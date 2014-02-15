@@ -1352,7 +1352,7 @@ void jl_init_serializer(void)
                           jl_f_invoke, jl_apply_generic,
                           jl_unprotect_stack, jl_f_task,
                           jl_f_yieldto, jl_f_ctor_trampoline,
-                          jl_f_new_module,
+                          jl_f_new_module, jl_f_sizeof,
                           NULL };
     i=2;
     while (fptrs[i-2] != NULL) {

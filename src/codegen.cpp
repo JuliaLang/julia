@@ -2200,6 +2200,20 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             }
         }
     }
+    else if (f->fptr == &jl_f_sizeof && nargs == 1) {
+        jl_datatype_t *sty = (jl_datatype_t*)expr_type(args[1], ctx);
+        rt1 = (jl_value_t*)sty;
+        if (jl_is_type_type((jl_value_t*)sty) && !jl_is_typevar(jl_tparam0(sty))) {
+            sty = (jl_datatype_t*)jl_tparam0(sty);
+        }
+        if (jl_is_datatype(sty) && sty != jl_symbol_type && sty->name != jl_array_typename) {
+            if (jl_is_leaf_type((jl_value_t*)sty) ||
+                (sty->names == jl_null && sty->size > 0)) {
+                JL_GC_POP();
+                return ConstantInt::get(T_size, sty->size);
+            }
+        }
+    }
     // TODO: other known builtins
     JL_GC_POP();
     return NULL;

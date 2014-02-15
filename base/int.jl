@@ -479,17 +479,6 @@ typemax(::Type{Uint64}) = 0xffffffffffffffff
     typemax(::Type{Int128} ) = $(int128((uint128(-1))>>int32(1)))
 end
 
-sizeof(::Type{Int8})    = 1
-sizeof(::Type{Uint8})   = 1
-sizeof(::Type{Int16})   = 2
-sizeof(::Type{Uint16})  = 2
-sizeof(::Type{Int32})   = 4
-sizeof(::Type{Uint32})  = 4
-sizeof(::Type{Int64})   = 8
-sizeof(::Type{Uint64})  = 8
-sizeof(::Type{Int128})  = 16
-sizeof(::Type{Uint128}) = 16
-
 widen(::Type{Int8}) = Int
 widen(::Type{Int16}) = Int
 widen(::Type{Int32}) = Int64

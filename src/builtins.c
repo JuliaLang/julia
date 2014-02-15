@@ -218,6 +218,35 @@ JL_CALLABLE(jl_f_typeof)
     return jl_full_type(args[0]);
 }
 
+JL_CALLABLE(jl_f_sizeof)
+{
+    JL_NARGS(sizeof, 1, 1);
+    jl_value_t *x = args[0];
+    if (jl_is_datatype(x)) {
+        jl_datatype_t *dx = (jl_datatype_t*)x;
+        if (dx->name == jl_array_typename || dx == jl_symbol_type)
+            jl_error("type does not have a canonical binary representation");
+        if (!(dx->names == jl_null && dx->size > 0)) {
+            // names===() and size > 0  =>  bitstype, size always known
+            if (dx->abstract || !jl_is_leaf_type(x))
+                jl_error("argument is an abstract type; size is indeterminate");
+        }
+        return jl_box_long(jl_datatype_size(x));
+    }
+    if (jl_is_array(x)) {
+        return jl_box_long(jl_array_len(x) * ((jl_array_t*)x)->elsize);
+    }
+    if (jl_is_tuple(x)) {
+        jl_error("tuples do not yet have a canonical binary representation");
+    }
+    jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(x);
+    assert(jl_is_datatype(dt));
+    assert(!dt->abstract);
+    if (dt == jl_symbol_type)
+        jl_error("value does not have a canonical binary representation");
+    return jl_box_long(jl_datatype_size(dt));
+}
+
 JL_CALLABLE(jl_f_subtype)
 {
     JL_NARGS(subtype, 2, 2);
@@ -996,6 +1025,7 @@ void jl_init_primitives(void)
 {
     add_builtin_func("is", jl_f_is);
     add_builtin_func("typeof", jl_f_typeof);
+    add_builtin_func("sizeof", jl_f_sizeof);
     add_builtin_func("issubtype", jl_f_subtype);
     add_builtin_func("isa", jl_f_isa);
     add_builtin_func("typeassert", jl_f_typeassert);
