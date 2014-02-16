@@ -1022,6 +1022,7 @@ void jl_restore_system_image(char *fname)
     jl_array_type->env = jl_deserialize_value(&f);
     
     jl_main_module = (jl_module_t*)jl_deserialize_value(&f);
+    jl_internal_main_module = jl_main_module;
     jl_core_module = (jl_module_t*)jl_get_global(jl_main_module,
                                                  jl_symbol("Core"));
     jl_base_module = (jl_module_t*)jl_get_global(jl_main_module,
