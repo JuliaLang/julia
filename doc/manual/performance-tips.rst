@@ -402,6 +402,30 @@ Taken to its extreme, pre-allocation can make your code uglier, so
 performance measurements and some judgment may be required.
 
 
+Avoid string interpolation for I/O
+----------------------------------
+
+When writing data to a file (or other I/O device), forming extra
+intermediate strings is a source of overhead. Instead of::
+
+    println(file, "$a $b")
+
+use::
+
+    println(file, a, " ", b)
+
+The first version of the code forms a string, then writes it
+to the file, while the second version writes values directly
+to the file. Also notice that in some cases string interpolation can
+be harder to read. Consider::
+
+    println(file, "$(f(a))$(f(b))")
+
+versus::
+
+    println(file, f(a), f(b))
+
+
 Fix deprecation warnings
 ------------------------
 
