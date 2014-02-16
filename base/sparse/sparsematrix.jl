@@ -1296,6 +1296,37 @@ function hvcat(rows::(Int...), X::SparseMatrixCSC...)
     vcat(tmp_rows...)
 end
 
+function blkdiag(X::SparseMatrixCSC...)
+    num = length(X)
+    mX = [ size(x, 1) for x in X ]
+    nX = [ size(x, 2) for x in X ]
+    m = sum(mX)
+    n = sum(nX)
+
+    Tv = promote_type(map(x->eltype(x.nzval), X)...)
+    Ti = promote_type(map(x->eltype(x.rowval), X)...)
+
+    colptr = Array(Ti, n + 1)
+    nnzX = [ nfilled(x) for x in X ]
+    nnz_res = sum(nnzX)
+    rowval = Array(Ti, nnz_res)
+    nzval = Array(Tv, nnz_res)
+
+    nnz_sofar = 0
+    nX_sofar = 0
+    mX_sofar = 0
+    for i = 1 : num
+        colptr[(1 : nX[i] + 1) + nX_sofar] = X[i].colptr + nnz_sofar
+        rowval[(1 : nnzX[i]) + nnz_sofar] = X[i].rowval + mX_sofar
+        nzval[(1 : nnzX[i]) + nnz_sofar] = X[i].nzval
+        nnz_sofar += nnzX[i]
+        nX_sofar += nX[i]
+        mX_sofar += mX[i]
+    end
+
+    SparseMatrixCSC(m, n, colptr, rowval, nzval)
+end
+
 ## Structure query functions
 
 function issym(A::SparseMatrixCSC)
