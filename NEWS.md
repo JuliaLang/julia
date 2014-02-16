@@ -82,6 +82,8 @@ Library improvements
       ``writedlm`` delimiter can be any printable object (e.g. a
       ``String``) instead of just a ``Char``.
 
+    * `isempty` now works for any iterable collection ([#5827]).
+
   * `Number` improvements
 
     * The `ImaginaryUnit` type no longer exists. Instead, `im` is of type
