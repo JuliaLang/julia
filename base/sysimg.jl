@@ -1,3 +1,6 @@
+import Core.Intrinsics.ccall
+ccall(:jl_new_main_module, Any, ())
+
 baremodule Base
 
 eval(x) = Core.eval(Base,x)
@@ -246,5 +249,8 @@ begin
 end
 
 end # baremodule Base
+
+using Base
+importall Base.Operators
 
 Base.isfile("userimg.jl") && Base.include("userimg.jl")

@@ -690,14 +690,13 @@ void julia_init(char *imageFile)
     jl_init_serializer();
 
     if (!imageFile) {
-        jl_main_module = jl_new_module(jl_symbol("Main"));
-        jl_main_module->parent = jl_main_module;
         jl_core_module = jl_new_module(jl_symbol("Core"));
-        jl_core_module->parent = jl_main_module;
-        jl_set_const(jl_main_module, jl_symbol("Core"),
-                     (jl_value_t*)jl_core_module);
-        jl_module_using(jl_main_module, jl_core_module);
+        jl_new_main_module();
+        jl_internal_main_module = jl_main_module;
+
         jl_current_module = jl_core_module;
+        jl_root_task->current_module = jl_current_module;
+
         jl_init_intrinsic_functions();
         jl_init_primitives();
         jl_load("boot.jl");

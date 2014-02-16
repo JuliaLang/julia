@@ -165,9 +165,9 @@ function close(io::IOBuffer)
 end
 isopen(io::IOBuffer) = io.readable || io.writable || io.seekable || nb_available(io) > 0
 function bytestring(io::IOBuffer)
-    if !io.readable error("bytestring read failed") end 
-    if !io.seekable error("bytestring read failed") end 
-    bytestring(io.data[1:io.size])
+    if !io.readable error("bytestring read failed") end
+    if !io.seekable error("bytestring read failed") end
+    bytestring(pointer(io.data), io.size)
 end
 function takebuf_array(io::IOBuffer)
     if io.seekable

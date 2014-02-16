@@ -87,8 +87,8 @@ build_sysconfdir = $(build_prefix)/etc
 # This used for debian packaging, to conform to library layout guidelines
 ifeq ($(MULTIARCH_INSTALL), 1)
 MULTIARCH = $(shell gcc -print-multiarch)
-private_libdir = $(libdir)/$(MULTIARCH)/julia
-libdir = $(libdir)/$(MULTIARCH)/
+private_libdir = $(prefix)/lib/$(MULTIARCH)/julia
+libdir = $(prefix)/lib/$(MULTIARCH)/
 endif
 
 
