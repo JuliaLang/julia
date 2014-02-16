@@ -815,21 +815,30 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         Type *llt1 = julia_type_to_llvm(t1);
         jl_value_t *t2 = expr_type(args[3], ctx);
         Type *llt2 = julia_type_to_llvm(t2);
+        int argStart = ctx->argDepth;
+        Value *ifelse_result;
         if (llt1 == jl_pvalue_llvmt && llt2 == jl_pvalue_llvmt) {
-            return builder.CreateSelect(isfalse,
-                                        emit_expr(args[3], ctx, false),
-                                        emit_expr(args[2], ctx, false));
+            Value *arg1 = emit_expr(args[3], ctx, false);
+            if (arg1->getType() == jl_pvalue_llvmt)
+                make_gcroot(arg1, ctx);
+            ifelse_result = builder.CreateSelect(isfalse,
+                                                 arg1,
+                                                 emit_expr(args[2], ctx, false));
         }
         else if (t1 == t2 && llt1 == llt2 && llt1 != jl_pvalue_llvmt) {
-            return builder.CreateSelect(isfalse,
-                                        auto_unbox(args[3], ctx),
-                                        auto_unbox(args[2], ctx));
+            ifelse_result = builder.CreateSelect(isfalse,
+                                                 auto_unbox(args[3], ctx),
+                                                 auto_unbox(args[2], ctx));
         }
         else {
-            return builder.CreateSelect(isfalse,
-                                        boxed(emit_expr(args[3], ctx, false),ctx,expr_type(args[3],ctx)),
-                                        boxed(emit_expr(args[2], ctx, false),ctx,expr_type(args[2],ctx)));
+            Value *arg1 = boxed(emit_expr(args[3],ctx,false), ctx, expr_type(args[3],ctx));
+            make_gcroot(arg1, ctx);
+            ifelse_result = builder.CreateSelect(isfalse,
+                                                 arg1,
+                                                 boxed(emit_expr(args[2],ctx,false), ctx, expr_type(args[2],ctx)));
         }
+        ctx->argDepth = argStart;
+        return ifelse_result;
     }
     default: ;
     }
