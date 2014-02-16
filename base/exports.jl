@@ -470,6 +470,7 @@ export
     zeta,
 
 # arrays
+    blkdiag,
     broadcast!,
     broadcast!_function,
     broadcast,
