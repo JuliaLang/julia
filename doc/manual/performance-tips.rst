@@ -322,7 +322,7 @@ by ``1`` input vector::
 
     julia> x = randn(10000);
 
-    julia> fmt(f) = println("$(rpad(string(f)*": ", 14, ' '))$(@elapsed f(x))")
+    julia> fmt(f) = println(rpad(string(f)*": ", 14, ' '), @elapsed f(x))
 
     julia> map(fmt, {copy_cols, copy_rows, copy_col_row, copy_row_col});
     copy_cols:    0.331706323

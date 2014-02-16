@@ -54,7 +54,6 @@ convert(::Type{Symbol}, s::String) = symbol(s)
 
 start(s::String) = 1
 done(s::String,i) = (i > endof(s))
-isempty(s::String) = done(s,start(s))
 getindex(s::String, i::Int) = next(s,i)[1]
 getindex(s::String, i::Integer) = s[int(i)]
 getindex(s::String, x::Real) = s[to_index(x)]
@@ -639,8 +638,6 @@ function getindex(s::SubString, i::Int)
     end
     getindex(s.string, i+s.offset)
 end
-
-isempty(s::SubString) = s.endof == 0
 
 endof(s::SubString) = s.endof
 # TODO: length(s::SubString) = ??

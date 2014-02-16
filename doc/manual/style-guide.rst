@@ -210,7 +210,7 @@ If a type is effectively an enumeration, it should be defined as a single
 (ideally ``immutable``) type, with the enumeration values being instances
 of it. Constructors and conversions can check whether values are valid.
 This design is preferred over making the enumeration an abstract type,
-with the ``values`` as subtypes.
+with the "values" as subtypes.
 
 Don't overuse macros
 --------------------
@@ -257,7 +257,7 @@ customizing its behavior can make it harder to work with.
 Be careful with type equality
 -----------------------------
 
-You generally want to use ``isa`` and ``<:`` (``subtype``) for testing types,
+You generally want to use ``isa`` and ``<:`` (``issubtype``) for testing types,
 not ``==``. Checking types for exact equality typically only makes sense
 when comparing to a known concrete type (e.g. ``T == Float64``), or if you
 *really, really* know what you're doing.

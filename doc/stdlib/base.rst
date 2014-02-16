@@ -951,9 +951,9 @@ Strings
 
    Create a string from any value using the ``showall`` function.
 
-.. function:: bytestring(::Ptr{Uint8})
+.. function:: bytestring(::Ptr{Uint8}, [length])
 
-   Create a string from the address of a C (0-terminated) string. A copy is made; the ptr can be safely freed.
+   Create a string from the address of a C (0-terminated) string. A copy is made; the ptr can be safely freed. If ``length`` is specified, the string does not have to be 0-terminated.
 
 .. function:: bytestring(s)
 
