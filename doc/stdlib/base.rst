@@ -507,10 +507,11 @@ Iterable Collections
 
    Returns the indices of elements in collection ``a`` that appear in collection ``b``
 
-.. function:: unique(itr)
+.. function:: unique(itr[, dim])
 
    Returns an array containing only the unique elements of the iterable ``itr``, in
    the order that the first of each set of equivalent elements originally appears.
+   If ``dim`` is specified, returns unique regions of the array ``itr`` along ``dim``.
 
 .. function:: reduce(op, v0, itr)
 
@@ -951,9 +952,9 @@ Strings
 
    Create a string from any value using the ``showall`` function.
 
-.. function:: bytestring(::Ptr{Uint8})
+.. function:: bytestring(::Ptr{Uint8}, [length])
 
-   Create a string from the address of a C (0-terminated) string. A copy is made; the ptr can be safely freed.
+   Create a string from the address of a C (0-terminated) string. A copy is made; the ptr can be safely freed. If ``length`` is specified, the string does not have to be 0-terminated.
 
 .. function:: bytestring(s)
 
@@ -4556,9 +4557,32 @@ Parallel Computing
 
 .. function:: @sync
 
-   Wait until all dynamically-enclosed uses of ``@async``, ``@spawn``, and
-   ``@spawnat`` complete.
+   Wait until all dynamically-enclosed uses of ``@async``, ``@spawn``, 
+   ``@spawnat`` and ``@parallel`` are complete.
 
+.. function:: @parallel 
+
+   A parallel for loop of the form ::
+
+        @parallel [reducer] for var = range
+            body
+        end
+   
+   The specified range is partitioned and locally executed across all workers. 
+   In case an optional reducer function is specified, @parallel performs local
+   reductions on each worker with a final reduction on the calling process.
+   
+   Note that without a reducer function, @parallel executes asynchronously, 
+   i.e. it spawns independent tasks on all available workers and returns 
+   immediately without waiting for completion. To wait for completion, prefix 
+   the call with ``@sync``, like ::
+   
+        @sync @parallel for var = range
+            body
+        end
+        
+    
+    
 Distributed Arrays
 ------------------
 

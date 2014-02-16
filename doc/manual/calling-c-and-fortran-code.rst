@@ -493,8 +493,25 @@ For fun, try inserting a ``println("mycompare($a,$b)")`` line into ``mycompare``
 will allow you to see the comparisons that ``qsort`` is performing (and to verify that
 it is really calling the Julia function that you passed to it).
 
+Thread-safety
+~~~~~~~~~~~~~
+
+Some C libraries execute their callbacks from a different thread, and
+since Julia isn't thread-safe you'll need to take some extra
+precautions. In particular, you'll need to set up a two-layered
+system: the C callback should only *schedule* (via Julia's event loop)
+the execution of your "real" callback. Your callback
+needs to be written to take two inputs (which you'll most likely just
+discard) and then wrapped by ``SingleAsyncWork``::
+
+  cb_from_event_loop = (data, status) -> my_real_callback(args)
+  cb_packaged = Base.SingleAsyncWork(cb_from_event_loop)
+
+The callback you pass to C should only execute a ``ccall`` to
+``:uv_async_send``, passing ``cb_packaged.handle`` as the argument.
+
 More About Callbacks
---------------------
+~~~~~~~~~~~~~~~~~~~~
 
 For more details on how to pass callbacks to C libraries, see this
 `blog post <http://julialang.org/blog/2013/05/callback/>`_.

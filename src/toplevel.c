@@ -21,16 +21,41 @@
 int jl_lineno = 0;
 
 jl_module_t *jl_old_base_module = NULL;
+// the Main we started with, in case it is switched
+jl_module_t *jl_internal_main_module = NULL;
 
 jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast);
 
 void jl_add_standard_imports(jl_module_t *m)
 {
+    assert(jl_base_module != NULL);
     // using Base
     jl_module_using(m, jl_base_module);
     // importall Base.Operators
     jl_module_importall(m, (jl_module_t*)jl_get_global(jl_base_module,
                                                        jl_symbol("Operators")));
+}
+
+jl_module_t *jl_new_main_module(void)
+{
+    // switch to a new top-level module
+    if (jl_current_module != jl_main_module && jl_current_module != NULL)
+        jl_error("Main can only be replaced from the top level");
+
+    jl_module_t *old_main = jl_main_module;
+
+    jl_main_module = jl_new_module(jl_symbol("Main"));
+    jl_main_module->parent = jl_main_module;
+    jl_core_module->parent = jl_main_module;
+    jl_set_const(jl_main_module, jl_symbol("Core"),
+                 (jl_value_t*)jl_core_module);
+    jl_set_global(jl_core_module, jl_symbol("Main"),
+                  (jl_value_t*)jl_main_module);
+
+    jl_current_module = jl_main_module;
+    jl_current_task->current_module = jl_main_module;
+
+    return old_main;
 }
 
 extern void jl_get_system_hooks(void);
@@ -63,7 +88,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
         jl_old_base_module = jl_base_module;
         // pick up Base module during bootstrap
         jl_base_module = newm;
-        newbase = 1;
+        newbase = base_module_conflict;
     }
     // export all modules from Main
     if (parent_module == jl_main_module)
