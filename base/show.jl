@@ -207,12 +207,14 @@ unquoted(ex::Expr)       = ex.args[1]
 # which shows the contents using show_unquoted(),
 # which shows subexpressions using show_unquoted()
 # ==> AST:s are printed wrapped in a single quotation
-show_indented(x)                 = show_indented(STDOUT, x)
-show_indented(io::IO, x)         = show_indented(io, x, 0)
-show_indented(io::IO, x, indent) = show(io, x)
-show_unquoted(x)                 = show_unquoted(STDOUT, x)
-show_unquoted(io::IO, x)         = show_unquoted(io, x, 0)
-show_unquoted(io::IO, x, indent) = (print(io,"\$("); show(io,x); print(io,')'))
+show_indented(x)                       = show_indented(STDOUT, x)
+show_indented(io::IO, x)               = show_indented(io, x, 0)
+show_indented(io::IO, x, indent)       = show(io, x)
+show_indented(io::IO, x, indent, prec) = show(io, x)
+show_unquoted(x)                       = show_unquoted(STDOUT, x)
+show_unquoted(io::IO, x)               = show_unquoted(io, x, 0)
+show_unquoted(io::IO, x, indent)       = show(io, x)
+show_unquoted(io::IO, x, indent, prec) = show_unquoted(io, x, indent)
 
 ## Quoted AST printing ##
 
@@ -221,7 +223,7 @@ typealias ExprNode Union(SymbolNode, LineNumberNode, LabelNode, GotoNode,
 show(io::IO, ex::ExprNode) = show_indented(io, ex)
 
 function show_indented(io::IO, ex::ExprNode, indent::Int)
-    default_show_quoted(io, ex, indent)
+    show_unquoted(io, ex, indent)
 end
 function show_indented(io::IO, ex::QuoteNode, indent::Int)
     show_indented(io, ex.value, indent)
@@ -231,19 +233,36 @@ show(io::IO, ex::Expr) = show_indented(io, ex)
 function show_indented(io::IO, ex::Expr, indent::Int)
     if is(ex.head, :block) || is(ex.head, :body)
         show_block(io, "quote", ex, indent); print(io, "end")
-    elseif in(ex.head, (:tuple, :vcat, :cell1))
-        print(io, ':'); show_unquoted(io, ex, indent + indent_width)        
+    elseif ex.head in (:tuple, :vcat, :cell1)
+        show_unquoted(io, ex, indent + indent_width)
     else
-        default_show_quoted(io, ex, indent)
+        show_unquoted(io, ex, indent)
     end
 end
 const paren_quoted_syms = Set{Symbol}(:(:),:(::),:(:=),:(=),:(==),:(===),:(=>))
+const assignment_syms = Set{Symbol}(:(=), :(:=), :(+=), :(-=), :(*=), :(/=), :(//=), :(.//=), :(.*=), :(./=), :(\=), :(.\=), :(^=), :(.^=), :(%=), :(.%=), :(|=), :(&=), :($=), :(=>), :(<<=), :(>>=), :(>>>=), :(~), :(.+=), :(.-=))
+const prefix_op_syms = Set{Symbol}(:(+), :(-), :(!), :(~), :(<:), :(>:))
+const infix_ops_by_prec = [
+    "= := += -= *= /= //= .//= .*= ./= \\= .\\= ^= .^= %= .%= |= &= \$= => <<= >>= >>>= ~ .+= .-=",
+    "?",
+    "||",
+    "&&",
+    "-- -->",
+    "> < >= <= == === != !== .> .< .>= .<= .== .!= .= .! <: >:",
+    "|> <|",
+    ": ..",
+    "+ - .+ .- | \$",
+    "<< >> >>> .<< .>> .>>>",
+    "* / ./ % .% & .* \\ .\\",
+    "// .//",
+    "^ .^",
+    "::",
+    "."
+]
+const infix_op_precs = Dict{Symbol,Int}(merge([{symbol(op)=>i for op=split(infix_ops_by_prec[i])} for i=1:length(infix_ops_by_prec)]...))
+const infix_op_syms = Set{Symbol}(keys(infix_op_precs)...)
 function show_indented(io::IO, sym::Symbol, indent::Int)
-    if in(sym, paren_quoted_syms)
-        print(io, ":($sym)")
-    else
-        print(io, ":$sym")
-    end
+    print(io, sym)
 end
 function default_show_quoted(io::IO, ex, indent::Int)
     print(io, ":(")
@@ -287,19 +306,19 @@ show_block(io::IO,head,    block,i::Int) = show_block(io,head,{},   block,i)
 show_block(io::IO,head,arg,block,i::Int) = show_block(io,head,{arg},block,i)
 
 # show an indented list
-function show_list(io::IO, items, sep, indent::Int)
+function show_list(io::IO, items, sep, indent::Int, prec::Int=0)
     n = length(items)
     if n == 0; return end
     indent += indent_width
-    show_unquoted(io, items[1], indent)
+    show_unquoted(io, items[1], indent, prec)
     for item in items[2:end]
         print(io, sep)
-        show_unquoted(io, item, indent)        
+        show_unquoted(io, item, indent, prec)
     end
 end
 # show an indented list inside the parens (op, cl)
-function show_enclosed_list(io::IO, op, items, sep, cl, indent)
-    print(io, op); show_list(io, items, sep, indent); print(io, cl)
+function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0)
+    print(io, op); show_list(io, items, sep, indent, prec); print(io, cl)
 end
 
 ## Unquoted AST printing ##
@@ -315,9 +334,10 @@ const _expr_infix = Set(:(:), :(<:), :(->), :(=>), symbol("::"))
 const _expr_calls  = [:call =>('(',')'), :ref =>('[',']'), :curly =>('{','}')]
 const _expr_parens = [:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>('{','}')]
 
-function show_unquoted(io::IO, ex::Expr, indent::Int)
+function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int=0)
     head, args, nargs = ex.head, ex.args, length(ex.args)
 
+    # dot
     if is(head, :(.))
         show_unquoted(io, args[1], indent + indent_width)
         print(io, '.')
@@ -327,31 +347,90 @@ function show_unquoted(io::IO, ex::Expr, indent::Int)
             print(io, '(')
             show_unquoted(io, args[2], indent + indent_width)
             print(io, ')')
-        end                  
-    elseif (in(head, _expr_infix) && nargs==2) || (is(head,:(:)) && nargs==3)
+        end
+
+    # infix
+    elseif (head in _expr_infix && nargs==2) || (is(head,:(:)) && nargs==3)
         show_list(io, args, head, indent)
-    elseif in(head, _expr_infix_wide) && nargs == 2
+    elseif head in _expr_infix_wide && nargs == 2
         show_list(io, args, " $head ", indent)
-    elseif is(head, symbol("::")) && nargs == 1
-        print(io, "::")        
-        show_unquoted(io, args[1], indent)
+
+    # list
     elseif haskey(_expr_parens, head)               # :tuple/:vcat/:cell1d
         op, cl = _expr_parens[head]
         print(io, op)
         show_list(io, args, ",", indent)
         if is(head, :tuple) && nargs == 1; print(io, ','); end
         print(io, cl)
+
+    # function call
     elseif haskey(_expr_calls, head) && nargs >= 1  # :call/:ref/:curly
-        op, cl = _expr_calls[head]
-        show_unquoted(io, args[1], indent)
-        show_enclosed_list(io, op, args[2:end], ",", cl, indent)
+        func = args[1]
+        func_prec = get(infix_op_precs, func, 0)
+        func_args = args[2:end]
+
+        # scalar multiplication
+        if func == :(*) && length(func_args)==2 && isa(func_args[1], Real) && isa(func_args[2], Symbol)
+            if func_prec <= prec
+                show_enclosed_list(io, '(', func_args, "", ')', indent, func_prec)
+            else
+                show_list(io, func_args, "", indent, func_prec)
+            end
+
+        # prefix operator
+        elseif func in prefix_op_syms && length(func_args) == 1
+            show_unquoted(io, func, indent)
+            if isa(func_args[1], Expr) || length(func_args) > 1
+                show_enclosed_list(io, '(', func_args, ",", ')', indent, func_prec)
+            else
+                show_unquoted(io, func_args[1])
+            end
+
+        # infix operator
+        elseif func in infix_op_syms
+            sep = func_prec >= infix_op_precs[:(^)] ? "$func" : " $func "
+            if func_prec <= prec
+                show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec)
+            else
+                show_list(io, func_args, sep, indent, func_prec)
+            end
+
+        # normal function
+        else
+            op, cl = _expr_calls[head]
+            show_unquoted(io, args[1], indent)
+            show_enclosed_list(io, op, args[2:end], ",", cl, indent)
+        end
+
+    # comparison
     elseif is(head, :comparison) && nargs >= 3 && (nargs&1==1)
-        show_enclosed_list(io, '(', args, "", ')', indent)
+        comp_prec = minimum([get(infix_op_precs, comp, 0) for comp=args[2:2:end]])
+        if comp_prec <= prec
+            show_enclosed_list(io, '(', args, " ", ')', indent, comp_prec)
+        else
+            show_list(io, args, " ", indent, comp_prec)
+        end
+
+    # block with argument
+    elseif head in (:for,:while,:function,:if,:module) && nargs==2
+        show_block(io, head, args[1], args[2], indent); print(io, "end")
+
+    # type declaration
+    elseif is(head, :type) && nargs==3
+        show_block(io, head, args[2], args[3], indent); print(io, "end")
+
+    # return nothing
+    elseif is(head, :return) && nargs == 1 && is(args[1], nothing)
+        print(io, head)
+
+    elseif is(head, symbol("::")) && nargs == 1
+        print(io, "::")
+        show_unquoted(io, args[1], indent)
     elseif is(head, :(...)) && nargs == 1
         show_unquoted(io, args[1], indent)
         print(io, "...")
-    elseif (nargs == 1 && in(head, (:return, :abstract, :const))) ||
-                          in(head, (:local,  :global))
+    elseif (nargs == 1 && head in (:return, :abstract, :const)) ||
+                          head in (:local,  :global)
         print(io, head, ' ')
         show_list(io, args, ",", indent)
     elseif is(head, :macrocall) && nargs >= 1
@@ -375,8 +454,6 @@ function show_unquoted(io::IO, ex::Expr, indent::Int)
         show_block(io, "let", args[2:end], args[1], indent); print(io, "end")
     elseif is(head, :block) || is(head, :body)
         show_block(io, "begin", ex, indent); print(io, "end")
-    elseif in(head,(:for,:while,:function,:if,:type,:module)) && nargs==2
-        show_block(io, head, args[1], args[2], indent); print(io, "end")
     elseif is(head, :quote) && nargs == 1
         show_indented(io, args[1], indent)
     elseif is(head, :gotoifnot) && nargs == 2
@@ -390,14 +467,15 @@ function show_unquoted(io::IO, ex::Expr, indent::Int)
         show_unquoted(io, args[1], indent+indent_width)
         print(io, '=')
         show_unquoted(io, args[2], indent+indent_width)
+    # TODO: implement interpolated strings
     else
-        print(io, "\$(Expr(")
+        print(io, "Expr(")
         show_indented(io, ex.head, indent)
         for arg in args
             print(io, ", ")
             show_indented(io, arg, indent)
         end
-        print(io, "))")
+        print(io, ")")
     end
     show_expr_type(io, ex.typ)
 end
