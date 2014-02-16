@@ -17,6 +17,7 @@ next(s::String, i::Integer) = next(s,int(i))
 ## conversion of general objects to strings ##
 
 function print_to_string(xs...)
+    # specialized for performance reasons
     s = IOBuffer(Array(Uint8,isa(xs[1],String) ? endof(xs[1]) : 0), true, true)
     truncate(s,0)
     for x in xs
@@ -184,7 +185,7 @@ function search(s::String, c::Chars, i::Integer)
     i = nextind(s,i-1)
     while !done(s,i)
         d, j = next(s,i)
-        if in(d,c)
+        if d in c
             return i
         end
         i = j
@@ -854,7 +855,7 @@ function print_escaped(io, s::String, esc::String)
         c == '\0'       ? print(io, escape_nul(s,j)) :
         c == '\e'       ? print(io, "\\e") :
         c == '\\'       ? print(io, "\\\\") :
-        in(c,esc)       ? print(io, '\\', c) :
+        c in esc        ? print(io, '\\', c) :
         7 <= c <= 13    ? print(io, '\\', "abtnvfr"[int(c-6)]) :
         isprint(c)      ? print(io, c) :
         c <= '\x7f'     ? print(io, "\\x", hex(c, 2)) :
@@ -874,13 +875,13 @@ end
 # bare minimum unescaping function unescapes only given characters
 
 function print_unescaped_chars(io, s::String, esc::String)
-    if !in('\\',esc)
+    if !('\\' in esc)
         esc = string("\\", esc)
     end
     i = start(s)
     while !done(s,i)
         c, i = next(s,i)
-        if c == '\\' && !done(s,i) && in(s[i],esc)
+        if c == '\\' && !done(s,i) && s[i] in esc
             c, i = next(s,i)
         end
         print(io, c)
@@ -1408,7 +1409,7 @@ function lstrip(s::String, chars::Chars=_default_delims)
     i = start(s)
     while !done(s,i)
         c, j = next(s,i)
-        if !in(c, chars)
+        if !(c in chars)
             return s[i:end]
         end
         i = j
@@ -1421,7 +1422,7 @@ function rstrip(s::String, chars::Chars=_default_delims)
     i = start(r)
     while !done(r,i)
         c, j = next(r,i)
-        if !in(c, chars)
+        if !(c in chars)
             return s[1:end-i+1]
         end
         i = j
