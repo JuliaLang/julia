@@ -330,6 +330,10 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Kronecker tensor product of two vectors or two matrices.
 
+.. function:: blkdiag(A...)
+
+   Concatenate matrices block-diagonally. Currently only implemented for sparse matrices.
+
 .. function:: linreg(x, y)
 
    Determine parameters ``[a, b]`` that minimize the squared error between ``y`` and ``a+b*x``.

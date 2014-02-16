@@ -584,6 +584,7 @@ export
     bkfact!,
     bkfact,
     blas_set_num_threads,
+    blkdiag,
     chol,
     cholfact!,
     cholfact,
