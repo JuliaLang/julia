@@ -84,6 +84,10 @@ Library improvements
 
     * `isempty` now works for any iterable collection ([#5827]).
 
+    * `unique` now accepts an optional `dim` argument for finding
+      unique rows or columns of a matrix or regions of a
+      multidimensional array ([#5811]).
+
   * `Number` improvements
 
     * The `ImaginaryUnit` type no longer exists. Instead, `im` is of type
@@ -241,6 +245,7 @@ Deprecated or removed
 [#5526]: https://github.com/JuliaLang/julia/pull/5526
 [#5538]: https://github.com/JuliaLang/julia/pull/5538
 [#5726]: https://github.com/JuliaLang/julia/pull/5726
+[#5811]: https://github.com/JuliaLang/julia/pull/5811
 
 Julia v0.2.0 Release Notes
 ==========================
