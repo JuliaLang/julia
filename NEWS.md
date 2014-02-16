@@ -246,6 +246,13 @@ Deprecated or removed
 [#5538]: https://github.com/JuliaLang/julia/pull/5538
 [#5726]: https://github.com/JuliaLang/julia/pull/5726
 [#5811]: https://github.com/JuliaLang/julia/pull/5811
+[#5462]: https://github.com/JuliaLang/julia/pull/5462
+[#5403]: https://github.com/JuliaLang/julia/pull/5403
+[#5464]: https://github.com/JuliaLang/julia/pull/5464
+[#5827]: https://github.com/JuliaLang/julia/pull/5827
+[#5576]: https://github.com/JuliaLang/julia/pull/5576
+[#5703]: https://github.com/JuliaLang/julia/pull/5703
+[#5427]: https://github.com/JuliaLang/julia/pull/5427
 
 Julia v0.2.0 Release Notes
 ==========================
@@ -625,6 +632,9 @@ Too numerous to mention.
 [#4284]: https://github.com/JuliaLang/julia/issues/4284
 [#4412]: https://github.com/JuliaLang/julia/issues/4412
 [#5214]: https://github.com/JuliaLang/julia/issues/5214
+[#3605]: https://github.com/JuliaLang/julia/pull/3605
+[#3233]: https://github.com/JuliaLang/julia/pull/3233
+[#4811]: https://github.com/JuliaLang/julia/pull/4811
 
 [packages chapter]: http://docs.julialang.org/en/latest/manual/packages/
 [sorting functions]: http://docs.julialang.org/en/latest/stdlib/sort/
