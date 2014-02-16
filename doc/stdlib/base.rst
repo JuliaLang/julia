@@ -507,10 +507,11 @@ Iterable Collections
 
    Returns the indices of elements in collection ``a`` that appear in collection ``b``
 
-.. function:: unique(itr)
+.. function:: unique(itr[, dim])
 
    Returns an array containing only the unique elements of the iterable ``itr``, in
    the order that the first of each set of equivalent elements originally appears.
+   If ``dim`` is specified, returns unique regions of the array ``itr`` along ``dim``.
 
 .. function:: reduce(op, v0, itr)
 
