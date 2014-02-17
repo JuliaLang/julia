@@ -711,7 +711,7 @@ DLLEXPORT void *jl_unbox_voidpointer(jl_value_t *v);
 #endif
 
 // structs
-int jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err);
+DLLEXPORT int jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err);
 DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i);
 DLLEXPORT jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i);
 DLLEXPORT void        jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs);
