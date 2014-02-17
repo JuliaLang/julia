@@ -74,3 +74,4 @@ end
 ^(::MathConst{:e}, x::AbstractMatrix) = expm(x)
 
 log(::MathConst{:e}) = 1 # use 1 to correctly promote expressions like log(x)/log(e)
+log(::MathConst{:e}, x) = log(x)
