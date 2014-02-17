@@ -4650,10 +4650,13 @@ Distributed Arrays
 Shared Arrays (Experimental, UNIX-only feature)
 -----------------------------------------------
 
-.. function:: SharedArray(T::Type, dims::NTuple; init=false, pids=workers())
+.. function:: SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
 
     Construct a SharedArray of a bitstype ``T``  and size ``dims`` across the processes
     specified by ``pids`` - all of which have to be on the same host. 
+    
+    If ``pids`` is left unspecified, the shared array will be mapped across all workers
+    on the current host.
 
     If an ``init`` function of the type ``initfn(S::SharedArray)`` is specified, 
     it is called on all the participating workers. 
