@@ -17,7 +17,8 @@ mean(v::AbstractArray) = sum(v) / length(v)
 
 function mean(v::AbstractArray, region)
     rs = regionsize(v, region)
-    dst = sum(v, region)
+    dst = reduction_init(v, region, zero((v[1]+v[1])/rs))
+    sum!(dst, v)
     if rs != 1
         for i = 1 : length(dst)
             @inbounds dst[i] /= rs
