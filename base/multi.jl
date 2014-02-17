@@ -1251,7 +1251,7 @@ pmap(f) = f()
 # rsym(n) = (a=rand(n,n);a*a')
 # L = {rsym(200),rsym(1000),rsym(200),rsym(1000),rsym(200),rsym(1000),rsym(200),rsym(1000)};
 # pmap(eig, L);
-function pmap(f, lsts...; err_retry=true, err_stop=false)
+function pmap(f, lsts...; err_retry=true, err_stop=false, pids=workers())
     len = length(lsts)
 
     results = Dict{Int,Any}()
@@ -1282,7 +1282,7 @@ function pmap(f, lsts...; err_retry=true, err_stop=false)
     end
 
     @sync begin
-        for wpid in workers()
+        for wpid in pids
             @async begin
                 tasklet = getnext_tasklet()
                 while (tasklet != nothing)
@@ -1385,25 +1385,13 @@ macro parallel(args...)
     na = length(args)
     if na==1
         loop = args[1]
-        if isa(loop,Expr) && loop.head === :comprehension
-            ex = loop.args[1]
-            loop.args[1] = esc(ex)
-            nd = length(loop.args)-1
-            ranges = map(e->esc(e.args[2]), loop.args[2:end])
-            for i=1:nd
-                var = loop.args[1+i].args[1]
-                loop.args[1+i] = :( $(esc(var)) = ($(ranges[i]))[I[$i]] )
-            end
-            return :( DArray((I::(Range1{Int}...))->($loop),
-                             tuple($(map(r->:(length($r)),ranges)...))) )
-        end
     elseif na==2
         reducer = args[1]
         loop = args[2]
     else
         throw(ArgumentError("wrong number of arguments to @parallel"))
     end
-    if !isa(loop,Expr) || !is(loop.head,:for)
+    if !isa(loop,Expr) || !is(loop.head,:for) || (loop.args[1].args[2].head != :(:))
         error("malformed @parallel loop")
     end
     var = loop.args[1].args[1]

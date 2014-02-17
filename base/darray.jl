@@ -298,3 +298,44 @@ map(f::Callable, d::DArray) = DArray(I->map(f, localpart(d)), d)
 reduce(f::Function, d::DArray) =
     mapreduce(fetch, f,
               { @spawnat p reduce(f, localpart(d)) for p in procs(d) })
+
+
+macro darray(args...)
+    na = length(args)
+    if na==1
+        c = args[1]
+        pids = workers()
+    elseif na==2
+        c = args[1]
+        pids = args[2]
+    else
+        throw(ArgumentError("wrong number of arguments to @darray"))
+    end
+
+    if !isa(c,Expr) || !(is(c.head, :comprehension) || is(c.head, :typed_comprehension))
+        error("malformed @darray comprehension")
+    end
+
+    if is(c.head, :typed_comprehension)
+        roff = 2
+    else
+        roff = 1
+    end
+
+    ex = c.args[roff]
+    c.args[roff] = esc(ex)
+
+    nd = length(c.args) - roff
+    ranges = map(e->esc(e.args[2]), c.args[(roff+1):end])
+
+    for i=1:nd
+        var = c.args[roff+i].args[1]
+        c.args[roff+i] = :( $(esc(var)) = ($(ranges[i]))[I[$i]] )
+    end
+
+    return :( DArray((I::(Range1{Int}...))->($c),
+                        tuple($(map(r->:(length($r)),ranges)...)), $pids) )
+end
+
+
+        

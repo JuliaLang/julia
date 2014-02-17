@@ -118,6 +118,30 @@ et=toq()
 @test isready(rr1)
 @test !isready(rr3)
 
+# pmap with / without procs keyword arg
+resp = pmap(x->myid(), [1:32])
+@test all([x in workers() for x in resp])
+
+w_some = workers()[1:2]
+resp = pmap(x->myid(), [1:32]; pids=w_some) 
+@test all([x in w_some for x in resp])
+
+
+# @darray 
+
+d = @darray [x for x=1:10]
+@test d == [x for x=1:10]
+
+d = @darray [x*y for x=1:10, y=1:5] workers()[1:2]
+@test d == [x*y for x=1:10, y=1:5]
+@test all([x in workers()[1:2] for x in procs(d)])
+
+d = @darray {x for x=1:10}
+@test d == {x for x=1:10}
+
+d = @darray {x*y for x=1:10, y=1:5} workers()[1:2]
+@test d == {x*y for x=1:10, y=1:5}
+@test all([x in workers()[1:2] for x in procs(d)])
 
 # TODO: The below block should be always enabled but the error is printed by the event loop
 
