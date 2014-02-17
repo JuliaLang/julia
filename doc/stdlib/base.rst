@@ -3641,6 +3641,10 @@ Indexing, Assignment, and Concatenation
 
    If the first argument is a single integer ``n``, then all block rows are assumed to have ``n`` block columns.
 
+.. function:: blkdiag(A...)
+
+   Concatenate block-diagonally
+
 .. function:: flipdim(A, d)
 
    Reverse ``A`` in dimension ``d``.
