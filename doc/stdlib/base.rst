@@ -555,6 +555,11 @@ Iterable Collections
 
    Compute the minimum value of an array over the given dimensions
 
+.. function:: extrema(itr)
+
+    Compute both the minimum and maximum element in a single pass, and
+    return them as a 2-tuple.
+
 .. function:: indmax(itr) -> Integer
 
    Returns the index of the maximum element in a collection
@@ -2688,6 +2693,10 @@ Mathematical Functions
 .. function:: max(x, y, ...)
 
    Return the maximum of the arguments. Operates elementwise over arrays.
+
+.. function:: minmax(x, y)
+
+   Return ``(min(x,y), max(x,y))``.
 
 .. function:: clamp(x, lo, hi)
 
