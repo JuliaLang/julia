@@ -139,6 +139,49 @@ end
 code_llvm  (f::Callable, types::Tuple) = print(_dump_function(f, types, false, false))
 code_native(f::Callable, types::Tuple) = print(_dump_function(f, types, true, false))
 
+macro code_llvm(ex0)
+    if isa(ex0,Expr) &&
+        any(a->(Meta.isexpr(a,:kw) || Meta.isexpr(a,:parameters)), ex0.args)
+        # keyword args not used in code_ functions, so just remove them
+        args = filter(a->!(Meta.isexpr(a,:kw) || Meta.isexpr(a,:parameters)), ex0.args)
+        return Expr(:call, :code_llvm, ex0.args[1], 
+                Expr(:tuple, 
+                    map(x->Expr(:call, :typeof, esc(x)),ex0.args[2:end])...))
+    end
+    if isa(ex0, Expr) && ex0.head == :call
+        return Expr(:call, :code_llvm, ex0.args[1], 
+                Expr(:tuple, 
+                    map(x->Expr(:call, :typeof, esc(x)),ex0.args[2:end])...))
+    end
+    ex = expand(ex0)
+    if !isa(ex, Expr)
+        # do nothing, error
+    elseif ex.head == :call
+        if any(e->(isa(e,Expr) && e.head==:(...)), ex0.args) &&
+            isa(ex.args[1],TopNode) && ex.args[1].name == :apply
+            return Expr(:call, :code_llvm, ex.args[2], 
+                    Expr(:tuple, 
+                        map(x->Expr(:call, :typeof, esc(x)),ex.args[3:end])...))
+        else
+            return Expr(:call, :code_llvm, ex.args[1], 
+                    Expr(:tuple, 
+                        map(x->Expr(:call, :typeof, esc(x)),ex.args[2:end])...))
+        end
+    elseif ex.head == :body
+        a1 = ex.args[1]
+        if isa(a1, Expr) && a1.head == :call
+            a11 = a1.args[1]
+            if a11 == :setindex!
+                return Expr(:call, :code_llvm, a11, 
+                        Expr(:tuple, 
+                            map(x->Expr(:call, :typeof, esc(x)),a1.args[2:end])...))
+            end
+        end
+    end
+    Expr(:call, :error, "expression is not a function call, or is too complex for @code_llvm to analyze; "
+                                  * "break it down to simpler parts if possible")
+end
+
 function functionlocs(f::Function, types=(Any...))
     locs = Any[]
     for m in methods(f, types)
