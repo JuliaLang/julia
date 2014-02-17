@@ -364,24 +364,28 @@ ifneq ($(BUILD_OS),WINNT)
 endif
 ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 	cd dist-extras && \
-	wget -O 7z920.exe http://downloads.sourceforge.net/sevenzip/7z920.exe && \
+	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z920.exe && \
 	7z x -y 7z920.exe 7z.exe 7z.dll && \
-	wget -O mingw-libexpat.rpm http://download.opensuse.org/repositories/windows:/mingw:/win32/SLE_11_SP3/noarch/mingw32-libexpat-2.0.1-6.1.noarch.rpm && \
-	wget -O mingw-zlib.rpm http://download.opensuse.org/repositories/windows:/mingw:/win32/SLE_11_SP3/noarch/mingw32-zlib-1.2.8-1.2.noarch.rpm
+	$(JLDOWNLOAD) http://download.opensuse.org/repositories/windows:/mingw:/win32/SLE_11_SP3/noarch/mingw32-libexpat-2.0.1-6.6.noarch.rpm && \
+	mv mingw32-libexpat-*.rpm mingw-libexpat.rpm && \
+	$(JLDOWNLOAD) http://download.opensuse.org/repositories/windows:/mingw:/win32/SLE_11_SP3/noarch/mingw32-zlib-1.2.8-2.4.noarch.rpm && \
+	mv mingw32-zlib-*.rpm mingw-zlib.rpm
 else ifeq ($(ARCH),x86_64)
 	cd dist-extras && \
-	wget -O 7z920-x64.msi http://downloads.sourceforge.net/sevenzip/7z920-x64.msi && \
+	$(JLDOWNLOAD) 7z920-x64.msi http://downloads.sourceforge.net/sevenzip/7z920-x64.msi && \
 	7z x -y 7z920-x64.msi _7z.exe _7z.dll && \
 	mv _7z.dll 7z.dll && \
 	mv _7z.exe 7z.exe && \
-	wget -O mingw-libexpat.rpm http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP3/noarch/mingw64-libexpat-2.0.1-5.1.noarch.rpm && \
-	wget -O mingw-zlib.rpm http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP3/noarch/mingw64-zlib-1.2.8-1.5.noarch.rpm
+	$(JLDOWNLOAD) http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP3/noarch/mingw64-libexpat-2.0.1-5.8.noarch.rpm && \
+	mv mingw64-libexpat-*.rpm mingw-libexpat.rpm && \
+	$(JLDOWNLOAD) http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP3/noarch/mingw64-zlib-1.2.8-2.1.noarch.rpm && \
+	mv mingw64-zlib-*.rpm mingw-zlib.rpm
 else
 	$(error no win-extras target for ARCH=$(ARCH))
 endif
 	cd dist-extras && \
-	wget -O 7z920_extra.7z http://downloads.sourceforge.net/sevenzip/7z920_extra.7z && \
-	wget -O nsis-2.46.5-Unicode-setup.exe https://unsis.googlecode.com/files/nsis-2.46.5-Unicode-setup.exe && \
+	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z920_extra.7z && \
+	$(JLDOWNLOAD) https://unsis.googlecode.com/files/nsis-2.46.5-Unicode-setup.exe && \
 	$(call spawn,./7z.exe) x -y -onsis nsis-2.46.5-Unicode-setup.exe && \
 	chmod a+x ./nsis/makensis.exe && \
 	chmod a+x 7z.exe && \
@@ -389,4 +393,4 @@ endif
 	7z e -y mingw-libexpat.cpio && \
 	7z x -y mingw-zlib.rpm -so > mingw-zlib.cpio && \
 	7z e -y mingw-zlib.cpio && \
-	wget -O PortableGit.7z http://msysgit.googlecode.com/files/PortableGit-1.8.3-preview20130601.7z
+	$(JLDOWNLOAD) PortableGit.7z http://msysgit.googlecode.com/files/PortableGit-1.8.3-preview20130601.7z
