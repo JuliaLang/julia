@@ -189,3 +189,6 @@ I,J,V = findnz(SparseMatrixCSC(2,1,[1,3],[1,2],[1.0,0.0]))
 
 # issue #5437
 @test nfilled(sparse([1,2,3],[1,2,3],[0.0,1.0,2.0])) == 2
+
+# issue 5824
+@test sprand(4,5,0.5).^0 == sparse(ones(4,5))

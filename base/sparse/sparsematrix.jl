@@ -576,7 +576,7 @@ end # macro
 (.\)(A::Array, B::SparseMatrixCSC) = (.\)(A, full(B))
 (.\)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (.\)(full(A), full(B))
 
-(.^)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval .^ B)
+(.^)(A::SparseMatrixCSC, B::Number) = B==0 ? sparse(ones(A.m, A.n)) : SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval .^ B)
 (.^)(A::Number, B::SparseMatrixCSC) = (.^)(A, full(B))
 (.^)(A::SparseMatrixCSC, B::Array) = (.^)(full(A), B)
 (.^)(A::Array, B::SparseMatrixCSC) = (.^)(A, full(B))
