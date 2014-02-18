@@ -119,7 +119,7 @@ Library improvements
       and `SubString`s thereof ([#5703]).
 
     * `bytestring` is automatically called on `String` arguments for
-      conversion to `Ptr{Uint8}` in `ccall` ([#5673]).
+      conversion to `Ptr{Uint8}` in `ccall` ([#5677]).
 
   * `LinAlg` (linear algebra) improvements
 
