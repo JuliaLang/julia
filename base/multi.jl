@@ -87,6 +87,14 @@ end
 
 abstract ClusterManager
 
+type WorkerLocalInfo
+    # Currently only one field, in the future we may add more fields like 
+    # local OS pid, system info like RAM, CPU type, etc.
+    #
+    privipaddr::IpAddr
+    WorkerLocalInfo() = new(getipaddr())
+end
+
 type Worker
     host::ByteString
     port::Uint16
@@ -99,6 +107,7 @@ type Worker
     privhost::ByteString
     manage::Function
     config::Dict
+    winfo::WorkerLocalInfo
     
     Worker(host::String, port::Integer, sock::TcpSocket, id::Int) =
         new(bytestring(host), uint16(port), sock, IOBuffer(), {}, {}, id, false, "")
@@ -173,9 +182,10 @@ end
 
 type LocalProcess
     id::Int
+    winfo::WorkerLocalInfo
 end
 
-const LPROC = LocalProcess(1)
+const LPROC = LocalProcess(1, WorkerLocalInfo())
 
 const map_pid_wrkr = Dict{Int, Union(Worker, LocalProcess)}()
 const map_sock_wrkr = ObjectIdDict()
@@ -201,6 +211,18 @@ type ProcessGroup
 end
 const PGRP = ProcessGroup({})
 
+getprivipaddr(pid::Integer) = getprivipaddr(worker_from_id(pid))
+getprivipaddr(w::Union(Worker, LocalProcess)) = fetchwinfo(w).privipaddr
+
+fetchwinfo(pid::Integer) = fetchwinfo(worker_from_id(pid))
+function fetchwinfo(w::Union(Worker, LocalProcess))
+    # retrieve and cache upon first access
+    if !isdefined(w, :winfo)
+        w.winfo = remotecall_fetch(w.id, fetchwinfo, w.id)
+    end
+    w.winfo
+end
+
 function add_workers(pg::ProcessGroup, ws::Array{Any,1})
     # NOTE: currently only node 1 can add new nodes, since nobody else
     # has the full list of address:port
@@ -211,6 +233,7 @@ function add_workers(pg::ProcessGroup, ws::Array{Any,1})
         create_message_handler_loop(w.socket) 
     end
     all_locs = map(x -> isa(x, Worker) ? (x.privhost, x.port, x.id) : ("", 0, x.id), pg.workers)
+    
     for w in ws
         send_msg_now(w, :join_pgrp, w.id, all_locs)
     end
@@ -231,6 +254,10 @@ function nworkers()
 end
 
 procs() = Int[x.id for x in PGRP.workers]
+function procs(pid::Integer)
+    ipatpid = getprivipaddr(pid)
+    Int[x.id for x in filter(w -> getprivipaddr(w) == ipatpid, PGRP.workers)]
+end
 
 function workers()
     allp = procs()
@@ -1507,3 +1534,4 @@ function interrupt(pids::AbstractVector=workers())
         end
     end
 end
+
