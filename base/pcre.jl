@@ -79,7 +79,7 @@ function compile(pattern::String, options::Integer)
     erroff = Array(Int32,1)
     re_ptr = ccall((:pcre_compile, :libpcre), Ptr{Void},
                     (Ptr{Uint8}, Int32, Ptr{Ptr{Uint8}}, Ptr{Int32}, Ptr{Uint8}),
-                    pattern, options, errstr, erroff, C_NULL)
+                    bytestring(pattern), options, errstr, erroff, C_NULL)
     if re_ptr == C_NULL
         error("$(bytestring(errstr[1]))",
               " at position $(erroff[1]+1)",

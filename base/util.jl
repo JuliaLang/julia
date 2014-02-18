@@ -249,13 +249,13 @@ end
 end
 
 @windows_only begin
-    function clipboard(x::ByteString)
+    function clipboard(x::String)
         ccall((:OpenClipboard, "user32"), stdcall, Bool, (Ptr{Void},), C_NULL)
         ccall((:EmptyClipboard, "user32"), stdcall, Bool, ())
         p = ccall((:GlobalAlloc, "kernel32"), stdcall, Ptr{Void}, (Uint16,Int32), 2, length(x)+1)
         p = ccall((:GlobalLock, "kernel32"), stdcall, Ptr{Void}, (Ptr{Void},), p)
         # write data to locked, allocated space
-        ccall(:memcpy, Ptr{Void}, (Ptr{Void},Ptr{Uint8},Int32), p, x, length(x)+1)
+        ccall(:memcpy, Ptr{Void}, (Ptr{Void},Ptr{Uint8},Int32), p, bytestring(x), length(x)+1)
         ccall((:GlobalUnlock, "kernel32"), stdcall, Void, (Ptr{Void},), p)
         # set clipboard data type to 13 for Unicode text/string
         p = ccall((:SetClipboardData, "user32"), stdcall, Ptr{Void}, (Uint32, Ptr{Void}), 1, p)

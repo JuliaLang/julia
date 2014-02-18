@@ -106,8 +106,8 @@ end
 
 # For move command
 function rename(src::String, dst::String)
-    err = ccall(:jl_fs_rename, Int32, (Ptr{Uint8}, Ptr{Uint8}), bytestring(src),
-                bytestring(dst))
+    err = ccall(:jl_fs_rename, Int32, (Ptr{Uint8}, Ptr{Uint8}),
+                bytestring(src), bytestring(dst))
 
     # on error, default to cp && rm
     if err < 0

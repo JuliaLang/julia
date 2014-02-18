@@ -109,21 +109,23 @@ abspath(a::String, b::String...) = abspath(joinpath(a,b...))
 @windows_only function realpath(path::String)
     buflength = length(path)+1
     buf = zeros(Uint8,buflength)
+    bpath = bytestring(path)
     p = ccall((:GetFullPathNameA, "Kernel32"), stdcall, 
         Uint32, (Ptr{Uint8}, Uint32, Ptr{Uint8}, Ptr{Void}), 
-        path, buflength, buf, C_NULL)
+        bpath, buflength, buf, C_NULL)
     if p > buflength
         buf = zeros(Uint8,p)
         p = ccall((:GetFullPathNameA, "Kernel32"), stdcall, 
             Uint32, (Ptr{Uint8}, Uint32, Ptr{Uint8}, Ptr{Void}), 
-            path, p, buf, C_NULL)
+            bpath, p, buf, C_NULL)
     end
     systemerror(:realpath, p == 0)
     return bytestring(buf)[1:end-1]
 end
 
 @unix_only function realpath(path::String)
-    p = ccall(:realpath, Ptr{Uint8}, (Ptr{Uint8}, Ptr{Uint8}), path, C_NULL)
+    p = ccall(:realpath, Ptr{Uint8}, (Ptr{Uint8}, Ptr{Uint8}), 
+              bytestring(path), C_NULL)
     systemerror(:realpath, p == C_NULL)
     s = bytestring(p)
     c_free(p)

@@ -1207,7 +1207,7 @@ function parse(str::String, pos::Int; greedy::Bool=true, raise::Bool=true)
     # returns (expr, end_pos). expr is () in case of parse error.
     ex, pos = ccall(:jl_parse_string, Any,
                     (Ptr{Uint8}, Int32, Int32),
-                    str, pos-1, greedy ? 1:0)
+                    bytestring(str), pos-1, greedy ? 1:0)
     if raise && isa(ex,Expr) && is(ex.head,:error)
         throw(ParseError(ex.args[1]))
     end
@@ -1549,9 +1549,9 @@ string(x::Union(Int8,Int16,Int32,Int64,Int128)) = dec(x)
 ## string to float functions ##
 
 float64_isvalid(s::String, out::Array{Float64,1}) =
-    ccall(:jl_strtod, Int32, (Ptr{Uint8},Ptr{Float64}), s, out) == 0
+    ccall(:jl_strtod, Int32, (Ptr{Uint8},Ptr{Float64}), bytestring(s),out) == 0
 float32_isvalid(s::String, out::Array{Float32,1}) =
-    ccall(:jl_strtof, Int32, (Ptr{Uint8},Ptr{Float32}), s, out) == 0
+    ccall(:jl_strtof, Int32, (Ptr{Uint8},Ptr{Float32}), bytestring(s),out) == 0
 
 float64_isvalid(s::SubString, out::Array{Float64,1}) =
     ccall(:jl_substrtod, Int32, (Ptr{Uint8},Csize_t,Int,Ptr{Float64}), s.string, convert(Csize_t,s.offset), s.endof, out) == 0
