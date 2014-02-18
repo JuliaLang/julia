@@ -469,11 +469,7 @@ for (op, restype) in ( (:+, Nothing), (:-, Nothing), (:.*, Nothing),
             nnzS = nfilled(A) + nfilled(B)
             colptrS = Array(Ti, A.n+1)
             rowvalS = Array(Ti, nnzS)
-            if $restype == Nothing
-                nzvalS = Array(Tv, nnzS)
-            else
-                nzvalS = Array($restype, nnzS)
-            end
+            nzvalS = Array($(restype==Nothing ? (:Tv) : restype), nnzS)
 
             z = zero(Tv)
 
