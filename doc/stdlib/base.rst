@@ -4513,11 +4513,11 @@ Parallel Computing
 
    Perform ``fetch(remotecall(...))`` in one message.
 
-.. function:: put(RemoteRef, value)
+.. function:: put!(RemoteRef, value)
 
-   Store a value to a remote reference. Implements "shared queue of length 1" semantics: if a value is already present, blocks until the value is removed with ``take``.
+   Store a value to a remote reference. Implements "shared queue of length 1" semantics: if a value is already present, blocks until the value is removed with ``take``. Returns its first argument.
 
-.. function:: take(RemoteRef)
+.. function:: take!(RemoteRef)
 
    Fetch the value of a remote reference, removing it so that the reference is empty again.
 

@@ -62,14 +62,14 @@ rmdir(b_tmpdir)
 #######################################################################
 function test_file_poll(channel,timeout_s)
     rc = poll_file(file, iround(timeout_s/10), timeout_s)
-    put(channel,rc)
+    put!(channel,rc)
 end
 
 function test_timeout(tval)
     tic()
     channel = RemoteRef()
     @async test_file_poll(channel,tval)
-    tr = take(channel)
+    tr = take!(channel)
     t_elapsed = toq()
     @test !tr
     @test tval <= t_elapsed
@@ -83,7 +83,7 @@ function test_touch(slval)
     f = open(file,"a")
     write(f,"Hello World\n")
     close(f)
-    tr = take(channel)
+    tr = take!(channel)
     @test tr
 end
 

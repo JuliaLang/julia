@@ -392,6 +392,8 @@ eval(Sys, :(@deprecate shlib_list dllist))
 @deprecate myindexes localindexes
 
 @deprecate setfield setfield!
+@deprecate put      put!
+@deprecate take     take!
 
 # 0.3 discontinued functions
 
