@@ -40,6 +40,7 @@ astcopy(x::Array{Any,1}) = map(astcopy, x)
 astcopy(x) = x
 
 isequal(x::Expr, y::Expr) = (is(x.head,y.head) && isequal(x.args,y.args))
+isequal(x::QuoteNode, y::QuoteNode) = isequal(x.value, y.value)
 
 function show(io::IO, tv::TypeVar)
     if !is(tv.lb, None)
