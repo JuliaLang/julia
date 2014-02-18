@@ -118,6 +118,31 @@ et=toq()
 @test isready(rr1)
 @test !isready(rr3)
 
+# task waiting on a remoteref with a timeout
+rr = RemoteRef()
+tic()
+try 
+    take!(rr; timeout=0.2)
+end
+et=toq()
+@test (et >= 0.2) && (et <= 0.5)
+put!(rr, 1)
+tic()
+try 
+    put!(rr, 2; timeout=0.2)
+end
+et=toq()
+@test (et >= 0.2) && (et <= 0.5)
+take!(rr)
+@spawn begin
+  sleep(0.2)
+  put!(rr, 2)
+end
+tic()
+@test (2 == take!(rr; timeout=1.0))
+et=toq()
+@test (et >= 0.2) && (et <= 0.5)
+
 
 # TODO: The below block should be always enabled but the error is printed by the event loop
 

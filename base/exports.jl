@@ -1126,6 +1126,7 @@ export
     remotecall_fetch,
     remotecall_wait,
     rmprocs,
+    rtype,
     take!,
     SyncObjData,
     syncobj_create,
