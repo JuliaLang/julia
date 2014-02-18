@@ -34,8 +34,8 @@ type TmStruct
 end
 
 strftime(t) = strftime("%c", t)
-strftime(fmt::ByteString, t::Real) = strftime(fmt, TmStruct(t))
-function strftime(fmt::ByteString, tm::TmStruct)
+strftime(fmt::String, t::Real) = strftime(fmt, TmStruct(t))
+function strftime(fmt::String, tm::TmStruct)
     timestr = Array(Uint8, 128)
     n = ccall(:strftime, Int, (Ptr{Uint8}, Int, Ptr{Uint8}, Ptr{Void}),
               timestr, length(timestr), fmt, &tm)
@@ -45,8 +45,8 @@ function strftime(fmt::ByteString, tm::TmStruct)
     bytestring(convert(Ptr{Uint8},timestr))
 end
 
-strptime(timestr::ByteString) = strptime("%c", timestr)
-function strptime(fmt::ByteString, timestr::ByteString)
+strptime(timestr::String) = strptime("%c", timestr)
+function strptime(fmt::String, timestr::String)
     tm = TmStruct()
     r = ccall(:strptime, Ptr{Uint8}, (Ptr{Uint8}, Ptr{Uint8}, Ptr{Void}),
               timestr, fmt, &tm)

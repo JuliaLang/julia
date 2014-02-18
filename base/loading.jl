@@ -86,10 +86,10 @@ end
 
 # remote/parallel load
 
-include_string(txt::ByteString, fname::ByteString) =
+include_string(txt::String, fname::String) =
     ccall(:jl_load_file_string, Any, (Ptr{Uint8},Ptr{Uint8}), txt, fname)
 
-include_string(txt::ByteString) = include_string(txt, "string")
+include_string(txt::String) = include_string(txt, "string")
 
 function source_path(default::Union(String,Nothing)="")
     t = current_task()

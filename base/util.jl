@@ -249,7 +249,7 @@ end
 end
 
 @windows_only begin
-    function clipboard(x::ByteString)
+    function clipboard(x::String)
         ccall((:OpenClipboard, "user32"), stdcall, Bool, (Ptr{Void},), C_NULL)
         ccall((:EmptyClipboard, "user32"), stdcall, Bool, ())
         p = ccall((:GlobalAlloc, "kernel32"), stdcall, Ptr{Void}, (Uint16,Int32), 2, length(x)+1)
