@@ -115,7 +115,7 @@ end
 yield()
 schedule(t, InterruptException(), error=true)
 yield()
-put(r,11)
+put!(r,11)
 yield()
 
 

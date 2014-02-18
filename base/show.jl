@@ -332,7 +332,8 @@ const _expr_infix_wide = Set(:(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(&=),
     :(|=), :($=), :(>>>=), :(>>=), :(<<=), :(&&), :(||))
 const _expr_infix = Set(:(:), :(<:), :(->), :(=>), symbol("::"))
 const _expr_calls  = [:call =>('(',')'), :ref =>('[',']'), :curly =>('{','}')]
-const _expr_parens = [:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>('{','}')]
+const _expr_parens = [:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>('{','}'),
+                      :hcat =>('[',']'), :row =>('[',']')]
 
 function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int=0)
     head, args, nargs = ex.head, ex.args, length(ex.args)
@@ -358,10 +359,17 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int=0)
     # list
     elseif haskey(_expr_parens, head)               # :tuple/:vcat/:cell1d
         op, cl = _expr_parens[head]
-        print(io, op)
-        show_list(io, args, ",", indent)
+        if head === :vcat && !isempty(args) && is_expr(args[1], :row)
+            sep = ";"
+        elseif head === :hcat || head === :row
+            sep = " "
+        else
+            sep = ","
+        end
+        head !== :row && print(io, op)
+        show_list(io, args, sep, indent)
         if is(head, :tuple) && nargs == 1; print(io, ','); end
-        print(io, cl)
+        head !== :row && print(io, cl)
 
     # function call
     elseif haskey(_expr_calls, head) && nargs >= 1  # :call/:ref/:curly

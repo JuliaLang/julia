@@ -24,7 +24,7 @@
 ##
 ## RemoteRef(p) - ...or on a particular processor
 ##
-## put(r, val) - store a value to an uninitialized RemoteRef
+## put!(r, val) - store a value to an uninitialized RemoteRef
 ##
 ## @spawn expr -
 ##     evaluate expr somewhere. returns a RemoteRef. all variables in expr
@@ -42,8 +42,8 @@
 
 # todo:
 # - more indexing
-# * take() to empty a Ref (full/empty variables)
-# * have put() wait on non-empty Refs
+# * take!() to empty a Ref (full/empty variables)
+# * have put!() wait on non-empty Refs
 # - removing nodes
 # - more dynamic scheduling
 # * fetch/wait latency seems to be excessive
@@ -554,7 +554,7 @@ function wait_empty(rv::RemoteValue)
     return nothing
 end
 
-## core messages: do, call, fetch, wait, ref, put ##
+## core messages: do, call, fetch, wait, ref, put! ##
 
 
 function run_work_thunk(thunk)
@@ -569,7 +569,8 @@ function run_work_thunk(thunk)
     result
 end
 function run_work_thunk(rv::RemoteValue, thunk)
-    put(rv, run_work_thunk(thunk))
+    put!(rv, run_work_thunk(thunk))
+    nothing
 end
 
 function schedule_call(rid, thunk)
@@ -701,17 +702,18 @@ fetch(r::RemoteRef) = call_on_owner(fetch_ref, r)
 fetch(x::ANY) = x
 
 # storing a value to a Ref
-function put(rv::RemoteValue, val::ANY)
+function put!(rv::RemoteValue, val::ANY)
     wait_empty(rv)
     rv.result = val
     rv.done = true
     notify_full(rv)
+    rv
 end
 
-put_ref(rid, v) = put(lookup_ref(rid), v)
-put(rr::RemoteRef, val::ANY) = (call_on_owner(put_ref, rr, val); val)
+put_ref(rid, v) = put!(lookup_ref(rid), v)
+put!(rr::RemoteRef, val::ANY) = (call_on_owner(put_ref, rr, val); rr)
 
-function take(rv::RemoteValue)
+function take!(rv::RemoteValue)
     wait_full(rv)
     val = rv.result
     rv.done = false
@@ -720,8 +722,8 @@ function take(rv::RemoteValue)
     val
 end
 
-take_ref(rid) = take(lookup_ref(rid))
-take(rr::RemoteRef) = call_on_owner(take_ref, rr)
+take_ref(rid) = take!(lookup_ref(rid))
+take!(rr::RemoteRef) = call_on_owner(take_ref, rr)
 
 function deliver_result(sock::IO, msg, oid, value)
     #print("$(myid()) sending result $oid\n")
@@ -815,7 +817,7 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                     oid = deserialize(sock)
                     #print("$(myid()) got $msg $oid\n")
                     val = deserialize(sock)
-                    put(lookup_ref(oid), val)
+                    put!(lookup_ref(oid), val)
                 elseif is(msg, :identify_socket)
                     otherid = deserialize(sock)
                     register_worker(Worker("", 0, sock, otherid))
@@ -1464,14 +1466,14 @@ function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
     timercb(aw, status) = begin
         try
             if testcb()
-                put(done, :ok)
+                put!(done, :ok)
             elseif (time() - start) > secs
-                put(done, :timed_out)
+                put!(done, :timed_out)
             elseif status != 0
-                put(done, :error)
+                put!(done, :error)
             end
         catch e
-            put(done, :error)
+            put!(done, :error)
         finally
             isready(done) && stop_timer(aw)
         end

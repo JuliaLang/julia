@@ -54,7 +54,7 @@ If you are behind a firewall and you need to use the https protocol instead of t
 Next, enter the `julia/` directory and run `make` to build the `julia` executable. To perform a parallel build, use `make -j N` and supply the maximum number of concurrent processes.
 When compiled the first time, it will automatically download and build its [external dependencies](#Required-Build-Tools-External-Libraries).
 This takes a while, but only has to be done once. If the defaults in the build do not work for you, and you need to set specific make parameters, you can save them in `Make.user`. The build will automatically check for the existence of `Make.user` and use it if it exists.
-Building Julia requires 1.5GiB of diskspace and approximately 700MiB of virtual memory.
+Building Julia requires 1.5GiB of disk space and approximately 700MiB of virtual memory.
 
 If you need to build Julia in an environment that does not allow access to the outside world, use `make -C deps getall` to download all the necessary files. Then, copy the julia directory over to the target environment and build with `make`.
 
@@ -67,7 +67,7 @@ Once it is built, you can run the `julia` executable using its full path in the 
 2. add the `julia` directory to your executable path for this shell session (in bash: `export PATH="$(pwd):$PATH"` ; in csh or tcsh:
 `set path= ( $path $cwd )` ), or
 
-3. add the `julia` directory to your executable path permanently (eg in `.bash_profile`).
+3. add the `julia` directory to your executable path permanently (e.g. in `.bash_profile`).
 
 Now you should be able to run Julia like this:
 
@@ -106,37 +106,37 @@ For a fast and easy current installation, the `before_install` section of [travi
 
 #### CentOS 5
 
-On CentOS 5 systems, the default compiler (gcc 4.1) is too old to build Julia.
+On CentOS 5 systems, the default compiler (`gcc` 4.1) is too old to build Julia.
 
-If the gcc44 and gfortran44 packages are installed, you can specify their use by adding the following to Make.user
+If the `gcc44` and `gfortran44` packages are installed, you can specify their use by adding the following to Make.user
 
     FC = gfortran44
     CC = gcc44
     CXX = g++44
 
-Otherwise, install or contact your systems administrator to install a more recent version of gcc.
+Otherwise, install or contact your systems administrator to install a more recent version of `gcc`.
 
 #### Linux Build Troubleshooting
 
  Problem              | Possible Solution
 ------------------------|---------------------
- OpenBLAS build failure | Set one of the following build options in `Make.user` and build again: <ul><li> `OPENBLAS_TARGET_ARCH=BARCELONA` (AMD CPUs) </li><li> `OPENBLAS_TARGET_ARCH=NEHALEM` (Intel CPUs) </li><li> `USE_SYSTEM_BLAS=1` uses the system provided `libblas` <ul><li> Set `LIBBLAS=-lopenblas` and `LIBBLASNAME=libopenblas` to force the use of the system provided OpenBLAS when multiple BLAS versions are installed </li></ul></li></ul>
+ OpenBLAS build failure | Set one of the following build options in `Make.user` and build again: <ul><li> `OPENBLAS_TARGET_ARCH=BARCELONA` (AMD CPUs) or `OPENBLAS_TARGET_ARCH=NEHALEM` (Intel CPUs)<ul>Set `OPENBLAS_DYNAMIC_ARCH = 0` to disable compiling multiple architectures in a single binary.</ul></li><li> `USE_SYSTEM_BLAS=1` uses the system provided `libblas` <ul><li>Set `LIBBLAS=-lopenblas` and `LIBBLASNAME=libopenblas` to force the use of the system provided OpenBLAS when multiple BLAS versions are installed </li></ul></li></ul>
  readline build error   | Set `USE_SYSTEM_READLINE=1` in `Make.user`
  ncurses build error    | Install the `libncurses5` development package <ul><li> Debian/Ubuntu: `apt-get install libncurses5-dev` </li><li> RPM-based systems: `yum install libncurses5-devel` </li></ul>
  Illegal Instruction error | Check if your CPU supports AVX while your OS does not (e.g. through virtualization, as described in [this issue](https://github.com/JuliaLang/julia/issues/3263)), and try installing LLVM 3.3 instead of LLVM 3.2.
 
 ### OS X
 
-It is essential to use a 64-bit gfortran to compile Julia dependencies. The gfortran-4.7 (and newer) compilers in brew and macports work for building Julia. If you do not use brew or macports, you can download and install [gfortran and gcc from hpc.sf.net](http://hpc.sf.net/). The HPC gfortran requires HPC gcc to be installed to function properly. 
-Clang is now used by default to build Julia on OS X (10.7 and above). It is recommended that you upgrade to the latest version of Xcode (at least 4.3.3.). You need to have the Xcode command line utlities installed (and updated): run `xcode-select --install` in the terminal (in Xcode prior to v5.0, you can alternatively go to Preferences -> Downloads and select the Command Line Utilities). This will ensure that clang v3.1 is installed, which is the minimum version of clang required to build Julia. On OS X 10.6, the Julia build will automatically use gcc.
+It is essential to use a 64-bit gfortran to compile Julia dependencies. The gfortran-4.7 (and newer) compilers in brew and MacPorts work for building Julia. If you do not use brew or MacPorts, you can download and install [gfortran and gcc from hpc.sf.net](http://hpc.sf.net/). The HPC gfortran requires HPC gcc to be installed to function properly. 
+Clang is now used by default to build Julia on OS X (10.7 and above). It is recommended that you upgrade to the latest version of Xcode (at least 4.3.3.). You need to have the Xcode command line utilities installed (and updated): run `xcode-select --install` in the terminal (in Xcode prior to v5.0, you can alternatively go to Preferences -> Downloads and select the Command Line Utilities). This will ensure that clang v3.1 is installed, which is the minimum version of `clang` required to build Julia. On OS X 10.6, the Julia build will automatically use `gcc`.
 
-If you have set `LD_LIBRARY_PATH` or `DYLD_LIBRARY_PATH` in your .bashrc or equivalent, Julia may be unable to find various libraries that come bundled with it. These environment variables need to be unset for Julia to work.
+If you have set `LD_LIBRARY_PATH` or `DYLD_LIBRARY_PATH` in your `.bashrc` or equivalent, Julia may be unable to find various libraries that come bundled with it. These environment variables need to be unset for Julia to work.
 
 If you see build failures in OpenBLAS or if you prefer to experiment, you can use the Apple provided BLAS in vecLib by building with `USE_SYSTEM_BLAS=1`. Julia does not use the Apple provided LAPACK, as it is too old.
 
 ### FreeBSD
 
-On *FreeBSD Release 9.0*, install the gcc46, git, and gmake packages/ports, and compile Julia with the command:
+On *FreeBSD Release 9.0*, install the `gcc46`, `git`, and `gmake` packages/ports, and compile Julia with the command:
 
     $ gmake FC=gfortran46
 

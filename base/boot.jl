@@ -112,7 +112,6 @@
 #     runnable::Bool
 # end
 
-import Main
 import Core.Intrinsics.ccall
 
 export

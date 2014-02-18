@@ -103,9 +103,9 @@ rr1 = RemoteRef()
 rr2 = RemoteRef()
 rr3 = RemoteRef()
 
-@async begin sleep(0.5); put(rr1, :ok) end
-@async begin sleep(1.0); put(rr2, :ok) end
-@async begin sleep(2.0); put(rr3, :ok) end
+@async begin sleep(0.5); put!(rr1, :ok) end
+@async begin sleep(1.0); put!(rr2, :ok) end
+@async begin sleep(2.0); put!(rr3, :ok) end
 
 tic()
 timedwait(1.0) do

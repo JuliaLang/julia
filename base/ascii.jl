@@ -21,6 +21,9 @@ search(s::ASCIIString, c::Char, i::Integer) = c < 0x80 ? search(s.data,uint8(c),
 rsearch(s::ASCIIString, c::Char, i::Integer) = c < 0x80 ? rsearch(s.data,uint8(c),i) : 0
 
 function string(c::ASCIIString...)
+    if length(c) == 1
+        return c[1]
+    end
     n = 0
     for s in c
         n += length(s.data)

@@ -140,7 +140,7 @@ end
 function repl_callback(ast::ANY, show_value)
     global _repl_enough_stdin = true
     stop_reading(STDIN)
-    put(repl_channel, (ast, show_value))
+    put!(repl_channel, (ast, show_value))
 end
 
 _eval_done = Condition()
@@ -161,7 +161,7 @@ function run_repl()
                 wait(_eval_done)
             end
         end
-        put(repl_channel,(nothing,-1))
+        put!(repl_channel,(nothing,-1))
     end
 
     while true
@@ -173,7 +173,7 @@ function run_repl()
         ccall(:repl_callback_enable, Void, (Ptr{Uint8},), prompt_string)
         global _repl_enough_stdin = false
         start_reading(STDIN)
-        (ast, show_value) = take(repl_channel)
+        (ast, show_value) = take!(repl_channel)
         if show_value == -1
             # exit flag
             break

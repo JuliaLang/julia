@@ -857,7 +857,7 @@ bin_val = hex2bytes("07bf")
 
 # issue #4586
 @test rsplit(RevString("ailuj"),'l') == {"ju","ia"}
-@test_throws float64(RevString("64"))
+@test float64(RevString("64")) === 46.0
 
 for T = (Uint8,Int8,Uint16,Int16,Uint32,Int32,Uint64,Int64,Uint128,Int128,BigInt),
     b = 2:62, _ = 1:10

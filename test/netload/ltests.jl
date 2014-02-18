@@ -51,7 +51,7 @@ rr_sent = RemoteRef()
             end
 #            println("process $(myid()) received $bread bytes")
             close(s)
-            put(rr_rcd, true)
+            put!(rr_rcd, true)
         end
     end)
 
@@ -67,7 +67,7 @@ rr_sent = RemoteRef()
         end
         close(s)
 #        println("process $(myid()) sent $bwritten bytes")
-        put(rr_sent, true)
+        put!(rr_sent, true)
     end)
 
 wait(rr_rcd)
@@ -93,22 +93,19 @@ rr_client = RemoteRef()
     begin
         while (true)
             s=accept(server) 
-            @async begin xfer(s, xfer_exp); put(rr_server, true); take(rr_client); close(s); put(rr_server, true);   end 
+            @async begin xfer(s, xfer_exp); put!(rr_server, true); take!(rr_client); close(s); put!(rr_server, true);   end
         end
     end)
 
 
 
-@spawnat(workers()[1], begin s = connect("localhost", port); xfer(s, xfer_exp); put(rr_client, true); take(rr_server); close(s); put(rr_client, true);  end)
+@spawnat(workers()[1], begin s = connect("localhost", port); xfer(s, xfer_exp); put!(rr_client, true); take!(rr_server); close(s); put!(rr_client, true);  end)
 
-take(rr_server)
-take(rr_client)
+take!(rr_server)
+take!(rr_client)
 
 close(server)
 
 println(" : OK")
 
 @unix_only include("memtest.jl")
-
-    
-    
