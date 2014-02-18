@@ -269,6 +269,10 @@ function default_show_quoted(io::IO, ex, indent::Int)
     show_unquoted(io, ex, indent + indent_width)
     print(io, ")")
 end
+function default_show_quoted(io::IO, ex::Symbol, indent::Int)
+    print(io, ":")
+    show_unquoted(io, ex, indent)
+end
 
 ## AST printing helpers ##
 
