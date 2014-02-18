@@ -446,7 +446,7 @@ end
 
 ## Binary arithmetic and boolean operators
 
-for (op, restype) in ( (:+, Nothing), (:-, Nothing), (:.*, Nothing), (:.^, Nothing), 
+for (op, restype) in ( (:+, Nothing), (:-, Nothing), (:.*, Nothing),
                        (:(.<), Bool) )
     @eval begin
 
