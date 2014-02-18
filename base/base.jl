@@ -18,8 +18,8 @@ ptr_arg_convert(::Type{Ptr{Void}}, x) = x
 cconvert(T, x) = convert(T, x)
 # use the code in ccall.cpp to safely allocate temporary pointer arrays
 cconvert{T}(::Type{Ptr{Ptr{T}}}, a::Array) = a
-# TODO: for some reason this causes a strange type inference problem
-#cconvert(::Type{Ptr{Uint8}}, s::String) = bytestring(s)
+# convert strings to ByteString to pass as pointers
+cconvert{P<:Union(Int8,Uint8)}(::Type{Ptr{P}}, s::String) = bytestring(s)
 
 abstract IO
 
