@@ -22,18 +22,24 @@ type SharedArray{T,N} <: DenseArray{T,N}
     SharedArray(d,p,r,sn) = new(d,p,r,sn)
 end
 
-function SharedArray(T::Type, dims::NTuple; init=false, pids=workers())
+function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
     N = length(dims)
 
     !isbits(T) ? error("Type of Shared Array elements must be bits types") : nothing
     @windows_only error(" SharedArray is not supported on Windows yet.")
     
+    if isempty(pids)
+        # only use workers on the current host
+        pids = procs(myid())
+        onlocalhost = true
+    else
+        onlocalhost = assert_same_host(pids)
+    end
+    
     len_S = prod(dims)
     if length(pids) > len_S
         pids = pids[1:len_S]
     end
-    
-    onlocalhost = assert_same_host(pids)
 
     local shm_seg_name = ""
     local s 
@@ -270,17 +276,11 @@ end
 
 
 function assert_same_host(procs)
-    resp = Array(Any, length(procs))
-    
-    @sync begin
-        for (i, p) in enumerate(procs)
-            @async resp[i] = remotecall_fetch(p, () -> getipaddr())
-        end
-    end
-    
-    if !all(x->x==resp[1], resp) 
+    first_privip = getprivipaddr(procs[1])
+    if !all(x -> getprivipaddr(x) == first_privip, procs) 
         error("SharedArray requires all requested processes to be on the same machine.")
     end
     
-    return (resp[1] != getipaddr()) ? false : true
+    return (first_privip != getipaddr()) ? false : true
 end
+
