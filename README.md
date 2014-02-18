@@ -104,9 +104,9 @@ The [julia-deps PPA](https://launchpad.net/~staticfloat/+archive/julia-deps/) co
 
 For a fast and easy current installation, the `before_install` section of [travis.yml](https://github.com/JuliaLang/julia/blob/master/.travis.yml) is a great resource.  Note that those instructions are for Ubuntu 12.04, and for later versions you may need to install newer versions of dependencies, such as `libunwind8-dev` instead of `libunwind7-dev`.
 
-#### CentOS 5
+#### RHEL/CentOS 5
 
-On CentOS 5 systems, the default compiler (`gcc` 4.1) is too old to build Julia.
+On RHEL/CentOS 5 systems, the default compiler (`gcc` 4.1) is too old to build Julia.
 
 If the `gcc44` and `gfortran44` packages are installed, you can specify their use by adding the following to Make.user
 
