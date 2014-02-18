@@ -507,10 +507,11 @@ Iterable Collections
 
    Returns the indices of elements in collection ``a`` that appear in collection ``b``
 
-.. function:: unique(itr)
+.. function:: unique(itr[, dim])
 
    Returns an array containing only the unique elements of the iterable ``itr``, in
    the order that the first of each set of equivalent elements originally appears.
+   If ``dim`` is specified, returns unique regions of the array ``itr`` along ``dim``.
 
 .. function:: reduce(op, v0, itr)
 
@@ -553,6 +554,11 @@ Iterable Collections
 .. function:: minimum(A, dims)
 
    Compute the minimum value of an array over the given dimensions
+
+.. function:: extrema(itr)
+
+    Compute both the minimum and maximum element in a single pass, and
+    return them as a 2-tuple.
 
 .. function:: indmax(itr) -> Integer
 
@@ -951,9 +957,9 @@ Strings
 
    Create a string from any value using the ``showall`` function.
 
-.. function:: bytestring(::Ptr{Uint8})
+.. function:: bytestring(::Ptr{Uint8}, [length])
 
-   Create a string from the address of a C (0-terminated) string. A copy is made; the ptr can be safely freed.
+   Create a string from the address of a C (0-terminated) string. A copy is made; the ptr can be safely freed. If ``length`` is specified, the string does not have to be 0-terminated.
 
 .. function:: bytestring(s)
 
@@ -2687,6 +2693,10 @@ Mathematical Functions
 .. function:: max(x, y, ...)
 
    Return the maximum of the arguments. Operates elementwise over arrays.
+
+.. function:: minmax(x, y)
+
+   Return ``(min(x,y), max(x,y))``.
 
 .. function:: clamp(x, lo, hi)
 
@@ -4503,11 +4513,11 @@ Parallel Computing
 
    Perform ``fetch(remotecall(...))`` in one message.
 
-.. function:: put(RemoteRef, value)
+.. function:: put!(RemoteRef, value)
 
-   Store a value to a remote reference. Implements "shared queue of length 1" semantics: if a value is already present, blocks until the value is removed with ``take``.
+   Store a value to a remote reference. Implements "shared queue of length 1" semantics: if a value is already present, blocks until the value is removed with ``take``. Returns its first argument.
 
-.. function:: take(RemoteRef)
+.. function:: take!(RemoteRef)
 
    Fetch the value of a remote reference, removing it so that the reference is empty again.
 

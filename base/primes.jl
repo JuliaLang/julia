@@ -4,8 +4,8 @@
 #     http://thomasinterestingblog.wordpress.com/2011/11/30/generating-primes-with-the-sieve-of-atkin-in-c/
 #     http://dl.dropboxusercontent.com/u/29023244/atkin.cpp
 #
-function primesmask(n::Int)
-    s = falses(n)
+function primesmask(s::AbstractVector{Bool})
+    n = length(s)
     n < 2 && return s; s[2] = true
     n < 3 && return s; s[3] = true
     r = ifloor(sqrt(n))
@@ -24,12 +24,11 @@ function primesmask(n::Int)
     end
     return s
 end
-function primesmask(n::Integer)
-    n <= typemax(Int) || error("you want WAY too many primes ($n)")
-    primesmask(int(n))
-end
+primesmask(n::Int) = primesmask(falses(n))
+primesmask(n::Integer) = n <= typemax(Int) ? primesmask(int(n)) :
+    error("you want WAY too many primes ($n)")
 
-primes(n::Integer) = find(primesmask(n))
+primes(n::Union(Integer,AbstractVector{Bool})) = find(primesmask(n))
 
 # Miller-Rabin for primality testing:
 #     http://en.wikipedia.org/wiki/Miller–Rabin_primality_test

@@ -88,7 +88,7 @@ end
 
 # searching definitions
 
-function which(f, args...)
+function which(f::Callable, args...)
     ms = methods(f, map(a->(isa(a,Type) ? Type{a} : typeof(a)), args))
     isempty(ms) && throw(MethodError(f, args))
     ms[1]

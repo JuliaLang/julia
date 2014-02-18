@@ -24,6 +24,9 @@ sz34 = spzeros(3, 4)
 se77 = speye(7)
 @test all([se44 sz42 sz41; sz34 se33] == se77)
 
+# check blkdiag concatenation
+@test all(blkdiag(se33, se33) == sparse([1, 2, 3, 4, 5, 6], [1, 2, 3, 4, 5, 6], ones(6)))
+
 # check concatenation promotion
 sz41_f32 = spzeros(Float32, 4, 1)
 se33_i32 = speye(Int32, 3, 3)
@@ -189,3 +192,6 @@ I,J,V = findnz(SparseMatrixCSC(2,1,[1,3],[1,2],[1.0,0.0]))
 
 # issue #5437
 @test nfilled(sparse([1,2,3],[1,2,3],[0.0,1.0,2.0])) == 2
+
+# issue 5824
+@test sprand(4,5,0.5).^0 == sparse(ones(4,5))

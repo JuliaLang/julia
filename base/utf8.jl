@@ -131,6 +131,9 @@ function rsearch(s::UTF8String, c::Char, i::Integer)
 end
 
 function string(a::ByteString...)
+    if length(a) == 1
+        return a[1]::UTF8String
+    end
     # ^^ at least one must be UTF-8 or the ASCII-only method would get called
     data = Array(Uint8,0)
     for d in a

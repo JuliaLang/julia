@@ -1,3 +1,5 @@
+isempty(itr) = done(itr, start(itr))
+
 # enumerate
 
 immutable Enumerate{I}

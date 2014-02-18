@@ -300,38 +300,38 @@ typedef struct {
 
 // constants and type objects -------------------------------------------------
 
-extern jl_datatype_t *jl_any_type;
-extern jl_datatype_t *jl_type_type;
-extern jl_tvar_t     *jl_typetype_tvar;
-extern jl_datatype_t *jl_typetype_type;
-extern jl_value_t    *jl_ANY_flag;
-extern jl_datatype_t *jl_undef_type;
-extern jl_datatype_t *jl_typename_type;
-extern jl_datatype_t *jl_typector_type;
-extern jl_datatype_t *jl_sym_type;
-extern jl_datatype_t *jl_symbol_type;
-extern jl_tuple_t *jl_tuple_type;
-extern jl_value_t *jl_tupletype_type;
-extern jl_datatype_t *jl_ntuple_type;
-extern jl_typename_t *jl_ntuple_typename;
-extern jl_datatype_t *jl_tvar_type;
-extern jl_datatype_t *jl_task_type;
+extern DLLEXPORT jl_datatype_t *jl_any_type;
+extern DLLEXPORT jl_datatype_t *jl_type_type;
+extern DLLEXPORT jl_tvar_t     *jl_typetype_tvar;
+extern DLLEXPORT jl_datatype_t *jl_typetype_type;
+extern DLLEXPORT jl_value_t    *jl_ANY_flag;
+extern DLLEXPORT jl_datatype_t *jl_undef_type;
+extern DLLEXPORT jl_datatype_t *jl_typename_type;
+extern DLLEXPORT jl_datatype_t *jl_typector_type;
+extern DLLEXPORT jl_datatype_t *jl_sym_type;
+extern DLLEXPORT jl_datatype_t *jl_symbol_type;
+extern DLLEXPORT jl_tuple_t *jl_tuple_type;
+extern DLLEXPORT jl_value_t *jl_tupletype_type;
+extern DLLEXPORT jl_datatype_t *jl_ntuple_type;
+extern DLLEXPORT jl_typename_t *jl_ntuple_typename;
+extern DLLEXPORT jl_datatype_t *jl_tvar_type;
+extern DLLEXPORT jl_datatype_t *jl_task_type;
 
-extern jl_datatype_t *jl_uniontype_type;
-extern jl_datatype_t *jl_datatype_type;
+extern DLLEXPORT jl_datatype_t *jl_uniontype_type;
+extern DLLEXPORT jl_datatype_t *jl_datatype_type;
 
-extern jl_value_t *jl_bottom_type;
-extern jl_value_t *jl_top_type;
-extern jl_datatype_t *jl_lambda_info_type;
+extern DLLEXPORT jl_value_t *jl_bottom_type;
+extern DLLEXPORT jl_value_t *jl_top_type;
+extern DLLEXPORT jl_datatype_t *jl_lambda_info_type;
 extern DLLEXPORT jl_datatype_t *jl_module_type;
-extern jl_datatype_t *jl_vararg_type;
-extern jl_datatype_t *jl_function_type;
-extern jl_datatype_t *jl_abstractarray_type;
-extern jl_datatype_t *jl_storedarray_type;
-extern jl_datatype_t *jl_densearray_type;
+extern DLLEXPORT jl_datatype_t *jl_vararg_type;
+extern DLLEXPORT jl_datatype_t *jl_function_type;
+extern DLLEXPORT jl_datatype_t *jl_abstractarray_type;
+extern DLLEXPORT jl_datatype_t *jl_storedarray_type;
+extern DLLEXPORT jl_datatype_t *jl_densearray_type;
 extern DLLEXPORT jl_datatype_t *jl_array_type;
-extern jl_typename_t *jl_array_typename;
-extern jl_datatype_t *jl_weakref_type;
+extern DLLEXPORT jl_typename_t *jl_array_typename;
+extern DLLEXPORT jl_datatype_t *jl_weakref_type;
 extern DLLEXPORT jl_datatype_t *jl_ascii_string_type;
 extern DLLEXPORT jl_datatype_t *jl_utf8_string_type;
 extern DLLEXPORT jl_datatype_t *jl_errorexception_type;
@@ -348,7 +348,7 @@ extern DLLEXPORT jl_value_t *jl_inexact_exception;
 extern DLLEXPORT jl_value_t *jl_undefref_exception;
 extern DLLEXPORT jl_value_t *jl_interrupt_exception;
 extern DLLEXPORT jl_value_t *jl_bounds_exception;
-extern jl_value_t *jl_an_empty_cell;
+extern DLLEXPORT jl_value_t *jl_an_empty_cell;
 
 extern DLLEXPORT jl_datatype_t *jl_bool_type;
 extern DLLEXPORT jl_datatype_t *jl_char_type;
@@ -362,26 +362,26 @@ extern DLLEXPORT jl_datatype_t *jl_int64_type;
 extern DLLEXPORT jl_datatype_t *jl_uint64_type;
 extern DLLEXPORT jl_datatype_t *jl_float32_type;
 extern DLLEXPORT jl_datatype_t *jl_float64_type;
-extern jl_datatype_t *jl_floatingpoint_type;
-extern jl_datatype_t *jl_voidpointer_type;
-extern jl_datatype_t *jl_pointer_type;
+extern DLLEXPORT jl_datatype_t *jl_floatingpoint_type;
+extern DLLEXPORT jl_datatype_t *jl_voidpointer_type;
+extern DLLEXPORT jl_datatype_t *jl_pointer_type;
 
-extern jl_value_t *jl_array_uint8_type;
-extern jl_value_t *jl_array_any_type;
-extern jl_value_t *jl_array_symbol_type;
+extern DLLEXPORT jl_value_t *jl_array_uint8_type;
+extern DLLEXPORT jl_value_t *jl_array_any_type;
+extern DLLEXPORT jl_value_t *jl_array_symbol_type;
 extern DLLEXPORT jl_datatype_t *jl_expr_type;
-extern jl_datatype_t *jl_symbolnode_type;
-extern jl_datatype_t *jl_getfieldnode_type;
-extern jl_datatype_t *jl_linenumbernode_type;
-extern jl_datatype_t *jl_labelnode_type;
-extern jl_datatype_t *jl_gotonode_type;
-extern jl_datatype_t *jl_quotenode_type;
-extern jl_datatype_t *jl_newvarnode_type;
-extern jl_datatype_t *jl_topnode_type;
-extern jl_datatype_t *jl_intrinsic_type;
-extern jl_datatype_t *jl_methtable_type;
-extern jl_datatype_t *jl_method_type;
-extern jl_datatype_t *jl_task_type;
+extern DLLEXPORT jl_datatype_t *jl_symbolnode_type;
+extern DLLEXPORT jl_datatype_t *jl_getfieldnode_type;
+extern DLLEXPORT jl_datatype_t *jl_linenumbernode_type;
+extern DLLEXPORT jl_datatype_t *jl_labelnode_type;
+extern DLLEXPORT jl_datatype_t *jl_gotonode_type;
+extern DLLEXPORT jl_datatype_t *jl_quotenode_type;
+extern DLLEXPORT jl_datatype_t *jl_newvarnode_type;
+extern DLLEXPORT jl_datatype_t *jl_topnode_type;
+extern DLLEXPORT jl_datatype_t *jl_intrinsic_type;
+extern DLLEXPORT jl_datatype_t *jl_methtable_type;
+extern DLLEXPORT jl_datatype_t *jl_method_type;
+extern DLLEXPORT jl_datatype_t *jl_task_type;
 
 extern jl_tuple_t *jl_null;
 #define JL_NULL ((void*)jl_null)
@@ -620,21 +620,21 @@ DLLEXPORT jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b);
 int jl_args_morespecific(jl_value_t *a, jl_value_t *b);
 
 // type constructors
-jl_typename_t *jl_new_typename(jl_sym_t *name);
-jl_tvar_t *jl_new_typevar(jl_sym_t *name,jl_value_t *lb,jl_value_t *ub);
+DLLEXPORT jl_typename_t *jl_new_typename(jl_sym_t *name);
+DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name,jl_value_t *lb,jl_value_t *ub);
 jl_typector_t *jl_new_type_ctor(jl_tuple_t *params, jl_value_t *body);
 DLLEXPORT jl_value_t *jl_apply_type(jl_value_t *tc, jl_tuple_t *params);
 jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n);
 jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n);
-jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types);
+DLLEXPORT jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types);
 jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_datatype_t *super,
                                    jl_tuple_t *parameters);
-jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields);
-jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
+DLLEXPORT jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields);
+DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
                                jl_tuple_t *parameters,
                                jl_tuple_t *fnames, jl_tuple_t *ftypes,
                                int abstract, int mutabl);
-jl_datatype_t *jl_new_bitstype(jl_value_t *name, jl_datatype_t *super,
+DLLEXPORT jl_datatype_t *jl_new_bitstype(jl_value_t *name, jl_datatype_t *super,
                                jl_tuple_t *parameters, size_t nbits);
 jl_datatype_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
 
@@ -651,7 +651,7 @@ DLLEXPORT jl_tuple_t *jl_tuple(size_t n, ...);
 DLLEXPORT jl_tuple_t *jl_tuple1(void *a);
 DLLEXPORT jl_tuple_t *jl_tuple2(void *a, void *b);
 DLLEXPORT jl_tuple_t *jl_alloc_tuple(size_t n);
-jl_tuple_t *jl_alloc_tuple_uninit(size_t n);
+DLLEXPORT jl_tuple_t *jl_alloc_tuple_uninit(size_t n);
 DLLEXPORT jl_tuple_t *jl_tuple_append(jl_tuple_t *a, jl_tuple_t *b);
 DLLEXPORT jl_tuple_t *jl_tuple_fill(size_t n, jl_value_t *v);
 DLLEXPORT jl_sym_t *jl_symbol(const char *str);
@@ -711,7 +711,7 @@ DLLEXPORT void *jl_unbox_voidpointer(jl_value_t *v);
 #endif
 
 // structs
-int jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err);
+DLLEXPORT int jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err);
 DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i);
 DLLEXPORT jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i);
 DLLEXPORT void        jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs);
@@ -766,6 +766,7 @@ DLLEXPORT jl_value_t *jl_apply_array_type(jl_datatype_t *type, size_t dim);
 
 // modules and global variables
 extern DLLEXPORT jl_module_t *jl_main_module;
+extern DLLEXPORT jl_module_t *jl_internal_main_module;
 extern DLLEXPORT jl_module_t *jl_core_module;
 extern DLLEXPORT jl_module_t *jl_base_module;
 extern DLLEXPORT jl_module_t *jl_current_module;
@@ -789,6 +790,7 @@ DLLEXPORT void jl_module_use(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
 DLLEXPORT void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
 DLLEXPORT void jl_module_importall(jl_module_t *to, jl_module_t *from);
 DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s);
+DLLEXPORT jl_module_t *jl_new_main_module(void);
 void jl_add_standard_imports(jl_module_t *m);
 STATIC_INLINE jl_function_t *jl_get_function(jl_module_t *m, const char *name)
 {

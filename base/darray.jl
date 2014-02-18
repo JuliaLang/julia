@@ -160,7 +160,7 @@ drandn(d::Int...) = drandn(d)
 function distribute(a::AbstractArray)
     owner = myid()
     rr = RemoteRef()
-    put(rr, a)
+    put!(rr, a)
     DArray(size(a)) do I
         remotecall_fetch(owner, ()->fetch(rr)[I...])
     end
