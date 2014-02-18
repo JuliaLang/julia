@@ -22,8 +22,9 @@ macro test_repr(x)
         local x3 = parse(repr(x2))
         x3 == x2 ? nothing : error(string(
             "repr test failed:",
-            "\noriginal: ", x2, "    (", typeof(x2), ")",
-            "\nreparsed: ", x3, "    (", typeof(x3), ")"
+            "\noriginal: ", $x,
+            "\n\nparsed: ", x2, "\n", sprint(dump, x2),
+            "\n\nreparsed: ", x3, "\n", sprint(dump, x3)
         ))
     end
 end
