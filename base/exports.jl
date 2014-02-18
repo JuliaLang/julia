@@ -470,7 +470,6 @@ export
     zeta,
 
 # arrays
-    blkdiag,
     broadcast!,
     broadcast!_function,
     broadcast,
@@ -585,6 +584,7 @@ export
     bkfact!,
     bkfact,
     blas_set_num_threads,
+    blkdiag,
     chol,
     cholfact!,
     cholfact,
