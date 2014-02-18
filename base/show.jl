@@ -226,7 +226,7 @@ function show_indented(io::IO, ex::ExprNode, indent::Int)
     show_unquoted(io, ex, indent)
 end
 function show_indented(io::IO, ex::QuoteNode, indent::Int)
-    show_indented(io, ex.value, indent)
+    default_show_quoted(io, ex.value, indent)
 end
 
 show(io::IO, ex::Expr) = show_indented(io, ex)
@@ -268,6 +268,10 @@ function default_show_quoted(io::IO, ex, indent::Int)
     print(io, ":(")
     show_unquoted(io, ex, indent + indent_width)
     print(io, ")")
+end
+function default_show_quoted(io::IO, ex::Symbol, indent::Int)
+    print(io, ":")
+    show_unquoted(io, ex, indent)
 end
 
 ## AST printing helpers ##
@@ -494,7 +498,7 @@ show_unquoted(io::IO, ex::LineNumberNode) = show_linenumber(io, ex.line)
 show_unquoted(io::IO, ex::LabelNode)      = print(io, ex.label, ": ")
 show_unquoted(io::IO, ex::GotoNode)       = print(io, "goto ", ex.label)
 show_unquoted(io::IO, ex::TopNode)        = print(io, "top(", ex.name, ')')
-show_unquoted(io::IO, ex::QuoteNode, ind::Int) = show_indented(io,ex.value,ind)
+show_unquoted(io::IO, ex::QuoteNode, ind::Int) = default_show_quoted(io,ex.value,ind)
 function show_unquoted(io::IO, ex::SymbolNode) 
     print(io, ex.name)
     show_expr_type(io, ex.typ)
@@ -552,7 +556,7 @@ function xdump_elts(fn::Function, io::IO, x::Array{Any}, n::Int, indent, i0, i1)
     end
 end
 function xdump(fn::Function, io::IO, x::Array{Any}, n::Int, indent)
-    println("Array($(eltype(x)),$(size(x)))")
+    println(io, "Array($(eltype(x)),$(size(x)))")
     if n > 0
         xdump_elts(fn, io, x, n, indent, 1, (length(x) <= 10 ? length(x) : 5))
         if length(x) > 10
