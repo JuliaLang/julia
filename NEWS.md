@@ -118,6 +118,9 @@ Library improvements
     * `pointer(s, i=1)` for `ByteString`, `UTF16String`, `UTF32String`,
       and `SubString`s thereof ([#5703]).
 
+    * `bytestring` is automatically called on `String` arguments for
+      conversion to `Ptr{Uint8}` in `ccall` ([#5673]).
+
   * `LinAlg` (linear algebra) improvements
 
       * Balancing options for eigenvector calculations for general matrices ([#5428]).
