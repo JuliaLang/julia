@@ -151,7 +151,7 @@ function reload_path(path::String)
         end
     end
     if !isready(package_locks[path])
-        put(package_locks[path],nothing)
+        put!(package_locks[path],nothing)
     end
     nothing
 end

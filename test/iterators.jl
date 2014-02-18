@@ -15,21 +15,21 @@ macro test_buildvec(ex...)
     :(@test buildvec($(ex[1])) == $(ex[2]))
 end
 
-@test_buildvec take(count(), 0)           []
-@test_buildvec take(count(), 5)           [0:4]
-@test_buildvec take(count(1,3), 5)        [1:3:13]
-@test_buildvec take(count(zeros(2,2)), 3) [i * eye(2) for i=0:2]
+@test_buildvec take!(count(), 0)           []
+@test_buildvec take!(count(), 5)           [0:4]
+@test_buildvec take!(count(1,3), 5)        [1:3:13]
+@test_buildvec take!(count(zeros(2,2)), 3) [i * eye(2) for i=0:2]
 
 @test_buildvec drop(1:5, 5)  []
 @test_buildvec drop(1:0, 0)  []
 @test_buildvec drop(1:5, 2)  [3:5]
 
 @test_buildvec cycle(1:0)           []
-@test_buildvec take(cycle(1:3), 8)  [1:3,1:3,1:2]
+@test_buildvec take!(cycle(1:3), 8)  [1:3,1:3,1:2]
 
 @test_buildvec repeat('a', 0)        []
 @test_buildvec repeat('a', 5)        ['a' for i = 1:5]
-@test_buildvec take(repeat('a'), 5)  ['a' for i = 1:5]
+@test_buildvec take!(repeat('a'), 5)  ['a' for i = 1:5]
 
 @test_buildvec chain()               []
 @test_buildvec chain(1:0)            []

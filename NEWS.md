@@ -199,6 +199,12 @@ Deprecated or removed
   
   * `nnz` is removed. Use `countnz` or `nfilled` instead ([#5538])
 
+  * `setfield` is renamed `setfield!` ([#5748])
+
+  * `put` and `take` are renamed `put!` and `take!` ([#5511])
+
+  * `put!` now returns its first argument, the remote reference ([#5819])
+
 [#4042]: https://github.com/JuliaLang/julia/issues/4042
 [#5164]: https://github.com/JuliaLang/julia/issues/5164
 [#4026]: https://github.com/JuliaLang/julia/issues/4026
@@ -253,6 +259,9 @@ Deprecated or removed
 [#5576]: https://github.com/JuliaLang/julia/pull/5576
 [#5703]: https://github.com/JuliaLang/julia/pull/5703
 [#5427]: https://github.com/JuliaLang/julia/pull/5427
+[#5748]: https://github.com/JuliaLang/julia/issues/5748
+[#5511]: https://github.com/JuliaLang/julia/issues/5511
+[#5819]: https://github.com/JuliaLang/julia/issues/5819
 
 Julia v0.2.0 Release Notes
 ==========================
