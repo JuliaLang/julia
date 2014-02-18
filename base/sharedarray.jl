@@ -29,8 +29,8 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
     @windows_only error(" SharedArray is not supported on Windows yet.")
     
     if isempty(pids)
-    # only use workers on the current host
-        pids = workers_at_host(getipaddr())
+        # only use workers on the current host
+        pids = procs(myid())
         onlocalhost = true
     else
         onlocalhost = assert_same_host(pids)
@@ -276,32 +276,11 @@ end
 
 
 function assert_same_host(procs)
-    resp = Array(Any, length(procs))
-    
-    @sync begin
-        for (i, p) in enumerate(procs)
-            @async resp[i] = remotecall_fetch(p, getipaddr)
-        end
-    end
-    
-    if !all(x->x==resp[1], resp) 
+    first_privip = getprivipaddr(procs[1])
+    if !all(x -> getprivipaddr(x) == first_privip, procs) 
         error("SharedArray requires all requested processes to be on the same machine.")
     end
     
-    return (resp[1] != getipaddr()) ? false : true
+    return (first_privip != getipaddr()) ? false : true
 end
 
-function workers_at_host(host)
-    wrkrs = Array(Int, 0)
-    @sync begin
-        for p in workers()
-            @async begin 
-                rhost = remotecall_fetch(p, getipaddr)
-                if host == rhost
-                    push!(wrkrs, p)
-                end
-            end
-        end
-    end
-    wrkrs
-end
