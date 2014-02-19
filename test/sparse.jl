@@ -195,3 +195,8 @@ I,J,V = findnz(SparseMatrixCSC(2,1,[1,3],[1,2],[1.0,0.0]))
 
 # issue 5824
 @test sprand(4,5,0.5).^0 == sparse(ones(4,5))
+
+# issue 5853, sparse diff
+for i=1:2, a={[1 2 3], [1 2 3]', speye(3)}
+    @test all(diff(sparse(a),i) == diff(a,i))
+end
