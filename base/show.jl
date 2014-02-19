@@ -770,12 +770,16 @@ function print_matrix_vdots(io::IO,
     end
 end
 
-function print_matrix(io::IO,
-    X::AbstractVecOrMat, rows::Integer, cols::Integer,
-    pre::String, sep::String, post::String,
-    hdots::String, vdots::String, ddots::String,
-    hmod::Integer, vmod::Integer
-)
+function print_matrix(io::IO, X::AbstractVecOrMat,
+                      rows::Integer = tty_rows()-4,
+                      cols::Integer = tty_cols(),
+                      pre::String = " ",
+                      sep::String = "  ",
+                      post::String = "",
+                      hdots::String = "  \u2026  ",
+                      vdots::String = "\u22ee",
+                      ddots::String = "  \u22f1  ",
+                      hmod::Integer = 5, vmod::Integer = 5)
     cols -= length(pre) + length(post)
     presp = repeat(" ", length(pre))
     postsp = ""
@@ -845,13 +849,6 @@ function print_matrix(io::IO,
         end
     end
 end
-print_matrix(io::IO, X::AbstractVecOrMat,
-             rows::Integer, cols::Integer) =
-    print_matrix(io, X, rows, cols, " ", "  ", "",
-                 "  \u2026  ", "\u22ee", "  \u22f1  ", 5, 5)
-
-print_matrix(io::IO, X::AbstractVecOrMat) =
-               print_matrix(io, X, tty_rows()-4, tty_cols())
 
 summary(x) = string(typeof(x))
 
@@ -862,7 +859,7 @@ dims2string(d) = length(d) == 0 ? "0-dimensional" :
 summary(a::AbstractArray) =
     string(dims2string(size(a)), " ", typeof(a))
 
-function show_nd(io::IO, a::AbstractArray, limit, rows, cols)
+function show_nd(io::IO, a::AbstractArray, limit, print_matrix)
     if isempty(a)
         return
     end
@@ -894,7 +891,7 @@ function show_nd(io::IO, a::AbstractArray, limit, rows, cols)
         for i = 1:(nd-1); print(io, "$(idxs[i]), "); end
         println(io, idxs[end], "] =")
         slice = sub(a, 1:size(a,1), 1:size(a,2), idxs...)
-        print_matrix(io, slice, rows, cols)
+        print_matrix(io, slice)
         print(io, idxs == tail ? "" : "\n\n")
     end
     cartesianmap(print_slice, tail)
@@ -912,16 +909,6 @@ whos() = whos(r"")
 whos(m::Module) = whos(m, r"")
 whos(pat::Regex) = whos(current_module(), pat)
 
-function show{T}(io::IO, x::AbstractArray{T,0})
-    println(io, summary(x),":")
-    if isassigned(x)
-        sx = sprint(showcompact, x[])
-    else
-        sx = undef_ref_str
-    end
-    print(io, sx)
-end
-
 # global flag for limiting output
 # TODO: this should be replaced with a better mechanism. currently it is only
 # for internal use in showing arrays.
@@ -932,25 +919,31 @@ _limit_output = false
 showarray(X::AbstractArray; kw...) = showarray(STDOUT, X; kw...)
 function showarray(io::IO, X::AbstractArray;
                    header::Bool=true, limit::Bool=_limit_output,
-                   rows = tty_rows()-4, cols = tty_cols())
+                   rows = tty_rows()-4, cols = tty_cols(), repr=false)
     header && print(io, summary(X))
     if !isempty(X)
         header && println(io, ":")
         if ndims(X) == 0
-            return showcompact(io, X[])
+            if isassigned(X)
+                return showcompact(io, X[])
+            else
+                return print(io, undef_ref_str)
+            end
         end
         if !limit
             rows = cols = typemax(Int)
         end
+        punct = repr ? ("[", " ", "]") : (" ", "  ", "")
         if ndims(X)<=2
-            print_matrix(io, X, rows, cols)
+            print_matrix(io, X, rows, cols, punct...)
         else
-            show_nd(io, X, limit, rows, cols)
+            show_nd(io, X, limit,
+                    (io,slice)->print_matrix(io,slice,rows,cols,punct...))
         end
     end
 end
 
-show(io::IO, X::AbstractArray) = showarray(io, X)
+show(io::IO, X::AbstractArray) = showarray(io, X, header=false, limit=false, repr=true)
 
 print(io::IO, X::AbstractArray) = writedlm(io, X)
 

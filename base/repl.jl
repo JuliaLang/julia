@@ -23,6 +23,9 @@ function writemime(io::IO, ::MIME"text/plain", v::AbstractVector)
     end
 end
 
+writemime(io::IO, ::MIME"text/plain", v::AbstractArray) =
+    showarray(io, header=true, repr=false)
+
 function writemime(io::IO, ::MIME"text/plain", v::DataType)
     show(io, v)
     methods(v) # force constructor creation
