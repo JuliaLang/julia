@@ -326,7 +326,7 @@ end
 
 function sparse_diff1{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     m,n = size(S)
-    m > 1 && return SparseMatrixCSC{Tv,Ti}(0, n, ones(n+1), Ti[], Tv[])
+    m > 1 || return SparseMatrixCSC{Tv,Ti}(0, n, ones(n+1), Ti[], Tv[])
     colptr = Array(Ti, n+1)
     numnz = 2 * nfilled(S) # upper bound; will shrink later
     rowval = Array(Ti, numnz)
@@ -381,7 +381,7 @@ function sparse_diff2{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti})
     ptrS = 1
     colptr[1] = 1
 
-    n == 0 || return SparseMatrixCSC{Tv,Ti}(m, n, colptr, rowval, nzval)
+    n == 0 && return SparseMatrixCSC{Tv,Ti}(m, n, colptr, rowval, nzval)
 
     startA = colptr_a[1]
     stopA = colptr_a[2]
