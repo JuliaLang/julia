@@ -498,7 +498,7 @@ executed. Consider if the regular expression occurs in a loop::
 
     for line = lines
       m = match(r"^\s*(?:#|$)", line)
-      if m.match == nothing
+      if m == nothing
         # non-comment
       else
         # comment
@@ -514,7 +514,7 @@ this::
     re = Regex("^\\s*(?:#|\$)")
     for line = lines
       m = match(re, line)
-      if m.match == nothing
+      if m == nothing
         # non-comment
       else
         # comment
