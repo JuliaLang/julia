@@ -24,7 +24,7 @@ function writemime(io::IO, ::MIME"text/plain", v::AbstractVector)
 end
 
 writemime(io::IO, ::MIME"text/plain", v::AbstractArray) =
-    showarray(io, header=true, repr=false)
+    with_output_limit(()->showarray(io, v, header=true, repr=false))
 
 function writemime(io::IO, ::MIME"text/plain", v::DataType)
     show(io, v)
