@@ -27,20 +27,12 @@ New language features
   * Unicode identifiers are normalized (NFC) so that different encodings
     of equivalent strings are treated as the same identifier ([#5462]).
 
-New library functions
----------------------
-
-  * `GitHub` module for interacting with the GitHub API
-
-  * `Pkg.submit(pkg[,commit])` function to automatically submit
-    a GitHub pull request to the package author.
+Library improvements
+--------------------
 
   * `mod2pi` function ([#4799], [#4862]).
 
   * New functions `minmax` and `extrema` ([#5275]).
-
-Library improvements
---------------------
 
   * `consume(p)` extended to `consume(p, args...)`, allowing it
     to optionally pass `args...` back to the producer ([#4775]).
@@ -63,6 +55,19 @@ Library improvements
     than just printing its results.
 
   * `errno([code])` function to get or set the C library's `errno`.
+
+  * `GitHub` module for interacting with the GitHub API
+
+  * Package improvements
+
+    * Packages are now installed into `.julia/v0.3` by default (or
+      whatever the current Julia version is), so that different
+      versions of Julia can co-exist with incompatible packages.
+      Existing `.julia` installations are unaffected unless `Pkg.init()`
+      is run to re-create the package directories ([#3344], [#5737]).
+
+    * `Pkg.submit(pkg[,commit])` function to automatically submit
+      a GitHub pull request to the package author.
 
   * Collections improvements
 

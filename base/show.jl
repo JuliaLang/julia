@@ -221,12 +221,13 @@ show_unquoted(io::IO, x, indent, prec) = show_unquoted(io, x, indent)
 typealias ExprNode Union(SymbolNode, LineNumberNode, LabelNode, GotoNode,
                          TopNode, QuoteNode)
 show(io::IO, ex::ExprNode) = show_indented(io, ex)
+show(io::IO, ex::QuoteNode) = show_indented(io, QuoteNode(ex))
 
 function show_indented(io::IO, ex::ExprNode, indent::Int)
-    show_unquoted(io, ex, indent)
+    default_show_quoted(io, ex, indent)
 end
 function show_indented(io::IO, ex::QuoteNode, indent::Int)
-    default_show_quoted(io, ex.value, indent)
+    show_unquoted(io, ex, indent)
 end
 
 show(io::IO, ex::Expr) = show_indented(io, ex)
@@ -234,9 +235,9 @@ function show_indented(io::IO, ex::Expr, indent::Int)
     if is(ex.head, :block) || is(ex.head, :body)
         show_block(io, "quote", ex, indent); print(io, "end")
     elseif ex.head in (:tuple, :vcat, :cell1)
-        show_unquoted(io, ex, indent + indent_width)
+        print(io, ':'); show_unquoted(io, ex, indent + indent_width)
     else
-        show_unquoted(io, ex, indent)
+        default_show_quoted(io, ex, indent)
     end
 end
 const paren_quoted_syms = Set{Symbol}(:(:),:(::),:(:=),:(=),:(==),:(===),:(=>))
@@ -262,17 +263,18 @@ const infix_ops_by_prec = [
 const infix_op_precs = Dict{Symbol,Int}(merge([{symbol(op)=>i for op=split(infix_ops_by_prec[i])} for i=1:length(infix_ops_by_prec)]...))
 const infix_op_syms = Set{Symbol}(keys(infix_op_precs)...)
 function show_indented(io::IO, sym::Symbol, indent::Int)
-    print(io, sym)
+    if in(sym, paren_quoted_syms)
+        print(io, ":($sym)")
+    else
+        print(io, ":$sym")
+    end
 end
 function default_show_quoted(io::IO, ex, indent::Int)
     print(io, ":(")
     show_unquoted(io, ex, indent + indent_width)
     print(io, ")")
 end
-function default_show_quoted(io::IO, ex::Symbol, indent::Int)
-    print(io, ":")
-    show_unquoted(io, ex, indent)
-end
+default_show_quoted(io::IO, s::Symbol, indent::Int) = show_indented(io, s, indent)
 
 ## AST printing helpers ##
 
