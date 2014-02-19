@@ -3660,9 +3660,9 @@ static void init_julia_llvm_env(Module *m)
     tbaa_arrayptr = tbaa_make_child("jtbaa_arrayptr",tbaa_array);
     tbaa_arraysize = tbaa_make_child("jtbaa_arraysize",tbaa_array);
     tbaa_arraylen = tbaa_make_child("jtbaa_arraylen",tbaa_array);
-    tbaa_tuplelen = tbaa_make_child("jtbaa_arraysize",tbaa_value);
+    tbaa_tuplelen = tbaa_make_child("jtbaa_tuplelen",tbaa_value);
     tbaa_func = tbaa_make_child("jtbaa_func",tbaa_value);
-    tbaa_datatype = tbaa_make_child("jtbaa_func",tbaa_value);
+    tbaa_datatype = tbaa_make_child("jtbaa_datatype",tbaa_value);
     tbaa_const = tbaa_make_child("jtbaa_const",tbaa_root,true);
 
     // every variable or function mapped in this function must be
