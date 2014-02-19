@@ -859,7 +859,7 @@ dims2string(d) = length(d) == 0 ? "0-dimensional" :
 summary(a::AbstractArray) =
     string(dims2string(size(a)), " ", typeof(a))
 
-function show_nd(io::IO, a::AbstractArray, limit, print_matrix)
+function show_nd(io::IO, a::AbstractArray, limit, print_matrix, label_slices)
     if isempty(a)
         return
     end
@@ -887,9 +887,11 @@ function show_nd(io::IO, a::AbstractArray, limit, print_matrix)
                 end
             end
         end
-        print(io, "[:, :, ")
-        for i = 1:(nd-1); print(io, "$(idxs[i]), "); end
-        println(io, idxs[end], "] =")
+        if label_slices
+            print(io, "[:, :, ")
+            for i = 1:(nd-1); print(io, "$(idxs[i]), "); end
+            println(io, idxs[end], "] =")
+        end
         slice = sub(a, 1:size(a,1), 1:size(a,2), idxs...)
         print_matrix(io, slice)
         print(io, idxs == tail ? "" : "\n\n")
@@ -938,7 +940,8 @@ function showarray(io::IO, X::AbstractArray;
             print_matrix(io, X, rows, cols, punct...)
         else
             show_nd(io, X, limit,
-                    (io,slice)->print_matrix(io,slice,rows,cols,punct...))
+                    (io,slice)->print_matrix(io,slice,rows,cols,punct...),
+                    !repr)
         end
     end
 end
