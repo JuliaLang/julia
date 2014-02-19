@@ -330,6 +330,9 @@ function deserialize(s, ::Type{Module})
     path = deserialize(s)
     m = Main
     for mname in path
+        if !isdefined(m,mname)
+            warn("Module $mname not defined on process $(myid())")  # an error seemingly fails
+        end
         m = eval(m,mname)::Module
     end
     m
