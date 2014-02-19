@@ -18,8 +18,8 @@ macro test_repr(x)
         # This could produce a few false positives, but until string
         # interpolation works we don't really have a choice.
         local x1 = parse($x)
-        local x2 = parse(repr(x1))
-        local x3 = parse(repr(x2))
+        local x2 = eval(parse(repr(x1)))
+        local x3 = eval(parse(repr(x2)))
         x3 == x2 ? nothing : error(string(
             "repr test failed:",
             "\noriginal: ", $x,
