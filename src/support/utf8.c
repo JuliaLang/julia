@@ -257,8 +257,10 @@ size_t u8_strlen(const char *s)
     return count;
 }
 
-#if defined(_OS_WINDOWS_) || defined(_OS_LINUX_)
+#if defined(_OS_WINDOWS_)
 extern int wcwidth(uint32_t ch);
+#elif defined(_OS_LINUX_)
+extern int wcwidth(wchar_t ch);
 #endif
 
 size_t u8_strwidth(const char *s)
