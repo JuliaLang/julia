@@ -413,7 +413,7 @@ type RemoteRef{T}
     end
 end
 
-rtype{T}(::RemoteRef{T}) = T
+eltype{T}(::RemoteRef{T}) = T
 
 function record_rr(rr::RemoteRef)
     found = getkey(client_refs, rr, false)
@@ -562,10 +562,12 @@ type RemoteValue <: AbstractRemoteSyncObj
     fetch::Function
     put::Function
     take::Function
+    query::Function
     
-    RemoteValue() = new(false, nothing, SyncObjData(), rvcantake, rvcanput, rvfetch, rvput, rvtake)
+    RemoteValue() = new(false, nothing, SyncObjData(), rvcantake, rvcanput, rvfetch, rvput, rvtake, rvquery)
 end
 
+rvquery(rv::RemoteValue) = nothing
 rvcantake(rv::RemoteValue) = rv.done
 rvcanput(rv::RemoteValue, args...) = !rv.done
 
@@ -580,10 +582,13 @@ function syncobj(pg::ProcessGroup, id, T::Type, args...)
     register_remote_obj(pg, id, rw)
     rw
 end
+syncobjn(id, T, args...) = syncobjn(PGRP, id, T, args...)
+syncobjn(pg, id, T, args...) = (syncobj(pg, id, T, args...); nothing)
+
 
 function syncobj_create(pid, T, args...)
     rr = RemoteRef(pid, T)
-    call_on_owner(syncobj, rr, T, args...)
+    call_on_owner(syncobjn, rr, T, args...)
     rr
 end
 
@@ -628,7 +633,17 @@ function setup_waittimer(condvar, timeout)
     (t1, t)
 end
 
-function wait_cantake (rv::AbstractRemoteSyncObj, args...; timeout=0.0)
+function kwextract(kw, fld, default) 
+    for (k,v) in kw
+        if (k == fld)
+            return v
+        end
+    end
+    return default
+end
+
+function wait_cantake (rv::AbstractRemoteSyncObj, args...; kw...)
+    timeout = kwextract(kw, :timeout, 0.0)
     (t1, t) = (timeout > 0.0) ? setup_waittimer(rv.so.cantake, timeout) : (0, nothing)
 
     try
@@ -645,7 +660,8 @@ function wait_cantake (rv::AbstractRemoteSyncObj, args...; timeout=0.0)
 end
 
 
-function wait_canput(rv::AbstractRemoteSyncObj, args...; timeout=0.0)
+function wait_canput(rv::AbstractRemoteSyncObj, args...; kw...)
+    timeout = kwextract(kw, :timeout, 0.0)
     (t1, t) = (timeout > 0.0) ? setup_waittimer(rv.so.canput, timeout) : (0, nothing)
     
     try
@@ -827,6 +843,10 @@ take_ref(rid; kw...) = take!(lookup_ref(rid); kw...)
 take_ref(rid, key; kw...) = take!(lookup_ref(rid), key; kw...)
 take!(rr::RemoteRef; kw...) = call_on_owner(take_ref, rr; kw...)
 take!(rr::RemoteRef, key; kw...) = call_on_owner(take_ref, rr, key; kw...)
+
+query_ref(rid, args...) = query(lookup_ref(rid), args...)
+query(rr::RemoteRef, args...) = call_on_owner(query_ref, rr, args...)
+query(rv::AbstractRemoteSyncObj, args...) = rv.query(rv, args...)
 
 function deliver_result(sock::IO, msg, oid, value)
     #print("$(myid()) sending result $oid\n")
