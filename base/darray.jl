@@ -1,4 +1,4 @@
-type DArray{T,N,A} <: AbstractArray{T,N}
+type DArray{T,N,A} <: StoredArray{T,N}
     dims::NTuple{N,Int}
 
     chunks::Array{RemoteRef,N}

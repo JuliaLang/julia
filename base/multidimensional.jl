@@ -131,14 +131,14 @@ eval(ngenerate(:N, nothing, :(setindex!{T}(s::SubArray{T,N}, v, ind::Integer)), 
 
 ### from abstractarray.jl
 
-@ngenerate N typeof(A) function fill!{T,N}(A::AbstractArray{T,N}, x)
+@ngenerate N typeof(A) function fill!{T,N}(A::StoredArray{T,N}, x)
     @nloops N i A begin
         @inbounds (@nref N A i) = x
     end
     A
 end
 
-@ngenerate N typeof(dest) function copy!{T,N}(dest::AbstractArray{T,N}, src::AbstractArray{T,N})
+@ngenerate N typeof(dest) function copy!{T,N}(dest::StoredArray{T,N}, src::StoredArray{T,N})
     if @nall N d->(size(dest,d) == size(src,d))
         @nloops N i dest begin
             @inbounds (@nref N dest i) = (@nref N src i)
