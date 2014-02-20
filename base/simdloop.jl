@@ -36,7 +36,7 @@ function compile(x)
         n = gensym() # Trip count
         s = gensym() # Step
         i = gensym() # Index variable
-        # LLVM vectorizer needs to compute a trip count, so make it obivious.
+        # LLVM vectorizer needs to compute a trip count, so make it obvious.
         quote
             local $r = $range
             local $n = length($r)
