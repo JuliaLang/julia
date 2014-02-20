@@ -885,7 +885,7 @@ end
 function flipdim{T}(A::Array{T}, d::Integer)
     nd = ndims(A)
     sd = d > nd ? 1 : size(A, d)
-    if sd == 1
+    if sd == 1 || isempty(A)
         return copy(A)
     end
 
