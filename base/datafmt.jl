@@ -91,6 +91,8 @@ function val_opts(opts)
     d
 end
 
+const offs_chunk_size = 5000
+
 function dlm_fill{T}(cells::Array{T,2}, offarr::Vector{Vector{Int}}, sbuff::String, auto::Bool, row_offset::Int, eol::Char)
     maxrow,maxcol = size(cells)
     const tmp64 = Array(Float64,1)
@@ -107,7 +109,7 @@ function dlm_fill{T}(cells::Array{T,2}, offarr::Vector{Vector{Int}}, sbuff::Stri
         quoted = bool(offsets[idx+2])
         startpos = offsets[idx+3]
         endpos = offsets[idx+4]
-        ((idx += 5) > 5000) && (offidx < length(offarr)) && (idx = 1; offsets = offarr[offidx += 1])
+        ((idx += 5) > offs_chunk_size) && (offidx < length(offarr)) && (idx = 1; offsets = offarr[offidx += 1])
 
         (row < 1) && continue
         (row > maxrow) && break
@@ -165,7 +167,7 @@ _colval{S<:String}(sval::S, cells::Array, row::Int, col::Int, tmp64::Array{Float
 function store_column(oarr::Vector{Vector{Int}}, row::Int, col::Int, quoted::Bool, startpos::Int, endpos::Int, offidx::Int)
     offsets = oarr[end]
     if length(offsets) < offidx
-        offsets = Array(Int, 5000)
+        offsets = Array(Int, offs_chunk_size)
         push!(oarr, offsets)
         offidx = 1
     end
@@ -188,7 +190,7 @@ function dlm_dims{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, ign_adj_dlm::Bool, al
     is_eol = is_dlm = is_quote = expct_col = false
     idx = 1
     offsets = Array(Array{Int,1}, 1)
-    offsets[1] = Array(Int, 5000)
+    offsets[1] = Array(Int, offs_chunk_size)
     offidx = 1
     try
         slen = sizeof(dbuff)
@@ -285,7 +287,7 @@ function dlm_dims{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, ign_adj_dlm::Bool, al
     
     ncols = max(ncols, 1)
     nrows = max(nrows, 1)
-    trimsz = (offidx-1)%5000
+    trimsz = (offidx-1)%offs_chunk_size
     (trimsz > 0) && resize!(offsets[end], trimsz)
     return (nrows, ncols, offsets)
 end
