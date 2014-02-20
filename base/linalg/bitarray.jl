@@ -64,11 +64,6 @@ function tril(B::BitMatrix, k::Integer)
     A
 end
 
-# TODO: improve this!
-(*)(A::BitArray, B::BitArray)      = bitunpack(A) * bitunpack(B)
-(*)(A::BitArray, B::Union(AbstractArray, Array{Bool})) = bitunpack(A) * B
-(*)(A::Union(AbstractArray, Array{Bool}), B::BitArray) = A * bitunpack(B)
-
 ## diff and gradient
 
 # TODO: this could be improved (is it worth it?)

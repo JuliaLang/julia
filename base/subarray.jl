@@ -2,7 +2,7 @@
 
 typealias RangeIndex Union(Int, Range{Int}, Range1{Int})
 
-type SubArray{T,N,A<:AbstractArray,I<:(RangeIndex...,)} <: AbstractArray{T,N}
+type SubArray{T,N,A<:StoredArray,I<:(RangeIndex...,)} <: StoredArray{T,N}
     parent::A
     indexes::I
     dims::NTuple{N,Int}
@@ -188,7 +188,6 @@ parentindexes(a::AbstractArray) = ntuple(ndims(a), i->1:size(a,i))
 copy(s::SubArray) = copy!(similar(s.parent, size(s)), s)
 similar(s::SubArray, T, dims::Dims) = similar(s.parent, T, dims)
 
-getindex{T}(s::SubArray{T,0,AbstractArray{T,0}}) = s.parent[]
 getindex{T}(s::SubArray{T,0}) = s.parent[s.first_index]
 
 getindex{T}(s::SubArray{T,1}, i::Integer) =
@@ -354,8 +353,6 @@ function setindex!(s::SubArray, v, is::Integer...)
     s.parent[index] = v
     return s
 end
-
-setindex!{T}(s::SubArray{T,0,AbstractArray{T,0}},v) = setindex!(s.parent, v)
 
 setindex!{T}(s::SubArray{T,0}, v) = setindex!(s.parent, v, s.first_index)
 

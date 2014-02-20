@@ -163,7 +163,7 @@ function squeeze(A::AbstractArray, dims)
     reshape(A, d)
 end
 
-function copy!(dest::AbstractArray, src)
+function copy!(dest::StoredArray, src)
     i = 1
     for x in src
         dest[i] = x
@@ -174,7 +174,7 @@ end
 
 # copy with minimal requirements on src
 # if src is not an AbstractArray, moving to the offset might be O(n)
-function copy!(dest::AbstractArray, doffs::Integer, src, soffs::Integer=1)
+function copy!(dest::StoredArray, doffs::Integer, src, soffs::Integer=1)
     st = start(src)
     for j = 1:(soffs-1)
         _, st = next(src, st)
@@ -191,13 +191,13 @@ end
 # NOTE: this is to avoid ambiguity with the deprecation of
 #   copy!(dest::AbstractArray, src, doffs::Integer)
 # Remove this when that deprecation is removed.
-function copy!(dest::AbstractArray, doffs::Integer, src::Integer)
+function copy!(dest::StoredArray, doffs::Integer, src::Integer)
     dest[doffs] = src
     return dest
 end
 
 # this method must be separate from the above since src might not have a length
-function copy!(dest::AbstractArray, doffs::Integer, src, soffs::Integer, n::Integer)
+function copy!(dest::StoredArray, doffs::Integer, src, soffs::Integer, n::Integer)
     n == 0 && return dest
     st = start(src)
     for j = 1:(soffs-1)
@@ -212,7 +212,7 @@ function copy!(dest::AbstractArray, doffs::Integer, src, soffs::Integer, n::Inte
 end
 
 # if src is an AbstractArray and a source offset is passed, use indexing
-function copy!(dest::AbstractArray, doffs::Integer, src::AbstractArray, soffs::Integer, n::Integer=length(src))
+function copy!(dest::StoredArray, doffs::Integer, src::AbstractArray, soffs::Integer, n::Integer=length(src))
     for i = 0:(n-1)
         dest[doffs+i] = src[soffs+i]
     end
@@ -249,7 +249,7 @@ for (f,t) in ((:char,   Char),
     @eval begin
         ($f)(x::AbstractArray{$t}) = x
 
-        function ($f)(x::AbstractArray)
+        function ($f)(x::StoredArray)
             y = similar(x,$t)
             i = 1
             for e in x
@@ -266,7 +266,7 @@ for (f,t) in ((:integer, Integer),
     @eval begin
         ($f){T<:$t}(x::AbstractArray{T}) = x
 
-        function ($f)(x::AbstractArray)
+        function ($f)(x::StoredArray)
             y = similar(x,typeof(($f)(one(eltype(x)))))
             i = 1
             for e in x
@@ -312,9 +312,7 @@ end
 conj{T<:Real}(x::AbstractArray{T}) = x
 conj!{T<:Real}(x::AbstractArray{T}) = x
 
-real{T<:Real}(x::AbstractVector{T}) = x
 real{T<:Real}(x::AbstractArray{T}) = x
-imag{T<:Real}(x::AbstractVector{T}) = zero(x)
 imag{T<:Real}(x::AbstractArray{T}) = zero(x)
 
 +{T<:Number}(x::AbstractArray{T}) = x
@@ -355,20 +353,6 @@ end
 # TODO: more optimized special cases
 slicedim(A::AbstractArray, d::Integer, i) =
     A[[ n==d ? i : (1:size(A,n)) for n in 1:ndims(A) ]...]
-
-function reverse(A::AbstractVector, s=1, n=length(A))
-    B = similar(A)
-    for i = 1:s-1
-        B[i] = A[i]
-    end
-    for i = s:n
-        B[i] = A[n+s-i]
-    end
-    for i = n+1:length(A)
-        B[i] = A[i]
-    end
-    B
-end
 
 function flipdim(A::AbstractVector, d::Integer)
     d > 0 || error("dimension to flip must be positive")
@@ -857,106 +841,6 @@ function (==)(A::AbstractArray, B::AbstractArray)
     return true
 end
 
-_cumsum_type{T<:Number}(v::AbstractArray{T}) = typeof(+zero(T))
-_cumsum_type(v) = typeof(v[1]+v[1])
-
-for (f, fp, op) = ((:cumsum, :cumsum_pairwise, :+),
-                   (:cumprod, :cumprod_pairwise, :*) )
-    # in-place cumsum of c = s+v(i1:n), using pairwise summation as for sum
-    @eval function ($fp)(v::AbstractVector, c::AbstractVector, s, i1, n)
-        if n < 128
-            @inbounds c[i1] = ($op)(s, v[i1])
-            for i = i1+1:i1+n-1
-                @inbounds c[i] = $(op)(c[i-1], v[i])
-            end
-        else
-            n2 = div(n,2)
-            ($fp)(v, c, s, i1, n2)
-            ($fp)(v, c, c[(i1+n2)-1], i1+n2, n-n2)
-        end
-    end
-
-    @eval function ($f)(v::AbstractVector)
-        n = length(v)
-        c = $(op===:+ ? (:(similar(v,_cumsum_type(v)))) :
-                        (:(similar(v))))
-        if n == 0; return c; end
-        ($fp)(v, c, $(op==:+ ? :(zero(v[1])) : :(one(v[1]))), 1, n)
-        return c
-    end
-
-    @eval function ($f)(A::AbstractArray, axis::Integer)
-        dimsA = size(A)
-        ndimsA = ndims(A)
-        axis_size = dimsA[axis]
-        axis_stride = 1
-        for i = 1:(axis-1)
-            axis_stride *= size(A,i)
-        end
-
-        B = $(op===:+ ? (:(similar(A,_cumsum_type(A)))) :
-                        (:(similar(A))))
-
-        if axis_size < 1
-            return B
-        end
-
-        for i = 1:length(A)
-            if div(i-1, axis_stride) % axis_size == 0
-               B[i] = A[i]
-            else
-               B[i] = ($op)(B[i-axis_stride], A[i])
-            end
-        end
-
-        return B
-    end
-
-    @eval ($f)(A::AbstractArray) = ($f)(A, 1)
-end
-
-for (f, op) = ((:cummin, :min), (:cummax, :max))
-    @eval function ($f)(v::AbstractVector)
-        n = length(v)
-        cur_val = v[1]
-        res = similar(v, n)
-        res[1] = cur_val
-        for i in 2:n
-            cur_val = ($op)(v[i], cur_val)
-            res[i] = cur_val
-        end
-        return res
-    end
-
-    @eval function ($f)(A::AbstractArray, axis::Integer)
-        dimsA = size(A)
-        ndimsA = ndims(A)
-        axis_size = dimsA[axis]
-        axis_stride = 1
-        for i = 1:(axis-1)
-            axis_stride *= size(A,i)
-        end
-
-        if axis_size < 1
-            return A
-        end
-
-        B = similar(A)
-
-        for i = 1:length(A)
-            if div(i-1, axis_stride) % axis_size == 0
-               B[i] = A[i]
-            else
-               B[i] = ($op)(A[i], B[i-axis_stride])
-            end
-        end
-
-        return B
-    end
-
-    @eval ($f)(A::AbstractArray) = ($f)(A, 1)
-end
-
 # Uses K-B-N summation
 function cumsum_kbn{T<:FloatingPoint}(v::AbstractVector{T})
     n = length(v)
@@ -1347,7 +1231,7 @@ end
 
 
 ## 1 argument
-function map_to!(f::Callable, first, dest::AbstractArray, A::AbstractArray)
+function map_to!(f::Callable, first, dest::StoredArray, A::AbstractArray)
     dest[1] = first
     for i=2:length(A)
         dest[i] = f(A[i])
@@ -1363,7 +1247,7 @@ function map(f::Callable, A::AbstractArray)
 end
 
 ## 2 argument
-function map_to!(f::Callable, first, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
+function map_to!(f::Callable, first, dest::StoredArray, A::AbstractArray, B::AbstractArray)
     dest[1] = first
     for i=2:length(A)
         dest[i] = f(A[i], B[i])
@@ -1382,7 +1266,7 @@ function map(f::Callable, A::AbstractArray, B::AbstractArray)
 end
 
 ## N argument
-function map_to!(f::Callable, first, dest::AbstractArray, As::AbstractArray...)
+function map_to!(f::Callable, first, dest::StoredArray, As::AbstractArray...)
     n = length(As[1])
     i = 1
     ith = a->a[i]
