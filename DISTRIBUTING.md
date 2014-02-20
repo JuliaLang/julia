@@ -30,9 +30,9 @@ Juila has lots of build dependencies where we use patched versions that has not
 yet been included by the popular package managers. These dependencies will usually
 be automatically downloaded when you build, but if you want to be able to build
 Julia on a computer without internet access you should create a source-dist archive
-with the special make targed
+with the special make target
 
-   make source-dist
+    make source-dist
 
 that creates a julia-version-commit.tar.gz archive with all required dependencies.
 
