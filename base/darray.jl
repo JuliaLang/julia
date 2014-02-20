@@ -1,22 +1,13 @@
 type DArray{T,N,A} <: AbstractArray{T,N}
-    dims::NTuple{N,Int}
+    cdist::ChunkedDist{N}
 
     chunks::Array{RemoteRef,N}
 
-    # pmap[i]==p ⇒ processor p has piece i
-    pmap::Vector{Int}
-
-    # indexes held by piece i
-    indexes::Array{NTuple{N,Range1{Int}},N}
-    # cuts[d][i] = first index of chunk i in dimension d
-    cuts::Vector{Vector{Int}}
-
-    function DArray(dims, chunks, pmap, indexes, cuts)
+    function DArray(cdist, chunks)
         # check invariants
-        assert(size(chunks) == size(indexes))
-        assert(length(chunks) == length(pmap))
-        assert(dims == map(last,last(indexes)))
-        new(dims, chunks, pmap, indexes, cuts)
+        assert(size(chunks) == dist(cdist))
+        assert(length(chunks) == length(procs(cdist)))
+        new(cdist, chunks)
     end
 end
 
@@ -26,134 +17,62 @@ typealias SubOrDArray{T,N}         Union(DArray{T,N}, SubDArray{T,N})
 ## core constructors ##
 
 # dist == size(chunks)
-function DArray(init, dims, procs, dist)
-    np = prod(dist)
-    procs = procs[1:np]
-    idxs, cuts = chunk_idxs([dims...], dist)
-    chunks = Array(RemoteRef, dist...)
-    for i = 1:np
-        chunks[i] = remotecall(procs[i], init, idxs[i])
+function DArray(init, cdist::ChunkedDist)
+    chunks = Array(RemoteRef, dist(cdist)...)
+    pids = procs(cdist)
+    for i = 1:nprocs(cdist)
+        chunks[i] = remotecall(pids[i], init, cdist[i])
     end
-    p = max(1, localpartindex(procs))
-    A = remotecall_fetch(procs[p], r->typeof(fetch(r)), chunks[p])
-    DArray{eltype(A),length(dims),A}(dims, chunks, procs, idxs, cuts)
+    p = max(1, localpartindex(cdist))
+    A = remotecall_fetch(pids[p], r->typeof(fetch(r)), chunks[p])
+    DArray{eltype(A),length(size(cdist)),A}(cdist, chunks)
 end
 
-function DArray(init, dims, procs)
-    if isempty(procs)
-        error("no processors")
-    end
-    DArray(init, dims, procs, defaultdist(dims,procs))
-end
+DArray(init, dims, pids) = DArray(init, ChunkedDist(dims; pids=pids))
 DArray(init, dims) = DArray(init, dims, workers()[1:min(nworkers(),maximum(dims))])
 
 # new DArray similar to an existing one
-DArray(init, d::DArray) = DArray(init, size(d), procs(d), [size(d.chunks)...])
+DArray(init, d::DArray) = DArray(init, distribution(d))
 
-size(d::DArray) = d.dims
-procs(d::DArray) = d.pmap
+size(d::DArray) = d.cdist.dims
+procs(d::DArray) = procs(d.cdist)
+distribution(d::DArray) = d.cdist
 
 chunktype{T,N,A}(d::DArray{T,N,A}) = A
 
-## chunk index utilities ##
-
-# decide how to divide each dimension
-# returns size of chunks array
-function defaultdist(dims, procs)
-    dims = [dims...]
-    chunks = ones(Int, length(dims))
-    np = length(procs)
-    f = sort!(collect(keys(factor(np))), rev=true)
-    k = 1
-    while np > 1
-        # repeatedly allocate largest factor to largest dim
-        if np%f[k] != 0
-            k += 1
-            if k > length(f)
-                break
-            end
-        end
-        fac = f[k]
-        (d, dno) = findmax(dims)
-        # resolve ties to highest dim
-        dno = last(find(dims .== d))
-        if dims[dno] >= fac
-            dims[dno] = div(dims[dno], fac)
-            chunks[dno] *= fac
-        end
-        np = div(np,fac)
-    end
-    chunks
-end
-
-# get array of start indexes for dividing sz into nc chunks
-function defaultdist(sz::Int, nc::Int)
-    if sz >= nc
-        iround(linspace(1, sz+1, nc+1))
-    else
-        [[1:(sz+1)], zeros(Int, nc-sz)]
-    end
-end
-
-# compute indexes array for dividing dims into chunks
-function chunk_idxs(dims, chunks)
-    cuts = map(defaultdist, dims, chunks)
-    n = length(dims)
-    idxs = Array(NTuple{n,Range1{Int}},chunks...)
-    cartesianmap(tuple(chunks...)) do cidx...
-        idxs[cidx...] = ntuple(n, i->(cuts[i][cidx[i]]:cuts[i][cidx[i]+1]-1))
-    end
-    idxs, cuts
-end
-
-function localpartindex(pmap::Vector{Int})
-    mi = myid()
-    for i = 1:length(pmap)
-        if pmap[i] == mi
-            return i
-        end
-    end
-    return 0
-end
-
-localpartindex(d::DArray) = localpartindex(d.pmap)
-
 function localpart{T,N,A}(d::DArray{T,N,A})
-    lpidx = localpartindex(d)
+    lpidx = localpartindex(d.cdist)
     if lpidx == 0
         convert(A, Array(T, ntuple(N,i->0)))::A
     else
         fetch(d.chunks[lpidx])::A
     end
 end
-function localindexes(d::DArray)
+
+function localindexes{T,N}(d::DArray{T,N})
     lpidx = localpartindex(d)
     if lpidx == 0
-        ntuple(ndims(d), i->1:0)
+        ntuple(N, i->1:0)
     else
-        d.indexes[lpidx]
+        d.cdist[lpidx]
     end
 end
 
 # find which piece holds index (I...)
-function locate(d::DArray, I::Int...)
-    ntuple(ndims(d), i->searchsortedlast(d.cuts[i], I[i]))
-end
+locate(d::DArray, I::Int...) = locate(d.cdist, I...)
 
 chunk{T,N,A}(d::DArray{T,N,A}, i...) = fetch(d.chunks[i...])::A
 
 ## convenience constructors ##
 
-dzeros(args...) = DArray(I->zeros(map(length,I)), args...)
-dzeros(d::Int...) = dzeros(d)
-dones(args...) = DArray(I->ones(map(length,I)), args...)
-dones(d::Int...) = dones(d)
-dfill(v, args...) = DArray(I->fill(v, map(length,I)), args...)
-dfill(v, d::Int...) = dfill(v, d)
-drand(args...)  = DArray(I->rand(map(length,I)), args...)
-drand(d::Int...) = drand(d)
-drandn(args...) = DArray(I->randn(map(length,I)), args...)
-drandn(d::Int...) = drandn(d)
+zeros(cdist::ChunkedDist) = DArray(I->zeros(map(length,I)), cdist)
+zeros{T}(::Type{T}, cdist::ChunkedDist) = DArray(I->zeros(T, map(length,I)), cdist)
+ones(cdist::ChunkedDist) = DArray(I->ones(map(length,I)), cdist)
+ones{T}(::Type{T}, cdist::ChunkedDist) = DArray(I->ones(T, map(length,I)), cdist)
+fill(v, cdist::ChunkedDist) = DArray(I->fill(v, map(length,I)), cdist)
+rand(cdist::ChunkedDist)  = DArray(I->rand(map(length,I)), cdist)
+randn(cdist::ChunkedDist) = DArray(I->randn(map(length,I)), cdist)
+
 
 ## conversions ##
 
@@ -170,7 +89,7 @@ function convert{S,T,N}(::Type{Array{S,N}}, d::DArray{T,N})
     a = Array(S, size(d))
     @sync begin
         for i = 1:length(d.chunks)
-            @async a[d.indexes[i]...] = chunk(d, i)
+            @async a[d.cdist[i]...] = chunk(d, i)
         end
     end
     a
@@ -181,7 +100,7 @@ function convert{S,T,N}(::Type{Array{S,N}}, s::SubDArray{T,N})
     d = s.parent
     if isa(I,(Range1{Int}...)) && S<:T && T<:S
         l = locate(d, map(first, I)...)
-        if isequal(d.indexes[l...], I)
+        if isequal(d.cdist[l...], I)
             # SubDArray corresponds to a chunk
             return chunk(d, l...)
         end
@@ -229,11 +148,11 @@ end
 getindex(d::DArray, i::Int) = getindex(d, ind2sub(size(d), i))
 getindex(d::DArray, i::Int...) = getindex(d, sub2ind(size(d), i...))
 
-function getindex{T}(d::DArray{T}, I::(Int...))
+function getindex{T,N}(d::DArray{T,N}, I::(Int...))
     chidx = locate(d, I...)
     chunk = d.chunks[chidx...]
-    idxs = d.indexes[chidx...]
-    localidx = ntuple(ndims(d), i->(I[i]-first(idxs[i])+1))
+    idxs = d.cdist[chidx...]
+    localidx = ntuple(N, i->(I[i]-first(idxs[i])+1))
     chunk[localidx...]::T
 end
 
@@ -249,7 +168,7 @@ function setindex!(a::Array, d::DArray, I::Range1{Int}...)
     n = length(I)
     @sync begin
         for i = 1:length(d.chunks)
-            K = d.indexes[i]
+            K = d.cdist[i]
             @async a[[I[j][K[j]] for j=1:n]...] = chunk(d, i)
         end
     end
@@ -267,7 +186,7 @@ function setindex!(a::Array, s::SubDArray, I::Range1{Int}...)
     offs = [isa(J[i],Int) ? J[i]-1 : first(J[i])-1 for i=1:n]
     @sync begin
         for i = 1:length(d.chunks)
-            K_c = {d.indexes[i]...}
+            K_c = {d.cdist[i]...}
             K = [ intersect(J[j],K_c[j]) for j=1:n ]
             if !any(isempty, K)
                 idxs = [ I[j][K[j]-offs[j]] for j=1:n ]

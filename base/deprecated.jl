@@ -395,6 +395,22 @@ eval(Sys, :(@deprecate shlib_list dllist))
 @deprecate put      put!
 @deprecate take     take!
 
+for dp in ["dzeros", "dones", "drand", "drandn"]
+    depf = symbol(dp)
+    newf = symbol(dp[2:end])
+    @eval begin
+        @deprecate ($depf)(d::Int...)  ($newf)(ChunkedDist(d))
+        @deprecate ($depf)(dims)  ($newf)(ChunkedDist(dims))
+        @deprecate ($depf)(dims, pids)  ($newf)(ChunkedDist(dims; pids=pids))
+        @deprecate ($depf)(dims, pids, dist)  ($newf)(ChunkedDist(dims; pids=pids, dist=dist))
+    end
+end
+
+@deprecate dfill(v, d::Int...)  fill(v, ChunkedDist(d))
+@deprecate dfill(v, dims)  fill(v, ChunkedDist(dims))
+@deprecate dfill(v, dims, pids)  fill(v, ChunkedDist(dims; pids=pids))
+@deprecate dfill(v, dims, pids, dist)  fill(v, ChunkedDist(dims; pids=pids, dist=dist))
+
 # 0.3 discontinued functions
 
 function nnz(X)

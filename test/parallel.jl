@@ -12,7 +12,7 @@ id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
 @test @fetchfrom id_other begin myid() end == id_other
 @fetch begin myid() end
 
-d = drand((200,200), [id_me, id_other])
+d = rand(ChunkedDist((200,200); pids=[id_me, id_other]))
 s = convert(Matrix{Float64}, d[1:150, 1:150])
 a = convert(Matrix{Float64}, d)
 @test a[1:150,1:150] == s
