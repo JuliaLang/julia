@@ -34,7 +34,7 @@ DArray(init, dims) = DArray(init, dims, workers()[1:min(nworkers(),maximum(dims)
 # new DArray similar to an existing one
 DArray(init, d::DArray) = DArray(init, distribution(d))
 
-size(d::DArray) = size(d.cdist)
+size(d::DArray) = d.cdist.dims
 procs(d::DArray) = procs(d.cdist)
 distribution(d::DArray) = d.cdist
 

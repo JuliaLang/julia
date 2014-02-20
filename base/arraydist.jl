@@ -98,9 +98,12 @@ function chunk_idxs(dims, chunks)
 end
 
 
-size(ad::ArrayDist) = ad.dims
 procs(ad::ArrayDist) = ad.pids
 nprocs(ad::ArrayDist) = length(ad.pids)
+
+size(cdist::ChunkedDist) = size(cdist.indexes)
+size(sdist::SharedDist) = size(sdist.pids)
+
 
 getindex(cdist::ChunkedDist, i::Int) = cdist.indexes[i]
 getindex(cdist::ChunkedDist, i::Int...) = cdist.indexes[i...]
