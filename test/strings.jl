@@ -937,3 +937,7 @@ normalize_string(string(a...), :NFKC)==normalize_string(string(b...), :NFKC)
 @test normalize_string("\U1e9b\U0323", :NFC) == "\U1e9b\U0323"
 @test normalize_string("\U1e9b\U0323", :NFKD) == "s\U0323\U0307"
 @test normalize_string("\U1e9b\U0323", :NFKC) == "\U1e69"
+
+# issue #5870
+@test !ismatch(Regex("aa"), SubString("",1,0))
+@test ismatch(Regex(""), SubString("",1,0))
