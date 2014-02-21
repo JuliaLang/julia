@@ -417,17 +417,18 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
         else if (!vxt->isPointerTy() && llvmt->isPointerTy()) {
             vx = builder.CreateIntToPtr(vx, llvmt);
         }
+        else if (llvmt == T_int1) {
+            vx = builder.CreateTrunc(vx, llvmt);
+        }
+        else if (vxt == T_int1 && llvmt == T_int8) {
+            vx = builder.CreateZExt(vx, llvmt);
+        }
         else {
-            if (llvmt == T_int1) {
-                vx = builder.CreateTrunc(vx, llvmt);
+            if (vxt->getPrimitiveSizeInBits() != llvmt->getPrimitiveSizeInBits()) {
+                emit_error("box: argument is of incorrect size", ctx);
+                return vx;
             }
-            else {
-                if (vxt->getPrimitiveSizeInBits() != llvmt->getPrimitiveSizeInBits()) {
-                    emit_error("box: argument is of incorrect size", ctx);
-                    return vx;
-                }
-                vx = builder.CreateBitCast(vx, llvmt);
-            }
+            vx = builder.CreateBitCast(vx, llvmt);
         }
     }
 
