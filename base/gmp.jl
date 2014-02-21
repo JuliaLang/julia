@@ -414,7 +414,12 @@ function base(b::Integer, n::BigInt)
     ASCIIString(pointer_to_array(p,len,true))
 end
 
-ndigits(x::BigInt, base::Integer=10) = int(ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &x, base))
+function ndigits(x::BigInt, base::Integer=10)
+    # mpz_sizeinbase might return an answer 1 too big
+    n = int(ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &x, base))
+    abs(x) < big(base)^(n-1) ? n-1 : n
+end
+
 ndigits0z(x::BigInt, base::Integer=10) = x == 0 ? 0 : ndigits(x)
 
 isprime(x::BigInt, reps=25) = ccall((:__gmpz_probab_prime_p,:libgmp), Cint, (Ptr{BigInt}, Cint), &x, reps) > 0
