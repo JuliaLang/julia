@@ -338,28 +338,9 @@ end
 
 ./(x::Number, r::Ranges) = [ x/y for y=r ]
 ./(r::Ranges, y::Number) = [ x/y for x=r ]
-function ./(r::Ranges, s::Ranges)
-    if length(r) != length(s)
-        error("argument dimensions must match")
-    end
-    [ r[i]/s[i] for i = 1:length(r) ]
-end
-
-function .*{T<:Number,S<:Number}(r::Ranges{T}, s::Ranges{S})
-    if length(r) != length(s)
-        error("argument dimensions must match")
-    end
-    [ r[i]*s[i] for i = 1:length(r) ]
-end
 
 .^(x::Number, r::Ranges) = [ x^y for y=r ]
 .^(r::Ranges, y::Number) = [ x^y for x=r ]
-function .^{T<:Number,S<:Number}(r::Ranges{T}, s::Ranges{S})
-    if length(r) != length(s)
-        error("argument dimensions must match")
-    end
-    [ r[i]^s[i] for i = 1:length(r) ]
-end
 
 ## concatenation ##
 

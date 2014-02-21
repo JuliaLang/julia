@@ -777,25 +777,6 @@ for f in (:+, :-, :.*, :./, :.%, :div, :mod, :rem, :&, :|, :$)
             end
             return F
         end
-        # interaction with Ranges
-        function ($f){S,T<:Real}(A::StridedArray{S}, B::Ranges{T})
-            F = Array(promote_type(S,T), promote_shape(size(A),size(B)))
-            i = 1
-            for b in B
-                @inbounds F[i] = ($f)(A[i], b)
-                i += 1
-            end
-            return F
-        end
-        function ($f){S<:Real,T}(A::Ranges{S}, B::StridedArray{T})
-            F = Array(promote_type(S,T), promote_shape(size(A),size(B)))
-            i = 1
-            for a in A
-                @inbounds F[i] = ($f)(a, B[i])
-                i += 1
-            end
-            return F
-        end
     end
 end
 
