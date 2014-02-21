@@ -112,7 +112,7 @@ length(S::SharedArray) = prod(S.dims)
 size(S::SharedArray) = S.dims
 
 procs(S::SharedArray) = S.pids
-indexpids(S::SharedArray) = S.pididx
+indexpids(S::SharedArray) = S.pidx
 
 sdata(S::SharedArray) = S.s
 sdata(A::AbstractArray) = A
@@ -151,7 +151,7 @@ end
 
 
 # Don't serialize s (it is the complete array) and 
-# pididx, which is relevant to the current process only
+# pidx, which is relevant to the current process only
 function serialize(s, S::SharedArray)
     serialize_type(s, typeof(S))
     serialize(s, length(SharedArray.names)) 
