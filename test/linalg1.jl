@@ -20,14 +20,16 @@ areal = randn(n,n)/2
 aimg  = randn(n,n)/2
 breal = randn(n,2)/2
 bimg  = randn(n,2)/2
-for eltya in (Float16, Float32, Float64, Complex32, Complex64, Complex128, BigFloat, Int)
-    for eltyb in (Float16, Float32, Float64, Complex32, Complex64, Complex128, Int)
-        a = eltya == Int ? rand(1:5, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(areal, aimg) : areal)
+for eltya in (Float32, Float64, Complex32, Complex64, Complex128, BigFloat, Int)
+    for eltyb in (Float32, Float64, Complex32, Complex64, Complex128, Int)
+        a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(areal, aimg) : areal)
         b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex(breal, bimg) : breal)
         asym = a'+a                  # symmetric indefinite
         apd  = a'*a                 # symmetric positive-definite
 
-        ε = max(eps(abs(float(one(eltya)))),eps(abs(float(one(eltyb)))))
+        εa = eps(abs(float(one(eltya))))
+        εb = eps(abs(float(one(eltyb))))
+        ε = max(εa,εb)
 
 debug && println("\ntype of a: ", eltya, " type of b: ", eltyb, "\n")
 
@@ -50,8 +52,8 @@ debug && println("(Automatic) upper Cholesky factor")
         @test norm(apd*x-b)/norm(b) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
 
         @test_approx_eq apd * inv(capd) eye(n)
-        @test_approx_eq_eps a*(capd\(a'*b)) b 8000ε
-        @test_approx_eq det(capd) det(apd)
+        @test norm(a*(capd\(a'*b)) - b)/norm(b) <= ε*κ*n # Ad hoc, revisit
+        @test abs((det(capd) - det(apd))/det(capd)) <= ε*κ*n # Ad hoc, but statistically verified, revisit
         @test_approx_eq logdet(capd) log(det(capd)) # logdet is less likely to overflow
 
 debug && println("lower Cholesky factor")
@@ -64,7 +66,7 @@ debug && println("pivoted Choleksy decomposition")
         cpapd = cholfact(apd, pivot=true)
         @test rank(cpapd) == n
         @test all(diff(diag(real(cpapd.UL))).<=0.) # diagonal should be non-increasing
-        @test_approx_eq_eps b apd * (cpapd\b) 15000ε
+        @test norm(apd * (cpapd\b) - b)/norm(b) <= ε*κ*n # Ad hoc, revisit
         if isreal(apd)
             @test_approx_eq apd * inv(cpapd) eye(n)
         end
@@ -83,12 +85,13 @@ debug && println("Bunch-Kaufman factors of a pos-def matrix")
     end
 
 debug && println("(Automatic) Square LU decomposition")
+    κ     = cond(a,1)
     lua   = factorize(a)
     l,u,p = lua[:L], lua[:U], lua[:p]
     @test_approx_eq l*u a[p,:]
     @test_approx_eq l[invperm(p),:]*u a
     @test_approx_eq a * inv(lua) eye(n)
-    @test_approx_eq_eps a*(lua\b) b 80ε
+    @test norm(a*(lua\b) - b, 1) < ε*κ*n*2 # Two because the right hand side has two columns
 
 debug && println("Thin LU")
     lua   = lufact(a[:,1:5])
@@ -188,10 +191,11 @@ debug && println("Generalized svd")
     end
 
 debug && println("Solve square general system of equations")
+    κ = cond(a,1)
     x = a \ b
-    @test_approx_eq_eps a*x b 80ε
     @test_throws b'\b
     @test_throws b\b'
+    @test norm(a*x - b, 1)/norm(b) < ε*κ*n*2 # Ad hoc, revisit!
 
 debug && println("Solve upper triangular system")
     x = triu(a) \ b

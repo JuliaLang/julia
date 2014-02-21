@@ -43,6 +43,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
         V = convert(Matrix{elty}, V)
         C = convert(Matrix{elty}, C)
     end
+    ε = eps(abs2(float(one(elty))))
     T = Tridiagonal(dl, d, du)
     @test size(T, 1) == n
     @test size(T) == (n, n)
@@ -95,8 +96,8 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     F = full(W)
     @test_approx_eq W*v F*v
     iFv = F\v
-    @test_approx_eq W\v iFv
-    @test_approx_eq det(W) det(F)
+    @test norm(W\v - iFv)/norm(iFv) <= n*cond(F)*ε # Revisit. Condition number is wrong
+    @test abs((det(W) - det(F))/det(F)) <= n*cond(F)*ε # Revisit. Condition number is wrong
     iWv = similar(iFv)
     if elty != Int
         Base.LinAlg.solve!(iWv, W, v)
@@ -208,7 +209,7 @@ end
 
 #Triangular matrices
 n=12
-for relty in (Float16, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
+for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     A = convert(Matrix{elty}, randn(n, n))
     b = convert(Matrix{elty}, randn(n, 2))
     if elty <: Complex
@@ -245,7 +246,7 @@ for relty in (Float16, Float32, Float64, BigFloat), elty in (relty, Complex{relt
 end
 
 #Tridiagonal matrices
-for relty in (Float16, Float32, Float64), elty in (relty, Complex{relty})
+for relty in (Float32, Float64), elty in (relty, Complex{relty})
     a = convert(Vector{elty}, randn(n-1))
     b = convert(Vector{elty}, randn(n))
     c = convert(Vector{elty}, randn(n-1))
@@ -263,11 +264,10 @@ for relty in (Float16, Float32, Float64), elty in (relty, Complex{relty})
 end
 
 #SymTridiagonal (symmetric tridiagonal) matrices
-for relty in (Float16, Float32, Float64), elty in (relty, )#XXX Complex{relty}) doesn't work
+for relty in (Float32, Float64), elty in (relty, )#XXX Complex{relty}) doesn't work
     a = convert(Vector{elty}, randn(n))
     b = convert(Vector{elty}, randn(n-1))
     if elty <: Complex
-        relty==Float16 && continue
         a += im*convert(Vector{elty}, randn(n))
         b += im*convert(Vector{elty}, randn(n-1))
     end
@@ -306,7 +306,7 @@ for elty in (Float32, Float64)
 end
 
 #Bidiagonal matrices
-for relty in (Float16, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
+for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     dv = convert(Vector{elty}, randn(n))
     ev = convert(Vector{elty}, randn(n-1))
     b = convert(Matrix{elty}, randn(n, 2))
@@ -361,7 +361,7 @@ end
 
 #Diagonal matrices
 n=12
-for relty in (Float16, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
+for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     d=convert(Vector{elty}, randn(n))
     v=convert(Vector{elty}, randn(n))
     U=convert(Matrix{elty}, randn(n,n))
@@ -529,7 +529,7 @@ end
 nnorm = 1000
 mmat = 100
 nmat = 80
-for elty in (Float16, Float32, Float64, BigFloat, Complex{Float16}, Complex{Float32}, Complex{Float64}, Complex{BigFloat}, Int32, Int64, BigInt)
+for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Complex{BigFloat}, Int32, Int64, BigInt)
     debug && println(elty)
 
     ## Vector
