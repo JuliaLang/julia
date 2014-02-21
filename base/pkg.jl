@@ -67,3 +67,15 @@ generate(pkg::String, license::String; force::Bool=false) =
 @deprecate fix pin
 
 end # module
+
+macro ifpkg(reqline, iftrue, iffalse...)
+	length(iffalse) <= 1 || error("ifpkg: wrong number of arguments")
+	isa(reqline, String) || error("ifpkg: reqline must be a string")
+	if Pkg.Dir.cd(Pkg.Entry.issatisfied, reqline)
+		iftrue
+	elseif !isempty(iffalse)
+		iffalse[1]
+	else
+		nothing
+	end
+end

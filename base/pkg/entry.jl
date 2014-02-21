@@ -102,6 +102,14 @@ function installed(pkg::String)
     return nothing # registered but not installed
 end
 
+function issatisfied(reqline::String)
+    req = Reqs.Requirement(reqline)
+    Reqs.applies(req) || return true
+    req.package == "julia" && return VERSION in req.versions
+    Read.isinstalled(req.package) || return false
+    Read.installed_version(req.package) in req.versions
+end
+
 function status(io::IO)
     reqs = Reqs.parse("REQUIRE")
     instd = Read.installed()
