@@ -4161,7 +4161,7 @@ extern "C" void jl_init_codegen(void)
         .setTargetOptions(options)
 #ifdef USE_MCJIT
         .setUseMCJIT(true)
-        .setMAttrs(attrvec)
+        .setMAttrs(attrvec);
 #else
         .setMAttrs(attrvec);
 #endif
