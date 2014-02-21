@@ -327,6 +327,9 @@ const getfield_tfunc = function (A, s0, name)
             if fld === :types && isleaftype(sp.types)
                 return Type{sp.types}
             end
+            if fld === :super && isleaftype(sp)
+                return Type{sp.super}
+            end
         end
         for i=1:length(s.names)
             if is(s.names[i],fld)
