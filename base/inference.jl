@@ -1850,24 +1850,43 @@ function effect_free(e::ANY, sv, any_expr::Bool)
         isa(e,TopNode) || isa(e,QuoteNode) || isa(e,Type)
         return true
     end
-    if any_expr && isa(e,Expr)
+    if isa(e,Expr)
         e = e::Expr
         if e.head === :static_typeof
             return true
         end
         ea = e.args
         if e.head === :call || e.head === :call1
-            for a in ea
-                if !effect_free(a,sv,true)
-                    return false
-                end
-            end
             if is_known_call(e, _pure_builtins, sv)
+                if !any_expr && is_known_call(e, getfield, sv)
+                    for a in ea
+                        if isa(a,Symbol)
+                            return false
+                        end
+                        if isa(a,SymbolNode)
+                            typ = (a::SymbolNode).typ
+                            if !isa(typ,Tuple)
+                                if !isa(typ,DataType) || typ.mutable
+                                    return false
+                                end
+                            end
+                        end
+                        if !effect_free(a,sv,any_expr)
+                            return false
+                        end
+                    end
+                else
+                    for a in ea
+                        if !effect_free(a,sv,any_expr)
+                            return false
+                        end
+                    end
+                end
                 return true
             end
         elseif e.head === :new
             for a in ea
-                if !effect_free(a,sv,true)
+                if !effect_free(a,sv,any_expr)
                     return false
                 end
             end
