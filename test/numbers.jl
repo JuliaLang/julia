@@ -1747,3 +1747,7 @@ end
 @test pi*false === 0.0
 @test true*pi === float64(pi)
 @test pi*true === float64(pi)
+
+# issue #5881
+@test bits(true) == "00000001"
+@test bits(false) == "00000000"
