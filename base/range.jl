@@ -35,6 +35,15 @@ immutable Range1{T<:Real} <: Ranges{T}
 end
 Range1{T}(start::T, len::Integer) = Range1{T}(start, len)
 
+immutable FloatRange{T<:FloatingPoint} <: Ranges{T}
+    start::T
+    step::T
+    divisor::T
+    len::T
+end
+FloatRange(a::FloatingPoint, s::FloatingPoint, d::FloatingPoint, l::Real) =
+    FloatRange{promote_type(typeof(a),typeof(s),typeof(d))}(a,s,d,l)
+
 function colon{T<:Integer}(start::T, step::T, stop::T)
     step != 0 || error("step cannot be zero in colon syntax")
     Range{T}(start, step, max(0, 1 + fld(stop-start, step)))
@@ -104,17 +113,60 @@ end
 colon(start::Real, step::Real, stop::Real) = colon(promote(start, step, stop)...)
 colon(start::Real, stop::Real) = colon(promote(start, stop)...)
 
+# float rationalization helper
+function rat(x)
+    y = x
+    a = d = 1
+    b = c = 0
+    m = typemax(Int) >> 1
+    while max(abs(a),abs(b)) <= m
+        f = itrunc(y)
+        y -= f
+        a, c = f*a + c, a
+        b, d = f*b + d, b
+        (y == 0 || oftype(x,a)/oftype(x,b) == x) && return a, b
+        y = inv(y)
+    end
+    return c, d
+end
+
+# float range "lifting" helper
+function frange{T<:FloatingPoint}(start::T, step::T, stop::T)
+    r = (stop-start)/step
+    n = iround(r)
+    lo = prevfloat((prevfloat(stop)-nextfloat(start))/n)
+    hi = nextfloat((nextfloat(stop)-prevfloat(start))/n)
+    if lo <= step <= hi
+        a, b = rat(start)
+        if convert(T,a)/convert(T,b) == start
+            c, d = rat(step)
+            if convert(T,c)/convert(T,d) == step
+                e = lcm(b,d)
+                a *= div(e,b)
+                c *= div(e,d)
+                if convert(T,a+n*c)/convert(T,e) == stop
+                    return convert(T,a), convert(T,c), convert(T,e), convert(T,n+1)
+                end
+            end
+        end
+    end
+    start, step, one(step), floor(r)+1
+end
+
 similar(r::Ranges, T::Type, dims::Dims) = Array(T, dims)
 
 length(r::Ranges) = integer(r.len)
 size(r::Ranges) = (length(r),)
 isempty(r::Ranges) = r.len==0
 first(r::Ranges) = r.start
+first(r::FloatRange) = r.start/r.divisor
 last{T}(r::Range1{T}) = oftype(T, r.start + r.len-1)
 last{T}(r::Range{T})  = oftype(T, r.start + (r.len-1)*r.step)
+last{T}(r::FloatRange{T}) = oftype(T, (r.start + (r.len-1)*r.step)/r.divisor)
 
 step(r::Range) = r.step
 step(r::Range1) = one(r.start)
+step(r::FloatRange) = r.step/r.divisor
 
 minimum(r::Range1) = isempty(r) ? error("range must be non-empty") : first(r)
 maximum(r::Range1) = isempty(r) ? error("range must be non-empty") : last(r)
@@ -132,6 +184,10 @@ getindex(r::Ranges, i::Real) = getindex(r, to_index(i))
 function getindex{T}(r::Ranges{T}, i::Integer)
     1 <= i <= r.len || error(BoundsError)
     oftype(T, r.start + (i-1)*step(r))
+end
+function getindex{T}(r::FloatRange{T}, i::Integer)
+    1 <= i <= r.len || error(BoundsError)
+    oftype(T, (r.start + (i-1)*r.step)/r.divisor)
 end
 
 function getindex(r::Range1, s::Range1{Int})
@@ -165,6 +221,7 @@ show(io::IO, r::Range1) = print(io, repr(first(r)), ':', repr(last(r)))
 start(r::Ranges) = 0
 next{T}(r::Range{T}, i) = (oftype(T, r.start + i*step(r)), i+1)
 next{T}(r::Range1{T}, i) = (oftype(T, r.start + i), i+1)
+next{T}(r::FloatRange{T}, i) = (oftype(T, (r.start + i*r.step)/r.divisor), i+1)
 done(r::Ranges, i) = (length(r) <= i)
 
 # though these look very similar to the above, for some reason LLVM generates
@@ -368,6 +425,7 @@ function vcat{T}(rs::Ranges{T}...)
 end
 
 reverse(r::Ranges) = Range(last(r), -step(r), r.len)
+reverse(r::FloatRange) = FloatRange(last(r), -r.step, r.divisor, r.len)
 
 ## sorting ##
 
