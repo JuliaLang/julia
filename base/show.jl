@@ -421,6 +421,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             show_unquoted(io, args[1], indent)
             show_enclosed_list(io, op, args[2:end], ",", cl, indent)
         end
+    elseif is(head, :ccall)
+        show_unquoted(io, :ccall, indent)
+        show_enclosed_list(io, '(', args, ",", ')', indent)
 
     # comparison (i.e. "x < y < z")
     elseif is(head, :comparison) && nargs >= 3 && (nargs&1==1)
