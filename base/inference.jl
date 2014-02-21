@@ -1842,7 +1842,28 @@ function without_linenums(a::Array{Any,1})
     l
 end
 
-_pure_builtins = {getfield, tuple, tupleref, tuplelen, fieldtype, apply_type}
+_pure_builtins = {getfield, tuple, tupleref, tuplelen, fieldtype, apply_type,
+                  Intrinsics.checked_usub,Intrinsics.cglobal,Intrinsics.checked_fptosi,
+                  Intrinsics.lefsi64,Intrinsics.checked_umul,Intrinsics.fpext,Intrinsics.sext_int,
+                  Intrinsics.ltuif64,Intrinsics.sub_float,Intrinsics.checked_ssub,Intrinsics.sub_int,
+                  Intrinsics.abs_float,Intrinsics.ctpop_int,Intrinsics.div_float,Intrinsics.nan_dom_err,
+                  Intrinsics.mul_int,Intrinsics.fptosi,Intrinsics.uitofp,Intrinsics.neg_float,
+                  Intrinsics.eq_float,Intrinsics.ult_int,Intrinsics.srem_int,
+                  Intrinsics.ltsif64,Intrinsics.eq_int,Intrinsics.leuif64,
+                  Intrinsics.copysign_float,Intrinsics.fpislt,Intrinsics.add_float,Intrinsics.ltfui64,
+                  Intrinsics.fpsiround,Intrinsics.checked_uadd,Intrinsics.add_int,Intrinsics.fptoui,
+                  Intrinsics.slt_int,Intrinsics.urem_int,Intrinsics.select_value,Intrinsics.lt_float,
+                  Intrinsics.box,Intrinsics.sdiv_int,Intrinsics.flipsign_int,Intrinsics.or_int,
+                  Intrinsics.unbox,Intrinsics.ctlz_int,Intrinsics.checked_fptoui,
+                  Intrinsics.and_int,Intrinsics.le_float,Intrinsics.sle_int,Intrinsics.checked_smul,
+                  Intrinsics.ltfsi64,Intrinsics.bswap_int,Intrinsics.cttz_int,Intrinsics.lefui64,
+                  Intrinsics.sitofp,Intrinsics.checked_sadd,Intrinsics.udiv_int,Intrinsics.lshr_int,
+                  Intrinsics.trunc_int,Intrinsics.eqfsi64,Intrinsics.mul_float,Intrinsics.shl_int,
+                  Intrinsics.neg_int,Intrinsics.zext_int,Intrinsics.ule_int,Intrinsics.smod_int,
+                  Intrinsics.lesif64,Intrinsics.eqfui64,Intrinsics.ashr_int,Intrinsics.xor_int,
+                  Intrinsics.ne_int,Intrinsics.fpuiround,Intrinsics.fptrunc,Intrinsics.ne_float,
+                  Intrinsics.fpiseq,Intrinsics.not_int,Intrinsics.rem_float
+              } #all Intrinsic functions except pointerref,pointerset,ccall,jl_alloca,pointertoref
 
 # detect some important side-effect-free calls
 function effect_free(e::ANY, sv, any_expr::Bool)
