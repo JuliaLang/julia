@@ -250,7 +250,8 @@ Ac_ldiv_Bc{T<:BlasComplex}(A::LU{T}, B::StridedVecOrMat{T}) = @assertnonsingular
 
 inv{T<:BlasFloat}(A::LU{T})=@assertnonsingular LAPACK.getri!(copy(A.factors), A.ipiv) A.info
 
-cond(A::LU, p) = inv(LAPACK.gecon!(p == 1 ? '1' : 'I', A.factors, norm(A[:L][A[:p],:]*A[:U], p)))
+cond{T<:BlasFloat}(A::LU{T}, p::Number) = inv(LAPACK.gecon!(p == 1 ? '1' : 'I', A.factors, norm(A[:L][A[:p],:]*A[:U], p)))
+cond(A::LU, p::Number) = norm(A[:L]*A[:U],p)*norm(inv(A),p)
 
 ####################
 # QR Factorization #
