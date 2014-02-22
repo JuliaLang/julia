@@ -124,13 +124,17 @@ type PriorityQueue{K,V} <: Associative{K,V}
 
     function PriorityQueue(ks::AbstractArray{K}, vs::AbstractArray{V},
                            o::Ordering)
+        # TODO: maybe deprecate
         if length(ks) != length(vs)
             error("key and value arrays must have equal lengths")
         end
+        PriorityQueue{K,V}(zip(ks, vs))
+    end
 
-        xs = Array((K, V), length(ks))
+    function PriorityQueue(itr, o::Ordering)
+        xs = Array((K, V), length(itr))
         index = Dict{K, Int}()
-        for (i, (k, v)) in enumerate(zip(ks, vs))
+        for (i, (k, v)) in enumerate(itr)
             xs[i] = (k, v)
             if haskey(index, k)
                 error("PriorityQueue keys must be unique")
@@ -150,15 +154,13 @@ end
 
 PriorityQueue(o::Ordering=Forward) = PriorityQueue{Any,Any}(o)
 
-function PriorityQueue{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V},
-                            o::Ordering=Forward)
-    PriorityQueue{K,V}(ks, vs, o)
-end
+# TODO: maybe deprecate
+PriorityQueue{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V},
+                   o::Ordering=Forward) = PriorityQueue{K,V}(ks, vs, o)
 
-function PriorityQueue{K,V}(kvs::Dict{K,V}, o::Ordering=Forward)
-    PriorityQueue{K,V}([k for k in keys(kvs)], [v for v in values(kvs)], o)
-end
+PriorityQueue{K,V}(kvs::Associative{K,V}, o::Ordering=Forward) = PriorityQueue{K,V}(kvs, o)
 
+PriorityQueue{K,V}(a::AbstractArray{(K,V)}, o::Ordering=Forward) = PriorityQueue{K,V}(a, o)
 
 length(pq::PriorityQueue) = length(pq.xs)
 isempty(pq::PriorityQueue) = isempty(pq.xs)
