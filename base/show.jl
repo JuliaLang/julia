@@ -491,20 +491,33 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show(io, args[1])
     elseif is(head, :null)
         print(io, "nothing")
-    elseif is(head, :kw)
+    elseif is(head, :kw) && length(args)==2
         show_unquoted(io, args[1], indent+indent_width)
         print(io, '=')
         show_unquoted(io, args[2], indent+indent_width)
+    elseif is(head, :string)
+        a = map(args) do x
+            if !isa(x,String)
+                if isa(x,Symbol) && !(x in quoted_syms)
+                    string("\$", x)
+                else
+                    string("\$(", sprint(show_unquoted,x), ")")
+                end
+            else
+                sprint(print_escaped, x, "\"\$")
+            end
+        end
+        print(io, '"', a..., '"')
 
     # print anything else as "Expr(head, args...)"
     else
-        print(io, "Expr(")
-        show_unquoted(io, ex.head, indent)
+        print(io, "\$(Expr(")
+        show(io, ex.head)
         for arg in args
             print(io, ", ")
-            show_unquoted(io, arg, indent)
+            show(io, arg)
         end
-        print(io, ")")
+        print(io, "))")
     end
 
     show_expr_type(io, ex.typ)
