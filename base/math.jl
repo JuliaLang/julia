@@ -595,9 +595,12 @@ function besselj(nu::Float64, z::Complex128)
 end
 
 function besselj(nu::Integer, x::FloatingPoint)
+    nu > typemax(Int32) && throw(DomainError())
     return oftype(x, ccall((:jn, libm), Float64, (Cint, Float64), nu, x))
 end
+
 function besselj(nu::Integer, x::Float32)
+    nu > typemax(Int32) && throw(DomainError())
     return ccall((:jnf, libm), Float32, (Cint, Float32), nu, x)
 end
 
