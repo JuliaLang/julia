@@ -152,6 +152,14 @@ push!(t::Associative, key, v) = setindex!(t, v, key)
 type ObjectIdDict <: Associative{Any,Any}
     ht::Array{Any,1}
     ObjectIdDict() = new(cell(32))
+
+    function ObjectIdDict(itr)
+        d = ObjectIdDict()
+        for (k,v) in itr
+            d[k] = v
+        end
+        d
+    end
 end
 
 similar(d::ObjectIdDict) = ObjectIdDict()
@@ -318,6 +326,7 @@ Dict{K  }(ks::(K...), vs::Tuple ) = Dict{K  ,Any}(ks, vs)
 Dict{V  }(ks::Tuple , vs::(V...)) = Dict{Any,V  }(ks, vs)
 
 Dict{K,V}(kv::AbstractArray{(K,V)}) = Dict{K,V}(kv)
+Dict{K,V}(kv::Associative{K,V}) = Dict{K,V}(kv)
 
 similar{K,V}(d::Dict{K,V}) = (K=>V)[]
 
