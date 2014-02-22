@@ -148,8 +148,9 @@ DLLEXPORT void jl_uv_closeHandle(uv_handle_t* handle)
 {
     if (handle->data) {
         JULIA_CB(close,handle->data,0); (void)ret;
+    } else {
+        free(handle);
     }
-    free(handle);
 }
 
 DLLEXPORT void jl_uv_shutdownCallback(uv_shutdown_t* req, int status)

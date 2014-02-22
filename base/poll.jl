@@ -291,8 +291,8 @@ function _uv_hook_fspollcb(t::PollingFileWatcher,status::Int32,prev::Ptr,cur::Pt
     end
 end
 
-_uv_hook_close(uv::FileMonitor) = (uv.handle = 0; nothing)
-_uv_hook_close(uv::UVPollingWatcher) = (uv.handle = 0; nothing)
+_uv_hook_close(uv::FileMonitor) = (c_free(uv.handle); uv.handle = 0; nothing)
+_uv_hook_close(uv::UVPollingWatcher) = (c_free(uv.handle); uv.handle = 0; nothing)
 
 function poll_fd(s, seconds::Real; readable=false, writable=false)
     wt = Condition()

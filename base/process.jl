@@ -221,6 +221,7 @@ function _uv_hook_return_spawn(proc::Process, exit_status::Int32, termsignal::In
 end
 
 function _uv_hook_close(proc::Process)
+    c_free(proc.handle)
     proc.handle = 0
     if isa(proc.closecb, Function) proc.closecb(proc) end
     notify(proc.closenotify)
