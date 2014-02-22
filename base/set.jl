@@ -2,13 +2,15 @@ type Set{T}
     dict::Dict{T,Nothing}
 
     Set() = new(Dict{T,Nothing}())
-    Set(x...) = union!(new(Dict{T,Nothing}()), x)
+    Set(itr) = union!(new(Dict{T,Nothing}()), itr)
+
+    # for backwards compat
+    Set(xs::T...) = Set{T}(xs)
 end
 Set() = Set{Any}()
-Set(x...) = Set{Any}(x...)
-Set{T}(x::T...) = Set{T}(x...)
+Set(itr) = Set{eltype(itr)}(itr)
 
-show(io::IO, s::Set) = (show(io, typeof(s)); show_comma_array(io, s,'(',')'))
+show(io::IO, s::Set) = (show(io, typeof(s)); show_comma_array(io, s,"([","])"))
 
 isempty(s::Set) = isempty(s.dict)
 length(s::Set)  = length(s.dict)
