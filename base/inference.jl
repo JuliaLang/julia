@@ -2273,18 +2273,18 @@ const basenumtype = Union(Int32,Int64,Float32,Float64,Complex64,Complex128,Ratio
 function inlining_pass(e::Expr, sv, ast)
     if e.head == :method
         # avoid running the inlining pass on function definitions
-        return (e,None)
+        return (e,())
     end
-    # don't inline first argument of ccall, as this needs to be evaluated
-    # by the interpreter and inlining might put in something it can't handle,
-    # like another ccall.
     eargs = e.args
     if length(eargs)<1
         return (e,())
     end
     arg1 = eargs[1]
+    # don't inline first (global) arguments of ccall, as this needs to be evaluated
+    # by the interpreter and inlining might put in something it can't handle,
+    # like another ccall (or try to move the variables out into the function)
     if is_known_call(e, Core.Intrinsics.ccall, sv)
-        i0 = 3
+        i0 = 5
         isccall = true
     else
         i0 = 1
@@ -2313,16 +2313,26 @@ function inlining_pass(e::Expr, sv, ast)
         for i=length(eargs):-1:i0
             ei = eargs[i]
             if isa(ei,Expr)
-                res = inlining_pass(ei, sv, ast)
+                if ei.head === :&
+                    argloc = (ei::Expr).args
+                    i = 1
+                    ei = argloc[1]
+                    if !isa(ei,Expr)
+                        continue
+                    end
+                else
+                    argloc = eargs
+                end
+                res = inlining_pass(ei::Expr, sv, ast)
                 res1 = res[1]
                 if has_stmts && !effect_free(res1, sv, false)
                     restype = exprtype(res1)
                     vnew = unique_name(ast)
                     add_variable(ast, vnew, restype, true)
                     unshift!(stmts, Expr(:(=), vnew, res1))
-                    eargs[i] = restype===Any ? vnew : SymbolNode(vnew,restype)
+                    argloc[i] = restype===Any ? vnew : SymbolNode(vnew,restype)
                 else
-                    eargs[i] = res1
+                    argloc[i] = res1
                 end
                 if isa(res[2],Array)
                     res2 = res[2]::Array{Any,1}
