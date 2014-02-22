@@ -2243,7 +2243,7 @@ function inline_worthy(body::Expr)
 #        shift!(body.args)
 #        return true
 #    end
-    if length(body.args) < 10 && occurs_more(body, e->true, 50) < 50
+    if length(body.args) < 11 && occurs_more(body, e->true, 50) < 50
         return true
     end
     return false
@@ -2271,6 +2271,10 @@ end
 const basenumtype = Union(Int32,Int64,Float32,Float64,Complex64,Complex128,Rational)
 
 function inlining_pass(e::Expr, sv, ast)
+    if e.head == :method
+        # avoid running the inlining pass on function definitions
+        return (e,None)
+    end
     # don't inline first argument of ccall, as this needs to be evaluated
     # by the interpreter and inlining might put in something it can't handle,
     # like another ccall.
@@ -2305,7 +2309,7 @@ function inlining_pass(e::Expr, sv, ast)
             i += 1
         end
     else
-        has_stmts = false
+        has_stmts = false # needed to preserve order-of-execution
         for i=length(eargs):-1:i0
             ei = eargs[i]
             if isa(ei,Expr)
@@ -2321,8 +2325,11 @@ function inlining_pass(e::Expr, sv, ast)
                     eargs[i] = res1
                 end
                 if isa(res[2],Array)
-                    prepend!(stmts,res[2]::Array{Any,1})
-                    has_stmts = true
+                    res2 = res[2]::Array{Any,1}
+                    if length(res2) > 0
+                        prepend!(stmts,res2)
+                        has_stmts = true
+                    end
                 end
             end
         end
