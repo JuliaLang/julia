@@ -99,7 +99,7 @@ showerror(io::IO, e::KeyError) = (print(io, "key not found: "); show(io, e.key))
 showerror(io::IO, e::InterruptException) = print(io, "interrupt")
 
 function showerror(io::IO, e::MethodError)
-    name = e.f.env.name
+    name = isgeneric(e.f) ? e.f.env.name : :anonymous
     if isa(e.f, DataType)
         print(io, "no method $(e.f)(")
     else
