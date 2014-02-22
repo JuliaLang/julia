@@ -10,7 +10,7 @@ end
 Set() = Set{Any}()
 Set(itr) = Set{eltype(itr)}(itr)
 
-show(io::IO, s::Set) = (show(io, typeof(s)); show_comma_array(io, s,"([","])"))
+show(io::IO, s::Set) = (show(io, typeof(s)); show_comma_array(io, s,"({","})"))
 
 isempty(s::Set) = isempty(s.dict)
 length(s::Set)  = length(s.dict)
