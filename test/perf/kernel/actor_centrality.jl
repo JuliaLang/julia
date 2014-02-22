@@ -16,7 +16,7 @@ end
 
 function centrality_mean(G::Graph, start_node)
     dists = Dict{Node,Uint64}()
-    next = Set(G[start_node])
+    next = Set([G[start_node]])
 
     cdist = 0
     while !isempty(next)

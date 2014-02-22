@@ -38,7 +38,7 @@ function edits1(word::String)
     transposes = ["$a$(b[2])$(b[1])$(b[3:end])" for (a,b) in splits[1:end-2]]
     replaces   = ["$a$c$(b[2:end])"             for (a,b) in splits[1:end-1], c in alphabet]
     inserts    = ["$a$c$b"                      for (a,b) in splits,          c in alphabet]
-    return Set(deletes..., transposes..., replaces..., inserts...)
+    return Set([deletes; transposes; replaces[:]; inserts[:]])
 end
 
 function known_edits2(word::String)
@@ -63,7 +63,7 @@ function correct(word::String)
     candidates = known([word])
     length(candidates) == 0 && (candidates = known(edits1(word)))
     length(candidates) == 0 && (candidates = known_edits2(word) )
-    length(candidates) == 0 && (candidates = Set(word)          )
+    length(candidates) == 0 && (candidates = Set([word])        )
 
     maximum(x->(get(NWORDS, x, 0),x), candidates)[2]
 end

@@ -89,6 +89,9 @@ end
 # searching definitions
 
 function which(f::Callable, args...)
+    if !isgeneric(f)
+        throw(ErrorException("not a generic function, no methods available"))
+    end
     ms = methods(f, map(a->(isa(a,Type) ? Type{a} : typeof(a)), args))
     isempty(ms) && throw(MethodError(f, args))
     ms[1]
