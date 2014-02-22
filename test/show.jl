@@ -315,9 +315,22 @@ end
 #test methodshow.jl functions
 @test Base.inbase(Base)
 @test Base.inbase(LinAlg)
+@test !Base.inbase(Core)
 
-@test contains(sprint(io -> writemime(io,"text/plain",methods(Base.inbase))),"inbase(m::Module)")
-@test contains(sprint(io -> writemime(io,"text/html",methods(Base.inbase))),"inbase(m::<b>Module</b>)")
+let repr = sprint(io -> writemime(io,"text/plain", methods(Base.inbase)))
+    @test contains(repr, "inbase(m::Module)")
+end
+let repr = sprint(io -> writemime(io,"text/html", methods(Base.inbase)))
+    @test contains(repr, "inbase(m::<b>Module</b>)")
+end
+
+f5971(x, y...; z=1, w...) = nothing
+let repr = sprint(io -> writemime(io,"text/plain", methods(f5971)))
+    @test contains(repr, "f5971(x, y...; z)")
+end
+let repr = sprint(io -> writemime(io,"text/html", methods(f5971)))
+    @test contains(repr, "f5971(x, y...; <i>z</i>)")
+end
 
 if isempty(Base.GIT_VERSION_INFO.commit)
     @test contains(Base.url(methods(eigs).defs),"https://github.com/JuliaLang/julia/tree/v$VERSION/base/linalg/arnoldi.jl#L")
