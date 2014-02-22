@@ -2243,7 +2243,7 @@ function inline_worthy(body::Expr)
 #        shift!(body.args)
 #        return true
 #    end
-    if length(body.args) < 10 && occurs_more(body, e->true, 30) < 30
+    if length(body.args) < 10 && occurs_more(body, e->true, 50) < 50
         return true
     end
     return false
@@ -2305,13 +2305,24 @@ function inlining_pass(e::Expr, sv, ast)
             i += 1
         end
     else
-        for i=i0:length(eargs)
+        has_stmts = false
+        for i=length(eargs):-1:i0
             ei = eargs[i]
             if isa(ei,Expr)
                 res = inlining_pass(ei, sv, ast)
-                eargs[i] = res[1]
+                res1 = res[1]
+                if has_stmts && !effect_free(res1, sv, false)
+                    restype = exprtype(res1)
+                    vnew = unique_name(ast)
+                    add_variable(ast, vnew, restype, true)
+                    unshift!(stmts, Expr(:(=), vnew, res1))
+                    eargs[i] = restype===Any ? vnew : SymbolNode(vnew,restype)
+                else
+                    eargs[i] = res1
+                end
                 if isa(res[2],Array)
-                    append!(stmts,res[2]::Array{Any,1})
+                    prepend!(stmts,res[2]::Array{Any,1})
+                    has_stmts = true
                 end
             end
         end
