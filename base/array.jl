@@ -1328,7 +1328,7 @@ end
 # setdiff only accepts two args
 function setdiff(a, b)
     args_type = promote_type(eltype(a), eltype(b))
-    bset = Set(b...)
+    bset = Set(b)
     ret = Array(args_type,0)
     seen = Set()
     for a_elem in a
