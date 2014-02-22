@@ -395,19 +395,32 @@ The base array type in Julia is the abstract type
 ``n`` and the element type ``T``. ``AbstractVector`` and
 ``AbstractMatrix`` are aliases for the 1-d and 2-d cases. Operations on
 ``AbstractArray`` objects are defined using higher level operators and
-functions, in a way that is independent of the underlying storage class.
-These operations are guaranteed to work correctly as a fallback for any
+functions, in a way that is independent of the underlying storage.
+These operations generally work correctly as a fallback for any
 specific array implementation.
 
-The ``Array{T,n}`` type is a specific instance of ``AbstractArray``
+The ``AbstractArray`` type includes anything vaguely array-like, and
+implementations of it might be quite different from conventional
+arrays. For example, elements might be computed on request rather than
+stored. Or, it might not be possible to assign or access every array
+location.
+
+``StoredArray`` is an abstract subtype of ``AbstractArray`` intended to
+include all arrays that behave like memories: all elements are independent,
+can be accessed, and (for mutable arrays) all elements can be assigned.
+``DenseArray`` is a further abstract subtype of ``StoredArray``. Arrays of
+this type have storage for every possible index, and provide uniform access
+performance for all elements.
+
+The ``Array{T,n}`` type is a specific instance of ``DenseArray``
 where elements are stored in column-major order (see additional notes in
 :ref:`man-performance-tips`). ``Vector`` and ``Matrix`` are aliases for
 the 1-d and 2-d cases. Specific operations such as scalar indexing,
 assignment, and a few other basic storage-specific operations are all
 that have to be implemented for ``Array``, so that the rest of the array
-library can be implemented in a generic manner for ``AbstractArray``.
+library can be implemented in a generic manner.
 
-``SubArray`` is a specialization of ``AbstractArray`` that performs
+``SubArray`` is a specialization of ``StoredArray`` that performs
 indexing by reference rather than by copying. A ``SubArray`` is created
 with the ``sub`` function, which is called the same way as ``getindex`` (with
 an array and a series of index arguments). The result of ``sub`` looks
@@ -418,7 +431,7 @@ can later be used to index the original array indirectly.
 ``StridedVector`` and ``StridedMatrix`` are convenient aliases defined
 to make it possible for Julia to call a wider range of BLAS and LAPACK
 functions by passing them either ``Array`` or ``SubArray`` objects, and
-thus saving inefficiencies from indexing and memory allocation.
+thus saving inefficiencies from memory allocation and copying.
 
 The following example computes the QR decomposition of a small section
 of a larger array, without creating any temporaries, and by calling the

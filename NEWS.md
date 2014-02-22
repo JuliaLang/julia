@@ -183,6 +183,9 @@ Library improvements
   * The `setenv` function for external processes now accepts a `dir` keyword
     argument for specifying the directory to start the child process in ([#4888]).
 
+  * Constructors for collections (`Set`, `Dict`, etc.) now generally accept a
+    single iterable argument giving the elements of the collection ([#4996], [#4871])
+
 Deprecated or removed
 ---------------------
 
@@ -270,6 +273,8 @@ Deprecated or removed
 [#5748]: https://github.com/JuliaLang/julia/issues/5748
 [#5511]: https://github.com/JuliaLang/julia/issues/5511
 [#5819]: https://github.com/JuliaLang/julia/issues/5819
+[#4871]: https://github.com/JuliaLang/julia/issues/4871
+[#4996]: https://github.com/JuliaLang/julia/issues/4996
 
 Julia v0.2.0 Release Notes
 ==========================

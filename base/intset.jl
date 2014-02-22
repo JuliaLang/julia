@@ -6,7 +6,7 @@ type IntSet
     IntSet() = new(zeros(Uint32,256>>>5), 256, false)
 end
 
-IntSet(args...) = (s=IntSet(); for a in args; push!(s,a); end; s)
+IntSet(itr) = (s=IntSet(); for a in itr; push!(s,a); end; s)
 
 similar(s::IntSet) = IntSet()
 
@@ -167,7 +167,7 @@ length(s::IntSet) = int(ccall(:bitvector_count, Uint64, (Ptr{Uint32}, Uint64, Ui
     (s.fill1s ? typemax(Int) - s.limit : 0)
 
 function show(io::IO, s::IntSet)
-    print(io, "IntSet(")
+    print(io, "IntSet([")
     first = true
     for n in s
         if n > s.limit
@@ -182,7 +182,7 @@ function show(io::IO, s::IntSet)
     if s.fill1s
         print(io, ", ..., ", typemax(Int)-1, ")")
     else
-        print(io, ")")
+        print(io, "])")
     end
 end
 

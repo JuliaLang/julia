@@ -1,7 +1,6 @@
-abstract AbstractSparseMatrix{Tv,Ti} <: AbstractMatrix{Tv}
+abstract AbstractSparseMatrix{Tv,Ti} <: StoredArray{Tv,2}
 
 issparse(A::AbstractArray) = false
 issparse(S::AbstractSparseMatrix) = true
 
-eltype{Tv}(S::AbstractSparseMatrix{Tv}) = Tv
 indtype{Tv,Ti}(S::AbstractSparseMatrix{Tv,Ti}) = Ti

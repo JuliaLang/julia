@@ -4,6 +4,7 @@ typealias Vector{T} Array{T,1}
 typealias Matrix{T} Array{T,2}
 typealias VecOrMat{T} Union(Vector{T}, Matrix{T})
 
+typealias StoredVector{T} StoredArray{T,1}
 typealias StridedArray{T,N,A<:DenseArray} Union(DenseArray{T,N}, SubArray{T,N,A})
 typealias StridedVector{T,A<:DenseArray}  Union(DenseArray{T,1}, SubArray{T,1,A})
 typealias StridedMatrix{T,A<:DenseArray}  Union(DenseArray{T,2}, SubArray{T,2,A})
@@ -81,7 +82,7 @@ function copy!{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, A:
     end
 end
 
-function copy_transpose!{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, A::StridedMatrix{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
+function copy_transpose!{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, A::StridedVecOrMat{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
     if length(ir_dest) != length(jr_src) || length(jr_dest) != length(ir_src)
         error("source and destination must have same size")
     end
@@ -130,6 +131,9 @@ reinterpret(t::Type,x) = reinterpret(t,[x])[1]
 function reshape{T,N}(a::Array{T}, dims::NTuple{N,Int})
     if prod(dims) != length(a)
         throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(a))"))
+    end
+    if dims == size(a)
+        return a
     end
     ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
 end
@@ -681,7 +685,7 @@ end
 
 ## Unary operators ##
 
-function conj!{T<:Number}(A::AbstractArray{T})
+function conj!{T<:Number}(A::StoredArray{T})
     for i=1:length(A)
         A[i] = conj(A[i])
     end
@@ -690,7 +694,7 @@ end
 
 for f in (:-, :~, :conj, :sign)
     @eval begin
-        function ($f)(A::AbstractArray)
+        function ($f)(A::StridedArray)
             F = similar(A)
             for i=1:length(A)
                 F[i] = ($f)(A[i])
@@ -702,14 +706,12 @@ end
 
 (-)(A::StridedArray{Bool}) = reshape([ -A[i] for i=1:length(A) ], size(A))
 
-for f in (:real, :imag)
-    @eval begin
-        ($f)(A::AbstractVector) = [ ($f)(x) for x in A ]
-        ($f)(A::AbstractArray)  = reshape([ ($f)(x) for x in A ], size(A))
-    end
-end
+real(A::StridedArray) = reshape([ real(x) for x in A ], size(A))
+imag(A::StridedArray) = reshape([ imag(x) for x in A ], size(A))
+real{T<:Real}(x::StridedArray{T}) = x
+imag{T<:Real}(x::StridedArray{T}) = zero(x)
 
-function !(A::AbstractArray{Bool})
+function !(A::StridedArray{Bool})
     F = similar(A)
     for i=1:length(A)
         F[i] = !A[i]
@@ -772,25 +774,6 @@ for f in (:+, :-, :.*, :./, :.%, :div, :mod, :rem, :&, :|, :$)
             F = similar(A, promote_array_type(typeof(B),T))
             for i=1:length(A)
                 @inbounds F[i] = ($f)(A[i], B)
-            end
-            return F
-        end
-        # interaction with Ranges
-        function ($f){S,T<:Real}(A::StridedArray{S}, B::Ranges{T})
-            F = Array(promote_type(S,T), promote_shape(size(A),size(B)))
-            i = 1
-            for b in B
-                @inbounds F[i] = ($f)(A[i], b)
-                i += 1
-            end
-            return F
-        end
-        function ($f){S<:Real,T}(A::Ranges{S}, B::StridedArray{T})
-            F = Array(promote_type(S,T), promote_shape(size(A),size(B)))
-            i = 1
-            for a in A
-                @inbounds F[i] = ($f)(a, B[i])
-                i += 1
             end
             return F
         end
@@ -883,7 +866,7 @@ end
 function flipdim{T}(A::Array{T}, d::Integer)
     nd = ndims(A)
     sd = d > nd ? 1 : size(A, d)
-    if sd == 1
+    if sd == 1 || isempty(A)
         return copy(A)
     end
 
@@ -940,7 +923,7 @@ function flipdim{T}(A::Array{T}, d::Integer)
     return B
 end
 
-function rotl90(A::AbstractMatrix)
+function rotl90(A::StridedMatrix)
     m,n = size(A)
     B = similar(A,(n,m))
     for i=1:m, j=1:n
@@ -948,7 +931,7 @@ function rotl90(A::AbstractMatrix)
     end
     return B
 end
-function rotr90(A::AbstractMatrix)
+function rotr90(A::StridedMatrix)
     m,n = size(A)
     B = similar(A,(n,m))
     for i=1:m, j=1:n
@@ -956,7 +939,7 @@ function rotr90(A::AbstractMatrix)
     end
     return B
 end
-function rot180(A::AbstractMatrix)
+function rot180(A::StridedMatrix)
     m,n = size(A)
     B = similar(A)
     for i=1:m, j=1:n
@@ -973,9 +956,24 @@ end
 rotr90(A::AbstractMatrix, k::Integer) = rotl90(A,-k)
 rot180(A::AbstractMatrix, k::Integer) = mod(k, 2) == 1 ? rot180(A) : copy(A)
 
+# note: probably should be StridedVector or StoredVector
+function reverse(A::AbstractVector, s=1, n=length(A))
+    B = similar(A)
+    for i = 1:s-1
+        B[i] = A[i]
+    end
+    for i = s:n
+        B[i] = A[n+s-i]
+    end
+    for i = n+1:length(A)
+        B[i] = A[i]
+    end
+    B
+end
+
 reverse(v::StridedVector) = (n=length(v); [ v[n-i+1] for i=1:n ])
 reverse(v::StridedVector, s, n=length(v)) = reverse!(copy(v), s, n)
-function reverse!(v::AbstractVector, s=1, n=length(v))
+function reverse!(v::StridedVector, s=1, n=length(v))
     r = n
     for i=s:div(s+n-1,2)
         v[i], v[r] = v[r], v[i]
@@ -1041,7 +1039,7 @@ function findnext(testf::Function, A, start::Integer)
 end
 findfirst(testf::Function, A) = findnext(testf, A, 1)
 
-function find(testf::Function, A::AbstractArray)
+function find(testf::Function, A::StridedArray)
     # use a dynamic-length array to store the indexes, then copy to a non-padded
     # array for the return
     tmpI = Array(Int, 0)
@@ -1055,7 +1053,7 @@ function find(testf::Function, A::AbstractArray)
     I
 end
 
-function find(A::AbstractArray)
+function find(A::StridedArray)
     nnzA = countnz(A)
     I = Array(Int, nnzA)
     count = 1
@@ -1073,7 +1071,7 @@ find(testf::Function, x) = find(testf(x))
 
 findn(A::AbstractVector) = find(A)
 
-function findn(A::AbstractMatrix)
+function findn(A::StridedMatrix)
     nnzA = countnz(A)
     I = Array(Int, nnzA)
     J = Array(Int, nnzA)
@@ -1088,7 +1086,7 @@ function findn(A::AbstractMatrix)
     return (I, J)
 end
 
-function findnz{T}(A::AbstractMatrix{T})
+function findnz{T}(A::StridedMatrix{T})
     nnzA = countnz(A)
     I = zeros(Int, nnzA)
     J = zeros(Int, nnzA)
@@ -1108,7 +1106,7 @@ function findnz{T}(A::AbstractMatrix{T})
     return (I, J, NZs)
 end
 
-function nonzeros{T}(A::AbstractArray{T})
+function nonzeros{T}(A::StridedArray{T})
     nnzA = countnz(A)
     V = Array(T, nnzA)
     count = 1
@@ -1330,7 +1328,7 @@ end
 # setdiff only accepts two args
 function setdiff(a, b)
     args_type = promote_type(eltype(a), eltype(b))
-    bset = Set(b...)
+    bset = Set(b)
     ret = Array(args_type,0)
     seen = Set()
     for a_elem in a
@@ -1349,3 +1347,103 @@ end
 symdiff(a) = a
 symdiff(a, b) = union(setdiff(a,b), setdiff(b,a))
 symdiff(a, b, rest...) = symdiff(a, symdiff(b, rest...))
+
+_cumsum_type{T<:Number}(v::AbstractArray{T}) = typeof(+zero(T))
+_cumsum_type(v) = typeof(v[1]+v[1])
+
+for (f, fp, op) = ((:cumsum, :cumsum_pairwise, :+),
+                   (:cumprod, :cumprod_pairwise, :*) )
+    # in-place cumsum of c = s+v(i1:n), using pairwise summation as for sum
+    @eval function ($fp)(v::StoredVector, c::StoredVector, s, i1, n)
+        if n < 128
+            @inbounds c[i1] = ($op)(s, v[i1])
+            for i = i1+1:i1+n-1
+                @inbounds c[i] = $(op)(c[i-1], v[i])
+            end
+        else
+            n2 = div(n,2)
+            ($fp)(v, c, s, i1, n2)
+            ($fp)(v, c, c[(i1+n2)-1], i1+n2, n-n2)
+        end
+    end
+
+    @eval function ($f)(v::StoredVector)
+        n = length(v)
+        c = $(op===:+ ? (:(similar(v,_cumsum_type(v)))) :
+                        (:(similar(v))))
+        if n == 0; return c; end
+        ($fp)(v, c, $(op==:+ ? :(zero(v[1])) : :(one(v[1]))), 1, n)
+        return c
+    end
+
+    @eval function ($f)(A::StridedArray, axis::Integer)
+        dimsA = size(A)
+        ndimsA = ndims(A)
+        axis_size = dimsA[axis]
+        axis_stride = 1
+        for i = 1:(axis-1)
+            axis_stride *= size(A,i)
+        end
+
+        B = $(op===:+ ? (:(similar(A,_cumsum_type(A)))) :
+                        (:(similar(A))))
+
+        if axis_size < 1
+            return B
+        end
+
+        for i = 1:length(A)
+            if div(i-1, axis_stride) % axis_size == 0
+               B[i] = A[i]
+            else
+               B[i] = ($op)(B[i-axis_stride], A[i])
+            end
+        end
+
+        return B
+    end
+
+    @eval ($f)(A::AbstractArray) = ($f)(A, 1)
+end
+
+for (f, op) = ((:cummin, :min), (:cummax, :max))
+    @eval function ($f)(v::StoredVector)
+        n = length(v)
+        cur_val = v[1]
+        res = similar(v, n)
+        res[1] = cur_val
+        for i in 2:n
+            cur_val = ($op)(v[i], cur_val)
+            res[i] = cur_val
+        end
+        return res
+    end
+
+    @eval function ($f)(A::StridedArray, axis::Integer)
+        dimsA = size(A)
+        ndimsA = ndims(A)
+        axis_size = dimsA[axis]
+        axis_stride = 1
+        for i = 1:(axis-1)
+            axis_stride *= size(A,i)
+        end
+
+        if axis_size < 1
+            return A
+        end
+
+        B = similar(A)
+
+        for i = 1:length(A)
+            if div(i-1, axis_stride) % axis_size == 0
+               B[i] = A[i]
+            else
+               B[i] = ($op)(A[i], B[i-axis_stride])
+            end
+        end
+
+        return B
+    end
+
+    @eval ($f)(A::AbstractArray) = ($f)(A, 1)
+end

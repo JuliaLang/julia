@@ -889,26 +889,28 @@ end
 #http://www.unicode.org/reports/tr15/
  
 #1. Canonical equivalence
-==(a::Array{Char},b::Array{Char}) =
-normalize_string(string(a...), :NFC)==normalize_string(string(b...), :NFC)
-@test ['C', '̧'] == ['Ç']
-@test ['q', '̇', '̣'] == ['q', '̣', '̇']
-@test ['가'] == ['ᄀ', 'ᅡ']
-@test ['Ω'] == ['Ω']
- 
+let ==(a::Array{Char},b::Array{Char}) = normalize_string(string(a...), :NFC)==normalize_string(string(b...), :NFC)
+    ==(a,b) = Base.(:(==))(a,b)
+    @test ['C', '̧'] == ['Ç']
+    @test ['q', '̇', '̣'] == ['q', '̣', '̇']
+    @test ['가'] == ['ᄀ', 'ᅡ']
+    @test ['Ω'] == ['Ω']
+end
+
 #2. Compatibility Equivalence
-==(a::Array{Char},b::Array{Char}) =
-normalize_string(string(a...), :NFKC)==normalize_string(string(b...), :NFKC)
-@test ['ℌ'] == ['ℍ'] == ['H']
-@test ['ﻨ'] == ['ﻧ'] == ['ﻦ'] == ['ﻥ']
-@test ['①'] == ['1']
-@test ['ｶ'] == ['カ']
-@test ['︷'] == ['{']
-@test ['⁹'] == ['₉']
-@test ['㌀'] == ['ア', 'パ', 'ー', 'ト']
-@test ['¼'] == ['1', '⁄', '4']
-@test ['ǆ'] == ['d', 'ž']
- 
+let ==(a::Array{Char},b::Array{Char}) = normalize_string(string(a...), :NFKC)==normalize_string(string(b...), :NFKC)
+    ==(a,b) = Base.(:(==))(a,b)
+    @test ['ℌ'] == ['ℍ'] == ['H']
+    @test ['ﻨ'] == ['ﻧ'] == ['ﻦ'] == ['ﻥ']
+    @test ['①'] == ['1']
+    @test ['ｶ'] == ['カ']
+    @test ['︷'] == ['{']
+    @test ['⁹'] == ['₉']
+    @test ['㌀'] == ['ア', 'パ', 'ー', 'ト']
+    @test ['¼'] == ['1', '⁄', '4']
+    @test ['ǆ'] == ['d', 'ž']
+end
+
 #3. Singletons
 @test normalize_string("\U212b", :NFD) == "A\U030a"
 @test normalize_string("\U212b", :NFC) == "\U00c5"
@@ -937,3 +939,7 @@ normalize_string(string(a...), :NFKC)==normalize_string(string(b...), :NFKC)
 @test normalize_string("\U1e9b\U0323", :NFC) == "\U1e9b\U0323"
 @test normalize_string("\U1e9b\U0323", :NFKD) == "s\U0323\U0307"
 @test normalize_string("\U1e9b\U0323", :NFKC) == "\U1e69"
+
+# issue #5870
+@test !ismatch(Regex("aa"), SubString("",1,0))
+@test ismatch(Regex(""), SubString("",1,0))

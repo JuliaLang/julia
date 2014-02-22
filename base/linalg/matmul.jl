@@ -249,7 +249,7 @@ function copy!{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, tM
     end
 end
 
-function copy_transpose!{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, tM::Char, M::StridedMatrix{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
+function copy_transpose!{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, tM::Char, M::StridedVecOrMat{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
     if tM == 'N'
         Base.copy_transpose!(B, ir_dest, jr_dest, M, ir_src, jr_src)
     else
@@ -313,7 +313,7 @@ function generic_matvecmul{T,S,R}(C::StridedVector{R}, tA, A::StridedMatrix{T}, 
     C
 end
 
-(*){T,S}(A::Vector{S}, B::Matrix{T}) = reshape(A,length(A),1)*B
+(*){T,S}(A::AbstractVector{S}, B::AbstractMatrix{T}) = reshape(A,length(A),1)*B
 
 # NOTE: the generic version is also called as fallback for strides != 1 cases
 #       in libalg_blas.jl

@@ -262,3 +262,12 @@ let
     seek(b,0)
     @test deserialize(b) == n
 end
+
+# issue #5873
+@test ndigits(big(90)) == 2
+@test ndigits(big(99)) == 2
+ndigits_mismatch(n) = ndigits(n) != ndigits(BigInt(n))
+@test !any(ndigits_mismatch, 8:9)
+@test !any(ndigits_mismatch, 64:99)
+@test !any(ndigits_mismatch, 512:999)
+@test !any(ndigits_mismatch, 8192:9999)

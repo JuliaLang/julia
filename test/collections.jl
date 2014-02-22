@@ -180,6 +180,16 @@ d = {x => 1
 d = (String => String)[ a => "foo" for a in ["a","b","c"]]
 @test d == ["a"=>"foo","b"=>"foo","c"=>"foo"]
 
+# issue #5886
+d5886 = Dict()
+for k5886 in 1:11
+   d5886[k5886] = 1
+end
+for k5886 in keys(d5886)
+   # undefined ref if not fixed
+   d5886[k5886] += 1
+end
+
 # ############# end of dict tests #############
 
 # #################### set ####################
@@ -188,24 +198,24 @@ d = (String => String)[ a => "foo" for a in ["a","b","c"]]
 
 # isempty
 @test  isempty(Set())
-@test !isempty(Set(1))
-@test !isempty(Set("banana", "apple"))
-@test !isempty(Set(1, 1:10, "pear"))
+@test !isempty(Set([1]))
+@test !isempty(Set(["banana", "apple"]))
+@test !isempty(Set({1, 1:10, "pear"}))
 
 # ordering
-@test Set() < Set(1)
-@test Set(1) < Set(1,2)
-@test !(Set(3) < Set(1,2))
-@test !(Set(3) > Set(1,2))
-@test Set(1,2,3) > Set(1,2)
-@test !(Set(3) <= Set(1,2))
-@test !(Set(3) >= Set(1,2))
-@test Set(1) <= Set(1,2)
-@test Set(1,2) <= Set(1,2)
-@test Set(1,2) >= Set(1,2)
-@test Set(1,2,3) >= Set(1,2)
-@test !(Set(1,2,3) >= Set(1,2,4))
-@test !(Set(1,2,3) <= Set(1,2,4))
+@test Set() < Set([1])
+@test Set([1]) < Set([1,2])
+@test !(Set([3]) < Set([1,2]))
+@test !(Set([3]) > Set([1,2]))
+@test Set([1,2,3]) > Set([1,2])
+@test !(Set([3]) <= Set([1,2]))
+@test !(Set([3]) >= Set([1,2]))
+@test Set([1]) <= Set([1,2])
+@test Set([1,2]) <= Set([1,2])
+@test Set([1,2]) >= Set([1,2])
+@test Set([1,2,3]) >= Set([1,2])
+@test !(Set([1,2,3]) >= Set([1,2,4]))
+@test !(Set([1,2,3]) <= Set([1,2,4]))
 
 # add, length
 s = Set()
@@ -226,7 +236,7 @@ end
 
 # elements
 data_in = (1,"banana", ())
-s = Set(data_in...)
+s = Set(data_in)
 data_out = collect(s)
 @test is(typeof(data_out), Array{Any,1})
 @test all(map(d->in(d,data_out), data_in))
@@ -236,15 +246,15 @@ data_out = collect(s)
 @test length(data_out) == length(data_in)
 
 # homogeneous sets
-@test is(typeof(Set(1,2,3)), Set{Int})
-@test is(typeof(Set{Int}(3)), Set{Int})
+@test is(typeof(Set([1,2,3])), Set{Int})
+@test is(typeof(Set{Int}([3])), Set{Int})
 
 # eltype
-@test is(eltype(Set(1,"hello")), Any)
+@test is(eltype(Set({1,"hello"})), Any)
 @test is(eltype(Set{String}()), String)
 
 # no duplicates
-s = Set(1,2,3)
+s = Set([1,2,3])
 @test length(s) == 3
 push!(s,2)
 @test length(s) == 3
@@ -322,16 +332,16 @@ setdiff!(s,(3,5))
 @test isequal(s,Set(1,7))
 
 # similar
-s = similar(Set(1,"Banana"))
+s = similar(Set([1,"Banana"]))
 @test length(s) == 0
 @test typeof(s) == Set{Any}
-s = similar(Set{Float32}(2.0f0,3.0f0,4.0f0))
+s = similar(Set{Float32}([2.0f0,3.0f0,4.0f0]))
 @test length(s) == 0
 @test typeof(s) == Set{Float32}
 
 # copy
 data_in = (1,2,9,8,4)
-s = Set(data_in...)
+s = Set(data_in)
 c = copy(s)
 @test isequal(s,c)
 push!(s,100)
@@ -342,7 +352,7 @@ push!(c,200)
 # start, done, next
 for data_in in ((7,8,4,5),
                 ("hello", 23, 2.7, (), [], (1,8)))
-    s = Set(data_in...)
+    s = Set(data_in)
 
     s_new = Set()
     for el in s
@@ -369,7 +379,7 @@ end
 end
 
 # pop!
-origs = Set(1,2,3,"apple")
+origs = Set([1,2,3,"apple"])
 s = copy(origs)
 for i in 1:length(origs)
     el = pop!(s)

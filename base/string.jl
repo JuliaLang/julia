@@ -598,7 +598,7 @@ immutable SubString{T<:String} <: String
 
     function SubString(s::T, i::Int, j::Int)
         if i > endof(s) || j<i
-            return new(s, i, 0)
+            return new(s, i-1, 0)
         else
             if !isvalid(s,i)
                 error("invalid SubString indexes")

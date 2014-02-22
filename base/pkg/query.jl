@@ -326,7 +326,7 @@ function dependencies_subset(deps::Dict{ByteString,Dict{VersionNumber,Available}
 end
 
 function prune_dependencies(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
-    deps = dependencies_subset(deps, Set{ByteString}(keys(reqs)...))
+    deps = dependencies_subset(deps, Set{ByteString}(keys(reqs)))
     deps, _ = prune_versions(reqs, deps)
 
     return deps
