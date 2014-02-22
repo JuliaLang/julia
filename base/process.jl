@@ -595,7 +595,7 @@ macro cmd(str)
     :(cmd_gen($(shell_parse(str)[1])))
 end
 
-wait(x::Process)      = if !process_exited(x); wait(x.exitnotify); end
+wait(x::Process)      = if !process_exited(x); stream_wait(x,x.exitnotify); end
 wait(x::ProcessChain) = for p in x.processes; wait(p); end
 
 show(io::IO, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p), ")")
