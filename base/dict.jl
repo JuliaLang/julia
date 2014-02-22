@@ -449,13 +449,6 @@ end
 # This version is for use by setindex! and get!
 function ht_keyindex2{K,V}(h::Dict{K,V}, key)
     sz = length(h.keys)
-
-    if h.ndel >= ((3*sz)>>2) || h.count*3 > sz*2
-        # > 3/4 deleted or > 2/3 full
-        rehash(h, h.count > 64000 ? h.count*2 : h.count*4)
-        sz = length(h.keys)  # rehash may resize the table at this point!
-    end
-
     iter = 0
     maxprobe = max(16, sz>>6)
     index = hashindex(key, sz)
@@ -495,6 +488,13 @@ function _setindex!(h::Dict, v, key, index)
     h.keys[index] = key
     h.vals[index] = v
     h.count += 1
+
+    sz = length(h.keys)
+    # Rehash now if necessary
+    if h.ndel >= ((3*sz)>>2) || h.count*3 > sz*2
+        # > 3/4 deleted or > 2/3 full
+        rehash(h, h.count > 64000 ? h.count*2 : h.count*4)
+    end
 end
 
 function setindex!{K,V}(h::Dict{K,V}, v0, key0)
