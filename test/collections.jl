@@ -180,6 +180,16 @@ d = {x => 1
 d = (String => String)[ a => "foo" for a in ["a","b","c"]]
 @test d == ["a"=>"foo","b"=>"foo","c"=>"foo"]
 
+# issue #5886
+d5886 = Dict()
+for k5886 in 1:11
+   d5886[k5886] = 1
+end
+for k5886 in keys(d5886)
+   # undefined ref if not fixed
+   d5886[k5886] += 1
+end
+
 # ############# end of dict tests #############
 
 # #################### set ####################
