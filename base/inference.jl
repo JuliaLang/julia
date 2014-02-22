@@ -296,6 +296,35 @@ const tupleref_tfunc = function (A, t, i)
 end
 t_func[tupleref] = (2, 2, tupleref_tfunc)
 
+function quantify_type(t, vars)
+    # all types of the form S{...,T,...} in invariant position where T
+    # is a bound variable are replaced with _<:S
+    if isa(t,TypeVar) || isa(t,TypeConstructor)
+        return t
+    end
+    if isa(t,Tuple)
+        return map(x->quantify_type(x, vars), t)
+    end
+    if isa(t,UnionType)
+        return Union(quantify_type(t.types, vars)...)
+    end
+    if isa(t,DataType)
+        P = t.parameters
+        if P === ()
+            return t
+        end
+        P = quantify_type(P, vars)
+        t = t.name.primary{P...}
+        for i = 1:length(P)
+            Pi = P[i]
+            if isa(Pi,TypeVar) && contains_is(vars, Pi)
+                return TypeVar(:_,t)
+            end
+        end
+    end
+    return t
+end
+
 const getfield_tfunc = function (A, s0, name)
     s = s0
     if isType(s)
@@ -327,10 +356,17 @@ const getfield_tfunc = function (A, s0, name)
             if fld === :types && isleaftype(sp.types)
                 return Type{sp.types}
             end
+            if fld === :super && isleaftype(sp)
+                return Type{sp.super}
+            end
         end
         for i=1:length(s.names)
             if is(s.names[i],fld)
-                return s.types[i]
+                ft = s.types[i]
+                if isleaftype(s) || !any(x->isa(x,TypeVar), s.parameters)
+                    return ft
+                end
+                return quantify_type(ft, s.parameters)
             end
         end
         return None

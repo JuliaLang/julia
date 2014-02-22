@@ -2622,7 +2622,7 @@
 
 "),
 
-("Text I/O","Base","readdlm","readdlm(source, delim::Char, T::Type, eol::Char; has_header=false, use_mmap=false, ignore_invalid_chars=false)
+("Text I/O","Base","readdlm","readdlm(source, delim::Char, T::Type, eol::Char; has_header=false, use_mmap=true, ignore_invalid_chars=false, quotes=true)
 
    Read a matrix from the source where each line (separated by
    \"eol\") gives one row, with elements separated by the given
@@ -2645,6 +2645,11 @@
    If \"ignore_invalid_chars\" is \"true\", bytes in \"source\" with
    invalid character encoding will be ignored. Otherwise an error is
    thrown indicating the offending character position.
+
+   If \"quotes\" is \"true\", column enclosed within double-quote (\") 
+   characters are allowed to contain new lines and column delimiters. 
+   Double-quote characters within a quoted field must be escaped with 
+   another double-quote.
 
 "),
 

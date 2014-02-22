@@ -863,6 +863,7 @@ end
 @test isequal(flipdim(1:10, 1), 10:-1:1)
 @test isequal(flipdim(1:10, 2), 1:10)
 @test_throws flipdim(1:10, -1)
+@test isequal(flipdim(Array(Int,0,0),1), Array(Int,0,0))  # issue #5872
 
 # issue 4228
 A = [[i i; i i] for i=1:2]

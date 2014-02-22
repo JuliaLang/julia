@@ -1355,3 +1355,19 @@ function f5584()
     end
 end
 f5584()
+
+# issue #5884
+
+type Polygon5884{T<:Real}
+    points::Vector{Complex{T}}
+end
+
+function test5884()
+    star = Array(Polygon5884,(3,))
+    star[1] = Polygon5884([Complex(1.0,1.0)])
+    p1 = star[1].points[1]
+    @test p1 == Complex(1.0,1.0)
+    @test p1.re == 1.0
+    @test star[1].points[1].re == 1.0
+end
+test5884()

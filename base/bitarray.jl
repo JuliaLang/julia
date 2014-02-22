@@ -13,7 +13,7 @@ const bitcache_size = 64 * bitcache_chunks # do not change this
 
 # notes: bits are stored in contiguous chunks
 #        unused bits must always be set to 0
-type BitArray{N} <: AbstractArray{Bool, N}
+type BitArray{N} <: DenseArray{Bool, N}
     chunks::Vector{Uint64}
     len::Int
     dims::NTuple{N,Int}
@@ -262,6 +262,9 @@ end
 function reshape{N}(B::BitArray, dims::NTuple{N,Int})
     if prod(dims) != length(B)
         throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(B))"))
+    end
+    if dims == size(B)
+        return B
     end
     Br = BitArray{N}(ntuple(N,i->0)...)
     Br.chunks = B.chunks
@@ -908,12 +911,6 @@ function (./)(A::BitArray, B::BitArray)
     shp = promote_shape(size(A),size(B))
     reshape([ A[i] ./ B[i] for i=1:length(A) ], shp)
 end
-function (./)(B::BitArray, x::Number)
-    reshape([ B[i] ./ x for i = 1:length(B) ], size(B))
-end
-function (./)(x::Number, B::BitArray)
-    reshape([ x ./ B[i] for i = 1:length(B) ], size(B))
-end
 
 for f in (:/, :\)
     @eval begin
@@ -1133,13 +1130,6 @@ end
 (.*)(B::BitArray, x::Bool) = B & x
 (.*)(x::Number, B::BitArray) = x .* bitunpack(B)
 (.*)(B::BitArray, x::Number) = bitunpack(B) .* x
-
-for f in (:+, :-, :div, :mod, :./, :.^, :.*, :&, :|, :$)
-    @eval begin
-        ($f)(A::BitArray, B::AbstractArray) = ($f)(bitunpack(A), B)
-        ($f)(A::AbstractArray, B::BitArray) = ($f)(A, bitunpack(B))
-    end
-end
 
 ## promotion to complex ##
 

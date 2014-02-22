@@ -6,7 +6,7 @@ TESTS = all core keywordargs numbers strings unicode collections hashing	\
 	math functional bigint sorting statistics spawn parallel arpack file	\
 	git pkg resolve suitesparse complex version pollfd mpfr	broadcast       \
 	socket floatapprox priorityqueue readdlm regex float16 combinatorics    \
-	sysinfo rounding ranges mod2pi euler show
+	sysinfo rounding ranges mod2pi euler show linalg1 linalg2
 
 default: all
 
