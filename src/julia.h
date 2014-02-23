@@ -1224,7 +1224,7 @@ DLLEXPORT uv_timer_t *jl_make_timer(uv_loop_t *loop, jl_value_t *julia_struct);
 DLLEXPORT int jl_timer_stop(uv_timer_t* timer);
 
 DLLEXPORT uv_tcp_t *jl_tcp_init(uv_loop_t *loop);
-DLLEXPORT int jl_tcp_bind(uv_tcp_t* handle, uint16_t port, uint32_t host);
+DLLEXPORT int jl_tcp_bind(uv_tcp_t* handle, uint16_t port, uint32_t host, unsigned int flags);
 
 DLLEXPORT int jl_sizeof_ios_t(void);
 
@@ -1239,9 +1239,9 @@ DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim);
 DLLEXPORT void jl_free2(void *p, void *hint);
 
 typedef struct {
+    void *data;
     uv_loop_t *loop;
     uv_handle_type type;
-    void *data;
     uv_file file;
 } jl_uv_file_t;
 
