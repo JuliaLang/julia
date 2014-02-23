@@ -205,14 +205,15 @@ function _jl_spawn(cmd::Ptr{Uint8}, argv::Ptr{Ptr{Uint8}}, loop::Ptr{Void}, pp::
          uvhandle(in), uvtype(out), uvhandle(out), uvtype(err), uvhandle(err),
          pp.cmd.detach, pp.cmd.env === nothing ? C_NULL : pp.cmd.env, isempty(pp.cmd.dir) ? C_NULL : pp.cmd.dir)
     if error != 0
-        c_free(proc)
+        disassociate_julia_struct(proc)
+        ccall(:jl_forceclose_uv,Void,(Ptr{Void},),proc)
         throw(UVError("spawn",error))
     end
     associate_julia_struct(proc,pp)
     return proc
 end
 
-function _uv_hook_return_spawn(proc::Process, exit_status::Int32, termsignal::Int32)
+function _uv_hook_return_spawn(proc::Process, exit_status::Int64, termsignal::Int32)
     proc.exitcode = exit_status
     proc.termsignal = termsignal
     if isa(proc.exitcb, Function) proc.exitcb(proc, exit_status, termsignal) end
