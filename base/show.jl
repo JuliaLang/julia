@@ -118,7 +118,7 @@ function show(io::IO, l::LambdaStaticData)
     print(io, ")")
 end
 
-function show_delim_array(io::IO, itr::AbstractArray, op, delim, cl, delim_one)
+function show_delim_array(io::IO, itr::AbstractArray, op, delim, cl, delim_one, compact=false)
     print(io, op)
     newline = true
     first = true
@@ -133,7 +133,7 @@ function show_delim_array(io::IO, itr::AbstractArray, op, delim, cl, delim_one)
                 x = itr[i]
                 multiline = isa(x,AbstractArray) && ndims(x)>1 && length(x)>0
                 newline && multiline && println(io)
-                show(io, x)
+                compact ? showcompact(io, x) : show(io, x)
             end
             i += 1
             if i > l
@@ -935,6 +935,35 @@ whos(pat::Regex) = whos(current_module(), pat)
 # for internal use in showing arrays.
 _limit_output = false
 
+function print_matrix_repr(io, X::AbstractArray)
+    e = eltype(X)
+    types = !isleaftype(e)
+    prefix = string(e)*"["
+    ind = " "^length(prefix)
+    print(io, prefix)
+    for i=1:size(X,1)
+        i > 1 && print(io, ind)
+        for j=1:size(X,2)
+            j > 1 && print(io, " ")
+            if !isassigned(X,i,j)
+                print(io, undef_ref_str)
+            else
+                el = X[i,j]
+                if types
+                    show(io, el)
+                else
+                    showcompact(io, el)
+                end
+            end
+        end
+        if i < size(X,1)
+            println(io)
+        else
+            print(io, "]")
+        end
+    end
+end
+
 # NOTE: this is a possible, so-far-unexported function, providing control of
 # array output. Not sure I want to do it this way.
 showarray(X::AbstractArray; kw...) = showarray(STDOUT, X; kw...)
@@ -954,13 +983,21 @@ function showarray(io::IO, X::AbstractArray;
         if !limit
             rows = cols = typemax(Int)
         end
-        punct = repr ? ("[", " ", "]") : (" ", "  ", "")
-        if ndims(X)<=2
-            print_matrix(io, X, rows, cols, punct...)
+        if repr
+            if ndims(X)<=2
+                print_matrix_repr(io, X)
+            else
+                show_nd(io, X, limit, print_matrix_repr, false)
+            end
         else
-            show_nd(io, X, limit,
-                    (io,slice)->print_matrix(io,slice,rows,cols,punct...),
-                    !repr)
+            punct = (" ", "  ", "")
+            if ndims(X)<=2
+                print_matrix(io, X, rows, cols, punct...)
+            else
+                show_nd(io, X, limit,
+                        (io,slice)->print_matrix(io,slice,rows,cols,punct...),
+                        !repr)
+            end
         end
     end
 end
@@ -1003,13 +1040,21 @@ function showlimited(io::IO, x)
 end
 
 function show_vector(io::IO, v, opn, cls)
+    e = eltype(v)
+    compact = false
+    if e !== Any
+        if isleaftype(e)
+            compact = true
+        end
+        print(io, e)
+    end
     if _limit_output && length(v) > 20
-        show_delim_array(io, sub(v,1:10), opn, ",", "", false)
+        show_delim_array(io, sub(v,1:10), opn, ",", "", false, compact)
         print(io, "  \u2026  ")
         n = length(v)
-        show_delim_array(io, sub(v,(n-9):n), "", ",", cls, false)
+        show_delim_array(io, sub(v,(n-9):n), "", ",", cls, false, compact)
     else
-        show_delim_array(io, v, opn, ",", cls, false)
+        show_delim_array(io, v, opn, ",", cls, false, compact)
     end
 end
 
