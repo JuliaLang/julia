@@ -133,19 +133,22 @@ end
 # float range "lifting" helper
 function frange{T<:FloatingPoint}(start::T, step::T, stop::T)
     r = (stop-start)/step
-    n = iround(r)
+    n = round(r)
     lo = prevfloat((prevfloat(stop)-nextfloat(start))/n)
     hi = nextfloat((nextfloat(stop)-prevfloat(start))/n)
     if lo <= step <= hi
         a, b = rat(start)
-        if convert(T,a)/convert(T,b) == start
+        a = convert(T,a)
+        if a/convert(T,b) == start
             c, d = rat(step)
-            if convert(T,c)/convert(T,d) == step
+            c = convert(T,c)
+            if c/convert(T,d) == step
                 e = lcm(b,d)
                 a *= div(e,b)
                 c *= div(e,d)
-                if convert(T,a+n*c)/convert(T,e) == stop
-                    return convert(T,a), convert(T,c), convert(T,e), convert(T,n+1)
+                e = convert(T,e)
+                if (a+n*c)/e == stop
+                    return a, c, e, n+1
                 end
             end
         end
