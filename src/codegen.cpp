@@ -30,11 +30,14 @@
 #include "llvm/ExecutionEngine/JITEventListener.h"
 #include "llvm/ExecutionEngine/JITMemoryManager.h"
 #include "llvm/PassManager.h"
+#include "llvm/Target/TargetLibraryInfo.h"
+#include "llvm/Support/TargetRegistry.h"
 #include "llvm/Analysis/Passes.h"
 #include "llvm/Bitcode/ReaderWriter.h"
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 5
 #define LLVM35 1
 #include "llvm/IR/Verifier.h"
+#include "llvm/Object/ObjectFile.h"
 #else
 #include "llvm/Analysis/Verifier.h"
 #endif
@@ -125,6 +128,7 @@ static LLVMContext &jl_LLVMContext = getGlobalContext();
 static IRBuilder<> builder(getGlobalContext());
 static bool nested_compile=false;
 static ExecutionEngine *jl_ExecutionEngine;
+static TargetMachine *jl_TargetMachine;
 #ifdef USE_MCJIT
 static Module *shadow_module;
 static RTDyldMemoryManager *jl_mcjmm;
@@ -291,6 +295,47 @@ void jl_dump_bitcode(char* fname)
     WriteBitcodeToFile(shadow_module, OS);
 #else
     WriteBitcodeToFile(jl_Module, OS);
+#endif
+}
+
+extern "C"
+void jl_dump_objfile(char* fname, int jit_model)
+{
+    std::string err;
+    raw_fd_ostream OS(fname, err);
+    formatted_raw_ostream FOS(OS);
+    jl_gen_llvm_gv_array();
+
+    // We don't want to use MCJIT's target machine because 
+    // it uses the large code model and we may potentially
+    // want less optimizations there. 
+    OwningPtr<TargetMachine>
+    TM(jl_TargetMachine->getTarget().createTargetMachine(
+        jl_TargetMachine->getTargetTriple(),
+        jl_TargetMachine->getTargetCPU(),
+        jl_TargetMachine->getTargetFeatureString(),
+        jl_TargetMachine->Options,
+#ifdef _OS_LINUX_
+        Reloc::PIC_,
+#else
+        jit_model ? Reloc::PIC_ : Reloc::Default,
+#endif
+        jit_model ? CodeModel::JITDefault : CodeModel::Default,
+        CodeGenOpt::Aggressive // -O3
+        ));
+
+    PassManager PM;
+    PM.add(new TargetLibraryInfo(Triple(jl_TargetMachine->getTargetTriple())));
+    PM.add(new DataLayout(*jl_ExecutionEngine->getDataLayout()));
+    if (TM->addPassesToEmitFile(PM, FOS, 
+            TargetMachine::CGFT_ObjectFile, false)) {
+        jl_error("Could not generate obj file for this target");
+    }
+
+#ifdef USE_MCJIT
+    PM.run(*shadow_module);
+#else
+    PM.run(*jl_Module);
 #endif
 }
 
@@ -4065,23 +4110,24 @@ extern "C" void jl_init_codegen(void)
 #endif
 #ifdef USE_MCJIT
     jl_mcjmm = new SectionMemoryManager();
-#endif
+#else
     // Temporarily disable Haswell BMI2 features due to LLVM bug.
     const char *mattr[] = {"-bmi2", "-avx2"};
     std::vector<std::string> attrvec (mattr, mattr+2);
-    jl_ExecutionEngine = EngineBuilder(engine_module)
+#endif
+    EngineBuilder eb = EngineBuilder(engine_module)
         .setEngineKind(EngineKind::JIT)
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
         .setJITMemoryManager(new JITMemoryManagerWin())
 #endif
         .setTargetOptions(options)
 #ifdef USE_MCJIT
-        .setUseMCJIT(true)
-        .setMAttrs(attrvec)
+        .setUseMCJIT(true);
 #else
-        .setMAttrs(attrvec)
+        .setMAttrs(attrvec);
 #endif
-        .create();
+    jl_TargetMachine = eb.selectTarget();
+    jl_ExecutionEngine = eb.create(jl_TargetMachine);
 #endif // LLVM VERSION
     jl_ExecutionEngine->DisableLazyCompilation();
 
@@ -4145,16 +4191,28 @@ extern "C" void jl_init_codegen(void)
     typeToTypeId = jl_alloc_cell_1d(16);
 }
 
-/*
-maybe this reads the dwarf info for a MachineFunction:
+extern "C" jl_value_t ***sysimg_gvars;
 
-MCContext &mc = Details.MF->getContext()
-DenseMap<const MCSection*,MCLineSection*> &secs = mc.getMCLineSectionOrder();
-std::vector<const MCSection*> &sec2line = mc.getMCLineSections();
-MCLineSection *line = sec2line[secs[0]];
-const MCLineEntryCollection *lec = line->getMCLineEntries();
-MCLineEntryCollection::iterator it = lec->begin();
+#if defined(LLVM35) && defined(USE_MCJIT)
+extern "C" int jl_load_sysimg_o(char *fname)
+{
+    // attempt to load the pre-compiled sysimg at fname
+    // if this succeeds, sysimg_gvars will be a valid array
+    // otherwise, it will be NULL
+    OwningPtr< MemoryBuffer > membuf;
+    error_code error = MemoryBuffer::getFile(fname,membuf);
+    if (error)
+        return 0;
 
-addr = (*it).getLabel()->getVariableValue()
-line = (*it).getLine()
-*/
+    jl_ExecutionEngine->addObjectFile(*object::ObjectFile::createObjectFile(membuf.take()));
+    
+    sysimg_gvars = (jl_value_t***)jl_ExecutionEngine->getGlobalValueAddress(StringRef("jl_sysimg_gvars"));
+    globalUnique = *(size_t*)jl_ExecutionEngine->getGlobalValueAddress(StringRef("jl_globalUnique"));
+    return 1;
+}
+#else
+extern "C" int jl_load_sysimg_o(char *fname)
+{
+    return 0;
+}
+#endif

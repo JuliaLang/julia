@@ -87,6 +87,7 @@ void jl_init_tasks(void *stack, size_t ssize);
 void jl_init_serializer(void);
 
 void jl_dump_bitcode(char *fname);
+void jl_dump_objfile(char *fname, int jit_model);
 int32_t jl_get_llvm_gv(jl_value_t *p);
 
 #ifdef _OS_LINUX_
@@ -97,6 +98,8 @@ jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp);
 
 void jl_generate_fptr(jl_function_t *f);
 void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig);
+
+int jl_load_sysimg_o(char *fname);
 
 // backtraces
 #ifdef _OS_WINDOWS_
