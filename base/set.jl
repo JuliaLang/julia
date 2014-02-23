@@ -3,9 +3,6 @@ type Set{T}
 
     Set() = new(Dict{T,Nothing}())
     Set(itr) = union!(new(Dict{T,Nothing}()), itr)
-
-    # for backwards compat
-    Set(xs::T...) = Set{T}(xs)
 end
 Set() = Set{Any}()
 Set(itr) = Set{eltype(itr)}(itr)
