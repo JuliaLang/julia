@@ -26,7 +26,7 @@
 #        @test_approx_eq eigs(apd; nev=1, sigma=d[3])[1][1] d[3]
 
     # test (shift-and-)invert mode
-    (d,v) = eigs(apd, nev=3, which="SM")
+    (d,v) = eigs(apd, nev=3, sigma=0)
     @test_approx_eq apd*v[:,3] d[3]*v[:,3]
 
     end
