@@ -416,8 +416,9 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
         // not yet expanded
         ex = (jl_expr_t*)jl_expand(e);
     }
+    jl_sym_t *head = jl_is_expr(ex) ? ex->head : NULL;
 
-    if (jl_is_expr(ex) && ex->head == toplevel_sym) {
+    if (head == toplevel_sym) {
         int i=0; jl_value_t *res=jl_nothing;
         for(i=0; i < jl_array_len(ex->args); i++) {
             res = jl_toplevel_eval_flex(jl_cellref(ex->args, i), fast);
@@ -426,7 +427,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
         return res;
     }
 
-    if (jl_is_expr(ex) && ex->head == thunk_sym) {
+    if (head == thunk_sym) {
         thk = (jl_lambda_info_t*)jl_exprarg(ex,0);
         assert(jl_is_lambda_info(thk));
         assert(jl_is_expr(thk->ast));
@@ -439,12 +440,12 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
         }
     }
     else {
-        if (jl_is_expr(ex) && jl_eval_with_compiler_p((jl_expr_t*)ex, fast)) {
+        if (head && jl_eval_with_compiler_p((jl_expr_t*)ex, fast)) {
             thk = jl_wrap_expr((jl_value_t*)ex);
             ewc = 1;
         }
         else {
-            if (ex->head == body_sym) {
+            if (head == body_sym) {
                 result = jl_toplevel_eval_body(ex->args);
             }
             else if (jl_is_toplevel_only_expr((jl_value_t*)ex)) {
