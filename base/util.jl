@@ -205,10 +205,10 @@ function less(file::String, line::Integer)
 end
 less(file::String) = less(file, 1)
 
-edit(f::Function)    = edit(functionloc(f)...)
-edit(f::Function, t) = edit(functionloc(f,t)...)
-less(f::Function)    = less(functionloc(f)...)
-less(f::Function, t) = less(functionloc(f,t)...)
+edit(f::Union(Function,DataType))    = edit(functionloc(f)...)
+edit(f::Union(Function,DataType), t) = edit(functionloc(f,t)...)
+less(f::Union(Function,DataType))    = less(functionloc(f)...)
+less(f::Union(Function,DataType), t) = less(functionloc(f,t)...)
 
 # clipboard copy and paste
 
