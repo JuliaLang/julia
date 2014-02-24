@@ -165,28 +165,26 @@ DLLEXPORT void jl_uv_shutdownCallback(uv_shutdown_t* req, int status)
     free(req);
 }
 
-DLLEXPORT void jl_uv_return_spawn(uv_process_t *p, int exit_status, int term_signal)
+DLLEXPORT void jl_uv_return_spawn(uv_process_t *p, int64_t exit_status, int term_signal)
 {
-    JULIA_CB(return_spawn,p->data,2,CB_INT32,exit_status,CB_INT32,term_signal);
+    JULIA_CB(return_spawn,p->data,2,CB_INT64,exit_status,CB_INT32,term_signal);
     (void)ret;
 }
 
-DLLEXPORT void jl_uv_readcb(uv_stream_t *handle, ssize_t nread, uv_buf_t buf)
+DLLEXPORT void jl_uv_readcb(uv_stream_t *handle, ssize_t nread, const uv_buf_t* buf)
 {
-    JULIA_CB(readcb,handle->data,3,CB_INT,nread,CB_PTR,(buf.base),CB_INT32,buf.len);
+    JULIA_CB(readcb,handle->data,3,CB_INT,nread,CB_PTR,(buf->base),CB_INT32,buf->len);
     (void)ret;
 }
 
-DLLEXPORT uv_buf_t jl_uv_alloc_buf(uv_handle_t *handle, size_t suggested_size)
+DLLEXPORT void jl_uv_alloc_buf(uv_handle_t *handle, size_t suggested_size, uv_buf_t* buf)
 {
-    uv_buf_t buf;
     JULIA_CB(alloc_buf,handle->data,1,CB_INT32,suggested_size);
     if (!jl_is_tuple(ret) || !jl_is_pointer(jl_t0(ret)) || !jl_is_int32(jl_t1(ret))) {
         jl_error("jl_alloc_buf: Julia function returned invalid value for buffer allocation callback");
     }
-    buf.base = (char*)jl_unbox_voidpointer(jl_t0(ret));
-    buf.len = jl_unbox_int32(jl_t1(ret));
-    return buf;
+    buf->base = (char*)jl_unbox_voidpointer(jl_t0(ret));
+    buf->len = jl_unbox_int32(jl_t1(ret));
 }
 
 DLLEXPORT void jl_uv_connectcb(uv_connect_t *connect, int status)
@@ -233,9 +231,9 @@ DLLEXPORT void jl_uv_fseventscb(uv_fs_event_t* handle, const char* filename, int
     (void)ret;
 }
 
-DLLEXPORT void jl_uv_recvcb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf, struct sockaddr* addr, unsigned flags)
+DLLEXPORT void jl_uv_recvcb(uv_udp_t* handle, ssize_t nread, const uv_buf_t *buf, struct sockaddr* addr, unsigned flags)
 {
-    JULIA_CB(recv,handle->data,5,CB_PTR,nread,CB_PTR,(buf.base),CB_INT32,buf.len,CB_PTR,addr,CB_INT32,flags)
+    JULIA_CB(recv,handle->data,5,CB_PTR,nread,CB_PTR,(buf->base),CB_INT32,buf->len,CB_PTR,addr,CB_INT32,flags)
     (void)ret;
 }
 
@@ -379,7 +377,7 @@ DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
     stdio[2].type = stderr_type;
     stdio[2].data.stream = (uv_stream_t*)(stderr_pipe);
     opts.exit_cb = &jl_uv_return_spawn;
-    error = uv_spawn(loop,proc,opts);
+    error = uv_spawn(loop,proc,&opts);
     return error;
 }
 
@@ -417,7 +415,8 @@ DLLEXPORT int jl_fs_poll_start(uv_fs_poll_t* handle, char *file, uint32_t interv
 DLLEXPORT int jl_fs_event_init(uv_loop_t* loop, uv_fs_event_t* handle,
     const char* filename, int flags)
 {
-    return uv_fs_event_init(loop,handle,filename,&jl_uv_fseventscb,flags);
+    uv_fs_event_init(loop,handle); 
+    return uv_fs_event_start(handle,&jl_uv_fseventscb,filename,flags);
 }
 
 DLLEXPORT int jl_fs_unlink(char *path)
@@ -694,23 +693,23 @@ DLLEXPORT int jl_getpid()
 }
 
 //NOTE: These function expects port/host to be in network byte-order (Big Endian)
-DLLEXPORT int jl_tcp_bind(uv_tcp_t* handle, uint16_t port, uint32_t host)
+DLLEXPORT int jl_tcp_bind(uv_tcp_t* handle, uint16_t port, uint32_t host, unsigned int flags)
 {
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(struct sockaddr_in));
     addr.sin_port = port;
     addr.sin_addr.s_addr = host;
     addr.sin_family = AF_INET;
-    return uv_tcp_bind(handle, addr);
+    return uv_tcp_bind(handle, (struct sockaddr*)&addr, flags);
 }
-DLLEXPORT int jl_tcp_bind6(uv_tcp_t* handle, uint16_t port, void *host)
+DLLEXPORT int jl_tcp_bind6(uv_tcp_t* handle, uint16_t port, void *host, unsigned int flags)
 {
     struct sockaddr_in6 addr;
     memset(&addr, 0, sizeof(struct sockaddr_in6));
     addr.sin6_port = port;
     memcpy(&addr.sin6_addr, host, 16);
     addr.sin6_family = AF_INET6;
-    return uv_tcp_bind6(handle, addr);
+    return uv_tcp_bind(handle, (struct sockaddr*)&addr, flags);
 }
 
 DLLEXPORT int jl_udp_bind(uv_udp_t* handle, uint16_t port, uint32_t host, uint32_t flags)
@@ -720,7 +719,7 @@ DLLEXPORT int jl_udp_bind(uv_udp_t* handle, uint16_t port, uint32_t host, uint32
     addr.sin_port = port;
     addr.sin_addr.s_addr = host;
     addr.sin_family = AF_INET;
-    return uv_udp_bind(handle, addr, flags);
+    return uv_udp_bind(handle, (struct sockaddr*)&addr, flags);
 }
 DLLEXPORT int jl_udp_bind6(uv_udp_t* handle, uint16_t port, void *host, uint32_t flags)
 {
@@ -729,7 +728,7 @@ DLLEXPORT int jl_udp_bind6(uv_udp_t* handle, uint16_t port, void *host, uint32_t
     addr.sin6_port = port;
     memcpy(&addr.sin6_addr, host, 16);
     addr.sin6_family = AF_INET6;
-    return uv_udp_bind6(handle, addr, flags);
+    return uv_udp_bind(handle, (struct sockaddr*)&addr, flags);
 }
 
 DLLEXPORT int jl_udp_send(uv_udp_t* handle, uint16_t port, uint32_t host, void *data, uint32_t size)
@@ -744,7 +743,7 @@ DLLEXPORT int jl_udp_send(uv_udp_t* handle, uint16_t port, uint32_t host, void *
     buf[0].len = size;
     uv_udp_send_t *req = malloc(sizeof(uv_udp_send_t));
     req->data = handle->data;
-    return uv_udp_send(req, handle, buf, 1, addr, &jl_uv_sendcb);
+    return uv_udp_send(req, handle, buf, 1, (struct sockaddr*)&addr, &jl_uv_sendcb);
 }
 
 DLLEXPORT int jl_udp_send6(uv_udp_t* handle, uint16_t port, void *host, void *data, uint32_t size)
@@ -759,7 +758,7 @@ DLLEXPORT int jl_udp_send6(uv_udp_t* handle, uint16_t port, void *host, void *da
     buf[0].len = size;
     uv_udp_send_t *req = malloc(sizeof(uv_udp_send_t));
     req->data = handle->data;
-    return uv_udp_send6(req, handle, buf, 1, addr, &jl_uv_sendcb);
+    return uv_udp_send(req, handle, buf, 1, (struct sockaddr*)&addr, &jl_uv_sendcb);
 }
 
 DLLEXPORT int jl_uv_sizeof_interface_address()
@@ -856,7 +855,7 @@ DLLEXPORT int jl_tcp4_connect(uv_tcp_t *handle,uint32_t host, uint16_t port)
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = host;
     addr.sin_port = port;
-    return uv_tcp_connect(req,handle,addr,&jl_uv_connectcb);
+    return uv_tcp_connect(req,handle,(struct sockaddr*)&addr,&jl_uv_connectcb);
 }
 
 DLLEXPORT int jl_tcp6_connect(uv_tcp_t *handle, void *host, uint16_t port)
@@ -868,21 +867,14 @@ DLLEXPORT int jl_tcp6_connect(uv_tcp_t *handle, void *host, uint16_t port)
     addr.sin6_family = AF_INET6;
     memcpy(&addr.sin6_addr, host, 16);
     addr.sin6_port = port;
-    return uv_tcp_connect6(req,handle,addr,&jl_uv_connectcb);
+    return uv_tcp_connect(req,handle,(struct sockaddr*)&addr,&jl_uv_connectcb);
 }
 
 DLLEXPORT int jl_connect_raw(uv_tcp_t *handle,struct sockaddr_storage *addr)
 {
     uv_connect_t *req = (uv_connect_t*)malloc(sizeof(uv_connect_t));
     req->data = 0;
-    if (addr->ss_family==AF_INET) {
-        return uv_tcp_connect(req,handle,*((struct sockaddr_in*)addr),&jl_uv_connectcb);
-    }
-    else {
-        return uv_tcp_connect6(req,handle,*((struct sockaddr_in6*)addr),&jl_uv_connectcb);
-    }
-    free(req);
-    return -2; //error! Only IPv4 and IPv6 are implemented atm
+    return uv_tcp_connect(req,handle,(struct sockaddr*)addr,&jl_uv_connectcb);
 }
 
 DLLEXPORT char *jl_ios_buf_base(ios_t *ios)
