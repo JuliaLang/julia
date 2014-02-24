@@ -17,7 +17,7 @@ import
         itrunc, eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
         serialize, deserialize, inf, nan, hash, cbrt, typemax, typemin,
-        realmin, realmax, get_rounding, set_rounding
+        realmin, realmax, get_rounding, set_rounding, maxintfloat
 
 import Base.Math.lgamma_r
 
@@ -592,6 +592,9 @@ function set_bigfloat_precision(x::Int)
     end
     DEFAULT_PRECISION[end] = x
 end
+
+maxintfloat(x::BigFloat) = BigFloat(2)^precision(x)
+maxintfloat(::Type{BigFloat}) = BigFloat(2)^get_bigfloat_precision()
 
 function to_mpfr(r::RoundingMode)
     c = r.code
