@@ -279,7 +279,6 @@ export
     atanh,
     big,
     binomial,
-    bitmix,
     bool,
     bswap,
     cbrt,

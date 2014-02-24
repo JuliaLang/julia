@@ -107,5 +107,3 @@ function filter!(f::Function, s::Set)
     return s
 end
 filter(f::Function, s::Set) = filter!(f, copy(s))
-
-hash(s::Set) = hash(sort(s.dict.keys[s.dict.slots .!= 0]))

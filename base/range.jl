@@ -299,10 +299,6 @@ function ==(r::Range, s::Range)
     return true
 end
 
-# hashing ranges by component at worst leads to collisions for very similar ranges
-hash(r::Range) =
-    bitmix(hash(first(r)), bitmix(hash(step(r)), bitmix(hash(last(r)), uint(0xaaeeaaee))))
-
 # TODO: isless?
 
 intersect{T1<:Integer, T2<:Integer}(r::UnitRange{T1}, s::UnitRange{T2}) = max(r.start,s.start):min(last(r),last(s))

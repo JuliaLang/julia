@@ -1,7 +1,7 @@
 # Various Unicode functionality from the utf8proc library
 module UTF8proc
 
-import Base: show, showcompact, ==, string, symbol, isless, hash
+import Base: show, showcompact, ==, string, symbol, isless
 
 # also exported by Base:
 export normalize_string, is_valid_char, is_assigned_char

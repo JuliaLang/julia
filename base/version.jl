@@ -145,7 +145,14 @@ function isless(a::VersionNumber, b::VersionNumber)
     return false
 end
 
-hash(v::VersionNumber) = hash([v.(n) for n in VersionNumber.names])
+function hash(v::VersionNumber, h::Uint=zero(Uint))
+    h += 0x8ff4ffdb75f9fede
+    h = hash(v.major, h)
+    h = hash(v.minor, h)
+    h = hash(v.patch, h)
+    h = hash(v.prerelease, ~h)
+    h = hash(v.build, ~h)
+end
 
 lowerbound(v::VersionNumber) = VersionNumber(v.major, v.minor, v.patch, ("",), ())
 upperbound(v::VersionNumber) = VersionNumber(v.major, v.minor, v.patch, (), ("",))
