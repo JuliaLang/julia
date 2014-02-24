@@ -30,6 +30,11 @@ New language features
 Library improvements
 --------------------
 
+  * Well-behaved floating-point ranges ([#2333], [#5636]).
+    Introduced the `FloatRange` type for floating-point ranges with a step,
+    which will give intuitive/correct results for classically problematic
+    ranges like `0.1:0.1:0.3`, `0.0:0.7:2.1` or `1.0:1/49:27.0`.
+
   * `mod2pi` function ([#4799], [#4862]).
 
   * New functions `minmax` and `extrema` ([#5275]).
@@ -275,6 +280,8 @@ Deprecated or removed
 [#5819]: https://github.com/JuliaLang/julia/issues/5819
 [#4871]: https://github.com/JuliaLang/julia/issues/4871
 [#4996]: https://github.com/JuliaLang/julia/issues/4996
+[#2333]: https://github.com/JuliaLang/julia/issues/2333
+[#5636]: https://github.com/JuliaLang/julia/issues/5636
 
 Julia v0.2.0 Release Notes
 ==========================
