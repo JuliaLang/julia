@@ -52,7 +52,7 @@ size(C::Union(Cholesky, CholeskyPivoted), d::Integer) = size(C.UL,d)
 function getindex(C::Cholesky, d::Symbol)
     d == :U && return triu!(symbol(C.uplo) == d ? C.UL : C.UL')
     d == :L && return tril!(symbol(C.uplo) == d ? C.UL : C.UL')
-    d == :UL && return Triangular(C.UL, C.uplo)
+    d == :UL && return Triangular(C.UL, symbol(C.uplo))
     throw(KeyError(d))
 end
 function getindex{T<:BlasFloat}(C::CholeskyPivoted{T}, d::Symbol)
