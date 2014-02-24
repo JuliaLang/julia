@@ -119,6 +119,13 @@ include("cartesian.jl")
 using .Cartesian
 include("multidimensional.jl")
 
+# FIXME: #5885
+colon{T<:FloatingPoint}(start::T, step::T, stop::T) =
+          step == 0              ? error("step cannot be zero in colon syntax") :
+         start == stop           ? FloatRange{T}(start,step,1,1) :
+    (0 < step) != (start < stop) ? FloatRange{T}(start,step,1,0) :
+                                   FloatRange{T}(frange(start,step,stop)...)
+
 # core math functions
 include("floatfuncs.jl")
 include("math.jl")
