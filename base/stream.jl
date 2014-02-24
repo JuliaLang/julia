@@ -220,7 +220,7 @@ function init_stdio(handle)
         elseif t == UV_NAMED_PIPE
             ret = Pipe(handle)
         else
-            error("FATAL: stdio type invalid")
+            error("FATAL: stdio type ($t) invalid")
         end
         ret.status = StatusOpen
         ret.line_buffered = false  
