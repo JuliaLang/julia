@@ -153,6 +153,9 @@ macro boundscheck(yesno,blk)
 end
 
 macro inbounds(blk)
+    if ccall(:jl_is_debugbuild, Any, ())::Bool
+        return :($(esc(blk)))
+    end
     :(@boundscheck false $(esc(blk)))
 end
 
