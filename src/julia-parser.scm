@@ -1015,7 +1015,9 @@
 					 (eq? (car sig) 'tuple))))
 			   (error (string "expected \"(\" in \"" word "\" definition"))
 			   sig)))
-	    (loc   (begin (skip-ws-and-comments (ts:port s))
+	    (loc   (begin (if (not (eq? (peek-token s) 'end))
+			      ;; if ends on same line, don't skip the following newline
+			      (skip-ws-and-comments (ts:port s)))
 			  (line-number-filename-node s)))
 	    (body  (parse-block s)))
        (expect-end s)

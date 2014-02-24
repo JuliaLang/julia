@@ -1371,3 +1371,12 @@ function test5884()
     @test star[1].points[1].re == 1.0
 end
 test5884()
+
+# issue #5924
+let
+    function Test()
+        func = function () end
+        func
+    end
+    @test Test()() === nothing
+end

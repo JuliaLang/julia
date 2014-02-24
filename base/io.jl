@@ -106,6 +106,7 @@ function read{T <: Integer}(s::IO, ::Type{T})
 end
 
 read(s::IO, ::Type{Bool})    = (read(s,Uint8)!=0)
+read(s::IO, ::Type{Float16}) = box(Float16,unbox(Int16,read(s,Int16)))
 read(s::IO, ::Type{Float32}) = box(Float32,unbox(Int32,read(s,Int32)))
 read(s::IO, ::Type{Float64}) = box(Float64,unbox(Int64,read(s,Int64)))
 

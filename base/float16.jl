@@ -80,9 +80,28 @@ end
 function convert(::Type{Float16}, val::Float32)
     f = reinterpret(Uint32, val)
     i = (f >> 23) & 0x1ff + 1
-    h = basetable[i] + ((f & 0x007fffff) >> shifttable[i])
-    reinterpret(Float16, uint16(h))
+    sh = shifttable[i]
+    f &= 0x007fffff
+    h::Uint16 = uint16(basetable[i] + (f >> sh))
+    # round
+    # NOTE: we maybe should ignore NaNs here, but the payload is
+    # getting truncated anyway so "rounding" it might not matter
+    nextbit = (f >> (sh-1)) & 1
+    if nextbit != 0
+        if h&1 == 1 ||  # round halfway to even
+            (f & ((1<<(sh-1))-1)) != 0  # check lower bits
+            h += 1
+        end
+    end
+    reinterpret(Float16, h)
 end
+
+convert(::Type{Integer}, x::Float16) = convert(Int,float32(x))
+
+round(x::Float16) = float16(round(float32(x)))
+trunc(x::Float16) = float16(trunc(float32(x)))
+floor(x::Float16) = float16(floor(float32(x)))
+ ceil(x::Float16) = float16( ceil(float32(x)))
 
 isnan(x::Float16)    = reinterpret(Uint16,x)&0x7fff  > 0x7c00
 isinf(x::Float16)    = reinterpret(Uint16,x)&0x7fff == 0x7c00
