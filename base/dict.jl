@@ -203,26 +203,49 @@ end
 
 # hashing
 
-bitmix(a::Union(Int32,Uint32), b::Union(Int32,Uint32)) =
-    ccall(:int64to32hash, Uint32, (Uint64,),
-          box(Uint64, or_int(shl_int(zext_int(Uint64,unbox(Uint32,a)), 32),
-                             zext_int(Uint64,unbox(Uint32,b)))))
+function int32hash(n::Uint32)
+    local a::Uint32 = n
+    a = (a + 0x7ed55d16) + a << 12
+    a = (a $ 0xc761c23c) $ a >> 19
+    a = (a + 0x165667b1) + a << 5
+    a = (a + 0xd3a2646c) $ a << 9
+    a = (a + 0xfd7046c5) + a << 3
+    a = (a $ 0xb55a4f09) $ a >> 16
+    return a
+end
 
-bitmix(a::Union(Int64,Uint64), b::Union(Int64, Uint64)) =
-    ccall(:int64hash, Uint64, (Uint64,),
-          box(Uint64, xor_int(unbox(Uint64,a), or_int(lshr_int(unbox(Uint64,b), 32),
-                                                      shl_int(unbox(Uint64,b), 32)))))
+function int64hash(n::Uint64)
+    local a::Uint64 = n
+    a = ~a + (a << 21)
+    a =  a $ (a >> 24)
+    a = (a + (a << 3)) + (a << 8)
+    a =  a $ (a >> 14)
+    a = (a + (a << 2)) + (a << 4)
+    a =  a $ (a >> 28)
+    a =  a + (a << 31)
+    return a
+end
+
+function int64to32hash(n::Uint64)
+    local key::Uint64 = n
+    key = ~key + (key << 18)
+    key =  key $ (key >> 31)
+    key =  key * 21
+    key =  key $ (key >> 11)
+    key =  key + (key << 6 )
+    key =  key $ (key >> 22)
+    return uint32(key)
+end
+
+bitmix(a::Union(Int32,Uint32), b::Union(Int32,Uint32)) = int64to32hash((uint64(a)<<32)|uint64(b))
+bitmix(a::Union(Int64,Uint64), b::Union(Int64, Uint64)) = int64hash(uint64(a$((b<<32)|(b>>>32))))
 
 if WORD_SIZE == 64
-    hash64(x::Float64) =
-        ccall(:int64hash, Uint64, (Uint64,), box(Uint64,unbox(Float64,x)))
-    hash64(x::Union(Int64,Uint64)) =
-        ccall(:int64hash, Uint64, (Uint64,), x)
+    hash64(x::Float64) = int64hash(reinterpret(Uint64,x))
+    hash64(x::Union(Int64,Uint64)) = int64hash(reinterpret(Uint64,x))
 else
-    hash64(x::Float64) =
-        ccall(:int64to32hash, Uint32, (Uint64,), box(Uint64,unbox(Float64,x)))
-    hash64(x::Union(Int64,Uint64)) =
-        ccall(:int64to32hash, Uint32, (Uint64,), x)
+    hash64(x::Float64) = int64to32hash(reinterpret(Uint64,x))
+    hash64(x::Union(Int64,Uint64)) = int64to32hash(reinterpret(Uint64,x))
 end
 
 hash(x::Union(Bool,Char,Int8,Uint8,Int16,Uint16,Int32,Uint32,Int64,Uint64)) =

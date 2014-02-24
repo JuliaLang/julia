@@ -76,3 +76,19 @@ end
 
 @test nextfloat(Inf16) === Inf16
 @test prevfloat(-Inf16) === -Inf16
+
+# rounding in conversions
+let
+    for f in [.3325f0, -.3325f0]
+        f16 = float16(f)
+        # need to round away from 0. make sure we picked closest number.
+        @test abs(f-f16) < abs(f-nextfloat(f16))
+        @test abs(f-f16) < abs(f-prevfloat(f16))
+    end
+    # halfway between and last bit is 1
+    f = reinterpret(Float32,                           0b00111110101010100011000000000000)
+    @test float32(float16(f)) === reinterpret(Float32, 0b00111110101010100100000000000000)
+    # halfway between and last bit is 0
+    f = reinterpret(Float32,                           0b00111110101010100001000000000000)
+    @test float32(float16(f)) === reinterpret(Float32, 0b00111110101010100000000000000000)
+end

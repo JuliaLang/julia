@@ -389,9 +389,9 @@ end
 @test isempty(s)
 
 # hash
-s1 = Set{ASCIIString}("bar", "foo")
-s2 = Set{ASCIIString}("foo", "bar")
-s3 = Set{ASCIIString}("baz")
+s1 = Set{ASCIIString}(["bar", "foo"])
+s2 = Set{ASCIIString}(["foo", "bar"])
+s3 = Set{ASCIIString}(["baz"])
 @test hash(s1) == hash(s2)
 @test hash(s1) != hash(s3)
 
@@ -399,24 +399,24 @@ s3 = Set{ASCIIString}("baz")
 # isequal
 @test  isequal(Set(), Set())
 @test !isequal(Set(), Set(1))
-@test  isequal(Set{Any}(1,2), Set{Int}(1,2))
-@test !isequal(Set{Any}(1,2), Set{Int}(1,2,3))
+@test  isequal(Set{Any}({1,2}), Set{Int}([1,2]))
+@test !isequal(Set{Any}({1,2}), Set{Int}([1,2,3]))
 
 # Comparison of unrelated types seems rather inconsistent
 
 @test  isequal(Set{Int}(), Set{String}())
-@test !isequal(Set{Int}(), Set{String}(""))
-@test !isequal(Set{String}(), Set{Int}(0))
-@test !isequal(Set{Int}(1), Set{String}())
+@test !isequal(Set{Int}(), Set{String}([""]))
+@test !isequal(Set{String}(), Set{Int}([0]))
+@test !isequal(Set{Int}([1]), Set{String}())
 
-@test  isequal(Set{Any}(1,2,3), Set{Int}(1,2,3))
-@test  isequal(Set{Int}(1,2,3), Set{Any}(1,2,3))
+@test  isequal(Set{Any}([1,2,3]), Set{Int}([1,2,3]))
+@test  isequal(Set{Int}([1,2,3]), Set{Any}([1,2,3]))
 
-@test !isequal(Set{Any}(1,2,3), Set{Int}(1,2,3,4))
-@test !isequal(Set{Int}(1,2,3), Set{Any}(1,2,3,4))
+@test !isequal(Set{Any}([1,2,3]), Set{Int}([1,2,3,4]))
+@test !isequal(Set{Int}([1,2,3]), Set{Any}([1,2,3,4]))
 
-@test !isequal(Set{Any}(1,2,3,4), Set{Int}(1,2,3))
-@test !isequal(Set{Int}(1,2,3,4), Set{Any}(1,2,3))
+@test !isequal(Set{Any}([1,2,3,4]), Set{Int}([1,2,3]))
+@test !isequal(Set{Int}([1,2,3,4]), Set{Any}([1,2,3]))
 
 # ########## end of set tests ##########
 

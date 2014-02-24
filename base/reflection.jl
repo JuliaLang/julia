@@ -139,7 +139,7 @@ end
 code_llvm  (f::Callable, types::Tuple) = print(_dump_function(f, types, false, false))
 code_native(f::Callable, types::Tuple) = print(_dump_function(f, types, true, false))
 
-function functionlocs(f::Function, types=(Any...))
+function functionlocs(f::Union(Function,DataType), types=(Any...))
     locs = Any[]
     for m in methods(f, types)
         lsd = m.func.code::LambdaStaticData
@@ -154,7 +154,7 @@ function functionlocs(f::Function, types=(Any...))
     locs
 end
 
-functionloc(f::Function, types=(Any...)) = functionlocs(f, types)[1]
+functionloc(f::Union(Function,DataType), types=(Any...)) = functionlocs(f, types)[1]
 
 function function_module(f::Function, types=(Any...))
     m = methods(f, types)
