@@ -820,7 +820,7 @@ svdfact{TA,TB}(A::StridedMatrix{TA}, B::StridedMatrix{TB}) = (S = promote_type(F
 
 function svd(A::AbstractMatrix, B::AbstractMatrix)
     F = svdfact(A, B)
-    F[:U], F[:V], F[:Q]*F[:R0]', F[:D1], F[:D2]
+    F[:U], F[:V], F[:Q], F[:D1], F[:D2], F[:R0]
 end
 
 function getindex{T}(obj::GeneralizedSVD{T}, d::Symbol)
