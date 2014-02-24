@@ -181,7 +181,9 @@ type Process
         if !isa(err,AsyncStream) || err === DevNull
             err=DevNull
         end
-        new(cmd,handle,in,out,err,typemin(Int32),typemin(Int32),false,Condition(),false,Condition())
+        this = new(cmd,handle,in,out,err,typemin(Int32),typemin(Int32),false,Condition(),false,Condition())
+        finalizer(this, uvfinalize)
+        this
     end
 end
 
@@ -211,6 +213,12 @@ function _jl_spawn(cmd::Ptr{Uint8}, argv::Ptr{Ptr{Uint8}}, loop::Ptr{Void}, pp::
     end
     associate_julia_struct(proc,pp)
     return proc
+end
+
+function uvfinalize(proc::Process)
+    proc.handle != C_NULL && ccall(:jl_close_uv,Void,(Ptr{Void},),proc.handle)
+    disassociate_julia_struct(proc)
+    proc.handle = 0
 end
 
 function _uv_hook_return_spawn(proc::Process, exit_status::Int64, termsignal::Int32)
