@@ -18,10 +18,13 @@ function writemime(io::IO, ::MIME"text/plain", v::AbstractVector)
         print(io, summary(v))
         if !isempty(v)
             println(io, ":")
-            print_matrix(io, v)
+            with_output_limit(()->print_matrix(io, v))
         end
     end
 end
+
+writemime(io::IO, ::MIME"text/plain", v::AbstractArray) =
+    with_output_limit(()->showarray(io, v, header=true, repr=false))
 
 function writemime(io::IO, ::MIME"text/plain", v::DataType)
     show(io, v)

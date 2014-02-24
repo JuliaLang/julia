@@ -27,8 +27,8 @@ function show(io::IO, S::SparseMatrixCSC)
     sep = "\n\t"
     for col = 1:S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
         if k < half_screen_rows || k > nfilled(S)-half_screen_rows
-            print(io, sep, '[', rpad(S.rowval[k], pad), ", ", lpad(col, pad), "]  =  ",
-                    sprint(showcompact, S.nzval[k]))
+            print(io, sep, '[', rpad(S.rowval[k], pad), ", ", lpad(col, pad), "]  =  ")
+            showcompact(io, S.nzval[k])
         elseif k == half_screen_rows
             print(io, sep, '\u22ee')
         end
