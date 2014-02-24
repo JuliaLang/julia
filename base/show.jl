@@ -936,9 +936,8 @@ whos(pat::Regex) = whos(current_module(), pat)
 _limit_output = false
 
 function print_matrix_repr(io, X::AbstractArray)
-    e = eltype(X)
-    types = !isleaftype(e)
-    prefix = string(e)*"["
+    compact, prefix = array_eltype_show_how(eltype(X))
+    prefix *= "["
     ind = " "^length(prefix)
     print(io, prefix)
     for i=1:size(X,1)
@@ -949,11 +948,7 @@ function print_matrix_repr(io, X::AbstractArray)
                 print(io, undef_ref_str)
             else
                 el = X[i,j]
-                if types
-                    show(io, el)
-                else
-                    showcompact(io, el)
-                end
+                compact ? showcompact(io, el) : show(io, el)
             end
         end
         if i < size(X,1)
@@ -1039,14 +1034,24 @@ function showlimited(io::IO, x)
     end
 end
 
+# returns compact, prefix
+function array_eltype_show_how(e)
+    leaf = isleaftype(e)
+    plain = e<:Number || e<:String
+    if isa(e,DataType) && e === e.name.primary
+        str = string(e.name)
+    else
+        str = string(e)
+    end
+    leaf&&plain, (e===Float64 || e===Int || (leaf && !plain) ? "" : str)
+end
+
 function show_vector(io::IO, v, opn, cls)
     e = eltype(v)
     compact = false
     if e !== Any
-        if isleaftype(e)
-            compact = true
-        end
-        print(io, e)
+        compact, prefix = array_eltype_show_how(e)
+        print(io, prefix)
     end
     if _limit_output && length(v) > 20
         show_delim_array(io, sub(v,1:10), opn, ",", "", false, compact)
