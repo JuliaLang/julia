@@ -7,7 +7,7 @@ replstr(x) = sprint((io,x) -> writemime(io,MIME("text/plain"),x), x)
 immutable T5589
     names::Vector{UTF8String}
 end
-@test replstr(T5589(Array(UTF8String,100))) == "T5589([#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef  …  #undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef])"
+@test replstr(T5589(Array(UTF8String,100))) == "T5589(UTF8String[#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef  …  #undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef])"
 
 # expression printing
 

@@ -47,6 +47,7 @@ jl_datatype_t *jl_uint64_type;
 jl_datatype_t *jl_float32_type;
 jl_datatype_t *jl_float64_type;
 jl_datatype_t *jl_floatingpoint_type;
+jl_datatype_t *jl_number_type;
 
 jl_tuple_t *jl_null;
 jl_value_t *jl_nothing;
@@ -1511,7 +1512,9 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
         jl_value_t *pi = params[i];
         if (!valid_type_param(pi)) {
             jl_type_error_rt("apply_type", tname,
-                             (jl_value_t*)jl_type_type, pi);
+                             jl_subtype(pi, (jl_value_t*)jl_number_type, 1) ?
+                             (jl_value_t*)jl_long_type : (jl_value_t*)jl_type_type,
+                             pi);
         }
     }
     if (tc == (jl_value_t*)jl_ntuple_type && (n==1||n==2) &&
