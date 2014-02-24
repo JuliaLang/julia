@@ -238,7 +238,7 @@ function int64to32hash(n::Uint64)
 end
 
 bitmix(a::Union(Int32,Uint32), b::Union(Int32,Uint32)) = int64to32hash((uint64(a)<<32)|uint64(b))
-bitmix(a::Union(Int64,Uint64), b::Union(Int64, Uint64)) = int64hash(uint64(a$((b<<32)|(b>>32))))
+bitmix(a::Union(Int64,Uint64), b::Union(Int64, Uint64)) = int64hash(uint64(a$((b<<32)|(b>>>32))))
 
 if WORD_SIZE == 64
     hash64(x::Float64) = int64hash(reinterpret(Uint64,x))
