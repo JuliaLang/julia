@@ -341,7 +341,13 @@ JL_CALLABLE(jl_f_kwcall)
         jl_cellset(container, i+1, args[2+i+1]);
     }
 
-    return jl_apply(sorter, &args[pa-1], nargs-(pa-1));
+    assert(jl_is_gf(sorter));
+    jl_function_t *m = jl_method_lookup((jl_methtable_t*)sorter->env, &args[pa-1], nargs-(pa-1), 1);
+    if (m == jl_bottom_func) {
+        return jl_no_method_error(f, &args[pa], nargs-pa);
+    }
+
+    return jl_apply(m, &args[pa-1], nargs-(pa-1));
 }
 
 // eval -----------------------------------------------------------------------
