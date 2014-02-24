@@ -355,7 +355,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     if !isempty(GIT_VERSION_INFO.commit_short)
       println(io,             "Commit $(GIT_VERSION_INFO.commit_short) ($(GIT_VERSION_INFO.date_string))")
     end
-    if ccall(:jl_is_debugbuild, Bool, ())
+    if ccall(:jl_is_debugbuild, Cint, ())!=0
         println(io, "DEBUG build")
     end
     println(io,             "Platform Info:")
