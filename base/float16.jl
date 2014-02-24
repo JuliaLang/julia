@@ -96,10 +96,7 @@ function convert(::Type{Float16}, val::Float32)
     reinterpret(Float16, h)
 end
 
-for T in (Bool, Int128, Uint128, Complex, Rational)
-    @eval convert(::Type{$T}, x::Float16) = convert($T,float32(x))
-end
-convert{T<:Number}(::Type{T}, x::Float16) = convert(T,float32(x))
+convert(::Type{Integer}, x::Float16) = convert(Int,float32(x))
 
 round(x::Float16) = float16(round(float32(x)))
 trunc(x::Float16) = float16(trunc(float32(x)))
