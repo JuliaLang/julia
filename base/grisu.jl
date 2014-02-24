@@ -118,7 +118,10 @@ show(io::IO, x::Float16) = _show(io, x, PRECISION, 4, true)
 print(io::IO, x::Float32) = _show(io, x, SHORTEST_SINGLE, 0, false)
 print(io::IO, x::Float16) = _show(io, x, PRECISION, 4, false)
 
-showcompact(io::IO, x::FloatingPoint) = _show(io, x, PRECISION, 6, false)
+showcompact(io::IO, x::Float64) =
+    (Base._limit_output::Bool) ? _show(io, x, PRECISION, 6, false) : _show(io, x, SHORTEST, 0, false)
+showcompact(io::IO, x::Float32) =
+    (Base._limit_output::Bool) ? _show(io, x, PRECISION, 6, false) : _show(io, x, SHORTEST_SINGLE, 0, false)
 showcompact(io::IO, x::Float16) = _show(io, x, PRECISION, 4, false)
 
 # normal:
