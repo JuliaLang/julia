@@ -110,8 +110,6 @@ typemax{T<:Integer}(::Type{Rational{T}}) = one(T)//zero(T)
 
 isinteger(x::Rational) = x.den == 1
 
-hash(x::Rational) = bitmix(hash(x.num), ~hash(x.den))
-
 -(x::Rational) = (-x.num) // x.den
 for op in (:+, :-, :rem, :mod)
     @eval begin
