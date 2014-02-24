@@ -234,11 +234,11 @@ DLLEXPORT void jl_sigatomic_end(void)
     JL_SIGATOMIC_END();
 }
 
-DLLEXPORT int jl_is_debugbuild(void) {
+DLLEXPORT jl_value_t *jl_is_debugbuild(void) {
 #ifdef DEBUG
-    return 1;
+    return jl_true;
 #else
-    return 0;
+    return jl_false;
 #endif
 }
 
