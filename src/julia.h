@@ -363,6 +363,7 @@ extern DLLEXPORT jl_datatype_t *jl_uint64_type;
 extern DLLEXPORT jl_datatype_t *jl_float32_type;
 extern DLLEXPORT jl_datatype_t *jl_float64_type;
 extern DLLEXPORT jl_datatype_t *jl_floatingpoint_type;
+extern DLLEXPORT jl_datatype_t *jl_number_type;
 extern DLLEXPORT jl_datatype_t *jl_voidpointer_type;
 extern DLLEXPORT jl_datatype_t *jl_pointer_type;
 
