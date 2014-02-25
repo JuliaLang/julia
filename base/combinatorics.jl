@@ -301,22 +301,24 @@ function nextpartition(n, as)
     xs
 end
 
-const _npartitions = (Int=>Int)[]
-function npartitions(n::Int)
-    if n < 0
-        0
-    elseif n < 2
-        1
-    elseif (np = get(_npartitions, n, 0)) > 0
-        np
-    else
-        np = 0
-        sgn = 1
-        for k = 1:n
-            np += sgn * (npartitions(n-k*(3k-1)>>1) + npartitions(n-k*(3k+1)>>1))
-            sgn = -sgn
+let _npartitions = (Int=>Int)[]
+    global npartitions
+    function npartitions(n::Int)
+        if n < 0
+            0
+        elseif n < 2
+            1
+        elseif (np = get(_npartitions, n, 0)) > 0
+            np
+        else
+            np = 0
+            sgn = 1
+            for k = 1:n
+                np += sgn * (npartitions(n-k*(3k-1)>>1) + npartitions(n-k*(3k+1)>>1))
+                sgn = -sgn
+            end
+            _npartitions[n] = np
         end
-        _npartitions[n] = np
     end
 end
 
@@ -365,19 +367,20 @@ function nextfixedpartition(n, m, bs)
     return as
 end
 
-const _nipartitions = ((Int,Int)=>Int)[]
-function npartitions(n::Int,m::Int)
-    if n < m || m == 0
-        0
-    elseif n == m
-        1
-    elseif (np = get(_nipartitions, (n,m), 0)) > 0
-        np
-    else
-        _nipartitions[(n,m)] = npartitions(n-1,m-1) + npartitions(n-m,m)
+let _nipartitions = ((Int,Int)=>Int)[]
+    global npartitions
+    function npartitions(n::Int,m::Int)
+        if n < m || m == 0
+            0
+        elseif n == m
+            1
+        elseif (np = get(_nipartitions, (n,m), 0)) > 0
+            np
+        else
+            _nipartitions[(n,m)] = npartitions(n-1,m-1) + npartitions(n-m,m)
+        end
     end
 end
-
 
 # Algorithm H from TAoCP 7.2.1.5
 # Set partitions
@@ -429,20 +432,22 @@ function nextsetpartition(s::AbstractVector, a, b, n, m)
 
 end
 
-const _nsetpartitions = (Int=>Int)[]
-function nsetpartitions(n::Int)
-    if n < 0
-        0
-    elseif n < 2
-        1
-    elseif (wn = get(_nsetpartitions, n, 0)) > 0
-        wn
-    else
-        wn = 0
-        for k = 0:n-1
-            wn += binomial(n-1,k)*nsetpartitions(n-1-k)
+let _nsetpartitions = (Int=>Int)[]
+    global nsetpartitions
+    function nsetpartitions(n::Int)
+        if n < 0
+            0
+        elseif n < 2
+            1
+        elseif (wn = get(_nsetpartitions, n, 0)) > 0
+            wn
+        else
+            wn = 0
+            for k = 0:n-1
+                wn += binomial(n-1,k)*nsetpartitions(n-1-k)
+            end
+            _nsetpartitions[n] = wn
         end
-        _nsetpartitions[n] = wn
     end
 end
 
