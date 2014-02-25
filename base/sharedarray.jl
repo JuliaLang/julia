@@ -211,7 +211,31 @@ function shmem_randn(dims; kwargs...)
 end
 shmem_randn(I::Int...; kwargs...) = shmem_randn(I; kwargs...)
 
-similar(S::SharedArray, T, dims::Dims) = similar(S.s, T, dims)
+similar(S::SharedArray, T, dims::Dims) = SharedArray(T, dims; pids=procs(S)) 
+similar(S::SharedArray, T) = similar(S, T, size(S)) 
+similar(S::SharedArray, dims::Dims) = similar(S, eltype(S), dims) 
+similar(S::SharedArray) = similar(S, eltype(S), size(S)) 
+
+eltype(S::SharedArray) = eltype(S.s)
+
+map(f::Callable, S::SharedArray) = (S2 = similar(S); S2[:] = S[:]; map!(f, S2); S2)
+
+reduce(f::Function, S::SharedArray) =
+    mapreduce(fetch, f,
+              { @spawnat p reduce(f, S.loc_subarr_1d) for p in procs(S) })
+
+
+function map!(f::Callable, S::SharedArray) 
+    @sync begin
+        for p in procs(S)
+            @spawnat p begin 
+                for idx in localindexes(S)
+                    S.s[idx] = f(S.s[idx])
+                end
+            end
+        end
+    end
+end
 
 
 function print_shmem_limits(slen)
@@ -284,3 +308,4 @@ function assert_same_host(procs)
     return (first_privip != getipaddr()) ? false : true
 end
 
+              
