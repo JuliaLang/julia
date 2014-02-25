@@ -816,6 +816,9 @@ void julia_init(char *imageFile)
 #ifdef JL_GC_MARKSWEEP
     jl_gc_enable();
 #endif
+
+    if (imageFile)
+        jl_init_restored_modules();
 }
 
 DLLEXPORT void jl_install_sigint_handler()

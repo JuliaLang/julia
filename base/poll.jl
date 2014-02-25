@@ -171,10 +171,10 @@ end
 # on unix
 
 let
-    global fdwatcher_reinit
+    global fdwatcher_init
     @unix_only begin
-        local fdwatcher_array = Array(FDWatcher,0)
-        function fdwatcher_reinit()
+        local fdwatcher_array
+        function fdwatcher_init()
             fdwatcher_array = Array(FDWatcher,0)
         end
 
@@ -190,8 +190,8 @@ let
         end 
     end
     @windows_only begin
-        local fdwatcher_array = Dict{WindowsRawSocket,FDWatcher}()
-        function fdwatcher_reinit()
+        local fdwatcher_array
+        function fdwatcher_init()
             fdwatcher_array = Dict{WindowsRawSocket,FDWatcher}()
         end
 
@@ -206,6 +206,10 @@ let
             _wait(fdwatcher_array[socket],readable,writable)
         end 
     end
+end
+
+module _FDWatcherInitializer
+_init() = Base.fdwatcher_init()
 end
 
 function pfw_wait_cb(pfw::PollingFileWatcher, prev, cur, status)

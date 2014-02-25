@@ -150,6 +150,9 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
         }
     }
 #endif
+
+    jl_module_run_initializer(newm);
+
     return jl_nothing;
 }
 
