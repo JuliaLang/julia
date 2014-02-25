@@ -20,6 +20,14 @@ a = convert(Matrix{Float64}, d)
 @test fetch(@spawnat id_me localpart(d)[1,1]) == d[1,1]
 @test fetch(@spawnat id_other localpart(d)[1,1]) == d[1,101]
 
+d=DArray(I->fill(myid(), map(length,I)), (10,10), [id_me, id_other])
+d2 = map(x->1, d)
+@test reduce(+, d2) == 100
+
+@test reduce(+, d) == ((50*id_me) + (50*id_other))
+map!(x->1, d)
+@test reduce(+, d) == 100
+
 
 @unix_only begin
 
@@ -83,6 +91,15 @@ AA = rand(4,2)
 A = convert(SharedArray, AA)
 B = convert(SharedArray, AA')
 @test B*A == AA'*AA
+
+d=SharedArray(Int64, (10,10); init = D->fill!(D.loc_subarr_1d, myid()), pids=[id_me, id_other])
+d2 = map(x->1, d)
+@test reduce(+, d2) == 100
+
+@test reduce(+, d) == ((50*id_me) + (50*id_other))
+map!(x->1, d)
+@test reduce(+, d) == 100
+
 
 end # @unix_only(SharedArray tests)
 
