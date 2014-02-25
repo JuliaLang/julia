@@ -296,34 +296,49 @@ const tupleref_tfunc = function (A, t, i)
 end
 t_func[tupleref] = (2, 2, tupleref_tfunc)
 
-function quantify_type(t, vars)
-    # all types of the form S{...,T,...} in invariant position where T
-    # is a bound variable are replaced with _<:S
+function limit_type_depth(t::ANY, d::Int, cov::Bool, vars)
     if isa(t,TypeVar) || isa(t,TypeConstructor)
         return t
     end
     if isa(t,Tuple)
-        return map(x->quantify_type(x, vars), t)
-    end
-    if isa(t,UnionType)
-        return Union(quantify_type(t.types, vars)...)
-    end
-    if isa(t,DataType)
+        if d > MAX_TYPE_DEPTH
+            R = Tuple
+        else
+            R = map(x->limit_type_depth(x, d+1, cov, vars), t)
+        end
+    elseif isa(t,UnionType)
+        if d > MAX_TYPE_DEPTH
+            R = Any
+        else
+            R = Union(limit_type_depth(t.types, d, cov, vars)...)
+        end
+    elseif isa(t,DataType)
         P = t.parameters
         if P === ()
             return t
         end
-        P = quantify_type(P, vars)
-        t = t.name.primary{P...}
-        for i = 1:length(P)
-            Pi = P[i]
-            if isa(Pi,TypeVar) && contains_is(vars, Pi)
-                return TypeVar(:_,t)
+        if d > MAX_TYPE_DEPTH
+            R = t.name.primary
+        else
+            Q = map(x->limit_type_depth(x, d+1, false, vars), P)
+            if !cov && any(p->contains_is(vars,p), Q)
+                R = TypeVar(:_,t.name.primary)
+                push!(vars, R)
+                return R
+            else
+                R = t.name.primary{Q...}
             end
         end
+    else
+        return t
     end
-    return t
+    if !cov && d > MAX_TYPE_DEPTH
+        R = TypeVar(:_,R)
+        push!(vars, R)
+    end
+    return R
 end
+
 
 const getfield_tfunc = function (A, s0, name)
     s = s0
@@ -362,11 +377,7 @@ const getfield_tfunc = function (A, s0, name)
         end
         for i=1:length(s.names)
             if is(s.names[i],fld)
-                ft = s.types[i]
-                if isleaftype(s) || !any(x->isa(x,TypeVar), s.parameters)
-                    return ft
-                end
-                return quantify_type(ft, s.parameters)
+                return limit_type_depth(s.types[i], 0, true, {s.parameters...})
             end
         end
         return None
@@ -1165,6 +1176,9 @@ typeinf(linfo,atypes::ANY,sparams::ANY,def) = typeinf(linfo,atypes,sparams,def,t
 
 CYCLE_ID = 1
 
+#trace_inf = false
+#enable_trace_inf() = (global trace_inf=true)
+
 # def is the original unspecialized version of a method. we aggregate all
 # saved type inference data there.
 function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
@@ -1197,7 +1211,9 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     #if dbg
     #    print("typeinf ", linfo.name, " ", object_id(ast0), "\n")
     #end
-    #print("typeinf ", linfo.name, " ", atypes, " ", linfo.file,":",linfo.line,"\n")
+    #if trace_inf
+    #    print("typeinf ", linfo.name, " ", atypes, " ", linfo.file,":",linfo.line,"\n")
+    #end
     # if isdefined(:STDOUT)
     #     write(STDOUT, "typeinf ")
     #     write(STDOUT, string(linfo.name))
