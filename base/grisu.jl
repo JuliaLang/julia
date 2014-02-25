@@ -113,16 +113,16 @@ end
 
 show(io::IO, x::Float64) = _show(io, x, SHORTEST, 0, true)
 show(io::IO, x::Float32) = _show(io, x, SHORTEST_SINGLE, 0, true)
-show(io::IO, x::Float16) = _show(io, x, PRECISION, 4, true)
+show(io::IO, x::Float16) = _show(io, x, PRECISION, 5, true)
 
 print(io::IO, x::Float32) = _show(io, x, SHORTEST_SINGLE, 0, false)
-print(io::IO, x::Float16) = _show(io, x, PRECISION, 4, false)
+print(io::IO, x::Float16) = _show(io, x, PRECISION, 5, false)
 
 showcompact(io::IO, x::Float64) =
     (Base._limit_output::Bool) ? _show(io, x, PRECISION, 6, false) : _show(io, x, SHORTEST, 0, false)
 showcompact(io::IO, x::Float32) =
     (Base._limit_output::Bool) ? _show(io, x, PRECISION, 6, false) : _show(io, x, SHORTEST_SINGLE, 0, false)
-showcompact(io::IO, x::Float16) = _show(io, x, PRECISION, 4, false)
+showcompact(io::IO, x::Float16) = _show(io, x, PRECISION, 5, false)
 
 # normal:
 #   0 < pt < len        ####.####           len+1
@@ -177,7 +177,7 @@ end
 
 print_shortest(io::IO, x::Float64, dot::Bool) = _print_shortest(io, x, dot, SHORTEST, 0)
 print_shortest(io::IO, x::Float32, dot::Bool) = _print_shortest(io, x, dot, SHORTEST_SINGLE, 0)
-print_shortest(io::IO, x::Float16, dot::Bool=false) = _print_shortest(io, x, dot, PRECISION, 4)
+print_shortest(io::IO, x::Float16, dot::Bool=false) = _print_shortest(io, x, dot, PRECISION, 5)
 print_shortest(io::IO, x::Union(FloatingPoint,Integer)) = print_shortest(io, float(x), false)
 
 end # module

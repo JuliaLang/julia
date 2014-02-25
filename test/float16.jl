@@ -92,3 +92,6 @@ let
     f = reinterpret(Float32,                           0b00111110101010100001000000000000)
     @test float32(float16(f)) === reinterpret(Float32, 0b00111110101010100000000000000000)
 end
+
+# issue #5948
+@test string(reinterpret(Float16, 0x7bff)) == "65504.0"
