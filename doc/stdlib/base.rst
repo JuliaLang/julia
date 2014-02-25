@@ -4362,9 +4362,9 @@ some built-in integration support in Julia.
 
    Returns a pair ``(I,E)`` of the estimated integral ``I`` and an
    estimated upper bound on the absolute error ``E``.  If ``maxevals``
-   is not exceeded then either ``E <= abstol`` or ``E <=
-   reltol*norm(I)`` will hold.  (Note that it is useful to specify a
-   positive ``abstol`` in cases where ``norm(I)`` may be zero.)
+   is not exceeded then ``E <= max(abstol, reltol*norm(I))`` will hold.
+   (Note that it is useful to specify a positive ``abstol`` in cases where
+   ``norm(I)`` may be zero.)
 
    The endpoints ``a`` etcetera can also be complex (in which case the
    integral is performed over straight-line segments in the complex
