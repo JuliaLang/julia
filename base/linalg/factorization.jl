@@ -52,7 +52,7 @@ size(C::Union(Cholesky, CholeskyPivoted), d::Integer) = size(C.UL,d)
 function getindex(C::Cholesky, d::Symbol)
     d == :U && return triu!(symbol(C.uplo) == d ? C.UL : C.UL')
     d == :L && return tril!(symbol(C.uplo) == d ? C.UL : C.UL')
-    d == :UL && return Triangular(C.UL, C.uplo)
+    d == :UL && return Triangular(C.UL, symbol(C.uplo))
     throw(KeyError(d))
 end
 function getindex{T<:BlasFloat}(C::CholeskyPivoted{T}, d::Symbol)
@@ -297,7 +297,7 @@ function qrfact!{T}(A::AbstractMatrix{T}; pivot=false)
 end
 qrfact{T<:BlasFloat}(A::StridedMatrix{T}; pivot=false) = qrfact!(copy(A),pivot=pivot)
 qrfact{T}(A::StridedMatrix{T}; pivot=false) = (S = typeof(one(T)/norm(one(T)));S != T ? qrfact!(convert(Matrix{S},A), pivot=pivot) : qrfact!(copy(A),pivot=pivot))
-qrfact(x::Number) = QR(fill(one(x), 1, 1), fill(x, 1, 1))
+qrfact(x::Number) = qrfact(fill(x,1,1))
 
 function qr(A::Union(Number, AbstractMatrix); pivot=false, thin::Bool=true)
     F = qrfact(A, pivot=pivot)
