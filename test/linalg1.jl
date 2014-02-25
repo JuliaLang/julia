@@ -442,3 +442,13 @@ Ai = int(ceil(Ar*100))
 @test_approx_eq norm(Ai,Inf)   norm(full(Ai),Inf)
 @test_approx_eq normfro(Ai)    normfro(full(Ai))
 
+# scale real matrix by complex type
+@test_throws scale!([1.0], 2.0im)
+@test isequal(scale([1.0], 2.0im),             Complex{Float64}[2.0im])
+@test isequal(scale(Float32[1.0], 2.0f0im),    Complex{Float32}[2.0im])
+@test isequal(scale(Float32[1.0], 2.0im),      Complex{Float64}[2.0im])
+@test isequal(scale(Float64[1.0], 2.0f0im),    Complex{Float64}[2.0im])
+@test isequal(scale(Float32[1.0], big(2.0)im), Complex{BigFloat}[2.0im])
+@test isequal(scale(Float64[1.0], big(2.0)im), Complex{BigFloat}[2.0im])
+@test isequal(scale(BigFloat[1.0], 2.0im),     Complex{BigFloat}[2.0im])
+@test isequal(scale(BigFloat[1.0], 2.0f0im),   Complex{BigFloat}[2.0im])
