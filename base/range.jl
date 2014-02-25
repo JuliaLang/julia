@@ -118,16 +118,17 @@ function rat(x)
     y = x
     a = d = 1
     b = c = 0
-    m = convert(Int,maxintfloat(Float32))
-    while true
+    m = maxintfloat(Float32)
+    while abs(y) <= m
         f = itrunc(y)
         y -= f
         a, c = f*a + c, a
         b, d = f*b + d, b
-        max(abs(a),abs(b)) <= m || return c, d
-        (y == 0 || oftype(x,a)/oftype(x,b) == x) && return a, b
+        max(abs(a),abs(b)) <= convert(Int,m) || return c, d
+        oftype(x,a)/oftype(x,b) == x && break
         y = inv(y)
     end
+    return a, b
 end
 
 # float range "lifting" helper
