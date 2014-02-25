@@ -105,7 +105,13 @@ importall .FS
 include("process.jl")
 include("multimedia.jl")
 importall .Multimedia
-reinit_stdio()
+module _IOInitializer
+function _init()
+    Base.reinit_stdio()
+    Base.Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
+end
+end
+# TODO: should put this in _init, but need to handle its boolean argument correctly
 ccall(:jl_get_uv_hooks, Void, (Cint,), 0)
 include("grisu.jl")
 import .Grisu.print_shortest

@@ -241,7 +241,6 @@ function reinit_stdio()
     global STDIN = init_stdio(ccall(:jl_stdin_stream ,Ptr{Void},()))
     global STDOUT = init_stdio(ccall(:jl_stdout_stream,Ptr{Void},()))
     global STDERR = init_stdio(ccall(:jl_stderr_stream,Ptr{Void},()))
-    reinit_displays() # since Multimedia.displays uses STDOUT as fallback
 end
 
 flush(::AsyncStream) = nothing

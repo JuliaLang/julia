@@ -2,7 +2,7 @@ module Multimedia
 
 export Display, display, pushdisplay, popdisplay, displayable, redisplay,
    MIME, @MIME, @MIME_str, writemime, reprmime, stringmime, istext,
-   mimewritable, TextDisplay, reinit_displays
+   mimewritable, TextDisplay
 
 ###########################################################################
 # We define a singleton type MIME{mime symbol} for each MIME type, so
