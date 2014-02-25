@@ -1380,3 +1380,29 @@ let
     end
     @test Test()() === nothing
 end
+
+# issue #5906
+
+abstract Outer5906{T}
+
+immutable Inner5906{T}
+   a:: T
+end
+
+immutable Empty5906{T} <: Outer5906{T}
+end
+
+immutable Hanoi5906{T} <: Outer5906{T}
+    a::T
+    succ :: Outer5906{Inner5906{T}}
+    Hanoi5906(a) = new(a, Empty5906{Inner5906{T}}())
+end
+
+function f5906{T}(h::Hanoi5906{T})
+    if isa(h.succ, Empty5906) return end
+    f5906(h.succ)
+end
+
+# can cause infinite recursion in type inference via instantiation of
+# the type of the `succ` field
+@test f5906(Hanoi5906{Int}(1)) === nothing
