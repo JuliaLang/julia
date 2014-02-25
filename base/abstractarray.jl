@@ -248,6 +248,7 @@ for (f,t) in ((:char,   Char),
               (:uint128,Uint128))
     @eval begin
         ($f)(x::AbstractArray{$t}) = x
+        ($f)(x::StoredArray{$t}) = x
 
         function ($f)(x::StoredArray)
             y = similar(x,$t)
@@ -265,6 +266,7 @@ for (f,t) in ((:integer, Integer),
               (:unsigned, Unsigned))
     @eval begin
         ($f){T<:$t}(x::AbstractArray{T}) = x
+        ($f){T<:$t}(x::StoredArray{T}) = x
 
         function ($f)(x::StoredArray)
             y = similar(x,typeof(($f)(one(eltype(x)))))
