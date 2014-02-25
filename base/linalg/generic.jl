@@ -3,6 +3,14 @@
 scale(X::AbstractArray, s::Number) = scale!(copy(X), s)
 scale(s::Number, X::AbstractArray) = scale!(copy(X), s)
 
+function scale{R<:Real,S<:Complex}(X::AbstractArray{R}, s::S)
+    Y = Array(promote_type(R,S), size(X))
+    copy!(Y, X)
+    scale!(Y, s)
+end
+
+scale{R<:Real}(s::Complex, X::AbstractArray{R}) = scale(X, s)
+
 function scale!(X::AbstractArray, s::Number)
     for i in 1:length(X)
         @inbounds X[i] *= s

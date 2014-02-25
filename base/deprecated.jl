@@ -408,3 +408,5 @@ function nnz(X)
     countnz(X)
 end
 export nnz
+
+scale!{T<:Base.LinAlg.BlasReal}(X::Array{T}, s::Complex) = error("scale!: Cannot scale a real array by a complex value in-place.  Use scale(X::Array{Real}, s::Complex) instead.")
