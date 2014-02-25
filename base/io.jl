@@ -381,7 +381,7 @@ end
 
 ## low-level calls ##
 
-write(s::IOStream, b::Uint8) = int(ccall(:jl_putc, Int32, (Uint8, Ptr{Void}), b, s.ios))
+write(s::IOStream, b::Uint8) = int(ccall(:ios_putc, Int32, (Uint8, Ptr{Void}), b, s.ios))
 
 function write{T}(s::IOStream, a::Array{T})
     if isbits(T)
