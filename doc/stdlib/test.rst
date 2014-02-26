@@ -57,13 +57,15 @@ As floating point comparisons can be imprecise, two additional macros exist taki
 
   julia> @test_approx_eq 1. 0.9999999999999
 
-  julia> @test_approx_eq_eps 1. 0.999 e-2
+  julia> @test_approx_eq_eps 1. 0.999 1e-2
 
-  julia> @test_approx_eq_eps 1. 0.999 e-3
-  ERROR: assertion failed: |1.0 - 0.999| < -0.2817181715409549
+  julia> @test_approx_eq_eps 1. 0.999 1e-3
+  ERROR: assertion failed: |1.0 - 0.999| <= 0.001
     1.0 = 1.0
     0.999 = 0.999
-   in test_approx_eq at test.jl:75
+    difference = 0.0010000000000000009 > 0.001
+   in error at error.jl:22
+   in test_approx_eq at test.jl:68
 
 Handlers
 ________
