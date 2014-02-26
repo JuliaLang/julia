@@ -546,7 +546,7 @@ function getipaddr()
         end
     end
     ccall(:uv_free_interface_addresses,Void,(Ptr{Uint8},Int32),addr,count)
-    error("no active external interfaces")
+    return ip"127.0.0.1"
 end
 
 ##
