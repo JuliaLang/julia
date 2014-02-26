@@ -55,8 +55,6 @@ similar(d::DArray, T)= similar(d, T, size(d))
 similar{T}(d::DArray{T}, dims::Dims)= similar(d, T, dims)
 similar{T}(d::DArray{T})= similar(d, T, size(d))
 
-eltype{T}(d::DArray{T}) = T
-
 size(d::DArray) = d.dims
 procs(d::DArray) = d.pmap
 
