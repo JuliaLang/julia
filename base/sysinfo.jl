@@ -19,6 +19,8 @@ export  CPU_CORES,
 import ..Base: WORD_SIZE, OS_NAME, ARCH, MACHINE
 import ..Base: show, uv_error
 
+global CPU_CORES
+
 function __init__()
     # set CPU core count
     global const CPU_CORES = int(

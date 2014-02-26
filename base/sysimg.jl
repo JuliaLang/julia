@@ -188,6 +188,7 @@ include("sharedarray.jl")
 
 # utilities - version, timing, help, edit, metaprogramming
 include("sysinfo.jl")
+import .Sys.CPU_CORES
 include("version.jl")
 include("datafmt.jl")
 include("deepcopy.jl")

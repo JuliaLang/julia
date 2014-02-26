@@ -349,7 +349,6 @@ end
 
 
 function _start()
-    global const CPU_CORES = Sys.CPU_CORES
     if CPU_CORES > 8 && !("OPENBLAS_NUM_THREADS" in keys(ENV)) && !("OMP_NUM_THREADS" in keys(ENV))
         # Prevent openblas from stating to many threads, unless/until specifically requested
         ENV["OPENBLAS_NUM_THREADS"] = 8
