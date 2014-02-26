@@ -106,6 +106,9 @@ BUILD_LLDB = 0
 #XC_HOST = i686-w64-mingw32
 #XC_HOST = x86_64-w64-mingw32
 
+# Figure out OS and architecture
+BUILD_OS := $(shell uname)
+
 ifeq ($(XC_HOST),)
 CROSS_COMPILE=
 HOSTCC = $(CC)
@@ -115,8 +118,13 @@ override OPENBLAS_DYNAMIC_ARCH = 1
 override CROSS_COMPILE=$(XC_HOST)-
 ifneq (,$(findstring mingw,$(XC_HOST)))
 override OS := WINNT
+ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
+export STD_LIB_PATH := $(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed -e "s/^programs: =//" -e "s!/lib/!/bin/!g")
+export STD_LIB_PATH := $(STD_LIB_PATH):$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep libraries | sed -e "s/^libraries: =//" -e "s!/lib/!/bin/!g")
+else
 export STD_LIB_PATH := $(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed "s/^programs: =//" | xargs -d":" winepath -w | tr '\n' ';')
 export STD_LIB_PATH := $(STD_LIB_PATH);$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep libraries | sed "s/^libraries: =//" | xargs -d":" winepath -w | tr '\n' ';')
+endif
 else
 $(error "unknown XC_HOST variable set")
 endif
@@ -125,7 +133,6 @@ endif
 JLDOWNLOAD = $(JULIAHOME)/deps/jldownload
 
 # Figure out OS and architecture
-BUILD_OS := $(shell uname)
 OS := $(BUILD_OS)
 
 ifneq (,$(findstring MINGW,$(OS)))
@@ -367,7 +374,7 @@ LIBBLAS ?= -lblas
 LIBBLASNAME ?= libblas
 endif
 else
-LIBBLAS = -L$(build_libdir) -lopenblas
+LIBBLAS = -L$(build_shlibdir) -lopenblas
 LIBBLASNAME = libopenblas
 endif
 
@@ -381,7 +388,7 @@ ifeq ($(USE_SYSTEM_LAPACK), 1)
 LIBLAPACK = -llapack
 LIBLAPACKNAME = liblapack
 else
-LIBLAPACK = -L$(build_libdir) -llapack $(LIBBLAS)
+LIBLAPACK = -L$(build_shlibdir) -llapack $(LIBBLAS)
 LIBLAPACKNAME = liblapack
 endif
 endif
@@ -572,6 +579,8 @@ endef
 
 ifeq ($(BUILD_OS), WINNT)
 spawn = $(1)
+else ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
+spawn = $(1)
 else
 ifeq ($(OS), WINNT)
 spawn = wine $(1)
@@ -580,9 +589,19 @@ spawn = $(1)
 endif
 endif
 
+ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
+cygpath_w = `cygpath -w $(1)`
+else
+cygpath_w = $(1)
+endif
+
 exec = $(shell $(call spawn,$(1)))
 
+ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
+wine_pathsearch = $(firstword $(wildcard $(addsuffix /$(1),$(subst :, ,$(2)))))
+else
 wine_pathsearch = $(firstword $(wildcard $(addsuffix /$(1),$(shell printf %s\n '$(2)' | xargs -d";" winepath -u | tr '\n' ' '))))
+endif
 pathsearch = $(firstword $(wildcard $(addsuffix /$(1),$(subst :, ,$(2)))))
 
 JULIA_EXECUTABLE_debug = $(build_bindir)/julia-debug-$(DEFAULT_REPL)$(EXE)
