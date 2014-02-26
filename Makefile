@@ -68,7 +68,7 @@ endif
 $(build_private_libdir)/sys%ji: $(build_private_libdir)/sys%bc
 
 $(build_private_libdir)/sys%o: $(build_private_libdir)/sys%bc
-	$(call spawn,$(LLVM_LLC)) -filetype=obj -relocation-model=pic -mattr=-bmi2,-avx2 -o $@ $<
+	$(call spawn,$(LLVM_LLC)) -filetype=obj -relocation-model=pic -mattr=-bmi2,-avx2 -o $(call cygpath_w,$@) $(call cygpath_w,$<)
 
 .PRECIOUS: $(build_private_libdir)/sys%o
 
@@ -79,12 +79,12 @@ $(build_private_libdir)/sys%$(SHLIB_EXT): $(build_private_libdir)/sys%o
 
 $(build_private_libdir)/sys0.bc:
 	@$(QUIET_JULIA) cd base && \
-	$(call spawn,$(JULIA_EXECUTABLE)) --build $(build_private_libdir)/sys0 sysimg.jl
+	$(call spawn,$(JULIA_EXECUTABLE)) --build $(call cygpath_w,$(build_private_libdir)/sys0) sysimg.jl
 
 $(build_private_libdir)/sys.bc: VERSION base/*.jl base/pkg/*.jl base/linalg/*.jl base/sparse/*.jl $(build_datarootdir)/julia/helpdb.jl $(build_datarootdir)/man/man1/julia.1 $(build_private_libdir)/sys0.$(SHLIB_EXT)
 	@$(QUIET_JULIA) cd base && \
-	$(call spawn,$(JULIA_EXECUTABLE)) --build $(build_private_libdir)/sys \
-		-J$(build_private_libdir)/$$([ -e $(build_private_libdir)/sys.ji ] && echo sys.ji || echo sys0.ji) -f sysimg.jl \
+	$(call spawn,$(JULIA_EXECUTABLE)) --build $(call cygpath_w,$(build_private_libdir)/sys) \
+		-J$(call cygpath_w,$(build_private_libdir))/$$([ -e $(build_private_libdir)/sys.ji ] && echo sys.ji || echo sys0.ji) -f sysimg.jl \
 		|| (echo "*** This error is usually fixed by running 'make clean'. If the error persists, try 'make cleanall'. ***" && false)
 
 run-julia-debug run-julia-release: run-julia-%:
