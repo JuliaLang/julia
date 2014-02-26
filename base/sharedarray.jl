@@ -216,8 +216,6 @@ similar(S::SharedArray, T) = similar(S, T, size(S))
 similar(S::SharedArray, dims::Dims) = similar(S, eltype(S), dims) 
 similar(S::SharedArray) = similar(S, eltype(S), size(S)) 
 
-eltype(S::SharedArray) = eltype(S.s)
-
 map(f::Callable, S::SharedArray) = (S2 = similar(S); S2[:] = S[:]; map!(f, S2); S2)
 
 reduce(f::Function, S::SharedArray) =
