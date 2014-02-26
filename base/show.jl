@@ -1,3 +1,4 @@
+
 show(x) = show(STDOUT::IO, x)
 
 function print(io::IO, s::Symbol)
@@ -84,6 +85,9 @@ end
 showcompact(io::IO, x) = show(io, x)
 showcompact(x) = showcompact(STDOUT::IO, x)
 
+showcompact_lim(io, x) = _limit_output ? showcompact(io, x) : show(io, x)
+showcompact_lim(io, x::Number) = _limit_output ? showcompact(io, x) : print(io, x)
+
 macro show(exs...)
     blk = Expr(:block)
     for ex in exs
@@ -133,7 +137,7 @@ function show_delim_array(io::IO, itr::AbstractArray, op, delim, cl, delim_one, 
                 x = itr[i]
                 multiline = isa(x,AbstractArray) && ndims(x)>1 && length(x)>0
                 newline && multiline && println(io)
-                compact ? showcompact(io, x) : show(io, x)
+                compact ? showcompact_lim(io, x) : show(io, x)
             end
             i += 1
             if i > l
@@ -699,22 +703,22 @@ dump(io::IO, x::DataType) = dump(io, x, 5, "")
 dump(io::IO, x::TypeVar, n::Int, indent) = println(io, x.name)
 
 
-alignment(x::Any) = (0, length(sprint(showcompact, x)))
-alignment(x::Number) = (length(sprint(showcompact, x)), 0)
-alignment(x::Integer) = (length(sprint(showcompact, x)), 0)
+alignment(x::Any) = (0, length(sprint(showcompact_lim, x)))
+alignment(x::Number) = (length(sprint(showcompact_lim, x)), 0)
+alignment(x::Integer) = (length(sprint(showcompact_lim, x)), 0)
 function alignment(x::Real)
-    m = match(r"^(.*?)((?:[\.eE].*)?)$", sprint(showcompact, x))
-    m == nothing ? (length(sprint(showcompact, x)), 0) :
+    m = match(r"^(.*?)((?:[\.eE].*)?)$", sprint(showcompact_lim, x))
+    m == nothing ? (length(sprint(showcompact_lim, x)), 0) :
                    (length(m.captures[1]), length(m.captures[2]))
 end
 function alignment(x::Complex)
-    m = match(r"^(.*,)(.*)$", sprint(showcompact, x))
-    m == nothing ? (length(sprint(showcompact, x)), 0) :
+    m = match(r"^(.*,)(.*)$", sprint(showcompact_lim, x))
+    m == nothing ? (length(sprint(showcompact_lim, x)), 0) :
                    (length(m.captures[1]), length(m.captures[2]))
 end
 function alignment(x::Rational)
-    m = match(r"^(.*?/)(/.*)$", sprint(showcompact, x))
-    m == nothing ? (length(sprint(showcompact, x)), 0) :
+    m = match(r"^(.*?/)(/.*)$", sprint(showcompact_lim, x))
+    m == nothing ? (length(sprint(showcompact_lim, x)), 0) :
                    (length(m.captures[1]), length(m.captures[2]))
 end
 
@@ -761,7 +765,7 @@ function print_matrix_row(io::IO,
         if isassigned(X,i,j)
             x = X[i,j]
             a = alignment(x)
-            sx = sprint(showcompact, x)
+            sx = sprint(showcompact_lim, x)
         else
             a = undef_ref_alignment
             sx = undef_ref_str
@@ -948,7 +952,7 @@ function print_matrix_repr(io, X::AbstractArray)
                 print(io, undef_ref_str)
             else
                 el = X[i,j]
-                compact ? showcompact(io, el) : show(io, el)
+                compact ? showcompact_lim(io, el) : show(io, el)
             end
         end
         if i < size(X,1)
@@ -970,7 +974,7 @@ function showarray(io::IO, X::AbstractArray;
         header && println(io, ":")
         if ndims(X) == 0
             if isassigned(X)
-                return showcompact(io, X[])
+                return showcompact_lim(io, X[])
             else
                 return print(io, undef_ref_str)
             end
