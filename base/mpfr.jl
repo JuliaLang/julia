@@ -233,10 +233,8 @@ function *(x::BigFloat, c::Culong)
     return z
 end
 *(c::Culong, x::BigFloat) = x * c
-if Culong === Uint64
-    *(c::Uint32, x::BigFloat) = x * convert(Culong, c)
-    *(x::BigFloat, c::Uint32) = x * convert(Culong, c)
-end
+*(c::Unsigned, x::BigFloat) = x * convert(Culong, c)
+*(x::BigFloat, c::Unsigned) = x * convert(Culong, c)
 
 # Signed multiplication
 function *(x::BigFloat, c::Clong)
@@ -245,8 +243,7 @@ function *(x::BigFloat, c::Clong)
     return z
 end
 *(c::Clong, x::BigFloat) = x * c
-*(x::BigFloat, c::Union(Int8,Uint8,Int16,Uint16,Int32)) = x * convert(Clong, c)
-*(c::Union(Int8,Uint8,Int16,Uint16,Int32), x::BigFloat) = x * convert(Clong, c)
+*(x::BigFloat, c::Signed) = x * convert(Clong, c)
 
 # Float64 multiplication
 function *(x::BigFloat, c::Float64)
@@ -259,6 +256,7 @@ end
 *(x::BigFloat, c::Float32) = x * convert(Float64, c)
 
 # BigInt multiplication
+*(c::Signed, x::BigFloat) = x * convert(Clong, c)
 function *(x::BigFloat, c::BigInt)
     z = BigFloat()
     ccall((:mpfr_mul_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigInt}, Int32), &z, &x, &c, ROUNDING_MODE[end])
