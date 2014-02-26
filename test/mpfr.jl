@@ -752,3 +752,9 @@ tol = 1e-3
 @test_approx_eq_eps f+(1//1) g tol
 
 @test_approx_eq_eps f+one(Rational{BigInt}) g tol
+
+# issue #5963
+@test typemax(Int128) == convert(BigFloat, typemax(Int128))
+@test typemax(Int128)  * big(1.0) == convert(BigFloat, typemax(Int128))
+@test typemax(Uint64)  * big(1.0) == big(typemax(Uint64))
+@test typemax(Uint128) * big(1.0) == big(typemax(Uint128))
