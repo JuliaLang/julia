@@ -421,12 +421,12 @@ DLLEXPORT jl_module_t *jl_module_parent(jl_module_t *m) { return m->parent; }
 
 int jl_module_has_initializer(jl_module_t *m)
 {
-    return jl_get_global(m, jl_symbol("_init")) != NULL;
+    return jl_get_global(m, jl_symbol("__init__")) != NULL;
 }
 
 void jl_module_run_initializer(jl_module_t *m)
 {
-    jl_value_t *f = jl_get_global(m, jl_symbol("_init"));
+    jl_value_t *f = jl_get_global(m, jl_symbol("__init__"));
     if (f == NULL || !jl_is_function(f))
         return;
     JL_TRY {

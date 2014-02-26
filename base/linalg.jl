@@ -213,7 +213,7 @@ include("linalg/cholmod.jl")
 include("linalg/arpack.jl")
 include("linalg/arnoldi.jl")
 
-function _init()
+function __init__()
     Base.check_blas()
     if Base.blas_vendor() == :mkl
         ccall((:MKL_Set_Interface_Layer, Base.libblas_name), Void, (Cint,), USE_BLAS64 ? 1 : 0)

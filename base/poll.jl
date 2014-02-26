@@ -209,7 +209,7 @@ let
 end
 
 module _FDWatcherInitializer
-_init() = Base.fdwatcher_init()
+__init__() = Base.fdwatcher_init()
 end
 
 function pfw_wait_cb(pfw::PollingFileWatcher, prev, cur, status)
