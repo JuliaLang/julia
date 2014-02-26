@@ -106,7 +106,7 @@ include("process.jl")
 include("multimedia.jl")
 importall .Multimedia
 module _IOInitializer
-function _init()
+function __init__()
     Base.reinit_stdio()
     Base.Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
 end

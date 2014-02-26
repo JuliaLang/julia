@@ -44,7 +44,7 @@ end
 
 ## initialization
 
-function _init()
+function __init__()
 
 @unix_only begin
     try

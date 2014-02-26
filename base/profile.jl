@@ -30,7 +30,7 @@ end
 
 # init with default values
 # Use a max size of 1M profile samples, and fire timer every 1ms
-_init() = init(1_000_000, 0.001)
+__init__() = init(1_000_000, 0.001)
 
 clear() = ccall(:jl_profile_clear_data, Void, ())
 
