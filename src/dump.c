@@ -39,6 +39,9 @@ static jl_value_t *jl_idtable_type=NULL;
 // queue of types to cache
 static jl_array_t *datatype_list=NULL;
 
+// queue of modules to initialize
+static arraylist_t modules_to_init;
+
 #define write_uint8(s, n) ios_putc((n), (s))
 #define read_uint8(s) ((uint8_t)ios_getc(s))
 #define write_int8(s, n) write_uint8(s, n)
@@ -833,6 +836,8 @@ static jl_value_t *jl_deserialize_value_internal(ios_t *s)
             arraylist_push(&m->usings, jl_deserialize_value(s));
         }
         m->constant_table = (jl_array_t*)jl_deserialize_value(s);
+        if (jl_module_has_initializer(m))
+            arraylist_push(&modules_to_init, m);
         return (jl_value_t*)m;
     }
     else if (vtag == (jl_value_t*)SmallInt64_tag) {
@@ -1073,6 +1078,13 @@ void jl_restore_system_image(char *fname)
     jl_update_all_fptrs();
 }
 
+void jl_init_restored_modules()
+{
+    while (modules_to_init.len > 0) {
+        jl_module_run_initializer(arraylist_pop(&modules_to_init));
+    }
+}
+
 DLLEXPORT
 jl_value_t *jl_ast_rettype(jl_lambda_info_t *li, jl_value_t *ast)
 {
@@ -1153,6 +1165,7 @@ void jl_init_serializer(void)
     htable_new(&fptr_to_id, 0);
     htable_new(&id_to_fptr, 0);
     htable_new(&backref_table, 50000);
+    arraylist_new(&modules_to_init, 0);
 
     void *tags[] = { jl_symbol_type, jl_datatype_type,
                      jl_function_type, jl_tuple_type, jl_array_type,

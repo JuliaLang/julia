@@ -105,7 +105,7 @@ importall .FS
 include("process.jl")
 include("multimedia.jl")
 importall .Multimedia
-reinit_stdio()
+# TODO: should put this in _init, but need to handle its boolean argument correctly
 ccall(:jl_get_uv_hooks, Void, (Cint,), 0)
 include("grisu.jl")
 import .Grisu.print_shortest
@@ -182,6 +182,7 @@ include("sharedarray.jl")
 
 # utilities - version, timing, help, edit, metaprogramming
 include("sysinfo.jl")
+import .Sys.CPU_CORES
 include("version.jl")
 include("datafmt.jl")
 include("deepcopy.jl")
@@ -242,6 +243,13 @@ include("graphics.jl")
 # profiler
 include("profile.jl")
 importall .Profile
+
+function __init__()
+    # Base library init
+    reinit_stdio()
+    Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
+    fdwatcher_init()
+end
 
 include("precompile.jl")
 

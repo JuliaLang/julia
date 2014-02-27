@@ -63,6 +63,12 @@ extern void jl_get_uv_hooks(int);
 extern int base_module_conflict;
 jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
 {
+    static arraylist_t module_stack;
+    static int initialized=0;
+    if (!initialized) {
+        arraylist_new(&module_stack, 0);
+        initialized = 1;
+    }
     assert(ex->head == module_sym);
     jl_module_t *last_module = jl_current_module;
     if (jl_array_len(ex->args) != 3 || !jl_is_expr(jl_exprarg(ex,2))) {
@@ -150,6 +156,15 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
         }
     }
 #endif
+
+    arraylist_push(&module_stack, newm);
+
+    if (jl_current_module == jl_main_module) {
+        while (module_stack.len > 0) {
+            jl_module_run_initializer(arraylist_pop(&module_stack));
+        }
+    }
+
     return jl_nothing;
 }
 

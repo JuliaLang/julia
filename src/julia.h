@@ -797,6 +797,8 @@ STATIC_INLINE jl_function_t *jl_get_function(jl_module_t *m, const char *name)
 {
     return  (jl_function_t*) jl_get_global(m, jl_symbol(name));
 }
+DLLEXPORT int jl_module_has_initializer(jl_module_t *m);
+DLLEXPORT void jl_module_run_initializer(jl_module_t *m);
 
 // eq hash tables
 DLLEXPORT jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val);
@@ -860,6 +862,7 @@ DLLEXPORT extern char *julia_home;
 
 DLLEXPORT void jl_save_system_image(char *fname);
 DLLEXPORT void jl_restore_system_image(char *fname);
+void jl_init_restored_modules();
 
 // front end interface
 DLLEXPORT jl_value_t *jl_parse_input_line(const char *str);
