@@ -27,6 +27,10 @@ New language features
   * Unicode identifiers are normalized (NFC) so that different encodings
     of equivalent strings are treated as the same identifier ([#5462]).
 
+  * If a module contains a function `__init__()`, it will be called when
+    the module is first loaded, and on process startup if a pre-compiled
+    version of the module is present ([#1268]).
+
 Library improvements
 --------------------
 
@@ -282,6 +286,7 @@ Deprecated or removed
 [#4996]: https://github.com/JuliaLang/julia/issues/4996
 [#2333]: https://github.com/JuliaLang/julia/issues/2333
 [#5636]: https://github.com/JuliaLang/julia/issues/5636
+[#1268]: https://github.com/JuliaLang/julia/issues/1268
 
 Julia v0.2.0 Release Notes
 ==========================

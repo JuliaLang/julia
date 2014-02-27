@@ -208,10 +208,6 @@ let
     end
 end
 
-module _FDWatcherInitializer
-__init__() = Base.fdwatcher_init()
-end
-
 function pfw_wait_cb(pfw::PollingFileWatcher, prev, cur, status)
     if status < 0
         notify_error(pfw.notify,UVError("PollingFileWatcher",status))

@@ -105,12 +105,6 @@ importall .FS
 include("process.jl")
 include("multimedia.jl")
 importall .Multimedia
-module _IOInitializer
-function __init__()
-    Base.reinit_stdio()
-    Base.Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
-end
-end
 # TODO: should put this in _init, but need to handle its boolean argument correctly
 ccall(:jl_get_uv_hooks, Void, (Cint,), 0)
 include("grisu.jl")
@@ -249,6 +243,13 @@ include("graphics.jl")
 # profiler
 include("profile.jl")
 importall .Profile
+
+function __init__()
+    # Base library init
+    reinit_stdio()
+    Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
+    fdwatcher_init()
+end
 
 include("precompile.jl")
 
