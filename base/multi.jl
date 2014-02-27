@@ -1027,25 +1027,14 @@ function create_worker(privhost, port, pubhost, stream, config, manage)
     w.manage = manage
     
     if isa(stream, AsyncStream)
-        stream.line_buffered = true
         let wrker = w
             # redirect console output from workers to the client's stdout:
-            start_reading(stream,function(stream::AsyncStream,nread::Int)
-                if nread>0
-                    try
-                        line = readbytes(stream.buffer, nread)
-                        if length(line) < nread
-                            println(STDERR,"\tTruncated reply from worker $(wrker.id)")
-                            return false
-                        end
-                        print("\tFrom worker $(wrker.id):\t",bytestring(line))
-                    catch err
-                        println(STDERR,"\tError parsing reply from worker $(wrker.id):\t",err)
-                        return false
-                    end
+            @async begin
+                while !eof(stream)
+                    line = readline(stream)
+                    print("\tFrom worker $(wrker.id):\t",bytestring(line))
                 end
-                true
-            end)
+            end
         end
     end
 
