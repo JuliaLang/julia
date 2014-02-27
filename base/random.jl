@@ -44,7 +44,7 @@ end
 
 ## initialization
 
-function librandom_init()
+function __init__()
 
 @unix_only begin
     try

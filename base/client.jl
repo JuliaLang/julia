@@ -336,11 +336,6 @@ function init_head_sched()
     register_worker(LPROC)
 end
 
-function init_profiler()
-    # Use a max size of 1M profile samples, and fire timer every 1ms
-    Profile.init(1_000_000, 0.001)
-end
-
 function load_juliarc()
     # If the user built us with a specific Base.SYSCONFDIR, check that location first for a juliarc.jl file
     #   If it is not found, then continue on to the relative path based on JULIA_HOME
@@ -354,25 +349,12 @@ end
 
 
 function _start()
-    # set up standard streams
-    reinit_stdio()
-    fdwatcher_reinit()
-    # Initialize RNG
-    Random.librandom_init()
-    Sys.init()
-    global const CPU_CORES = Sys.CPU_CORES
     if CPU_CORES > 8 && !("OPENBLAS_NUM_THREADS" in keys(ENV)) && !("OMP_NUM_THREADS" in keys(ENV))
         # Prevent openblas from stating to many threads, unless/until specifically requested
         ENV["OPENBLAS_NUM_THREADS"] = 8
     end
-    # Check that BLAS is correctly built
-    check_blas()
-    LinAlg.init()
-    GMP.gmp_init()
-    init_profiler()
     start_gc_msgs_task()
 
-    #atexit(()->flush(STDOUT))
     try
         any(a->(a=="--worker"), ARGS) || init_head_sched()
         init_load_path()

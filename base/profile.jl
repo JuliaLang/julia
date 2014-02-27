@@ -28,6 +28,10 @@ function init(n::Integer, delay::Float64)
     end
 end
 
+# init with default values
+# Use a max size of 1M profile samples, and fire timer every 1ms
+__init__() = init(1_000_000, 0.001)
+
 clear() = ccall(:jl_profile_clear_data, Void, ())
 
 function print{T<:Unsigned}(io::IO = STDOUT, data::Vector{T} = fetch(); format = :tree, C = false, combine = true, cols = Base.tty_cols())
