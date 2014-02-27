@@ -26,8 +26,6 @@
 
 extern int asprintf(char **strp, const char *fmt, ...);
 
-static void jl_clear_input(void);
-
 #define USE_READLINE_STATIC
 #include <readline/readline.h>
 #include <readline/history.h>
@@ -555,7 +553,7 @@ static int callback_en=0;
 void jl_input_line_callback(char *input)
 {
     int end=0, doprint=1;
-    if (!input || ios_eof(ios_stdin)) {
+    if (!input) {
         end = 1;
         rl_ast = NULL;
     }
@@ -736,18 +734,7 @@ static char *do_completions(const char *ch, int c)
     return ptr ? strdup(ptr) : NULL;
 }
 
-#ifdef __WIN32__
-static int repl_sigint_handler_installed = 0;
-static BOOL WINAPI repl_sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
-{
-    if (callback_en) {
-        JL_WRITE(jl_uv_stdout, "^C", 2);
-        jl_clear_input();
-        return 1;
-    }
-    return 0; // continue to next handler
-}
-#else
+#ifndef __WIN32__
 void sigtstp_handler(int arg)
 {
     rl_cleanup_after_signal();
@@ -767,28 +754,6 @@ void sigcont_handler(int arg)
     rl_reset_after_signal();
     if (callback_en)
         rl_forced_update_display();
-}
-
-struct sigaction jl_sigint_act = {{0}};
-
-static void repl_sigint_handler(int sig, siginfo_t *info, void *context)
-{
-    if (callback_en) {
-        JL_WRITE(jl_uv_stdout, "^C", 2);
-        jl_clear_input();
-    }
-    else {
-        if (jl_sigint_act.sa_flags & SA_SIGINFO) {
-            jl_sigint_act.sa_sigaction(sig, info, context);
-        }
-        else {
-            void (*f)(int) = jl_sigint_act.sa_handler;
-            if (f == SIG_DFL)
-                raise(sig);
-            else if (f != SIG_IGN)
-                f(sig);
-        }
-    }
 }
 #endif
 
@@ -843,25 +808,6 @@ void jl_prep_terminal(int meta_flag)
     rl_instream = rl_in;
 #ifdef __WIN32__
     if (jl_uv_stdin->type == UV_TTY) uv_tty_set_mode((uv_tty_t*)jl_uv_stdin,1); //raw (and libuv-processed)
-    if (!repl_sigint_handler_installed) {
-        if (SetConsoleCtrlHandler((PHANDLER_ROUTINE)repl_sigint_handler,1))
-            repl_sigint_handler_installed = 1;
-    }
-#else
-    if (jl_sigint_act.sa_sigaction == NULL) {
-        struct sigaction oldact, repl_sigint_act;
-        memset(&repl_sigint_act, 0, sizeof(struct sigaction));
-        sigemptyset(&repl_sigint_act.sa_mask);
-        repl_sigint_act.sa_sigaction = repl_sigint_handler;
-        repl_sigint_act.sa_flags = SA_SIGINFO;
-        if (sigaction(SIGINT, &repl_sigint_act, &oldact) < 0) {
-            JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
-            jl_exit(1);
-        }
-        if (repl_sigint_act.sa_sigaction != oldact.sa_sigaction &&
-            jl_sigint_act.sa_sigaction != oldact.sa_sigaction)
-            jl_sigint_act = oldact;
-    }
 #endif
 }
 /* Restore the terminal's normal settings and modes. */
@@ -882,9 +828,6 @@ void jl_init_repl(int history)
 
 #ifdef __WIN32__
     rl_outstream=(void*)jl_uv_stdout;
-    repl_sigint_handler_installed = 0;
-#else
-    jl_sigint_act.sa_sigaction = NULL;
 #endif
     rl_catch_signals = 0;
     rl_prep_term_function = &jl_prep_terminal;
@@ -920,9 +863,8 @@ void jl_read_buffer(unsigned char *base, ssize_t nread)
     rl_callback_read_char();
 }
 
-static void jl_clear_input(void)
+DLLEXPORT void jl_reset_input(void)
 {
-    //todo: how to do this better / the correct way / ???
     //move the cursor to a clean line:
     char *p = rl_line_buffer;
     int i;
@@ -931,16 +873,10 @@ static void jl_clear_input(void)
             jl_putc('\n', jl_uv_stdout);
         }
     }
-    jl_putc('\n', jl_uv_stdout);
-    jl_putc('\n', jl_uv_stdout);
+    rl_ast = NULL;
     //reset state:
     rl_reset_line_state();
     reset_indent();
-    rl_initialize();
-    //and redisplay prompt:
-    rl_forced_update_display();
-    rl_on_new_line_with_prompt();
-#ifdef __WIN32__
-    jl_write(jl_uv_stdout, "\e[4C", 4); //hack: try to fix cursor location
-#endif
+    callback_en = 0;
+    rl_callback_handler_remove();
 }

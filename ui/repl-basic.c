@@ -7,46 +7,12 @@ static size_t stdin_buf_maxlen = 128;
 static char *given_prompt=NULL, *prompt_to_use=NULL;
 static int callback_en=0;
 
-static void jl_clear_input(void);
-
-#ifdef __WIN32__
-static int repl_sigint_handler_installed = 0;
-static BOOL WINAPI repl_sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
-{
-    if (callback_en) {
-        JL_WRITE(jl_uv_stdout, "^C", 2);
-        jl_clear_input();
-        return 1;
-    }
-    return 0; // continue to next handler
-}
-#else
+#ifndef __WIN32__
 void sigcont_handler(int arg)
 {
     if (callback_en) {
         jl_write(jl_uv_stdout, prompt_to_use, strlen(prompt_to_use));
         //jl_write(jl_uv_stdout, stdin_buf, stdin_buf_len); //disabled because the current line was still in the system buffer
-    }
-}
-
-struct sigaction jl_sigint_act = {};
-static void repl_sigint_handler(int sig, siginfo_t *info, void *context)
-{
-    if (callback_en) {
-        JL_WRITE(jl_uv_stdout, "\n", 1);
-        jl_clear_input();
-    }
-    else {
-        if (jl_sigint_act.sa_flags & SA_SIGINFO) {
-            jl_sigint_act.sa_sigaction(sig, info, context);
-        }
-        else {
-            void (*f)(int) = jl_sigint_act.sa_handler;
-            if (f == SIG_DFL)
-                raise(sig);
-            else if (f != SIG_IGN)
-                f(sig);
-        }
     }
 }
 #endif
@@ -55,37 +21,13 @@ void jl_init_repl(int history)
 {
     stdin_buf = malloc(stdin_buf_maxlen);
     stdin_buf_len = 0;
-#ifdef __WIN32__
-    repl_sigint_handler_installed = 0;
-#else
-    jl_sigint_act.sa_sigaction = NULL;
+#ifndef __WIN32__
     signal(SIGCONT, sigcont_handler);
 #endif
 }
 
 void jl_prep_terminal(int meta_flag)
 {
-#ifdef __WIN32__
-    if (!repl_sigint_handler_installed) {
-        if (SetConsoleCtrlHandler((PHANDLER_ROUTINE)repl_sigint_handler,1))
-            repl_sigint_handler_installed = 1;
-    }
-#else
-    if (jl_sigint_act.sa_sigaction == NULL) {
-        struct sigaction oldact, repl_sigint_act;
-        memset(&repl_sigint_act, 0, sizeof(struct sigaction));
-        sigemptyset(&repl_sigint_act.sa_mask);
-        repl_sigint_act.sa_sigaction = repl_sigint_handler;
-        repl_sigint_act.sa_flags = SA_SIGINFO;
-        if (sigaction(SIGINT, &repl_sigint_act, &oldact) < 0) {
-            JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
-            jl_exit(1);
-        }
-        if (repl_sigint_act.sa_sigaction != oldact.sa_sigaction &&
-            jl_sigint_act.sa_sigaction != oldact.sa_sigaction)
-            jl_sigint_act = oldact;
-    }
-#endif
 }
 
 /* Restore the terminal's normal settings and modes. */
@@ -168,8 +110,7 @@ void jl_read_buffer(unsigned char* base, ssize_t nread)
                 newline = 1;
                 break;
             case '\x03':
-                JL_WRITE(jl_uv_stdout, "^C\n", 3);
-                jl_clear_input();
+                raise(SIGINT);
                 break;
             case '\x04':
                 raise(SIGTERM);
@@ -212,10 +153,9 @@ void jl_read_buffer(unsigned char* base, ssize_t nread)
     if (newline) basic_stdin_callback();
 }
 
-static void jl_clear_input(void)
+DLLEXPORT void jl_reset_input(void)
 {
     stdin_buf_len = 0;
     stdin_buf[0] = 0;
     JL_WRITE(jl_uv_stdout,"\n",1);
-    repl_callback_enable(prompt_to_use);
 }

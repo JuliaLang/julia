@@ -359,8 +359,12 @@ function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::
             ccall(:jl_forceclose_uv,Void,(Ptr{Void},),stream.handle)
             notify_error(stream.readnotify, UVError("readcb",nread))
         else
-            close(stream)
-            notify(stream.readnotify)
+            if isa(stream,TTY)
+                notify_error(stream.readnotify, EOFError())
+            else
+                close(stream)
+                notify(stream.readnotify)
+            end
         end
     else
         notify_filled(stream.buffer, nread, base, len)
