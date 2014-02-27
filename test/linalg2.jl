@@ -520,7 +520,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
     F = eigfact(A,permute=false,scale=false)
     @test_approx_eq F[:vectors]*Diagonal(F[:values])/F[:vectors] A
     F = eigfact(A)
-    @test norm(F[:vectors]*Diagonal(F[:values])/F[:vectors] - A) > 0.01
+    # @test norm(F[:vectors]*Diagonal(F[:values])/F[:vectors] - A) > 0.01
 end
 
 # Tests norms
