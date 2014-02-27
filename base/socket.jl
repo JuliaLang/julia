@@ -261,7 +261,8 @@ type TcpSocket <: Socket
 end
 function TcpSocket()
     this = TcpSocket(c_malloc(_sizeof_uv_tcp))
-    associate_julia_struct(this.handle, this)
+    associate_julia_struct(this.handle,this)
+    finalizer(this,uvfinalize)
     err = ccall(:uv_tcp_init,Cint,(Ptr{Void},Ptr{Void}),
                   eventloop(),this.handle)
     if err != 0 
@@ -289,6 +290,7 @@ end
 function TcpServer()
     this = TcpServer(c_malloc(_sizeof_uv_tcp))
     associate_julia_struct(this.handle, this)
+    finalizer(this,uvfinalize)
     err = ccall(:uv_tcp_init,Cint,(Ptr{Void},Ptr{Void}),
                   eventloop(),this.handle)
     if err != 0 
@@ -298,6 +300,22 @@ function TcpServer()
     end
     this.status = StatusInit
     this
+end
+
+# Internal version of close that doesn't error when called on an unitialized socket, as well as disassociating the socket immidiately
+# This is fine because if we're calling this from a finalizer, nobody can be possibly waiting for the close to go through
+function uvfinalize(uv)
+    close(uv)
+    disassociate_julia_struct(uv)
+    uv.handle = 0
+end
+
+function uvfinalize(uv::Union(TTY,Pipe,TcpServer,TcpSocket))
+    if (uv.status != StatusUninit && uv.status != StatusInit)
+        close(uv)
+    end
+    disassociate_julia_struct(uv)
+    uv.handle = 0
 end
 
 isreadable(io::TcpSocket) = true
@@ -435,7 +453,7 @@ function recv(sock::UdpSocket)
         error("Invalid socket state")
     end
     _recv_start(sock)
-    wait(sock.recvnotify)::Vector{Uint8}
+    stream_wait(sock,sock.recvnotify)::Vector{Uint8}
 end
 
 function _uv_hook_recv(sock::UdpSocket, nread::Ptr{Void}, buf_addr::Ptr{Void}, buf_size::Int32, addr::Ptr{Void}, flags::Int32)
@@ -463,7 +481,7 @@ function send(sock::UdpSocket,ipaddr,port,msg)
         error("Invalid socket state")
     end
     uv_error("send",_send(sock,ipaddr,uint16(port),msg))
-    wait(sock.sendnotify)
+    stream_wait(sock,sock.sendnotify)
     nothing
 end
 

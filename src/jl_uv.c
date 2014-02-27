@@ -113,6 +113,8 @@ jl_value_t *jl_callback_call(jl_function_t *f,jl_value_t *val,int count,...)
 {
     if (val != 0)
         count += 1;
+    else
+        return NULL;
     jl_value_t **argv;
     JL_GC_PUSHARGS(argv,count);
     memset(argv, 0, count*sizeof(jl_value_t*));
@@ -272,7 +274,7 @@ DLLEXPORT int jl_process_events(uv_loop_t *loop)
     else return 0;
 }
 
-DLLEXPORT int jl_init_pipe(uv_pipe_t *pipe, int writable, int readable, int julia_only, jl_value_t *julia_struct)
+DLLEXPORT int jl_init_pipe(uv_pipe_t *pipe, int writable, int readable, int julia_only)
 {
      int flags = 0;
      flags |= writable ? UV_PIPE_WRITABLE : 0;
@@ -280,7 +282,6 @@ DLLEXPORT int jl_init_pipe(uv_pipe_t *pipe, int writable, int readable, int juli
      if (!julia_only)
          flags |= UV_PIPE_SPAWN_SAFE;
      int err = uv_pipe_init(jl_io_loop, pipe, flags);
-     pipe->data = julia_struct;//will be initilized on io
      return err;
 }
 
@@ -293,12 +294,14 @@ DLLEXPORT void jl_close_uv(uv_handle_t *handle)
         uv_is_writable((uv_stream_t*)handle)) {
         // Make sure that the stream has not already been marked closed in Julia.
         // A double shutdown would cause the process to hang on exit.
-        JULIA_CB(isopen, handle->data, 0);
-        if (!jl_is_int32(ret)) {
-            jl_error("jl_close_uv: _uv_hook_isopen must return an int32.");
-        }
-        if (!jl_unbox_int32(ret)){
-            return;
+        if (handle->data) {
+            JULIA_CB(isopen, handle->data, 0);
+            if (!jl_is_int32(ret)) {
+                jl_error("jl_close_uv: _uv_hook_isopen must return an int32.");
+            }
+            if (!jl_unbox_int32(ret)){
+                return;
+            }
         }
 
         uv_shutdown_t *req = (uv_shutdown_t*)malloc(sizeof(uv_shutdown_t));
@@ -503,9 +506,11 @@ DLLEXPORT int jl_puts(char *str, uv_stream_t *stream)
 
 DLLEXPORT void jl_uv_writecb(uv_write_t* req, int status)
 {
-    JULIA_CB(writecb, req->handle->data, 2, CB_PTR, req, CB_INT32, status)
+    if(req->data) {
+        JULIA_CB(writecb, req->data, 2, CB_PTR, req, CB_INT32, status)
+        (void)ret;
+    }
     free(req);
-    (void)ret;
 }
 
 DLLEXPORT void jl_uv_writecb_task(uv_write_t* req, int status)
