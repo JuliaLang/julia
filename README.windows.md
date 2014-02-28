@@ -66,6 +66,10 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
     . ~/.bashrc
 ```
 
+     *N.B.* Note that the `export` clobbers whatever $(PATH) is already defined. This is suggested to avoid path-masking. If you use MSYS2 for purposes other than building Julia, you may perfer to append rather than clobber.
+      *N.B.* All of the path-separators in the mount commands are unix-style. 
+
+
   6. Now `exit` the MSYS2 shell.
 
 5. Build Julia and its dependencies from source.
