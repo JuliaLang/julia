@@ -15,21 +15,109 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
 
 # Source distribution
 
-## Building on Windows with MinGW-builds/MSYS
+## Compiling with MinGW/MSYS2
 
-1. Download and install the full [7-Zip](http://www.7-zip.org/download.html) program.
+### MSYS2 provides a robust MSYS experience. 
+### The instructions in this section were tested with the latest versions of all packages specified as of 2014-02-28.
 
-2. Download and install the latest [Python 2.x](http://www.python.org/download/releases) release. Do not install Python 3.x.
+1. Install [7-Zip](http://www.7-zip.org/download.html).
 
-3. Install [MinGW-builds](http://sourceforge.net/projects/mingwbuilds/), a Windows port of GCC. (Do not use the regular MinGW distribution.)
-  1. Download the [MinGW-builds installer](http://downloads.sourceforge.net/project/mingwbuilds/mingw-builds-install/mingw-builds-install.exe) from the [MinGW-builds homepage](http://sourceforge.net/projects/mingwbuilds/). 
+2. Install [Python 2.x](http://www.python.org/download/releases). Do **not** install Python 3.
+
+3. Install [MinGW-builds](http://sourceforge.net/projects/mingwbuilds/), a Windows port of GCC. as follows. Do **not** use the regular MinGW distribution.
+  1. Download the [MinGW-builds installer](http://downloads.sourceforge.net/project/mingwbuilds/mingw-builds-install/mingw-builds-install.exe). 
   2. Run the installer. When prompted, choose:
     - Version: the most recent version (these instructions were tested with 4.8.1)
-    - Architecture: x32 or x64 as desired 
+    - Architecture: x32 or x64 as appropriate and desired.
     - Threads: win32 (not posix)
     - Exception: sjlj (for x32) or seh (for x64). Do not choose dwarf2.
     - Build revision: most recent available (tested with 5)
-  3. Do **not** install to a directory with spaces in the name. You will have to change the default installation path. Choose instead something like `C:\mingw-builds\x64-4.8.1-win32-seh-rev5\mingw64`.
+  3. Do **not** install to a directory with spaces in the name. You will have to change the default installation path. The following instructions will assume `C:\mingw-builds\x64-4.8.1-win32-seh-rev5\mingw64`.
+
+4. Install and configure [MSYS2](http://sourceforge.net/projects/msys2), a minimal POSIX-like environment for Windows.
+
+  1. Download the latest base [32-bit](http://sourceforge.net/projects/msys2/files/Base/32-bit) or [64-bit](http://sourceforge.net/projects/msys2/files/Base/64-bit) distribution, consistent with the architecture you chose for MinGW-builds. The archive will have a name like `msys2-base-x86_64-yyyymmdd.tar.xz` and these instructions were tested with `msys2-base-x86_64-20140216.tar.xz`.
+
+  2. Using [7-Zip](http://www.7-zip.org/download.html), extract the archive to any convenient directory. 
+    - *N.B.* Some versions of this archive contain zero-byte files that clash with existing files. If prompted, choose **not** to overwrite existing files.
+    - You may need to extract the tarball in a separate step. This will create an `msys32` or `msys64` directory, according to the architecture you chose.
+    - Move the `msys32` or `msys64` directory into your MinGW-builds directory, which is `C:\mingw-builds` if you followed the suggestion in step 3. We will omit the "32" or "64" in teh steps below and refer to this as "the msys directory".
+
+  3. Double-click `msys2_shell.bat` in the msys directory. This will initialize MSYS2. The shell will tell you to `exit` and restart the shell, and that's a good idea. But we'll be doing that, for a different reason, a few lines down.
+
+  4. Update MSYS2 and install packages required to build julia, using the `pacman` package manager included in MSYS2:
+
+     ```
+    pacman-key --init     #Download keys
+    pacman -Syu           #Update package database and full system upgrade
+```
+    At this point you should `exit` the MSYS2 shell and restart it *-- even if you already restarted it above.*  The reason for thsi second restart is that the MSYS2 system upgrade may have updated the main MSYS2 libs, which could cause further commands -- particularly the following invocation of pacman -- to fail.
+
+     ```
+    pacman -S diffutils git m4 make patch tar
+```
+
+  5. Configure your MSYS2 shell for convenience:
+
+     ```
+    echo "mount C:/Python27 /python" >> ~/.bashrc
+    echo "mount C:/mingw-builds/x64-4.8.1-win32-seh-rev5/mingw64 /mingw" >> ~/.bashrc
+    echo "export PATH=/usr/local/bin:/usr/bin:/opt/bin:/mingw/bin:/python" >> ~/.bashrc
+    . ~/.bashrc
+```
+
+  6. Now `exit` the MSYS2 shell.
+
+5. Build Julia and its dependencies from source.
+  1. Relaunch the MSYS2 shell and type
+
+     ```
+    . ~/.bashrc  # Some versions of MSYS2 do not run this automatically
+```
+
+     Ignore any warnings you see from `mount` about /mingw and /python not existing.
+
+  2. Get the Julia sources and enjoy a highly reliable parallel build thanks to MSYS2:
+    ```
+    git clone https://github.com/JuliaLang/julia.git
+    cd julia
+    make -j 4
+```
+
+  3. The build can fail (Win7 x64 as of 2014-02-28) after building OpenBLAS.  This appeasrs (?) to be a result of trying to run the Microsoft Visual C++ `lib.exe` tool  -- which we don't need to do -- without checking for existence.  If this happens, follow the instructions in the error message and continue the build, *viz.*
+    ```
+    cd deps/openblas-v0.2.9.rc1   # This path will depend on teh version of OpenBLAS.
+    make install
+    cd ../..
+    make -j 4
+```
+
+  4. Some versions of PCRE (*e.g.* 8.31) will compile correctly but have a single
+  test fail with an error like `** Failed to set locale "fr_FR`
+  which will break the entire build. To circumvent the test and allow the rest
+  of the build to continue, 
+    ```
+    touch deps/pcre-8.31/checked  # This path will depend on the version of PCRE.
+    make -j 4
+```
+
+## Building on Windows with MinGW-builds/MSYS
+
+### The MSYS build of `make` is fragile and may not reliably support parallel builds. Use MSYS2 as described above, if you can. If you must use MSYS, take care to notice the special comments in this section.
+
+1. Install [7-Zip](http://www.7-zip.org/download.html).
+
+2. Install [Python 2.x](http://www.python.org/download/releases). Do **not** install Python 3.
+
+3. Install [MinGW-builds](http://sourceforge.net/projects/mingwbuilds/), a Windows port of GCC. as follows. Do **not** use the regular MinGW distribution.
+  1. Download the [MinGW-builds installer](http://downloads.sourceforge.net/project/mingwbuilds/mingw-builds-install/mingw-builds-install.exe). 
+  2. Run the installer. When prompted, choose:
+    - Version: the most recent version (these instructions were tested with 4.8.1)
+    - Architecture: x32 or x64 as appropriate and desired.
+    - Threads: win32 (not posix)
+    - Exception: sjlj (for x32) or seh (for x64). Do not choose dwarf2.
+    - Build revision: most recent available (tested with 5)
+  3. Do **not** install to a directory with spaces in the name. You will have to change the default installation path. The following instructions will assume `C:\mingw-builds\x64-4.8.1-win32-seh-rev5\mingw64`.
 
 4. Download and extract the [MSYS distribution for MinGW-builds](http://sourceforge.net/projects/mingwbuilds/files/external-binary-packages/) (e.g. msys+7za+wget+svn+git+mercurial+cvs-rev13.7z) to a directory *without* spaces in the name, e.g. `C:/mingw-builds/msys`.
 
@@ -38,7 +126,7 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
 6. Run the `msys.bat` installed in Step 4. Set up MSYS by running at the MSYS prompt:
 
    ```
-    mount C:/mingw-builds/x64-4.8.1-win32-seh-rev5/mingw64/bin /mingw
+    mount C:/mingw-builds/x64-4.8.1-win32-seh-rev5/mingw64 /mingw
     mount C:/Python27 /python
     export PATH=$PATH:/mingw/bin:/python
    ```
@@ -70,58 +158,6 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
     usr/bin/julia-readline
 ```
     (or `julia-basic` if you prefer)
-
-## Compiling with MinGW/MSYS2 (experimental)
-
-1. Download and install [7-Zip](http://www.7-zip.org/download.html), [Python 2.x](http://www.python.org/download/releases) and [MinGW-builds](http://sourceforge.net/projects/mingwbuilds/) as described in the previous section.
-
-2. Install and configure [MSYS2](http://sourceforge.net/projects/msys2), a minimal POSIX-like environment for Windows.
-  1. Download the latest base [32-bit](http://sourceforge.net/projects/msys2/files/Base/32-bit) or [64-bit](http://sourceforge.net/projects/msys2/files/Base/64-bit) distribution as apprpriate.
-  2. Using [7-Zip](http://www.7-zip.org/download.html), extract the archive to a convenient directory, e.g. **C:\msys2\x64-20131126**. You may need to extract the tarball in a separate step. This will create an additional `msys32`/`msys64` subdirectory.
-    - Some versions of this archive contain zero-byte files that clash with existing files. If prompted, choose to not overwrite all existing files.
-  3. Launch `msys2_shell.bat`, which will initialize MSYS2.
-  4. Install the necessary packages:
-
-     ```
-    pacman-key --init #Download keys
-    pacman -Syu #Update package database and full system upgrade
-    pacman -S diffutils git m4 make patch python2 tar
-    ln -s /usr/bin/python{2.exe,} #Fixes python2 not found error
-```
-
-  5. Edit the `/etc/fstab` file and append a line of the form
-
-     ```
-    C:/mingw-builds/x64-4.8.1-win32-seh-rev5/mingw64 /mingw ext3 binary 0 0
-```
-
-   Use the actual installation directory of MinGW from Step 2c. Consult the
-  [Cygwin manual](http://cygwin.com/cygwin-ug-net/using.html#mount-table) for
-  details of how to enter the directory name.
-
-  6. Edit the `~/.bashrc` file and append the line
-     ```   
-    export PATH=$PATH:/mingw/bin
-```
-
-  7. `exit` the MSYS2 shell.
-
-3. Build Julia and its dependencies from source.
-  1. Relaunch the MSYS2 shell and type
-
-     ```
-    . ~/.bashrc #Some versions of MSYS2 do not run this automatically
-    git clone https://github.com/JuliaLang/julia.git
-    cd julia
-    make
-```
-
-  2. Some versions of PCRE (e.g. 8.31) will compile correctly but have a single
-  test fail with an error like `** Failed to set locale "fr_FR`
-  which will break the entire build. To circumvent the test and allow the rest
-  of the build to continue, create an empty `checked` file in the `deps/pcre*`
-  directory and rerun `make`.
-
 
 ## Cross-compiling
 
