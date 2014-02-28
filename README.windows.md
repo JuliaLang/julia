@@ -24,7 +24,7 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
 
 2. Install [Python 2.x](http://www.python.org/download/releases). Do **not** install Python 3.
 
-3. Install [MinGW-builds](http://sourceforge.net/projects/mingwbuilds/), a Windows port of GCC. as follows. Do **not** use the regular MinGW distribution.
+3. Install [MinGW-builds](http://sourceforge.net/projects/mingwbuilds/), a Windows port of GCC, as follows. Do **not** use the regular MinGW distribution.
   1. Download the [MinGW-builds installer](http://downloads.sourceforge.net/project/mingwbuilds/mingw-builds-install/mingw-builds-install.exe). 
   2. Run the installer. When prompted, choose:
     - Version: the most recent version (these instructions were tested with 4.8.1)
@@ -41,7 +41,7 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
   2. Using [7-Zip](http://www.7-zip.org/download.html), extract the archive to any convenient directory. 
     - *N.B.* Some versions of this archive contain zero-byte files that clash with existing files. If prompted, choose **not** to overwrite existing files.
     - You may need to extract the tarball in a separate step. This will create an `msys32` or `msys64` directory, according to the architecture you chose.
-    - Move the `msys32` or `msys64` directory into your MinGW-builds directory, which is `C:\mingw-builds` if you followed the suggestion in step 3. We will omit the "32" or "64" in teh steps below and refer to this as "the msys directory".
+    - Move the `msys32` or `msys64` directory into your MinGW-builds directory, which is `C:\mingw-builds` if you followed the suggestion in step 3. We will omit the "32" or "64" in the steps below and refer to this as "the msys directory".
 
   3. Double-click `msys2_shell.bat` in the msys directory. This will initialize MSYS2. The shell will tell you to `exit` and restart the shell, and that's a good idea. But we'll be doing that, for a different reason, a few lines down.
 
@@ -51,7 +51,7 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
     pacman-key --init     #Download keys
     pacman -Syu           #Update package database and full system upgrade
 ```
-    At this point you should `exit` the MSYS2 shell and restart it *-- even if you already restarted it above.*  The reason for thsi second restart is that the MSYS2 system upgrade may have updated the main MSYS2 libs, which could cause further commands -- particularly the following invocation of pacman -- to fail.
+    At this point you should `exit` the MSYS2 shell and restart it *-- even if you already restarted it above.*  The reason for this second restart is that the MSYS2 system upgrade may have updated the main MSYS2 libs, which could cause further commands -- particularly the following invocation of pacman -- to fail.
 
      ```
     pacman -S diffutils git m4 make patch tar
@@ -63,14 +63,14 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
     echo "mount C:/Python27 /python" >> ~/.bashrc
     echo "mount C:/mingw-builds/x64-4.8.1-win32-seh-rev5/mingw64 /mingw" >> ~/.bashrc
     echo "export PATH=/usr/local/bin:/usr/bin:/opt/bin:/mingw/bin:/python" >> ~/.bashrc
-    . ~/.bashrc
 ```
 
-     *N.B.* Note that the `export` clobbers whatever $(PATH) is already defined. This is suggested to avoid path-masking. If you use MSYS2 for purposes other than building Julia, you may perfer to append rather than clobber.
-      *N.B.* All of the path-separators in the mount commands are unix-style. 
+     *N.B.* The `export` clobbers whatever $(PATH) is already defined. This is suggested to avoid path-masking. If you use MSYS2 for purposes other than building Julia, you may perfer to append rather than clobber.
+      
+     *N.B.* All of the path-separators in the mount commands are unix-style. 
 
 
-  6. Now `exit` the MSYS2 shell.
+  6. Configuration of the toolchain is complete. Now `exit` the MSYS2 shell.
 
 5. Build Julia and its dependencies from source.
   1. Relaunch the MSYS2 shell and type
@@ -81,28 +81,27 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
 
      Ignore any warnings you see from `mount` about /mingw and /python not existing.
 
-  2. Get the Julia sources and enjoy a highly reliable parallel build thanks to MSYS2:
+  2. Get the Julia sources and start the build:
     ```
     git clone https://github.com/JuliaLang/julia.git
     cd julia
-    make -j 4
+    make -j 4   # Adjust the number of cores (4) to match your build environment.
 ```
 
-  3. The build can fail (Win7 x64 as of 2014-02-28) after building OpenBLAS.  This appeasrs (?) to be a result of trying to run the Microsoft Visual C++ `lib.exe` tool  -- which we don't need to do -- without checking for existence.  If this happens, follow the instructions in the error message and continue the build, *viz.*
+  3. The Julia build can (as of 2014-02-28) fail after building OpenBLAS.  This appeasrs (?) to be a result of the OpenBLAS build trying to run the Microsoft Visual C++ `lib.exe` tool  -- which we don't need to do -- without checking for existence. This uncaught error kills the Julia build. If this happens, follow the instructions in the helpful error message and continue the build, *viz.*
     ```
     cd deps/openblas-v0.2.9.rc1   # This path will depend on teh version of OpenBLAS.
     make install
     cd ../..
-    make -j 4
+    make -j 4   # Adjust the number of cores (4) to match your build environment.
 ```
 
-  4. Some versions of PCRE (*e.g.* 8.31) will compile correctly but have a single
-  test fail with an error like `** Failed to set locale "fr_FR`
-  which will break the entire build. To circumvent the test and allow the rest
+  4. Some versions of PCRE (*e.g.* 8.31) will compile correctly but fail a test.
+  This will cause the Julia build to fail. To circumvent testing for PCRE and allow the rest
   of the build to continue, 
     ```
     touch deps/pcre-8.31/checked  # This path will depend on the version of PCRE.
-    make -j 4
+    make -j 4   # Adjust the number of cores (4) to match your build environment.
 ```
 
 ## Building on Windows with MinGW-builds/MSYS
