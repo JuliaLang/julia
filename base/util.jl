@@ -308,6 +308,8 @@ function blas_set_num_threads(n::Integer)
     return nothing
 end
 
+blas_restore_num_threads() = nprocs() == 1 ? blas_set_num_threads(CPU_CORES) : 1
+
 function check_blas()
     blas = blas_vendor()
     if blas == :openblas

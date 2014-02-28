@@ -5,6 +5,7 @@ const liblapack = Base.liblapack_name
 
 import ..LinAlg: BlasFloat, BlasChar, BlasInt, blas_int, LAPACKException,
     DimensionMismatch, SingularException, chkstride1, chksquare
+import ..LinAlg: geevx!_nthreads
 
 #Generic LAPACK error handlers
 macro assertargsok() #Handle only negative info codes - use only if positive info code is useful!
@@ -1205,6 +1206,8 @@ for (geevx, ggev, elty) in
         lwork::BlasInt = -1
         iwork = Array(BlasInt, sense == 'N' || sense == 'E' ? 0 : (sense == 'V' || sense == 'B' ? 2n-2 : throw(ArgumentError("argument sense must be 'N', 'E', 'V' or 'B'"))))
         info = Array(BlasInt, 1)
+        nthreads = geevx!_nthreads((n,))
+        blas_set_num_threads(nthreads)
         for i = 1:2
             ccall(($(string(geevx)),Base.liblapack_name), Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8},
@@ -1222,6 +1225,7 @@ for (geevx, ggev, elty) in
             lwork = convert(BlasInt, work[1])
             work = Array($elty, lwork)
         end
+        blas_restore_num_threads()
         @lapackerror
         A, wr, wi, VL, VR, ilo[1], ihi[1], scale, abnrm[1], rconde, rcondv
     end

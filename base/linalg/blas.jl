@@ -38,6 +38,7 @@ export
 const libblas = Base.libblas_name
 
 import ..LinAlg: BlasFloat, BlasChar, BlasInt, blas_int, DimensionMismatch, chksquare, axpy!
+import ..LinAlg: gemm!_nthreads
 
 # Level 1
 ## copy
@@ -517,6 +518,8 @@ for (gemm, elty) in
             if m != size(C,1) || n != size(C,2)
                 throw(DimensionMismatch(""))
             end
+            nthreads = gemm!_nthreads((m,k,n))
+            blas_set_num_threads(nthreads)
             ccall(($(string(gemm)),libblas), Void,
                 (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, 
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, 
@@ -526,6 +529,7 @@ for (gemm, elty) in
                  &k, &alpha, A, &max(1,stride(A,2)),
                  B, &max(1,stride(B,2)), &beta, C, 
                  &max(1,stride(C,2)))
+            blas_restore_num_threads()
             C
         end
         function gemm(transA::BlasChar, transB::BlasChar, alpha::($elty), A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
