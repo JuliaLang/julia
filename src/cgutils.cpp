@@ -823,11 +823,11 @@ static Value *emit_nthptr(Value *v, size_t n, MDNode *tbaa)
     return tbaa_decorate(tbaa,builder.CreateLoad(vptr, false));
 }
 
-static Value *emit_nthptr(Value *v, Value *idx)
+static Value *emit_nthptr(Value *v, Value *idx, MDNode *tbaa)
 {
     // p = (jl_value_t**)v; p[n]
     Value *vptr = emit_nthptr_addr(v, idx);
-    return builder.CreateLoad(vptr, false);
+    return tbaa_decorate(tbaa,builder.CreateLoad(vptr, false));
 }
 
 static Value *typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
@@ -1202,7 +1202,7 @@ static Value *emit_arraysize(Value *t, Value *dim)
 #endif
     Value *dbits =
         emit_nthptr(t, builder.CreateAdd(dim,
-                                         ConstantInt::get(dim->getType(), o)));
+                                         ConstantInt::get(dim->getType(), o)), tbaa_arraysize);
     return builder.CreatePtrToInt(dbits, T_size);
 }
 
