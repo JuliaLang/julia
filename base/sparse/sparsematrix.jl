@@ -399,7 +399,7 @@ function sprand(m::Integer, n::Integer, density::FloatingPoint, rng::Function, v
     if !iseltype(v,Bool)
         return sparse_IJ_sorted!(I, J, rng(length(uind)), m, n, +)  # it will never need to combine
     else
-        return sparse_IJ_sorted!(I, J, trues(length(uind)), m, n, +)
+        return sparse_IJ_sorted!(I, J, ones(Bool, length(uind)), m, n, +)
     end
 end
 
