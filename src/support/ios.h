@@ -20,10 +20,11 @@ typedef struct {
     // to the buffer. reading: at the end. writing: at the beginning.
     // in general, you can do any operation in any state.
     char *buf;        // start of buffer
-    bufmode_t bm;
 
     int errcode;
 
+    int _pad_bm;      // put bm at same offset as type field of uv_stream_s
+    bufmode_t bm;     //
     bufstate_t state;
 
     off_t maxsize;    // space allocated to buffer

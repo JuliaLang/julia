@@ -1406,3 +1406,6 @@ end
 # can cause infinite recursion in type inference via instantiation of
 # the type of the `succ` field
 @test f5906(Hanoi5906{Int}(1)) === nothing
+
+# make sure front end can correctly print values to error messages
+@test expand(parse("\"a\"=1")) == Expr(:error, "invalid assignment location \"\"a\"\"")
