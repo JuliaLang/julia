@@ -38,11 +38,11 @@ Range1{T}(start::T, len::Integer) = Range1{T}(start, len)
 immutable FloatRange{T<:FloatingPoint} <: Ranges{T}
     start::T
     step::T
-    divisor::T
     len::T
+    divisor::T
 end
-FloatRange(a::FloatingPoint, s::FloatingPoint, d::FloatingPoint, l::Real) =
-    FloatRange{promote_type(typeof(a),typeof(s),typeof(d))}(a,s,d,l)
+FloatRange(a::FloatingPoint, s::FloatingPoint, l::Real, d::FloatingPoint) =
+    FloatRange{promote_type(typeof(a),typeof(s),typeof(d))}(a,s,l,d)
 
 function colon{T<:Integer}(start::T, step::T, stop::T)
     step != 0 || error("step cannot be zero in colon syntax")
@@ -55,13 +55,13 @@ colon{T<:Integer}(start::T, stop::T) =
 if Int === Int32
 colon{T<:Union(Int8,Int16,Int32,Uint8,Uint16)}(start::T, stop::T) =
     Range1{T}(start,
-              ifelse(stop<start, 0,
+              ifelse(stop < start, 0,
                      checked_add(checked_sub(convert(Int,stop),convert(Int,start)),1)),
               0)  # hack to elide negative length check
 else
 colon{T<:Union(Int8,Int16,Int32,Int64,Uint8,Uint16,Uint32)}(start::T, stop::T) =
     Range1{T}(start,
-              ifelse(stop<start, 0,
+              ifelse(stop < start, 0,
                      checked_add(checked_sub(convert(Int,stop),convert(Int,start)),1)),
               0)  # hack to elide negative length check
 end
@@ -149,12 +149,12 @@ function frange{T<:FloatingPoint}(start::T, step::T, stop::T)
                 c *= div(e,d)
                 e = convert(T,e)
                 if (a+n*c)/e == stop
-                    return a, c, e, n+1
+                    return a, c, n+1, e
                 end
             end
         end
     end
-    start, step, one(step), floor(r)+1
+    start, step, floor(r)+1, one(step)
 end
 
 similar(r::Ranges, T::Type, dims::Dims) = Array(T, dims)
@@ -434,7 +434,7 @@ function vcat{T}(rs::Ranges{T}...)
 end
 
 reverse(r::Ranges) = Range(last(r), -step(r), r.len)
-reverse(r::FloatRange) = FloatRange(last(r), -r.step, r.divisor, r.len)
+reverse(r::FloatRange) = FloatRange(last(r), -r.step, r.len, r.divisor)
 
 ## sorting ##
 
