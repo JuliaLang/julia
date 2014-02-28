@@ -145,10 +145,20 @@ end
 
 ## elementwise operators ##
 
-.+(As::AbstractArray...) = broadcast(+, As...)
 .*(As::AbstractArray...) = broadcast(*, As...)
-.-(A::AbstractArray, B::AbstractArray) = broadcast(-, A, B)
 .%(A::AbstractArray, B::AbstractArray) = broadcast(%, A, B)
+
+eltype_plus(As::AbstractArray...) = promote_eltype(As...)
+eltype_plus(As::AbstractArray{Bool}...) = typeof(true+true)
+
+.+(As::AbstractArray...) = broadcast!(+, Array(eltype_plus(As...), broadcast_shape(As...)), As...)
+
+type_minus(T, S) = promote_type(T, S)
+type_minus(::Type{Bool}, ::Type{Bool}) = typeof(true-true)
+
+function .-(A::AbstractArray, B::AbstractArray)
+    broadcast!(-, Array(type_minus(eltype(A), eltype(B)), broadcast_shape(A,B)), A, B)
+end
 
 type_div(T,S) = promote_type(T,S)
 type_div{T<:Integer,S<:Integer}(::Type{T},::Type{S}) = typeof(one(T)/one(S))
