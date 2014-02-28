@@ -1255,7 +1255,7 @@ static Value *emit_arraylen(Value *t, jl_value_t *ex, jl_codectx_t *ctx)
 {
     jl_arrayvar_t *av = arrayvar_for(ex, ctx);
     if (av!=NULL)
-        return tbaa_decorate(tbaa_arraylen, builder.CreateLoad(av->len));
+        return builder.CreateLoad(av->len);
     return emit_arraylen_prim(t, expr_type(ex,ctx));
 }
 
@@ -1268,7 +1268,7 @@ static Value *emit_arrayptr(Value *t, jl_value_t *ex, jl_codectx_t *ctx)
 {
     jl_arrayvar_t *av = arrayvar_for(ex, ctx);
     if (av!=NULL)
-        return tbaa_decorate(tbaa_arrayptr, builder.CreateLoad(av->dataptr));
+        return builder.CreateLoad(av->dataptr);
     return emit_arrayptr(t);
 }
 
@@ -1276,7 +1276,7 @@ static Value *emit_arraysize(Value *t, jl_value_t *ex, int dim, jl_codectx_t *ct
 {
     jl_arrayvar_t *av = arrayvar_for(ex, ctx);
     if (av != NULL && dim <= (int)av->sizes.size())
-        return tbaa_decorate(tbaa_arraysize, builder.CreateLoad(av->sizes[dim-1]));
+        return builder.CreateLoad(av->sizes[dim-1]);
     return emit_arraysize(t, dim);
 }
 
@@ -1285,9 +1285,9 @@ static void assign_arrayvar(jl_arrayvar_t &av, Value *ar)
     tbaa_decorate(tbaa_arrayptr,builder.CreateStore(builder.CreateBitCast(emit_arrayptr(ar),
                                                     av.dataptr->getType()->getContainedType(0)),
                                                     av.dataptr));
-    tbaa_decorate(tbaa_arraylen,builder.CreateStore(emit_arraylen_prim(ar, av.ty), av.len));
+    builder.CreateStore(emit_arraylen_prim(ar, av.ty), av.len);
     for(size_t i=0; i < av.sizes.size(); i++)
-        tbaa_decorate(tbaa_user, builder.CreateStore(emit_arraysize(ar,i+1), av.sizes[i]));
+        builder.CreateStore(emit_arraysize(ar,i+1), av.sizes[i]);
 }
 
 static Value *data_pointer(Value *x)
