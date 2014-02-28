@@ -39,7 +39,8 @@ release debug: %: libjulia-%
 ast.o ast.do: julia_flisp.boot.inc
 
 julia_flisp.boot.inc: julia_flisp.boot flisp/libflisp-debug.a
-	@$(call PRINT_FLISP, flisp/flisp-debug ./bin2hex.scm < $< > $@)
+	gcc bin2hex.c -o bin2hex
+	@$(call PRINT_FLISP, $(call spawn,./bin2hex < $< > $@))
 
 julia_flisp.boot: julia-parser.scm julia-syntax.scm \
 	match.scm utils.scm jlfrontend.scm mk_julia_flisp_boot.scm flisp/libflisp-debug.a
@@ -80,6 +81,7 @@ clean:
 	rm -f ../libjulia*.$(SHLIB_EXT)
 	rm -f julia_flisp.boot
 	rm -f julia_flisp.boot.inc
+	rm -f bin2hex
 	rm -f *.do
 	rm -f *.o
 	rm -f *~ *#

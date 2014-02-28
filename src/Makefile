@@ -60,7 +60,8 @@ HEADERS = julia.h julia_internal.h options.h $(wildcard support/*.h) $(LIBUV_INC
 ast.o ast.do: julia_flisp.boot.inc flisp/*.h
 
 julia_flisp.boot.inc: julia_flisp.boot flisp/libflisp.a
-	@$(call PRINT_FLISP, $(call spawn,./flisp/flisp) ./bin2hex.scm < $< > $@)
+	gcc bin2hex.c -o bin2hex
+	@$(call PRINT_FLISP, $(call spawn,./bin2hex < $< > $@))
 
 julia_flisp.boot: julia-parser.scm julia-syntax.scm \
 	match.scm utils.scm jlfrontend.scm mk_julia_flisp_boot.scm flisp/libflisp.a
@@ -100,6 +101,7 @@ libjulia-release: $(build_shlibdir)/libjulia.$(SHLIB_EXT)
 clean:
 	-rm -f $(build_shlibdir)/libjulia*
 	-rm -f julia_flisp.boot julia_flisp.boot.inc
+	rm -f bin2hex
 	-rm -f *.do *.o *~ *# *.$(SHLIB_EXT) *.a h2j
 
 clean-flisp:
