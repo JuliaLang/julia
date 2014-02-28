@@ -6,7 +6,7 @@ override CXXFLAGS += $(JCXXFLAGS)
 
 OBJS = hashing.o timefuncs.o ptrhash.o operators.o \
 	utf8.o ios.o htable.o bitvector.o \
-	int2str.o libsupportinit.o arraylist.o
+	int2str.o libsupportinit.o arraylist.o strtod.o
 
 ifeq ($(OS),WINNT)
 OBJS += asprintf.o wcwidth.o
