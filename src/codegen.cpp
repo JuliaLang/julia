@@ -198,7 +198,7 @@ static MDNode* tbaa_arraylen;               // The len in a jl_array_t
 static MDNode* tbaa_tuplelen;           // The len in a jl_tuple_t
 static MDNode* tbaa_func;           // A jl_function_t
 static MDNode* tbaa_datatype;       // A jl_datatype_t
-static MDNode* tbaa_const;          // Julia constant
+static MDNode* tbaa_const;          // Memory that is immutable by the time LLVM can see it
 
 namespace llvm {
     extern Pass *createLowerSimdLoopPass();
