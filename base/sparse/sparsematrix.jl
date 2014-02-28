@@ -18,10 +18,20 @@ size(S::SparseMatrixCSC) = (S.m, S.n)
 nfilled(S::SparseMatrixCSC) = int(S.colptr[end]-1)
 countnz(S::SparseMatrixCSC) = countnz(S.nzval)
 
-function show(io::IO, S::SparseMatrixCSC)
-    print(io, S.m, "x", S.n, " sparse matrix with ", nfilled(S), " ", eltype(S), " entries:")
+function Base.showarray(io::IO, S::SparseMatrixCSC;
+                        header::Bool=true, limit::Bool=Base._limit_output,
+                        rows = Base.tty_rows(), repr=false)
+    # TODO: repr?
 
-    half_screen_rows = div(Base.tty_rows() - 8, 2)
+    if header
+        print(io, S.m, "x", S.n, " sparse matrix with ", nfilled(S), " ", eltype(S), " entries:")
+    end
+
+    if limit
+        half_screen_rows = div(rows - 8, 2)
+    else
+        half_screen_rows = typemax(Int)
+    end
     pad = ndigits(max(S.m,S.n))
     k = 0
     sep = "\n\t"
