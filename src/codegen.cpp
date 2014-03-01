@@ -135,7 +135,9 @@ static Module *jl_Module;
 static std::map<int, std::string> argNumberStrings;
 static FunctionPassManager *FPM;
 
-#ifdef LLVM32
+#ifdef LLVM35
+static DataLayoutPass *jl_data_layout; 
+#elif defined(LLVM32)
 static DataLayout *jl_data_layout;
 #else
 static TargetData *jl_data_layout;
@@ -285,7 +287,11 @@ extern "C"
 void jl_dump_bitcode(char* fname)
 {
     std::string err;
+#ifdef LLVM35
+    raw_fd_ostream OS(fname, err, sys::fs::F_None);
+#else
     raw_fd_ostream OS(fname, err);
+#endif
     jl_gen_llvm_gv_array();
 #ifdef USE_MCJIT
     WriteBitcodeToFile(shadow_module, OS);
@@ -3950,7 +3956,9 @@ static void init_julia_llvm_env(Module *m)
     // set up optimization passes
     FPM = new FunctionPassManager(m);
     
-#ifdef LLVM32
+#ifdef LLVM35
+    jl_data_layout = new llvm::DataLayoutPass(*jl_ExecutionEngine->getDataLayout());
+#elif defined(LLVM32)
     jl_data_layout = new DataLayout(*jl_ExecutionEngine->getDataLayout());
 #else 
     jl_data_layout = new TargetData(*jl_ExecutionEngine->getTargetData());
