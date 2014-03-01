@@ -63,7 +63,9 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
 
      ```
     echo "mount C:/Python27 /python" >> ~/.bashrc
-    echo "mount C:/mingw-builds/x64-4.8.1-win32-seh-rev5/mingw64 /mingw" >> ~/.bashrc
+    # uncomment ONE of the following two lines
+    #echo "mount C:/mingw-builds/x64-4.8.1-win32-seh-rev5/mingw64 /mingw" >> ~/.bashrc
+    #echo "mount C:/mingw-builds/x32-4.8.1-win32-sjlj-rev5/mingw32 /mingw" >> ~/.bashrc
     echo "export PATH=/usr/local/bin:/usr/bin:/opt/bin:/mingw/bin:/python" >> ~/.bashrc
 ```
 
