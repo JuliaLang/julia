@@ -32,7 +32,9 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
     - Threads: win32 (not posix)
     - Exception: sjlj (for x32) or seh (for x64). Do not choose dwarf2.
     - Build revision: most recent available (tested with 5)
-  3. Do **not** install to a directory with spaces in the name. You will have to change the default installation path. The following instructions will assume `C:\mingw-builds\x64-4.8.1-win32-seh-rev5\mingw64`.
+  3. Do **not** install to a directory with spaces in the name. You will have to change the default installation path, for example,
+    - `C:\mingw-builds\x64-4.8.1-win32-seh-rev5` for 64 bits
+    - `C:\mingw-builds\x32-4.8.1-win32-sjlj-rev5` for 32 bits
 
 4. Install and configure [MSYS2](http://sourceforge.net/projects/msys2), a minimal POSIX-like environment for Windows.
 
@@ -41,7 +43,7 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
   2. Using [7-Zip](http://www.7-zip.org/download.html), extract the archive to any convenient directory. 
     - *N.B.* Some versions of this archive contain zero-byte files that clash with existing files. If prompted, choose **not** to overwrite existing files.
     - You may need to extract the tarball in a separate step. This will create an `msys32` or `msys64` directory, according to the architecture you chose.
-    - Move the `msys32` or `msys64` directory into your MinGW-builds directory, which is `C:\mingw-builds` if you followed the suggestion in step 3. We will omit the "32" or "64" in the steps below and refer to this as "the msys directory".
+    - Move the `msys32` or `msys64` directory into your MinGW-builds directory, which is `C:\mingw-builds` if you followed the suggestions in step 3. We will omit the "32" or "64" in the steps below and refer to this as "the msys directory".
 
   3. Double-click `msys2_shell.bat` in the msys directory. This will initialize MSYS2. The shell will tell you to `exit` and restart the shell, and that's a good idea. But we'll be doing that, for a different reason, a few lines down.
 
