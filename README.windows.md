@@ -1,7 +1,7 @@
 # General Information for Windows
 
-This file describes how to use and build Julia on Windows.
-For more information about Julia, please see the [main README](https://github.com/JuliaLang/julia/blob/master/README.md) 
+This file describes how to install or build Julia on Windows.
+For more information about Julia, please see the [main README](https://github.com/JuliaLang/julia/blob/master/README.md)
 
 # Binary distribution
 
@@ -14,6 +14,13 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
 3. Double-click the file `julia.bat` to launch Julia.
 
 # Source distribution
+
+## Supported build platforms
+
+- Windows 8: supported
+- Windows 7: supported (32 and 64 bits)
+- Windows Vista: unknown
+- Windows XP: not supported
 
 ## Compiling with MinGW/MSYS2
 
