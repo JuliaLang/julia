@@ -97,11 +97,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: eig(A,[permute=true,][scale=true]) -> D, V
 
-   Compute eigenvalues and eigenvectors of ``A``. See :func:`eigfact` for details on the ``permute`` and ``scale`` keyword arguments.
+   Wrapper around ``eigfact`` extracting all parts the factorization to a tuple. Direct use of ``eigfact`` is therefore generally more efficient. Computes eigenvalues and eigenvectors of ``A``. See :func:`eigfact` for details on the ``permute`` and ``scale`` keyword arguments.
 
 .. function:: eig(A, B) -> D, V
 
-   Compute generalized eigenvalues and vectors of ``A`` with respect to ``B``.
+   Wrapper around ``eigfact`` extracting all parts the factorization to a tuple. Direct use of ``eigfact`` is therefore generally more efficient. Computes generalized eigenvalues and vectors of ``A`` with respect to ``B``.
 
 .. function:: eigvals(A)
 
@@ -174,7 +174,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: svd(A, [thin=true]) -> U, S, V
 
-   Compute the SVD of A, returning ``U``, vector ``S``, and ``V`` such that ``A == U*diagm(S)*V'``. If ``thin`` is ``true``, an economy mode decomposition is returned. The default is to produce a thin decomposition.
+   Wrapper around ``svdfact`` extracting all parts the factorization to a tuple. Direct use of ``svdfact`` is therefore generally more efficient. Computes the SVD of A, returning ``U``, vector ``S``, and ``V`` such that ``A == U*diagm(S)*V'``. If ``thin`` is ``true``, an economy mode decomposition is returned. The default is to produce a thin decomposition.
 
 .. function:: svdvals(A)
 
@@ -186,11 +186,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: svdfact(A, B) -> GeneralizedSVD
 
-   Compute the generalized SVD of ``A`` and ``B``, returning a ``GeneralizedSVD`` Factorization object, such that ``A = U*D1*R0*Q'`` and ``B = V*D2*R0*Q'``.
+   Compute the generalized SVD of ``A`` and ``B``, returning a ``GeneralizedSVD`` Factorization object ``F``, such that ``A = F[:U]*F[:D1]*F[:R0]*F[:Q]'`` and ``B = F[:V]*F[:D2]*F[:R0]*F[:Q]'``.
 
 .. function:: svd(A, B) -> U, V, Q, D1, D2, R0
 
-   Compute the generalized SVD of ``A`` and ``B``, returning ``U``, ``V``, ``Q``, ``D1``, ``D2``, and ``R0`` such that ``A = U*D1*R0*Q'`` and ``B = V*D2*R0*Q'``.
+   Wrapper around ``svdfact`` extracting all parts the factorization to a tuple. Direct use of ``svdfact`` is therefore generally more efficient. The function returns the generalized SVD of ``A`` and ``B``, returning ``U``, ``V``, ``Q``, ``D1``, ``D2``, and ``R0`` such that ``A = U*D1*R0*Q'`` and ``B = V*D2*R0*Q'``.
 
 .. function:: svdvals(A, B)
 
