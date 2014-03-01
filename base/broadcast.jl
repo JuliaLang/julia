@@ -2,7 +2,9 @@ module Broadcast
 
 using ..Cartesian
 import Base.promote_eltype
+import Base.num_bit_chunks, Base.dumpbitcache, Base.bitcache_size, Base.bitcache_chunks, Base.@_msk_end, Base.unsafe_getindex
 import Base.(.+), Base.(.-), Base.(.*), Base.(./), Base.(.\)
+import Base.(.==), Base.(.<), Base.(.!=), Base.(.<=)
 export broadcast, broadcast!, broadcast_function, broadcast!_function
 export broadcast_getindex, broadcast_setindex!
 
@@ -180,6 +182,143 @@ type_pow{S}(T,::Type{Rational{S}}) = type_pow(T, type_div(S, S))
 
 function .^(A::AbstractArray, B::AbstractArray) 
     broadcast!(^, Array(type_pow(eltype(A), eltype(B)), broadcast_shape(A, B)), A, B)
+end
+
+## Broadcasting core -- specialized version to return a BitArray
+
+function gen_bitbroadcast_body(nd::Int, narrays::Int, f::Function)
+    checkshape = Expr(:call, check_broadcast_shape, :(size(B)), [symbol("A_"*string(i)) for i = 1:narrays]...)
+    F = Expr(:quote, f)
+    quote
+        @assert ndims(B) == $nd
+        $checkshape
+        C = Array(Bool, bitcache_size)
+        Bc = B.chunks
+        ind = 1
+        cind = 1
+        @nloops $nd i B d->(@nexprs $narrays k->(j_d_k = size(A_k, d) == 1 ? 1 : i_d)) begin
+            @nexprs $narrays k->(@inbounds v_k = @nref $nd A_k d->j_d_k)
+            @inbounds C[ind] = (@ncall $narrays $F v)
+            ind += 1
+            if ind > bitcache_size
+                dumpbitcache(Bc, cind, C)
+                cind += bitcache_chunks
+                ind = 1
+            end
+        end
+        if ind > 1
+            @inbounds C[ind:bitcache_size] = false
+            dumpbitcache(Bc, cind, C)
+        end
+    end
+end
+
+function gen_bitbroadcast_function(nd::Int, narrays::Int, f::Function)
+    As = [symbol("A_"*string(i)) for i = 1:narrays]
+    body = gen_bitbroadcast_body(nd, narrays, f)
+    @eval begin
+        local _F_
+        function _F_(B::BitArray, $(As...))
+            $body
+        end
+        _F_
+    end
+end
+
+let bitbroadcast_cache = Dict()
+global bitbroadcast!
+function broadcast!(f::Function, B::BitArray, As...)
+    nd = ndims(B)
+    narrays = length(As)
+    key = (f, nd, narrays)
+    if !haskey(bitbroadcast_cache, key)
+        func = gen_bitbroadcast_function(nd, narrays, f)
+        bitbroadcast_cache[key] = func
+    else
+        func = bitbroadcast_cache[key]
+    end
+    func(B, As...)
+    B
+end
+end  # let bitbroadcast_cache
+
+bitbroadcast(f::Function, As...) = broadcast!(f, BitArray(broadcast_shape(As...)), As...)
+
+## element-wise comparison operators returning BitArray ##
+
+for (f, scalarf, bitf, bitfbody) in ((:.==, :(==), :biteq , :(~a $ b)),
+                                     (:.< , :<   , :bitlt , :(~a & b)),
+                                     (:.!=, :!=  , :bitneq, :( a $ b)),
+                                     (:.<=, :<=  , :bitle , :(~a | b)))
+    @eval begin
+        ($f)(A::AbstractArray, B::AbstractArray) = bitbroadcast($scalarf, A, B)
+        ($bitf)(a::Uint64, b::Uint64) = $bitfbody
+        function ($f)(A::AbstractArray{Bool}, B::AbstractArray{Bool})
+            local shape
+            try
+                shape = promote_shape(size(A), size(B))
+            catch
+                return bitbroadcast($scalarf, A, B)
+            end
+            F = BitArray(shape)
+            Fc = F.chunks
+            Ac = bitpack(A).chunks
+            Bc = bitpack(B).chunks
+            if !isempty(Ac) && !isempty(Bc)
+                for i = 1:length(Fc) - 1
+                    Fc[i] = ($bitf)(Ac[i], Bc[i])
+                end
+                msk = @_msk_end length(F)
+                Fc[end] = msk & ($bitf)(Ac[end], Bc[end])
+            end
+            return F
+        end
+    end
+end
+
+# note: the following are not broadcasting, but need to be defined here to avoid
+# ambiguity warnings
+
+for (f, cachef, scalarf) in ((:.==, :bitcache_eq , :(==)),
+                             (:.< , :bitcache_lt , :<   ),
+                             (:.!=, :bitcache_neq, :!=  ),
+                             (:.<=, :bitcache_le , :<=  ))
+    for (sigA, sigB, expA, expB, shape) in ((:Any, :AbstractArray,
+                                             :A, :(B[ind]),
+                                             :(size(B))),
+                                            (:AbstractArray, :Any,
+                                             :(A[ind]), :B,
+                                             :(size(A))))
+        @eval begin
+            ($cachef)(A::AbstractArray, B::AbstractArray, l::Int, ind::Int, C::Vector{Bool}) = 0
+            function ($cachef)(A::$sigA, B::$sigB, l::Int, ind::Int, C::Vector{Bool})
+                left = l - ind + 1
+                @inbounds begin
+                    for j = 1:min(bitcache_size, left)
+                        C[j] = ($scalarf)($expA, $expB)
+                        ind += 1
+                    end
+                    C[left+1:bitcache_size] = false
+                end
+                return ind
+            end
+            function ($f)(A::$sigA, B::$sigB)
+                F = BitArray($shape)
+                l = length(F)
+                l == 0 && return F
+                Fc = F.chunks
+                C = Array(Bool, bitcache_size)
+                ind = 1
+                cind = 1
+                for i = 1:div(l + bitcache_size - 1, bitcache_size)
+                    ind = ($cachef)(A, B, l, ind, C)
+                    dumpbitcache(Fc, cind, C)
+                    cind += bitcache_chunks
+                end
+                return F
+            end
+        end
+    end
 end
 
 
