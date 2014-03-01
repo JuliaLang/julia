@@ -1106,6 +1106,24 @@ function (.^){T<:Number}(B::BitArray, x::T)
     end
 end
 
+function dumpbitcache(Bc::Vector{Uint64}, bind::Int, C::Vector{Bool})
+    ind = 1
+    nc = min(bitcache_chunks, length(Bc)-bind+1)
+    for i = 1:nc
+        u = uint64(1)
+        c = uint64(0)
+        for j = 1:64
+            if C[ind]
+                c |= u
+            end
+            ind += 1
+            u <<= 1
+        end
+        Bc[bind] = c
+        bind += 1
+    end
+end
+
 function bitcache_pow{T}(A::BitArray, B::Array{T}, l::Int, ind::Int, C::Vector{Bool})
     left = l - ind + 1
     for j = 1:min(bitcache_size, left)
@@ -1146,72 +1164,7 @@ end
 
 # TODO?
 
-## element-wise comparison operators returning BitArray{Bool} ##
-
-function dumpbitcache(Bc::Vector{Uint64}, bind::Int, C::Vector{Bool})
-    ind = 1
-    nc = min(@_div64(length(C)), length(Bc)-bind+1)
-    for i = 1:nc
-        u = uint64(1)
-        c = uint64(0)
-        for j = 1:64
-            if C[ind]
-                c |= u
-            end
-            ind += 1
-            u <<= 1
-        end
-        Bc[bind] = c
-        bind += 1
-    end
-end
-
-for (f, cachef, scalarf) in ((:.==, :bitcache_eq , :(==)),
-                             (:.< , :bitcache_lt , :<   ),
-                             (:.!=, :bitcache_neq, :!=  ),
-                             (:.<=, :bitcache_le , :<=  ))
-    for (sigA, sigB, expA, expB, shape) in ((:AbstractArray, :AbstractArray,
-                                             :(A[ind]), :(B[ind]),
-                                             :(promote_shape(size(A), size(B)))),
-                                            (:Any, :AbstractArray,
-                                             :A, :(B[ind]),
-                                             :(size(B))),
-                                            (:AbstractArray, :Any,
-                                             :(A[ind]), :B,
-                                             :(size(A))))
-        @eval begin
-            function ($cachef)(A::$sigA, B::$sigB, l::Int, ind::Int, C::Vector{Bool})
-                left = l - ind + 1
-                @inbounds begin
-                    for j = 1:min(bitcache_size, left)
-                        C[j] = ($scalarf)($expA, $expB)
-                        ind += 1
-                    end
-                    C[left+1:bitcache_size] = false
-                end
-                return ind
-            end
-            function ($f)(A::$sigA, B::$sigB)
-                F = BitArray($shape)
-                Fc = F.chunks
-                l = length(F)
-                if l == 0
-                    return F
-                end
-                C = Array(Bool, bitcache_size)
-                ind = 1
-                cind = 1
-                nFc = num_bit_chunks(l)
-                for i = 1:div(l + bitcache_size - 1, bitcache_size)
-                    ind = ($cachef)(A, B, l, ind, C)
-                    dumpbitcache(Fc, cind, C)
-                    cind += bitcache_chunks
-                end
-                return F
-            end
-        end
-    end
-end
+## comparison operators ##
 
 function (==)(A::BitArray, B::BitArray)
     if size(A) != size(B)
