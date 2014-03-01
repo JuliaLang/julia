@@ -38,7 +38,7 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
 
 4. Install and configure [MSYS2](http://sourceforge.net/projects/msys2), a minimal POSIX-like environment for Windows.
 
-  1. Download the latest base [32-bit](http://sourceforge.net/projects/msys2/files/Base/32-bit) or [64-bit](http://sourceforge.net/projects/msys2/files/Base/64-bit) distribution, consistent with the architecture you chose for MinGW-builds. The archive will have a name like `msys2-base-x86_64-yyyymmdd.tar.xz` and these instructions were tested with `msys2-base-x86_64-20140216.tar.xz`.
+  1. Download the latest base [32-bit](http://sourceforge.net/projects/msys2/files/Base/i686/) or [64-bit](http://sourceforge.net/projects/msys2/files/Base/x86_64/) distribution, consistent with the architecture you chose for MinGW-builds. The archive will have a name like `msys2-base-x86_64-yyyymmdd.tar.xz` and these instructions were tested with `msys2-base-x86_64-20140216.tar.xz`.
 
   2. Using [7-Zip](http://www.7-zip.org/download.html), extract the archive to any convenient directory. 
     - *N.B.* Some versions of this archive contain zero-byte files that clash with existing files. If prompted, choose **not** to overwrite existing files.
