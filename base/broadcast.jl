@@ -74,7 +74,7 @@ function gen_broadcast_body(nd::Int, narrays::Int, f::Function)
     end
 end
 
-function broadcast!_function(nd::Int, narrays::Int, f::Function)
+function gen_broadcast_function(nd::Int, narrays::Int, f::Function)
     As = [symbol("A_"*string(i)) for i = 1:narrays]
     body = gen_broadcast_body(nd, narrays, f)
     @eval begin
@@ -92,8 +92,8 @@ function broadcast!(f::Function, B, As...)
     nd = ndims(B)
     narrays = length(As)
     key = (f, nd, narrays)
-    if !haskey(broadcast_cache,key)
-        func = broadcast!_function(nd, narrays, f)
+    if !haskey(broadcast_cache, key)
+        func = gen_broadcast_function(nd, narrays, f)
         broadcast_cache[key] = func
     else
         func = broadcast_cache[key]

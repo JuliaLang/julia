@@ -224,7 +224,6 @@ end
 end
 
 # general version with Real (or logical) indexing which dispatches on the appropriate method
-# TODO: fix return type
 
 @ngenerate N Bool function getindex(B::BitArray, I::NTuple{N,Real}...)
     @nexprs N d->(J_d = to_index(I_d))
