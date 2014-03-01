@@ -5,9 +5,9 @@
 
 MIRROR_HOST=http://d304tytmzqn1fl.cloudfront.net
 
-WGET=$(which wget)
-CURL=$(which curl)
-FETCH=$(which fetch)
+WGET=$(which wget 2>/dev/null)
+CURL=$(which curl 2>/dev/null)
+FETCH=$(which fetch 2>/dev/null)
 
 TIMEOUT=15 # seconds
 WGET_OPTS="--no-check-certificate --tries=1 --timeout=$TIMEOUT"
@@ -29,13 +29,15 @@ fi
 MIRROR_BASENAME=`basename $1`
 MIRROR_URL="$MIRROR_HOST/$MIRROR_BASENAME"
 
-if [ -x $CURL ] && $CURL -V >/dev/null; then
+if [ -x "$CURL" ] && $CURL -V >/dev/null; then
     GETURL="$CURL $CURL_OPTS"
-elif [ -x $WGET ] && $WGET -V >/dev/null; then
+elif [ -x "$WGET" ] && $WGET -V >/dev/null; then
     GETURL="$WGET $WGET_OPTS"
-elif [ -x $FETCH ]; then
+elif [ -x "$FETCH" ]; then
     GETURL="$FETCH $FETCH_OPTS"
 else
+    echo "Could not find working curl, wget, or fetch."
+    echo "You need to install one of these to download dependencies."
     exit 1
 fi
 
