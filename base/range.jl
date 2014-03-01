@@ -363,32 +363,37 @@ end
 
 ## linear operations on ranges ##
 
--(r::Ranges) = Range(-r.start, -step(r), r.len)
+-(r::Ranges)     = Range(-r.start, -step(r), r.len)
+-(r::FloatRange) = FloatRange(-r.start, -r.step, r.len, r.divisor)
 
-+(x::Real, r::Range ) = Range(x+r.start, r.step, r.len)
-+(x::Real, r::Range1) = Range1(x+r.start, r.len)
-+(r::Ranges, x::Real) = x+r
++(x::Real, r::Range1)     = Range1(x + r.start, r.len)
++(x::Real, r::Range)      = Range(x + r.start, r.step, r.len)
++(x::Real, r::FloatRange) = FloatRange(r.divisor*x + r.start, r.step, r.len, r.divisor)
++(r::Ranges, x::Real)     = x + r
++(r::FloatRange, x::Real) = x + r
 
--(x::Real, r::Ranges) = Range(x-r.start, -step(r), r.len)
--(r::Range , x::Real) = Range(r.start-x, r.step, r.len)
--(r::Range1, x::Real) = Range1(r.start-x, r.len)
+-(x::Real, r::Ranges)     = Range(x - r.start, -step(r), r.len)
+-(x::Real, r::FloatRange) = FloatRange(r.divisor*x - r.start, -r.step, r.len, r.divisor)
+-(r::Range1, x::Real)     = Range1(r.start-x, r.len)
+-(r::Range , x::Real)     = Range(r.start-x, r.step, r.len)
+-(r::FloatRange, x::Real) = FloatRange(r.start - r.divisor*x, r.step, r.len, r.divisor)
 
-.*(x::Real, r::Ranges) = Range(x*r.start, x*step(r), r.len)
-.*(r::Ranges, x::Real) = x*r
+.*(x::Real, r::Ranges)     = Range(x*r.start, x*step(r), r.len)
+.*(x::Real, r::FloatRange) = FloatRange(x*r.start, x*r.step, r.len, r.divisor)
+.*(r::Ranges, x::Real)     = x .* r
+.*(r::FloatRange, x::Real) = x .* r
 
-./(r::Ranges, x::Real) = Range(r.start/x, step(r)/x, r.len)
+./(r::Ranges, x::Real)     = Range(r.start/x, step(r)/x, r.len)
+./(r::FloatRange, x::Real) = FloatRange(r.start/x, r.step/x, r.len, r.divisor)
 
+# TODO: better implementations for FloatRanges?
 function +(r1::Ranges, r2::Ranges)
-    if r1.len != r2.len
-        error("argument dimensions must match")
-    end
+    r1.len == r2.len || error("argument dimensions must match")
     Range(r1.start+r2.start, step(r1)+step(r2), r1.len)
 end
 
 function -(r1::Ranges, r2::Ranges)
-    if r1.len != r2.len
-        error("argument dimensions must match")
-    end
+    r1.len == r2.len || error("argument dimensions must match")
     Range(r1.start-r2.start, step(r1)-step(r2), r1.len)
 end
 
