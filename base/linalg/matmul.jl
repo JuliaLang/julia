@@ -167,7 +167,8 @@ function gemv{T<:BlasFloat}(y::StridedVector{T}, tA::Char, A::StridedMatrix{T}, 
         (mA, nA) = size(A)
     end
 
-    nA==length(x) || mA==length(y) || throw(DimensionMismatch("*"))
+    nA==length(x) || throw(DimensionMismatch(""))
+    mA==length(y) || throw(DimensionMismatch(""))
     mA == 0 && return zeros(T, 0)
     nA == 0 && return zeros(T, mA)
     return BLAS.gemv!(tA, one(T), A, x, zero(T), y)
