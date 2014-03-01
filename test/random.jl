@@ -6,6 +6,13 @@
 @test minimum([rand(int32(1):int32(7^7)) for i = 1:100000]) > 0
 @test(typeof(rand(false:true)) == Bool)
 
+@test length(randn(4, 5)) == 20
+@test length(randbool(4, 5)) == 20
+
+# Test Reproducibility of Pseudo-Random Numbers
+rng = MersenneTwister(0)
+@test (rand(rng) - 0.07749284875576845) < 0.01
+
 for T in (Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Int128, Uint128, Char, BigInt,
 	Float16, Float32, Float64, Rational{Int})
     r = rand(convert(T, 97):convert(T, 122))
