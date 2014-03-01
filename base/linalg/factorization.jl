@@ -568,14 +568,16 @@ end
 A_ldiv_B!(A::QR, B::StridedVector) = A_ldiv_B!(A, reshape(B, length(B), 1))[:]
 A_ldiv_B!(A::QRPivoted, B::StridedVector) = A_ldiv_B!(QR(A.factors,A.τ),B)[invperm(A.jpvt)]
 A_ldiv_B!(A::QRPivoted, B::StridedMatrix) = A_ldiv_B!(QR(A.factors,A.τ),B)[invperm(A.jpvt),:]
-function \{TA,TB}(A::Union(QR{TA},QRCompactWY{TA},QRPivoted{TA}),B::StridedVector{TB})
-    S = promote_type(TA,TB)
+function \{TA,Tb}(A::Union(QR{TA},QRCompactWY{TA},QRPivoted{TA}),b::StridedVector{Tb})
+    S = promote_type(TA,Tb)
     m,n = size(A)
-    n > m ? A_ldiv_B!(convert(typeof(A).name.primary{S},A),[B,zeros(S,n-m)]) : A_ldiv_B!(convert(typeof(A).name.primary{S},A), S == TB ? copy(B) : convert(Vector{S}, B))
+    m == length(b) || throw(DimensionMismatch("left hand side has $(m) rows, but right hand side has length $(length(b))"))
+    n > m ? A_ldiv_B!(convert(typeof(A).name.primary{S},A),[b,zeros(S,n-m)]) : A_ldiv_B!(convert(typeof(A).name.primary{S},A), S == Tb ? copy(b) : convert(Vector{S}, b))
 end
 function \{TA,TB}(A::Union(QR{TA},QRCompactWY{TA},QRPivoted{TA}),B::StridedMatrix{TB})
     S = promote_type(TA,TB)
     m,n = size(A)
+    m == size(B,1) || throw(DimensionMismatch("left hand side has $(m) rows, but right hand side has $(size(B,1)) rows"))
     n > m ? A_ldiv_B!(convert(typeof(A).name.primary{S},A),[B;zeros(S,n-m,size(B,2))]) : A_ldiv_B!(convert(typeof(A).name.primary{S},A), S == TB ? copy(B) : convert(Matrix{S}, B))
 end
 
