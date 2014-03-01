@@ -190,6 +190,8 @@ debug && println("Generalized svd")
 debug && println("Solve square general system of equations")
     x = a \ b
     @test_approx_eq_eps a*x b 80ε
+    @test_throws b'\b
+    @test_throws b\b'
 
 debug && println("Solve upper triangular system")
     x = triu(a) \ b
