@@ -916,11 +916,6 @@ for f in (:+, :-),
     end
 end
 
-function (./)(A::BitArray, B::BitArray)
-    shp = promote_shape(size(A),size(B))
-    reshape([ A[i] ./ B[i] for i=1:length(A) ], shp)
-end
-
 for f in (:/, :\)
     @eval begin
         ($f)(A::BitArray, B::BitArray) = ($f)(bitunpack(A), bitunpack(B))
