@@ -501,6 +501,10 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
             else if (head == enter_sym) {
                 jl_enter_handler(&__eh);
                 if (!jl_setjmp(__eh.eh_ctx,1)) {
+#ifdef _OS_WINDOWS_
+                    if (jl_exception_in_transit == jl_stackovf_exception)
+                        _resetstkoflw();
+#endif
                     return eval_body(stmts, locals, nl, i+1, toplevel);
                 }
                 else {

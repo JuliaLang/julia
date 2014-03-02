@@ -233,15 +233,11 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
             case EXCEPTION_INT_DIVIDE_BY_ZERO:
                 fpreset();
-                if (!in_ctx)
-                    jl_throw(jl_diverror_exception);
-                jl_throw_in_ctx(jl_diverror_exception, ExceptionInfo->ContextRecord, 0);
+                jl_throw_in_ctx(jl_diverror_exception, ExceptionInfo->ContextRecord,in_ctx);
                 return EXCEPTION_CONTINUE_EXECUTION;
             case EXCEPTION_STACK_OVERFLOW:
                 bt_size = 0;
-                if (!in_ctx)
-                    jl_rethrow_other(jl_stackovf_exception);
-                jl_throw_in_ctx(jl_stackovf_exception, ExceptionInfo->ContextRecord, 0);
+                jl_throw_in_ctx(jl_stackovf_exception, ExceptionInfo->ContextRecord,0);
                 return EXCEPTION_CONTINUE_EXECUTION;
         }
         ios_puts("Please submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\nException: ", ios_stderr);
@@ -308,7 +304,18 @@ EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord, 
     EXCEPTION_POINTERS ExceptionInfo;
     ExceptionInfo.ExceptionRecord = ExceptionRecord;
     ExceptionInfo.ContextRecord = ContextRecord;
-    return (EXCEPTION_DISPOSITION)_exception_handler(&ExceptionInfo,0);
+    
+    EXCEPTION_DISPOSITION rval;
+    switch (_exception_handler(&ExceptionInfo,1)) {
+        case EXCEPTION_CONTINUE_EXECUTION:
+            rval = ExceptionContinueExecution; break;
+        case EXCEPTION_CONTINUE_SEARCH:
+            rval = ExceptionContinueSearch; break;
+        case EXCEPTION_EXECUTE_HANDLER:
+            rval = ExceptionExecuteHandler; break;
+    }
+
+    return rval;
 } 
 #endif
 
