@@ -58,17 +58,12 @@ DLLEXPORT void jl_init(char *julia_home_dir)
     jl_eval_string("Base.init_load_path()");
 }
 
-#ifdef COPY_STACKS
-void jl_switch_stack(jl_task_t *t, jl_jmp_buf *where);
-extern jl_jmp_buf * volatile jl_jmp_target;
-#endif
-
 DLLEXPORT void *jl_eval_string(char *str)
 {
 #ifdef COPY_STACKS
-    jl_root_task->stackbase = (char*)&str;
-    if (jl_setjmp(jl_root_task->base_ctx, 1)) {
-        jl_switch_stack(jl_current_task, jl_jmp_target);
+    int outside_task = (jl_root_task->stackbase == NULL);
+    if (outside_task) {
+        JL_SET_STACK_BASE;
     }
 #endif
     jl_value_t *r;
@@ -82,6 +77,11 @@ DLLEXPORT void *jl_eval_string(char *str)
         //jl_show(jl_stderr_obj(), jl_exception_in_transit);
         r = NULL;
     }
+#ifdef COPY_STACKS
+    if (outside_task) {
+        jl_root_task->stackbase = NULL;
+    }
+#endif
     return r;
 }
 
@@ -206,6 +206,15 @@ DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a, jl_value_t *b, j
         v = NULL;
     }
     return v;
+}
+
+DLLEXPORT void jl_yield()
+{
+    static jl_function_t *yieldfunc = NULL;
+    if (yieldfunc == NULL)
+        yieldfunc = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("yield"));
+    if (yieldfunc != NULL && jl_is_func(yieldfunc))
+        jl_call0(yieldfunc);
 }
 
 DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, char *fld)

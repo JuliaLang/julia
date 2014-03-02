@@ -970,6 +970,24 @@ DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a);
 DLLEXPORT jl_value_t *jl_call2(jl_function_t *f, jl_value_t *a, jl_value_t *b);
 DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a, jl_value_t *b, jl_value_t *c);
 
+// interfacing with Task runtime
+DLLEXPORT void jl_yield();
+DLLEXPORT void jl_handle_stack_switch();
+
+#ifdef COPY_STACKS
+// initialize base context of root task
+#define JL_SET_STACK_BASE                               \
+    {                                                   \
+        int __stk;                                      \
+        jl_root_task->stackbase = (char*)&__stk;        \
+        if (jl_setjmp(jl_root_task->base_ctx, 1)) {     \
+            jl_handle_stack_switch();                   \
+        }                                               \
+    }
+#else
+#define JL_SET_STACK_BASE
+#endif
+
 // gc -------------------------------------------------------------------------
 
 #ifdef JL_GC_MARKSWEEP

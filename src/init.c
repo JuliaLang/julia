@@ -460,11 +460,6 @@ uv_lib_t *jl_winsock_handle=&_jl_winsock_handle;
 #endif
 uv_loop_t *jl_io_loop;
 
-#ifdef COPY_STACKS
-void jl_switch_stack(jl_task_t *t, jl_jmp_buf *where);
-extern jl_jmp_buf * volatile jl_jmp_target;
-#endif
-
 void *init_stdio_handle(uv_file fd,int readable)
 {
     void *handle;
@@ -855,13 +850,7 @@ DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *
     p[sizeof(__stack_chk_guard)-1] = 255;
     p[sizeof(__stack_chk_guard)-2] = '\n';
     p[0] = 0;
-#ifdef COPY_STACKS
-    // initialize base context of root task
-    jl_root_task->stackbase = (char*)&argc;
-    if (jl_setjmp(jl_root_task->base_ctx, 0)) {
-        jl_switch_stack(jl_current_task, jl_jmp_target);
-    }
-#endif
+    JL_SET_STACK_BASE;
     int ret = pmain(argc, argv);
     char *build_path = jl_compileropts.build_path;
     if (build_path) {
