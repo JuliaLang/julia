@@ -480,7 +480,7 @@ function success(x::Process)
     kill(x)
     test_success(x)
 end
-success(procs::Vector{Process}) = all(success, procs)
+success(procs::Vector{Process}) = mapreduce(success, &, procs)
 success(procs::ProcessChain) = success(procs.processes)
 success(cmd::AbstractCmd) = success(spawn(cmd))
 

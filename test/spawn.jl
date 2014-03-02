@@ -122,3 +122,15 @@ yield()
 # issue #4535
 exename=joinpath(JULIA_HOME,(ccall(:jl_is_debugbuild,Cint,())==0?"julia-basic":"julia-debug-basic"))
 @test readall(`$exename -f -e 'println(STDERR,"Hello World")'` .> `cat`) == "Hello World\n"
+
+
+# issue #5904
+@test run(ignorestatus(`false`) |> `true`) === nothing
+
+
+# issue #6010
+# TODO: should create separate set of task tests
+ducer = @async for i=1:100; produce(i); end
+yield()
+@test consume(ducer) == 1
+@test consume(ducer) == 2

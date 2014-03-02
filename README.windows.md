@@ -179,9 +179,15 @@ If you prefer to cross-compile, the following steps should get you started.
 
 ### Ubuntu and Mac Dependencies (these steps will work for almost any linux platform)
 
-First, you will need to ensure your system has the required dependencies. We need wine, a system compiler, and some downloaders.
+First, you will need to ensure your system has the required dependencies. We need wine (>=1.7.5),
+a system compiler, and some downloaders.
 
-On Ubuntu: ```apt-get install wine subversion cvs gcc wget p7zip-full```
+On Ubuntu: 
+    ```
+    apt-add repository ppa:ubuntu-wine/ppa
+    apt-get upate
+    apt-get install wine subversion cvs gcc wget p7zip-full
+    ```
 
 On Mac: Install XCode, XCode command line tools, X11 (now [XQuartz](http://xquartz.macosforge.org/)),
 and [MacPorts](http://www.macports.org/install.php) or [Homebrew](http://mxcl.github.io/homebrew/).

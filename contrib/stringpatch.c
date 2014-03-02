@@ -15,7 +15,7 @@ int main( int argc, char ** argv ) {
 
 	FILE * f = fopen( argv[4], "r+" );
 	if( !f ) {
-		printf( "ERROR: Could not open %s for writing!\n", argv[3] );
+		printf( "ERROR: Could not open %s for writing!\n", argv[4] );
 		return -1;
 	}
 

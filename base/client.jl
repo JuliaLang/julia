@@ -143,7 +143,7 @@ function repl_callback(ast::ANY, show_value)
     put!(repl_channel, (ast, show_value))
 end
 
-_eval_done = Condition()
+_repl_start = Condition()
 
 function run_repl()
     global const repl_channel = RemoteRef()
@@ -152,19 +152,36 @@ function run_repl()
 
     # install Ctrl-C interrupt handler (InterruptException)
     ccall(:jl_install_sigint_handler, Void, ())
-    buf = Uint8[0]
-    @async begin
-        while !eof(STDIN)
-            read(STDIN, buf)
-            ccall(:jl_read_buffer,Void,(Ptr{Void},Cssize_t),buf,1)
-            if _repl_enough_stdin
-                wait(_eval_done)
+    buf = Array(Uint8)
+    global _repl_enough_stdin = true
+    input = @async begin
+        try
+            while true
+                if _repl_enough_stdin
+                    wait(_repl_start)
+                end
+                try
+                    if eof(STDIN) # if TTY, can throw InterruptException, must be in try/catch block
+                        return
+                    end
+                    read(STDIN, buf)
+                    ccall(:jl_read_buffer,Void,(Ptr{Void},Cssize_t),buf,length(buf))
+                catch ex
+                    if isa(ex,InterruptException)
+                        println(STDOUT, "^C")
+                        ccall(:jl_reset_input,Void,())
+                        repl_callback(nothing, 0)
+                    else
+                        rethrow(ex)
+                    end
+                end
             end
+        finally
+            put!(repl_channel,(nothing,-1))
         end
-        put!(repl_channel,(nothing,-1))
     end
 
-    while true
+    while !istaskdone(input)
         if have_color
             prompt_string = "\01\033[1m\033[32m\02julia> \01\033[0m"*input_color()*"\02"
         else
@@ -172,6 +189,7 @@ function run_repl()
         end
         ccall(:repl_callback_enable, Void, (Ptr{Uint8},), prompt_string)
         global _repl_enough_stdin = false
+        notify(_repl_start)
         start_reading(STDIN)
         (ast, show_value) = take!(repl_channel)
         if show_value == -1
@@ -179,7 +197,6 @@ function run_repl()
             break
         end
         eval_user_input(ast, show_value!=0)
-        notify(_eval_done)
     end
 
     if have_color

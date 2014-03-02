@@ -123,7 +123,7 @@ include("multidimensional.jl")
 colon{T<:FloatingPoint}(start::T, step::T, stop::T) =
           step == 0              ? error("step cannot be zero in colon syntax") :
          start == stop           ? FloatRange{T}(start,step,1,1) :
-    (0 < step) != (start < stop) ? FloatRange{T}(start,step,1,0) :
+    (0 < step) != (start < stop) ? FloatRange{T}(start,step,0,1) :
                                    FloatRange{T}(frange(start,step,stop)...)
 
 # core math functions
