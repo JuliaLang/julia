@@ -107,6 +107,11 @@ function power_by_squaring(x, p::Integer)
     end
     return y
 end
+power_by_squaring(x::Bool, p::Unsigned) = ((p==0) | x)
+function power_by_squaring(x::Bool, p::Integer)
+    p < 0 && throw(DomainError())
+    return (p==0) | x
+end
 
 ^{T<:Integer}(x::T, p::T) = power_by_squaring(x,p)
 ^(x::Number, p::Integer)  = power_by_squaring(x,p)

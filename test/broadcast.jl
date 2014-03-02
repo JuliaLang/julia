@@ -57,6 +57,8 @@ for arr in (identity, as_sub)
     @test arr([1 2]) ./ arr([3, 4]) == [1/3 2/3; 1/4 2/4]
     @test arr([1 2]) .\ arr([3, 4]) == [3 1.5; 4 2]
     @test arr([3 4]) .^ arr([1, 2]) == [3 4; 9 16]
+    @test arr(bitpack([true false])) .^ arr(bitpack([false, true])) == [true true; true false]
+    @test arr(bitpack([true false])) .^ arr([0, 3]) == [true true; true false]
 
     M = arr([11 12; 21 22])
     @test broadcast_getindex(M, eye(Int, 2)+1,arr([1, 2])) == [21 11; 12 22]
