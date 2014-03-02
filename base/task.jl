@@ -94,6 +94,7 @@ function produce(v)
     #empty = isempty(q.waitq)
     ct = current_task()
     q = ct.consumers
+    q == nothing && error("Cannot produce without consumers")
     if isa(q,Condition)
         t = shift!(q.waitq)
         empty = isempty(q.waitq)
