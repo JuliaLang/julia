@@ -10,6 +10,7 @@ double my_c_sqrt(double x)
 int main()
 {
     jl_init(NULL);
+    JL_SET_STACK_BASE;
 
     {
         // Simple running Julia code
@@ -87,12 +88,11 @@ int main()
 
         jl_eval_string("this_function_does_not_exist()");
 
-        if (jl_exception_occurred())
-            printf("%s \n", jl_get_exception_str( jl_exception_occurred() ) );
+        if (jl_exception_occurred()) {
+            jl_show(jl_stderr_obj(), jl_exception_occurred());
+            JL_PRINTF(jl_stderr_stream(), "\n");
+        }
     }
-
 
     return 0;
 }
-
-

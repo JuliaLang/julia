@@ -424,6 +424,11 @@ static void start_task(jl_task_t *t)
     assert(0);
 }
 
+DLLEXPORT void jl_handle_stack_switch()
+{
+    jl_switch_stack(jl_current_task, jl_jmp_target);
+}
+
 #ifndef COPY_STACKS
 static void init_task(jl_task_t *t)
 {
@@ -896,7 +901,7 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_current_task = (jl_task_t*)allocobj(sizeof(jl_task_t));
     jl_current_task->type = (jl_value_t*)jl_task_type;
 #ifdef COPY_STACKS
-    jl_current_task->stackbase = (char *)stack + ssize;
+    jl_current_task->stackbase = NULL;
     jl_current_task->ssize = 0;  // size of saved piece
     jl_current_task->bufsz = 0;
 #else
