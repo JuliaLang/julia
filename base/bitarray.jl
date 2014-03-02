@@ -1083,9 +1083,6 @@ function (.^){T<:Number}(B::BitArray, x::T)
     end
 end
 
-(.*)(A::BitArray, B::BitArray) = A & B
-(.*)(A::Array{Bool}, B::BitArray) = A & B
-(.*)(B::BitArray, A::Array{Bool}) = A & B
 (.*)(x::Bool, B::BitArray) = x & B
 (.*)(B::BitArray, x::Bool) = B & x
 (.*)(x::Number, B::BitArray) = x .* bitunpack(B)

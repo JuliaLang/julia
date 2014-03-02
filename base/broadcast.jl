@@ -381,4 +381,16 @@ function (.^){T<:Integer}(A::BitArray, B::Array{T})
     return F
 end
 
+for (sigA, sigB) in ((BitArray, BitArray),
+                     (AbstractArray{Bool}, BitArray),
+                     (BitArray, AbstractArray{Bool}))
+    @eval function (.*)(A::$sigA, B::$sigB)
+        try
+            return bitpack(A) & bitpack(B)
+        catch
+            return bitbroadcast(&, A, B)
+        end
+    end
+end
+
 end # module
