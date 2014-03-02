@@ -2,7 +2,7 @@ module Broadcast
 
 using ..Cartesian
 import Base.promote_eltype
-import Base.num_bit_chunks, Base.dumpbitcache, Base.bitcache_size, Base.bitcache_chunks, Base.@_msk_end, Base.unsafe_getindex
+import Base.num_bit_chunks, Base.@_msk_end, Base.getindex_unchecked
 import Base.(.+), Base.(.-), Base.(.*), Base.(./), Base.(.\)
 import Base.(.==), Base.(.<), Base.(.!=), Base.(.<=)
 export broadcast, broadcast!, broadcast_function, broadcast!_function
@@ -186,6 +186,27 @@ end
 
 ## Broadcasting core -- specialized version to return a BitArray
 
+const bitcache_chunks = 64 # this can be changed
+const bitcache_size = 64 * bitcache_chunks # do not change this
+
+function dumpbitcache(Bc::Vector{Uint64}, bind::Int, C::Vector{Bool})
+    ind = 1
+    nc = min(bitcache_chunks, length(Bc)-bind+1)
+    for i = 1:nc
+        u = uint64(1)
+        c = uint64(0)
+        for j = 1:64
+            if C[ind]
+                c |= u
+            end
+            ind += 1
+            u <<= 1
+        end
+        Bc[bind] = c
+        bind += 1
+    end
+end
+
 function gen_bitbroadcast_body(nd::Int, narrays::Int, f::Function)
     checkshape = Expr(:call, check_broadcast_shape, :(size(B)), [symbol("A_"*string(i)) for i = 1:narrays]...)
     F = Expr(:quote, f)
@@ -321,5 +342,43 @@ for (f, cachef, scalarf) in ((:.==, :bitcache_eq , :(==)),
     end
 end
 
+## specialized element-wise operators for BitArray
+
+(.^)(A::BitArray, B::AbstractArray{Bool}) = (B .<= A)
+(.^)(A::AbstractArray{Bool}, B::AbstractArray{Bool}) = (B .<= A)
+
+function bitcache_pow{T}(Ac::Vector{Uint64}, B::Array{T}, l::Int, ind::Int, C::Vector{Bool})
+    left = l - ind + 1
+    @inbounds begin
+        for j = 1:min(bitcache_size, left)
+            C[j] = getindex_unchecked(Ac, ind) ^ B[ind]
+            ind += 1
+        end
+        C[left+1:bitcache_size] = false
+    end
+    return ind
+end
+function (.^){T<:Integer}(A::BitArray, B::Array{T})
+    local shape
+    try
+        shape = promote_shape(size(A), size(B))
+    catch
+        return bitbroadcast(^, A, B)
+    end
+    F = BitArray(shape)
+    l = length(F)
+    l == 0 && return F
+    Ac = A.chunks
+    Fc = F.chunks
+    C = Array(Bool, bitcache_size)
+    ind = 1
+    cind = 1
+    for i = 1:div(l + bitcache_size - 1, bitcache_size)
+        ind = bitcache_pow(Ac, B, l, ind, C)
+        dumpbitcache(Fc, cind, C)
+        cind += bitcache_chunks
+    end
+    return F
+end
 
 end # module
