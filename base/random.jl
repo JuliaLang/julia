@@ -103,6 +103,8 @@ rand(r::MersenneTwister) = dsfmt_genrand_close_open(r.state)
 
 dsfmt_randui32() = dsfmt_gv_genrand_uint32()
 dsfmt_randui64() = uint64(dsfmt_randui32()) | (uint64(dsfmt_randui32())<<32)
+dsfmt_randui32(r::MersenneTwister) = dsfmt_genrand_uint32(r.state)
+dsfmt_randui64(r::MersenneTwister) = uint64(dsfmt_randui32(r)) | (uint64(dsfmt_randui32(r))<<32)
 
 rand(::Type{Uint8})   = uint8(rand(Uint32))
 rand(::Type{Uint16})  = uint16(rand(Uint32))
@@ -202,12 +204,17 @@ rand(r::Ranges, dims::Int...) = rand(r, dims)
 ## random Bools
 
 rand!(B::BitArray) = Base.bitarray_rand_fill!(B)
+rand!(rng::AbstractRNG, B::BitArray) = Base.bitarray_rand_fill!(B, false; rng=rng)
 
 randbool(dims::Dims) = rand!(BitArray(dims))
 randbool(dims::Int...) = rand!(BitArray(dims))
+randbool(rng::AbstractRNG, dims::Dims) = rand!(rng, BitArray(dims))
+randbool(rng::AbstractRNG, dims::Int...) = rand!(rng, BitArray(dims))
 
 randbool() = ((dsfmt_randui32() & 1) == 1)
+randbool(rng::MersenneTwister) =  ((dsfmt_randui32(rng)  &  1)  ==  1)
 randbool!(B::BitArray) = rand!(B)
+randbool!(rng::AbstractRNG, B::BitArray) = rand!(rng, B)
 
 ## randn() - Normally distributed random numbers using Ziggurat algorithm
 

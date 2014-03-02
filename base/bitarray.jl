@@ -333,16 +333,21 @@ bitpack{T,N}(A::AbstractArray{T,N}) = convert(BitArray{N}, A)
 
 ## Random ##
 
-function bitarray_rand_fill!(B::BitArray)
+function bitarray_rand_fill!(B::BitArray, use_default_rng::Bool=true; rng=nothing)
     if length(B) == 0
         return B
     end
     Bc = B.chunks
     for i = 1 : length(Bc) - 1
-        Bc[i] = rand(Uint64)
+        if use_default_rng
+            Bc[i] = rand(Uint64)
+        else
+            Bc[i] = rand(rng, Uint64)
+        end
     end
     msk = @_msk_end length(B)
-    Bc[end] = msk & rand(Uint64)
+    end_rand = (if use_default_rng rand(Uint64) else rand(rng, Uint64) end)
+    Bc[end] = msk & end_rand
     return B
 end
 

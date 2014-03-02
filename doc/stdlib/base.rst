@@ -3427,11 +3427,11 @@ Random number generation in Julia uses the `Mersenne Twister library <http://www
 
    Generate a random integer from the inclusive interval specified by ``Range1 r`` (for example, ``1:n``). Optionally, generate a random integer array.
 
-.. function:: randbool([dims...])
+.. function:: randbool([rng], [dims...])
 
    Generate a random boolean value. Optionally, generate an array of random boolean values.
 
-.. function:: randbool!(A)
+.. function:: randbool!([rng], A)
 
    Fill an array with random boolean values. A may be an ``Array`` or a ``BitArray``.
 

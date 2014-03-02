@@ -6,6 +6,9 @@
 @test minimum([rand(int32(1):int32(7^7)) for i = 1:100000]) > 0
 @test(typeof(rand(false:true)) == Bool)
 
+rng = MersenneTwister(0)
+@test randbool(rng) == false
+
 @test length(randn(4, 5)) == 20
 @test length(randbool(4, 5)) == 20
 
