@@ -23,7 +23,9 @@ typedef struct {
 
     int errcode;
 
+#ifdef _P64
     int _pad_bm;      // put bm at same offset as type field of uv_stream_s
+#endif
     bufmode_t bm;     //
     bufstate_t state;
 
