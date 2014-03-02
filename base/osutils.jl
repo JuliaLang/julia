@@ -7,6 +7,10 @@ function is_unix(os::Symbol)
     end
 end
 
+function is_64bit()
+    return WORD_SIZE == 64
+end
+
 function _os_test(qm,ex,test)
     @assert qm == :?
     @assert isa(ex,Expr)
@@ -42,4 +46,7 @@ macro osx_only(ex)
 end
 macro linux_only(ex)
     @linux? esc(ex) : nothing
+end
+macro sixtyfourbit_only(ex)
+    is_64bit ? esc(ex) : nothing
 end
