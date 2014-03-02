@@ -199,12 +199,12 @@ fill(v, dims::Integer...) = fill!(Array(typeof(v), dims...), v)
 
 for (fname, felt) in ((:zeros,:zero),
                       (:ones,:one),
-                      (:infs,:inf), 
+                      (:infs,:inf),
                       (:nans,:nan))
     @eval begin
-        ($fname){T}(::Type{T}, dims...) = fill!(Array(T, dims...), ($felt)(T))
-        ($fname)(dims...)               = fill!(Array(Float64, dims...), ($felt)(Float64))
-        ($fname){T}(x::AbstractMatrix{T}) = ($fname)(T, size(x, 1), size(x, 2))
+        ($fname){T}(::Type{T}, dims...)  = fill!(Array(T, dims...), ($felt)(T))
+        ($fname)(dims...)                = fill!(Array(Float64, dims...), ($felt)(Float64))
+        ($fname){T}(x::AbstractArray{T}) = ($fname)(T, size(x))
     end
 end
 
