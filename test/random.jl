@@ -9,6 +9,17 @@
 @test length(randn(4, 5)) == 20
 @test length(randbool(4, 5)) == 20
 
+rng = MersenneTwister(0)
+
+# Currently, the MersenneTwister for 64-bit outputs different
+# random numbers on 32- versus 64-bit systems. (Issue #5999)
+# The if-statement will be unnecessary once this is fixed.
+if WORD_SIZE == 64
+    @test (rand(rng) - 0.07749284875576845) < 0.01
+elseif WORD_SIZE == 32
+    @test (rand(rng) - 0.8236475079774124) < 0.01
+end
+
 for T in (Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Int128, Uint128, Char, BigInt,
 	Float16, Float32, Float64, Rational{Int})
     r = rand(convert(T, 97):convert(T, 122))
