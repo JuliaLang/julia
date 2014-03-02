@@ -52,7 +52,7 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
     - You may need to extract the tarball in a separate step. This will create an `msys32` or `msys64` directory, according to the architecture you chose.
     - Move the `msys32` or `msys64` directory into your MinGW-builds directory, which is `C:\mingw-builds` if you followed the suggestions in step 3. We will omit the "32" or "64" in the steps below and refer to this as "the msys directory".
 
-  3. Double-click `msys2_shell.bat` in the msys directory. This will initialize MSYS2. The shell will tell you to `exit` and restart the shell, and that's a good idea. But we'll be doing that, for a different reason, a few lines down.
+  3. Double-click `msys2_shell.bat` in the msys directory. This will initialize MSYS2. The shell will tell you to `exit` and restart the shell. For now, ignore it.
 
   4. Update MSYS2 and install packages required to build julia, using the `pacman` package manager included in MSYS2:
 
@@ -60,9 +60,9 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
     pacman-key --init     #Download keys
     pacman -Syu           #Update package database and full system upgrade
 ```
-    At this point you should `exit` the MSYS2 shell and restart it *-- even if you already restarted it above.*  The reason for this second restart is that the MSYS2 system upgrade may have updated the main MSYS2 libs, which could cause further commands -- particularly the following invocation of pacman -- to fail.
+    Now `exit` the MSYS2 shell and restart it,  *even if you already restarted it above*. This is necessary in case the system upgrade updated the main MSYS2 libs. Reopen the MSYS2 shell and continue with:
 
-     ```
+    ```
     pacman -S diffutils git m4 make patch tar
 ```
 
@@ -76,7 +76,7 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
     echo "export PATH=/usr/local/bin:/usr/bin:/opt/bin:/mingw/bin:/python" >> ~/.bashrc
 ```
 
-     *N.B.* The `export` clobbers whatever $(PATH) is already defined. This is suggested to avoid path-masking. If you use MSYS2 for purposes other than building Julia, you may perfer to append rather than clobber.
+     *N.B.* The `export` clobbers whatever `$PATH` is already defined. This is suggested to avoid path-masking. If you use MSYS2 for purposes other than building Julia, you may prefer to append rather than clobber.
       
      *N.B.* All of the path-separators in the mount commands are unix-style. 
 
@@ -90,7 +90,7 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
     . ~/.bashrc  # Some versions of MSYS2 do not run this automatically
 ```
 
-     Ignore any warnings you see from `mount` about /mingw and /python not existing.
+     Ignore any warnings you see from `mount` about `/mingw` and `/python` not existing.
 
   2. Get the Julia sources and start the build:
     ```
@@ -99,9 +99,9 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
     make -j 4   # Adjust the number of cores (4) to match your build environment.
 ```
 
-  3. The Julia build can (as of 2014-02-28) fail after building OpenBLAS.  This appeasrs (?) to be a result of the OpenBLAS build trying to run the Microsoft Visual C++ `lib.exe` tool  -- which we don't need to do -- without checking for existence. This uncaught error kills the Julia build. If this happens, follow the instructions in the helpful error message and continue the build, *viz.*
+  3. The Julia build can (as of 2014-02-28) fail after building OpenBLAS.  This appears (?) to be a result of the OpenBLAS build trying to run the Microsoft Visual C++ `lib.exe` tool  -- which we don't need to do -- without checking for its existence. This uncaught error kills the Julia build. If this happens, follow the instructions in the helpful error message and continue the build, *viz.*
     ```
-    cd deps/openblas-v0.2.9.rc1   # This path will depend on teh version of OpenBLAS.
+    cd deps/openblas-v0.2.9.rc1   # This path will depend on the version of OpenBLAS.
     make install
     cd ../..
     make -j 4   # Adjust the number of cores (4) to match your build environment.
