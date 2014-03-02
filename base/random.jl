@@ -14,26 +14,13 @@ type MersenneTwister <: AbstractRNG
     state::DSFMT_state
     seed::Union(Uint32,Vector{Uint32})
 
-    function MersenneTwister()
-        seed = uint32(0)
-        state = DSFMT_state()
-        dsfmt_init_gen_rand(state, seed)
-        return new(state, seed)
-    end
-
-    function MersenneTwister(seed::Uint32)
-        state = DSFMT_state()
-        dsfmt_init_gen_rand(state, seed)
-        return new(state, seed)
-    end
-
     function MersenneTwister(seed::Vector{Uint32})
         state = DSFMT_state()
         dsfmt_init_by_array(state, seed)
         return new(state, seed)
     end
 
-    MersenneTwister(seed) = MersenneTwister(reinterpret(Uint32, [seed]))
+    MersenneTwister(seed=0) = MersenneTwister(make_seed(seed))
 end
 
 function srand(r::MersenneTwister, seed) 
