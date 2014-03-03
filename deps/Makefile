@@ -824,7 +824,7 @@ OPENBLAS_BUILD_OPTS += BINARY=32
 else ifeq ($(ARCH),x86_64)
 OPENBLAS_BUILD_OPTS += BINARY=64
 else
-$(error "unknown arch for openblas cross-compile")
+$(error "unknown arch for openblas cross-compile: $(ARCH)")
 endif
 
 ifeq ($(OS),WINNT)
