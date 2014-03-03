@@ -395,15 +395,7 @@ function inlineanonymous(ex::Expr, val)
     exout = lreplace(ex, sym, val)
     exout = poplinenum(exout)
     exout = poparithmetic(exout)
-    # Inline ternary expressions
-    if isa(exout, Expr) && exout.head == :if
-        try
-            tf = eval(exout.args[1])
-            exout = tf?exout.args[2]:exout.args[3]
-        catch
-        end
-    end
-    exout
+    popconditionals(exout)
 end
 
 # Given :i and 3, this generates :i_3
@@ -458,6 +450,26 @@ function poparithmetic(ex::Expr)
     elseif ex.head == :call && (ex.args[1] == :+ || ex.args[1] == :-) && length(ex.args) == 3 && ex.args[3] == 0
         # simplify x+0 and x-0
         return ex.args[2]
+    end
+    ex
+end
+
+# Resolve if/else and ternary expressions that can be evaluated at parsing time
+popconditionals(arg) = arg
+function popconditionals(ex::Expr)
+    if isa(ex, Expr) && ex.head == :if
+        for i = 2:length(ex.args)
+            ex.args[i] = popconditionals(ex.args[i])
+        end
+        try
+            tf = eval(ex.args[1])
+            ex = tf?ex.args[2]:ex.args[3]
+        catch
+        end
+    else
+        for i = 1:length(ex.args)
+            ex.args[i] = popconditionals(ex.args[i])
+        end
     end
     ex
 end
