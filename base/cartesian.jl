@@ -1,6 +1,6 @@
 module Cartesian
 
-export @ngenerate, @nsplat, @nloops, @nref, @ncall, @nexprs, @nextract, @nall, @ntuple, ngenerate
+export @ngenerate, @nsplat, @nloops, @nref, @ncall, @nexprs, @nextract, @nall, @ntuple, @nif, ngenerate
 
 const CARTESIAN_DIMS = 4
 
@@ -366,6 +366,18 @@ end
 function _ntuple(N::Int, ex)
     vars = [ inlineanonymous(ex,i) for i = 1:N ]
     Expr(:escape, Expr(:tuple, vars...))
+end
+
+# if condition1; operation1; elseif condition2; operation2; else operation3
+# You can pass one or two operations; the second, if present, is used in the final "else"
+macro nif(N, condition, operation...)
+    # Handle the final "else"
+    ex = esc(inlineanonymous(length(operation) > 1 ? operation[2] : operation[1], N))
+    # Make the nested if statements
+    for i = N-1:-1:1
+        ex = Expr(:if, esc(inlineanonymous(condition,i)), esc(inlineanonymous(operation[1],i)), ex)
+    end
+    ex
 end
 
 ## Utilities
