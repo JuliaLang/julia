@@ -943,3 +943,12 @@ end
 # issue #5870
 @test !ismatch(Regex("aa"), SubString("",1,0))
 @test ismatch(Regex(""), SubString("",1,0))
+
+# issue #6027
+let
+    # make symbol with invalid char
+    sym = symbol(char(0xdcdb))
+    @test string(sym) == "\udcdb"
+    @test expand(sym) === sym
+    @test parse("\udcdb = 1",1,raise=false)[1] == Expr(:error, "error normalizing identifier \udcdb: Invalid UTF-8 string")
+end
