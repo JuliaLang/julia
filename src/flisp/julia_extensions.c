@@ -3,6 +3,7 @@
 #include <string.h>
 #include <assert.h>
 #include "flisp.h"
+#include "utf8proc.h"
 
 static int is_uws(uint32_t wc)
 {
@@ -42,6 +43,33 @@ static int jl_id_char(uint32_t wc)
             wc == '!' || wc == '_');
 }
 
+// return NFC-normalized UTF8-encoded version of s
+static char *normalize(char *s)
+{
+    static size_t buflen = 0;
+    static void *buf = NULL; // persistent buffer (avoid repeated malloc/free)
+    // options equivalent to utf8proc_NFC:
+    const int options = UTF8PROC_NULLTERM|UTF8PROC_STABLE|UTF8PROC_COMPOSE;
+    ssize_t result;
+    size_t newlen;
+    result = utf8proc_decompose((uint8_t*) s, 0, NULL, 0, options);
+    if (result < 0) goto error;
+    newlen = result * sizeof(int32_t) + 1;
+    if (newlen > buflen) {
+        buflen = newlen * 2;
+        buf = realloc(buf, buflen);
+        if (!buf) lerror(MemoryError, "error allocating UTF8 buffer");
+    }
+    result = utf8proc_decompose((uint8_t*)s,0, (int32_t*)buf,result, options);
+    if (result < 0) goto error;
+    result = utf8proc_reencode((int32_t*)buf,result, options);
+    if (result < 0) goto error;
+    return (char*) buf;
+error:
+    lerrorf(symbol("error"), "error normalizing identifier %s: %s", s,
+            utf8proc_errmsg(result));
+}
+
 value_t fl_accum_julia_symbol(value_t *args, u_int32_t nargs)
 {
     argcount("accum-julia-symbol", nargs, 2);
@@ -67,7 +95,7 @@ value_t fl_accum_julia_symbol(value_t *args, u_int32_t nargs)
             break;
     }
     ios_pututf8(&str, 0);
-    return symbol(str.buf);
+    return symbol(normalize(str.buf));
 }
 
 static builtinspec_t julia_flisp_func_info[] = {
