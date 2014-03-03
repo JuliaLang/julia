@@ -278,7 +278,7 @@ function setindex_shape_check{T}(X::AbstractArray{T,2}, i, j)
 end
 
 # convert to integer index
-to_index(i)       = i
+to_index(i)       = error("invalid index: $i")
 to_index(i::Real) = convert(Int, i)
 to_index(i::Int)  = i
 to_index(r::Range1{Int}) = r
