@@ -4536,8 +4536,9 @@ Parallel Computing
    Add processes on remote machines via SSH. 
    Requires julia to be installed in the same location on each node, or to be available via a shared file system.
    
-   ``machines`` is a vector of host definitions of the form ``[user@]host[:port]``. A worker is started
-   for each such definition.
+   ``machines`` is a vector of host definitions of the form ``[user@]host[:port] [bind_addr]``. ``user`` defaults 
+   to current user, ``port`` to the standard ssh port. Optionally, in case of multi-homed hosts, ``bind_addr`` 
+   may be used to explicitly specify an interface.
    
    Keyword arguments:
 
