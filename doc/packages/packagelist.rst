@@ -7,7 +7,7 @@
 `ApproxFun <https://github.com/dlfivefifty/ApproxFun>`_
 _______________________________________________________
 
-  .. image:: https://gravatar.com/avatar/69459897cbc341ab301fa1d7d2e3486a?d=https%3A%2F%2Fidenticons.github.com%2F9921857de834e7f939b19d3d1afbe55b.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1229737
      :height: 80px
      :width: 80px
      :align: right
@@ -26,13 +26,13 @@ _______________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/69459897cbc341ab301fa1d7d2e3486a?d=https%3A%2F%2Fidenticons.github.com%2F9921857de834e7f939b19d3d1afbe55b.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1229737
         :height: 40px
         :width: 40px
         :alt: dlfivefifty
         :target: https://github.com/dlfivefifty
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
@@ -43,7 +43,7 @@ _______________________________________________________
 `Arduino <https://github.com/rennis250/Arduino.jl>`_
 ____________________________________________________
 
-  .. image:: https://gravatar.com/avatar/37cebf4f44a1dbf71ee94aaea166ef00?d=https%3A%2F%2Fidenticons.github.com%2F297c3e3befdaf89f098f109d971e6f5a.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1783559
      :height: 80px
      :width: 80px
      :align: right
@@ -62,7 +62,7 @@ ____________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/37cebf4f44a1dbf71ee94aaea166ef00?d=https%3A%2F%2Fidenticons.github.com%2F297c3e3befdaf89f098f109d971e6f5a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1783559
         :height: 40px
         :width: 40px
         :alt: Robert J. Ennis
@@ -78,7 +78,7 @@ __________________________________________________________
      :width: 19
      :target: https://travis-ci.org/carlobaldassi/ArgParse.jl
 
-  .. image:: https://gravatar.com/avatar/80502de63c1b21d8f3ba663d72ba5be2?d=https%3A%2F%2Fidenticons.github.com%2Fd454171c70136b2284d6a8cfe123eb29.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/223753
      :height: 80px
      :width: 80px
      :align: right
@@ -99,25 +99,25 @@ __________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/80502de63c1b21d8f3ba663d72ba5be2?d=https%3A%2F%2Fidenticons.github.com%2Fd454171c70136b2284d6a8cfe123eb29.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223753
         :height: 40px
         :width: 40px
         :alt: Carlo Baldassi
         :target: https://github.com/carlobaldassi
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
         :target: https://github.com/kmsquire
 
-    .. image:: https://gravatar.com/avatar/311f28d70bb1de3b0e9bb55e9d5fd26d?d=https%3A%2F%2Fidenticons.github.com%2F2747c21d7e84c52000db99011952b880.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/383068
         :height: 40px
         :width: 40px
         :alt: Tim Besard
@@ -133,7 +133,7 @@ _________________________________________________________
      :width: 19
      :target: https://travis-ci.org/lindahua/ArrayViews.jl
 
-  .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1900250
      :height: 80px
      :width: 80px
      :align: right
@@ -152,7 +152,7 @@ _________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900250
         :height: 40px
         :width: 40px
         :alt: Dahua Lin
@@ -163,7 +163,7 @@ _________________________________________________________
 `ASCIIPlots <https://github.com/johnmyleswhite/ASCIIPlots.jl>`_
 _______________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/22064
      :height: 80px
      :width: 80px
      :align: right
@@ -182,13 +182,13 @@ _______________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
-    .. image:: https://gravatar.com/avatar/cc283e3bd2784ad33dfd55afcfef4877?d=https%3A%2F%2Fidenticons.github.com%2F54c0a5d9982c0b2967ca7ad7851c0d98.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/692635
         :height: 40px
         :width: 40px
         :alt: Iain Dunning
@@ -204,7 +204,7 @@ ________________________________________________
      :width: 19
      :target: https://travis-ci.org/ssfrr/AudioIO.jl
 
-  .. image:: https://gravatar.com/avatar/733be193bf3baac5c2d6872b42c7774e?d=https%3A%2F%2Fidenticons.github.com%2F80edbd56f6cf1db86e54e6f6f309c698.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/734386
      :height: 80px
      :width: 80px
      :align: right
@@ -223,13 +223,13 @@ ________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/733be193bf3baac5c2d6872b42c7774e?d=https%3A%2F%2Fidenticons.github.com%2F80edbd56f6cf1db86e54e6f6f309c698.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/734386
         :height: 40px
         :width: 40px
         :alt: Spencer Russell
         :target: https://github.com/ssfrr
 
-    .. image:: https://gravatar.com/avatar/fe5c6f1b45179e75dcb925f2375cd5bc?d=https%3A%2F%2Fidenticons.github.com%2F7723319e691418608afff1e0322f5550.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/433799
         :height: 40px
         :width: 40px
         :alt: Howard Mao
@@ -245,7 +245,7 @@ ________________________________________________________
      :width: 19
      :target: https://travis-ci.org/malmaud/Autoreload.jl
 
-  .. image:: https://gravatar.com/avatar/d9e3f7e864e3fa0cb1906b79000d436a?d=https%3A%2F%2Fidenticons.github.com%2Fed99a4a153bc412570b5d7443557561b.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/987837
      :height: 80px
      :width: 80px
      :align: right
@@ -264,7 +264,7 @@ ________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/d9e3f7e864e3fa0cb1906b79000d436a?d=https%3A%2F%2Fidenticons.github.com%2Fed99a4a153bc412570b5d7443557561b.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/987837
         :height: 40px
         :width: 40px
         :alt: Jonathan Malmaud
@@ -275,7 +275,7 @@ ________________________________________________________
 `AWS <https://github.com/amitmurthy/AWS.jl>`_
 _____________________________________________
 
-  .. image:: https://gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https%3A%2F%2Fidenticons.github.com%2F8de01f67e4cbfa5ce2e70e6f1f761891.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/117461
      :height: 80px
      :width: 80px
      :align: right
@@ -298,19 +298,19 @@ _____________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https%3A%2F%2Fidenticons.github.com%2F8de01f67e4cbfa5ce2e70e6f1f761891.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/117461
         :height: 40px
         :width: 40px
         :alt: Amit Murthy
         :target: https://github.com/amitmurthy
 
-    .. image:: https://gravatar.com/avatar/002ccfd8ee9e135f0dfb5650c292052d?d=https%3A%2F%2Fidenticons.github.com%2F0f1b002e3ac98562472e40b49a01cc84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/130920
         :height: 40px
         :width: 40px
         :alt: Elliot Saba
         :target: https://github.com/staticfloat
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
@@ -321,7 +321,7 @@ _____________________________________________
 `Bebop <https://github.com/zhemao/Bebop.jl>`_
 _____________________________________________
 
-  .. image:: https://gravatar.com/avatar/fe5c6f1b45179e75dcb925f2375cd5bc?d=https%3A%2F%2Fidenticons.github.com%2F7723319e691418608afff1e0322f5550.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/433799
      :height: 80px
      :width: 80px
      :align: right
@@ -340,7 +340,7 @@ _____________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/fe5c6f1b45179e75dcb925f2375cd5bc?d=https%3A%2F%2Fidenticons.github.com%2F7723319e691418608afff1e0322f5550.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/433799
         :height: 40px
         :width: 40px
         :alt: Howard Mao
@@ -351,7 +351,7 @@ _____________________________________________
 `Benchmark <https://github.com/johnmyleswhite/Benchmark.jl>`_
 _____________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/22064
      :height: 80px
      :width: 80px
      :align: right
@@ -372,25 +372,25 @@ _____________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
-    .. image:: https://gravatar.com/avatar/16d8443194c380ca93a77fb8530a5aee?d=https%3A%2F%2Fidenticons.github.com%2F38da66e2f2af82932859b7a5f330af55.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/140497
         :height: 40px
         :width: 40px
         :alt: Patrick O'Leary
         :target: https://github.com/pao
 
-    .. image:: https://gravatar.com/avatar/fa3b781987ef53c4d3b8397f2239e519?d=https%3A%2F%2Fidenticons.github.com%2F75a2b93c61829886bca2442b2438509b.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2822757
         :height: 40px
         :width: 40px
         :alt: Diego Javier Zea
         :target: https://github.com/diegozea
 
-    .. image:: https://gravatar.com/avatar/80502de63c1b21d8f3ba663d72ba5be2?d=https%3A%2F%2Fidenticons.github.com%2Fd454171c70136b2284d6a8cfe123eb29.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223753
         :height: 40px
         :width: 40px
         :alt: Carlo Baldassi
@@ -401,7 +401,7 @@ _____________________________________________________________
 `BinDeps <https://github.com/JuliaLang/BinDeps.jl>`_
 ____________________________________________________
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2F96058cb0ed9e150dfffc3b86b3b8d5e7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/743164
      :height: 80px
      :width: 80px
      :align: right
@@ -421,79 +421,79 @@ ____________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
-    .. image:: https://gravatar.com/avatar/002ccfd8ee9e135f0dfb5650c292052d?d=https%3A%2F%2Fidenticons.github.com%2F0f1b002e3ac98562472e40b49a01cc84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/130920
         :height: 40px
         :width: 40px
         :alt: Elliot Saba
         :target: https://github.com/staticfloat
 
-    .. image:: https://gravatar.com/avatar/55e277a715ee2afd0d29c309174eca02?d=https%3A%2F%2Fidenticons.github.com%2F938b248e75affacf29383e0738b98ea2.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/744411
         :height: 40px
         :width: 40px
         :alt: Viral B. Shah
         :target: https://github.com/ViralBShah
 
-    .. image:: https://gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https%3A%2F%2Fidenticons.github.com%2F5d5113de843c8b258029d6a06bccd163.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/330950
         :height: 40px
         :width: 40px
         :alt: Jameson Nash
         :target: https://github.com/vtjnash
 
-    .. image:: https://gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https%3A%2F%2Fidenticons.github.com%2Fd73ab2afeb22d558e3fae4b0a0de43e3.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1733683
         :height: 40px
         :width: 40px
         :alt: Miles Lubin
         :target: https://github.com/mlubin
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
         :target: https://github.com/kmsquire
 
-    .. image:: https://gravatar.com/avatar/192f114babcc8c2f53936c145bbc502c?d=https%3A%2F%2Fidenticons.github.com%2F8221b4c8f7cc8d6114e4f1afc7fd7dff.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/327706
         :height: 40px
         :width: 40px
         :alt: Isaiah
         :target: https://github.com/ihnorton
 
-    .. image:: https://gravatar.com/avatar/c928b9b00cbc5133c4ae7a743cf96f10?d=https%3A%2F%2Fidenticons.github.com%2F6b1b3a1e3737701978c843b72704488b.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/159177
         :height: 40px
         :width: 40px
         :alt: Alessandro Andrioni
         :target: https://github.com/andrioni
 
-    .. image:: https://gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https%3A%2F%2Fidenticons.github.com%2Fccc246e2e59d5e2d0cca344114f2065e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/201456
         :height: 40px
         :width: 40px
         :alt: Mike Nolta
         :target: https://github.com/nolta
 
-    .. image:: https://gravatar.com/avatar/9563cfcf21df990e570df1dd019bce16?d=https%3A%2F%2Fidenticons.github.com%2Ff2d6e6092107c938c67268b75745fb84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2913679
         :height: 40px
         :width: 40px
         :alt: Steven G. Johnson
         :target: https://github.com/stevengj
 
-    .. image:: https://gravatar.com/avatar/80502de63c1b21d8f3ba663d72ba5be2?d=https%3A%2F%2Fidenticons.github.com%2Fd454171c70136b2284d6a8cfe123eb29.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223753
         :height: 40px
         :width: 40px
         :alt: Carlo Baldassi
         :target: https://github.com/carlobaldassi
 
-    .. image:: https://gravatar.com/avatar/317e44562dcf11f5164d0a4936696fbc?d=https%3A%2F%2Fidenticons.github.com%2F655fe21cedd4ac41f328aef38b350ef0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1553856
         :height: 40px
         :width: 40px
         :alt: rened
         :target: https://github.com/rened
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
@@ -504,7 +504,7 @@ ____________________________________________________
 `BioSeq <https://github.com/diegozea/BioSeq.jl>`_
 _________________________________________________
 
-  .. image:: https://gravatar.com/avatar/fa3b781987ef53c4d3b8397f2239e519?d=https%3A%2F%2Fidenticons.github.com%2F75a2b93c61829886bca2442b2438509b.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2822757
      :height: 80px
      :width: 80px
      :align: right
@@ -523,13 +523,13 @@ _________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/fa3b781987ef53c4d3b8397f2239e519?d=https%3A%2F%2Fidenticons.github.com%2F75a2b93c61829886bca2442b2438509b.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2822757
         :height: 40px
         :width: 40px
         :alt: Diego Javier Zea
         :target: https://github.com/diegozea
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
@@ -545,7 +545,7 @@ _________________________________________________
      :width: 19
      :target: https://travis-ci.org/tanmaykm/Blocks.jl
 
-  .. image:: https://gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https%3A%2F%2Fidenticons.github.com%2Fa2feca9cad6b69327bdee24d0d81156a.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1010989
      :height: 80px
      :width: 80px
      :align: right
@@ -564,13 +564,13 @@ _________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https%3A%2F%2Fidenticons.github.com%2Fa2feca9cad6b69327bdee24d0d81156a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1010989
         :height: 40px
         :width: 40px
         :alt: Tanmay Mohapatra
         :target: https://github.com/tanmaykm
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
@@ -581,7 +581,7 @@ _________________________________________________
 `BloomFilters <https://github.com/johnmyleswhite/BloomFilters.jl>`_
 ___________________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/22064
      :height: 80px
      :width: 80px
      :align: right
@@ -600,7 +600,7 @@ ___________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
@@ -611,7 +611,7 @@ ___________________________________________________________________
 `BSplines <https://github.com/gusl/BSplines.jl>`_
 _________________________________________________
 
-  .. image:: https://gravatar.com/avatar/25d0ed671b01595bb0a6c12bfa90c9b2?d=https%3A%2F%2Fidenticons.github.com%2F22b82e9e1ecf7e4570a56c0160a247b7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/128380
      :height: 80px
      :width: 80px
      :align: right
@@ -630,7 +630,7 @@ _________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/25d0ed671b01595bb0a6c12bfa90c9b2?d=https%3A%2F%2Fidenticons.github.com%2F22b82e9e1ecf7e4570a56c0160a247b7.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/128380
         :height: 40px
         :width: 40px
         :alt: gusl
@@ -641,7 +641,7 @@ _________________________________________________
 `Cairo <https://github.com/JuliaLang/Cairo.jl>`_
 ________________________________________________
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2F96058cb0ed9e150dfffc3b86b3b8d5e7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/743164
      :height: 80px
      :width: 80px
      :align: right
@@ -662,97 +662,97 @@ ________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
         :target: https://github.com/timholy
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
-    .. image:: https://gravatar.com/avatar/55e277a715ee2afd0d29c309174eca02?d=https%3A%2F%2Fidenticons.github.com%2F938b248e75affacf29383e0738b98ea2.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/744411
         :height: 40px
         :width: 40px
         :alt: Viral B. Shah
         :target: https://github.com/ViralBShah
 
-    .. image:: https://gravatar.com/avatar/b4b8db23d8096b722483a57d21b7d65d?d=https%3A%2F%2Fidenticons.github.com%2F013fdd367536d965b2a0fcbc90fae782.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/744556
         :height: 40px
         :width: 40px
         :alt: Jeff Bezanson
         :target: https://github.com/JeffBezanson
 
-    .. image:: https://gravatar.com/avatar/002ccfd8ee9e135f0dfb5650c292052d?d=https%3A%2F%2Fidenticons.github.com%2F0f1b002e3ac98562472e40b49a01cc84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/130920
         :height: 40px
         :width: 40px
         :alt: Elliot Saba
         :target: https://github.com/staticfloat
 
-    .. image:: https://gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https%3A%2F%2Fidenticons.github.com%2Fccc246e2e59d5e2d0cca344114f2065e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/201456
         :height: 40px
         :width: 40px
         :alt: Mike Nolta
         :target: https://github.com/nolta
 
-    .. image:: https://gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https%3A%2F%2Fidenticons.github.com%2F5d5113de843c8b258029d6a06bccd163.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/330950
         :height: 40px
         :width: 40px
         :alt: Jameson Nash
         :target: https://github.com/vtjnash
 
-    .. image:: https://gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https%3A%2F%2Fidenticons.github.com%2Fc7ec48e0ff0d0ae8827e36301a0962a1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/210361
         :height: 40px
         :width: 40px
         :alt: Daniel Jones
         :target: https://github.com/dcjones
 
-    .. image:: https://gravatar.com/avatar/afb7f86706c41da610daf216d60e59b9?d=https%3A%2F%2Fidenticons.github.com%2F1879416768cbb240e6c004a231a0204f.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1935770
         :height: 40px
         :width: 40px
         :alt: Ron Rock
         :target: https://github.com/rsrock
 
-    .. image:: https://gravatar.com/avatar/192f114babcc8c2f53936c145bbc502c?d=https%3A%2F%2Fidenticons.github.com%2F8221b4c8f7cc8d6114e4f1afc7fd7dff.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/327706
         :height: 40px
         :width: 40px
         :alt: Isaiah
         :target: https://github.com/ihnorton
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
         :target: https://github.com/kmsquire
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://gravatar.com/avatar/16d8443194c380ca93a77fb8530a5aee?d=https%3A%2F%2Fidenticons.github.com%2F38da66e2f2af82932859b7a5f330af55.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/140497
         :height: 40px
         :width: 40px
         :alt: Patrick O'Leary
         :target: https://github.com/pao
 
-    .. image:: https://identicons.github.com/87ab28708f1d203e71e266dd26706c99.png
+    .. image:: https://avatars.githubusercontent.com/u/5199059
         :height: 40px
         :width: 40px
         :alt: Andreas Lobinger
         :target: https://github.com/lobingera
 
-    .. image:: https://gravatar.com/avatar/adcdd5a613f7a9193b9f1056a356d77d?d=https%3A%2F%2Fidenticons.github.com%2F9952a9bfd8b3dfa6d4b0f65825349628.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1120448
         :height: 40px
         :width: 40px
         :alt: Milan Bouchet-Valat
         :target: https://github.com/nalimilan
 
-    .. image:: https://gravatar.com/avatar/dfc3b0fbb59c9444153823fd35dbd13b?d=https%3A%2F%2Fidenticons.github.com%2F678085c7c9e848e0442b77d8b0c4be71.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900307
         :height: 40px
         :width: 40px
         :alt: Westley Argentum Hennigh
@@ -768,7 +768,7 @@ ___________________________________________________________
      :width: 19
      :target: https://travis-ci.org/johnmyleswhite/Calculus.jl
 
-  .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/22064
      :height: 80px
      :width: 80px
      :align: right
@@ -787,49 +787,49 @@ ___________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
-    .. image:: https://gravatar.com/avatar/fd4324f02a40d980974b862ec8410f79?d=https%3A%2F%2Fidenticons.github.com%2F77b4ea235ea1d5b8b4afc58903b4d3a8.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/418773
         :height: 40px
         :width: 40px
         :alt: Yuriy Skalko
         :target: https://github.com/magistere
 
-    .. image:: https://gravatar.com/avatar/11ed595b17e2ccf6bc0b3c80f3dde4e8?d=https%3A%2F%2Fidenticons.github.com%2F176a9d5ad1fcb179b164bdd7d4e625dc.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/5247292
         :height: 40px
         :width: 40px
         :alt: powerdistribution
         :target: https://github.com/powerdistribution
 
-    .. image:: https://gravatar.com/avatar/f2416751970c33a3e92f4d58c812e577?d=https%3A%2F%2Fidenticons.github.com%2F5c2104e81f62ced8242f65c039beb950.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/982499
         :height: 40px
         :width: 40px
         :alt: Erik Taubeneck
         :target: https://github.com/eriktaubeneck
 
-    .. image:: https://gravatar.com/avatar/6453a62bda2e46cf7778a2b64a5a259b?d=https%3A%2F%2Fidenticons.github.com%2F3cae6d6fc7fdc9cbb8276eaee2b23524.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/131616
         :height: 40px
         :width: 40px
         :alt: Ivar Nesje
         :target: https://github.com/ivarne
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
         :target: https://github.com/timholy
 
-    .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/378918
         :height: 40px
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
 
-    .. image:: https://gravatar.com/avatar/317e44562dcf11f5164d0a4936696fbc?d=https%3A%2F%2Fidenticons.github.com%2F655fe21cedd4ac41f328aef38b350ef0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1553856
         :height: 40px
         :width: 40px
         :alt: rened
@@ -840,7 +840,7 @@ ___________________________________________________________
 `Calendar <https://github.com/nolta/Calendar.jl>`_
 __________________________________________________
 
-  .. image:: https://gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https%3A%2F%2Fidenticons.github.com%2Fccc246e2e59d5e2d0cca344114f2065e.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/201456
      :height: 80px
      :width: 80px
      :align: right
@@ -860,25 +860,25 @@ __________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https%3A%2F%2Fidenticons.github.com%2Fccc246e2e59d5e2d0cca344114f2065e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/201456
         :height: 40px
         :width: 40px
         :alt: Mike Nolta
         :target: https://github.com/nolta
 
-    .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/378918
         :height: 40px
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
 
-    .. image:: https://gravatar.com/avatar/11ed595b17e2ccf6bc0b3c80f3dde4e8?d=https%3A%2F%2Fidenticons.github.com%2F176a9d5ad1fcb179b164bdd7d4e625dc.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/5247292
         :height: 40px
         :width: 40px
         :alt: powerdistribution
         :target: https://github.com/powerdistribution
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
@@ -889,7 +889,7 @@ __________________________________________________
 `Cartesian <https://github.com/timholy/Cartesian.jl>`_
 ______________________________________________________
 
-  .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1525481
      :height: 80px
      :width: 80px
      :align: right
@@ -898,7 +898,7 @@ ______________________________________________________
 
   Fast multidimensional algorithms 
 
-  Current Version: ``0.1.3``  (updated: 2013-10-16) 
+  Current Version: ``0.1.4``  (updated: 2014-01-04) 
 
   Maintainer: `Tim Holy <https://github.com/timholy>`_
 
@@ -908,7 +908,7 @@ ______________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
@@ -919,7 +919,7 @@ ______________________________________________________
 `Catalan <https://github.com/andrioni/Catalan.jl>`_
 ___________________________________________________
 
-  .. image:: https://gravatar.com/avatar/c928b9b00cbc5133c4ae7a743cf96f10?d=https%3A%2F%2Fidenticons.github.com%2F6b1b3a1e3737701978c843b72704488b.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/159177
      :height: 80px
      :width: 80px
      :align: right
@@ -938,19 +938,19 @@ ___________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/c928b9b00cbc5133c4ae7a743cf96f10?d=https%3A%2F%2Fidenticons.github.com%2F6b1b3a1e3737701978c843b72704488b.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/159177
         :height: 40px
         :width: 40px
         :alt: Alessandro Andrioni
         :target: https://github.com/andrioni
 
-    .. image:: https://gravatar.com/avatar/62df30beab9c2a6f3fe3f86995e94387?d=https%3A%2F%2Fidenticons.github.com%2F58b08088d26ada47c510cef3759f7aae.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1908571
         :height: 40px
         :width: 40px
         :alt: David de Laat
         :target: https://github.com/daviddelaat
 
-    .. image:: https://gravatar.com/avatar/6cba33e8e7c69fa63f6ad386b7a958c5?d=https%3A%2F%2Fidenticons.github.com%2F270edd69788dce200a3b395a6da6fdb7.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1732
         :height: 40px
         :width: 40px
         :alt: Jiahao Chen
@@ -961,7 +961,7 @@ ___________________________________________________
 `Cbc <https://github.com/JuliaOpt/Cbc.jl>`_
 ___________________________________________
 
-  .. image:: https://gravatar.com/avatar/f86ab8fe20610c227b7891ebf16ecfd8?d=https%3A%2F%2Fidenticons.github.com%2F5efde7dd012df4681146f0d1704b0238.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/5667382
      :height: 80px
      :width: 80px
      :align: right
@@ -983,36 +983,36 @@ ___________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https%3A%2F%2Fidenticons.github.com%2Fd73ab2afeb22d558e3fae4b0a0de43e3.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1733683
         :height: 40px
         :width: 40px
         :alt: Miles Lubin
         :target: https://github.com/mlubin
 
-    .. image:: https://gravatar.com/avatar/80502de63c1b21d8f3ba663d72ba5be2?d=https%3A%2F%2Fidenticons.github.com%2Fd454171c70136b2284d6a8cfe123eb29.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223753
         :height: 40px
         :width: 40px
         :alt: Carlo Baldassi
         :target: https://github.com/carlobaldassi
 
-    .. image:: https://gravatar.com/avatar/cc283e3bd2784ad33dfd55afcfef4877?d=https%3A%2F%2Fidenticons.github.com%2F54c0a5d9982c0b2967ca7ad7851c0d98.png&r=x
-        :height: 40px
-        :width: 40px
-        :alt: Iain Dunning
-        :target: https://github.com/IainNZ
-
-    .. image:: https://gravatar.com/avatar/7e72b2f1c3eec9390c944edc1f023b7f?d=https%3A%2F%2Fidenticons.github.com%2F36f80e1e56d385146c893bd86186f61f.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1373010
         :height: 40px
         :width: 40px
         :alt: Joey Huchette
         :target: https://github.com/joehuchette
+
+    .. image:: https://avatars.githubusercontent.com/u/692635
+        :height: 40px
+        :width: 40px
+        :alt: Iain Dunning
+        :target: https://github.com/IainNZ
 
 ----
 
 `CellularAutomata <https://github.com/natj/CellularAutomata.jl>`_
 _________________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/40951e2e93fb7fbb32e6fa2e77411a3c?d=https%3A%2F%2Fidenticons.github.com%2F3607a259b46ab6eb3548757b015dad25.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/3612029
      :height: 80px
      :width: 80px
      :align: right
@@ -1031,7 +1031,7 @@ _________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/40951e2e93fb7fbb32e6fa2e77411a3c?d=https%3A%2F%2Fidenticons.github.com%2F3607a259b46ab6eb3548757b015dad25.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/3612029
         :height: 40px
         :width: 40px
         :alt: Joonas Nättilä
@@ -1047,7 +1047,7 @@ _________________________________________________________________
      :width: 19
      :target: https://travis-ci.org/tanmaykm/ChainedVectors.jl
 
-  .. image:: https://gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https%3A%2F%2Fidenticons.github.com%2Fa2feca9cad6b69327bdee24d0d81156a.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1010989
      :height: 80px
      :width: 80px
      :align: right
@@ -1066,7 +1066,7 @@ _________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https%3A%2F%2Fidenticons.github.com%2Fa2feca9cad6b69327bdee24d0d81156a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1010989
         :height: 40px
         :width: 40px
         :alt: Tanmay Mohapatra
@@ -1082,7 +1082,7 @@ _________________________________________________________________________
      :width: 19
      :target: https://travis-ci.org/scidom/ChaosCommunications.jl
 
-  .. image:: https://gravatar.com/avatar/f1678bcdc052b500191b78923399e5f8?d=https%3A%2F%2Fidenticons.github.com%2F23ac6c3f4e95b0415828115db7a8ca44.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2519036
      :height: 80px
      :width: 80px
      :align: right
@@ -1103,7 +1103,7 @@ _________________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/f1678bcdc052b500191b78923399e5f8?d=https%3A%2F%2Fidenticons.github.com%2F23ac6c3f4e95b0415828115db7a8ca44.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2519036
         :height: 40px
         :width: 40px
         :alt: Theodore Papamarkou
@@ -1111,10 +1111,15 @@ _________________________________________________________________________
 
 ----
 
-`ChemicalKinetics <https://github.com/scidom/ChemicalKinetics.jl>`_
+`ChemicalKinetics <https://github.com/scidom/ChemicalKinetics.jl>`_ |ChemicalKinetics_build|
 ___________________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/f1678bcdc052b500191b78923399e5f8?d=https%3A%2F%2Fidenticons.github.com%2F23ac6c3f4e95b0415828115db7a8ca44.png&r=x
+  .. |ChemicalKinetics_build| image:: ../images/travis-icon.png
+     :height: 19
+     :width: 19
+     :target: https://travis-ci.org/scidom/ChemicalKinetics.jl
+
+  .. image:: https://avatars.githubusercontent.com/u/2519036
      :height: 80px
      :width: 80px
      :align: right
@@ -1135,7 +1140,7 @@ ___________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/f1678bcdc052b500191b78923399e5f8?d=https%3A%2F%2Fidenticons.github.com%2F23ac6c3f4e95b0415828115db7a8ca44.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2519036
         :height: 40px
         :width: 40px
         :alt: Theodore Papamarkou
@@ -1151,7 +1156,7 @@ __________________________________________________
      :width: 19
      :target: https://travis-ci.org/LaurenceA/Church.jl
 
-  .. image:: https://gravatar.com/avatar/4fe864d27a93c487f3a07d183d0feb9c?d=https%3A%2F%2Fidenticons.github.com%2F064a705747e336d041c851f8700aff7a.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/4278594
      :height: 80px
      :width: 80px
      :align: right
@@ -1171,7 +1176,7 @@ __________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/4fe864d27a93c487f3a07d183d0feb9c?d=https%3A%2F%2Fidenticons.github.com%2F064a705747e336d041c851f8700aff7a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/4278594
         :height: 40px
         :width: 40px
         :alt: LaurenceA
@@ -1182,7 +1187,7 @@ __________________________________________________
 `Clang <https://github.com/ihnorton/Clang.jl>`_
 _______________________________________________
 
-  .. image:: https://gravatar.com/avatar/192f114babcc8c2f53936c145bbc502c?d=https%3A%2F%2Fidenticons.github.com%2F8221b4c8f7cc8d6114e4f1afc7fd7dff.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/327706
      :height: 80px
      :width: 80px
      :align: right
@@ -1202,43 +1207,49 @@ _______________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/192f114babcc8c2f53936c145bbc502c?d=https%3A%2F%2Fidenticons.github.com%2F8221b4c8f7cc8d6114e4f1afc7fd7dff.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/327706
         :height: 40px
         :width: 40px
         :alt: Isaiah
         :target: https://github.com/ihnorton
 
-    .. image:: https://gravatar.com/avatar/55574dcc5d9395db2140114be896862c?d=https%3A%2F%2Fidenticons.github.com%2F13de03bec50bea10849bff1ca58b881d.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/78738
         :height: 40px
         :width: 40px
         :alt: ZHUO QL
         :target: https://github.com/KDr2
 
-    .. image:: https://gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https%3A%2F%2Fidenticons.github.com%2F5d5113de843c8b258029d6a06bccd163.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/330950
         :height: 40px
         :width: 40px
         :alt: Jameson Nash
         :target: https://github.com/vtjnash
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
         :target: https://github.com/timholy
 
-    .. image:: https://gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https%3A%2F%2Fidenticons.github.com%2F8de01f67e4cbfa5ce2e70e6f1f761891.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/117461
         :height: 40px
         :width: 40px
         :alt: Amit Murthy
         :target: https://github.com/amitmurthy
 
-    .. image:: https://gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https%3A%2F%2Fidenticons.github.com%2Fd73ab2afeb22d558e3fae4b0a0de43e3.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/69717
+        :height: 40px
+        :width: 40px
+        :alt: Joosep Pata
+        :target: https://github.com/jpata
+
+    .. image:: https://avatars.githubusercontent.com/u/1733683
         :height: 40px
         :width: 40px
         :alt: Miles Lubin
         :target: https://github.com/mlubin
 
-    .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/470884
         :height: 40px
         :width: 40px
         :alt: Simon Kornblith
@@ -1254,7 +1265,7 @@ ___________________________________________________
      :width: 19
      :target: https://travis-ci.org/jakebolewski/CLFFT.jl
 
-  .. image:: https://gravatar.com/avatar/44338030dea25ca337ae4c843d9b601b?d=https%3A%2F%2Fidenticons.github.com%2Ffbb86fbc1a3233da94ed5ae0739a8ab1.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1157798
      :height: 80px
      :width: 80px
      :align: right
@@ -1275,7 +1286,7 @@ ___________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/44338030dea25ca337ae4c843d9b601b?d=https%3A%2F%2Fidenticons.github.com%2Ffbb86fbc1a3233da94ed5ae0739a8ab1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1157798
         :height: 40px
         :width: 40px
         :alt: Jake Bolewski
@@ -1286,7 +1297,7 @@ ___________________________________________________
 `Clp <https://github.com/JuliaOpt/Clp.jl>`_
 ___________________________________________
 
-  .. image:: https://gravatar.com/avatar/f86ab8fe20610c227b7891ebf16ecfd8?d=https%3A%2F%2Fidenticons.github.com%2F5efde7dd012df4681146f0d1704b0238.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/5667382
      :height: 80px
      :width: 80px
      :align: right
@@ -1307,13 +1318,13 @@ ___________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https%3A%2F%2Fidenticons.github.com%2Fd73ab2afeb22d558e3fae4b0a0de43e3.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1733683
         :height: 40px
         :width: 40px
         :alt: Miles Lubin
         :target: https://github.com/mlubin
 
-    .. image:: https://gravatar.com/avatar/80502de63c1b21d8f3ba663d72ba5be2?d=https%3A%2F%2Fidenticons.github.com%2Fd454171c70136b2284d6a8cfe123eb29.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223753
         :height: 40px
         :width: 40px
         :alt: Carlo Baldassi
@@ -1324,7 +1335,7 @@ ___________________________________________
 `Clustering <https://github.com/JuliaStats/Clustering.jl>`_
 ___________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2Fcb77afca27851230430c94750eef67c7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2761531
      :height: 80px
      :width: 80px
      :align: right
@@ -1346,43 +1357,43 @@ ___________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900250
         :height: 40px
         :width: 40px
         :alt: Dahua Lin
         :target: https://github.com/lindahua
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
-    .. image:: https://gravatar.com/avatar/1af2db0b26142fd0c7ab082f3d445f73?d=https%3A%2F%2Fidenticons.github.com%2Fabc7045985c1a04674b1024963c5dcc6.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/135570
         :height: 40px
         :width: 40px
         :alt: Ian Fiske
         :target: https://github.com/ianfiske
 
-    .. image:: https://gravatar.com/avatar/b02979bc1549a16515c880ce836c3023?d=https%3A%2F%2Fidenticons.github.com%2F8487e01fbaf43e758c17f86472cbf3e6.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/3542
         :height: 40px
         :width: 40px
         :alt: Chiyuan Zhang
         :target: https://github.com/pluskid
 
-    .. image:: https://gravatar.com/avatar/436b5ec3552d5e81ed4f45de75d36397?d=https%3A%2F%2Fidenticons.github.com%2Ff8e25956143b37223da8927c5ccab6b0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/5597212
         :height: 40px
         :width: 40px
         :alt: jejomath
         :target: https://github.com/jejomath
 
-    .. image:: https://gravatar.com/avatar/ec07c5d23aa0becff079912362000f08?d=https%3A%2F%2Fidenticons.github.com%2Fb970cb298efd2153bde0dd438468db60.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1226424
         :height: 40px
         :width: 40px
         :alt: Sergey Goder
         :target: https://github.com/cosinequanon
 
-    .. image:: https://gravatar.com/avatar/317e44562dcf11f5164d0a4936696fbc?d=https%3A%2F%2Fidenticons.github.com%2F655fe21cedd4ac41f328aef38b350ef0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1553856
         :height: 40px
         :width: 40px
         :alt: rened
@@ -1393,7 +1404,7 @@ ___________________________________________________________
 `ClusterManagers <https://github.com/nlhepler/ClusterManagers.jl>`_
 ___________________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/0e32745f2094c6ec4162b447c47a9609?d=https%3A%2F%2Fidenticons.github.com%2F3bd73f0a57e8f464e8afda24aac180ea.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/38372
      :height: 80px
      :width: 80px
      :align: right
@@ -1412,19 +1423,19 @@ ___________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/0e32745f2094c6ec4162b447c47a9609?d=https%3A%2F%2Fidenticons.github.com%2F3bd73f0a57e8f464e8afda24aac180ea.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/38372
         :height: 40px
         :width: 40px
         :alt: Lance Hepler
         :target: https://github.com/nlhepler
 
-    .. image:: https://gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https%3A%2F%2Fidenticons.github.com%2F8de01f67e4cbfa5ce2e70e6f1f761891.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/117461
         :height: 40px
         :width: 40px
         :alt: Amit Murthy
         :target: https://github.com/amitmurthy
 
-    .. image:: https://gravatar.com/avatar/20b7c354e61d36ebed3b1d83619724c5?d=https%3A%2F%2Fidenticons.github.com%2Fab3ad5bbc1cb8e4d95bfa0b2fa54f51e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1236964
         :height: 40px
         :width: 40px
         :alt: David Bindel
@@ -1435,7 +1446,7 @@ ___________________________________________________________________
 `Codecs <https://github.com/dcjones/Codecs.jl>`_
 ________________________________________________
 
-  .. image:: https://gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https%3A%2F%2Fidenticons.github.com%2Fc7ec48e0ff0d0ae8827e36301a0962a1.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/210361
      :height: 80px
      :width: 80px
      :align: right
@@ -1454,13 +1465,13 @@ ________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https%3A%2F%2Fidenticons.github.com%2Fc7ec48e0ff0d0ae8827e36301a0962a1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/210361
         :height: 40px
         :width: 40px
         :alt: Daniel Jones
         :target: https://github.com/dcjones
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
@@ -1471,7 +1482,7 @@ ________________________________________________
 `Color <https://github.com/JuliaLang/Color.jl>`_
 ________________________________________________
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2F96058cb0ed9e150dfffc3b86b3b8d5e7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/743164
      :height: 80px
      :width: 80px
      :align: right
@@ -1490,55 +1501,55 @@ ________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https%3A%2F%2Fidenticons.github.com%2Fc7ec48e0ff0d0ae8827e36301a0962a1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/210361
         :height: 40px
         :width: 40px
         :alt: Daniel Jones
         :target: https://github.com/dcjones
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
         :target: https://github.com/timholy
 
-    .. image:: https://gravatar.com/avatar/b4b8db23d8096b722483a57d21b7d65d?d=https%3A%2F%2Fidenticons.github.com%2F013fdd367536d965b2a0fcbc90fae782.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/744556
         :height: 40px
         :width: 40px
         :alt: Jeff Bezanson
         :target: https://github.com/JeffBezanson
 
-    .. image:: https://gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https%3A%2F%2Fidenticons.github.com%2F5d5113de843c8b258029d6a06bccd163.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/330950
         :height: 40px
         :width: 40px
         :alt: Jameson Nash
         :target: https://github.com/vtjnash
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://gravatar.com/avatar/16d8443194c380ca93a77fb8530a5aee?d=https%3A%2F%2Fidenticons.github.com%2F38da66e2f2af82932859b7a5f330af55.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/140497
         :height: 40px
         :width: 40px
         :alt: Patrick O'Leary
         :target: https://github.com/pao
 
-    .. image:: https://gravatar.com/avatar/9563cfcf21df990e570df1dd019bce16?d=https%3A%2F%2Fidenticons.github.com%2Ff2d6e6092107c938c67268b75745fb84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2913679
         :height: 40px
         :width: 40px
         :alt: Steven G. Johnson
         :target: https://github.com/stevengj
 
-    .. image:: https://gravatar.com/avatar/d04d5b6e71776eb13d195ba7cc94b995?d=https%3A%2F%2Fidenticons.github.com%2Ff1abfc4d42d91a6bfbdfb8da432c2a96.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/478237
         :height: 40px
         :width: 40px
         :alt: Waldir Pimenta
         :target: https://github.com/waldir
 
-    .. image:: https://gravatar.com/avatar/40951e2e93fb7fbb32e6fa2e77411a3c?d=https%3A%2F%2Fidenticons.github.com%2F3607a259b46ab6eb3548757b015dad25.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/3612029
         :height: 40px
         :width: 40px
         :alt: Joonas Nättilä
@@ -1554,7 +1565,7 @@ ___________________________________________________________
      :width: 19
      :target: https://travis-ci.org/tanmaykm/CommonCrawl.jl
 
-  .. image:: https://gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https%3A%2F%2Fidenticons.github.com%2Fa2feca9cad6b69327bdee24d0d81156a.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1010989
      :height: 80px
      :width: 80px
      :align: right
@@ -1577,7 +1588,7 @@ ___________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https%3A%2F%2Fidenticons.github.com%2Fa2feca9cad6b69327bdee24d0d81156a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1010989
         :height: 40px
         :width: 40px
         :alt: Tanmay Mohapatra
@@ -1588,7 +1599,7 @@ ___________________________________________________________
 `Compose <https://github.com/dcjones/Compose.jl>`_
 __________________________________________________
 
-  .. image:: https://gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https%3A%2F%2Fidenticons.github.com%2Fc7ec48e0ff0d0ae8827e36301a0962a1.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/210361
      :height: 80px
      :width: 80px
      :align: right
@@ -1597,7 +1608,7 @@ __________________________________________________
 
   Declarative vector graphics 
 
-  Current Version: ``0.1.25``  (updated: 2014-02-05) 
+  Current Version: ``0.1.26``  (updated: 2014-02-26) 
 
   Maintainer: `Daniel Jones <https://github.com/dcjones>`_
 
@@ -1608,85 +1619,85 @@ __________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https%3A%2F%2Fidenticons.github.com%2Fc7ec48e0ff0d0ae8827e36301a0962a1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/210361
         :height: 40px
         :width: 40px
         :alt: Daniel Jones
         :target: https://github.com/dcjones
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
-    .. image:: https://gravatar.com/avatar/313878fc8f316fc3fe4443b13913d0a4?d=https%3A%2F%2Fidenticons.github.com%2Fb12c483d8922cb5945bd4ffdae6d591d.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/112170
         :height: 40px
         :width: 40px
         :alt: Jared Forsyth
         :target: https://github.com/jaredly
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
         :target: https://github.com/timholy
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://gravatar.com/avatar/4206b43cb025b0c1fd8cd9fa89dd6086?d=https%3A%2F%2Fidenticons.github.com%2F64444743705b96233935f7aa3a0efcfb.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1277811
         :height: 40px
         :width: 40px
         :alt: catawbasam
         :target: https://github.com/catawbasam
 
-    .. image:: https://gravatar.com/avatar/1af2db0b26142fd0c7ab082f3d445f73?d=https%3A%2F%2Fidenticons.github.com%2Fabc7045985c1a04674b1024963c5dcc6.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/135570
         :height: 40px
         :width: 40px
         :alt: Ian Fiske
         :target: https://github.com/ianfiske
 
-    .. image:: https://gravatar.com/avatar/449044e4f0ed377b21409488cddafc45?d=https%3A%2F%2Fidenticons.github.com%2F3f2743ab32e9c084ddcabc42324d7465.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/866695
         :height: 40px
         :width: 40px
         :alt: Blake Johnson
         :target: https://github.com/blakejohnson
 
-    .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/378918
         :height: 40px
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
 
-    .. image:: https://gravatar.com/avatar/910a5ad5931aeda034b38c9658eaadf2?d=https%3A%2F%2Fidenticons.github.com%2Fd02b9513973e4fe6905e8b0424efad7d.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1979907
         :height: 40px
         :width: 40px
         :alt: microtherion
         :target: https://github.com/microtherion
 
-    .. image:: https://gravatar.com/avatar/957fc8103c58ee9ee9a5d96c91b15e76?d=https%3A%2F%2Fidenticons.github.com%2F63a72c1cabc34962926263f1e33c3ce1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2762787
         :height: 40px
         :width: 40px
         :alt: Randy Zwitch
         :target: https://github.com/randyzwitch
 
-    .. image:: https://gravatar.com/avatar/55e277a715ee2afd0d29c309174eca02?d=https%3A%2F%2Fidenticons.github.com%2F938b248e75affacf29383e0738b98ea2.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/744411
         :height: 40px
         :width: 40px
         :alt: Viral B. Shah
         :target: https://github.com/ViralBShah
 
-    .. image:: https://gravatar.com/avatar/dfc3b0fbb59c9444153823fd35dbd13b?d=https%3A%2F%2Fidenticons.github.com%2F678085c7c9e848e0442b77d8b0c4be71.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900307
         :height: 40px
         :width: 40px
         :alt: Westley Argentum Hennigh
         :target: https://github.com/WestleyArgentum
 
-    .. image:: https://gravatar.com/avatar/8f514187144b1b19b0205fce41284d32?d=https%3A%2F%2Fidenticons.github.com%2F763a59893dc5fcf4c3d471b690847bec.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/421708
         :height: 40px
         :width: 40px
         :alt: john verzani
@@ -1697,7 +1708,7 @@ __________________________________________________
 `ContinuedFractions <https://github.com/johnmyleswhite/ContinuedFractions.jl>`_
 _______________________________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/22064
      :height: 80px
      :width: 80px
      :align: right
@@ -1716,7 +1727,7 @@ _______________________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
@@ -1727,7 +1738,7 @@ _______________________________________________________________________________
 `CoreNLP <https://github.com/JuliaText/CoreNLP.jl>`_
 ____________________________________________________
 
-  .. image:: https://identicons.github.com/0e0429dd1cca6440084ffefc403dd402.png
+  .. image:: https://avatars.githubusercontent.com/u/6527714
      :height: 80px
      :width: 80px
      :align: right
@@ -1748,7 +1759,7 @@ ____________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/d9e3f7e864e3fa0cb1906b79000d436a?d=https%3A%2F%2Fidenticons.github.com%2Fed99a4a153bc412570b5d7443557561b.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/987837
         :height: 40px
         :width: 40px
         :alt: Jonathan Malmaud
@@ -1759,7 +1770,7 @@ ____________________________________________________
 `Cosmology <https://github.com/JuliaAstro/Cosmology.jl>`_
 _________________________________________________________
 
-  .. image:: https://identicons.github.com/2619d7a040d308577e793df7b28119f2.png
+  .. image:: https://avatars.githubusercontent.com/u/6685132
      :height: 80px
      :width: 80px
      :align: right
@@ -1778,7 +1789,7 @@ _________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https%3A%2F%2Fidenticons.github.com%2Fccc246e2e59d5e2d0cca344114f2065e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/201456
         :height: 40px
         :width: 40px
         :alt: Mike Nolta
@@ -1789,7 +1800,7 @@ _________________________________________________________
 `CPLEX <https://github.com/joehuchette/CPLEX.jl>`_
 __________________________________________________
 
-  .. image:: https://gravatar.com/avatar/7e72b2f1c3eec9390c944edc1f023b7f?d=https%3A%2F%2Fidenticons.github.com%2F36f80e1e56d385146c893bd86186f61f.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1373010
      :height: 80px
      :width: 80px
      :align: right
@@ -1810,19 +1821,19 @@ __________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/7e72b2f1c3eec9390c944edc1f023b7f?d=https%3A%2F%2Fidenticons.github.com%2F36f80e1e56d385146c893bd86186f61f.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1373010
         :height: 40px
         :width: 40px
         :alt: Joey Huchette
         :target: https://github.com/joehuchette
 
-    .. image:: https://gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https%3A%2F%2Fidenticons.github.com%2Fd73ab2afeb22d558e3fae4b0a0de43e3.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1733683
         :height: 40px
         :width: 40px
         :alt: Miles Lubin
         :target: https://github.com/mlubin
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
@@ -1833,7 +1844,7 @@ __________________________________________________
 `Cpp <https://github.com/timholy/Cpp.jl>`_
 __________________________________________
 
-  .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1525481
      :height: 80px
      :width: 80px
      :align: right
@@ -1852,13 +1863,13 @@ __________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
         :target: https://github.com/timholy
 
-    .. image:: https://gravatar.com/avatar/d04d5b6e71776eb13d195ba7cc94b995?d=https%3A%2F%2Fidenticons.github.com%2Ff1abfc4d42d91a6bfbdfb8da432c2a96.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/478237
         :height: 40px
         :width: 40px
         :alt: Waldir Pimenta
@@ -1874,7 +1885,7 @@ __________________________________________
      :width: 19
      :target: https://travis-ci.org/fhs/CRC32.jl
 
-  .. image:: https://gravatar.com/avatar/f11cd39050d2eb63ec494c0e7ae81d98?d=https%3A%2F%2Fidenticons.github.com%2Fe4874cbbcbec68daabdd9342beac3bd9.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/183501
      :height: 80px
      :width: 80px
      :align: right
@@ -1893,7 +1904,7 @@ __________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/f11cd39050d2eb63ec494c0e7ae81d98?d=https%3A%2F%2Fidenticons.github.com%2Fe4874cbbcbec68daabdd9342beac3bd9.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/183501
         :height: 40px
         :width: 40px
         :alt: Fazlul Shahriar
@@ -1904,7 +1915,7 @@ __________________________________________
 `CRF <https://github.com/slyrz/CRF.jl>`_
 ________________________________________
 
-  .. image:: https://gravatar.com/avatar/145e1d8a7c0f51e4e41a64e1614d5417?d=https%3A%2F%2Fidenticons.github.com%2Fcbe8a801cc7894369a53cc73c3c453d8.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/6135391
      :height: 80px
      :width: 80px
      :align: right
@@ -1923,7 +1934,7 @@ ________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/145e1d8a7c0f51e4e41a64e1614d5417?d=https%3A%2F%2Fidenticons.github.com%2Fcbe8a801cc7894369a53cc73c3c453d8.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/6135391
         :height: 40px
         :width: 40px
         :alt: slyrz
@@ -1934,7 +1945,7 @@ ________________________________________
 `Cubature <https://github.com/stevengj/Cubature.jl>`_
 _____________________________________________________
 
-  .. image:: https://gravatar.com/avatar/9563cfcf21df990e570df1dd019bce16?d=https%3A%2F%2Fidenticons.github.com%2Ff2d6e6092107c938c67268b75745fb84.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2913679
      :height: 80px
      :width: 80px
      :align: right
@@ -1959,7 +1970,7 @@ _____________________________________________________
 `CUDA <https://github.com/lindahua/CUDA.jl>`_
 _____________________________________________
 
-  .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1900250
      :height: 80px
      :width: 80px
      :align: right
@@ -1978,7 +1989,7 @@ _____________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900250
         :height: 40px
         :width: 40px
         :alt: Dahua Lin
@@ -1994,7 +2005,7 @@ __________________________________________
      :width: 19
      :target: https://travis-ci.org/forio/Curl.jl
 
-  .. image:: https://gravatar.com/avatar/bd2a3d33c3dcc6f25e61382f81689f33?d=https%3A%2F%2Fidenticons.github.com%2F303541224a8d81c65040eb747f5ee614.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1878641
      :height: 80px
      :width: 80px
      :align: right
@@ -2013,19 +2024,19 @@ __________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/dfc3b0fbb59c9444153823fd35dbd13b?d=https%3A%2F%2Fidenticons.github.com%2F678085c7c9e848e0442b77d8b0c4be71.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900307
         :height: 40px
         :width: 40px
         :alt: Westley Argentum Hennigh
         :target: https://github.com/WestleyArgentum
 
-    .. image:: https://gravatar.com/avatar/d1206b7851de49f51e710c88a15547f4?d=https%3A%2F%2Fidenticons.github.com%2Ff9e6291c7298972dcf570643ff134ed8.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/59290
         :height: 40px
         :width: 40px
         :alt: PLHW
         :target: https://github.com/pauladam
 
-    .. image:: https://gravatar.com/avatar/d5f30c2d40341d55ba235d674d24972e?d=https%3A%2F%2Fidenticons.github.com%2Fae7e0405c74926295bca0f9d2aa09fa1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/172643
         :height: 40px
         :width: 40px
         :alt: Stu Thompson
@@ -2041,7 +2052,7 @@ ___________________________________________________________
      :width: 19
      :target: https://travis-ci.org/JuliaStats/DataArrays.jl
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2Fcb77afca27851230430c94750eef67c7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2761531
      :height: 80px
      :width: 80px
      :align: right
@@ -2050,7 +2061,7 @@ ___________________________________________________________
 
   Data structures that allow missing values 
 
-  Current Version: ``0.1.2``  (updated: 2014-02-10) 
+  Current Version: ``0.1.3``  (updated: 2014-02-23) 
 
   Maintainer: `Julia Statistics <https://github.com/JuliaStats>`_
 
@@ -2061,43 +2072,43 @@ ___________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
-    .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/470884
         :height: 40px
         :width: 40px
         :alt: Simon Kornblith
         :target: https://github.com/simonster
 
-    .. image:: https://gravatar.com/avatar/e9d7782f2aa9fa7f78301ca94e9b2f9c?d=https%3A%2F%2Fidenticons.github.com%2F2d02bf91a26f3e1c6760503262ba3e8f.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2823840
         :height: 40px
         :width: 40px
         :alt: Sean Garborg
         :target: https://github.com/garborg
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
         :target: https://github.com/kmsquire
 
-    .. image:: https://gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https%3A%2F%2Fidenticons.github.com%2Fc7ec48e0ff0d0ae8827e36301a0962a1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/210361
         :height: 40px
         :width: 40px
         :alt: Daniel Jones
         :target: https://github.com/dcjones
 
-    .. image:: https://gravatar.com/avatar/2cbc175271c0dbdaf0aa8f68af6c13d4?d=https%3A%2F%2Fidenticons.github.com%2Fc5c8c15bda296715d823447a01364000.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1714451
         :height: 40px
         :width: 40px
         :alt: Glen Hertz
         :target: https://github.com/GlenHertz
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
@@ -2113,7 +2124,7 @@ ___________________________________________________________
      :width: 19
      :target: https://travis-ci.org/JuliaStats/DataFrames.jl
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2Fcb77afca27851230430c94750eef67c7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2761531
      :height: 80px
      :width: 80px
      :align: right
@@ -2122,7 +2133,7 @@ ___________________________________________________________
 
   library for working with tabular data in Julia 
 
-  Current Version: ``0.5.2``  (updated: 2014-02-18) 
+  Current Version: ``0.5.3``  (updated: 2014-02-27) 
 
   Maintainer: `Julia Statistics <https://github.com/JuliaStats>`_
 
@@ -2137,253 +2148,253 @@ ___________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
-    .. image:: https://gravatar.com/avatar/11ed595b17e2ccf6bc0b3c80f3dde4e8?d=https%3A%2F%2Fidenticons.github.com%2F176a9d5ad1fcb179b164bdd7d4e625dc.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/5247292
         :height: 40px
         :width: 40px
         :alt: powerdistribution
         :target: https://github.com/powerdistribution
 
-    .. image:: https://gravatar.com/avatar/9f1a68b9e623be5da422b44e733fa8bc?d=https%3A%2F%2Fidenticons.github.com%2Fe101c9ae473b1eeb13745d045d60d917.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/130809
         :height: 40px
         :width: 40px
         :alt: Harlan Harris
         :target: https://github.com/HarlanH
 
-    .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/470884
         :height: 40px
         :width: 40px
         :alt: Simon Kornblith
         :target: https://github.com/simonster
 
-    .. image:: https://gravatar.com/avatar/1a4672a0ae94c24f02517dea26097f58?d=https%3A%2F%2Fidenticons.github.com%2F876581e21f82522068fadfdd6f1d08c7.png&r=x
-        :height: 40px
-        :width: 40px
-        :alt: Chris DuBois
-        :target: https://github.com/doobwa
-
-    .. image:: https://gravatar.com/avatar/e9d7782f2aa9fa7f78301ca94e9b2f9c?d=https%3A%2F%2Fidenticons.github.com%2F2d02bf91a26f3e1c6760503262ba3e8f.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2823840
         :height: 40px
         :width: 40px
         :alt: Sean Garborg
         :target: https://github.com/garborg
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/79467
+        :height: 40px
+        :width: 40px
+        :alt: Chris DuBois
+        :target: https://github.com/doobwa
+
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
         :target: https://github.com/kmsquire
 
-    .. image:: https://gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https%3A%2F%2Fidenticons.github.com%2Faeffec9bb1d59de139f16ccd910b5168.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/371258
         :height: 40px
         :width: 40px
         :alt: Douglas Bates
         :target: https://github.com/dmbates
 
-    .. image:: https://gravatar.com/avatar/903acb22f47a901577ee48d3962d5858?d=https%3A%2F%2Fidenticons.github.com%2F3d46ff6b8eb4321c2705be8a1791bc94.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/636420
         :height: 40px
         :width: 40px
         :alt: Tom Short
         :target: https://github.com/tshort
 
-    .. image:: https://gravatar.com/avatar/55e277a715ee2afd0d29c309174eca02?d=https%3A%2F%2Fidenticons.github.com%2F938b248e75affacf29383e0738b98ea2.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/744411
         :height: 40px
         :width: 40px
         :alt: Viral B. Shah
         :target: https://github.com/ViralBShah
 
-    .. image:: https://gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https%3A%2F%2Fidenticons.github.com%2Fa2feca9cad6b69327bdee24d0d81156a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1010989
         :height: 40px
         :width: 40px
         :alt: Tanmay Mohapatra
         :target: https://github.com/tanmaykm
 
-    .. image:: https://gravatar.com/avatar/25ce2ab2f5e673e46208c1188a39e6ca?d=https%3A%2F%2Fidenticons.github.com%2F94554a56b2946c805e180501c4d4544c.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/324836
         :height: 40px
         :width: 40px
         :alt: milktrader
         :target: https://github.com/milktrader
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900250
         :height: 40px
         :width: 40px
         :alt: Dahua Lin
         :target: https://github.com/lindahua
 
-    .. image:: https://gravatar.com/avatar/53949fa7e9d7c39f470e849cc94dd1e5?d=https%3A%2F%2Fidenticons.github.com%2Ff5ad7913e6eea7d0217ac64582be00fa.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/556171
         :height: 40px
         :width: 40px
         :alt: David Reiss
         :target: https://github.com/dreiss-isb
 
-    .. image:: https://gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https%3A%2F%2Fidenticons.github.com%2Fc7ec48e0ff0d0ae8827e36301a0962a1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/210361
         :height: 40px
         :width: 40px
         :alt: Daniel Jones
         :target: https://github.com/dcjones
 
-    .. image:: https://gravatar.com/avatar/80c37b7308df099b8b9ec660146cf3da?d=https%3A%2F%2Fidenticons.github.com%2F19b954cc25ddca3a3a0b8b755c0a4725.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/817739
         :height: 40px
         :width: 40px
         :alt: Julia Evans
         :target: https://github.com/jvns
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
         :target: https://github.com/timholy
 
-    .. image:: https://gravatar.com/avatar/b4b8db23d8096b722483a57d21b7d65d?d=https%3A%2F%2Fidenticons.github.com%2F013fdd367536d965b2a0fcbc90fae782.png&r=x
-        :height: 40px
-        :width: 40px
-        :alt: Jeff Bezanson
-        :target: https://github.com/JeffBezanson
-
-    .. image:: https://gravatar.com/avatar/1af2db0b26142fd0c7ab082f3d445f73?d=https%3A%2F%2Fidenticons.github.com%2Fabc7045985c1a04674b1024963c5dcc6.png&r=x
-        :height: 40px
-        :width: 40px
-        :alt: Ian Fiske
-        :target: https://github.com/ianfiske
-
-    .. image:: https://gravatar.com/avatar/dfc3b0fbb59c9444153823fd35dbd13b?d=https%3A%2F%2Fidenticons.github.com%2F678085c7c9e848e0442b77d8b0c4be71.png&r=x
-        :height: 40px
-        :width: 40px
-        :alt: Westley Argentum Hennigh
-        :target: https://github.com/WestleyArgentum
-
-    .. image:: https://gravatar.com/avatar/2cbc175271c0dbdaf0aa8f68af6c13d4?d=https%3A%2F%2Fidenticons.github.com%2Fc5c8c15bda296715d823447a01364000.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1714451
         :height: 40px
         :width: 40px
         :alt: Glen Hertz
         :target: https://github.com/GlenHertz
 
-    .. image:: https://gravatar.com/avatar/69bdae2d8460449e27b9dc03a0c7e6d6?d=https%3A%2F%2Fidenticons.github.com%2Ff24f29bfbd9715c0c494bf4da1923ebc.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900307
+        :height: 40px
+        :width: 40px
+        :alt: Westley Argentum Hennigh
+        :target: https://github.com/WestleyArgentum
+
+    .. image:: https://avatars.githubusercontent.com/u/135570
+        :height: 40px
+        :width: 40px
+        :alt: Ian Fiske
+        :target: https://github.com/ianfiske
+
+    .. image:: https://avatars.githubusercontent.com/u/744556
+        :height: 40px
+        :width: 40px
+        :alt: Jeff Bezanson
+        :target: https://github.com/JeffBezanson
+
+    .. image:: https://avatars.githubusercontent.com/u/5497303
         :height: 40px
         :width: 40px
         :alt: David van Leeuwen
         :target: https://github.com/davidavdav
 
-    .. image:: https://gravatar.com/avatar/16d8443194c380ca93a77fb8530a5aee?d=https%3A%2F%2Fidenticons.github.com%2F38da66e2f2af82932859b7a5f330af55.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/140497
         :height: 40px
         :width: 40px
         :alt: Patrick O'Leary
         :target: https://github.com/pao
 
-    .. image:: https://gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https%3A%2F%2Fidenticons.github.com%2F5d5113de843c8b258029d6a06bccd163.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/330950
         :height: 40px
         :width: 40px
         :alt: Jameson Nash
         :target: https://github.com/vtjnash
 
-    .. image:: https://gravatar.com/avatar/adcdd5a613f7a9193b9f1056a356d77d?d=https%3A%2F%2Fidenticons.github.com%2F9952a9bfd8b3dfa6d4b0f65825349628.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1120448
         :height: 40px
         :width: 40px
         :alt: Milan Bouchet-Valat
         :target: https://github.com/nalimilan
 
-    .. image:: https://gravatar.com/avatar/957fc8103c58ee9ee9a5d96c91b15e76?d=https%3A%2F%2Fidenticons.github.com%2F63a72c1cabc34962926263f1e33c3ce1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2762787
         :height: 40px
         :width: 40px
         :alt: Randy Zwitch
         :target: https://github.com/randyzwitch
 
-    .. image:: https://gravatar.com/avatar/80502de63c1b21d8f3ba663d72ba5be2?d=https%3A%2F%2Fidenticons.github.com%2Fd454171c70136b2284d6a8cfe123eb29.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223753
         :height: 40px
         :width: 40px
         :alt: Carlo Baldassi
         :target: https://github.com/carlobaldassi
 
-    .. image:: https://gravatar.com/avatar/756973876a839bde0544818d2dee6961?d=https%3A%2F%2Fidenticons.github.com%2Fa171dc51db30f0b0598974095c5ac02d.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2054988
         :height: 40px
         :width: 40px
         :alt: timema
         :target: https://github.com/timema
 
-    .. image:: https://gravatar.com/avatar/37245cf400fe4114b677828281879f2f?d=https%3A%2F%2Fidenticons.github.com%2F0a988fc2992add2d3233e19c7aadfdea.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/5733
         :height: 40px
         :width: 40px
         :alt: João Felipe Santos
         :target: https://github.com/jfsantos
 
-    .. image:: https://gravatar.com/avatar/cc283e3bd2784ad33dfd55afcfef4877?d=https%3A%2F%2Fidenticons.github.com%2F54c0a5d9982c0b2967ca7ad7851c0d98.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/692635
         :height: 40px
         :width: 40px
         :alt: Iain Dunning
         :target: https://github.com/IainNZ
 
-    .. image:: https://gravatar.com/avatar/313878fc8f316fc3fe4443b13913d0a4?d=https%3A%2F%2Fidenticons.github.com%2Fb12c483d8922cb5945bd4ffdae6d591d.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/112170
         :height: 40px
         :width: 40px
         :alt: Jared Forsyth
         :target: https://github.com/jaredly
 
-    .. image:: https://gravatar.com/avatar/d9e3f7e864e3fa0cb1906b79000d436a?d=https%3A%2F%2Fidenticons.github.com%2Fed99a4a153bc412570b5d7443557561b.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/987837
         :height: 40px
         :width: 40px
         :alt: Jonathan Malmaud
         :target: https://github.com/malmaud
 
-    .. image:: https://gravatar.com/avatar/02abdd20ef026f24d96035a407912df0?d=https%3A%2F%2Fidenticons.github.com%2Fc217f7fdea0f4545b9bb96a09ec7bd72.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/505001
         :height: 40px
         :width: 40px
         :alt: Andreas Noack Jensen
         :target: https://github.com/andreasnoackjensen
 
-    .. image:: https://gravatar.com/avatar/4206b43cb025b0c1fd8cd9fa89dd6086?d=https%3A%2F%2Fidenticons.github.com%2F64444743705b96233935f7aa3a0efcfb.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1277811
         :height: 40px
         :width: 40px
         :alt: catawbasam
         :target: https://github.com/catawbasam
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
-    .. image:: https://gravatar.com/avatar/79e1bcfc1ed23b8964171191e9073545?d=https%3A%2F%2Fidenticons.github.com%2F770db0d7e7610d1f17e1680bddda40c6.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/538456
         :height: 40px
         :width: 40px
         :alt: Matt Weiden
         :target: https://github.com/mweiden
 
-    .. image:: https://gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https%3A%2F%2Fidenticons.github.com%2Fccc246e2e59d5e2d0cca344114f2065e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/201456
         :height: 40px
         :width: 40px
         :alt: Mike Nolta
         :target: https://github.com/nolta
 
-    .. image:: https://gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https%3A%2F%2Fidenticons.github.com%2Fd73ab2afeb22d558e3fae4b0a0de43e3.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1733683
         :height: 40px
         :width: 40px
         :alt: Miles Lubin
         :target: https://github.com/mlubin
 
-    .. image:: https://gravatar.com/avatar/5c06e9faa0d7bd205f81d10e825d7e4a?d=https%3A%2F%2Fidenticons.github.com%2F6b8901820c4636072f2131546cc646f7.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1437512
         :height: 40px
         :width: 40px
         :alt: nfoti
         :target: https://github.com/nfoti
 
-    .. image:: https://gravatar.com/avatar/5ac7b1da0f2e9107b5020f88023a15e5?d=https%3A%2F%2Fidenticons.github.com%2F78ed96596b5786af9c65360c7fff0624.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1692009
         :height: 40px
         :width: 40px
         :alt: Simon Byrne
         :target: https://github.com/simonbyrne
 
-    .. image:: https://gravatar.com/avatar/296ee25bff5b4ab9be5a06619e0a0818?d=https%3A%2F%2Fidenticons.github.com%2F7c7eb4f9eb474253a9e29551dff00f25.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/766621
         :height: 40px
         :width: 40px
         :alt: Mark McCurry
@@ -2399,7 +2410,7 @@ __________________________________________________________________
      :width: 19
      :target: https://travis-ci.org/JuliaLang/DataStructures.jl
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2F96058cb0ed9e150dfffc3b86b3b8d5e7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/743164
      :height: 80px
      :width: 80px
      :align: right
@@ -2408,41 +2419,47 @@ __________________________________________________________________
 
   Julia implementation of Data structures 
 
-  Current Version: ``0.2.8``  (updated: 2014-01-29) 
+  Current Version: ``0.2.9``  (updated: 2014-02-26) 
 
   Maintainer: `The Julia Language <https://github.com/JuliaLang>`_
 
   Dependencies::
 
-      julia                    [0.2.0-,∞)
+      julia                    [0.3.0-,∞)
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900250
         :height: 40px
         :width: 40px
         :alt: Dahua Lin
         :target: https://github.com/lindahua
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
         :target: https://github.com/kmsquire
 
-    .. image:: https://gravatar.com/avatar/b58bc8f94bc5a0d8eaf149abe297a25e?d=https%3A%2F%2Fidenticons.github.com%2F20e40b5d4a56eb5a481861bf4a632664.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2896623
+        :height: 40px
+        :width: 40px
+        :alt: Jacob Quinn
+        :target: https://github.com/karbarcca
+
+    .. image:: https://avatars.githubusercontent.com/u/325520
         :height: 40px
         :width: 40px
         :alt: msainz
         :target: https://github.com/msainz
 
-    .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/378918
         :height: 40px
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
 
-    .. image:: https://gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https%3A%2F%2Fidenticons.github.com%2Fccc246e2e59d5e2d0cca344114f2065e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/201456
         :height: 40px
         :width: 40px
         :alt: Mike Nolta
@@ -2458,7 +2475,7 @@ ______________________________________________________
      :width: 19
      :target: https://travis-ci.org/karbarcca/Datetime.jl
 
-  .. image:: https://gravatar.com/avatar/d788bf7fd037ebef5798d8881c5faa2f?d=https%3A%2F%2Fidenticons.github.com%2Fb74329b16ae6564aa58c344720a5a087.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2896623
      :height: 80px
      :width: 80px
      :align: right
@@ -2477,31 +2494,31 @@ ______________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/d788bf7fd037ebef5798d8881c5faa2f?d=https%3A%2F%2Fidenticons.github.com%2Fb74329b16ae6564aa58c344720a5a087.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2896623
         :height: 40px
         :width: 40px
         :alt: Jacob Quinn
         :target: https://github.com/karbarcca
 
-    .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/378918
         :height: 40px
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
 
-    .. image:: https://gravatar.com/avatar/0f7d7f395baee472113aaf575003d60d?d=https%3A%2F%2Fidenticons.github.com%2F0fa05818ca798b7d6c864bee998e2595.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/6413966
         :height: 40px
         :width: 40px
         :alt: Stephen C. Pope
         :target: https://github.com/stephencpope
 
-    .. image:: https://gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https%3A%2F%2Fidenticons.github.com%2Fc7ec48e0ff0d0ae8827e36301a0962a1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/210361
         :height: 40px
         :width: 40px
         :alt: Daniel Jones
         :target: https://github.com/dcjones
 
-    .. image:: https://gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https%3A%2F%2Fidenticons.github.com%2Fccc246e2e59d5e2d0cca344114f2065e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/201456
         :height: 40px
         :width: 40px
         :alt: Mike Nolta
@@ -2512,7 +2529,7 @@ ______________________________________________________
 `Debug <https://github.com/toivoh/Debug.jl>`_
 _____________________________________________
 
-  .. image:: https://gravatar.com/avatar/8d3d3934c39b52f48c35a0cc536edae7?d=https%3A%2F%2Fidenticons.github.com%2F81c47394418f4da2556f7b0d67d3d3be.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1627007
      :height: 80px
      :width: 80px
      :align: right
@@ -2531,25 +2548,25 @@ _____________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/8d3d3934c39b52f48c35a0cc536edae7?d=https%3A%2F%2Fidenticons.github.com%2F81c47394418f4da2556f7b0d67d3d3be.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1627007
         :height: 40px
         :width: 40px
         :alt: toivoh
         :target: https://github.com/toivoh
 
-    .. image:: https://gravatar.com/avatar/5c06e9faa0d7bd205f81d10e825d7e4a?d=https%3A%2F%2Fidenticons.github.com%2F6b8901820c4636072f2131546cc646f7.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1437512
         :height: 40px
         :width: 40px
         :alt: nfoti
         :target: https://github.com/nfoti
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
         :target: https://github.com/timholy
 
-    .. image:: https://gravatar.com/avatar/317e44562dcf11f5164d0a4936696fbc?d=https%3A%2F%2Fidenticons.github.com%2F655fe21cedd4ac41f328aef38b350ef0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1553856
         :height: 40px
         :width: 40px
         :alt: rened
@@ -2560,7 +2577,7 @@ _____________________________________________
 `DecisionTree <https://github.com/bensadeghi/DecisionTree.jl>`_
 _______________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/de1cfaf505e6cea3e5b76cfda87bf6c8?d=https%3A%2F%2Fidenticons.github.com%2F4318d1a0f79b8fe608856135fd5480be.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1551277
      :height: 80px
      :width: 80px
      :align: right
@@ -2581,13 +2598,13 @@ _______________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/de1cfaf505e6cea3e5b76cfda87bf6c8?d=https%3A%2F%2Fidenticons.github.com%2F4318d1a0f79b8fe608856135fd5480be.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1551277
         :height: 40px
         :width: 40px
         :alt: Ben Sadeghi
         :target: https://github.com/bensadeghi
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
@@ -2598,7 +2615,7 @@ _______________________________________________________________
 `Devectorize <https://github.com/lindahua/Devectorize.jl>`_
 ___________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1900250
      :height: 80px
      :width: 80px
      :align: right
@@ -2617,31 +2634,31 @@ ___________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900250
         :height: 40px
         :width: 40px
         :alt: Dahua Lin
         :target: https://github.com/lindahua
 
-    .. image:: https://gravatar.com/avatar/11ed595b17e2ccf6bc0b3c80f3dde4e8?d=https%3A%2F%2Fidenticons.github.com%2F176a9d5ad1fcb179b164bdd7d4e625dc.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/5247292
         :height: 40px
         :width: 40px
         :alt: powerdistribution
         :target: https://github.com/powerdistribution
 
-    .. image:: https://gravatar.com/avatar/903acb22f47a901577ee48d3962d5858?d=https%3A%2F%2Fidenticons.github.com%2F3d46ff6b8eb4321c2705be8a1791bc94.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/636420
         :height: 40px
         :width: 40px
         :alt: Tom Short
         :target: https://github.com/tshort
 
-    .. image:: https://gravatar.com/avatar/44338030dea25ca337ae4c843d9b601b?d=https%3A%2F%2Fidenticons.github.com%2Ffbb86fbc1a3233da94ed5ae0739a8ab1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1157798
         :height: 40px
         :width: 40px
         :alt: Jake Bolewski
         :target: https://github.com/jakebolewski
 
-    .. image:: https://gravatar.com/avatar/f0f434f3f92f83314d9cb87ac5e5fdf3?d=https%3A%2F%2Fidenticons.github.com%2Ff8da6776e868d3254e024c9e06d9381a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1351003
         :height: 40px
         :width: 40px
         :alt: amckinlay
@@ -2652,7 +2669,7 @@ ___________________________________________________________
 `DICOM <https://github.com/ihnorton/DICOM.jl>`_
 _______________________________________________
 
-  .. image:: https://gravatar.com/avatar/192f114babcc8c2f53936c145bbc502c?d=https%3A%2F%2Fidenticons.github.com%2F8221b4c8f7cc8d6114e4f1afc7fd7dff.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/327706
      :height: 80px
      :width: 80px
      :align: right
@@ -2671,37 +2688,37 @@ _______________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/192f114babcc8c2f53936c145bbc502c?d=https%3A%2F%2Fidenticons.github.com%2F8221b4c8f7cc8d6114e4f1afc7fd7dff.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/327706
         :height: 40px
         :width: 40px
         :alt: Isaiah
         :target: https://github.com/ihnorton
 
-    .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/470884
         :height: 40px
         :width: 40px
         :alt: Simon Kornblith
         :target: https://github.com/simonster
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://gravatar.com/avatar/b4b8db23d8096b722483a57d21b7d65d?d=https%3A%2F%2Fidenticons.github.com%2F013fdd367536d965b2a0fcbc90fae782.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/744556
         :height: 40px
         :width: 40px
         :alt: Jeff Bezanson
         :target: https://github.com/JeffBezanson
 
-    .. image:: https://gravatar.com/avatar/80502de63c1b21d8f3ba663d72ba5be2?d=https%3A%2F%2Fidenticons.github.com%2Fd454171c70136b2284d6a8cfe123eb29.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223753
         :height: 40px
         :width: 40px
         :alt: Carlo Baldassi
         :target: https://github.com/carlobaldassi
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
@@ -2712,7 +2729,7 @@ _______________________________________________
 `DictUtils <https://github.com/slycoder/DictUtils.jl>`_
 _______________________________________________________
 
-  .. image:: https://gravatar.com/avatar/34bbe1993f0b1e918539da9a832f8064?d=https%3A%2F%2Fidenticons.github.com%2F2be6a2b31df685466061c234f3b786aa.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/524989
      :height: 80px
      :width: 80px
      :align: right
@@ -2731,7 +2748,7 @@ _______________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/34bbe1993f0b1e918539da9a832f8064?d=https%3A%2F%2Fidenticons.github.com%2F2be6a2b31df685466061c234f3b786aa.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/524989
         :height: 40px
         :width: 40px
         :alt: Jonathan Chang
@@ -2742,7 +2759,7 @@ _______________________________________________________
 `DimensionalityReduction <https://github.com/JuliaStats/DimensionalityReduction.jl>`_
 _____________________________________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2Fcb77afca27851230430c94750eef67c7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2761531
      :height: 80px
      :width: 80px
      :align: right
@@ -2761,43 +2778,43 @@ ________________________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
-    .. image:: https://gravatar.com/avatar/9a4e403e1158cdffceb70481f8ed7516?d=https%3A%2F%2Fidenticons.github.com%2F443802e01f6605b14b816d85c9c1b4f9.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/831341
         :height: 40px
         :width: 40px
         :alt: Chris Said
         :target: https://github.com/csaid
 
-    .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900250
         :height: 40px
         :width: 40px
         :alt: Dahua Lin
         :target: https://github.com/lindahua
 
-    .. image:: https://gravatar.com/avatar/9023771061ea090d6e6ef9f4c3a9f322?d=https%3A%2F%2Fidenticons.github.com%2F2e4f67056b52aa3ef51006fe45ea04fe.png&r=x
-        :height: 40px
-        :width: 40px
-        :alt: Julien Delafontaine
-        :target: https://github.com/delafont
-
-    .. image:: https://gravatar.com/avatar/02abdd20ef026f24d96035a407912df0?d=https%3A%2F%2Fidenticons.github.com%2Fc217f7fdea0f4545b9bb96a09ec7bd72.png&r=x
-        :height: 40px
-        :width: 40px
-        :alt: Andreas Noack Jensen
-        :target: https://github.com/andreasnoackjensen
-
-    .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/470884
         :height: 40px
         :width: 40px
         :alt: Simon Kornblith
         :target: https://github.com/simonster
 
-    .. image:: https://gravatar.com/avatar/3b76f9b2bc2a2e018f9252c70c13b9d3?d=https%3A%2F%2Fidenticons.github.com%2F6388b703fb80f6ebe6e3f83ec1624b1f.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/765212
+        :height: 40px
+        :width: 40px
+        :alt: Julien Delafontaine
+        :target: https://github.com/delafont
+
+    .. image:: https://avatars.githubusercontent.com/u/505001
+        :height: 40px
+        :width: 40px
+        :alt: Andreas Noack Jensen
+        :target: https://github.com/andreasnoackjensen
+
+    .. image:: https://avatars.githubusercontent.com/u/1499894
         :height: 40px
         :width: 40px
         :alt: bloody76
@@ -2808,18 +2825,18 @@ ________________________________________________________________________________
 `DiscreteFactor <https://github.com/wlbksy/DiscreteFactor.jl>`_
 _______________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/0bd7b10cad6fab97f81741aa2081cbde?d=https%3A%2F%2Fidenticons.github.com%2F4769168d0296537ac86601333d81c75a.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2433806
      :height: 80px
      :width: 80px
      :align: right
-     :alt: Lei WANG
+     :alt: WANG Lei
      :target: https://github.com/wlbksy
 
   Discrete factor and its operations in Probabilistic Graphical Models 
 
   Current Version: ``0.0.0``  (updated: 2013-09-03) 
 
-  Maintainer: `Lei WANG <https://github.com/wlbksy>`_
+  Maintainer: `WANG Lei <https://github.com/wlbksy>`_
 
   Dependencies::
 
@@ -2827,10 +2844,10 @@ _______________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/0bd7b10cad6fab97f81741aa2081cbde?d=https%3A%2F%2Fidenticons.github.com%2F4769168d0296537ac86601333d81c75a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2433806
         :height: 40px
         :width: 40px
-        :alt: Lei WANG
+        :alt: WANG Lei
         :target: https://github.com/wlbksy
 
 ----
@@ -2843,7 +2860,7 @@ _______________________________________________________
      :width: 19
      :target: https://travis-ci.org/JuliaStats/Distance.jl
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2Fcb77afca27851230430c94750eef67c7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2761531
      :height: 80px
      :width: 80px
      :align: right
@@ -2863,13 +2880,13 @@ _______________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900250
         :height: 40px
         :width: 40px
         :alt: Dahua Lin
         :target: https://github.com/lindahua
 
-    .. image:: https://gravatar.com/avatar/11ed595b17e2ccf6bc0b3c80f3dde4e8?d=https%3A%2F%2Fidenticons.github.com%2F176a9d5ad1fcb179b164bdd7d4e625dc.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/5247292
         :height: 40px
         :width: 40px
         :alt: powerdistribution
@@ -2885,7 +2902,7 @@ _________________________________________________________________
      :width: 19
      :target: https://travis-ci.org/JuliaStats/Distributions.jl
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2Fcb77afca27851230430c94750eef67c7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2761531
      :height: 80px
      :width: 80px
      :align: right
@@ -2907,133 +2924,133 @@ _________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900250
         :height: 40px
         :width: 40px
         :alt: Dahua Lin
         :target: https://github.com/lindahua
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
-    .. image:: https://gravatar.com/avatar/5ac7b1da0f2e9107b5020f88023a15e5?d=https%3A%2F%2Fidenticons.github.com%2F78ed96596b5786af9c65360c7fff0624.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1692009
         :height: 40px
         :width: 40px
         :alt: Simon Byrne
         :target: https://github.com/simonbyrne
 
-    .. image:: https://gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https%3A%2F%2Fidenticons.github.com%2Faeffec9bb1d59de139f16ccd910b5168.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/371258
         :height: 40px
         :width: 40px
         :alt: Douglas Bates
         :target: https://github.com/dmbates
 
-    .. image:: https://gravatar.com/avatar/52ec3f52d9c7be45b398b9e8afa4ee8c?d=https%3A%2F%2Fidenticons.github.com%2F8270367f6d0112ba184b09b25f46afa1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/3493568
         :height: 40px
         :width: 40px
         :alt: Dan Merl
         :target: https://github.com/danmerl
 
-    .. image:: https://gravatar.com/avatar/02abdd20ef026f24d96035a407912df0?d=https%3A%2F%2Fidenticons.github.com%2Fc217f7fdea0f4545b9bb96a09ec7bd72.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/505001
         :height: 40px
         :width: 40px
         :alt: Andreas Noack Jensen
         :target: https://github.com/andreasnoackjensen
 
-    .. image:: https://gravatar.com/avatar/f1678bcdc052b500191b78923399e5f8?d=https%3A%2F%2Fidenticons.github.com%2F23ac6c3f4e95b0415828115db7a8ca44.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2519036
         :height: 40px
         :width: 40px
         :alt: Theodore Papamarkou
         :target: https://github.com/scidom
 
-    .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/378918
         :height: 40px
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
 
-    .. image:: https://gravatar.com/avatar/25d0ed671b01595bb0a6c12bfa90c9b2?d=https%3A%2F%2Fidenticons.github.com%2F22b82e9e1ecf7e4570a56c0160a247b7.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/128380
         :height: 40px
         :width: 40px
         :alt: gusl
         :target: https://github.com/gusl
 
-    .. image:: https://gravatar.com/avatar/325774630318273a531f75046d1bacc6?d=https%3A%2F%2Fidenticons.github.com%2Fa482120dcb329ff2ad650a80380828ff.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2234614
         :height: 40px
         :width: 40px
         :alt: Mike Innes
         :target: https://github.com/one-more-minute
 
-    .. image:: https://gravatar.com/avatar/198e9aeca5b6c25a3c2b03a6506de1a9?d=https%3A%2F%2Fidenticons.github.com%2F3ce67bb8a071a425cb811b084b7ccbb0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/360952
         :height: 40px
         :width: 40px
         :alt: Martin O'Leary
         :target: https://github.com/mewo2
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
         :target: https://github.com/kmsquire
 
-    .. image:: https://gravatar.com/avatar/394286d6440acbef8de68df95ccf9bd7?d=https%3A%2F%2Fidenticons.github.com%2Fd3b66622a9c6a31f47b109f6b398c014.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1830517
         :height: 40px
         :width: 40px
         :alt: Ingmar Schuster
         :target: https://github.com/ingmarschuster
 
-    .. image:: https://gravatar.com/avatar/0b41d1f9e580cde53307166a47ae5300?d=https%3A%2F%2Fidenticons.github.com%2F43511d4a95d25482e140a48746fa74ae.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/120461
         :height: 40px
         :width: 40px
         :alt: Sergey Bartunov
         :target: https://github.com/sbos
 
-    .. image:: https://gravatar.com/avatar/0a68dbac433d776e5c3d831f2db93ce3?d=https%3A%2F%2Fidenticons.github.com%2F04d12f935046c04ef7898d7aba59578d.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1664912
         :height: 40px
         :width: 40px
         :alt: Antonio Saragga
         :target: https://github.com/AntonioSaragga
 
-    .. image:: https://gravatar.com/avatar/469373064055498d7c228aa55cf7a542?d=https%3A%2F%2Fidenticons.github.com%2Fe1e166638e80a67cc594296a5d08b17f.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/402348
         :height: 40px
         :width: 40px
         :alt: G. Jay Kerns
         :target: https://github.com/gjkerns
 
-    .. image:: https://gravatar.com/avatar/6cba33e8e7c69fa63f6ad386b7a958c5?d=https%3A%2F%2Fidenticons.github.com%2F270edd69788dce200a3b395a6da6fdb7.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1732
         :height: 40px
         :width: 40px
         :alt: Jiahao Chen
         :target: https://github.com/jiahao
 
-    .. image:: https://gravatar.com/avatar/f2416751970c33a3e92f4d58c812e577?d=https%3A%2F%2Fidenticons.github.com%2F5c2104e81f62ced8242f65c039beb950.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/982499
         :height: 40px
         :width: 40px
         :alt: Erik Taubeneck
         :target: https://github.com/eriktaubeneck
 
-    .. image:: https://gravatar.com/avatar/5c06e9faa0d7bd205f81d10e825d7e4a?d=https%3A%2F%2Fidenticons.github.com%2F6b8901820c4636072f2131546cc646f7.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1437512
         :height: 40px
         :width: 40px
         :alt: nfoti
         :target: https://github.com/nfoti
 
-    .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/470884
         :height: 40px
         :width: 40px
         :alt: Simon Kornblith
         :target: https://github.com/simonster
 
-    .. image:: https://gravatar.com/avatar/55e277a715ee2afd0d29c309174eca02?d=https%3A%2F%2Fidenticons.github.com%2F938b248e75affacf29383e0738b98ea2.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/744411
         :height: 40px
         :width: 40px
         :alt: Viral B. Shah
         :target: https://github.com/ViralBShah
 
-    .. image:: https://gravatar.com/avatar/b4035aa7c2e4ecf012eed26a63573f5b?d=https%3A%2F%2Fidenticons.github.com%2F0a49340e59a7ed16710b8f55286ba382.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/862530
         :height: 40px
         :width: 40px
         :alt: Alan Edelman
@@ -3044,7 +3061,7 @@ _________________________________________________________________
 `Docker <https://github.com/loladiro/Docker.jl>`_
 _________________________________________________
 
-  .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1291671
      :height: 80px
      :width: 80px
      :align: right
@@ -3064,7 +3081,7 @@ _________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
@@ -3075,7 +3092,7 @@ _________________________________________________
 `DoubleDouble <https://github.com/simonbyrne/DoubleDouble.jl>`_
 _______________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/5ac7b1da0f2e9107b5020f88023a15e5?d=https%3A%2F%2Fidenticons.github.com%2F78ed96596b5786af9c65360c7fff0624.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1692009
      :height: 80px
      :width: 80px
      :align: right
@@ -3094,7 +3111,7 @@ _______________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/5ac7b1da0f2e9107b5020f88023a15e5?d=https%3A%2F%2Fidenticons.github.com%2F78ed96596b5786af9c65360c7fff0624.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1692009
         :height: 40px
         :width: 40px
         :alt: Simon Byrne
@@ -3105,7 +3122,7 @@ _______________________________________________________________
 `DSP <https://github.com/JuliaDSP/DSP.jl>`_
 ___________________________________________
 
-  .. image:: https://identicons.github.com/cb0c7303d75b71e3f32e5401eef7f512.png
+  .. image:: https://avatars.githubusercontent.com/u/6054300
      :height: 80px
      :width: 80px
      :align: right
@@ -3126,25 +3143,25 @@ ___________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/470884
         :height: 40px
         :width: 40px
         :alt: Simon Kornblith
         :target: https://github.com/simonster
 
-    .. image:: https://gravatar.com/avatar/37245cf400fe4114b677828281879f2f?d=https%3A%2F%2Fidenticons.github.com%2F0a988fc2992add2d3233e19c7aadfdea.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/5733
         :height: 40px
         :width: 40px
         :alt: João Felipe Santos
         :target: https://github.com/jfsantos
 
-    .. image:: https://gravatar.com/avatar/733be193bf3baac5c2d6872b42c7774e?d=https%3A%2F%2Fidenticons.github.com%2F80edbd56f6cf1db86e54e6f6f309c698.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/734386
         :height: 40px
         :width: 40px
         :alt: Spencer Russell
         :target: https://github.com/ssfrr
 
-    .. image:: https://gravatar.com/avatar/4834480cf8e147503fa51dd4883a8ff7?d=https%3A%2F%2Fidenticons.github.com%2F89593c70842094f116f32f8e7d3da890.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/408510
         :height: 40px
         :width: 40px
         :alt: Jared Kofron
@@ -3160,7 +3177,7 @@ _________________________________________________________
      :width: 19
      :target: https://travis-ci.org/scidom/DualNumbers.jl
 
-  .. image:: https://gravatar.com/avatar/f1678bcdc052b500191b78923399e5f8?d=https%3A%2F%2Fidenticons.github.com%2F23ac6c3f4e95b0415828115db7a8ca44.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2519036
      :height: 80px
      :width: 80px
      :align: right
@@ -3179,13 +3196,13 @@ _________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/f1678bcdc052b500191b78923399e5f8?d=https%3A%2F%2Fidenticons.github.com%2F23ac6c3f4e95b0415828115db7a8ca44.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2519036
         :height: 40px
         :width: 40px
         :alt: Theodore Papamarkou
         :target: https://github.com/scidom
 
-    .. image:: https://gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https%3A%2F%2Fidenticons.github.com%2Fd73ab2afeb22d558e3fae4b0a0de43e3.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1733683
         :height: 40px
         :width: 40px
         :alt: Miles Lubin
@@ -3201,7 +3218,7 @@ _______________________________________________
      :width: 19
      :target: https://travis-ci.org/loladiro/DWARF.jl
 
-  .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1291671
      :height: 80px
      :width: 80px
      :align: right
@@ -3222,7 +3239,7 @@ _______________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
@@ -3233,7 +3250,7 @@ _______________________________________________
 `ELF <https://github.com/loladiro/ELF.jl>`_
 ___________________________________________
 
-  .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1291671
      :height: 80px
      :width: 80px
      :align: right
@@ -3253,7 +3270,7 @@ ___________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
@@ -3264,7 +3281,7 @@ ___________________________________________
 `Elliptic <https://github.com/nolta/Elliptic.jl>`_
 __________________________________________________
 
-  .. image:: https://gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https%3A%2F%2Fidenticons.github.com%2Fccc246e2e59d5e2d0cca344114f2065e.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/201456
      :height: 80px
      :width: 80px
      :align: right
@@ -3283,7 +3300,7 @@ __________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https%3A%2F%2Fidenticons.github.com%2Fccc246e2e59d5e2d0cca344114f2065e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/201456
         :height: 40px
         :width: 40px
         :alt: Mike Nolta
@@ -3299,7 +3316,7 @@ ____________________________________________________
      :width: 19
      :target: https://travis-ci.org/JuliaLang/Example.jl
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2F96058cb0ed9e150dfffc3b86b3b8d5e7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/743164
      :height: 80px
      :width: 80px
      :align: right
@@ -3308,47 +3325,47 @@ ____________________________________________________
 
   Example Julia package repo. 
 
-  Current Version: ``0.0.0``  (updated: 2012-11-22) 
+  Current Version: ``0.2.0``  (updated: 2014-02-26) 
 
   Maintainer: `The Julia Language <https://github.com/JuliaLang>`_
 
   Dependencies::
 
-      None
+      julia                    [0.2.0-,∞)
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://gravatar.com/avatar/55e277a715ee2afd0d29c309174eca02?d=https%3A%2F%2Fidenticons.github.com%2F938b248e75affacf29383e0738b98ea2.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/744411
         :height: 40px
         :width: 40px
         :alt: Viral B. Shah
         :target: https://github.com/ViralBShah
 
-    .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/378918
         :height: 40px
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
 
-    .. image:: https://gravatar.com/avatar/cc283e3bd2784ad33dfd55afcfef4877?d=https%3A%2F%2Fidenticons.github.com%2F54c0a5d9982c0b2967ca7ad7851c0d98.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/692635
         :height: 40px
         :width: 40px
         :alt: Iain Dunning
         :target: https://github.com/IainNZ
 
-    .. image:: https://gravatar.com/avatar/002ccfd8ee9e135f0dfb5650c292052d?d=https%3A%2F%2Fidenticons.github.com%2F0f1b002e3ac98562472e40b49a01cc84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/130920
         :height: 40px
         :width: 40px
         :alt: Elliot Saba
         :target: https://github.com/staticfloat
 
-    .. image:: https://gravatar.com/avatar/6cba33e8e7c69fa63f6ad386b7a958c5?d=https%3A%2F%2Fidenticons.github.com%2F270edd69788dce200a3b395a6da6fdb7.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1732
         :height: 40px
         :width: 40px
         :alt: Jiahao Chen
@@ -3359,7 +3376,7 @@ ____________________________________________________
 `ExpressionUtils <https://github.com/zachallaun/ExpressionUtils.jl>`_
 _____________________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/06625cbad0c69f5c2e673a4312e9fd7e?d=https%3A%2F%2Fidenticons.github.com%2F5dd6d7ae462c1aec0b364990d3ec72e0.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/503938
      :height: 80px
      :width: 80px
      :align: right
@@ -3378,7 +3395,7 @@ _____________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/06625cbad0c69f5c2e673a4312e9fd7e?d=https%3A%2F%2Fidenticons.github.com%2F5dd6d7ae462c1aec0b364990d3ec72e0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/503938
         :height: 40px
         :width: 40px
         :alt: Zach Allaun
@@ -3394,7 +3411,7 @@ _________________________________________________________
      :width: 19
      :target: https://travis-ci.org/zachallaun/FactCheck.jl
 
-  .. image:: https://gravatar.com/avatar/06625cbad0c69f5c2e673a4312e9fd7e?d=https%3A%2F%2Fidenticons.github.com%2F5dd6d7ae462c1aec0b364990d3ec72e0.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/503938
      :height: 80px
      :width: 80px
      :align: right
@@ -3413,25 +3430,25 @@ _________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/06625cbad0c69f5c2e673a4312e9fd7e?d=https%3A%2F%2Fidenticons.github.com%2F5dd6d7ae462c1aec0b364990d3ec72e0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/503938
         :height: 40px
         :width: 40px
         :alt: Zach Allaun
         :target: https://github.com/zachallaun
 
-    .. image:: https://gravatar.com/avatar/317e44562dcf11f5164d0a4936696fbc?d=https%3A%2F%2Fidenticons.github.com%2F655fe21cedd4ac41f328aef38b350ef0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1553856
         :height: 40px
         :width: 40px
         :alt: rened
         :target: https://github.com/rened
 
-    .. image:: https://gravatar.com/avatar/25ce2ab2f5e673e46208c1188a39e6ca?d=https%3A%2F%2Fidenticons.github.com%2F94554a56b2946c805e180501c4d4544c.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/324836
         :height: 40px
         :width: 40px
         :alt: milktrader
         :target: https://github.com/milktrader
 
-    .. image:: https://gravatar.com/avatar/d7912ba2ab72397e157148de151cd9e9?d=https%3A%2F%2Fidenticons.github.com%2F48d6b9b7c925b16ee5b168cf5e480a58.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1550920
         :height: 40px
         :width: 40px
         :alt: Tomas Lycken
@@ -3447,7 +3464,7 @@ ________________________________________________________
      :width: 19
      :target: https://travis-ci.org/carlobaldassi/FastaIO.jl
 
-  .. image:: https://gravatar.com/avatar/80502de63c1b21d8f3ba663d72ba5be2?d=https%3A%2F%2Fidenticons.github.com%2Fd454171c70136b2284d6a8cfe123eb29.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/223753
      :height: 80px
      :width: 80px
      :align: right
@@ -3467,7 +3484,7 @@ ________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/80502de63c1b21d8f3ba663d72ba5be2?d=https%3A%2F%2Fidenticons.github.com%2Fd454171c70136b2284d6a8cfe123eb29.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223753
         :height: 40px
         :width: 40px
         :alt: Carlo Baldassi
@@ -3478,7 +3495,7 @@ ________________________________________________________
 `FileFind <https://github.com/johnmyleswhite/FileFind.jl>`_
 ___________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/22064
      :height: 80px
      :width: 80px
      :align: right
@@ -3497,7 +3514,7 @@ ___________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
@@ -3508,7 +3525,7 @@ ___________________________________________________________
 `FITSIO <https://github.com/JuliaAstro/FITSIO.jl>`_
 ___________________________________________________
 
-  .. image:: https://identicons.github.com/2619d7a040d308577e793df7b28119f2.png
+  .. image:: https://avatars.githubusercontent.com/u/6685132
      :height: 80px
      :width: 80px
      :align: right
@@ -3527,19 +3544,19 @@ ___________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https%3A%2F%2Fidenticons.github.com%2Fccc246e2e59d5e2d0cca344114f2065e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/201456
         :height: 40px
         :width: 40px
         :alt: Mike Nolta
         :target: https://github.com/nolta
 
-    .. image:: https://gravatar.com/avatar/4b8f4719fb4ce4b00dda791c2c40e455?d=https%3A%2F%2Fidenticons.github.com%2F7aa0c11363bd2e21d6070331bb1fdd46.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/377795
         :height: 40px
         :width: 40px
         :alt: Maurizio Tomasi
         :target: https://github.com/ziotom78
 
-    .. image:: https://gravatar.com/avatar/345afc780d8725b6e8e9304d5bebcf1e?d=https%3A%2F%2Fidenticons.github.com%2F0f3b87a67e2c30deb30b4dd76aebdfb0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/970135
         :height: 40px
         :width: 40px
         :alt: Kyle Barbary
@@ -3555,7 +3572,7 @@ _____________________________________________________
      :width: 19
      :target: https://travis-ci.org/burrowsa/Fixtures.jl
 
-  .. image:: https://gravatar.com/avatar/f30692fe671bea12264aa2d0459da153?d=https%3A%2F%2Fidenticons.github.com%2F300b9eda5cf0e70f2a03efbc5f437c9f.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1609099
      :height: 80px
      :width: 80px
      :align: right
@@ -3574,7 +3591,7 @@ _____________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/f30692fe671bea12264aa2d0459da153?d=https%3A%2F%2Fidenticons.github.com%2F300b9eda5cf0e70f2a03efbc5f437c9f.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1609099
         :height: 40px
         :width: 40px
         :alt: Andrew Burrows
@@ -3590,7 +3607,7 @@ _________________________________________________________
      :width: 19
      :target: https://travis-ci.org/lindahua/Formatting.jl
 
-  .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1900250
      :height: 80px
      :width: 80px
      :align: right
@@ -3609,7 +3626,7 @@ _________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900250
         :height: 40px
         :width: 40px
         :alt: Dahua Lin
@@ -3617,10 +3634,15 @@ _________________________________________________________
 
 ----
 
-`ForwardDiff <https://github.com/scidom/ForwardDiff.jl>`_
+`ForwardDiff <https://github.com/scidom/ForwardDiff.jl>`_ |ForwardDiff_build|
 _________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/f1678bcdc052b500191b78923399e5f8?d=https%3A%2F%2Fidenticons.github.com%2F23ac6c3f4e95b0415828115db7a8ca44.png&r=x
+  .. |ForwardDiff_build| image:: ../images/travis-icon.png
+     :height: 19
+     :width: 19
+     :target: https://travis-ci.org/scidom/ForwardDiff.jl
+
+  .. image:: https://avatars.githubusercontent.com/u/2519036
      :height: 80px
      :width: 80px
      :align: right
@@ -3640,36 +3662,42 @@ _________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/f1678bcdc052b500191b78923399e5f8?d=https%3A%2F%2Fidenticons.github.com%2F23ac6c3f4e95b0415828115db7a8ca44.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2519036
         :height: 40px
         :width: 40px
         :alt: Theodore Papamarkou
         :target: https://github.com/scidom
 
-    .. image:: https://gravatar.com/avatar/11ed595b17e2ccf6bc0b3c80f3dde4e8?d=https%3A%2F%2Fidenticons.github.com%2F176a9d5ad1fcb179b164bdd7d4e625dc.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/5247292
         :height: 40px
         :width: 40px
         :alt: powerdistribution
         :target: https://github.com/powerdistribution
 
-    .. image:: https://gravatar.com/avatar/f87ff664dab9cd5bb362590613c680b8?d=https%3A%2F%2Fidenticons.github.com%2F74e421289e7f0fa0ef2e52acfe948fae.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2848130
         :height: 40px
         :width: 40px
         :alt: Frédéric Testard
         :target: https://github.com/fredo-dedup
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
         :target: https://github.com/kmsquire
+
+    .. image:: https://avatars.githubusercontent.com/u/1733683
+        :height: 40px
+        :width: 40px
+        :alt: Miles Lubin
+        :target: https://github.com/mlubin
 
 ----
 
 `FoundationDB <https://github.com/wwilson/FoundationDB.jl>`_
 ____________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/83c7006ed441a45aee8001ed6686d9bd?d=https%3A%2F%2Fidenticons.github.com%2F49fba10641bd0860d762eb7694508f83.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/639725
      :height: 80px
      :width: 80px
      :align: right
@@ -3688,7 +3716,7 @@ ____________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/83c7006ed441a45aee8001ed6686d9bd?d=https%3A%2F%2Fidenticons.github.com%2F49fba10641bd0860d762eb7694508f83.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/639725
         :height: 40px
         :width: 40px
         :alt: wwilson
@@ -3699,7 +3727,7 @@ ____________________________________________________________
 `FunctionalCollections <https://github.com/zachallaun/FunctionalCollections.jl>`_
 _________________________________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/06625cbad0c69f5c2e673a4312e9fd7e?d=https%3A%2F%2Fidenticons.github.com%2F5dd6d7ae462c1aec0b364990d3ec72e0.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/503938
      :height: 80px
      :width: 80px
      :align: right
@@ -3720,25 +3748,25 @@ ________________________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/06625cbad0c69f5c2e673a4312e9fd7e?d=https%3A%2F%2Fidenticons.github.com%2F5dd6d7ae462c1aec0b364990d3ec72e0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/503938
         :height: 40px
         :width: 40px
         :alt: Zach Allaun
         :target: https://github.com/zachallaun
 
-    .. image:: https://gravatar.com/avatar/72ee26065724239b61be271722b682dd?d=https%3A%2F%2Fidenticons.github.com%2Fbb31b1d09b467b2128926c8847d57609.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/607298
         :height: 40px
         :width: 40px
         :alt: Nick Collins
         :target: https://github.com/ncollins
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
         :target: https://github.com/kmsquire
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
@@ -3749,7 +3777,7 @@ ________________________________________________________________________________
 `FunctionalUtils <https://github.com/zachallaun/FunctionalUtils.jl>`_
 _____________________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/06625cbad0c69f5c2e673a4312e9fd7e?d=https%3A%2F%2Fidenticons.github.com%2F5dd6d7ae462c1aec0b364990d3ec72e0.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/503938
      :height: 80px
      :width: 80px
      :align: right
@@ -3768,13 +3796,13 @@ _____________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/06625cbad0c69f5c2e673a4312e9fd7e?d=https%3A%2F%2Fidenticons.github.com%2F5dd6d7ae462c1aec0b364990d3ec72e0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/503938
         :height: 40px
         :width: 40px
         :alt: Zach Allaun
         :target: https://github.com/zachallaun
 
-    .. image:: https://gravatar.com/avatar/31c16c481409b0922890da5266fabdeb?d=https%3A%2F%2Fidenticons.github.com%2Fc1902d1d6aa6def806a48e5225251ca9.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2532521
         :height: 40px
         :width: 40px
         :alt: James J Porter
@@ -3790,7 +3818,7 @@ ________________________________________________
      :width: 19
      :target: https://travis-ci.org/dcjones/Gadfly.jl
 
-  .. image:: https://gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https%3A%2F%2Fidenticons.github.com%2Fc7ec48e0ff0d0ae8827e36301a0962a1.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/210361
      :height: 80px
      :width: 80px
      :align: right
@@ -3799,7 +3827,7 @@ ________________________________________________
 
   Crafty statistical graphics for Julia. 
 
-  Current Version: ``0.2.4``  (updated: 2014-02-21) 
+  Current Version: ``0.2.5``  (updated: 2014-02-25) 
 
   Maintainer: `Daniel Jones <https://github.com/dcjones>`_
 
@@ -3822,151 +3850,157 @@ ________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https%3A%2F%2Fidenticons.github.com%2Fc7ec48e0ff0d0ae8827e36301a0962a1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/210361
         :height: 40px
         :width: 40px
         :alt: Daniel Jones
         :target: https://github.com/dcjones
 
-    .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/378918
         :height: 40px
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
 
-    .. image:: https://gravatar.com/avatar/8f514187144b1b19b0205fce41284d32?d=https%3A%2F%2Fidenticons.github.com%2F763a59893dc5fcf4c3d471b690847bec.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/421708
         :height: 40px
         :width: 40px
         :alt: john verzani
         :target: https://github.com/jverzani
 
-    .. image:: https://gravatar.com/avatar/f17ca369fdfffba1f53e461fff5400c5?d=https%3A%2F%2Fidenticons.github.com%2Fcfe9d26390606405f1a2d2095a8fea96.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/52222
         :height: 40px
         :width: 40px
         :alt: Calder Coalson
         :target: https://github.com/Calder
 
-    .. image:: https://gravatar.com/avatar/957fc8103c58ee9ee9a5d96c91b15e76?d=https%3A%2F%2Fidenticons.github.com%2F63a72c1cabc34962926263f1e33c3ce1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2762787
         :height: 40px
         :width: 40px
         :alt: Randy Zwitch
         :target: https://github.com/randyzwitch
 
-    .. image:: https://gravatar.com/avatar/313878fc8f316fc3fe4443b13913d0a4?d=https%3A%2F%2Fidenticons.github.com%2Fb12c483d8922cb5945bd4ffdae6d591d.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/112170
         :height: 40px
         :width: 40px
         :alt: Jared Forsyth
         :target: https://github.com/jaredly
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://gravatar.com/avatar/449044e4f0ed377b21409488cddafc45?d=https%3A%2F%2Fidenticons.github.com%2F3f2743ab32e9c084ddcabc42324d7465.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/866695
         :height: 40px
         :width: 40px
         :alt: Blake Johnson
         :target: https://github.com/blakejohnson
 
-    .. image:: https://gravatar.com/avatar/002ccfd8ee9e135f0dfb5650c292052d?d=https%3A%2F%2Fidenticons.github.com%2F0f1b002e3ac98562472e40b49a01cc84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/130920
         :height: 40px
         :width: 40px
         :alt: Elliot Saba
         :target: https://github.com/staticfloat
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
-    .. image:: https://gravatar.com/avatar/e9d7782f2aa9fa7f78301ca94e9b2f9c?d=https%3A%2F%2Fidenticons.github.com%2F2d02bf91a26f3e1c6760503262ba3e8f.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2823840
         :height: 40px
         :width: 40px
         :alt: Sean Garborg
         :target: https://github.com/garborg
 
-    .. image:: https://gravatar.com/avatar/63bcfcfcdf0fb75e508151e5fd944092?d=https%3A%2F%2Fidenticons.github.com%2F91f0d29e5839785338447a21e0d73317.png&r=x
-        :height: 40px
-        :width: 40px
-        :alt: dchudz
-        :target: https://github.com/dchudz
-
-    .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
-        :height: 40px
-        :width: 40px
-        :alt: Dahua Lin
-        :target: https://github.com/lindahua
-
-    .. image:: https://gravatar.com/avatar/b1f06f732d86e562563db728b2875eb2?d=https%3A%2F%2Fidenticons.github.com%2F58350ebc61b97bd7c28aeaca836c9c26.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/48409
         :height: 40px
         :width: 40px
         :alt: Jason Merrill
         :target: https://github.com/jwmerrill
 
-    .. image:: https://gravatar.com/avatar/37cebf4f44a1dbf71ee94aaea166ef00?d=https%3A%2F%2Fidenticons.github.com%2F297c3e3befdaf89f098f109d971e6f5a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1222726
+        :height: 40px
+        :width: 40px
+        :alt: dchudz
+        :target: https://github.com/dchudz
+
+    .. image:: https://avatars.githubusercontent.com/u/1900250
+        :height: 40px
+        :width: 40px
+        :alt: Dahua Lin
+        :target: https://github.com/lindahua
+
+    .. image:: https://avatars.githubusercontent.com/u/2933625
+        :height: 40px
+        :width: 40px
+        :alt: 
+        :target: https://github.com/nignatiadis
+
+    .. image:: https://avatars.githubusercontent.com/u/1783559
         :height: 40px
         :width: 40px
         :alt: Robert J. Ennis
         :target: https://github.com/rennis250
 
-    .. image:: https://gravatar.com/avatar/2a6dde592c8e5f207759779786160c6b?d=https%3A%2F%2Fidenticons.github.com%2F2baaf2c64031f3820b52e5fa4b0333ee.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/3237784
         :height: 40px
         :width: 40px
         :alt: Adrián
         :target: https://github.com/adrianlzt
 
-    .. image:: https://gravatar.com/avatar/2d100b37ea641d0189a946f05b08ce84?d=https%3A%2F%2Fidenticons.github.com%2Fe06e22754a5c74f284ca8324a7895b05.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1531373
         :height: 40px
         :width: 40px
         :alt: Sean Mackesey
         :target: https://github.com/smackesey
 
-    .. image:: https://gravatar.com/avatar/8c5eb92eab5256b9591026444ec8aee4?d=https%3A%2F%2Fidenticons.github.com%2F4d99b3becb0edf29937bfc1350f4e97e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1095067
         :height: 40px
         :width: 40px
         :alt: Stephen Eglen
         :target: https://github.com/sje30
 
-    .. image:: https://gravatar.com/avatar/11ed595b17e2ccf6bc0b3c80f3dde4e8?d=https%3A%2F%2Fidenticons.github.com%2F176a9d5ad1fcb179b164bdd7d4e625dc.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/5247292
         :height: 40px
         :width: 40px
         :alt: powerdistribution
         :target: https://github.com/powerdistribution
 
-    .. image:: https://gravatar.com/avatar/3b76f9b2bc2a2e018f9252c70c13b9d3?d=https%3A%2F%2Fidenticons.github.com%2F6388b703fb80f6ebe6e3f83ec1624b1f.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1499894
         :height: 40px
         :width: 40px
         :alt: bloody76
         :target: https://github.com/bloody76
 
-    .. image:: https://gravatar.com/avatar/55e277a715ee2afd0d29c309174eca02?d=https%3A%2F%2Fidenticons.github.com%2F938b248e75affacf29383e0738b98ea2.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/744411
         :height: 40px
         :width: 40px
         :alt: Viral B. Shah
         :target: https://github.com/ViralBShah
 
-    .. image:: https://gravatar.com/avatar/4206b43cb025b0c1fd8cd9fa89dd6086?d=https%3A%2F%2Fidenticons.github.com%2F64444743705b96233935f7aa3a0efcfb.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1277811
         :height: 40px
         :width: 40px
         :alt: catawbasam
         :target: https://github.com/catawbasam
 
-    .. image:: https://gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https%3A%2F%2Fidenticons.github.com%2Faeffec9bb1d59de139f16ccd910b5168.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/371258
         :height: 40px
         :width: 40px
         :alt: Douglas Bates
         :target: https://github.com/dmbates
 
-    .. image:: https://gravatar.com/avatar/25ce2ab2f5e673e46208c1188a39e6ca?d=https%3A%2F%2Fidenticons.github.com%2F94554a56b2946c805e180501c4d4544c.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/324836
         :height: 40px
         :width: 40px
         :alt: milktrader
         :target: https://github.com/milktrader
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
@@ -3977,7 +4011,7 @@ ________________________________________________
 `GARCH <https://github.com/AndreyKolev/GARCH.jl>`_
 __________________________________________________
 
-  .. image:: https://gravatar.com/avatar/27541ea7ad0954012c655bc3d2dad17f?d=https%3A%2F%2Fidenticons.github.com%2F4e0791aa8c6cc892713508d5d4dfdecb.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/5008318
      :height: 80px
      :width: 80px
      :align: right
@@ -3997,7 +4031,7 @@ __________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/27541ea7ad0954012c655bc3d2dad17f?d=https%3A%2F%2Fidenticons.github.com%2F4e0791aa8c6cc892713508d5d4dfdecb.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/5008318
         :height: 40px
         :width: 40px
         :alt: Andrey Kolev
@@ -4008,7 +4042,7 @@ __________________________________________________
 `Gaston <https://github.com/mbaz/Gaston.jl>`_
 _____________________________________________
 
-  .. image:: https://gravatar.com/avatar/ec325e7c3c35e354f2ea5ead5b0ec745?d=https%3A%2F%2Fidenticons.github.com%2F8118ed29272cba4f144a2500bdb2dc52.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1630034
      :height: 80px
      :width: 80px
      :align: right
@@ -4027,31 +4061,31 @@ _____________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/ec325e7c3c35e354f2ea5ead5b0ec745?d=https%3A%2F%2Fidenticons.github.com%2F8118ed29272cba4f144a2500bdb2dc52.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1630034
         :height: 40px
         :width: 40px
         :alt: mbaz
         :target: https://github.com/mbaz
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://gravatar.com/avatar/2a6dde592c8e5f207759779786160c6b?d=https%3A%2F%2Fidenticons.github.com%2F2baaf2c64031f3820b52e5fa4b0333ee.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/3237784
         :height: 40px
         :width: 40px
         :alt: Adrián
         :target: https://github.com/adrianlzt
 
-    .. image:: https://gravatar.com/avatar/80502de63c1b21d8f3ba663d72ba5be2?d=https%3A%2F%2Fidenticons.github.com%2Fd454171c70136b2284d6a8cfe123eb29.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223753
         :height: 40px
         :width: 40px
         :alt: Carlo Baldassi
         :target: https://github.com/carlobaldassi
 
-    .. image:: https://gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https%3A%2F%2Fidenticons.github.com%2F5d5113de843c8b258029d6a06bccd163.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/330950
         :height: 40px
         :width: 40px
         :alt: Jameson Nash
@@ -4059,26 +4093,26 @@ _____________________________________________
 
 ----
 
-`GeneticAlgorithms <https://github.com/WestleyArgentum/GeneticAlgorithms.jl>`_ |GeneticAlgorithms_build|
-______________________________________________________________________________
+`GeneticAlgorithms <https://github.com/forio/GeneticAlgorithms.jl>`_ |GeneticAlgorithms_build|
+____________________________________________________________________
 
   .. |GeneticAlgorithms_build| image:: ../images/travis-icon.png
      :height: 19
      :width: 19
-     :target: https://travis-ci.org/WestleyArgentum/GeneticAlgorithms.jl
+     :target: https://travis-ci.org/forio/GeneticAlgorithms.jl
 
-  .. image:: https://gravatar.com/avatar/dfc3b0fbb59c9444153823fd35dbd13b?d=https%3A%2F%2Fidenticons.github.com%2F678085c7c9e848e0442b77d8b0c4be71.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1878641
      :height: 80px
      :width: 80px
      :align: right
-     :alt: Westley Argentum Hennigh
-     :target: https://github.com/WestleyArgentum
+     :alt: Forio
+     :target: https://github.com/forio
 
   A lightweight framework for writing genetic algorithms in Julia 
 
   Current Version: ``0.0.1``  (updated: 2013-10-23) 
 
-  Maintainer: `Westley Argentum Hennigh <https://github.com/WestleyArgentum>`_
+  Maintainer: `Forio <https://github.com/forio>`_
 
   Dependencies::
 
@@ -4086,24 +4120,24 @@ ______________________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/dfc3b0fbb59c9444153823fd35dbd13b?d=https%3A%2F%2Fidenticons.github.com%2F678085c7c9e848e0442b77d8b0c4be71.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900307
         :height: 40px
         :width: 40px
         :alt: Westley Argentum Hennigh
         :target: https://github.com/WestleyArgentum
 
-    .. image:: https://gravatar.com/avatar/b42c651650ec8d3d95829c75e318af2d?d=https%3A%2F%2Fidenticons.github.com%2F25fa1502b4fd1cb246d30cc7b685e870.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/172643
         :height: 40px
         :width: 40px
-        :alt: Bitdeli Chef
-        :target: https://github.com/bitdeli-chef
+        :alt: Stu Thompson
+        :target: https://github.com/stuinzuri
 
 ----
 
 `GeoIP <https://github.com/johnmyleswhite/GeoIP.jl>`_
 _____________________________________________________
 
-  .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/22064
      :height: 80px
      :width: 80px
      :align: right
@@ -4122,13 +4156,13 @@ _____________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
-    .. image:: https://gravatar.com/avatar/957fc8103c58ee9ee9a5d96c91b15e76?d=https%3A%2F%2Fidenticons.github.com%2F63a72c1cabc34962926263f1e33c3ce1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2762787
         :height: 40px
         :width: 40px
         :alt: Randy Zwitch
@@ -4139,7 +4173,7 @@ _____________________________________________________
 `GetC <https://github.com/rennis250/GetC.jl>`_
 ______________________________________________
 
-  .. image:: https://gravatar.com/avatar/37cebf4f44a1dbf71ee94aaea166ef00?d=https%3A%2F%2Fidenticons.github.com%2F297c3e3befdaf89f098f109d971e6f5a.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1783559
      :height: 80px
      :width: 80px
      :align: right
@@ -4148,7 +4182,7 @@ ______________________________________________
 
   Minimal implementation of Jasper's Julia FFI 
 
-  Current Version: ``1.1.0``  (updated: 2013-12-08) 
+  Current Version: ``1.1.1``  (updated: 2014-03-02) 
 
   Maintainer: `Robert J. Ennis <https://github.com/rennis250>`_
 
@@ -4158,13 +4192,13 @@ ______________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/37cebf4f44a1dbf71ee94aaea166ef00?d=https%3A%2F%2Fidenticons.github.com%2F297c3e3befdaf89f098f109d971e6f5a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1783559
         :height: 40px
         :width: 40px
         :alt: Robert J. Ennis
         :target: https://github.com/rennis250
 
-    .. image:: https://gravatar.com/avatar/ae133b07aeeb78f471eadd6b061c6ec3?d=https%3A%2F%2Fidenticons.github.com%2F603b29335e75db8ad553a20349a0a4cb.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/149418
         :height: 40px
         :width: 40px
         :alt: Jasper den Ouden
@@ -4172,10 +4206,48 @@ ______________________________________________
 
 ----
 
+`GitHub <https://github.com/WestleyArgentum/GitHub.jl>`_ |GitHub_build|
+________________________________________________________
+
+  .. |GitHub_build| image:: ../images/travis-icon.png
+     :height: 19
+     :width: 19
+     :target: https://travis-ci.org/WestleyArgentum/GitHub.jl
+
+  .. image:: https://avatars.githubusercontent.com/u/1900307
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Westley Argentum Hennigh
+     :target: https://github.com/WestleyArgentum
+
+  A Julia package for interfacing with GitHub 
+
+  Current Version: ``0.0.1``  (updated: 2014-02-25) 
+
+  Maintainer: `Westley Argentum Hennigh <https://github.com/WestleyArgentum>`_
+
+  Dependencies::
+
+      julia                    [0.2.0-,∞)
+      Requests                 [0.0.0-,∞)
+      HttpCommon               [0.0.0-,∞)
+      JSON                     [0.0.0-,∞)
+
+  Contributors:
+
+    .. image:: https://avatars.githubusercontent.com/u/1900307
+        :height: 40px
+        :width: 40px
+        :alt: Westley Argentum Hennigh
+        :target: https://github.com/WestleyArgentum
+
+----
+
 `GLFW <https://github.com/jayschwa/GLFW.jl>`_
 _____________________________________________
 
-  .. image:: https://gravatar.com/avatar/805857de807ffc1b543e807f727d05c6?d=https%3A%2F%2Fidenticons.github.com%2F650104614a86140b6f734393ee947c77.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/475017
      :height: 80px
      :width: 80px
      :align: right
@@ -4196,7 +4268,7 @@ _____________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/805857de807ffc1b543e807f727d05c6?d=https%3A%2F%2Fidenticons.github.com%2F650104614a86140b6f734393ee947c77.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/475017
         :height: 40px
         :width: 40px
         :alt: Jay Weisskopf
@@ -4207,7 +4279,7 @@ _____________________________________________
 `GLM <https://github.com/JuliaStats/GLM.jl>`_
 _____________________________________________
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2Fcb77afca27851230430c94750eef67c7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2761531
      :height: 80px
      :width: 80px
      :align: right
@@ -4216,62 +4288,69 @@ _____________________________________________
 
   Generalized linear models in Julia 
 
-  Current Version: ``0.2.2``  (updated: 2013-10-18) 
+  Current Version: ``0.3.0``  (updated: 2014-02-24) 
 
   Maintainer: `Julia Statistics <https://github.com/JuliaStats>`_
 
   Dependencies::
 
-      julia                    [0.2.0-,∞)
-      Distributions            [0.2.0-,∞)
-      NumericExtensions        [0.2.17-,∞)
-      DataFrames               [0.3.6-,∞)
+      julia                    [0.3.0-,∞)
+      Distributions            [0.4.0-,∞)
+      StatsBase                [0.3.7-,∞)
+      NumericExtensions        [0.5.0-,∞)
+      DataFrames               [0.5.0-,∞)
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https%3A%2F%2Fidenticons.github.com%2Faeffec9bb1d59de139f16ccd910b5168.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/371258
         :height: 40px
         :width: 40px
         :alt: Douglas Bates
         :target: https://github.com/dmbates
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
-    .. image:: https://gravatar.com/avatar/02abdd20ef026f24d96035a407912df0?d=https%3A%2F%2Fidenticons.github.com%2Fc217f7fdea0f4545b9bb96a09ec7bd72.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/505001
         :height: 40px
         :width: 40px
         :alt: Andreas Noack Jensen
         :target: https://github.com/andreasnoackjensen
 
-    .. image:: https://gravatar.com/avatar/1a4672a0ae94c24f02517dea26097f58?d=https%3A%2F%2Fidenticons.github.com%2F876581e21f82522068fadfdd6f1d08c7.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/470884
+        :height: 40px
+        :width: 40px
+        :alt: Simon Kornblith
+        :target: https://github.com/simonster
+
+    .. image:: https://avatars.githubusercontent.com/u/79467
         :height: 40px
         :width: 40px
         :alt: Chris DuBois
         :target: https://github.com/doobwa
 
-    .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900250
         :height: 40px
         :width: 40px
         :alt: Dahua Lin
         :target: https://github.com/lindahua
 
-    .. image:: https://gravatar.com/avatar/d788bf7fd037ebef5798d8881c5faa2f?d=https%3A%2F%2Fidenticons.github.com%2Fb74329b16ae6564aa58c344720a5a087.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2896623
         :height: 40px
         :width: 40px
         :alt: Jacob Quinn
         :target: https://github.com/karbarcca
 
-    .. image:: https://gravatar.com/avatar/eb7d19c0c2d38d6f2616601189425b8e?d=https%3A%2F%2Fidenticons.github.com%2F823cfadd06578fce6b392866260a4d8f.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/815403
         :height: 40px
         :width: 40px
         :alt: Sam Lendle
         :target: https://github.com/lendle
 
-    .. image:: https://gravatar.com/avatar/11ed595b17e2ccf6bc0b3c80f3dde4e8?d=https%3A%2F%2Fidenticons.github.com%2F176a9d5ad1fcb179b164bdd7d4e625dc.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/5247292
         :height: 40px
         :width: 40px
         :alt: powerdistribution
@@ -4287,7 +4366,7 @@ __________________________________________________
      :width: 19
      :target: https://travis-ci.org/simonster/GLMNet.jl
 
-  .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/470884
      :height: 80px
      :width: 80px
      :align: right
@@ -4296,7 +4375,7 @@ __________________________________________________
 
   Julia wrapper for fitting Lasso/ElasticNet GLM models using glmnet 
 
-  Current Version: ``0.0.1``  (updated: 2013-11-23) 
+  Current Version: ``0.0.2``  (updated: 2014-03-01) 
 
   Maintainer: `Simon Kornblith <https://github.com/simonster>`_
 
@@ -4307,13 +4386,13 @@ __________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/470884
         :height: 40px
         :width: 40px
         :alt: Simon Kornblith
         :target: https://github.com/simonster
 
-    .. image:: https://gravatar.com/avatar/f09663fd5fc04bad5e5b09daddb86fe6?d=https%3A%2F%2Fidenticons.github.com%2F599950177e0539ce40b503f2b32fe461.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/216398
         :height: 40px
         :width: 40px
         :alt: Yixuan Qiu
@@ -4329,7 +4408,7 @@ _____________________________________________
      :width: 19
      :target: https://travis-ci.org/JuliaOpt/GLPK.jl
 
-  .. image:: https://gravatar.com/avatar/f86ab8fe20610c227b7891ebf16ecfd8?d=https%3A%2F%2Fidenticons.github.com%2F5efde7dd012df4681146f0d1704b0238.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/5667382
      :height: 80px
      :width: 80px
      :align: right
@@ -4350,31 +4429,31 @@ _____________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/80502de63c1b21d8f3ba663d72ba5be2?d=https%3A%2F%2Fidenticons.github.com%2Fd454171c70136b2284d6a8cfe123eb29.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223753
         :height: 40px
         :width: 40px
         :alt: Carlo Baldassi
         :target: https://github.com/carlobaldassi
 
-    .. image:: https://gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https%3A%2F%2Fidenticons.github.com%2Fd73ab2afeb22d558e3fae4b0a0de43e3.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1733683
         :height: 40px
         :width: 40px
         :alt: Miles Lubin
         :target: https://github.com/mlubin
 
-    .. image:: https://gravatar.com/avatar/002ccfd8ee9e135f0dfb5650c292052d?d=https%3A%2F%2Fidenticons.github.com%2F0f1b002e3ac98562472e40b49a01cc84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/130920
         :height: 40px
         :width: 40px
         :alt: Elliot Saba
         :target: https://github.com/staticfloat
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
         :target: https://github.com/kmsquire
 
-    .. image:: https://gravatar.com/avatar/ae52b95e7dbb8f07a81e1758421cccd9?d=https%3A%2F%2Fidenticons.github.com%2F27a5a977c5b6bc4683da436ba13e236e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1311290
         :height: 40px
         :width: 40px
         :alt: Leonardo
@@ -4390,7 +4469,7 @@ _______________________________________________________________________________
      :width: 19
      :target: https://travis-ci.org/JuliaOpt/GLPKMathProgInterface.jl
 
-  .. image:: https://gravatar.com/avatar/f86ab8fe20610c227b7891ebf16ecfd8?d=https%3A%2F%2Fidenticons.github.com%2F5efde7dd012df4681146f0d1704b0238.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/5667382
      :height: 80px
      :width: 80px
      :align: right
@@ -4411,19 +4490,19 @@ _______________________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/80502de63c1b21d8f3ba663d72ba5be2?d=https%3A%2F%2Fidenticons.github.com%2Fd454171c70136b2284d6a8cfe123eb29.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223753
         :height: 40px
         :width: 40px
         :alt: Carlo Baldassi
         :target: https://github.com/carlobaldassi
 
-    .. image:: https://gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https%3A%2F%2Fidenticons.github.com%2Fd73ab2afeb22d558e3fae4b0a0de43e3.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1733683
         :height: 40px
         :width: 40px
         :alt: Miles Lubin
         :target: https://github.com/mlubin
 
-    .. image:: https://gravatar.com/avatar/cc283e3bd2784ad33dfd55afcfef4877?d=https%3A%2F%2Fidenticons.github.com%2F54c0a5d9982c0b2967ca7ad7851c0d98.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/692635
         :height: 40px
         :width: 40px
         :alt: Iain Dunning
@@ -4434,7 +4513,7 @@ _______________________________________________________________________________
 `GLUT <https://github.com/rennis250/GLUT.jl>`_
 ______________________________________________
 
-  .. image:: https://gravatar.com/avatar/37cebf4f44a1dbf71ee94aaea166ef00?d=https%3A%2F%2Fidenticons.github.com%2F297c3e3befdaf89f098f109d971e6f5a.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1783559
      :height: 80px
      :width: 80px
      :align: right
@@ -4443,7 +4522,7 @@ ______________________________________________
 
   Julia interface to GLUT 
 
-  Current Version: ``0.1.0``  (updated: 2013-10-11) 
+  Current Version: ``0.2.0``  (updated: 2014-02-28) 
 
   Maintainer: `Robert J. Ennis <https://github.com/rennis250>`_
 
@@ -4453,11 +4532,17 @@ ______________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/37cebf4f44a1dbf71ee94aaea166ef00?d=https%3A%2F%2Fidenticons.github.com%2F297c3e3befdaf89f098f109d971e6f5a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1783559
         :height: 40px
         :width: 40px
         :alt: Robert J. Ennis
         :target: https://github.com/rennis250
+
+    .. image:: https://avatars.githubusercontent.com/u/1010467
+        :height: 40px
+        :width: 40px
+        :alt: Sdanisch
+        :target: https://github.com/SimonDanisch
 
 ----
 
@@ -4469,7 +4554,7 @@ _________________________________________________
      :width: 19
      :target: https://travis-ci.org/loladiro/GnuTLS.jl
 
-  .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1291671
      :height: 80px
      :width: 80px
      :align: right
@@ -4490,19 +4575,19 @@ _________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
-    .. image:: https://gravatar.com/avatar/002ccfd8ee9e135f0dfb5650c292052d?d=https%3A%2F%2Fidenticons.github.com%2F0f1b002e3ac98562472e40b49a01cc84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/130920
         :height: 40px
         :width: 40px
         :alt: Elliot Saba
         :target: https://github.com/staticfloat
 
-    .. image:: https://gravatar.com/avatar/192f114babcc8c2f53936c145bbc502c?d=https%3A%2F%2Fidenticons.github.com%2F8221b4c8f7cc8d6114e4f1afc7fd7dff.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/327706
         :height: 40px
         :width: 40px
         :alt: Isaiah
@@ -4513,7 +4598,7 @@ _________________________________________________
 `GoogleCharts <https://github.com/jverzani/GoogleCharts.jl>`_
 _____________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/8f514187144b1b19b0205fce41284d32?d=https%3A%2F%2Fidenticons.github.com%2F763a59893dc5fcf4c3d471b690847bec.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/421708
      :height: 80px
      :width: 80px
      :align: right
@@ -4536,13 +4621,13 @@ _____________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/8f514187144b1b19b0205fce41284d32?d=https%3A%2F%2Fidenticons.github.com%2F763a59893dc5fcf4c3d471b690847bec.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/421708
         :height: 40px
         :width: 40px
         :alt: john verzani
         :target: https://github.com/jverzani
 
-    .. image:: https://gravatar.com/avatar/2a6dde592c8e5f207759779786160c6b?d=https%3A%2F%2Fidenticons.github.com%2F2baaf2c64031f3820b52e5fa4b0333ee.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/3237784
         :height: 40px
         :width: 40px
         :alt: Adrián
@@ -4558,7 +4643,7 @@ __________________________________________________
      :width: 19
      :target: https://travis-ci.org/JuliaLang/Graphs.jl
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2F96058cb0ed9e150dfffc3b86b3b8d5e7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/743164
      :height: 80px
      :width: 80px
      :align: right
@@ -4567,125 +4652,131 @@ __________________________________________________
 
   Working with graphs in Julia 
 
-  Current Version: ``0.3.1``  (updated: 2014-02-18) 
+  Current Version: ``0.4.1``  (updated: 2014-02-28) 
 
   Maintainer: `The Julia Language <https://github.com/JuliaLang>`_
 
   Dependencies::
 
-      julia                    [0.2.0-,∞)
-      DataStructures           [0.0.0-,∞)
+      julia                    [0.3.0-,∞)
+      DataStructures           [0.2.9-,∞)
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900250
         :height: 40px
         :width: 40px
         :alt: Dahua Lin
         :target: https://github.com/lindahua
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
-    .. image:: https://gravatar.com/avatar/5c06e9faa0d7bd205f81d10e825d7e4a?d=https%3A%2F%2Fidenticons.github.com%2F6b8901820c4636072f2131546cc646f7.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1437512
         :height: 40px
         :width: 40px
         :alt: nfoti
         :target: https://github.com/nfoti
 
-    .. image:: https://identicons.github.com/9990a890f3a93e06ce4221f9eac1c432.png
+    .. image:: https://avatars.githubusercontent.com/u/212750
         :height: 40px
         :width: 40px
         :alt: Raphael Sofaer
         :target: https://github.com/rsofaer
 
-    .. image:: https://gravatar.com/avatar/2bf4378d854e6f9e8cdba9505b90520e?d=https%3A%2F%2Fidenticons.github.com%2F76e1ead3d1a884164c26077252b67406.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1237055
         :height: 40px
         :width: 40px
         :alt: David
         :target: https://github.com/maxlikely
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
         :target: https://github.com/kmsquire
 
-    .. image:: https://gravatar.com/avatar/79e1bcfc1ed23b8964171191e9073545?d=https%3A%2F%2Fidenticons.github.com%2F770db0d7e7610d1f17e1680bddda40c6.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2433806
         :height: 40px
         :width: 40px
-        :alt: Matt Weiden
-        :target: https://github.com/mweiden
+        :alt: WANG Lei
+        :target: https://github.com/wlbksy
 
-    .. image:: https://gravatar.com/avatar/d6fcc16462fbe93673342da3ff5d8121?d=https%3A%2F%2Fidenticons.github.com%2F140c3a685cc4991ce11dae00e71b9d9d.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/70274
         :height: 40px
         :width: 40px
         :alt: Uwe L. Korn
         :target: https://github.com/xhochy
 
-    .. image:: https://gravatar.com/avatar/0bd7b10cad6fab97f81741aa2081cbde?d=https%3A%2F%2Fidenticons.github.com%2F4769168d0296537ac86601333d81c75a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/538456
         :height: 40px
         :width: 40px
-        :alt: Lei WANG
-        :target: https://github.com/wlbksy
+        :alt: Matt Weiden
+        :target: https://github.com/mweiden
 
-    .. image:: https://gravatar.com/avatar/30129fd857fe78026b4a672db3ddd682?d=https%3A%2F%2Fidenticons.github.com%2Fef2be206edb57c8095281ecd86d5e361.png&r=x
-        :height: 40px
-        :width: 40px
-        :alt: Cameron Smith
-        :target: https://github.com/cameronraysmith
-
-    .. image:: https://gravatar.com/avatar/62df30beab9c2a6f3fe3f86995e94387?d=https%3A%2F%2Fidenticons.github.com%2F58b08088d26ada47c510cef3759f7aae.png&r=x
-        :height: 40px
-        :width: 40px
-        :alt: David de Laat
-        :target: https://github.com/daviddelaat
-
-    .. image:: https://gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https%3A%2F%2Fidenticons.github.com%2Faeffec9bb1d59de139f16ccd910b5168.png&r=x
-        :height: 40px
-        :width: 40px
-        :alt: Douglas Bates
-        :target: https://github.com/dmbates
-
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
         :target: https://github.com/timholy
 
-    .. image:: https://gravatar.com/avatar/c928b9b00cbc5133c4ae7a743cf96f10?d=https%3A%2F%2Fidenticons.github.com%2F6b1b3a1e3737701978c843b72704488b.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1908571
+        :height: 40px
+        :width: 40px
+        :alt: David de Laat
+        :target: https://github.com/daviddelaat
+
+    .. image:: https://avatars.githubusercontent.com/u/371258
+        :height: 40px
+        :width: 40px
+        :alt: Douglas Bates
+        :target: https://github.com/dmbates
+
+    .. image:: https://avatars.githubusercontent.com/u/420942
+        :height: 40px
+        :width: 40px
+        :alt: Cameron Smith
+        :target: https://github.com/cameronraysmith
+
+    .. image:: https://avatars.githubusercontent.com/u/159177
         :height: 40px
         :width: 40px
         :alt: Alessandro Andrioni
         :target: https://github.com/andrioni
 
-    .. image:: https://gravatar.com/avatar/91fa687725c763561519614037bb31a9?d=https%3A%2F%2Fidenticons.github.com%2F63f8c7b4d7ffc2c73e530663a34fa418.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/62906
         :height: 40px
         :width: 40px
         :alt: Andrei Formiga
         :target: https://github.com/tautologico
 
-    .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/378918
         :height: 40px
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
 
-    .. image:: https://gravatar.com/avatar/002ccfd8ee9e135f0dfb5650c292052d?d=https%3A%2F%2Fidenticons.github.com%2F0f1b002e3ac98562472e40b49a01cc84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/130920
         :height: 40px
         :width: 40px
         :alt: Elliot Saba
         :target: https://github.com/staticfloat
+
+    .. image:: https://avatars.githubusercontent.com/u/2588685
+        :height: 40px
+        :width: 40px
+        :alt: lpand
+        :target: https://github.com/lpand
 
 ----
 
 `Grid <https://github.com/timholy/Grid.jl>`_
 ____________________________________________
 
-  .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1525481
      :height: 80px
      :width: 80px
      :align: right
@@ -4694,7 +4785,7 @@ ____________________________________________
 
   Interpolation and related operations on grids 
 
-  Current Version: ``0.2.9``  (updated: 2014-02-11) 
+  Current Version: ``0.2.10``  (updated: 2014-02-28) 
 
   Maintainer: `Tim Holy <https://github.com/timholy>`_
 
@@ -4704,19 +4795,19 @@ ____________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
         :target: https://github.com/timholy
 
-    .. image:: https://gravatar.com/avatar/449044e4f0ed377b21409488cddafc45?d=https%3A%2F%2Fidenticons.github.com%2F3f2743ab32e9c084ddcabc42324d7465.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/866695
         :height: 40px
         :width: 40px
         :alt: Blake Johnson
         :target: https://github.com/blakejohnson
 
-    .. image:: https://gravatar.com/avatar/5ac7b1da0f2e9107b5020f88023a15e5?d=https%3A%2F%2Fidenticons.github.com%2F78ed96596b5786af9c65360c7fff0624.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1692009
         :height: 40px
         :width: 40px
         :alt: Simon Byrne
@@ -4732,7 +4823,7 @@ _________________________________________
      :width: 19
      :target: https://travis-ci.org/jiahao/GSL.jl
 
-  .. image:: https://gravatar.com/avatar/6cba33e8e7c69fa63f6ad386b7a958c5?d=https%3A%2F%2Fidenticons.github.com%2F270edd69788dce200a3b395a6da6fdb7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1732
      :height: 80px
      :width: 80px
      :align: right
@@ -4753,13 +4844,13 @@ _________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/6cba33e8e7c69fa63f6ad386b7a958c5?d=https%3A%2F%2Fidenticons.github.com%2F270edd69788dce200a3b395a6da6fdb7.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1732
         :height: 40px
         :width: 40px
         :alt: Jiahao Chen
         :target: https://github.com/jiahao
 
-    .. image:: https://gravatar.com/avatar/b4035aa7c2e4ecf012eed26a63573f5b?d=https%3A%2F%2Fidenticons.github.com%2F0a49340e59a7ed16710b8f55286ba382.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/862530
         :height: 40px
         :width: 40px
         :alt: Alan Edelman
@@ -4770,7 +4861,7 @@ _________________________________________
 `Gtk <https://github.com/JuliaLang/Gtk.jl>`_
 ____________________________________________
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2F96058cb0ed9e150dfffc3b86b3b8d5e7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/743164
      :height: 80px
      :width: 80px
      :align: right
@@ -4790,37 +4881,37 @@ ____________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https%3A%2F%2Fidenticons.github.com%2F5d5113de843c8b258029d6a06bccd163.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/330950
         :height: 40px
         :width: 40px
         :alt: Jameson Nash
         :target: https://github.com/vtjnash
 
-    .. image:: https://gravatar.com/avatar/a0cab25b58656bcdf9f6de11dc7b158a?d=https%3A%2F%2Fidenticons.github.com%2F74fe54e37e826ba88809a3320f0c6a6e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/3109172
         :height: 40px
         :width: 40px
         :alt: Tobias Knopp
         :target: https://github.com/tknopp
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
         :target: https://github.com/timholy
 
-    .. image:: https://gravatar.com/avatar/02715901c97d8a7b314e447a507bba83?d=https%3A%2F%2Fidenticons.github.com%2Fb5b339e80edfb1b0d6de9a108fa62ce0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1363104
         :height: 40px
         :width: 40px
         :alt: Björn Linse
         :target: https://github.com/bfredl
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
-    .. image:: https://gravatar.com/avatar/8f514187144b1b19b0205fce41284d32?d=https%3A%2F%2Fidenticons.github.com%2F763a59893dc5fcf4c3d471b690847bec.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/421708
         :height: 40px
         :width: 40px
         :alt: john verzani
@@ -4831,7 +4922,7 @@ ____________________________________________
 `Gurobi <https://github.com/JuliaOpt/Gurobi.jl>`_
 _________________________________________________
 
-  .. image:: https://gravatar.com/avatar/f86ab8fe20610c227b7891ebf16ecfd8?d=https%3A%2F%2Fidenticons.github.com%2F5efde7dd012df4681146f0d1704b0238.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/5667382
      :height: 80px
      :width: 80px
      :align: right
@@ -4852,31 +4943,31 @@ _________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https%3A%2F%2Fidenticons.github.com%2Fd73ab2afeb22d558e3fae4b0a0de43e3.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1733683
         :height: 40px
         :width: 40px
         :alt: Miles Lubin
         :target: https://github.com/mlubin
 
-    .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900250
         :height: 40px
         :width: 40px
         :alt: Dahua Lin
         :target: https://github.com/lindahua
 
-    .. image:: https://gravatar.com/avatar/cc283e3bd2784ad33dfd55afcfef4877?d=https%3A%2F%2Fidenticons.github.com%2F54c0a5d9982c0b2967ca7ad7851c0d98.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/692635
         :height: 40px
         :width: 40px
         :alt: Iain Dunning
         :target: https://github.com/IainNZ
 
-    .. image:: https://gravatar.com/avatar/7e72b2f1c3eec9390c944edc1f023b7f?d=https%3A%2F%2Fidenticons.github.com%2F36f80e1e56d385146c893bd86186f61f.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1373010
         :height: 40px
         :width: 40px
         :alt: Joey Huchette
         :target: https://github.com/joehuchette
 
-    .. image:: https://gravatar.com/avatar/c928b9b00cbc5133c4ae7a743cf96f10?d=https%3A%2F%2Fidenticons.github.com%2F6b1b3a1e3737701978c843b72704488b.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/159177
         :height: 40px
         :width: 40px
         :alt: Alessandro Andrioni
@@ -4892,7 +4983,7 @@ _____________________________________________
      :width: 19
      :target: https://travis-ci.org/kmsquire/GZip.jl
 
-  .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/223250
      :height: 80px
      :width: 80px
      :align: right
@@ -4913,25 +5004,25 @@ _____________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
         :target: https://github.com/kmsquire
 
-    .. image:: https://gravatar.com/avatar/0e32745f2094c6ec4162b447c47a9609?d=https%3A%2F%2Fidenticons.github.com%2F3bd73f0a57e8f464e8afda24aac180ea.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/38372
         :height: 40px
         :width: 40px
         :alt: Lance Hepler
         :target: https://github.com/nlhepler
 
-    .. image:: https://gravatar.com/avatar/d788bf7fd037ebef5798d8881c5faa2f?d=https%3A%2F%2Fidenticons.github.com%2Fb74329b16ae6564aa58c344720a5a087.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2896623
         :height: 40px
         :width: 40px
         :alt: Jacob Quinn
         :target: https://github.com/karbarcca
 
-    .. image:: https://gravatar.com/avatar/e9d7782f2aa9fa7f78301ca94e9b2f9c?d=https%3A%2F%2Fidenticons.github.com%2F2d02bf91a26f3e1c6760503262ba3e8f.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2823840
         :height: 40px
         :width: 40px
         :alt: Sean Garborg
@@ -4942,7 +5033,7 @@ _____________________________________________
 `Hadamard <https://github.com/stevengj/Hadamard.jl>`_
 _____________________________________________________
 
-  .. image:: https://gravatar.com/avatar/9563cfcf21df990e570df1dd019bce16?d=https%3A%2F%2Fidenticons.github.com%2Ff2d6e6092107c938c67268b75745fb84.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2913679
      :height: 80px
      :width: 80px
      :align: right
@@ -4951,17 +5042,17 @@ _____________________________________________________
 
   Fast Walsh-Hadamard transforms for the Julia language 
 
-  Current Version: ``0.0.0``  (updated: 2013-08-15) 
+  Current Version: ``0.0.1``  (updated: 2014-03-01) 
 
   Maintainer: `Steven G. Johnson <https://github.com/stevengj>`_
 
   Dependencies::
 
-      None
+      julia                    [0.2.0-,∞)
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/9563cfcf21df990e570df1dd019bce16?d=https%3A%2F%2Fidenticons.github.com%2Ff2d6e6092107c938c67268b75745fb84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2913679
         :height: 40px
         :width: 40px
         :alt: Steven G. Johnson
@@ -4977,7 +5068,7 @@ ____________________________________________
      :width: 19
      :target: https://travis-ci.org/timholy/HDF5.jl
 
-  .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1525481
      :height: 80px
      :width: 80px
      :align: right
@@ -4986,7 +5077,7 @@ ____________________________________________
 
   Saving and loading Julia variables 
 
-  Current Version: ``0.2.17``  (updated: 2014-02-03) 
+  Current Version: ``0.2.19``  (updated: 2014-02-28) 
 
   Maintainer: `Tim Holy <https://github.com/timholy>`_
 
@@ -4998,85 +5089,85 @@ ____________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
         :target: https://github.com/timholy
 
-    .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/470884
         :height: 40px
         :width: 40px
         :alt: Simon Kornblith
         :target: https://github.com/simonster
 
-    .. image:: https://gravatar.com/avatar/317e44562dcf11f5164d0a4936696fbc?d=https%3A%2F%2Fidenticons.github.com%2F655fe21cedd4ac41f328aef38b350ef0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1553856
         :height: 40px
         :width: 40px
         :alt: rened
         :target: https://github.com/rened
 
-    .. image:: https://gravatar.com/avatar/449044e4f0ed377b21409488cddafc45?d=https%3A%2F%2Fidenticons.github.com%2F3f2743ab32e9c084ddcabc42324d7465.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/866695
         :height: 40px
         :width: 40px
         :alt: Blake Johnson
         :target: https://github.com/blakejohnson
 
-    .. image:: https://gravatar.com/avatar/028d46603cc1c1821da3397589a4c8e8?d=https%3A%2F%2Fidenticons.github.com%2F4cac4f2ce13c760d23815f4ba814c37b.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/5192577
         :height: 40px
         :width: 40px
         :alt: ggggggggg
         :target: https://github.com/ggggggggg
 
-    .. image:: https://gravatar.com/avatar/80502de63c1b21d8f3ba663d72ba5be2?d=https%3A%2F%2Fidenticons.github.com%2Fd454171c70136b2284d6a8cfe123eb29.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223753
         :height: 40px
         :width: 40px
         :alt: Carlo Baldassi
         :target: https://github.com/carlobaldassi
 
-    .. image:: https://gravatar.com/avatar/927b12170d55ac2cfe2060487cb16c0b?d=https%3A%2F%2Fidenticons.github.com%2F9fda0033bae4b12ddaea4350cd67dbe1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1625247
         :height: 40px
         :width: 40px
         :alt: John Travers
         :target: https://github.com/jtravs
 
-    .. image:: https://gravatar.com/avatar/11ed595b17e2ccf6bc0b3c80f3dde4e8?d=https%3A%2F%2Fidenticons.github.com%2F176a9d5ad1fcb179b164bdd7d4e625dc.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/5247292
         :height: 40px
         :width: 40px
         :alt: powerdistribution
         :target: https://github.com/powerdistribution
 
-    .. image:: https://gravatar.com/avatar/9563cfcf21df990e570df1dd019bce16?d=https%3A%2F%2Fidenticons.github.com%2Ff2d6e6092107c938c67268b75745fb84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2913679
         :height: 40px
         :width: 40px
         :alt: Steven G. Johnson
         :target: https://github.com/stevengj
 
-    .. image:: https://gravatar.com/avatar/88b8fe9e9bc03bd33208830fa612dc50?d=https%3A%2F%2Fidenticons.github.com%2Fddae15621d5bc958737aa7c04cde3640.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/154641
         :height: 40px
         :width: 40px
         :alt: Matt Bauman
         :target: https://github.com/mbauman
 
-    .. image:: https://gravatar.com/avatar/002ccfd8ee9e135f0dfb5650c292052d?d=https%3A%2F%2Fidenticons.github.com%2F0f1b002e3ac98562472e40b49a01cc84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/130920
         :height: 40px
         :width: 40px
         :alt: Elliot Saba
         :target: https://github.com/staticfloat
 
-    .. image:: https://gravatar.com/avatar/192f114babcc8c2f53936c145bbc502c?d=https%3A%2F%2Fidenticons.github.com%2F8221b4c8f7cc8d6114e4f1afc7fd7dff.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/327706
         :height: 40px
         :width: 40px
         :alt: Isaiah
         :target: https://github.com/ihnorton
 
-    .. image:: https://gravatar.com/avatar/be5ce4d5ca4313588fbc0783156b1a22?d=https%3A%2F%2Fidenticons.github.com%2Fa4994fd85ea5e6bcb67ecdaf114afb7d.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/69717
         :height: 40px
         :width: 40px
         :alt: Joosep Pata
         :target: https://github.com/jpata
 
-    .. image:: https://gravatar.com/avatar/69bdae2d8460449e27b9dc03a0c7e6d6?d=https%3A%2F%2Fidenticons.github.com%2Ff24f29bfbd9715c0c494bf4da1923ebc.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/5497303
         :height: 40px
         :width: 40px
         :alt: David van Leeuwen
@@ -5087,7 +5178,7 @@ ____________________________________________
 `HDFS <https://github.com/tanmaykm/HDFS.jl>`_
 _____________________________________________
 
-  .. image:: https://gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https%3A%2F%2Fidenticons.github.com%2Fa2feca9cad6b69327bdee24d0d81156a.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1010989
      :height: 80px
      :width: 80px
      :align: right
@@ -5109,13 +5200,13 @@ _____________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https%3A%2F%2Fidenticons.github.com%2Fa2feca9cad6b69327bdee24d0d81156a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1010989
         :height: 40px
         :width: 40px
         :alt: Tanmay Mohapatra
         :target: https://github.com/tanmaykm
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
@@ -5126,7 +5217,7 @@ _____________________________________________
 `Hexagons <https://github.com/dcjones/Hexagons.jl>`_
 ____________________________________________________
 
-  .. image:: https://gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https%3A%2F%2Fidenticons.github.com%2Fc7ec48e0ff0d0ae8827e36301a0962a1.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/210361
      :height: 80px
      :width: 80px
      :align: right
@@ -5145,7 +5236,7 @@ ____________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https%3A%2F%2Fidenticons.github.com%2Fc7ec48e0ff0d0ae8827e36301a0962a1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/210361
         :height: 40px
         :width: 40px
         :alt: Daniel Jones
@@ -5156,7 +5247,7 @@ ____________________________________________________
 `Homebrew <https://github.com/JuliaLang/Homebrew.jl>`_
 ______________________________________________________
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2F96058cb0ed9e150dfffc3b86b3b8d5e7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/743164
      :height: 80px
      :width: 80px
      :align: right
@@ -5176,19 +5267,19 @@ ______________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/002ccfd8ee9e135f0dfb5650c292052d?d=https%3A%2F%2Fidenticons.github.com%2F0f1b002e3ac98562472e40b49a01cc84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/130920
         :height: 40px
         :width: 40px
         :alt: Elliot Saba
         :target: https://github.com/staticfloat
 
-    .. image:: https://gravatar.com/avatar/4d4ea6148fef59dff9fa0fc8c309496a?d=https%3A%2F%2Fidenticons.github.com%2F30ab11b1a8d453e2da2a6f55d7733ce5.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/335567
         :height: 40px
         :width: 40px
         :alt: Matthias Bussonnier
         :target: https://github.com/Carreau
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
@@ -5199,7 +5290,7 @@ ______________________________________________________
 `HopfieldNets <https://github.com/johnmyleswhite/HopfieldNets.jl>`_
 ___________________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/22064
      :height: 80px
      :width: 80px
      :align: right
@@ -5218,7 +5309,7 @@ ___________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
@@ -5229,7 +5320,7 @@ ___________________________________________________________________
 `HTTP <https://github.com/dirk/HTTP.jl>`_
 _________________________________________
 
-  .. image:: https://gravatar.com/avatar/d9c8c5a29b60871d14846a382d50626a?d=https%3A%2F%2Fidenticons.github.com%2Fdf438e5206f31600e6ae4af72f2725f1.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/7081
      :height: 80px
      :width: 80px
      :align: right
@@ -5248,25 +5339,25 @@ _________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/d9c8c5a29b60871d14846a382d50626a?d=https%3A%2F%2Fidenticons.github.com%2Fdf438e5206f31600e6ae4af72f2725f1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/7081
         :height: 40px
         :width: 40px
         :alt: Dirk Gadsden
         :target: https://github.com/dirk
 
-    .. image:: https://gravatar.com/avatar/e12917e2ca672f4a89081873d4503683?d=https%3A%2F%2Fidenticons.github.com%2F6794d53010ae7555cc4565a2d183f6f0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1633955
         :height: 40px
         :width: 40px
         :alt: Samuel Huberman
         :target: https://github.com/schuberm
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
         :target: https://github.com/kmsquire
 
-    .. image:: https://gravatar.com/avatar/11ed595b17e2ccf6bc0b3c80f3dde4e8?d=https%3A%2F%2Fidenticons.github.com%2F176a9d5ad1fcb179b164bdd7d4e625dc.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/5247292
         :height: 40px
         :width: 40px
         :alt: powerdistribution
@@ -5282,7 +5373,7 @@ ___________________________________________________________
      :width: 19
      :target: https://travis-ci.org/amitmurthy/HTTPClient.jl
 
-  .. image:: https://gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https%3A%2F%2Fidenticons.github.com%2F8de01f67e4cbfa5ce2e70e6f1f761891.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/117461
      :height: 80px
      :width: 80px
      :align: right
@@ -5301,13 +5392,13 @@ ___________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https%3A%2F%2Fidenticons.github.com%2F8de01f67e4cbfa5ce2e70e6f1f761891.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/117461
         :height: 40px
         :width: 40px
         :alt: Amit Murthy
         :target: https://github.com/amitmurthy
 
-    .. image:: https://gravatar.com/avatar/dfc3b0fbb59c9444153823fd35dbd13b?d=https%3A%2F%2Fidenticons.github.com%2F678085c7c9e848e0442b77d8b0c4be71.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900307
         :height: 40px
         :width: 40px
         :alt: Westley Argentum Hennigh
@@ -5323,7 +5414,7 @@ __________________________________________________________
      :width: 19
      :target: https://travis-ci.org/JuliaLang/HttpCommon.jl
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2F96058cb0ed9e150dfffc3b86b3b8d5e7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/743164
      :height: 80px
      :width: 80px
      :align: right
@@ -5344,37 +5435,37 @@ __________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/06625cbad0c69f5c2e673a4312e9fd7e?d=https%3A%2F%2Fidenticons.github.com%2F5dd6d7ae462c1aec0b364990d3ec72e0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/503938
         :height: 40px
         :width: 40px
         :alt: Zach Allaun
         :target: https://github.com/zachallaun
 
-    .. image:: https://gravatar.com/avatar/54cc6bf56d6223bdb99e5d6cfbd11056?d=https%3A%2F%2Fidenticons.github.com%2F64e76e13ef337dfcda3cf3da7b89c5c2.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1205394
         :height: 40px
         :width: 40px
         :alt: Leah Hanson
         :target: https://github.com/astrieanna
 
-    .. image:: https://gravatar.com/avatar/757c233176d3ad14136df4a547ac4234?d=https%3A%2F%2Fidenticons.github.com%2F121cd9e6bfd4012a5efdf75e322b5b39.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/304202
         :height: 40px
         :width: 40px
         :alt: Daniel Mendel
         :target: https://github.com/danielmendel
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
-    .. image:: https://gravatar.com/avatar/2aff223681817a0fadddb6a94a4860b8?d=https%3A%2F%2Fidenticons.github.com%2F4f34bae0831b0cdba0b2e707858e1ce0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/98927
         :height: 40px
         :width: 40px
         :alt: Chuck
         :target: https://github.com/chuckha
 
-    .. image:: https://gravatar.com/avatar/317e44562dcf11f5164d0a4936696fbc?d=https%3A%2F%2Fidenticons.github.com%2F655fe21cedd4ac41f328aef38b350ef0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1553856
         :height: 40px
         :width: 40px
         :alt: rened
@@ -5390,7 +5481,7 @@ __________________________________________________________
      :width: 19
      :target: https://travis-ci.org/JuliaLang/HttpParser.jl
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2F96058cb0ed9e150dfffc3b86b3b8d5e7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/743164
      :height: 80px
      :width: 80px
      :align: right
@@ -5411,61 +5502,61 @@ __________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/54cc6bf56d6223bdb99e5d6cfbd11056?d=https%3A%2F%2Fidenticons.github.com%2F64e76e13ef337dfcda3cf3da7b89c5c2.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1205394
         :height: 40px
         :width: 40px
         :alt: Leah Hanson
         :target: https://github.com/astrieanna
 
-    .. image:: https://gravatar.com/avatar/2aff223681817a0fadddb6a94a4860b8?d=https%3A%2F%2Fidenticons.github.com%2F4f34bae0831b0cdba0b2e707858e1ce0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/98927
         :height: 40px
         :width: 40px
         :alt: Chuck
         :target: https://github.com/chuckha
 
-    .. image:: https://gravatar.com/avatar/06625cbad0c69f5c2e673a4312e9fd7e?d=https%3A%2F%2Fidenticons.github.com%2F5dd6d7ae462c1aec0b364990d3ec72e0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/503938
         :height: 40px
         :width: 40px
         :alt: Zach Allaun
         :target: https://github.com/zachallaun
 
-    .. image:: https://gravatar.com/avatar/cc283e3bd2784ad33dfd55afcfef4877?d=https%3A%2F%2Fidenticons.github.com%2F54c0a5d9982c0b2967ca7ad7851c0d98.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/692635
         :height: 40px
         :width: 40px
         :alt: Iain Dunning
         :target: https://github.com/IainNZ
 
-    .. image:: https://gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https%3A%2F%2Fidenticons.github.com%2Fd73ab2afeb22d558e3fae4b0a0de43e3.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1733683
         :height: 40px
         :width: 40px
         :alt: Miles Lubin
         :target: https://github.com/mlubin
 
-    .. image:: https://gravatar.com/avatar/757c233176d3ad14136df4a547ac4234?d=https%3A%2F%2Fidenticons.github.com%2F121cd9e6bfd4012a5efdf75e322b5b39.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/304202
         :height: 40px
         :width: 40px
         :alt: Daniel Mendel
         :target: https://github.com/danielmendel
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://gravatar.com/avatar/192f114babcc8c2f53936c145bbc502c?d=https%3A%2F%2Fidenticons.github.com%2F8221b4c8f7cc8d6114e4f1afc7fd7dff.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/327706
         :height: 40px
         :width: 40px
         :alt: Isaiah
         :target: https://github.com/ihnorton
 
-    .. image:: https://gravatar.com/avatar/dfc3b0fbb59c9444153823fd35dbd13b?d=https%3A%2F%2Fidenticons.github.com%2F678085c7c9e848e0442b77d8b0c4be71.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900307
         :height: 40px
         :width: 40px
         :alt: Westley Argentum Hennigh
@@ -5481,7 +5572,7 @@ __________________________________________________________
      :width: 19
      :target: https://travis-ci.org/JuliaLang/HttpServer.jl
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2F96058cb0ed9e150dfffc3b86b3b8d5e7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/743164
      :height: 80px
      :width: 80px
      :align: right
@@ -5503,55 +5594,55 @@ __________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/757c233176d3ad14136df4a547ac4234?d=https%3A%2F%2Fidenticons.github.com%2F121cd9e6bfd4012a5efdf75e322b5b39.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/304202
         :height: 40px
         :width: 40px
         :alt: Daniel Mendel
         :target: https://github.com/danielmendel
 
-    .. image:: https://gravatar.com/avatar/54cc6bf56d6223bdb99e5d6cfbd11056?d=https%3A%2F%2Fidenticons.github.com%2F64e76e13ef337dfcda3cf3da7b89c5c2.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1205394
         :height: 40px
         :width: 40px
         :alt: Leah Hanson
         :target: https://github.com/astrieanna
 
-    .. image:: https://gravatar.com/avatar/06625cbad0c69f5c2e673a4312e9fd7e?d=https%3A%2F%2Fidenticons.github.com%2F5dd6d7ae462c1aec0b364990d3ec72e0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/503938
         :height: 40px
         :width: 40px
         :alt: Zach Allaun
         :target: https://github.com/zachallaun
 
-    .. image:: https://gravatar.com/avatar/317e44562dcf11f5164d0a4936696fbc?d=https%3A%2F%2Fidenticons.github.com%2F655fe21cedd4ac41f328aef38b350ef0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1553856
         :height: 40px
         :width: 40px
         :alt: rened
         :target: https://github.com/rened
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
-    .. image:: https://gravatar.com/avatar/cc283e3bd2784ad33dfd55afcfef4877?d=https%3A%2F%2Fidenticons.github.com%2F54c0a5d9982c0b2967ca7ad7851c0d98.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/692635
         :height: 40px
         :width: 40px
         :alt: Iain Dunning
         :target: https://github.com/IainNZ
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://gravatar.com/avatar/2aff223681817a0fadddb6a94a4860b8?d=https%3A%2F%2Fidenticons.github.com%2F4f34bae0831b0cdba0b2e707858e1ce0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/98927
         :height: 40px
         :width: 40px
         :alt: Chuck
         :target: https://github.com/chuckha
 
-    .. image:: https://gravatar.com/avatar/dfc3b0fbb59c9444153823fd35dbd13b?d=https%3A%2F%2Fidenticons.github.com%2F678085c7c9e848e0442b77d8b0c4be71.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900307
         :height: 40px
         :width: 40px
         :alt: Westley Argentum Hennigh
@@ -5562,7 +5653,7 @@ __________________________________________________________
 `HyperLogLog <https://github.com/johnmyleswhite/HyperLogLog.jl>`_
 _________________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/22064
      :height: 80px
      :width: 80px
      :align: right
@@ -5581,7 +5672,7 @@ _________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
@@ -5589,26 +5680,26 @@ _________________________________________________________________
 
 ----
 
-`HypothesisTests <https://github.com/simonster/HypothesisTests.jl>`_ |HypothesisTests_build|
-____________________________________________________________________
+`HypothesisTests <https://github.com/JuliaStats/HypothesisTests.jl>`_ |HypothesisTests_build|
+_____________________________________________________________________
 
   .. |HypothesisTests_build| image:: ../images/travis-icon.png
      :height: 19
      :width: 19
-     :target: https://travis-ci.org/simonster/HypothesisTests.jl
+     :target: https://travis-ci.org/JuliaStats/HypothesisTests.jl
 
-  .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2761531
      :height: 80px
      :width: 80px
      :align: right
-     :alt: Simon Kornblith
-     :target: https://github.com/simonster
+     :alt: Julia Statistics
+     :target: https://github.com/JuliaStats
 
   T-tests, Wilcoxon rank sum (Mann-Whitney U), signed rank, and circular statistics in Julia 
 
-  Current Version: ``0.2.3``  (updated: 2013-10-19) 
+  Current Version: ``0.2.4``  (updated: 2014-02-27) 
 
-  Maintainer: `Simon Kornblith <https://github.com/simonster>`_
+  Maintainer: `Julia Statistics <https://github.com/JuliaStats>`_
 
   Dependencies::
 
@@ -5616,18 +5707,24 @@ ____________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/470884
         :height: 40px
         :width: 40px
         :alt: Simon Kornblith
         :target: https://github.com/simonster
+
+    .. image:: https://avatars.githubusercontent.com/u/1525481
+        :height: 40px
+        :width: 40px
+        :alt: Tim Holy
+        :target: https://github.com/timholy
 
 ----
 
 `ICU <https://github.com/nolta/ICU.jl>`_
 ________________________________________
 
-  .. image:: https://gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https%3A%2F%2Fidenticons.github.com%2Fccc246e2e59d5e2d0cca344114f2065e.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/201456
      :height: 80px
      :width: 80px
      :align: right
@@ -5647,25 +5744,25 @@ ________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https%3A%2F%2Fidenticons.github.com%2Fccc246e2e59d5e2d0cca344114f2065e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/201456
         :height: 40px
         :width: 40px
         :alt: Mike Nolta
         :target: https://github.com/nolta
 
-    .. image:: https://gravatar.com/avatar/1af2db0b26142fd0c7ab082f3d445f73?d=https%3A%2F%2Fidenticons.github.com%2Fabc7045985c1a04674b1024963c5dcc6.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/135570
         :height: 40px
         :width: 40px
         :alt: Ian Fiske
         :target: https://github.com/ianfiske
 
-    .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/378918
         :height: 40px
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
@@ -5676,7 +5773,7 @@ ________________________________________
 `IJulia <https://github.com/JuliaLang/IJulia.jl>`_
 __________________________________________________
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2F96058cb0ed9e150dfffc3b86b3b8d5e7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/743164
      :height: 80px
      :width: 80px
      :align: right
@@ -5699,97 +5796,103 @@ __________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/9563cfcf21df990e570df1dd019bce16?d=https%3A%2F%2Fidenticons.github.com%2Ff2d6e6092107c938c67268b75745fb84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2913679
         :height: 40px
         :width: 40px
         :alt: Steven G. Johnson
         :target: https://github.com/stevengj
 
-    .. image:: https://gravatar.com/avatar/95198572b00e5fbcd97fb5315215bf7a?d=https%3A%2F%2Fidenticons.github.com%2F00780d1b74ca2bbca4e7a7710dacfb2d.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/57394
         :height: 40px
         :width: 40px
         :alt: Fernando Perez
         :target: https://github.com/fperez
 
-    .. image:: https://gravatar.com/avatar/d9e3f7e864e3fa0cb1906b79000d436a?d=https%3A%2F%2Fidenticons.github.com%2Fed99a4a153bc412570b5d7443557561b.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/987837
         :height: 40px
         :width: 40px
         :alt: Jonathan Malmaud
         :target: https://github.com/malmaud
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://gravatar.com/avatar/b4b8db23d8096b722483a57d21b7d65d?d=https%3A%2F%2Fidenticons.github.com%2F013fdd367536d965b2a0fcbc90fae782.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/744556
         :height: 40px
         :width: 40px
         :alt: Jeff Bezanson
         :target: https://github.com/JeffBezanson
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
-    .. image:: https://gravatar.com/avatar/4d4ea6148fef59dff9fa0fc8c309496a?d=https%3A%2F%2Fidenticons.github.com%2F30ab11b1a8d453e2da2a6f55d7733ce5.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/335567
         :height: 40px
         :width: 40px
         :alt: Matthias Bussonnier
         :target: https://github.com/Carreau
 
-    .. image:: https://gravatar.com/avatar/a6bbc79cd19907314d4246eb59345c04?d=https%3A%2F%2Fidenticons.github.com%2F1aae7663e5ac07c626ea0486781245c5.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/165338
         :height: 40px
         :width: 40px
         :alt: George Lesica
         :target: https://github.com/glesica
 
-    .. image:: https://gravatar.com/avatar/7c2f5d91d0311cc40035d1ef0e714685?d=https%3A%2F%2Fidenticons.github.com%2F2c86f5aa90a7318661432b6a35a1ea29.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/333519
         :height: 40px
         :width: 40px
         :alt: Cristóvão Duarte Sousa
         :target: https://github.com/cdsousa
 
-    .. image:: https://gravatar.com/avatar/d5b897c37001627c2e3ad3c1e8a7e6fb?d=https%3A%2F%2Fidenticons.github.com%2Ffd0c473f5aa5802a4e75f406e992c687.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/151929
         :height: 40px
         :width: 40px
         :alt: Min RK
         :target: https://github.com/minrk
 
-    .. image:: https://gravatar.com/avatar/2cbc175271c0dbdaf0aa8f68af6c13d4?d=https%3A%2F%2Fidenticons.github.com%2Fc5c8c15bda296715d823447a01364000.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1714451
         :height: 40px
         :width: 40px
         :alt: Glen Hertz
         :target: https://github.com/GlenHertz
 
-    .. image:: https://gravatar.com/avatar/002ccfd8ee9e135f0dfb5650c292052d?d=https%3A%2F%2Fidenticons.github.com%2F0f1b002e3ac98562472e40b49a01cc84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/130920
         :height: 40px
         :width: 40px
         :alt: Elliot Saba
         :target: https://github.com/staticfloat
 
-    .. image:: https://gravatar.com/avatar/56c4053438af8e8b90d6f53cbb7573be?d=https%3A%2F%2Fidenticons.github.com%2F35c4b6cf9566ae5dbf29b5bd2b263ba7.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1876264
+        :height: 40px
+        :width: 40px
+        :alt: Christophe MEYER
+        :target: https://github.com/cmey
+
+    .. image:: https://avatars.githubusercontent.com/u/781659
         :height: 40px
         :width: 40px
         :alt: Jake Vanderplas
         :target: https://github.com/jakevdp
 
-    .. image:: https://gravatar.com/avatar/6cba33e8e7c69fa63f6ad386b7a958c5?d=https%3A%2F%2Fidenticons.github.com%2F270edd69788dce200a3b395a6da6fdb7.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1732
         :height: 40px
         :width: 40px
         :alt: Jiahao Chen
         :target: https://github.com/jiahao
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
-    .. image:: https://gravatar.com/avatar/5c06e9faa0d7bd205f81d10e825d7e4a?d=https%3A%2F%2Fidenticons.github.com%2F6b8901820c4636072f2131546cc646f7.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1437512
         :height: 40px
         :width: 40px
         :alt: nfoti
@@ -5800,7 +5903,7 @@ __________________________________________________
 `Images <https://github.com/timholy/Images.jl>`_
 ________________________________________________
 
-  .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1525481
      :height: 80px
      :width: 80px
      :align: right
@@ -5809,7 +5912,7 @@ ________________________________________________
 
   An image library for Julia 
 
-  Current Version: ``0.2.28``  (updated: 2014-02-18) 
+  Current Version: ``0.2.29``  (updated: 2014-02-22) 
 
   Maintainer: `Tim Holy <https://github.com/timholy>`_
 
@@ -5825,73 +5928,73 @@ ________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
         :target: https://github.com/timholy
 
-    .. image:: https://gravatar.com/avatar/afb7f86706c41da610daf216d60e59b9?d=https%3A%2F%2Fidenticons.github.com%2F1879416768cbb240e6c004a231a0204f.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1935770
         :height: 40px
         :width: 40px
         :alt: Ron Rock
         :target: https://github.com/rsrock
 
-    .. image:: https://gravatar.com/avatar/180bf497f08f6ebcc02192ac9079c8a4?d=https%3A%2F%2Fidenticons.github.com%2F0c2b6c85dfa1ef590958e1af0cbd0ece.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1464194
         :height: 40px
         :width: 40px
         :alt: Daniel Perry
         :target: https://github.com/daniel-perry
 
-    .. image:: https://gravatar.com/avatar/d04d5b6e71776eb13d195ba7cc94b995?d=https%3A%2F%2Fidenticons.github.com%2Ff1abfc4d42d91a6bfbdfb8da432c2a96.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/478237
         :height: 40px
         :width: 40px
         :alt: Waldir Pimenta
         :target: https://github.com/waldir
 
-    .. image:: https://gravatar.com/avatar/a0cab25b58656bcdf9f6de11dc7b158a?d=https%3A%2F%2Fidenticons.github.com%2F74fe54e37e826ba88809a3320f0c6a6e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/3109172
         :height: 40px
         :width: 40px
         :alt: Tobias Knopp
         :target: https://github.com/tknopp
 
-    .. image:: https://gravatar.com/avatar/538889c0ce4dd2719f09f1961d13af78?d=https%3A%2F%2Fidenticons.github.com%2F4bd6752d9fb18192689562546ba57804.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1476029
         :height: 40px
         :width: 40px
         :alt: Lucas Beyer
         :target: https://github.com/lucasb-eyer
 
-    .. image:: https://gravatar.com/avatar/b1f06f732d86e562563db728b2875eb2?d=https%3A%2F%2Fidenticons.github.com%2F58350ebc61b97bd7c28aeaca836c9c26.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/48409
         :height: 40px
         :width: 40px
         :alt: Jason Merrill
         :target: https://github.com/jwmerrill
 
-    .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900250
         :height: 40px
         :width: 40px
         :alt: Dahua Lin
         :target: https://github.com/lindahua
 
-    .. image:: https://gravatar.com/avatar/192f114babcc8c2f53936c145bbc502c?d=https%3A%2F%2Fidenticons.github.com%2F8221b4c8f7cc8d6114e4f1afc7fd7dff.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/327706
         :height: 40px
         :width: 40px
         :alt: Isaiah
         :target: https://github.com/ihnorton
 
-    .. image:: https://gravatar.com/avatar/f9450608516dffc3f50c75bd6133ae7f?d=https%3A%2F%2Fidenticons.github.com%2F8afd7a40e0451a407ed7f47a49774f50.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/537321
         :height: 40px
         :width: 40px
         :alt: Joaquim
         :target: https://github.com/joa-quim
 
-    .. image:: https://gravatar.com/avatar/321953e4db4bccb22e7902a512b0476b?d=https%3A%2F%2Fidenticons.github.com%2F741a935b2d0285f0c3814a8eaa66e75f.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/901039
         :height: 40px
         :width: 40px
         :alt: Peter Le Bek
         :target: https://github.com/lebek
 
-    .. image:: https://gravatar.com/avatar/9553bee3aa95ce13310db4f5f70acc62?d=https%3A%2F%2Fidenticons.github.com%2F9a46c6d38ad6c7b17e8005b2e900ff2f.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1570926
         :height: 40px
         :width: 40px
         :alt: Tracy Wadleigh
@@ -5902,7 +6005,7 @@ ________________________________________________
 `ImageView <https://github.com/timholy/ImageView.jl>`_
 ______________________________________________________
 
-  .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1525481
      :height: 80px
      :width: 80px
      :align: right
@@ -5911,7 +6014,7 @@ ______________________________________________________
 
   Interactive display of images and movies 
 
-  Current Version: ``0.0.13``  (updated: 2014-01-25) 
+  Current Version: ``0.0.14``  (updated: 2014-02-12) 
 
   Maintainer: `Tim Holy <https://github.com/timholy>`_
 
@@ -5925,19 +6028,19 @@ ______________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
         :target: https://github.com/timholy
 
-    .. image:: https://gravatar.com/avatar/afb7f86706c41da610daf216d60e59b9?d=https%3A%2F%2Fidenticons.github.com%2F1879416768cbb240e6c004a231a0204f.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1935770
         :height: 40px
         :width: 40px
         :alt: Ron Rock
         :target: https://github.com/rsrock
 
-    .. image:: https://gravatar.com/avatar/f02e4f0def207ba63ecc5c1ce9bec24e?d=https%3A%2F%2Fidenticons.github.com%2F201e59fb999f5f254d3410f4fa049311.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1627972
         :height: 40px
         :width: 40px
         :alt: Mohammed Habib
@@ -5953,7 +6056,7 @@ ____________________________________________________________________
      :width: 19
      :target: https://travis-ci.org/twadleigh/ImmutableArrays.jl
 
-  .. image:: https://gravatar.com/avatar/9553bee3aa95ce13310db4f5f70acc62?d=https%3A%2F%2Fidenticons.github.com%2F9a46c6d38ad6c7b17e8005b2e900ff2f.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1570926
      :height: 80px
      :width: 80px
      :align: right
@@ -5962,7 +6065,7 @@ ____________________________________________________________________
 
   Statically-sized immutable vectors and matrices. 
 
-  Current Version: ``0.0.3``  (updated: 2013-10-29) 
+  Current Version: ``0.0.4``  (updated: 2014-02-27) 
 
   Maintainer: `Tracy Wadleigh <https://github.com/twadleigh>`_
 
@@ -5972,25 +6075,25 @@ ____________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/9553bee3aa95ce13310db4f5f70acc62?d=https%3A%2F%2Fidenticons.github.com%2F9a46c6d38ad6c7b17e8005b2e900ff2f.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1570926
         :height: 40px
         :width: 40px
         :alt: Tracy Wadleigh
         :target: https://github.com/twadleigh
 
-    .. image:: https://gravatar.com/avatar/805857de807ffc1b543e807f727d05c6?d=https%3A%2F%2Fidenticons.github.com%2F650104614a86140b6f734393ee947c77.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/475017
         :height: 40px
         :width: 40px
         :alt: Jay Weisskopf
         :target: https://github.com/jayschwa
 
-    .. image:: https://gravatar.com/avatar/cd90bb9515507b0f998f7e5dbccbd238?d=https%3A%2F%2Fidenticons.github.com%2Fa14a9453d4f167c4ca565a8c0d04b74a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1353970
         :height: 40px
         :width: 40px
         :alt: Olli Wilkman
         :target: https://github.com/dronir
 
-    .. image:: https://gravatar.com/avatar/002ccfd8ee9e135f0dfb5650c292052d?d=https%3A%2F%2Fidenticons.github.com%2F0f1b002e3ac98562472e40b49a01cc84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/130920
         :height: 40px
         :width: 40px
         :alt: Elliot Saba
@@ -6001,7 +6104,7 @@ ____________________________________________________________________
 `IniFile <https://github.com/JuliaLang/IniFile.jl>`_
 ____________________________________________________
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2F96058cb0ed9e150dfffc3b86b3b8d5e7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/743164
      :height: 80px
      :width: 80px
      :align: right
@@ -6020,37 +6123,37 @@ ____________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://gravatar.com/avatar/62df30beab9c2a6f3fe3f86995e94387?d=https%3A%2F%2Fidenticons.github.com%2F58b08088d26ada47c510cef3759f7aae.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1908571
         :height: 40px
         :width: 40px
         :alt: David de Laat
         :target: https://github.com/daviddelaat
 
-    .. image:: https://gravatar.com/avatar/b4b8db23d8096b722483a57d21b7d65d?d=https%3A%2F%2Fidenticons.github.com%2F013fdd367536d965b2a0fcbc90fae782.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/744556
         :height: 40px
         :width: 40px
         :alt: Jeff Bezanson
         :target: https://github.com/JeffBezanson
 
-    .. image:: https://gravatar.com/avatar/55e277a715ee2afd0d29c309174eca02?d=https%3A%2F%2Fidenticons.github.com%2F938b248e75affacf29383e0738b98ea2.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/744411
         :height: 40px
         :width: 40px
         :alt: Viral B. Shah
         :target: https://github.com/ViralBShah
 
-    .. image:: https://gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https%3A%2F%2Fidenticons.github.com%2Fccc246e2e59d5e2d0cca344114f2065e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/201456
         :height: 40px
         :width: 40px
         :alt: Mike Nolta
         :target: https://github.com/nolta
 
-    .. image:: https://gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https%3A%2F%2Fidenticons.github.com%2Fa2feca9cad6b69327bdee24d0d81156a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1010989
         :height: 40px
         :width: 40px
         :alt: Tanmay Mohapatra
@@ -6066,7 +6169,7 @@ _______________________________________________
      :width: 19
      :target: https://travis-ci.org/JuliaOpt/Ipopt.jl
 
-  .. image:: https://gravatar.com/avatar/f86ab8fe20610c227b7891ebf16ecfd8?d=https%3A%2F%2Fidenticons.github.com%2F5efde7dd012df4681146f0d1704b0238.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/5667382
      :height: 80px
      :width: 80px
      :align: right
@@ -6087,13 +6190,13 @@ _______________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/cc283e3bd2784ad33dfd55afcfef4877?d=https%3A%2F%2Fidenticons.github.com%2F54c0a5d9982c0b2967ca7ad7851c0d98.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/692635
         :height: 40px
         :width: 40px
         :alt: Iain Dunning
         :target: https://github.com/IainNZ
 
-    .. image:: https://gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https%3A%2F%2Fidenticons.github.com%2Fd73ab2afeb22d558e3fae4b0a0de43e3.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1733683
         :height: 40px
         :width: 40px
         :alt: Miles Lubin
@@ -6104,7 +6207,7 @@ _______________________________________________
 `IProfile <https://github.com/timholy/IProfile.jl>`_
 ____________________________________________________
 
-  .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1525481
      :height: 80px
      :width: 80px
      :align: right
@@ -6123,43 +6226,43 @@ ____________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
         :target: https://github.com/timholy
 
-    .. image:: https://gravatar.com/avatar/317e44562dcf11f5164d0a4936696fbc?d=https%3A%2F%2Fidenticons.github.com%2F655fe21cedd4ac41f328aef38b350ef0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1553856
         :height: 40px
         :width: 40px
         :alt: rened
         :target: https://github.com/rened
 
-    .. image:: https://gravatar.com/avatar/296ee25bff5b4ab9be5a06619e0a0818?d=https%3A%2F%2Fidenticons.github.com%2F7c7eb4f9eb474253a9e29551dff00f25.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/766621
         :height: 40px
         :width: 40px
         :alt: Mark McCurry
         :target: https://github.com/fundamental
 
-    .. image:: https://gravatar.com/avatar/372dded49e28d87f89e1417f1e4fd26b?d=https%3A%2F%2Fidenticons.github.com%2F7ddb8a13ca8ef509243437580e63fdcf.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1538268
         :height: 40px
         :width: 40px
         :alt: Ben Arthur
         :target: https://github.com/bjarthur
 
-    .. image:: https://gravatar.com/avatar/449044e4f0ed377b21409488cddafc45?d=https%3A%2F%2Fidenticons.github.com%2F3f2743ab32e9c084ddcabc42324d7465.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/866695
         :height: 40px
         :width: 40px
         :alt: Blake Johnson
         :target: https://github.com/blakejohnson
 
-    .. image:: https://gravatar.com/avatar/002ccfd8ee9e135f0dfb5650c292052d?d=https%3A%2F%2Fidenticons.github.com%2F0f1b002e3ac98562472e40b49a01cc84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/130920
         :height: 40px
         :width: 40px
         :alt: Elliot Saba
         :target: https://github.com/staticfloat
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
@@ -6170,7 +6273,7 @@ ____________________________________________________
 `Iterators <https://github.com/JuliaLang/Iterators.jl>`_
 ________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2F96058cb0ed9e150dfffc3b86b3b8d5e7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/743164
      :height: 80px
      :width: 80px
      :align: right
@@ -6189,43 +6292,49 @@ ________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https%3A%2F%2Fidenticons.github.com%2Fc7ec48e0ff0d0ae8827e36301a0962a1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/210361
         :height: 40px
         :width: 40px
         :alt: Daniel Jones
         :target: https://github.com/dcjones
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
-        :height: 40px
-        :width: 40px
-        :alt: Simon Kornblith
-        :target: https://github.com/simonster
-
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
         :target: https://github.com/kmsquire
 
-    .. image:: https://gravatar.com/avatar/d9e3f7e864e3fa0cb1906b79000d436a?d=https%3A%2F%2Fidenticons.github.com%2Fed99a4a153bc412570b5d7443557561b.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/470884
         :height: 40px
         :width: 40px
-        :alt: Jonathan Malmaud
-        :target: https://github.com/malmaud
+        :alt: Simon Kornblith
+        :target: https://github.com/simonster
 
-    .. image:: https://gravatar.com/avatar/b4b8db23d8096b722483a57d21b7d65d?d=https%3A%2F%2Fidenticons.github.com%2F013fdd367536d965b2a0fcbc90fae782.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/744556
         :height: 40px
         :width: 40px
         :alt: Jeff Bezanson
         :target: https://github.com/JeffBezanson
 
-    .. image:: https://gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https%3A%2F%2Fidenticons.github.com%2Fccc246e2e59d5e2d0cca344114f2065e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/987837
+        :height: 40px
+        :width: 40px
+        :alt: Jonathan Malmaud
+        :target: https://github.com/malmaud
+
+    .. image:: https://avatars.githubusercontent.com/u/1525481
+        :height: 40px
+        :width: 40px
+        :alt: Tim Holy
+        :target: https://github.com/timholy
+
+    .. image:: https://avatars.githubusercontent.com/u/201456
         :height: 40px
         :width: 40px
         :alt: Mike Nolta
@@ -6241,7 +6350,7 @@ ________________________________________
      :width: 19
      :target: https://travis-ci.org/aviks/Ito.jl
 
-  .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/378918
      :height: 80px
      :width: 80px
      :align: right
@@ -6263,19 +6372,19 @@ ________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/378918
         :height: 40px
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
 
-    .. image:: https://gravatar.com/avatar/cf2d767eb5ca6fbb79f73bf86d8748c2?d=https%3A%2F%2Fidenticons.github.com%2Fb61c515703064ad6ae2acf5e9d48bba3.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/3519840
         :height: 40px
         :width: 40px
         :alt: Eucalyptus2013
         :target: https://github.com/Eucalyptus2013
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
@@ -6291,7 +6400,7 @@ __________________________________________________
      :width: 19
      :target: https://travis-ci.org/aviks/JavaCall.jl
 
-  .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/378918
      :height: 80px
      :width: 80px
      :align: right
@@ -6300,7 +6409,7 @@ __________________________________________________
 
   Call Java from Julia 
 
-  Current Version: ``0.1.3``  (updated: 2014-02-08) 
+  Current Version: ``0.1.2``  (updated: 2014-01-02) 
 
   Maintainer: `Avik Sengupta <https://github.com/aviks>`_
 
@@ -6312,7 +6421,7 @@ __________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/378918
         :height: 40px
         :width: 40px
         :alt: Avik Sengupta
@@ -6328,7 +6437,7 @@ ___________________________________________________________
      :width: 19
      :target: https://travis-ci.org/helgee/JPLEphemeris.jl
 
-  .. image:: https://gravatar.com/avatar/6f75257683625cb2a5398f3d610c5355?d=https%3A%2F%2Fidenticons.github.com%2F0e10b1b3855816993dfcb043bbcbafc8.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1408922
      :height: 80px
      :width: 80px
      :align: right
@@ -6348,7 +6457,7 @@ ___________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/6f75257683625cb2a5398f3d610c5355?d=https%3A%2F%2Fidenticons.github.com%2F0e10b1b3855816993dfcb043bbcbafc8.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1408922
         :height: 40px
         :width: 40px
         :alt: Helge Eichhorn
@@ -6364,7 +6473,7 @@ ______________________________________________
      :width: 19
      :target: https://travis-ci.org/JuliaLang/JSON.jl
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2F96058cb0ed9e150dfffc3b86b3b8d5e7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/743164
      :height: 80px
      :width: 80px
      :align: right
@@ -6383,97 +6492,97 @@ ______________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/378918
         :height: 40px
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
 
-    .. image:: https://gravatar.com/avatar/dfc3b0fbb59c9444153823fd35dbd13b?d=https%3A%2F%2Fidenticons.github.com%2F678085c7c9e848e0442b77d8b0c4be71.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900307
         :height: 40px
         :width: 40px
         :alt: Westley Argentum Hennigh
         :target: https://github.com/WestleyArgentum
 
-    .. image:: https://gravatar.com/avatar/d9c8c5a29b60871d14846a382d50626a?d=https%3A%2F%2Fidenticons.github.com%2Fdf438e5206f31600e6ae4af72f2725f1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/7081
         :height: 40px
         :width: 40px
         :alt: Dirk Gadsden
         :target: https://github.com/dirk
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://gravatar.com/avatar/6cba33e8e7c69fa63f6ad386b7a958c5?d=https%3A%2F%2Fidenticons.github.com%2F270edd69788dce200a3b395a6da6fdb7.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1732
         :height: 40px
         :width: 40px
         :alt: Jiahao Chen
         :target: https://github.com/jiahao
 
-    .. image:: https://gravatar.com/avatar/62df30beab9c2a6f3fe3f86995e94387?d=https%3A%2F%2Fidenticons.github.com%2F58b08088d26ada47c510cef3759f7aae.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1908571
         :height: 40px
         :width: 40px
         :alt: David de Laat
         :target: https://github.com/daviddelaat
 
-    .. image:: https://gravatar.com/avatar/b4b8db23d8096b722483a57d21b7d65d?d=https%3A%2F%2Fidenticons.github.com%2F013fdd367536d965b2a0fcbc90fae782.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/744556
         :height: 40px
         :width: 40px
         :alt: Jeff Bezanson
         :target: https://github.com/JeffBezanson
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
-    .. image:: https://gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https%3A%2F%2Fidenticons.github.com%2Fc7ec48e0ff0d0ae8827e36301a0962a1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/210361
         :height: 40px
         :width: 40px
         :alt: Daniel Jones
         :target: https://github.com/dcjones
 
-    .. image:: https://gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https%3A%2F%2Fidenticons.github.com%2Fccc246e2e59d5e2d0cca344114f2065e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/201456
         :height: 40px
         :width: 40px
         :alt: Mike Nolta
         :target: https://github.com/nolta
 
-    .. image:: https://gravatar.com/avatar/002ccfd8ee9e135f0dfb5650c292052d?d=https%3A%2F%2Fidenticons.github.com%2F0f1b002e3ac98562472e40b49a01cc84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/130920
         :height: 40px
         :width: 40px
         :alt: Elliot Saba
         :target: https://github.com/staticfloat
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
-    .. image:: https://gravatar.com/avatar/a3968aa6e4769f273c792ab43f96ae6c?d=https%3A%2F%2Fidenticons.github.com%2Fd7d7085403aeb65a1c55781e89e29abf.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/45827
         :height: 40px
         :width: 40px
         :alt: Patrick Marks
         :target: https://github.com/pmarks
 
-    .. image:: https://gravatar.com/avatar/fa183b064e6ddfafab783d3de300c72a?d=https%3A%2F%2Fidenticons.github.com%2F1cf6054567dba9cded36457b06a79768.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1401817
         :height: 40px
         :width: 40px
         :alt: S Wade
         :target: https://github.com/swadey
 
-    .. image:: https://gravatar.com/avatar/9563cfcf21df990e570df1dd019bce16?d=https%3A%2F%2Fidenticons.github.com%2Ff2d6e6092107c938c67268b75745fb84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2913679
         :height: 40px
         :width: 40px
         :alt: Steven G. Johnson
         :target: https://github.com/stevengj
 
-    .. image:: https://gravatar.com/avatar/11ed595b17e2ccf6bc0b3c80f3dde4e8?d=https%3A%2F%2Fidenticons.github.com%2F176a9d5ad1fcb179b164bdd7d4e625dc.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/5247292
         :height: 40px
         :width: 40px
         :alt: powerdistribution
@@ -6489,7 +6598,7 @@ _______________________________________________________
      :width: 19
      :target: https://travis-ci.org/tanmaykm/JudyDicts.jl
 
-  .. image:: https://gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https%3A%2F%2Fidenticons.github.com%2Fa2feca9cad6b69327bdee24d0d81156a.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1010989
      :height: 80px
      :width: 80px
      :align: right
@@ -6508,7 +6617,7 @@ _______________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https%3A%2F%2Fidenticons.github.com%2Fa2feca9cad6b69327bdee24d0d81156a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1010989
         :height: 40px
         :width: 40px
         :alt: Tanmay Mohapatra
@@ -6519,7 +6628,7 @@ _______________________________________________________
 `JuliaWebRepl <https://github.com/vtjnash/JuliaWebRepl.jl>`_
 ____________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https%3A%2F%2Fidenticons.github.com%2F5d5113de843c8b258029d6a06bccd163.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/330950
      :height: 80px
      :width: 80px
      :align: right
@@ -6539,7 +6648,7 @@ ____________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https%3A%2F%2Fidenticons.github.com%2F5d5113de843c8b258029d6a06bccd163.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/330950
         :height: 40px
         :width: 40px
         :alt: Jameson Nash
@@ -6555,7 +6664,7 @@ _____________________________________________
      :width: 19
      :target: https://travis-ci.org/JuliaOpt/JuMP.jl
 
-  .. image:: https://gravatar.com/avatar/f86ab8fe20610c227b7891ebf16ecfd8?d=https%3A%2F%2Fidenticons.github.com%2F5efde7dd012df4681146f0d1704b0238.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/5667382
      :height: 80px
      :width: 80px
      :align: right
@@ -6575,19 +6684,19 @@ _____________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https%3A%2F%2Fidenticons.github.com%2Fd73ab2afeb22d558e3fae4b0a0de43e3.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1733683
         :height: 40px
         :width: 40px
         :alt: Miles Lubin
         :target: https://github.com/mlubin
 
-    .. image:: https://gravatar.com/avatar/cc283e3bd2784ad33dfd55afcfef4877?d=https%3A%2F%2Fidenticons.github.com%2F54c0a5d9982c0b2967ca7ad7851c0d98.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/692635
         :height: 40px
         :width: 40px
         :alt: Iain Dunning
         :target: https://github.com/IainNZ
 
-    .. image:: https://gravatar.com/avatar/7e72b2f1c3eec9390c944edc1f023b7f?d=https%3A%2F%2Fidenticons.github.com%2F36f80e1e56d385146c893bd86186f61f.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1373010
         :height: 40px
         :width: 40px
         :alt: Joey Huchette
@@ -6595,10 +6704,51 @@ _____________________________________________
 
 ----
 
+`KernSmooth <https://github.com/lendle/KernSmooth.jl>`_ |KernSmooth_build|
+_______________________________________________________
+
+  .. |KernSmooth_build| image:: ../images/travis-icon.png
+     :height: 19
+     :width: 19
+     :target: https://travis-ci.org/lendle/KernSmooth.jl
+
+  .. image:: https://avatars.githubusercontent.com/u/815403
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Sam Lendle
+     :target: https://github.com/lendle
+
+  Local polynomial regression and density estimation. 
+
+  Current Version: ``0.0.2``  (updated: 2014-03-01) 
+
+  Maintainer: `Sam Lendle <https://github.com/lendle>`_
+
+  Dependencies::
+
+      None
+
+  Contributors:
+
+    .. image:: https://avatars.githubusercontent.com/u/815403
+        :height: 40px
+        :width: 40px
+        :alt: Sam Lendle
+        :target: https://github.com/lendle
+
+    .. image:: https://avatars.githubusercontent.com/u/1733683
+        :height: 40px
+        :width: 40px
+        :alt: Miles Lubin
+        :target: https://github.com/mlubin
+
+----
+
 `KLDivergence <https://github.com/johnmyleswhite/KLDivergence.jl>`_
 ___________________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/22064
      :height: 80px
      :width: 80px
      :align: right
@@ -6617,13 +6767,13 @@ ___________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
-    .. image:: https://gravatar.com/avatar/394286d6440acbef8de68df95ccf9bd7?d=https%3A%2F%2Fidenticons.github.com%2Fd3b66622a9c6a31f47b109f6b398c014.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1830517
         :height: 40px
         :width: 40px
         :alt: Ingmar Schuster
@@ -6634,7 +6784,7 @@ ___________________________________________________________________
 `kNN <https://github.com/johnmyleswhite/kNN.jl>`_
 _________________________________________________
 
-  .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/22064
      :height: 80px
      :width: 80px
      :align: right
@@ -6653,7 +6803,7 @@ _________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
@@ -6664,7 +6814,7 @@ _________________________________________________
 `Languages <https://github.com/johnmyleswhite/Languages.jl>`_
 _____________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/22064
      :height: 80px
      :width: 80px
      :align: right
@@ -6683,13 +6833,13 @@ _____________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
-    .. image:: https://gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https%3A%2F%2Fidenticons.github.com%2Fa2feca9cad6b69327bdee24d0d81156a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1010989
         :height: 40px
         :width: 40px
         :alt: Tanmay Mohapatra
@@ -6700,7 +6850,7 @@ _____________________________________________________________
 `Lazy <https://github.com/one-more-minute/Lazy.jl>`_
 ____________________________________________________
 
-  .. image:: https://gravatar.com/avatar/325774630318273a531f75046d1bacc6?d=https%3A%2F%2Fidenticons.github.com%2Fa482120dcb329ff2ad650a80380828ff.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2234614
      :height: 80px
      :width: 80px
      :align: right
@@ -6709,7 +6859,7 @@ ____________________________________________________
 
   Functional programming for Julia 
 
-  Current Version: ``0.1.0``  (updated: 2013-12-20) 
+  Current Version: ``0.2.0``  (updated: 2014-03-02) 
 
   Maintainer: `Mike Innes <https://github.com/one-more-minute>`_
 
@@ -6719,24 +6869,30 @@ ____________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/325774630318273a531f75046d1bacc6?d=https%3A%2F%2Fidenticons.github.com%2Fa482120dcb329ff2ad650a80380828ff.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2234614
         :height: 40px
         :width: 40px
         :alt: Mike Innes
         :target: https://github.com/one-more-minute
 
-    .. image:: https://gravatar.com/avatar/25ce2ab2f5e673e46208c1188a39e6ca?d=https%3A%2F%2Fidenticons.github.com%2F94554a56b2946c805e180501c4d4544c.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/324836
         :height: 40px
         :width: 40px
         :alt: milktrader
         :target: https://github.com/milktrader
+
+    .. image:: https://avatars.githubusercontent.com/u/636420
+        :height: 40px
+        :width: 40px
+        :alt: Tom Short
+        :target: https://github.com/tshort
 
 ----
 
 `LazySequences <https://github.com/dcjones/LazySequences.jl>`_
 ______________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https%3A%2F%2Fidenticons.github.com%2Fc7ec48e0ff0d0ae8827e36301a0962a1.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/210361
      :height: 80px
      :width: 80px
      :align: right
@@ -6755,13 +6911,13 @@ ______________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https%3A%2F%2Fidenticons.github.com%2Fc7ec48e0ff0d0ae8827e36301a0962a1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/210361
         :height: 40px
         :width: 40px
         :alt: Daniel Jones
         :target: https://github.com/dcjones
 
-    .. image:: https://gravatar.com/avatar/7587822f903939a9cfda491818381a01?d=https%3A%2F%2Fidenticons.github.com%2F6676b2eb81579b068a7366563daef420.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/984832
         :height: 40px
         :width: 40px
         :alt: Sean Williamson
@@ -6772,7 +6928,7 @@ ______________________________________________________________
 `LibCURL <https://github.com/amitmurthy/LibCURL.jl>`_
 _____________________________________________________
 
-  .. image:: https://gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https%3A%2F%2Fidenticons.github.com%2F8de01f67e4cbfa5ce2e70e6f1f761891.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/117461
      :height: 80px
      :width: 80px
      :align: right
@@ -6791,19 +6947,19 @@ _____________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https%3A%2F%2Fidenticons.github.com%2F8de01f67e4cbfa5ce2e70e6f1f761891.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/117461
         :height: 40px
         :width: 40px
         :alt: Amit Murthy
         :target: https://github.com/amitmurthy
 
-    .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/378918
         :height: 40px
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
 
-    .. image:: https://gravatar.com/avatar/55e277a715ee2afd0d29c309174eca02?d=https%3A%2F%2Fidenticons.github.com%2F938b248e75affacf29383e0738b98ea2.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/744411
         :height: 40px
         :width: 40px
         :alt: Viral B. Shah
@@ -6814,7 +6970,7 @@ _____________________________________________________
 `LibExpat <https://github.com/amitmurthy/LibExpat.jl>`_
 _______________________________________________________
 
-  .. image:: https://gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https%3A%2F%2Fidenticons.github.com%2F8de01f67e4cbfa5ce2e70e6f1f761891.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/117461
      :height: 80px
      :width: 80px
      :align: right
@@ -6833,35 +6989,41 @@ _______________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https%3A%2F%2Fidenticons.github.com%2F8de01f67e4cbfa5ce2e70e6f1f761891.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/117461
         :height: 40px
         :width: 40px
         :alt: Amit Murthy
         :target: https://github.com/amitmurthy
 
-    .. image:: https://gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https%3A%2F%2Fidenticons.github.com%2F5d5113de843c8b258029d6a06bccd163.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/330950
         :height: 40px
         :width: 40px
         :alt: Jameson Nash
         :target: https://github.com/vtjnash
 
-    .. image:: https://gravatar.com/avatar/4206b43cb025b0c1fd8cd9fa89dd6086?d=https%3A%2F%2Fidenticons.github.com%2F64444743705b96233935f7aa3a0efcfb.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1277811
         :height: 40px
         :width: 40px
         :alt: catawbasam
         :target: https://github.com/catawbasam
 
-    .. image:: https://gravatar.com/avatar/192f114babcc8c2f53936c145bbc502c?d=https%3A%2F%2Fidenticons.github.com%2F8221b4c8f7cc8d6114e4f1afc7fd7dff.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/327706
         :height: 40px
         :width: 40px
         :alt: Isaiah
         :target: https://github.com/ihnorton
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
+
+    .. image:: https://avatars.githubusercontent.com/u/70274
+        :height: 40px
+        :width: 40px
+        :alt: Uwe L. Korn
+        :target: https://github.com/xhochy
 
 ----
 
@@ -6873,7 +7035,7 @@ _______________________________________________________
      :width: 19
      :target: https://travis-ci.org/jakebolewski/LibGit2.jl
 
-  .. image:: https://gravatar.com/avatar/44338030dea25ca337ae4c843d9b601b?d=https%3A%2F%2Fidenticons.github.com%2Ffbb86fbc1a3233da94ed5ae0739a8ab1.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1157798
      :height: 80px
      :width: 80px
      :align: right
@@ -6894,11 +7056,17 @@ _______________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/44338030dea25ca337ae4c843d9b601b?d=https%3A%2F%2Fidenticons.github.com%2Ffbb86fbc1a3233da94ed5ae0739a8ab1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1157798
         :height: 40px
         :width: 40px
         :alt: Jake Bolewski
         :target: https://github.com/jakebolewski
+
+    .. image:: https://avatars.githubusercontent.com/u/1649109
+        :height: 40px
+        :width: 40px
+        :alt: michele
+        :target: https://github.com/elehcim
 
 ----
 
@@ -6910,7 +7078,7 @@ __________________________________________________
      :width: 19
      :target: https://travis-ci.org/simonster/LIBSVM.jl
 
-  .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/470884
      :height: 80px
      :width: 80px
      :align: right
@@ -6929,7 +7097,7 @@ __________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/470884
         :height: 40px
         :width: 40px
         :alt: Simon Kornblith
@@ -6940,7 +7108,7 @@ __________________________________________________
 `LightXML <https://github.com/lindahua/LightXML.jl>`_
 _____________________________________________________
 
-  .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1900250
      :height: 80px
      :width: 80px
      :align: right
@@ -6959,25 +7127,25 @@ _____________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900250
         :height: 40px
         :width: 40px
         :alt: Dahua Lin
         :target: https://github.com/lindahua
 
-    .. image:: https://gravatar.com/avatar/be74dd2837d69001ca63ea3394fe79b6?d=https%3A%2F%2Fidenticons.github.com%2F52c77fe7c32348918d03e6e3c0fe91ba.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/4707207
         :height: 40px
         :width: 40px
         :alt: olofsen
         :target: https://github.com/olofsen
 
-    .. image:: https://gravatar.com/avatar/e0ffb3df640bdfc20a10ee433268cea4?d=https%3A%2F%2Fidenticons.github.com%2Fa5160529370c7f967810cb74483b4492.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/348933
         :height: 40px
         :width: 40px
         :alt: Paulo Geyer
         :target: https://github.com/paulogeyer
 
-    .. image:: https://gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https%3A%2F%2Fidenticons.github.com%2Faeffec9bb1d59de139f16ccd910b5168.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/371258
         :height: 40px
         :width: 40px
         :alt: Douglas Bates
@@ -6988,7 +7156,7 @@ _____________________________________________________
 `Loess <https://github.com/dcjones/Loess.jl>`_
 ______________________________________________
 
-  .. image:: https://gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https%3A%2F%2Fidenticons.github.com%2Fc7ec48e0ff0d0ae8827e36301a0962a1.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/210361
      :height: 80px
      :width: 80px
      :align: right
@@ -7009,13 +7177,13 @@ ______________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https%3A%2F%2Fidenticons.github.com%2Fc7ec48e0ff0d0ae8827e36301a0962a1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/210361
         :height: 40px
         :width: 40px
         :alt: Daniel Jones
         :target: https://github.com/dcjones
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
@@ -7026,7 +7194,7 @@ ______________________________________________
 `Logging <https://github.com/kmsquire/Logging.jl>`_
 ___________________________________________________
 
-  .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/223250
      :height: 80px
      :width: 80px
      :align: right
@@ -7035,7 +7203,7 @@ ___________________________________________________
 
   Logging package for julia 
 
-  Current Version: ``0.0.0``  (updated: 2013-10-31) 
+  Current Version: ``0.0.3``  (updated: 2014-02-27) 
 
   Maintainer: `Kevin Squire <https://github.com/kmsquire>`_
 
@@ -7045,24 +7213,30 @@ ___________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
         :target: https://github.com/kmsquire
 
-    .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/378918
         :height: 40px
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
+
+    .. image:: https://avatars.githubusercontent.com/u/965092
+        :height: 40px
+        :width: 40px
+        :alt: Sean Harnett
+        :target: https://github.com/sharnett
 
 ----
 
 `Loss <https://github.com/johnmyleswhite/Loss.jl>`_
 ___________________________________________________
 
-  .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/22064
      :height: 80px
      :width: 80px
      :align: right
@@ -7081,7 +7255,7 @@ ___________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
@@ -7097,7 +7271,7 @@ ______________________________________________________
      :width: 19
      :target: https://travis-ci.org/forio/Lumberjack.jl
 
-  .. image:: https://gravatar.com/avatar/bd2a3d33c3dcc6f25e61382f81689f33?d=https%3A%2F%2Fidenticons.github.com%2F303541224a8d81c65040eb747f5ee614.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1878641
      :height: 80px
      :width: 80px
      :align: right
@@ -7118,23 +7292,29 @@ ______________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/dfc3b0fbb59c9444153823fd35dbd13b?d=https%3A%2F%2Fidenticons.github.com%2F678085c7c9e848e0442b77d8b0c4be71.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900307
         :height: 40px
         :width: 40px
         :alt: Westley Argentum Hennigh
         :target: https://github.com/WestleyArgentum
 
-    .. image:: https://gravatar.com/avatar/d5f30c2d40341d55ba235d674d24972e?d=https%3A%2F%2Fidenticons.github.com%2Fae7e0405c74926295bca0f9d2aa09fa1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/172643
         :height: 40px
         :width: 40px
         :alt: Stu Thompson
         :target: https://github.com/stuinzuri
 
-    .. image:: https://gravatar.com/avatar/cbc10427e8019290d4c2416e4501995a?d=https%3A%2F%2Fidenticons.github.com%2F5c6839e11219ac4b4021d194b43665f7.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/28634
         :height: 40px
         :width: 40px
         :alt: compressed
         :target: https://github.com/compressed
+
+    .. image:: https://avatars.githubusercontent.com/u/2124535
+        :height: 40px
+        :width: 40px
+        :alt: bass3m
+        :target: https://github.com/bass3m
 
 ----
 
@@ -7146,7 +7326,7 @@ _______________________________________________________________________
      :width: 19
      :target: https://travis-ci.org/JuliaQuant/MarketTechnicals.jl
 
-  .. image:: https://gravatar.com/avatar/10d86113162d31110fc309a2a8bc1bd9?d=https%3A%2F%2Fidenticons.github.com%2F4e2741a03c913fd122caf1f453678bfe.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/5839427
      :height: 80px
      :width: 80px
      :align: right
@@ -7155,7 +7335,7 @@ _______________________________________________________________________
 
   Technical analysis of financial time series in Julia 
 
-  Current Version: ``0.2.1``  (updated: 2014-02-12) 
+  Current Version: ``0.3.1``  (updated: 2014-02-25) 
 
   Maintainer: `Quantitative Finance in Julia <https://github.com/JuliaQuant>`_
 
@@ -7166,7 +7346,7 @@ _______________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/25ce2ab2f5e673e46208c1188a39e6ca?d=https%3A%2F%2Fidenticons.github.com%2F94554a56b2946c805e180501c4d4544c.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/324836
         :height: 40px
         :width: 40px
         :alt: milktrader
@@ -7182,7 +7362,7 @@ ____________________________________________
      :width: 19
      :target: https://travis-ci.org/simonster/MAT.jl
 
-  .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/470884
      :height: 80px
      :width: 80px
      :align: right
@@ -7202,31 +7382,31 @@ ____________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/470884
         :height: 40px
         :width: 40px
         :alt: Simon Kornblith
         :target: https://github.com/simonster
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
         :target: https://github.com/timholy
 
-    .. image:: https://gravatar.com/avatar/317e44562dcf11f5164d0a4936696fbc?d=https%3A%2F%2Fidenticons.github.com%2F655fe21cedd4ac41f328aef38b350ef0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1553856
         :height: 40px
         :width: 40px
         :alt: rened
         :target: https://github.com/rened
 
-    .. image:: https://gravatar.com/avatar/fd4b164e15fa2a834d16fb8743ec4f1b?d=https%3A%2F%2Fidenticons.github.com%2F08e6bea8e90ba87af3c9554d94db6579.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1677
         :height: 40px
         :width: 40px
         :alt: Brendan O'Connor
         :target: https://github.com/brendano
 
-    .. image:: https://gravatar.com/avatar/d5eaa24d3d504aebc34d72ed352c344e?d=https%3A%2F%2Fidenticons.github.com%2F07c37f4c58d7a3945987fcaf06388fe9.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2594963
         :height: 40px
         :width: 40px
         :alt: Geoffrey K. Adams
@@ -7237,7 +7417,7 @@ ____________________________________________
 `Match <https://github.com/kmsquire/Match.jl>`_
 _______________________________________________
 
-  .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/223250
      :height: 80px
      :width: 80px
      :align: right
@@ -7258,13 +7438,13 @@ _______________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
         :target: https://github.com/kmsquire
 
-    .. image:: https://gravatar.com/avatar/fd4324f02a40d980974b862ec8410f79?d=https%3A%2F%2Fidenticons.github.com%2F77b4ea235ea1d5b8b4afc58903b4d3a8.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/418773
         :height: 40px
         :width: 40px
         :alt: Yuriy Skalko
@@ -7275,7 +7455,7 @@ _______________________________________________
 `MathProgBase <https://github.com/JuliaOpt/MathProgBase.jl>`_
 _____________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/f86ab8fe20610c227b7891ebf16ecfd8?d=https%3A%2F%2Fidenticons.github.com%2F5efde7dd012df4681146f0d1704b0238.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/5667382
      :height: 80px
      :width: 80px
      :align: right
@@ -7294,25 +7474,25 @@ _____________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https%3A%2F%2Fidenticons.github.com%2Fd73ab2afeb22d558e3fae4b0a0de43e3.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1733683
         :height: 40px
         :width: 40px
         :alt: Miles Lubin
         :target: https://github.com/mlubin
 
-    .. image:: https://gravatar.com/avatar/7e72b2f1c3eec9390c944edc1f023b7f?d=https%3A%2F%2Fidenticons.github.com%2F36f80e1e56d385146c893bd86186f61f.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1373010
         :height: 40px
         :width: 40px
         :alt: Joey Huchette
         :target: https://github.com/joehuchette
 
-    .. image:: https://gravatar.com/avatar/cc283e3bd2784ad33dfd55afcfef4877?d=https%3A%2F%2Fidenticons.github.com%2F54c0a5d9982c0b2967ca7ad7851c0d98.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/692635
         :height: 40px
         :width: 40px
         :alt: Iain Dunning
         :target: https://github.com/IainNZ
 
-    .. image:: https://gravatar.com/avatar/80502de63c1b21d8f3ba663d72ba5be2?d=https%3A%2F%2Fidenticons.github.com%2Fd454171c70136b2284d6a8cfe123eb29.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223753
         :height: 40px
         :width: 40px
         :alt: Carlo Baldassi
@@ -7323,7 +7503,7 @@ _____________________________________________________________
 `MATLAB <https://github.com/lindahua/MATLAB.jl>`_
 _________________________________________________
 
-  .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1900250
      :height: 80px
      :width: 80px
      :align: right
@@ -7342,25 +7522,25 @@ _________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900250
         :height: 40px
         :width: 40px
         :alt: Dahua Lin
         :target: https://github.com/lindahua
 
-    .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/470884
         :height: 40px
         :width: 40px
         :alt: Simon Kornblith
         :target: https://github.com/simonster
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://gravatar.com/avatar/d04d5b6e71776eb13d195ba7cc94b995?d=https%3A%2F%2Fidenticons.github.com%2Ff1abfc4d42d91a6bfbdfb8da432c2a96.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/478237
         :height: 40px
         :width: 40px
         :alt: Waldir Pimenta
@@ -7371,7 +7551,7 @@ _________________________________________________
 `MATLABCluster <https://github.com/simonster/MATLABCluster.jl>`_
 ________________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/470884
      :height: 80px
      :width: 80px
      :align: right
@@ -7390,7 +7570,7 @@ ________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/470884
         :height: 40px
         :width: 40px
         :alt: Simon Kornblith
@@ -7401,7 +7581,7 @@ ________________________________________________________________
 `MatrixMarket <https://github.com/ViralBShah/MatrixMarket.jl>`_
 _______________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/55e277a715ee2afd0d29c309174eca02?d=https%3A%2F%2Fidenticons.github.com%2F938b248e75affacf29383e0738b98ea2.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/744411
      :height: 80px
      :width: 80px
      :align: right
@@ -7420,7 +7600,7 @@ _______________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/55e277a715ee2afd0d29c309174eca02?d=https%3A%2F%2Fidenticons.github.com%2F938b248e75affacf29383e0738b98ea2.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/744411
         :height: 40px
         :width: 40px
         :alt: Viral B. Shah
@@ -7436,7 +7616,7 @@ _______________________________________________
      :width: 19
      :target: https://travis-ci.org/JuliaStats/MCMC.jl
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2Fcb77afca27851230430c94750eef67c7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2761531
      :height: 80px
      :width: 80px
      :align: right
@@ -7457,43 +7637,43 @@ _______________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/f1678bcdc052b500191b78923399e5f8?d=https%3A%2F%2Fidenticons.github.com%2F23ac6c3f4e95b0415828115db7a8ca44.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2519036
         :height: 40px
         :width: 40px
         :alt: Theodore Papamarkou
         :target: https://github.com/scidom
 
-    .. image:: https://gravatar.com/avatar/f87ff664dab9cd5bb362590613c680b8?d=https%3A%2F%2Fidenticons.github.com%2F74e421289e7f0fa0ef2e52acfe948fae.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2848130
         :height: 40px
         :width: 40px
         :alt: Frédéric Testard
         :target: https://github.com/fredo-dedup
 
-    .. image:: https://gravatar.com/avatar/fd4b164e15fa2a834d16fb8743ec4f1b?d=https%3A%2F%2Fidenticons.github.com%2F08e6bea8e90ba87af3c9554d94db6579.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1677
         :height: 40px
         :width: 40px
         :alt: Brendan O'Connor
         :target: https://github.com/brendano
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
-    .. image:: https://gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https%3A%2F%2Fidenticons.github.com%2Faeffec9bb1d59de139f16ccd910b5168.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/371258
         :height: 40px
         :width: 40px
         :alt: Douglas Bates
         :target: https://github.com/dmbates
 
-    .. image:: https://gravatar.com/avatar/63bcfcfcdf0fb75e508151e5fd944092?d=https%3A%2F%2Fidenticons.github.com%2F91f0d29e5839785338447a21e0d73317.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1222726
         :height: 40px
         :width: 40px
         :alt: dchudz
         :target: https://github.com/dchudz
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
@@ -7504,7 +7684,7 @@ _______________________________________________
 `MDCT <https://github.com/stevengj/MDCT.jl>`_
 _____________________________________________
 
-  .. image:: https://gravatar.com/avatar/9563cfcf21df990e570df1dd019bce16?d=https%3A%2F%2Fidenticons.github.com%2Ff2d6e6092107c938c67268b75745fb84.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2913679
      :height: 80px
      :width: 80px
      :align: right
@@ -7523,7 +7703,7 @@ _____________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/9563cfcf21df990e570df1dd019bce16?d=https%3A%2F%2Fidenticons.github.com%2Ff2d6e6092107c938c67268b75745fb84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2913679
         :height: 40px
         :width: 40px
         :alt: Steven G. Johnson
@@ -7534,7 +7714,7 @@ _____________________________________________
 `Meddle <https://github.com/JuliaLang/Meddle.jl>`_
 __________________________________________________
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2F96058cb0ed9e150dfffc3b86b3b8d5e7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/743164
      :height: 80px
      :width: 80px
      :align: right
@@ -7554,49 +7734,49 @@ __________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/54cc6bf56d6223bdb99e5d6cfbd11056?d=https%3A%2F%2Fidenticons.github.com%2F64e76e13ef337dfcda3cf3da7b89c5c2.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1205394
         :height: 40px
         :width: 40px
         :alt: Leah Hanson
         :target: https://github.com/astrieanna
 
-    .. image:: https://gravatar.com/avatar/757c233176d3ad14136df4a547ac4234?d=https%3A%2F%2Fidenticons.github.com%2F121cd9e6bfd4012a5efdf75e322b5b39.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/304202
         :height: 40px
         :width: 40px
         :alt: Daniel Mendel
         :target: https://github.com/danielmendel
 
-    .. image:: https://gravatar.com/avatar/06625cbad0c69f5c2e673a4312e9fd7e?d=https%3A%2F%2Fidenticons.github.com%2F5dd6d7ae462c1aec0b364990d3ec72e0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/503938
         :height: 40px
         :width: 40px
         :alt: Zach Allaun
         :target: https://github.com/zachallaun
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://gravatar.com/avatar/6cba33e8e7c69fa63f6ad386b7a958c5?d=https%3A%2F%2Fidenticons.github.com%2F270edd69788dce200a3b395a6da6fdb7.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1732
         :height: 40px
         :width: 40px
         :alt: Jiahao Chen
         :target: https://github.com/jiahao
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
         :target: https://github.com/kmsquire
 
-    .. image:: https://gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https%3A%2F%2Fidenticons.github.com%2Fa2feca9cad6b69327bdee24d0d81156a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1010989
         :height: 40px
         :width: 40px
         :alt: Tanmay Mohapatra
@@ -7612,7 +7792,7 @@ _____________________________________________________
      :width: 19
      :target: https://travis-ci.org/tanmaykm/Memcache.jl
 
-  .. image:: https://gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https%3A%2F%2Fidenticons.github.com%2Fa2feca9cad6b69327bdee24d0d81156a.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1010989
      :height: 80px
      :width: 80px
      :align: right
@@ -7631,7 +7811,7 @@ _____________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https%3A%2F%2Fidenticons.github.com%2Fa2feca9cad6b69327bdee24d0d81156a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1010989
         :height: 40px
         :width: 40px
         :alt: Tanmay Mohapatra
@@ -7647,7 +7827,7 @@ ____________________________________________________
      :width: 19
      :target: https://travis-ci.org/simonster/Memoize.jl
 
-  .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/470884
      :height: 80px
      :width: 80px
      :align: right
@@ -7666,7 +7846,7 @@ ____________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/470884
         :height: 40px
         :width: 40px
         :alt: Simon Kornblith
@@ -7682,7 +7862,7 @@ __________________________________________________
      :width: 19
      :target: https://travis-ci.org/twadleigh/Meshes.jl
 
-  .. image:: https://gravatar.com/avatar/9553bee3aa95ce13310db4f5f70acc62?d=https%3A%2F%2Fidenticons.github.com%2F9a46c6d38ad6c7b17e8005b2e900ff2f.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1570926
      :height: 80px
      :width: 80px
      :align: right
@@ -7691,7 +7871,7 @@ __________________________________________________
 
   Generation and manipulation of triangular meshes. 
 
-  Current Version: ``0.0.1``  (updated: 2013-10-26) 
+  Current Version: ``0.0.2``  (updated: 2014-02-27) 
 
   Maintainer: `Tracy Wadleigh <https://github.com/twadleigh>`_
 
@@ -7702,19 +7882,19 @@ __________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/9553bee3aa95ce13310db4f5f70acc62?d=https%3A%2F%2Fidenticons.github.com%2F9a46c6d38ad6c7b17e8005b2e900ff2f.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1570926
         :height: 40px
         :width: 40px
         :alt: Tracy Wadleigh
         :target: https://github.com/twadleigh
 
-    .. image:: https://gravatar.com/avatar/a7edd4ba72f4a9e79c14e1d1a5f29071?d=https%3A%2F%2Fidenticons.github.com%2Fa77ac866c9e368b44d40dbbb01b50f7f.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/3915826
         :height: 40px
         :width: 40px
         :alt: Alan Bahm
         :target: https://github.com/abahm
 
-    .. image:: https://gravatar.com/avatar/9c8bbd5a306197b461704991872a05b0?d=https%3A%2F%2Fidenticons.github.com%2F6ffe06bb5659901917ee7bed9301fa0e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1404919
         :height: 40px
         :width: 40px
         :alt: Michel Kuhlmann
@@ -7725,7 +7905,7 @@ __________________________________________________
 `Metis <https://github.com/dmbates/Metis.jl>`_
 ______________________________________________
 
-  .. image:: https://gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https%3A%2F%2Fidenticons.github.com%2Faeffec9bb1d59de139f16ccd910b5168.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/371258
      :height: 80px
      :width: 80px
      :align: right
@@ -7745,7 +7925,7 @@ ______________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https%3A%2F%2Fidenticons.github.com%2Faeffec9bb1d59de139f16ccd910b5168.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/371258
         :height: 40px
         :width: 40px
         :alt: Douglas Bates
@@ -7761,7 +7941,7 @@ _______________________________________________________________________________
      :width: 19
      :target: https://travis-ci.org/soundcloud/MinimalPerfectHashes.jl
 
-  .. image:: https://gravatar.com/avatar/6b7fef81eb37d969836006b41d751a32?d=https%3A%2F%2Fidenticons.github.com%2F8569aad08bd79e68d8a5d2b2ee505408.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/21021
      :height: 80px
      :width: 80px
      :align: right
@@ -7782,7 +7962,7 @@ _______________________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/79e1bcfc1ed23b8964171191e9073545?d=https%3A%2F%2Fidenticons.github.com%2F770db0d7e7610d1f17e1680bddda40c6.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/538456
         :height: 40px
         :width: 40px
         :alt: Matt Weiden
@@ -7793,7 +7973,7 @@ _______________________________________________________________________________
 `MixedModels <https://github.com/dmbates/MixedModels.jl>`_
 __________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https%3A%2F%2Fidenticons.github.com%2Faeffec9bb1d59de139f16ccd910b5168.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/371258
      :height: 80px
      :width: 80px
      :align: right
@@ -7814,7 +7994,7 @@ __________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https%3A%2F%2Fidenticons.github.com%2Faeffec9bb1d59de139f16ccd910b5168.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/371258
         :height: 40px
         :width: 40px
         :alt: Douglas Bates
@@ -7825,7 +8005,7 @@ __________________________________________________________
 `MixtureModels <https://github.com/lindahua/MixtureModels.jl>`_
 _______________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1900250
      :height: 80px
      :width: 80px
      :align: right
@@ -7847,7 +8027,7 @@ _______________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900250
         :height: 40px
         :width: 40px
         :alt: Dahua Lin
@@ -7863,7 +8043,7 @@ ___________________________________________________
      :width: 19
      :target: https://travis-ci.org/JuliaStats/MLBase.jl
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2Fcb77afca27851230430c94750eef67c7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2761531
      :height: 80px
      :width: 80px
      :align: right
@@ -7884,7 +8064,7 @@ ___________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900250
         :height: 40px
         :width: 40px
         :alt: Dahua Lin
@@ -7895,7 +8075,7 @@ ___________________________________________________
 `MNIST <https://github.com/johnmyleswhite/MNIST.jl>`_
 _____________________________________________________
 
-  .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/22064
      :height: 80px
      :width: 80px
      :align: right
@@ -7914,13 +8094,13 @@ _____________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
-    .. image:: https://gravatar.com/avatar/38fd90a3e36e0fc871e3c58e79c74227?d=https%3A%2F%2Fidenticons.github.com%2F4f083f9efc165785db3ef3255f13c787.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/869592
         :height: 40px
         :width: 40px
         :alt: Alexander Fabisch
@@ -7931,7 +8111,7 @@ _____________________________________________________
 `Monads <https://github.com/pao/Monads.jl>`_
 ____________________________________________
 
-  .. image:: https://gravatar.com/avatar/16d8443194c380ca93a77fb8530a5aee?d=https%3A%2F%2Fidenticons.github.com%2F38da66e2f2af82932859b7a5f330af55.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/140497
      :height: 80px
      :width: 80px
      :align: right
@@ -7952,7 +8132,7 @@ ____________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/16d8443194c380ca93a77fb8530a5aee?d=https%3A%2F%2Fidenticons.github.com%2F38da66e2f2af82932859b7a5f330af55.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/140497
         :height: 40px
         :width: 40px
         :alt: Patrick O'Leary
@@ -7963,7 +8143,7 @@ ____________________________________________
 `Mongo <https://github.com/Lytol/Mongo.jl>`_
 ____________________________________________
 
-  .. image:: https://gravatar.com/avatar/eabc077018e56904597d150369b4a803?d=https%3A%2F%2Fidenticons.github.com%2F178fde6398864e33aaefae5d2d855f20.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/11248
      :height: 80px
      :width: 80px
      :align: right
@@ -7983,19 +8163,19 @@ ____________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/eabc077018e56904597d150369b4a803?d=https%3A%2F%2Fidenticons.github.com%2F178fde6398864e33aaefae5d2d855f20.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/11248
         :height: 40px
         :width: 40px
         :alt: Brian Smith
         :target: https://github.com/Lytol
 
-    .. image:: https://gravatar.com/avatar/06625cbad0c69f5c2e673a4312e9fd7e?d=https%3A%2F%2Fidenticons.github.com%2F5dd6d7ae462c1aec0b364990d3ec72e0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/503938
         :height: 40px
         :width: 40px
         :alt: Zach Allaun
         :target: https://github.com/zachallaun
 
-    .. image:: https://gravatar.com/avatar/a4805f329b5b9de6f8151cd4146cac45?d=https%3A%2F%2Fidenticons.github.com%2F11fb96364721a5827dfc4722e8283ec4.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2367246
         :height: 40px
         :width: 40px
         :alt: Nathaniel Nicandro
@@ -8006,7 +8186,7 @@ ____________________________________________
 `Mongrel2 <https://github.com/aviks/Mongrel2.jl>`_
 __________________________________________________
 
-  .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/378918
      :height: 80px
      :width: 80px
      :align: right
@@ -8026,19 +8206,19 @@ __________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/378918
         :height: 40px
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
 
-    .. image:: https://gravatar.com/avatar/baff1969663ebce1d743a43a2bbaa00e?d=https%3A%2F%2Fidenticons.github.com%2Fc8829bcfb9c1d89b93f14dee9add8a0b.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/12100
         :height: 40px
         :width: 40px
         :alt: Nathan Wienert
         :target: https://github.com/natew
 
-    .. image:: https://gravatar.com/avatar/72ee26065724239b61be271722b682dd?d=https%3A%2F%2Fidenticons.github.com%2Fbb31b1d09b467b2128926c8847d57609.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/607298
         :height: 40px
         :width: 40px
         :alt: Nick Collins
@@ -8049,7 +8229,7 @@ __________________________________________________
 `Morsel <https://github.com/JuliaLang/Morsel.jl>`_
 __________________________________________________
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2F96058cb0ed9e150dfffc3b86b3b8d5e7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/743164
      :height: 80px
      :width: 80px
      :align: right
@@ -8071,61 +8251,61 @@ __________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/757c233176d3ad14136df4a547ac4234?d=https%3A%2F%2Fidenticons.github.com%2F121cd9e6bfd4012a5efdf75e322b5b39.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/304202
         :height: 40px
         :width: 40px
         :alt: Daniel Mendel
         :target: https://github.com/danielmendel
 
-    .. image:: https://gravatar.com/avatar/06625cbad0c69f5c2e673a4312e9fd7e?d=https%3A%2F%2Fidenticons.github.com%2F5dd6d7ae462c1aec0b364990d3ec72e0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/503938
         :height: 40px
         :width: 40px
         :alt: Zach Allaun
         :target: https://github.com/zachallaun
 
-    .. image:: https://gravatar.com/avatar/54cc6bf56d6223bdb99e5d6cfbd11056?d=https%3A%2F%2Fidenticons.github.com%2F64e76e13ef337dfcda3cf3da7b89c5c2.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1205394
         :height: 40px
         :width: 40px
         :alt: Leah Hanson
         :target: https://github.com/astrieanna
 
-    .. image:: https://gravatar.com/avatar/72ee26065724239b61be271722b682dd?d=https%3A%2F%2Fidenticons.github.com%2Fbb31b1d09b467b2128926c8847d57609.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/607298
         :height: 40px
         :width: 40px
         :alt: Nick Collins
         :target: https://github.com/ncollins
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://gravatar.com/avatar/6c72d7139086df4435a1067a66b02fff?d=https%3A%2F%2Fidenticons.github.com%2Fbe3dcb33438332196eb6b2f23330cb05.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2681817
         :height: 40px
         :width: 40px
         :alt: thinkpad20
         :target: https://github.com/thinkpad20
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
-    .. image:: https://gravatar.com/avatar/2bf4378d854e6f9e8cdba9505b90520e?d=https%3A%2F%2Fidenticons.github.com%2F76e1ead3d1a884164c26077252b67406.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1237055
         :height: 40px
         :width: 40px
         :alt: David
         :target: https://github.com/maxlikely
 
-    .. image:: https://gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https%3A%2F%2Fidenticons.github.com%2Fccc246e2e59d5e2d0cca344114f2065e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/201456
         :height: 40px
         :width: 40px
         :alt: Mike Nolta
         :target: https://github.com/nolta
 
-    .. image:: https://gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https%3A%2F%2Fidenticons.github.com%2Fa2feca9cad6b69327bdee24d0d81156a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1010989
         :height: 40px
         :width: 40px
         :alt: Tanmay Mohapatra
@@ -8136,7 +8316,7 @@ __________________________________________________
 `Mosek <https://github.com/JuliaOpt/Mosek.jl>`_
 _______________________________________________
 
-  .. image:: https://gravatar.com/avatar/f86ab8fe20610c227b7891ebf16ecfd8?d=https%3A%2F%2Fidenticons.github.com%2F5efde7dd012df4681146f0d1704b0238.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/5667382
      :height: 80px
      :width: 80px
      :align: right
@@ -8157,31 +8337,31 @@ _______________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/36413a0226cebd45005a81174bf0ae6e?d=https%3A%2F%2Fidenticons.github.com%2Fd435453d14891f281515f3b88a4f6b46.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/5641194
         :height: 40px
         :width: 40px
         :alt: Ulf Worsøe
         :target: https://github.com/ulfworsoe
 
-    .. image:: https://gravatar.com/avatar/e87d3fde682acdee0d39dc183073da6a?d=https%3A%2F%2Fidenticons.github.com%2F7370404f4024fe9cd1f516ee30645399.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2028102
         :height: 40px
         :width: 40px
         :alt: wflu
         :target: https://github.com/wflu
 
-    .. image:: https://gravatar.com/avatar/7e72b2f1c3eec9390c944edc1f023b7f?d=https%3A%2F%2Fidenticons.github.com%2F36f80e1e56d385146c893bd86186f61f.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1373010
         :height: 40px
         :width: 40px
         :alt: Joey Huchette
         :target: https://github.com/joehuchette
 
-    .. image:: https://gravatar.com/avatar/cc283e3bd2784ad33dfd55afcfef4877?d=https%3A%2F%2Fidenticons.github.com%2F54c0a5d9982c0b2967ca7ad7851c0d98.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/692635
         :height: 40px
         :width: 40px
         :alt: Iain Dunning
         :target: https://github.com/IainNZ
 
-    .. image:: https://gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https%3A%2F%2Fidenticons.github.com%2Fd73ab2afeb22d558e3fae4b0a0de43e3.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1733683
         :height: 40px
         :width: 40px
         :alt: Miles Lubin
@@ -8192,7 +8372,7 @@ _______________________________________________
 `MPFI <https://github.com/andrioni/MPFI.jl>`_
 _____________________________________________
 
-  .. image:: https://gravatar.com/avatar/c928b9b00cbc5133c4ae7a743cf96f10?d=https%3A%2F%2Fidenticons.github.com%2F6b1b3a1e3737701978c843b72704488b.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/159177
      :height: 80px
      :width: 80px
      :align: right
@@ -8211,7 +8391,7 @@ _____________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/c928b9b00cbc5133c4ae7a743cf96f10?d=https%3A%2F%2Fidenticons.github.com%2F6b1b3a1e3737701978c843b72704488b.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/159177
         :height: 40px
         :width: 40px
         :alt: Alessandro Andrioni
@@ -8222,7 +8402,7 @@ _____________________________________________
 `MUMPS <https://github.com/lruthotto/MUMPS.jl>`_
 ________________________________________________
 
-  .. image:: https://gravatar.com/avatar/d9e46fb573df7e3c772cdc6807c909cb?d=https%3A%2F%2Fidenticons.github.com%2F12f5e89b26862480fc1f59fe2d001f34.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/4249607
      :height: 80px
      :width: 80px
      :align: right
@@ -8241,7 +8421,7 @@ ________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/d9e46fb573df7e3c772cdc6807c909cb?d=https%3A%2F%2Fidenticons.github.com%2F12f5e89b26862480fc1f59fe2d001f34.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/4249607
         :height: 40px
         :width: 40px
         :alt: Lars Ruthotto
@@ -8252,7 +8432,7 @@ ________________________________________________
 `Mustache <https://github.com/jverzani/Mustache.jl>`_
 _____________________________________________________
 
-  .. image:: https://gravatar.com/avatar/8f514187144b1b19b0205fce41284d32?d=https%3A%2F%2Fidenticons.github.com%2F763a59893dc5fcf4c3d471b690847bec.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/421708
      :height: 80px
      :width: 80px
      :align: right
@@ -8271,43 +8451,43 @@ _____________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/8f514187144b1b19b0205fce41284d32?d=https%3A%2F%2Fidenticons.github.com%2F763a59893dc5fcf4c3d471b690847bec.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/421708
         :height: 40px
         :width: 40px
         :alt: john verzani
         :target: https://github.com/jverzani
 
-    .. image:: https://gravatar.com/avatar/72ee26065724239b61be271722b682dd?d=https%3A%2F%2Fidenticons.github.com%2Fbb31b1d09b467b2128926c8847d57609.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/607298
         :height: 40px
         :width: 40px
         :alt: Nick Collins
         :target: https://github.com/ncollins
 
-    .. image:: https://gravatar.com/avatar/d9c8c5a29b60871d14846a382d50626a?d=https%3A%2F%2Fidenticons.github.com%2Fdf438e5206f31600e6ae4af72f2725f1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/7081
         :height: 40px
         :width: 40px
         :alt: Dirk Gadsden
         :target: https://github.com/dirk
 
-    .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/378918
         :height: 40px
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
 
-    .. image:: https://gravatar.com/avatar/44338030dea25ca337ae4c843d9b601b?d=https%3A%2F%2Fidenticons.github.com%2Ffbb86fbc1a3233da94ed5ae0739a8ab1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1157798
         :height: 40px
         :width: 40px
         :alt: Jake Bolewski
         :target: https://github.com/jakebolewski
 
-    .. image:: https://gravatar.com/avatar/54cc6bf56d6223bdb99e5d6cfbd11056?d=https%3A%2F%2Fidenticons.github.com%2F64e76e13ef337dfcda3cf3da7b89c5c2.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1205394
         :height: 40px
         :width: 40px
         :alt: Leah Hanson
         :target: https://github.com/astrieanna
 
-    .. image:: https://gravatar.com/avatar/11ed595b17e2ccf6bc0b3c80f3dde4e8?d=https%3A%2F%2Fidenticons.github.com%2F176a9d5ad1fcb179b164bdd7d4e625dc.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/5247292
         :height: 40px
         :width: 40px
         :alt: powerdistribution
@@ -8323,7 +8503,7 @@ _________________________________________________________________
      :width: 19
      :target: https://travis-ci.org/tanmaykm/MutableStrings.jl
 
-  .. image:: https://gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https%3A%2F%2Fidenticons.github.com%2Fa2feca9cad6b69327bdee24d0d81156a.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1010989
      :height: 80px
      :width: 80px
      :align: right
@@ -8342,7 +8522,7 @@ _________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https%3A%2F%2Fidenticons.github.com%2Fa2feca9cad6b69327bdee24d0d81156a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1010989
         :height: 40px
         :width: 40px
         :alt: Tanmay Mohapatra
@@ -8353,7 +8533,7 @@ _________________________________________________________________
 `Named <https://github.com/HarlanH/Named.jl>`_
 ______________________________________________
 
-  .. image:: https://gravatar.com/avatar/9f1a68b9e623be5da422b44e733fa8bc?d=https%3A%2F%2Fidenticons.github.com%2Fe101c9ae473b1eeb13745d045d60d917.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/130809
      :height: 80px
      :width: 80px
      :align: right
@@ -8372,7 +8552,7 @@ ______________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/9f1a68b9e623be5da422b44e733fa8bc?d=https%3A%2F%2Fidenticons.github.com%2Fe101c9ae473b1eeb13745d045d60d917.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/130809
         :height: 40px
         :width: 40px
         :alt: Harlan Harris
@@ -8383,7 +8563,7 @@ ______________________________________________
 `NamedArrays <https://github.com/davidavdav/NamedArrays>`_
 __________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/69bdae2d8460449e27b9dc03a0c7e6d6?d=https%3A%2F%2Fidenticons.github.com%2Ff24f29bfbd9715c0c494bf4da1923ebc.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/5497303
      :height: 80px
      :width: 80px
      :align: right
@@ -8402,13 +8582,13 @@ __________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/69bdae2d8460449e27b9dc03a0c7e6d6?d=https%3A%2F%2Fidenticons.github.com%2Ff24f29bfbd9715c0c494bf4da1923ebc.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/5497303
         :height: 40px
         :width: 40px
         :alt: David van Leeuwen
         :target: https://github.com/davidavdav
 
-    .. image:: https://gravatar.com/avatar/adcdd5a613f7a9193b9f1056a356d77d?d=https%3A%2F%2Fidenticons.github.com%2F9952a9bfd8b3dfa6d4b0f65825349628.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1120448
         :height: 40px
         :width: 40px
         :alt: Milan Bouchet-Valat
@@ -8424,7 +8604,7 @@ ________________________________________________
      :width: 19
      :target: https://travis-ci.org/meggart/NetCDF.jl
 
-  .. image:: https://gravatar.com/avatar/5c9292b49876311c17bf358b1717adf9?d=https%3A%2F%2Fidenticons.github.com%2Fd82d82c9dfa5f52ec4c41fc14d4a9f71.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2539563
      :height: 80px
      :width: 80px
      :align: right
@@ -8443,25 +8623,25 @@ ________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/5c9292b49876311c17bf358b1717adf9?d=https%3A%2F%2Fidenticons.github.com%2Fd82d82c9dfa5f52ec4c41fc14d4a9f71.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2539563
         :height: 40px
         :width: 40px
         :alt: meggart
         :target: https://github.com/meggart
 
-    .. image:: https://gravatar.com/avatar/c811c17c6a4b5252eb111203440122d5?d=https%3A%2F%2Fidenticons.github.com%2F1ebc30c07539d978a0b39f376f1e0526.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1494839
         :height: 40px
         :width: 40px
         :alt: Martin Vejmelka
         :target: https://github.com/vejmelkam
 
-    .. image:: https://gravatar.com/avatar/d788bf7fd037ebef5798d8881c5faa2f?d=https%3A%2F%2Fidenticons.github.com%2Fb74329b16ae6564aa58c344720a5a087.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2896623
         :height: 40px
         :width: 40px
         :alt: Jacob Quinn
         :target: https://github.com/karbarcca
 
-    .. image:: https://gravatar.com/avatar/b7fc7a13b61beef7cd8a5661174888e3?d=https%3A%2F%2Fidenticons.github.com%2Fd32eb5b953a0482e610f9a8b7cff63e9.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/5595828
         :height: 40px
         :width: 40px
         :alt: wenjiany
@@ -8472,7 +8652,7 @@ ________________________________________________
 `Nettle <https://github.com/staticfloat/Nettle.jl>`_
 ____________________________________________________
 
-  .. image:: https://gravatar.com/avatar/002ccfd8ee9e135f0dfb5650c292052d?d=https%3A%2F%2Fidenticons.github.com%2F0f1b002e3ac98562472e40b49a01cc84.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/130920
      :height: 80px
      :width: 80px
      :align: right
@@ -8493,31 +8673,31 @@ ____________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/002ccfd8ee9e135f0dfb5650c292052d?d=https%3A%2F%2Fidenticons.github.com%2F0f1b002e3ac98562472e40b49a01cc84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/130920
         :height: 40px
         :width: 40px
         :alt: Elliot Saba
         :target: https://github.com/staticfloat
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
-    .. image:: https://gravatar.com/avatar/192f114babcc8c2f53936c145bbc502c?d=https%3A%2F%2Fidenticons.github.com%2F8221b4c8f7cc8d6114e4f1afc7fd7dff.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/327706
         :height: 40px
         :width: 40px
         :alt: Isaiah
         :target: https://github.com/ihnorton
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
@@ -8528,7 +8708,7 @@ ____________________________________________________
 `NHST <https://github.com/johnmyleswhite/NHST.jl>`_
 ___________________________________________________
 
-  .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/22064
      :height: 80px
      :width: 80px
      :align: right
@@ -8549,7 +8729,7 @@ ___________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
@@ -8565,7 +8745,7 @@ ________________________________________________
      :width: 19
      :target: https://travis-ci.org/simonster/NIfTI.jl
 
-  .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/470884
      :height: 80px
      :width: 80px
      :align: right
@@ -8585,7 +8765,7 @@ ________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/470884
         :height: 40px
         :width: 40px
         :alt: Simon Kornblith
@@ -8596,7 +8776,7 @@ ________________________________________________
 `NLopt <https://github.com/JuliaOpt/NLopt.jl>`_
 _______________________________________________
 
-  .. image:: https://gravatar.com/avatar/f86ab8fe20610c227b7891ebf16ecfd8?d=https%3A%2F%2Fidenticons.github.com%2F5efde7dd012df4681146f0d1704b0238.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/5667382
      :height: 80px
      :width: 80px
      :align: right
@@ -8617,25 +8797,25 @@ _______________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https%3A%2F%2Fidenticons.github.com%2Fd73ab2afeb22d558e3fae4b0a0de43e3.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1733683
         :height: 40px
         :width: 40px
         :alt: Miles Lubin
         :target: https://github.com/mlubin
 
-    .. image:: https://gravatar.com/avatar/9563cfcf21df990e570df1dd019bce16?d=https%3A%2F%2Fidenticons.github.com%2Ff2d6e6092107c938c67268b75745fb84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2913679
         :height: 40px
         :width: 40px
         :alt: Steven G. Johnson
         :target: https://github.com/stevengj
 
-    .. image:: https://gravatar.com/avatar/f39215e104cf3549fd6268b0929b6941?d=https%3A%2F%2Fidenticons.github.com%2F0208d7e5dae090a96b03a62a3a146b50.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/586809
         :height: 40px
         :width: 40px
         :alt: Sébastien Villemot
         :target: https://github.com/sebastien-villemot
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
@@ -8646,7 +8826,7 @@ _______________________________________________
 `NLreg <https://github.com/dmbates/NLreg.jl>`_
 ______________________________________________
 
-  .. image:: https://gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https%3A%2F%2Fidenticons.github.com%2Faeffec9bb1d59de139f16ccd910b5168.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/371258
      :height: 80px
      :width: 80px
      :align: right
@@ -8655,28 +8835,28 @@ ______________________________________________
 
   Nonlinear regression in Julia 
 
-  Current Version: ``0.0.0``  (updated: 2013-11-01) 
+  Current Version: ``0.1.0``  (updated: 2014-02-27) 
 
   Maintainer: `Douglas Bates <https://github.com/dmbates>`_
 
   Dependencies::
 
-      julia                    [0.2.0-,∞)
-      Distributions            [0.2.9-,∞)
+      julia                    [0.3.0-,∞)
+      Distributions            [0.2.13-,∞)
       NLopt                    [0.0.0-,∞)
-      StatsBase                [0.2.7-,∞)
-      NumericExtensions        [0.2.15-,∞)
+      StatsBase                [0.2.9-,∞)
+      NumericExtensions        [0.3.5-,∞)
       DataFrames               [0.3.6-,∞)
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https%3A%2F%2Fidenticons.github.com%2Faeffec9bb1d59de139f16ccd910b5168.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/371258
         :height: 40px
         :width: 40px
         :alt: Douglas Bates
         :target: https://github.com/dmbates
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
@@ -8687,7 +8867,7 @@ ______________________________________________
 `NLsolve <https://github.com/EconForge/NLsolve.jl>`_
 ____________________________________________________
 
-  .. image:: https://identicons.github.com/bda9b86f45aebb6d557714e6cced6afe.png
+  .. image:: https://avatars.githubusercontent.com/u/5486828
      :height: 80px
      :width: 80px
      :align: right
@@ -8709,13 +8889,13 @@ ____________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/f39215e104cf3549fd6268b0929b6941?d=https%3A%2F%2Fidenticons.github.com%2F0208d7e5dae090a96b03a62a3a146b50.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/586809
         :height: 40px
         :width: 40px
         :alt: Sébastien Villemot
         :target: https://github.com/sebastien-villemot
 
-    .. image:: https://gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https%3A%2F%2Fidenticons.github.com%2Fd73ab2afeb22d558e3fae4b0a0de43e3.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1733683
         :height: 40px
         :width: 40px
         :alt: Miles Lubin
@@ -8731,7 +8911,7 @@ _____________________________________________
      :width: 19
      :target: https://travis-ci.org/JuliaStats/NMF.jl
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2Fcb77afca27851230430c94750eef67c7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2761531
      :height: 80px
      :width: 80px
      :align: right
@@ -8752,7 +8932,7 @@ _____________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900250
         :height: 40px
         :width: 40px
         :alt: Dahua Lin
@@ -8768,7 +8948,7 @@ ______________________________________
      :width: 19
      :target: https://travis-ci.org/fhs/NPZ.jl
 
-  .. image:: https://gravatar.com/avatar/f11cd39050d2eb63ec494c0e7ae81d98?d=https%3A%2F%2Fidenticons.github.com%2Fe4874cbbcbec68daabdd9342beac3bd9.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/183501
      :height: 80px
      :width: 80px
      :align: right
@@ -8787,7 +8967,7 @@ ______________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/f11cd39050d2eb63ec494c0e7ae81d98?d=https%3A%2F%2Fidenticons.github.com%2Fe4874cbbcbec68daabdd9342beac3bd9.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/183501
         :height: 40px
         :width: 40px
         :alt: Fazlul Shahriar
@@ -8803,7 +8983,7 @@ _______________________________________________________________________
      :width: 19
      :target: https://travis-ci.org/lindahua/NumericExtensions.jl
 
-  .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1900250
      :height: 80px
      :width: 80px
      :align: right
@@ -8812,7 +8992,7 @@ _______________________________________________________________________
 
   Julia extensions to provide high performance computational support 
 
-  Current Version: ``0.5.3``  (updated: 2014-02-17) 
+  Current Version: ``0.5.4``  (updated: 2014-02-23) 
 
   Maintainer: `Dahua Lin <https://github.com/lindahua>`_
 
@@ -8823,31 +9003,31 @@ _______________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900250
         :height: 40px
         :width: 40px
         :alt: Dahua Lin
         :target: https://github.com/lindahua
 
-    .. image:: https://gravatar.com/avatar/44338030dea25ca337ae4c843d9b601b?d=https%3A%2F%2Fidenticons.github.com%2Ffbb86fbc1a3233da94ed5ae0739a8ab1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1157798
         :height: 40px
         :width: 40px
         :alt: Jake Bolewski
         :target: https://github.com/jakebolewski
 
-    .. image:: https://gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https%3A%2F%2Fidenticons.github.com%2Faeffec9bb1d59de139f16ccd910b5168.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/371258
         :height: 40px
         :width: 40px
         :alt: Douglas Bates
         :target: https://github.com/dmbates
 
-    .. image:: https://gravatar.com/avatar/394286d6440acbef8de68df95ccf9bd7?d=https%3A%2F%2Fidenticons.github.com%2Fd3b66622a9c6a31f47b109f6b398c014.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1830517
         :height: 40px
         :width: 40px
         :alt: Ingmar Schuster
         :target: https://github.com/ingmarschuster
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
@@ -8855,10 +9035,15 @@ _______________________________________________________________________
 
 ----
 
-`ODBC <https://github.com/karbarcca/ODBC.jl>`_
+`ODBC <https://github.com/karbarcca/ODBC.jl>`_ |ODBC_build|
 ______________________________________________
 
-  .. image:: https://gravatar.com/avatar/d788bf7fd037ebef5798d8881c5faa2f?d=https%3A%2F%2Fidenticons.github.com%2Fb74329b16ae6564aa58c344720a5a087.png&r=x
+  .. |ODBC_build| image:: ../images/travis-icon.png
+     :height: 19
+     :width: 19
+     :target: https://travis-ci.org/karbarcca/ODBC.jl
+
+  .. image:: https://avatars.githubusercontent.com/u/2896623
      :height: 80px
      :width: 80px
      :align: right
@@ -8867,43 +9052,43 @@ ______________________________________________
 
   A low-level ODBC interface for the Julia programming language 
 
-  Current Version: ``0.3.5``  (updated: 2014-01-13) 
+  Current Version: ``0.3.6``  (updated: 2014-02-28) 
 
   Maintainer: `Jacob Quinn <https://github.com/karbarcca>`_
 
   Dependencies::
 
       julia                    [0.3.0-,∞)
-      Datetime                 [0.1.0-,∞)
-      DataFrames               [0.4.0-,∞)
+      Datetime                 [0.1.2,∞)
+      DataFrames               [0.5.2,∞)
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/d788bf7fd037ebef5798d8881c5faa2f?d=https%3A%2F%2Fidenticons.github.com%2Fb74329b16ae6564aa58c344720a5a087.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2896623
         :height: 40px
         :width: 40px
         :alt: Jacob Quinn
         :target: https://github.com/karbarcca
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
         :target: https://github.com/kmsquire
 
-    .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/378918
         :height: 40px
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
 
-    .. image:: https://gravatar.com/avatar/3aa708adb3ecf15173f7e6f2f9eefc6c?d=https%3A%2F%2Fidenticons.github.com%2F2b38c2df6a49b97f706ec9148ce48d86.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1150
         :height: 40px
         :width: 40px
         :alt: Paul Ingles
         :target: https://github.com/pingles
 
-    .. image:: https://gravatar.com/avatar/e0ffb3df640bdfc20a10ee433268cea4?d=https%3A%2F%2Fidenticons.github.com%2Fa5160529370c7f967810cb74483b4492.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/348933
         :height: 40px
         :width: 40px
         :alt: Paulo Geyer
@@ -8914,7 +9099,7 @@ ______________________________________________
 `ODE <https://github.com/JuliaLang/ODE.jl>`_
 ____________________________________________
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2F96058cb0ed9e150dfffc3b86b3b8d5e7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/743164
      :height: 80px
      :width: 80px
      :align: right
@@ -8933,35 +9118,47 @@ ____________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/55e277a715ee2afd0d29c309174eca02?d=https%3A%2F%2Fidenticons.github.com%2F938b248e75affacf29383e0738b98ea2.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/744411
         :height: 40px
         :width: 40px
         :alt: Viral B. Shah
         :target: https://github.com/ViralBShah
 
-    .. image:: https://gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https%3A%2F%2Fidenticons.github.com%2F5d5113de843c8b258029d6a06bccd163.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/330950
         :height: 40px
         :width: 40px
         :alt: Jameson Nash
         :target: https://github.com/vtjnash
 
-    .. image:: https://gravatar.com/avatar/fd4324f02a40d980974b862ec8410f79?d=https%3A%2F%2Fidenticons.github.com%2F77b4ea235ea1d5b8b4afc58903b4d3a8.png&r=x
-        :height: 40px
-        :width: 40px
-        :alt: Yuriy Skalko
-        :target: https://github.com/magistere
-
-    .. image:: https://gravatar.com/avatar/d7912ba2ab72397e157148de151cd9e9?d=https%3A%2F%2Fidenticons.github.com%2F48d6b9b7c925b16ee5b168cf5e480a58.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1550920
         :height: 40px
         :width: 40px
         :alt: Tomas Lycken
         :target: https://github.com/tlycken
 
-    .. image:: https://gravatar.com/avatar/002ccfd8ee9e135f0dfb5650c292052d?d=https%3A%2F%2Fidenticons.github.com%2F0f1b002e3ac98562472e40b49a01cc84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/418773
+        :height: 40px
+        :width: 40px
+        :alt: Yuriy Skalko
+        :target: https://github.com/magistere
+
+    .. image:: https://avatars.githubusercontent.com/u/130920
         :height: 40px
         :width: 40px
         :alt: Elliot Saba
         :target: https://github.com/staticfloat
+
+    .. image:: https://avatars.githubusercontent.com/u/140497
+        :height: 40px
+        :width: 40px
+        :alt: Patrick O'Leary
+        :target: https://github.com/pao
+
+    .. image:: https://avatars.githubusercontent.com/u/6170781
+        :height: 40px
+        :width: 40px
+        :alt: acroy
+        :target: https://github.com/acroy
 
 ----
 
@@ -8973,7 +9170,7 @@ _____________________________________________________
      :width: 19
      :target: https://travis-ci.org/jakebolewski/OpenCL.jl
 
-  .. image:: https://gravatar.com/avatar/44338030dea25ca337ae4c843d9b601b?d=https%3A%2F%2Fidenticons.github.com%2Ffbb86fbc1a3233da94ed5ae0739a8ab1.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1157798
      :height: 80px
      :width: 80px
      :align: right
@@ -8993,13 +9190,13 @@ _____________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/44338030dea25ca337ae4c843d9b601b?d=https%3A%2F%2Fidenticons.github.com%2Ffbb86fbc1a3233da94ed5ae0739a8ab1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1157798
         :height: 40px
         :width: 40px
         :alt: Jake Bolewski
         :target: https://github.com/jakebolewski
 
-    .. image:: https://gravatar.com/avatar/3aeb6c2816397a7ed58ae05ac50153a8?d=https%3A%2F%2Fidenticons.github.com%2Fe5f154219de9effc086d1c594217a5a9.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/117908
         :height: 40px
         :width: 40px
         :alt: Lucas C Wilcox
@@ -9010,7 +9207,7 @@ _____________________________________________________
 `OpenGL <https://github.com/rennis250/OpenGL.jl>`_
 __________________________________________________
 
-  .. image:: https://gravatar.com/avatar/37cebf4f44a1dbf71ee94aaea166ef00?d=https%3A%2F%2Fidenticons.github.com%2F297c3e3befdaf89f098f109d971e6f5a.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1783559
      :height: 80px
      :width: 80px
      :align: right
@@ -9019,7 +9216,7 @@ __________________________________________________
 
   Julia interface to OpenGL 
 
-  Current Version: ``1.1.2``  (updated: 2014-01-13) 
+  Current Version: ``1.1.3``  (updated: 2014-03-02) 
 
   Maintainer: `Robert J. Ennis <https://github.com/rennis250>`_
 
@@ -9031,13 +9228,13 @@ __________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/37cebf4f44a1dbf71ee94aaea166ef00?d=https%3A%2F%2Fidenticons.github.com%2F297c3e3befdaf89f098f109d971e6f5a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1783559
         :height: 40px
         :width: 40px
         :alt: Robert J. Ennis
         :target: https://github.com/rennis250
 
-    .. image:: https://gravatar.com/avatar/832d10ca3b2825c42d2280cbeca6fef6?d=https%3A%2F%2Fidenticons.github.com%2F0b5017c61b1934db59ab97890d344f57.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1010467
         :height: 40px
         :width: 40px
         :alt: Sdanisch
@@ -9048,7 +9245,7 @@ __________________________________________________
 `OpenSlide <https://github.com/ihnorton/OpenSlide.jl>`_
 _______________________________________________________
 
-  .. image:: https://gravatar.com/avatar/192f114babcc8c2f53936c145bbc502c?d=https%3A%2F%2Fidenticons.github.com%2F8221b4c8f7cc8d6114e4f1afc7fd7dff.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/327706
      :height: 80px
      :width: 80px
      :align: right
@@ -9067,7 +9264,7 @@ _______________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/192f114babcc8c2f53936c145bbc502c?d=https%3A%2F%2Fidenticons.github.com%2F8221b4c8f7cc8d6114e4f1afc7fd7dff.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/327706
         :height: 40px
         :width: 40px
         :alt: Isaiah
@@ -9078,7 +9275,7 @@ _______________________________________________________
 `OpenSSL <https://github.com/dirk/OpenSSL.jl>`_
 _______________________________________________
 
-  .. image:: https://gravatar.com/avatar/d9c8c5a29b60871d14846a382d50626a?d=https%3A%2F%2Fidenticons.github.com%2Fdf438e5206f31600e6ae4af72f2725f1.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/7081
      :height: 80px
      :width: 80px
      :align: right
@@ -9097,7 +9294,7 @@ _______________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/d9c8c5a29b60871d14846a382d50626a?d=https%3A%2F%2Fidenticons.github.com%2Fdf438e5206f31600e6ae4af72f2725f1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/7081
         :height: 40px
         :width: 40px
         :alt: Dirk Gadsden
@@ -9113,7 +9310,7 @@ _______________________________________________
      :width: 19
      :target: https://travis-ci.org/JuliaOpt/Optim.jl
 
-  .. image:: https://gravatar.com/avatar/f86ab8fe20610c227b7891ebf16ecfd8?d=https%3A%2F%2Fidenticons.github.com%2F5efde7dd012df4681146f0d1704b0238.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/5667382
      :height: 80px
      :width: 80px
      :align: right
@@ -9138,43 +9335,49 @@ _______________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
         :target: https://github.com/timholy
 
-    .. image:: https://gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https%3A%2F%2Fidenticons.github.com%2Fd73ab2afeb22d558e3fae4b0a0de43e3.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1733683
         :height: 40px
         :width: 40px
         :alt: Miles Lubin
         :target: https://github.com/mlubin
 
-    .. image:: https://gravatar.com/avatar/449044e4f0ed377b21409488cddafc45?d=https%3A%2F%2Fidenticons.github.com%2F3f2743ab32e9c084ddcabc42324d7465.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/866695
         :height: 40px
         :width: 40px
         :alt: Blake Johnson
         :target: https://github.com/blakejohnson
 
-    .. image:: https://gravatar.com/avatar/02abdd20ef026f24d96035a407912df0?d=https%3A%2F%2Fidenticons.github.com%2Fc217f7fdea0f4545b9bb96a09ec7bd72.png&r=x
-        :height: 40px
-        :width: 40px
-        :alt: Andreas Noack Jensen
-        :target: https://github.com/andreasnoackjensen
-
-    .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900250
         :height: 40px
         :width: 40px
         :alt: Dahua Lin
         :target: https://github.com/lindahua
 
-    .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/505001
+        :height: 40px
+        :width: 40px
+        :alt: Andreas Noack Jensen
+        :target: https://github.com/andreasnoackjensen
+
+    .. image:: https://avatars.githubusercontent.com/u/28448
+        :height: 40px
+        :width: 40px
+        :alt: Aditya Mahajan
+        :target: https://github.com/adityam
+
+    .. image:: https://avatars.githubusercontent.com/u/378918
         :height: 40px
         :width: 40px
         :alt: Avik Sengupta
@@ -9185,7 +9388,7 @@ _______________________________________________
 `Options <https://github.com/JuliaLang/Options.jl>`_
 ____________________________________________________
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2F96058cb0ed9e150dfffc3b86b3b8d5e7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/743164
      :height: 80px
      :width: 80px
      :align: right
@@ -9204,31 +9407,31 @@ ____________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/80502de63c1b21d8f3ba663d72ba5be2?d=https%3A%2F%2Fidenticons.github.com%2Fd454171c70136b2284d6a8cfe123eb29.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223753
         :height: 40px
         :width: 40px
         :alt: Carlo Baldassi
         :target: https://github.com/carlobaldassi
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
         :target: https://github.com/timholy
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://gravatar.com/avatar/9f1a68b9e623be5da422b44e733fa8bc?d=https%3A%2F%2Fidenticons.github.com%2Fe101c9ae473b1eeb13745d045d60d917.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/130809
         :height: 40px
         :width: 40px
         :alt: Harlan Harris
         :target: https://github.com/HarlanH
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
@@ -9239,7 +9442,7 @@ ____________________________________________________
 `Pandas <https://github.com/malmaud/Pandas.jl>`_
 ________________________________________________
 
-  .. image:: https://gravatar.com/avatar/d9e3f7e864e3fa0cb1906b79000d436a?d=https%3A%2F%2Fidenticons.github.com%2Fed99a4a153bc412570b5d7443557561b.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/987837
      :height: 80px
      :width: 80px
      :align: right
@@ -9260,7 +9463,7 @@ ________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/d9e3f7e864e3fa0cb1906b79000d436a?d=https%3A%2F%2Fidenticons.github.com%2Fed99a4a153bc412570b5d7443557561b.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/987837
         :height: 40px
         :width: 40px
         :alt: Jonathan Malmaud
@@ -9271,7 +9474,7 @@ ________________________________________________
 `PatternDispatch <https://github.com/toivoh/PatternDispatch.jl>`_
 _________________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/8d3d3934c39b52f48c35a0cc536edae7?d=https%3A%2F%2Fidenticons.github.com%2F81c47394418f4da2556f7b0d67d3d3be.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1627007
      :height: 80px
      :width: 80px
      :align: right
@@ -9290,19 +9493,19 @@ _________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/8d3d3934c39b52f48c35a0cc536edae7?d=https%3A%2F%2Fidenticons.github.com%2F81c47394418f4da2556f7b0d67d3d3be.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1627007
         :height: 40px
         :width: 40px
         :alt: toivoh
         :target: https://github.com/toivoh
 
-    .. image:: https://gravatar.com/avatar/fd4324f02a40d980974b862ec8410f79?d=https%3A%2F%2Fidenticons.github.com%2F77b4ea235ea1d5b8b4afc58903b4d3a8.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/418773
         :height: 40px
         :width: 40px
         :alt: Yuriy Skalko
         :target: https://github.com/magistere
 
-    .. image:: https://gravatar.com/avatar/317e44562dcf11f5164d0a4936696fbc?d=https%3A%2F%2Fidenticons.github.com%2F655fe21cedd4ac41f328aef38b350ef0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1553856
         :height: 40px
         :width: 40px
         :alt: rened
@@ -9313,7 +9516,7 @@ _________________________________________________________________
 `PDMats <https://github.com/lindahua/PDMats.jl>`_
 _________________________________________________
 
-  .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1900250
      :height: 80px
      :width: 80px
      :align: right
@@ -9333,7 +9536,7 @@ _________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900250
         :height: 40px
         :width: 40px
         :alt: Dahua Lin
@@ -9344,7 +9547,7 @@ _________________________________________________
 `Phylogenetics <https://github.com/Ward9250/Phylogenetics.jl>`_
 _______________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/42b85a64563ec24b7a601143419f3d93?d=https%3A%2F%2Fidenticons.github.com%2Fd67ecea18c6467d959faba0a0d03048a.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/3399309
      :height: 80px
      :width: 80px
      :align: right
@@ -9363,13 +9566,13 @@ _______________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/42b85a64563ec24b7a601143419f3d93?d=https%3A%2F%2Fidenticons.github.com%2Fd67ecea18c6467d959faba0a0d03048a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/3399309
         :height: 40px
         :width: 40px
         :alt: Ben J. Ward
         :target: https://github.com/Ward9250
 
-    .. image:: https://gravatar.com/avatar/31c16c481409b0922890da5266fabdeb?d=https%3A%2F%2Fidenticons.github.com%2Fc1902d1d6aa6def806a48e5225251ca9.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2532521
         :height: 40px
         :width: 40px
         :alt: James J Porter
@@ -9380,7 +9583,7 @@ _______________________________________________________________
 `PLX <https://github.com/simonster/PLX.jl>`_
 ____________________________________________
 
-  .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/470884
      :height: 80px
      :width: 80px
      :align: right
@@ -9399,7 +9602,7 @@ ____________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/470884
         :height: 40px
         :width: 40px
         :alt: Simon Kornblith
@@ -9415,7 +9618,7 @@ ________________________________________________________
      :width: 19
      :target: https://travis-ci.org/vtjnash/Polynomial.jl
 
-  .. image:: https://gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https%3A%2F%2Fidenticons.github.com%2F5d5113de843c8b258029d6a06bccd163.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/330950
      :height: 80px
      :width: 80px
      :align: right
@@ -9424,7 +9627,7 @@ ________________________________________________________
 
   Polynomial manipulations 
 
-  Current Version: ``0.0.0``  (updated: 2013-03-01) 
+  Current Version: ``0.1.0``  (updated: 2014-02-26) 
 
   Maintainer: `Jameson Nash <https://github.com/vtjnash>`_
 
@@ -9434,19 +9637,25 @@ ________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https%3A%2F%2Fidenticons.github.com%2F5d5113de843c8b258029d6a06bccd163.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/330950
         :height: 40px
         :width: 40px
         :alt: Jameson Nash
         :target: https://github.com/vtjnash
 
-    .. image:: https://gravatar.com/avatar/b1f06f732d86e562563db728b2875eb2?d=https%3A%2F%2Fidenticons.github.com%2F58350ebc61b97bd7c28aeaca836c9c26.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/48409
         :height: 40px
         :width: 40px
         :alt: Jason Merrill
         :target: https://github.com/jwmerrill
 
-    .. image:: https://gravatar.com/avatar/fd4324f02a40d980974b862ec8410f79?d=https%3A%2F%2Fidenticons.github.com%2F77b4ea235ea1d5b8b4afc58903b4d3a8.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2783717
+        :height: 40px
+        :width: 40px
+        :alt: Jim Crist
+        :target: https://github.com/jcrist
+
+    .. image:: https://avatars.githubusercontent.com/u/418773
         :height: 40px
         :width: 40px
         :alt: Yuriy Skalko
@@ -9462,7 +9671,7 @@ ____________________________________________________________
      :width: 19
      :target: https://travis-ci.org/jwmerrill/PowerSeries.jl
 
-  .. image:: https://gravatar.com/avatar/b1f06f732d86e562563db728b2875eb2?d=https%3A%2F%2Fidenticons.github.com%2F58350ebc61b97bd7c28aeaca836c9c26.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/48409
      :height: 80px
      :width: 80px
      :align: right
@@ -9471,7 +9680,7 @@ ____________________________________________________________
 
   Truncated Power Series for Julia 
 
-  Current Version: ``0.1.4``  (updated: 2014-02-13) 
+  Current Version: ``0.1.5``  (updated: 2014-02-27) 
 
   Maintainer: `Jason Merrill <https://github.com/jwmerrill>`_
 
@@ -9481,13 +9690,13 @@ ____________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b1f06f732d86e562563db728b2875eb2?d=https%3A%2F%2Fidenticons.github.com%2F58350ebc61b97bd7c28aeaca836c9c26.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/48409
         :height: 40px
         :width: 40px
         :alt: Jason Merrill
         :target: https://github.com/jwmerrill
 
-    .. image:: https://gravatar.com/avatar/8f514187144b1b19b0205fce41284d32?d=https%3A%2F%2Fidenticons.github.com%2F763a59893dc5fcf4c3d471b690847bec.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/421708
         :height: 40px
         :width: 40px
         :alt: john verzani
@@ -9498,7 +9707,7 @@ ____________________________________________________________
 `ProfileView <https://github.com/timholy/ProfileView.jl>`_
 __________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1525481
      :height: 80px
      :width: 80px
      :align: right
@@ -9521,7 +9730,7 @@ __________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
@@ -9532,7 +9741,7 @@ __________________________________________________________
 `ProgressMeter <https://github.com/timholy/ProgressMeter.jl>`_
 ______________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1525481
      :height: 80px
      :width: 80px
      :align: right
@@ -9551,25 +9760,25 @@ ______________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
         :target: https://github.com/timholy
 
-    .. image:: https://gravatar.com/avatar/a7edd4ba72f4a9e79c14e1d1a5f29071?d=https%3A%2F%2Fidenticons.github.com%2Fa77ac866c9e368b44d40dbbb01b50f7f.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/3915826
         :height: 40px
         :width: 40px
         :alt: Alan Bahm
         :target: https://github.com/abahm
 
-    .. image:: https://gravatar.com/avatar/f30692fe671bea12264aa2d0459da153?d=https%3A%2F%2Fidenticons.github.com%2F300b9eda5cf0e70f2a03efbc5f437c9f.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1609099
         :height: 40px
         :width: 40px
         :alt: Andrew Burrows
         :target: https://github.com/burrowsa
 
-    .. image:: https://gravatar.com/avatar/d788bf7fd037ebef5798d8881c5faa2f?d=https%3A%2F%2Fidenticons.github.com%2Fb74329b16ae6564aa58c344720a5a087.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2896623
         :height: 40px
         :width: 40px
         :alt: Jacob Quinn
@@ -9580,7 +9789,7 @@ ______________________________________________________________
 `ProjectTemplate <https://github.com/johnmyleswhite/ProjectTemplate.jl>`_
 _________________________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/22064
      :height: 80px
      :width: 80px
      :align: right
@@ -9601,7 +9810,7 @@ _________________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
@@ -9612,7 +9821,7 @@ _________________________________________________________________________
 `PTools <https://github.com/amitmurthy/PTools.jl>`_
 ___________________________________________________
 
-  .. image:: https://gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https%3A%2F%2Fidenticons.github.com%2F8de01f67e4cbfa5ce2e70e6f1f761891.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/117461
      :height: 80px
      :width: 80px
      :align: right
@@ -9631,13 +9840,13 @@ ___________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https%3A%2F%2Fidenticons.github.com%2F8de01f67e4cbfa5ce2e70e6f1f761891.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/117461
         :height: 40px
         :width: 40px
         :alt: Amit Murthy
         :target: https://github.com/amitmurthy
 
-    .. image:: https://gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https%3A%2F%2Fidenticons.github.com%2Fa2feca9cad6b69327bdee24d0d81156a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1010989
         :height: 40px
         :width: 40px
         :alt: Tanmay Mohapatra
@@ -9653,7 +9862,7 @@ _____________________________________________________________
      :width: 19
      :target: https://travis-ci.org/tanmaykm/PublicSuffix.jl
 
-  .. image:: https://gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https%3A%2F%2Fidenticons.github.com%2Fa2feca9cad6b69327bdee24d0d81156a.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1010989
      :height: 80px
      :width: 80px
      :align: right
@@ -9672,7 +9881,7 @@ _____________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https%3A%2F%2Fidenticons.github.com%2Fa2feca9cad6b69327bdee24d0d81156a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1010989
         :height: 40px
         :width: 40px
         :alt: Tanmay Mohapatra
@@ -9688,7 +9897,7 @@ _________________________________________________
      :width: 19
      :target: https://travis-ci.org/stevengj/PyCall.jl
 
-  .. image:: https://gravatar.com/avatar/9563cfcf21df990e570df1dd019bce16?d=https%3A%2F%2Fidenticons.github.com%2Ff2d6e6092107c938c67268b75745fb84.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2913679
      :height: 80px
      :width: 80px
      :align: right
@@ -9697,7 +9906,7 @@ _________________________________________________
 
   Package to call Python functions from the Julia language 
 
-  Current Version: ``0.4.1``  (updated: 2014-01-23) 
+  Current Version: ``0.4.2``  (updated: 2014-02-26) 
 
   Maintainer: `Steven G. Johnson <https://github.com/stevengj>`_
 
@@ -9707,67 +9916,67 @@ _________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/9563cfcf21df990e570df1dd019bce16?d=https%3A%2F%2Fidenticons.github.com%2Ff2d6e6092107c938c67268b75745fb84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2913679
         :height: 40px
         :width: 40px
         :alt: Steven G. Johnson
         :target: https://github.com/stevengj
 
-    .. image:: https://gravatar.com/avatar/44338030dea25ca337ae4c843d9b601b?d=https%3A%2F%2Fidenticons.github.com%2Ffbb86fbc1a3233da94ed5ae0739a8ab1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1157798
         :height: 40px
         :width: 40px
         :alt: Jake Bolewski
         :target: https://github.com/jakebolewski
 
-    .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/470884
         :height: 40px
         :width: 40px
         :alt: Simon Kornblith
         :target: https://github.com/simonster
 
-    .. image:: https://gravatar.com/avatar/d9e3f7e864e3fa0cb1906b79000d436a?d=https%3A%2F%2Fidenticons.github.com%2Fed99a4a153bc412570b5d7443557561b.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/987837
         :height: 40px
         :width: 40px
         :alt: Jonathan Malmaud
         :target: https://github.com/malmaud
 
-    .. image:: https://gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https%3A%2F%2Fidenticons.github.com%2F5d5113de843c8b258029d6a06bccd163.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/330950
         :height: 40px
         :width: 40px
         :alt: Jameson Nash
         :target: https://github.com/vtjnash
 
-    .. image:: https://gravatar.com/avatar/192f114babcc8c2f53936c145bbc502c?d=https%3A%2F%2Fidenticons.github.com%2F8221b4c8f7cc8d6114e4f1afc7fd7dff.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/327706
         :height: 40px
         :width: 40px
         :alt: Isaiah
         :target: https://github.com/ihnorton
 
-    .. image:: https://gravatar.com/avatar/538889c0ce4dd2719f09f1961d13af78?d=https%3A%2F%2Fidenticons.github.com%2F4bd6752d9fb18192689562546ba57804.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1476029
         :height: 40px
         :width: 40px
         :alt: Lucas Beyer
         :target: https://github.com/lucasb-eyer
 
-    .. image:: https://gravatar.com/avatar/fa3b781987ef53c4d3b8397f2239e519?d=https%3A%2F%2Fidenticons.github.com%2F75a2b93c61829886bca2442b2438509b.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2822757
         :height: 40px
         :width: 40px
         :alt: Diego Javier Zea
         :target: https://github.com/diegozea
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
         :target: https://github.com/kmsquire
 
-    .. image:: https://gravatar.com/avatar/cab90c7de5efde92a29f1eacb603ba9a?d=https%3A%2F%2Fidenticons.github.com%2F29572f3990c8278f3d2138da53885bc6.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/101514
         :height: 40px
         :width: 40px
         :alt: Orivej Desh
@@ -9778,7 +9987,7 @@ _________________________________________________
 `PyLexYacc <https://github.com/iamed2/PyLexYacc.jl>`_
 _____________________________________________________
 
-  .. image:: https://gravatar.com/avatar/ea83c5f11d230a2f17550058adf1e028?d=https%3A%2F%2Fidenticons.github.com%2F1bb1187e9a4b39f49034ea17294f446d.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/3131001
      :height: 80px
      :width: 80px
      :align: right
@@ -9797,7 +10006,7 @@ _____________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/ea83c5f11d230a2f17550058adf1e028?d=https%3A%2F%2Fidenticons.github.com%2F1bb1187e9a4b39f49034ea17294f446d.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/3131001
         :height: 40px
         :width: 40px
         :alt: iamed2
@@ -9808,7 +10017,7 @@ _____________________________________________________
 `PyPlot <https://github.com/stevengj/PyPlot.jl>`_
 _________________________________________________
 
-  .. image:: https://gravatar.com/avatar/9563cfcf21df990e570df1dd019bce16?d=https%3A%2F%2Fidenticons.github.com%2Ff2d6e6092107c938c67268b75745fb84.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2913679
      :height: 80px
      :width: 80px
      :align: right
@@ -9831,37 +10040,37 @@ _________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/645b9a973f09e98d38b94955a980c9d5?d=https%3A%2F%2Fidenticons.github.com%2Fa155f64bd0f9ac6f56baeff9b75122c2.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1453551
         :height: 40px
         :width: 40px
         :alt: Junfeng Li
         :target: https://github.com/autozimu
 
-    .. image:: https://gravatar.com/avatar/9563cfcf21df990e570df1dd019bce16?d=https%3A%2F%2Fidenticons.github.com%2Ff2d6e6092107c938c67268b75745fb84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2913679
         :height: 40px
         :width: 40px
         :alt: Steven G. Johnson
         :target: https://github.com/stevengj
 
-    .. image:: https://gravatar.com/avatar/5c06e9faa0d7bd205f81d10e825d7e4a?d=https%3A%2F%2Fidenticons.github.com%2F6b8901820c4636072f2131546cc646f7.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1437512
         :height: 40px
         :width: 40px
         :alt: nfoti
         :target: https://github.com/nfoti
 
-    .. image:: https://gravatar.com/avatar/7c2f5d91d0311cc40035d1ef0e714685?d=https%3A%2F%2Fidenticons.github.com%2F2c86f5aa90a7318661432b6a35a1ea29.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/333519
         :height: 40px
         :width: 40px
         :alt: Cristóvão Duarte Sousa
         :target: https://github.com/cdsousa
 
-    .. image:: https://gravatar.com/avatar/b4035aa7c2e4ecf012eed26a63573f5b?d=https%3A%2F%2Fidenticons.github.com%2F0a49340e59a7ed16710b8f55286ba382.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/862530
         :height: 40px
         :width: 40px
         :alt: Alan Edelman
         :target: https://github.com/alanedelman
 
-    .. image:: https://gravatar.com/avatar/c25357637c69212b1c7434a40ff3f68f?d=https%3A%2F%2Fidenticons.github.com%2F524ab1f853ca170a0791bde77f30fff5.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/3071486
         :height: 40px
         :width: 40px
         :alt: scheidan
@@ -9872,7 +10081,7 @@ _________________________________________________
 `PySide <https://github.com/jverzani/PySide.jl>`_
 _________________________________________________
 
-  .. image:: https://gravatar.com/avatar/8f514187144b1b19b0205fce41284d32?d=https%3A%2F%2Fidenticons.github.com%2F763a59893dc5fcf4c3d471b690847bec.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/421708
      :height: 80px
      :width: 80px
      :align: right
@@ -9894,13 +10103,13 @@ _________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/8f514187144b1b19b0205fce41284d32?d=https%3A%2F%2Fidenticons.github.com%2F763a59893dc5fcf4c3d471b690847bec.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/421708
         :height: 40px
         :width: 40px
         :alt: john verzani
         :target: https://github.com/jverzani
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
@@ -9916,7 +10125,7 @@ ___________________________________________________
      :width: 19
      :target: https://travis-ci.org/milktrader/Quandl.jl
 
-  .. image:: https://gravatar.com/avatar/25ce2ab2f5e673e46208c1188a39e6ca?d=https%3A%2F%2Fidenticons.github.com%2F94554a56b2946c805e180501c4d4544c.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/324836
      :height: 80px
      :width: 80px
      :align: right
@@ -9925,7 +10134,7 @@ ___________________________________________________
 
   Julia api to Quandl open source financial, economic and social datasets 
 
-  Current Version: ``0.1.0``  (updated: 2013-11-08) 
+  Current Version: ``0.1.1``  (updated: 2014-03-02) 
 
   Maintainer: `milktrader <https://github.com/milktrader>`_
 
@@ -9935,7 +10144,7 @@ ___________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/25ce2ab2f5e673e46208c1188a39e6ca?d=https%3A%2F%2Fidenticons.github.com%2F94554a56b2946c805e180501c4d4544c.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/324836
         :height: 40px
         :width: 40px
         :alt: milktrader
@@ -9951,7 +10160,7 @@ ________________________________________________________
      :width: 19
      :target: https://travis-ci.org/forio/Quaternions.jl
 
-  .. image:: https://gravatar.com/avatar/bd2a3d33c3dcc6f25e61382f81689f33?d=https%3A%2F%2Fidenticons.github.com%2F303541224a8d81c65040eb747f5ee614.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1878641
      :height: 80px
      :width: 80px
      :align: right
@@ -9971,13 +10180,13 @@ ________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/163163e3fabc8901d907ada73435c64a?d=https%3A%2F%2Fidenticons.github.com%2Fc2f125da279766c178540cac4bae8889.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/3901144
         :height: 40px
         :width: 40px
         :alt: Kees van Prooijen
         :target: https://github.com/keesvp
 
-    .. image:: https://gravatar.com/avatar/d5f30c2d40341d55ba235d674d24972e?d=https%3A%2F%2Fidenticons.github.com%2Fae7e0405c74926295bca0f9d2aa09fa1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/172643
         :height: 40px
         :width: 40px
         :alt: Stu Thompson
@@ -9988,7 +10197,7 @@ ________________________________________________________
 `QuickCheck <https://github.com/pao/QuickCheck.jl>`_
 ____________________________________________________
 
-  .. image:: https://gravatar.com/avatar/16d8443194c380ca93a77fb8530a5aee?d=https%3A%2F%2Fidenticons.github.com%2F38da66e2f2af82932859b7a5f330af55.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/140497
      :height: 80px
      :width: 80px
      :align: right
@@ -10009,13 +10218,13 @@ ____________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/16d8443194c380ca93a77fb8530a5aee?d=https%3A%2F%2Fidenticons.github.com%2F38da66e2f2af82932859b7a5f330af55.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/140497
         :height: 40px
         :width: 40px
         :alt: Patrick O'Leary
         :target: https://github.com/pao
 
-    .. image:: https://gravatar.com/avatar/54cc6bf56d6223bdb99e5d6cfbd11056?d=https%3A%2F%2Fidenticons.github.com%2F64e76e13ef337dfcda3cf3da7b89c5c2.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1205394
         :height: 40px
         :width: 40px
         :alt: Leah Hanson
@@ -10026,7 +10235,7 @@ ____________________________________________________
 `RandomMatrices <https://github.com/jiahao/RandomMatrices.jl>`_
 _______________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/6cba33e8e7c69fa63f6ad386b7a958c5?d=https%3A%2F%2Fidenticons.github.com%2F270edd69788dce200a3b395a6da6fdb7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1732
      :height: 80px
      :width: 80px
      :align: right
@@ -10049,25 +10258,25 @@ _______________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/6cba33e8e7c69fa63f6ad386b7a958c5?d=https%3A%2F%2Fidenticons.github.com%2F270edd69788dce200a3b395a6da6fdb7.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1732
         :height: 40px
         :width: 40px
         :alt: Jiahao Chen
         :target: https://github.com/jiahao
 
-    .. image:: https://gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https%3A%2F%2Fidenticons.github.com%2F5d5113de843c8b258029d6a06bccd163.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/330950
         :height: 40px
         :width: 40px
         :alt: Jameson Nash
         :target: https://github.com/vtjnash
 
-    .. image:: https://gravatar.com/avatar/69459897cbc341ab301fa1d7d2e3486a?d=https%3A%2F%2Fidenticons.github.com%2F9921857de834e7f939b19d3d1afbe55b.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1229737
         :height: 40px
         :width: 40px
         :alt: dlfivefifty
         :target: https://github.com/dlfivefifty
 
-    .. image:: https://gravatar.com/avatar/b4035aa7c2e4ecf012eed26a63573f5b?d=https%3A%2F%2Fidenticons.github.com%2F0a49340e59a7ed16710b8f55286ba382.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/862530
         :height: 40px
         :width: 40px
         :alt: Alan Edelman
@@ -10078,7 +10287,7 @@ _______________________________________________________________
 `RDatasets <https://github.com/johnmyleswhite/RDatasets.jl>`_
 _____________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/22064
      :height: 80px
      :width: 80px
      :align: right
@@ -10099,37 +10308,37 @@ _____________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
-    .. image:: https://gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https%3A%2F%2Fidenticons.github.com%2Faeffec9bb1d59de139f16ccd910b5168.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/371258
         :height: 40px
         :width: 40px
         :alt: Douglas Bates
         :target: https://github.com/dmbates
 
-    .. image:: https://gravatar.com/avatar/e9d7782f2aa9fa7f78301ca94e9b2f9c?d=https%3A%2F%2Fidenticons.github.com%2F2d02bf91a26f3e1c6760503262ba3e8f.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2823840
         :height: 40px
         :width: 40px
         :alt: Sean Garborg
         :target: https://github.com/garborg
 
-    .. image:: https://gravatar.com/avatar/62df30beab9c2a6f3fe3f86995e94387?d=https%3A%2F%2Fidenticons.github.com%2F58b08088d26ada47c510cef3759f7aae.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1908571
         :height: 40px
         :width: 40px
         :alt: David de Laat
         :target: https://github.com/daviddelaat
 
-    .. image:: https://gravatar.com/avatar/fe02fa44c6a0962e2833693f104cbc88?d=https%3A%2F%2Fidenticons.github.com%2F396b50238900eb0bce49f39a605b11ea.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1494667
         :height: 40px
         :width: 40px
         :alt: Stew
         :target: https://github.com/stewartwatts
 
-    .. image:: https://gravatar.com/avatar/11ed595b17e2ccf6bc0b3c80f3dde4e8?d=https%3A%2F%2Fidenticons.github.com%2F176a9d5ad1fcb179b164bdd7d4e625dc.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/5247292
         :height: 40px
         :width: 40px
         :alt: powerdistribution
@@ -10140,7 +10349,7 @@ _____________________________________________________________
 `RdRand <https://github.com/SamChill/RdRand.jl>`_
 _________________________________________________
 
-  .. image:: https://gravatar.com/avatar/76dcb63fadbea9db73d6309005165661?d=https%3A%2F%2Fidenticons.github.com%2Fe4045cc4ef08aaccfc848d460e7c4a65.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1629780
      :height: 80px
      :width: 80px
      :align: right
@@ -10159,7 +10368,7 @@ _________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/76dcb63fadbea9db73d6309005165661?d=https%3A%2F%2Fidenticons.github.com%2Fe4045cc4ef08aaccfc848d460e7c4a65.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1629780
         :height: 40px
         :width: 40px
         :alt: Sam Chill
@@ -10170,7 +10379,7 @@ _________________________________________________
 `Readline <https://github.com/loladiro/Readline.jl>`_
 _____________________________________________________
 
-  .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1291671
      :height: 80px
      :width: 80px
      :align: right
@@ -10190,7 +10399,7 @@ _____________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
@@ -10201,7 +10410,7 @@ _____________________________________________________
 `Regression <https://github.com/lindahua/Regression.jl>`_
 _________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1900250
      :height: 80px
      :width: 80px
      :align: right
@@ -10222,19 +10431,19 @@ _________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900250
         :height: 40px
         :width: 40px
         :alt: Dahua Lin
         :target: https://github.com/lindahua
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
         :target: https://github.com/kmsquire
 
-    .. image:: https://gravatar.com/avatar/58ca327568d990b20205c4a94bfd6766?d=https%3A%2F%2Fidenticons.github.com%2F807fbe9e461094ec341d14b106d020c8.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/4620204
         :height: 40px
         :width: 40px
         :alt: jonneguyt
@@ -10245,7 +10454,7 @@ _________________________________________________________
 `REPL <https://github.com/loladiro/REPL.jl>`_
 _____________________________________________
 
-  .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1291671
      :height: 80px
      :width: 80px
      :align: right
@@ -10266,19 +10475,19 @@ _____________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://gravatar.com/avatar/6453a62bda2e46cf7778a2b64a5a259b?d=https%3A%2F%2Fidenticons.github.com%2F3cae6d6fc7fdc9cbb8276eaee2b23524.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/131616
         :height: 40px
         :width: 40px
         :alt: Ivar Nesje
@@ -10294,7 +10503,7 @@ ___________________________________________________________________
      :width: 19
      :target: https://travis-ci.org/loladiro/REPLCompletions.jl
 
-  .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1291671
      :height: 80px
      :width: 80px
      :align: right
@@ -10313,25 +10522,25 @@ ___________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
-    .. image:: https://gravatar.com/avatar/b4b8db23d8096b722483a57d21b7d65d?d=https%3A%2F%2Fidenticons.github.com%2F013fdd367536d965b2a0fcbc90fae782.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/744556
         :height: 40px
         :width: 40px
         :alt: Jeff Bezanson
         :target: https://github.com/JeffBezanson
 
-    .. image:: https://gravatar.com/avatar/6453a62bda2e46cf7778a2b64a5a259b?d=https%3A%2F%2Fidenticons.github.com%2F3cae6d6fc7fdc9cbb8276eaee2b23524.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/131616
         :height: 40px
         :width: 40px
         :alt: Ivar Nesje
         :target: https://github.com/ivarne
 
-    .. image:: https://gravatar.com/avatar/9563cfcf21df990e570df1dd019bce16?d=https%3A%2F%2Fidenticons.github.com%2Ff2d6e6092107c938c67268b75745fb84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2913679
         :height: 40px
         :width: 40px
         :alt: Steven G. Johnson
@@ -10342,7 +10551,7 @@ ___________________________________________________________________
 `Requests <https://github.com/loladiro/Requests.jl>`_
 _____________________________________________________
 
-  .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1291671
      :height: 80px
      :width: 80px
      :align: right
@@ -10351,7 +10560,7 @@ _____________________________________________________
 
   Http client written in julia (depends on joyent/http-parser) for HTTP parsing.  
 
-  Current Version: ``0.0.2``  (updated: 2014-01-29) 
+  Current Version: ``0.0.3``  (updated: 2014-02-20) 
 
   Maintainer: `Keno Fischer <https://github.com/loladiro>`_
 
@@ -10366,25 +10575,25 @@ _____________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
-    .. image:: https://gravatar.com/avatar/dfc3b0fbb59c9444153823fd35dbd13b?d=https%3A%2F%2Fidenticons.github.com%2F678085c7c9e848e0442b77d8b0c4be71.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900307
         :height: 40px
         :width: 40px
         :alt: Westley Argentum Hennigh
         :target: https://github.com/WestleyArgentum
 
-    .. image:: https://gravatar.com/avatar/ceb97a8b0a334bd1f4f13a31d2c34230?d=https%3A%2F%2Fidenticons.github.com%2Fe5f7cf67f9ee2f5b2764d2d120aa6fae.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2491823
         :height: 40px
         :width: 40px
         :alt: racycle
         :target: https://github.com/racycle
 
-    .. image:: https://gravatar.com/avatar/e985494cf5c45c2851b1099d990f479b?d=https%3A%2F%2Fidenticons.github.com%2F27708dd5754c4913ded3245cbbae20be.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2124535
         :height: 40px
         :width: 40px
         :alt: bass3m
@@ -10395,7 +10604,7 @@ _____________________________________________________
 `Resampling <https://github.com/johnmyleswhite/Resampling.jl>`_
 _______________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/22064
      :height: 80px
      :width: 80px
      :align: right
@@ -10414,13 +10623,13 @@ _______________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
-    .. image:: https://gravatar.com/avatar/db212dec0d83349ef63c6100957b52d4?d=https%3A%2F%2Fidenticons.github.com%2F9425be43ba92c2b4454ca7bf602efad8.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/3980
         :height: 40px
         :width: 40px
         :alt: Robert Feldt
@@ -10436,7 +10645,7 @@ ____________________________________________________________________________
      :width: 19
      :target: https://travis-ci.org/LaurenceA/ReverseDiffOverload.jl
 
-  .. image:: https://gravatar.com/avatar/4fe864d27a93c487f3a07d183d0feb9c?d=https%3A%2F%2Fidenticons.github.com%2F064a705747e336d041c851f8700aff7a.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/4278594
      :height: 80px
      :width: 80px
      :align: right
@@ -10457,7 +10666,7 @@ ____________________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/4fe864d27a93c487f3a07d183d0feb9c?d=https%3A%2F%2Fidenticons.github.com%2F064a705747e336d041c851f8700aff7a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/4278594
         :height: 40px
         :width: 40px
         :alt: LaurenceA
@@ -10468,7 +10677,7 @@ ____________________________________________________________________________
 `Rif <https://github.com/lgautier/Rif.jl>`_
 ___________________________________________
 
-  .. image:: https://gravatar.com/avatar/8e5422a173711c086b685140dbc498fe?d=https%3A%2F%2Fidenticons.github.com%2F5e4d72124c9a5a8c0e66c075b993994b.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/650866
      :height: 80px
      :width: 80px
      :align: right
@@ -10487,25 +10696,25 @@ ___________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/8e5422a173711c086b685140dbc498fe?d=https%3A%2F%2Fidenticons.github.com%2F5e4d72124c9a5a8c0e66c075b993994b.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/650866
         :height: 40px
         :width: 40px
         :alt: Laurent Gautier
         :target: https://github.com/lgautier
 
-    .. image:: https://gravatar.com/avatar/db212dec0d83349ef63c6100957b52d4?d=https%3A%2F%2Fidenticons.github.com%2F9425be43ba92c2b4454ca7bf602efad8.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/3980
         :height: 40px
         :width: 40px
         :alt: Robert Feldt
         :target: https://github.com/robertfeldt
 
-    .. image:: https://gravatar.com/avatar/fa3b781987ef53c4d3b8397f2239e519?d=https%3A%2F%2Fidenticons.github.com%2F75a2b93c61829886bca2442b2438509b.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2822757
         :height: 40px
         :width: 40px
         :alt: Diego Javier Zea
         :target: https://github.com/diegozea
 
-    .. image:: https://gravatar.com/avatar/11ed595b17e2ccf6bc0b3c80f3dde4e8?d=https%3A%2F%2Fidenticons.github.com%2F176a9d5ad1fcb179b164bdd7d4e625dc.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/5247292
         :height: 40px
         :width: 40px
         :alt: powerdistribution
@@ -10516,7 +10725,7 @@ ___________________________________________
 `Rmath <https://github.com/dmbates/Rmath.jl>`_
 ______________________________________________
 
-  .. image:: https://gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https%3A%2F%2Fidenticons.github.com%2Faeffec9bb1d59de139f16ccd910b5168.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/371258
      :height: 80px
      :width: 80px
      :align: right
@@ -10535,7 +10744,7 @@ ______________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https%3A%2F%2Fidenticons.github.com%2Faeffec9bb1d59de139f16ccd910b5168.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/371258
         :height: 40px
         :width: 40px
         :alt: Douglas Bates
@@ -10543,10 +10752,15 @@ ______________________________________________
 
 ----
 
-`RNGTest <https://github.com/andreasnoackjensen/RNGTest.jl>`_
+`RNGTest <https://github.com/andreasnoackjensen/RNGTest.jl>`_ |RNGTest_build|
 _____________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/02abdd20ef026f24d96035a407912df0?d=https%3A%2F%2Fidenticons.github.com%2Fc217f7fdea0f4545b9bb96a09ec7bd72.png&r=x
+  .. |RNGTest_build| image:: ../images/travis-icon.png
+     :height: 19
+     :width: 19
+     :target: https://travis-ci.org/andreasnoackjensen/RNGTest.jl
+
+  .. image:: https://avatars.githubusercontent.com/u/505001
      :height: 80px
      :width: 80px
      :align: right
@@ -10555,23 +10769,23 @@ _____________________________________________________________
 
   Code for testing of Julia's random numbers 
 
-  Current Version: ``0.0.0``  (updated: 2013-02-25) 
+  Current Version: ``0.0.1``  (updated: 2014-02-28) 
 
   Maintainer: `Andreas Noack Jensen <https://github.com/andreasnoackjensen>`_
 
   Dependencies::
 
-      None
+      julia                    [0.2.0-,∞)
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/02abdd20ef026f24d96035a407912df0?d=https%3A%2F%2Fidenticons.github.com%2Fc217f7fdea0f4545b9bb96a09ec7bd72.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/505001
         :height: 40px
         :width: 40px
         :alt: Andreas Noack Jensen
         :target: https://github.com/andreasnoackjensen
 
-    .. image:: https://gravatar.com/avatar/55e277a715ee2afd0d29c309174eca02?d=https%3A%2F%2Fidenticons.github.com%2F938b248e75affacf29383e0738b98ea2.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/744411
         :height: 40px
         :width: 40px
         :alt: Viral B. Shah
@@ -10582,7 +10796,7 @@ _____________________________________________________________
 `RobustStats <https://github.com/mrxiaohe/RobustStats.jl>`_
 ___________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/6b09c84accc07b69d2d60b721ac34a38?d=https%3A%2F%2Fidenticons.github.com%2F27343dc0d427d45c891c8ea1bdf71701.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/3064882
      :height: 80px
      :width: 80px
      :align: right
@@ -10606,18 +10820,24 @@ ___________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/6b09c84accc07b69d2d60b721ac34a38?d=https%3A%2F%2Fidenticons.github.com%2F27343dc0d427d45c891c8ea1bdf71701.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/3064882
         :height: 40px
         :width: 40px
         :alt: Xiao He
         :target: https://github.com/mrxiaohe
+
+    .. image:: https://avatars.githubusercontent.com/u/3092978
+        :height: 40px
+        :width: 40px
+        :alt: Bitdeli Chef
+        :target: https://github.com/bitdeli-chef
 
 ----
 
 `Roots <https://github.com/jverzani/Roots.jl>`_
 _______________________________________________
 
-  .. image:: https://gravatar.com/avatar/8f514187144b1b19b0205fce41284d32?d=https%3A%2F%2Fidenticons.github.com%2F763a59893dc5fcf4c3d471b690847bec.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/421708
      :height: 80px
      :width: 80px
      :align: right
@@ -10637,13 +10857,13 @@ _______________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/8f514187144b1b19b0205fce41284d32?d=https%3A%2F%2Fidenticons.github.com%2F763a59893dc5fcf4c3d471b690847bec.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/421708
         :height: 40px
         :width: 40px
         :alt: john verzani
         :target: https://github.com/jverzani
 
-    .. image:: https://gravatar.com/avatar/927b12170d55ac2cfe2060487cb16c0b?d=https%3A%2F%2Fidenticons.github.com%2F9fda0033bae4b12ddaea4350cd67dbe1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1625247
         :height: 40px
         :width: 40px
         :alt: John Travers
@@ -10659,7 +10879,7 @@ _____________________________________________________
      :width: 19
      :target: https://travis-ci.org/burrowsa/RunTests.jl
 
-  .. image:: https://gravatar.com/avatar/f30692fe671bea12264aa2d0459da153?d=https%3A%2F%2Fidenticons.github.com%2F300b9eda5cf0e70f2a03efbc5f437c9f.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1609099
      :height: 80px
      :width: 80px
      :align: right
@@ -10679,7 +10899,7 @@ _____________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/f30692fe671bea12264aa2d0459da153?d=https%3A%2F%2Fidenticons.github.com%2F300b9eda5cf0e70f2a03efbc5f437c9f.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1609099
         :height: 40px
         :width: 40px
         :alt: Andrew Burrows
@@ -10695,7 +10915,7 @@ ___________________________________________
      :width: 19
      :target: https://travis-ci.org/mschauer/SDE.jl
 
-  .. image:: https://gravatar.com/avatar/b3ce82c50576d090da69fc77bc2ee79f?d=https%3A%2F%2Fidenticons.github.com%2F6c0f70bfbd840497403e511d771e040d.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1923437
      :height: 80px
      :width: 80px
      :align: right
@@ -10715,7 +10935,7 @@ ___________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b3ce82c50576d090da69fc77bc2ee79f?d=https%3A%2F%2Fidenticons.github.com%2F6c0f70bfbd840497403e511d771e040d.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1923437
         :height: 40px
         :width: 40px
         :alt: M. Schauer
@@ -10726,7 +10946,7 @@ ___________________________________________
 `SDL <https://github.com/rennis250/SDL.jl>`_
 ____________________________________________
 
-  .. image:: https://gravatar.com/avatar/37cebf4f44a1dbf71ee94aaea166ef00?d=https%3A%2F%2Fidenticons.github.com%2F297c3e3befdaf89f098f109d971e6f5a.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1783559
      :height: 80px
      :width: 80px
      :align: right
@@ -10745,7 +10965,7 @@ ____________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/37cebf4f44a1dbf71ee94aaea166ef00?d=https%3A%2F%2Fidenticons.github.com%2F297c3e3befdaf89f098f109d971e6f5a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1783559
         :height: 40px
         :width: 40px
         :alt: Robert J. Ennis
@@ -10756,7 +10976,7 @@ ____________________________________________
 `SemidefiniteProgramming <https://github.com/daviddelaat/SemidefiniteProgramming.jl>`_
 ______________________________________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/62df30beab9c2a6f3fe3f86995e94387?d=https%3A%2F%2Fidenticons.github.com%2F58b08088d26ada47c510cef3759f7aae.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1908571
      :height: 80px
      :width: 80px
      :align: right
@@ -10775,7 +10995,7 @@ ________________________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/62df30beab9c2a6f3fe3f86995e94387?d=https%3A%2F%2Fidenticons.github.com%2F58b08088d26ada47c510cef3759f7aae.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1908571
         :height: 40px
         :width: 40px
         :alt: David de Laat
@@ -10786,7 +11006,7 @@ ________________________________________________________________________________
 `Shapefile <https://github.com/loladiro/Shapefile.jl>`_
 _______________________________________________________
 
-  .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1291671
      :height: 80px
      :width: 80px
      :align: right
@@ -10805,7 +11025,7 @@ _______________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
@@ -10816,7 +11036,7 @@ _______________________________________________________
 `SimJulia <https://github.com/BenLauwens/SimJulia.jl>`_
 _______________________________________________________
 
-  .. image:: https://gravatar.com/avatar/d90d902f9f64a30155b8a87441615cc2?d=https%3A%2F%2Fidenticons.github.com%2F1b12ae56baba3be253691a77fc68269f.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/3951276
      :height: 80px
      :width: 80px
      :align: right
@@ -10835,7 +11055,7 @@ _______________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/d90d902f9f64a30155b8a87441615cc2?d=https%3A%2F%2Fidenticons.github.com%2F1b12ae56baba3be253691a77fc68269f.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/3951276
         :height: 40px
         :width: 40px
         :alt: Ben Lauwens
@@ -10846,7 +11066,7 @@ _______________________________________________________
 `Sims <https://github.com/tshort/Sims.jl>`_
 ___________________________________________
 
-  .. image:: https://gravatar.com/avatar/903acb22f47a901577ee48d3962d5858?d=https%3A%2F%2Fidenticons.github.com%2F3d46ff6b8eb4321c2705be8a1791bc94.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/636420
      :height: 80px
      :width: 80px
      :align: right
@@ -10865,19 +11085,19 @@ ___________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/11ed595b17e2ccf6bc0b3c80f3dde4e8?d=https%3A%2F%2Fidenticons.github.com%2F176a9d5ad1fcb179b164bdd7d4e625dc.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/5247292
         :height: 40px
         :width: 40px
         :alt: powerdistribution
         :target: https://github.com/powerdistribution
 
-    .. image:: https://gravatar.com/avatar/903acb22f47a901577ee48d3962d5858?d=https%3A%2F%2Fidenticons.github.com%2F3d46ff6b8eb4321c2705be8a1791bc94.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/636420
         :height: 40px
         :width: 40px
         :alt: Tom Short
         :target: https://github.com/tshort
 
-    .. image:: https://gravatar.com/avatar/fd4324f02a40d980974b862ec8410f79?d=https%3A%2F%2Fidenticons.github.com%2F77b4ea235ea1d5b8b4afc58903b4d3a8.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/418773
         :height: 40px
         :width: 40px
         :alt: Yuriy Skalko
@@ -10893,7 +11113,7 @@ ___________________________________________________
      :width: 19
      :target: https://travis-ci.org/loladiro/SIUnits.jl
 
-  .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1291671
      :height: 80px
      :width: 80px
      :align: right
@@ -10913,19 +11133,19 @@ ___________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
-    .. image:: https://gravatar.com/avatar/6cba33e8e7c69fa63f6ad386b7a958c5?d=https%3A%2F%2Fidenticons.github.com%2F270edd69788dce200a3b395a6da6fdb7.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1732
         :height: 40px
         :width: 40px
         :alt: Jiahao Chen
         :target: https://github.com/jiahao
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
@@ -10936,7 +11156,7 @@ ___________________________________________________
 `SliceSampler <https://github.com/doobwa/MCMC.jl>`_
 ___________________________________________________
 
-  .. image:: https://gravatar.com/avatar/1a4672a0ae94c24f02517dea26097f58?d=https%3A%2F%2Fidenticons.github.com%2F876581e21f82522068fadfdd6f1d08c7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/79467
      :height: 80px
      :width: 80px
      :align: right
@@ -10955,19 +11175,19 @@ ___________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/1a4672a0ae94c24f02517dea26097f58?d=https%3A%2F%2Fidenticons.github.com%2F876581e21f82522068fadfdd6f1d08c7.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/79467
         :height: 40px
         :width: 40px
         :alt: Chris DuBois
         :target: https://github.com/doobwa
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
-    .. image:: https://gravatar.com/avatar/5c06e9faa0d7bd205f81d10e825d7e4a?d=https%3A%2F%2Fidenticons.github.com%2F6b8901820c4636072f2131546cc646f7.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1437512
         :height: 40px
         :width: 40px
         :alt: nfoti
@@ -10978,7 +11198,7 @@ ___________________________________________________
 `SmoothingKernels <https://github.com/johnmyleswhite/SmoothingKernels.jl>`_
 ___________________________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/22064
      :height: 80px
      :width: 80px
      :align: right
@@ -10998,7 +11218,7 @@ ___________________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
@@ -11009,7 +11229,7 @@ ___________________________________________________________________________
 `SMTPClient <https://github.com/aviks/SMTPClient.jl>`_
 ______________________________________________________
 
-  .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/378918
      :height: 80px
      :width: 80px
      :align: right
@@ -11029,7 +11249,7 @@ ______________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/378918
         :height: 40px
         :width: 40px
         :alt: Avik Sengupta
@@ -11040,7 +11260,7 @@ ______________________________________________________
 `Sodium <https://github.com/amitmurthy/Sodium.jl>`_
 ___________________________________________________
 
-  .. image:: https://gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https%3A%2F%2Fidenticons.github.com%2F8de01f67e4cbfa5ce2e70e6f1f761891.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/117461
      :height: 80px
      :width: 80px
      :align: right
@@ -11059,7 +11279,7 @@ ___________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https%3A%2F%2Fidenticons.github.com%2F8de01f67e4cbfa5ce2e70e6f1f761891.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/117461
         :height: 40px
         :width: 40px
         :alt: Amit Murthy
@@ -11070,7 +11290,7 @@ ___________________________________________________
 `SortingAlgorithms <https://github.com/JuliaLang/SortingAlgorithms.jl>`_
 ________________________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2F96058cb0ed9e150dfffc3b86b3b8d5e7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/743164
      :height: 80px
      :width: 80px
      :align: right
@@ -11089,18 +11309,30 @@ ________________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b4b8db23d8096b722483a57d21b7d65d?d=https%3A%2F%2Fidenticons.github.com%2F013fdd367536d965b2a0fcbc90fae782.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/744556
         :height: 40px
         :width: 40px
         :alt: Jeff Bezanson
         :target: https://github.com/JeffBezanson
+
+    .. image:: https://avatars.githubusercontent.com/u/153596
+        :height: 40px
+        :width: 40px
+        :alt: Stefan Karpinski
+        :target: https://github.com/StefanKarpinski
+
+    .. image:: https://avatars.githubusercontent.com/u/223250
+        :height: 40px
+        :width: 40px
+        :alt: Kevin Squire
+        :target: https://github.com/kmsquire
 
 ----
 
 `Soundex <https://github.com/johnmyleswhite/Soundex.jl>`_
 _________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/22064
      :height: 80px
      :width: 80px
      :align: right
@@ -11119,7 +11351,7 @@ _________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
@@ -11135,7 +11367,7 @@ __________________________________________________
      :width: 19
      :target: https://travis-ci.org/karbarcca/SQLite.jl
 
-  .. image:: https://gravatar.com/avatar/d788bf7fd037ebef5798d8881c5faa2f?d=https%3A%2F%2Fidenticons.github.com%2Fb74329b16ae6564aa58c344720a5a087.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2896623
      :height: 80px
      :width: 80px
      :align: right
@@ -11158,49 +11390,49 @@ __________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/d788bf7fd037ebef5798d8881c5faa2f?d=https%3A%2F%2Fidenticons.github.com%2Fb74329b16ae6564aa58c344720a5a087.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2896623
         :height: 40px
         :width: 40px
         :alt: Jacob Quinn
         :target: https://github.com/karbarcca
 
-    .. image:: https://gravatar.com/avatar/cc283e3bd2784ad33dfd55afcfef4877?d=https%3A%2F%2Fidenticons.github.com%2F54c0a5d9982c0b2967ca7ad7851c0d98.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/692635
         :height: 40px
         :width: 40px
         :alt: Iain Dunning
         :target: https://github.com/IainNZ
 
-    .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900250
         :height: 40px
         :width: 40px
         :alt: Dahua Lin
         :target: https://github.com/lindahua
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
-    .. image:: https://gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https%3A%2F%2Fidenticons.github.com%2Fd73ab2afeb22d558e3fae4b0a0de43e3.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1733683
         :height: 40px
         :width: 40px
         :alt: Miles Lubin
         :target: https://github.com/mlubin
 
-    .. image:: https://gravatar.com/avatar/192f114babcc8c2f53936c145bbc502c?d=https%3A%2F%2Fidenticons.github.com%2F8221b4c8f7cc8d6114e4f1afc7fd7dff.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/327706
         :height: 40px
         :width: 40px
         :alt: Isaiah
         :target: https://github.com/ihnorton
 
-    .. image:: https://gravatar.com/avatar/e0ffb3df640bdfc20a10ee433268cea4?d=https%3A%2F%2Fidenticons.github.com%2Fa5160529370c7f967810cb74483b4492.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/348933
         :height: 40px
         :width: 40px
         :alt: Paulo Geyer
@@ -11211,7 +11443,7 @@ __________________________________________________
 `Stats <https://github.com/JuliaStats/Stats.jl>`_
 _________________________________________________
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2Fcb77afca27851230430c94750eef67c7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2761531
      :height: 80px
      :width: 80px
      :align: right
@@ -11231,7 +11463,7 @@ _________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
@@ -11247,7 +11479,7 @@ _________________________________________________________
      :width: 19
      :target: https://travis-ci.org/JuliaStats/StatsBase.jl
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2Fcb77afca27851230430c94750eef67c7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2761531
      :height: 80px
      :width: 80px
      :align: right
@@ -11266,73 +11498,91 @@ _________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900250
         :height: 40px
         :width: 40px
         :alt: Dahua Lin
         :target: https://github.com/lindahua
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
-    .. image:: https://gravatar.com/avatar/02abdd20ef026f24d96035a407912df0?d=https%3A%2F%2Fidenticons.github.com%2Fc217f7fdea0f4545b9bb96a09ec7bd72.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/505001
         :height: 40px
         :width: 40px
         :alt: Andreas Noack Jensen
         :target: https://github.com/andreasnoackjensen
 
-    .. image:: https://gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https%3A%2F%2Fidenticons.github.com%2Faeffec9bb1d59de139f16ccd910b5168.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/371258
         :height: 40px
         :width: 40px
         :alt: Douglas Bates
         :target: https://github.com/dmbates
 
-    .. image:: https://gravatar.com/avatar/38fd90a3e36e0fc871e3c58e79c74227?d=https%3A%2F%2Fidenticons.github.com%2F4f083f9efc165785db3ef3255f13c787.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/869592
         :height: 40px
         :width: 40px
         :alt: Alexander Fabisch
         :target: https://github.com/AlexanderFabisch
 
-    .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/470884
         :height: 40px
         :width: 40px
         :alt: Simon Kornblith
         :target: https://github.com/simonster
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/378918
         :height: 40px
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
 
-    .. image:: https://gravatar.com/avatar/449044e4f0ed377b21409488cddafc45?d=https%3A%2F%2Fidenticons.github.com%2F3f2743ab32e9c084ddcabc42324d7465.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/866695
         :height: 40px
         :width: 40px
         :alt: Blake Johnson
         :target: https://github.com/blakejohnson
 
-    .. image:: https://gravatar.com/avatar/fa3b781987ef53c4d3b8397f2239e519?d=https%3A%2F%2Fidenticons.github.com%2F75a2b93c61829886bca2442b2438509b.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2822757
         :height: 40px
         :width: 40px
         :alt: Diego Javier Zea
         :target: https://github.com/diegozea
 
-    .. image:: https://gravatar.com/avatar/d788bf7fd037ebef5798d8881c5faa2f?d=https%3A%2F%2Fidenticons.github.com%2Fb74329b16ae6564aa58c344720a5a087.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2896623
         :height: 40px
         :width: 40px
         :alt: Jacob Quinn
         :target: https://github.com/karbarcca
 
-    .. image:: https://gravatar.com/avatar/f1678bcdc052b500191b78923399e5f8?d=https%3A%2F%2Fidenticons.github.com%2F23ac6c3f4e95b0415828115db7a8ca44.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/697092
+        :height: 40px
+        :width: 40px
+        :alt: Leonhard Markert
+        :target: https://github.com/curiousleo
+
+    .. image:: https://avatars.githubusercontent.com/u/2234614
+        :height: 40px
+        :width: 40px
+        :alt: Mike Innes
+        :target: https://github.com/one-more-minute
+
+    .. image:: https://avatars.githubusercontent.com/u/2823840
+        :height: 40px
+        :width: 40px
+        :alt: Sean Garborg
+        :target: https://github.com/garborg
+
+    .. image:: https://avatars.githubusercontent.com/u/2519036
         :height: 40px
         :width: 40px
         :alt: Theodore Papamarkou
@@ -11340,10 +11590,58 @@ _________________________________________________________
 
 ----
 
+`StatsdClient <https://github.com/forio/StatsdClient.jl>`_
+__________________________________________________________
+
+  .. image:: https://avatars.githubusercontent.com/u/1878641
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Forio
+     :target: https://github.com/forio
+
+  A simple statsd client written in Julia 
+
+  Current Version: ``0.0.1``  (updated: 2014-02-18) 
+
+  Maintainer: `Forio <https://github.com/forio>`_
+
+  Dependencies::
+
+      julia                    [0.3.0-,∞)
+
+  Contributors:
+
+    .. image:: https://avatars.githubusercontent.com/u/2124535
+        :height: 40px
+        :width: 40px
+        :alt: bass3m
+        :target: https://github.com/bass3m
+
+    .. image:: https://avatars.githubusercontent.com/u/172643
+        :height: 40px
+        :width: 40px
+        :alt: Stu Thompson
+        :target: https://github.com/stuinzuri
+
+    .. image:: https://avatars.githubusercontent.com/u/1878961
+        :height: 40px
+        :width: 40px
+        :alt: William Glass-Husain
+        :target: https://github.com/wglasshusain
+
+    .. image:: https://avatars.githubusercontent.com/u/1900307
+        :height: 40px
+        :width: 40px
+        :alt: Westley Argentum Hennigh
+        :target: https://github.com/WestleyArgentum
+
+----
+
 `StrPack <https://github.com/pao/StrPack.jl>`_
 ______________________________________________
 
-  .. image:: https://gravatar.com/avatar/16d8443194c380ca93a77fb8530a5aee?d=https%3A%2F%2Fidenticons.github.com%2F38da66e2f2af82932859b7a5f330af55.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/140497
      :height: 80px
      :width: 80px
      :align: right
@@ -11364,31 +11662,31 @@ ______________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/16d8443194c380ca93a77fb8530a5aee?d=https%3A%2F%2Fidenticons.github.com%2F38da66e2f2af82932859b7a5f330af55.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/140497
         :height: 40px
         :width: 40px
         :alt: Patrick O'Leary
         :target: https://github.com/pao
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
-    .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/470884
         :height: 40px
         :width: 40px
         :alt: Simon Kornblith
         :target: https://github.com/simonster
 
-    .. image:: https://gravatar.com/avatar/fa3b781987ef53c4d3b8397f2239e519?d=https%3A%2F%2Fidenticons.github.com%2F75a2b93c61829886bca2442b2438509b.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2822757
         :height: 40px
         :width: 40px
         :alt: Diego Javier Zea
         :target: https://github.com/diegozea
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
@@ -11399,7 +11697,7 @@ ______________________________________________
 `Sundials <https://github.com/JuliaLang/Sundials.jl>`_
 ______________________________________________________
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2F96058cb0ed9e150dfffc3b86b3b8d5e7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/743164
      :height: 80px
      :width: 80px
      :align: right
@@ -11418,7 +11716,7 @@ ______________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/11ed595b17e2ccf6bc0b3c80f3dde4e8?d=https%3A%2F%2Fidenticons.github.com%2F176a9d5ad1fcb179b164bdd7d4e625dc.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/5247292
         :height: 40px
         :width: 40px
         :alt: powerdistribution
@@ -11429,7 +11727,7 @@ ______________________________________________________
 `SVM <https://github.com/JuliaStats/SVM.jl>`_
 _____________________________________________
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2Fcb77afca27851230430c94750eef67c7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2761531
      :height: 80px
      :width: 80px
      :align: right
@@ -11448,13 +11746,13 @@ _____________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
-    .. image:: https://gravatar.com/avatar/538889c0ce4dd2719f09f1961d13af78?d=https%3A%2F%2Fidenticons.github.com%2F4bd6752d9fb18192689562546ba57804.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1476029
         :height: 40px
         :width: 40px
         :alt: Lucas Beyer
@@ -11465,7 +11763,7 @@ _____________________________________________
 `SymPy <https://github.com/jverzani/SymPy.jl>`_
 _______________________________________________
 
-  .. image:: https://gravatar.com/avatar/8f514187144b1b19b0205fce41284d32?d=https%3A%2F%2Fidenticons.github.com%2F763a59893dc5fcf4c3d471b690847bec.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/421708
      :height: 80px
      :width: 80px
      :align: right
@@ -11485,19 +11783,19 @@ _______________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/8f514187144b1b19b0205fce41284d32?d=https%3A%2F%2Fidenticons.github.com%2F763a59893dc5fcf4c3d471b690847bec.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/421708
         :height: 40px
         :width: 40px
         :alt: john verzani
         :target: https://github.com/jverzani
 
-    .. image:: https://gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https%3A%2F%2Fidenticons.github.com%2F5d5113de843c8b258029d6a06bccd163.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/330950
         :height: 40px
         :width: 40px
         :alt: Jameson Nash
         :target: https://github.com/vtjnash
 
-    .. image:: https://gravatar.com/avatar/f1678bcdc052b500191b78923399e5f8?d=https%3A%2F%2Fidenticons.github.com%2F23ac6c3f4e95b0415828115db7a8ca44.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2519036
         :height: 40px
         :width: 40px
         :alt: Theodore Papamarkou
@@ -11513,7 +11811,7 @@ __________________________________________
      :width: 19
      :target: https://travis-ci.org/aviks/Taro.jl
 
-  .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/378918
      :height: 80px
      :width: 80px
      :align: right
@@ -11533,7 +11831,7 @@ __________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/378918
         :height: 40px
         :width: 40px
         :alt: Avik Sengupta
@@ -11544,7 +11842,7 @@ __________________________________________
 `Terminals <https://github.com/loladiro/Terminals.jl>`_
 _______________________________________________________
 
-  .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1291671
      :height: 80px
      :width: 80px
      :align: right
@@ -11563,7 +11861,7 @@ _______________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
@@ -11574,7 +11872,7 @@ _______________________________________________________
 `TexExtensions <https://github.com/loladiro/TexExtensions.jl>`_
 _______________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1291671
      :height: 80px
      :width: 80px
      :align: right
@@ -11593,7 +11891,7 @@ _______________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
@@ -11604,7 +11902,7 @@ _______________________________________________________________
 `TextAnalysis <https://github.com/johnmyleswhite/TextAnalysis.jl>`_
 ___________________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/22064
      :height: 80px
      :width: 80px
      :align: right
@@ -11625,13 +11923,13 @@ ___________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
-    .. image:: https://gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https%3A%2F%2Fidenticons.github.com%2Fa2feca9cad6b69327bdee24d0d81156a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1010989
         :height: 40px
         :width: 40px
         :alt: Tanmay Mohapatra
@@ -11647,7 +11945,7 @@ __________________________________________________________
      :width: 19
      :target: https://travis-ci.org/carlobaldassi/TextWrap.jl
 
-  .. image:: https://gravatar.com/avatar/80502de63c1b21d8f3ba663d72ba5be2?d=https%3A%2F%2Fidenticons.github.com%2Fd454171c70136b2284d6a8cfe123eb29.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/223753
      :height: 80px
      :width: 80px
      :align: right
@@ -11666,19 +11964,19 @@ __________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/80502de63c1b21d8f3ba663d72ba5be2?d=https%3A%2F%2Fidenticons.github.com%2Fd454171c70136b2284d6a8cfe123eb29.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223753
         :height: 40px
         :width: 40px
         :alt: Carlo Baldassi
         :target: https://github.com/carlobaldassi
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
@@ -11694,7 +11992,7 @@ ___________________________________________________
      :width: 19
      :target: https://travis-ci.org/cgroll/TimeData.jl
 
-  .. image:: https://gravatar.com/avatar/193abff8a1c2f40862598ce3fe37d559?d=https%3A%2F%2Fidenticons.github.com%2F1988665b77f1b84648aefb9086bf065d.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2378081
      :height: 80px
      :width: 80px
      :align: right
@@ -11703,20 +12001,20 @@ ___________________________________________________
 
   TimeData package for julia language 
 
-  Current Version: ``0.1.0``  (updated: 2014-02-05) 
+  Current Version: ``0.1.1``  (updated: 2014-02-19) 
 
   Maintainer: `cgroll <https://github.com/cgroll>`_
 
   Dependencies::
 
       julia                    [0.3.0-,∞)
-      DataArrays               [0.1.1-,∞)
+      DataArrays               [0.1.2-,∞)
       Datetime                 [0.1.2-,∞)
-      DataFrames               [0.5.1-,∞)
+      DataFrames               [0.5.2-,∞)
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/193abff8a1c2f40862598ce3fe37d559?d=https%3A%2F%2Fidenticons.github.com%2F1988665b77f1b84648aefb9086bf065d.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2378081
         :height: 40px
         :width: 40px
         :alt: cgroll
@@ -11732,7 +12030,7 @@ ___________________________________________________________
      :width: 19
      :target: https://travis-ci.org/JuliaStats/TimeModels.jl
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2Fcb77afca27851230430c94750eef67c7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2761531
      :height: 80px
      :width: 80px
      :align: right
@@ -11755,25 +12053,25 @@ ___________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/25ce2ab2f5e673e46208c1188a39e6ca?d=https%3A%2F%2Fidenticons.github.com%2F94554a56b2946c805e180501c4d4544c.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/324836
         :height: 40px
         :width: 40px
         :alt: milktrader
         :target: https://github.com/milktrader
 
-    .. image:: https://gravatar.com/avatar/27541ea7ad0954012c655bc3d2dad17f?d=https%3A%2F%2Fidenticons.github.com%2F4e0791aa8c6cc892713508d5d4dfdecb.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/5008318
         :height: 40px
         :width: 40px
         :alt: Andrey Kolev
         :target: https://github.com/AndreyKolev
 
-    .. image:: https://gravatar.com/avatar/f1678bcdc052b500191b78923399e5f8?d=https%3A%2F%2Fidenticons.github.com%2F23ac6c3f4e95b0415828115db7a8ca44.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2519036
         :height: 40px
         :width: 40px
         :alt: Theodore Papamarkou
         :target: https://github.com/scidom
 
-    .. image:: https://gravatar.com/avatar/ab31fb941184aaef823ddad0f2179c1f?d=https%3A%2F%2Fidenticons.github.com%2Ffb2e9f876c42f892b14d309a5e08e728.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/571693
         :height: 40px
         :width: 40px
         :alt: João Daniel
@@ -11789,7 +12087,7 @@ ___________________________________________________________
      :width: 19
      :target: https://travis-ci.org/JuliaStats/TimeSeries.jl
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2Fcb77afca27851230430c94750eef67c7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2761531
      :height: 80px
      :width: 80px
      :align: right
@@ -11798,7 +12096,7 @@ ___________________________________________________________
 
   Time series toolkit for Julia 
 
-  Current Version: ``0.3.5``  (updated: 2014-02-16) 
+  Current Version: ``0.3.6``  (updated: 2014-02-18) 
 
   Maintainer: `Julia Statistics <https://github.com/JuliaStats>`_
 
@@ -11809,13 +12107,13 @@ ___________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/25ce2ab2f5e673e46208c1188a39e6ca?d=https%3A%2F%2Fidenticons.github.com%2F94554a56b2946c805e180501c4d4544c.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/324836
         :height: 40px
         :width: 40px
         :alt: milktrader
         :target: https://github.com/milktrader
 
-    .. image:: https://gravatar.com/avatar/1af2db0b26142fd0c7ab082f3d445f73?d=https%3A%2F%2Fidenticons.github.com%2Fabc7045985c1a04674b1024963c5dcc6.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/135570
         :height: 40px
         :width: 40px
         :alt: Ian Fiske
@@ -11826,7 +12124,7 @@ ___________________________________________________________
 `Tk <https://github.com/JuliaLang/Tk.jl>`_
 __________________________________________
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2F96058cb0ed9e150dfffc3b86b3b8d5e7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/743164
      :height: 80px
      :width: 80px
      :align: right
@@ -11847,79 +12145,79 @@ __________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/55e277a715ee2afd0d29c309174eca02?d=https%3A%2F%2Fidenticons.github.com%2F938b248e75affacf29383e0738b98ea2.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/744411
         :height: 40px
         :width: 40px
         :alt: Viral B. Shah
         :target: https://github.com/ViralBShah
 
-    .. image:: https://gravatar.com/avatar/8f514187144b1b19b0205fce41284d32?d=https%3A%2F%2Fidenticons.github.com%2F763a59893dc5fcf4c3d471b690847bec.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/421708
         :height: 40px
         :width: 40px
         :alt: john verzani
         :target: https://github.com/jverzani
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
         :target: https://github.com/timholy
 
-    .. image:: https://gravatar.com/avatar/b4b8db23d8096b722483a57d21b7d65d?d=https%3A%2F%2Fidenticons.github.com%2F013fdd367536d965b2a0fcbc90fae782.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/744556
         :height: 40px
         :width: 40px
         :alt: Jeff Bezanson
         :target: https://github.com/JeffBezanson
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
-    .. image:: https://gravatar.com/avatar/afb7f86706c41da610daf216d60e59b9?d=https%3A%2F%2Fidenticons.github.com%2F1879416768cbb240e6c004a231a0204f.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1935770
         :height: 40px
         :width: 40px
         :alt: Ron Rock
         :target: https://github.com/rsrock
 
-    .. image:: https://gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https%3A%2F%2Fidenticons.github.com%2F5d5113de843c8b258029d6a06bccd163.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/330950
         :height: 40px
         :width: 40px
         :alt: Jameson Nash
         :target: https://github.com/vtjnash
 
-    .. image:: https://gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https%3A%2F%2Fidenticons.github.com%2Fccc246e2e59d5e2d0cca344114f2065e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/201456
         :height: 40px
         :width: 40px
         :alt: Mike Nolta
         :target: https://github.com/nolta
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://gravatar.com/avatar/192f114babcc8c2f53936c145bbc502c?d=https%3A%2F%2Fidenticons.github.com%2F8221b4c8f7cc8d6114e4f1afc7fd7dff.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/327706
         :height: 40px
         :width: 40px
         :alt: Isaiah
         :target: https://github.com/ihnorton
 
-    .. image:: https://gravatar.com/avatar/002ccfd8ee9e135f0dfb5650c292052d?d=https%3A%2F%2Fidenticons.github.com%2F0f1b002e3ac98562472e40b49a01cc84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/130920
         :height: 40px
         :width: 40px
         :alt: Elliot Saba
         :target: https://github.com/staticfloat
 
-    .. image:: https://gravatar.com/avatar/37cebf4f44a1dbf71ee94aaea166ef00?d=https%3A%2F%2Fidenticons.github.com%2F297c3e3befdaf89f098f109d971e6f5a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1783559
         :height: 40px
         :width: 40px
         :alt: Robert J. Ennis
         :target: https://github.com/rennis250
 
-    .. image:: https://gravatar.com/avatar/449044e4f0ed377b21409488cddafc45?d=https%3A%2F%2Fidenticons.github.com%2F3f2743ab32e9c084ddcabc42324d7465.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/866695
         :height: 40px
         :width: 40px
         :alt: Blake Johnson
@@ -11930,7 +12228,7 @@ __________________________________________
 `TOML <https://github.com/pygy/TOML.jl>`_
 _________________________________________
 
-  .. image:: https://gravatar.com/avatar/e38cd950767e62fd3250795bbd208cf6?d=https%3A%2F%2Fidenticons.github.com%2Fdde7ab386f2688e33598588c7447fa0b.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/54515
      :height: 80px
      :width: 80px
      :align: right
@@ -11939,18 +12237,18 @@ _________________________________________
 
   A TOML parser for Julia. 
 
-  Current Version: ``0.0.0``  (updated: 2013-03-06) 
+  Current Version: ``0.1.1``  (updated: 2014-02-28) 
 
   Maintainer: `Pierre-Yves Gérardy <https://github.com/pygy>`_
 
   Dependencies::
 
-      Calendar                 [0.0.0-,∞)
+      julia                    [0.2.1,∞)
       JSON                     [0.0.0-,∞)
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/e38cd950767e62fd3250795bbd208cf6?d=https%3A%2F%2Fidenticons.github.com%2Fdde7ab386f2688e33598588c7447fa0b.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/54515
         :height: 40px
         :width: 40px
         :alt: Pierre-Yves Gérardy
@@ -11961,7 +12259,7 @@ _________________________________________
 `TopicModels <https://github.com/slycoder/TopicModels.jl>`_
 ___________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/34bbe1993f0b1e918539da9a832f8064?d=https%3A%2F%2Fidenticons.github.com%2F2be6a2b31df685466061c234f3b786aa.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/524989
      :height: 80px
      :width: 80px
      :align: right
@@ -11980,13 +12278,13 @@ ___________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/34bbe1993f0b1e918539da9a832f8064?d=https%3A%2F%2Fidenticons.github.com%2F2be6a2b31df685466061c234f3b786aa.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/524989
         :height: 40px
         :width: 40px
         :alt: Jonathan Chang
         :target: https://github.com/slycoder
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
@@ -11997,7 +12295,7 @@ ___________________________________________________________
 `Trie <https://github.com/JuliaLang/Trie.jl>`_
 ______________________________________________
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2F96058cb0ed9e150dfffc3b86b3b8d5e7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/743164
      :height: 80px
      :width: 80px
      :align: right
@@ -12016,7 +12314,7 @@ ______________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
@@ -12032,7 +12330,7 @@ _________________________________________________________
      :width: 19
      :target: https://travis-ci.org/astrieanna/TypeCheck.jl
 
-  .. image:: https://gravatar.com/avatar/54cc6bf56d6223bdb99e5d6cfbd11056?d=https%3A%2F%2Fidenticons.github.com%2F64e76e13ef337dfcda3cf3da7b89c5c2.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1205394
      :height: 80px
      :width: 80px
      :align: right
@@ -12051,13 +12349,13 @@ _________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/54cc6bf56d6223bdb99e5d6cfbd11056?d=https%3A%2F%2Fidenticons.github.com%2F64e76e13ef337dfcda3cf3da7b89c5c2.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1205394
         :height: 40px
         :width: 40px
         :alt: Leah Hanson
         :target: https://github.com/astrieanna
 
-    .. image:: https://gravatar.com/avatar/f6bd929465d6d225def8062d5a9d3f3f?d=https%3A%2F%2Fidenticons.github.com%2F8f938878d1078d25e184c24dc82376b5.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/157136
         :height: 40px
         :width: 40px
         :alt: Dan Luu
@@ -12073,7 +12371,7 @@ ________________________________________________________
      :width: 19
      :target: https://travis-ci.org/randyzwitch/UAParser.jl
 
-  .. image:: https://gravatar.com/avatar/957fc8103c58ee9ee9a5d96c91b15e76?d=https%3A%2F%2Fidenticons.github.com%2F63a72c1cabc34962926263f1e33c3ce1.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2762787
      :height: 80px
      :width: 80px
      :align: right
@@ -12094,7 +12392,7 @@ ________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/957fc8103c58ee9ee9a5d96c91b15e76?d=https%3A%2F%2Fidenticons.github.com%2F63a72c1cabc34962926263f1e33c3ce1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2762787
         :height: 40px
         :width: 40px
         :alt: Randy Zwitch
@@ -12105,7 +12403,7 @@ ________________________________________________________
 `Units <https://github.com/timholy/Units.jl>`_
 ______________________________________________
 
-  .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1525481
      :height: 80px
      :width: 80px
      :align: right
@@ -12124,7 +12422,7 @@ ______________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
@@ -12140,7 +12438,7 @@ _______________________________________________________
      :width: 19
      :target: https://travis-ci.org/loladiro/URIParser.jl
 
-  .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1291671
      :height: 80px
      :width: 80px
      :align: right
@@ -12159,25 +12457,25 @@ _______________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
-    .. image:: https://gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https%3A%2F%2Fidenticons.github.com%2Fa2feca9cad6b69327bdee24d0d81156a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1010989
         :height: 40px
         :width: 40px
         :alt: Tanmay Mohapatra
         :target: https://github.com/tanmaykm
 
-    .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/378918
         :height: 40px
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
 
-    .. image:: https://gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https%3A%2F%2Fidenticons.github.com%2Fccc246e2e59d5e2d0cca344114f2065e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/201456
         :height: 40px
         :width: 40px
         :alt: Mike Nolta
@@ -12188,7 +12486,7 @@ _______________________________________________________
 `URITemplate <https://github.com/loladiro/URITemplate.jl>`_
 ___________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1291671
      :height: 80px
      :width: 80px
      :align: right
@@ -12207,7 +12505,7 @@ ___________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
@@ -12223,7 +12521,7 @@ _____________________________________________________
      :width: 19
      :target: https://travis-ci.org/tanmaykm/URLParse.jl
 
-  .. image:: https://gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https%3A%2F%2Fidenticons.github.com%2Fa2feca9cad6b69327bdee24d0d81156a.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1010989
      :height: 80px
      :width: 80px
      :align: right
@@ -12242,7 +12540,7 @@ _____________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https%3A%2F%2Fidenticons.github.com%2Fa2feca9cad6b69327bdee24d0d81156a.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1010989
         :height: 40px
         :width: 40px
         :alt: Tanmay Mohapatra
@@ -12253,7 +12551,7 @@ _____________________________________________________
 `UTF16 <https://github.com/nolta/UTF16.jl>`_
 ____________________________________________
 
-  .. image:: https://gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https%3A%2F%2Fidenticons.github.com%2Fccc246e2e59d5e2d0cca344114f2065e.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/201456
      :height: 80px
      :width: 80px
      :align: right
@@ -12272,13 +12570,13 @@ ____________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https%3A%2F%2Fidenticons.github.com%2Fccc246e2e59d5e2d0cca344114f2065e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/201456
         :height: 40px
         :width: 40px
         :alt: Mike Nolta
         :target: https://github.com/nolta
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
@@ -12294,7 +12592,7 @@ __________________________________________
      :width: 19
      :target: https://travis-ci.org/forio/UUID.jl
 
-  .. image:: https://gravatar.com/avatar/bd2a3d33c3dcc6f25e61382f81689f33?d=https%3A%2F%2Fidenticons.github.com%2F303541224a8d81c65040eb747f5ee614.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/1878641
      :height: 80px
      :width: 80px
      :align: right
@@ -12313,19 +12611,19 @@ __________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/dfc3b0fbb59c9444153823fd35dbd13b?d=https%3A%2F%2Fidenticons.github.com%2F678085c7c9e848e0442b77d8b0c4be71.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900307
         :height: 40px
         :width: 40px
         :alt: Westley Argentum Hennigh
         :target: https://github.com/WestleyArgentum
 
-    .. image:: https://gravatar.com/avatar/e985494cf5c45c2851b1099d990f479b?d=https%3A%2F%2Fidenticons.github.com%2F27708dd5754c4913ded3245cbbae20be.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2124535
         :height: 40px
         :width: 40px
         :alt: bass3m
         :target: https://github.com/bass3m
 
-    .. image:: https://gravatar.com/avatar/d5f30c2d40341d55ba235d674d24972e?d=https%3A%2F%2Fidenticons.github.com%2Fae7e0405c74926295bca0f9d2aa09fa1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/172643
         :height: 40px
         :width: 40px
         :alt: Stu Thompson
@@ -12336,7 +12634,7 @@ __________________________________________
 `ValueDispatch <https://github.com/zachallaun/ValueDispatch.jl>`_
 _________________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/06625cbad0c69f5c2e673a4312e9fd7e?d=https%3A%2F%2Fidenticons.github.com%2F5dd6d7ae462c1aec0b364990d3ec72e0.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/503938
      :height: 80px
      :width: 80px
      :align: right
@@ -12355,7 +12653,7 @@ _________________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/06625cbad0c69f5c2e673a4312e9fd7e?d=https%3A%2F%2Fidenticons.github.com%2F5dd6d7ae462c1aec0b364990d3ec72e0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/503938
         :height: 40px
         :width: 40px
         :alt: Zach Allaun
@@ -12366,7 +12664,7 @@ _________________________________________________________________
 `Vega <https://github.com/johnmyleswhite/Vega.jl>`_
 ___________________________________________________
 
-  .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/22064
      :height: 80px
      :width: 80px
      :align: right
@@ -12386,13 +12684,13 @@ ___________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/22064
         :height: 40px
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
-    .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900250
         :height: 40px
         :width: 40px
         :alt: Dahua Lin
@@ -12400,10 +12698,45 @@ ___________________________________________________
 
 ----
 
+`VML <https://github.com/simonster/VML.jl>`_ |VML_build|
+____________________________________________
+
+  .. |VML_build| image:: ../images/travis-icon.png
+     :height: 19
+     :width: 19
+     :target: https://travis-ci.org/simonster/VML.jl
+
+  .. image:: https://avatars.githubusercontent.com/u/470884
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Simon Kornblith
+     :target: https://github.com/simonster
+
+  Julia bindings for the Intel Vector Math Library 
+
+  Current Version: ``0.0.1``  (updated: 2014-02-28) 
+
+  Maintainer: `Simon Kornblith <https://github.com/simonster>`_
+
+  Dependencies::
+
+      None
+
+  Contributors:
+
+    .. image:: https://avatars.githubusercontent.com/u/470884
+        :height: 40px
+        :width: 40px
+        :alt: Simon Kornblith
+        :target: https://github.com/simonster
+
+----
+
 `WAV <https://github.com/dancasimiro/WAV.jl>`_
 ______________________________________________
 
-  .. image:: https://gravatar.com/avatar/e9c9bece011a5c75918c1dc73a21eaa8?d=https%3A%2F%2Fidenticons.github.com%2F31dc52ce7f9747c7e199cb4dccc21e4b.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2293204
      :height: 80px
      :width: 80px
      :align: right
@@ -12422,13 +12755,13 @@ ______________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/e9c9bece011a5c75918c1dc73a21eaa8?d=https%3A%2F%2Fidenticons.github.com%2F31dc52ce7f9747c7e199cb4dccc21e4b.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2293204
         :height: 40px
         :width: 40px
         :alt: Daniel Casimiro
         :target: https://github.com/dancasimiro
 
-    .. image:: https://gravatar.com/avatar/69bdae2d8460449e27b9dc03a0c7e6d6?d=https%3A%2F%2Fidenticons.github.com%2Ff24f29bfbd9715c0c494bf4da1923ebc.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/5497303
         :height: 40px
         :width: 40px
         :alt: David van Leeuwen
@@ -12444,7 +12777,7 @@ __________________________________________________________
      :width: 19
      :target: https://travis-ci.org/JuliaLang/WebSockets.jl
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2F96058cb0ed9e150dfffc3b86b3b8d5e7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/743164
      :height: 80px
      :width: 80px
      :align: right
@@ -12453,7 +12786,7 @@ __________________________________________________________
 
   A WebSockets server library for Julia 
 
-  Current Version: ``0.0.5``  (updated: 2013-10-17) 
+  Current Version: ``0.0.6``  (updated: 2014-02-27) 
 
   Maintainer: `The Julia Language <https://github.com/JuliaLang>`_
 
@@ -12463,57 +12796,70 @@ __________________________________________________________
       Codecs                   [0.0.0-,∞)
       HttpCommon               [0.0.3-,∞)
       HttpServer               [0.0.4-,∞)
+      Nettle                   [0.0.0-,∞)
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/54cc6bf56d6223bdb99e5d6cfbd11056?d=https%3A%2F%2Fidenticons.github.com%2F64e76e13ef337dfcda3cf3da7b89c5c2.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1205394
         :height: 40px
         :width: 40px
         :alt: Leah Hanson
         :target: https://github.com/astrieanna
 
-    .. image:: https://gravatar.com/avatar/757c233176d3ad14136df4a547ac4234?d=https%3A%2F%2Fidenticons.github.com%2F121cd9e6bfd4012a5efdf75e322b5b39.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/304202
         :height: 40px
         :width: 40px
         :alt: Daniel Mendel
         :target: https://github.com/danielmendel
 
-    .. image:: https://gravatar.com/avatar/06625cbad0c69f5c2e673a4312e9fd7e?d=https%3A%2F%2Fidenticons.github.com%2F5dd6d7ae462c1aec0b364990d3ec72e0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/503938
         :height: 40px
         :width: 40px
         :alt: Zach Allaun
         :target: https://github.com/zachallaun
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/378918
+        :height: 40px
+        :width: 40px
+        :alt: Avik Sengupta
+        :target: https://github.com/aviks
+
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https%3A%2F%2Fidenticons.github.com%2Fc7ec48e0ff0d0ae8827e36301a0962a1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1553856
+        :height: 40px
+        :width: 40px
+        :alt: rened
+        :target: https://github.com/rened
+
+    .. image:: https://avatars.githubusercontent.com/u/210361
         :height: 40px
         :width: 40px
         :alt: Daniel Jones
         :target: https://github.com/dcjones
 
-    .. image:: https://gravatar.com/avatar/317e44562dcf11f5164d0a4936696fbc?d=https%3A%2F%2Fidenticons.github.com%2F655fe21cedd4ac41f328aef38b350ef0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/130920
         :height: 40px
         :width: 40px
-        :alt: rened
-        :target: https://github.com/rened
+        :alt: Elliot Saba
+        :target: https://github.com/staticfloat
 
 ----
 
 `WinRPM <https://github.com/JuliaLang/WinRPM.jl>`_
 __________________________________________________
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2F96058cb0ed9e150dfffc3b86b3b8d5e7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/743164
      :height: 80px
      :width: 80px
      :align: right
@@ -12536,31 +12882,31 @@ __________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https%3A%2F%2Fidenticons.github.com%2F5d5113de843c8b258029d6a06bccd163.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/330950
         :height: 40px
         :width: 40px
         :alt: Jameson Nash
         :target: https://github.com/vtjnash
 
-    .. image:: https://gravatar.com/avatar/192f114babcc8c2f53936c145bbc502c?d=https%3A%2F%2Fidenticons.github.com%2F8221b4c8f7cc8d6114e4f1afc7fd7dff.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/327706
         :height: 40px
         :width: 40px
         :alt: Isaiah
         :target: https://github.com/ihnorton
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
-    .. image:: https://gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https%3A%2F%2Fidenticons.github.com%2F8de01f67e4cbfa5ce2e70e6f1f761891.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/117461
         :height: 40px
         :width: 40px
         :alt: Amit Murthy
         :target: https://github.com/amitmurthy
 
-    .. image:: https://gravatar.com/avatar/002ccfd8ee9e135f0dfb5650c292052d?d=https%3A%2F%2Fidenticons.github.com%2F0f1b002e3ac98562472e40b49a01cc84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/130920
         :height: 40px
         :width: 40px
         :alt: Elliot Saba
@@ -12571,7 +12917,7 @@ __________________________________________________
 `Winston <https://github.com/nolta/Winston.jl>`_
 ________________________________________________
 
-  .. image:: https://gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https%3A%2F%2Fidenticons.github.com%2Fccc246e2e59d5e2d0cca344114f2065e.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/201456
      :height: 80px
      :width: 80px
      :align: right
@@ -12594,91 +12940,91 @@ ________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https%3A%2F%2Fidenticons.github.com%2Fccc246e2e59d5e2d0cca344114f2065e.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/201456
         :height: 40px
         :width: 40px
         :alt: Mike Nolta
         :target: https://github.com/nolta
 
-    .. image:: https://gravatar.com/avatar/b4b8db23d8096b722483a57d21b7d65d?d=https%3A%2F%2Fidenticons.github.com%2F013fdd367536d965b2a0fcbc90fae782.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/744556
         :height: 40px
         :width: 40px
         :alt: Jeff Bezanson
         :target: https://github.com/JeffBezanson
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
         :target: https://github.com/timholy
 
-    .. image:: https://gravatar.com/avatar/55e277a715ee2afd0d29c309174eca02?d=https%3A%2F%2Fidenticons.github.com%2F938b248e75affacf29383e0738b98ea2.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/744411
         :height: 40px
         :width: 40px
         :alt: Viral B. Shah
         :target: https://github.com/ViralBShah
 
-    .. image:: https://gravatar.com/avatar/40951e2e93fb7fbb32e6fa2e77411a3c?d=https%3A%2F%2Fidenticons.github.com%2F3607a259b46ab6eb3548757b015dad25.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/3612029
         :height: 40px
         :width: 40px
         :alt: Joonas Nättilä
         :target: https://github.com/natj
 
-    .. image:: https://gravatar.com/avatar/8f514187144b1b19b0205fce41284d32?d=https%3A%2F%2Fidenticons.github.com%2F763a59893dc5fcf4c3d471b690847bec.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/421708
         :height: 40px
         :width: 40px
         :alt: john verzani
         :target: https://github.com/jverzani
 
-    .. image:: https://gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https%3A%2F%2Fidenticons.github.com%2F5d5113de843c8b258029d6a06bccd163.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/330950
         :height: 40px
         :width: 40px
         :alt: Jameson Nash
         :target: https://github.com/vtjnash
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
         :target: https://github.com/kmsquire
 
-    .. image:: https://gravatar.com/avatar/ed09e933a899fcae158439f11f66fed0?d=https%3A%2F%2Fidenticons.github.com%2F028171bb063f988eb946975547e1a8c7.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/501008
         :height: 40px
         :width: 40px
         :alt: Emaad Ahmed Manzoor
         :target: https://github.com/emaadmanzoor
 
-    .. image:: https://gravatar.com/avatar/fa3b781987ef53c4d3b8397f2239e519?d=https%3A%2F%2Fidenticons.github.com%2F75a2b93c61829886bca2442b2438509b.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2822757
         :height: 40px
         :width: 40px
         :alt: Diego Javier Zea
         :target: https://github.com/diegozea
 
-    .. image:: https://gravatar.com/avatar/449044e4f0ed377b21409488cddafc45?d=https%3A%2F%2Fidenticons.github.com%2F3f2743ab32e9c084ddcabc42324d7465.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/866695
         :height: 40px
         :width: 40px
         :alt: Blake Johnson
         :target: https://github.com/blakejohnson
 
-    .. image:: https://gravatar.com/avatar/192f114babcc8c2f53936c145bbc502c?d=https%3A%2F%2Fidenticons.github.com%2F8221b4c8f7cc8d6114e4f1afc7fd7dff.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/327706
         :height: 40px
         :width: 40px
         :alt: Isaiah
         :target: https://github.com/ihnorton
 
-    .. image:: https://gravatar.com/avatar/adcdd5a613f7a9193b9f1056a356d77d?d=https%3A%2F%2Fidenticons.github.com%2F9952a9bfd8b3dfa6d4b0f65825349628.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1120448
         :height: 40px
         :width: 40px
         :alt: Milan Bouchet-Valat
         :target: https://github.com/nalimilan
 
-    .. image:: https://gravatar.com/avatar/dfc3b0fbb59c9444153823fd35dbd13b?d=https%3A%2F%2Fidenticons.github.com%2F678085c7c9e848e0442b77d8b0c4be71.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1900307
         :height: 40px
         :width: 40px
         :alt: Westley Argentum Hennigh
         :target: https://github.com/WestleyArgentum
 
-    .. image:: https://gravatar.com/avatar/fd4324f02a40d980974b862ec8410f79?d=https%3A%2F%2Fidenticons.github.com%2F77b4ea235ea1d5b8b4afc58903b4d3a8.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/418773
         :height: 40px
         :width: 40px
         :alt: Yuriy Skalko
@@ -12689,7 +13035,7 @@ ________________________________________________
 `XClipboard <https://github.com/kmsquire/XClipboard.jl>`_
 _________________________________________________________
 
-  .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/223250
      :height: 80px
      :width: 80px
      :align: right
@@ -12708,7 +13054,7 @@ _________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
@@ -12724,7 +13070,7 @@ ____________________________________________
      :width: 19
      :target: https://travis-ci.org/dcjones/YAML.jl
 
-  .. image:: https://gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https%3A%2F%2Fidenticons.github.com%2Fc7ec48e0ff0d0ae8827e36301a0962a1.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/210361
      :height: 80px
      :width: 80px
      :align: right
@@ -12745,13 +13091,13 @@ ____________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https%3A%2F%2Fidenticons.github.com%2Fc7ec48e0ff0d0ae8827e36301a0962a1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/210361
         :height: 40px
         :width: 40px
         :alt: Daniel Jones
         :target: https://github.com/dcjones
 
-    .. image:: https://gravatar.com/avatar/957fc8103c58ee9ee9a5d96c91b15e76?d=https%3A%2F%2Fidenticons.github.com%2F63a72c1cabc34962926263f1e33c3ce1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2762787
         :height: 40px
         :width: 40px
         :alt: Randy Zwitch
@@ -12767,7 +13113,7 @@ ______________________________________________
      :width: 19
      :target: https://travis-ci.org/fhs/ZipFile.jl
 
-  .. image:: https://gravatar.com/avatar/f11cd39050d2eb63ec494c0e7ae81d98?d=https%3A%2F%2Fidenticons.github.com%2Fe4874cbbcbec68daabdd9342beac3bd9.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/183501
      :height: 80px
      :width: 80px
      :align: right
@@ -12788,7 +13134,7 @@ ______________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/f11cd39050d2eb63ec494c0e7ae81d98?d=https%3A%2F%2Fidenticons.github.com%2Fe4874cbbcbec68daabdd9342beac3bd9.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/183501
         :height: 40px
         :width: 40px
         :alt: Fazlul Shahriar
@@ -12799,7 +13145,7 @@ ______________________________________________
 `Zlib <https://github.com/dcjones/Zlib.jl>`_
 ____________________________________________
 
-  .. image:: https://gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https%3A%2F%2Fidenticons.github.com%2Fc7ec48e0ff0d0ae8827e36301a0962a1.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/210361
      :height: 80px
      :width: 80px
      :align: right
@@ -12818,37 +13164,37 @@ ____________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https%3A%2F%2Fidenticons.github.com%2Fc7ec48e0ff0d0ae8827e36301a0962a1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/210361
         :height: 40px
         :width: 40px
         :alt: Daniel Jones
         :target: https://github.com/dcjones
 
-    .. image:: https://gravatar.com/avatar/f11cd39050d2eb63ec494c0e7ae81d98?d=https%3A%2F%2Fidenticons.github.com%2Fe4874cbbcbec68daabdd9342beac3bd9.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/183501
         :height: 40px
         :width: 40px
         :alt: Fazlul Shahriar
         :target: https://github.com/fhs
 
-    .. image:: https://gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https%3A%2F%2Fidenticons.github.com%2F5d5113de843c8b258029d6a06bccd163.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/330950
         :height: 40px
         :width: 40px
         :alt: Jameson Nash
         :target: https://github.com/vtjnash
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
         :target: https://github.com/kmsquire
 
-    .. image:: https://gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https%3A%2F%2Fidenticons.github.com%2F743091389e86963e4eeef5832534cbbd.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/470884
         :height: 40px
         :width: 40px
         :alt: Simon Kornblith
         :target: https://github.com/simonster
 
-    .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1525481
         :height: 40px
         :width: 40px
         :alt: Tim Holy
@@ -12864,7 +13210,7 @@ ____________________________________________
      :width: 19
      :target: https://travis-ci.org/JuliaLang/ZMQ.jl
 
-  .. image:: https://gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https%3A%2F%2Fidenticons.github.com%2F96058cb0ed9e150dfffc3b86b3b8d5e7.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/743164
      :height: 80px
      :width: 80px
      :align: right
@@ -12884,67 +13230,67 @@ ____________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/378918
         :height: 40px
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
 
-    .. image:: https://gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https%3A%2F%2Fidenticons.github.com%2Ff36f3f932c25fc21ab72033891540076.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1291671
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
-    .. image:: https://gravatar.com/avatar/645b9a973f09e98d38b94955a980c9d5?d=https%3A%2F%2Fidenticons.github.com%2Fa155f64bd0f9ac6f56baeff9b75122c2.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1453551
         :height: 40px
         :width: 40px
         :alt: Junfeng Li
         :target: https://github.com/autozimu
 
-    .. image:: https://gravatar.com/avatar/192f114babcc8c2f53936c145bbc502c?d=https%3A%2F%2Fidenticons.github.com%2F8221b4c8f7cc8d6114e4f1afc7fd7dff.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/327706
         :height: 40px
         :width: 40px
         :alt: Isaiah
         :target: https://github.com/ihnorton
 
-    .. image:: https://gravatar.com/avatar/002ccfd8ee9e135f0dfb5650c292052d?d=https%3A%2F%2Fidenticons.github.com%2F0f1b002e3ac98562472e40b49a01cc84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/130920
         :height: 40px
         :width: 40px
         :alt: Elliot Saba
         :target: https://github.com/staticfloat
 
-    .. image:: https://gravatar.com/avatar/9563cfcf21df990e570df1dd019bce16?d=https%3A%2F%2Fidenticons.github.com%2Ff2d6e6092107c938c67268b75745fb84.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2913679
         :height: 40px
         :width: 40px
         :alt: Steven G. Johnson
         :target: https://github.com/stevengj
 
-    .. image:: https://gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/223250
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
         :target: https://github.com/kmsquire
 
-    .. image:: https://gravatar.com/avatar/b4b8db23d8096b722483a57d21b7d65d?d=https%3A%2F%2Fidenticons.github.com%2F013fdd367536d965b2a0fcbc90fae782.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/744556
         :height: 40px
         :width: 40px
         :alt: Jeff Bezanson
         :target: https://github.com/JeffBezanson
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/153596
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://gravatar.com/avatar/f9edf141570be78631565a8c8883bde5?d=https%3A%2F%2Fidenticons.github.com%2F4cd8ae1ee936459446b4a2fd70df44bf.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/82855
         :height: 40px
         :width: 40px
         :alt: CJ Carey
         :target: https://github.com/perimosocordiae
 
-    .. image:: https://gravatar.com/avatar/317e44562dcf11f5164d0a4936696fbc?d=https%3A%2F%2Fidenticons.github.com%2F655fe21cedd4ac41f328aef38b350ef0.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/1553856
         :height: 40px
         :width: 40px
         :alt: rened
@@ -12960,7 +13306,7 @@ _________________________________________________________
      :width: 19
      :target: https://travis-ci.org/scidom/ZVSimulator.jl
 
-  .. image:: https://gravatar.com/avatar/f1678bcdc052b500191b78923399e5f8?d=https%3A%2F%2Fidenticons.github.com%2F23ac6c3f4e95b0415828115db7a8ca44.png&r=x
+  .. image:: https://avatars.githubusercontent.com/u/2519036
      :height: 80px
      :width: 80px
      :align: right
@@ -12981,7 +13327,7 @@ _________________________________________________________
 
   Contributors:
 
-    .. image:: https://gravatar.com/avatar/f1678bcdc052b500191b78923399e5f8?d=https%3A%2F%2Fidenticons.github.com%2F23ac6c3f4e95b0415828115db7a8ca44.png&r=x
+    .. image:: https://avatars.githubusercontent.com/u/2519036
         :height: 40px
         :width: 40px
         :alt: Theodore Papamarkou
@@ -12989,5 +13335,5 @@ _________________________________________________________
 
 ----
 
-.. footer: 275 packages, generated 23 Feb 2014 08:51:36 GMT 
+.. footer: 279 packages, generated 3 Mar 2014 00:12:08 GMT 
 
