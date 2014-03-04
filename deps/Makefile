@@ -637,10 +637,10 @@ endif
 $(OPENLIBM_OBJ_SOURCE): openlibm/Makefile
 	$(MAKE) -C openlibm $(OPENLIBM_FLAGS) $(MAKE_COMMON)
 	touch -c $@
-$(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE) | $(build_shlibdir)
-	cp openlibm/libopenlibm.a $(build_libdir)/libopenlibm.a
-	cp $< $@
-	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $@
+$(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE)
+	$(MAKE) -C openlibm install $(MAKE_COMMON)
+	$(INSTALL_NAME_CMD)libopenlibm.dylib $@
+	touch -c $@
 
 clean-openlibm:
 	-$(MAKE) -C openlibm distclean $(OPENLIBM_FLAGS)
