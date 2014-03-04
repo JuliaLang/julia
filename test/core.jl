@@ -1409,3 +1409,8 @@ end
 
 # make sure front end can correctly print values to error messages
 @test expand(parse("\"a\"=1")) == Expr(:error, "invalid assignment location \"\"a\"\"")
+
+# issue #6031
+macro m6031(x); x; end
+@test @m6031([2,4,6])[3] == 6
+@test (@m6031 [2,4,6])[2] == 4

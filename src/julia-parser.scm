@@ -825,93 +825,100 @@
 		     (else         (list op (parse-atom s)))))
 	(parse-atom s))))
 
-; parse function call, indexing, dot, and transpose expressions
-; also handles looking for syntactic reserved words
+;; parse function call, indexing, dot, and transpose expressions
+;; also handles looking for syntactic reserved words
 (define (parse-call s)
   (let ((ex (parse-unary-prefix s)))
     (if (memq ex reserved-words)
 	(parse-resword s ex)
-	(let loop ((ex ex))
-	  (let ((t (peek-token s)))
-	    (if (or (and space-sensitive (ts:space? s)
-			 (memv t '(#\( #\[ #\{ |'| #\")))
-		    (and (or (number? ex)  ;; 2(...) is multiply, not call
-			     (large-number? ex))
-			 (eqv? t #\()))
-		ex
-		(case t
-		  ((#\( )   (take-token s)
-		   (let ((al (parse-arglist s #\) )))
-		     (receive
-		      (params args) (separate (lambda (x)
-						(and (pair? x)
-						     (eq? (car x) 'parameters)))
-					      al)
-		      (if (eq? (peek-token s) 'do)
-			  (begin
-			    (take-token s)
-			    (loop `(call ,ex ,@params ,(parse-do s) ,@args)))
-			  (loop `(call ,ex ,@al))))))
-		  ((#\[ )   (take-token s)
-		   ; ref is syntax, so we can distinguish
-		   ; a[i] = x  from
-		   ; ref(a,i) = x
-		   (let ((al (with-end-symbol (parse-cat s #\] ))))
-                     (if (null? al)
-                         (if (dict-literal? ex)
-                             (loop (list 'typed_dict ex))
-                             (loop (list 'ref ex)))
-                         (case (car al)
-                           ((dict)  (loop (list* 'typed_dict ex (cdr al))))
-                           ((hcat)  (loop (list* 'typed_hcat ex (cdr al))))
-                           ((vcat)
-                            (if (any (lambda (x)
-                                       (and (pair? x) (eq? (car x) 'row)))
-                                     (cdr al))
-                                (loop (list* 'typed_vcat ex (cdr al)))
-                                (loop (list* 'ref ex (cdr al)))))
-                           ((comprehension)
-                            (loop (list* 'typed_comprehension ex (cdr al))))
-                           ((dict_comprehension)
-                            (loop (list* 'typed_dict_comprehension ex (cdr al))))
-                           (else (error "unknown parse-cat result (internal error)"))))))
-		  ((|.|)
-		   (take-token s)
-		   (cond ((eqv? (peek-token s) #\()
-			  (loop `(|.| ,ex ,(parse-atom s))))
-			 ((eq? (peek-token s) '$)
-			  (let ((dollarex (parse-unary s)))
-			    (loop `(|.| ,ex ($ (call (top Expr) (quote quote)
-						     ,(cadr dollarex)))))))
-			 (else
-			  (let ((name (parse-atom s)))
-			    (if (and (pair? name) (eq? (car name) 'macrocall))
-				`(macrocall (|.| ,ex (quote ,(cadr name)))
-					    ,@(cddr name))
-				(loop `(|.| ,ex (quote ,name))))))))
-		  ((|.'| |'|) (take-token s)
-		   (loop (list t ex)))
-		  ((#\{ )   (take-token s)
-		   (loop (list* 'curly ex
-				(map subtype-syntax (parse-arglist s #\} )))))
-		  ((#\")
-		   (if (and (symbol? ex) (not (operator? ex))
+	(parse-call-chain s ex #f))))
+
+(define (parse-call-chain s ex one-call)
+  (let loop ((ex ex))
+    (let ((t (peek-token s)))
+      (if (or (and space-sensitive (ts:space? s)
+		   (memv t '(#\( #\[ #\{ |'| #\")))
+	      (and (or (number? ex)  ;; 2(...) is multiply, not call
+		       (large-number? ex))
+		   (eqv? t #\()))
+	  ex
+	  (case t
+	    ((#\( )   (take-token s)
+	     (let ((c
+		    (let ((al (parse-arglist s #\) )))
+		      (receive
+		       (params args) (separate (lambda (x)
+						 (and (pair? x)
+						      (eq? (car x) 'parameters)))
+					       al)
+		       (if (eq? (peek-token s) 'do)
+			   (begin
+			     (take-token s)
+			     `(call ,ex ,@params ,(parse-do s) ,@args))
+			   `(call ,ex ,@al))))))
+	       (if one-call
+		   c
+		   (loop c))))
+	    ((#\[ )   (take-token s)
+	     ;; ref is syntax, so we can distinguish
+	     ;; a[i] = x  from
+	     ;; ref(a,i) = x
+	     (let ((al (with-end-symbol (parse-cat s #\] ))))
+	       (if (null? al)
+		   (if (dict-literal? ex)
+		       (loop (list 'typed_dict ex))
+		       (loop (list 'ref ex)))
+		   (case (car al)
+		     ((dict)  (loop (list* 'typed_dict ex (cdr al))))
+		     ((hcat)  (loop (list* 'typed_hcat ex (cdr al))))
+		     ((vcat)
+		      (if (any (lambda (x)
+				 (and (pair? x) (eq? (car x) 'row)))
+			       (cdr al))
+			  (loop (list* 'typed_vcat ex (cdr al)))
+			  (loop (list* 'ref ex (cdr al)))))
+		     ((comprehension)
+		      (loop (list* 'typed_comprehension ex (cdr al))))
+		     ((dict_comprehension)
+		      (loop (list* 'typed_dict_comprehension ex (cdr al))))
+		     (else (error "unknown parse-cat result (internal error)"))))))
+	    ((|.|) (take-token s)
+	     (loop
+	      (cond ((eqv? (peek-token s) #\()
+		     `(|.| ,ex ,(parse-atom s)))
+		    ((eq? (peek-token s) '$)
+		     (let ((dollarex (parse-unary s)))
+		       `(|.| ,ex ($ (call (top Expr) (quote quote)
+					  ,(cadr dollarex))))))
+		    (else
+		     (let ((name (parse-atom s)))
+		       (if (and (pair? name) (eq? (car name) 'macrocall))
+			   `(macrocall (|.| ,ex (quote ,(cadr name)))
+				       ,@(cddr name))
+			   `(|.| ,ex (quote ,name))))))))
+	    ((|.'| |'|) (take-token s)
+	     (loop (list t ex)))
+	    ((#\{ )   (take-token s)
+	     (loop (list* 'curly ex
+			  (map subtype-syntax (parse-arglist s #\} )))))
+	    ((#\")
+	     (if (and (symbol? ex) (not (operator? ex))
+		      (not (ts:space? s)))
+		 ;; custom prefixed string literals, x"s" => @x_str "s"
+		 (let* ((str (begin (take-token s)
+				    (parse-string-literal s #t)))
+			(nxt (peek-token s))
+			(suffix (if (triplequote-string-literal? str) '_mstr '_str))
+			(macname (symbol (string #\@ ex suffix)))
+			(macstr (cdr str)))
+		   (if (and (symbol? nxt) (not (operator? nxt))
 			    (not (ts:space? s)))
-		       ;; custom prefixed string literals, x"s" => @x_str "s"
-                       (let* ((str (begin (take-token s)
-                                          (parse-string-literal s #t)))
-			      (nxt (peek-token s))
-			      (suffix (if (triplequote-string-literal? str) '_mstr '_str))
-                              (macname (symbol (string #\@ ex suffix)))
-                              (macstr (cdr str)))
-                         (if (and (symbol? nxt) (not (operator? nxt))
-                                  (not (ts:space? s)))
-                             ;; string literal suffix, "s"x
-                             (loop `(macrocall ,macname ,@macstr
-                                               ,(string (take-token s))))
-                             (loop `(macrocall ,macname ,@macstr))))
-		       ex))
-		  (else ex))))))))
+		       ;; string literal suffix, "s"x
+		       (loop `(macrocall ,macname ,@macstr
+					 ,(string (take-token s))))
+		       (loop `(macrocall ,macname ,@macstr))))
+		 ex))
+	    (else ex))))))
 
 (define expect-end-current-line 0)
 
@@ -1739,13 +1746,17 @@
 	  ;; macro call
 	  ((eqv? t #\@)
 	   (take-token s)
-	   (let ((head (with-space-sensitive
-			(parse-call s))))
-	     (if (and (pair? head) (eq? (car head) 'call))
-		 `(macrocall ,(macroify-name (cadr head))
-			     ,@(cddr head))
-		 `(macrocall ,(macroify-name head)
-			     ,@(parse-space-separated-exprs s)))))
+	   (with-space-sensitive
+	    (let* ((head (parse-unary-prefix s))
+		   (t    (peek-token s)))
+	      (if (ts:space? s)
+		  `(macrocall ,(macroify-name head)
+			      ,@(parse-space-separated-exprs s))
+		  (let ((call (parse-call-chain s head #t)))
+		    (if (and (pair? call) (eq? (car call) 'call))
+			`(macrocall ,(macroify-name (cadr call)) ,@(cddr call))
+			`(macrocall ,(macroify-name call)
+				    ,@(parse-space-separated-exprs s))))))))
 
 	  ;; command syntax
 	  ((eqv? t #\`)
