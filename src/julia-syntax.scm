@@ -27,7 +27,10 @@
 	((eq? e #f) "false")
 	((eq? (typeof e) 'julia_value)
 	 (let ((s (string e)))
-	   (string.sub s 9 (string.dec s (length s)))))
+	   (if (string.find s "#<julia: ")
+	       ;; successfully printed as a julia value
+	       (string.sub s 9 (string.dec s (length s)))
+	       s)))
 	((atom? e) (string e))
 	((eq? (car e) '|.|)
 	 (string (deparse (cadr e)) '|.|

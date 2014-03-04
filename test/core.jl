@@ -1408,7 +1408,11 @@ end
 @test f5906(Hanoi5906{Int}(1)) === nothing
 
 # make sure front end can correctly print values to error messages
-@test expand(parse("\"a\"=1")) == Expr(:error, "invalid assignment location \"\"a\"\"")
+let
+    ex = expand(parse("\"a\"=1"))
+    @test ex == Expr(:error, "invalid assignment location \"\"a\"\"") ||
+          ex == Expr(:error, "invalid assignment location \"#<julia_value>\"")
+end
 
 # issue #6031
 macro m6031(x); x; end
