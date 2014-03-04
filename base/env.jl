@@ -72,7 +72,7 @@ const ENV = EnvHash()
 
 similar(::EnvHash) = Dict{ByteString,ByteString}()
 
-getindex(::EnvHash, k::String) = @accessEnv k throw(KeyError(k))
+getindex(::EnvHash, k::String) = @accessEnv k error("environment variable not found: $k")
 get(::EnvHash, k::String, def) = @accessEnv k (return def)
 in(k::String, ::KeyIterator{EnvHash}) = _hasenv(k)
 pop!(::EnvHash, k::String) = (v = ENV[k]; _unsetenv(k); v)
