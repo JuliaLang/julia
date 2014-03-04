@@ -377,7 +377,8 @@ const getfield_tfunc = function (A, s0, name)
         end
         for i=1:length(s.names)
             if is(s.names[i],fld)
-                return limit_type_depth(s.types[i], 0, true, {s.parameters...})
+                return limit_type_depth(s.types[i], 0, true,
+                                        filter!(x->isa(x,TypeVar), {s.parameters...}))
             end
         end
         return None
