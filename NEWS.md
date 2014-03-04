@@ -143,6 +143,8 @@ Library improvements
 
       * `condskeel` for Skeel condition numbers ([#5726]).
 
+      * norm(Matrix) no longer calculates vector norm when first dimension is one ([#5545]).
+
     * Sparse linear algebra
 
       * Faster sparse `kron` ([#4958]).
