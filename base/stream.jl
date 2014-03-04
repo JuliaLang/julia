@@ -476,20 +476,14 @@ function _uv_hook_asynccb(async::AsyncWork, status::Int32)
     end
     try
         async.cb(async, status)
-    catch err
-        #bt = catch_backtrace()
-        if isa(err, MethodError)
-            warn_once("async callbacks should take an AsyncWork object as the first argument")
-            async.cb(status)
-            return
-        end
-        rethrow(err)
+    catch
     end
     nothing
 end
 
 function start_timer(timer::Timer, timeout::Real, repeat::Real)
     associate_julia_struct(timer.handle, timer)
+    preserve_handle(timer)
     ccall(:uv_update_time,Void,(Ptr{Void},),eventloop())
     ccall(:uv_timer_start,Cint,(Ptr{Void},Ptr{Void},Uint64,Uint64),
         timer.handle, uv_jl_asynccb::Ptr{Void}, uint64(round(timeout*1000))+1, uint64(round(repeat*1000)))
@@ -498,6 +492,7 @@ end
 function stop_timer(timer::Timer)
     ccall(:uv_timer_stop,Cint,(Ptr{Void},),timer.handle)
     disassociate_julia_struct(timer.handle)
+    unpreserve_handle(timer)
 end
 
 function sleep(sec::Real)
