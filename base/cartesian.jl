@@ -1,6 +1,6 @@
 module Cartesian
 
-export @ngenerate, @nsplat, @nloops, @nref, @ncall, @nexprs, @nextract, @nall, @ntuple, ngenerate
+export @ngenerate, @nsplat, @nloops, @nref, @ncall, @nexprs, @nextract, @nall, @ntuple, @nif, ngenerate
 
 const CARTESIAN_DIMS = 4
 
@@ -368,6 +368,18 @@ function _ntuple(N::Int, ex)
     Expr(:escape, Expr(:tuple, vars...))
 end
 
+# if condition1; operation1; elseif condition2; operation2; else operation3
+# You can pass one or two operations; the second, if present, is used in the final "else"
+macro nif(N, condition, operation...)
+    # Handle the final "else"
+    ex = esc(inlineanonymous(length(operation) > 1 ? operation[2] : operation[1], N))
+    # Make the nested if statements
+    for i = N-1:-1:1
+        ex = Expr(:if, esc(inlineanonymous(condition,i)), esc(inlineanonymous(operation[1],i)), ex)
+    end
+    ex
+end
+
 ## Utilities
 
 # Simplify expressions like :(d->3:size(A,d)-3) given an explicit value for d
@@ -383,15 +395,7 @@ function inlineanonymous(ex::Expr, val)
     exout = lreplace(ex, sym, val)
     exout = poplinenum(exout)
     exout = poparithmetic(exout)
-    # Inline ternary expressions
-    if isa(exout, Expr) && exout.head == :if
-        try
-            tf = eval(exout.args[1])
-            exout = tf?exout.args[2]:exout.args[3]
-        catch
-        end
-    end
-    exout
+    popconditionals(exout)
 end
 
 # Given :i and 3, this generates :i_3
@@ -446,6 +450,26 @@ function poparithmetic(ex::Expr)
     elseif ex.head == :call && (ex.args[1] == :+ || ex.args[1] == :-) && length(ex.args) == 3 && ex.args[3] == 0
         # simplify x+0 and x-0
         return ex.args[2]
+    end
+    ex
+end
+
+# Resolve if/else and ternary expressions that can be evaluated at parsing time
+popconditionals(arg) = arg
+function popconditionals(ex::Expr)
+    if isa(ex, Expr) && ex.head == :if
+        for i = 2:length(ex.args)
+            ex.args[i] = popconditionals(ex.args[i])
+        end
+        try
+            tf = eval(ex.args[1])
+            ex = tf?ex.args[2]:ex.args[3]
+        catch
+        end
+    else
+        for i = 1:length(ex.args)
+            ex.args[i] = popconditionals(ex.args[i])
+        end
     end
     ex
 end
