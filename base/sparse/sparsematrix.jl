@@ -641,14 +641,14 @@ function reducedim{Tv,Ti}(f::Function, A::SparseMatrixCSC{Tv,Ti}, region, v0)
 end
 
 maximum{T}(A::SparseMatrixCSC{T}) =
-    isempty(A) ? throw(ArgumentError("argument must not be empty")) : reducedim(scalarmax,A,(1,2),typemin(T))
+    isempty(A) ? throw(ArgumentError("argument must not be empty")) : reducedim(Base.scalarmax,A,(1,2),typemin(T))
 maximum{T}(A::SparseMatrixCSC{T}, region) =
-    isempty(A) ? similar(A, reduced_dims0(A,region)) : reducedim(scalarmax,A,region,typemin(T))
+    isempty(A) ? similar(A, reduced_dims0(A,region)) : reducedim(Base.scalarmax,A,region,typemin(T))
 
 minimum{T}(A::SparseMatrixCSC{T}) =
-    isempty(A) ? throw(ArgumentError("argument must not be empty")) : reducedim(scalarmin,A,(1,2),typemax(T))
+    isempty(A) ? throw(ArgumentError("argument must not be empty")) : reducedim(Base.scalarmin,A,(1,2),typemax(T))
 minimum{T}(A::SparseMatrixCSC{T}, region) =
-    isempty(A) ? similar(A, reduced_dims0(A,region)) : reducedim(scalarmin,A,region,typemax(T))
+    isempty(A) ? similar(A, reduced_dims0(A,region)) : reducedim(Base.scalarmin,A,region,typemax(T))
 
 sum{T}(A::SparseMatrixCSC{T}) = reducedim(+,A,(1,2),zero(T))
 sum{T}(A::SparseMatrixCSC{T}, region)  = reducedim(+,A,region,zero(T))
