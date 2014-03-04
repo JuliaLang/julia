@@ -389,8 +389,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
     * ``ritzvec``: Returns the Ritz vectors ``v`` (eigenvectors) if ``true``
     * ``op_part``: which part of linear operator to use for real A (:real, :imag)
     * ``v0``: starting vector from which to start the Arnoldi iteration
-   ``eigs`` returns the ``nev`` requested eigenvalues in ``d``, the corresponding Ritz vectors ``v`` (only if ``ritzvec=true``), the number of converged eigenvalues ``nconv``, the number of iterations ``niter`` and the number of matrix vector multiplications ``nmult``, as well as the final residual vector ``resid``.
-    
+   ``eigs`` returns the ``nev`` requested eigenvalues in ``d``, the corresponding Ritz vectors ``v`` (only if ``ritzvec=true``), the number of converged eigenvalues ``nconv``, the number of iterations ``niter`` and the number of matrix vector multiplications ``nmult``, as well as the final residual vector ``resid``. If ``which="SM"`` inverse iteration is used to find the eigenvalues with smallest magnitude.    
 
 .. function:: svds(A; nev=6, which="LA", tol=0.0, maxiter=1000, ritzvec=true)
 

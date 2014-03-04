@@ -3,7 +3,7 @@ using .ARPACK
 ## eigs
 
 function eigs(A;nev::Integer=6, ncv::Integer=20, which::ASCIIString="LM",
-          tol=0.0, maxiter::Integer=1000, sigma=0,v0::Vector=zeros((0,)),
+          tol=0.0, maxiter::Integer=1000, sigma=(), v0::Vector=zeros((0,)),
           ritzvec::Bool=true, complexOP::Bool=false)
     n = chksquare(A)
     (n <= 6) && (nev = min(n-1, nev))
@@ -13,6 +13,7 @@ function eigs(A;nev::Integer=6, ncv::Integer=20, which::ASCIIString="LM",
     T     = eltype(A)
     cmplx = T<:Complex
     bmat  = "I"
+    
     if !isempty(v0)
         length(v0)==n || throw(DimensionMismatch(""))
         eltype(v0)==T || error("Starting vector must have eltype $T")
@@ -20,11 +21,21 @@ function eigs(A;nev::Integer=6, ncv::Integer=20, which::ASCIIString="LM",
         v0=zeros(T,(0,))
     end
 
-    if sigma == 0
+    if isempty(sigma)
+        # normal iteration
         mode = 1
+        sigma = 0
         linop(x) = A * x
     else
-        C = lufact(A - sigma*eye(A))
+        # always find ev closest in magnitude to sigma ...
+        which = "LM" 
+        if sigma == 0
+            # using invert only
+            C = lufact(A)
+        else
+            # using shift and invert
+            C = lufact(A - sigma*eye(A))
+        end
         if cmplx
             mode = 3
             linop(x) = C\x
