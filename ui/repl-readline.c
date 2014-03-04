@@ -835,7 +835,7 @@ void jl_init_repl(int history)
     rl_instream = fopen("/dev/null","r");
     prompt_length = 7;  // == strlen("julia> ")
     init_history();
-    rl_startup_hook = (Function*)init_rl;
+    rl_startup_hook = (rl_hook_func_t*)init_rl;
 }
 
 static char *prompt_string=NULL;
