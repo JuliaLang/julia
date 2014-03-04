@@ -61,7 +61,7 @@ JULIA_VERSION = $(shell cat $(JULIAHOME)/VERSION)
 ifneq ($(NO_GIT), 1)
 JULIA_COMMIT = $(shell git rev-parse --short=10 HEAD)
 else
-JULIA_COMMIT = $JULIA_VERSION
+JULIA_COMMIT = $(JULIA_VERSION)
 endif
 
 # Directories where said libraries get installed to
