@@ -378,18 +378,43 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    The conjugate transposition operator (``'``).
 
-.. function:: eigs(A; nev=6, which="LM", tol=0.0, maxiter=1000, sigma=0, ritzvec=true, op_part=:real,v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
+.. function:: eigs(A; nev=6, which="LM", tol=0.0, maxiter=1000, sigma=nothing, ritzvec=true, op_part=:real,v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
 
-   ``eigs`` computes eigenvalues ``d`` of A using Arnoldi factorization. The following keyword arguments are supported:
+   ``eigs`` computes eigenvalues ``d`` of ``A`` using Lanczos or Arnoldi iterations for real symmetric or general nonsymmetric matrices respectively. The following keyword arguments are supported:
     * ``nev``: Number of eigenvalues
-    * ``which``: type of eigenvalues ("LM", "SM")
+    * ``which``: type of eigenvalues to compute. See the note below.
+
+      ========= ======================================================================================================================
+      ``which`` type of eigenvalues
+      --------- ----------------------------------------------------------------------------------------------------------------------
+      ``"LM"``  eigenvalues of largest magnitude
+      ``"SM"``  eigenvalues of smallest magnitude
+      ``"LA"``  largest algebraic eigenvalues (real symmetric ``A`` only)
+      ``"SA"``  smallest algebraic eigenvalues (real symmetric ``A`` only)
+      ``"BE"``  compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (symmetric ``A`` only)
+      ``"LR"``  eigenvalues of largest real part (nonsymmetric ``A`` only)
+      ``"SR"``  eigenvalues of smallest real part (nonsymmetric ``A`` only)
+      ``"LI"``  eigenvalues of largest imaginary part (nonsymmetric ``A`` only)
+      ``"SI"``  eigenvalues of smallest imaginary part (nonsymmetric ``A`` only)
+      ========= ======================================================================================================================
+
     * ``tol``: tolerance (:math:`tol \le 0.0` defaults to ``DLAMCH('EPS')``)
     * ``maxiter``: Maximum number of iterations
-    * ``sigma``: find eigenvalues close to ``sigma`` using shift and invert
+    * ``sigma``: Specifies the level shift used in inverse iteration. If ``nothing`` (default), defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to ``sigma`` using shift and invert iterations.
     * ``ritzvec``: Returns the Ritz vectors ``v`` (eigenvectors) if ``true``
-    * ``op_part``: which part of linear operator to use for real A (:real, :imag)
-    * ``v0``: starting vector from which to start the Arnoldi iteration
-   ``eigs`` returns the ``nev`` requested eigenvalues in ``d``, the corresponding Ritz vectors ``v`` (only if ``ritzvec=true``), the number of converged eigenvalues ``nconv``, the number of iterations ``niter`` and the number of matrix vector multiplications ``nmult``, as well as the final residual vector ``resid``. If ``which="SM"`` inverse iteration is used to find the eigenvalues with smallest magnitude.    
+    * ``op_part``: which part of linear operator to use for real ``A`` (``:real``, ``:imag``)
+    * ``v0``: starting vector from which to start the iterations
+
+   ``eigs`` returns the ``nev`` requested eigenvalues in ``d``, the corresponding Ritz vectors ``v`` (only if ``ritzvec=true``), the number of converged eigenvalues ``nconv``, the number of iterations ``niter`` and the number of matrix vector multiplications ``nmult``, as well as the final residual vector ``resid``.
+   
+   .. note:: The ``sigma`` and ``which`` keywords interact: the description of eigenvalues searched for by ``which`` do _not_ necessarily refer to the eigenvalues of ``A``, but rather the linear operator constructed by the specification of the iteration mode implied by ``sigma``. 
+
+      =============== ================================== ==================================
+      ``sigma``       iteration mode                     ``which`` refers to eigenvalues of
+      --------------- ---------------------------------- ----------------------------------
+      ``nothing``     ordinary (forward)                 :math:`A`
+      real or complex inverse with level shift ``sigma`` :math:`(A - \sigma I )^{-1}`
+      =============== ================================== ==================================
 
 .. function:: svds(A; nev=6, which="LA", tol=0.0, maxiter=1000, ritzvec=true)
 
