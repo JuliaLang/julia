@@ -1672,3 +1672,19 @@ pointer{T<:ByteString}(x::SubString{T}, i::Integer) = pointer(x.string.data) + x
 pointer(x::Union(UTF16String,UTF32String), i::Integer) = pointer(x)+(i-1)*sizeof(eltype(x.data))
 pointer{T<:Union(UTF16String,UTF32String)}(x::SubString{T}) = pointer(x.string.data) + x.offset*sizeof(eltype(x.data))
 pointer{T<:Union(UTF16String,UTF32String)}(x::SubString{T}, i::Integer) = pointer(x.string.data) + (x.offset + (i-1))*sizeof(eltype(x.data))
+
+# string hashing:
+if WORD_SIZE == 64
+    hash{T<:ByteString}(s::Union(T,SubString{T})) =
+        ccall(:memhash, Uint64, (Ptr{Void}, Int), pointer(s), sizeof(s))
+    hash{T<:ByteString}(s::Union(T,SubString{T}), seed::Union(Int,Uint)) =
+        ccall(:memhash_seed, Uint64, (Ptr{Void}, Int, Uint32),
+              pointer(s), sizeof(s), uint32(seed))
+else
+    hash{T<:ByteString}(s::Union(T,SubString{T})) =
+        ccall(:memhash32, Uint32, (Ptr{Void}, Int), pointer(s), sizeof(s))
+    hash{T<:ByteString}(s::Union(T,SubString{T}), seed::Union(Int,Uint)) =
+        ccall(:memhash32_seed, Uint32, (Ptr{Void}, Int, Uint32),
+              pointer(s), sizeof(s), uint32(seed))
+end
+hash(s::String) = hash(bytestring(s))
