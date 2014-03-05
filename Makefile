@@ -229,7 +229,7 @@ endif
 
 	# Overwrite JL_SYSTEM_IMAGE_PATH in julia binaries:
 	for julia in $(DESTDIR)$(bindir)/julia-* ; do \
-		$(build_bindir)/stringpatch $$(strings -t x - $$julia | grep "sys.ji$$" | awk '{print $$1;}' ) "$(private_libdir_rel)/sys.ji" 256 $$julia; \
+		$(build_bindir)/stringpatch $$(strings -t x - $$julia | grep "sys.ji$$" | awk '{print $$1;}' ) "$(private_libdir_rel)/sys.ji" 256 $(call cygpath_w,$$julia); \
 	done
 
 	mkdir -p $(DESTDIR)$(sysconfdir)
@@ -360,7 +360,9 @@ perf-%: release
 win-extras:
 	[ -d dist-extras ] || mkdir dist-extras
 ifneq ($(BUILD_OS),WINNT)
+ifeq (,$(findstring CYGWIN,$(BUILD_OS)))
 	cp /usr/lib/p7zip/7z /usr/lib/p7zip/7z.so dist-extras
+endif
 endif
 ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 	cd dist-extras && \
@@ -386,9 +388,10 @@ endif
 	cd dist-extras && \
 	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z920_extra.7z && \
 	$(JLDOWNLOAD) https://unsis.googlecode.com/files/nsis-2.46.5-Unicode-setup.exe && \
+	chmod a+x 7z.exe && \
+	chmod a+x 7z.dll && \
 	$(call spawn,./7z.exe) x -y -onsis nsis-2.46.5-Unicode-setup.exe && \
 	chmod a+x ./nsis/makensis.exe && \
-	chmod a+x 7z.exe && \
 	7z x -y mingw-libexpat.rpm -so > mingw-libexpat.cpio && \
 	7z e -y mingw-libexpat.cpio && \
 	7z x -y mingw-zlib.rpm -so > mingw-zlib.cpio && \
