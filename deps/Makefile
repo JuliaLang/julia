@@ -638,7 +638,7 @@ $(OPENLIBM_OBJ_SOURCE): openlibm/Makefile
 	$(MAKE) -C openlibm $(OPENLIBM_FLAGS) $(MAKE_COMMON)
 	touch -c $@
 $(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE)
-	$(MAKE) -C openlibm install $(MAKE_COMMON)
+	$(MAKE) -C openlibm install $(OPENLIBM_FLAGS) $(MAKE_COMMON)
 	$(INSTALL_NAME_CMD)libopenlibm.dylib $@
 	touch -c $@
 
