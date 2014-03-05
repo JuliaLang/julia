@@ -627,7 +627,6 @@ export
     lufact!,
     lufact,
     norm,
-    normfro,
     null,
     peakflops,
     pinv,
@@ -656,6 +655,7 @@ export
     tril,
     triu!,
     triu,
+    vecnorm,
 
 # sparse
     etree,

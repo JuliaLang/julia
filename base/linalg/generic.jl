@@ -51,54 +51,97 @@ diag(A::AbstractVector) = error("use diagm instead of diag to construct a diagon
 
 #diagm{T}(v::AbstractVecOrMat{T})
 
-function normMinusInf(x::AbstractVector)
-    n = length(x)
-    n > 0 || return real(zero(eltype(x)))
-    a = abs(x[1])
-    @inbounds for i = 2:n
-        a = min(a, abs(x[i]))
+# special cases of vecnorm; note that they don't need to handle isempty(x)
+function vecnormMinusInf(x)
+    s = start(x)
+    (v, s) = next(x, s)
+    minabs = abs(v)
+    while !done(x, s)
+        (v, s) = next(x, s)
+        minabs = Base.scalarmin(minabs, abs(v))
     end
-    return a
+    return float(minabs)
 end
-function normInf(x::AbstractVector)
-    a = real(zero(eltype(x)))
-    @inbounds for i = 1:length(x)
-        a = max(a, abs(x[i]))
+function vecnormInf(x)
+    s = start(x)
+    (v, s) = next(x, s)
+    maxabs = abs(v)
+    while !done(x, s)
+        (v, s) = next(x, s)
+        maxabs = Base.scalarmax(maxabs, abs(v))
     end
-    return a
+    return float(maxabs)
 end
-function norm1(x::AbstractVector)
-    a = real(zero(eltype(x)))
-    @inbounds for i = 1:length(x)
-        a += abs(x[i])
+function vecnorm1(x)
+    s = start(x)
+    (v, s) = next(x, s)
+    av = float(abs(v))
+    T = typeof(av)
+    sum::promote_type(Float64, T) = av
+    while !done(x, s)
+        (v, s) = next(x, s)
+        sum += abs(v)
     end
-    return a
+    return convert(T, sum)
 end
-function norm2(x::AbstractVector)
-    nrmInfInv = inv(norm(x,Inf))
-    isinf(nrmInfInv) && return zero(nrmInfInv)
-    a = abs2(x[1]*nrmInfInv)
-    @inbounds for i = 2:length(x)
-        a += abs2(x[i]*nrmInfInv)
+function vecnorm2(x)
+    maxabs = vecnormInf(x)
+    maxabs == 0 && return maxabs
+    s = start(x)
+    (v, s) = next(x, s)
+    T = typeof(maxabs)
+    scale::promote_type(Float64, T) = 1/maxabs
+    y = abs(v)*scale
+    sum::promote_type(Float64, T) = y*y
+    while !done(x, s)
+        (v, s) = next(x, s)
+        y = abs(v)*scale
+        sum += y*y
     end
-    return sqrt(a)/nrmInfInv
+    return convert(T, maxabs * sqrt(sum))
 end
-function normp(x::AbstractVector,p::Number)
-    absx = convert(Vector{typeof(sqrt(abs(x[1])))}, abs(x))
-    dx = maximum(absx)
-    dx == 0 && return zero(typeof(absx))
-    scale!(absx, 1/dx)
-    pp = convert(eltype(absx), p)
-    return dx*sum(absx.^pp)^inv(pp)
+function vecnormp(x, p)
+    if p > 1 || p < 0 # need to rescale to avoid overflow/underflow
+        maxabs = vecnormInf(x)
+        maxabs == 0 && return maxabs
+        s = start(x)
+        (v, s) = next(x, s)
+        T = typeof(maxabs)
+        spp::promote_type(Float64, T) = p
+        scale::promote_type(Float64, T) = 1/maxabs
+        ssum::promote_type(Float64, T) = (abs(v)*scale)^spp
+        while !done(x, s)
+            (v, s) = next(x, s)
+            ssum += (abs(v)*scale)^spp
+        end
+        return convert(T, maxabs * ssum^inv(spp))
+    else # 0 < p < 1, no need for rescaling (but technically not a true norm)
+        s = start(x)
+        (v, s) = next(x, s)
+        av = float(abs(v))
+        T = typeof(av)
+        pp::promote_type(Float64, T) = p
+        sum::promote_type(Float64, T) = av^pp
+        while !done(x, s)
+            (v, s) = next(x, s)
+            sum += abs(v)^pp
+        end
+        return convert(T, sum^inv(pp))
+    end
 end
-function norm(x::AbstractVector, p::Number=2)
-    p == 0 && return countnz(x)
-    p == Inf && return normInf(x)
-    p == -Inf && return normMinusInf(x)
-    p == 1 && return norm1(x)
-    p == 2 && return norm2(x)
-    normp(x,p)
+function vecnorm(itr, p::Real=2)
+    isempty(itr) && return float(real(zero(eltype(itr))))
+    p == 2 && return vecnorm2(itr)
+    p == 1 && return vecnorm1(itr)
+    p == Inf && return vecnormInf(itr)
+    p == 0 && return convert(typeof(float(real(zero(eltype(itr))))),
+                             countnz(itr))
+    p == -Inf && return vecnormMinusInf(itr)
+    vecnormp(itr,p)
 end
+vecnorm(x::Number, p::Real=2) = p == 0 ? real(x==0 ? zero(x) : one(x)) : abs(x)
+
+norm(x::AbstractVector, p::Real=2) = vecnorm(x, p)
 
 function norm1{T}(A::AbstractMatrix{T})
     m,n = size(A)
@@ -133,9 +176,9 @@ function normInf{T}(A::AbstractMatrix{T})
     end
     return nrm
 end
-function norm{T}(A::AbstractMatrix{T}, p::Number=2)
-    p == 1 && return norm1(A)
+function norm{T}(A::AbstractMatrix{T}, p::Real=2)
     p == 2 && return norm2(A)
+    p == 1 && return norm1(A)
     p == Inf && return normInf(A)
     throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
 end
@@ -145,9 +188,6 @@ function norm(x::Number, p=2)
     p == 0 && return ifelse(x != 0, 1, 0)
     float(abs(x))
 end
-
-normfro(A::AbstractMatrix) = norm(reshape(A, length(A)))
-normfro(x::Number) = abs(x)
 
 rank(A::AbstractMatrix, tol::Real) = sum(svdvals(A) .> tol)
 function rank(A::AbstractMatrix)
