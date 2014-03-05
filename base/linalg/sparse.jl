@@ -457,9 +457,9 @@ end
 diff(a::SparseMatrixCSC, dim::Integer)= dim==1 ? sparse_diff1(a) : sparse_diff2(a)
 
 ## norm and rank
-normfro(A::SparseMatrixCSC) = norm(A.nzval,2)
+vecnorm(A::SparseMatrixCSC, p::Real=2) = vecnorm(A.nzval, p)
 
-function norm(A::SparseMatrixCSC,p::Number=1)
+function norm(A::SparseMatrixCSC,p::Real=1)
     m, n = size(A)
     if m == 0 || n == 0 || isempty(A)
         return real(zero(eltype(A))) 

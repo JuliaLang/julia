@@ -169,6 +169,7 @@ for (fname, elty, ret_type) in ((:dnrm2_,:Float64,:Float64),
     end
 end
 nrm2(x::StridedVector) = nrm2(length(x), x, stride(x,1))
+nrm2(x::Array) = nrm2(length(x), pointer(x), 1)
 
 ## asum
 for (fname, elty, ret_type) in ((:dasum_,:Float64,:Float64),
@@ -185,6 +186,7 @@ for (fname, elty, ret_type) in ((:dasum_,:Float64,:Float64),
     end
 end
 asum(x::StridedVector) = asum(length(x), x, stride(x,1))
+asum(x::Array) = asum(length(x), pointer(x), 1)
 
 ## axpy
 for (fname, elty) in ((:daxpy_,:Float64),

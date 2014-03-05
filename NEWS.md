@@ -143,7 +143,14 @@ Library improvements
 
       * `condskeel` for Skeel condition numbers ([#5726]).
 
-      * norm(Matrix) no longer calculates vector norm when first dimension is one ([#5545]).
+      * `norm(::Matrix)` no longer calculates a vector norm when the first 
+        dimension is one ([#5545]); it always uses the operator (induced)
+        matrix norm.
+
+      * New `vecnorm(itr, p=2)` function that computes the norm of
+        any iterable collection of numbers as if it were a vector of
+        the same length.  This generalizes and replaces `normfro` ([#6057]),
+        and `norm` is now type-stable ([#6056]).
 
     * Sparse linear algebra
 
