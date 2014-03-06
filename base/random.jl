@@ -83,11 +83,10 @@ function make_seed(n::Integer)
     seed = Uint32[]
     while true
         push!(seed, n & 0xffffffff)
-        n2 = n >> 32
-        if n2 == 0 || n2 == n
+        n >>= 32
+        if n == 0
             return seed
         end
-        n = n2
     end
 end
 
