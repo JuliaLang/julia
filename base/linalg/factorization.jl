@@ -137,7 +137,7 @@ function lufact!{T}(A::AbstractMatrix{T})
     ipiv = Array(BlasInt, minmn)
     for k = 1:minmn
         # find index max
-        kp = 1
+        kp = k
         amax = real(zero(T))
         for i = k:m
             absi = abs(A[i,k])
@@ -148,11 +148,13 @@ function lufact!{T}(A::AbstractMatrix{T})
         end
         ipiv[k] = kp
         if A[kp,k] != 0
-            # Interchange
-            for i = 1:n
-                tmp = A[k,i]
-                A[k,i] = A[kp,i]
-                A[kp,i] = tmp
+            if k != kp
+                # Interchange
+                for i = 1:n
+                    tmp = A[k,i]
+                    A[k,i] = A[kp,i]
+                    A[kp,i] = tmp
+                end
             end
             # Scale first column
             Akkinv = inv(A[k,k])
@@ -167,9 +169,8 @@ function lufact!{T}(A::AbstractMatrix{T})
             for i = k+1:m
                 A[i,j] -= A[i,k]*A[k,j]
             end
-        end
+        end        
     end
-    if minmn > 0 && A[minmn,minmn] == 0; info = minmn; end
     LU(A, ipiv, convert(BlasInt, info))
 end
 lufact{T<:BlasFloat}(A::StridedMatrix{T}) = lufact!(copy(A))
