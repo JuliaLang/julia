@@ -425,7 +425,7 @@ type Timer <: AsyncWork
         # ->data field
         disassociate_julia_struct(this.handle)
         err = ccall(:uv_timer_init,Cint,(Ptr{Void},Ptr{Void}),eventloop(),this.handle)
-        if err != 0 
+        if err != 0
             c_free(this.handle)
             this.handle = C_NULL
             error(UVError("uv_make_timer",err))
@@ -459,28 +459,26 @@ function _uv_hook_asynccb(async::AsyncWork, status::Int32)
     end
     try
         async.cb(async, status)
-    catch err
-        #bt = catch_backtrace()
-        if isa(err, MethodError)
-            warn_once("async callbacks should take an AsyncWork object as the first argument")
-            async.cb(status)
-            return
-        end
-        rethrow(err)
+    catch
     end
     nothing
 end
 
 function start_timer(timer::Timer, timeout::Real, repeat::Real)
     associate_julia_struct(timer.handle, timer)
+    preserve_handle(timer)
     ccall(:uv_update_time,Void,(Ptr{Void},),eventloop())
     ccall(:uv_timer_start,Cint,(Ptr{Void},Ptr{Void},Uint64,Uint64),
-        timer.handle, uv_jl_asynccb::Ptr{Void}, uint64(round(timeout*1000))+1, uint64(round(repeat*1000)))
+          timer.handle, uv_jl_asynccb::Ptr{Void}, uint64(round(timeout*1000))+1, uint64(round(repeat*1000)))
 end
 
 function stop_timer(timer::Timer)
+    # ignore multiple calls to stop_timer
+    !haskey(uvhandles, timer) && return
+
     ccall(:uv_timer_stop,Cint,(Ptr{Void},),timer.handle)
     disassociate_julia_struct(timer.handle)
+    unpreserve_handle(timer)
 end
 
 function sleep(sec::Real)
@@ -592,7 +590,7 @@ function start_reading(stream::AsyncStream)
             error("tried to read a stream that is not readable")
         end
         ret = ccall(:uv_read_start,Cint,(Ptr{Void},Ptr{Void},Ptr{Void}),
-            handle(stream),uv_jl_alloc_buf::Ptr{Void},uv_jl_readcb::Ptr{Void})
+                    handle(stream),uv_jl_alloc_buf::Ptr{Void},uv_jl_readcb::Ptr{Void})
         stream.status = StatusActive
         ret
     elseif stream.status == StatusActive
@@ -834,7 +832,7 @@ const BACKLOG_DEFAULT = 511
 
 function _listen(sock::UVServer; backlog::Integer=BACKLOG_DEFAULT)
     err = ccall(:uv_listen, Cint, (Ptr{Void}, Cint, Ptr{Void}),
-        sock.handle, backlog, uv_jl_connectioncb::Ptr{Void})
+                sock.handle, backlog, uv_jl_connectioncb::Ptr{Void})
     sock.status = StatusActive
     err
 end
@@ -842,8 +840,8 @@ end
 function bind(server::PipeServer, name::ASCIIString)
     @assert server.status == StatusInit
     err = ccall(:uv_pipe_bind, Int32, (Ptr{Void}, Ptr{Uint8}),
-            server.handle, name)
-    if err != 0  
+                server.handle, name)
+    if err != 0
         if err != UV_EADDRINUSE && err != UV_EACCES
             error(UVError("bind",err))
         else
