@@ -75,3 +75,14 @@ end
 
 log(::MathConst{:e}) = 1 # use 1 to correctly promote expressions like log(x)/log(e)
 log(::MathConst{:e}, x) = log(x)
+
+# infinity
+
+const ∞ = MathConst{:∞}()
+
+show(io::IO, x::MathConst{:∞}) = print(io, "∞")
+
+# resolve ambguity
+convert(::Type{BigFloat}, ::MathConst{:∞}) = inf(BigFloat)
+
+convert{T<:FloatingPoint}(::Type{T}, ::MathConst{:∞}) = inf(T)

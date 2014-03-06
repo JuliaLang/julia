@@ -189,6 +189,7 @@ export
     γ, eulergamma,
     catalan,
     φ, golden,
+    ∞,
 
 # Operators
     !,
