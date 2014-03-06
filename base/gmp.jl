@@ -390,12 +390,7 @@ isequal(x::BigInt, y::BigInt) = cmp(x,y) == 0
 <(x::BigInt, y::BigInt) = cmp(x,y) < 0
 >(x::BigInt, y::BigInt) = cmp(x,y) > 0
 
-function string(x::BigInt)
-    lng = ndigits(x) + 2
-    z = Array(Uint8, lng)
-    lng = ccall((:__gmp_snprintf,:libgmp), Int32, (Ptr{Uint8}, Culong, Ptr{Uint8}, Ptr{BigInt}...), z, lng, "%Zd", &x)
-    return bytestring(z[1:lng])
-end
+string(x::BigInt) = dec(x)
 
 function show(io::IO, x::BigInt)
     print(io, string(x))
@@ -407,11 +402,8 @@ dec(n::BigInt) = base(10, n)
 hex(n::BigInt) = base(16, n)
 
 function base(b::Integer, n::BigInt)
-    if !(2 <= b <= 62)
-        error("invalid base: $b")
-    end
-    p = ccall((:__gmpz_get_str,:libgmp), Ptr{Uint8}, (Ptr{Uint8}, Cint, Ptr{BigInt}),
-              C_NULL, b, &n)
+    2 <= b <= 62 || error("invalid base: $b")
+    p = ccall((:__gmpz_get_str,:libgmp), Ptr{Uint8}, (Ptr{Uint8}, Cint, Ptr{BigInt}), C_NULL, b, &n)
     len = int(ccall(:strlen, Csize_t, (Ptr{Uint8},), p))
     ASCIIString(pointer_to_array(p,len,true))
 end
