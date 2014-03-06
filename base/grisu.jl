@@ -4,11 +4,11 @@ export @grisu_ccall, NEG, DIGITS, BUFLEN, LEN, POINT
 
 import Base.show, Base.print, Base.showcompact
 
-const NEG    = Array(Bool,1)
+const NEG    = Array(Bool)
 const DIGITS = Array(Uint8,309+17)
 const BUFLEN = int32(length(DIGITS)+1)
-const LEN    = Array(Int32,1)
-const POINT  = Array(Int32,1)
+const LEN    = Array(Int32)
+const POINT  = Array(Int32)
 
 macro grisu_ccall(value, mode, ndigits)
     quote
