@@ -7,6 +7,7 @@ end
 
 unsafe_getindex(v::Real, ind::Integer) = v
 unsafe_getindex(v::Ranges, ind::Integer) = first(v) + (ind-1)*step(v)
+unsafe_getindex(v::BitArray, ind::Integer) = Base.getindex_unchecked(v.chunks, ind)
 unsafe_getindex(v::AbstractArray, ind::Integer) = v[ind]
 
 # Version that uses cartesian indexing for src

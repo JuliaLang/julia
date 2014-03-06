@@ -63,22 +63,125 @@ end
 # Generate the body for a broadcasting function f_broadcast!(B, A1, A2, ..., A$narrays),
 # using function f, output B, and inputs As...
 # B must have already been set to the appropriate size.
-function gen_broadcast_body(nd::Int, narrays::Int, f::Function)
-    checkshape = Expr(:call, check_broadcast_shape, :(size(B)), [symbol("A_"*string(i)) for i = 1:narrays]...)
+
+# version using cartesian indexing
+function gen_broadcast_body_cartesian(nd::Int, narrays::Int, f::Function)
     F = Expr(:quote, f)
     quote
         @assert ndims(B) == $nd
-        $checkshape
-        @nloops $nd i B d->(@nexprs $narrays k->(j_d_k = size(A_k, d) == 1 ? 1 : i_d)) begin
-            @nexprs $narrays k->(@inbounds v_k = @nref $nd A_k d->j_d_k)
-            @inbounds (@nref $nd B i) = (@ncall $narrays $F v)
+        @ncall $narrays check_broadcast_shape size(B) k->A_k
+        @nloops($nd, i, B,
+            d->(@nexprs $narrays k->(j_d_k = size(A_k, d) == 1 ? 1 : i_d)), # pre
+            begin # body
+                @nexprs $narrays k->(@inbounds v_k = @nref $nd A_k d->j_d_k)
+                @inbounds (@nref $nd B i) = (@ncall $narrays $F v)
+            end)
+    end
+end
+
+# version using start/next for iterating over the arguments
+function gen_broadcast_body_iter(nd::Int, narrays::Int, f::Function)
+    F = Expr(:quote, f)
+    quote
+        @assert ndims(B) == $nd
+        @ncall $narrays check_broadcast_shape size(B) k->A_k
+        @nexprs 1 d->(@nexprs $narrays k->(state_k_0 = state_k_{$nd} = start(A_k)))
+        @nexprs $nd d->(@nexprs $narrays k->(skip_k_d = size(A_k, d) == 1))
+        @nloops($nd, i, B,
+            d->(@nexprs $narrays k->(state_k_{d-1} = state_k_d)),           # pre
+            d->(@nexprs $narrays k->(skip_k_d || (state_k_d = state_k_0))), # post
+            begin # body
+                @nexprs $narrays k->(@inbounds (v_k, state_k_0) = next(A_k, state_k_0))
+                @inbounds (@nref $nd B i) = (@ncall $narrays $F v)
+            end)
+    end
+end
+
+## Broadcasting cores specialized for returning a BitArray
+
+const bitcache_chunks = 64 # this can be changed
+const bitcache_size = 64 * bitcache_chunks # do not change this
+
+function dumpbitcache(Bc::Vector{Uint64}, bind::Int, C::Vector{Bool})
+    ind = 1
+    nc = min(bitcache_chunks, length(Bc)-bind+1)
+    for i = 1:nc
+        u = uint64(1)
+        c = uint64(0)
+        for j = 1:64
+            C[ind] && (c |= u)
+            ind += 1
+            u <<= 1
+        end
+        Bc[bind] = c
+        bind += 1
+    end
+end
+
+# using cartesian indexing
+function gen_broadcast_body_cartesian_tobitarray(nd::Int, narrays::Int, f::Function)
+    F = Expr(:quote, f)
+    quote
+        @assert ndims(B) == $nd
+        @ncall $narrays check_broadcast_shape size(B) k->A_k
+        C = Array(Bool, bitcache_size)
+        Bc = B.chunks
+        ind = 1
+        cind = 1
+        @nloops($nd, i, B,
+            d->(@nexprs $narrays k->(j_d_k = size(A_k, d) == 1 ? 1 : i_d)), # pre
+            begin # body
+                @nexprs $narrays k->(@inbounds v_k = @nref $nd A_k d->j_d_k)
+                @inbounds C[ind] = (@ncall $narrays $F v)
+                ind += 1
+                if ind > bitcache_size
+                    dumpbitcache(Bc, cind, C)
+                    cind += bitcache_chunks
+                    ind = 1
+                end
+            end)
+        if ind > 1
+            @inbounds C[ind:bitcache_size] = false
+            dumpbitcache(Bc, cind, C)
         end
     end
 end
 
-function gen_broadcast_function(nd::Int, narrays::Int, f::Function)
+# using start/next
+function gen_broadcast_body_iter_tobitarray(nd::Int, narrays::Int, f::Function)
+    F = Expr(:quote, f)
+    quote
+        @assert ndims(B) == $nd
+        @ncall $narrays check_broadcast_shape size(B) k->A_k
+        C = Array(Bool, bitcache_size)
+        Bc = B.chunks
+        ind = 1
+        cind = 1
+        @nexprs 1 d->(@nexprs $narrays k->(state_k_0 = state_k_{$nd} = start(A_k)))
+        @nexprs $nd d->(@nexprs $narrays k->(skip_k_d = size(A_k, d) == 1))
+        @nloops($nd, i, B,
+            d->(@nexprs $narrays k->(state_k_{d-1} = state_k_d)),           # pre
+            d->(@nexprs $narrays k->(skip_k_d || (state_k_d = state_k_0))), # post
+            begin # body
+                @nexprs $narrays k->(@inbounds (v_k, state_k_0) = next(A_k, state_k_0))
+                @inbounds C[ind] = (@ncall $narrays $F v)
+                ind += 1
+                if ind > bitcache_size
+                    dumpbitcache(Bc, cind, C)
+                    cind += bitcache_chunks
+                    ind = 1
+                end
+            end)
+        if ind > 1
+            @inbounds C[ind:bitcache_size] = false
+            dumpbitcache(Bc, cind, C)
+        end
+    end
+end
+
+function gen_broadcast_function(genbody::Function, nd::Int, narrays::Int, f::Function)
     As = [symbol("A_"*string(i)) for i = 1:narrays]
-    body = gen_broadcast_body(nd, narrays, f)
+    body = genbody(nd, narrays, f)
     @eval begin
         local _F_
         function _F_(B, $(As...))
@@ -88,14 +191,26 @@ function gen_broadcast_function(nd::Int, narrays::Int, f::Function)
     end
 end
 
+function gen_broadcast_function_tobitarray(genbody::Function, nd::Int, narrays::Int, f::Function)
+    As = [symbol("A_"*string(i)) for i = 1:narrays]
+    body = genbody(nd, narrays, f)
+    @eval begin
+        local _F_
+        function _F_(B::BitArray, $(As...))
+            $body
+        end
+        _F_
+    end
+end
+
 let broadcast_cache = Dict()
 global broadcast!
-function broadcast!(f::Function, B, As...)
+function broadcast!(f::Function, B, As::Union(Array,BitArray)...)
     nd = ndims(B)
     narrays = length(As)
     key = (f, nd, narrays)
     if !haskey(broadcast_cache, key)
-        func = gen_broadcast_function(nd, narrays, f)
+        func = gen_broadcast_function(gen_broadcast_body_iter, nd, narrays, f)
         broadcast_cache[key] = func
     else
         func = broadcast_cache[key]
@@ -105,7 +220,61 @@ function broadcast!(f::Function, B, As...)
 end
 end  # let broadcast_cache
 
+let broadcast_cache = Dict()
+global broadcast!
+function broadcast!(f::Function, B::BitArray, As::Union(Array,BitArray)...)
+    nd = ndims(B)
+    narrays = length(As)
+    key = (f, nd, narrays)
+    if !haskey(broadcast_cache, key)
+        func = gen_broadcast_function_tobitarray(gen_broadcast_body_iter_tobitarray, nd, narrays, f)
+        broadcast_cache[key] = func
+    else
+        func = broadcast_cache[key]
+    end
+    func(B, As...)
+    B
+end
+end  # let broadcast_cache
+
+let broadcast_cache = Dict()
+global broadcast!
+function broadcast!(f::Function, B, As...)
+    nd = ndims(B)
+    narrays = length(As)
+    key = (f, nd, narrays)
+    if !haskey(broadcast_cache, key)
+        func = gen_broadcast_function(gen_broadcast_body_cartesian, nd, narrays, f)
+        broadcast_cache[key] = func
+    else
+        func = broadcast_cache[key]
+    end
+    func(B, As...)
+    B
+end
+end  # let broadcast_cache
+
+let broadcast_cache = Dict()
+global broadcast!
+function broadcast!(f::Function, B::BitArray, As...)
+    nd = ndims(B)
+    narrays = length(As)
+    key = (f, nd, narrays)
+    if !haskey(broadcast_cache, key)
+        func = gen_broadcast_function_tobitarray(gen_broadcast_body_cartesian_tobitarray, nd, narrays, f)
+        broadcast_cache[key] = func
+    else
+        func = broadcast_cache[key]
+    end
+    func(B, As...)
+    B
+end
+end  # let broadcast_cache
+
+
 broadcast(f::Function, As...) = broadcast!(f, Array(promote_eltype(As...), broadcast_shape(As...)), As...)
+
+bitbroadcast(f::Function, As...) = broadcast!(f, BitArray(broadcast_shape(As...)), As...)
 
 broadcast!_function(f::Function) = (B, As...) -> broadcast!(f, B, As...)
 broadcast_function(f::Function) = (As...) -> broadcast(f, As...)
@@ -180,90 +349,9 @@ type_pow(T,S) = promote_type(T,S)
 type_pow{S<:Integer}(::Type{Bool},::Type{S}) = Bool
 type_pow{S}(T,::Type{Rational{S}}) = type_pow(T, type_div(S, S))
 
-function .^(A::AbstractArray, B::AbstractArray) 
+function .^(A::AbstractArray, B::AbstractArray)
     broadcast!(^, Array(type_pow(eltype(A), eltype(B)), broadcast_shape(A, B)), A, B)
 end
-
-## Broadcasting core -- specialized version to return a BitArray
-
-const bitcache_chunks = 64 # this can be changed
-const bitcache_size = 64 * bitcache_chunks # do not change this
-
-function dumpbitcache(Bc::Vector{Uint64}, bind::Int, C::Vector{Bool})
-    ind = 1
-    nc = min(bitcache_chunks, length(Bc)-bind+1)
-    for i = 1:nc
-        u = uint64(1)
-        c = uint64(0)
-        for j = 1:64
-            if C[ind]
-                c |= u
-            end
-            ind += 1
-            u <<= 1
-        end
-        Bc[bind] = c
-        bind += 1
-    end
-end
-
-function gen_bitbroadcast_body(nd::Int, narrays::Int, f::Function)
-    checkshape = Expr(:call, check_broadcast_shape, :(size(B)), [symbol("A_"*string(i)) for i = 1:narrays]...)
-    F = Expr(:quote, f)
-    quote
-        @assert ndims(B) == $nd
-        $checkshape
-        C = Array(Bool, bitcache_size)
-        Bc = B.chunks
-        ind = 1
-        cind = 1
-        @nloops $nd i B d->(@nexprs $narrays k->(j_d_k = size(A_k, d) == 1 ? 1 : i_d)) begin
-            @nexprs $narrays k->(@inbounds v_k = @nref $nd A_k d->j_d_k)
-            @inbounds C[ind] = (@ncall $narrays $F v)
-            ind += 1
-            if ind > bitcache_size
-                dumpbitcache(Bc, cind, C)
-                cind += bitcache_chunks
-                ind = 1
-            end
-        end
-        if ind > 1
-            @inbounds C[ind:bitcache_size] = false
-            dumpbitcache(Bc, cind, C)
-        end
-    end
-end
-
-function gen_bitbroadcast_function(nd::Int, narrays::Int, f::Function)
-    As = [symbol("A_"*string(i)) for i = 1:narrays]
-    body = gen_bitbroadcast_body(nd, narrays, f)
-    @eval begin
-        local _F_
-        function _F_(B::BitArray, $(As...))
-            $body
-        end
-        _F_
-    end
-end
-
-let bitbroadcast_cache = Dict()
-global bitbroadcast!
-function broadcast!(f::Function, B::BitArray, As...)
-    nd = ndims(B)
-    narrays = length(As)
-    key = (f, nd, narrays)
-    if !haskey(bitbroadcast_cache, key)
-        func = gen_bitbroadcast_function(nd, narrays, f)
-        bitbroadcast_cache[key] = func
-    else
-        func = bitbroadcast_cache[key]
-    end
-    func(B, As...)
-    B
-end
-end  # let bitbroadcast_cache
-
-bitbroadcast(f::Function, As...) = broadcast!(f, BitArray(broadcast_shape(As...)), As...)
 
 ## element-wise comparison operators returning BitArray ##
 
