@@ -33,7 +33,10 @@ if [ -n "$(git status --porcelain)" ]; then
     commit_short="$commit_short"*
 fi
 branch=$(git branch | sed -n '/\* /s///p')
-build_number=$(git rev-list HEAD ^$last_tag | wc -l)
+# Some versions of wc (eg on OS X) add extra whitespace to their output.
+# The tr(1) call stops this from breaking the generated Julia's indentation by
+# stripping all non-digits.
+build_number=$(git rev-list HEAD ^$last_tag | wc -l | tr -dc '[:digit:]')
 
 date_string=$git_time
 if [ "$(uname)" = "Darwin" ] || [ "$(uname)" = "FreeBSD" ]; then
@@ -46,7 +49,7 @@ if [ $(git describe --tags --exact-match 2> /dev/null) ]; then
 else
     tagged_commit="false"
 fi
-fork_master_distance=$(git rev-list HEAD ^"$(echo $origin)master" | wc -l)
+fork_master_distance=$(git rev-list HEAD ^"$(echo $origin)master" | wc -l | tr -dc '[:digit:]')
 fork_master_timestamp=$(git show -s $(git merge-base HEAD $(echo $origin)master) --format=format:"%ct")
 
 # Check for errrors and emit default value for missing numbers.
