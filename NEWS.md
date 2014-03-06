@@ -158,6 +158,8 @@ Library improvements
 
       * `sparse(A) \ B` now supports a matrix `B` of right-hand sides ([#5196]).
 
+      * `eigs(A, sigma)` now uses shift-and-invert for nonzero shifts `sigma` and inverse iteration for `which="SM"`. If `sigma==nothing` (the new default), computes ordinary (forward) iterations. ([#5776])
+
     * Dense linear algebra for special matrix types
 
       * Interconversions between the special matrix types `Diagonal`, `Bidiagonal`,
@@ -290,6 +292,7 @@ Deprecated or removed
 [#5427]: https://github.com/JuliaLang/julia/pull/5427
 [#5748]: https://github.com/JuliaLang/julia/issues/5748
 [#5511]: https://github.com/JuliaLang/julia/issues/5511
+[#5776]: https://github.com/JuliaLang/julia/issues/5776
 [#5819]: https://github.com/JuliaLang/julia/issues/5819
 [#4871]: https://github.com/JuliaLang/julia/issues/4871
 [#4996]: https://github.com/JuliaLang/julia/issues/4996
