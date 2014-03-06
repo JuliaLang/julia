@@ -4,21 +4,21 @@ export @printf, @sprintf
 
 ### printf formatter generation ###
 
-function _gen(s::String)
+function gen(s::String)
     args = {:(out::IO)}
     blk = Expr(:block, :(local neg, pt, len, exp))
-    for x in _parse(s)
+    for x in parse(s)
         if isa(x,String)
             push!(blk.args, :(write(out, $(length(x)==1 ? x[1] : x))))
         else
             c = lowercase(x[end])
-            f = c=='f' ? _gen_f :
-                c=='e' ? _gen_e :
-                c=='g' ? _gen_g :
-                c=='c' ? _gen_c :
-                c=='s' ? _gen_s :
-                c=='p' ? _gen_p :
-                         _gen_d
+            f = c=='f' ? gen_f :
+                c=='e' ? gen_e :
+                c=='g' ? gen_g :
+                c=='c' ? gen_c :
+                c=='s' ? gen_s :
+                c=='p' ? gen_p :
+                         gen_d
             arg, ex = f(x...)
             push!(args, arg)
             push!(blk.args, ex)
@@ -30,7 +30,7 @@ end
 
 ### printf format string parsing ###
 
-function _parse(s::String)
+function parse(s::String)
     # parse format string in to stings and format tuples
     list = {}
     i = j = start(s)
@@ -38,7 +38,7 @@ function _parse(s::String)
         c, k = next(s,j)
         if c == '%'
             isempty(s[i:j-1]) || push!(list, s[i:j-1])
-            flags, width, precision, conversion, k = _parse1(s,k)
+            flags, width, precision, conversion, k = parse1(s,k)
             in('\'',flags) && error("printf format flag ' not yet supported")
             conversion == 'a'    && error("printf feature %a not yet supported")
             conversion == 'n'    && error("printf feature %n not supported")
@@ -78,48 +78,48 @@ end
 #   (h|hh|l|ll|L|j|t|z|q)?  # modifier (ignored)
 #   [diouxXeEfFgGaAcCsSp%]  # conversion
 
-_next_or_die(s::String, k) = !done(s,k) ? next(s,k) :
+next_or_die(s::String, k) = !done(s,k) ? next(s,k) :
     error("invalid printf format string: ", repr(s))
 
-function _parse1(s::String, k::Integer)
+function parse1(s::String, k::Integer)
     j = k
     width = 0
     precision = -1
-    c, k = _next_or_die(s,k)
+    c, k = next_or_die(s,k)
     # handle %%
     if c == '%'
         return "", width, precision, c, k
     end
     # parse flags
     while in(c, "#0- + '")
-        c, k = _next_or_die(s,k)
+        c, k = next_or_die(s,k)
     end
     flags = ascii(s[j:k-2])
     # parse width
     while '0' <= c <= '9'
         width = 10*width + c-'0'
-        c, k = _next_or_die(s,k)
+        c, k = next_or_die(s,k)
     end
     # parse precision
     if c == '.'
-        c, k = _next_or_die(s,k)
+        c, k = next_or_die(s,k)
         if '0' <= c <= '9'
             precision = 0
             while '0' <= c <= '9'
                 precision = 10*precision + c-'0'
-                c, k = _next_or_die(s,k)
+                c, k = next_or_die(s,k)
             end
         end
     end
     # parse length modifer (ignored)
     if c == 'h' || c == 'l'
         prev = c
-        c, k = _next_or_die(s,k)
+        c, k = next_or_die(s,k)
         if c == prev
-            c, k = _next_or_die(s,k)
+            c, k = next_or_die(s,k)
         end
     elseif in(c,"Ljqtz")
-        c, k = _next_or_die(s,k)
+        c, k = next_or_die(s,k)
     end
     # validate conversion
     if !in(c,"diouxXDOUeEfFgGaAcCsSpn")
@@ -131,7 +131,7 @@ end
 
 ### printf formatter generation ###
 
-function _special_handler(flags::ASCIIString, width::Int)
+function special_handler(flags::ASCIIString, width::Int)
     @gensym x
     blk = Expr(:block)
     pad = in('-',flags) ? rpad : lpad
@@ -146,7 +146,7 @@ function _special_handler(flags::ASCIIString, width::Int)
     x, ex, blk
 end
 
-function _pad(m::Int, n, c::Char)
+function pad(m::Int, n, c::Char)
     if m <= 1
         :($n > 0 && write(out,$c))
     else
@@ -161,7 +161,7 @@ function _pad(m::Int, n, c::Char)
     end
 end
 
-function _print_fixed(out, precision)
+function print_fixed(out, precision)
     pdigits = pointer(DIGITS)
     ndigits = LEN[1]
     pt = POINT[1]
@@ -198,7 +198,7 @@ function _print_fixed(out, precision)
     end
 end
 
-function _print_exp(out, exp)
+function print_exp(out, exp)
     write(out, exp < 0 ? '-' : '+')
     exp = abs(exp)
     d = div(exp,100)
@@ -208,7 +208,7 @@ function _print_exp(out, exp)
     write(out, char('0'+rem(exp,10)))
 end
 
-function _gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
+function gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print integer:
     #  [dDiu]: print decimal digits
     #  [o]:    print octal digits
@@ -222,20 +222,20 @@ function _gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
     #  ( ): precede non-negative values with " "
     #  (+): precede non-negative values with "+"
     #
-    x, ex, blk = _special_handler(flags,width)
+    x, ex, blk = special_handler(flags,width)
     # interpret the number
     prefix = ""
     if lowercase(c)=='o'
-        f = in('#',flags) ? :_int_0ct : :_int_oct
+        f = in('#',flags) ? :int_0ct : :int_oct
         push!(blk.args, :(($f)($x)))
     elseif c=='x'
         if in('#',flags); prefix = "0x"; end
-        push!(blk.args, :(_int_hex($x)))
+        push!(blk.args, :(int_hex($x)))
     elseif c=='X'
         if in('#',flags); prefix = "0X"; end
-        push!(blk.args, :(_int_HEX($x)))
+        push!(blk.args, :(int_HEX($x)))
     else
-        push!(blk.args, :(_int_dec($x)))
+        push!(blk.args, :(int_dec($x)))
     end
     push!(blk.args, :(neg = NEG[1]))
     push!(blk.args, :(pt  = POINT[1]))
@@ -260,7 +260,7 @@ function _gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
     end
     # print space padding
     if padding != nothing && !in('-',flags)
-        push!(blk.args, _pad(width-precision, padding, ' '))
+        push!(blk.args, pad(width-precision, padding, ' '))
     end
     # print sign
     in('+',flags) ? push!(blk.args, :(write(out, neg?'-':'+'))) :
@@ -272,23 +272,23 @@ function _gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
     end
     # print zero padding & leading zeros
     if space_pad && precision > 1
-        push!(blk.args, _pad(precision-1, :($precision-pt), '0'))
+        push!(blk.args, pad(precision-1, :($precision-pt), '0'))
     elseif !space_pad && width > 1
         zeros = in('+',flags) || in(' ',flags) ?
             :($(width-1)-pt) : :($width-neg-pt)
-        push!(blk.args, _pad(width-1, zeros, '0'))
+        push!(blk.args, pad(width-1, zeros, '0'))
     end
     # print integer
     push!(blk.args, :(write(out, pointer(DIGITS), pt)))
     # print padding
     if padding != nothing && in('-',flags)
-        push!(blk.args, _pad(width-precision, padding, ' '))
+        push!(blk.args, pad(width-precision, padding, ' '))
     end
     # return arg, expr
     :(($x)::Real), ex
 end
 
-function _gen_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
+function gen_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print to fixed trailing precision
     #  [fF]: the only choice
     #
@@ -299,10 +299,10 @@ function _gen_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
     #  ( ): precede non-negative values with " "
     #  (+): precede non-negative values with "+"
     #
-    x, ex, blk = _special_handler(flags,width)
+    x, ex, blk = special_handler(flags,width)
     # interpret the number
     if precision < 0; precision = 6; end
-    push!(blk.args, :(_fix_dec($x,$precision)))
+    push!(blk.args, :(fix_dec($x,$precision)))
     push!(blk.args, :(neg = NEG[1]))
     push!(blk.args, :(pt  = POINT[1]))
     push!(blk.args, :(len = LEN[1]))
@@ -323,7 +323,7 @@ function _gen_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
     end
     # print space padding
     if padding != nothing && !in('-',flags) && !in('0',flags)
-        push!(blk.args, _pad(width-1, padding, ' '))
+        push!(blk.args, pad(width-1, padding, ' '))
     end
     # print sign
     in('+',flags) ? push!(blk.args, :(write(out, neg?'-':'+'))) :
@@ -331,11 +331,11 @@ function _gen_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
                     push!(blk.args, :(neg && write(out, '-')))
     # print zero padding
     if padding != nothing && !in('-',flags) && in('0',flags)
-        push!(blk.args, _pad(width-1, padding, '0'))
+        push!(blk.args, pad(width-1, padding, '0'))
     end
     # print digits
     if precision > 0
-        push!(blk.args, :(_print_fixed(out,$precision)))
+        push!(blk.args, :(print_fixed(out,$precision)))
     else
         push!(blk.args, :(write(out, pointer(DIGITS), len)))
         push!(blk.args, :(while pt >= (len+=1) write(out,'0') end))
@@ -343,13 +343,13 @@ function _gen_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
     end
     # print space padding
     if padding != nothing && in('-',flags)
-        push!(blk.args, _pad(width-1, padding, ' '))
+        push!(blk.args, pad(width-1, padding, ' '))
     end
     # return arg, expr
     :(($x)::Real), ex
 end
 
-function _gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
+function gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print float in scientific form:
     #  [e]: use 'e' to introduce exponent
     #  [E]: use 'E' to introduce exponent
@@ -361,11 +361,11 @@ function _gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     #  ( ): precede non-negative values with " "
     #  (+): precede non-negative values with "+"
     #
-    x, ex, blk = _special_handler(flags,width)
+    x, ex, blk = special_handler(flags,width)
     # interpret the number
     if precision < 0; precision = 6; end
     ndigits = min(precision+1,BUFLEN-1)
-    push!(blk.args, :(_ini_dec($x,$ndigits)))
+    push!(blk.args, :(ini_dec($x,$ndigits)))
     push!(blk.args, :(neg = NEG[1]))
     push!(blk.args, :(exp = POINT[1]-1))
     expmark = c=='E' ? "E" : "e"
@@ -388,7 +388,7 @@ function _gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     end
     # print space padding
     if padding != nothing && !in('-',flags) && !in('0',flags)
-        push!(blk.args, _pad(width, padding, ' '))
+        push!(blk.args, pad(width, padding, ' '))
     end
     # print sign
     in('+',flags) ? push!(blk.args, :(write(out, neg?'-':'+'))) :
@@ -396,7 +396,7 @@ function _gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
                     push!(blk.args, :(neg && write(out, '-')))
     # print zero padding
     if padding != nothing && !in('-',flags) && in('0',flags)
-        push!(blk.args, _pad(width, padding, '0'))
+        push!(blk.args, pad(width, padding, '0'))
     end
     # print digits
     push!(blk.args, :(write(out, DIGITS[1])))
@@ -405,22 +405,22 @@ function _gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
         push!(blk.args, :(write(out, pointer(DIGITS)+1, $(ndigits-1))))
         if ndigits < precision+1
             n = precision+1-ndigits
-            push!(blk.args, _pad(n, n, '0'))
+            push!(blk.args, pad(n, n, '0'))
         end
     end
     for ch in expmark
         push!(blk.args, :(write(out, $ch)))
     end
-    push!(blk.args, :(_print_exp(out, exp)))
+    push!(blk.args, :(print_exp(out, exp)))
     # print space padding
     if padding != nothing && in('-',flags)
-        push!(blk.args, _pad(width, padding, ' '))
+        push!(blk.args, pad(width, padding, ' '))
     end
     # return arg, expr
     :(($x)::Real), ex
 end
 
-function _gen_c(flags::ASCIIString, width::Int, precision::Int, c::Char)
+function gen_c(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print a character:
     #  [cC]: both the same for us (Unicode)
     #
@@ -432,16 +432,16 @@ function _gen_c(flags::ASCIIString, width::Int, precision::Int, c::Char)
     blk = Expr(:block, :($x = char($x)))
     if width > 1 && !in('-',flags)
         p = in('0',flags) ? '0' : ' '
-        push!(blk.args, _pad(width-1, :($width-charwidth($x)), p))
+        push!(blk.args, pad(width-1, :($width-charwidth($x)), p))
     end
     push!(blk.args, :(write(out, $x)))
     if width > 1 && in('-',flags)
-        push!(blk.args, _pad(width-1, :($width-charwidth($x)), ' '))
+        push!(blk.args, pad(width-1, :($width-charwidth($x)), ' '))
     end
     :(($x)::Integer), blk
 end
 
-function _gen_s(flags::ASCIIString, width::Int, precision::Int, c::Char)
+function gen_s(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print a string:
     #  [sS]: both the same for us (Unicode)
     #
@@ -458,11 +458,11 @@ function _gen_s(flags::ASCIIString, width::Int, precision::Int, c::Char)
             push!(blk.args, :($x = repr($x)))
         end
         if !in('-',flags)
-            push!(blk.args, _pad(width, :($width-strwidth($x)), ' '))
+            push!(blk.args, pad(width, :($width-strwidth($x)), ' '))
         end
         push!(blk.args, :(write(out, $x)))
         if in('-',flags)
-            push!(blk.args, _pad(width, :($width-strwidth($x)), ' '))
+            push!(blk.args, pad(width, :($width-strwidth($x)), ' '))
         end
     else
         if !in('#',flags)
@@ -476,7 +476,7 @@ end
 
 # TODO: faster pointer printing.
 
-function _gen_p(flags::ASCIIString, width::Int, precision::Int, c::Char)
+function gen_p(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print pointer:
     #  [p]: the only option
     #
@@ -485,24 +485,24 @@ function _gen_p(flags::ASCIIString, width::Int, precision::Int, c::Char)
     ptrwidth = WORD_SIZE>>2
     width -= ptrwidth+2
     if width > 0 && !in('-',flags)
-        push!(blk.args, _pad(width, width, ' '))
+        push!(blk.args, pad(width, width, ' '))
     end
     push!(blk.args, :(write(out, '0')))
     push!(blk.args, :(write(out, 'x')))
     push!(blk.args, :(write(out, bytestring(hex(unsigned($x), $ptrwidth)))))
     if width > 0 && in('-',flags)
-        push!(blk.args, _pad(width, width, ' '))
+        push!(blk.args, pad(width, width, ' '))
     end
     :(($x)::Ptr), blk
 end
 
-function _gen_g(flags::ASCIIString, width::Int, precision::Int, c::Char)
+function gen_g(flags::ASCIIString, width::Int, precision::Int, c::Char)
     error("printf \"%g\" format specifier not implemented")
 end
 
 ### core unsigned integer decoding functions ###
 
-macro _handle_zero()
+macro handle_zero()
     quote
         if $(esc(:x)) == 0
             POINT[1] = 1
@@ -512,8 +512,8 @@ macro _handle_zero()
     end
 end
 
-function _decode_oct(x::Unsigned)
-    @_handle_zero
+function decode_oct(x::Unsigned)
+    @handle_zero
     POINT[1] = i = div((sizeof(x)<<3)-leading_zeros(x)+2,3)
     while i > 0
         DIGITS[i] = '0'+(x&0x7)
@@ -522,7 +522,7 @@ function _decode_oct(x::Unsigned)
     end
 end
 
-function _decode_0ct(x::Unsigned)
+function decode_0ct(x::Unsigned)
     POINT[1] = i = div((sizeof(x)<<3)-leading_zeros(x)+5,3)
     while i > 0
         DIGITS[i] = '0'+(x&0x7)
@@ -531,8 +531,8 @@ function _decode_0ct(x::Unsigned)
     end
 end
 
-function _decode_dec(x::Unsigned)
-    @_handle_zero
+function decode_dec(x::Unsigned)
+    @handle_zero
     POINT[1] = i = Base.ndigits0z(x)
     while i > 0
         DIGITS[i] = '0'+rem(x,10)
@@ -541,8 +541,8 @@ function _decode_dec(x::Unsigned)
     end
 end
 
-function _decode_hex(x::Unsigned, symbols::Array{Uint8,1})
-    @_handle_zero
+function decode_hex(x::Unsigned, symbols::Array{Uint8,1})
+    @handle_zero
     POINT[1] = i = (sizeof(x)<<1)-(leading_zeros(x)>>2)
     while i > 0
         DIGITS[i] = symbols[(x&0xf)+1]
@@ -551,11 +551,11 @@ function _decode_hex(x::Unsigned, symbols::Array{Uint8,1})
     end
 end
 
-const _hex_symbols = "0123456789abcdef".data
-const _HEX_symbols = "0123456789ABCDEF".data
+const hex_symbols = "0123456789abcdef".data
+const HEX_symbols = "0123456789ABCDEF".data
 
-_decode_hex(x::Unsigned) = _decode_hex(x,_hex_symbols)
-_decode_HEX(x::Unsigned) = _decode_hex(x,_HEX_symbols)
+decode_hex(x::Unsigned) = decode_hex(x,hex_symbols)
+decode_HEX(x::Unsigned) = decode_hex(x,HEX_symbols)
 
 ### decoding functions directly used by printf generated code ###
 
@@ -575,13 +575,13 @@ _decode_HEX(x::Unsigned) = _decode_hex(x,_HEX_symbols)
 # - implies len[1] = point[1]
 #
 
-_int_oct(x::Unsigned) = (NEG[1]=false; _decode_oct(x))
-_int_0ct(x::Unsigned) = (NEG[1]=false; _decode_0ct(x))
-_int_dec(x::Unsigned) = (NEG[1]=false; _decode_dec(x))
-_int_hex(x::Unsigned) = (NEG[1]=false; _decode_hex(x))
-_int_HEX(x::Unsigned) = (NEG[1]=false; _decode_HEX(x))
+int_oct(x::Unsigned) = (NEG[1]=false; decode_oct(x))
+int_0ct(x::Unsigned) = (NEG[1]=false; decode_0ct(x))
+int_dec(x::Unsigned) = (NEG[1]=false; decode_dec(x))
+int_hex(x::Unsigned) = (NEG[1]=false; decode_hex(x))
+int_HEX(x::Unsigned) = (NEG[1]=false; decode_HEX(x))
 
-macro _handle_negative()
+macro handle_negative()
     quote
         if $(esc(:x)) < 0
             NEG[1] = true
@@ -592,19 +592,19 @@ macro _handle_negative()
     end
 end
 
-_int_oct(x::Integer) = (@_handle_negative; _decode_oct(unsigned(x)))
-_int_0ct(x::Integer) = (@_handle_negative; _decode_0ct(unsigned(x)))
-_int_dec(x::Integer) = (@_handle_negative; _decode_dec(unsigned(x)))
-_int_hex(x::Integer) = (@_handle_negative; _decode_hex(unsigned(x)))
-_int_HEX(x::Integer) = (@_handle_negative; _decode_HEX(unsigned(x)))
+int_oct(x::Integer) = (@handle_negative; decode_oct(unsigned(x)))
+int_0ct(x::Integer) = (@handle_negative; decode_0ct(unsigned(x)))
+int_dec(x::Integer) = (@handle_negative; decode_dec(unsigned(x)))
+int_hex(x::Integer) = (@handle_negative; decode_hex(unsigned(x)))
+int_HEX(x::Integer) = (@handle_negative; decode_HEX(unsigned(x)))
 
-_int_oct(x::Real) = _int_oct(integer(x)) # TODO: real float decoding.
-_int_0ct(x::Real) = _int_0ct(integer(x)) # TODO: real float decoding.
-_int_dec(x::Real) = _int_dec(float(x))
-_int_hex(x::Real) = _int_hex(integer(x)) # TODO: real float decoding.
-_int_HEX(x::Real) = _int_HEX(integer(x)) # TODO: real float decoding.
+int_oct(x::Real) = int_oct(integer(x)) # TODO: real float decoding.
+int_0ct(x::Real) = int_0ct(integer(x)) # TODO: real float decoding.
+int_dec(x::Real) = int_dec(float(x))
+int_hex(x::Real) = int_hex(integer(x)) # TODO: real float decoding.
+int_HEX(x::Real) = int_HEX(integer(x)) # TODO: real float decoding.
 
-function _int_dec(x::FloatingPoint)
+function int_dec(x::FloatingPoint)
     if x == 0.0
         NEG[1] = false
         POINT[1] = 1
@@ -630,10 +630,10 @@ end
 # - sets len[1]; if less than point[1], trailing zeros implied
 #
 
-_fix_dec(x::Integer, n::Int) = (_int_dec(x); LEN[1]=POINT[1])
-_fix_dec(x::Real, n::Int) = _fix_dec(float(x),n)
+fix_dec(x::Integer, n::Int) = (int_dec(x); LEN[1]=POINT[1])
+fix_dec(x::Real, n::Int) = fix_dec(float(x),n)
 
-function _fix_dec(x::FloatingPoint, n::Int)
+function fix_dec(x::FloatingPoint, n::Int)
     if n > BUFLEN-1; n = BUFLEN-1; end
     @grisu_ccall x Grisu.FIXED n
     if LEN[1] == 0
@@ -650,7 +650,7 @@ end
 # - implies len[1] = n (requested digits)
 #
 
-function _ini_dec(x::Unsigned, n::Int)
+function ini_dec(x::Unsigned, n::Int)
     k = ndigits(x)
     if k <= n
         POINT[1] = k
@@ -680,10 +680,10 @@ function _ini_dec(x::Unsigned, n::Int)
     end
 end
 
-_ini_dec(x::Integer, n::Int) = (@_handle_negative; _ini_dec(unsigned(x),n))
-_ini_dec(x::Real, n::Int) = _ini_dec(float(x),n)
+ini_dec(x::Integer, n::Int) = (@handle_negative; ini_dec(unsigned(x),n))
+ini_dec(x::Real, n::Int) = ini_dec(float(x),n)
 
-function _ini_dec(x::FloatingPoint, n::Int)
+function ini_dec(x::FloatingPoint, n::Int)
     if x == 0.0
         POINT[1] = 1
         NEG[1] = signbit(x)
@@ -700,7 +700,7 @@ end
 # - sets len[1]
 #
 
-function _sig_dec(x::Unsigned, n::Int)
+function sig_dec(x::Unsigned, n::Int)
     if x == 0
         NEG[1] = false
         POINT[1] = 1
@@ -742,10 +742,10 @@ function _sig_dec(x::Unsigned, n::Int)
     end
 end
 
-_sig_dec(x::Integer, n::Int) = (@_handle_negative; _sig_dec(unsigned(x),n))
-_sig_dec(x::Real, n::Int) = _sig_dec(float(x),n)
+sig_dec(x::Integer, n::Int) = (@handle_negative; sig_dec(unsigned(x),n))
+sig_dec(x::Real, n::Int) = sig_dec(float(x),n)
 
-function _sig_dec(x::FloatingPoint, n::Int)
+function sig_dec(x::FloatingPoint, n::Int)
     @grisu_ccall x Grisu.PRECISION n
     if x == 0.0; return; end
     while DIGITS[n] == '0'
@@ -756,7 +756,7 @@ end
 
 ### external printf interface ###
 
-_is_str_expr(ex) =
+is_str_expr(ex) =
     isa(ex,Expr) && ex.head==:macrocall && isa(ex.args[1],Symbol) &&
     (ex.args[1] == :str || endswith(string(ex.args[1]),"_str"))
 
@@ -765,7 +765,7 @@ macro printf(args...)
         error("@printf: called with zero arguments")
     end
     if !isa(args[1],String) && !(length(args) > 1 && isa(args[2],String))
-        if _is_str_expr(args[1]) || length(args) > 1 && _is_str_expr(args[2])
+        if is_str_expr(args[1]) || length(args) > 1 && is_str_expr(args[2])
            error("format must be a plain static string (no interpolation or prefix)")
         end
         error("first or second argument must be a format string")
@@ -781,7 +781,7 @@ macro printf(args...)
         args = args[3:end]
     end
     args = {io,args...}
-    sym_args, blk = _gen(fmt)
+    sym_args, blk = gen(fmt)
     if length(sym_args) != length(args)
         error("@printf: wrong number of arguments")
     end
