@@ -486,7 +486,7 @@ function start_timer(timer::Timer, timeout::Real, repeat::Real)
     preserve_handle(timer)
     ccall(:uv_update_time,Void,(Ptr{Void},),eventloop())
     ccall(:uv_timer_start,Cint,(Ptr{Void},Ptr{Void},Uint64,Uint64),
-        timer.handle, uv_jl_asynccb::Ptr{Void}, uint64(round(timeout*1000))+1, uint64(round(repeat*1000)))
+          timer.handle, uv_jl_asynccb::Ptr{Void}, uint64(round(timeout*1000))+1, uint64(round(repeat*1000)))
 end
 
 function stop_timer(timer::Timer)
@@ -615,7 +615,7 @@ function start_reading(stream::AsyncStream)
             error("tried to read a stream that is not readable")
         end
         ret = ccall(:uv_read_start,Cint,(Ptr{Void},Ptr{Void},Ptr{Void}),
-            handle(stream),uv_jl_alloc_buf::Ptr{Void},uv_jl_readcb::Ptr{Void})
+                    handle(stream),uv_jl_alloc_buf::Ptr{Void},uv_jl_readcb::Ptr{Void})
         stream.status = StatusActive
         ret
     elseif stream.status == StatusActive
@@ -857,7 +857,7 @@ const BACKLOG_DEFAULT = 511
 
 function _listen(sock::UVServer; backlog::Integer=BACKLOG_DEFAULT)
     err = ccall(:uv_listen, Cint, (Ptr{Void}, Cint, Ptr{Void}),
-        sock.handle, backlog, uv_jl_connectioncb::Ptr{Void})
+                sock.handle, backlog, uv_jl_connectioncb::Ptr{Void})
     sock.status = StatusActive
     err
 end
@@ -865,8 +865,8 @@ end
 function bind(server::PipeServer, name::ASCIIString)
     @assert server.status == StatusInit
     err = ccall(:uv_pipe_bind, Int32, (Ptr{Void}, Ptr{Uint8}),
-            server.handle, name)
-    if err != 0  
+                server.handle, name)
+    if err != 0
         if err != UV_EADDRINUSE && err != UV_EACCES
             error(UVError("bind",err))
         else
