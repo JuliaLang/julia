@@ -80,6 +80,8 @@ log(::MathConst{:e}, x) = log(x)
 
 const ∞ = MathConst{:∞}()
 
+const infinity = ∞
+
 show(io::IO, x::MathConst{:∞}) = print(io, "∞")
 
 # resolve ambguity
