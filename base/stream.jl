@@ -442,7 +442,7 @@ type Timer <: AsyncWork
         # ->data field
         disassociate_julia_struct(this.handle)
         err = ccall(:uv_timer_init,Cint,(Ptr{Void},Ptr{Void}),eventloop(),this.handle)
-        if err != 0 
+        if err != 0
             c_free(this.handle)
             this.handle = C_NULL
             error(UVError("uv_make_timer",err))
@@ -490,6 +490,9 @@ function start_timer(timer::Timer, timeout::Real, repeat::Real)
 end
 
 function stop_timer(timer::Timer)
+    # ignore multiple calls to stop_timer
+    !haskey(uvhandles, timer) && return
+
     ccall(:uv_timer_stop,Cint,(Ptr{Void},),timer.handle)
     disassociate_julia_struct(timer.handle)
     unpreserve_handle(timer)
