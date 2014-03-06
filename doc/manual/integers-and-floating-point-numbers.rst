@@ -101,7 +101,7 @@ is 32-bit or 64-bit.::
     julia> WORD_SIZE
     64
  
-Julia also defines the types ``Int`` and ``UInt``, which are aliases for the
+Julia also defines the types ``Int`` and ``Uint``, which are aliases for the
 system's signed and unsigned native integer types respectively.::
 
     # 32-bit system:

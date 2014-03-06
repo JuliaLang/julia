@@ -128,6 +128,15 @@ end
 
 ## countnz & count
 
+
+function countnz(itr)
+    n = 0
+    for x in itr
+        n += (x != 0)
+    end
+    return n
+end
+
 function countnz{T}(a::AbstractArray{T})
     n = 0
     z = zero(T)

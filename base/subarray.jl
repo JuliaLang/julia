@@ -214,8 +214,8 @@ getindex(s::SubArray, i0::Real, i1::Real, i2::Real, i3::Real, i4::Real) =
     getindex(s, to_index(i0), to_index(i1), to_index(i2), to_index(i3), to_index(i4))
 getindex(s::SubArray, i0::Real, i1::Real, i2::Real, i3::Real, i4::Real, i5::Real) =
     getindex(s, to_index(i0), to_index(i1), to_index(i2), to_index(i3), to_index(i4), to_index(i5))
-getindex(s::SubArray, i0::Real, i1::Real, i2::Real, i3::Real, i4::Real, i5::Real, is::Int...) =
-    getindex(s, to_index(i0), to_index(i1), to_index(i2), to_index(i3), to_index(i4), to_index(i5), is...)
+getindex(s::SubArray, i0::Real, i1::Real, i2::Real, i3::Real, i4::Real, i5::Real, is::Real...) =
+    getindex(s, to_index(i0), to_index(i1), to_index(i2), to_index(i3), to_index(i4), to_index(i5), to_index(is)...)
 
 getindex(s::SubArray, i::Integer) = s[ind2sub(size(s), i)...]
 

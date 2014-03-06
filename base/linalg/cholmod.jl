@@ -386,7 +386,7 @@ function copy{Tv<:CHMVTypes}(B::CholmodDense{Tv})
                        (Ptr{c_CholmodDense{Tv}},Ptr{Uint8}), &B.c, cmn(Int32)))
 end
 
-function norm{Tv<:CHMVTypes}(D::CholmodDense{Tv},p::Number=1)
+function norm{Tv<:CHMVTypes}(D::CholmodDense{Tv},p::Real=1)
     ccall((:cholmod_norm_dense, :libcholmod), Float64, 
           (Ptr{c_CholmodDense{Tv}}, Cint, Ptr{Uint8}),
           &D.c, p == 1 ? 1 :(p == Inf ? 1 : throw(ArgumentError("p must be 1 or Inf"))),cmn(Int32))

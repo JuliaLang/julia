@@ -288,22 +288,6 @@ hash(a::AbstractArray{Bool}) = hash(bitpack(a))
 
 hash(x::ANY) = object_id(x)
 
-if WORD_SIZE == 64
-    hash(s::ByteString) =
-        ccall(:memhash, Uint64, (Ptr{Void}, Int), s.data, length(s.data))
-    hash(s::ByteString, seed::Union(Int,Uint)) =
-        ccall(:memhash_seed, Uint64, (Ptr{Void}, Int, Uint32),
-              s.data, length(s.data), uint32(seed))
-else
-    hash(s::ByteString) =
-        ccall(:memhash32, Uint32, (Ptr{Void}, Int), s.data, length(s.data))
-    hash(s::ByteString, seed::Union(Int,Uint)) =
-        ccall(:memhash32_seed, Uint32, (Ptr{Void}, Int, Uint32),
-              s.data, length(s.data), uint32(seed))
-end
-
-hash(s::String) = hash(bytestring(s))
-
 hash(x::Expr) = bitmix(hash(x.head),hash(x.args)+43)
 
 

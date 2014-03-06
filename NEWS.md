@@ -143,11 +143,22 @@ Library improvements
 
       * `condskeel` for Skeel condition numbers ([#5726]).
 
+      * `norm(::Matrix)` no longer calculates a vector norm when the first 
+        dimension is one ([#5545]); it always uses the operator (induced)
+        matrix norm.
+
+      * New `vecnorm(itr, p=2)` function that computes the norm of
+        any iterable collection of numbers as if it were a vector of
+        the same length.  This generalizes and replaces `normfro` ([#6057]),
+        and `norm` is now type-stable ([#6056]).
+
     * Sparse linear algebra
 
       * Faster sparse `kron` ([#4958]).
 
       * `sparse(A) \ B` now supports a matrix `B` of right-hand sides ([#5196]).
+
+      * `eigs(A, sigma)` now uses shift-and-invert for nonzero shifts `sigma` and inverse iteration for `which="SM"`. If `sigma==nothing` (the new default), computes ordinary (forward) iterations. ([#5776])
 
     * Dense linear algebra for special matrix types
 
@@ -281,6 +292,7 @@ Deprecated or removed
 [#5427]: https://github.com/JuliaLang/julia/pull/5427
 [#5748]: https://github.com/JuliaLang/julia/issues/5748
 [#5511]: https://github.com/JuliaLang/julia/issues/5511
+[#5776]: https://github.com/JuliaLang/julia/issues/5776
 [#5819]: https://github.com/JuliaLang/julia/issues/5819
 [#4871]: https://github.com/JuliaLang/julia/issues/4871
 [#4996]: https://github.com/JuliaLang/julia/issues/4996

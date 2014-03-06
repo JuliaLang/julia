@@ -85,7 +85,6 @@ export
     lufact,
     lufact!,
     norm,
-    normfro,
     null,
     peakflops,
     pinv,
@@ -114,6 +113,7 @@ export
     triu,
     tril!,
     triu!,
+    vecnorm,
 
 # Operators
     \,

@@ -3561,6 +3561,10 @@ Constructors
 
    m-by-n identity matrix
 
+.. function:: eye(A)
+
+   Constructs an identity matrix of the same dimensions and type as ``A``.
+
 .. function:: linspace(start, stop, n)
 
    Construct a vector of ``n`` linearly-spaced elements from ``start`` to ``stop``.
@@ -4350,7 +4354,7 @@ Although several external packages are available for numeric integration
 and solution of ordinary differential equations, we also provide
 some built-in integration support in Julia.
 
-.. function:: quadgk(f, a,b,c...; reltol=sqrt(eps), abstol=0, maxevals=10^7, order=7, norm=norm)
+.. function:: quadgk(f, a,b,c...; reltol=sqrt(eps), abstol=0, maxevals=10^7, order=7, norm=vecnorm)
 
    Numerically integrate the function ``f(x)`` from ``a`` to ``b``,
    and optionally over additional intervals ``b`` to ``c`` and so on.
@@ -4379,9 +4383,7 @@ some built-in integration support in Julia.
    type, or in fact any type supporting ``+``, ``-``, multiplication
    by real values, and a ``norm`` (i.e., any normed vector space). 
    Alternatively, a different norm can be specified by passing a `norm`-like
-   function as the `norm` keyword argument (which defaults to `norm` for
-   most types, except for matrices where the default is the L1 norm since
-   it is cheaper to compute).
+   function as the `norm` keyword argument (which defaults to `vecnorm`).
 
    The algorithm is an adaptive Gauss-Kronrod integration technique:
    the integral in each interval is estimated using a Kronrod rule

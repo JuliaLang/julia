@@ -42,10 +42,6 @@ immutable Segment
 end
 isless(i::Segment, j::Segment) = isless(i.E, j.E)
 
-# use norm(A,1) for matrices since it is cheaper than norm(A) = norm(A,2),
-# but only assume that norm(x) exists for more general vector spaces
-cheapnorm(A::AbstractMatrix) = norm(A,1)
-cheapnorm(x) = norm(x)
 
 # Internal routine: approximately integrate f(x) over the interval (a,b)
 # by evaluating the integration rule (x,w,gw). Return a Segment.
@@ -156,14 +152,14 @@ end
 
 function quadgk{T<:FloatingPoint}(f, a::T,b::T,c::T...; 
                                   abstol=zero(T), reltol=sqrt(eps(T)),
-                                  maxevals=10^7, order=7, norm=cheapnorm)
+                                  maxevals=10^7, order=7, norm=vecnorm)
     do_quadgk(f, [a, b, c...], order, T, abstol, reltol, maxevals, norm)
 end
 
 function quadgk{T<:FloatingPoint}(f, a::Complex{T},
                                   b::Complex{T},c::Complex{T}...; 
                                   abstol=zero(T), reltol=sqrt(eps(T)),
-                                  maxevals=10^7, order=7, norm=cheapnorm)
+                                  maxevals=10^7, order=7, norm=vecnorm)
     do_quadgk(f, [a, b, c...], order, T, abstol, reltol, maxevals, norm)
 end
 

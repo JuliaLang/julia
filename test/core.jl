@@ -1418,3 +1418,8 @@ end
 macro m6031(x); x; end
 @test @m6031([2,4,6])[3] == 6
 @test (@m6031 [2,4,6])[2] == 4
+
+# issue #6050
+@test Base.getfield_tfunc({nothing,QuoteNode(:vals)},
+                          Dict{Int64,(Range1{Int64},Range1{Int64})},
+                          :vals) == Array{(Range1{Int64},Range1{Int64}),1}
