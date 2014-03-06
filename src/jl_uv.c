@@ -509,7 +509,7 @@ DLLEXPORT int jl_puts(char *str, uv_stream_t *stream)
 
 DLLEXPORT void jl_uv_writecb(uv_write_t* req, int status)
 {
-    if(req->data) {
+    if (req->data) {
         JULIA_CB(writecb, req->data, 2, CB_PTR, req, CB_INT32, status)
         (void)ret;
     }
