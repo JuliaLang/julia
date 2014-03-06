@@ -363,25 +363,19 @@ function sum(arr::AbstractArray{BigInt})
     return n
 end
 
-function factorial(bn::BigInt)
-    if bn<0
-        return BigInt(0)
-    else
-        n = uint(bn)
-    end
+function factorial(x::BigInt)
+    x.size < 0 && return BigInt(0)
     z = BigInt()
-    ccall((:__gmpz_fac_ui, :libgmp), Void,
-        (Ptr{BigInt}, Culong), &z, n)
+    ccall((:__gmpz_fac_ui, :libgmp), Void, (Ptr{BigInt}, Culong), &z, x)
     return z
 end
 
 function binomial(n::BigInt, k::Uint)
     z = BigInt()
-    ccall((:__gmpz_bin_ui, :libgmp), Void,
-        (Ptr{BigInt}, Ptr{BigInt}, Culong), &z, &n, k)
+    ccall((:__gmpz_bin_ui, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Culong), &z, &n, k)
     return z
 end
-binomial(n::BigInt, k::Integer) = k<0 ? throw(DomainError()) : binomial(n, uint(k))
+binomial(n::BigInt, k::Integer) = k < 0 ? throw(DomainError()) : binomial(n, uint(k))
 
 ==(x::BigInt, y::BigInt) = cmp(x,y) == 0
 isequal(x::BigInt, y::BigInt) = cmp(x,y) == 0
@@ -391,10 +385,7 @@ isequal(x::BigInt, y::BigInt) = cmp(x,y) == 0
 >(x::BigInt, y::BigInt) = cmp(x,y) > 0
 
 string(x::BigInt) = dec(x)
-
-function show(io::IO, x::BigInt)
-    print(io, string(x))
-end
+show(io::IO, x::BigInt) = print(io, string(x))
 
 bin(n::BigInt) = base( 2, n)
 oct(n::BigInt) = base( 8, n)
@@ -414,7 +405,7 @@ function ndigits(x::BigInt, base::Integer=10)
     abs(x) < big(base)^(n-1) ? n-1 : n
 end
 
-ndigits0z(x::BigInt, base::Integer=10) = x == 0 ? 0 : ndigits(x)
+ndigits0z(x::BigInt, base::Integer=10) = x.size == 0 ? 0 : ndigits(x)
 
 isprime(x::BigInt, reps=25) = ccall((:__gmpz_probab_prime_p,:libgmp), Cint, (Ptr{BigInt}, Cint), &x, reps) > 0
 
@@ -423,7 +414,7 @@ widemul(x::Int128, y::Uint128)  = BigInt(x)*BigInt(y)
 widemul(x::Uint128, y::Int128)  = BigInt(x)*BigInt(y)
 widemul{T<:Integer}(x::T, y::T) = BigInt(x)*BigInt(y)
 
-prevpow2(x::BigInt) = x < 0 ? -prevpow2(-x) : (x <= 2 ? x : one(BigInt) << (ndigits(x, 2)-1))
-nextpow2(x::BigInt) = x < 0 ? -nextpow2(-x) : (x <= 2 ? x : one(BigInt) << ndigits(x-1, 2))
+prevpow2(x::BigInt) = x.size < 0 ? -prevpow2(-x) : (x <= 2 ? x : one(BigInt) << (ndigits(x, 2)-1))
+nextpow2(x::BigInt) = x.size < 0 ? -nextpow2(-x) : (x <= 2 ? x : one(BigInt) << ndigits(x-1, 2))
 
 end # module
