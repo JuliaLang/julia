@@ -281,14 +281,14 @@ function qrfact!{T}(A::AbstractMatrix{T}; pivot=false)
             τk = elementaryLeft!(A, k, k)
             τ[k] = τk
             for j = k+1:n
-                νAj = A[k,j]
+                vAj = A[k,j]
                 for i = k+1:m
-                    νAj += conj(A[i,k])*A[i,j]
+                    vAj += conj(A[i,k])*A[i,j]
                 end
-                νAj *= conj(τk)
-                A[k,j] -= νAj
+                vAj = conj(τk)*vAj
+                A[k,j] -= vAj
                 for i = k+1:m
-                    A[i,j] -= A[i,k]*νAj
+                    A[i,j] -= A[i,k]*vAj
                 end
             end
         end
@@ -367,14 +367,14 @@ function A_mul_B!{T}(A::QRPackedQ{T}, B::AbstractVecOrMat{T})
     @inbounds begin
         for k = min(mA,nA):-1:1
             for j = 1:nB
-                νBj = B[k,j]
+                vBj = B[k,j]
                 for i = k+1:mB
-                    νBj += conj(Afactors[i,k])*B[i,j]
+                    vBj += conj(Afactors[i,k])*B[i,j]
                 end
-                νBj *= conj(A.τ[k])
-                B[k,j] -= νBj
+                vBj = A.τ[k]*vBj
+                B[k,j] -= vBj
                 for i = k+1:mB
-                    B[i,j] -= Afactors[i,k]*νBj
+                    B[i,j] -= Afactors[i,k]*vBj
                 end
             end
         end
@@ -406,14 +406,14 @@ function Ac_mul_B!{T}(A::QRPackedQ{T}, B::AbstractVecOrMat{T})
     @inbounds begin
         for k = 1:min(mA,nA)
             for j = 1:nB
-                νBj = B[k,j]
+                vBj = B[k,j]
                 for i = k+1:mB
-                    νBj += conj(Afactors[i,k])*B[i,j]
+                    vBj += conj(Afactors[i,k])*B[i,j]
                 end
-                νBj *= A.τ[k]
-                B[k,j] -= νBj
+                vBj = conj(A.τ[k])*vBj
+                B[k,j] -= vBj
                 for i = k+1:mB
-                    B[i,j] -= Afactors[i,k]*νBj
+                    B[i,j] -= Afactors[i,k]*vBj
                 end
             end
         end
@@ -435,14 +435,14 @@ function A_mul_B!{T}(A::StridedMatrix{T},Q::QRPackedQ{T})
     @inbounds begin
         for k = 1:min(mQ,nQ)
             for i = 1:mA
-                νAi = A[i,k]
+                vAi = A[i,k]
                 for j = k+1:mQ
-                    νAi += Qfactors[j,k]*A[i,j]
+                    vAi += A[i,j]*Qfactors[j,k]
                 end
-                νAi *= conj(Q.τ[k])
-                A[i,k] -= νAi
+                vAi = vAi*Q.τ[k]
+                A[i,k] -= vAi
                 for j = k+1:nA
-                    A[i,j] -= Qfactors[j,k]*νAi
+                    A[i,j] -= vAi*conj(Qfactors[j,k])
                 end
             end
         end
@@ -451,7 +451,7 @@ function A_mul_B!{T}(A::StridedMatrix{T},Q::QRPackedQ{T})
 end
 function *{TA,TQ}(A::StridedVecOrMat{TA}, Q::Union(QRPackedQ{TQ},QRCompactWYQ{TQ}))
     TAQ = promote_type(TA, TQ)
-    A_mul_B!(TA==TAQ ? copy(A) : convert(typeof(A).name.primary{TAQ}, A), convert(typeof(Q).name.primary{TAQ}, Q))
+    A_mul_B!(TA==TAQ ? copy(A) : convert(Matrix{TAQ}, A), convert(typeof(Q).name.primary{TAQ}, Q))
 end
 ### AQc
 A_mul_Bc!{T<:BlasReal}(A::StridedVecOrMat{T}, B::QRCompactWYQ{T}) = LAPACK.gemqrt!('R','T',B.factors,B.T,A)
@@ -466,14 +466,14 @@ function A_mul_Bc!{T}(A::AbstractMatrix{T},Q::QRPackedQ{T})
     @inbounds begin
         for k = min(mQ,nQ):-1:1
             for i = 1:mA
-                νAi = A[i,k]
+                vAi = A[i,k]
                 for j = k+1:mQ
-                    νAi += Qfactors[j,k]*A[i,j]
+                    vAi += A[i,j]*Qfactors[j,k]
                 end
-                νAi *= Q.τ[k]
-                A[i,k] -= νAi
+                vAi = vAi*conj(Q.τ[k])
+                A[i,k] -= vAi
                 for j = k+1:nA
-                    A[i,j] -= Qfactors[j,k]*νAi
+                    A[i,j] -= vAi*conj(Qfactors[j,k])
                 end
             end
         end
@@ -482,7 +482,7 @@ function A_mul_Bc!{T}(A::AbstractMatrix{T},Q::QRPackedQ{T})
 end
 function A_mul_Bc{TA,TB}(A::AbstractVecOrMat{TA}, B::Union(QRCompactWYQ{TB},QRPackedQ{TB}))
     TAB = promote_type(TA,TB)
-    A_mul_Bc!(size(A,2)==size(B.factors,1) ? copy(A) : (size(A,2)==size(B.factors,2) ? [A zeros(T, size(A, 1), size(B.factors, 1) - size(B.factors, 2))] : throw(DimensionMismatch(""))))
+    A_mul_Bc!(size(A,2)==size(B.factors,1) ? (TA == TAB ? copy(A) : convert(Matrix{TAB}, A)) : (size(A,2)==size(B.factors,2) ? [A zeros(T, size(A, 1), size(B.factors, 1) - size(B.factors, 2))] : throw(DimensionMismatch(""))),B)
 end
 
 # Julia implementation similarly to xgelsy
@@ -526,14 +526,14 @@ function A_ldiv_B!{T}(A::QR{T},B::StridedMatrix{T})
             for k = m:-1:1 # Trapezoid to triangular by elementary operation
                 τ[k] = elementaryRightTrapezoid!(R,k)
                 for i = 1:k-1
-                    νRi = R[i,k]
+                    vRi = R[i,k]
                     for j = m+1:n
-                        νRi += R[i,j]*R[k,j]
+                        vRi += R[i,j]*R[k,j]
                     end
-                    νRi *= τ[k]
-                    R[i,k] -= νRi
+                    vRi *= τ[k]
+                    R[i,k] -= vRi
                     for j = m+1:n
-                        R[i,j] -= νRi*R[k,j]
+                        R[i,j] -= vRi*R[k,j]
                     end
                 end
             end
@@ -550,14 +550,14 @@ function A_ldiv_B!{T}(A::QR{T},B::StridedMatrix{T})
             B[m+1:mB,1:nB] = zero(T)
             for j = 1:nB
                 for k = 1:m
-                    νBj = B[k,j]
+                    vBj = B[k,j]
                     for i = m+1:n
-                        νBj += B[i,j]*conj(R[k,i])
+                        vBj += B[i,j]*conj(R[k,i])
                     end
-                    νBj *= τ[k]
-                    B[k,j] -= νBj
+                    vBj *= τ[k]
+                    B[k,j] -= vBj
                     for i = m+1:n
-                        B[i,j] -= R[k,i]*νBj
+                        B[i,j] -= R[k,i]*vBj
                     end
                 end
             end
