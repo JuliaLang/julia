@@ -300,31 +300,45 @@ function limit_type_depth(t::ANY, d::Int, cov::Bool, vars)
     if isa(t,TypeVar) || isa(t,TypeConstructor)
         return t
     end
+    inexact = !cov && d > MAX_TYPE_DEPTH
     if isa(t,Tuple)
+        t === () && return t
         if d > MAX_TYPE_DEPTH
-            R = Tuple
+            if isvatuple(t)
+                R = Tuple
+            else
+                R = NTuple{length(t),Any}
+            end
         else
-            R = map(x->limit_type_depth(x, d+1, cov, vars), t)
+            l0 = length(vars)
+            R = map(x->limit_type_depth(x, d+1, true, vars), t)
+            if !cov && (length(vars) > l0 || d == MAX_TYPE_DEPTH)
+                inexact = true
+            end
         end
     elseif isa(t,UnionType)
+        t === None && return t
         if d > MAX_TYPE_DEPTH
             R = Any
         else
-            R = Union(limit_type_depth(t.types, d, cov, vars)...)
+            R = limit_type_depth(t.types, d, cov, vars)
+            if isa(R,TypeVar)
+                R = Union(R.ub...)
+                inexact = true
+            else
+                R = Union(R...)
+            end
         end
     elseif isa(t,DataType)
         P = t.parameters
-        if P === ()
-            return t
-        end
+        P === () && return t
         if d > MAX_TYPE_DEPTH
             R = t.name.primary
         else
             Q = map(x->limit_type_depth(x, d+1, false, vars), P)
             if !cov && any(p->contains_is(vars,p), Q)
-                R = TypeVar(:_,t.name.primary)
-                push!(vars, R)
-                return R
+                R = t.name.primary
+                inexact = true
             else
                 R = t.name.primary{Q...}
             end
@@ -332,7 +346,7 @@ function limit_type_depth(t::ANY, d::Int, cov::Bool, vars)
     else
         return t
     end
-    if !cov && d > MAX_TYPE_DEPTH
+    if inexact
         R = TypeVar(:_,R)
         push!(vars, R)
     end
@@ -377,8 +391,13 @@ const getfield_tfunc = function (A, s0, name)
         end
         for i=1:length(s.names)
             if is(s.names[i],fld)
-                return limit_type_depth(s.types[i], 0, true,
-                                        filter!(x->isa(x,TypeVar), {s.parameters...}))
+                R = s.types[i]
+                if s.parameters === ()
+                    return R
+                else
+                    return limit_type_depth(R, 0, true,
+                                            filter!(x->isa(x,TypeVar), {s.parameters...}))
+                end
             end
         end
         return None
