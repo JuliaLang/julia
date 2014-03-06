@@ -3561,6 +3561,10 @@ Constructors
 
    m-by-n identity matrix
 
+.. function:: eye(A)
+
+   Constructs an identity matrix of the same dimensions and type as ``A``.
+
 .. function:: linspace(start, stop, n)
 
    Construct a vector of ``n`` linearly-spaced elements from ``start`` to ``stop``.
