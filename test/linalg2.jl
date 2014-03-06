@@ -352,7 +352,7 @@ for relty in (Float16, Float32, Float64, BigFloat), elty in (relty, Complex{relt
                 test_approx_eq_vecs(u1, u2) 
                 test_approx_eq_vecs(v1, v2)
             end
-            @test_approx_eq_eps 0 normfro(u2*diagm(d2)*v2'-Tfull) n*max(n^2*eps(relty), normfro(u1*diagm(d1)*v1'-Tfull))
+            @test_approx_eq_eps 0 vecnorm(u2*diagm(d2)*v2'-Tfull) n*max(n^2*eps(relty), vecnorm(u1*diagm(d1)*v1'-Tfull))
         end
     end
 end
@@ -642,6 +642,11 @@ for elty in (Float16, Float32, Float64, BigFloat, Complex{Float16}, Complex{Floa
         @test norm(As + Bs,1) <= norm(As,1) + norm(Bs,1)
         elty <: Union(BigFloat,Complex{BigFloat},BigInt) || @test norm(As + Bs) <= norm(As) + norm(Bs) # two is default
         @test norm(As + Bs,Inf) <= norm(As,Inf) + norm(Bs,Inf)
+
+        # vecnorm:
+        for p = -2:3
+            @test norm(reshape(A, length(A)), p) == vecnorm(A, p)
+        end
     end
 end
 

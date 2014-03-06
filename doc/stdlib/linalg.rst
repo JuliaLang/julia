@@ -274,11 +274,16 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    For vectors, ``p`` can assume any numeric value (even though not all values produce a mathematically valid vector norm). In particular, ``norm(A, Inf)`` returns the largest value in ``abs(A)``, whereas ``norm(A, -Inf)`` returns the smallest.
 
-   For matrices, valid values of ``p`` are ``1``, ``2``, or ``Inf``. Use :func:`normfro` to compute the Frobenius norm.
+   For matrices, valid values of ``p`` are ``1``, ``2``, or ``Inf``. Use :func:`vecnorm` to compute the Frobenius norm.
 
-.. function:: normfro(A)
+.. function:: vecnorm(A, [p])
 
-   Compute the Frobenius norm of a matrix ``A``.
+   For any iterable container ``A`` (including arrays of any dimension)
+   of numbers, compute the ``p``-norm (defaulting to ``p=2``) as if ``A``
+   were a vector of the corresponding length.
+
+   For example, if ``A`` is a matrix and ``p=2``, then this is equivalent
+   to the Frobenius norm.
 
 .. function:: cond(M, [p])
 
@@ -378,19 +383,43 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    The conjugate transposition operator (``'``).
 
-.. function:: eigs(A; nev=6, which="LM", tol=0.0, maxiter=1000, sigma=0, ritzvec=true, op_part=:real,v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
+.. function:: eigs(A; nev=6, which="LM", tol=0.0, maxiter=1000, sigma=nothing, ritzvec=true, op_part=:real,v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
 
-   ``eigs`` computes eigenvalues ``d`` of A using Arnoldi factorization. The following keyword arguments are supported:
+   ``eigs`` computes eigenvalues ``d`` of ``A`` using Lanczos or Arnoldi iterations for real symmetric or general nonsymmetric matrices respectively. The following keyword arguments are supported:
     * ``nev``: Number of eigenvalues
-    * ``which``: type of eigenvalues ("LM", "SM")
+    * ``which``: type of eigenvalues to compute. See the note below.
+
+      ========= ======================================================================================================================
+      ``which`` type of eigenvalues
+      --------- ----------------------------------------------------------------------------------------------------------------------
+      ``"LM"``  eigenvalues of largest magnitude
+      ``"SM"``  eigenvalues of smallest magnitude
+      ``"LA"``  largest algebraic eigenvalues (real symmetric ``A`` only)
+      ``"SA"``  smallest algebraic eigenvalues (real symmetric ``A`` only)
+      ``"BE"``  compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (symmetric ``A`` only)
+      ``"LR"``  eigenvalues of largest real part (nonsymmetric ``A`` only)
+      ``"SR"``  eigenvalues of smallest real part (nonsymmetric ``A`` only)
+      ``"LI"``  eigenvalues of largest imaginary part (nonsymmetric ``A`` only)
+      ``"SI"``  eigenvalues of smallest imaginary part (nonsymmetric ``A`` only)
+      ========= ======================================================================================================================
+
     * ``tol``: tolerance (:math:`tol \le 0.0` defaults to ``DLAMCH('EPS')``)
     * ``maxiter``: Maximum number of iterations
-    * ``sigma``: find eigenvalues close to ``sigma`` using shift and invert
+    * ``sigma``: Specifies the level shift used in inverse iteration. If ``nothing`` (default), defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to ``sigma`` using shift and invert iterations.
     * ``ritzvec``: Returns the Ritz vectors ``v`` (eigenvectors) if ``true``
-    * ``op_part``: which part of linear operator to use for real A (:real, :imag)
-    * ``v0``: starting vector from which to start the Arnoldi iteration
+    * ``op_part``: which part of linear operator to use for real ``A`` (``:real``, ``:imag``)
+    * ``v0``: starting vector from which to start the iterations
+
    ``eigs`` returns the ``nev`` requested eigenvalues in ``d``, the corresponding Ritz vectors ``v`` (only if ``ritzvec=true``), the number of converged eigenvalues ``nconv``, the number of iterations ``niter`` and the number of matrix vector multiplications ``nmult``, as well as the final residual vector ``resid``.
-    
+   
+   .. note:: The ``sigma`` and ``which`` keywords interact: the description of eigenvalues searched for by ``which`` do _not_ necessarily refer to the eigenvalues of ``A``, but rather the linear operator constructed by the specification of the iteration mode implied by ``sigma``. 
+
+      =============== ================================== ==================================
+      ``sigma``       iteration mode                     ``which`` refers to eigenvalues of
+      --------------- ---------------------------------- ----------------------------------
+      ``nothing``     ordinary (forward)                 :math:`A`
+      real or complex inverse with level shift ``sigma`` :math:`(A - \sigma I )^{-1}`
+      =============== ================================== ==================================
 
 .. function:: svds(A; nev=6, which="LA", tol=0.0, maxiter=1000, ritzvec=true)
 

@@ -504,6 +504,10 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
                     return eval_body(stmts, locals, nl, i+1, toplevel);
                 }
                 else {
+#ifdef _OS_WINDOWS_
+                    if (jl_exception_in_transit == jl_stackovf_exception)
+                        _resetstkoflw();
+#endif
                     i = label_idx(jl_exprarg(stmt,0), stmts);
                     continue;
                 }

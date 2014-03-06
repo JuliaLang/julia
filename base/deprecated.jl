@@ -400,6 +400,7 @@ eval(Sys, :(@deprecate shlib_list dllist))
 IntSet(xs::Integer...) = (s=IntSet(); for a in xs; push!(s,a); end; s)
 Set{T<:Number}(xs::T...) = Set{T}(xs)
 
+@deprecate normfro(A) vecnorm(A)
 
 # 0.3 discontinued functions
 

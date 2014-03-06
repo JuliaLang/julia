@@ -292,7 +292,7 @@ function pull_request(dir::String, commit::String="", url::String="")
     branch = "pull-request/$(commit[1:8])"
     info("Pushing changes as branch $branch")
     Git.run(`push -q $fork $commit:refs/heads/$branch`, dir=dir)
-    pr_url = "$(response["html_url"])/compare/$branch?expand=1"
+    pr_url = "$(response["html_url"])/compare/$branch"
     @osx? run(`open $pr_url`) : info("To create a pull-request open:\n\n  $pr_url\n")
 end
 
