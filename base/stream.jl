@@ -403,35 +403,6 @@ end
 
 abstract AsyncWork
 
-type SingleAsyncWork <: AsyncWork
-    handle::Ptr{Void}
-    cb::Function
-    function SingleAsyncWork(cb::Function)
-        this = new(c_malloc(_sizeof_uv_async), cb)
-        associate_julia_struct(this.handle, this)
-        preserve_handle(this)
-        err = ccall(:uv_async_init,Cint,(Ptr{Void},Ptr{Void},Ptr{Void}),eventloop(),this.handle,uv_jl_asynccb::Ptr{Void})
-        this
-    end
-end
-
-type IdleAsyncWork <: AsyncWork
-    handle::Ptr{Void}
-    cb::Function
-    function IdleAsyncWork(cb::Function)
-        this = new(c_malloc(_sizeof_uv_idle), cb)
-        disassociate_julia_struct(this)
-        err = ccall(:uv_idle_init,Cint,(Ptr{Void},Ptr{Void}),eventloop(),this)
-        if err != 0
-            c_free(this.handle)
-            this.handle = C_NULL
-            error(UVError("uv_make_timer",err))
-        end
-        finalizer(this,uvfinalize)
-        this
-    end
-end
-
 type Timer <: AsyncWork
     handle::Ptr{Void}
     cb::Function
@@ -516,17 +487,6 @@ function sleep(sec::Real)
         stop_timer(timer)
     end
     nothing
-end
-
-function add_idle_cb(cb::Function)
-    work = IdleAsyncWork(cb)
-    associate_julia_struct(work.handle, work)
-    ccall(:uv_idle_start,Cint,(Ptr{Void},Ptr{Void}),work.handle,uv_jl_asynccb::Ptr{Void})
-    work
-end
-
-function queueAsync(work::SingleAsyncWork)
-    ccall(:uv_async_send,Cint,(Ptr{Void},),work.handle)
 end
 
 ## event loop ##
