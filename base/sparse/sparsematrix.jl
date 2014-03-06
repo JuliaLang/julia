@@ -353,9 +353,12 @@ function findnz{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     return (I, J, V)
 end
 
-function sprand(m::Integer, n::Integer, density::FloatingPoint, rng::Function, v)
+truebools(n::Integer) = ones(Bool, n)
+function sprand{T}(m::Integer, n::Integer, density::FloatingPoint, rng::Function,::Type{T}=eltype(rng(1)))
     0 <= density <= 1 || throw(ArgumentError("density must be between 0 and 1"))
     N = n*m
+    N == 0 && return spzeros(T,m,n)
+    N == 1 && return rand() <= density ? sparse(rng(1)) : spzeros(T,1,1)
     # if density < 0.5, we'll randomly generate the indices to set
     #        otherwise, we'll randomly generate the indices to skip
     K = (density > 0.5) ? N*(1-density) : N*density
@@ -370,7 +373,7 @@ function sprand(m::Integer, n::Integer, density::FloatingPoint, rng::Function, v
     sizehint(uind, int(N*density))
     if density < 0.5
         if ik == 0
-            return sparse(Int[],Int[],Array(eltype(v),0),m,n)
+            return sparse(Int[],Int[],Array(T,0),m,n)
         end
         j = ind[1]
         push!(uind, j)
@@ -396,17 +399,11 @@ function sprand(m::Integer, n::Integer, density::FloatingPoint, rng::Function, v
         end
     end
     I, J = ind2sub((m,n), uind)
-    if !iseltype(v,Bool)
-        return sparse_IJ_sorted!(I, J, rng(length(uind)), m, n, +)  # it will never need to combine
-    else
-        return sparse_IJ_sorted!(I, J, ones(Bool, length(uind)), m, n, +)
-    end
+    return sparse_IJ_sorted!(I, J, rng(length(uind)), m, n, +)  # it will never need to combine
 end
-
-sprand(m::Integer, n::Integer, density::FloatingPoint, rng::Function) = sprand(m,n,density,rng, 1.0)
-sprand(m::Integer, n::Integer, density::FloatingPoint)  = sprand(m,n,density,rand, 1.0)
-sprandn(m::Integer, n::Integer, density::FloatingPoint) = sprand(m,n,density,randn, 1.0)
-sprandbool(m::Integer, n::Integer, density::FloatingPoint) = sprand(m,n,density,randbool, true)
+sprand(m::Integer, n::Integer, density::FloatingPoint) = sprand(m,n,density,rand,Float64)
+sprandn(m::Integer, n::Integer, density::FloatingPoint) = sprand(m,n,density,randn,Float64)
+sprandbool(m::Integer, n::Integer, density::FloatingPoint) = sprand(m,n,density,truebools,Bool)
 
 spones{T}(S::SparseMatrixCSC{T}) =
      SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), ones(T, S.colptr[end]-1))
