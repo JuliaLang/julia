@@ -35,8 +35,10 @@ reim(z) = (real(z), imag(z))
 isreal(x::Real) = true
 isreal(z::Complex) = imag(z) == 0
 isimag(z::Number) = real(z) == 0
-isinteger(z::Complex) = isreal(z) && isinteger(real(z))
-isfinite(z::Complex) = isfinite(real(z)) && isfinite(imag(z))
+isinteger(z::Complex) = isreal(z) & isinteger(real(z))
+isfinite(z::Complex) = isfinite(real(z)) & isfinite(imag(z))
+isnan(z::Complex) = isnan(real(z)) | isnan(imag(z))
+isinf(z::Complex) = isinf(real(z)) | isinf(imag(z))
 
 complex(x::Real, y::Real) = Complex(x, y)
 complex(x::Real) = Complex(x)
