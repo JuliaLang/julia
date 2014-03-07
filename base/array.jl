@@ -802,15 +802,26 @@ end
 # functions that should give an Int result for Bool arrays
 for f in (:+, :-)
     @eval begin
-        function ($f)(x::Bool, y::StridedArray{Bool})
-            reshape([ ($f)(x, y[i]) for i=1:length(y) ], size(y))
+        function ($f)(A::Bool, B::StridedArray{Bool})
+            F = Array(Int, size(B))
+            for i=1:length(B)
+                @inbounds F[i] = ($f)(A, B[i])
+            end
+            return F
         end
-        function ($f)(x::StridedArray{Bool}, y::Bool)
-            reshape([ ($f)(x[i], y) for i=1:length(x) ], size(x))
+        function ($f)(A::StridedArray{Bool}, B::Bool)
+            F = Array(Int, size(A))
+            for i=1:length(A)
+                @inbounds F[i] = ($f)(A[i], B)
+            end
+            return F
         end
-        function ($f)(x::StridedArray{Bool}, y::StridedArray{Bool})
-            shp = promote_shape(size(x),size(y))
-            reshape([ ($f)(x[i], y[i]) for i=1:length(x) ], shp)
+        function ($f)(A::StridedArray{Bool}, B::StridedArray{Bool})
+            F = Array(Int, promote_shape(size(A), size(B)))
+            for i=1:length(A)
+                @inbounds F[i] = ($f)(A[i], B[i])
+            end
+            return F
         end
     end
 end
