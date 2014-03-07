@@ -2350,11 +2350,24 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     if (head == goto_ifnot_sym) {
         jl_value_t *cond = args[0];
         int labelname = jl_unbox_long(args[1]);
-        Value *isfalse = emit_condition(cond, "if", ctx);
         BasicBlock *ifso = BasicBlock::Create(getGlobalContext(), "if", ctx->f);
         BasicBlock *ifnot = (*ctx->labels)[labelname];
         assert(ifnot);
-        builder.CreateCondBr(isfalse, ifnot, ifso);
+        // NOTE: if type inference sees a constant condition it behaves as if
+        // the branch weren't there. But LLVM will not see constant conditions
+        // this way until a later optimization pass, so it might see one of our
+        // SSA vars as not dominating all uses. see issue #6068
+        // Work around this by generating unconditional branches.
+        if (cond == jl_true) {
+            builder.CreateBr(ifso);
+        }
+        else if (cond == jl_false) {
+            builder.CreateBr(ifnot);
+        }
+        else {
+            Value *isfalse = emit_condition(cond, "if", ctx);
+            builder.CreateCondBr(isfalse, ifnot, ifso);
+        }
         builder.SetInsertPoint(ifso);
     }
 
