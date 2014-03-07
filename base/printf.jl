@@ -501,9 +501,9 @@ end
 
 ### core unsigned integer decoding functions ###
 
-macro handle_zero()
+macro handle_zero(ex)
     quote
-        if $(esc(:x)) == 0
+        if $(esc(ex)) == 0
             POINT[1] = 1
             DIGITS[1] = '0'
             return
@@ -512,7 +512,7 @@ macro handle_zero()
 end
 
 function decode_oct(x::Unsigned)
-    @handle_zero
+    @handle_zero x
     POINT[1] = i = div((sizeof(x)<<3)-leading_zeros(x)+2,3)
     while i > 0
         DIGITS[i] = '0'+(x&0x7)
@@ -522,6 +522,7 @@ function decode_oct(x::Unsigned)
 end
 
 function decode_0ct(x::Unsigned)
+    # doesn't need special handling for zero
     POINT[1] = i = div((sizeof(x)<<3)-leading_zeros(x)+5,3)
     while i > 0
         DIGITS[i] = '0'+(x&0x7)
@@ -531,7 +532,7 @@ function decode_0ct(x::Unsigned)
 end
 
 function decode_dec(x::Unsigned)
-    @handle_zero
+    @handle_zero x
     POINT[1] = i = Base.ndigits0z(x)
     while i > 0
         DIGITS[i] = '0'+rem(x,10)
@@ -541,7 +542,7 @@ function decode_dec(x::Unsigned)
 end
 
 function decode_hex(x::Unsigned, symbols::Array{Uint8,1})
-    @handle_zero
+    @handle_zero x
     POINT[1] = i = (sizeof(x)<<1)-(leading_zeros(x)>>2)
     while i > 0
         DIGITS[i] = symbols[(x&0xf)+1]
@@ -555,6 +556,32 @@ const HEX_symbols = "0123456789ABCDEF".data
 
 decode_hex(x::Unsigned) = decode_hex(x,hex_symbols)
 decode_HEX(x::Unsigned) = decode_hex(x,HEX_symbols)
+
+function decode(b::Int, x::BigInt)
+    neg = NEG[1] = x.size < 0
+    pt = POINT[1] = Base.ndigits(x, abs(b))
+    length(DIGITS) < pt+1 && resize!(DIGITS, pt+1)
+    neg && (x.size = -x.size)
+    ccall((:__gmpz_get_str, :libgmp), Ptr{Uint8},
+          (Ptr{Uint8}, Cint, Ptr{BigInt}), DIGITS, b, &x)
+    neg && (x.size = -x.size)
+end
+
+function decode_0ct(x::BigInt)
+    neg = NEG[1] = x.size < 0
+    DIGITS[1] = '0'
+    if x.size == 0
+        POINT[1] = 1
+        return
+    end
+    pt = POINT[1] = Base.ndigits0z(x, 8) + 1
+    length(DIGITS) < pt+1 && resize!(DIGITS, pt+1)
+    neg && (x.size = -x.size)
+    p = convert(Ptr{Uint8}, DIGITS) + 1
+    ccall((:__gmpz_get_str, :libgmp), Ptr{Uint8},
+          (Ptr{Uint8}, Cint, Ptr{BigInt}), p, 8, &x)
+    neg && (x.size = -x.size)
+end
 
 ### decoding functions directly used by printf generated code ###
 
@@ -584,7 +611,7 @@ macro handle_negative()
     quote
         if $(esc(:x)) < 0
             NEG[1] = true
-            $(esc(:x)) = -$(esc(:x))
+            $(esc(:x)) = oftype($(esc(:x)),-$(esc(:x)))
         else
             NEG[1] = false
         end
@@ -596,6 +623,12 @@ int_0ct(x::Integer) = (@handle_negative; decode_0ct(unsigned(x)))
 int_dec(x::Integer) = (@handle_negative; decode_dec(unsigned(x)))
 int_hex(x::Integer) = (@handle_negative; decode_hex(unsigned(x)))
 int_HEX(x::Integer) = (@handle_negative; decode_HEX(unsigned(x)))
+
+int_oct(x::BigInt) = decode(8, x)
+int_0ct(x::BigInt) = decode_0ct(x)
+int_dec(x::BigInt) = decode(10, x)
+int_hex(x::BigInt) = decode(16, x)
+int_HEX(x::BigInt) = decode(-16, x)
 
 int_oct(x::Real) = int_oct(integer(x)) # TODO: real float decoding.
 int_0ct(x::Real) = int_0ct(integer(x)) # TODO: real float decoding.
