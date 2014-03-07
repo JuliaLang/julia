@@ -34,6 +34,10 @@ New language features
 Library improvements
 --------------------
 
+  * `convert(Ptr{T1}, x::Array{T2})` is now deprecated unless `T1 == T2`
+    or `T1 == None` ([#6073]).  (You can still explicitly `convert`
+    one pointer type into another if needed.)
+
   * Well-behaved floating-point ranges ([#2333], [#5636]).
     Introduced the `FloatRange` type for floating-point ranges with a step,
     which will give intuitive/correct results for classically problematic
