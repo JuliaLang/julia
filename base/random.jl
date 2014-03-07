@@ -97,12 +97,18 @@ rand(::Type{Float16}) = float16(rand())
 rand{T<:Real}(::Type{Complex{T}}) = complex(rand(T),rand(T))
 
 
-rand(r::MersenneTwister) = dsfmt_genrand_close_open(r.state)
+rand(rng::MersenneTwister) = dsfmt_genrand_close_open(rng.state)
+rand(rng::MersenneTwister, ::Type{Float64}) = rand(rng)
+rand(rng::MersenneTwister, ::Type{Float32}) = float32(rand(rng))
+rand(rng::MersenneTwister, ::Type{Float16}) = float16(rand(rng))
+rand{T<:Real}(rng::MersenneTwister, ::Type{Complex{T}}) = complex(rand(rng, T),rand(rng, T))
 
 ## random integers
 
 dsfmt_randui32() = dsfmt_gv_genrand_uint32()
 dsfmt_randui64() = uint64(dsfmt_randui32()) | (uint64(dsfmt_randui32())<<32)
+dsfmt_randui32(rng::MersenneTwister) = dsfmt_genrand_uint32(rng.state)
+dsfmt_randui64(rng::MersenneTwister) = uint64(dsfmt_randui32(rng)) | (uint64(dsfmt_randui32(rng))<<32)
 
 rand(::Type{Uint8})   = uint8(rand(Uint32))
 rand(::Type{Uint16})  = uint16(rand(Uint32))
@@ -115,6 +121,18 @@ rand(::Type{Int16})   = int16(rand(Uint16))
 rand(::Type{Int32})   = int32(rand(Uint32))
 rand(::Type{Int64})   = int64(rand(Uint64))
 rand(::Type{Int128})  = int128(rand(Uint128))
+
+rand(rng::AbstractRNG, ::Type{Uint8})   = uint8(rand(rng, Uint32))
+rand(rng::AbstractRNG, ::Type{Uint16})  = uint16(rand(rng, Uint32))
+rand(rng::MersenneTwister, ::Type{Uint32})  = dsfmt_randui32(rng)
+rand(rng::MersenneTwister, ::Type{Uint64})  = dsfmt_randui64(rng)
+rand(rng::AbstractRNG, ::Type{Uint128}) = uint128(rand(rng, Uint64))<<64 | rand(rng, Uint64)
+
+rand(rng::AbstractRNG, ::Type{Int8})    = int8(rand(rng, Uint8))
+rand(rng::AbstractRNG, ::Type{Int16})   = int16(rand(rng, Uint16))
+rand(rng::AbstractRNG, ::Type{Int32})   = int32(rand(rng, Uint32))
+rand(rng::AbstractRNG, ::Type{Int64})   = int64(rand(rng, Uint64))
+rand(rng::AbstractRNG, ::Type{Int128})  = int128(rand(rng, Uint128))
 
 # Arrays of random numbers
 
