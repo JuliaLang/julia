@@ -475,6 +475,7 @@ end
 function stop_timer(timer::Timer)
     # ignore multiple calls to stop_timer
     !haskey(uvhandles, timer) && return
+    timer.handle == C_NULL && return
 
     ccall(:uv_timer_stop,Cint,(Ptr{Void},),timer.handle)
     disassociate_julia_struct(timer.handle)
