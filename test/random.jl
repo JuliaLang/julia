@@ -9,6 +9,12 @@
 @test length(randn(4, 5)) == 20
 @test length(randbool(4, 5)) == 20
 
+@test rand(MersenneTwister()) == 0.8236475079774124
+@test rand(MersenneTwister(0)) == 0.8236475079774124
+@test rand(MersenneTwister(42)) == 0.5331830160438613
+# Try a seed larger than 2^32
+@test rand(MersenneTwister(5294967296)) == 0.3498809918210497
+
 for T in (Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Int128, Uint128, Char, BigInt,
 	Float16, Float32, Float64, Rational{Int})
     r = rand(convert(T, 97):convert(T, 122))

@@ -99,7 +99,11 @@ hash(z::Complex) = bitmix(hash(real(z)),hash(imag(z)))
 
 conj(z::Complex) = Complex(real(z),-imag(z))
 abs(z::Complex)  = hypot(real(z), imag(z))
-abs2(z::Complex) = real(z)*real(z) + imag(z)*imag(z)
+function abs2(z::Complex)
+    x, y = reim(z)
+    isinf(x) ? abs(x) : isinf(y) ? abs(y) : x^2 + y^2
+end
+
 inv(z::Complex)  = conj(z)/abs2(z)
 inv{T<:Integer}(z::Complex{T}) = inv(float(z))
 sign(z::Complex) = z/abs(z)

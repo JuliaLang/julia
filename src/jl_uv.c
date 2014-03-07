@@ -181,12 +181,15 @@ DLLEXPORT void jl_uv_readcb(uv_stream_t *handle, ssize_t nread, const uv_buf_t* 
 
 DLLEXPORT void jl_uv_alloc_buf(uv_handle_t *handle, size_t suggested_size, uv_buf_t* buf)
 {
-    JULIA_CB(alloc_buf,handle->data,1,CB_INT32,suggested_size);
-    if (!jl_is_tuple(ret) || !jl_is_pointer(jl_t0(ret)) || !jl_is_int32(jl_t1(ret))) {
-        jl_error("jl_alloc_buf: Julia function returned invalid value for buffer allocation callback");
+    if (handle->data) {
+        JULIA_CB(alloc_buf,handle->data,1,CB_INT32,suggested_size);
+        assert(jl_is_tuple(ret) && jl_is_pointer(jl_t0(ret)) && jl_is_int32(jl_t1(ret)));
+        buf->base = (char*)jl_unbox_voidpointer(jl_t0(ret));
+        buf->len = jl_unbox_int32(jl_t1(ret));
     }
-    buf->base = (char*)jl_unbox_voidpointer(jl_t0(ret));
-    buf->len = jl_unbox_int32(jl_t1(ret));
+    else {
+        buf->len = 0;
+    }
 }
 
 DLLEXPORT void jl_uv_connectcb(uv_connect_t *connect, int status)
@@ -506,7 +509,7 @@ DLLEXPORT int jl_puts(char *str, uv_stream_t *stream)
 
 DLLEXPORT void jl_uv_writecb(uv_write_t* req, int status)
 {
-    if(req->data) {
+    if (req->data) {
         JULIA_CB(writecb, req->data, 2, CB_PTR, req, CB_INT32, status)
         (void)ret;
     }
