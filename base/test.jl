@@ -61,9 +61,25 @@ macro test_fails(ex)
     :(@test_throws $ex)
 end
 
+approx_full(x::StoredArray) = x
+approx_full(x::Number) = x
+approx_full(x) = full(x)
+
 function test_approx_eq(va, vb, Eps, astr, bstr)
-    diff = maximum(abs(va - vb))
-    if diff > Eps
+    va = approx_full(va)
+    vb = approx_full(vb)
+    diff = real(zero(eltype(va)))
+    ok = true
+    for i = 1:length(va)
+        xa = va[i]; xb = vb[i]
+        if isfinite(xa) && isfinite(xb)
+            diff = max(diff, abs(xa-xb))
+        elseif !isequal(xa,xb)
+            ok = false; break
+        end
+    end
+
+    if !ok || (!isnan(Eps) && !(diff <= Eps))
         sdiff = string("|", astr, " - ", bstr, "| <= ", Eps)
         error("assertion failed: ", sdiff,
 	      "\n  ", astr, " = ", va,
@@ -72,8 +88,10 @@ function test_approx_eq(va, vb, Eps, astr, bstr)
     end
 end
 
+array_eps(a) = eps(float(maximum(x->(isfinite(x) ? abs(x) : nan(x)), a)))
+
 test_approx_eq(va, vb, astr, bstr) =
-    test_approx_eq(va, vb, 1E4*length(va)*max(eps(float(maximum(abs(va)))), eps(float(maximum(abs(vb))))), astr, bstr)
+    test_approx_eq(va, vb, 1E4*length(va)*max(array_eps(va), array_eps(vb)), astr, bstr)
 
 macro test_approx_eq_eps(a, b, c)
     :(test_approx_eq($(esc(a)), $(esc(b)), $(esc(c)), $(string(a)), $(string(b))))

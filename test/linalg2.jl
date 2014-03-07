@@ -196,7 +196,9 @@ function test_approx_eq_vecs{S<:Real,T<:Real}(a::StridedVecOrMat{S}, b::StridedV
     for i=1:n
         ev1, ev2 = a[:,i], b[:,i]
         deviation = min(abs(norm(ev1-ev2)),abs(norm(ev1+ev2)))
-        @test_approx_eq_eps deviation 0.0 error
+        if !isnan(deviation)
+            @test_approx_eq_eps deviation 0.0 error
+        end
     end
 end
 
