@@ -726,6 +726,25 @@ function ini_dec(x::SmallFloatingPoint, n::Int)
     end
 end
 
+function ini_dec(x::BigInt, n::Int)
+    if x.size == 0
+        POINT[1] = 1
+        NEG[1] = false
+        ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', n)
+    else
+        d = Base.ndigits0z(x)
+        if d <= n
+            int_dec(x)
+            d == n && return
+            p = convert(Ptr{Void}, DIGITS) + POINT[1]
+            ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), p, '0', n - POINT[1])
+        else
+            int_dec(iround(x/big(10)^(d-n)))
+            POINT[1] = d
+        end
+    end
+end
+
 ### external printf interface ###
 
 is_str_expr(ex) =
