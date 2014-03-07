@@ -192,14 +192,12 @@ When a scalar value is passed with ``&`` as an argument of type
 Array conversions
 ~~~~~~~~~~~~~~~~~
 
-When an ``Array{T}`` is passed to C as a ``Ptr{T}`` or ``Ptr{Void}``
-argument, it is "converted" simply by taking the address of the first
-element. This is done in order to avoid copying arrays unnecessarily.
-To pass an array ``A`` as a pointer of a different type (for example,
-passing a ``Float64`` array to a function that operates on
-uninterpreted bytes), you can either declare the argument as
-``Ptr{Void}`` or you can explicitly call ``convert(Ptr{T},
-pointer(A))``.
+When an ``Array`` is passed to C as a ``Ptr`` argument, it is
+"converted" simply by taking the address of the first element. This is
+done in order to avoid copying arrays unnecessarily, and to tolerate the
+slight mismatches in pointer types that are often encountered in C APIs
+(for example, passing a ``Float64`` array to a function that operates on
+uninterpreted bytes).
 
 Therefore, if an ``Array`` contains data in the wrong format, it will
 have to be explicitly converted using a call such as ``int32(a)``.
