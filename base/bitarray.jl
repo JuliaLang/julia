@@ -350,7 +350,7 @@ end
 ## Indexing: getindex ##
 
 function getindex_unchecked(Bc::Vector{Uint64}, i::Int)
-    return (Bc[@_div64(int(i)-1)+1] & (uint64(1)<<@_mod64(int(i)-1))) != 0
+    return (Bc[@_div64(i-1)+1] & (uint64(1)<<@_mod64(i-1))) != 0
 end
 
 function getindex(B::BitArray, i::Int)
@@ -885,25 +885,35 @@ end
 ## Binary arithmetic operators ##
 
 for f in (:+, :-)
-    @eval begin
-        function ($f)(A::BitArray, B::BitArray)
-            shp = promote_shape(size(A),size(B))
-            reshape(Int[ ($f)(A[i], B[i]) for i=1:length(A) ], shp)
+    @eval function ($f)(A::BitArray, B::BitArray)
+        r = Array(Int, promote_shape(size(A), size(B)))
+        ai = start(A)
+        bi = start(B)
+        ri = 1
+        while !done(A, ai)
+            a, ai = next(A, ai)
+            b, bi = next(B, bi)
+            @inbounds r[ri] = ($f)(a, b)
+            ri += 1
         end
-        function ($f)(B::BitArray, x::Bool)
-            reshape([ ($f)(B[i], x) for i = 1:length(B) ], size(B))
+        return r
+    end
+end
+for f in (:+, :-),
+    (arg1, arg2, T, fargs) in ((:(B::BitArray), :(x::Bool)    , Int                                   , :(b, x)),
+                               (:(B::BitArray), :(x::Number)  , :(promote_array_type(typeof(x), Bool)), :(b, x)),
+                               (:(x::Bool)    , :(B::BitArray), Int                                   , :(x, b)),
+                               (:(x::Number)  , :(B::BitArray), :(promote_array_type(typeof(x), Bool)), :(x, b)))
+    @eval function ($f)($arg1, $arg2)
+        r = Array($T, size(B))
+        bi = start(B)
+        ri = 1
+        while !done(B, bi)
+            b, bi = next(B, bi)
+            @inbounds r[ri] = ($f)($fargs...)
+            ri += 1
         end
-        function ($f)(B::BitArray, x::Number)
-            pt = promote_array_type(typeof(x), Bool)
-            reshape((pt)[ ($f)(B[i], x) for i = 1:length(B) ], size(B))
-        end
-        function ($f)(x::Bool, B::BitArray)
-            reshape([ ($f)(x, B[i]) for i = 1:length(B) ], size(B))
-        end
-        function ($f)(x::Number, B::BitArray)
-            pt = promote_array_type(typeof(x), Bool)
-            reshape((pt)[ ($f)(x, B[i]) for i = 1:length(B) ], size(B))
-        end
+        return r
     end
 end
 
