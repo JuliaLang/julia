@@ -109,8 +109,6 @@ importall .Multimedia
 ccall(:jl_get_uv_hooks, Void, (Cint,), 0)
 include("grisu.jl")
 import .Grisu.print_shortest
-include("printf.jl")
-importall .Printf
 include("file.jl")
 include("methodshow.jl")
 
@@ -181,8 +179,6 @@ include("mmap.jl")
 include("sharedarray.jl")
 
 # utilities - version, timing, help, edit, metaprogramming
-include("sysinfo.jl")
-import .Sys.CPU_CORES
 include("version.jl")
 include("datafmt.jl")
 include("deepcopy.jl")
@@ -222,6 +218,14 @@ big(x::FloatingPoint) = convert(BigFloat,x)
 big(q::Rational) = big(num(q))//big(den(q))
 big(z::Complex) = complex(big(real(z)),big(imag(z)))
 @vectorize_1arg Number big
+
+# (s)printf macros
+include("printf.jl")
+importall .Printf
+
+# system information
+include("sysinfo.jl")
+import .Sys.CPU_CORES
 
 # mathematical constants
 include("constants.jl")
