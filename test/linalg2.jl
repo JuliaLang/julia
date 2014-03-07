@@ -475,7 +475,7 @@ for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
             A = convert(Matrix{elty}, randn(10,nn))
         else
             A = convert(Matrix{elty}, complex(randn(10,nn),randn(10,nn)))
-        end    ## LU (only equal for real because LAPACK uses difference absolute value when choosing permutations)
+        end    ## LU (only equal for real because LAPACK uses different absolute value when choosing permutations)
         if elty <: Real
             FJulia  = invoke(lufact!, (AbstractMatrix,), copy(A)) 
             FLAPACK = Base.LinAlg.LAPACK.getrf!(copy(A))
