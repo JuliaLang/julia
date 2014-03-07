@@ -650,3 +650,9 @@ end
 
 # inv
 @test inv(1e300+0im) == 1e-300 - 0.0im
+
+#issue 5979
+let z=complex(Inf, NaN)
+    @test abs(z) == abs2(z) == Inf
+end
+

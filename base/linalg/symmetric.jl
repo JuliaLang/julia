@@ -38,13 +38,13 @@ factorize(A::HermOrSym) = bkfact(A.S, symbol(A.uplo), issym(A))
 eigfact!{T<:BlasReal}(A::Symmetric{T}) = Eigen(LAPACK.syevr!('V', 'A', A.uplo, A.S, 0.0, 0.0, 0, 0, -1.0)...)
 eigfact!{T<:BlasComplex}(A::Hermitian{T}) = Eigen(LAPACK.syevr!('V', 'A', A.uplo, A.S, 0.0, 0.0, 0, 0, -1.0)...)
 eigfact{T<:BlasFloat}(A::HermOrSym{T}) = eigfact!(copy(A))
-eigfact{T}(A::HermOrSym{T}) = (S = promote_type(Float32,typeof(sqrt(one(T)))); S != T ? eigfact!(convert(typeof(A).name.primary{S}, A)) : eigfact!(copy(A)))
+eigfact{T}(A::HermOrSym{T}) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); S != T ? eigfact!(convert(typeof(A).name.primary{S}, A)) : eigfact!(copy(A)))
 eigvals!{T<:BlasReal}(A::Symmetric{T}, il::Int=1, ih::Int=size(A,1)) = LAPACK.syevr!('N', 'I', A.uplo, A.S, 0.0, 0.0, il, ih, -1.0)[1]
 eigvals!{T<:BlasReal}(A::Symmetric{T}, vl::Real, vh::Real) = LAPACK.syevr!('N', 'V', A.uplo, A.S, vl, vh, 0, 0, -1.0)[1]
 eigvals!{T<:BlasComplex}(A::Hermitian{T}, il::Int=1, ih::Int=size(A,1)) = LAPACK.syevr!('N', 'I', A.uplo, A.S, 0.0, 0.0, il, ih, -1.0)[1]
 eigvals!{T<:BlasComplex}(A::Hermitian{T}, vl::Real, vh::Real) = LAPACK.syevr!('N', 'V', A.uplo, A.S, vl, vh, 0, 0, -1.0)[1]
 eigvals{T<:BlasFloat}(A::HermOrSym{T},l::Real=1,h::Real=size(A,1)) = eigvals!(copy(A),l,h)
-eigvals{T}(A::HermOrSym{T},l::Real=1,h::Real=size(A,1)) = (S = promote_type(Float32,typeof(sqrt(one(T)))); S != T ? eigvals!(convert(typeof(A).name.primary{S}, A, l, h)) : eigvals!(copy(A), l, h))
+eigvals{T}(A::HermOrSym{T},l::Real=1,h::Real=size(A,1)) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); S != T ? eigvals!(convert(typeof(A).name.primary{S}, A, l, h)) : eigvals!(copy(A), l, h))
 eigmax(A::HermOrSym) = eigvals(A, size(A, 1), size(A, 1))[1]
 eigmin(A::HermOrSym) = eigvals(A, 1, 1)[1]
 
