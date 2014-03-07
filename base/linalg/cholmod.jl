@@ -86,7 +86,7 @@ end
 ### These offsets should be reconfigured to be less error-prone in matches
 const chm_com_offsets = Array(Int, length(ChmCommon.types))
 ccall((:jl_cholmod_common_offsets, :libsuitesparse_wrapper),
-      Void, (Ptr{Uint8},), chm_com_offsets)
+      Void, (Ptr{Int},), chm_com_offsets)
 const chm_final_ll_inds = (1:4) + chm_com_offsets[7]
 const chm_prt_inds = (1:4) + chm_com_offsets[13]
 const chm_ityp_inds = (1:4) + chm_com_offsets[18]
