@@ -588,7 +588,6 @@ end
 # int_*(x)   => fixed precision, to 0th place, filled out
 # fix_*(x,n) => fixed precision, to nth place, not filled out
 # ini_*(x,n) => n initial digits, filled out
-# sig_*(x,n) => n initial digits, zero-stripped
 
 # alternate versions:
 #   *_0ct(x,n) => ensure that the first octal digits is zero
@@ -630,12 +629,6 @@ int_dec(x::BigInt) = decode(10, x)
 int_hex(x::BigInt) = decode(16, x)
 int_HEX(x::BigInt) = decode(-16, x)
 
-int_oct(x::Real) = int_oct(integer(x)) # TODO: real float decoding.
-int_0ct(x::Real) = int_0ct(integer(x)) # TODO: real float decoding.
-int_dec(x::Real) = int_dec(float(x))
-int_hex(x::Real) = int_hex(integer(x)) # TODO: real float decoding.
-int_HEX(x::Real) = int_HEX(integer(x)) # TODO: real float decoding.
-
 const SmallFloatingPoint = Union(Float64,Float32,Float16)
 
 function int_dec(x::SmallFloatingPoint)
@@ -656,6 +649,12 @@ function int_dec(x::SmallFloatingPoint)
         end
     end
 end
+
+int_oct(x::Real) = int_oct(integer(x)) # TODO: real float decoding.
+int_0ct(x::Real) = int_0ct(integer(x)) # TODO: real float decoding.
+int_dec(x::Real) = int_dec(float(x))
+int_hex(x::Real) = int_hex(integer(x)) # TODO: real float decoding.
+int_HEX(x::Real) = int_HEX(integer(x)) # TODO: real float decoding.
 
 ## fix decoding functions ##
 #
@@ -721,71 +720,10 @@ function ini_dec(x::SmallFloatingPoint, n::Int)
     if x == 0.0
         POINT[1] = 1
         NEG[1] = signbit(x)
-        ccall(:memset, Ptr{Void}, (Ptr{Void}, Int32, Csize_t), DIGITS, '0', n)
+        ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', n)
     else
         @grisu_ccall x Grisu.PRECISION n
     end
-end
-
-## sig decoding functions ##
-#
-# - sets neg[1]
-# - sets point[1]
-# - sets len[1]
-#
-
-function sig_dec(x::Unsigned, n::Int)
-    if x == 0
-        NEG[1] = false
-        POINT[1] = 1
-        LEN[1] = 1
-        DIGITS[1] = '0'
-        return
-    end
-    k = Base.ndigits0z(x)
-    if k <= n
-        POINT[1] = k
-        for i = k:-1:1
-            DIGITS[i] = '0'+rem(x,10)
-            x = div(x,10)
-        end
-        while DIGITS[k] == '0'
-            k -= 1
-        end
-        LEN[1] = k
-    else
-        p = Base.powers_of_ten[k-n+1]
-        r = rem(x,p)
-        if r >= (p>>1)
-            x += p
-            if x >= Base.powers_of_ten[k+1]
-                p *= 10
-                k += 1
-            end
-        end
-        POINT[1] = k
-        x = div(x,p)
-        for i = n:-1:1
-            DIGITS[i] = '0'+rem(x,10)
-            x = div(x,10)
-        end
-        while DIGITS[n] == '0'
-            n -= 1
-        end
-        LEN[1] = n
-    end
-end
-
-sig_dec(x::Integer, n::Int) = (@handle_negative; sig_dec(unsigned(x),n))
-sig_dec(x::Real, n::Int) = sig_dec(float(x),n)
-
-function sig_dec(x::SmallFloatingPoint, n::Int)
-    @grisu_ccall x Grisu.PRECISION n
-    if x == 0.0; return; end
-    while DIGITS[n] == '0'
-        n -= 1
-    end
-    LEN[1] = n
 end
 
 ### external printf interface ###
