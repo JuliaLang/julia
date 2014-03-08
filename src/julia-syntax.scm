@@ -3090,17 +3090,24 @@ So far only the second case can actually occur.
   (if (symbol? e) e
       (cadr e)))
 
+(define (new-expansion-env-for x env)
+  (append!
+   (filter (lambda (v)
+	     (not (assq (car v) env)))
+	   (append!
+	    (pair-with-gensyms (vars-introduced-by x))
+	    (map (lambda (v) (cons v v))
+		 (keywords-introduced-by x))))
+   env))
+
 (define (resolve-expansion-vars-with-new-env x env m inarg)
   (resolve-expansion-vars-
    x
-   (append!
-    (filter (lambda (x)
-	      (not (assq (car x) env)))
-	    (append!
-	     (pair-with-gensyms (vars-introduced-by x))
-	     (map (lambda (s) (cons s s))
-		  (keywords-introduced-by x))))
-    env)
+   (if (and (pair? x) (eq? (car x) 'let))
+       ;; let is strange in that it needs both old and new envs within
+       ;; the same expression
+       env
+       (new-expansion-env-for x env))
    m inarg))
 
 (define (resolve-expansion-vars- e env m inarg)
@@ -3167,6 +3174,21 @@ So far only the second case can actually occur.
 			  (cadr e))
 		     ,(resolve-expansion-vars- (caddr e) env m inarg))))
 
+	   ((let)
+	    (let* ((newenv (new-expansion-env-for e env))
+		   (body   (resolve-expansion-vars- (cadr e) newenv m inarg))
+		   ;; expand initial values in old env
+		   (rhss (map (lambda (a)
+				(resolve-expansion-vars- (caddr a) env m inarg))
+			      (cddr e)))
+		   ;; expand binds in old env with dummy RHS
+		   (lhss (map (lambda (a)
+				(cadr
+				 (resolve-expansion-vars- (make-assignment (cadr a) 0)
+							  newenv m inarg)))
+			      (cddr e))))
+	      `(let ,body ,@(map make-assignment lhss rhss))))
+
 	   ;; todo: trycatch
 	   (else
 	    (cons (car e)
@@ -3197,7 +3219,7 @@ So far only the second case can actually occur.
   (if (or (not (pair? e)) (quoted? e))
       '()
       (case (car e)
-	((escape)  '())
+	((escape let)  '())
 	((= function)
 	 (append! (filter
 		   symbol?

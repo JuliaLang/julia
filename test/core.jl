@@ -1435,3 +1435,15 @@ function test6068()
     a + 1
 end
 @test test6068() == 2
+
+# issue #6074
+macro X6074()
+    quote
+        global x6074
+        let x6074 = x6074
+            x6074
+        end
+    end
+end
+x6074 = 6074
+@test @X6074() == 6074
