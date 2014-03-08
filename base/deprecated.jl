@@ -12,9 +12,16 @@ macro deprecate(old,new)
     elseif isa(old,Expr) && old.head == :call
         oldcall = sprint(io->show_unquoted(io,old))
         newcall = sprint(io->show_unquoted(io,new))
-        oldname = Expr(:quote, old.args[1])
+        oldsym = if isa(old.args[1],Symbol)
+            old.args[1]
+        elseif isa(old.args[1],Expr) && old.args[1].head == :curly
+            old.args[1].args[1]
+        else
+            error("invalid usage of @deprecate")
+        end
+        oldname = Expr(:quote, oldsym)
         Expr(:toplevel,
-            Expr(:export,esc(old.args[1])),
+            Expr(:export,esc(oldsym)),
             :($(esc(old)) = begin
                   depwarn(string($oldcall," is deprecated, use ",$newcall," instead."),
                           $oldname)
@@ -401,6 +408,8 @@ IntSet(xs::Integer...) = (s=IntSet(); for a in xs; push!(s,a); end; s)
 Set{T<:Number}(xs::T...) = Set{T}(xs)
 
 @deprecate normfro(A) vecnorm(A)
+
+@deprecate convert{T}(p::Type{Ptr{T}}, a::Array) convert(p, pointer(a))
 
 # 0.3 discontinued functions
 
