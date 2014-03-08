@@ -168,39 +168,39 @@ end
 
 # tricky floating-point ranges
 
-@test 0.1:0.1:0.3   == [1:3]./10
-@test 0.0:0.1:0.3   == [0:3]./10
-@test 0.3:-0.1:-0.1 == [3:-1:-1]./10
-@test 0.1:-0.1:-0.3 == [1:-1:-3]./10
-@test 0.0:0.1:1.0   == [0:10]./10
-@test 0.0:-0.1:1.0  == []
-@test 0.0:0.1:-1.0  == []
-@test 0.0:-0.1:-1.0 == [0:-1:-10]./10
-@test 1.0:1/49:27.0 == [49:1323]./49
-@test 0.0:0.7:2.1   == [0:7:21]./10
-@test 0.0:1.1:3.3   == [0:11:33]./10
-@test 0.1:1.1:3.4   == [1:11:34]./10
-@test 0.0:1.3:3.9   == [0:13:39]./10
-@test 0.1:1.3:4.0   == [1:13:40]./10
-@test 1.1:1.1:3.3   == [11:11:33]./10
-@test 0.3:0.1:1.1   == [3:1:11]./10
+@test [0.1:0.1:0.3]   == [1:3]./10
+@test [0.0:0.1:0.3]   == [0:3]./10
+@test [0.3:-0.1:-0.1] == [3:-1:-1]./10
+@test [0.1:-0.1:-0.3] == [1:-1:-3]./10
+@test [0.0:0.1:1.0]   == [0:10]./10
+@test [0.0:-0.1:1.0]  == []
+@test [0.0:0.1:-1.0]  == []
+@test [0.0:-0.1:-1.0] == [0:-1:-10]./10
+@test [1.0:1/49:27.0] == [49:1323]./49
+@test [0.0:0.7:2.1]   == [0:7:21]./10
+@test [0.0:1.1:3.3]   == [0:11:33]./10
+@test [0.1:1.1:3.4]   == [1:11:34]./10
+@test [0.0:1.3:3.9]   == [0:13:39]./10
+@test [0.1:1.3:4.0]   == [1:13:40]./10
+@test [1.1:1.1:3.3]   == [11:11:33]./10
+@test [0.3:0.1:1.1]   == [3:1:11]./10
 
-@test 0.0:1.0:5.5   == [0:10:55]./10
-@test 0.0:-1.0:0.5  == []
-@test 0.0:1.0:0.5   == [0.0]
+@test [0.0:1.0:5.5]   == [0:10:55]./10
+@test [0.0:-1.0:0.5]  == []
+@test [0.0:1.0:0.5]   == [0.0]
 
-@test prevfloat(0.1):0.1:0.3 == [prevfloat(0.1), 0.2, 0.3]
-@test nextfloat(0.1):0.1:0.3 == [nextfloat(0.1), 0.2]
-@test prevfloat(0.0):0.1:0.3 == [prevfloat(0.0), 0.1, 0.2]
-@test nextfloat(0.0):0.1:0.3 == [nextfloat(0.0), 0.1, 0.2]
-@test 0.1:0.1:prevfloat(0.3) == [0.1, 0.2]
-@test 0.1:0.1:nextfloat(0.3) == [0.1, 0.2, nextfloat(0.3)]
-@test 0.0:0.1:prevfloat(0.3) == [0.0, 0.1, 0.2]
-@test 0.0:0.1:nextfloat(0.3) == [0.0, 0.1, 0.2, nextfloat(0.3)]
-@test 0.1:prevfloat(0.1):0.3 == [0.1, 0.2, 0.3]
-@test 0.1:nextfloat(0.1):0.3 == [0.1, 0.2]
-@test 0.0:prevfloat(0.1):0.3 == [0.0, prevfloat(0.1), prevfloat(0.2), 0.3]
-@test 0.0:nextfloat(0.1):0.3 == [0.0, nextfloat(0.1), nextfloat(0.2)]
+@test [prevfloat(0.1):0.1:0.3] == [prevfloat(0.1), 0.2, 0.3]
+@test [nextfloat(0.1):0.1:0.3] == [nextfloat(0.1), 0.2]
+@test [prevfloat(0.0):0.1:0.3] == [prevfloat(0.0), 0.1, 0.2]
+@test [nextfloat(0.0):0.1:0.3] == [nextfloat(0.0), 0.1, 0.2]
+@test [0.1:0.1:prevfloat(0.3)] == [0.1, 0.2]
+@test [0.1:0.1:nextfloat(0.3)] == [0.1, 0.2, nextfloat(0.3)]
+@test [0.0:0.1:prevfloat(0.3)] == [0.0, 0.1, 0.2]
+@test [0.0:0.1:nextfloat(0.3)] == [0.0, 0.1, 0.2, nextfloat(0.3)]
+@test [0.1:prevfloat(0.1):0.3] == [0.1, 0.2, 0.3]
+@test [0.1:nextfloat(0.1):0.3] == [0.1, 0.2]
+@test [0.0:prevfloat(0.1):0.3] == [0.0, prevfloat(0.1), prevfloat(0.2), 0.3]
+@test [0.0:nextfloat(0.1):0.3] == [0.0, nextfloat(0.1), nextfloat(0.2)]
 
 for T = (Float32, Float64,),# BigFloat),
     a = -5:25, s = [-5:-1;1:25], d = 1:25, n = -1:15
@@ -209,4 +209,26 @@ for T = (Float32, Float64,),# BigFloat),
     step  = convert(T,s)/den
     stop  = convert(T,(a+(n-1)*s))/den
     @test [start:step:stop] == T[a:s:a+(n-1)*s]./den
+end
+
+# near-equal ranges
+@test 0.0:0.1:1.0 != Range(0.0,0.1,11)
+
+# comparing and hashing ranges
+let
+    Rs = {1:2, int32(1:3:17), int64(1:3:17), 1:0, 17:-3:0,
+          0.0:0.1:1.0, Range(0.0,0.1,11),
+          float32(0.0:0.1:1.0), float32(Range(0.0,0.1,11))}
+    for r in Rs
+        ar = collect(r)
+        @test r != ar
+        @test !isequal(r, ar)
+        for s in Rs
+            as = collect(s)
+
+            @test !isequal(r, s) || hash(r)==hash(s)
+
+            @test (r==s) == (ar==as)
+        end
+    end
 end
