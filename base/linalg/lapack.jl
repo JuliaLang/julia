@@ -1027,7 +1027,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                 if cmplx
                     ccall(($(string(gesdd)),liblapack), Void,
                           (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
-                           Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
+                           Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{$relty}, Ptr{BlasInt}, Ptr{BlasInt}),
                           &job, &m, &n, A, &max(1,stride(A,2)), S, U, &max(1,stride(U,2)), VT, &max(1,stride(VT,2)),
@@ -2070,7 +2070,7 @@ for (trcon, trevc, trrfs, elty, relty) in
             @chkuplo
             rcond = Array($relty, 1)
             work  = Array($elty, 2n)
-            rwork = Array($elty, n)
+            rwork = Array($relty, n)
             info  = Array(BlasInt, 1)
             ccall(($(string(trcon)),liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt},
@@ -2150,7 +2150,7 @@ for (trcon, trevc, trrfs, elty, relty) in
             nrhs=size(B,2)
             nrhs==size(X,2) || throw(DimensionMismatch(""))
             work=Array($elty, 2n)
-            rwork=Array($elty, n)
+            rwork=Array($relty, n)
             info=Array(BlasInt, 1)
             ccall(($(string(trrfs)),liblapack), Void,
                 (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, 
@@ -2987,7 +2987,7 @@ for (syev, syevr, sygvd, elty, relty) in
                     (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, 
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, 
                         Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
+                        Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt},
                             Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
                         &jobz, &range, &uplo, &n, 
