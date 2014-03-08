@@ -306,6 +306,11 @@ function hypot{T<:FloatingPoint}(x::T, y::T)
         r = y/one(x)
     else
         r = y/x
+        if isnan(r)
+            isinf(x) && return x
+            isinf(y) && return y
+            return r
+        end
     end
     x * sqrt(one(r)+r*r)
 end
