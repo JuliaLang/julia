@@ -412,18 +412,27 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 
         # binary operator (i.e. "x + y")
         elseif func in bin_ops
-            sep = func_prec >= bin_op_precs[:(^)] ? "$func" : " $func "
-            if func_prec <= prec
-                show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec)
+            if length(func_args) > 1
+                sep = func_prec >= bin_op_precs[:(^)] ? "$func" : " $func "
+                if func_prec <= prec
+                    show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec)
+                else
+                    show_list(io, func_args, sep, indent, func_prec)
+                end
             else
-                show_list(io, func_args, sep, indent, func_prec)
+                # 1-argument call to normally-binary operator
+                op, cl = expr_calls[head]
+                print(io, "(")
+                show_unquoted(io, func, indent)
+                print(io, ")")
+                show_enclosed_list(io, op, func_args, ",", cl, indent)
             end
 
         # normal function (i.e. "f(x,y)")
         else
             op, cl = expr_calls[head]
-            show_unquoted(io, args[1], indent)
-            show_enclosed_list(io, op, args[2:end], ",", cl, indent)
+            show_unquoted(io, func, indent)
+            show_enclosed_list(io, op, func_args, ",", cl, indent)
         end
     elseif is(head, :ccall)
         show_unquoted(io, :ccall, indent)
