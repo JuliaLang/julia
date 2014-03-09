@@ -515,7 +515,7 @@ static jl_value_t *intersect_tag(jl_datatype_t *a, jl_datatype_t *b,
                 int tva = jl_has_typevars_(ap,0);
                 int tvb = jl_has_typevars_(bp,0);
                 if (tva || tvb) {
-                    if ((tva&&tvb) || jl_subtype_invariant(ap,bp,0) ||
+                    if (jl_subtype_invariant(ap,bp,0) ||
                         jl_subtype_invariant(bp,ap,0)) {
                         ti = jl_type_intersect(ap,bp,penv,eqc,invariant);
                     }
