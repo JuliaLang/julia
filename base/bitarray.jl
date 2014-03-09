@@ -324,6 +324,7 @@ function convert{T,N}(::Type{BitArray{N}}, A::AbstractArray{T,N})
 end
 
 convert{N}(::Type{BitArray{N}}, B::BitArray{N}) = B
+convert{T,N}(::Type{AbstractArray{T,N}}, B::BitArray{N}) = convert(Array{Bool,N}, B)
 
 reinterpret{N}(::Type{Bool}, B::BitArray, dims::NTuple{N,Int}) = reinterpret(B, dims)
 reinterpret{N}(B::BitArray, dims::NTuple{N,Int}) = reshape(B, dims)

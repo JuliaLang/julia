@@ -127,28 +127,10 @@ end
 copy(S::SparseMatrixCSC) =
     SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), copy(S.nzval))
 
-similar(S::SparseMatrixCSC, Tv::NonTupleType) =
-    SparseMatrixCSC(S.m, S.n, similar(S.colptr), similar(S.rowval), Array(Tv, length(S.rowval)))
-
+similar(S::SparseMatrixCSC, Tv::NonTupleType=eltype(S))   = SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), Array(Tv, length(S.nzval)))
+similar{Tv,Ti,TvNew}(S::SparseMatrixCSC{Tv,Ti}, ::Type{TvNew}, ::Type{Ti}) = similar(S, TvNew)
+similar{Tv,Ti,TvNew,TiNew}(S::SparseMatrixCSC{Tv,Ti}, ::Type{TvNew}, ::Type{TiNew}) = SparseMatrixCSC(S.m, S.n, convert(Array{TiNew},S.colptr), convert(Array{TiNew}, S.rowval), Array(TvNew, length(S.nzval)))
 similar(S::SparseMatrixCSC, Tv::Type, d::(Integer,Integer)) = spzeros(Tv, d[1], d[2])
-
-function similar(A::SparseMatrixCSC, Tv::Type, Ti::Type)
-    colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
-
-    colptr = Array(Ti, length(colptrA))
-    rowval = Array(Ti, length(rowvalA))
-    nzval  = Array(Tv, length(nzvalA))
-
-    for i=1:length(colptr)
-        colptr[i] = colptrA[i]
-    end
-
-    for i=1:length(rowval)
-        rowval[i] = rowvalA[i]
-    end
-
-    SparseMatrixCSC(S.m, S.n, similar(S.colptr), similar(S.rowval), Array(Tv, length(S.rowval)))
-end
 
 function convert{Tv,Ti,TvS,TiS}(::Type{SparseMatrixCSC{Tv,Ti}}, S::SparseMatrixCSC{TvS,TiS})
     if Tv == TvS && Ti == TiS
