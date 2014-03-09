@@ -4095,7 +4095,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    Multidimensional inverse FFT.
 
    A one-dimensional backward FFT computes
-   :math:`\operatorname{BDFT}[k] =
+   :math:`\operatorname{BDFT}[k] = \frac{1}{\operatorname{length}(A)}}
    \sum_{n=1}^{\operatorname{length}(A)} \exp\left(+i\frac{2\pi
    (n-1)(k-1)}{\operatorname{length}(A)} \right) A[n]`.  A
    multidimensional backward FFT simply performs this operation along
