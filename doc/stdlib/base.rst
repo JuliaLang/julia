@@ -3589,6 +3589,10 @@ All mathematical operations and functions are supported for arrays
    ``f`` unless it is also listed in the ``As``, as in ``broadcast!(f, A, A, B)`` to perform
    ``A[:] = broadcast(f, A, B)``.
 
+.. function:: bitbroadcast(f, As...)
+
+   Like ``broadcast``, but allocates a ``BitArray`` to store the result, rather then an ``Array``.
+
 .. function:: broadcast_function(f)
 
    Returns a function ``broadcast_f`` such that ``broadcast_function(f)(As...) === broadcast(f, As...)``. Most useful in the form ``const broadcast_f = broadcast_function(f)``.

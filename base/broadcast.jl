@@ -5,7 +5,7 @@ import Base.promote_eltype
 import Base.num_bit_chunks, Base.@_msk_end, Base.getindex_unchecked
 import Base.(.+), Base.(.-), Base.(.*), Base.(./), Base.(.\)
 import Base.(.==), Base.(.<), Base.(.!=), Base.(.<=)
-export broadcast, broadcast!, broadcast_function, broadcast!_function
+export broadcast, broadcast!, broadcast_function, broadcast!_function, bitbroadcast
 export broadcast_getindex, broadcast_setindex!
 
 ## Broadcasting utilities ##
