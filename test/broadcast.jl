@@ -1,11 +1,11 @@
-function as_sub(x::Vector)
-    y = Array(eltype(x), length(x)*2)
+function as_sub(x::AbstractVector)
+    y = similar(x, eltype(x), tuple(([size(x)...]*2)...))
     y = sub(y, 2:2:length(y))
     y[:] = x[:]
     y
 end
-function as_sub(x::Matrix)
-    y = Array(eltype(x), tuple(([size(x)...]*2)...))
+function as_sub(x::AbstractMatrix)
+    y = similar(x, eltype(x), tuple(([size(x)...]*2)...))
     y = sub(y, 2:2:size(y,1), 2:2:size(y,2))
     for j=1:size(x,2)
         for i=1:size(x,1)
@@ -14,6 +14,24 @@ function as_sub(x::Matrix)
     end
     y
 end
+function as_sub{T}(x::AbstractArray{T,3})
+    y = similar(x, eltype(x), tuple(([size(x)...]*2)...))
+    y = sub(y, 2:2:size(y,1), 2:2:size(y,2), 2:2:size(y,3))
+    for k=1:size(x,3)
+        for j=1:size(x,2)
+            for i=1:size(x,1)
+                y[i,j,k] = x[i,j,k]
+            end
+        end
+    end
+    y
+end
+
+bittest(f::Function, ewf::Function, a...) = (@test ewf(a...) == bitpack(broadcast(f, a...)))
+n1 = 21
+n2 = 32
+n3 = 17
+rb = 1:5
 
 for arr in (identity, as_sub)
     @test broadcast(+, arr(eye(2)), arr([1, 4])) == [2 1; 4 5]
@@ -39,6 +57,9 @@ for arr in (identity, as_sub)
     @test arr([1 2]) ./ arr([3, 4]) == [1/3 2/3; 1/4 2/4]
     @test arr([1 2]) .\ arr([3, 4]) == [3 1.5; 4 2]
     @test arr([3 4]) .^ arr([1, 2]) == [3 4; 9 16]
+    @test arr(bitpack([true false])) .* arr(bitpack([true, true])) == [true false; true false]
+    @test arr(bitpack([true false])) .^ arr(bitpack([false, true])) == [true true; true false]
+    @test arr(bitpack([true false])) .^ arr([0, 3]) == [true true; true false]
 
     M = arr([11 12; 21 22])
     @test broadcast_getindex(M, eye(Int, 2)+1,arr([1, 2])) == [21 11; 12 22]
@@ -57,6 +78,21 @@ for arr in (identity, as_sub)
     broadcast_setindex!(A, 10:12, 1:3, 1:3)
     @test A == diagm(10:12)
     @test_throws broadcast_setindex!(A, 7, [1,-1], [1 2])
+
+    for (f, ewf) in (((==), (.==)),
+                     ((<) , (.<) ),
+                     ((!=), (.!=)),
+                     ((<=), (.<=)))
+        bittest(f, ewf, arr(eye(2)), arr([1, 4]))
+        bittest(f, ewf, arr(eye(2)), arr([1  4]))
+        bittest(f, ewf, arr([0, 1]), arr([1  4]))
+        bittest(f, ewf, arr([0  1]), arr([1, 4]))
+        bittest(f, ewf, arr([1, 0]), arr([1, 4]))
+        bittest(f, ewf, arr(rand(rb, n1, n2, n3)), arr(rand(rb, n1, n2, n3)))
+        bittest(f, ewf, arr(rand(rb,  1, n2, n3)), arr(rand(rb, n1,  1, n3)))
+        bittest(f, ewf, arr(rand(rb,  1, n2,  1)), arr(rand(rb, n1,  1, n3)))
+        bittest(f, ewf, arr(randbool(n1, n2, n3)), arr(randbool(n1, n2, n3)))
+    end
 end
 
 r1 = 1:1

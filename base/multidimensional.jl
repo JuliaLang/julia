@@ -7,6 +7,7 @@ end
 
 unsafe_getindex(v::Real, ind::Integer) = v
 unsafe_getindex(v::Ranges, ind::Integer) = first(v) + (ind-1)*step(v)
+unsafe_getindex(v::BitArray, ind::Integer) = Base.getindex_unchecked(v.chunks, ind)
 unsafe_getindex(v::AbstractArray, ind::Integer) = v[ind]
 
 # Version that uses cartesian indexing for src
@@ -224,7 +225,6 @@ end
 end
 
 # general version with Real (or logical) indexing which dispatches on the appropriate method
-# TODO: fix return type
 
 @ngenerate N Bool function getindex(B::BitArray, I::NTuple{N,Real}...)
     @nexprs N d->(J_d = to_index(I_d))
