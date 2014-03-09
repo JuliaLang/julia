@@ -4070,7 +4070,8 @@ Statistics
 Signal Processing
 -----------------
 
-FFT functions in Julia are largely implemented by calling functions from `FFTW <http://www.fftw.org>`_
+Fast Fourier transform (FFT) functions in Julia are largely implemented by
+calling functions from `FFTW <http://www.fftw.org>`_.
 
 .. function:: fft(A [, dims])
 
@@ -4082,8 +4083,16 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    greater efficiency.
 
    A one-dimensional FFT computes the one-dimensional discrete Fourier
-   transform (DFT) as defined by :math:`\operatorname{DFT}[k] = \sum_{n=1}^{\operatorname{length}(A)} \exp\left(-i\frac{2\pi (n-1)(k-1)}{\operatorname{length}(A)} \right) A[n]`.  A multidimensional FFT simply performs this operation
-   along each transformed dimension of ``A``.
+   transform (DFT) as defined by
+   
+   .. math::
+
+      \operatorname{DFT}(A)[k] = \sum_{n=1}^{\operatorname{length}(A)}
+      \exp\left(-i\frac{2\pi (n-1)(k-1)}{\operatorname{length}(A)} \right)
+      A[n].
+   
+   A multidimensional FFT simply performs this operation along each transformed
+   dimension of ``A``.
 
 .. function:: fft!(A [, dims])
 
@@ -4094,13 +4103,16 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 
    Multidimensional inverse FFT.
 
-   A one-dimensional backward FFT computes
-   :math:`\operatorname{BDFT}[k] = \frac{1}{\operatorname{length}(A)}}
-   \sum_{n=1}^{\operatorname{length}(A)} \exp\left(+i\frac{2\pi
-   (n-1)(k-1)}{\operatorname{length}(A)} \right) A[n]`.  A
-   multidimensional backward FFT simply performs this operation along
-   each transformed dimension of ``A``.  The inverse FFT computes
-   the same thing divided by the product of the transformed dimensions.
+   A one-dimensional inverse FFT computes
+
+   .. math::
+
+      \operatorname{IDFT}(A)[k] = \frac{1}{\operatorname{length}(A)}
+      \sum_{n=1}^{\operatorname{length}(A)} \exp\left(+i\frac{2\pi (n-1)(k-1)}
+      {\operatorname{length}(A)} \right) A[n].
+
+   A multidimensional inverse FFT simply performs this operation along each
+   transformed dimension of ``A``.
 
 .. function:: ifft!(A [, dims])
 
@@ -4108,12 +4120,15 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 
 .. function:: bfft(A [, dims])
 
-   Similar to :func:`ifft`, but computes an unnormalized inverse
-   (backward) transform, which must be divided by the product of the sizes
-   of the transformed dimensions in order to obtain the inverse.  (This is
-   slightly more efficient than :func:`ifft` because it omits a scaling
-   step, which in some applications can be combined with other
-   computational steps elsewhere.)
+   Similar to :func:`ifft`, but computes an unnormalized inverse (backward)
+   transform, which must be divided by the product of the sizes of the
+   transformed dimensions in order to obtain the inverse. (This is slightly
+   more efficient than :func:`ifft` because it omits a scaling step, which in
+   some applications can be combined with other computational steps elsewhere.)
+
+   .. math::
+
+      \operatorname{BDFT}(A)[k] = \operatorname{length}(A) \operatorname{IDFT}(A)[k]
 
 .. function:: bfft!(A [, dims])
 
