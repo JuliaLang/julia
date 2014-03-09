@@ -405,11 +405,11 @@ Syntax
 
 .. function:: parse(str, start; greedy=true, raise=true)
 
-   Parse the expression string and return an expression (which could later be passed to eval for execution). Start is the index of the first character to start parsing (default is 1). If greedy is true (default), parse will try to consume as much input as it can; otherwise, it will stop as soon as it has parsed a valid token. If raise is true (default), parse errors will raise an error; otherwise, parse will return the error as an expression object.
+   Parse the expression string and return an expression (which could later be passed to eval for execution). Start is the index of the first character to start parsing. If ``greedy`` is true (default), ``parse`` will try to consume as much input as it can; otherwise, it will stop as soon as it has parsed a valid expression. If ``raise`` is true (default), syntax errors will raise an error; otherwise, ``parse`` will return an expression that will raise an error upon evaluation.
 
 .. function:: parse(str; raise=true)
 
-   Parse the whole string greedily, returning a single expression.  An error is thrown if there are additional characters after the first expression.
+   Parse the whole string greedily, returning a single expression.  An error is thrown if there are additional characters after the first expression. If ``raise`` is true (default), syntax errors will raise an error; otherwise, ``parse`` will return an expression that will raise an error upon evaluation.
 
 Iteration
 ---------
