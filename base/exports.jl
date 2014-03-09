@@ -1303,4 +1303,6 @@ export
     @sprintf,
     @deprecate,
     @boundscheck,
-    @inbounds
+    @inbounds,
+    @enum,
+    @enum_mask

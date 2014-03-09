@@ -85,6 +85,7 @@ include("base64.jl")
 importall .Base64
 
 # system & environment
+include("enum.jl")
 include("libc.jl")
 include("env.jl")
 include("errno.jl")
