@@ -283,8 +283,8 @@ end
 bool(x::AbstractArray{Bool}) = x
 bool(x::AbstractArray) = copy!(similar(x,Bool), x)
 
-convert{T,S,N}(::Type{AbstractArray{T}}, A::Array{S,N}) = convert(Array{T,N}, A)
 convert{T,S,N}(::Type{AbstractArray{T,N}}, A::Array{S,N}) = convert(Array{T,N}, A)
+
 for (f,T) in ((:float16,    Float16),
               (:float32,    Float32),
               (:float64,    Float64),
