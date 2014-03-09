@@ -823,6 +823,7 @@ static jl_value_t *lookup_match(jl_value_t *a, jl_value_t *b, jl_tuple_t **penv,
     jl_value_t *ti = jl_type_intersection_matching(a, b, penv, tvars);
     if (ti == (jl_value_t*)jl_bottom_type)
         return ti;
+    JL_GC_PUSH1(&ti);
     assert(jl_is_tuple(*penv));
     jl_value_t **ee = (jl_value_t**)alloca(sizeof(void*) * jl_tuple_len(*penv));
     int n=0;
@@ -854,8 +855,10 @@ static jl_value_t *lookup_match(jl_value_t *a, jl_value_t *b, jl_tuple_t **penv,
                   issue #5254
                 */
                 if (val == (jl_value_t*)jl_bottom_type) {
-                    if (!jl_subtype(a, ti, 0))
+                    if (!jl_subtype(a, ti, 0)) {
+                        JL_GC_POP();
                         return (jl_value_t*)jl_bottom_type;
+                    }
                 }
             }
         }
@@ -865,6 +868,7 @@ static jl_value_t *lookup_match(jl_value_t *a, jl_value_t *b, jl_tuple_t **penv,
         memcpy(en->data, ee, n*sizeof(void*));
         *penv = en;
     }
+    JL_GC_POP();
     return ti;
 }
 
