@@ -12,5 +12,4 @@
 	url = git://github.com/JuliaLang/Rmath.git
 [submodule "doc/juliadoc"]
 	path = doc/juliadoc
-	url = git://github.com/JuliaLang/JuliaDoc.git
-
+	url = https://github.com/JuliaLang/JuliaDoc
