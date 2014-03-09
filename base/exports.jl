@@ -470,6 +470,7 @@ export
     zeta,
 
 # arrays
+    bitbroadcast,
     broadcast!,
     broadcast!_function,
     broadcast,
