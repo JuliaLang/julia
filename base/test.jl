@@ -11,6 +11,7 @@ type Failure <: Result
     lhs
     rhs
 end
+Failure(expr) = Failure(expr, nothing, nothing)
 type Error <: Result
     expr
     err
