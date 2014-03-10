@@ -571,7 +571,7 @@ i2 = rand(1:10, n1, n2)
 
 # Matrix{Bool}/Matrix{Float64}
 b1 = randbool(n1, n2)
-f2 = 1.0 + rand(n1, n2)
+f2 = 1.0 .+ rand(n1, n2)
 @check_bit_operation (.*)(b1, f2) Matrix{Float64}
 @check_bit_operation (./)(b1, f2) Matrix{Float64}
 @check_bit_operation (.^)(b1, f2) Matrix{Float64}
@@ -590,23 +590,23 @@ cf1 = complex(f1)
 @check_bit_operation (&)(i1, b2)  Matrix{Int}
 @check_bit_operation (|)(i1, b2)  Matrix{Int}
 @check_bit_operation ($)(i1, b2)  Matrix{Int}
-@check_bit_operation (+)(i1, b2)  Matrix{Int}
-@check_bit_operation (-)(i1, b2)  Matrix{Int}
+@check_bit_operation (.+)(i1, b2)  Matrix{Int}
+@check_bit_operation (.-)(i1, b2)  Matrix{Int}
 @check_bit_operation (.*)(i1, b2) Matrix{Int}
 
 @check_bit_operation (&)(u1, b2)  Matrix{Uint8}
 @check_bit_operation (|)(u1, b2)  Matrix{Uint8}
 @check_bit_operation ($)(u1, b2)  Matrix{Uint8}
-@check_bit_operation (+)(u1, b2)  Matrix{Uint8}
-@check_bit_operation (-)(u1, b2)  Matrix{Uint8}
+@check_bit_operation (.+)(u1, b2)  Matrix{Uint8}
+@check_bit_operation (.-)(u1, b2)  Matrix{Uint8}
 @check_bit_operation (.*)(u1, b2) Matrix{Uint8}
 
 for (x1,t1) = {(f1, Float64),
                (ci1, Complex{Int}),
                (cu1, Complex{Uint8}),
                (cf1, Complex128)}
-    @check_bit_operation (+)(x1, b2)  Matrix{t1}
-    @check_bit_operation (-)(x1, b2)  Matrix{t1}
+    @check_bit_operation (.+)(x1, b2)  Matrix{t1}
+    @check_bit_operation (.-)(x1, b2)  Matrix{t1}
     @check_bit_operation (.*)(x1, b2) Matrix{t1}
 end
 
@@ -666,10 +666,10 @@ cf2 = complex(f2)
 @check_bit_operation (|)(b1, false)  BitMatrix
 @check_bit_operation ($)(b1, true)   BitMatrix
 @check_bit_operation ($)(b1, false)  BitMatrix
-@check_bit_operation (+)(b1, true)   Matrix{Int}
-@check_bit_operation (+)(b1, false)  Matrix{Int}
-@check_bit_operation (-)(b1, true)   Matrix{Int}
-@check_bit_operation (-)(b1, false)  Matrix{Int}
+@check_bit_operation (.+)(b1, true)   Matrix{Int}
+@check_bit_operation (.+)(b1, false)  Matrix{Int}
+@check_bit_operation (.-)(b1, true)   Matrix{Int}
+@check_bit_operation (.-)(b1, false)  Matrix{Int}
 @check_bit_operation (.*)(b1, true)  BitMatrix
 @check_bit_operation (.*)(b1, false) BitMatrix
 @check_bit_operation (./)(b1, true)  Matrix{Float32}
@@ -680,8 +680,8 @@ cf2 = complex(f2)
 @check_bit_operation (&)(b1, i2)  Matrix{Int}
 @check_bit_operation (|)(b1, i2)  Matrix{Int}
 @check_bit_operation ($)(b1, i2)  Matrix{Int}
-@check_bit_operation (+)(b1, i2)  Matrix{Int}
-@check_bit_operation (-)(b1, i2)  Matrix{Int}
+@check_bit_operation (.+)(b1, i2)  Matrix{Int}
+@check_bit_operation (.-)(b1, i2)  Matrix{Int}
 @check_bit_operation (.*)(b1, i2) Matrix{Int}
 @check_bit_operation (./)(b1, i2) Matrix{Float64}
 @check_bit_operation div(b1, i2)  Matrix{Int}
@@ -690,32 +690,32 @@ cf2 = complex(f2)
 @check_bit_operation (&)(b1, u2)  Matrix{Uint8}
 @check_bit_operation (|)(b1, u2)  Matrix{Uint8}
 @check_bit_operation ($)(b1, u2)  Matrix{Uint8}
-@check_bit_operation (+)(b1, u2)  Matrix{Uint8}
-@check_bit_operation (-)(b1, u2)  Matrix{Uint8}
+@check_bit_operation (.+)(b1, u2)  Matrix{Uint8}
+@check_bit_operation (.-)(b1, u2)  Matrix{Uint8}
 @check_bit_operation (.*)(b1, u2) Matrix{Uint8}
 @check_bit_operation (./)(b1, u2) Matrix{Float32}
 @check_bit_operation div(b1, u2)  Matrix{Uint8}
 @check_bit_operation mod(b1, u2)  Matrix{Uint8}
 
-@check_bit_operation (+)(b1, f2)  Matrix{Float64}
-@check_bit_operation (-)(b1, f2)  Matrix{Float64}
+@check_bit_operation (.+)(b1, f2)  Matrix{Float64}
+@check_bit_operation (.-)(b1, f2)  Matrix{Float64}
 @check_bit_operation (.*)(b1, f2) Matrix{Float64}
 @check_bit_operation (./)(b1, f2) Matrix{Float64}
 @check_bit_operation div(b1, f2)  Matrix{Float64}
 @check_bit_operation mod(b1, f2)  Matrix{Float64}
 
-@check_bit_operation (+)(b1, ci2)  Matrix{Complex{Int}}
-@check_bit_operation (-)(b1, ci2)  Matrix{Complex{Int}}
+@check_bit_operation (.+)(b1, ci2)  Matrix{Complex{Int}}
+@check_bit_operation (.-)(b1, ci2)  Matrix{Complex{Int}}
 @check_bit_operation (.*)(b1, ci2) Matrix{Complex{Int}}
 @check_bit_operation (./)(b1, ci2) Matrix{Complex128}
 
-@check_bit_operation (+)(b1, cu2)  Matrix{Complex{Uint8}}
-@check_bit_operation (-)(b1, cu2)  Matrix{Complex{Uint8}}
+@check_bit_operation (.+)(b1, cu2)  Matrix{Complex{Uint8}}
+@check_bit_operation (.-)(b1, cu2)  Matrix{Complex{Uint8}}
 @check_bit_operation (.*)(b1, cu2) Matrix{Complex{Uint8}}
 @check_bit_operation (./)(b1, cu2) Matrix{Complex64}
 
-@check_bit_operation (+)(b1, cf2)  Matrix{Complex128}
-@check_bit_operation (-)(b1, cf2)  Matrix{Complex128}
+@check_bit_operation (.+)(b1, cf2)  Matrix{Complex128}
+@check_bit_operation (.-)(b1, cf2)  Matrix{Complex128}
 @check_bit_operation (.*)(b1, cf2) Matrix{Complex128}
 @check_bit_operation (./)(b1, cf2) Matrix{Complex128}
 

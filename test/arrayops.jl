@@ -12,14 +12,14 @@ b = a+a
 @test length((1,)) == 1
 @test length((1,2)) == 2
 
-@test isequal(1+[1,2,3], [2,3,4])
-@test isequal([1,2,3]+1, [2,3,4])
-@test isequal(1-[1,2,3], [0,-1,-2])
-@test isequal([1,2,3]-1, [0,1,2])
+@test isequal(1.+[1,2,3], [2,3,4])
+@test isequal([1,2,3].+1, [2,3,4])
+@test isequal(1.-[1,2,3], [0,-1,-2])
+@test isequal([1,2,3].-1, [0,1,2])
 
 @test isequal(5*[1,2,3], [5,10,15])
 @test isequal([1,2,3]*5, [5,10,15])
-@test isequal(1/[1,2,5], [1.0,0.5,0.2])
+@test isequal(1./[1,2,5], [1.0,0.5,0.2])
 @test isequal([1,2,3]/5, [0.2,0.4,0.6])
 
 a = ones(2,2)
@@ -703,10 +703,9 @@ begin
     @test all(b.==6)
 
     # issue #5141
+    ## Update Removed the version that removes the dimensions when dims==1:ndims(A) 
     c1 = mapslices(x-> maximum(-x), a, [])
     @test c1 == -a
-    c2 = mapslices(x-> maximum(-x), a, [1,2])
-    @test c2 == maximum(-a)
     
     # other types than Number
     @test mapslices(prod,["1" "2"; "3" "4"],1) == ["13" "24"]
@@ -859,7 +858,7 @@ end
 @test isequal(flipdim([2,3,1], 2), [2,3,1])
 @test isequal(flipdim([2 3 1], 1), [2 3 1])
 @test isequal(flipdim([2 3 1], 2), [1 3 2])
-@test_throws flipdim([2,3,1] -1)
+@test_throws flipdim([2,3,1], -1)
 @test isequal(flipdim(1:10, 1), 10:-1:1)
 @test isequal(flipdim(1:10, 2), 1:10)
 @test_throws flipdim(1:10, -1)

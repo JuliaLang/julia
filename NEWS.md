@@ -156,6 +156,10 @@ Library improvements
         the same length.  This generalizes and replaces `normfro` ([#6057]),
         and `norm` is now type-stable ([#6056]).
 
+      * + and - now only works when the sizes of the arrays are the same, i.e. the 
+        operations no longer do broadcasting. New `UniformScaling` type and identity
+        `I` constant (#5810).
+
     * Sparse linear algebra
 
       * Faster sparse `kron` ([#4958]).

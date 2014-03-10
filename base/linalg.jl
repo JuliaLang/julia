@@ -33,6 +33,7 @@ export
     Symmetric,
     Triangular,
     Diagonal,
+    UniformScaling,
 
 # Functions
     axpy!,
@@ -145,7 +146,10 @@ export
     At_mul_Bt,
     At_mul_Bt!,
     At_rdiv_B,
-    At_rdiv_Bt
+    At_rdiv_Bt,
+
+# Constants
+    I
 
 typealias BlasFloat Union(Float64,Float32,Complex128,Complex64)
 typealias BlasReal Union(Float64,Float32)
@@ -201,6 +205,7 @@ include("linalg/woodbury.jl")
 include("linalg/tridiag.jl")
 include("linalg/diagonal.jl")
 include("linalg/bidiag.jl")
+include("linalg/uniformscaling.jl")
 include("linalg/rectfullpacked.jl")
 include("linalg/givens.jl")
 include("linalg/special.jl")

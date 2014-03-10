@@ -286,7 +286,7 @@ operator should be used for elementwise operations.
 5.  Binary Boolean or bitwise — ``&``, ``|``, ``$``
 
 Some operators without dots operate elementwise anyway when one argument is a
-scalar. These operators are ``+``, ``-``, ``*``, ``/``, ``\``, and the bitwise
+scalar. These operators are ``*``, ``/``, ``\``, and the bitwise
 operators.
 
 Note that comparisons such as ``==`` operate on whole arrays, giving a single

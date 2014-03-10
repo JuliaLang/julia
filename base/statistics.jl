@@ -274,15 +274,15 @@ function quantile!(v::AbstractVector, q::AbstractVector)
     lv = length(v)
     lq = length(q)
 
-    index = 1 + (lv-1)*q
+    index = 1 .+ (lv-1)*q
     lo = ifloor(index)
     hi = iceil(index)
     sort!(v)
     isnan(v[end]) && error("quantiles are undefined in presence of NaNs")
     i = find(index .> lo)
     r = float(v[lo])
-    h = (index-lo)[i]
-    r[i] = (1-h).*r[i] + h.*v[hi[i]]
+    h = (index.-lo)[i]
+    r[i] = (1.-h).*r[i] + h.*v[hi[i]]
     return r
 end
 quantile(v::AbstractVector, q::AbstractVector) = quantile!(copy(v),q)

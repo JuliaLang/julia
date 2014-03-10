@@ -314,7 +314,7 @@ Bi = B+(2.5*im).*A[[2,1],[2,1]]
 @test Ac_mul_Bc(Ai, Bi) == [-28.25-66im 9.75-58im; -26-89im 21-73im]
 
 # 3x3
-A = [1 2 3; 4 5 6; 7 8 9]-5
+A = [1 2 3; 4 5 6; 7 8 9].-5
 B = [1 0 5; 6 -10 3; 2 -4 -1]
 @test A*B == [-26 38 -27; 1 -4 -6; 28 -46 15]
 @test Ac_mul_B(A, B) == [-6 2 -25; 3 -12 -18; 12 -26 -11]
@@ -328,15 +328,15 @@ Bi = B+(2.5*im).*A[[2,1,3],[2,3,1]]
 @test Ac_mul_Bc(Ai, Bi) == [1+2im 20.75+9im -44.75+42im; 19.5+17.5im -54-36.5im 51-14.5im; 13+7.5im 11.25+31.5im -43.25-14.5im]
 
 # Generic integer matrix multiplication
-A = [1 2 3; 4 5 6] - 3
+A = [1 2 3; 4 5 6] .- 3
 B = [2 -2; 3 -5; -4 7]
 @test A*B == [-7 9; -4 9]
 @test At_mul_Bt(A, B) == [-6 -11 15; -6 -13 18; -6 -15 21]
 A = ones(Int, 2, 100)
 B = ones(Int, 100, 3)
 @test A*B == [100 100 100; 100 100 100]
-A = rand(1:20, 5, 5) - 10
-B = rand(1:20, 5, 5) - 10
+A = rand(1:20, 5, 5) .- 10
+B = rand(1:20, 5, 5) .- 10
 @test At_mul_B(A, B) == A'*B
 @test A_mul_Bt(A, B) == A*B'
  
@@ -355,23 +355,23 @@ b = [1.2,-2.5]
 @test (Aref*b) == (Asub*b)
 @test At_mul_B(Asub, Asub) == At_mul_B(Aref, Aref)
 @test A_mul_Bt(Asub, Asub) == A_mul_Bt(Aref, Aref)
-Ai = A + im
+Ai = A .+ im
 Aref = Ai[1:2:end,1:2:end]
 Asub = sub(Ai, 1:2:5, 1:2:4)
 @test Ac_mul_B(Asub, Asub) == Ac_mul_B(Aref, Aref)
 @test A_mul_Bc(Asub, Asub) == A_mul_Bc(Aref, Aref)
 
 # syrk & herk
-A = reshape(1:1503, 501, 3)-750.0
+A = reshape(1:1503, 501, 3).-750.0
 res = float64([135228751 9979252 -115270247; 9979252 10481254 10983256; -115270247 10983256 137236759])
 @test At_mul_B(A, A) == res
 @test A_mul_Bt(A',A') == res
 cutoff = 501
-A = reshape(1:6*cutoff,2*cutoff,3)-(6*cutoff)/2
+A = reshape(1:6*cutoff,2*cutoff,3).-(6*cutoff)/2
 Asub = sub(A, 1:2:2*cutoff, 1:3)
 Aref = A[1:2:2*cutoff, 1:3]
 @test At_mul_B(Asub, Asub) == At_mul_B(Aref, Aref)
-Ai = A - im
+Ai = A .- im
 Asub = sub(Ai, 1:2:2*cutoff, 1:3)
 Aref = Ai[1:2:2*cutoff, 1:3]
 @test Ac_mul_B(Asub, Asub) == Ac_mul_B(Aref, Aref)
