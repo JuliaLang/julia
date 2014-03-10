@@ -43,9 +43,41 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the LU factorization of ``A``, such that ``A[p,:] = L*U``.
 
-.. function:: lufact(A) -> LU
+.. function:: lufact(A) -> F
 
-   Compute the LU factorization of ``A``, returning an ``LU`` object for dense ``A`` or an ``UmfpackLU`` object for sparse ``A``. The individual components of the factorization ``F`` can be accesed by indexing: ``F[:L]``, ``F[:U]``, and ``F[:P]`` (permutation matrix) or ``F[:p]`` (permutation vector). An ``UmfpackLU`` object has additional components ``F[:q]`` (the left permutation vector) and ``Rs`` the vector of scaling factors. The following functions are available for both ``LU`` and ``UmfpackLU`` objects: ``size``, ``\`` and ``det``.  For ``LU`` there is also an ``inv`` method.  The sparse LU factorization is such that ``L*U`` is equal to``scale(Rs,A)[p,q]``.
+   Compute the LU factorization of ``A``. The return type of ``F`` depends on the type of ``A``.
+
+      ======================= ==================== ========================================
+      Type of input ``A``     Type of output ``F`` Relationship between ``F`` and ``A``
+      ----------------------- -------------------- ----------------------------------------
+      :func:`Matrix`           ``LU``              ``F[:L]*F[:U] == A[F[:p], :]``
+      :func:`Tridiagonal`      ``LUTridiagonal``     N/A
+      :func:`SparseMatrixCSC`  ``UmfpackLU``       ``F[:L]*F[:U] == Rs .* A[F[:p], F[:q]]``
+      ======================= ==================== ========================================
+
+   The individual components of the factorization ``F`` can be accessed by indexing:
+
+      =========== ======================================= ====== ================= =============
+      Component   Description                             ``LU`` ``LUTridiagonal`` ``UmfpackLU``
+      ----------- --------------------------------------- ------ ----------------- -------------
+      ``F[:L]``   ``L`` (lower triangular) part of ``LU``    ✓                      ✓
+      ``F[:U]``   ``U`` (upper triangular) part of ``LU``    ✓                      ✓
+      ``F[:p]``   (right) permutation ``Vector``             ✓                      ✓
+      ``F[:P]``   (right) permutation ``Matrix``             ✓
+      ``F[:q]``   left permutation ``Vector``                                       ✓
+      ``F[:Rs]``  ``Vector`` of scaling factors                                     ✓
+      ``F[:(:)]`` ``(L,U,p,q,Rs)`` components                                       ✓
+      =========== ======================================= ====== ================= =============
+
+      ================== ====== ================= =============
+      Supported function ``LU`` ``LUTridiagonal`` ``UmfpackLU``
+      ------------------ ------ ----------------- -------------
+           ``/``            ✓
+           ``\``            ✓        ✓             ✓
+           ``cond``         ✓                      ✓
+           ``det``          ✓                      ✓
+           ``size``         ✓
+      ================== ====== ================= =============
 
 .. function:: lufact!(A) -> LU
 
