@@ -1457,9 +1457,19 @@ static jl_value_t *static_constant_instance(Constant *constant, jl_value_t *jt)
 static Value *boxed(Value *v,  jl_codectx_t *ctx, jl_value_t *jt)
 {
     Type *t = (v == NULL) ? NULL : v->getType();
+
+    if (jt == NULL) {
+        jt = julia_type_of(v);
+    }
+    else if (!jl_is_leaf_type(jt)) {
+        // we can get a sharper type from julia_type_of than expr_type in some
+        // cases, due to ccall's compile-time evaluations of types. see issue #5752
+        jl_value_t *jt2 = julia_type_of(v);
+        if (jl_subtype(jt2, jt, 0))
+            jt = jt2;
+    }
+
     if (v == NULL || dyn_cast<UndefValue>(v) != 0 || t == NoopType) {
-        if (jt == NULL || jl_is_uniontype(jt) || jl_is_abstracttype(jt))
-            jt = julia_type_of(v);
         jl_value_t *s = static_void_instance(jt);
         if (jl_is_tuple(jt) && jl_tuple_len(jt) > 0)
             jl_add_linfo_root(ctx->linfo, s);
@@ -1468,8 +1478,6 @@ static Value *boxed(Value *v,  jl_codectx_t *ctx, jl_value_t *jt)
     if (t == jl_pvalue_llvmt)
         return v;
     if (t == T_int1) return julia_bool(v);
-    if (jt == NULL || jl_is_uniontype(jt) || jl_is_abstracttype(jt))
-        jt = julia_type_of(v);
     if (t == T_void || t->isEmptyTy()) {
         jl_value_t *s = static_void_instance(jt);
         if (jl_is_tuple(jt) && jl_tuple_len(jt) > 0)
@@ -1489,12 +1497,14 @@ static Value *boxed(Value *v,  jl_codectx_t *ctx, jl_value_t *jt)
         make_gcroot(tpl,ctx);
         for (size_t i = 0; i < n; ++i) {
             jl_value_t *jti = jl_tupleref(jt,i);
-            Value *vi = emit_tupleref(v,ConstantInt::get(T_size,i+1),jt,ctx);
-            emit_tupleset(tpl,ConstantInt::get(T_size,i+1),boxed(vi,ctx,jti),jt,ctx);
+            Value *vi = emit_tupleref(v, ConstantInt::get(T_size,i+1), jt, ctx);
+            Value *boxedvi = boxed(vi, ctx, jti);
+            emit_tupleset(tpl, ConstantInt::get(T_size,i+1), boxedvi, jt, ctx);
         }
         ctx->argDepth = last_depth;
         return tpl;
     }
+
     jl_datatype_t *jb = (jl_datatype_t*)jt;
     assert(jl_is_datatype(jb));
     if (jb == jl_int8_type)
@@ -1522,18 +1532,11 @@ static Value *boxed(Value *v,  jl_codectx_t *ctx, jl_value_t *jt)
     if (jb == jl_uint64_type) return builder.CreateCall(prepare_call(box_uint64_func), v);
     if (jb == jl_char_type)   return builder.CreateCall(prepare_call(box_char_func), v);
 
-    if (!jl_is_leaf_type(jt)) {
-        // we can get a sharper type from julia_type_of than expr_type in some
-        // cases, due to ccall's compile-time evaluations of types. see issue #5752
-        jl_value_t *jt2 = julia_type_of(v);
-        if (jl_subtype(jt2, jt, 0))
-            jt = jt2;
-    }
-
     if (!jl_isbits(jt) || !jl_is_leaf_type(jt)) {
         assert("Don't know how to box this type" && false);
         return NULL;
     }
+
     if (!jb->abstract && jb->size == 0) {
         if (jb->instance == NULL)
             jl_new_struct_uninit(jb);
