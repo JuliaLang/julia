@@ -62,13 +62,13 @@ for arr in (identity, as_sub)
     @test arr(bitpack([true false])) .^ arr([0, 3]) == [true true; true false]
 
     M = arr([11 12; 21 22])
-    @test broadcast_getindex(M, eye(Int, 2)+1,arr([1, 2])) == [21 11; 12 22]
-    @test_throws broadcast_getindex(M, eye(Int, 2)+1,arr([1, -1]))
-    @test_throws broadcast_getindex(M, eye(Int, 2)+1,arr([1, 2]), [2])
-    @test broadcast_getindex(M, eye(Int, 2)+1,arr([2, 1]), [1]) == [22 12; 11 21]
+    @test broadcast_getindex(M, eye(Int, 2).+1,arr([1, 2])) == [21 11; 12 22]
+    @test_throws broadcast_getindex(M, eye(Int, 2).+1,arr([1, -1]))
+    @test_throws broadcast_getindex(M, eye(Int, 2).+1,arr([1, 2]), [2])
+    @test broadcast_getindex(M, eye(Int, 2).+1,arr([2, 1]), [1]) == [22 12; 11 21]
 
     A = arr(zeros(2,2))
-    broadcast_setindex!(A, arr([21 11; 12 22]), eye(Int, 2)+1,arr([1, 2]))
+    broadcast_setindex!(A, arr([21 11; 12 22]), eye(Int, 2).+1,arr([1, 2]))
     @test A == M
     broadcast_setindex!(A, 5, [1,2], [2 2])
     @test A == [11 5; 21 5]

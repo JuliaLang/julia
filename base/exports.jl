@@ -51,6 +51,7 @@ export
     GeneralizedSVD,
     Hermitian,
     Hessenberg,
+    UniformScaling,
     InsertionSort,
     IntSet,
     IO,
@@ -189,6 +190,7 @@ export
     γ, eulergamma,
     catalan,
     φ, golden,
+    I,
 
 # Operators
     !,

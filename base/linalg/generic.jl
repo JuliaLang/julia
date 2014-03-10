@@ -212,12 +212,14 @@ trace(x::Number) = x
 inv(a::AbstractVector) = error("argument must be a square matrix")
 inv{T}(A::AbstractMatrix{T}) = A_ldiv_B!(A,eye(T, chksquare(A)))
 
-function \{TA<:Number,TB<:Number}(A::AbstractMatrix{TA}, B::AbstractVecOrMat{TB})
+function \{TA,TB}(A::AbstractMatrix{TA}, B::AbstractVecOrMat{TB})
     TC = typeof(one(TA)/one(TB))
     A_ldiv_B!(convert(typeof(A).name.primary{TC}, A), TB == TC ? copy(B) : convert(typeof(B).name.primary{TC}, B))
 end
 \(a::AbstractVector, b::AbstractArray) = reshape(a, length(a), 1) \ b
 /(A::AbstractVecOrMat, B::AbstractVecOrMat) = (B' \ A')'
+# \(A::StridedMatrix,x::Number) = inv(A)*x Should be added at some point when the old elementwise version has been deprecated long enough
+# /(x::Number,A::StridedMatrix) = x*inv(A)
 
 cond(x::Number) = x == 0 ? Inf : 1.0
 cond(x::Number, p) = cond(x)
