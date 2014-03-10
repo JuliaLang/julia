@@ -107,7 +107,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Computes the QR factorization of ``A`` and returns either a ``QR`` type if ``pivot=false`` or ``QRPivoted`` type if ``pivot=true``. From a ``QR`` or  ``QRPivoted`` factorization ``F``, an orthogonal matrix ``F[:Q]`` and a triangular matrix ``F[:R]`` can be extracted. For ``QRPivoted`` it is also posiible to extract the permutation vector ``F[:p]`` or matrix ``F[:P]``.
    The following functions are available for the ``QR`` objects: ``size``, ``\``. When ``A`` is rectangular ``\`` will return a least squares solution and if the soultion is not unique, the one with smallest norm is returned.
-   The orthogonal matrix ``Q=F[:Q]`` is a ``QRPackedQ`` type when ``F`` is a ``QR`` and a ``QRPivotedQ`` then ``F`` is a ``QRPivoted``. Both have the ``*`` operator overloaded to support efficient multiplication by ``Q`` and ``Q'``. Multiplication with respect to either thin or full ``Q`` is allowed, i.e. both ``F[:Q]*F[:R]`` and ``F[:Q]*A`` are supported. A ``Q`` matrix can be converted into a regular matrix with ``full`` which has a named argument ``thin``.
+   The orthogonal matrix ``Q=F[:Q]`` is a ``QRPackedQ`` type when ``F`` is a ``QR`` and a ``QRPivotedQ`` then ``F`` is a ``QRPivoted``. Both have the ``*`` operator overloaded to support efficient multiplication by ``Q`` and ``Q'``. Multiplication with respect to either thin or full ``Q`` is allowed, i.e. both ``F[:Q]*F[:R]`` and ``F[:Q]*A`` are supported. A ``Q`` matrix can be converted into a regular matrix with :func:`full` which has a named argument ``thin``.
 
 .. function:: qrfact!(A,[pivot=false])
 
@@ -170,7 +170,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: hessfact(A)
 
-   Compute the Hessenberg decomposition of ``A`` and return a ``Hessenberg`` object. If ``F`` is the factorization object, the unitary matrix can be accessed with ``F[:Q]`` and the Hessenberg matrix with ``F[:H]``. When ``Q`` is extracted, the resulting type is the ``HessenbergQ`` object, and may be converted to a regular matrix with ``full``.
+   Compute the Hessenberg decomposition of ``A`` and return a ``Hessenberg`` object. If ``F`` is the factorization object, the unitary matrix can be accessed with ``F[:Q]`` and the Hessenberg matrix with ``F[:H]``. When ``Q`` is extracted, the resulting type is the ``HessenbergQ`` object, and may be converted to a regular matrix with :func:`full`.
 
 .. function:: hessfact!(A)
 
@@ -281,16 +281,16 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: Tridiagonal(dl, d, du)
 
-   Construct a tridiagonal matrix from the lower diagonal, diagonal, and upper diagonal, respectively.  The result is of type ``Tridiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with ``full``.
+   Construct a tridiagonal matrix from the lower diagonal, diagonal, and upper diagonal, respectively.  The result is of type ``Tridiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with :func:`full`.
 
 .. function:: Bidiagonal(dv, ev, isupper)
 
    Constructs an upper (``isupper=true``) or lower (``isupper=false``) bidiagonal matrix
-   using the given diagonal (``dv``) and off-diagonal (``ev``) vectors.  The result is of type ``Bidiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with ``full``.
+   using the given diagonal (``dv``) and off-diagonal (``ev``) vectors.  The result is of type ``Bidiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with :func:`full`.
 
 .. function:: SymTridiagonal(d, du)
 
-   Construct a real symmetric tridiagonal matrix from the diagonal and upper diagonal, respectively. The result is of type ``SymTridiagonal`` and provides efficient specialized eigensolvers, but may be converted into a regular matrix with ``full``.
+   Construct a real symmetric tridiagonal matrix from the diagonal and upper diagonal, respectively. The result is of type ``SymTridiagonal`` and provides efficient specialized eigensolvers, but may be converted into a regular matrix with :func:`full`.
 
 .. function:: Woodbury(A, U, C, V)
 
