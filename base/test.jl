@@ -16,7 +16,20 @@ type Error <: Result
 end
 
 default_handler(r::Success) = nothing
-default_handler(r::Failure) = error("test failed: $(r.expr)")
+function default_handler(r::Failure)
+    if r.expr.head == :comparison
+        lhs = eval(r.expr.args[1])
+        rhs = eval(r.expr.args[3])
+        error("test failed: $(r.expr) [$lhs $(r.expr.args[2]) $rhs]")
+    elseif r.expr.head == :call
+        if r.expr.args[1] == :(!)
+            error("test failed: $(r.expr), $(r.expr.args[2]) returned true")
+        else
+            error("test failed: $(r.expr) returned false")
+        end
+    end
+    error("test failed: $(r.expr)")
+end
 default_handler(r::Error)   = rethrow(r)
 
 handler() = get(task_local_storage(), :TEST_HANDLER, default_handler)
