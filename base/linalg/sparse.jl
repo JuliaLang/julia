@@ -13,7 +13,9 @@ end
 function A_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractVector, β::Number, y::AbstractVector)
     A.n == length(x) || throw(DimensionMismatch(""))
     A.m == length(y) || throw(DimensionMismatch(""))
-    for i = 1:A.m; y[i] *= β; end
+    if β != 1
+        β != 0 ? scale!(y,β) : fill!(y,zero(eltype(y)))
+    end
     nzv = A.nzval
     rv = A.rowval
     for col = 1 : A.n
@@ -28,7 +30,7 @@ A_mul_B!(y::AbstractVector, A::SparseMatrixCSC, x::AbstractVector) = A_mul_B!(on
 
 function *{TA,S,Tx}(A::SparseMatrixCSC{TA,S}, x::AbstractVector{Tx})
     T = promote_type(TA,Tx)
-    A_mul_B!(one(T), A, x, zero(T), zeros(T, A.m))
+    A_mul_B!(one(T), A, x, zero(T), Array(T, A.m))
 end
 
 function Ac_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractVector, β::Number, y::AbstractVector)
@@ -36,9 +38,16 @@ function Ac_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractVector, β::Number
     A.m == length(x) || throw(DimensionMismatch(""))
     nzv = A.nzval
     rv = A.rowval
+    zro = zero(eltype(y))
     @inbounds begin
         for i = 1 : A.n
-            y[i] *= β
+            if β != 1
+                if β != 0
+                    y[i] *= β
+                else
+                    y[i] = zro
+                end
+            end
             tmp = zero(eltype(y))
             for j = A.colptr[i] : (A.colptr[i+1]-1)
                 tmp += conj(nzv[j])*x[rv[j]]
@@ -54,9 +63,16 @@ function At_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractVector, β::Number
     A.m == length(x) || throw(DimensionMismatch(""))
     nzv = A.nzval
     rv = A.rowval
+    zro = zero(eltype(y))
     @inbounds begin
         for i = 1 : A.n
-            y[i] *= β
+            if β != 1
+                if β != 0
+                    y[i] *= β
+                else
+                    y[i] = zro
+                end
+            end
             tmp = zero(eltype(y))
             for j = A.colptr[i] : (A.colptr[i+1]-1)
                 tmp += nzv[j]*x[rv[j]]
@@ -69,11 +85,11 @@ end
 At_mul_B!(y::AbstractVector, A::SparseMatrixCSC, x::AbstractVector) = At_mul_B!(one(eltype(x)), A, x, zero(eltype(y)), y)
 function Ac_mul_B{TA,S,Tx}(A::SparseMatrixCSC{TA,S}, x::AbstractVector{Tx})
     T = promote_type(TA, Tx)
-    Ac_mul_B!(one(T), A, x, zero(T), zeros(T, A.n))
+    Ac_mul_B!(one(T), A, x, zero(T), Array(T, A.n))
 end
 function At_mul_B{TA,S,Tx}(A::SparseMatrixCSC{TA,S}, x::AbstractVector{Tx})
     T = promote_type(TA, Tx)
-    At_mul_B!(one(T), A, x, zero(T), zeros(T, A.n))
+    At_mul_B!(one(T), A, x, zero(T), Array(T, A.n))
 end
 
 *(X::BitArray{1}, A::SparseMatrixCSC) = invoke(*, (AbstractVector, SparseMatrixCSC), X, A)
