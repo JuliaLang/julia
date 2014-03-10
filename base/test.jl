@@ -68,18 +68,24 @@ approx_full(x) = full(x)
 function test_approx_eq(va, vb, Eps, astr, bstr)
     va = approx_full(va)
     vb = approx_full(vb)
+    if length(va) != length(vb)
+        error("lengths of ", astr, " and ", bstr, " do not match: ",
+              "\n  ", astr, " (length $(length(va))) = ", va,
+              "\n  ", bstr, " (length $(length(vb))) = ", vb)
+    end
     diff = real(zero(eltype(va)))
-    ok = true
     for i = 1:length(va)
         xa = va[i]; xb = vb[i]
         if isfinite(xa) && isfinite(xb)
             diff = max(diff, abs(xa-xb))
         elseif !isequal(xa,xb)
-            ok = false; break
+            error("mismatch of non-finite elements: ",
+                  "\n  ", astr, " = ", va,
+                  "\n  ", bstr, " = ", vb)
         end
     end
 
-    if !ok || (!isnan(Eps) && !(diff <= Eps))
+    if !isnan(Eps) && !(diff <= Eps)
         sdiff = string("|", astr, " - ", bstr, "| <= ", Eps)
         error("assertion failed: ", sdiff,
 	      "\n  ", astr, " = ", va,
