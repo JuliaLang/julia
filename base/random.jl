@@ -121,13 +121,14 @@ rand(::Type{Int128})  = int128(rand(Uint128))
 rand!(A::Array{Float64}) = dsfmt_gv_fill_array_close_open!(A)
 rand(::Type{Float64}, dims::Dims) = rand!(Array(Float64, dims))
 rand(::Type{Float64}, dims::Int...) = rand(Float64, dims)
+rand!(rng::MersenneTwister, A::Array{Float64}) = dsfmt_fill_array_close_open!(rng.state, A)
+rand(rng::AbstractRNG, ::Type{Float64}, dims::Dims) = rand!(rng, Array(Float64, dims))
+rand(rng::AbstractRNG, ::Type{Float64}, dims::Int...) = rand(rng, Float64, dims)
 
 rand(dims::Dims) = rand(Float64, dims)
 rand(dims::Int...) = rand(Float64, dims)
-
-rand!(r::MersenneTwister, A::Array{Float64}) = dsfmt_fill_array_close_open!(r.state, A)
-rand(r::AbstractRNG, dims::Dims) = rand!(r, Array(Float64, dims))
-rand(r::AbstractRNG, dims::Int...) = rand(r, dims)
+rand(rng::AbstractRNG, dims::Dims) = rand(rng, Float64, dims)
+rand(rng::AbstractRNG, dims::Int...) = rand(rng, Float64, dims)
 
 function rand!{T}(A::Array{T})
     for i=1:length(A)
@@ -138,6 +139,16 @@ end
 rand(T::Type, dims::Dims) = rand!(Array(T, dims))
 rand{T<:Number}(::Type{T}) = error("no random number generator for type $T; try a more specific type")
 rand{T<:Number}(::Type{T}, dims::Int...) = rand(T, dims)
+
+function rand!{T}(rng::AbstractRNG, A::Array{T})
+    for i=1:length(A)
+        A[i] = rand(rng, T)
+    end
+    A
+end
+rand(rng::AbstractRNG, T::Type, dims::Dims) = rand!(rng, Array(T, dims))
+rand{T<:Number}(rng::AbstractRNG, ::Type{T}) = error("no random number generator for type $T; try a more specific type")
+rand{T<:Number}(rng::AbstractRNG, ::Type{T}, dims::Int...) = rand(rng, T, dims)
 
 # Generate random integer within a range
 
