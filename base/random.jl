@@ -59,9 +59,16 @@ end
 
 ## srand()
 
+const default_rng = MersenneTwister
+unknown_rng() = error("Unknown default Random Number Generator")
+
 function srand(seed::Vector{Uint32})
-    global RANDOM_SEED = seed
-    dsfmt_gv_init_by_array(seed)
+    if default_rng == MersenneTwister
+        global RANDOM_SEED = seed
+        dsfmt_gv_init_by_array(seed)
+    else
+        unknown_rng()
+    end
 end
 srand(n::Integer) = srand(make_seed(n))
 
@@ -88,8 +95,8 @@ srand(filename::String) = srand(filename, 4)
 
 ## random floating point values
 
-rand(::Type{Float64}) = dsfmt_gv_genrand_close_open()
-rand() = dsfmt_gv_genrand_close_open()
+rand(::Type{Float64}) = (if default_rng == MersenneTwister dsfmt_gv_genrand_close_open() else unknown_rng() end)
+rand() = (if default_rng == MersenneTwister dsfmt_gv_genrand_close_open() else unknown_rng() end)
 
 rand(::Type{Float32}) = float32(rand())
 rand(::Type{Float16}) = float16(rand())
@@ -101,7 +108,7 @@ rand(r::MersenneTwister) = dsfmt_genrand_close_open(r.state)
 
 ## random integers
 
-dsfmt_randui32() = dsfmt_gv_genrand_uint32()
+dsfmt_randui32() = (if default_rng == MersenneTwister dsfmt_gv_genrand_uint32() else unknown_rng() end)
 dsfmt_randui64() = uint64(dsfmt_randui32()) | (uint64(dsfmt_randui32())<<32)
 
 rand(::Type{Uint8})   = uint8(rand(Uint32))
@@ -118,7 +125,7 @@ rand(::Type{Int128})  = int128(rand(Uint128))
 
 # Arrays of random numbers
 
-rand!(A::Array{Float64}) = dsfmt_gv_fill_array_close_open!(A)
+rand!(A::Array{Float64}) = (if default_rng == MersenneTwister dsfmt_gv_fill_array_close_open!(A) else unknown_rng() end)
 rand(::Type{Float64}, dims::Dims) = rand!(Array(Float64, dims))
 rand(::Type{Float64}, dims::Int...) = rand(Float64, dims)
 
