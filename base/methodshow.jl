@@ -1,5 +1,8 @@
 # Method and method-table pretty-printing
 
+# Allow sorting by function name
+isless(a::Method,b::Method) = isless(a.func.code.name,b.func.code.name)
+
 function argtype_decl(n, t) # -> (argname, argtype)
     if isa(n,Expr)
         n = n.args[1]  # handle n::T in arg list
