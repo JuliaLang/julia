@@ -222,6 +222,8 @@ function show(io::IO, r::Ranges)
 end
 show(io::IO, r::Range1) = print(io, repr(first(r)), ':', repr(last(r)))
 
+show{T<:FloatingPoint}(io::IO, r::Range{T}) = invoke(show, (IO,Any), io, r)
+
 start(r::Ranges) = 0
 next{T}(r::Range{T}, i) = (oftype(T, r.start + i*step(r)), i+1)
 next{T}(r::Range1{T}, i) = (oftype(T, r.start + i), i+1)
@@ -234,8 +236,35 @@ start{T<:Integer}(r::Range1{T}) = r.start
 next{T<:Integer}(r::Range1{T}, i) = (i, oftype(T, i+1))
 done{T<:Integer}(r::Range1{T}, i) = i==oftype(T, r.start+r.len)
 
-==(r::Ranges, s::Ranges) = (first(r)==first(s)) & (step(r)==step(s)) & (length(r)==length(s))
-==(r::Range1, s::Range1) = (r.start==s.start) & (r.len==s.len)
+isequal{T<:Ranges}(r::T, s::T) =
+    (first(r)==first(s)) & (step(r)==step(s)) & (length(r)==length(s))
+
+isequal(r::Ranges, s::Ranges) = false
+
+=={T<:Ranges}(r::T, s::T) = isequal(r, s)
+
+=={T<:Integer, S<:Integer}(r::Ranges{T}, s::Ranges{S}) =
+    (first(r)==first(s)) & (step(r)==step(s)) & (length(r)==length(s))
+
+function ==(r::Ranges, s::Ranges)
+    lr = length(r)
+    if lr != length(s)
+        return false
+    end
+    u, v = start(r), start(s)
+    while !done(r, u)
+        x, u = next(r, u)
+        y, v = next(s, v)
+        if x != y
+            return false
+        end
+    end
+    return true
+end
+
+# hashing ranges by component at worst leads to collisions for very similar ranges
+hash(r::Ranges) =
+    bitmix(hash(first(r)), bitmix(hash(step(r)), bitmix(hash(length(r)), uint(0xaaeeaaee))))
 
 # TODO: isless?
 

@@ -1108,16 +1108,6 @@ function (!=)(A::BitArray, B::BitArray)
     return A.chunks != B.chunks
 end
 
-# TODO: avoid bitpack/bitunpack
-for f in (:(==), :!=)
-    @eval begin
-        ($f)(A::BitArray, B::AbstractArray{Bool}) = ($f)(A, bitpack(B))
-        ($f)(A::AbstractArray{Bool}, B::BitArray) = ($f)(bitpack(A), B)
-        ($f)(A::BitArray, B::AbstractArray) = ($f)(bitunpack(A), B)
-        ($f)(A::AbstractArray, B::BitArray) = ($f)(A, bitunpack(B))
-    end
-end
-
 
 ## Data movement ##
 

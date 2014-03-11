@@ -99,10 +99,10 @@ A = reshape(1:120, 3, 5, 8)
 sA = sub(A, 2, 1:5, :)
 @test parent(sA) == A
 @test parentindexes(sA) == (2:2, 1:5, 1:8)
-@test Base.parentdims(sA) == 1:3
+@test Base.parentdims(sA) == [1:3]
 @test size(sA) == (1, 5, 8)
 @test_throws sA[2, 1:8]
-@test sA[1, 2, 1:8][:] == 5:15:120
+@test sA[1, 2, 1:8][:] == [5:15:120]
 sA[2:5:end] = -1
 @test all(sA[2:5:end] .== -1)
 @test all(A[5:15:120] .== -1)
@@ -110,19 +110,19 @@ sA[2:5:end] = -1
 @test stride(sA,3) == 15
 @test stride(sA,4) == 120
 sA = sub(A, 1:3, 1:5, 5)
-@test Base.parentdims(sA) == 1:2
+@test Base.parentdims(sA) == [1:2]
 sA[1:3,1:5] = -2
 @test all(A[:,:,5] .== -2)
 sA[:] = -3
 @test all(A[:,:,5] .== -3)
 @test strides(sA) == (1,3)
 sA = sub(A, 1:3, 3, 2:5)
-@test Base.parentdims(sA) == 1:3
+@test Base.parentdims(sA) == [1:3]
 @test size(sA) == (3,1,4)
 @test sA == A[1:3,3,2:5]
 @test sA[:] == A[1:3,3,2:5][:]
 sA = sub(A, 1:2:3, 1:3:5, 1:2:8)
-@test Base.parentdims(sA) == 1:3
+@test Base.parentdims(sA) == [1:3]
 @test strides(sA) == (2,9,30)
 @test sA[:] == A[1:2:3, 1:3:5, 1:2:8][:]
 
@@ -138,17 +138,17 @@ A = reshape(1:120, 3, 5, 8)
 sA = slice(A, 2, :, 1:8)
 @test parent(sA) == A
 @test parentindexes(sA) == (2, 1:5, 1:8)
-@test Base.parentdims(sA) == 2:3
+@test Base.parentdims(sA) == [2:3]
 @test size(sA) == (5, 8)
 @test strides(sA) == (3,15)
-@test sA[2, 1:8][:] == 5:15:120
-@test sA[:,1] == 2:3:14
-@test sA[2:5:end] == 5:15:110
+@test sA[2, 1:8][:] == [5:15:120]
+@test sA[:,1] == [2:3:14]
+@test sA[2:5:end] == [5:15:110]
 sA[2:5:end] = -1
 @test all(sA[2:5:end] .== -1)
 @test all(A[5:15:120] .== -1)
 sA = slice(A, 1:3, 1:5, 5)
-@test Base.parentdims(sA) == 1:2
+@test Base.parentdims(sA) == [1:2]
 @test size(sA) == (3,5)
 @test strides(sA) == (1,3)
 sA = slice(A, 1:2:3, 3, 1:2:8)
@@ -198,7 +198,7 @@ let
     X = get(A, -5:5, nan(Float32))
     @test eltype(X) == Float32
     @test isnan(X) == [trues(6),falses(5)]
-    @test X[7:11] == 1:5
+    @test X[7:11] == [1:5]
     X = get(A, (2:4, 9:-2:-13), 0)
     Xv = zeros(Int, 3, 12)
     Xv[1:2, 2:5] = A[2:3, 7:-2:1]

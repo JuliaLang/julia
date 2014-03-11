@@ -307,6 +307,7 @@ for fn in _numeric_conversion_func_names
     @eval begin
         $fn(r::Range ) = Range($fn(r.start), $fn(r.step), r.len)
         $fn(r::Range1) = Range1($fn(r.start), r.len)
+        $fn(r::FloatRange) = FloatRange($fn(r.start), $fn(r.step), r.len, $fn(r.divisor))
     end
 end
 
@@ -813,6 +814,9 @@ function isequal(A::AbstractArray, B::AbstractArray)
     if size(A) != size(B)
         return false
     end
+    if isa(A,Ranges) != isa(B,Ranges)
+        return false
+    end
     for i = 1:length(A)
         if !isequal(A[i], B[i])
             return false
@@ -832,6 +836,9 @@ end
 
 function (==)(A::AbstractArray, B::AbstractArray)
     if size(A) != size(B)
+        return false
+    end
+    if isa(A,Ranges) != isa(B,Ranges)
         return false
     end
     for i = 1:length(A)
