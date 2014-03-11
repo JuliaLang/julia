@@ -123,7 +123,7 @@ t_func[eval(Core.Intrinsics,:select_value)] =
 t_func[is] = (2, 2, cmp_tfunc)
 t_func[issubtype] = (2, 2, cmp_tfunc)
 t_func[isa] = (2, 2, cmp_tfunc)
-t_func[isdefined] = (1, 2, (args...)->Bool)
+t_func[isdefined] = (1, Inf, (args...)->Bool)
 t_func[Union] = (0, Inf,
                  (args...)->(if all(isType,args)
                                  Type{Union(map(t->t.parameters[1],args)...)}
