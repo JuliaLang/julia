@@ -35,7 +35,7 @@ SHIPFLAGS += $(FLAGS)
 
 default: release
 
-HEADERS = $(wildcard *.h) $(JULIAHOME)/deps/libuv/include/uv.h
+HEADERS = $(wildcard *.h) $(LIBUV_INC)/uv.h
 
 %.o: %.c $(HEADERS)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(SHIPFLAGS) -DNDEBUG -c $< -o $@)
