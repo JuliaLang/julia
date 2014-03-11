@@ -145,36 +145,40 @@ norm(x::AbstractVector, p::Real=2) = vecnorm(x, p)
 
 function norm1{T}(A::AbstractMatrix{T})
     m,n = size(A)
-    nrm = zero(real(zero(T)))
+    Tnorm = typeof(float(real(zero(T))))
+    Tsum = promote_type(Float64,Tnorm)
+    nrm::Tsum = 0
     @inbounds begin
         for j = 1:n
-            nrmj = zero(real(zero(T)))
+            nrmj::Tsum = 0
             for i = 1:m
                 nrmj += abs(A[i,j])
             end
             nrm = max(nrm,nrmj)
         end
     end
-    return nrm
+    return convert(Tnorm, nrm)
 end
-function norm2(A::AbstractMatrix)
+function norm2{T}(A::AbstractMatrix{T})
     m,n = size(A)
-    if m == 0 || n == 0 return real(zero(eltype(A))) end
-    svdvals(A)[1]
+    Tnorm = typeof(float(real(zero(T))))
+    (m == 0 || n == 0) ? zero(Tnorm) : convert(Tnorm, svdvals(A)[1])
 end
 function normInf{T}(A::AbstractMatrix{T})
     m,n = size(A)
-    nrm = zero(real(zero(T)))
+    Tnorm = typeof(float(real(zero(T))))
+    Tsum = promote_type(Float64,Tnorm)
+    nrm::Tsum = 0
     @inbounds begin
         for i = 1:m
-            nrmi = zero(real(zero(T)))
+            nrmi::Tsum = 0
             for j = 1:n
                 nrmi += abs(A[i,j])
             end
             nrm = max(nrm,nrmi)
         end
     end
-    return nrm
+    return convert(Tnorm, nrm)
 end
 function norm{T}(A::AbstractMatrix{T}, p::Real=2)
     p == 2 && return norm2(A)
@@ -183,11 +187,8 @@ function norm{T}(A::AbstractMatrix{T}, p::Real=2)
     throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
 end
 
-function norm(x::Number, p=2)
-    if p == 1 || p == Inf || p == -Inf return abs(x) end
-    p == 0 && return ifelse(x != 0, 1, 0)
-    float(abs(x))
-end
+norm(x::Number, p::Real=2) =
+    p == 0 ? convert(typeof(real(x)), ifelse(x != 0, 1, 0)) : abs(x)
 
 rank(A::AbstractMatrix, tol::Real) = sum(svdvals(A) .> tol)
 function rank(A::AbstractMatrix)
