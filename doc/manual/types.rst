@@ -36,7 +36,7 @@ perhaps somewhat counterintuitively, often significantly simplify them.
 
 Describing Julia in the lingo of `type
 systems <http://en.wikipedia.org/wiki/Type_system>`_, it is: dynamic,
-nominative, parametric and dependent. Generic types can be parameterized,
+nominative and parametric. Generic types can be parameterized,
 and the hierarchical relationships
 between types are explicitly declared, rather than implied by compatible
 structure. One particularly distinctive feature of Julia's type system
