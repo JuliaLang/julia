@@ -285,6 +285,9 @@ const tupleref_tfunc = function (A, t, i)
         else
             types = t
         end
+        if !isa(types, Type)
+            return Any
+        end
         T = reduce(tmerge, None, types)
         if wrapType
             return isleaftype(T) ? Type{T} : Type{TypeVar(:_,T)}
@@ -379,14 +382,16 @@ const getfield_tfunc = function (A, s0, name)
         end
         if isType(s0)
             sp = s0.parameters[1]
-            if fld === :parameters && isleaftype(sp.parameters)
-                return Type{sp.parameters}
-            end
-            if fld === :types && isleaftype(sp.types)
-                return Type{sp.types}
-            end
-            if fld === :super && isleaftype(sp)
-                return Type{sp.super}
+            if isa(sp,DataType) && !any(x->isa(x,TypeVar), sp.parameters)
+                if fld === :parameters
+                    return Type{sp.parameters}
+                end
+                if fld === :types
+                    return Type{sp.types}
+                end
+                if fld === :super
+                    return Type{sp.super}
+                end
             end
         end
         for i=1:length(s.names)
