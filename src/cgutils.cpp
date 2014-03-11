@@ -1454,7 +1454,7 @@ static jl_value_t *static_constant_instance(Constant *constant, jl_value_t *jt)
 // this is used to wrap values for generic contexts, where a
 // dynamically-typed value is required (e.g. argument to unknown function).
 // if it's already a pointer it's left alone.
-static Value *boxed(Value *v,  jl_codectx_t *ctx, jl_value_t *jt)
+static Value *boxed(Value *v, jl_codectx_t *ctx, jl_value_t *jt)
 {
     Type *t = (v == NULL) ? NULL : v->getType();
 
@@ -1469,7 +1469,7 @@ static Value *boxed(Value *v,  jl_codectx_t *ctx, jl_value_t *jt)
             jt = jt2;
     }
 
-    if (v == NULL || dyn_cast<UndefValue>(v) != 0 || t == NoopType) {
+    if (jt == jl_bottom_type || v == NULL || dyn_cast<UndefValue>(v) != 0 || t == NoopType) {
         jl_value_t *s = static_void_instance(jt);
         if (jl_is_tuple(jt) && jl_tuple_len(jt) > 0)
             jl_add_linfo_root(ctx->linfo, s);
