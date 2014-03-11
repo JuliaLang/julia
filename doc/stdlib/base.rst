@@ -3443,10 +3443,6 @@ Random number generation in Julia uses the `Mersenne Twister library <http://www
 
    Fill the array A with normally-distributed (mean 0, standard deviation 1) random numbers. Also see the rand function.
 
-.. function:: randsym(n)
-
-   Generate a ``nxn`` symmetric array of normally-distributed random numbers with mean 0 and standard deviation 1.
-
 Arrays
 ------
 
