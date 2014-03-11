@@ -189,6 +189,8 @@ export PipeString
 @deprecate svdfact(A,thin)      svdfact(A,thin=thin)
 @deprecate svdfact!(A,thin)     svdfact(A,thin=thin)
 @deprecate svd(A,thin)          svd(A,thin=thin)
+# Note: These methods need a more helpfull error message than a `NoMethodError`,
+#       when the deprecation is removed
 @deprecate (+)(A::Array{Bool},x::Bool)      A .+ x
 @deprecate (+)(x::Bool,A::Array{Bool})      x .+ A 
 @deprecate (-)(A::Array{Bool},x::Bool)      A .- x
