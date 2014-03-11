@@ -141,7 +141,8 @@ static jl_binding_t *jl_get_binding_(jl_module_t *m, jl_sym_t *var, modstack_t *
             if (b != HT_NOTFOUND && b->exportp) {
                 b = jl_get_binding_(imp, var, &top);
                 if (b == NULL || b->owner == NULL)
-                    return NULL;
+                    // couldn't resolve; try next using (see issue #6105)
+                    continue;
                 // do a full import to prevent the result of this lookup
                 // from changing, for example if this var is assigned to
                 // later.
