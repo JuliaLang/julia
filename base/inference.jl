@@ -1768,7 +1768,11 @@ function exprtype(x::ANY)
         end
         return abstract_eval(x, (), sv)
     elseif isa(x,QuoteNode)
-        return typeof(x.value)
+        v = x.value
+        if isa(v,Type)
+            return Type{v}
+        end
+        return typeof(v)
     elseif isa(x,Type)
         return Type{x}
     elseif isa(x,LambdaStaticData)
@@ -2154,6 +2158,8 @@ function inlining_pass(e::Expr, sv, ast)
                     if isa(aarg,Expr) && is_known_call(aarg, tuple, sv)
                         # apply(f,tuple(x,y,...)) => f(x,y,...)
                         newargs[i-2] = aarg.args[2:end]
+                    elseif isa(aarg, Tuple)
+                        newargs[i-2] = { QuoteNode(x) for x in aarg }
                     elseif isa(t,Tuple) && !isvatuple(t) && effect_free(aarg,sv)
                         # apply(f,t::(x,y)) => f(t[1],t[2])
                         newargs[i-2] = { mk_tupleref(aarg,j) for j=1:length(t) }
