@@ -241,6 +241,7 @@ JL_CALLABLE(jl_f_typeassert)
 }
 
 static jl_function_t *jl_append_any_func;
+extern size_t jl_page_size;
 
 JL_CALLABLE(jl_f_apply)
 {
@@ -295,7 +296,7 @@ JL_CALLABLE(jl_f_apply)
             return result;
         }
     }
-    if (n > 64000) {
+    if (n > jl_page_size/sizeof(jl_value_t*)) {
         // put arguments on the heap if there are too many
         argarr = (jl_value_t*)jl_alloc_cell_1d(n);
         newargs = jl_cell_data(argarr);
