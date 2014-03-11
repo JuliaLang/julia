@@ -83,7 +83,7 @@ x = randn(200_000)
 @timeit (for n in 1:10; count = cmp_with_func(x, isless) end) "funarg" "Function argument benchmark"
 
 
-arith_vectorized(b,c,d) = b.*c + d + 1.0
+arith_vectorized(b,c,d) = b.*c + d .+ 1.0
 
 len = 1_000_000
 b = randn(len)
