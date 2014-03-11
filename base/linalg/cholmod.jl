@@ -782,7 +782,7 @@ for Ti in (:Int32,:Int64)
             ccall((@chm_nm "nnz" $Ti
                    ,:libcholmod), Int, (Ptr{c_CholmodSparse{Tv,$Ti}},Ptr{Uint8}),&A.c,cmn($Ti))
         end
-        function norm{Tv<:CHMVTypes}(A::CholmodSparse{Tv,$Ti},p::Number)
+        function norm{Tv<:CHMVTypes}(A::CholmodSparse{Tv,$Ti},p::Real)
             ccall((@chm_nm "norm_sparse" $Ti
                    , :libcholmod), Float64, 
                   (Ptr{c_CholmodSparse{Tv,$Ti}}, Cint, Ptr{Uint8}),
