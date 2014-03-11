@@ -1113,6 +1113,7 @@ export
     UdpSocket,
 
 # multiprocessing
+    AbstractRemoteSyncObj,
     addprocs,
     ClusterManager,
     fetch,
@@ -1124,11 +1125,14 @@ export
     pmap,
     procs,
     put!,
+    query,
     remotecall,
     remotecall_fetch,
     remotecall_wait,
     rmprocs,
     take!,
+    SyncObjData,
+    syncobj_create,
     timedwait,
     wait,
     workers,

@@ -135,6 +135,28 @@ et=toq()
 @test isready(rr1)
 @test !isready(rr3)
 
+# task waiting on a remoteref with a timeout
+rr = RemoteRef()
+tdr = @timed @test_throws take!(rr; timeout=0.2)
+@test (tdr[2] >= 0.2) && (tdr[2] <= 0.5)
+
+tdr = @timed @test_throws fetch(rr; timeout=0.2)
+@test (tdr[2] >= 0.2) && (tdr[2] <= 0.5)
+
+put!(rr, 1)
+
+tdr = @timed @test_throws put!(rr, 2; timeout=0.2)
+@test (tdr[2] >= 0.2) && (tdr[2] <= 0.5)
+
+take!(rr)
+@spawn begin
+  sleep(0.2)
+  put!(rr, 2)
+end
+
+tdr = @timed @test (2 == take!(rr; timeout=1.0))
+@test (tdr[2] >= 0.2) && (tdr[2] <= 0.5)
+
 
 # TODO: The below block should be always enabled but the error is printed by the event loop
 

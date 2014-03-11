@@ -365,10 +365,10 @@ function deregister_worker(pg, pid)
     ids = {}
     tonotify = {}
     for (id,rv) in pg.refs
-        if in(pid,rv.clientset)
+        if in(pid,rv.so.clientset)
             push!(ids, id)
         end
-        if rv.waitingfor == pid
+        if waitingfor(rv) == pid
             push!(tonotify, (id,rv))
         end
     end
@@ -378,7 +378,7 @@ function deregister_worker(pg, pid)
 
     # throw exception to tasks waiting for this pid
     for (id,rv) in tonotify
-        notify_error(rv.full, ProcessExitedException())
+        notify_error(rv.so.cantake, ProcessExitedException())
         delete!(pg.refs, id)
     end
 end
@@ -387,28 +387,23 @@ end
 
 const client_refs = WeakKeyDict()
 
-type RemoteRef
+let REQ_ID = 0
+    global next_req_id
+    next_req_id() = (req_id = REQ_ID; REQ_ID += 1; req_id)
+end
+
+type RemoteRef{T}
     where::Int
     whence::Int
     id::Int
     # TODO: cache value if it's fetched, but don't serialize the cached value
 
-    function RemoteRef(w, wh, id)
-        r = new(w,wh,id)
-        found = getkey(client_refs, r, false)
-        if !is(found,false)
-            return found
-        end
-        client_refs[r] = true
-        finalizer(r, send_del_client)
-        r
-    end
-
-    REQ_ID::Int = 0
-    function RemoteRef(pid::Integer)
-        rr = RemoteRef(pid, myid(), REQ_ID)
-        REQ_ID += 1
-        if mod(REQ_ID,200) == 0
+    function RemoteRef(pid::Integer, ::Type)
+        req_id = next_req_id()
+        rr = new(pid, myid(), req_id)
+        record_rr(rr)
+        
+        if mod(req_id,200) == 0
             # force gc after making a lot of refs since they take up
             # space on the machine where they're stored, yet the client
             # is responsible for freeing them.
@@ -416,14 +411,25 @@ type RemoteRef
         end
         rr
     end
-
-    RemoteRef(w::LocalProcess) = RemoteRef(w.id)
-    RemoteRef(w::Worker) = RemoteRef(w.id)
-    RemoteRef() = RemoteRef(myid())
-
-    global next_id
-    next_id() = (id=(myid(),REQ_ID); REQ_ID+=1; id)
 end
+
+eltype{T}(::RemoteRef{T}) = T
+
+function record_rr(rr::RemoteRef)
+    found = getkey(client_refs, rr, false)
+    if !is(found,false)
+        return found
+    end
+    client_refs[rr] = true
+    finalizer(rr, send_del_client)
+    rr
+end
+
+
+RemoteRef(w::LocalProcess) = RemoteRef(w.id)
+RemoteRef(w::Worker) = RemoteRef(w.id)
+RemoteRef() = RemoteRef(myid())
+RemoteRef(pid::Integer, rtype=RemoteValue) = RemoteRef{rtype}(pid, rtype)
 
 hash(r::RemoteRef) = hash(r.whence)+3*hash(r.id)
 isequal(r::RemoteRef, s::RemoteRef) = (r.whence==s.whence && r.id==s.id)
@@ -435,9 +441,7 @@ function lookup_ref(pg, id)
     rv = get(pg.refs, id, false)
     if rv === false
         # first we've heard of this ref
-        rv = RemoteValue()
-        pg.refs[id] = rv
-        push!(rv.clientset, id[1])
+        rv = syncobj(pg, id, RemoteValue)
     end
     rv
 end
@@ -450,20 +454,11 @@ end
 #ref_uninitialized(r::RemoteRef) = (assert(r.where==myid());
 #                                   ref_uninitialized(rr2id(r)))
 
-function isready(rr::RemoteRef)
-    rid = rr2id(rr)
-    if rr.where == myid()
-        lookup_ref(rid).done
-    else
-        remotecall_fetch(rr.where, id->lookup_ref(id).done, rid)
-    end
-end
-
 del_client(id, client) = del_client(PGRP, id, client)
 function del_client(pg, id, client)
     rv = lookup_ref(id)
-    delete!(rv.clientset, client)
-    if isempty(rv.clientset)
+    delete!(rv.so.clientset, client)
+    if isempty(rv.so.clientset)
         delete!(pg.refs, id)
         #print("$(myid()) collected $id\n")
     end
@@ -502,7 +497,7 @@ end
 function add_client(id, client)
     #println("$(myid()) adding client $client to $id")
     rv = lookup_ref(id)
-    push!(rv.clientset, client)
+    push!(rv.so.clientset, client)
     nothing
 end
 
@@ -537,46 +532,145 @@ function serialize(s, rr::RemoteRef)
     invoke(serialize, (Any, Any), s, rr)
 end
 
-function deserialize(s, t::Type{RemoteRef})
+function deserialize{T}(s, t::Type{RemoteRef{T}})
     rr = invoke(deserialize, (Any, DataType), s, t)
     where = rr.where
     if where == myid()
         add_client(rr2id(rr), myid())
     end
     # call ctor to make sure this rr gets added to the client_refs table
-    RemoteRef(where, rr.whence, rr.id)
+    record_rr(rr)
+end
+
+type SyncObjData
+    cantake::Condition   # waiting for a value
+    canput::Condition  # waiting for value to be removed
+    clientset::IntSet
+    waitingfor::Int   # processor we need to hear from to fill this, or 0 - used by remotecall* methods
+
+    SyncObjData() = new (Condition(), Condition(), IntSet(), 0)
 end
 
 # data stored by the owner of a RemoteRef
-type RemoteValue
-    done::Bool
-    result
-    full::Condition   # waiting for a value
-    empty::Condition  # waiting for value to be removed
-    clientset::IntSet
-    waitingfor::Int   # processor we need to hear from to fill this, or 0
-
-    RemoteValue() = new(false, nothing, Condition(), Condition(), IntSet(), 0)
+abstract AbstractRemoteSyncObj
+type RemoteValue <: AbstractRemoteSyncObj
+    done::Bool           
+    val
+    so::SyncObjData
+    cantake::Function
+    canput::Function
+    fetch::Function
+    put::Function
+    take::Function
+    query::Function
+    
+    RemoteValue() = new(false, nothing, SyncObjData(), rvcantake, rvcanput, rvfetch, rvput, rvtake, rvquery)
 end
 
-function work_result(rv::RemoteValue)
-    v = rv.result
+rvquery(rv::RemoteValue) = nothing
+rvcantake(rv::RemoteValue) = rv.done
+rvcanput(rv::RemoteValue, args...) = !rv.done
+
+function register_remote_obj(pg, id, rw)
+    pg.refs[id] = rw
+    push!(rw.so.clientset, id[1])
+end
+
+syncobj(id, T, args...) = syncobj(PGRP, id, T, args...)
+function syncobj(pg::ProcessGroup, id, T::Type, args...) 
+    rw = T(args...)
+    register_remote_obj(pg, id, rw)
+    rw
+end
+syncobjn(id, T, args...) = syncobjn(PGRP, id, T, args...)
+syncobjn(pg, id, T, args...) = (syncobj(pg, id, T, args...); nothing)
+
+
+function syncobj_create(pid, T, args...)
+    rr = RemoteRef(pid, T)
+    call_on_owner(syncobjn, rr, T, args...)
+    rr
+end
+
+waitingfor(rv::AbstractRemoteSyncObj) = rv.so.waitingfor
+
+
+function rvput(rv::RemoteValue, val)
+    rv.val = val
+    rv.done = true
+end
+
+function rvtake(rv::RemoteValue)
+    val = rv.val
+    rv.done = false
+    rv.val = nothing
+    val
+end
+
+
+function isready(rr::RemoteRef, args...)
+    rid = rr2id(rr)
+    if rr.where == myid()
+        rv = lookup_ref(rid)
+        rv.cantake(rv, args...)
+    else
+        remotecall_fetch(rr.where, (id, rargs...) -> begin rv = lookup_ref(rid); rv.cantake(rv, rargs...) end, rid, args...)
+    end
+end
+
+function rvfetch(rv::RemoteValue)
+    v = rv.val
     if isa(v,WeakRef)
         v = v.value
     end
     v
 end
 
-function wait_full(rv::RemoteValue)
-    while !rv.done
-        wait(rv.full)
-    end
-    return work_result(rv)
+function setup_waittimer(condvar, timeout)
+    t1 = time()
+    t = Timer((x,y) -> notify(condvar))
+    start_timer(t, timeout, 0.0)
+    (t1, t)
 end
 
-function wait_empty(rv::RemoteValue)
-    while rv.done
-        wait(rv.empty)
+function kwextract(kw, fld, default) 
+    for (k,v) in kw
+        if (k == fld)
+            return v
+        end
+    end
+    return default
+end
+
+function wait_cantake (rv::AbstractRemoteSyncObj, args...; kw...)
+    timeout = kwextract(kw, :timeout, 0.0)
+    (t1, t) = (timeout > 0.0) ? setup_waittimer(rv.so.cantake, timeout) : (0, nothing)
+
+    try
+        while !rv.cantake(rv, args...)
+            # Multiple tasks are waiting on the same condition variable.
+            # Consequently, we may get woken up but not find any data for ourselves.
+            (timeout > 0.0) && ((time() - t1) > timeout) && error("Timed out")
+            wait( rv.so.cantake )
+        end
+    finally
+        (t != nothing) && stop_timer(t)
+    end
+    return ( rv.fetch(rv, args...) )
+end
+
+
+function wait_canput(rv::AbstractRemoteSyncObj, args...; kw...)
+    timeout = kwextract(kw, :timeout, 0.0)
+    (t1, t) = (timeout > 0.0) ? setup_waittimer(rv.so.canput, timeout) : (0, nothing)
+    
+    try
+        while !rv.canput(rv, args...)
+            (timeout > 0.0) && ((time() - t1) > timeout) && error("Timed out")
+            wait(rv.so.canput)
+        end
+    finally
+        (t != nothing) && stop_timer(t)
     end
     return nothing
 end
@@ -601,9 +695,7 @@ function run_work_thunk(rv::RemoteValue, thunk)
 end
 
 function schedule_call(rid, thunk)
-    rv = RemoteValue()
-    (PGRP::ProcessGroup).refs[rid] = rv
-    push!(rv.clientset, rid[1])
+    rv = syncobj(PGRP, rid, RemoteValue) 
     schedule(@task(run_work_thunk(rv,thunk)))
     rv
 end
@@ -666,11 +758,11 @@ end
 function remotecall_fetch(w::Worker, f, args...)
     # can be weak, because the program will have no way to refer to the Ref
     # itself, it only gets the result.
-    oid = next_id()
+    oid = (myid(), next_req_id())
     rv = lookup_ref(oid)
-    rv.waitingfor = w.id
+    rv.so.waitingfor = w.id
     send_msg(w, :call_fetch, oid, f, args)
-    v = wait_full(rv)
+    v = wait_cantake(rv)
     delete!(PGRP.refs, oid)
     v
 end
@@ -682,12 +774,12 @@ remotecall_fetch(id::Integer, f, args...) =
 remotecall_wait(w::LocalProcess, f, args...) = wait(remotecall(w,f,args...))
 
 function remotecall_wait(w::Worker, f, args...)
-    prid = next_id()
+    prid = (myid(), next_req_id())
     rv = lookup_ref(prid)
-    rv.waitingfor = w.id
+    rv.so.waitingfor = w.id
     rr = RemoteRef(w)
     send_msg(w, :call_wait, rr2id(rr), prid, f, args)
-    wait_full(rv)
+    wait_cantake(rv)
     delete!(PGRP.refs, prid)
     rr
 end
@@ -712,45 +804,49 @@ end
 remote_do(id::Integer, f, args...) = remote_do(worker_from_id(id), f, args...)
 
 # have the owner of rr call f on it
-function call_on_owner(f, rr::RemoteRef, args...)
+function call_on_owner(f, rr::RemoteRef, args...; kw...)
     rid = rr2id(rr)
     if rr.where == myid()
-        f(rid, args...)
+        f(rid, args...; kw...)
     else
-        remotecall_fetch(rr.where, f, rid, args...)
+        remotecall_fetch(rr.where, f, rid, args...; kw...)
     end
 end
 
-wait_ref(rid) = (wait_full(lookup_ref(rid)); nothing)
-wait(r::RemoteRef) = (call_on_owner(wait_ref, r); r)
+wait_ref(rid, args...; kw...) = (wait_cantake(lookup_ref(rid), args...; kw...); nothing)
+wait(r::RemoteRef, args...; kw...) = (call_on_owner(wait_ref, r, args...; kw...); r)
 
-fetch_ref(rid) = wait_full(lookup_ref(rid))
-fetch(r::RemoteRef) = call_on_owner(fetch_ref, r)
+fetch_ref(rid, args...; kw...) = wait_cantake(lookup_ref(rid), args...; kw...)
+fetch(r::RemoteRef, args...; kw...) = call_on_owner(fetch_ref, r, args...; kw...)
 fetch(x::ANY) = x
 
 # storing a value to a Ref
-function put!(rv::RemoteValue, val::ANY)
-    wait_empty(rv)
-    rv.result = val
-    rv.done = true
-    notify_full(rv)
-    rv
+function put!(rv::AbstractRemoteSyncObj, args...; kw...)
+    wait_canput(rv, args...; kw...)
+    rv.put(rv, args...; kw...)
+    notify(rv.so.cantake, rv.fetch(rv))
 end
 
-put_ref(rid, v) = put!(lookup_ref(rid), v)
-put!(rr::RemoteRef, val::ANY) = (call_on_owner(put_ref, rr, val); rr)
 
-function take!(rv::RemoteValue)
-    wait_full(rv)
-    val = rv.result
-    rv.done = false
-    rv.result = nothing
-    notify_empty(rv)
+put_ref(rid, args...; kw...) = put!(lookup_ref(rid), args...; kw...)
+put!(rr::RemoteRef, args...; kw...) = (call_on_owner(put_ref, rr, args...; kw...); rr)
+
+function take!(rv::AbstractRemoteSyncObj, args...; kw...)
+    wait_cantake(rv, args...; kw...)
+    val = rv.take(rv, args...)
+    notify(rv.so.canput)
     val
 end
 
-take_ref(rid) = take!(lookup_ref(rid))
-take!(rr::RemoteRef) = call_on_owner(take_ref, rr)
+
+take_ref(rid; kw...) = take!(lookup_ref(rid); kw...)
+take_ref(rid, key; kw...) = take!(lookup_ref(rid), key; kw...)
+take!(rr::RemoteRef; kw...) = call_on_owner(take_ref, rr; kw...)
+take!(rr::RemoteRef, key; kw...) = call_on_owner(take_ref, rr, key; kw...)
+
+query_ref(rid, args...) = query(lookup_ref(rid), args...)
+query(rr::RemoteRef, args...) = call_on_owner(query_ref, rr, args...)
+query(rv::AbstractRemoteSyncObj, args...) = rv.query(rv, args...)
 
 function deliver_result(sock::IO, msg, oid, value)
     #print("$(myid()) sending result $oid\n")
@@ -777,10 +873,6 @@ function deliver_result(sock::IO, msg, oid, value)
         end
     end
 end
-
-# notify waiters that a certain job has finished or Ref has been emptied
-notify_full (rv::RemoteValue) = notify(rv.full, work_result(rv))
-notify_empty(rv::RemoteValue) = notify(rv.empty)
 
 ## message event handlers ##
 
@@ -830,7 +922,7 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                     args = deserialize(sock)
                     @schedule begin
                         rv = schedule_call(id, ()->f(args...))
-                        deliver_result(sock, msg, notify_id, wait_full(rv))
+                        deliver_result(sock, msg, notify_id, wait_cantake(rv))
                     end
                 elseif is(msg, :do)
                     f = deserialize(sock)
@@ -1177,14 +1269,14 @@ function addprocs_internal(np::Integer;
     add_workers(PGRP, start_cluster_workers(np, config, cman))
 end
 
-addprocs(np::Integer; kwargs...) = addprocs_internal(np; kwargs...)
+addprocs(np::Integer; kw...) = addprocs_internal(np; kw...)
 
-function addprocs(machines::AbstractVector; kwargs...)
+function addprocs(machines::AbstractVector; kw...)
     cman_defined = any(x -> begin k,v = x; k==:cman end, kwargs)
     if cman_defined
         error("custom cluster managers unsupported on the ssh interface")
     else
-        addprocs_internal(length(machines); cman=SSHManager(machines=machines), kwargs...)
+        addprocs_internal(length(machines); cman=SSHManager(machines=machines), kw...)
     end
 end
 
