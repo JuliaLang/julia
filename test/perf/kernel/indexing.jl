@@ -1,5 +1,5 @@
 function add1!(x,y)
-    x[y] += 1
+    x[y] .+= 1
 end
 
 function devec_add1!(x,y)
