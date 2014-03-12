@@ -226,17 +226,9 @@ function done(itr::EachLine, nada)
     true
 end
 next(itr::EachLine, nada) = (readline(itr.stream), nothing)
+eltype(itr::EachLine) = ByteString
 
-function readlines(s, fx::Function...)
-    a = {}
-    for l in eachline(s)
-        for f in fx
-          l = f(l)
-        end
-        push!(a, l)
-    end
-    return a
-end
+readlines(s) = collect(eachline(s))
 
 
 ## IOStream
