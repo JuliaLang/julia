@@ -105,28 +105,9 @@ r = (-4*int64(maxintfloat(is(Int,Int32) ? Float32 : Float64))):5
 @test length(1:4:typemax(Int)) == div(typemax(Int),4) + 1
 
 # overflow in length
-@test_throws 0:typemax(Int)
-@test_throws typemin(Int):typemax(Int)
-@test_throws -1:typemax(Int)-1
-
-# parity between ranges and for loops (see issue #5355)
-
-@test length(2.0^53:(2.0^53+2)) == 3
-let s = 0
-    r = 2.0^53:(2.0^53+2)
-    for i in r
-        s += 1
-        @test s <= 3
-    end
-    @test s == 3
-
-    s = 0
-    for i in 2.0^53:(2.0^53+2)
-        s += 1
-        @test s <= 3
-    end
-    @test s == 3
-end
+@test_throws length(0:typemax(Int))
+@test_throws length(typemin(Int):typemax(Int))
+@test_throws length(-1:typemax(Int)-1)
 
 let s = 0
     # loops ending at typemax(Int)
@@ -262,3 +243,7 @@ let
         end
     end
 end
+
+# issue #2959
+@test 1.0:1.5 == 1.0:1.0:1.5 == 1.0:1.0
+@test 1.0:(.3-.1)/.1 == 1.0:2.0

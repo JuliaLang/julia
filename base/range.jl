@@ -19,21 +19,13 @@ immutable Range{T<:Real} <: Ranges{T}
 end
 Range{T}(start::T, step, len::Integer) = Range{T}(start, step, len)
 
-immutable Range1{T<:Real} <: Ranges{T}
+immutable Range1{T} <: Ranges{T}
     start::T
-    len::Int
+    stop::T
 
-    function Range1(start::T, len::Int)
-        if len < 0; error("length must be non-negative"); end
-        new(start, len)
-    end
-    Range1(start::T, len::Integer) = Range1(start, int(len))
-
-    # TODO: this is a hack to elide the len<0 check for colon.
-    # should store start and stop for integer ranges instead
-    Range1(start::T, len::Integer, _) = new(start, int(len))
+    Range1(start, stop) = new(start, ifelse(stop>=start, stop, oftype(T, start-1)))
 end
-Range1{T}(start::T, len::Integer) = Range1{T}(start, len)
+Range1{T}(start::T, stop::T) = Range1{T}(start, stop)
 
 immutable FloatRange{T<:FloatingPoint} <: Ranges{T}
     start::T
@@ -88,23 +80,22 @@ function colon{T<:Real}(start::T, step::T, stop::T)
     end
     Range(start, step, len)
 end
+
 function colon{T<:Real}(start::T, stop::T)
-    if stop < start
-        len = 0
-    else
+    if T <: FloatingPoint
         nf = stop - start + 1
-        if T <: FloatingPoint
-            n = round(nf)
-            len = abs(n-nf) < eps(n)*3 ? itrunc(n) : itrunc(nf)
-        else
-            n = nf
-            len = itrunc(n)
+        n = round(nf)
+        len = abs(n-nf) < eps(n)*3 ? itrunc(n) : itrunc(nf)
+        stop = oftype(start, start+(len-1))
+        if stop == stop+1
+            # Range1 doesn't work beyond maxintfloat
+            error("end point ", stop, " is too large for Range1")
         end
         if n >= typemax(Int)
             error("length ",n," is too large")
         end
     end
-    Range1(start, len)
+    Range1(start, stop)
 end
 
 colon(start::Real, step::Real, stop::Real) = colon(promote(start, step, stop)...)
@@ -164,12 +155,24 @@ similar(r::Ranges, T::Type, dims::Dims) = Array(T, dims)
 
 length(r::Ranges) = integer(r.len)
 size(r::Ranges) = (length(r),)
-isempty(r::Ranges) = r.len==0
 first(r::Ranges) = r.start
 first(r::FloatRange) = r.start/r.divisor
-last{T}(r::Range1{T}) = oftype(T, r.start + r.len-1)
+last{T}(r::Range1{T}) = r.stop
 last{T}(r::Range{T})  = oftype(T, r.start + (r.len-1)*r.step)
 last{T}(r::FloatRange{T}) = oftype(T, (r.start + (r.len-1)*r.step)/r.divisor)
+
+length{T<:Integer}(r::Range1{T}) = int(r.stop - r.start + 1)
+length(r::Range1) = int(itrunc(r.stop - r.start)+1)
+
+if Int === Int32
+    function length{T<:Union(Int8,Int16,Int32,Uint8,Uint16)}(r::Range1{T})
+        checked_add(checked_sub(convert(Int,r.stop), convert(Int,r.start)), 1)
+    end
+else
+    function length{T<:Union(Int8,Int16,Int32,Int64,Uint8,Uint16,Uint32)}(r::Range1{T})
+        checked_add(checked_sub(convert(Int,r.stop), convert(Int,r.start)), 1)
+    end
+end
 
 step(r::Range) = r.step
 step(r::Range1) = one(r.start)
@@ -183,39 +186,42 @@ maximum(r::Ranges) = isempty(r) ? error("range must be non-empty") : step(r) > 0
 ctranspose(r::Ranges) = [x for _=1, x=r]
 transpose(r::Ranges) = r'
 
-# Ranges are intended to be immutable
+# Ranges are immutable
 copy(r::Ranges) = r
 
 getindex(r::Ranges, i::Real) = getindex(r, to_index(i))
 
 function getindex{T}(r::Ranges{T}, i::Integer)
-    1 <= i <= r.len || error(BoundsError)
+    1 <= i <= length(r) || error(BoundsError)
     oftype(T, r.start + (i-1)*step(r))
 end
 function getindex{T}(r::FloatRange{T}, i::Integer)
-    1 <= i <= r.len || error(BoundsError)
+    1 <= i <= length(r) || error(BoundsError)
     oftype(T, (r.start + (i-1)*r.step)/r.divisor)
 end
 
 function getindex(r::Range1, s::Range1{Int})
-    if s.len > 0
-        if !(1 <= last(s) <= r.len)
+    sl = length(s)
+    if sl > 0
+        if !(1 <= last(s) <= length(r))
             throw(BoundsError())
         end
-        Range1(r[s.start], s.len)
+        st = r[s.start]
     else
-        Range1(r.start + s.start-1, s.len)
+        st = oftype(r.start, r.start + s.start-1)
     end
+    Range1(st, oftype(st,st+sl-1))
 end
 
 function getindex(r::Ranges, s::Ranges{Int})
-    if s.len > 0
-        if !(1 <= last(s) <= r.len)
+    sl = length(s)
+    if sl > 0
+        if !(1 <= last(s) <= length(r))
             throw(BoundsError())
         end
-        Range(r[s.start], step(r)*step(s), s.len)
+        Range(r[s.start], step(r)*step(s), sl)
     else
-        Range(r.start + (s.start-1)*step(r), step(r)*step(s), s.len)
+        Range(r.start + (s.start-1)*step(r), step(r)*step(s), sl)
     end
 end
 
@@ -229,7 +235,6 @@ show{T<:FloatingPoint}(io::IO, r::Range{T}) = invoke(show, (IO,Any), io, r)
 
 start(r::Ranges) = 0
 next{T}(r::Range{T}, i) = (oftype(T, r.start + i*step(r)), i+1)
-next{T}(r::Range1{T}, i) = (oftype(T, r.start + i), i+1)
 next{T}(r::FloatRange{T}, i) = (oftype(T, (r.start + i*r.step)/r.divisor), i+1)
 done(r::Ranges, i) = (length(r) <= i)
 
@@ -284,7 +289,7 @@ intersect{T<:Integer}(r::Range1{T}, i::Integer) = intersect(i, r)
 
 function intersect{T1<:Integer, T2<:Integer}(r::Range1{T1}, s::Range{T2})
     if length(s) == 0
-        Range1(first(r), 0)
+        Range1(first(r), oftype(T1, first(r)-1))
     elseif step(s) == 0
         intersect(first(s), r)
     elseif step(s) < 0
@@ -398,38 +403,40 @@ end
 
 ## linear operations on ranges ##
 
--(r::Ranges)     = Range(-r.start, -step(r), r.len)
+-(r::Ranges)     = Range(-r.start, -step(r), length(r))
 -(r::FloatRange) = FloatRange(-r.start, -r.step, r.len, r.divisor)
 
-+(x::Real, r::Range1)     = Range1(x + r.start, r.len)
++(x::Real, r::Range1)     = Range1(x + r.start, x + last(r))
 +(x::Real, r::Range)      = Range(x + r.start, r.step, r.len)
 +(x::Real, r::FloatRange) = FloatRange(r.divisor*x + r.start, r.step, r.len, r.divisor)
 +(r::Ranges, x::Real)     = x + r
 +(r::FloatRange, x::Real) = x + r
 
--(x::Real, r::Ranges)     = Range(x - r.start, -step(r), r.len)
+-(x::Real, r::Ranges)     = Range(x - r.start, -step(r), length(r))
 -(x::Real, r::FloatRange) = FloatRange(r.divisor*x - r.start, -r.step, r.len, r.divisor)
--(r::Range1, x::Real)     = Range1(r.start-x, r.len)
+-(r::Range1, x::Real)     = Range1(r.start-x, last(r)-x)
 -(r::Range , x::Real)     = Range(r.start-x, r.step, r.len)
 -(r::FloatRange, x::Real) = FloatRange(r.start - r.divisor*x, r.step, r.len, r.divisor)
 
-.*(x::Real, r::Ranges)     = Range(x*r.start, x*step(r), r.len)
+.*(x::Real, r::Ranges)     = Range(x*r.start, x*step(r), length(r))
 .*(x::Real, r::FloatRange) = FloatRange(x*r.start, x*r.step, r.len, r.divisor)
 .*(r::Ranges, x::Real)     = x .* r
 .*(r::FloatRange, x::Real) = x .* r
 
-./(r::Ranges, x::Real)     = Range(r.start/x, step(r)/x, r.len)
+./(r::Ranges, x::Real)     = Range(r.start/x, step(r)/x, length(r))
 ./(r::FloatRange, x::Real) = FloatRange(r.start/x, r.step/x, r.len, r.divisor)
 
 # TODO: better implementations for FloatRanges?
 function +(r1::Ranges, r2::Ranges)
-    r1.len == r2.len || error("argument dimensions must match")
-    Range(r1.start+r2.start, step(r1)+step(r2), r1.len)
+    r1l = length(r1)
+    r1l == length(r2) || error("argument dimensions must match")
+    Range(r1.start+r2.start, step(r1)+step(r2), r1l)
 end
 
 function -(r1::Ranges, r2::Ranges)
-    r1.len == r2.len || error("argument dimensions must match")
-    Range(r1.start-r2.start, step(r1)-step(r2), r1.len)
+    r1l = length(r1)
+    r1l == length(r2) || error("argument dimensions must match")
+    Range(r1.start-r2.start, step(r1)-step(r2), r1l)
 end
 
 ## non-linear operations on ranges ##
@@ -468,7 +475,7 @@ function vcat{T}(rs::Ranges{T}...)
     return a
 end
 
-reverse(r::Ranges) = Range(last(r), -step(r), r.len)
+reverse(r::Ranges) = Range(last(r), -step(r), length(r))
 reverse(r::FloatRange) = FloatRange(last(r), -r.step, r.len, r.divisor)
 
 ## sorting ##
