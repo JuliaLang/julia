@@ -21,6 +21,7 @@ juliadoc_dir = '{0}/juliadoc/'.format(os.path.abspath('.'))
 sys.path.append(juliadoc_dir)
 
 import juliadoc
+import sphinx_rtd_theme
 
 # -- General configuration -----------------------------------------------------
 
@@ -112,7 +113,8 @@ html_theme = 'julia'
 #html_theme_options = {}
 
 # Add any paths that contain custom themes here, relative to this directory.
-html_theme_path = [juliadoc.get_theme_dir()]
+html_theme_path = [juliadoc.get_theme_dir(),
+                   sphinx_rtd_theme.get_html_theme_path()]
 
 # The name for this set of Sphinx documents.  If None, it defaults to
 # "<project> v<release> documentation".

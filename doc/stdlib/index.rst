@@ -5,10 +5,6 @@
  The Julia Standard Library
 ############################
 
-*********
-Built-ins
-*********
-
 .. toctree::
    :maxdepth: 1
 
@@ -19,16 +15,6 @@ Built-ins
    file
    punctuation
    sort
-
-.. _built-in-modules:
-
-****************
-Built-in Modules
-****************
-
-.. toctree::
-   :maxdepth: 1
-
    pkg
    collections
    graphics
