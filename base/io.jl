@@ -226,6 +226,11 @@ function done(itr::EachLine, nada)
     true
 end
 next(itr::EachLine, nada) = (readline(itr.stream), nothing)
+eltype(itr::EachLine) = String
+
+function readlines(s)
+    collect(eachline(s))
+end
 
 function readlines(s, fx::Function...)
     a = {}
