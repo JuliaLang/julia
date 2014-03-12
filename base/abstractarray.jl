@@ -331,13 +331,6 @@ imag{T<:Real}(x::AbstractArray{T}) = zero(x)
 
 \(A::Number, B::AbstractArray) = B ./ A
 
-./(x::Number,y::AbstractArray )         = throw(MethodError(./, (x,y)))
-./(x::AbstractArray, y::Number)         = throw(MethodError(./, (x,y)))
-
-.^(x::Number,y::AbstractArray )         = throw(MethodError(.^, (x,y)))
-.^(x::AbstractArray, y::Number)         = throw(MethodError(.^, (x,y)))
-
-
 ## Indexing: getindex ##
 
 getindex(t::AbstractArray, i::Real) = error("indexing not defined for ", typeof(t))
