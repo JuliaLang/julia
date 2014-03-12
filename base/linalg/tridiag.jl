@@ -309,7 +309,7 @@ function solve!(X::StridedMatrix, M::Tridiagonal, B::StridedMatrix)
     size(X) == size(B) || throw(DimensionMismatch(""))
     m, n = size(B)
     for j = 1:n
-        r = Range1((j-1)*m+1,m)
+        r = ((j-1)*m+1):((j-1)*m+m)
         solve!(X, r, M, B, r)
     end
     X
@@ -346,7 +346,7 @@ function mult(X::StridedMatrix, M::Tridiagonal, B::StridedMatrix)
     size(X) == size(B) || throw(DimensionMismatch(""))
     m, n = size(B)
     for j = 1:n
-        r = Range1((j-1)*m+1,m)
+        r = ((j-1)*m+1):((j-1)*m+m)
         mult(X, r, M, B, r)
     end
     X
