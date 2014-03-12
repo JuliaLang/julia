@@ -561,6 +561,26 @@ function get!{K,V}(default::Function, h::Dict{K,V}, key0)
     return v
 end
 
+# NOTE: this macro is specific to Dict, not Associative, and should
+#       therefore not be exported as-is: it's for internal use only.
+macro get!(h, key0, default)
+    quote
+        K, V = eltype($(esc(h)))
+        key = convert(K, $(esc(key0)))
+        isequal(key, $(esc(key0))) || error($(esc(key0)), " is not a valid key for type ", K)
+        idx = ht_keyindex2($(esc(h)), key)
+        if idx < 0
+            idx = -idx
+            v = convert(V, $(esc(default)))
+            _setindex!($(esc(h)), v, key, idx)
+        else
+            @inbounds v = $(esc(h)).vals[idx]
+        end
+        v
+    end
+end
+
+
 function getindex{K,V}(h::Dict{K,V}, key)
     index = ht_keyindex(h, key)
     return (index<0) ? throw(KeyError(key)) : h.vals[index]::V
