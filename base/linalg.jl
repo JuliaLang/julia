@@ -149,7 +149,7 @@ export
     At_rdiv_Bt,
 
 # Constants
-    I
+    𝟙, I
 
 typealias BlasFloat Union(Float64,Float32,Complex128,Complex64)
 typealias BlasReal Union(Float64,Float32)
