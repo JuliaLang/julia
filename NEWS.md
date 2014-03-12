@@ -31,6 +31,8 @@ New language features
     the module is first loaded, and on process startup if a pre-compiled
     version of the module is present ([#1268]).
 
+  * Multiline comments: `#= .... =#` ([#69], [#6128]).
+
 Library improvements
 --------------------
 
