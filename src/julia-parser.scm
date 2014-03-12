@@ -355,10 +355,28 @@
        (eq? (car t) 'macrocall)
        (memq (cadr t) '(@int128_str @uint128_str @bigint_str))))
 
+; skip to end of comment, starting at #:  either #...<eol> or #{ .... }#.
+(define (skip-comment port)
+  (define (skip-multiline-comment port)
+    (let ((c (read-char port)))
+      (if (eof-object? c) 
+          (error "non-terminated multiline comment #= ... =#")
+          (begin (if (eqv? c #\=)
+                     (let ((c (read-char port)))
+                       (if (not (eqv? c #\#))
+                           (skip-multiline-comment port)))
+                     (skip-multiline-comment port))))))
+
+  (read-char port) ; read # that was already peeked
+  (if (eqv? (peek-char port) #\=)
+      (begin (read-char port) ; read initial {
+             (skip-multiline-comment port))
+      (skip-to-eol port)))
+
 (define (skip-ws-and-comments port)
   (skip-ws port #t)
   (if (eqv? (peek-char port) #\#)
-      (begin (skip-to-eol port)
+      (begin (skip-comment port)
 	     (skip-ws-and-comments port)))
   #t)
 
@@ -371,7 +389,7 @@
 
 	  ((char-numeric? c)    (read-number port #f #f))
 
-	  ((eqv? c #\#)         (skip-to-eol port) (next-token port s))
+	  ((eqv? c #\#)         (skip-comment port) (next-token port s))
 
 	  ; . is difficult to handle; it could start a number or operator
 	  ((and (eqv? c #\.)
