@@ -561,6 +561,8 @@ function get!{K,V}(default::Function, h::Dict{K,V}, key0)
     return v
 end
 
+# NOTE: this macro is specific to Dict, not Associative, and should
+#       therefore not be exported as-is: it's for internal use only.
 macro get!(h, key0, default)
     quote
         K, V = eltype($(esc(h)))
