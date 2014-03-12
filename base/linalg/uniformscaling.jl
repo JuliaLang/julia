@@ -5,6 +5,7 @@ immutable UniformScaling{T<:Number} <: AbstractMatrix{T}
 end
 
 const I = UniformScaling(1)
+const 𝟙 = I
 
 getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ))
 
