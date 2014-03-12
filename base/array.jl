@@ -261,9 +261,11 @@ convert{T,n,S}(::Type{Array{T,n}}, x::Array{S,n}) = copy!(similar(x,T), x)
 
 convert{T,S,N}(::Type{AbstractArray{T,N}}, B::StridedArray{S,N}) = copy!(similar(B,T), B)
 
-function collect{C}(T::Type, itr::C)
-    if method_exists(length,(C,))
-        a = Array(T,length(itr))
+function collect(T::Type, itr)
+    if applicable(length, itr)
+        # when length() isn't defined this branch might pollute the
+        # type of the other.
+        a = Array(T,length(itr)::Integer)
         i = 0
         for x in itr
             a[i+=1] = x
@@ -276,9 +278,8 @@ function collect{C}(T::Type, itr::C)
     end
     return a
 end
-function collect{C}(itr::C)
-    method_exists(eltype,(C,)) ? collect(eltype(itr),itr) : [x for x in itr]
-end
+
+collect(itr) = collect(eltype(itr), itr)
 
 ## Indexing: getindex ##
 
