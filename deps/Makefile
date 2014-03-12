@@ -347,7 +347,7 @@ endif # LLVM_VER != svn
 LLVM_CXXFLAGS = $(CXXFLAGS)
 LLVM_CPPFLAGS = $(CPPFLAGS)
 LLVM_LDFLAGS = $(LDFLAGS)
-LLVM_TARGET_FLAGS= --enable-targets=host
+LLVM_TARGET_FLAGS= --enable-targets=host,nvptx
 LLVM_FLAGS += --disable-profiling --enable-shared --enable-static $(LLVM_TARGET_FLAGS) --disable-bindings --disable-docs
 # LLVM has weird install prefixes (see llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/Makefile.config for the full list)
 # We map them here to the "normal" ones, which means just prefixing "PROJ_" to the variable name.
