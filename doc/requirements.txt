@@ -1,1 +1,1 @@
--e git+https://github.com/JuliaLang/JuliaDoc.git#egg=JuliaDoc
+-e git+https://github.com/JuliaLang/JuliaDoc.git@300b72cd13fe9b54b938a0b49416e4d860181d0f#egg=JuliaDoc
