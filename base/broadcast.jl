@@ -2,6 +2,7 @@ module Broadcast
 
 using ..Cartesian
 import Base.promote_eltype
+import Base.@get!
 import Base.num_bit_chunks, Base.@_msk_end, Base.getindex_unchecked
 import Base.(.+), Base.(.-), Base.(.*), Base.(./), Base.(.\)
 import Base.(.==), Base.(.<), Base.(.!=), Base.(.<=)
@@ -203,73 +204,31 @@ function gen_broadcast_function_tobitarray(genbody::Function, nd::Int, narrays::
     end
 end
 
-let broadcast_cache = Dict()
-global broadcast!
-function broadcast!(f::Function, B, As::Union(Array,BitArray)...)
-    nd = ndims(B)
-    narrays = length(As)
-    key = (f, nd, narrays)
-    if !haskey(broadcast_cache, key)
-        func = gen_broadcast_function(gen_broadcast_body_iter, nd, narrays, f)
-        broadcast_cache[key] = func
-    else
-        func = broadcast_cache[key]
-    end
-    func(B, As...)
-    B
-end
-end  # let broadcast_cache
+for (Bsig, Asig, gbf, gbb) in
+    ((BitArray                          , Union(Array,BitArray)                   ,
+      :gen_broadcast_function_tobitarray, :gen_broadcast_body_iter_tobitarray     ),
+     (Any                               , Union(Array,BitArray)                   ,
+      :gen_broadcast_function           , :gen_broadcast_body_iter                ),
+     (BitArray                          , Any                                     ,
+      :gen_broadcast_function_tobitarray, :gen_broadcast_body_cartesian_tobitarray),
+     (Any                               , Any                                     ,
+      :gen_broadcast_function           , :gen_broadcast_body_cartesian           ))
 
-let broadcast_cache = Dict()
-global broadcast!
-function broadcast!(f::Function, B::BitArray, As::Union(Array,BitArray)...)
-    nd = ndims(B)
-    narrays = length(As)
-    key = (f, nd, narrays)
-    if !haskey(broadcast_cache, key)
-        func = gen_broadcast_function_tobitarray(gen_broadcast_body_iter_tobitarray, nd, narrays, f)
-        broadcast_cache[key] = func
-    else
-        func = broadcast_cache[key]
-    end
-    func(B, As...)
-    B
-end
-end  # let broadcast_cache
+    @eval let cache = Dict{Function,Dict{Int,Dict{Int,Function}}}()
+        global broadcast!
+        function broadcast!(f::Function, B::$Bsig, As::$Asig...)
+            nd = ndims(B)
+            narrays = length(As)
 
-let broadcast_cache = Dict()
-global broadcast!
-function broadcast!(f::Function, B, As...)
-    nd = ndims(B)
-    narrays = length(As)
-    key = (f, nd, narrays)
-    if !haskey(broadcast_cache, key)
-        func = gen_broadcast_function(gen_broadcast_body_cartesian, nd, narrays, f)
-        broadcast_cache[key] = func
-    else
-        func = broadcast_cache[key]
-    end
-    func(B, As...)
-    B
-end
-end  # let broadcast_cache
+            cache_f    = @get! cache      f       Dict{Int,Dict{Int,Function}}()
+            cache_f_na = @get! cache_f    narrays Dict{Int,Function}()
+            func       = @get! cache_f_na nd      $gbf($gbb, nd, narrays, f)
 
-let broadcast_cache = Dict()
-global broadcast!
-function broadcast!(f::Function, B::BitArray, As...)
-    nd = ndims(B)
-    narrays = length(As)
-    key = (f, nd, narrays)
-    if !haskey(broadcast_cache, key)
-        func = gen_broadcast_function_tobitarray(gen_broadcast_body_cartesian_tobitarray, nd, narrays, f)
-        broadcast_cache[key] = func
-    else
-        func = broadcast_cache[key]
-    end
-    func(B, As...)
-    B
+            func(B, As...)
+            B
+        end
+    end  # let broadcast_cache
 end
-end  # let broadcast_cache
 
 
 broadcast(f::Function, As...) = broadcast!(f, Array(promote_eltype(As...), broadcast_shape(As...)), As...)
