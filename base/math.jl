@@ -49,19 +49,16 @@ function sinpi(x::Real)
         return nan(x)
     end
 
-    rx = float(rem(x,2))
+    rx = copysign(float(rem(x,2)),x)
     arx = abs(rx)
 
-    if arx == 0.0
-        # return -0.0 iff x == -0.0
-        return x == 0.0 ? x : arx
-    elseif arx < 0.25
+    if arx < 0.25
         return sin(pi*rx)
     elseif arx <= 0.75
         arx = 0.5 - arx
         return copysign(cos(pi*arx),rx)
     elseif arx < 1.25
-        rx = copysign(1.0,rx) - rx
+        rx = (1.0-arx)*copysign(1.0,rx)
         return sin(pi*rx)
     elseif arx <= 1.75
         arx = 1.5 - arx
