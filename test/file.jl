@@ -298,5 +298,6 @@ rm(file)
 rm(subdir)
 rm(dir)
 
-@test !ispath(file)
-@test !ispath(dir)
+# The following fail on Windows with "stat: operation not permitted (EPERM)"
+@unix_only @test !ispath(file)
+@unix_only @test !ispath(dir)
