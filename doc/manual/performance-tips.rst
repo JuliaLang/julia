@@ -459,6 +459,8 @@ properties.
    Be certain before doing this. If the subscripts are ever out of bounds,
    you may suffer crashes or silent corruption.
 -  Write ``@simd`` in front of ``for`` loops that are amenable to vectorization.
+   **This feature is experimental** and could change or disappear in future 
+   versions of Julia.  
 
 Here is an example with both forms of markup::
 
