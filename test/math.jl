@@ -23,7 +23,12 @@ for x = 0.0:1.0:4.0
     @test sinpi(-x) === -0.0
 end
 
-
+# check type stability
+for T = (Float32,Float64,BigFloat)
+    for f = (sind,cosd,sinpi,cospi)
+        @test Base.return_types(f,(T,)) == [T]
+    end
+end
 
 
 # error functions
