@@ -1454,3 +1454,8 @@ x6074 = 6074
 test5536(a::Union(Real, AbstractArray)...) = "Splatting"
 test5536(a::Union(Real, AbstractArray)) = "Non-splatting"
 @test test5536(5) == "Non-splatting"
+
+# multiline comments (#6139 and others raised in #6128)
+@test 3 == include_string("1 + #=# 2") == include_string("1 + #==# 2") == include_string("1 + #===# 2") == include_string("1 + #= #= blah =# =# 2") == include_string("1 + #= #= #= nested =# =# =# 2")
+@test_throws include_string("#=")
+@test_throws include_string("#= #= #= =# =# =")

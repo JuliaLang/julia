@@ -11,7 +11,7 @@ Extended documentation for mathematical symbols & functions is :ref:`here <mathe
    ``!``       prefix "not" operator
    ``a!( )``   at the end of a function name, `!` indicates that a function modifies its argument(s)
    ``#``       begin single line comment
-   ``#=``      begin multi-line comment
+   ``#=``      begin multi-line comment (these are nestable)
    ``=#``      end multi-line comment
    ``$``       xor operator, string and expression interpolation
    ``%``       remainder operator
