@@ -29,7 +29,7 @@
 
 <!DOCTYPE language SYSTEM "language.dtd">
 
-<language name="Julia" section="Sources" version="0.2" kateversion="2.4" extensions="*.jl" casesensitive="1" priority="5" license="MIT">
+<language name="Julia" section="Sources" version="0.3" kateversion="2.4" extensions="*.jl" casesensitive="1" priority="5" license="MIT">
 
   <highlighting>
     <list name="block_begin">
@@ -342,6 +342,7 @@
         <keyword context="#stay" attribute="Data Type" String="types" />
         <keyword context="#stay" attribute="Constant" String="constants" />
         <keyword context="#stay" attribute="Math Constant" String="math-constants" />
+        <Detect2Chars char="#" char1="=" context="multiline-comment" attribute="Comment"/>
         <DetectChar char="#" context="1-comment" attribute="Comment"/>
 
         <!-- Lists and arrays -->
@@ -433,6 +434,15 @@
 
       <!-- 1-line comment: #pop@EOL  -->
       <context name="1-comment" lineEndContext="#pop" attribute="Comment">
+        <IncludeRules context="##Alerts" />
+        <DetectSpaces />
+        <DetectIdentifier />
+      </context>
+
+      <!-- multi-line comment: -->
+      <context name="multiline-comment" lineEndContext="#stay" attribute="Comment">
+        <Detect2Chars attribute="Comment" context="#pop" char="=" char1="#" endRegion="Comment"/>
+        <IncludeRules context="##Alerts" />
         <DetectSpaces />
         <DetectIdentifier />
       </context>
@@ -464,6 +474,7 @@
   <general>
     <comments>
       <comment name="singleLine" start="#" />
+      <comment name="multiLine" start="#=" end="=#" />
     </comments>
     <keywords casesensitive="1" weakDeliminator=""/>
   </general>
