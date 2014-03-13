@@ -15,6 +15,15 @@
 # Try a seed larger than 2^32
 @test rand(MersenneTwister(5294967296)) == 0.3498809918210497
 
+z = zeros(1)
+rand!(MersenneTwister(42), z)
+@test z[1] == 0.5331830160438613
+@test rand(MersenneTwister(42), Float64, (1, 1))[1] == 0.5331830160438613
+@test rand(MersenneTwister(42), Float64, 1, 1)[1] == 0.5331830160438613
+@test rand(MersenneTwister(42), (1, 1))[1] == 0.5331830160438613
+@test rand(MersenneTwister(42), 1, 1)[1] == 0.5331830160438613
+@testfails rand(MersenneTwister(42), Uint64)
+
 for T in (Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Int128, Uint128, Char, BigInt,
 	Float16, Float32, Float64, Rational{Int})
     r = rand(convert(T, 97):convert(T, 122))

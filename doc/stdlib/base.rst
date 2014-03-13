@@ -3415,11 +3415,11 @@ Random number generation in Julia uses the `Mersenne Twister library <http://www
 
    Populate the array A with random number generated from the specified RNG.
 
-.. function:: rand(rng::AbstractRNG, [dims...])
+.. function:: rand([rng], [dims...])
 
    Generate a random ``Float64`` number or array of the size specified by dims, using the specified RNG object. Currently, ``MersenneTwister`` is the only available Random Number Generator (RNG), which may be seeded using srand.
 
-.. function:: rand(dims or [dims...])
+.. function:: rand([rng], dims or [dims...])
 
    Generate a random ``Float64`` array of the size specified by dims
 
