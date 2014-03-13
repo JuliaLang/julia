@@ -166,9 +166,11 @@ function clone(url_or_pkg::String)
         # TODO: Cache.prefetch(pkg,url)
     else
         url = url_or_pkg
-        m = match(r"/(\w+?)(?:\.jl)?(?:\.git)?$", url)
-        m != nothing || error("can't determine package name from URL: $url")
-        pkg = m.captures[1]
+        (pkg, ext) = splitext(basename(url))
+        while ext != ""
+            (pkg, ext) = splitext(pkg)
+        end
+        isempty(pkg) && error("can't determine package name from URL: $url")
     end
     clone(url,pkg)
 end
