@@ -16,6 +16,7 @@ char system_image[256] = JL_SYSTEM_IMAGE_PATH;
 
 static int lisp_prompt = 0;
 static int codecov=0;
+static int int32lit=0;
 static char *program = NULL;
 char *image_file = NULL;
 int tab_width = 2;
@@ -43,7 +44,8 @@ static const char *opts =
     " --color=yes|no           Enable or disable color text\n\n"
 
     " --code-coverage          Count executions of source lines\n"
-    " --check-bounds=yes|no    Emit bounds checks always or never (ignoring declarations)\n";
+    " --check-bounds=yes|no    Emit bounds checks always or never (ignoring declarations)\n"
+    " --int32-literals         Use Int32 for integer literals on all platforms\n";
 
 void parse_opts(int *argcp, char ***argvp)
 {
@@ -57,6 +59,7 @@ void parse_opts(int *argcp, char ***argvp)
         { "sysimage",      required_argument, 0, 'J' },
         { "code-coverage", no_argument,       &codecov, 1 },
         { "check-bounds",  required_argument, 0, 300 },
+        { "int32-literals", no_argument,      &int32lit, 1 },
         { 0, 0, 0, 0 }
     };
     int c;
@@ -105,6 +108,7 @@ void parse_opts(int *argcp, char ***argvp)
         }
     }
     jl_compileropts.code_coverage = codecov;
+    jl_compileropts.int32_literals = int32lit;
     if (!julia_home) {
         julia_home = getenv("JULIA_HOME");
         if (julia_home) {
