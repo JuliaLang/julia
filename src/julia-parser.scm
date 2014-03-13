@@ -360,7 +360,7 @@
   (define (skip-multiline-comment port)
     (let ((c (read-char port)))
       (if (eof-object? c) 
-          (error "non-terminated multiline comment #= ... =#")
+          (error "unterminated multi-line comment #= ... =#")
           (begin (if (eqv? c #\=)
                      (let ((c (peek-char port)))
                        (if (eqv? c #\#)
@@ -370,8 +370,7 @@
 
   (read-char port) ; read # that was already peeked
   (if (eqv? (peek-char port) #\=)
-      (begin (read-char port) ; read initial =
-             (skip-multiline-comment port))
+      (skip-multiline-comment port)
       (skip-to-eol port)))
 
 (define (skip-ws-and-comments port)
