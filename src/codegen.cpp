@@ -116,8 +116,6 @@ void __attribute__(()) __stack_chk_fail()
 }
 }
 
-#define CONDITION_REQUIRES_BOOL
-
 #define DISABLE_FLOAT16
 
 // llvm state
@@ -2223,12 +2221,10 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
 static Value *emit_condition(jl_value_t *cond, const std::string &msg, jl_codectx_t *ctx)
 {
     Value *condV = emit_unboxed(cond, ctx);
-#ifdef CONDITION_REQUIRES_BOOL
     if (expr_type(cond, ctx) != (jl_value_t*)jl_bool_type &&
         condV->getType() != T_int1) {
         emit_typecheck(condV, (jl_value_t*)jl_bool_type, msg, ctx);
     }
-#endif
     if (condV->getType() == T_int1) {
         return builder.CreateXor(condV, ConstantInt::get(T_int1,1));
     }
