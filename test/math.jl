@@ -5,22 +5,24 @@
 @test exponent(12.8) == 3
 
 # degree-based trig functions
-for x = -400:40:400
-    @test_approx_eq_eps sind(x) sin(pi/180*x) eps(pi/180*x)
-    @test_approx_eq_eps cosd(x) cos(pi/180*x) eps(pi/180*x)
-end
-for x = 0.0:180:720
-    @test sind(x) === 0.0
-    @test sind(-x) === -0.0
-end
+for T = (Float32,Float64)
+    for x = -400:40:400
+        @test_approx_eq_eps sind(convert(T,x))::T convert(T,sin(pi/180*x)) eps(deg2rad(convert(T,x)))
+        @test_approx_eq_eps cosd(convert(T,x))::T convert(T,cos(pi/180*x)) eps(deg2rad(convert(T,x)))
+    end
+    for x = 0.0:180:720
+        @test sind(convert(T,x)) === zero(T)
+        @test sind(-convert(T,x)) === -zero(T)
+    end
 
-for x = -3:0.3:3
-    @test_approx_eq_eps sinpi(x) sin(pi*x) eps(pi*x)
-    @test_approx_eq_eps cospi(x) cos(pi*x) eps(pi*x)
-end
-for x = 0.0:1.0:4.0
-    @test sinpi(x) === 0.0
-    @test sinpi(-x) === -0.0
+    for x = -3:0.3:3
+        @test_approx_eq_eps sinpi(convert(T,x))::T convert(T,sin(pi*x)) eps(pi*convert(T,x))
+        @test_approx_eq_eps cospi(convert(T,x))::T convert(T,cos(pi*x)) eps(pi*convert(T,x))
+    end
+    for x = 0.0:1.0:4.0
+        @test sinpi(convert(T,x)) === zero(T)
+        @test sinpi(-convert(T,x)) === -zero(T)
+    end
 end
 
 # check type stability
