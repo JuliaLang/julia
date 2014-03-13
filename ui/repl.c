@@ -42,7 +42,8 @@ static const char *opts =
     " -F                       Load ~/.juliarc.jl, then handle remaining inputs\n"
     " --color=yes|no           Enable or disable color text\n\n"
 
-    " --code-coverage          Count executions of source lines\n";
+    " --code-coverage          Count executions of source lines\n"
+    " --check-bounds=yes|no    Emit bounds checks always or never (ignoring declarations)\n";
 
 void parse_opts(int *argcp, char ***argvp)
 {
@@ -55,6 +56,7 @@ void parse_opts(int *argcp, char ***argvp)
         { "help",          no_argument,       0, 'h' },
         { "sysimage",      required_argument, 0, 'J' },
         { "code-coverage", no_argument,       &codecov, 1 },
+        { "check-bounds",  required_argument, 0, 300 },
         { 0, 0, 0, 0 }
     };
     int c;
@@ -90,6 +92,12 @@ void parse_opts(int *argcp, char ***argvp)
         case 'h':
             printf("%s%s", usage, opts);
             exit(0);
+        case 300:
+            if (!strcmp(optarg,"yes"))
+                jl_compileropts.check_bounds = JL_COMPILEROPT_CHECK_BOUNDS_ON;
+            else if (!strcmp(optarg,"no"))
+                jl_compileropts.check_bounds = JL_COMPILEROPT_CHECK_BOUNDS_OFF;
+            break;
         default:
             ios_printf(ios_stderr, "julia: unhandled option -- %c\n",  c);
             ios_printf(ios_stderr, "This is a bug, please report it.\n");

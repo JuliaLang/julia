@@ -98,6 +98,7 @@ those available for the ``perl`` and ``ruby`` programs::
 
     julia [options] [program] [args...]
      -v --version             Display version information
+     -h --help                Print this message
      -q --quiet               Quiet startup without banner
      -H --home=<dir>          Load files relative to <dir>
      -T --tab=<size>          Set REPL tab width to <size>
@@ -116,7 +117,7 @@ those available for the ``perl`` and ``ruby`` programs::
      -F                       Load ~/.juliarc.jl, then handle remaining inputs
      --color=yes|no           Enable or disable color text
 
-     -h --help                Print this message
+     --check-bounds=yes|no    Emit bounds checks always or never (ignoring declarations)
 
 Resources
 ---------

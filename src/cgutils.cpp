@@ -767,7 +767,9 @@ static Value *emit_bounds_check(Value *i, Value *len, jl_codectx_t *ctx)
 {
     Value *im1 = builder.CreateSub(i, ConstantInt::get(T_size, 1));
 #if CHECK_BOUNDS==1
-    if (ctx->boundsCheck.empty() || ctx->boundsCheck.back()==true) {
+    if (((ctx->boundsCheck.empty() || ctx->boundsCheck.back()==true) &&
+         jl_compileropts.check_bounds != JL_COMPILEROPT_CHECK_BOUNDS_OFF) ||
+        jl_compileropts.check_bounds == JL_COMPILEROPT_CHECK_BOUNDS_ON) {
         Value *ok = builder.CreateICmpULT(im1, len);
         raise_exception_unless(ok, prepare_global(jlboundserr_var), ctx);
     }
@@ -1296,8 +1298,10 @@ static Value *emit_array_nd_index(Value *a, jl_value_t *ex, size_t nd, jl_value_
 {
     Value *i = ConstantInt::get(T_size, 0);
     Value *stride = ConstantInt::get(T_size, 1);
-    bool bc = ctx->boundsCheck.empty() || ctx->boundsCheck.back()==true;
 #if CHECK_BOUNDS==1
+    bool bc = ((ctx->boundsCheck.empty() || ctx->boundsCheck.back()==true) &&
+               jl_compileropts.check_bounds != JL_COMPILEROPT_CHECK_BOUNDS_OFF) ||
+        jl_compileropts.check_bounds == JL_COMPILEROPT_CHECK_BOUNDS_ON;
     BasicBlock *failBB=NULL, *endBB=NULL;
     if (bc) {
         failBB = BasicBlock::Create(getGlobalContext(), "oob");

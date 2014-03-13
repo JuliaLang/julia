@@ -1294,10 +1294,15 @@ void jl_print_gc_stats(JL_STREAM *s);
 
 typedef struct {
     char *build_path;
-    int code_coverage;
+    int8_t code_coverage;
+    int8_t check_bounds;
 } jl_compileropts_t;
 
 extern DLLEXPORT jl_compileropts_t jl_compileropts;
+
+#define JL_COMPILEROPT_CHECK_BOUNDS_DEFAULT 0
+#define JL_COMPILEROPT_CHECK_BOUNDS_ON 1
+#define JL_COMPILEROPT_CHECK_BOUNDS_OFF 2
 
 #ifdef __cplusplus
 }
