@@ -648,7 +648,7 @@ DLLEXPORT int jl_substrtod(char *str, size_t offset, int len, double *out)
     char *p;
     errno = 0;
     char *bstr = str+offset;
-    *out = strtod(bstr, &p);
+    *out = strtod_c(bstr, &p);
     if ((p == bstr) || (p != (bstr+len)) ||
         (errno==ERANGE && (*out==0 || *out==HUGE_VAL || *out==-HUGE_VAL)))
         return 1;
@@ -659,7 +659,7 @@ DLLEXPORT int jl_strtod(char *str, double *out)
 {
     char *p;
     errno = 0;
-    *out = strtod(str, &p);
+    *out = strtod_c(str, &p);
     if (p == str ||
         (errno==ERANGE && (*out==0 || *out==HUGE_VAL || *out==-HUGE_VAL)))
         return 1;
@@ -677,9 +677,9 @@ DLLEXPORT int jl_substrtof(char *str, int offset, int len, float *out)
     errno = 0;
     char *bstr = str+offset;
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
-    *out = (float)strtod(bstr, &p);
+    *out = (float)strtod_c(bstr, &p);
 #else
-    *out = strtof(bstr, &p);
+    *out = strtof_c(bstr, &p);
 #endif
 
     if ((p == bstr) || (p != (bstr+len)) ||
@@ -693,9 +693,9 @@ DLLEXPORT int jl_strtof(char *str, float *out)
     char *p;
     errno = 0;
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
-    *out = (float)strtod(str, &p);
+    *out = (float)strtod_c(str, &p);
 #else
-    *out = strtof(str, &p);
+    *out = strtof_c(str, &p);
 #endif
     if (p == str ||
         (errno==ERANGE && (*out==0 || *out==HUGE_VALF || *out==-HUGE_VALF)))
