@@ -357,20 +357,26 @@
 
 ; skip to end of comment, starting at #:  either #...<eol> or #= .... =#.
 (define (skip-comment port)
-  (define (skip-multiline-comment port)
+  (define (skip-multiline-comment port count)
     (let ((c (read-char port)))
       (if (eof-object? c) 
           (error "unterminated multi-line comment #= ... =#")
           (begin (if (eqv? c #\=)
                      (let ((c (peek-char port)))
                        (if (eqv? c #\#)
-                           (read-char port)
-                           (skip-multiline-comment port)))
-                     (skip-multiline-comment port))))))
+			   (begin
+			     (read-char port)
+			     (if (> count 1)
+				 (skip-multiline-comment port (- count 1))))
+                           (skip-multiline-comment port count)))
+		     (if (eqv? c #\#)
+			 (skip-multiline-comment port
+                          (if (eqv? (peek-char port) #\=) (+ count 1) count))
+			 (skip-multiline-comment port count)))))))
 
   (read-char port) ; read # that was already peeked
   (if (eqv? (peek-char port) #\=)
-      (skip-multiline-comment port)
+      (skip-multiline-comment port 1)
       (skip-to-eol port)))
 
 (define (skip-ws-and-comments port)
