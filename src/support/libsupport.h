@@ -14,6 +14,7 @@
 #include "ptrhash.h"
 #include "bitvector.h"
 #include "dirpath.h"
+#include "strtod.h"
 
 DLLEXPORT void libsupport_init(void);
 
