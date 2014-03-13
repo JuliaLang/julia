@@ -3,6 +3,15 @@
  Julia Documentation
 %%%%%%%%%%%%%%%%%%%%%
 
+* :ref:`manual`
+* :ref:`stdlib`
+
+.. _manual:
+
+########
+ Manual
+########
+
 .. toctree::
    :maxdepth: 1
 
@@ -34,6 +43,16 @@
    manual/style-guide
    manual/faq
    manual/noteworthy-differences
+
+.. _stdlib:
+
+##################
+ Standard Library
+##################
+
+.. toctree::
+   :maxdepth: 1
+
    stdlib/base
    stdlib/sparse
    stdlib/linalg
