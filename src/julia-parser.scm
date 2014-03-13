@@ -360,7 +360,7 @@
   (define (skip-multiline-comment port count)
     (let ((c (read-char port)))
       (if (eof-object? c) 
-          (error "unterminated multi-line comment #= ... =#")
+          (error "incomplete: unterminated multi-line comment #= ... =#")
           (begin (if (eqv? c #\=)
                      (let ((c (peek-char port)))
                        (if (eqv? c #\#)
