@@ -228,9 +228,9 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
         }
         if (
 #ifdef _P64
-            jl_compileropts.int32_literals
+            jl_compileropts.int_literals==32
 #else
-            1
+            jl_compileropts.int_literals!=64
 #endif
             ) {
             if (i64 > (int64_t)S32_MAX || i64 < (int64_t)S32_MIN)
