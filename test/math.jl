@@ -9,11 +9,21 @@ for x = -400:40:400
     @test_approx_eq_eps sind(x) sin(pi/180*x) eps(pi/180*x)
     @test_approx_eq_eps cosd(x) cos(pi/180*x) eps(pi/180*x)
 end
+for x = 0.0:180:720
+    @test sind(x) === 0.0
+    @test sind(-x) === -0.0
+end
 
 for x = -3:0.3:3
     @test_approx_eq_eps sinpi(x) sin(pi*x) eps(pi*x)
     @test_approx_eq_eps cospi(x) cos(pi*x) eps(pi*x)
 end
+for x = 0.0:1.0:4.0
+    @test sinpi(x) === 0.0
+    @test sinpi(-x) === -0.0
+end
+
+
 
 
 # error functions
