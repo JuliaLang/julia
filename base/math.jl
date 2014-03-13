@@ -410,8 +410,8 @@ modf(x) = rem(x,one(x)), trunc(x)
 ^(x::Float64, y::Float64) = nan_dom_err(ccall((:pow,libm),  Float64, (Float64,Float64), x, y), x+y)
 ^(x::Float32, y::Float32) = nan_dom_err(ccall((:powf,libm), Float32, (Float32,Float32), x, y), x+y)
 
-^(x::Float64, y::Integer) = x^float64(y)
-^(x::Float32, y::Integer) = x^float32(y)
+^(x::Float64, y::Integer) = ccall((:pow,libm),  Float64, (Float64,Float64), x, y)
+^(x::Float32, y::Integer) = ccall((:powf,libm), Float32, (Float32,Float32), x, y)
 
 # special functions
 
