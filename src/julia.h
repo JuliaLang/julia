@@ -1296,7 +1296,7 @@ typedef struct {
     char *build_path;
     int8_t code_coverage;
     int8_t check_bounds;
-    int8_t int32_literals;
+    int int_literals;
 } jl_compileropts_t;
 
 extern DLLEXPORT jl_compileropts_t jl_compileropts;

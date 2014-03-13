@@ -16,7 +16,6 @@ char system_image[256] = JL_SYSTEM_IMAGE_PATH;
 
 static int lisp_prompt = 0;
 static int codecov=0;
-static int int32lit=0;
 static char *program = NULL;
 char *image_file = NULL;
 int tab_width = 2;
@@ -45,7 +44,7 @@ static const char *opts =
 
     " --code-coverage          Count executions of source lines\n"
     " --check-bounds=yes|no    Emit bounds checks always or never (ignoring declarations)\n"
-    " --int32-literals         Use Int32 for integer literals on all platforms\n";
+    " --int-literals=32|64     Select integer literal size independent of platform\n";
 
 void parse_opts(int *argcp, char ***argvp)
 {
@@ -59,7 +58,7 @@ void parse_opts(int *argcp, char ***argvp)
         { "sysimage",      required_argument, 0, 'J' },
         { "code-coverage", no_argument,       &codecov, 1 },
         { "check-bounds",  required_argument, 0, 300 },
-        { "int32-literals", no_argument,      &int32lit, 1 },
+        { "int-literals",  required_argument, 0, 301 },
         { 0, 0, 0, 0 }
     };
     int c;
@@ -101,6 +100,16 @@ void parse_opts(int *argcp, char ***argvp)
             else if (!strcmp(optarg,"no"))
                 jl_compileropts.check_bounds = JL_COMPILEROPT_CHECK_BOUNDS_OFF;
             break;
+        case 301:
+            if (!strcmp(optarg,"32"))
+                jl_compileropts.int_literals = 32;
+            else if (!strcmp(optarg,"64"))
+                jl_compileropts.int_literals = 64;
+            else {
+                ios_printf(ios_stderr, "julia: invalid integer literal size (%s)\n", optarg);
+                exit(1);
+            }
+            break;
         default:
             ios_printf(ios_stderr, "julia: unhandled option -- %c\n",  c);
             ios_printf(ios_stderr, "This is a bug, please report it.\n");
@@ -108,7 +117,6 @@ void parse_opts(int *argcp, char ***argvp)
         }
     }
     jl_compileropts.code_coverage = codecov;
-    jl_compileropts.int32_literals = int32lit;
     if (!julia_home) {
         julia_home = getenv("JULIA_HOME");
         if (julia_home) {
