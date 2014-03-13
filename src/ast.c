@@ -477,6 +477,8 @@ jl_value_t *jl_parse_next(void)
     if (c == FL_EOF)
         return NULL;
     if (iscons(c)) {
+        if (cdr_(c) == FL_EOF)
+            return NULL;
         value_t a = car_(c);
         if (isfixnum(a)) {
             jl_lineno = numval(a);
