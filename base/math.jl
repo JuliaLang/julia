@@ -22,7 +22,7 @@ import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
              max, min, minmax, ceil, floor, trunc, round, ^, exp2, exp10
 
-import Core.Intrinsics.nan_dom_err
+import Core.Intrinsics: nan_dom_err, sqrt_llvm, box, unbox
 
 # non-type specific math functions
 
@@ -272,7 +272,7 @@ exp10(x::Integer) = exp10(float(x))
 
 # functions that return NaN on non-NaN argument for domain error
 for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,
-          :lgamma, :sqrt, :log1p)
+          :lgamma, :log1p)
     @eval begin
         ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)),libm), Float64, (Float64,), x), x)
         ($f)(x::Float32) = nan_dom_err(ccall(($(string(f,"f")),libm), Float32, (Float32,), x), x)
@@ -280,6 +280,11 @@ for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,
         @vectorize_1arg Number $f
     end
 end
+
+sqrt(x::Float64) = nan_dom_err(box(Float64,sqrt_llvm(unbox(Float64,x))), x)
+sqrt(x::Float32) = nan_dom_err(box(Float32,sqrt_llvm(unbox(Float32,x))), x)
+sqrt(x::Real) = sqrt(float(x))
+@vectorize_1arg Number sqrt
 
 for f in (:ceil, :trunc, :significand) # :rint, :nearbyint
     @eval begin
