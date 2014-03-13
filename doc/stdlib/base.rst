@@ -628,7 +628,9 @@ Iterable Collections
 
    Determine whether predicate ``p`` returns true for all elements of ``itr``.
 
-   **Example**: ``all((i) -> i==i, [4,5,6]) = true``
+   **Example**:
+     * ``all((i) -> (4<=i<=6), [4,5,6]) = true``
+     * ``all((i) -> (4<=i<=6), [3,4,5,6,7]) = false``
 
 .. function:: map(f, c...) -> collection
 
