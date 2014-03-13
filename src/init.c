@@ -62,7 +62,8 @@ extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 
 char *julia_home = NULL;
 jl_compileropts_t jl_compileropts = { NULL, // build_path
-                                      0     // code_coverage
+                                      0,    // code_coverage
+                                      JL_COMPILEROPT_CHECK_BOUNDS_DEFAULT
 };
 
 int jl_boot_file_loaded = 0;

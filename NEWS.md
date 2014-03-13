@@ -33,6 +33,8 @@ New language features
 
   * Multi-line comments ([#69], [#6128]): `#= .... =#` 
 
+  * --bounds-check=yes|no compiler option
+
 Library improvements
 --------------------
 

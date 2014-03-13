@@ -2585,7 +2585,8 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         builder.SetInsertPoint(tryblk);
     }
     else if (head == boundscheck_sym) {
-        if (jl_array_len(ex->args) > 0) {
+        if (jl_array_len(ex->args) > 0 &&
+            jl_compileropts.check_bounds == JL_COMPILEROPT_CHECK_BOUNDS_DEFAULT) {
             jl_value_t *arg = args[0];
             if (arg == jl_true) {
                 ctx->boundsCheck.push_back(true);
