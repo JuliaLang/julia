@@ -45,9 +45,10 @@ function from_fenv(r::Integer)
         error("invalid rounding mode code")
     end
 end
+typealias IEEEFloat Union(Float32,Float64)
 
-set_rounding{T<:Union(Float32,Float64)}(::Type{T},r::RoundingMode) = ccall(:fesetround, Cint, (Cint,), to_fenv(r))
-get_rounding{T<:Union(Float32,Float64)}(::Type{T}) = from_fenv(ccall(:fegetround, Cint, ()))
+set_rounding{T<:IEEEFloat}(::Type{T},r::RoundingMode) = ccall(:fesetround, Cint, (Cint,), to_fenv(r))
+get_rounding{T<:IEEEFloat}(::Type{T}) = from_fenv(ccall(:fegetround, Cint, ()))
 
 function with_rounding{T}(f::Function, ::Type{T}, rounding::RoundingMode)
     old_rounding = get_rounding(T)
@@ -63,8 +64,8 @@ end
 ## floating point exceptions ##
 import Base: show, in, convert
 
-export FloatExceptions, FEInexact, FEUnderflow, FEOverflow, FEDivByZero, FEInvalid, FloatExceptionSet, 
-FEAll, clear_floatexcept, get_floatexcept, is_floatexcept
+export FloatExceptions, FEInexact, FEUnderflow, FEOverflow, FEDivByZero, FEInvalid, 
+FENaN, FERange, FloatExceptionSet, FEAll, clear_floatexcept, get_floatexcept, is_floatexcept
 
 
 abstract FloatExceptions
@@ -74,13 +75,17 @@ immutable FEUnderflow <: FloatExceptions end
 immutable FEOverflow <: FloatExceptions end
 immutable FEDivByZero <: FloatExceptions end
 immutable FEInvalid <: FloatExceptions end
+immutable FENaN <: FloatExceptions end # BigFloat only
+immutable FERange <: FloatExceptions end # BigFloat only
 
+typealias IEEEExceptions  Union(FEInexact, FEUnderflow, FEOverflow, FEDivByZero, FEInvalid)
+typealias BigFloatExceptions Union(FEInexact, FEUnderflow, FEOverflow, FEDivByZero, FENaN, FERange)
 
 # IEEE 754 requires the ability to check/set/clear multiple exceptions
 immutable FloatExceptionSet
     flags::Cint
     FloatExceptionSet(e::Integer) = new(convert(Cint,e))
-end    
+end
 
 convert(::Type{FloatExceptionSet},::Type{FEInexact}) = FloatExceptionSet(JL_FE_INEXACT)
 convert(::Type{FloatExceptionSet},::Type{FEUnderflow}) = FloatExceptionSet(JL_FE_UNDERFLOW)
@@ -93,7 +98,7 @@ const FEAll = FloatExceptionSet(JL_FE_INEXACT | JL_FE_UNDERFLOW | JL_FE_OVERFLOW
 in(fs1::FloatExceptionSet,fs2::FloatExceptionSet) = fs1.flags & fs2.flags != zero(Cint)
 in{E<:FloatExceptions}(::Type{E},fs::FloatExceptionSet) = in(convert(FloatExceptionSet,E), fs)
 
-show(io::IO,fe::FloatExceptionSet) = showcompact(io, filter(x->in(x,fe),subtypes(FloatExceptions)))
+show(io::IO,fe::FloatExceptionSet) = showcompact(io, filter(x->in(x,fe),[IEEEExceptions.types...]))
 
 
 
@@ -101,24 +106,24 @@ show(io::IO,fe::FloatExceptionSet) = showcompact(io, filter(x->in(x,fe),subtypes
 # lowerFlags, raiseFlags, testFlags, testSavedFlags (handled by "in"), restoreFlags, saveAllFlags
 
 # lowerFlags
-function clear_floatexcept(f::FloatExceptionSet) 
+function clear_floatexcept{T<:IEEEFloat}(::Type{T},f::FloatExceptionSet) 
     if ccall(:feclearexcept, Cint, (Cint,), f.flags) != zero(Cint)
         error("Could not clear floating point exception flag")
     end
 end
-clear_floatexcept{E<:FloatExceptions}(::Type{E}) = clear_floatexcept(convert(FloatExceptionSet,E))
-clear_floatexcept() = clear_floatexcept(FEAll)
+clear_floatexcept{E<:FloatExceptions,T<:IEEEFloat}(::Type{T},::Type{E}) = clear_floatexcept(T,convert(FloatExceptionSet,E))
+clear_floatexcept{T<:IEEEFloat}(::Type{T}) = clear_floatexcept(T,FEAll)
 
-function get_floatexcept(f::FloatExceptionSet)
+function get_floatexcept{T<:IEEEFloat}(::Type{T},f::FloatExceptionSet)
     FloatExceptionSet(ccall(:fetestexcept, Cint, (Cint,), f.flags))
 end
 # saveAllFlags
-get_floatexcept() = get_floatexcept(FEAll)
+get_floatexcept{T<:IEEEFloat}(::Type{T}) = get_floatexcept(T,FEAll)
 
 # testFlags 
-is_floatexcept(f::FloatExceptionSet) = in(f,get_floatexcept(f))
-is_floatexcept{E<:FloatExceptions}(::Type{E}) = is_floatexcept(convert(FloatExceptionSet,E))
-is_floatexcept() = is_floatexcept(FEAll)
+is_floatexcept{T<:IEEEFloat}(::Type{T},f::FloatExceptionSet) = in(f,get_floatexcept(T,f))
+is_floatexcept{E<:FloatExceptions,T<:IEEEFloat}(::Type{T},::Type{E}) = is_floatexcept(T,convert(FloatExceptionSet,E))
+is_floatexcept{T<:IEEEFloat}(::Type{T}) = is_floatexcept(T,FEAll)
 
 # TODO: raiseFlags, restoreFlags
 

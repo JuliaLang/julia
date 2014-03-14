@@ -91,18 +91,32 @@ end
 
 ## Floating point exceptions
 using Base.Rounding
-clear_floatexcept()
-x = 1e-200 * 1e-200
-@test is_floatexcept(FEUnderflow)
+for T = [Float32,Float64,BigFloat]
+    clear_floatexcept(T)
+    x = realmin(T)
+    @test !is_floatexcept(T,FEUnderflow)
+    if T != BigFloat
+        y = x/2
+        @test !is_floatexcept(T,FEUnderflow) # exact should not raise underflow
+    end
+    y = x/3
+    @test is_floatexcept(T,FEUnderflow)
 
-clear_floatexcept()
-x = 1e200*1e200
-@test is_floatexcept(FEOverflow)
+    clear_floatexcept(T)
+    x = realmax(T)
+    @test !is_floatexcept(T,FEOverflow)
+    y = x*2
+    @test is_floatexcept(T,FEOverflow)
 
-clear_floatexcept()
-x = 1.0/0.0
-@test is_floatexcept(FEDivByZero)
+    clear_floatexcept(T)
+    @test !is_floatexcept(T,FEDivByZero)
+    y = one(T)/zero(T)
+    @test is_floatexcept(T,FEDivByZero)
 
-clear_floatexcept()
-x = Inf-Inf
-@test is_floatexcept(FEInvalid)
+    except = T == BigFloat ? FENaN : FEInvalid
+    clear_floatexcept(T)
+    x = inf(T)
+    @test !is_floatexcept(T,except)    
+    y = x-x
+    @test is_floatexcept(T,except)
+end

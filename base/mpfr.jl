@@ -17,7 +17,9 @@ import
         itrunc, eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
         serialize, deserialize, inf, nan, hash, cbrt, typemax, typemin,
-        realmin, realmax, get_rounding, set_rounding, maxintfloat
+        realmin, realmax, get_rounding, set_rounding, maxintfloat, 
+        clear_floatexcept, is_floatexcept, FEUnderflow, FEOverflow, FEDivByZero,
+        FEInexact, FENaN, FERange
 
 import Base.Math.lgamma_r
 
@@ -615,6 +617,16 @@ end
 
 get_rounding(::Type{BigFloat}) = from_mpfr(ROUNDING_MODE[end])
 set_rounding(::Type{BigFloat},r::RoundingMode) = ROUNDING_MODE[end] = to_mpfr(r)
+
+for (eJ,eC) in ((:FEUnderflow,:underflow),(:FEOverflow,:overflow),(:FEDivByZero,:divby0),
+              (:FEInexact,:inexflag),(:FENaN,:nanflag),(:FERange,:erangeflag))
+    @eval begin
+        is_floatexcept(::Type{BigFloat},::Type{$eJ}) = ccall(($(string(:mpfr_,eC,:_p)), :libmpfr),Cint,()) != zero(Cint)
+        clear_floatexcept(::Type{BigFloat},::Type{$eJ}) = ccall(($(string(:mpfr_clear_,eC)), :libmpfr),None,())
+        #raise_floatexcept(::Type{BigFloat},::Type{$eJ}) = ccall(($(string(:mpfr_set_,eC)), :libmpfr),None,())
+    end
+end
+clear_floatexcept(::Type{BigFloat}) = ccall((:mpfr_clear_flags, :libmpfr),None,())
 
 function copysign(x::BigFloat, y::BigFloat)
     z = BigFloat()
