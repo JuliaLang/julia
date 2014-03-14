@@ -87,3 +87,22 @@ with_rounding(Float32,RoundDown) do
     @test a32 - b32 === -c32
     @test b32 - a32 === c32
 end
+
+
+## Floating point exceptions
+using Base.Rounding
+clear_floatexcept()
+x = 1e-200 * 1e-200
+@test is_floatexcept(FEUnderflow)
+
+clear_floatexcept()
+x = 1e200*1e200
+@test is_floatexcept(FEOverflow)
+
+clear_floatexcept()
+x = 1.0/0.0
+@test is_floatexcept(FEDivByZero)
+
+clear_floatexcept()
+x = Inf-Inf
+@test is_floatexcept(FEInvalid)
