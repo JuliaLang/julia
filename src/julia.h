@@ -384,7 +384,7 @@ extern DLLEXPORT jl_datatype_t *jl_methtable_type;
 extern DLLEXPORT jl_datatype_t *jl_method_type;
 extern DLLEXPORT jl_datatype_t *jl_task_type;
 
-extern jl_tuple_t *jl_null;
+extern DLLEXPORT jl_tuple_t *jl_null;
 #define JL_NULL ((void*)jl_null)
 extern jl_value_t *jl_true;
 extern jl_value_t *jl_false;
@@ -611,7 +611,7 @@ jl_value_t *jl_full_type(jl_value_t *v);
 int jl_is_type(jl_value_t *v);
 DLLEXPORT int jl_is_leaf_type(jl_value_t *v);
 int jl_has_typevars(jl_value_t *v);
-int jl_subtype(jl_value_t *a, jl_value_t *b, int ta);
+DLLEXPORT int jl_subtype(jl_value_t *a, jl_value_t *b, int ta);
 int jl_type_morespecific(jl_value_t *a, jl_value_t *b, int ta);
 DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b);
 jl_value_t *jl_type_union(jl_tuple_t *types);
