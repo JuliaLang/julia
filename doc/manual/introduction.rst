@@ -24,8 +24,8 @@ implemented using `LLVM
 multi-paradigm, combining features of imperative, functional, and
 object-oriented programming. Julia provides ease and expressiveness
 for high-level numerical computing, in the same way as languages such
-as R, MATLAB, and Python, but transcends its general programming
-limitations. To achieve this, Julia builds upon the lineage of
+as R, MATLAB, and Python, but also supports general programming. To
+achieve this, Julia builds upon the lineage of
 mathematical programming languages, but also borrows much from popular
 dynamic languages, including `Lisp
 <http://en.wikipedia.org/wiki/Lisp_(programming_language)>`_, `Perl
