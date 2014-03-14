@@ -275,8 +275,8 @@ for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,
     end
 end
 
-sqrt(x::Float64) = nan_dom_err(box(Float64,sqrt_llvm(unbox(Float64,x))), x)
-sqrt(x::Float32) = nan_dom_err(box(Float32,sqrt_llvm(unbox(Float32,x))), x)
+sqrt(x::Float64) = box(Float64,sqrt_llvm(unbox(Float64,x)))
+sqrt(x::Float32) = box(Float32,sqrt_llvm(unbox(Float32,x)))
 sqrt(x::Real) = sqrt(float(x))
 @vectorize_1arg Number sqrt
 

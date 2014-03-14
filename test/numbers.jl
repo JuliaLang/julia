@@ -1751,3 +1751,15 @@ end
 # issue #5881
 @test bits(true) == "00000001"
 @test bits(false) == "00000000"
+
+# edge cases of intrinsics
+let g() = sqrt(-1.0)
+    @test_throws sqrt(-1.0)
+end
+@test sqrt(NaN) === NaN
+let g() = sqrt(NaN)
+    @test g() === NaN
+end
+let g(x) = sqrt(x)
+    @test g(NaN) === NaN
+end
