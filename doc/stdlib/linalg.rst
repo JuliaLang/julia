@@ -501,15 +501,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
       real or complex inverse with level shift ``sigma`` :math:`(A - \sigma I )^{-1}`
       =============== ================================== ==================================
 
-.. function:: svds(A; nev=6, which="LA", tol=0.0, maxiter=1000, ritzvec=true)
-
-   ``svds`` computes the singular values of A using Arnoldi factorization. The following keyword arguments are supported:
-    * ``nsv``: Number of singular values
-    * ``which``: type of singular values ("LA")
-    * ``tol``: tolerance (:math:`tol \le 0.0` defaults to ``DLAMCH('EPS')``)
-    * ``maxiter``: Maximum number of iterations
-    * ``ritzvec``: Returns the singular vectors if ``true``
-
 .. function:: peakflops(n; parallel=false)
 
    ``peakflops`` computes the peak flop rate of the computer by using BLAS double precision :func:`gemm!`. By default, if no arguments are specified, it multiplies a matrix of size ``n x n``, where ``n = 2000``. If the underlying BLAS is using multiple threads, higher flop rates are realized. The number of BLAS threads can be set with ``blas_set_num_threads(n)``.
