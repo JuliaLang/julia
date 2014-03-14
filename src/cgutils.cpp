@@ -893,8 +893,10 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
         return ((jl_expr_t*)e)->etype;
     if (jl_is_symbolnode(e))
         return jl_symbolnode_type(e);
-    if (jl_is_quotenode(e))
-        return (jl_value_t*)jl_typeof(jl_fieldref(e,0));
+    if (jl_is_quotenode(e)) {
+        e = jl_fieldref(e,0);
+        goto type_of_constant;
+    }
     if (jl_is_lambda_info(e))
         return (jl_value_t*)jl_function_type;
     if (jl_is_getfieldnode(e)) {
