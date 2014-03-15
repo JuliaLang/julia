@@ -460,14 +460,14 @@ sizeof(::Type{Uint64})  = 8
 sizeof(::Type{Int128})  = 16
 sizeof(::Type{Uint128}) = 16
 
-morebits(::Type{Int8}) = Int16
-morebits(::Type{Int16}) = Int32
-morebits(::Type{Int32}) = Int64
-morebits(::Type{Int64}) = Int128
-morebits(::Type{Uint8}) = Uint16
-morebits(::Type{Uint16}) = Uint32
-morebits(::Type{Uint32}) = Uint64
-morebits(::Type{Uint64}) = Uint128
+widen(::Type{Int8}) = Int
+widen(::Type{Int16}) = Int
+widen(::Type{Int32}) = Int64
+widen(::Type{Int64}) = Int128
+widen(::Type{Uint8}) = Uint
+widen(::Type{Uint16}) = Uint
+widen(::Type{Uint32}) = Uint64
+widen(::Type{Uint64}) = Uint128
 
 ## float to integer coercion ##
 

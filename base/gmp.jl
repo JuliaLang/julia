@@ -7,7 +7,7 @@ import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
              widemul, sum, trailing_zeros, trailing_ones, count_ones, base, parseint,
              serialize, deserialize, bin, oct, dec, hex, isequal, invmod,
-             prevpow2, nextpow2, ndigits0z
+             prevpow2, nextpow2, ndigits0z, widen
 
 type BigInt <: Integer
     alloc::Cint
@@ -33,6 +33,10 @@ function __init__()
           cglobal(:jl_gc_counted_realloc_with_old_size),
           cglobal(:jl_gc_counted_free))
 end
+
+widen(::Type{Int128})  = BigInt
+widen(::Type{Uint128}) = BigInt
+widen(::Type{BigInt})  = BigInt
 
 BigInt(x::BigInt) = x
 BigInt(s::String) = parseint(BigInt,s)
