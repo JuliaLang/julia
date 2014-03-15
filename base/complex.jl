@@ -26,6 +26,8 @@ promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{S}) =
 promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{Complex{S}}) =
     Complex{promote_type(T,S)}
 
+widen{T}(::Type{Complex{T}}) = Complex{widen(T)}
+
 real(z::Complex) = z.re
 imag(z::Complex) = z.im
 real(x::Real) = x

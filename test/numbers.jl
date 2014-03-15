@@ -1772,3 +1772,5 @@ end
 ## Note: this should change to e.g. Float128 at some point
 @test widen(Float64) === BigFloat
 @test widen(BigInt) === BigInt
+
+@test widemul(typemax(Int64),typemax(Int64)) == 85070591730234615847396907784232501249

@@ -3008,6 +3008,10 @@ Mathematical Functions
 
    Compute the number of digits in number ``n`` written in base ``b``.
 
+.. function:: widemul(x, y)
+
+   Multiply ``x`` and ``y``, giving the result as a larger type.
+
 Data Formats
 ------------
 

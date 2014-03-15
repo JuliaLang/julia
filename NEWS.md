@@ -221,7 +221,8 @@ Library improvements
   * Ranges and arrays with the same elements are now unequal. This allows hashing
     and comparing ranges to be faster. ([#5778])
 
-  * New function `widen` for widening numeric types and values ([#6169])
+  * New function `widen` for widening numeric types and values, and `widemul`
+    for multiplying to a larger type ([#6169])
 
 Deprecated or removed
 ---------------------

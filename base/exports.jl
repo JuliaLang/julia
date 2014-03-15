@@ -448,6 +448,7 @@ export
     uint64,
     uint8,
     unsigned,
+    widemul,
     zero,
 
 # specfun
