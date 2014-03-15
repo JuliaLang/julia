@@ -146,6 +146,8 @@ oftype{T}(x::T,c) = convert(T,c)
 zero(x) = oftype(x,0)
 one(x)  = oftype(x,1)
 
+widen{T<:Number}(x::T) = convert(widen(T), x)
+
 sizeof(T::Type) = error(string("size of type ",T," unknown"))
 sizeof(T::DataType) = if isleaftype(T) T.size else error("type does not have a native size") end
 sizeof(::Type{Symbol}) = error("type does not have a native size")

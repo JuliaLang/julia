@@ -1763,3 +1763,14 @@ end
 let g(x) = sqrt(x)
     @test g(NaN) === NaN
 end
+
+# widen
+@test widen(1.5f0) === 1.5
+@test widen(int32(42)) === int64(42)
+@test widen(Int8) === Int
+@test widen(Float32) === Float64
+## Note: this should change to e.g. Float128 at some point
+@test widen(Float64) === BigFloat
+@test widen(BigInt) === BigInt
+
+@test widemul(typemax(Int64),typemax(Int64)) == 85070591730234615847396907784232501249

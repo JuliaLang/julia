@@ -221,6 +221,9 @@ Library improvements
   * Ranges and arrays with the same elements are now unequal. This allows hashing
     and comparing ranges to be faster. ([#5778])
 
+  * New function `widen` for widening numeric types and values, and `widemul`
+    for multiplying to a larger type ([#6169])
+
 Deprecated or removed
 ---------------------
 
@@ -322,6 +325,7 @@ Deprecated or removed
 [#5737]: https://github.com/JuliaLang/julia/issues/5737
 [#6073]: https://github.com/JuliaLang/julia/issues/6073
 [#5778]: https://github.com/JuliaLang/julia/issues/5778
+[#6169]: https://github.com/JuliaLang/julia/issues/6169
 
 Julia v0.2.0 Release Notes
 ==========================

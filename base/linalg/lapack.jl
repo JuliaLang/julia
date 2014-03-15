@@ -46,7 +46,7 @@ for (gbtrf, gbtrs, elty) in
             info = Array(BlasInt, 1)
             n    = size(AB, 2)
             mnmn = min(m, n)
-            ipiv = Array(BlasInt, mnmn)
+            ipiv = similar(AB, BlasInt, mnmn)
             ccall(($(string(gbtrf)),liblapack), Void,
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
@@ -99,7 +99,7 @@ for (gebal, gebak, elty, relty) in
             info    = Array(BlasInt, 1)
             ihi     = Array(BlasInt, 1)
             ilo     = Array(BlasInt, 1)
-            scale   = Array($relty, n)
+            scale   = similar(A, $relty, n)
             ccall(($(string(gebal)),liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt}),
@@ -162,10 +162,10 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             chkstride1(A)
             m, n  = size(A)
             k     = min(m, n)
-            d     = Array($elty, k)
-            s     = Array($elty, k)
-            tauq  = Array($elty, k)
-            taup  = Array($elty, k)
+            d     = similar(A, $elty, k)
+            s     = similar(A, $elty, k)
+            tauq  = similar(A, $elty, k)
+            taup  = similar(A, $elty, k)
             work  = Array($elty, 1)
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
@@ -379,7 +379,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             info = Array(BlasInt, 1)
             m, n = size(A)
             lda  = max(1,stride(A, 2))
-            ipiv = Array(BlasInt, min(m,n))
+            ipiv = similar(A, BlasInt, min(m,n))
             ccall(($(string(getrf)),liblapack), Void,
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
@@ -390,20 +390,20 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
     end
 end
 
-gelqf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); gelqf!(A,Array(T,min(m,n))))
-geqlf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); geqlf!(A,Array(T,min(m,n))))
-geqrt!{T<:BlasFloat}(A::StridedMatrix{T}, nb::Integer) = geqrt!(A,Array(T,nb,minimum(size(A))))
-geqrt3!{T<:BlasFloat}(A::StridedMatrix{T}) = (n=size(A,2); geqrt3!(A,Array(T,n,n)))
-geqrf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); geqrf!(A,Array(T,min(m,n))))
-gerqf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); gerqf!(A,Array(T,min(m,n))))
+gelqf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); gelqf!(A,similar(A,T,min(m,n))))
+geqlf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); geqlf!(A,similar(A,T,min(m,n))))
+geqrt!{T<:BlasFloat}(A::StridedMatrix{T}, nb::Integer) = geqrt!(A,similar(A,T,nb,minimum(size(A))))
+geqrt3!{T<:BlasFloat}(A::StridedMatrix{T}) = (n=size(A,2); geqrt3!(A,similar(A,T,n,n)))
+geqrf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); geqrf!(A,similar(A,T,min(m,n))))
+gerqf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); gerqf!(A,similar(A,T,min(m,n))))
 
 function geqp3!{T<:BlasFloat}(A::StridedMatrix{T},jpvt::Vector{BlasInt})
     m,n = size(A)
-    geqp3!(A,jpvt,Array(T,min(m,n)))
+    geqp3!(A,jpvt,similar(A,T,min(m,n)))
 end
 function geqp3!{T<:BlasFloat}(A::StridedMatrix{T})
     m,n=size(A)
-    geqp3!(A,zeros(BlasInt,n),Array(T,min(m,n)))
+    geqp3!(A,zeros(BlasInt,n),similar(A,T,min(m,n)))
 end
 
 ## Complete orthogonaliztion tools
@@ -424,7 +424,7 @@ for (tzrzf, ormrz, elty) in
             m, n = size(A)
             if n < m throw(DimensionMismatch("matrix cannot have fewer columns than rows")) end
             lda = max(1, m)
-            tau = Array($elty, m)
+            tau = similar(A, $elty, m)
             work = Array($elty, 1)
             lwork = -1
             info = Array(BlasInt, 1)
@@ -536,7 +536,7 @@ for (gels, gesv, getrs, getri, elty) in
             chkstride1(A, B)
             n = chksquare(A)
             if size(B,1) != n throw(DimensionMismatch("gesv!")) end
-            ipiv    = Array(BlasInt, n)
+            ipiv    = similar(A, BlasInt, n)
             info    = Array(BlasInt, 1)
             ccall(($(string(gesv)),liblapack), Void,
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
@@ -620,12 +620,12 @@ for (gesvx, elty) in
             ldaf, n   = size(AF)
             ldb, nrhs = ndims(B)==2 ? size(B) : (size(B,1), 1)
             rcond     = Array($elty, 1)
-            ferr      = Array($elty, nrhs)
-            berr      = Array($elty, nrhs)
+            ferr      = similar(A, $elty, nrhs)
+            berr      = similar(A, $elty, nrhs)
             work      = Array($elty, 4n)
             iwork     = Array($elty, n)
             info      = Array(BlasInt, 1)
-            X = Array($elty, n, nrhs)
+            X = similar(A, $elty, n, nrhs)
             ccall(($(string(gesvx)),liblapack), Void,
               (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt},
                Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
@@ -644,7 +644,7 @@ for (gesvx, elty) in
         #Wrapper for the no-equilibration, no-transpose calculation
         function gesvx!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
             n=size(A,1)
-            X, equed, R, C, B, rcond, ferr, berr, rpgf = gesvx!('N', 'N', A, Array($elty, n, n), Array(BlasInt, n), 'N', Array($elty, n),  Array($elty, n), B)
+            X, equed, R, C, B, rcond, ferr, berr, rpgf = gesvx!('N', 'N', A, similar(A, $elty, n, n), similar(A, BlasInt, n), 'N', similar(A, $elty, n),  similar(A, $elty, n), B)
             X, rcond, ferr, berr, rpgf
         end
     end
@@ -675,12 +675,12 @@ for (gesvx, elty, relty) in
             ldaf, n   = size(AF)
             ldb, nrhs = ndims(B)==2 ? size(B) : (size(B, 1), 1)
             rcond     = Array($relty, 1)
-            ferr      = Array($relty, nrhs)
-            berr      = Array($relty, nrhs)
+            ferr      = similar(A, $relty, nrhs)
+            berr      = similar(A, $relty, nrhs)
             work      = Array($elty, 4n)
             rwork     = Array($relty, 2n)
             info      = Array(BlasInt, 1)
-            x = Array($elty, n, nrhs)
+            x = similar(A, $elty, n, nrhs)
             ccall(($(string(gesvx)),liblapack), Void,
               (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt},
                Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
@@ -698,7 +698,7 @@ for (gesvx, elty, relty) in
         #Wrapper for the no-equilibration, no-transpose calculation
         function gesvx!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
             n=size(A,1)
-            X, equed, R, C, B, rcond, ferr, berr, rpgf = gesvx!('N', 'N', A, Array($elty, n, n), Array(BlasInt, n), 'N', Array($relty, n),  Array($relty, n), B)
+            X, equed, R, C, B, rcond, ferr, berr, rpgf = gesvx!('N', 'N', A, similar(A, $elty, n, n), similar(A, BlasInt, n), 'N', similar(A, $relty, n),  similar(A, $relty, n), B)
             X, rcond, ferr, berr, rpgf
         end
     end
@@ -722,7 +722,7 @@ for (gelsd, gelsy, elty) in
             m, n  = size(A)
             if size(B, 1) != m; throw(DimensionMismatch("gelsd!")); end
             newB = [B; zeros($elty, max(0, n - size(B, 1)), size(B, 2))]
-            s     = Array($elty, min(m, n))
+            s     = similar(A, $elty, min(m, n))
             rcond = convert($elty, rcond)
             rnk   = Array(BlasInt, 1)
             info  = Array(BlasInt, 1)
@@ -765,7 +765,7 @@ for (gelsd, gelsy, elty) in
             newB = [B; zeros($elty, max(0, n - size(B, 1)), size(B, 2))]
             lda = max(1, m)
             ldb = max(1, m, n)
-            jpvt = Array(BlasInt, n)
+            jpvt = similar(A, BlasInt, n)
             rcond = convert($elty, rcond)
             rnk = Array(BlasInt, 1)
             work = Array($elty, 1)
@@ -810,7 +810,7 @@ for (gelsd, gelsy, elty, relty) in
             m, n  = size(A)
             if size(B,1) != m; throw(DimensionMismatch("gelsd!")); end
             newB = [B; zeros($elty, max(0, n - size(B, 1)), size(B, 2))]
-            s     = Array($elty, min(m, n))
+            s     = similar(A, $elty, min(m, n))
             rcond = convert($relty, rcond)
             rnk   = Array(BlasInt, 1)
             info  = Array(BlasInt, 1)
@@ -855,7 +855,7 @@ for (gelsd, gelsy, elty, relty) in
             newB = [B; zeros($elty, max(0, n - size(B, 1)), size(B, 2))]
             lda = max(1, m)
             ldb = max(1, m, n)
-            jpvt = Array(BlasInt, n)
+            jpvt = similar(A, BlasInt, n)
             rcond = convert($relty, rcond)
             rnk = Array(BlasInt, 1)
             work = Array($elty, 1)
@@ -947,15 +947,15 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             n = chksquare(A)
             lvecs = jobvl == 'V'
             rvecs = jobvr == 'V'
-            VL    = Array($elty, (n, lvecs ? n : 0))
-            VR    = Array($elty, (n, rvecs ? n : 0))
+            VL    = similar(A, $elty, (n, lvecs ? n : 0))
+            VR    = similar(A, $elty, (n, rvecs ? n : 0))
             cmplx = iseltype(A,Complex)
             if cmplx
-                W     = Array($elty, n)
-                rwork = Array($relty, 2n)
+                W     = similar(A, $elty, n)
+                rwork = similar(A, $relty, 2n)
             else
-                WR    = Array($elty, n)
-                WI    = Array($elty, n)
+                WR    = similar(A, $elty, n)
+                WI    = similar(A, $elty, n)
             end
             work  = Array($elty, 1)
             lwork = blas_int(-1)
@@ -1001,21 +1001,21 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             m, n   = size(A)
             minmn  = min(m, n)
             if job == 'A'
-                U  = Array($elty, (m, m))
-                VT = Array($elty, (n, n))
+                U  = similar(A, $elty, (m, m))
+                VT = similar(A, $elty, (n, n))
             elseif job == 'S'
-                U  = Array($elty, (m, minmn))
-                VT = Array($elty, (minmn, n))
+                U  = similar(A, $elty, (m, minmn))
+                VT = similar(A, $elty, (minmn, n))
             elseif job == 'O'
-                U  = Array($elty, (m, m >= n ? 0 : m))
-                VT = Array($elty, (n, m >= n ? n : 0))
+                U  = similar(A, $elty, (m, m >= n ? 0 : m))
+                VT = similar(A, $elty, (n, m >= n ? n : 0))
             else
-                U  = Array($elty, (m, 0))
-                VT = Array($elty, (n, 0))
+                U  = similar(A, $elty, (m, 0))
+                VT = similar(A, $elty, (n, 0))
             end
             work   = Array($elty, 1)
             lwork  = blas_int(-1)
-            S      = Array($relty, minmn)
+            S      = similar(A, $relty, minmn)
             cmplx  = iseltype(A,Complex)
             if cmplx
                 rwork = Array($relty, job == 'N' ? 7*minmn :
@@ -1060,9 +1060,9 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             chkstride1(A)
             m, n   = size(A)
             minmn  = min(m, n)
-            S      = Array($relty, minmn)
-            U      = Array($elty, jobu  == 'A'? (m, m):(jobu  == 'S'? (m, minmn) : (m, 0)))
-            VT     = Array($elty, jobvt == 'A'? (n, n):(jobvt == 'S'? (minmn, n) : (n, 0)))
+            S      = similar(A, $relty, minmn)
+            U      = similar(A, $elty, jobu  == 'A'? (m, m):(jobu  == 'S'? (m, minmn) : (m, 0)))
+            VT     = similar(A, $elty, jobvt == 'A'? (n, n):(jobvt == 'S'? (minmn, n) : (n, 0)))
             work   = Array($elty, 1)
             cmplx  = iseltype(A,Complex)
             if cmplx; rwork = Array($relty, 5minmn); end
@@ -1115,14 +1115,14 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             l = Array(BlasInt, 1)
             lda = max(1,stride(A, 2))
             ldb = max(1,stride(B, 2))
-            alpha = Array($relty, n)
-            beta = Array($relty, n)
+            alpha = similar(A, $relty, n)
+            beta = similar(A, $relty, n)
             ldu = max(1, m)
-            U = jobu == 'U' ? Array($elty, ldu, m) : Array($elty, 0)
+            U = jobu == 'U' ? similar(A, $elty, ldu, m) : similar(A, $elty, 0)
             ldv = max(1, p)
-            V = jobv == 'V' ? Array($elty, ldv, p) : Array($elty, 0)
+            V = jobv == 'V' ? similar(A, $elty, ldv, p) : similar(A, $elty, 0)
             ldq = max(1, n)
-            Q = jobq == 'Q' ? Array($elty, ldq, n) : Array($elty, 0)
+            Q = jobq == 'Q' ? similar(A, $elty, ldq, n) : similar(A, $elty, 0)
             work = Array($elty, max(3n, m, p) + n)
             cmplx = iseltype(A,Complex)
             if cmplx; rwork = Array($relty, 2n); end
@@ -1189,18 +1189,18 @@ for (geevx, ggev, elty) in
     function geevx!(balanc::Char, jobvl::Char, jobvr::Char, sense::Char, A::StridedMatrix{$elty})
         n = chksquare(A)
         lda = max(1,stride(A,2))
-        wr = Array($elty, n)
-        wi = Array($elty, n)
+        wr = similar(A, $elty, n)
+        wi = similar(A, $elty, n)
         ldvl = jobvl == 'V' ? n : (jobvl == 'N' ? 0 : throw(ArgumentError("jobvl must be 'V' or 'N'")))
-        VL = Array($elty, ldvl, n)
+        VL = similar(A, $elty, ldvl, n)
         ldvr = jobvr == 'V' ? n : (jobvr == 'N' ? 0 : throw(ArgumentError("jobvr must be 'V' or 'N'")))
-        VR = Array($elty, ldvr, n)
+        VR = similar(A, $elty, ldvr, n)
         ilo = Array(BlasInt, 1)
         ihi = Array(BlasInt, 1)
-        scale = Array($elty, n)
+        scale = similar(A, $elty, n)
         abnrm = Array($elty, 1)
-        rconde = Array($elty, n)
-        rcondv = Array($elty, n)
+        rconde = similar(A, $elty, n)
+        rcondv = similar(A, $elty, n)
         work = Array($elty, 1)
         lwork::BlasInt = -1
         iwork = Array(BlasInt, sense == 'N' || sense == 'E' ? 0 : (sense == 'V' || sense == 'B' ? 2n-2 : throw(ArgumentError("argument sense must be 'N', 'E', 'V' or 'B'"))))
@@ -1242,13 +1242,13 @@ for (geevx, ggev, elty) in
             n==m || throw(DimensionMismatch("matrices must have same size"))
             lda = max(1, n)
             ldb = max(1, n)
-            alphar = Array($elty, n)
-            alphai = Array($elty, n)
-            beta = Array($elty, n)
+            alphar = similar(A, $elty, n)
+            alphai = similar(A, $elty, n)
+            beta = similar(A, $elty, n)
             ldvl = jobvl == 'V' ? n : 1
-            vl = Array($elty, ldvl, n)
+            vl = similar(A, $elty, ldvl, n)
             ldvr = jobvr == 'V' ? n : 1
-            vr = Array($elty, ldvr, n)
+            vr = similar(A, $elty, ldvr, n)
             work = Array($elty, 1)
             lwork = -one(BlasInt)
             info = Array(BlasInt, 1)
@@ -1295,17 +1295,17 @@ for (geevx, ggev, elty, relty) in
     function geevx!(balanc::Char, jobvl::Char, jobvr::Char, sense::Char, A::StridedMatrix{$elty})
         n = chksquare(A)
         lda = max(1,stride(A,2))
-        w = Array($elty, n)
+        w = similar(A, $elty, n)
         ldvl = jobvl == 'V' ? n : (jobvl == 'N' ? 0 : throw(ArgumentError("jobvl must be 'V' or 'N'")))
-        VL = Array($elty, ldvl, n)
+        VL = similar(A, $elty, ldvl, n)
         ldvr = jobvr == 'V' ? n : (jobvr == 'N' ? 0 : throw(ArgumentError("jobvr must be 'V' or 'N'")))
-        VR = Array($elty, ldvr, n)
+        VR = similar(A, $elty, ldvr, n)
         ilo = Array(BlasInt, 1)
         ihi = Array(BlasInt, 1)
-        scale = Array($relty, n)
+        scale = similar(A, $relty, n)
         abnrm = Array($relty, 1)
-        rconde = Array($relty, n)
-        rcondv = Array($relty, n)
+        rconde = similar(A, $relty, n)
+        rcondv = similar(A, $relty, n)
         work = Array($elty, 1)
         lwork::BlasInt = -1
         rwork = Array($relty, 2n)
@@ -1347,12 +1347,12 @@ for (geevx, ggev, elty, relty) in
             n, m = chksquare(A, B)
             n==m || throw(DimensionMismatch("matrices must have same size"))
             lda = ldb = max(1, n)
-            alpha = Array($elty, n)
-            beta = Array($elty, n)
+            alpha = similar(A, $elty, n)
+            beta = similar(A, $elty, n)
             ldvl = jobvl == 'V' ? n : 1
-            vl = Array($elty, ldvl, n)
+            vl = similar(A, $elty, ldvl, n)
             ldvr = jobvr == 'V' ? n : 1
-            vr = Array($elty, ldvr, n)
+            vr = similar(A, $elty, ldvr, n)
             work = Array($elty, 1)
             lwork = -one(BlasInt)
             rwork = Array($relty, 8n)
@@ -1481,8 +1481,8 @@ for (gtsv, gttrf, gttrs, elty) in
             if length(dl) != (n-1) || length(du) != (n-1)
                 throw(DimensionMismatch("gttrf!"))
             end
-            du2  = Array($elty, n-2)
-            ipiv = Array(BlasInt, n)
+            du2  = similar(d, $elty, n-2)
+            ipiv = similar(d, BlasInt, n)
             info = Array(BlasInt, 1)
             ccall(($(string(gttrf)),liblapack), Void,
                   (Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
@@ -1782,7 +1782,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             chkstride1(A)
             n = chksquare(A)
             @chkuplo
-            piv  = Array(BlasInt, n)
+            piv  = similar(A, BlasInt, n)
             rank = Array(BlasInt, 1)
             work = Array($rtyp, 2n)
             info = Array(BlasInt, 1)
@@ -2030,7 +2030,7 @@ for (trcon, trevc, trrfs, elty) in
         #$                   WORK( * ), X( LDX, * )
         function trrfs!(uplo::BlasChar, trans::BlasChar, diag::BlasChar,
                 A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, X::StridedVecOrMat{$elty},
-                Ferr::StridedVector{$elty}=Array($elty, size(B,2)), Berr::StridedVector{$elty}=Array($elty, size(B,2)))
+                Ferr::StridedVector{$elty}=similar(B, $elty, size(B,2)), Berr::StridedVector{$elty}=similar(B, $elty, size(B,2)))
             @chkuplo
             n=size(A,2)
             nrhs=size(B,2)
@@ -2144,7 +2144,7 @@ for (trcon, trevc, trrfs, elty, relty) in
         #$                   WORK( * ), X( LDX, * )
         function trrfs!(uplo::BlasChar, trans::BlasChar, diag::BlasChar,
                 A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, X::StridedVecOrMat{$elty},
-                Ferr::StridedVector{$relty}=Array($relty, size(B,2)), Berr::StridedVector{$relty}=Array($relty, size(B,2)))
+                Ferr::StridedVector{$relty}=similar(B, $relty, size(B,2)), Berr::StridedVector{$relty}=similar(B, $relty, size(B,2)))
             @chkuplo
             n=size(A,2)
             nrhs=size(B,2)
@@ -2178,7 +2178,7 @@ for (stev, stebz, stegr, stein, elty) in
         function stev!(job::BlasChar, dv::Vector{$elty}, ev::Vector{$elty})
             n = length(dv)
             if length(ev) != (n-1) throw(DimensionMismatch("stev!")) end
-            Zmat = Array($elty, (n, job != 'N' ? n : 0))
+            Zmat = similar(dv, $elty, (n, job != 'N' ? n : 0))
             work = Array($elty, max(1, 2n-2))
             info = Array(BlasInt, 1)
             ccall(($(string(stev)),liblapack), Void,
@@ -2197,10 +2197,10 @@ for (stev, stebz, stegr, stein, elty) in
             if length(ev) != (n-1) throw(DimensionMismatch("stebz!")) end
             m = Array(BlasInt,1)
             nsplit = Array(BlasInt,1)
-            w = Array($elty, n)
+            w = similar(dv, $elty, n)
             tmp = 0.0
-            iblock = Array(BlasInt,n)
-            isplit = Array(BlasInt,n)
+            iblock = similar(dv, BlasInt,n)
+            isplit = similar(dv, BlasInt,n)
             work = Array($elty, 4*n)
             iwork = Array(BlasInt,3*n)
             info = Array(BlasInt, 1)
@@ -2232,10 +2232,10 @@ for (stev, stebz, stegr, stein, elty) in
             eev = [ev, zero($elty)]
             abstol = Array($elty, 1)
             m = Array(BlasInt, 1)
-            w = Array($elty, n)
+            w = similar(dv, $elty, n)
             ldz = jobz == 'N' ? 1 : n
-            Z = Array($elty, ldz, n)
-            isuppz = Array(BlasInt, 2n)
+            Z = similar(dv, $elty, ldz, n)
+            isuppz = similar(dv, BlasInt, 2n)
             work = Array($elty, 1)
             lwork = -one(BlasInt)
             iwork = Array(BlasInt, 1)
@@ -2279,9 +2279,9 @@ for (stev, stebz, stegr, stein, elty) in
             1<=length(w_in)<=n ? (m=length(w_in)) : throw(DimensionMismatch("stein!"))
             #If iblock and isplit are invalid input, assume worst-case block paritioning,
             # i.e. set the block scheme to be the entire matrix
-            iblock = Array(BlasInt,n)
-            isplit = Array(BlasInt,n)
-            w = Array($elty,n)
+            iblock = similar(dv, BlasInt,n)
+            isplit = similar(dv, BlasInt,n)
+            w = similar(dv, $elty,n)
             if length(iblock_in) < m #Not enough block specifications
                 iblock[1:m] = ones(BlasInt, m)
                 w[1:m] = sort(w_in)
@@ -2295,7 +2295,7 @@ for (stev, stebz, stegr, stein, elty) in
                 isplit[1:length(isplit_in)] = isplit_in
             end
 
-            z = Array($elty,(n,m))
+            z = similar(dv, $elty,(n,m))
             work = Array($elty, 5*n)
             iwork = Array(BlasInt,n)
             ifail = Array(BlasInt,m)
@@ -2360,7 +2360,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             n = chksquare(A)
             @chkuplo
             if n != size(B,1) throw(DimensionMismatch("sysv!")) end
-            ipiv  = Array(BlasInt, n)
+            ipiv  = similar(A, BlasInt, n)
             work  = Array($elty, 1)
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
@@ -2390,7 +2390,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             chkstride1(A)
             n = chksquare(A)
             @chkuplo
-            ipiv  = Array(BlasInt, n)
+            ipiv  = similar(A, BlasInt, n)
             n==0 && return A, ipiv
             work  = Array($elty, 1)
             lwork = blas_int(-1)
@@ -2523,7 +2523,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
             n = chksquare(A)
             @chkuplo
             if n != size(B,1) throw(DimensionMismatch("hesv!")) end
-            ipiv  = Array(BlasInt, n)
+            ipiv  = similar(A, BlasInt, n)
             work  = Array($elty, 1)
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
@@ -2553,7 +2553,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
             chkstride1(A)
             n = chksquare(A)
             @chkuplo
-            ipiv  = Array(BlasInt, n)
+            ipiv  = similar(A, BlasInt, n)
             work  = Array($elty, 1)
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
@@ -2661,7 +2661,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
             n = chksquare(A)
             @chkuplo
             if n != size(B,1) throw(DimensionMismatch("sysv!")) end
-            ipiv  = Array(BlasInt, n)
+            ipiv  = similar(A, BlasInt, n)
             work  = Array($elty, 1)
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
@@ -2692,7 +2692,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
             chkstride1(A)
             n = chksquare(A)
             @chkuplo
-            ipiv  = Array(BlasInt, n)
+            ipiv  = similar(A, BlasInt, n)
             work  = Array($elty, 1)
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
@@ -2798,7 +2798,7 @@ for (syev, syevr, sygvd, elty) in
         function syev!(jobz::BlasChar, uplo::BlasChar, A::StridedMatrix{$elty})
             chkstride1(A)
             n = chksquare(A)
-            W     = Array($elty, n)
+            W     = similar(A, $elty, n)
             work  = Array($elty, 1)
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
@@ -2831,15 +2831,15 @@ for (syev, syevr, sygvd, elty) in
             n = chksquare(A)                   
             lda = max(1,stride(A,2))
             m = Array(BlasInt, 1)
-            w = Array($elty, n)
+            w = similar(A, $elty, n)
             if jobz == 'N'
                 ldz = 1
-                Z = Array($elty, ldz, 0)
+                Z = similar(A, $elty, ldz, 0)
             elseif jobz == 'V'
                 ldz = max(1,n)
-                Z = Array($elty, ldz, n)
+                Z = similar(A, $elty, ldz, n)
             end
-            isuppz = Array(BlasInt, 2*n)
+            isuppz = similar(A, BlasInt, 2*n)
             work  = Array($elty, 1)
             lwork = blas_int(-1)
             iwork = Array(BlasInt, 1)
@@ -2885,7 +2885,7 @@ for (syev, syevr, sygvd, elty) in
             n, m = chksquare(A, B)
             n==m || throw(DimensionMismatch("Matrices must have same size"))
             lda = ldb = max(1, n)
-            w = Array($elty, n)
+            w = similar(A, $elty, n)
             work = Array($elty, 1)
             lwork = -one(BlasInt)
             iwork = Array(BlasInt, 1)
@@ -2930,7 +2930,7 @@ for (syev, syevr, sygvd, elty, relty) in
         function syev!(jobz::BlasChar, uplo::BlasChar, A::StridedMatrix{$elty})
             chkstride1(A)
             n = chksquare(A)
-            W     = Array($relty, n)
+            W     = similar(A, $relty, n)
             work  = Array($elty, 1)
             lwork = blas_int(-1)
             rwork = Array($relty, max(1, 3n-2))
@@ -2966,15 +2966,15 @@ for (syev, syevr, sygvd, elty, relty) in
             n = chksquare(A)
             lda = max(1,stride(A,2))
             m = Array(BlasInt, 1)
-            w = Array($relty, n)
+            w = similar(A, $relty, n)
             if jobz == 'N'
                 ldz = 1
-                Z = Array($elty, ldz, 0)
+                Z = similar(A, $elty, ldz, 0)
             elseif jobz == 'V'
                 ldz = n
-                Z = Array($elty, ldz, n)
+                Z = similar(A, $elty, ldz, n)
             end
-            isuppz = Array(BlasInt, 2*n)
+            isuppz = similar(A, BlasInt, 2*n)
             work  = Array($elty, 1)
             lwork = blas_int(-1)
             rwork = Array($relty, 1)
@@ -3030,7 +3030,7 @@ for (syev, syevr, sygvd, elty, relty) in
             n, m = chksquare(A, B)
             n==m || throw(DimensionMismatch("Matrices must have same size"))
             lda = ldb = max(1, n)
-            w = Array($relty, n)
+            w = similar(A, $relty, n)
             work = Array($elty, 1)
             lwork = -one(BlasInt)
             iwork = Array(BlasInt, 1)
@@ -3134,10 +3134,10 @@ for (bdsdc, elty) in
             else
                 error(string("COMPQ argument must be 'N', 'P' or 'I' but you said '",compq,"'"))
             end
-            u = Array($elty, (ldu,  n))
-            vt= Array($elty, (ldvt, n))
-            q = Array($elty, ldq)
-            iq= Array(BlasInt, ldiq)
+            u = similar(d, $elty, (ldu,  n))
+            vt= similar(d, $elty, (ldvt, n))
+            q = similar(d, $elty, ldq)
+            iq= similar(d, BlasInt, ldiq)
             work =Array($elty, lwork)
             iwork=Array(BlasInt, 8n)
             info =Array(BlasInt, 1)
@@ -3239,7 +3239,7 @@ for (gehrd, elty) in
 #       DOUBLE PRECISION  A( LDA, * ), TAU( * ), WORK( * )
             chkstride1(A)
             n = chksquare(A)
-            tau = Array($elty, max(0,n - 1))
+            tau = similar(A, $elty, max(0,n - 1))
             work = Array($elty, 1)
             lwork = blas_int(-1)
             info = Array(BlasInt, 1)
@@ -3317,10 +3317,10 @@ for (gees, gges, elty) in
             chkstride1(A)
             n = chksquare(A)
             sdim = Array(BlasInt, 1)
-            wr = Array($elty, n)
-            wi = Array($elty, n)
+            wr = similar(A, $elty, n)
+            wi = similar(A, $elty, n)
             ldvs = jobvs == 'V' ? n : 1
-            vs = Array($elty, ldvs, n)
+            vs = similar(A, $elty, ldvs, n)
             work = Array($elty, 1)
             lwork = blas_int(-1)
             info = Array(BlasInt, 1)
@@ -3356,13 +3356,13 @@ for (gees, gges, elty) in
             n, m = chksquare(A, B)
             n==m || throw(DimensionMismatch("matrices are not of same size"))
             sdim = blas_int(0)
-            alphar = Array($elty, n)
-            alphai = Array($elty, n)
-            beta = Array($elty, n)
+            alphar = similar(A, $elty, n)
+            alphai = similar(A, $elty, n)
+            beta = similar(A, $elty, n)
             ldvsl = jobvsl == 'V' ? n : 1
-            vsl = Array($elty, ldvsl, n)
+            vsl = similar(A, $elty, ldvsl, n)
             ldvsr = jobvsr == 'V' ? n : 1
-            vsr = Array($elty, ldvsr, n)
+            vsr = similar(A, $elty, ldvsr, n)
             work = Array($elty, 1)
             lwork = blas_int(-1)
             info = Array(BlasInt, 1)
@@ -3407,9 +3407,9 @@ for (gees, gges, elty, relty) in
             n = chksquare(A)
             sort = 'N'
             sdim = blas_int(0)
-            w = Array($elty, n)
+            w = similar(A, $elty, n)
             ldvs = jobvs == 'V' ? n : 1
-            vs = Array($elty, ldvs, n)
+            vs = similar(A, $elty, ldvs, n)
             work = Array($elty, 1)
             lwork = blas_int(-1)
             rwork = Array($relty, n)
@@ -3447,12 +3447,12 @@ for (gees, gges, elty, relty) in
             n, m = chksquare(A, B)
             n==m || throw(DimensionMismatch("matrices are not of same size"))
             sdim = blas_int(0)
-            alpha = Array($elty, n)
-            beta = Array($elty, n)
+            alpha = similar(A, $elty, n)
+            beta = similar(A, $elty, n)
             ldvsl = jobvsl == 'V' ? n : 1
-            vsl = Array($elty, ldvsl, n)
+            vsl = similar(A, $elty, ldvsl, n)
             ldvsr = jobvsr == 'V' ? n : 1
-            vsr = Array($elty, ldvsr, n)
+            vsr = similar(A, $elty, ldvsr, n)
             work = Array($elty, 1)
             lwork = blas_int(-1)
             rwork = Array($relty, 8n)
@@ -3630,7 +3630,7 @@ for (fn, elty) in ((:dtfttr_, :Float64),
         function tfttr!(transr::Char, uplo::Char, Arf::StridedVector{$elty})
             n = int(div(sqrt(8length(Arf)), 2))
             info = Array(BlasInt, 1)
-            A = Array($elty, n, n)
+            A = similar(Arf, $elty, n, n)
             ccall(($(string(fn)), liblapack), Void,
                 (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty},
                  Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
@@ -3653,7 +3653,7 @@ for (fn, elty) in ((:dtrttf_, :Float64),
             n = size(A, 1)
             lda = max(1, stride(A, 2))
             info = Array(BlasInt, 1)
-            Arf = Array($elty, div(n*(n+1), 2))
+            Arf = similar(A, $elty, div(n*(n+1), 2))
             ccall(($(string(fn)), liblapack), Void,
                 (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty},
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
