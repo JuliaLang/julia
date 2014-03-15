@@ -334,7 +334,7 @@ sort(v::AbstractVector; kws...) = sort!(copy(v); kws...)
 
 ## sortperm: the permutation to sort an array ##
 
-sortperm(v::AbstractVector; alg::Algorithm=DEFAULT_STABLE,
+sortperm(v::AbstractVector; alg::Algorithm=DEFAULT_UNSTABLE,
     lt::Function=isless, by::Function=identity, rev::Bool=false, order::Ordering=Forward) =
     sort!([1:length(v)], alg, Perm(ord(lt,by,rev,order),v))
 
