@@ -531,7 +531,7 @@ function nextprod(a::Vector{Int}, x)
     v = ones(Int, k)                  # current value of each counter
     mx = [nextpow(ai,x) for ai in a]  # maximum value of each counter
     v[1] = mx[1]                      # start at first case that is >= x
-    p::morebits(Int) = mx[1]          # initial value of product in this case
+    p::widen(Int) = mx[1]             # initial value of product in this case
     best = p
     icarry = 1
     
@@ -573,7 +573,7 @@ function prevprod(a::Vector{Int}, x)
     mx = [nextpow(ai,x) for ai in a]  # allow each counter to exceed p (sentinel)
     first = int(prevpow(a[1], x))     # start at best case in first factor
     v[1] = first
-    p::morebits(Int) = first
+    p::widen(Int) = first
     best = p
     icarry = 1
     

@@ -231,6 +231,15 @@ All Objects
 
    Convert ``y`` to the type of ``x``.
 
+.. function:: widen(type | x)
+
+   If the argument is a type, return a "larger" type (for numeric types, this will be
+   a type with at least as much range and precision as the argument, and usually more).
+   Otherwise the argument ``x`` is converted to ``widen(typeof(x))``.
+
+   **Example**: ``widen(Int32) === Int64``
+   **Example**: ``widen(1.5f0) === 1.5``
+
 .. function:: identity(x)
 
    The identity function. Returns its argument.

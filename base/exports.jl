@@ -982,6 +982,7 @@ export
     super,
     typeintersect,
     typejoin,
+    widen,
 
 # syntax
     esc,
