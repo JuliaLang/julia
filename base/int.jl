@@ -486,14 +486,6 @@ end
 
 ## wide multiplication, Int128 multiply and divide ##
 
-widemul(x::Union(Int8,Uint8,Int16), y::Union(Int8,Uint8,Int16)) = int32(x)*int32(y)
-widemul(x::Uint16, y::Uint16) = uint32(x)*uint32(y)
-
-widemul(x::Int32, y::Int32) = int64(x)*int64(y)
-widemul(x::Uint32, y::Uint32) = uint64(x)*uint64(y)
-
-widemul(x::Integer, y::Integer) = widemul(promote(x,y)...)
-
 if WORD_SIZE==32
     function widemul(u::Int64, v::Int64)
         local u0::Uint64, v0::Uint64, w0::Uint64
@@ -564,9 +556,6 @@ if WORD_SIZE==32
     >>>(x::Int128,  y::Int32) = y == 0 ? x : box(Int128,lshr_int(unbox(Int128,x),unbox(Int32,y)))
     >>>(x::Uint128, y::Int32) = y == 0 ? x : box(Uint128,lshr_int(unbox(Uint128,x),unbox(Int32,y)))
 else
-    widemul(u::Int64, v::Int64) = int128(u)*int128(v)
-    widemul(u::Uint64, v::Uint64) = uint128(u)*uint128(v)
-
     *(x::Int128,  y::Int128)  = box(Int128,mul_int(unbox(Int128,x),unbox(Int128,y)))
     *(x::Uint128, y::Uint128) = box(Uint128,mul_int(unbox(Uint128,x),unbox(Uint128,y)))
 
