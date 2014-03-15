@@ -374,8 +374,8 @@ immutable Right <: Ordering end
 left(::DirectOrdering) = Left()
 right(::DirectOrdering) = Right()
 
-left(o::Perm) = Perm(left(o.order),o.data)
-right(o::Perm) = Perm(right(o.order),o.data)
+left(o::Perm) = Perm(left(o.order), o.data)
+right(o::Perm) = Perm(right(o.order), o.data)
 
 lt{T<:Floats}(::Left, x::T, y::T) = slt_int(unbox(T,y),unbox(T,x))
 lt{T<:Floats}(::Right, x::T, y::T) = slt_int(unbox(T,x),unbox(T,y))
@@ -419,7 +419,8 @@ nans2end!(v::AbstractVector, o::ReverseOrdering) = nans2left!(v,o)
 nans2end!{O<:ForwardOrdering}(v::AbstractVector{Int}, o::Perm{O}) = nans2right!(v,o)
 nans2end!{O<:ReverseOrdering}(v::AbstractVector{Int}, o::Perm{O}) = nans2left!(v,o)
 
-issignleft(o::DirectOrdering, x::Floats) = lt(o, x, zero(x))
+issignleft(o::ForwardOrdering, x::Floats) = lt(o, x, zero(x))
+issignleft(o::ReverseOrdering, x::Floats) = lt(o, x, -zero(x))
 issignleft(o::Perm, i::Int) = issignleft(o.order, o.data[i])
 
 function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
