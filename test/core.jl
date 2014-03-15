@@ -1459,3 +1459,9 @@ test5536(a::Union(Real, AbstractArray)) = "Non-splatting"
 @test 3 == include_string("1 + #=# 2") == include_string("1 + #==# 2") == include_string("1 + #===# 2") == include_string("1 + #= #= blah =# =# 2") == include_string("1 + #= #= #= nested =# =# =# 2")
 @test_throws include_string("#=")
 @test_throws include_string("#= #= #= =# =# =")
+
+# issue #6142
+type A6142 <: AbstractMatrix{Float64}; end
++{TJ}(x::A6142, y::UniformScaling{TJ}) = "UniformScaling method called"
++(x::A6142, y::AbstractArray) = "AbstractArray method called"
+@test A6142() + I == "UniformScaling method called"

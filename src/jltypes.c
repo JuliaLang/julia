@@ -2388,29 +2388,51 @@ static jl_value_t *tuple_match(jl_tuple_t *child, jl_tuple_t *parent,
     size_t ci=0, pi=0;
     size_t cl = jl_tuple_len(child);
     size_t pl = jl_tuple_len(parent);
+    int mode = 0;
     while(1) {
         int cseq = (ci<cl) && jl_is_vararg_type(jl_tupleref(child,ci));
         int pseq = (pi<pl) && jl_is_vararg_type(jl_tupleref(parent,pi));
+        if (!morespecific && cseq && !pseq)
+            return jl_false;
         if (ci >= cl)
-            return (pi>=pl || pseq) ? jl_true : jl_false;
-        if (cseq && !pseq)
-            return jl_false;
+            return (mode || pi>=pl || pseq) ? jl_true : jl_false;
         if (pi >= pl)
-            return jl_false;
+            return mode ? jl_true : jl_false;
         jl_value_t *ce = jl_tupleref(child,ci);
         jl_value_t *pe = jl_tupleref(parent,pi);
         if (cseq) ce = jl_tparam0(ce);
         if (pseq) pe = jl_tparam0(pe);
 
         int n = env->n;
-        if (type_match_(ce, pe, env, morespecific, invariant) == jl_false)
-            { env->n = n; return jl_false; }
+        if (type_match_(ce, pe, env, morespecific, invariant) == jl_false) {
+            env->n = n;
+            if (jl_types_equal_generic(ce,pe,1)) {
+                if (ci==cl-1 && pi==pl-1 && !cseq && pseq) {
+                    return jl_true;
+                }
+                if (!mode) return jl_false;
+            }
+            else {
+                return jl_false;
+            }
+        }
+
+        if (mode && cseq && !pseq)
+            return jl_true;
+
+        if (morespecific) {
+            if (!(jl_types_equal_generic(ce,pe,1) ||
+                  (jl_is_typevar(pe) &&
+                   jl_types_equal(ce,((jl_tvar_t*)pe)->ub)))) {
+                mode = 1;
+            }
+        }
 
         if (cseq && pseq) return jl_true;
         if (!cseq) ci++;
         if (!pseq) pi++;
     }
-    return jl_true;
+    return jl_false;
 }
 
 static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
