@@ -7,7 +7,7 @@ import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
              widemul, sum, trailing_zeros, trailing_ones, count_ones, base, parseint,
              serialize, deserialize, bin, oct, dec, hex, isequal, invmod,
-             prevpow2, nextpow2, ndigits0z
+             prevpow2, nextpow2, ndigits0z, widen
 
 type BigInt <: Integer
     alloc::Cint
@@ -33,6 +33,10 @@ function __init__()
           cglobal(:jl_gc_counted_realloc_with_old_size),
           cglobal(:jl_gc_counted_free))
 end
+
+widen(::Type{Int128})  = BigInt
+widen(::Type{Uint128}) = BigInt
+widen(::Type{BigInt})  = BigInt
 
 BigInt(x::BigInt) = x
 BigInt(s::String) = parseint(BigInt,s)
@@ -408,10 +412,8 @@ ndigits(x::BigInt, b::Integer=10) = x.size == 0 ? 1 : ndigits0z(x,b)
 
 isprime(x::BigInt, reps=25) = ccall((:__gmpz_probab_prime_p,:libgmp), Cint, (Ptr{BigInt}, Cint), &x, reps) > 0
 
-widemul(x::BigInt, y::BigInt)   = x*y
 widemul(x::Int128, y::Uint128)  = BigInt(x)*BigInt(y)
 widemul(x::Uint128, y::Int128)  = BigInt(x)*BigInt(y)
-widemul{T<:Integer}(x::T, y::T) = BigInt(x)*BigInt(y)
 
 prevpow2(x::BigInt) = x.size < 0 ? -prevpow2(-x) : (x <= 2 ? x : one(BigInt) << (ndigits(x, 2)-1))
 nextpow2(x::BigInt) = x.size < 0 ? -nextpow2(-x) : (x <= 2 ? x : one(BigInt) << ndigits(x-1, 2))

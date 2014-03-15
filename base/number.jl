@@ -30,6 +30,8 @@ ctranspose(x::Number) = conj(x)
 inv(x::Number) = one(x)/x
 angle(z::Real) = atan2(zero(z), z)
 
+widemul(x::Number, y::Number) = widen(x)*widen(y)
+
 start(x::Number) = false
 next(x::Number, state) = (x, true)
 done(x::Number, state) = state

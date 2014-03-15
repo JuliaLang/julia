@@ -21,8 +21,8 @@ function scale!(C::Matrix, b::Vector, A::Matrix)
     end
     C
 end
-scale(A::Matrix, b::Vector) = scale!(Array(promote_type(eltype(A),eltype(b)),size(A)), A, b)
-scale(b::Vector, A::Matrix) = scale!(Array(promote_type(eltype(A),eltype(b)),size(A)), b, A)
+scale(A::Matrix, b::Vector) = scale!(similar(A, promote_type(eltype(A),eltype(b))), A, b)
+scale(b::Vector, A::Matrix) = scale!(similar(b, promote_type(eltype(A),eltype(b)), size(A)), b, A)
 
 # Dot products
 
@@ -216,7 +216,7 @@ function gemm_wrapper{T<:BlasFloat}(tA::Char, tB::Char,
                              B::StridedMatrix{T})
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
-    C = Array(T, mA, nB)
+    C = similar(B, T, mA, nB)
     gemm_wrapper(C, tA, tB, A, B)
 end
 
@@ -270,7 +270,7 @@ arithtype(T) = T
 arithtype(::Type{Bool}) = Int
 
 function generic_matvecmul{T,S}(tA::Char, A::StridedMatrix{T}, B::StridedVector{S})
-    C = Array(promote_type(arithtype(T),arithtype(S)), size(A, tA=='N' ? 1 : 2))
+    C = similar(B, promote_type(arithtype(T),arithtype(S)), size(A, tA=='N' ? 1 : 2))
     generic_matvecmul(C, tA, A, B)
 end
 
@@ -323,7 +323,7 @@ end
 function generic_matmatmul{T,S}(tA, tB, A::StridedVecOrMat{T}, B::StridedMatrix{S})
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
-    C = Array(promote_type(arithtype(T),arithtype(S)), mA, nB)
+    C = similar(B, promote_type(arithtype(T),arithtype(S)), mA, nB)
     generic_matmatmul(C, tA, tB, A, B)
 end
 
@@ -483,7 +483,7 @@ end
 
 # multiply 2x2 matrices
 function matmul2x2{T,S}(tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
-    matmul2x2(Array(promote_type(T,S), 2, 2), tA, tB, A, B)
+    matmul2x2(similar(B, promote_type(T,S), 2, 2), tA, tB, A, B)
 end
 
 function matmul2x2{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
@@ -510,7 +510,7 @@ end
 
 # Multiply 3x3 matrices
 function matmul3x3{T,S}(tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
-    matmul3x3(Array(promote_type(T,S), 3, 3), tA, tB, A, B)
+    matmul3x3(similar(B, promote_type(T,S), 3, 3), tA, tB, A, B)
 end
 
 function matmul3x3{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})

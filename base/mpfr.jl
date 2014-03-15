@@ -17,7 +17,7 @@ import
         itrunc, eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
         serialize, deserialize, inf, nan, hash, cbrt, typemax, typemin,
-        realmin, realmax, get_rounding, set_rounding, maxintfloat
+        realmin, realmax, get_rounding, set_rounding, maxintfloat, widen
 
 import Base.Math.lgamma_r
 
@@ -43,6 +43,9 @@ type BigFloat <: FloatingPoint
         new(prec, sign, exp, d)
     end
 end
+
+widen(::Type{Float64}) = BigFloat
+widen(::Type{BigFloat}) = BigFloat
 
 BigFloat(x::BigFloat) = x
 

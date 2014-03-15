@@ -37,15 +37,17 @@ function binomial{T<:Integer}(n::T, k::T)
     if k > (n>>1)
         k = (n - k)
     end
-    x = nn = n - k + 1.0
-    nn += 1.0
-    rr = 2.0
+    x::T = nn = n - k + 1
+    nn += 1
+    rr = 2
     while rr <= k
-        x *= nn/rr
+        xt = div(widemul(x, nn), rr)
+        x = xt
+        x == xt || throw(OverflowError())
         rr += 1
         nn += 1
     end
-    sgn*iround(T,x)
+    convert(T, copysign(x, sgn))
 end
 
 ## other ordering related functions ##
@@ -531,7 +533,7 @@ function nextprod(a::Vector{Int}, x)
     v = ones(Int, k)                  # current value of each counter
     mx = [nextpow(ai,x) for ai in a]  # maximum value of each counter
     v[1] = mx[1]                      # start at first case that is >= x
-    p::morebits(Int) = mx[1]          # initial value of product in this case
+    p::widen(Int) = mx[1]             # initial value of product in this case
     best = p
     icarry = 1
     
@@ -573,7 +575,7 @@ function prevprod(a::Vector{Int}, x)
     mx = [nextpow(ai,x) for ai in a]  # allow each counter to exceed p (sentinel)
     first = int(prevpow(a[1], x))     # start at best case in first factor
     v[1] = first
-    p::morebits(Int) = first
+    p::widen(Int) = first
     best = p
     icarry = 1
     
