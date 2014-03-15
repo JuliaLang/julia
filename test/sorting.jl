@@ -100,13 +100,14 @@ end
 srand(0xdeadbeef)
 
 for n in [0:10, 100, 101, 1000, 1001]
-    r = 1:10
-    v = rand(1:10,n)
+    r = -5:5
+    v = rand(r,n)
     h = hist(v,r)
 
     for rev in [false,true]
         # insertion sort (stable) as reference
         pi = sortperm(v, alg=InsertionSort, rev=rev)
+        @test pi == sortperm(float(v), alg=InsertionSort, rev=rev)
         @test isperm(pi)
         si = v[pi]
         @test hist(si,r) == h
@@ -121,6 +122,7 @@ for n in [0:10, 100, 101, 1000, 1001]
         # stable algorithms
         for alg in [MergeSort]
             p = sortperm(v, alg=alg, rev=rev)
+            @test p == sortperm(float(v), alg=alg, rev=rev)
             @test p == pi
             s = copy(v)
             permute!(s, p)
@@ -132,6 +134,7 @@ for n in [0:10, 100, 101, 1000, 1001]
         # unstable algorithms
         for alg in [QuickSort]
             p = sortperm(v, alg=alg, rev=rev)
+            @test p == sortperm(float(v), alg=alg, rev=rev)
             @test isperm(p)
             @test v[p] == si
             s = copy(v)
@@ -203,3 +206,8 @@ for alg in [InsertionSort, MergeSort]
     sp = sortperm(inds, alg=alg)
     @test all(issorted, [sp[inds.==x] for x in 1:200])
 end
+
+# issue #6177
+@test sortperm([ 0.0, 1.0, 1.0], rev=true) == [2, 3, 1]
+@test sortperm([-0.0, 1.0, 1.0], rev=true) == [2, 3, 1]
+@test sortperm([-1.0, 1.0, 1.0], rev=true) == [2, 3, 1]
