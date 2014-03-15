@@ -267,7 +267,7 @@ function stop_watching(t::PollingFileWatcher)
 end
 
 function _uv_hook_fseventscb(t::FileMonitor,filename::Ptr,events::Int32,status::Int32)
-    fname = bytestring(convert(Ptr{Uint8},filename))
+    fname = filename == C_NULL ? "" : bytestring(convert(Ptr{Uint8},filename))
     fe = FileEvent(events)
     if isa(t.cb,Function)
         t.cb(fname, fe, status)
