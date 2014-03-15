@@ -115,8 +115,7 @@ static inline int cache_match(jl_value_t **args, size_t n, jl_tuple_t *sig,
             // signatures for tuples of every length
             if (!jl_is_tuple(a) || //!jl_subtype(a, decl, 1))
                 !jl_tuple_subtype(((jl_tuple_t*)a)->data, jl_tuple_len(a),
-                                  ((jl_tuple_t*)decl)->data, jl_tuple_len(decl),
-                                  1, 0))
+                                  ((jl_tuple_t*)decl)->data, jl_tuple_len(decl), 1))
                 return 0;
         }
         else if (jl_is_type_type(decl) &&
@@ -908,7 +907,7 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
         }
         else if (jl_tuple_subtype(&jl_tupleref(tt,0), nargs,
                                   &jl_tupleref(m->sig,0),
-                                  jl_tuple_len(m->sig), 0, 0)) {
+                                  jl_tuple_len(m->sig), 0)) {
             break;
         }
         m = m->next;
@@ -960,7 +959,7 @@ static int sigs_eq(jl_value_t *a, jl_value_t *b, int useenv)
 
 int jl_args_morespecific(jl_value_t *a, jl_value_t *b)
 {
-    int msp = jl_type_morespecific(a,b,0);
+    int msp = jl_type_morespecific(a,b);
     int btv = jl_has_typevars(b);
     if (btv) {
         if (jl_type_match_morespecific(a,b) == (jl_value_t*)jl_false) {
@@ -975,12 +974,12 @@ int jl_args_morespecific(jl_value_t *a, jl_value_t *b)
             if (jl_type_match(b,a) == (jl_value_t*)jl_false)
                 return 1;
         }
-        int nmsp = jl_type_morespecific(b,a,0);
+        int nmsp = jl_type_morespecific(b,a);
         if (nmsp == msp)
             return 0;
     }
     if (jl_has_typevars((jl_value_t*)a)) {
-        int nmsp = jl_type_morespecific(b,a,0);
+        int nmsp = jl_type_morespecific(b,a);
         if (nmsp && msp)
             return 1;
         if (!btv && jl_types_equal(a,b))
@@ -1403,7 +1402,7 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
         }
         else if (jl_tuple_subtype(&jl_tupleref(types,0), typelen,
                                   &jl_tupleref(m->sig,0),
-                                  jl_tuple_len(m->sig), 0, 0)) {
+                                  jl_tuple_len(m->sig), 0)) {
             break;
         }
         m = m->next;
