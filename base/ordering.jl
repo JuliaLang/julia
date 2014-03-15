@@ -54,7 +54,7 @@ function lt(p::Perm, a::Int, b::Int)
 end
 function lt(p::Perm{LexicographicOrdering}, a::Int, b::Int)
     c = lexcmp(p.data[a], p.data[b])
-    c < 0 ? true : 0 < c ? false : a < b
+    c != 0 ? c < 0 : a < b
 end
 
 # Map a bits-type to an unsigned int, maintaining sort order
