@@ -6,9 +6,10 @@ import Base.FFTW.normalization
 export FFTW, filt, deconv, conv, conv2, xcorr, fftshift, ifftshift,
        dct, idct, dct!, idct!, plan_dct, plan_idct, plan_dct!, plan_idct!,
        # the rest are defined imported from FFTW:
-       fft, bfft, ifft, rfft, brfft, irfft,
+       fft, bfft, ifft, rfft, brfft, irfft, rfft!, irfft!,
        plan_fft, plan_bfft, plan_ifft, plan_rfft, plan_brfft, plan_irfft,
-       fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!
+       fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!,
+       plan_rfft!, plan_irfft!, RCpair
 
 function filt{T<:Number}(b::Union(AbstractVector{T}, T),a::Union(AbstractVector{T}, T),x::AbstractVector{T})
     if isempty(b); error("b must be non-empty"); end

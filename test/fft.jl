@@ -202,3 +202,20 @@ rfftn_m3d = rfft(m3d)
 for i = 1:3, j = 1:3, k = 1:2
     @test_approx_eq rfftn_m3d[i,j,k] fftn_m3d[i,j,k]
 end
+
+A = rand(3,4)
+RC = RCpair(A)
+@test real(RC) == A
+rfft!(RC)
+@test_approx_eq rfft(A) complex(RC)
+irfft!(RC)
+@test_approx_eq real(RC)*Base.FFTW.normalization(RC) A
+
+A = rand(4,3)
+RC = RCpair(A)
+prfft!  = plan_rfft!(RC)
+pirfft! = plan_irfft!(RC)
+prfft!(RC)
+@test_approx_eq rfft(A) complex(RC)
+pirfft!(RC)
+@test_approx_eq real(RC)*Base.FFTW.normalization(RC) A

@@ -4077,9 +4077,26 @@ Signal Processing
 Fast Fourier transform (FFT) functions in Julia are largely implemented by
 calling functions from `FFTW <http://www.fftw.org>`_.
 
-.. function:: fft(A [, dims])
+.. function:: RCpair(T, dims[, region])
 
-   Performs a multidimensional FFT of the array ``A``.  The optional ``dims``
+   Defines a Real/Complex pair for in-place real-to-complex and
+   complex-to-real FFTs.  A single memory buffer is interpreted either
+   as a real or complex array (returned by ``real(RC)`` and
+   ``complex(RC)``, respectively).  Optionally, specify the ``region``
+   (i.e., which dimensions) to be transformed, with all transformed by
+   default.
+
+   The buffer is allocated to provide appropriate padding, as required
+   by FFTW.
+
+.. function:: RCpair(A [, region])
+
+   Creates an ``RCpair`` and copies the data in the real-valued array
+   ``A``. Optionally, specify the ``region`` that will be transformed.
+
+.. function:: fft(A [, region])
+
+   Performs a multidimensional FFT of the array ``A``.  The optional ``region``
    argument specifies an iterable subset of dimensions (e.g. an integer,
    range, tuple, or array) to transform along.  Most efficient if the
    size of ``A`` along the transformed dimensions is a product of small
@@ -4098,12 +4115,12 @@ calling functions from `FFTW <http://www.fftw.org>`_.
    A multidimensional FFT simply performs this operation along each transformed
    dimension of ``A``.
 
-.. function:: fft!(A [, dims])
+.. function:: fft!(A [, region])
 
    Same as :func:`fft`, but operates in-place on ``A``,
    which must be an array of complex floating-point numbers.
 
-.. function:: ifft(A [, dims])
+.. function:: ifft(A [, region])
 
    Multidimensional inverse FFT.
 
@@ -4118,11 +4135,11 @@ calling functions from `FFTW <http://www.fftw.org>`_.
    A multidimensional inverse FFT simply performs this operation along each
    transformed dimension of ``A``.
 
-.. function:: ifft!(A [, dims])
+.. function:: ifft!(A [, region])
 
    Same as :func:`ifft`, but operates in-place on ``A``.
 
-.. function:: bfft(A [, dims])
+.. function:: bfft(A [, region])
 
    Similar to :func:`ifft`, but computes an unnormalized inverse (backward)
    transform, which must be divided by the product of the sizes of the
@@ -4134,16 +4151,16 @@ calling functions from `FFTW <http://www.fftw.org>`_.
 
       \operatorname{BDFT}(A)[k] = \operatorname{length}(A) \operatorname{IDFT}(A)[k]
 
-.. function:: bfft!(A [, dims])
+.. function:: bfft!(A [, region])
 
    Same as :func:`bfft`, but operates in-place on ``A``.
 
-.. function:: plan_fft(A [, dims [, flags [, timelimit]]])
+.. function:: plan_fft(A [, region [, flags [, timelimit]]])
 
-   Pre-plan an optimized FFT along given dimensions (``dims``) of arrays
+   Pre-plan an optimized FFT along given dimensions (``region``) of arrays
    matching the shape and type of ``A``.  (The first two arguments have
    the same meaning as for :func:`fft`.)  Returns a function ``plan(A)``
-   that computes ``fft(A, dims)`` quickly.
+   that computes ``fft(A, region)`` quickly.
 
    The ``flags`` argument is a bitwise-or of FFTW planner flags, defaulting
    to ``FFTW.ESTIMATE``.  e.g. passing ``FFTW.MEASURE`` or ``FFTW.PATIENT``
@@ -4160,29 +4177,29 @@ calling functions from `FFTW <http://www.fftw.org>`_.
    are similar but produce plans that perform the equivalent of
    the inverse transforms :func:`ifft` and so on.
 
-.. function:: plan_ifft(A [, dims [, flags [, timelimit]]])
+.. function:: plan_ifft(A [, region [, flags [, timelimit]]])
 
    Same as :func:`plan_fft`, but produces a plan that performs inverse transforms
    :func:`ifft`.
 
-.. function:: plan_bfft(A [, dims [, flags [, timelimit]]])
+.. function:: plan_bfft(A [, region [, flags [, timelimit]]])
 
    Same as :func:`plan_fft`, but produces a plan that performs an unnormalized
    backwards transform :func:`bfft`.
 
-.. function:: plan_fft!(A [, dims [, flags [, timelimit]]])
+.. function:: plan_fft!(A [, region [, flags [, timelimit]]])
 
    Same as :func:`plan_fft`, but operates in-place on ``A``.
 
-.. function:: plan_ifft!(A [, dims [, flags [, timelimit]]])
+.. function:: plan_ifft!(A [, region [, flags [, timelimit]]])
 
    Same as :func:`plan_ifft`, but operates in-place on ``A``.
 
-.. function:: plan_bfft!(A [, dims [, flags [, timelimit]]])
+.. function:: plan_bfft!(A [, region [, flags [, timelimit]]])
 
    Same as :func:`plan_bfft`, but operates in-place on ``A``.
 
-.. function:: rfft(A [, dims])
+.. function:: rfft(A [, region])
 
    Multidimensional FFT of a real array A, exploiting the fact that
    the transform has conjugate symmetry in order to save roughly half
@@ -4190,98 +4207,120 @@ calling functions from `FFTW <http://www.fftw.org>`_.
    If ``A`` has size ``(n_1, ..., n_d)``, the result has size
    ``(floor(n_1/2)+1, ..., n_d)``.
 
-   The optional ``dims`` argument specifies an iterable subset of one or
+   The optional ``region`` argument specifies an iterable subset of one or
    more dimensions of ``A`` to transform, similar to :func:`fft`.  Instead
    of (roughly) halving the first dimension of ``A`` in the result, the
-   ``dims[1]`` dimension is (roughly) halved in the same way.
+   ``region[1]`` dimension is (roughly) halved in the same way.
 
-.. function:: irfft(A, d [, dims])
+.. function:: rfft!(RC)
+
+   Same as :func:`rfft`, but operates in-place on ``RC``,
+   which must be an ``RCpair``.
+
+.. function:: irfft(A, d [, region])
 
    Inverse of :func:`rfft`: for a complex array ``A``, gives the
    corresponding real array whose FFT yields ``A`` in the first half.
-   As for :func:`rfft`, ``dims`` is an optional subset of dimensions
+   As for :func:`rfft`, ``region`` is an optional subset of dimensions
    to transform, defaulting to ``1:ndims(A)``.
 
-   ``d`` is the length of the transformed real array along the ``dims[1]``
-   dimension, which must satisfy ``d == floor(size(A,dims[1])/2)+1``.
+   ``d`` is the length of the transformed real array along the ``region[1]``
+   dimension, which must satisfy ``d == floor(size(A,region[1])/2)+1``.
    (This parameter cannot be inferred from ``size(A)`` due to the
    possibility of rounding by the ``floor`` function here.)
 
-.. function:: brfft(A, d [, dims])
+.. function:: irfft!(RC)
+
+   Same as :func:`irfft`, but operates in-place on ``RC``,
+   which must be an ``RCpair``.
+
+.. function:: brfft(A, d [, region])
 
    Similar to :func:`irfft` but computes an unnormalized inverse transform
    (similar to :func:`bfft`), which must be divided by the product
    of the sizes of the transformed dimensions (of the real output array)
    in order to obtain the inverse transform.
 
-.. function:: plan_rfft(A [, dims [, flags [, timelimit]]])
+.. function:: plan_rfft(A [, region [, flags [, timelimit]]])
 
    Pre-plan an optimized real-input FFT, similar to :func:`plan_fft`
    except for :func:`rfft` instead of :func:`fft`.  The first two
    arguments, and the size of the transformed result, are the same as
    for :func:`rfft`.
 
-.. function:: plan_brfft(A, d [, dims [, flags [, timelimit]]])
+.. function:: plan_rfft!(RC [, flags [, timelimit]])
+
+   Pre-plan an optimized in-place real-input FFT, similar to
+   :func:`plan_fft` except for :func:`rfft` instead of :func:`fft`.
+   ``RC`` must be an ``RCpair``.
+
+.. function:: plan_brfft(A, d [, region [, flags [, timelimit]]])
 
    Pre-plan an optimized real-input unnormalized transform, similar to
    :func:`plan_rfft` except for :func:`brfft` instead of :func:`rfft`.
    The first two arguments and the size of the transformed result, are
    the same as for :func:`brfft`.
 
-.. function:: plan_irfft(A, d [, dims [, flags [, timelimit]]])
+.. function:: plan_irfft(A, d [, region [, flags [, timelimit]]])
 
    Pre-plan an optimized inverse real-input FFT, similar to :func:`plan_rfft`
    except for :func:`irfft` and :func:`brfft`, respectively.  The first
    three arguments have the same meaning as for :func:`irfft`.
 
-.. function:: dct(A [, dims])
+.. function:: plan_irfft!(RC [, flags [, timelimit]])
+
+   Pre-plan an optimized in-place inverse real-output FFT, similar to
+   :func:`plan_fft` except for :func:`rfft` instead of :func:`fft`.
+   ``RC`` must be an ``RCpair``.
+
+.. function:: dct(A [, region])
 
    Performs a multidimensional type-II discrete cosine transform (DCT)
    of the array ``A``, using the unitary normalization of the DCT.
-   The optional ``dims`` argument specifies an iterable subset of
+   The optional ``region`` argument specifies an iterable subset of
    dimensions (e.g. an integer, range, tuple, or array) to transform
    along.  Most efficient if the size of ``A`` along the transformed
    dimensions is a product of small primes; see :func:`nextprod`.  See
    also :func:`plan_dct` for even greater efficiency.
 
-.. function:: dct!(A [, dims])
+.. function:: dct!(A [, region])
 
    Same as :func:`dct!`, except that it operates in-place
    on ``A``, which must be an array of real or complex floating-point
    values.
 
-.. function:: idct(A [, dims])
+.. function:: idct(A [, region])
 
    Computes the multidimensional inverse discrete cosine transform (DCT)
    of the array ``A`` (technically, a type-III DCT with the unitary
    normalization).
-   The optional ``dims`` argument specifies an iterable subset of
+   The optional ``region`` argument specifies an iterable subset of
    dimensions (e.g. an integer, range, tuple, or array) to transform
    along.  Most efficient if the size of ``A`` along the transformed
    dimensions is a product of small primes; see :func:`nextprod`.  See
    also :func:`plan_idct` for even greater efficiency.
 
-.. function:: idct!(A [, dims])
+.. function:: idct!(A [, region])
 
    Same as :func:`idct!`, but operates in-place on ``A``.
 
-.. function:: plan_dct(A [, dims [, flags [, timelimit]]])
+.. function:: plan_dct(A [, region [, flags [, timelimit]]])
 
    Pre-plan an optimized discrete cosine transform (DCT), similar to
    :func:`plan_fft` except producing a function that computes :func:`dct`.
    The first two arguments have the same meaning as for :func:`dct`.
 
-.. function:: plan_dct!(A [, dims [, flags [, timelimit]]])
+.. function:: plan_dct!(A [, region [, flags [, timelimit]]])
 
    Same as :func:`plan_dct`, but operates in-place on ``A``.
 
-.. function:: plan_idct(A [, dims [, flags [, timelimit]]])
+.. function:: plan_idct(A [, region [, flags [, timelimit]]])
 
    Pre-plan an optimized inverse discrete cosine transform (DCT), similar to
    :func:`plan_fft` except producing a function that computes :func:`idct`.
    The first two arguments have the same meaning as for :func:`idct`.
 
-.. function:: plan_idct!(A [, dims [, flags [, timelimit]]])
+.. function:: plan_idct!(A [, region [, flags [, timelimit]]])
 
    Same as :func:`plan_idct`, but operates in-place on ``A``.
 
@@ -4326,7 +4365,7 @@ The following functions are defined within the ``Base.FFTW`` module.
 
 .. currentmodule:: Base.FFTW
 
-.. function:: r2r(A, kind [, dims])
+.. function:: r2r(A, kind [, region])
 
    Performs a multidimensional real-input/real-output (r2r) transform
    of type ``kind`` of the array ``A``, as defined in the FFTW manual.
@@ -4342,25 +4381,25 @@ The following functions are defined within the ``Base.FFTW`` module.
    for any unspecified dimensions.  See the FFTW manual for precise
    definitions of these transform types, at http://www.fftw.org/doc.
 
-   The optional ``dims`` argument specifies an iterable subset of
+   The optional ``region`` argument specifies an iterable subset of
    dimensions (e.g. an integer, range, tuple, or array) to transform
-   along. ``kind[i]`` is then the transform type for ``dims[i]``,
+   along. ``kind[i]`` is then the transform type for ``region[i]``,
    with ``kind[end]`` being used for ``i > length(kind)``.
 
    See also :func:`plan_r2r` to pre-plan optimized r2r transforms.
 
-.. function:: r2r!(A, kind [, dims])
+.. function:: r2r!(A, kind [, region])
 
    Same as :func:`r2r`, but operates in-place on ``A``, which must be
    an array of real or complex floating-point numbers.
 
-.. function:: plan_r2r(A, kind [, dims [, flags [, timelimit]]])
+.. function:: plan_r2r(A, kind [, region [, flags [, timelimit]]])
 
    Pre-plan an optimized r2r transform, similar to :func:`Base.plan_fft`
    except that the transforms (and the first three arguments)
    correspond to :func:`r2r` and :func:`r2r!`, respectively.
 
-.. function:: plan_r2r!(A, kind [, dims [, flags [, timelimit]]])
+.. function:: plan_r2r!(A, kind [, region [, flags [, timelimit]]])
 
    Similar to :func:`Base.plan_fft`, but corresponds to :func:`r2r!`.
 
