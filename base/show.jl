@@ -98,6 +98,10 @@ macro show(exs...)
     return blk
 end
 
+macro showln(exs...)
+    :(bt = backtrace(); @show $(esc(exs...)); print("  ("); show_backtrace1(bt); println(")"))
+end
+
 show(io::IO, tn::TypeName) = print(io, tn.name)
 show(io::IO, ::Nothing) = print(io, "nothing")
 show(io::IO, b::Bool) = print(io, b ? "true" : "false")

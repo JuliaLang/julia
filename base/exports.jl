@@ -1305,6 +1305,7 @@ export
     @vectorize_1arg,
     @vectorize_2arg,
     @show,
+    @showln,
     @printf,
     @sprintf,
     @deprecate,
