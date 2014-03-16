@@ -22,6 +22,7 @@
      
       <scheme name="julia">
 <!-- Comments -->
+         <block start="/\#\=/" end="/\=\#/" scheme="Comment" region="mlComment"/>
          <block start="/\#/" end="/$/" scheme="Comment" region="mlComment"/>
 <!-- Strings -->
          <regexp match="/&#34;.*?&#34;/" region0="mlString"/>
