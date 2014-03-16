@@ -71,17 +71,6 @@ function show(io::IO, x::DataType)
     end
 end
 
-function showcompact{T<:Number}(io::IO, x::Vector{T})
-    print(io, "[")
-    if length(x) > 0
-        showcompact(io, x[1])
-        for j in 2:length(x)
-            print(io, ",")
-            showcompact(io, x[j])
-        end
-    end
-    print(io, "]")
-end
 showcompact(io::IO, x) = show(io, x)
 showcompact(x) = showcompact(STDOUT::IO, x)
 
@@ -1013,7 +1002,7 @@ function showarray(io::IO, X::AbstractArray;
     end
 end
 
-show(io::IO, X::AbstractArray) = showarray(io, X, header=false, limit=false, repr=true)
+show(io::IO, X::AbstractArray) = showarray(io, X, header=_limit_output, repr=!_limit_output)
 
 print(io::IO, X::AbstractArray) = writedlm(io, X)
 
