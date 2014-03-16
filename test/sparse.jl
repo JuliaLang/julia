@@ -209,8 +209,8 @@ for i=1:2, a={[1 2 3], [1 2 3]', speye(3)}
 end
 
 # test for "access to undefined error" types that initially allocate elements as #undef
-@test all(sparse(1:2, 1:2, Any[1,2])^2 == sparse(1:2, 1:2, [1,4]))
-sd1 = diff(sparse([1,1,1], [1,2,3], Any[1,2,3]), 1)
+@test all(sparse(1:2, 1:2, Number[1,2])^2 == sparse(1:2, 1:2, [1,4]))
+sd1 = diff(sparse([1,1,1], [1,2,3], Number[1,2,3]), 1)
 
 # issue #6036
 P = spzeros(Float64, 3, 3)
