@@ -105,6 +105,11 @@ typemax{T<:Integer}(::Type{Rational{T}}) = one(T)//zero(T)
 
 isinteger(x::Rational) = x.den == 1
 
+zero{T}(::Type{Rational{T}}) = zero(T)//one(T)
+zero{T}(q::Rational{T}) = zero(T)//one(T)
+one{T}(::Type{Rational{T}}) = one(T)//one(T)
+one{T}(q::Rational{T}) = one(T)//one(T)
+
 hash(x::Rational) = bitmix(hash(x.num), ~hash(x.den))
 
 -(x::Rational) = (-x.num) // x.den

@@ -1575,7 +1575,7 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 for T in [Int,BigInt], n = [1:1000,1000000]
     n = convert(T,n)
     f = factor(n)
-    @test n == prod([p^k for (p,k)=f])
+    @test n == prod(T[p^k for (p,k)=f])
     prime = n!=1 && length(f)==1 && get(f,n,0)==1
     @test isprime(n) == prime
 
