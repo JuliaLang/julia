@@ -1,9 +1,12 @@
 module FFTW
 
+import Base: real, complex, copy, copy!
+
 export fft, bfft, ifft, rfft, brfft, irfft,
        plan_fft, plan_bfft, plan_ifft, plan_rfft, plan_brfft, plan_irfft,
-       fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!,
-       r2r, r2r!, plan_r2r, plan_r2r!,
+       fft!, bfft!, ifft!, rfft!, irfft!, plan_fft!, plan_bfft!, plan_ifft!,
+       plan_rfft!, plan_irfft!, r2r, r2r!, plan_r2r, plan_r2r!,
+       RCpair,
        export_wisdom, import_wisdom, import_system_wisdom, forget_wisdom,
        MEASURE, DESTROY_INPUT, UNALIGNED, CONSERVE_MEMORY, EXHAUSTIVE,
        PRESERVE_INPUT, PATIENT, ESTIMATE, WISDOM_ONLY, NO_TIMELIMIT,
@@ -492,10 +495,41 @@ for (f,direction) in ((:fft,:FORWARD), (:bfft,:BACKWARD))
     end
 end
 
+## RCpair enables in-place rfft, by using a single block of memory and
+# allowing it to be interpreted as either real or complex
+type RCpair{T<:FloatingPoint,N}
+    R::SubArray{T,N,Array{T,N},NTuple{N,Range1{Int}}}
+    C::Array{Complex{T},N}
+    region::Vector{Int}
+end
+
+function RCpair{T<:FloatingPoint}(realtype::Type{T}, realsize, region=1:length(realsize))
+    sz = [realsize...]
+    firstdim = region[1]
+    sz[firstdim] = realsize[firstdim]>>1 + 1
+    C = Array(Complex{T}, sz...)
+    sz[firstdim] *= 2
+    R = reinterpret(T, C, tuple(sz...))
+    RCpair(sub(R, map(n->1:n, realsize)), C, [region...])
+end
+RCpair{T<:FloatingPoint}(A::Array{T}, region=1:ndims(A)) = copy!(RCpair(T, size(A), region), A)
+
+real(RC::RCpair)    = RC.R
+complex(RC::RCpair) = RC.C
+
+copy!{T<:Real}(RC::RCpair, A::AbstractArray{T}) = (copy!(RC.R, A); RC)
+function copy{T,N}(RC::RCpair{T,N})
+    C = copy(RC.C)
+    R = reinterpret(T, C, size(parent(RC.R)))
+    RCpair(sub(R, RC.R.indexes), C, copy(RC.region))
+end
+
+
 # Normalization for ifft
 
 normalization(X::StridedArray, region) = 1 / prod([size(X)...][[region...]])
 normalization(X::StridedArray) = 1 / length(X)
+normalization(RC::RCpair) = 1 / prod(size(RC.R)[RC.region])
 
 # Normalized ifft inverse transforms:
 
@@ -521,7 +555,7 @@ for (f,fb) in ((:ifft,:bfft), (:ifft!,:bfft!))
     end
 end
 
-# rfft/brfft and planned variants.  No in-place version for now.
+# rfft/brfft and planned variants
 
 for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
     @eval begin
@@ -652,6 +686,21 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
     end
 end
 
+function plan_rfft!{T}(RC::RCpair{T}, flags::Unsigned = ESTIMATE, tlim::Real = NO_TIMELIMIT)
+    p = Plan(RC.R, RC.C, RC.region, flags, tlim)
+    return Z::RCpair{T} -> begin
+        assert_applicable(p, Z.R)
+        execute(p.plan, Z.R, Z.C)
+        return Z
+    end
+end
+
+function rfft!{T}(RC::RCpair{T})
+    p = Plan(RC.R, RC.C, RC.region, ESTIMATE, NO_TIMELIMIT)
+    execute(T, p.plan)
+    return RC
+end
+
 # Normalized rfft inverse transforms:
 
 function irfft(X, d, region)
@@ -676,6 +725,21 @@ end
 plan_irfft(X, d, region, flags) = plan_irfft(X, d, region, flags, NO_TIMELIMIT)
 plan_irfft(X, d, region) = plan_irfft(X, d, region, ESTIMATE, NO_TIMELIMIT)
 plan_irfft(X, d) = plan_irfft(X, d, 1:ndims(X), ESTIMATE, NO_TIMELIMIT)
+
+function plan_irfft!{T}(RC::RCpair{T}, flags::Unsigned = ESTIMATE, tlim::Real = NO_TIMELIMIT)
+    p = Plan(RC.C, RC.R, RC.region, flags, tlim)
+    return Z::RCpair{T} -> begin
+        assert_applicable(p, Z.C)
+        execute(p.plan, Z.C, Z.R)
+        return Z
+    end
+end
+
+function irfft!{T}(RC::RCpair{T})
+    p = Plan(RC.C, RC.R, RC.region, ESTIMATE, NO_TIMELIMIT)
+    execute(Complex{T}, p.plan)
+    return RC
+end
 
 # A DFT is unambiguously defined as just the identity operation for scalars
 fft(x::Number) = x

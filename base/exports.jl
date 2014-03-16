@@ -883,6 +883,7 @@ export
     varm,
 
 # signal processing
+    RCpair,
     bfft!,
     bfft,
     brfft,
@@ -901,6 +902,7 @@ export
     ifft,
     ifftshift,
     irfft,
+    irfft!,
     plan_bfft!,
     plan_bfft,
     plan_brfft,
@@ -913,8 +915,11 @@ export
     plan_ifft!,
     plan_ifft,
     plan_irfft,
+    plan_irfft!,
     plan_rfft,
+    plan_rfft!,
     rfft,
+    rfft!,
     xcorr,
 
 #   numerical integration
