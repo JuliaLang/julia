@@ -114,9 +114,8 @@ displayable(mime::String) = displayable(MIME(mime))
 immutable TextDisplay <: Display
     io::IO
 end
-display(d::TextDisplay, ::MIME"text/plain", x) =
-    writemime(d.io, MIME("text/plain"), x)
-display(d::TextDisplay, x) = display(d, MIME("text/plain"), x)
+display(d::TextDisplay, M::MIME"text/plain", x) = writemime(d.io, M, x)
+display(d::TextDisplay, x) = display(d, MIME"text/plain"(), x)
 
 import Base: close, flush
 flush(d::TextDisplay) = flush(d.io)
