@@ -488,6 +488,7 @@ extern jl_sym_t *boundscheck_sym; extern jl_sym_t *copyast_sym;
 // basic predicates -----------------------------------------------------------
 
 #define jl_is_null(v)        (((jl_value_t*)(v)) == ((jl_value_t*)jl_null))
+#define jl_is_nothing(v)     (((jl_value_t*)(v)) == ((jl_value_t*)jl_nothing))
 #define jl_is_tuple(v)       jl_typeis(v,jl_tuple_type)
 #define jl_is_datatype(v)    jl_typeis(v,jl_datatype_type)
 #define jl_is_pointerfree(t) (((jl_datatype_t*)t)->pointerfree)
