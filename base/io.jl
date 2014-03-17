@@ -523,7 +523,7 @@ end
 ## Character streams ##
 const _chtmp = Array(Char, 1)
 function peekchar(s::IOStream)
-    if ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Uint32}), s, _chtmp) < 0
+    if ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Char}), s, _chtmp) < 0
         return char(-1)
     end
     return _chtmp[1]
