@@ -303,7 +303,7 @@ function assert_same_host(procs)
         error("SharedArray requires all requested processes to be on the same machine.")
     end
     
-    return (first_privip != getipaddr()) ? false : true
+    return myid() in procs
 end
 
               
