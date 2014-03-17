@@ -17,6 +17,10 @@ in the :ref:`stdlib-linalg` section of the standard library documentation.
 ``Cholesky``        `Cholesky factorization <http://en.wikipedia.org/wiki/Cholesky_decomposition>`_
 ``CholeskyPivoted`` `Pivoted <http://en.wikipedia.org/wiki/Pivot_element>`_ Cholesky factorization
 ``LU``              `LU factorization <http://en.wikipedia.org/wiki/LU_decomposition>`_
+``LUTridiagonal``   LU factorization for Tridiagonal matrices
+``UmfpackLU``       LU factorization for sparse matrices (computed by UMFPack)
+``QR``              `QR factorization <http://en.wikipedia.org/wiki/QR_decomposition>`_
+``QRCompactWY``     Compact WY form of the QR factorization
 ``QRPivoted``       Pivoted `QR factorization <http://en.wikipedia.org/wiki/QR_decomposition>`_
 ``Hessenberg``      `Hessenberg decomposition <http://mathworld.wolfram.com/HessenbergDecomposition.html>`_
 ``Eigen``           `Spectral decomposition <http://en.wikipedia.org/wiki/Eigendecomposition_(matrix)>`_
