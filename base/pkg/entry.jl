@@ -663,4 +663,46 @@ function updatehook(pkgs::Vector)
     """)
 end
 
+@windows_only const JULIA = joinpath(JULIA_HOME, ENV["JULIA_EXE"])
+@unix_only const JULIA = joinpath(JULIA_HOME, "julia-readline")
+
+function test!(pkg::String, errs::Vector{String}, notests::Vector{String})
+    const tests_require = Reqs.parse("$pkg/REQUIRE",true)
+    if (!isempty(tests_require))
+        info("Computing test dependencies for $pkg...")
+        resolve(tests_require)
+    end
+    const path = abspath(pkg,"run_tests.jl")
+    if isfile(path)
+        info("Testing $pkg")
+        cd(dirname(path)) do
+            try
+                run(`$JULIA $path`)
+                info("$pkg tests passed")
+            catch err
+                warnbanner(err, label="[ ERROR: $pkg ]")
+                push!(errs,pkg)
+            end
+        end
+    else
+        push!(notests,pkg)
+    end
+end
+
+function test(pkgs::Vector{String})
+    errs = String[]
+    notests = String[]
+    for pkg in pkgs
+        test!(pkg,errs,notests)
+    end
+    if !isempty(errs) || !isempty(notests)
+        messages = String[]
+        isempty(errs) || push!(messages, "$(join(errs,", "," and ")) had test errors")
+        isempty(notests) || push!(messages, "$(join(notests,", "," and ")) did not provide a run_test.jl file")
+        error(join(messages, "and"))
+    end
+end
+
+test() = test(sort!(String[keys(installed())...]))
+
 end # module
