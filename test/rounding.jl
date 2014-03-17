@@ -119,4 +119,8 @@ for T = [Float32,Float64,BigFloat]
     @test !is_floatexcept(T,except)    
     y = x-x
     @test is_floatexcept(T,except)
+
+    clear_floatexcept(T)
+    raise_floatexcept(T,FEUnderflow)
+    @test is_floatexcept(T,FEUnderflow)
 end

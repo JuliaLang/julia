@@ -65,7 +65,7 @@ end
 import Base: show, in, convert
 
 export FloatExceptions, FEInexact, FEUnderflow, FEOverflow, FEDivByZero, FEInvalid, 
-FENaN, FERange, FloatExceptionSet, FEAll, clear_floatexcept, get_floatexcept, is_floatexcept
+FENaN, FERange, FloatExceptionSet, FEAll, clear_floatexcept, get_floatexcept, is_floatexcept, raise_floatexcept
 
 
 abstract FloatExceptions
@@ -108,7 +108,7 @@ show(io::IO,fe::FloatExceptionSet) = showcompact(io, filter(x->in(x,fe),[IEEEExc
 # lowerFlags
 function clear_floatexcept{T<:IEEEFloat}(::Type{T},f::FloatExceptionSet) 
     if ccall(:feclearexcept, Cint, (Cint,), f.flags) != zero(Cint)
-        error("Could not clear floating point exception flag")
+        error("Could not clear floating point exception flags")
     end
 end
 clear_floatexcept{E<:FloatExceptions,T<:IEEEFloat}(::Type{T},::Type{E}) = clear_floatexcept(T,convert(FloatExceptionSet,E))
@@ -125,7 +125,15 @@ is_floatexcept{T<:IEEEFloat}(::Type{T},f::FloatExceptionSet) = in(f,get_floatexc
 is_floatexcept{E<:FloatExceptions,T<:IEEEFloat}(::Type{T},::Type{E}) = is_floatexcept(T,convert(FloatExceptionSet,E))
 is_floatexcept{T<:IEEEFloat}(::Type{T}) = is_floatexcept(T,FEAll)
 
-# TODO: raiseFlags, restoreFlags
+# raiseFlags
+function raise_floatexcept{T<:IEEEFloat}(::Type{T},f::FloatExceptionSet)
+    if ccall(:feraiseexcept, Cint, (Cint,), f.flags) != zero(Cint)
+        error("Could not raise floating point exception flags")
+    end
+end
+raise_floatexcept{E<:FloatExceptions,T<:IEEEFloat}(::Type{T},::Type{E}) = raise_floatexcept(T,convert(FloatExceptionSet,E))
+
+# TODO: restoreFlags
 
 
 

@@ -18,8 +18,8 @@ import
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
         serialize, deserialize, inf, nan, hash, cbrt, typemax, typemin,
         realmin, realmax, get_rounding, set_rounding, maxintfloat, 
-        clear_floatexcept, is_floatexcept, FEUnderflow, FEOverflow, FEDivByZero,
-        FEInexact, FENaN, FERange
+        clear_floatexcept, is_floatexcept, raise_floatexcept,
+        FEUnderflow, FEOverflow, FEDivByZero, FEInexact, FENaN, FERange
 
 import Base.Math.lgamma_r
 
@@ -623,7 +623,7 @@ for (eJ,eC) in ((:FEUnderflow,:underflow),(:FEOverflow,:overflow),(:FEDivByZero,
     @eval begin
         is_floatexcept(::Type{BigFloat},::Type{$eJ}) = ccall(($(string(:mpfr_,eC,:_p)), :libmpfr),Cint,()) != zero(Cint)
         clear_floatexcept(::Type{BigFloat},::Type{$eJ}) = ccall(($(string(:mpfr_clear_,eC)), :libmpfr),None,())
-        #raise_floatexcept(::Type{BigFloat},::Type{$eJ}) = ccall(($(string(:mpfr_set_,eC)), :libmpfr),None,())
+        raise_floatexcept(::Type{BigFloat},::Type{$eJ}) = ccall(($(string(:mpfr_set_,eC)), :libmpfr),None,())
     end
 end
 clear_floatexcept(::Type{BigFloat}) = ccall((:mpfr_clear_flags, :libmpfr),None,())
