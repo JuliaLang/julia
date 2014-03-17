@@ -271,3 +271,8 @@ ndigits_mismatch(n) = ndigits(n) != ndigits(BigInt(n))
 @test !any(ndigits_mismatch, 64:99)
 @test !any(ndigits_mismatch, 512:999)
 @test !any(ndigits_mismatch, 8192:9999)
+
+# conversion from float
+@test BigInt(2.0) == BigInt(2.0f0) == BigInt(big(2.0)) == 2
+@test_throws convert(BigInt, 2.1)
+@test_throws convert(BigInt, big(2.1))
