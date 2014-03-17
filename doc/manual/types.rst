@@ -60,7 +60,7 @@ Julia's type system that should be mentioned up front are:
    distinction significant.
 -  Only values, not variables, have types — variables are simply names
    bound to values.
--  Both abstract and concrete types can be paramaterized by other types
+-  Both abstract and concrete types can be parameterized by other types
    and by certain other values (currently integers, symbols, bools, and tuples thereof).
    Type parameters may be completely omitted when they
    do not need to be referenced or restricted.
