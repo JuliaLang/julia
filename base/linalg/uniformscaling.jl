@@ -1,7 +1,7 @@
 import Base: +, -, *, /, copy, ctranspose, getindex, showarray, transpose
 import Base.LinAlg: SingularException
 immutable UniformScaling{T<:Number} <: AbstractMatrix{T}
-		λ::T
+    λ::T
 end
 
 const I = UniformScaling(1)
@@ -41,12 +41,12 @@ function -{TA,TJ<:Number}(A::AbstractMatrix{TA},J::UniformScaling{TJ})
     B
 end
 function -{TA,TJ<:Number}(J::UniformScaling{TJ},A::AbstractMatrix{TA})
-	n = chksquare(A)
-	B = -A
-	@inbounds for i = 1:n
-		B[i,i] += J.λ
-	end
-	B
+    n = chksquare(A)
+    B = -A
+    @inbounds for i = 1:n
+        B[i,i] += J.λ
+    end
+    B
 end
 
 *(J1::UniformScaling,J2::UniformScaling) = UniformScaling(J1.λ*J2.λ)
