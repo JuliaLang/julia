@@ -214,8 +214,10 @@ randbool!(B::BitArray) = rand!(B)
 # The Ziggurat Method for generating random variables - Marsaglia and Tsang
 # Paper and reference code: http://www.jstatsoft.org/v05/i08/ 
 
-randn() = randmtzig_randn()
-randn!(A::Array{Float64}) = randmtzig_fill_randn!(A)
+randn() = randmtzig_gv_randn()
+randn(rng::MersenneTwister) = randmtzig_randn(rng.state)
+randn!(A::Array{Float64}) = randmtzig_gv_fill_randn!(A)
+randn!(rng::MersenneTwister, A::Array{Float64}) = randmtzig_fill_randn!(rng.state, A)
 randn(dims::Dims) = randn!(Array(Float64, dims))
 randn(dims::Int...) = randn!(Array(Float64, dims...))
 

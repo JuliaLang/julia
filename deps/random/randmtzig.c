@@ -80,33 +80,46 @@ typedef unsigned long long randmtzig_uint64_t;
 /* Declarations */
 
 extern void randmtzig_create_ziggurat_tables (void);
-extern double randmtzig_randn (void);
-extern void randmtzig_fill_randn (double *p, randmtzig_idx_type n);
+extern double randmtzig_randn (dsfmt_t *dsfmt);
+extern void randmtzig_fill_randn (dsfmt_t *dsfmt, double *p, randmtzig_idx_type n);
+extern double randmtzig_gv_randn (void);
+extern void randmtzig_gv_fill_randn (double *p, randmtzig_idx_type n);
 extern double randmtzig_exprnd (void);
 extern void randmtzig_fill_exprnd (double *p, randmtzig_idx_type n);
 
 /* ===== Uniform generators ===== */
 
-inline static randmtzig_uint64_t randi (void)
+inline static randmtzig_uint64_t gv_randi (void)
 {
     double r = dsfmt_gv_genrand_close1_open2();
     return *((uint64_t *) &r) & 0x000fffffffffffff;
 }
 
 /* generates a random number on (0,1) with 53-bit resolution */
-inline static double randu (void)
+inline static double gv_randu (void)
 {
     return dsfmt_gv_genrand_open_open();
+}
+
+inline static randmtzig_uint64_t randi (dsfmt_t *dsfmt)
+{
+    double r = dsfmt_genrand_close1_open2(dsfmt);
+    return *((uint64_t *) &r) & 0x000fffffffffffff;
+}
+
+/* generates a random number on (0,1) with 53-bit resolution */
+inline static double randu (dsfmt_t *dsfmt)
+{
+    return dsfmt_genrand_open_open(dsfmt);
 }
 
 /* ===== Ziggurat normal and exponential generators ===== */
 # define ZIGINT randmtzig_uint64_t
 # define EMANTISSA 4503599627370496  /* 52 bit mantissa */
-# define ERANDI randi() /* 52 bits for mantissa */
+# define ERANDI gv_randi() /* 52 bits for mantissa */
 # define NMANTISSA 2251799813685248
-# define NRANDI randi() /* 51 bits for mantissa + 1 bit sign */
-# define RANDU randu()
-
+# define NRANDI gv_randi() /* 51 bits for mantissa + 1 bit sign */
+# define RANDU gv_randu()
 
 #define ZIGGURAT_TABLE_SIZE 256
 
@@ -240,7 +253,46 @@ void randmtzig_create_ziggurat_tables (void)
  * distribution is exp(-0.5*x*x)
  */
 
-double randmtzig_randn (void)
+/* NOTE: This is identical to randmtzig_gv_randn() below except for the random number generation */
+double randmtzig_randn (dsfmt_t *dsfmt)
+{
+  while (1)
+    {
+        /* arbitrary mantissa (selected by randi, with 1 bit for sign) */
+        const randmtzig_uint64_t r = randi(dsfmt);
+        const randmtzig_int64_t rabs=r>>1;
+        const int idx = (int)(rabs&0xFF);
+        const double x = ( r&1 ? -rabs : rabs) * wi[idx];
+        
+        if (rabs < (randmtzig_int64_t)ki[idx]) {
+            return x;        /* 99.3% of the time we return here 1st try */
+        } else if (idx == 0) {
+            /* As stated in Marsaglia and Tsang
+             *
+             * For the normal tail, the method of Marsaglia[5] provides:
+             * generate x = -ln(U_1)/r, y = -ln(U_2), until y+y > x*x,
+             * then return r+x. Except that r+x is always in the positive
+             * tail!!!! Any thing random might be used to determine the
+             * sign, but as we already have r we might as well use it
+             *
+             * [PAK] but not the bottom 8 bits, since they are all 0 here!
+             */
+            double xx, yy;
+            do {
+                xx = - ZIGGURAT_NOR_INV_R * log (randu(dsfmt));
+                yy = - log (randu(dsfmt));
+            }
+            while ( yy+yy <= xx*xx);
+            return (rabs&0x100 ? -ZIGGURAT_NOR_R-xx : ZIGGURAT_NOR_R+xx);
+        } else if ((fi[idx-1] - fi[idx]) * randu(dsfmt) + fi[idx] < exp(-0.5*x*x)) {
+            return x;
+        }
+
+    }
+}
+
+/* NOTE: This is identical to randmtzig_randn() above except for the random number generation */
+double randmtzig_gv_randn (void)
 {
   while (1)
     {
@@ -300,12 +352,20 @@ double randmtzig_exprnd (void)
      }
 }
 
-void randmtzig_fill_randn (double *p, randmtzig_idx_type n)
+void randmtzig_gv_fill_randn (double *p, randmtzig_idx_type n)
 {
      randmtzig_idx_type i;
      for (i = 0; i < n; i++)
-          p[i] = randmtzig_randn();
+          p[i] = randmtzig_gv_randn();
 }
+
+void randmtzig_fill_randn (dsfmt_t *dsfmt, double *p, randmtzig_idx_type n)
+{
+     randmtzig_idx_type i;
+     for (i = 0; i < n; i++)
+          p[i] = randmtzig_randn(dsfmt);
+}
+
 
 void randmtzig_fill_exprnd (double *p, randmtzig_idx_type n)
 {
@@ -346,7 +406,7 @@ int main(int ac, char *av[]) {
 
     memset((void *)p, 0, n*sizeof(double));
     t1 = clock();
-    for (int i = 0; i < n; i++)  p[i] = randmtzig_randn();
+    for (int i = 0; i < n; i++)  p[i] = randmtzig_gv_randn();
     printf("Normal (n): %f\n", (clock() - t1) / (double) CLOCKS_PER_SEC);
     for (int i = 0; i < 10; i++)  printf("%lf\n", p[i]);
 

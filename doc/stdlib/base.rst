@@ -3452,11 +3452,11 @@ Random number generation in Julia uses the `Mersenne Twister library <http://www
 
    Fill an array with random boolean values. A may be an ``Array`` or a ``BitArray``.
 
-.. function:: randn(dims or [dims...])
+.. function:: randn([rng], dims or [dims...])
 
    Generate a normally-distributed random number with mean 0 and standard deviation 1. Optionally generate an array of normally-distributed random numbers.
 
-.. function:: randn!(A::Array{Float64,N})
+.. function:: randn!([rng], A::Array{Float64,N})
 
    Fill the array A with normally-distributed (mean 0, standard deviation 1) random numbers. Also see the rand function.
 
