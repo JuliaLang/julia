@@ -1976,12 +1976,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
         }
         assert(idx == nfargs);
         result = builder.CreateCall(prepare_call(cf), ArrayRef<Value*>(&argvals[0],nfargs));
-        if (result->getType() == T_void) {
-            result = literal_pointer_val((jl_value_t*)jl_nothing);
-        }
-        else {
-            result = mark_julia_type(result, jl_ast_rettype(f->linfo, f->linfo->ast));
-        }
+        result = mark_julia_type(result, jl_ast_rettype(f->linfo, f->linfo->ast));
     }
     else {
         result = emit_jlcall(theFptr, theF, &args[1], nargs, ctx);

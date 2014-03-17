@@ -1465,3 +1465,9 @@ type A6142 <: AbstractMatrix{Float64}; end
 +{TJ}(x::A6142, y::UniformScaling{TJ}) = "UniformScaling method called"
 +(x::A6142, y::AbstractArray) = "AbstractArray method called"
 @test A6142() + I == "UniformScaling method called"
+
+# issue #6175
+function g6175(); print(""); (); end
+g6175(i::Real, I...) = g6175(I...)
+g6175(i, I...) = tuple(length(i), g6175(I...)...)
+@test g6175(1:5) === (5,)
