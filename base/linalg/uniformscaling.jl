@@ -1,4 +1,4 @@
-import Base: +, -, *, /, copy, ctranspose, getindex, showarray, transpose
+import Base: +, -, *, /, .*, ./, copy, ctranspose, getindex, showarray, transpose
 import Base.LinAlg: SingularException
 immutable UniformScaling{T<:Number} <: AbstractMatrix{T}
     λ::T
@@ -72,3 +72,9 @@ end
 \(A::AbstractMatrix,J::UniformScaling) = inv(A)*J.λ
 
 \(x::Number,J::UniformScaling) = UniformScaling(x\J.λ)
+
+.*(x::Number,J::UniformScaling) = UniformScaling(x*J.λ)
+.*(J::UniformScaling,x::Number) = UniformScaling(J.λ*x)
+
+./(J::UniformScaling,x::Number) = UniformScaling(J.λ/x)
+
