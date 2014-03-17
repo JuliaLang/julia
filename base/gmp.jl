@@ -59,11 +59,20 @@ function BigInt(x::Union(Clong,Int32))
 end
 function BigInt(x::Union(Culong,Uint32))
     z = BigInt()
-    ccall((:__gmpz_set_ui, :libgmp), Void,(Ptr{BigInt}, Culong), &z, x)
+    ccall((:__gmpz_set_ui, :libgmp), Void, (Ptr{BigInt}, Culong), &z, x)
     return z
 end
 
 BigInt(x::Bool) = BigInt(uint(x))
+
+function BigInt(x::Float64)
+    !isinteger(x) && throw(InexactError())
+    z = BigInt()
+    ccall((:__gmpz_set_d, :libgmp), Void, (Ptr{BigInt}, Cdouble), &z, x)
+    return z
+end
+
+BigInt(x::Union(Float16,Float32)) = BigInt(float64(x))
 
 function BigInt(x::Integer)
     if x < 0
@@ -94,6 +103,7 @@ function BigInt(x::Integer)
 end
 
 convert(::Type{BigInt}, x::Integer) = BigInt(x)
+convert(::Type{BigInt}, x::FloatingPoint) = BigInt(x)
 
 function convert(::Type{Int64}, x::BigInt)
     lo = int64(convert(Culong, x & typemax(Uint32)))

@@ -78,12 +78,11 @@ BigFloat(x::Integer) = BigFloat(BigInt(x))
 BigFloat(x::Union(Bool,Int8,Int16,Int32)) = BigFloat(convert(Clong,x))
 BigFloat(x::Union(Uint8,Uint16,Uint32)) = BigFloat(convert(Culong,x))
 
-BigFloat(x::Union(Float16,Float32,Float16)) = BigFloat(float64(x))
+BigFloat(x::Union(Float16,Float32)) = BigFloat(float64(x))
 BigFloat(x::Rational) = BigFloat(num(x)) / BigFloat(den(x))
 
 convert(::Type{Rational}, x::BigFloat) = convert(Rational{BigInt}, x)
 convert(::Type{BigFloat}, x::Rational) = BigFloat(x) # to resolve ambiguity
-convert(::Type{BigFloat}, x::Float16) = BigFloat(x) # to resolve ambiguity
 convert(::Type{BigFloat}, x::Real) = BigFloat(x)
 convert(::Type{FloatingPoint}, x::BigInt) = BigFloat(x)
 
@@ -107,12 +106,9 @@ for to in (Uint8, Uint16, Uint32, Uint64)
     end
 end
 
-function convert(::Type{BigInt}, x::BigFloat)
-    if isinteger(x)
-        return itrunc(x)
-    else
-        throw(InexactError())
-    end
+function Base.BigInt(x::BigFloat)
+    !isinteger(x) && throw(InexactError())
+    return itrunc(x)
 end
 convert(::Type{Float64}, x::BigFloat) =
     ccall((:mpfr_get_d,:libmpfr), Float64, (Ptr{BigFloat},Int32), &x, ROUNDING_MODE[end])
