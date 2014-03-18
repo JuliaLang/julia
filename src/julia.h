@@ -833,10 +833,6 @@ DLLEXPORT void jl_undefined_var_error(jl_sym_t *var);
 void jl_check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx);
 DLLEXPORT jl_value_t *jl_exception_occurred(void);
 DLLEXPORT void jl_exception_clear(void);
-STATIC_INLINE char *jl_get_exception_str(jl_value_t *exception)
-{
-    return jl_string_data(jl_fieldref(exception, 0));
-}
 
 #define JL_NARGS(fname, min, max)                               \
     if (nargs < min) jl_too_few_args(#fname, min);              \
