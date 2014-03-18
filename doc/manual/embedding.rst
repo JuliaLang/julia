@@ -195,7 +195,7 @@ Julia code can throw exceptions. For example, consider::
 This call will appear to do nothing. However, it is possible to check whether an exception was thrown::
 
     if (jl_exception_occurred())
-        printf("%s \n", jl_get_exception_str(jl_exception_occurred()));
+        printf("%s \n", jl_typeof_str(jl_exception_occurred()));
 
 If you are using the Julia C API from a language that supports exceptions (e.g. Python, C#, C++), it makes sense to wrap each call into libjulia with a function that checks whether an exception was thrown, and then rethrows the exception in the host language.
 
