@@ -368,7 +368,7 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
             return builder.CreateBitCast(emit_arrayptr(jv), ty);
         }
         if (aty == (jl_value_t*)jl_ascii_string_type || aty == (jl_value_t*)jl_utf8_string_type) {
-            return builder.CreateBitCast(emit_arrayptr(emit_nthptr(jv,1)), ty);
+            return builder.CreateBitCast(emit_arrayptr(emit_nthptr(jv,1,tbaa_const)), ty);
         }
         if (jl_is_structtype(aty) && jl_is_leaf_type(aty) && !jl_is_array_type(aty)) {
             if (!addressOf) {

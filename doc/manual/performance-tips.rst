@@ -449,6 +449,49 @@ These are some minor points that might help in tight inner loops.
 -  Use ``div(x,y)`` for truncating division of integers instead of
    ``trunc(x/y)``, and ``fld(x,y)`` instead of ``floor(x/y)``.
 
+Performance Annotations
+-----------------------
+
+Sometimes you can enable better optimization by promising certain program
+properties.
+
+-  Use ``@inbounds`` to eliminate array bounds checking within expressions.
+   Be certain before doing this. If the subscripts are ever out of bounds,
+   you may suffer crashes or silent corruption.
+-  Write ``@simd`` in front of ``for`` loops that are amenable to vectorization.
+   **This feature is experimental** and could change or disappear in future 
+   versions of Julia.  
+
+Here is an example with both forms of markup::
+
+    function tightloop( x, y, z )
+        s = zero(eltype(z))
+        n = min(length(x),length(y),length(z))
+        @simd for i in 1:n
+            @inbounds begin
+                z[i] = x[i]-y[i]
+                s += z[i]*z[i]
+            end
+        end
+        s
+    end
+
+The range for a ``@simd for`` loop should be a one-dimensional range.
+A variable used for accumulating, such as ``s`` in the example, is called
+a *reduction variable*. By using``@simd``, you are asserting several
+properties of the loop:
+
+-  It is safe to execute iterations in arbitrary or overlapping order,
+   with special consideration for reduction variables.
+-  Floating-point operations on reduction variables can be reordered,
+   possibly causing different results than without ``@simd``.
+-  No iteration ever waits on another iteration to make forward progress.
+
+Using ``@simd`` merely gives the compiler license to vectorize. Whether
+it actually does so depends on the compiler. The current implementation
+will not vectorize if there are possible early exits from the loop, such
+as from array bounds checking. This limitation may be lifted in the future.
+
 Tools
 -----
 
