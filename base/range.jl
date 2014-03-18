@@ -4,6 +4,10 @@ typealias Dims (Int...)
 
 abstract Ranges{T} <: AbstractArray{T,1}
 
+## ordinal ranges
+
+abstract OrdinalRange{T,S} <: Ranges{T}
+
 immutable Range{T<:Real} <: Ranges{T}
     start::T
     step::T
@@ -19,13 +23,41 @@ immutable Range{T<:Real} <: Ranges{T}
 end
 Range{T}(start::T, step, len::Integer) = Range{T}(start, step, len)
 
-immutable Range1{T} <: Ranges{T}
-    start::T
-    stop::T
+# A StepRange has a start point, and moves by some step up through a last point.
+# The element type is T, but we allow T+S to give a value from a lifted
+# domain D instead of from T. We store a sentinel value stop+step from domain D,
+# since T might not have any available sentinel value.
+immutable StepRange{T,S,D} <: OrdinalRange{T,S}
+    start::D
+    sentinel::D
+    step::S
 
-    Range1(start, stop) = new(start, ifelse(stop>=start, stop, oftype(T, start-1)))
+    StepRange(start, step, stop) = new(start, ifelse(stop>=start, stop+step, start),
+                                       step)
+end
+
+StepRange{T,S}(start::T, step::S, stop::T) =
+    StepRange{T, S, typeof(stop+step)}(start, step, stop)
+
+immutable Range1{T<:Integer,D} <: OrdinalRange{T,Int}
+    start::D
+    sentinel::D
+
+    Range1(start, stop) = new(start, ifelse(stop>=start, stop+1, start))
 end
 Range1{T}(start::T, stop::T) = Range1{T}(start, stop)
+
+colon(a, b) = colon(promote(a,b)...)
+colon(a::Real, b::Real, c::Real) = colon(promote(a,b,c)...)
+colon(a, b, c) = colon(convert(promote_type(a,c),a), b, convert(promote_type(a,c),c))
+
+colon{T<:Integer}(start::T, stop::T) = Range1{T}(start, stop)
+
+colon{T}(start::T, stop::T) = StepRange(start, one(stop-start), stop)
+
+colon{T}(start::T, step, stop::T) = StepRange(start, step, stop)
+
+## floating point ranges
 
 immutable FloatRange{T<:FloatingPoint} <: Ranges{T}
     start::T
@@ -35,71 +67,6 @@ immutable FloatRange{T<:FloatingPoint} <: Ranges{T}
 end
 FloatRange(a::FloatingPoint, s::FloatingPoint, l::Real, d::FloatingPoint) =
     FloatRange{promote_type(typeof(a),typeof(s),typeof(d))}(a,s,l,d)
-
-function colon{T<:Integer}(start::T, step::T, stop::T)
-    step != 0 || error("step cannot be zero in colon syntax")
-    Range{T}(start, step, max(0, 1 + fld(stop-start, step)))
-end
-
-colon{T<:Integer}(start::T, stop::T) =
-    Range1{T}(start, ifelse(stop<start, 0, int(stop-start+1)))
-
-if Int === Int32
-    typealias SmallInteger Union(Int8,Int16,Int32,Uint8,Uint16)
-else
-    typealias SmallInteger Union(Int8,Int16,Int32,Int64,Uint8,Uint16,Uint32)
-end
-colon{T<:SmallInteger}(start::T, stop::T) =
-    Range1{T}(start,
-              ifelse(stop < start, 0,
-                     checked_add(checked_sub(convert(Int,stop),convert(Int,start)),1)),
-              0)  # hack to elide negative length check
-
-function colon{T<:Real}(start::T, step::T, stop::T)
-    step != 0 || error("step cannot be zero in colon syntax")
-    if (step < 0) != (stop < start)
-        len = 0
-    else
-        nf = (stop-start)/step + 1
-        if T <: FloatingPoint
-            n = round(nf)
-            if n > 1 && abs(n-nf) < eps(n)*3
-                # adjust step to try to hit stop exactly
-                step = (stop-start)/(n-1)
-                len = itrunc(n)
-            else
-                len = itrunc(nf)
-            end
-        else
-            n = nf
-            len = itrunc(n)
-        end
-        if n >= typemax(Int)
-            error("length ",n," is too large")
-        end
-    end
-    Range(start, step, len)
-end
-
-function colon{T<:Real}(start::T, stop::T)
-    if T <: FloatingPoint
-        nf = stop - start + 1
-        n = round(nf)
-        len = abs(n-nf) < eps(n)*3 ? itrunc(n) : itrunc(nf)
-        stop = oftype(start, start+(len-1))
-        if stop == stop+1
-            # Range1 doesn't work beyond maxintfloat
-            error("end point ", stop, " is too large for Range1")
-        end
-        if n >= typemax(Int)
-            error("length ",n," is too large")
-        end
-    end
-    Range1(start, stop)
-end
-
-colon(start::Real, step::Real, stop::Real) = colon(promote(start, step, stop)...)
-colon(start::Real, stop::Real) = colon(promote(start, stop)...)
 
 # float rationalization helper
 function rat(x)
@@ -151,31 +118,31 @@ colon{T<:FloatingPoint}(start::T, step::T, stop::T) =
     (0 < step) != (start < stop) ? FloatRange{T}(start,step,0,1) :
                                    FloatRange{T}(frange(start,step,stop)...)
 
+## interface implementations
+
 similar(r::Ranges, T::Type, dims::Dims) = Array(T, dims)
 
-length(r::Ranges) = integer(r.len)
 size(r::Ranges) = (length(r),)
-first(r::Ranges) = r.start
+
+length(r::FloatRange) = r.len
+length(r::StepRange) = itrunc((r.sentinal - r.start)/r.step)
+length(r::Range1) = int(r.sentinel - r.start)
+length(r::Range) = r.len
+
+first{T}(r::Ranges{T}) = oftype(T, r.start)
 first(r::FloatRange) = r.start/r.divisor
-last{T}(r::Range1{T}) = r.stop
+
 last{T}(r::Range{T})  = oftype(T, r.start + (r.len-1)*r.step)
 last{T}(r::FloatRange{T}) = oftype(T, (r.start + (r.len-1)*r.step)/r.divisor)
+last{T}(r::OrdinalRange{T}) = oftype(T, r.sentinel-step(r))
 
-length{T<:Integer}(r::Range1{T}) = int(r.stop - r.start + 1)
-length(r::Range1) = int(itrunc(r.stop - r.start)+1)
-
-if Int === Int32
-    function length{T<:Union(Int8,Int16,Int32,Uint8,Uint16)}(r::Range1{T})
-        checked_add(checked_sub(convert(Int,r.stop), convert(Int,r.start)), 1)
-    end
-else
-    function length{T<:Union(Int8,Int16,Int32,Int64,Uint8,Uint16,Uint32)}(r::Range1{T})
-        checked_add(checked_sub(convert(Int,r.stop), convert(Int,r.start)), 1)
-    end
+function length(r::Range1{Int})
+    checked_add(checked_sub(r.sentinel-1, r.start), 1)
 end
 
 step(r::Range) = r.step
-step(r::Range1) = one(r.start)
+step(r::StepRange) = r.step
+step(r::Range1) = one(r.sentinel - r.start)
 step(r::FloatRange) = r.step/r.divisor
 
 minimum(r::Range1) = isempty(r) ? error("range must be non-empty") : first(r)
@@ -188,6 +155,24 @@ transpose(r::Ranges) = r'
 
 # Ranges are immutable
 copy(r::Ranges) = r
+
+
+## iteration
+
+start(r::Ranges) = 0
+next{T}(r::Range{T}, i) = (oftype(T, r.start + i*step(r)), i+1)
+done(r::Ranges, i) = (length(r) <= i)
+
+next{T}(r::FloatRange{T}, i) = (oftype(T, (r.start + i*r.step)/r.divisor), i+1)
+
+start(r::OrdinalRange) = r.start
+next{T}(r::OrdinalRange{T}, i) = (oftype(T,i), i+step(r))
+done(r::OrdinalRange, i) = i==r.sentinel
+
+next{T,D}(r::Range1{T,D}, i) = (oftype(T,i), oftype(D, i+1))
+
+
+## indexing
 
 getindex(r::Ranges, i::Real) = getindex(r, to_index(i))
 
@@ -232,20 +217,6 @@ end
 show(io::IO, r::Range1) = print(io, repr(first(r)), ':', repr(last(r)))
 
 show{T<:FloatingPoint}(io::IO, r::Range{T}) = invoke(show, (IO,Any), io, r)
-
-start(r::Ranges) = 0
-next{T}(r::Range{T}, i) = (oftype(T, r.start + i*step(r)), i+1)
-next{T}(r::FloatRange{T}, i) = (oftype(T, (r.start + i*r.step)/r.divisor), i+1)
-done(r::Ranges, i) = (length(r) <= i)
-
-# though these look very similar to the above, for some reason LLVM generates
-# much better code for these.
-start{T<:SmallInteger}(r::Range1{T}) = int(r.start)
-next{T<:SmallInteger}(r::Range1{T}, i) = (oftype(T, i), i+1)
-done{T<:SmallInteger}(r::Range1{T}, i) = i==r.start+r.len
-start{T<:Integer}(r::Range1{T}) = r.start
-next{T<:Integer}(r::Range1{T}, i) = (i, oftype(T, i+1))
-done{T<:Integer}(r::Range1{T}, i) = i==oftype(T, r.start+r.len)
 
 isequal{T<:Ranges}(r::T, s::T) =
     (first(r)==first(s)) & (step(r)==step(s)) & (length(r)==length(s))
