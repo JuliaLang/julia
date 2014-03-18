@@ -60,7 +60,9 @@
 #include "llvm/Intrinsics.h"
 #include "llvm/Attributes.h"
 #endif
-#if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 2 
+#if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 5 
+#include "llvm/IR/DIBuilder.h"
+#elif defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 2 
 #include "llvm/DebugInfo.h"
 #include "llvm/DIBuilder.h"
 #ifndef LLVM33
