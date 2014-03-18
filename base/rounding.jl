@@ -65,7 +65,8 @@ end
 import Base: show, in, convert
 
 export FloatExceptions, FEInexact, FEUnderflow, FEOverflow, FEDivByZero, FEInvalid, 
-FENaN, FERange, FloatExceptionSet, FEAll, clear_floatexcept, get_floatexcept, is_floatexcept, raise_floatexcept
+FENaN, FERange, FloatExceptionSet, FEAll, clear_floatexcept, get_floatexcept, 
+is_floatexcept, raise_floatexcept, save_floatexcept, restore_floatexcept
 
 
 abstract FloatExceptions
@@ -133,8 +134,26 @@ function raise_floatexcept{T<:IEEEFloat}(::Type{T},f::FloatExceptionSet)
 end
 raise_floatexcept{E<:FloatExceptions,T<:IEEEFloat}(::Type{T},::Type{E}) = raise_floatexcept(T,convert(FloatExceptionSet,E))
 
-# TODO: restoreFlags
+# restoreFlags
+const sizeof_fexcept_t = ccall(:jl_sizeof_fexcept_t, Cint, ())
+bitstype 8sizeof_fexcept_t FloatExceptState
 
+function save_floatexcept{T<:IEEEFloat}(::Type{T},f::FloatExceptionSet)
+    x = Array(FloatExceptState,1)
+    if ccall(:fegetexceptflag, Cint, (Ptr{FloatExceptState},Cint), x, f.flags) != zero(Cint)
+        error("Could not save floating point exception flags")
+    end
+    x[1]
+end
+save_floatexcept{E<:FloatExceptions,T<:IEEEFloat}(::Type{T},::Type{E}) = save_floatexcept(T,convert(FloatExceptionSet,E))
+save_floatexcept{T<:IEEEFloat}(::Type{T}) = save_floatexcept(T,FEAll)
 
+function restore_floatexcept{T<:IEEEFloat}(::Type{T},fs::FloatExceptState,f::FloatExceptionSet)
+    if ccall(:fesetexceptflag, Cint, (Ptr{FloatExceptState},Cint), &fs, f.flags) != zero(Cint)
+        error("Could not set floating point exception flags")
+    end
+end
+restore_floatexcept{E<:FloatExceptions,T<:IEEEFloat}(::Type{T},fs::FloatExceptState,::Type{E}) = restore_floatexcept(T,fs,convert(FloatExceptionSet,E))
+restore_floatexcept{T<:IEEEFloat}(::Type{T},fs::FloatExceptState) = restore_floatexcept(T,fs,FEAll)
 
 end #module

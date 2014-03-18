@@ -24,6 +24,7 @@ char *dirname(char *);
 #include <libgen.h>
 #endif
 #include <fcntl.h>
+#include <fenv.h>
 
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
@@ -532,6 +533,10 @@ DLLEXPORT long jl_SC_CLK_TCK(void)
     return 0;
 #endif
 }
+
+// --- fenv ---
+DLLEXPORT int jl_sizeof_fenv_t (void) { return sizeof(fenv_t); }
+DLLEXPORT int jl_sizeof_fexcept_t (void) { return sizeof(fexcept_t); }
 
 // Dynamic Library interrogation
 

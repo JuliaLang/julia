@@ -123,4 +123,11 @@ for T = [Float32,Float64,BigFloat]
     clear_floatexcept(T)
     raise_floatexcept(T,FEUnderflow)
     @test is_floatexcept(T,FEUnderflow)
+    if T != BigFloat
+        a = save_floatexcept(T,FEUnderflow)
+        clear_floatexcept(T)
+        @test !is_floatexcept(T,FEUnderflow)
+        restore_floatexcept(T,a,FEUnderflow)
+        @test is_floatexcept(T,FEUnderflow)
+    end
 end
