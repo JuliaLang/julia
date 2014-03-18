@@ -256,6 +256,9 @@ Deprecated or removed
 
   * `read` methods that modify a passed array are now called `read!` ([#5970])
 
+  * Reduction functions that accept a pre-allocated output array, including
+    `sum!`, `prod!`, `maximum!`, `minimum!`, `all!`, `any!` ([#6197])
+
 [#4042]: https://github.com/JuliaLang/julia/issues/4042
 [#5164]: https://github.com/JuliaLang/julia/issues/5164
 [#4026]: https://github.com/JuliaLang/julia/issues/4026

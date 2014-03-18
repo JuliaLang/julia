@@ -562,7 +562,8 @@ Iterable Collections
 
 .. function:: maximum!(r, A)
 
-   Compute the maximum value of ``A`` over the singleton dimensions of ``r``, and write results to ``r``.
+   Compute the maximum value of ``A`` over the singleton dimensions of ``r``, 
+   and write results to ``r``.
 
 .. function:: minimum(itr)
 
@@ -574,7 +575,8 @@ Iterable Collections
 
 .. function:: minimum!(r, A)
 
-   Compute the minimum value of ``A`` over the singleton dimensions of ``r``, and write results to ``r``.
+   Compute the minimum value of ``A`` over the singleton dimensions of ``r``, 
+   and write results to ``r``.
 
 .. function:: extrema(itr)
 
@@ -607,7 +609,8 @@ Iterable Collections
 
 .. function:: sum!(r, A)
 
-   Sum elements of ``A`` over the singleton dimensions of ``r``, and write results to ``r``. 
+   Sum elements of ``A`` over the singleton dimensions of ``r``, 
+   and write results to ``r``. 
 
 .. function:: sum(f, itr)
 
@@ -623,7 +626,8 @@ Iterable Collections
 
 .. function:: prod!(r, A)
 
-   Multiply elements of ``A`` over the singleton dimensions of ``r``, and write results to ``r``.
+   Multiply elements of ``A`` over the singleton dimensions of ``r``, 
+   and write results to ``r``.
 
 .. function:: any(itr) -> Bool
 
@@ -635,7 +639,8 @@ Iterable Collections
 
 .. function:: any!(r, A)
 
-   Test whether any values in ``A`` along the singleton dimensions of ``r`` are true, and write results to ``r``. 
+   Test whether any values in ``A`` along the singleton dimensions of ``r`` are true, 
+   and write results to ``r``. 
 
 .. function:: all(itr) -> Bool
 
@@ -647,7 +652,8 @@ Iterable Collections
 
 .. function:: all!(r, A)
 
-   Test whether all values in ``A`` along the singleton dimensions of ``r`` are true, and write results to ``r``.
+   Test whether all values in ``A`` along the singleton dimensions of ``r`` are true, 
+   and write results to ``r``.
 
 .. function:: count(p, itr) -> Integer
 
