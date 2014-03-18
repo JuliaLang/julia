@@ -81,8 +81,8 @@ end
 -(J::UniformScaling) = UniformScaling(-J.λ)
 
  ==(J1::UniformScaling,J2::UniformScaling) = (J1.λ == J2.λ)
- .>(J1::UniformScaling,J2::UniformScaling) = (J1.λ  > J2.λ)
+ .>(J1::UniformScaling,J2::UniformScaling) = false
 .>=(J1::UniformScaling,J2::UniformScaling) = (J1.λ >= J2.λ)
- .<(J1::UniformScaling,J2::UniformScaling) = (J1.λ  < J2.λ)
+ .<(J1::UniformScaling,J2::UniformScaling) = false
 .<=(J1::UniformScaling,J2::UniformScaling) = (J1.λ <= J2.λ)
 .==(J1::UniformScaling,J2::UniformScaling) = (J1.λ == J2.λ)
