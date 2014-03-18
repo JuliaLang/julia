@@ -37,7 +37,7 @@ export File,
        S_IRGRP, S_IWGRP, S_IXGRP, S_IRWXG,
        S_IROTH, S_IWOTH, S_IXOTH, S_IRWXO
 
-import Base: uvtype, uvhandle, eventloop, fd, position, stat, close, write, read, readbytes, isopen,
+import Base: uvtype, uvhandle, eventloop, fd, position, stat, close, write, read, read!, readbytes, isopen,
             _sizeof_uv_fs, uv_error
 
 include("file_constants.jl")
@@ -193,7 +193,7 @@ function read(f::File, ::Type{Uint8})
     return uint8(ret)
 end
 
-function read{T}(f::File, a::Array{T}, nel=length(a))
+function read!{T}(f::File, a::Array{T}, nel=length(a))
     if nel < 0 || nel > length(a)
         throw(BoundsError())
     end
@@ -215,15 +215,15 @@ function readbytes!(f::File, b::Array{Uint8}, nb=length(b))
     if length(b) < nr
         resize!(b, nr)
     end
-    read(f, b, nr)
+    read!(f, b, nr)
     return nr
 end
-readbytes(io::File) = read(io, Array(Uint8, nb_available(io)))
-readbytes(io::File, nb) = read(io, Array(Uint8, min(nb, nb_available(io))))
+readbytes(io::File) = read!(io, Array(Uint8, nb_available(io)))
+readbytes(io::File, nb) = read!(io, Array(Uint8, min(nb, nb_available(io))))
 
 function readbytes(f::File)
     a = Array(Uint8, nb_available(f))
-    read(f,a)
+    read!(f,a)
     a
 end
 

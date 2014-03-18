@@ -1081,6 +1081,7 @@ export
     position,
     RawFD,
     read,
+    read!,
     readall,
     readavailable,
     readbytes!,

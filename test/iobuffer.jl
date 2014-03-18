@@ -10,7 +10,7 @@ let io = IOBuffer()
 seek(io, 0)
 @test read(io,Uint8) == 'a'
 a = Array(Uint8, 2)
-@test read(io, a) == a
+@test read!(io, a) == a
 @test a == ['b','c']
 @test bytestring(io) == "abc"
 seek(io, 1)
@@ -29,7 +29,7 @@ seek(io, 2)
 truncate(io, 10)
 @test ioslength(io) == 10
 io.readable = false
-@test_throws read(io,Uint8[0])
+@test_throws read!(io,Uint8[0])
 truncate(io, 0)
 @test write(io,"boston\ncambridge\n") > 0
 @test takebuf_string(io) == "boston\ncambridge\n"
@@ -122,7 +122,7 @@ end
 # issue 5453
 let io=IOBuffer("abcdef")
 a = Array(Uint8,1024)
-@test_throws read(io,a)
+@test_throws read!(io,a)
 @test eof(io)
 end
 

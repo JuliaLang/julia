@@ -423,6 +423,15 @@ Set{T<:Number}(xs::T...) = Set{T}(xs)
 
 @deprecate convert{T}(p::Type{Ptr{T}}, a::Array) convert(p, pointer(a))
 
+@deprecate read(from::IOBuffer, a::Array)            read!(from, a)
+@deprecate read(from::IOBuffer, p::Ptr, nb::Integer) read!(from, p, nb)
+@deprecate read(s::IOStream, a::Array)               read!(s, a)
+@deprecate read(this::AsyncStream, a::Array)         read!(this, a)
+@deprecate read(f::File, a::Array, nel)              read!(f, a, nel)
+@deprecate read(f::File, a::Array)                   read!(f, a)
+@deprecate read(s::IO, a::Array)                     read!(s, a)
+@deprecate read(s::IO, B::BitArray)                  read!(s, B)
+
 # 0.3 discontinued functions
 
 function nnz(X)

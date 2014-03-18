@@ -629,7 +629,7 @@ function readall(stream::AsyncStream)
     return takebuf_string(stream.buffer)
 end
 
-function read{T}(this::AsyncStream, a::Array{T})
+function read!{T}(this::AsyncStream, a::Array{T})
     isbits(T) || error("read from buffer only supports bits types or arrays of bits types")
     nb = length(a)*sizeof(T)
     buf = this.buffer
@@ -637,7 +637,7 @@ function read{T}(this::AsyncStream, a::Array{T})
     @assert buf.maxsize >= nb
     start_reading(this)
     wait_readnb(this,nb)
-    read(this.buffer, a)
+    read!(this.buffer, a)
     return a
 end
 
