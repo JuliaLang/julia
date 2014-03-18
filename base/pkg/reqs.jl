@@ -79,7 +79,7 @@ function write(io::IO, reqs::Requires)
 end
 write(file::String, r::Union(Vector{Line},Requires)) = open(io->write(io,r), file, "w")
 
-function parse(lines::Vector{Line}, test::Bool=false)
+function parse(lines::Vector{Line}; test::Bool=false)
     reqs = Requires()
     for line in lines
         if isa(line,Requirement)
@@ -102,7 +102,7 @@ function parse(lines::Vector{Line}, test::Bool=false)
     end
     return reqs
 end
-parse(x, test::Bool=false) = parse(read(x),test)
+parse(x; test::Bool=false) = parse(read(x);test=test)
 
 # add & rm – edit the content a requires file
 
