@@ -78,3 +78,4 @@ end
 
 ./(J::UniformScaling,x::Number) = UniformScaling(J.λ/x)
 
+-(J::UniformScaling) = UniformScaling(-J.λ)
