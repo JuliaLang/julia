@@ -185,6 +185,10 @@ using .I18n
 using .Help
 push!(I18n.CALLBACKS, Help.clear_cache)
 
+# SIMD loops
+include("simdloop.jl")
+importall .SimdLoop
+
 # sparse matrices and linear algebra
 include("sparse.jl")
 importall .SparseMatrix
