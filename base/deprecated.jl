@@ -60,10 +60,6 @@ end
 
 # 0.1
 
-const IOString = IOBuffer
-export IOString
-const PipeString = PipeBuffer
-export PipeString
 
 # 0.2
 
