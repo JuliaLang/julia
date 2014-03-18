@@ -188,6 +188,9 @@ function wait(c::Condition)
         return wait()
     catch
         filter!(x->x!==ct, c.waitq)
+        if ct.state == :waiting
+            ct.state = :runnable
+        end
         rethrow()
     end
 end
