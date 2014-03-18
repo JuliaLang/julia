@@ -157,6 +157,12 @@ function frange{T<:FloatingPoint}(start::T, step::T, stop::T)
     start, step, floor(r)+1, one(step)
 end
 
+colon{T<:FloatingPoint}(start::T, step::T, stop::T) =
+          step == 0              ? error("step cannot be zero in colon syntax") :
+         start == stop           ? FloatRange{T}(start,step,1,1) :
+    (0 < step) != (start < stop) ? FloatRange{T}(start,step,0,1) :
+                                   FloatRange{T}(frange(start,step,stop)...)
+
 similar(r::Ranges, T::Type, dims::Dims) = Array(T, dims)
 
 length(r::Ranges) = integer(r.len)
