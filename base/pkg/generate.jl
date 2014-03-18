@@ -124,6 +124,7 @@ function tests(pkg::String; force::Bool=false)
         @test 1 == 1
         """)
     end
+end
 
 function travis(pkg::String; force::Bool=false)
     genfile(pkg,".travis.yml",force) do io
