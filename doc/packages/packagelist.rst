@@ -3649,7 +3649,7 @@ _________________________________________________________
      :alt: Theodore Papamarkou
      :target: https://github.com/scidom
 
-  Juila package for performing forward mode automatic differentiation 
+  Julia package for performing forward mode automatic differentiation 
 
   Current Version: ``0.0.0``  (updated: 2014-02-06) 
 
@@ -5421,7 +5421,7 @@ __________________________________________________________
      :alt: The Julia Language
      :target: https://github.com/JuliaLang
 
-  Provides types and helper functions for dealing with the HTTP protocl in Julia 
+  Provides types and helper functions for dealing with the HTTP protocol in Julia 
 
   Current Version: ``0.0.5``  (updated: 2013-11-19) 
 
