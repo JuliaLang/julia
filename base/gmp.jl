@@ -117,7 +117,7 @@ convert(::Type{Int8}, n::BigInt) = int8(convert(Clong, n))
 function convert(::Type{Clong}, n::BigInt)
     fits = ccall((:__gmpz_fits_slong_p, :libgmp), Int32, (Ptr{BigInt},), &n) != 0
     if fits
-        convert(Int, ccall((:__gmpz_get_si, :libgmp), Clong, (Ptr{BigInt},), &n))
+        ccall((:__gmpz_get_si, :libgmp), Clong, (Ptr{BigInt},), &n)
     else
         throw(InexactError())
     end
@@ -135,7 +135,7 @@ convert(::Type{Uint8}, x::BigInt) = uint8(convert(Culong, x))
 function convert(::Type{Culong}, n::BigInt)
     fits = ccall((:__gmpz_fits_ulong_p, :libgmp), Int32, (Ptr{BigInt},), &n) != 0
     if fits
-        convert(Uint, ccall((:__gmpz_get_ui, :libgmp), Culong, (Ptr{BigInt},), &n))
+        ccall((:__gmpz_get_ui, :libgmp), Culong, (Ptr{BigInt},), &n)
     else
         throw(InexactError())
     end
