@@ -698,6 +698,7 @@ function test(pkgs::Vector{String})
     for pkg in pkgs
         test!(pkg,errs,notests)
     end
+    resolve()
     if !isempty(errs) || !isempty(notests)
         messages = String[]
         isempty(errs) || push!(messages, "$(join(errs,", "," and ")) had test errors")

@@ -2,7 +2,7 @@ using Base.Test
 
 function temp_pkg_dir(fn::Function)
   # Used in tests below to setup and teardown a sandboxed package directory
-  const tmpdir = ENV["JULIA_PKGDIR"] = string("tmp.",randstring())
+  const tmpdir = ENV["JULIA_PKGDIR"] = abspath(string("tmp.",randstring()))
   @test !isdir(Pkg.dir())
   try
     Pkg.init()
@@ -24,7 +24,7 @@ temp_pkg_dir() do
 	@test isempty(Pkg.installed())
 end
 
-# testing a package with @test dependencies causes them to be installed
+# testing a package with test dependencies causes them to be installed for the duration of the test
 temp_pkg_dir() do
 	Pkg.generate("PackageWithTestDependencies", "MIT")
 	@test [keys(Pkg.installed())...] == ["PackageWithTestDependencies"]
@@ -35,14 +35,16 @@ temp_pkg_dir() do
   end
 
   open(Pkg.dir("PackageWithTestDependencies","test","runtests.jl"),"w") do f
-    println(f,"")
+    println(f,"using Base.Test")
+    println(f,"@test haskey(Pkg.installed(), \"Example\")")
   end
 
   Pkg.resolve()
   @test [keys(Pkg.installed())...] == ["PackageWithTestDependencies"]
 
   Pkg.test("PackageWithTestDependencies")
-  @test sort([keys(Pkg.installed())...]) == sort(["PackageWithTestDependencies", "Example"])
+
+  @test [keys(Pkg.installed())...] == ["PackageWithTestDependencies"]
 end
 
 # testing a package with no run_test.jl errors
