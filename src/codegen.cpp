@@ -35,6 +35,8 @@
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 5
 #define LLVM35 1
 #include "llvm/IR/Verifier.h"
+#include "llvm/IR/DIBuilder.h"
+#include "llvm/AsmParser/Parser.h"
 #else
 #include "llvm/Analysis/Verifier.h"
 #endif
@@ -61,8 +63,10 @@
 #include "llvm/Attributes.h"
 #endif
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 2 
+#ifndef LLVM35
 #include "llvm/DebugInfo.h"
 #include "llvm/DIBuilder.h"
+#endif
 #ifndef LLVM33
 #include "llvm/IRBuilder.h"
 #endif
