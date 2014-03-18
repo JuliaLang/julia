@@ -290,6 +290,8 @@ for sym in (:bin, :oct, :dec, :hex)
     @eval begin
         ($sym)(x::Unsigned, p::Int) = ($sym)(x,p,false)
         ($sym)(x::Unsigned)         = ($sym)(x,1,false)
+        ($sym)(x::Char, p::Int)     = ($sym)(unsigned(x),p,false)
+        ($sym)(x::Char)             = ($sym)(unsigned(x),1,false)
         ($sym)(x::Integer, p::Int)  = ($sym)(unsigned(abs(x)),p,x<0)
         ($sym)(x::Integer)          = ($sym)(unsigned(abs(x)),1,x<0)
     end

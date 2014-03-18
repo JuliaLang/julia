@@ -26,7 +26,7 @@ import Core.Intrinsics: nan_dom_err, sqrt_llvm, box, unbox
 
 # non-type specific math functions
 
-clamp(x::Real, lo::Real, hi::Real) = (x > hi ? hi : (x < lo ? lo : x))
+clamp(x::Real, lo::Real, hi::Real) = ifelse(x > hi, hi, ifelse(x < lo, lo, x))
 clamp{T<:Real}(x::AbstractArray{T,1}, lo::Real, hi::Real) = [clamp(xx, lo, hi) for xx in x]
 clamp{T<:Real}(x::AbstractArray{T,2}, lo::Real, hi::Real) =
     [clamp(x[i,j], lo, hi) for i in 1:size(x,1), j in 1:size(x,2)]

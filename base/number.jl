@@ -19,10 +19,10 @@ last(x::Number) = x
 
 divrem(x,y) = (div(x,y),rem(x,y))
 signbit(x::Real) = int(x < 0)
-sign(x::Real) = x < 0 ? oftype(x,-1) : x > 0 ? one(x) : x
-abs(x::Real) = x < 0 ? -x : x
+sign(x::Real) = ifelse(x < 0, oftype(x,-1), ifelse(x > 0, one(x), x))
+abs(x::Real) = ifelse(x < 0, -x, x)
 abs2(x::Real) = x*x
-copysign(x::Real, y::Real) = signbit(x)!=signbit(y) ? -x : x
+copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, x)
 
 conj(x::Real) = x
 transpose(x::Number) = x

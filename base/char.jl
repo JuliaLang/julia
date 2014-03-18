@@ -2,7 +2,6 @@ char(x) = convert(Char, x)
 char(x::FloatingPoint) = char(iround(x))
 
 integer(x::Char) = int(x)
-unsigned(x::Char) = uint(x)
 
 ## char promotions ##
 
