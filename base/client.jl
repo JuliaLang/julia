@@ -164,7 +164,7 @@ function run_repl()
                     if eof(STDIN) # if TTY, can throw InterruptException, must be in try/catch block
                         return
                     end
-                    read(STDIN, buf)
+                    read!(STDIN, buf)
                     ccall(:jl_read_buffer,Void,(Ptr{Void},Cssize_t),buf,length(buf))
                 catch ex
                     if isa(ex,InterruptException)

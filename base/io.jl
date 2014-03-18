@@ -115,9 +115,9 @@ read{T}(s::IO, t::Type{T}, d1::Int, dims::Int...) =
 read{T}(s::IO, t::Type{T}, d1::Integer, dims::Integer...) =
     read(s, t, map(int,tuple(d1,dims...)))
 
-read{T}(s::IO, ::Type{T}, dims::Dims) = read(s, Array(T, dims))
+read{T}(s::IO, ::Type{T}, dims::Dims) = read!(s, Array(T, dims))
 
-function read{T}(s::IO, a::Array{T})
+function read!{T}(s::IO, a::Array{T})
     for i = 1:length(a)
         a[i] = read(s, T)
     end
@@ -419,7 +419,7 @@ function read(s::IOStream, ::Type{Uint8})
     uint8(b)
 end
 
-function read{T}(s::IOStream, a::Array{T})
+function read!{T}(s::IOStream, a::Array{T})
     if isbits(T)
         nb = length(a)*sizeof(T)
         if ccall(:ios_readall, Uint,
@@ -427,7 +427,7 @@ function read{T}(s::IOStream, a::Array{T})
             throw(EOFError())
         end
     else
-        invoke(read, (IO, Array), s, a)
+        invoke(read!, (IO, Array), s, a)
     end
     a
 end
@@ -549,4 +549,4 @@ end
 # BitArray I/O
 
 write(s::IO, B::BitArray) = write(s, B.chunks)
-read(s::IO, B::BitArray) = read(s, B.chunks)
+read!(s::IO, B::BitArray) = read!(s, B.chunks)

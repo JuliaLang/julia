@@ -1356,6 +1356,10 @@ I/O
 
    Read a series of values of the given type from a stream, in canonical binary representation. ``dims`` is either a tuple or a series of integer arguments specifying the size of ``Array`` to return.
 
+.. function:: read!(stream, array::Array)
+
+   Read binary data from a stream, filling in the argument ``array``.
+
 .. function:: readbytes!(stream, b::Vector{Uint8}, nb=length(b))
 
    Read at most ``nb`` bytes from the stream into ``b``, returning the

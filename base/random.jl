@@ -80,7 +80,7 @@ end
 function srand(filename::String, n::Integer)
     open(filename) do io
         a = Array(Uint32, int(n))
-        read(io, a)
+        read!(io, a)
         srand(a)
     end
 end
