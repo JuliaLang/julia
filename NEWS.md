@@ -332,6 +332,7 @@ Deprecated or removed
 [#5778]: https://github.com/JuliaLang/julia/issues/5778
 [#6169]: https://github.com/JuliaLang/julia/issues/6169
 [#5970]: https://github.com/JuliaLang/julia/issues/5970
+[#6197]: https://github.com/JuliaLang/julia/pull/6197
 
 Julia v0.2.0 Release Notes
 ==========================
