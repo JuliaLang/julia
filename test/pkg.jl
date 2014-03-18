@@ -1,3 +1,5 @@
+using Base.Test
+
 function temp_pkg_dir(fn::Function)
   # Used in tests below to setup and teardown a sandboxed package directory
   const tmpdir = ENV["JULIA_PKGDIR"] = string("tmp.",randstring())
@@ -26,18 +28,19 @@ end
 temp_pkg_dir() do
 	Pkg.generate("PackageWithTestDependencies", "MIT")
 	@test [keys(Pkg.installed())...] == ["PackageWithTestDependencies"]
-	
-  open(Pkg.dir("PackageWithTestDependencies","REQUIRE"),"a") do f
-    println(f,"@test Example")
+
+  mkdir(Pkg.dir("PackageWithTestDependencies","test"))
+  open(Pkg.dir("PackageWithTestDependencies","test","REQUIRE"),"a") do f
+    println(f,"Example")
   end
-  
-  open(Pkg.dir("PackageWithTestDependencies","run_tests.jl"),"w") do f
+
+  open(Pkg.dir("PackageWithTestDependencies","test","runtests.jl"),"w") do f
     println(f,"")
   end
- 
-  Pkg.resolve() 
+
+  Pkg.resolve()
   @test [keys(Pkg.installed())...] == ["PackageWithTestDependencies"]
-	
+
   Pkg.test("PackageWithTestDependencies")
   @test sort([keys(Pkg.installed())...]) == sort(["PackageWithTestDependencies", "Example"])
 end
@@ -45,19 +48,20 @@ end
 # testing a package with no run_test.jl errors
 temp_pkg_dir() do
 	Pkg.generate("PackageWithNoTests", "MIT")
-	
+
 	try
     Pkg.test("PackageWithNoTests")
   catch err
-    @test err.msg == "PackageWithNoTests did not provide a run_test.jl file"
+    @test err.msg == "PackageWithNoTests did not provide a test/runtests.jl file"
   end
 end
 
 # testing a package with failing tests errors
 temp_pkg_dir() do
 	Pkg.generate("PackageWithFailingTests", "MIT")
-	
-  open(Pkg.dir("PackageWithFailingTests","run_tests.jl"),"w") do f
+
+  mkdir(Pkg.dir("PackageWithFailingTests","test"))
+  open(Pkg.dir("PackageWithFailingTests", "test", "runtests.jl"),"w") do f
     println(f,"using Base.Test")
     println(f,"@test false")
   end

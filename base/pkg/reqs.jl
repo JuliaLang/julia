@@ -13,19 +13,12 @@ immutable Requirement <: Line
     package::String
     versions::VersionSet
     system::Vector{String}
-    test::Bool
 
     function Requirement(content::String)
-        test = false
         fields = split(replace(content, r"#.*$", ""))
         system = String[]
         while !isempty(fields) && fields[1][1] == '@'
-            sys = shift!(fields)[2:end]
-            if sys=="test"
-                test = true
-            else
-                push!(system, sys)
-            end
+            push!(system,shift!(fields)[2:end])
         end
         isempty(fields) && error("invalid requires entry: $content")
         package = shift!(fields)
@@ -33,7 +26,7 @@ immutable Requirement <: Line
             error("invalid requires entry for $package: $content")
         versions = [ convert(VersionNumber, field) for field in fields ]
         issorted(versions) || error("invalid requires entry for $package: $content")
-        new(content, package, VersionSet(versions), system, test)
+        new(content, package, VersionSet(versions), system)
     end
     function Requirement(package::String, versions::VersionSet, system::Vector{String}=String[])
         content = ""
@@ -79,7 +72,7 @@ function write(io::IO, reqs::Requires)
 end
 write(file::String, r::Union(Vector{Line},Requires)) = open(io->write(io,r), file, "w")
 
-function parse(lines::Vector{Line}; test::Bool=false)
+function parse(lines::Vector{Line})
     reqs = Requires()
     for line in lines
         if isa(line,Requirement)
@@ -95,14 +88,13 @@ function parse(lines::Vector{Line}; test::Bool=false)
                 @linux_only   applies &= !("!linux"   in line.system)
                 applies || continue
             end
-            (test==line.test) || continue
             reqs[line.package] = haskey(reqs, line.package) ?
                 intersect(reqs[line.package], line.versions) : line.versions
         end
     end
     return reqs
 end
-parse(x; test::Bool=false) = parse(read(x);test=test)
+parse(x) = parse(read(x))
 
 # add & rm – edit the content a requires file
 

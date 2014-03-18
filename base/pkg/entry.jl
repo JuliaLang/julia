@@ -667,17 +667,20 @@ end
 @unix_only const JULIA = joinpath(JULIA_HOME, "julia-readline")
 
 function test!(pkg::String, errs::Vector{String}, notests::Vector{String})
-    const tests_require = Reqs.parse("$pkg/REQUIRE",test=true)
-    if (!isempty(tests_require))
-        info("Computing test dependencies for $pkg...")
-        resolve(tests_require)
+    const reqs_path = abspath(pkg,"test","REQUIRE")
+    if isfile(reqs_path)
+        const tests_require = Reqs.parse(reqs_path)
+        if (!isempty(tests_require))
+            info("Computing test dependencies for $pkg...")
+            resolve(tests_require)
+        end
     end
-    const path = abspath(pkg,"run_tests.jl")
-    if isfile(path)
+    const test_path = abspath(pkg,"test","runtests.jl")
+    if isfile(test_path)
         info("Testing $pkg")
-        cd(dirname(path)) do
+        cd(dirname(test_path)) do
             try
-                run(`$JULIA $path`)
+                run(`$JULIA $test_path`)
                 info("$pkg tests passed")
             catch err
                 warnbanner(err, label="[ ERROR: $pkg ]")
@@ -698,7 +701,7 @@ function test(pkgs::Vector{String})
     if !isempty(errs) || !isempty(notests)
         messages = String[]
         isempty(errs) || push!(messages, "$(join(errs,", "," and ")) had test errors")
-        isempty(notests) || push!(messages, "$(join(notests,", "," and ")) did not provide a run_test.jl file")
+        isempty(notests) || push!(messages, "$(join(notests,", "," and ")) did not provide a test/runtests.jl file")
         error(join(messages, "and"))
     end
 end
