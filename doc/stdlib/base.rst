@@ -554,19 +554,29 @@ Iterable Collections
 
 .. function:: maximum(itr)
 
-   Returns the largest element in a collection
+   Returns the largest element in a collection.
 
 .. function:: maximum(A, dims)
 
-   Compute the maximum value of an array over the given dimensions
+   Compute the maximum value of an array over the given dimensions.
+
+.. function:: maximum!(r, A)
+
+   Compute the maximum value of ``A`` over the singleton dimensions of ``r``, 
+   and write results to ``r``.
 
 .. function:: minimum(itr)
 
-   Returns the smallest element in a collection
+   Returns the smallest element in a collection.
 
 .. function:: minimum(A, dims)
 
-   Compute the minimum value of an array over the given dimensions
+   Compute the minimum value of an array over the given dimensions.
+
+.. function:: minimum!(r, A)
+
+   Compute the minimum value of ``A`` over the singleton dimensions of ``r``, 
+   and write results to ``r``.
 
 .. function:: extrema(itr)
 
@@ -575,27 +585,32 @@ Iterable Collections
 
 .. function:: indmax(itr) -> Integer
 
-   Returns the index of the maximum element in a collection
+   Returns the index of the maximum element in a collection.
 
 .. function:: indmin(itr) -> Integer
 
-   Returns the index of the minimum element in a collection
+   Returns the index of the minimum element in a collection.
 
 .. function:: findmax(itr) -> (x, index)
 
-   Returns the maximum element and its index
+   Returns the maximum element and its index.
 
 .. function:: findmin(itr) -> (x, index)
 
-   Returns the minimum element and its index
+   Returns the minimum element and its index.
 
 .. function:: sum(itr)
 
-   Returns the sum of all elements in a collection
+   Returns the sum of all elements in a collection.
 
 .. function:: sum(A, dims)
 
    Sum elements of an array over the given dimensions.
+
+.. function:: sum!(r, A)
+
+   Sum elements of ``A`` over the singleton dimensions of ``r``, 
+   and write results to ``r``. 
 
 .. function:: sum(f, itr)
 
@@ -603,27 +618,42 @@ Iterable Collections
 
 .. function:: prod(itr)
 
-   Returns the product of all elements of a collection
+   Returns the product of all elements of a collection.
 
 .. function:: prod(A, dims)
 
    Multiply elements of an array over the given dimensions.
 
+.. function:: prod!(r, A)
+
+   Multiply elements of ``A`` over the singleton dimensions of ``r``, 
+   and write results to ``r``.
+
 .. function:: any(itr) -> Bool
 
-   Test whether any elements of a boolean collection are true
+   Test whether any elements of a boolean collection are true.
 
 .. function:: any(A, dims)
 
    Test whether any values along the given dimensions of an array are true.
 
+.. function:: any!(r, A)
+
+   Test whether any values in ``A`` along the singleton dimensions of ``r`` are true, 
+   and write results to ``r``. 
+
 .. function:: all(itr) -> Bool
 
-   Test whether all elements of a boolean collection are true
+   Test whether all elements of a boolean collection are true.
 
 .. function:: all(A, dims)
 
    Test whether all values along the given dimensions of an array are true.
+
+.. function:: all!(r, A)
+
+   Test whether all values in ``A`` along the singleton dimensions of ``r`` are true, 
+   and write results to ``r``.
 
 .. function:: count(p, itr) -> Integer
 
