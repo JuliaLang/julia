@@ -667,7 +667,7 @@ end
 @unix_only const JULIA = joinpath(JULIA_HOME, "julia-readline")
 
 function test!(pkg::String, errs::Vector{String}, notests::Vector{String})
-    const tests_require = Reqs.parse("$pkg/REQUIRE",true)
+    const tests_require = Reqs.parse("$pkg/REQUIRE",test=true)
     if (!isempty(tests_require))
         info("Computing test dependencies for $pkg...")
         resolve(tests_require)
