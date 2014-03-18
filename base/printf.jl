@@ -5,7 +5,7 @@ export @printf, @sprintf
 ### printf formatter generation ###
 
 function gen(s::String)
-    args = {:(out::IO)}
+    args = {}
     blk = Expr(:block, :(local neg, pt, len, exp))
     for x in parse(s)
         if isa(x,String)
@@ -748,43 +748,42 @@ end
 ### external printf interface ###
 
 is_str_expr(ex) =
-    isa(ex,Expr) && ex.head==:macrocall && isa(ex.args[1],Symbol) &&
-    (ex.args[1] == :str || endswith(string(ex.args[1]),"_str"))
+    isa(ex,Expr) && (ex.head == :string || (ex.head == :macrocall && isa(ex.args[1],Symbol) &&
+    endswith(string(ex.args[1]),"str")))
 
-macro printf(args...)
-    if length(args) == 0
-        error("@printf: called with zero arguments")
-    end
-    if !isa(args[1],String) && !(length(args) > 1 && isa(args[2],String))
-        if is_str_expr(args[1]) || length(args) > 1 && is_str_expr(args[2])
-           error("format must be a plain static string (no interpolation or prefix)")
+function _printf(macroname, io, args)
+    if isempty(args) || !isa(args[1], String)
+        if !isempty(args) && is_str_expr(args[1])
+            error("$macroname: format must be a plain static string (no interpolation or prefix)")
+        else
+            error("$macroname: first or second argument must be a format string")
         end
-        error("first or second argument must be a format string")
     end
-    local io, fmt
-    if isa(args[1],String)
-        io = :(Base.STDOUT)
-        fmt = args[1]
-        args = args[2:end]
-    else
-        io = args[1]
-        fmt = args[2]
-        args = args[3:end]
-    end
-    args = {io,args...}
+    fmt = args[1]
     sym_args, blk = gen(fmt)
-    if length(sym_args) != length(args)
-        error("@printf: wrong number of arguments")
+    if length(sym_args) != length(args)-1
+        error("$macroname: wrong number of arguments")
     end
-    for i = length(args):-1:1
-        var = sym_args[i].args[1]
+    for i = length(args):-1:2
+        var = sym_args[i-1].args[1]
         unshift!(blk.args, :($var = $(esc(args[i]))))
     end
+    unshift!(blk.args, :(out = $io))
     blk
 end
 
+macro printf(args...)
+    !isempty(args) || error("@printf: called with zero arguments")
+    if isa(args[1], String) || is_str_expr(args[1])
+        _printf("@printf", :STDOUT, args)
+    else
+        _printf("@printf", esc(args[1]), args[2:end])
+    end
+end
+
 macro sprintf(args...)
-    :(sprint(io->@printf(io,$(map(esc,args)...))))
+    !isempty(args) || error("@sprintf: called with zero arguments")
+    :(sprint(io->$(_printf("@sprintf", :io, args))))
 end
 
 end # module
