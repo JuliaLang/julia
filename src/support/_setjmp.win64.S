@@ -1,6 +1,8 @@
 #include "../../deps/openlibm/amd64/bsd_asm.h"
 
+#ifndef _MSC_VER
 .intel_syntax noprefix
+#endif
 ENTRY(jl_setjmp)
     mov    rdx,QWORD PTR [rsp]
     mov    QWORD PTR [rcx],0

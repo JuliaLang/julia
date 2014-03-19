@@ -51,7 +51,11 @@
  * The previous signal state is NOT restored.
  */
 
+#ifndef _MSC_VER
 .intel_syntax
+#else
+.model small,C
+#endif
 ENTRY(jl_setjmp)
     mov    eax,DWORD PTR [esp+4]
     mov    edx,DWORD PTR [esp+0]
