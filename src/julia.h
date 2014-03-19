@@ -436,7 +436,8 @@ extern jl_sym_t *boundscheck_sym; extern jl_sym_t *copyast_sym;
 #else
 #define jl_typeof(v) (((jl_value_t*)(v))->type)
 #endif
-#define jl_typeis(v,t) (jl_typeof(v)==(jl_value_t*)(t))
+
+DLLEXPORT int jl_typeis(void *v, void *t);
 
 #ifdef OVERLAP_TUPLE_LEN
 #define jl_tupleref(t,i) (((jl_value_t**)(t))[1+(i)])
