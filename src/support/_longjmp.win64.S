@@ -1,6 +1,8 @@
 #include "../../deps/openlibm/amd64/bsd_asm.h"
 
+#ifndef _MSC_VER
 .intel_syntax noprefix
+#endif
 ENTRY(jl_longjmp)
     mov    rbx,QWORD PTR [rcx+8]
     mov    rsp,QWORD PTR [rcx+16]
@@ -24,8 +26,8 @@ ENTRY(jl_longjmp)
     movaps xmm15,XMMWORD PTR [rcx+240]
     mov    eax,edx
     test   eax,eax
-    jne    1f
+    jne    a
     inc    eax
-1:  mov    QWORD PTR [rsp],r8
+a:  mov    QWORD PTR [rsp],r8
     ret
 END(jl_longjmp)
