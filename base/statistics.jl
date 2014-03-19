@@ -15,17 +15,20 @@ function mean(iterable)
 end
 mean(v::AbstractArray) = sum(v) / length(v)
 
-function mean(v::AbstractArray, region)
-    rs = regionsize(v, region)
-    dst = reduction_init(v, region, zero((v[1]+v[1])/rs))
-    sum!(dst, v)
+function mean!{T}(r::AbstractArray{T}, v::AbstractArray)
+    sum!(r, v; init=true)
+    rs = convert(T, length(v) / length(r))
     if rs != 1
-        for i = 1 : length(dst)
-            @inbounds dst[i] /= rs
+        for i = 1:length(r)
+            @inbounds r[i] /= rs
         end
     end
-    return dst
+    return r
 end
+
+meantype{T}(::Type{T}) = typeof((zero(T) + zero(T)) / 2)
+mean{T}(v::AbstractArray{T}, region) = 
+    mean!(Array(meantype(T), reduced_dims(size(v), region)), v)
 
 function median!{T<:Real}(v::AbstractVector{T}; checknan::Bool=true)
     isempty(v) && error("median of an empty array is undefined")
