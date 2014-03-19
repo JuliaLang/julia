@@ -18,9 +18,9 @@ ENTRY(jl_setjmp)
     mov    QWORD PTR [rcx+80],rdx
     mov    QWORD PTR [rcx+88],0
     movaps XMMWORD PTR [rcx+96],xmm6
-    movaps XMMWORD PTR [rcx+120],xmm7
+    movaps XMMWORD PTR [rcx+112],xmm7
     movaps XMMWORD PTR [rcx+128],xmm8
-    movaps XMMWORD PTR [rcx+130],xmm9
+    movaps XMMWORD PTR [rcx+144],xmm9
     movaps XMMWORD PTR [rcx+160],xmm10
     movaps XMMWORD PTR [rcx+176],xmm11
     movaps XMMWORD PTR [rcx+192],xmm12
