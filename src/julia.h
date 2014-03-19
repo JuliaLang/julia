@@ -386,8 +386,8 @@ extern DLLEXPORT jl_datatype_t *jl_task_type;
 
 extern DLLEXPORT jl_tuple_t *jl_null;
 #define JL_NULL ((void*)jl_null)
-extern jl_value_t *jl_true;
-extern jl_value_t *jl_false;
+DLLEXPORT extern jl_value_t *jl_true;
+DLLEXPORT extern jl_value_t *jl_false;
 DLLEXPORT extern jl_value_t *jl_nothing;
 
 DLLEXPORT extern uv_lib_t *jl_dl_handle;
