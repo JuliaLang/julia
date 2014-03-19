@@ -877,6 +877,7 @@ export
     hist,
     hist2d,
     histrange,
+    mean!,
     mean,
     median!,
     median,
