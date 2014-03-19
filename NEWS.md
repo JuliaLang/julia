@@ -259,6 +259,8 @@ Deprecated or removed
   * Reduction functions that accept a pre-allocated output array, including
     `sum!`, `prod!`, `maximum!`, `minimum!`, `all!`, `any!` ([#6197])
 
+  * `infs` and `nans` are deprecated in favor of the more general `fill`.
+
 [#4042]: https://github.com/JuliaLang/julia/issues/4042
 [#5164]: https://github.com/JuliaLang/julia/issues/5164
 [#4026]: https://github.com/JuliaLang/julia/issues/4026

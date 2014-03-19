@@ -3564,14 +3564,6 @@ Constructors
 
    Create an array of all ones of specified type
 
-.. function:: infs(type, dims)
-
-   Create an array where every element is infinite and of the specified type
-
-.. function:: nans(type, dims)
-
-   Create an array where every element is NaN of the specified type
-
 .. function:: trues(dims)
 
    Create a ``BitArray`` with all values set to true

@@ -428,6 +428,13 @@ Set{T<:Number}(xs::T...) = Set{T}(xs)
 @deprecate read(s::IO, a::Array)                     read!(s, a)
 @deprecate read(s::IO, B::BitArray)                  read!(s, B)
 
+@deprecate nans{T}(::Type{T}, dims...)   fill(convert(T,NaN), dims)
+@deprecate nans(dims...)                 fill(NaN, dims)
+@deprecate nans{T}(x::AbstractArray{T})  fill(convert(T,NaN), size(x))
+@deprecate infs{T}(::Type{T}, dims...)   fill(convert(T,Inf), dims)
+@deprecate infs(dims...)                 fill(Inf, dims)
+@deprecate infs{T}(x::AbstractArray{T})  fill(convert(T,Inf), size(x))
+
 # 0.3 discontinued functions
 
 function nnz(X)
