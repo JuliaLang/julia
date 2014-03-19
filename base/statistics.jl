@@ -166,7 +166,7 @@ hist(v::AbstractVector, edg::AbstractVector) = hist!(Array(Int, length(edg)-1), 
 hist(v::AbstractVector, n::Integer) = hist(v,histrange(v,n))
 hist(v::AbstractVector) = hist(v,sturges(length(v)))
 
-function hist!{HT}(H::StoredArray{HT, 2}, A::AbstractMatrix, edg::AbstractVector; init::Bool=true)
+function hist!{HT}(H::StoredArray{HT,2}, A::AbstractMatrix, edg::AbstractVector; init::Bool=true)
     m, n = size(A)
     size(H) == (length(edg)-1, n) || error("Incorrect size of H.")
     if init
@@ -182,31 +182,35 @@ hist(A::AbstractMatrix, edg::AbstractVector) = hist!(Array(Int, length(edg-1), s
 hist(A::AbstractMatrix, n::Integer) = hist(A,histrange(A,n))
 hist(A::AbstractMatrix) = hist(A,sturges(size(A,1)))
 
-function hist2d(v::AbstractMatrix, edg1::AbstractVector, edg2::AbstractVector)
-    if size(v,2) != 2
-        error("hist2d requires an Nx2 matrix")
+
+## hist2d
+function hist2d!{HT}(H::StoredArray{HT,2}, v::AbstractMatrix, 
+                     edg1::AbstractVector, edg2::AbstractVector; init::Bool=true)
+    size(v,2) == 2 || error("hist2d requires an Nx2 matrix.")
+    n = length(edg1) - 1
+    m = length(edg2) - 1
+    size(H) == (n, m) || error("Incorrect size of H.")
+    if init
+        fill!(H, zero(HT))
     end
-    n = length(edg1)-1
-    m = length(edg2)-1
-    h = zeros(Int, n, m)
     for i = 1:size(v,1)
-        x = searchsortedfirst(edg1, v[i, 1])-1
-        y = searchsortedfirst(edg2, v[i, 2])-1
+        x = searchsortedfirst(edg1, v[i,1]) - 1
+        y = searchsortedfirst(edg2, v[i,2]) - 1
         if 1 <= x <= n && 1 <= y <= m
-            h[x,y] += 1
+            @inbounds H[x,y] += 1
         end
     end
-    edg1,edg2,h
+    edg1, edg2, H
 end
+
+hist2d(v::AbstractMatrix, edg1::AbstractVector, edg2::AbstractVector) = 
+    hist2d!(Array(Int, length(edg1)-1, length(edg2)-1), v, edg1, edg2)
+
 hist2d(v::AbstractMatrix, edg::AbstractVector) = hist2d(v, edg, edg)
-function hist2d(v::AbstractMatrix, n::Integer)
-    m = size(v,1)
-    hist2d(v, histrange(sub(v, 1:m, 1),n), histrange(sub(v, 1:m, 2),n))
-end
-function hist2d(v::AbstractMatrix, n1::Integer, n2::Integer)
-    m = size(v,1)
-    hist2d(v, histrange(sub(v, 1:m,1),n1), histrange(sub(v, 1:m,2),n2))
-end
+
+hist2d(v::AbstractMatrix, n1::Integer, n2::Integer) = 
+    hist2d(v, histrange(sub(v,:,1),n1), histrange(sub(v,:,2),n2))
+hist2d(v::AbstractMatrix, n::Integer) = hist2d(v, n, n)
 hist2d(v::AbstractMatrix) = hist2d(v, sturges(size(v,1)))
 
 ## pearson covariance functions ##
