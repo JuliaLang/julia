@@ -11,6 +11,8 @@ end
 
 @test replstr(parse("type X end")) == ":(type X\n    end)"
 @test replstr(parse("immutable X end")) == ":(immutable X\n    end)"
+s = "ccall(:f,Int,(Ptr{Void},),&x)"
+@test replstr(parse(s)) == ":($s)"
 
 # expression printing
 
