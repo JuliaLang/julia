@@ -749,12 +749,28 @@ end
 
 is_str_expr(ex) =
     isa(ex,Expr) && ex.head==:macrocall && isa(ex.args[1],Symbol) &&
-    (ex.args[1] == :str || endswith(string(ex.args[1]),"_str"))
+    (ex.args[1] == :str || endswith(string(ex.args[1]),"str"))
+
+#TODO: remove when triple quotes parses to a string and not a @mstr macrocall
+# and the following line fails with an exception
+:("""hi""").head
+function _convert_mstr_macro(ex)
+    !isa(ex, Expr) && return ex
+    if ex.head == :macrocall &&
+            ex.args[1] == symbol("@mstr") &&
+            length(ex.args) == 2 &&
+            isa(ex.args[2], String)
+        return ex.args[2]
+    end
+    ex
+end
 
 macro printf(args...)
     if length(args) == 0
         error("@printf: called with zero arguments")
     end
+    #TODO: remove when @mstr macrocall gets removed
+    args = map(_convert_mstr_macro, args)
     if !isa(args[1],String) && !(length(args) > 1 && isa(args[2],String))
         if is_str_expr(args[1]) || length(args) > 1 && is_str_expr(args[2])
            error("format must be a plain static string (no interpolation or prefix)")
