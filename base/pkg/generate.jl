@@ -50,6 +50,7 @@ function package(
             Generate.license(pkg,license,years,authors,force=force)
             Generate.readme(pkg,user,force=force)
             Generate.entrypoint(pkg,force=force)
+            Generate.tests(pkg,force=force)
             Generate.travis(pkg,force=force)
 
             msg = """
@@ -113,6 +114,18 @@ function readme(pkg::String, user::String=""; force::Bool=false)
     end
 end
 
+function tests(pkg::String; force::Bool=false)
+    genfile(pkg,"test/runtests.jl",force) do io
+        print(io, """
+        using $pkg
+        using Base.Test  
+
+        # write your own tests here
+        @test 1 == 1
+        """)
+    end
+end
+
 function travis(pkg::String; force::Bool=false)
     genfile(pkg,".travis.yml",force) do io
         print(io, """
@@ -131,8 +144,7 @@ function travis(pkg::String; force::Bool=false)
           - sudo apt-get update -qq -y
           - sudo apt-get install libpcre3-dev julia -y
         script:
-          - julia -e 'Pkg.init(); run(`ln -s \$(pwd()) \$(Pkg.dir("$pkg"))`); Pkg.pin("$pkg"); Pkg.resolve()'
-          - julia -e 'using $pkg; @assert isdefined(:$pkg); @assert typeof($pkg) === Module'
+          - julia -e 'Pkg.init(); Pkg.clone(pwd()); Pkg.test("$pkg")'
         """)
     end
 end
