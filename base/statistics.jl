@@ -147,29 +147,38 @@ function sturges(n)  # Sturges' formula
     iceil(log2(n))+1
 end
 
-hist(v::AbstractVector, n::Integer) = hist(v,histrange(v,n))
-hist(v::AbstractVector) = hist(v,sturges(length(v)))
-
-function hist(v::AbstractVector, edg::AbstractVector)
-    n = length(edg)-1
-    h = zeros(Int, n)
+function hist!{HT}(h::StoredArray{HT}, v::AbstractVector, edg::AbstractVector; init::Bool=true)
+    n = length(edg) - 1
+    length(h) == n || error("length(h) must equal length(edg) - 1.")
+    if init
+        fill!(h, zero(HT))
+    end
     for x in v
         i = searchsortedfirst(edg, x)-1
         if 1 <= i <= n
             h[i] += 1
         end
     end
-    edg,h
+    edg, h
 end
 
-function hist(A::AbstractMatrix, edg::AbstractVector)
+hist(v::AbstractVector, edg::AbstractVector) = hist!(Array(Int, length(edg)-1), v, edg)
+hist(v::AbstractVector, n::Integer) = hist(v,histrange(v,n))
+hist(v::AbstractVector) = hist(v,sturges(length(v)))
+
+function hist!{HT}(H::StoredArray{HT, 2}, A::AbstractMatrix, edg::AbstractVector; init::Bool=true)
     m, n = size(A)
-    H = Array(Int, length(edg)-1, n)
-    for j = 1:n
-        _,H[:,j] = hist(sub(A, 1:m, j), edg)
+    size(H) == (length(edg)-1, n) || error("Incorrect size of H.")
+    if init
+        fill!(H, zero(HT))
     end
-    edg,H
+    for j = 1:n
+        hist!(sub(H(H, :, j), sub(A, :, j), edg))
+    end
+    edg, H
 end
+
+hist(A::AbstractMatrix, edg::AbstractVector) = hist!(Array(Int, length(edg-1), size(A,2)), A, edg)
 hist(A::AbstractMatrix, n::Integer) = hist(A,histrange(A,n))
 hist(A::AbstractMatrix) = hist(A,sturges(size(A,1)))
 
