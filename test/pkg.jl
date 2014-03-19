@@ -1,5 +1,3 @@
-using Base.Test
-
 function temp_pkg_dir(fn::Function)
   # Used in tests below to setup and teardown a sandboxed package directory
   const tmpdir = ENV["JULIA_PKGDIR"] = abspath(string("tmp.",randstring()))
