@@ -9,6 +9,9 @@ immutable T5589
 end
 @test replstr(T5589(Array(UTF8String,100))) == "T5589(UTF8String[#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef  …  #undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef])"
 
+@test replstr(parse("type X end")) == ":(type X\n    end)"
+@test replstr(parse("immutable X end")) == ":(immutable X\n    end)"
+
 # expression printing
 
 macro test_repr(x)
