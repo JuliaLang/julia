@@ -4063,6 +4063,11 @@ Statistics
    element at location ``i`` satisfies ``sum(e[i] .< v .<= e[i+1])``.
    Note: Julia does not ignore ``NaN`` values in the computation.
 
+.. function:: hist!(counts, v, e) -> e, counts
+
+   Compute the histogram of ``v``, using a vector/range ``e`` as the edges for the bins. 
+   This function writes the resultant counts to a pre-allocated array ``counts``.
+
 .. function:: hist2d(M, e1, e2) -> (edge1, edge2, counts)
 
    Compute a "2d histogram" of a set of N points specified by N-by-2 matrix ``M``.
@@ -4072,6 +4077,12 @@ Statistics
    used in the second dimension), and ``counts``, a histogram matrix of size
    ``(length(edge1)-1, length(edge2)-1)``.
    Note: Julia does not ignore ``NaN`` values in the computation.
+
+.. function:: hist2d!(counts, M, e1, e2) -> (e1, e2, counts)
+
+   Compute a "2d histogram" with respect to the bins delimited by the edges given 
+   in ``e1`` and ``e2``. This function writes the results to a pre-allocated
+   array ``counts``. 
 
 .. function:: histrange(v, n)
 
