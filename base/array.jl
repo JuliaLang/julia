@@ -118,11 +118,11 @@ end
 getindex(T::(Type...)) = Array(T,0)
 
 # T[a:b] and T[a:s:b] also contruct typed ranges
-function getindex{T<:Number}(::Type{T}, r::Ranges)
+function getindex{T<:Number}(::Type{T}, r::Range)
     copy!(Array(T,length(r)), r)
 end
 
-function getindex{T<:Number}(::Type{T}, r1::Ranges, rs::Ranges...)
+function getindex{T<:Number}(::Type{T}, r1::Range, rs::Range...)
     a = Array(T,length(r1)+sum(length,rs))
     o = 1
     copy!(a, o, r1)
@@ -261,10 +261,10 @@ end
 function getindex{T<:Real}(A::Array, I::AbstractVector{T})
     return [ A[i] for i in to_index(I) ]
 end
-function getindex{T<:Real}(A::Ranges, I::AbstractVector{T})
+function getindex{T<:Real}(A::Range, I::AbstractVector{T})
     return [ A[i] for i in to_index(I) ]
 end
-function getindex(A::Ranges, I::AbstractVector{Bool})
+function getindex(A::Range, I::AbstractVector{Bool})
     checkbounds(A, I)
     return [ A[i] for i in to_index(I) ]
 end
@@ -716,7 +716,7 @@ for f in (:+, :-, :div, :mod, :&, :|, :$)
             return F
         end
         # interaction with Ranges
-        function ($f){S,T<:Real}(A::StridedArray{S}, B::Ranges{T})
+        function ($f){S,T<:Real}(A::StridedArray{S}, B::Range{T})
             F = similar(A, promote_type(S,T), promote_shape(size(A),size(B)))
             i = 1
             for b in B
@@ -725,7 +725,7 @@ for f in (:+, :-, :div, :mod, :&, :|, :$)
             end
             return F
         end
-        function ($f){S<:Real,T}(A::Ranges{S}, B::StridedArray{T})
+        function ($f){S<:Real,T}(A::Range{S}, B::StridedArray{T})
             F = similar(B, promote_type(S,T), promote_shape(size(A),size(B)))
             i = 1
             for a in A
