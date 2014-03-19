@@ -29,8 +29,8 @@ temp_pkg_dir() do
 	Pkg.generate("PackageWithTestDependencies", "MIT")
 	@test [keys(Pkg.installed())...] == ["PackageWithTestDependencies"]
 
-  mkdir(Pkg.dir("PackageWithTestDependencies","test"))
-  open(Pkg.dir("PackageWithTestDependencies","test","REQUIRE"),"a") do f
+  isdir(Pkg.dir("PackageWithTestDependencies","test")) || mkdir(Pkg.dir("PackageWithTestDependencies","test"))
+  open(Pkg.dir("PackageWithTestDependencies","test","REQUIRE"),"w") do f
     println(f,"Example")
   end
 
@@ -47,9 +47,13 @@ temp_pkg_dir() do
   @test [keys(Pkg.installed())...] == ["PackageWithTestDependencies"]
 end
 
-# testing a package with no run_test.jl errors
+# testing a package with no runtests.jl errors
 temp_pkg_dir() do
 	Pkg.generate("PackageWithNoTests", "MIT")
+
+  if isfile(Pkg.dir("PackageWithNoTests", "test", "runtests.jl"))
+    rm(Pkg.dir("PackageWithNoTests", "test", "runtests.jl"))
+  end
 
 	try
     Pkg.test("PackageWithNoTests")
@@ -62,7 +66,7 @@ end
 temp_pkg_dir() do
 	Pkg.generate("PackageWithFailingTests", "MIT")
 
-  mkdir(Pkg.dir("PackageWithFailingTests","test"))
+  isdir(Pkg.dir("PackageWithFailingTests","test")) || mkdir(Pkg.dir("PackageWithFailingTests","test"))
   open(Pkg.dir("PackageWithFailingTests", "test", "runtests.jl"),"w") do f
     println(f,"using Base.Test")
     println(f,"@test false")
