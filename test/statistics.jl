@@ -32,6 +32,7 @@
 @test hist([1,2,3],0:2:4) == (0:2:4,[2,1])
 @test all(hist([1:100]/100,0.0:0.01:1.0)[2] .==1)
 @test hist([1,1,1,1,1])[2][1] == 5
+@test sum(hist2d(rand(100, 2))[3]) == 100
 
 A = Complex128[exp(i*im) for i in 1:10^4]
 @test_approx_eq varm(A,0.) sum(map(abs2,A))/(length(A)-1)
