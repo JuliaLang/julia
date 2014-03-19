@@ -30,11 +30,14 @@
 #include "llvm/ExecutionEngine/JITEventListener.h"
 #include "llvm/ExecutionEngine/JITMemoryManager.h"
 #include "llvm/PassManager.h"
+#include "llvm/Target/TargetLibraryInfo.h"
+#include "llvm/Support/TargetRegistry.h"
 #include "llvm/Analysis/Passes.h"
 #include "llvm/Bitcode/ReaderWriter.h"
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 5
 #define LLVM35 1
 #include "llvm/IR/Verifier.h"
+#include "llvm/Object/ObjectFile.h"
 #include "llvm/IR/DIBuilder.h"
 #include "llvm/AsmParser/Parser.h"
 #else
@@ -80,6 +83,7 @@
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
+#include "llvm/Transforms/Instrumentation.h"
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 1
 #include "llvm/Transforms/Vectorize.h"
 #endif
@@ -127,6 +131,7 @@ static LLVMContext &jl_LLVMContext = getGlobalContext();
 static IRBuilder<> builder(getGlobalContext());
 static bool nested_compile=false;
 static ExecutionEngine *jl_ExecutionEngine;
+static TargetMachine *jl_TargetMachine;
 #ifdef USE_MCJIT
 static Module *shadow_module;
 static RTDyldMemoryManager *jl_mcjmm;
@@ -302,6 +307,47 @@ void jl_dump_bitcode(char* fname)
 #endif
 }
 
+extern "C"
+void jl_dump_objfile(char* fname, int jit_model)
+{
+    std::string err;
+    raw_fd_ostream OS(fname, err);
+    formatted_raw_ostream FOS(OS);
+    jl_gen_llvm_gv_array();
+
+    // We don't want to use MCJIT's target machine because
+    // it uses the large code model and we may potentially
+    // want less optimizations there.
+    OwningPtr<TargetMachine>
+    TM(jl_TargetMachine->getTarget().createTargetMachine(
+        jl_TargetMachine->getTargetTriple(),
+        jl_TargetMachine->getTargetCPU(),
+        jl_TargetMachine->getTargetFeatureString(),
+        jl_TargetMachine->Options,
+#ifdef _OS_LINUX_
+        Reloc::PIC_,
+#else
+        jit_model ? Reloc::PIC_ : Reloc::Default,
+#endif
+        jit_model ? CodeModel::JITDefault : CodeModel::Default,
+        CodeGenOpt::Aggressive // -O3
+        ));
+
+    PassManager PM;
+    PM.add(new TargetLibraryInfo(Triple(jl_TargetMachine->getTargetTriple())));
+    PM.add(new DataLayout(*jl_ExecutionEngine->getDataLayout()));
+    if (TM->addPassesToEmitFile(PM, FOS,
+            TargetMachine::CGFT_ObjectFile, false)) {
+        jl_error("Could not generate obj file for this target");
+    }
+
+#ifdef USE_MCJIT
+    PM.run(*shadow_module);
+#else
+    PM.run(*jl_Module);
+#endif
+}
+
 // aggregate of array metadata
 typedef struct {
     Value *dataptr;
@@ -366,12 +412,19 @@ static Type *NoopType;
 
 // --- utilities ---
 
+#if defined(JULIA_TARGET_CORE2)
+const char *jl_cpu_string = "core2";
+#elif defined(JULIA_TARGET_NATIVE)
+const char *jl_cpu_string = "native";
+#else
+#error "Must select julia cpu target"
+#endif
+
 extern "C" {
     int globalUnique = 0;
 }
 
 #include "cgutils.cpp"
-
 
 static void jl_rethrow_with_add(const char *fmt, ...)
 {
@@ -4082,23 +4135,30 @@ extern "C" void jl_init_codegen(void)
 #endif
 #ifdef USE_MCJIT
     jl_mcjmm = new SectionMemoryManager();
-#endif
+#else
     // Temporarily disable Haswell BMI2 features due to LLVM bug.
     const char *mattr[] = {"-bmi2", "-avx2"};
+#endif
     std::vector<std::string> attrvec (mattr, mattr+2);
-    jl_ExecutionEngine = EngineBuilder(engine_module)
+    EngineBuilder eb = EngineBuilder(engine_module)
         .setEngineKind(EngineKind::JIT)
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
         .setJITMemoryManager(new JITMemoryManagerWin())
 #endif
         .setTargetOptions(options)
+#if defined(JULIA_TARGET_NATIVE)
+        .setMCPU("")
+#else
+        .setMCPU(jl_cpu_string)
+#endif
 #ifdef USE_MCJIT
         .setUseMCJIT(true)
-        .setMAttrs(attrvec)
+        .setMAttrs(attrvec);
 #else
-        .setMAttrs(attrvec)
+        .setMAttrs(attrvec);
 #endif
-        .create();
+    jl_TargetMachine = eb.selectTarget();
+    jl_ExecutionEngine = eb.create(jl_TargetMachine);
 #endif // LLVM VERSION
     jl_ExecutionEngine->DisableLazyCompilation();
 

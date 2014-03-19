@@ -867,13 +867,13 @@ DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *
         if (asprintf(&build_ji, "%s.ji",build_path) > 0) {
             jl_save_system_image(build_ji);
             free(build_ji);
-            char *build_bc;
-            if (asprintf(&build_bc, "%s.bc",build_path) > 0) {
-                jl_dump_bitcode(build_bc);
-                free(build_bc);
+            char *build_o;
+            if (asprintf(&build_o, "%s.o",build_path) > 0) {
+                jl_dump_objfile(build_o,0);
+                free(build_o);
             }
             else {
-                ios_printf(ios_stderr,"FATAL: failed to create string for .bc build path");
+                ios_printf(ios_stderr,"FATAL: failed to create string for .o build path");
             }
         }
         else {
