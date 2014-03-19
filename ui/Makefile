@@ -3,6 +3,7 @@ include $(JULIAHOME)/Make.inc
 
 override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
+override CPPFLAGS += $(JCPPFLAGS)
 
 FLAGS = -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
 	-I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir)
