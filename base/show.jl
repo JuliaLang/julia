@@ -515,6 +515,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
         print(io, '"', a..., '"')
 
+    elseif is(head, :&) && length(args) == 1
+        print(io, '&')
+        show_unquoted(io, args[1])
+
     # print anything else as "Expr(head, args...)"
     else
         print(io, "\$(Expr(")
