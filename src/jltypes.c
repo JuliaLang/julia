@@ -56,6 +56,11 @@ void jl_add_constructors(jl_datatype_t *t);
 
 // --- type properties and predicates ---
 
+// signature to work with all macros
+int jl_typeis(void *v, void *t) {
+    return (jl_typeof(v)==(jl_value_t*)(t));
+}
+
 int jl_is_type(jl_value_t *v)
 {
     if (jl_is_tuple(v)) {
