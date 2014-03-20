@@ -217,7 +217,7 @@ extern "C" int32_t jl_get_llvm_gv(jl_value_t *p)
 }
 
 extern "C" {
-    extern void cpuid(int32_t CPUInfo[4], int32_t InfoType);
+    extern void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType);
 }
 
 static void jl_gen_llvm_gv_array()
@@ -253,7 +253,7 @@ static void jl_gen_llvm_gv_array()
     if(strcmp(jl_cpu_string,"native") == 0) {
         uint32_t info[4];
 
-        cpuid((int32_t*)info, 1);
+        jl_cpuid((int32_t*)info, 1);
         new GlobalVariable(
             *jl_Module,
             T_int64,

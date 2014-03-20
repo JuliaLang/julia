@@ -98,7 +98,7 @@ static jl_value_t *jl_deserialize_value_internal(ios_t *s);
 jl_value_t ***sysimg_gvars = NULL;
 
 extern int globalUnique;
-extern void cpuid(int32_t CPUInfo[4], int32_t InfoType);
+extern void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType);
 extern const char *jl_cpu_string;
 
 static void jl_load_sysimg_so(char *fname)
@@ -115,7 +115,7 @@ static void jl_load_sysimg_so(char *fname)
             jl_error("Julia and the system image were compiled for different architectures.\n"
                      "Please delete or regenerate sys.{so,dll,dylib}.");
         uint32_t info[4];
-        cpuid((int32_t*)info, 1);
+        jl_cpuid((int32_t*)info, 1);
         if (strcmp(cpu_target,"native") == 0)
         {
             uint64_t saved_cpuid = *(uint64_t*)jl_dlsym(sysimg_handle, "jl_sysimg_cpu_cpuid");
