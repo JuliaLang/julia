@@ -349,6 +349,12 @@ buffer and call ``free(ptr)`` when the returned ``Array`` object is finalized.
 If the ``own`` parameter is omitted or false, the caller must ensure the
 buffer remains in existence until all access is complete.
 
+Arithmetic on the ``Ptr`` type in Julia (e.g. using ``+``) does not behave the
+same as C's pointer arithmetic. Adding an integer to a ``Ptr`` in Julia always
+moves the pointer by some number of *bytes*, not elements. This way, the
+address values obtained from pointer arithmetic do not depend on the
+element types of pointers.
+
 Passing Pointers for Modifying Inputs
 -------------------------------------
 
