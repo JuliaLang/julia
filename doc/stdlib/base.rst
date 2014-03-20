@@ -5068,11 +5068,13 @@ C Interface
 
 .. function:: unsafe_load(p::Ptr{T},i::Integer)
 
-   Dereference the pointer ``p[i]`` or ``*p``, returning a copy of type T.
+   Load a value of type ``T`` from the address of the ith element (1-indexed)
+   starting at ``p``. This is equivalent to the C expression ``p[i-1]``.
 
 .. function:: unsafe_store!(p::Ptr{T},x,i::Integer)
 
-   Assign to the pointer ``p[i] = x`` or ``*p = x``, making a copy of object x into the memory at p.
+   Store a value of type ``T`` to the address of the ith element (1-indexed)
+   starting at ``p``. This is equivalent to the C expression ``p[i-1] = x``.
 
 .. function:: unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, N)
 
@@ -5082,7 +5084,7 @@ C Interface
 .. function:: unsafe_copy!(dest::Array, do, src::Array, so, N)
 
    Copy ``N`` elements from a source array to a destination, starting at offset ``so``
-   in the source and ``do`` in the destination.
+   in the source and ``do`` in the destination (1-indexed).
 
 .. function:: copy!(dest, src)
 
