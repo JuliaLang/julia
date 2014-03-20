@@ -211,8 +211,8 @@ $(error Address Sanitizer only supported with clang. Try setting SANITIZE=0)
 endif
 CC = $(CROSS_COMPILE)gcc
 CXX = $(CROSS_COMPILE)g++
-JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing
-JCPPFLAGS = -D_FILE_OFFSET_BITS=64
+JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
+JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -O0 -ggdb3 -DDEBUG -fstack-protector-all
 SHIPFLAGS = -O3 -falign-functions
@@ -221,8 +221,8 @@ endif
 ifeq ($(USECLANG),1)
 CC = $(CROSS_COMPILE)clang
 CXX = $(CROSS_COMPILE)clang++
-JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing
-JCPPFLAGS = -D_FILE_OFFSET_BITS=64
+JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
+JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -O0 -g -DDEBUG -fstack-protector-all
 SHIPFLAGS = -O3
