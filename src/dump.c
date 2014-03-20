@@ -112,21 +112,23 @@ static void jl_load_sysimg_so(char *fname)
         globalUnique = *(size_t*)jl_dlsym(sysimg_handle, "jl_globalUnique");
         const char *cpu_target = (const char*)jl_dlsym(sysimg_handle, "jl_sysimg_cpu_target");
         if (strcmp(cpu_target,jl_cpu_string) != 0)
-            jl_error("Julia and the system image were compiled for different architectures.");
+            jl_error("Julia and the system image were compiled for different architectures."
+                     "Please delete or regenerate sys.{so,dll,dylib}.");
         uint32_t info[4];
         cpuid((int32_t*)info, 1);
         if (strcmp(cpu_target,"native") == 0)
         {
             uint64_t saved_cpuid = *(uint64_t*)jl_dlsym(sysimg_handle, "jl_sysimg_cpu_cpuid");
             if (saved_cpuid != (((uint64_t)info[2])|(((uint64_t)info[3])<<32)))
-                jl_error("Target architecture mismatch. Please regenerate sys.{so,dll,dylib}.");
+                jl_error("Target architecture mismatch. Please delete or regenerate sys.{so,dll,dylib}.");
         } else if(strcmp(cpu_target,"core2") == 0) {
             int HasSSSE3 = (info[3] & 1<<9);
             if (!HasSSSE3)
                 jl_error("The current host does not support SSSE3, but the system image was compiled for Core2.\n"
                          "Please delete or regenerate sys.{so,dll,dylib}.");
         } else {
-            jl_error("System image has unknown target cpu architecture.");
+            jl_error("System image has unknown target cpu architecture."
+                     "Please delete or regenerate sys.{so,dll,dylib}.");
         }
     }
     else {
