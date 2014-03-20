@@ -321,8 +321,13 @@ full(x::AbstractArray) = x
 
 for fn in _numeric_conversion_func_names
     @eval begin
-        $fn(r::StepRange) = StepRange($fn(r.start), $fn(r.step), $fn(last(r)))
-        $fn(r::Range1) = Range1($fn(r.start), $fn(last(r)))
+        $fn(r::StepRange) = $fn(r.start):$fn(r.step):$fn(last(r))
+        $fn(r::Range1) = $fn(r.start):$fn(last(r))
+    end
+end
+
+for fn in (:float,:float16,:float32,:float64)
+    @eval begin
         $fn(r::FloatRange) = FloatRange($fn(r.start), $fn(r.step), r.len, $fn(r.divisor))
     end
 end
