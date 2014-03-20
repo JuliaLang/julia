@@ -396,7 +396,8 @@ function histrange{T<:FloatingPoint,N}(v::AbstractArray{T,N}, n::Integer)
         end
     end
     start = step*(ceil(lo/step)-1)
-    start:step:(start + iceil((hi - start)/step))
+    nm1 = iceil((hi - start)/step)
+    start:step:(start + nm1*step)
 end
 
 function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
@@ -420,8 +421,9 @@ function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
             step = 10*e
         end
     end
-    start = step*(iceil(lo/step)-1)
-    start:step:(start + iceil((hi - start)/step))
+    start = step*(ceil(lo/step)-1)
+    nm1 = iceil((hi - start)/step)
+    start:step:(start + nm1*step)
 end
 
 ## midpoints of intervals
