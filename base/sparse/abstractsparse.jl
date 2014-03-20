@@ -1,6 +1,9 @@
-abstract AbstractSparseMatrix{Tv,Ti} <: StoredArray{Tv,2}
+abstract AbstractSparseArray{Tv,Ti,N} <: AbstractArray{Tv,N}
+
+typealias AbstractSparseVector{Tv,Ti} AbstractSparseArray{Tv,Ti,1}
+typealias AbstractSparseMatrix{Tv,Ti} AbstractSparseArray{Tv,Ti,2}
 
 issparse(A::AbstractArray) = false
-issparse(S::AbstractSparseMatrix) = true
+issparse(S::AbstractSparseArray) = true
 
-indtype{Tv,Ti}(S::AbstractSparseMatrix{Tv,Ti}) = Ti
+indtype{Tv,Ti}(S::AbstractSparseArray{Tv,Ti}) = Ti
