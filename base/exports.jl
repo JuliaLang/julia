@@ -14,7 +14,9 @@ export
 
 # Types
     AbstractMatrix,
+    AbstractSparseArray,
     AbstractSparseMatrix,
+    AbstractSparseVector,
     AbstractVector,
     AbstractVecOrMat,
     Array,
