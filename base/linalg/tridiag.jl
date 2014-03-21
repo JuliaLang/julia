@@ -135,6 +135,128 @@ function getindex{T}(A::SymTridiagonal{T}, i::Integer, j::Integer)
     i==j ? A.dv[i] : i==j+1 ? A.ev[j] : i+1==j ? A.ev[i] : zero(T)
 end
 
+# Generic eigen
+function eigvals2x2(d1,d2,e)
+    r1 = 0.5*(d1+d2)
+    r2 = 0.5hypot(d1-d2,2*e)
+    return r1 + r2, r1 - r2
+end
+
+function eigvals!{T<:FloatingPoint}(S::SymTridiagonal{T}; tol::Real = eps(T), debug::Bool=false)
+    tol > 0 || throw(ArgumentError("tol must be positive"))
+    d = S.dv
+    e = S.ev
+    n = length(d)
+    zro = zero(T)
+    blockstart = 1
+    blockend = n
+    @inbounds begin
+        while true
+            for blockend = blockstart+1:n
+                if abs(e[blockend-1]) < tol*(abs(d[blockend-1]) + abs(d[blockend])) 
+                    blockend -= 1
+                    break 
+                end
+            end
+            if blockstart == blockend
+                blockstart += 1
+            elseif blockstart + 1 == blockend
+                d[blockstart], d[blockend] = eigvals2x2(d[blockstart],d[blockend],e[blockstart])
+                blockstart += 1
+            else
+                # if abs(d[blockstart]) > abs(d[blockend])
+                    μ = (d[blockstart+1]-d[blockstart])/(2*e[blockstart])
+                    r = hypot(μ,one(T))
+                    μ = d[blockstart] - (e[blockstart]/(μ+copysign(r,μ)))
+                    singleShiftQL!(S,μ,blockstart,blockend)
+                    debug && @printf("QL, blockstart: %d, blockend: %d, e[blockstart]: %e, e[blockend-1]:%e, μ: %f\n", blockstart, blockend, e[blockstart], e[blockend-1], μ)
+                    # end
+                # else
+                    # μ = (d[blockend-1]-d[blockend])/(2*e[blockend-1])
+                    # r = hypot(μ,one(T))
+                    # μ = d[blockend] - (e[blockend-1]/(μ+copysign(r,μ)))
+                    # singleShiftQR!(S,μ,blockstart,blockend)
+                    # @printf("QR, blockstart: %d, blockend: %d, e[blockstart]: %e, eblockend-1]:%e, μ: %f\n", blockstart, blockend, e[blockstart], e[blockend-1], μ)
+                # end
+            end
+            if blockstart == n break end
+        end
+    end
+    sort!(d)
+end
+
+function singleShiftQR!(S::SymTridiagonal, shift::Number, istart::Integer = 1, iend::Integer = length(S.dv))
+    d = S.dv
+    e = S.ev
+    n = length(d)
+    @inbounds begin
+        c, s, r = givensAlgorithm(d[istart]-shift, e[istart])
+        csq = c*c
+        ssq = s*s
+        d1 = d[istart]
+        d2 = d[istart+1]
+        e1 = e[istart]
+        d[istart] = csq*d1 + 2*c*s*e1 + ssq*d2
+        d[istart+1] = ssq*d1 - 2*c*s*e1 + csq*d2
+        e[istart] = (csq-ssq)*e1 + c*s*(d2-d1)
+        bulge = s*e[2]
+        e[istart+1] *= c
+        for i = istart:iend-2
+            c,s,r = givensAlgorithm(e[i],bulge)
+            csq = c*c
+            ssq = s*s
+            d1 = d[i+1]
+            d2 = d[i+2]
+            e1 = e[i+1]
+            d[i+1] = csq*d1 + 2*c*s*e1 + ssq*d2
+            d[i+2] = ssq*d1 - 2*c*s*e1 + csq*d2
+            e[i] = r
+            e[i+1] = (csq-ssq)*e1 + s*c*(d2-d1)
+            if i < iend-2
+                bulge = s*e[i+2]
+                e[i+2] *= c
+            end
+        end
+    end
+    S
+end 
+function singleShiftQL!(S::SymTridiagonal, shift::Number, istart::Integer = 1, iend::Integer = length(S.dv))
+    d = S.dv
+    e = S.ev
+    n = length(d)
+    @inbounds begin
+        c, s, r = givensAlgorithm(-(d[iend]-shift), e[iend-1])
+        csq = c*c
+        ssq = s*s
+        d1 = d[iend-1]
+        d2 = d[iend]
+        e1 = e[iend-1]
+        d[iend-1] = csq*d1 + 2*c*s*e1 + ssq*d2
+        d[iend] = ssq*d1 - 2*c*s*e1 + csq*d2
+        e[iend-1] = (csq-ssq)*e1 + c*s*(d2-d1)
+        bulge = -s*e[iend-2]
+        e[iend-2] *= c
+        for i = iend-1:-1:istart+1
+            c,s,r = givensAlgorithm(-e[i],bulge)
+            csq = c*c
+            ssq = s*s
+            d1 = d[i-1]
+            d2 = d[i]
+            e1 = e[i-1]
+            d[i-1] = csq*d1 + 2*c*s*e1 + ssq*d2
+            d[i] = ssq*d1 - 2*c*s*e1 + csq*d2
+            e[i] = r
+            e[i-1] = (csq-ssq)*e1 + s*c*(d2-d1)
+            if i > istart+1
+                bulge = -s*e[i-2]
+                e[i-2] *= c
+            end
+        end
+    end
+    S
+end
+    
+
 ## Tridiagonal matrices ##
 type Tridiagonal{T} <: AbstractMatrix{T}
     dl::Vector{T}    # sub-diagonal
