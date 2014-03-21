@@ -336,8 +336,7 @@ void jl_dump_objfile(char* fname, int jit_model)
     PassManager PM;
     PM.add(new TargetLibraryInfo(Triple(jl_TargetMachine->getTargetTriple())));
     PM.add(new DataLayout(*jl_ExecutionEngine->getDataLayout()));
-    if (TM->addPassesToEmitFile(PM, FOS,
-            TargetMachine::CGFT_ObjectFile, false)) {
+    if (TM->addPassesToEmitFile(PM, FOS, TargetMachine::CGFT_ObjectFile, false)) {
         jl_error("Could not generate obj file for this target");
     }
 
