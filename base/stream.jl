@@ -880,18 +880,28 @@ end
 connect(path::String) = connect(Pipe(),path)
 
 dup(x::RawFD) = RawFD(ccall((@windows? :_dup : :dup),Int32,(Int32,),x.fd))
-dup(src::RawFD,target::RawFD) = systemerror("dup",ccall((@windows? :_dup2 : :dup2),Int32,(Int32,Int32),src.fd,target.fd) == -1)
+dup(src::RawFD,target::RawFD) = systemerror("dup",-1==
+    ccall((@windows? :_dup2 : :dup2),Int32,
+    (Int32,Int32),src.fd,target.fd))
 
-@unix_only _fd(x::AsyncStream) = RawFD(ccall(:jl_uv_pipe_fd,Int32,(Ptr{Void},),x.handle))
-@windows_only _fd(x::Pipe) = WindowsRawSocket(ccall(:jl_uv_pipe_handle,Ptr{Void},(Ptr{Void},),x.handle))
+@unix_only _fd(x::AsyncStream) = RawFD(
+    ccall(:jl_uv_pipe_fd,Int32,(Ptr{Void},),x.handle))
+@windows_only _fd(x::Pipe) = WindowsRawSocket(
+    ccall(:jl_uv_pipe_handle,Ptr{Void},(Ptr{Void},),x.handle))
+@windows_only _fd(x::TTY) = WindowsRawSocket(
+    ccall(:jl_uv_tty_handle,Ptr{Void},(Ptr{Void},),x.handle))
 
 for (x,writable,unix_fd,c_symbol) in ((:STDIN,false,0,:jl_uv_stdin),(:STDOUT,true,1,:jl_uv_stdout),(:STDERR,true,2,:jl_uv_stderr))
     f = symbol("redirect_"*lowercase(string(x)))
     @eval begin
         function ($f)(handle::AsyncStream)
             global $x
-            @windows? ccall(:SetStdHandle,stdcall,Int32,(Uint32,Ptr{Void}),$(-10-unix_fd),_fd(handle).handle) : dup(_fd(handle),  RawFD($unix_fd))
-            unsafe_store!(cglobal($(Expr(:quote,c_symbol)),Ptr{Void}),handle.handle)
+            @windows? (
+                ccall(:SetStdHandle,stdcall,Int32,(Uint32,Ptr{Void}),
+                    $(-10-unix_fd),_get_osfhandle(_fd(handle)).handle) :
+                dup(_fd(handle),  RawFD($unix_fd)) )
+            unsafe_store!(cglobal($(Expr(:quote,c_symbol)),Ptr{Void}),
+                handle.handle)
             $x = handle
         end
         function ($f)()
