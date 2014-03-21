@@ -409,11 +409,9 @@ JL_STREAM *jl_stdin_stream(void)  { return (JL_STREAM*)JL_STDIN; }
 JL_STREAM *jl_stdout_stream(void) { return (JL_STREAM*)JL_STDOUT; }
 JL_STREAM *jl_stderr_stream(void) { return (JL_STREAM*)JL_STDERR; }
 
-// -- set/clear the FZ/DAZ flags on x86 & x86-64 --
+// CPUID
 
-#ifdef __SSE__
-
-void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
+DLLEXPORT void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
 {
     __asm__ __volatile__ (
         #if defined(__i386__) && defined(__PIC__)
@@ -431,6 +429,9 @@ void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
         "a" (InfoType)
     );
 }
+
+// -- set/clear the FZ/DAZ flags on x86 & x86-64 --
+#ifdef __SSE__
 
 DLLEXPORT uint8_t jl_zero_subnormals(uint8_t isZero)
 {
