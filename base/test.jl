@@ -65,8 +65,8 @@ macro test(ex)
             $lhssym = nothing
             $rhssym = nothing
             try
-                $lhssym = $(ex.args[1])
-                $rhssym = $(ex.args[3])
+                $lhssym = $(esc(ex.args[1]))
+                $rhssym = $(esc(ex.args[3]))
             end
             do_test( ()->($(esc(ex))), $(Expr(:quote,ex)), $lhssym, $rhssym )
         end
