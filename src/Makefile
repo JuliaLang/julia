@@ -11,11 +11,12 @@ SRCS = \
 	alloc dlload sys init task array dump toplevel jl_uv jlapi profile llvm-simdloop
 
 FLAGS = \
-	-D_GNU_SOURCE \
-	-Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
-	-Iflisp -Isupport -fvisibility=hidden -fno-common \
+	-D_GNU_SOURCE -Iflisp -Isupport \
 	-I$(call exec,$(LLVM_CONFIG) --includedir) \
 	-I$(LIBUV_INC) -I$(build_includedir) -DLIBRARY_EXPORTS
+ifneq ($(USEMSVC), 1)
+FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -fvisibility=hidden -fno-common
+endif
 
 LLVMLINK = $(call exec,$(LLVM_CONFIG) --libs) $(call exec,$(LLVM_CONFIG) --system-libs 2> /dev/null)
 ifeq ($(USE_LLVM_SHLIB),1)

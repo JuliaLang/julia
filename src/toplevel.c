@@ -161,7 +161,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
 
     if (jl_current_module == jl_main_module) {
         while (module_stack.len > 0) {
-            jl_module_run_initializer(arraylist_pop(&module_stack));
+            jl_module_run_initializer((jl_module_t *) arraylist_pop(&module_stack));
         }
     }
 
