@@ -167,12 +167,17 @@ USE_COPY_STACKS = 1
 
 # Compiler specific stuff
 
+ifeq ($(USEMSVC), 1)
+USEGCC = 0
+USECLANG = 0
+else
 ifeq ($(CC), clang)
 USEGCC ?= 0
 USECLANG ?= 1
 else
 USEGCC ?= 1
 USECLANG ?= 0
+endif
 endif
 
 STDLIBCPP_FLAG = 
@@ -239,10 +244,21 @@ endif
 
 JFFLAGS = -O2 $(fPIC)
 JF2CFLAGS = -ff2c -fno-second-underscore
+ifneq ($(USEMSVC),1)
 CPP = $(CC) -E
 AR := $(CROSS_COMPILE)ar
 AS := $(CROSS_COMPILE)as
 LD := $(CROSS_COMPILE)ld
+else
+CPP = $(CC) -P -EP
+AR := lib
+ifeq ($(ARCH),x86_64)
+AS := ml64
+else
+AS := ml
+endif
+LD := link
+endif
 RANLIB := $(CROSS_COMPILE)ranlib
 
 ifeq ($(JULIA_CPU_TARGET),native)

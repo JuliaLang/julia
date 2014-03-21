@@ -613,9 +613,13 @@ install-openspecfun: $(OPENSPECFUN_OBJ_TARGET)
 LIBRANDOM_OBJ_TARGET = $(build_shlibdir)/librandom.$(SHLIB_EXT)
 LIBRANDOM_OBJ_SOURCE = random/librandom.$(SHLIB_EXT)
 
-LIBRANDOM_CFLAGS = $(CFLAGS) -O3 -finline-functions -fomit-frame-pointer -DNDEBUG -fno-strict-aliasing \
-				   --param max-inline-insns-single=1800 -Wmissing-prototypes -Wall  -std=c99 \
-				   -DDSFMT_MEXP=19937 $(fPIC) -shared -DDSFMT_DO_NOT_USE_OLD_NAMES
+LIBRANDOM_CFLAGS = $(CFLAGS) -DNDEBUG -DDSFMT_MEXP=19937 $(fPIC) -DDSFMT_DO_NOT_USE_OLD_NAMES
+ifneq ($(USEMSVC), 1)
+LIBRANDOM_CFLAGS += -O3 -finline-functions -fomit-frame-pointer -fno-strict-aliasing \
+		--param max-inline-insns-single=1800 -Wmissing-prototypes -Wall  -std=c99 -shared
+else
+LIBRANDOM_CFLAGS += -Wl,-dll
+endif
 ifeq ($(ARCH), x86_64)
 LIBRANDOM_CFLAGS += -msse2 -DHAVE_SSE2
 endif

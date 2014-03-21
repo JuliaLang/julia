@@ -1104,7 +1104,7 @@ void jl_restore_system_image(char *fname)
 void jl_init_restored_modules()
 {
     while (modules_to_init.len > 0) {
-        jl_module_run_initializer(arraylist_pop(&modules_to_init));
+        jl_module_run_initializer((jl_module_t *) arraylist_pop(&modules_to_init));
     }
 }
 

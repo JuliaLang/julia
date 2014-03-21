@@ -12,7 +12,7 @@ static volatile int running = 0;
 /////////////////////////////////////////
 // Timers to take samples at intervals //
 /////////////////////////////////////////
-#if defined(__WIN32__)
+#if defined(_WIN32)
 //
 // Windows
 //

@@ -1,4 +1,7 @@
 #include "platform.h"
+#if defined(_OS_WINDOWS_)
+#define NOMINMAX
+#endif
 #include "julia.h"
 #include "julia_internal.h"
 
@@ -10,7 +13,6 @@
  * including <math.h> (or rather its content).
  */
 #if defined(_OS_WINDOWS_)
-#define NOMINMAX
 #include <malloc.h>
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
