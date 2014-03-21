@@ -58,7 +58,7 @@ function do_test_throws(body,qex)
 end
 
 macro test(ex)
-    if ex.head == :comparison && length(ex.args) == 3
+    if typeof(ex) == Expr && ex.head == :comparison && length(ex.args) == 3
         lhssym = gensym()
         rhssym = gensym()
         quote
