@@ -2,7 +2,7 @@ module Pkg
 
 export Git, Dir, GitHub, Types, Reqs, Cache, Read, Query, Resolve, Write, Generate, Entry
 export dir, init, rm, add, available, installed, status, clone, checkout,
-       release, fix, update, resolve, register, tag, publish, generate
+       release, fix, update, resolve, register, tag, publish, generate, test
 
 const DEFAULT_META = "git://github.com/JuliaLang/METADATA.jl"
 const META_BRANCH = "metadata-v2"
@@ -61,6 +61,10 @@ build(pkgs::String...) = cd(Entry.build,[pkgs...])
 
 generate(pkg::String, license::String; force::Bool=false) =
 	cd(Generate.package,pkg,license,force=force)
+
+
+test() = cd(Entry.test)
+test(pkgs::String...) = cd(Entry.test,String[pkgs...])
 
 @deprecate release free
 @deprecate fixup build

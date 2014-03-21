@@ -131,3 +131,11 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
    For each new package version tagged in ``METADATA`` not already published, make sure that the tagged package commits have been pushed to the repo at the registered URL for the package and if they all have, push ``METADATA``.
 
+.. function:: test()
+
+   Run the tests for all installed packages ensuring that each package's test dependencies are installed for the duration of the test. A package is tested by running its ``test/runtests.jl`` file and test dependencies are specified in ``test/REQUIRE``.
+
+.. function:: test(pkgs...)
+
+   Run the tests for each package in ``pkgs`` ensuring that each package's test dependencies are installed for the duration of the test. A package is tested by running its ``test/runtests.jl`` file and test dependencies are specified in ``test/REQUIRE``.
+
