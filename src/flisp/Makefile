@@ -64,15 +64,25 @@ $(LIBTARGET).a: $(OBJS)
 	rm -rf $@
 	@$(call PRINT_LINK, $(AR) -rcs $@ $(OBJS))
 
+ifneq ($(USEMSVC), 1)
+CCLD = $(CC)
+else
+CCLD = $(LD)
+endif
+
 $(EXENAME)-debug: $(DOBJS) $(LIBFILES) $(LIBTARGET)-debug.a flmain.do
-	@$(call PRINT_CC, $(CC) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME)-debug $(LIBTARGET).a $(LIBS) $(OSLIBS))
+	@$(call PRINT_LINK, $(CCLD) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME)-debug $(LIBTARGET).a $(LIBS) $(OSLIBS))
 ifndef CROSS_COMPILE
+ifneq ($(USEMSVC), 1)
 	$(call spawn,./$(EXENAME)-debug) unittest.lsp
+endif
 endif
 
 $(EXENAME): $(OBJS) $(LIBFILES) $(LIBTARGET).a flmain.o
-	@$(call PRINT_CC, $(CC) $(SHIPFLAGS) $(OBJS) flmain.o $(LDFLAGS) -o $(EXENAME) $(LIBTARGET).a $(LIBS) $(OSLIBS))
+	@$(call PRINT_LINK, $(CCLD) $(SHIPFLAGS) $(OBJS) flmain.o $(LDFLAGS) -o $(EXENAME) $(LIBTARGET).a $(LIBS) $(OSLIBS))
+ifneq ($(USEMSVC), 1)
 	$(call spawn,./$(EXENAME)) unittest.lsp
+endif
 
 clean:
 	rm -f *.o

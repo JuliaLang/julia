@@ -11,12 +11,14 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#ifndef _MSC_VER
 #include <unistd.h>
+#include <libgen.h>
+#include <getopt.h>
+#endif
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
-#include <libgen.h>
-#include <getopt.h>
 #include <ctype.h>
 
 #include "julia.h"
