@@ -8,7 +8,9 @@ ifneq ($(XC_HOST),)
 CONFIGURE_COMMON += --host=$(XC_HOST)
 endif
 ifeq ($(OS),WINNT)
+ifneq ($(USEMSVC), 1)
 CONFIGURE_COMMON += LDFLAGS=-Wl,--stack,8388608
+endif
 endif
 CONFIGURE_COMMON += F77="$(FC)" CC="$(CC)" CXX="$(CXX)"
 
@@ -1154,6 +1156,7 @@ utf8proc-v$(UTF8PROC_VER).tar.gz:
 utf8proc-v$(UTF8PROC_VER)/Makefile: utf8proc-v$(UTF8PROC_VER).tar.gz
 	$(TAR) -xzf $<
 	patch $@ < utf8proc_Makefile.patch
+	cd utf8proc-v$(UTF8PROC_VER) && patch < ../utf8proc_msvc.patch
 	touch -c $@
 
 $(UTF8PROC_OBJ_SOURCE): utf8proc-v$(UTF8PROC_VER)/Makefile
