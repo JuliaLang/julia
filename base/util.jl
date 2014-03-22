@@ -182,7 +182,7 @@ function edit(file::String, line::Integer)
         run(`$edpath $file +$line`)
     elseif edname == "textmate" || edname == "mate"
         spawn(`$edpath $file -l $line`)
-    elseif edname == "subl"
+    elseif beginswith(edname, "subl")
         spawn(`$edpath $file:$line`)
     elseif OS_NAME == :Windows && (edname == "start" || edname == "open")
         spawn(`start /b $file`)
