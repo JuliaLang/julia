@@ -40,6 +40,8 @@
 #include "llvm/Object/ObjectFile.h"
 #include "llvm/IR/DIBuilder.h"
 #include "llvm/AsmParser/Parser.h"
+#include "llvm/Target/TargetMachine.h"
+#include "llvm/ADT/OwningPtr.h"
 #else
 #include "llvm/Analysis/Verifier.h"
 #endif
@@ -311,7 +313,11 @@ extern "C"
 void jl_dump_objfile(char* fname, int jit_model)
 {
     std::string err;
+#ifdef LLVM35
+    raw_fd_ostream OS(fname, err, sys::fs::F_None);
+#else
     raw_fd_ostream OS(fname, err);
+#endif
     formatted_raw_ostream FOS(OS);
     jl_gen_llvm_gv_array();
 
@@ -335,7 +341,11 @@ void jl_dump_objfile(char* fname, int jit_model)
 
     PassManager PM;
     PM.add(new TargetLibraryInfo(Triple(jl_TargetMachine->getTargetTriple())));
+#ifdef LLVM35
+    PM.add(new DataLayoutPass(*jl_ExecutionEngine->getDataLayout()));
+#else
     PM.add(new DataLayout(*jl_ExecutionEngine->getDataLayout()));
+#endif
     if (TM->addPassesToEmitFile(PM, FOS, TargetMachine::CGFT_ObjectFile, false)) {
         jl_error("Could not generate obj file for this target");
     }
@@ -4134,11 +4144,12 @@ extern "C" void jl_init_codegen(void)
 #endif
 #ifdef USE_MCJIT
     jl_mcjmm = new SectionMemoryManager();
+    std::vector<std::string> attrvec;
 #else
     // Temporarily disable Haswell BMI2 features due to LLVM bug.
     const char *mattr[] = {"-bmi2", "-avx2"};
-#endif
     std::vector<std::string> attrvec (mattr, mattr+2);
+#endif
     EngineBuilder eb = EngineBuilder(engine_module)
         .setEngineKind(EngineKind::JIT)
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
