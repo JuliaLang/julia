@@ -210,6 +210,12 @@ edit(f::Union(Function,DataType), t) = edit(functionloc(f,t)...)
 less(f::Union(Function,DataType))    = less(functionloc(f)...)
 less(f::Union(Function,DataType), t) = less(functionloc(f,t)...)
 
+function edit( m::Method )
+	tv, decls, file, line = arg_decl_parts(m)
+	edit( string(file), line )
+end
+
+
 # clipboard copy and paste
 
 @osx_only begin
