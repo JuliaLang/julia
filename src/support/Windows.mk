@@ -15,6 +15,7 @@ HEADERS = \
 	libsupport.h \
 	MurmurHash3.h \
 	ptrhash.h \
+	strtod.h \
 	timefuncs.h \
 	utf8.h \
 	utils.h \
@@ -23,6 +24,7 @@ HEADERS = \
 OBJECTS = \
 	hashing.obj \
 	timefuncs.obj \
+	strtod.obj \
 	ptrhash.obj \
 	operators.obj \
 	utf8.obj \

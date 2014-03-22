@@ -16,12 +16,11 @@ DOBJS = $(SRCS:%.c=%.do)
 LLTDIR = ../support
 LLT = $(LLTDIR)/libsupport.a $(LIBUV) $(LIBUTF8PROC)
 
-FLAGS = -I$(LLTDIR) $(CFLAGS) \
-	-DUSE_COMPUTED_GOTO $(HFILEDIRS:%=-I%) \
+FLAGS = -I$(LLTDIR) $(CFLAGS) $(HFILEDIRS:%=-I%) \
         -I$(LIBUV_INC) -I$(JULIAHOME)/usr/include $(LIBDIRS:%=-L%) \
         -DLIBRARY_EXPORTS
 ifneq ($(USEMSVC), 1)
-FLAGS += -Wall -Wno-strict-aliasing -fvisibility=hidden 
+FLAGS += -Wall -Wno-strict-aliasing -DUSE_COMPUTED_GOTO -fvisibility=hidden 
 endif
 LIBFILES = $(LLT)
 LIBS = $(LIBFILES)
