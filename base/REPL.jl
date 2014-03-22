@@ -125,10 +125,10 @@ module REPL
         end
     end
 
-    using Terminals
-    using Readline
+    using Base.Terminals
+    using Base.Readline
 
-    import Readline: char_move_left, char_move_word_left, CompletionProvider, completeLine
+    import Base.Readline: char_move_left, char_move_word_left, CompletionProvider, completeLine
 
     type ReadlineREPL <: AbstractREPL
         t::TextTerminal
@@ -153,7 +153,7 @@ module REPL
         r::ReadlineREPL
     end
 
-    using REPLCompletions
+    using Base.REPLCompletions
 
     function completeLine(c::REPLCompletionProvider,s)
         partial = bytestring(s.input_buffer.data[1:position(s.input_buffer)])
@@ -168,7 +168,7 @@ module REPL
         return (ret, partial[range])
     end
 
-    import Readline: HistoryProvider, add_history, history_prev, history_next, history_search
+    import Base.Readline: HistoryProvider, add_history, history_prev, history_next, history_search
 
     type REPLHistoryProvider <: HistoryProvider
         history::Array{String,1}
@@ -329,7 +329,6 @@ module REPL
     Readline.reset_state(hist::REPLHistoryProvider) = history_reset_state(hist)
 
     const julia_green = "\033[1m\033[32m"
-    const color_normal = Base.color_normal
 
     function return_callback(repl,s)
         if position(s.input_buffer) != 0 && eof(s.input_buffer) && 
@@ -383,7 +382,7 @@ module REPL
         end
     end
 
-    import Terminals: raw!
+    import Base.Terminals: raw!
 
     function reset(d::REPLDisplay)
         raw!(d.repl.t,false)
@@ -473,7 +472,7 @@ module REPL
 
         (hkp,hkeymap) = Readline.setup_search_keymap(hp)
 
-        # Canoniczlize user keymap input
+        # Canonicalize user keymap input
         if isa(extra_repl_keymap,Dict)
             extra_repl_keymap = [extra_repl_keymap]
         end
@@ -569,7 +568,6 @@ module REPL
         repl_channel = RemoteRef()
         response_channel = RemoteRef()
         start_repl_backend(repl_channel, response_channel)
-        banner(t,t)
         run_frontend(ReadlineREPL(t),repl_channel,response_channel)
     end
 
@@ -639,7 +637,7 @@ module REPL
             if !isempty(line)
                 ast = Base.parse_input_line(line)
                 if have_color
-                    print(repl.stream,color_normal)
+                    print(repl.stream, Base.color_normal)
                 end
                 put!(repl_channel, (ast,1))
                 (val, bt) = take!(response_channel)

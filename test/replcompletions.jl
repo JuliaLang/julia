@@ -1,5 +1,4 @@
-using REPLCompletions
-using Base.Test
+using Base.REPLCompletions
 
 module CompletionFoo
     module CompletionFoo2
@@ -42,30 +41,31 @@ c,r = test_complete(s)
 @test r == 20:20
 @test s[r] == "f"
 
-# Test completion of packages
-mkp(p) = ((@assert !isdir(p)); mkdir(p))
-mkp(Pkg.dir("MyAwesomePackage"))
-mkp(Pkg.dir("CompletionFooPackage"))
-
-s = "using MyAwesome"
-c,r = test_complete(s)
-@test in("MyAwesomePackage",c)
-@test s[r] == "MyAwesome"
-
-s = "using Completion"
-c,r = test_complete(s)
-@test in("CompletionFoo",c) #The module
-@test in("CompletionFooPackage",c) #The package
-@test s[r] == "Completion"
-
-s = "using CompletionFoo.Completion"
-c,r = test_complete(s)
-@test in("CompletionFoo2",c)
-@test s[r] == "Completion"
-
-rmdir(Pkg.dir("MyAwesomePackage"))
-rmdir(Pkg.dir("CompletionFooPackage"))
-
+## Test completion of packages
+#mkp(p) = ((@assert !isdir(p)); mkdir(p))
+#temp_pkg_dir() do
+#    mkp(Pkg.dir("MyAwesomePackage"))
+#    mkp(Pkg.dir("CompletionFooPackage"))
+#
+#    s = "using MyAwesome"
+#    c,r = test_complete(s)
+#    @test in("MyAwesomePackage",c)
+#    @test s[r] == "MyAwesome"
+#
+#    s = "using Completion"
+#    c,r = test_complete(s)
+#    @test in("CompletionFoo",c) #The module
+#    @test in("CompletionFooPackage",c) #The package
+#    @test s[r] == "Completion"
+#
+#    s = "using CompletionFoo.Completion"
+#    c,r = test_complete(s)
+#    @test in("CompletionFoo2",c)
+#    @test s[r] == "Completion"
+#
+#    rmdir(Pkg.dir("MyAwesomePackage"))
+#    rmdir(Pkg.dir("CompletionFooPackage"))
+#end
 
 @unix_only begin
     #Assume that we can rely on the existence and accessibility of /tmp

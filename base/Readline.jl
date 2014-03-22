@@ -1,8 +1,8 @@
-    module Readline
-    using Terminals
+module Readline
+    using Base.Terminals
 
-    import Terminals: raw!, width, height, cmove, Rect, Size, getX, 
-                      getY, clear_line, beep
+    import Base.Terminals: raw!, width, height, cmove, Rect, Size, getX,
+                           getY, clear_line, beep
 
     import Base: ensureroom, peek
 

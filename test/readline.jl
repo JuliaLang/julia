@@ -1,4 +1,4 @@
-using Base.Test
+using Base.Readline
 
 a_foo = 0
 
