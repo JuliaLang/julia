@@ -469,7 +469,7 @@ endif
 ifeq ($(OS), Darwin)
   WHOLE_ARCHIVE = -Xlinker -all_load
   NO_WHOLE_ARCHIVE =
-else
+else ifneq ($(USEMSVC), 1)
   WHOLE_ARCHIVE = -Wl,--whole-archive
   NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
 endif
