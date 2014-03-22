@@ -145,65 +145,6 @@ end
 
 _repl_start = Condition()
 
-function run_repl()
-    global const repl_channel = RemoteRef()
-
-    ccall(:jl_init_repl, Void, (Cint,), _use_history)
-
-    # install Ctrl-C interrupt handler (InterruptException)
-    ccall(:jl_install_sigint_handler, Void, ())
-    buf = Array(Uint8)
-    global _repl_enough_stdin = true
-    input = @async begin
-        try
-            while true
-                if _repl_enough_stdin
-                    wait(_repl_start)
-                end
-                try
-                    if eof(STDIN) # if TTY, can throw InterruptException, must be in try/catch block
-                        return
-                    end
-                    read!(STDIN, buf)
-                    ccall(:jl_read_buffer,Void,(Ptr{Void},Cssize_t),buf,length(buf))
-                catch ex
-                    if isa(ex,InterruptException)
-                        println(STDOUT, "^C")
-                        ccall(:jl_reset_input,Void,())
-                        repl_callback(nothing, 0)
-                    else
-                        rethrow(ex)
-                    end
-                end
-            end
-        finally
-            put!(repl_channel,(nothing,-1))
-        end
-    end
-
-    while !istaskdone(input)
-        if have_color
-            prompt_string = "\01\033[1m\033[32m\02julia> \01\033[0m"*input_color()*"\02"
-        else
-            prompt_string = "julia> "
-        end
-        ccall(:repl_callback_enable, Void, (Ptr{Uint8},), prompt_string)
-        global _repl_enough_stdin = false
-        notify(_repl_start)
-        start_reading(STDIN)
-        (ast, show_value) = take!(repl_channel)
-        if show_value == -1
-            # exit flag
-            break
-        end
-        eval_user_input(ast, show_value!=0)
-    end
-
-    if have_color
-        print(color_normal)
-    end
-end
-
 function parse_input_line(s::String)
     # s = bytestring(s)
     # (expr, pos) = parse(s, 1)
@@ -373,6 +314,9 @@ function early_init()
     start_gc_msgs_task()
 end
 
+import .Terminals
+import .REPL
+
 function _start()
     early_init()
 
@@ -382,17 +326,15 @@ function _start()
         (quiet,repl,startup,color_set,history) = process_options(copy(ARGS))
         global _use_history = history
 
+        local term
         if repl
+            term = Terminals.UnixTerminal(get(ENV,"TERM",""),STDIN,STDOUT,STDERR)
             if !isa(STDIN,TTY)
                 global is_interactive = !isa(STDIN,Union(File,IOStream))
                 color_set || (global have_color = false)
             else
                 global is_interactive = true
-                if !color_set
-                    @windows_only global have_color = true
-                    @unix_only global have_color =
-                        (beginswith(get(ENV,"TERM",""),"xterm") || success(`tput setaf 0`))
-                end
+                color_set || (global have_color = Terminals.hascolor(term))
             end
         end
 
@@ -415,8 +357,9 @@ function _start()
                 end
                 quit()
             end
-            quiet || banner()
-            run_repl()
+            quiet || REPL.banner(term,term)
+            ccall(:jl_install_sigint_handler, Void, ())
+            REPL.run_repl(term)
         end
     catch err
         display_error(err,catch_backtrace())

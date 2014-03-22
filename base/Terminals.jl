@@ -1,7 +1,7 @@
 module Terminals
     import Base.size, Base.write, Base.flush
     abstract TextTerminal <: Base.IO
-    export TextTerminal, NCurses, writepos, cmove, pos, getX, getY, hascolor
+    export TextTerminal, writepos, cmove, pos, getX, getY, hascolor
 
     # Stuff that really should be in a Geometry package
     immutable Rect
@@ -15,7 +15,6 @@ module Terminals
         width
         height
     end 
-
 
     # INTERFACE
     size(::TextTerminal) = error("Unimplemented")
@@ -83,7 +82,7 @@ module Terminals
     module Attributes
         # This is just to get started and will have to be revised
 
-        import Terminals.TextAttribute, Terminals.TextTerminal
+        import ..Terminals: TextAttribute, TextTerminal
 
         export Standout, Underline, Reverse, Blink, Dim, Bold, AltCharset, Invisible, Protect, Left, Right, Top,
                 Vertical, Horizontal, Low
@@ -129,10 +128,9 @@ module Terminals
     end
 
     module Colors 
-        import Terminals.TextAttribute, Terminals.TextTerminal, Terminals.Attributes.attr_simplify
-        using Color
+        import ..Terminals: TextAttribute, TextTerminal
 
-        export TerminalColor, TextColor, BackgroundColor, ForegroundColor, approximate,
+        export TerminalColor, TextColor, BackgroundColor, ForegroundColor,
                 lookup_color, terminal_color, maxcolors, maxcolorpairs, palette, numcolors
 
         # Represents a color actually displayable by the current terminal
@@ -145,13 +143,6 @@ module Terminals
             c::TerminalColor
         end
 
-        function approximate(t::TextTerminal, c::ColorValue)
-            x = keys(palette(t))
-            lookup_color(t,x[indmin(map(x->colordiff(c,x),x))])
-        end
-
-        attr_simplify(t::TextTerminal, c::ColorValue) = TextColor(lookup_color(t,c))
-
         # Terminals should implement this
         lookup_color(t::TextTerminal) = error("Unimplemented")
         maxcolors(t::TextTerminal) = error("Unimplemented")
@@ -161,10 +152,10 @@ module Terminals
     end
 
     module Unix
-        importall Terminals
+        importall ..Terminals
 
-        import Terminals: width, height, cmove, Rect, Size, getX, 
-                          getY, raw!, clear, clear_line, beep, hascolor
+        import ..Terminals: width, height, cmove, Rect, Size, getX,
+                            getY, raw!, clear, clear_line, beep, hascolor
         import Base: size, read, write, flush, TTY, writemime, readuntil, start_reading, stop_reading
 
         export UnixTerminal
