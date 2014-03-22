@@ -165,13 +165,12 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
     ```
     make run-julia
    ```
-   (the full syntax is `make run-julia[-release|-debug] [DEFAULT_REPL=(basic|readline)]`)
+   (the full syntax is `make run-julia[-release|-debug]`)
 
   - Using the Julia executables directly
     ```
-    usr/bin/julia-readline
+    usr/bin/julia-basic
 ```
-    (or `julia-basic` if you prefer)
 
 ## Cross-compiling
 
