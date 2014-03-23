@@ -149,7 +149,7 @@ afiro = CholmodSparse!(int32([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,
                         -1.0,2.279,1.4,-1.0,1.0,-1.0,1.0,1.0,1.0], 27, 51, 0)
 chmaf = cholfact(afiro)
 y = afiro'*ones(size(afiro,1))
-sol = Base.solve(chmaf, afiro*y) # least squares solution
+sol = chmaf\(afiro*y) # least squares solution
 @test isvalid(sol)
 pred = afiro'*sol
 @test norm(afiro * (y.mat - pred.mat)) < 1e-8
