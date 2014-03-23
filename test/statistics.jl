@@ -19,12 +19,27 @@
 @test mean([1,2,3]) == 2.
 @test mean([0 1 2; 4 5 6], 1) == [2.  3.  4.]
 @test mean([1 2 3; 4 5 6], 1) == [2.5 3.5 4.5]
-@test var([1,2,3]) == 1.
+
 @test var(1:8) == 6.
-@test var([1 2 3 4 5; 6 7 8 9 10], 2) == [2.5 2.5]'
-@test varm([1,2,3], 2) == 1.
-@test std([1,2,3]) == 1.
-@test stdm([1,2,3], 2) == 1.
+
+@test_approx_eq varm([1,2,3], 2) 1.
+@test_approx_eq var([1,2,3]) 1.
+@test_approx_eq var([1,2,3]; corrected=false) 2.0/3
+@test_approx_eq var([1,2,3]; zeromean=true) 7.
+@test_approx_eq var([1,2,3]; zeromean=true, corrected=false) 14.0/3
+
+@test_approx_eq var([1 2 3 4 5; 6 7 8 9 10], 2) [2.5 2.5]'
+@test_approx_eq var([1 2 3 4 5; 6 7 8 9 10], 2; corrected=false) [2.0 2.0]'
+
+@test_approx_eq stdm([1,2,3], 2) 1.
+@test_approx_eq std([1,2,3]) 1.
+@test_approx_eq std([1,2,3]; corrected=false) sqrt(2.0/3)
+@test_approx_eq std([1,2,3]; zeromean=true) sqrt(7.0)
+@test_approx_eq std([1,2,3]; zeromean=true, corrected=false) sqrt(14.0/3)
+
+@test_approx_eq std([1 2 3 4 5; 6 7 8 9 10], 2) sqrt([2.5 2.5]')
+@test_approx_eq std([1 2 3 4 5; 6 7 8 9 10], 2; corrected=false) sqrt([2.0 2.0]')
+
 @test sum(hist([1,2,3])[2]) == 3
 @test hist([])[2] == []
 @test hist([1])[2] == [1]
