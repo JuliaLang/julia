@@ -182,3 +182,14 @@ function show_backtrace(io::IO, top_function::Symbol, t, set)
         show_trace_entry(io, lastname, lastfile, lastline, n)
     end
 end
+
+function show_backtrace1(bt)
+    for t in bt
+        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Int32), t, 0)
+        if lkup != ()
+            fname, file, line = lkup
+            print("in ", fname, " at ", file, ", line ", line)
+            break
+        end
+    end
+end
