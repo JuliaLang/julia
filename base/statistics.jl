@@ -44,9 +44,24 @@ end
 median{T<:Real}(v::AbstractArray{T}; checknan::Bool=true) =
     median!(vec(copy(v)), checknan=checknan)
 
-## variance with known mean, using pairwise summation
-function varm_pairwise(A::AbstractArray, m, i1,n) # see sum_pairwise
-    if n < 128
+
+## variances
+
+function varzm_pairwise(A::AbstractArray, i1::Int, n::Int)
+    if n < 256
+        @inbounds s = abs2(A[i1])
+        for i=i1+1:i1+n-1
+            @inbounds s += abs2(A[i])
+        end
+        return s
+    else
+        n2 = div(n,2)
+        return varzm_pairwise(A, i1, n2) + varzm_pairwise(A, i1+n2, n-n2)
+    end
+end
+
+function varm_pairwise(A::AbstractArray, m::Number, i1::Int, n::Int) # see sum_pairwise
+    if n < 256
         @inbounds s = abs2(A[i1] - m)
         for i = i1+1:i1+n-1
             @inbounds s += abs2(A[i] - m)
@@ -57,16 +72,36 @@ function varm_pairwise(A::AbstractArray, m, i1,n) # see sum_pairwise
         return varm_pairwise(A, m, i1, n2) + varm_pairwise(A, m, i1+n2, n-n2)
     end
 end
-function varm(v::AbstractArray, m::Number)
+
+function varzm(v::AbstractArray; corrected::Bool=true)
     n = length(v)
-    if n == 0 || n == 1
-        return NaN
-    end
-    return varm_pairwise(v, m, 1,n) / (n - 1)
+    n == 0 && return NaN
+    return varzm_pairwise(v, 1, n) / (n - int(corrected))
 end
+
+function varm(v::AbstractArray, m::Number; corrected::Bool=true)
+    n = length(v)
+    n == 0 && return NaN
+    return varm_pairwise(v, m, 1, n) / (n - int(corrected))
+end
+
+var(v::AbstractArray; corrected::Bool=true, zeromean::Bool=false) = 
+    zeromean ? varzm(v; corrected=corrected) : varm(v, mean(v); corrected=corrected)
+
+function var(v::AbstractArray, region; corrected::Bool=true, zeromean::Bool=false)
+    cn = regionsize(v, region) - int(corrected)
+    if zeromean
+        return sum(abs2(v), region) / cn
+    else
+        return sum(abs2(v .- mean(v, region)), region) / cn
+    end
+end
+
+
+## variances over ranges
+
 varm(v::Ranges, m::Number) = var(v)
 
-## variance
 function var(v::Ranges)
     s = step(v)
     l = length(v)
@@ -75,20 +110,28 @@ function var(v::Ranges)
     end
     return abs2(s) * (l + 1) * l / 12
 end
-var(v::AbstractArray) = varm(v, mean(v))
-function var(v::AbstractArray, region)
-    x = v .- mean(v, region)
-    return sum(abs2(x), region) / (regionsize(v,region) - 1)
-end
-
-## standard deviation with known mean
-stdm(v, m::Number) = sqrt(varm(v, m))
 
 ## standard deviation
-std(v) = sqrt(var(v))
-std(v, region) = sqrt(var(v, region))
+
+function sqrt!(v::AbstractArray) 
+    for i = 1:length(v)
+        v[i] = sqrt(v[i])
+    end
+    v
+end
+
+stdm(v::AbstractArray, m::Number; corrected::Bool=true) = 
+    sqrt(varm(v, m; corrected=corrected))
+
+std(v::AbstractArray; corrected::Bool=true, zeromean::Bool=false) = 
+    sqrt(var(v; corrected=corrected, zeromean=zeromean))
+
+std(v::AbstractArray, region; corrected::Bool=true, zeromean::Bool=false) = 
+    sqrt!(var(v, region; corrected=corrected, zeromean=zeromean))
+
 
 ## nice-valued ranges for histograms
+
 function histrange{T<:FloatingPoint,N}(v::AbstractArray{T,N}, n::Integer)
     if length(v) == 0
         return Range(0.0,1.0,1)
