@@ -517,3 +517,17 @@ Examples::
     @unix @!osx
 
 The first condition applies to any system but Windows and the second condition applies to any UNIX system besides OS X.
+
+Runtime checks for the current version of Julia can be made using the built-in
+``VERSION`` variable, which is of type ``VersionNumber``. Such code is
+occasionally necessary to keep track of new or deprecated functionality between
+various releases of Julia. Examples of runtime checks::
+
+    VERSION < v"0.3-" #exclude all pre-release versions of 0.3
+
+    v"0.2-" <= VERSION < v"0.3-" #get all 0.2 versions, including pre-releases, up to the above
+
+    v"0.2" <= VERSION < v"0.3-" #To get only stable 0.2 versions (Note v"0.2" == v"0.2.0")
+
+    VERSION >= v"0.2.1" #get at least version 0.2.1
+
