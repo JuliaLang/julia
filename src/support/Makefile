@@ -44,10 +44,10 @@ ifneq ($(USEMSVC), 1)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 else
 %.o: %.S
-	@$(call PRINT_CC, $(CPP) $(CPPFLAGS) $(SHIPFLAGS) $<)
+	@$(call PRINT_CC, $(CPP) -P $(CPPFLAGS) $(SHIPFLAGS) $<)
 	@$(call PRINT_CC, $(AS) $(CPPFLAGS) $(SHIPFLAGS) -Fo$@ -c $*.i)
 %.do: %.S
-	@$(call PRINT_CC, $(CPP) $(CPPFLAGS) $(DEBUGFLAGS) $<)
+	@$(call PRINT_CC, $(CPP) -P $(CPPFLAGS) $(DEBUGFLAGS) $<)
 	@$(call PRINT_CC, $(AS) $(CPPFLAGS) $(DEBUGFLAGS) -Fo$@ -c $*.i)
 endif
 

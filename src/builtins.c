@@ -671,6 +671,11 @@ DLLEXPORT int jl_strtod(char *str, double *out)
     return 0;
 }
 
+// MSVC pre-2013 did not define HUGE_VALF
+#ifndef HUGE_VALF
+#define HUGE_VALF (1e25f * 1e25f)
+#endif
+
 DLLEXPORT int jl_substrtof(char *str, int offset, int len, float *out)
 {
     char *p;

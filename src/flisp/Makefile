@@ -10,6 +10,9 @@ LIBTARGET = lib$(NAME)
 
 SRCS = flisp.c builtins.c string.c equalhash.c table.c iostream.c \
         julia_extensions.c
+ifeq ($(USEMSVC), 1)
+SRCS += basename.c dirname.c
+endif
 
 OBJS = $(SRCS:%.c=%.o)
 DOBJS = $(SRCS:%.c=%.do)

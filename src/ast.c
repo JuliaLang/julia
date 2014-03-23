@@ -13,6 +13,12 @@
 #include "julia_internal.h"
 #include "flisp.h"
 
+// MSVC complains about "julia_flisp.boot.inc : error C4335: Mac file format
+// detected: please convert the source file to either DOS or UNIX format"
+#ifdef _MSC_VER
+#pragma warning(disable:4335)
+#endif
+
 static uint8_t flisp_system_image[] = {
 #include "julia_flisp.boot.inc"
 };
