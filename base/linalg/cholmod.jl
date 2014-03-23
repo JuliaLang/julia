@@ -18,7 +18,7 @@ import Base: (*), convert, copy, ctranspose, eltype, findnz, getindex, hcat,
 
 import ..LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul_B,
                  cholfact, cholfact!, copy, det, diag,
-                 full, logdet, norm, scale, scale!, solve, sparse
+                 full, logdet, norm, scale, scale!, sparse
 
 include("cholmod_h.jl")
 
