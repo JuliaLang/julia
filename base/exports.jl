@@ -849,6 +849,7 @@ export
     utf16,
     utf32,
     warn,
+    with_out_str,
     xdump,
 
 # random numbers
@@ -1319,4 +1320,5 @@ export
     @sprintf,
     @deprecate,
     @boundscheck,
-    @inbounds
+    @inbounds,
+    @with_out_str
