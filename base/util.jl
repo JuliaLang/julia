@@ -511,3 +511,17 @@ end
 
 warn(err::Exception; prefix="ERROR: ", kw...) =
     warn(sprint(io->showerror(io,err)), prefix=prefix; kw...)
+
+# capture stdout temporarily
+
+function with_out_str(f::Function)
+    orig_stdout = STDOUT
+    rd, wr = redirect_stdout()
+    f()
+    redirect_stdout(orig_stdout)
+    return readavailable(rd)
+end
+
+macro with_out_str(expr)
+    :(with_out_str(()->$expr)) |> esc
+end
