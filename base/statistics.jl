@@ -434,7 +434,7 @@ function sturges(n)  # Sturges' formula
     iceil(log2(n))+1
 end
 
-function hist!{HT}(h::StoredArray{HT}, v::AbstractVector, edg::AbstractVector; init::Bool=true)
+function hist!{HT}(h::AbstractArray{HT}, v::AbstractVector, edg::AbstractVector; init::Bool=true)
     n = length(edg) - 1
     length(h) == n || error("length(h) must equal length(edg) - 1.")
     if init
@@ -453,7 +453,7 @@ hist(v::AbstractVector, edg::AbstractVector) = hist!(Array(Int, length(edg)-1), 
 hist(v::AbstractVector, n::Integer) = hist(v,histrange(v,n))
 hist(v::AbstractVector) = hist(v,sturges(length(v)))
 
-function hist!{HT}(H::StoredArray{HT,2}, A::AbstractMatrix, edg::AbstractVector; init::Bool=true)
+function hist!{HT}(H::AbstractArray{HT,2}, A::AbstractMatrix, edg::AbstractVector; init::Bool=true)
     m, n = size(A)
     size(H) == (length(edg)-1, n) || error("Incorrect size of H.")
     if init
@@ -471,7 +471,7 @@ hist(A::AbstractMatrix) = hist(A,sturges(size(A,1)))
 
 
 ## hist2d
-function hist2d!{HT}(H::StoredArray{HT,2}, v::AbstractMatrix, 
+function hist2d!{HT}(H::AbstractArray{HT,2}, v::AbstractMatrix, 
                      edg1::AbstractVector, edg2::AbstractVector; init::Bool=true)
     size(v,2) == 2 || error("hist2d requires an Nx2 matrix.")
     n = length(edg1) - 1
