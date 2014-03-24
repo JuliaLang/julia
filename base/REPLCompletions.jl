@@ -91,7 +91,7 @@ module REPLCompletions
             fields = t.names
             for field in fields
                 s = string(field)
-                if beginswith(s,name) && 
+                if beginswith(s,name)
                     push!(suggestions,s)
                 end
             end
