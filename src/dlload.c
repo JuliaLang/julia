@@ -15,6 +15,10 @@
 #include <dlfcn.h>
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #if defined(__APPLE__)
 static char *extensions[] = { "", ".dylib" };
 #define N_EXTENSIONS 2
@@ -205,5 +209,9 @@ char *jl_dlfind_win32(char *f_name)
     // oops, we didn't find it. NULL defaults to searching jl_RTLD_DEFAULT_handle,
     // which defaults to jl_dl_handle, where we won't find it, and will throw the
     // appropriate error.
+}
+#endif
+
+#ifdef __cplusplus
 }
 #endif

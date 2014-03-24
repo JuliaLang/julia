@@ -7,6 +7,10 @@
 #include <setjmp.h>
 #include "flisp.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 static value_t iostreamsym, rdsym, wrsym, apsym, crsym, truncsym;
 static value_t instrsym, outstrsym;
 fltype_t *iostreamtype;
@@ -450,3 +454,7 @@ void iostream_init(void)
     setc(symbol("*stdin*" ), cvalue_from_ref(iostreamtype, ios_stdin,
                                              sizeof(ios_t), FL_NIL));
 }
+
+#ifdef __cplusplus
+}
+#endif

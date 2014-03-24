@@ -4,6 +4,10 @@
 #include "flisp.h"
 #include "opcodes.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 static value_t argv_list(int argc, char *argv[])
 {
     int i;
@@ -58,3 +62,7 @@ int main(int argc, char *argv[])
     }
     return 0;
 }
+
+#ifdef __cplusplus
+}
+#endif

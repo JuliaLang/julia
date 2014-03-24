@@ -64,6 +64,10 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct interval {
   int first;
   int last;
@@ -313,3 +317,7 @@ int wcswidth_cjk(const uint32_t *pwcs, size_t n)
 
   return width;
 }
+
+#ifdef __cplusplus
+}
+#endif

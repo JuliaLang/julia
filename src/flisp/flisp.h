@@ -20,6 +20,10 @@ typedef int_t fixnum_t;
 #define T_FIXNUM T_INT32
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct {
     value_t car;
     value_t cdr;
@@ -382,5 +386,9 @@ value_t cvalue_wchar(value_t *args, uint32_t nargs);
 
 void fl_init(size_t initial_heapsize);
 int fl_load_system_image(value_t ios);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

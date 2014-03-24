@@ -7,6 +7,10 @@
 #include <xlocale.h>
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #if !defined(_OS_WINDOWS_)
 // This code path should be used for systems that support the strtod_l function
 
@@ -286,4 +290,8 @@ float strtof_c(const char *nptr, char **endptr)
   return (float) strtod_c(nptr, endptr);
 }
 
+#endif
+
+#ifdef __cplusplus
+}
 #endif

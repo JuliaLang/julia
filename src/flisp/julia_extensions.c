@@ -5,6 +5,10 @@
 #include "flisp.h"
 #include "utf8proc.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 static int is_uws(uint32_t wc)
 {
     return (wc==9 || wc==10 || wc==11 || wc==12 || wc==13 || wc==32 ||
@@ -108,3 +112,7 @@ void fl_init_julia_extensions(void)
 {
     assign_global_builtins(julia_flisp_func_info);
 }
+
+#ifdef __cplusplus
+}
+#endif

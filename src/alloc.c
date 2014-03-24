@@ -8,6 +8,10 @@
 #include "julia.h"
 #include "julia_internal.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 jl_value_t *jl_true;
 jl_value_t *jl_false;
 
@@ -931,3 +935,7 @@ JL_CALLABLE(jl_f_default_ctor_2)
         jl_type_error(((jl_datatype_t*)F)->name->name->name, ft, args[1]);
     return jl_new_struct((jl_datatype_t*)F, args[0], args[1]);
 }
+
+#ifdef __cplusplus
+}
+#endif

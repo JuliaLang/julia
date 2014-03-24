@@ -13,6 +13,10 @@
 #include "julia_internal.h"
 #include "flisp.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // MSVC complains about "julia_flisp.boot.inc : error C4335: Mac file format
 // detected: please convert the source file to either DOS or UNIX format"
 #ifdef _MSC_VER
@@ -860,3 +864,7 @@ jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_tuple_t *sparams)
     JL_GC_POP();
     return ast;
 }
+
+#ifdef __cplusplus
+}
+#endif

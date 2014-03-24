@@ -47,6 +47,10 @@ char *dirname(char *);
 #include <intrin.h>
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 DLLEXPORT uint32_t jl_getutf8(ios_t *s)
 {
     uint32_t wc=0;
@@ -625,3 +629,7 @@ DLLEXPORT const char *jl_pathname_for_handle(uv_lib_t *uv_lib)
 #endif
     return NULL;
 }
+
+#ifdef __cplusplus
+}
+#endif
