@@ -367,6 +367,10 @@ end
 const WORD_SIZE = int(Int.size)*8
 
 ## integer promotions ##
+promote(x::SmallSigned) = (int(x),)
+promote(x::SmallUnsigned) = (uint(x),)
+promote_typeof(x::SmallSigned) = Int
+promote_typeof(x::SmallUnsigned) = Uint
 
 promote_rule(::Type{Int16},  ::Type{Int8} ) = Int
 promote_rule(::Type{Int32},  ::Type{Int8} ) = Int
