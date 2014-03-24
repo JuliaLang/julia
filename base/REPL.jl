@@ -515,7 +515,7 @@ module REPL
                 pos = 0
                 while pos <= length(string)
                     oldpos = pos
-                    ast, pos = Base.parse(string,pos; )
+                    ast, pos = Base.parse(string, pos; raise=false)
                     # Get the line and strip leading and trailing whitespace
                     line = strip(string[max(oldpos,1):min(pos-1,length(string))])
                     Readline.replace_line(s,line)
