@@ -391,8 +391,8 @@ Implementation
 --------------
 
 The base array type in Julia is the abstract type
-``AbstractArray{T,n}``. It is parametrized by the number of dimensions
-``n`` and the element type ``T``. ``AbstractVector`` and
+``AbstractArray{T,N}``. It is parametrized by the number of dimensions
+``N`` and the element type ``T``. ``AbstractVector`` and
 ``AbstractMatrix`` are aliases for the 1-d and 2-d cases. Operations on
 ``AbstractArray`` objects are defined using higher level operators and
 functions, in a way that is independent of the underlying storage.
@@ -402,17 +402,27 @@ specific array implementation.
 The ``AbstractArray`` type includes anything vaguely array-like, and
 implementations of it might be quite different from conventional
 arrays. For example, elements might be computed on request rather than
-stored. Or, it might not be possible to assign or access every array
-location.
+stored.  However, any concrete ``AbstractArray{T,N}`` type should
+generally implement at least ``size(A)`` (returing an ``Int`` tuple),
+``getindex(A,i)`` and ``getindex(A,i1,...,iN)`` (returning an element
+of type ``T``); mutable arrays should also implement ``setindex!``.  It
+is recommended that these operations have nearly constant time complexity,
+or technically Õ(1) complexity, as otherwise some array functions may
+be unexpectedly slow.   Concrete types should also typically provide
+a `similar(A,T=eltype(A),dims=size(A))` method, which is used to allocate
+a similar array for `copy` and other out-of-place operations.
 
-``StoredArray`` is an abstract subtype of ``AbstractArray`` intended to
-include all arrays that behave like memories: all elements are independent,
-can be accessed, and (for mutable arrays) all elements can be assigned.
-``DenseArray`` is a further abstract subtype of ``StoredArray``. Arrays of
-this type have storage for every possible index, and provide uniform access
-performance for all elements.
+``DenseArray`` is an abstract subtype of ``AbstractArray`` intended
+to include all arrays that are laid out at regular offsets in memory,
+and which can therefore be passed to external C and Fortran functions
+expecting this memory layout.  Subtypes should provide a method
+``stride(A,k)`` that returns the "stride" of dimension ``k``:
+increasing the index of dimension ``k`` by ``1`` should increase the
+index ``i`` of ``getindex(A,i)`` by ``stride(A,k)``.  If a
+pointer conversion method ``convert(Ptr{T}, A)`` is provided, the
+memory layout should correspond in the same way to these strides.
 
-The ``Array{T,n}`` type is a specific instance of ``DenseArray``
+The ``Array{T,N}`` type is a specific instance of ``DenseArray``
 where elements are stored in column-major order (see additional notes in
 :ref:`man-performance-tips`). ``Vector`` and ``Matrix`` are aliases for
 the 1-d and 2-d cases. Specific operations such as scalar indexing,
@@ -420,7 +430,7 @@ assignment, and a few other basic storage-specific operations are all
 that have to be implemented for ``Array``, so that the rest of the array
 library can be implemented in a generic manner.
 
-``SubArray`` is a specialization of ``StoredArray`` that performs
+``SubArray`` is a specialization of ``AbstractArray`` that performs
 indexing by reference rather than by copying. A ``SubArray`` is created
 with the ``sub`` function, which is called the same way as ``getindex`` (with
 an array and a series of index arguments). The result of ``sub`` looks

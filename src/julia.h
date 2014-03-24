@@ -327,7 +327,6 @@ extern DLLEXPORT jl_datatype_t *jl_module_type;
 extern DLLEXPORT jl_datatype_t *jl_vararg_type;
 extern DLLEXPORT jl_datatype_t *jl_function_type;
 extern DLLEXPORT jl_datatype_t *jl_abstractarray_type;
-extern DLLEXPORT jl_datatype_t *jl_storedarray_type;
 extern DLLEXPORT jl_datatype_t *jl_densearray_type;
 extern DLLEXPORT jl_datatype_t *jl_array_type;
 extern DLLEXPORT jl_typename_t *jl_array_typename;

@@ -8,7 +8,6 @@ typealias DenseVector{T} DenseArray{T,1}
 typealias DenseMatrix{T} DenseArray{T,2}
 typealias DenseVecOrMat{T} Union(DenseVector{T}, DenseMatrix{T})
 
-typealias StoredVector{T} StoredArray{T,1}
 typealias StridedArray{T,N,A<:DenseArray} Union(DenseArray{T,N}, SubArray{T,N,A})
 typealias StridedVector{T,A<:DenseArray}  Union(DenseArray{T,1}, SubArray{T,1,A})
 typealias StridedMatrix{T,A<:DenseArray}  Union(DenseArray{T,2}, SubArray{T,2,A})
@@ -57,53 +56,6 @@ function copy!{T}(dest::Array{T}, dsto::Integer, src::Array{T}, so::Integer, N::
 end
 
 copy!{T}(dest::Array{T}, src::Array{T}) = copy!(dest, 1, src, 1, length(src))
-
-function copy!{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, A::StridedMatrix{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
-    if length(ir_dest) != length(ir_src) || length(jr_dest) != length(jr_src)
-        error("source and destination must have same size")
-    end
-    checkbounds(B, ir_dest, jr_dest)
-    checkbounds(A, ir_src, jr_src)
-    jdest = first(jr_dest)
-    Askip = size(A, 1)
-    Bskip = size(B, 1)
-    if stride(A, 1) == 1 && R == S
-        for jsrc in jr_src
-            copy!(B, (jdest-1)*Bskip+first(ir_dest), A, (jsrc-1)*Askip+first(ir_src), length(ir_src))
-            jdest += 1
-        end
-    else
-        for jsrc in jr_src
-            aoffset = (jsrc-1)*Askip
-            boffset = (jdest-1)*Bskip
-            idest = first(ir_dest)
-            for isrc in ir_src
-                B[boffset+idest] = A[aoffset+isrc]
-                idest += 1
-            end
-            jdest += 1
-        end
-    end
-end
-
-function copy_transpose!{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, A::StridedVecOrMat{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
-    if length(ir_dest) != length(jr_src) || length(jr_dest) != length(ir_src)
-        error("source and destination must have same size")
-    end
-    checkbounds(B, ir_dest, jr_dest)
-    checkbounds(A, ir_src, jr_src)
-    idest = first(ir_dest)
-    Askip = size(A, 1)
-    for jsrc in jr_src
-        offset = (jsrc-1)*Askip
-        jdest = first(jr_dest)
-        for isrc in ir_src
-            B[idest,jdest] = A[offset+isrc]
-            jdest += 1
-        end
-        idest += 1
-    end
-end
 
 function reinterpret{T,S}(::Type{T}, a::Array{S,1})
     nel = int(div(length(a)*sizeof(S),sizeof(T)))
@@ -689,7 +641,7 @@ end
 
 ## Unary operators ##
 
-function conj!{T<:Number}(A::StoredArray{T})
+function conj!{T<:Number}(A::AbstractArray{T})
     for i=1:length(A)
         A[i] = conj(A[i])
     end
@@ -994,7 +946,7 @@ end
 rotr90(A::AbstractMatrix, k::Integer) = rotl90(A,-k)
 rot180(A::AbstractMatrix, k::Integer) = mod(k, 2) == 1 ? rot180(A) : copy(A)
 
-# note: probably should be StridedVector or StoredVector
+# note: probably should be StridedVector or AbstractVector
 function reverse(A::AbstractVector, s=1, n=length(A))
     B = similar(A)
     for i = 1:s-1
@@ -1392,7 +1344,7 @@ _cumsum_type(v) = typeof(v[1]+v[1])
 for (f, fp, op) = ((:cumsum, :cumsum_pairwise, :+),
                    (:cumprod, :cumprod_pairwise, :*) )
     # in-place cumsum of c = s+v(i1:n), using pairwise summation as for sum
-    @eval function ($fp)(v::StoredVector, c::StoredVector, s, i1, n)
+    @eval function ($fp)(v::AbstractVector, c::AbstractVector, s, i1, n)
         if n < 128
             @inbounds c[i1] = ($op)(s, v[i1])
             for i = i1+1:i1+n-1
@@ -1405,7 +1357,7 @@ for (f, fp, op) = ((:cumsum, :cumsum_pairwise, :+),
         end
     end
 
-    @eval function ($f)(v::StoredVector)
+    @eval function ($f)(v::AbstractVector)
         n = length(v)
         c = $(op===:+ ? (:(similar(v,_cumsum_type(v)))) :
                         (:(similar(v))))
@@ -1445,7 +1397,7 @@ for (f, fp, op) = ((:cumsum, :cumsum_pairwise, :+),
 end
 
 for (f, op) = ((:cummin, :min), (:cummax, :max))
-    @eval function ($f)(v::StoredVector)
+    @eval function ($f)(v::AbstractVector)
         n = length(v)
         cur_val = v[1]
         res = similar(v, n)
