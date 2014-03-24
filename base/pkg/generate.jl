@@ -135,9 +135,9 @@ function travis(pkg::String; force::Bool=false)
         notifications:
           email: false
         env:
-          matrix: 
-            - JULIAVERSION="juliareleases" 
-            - JULIAVERSION="julianightlies" 
+          matrix:
+            - JULIAVERSION="juliareleases"
+            - JULIAVERSION="julianightlies"
         before_install:
           - sudo add-apt-repository ppa:staticfloat/julia-deps -y
           - sudo add-apt-repository ppa:staticfloat/\${JULIAVERSION} -y
