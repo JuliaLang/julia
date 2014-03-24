@@ -212,7 +212,6 @@ end
 
 help(io::IO, t::DataType) = help_for(io, string(t.name),t)
 help(io::IO, t::Module) = help(io, string(t))
-help(args...) = help(STDOUT, args...)
 
 function help(io::IO, x)
     show(io, x)
@@ -224,6 +223,8 @@ function help(io::IO, x)
         println(io, " is of type $t")
     end
 end
+
+help(args...) = help(STDOUT, args...)
 
 # check whether an expression is a qualified name, e.g. Base.FFTW.FORWARD
 isname(n::Symbol) = true
