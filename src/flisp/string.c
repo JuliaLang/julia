@@ -18,6 +18,10 @@
 #include <sys/time.h>
 #endif /* !_OS_WINDOWS_ */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 value_t fl_stringp(value_t *args, u_int32_t nargs)
 {
     argcount("string?", nargs, 1);
@@ -432,3 +436,7 @@ void stringfuncs_init(void)
 {
     assign_global_builtins(stringfunc_info);
 }
+
+#ifdef __cplusplus
+}
+#endif

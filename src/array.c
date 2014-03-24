@@ -10,6 +10,10 @@
 #include "julia.h"
 #include "julia_internal.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // array constructors ---------------------------------------------------------
 
 static inline int store_unboxed(jl_value_t *el_type)
@@ -711,3 +715,7 @@ DLLEXPORT void jl_cell_1d_push2(jl_array_t *a, jl_value_t *b, jl_value_t *c)
     jl_cellset(a, jl_array_dim(a,0)-2, b);
     jl_cellset(a, jl_array_dim(a,0)-1, c);
 }
+
+#ifdef __cplusplus
+}
+#endif

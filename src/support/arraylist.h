@@ -3,6 +3,10 @@
 
 #define AL_N_INLINE 29
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct {
     size_t len;
     size_t max;
@@ -15,5 +19,9 @@ void arraylist_free(arraylist_t *a);
 
 void arraylist_push(arraylist_t *a, void *elt);
 void *arraylist_pop(arraylist_t *a);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

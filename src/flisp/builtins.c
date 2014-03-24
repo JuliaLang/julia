@@ -19,6 +19,10 @@
 #include <sys/time.h>
 #endif /* !_OS_WINDOWS_ */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 size_t llength(value_t v)
 {
     size_t n = 0;
@@ -419,3 +423,7 @@ void builtins_init(void)
     table_init();
     iostream_init();
 }
+
+#ifdef __cplusplus
+}
+#endif

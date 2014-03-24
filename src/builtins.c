@@ -28,6 +28,10 @@
 #include "julia_internal.h"
 #include "builtin_proto.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // exceptions -----------------------------------------------------------------
 
 DLLEXPORT void jl_error(const char *str)
@@ -1354,3 +1358,7 @@ DLLEXPORT void jl_breakpoint(jl_value_t* v)
 {
     // put a breakpoint in you debugger here
 }
+
+#ifdef __cplusplus
+}
+#endif

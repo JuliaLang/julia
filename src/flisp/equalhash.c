@@ -12,4 +12,12 @@
 
 #define _equal_lispvalue_(x,y) equal_lispvalue((value_t)(x),(value_t)(y))
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 HTIMPL(equalhash, hash_lispvalue, _equal_lispvalue_)
+
+#ifdef __cplusplus
+}
+#endif

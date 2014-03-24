@@ -17,6 +17,10 @@
 #include "julia.h"
 #include "julia_internal.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // current line number in a file
 int jl_lineno = 0;
 
@@ -710,3 +714,7 @@ void jl_check_static_parameter_conflicts(jl_lambda_info_t *li, jl_tuple_t *t, jl
         }
     }
 }
+
+#ifdef __cplusplus
+}
+#endif

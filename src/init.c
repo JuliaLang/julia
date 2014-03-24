@@ -28,6 +28,10 @@
 #include "julia_internal.h"
 #include <stdio.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef _OS_WINDOWS_
 #define WIN32_LEAN_AND_MEAN
 // Copied from MINGW_FLOAT_H which may not be found due to a colision with the builtin gcc float.h
@@ -974,3 +978,7 @@ DLLEXPORT void jl_get_system_hooks(void)
     jl_loaderror_type = (jl_datatype_t*)basemod("LoadError");
     jl_weakref_type = (jl_datatype_t*)basemod("WeakRef");
 }
+
+#ifdef __cplusplus
+}
+#endif

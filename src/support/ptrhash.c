@@ -17,4 +17,12 @@
 
 #include "htable.inc"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 HTIMPL(ptrhash, inthash, OP_EQ)
+
+#ifdef __cplusplus
+}
+#endif

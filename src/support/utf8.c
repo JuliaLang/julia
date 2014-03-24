@@ -34,6 +34,10 @@
 
 #include "utf8.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 static const uint32_t offsetsFromUTF8[6] = {
     0x00000000UL, 0x00003080UL, 0x000E2080UL,
     0x03C82080UL, 0xFA082080UL, 0x82082080UL
@@ -749,3 +753,7 @@ int u8_reverse(char *dest, char *src, size_t len)
     }
     return 0;
 }
+
+#ifdef __cplusplus
+}
+#endif

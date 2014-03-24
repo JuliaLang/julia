@@ -57,6 +57,10 @@ char * dirname(char *);
 #include "flisp.h"
 #include "opcodes.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 static char *builtin_names[] =
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
       NULL, NULL, NULL, NULL,
@@ -2531,3 +2535,7 @@ int fl_load_system_image(value_t sys_image_iostream)
     POPN(1);
     return 0;
 }
+
+#ifdef __cplusplus
+}
+#endif

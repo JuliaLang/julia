@@ -11,6 +11,10 @@
 #include "julia_internal.h"
 #include "builtin_proto.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 static htable_t ser_tag;
 static htable_t deser_tag;
 static htable_t backref_table;
@@ -1341,3 +1345,7 @@ void jl_init_serializer(void)
         i += 1;
     }
 }
+
+#ifdef __cplusplus
+}
+#endif

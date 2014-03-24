@@ -8,6 +8,10 @@
 #include "julia_internal.h"
 #include "builtin_proto.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern int jl_lineno;
 
 static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl);
@@ -568,3 +572,7 @@ jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam)
 {
     return jl_interpret_toplevel_thunk_with(lam, NULL, 0);
 }
+
+#ifdef __cplusplus
+}
+#endif
