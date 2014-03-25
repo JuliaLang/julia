@@ -48,10 +48,67 @@ A = Complex128[exp(i*im) for i in 1:10^4]
 
 # test covariance & correlation
 
-X = [1 0; 2 1; 3 0; 4 1; 5 10]
-y = [5, 3, 4, 2, 5]
-@test_approx_eq cov(X[:,1], X[:,2]) cov(X)[1,2]
-@test issym(cov(X))
+function safe_cov(x, y, zm::Bool, cr::Bool)
+    n = length(x)
+    if !zm
+        x = x .- mean(x)
+        y = y .- mean(y)
+    end
+    dot(vec(x), vec(y)) / (n - int(cr))
+end
+
+X = [1. 2. 3. 4. 5.; 5. 4. 3. 2. 1.]'
+Y = [6. 1. 5. 3. 2.; 2. 7. 8. 4. 3.]'
+
+for vd in [1, 2], zm in [true, false], cr in [true, false] 
+    # println("vd = $vd: zm = $zm, cr = $cr")
+    if vd == 1
+        k = size(X, 2)
+        Cxx = zeros(k, k)
+        Cxy = zeros(k, k)
+        for i = 1:k, j = 1:k
+            Cxx[i,j] = safe_cov(X[:,i], X[:,j], zm, cr)
+            Cxy[i,j] = safe_cov(X[:,i], Y[:,j], zm, cr)
+        end
+        x1 = vec(X[:,1])
+        y1 = vec(Y[:,1])
+    else
+        k = size(X, 1)
+        Cxx = zeros(k, k)
+        Cxy = zeros(k, k)
+        for i = 1:k, j = 1:k
+            Cxx[i,j] = safe_cov(X[i,:], X[j,:], zm, cr)
+            Cxy[i,j] = safe_cov(X[i,:], Y[j,:], zm, cr)
+        end
+        x1 = vec(X[1,:])
+        y1 = vec(Y[1,:])
+    end
+
+    c = cov(x1; zeromean=zm, corrected=cr)
+    @test isa(c, Float64)
+    @test_approx_eq c Cxx[1,1]
+
+    C = cov(X; vardim=vd, zeromean=zm, corrected=cr)
+    @test size(C) == (k, k)
+    @test_approx_eq C Cxx
+
+    c = cov(x1, y1; zeromean=zm, corrected=cr)
+    @test isa(c, Float64)
+    @test_approx_eq c Cxy[1,1]
+
+    C = cov(x1, Y; vardim=vd, zeromean=zm, corrected=cr)
+    @test size(C) == (1, k)
+    @test_approx_eq C Cxy[1,:]
+
+    C = cov(X, y1; vardim=vd, zeromean=zm, corrected=cr)
+    @test size(C) == (k, 1)
+    @test_approx_eq C Cxy[:,1]
+
+    C = cov(X, Y; vardim=vd, zeromean=zm, corrected=cr)
+    @test size(C) == (k, k)
+    @test_approx_eq C Cxy
+end
+
 
 # test hist
 
