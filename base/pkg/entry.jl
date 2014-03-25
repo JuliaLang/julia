@@ -663,8 +663,7 @@ function updatehook(pkgs::Vector)
     """)
 end
 
-@windows_only const JULIA = joinpath(JULIA_HOME, ENV["JULIA_EXE"])
-@unix_only const JULIA = joinpath(JULIA_HOME, "julia-readline")
+const JULIA = joinpath(JULIA_HOME, "julia-basic")
 
 function test!(pkg::String, errs::Vector{String}, notests::Vector{String})
     const reqs_path = abspath(pkg,"test","REQUIRE")
