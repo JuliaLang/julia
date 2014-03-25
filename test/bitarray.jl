@@ -41,6 +41,11 @@ allsizes = [((), BitArray{0}), ((v1,), BitVector),
 for (sz,T) in allsizes
     b1 = randbool!(falses(sz...))
     @test isequal(bitpack(bitunpack(b1)), b1)
+    @test isequal(convert(Array{Float64,ndims(b1)}, b1),
+                  convert(Array{Float64,ndims(b1)}, bitunpack(b1)))
+    @test isequal(convert(AbstractArray{Float64,ndims(b1)}, b1),
+                  convert(AbstractArray{Float64,ndims(b1)}, bitunpack(b1)))
+
     i1 = rand!(false:true, zeros(Bool, sz...))
     @test isequal(bitunpack(bitpack(i1)), i1)
 end
