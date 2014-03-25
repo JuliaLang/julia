@@ -53,18 +53,15 @@ colon{T<:Integer}(start::T, stop::T) =
     Range1{T}(start, ifelse(stop<start, 0, int(stop-start+1)))
 
 if Int === Int32
-colon{T<:Union(Int8,Int16,Int32,Uint8,Uint16)}(start::T, stop::T) =
-    Range1{T}(start,
-              ifelse(stop < start, 0,
-                     checked_add(checked_sub(convert(Int,stop),convert(Int,start)),1)),
-              0)  # hack to elide negative length check
+    eval(:(typealias SmallInteger Union(Int8,Int16,Int32,Uint8,Uint16)))
 else
-colon{T<:Union(Int8,Int16,Int32,Int64,Uint8,Uint16,Uint32)}(start::T, stop::T) =
+    eval(:(typealias SmallInteger Union(Int8,Int16,Int32,Int64,Uint8,Uint16,Uint32)))
+end
+colon{T<:SmallInteger}(start::T, stop::T) =
     Range1{T}(start,
               ifelse(stop < start, 0,
                      checked_add(checked_sub(convert(Int,stop),convert(Int,start)),1)),
               0)  # hack to elide negative length check
-end
 
 function colon{T<:Real}(start::T, step::T, stop::T)
     step != 0 || error("step cannot be zero in colon syntax")
@@ -238,6 +235,9 @@ done(r::Ranges, i) = (length(r) <= i)
 
 # though these look very similar to the above, for some reason LLVM generates
 # much better code for these.
+start{T<:SmallInteger}(r::Range1{T}) = int(r.start)
+next{T<:SmallInteger}(r::Range1{T}, i) = (oftype(T, i), i+1)
+done{T<:SmallInteger}(r::Range1{T}, i) = i==r.start+r.len
 start{T<:Integer}(r::Range1{T}) = r.start
 next{T<:Integer}(r::Range1{T}, i) = (i, oftype(T, i+1))
 done{T<:Integer}(r::Range1{T}, i) = i==oftype(T, r.start+r.len)
