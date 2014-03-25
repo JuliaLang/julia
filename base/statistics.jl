@@ -176,7 +176,6 @@ function covzm(x::AbstractMatrix, y::AbstractMatrix; vardim::Int=1, corrected::B
     n = size(x, vardim)
     size(y, vardim) == n || throw(DimensionMismatch("Dimension of x and y mismatch."))
     c = vardim == 1 ? _conj(x'y) : x * y'
-    c = reshape(c, length(c), 1)
     scale!(c, inv(n - int(corrected)))
     return c
 end
