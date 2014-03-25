@@ -53,10 +53,13 @@
 
 #ifndef _MSC_VER
 .intel_syntax
-#else
-.model small,C
-#endif
 ENTRY(jl_longjmp)
+#else
+.586
+.model small,C
+.code
+jl_longjmp proc
+#endif
     mov    edx,DWORD PTR [esp+4]
     mov    eax,DWORD PTR [esp+8]
     mov    ebp,DWORD PTR [edx+0]
@@ -70,4 +73,7 @@ ENTRY(jl_longjmp)
     inc    eax
 a:  mov    DWORD PTR [esp],ecx
     ret
+#ifdef _MSC_VER
+jl_longjmp endp
+#endif
 END(jl_longjmp)
