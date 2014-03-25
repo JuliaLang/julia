@@ -73,10 +73,13 @@ function varm_pairwise(A::AbstractArray, m::Number, i1::Int, n::Int) # see sum_p
     end
 end
 
+sumabs2(v::AbstractArray) = varzm_pairwise(v, 1, length(v))
+sumabs2(v::AbstractArray, region) = sum(abs2(v), region)
+
 function varzm(v::AbstractArray; corrected::Bool=true)
     n = length(v)
     n == 0 && return NaN
-    return varzm_pairwise(v, 1, n) / (n - int(corrected))
+    return sumabs2(v) / (n - int(corrected))
 end
 
 function varm(v::AbstractArray, m::Number; corrected::Bool=true)
@@ -91,9 +94,9 @@ var(v::AbstractArray; corrected::Bool=true, zeromean::Bool=false) =
 function var(v::AbstractArray, region; corrected::Bool=true, zeromean::Bool=false)
     cn = regionsize(v, region) - int(corrected)
     if zeromean
-        return sum(abs2(v), region) / cn
+        return sumabs2(v, region) / cn
     else
-        return sum(abs2(v .- mean(v, region)), region) / cn
+        return sumabs2(v .- mean(v, region), region) / cn
     end
 end
 
@@ -128,6 +131,133 @@ std(v::AbstractArray; corrected::Bool=true, zeromean::Bool=false) =
 
 std(v::AbstractArray, region; corrected::Bool=true, zeromean::Bool=false) = 
     sqrt!(var(v, region; corrected=corrected, zeromean=zeromean))
+
+
+## pearson covariance functions ##
+
+_conj{T<:Real}(x::AbstractArray{T}) = x
+_conj(x::AbstractArray) = conj(x)
+
+# covzm (non-exported, with centered data)
+
+covzm(x::AbstractVector; corrected::Bool=true) = dot(x, x) / (length(x) - int(corrected))
+
+function covzm(x::AbstractMatrix; vardim::Int=1, corrected::Bool=true)
+    n = size(x, vardim)
+    c = vardim == 1 ? _conj(x'x) : x * x'
+    scale!(c, inv(n - int(corrected)))
+    return c
+end
+
+function covzm(x::AbstractVector, y::AbstractVector; corrected::Bool=true)
+    n = length(x)
+    length(y) == n || throw(DimensionMismatch("Dimensions of x and y mismatch."))
+    dot(x, y) / (n - int(corrected))
+end
+
+function covzm(x::AbstractVector, y::AbstractMatrix; vardim::Int=1, corrected::Bool=true)
+    n = length(x)
+    size(y, vardim) == n || throw(DimensionMismatch("Dimensions of x and y mismatch."))
+    c = vardim == 1 ? (y'x).' : (y * x).'
+    scale!(c, inv(n - int(corrected)))
+    return c
+end
+
+function covzm(x::AbstractMatrix, y::AbstractVector; vardim::Int=1, corrected::Bool=true)
+    n = size(x, vardim)
+    length(y) == n || throw(DimensionMismatch("Dimensions of x and y mismatch."))
+    c = vardim == 1 ? _conj(x'y) :  x * _conj(y)
+    c = reshape(c, length(c), 1)
+    scale!(c, inv(n - int(corrected)))
+    return c
+end
+
+function covzm(x::AbstractMatrix, y::AbstractMatrix; vardim::Int=1, corrected::Bool=true)
+    n = size(x, vardim)
+    size(y, vardim) == n || throw(DimensionMismatch("Dimension of x and y mismatch."))
+    c = vardim == 1 ? _conj(x'y) : x * y'
+    c = reshape(c, length(c), 1)
+    scale!(c, inv(n - int(corrected)))
+    return c
+end
+
+# covm
+
+covm(x::AbstractVector, xmean::Number; corrected::Bool=true) = 
+    covzm(x .- xmean; corrected=corrected)
+
+covm(x::AbstractMatrix, xmean::AbstractVecOrMat; vardim::Int=1, corrected::Bool=true) = 
+    covzm(x .- xmean; vardim=vardim, corrected=corrected)
+
+covm(x::AbstractVector, xmean::Number, y::AbstractVector, ymean::Number; corrected::Bool=true) = 
+    covzm(x .- xmean, y .- ymean; corrected=corrected)
+
+covm(x::AbstractVector, xmean::Number, y::AbstractMatrix, ymean::AbstractVecOrMat; vardim::Int=1, corrected::Bool=true) = 
+    covzm(x .- xmean, y .- ymean; vardim=vardim, corrected=corrected)
+
+covm(x::AbstractMatrix, xmean::AbstractVecOrMat, y::AbstractVector, ymean::Number; vardim::Int=1, corrected::Bool=true) = 
+    covzm(x .- xmean, y .- ymean; vardim=vardim, corrected=corrected)
+
+covm(x::AbstractMatrix, xmean::AbstractVecOrMat, y::AbstractMatrix, ymean::AbstractVecOrMat; vardim::Int=1, corrected::Bool=true) = 
+    covzm(x .- xmean, y .- ymean; vardim=vardim, corrected=corrected)
+
+# cov
+
+cov(x::AbstractVector; corrected::Bool=true, zeromean::Bool=false) =
+    zeromean ? covzm(x; corrected=corrected) :
+               covm(x, mean(x); corrected=corrected)
+
+cov(x::AbstractMatrix; vardim::Int=1, corrected::Bool=true, zeromean::Bool=false) =
+    zeromean ? covzm(x; vardim=vardim, corrected=corrected) :
+               covm(x, mean(x, vardim); vardim=vardim, corrected=corrected)
+
+cov(x::AbstractVector, y::AbstractVector; corrected::Bool=true, zeromean::Bool=false) =
+    zeromean ? covzm(x, y; corrected=corrected) :
+               covm(x, mean(x), y, mean(y); corrected=corrected)
+
+cov(x::AbstractVector, y::AbstractMatrix; vardim::Int=1, corrected::Bool=true, zeromean::Bool=false) =
+    zeromean ? covzm(x, y; vardim=vardim, corrected=corrected) :
+               covm(x, mean(x), y, mean(y, vardim); vardim=vardim, corrected=corrected)
+
+cov(x::AbstractMatrix, y::AbstractVector; vardim::Int=1, corrected::Bool=true, zeromean::Bool=false) =
+    zeromean ? covzm(x, y; vardim=vardim, corrected=corrected) :
+               covm(x, mean(x, vardim), y, mean(y); vardim=vardim, corrected=corrected)
+
+cov(x::AbstractMatrix, y::AbstractMatrix; vardim::Int=1, corrected::Bool=true, zeromean::Bool=false) =
+    zeromean ? covzm(x, y; vardim=vardim, corrected=corrected) :
+               covm(x, mean(x, vardim), y, mean(y, vardim); vardim=vardim, corrected=corrected)
+
+# cov2cor!
+
+function cov2cor!{T}(C::AbstractMatrix{T}, xsd::AbstractVecOrMat)
+    nx = length(xsd)
+    size(C) == (nx, nx) || throw(DimensionMismatch("Inconsistent dimensions."))
+    for j = 1:nx
+        for i = 1:j-1
+            C[i,j] /= (xsd[i] * xsd[j])
+        end
+        C[i,j] = one(T)
+        for i = j+1:nx
+            C[i,j] = C[j,i]
+        end
+    end
+    return C
+end
+
+function cov2cor!(C::AbstractMatrix, xsd::AbstractVecOrMat, ysd::AbstractVecOrMat)
+    nx = length(xsd)
+    ny = length(ysd)
+    size(C) == (nx, ny) || throw(DimensionMismatch("Inconsistent dimensions."))
+    for j = 1:ny
+        for i = 1:nx
+            C[i,j] /= (xsd[i] * xsd[j])
+        end
+    end
+    return C
+end
+
+# corzm
+
 
 
 ## nice-valued ranges for histograms
@@ -256,68 +386,6 @@ hist2d(v::AbstractMatrix, n1::Integer, n2::Integer) =
 hist2d(v::AbstractMatrix, n::Integer) = hist2d(v, n, n)
 hist2d(v::AbstractMatrix) = hist2d(v, sturges(size(v,1)))
 
-## pearson covariance functions ##
-
-function center(x::AbstractMatrix)
-    m,n = size(x)
-    res = Array(promote_type(eltype(x),Float64), size(x))
-    for j in 1:n
-        colmean = mean(x[:,j])
-        for i in 1:m
-            res[i,j] = x[i,j] - colmean 
-        end
-    end
-    res
-end
-
-function center(x::AbstractVector)
-    colmean = mean(x)
-    res = Array(promote_type(eltype(x),Float64), size(x))
-    for i in 1:length(x)
-        res[i] = x[i] - colmean 
-    end
-    res
-end
-
-function cov(x::AbstractVecOrMat, y::AbstractVecOrMat)
-    size(x, 1)==size(y, 1) || throw(DimensionMismatch())
-    n = size(x, 1)
-    xc = center(x)
-    yc = center(y)
-    conj(xc' * yc / (n - 1))
-end
-cov(x::AbstractVector, y::AbstractVector) = cov(x'', y)[1]
-
-function cov(x::AbstractVecOrMat)
-    n = size(x, 1)
-    xc = center(x)
-    conj(xc' * xc / (n - 1))
-end
-cov(x::AbstractVector) = cov(x'')[1]
-
-function cor(x::AbstractVecOrMat, y::AbstractVecOrMat)
-    z = cov(x, y)
-    scale = mapslices(std, x, 1)'*mapslices(std, y, 1)
-    z ./ scale
-end
-cor(x::AbstractVector, y::AbstractVector) =
-    cov(x, y) / std(x) / std(y)
-    
-
-function cor(x::AbstractVecOrMat)
-    res = cov(x)
-    n = size(res, 1)
-    scale = 1 / sqrt(diag(res))
-    for j in 1:n
-        for i in 1 : j - 1
-            res[i,j] *= scale[i] * scale[j] 
-            res[j,i] = res[i,j]
-        end
-        res[j,j] = 1.0
-    end
-    res 
-end
-cor(x::AbstractVector) = cor(x'')[1]
 
 ## quantiles ##
 
