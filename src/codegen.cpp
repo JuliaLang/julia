@@ -1155,6 +1155,9 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
             Value *l = vari.memvalue;
             if (l == NULL) {
                 val = vari.passedAs;
+                if (val == NULL && vari.declType != (jl_value_t*)jl_any_type) {
+                    val = boxed(NULL, ctx, vari.declType);
+                }
                 assert(val != NULL);
                 if (val->getType() != jl_pvalue_llvmt) {
                     val = boxed(val,ctx);
