@@ -149,6 +149,9 @@ function _getnobs(x::AbstractVecOrMat, y::AbstractVecOrMat, vardim::Int)
     return n
 end
 
+_vmean(x::AbstractVector, vardim::Int) = mean(x)
+_vmean(x::AbstractMatrix, vardim::Int) = mean(x, vardim)
+
 # core functions
 
 unscaled_covzm(x::AbstractVector) = dot(x, x)
@@ -177,22 +180,16 @@ covzm(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, corrected::Bool=t
 
 # covm
 
-covm(x::AbstractVector, xmean::Number; corrected::Bool=true) = 
+covm(x::AbstractVector, xmean; corrected::Bool=true) = 
     covzm(x .- xmean; corrected=corrected)
 
-covm(x::AbstractMatrix, xmean::AbstractVecOrMat; vardim::Int=1, corrected::Bool=true) = 
+covm(x::AbstractMatrix, xmean; vardim::Int=1, corrected::Bool=true) = 
     covzm(x .- xmean; vardim=vardim, corrected=corrected)
 
-covm(x::AbstractVector, xmean::Number, y::AbstractVector, ymean::Number; corrected::Bool=true) = 
+covm(x::AbstractVector, xmean, y::AbstractVector, ymean; corrected::Bool=true) = 
     covzm(x .- xmean, y .- ymean; corrected=corrected)
 
-covm(x::AbstractVector, xmean::Number, y::AbstractMatrix, ymean::AbstractVecOrMat; vardim::Int=1, corrected::Bool=true) = 
-    covzm(x .- xmean, y .- ymean; vardim=vardim, corrected=corrected)
-
-covm(x::AbstractMatrix, xmean::AbstractVecOrMat, y::AbstractVector, ymean::Number; vardim::Int=1, corrected::Bool=true) = 
-    covzm(x .- xmean, y .- ymean; vardim=vardim, corrected=corrected)
-
-covm(x::AbstractMatrix, xmean::AbstractVecOrMat, y::AbstractMatrix, ymean::AbstractVecOrMat; vardim::Int=1, corrected::Bool=true) = 
+covm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean; vardim::Int=1, corrected::Bool=true) = 
     covzm(x .- xmean, y .- ymean; vardim=vardim, corrected=corrected)
 
 # cov
@@ -209,17 +206,9 @@ cov(x::AbstractVector, y::AbstractVector; corrected::Bool=true, zeromean::Bool=f
     zeromean ? covzm(x, y; corrected=corrected) :
                covm(x, mean(x), y, mean(y); corrected=corrected)
 
-cov(x::AbstractVector, y::AbstractMatrix; vardim::Int=1, corrected::Bool=true, zeromean::Bool=false) =
+cov(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, corrected::Bool=true, zeromean::Bool=false) =
     zeromean ? covzm(x, y; vardim=vardim, corrected=corrected) :
-               covm(x, mean(x), y, mean(y, vardim); vardim=vardim, corrected=corrected)
-
-cov(x::AbstractMatrix, y::AbstractVector; vardim::Int=1, corrected::Bool=true, zeromean::Bool=false) =
-    zeromean ? covzm(x, y; vardim=vardim, corrected=corrected) :
-               covm(x, mean(x, vardim), y, mean(y); vardim=vardim, corrected=corrected)
-
-cov(x::AbstractMatrix, y::AbstractMatrix; vardim::Int=1, corrected::Bool=true, zeromean::Bool=false) =
-    zeromean ? covzm(x, y; vardim=vardim, corrected=corrected) :
-               covm(x, mean(x, vardim), y, mean(y, vardim); vardim=vardim, corrected=corrected)
+               covm(x, _vmean(x, vardim), y, _vmean(y, vardim); vardim=vardim, corrected=corrected)
 
 # cov2cor!
 
