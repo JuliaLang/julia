@@ -135,50 +135,45 @@ std(v::AbstractArray, region; corrected::Bool=true, zeromean::Bool=false) =
 
 ## pearson covariance functions ##
 
+# auxiliary functions
+
 _conj{T<:Real}(x::AbstractArray{T}) = x
 _conj(x::AbstractArray) = conj(x)
 
+_getnobs(x::AbstractVector, vardim::Int) = length(x)
+_getnobs(x::AbstractMatrix, vardim::Int) = size(x, vardim)
+
+function _getnobs(x::AbstractVecOrMat, y::AbstractVecOrMat, vardim::Int)
+    n = _getnobs(x, vardim)
+    _getnobs(y, vardim) == n || throw(DimensionMismatch("Dimensions of x and y mismatch."))
+    return n
+end
+
+# core functions
+
+unscaled_covzm(x::AbstractVector) = dot(x, x)
+unscaled_covzm(x::AbstractMatrix, vardim::Int) = (vardim == 1 ? _conj(x'x) : x * x')
+
+unscaled_covzm(x::AbstractVector, y::AbstractVector) = dot(x, y)
+unscaled_covzm(x::AbstractVector, y::AbstractMatrix, vardim::Int) = 
+    (vardim == 1 ? (y'x).' : (y * x).')
+unscaled_covzm(x::AbstractMatrix, y::AbstractVector, vardim::Int) = 
+    (c = vardim == 1 ? _conj(x'y) :  x * _conj(y); reshape(c, length(c), 1))
+unscaled_covzm(x::AbstractMatrix, y::AbstractMatrix, vardim::Int) = 
+    (vardim == 1 ? _conj(x'y) : x * y')
+
 # covzm (non-exported, with centered data)
 
-covzm(x::AbstractVector; corrected::Bool=true) = dot(x, x) / (length(x) - int(corrected))
+covzm(x::AbstractVector; corrected::Bool=true) = unscaled_covzm(x, x) / (length(x) - int(corrected))
 
-function covzm(x::AbstractMatrix; vardim::Int=1, corrected::Bool=true)
-    n = size(x, vardim)
-    c = vardim == 1 ? _conj(x'x) : x * x'
-    scale!(c, inv(n - int(corrected)))
-    return c
-end
+covzm(x::AbstractMatrix; vardim::Int=1, corrected::Bool=true) = 
+    scale!(unscaled_covzm(x, vardim), inv(size(x,vardim) - int(corrected)))
 
-function covzm(x::AbstractVector, y::AbstractVector; corrected::Bool=true)
-    n = length(x)
-    length(y) == n || throw(DimensionMismatch("Dimensions of x and y mismatch."))
-    dot(x, y) / (n - int(corrected))
-end
+covzm(x::AbstractVector, y::AbstractVector; corrected::Bool=true) = 
+    unscaled_covzm(x, y) / (length(x) - int(corrected))
 
-function covzm(x::AbstractVector, y::AbstractMatrix; vardim::Int=1, corrected::Bool=true)
-    n = length(x)
-    size(y, vardim) == n || throw(DimensionMismatch("Dimensions of x and y mismatch."))
-    c = vardim == 1 ? (y'x).' : (y * x).'
-    scale!(c, inv(n - int(corrected)))
-    return c
-end
-
-function covzm(x::AbstractMatrix, y::AbstractVector; vardim::Int=1, corrected::Bool=true)
-    n = size(x, vardim)
-    length(y) == n || throw(DimensionMismatch("Dimensions of x and y mismatch."))
-    c = vardim == 1 ? _conj(x'y) :  x * _conj(y)
-    c = reshape(c, length(c), 1)
-    scale!(c, inv(n - int(corrected)))
-    return c
-end
-
-function covzm(x::AbstractMatrix, y::AbstractMatrix; vardim::Int=1, corrected::Bool=true)
-    n = size(x, vardim)
-    size(y, vardim) == n || throw(DimensionMismatch("Dimension of x and y mismatch."))
-    c = vardim == 1 ? _conj(x'y) : x * y'
-    scale!(c, inv(n - int(corrected)))
-    return c
-end
+covzm(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, corrected::Bool=true) = 
+    scale!(unscaled_covzm(x, y, vardim), inv(_getnobs(x, y, vardim) - int(corrected)))
 
 # covm
 
@@ -228,7 +223,7 @@ cov(x::AbstractMatrix, y::AbstractMatrix; vardim::Int=1, corrected::Bool=true, z
 
 # cov2cor!
 
-function cov2cor!{T}(C::AbstractMatrix{T}, xsd::AbstractVecOrMat)
+function cov2cor!{T}(C::AbstractMatrix{T}, xsd)
     nx = length(xsd)
     size(C) == (nx, nx) || throw(DimensionMismatch("Inconsistent dimensions."))
     for j = 1:nx
@@ -243,7 +238,7 @@ function cov2cor!{T}(C::AbstractMatrix{T}, xsd::AbstractVecOrMat)
     return C
 end
 
-function cov2cor!(C::AbstractMatrix, xsd::AbstractVecOrMat, ysd::AbstractVecOrMat)
+function cov2cor!(C::AbstractMatrix, xsd, ysd)
     nx = length(xsd)
     ny = length(ysd)
     size(C) == (nx, ny) || throw(DimensionMismatch("Inconsistent dimensions."))
@@ -254,8 +249,6 @@ function cov2cor!(C::AbstractMatrix, xsd::AbstractVecOrMat, ysd::AbstractVecOrMa
     end
     return C
 end
-
-# corzm
 
 
 
