@@ -873,7 +873,9 @@ export
 
 # statistics
     cor,
+    corm,
     cov,
+    covm,
     hist,
     hist2d,
     histrange,
