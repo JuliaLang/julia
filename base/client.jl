@@ -359,7 +359,9 @@ function _start()
             end
             quiet || REPL.banner(term,term)
             ccall(:jl_install_sigint_handler, Void, ())
-            REPL.run_repl(term)
+            repl = REPL.ReadlineREPL(term)
+            repl.use_history_file = history
+            REPL.run_repl(repl)
         end
     catch err
         display_error(err,catch_backtrace())

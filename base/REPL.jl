@@ -1,12 +1,27 @@
 module REPL
 
-    # compatibility for julia version 0.2
-    if !isdefined(:put!)
-        const put! = put
-        const take! = take
-    end
+    using Base.Meta
+    using Base.Terminals
+    using Base.Readline
+    using Base.REPLCompletions
 
     export StreamREPL, BasicREPL
+
+    import Base: AsyncStream,
+                 Display,
+                 display,
+                 writemime
+
+    import Base.Terminals: raw!
+    import Base.Readline: CompletionProvider,
+                          HistoryProvider,
+                          add_history,
+                          char_move_left,
+                          char_move_word_left,
+                          completeLine,
+                          history_prev,
+                          history_next,
+                          history_search
 
     abstract AbstractREPL
 
@@ -15,8 +30,6 @@ module REPL
         response_channel::RemoteRef
         ans
     end
-
-    using Base.Meta
 
     function eval_user_input(ast::ANY, backend)
         iserr, lasterr, bt = false, (), nothing
@@ -84,8 +97,6 @@ module REPL
         end
     end
 
-    import Base: Display, display, writemime
-
     immutable REPLDisplay <: Display
         repl::AbstractREPL
     end
@@ -124,12 +135,6 @@ module REPL
             end
         end
     end
-
-    using Base.Terminals
-    using Base.Readline
-
-    import Base.Readline: char_move_left, char_move_word_left, CompletionProvider, completeLine
-
     type ReadlineREPL <: AbstractREPL
         t::TextTerminal
         prompt_color::String
@@ -137,13 +142,19 @@ module REPL
         answer_color::String
         shell_color::String
         help_color::String
+        use_history_file::Bool
         in_shell::Bool
         in_help::Bool
-        consecutive_returns
+        consecutive_returns::Int
     end
     outstream(r::ReadlineREPL) = r.t
 
-    ReadlineREPL(t::TextTerminal) =  ReadlineREPL(t,julia_green,Base.input_color(),Base.answer_color(),Base.text_colors[:red],Base.text_colors[:yellow],false,false,0)
+    ReadlineREPL(t::TextTerminal) =  ReadlineREPL(t, julia_green,
+                                                  Base.input_color(),
+                                                  Base.answer_color(),
+                                                  Base.text_colors[:red],
+                                                  Base.text_colors[:yellow],
+                                                  true, false, false, 0)
 
     type REPLCompletionProvider <: CompletionProvider
         r::ReadlineREPL
@@ -152,8 +163,6 @@ module REPL
     type ShellCompletionProvider <: CompletionProvider
         r::ReadlineREPL
     end
-
-    using Base.REPLCompletions
 
     function completeLine(c::REPLCompletionProvider,s)
         partial = bytestring(s.input_buffer.data[1:position(s.input_buffer)])
@@ -168,8 +177,6 @@ module REPL
         return (ret, partial[range])
     end
 
-    import Base.Readline: HistoryProvider, add_history, history_prev, history_next, history_search
-
     type REPLHistoryProvider <: HistoryProvider
         history::Array{String,1}
         history_file
@@ -179,13 +186,16 @@ module REPL
         mode_mapping
         modes::Array{Uint8,1}
     end
+    REPLHistoryProvider(mode_mapping) =
+        REPLHistoryProvider(String[], nothing, 0, IOBuffer(),
+                            nothing, mode_mapping, Uint8[])
 
-    function hist_from_file(file,mode_mapping)
-        hp = REPLHistoryProvider(String[],file,0,IOBuffer(),nothing,mode_mapping,Uint8[])
+    function hist_from_file(hp, file)
+        hp.history_file = file
         seek(file,0)
         while !eof(file)
             b = readuntil(file,'\0')
-            if uint8(b[1]) in keys(mode_mapping)
+            if uint8(b[1]) in keys(hp.mode_mapping)
                 push!(hp.modes,uint8(b[1]))
                 push!(hp.history,b[2:(end-1)]) # Strip trailing \0
             else # For history backward compatibility 
@@ -220,10 +230,12 @@ module REPL
         push!(hist.history,str)
         c = mode_idx(hist,Readline.mode(s))
         push!(hist.modes,c)
-        write(hist.history_file,c)
-        write(hist.history_file,str)
-        write(hist.history_file,'\0')
-        flush(hist.history_file)
+        if hist.history_file !== nothing
+            write(hist.history_file,c)
+            write(hist.history_file,str)
+            write(hist.history_file,'\0')
+            flush(hist.history_file)
+        end
     end
 
     function history_adjust(hist::REPLHistoryProvider,s)
@@ -382,8 +394,6 @@ module REPL
         end
     end
 
-    import Base.Terminals: raw!
-
     function reset(d::REPLDisplay)
         raw!(d.repl.t,false)
         print(Base.text_colors[:normal])
@@ -422,7 +432,6 @@ module REPL
 
         # This will provide completions for REPL and help mode
         replc = REPLCompletionProvider(repl)
-        finalizer(replc,(replc)->close(f))
 
         # Set up the main Julia prompt
         main_prompt = Prompt("julia> ";
@@ -463,8 +472,15 @@ module REPL
 
         # Setup history 
         # We will have a unified history for all REPL modes
-        f = open(find_hist_file(),true,true,true,false,false)
-        hp = hist_from_file(f,(Uint8=>Any)[uint8('\0') => main_prompt, uint8(';') => shell_mode, uint8('?') => help_mode, uint8('>') => main_prompt])
+        hp = REPLHistoryProvider((Uint8=>Any)[uint8('\0') => main_prompt,
+                                              uint8(';') => shell_mode,
+                                              uint8('?') => help_mode,
+                                              uint8('>') => main_prompt])
+        if repl.use_history_file
+            f = open(find_hist_file(),true,true,true,false,false)
+            finalizer(replc,(replc)->close(f))
+            hist_from_file(hp, f)
+        end
         history_reset_state(hp)
         main_prompt.hist = hp
         shell_mode.hist = hp
@@ -476,7 +492,6 @@ module REPL
         if isa(extra_repl_keymap,Dict)
             extra_repl_keymap = [extra_repl_keymap]
         end
-
 
         const repl_keymap = {
             ';' => function (s)
@@ -564,12 +579,13 @@ module REPL
         banner(io,t) = Base.banner(io)
     end
 
-    function run_repl(t::TextTerminal)
+    function run_repl(repl::ReadlineREPL)
         repl_channel = RemoteRef()
         response_channel = RemoteRef()
         start_repl_backend(repl_channel, response_channel)
-        run_frontend(ReadlineREPL(t),repl_channel,response_channel)
+        run_frontend(repl, repl_channel, response_channel)
     end
+    run_repl(t::TextTerminal) = run_repl(ReadlineREPL(t))
 
     type BasicREPL <: AbstractREPL
     end
@@ -582,8 +598,6 @@ module REPL
         input_color::String
         answer_color::String
     end
-
-    import Base.AsyncStream
 
     outstream(s::StreamREPL) = s.stream
 
