@@ -5,10 +5,17 @@
     nothing
 end
 
-unsafe_getindex(v::Real, ind::Integer) = v
-unsafe_getindex(v::Ranges, ind::Integer) = first(v) + (ind-1)*step(v)
-unsafe_getindex(v::BitArray, ind::Integer) = Base.getindex_unchecked(v.chunks, ind)
-unsafe_getindex(v::AbstractArray, ind::Integer) = v[ind]
+
+unsafe_getindex(v::Real, ind::Int) = v
+unsafe_getindex(v::Ranges, ind::Int) = first(v) + (ind-1)*step(v)
+unsafe_getindex(v::BitArray, ind::Int) = Base.getindex_unchecked(v.chunks, ind)
+unsafe_getindex(v::AbstractArray, ind::Int) = v[ind]
+unsafe_getindex(v, ind::Real) = unsafe_getindex(v, to_index(ind))
+
+unsafe_setindex!{T}(v::AbstractArray{T}, x::T, ind::Int) = (v[ind] = x; v)
+unsafe_setindex!(v::BitArray, x::Bool, ind::Int) = (Base.setindex_unchecked(v.chunks, x, ind); v)
+unsafe_setindex!{T}(v::AbstractArray{T}, x::T, ind::Real) = unsafe_setindex!(v, x, to_index(ind))
+
 
 # Version that uses cartesian indexing for src
 @ngenerate N typeof(dest) function _getindex!(dest::Array, src::AbstractArray, I::NTuple{N,Union(Int,AbstractVector)}...)
@@ -155,8 +162,19 @@ end
 ## getindex
 
 # general scalar indexing with two or more indices
-# (uses linear indexing, which performs the final bounds check and
-# is defined in bitarray.jl)
+# (uses linear indexing, which - in the safe version - performs the final
+# bounds check and is defined in bitarray.jl)
+# (code is duplicated for safe and unsafe versions for performance reasons)
+
+@ngenerate N Bool function unsafe_getindex(B::BitArray, I_0::Int, I::NTuple{N,Int}...)
+    stride = 1
+    index = I_0
+    @nexprs N d->begin
+        stride *= size(B,d)
+        index += (I_d - 1) * stride
+    end
+    return unsafe_getindex(B, index)
+end
 
 @ngenerate N Bool function getindex(B::BitArray, I_0::Int, I::NTuple{N,Int}...)
     stride = 1
@@ -173,15 +191,20 @@ end
 # contiguous multidimensional indexing: if the first dimension is a range,
 # we can get some performance from using copy_chunks
 
-function getindex(B::BitArray, I0::Range1{Int})
-    checkbounds(B, I0)
+function unsafe_getindex(B::BitArray, I0::Range1{Int})
     X = BitArray(length(I0))
     copy_chunks(X.chunks, 1, B.chunks, first(I0), length(I0))
     return X
 end
 
-@ngenerate N BitArray{length(index_shape(I0, I...))} function getindex(B::BitArray, I0::Range1{Int}, I::NTuple{N,Union(Int,Range1{Int})}...)
-    checkbounds(B, I0, I...)
+function getindex(B::BitArray, I0::Range1{Int})
+    checkbounds(B, I0)
+    return unsafe_getindex(B, I0)
+end
+
+getindex{T<:Real}(B::BitArray, I0::Range1{T}) = getindex(B, to_index(I0))
+
+@ngenerate N BitArray{length(index_shape(I0, I...))} function unsafe_getindex(B::BitArray, I0::Range1{Int}, I::NTuple{N,Union(Int,Range1{Int})}...)
     X = BitArray(index_shape(I0, I...))
 
     f0 = first(I0)
@@ -211,14 +234,13 @@ end
 
 # general multidimensional non-scalar indexing
 
-@ngenerate N BitArray{length(index_shape(I...))} function getindex(B::BitArray, I::NTuple{N,Union(Int,AbstractVector{Int})}...)
-    checkbounds(B, I...)
+@ngenerate N BitArray{length(index_shape(I...))} function unsafe_getindex(B::BitArray, I::NTuple{N,Union(Int,AbstractVector{Int})}...)
     X = BitArray(index_shape(I...))
     Xc = X.chunks
 
     ind = 1
     @nloops N i d->I_d begin
-        setindex_unchecked(Xc, (@nref N B i), ind)
+        setindex_unchecked(Xc, (@ncall N unsafe_getindex B i), ind)
         ind += 1
     end
     return X
@@ -226,21 +248,28 @@ end
 
 # general version with Real (or logical) indexing which dispatches on the appropriate method
 
-@ngenerate N Bool function getindex(B::BitArray, I::NTuple{N,Real}...)
-    @nexprs N d->(J_d = to_index(I_d))
-    return @nref N B J
-end
-
 @ngenerate N BitArray{length(index_shape(I...))} function getindex(B::BitArray, I::NTuple{N,Union(Real,AbstractVector)}...)
-    @nexprs N d->(J_d = to_index(I_d))
-    return @nref N B J
+    checkbounds(B, I...)
+    return unsafe_getindex(B, to_index(I...)...)
 end
 
 ## setindex!
 
 # general scalar indexing with two or more indices
-# (uses linear indexing, which performs the final bounds check and
-# is defined in bitarray.jl)
+# (uses linear indexing, which - in the safe version - performs the final
+# bounds check and is defined in bitarray.jl)
+# (code is duplicated for safe and unsafe versions for performance reasons)
+
+@ngenerate N typeof(B) function unsafe_setindex!(B::BitArray, x::Bool, I_0::Int, I::NTuple{N,Int}...)
+    stride = 1
+    index = I_0
+    @nexprs N d->begin
+        stride *= size(B,d)
+        index += (I_d - 1) * stride
+    end
+    unsafe_setindex!(B, x, index)
+    return B
+end
 
 @ngenerate N typeof(B) function setindex!(B::BitArray, x::Bool, I_0::Int, I::NTuple{N,Int}...)
     stride = 1
@@ -258,9 +287,7 @@ end
 # contiguous multidimensional indexing: if the first dimension is a range,
 # we can get some performance from using copy_chunks
 
-function setindex!(B::BitArray, X::BitArray, I0::Range1{Int})
-    checkbounds(B, I0)
-    setindex_shape_check(X, I0)
+function unsafe_setindex!(B::BitArray, X::BitArray, I0::Range1{Int})
     l0 = length(I0)
     l0 == 0 && return B
     f0 = first(I0)
@@ -268,9 +295,7 @@ function setindex!(B::BitArray, X::BitArray, I0::Range1{Int})
     return B
 end
 
-@ngenerate N typeof(B) function setindex!(B::BitArray, X::BitArray, I0::Range1{Int}, I::NTuple{N,Union(Int,Range1{Int})}...)
-    checkbounds(B, I0, I...)
-    setindex_shape_check(X, I0, I...)
+@ngenerate N typeof(B) function unsafe_setindex!(B::BitArray, X::BitArray, I0::Range1{Int}, I::NTuple{N,Union(Int,Range1{Int})}...)
     length(X) == 0 && return B
     f0 = first(I0)
     l0 = length(I0)
@@ -300,44 +325,52 @@ end
 
 # general multidimensional non-scalar indexing
 
-@ngenerate N typeof(B) function setindex!(B::BitArray, X::AbstractArray, I::NTuple{N,Union(Int,AbstractArray{Int})}...)
-    checkbounds(B, I...)
-    setindex_shape_check(X, I...)
+@ngenerate N typeof(B) function unsafe_setindex!(B::BitArray, X::AbstractArray, I::NTuple{N,Union(Int,AbstractArray{Int})}...)
     refind = 1
-    @nloops N i d->I_d begin
-        (@nref N B i) = X[refind] # TODO: should avoid bounds checking
+    @nloops N i d->I_d @inbounds begin
+        @ncall N unsafe_setindex! B convert(Bool,X[refind]) i
         refind += 1
     end
     return B
 end
 
-@ngenerate N typeof(B) function setindex!(B::BitArray, x::Bool, I::NTuple{N,Union(Int,AbstractArray{Int})}...)
-    checkbounds(B, I...)
+@ngenerate N typeof(B) function unsafe_setindex!(B::BitArray, x::Bool, I::NTuple{N,Union(Int,AbstractArray{Int})}...)
     @nloops N i d->I_d begin
-        (@nref N B i) = x # TODO: should avoid bounds checking
+        @ncall N unsafe_setindex! B x i
     end
     return B
 end
 
 # general versions with Real (or logical) indexing which dispatch on the appropriate method
 
-# (multiple signatures for disambiguation)
-for T in [Real, Union(Real, AbstractArray)]
-    @eval begin
-        @ngenerate N typeof(B) function setindex!(B::BitArray, x, I::NTuple{N,$T}...)
-            y = convert(Bool, x)
-            @nexprs N d->(J_d = to_index(I_d))
-            (@nref N B J) = y
-            return B
-        end
-        @ngenerate N typeof(B) function setindex!(B::BitArray, X::AbstractArray, I::NTuple{N,$T}...)
-            @nexprs N d->(J_d = to_index(I_d))
-            (@nref N B J) = X
-            return B
-        end
-    end
+# this one is for disambiguation only
+function setindex!(B::BitArray, x, i::Real)
+    checkbounds(B, i)
+    return unsafe_setindex!(B, convert(Bool,x), to_index(i))
 end
-setindex!(B::BitArray, x) = setindex!(B, convert(Bool,x))
+
+@ngenerate N typeof(B) function setindex!(B::BitArray, x, I::NTuple{N,Union(Real,AbstractArray)}...)
+    checkbounds(B, I...)
+    #return unsafe_setindex!(B, convert(Bool,x), to_index(I...)...) # segfaults! (???)
+    @nexprs N d->(J_d = to_index(I_d))
+    return @ncall N unsafe_setindex! B convert(Bool,x) J
+end
+
+
+# this one is for disambiguation only
+function setindex!(B::BitArray, X::AbstractArray, i::Real)
+    checkbounds(B, i)
+    j = to_index(i)
+    setindex_shape_check(X, j)
+    return unsafe_setindex!(B, X, j)
+end
+
+@ngenerate N typeof(B) function setindex!(B::BitArray, X::AbstractArray, I::NTuple{N,Union(Real,AbstractArray)}...)
+    checkbounds(B, I...)
+    @nexprs N d->(J_d = to_index(I_d))
+    @ncall N setindex_shape_check X J
+    return @ncall N unsafe_setindex! B X J
+end
 
 
 
