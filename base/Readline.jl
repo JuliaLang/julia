@@ -925,14 +925,17 @@ module Readline
             # the we could be in the middle of a multi-byte
             # sequence, here but that's ok, since any 
             # whitespace we're interested in is only one byte
-            if position(buf) != 0
-                c = buf.data[position(buf)]
-            else 
-                c = '\n'
-            end
-            if c == ' ' || c == '\n' || c == '\t'
-                edit_insert(s," "^4)
-                return
+            i = position(buf)
+            if i != 0
+                c = buf.data[i]
+                if c == '\n' || c == '\t' ||
+                   # hack to allow path completion in cmds
+                   # after a space, e.g., `cd <tab>`, while still
+                   # allowing multiple indent levels
+                   (c == ' ' && i > 3 && buf.data[i-1] == ' ')
+                    edit_insert(s," "^4)
+                    return
+                end
             end
             Readline.completeLine(s) 
             Readline.refresh_line(s)
