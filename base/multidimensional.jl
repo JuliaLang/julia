@@ -295,6 +295,14 @@ function unsafe_setindex!(B::BitArray, X::BitArray, I0::Range1{Int})
     return B
 end
 
+function unsafe_setindex!(B::BitArray, x::Bool, I0::Range1{Int})
+    l0 = length(I0)
+    l0 == 0 && return B
+    f0 = first(I0)
+    fill_chunks(B.chunks, x, f0, l0)
+    return B
+end
+
 @ngenerate N typeof(B) function unsafe_setindex!(B::BitArray, X::BitArray, I0::Range1{Int}, I::NTuple{N,Union(Int,Range1{Int})}...)
     length(X) == 0 && return B
     f0 = first(I0)
@@ -322,6 +330,34 @@ end
 
     return B
 end
+
+@ngenerate N typeof(B) function unsafe_setindex!(B::BitArray, x::Bool, I0::Range1{Int}, I::NTuple{N,Union(Int,Range1{Int})}...)
+    f0 = first(I0)
+    l0 = length(I0)
+    l0 == 0 && return B
+    @nexprs N d->(length(I_d) == 0 && return B)
+
+    gap_lst_1 = 0
+    @nexprs N d->(gap_lst_{d+1} = length(I_d))
+    stride = 1
+    ind = f0
+    @nexprs N d->begin
+        stride *= size(B, d)
+        stride_lst_d = stride
+        ind += stride * (first(I_d) - 1)
+        gap_lst_{d+1} *= stride
+    end
+
+    @nloops(N, i, d->I_d,
+        d->nothing, # PRE
+        d->(ind += stride_lst_d - gap_lst_d), # POST
+        begin # BODY
+            fill_chunks(B.chunks, x, ind, l0)
+        end)
+
+    return B
+end
+
 
 # general multidimensional non-scalar indexing
 

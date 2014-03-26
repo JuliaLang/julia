@@ -72,9 +72,7 @@ function glue_src_bitchunks(src::Vector{Uint64}, k::Int, ks1::Int, msk_s0::Uint6
 end
 
 function copy_chunks(dest::Vector{Uint64}, pos_d::Integer, src::Vector{Uint64}, pos_s::Integer, numbits::Integer)
-    if numbits == 0
-        return
-    end
+    numbits == 0 && return
     if dest === src && pos_d > pos_s
         return copy_chunks_rtol(dest, pos_d, pos_s, numbits)
     end
@@ -181,6 +179,34 @@ function copy_chunks_rtol(chunks::Vector{Uint64}, pos_d::Integer, pos_s::Integer
         pd = pos_d + b
     end
 end
+
+function fill_chunks(Bc::Array{Uint64}, x::Bool, pos::Integer, numbits::Integer)
+    numbits <= 0 && return
+    k0, l0 = get_chunks_id(pos)
+    k1, l1 = get_chunks_id(pos+numbits-1)
+
+    u = _msk64
+    if k1 == k0
+        msk0 = (u << l0) & ~(u << (l1+1))
+    else
+        msk0 = (u << l0)
+        msk1 = ~(u << (l1+1))
+    end
+    @inbounds if x
+        Bc[k0] |= msk0
+        for k = k0+1:k1-1
+            Bc[k] = u
+        end
+        k1 > k0 && (Bc[k1] |= msk1)
+    else
+        Bc[k0] &= ~msk0
+        for k = k0+1:k1-1
+            Bc[k] = 0
+        end
+        k1 > k0 && (Bc[k1] &= ~msk1)
+    end
+end
+
 
 ## custom iterator ##
 start(B::BitArray) = 0
@@ -430,7 +456,7 @@ function setindex!(B::BitArray, x, I::AbstractArray{Bool})
     checkbounds(B, I)
     y = convert(Bool, x)
     Bc = B.chunks
-    for i = 1:length(I)
+    @inbounds for i = 1:length(I)
         # faster B[i] = y
         I[i] && setindex_unchecked(Bc, y, i)
     end
@@ -441,7 +467,7 @@ function setindex!(B::BitArray, X::AbstractArray, I::AbstractArray{Bool})
     checkbounds(B, I)
     Bc = B.chunks
     c = 1
-    for i = 1:length(I)
+    @inbounds for i = 1:length(I)
         if I[i]
             # faster B[i] = X[c]
             setindex_unchecked(Bc, convert(Bool, X[c]), i)
