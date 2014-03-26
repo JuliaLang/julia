@@ -32,6 +32,7 @@ ifeq ($(OS),WINNT)
 $(build_bindir)/julia.bat: $(JULIAHOME)/contrib/windows/*.bat
 	cp $(JULIAHOME)/contrib/windows/*.bat $(build_bindir)
 julia-release julia-debug: $(build_bindir)/julia.bat
+ifneq ($(USEMSVC), 1)
 julia_res.o: $(JULIAHOME)/contrib/windows/julia.rc
 	JLVER=`cat $(JULIAHOME)/VERSION` && \
 	JLVERi=`echo $$JLVER | perl -nle \
@@ -41,6 +42,7 @@ julia_res.o: $(JULIAHOME)/contrib/windows/julia.rc
 $(build_bindir)/julia$(EXE): julia_res.o
 $(build_bindir)/julia-debug$(EXE): julia_res.o
 JLDFLAGS += julia_res.o
+endif
 endif 
 
 julia-release: $(build_bindir)/julia$(EXE)
