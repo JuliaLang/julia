@@ -99,32 +99,90 @@ module REPLCompletions
         suggestions
     end
 
+    function complete_path(path::ByteString)
+        matches = ByteString[]
+        dir,prefix = splitdir(path)
+        if length(dir) == 0
+            files = readdir()
+        elseif isdir(dir)
+            files = readdir(dir)
+        else
+            return matches
+        end
+        for file in files
+            if beginswith(file, prefix)
+                p = joinpath(dir, file)
+                push!(matches, isdir(p) ? joinpath(p,"") : p)
+            end
+        end
+        matches
+    end
+
     const non_word_chars = " \t\n\"\\'`@\$><=:;|&{}()[].,+-*/?%^~"
 
     function completions(string,pos)
-        startpos = pos
+        startpos = min(pos,1)
         dotpos = 0
-        while startpos >= 1
-            c = string[startpos]
-            if c < 0x80 && in(char(c), non_word_chars)
-                if c != '.'
-                    startpos = nextind(string,startpos)
-                    break
-                elseif dotpos == 0
-                    dotpos = startpos
+        instring = false
+        incmd = false
+        escaped = false
+        nearquote = false
+        i = start(string)
+        while i <= pos
+            c,j = next(string, i)
+            if c == '\\'
+                if instring
+                    escaped $= true
+                end
+                nearquote = false
+            elseif c == '\''
+                if !instring
+                    nearquote = true
+                end
+            elseif c == '"'
+                if !escaped && !nearquote && !incmd
+                    instring $= true
+                end
+                escaped = nearquote = false
+            elseif c == '`'
+                if !escaped && !nearquote && !instring
+                    incmd $= true
+                end
+                escaped = nearquote = false
+            else
+                escaped = nearquote = false
+            end
+            if c < 0x80
+                if instring || incmd
+                    if in(c, " \t\n\"\\'`@\$><=;|&{(")
+                        startpos = j
+                    end
+                elseif in(c, non_word_chars)
+                    if c == '.'
+                        dotpos = i
+                    else
+                        startpos = j
+                    end
                 end
             end
-            if startpos == 1
-                break
-            end
-            startpos = prevind(string,startpos)
+            i = j
         end
+
+        if instring || incmd
+            r = startpos:pos
+            paths = complete_path(string[r])
+            if instring && length(paths) == 1
+                paths[1] *= "\""
+            end
+            return sort(paths), r
+        end
+
         ffunc = (mod,x)->true
         suggestions = UTF8String[]
         r = rsearch(string,"using",startpos)
         if !isempty(r) && all(isspace,string[nextind(string,last(r)):prevind(string,startpos)])
             # We're right after using. Let's look only for packages
-            # and modules we can reach form here
+            # and modules we can reach from here
 
             # If there's no dot, we're in toplevel, so we should
             # also search for packages
@@ -166,7 +224,7 @@ module REPLCompletions
                 files = readdir(dir)
             end
             # Filter out files and directories that do not begin with the partial name we were
-            # completiong and append "/" to directories to simplify further completion
+            # completing and append "/" to directories to simplify further completion
             ret = map(filter(x->beginswith(x,name),files)) do x
                 if !isdir(joinpath(dir,x))
                     return x
@@ -175,8 +233,8 @@ module REPLCompletions
                 end
             end
             r = (nextind(string,pos-sizeof(name))):pos
-            return (ret,r,string[r])
-        elseif isexpr(arg,:escape) && (isexpr(arg.args[1],VERSION >= v"0.3-" ? :incomplete : :continue) || isexpr(arg.args[1],:error))
+            return (ret,r)
+        elseif isexpr(arg,:escape) && (isexpr(arg.args[1],:incomplete) || isexpr(arg.args[1],:error))
             r = first(last_parse):prevind(last_parse,last(last_parse))
             partial = scs[r]
             ret, range = completions(partial,endof(partial))
