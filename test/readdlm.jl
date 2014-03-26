@@ -52,6 +52,8 @@ let result1 = reshape({"abc", "hello", "def,ghi", " \"quote\" ", "new\nline", "w
     @test isequal(readdlm(IOBuffer("abc,\"def,ghi\",\"new\nline\"\n\"hello\",\" \"\"quote\"\" \",world"), ',', quotes=false), result2)
 end
 
+@test isequal(readcsv(IOBuffer("\n1,2,3\n4,5,6\n\n\n")), reshape({"",1.0,4.0,"","","",2.0,5.0,"","","",3.0,6.0,"",""}, 5, 3))
+
 let x = [1,2,3], y = [4,5,6], io = IOBuffer()
     writedlm(io, zip(x,y), ",  ")
     seek(io, 0)
