@@ -204,7 +204,8 @@ module Terminals
         stop_reading(t::UnixTerminal) = stop_reading(t.in_stream)
 
 
-        hascolor(t::UnixTerminal) = (beginswith(t.term_type,"xterm") || success(`tput setaf 0`))
+        @unix_only hascolor(t::UnixTerminal) = (beginswith(t.term_type,"xterm") || success(`tput setaf 0`))
+        @windows_only hascolor(t::UnixTerminal) = true
         #writemime(t::UnixTerminal, ::MIME"text/plain", x) = writemime(t.out_stream, MIME("text/plain"), x)
     end
     importall .Unix
