@@ -217,11 +217,11 @@ function cov2cor!{T}(C::AbstractMatrix{T}, xsd::AbstractArray)
     size(C) == (nx, nx) || throw(DimensionMismatch("Inconsistent dimensions."))
     for j = 1:nx
         for i = 1:j-1
-            C[i,j] /= (xsd[i] * xsd[j])
-        end
-        C[i,j] = one(T)
-        for i = j+1:nx
             C[i,j] = C[j,i]
+        end
+        C[j,j] = one(T)
+        for i = j+1:nx
+            C[i,j] /= (xsd[i] * xsd[j])
         end
     end
     return C
@@ -255,7 +255,7 @@ function cov2cor!(C::AbstractMatrix, xsd::AbstractArray, ysd::AbstractArray)
         throw(DimensionMismatch("Inconsistent dimensions."))
     for j = 1:ny
         for i = 1:nx
-            C[i,j] /= (xsd[i] * ysd[i])
+            C[i,j] /= (xsd[i] * ysd[j])
         end
     end
     return C
@@ -277,8 +277,9 @@ function corzm(x::AbstractVector, y::AbstractVector)
     xx = abs2(x1)
     yy = abs2(y1)
     xy = x1 * conj(y1)
-    i = 2
-    while i <= n
+    i = 1
+    while i < n
+        i += 1
         @inbounds xi = x[i]
         @inbounds yi = y[i]
         xx += abs2(xi)

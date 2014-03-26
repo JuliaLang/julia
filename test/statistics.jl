@@ -46,7 +46,7 @@ A = Complex128[exp(i*im) for i in 1:10^4]
 @test_approx_eq varm(A,0.) sum(map(abs2,A))/(length(A)-1)
 @test_approx_eq varm(A,mean(A)) var(A)
 
-# test covariance & correlation
+# test covariance
 
 function safe_cov(x, y, zm::Bool, cr::Bool)
     n = length(x)
@@ -57,7 +57,7 @@ function safe_cov(x, y, zm::Bool, cr::Bool)
     dot(vec(x), vec(y)) / (n - int(cr))
 end
 
-X = [1. 2. 3. 4. 5.; 5. 4. 3. 2. 1.]'
+X = [1. 2. 3. 4. 5.; 5. 4. 6. 2. 1.]'
 Y = [6. 1. 5. 3. 2.; 2. 7. 8. 4. 3.]'
 
 for vd in [1, 2], zm in [true, false], cr in [true, false] 
@@ -108,6 +108,68 @@ for vd in [1, 2], zm in [true, false], cr in [true, false]
     @test size(C) == (k, k)
     @test_approx_eq C Cxy
 end
+
+# test correlation
+
+function safe_cor(x, y, zm::Bool)
+    if !zm 
+        x = x .- mean(x)
+        y = y .- mean(y)
+    end
+    x = vec(x)
+    y = vec(y)
+    dot(x, y) / (sqrt(dot(x, x)) * sqrt(dot(y, y)))
+end
+
+for vd in [1, 2], zm in [true, false]
+    # println("vd = $vd: zm = $zm")
+    if vd == 1
+        k = size(X, 2)
+        Cxx = zeros(k, k)
+        Cxy = zeros(k, k)
+        for i = 1:k, j = 1:k
+            Cxx[i,j] = safe_cor(X[:,i], X[:,j], zm)
+            Cxy[i,j] = safe_cor(X[:,i], Y[:,j], zm)
+        end
+        x1 = vec(X[:,1])
+        y1 = vec(Y[:,1])
+    else
+        k = size(X, 1)
+        Cxx = zeros(k, k)
+        Cxy = zeros(k, k)
+        for i = 1:k, j = 1:k
+            Cxx[i,j] = safe_cor(X[i,:], X[j,:], zm)
+            Cxy[i,j] = safe_cor(X[i,:], Y[j,:], zm)
+        end
+        x1 = vec(X[1,:])
+        y1 = vec(Y[1,:])
+    end
+
+    c = cor(x1; zeromean=zm)
+    @test isa(c, Float64)
+    @test_approx_eq c Cxx[1,1]
+
+    C = cor(X; vardim=vd, zeromean=zm)
+    @test size(C) == (k, k)
+    @test_approx_eq C Cxx
+
+    c = cor(x1, y1; zeromean=zm)
+    @test isa(c, Float64)
+    @test_approx_eq c Cxy[1,1]
+
+    C = cor(x1, Y; vardim=vd, zeromean=zm)
+    @test size(C) == (1, k)
+    @test_approx_eq C Cxy[1,:]
+
+    C = cor(X, y1; vardim=vd, zeromean=zm)
+    @test size(C) == (k, 1)
+    @test_approx_eq C Cxy[:,1]
+
+    C = cor(X, Y; vardim=vd, zeromean=zm)
+    @test size(C) == (k, k)
+    @test_approx_eq C Cxy
+end
+
 
 
 # test hist
