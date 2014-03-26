@@ -1001,6 +1001,8 @@ module Readline
         "\e[A" => edit_move_up,
         # Down Arrow
         "\e[B" => edit_move_down,
+        # Delete
+        "\e[3~" => edit_delete,
         # Bracketed Paste Mode
         "\e[200~" => s->begin
             ps = state(s,mode(s))
