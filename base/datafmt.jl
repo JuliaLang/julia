@@ -98,7 +98,8 @@ function dlm_fill{T}(cells::Array{T,2}, offarr::Vector{Vector{Int}}, sbuff::Stri
     const tmp64 = Array(Float64,1)
 
     idx = 1
-    lastrow = lastcol = 1
+    lastrow = 1
+    lastcol = 0
     offidx = 1
     offsets = offarr[1]
     fail = false
@@ -144,15 +145,20 @@ function dlm_fill{T}(cells::Array{T,2}, offarr::Vector{Vector{Int}}, sbuff::Stri
         lastcol = col
     end
 
-    if lastcol < maxcol
-        for cidx in (lastcol+1):maxcol
-            if (T <: String) || (T == Any)
-                cells[lastrow,cidx] = SubString(sbuff, 1, 0)
-            elseif ((T <: Number) || (T <: Char)) && auto
-                return dlm_fill(Array(Any,maxrow,maxcol), offarr, sbuff, false, row_offset, eol)
-            else
-                error("missing value at row $lastrow column $cidx")
+    if (lastcol < maxcol) || (lastrow < maxrow)
+        while lastrow <= maxrow
+            (lastcol == maxcol) && (lastcol = 0; lastrow += 1)
+            for cidx in (lastcol+1):maxcol
+                if (T <: String) || (T == Any)
+                    cells[lastrow,cidx] = SubString(sbuff, 1, 0)
+                elseif ((T <: Number) || (T <: Char)) && auto
+                    return dlm_fill(Array(Any,maxrow,maxcol), offarr, sbuff, false, row_offset, eol)
+                else
+                    error("missing value at row $lastrow column $cidx")
+                end
             end
+            lastcol = maxcol
+            (lastrow == maxrow) && break;
         end
     end
     cells
