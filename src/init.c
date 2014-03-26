@@ -85,7 +85,8 @@ jl_compileropts_t jl_compileropts = { NULL, // build_path
                                       JL_COMPILEROPT_CHECK_BOUNDS_DEFAULT,
                                       JL_COMPILEROPT_DUMPBITCODE_OFF,
                                       0,    // int_literals
-                                      JL_COMPILEROPT_COMPILE_DEFAULT
+                                      JL_COMPILEROPT_COMPILE_DEFAULT,
+                                      0     // opt_level
 };
 
 int jl_boot_file_loaded = 0;
