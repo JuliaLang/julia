@@ -53,9 +53,9 @@ colon{T<:Integer}(start::T, stop::T) =
     Range1{T}(start, ifelse(stop<start, 0, int(stop-start+1)))
 
 if Int === Int32
-    eval(:(typealias SmallInteger Union(Int8,Int16,Int32,Uint8,Uint16)))
+    typealias SmallInteger Union(Int8,Int16,Int32,Uint8,Uint16)
 else
-    eval(:(typealias SmallInteger Union(Int8,Int16,Int32,Int64,Uint8,Uint16,Uint32)))
+    typealias SmallInteger Union(Int8,Int16,Int32,Int64,Uint8,Uint16,Uint32)
 end
 colon{T<:SmallInteger}(start::T, stop::T) =
     Range1{T}(start,
