@@ -212,7 +212,7 @@ cov(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, corrected::Bool=tru
 
 # cov2cor!
 
-function cov2cor!{T}(C::AbstractMatrix{T}, xsd)
+function cov2cor!{T}(C::AbstractMatrix{T}, xsd::AbstractArray)
     nx = length(xsd)
     size(C) == (nx, nx) || throw(DimensionMismatch("Inconsistent dimensions."))
     for j = 1:nx
@@ -227,18 +227,102 @@ function cov2cor!{T}(C::AbstractMatrix{T}, xsd)
     return C
 end
 
-function cov2cor!(C::AbstractMatrix, xsd, ysd)
-    nx = length(xsd)
-    ny = length(ysd)
-    size(C) == (nx, ny) || throw(DimensionMismatch("Inconsistent dimensions."))
+function cov2cor!(C::AbstractMatrix, xsd::Number, ysd::AbstractArray)
+    nx, ny = size(C)
+    length(ysd) == ny || throw(DimensionMismatch("Inconsistent dimensions."))
     for j = 1:ny
         for i = 1:nx
-            C[i,j] /= (xsd[i] * xsd[j])
+            C[i,j] /= (xsd * ysd[j])
         end
     end
     return C
 end
 
+function cov2cor!(C::AbstractMatrix, xsd::AbstractArray, ysd::Number)
+    nx, ny = size(C)
+    length(xsd) == nx || throw(DimensionMismatch("Inconsistent dimensions."))
+    for j = 1:ny
+        for i = 1:nx
+            C[i,j] /= (xsd[i] * ysd)
+        end
+    end
+    return C
+end
+
+function cov2cor!(C::AbstractMatrix, xsd::AbstractArray, ysd::AbstractArray)
+    nx, ny = size(C)
+    (length(xsd) == nx && length(ysd) == ny) || 
+        throw(DimensionMismatch("Inconsistent dimensions."))
+    for j = 1:ny
+        for i = 1:nx
+            C[i,j] /= (xsd[i] * ysd[i])
+        end
+    end
+    return C
+end
+
+
+# # corzm (non-exported, with centered data)
+
+corzm{T}(x::AbstractVector{T}) = float(one(T) * one(T))
+
+corzm(x::AbstractMatrix; vardim::Int=1) = 
+    (c = unscaled_covzm(x, vardim); cov2cor!(c, sqrt!(diag(c))))
+
+function corzm(x::AbstractVector, y::AbstractVector)
+    n = length(x)
+    length(y) == n || throw(DimensionMismatch("Inconsistent lengths."))
+    x1 = x[1]
+    y1 = y[1]
+    xx = abs2(x1)
+    yy = abs2(y1)
+    xy = x1 * conj(y1)
+    i = 2
+    while i <= n
+        @inbounds xi = x[i]
+        @inbounds yi = y[i]
+        xx += abs2(xi)
+        yy += abs2(yi)
+        xy += xi * conj(yi)
+    end
+    return xy / (sqrt(xx) * sqrt(yy))
+end
+
+corzm(x::AbstractVector, y::AbstractMatrix; vardim::Int=1) = 
+    cov2cor!(unscaled_covzm(x, y, vardim), sqrt(sumabs2(x)), sqrt!(sumabs2(y, vardim)))
+
+corzm(x::AbstractMatrix, y::AbstractVector; vardim::Int=1) = 
+    cov2cor!(unscaled_covzm(x, y, vardim), sqrt!(sumabs2(x, vardim)), sqrt(sumabs2(y)))
+
+corzm(x::AbstractMatrix, y::AbstractMatrix; vardim::Int=1) = 
+    cov2cor!(unscaled_covzm(x, y, vardim), sqrt!(sumabs2(x, vardim)), sqrt!(sumabs2(y, vardim)))
+
+# corm
+
+corm(x::AbstractVector, xmean) = corzm(x .- xmean)
+
+corm(x::AbstractMatrix, xmean; vardim::Int=1) = corzm(x .- xmean; vardim=vardim)
+
+corm(x::AbstractVector, xmean, y::AbstractVector, ymean) = corzm(x .- xmean, y .- ymean)
+
+corm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean; vardim::Int=1) = 
+    corzm(x .- xmean, y .- ymean; vardim=vardim)
+
+# cor
+
+cor(x::AbstractVector; zeromean::Bool=false) =
+    zeromean ? corzm(x) : corm(x, mean(x))
+
+cor(x::AbstractMatrix; vardim::Int=1, zeromean::Bool=false) =
+    zeromean ? corzm(x; vardim=vardim) :
+               corm(x, mean(x, vardim); vardim=vardim)
+
+cor(x::AbstractVector, y::AbstractVector; zeromean::Bool=false) =
+    zeromean ? corzm(x, y) : corm(x, mean(x), y, mean(y))
+
+cor(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, zeromean::Bool=false) =
+    zeromean ? corzm(x, y; vardim=vardim) :
+               corm(x, _vmean(x, vardim), y, _vmean(y, vardim); vardim=vardim)
 
 
 ## nice-valued ranges for histograms
