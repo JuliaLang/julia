@@ -304,7 +304,7 @@ readcsv(io, T::Type; opts...) = readdlm(io, ',', T; opts...)
 # todo: keyword argument for # of digits to print
 writedlm_cell(io::IO, elt::FloatingPoint, dlm) = print_shortest(io, elt)
 function writedlm_cell{T}(io::IO, elt::String, dlm::T)
-    if ('"' == elt[1]) || ('\n' in elt) || ((T <: Char) ? (dlm in elt) : contains(elt, dlm))
+    if !isempty(elt) && (('"' == elt[1]) || ('\n' in elt) || ((T <: Char) ? (dlm in elt) : contains(elt, dlm)))
         print(io, '"', replace(elt, r"\"", "\"\""), '"')
     else
         print(io, elt)

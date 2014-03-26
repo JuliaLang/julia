@@ -66,6 +66,12 @@ let x = ["abc", "def\"ghi", "jk\nl"], y = [1, ",", "\"quoted\""], io = IOBuffer(
     @test readcsv(io) == [x y]
 end
 
+let x = ["a" "b"; "d" ""], io = IOBuffer()
+    writedlm(io, x)
+    seek(io, 0)
+    @test readdlm(io) == x
+end
+
 
 # source: http://www.i18nguy.com/unicode/unicode-example-utf8.zip
 let i18n_data = ["Origin (English)", "Name (English)", "Origin (Native)", "Name (Native)", 
