@@ -531,3 +531,4 @@ various releases of Julia. Examples of runtime checks::
 
     VERSION >= v"0.2.1" #get at least version 0.2.1
 
+See the section on :ref:`version number literals <man-version-number-literals>` for a more complete description.
