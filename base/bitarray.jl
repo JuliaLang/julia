@@ -416,7 +416,7 @@ function setindex_unchecked(Bc::Array{Uint64}, x::Bool, i::Int)
     end
 end
 
-setindex!(B::BitArray, x::Bool) = setindex!(B, x, 1)
+setindex!(B::BitArray, x) = setindex!(B, convert(Bool,x), 1)
 
 function setindex!(B::BitArray, x::Bool, i::Int)
     1 <= i <= length(B) || throw(BoundsError())
@@ -426,34 +426,32 @@ end
 
 # logical indexing
 
-function setindex!(A::BitArray, x, I::AbstractArray{Bool})
-    checkbounds(A, I)
+function setindex!(B::BitArray, x, I::AbstractArray{Bool})
+    checkbounds(B, I)
     y = convert(Bool, x)
-    Ac = A.chunks
+    Bc = B.chunks
     for i = 1:length(I)
-        if I[i]
-            # faster A[i] = y
-            setindex_unchecked(Ac, y, i)
-        end
+        # faster B[i] = y
+        I[i] && setindex_unchecked(Bc, y, i)
     end
-    A
+    return B
 end
 
-function setindex!(A::BitArray, X::AbstractArray, I::AbstractArray{Bool})
-    checkbounds(A, I)
-    Ac = A.chunks
+function setindex!(B::BitArray, X::AbstractArray, I::AbstractArray{Bool})
+    checkbounds(B, I)
+    Bc = B.chunks
     c = 1
     for i = 1:length(I)
         if I[i]
-            # faster A[i] = X[c]
-            setindex_unchecked(Ac, convert(Bool, X[c]), i)
+            # faster B[i] = X[c]
+            setindex_unchecked(Bc, convert(Bool, X[c]), i)
             c += 1
         end
     end
     if length(X) != c-1
         throw(DimensionMismatch("assigned $(length(X)) elements to length $(c-1) destination"))
     end
-    A
+    return B
 end
 
 ## Dequeue functionality ##
