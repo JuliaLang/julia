@@ -5,4 +5,5 @@
 /file_constants.jl
 /uv_constants.jl
 /version_git.jl
+/version_git.jl.phony
 /userimg.jl
