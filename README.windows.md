@@ -169,7 +169,7 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
 
   - Using the Julia executables directly
     ```
-    usr/bin/julia-basic
+    usr/bin/julia
 ```
 
 ## Cross-compiling
@@ -246,10 +246,9 @@ Finally, the build and install process for Julia:
 
 1. `git clone https://github.com/JuliaLang/julia.git julia-win32`
 2. `echo override XC_HOST = i686-w64-mingw32 >> Make.user`
-3. `echo override DEFAULT_REPL = basic >> Make.user`
-4. `make`
-5. `make win-extras` (Necessary before running `make dist`p)
-4. `make dist`
+3. `make`
+4. `make win-extras` (Necessary before running `make dist`p)
+5. `make dist`
 6. move the julia-* directory / zip file to the target machine
 
 If you are building for 64-bit windows, the steps are essentially the same. Just replace i686 in XC_HOST with x86_64. (note: on Mac, wine only runs in 32-bit mode)
