@@ -42,7 +42,7 @@ function init_help()
     global CATEGORY_LIST, CATEGORY_DICT,
            MODULE_DICT, FUNCTION_DICT
     if CATEGORY_DICT == nothing
-        println("Loading help data...")
+        info("Loading help data...")
         helpdb = evalfile(helpdb_filename())
         CATEGORY_LIST = {}
         CATEGORY_DICT = Dict()
@@ -74,9 +74,9 @@ function init_help()
     end
 end
 
-function help()
+function help(io::IO)
     init_help()
-    print(
+    print(io,
 """
 
  Welcome to Julia. The full manual is available at
@@ -90,40 +90,41 @@ function help()
 """)
     for cat = CATEGORY_LIST
         if !isempty(CATEGORY_DICT[cat])
-            print("  ")
-            show(cat); println()
+            print(io, "  ")
+            show(io, cat); println(io)
         end
     end
 end
 
-function help(cat::String)
+function help(io::IO, cat::String)
     init_help()
     if !haskey(CATEGORY_DICT, cat)
         # if it's not a category, try another named thing
-        return help_for(cat)
+        return help_for(io, cat)
     end
-    println("Help is available for the following items:")
+    println(io, "Help is available for the following items:")
     for func = CATEGORY_DICT[cat]
-        print(func, " ")
+        print(io, func, " ")
     end
-    println()
+    println(io)
 end
 
-function print_help_entries(entries)
+function print_help_entries(io::IO, entries)
     first = true
     for desc in entries
         if !first
-            println()
+            println(io)
         end
-        println(strip(desc))
+        println(io, strip(desc))
         first = false
     end
 end
 
 func_expr_from_symbols(s::Vector{Symbol}) = length(s) == 1 ? s[1] : Expr(:., func_expr_from_symbols(s[1:end-1]), Expr(:quote, s[end]))
 
-help_for(s::String) = help_for(s, 0)
-function help_for(fname::String, obj)
+help_for(io::IO, s::String) = help_for(io, s, 0)
+
+function help_for(io::IO, fname::String, obj)
     init_help()
     found = false
     if haskey(FUNCTION_DICT, fname)
@@ -145,43 +146,43 @@ function help_for(fname::String, obj)
                 found = true
             end
         end
-        found && print_help_entries(alldesc)
+        found && print_help_entries(io, alldesc)
     elseif haskey(FUNCTION_DICT, "Base." * fname)
-        print_help_entries(FUNCTION_DICT["Base." * fname])
+        print_help_entries(io, FUNCTION_DICT["Base." * fname])
         found = true
     end
     if !found
         if isa(obj, DataType)
-            print("DataType   : ")
-            writemime(STDOUT, "text/plain", obj)
-            println()
-            println("  supertype: ", super(obj))
+            print(io, "DataType   : ")
+            writemime(io, "text/plain", obj)
+            println(io)
+            println(io, "  supertype: ", super(obj))
             if obj.abstract
                 st = subtypes(obj)
                 if length(st) > 0
-                    print("  subtypes : ")
-                    showcompact(st)
-                    println()
+                    print(io, "  subtypes : ")
+                    showcompact(io, st)
+                    println(io)
                 end
             end
             if length(obj.names) > 0
-                println("  fields   : ", obj.names)
+                println(io, "  fields   : ", obj.names)
             end
         elseif isgeneric(obj)
-            writemime(STDOUT, "text/plain", obj); println()
+            writemime(io, "text/plain", obj); println()
         else
-            println("No help information found.")
+            println(io, "No help information found.")
         end
     end
 end
 
-function apropos(txt::String)
+function apropos(io::IO, txt::String)
     init_help()
     n = 0
     r = Regex("\\Q$txt", Base.PCRE.CASELESS)
     for (cat, _) in CATEGORY_DICT
         if ismatch(r, cat)
-            println("Category: \"$cat\"")
+            println(io, "Category: \"$cat\"")
         end
     end
     for (func, entries) in FUNCTION_DICT
@@ -189,39 +190,41 @@ function apropos(txt::String)
             for desc in entries
                 nl = search(desc,'\n')
                 if nl != 0
-                    println(desc[1:(nl-1)])
+                    println(io, desc[1:(nl-1)])
                 else
-                    println(desc)
+                    println(io, desc)
                 end
             end
             n+=1
         end
     end
     if n == 0
-        println("No help information found.")
+        println(io, "No help information found.")
     end
 end
 
-function help(f::Function)
+function help(io::IO, f::Function)
     if is(f,help)
-        return help()
+        return help(io)
     end
-    help_for(string(f), f)
+    help_for(io, string(f), f)
 end
 
-help(t::DataType) = help_for(string(t.name),t)
-help(t::Module) = help(string(t))
+help(io::IO, t::DataType) = help_for(io, string(t.name),t)
+help(io::IO, t::Module) = help(io, string(t))
 
-function help(x)
-    show(x)
+function help(io::IO, x)
+    show(io, x)
     t = typeof(x)
     if isa(t,DataType)
-        println(" is of type")
-        help(t)
+        println(io, " is of type")
+        help(io, t)
     else
-        println(" is of type $t")
+        println(io, " is of type $t")
     end
 end
+
+help(args...) = help(STDOUT, args...)
 
 # check whether an expression is a qualified name, e.g. Base.FFTW.FORWARD
 isname(n::Symbol) = true
