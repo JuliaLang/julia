@@ -145,7 +145,7 @@ function find_source_file(file)
     isfile(file2) ? file2 : nothing
 end
 
-function edit(file::String, line::Integer)
+function find_editor()
     if OS_NAME == :Windows || OS_NAME == :Darwin
         default_editor = "open"
     elseif isreadable("/etc/alternatives/editor")
@@ -154,16 +154,21 @@ function edit(file::String, line::Integer)
         default_editor = "emacs"
     end
     editor = get(ENV,"JULIA_EDITOR", get(ENV,"VISUAL", get(ENV,"EDITOR", default_editor)))
+    if ispath(editor) && !isreadable(editor)
+        error("can't find \"$editor\"")
+    end
+    return editor
+end
+
+function edit(file::String, line::Integer)
+    editor = find_editor()
     if ispath(editor)
-        if isreadable(editor)
-            edpath = realpath(editor)
-            edname = basename(edpath)
-        else
-            error("can't find \"$editor\"")
-        end
+        edpath = realpath(editor)
+        edname = basename(edpath)
     else
         edpath = edname = editor
     end
+
     issrc = length(file)>2 && file[end-2:end] == ".jl"
     if issrc
         file = find_source_file(file)
