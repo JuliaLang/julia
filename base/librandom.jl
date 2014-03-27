@@ -12,7 +12,7 @@ export DSFMT_state, dsfmt_get_min_array_size, dsfmt_get_idstring,
        dsfmt_fill_array_open_close!, dsfmt_gv_fill_array_open_close!, 
        dsfmt_fill_array_open_open!, dsfmt_gv_fill_array_open_open!, 
        dsfmt_genrand_uint32, dsfmt_gv_genrand_uint32, 
-       randmtzig_create_ziggurat_tables, randmtzig_randn, randmtzig_fill_randn!, 
+       randmtzig_randn, randmtzig_fill_randn!, 
        randmtzig_gv_randn, randmtzig_gv_fill_randn!,
        randmtzig_exprnd, randmtzig_fill_exprnd!,
        win32_SystemFunction036!
@@ -154,12 +154,6 @@ function dsfmt_gv_genrand_uint32()
 end
 
 ## randmtzig
-
-function randmtzig_create_ziggurat_tables()
-    ccall((:randmtzig_create_ziggurat_tables,:librandom), 
-          Void,
-          ())
-end
 
 function randmtzig_randn(s::DSFMT_state)
     ccall((:randmtzig_randn,:librandom), 
