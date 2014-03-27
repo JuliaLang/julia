@@ -1169,7 +1169,7 @@ end
 # to be mutually reachable without a tunnel, as is often the case in a cluster.
 function addprocs_internal(np::Integer;
                   tunnel=false, dir=JULIA_HOME,
-                  exename=(ccall(:jl_is_debugbuild,Cint,())==0?"./julia-basic":"./julia-debug-basic"),
+                  exename=(ccall(:jl_is_debugbuild,Cint,())==0?"./julia":"./julia-debug"),
                   sshflags::Cmd=``, cman=LocalManager(), exeflags=``)
                   
     config={:dir=>dir, :exename=>exename, :exeflags=>`$exeflags --worker`, :tunnel=>tunnel, :sshflags=>sshflags}
