@@ -33,8 +33,13 @@
 #include <string.h>
 #include <locale.h>
 #include <malloc.h>
+#include "dtypes.h"
 
-char *dirname( char *path )
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+DLLEXPORT char *dirname( char *path )
 {
     size_t len;
     static char *retfail = NULL;
@@ -236,5 +241,9 @@ char *dirname( char *path )
     free( locale );
     return retfail;
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 /* $RCSfile: dirname.c,v $$Revision: 1.2 $: end of file */

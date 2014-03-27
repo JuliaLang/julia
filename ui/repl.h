@@ -14,9 +14,6 @@
 #ifndef _MSC_VER
 #include <unistd.h>
 #include <libgen.h>
-#else
-char * basename(char *);
-char * dirname(char *);
 #endif
 #include <limits.h>
 #include <errno.h>
@@ -28,6 +25,11 @@ char * dirname(char *);
 
 #ifdef __cplusplus
 extern "C" {
+#endif
+
+#ifdef _MSC_VER
+DLLEXPORT char * basename(char *);
+DLLEXPORT char * dirname(char *);
 #endif
 
 extern int tab_width;
