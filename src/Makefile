@@ -82,7 +82,7 @@ flisp/libflisp-debug.a: flisp/*.h flisp/*.c support/libsupport-debug.a
 ifneq ($(USEMSVC), 1)
 CXXLD = $(CXX) -shared
 else
-CXXLD = $(LD) -dll
+CXXLD = $(LD) -dll -export:jl_setjmp -export:jl_longjmp
 endif
 
 $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT): julia.expmap $(DOBJS) flisp/libflisp-debug.a support/libsupport-debug.a $(LIBUV)

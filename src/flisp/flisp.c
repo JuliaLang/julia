@@ -44,21 +44,20 @@
 #include <errno.h>
 
 #include "platform.h"
-
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
-#include <malloc.h>
-char * basename(char *);
-char * dirname(char *);
-#else
-#include <libgen.h>
-#endif
-
 #include "libsupport.h"
 #include "flisp.h"
 #include "opcodes.h"
 
 #ifdef __cplusplus
 extern "C" {
+#endif
+
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+#include <malloc.h>
+DLLEXPORT char * basename(char *);
+DLLEXPORT char * dirname(char *);
+#else
+#include <libgen.h>
 #endif
 
 static char *builtin_names[] =

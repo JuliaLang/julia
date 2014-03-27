@@ -405,6 +405,11 @@ install-llvm: $(LLVM_OBJ_TARGET)
 
 UV_SRC_TARGET = libuv/.libs/libuv.a
 UV_OBJ_TARGET = $(build_libdir)/libuv.a
+ifneq ($(USEMSVC), 1)
+UV_OPTS =
+else
+UV_OPTS = CFLAGS=-DBUILDING_UV_SHARED
+endif
 
 libuv/configure:
 	(cd .. && git submodule init && git submodule update)
@@ -416,7 +421,7 @@ libuv/config.status: $(JULIAHOME)/.git/modules/deps/libuv/HEAD
 endif
 libuv/config.status: libuv/configure
 	cd libuv && \
-	./configure --with-pic $(CONFIGURE_COMMON)
+	./configure --with-pic $(CONFIGURE_COMMON) $(UV_OPTS)
 	touch -c $@
 $(UV_SRC_TARGET): libuv/config.status
 	touch -c libuv/aclocal.m4

@@ -17,12 +17,6 @@
 #endif
 #include <errno.h>
 #include <signal.h>
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
-char *basename(char *);
-char *dirname(char *);
-#else
-#include <libgen.h>
-#endif
 #include <fcntl.h>
 
 #ifdef __APPLE__
@@ -49,6 +43,13 @@ char *dirname(char *);
 
 #ifdef __cplusplus
 extern "C" {
+#endif
+
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+DLLEXPORT char *basename(char *);
+DLLEXPORT char *dirname(char *);
+#else
+#include <libgen.h>
 #endif
 
 DLLEXPORT uint32_t jl_getutf8(ios_t *s)
