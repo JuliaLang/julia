@@ -703,7 +703,7 @@ end
 # TODO: See if growing arrays is faster than pre-computing structure
 # and then populating nonzeros
 # TODO: Use binary search in cases where nI >> nfilled(A[:,j]) or nI << nfilled(A[:,j])
-function getindex_I_sorted{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::AbstractVector)
+function getindex_I_sorted{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector)
 
     (m, n) = size(A)
     nI = length(I)
@@ -929,17 +929,26 @@ end
 # S = A[I, J]
 function getindex{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector)
     m = size(A, 1)
-
-    if isa(I, Range) || isa(I, Range1); I = [I]; end
-
-    if I == 1:m
-        return getindex_cols(A, J)
-    elseif issorted(I)
-        return getindex_I_sorted(A, I, J)
-    else
-        return getindex_general(A, I, J)
+    if isa(I, Ranges) 
+        if I == 1:m # whole columns
+            return getindex_cols(A, J)
+        else # ranges are always sorted, but maybe in reverse
+            if step(I)>0
+                return getindex_I_sorted(A, I, J)
+            else 
+                I = [I]
+                return getindex_general(A, I, J)
+                # todo:
+                # return reverse(getindex_I_sorted(A, reverse(I), J))
+            end
+        end
+    else    
+        if issorted(I)
+            return getindex_I_sorted(A, I, J)
+        else
+            return getindex_general(A, I, J)
+        end
     end
-
 end
 
 # logical getindex
