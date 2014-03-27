@@ -235,8 +235,8 @@ function add_workers(pg::ProcessGroup, ws::Array{Any,1})
         register_worker(w)
         create_message_handler_loop(w.socket) 
     end
-    w_flags = (w::Worker) ->  w.config[:wtunnel] ? "$(w.user)#$(string(w.config[:sshflags].exec))" : ""
-    all_locs = map(x -> isa(x, Worker) ? (x.privhost, x.port, x.id, w_flags(x)) : ("", 0, x.id, ""), pg.workers)
+    w_flags = (w::Worker) ->  w.config[:wtunnel] ? (w.user, w.config[:sshflags]) : ("",``)
+    all_locs = map(x -> isa(x, Worker) ? (x.privhost, x.port, x.id, w_flags(x)) : ("", 0, x.id, ("",``)), pg.workers)
     
     for w in ws
         send_msg_now(w, :join_pgrp, w.id, all_locs)
@@ -866,12 +866,11 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                         if (rpid < self_pid) && (!(rpid == 1))
                             # Connect to them
                             ip = string(getipaddr())
-                            sflag = search(flags,'#')
+                            sflag = length(flags[1])
                             w = if (sflag == 0 || rhost == ip || rhost == "127.0.0.1") 
                                 Worker(rhost, rport) 
                             else 
-                                sshflags = sflag == length(flags) ? `` : `$(flags[sflag+1:end])`
-                                Worker(rhost, rport, flags[1:sflag-1], sshflags)
+                                Worker(rhost, rport, flags[1], flags[2])
                             end
                             w.id = rpid
                             register_worker(w)
