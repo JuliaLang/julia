@@ -540,9 +540,9 @@ module REPL
                         # This is slightly ugly but ok for now
                         terminal = Readline.terminal(s)
                         stop_reading(terminal)
-                        raw!(terminal,false) && Terminals.Unix.disable_bracketed_paste(terminal)
+                        raw!(terminal,false) && disable_bracketed_paste(terminal)
                         Readline.mode(s).on_done(s,Readline.buffer(s),true)
-                        raw!(terminal,true) && Terminals.Unix.enable_bracketed_paste(terminal)
+                        raw!(terminal,true) && enable_bracketed_paste(terminal)
                         start_reading(terminal)
                     else
                         break
