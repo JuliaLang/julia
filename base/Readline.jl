@@ -1,7 +1,7 @@
 module Readline
     using Base.Terminals
 
-    import Base.Terminals: raw!, width, height, cmove, Rect, Size, getX,
+    import Base.Terminals: raw!, width, height, cmove, getX,
                            getY, clear_line, beep
 
     import Base: ensureroom, peek
@@ -1119,7 +1119,7 @@ module Readline
 
     function prompt!(terminal,prompt,s=init_state(terminal,prompt))
         raw!(terminal,true)
-        isa(terminal,UnixTerminal) && Terminals.Unix.enable_bracketed_paste(terminal)
+        enable_bracketed_paste(terminal)
         try
             start_reading(terminal)
             activate(prompt,s)
@@ -1136,7 +1136,7 @@ module Readline
                 end
             end
         finally
-            raw!(terminal,false) && Terminals.Unix.disable_bracketed_paste(terminal)
+            raw!(terminal,false) && disable_bracketed_paste(terminal)
         end
     end
 end
