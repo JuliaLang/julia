@@ -159,11 +159,11 @@ unscaled_covzm(x::AbstractMatrix, vardim::Int) = (vardim == 1 ? _conj(x'x) : x *
 
 unscaled_covzm(x::AbstractVector, y::AbstractVector) = dot(x, y)
 unscaled_covzm(x::AbstractVector, y::AbstractMatrix, vardim::Int) = 
-    (vardim == 1 ? (y'x).' : (y * x).')
+    (vardim == 1 ? At_mul_B(x, _conj(y)) : At_mul_Bt(x, _conj(y)))
 unscaled_covzm(x::AbstractMatrix, y::AbstractVector, vardim::Int) = 
-    (c = vardim == 1 ? _conj(x'y) :  x * _conj(y); reshape(c, length(c), 1))
+    (c = vardim == 1 ? At_mul_B(x, _conj(y)) :  x * _conj(y); reshape(c, length(c), 1))
 unscaled_covzm(x::AbstractMatrix, y::AbstractMatrix, vardim::Int) = 
-    (vardim == 1 ? _conj(x'y) : x * y')
+    (vardim == 1 ? At_mul_B(x, _conj(y)) : A_mul_Bc(x, y))
 
 # covzm (non-exported, with centered data)
 
