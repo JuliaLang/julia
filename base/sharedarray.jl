@@ -36,11 +36,6 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
         onlocalhost = assert_same_host(pids)
     end
     
-    len_S = prod(dims)
-    if length(pids) > len_S
-        pids = pids[1:len_S]
-    end
-
     local shm_seg_name = ""
     local s 
     local S = nothing 
@@ -125,19 +120,25 @@ convert(::Type{SharedArray}, A::Array) = (S = SharedArray(eltype(A), size(A)); c
 convert{T}(::Type{SharedArray{T}}, A::Array) = (S = SharedArray(T, size(A)); copy!(S, A))
 convert{TS,TA,N}(::Type{SharedArray{TS,N}}, A::Array{TA,N}) = (S = SharedArray(TS, size(A)); copy!(S, A))
 
-function range_1dim(S::SharedArray, n) 
+function range_1dim(S::SharedArray, pidx) 
     l = length(S)
     nw = length(S.pids)
     partlen = div(l, nw)
 
-    if n == nw
-        return (((n-1) * partlen) + 1):l
+    if l < nw
+        if pidx <= l 
+            return pidx:1
+        else
+            return 1:0
+        end
+    elseif pidx == nw
+        return (((pidx-1) * partlen) + 1):l
     else
-        return (((n-1) * partlen) + 1):(n*partlen) 
+        return (((pidx-1) * partlen) + 1):(pidx*partlen) 
     end
 end
 
-sub_1dim(S::SharedArray, n) = sub(S.s, range_1dim(S, n))
+sub_1dim(S::SharedArray, pidx) = sub(S.s, range_1dim(S, pidx))
 
 function init_loc_flds(S)
     if myid() in S.pids
