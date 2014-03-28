@@ -797,8 +797,10 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
     schedule(@task begin
         global PGRP
         #println("message_handler_loop")
+        disable_nagle(sock)
         start_reading(sock)
         wait_connected(sock)
+        
         try
             while true
                 msg = deserialize(sock)
@@ -943,6 +945,7 @@ function start_worker(out::IO)
     disable_threaded_libs()
 
     ccall(:jl_install_sigint_handler, Void, ())
+    disable_nagle(sock)
 
     try
         check_master_connect(60.0)
@@ -1524,3 +1527,13 @@ function interrupt(pids::AbstractVector=workers())
     end
 end
 
+function disable_nagle(sock)
+    # disable nagle on all OSes
+    ccall(:uv_tcp_nodelay, Cint, (Ptr{Void}, Cint), sock.handle, 1)
+    @linux_only begin
+        # tcp_quickack is a linux only option
+        if ccall(:jl_tcp_quickack, Cint, (Ptr{Void}, Cint), sock.handle, 1) < 0 
+            warn("Error enabling TCP_QUICKACK : ", strerror(errno))
+        end
+    end
+end
