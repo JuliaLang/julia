@@ -235,7 +235,10 @@ function add_workers(pg::ProcessGroup, ws::Array{Any,1})
         register_worker(w)
         create_message_handler_loop(w.socket) 
     end
-    w_flags = (w::Worker) ->  w.config[:wtunnel] ? (w.user, w.config[:sshflags]) : ("",``)
+    
+    w_flags = (w::Worker) -> check_worker(w) ? (w.user, w.config[:sshflags]) : ("",``)
+    check_worker = (w::Worker) -> w.config[:wtunnel] || (all_local && w.config[:tunnel]) 
+    all_local = size(filter(x::Worker -> haskey(x.config, :process), ws),1) == size(ws,1)  
     all_locs = map(x -> isa(x, Worker) ? (x.privhost, x.port, x.id, w_flags(x)) : ("", 0, x.id, ("",``)), pg.workers)
     
     for w in ws
