@@ -162,12 +162,12 @@ type Messages
     #                           for each neighbor p1 of p0,
     #                           msg[p0][p1] is a vector of length spp[p0]
     #                           messages are normalized (i.e. the max is always 0)
-    msg::Vector{Vector{Field}}
+    msg::Vector{Vector{FieldVec}}
 
     # overall fields: for each package p0,
     #                 fld[p0] is a vector of length spp[p0]
     #                 fields are not normalized
-    fld::Vector{Field}
+    fld::Vector{FieldVec}
 
     # keep track of which variables have been decimated
     decimated::BitVector
