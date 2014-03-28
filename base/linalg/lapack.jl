@@ -4,7 +4,7 @@ module LAPACK
 const liblapack = Base.liblapack_name
 
 import ..LinAlg: BlasFloat, BlasChar, BlasInt, blas_int, LAPACKException,
-    DimensionMismatch, SingularException, chkstride1, chksquare
+    DimensionMismatch, SingularException, PosDefException, chkstride1, chksquare
 
 #Generic LAPACK error handlers
 macro assertargsok() #Handle only negative info codes - use only if positive info code is useful!
