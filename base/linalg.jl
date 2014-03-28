@@ -191,6 +191,8 @@ end
 include("linalg/exceptions.jl")
 include("linalg/generic.jl")
 
+include("linalg/blas_tune.jl")
+
 include("linalg/blas.jl")
 include("linalg/matmul.jl")
 include("linalg/lapack.jl")
