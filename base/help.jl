@@ -2,14 +2,10 @@ module Help
 
 export help, apropos, @help
 
-CATEGORY_LIST = nothing
-CATEGORY_DICT = nothing
 MODULE_DICT   = nothing
 FUNCTION_DICT = nothing
 
 function clear_cache()
-    global CATEGORY_LIST = nothing
-    global CATEGORY_DICT = nothing
     global MODULE_DICT   = nothing
     global FUNCTION_DICT = nothing
 end
@@ -39,27 +35,19 @@ function helpdb_filename()
 end
 
 function init_help()
-    global CATEGORY_LIST, CATEGORY_DICT,
-           MODULE_DICT, FUNCTION_DICT
-    if CATEGORY_DICT == nothing
+    global MODULE_DICT, FUNCTION_DICT
+    if FUNCTION_DICT == nothing
         info("Loading help data...")
         helpdb = evalfile(helpdb_filename())
-        CATEGORY_LIST = {}
-        CATEGORY_DICT = Dict()
         MODULE_DICT = Dict()
         FUNCTION_DICT = Dict()
-        for (cat,mod,func,desc) in helpdb
-            if !haskey(CATEGORY_DICT, cat)
-                push!(CATEGORY_LIST, cat)
-                CATEGORY_DICT[cat] = {}
-            end
+        for (mod,func,desc) in helpdb
             if !isempty(mod)
                 mfunc = mod * "." * func
                 desc = decor_help_desc(func, mfunc, desc)
             else
                 mfunc = func
             end
-            push!(CATEGORY_DICT[cat], mfunc)
             if !haskey(FUNCTION_DICT, mfunc)
                 FUNCTION_DICT[mfunc] = {}
             end
@@ -76,37 +64,15 @@ end
 
 function help(io::IO)
     init_help()
-    print(io,
-"""
+    print(io, """
 
- Welcome to Julia. The full manual is available at
+     Welcome to Julia. The full manual is available at
 
-    http://docs.julialang.org
+        http://docs.julialang.org
 
- To get help, try help(function), help("@macro"), or help("variable").
- To search all help text, try apropos("string"). To see available functions,
- try help(category), for one of the following categories:
-
-""")
-    for cat = CATEGORY_LIST
-        if !isempty(CATEGORY_DICT[cat])
-            print(io, "  ")
-            show(io, cat); println(io)
-        end
-    end
-end
-
-function help(io::IO, cat::String)
-    init_help()
-    if !haskey(CATEGORY_DICT, cat)
-        # if it's not a category, try another named thing
-        return help_for(io, cat)
-    end
-    println(io, "Help is available for the following items:")
-    for func = CATEGORY_DICT[cat]
-        print(io, func, " ")
-    end
-    println(io)
+     To get help, try help(function), help("@macro"), or help("variable").
+     To search all help text, try apropos("string").
+    """)
 end
 
 function print_help_entries(io::IO, entries)
@@ -122,9 +88,7 @@ end
 
 func_expr_from_symbols(s::Vector{Symbol}) = length(s) == 1 ? s[1] : Expr(:., func_expr_from_symbols(s[1:end-1]), Expr(:quote, s[end]))
 
-help_for(io::IO, s::String) = help_for(io, s, 0)
-
-function help_for(io::IO, fname::String, obj)
+function help(io::IO, fname::String, obj=0)
     init_help()
     found = false
     if haskey(FUNCTION_DICT, fname)
@@ -176,15 +140,11 @@ function help_for(io::IO, fname::String, obj)
     end
 end
 
+apropos(s::String) = apropos(STDOUT, s)
 function apropos(io::IO, txt::String)
     init_help()
     n = 0
     r = Regex("\\Q$txt", Base.PCRE.CASELESS)
-    for (cat, _) in CATEGORY_DICT
-        if ismatch(r, cat)
-            println(io, "Category: \"$cat\"")
-        end
-    end
     for (func, entries) in FUNCTION_DICT
         if ismatch(r, func) || any(e->ismatch(r,e), entries)
             for desc in entries
@@ -207,10 +167,10 @@ function help(io::IO, f::Function)
     if is(f,help)
         return help(io)
     end
-    help_for(io, string(f), f)
+    help(io, string(f), f)
 end
 
-help(io::IO, t::DataType) = help_for(io, string(t.name),t)
+help(io::IO, t::DataType) = help(io, string(t.name), t)
 help(io::IO, t::Module) = help(io, string(t))
 
 function help(io::IO, x)
