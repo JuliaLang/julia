@@ -108,6 +108,7 @@ type Worker
     manage::Function
     config::Dict
     winfo::WorkerLocalInfo
+    user::ByteString
     
     Worker(host::String, port::Integer, sock::TcpSocket, id::Int) =
         new(bytestring(host), uint16(port), sock, IOBuffer(), {}, {}, id, false, "")
@@ -116,6 +117,8 @@ Worker(host::String, port::Integer, sock::TcpSocket) =
     Worker(host, port, sock, 0)
 Worker(host::String, port::Integer) =
     Worker(host, port, connect(host,uint16(port)))
+Worker(host::String, port::Integer, tunnel_user, sshflags) =
+    Worker(host, host, port, tunnel_user, sshflags)
 Worker(host::String, privhost::String, port::Integer, tunnel_user::String, sshflags) =
     Worker(host, port, connect("localhost",
                                ssh_tunnel(tunnel_user, host, privhost, uint16(port), sshflags)))
@@ -232,7 +235,11 @@ function add_workers(pg::ProcessGroup, ws::Array{Any,1})
         register_worker(w)
         create_message_handler_loop(w.socket) 
     end
-    all_locs = map(x -> isa(x, Worker) ? (x.privhost, x.port, x.id) : ("", 0, x.id), pg.workers)
+    
+    w_flags = (w::Worker) -> check_worker(w) ? (w.user, w.config[:sshflags]) : ("",``)
+    check_worker = (w::Worker) -> w.config[:wtunnel] || (all_local && w.config[:tunnel]) 
+    all_local = size(filter(x::Worker -> haskey(x.config, :process), ws),1) == size(ws,1)  
+    all_locs = map(x -> isa(x, Worker) ? (x.privhost, x.port, x.id, w_flags(x)) : ("", 0, x.id, ("",``)), pg.workers)
     
     for w in ws
         send_msg_now(w, :join_pgrp, w.id, all_locs)
@@ -858,10 +865,16 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                     register_worker(Worker("", 0, sock, 1))
                     register_worker(LPROC)
                     
-                    for (rhost, rport, rpid) in locs
+                    for (rhost, rport, rpid, flags) in locs
                         if (rpid < self_pid) && (!(rpid == 1))
                             # Connect to them
-                            w = Worker(rhost, rport)
+                            ip = string(getipaddr())
+                            sflag = length(flags[1])
+                            w = if (sflag == 0 || rhost == ip || rhost == "127.0.0.1") 
+                                Worker(rhost, rport) 
+                            else 
+                                Worker(rhost, rport, flags[1], flags[2])
+                            end
                             w.id = rpid
                             register_worker(w)
                             create_message_handler_loop(w.socket)
@@ -1025,6 +1038,7 @@ function create_worker(privhost, port, pubhost, stream, config, manage)
     w.privhost = privhost
     w.config = config
     w.manage = manage
+    w.user = user
     
     if isa(stream, AsyncStream)
         let wrker = w
@@ -1168,11 +1182,16 @@ end
 # the tunnel is only used from the head (process 1); the nodes are assumed
 # to be mutually reachable without a tunnel, as is often the case in a cluster.
 function addprocs_internal(np::Integer;
-                  tunnel=false, dir=JULIA_HOME,
+                  tunnel=false, tunnel_between_workers=false, dir=JULIA_HOME,
                   exename=(ccall(:jl_is_debugbuild,Cint,())==0?"./julia-basic":"./julia-debug-basic"),
                   sshflags::Cmd=``, cman=LocalManager(), exeflags=``)
                   
-    config={:dir=>dir, :exename=>exename, :exeflags=>`$exeflags --worker`, :tunnel=>tunnel, :sshflags=>sshflags}
+    config={:dir=>dir, 
+            :exename=>exename, 
+            :exeflags=>`$exeflags --worker`, 
+            :wtunnel=>tunnel_between_workers, 
+            :tunnel=>tunnel, 
+            :sshflags=>sshflags}
     disable_threaded_libs()
     add_workers(PGRP, start_cluster_workers(np, config, cman))
 end
