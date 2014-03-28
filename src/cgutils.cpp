@@ -664,6 +664,11 @@ static Value *mark_julia_type(Value *v, jl_value_t *jt)
     return v;
 }
 
+static Value *tbaa_decorate(MDNode* md, Instruction* load_or_store) {
+    load_or_store->setMetadata( llvm::LLVMContext::MD_tbaa, md );
+    return load_or_store;
+}
+
 // --- generating various error checks ---
 
 static jl_value_t *llvm_type_to_julia(Type *t, bool err=true);
@@ -733,7 +738,7 @@ static void raise_exception_unless(Value *cond, Value *exc, jl_codectx_t *ctx)
 static void raise_exception_unless(Value *cond, GlobalVariable *exc,
                                    jl_codectx_t *ctx)
 {
-    raise_exception_unless(cond, (Value*)builder.CreateLoad(exc, false), ctx);
+    raise_exception_unless(cond, (Value*)tbaa_decorate(tbaa_const,builder.CreateLoad(exc, false)), ctx);
 }
 
 static void raise_exception_if(Value *cond, Value *exc, jl_codectx_t *ctx)
@@ -839,18 +844,18 @@ static Value *emit_nthptr_addr(Value *v, Value *idx)
     return builder.CreateGEP(builder.CreateBitCast(v, jl_ppvalue_llvmt), idx);
 }
 
-static Value *emit_nthptr(Value *v, size_t n)
+static Value *emit_nthptr(Value *v, size_t n, MDNode *tbaa)
 {
     // p = (jl_value_t**)v; p[n]
     Value *vptr = emit_nthptr_addr(v, n);
-    return builder.CreateLoad(vptr, false);
+    return tbaa_decorate(tbaa,builder.CreateLoad(vptr, false));
 }
 
-static Value *emit_nthptr(Value *v, Value *idx)
+static Value *emit_nthptr(Value *v, Value *idx, MDNode *tbaa)
 {
     // p = (jl_value_t**)v; p[n]
     Value *vptr = emit_nthptr_addr(v, idx);
-    return builder.CreateLoad(vptr, false);
+    return tbaa_decorate(tbaa,builder.CreateLoad(vptr, false));
 }
 
 static Value *typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
@@ -865,7 +870,7 @@ static Value *typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
         data = builder.CreateBitCast(ptr, PointerType::get(elty, 0));
     else
         data = ptr;
-    Value *elt = builder.CreateLoad(builder.CreateGEP(data, idx_0based), false);
+    Value *elt = tbaa_decorate(tbaa_user, builder.CreateLoad(builder.CreateGEP(data, idx_0based), false));
     if (elty == jl_pvalue_llvmt) {
         null_pointer_check(elt, ctx);
     }
@@ -891,7 +896,7 @@ static Value *typed_store(Value *ptr, Value *idx_0based, Value *rhs,
         data = builder.CreateBitCast(ptr, PointerType::get(elty, 0));
     else
         data = ptr;
-    return builder.CreateStore(rhs, builder.CreateGEP(data, idx_0based));
+    return tbaa_decorate(tbaa_user, builder.CreateStore(rhs, builder.CreateGEP(data, idx_0based)));
 }
 
 // --- convert boolean value to julia ---
@@ -988,7 +993,7 @@ static Value *emit_tuplelen(Value *t,jl_value_t *jt)
         return builder.CreateLShr(builder.CreatePtrToInt(lenbits, T_int64),
                                   ConstantInt::get(T_int32, 52));
 #else
-        Value *lenbits = emit_nthptr(t, 1);
+        Value *lenbits = emit_nthptr(t, 1, tbaa_tuplelen);
         return builder.CreatePtrToInt(lenbits, T_size);
 #endif
     }
@@ -1120,20 +1125,20 @@ static Value *emit_tupleref(Value *tuple, Value *ival, jl_value_t *jt, jl_codect
                                                        Intrinsic::stacksave));
         builder.Insert(stacksave);
         Value *tempSpace = builder.CreateAlloca(at);
-        builder.CreateStore(tuple,tempSpace);
+        tbaa_decorate(tbaa_user, builder.CreateStore(tuple,tempSpace));
         Value *idxs[2];
         idxs[0] = ConstantInt::get(T_size,0);
         idxs[1] = builder.CreateSub(ival,ConstantInt::get(T_size,1));
         Value *v = builder.CreateGEP(tempSpace,ArrayRef<Value*>(&idxs[0],2));
         if (idx) {
-            v = mark_julia_type(builder.CreateLoad(v), jl_tupleref(jt,ci));
+            v = mark_julia_type(tbaa_decorate(tbaa_user, builder.CreateLoad(v)), jl_tupleref(jt,ci));
         }
         else {
             jl_add_linfo_root(ctx->linfo, jt);
             Value *lty = emit_tupleref(literal_pointer_val(jt), ival, jl_typeof(jt), ctx);
             size_t i, l = jl_tuple_len(jt);
             if (is_tupletype_homogeneous((jl_tuple_t*)jt) && jl_isbits(jl_t0(jt))) {
-                v = mark_julia_type(builder.CreateLoad(v), jl_t0(jt));
+                v = mark_julia_type(tbaa_decorate(tbaa_user, builder.CreateLoad(v)), jl_t0(jt));
             }
             else {
                 for (i = 0; i < l; i++) {
@@ -1147,7 +1152,7 @@ static Value *emit_tupleref(Value *tuple, Value *ival, jl_value_t *jt, jl_codect
                     Value *nb = ConstantExpr::getSizeOf(at->getElementType());
                     if (sizeof(size_t)==4)
                         nb = builder.CreateTrunc(nb, T_int32);
-                    v = allocate_box_dynamic(lty, nb, builder.CreateLoad(v));
+                    v = allocate_box_dynamic(lty, nb, tbaa_decorate(tbaa_user, builder.CreateLoad(v)));
                 }
             }
         }
@@ -1227,7 +1232,7 @@ static Value *emit_arraysize(Value *t, Value *dim)
 #endif
     Value *dbits =
         emit_nthptr(t, builder.CreateAdd(dim,
-                                         ConstantInt::get(dim->getType(), o)));
+                                         ConstantInt::get(dim->getType(), o)), tbaa_arraysize);
     return builder.CreatePtrToInt(dbits, T_size);
 }
 
@@ -1254,7 +1259,7 @@ static Value *emit_arraylen_prim(Value *t, jl_value_t *ty)
 {
 #ifdef STORE_ARRAY_LEN
     (void)ty;
-    Value *lenbits = emit_nthptr(t, 2);
+    Value *lenbits = emit_nthptr(t, 2, tbaa_arraylen);
     return builder.CreatePtrToInt(lenbits, T_size);
 #else
     jl_value_t *p1 = jl_tparam1(ty);
@@ -1286,7 +1291,7 @@ static Value *emit_arraylen(Value *t, jl_value_t *ex, jl_codectx_t *ctx)
 
 static Value *emit_arrayptr(Value *t)
 {
-    return emit_nthptr(t, 1);
+    return emit_nthptr(t, 1, tbaa_arrayptr);
 }
 
 static Value *emit_arrayptr(Value *t, jl_value_t *ex, jl_codectx_t *ctx)
@@ -1307,9 +1312,9 @@ static Value *emit_arraysize(Value *t, jl_value_t *ex, int dim, jl_codectx_t *ct
 
 static void assign_arrayvar(jl_arrayvar_t &av, Value *ar)
 {
-    builder.CreateStore(builder.CreateBitCast(emit_arrayptr(ar),
-                                              av.dataptr->getType()->getContainedType(0)),
-                        av.dataptr);
+    tbaa_decorate(tbaa_arrayptr,builder.CreateStore(builder.CreateBitCast(emit_arrayptr(ar),
+                                                    av.dataptr->getType()->getContainedType(0)),
+                                                    av.dataptr));
     builder.CreateStore(emit_arraylen_prim(ar, av.ty), av.len);
     for(size_t i=0; i < av.sizes.size(); i++)
         builder.CreateStore(emit_arraysize(ar,i+1), av.sizes[i]);
@@ -1363,7 +1368,7 @@ static Value *emit_array_nd_index(Value *a, jl_value_t *ex, size_t nd, jl_value_
 
         ctx->f->getBasicBlockList().push_back(failBB);
         builder.SetInsertPoint(failBB);
-        builder.CreateCall2(prepare_call(jlthrow_line_func), builder.CreateLoad(prepare_global(jlboundserr_var)),
+        builder.CreateCall2(prepare_call(jlthrow_line_func), tbaa_decorate(tbaa_const,builder.CreateLoad(prepare_global(jlboundserr_var))),
                             ConstantInt::get(T_int32, ctx->lineno));
         builder.CreateUnreachable();
 
@@ -1585,7 +1590,7 @@ static void emit_cpointercheck(Value *x, const std::string &msg,
     emit_typecheck(t, (jl_value_t*)jl_datatype_type, msg, ctx);
 
     Value *istype =
-        builder.CreateICmpEQ(emit_nthptr(t, offsetof(jl_datatype_t,name)/sizeof(char*)),
+        builder.CreateICmpEQ(emit_nthptr(t, offsetof(jl_datatype_t,name)/sizeof(char*), tbaa_datatype),
                              literal_pointer_val((jl_value_t*)jl_pointer_type->name));
     BasicBlock *failBB = BasicBlock::Create(getGlobalContext(),"fail",ctx->f);
     BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
