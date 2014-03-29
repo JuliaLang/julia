@@ -16,7 +16,7 @@ CONFIGURE_COMMON += F77="$(FC)" CC="$(CC)" CXX="$(CXX)"
 # they will override the values passed above to ./configure
 MAKE_COMMON = DESTDIR="" prefix=$(build_prefix) bindir=$(build_bindir) libdir=$(build_libdir) libexecdir=$(build_libexecdir) datarootdir=$(build_datarootdir) includedir=$(build_includedir) sysconfdir=$(build_sysconfdir)
 
-#autoconf configure-driven scripts: llvm readline pcre arpack fftw unwind gmp mpfr patchelf uv
+#autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf uv
 #custom Makefile rules: openlibm Rmath double-conversion random suitesparse-wrapper suitesparse lapack openblas utf8proc
 
 # prevent installing libs into usr/lib64 on opensuse
@@ -63,14 +63,6 @@ endif
 
 ifeq ($(USE_SYSTEM_LLVM), 0)
 STAGE1_DEPS += llvm
-endif
-
-ifeq ($(OS),WINNT)
-READLINE_VER = 5.0
-endif
-
-ifeq ($(USE_SYSTEM_READLINE), 0)
-STAGE1_DEPS += readline
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 0)
@@ -146,7 +138,7 @@ install: $(addprefix install-, $(LIBS))
 cleanall: $(addprefix clean-, $(LIBS))
 distclean: $(addprefix distclean-, $(LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-readline get-uv get-pcre get-double-conversion get-openlibm get-openspecfun get-random get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf get-utf8proc
+getall: get-llvm get-uv get-pcre get-double-conversion get-openlibm get-openspecfun get-random get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf get-utf8proc
 
 ## PATHS ##
 # sort is used to remove potential duplicates
@@ -405,86 +397,6 @@ compile-llvm: $(LLVM_OBJ_SOURCE)
 check-llvm: llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/checked
 install-llvm: $(LLVM_OBJ_TARGET)
 #todo: LLVM make check target is broken on julia.mit.edu (and really slow elsewhere)
-
-
-## GNU readline ##
-
-
-ifeq ($(OS),WINNT)
-READLINE_OBJ_TARGET = $(build_libdir)/libreadline.a
-READLINE_OBJ_SOURCE = readline-$(READLINE_VER)/libreadline.a
-READLINE_URL = https://github.com/JuliaLang/readline/tarball/master
-READLINE_OPTS = --disable-shared --enable-static --with-curses
-READLINE_CFLAGS = LOCAL_DEFS="-include $(abspath .)/readline-win.h"
-readline-$(READLINE_VER).tar.gz:
-	$(JLDOWNLOAD) $@ $(READLINE_URL)
-	touch -c $@
-readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
-	mkdir readline-$(READLINE_VER)
-	$(TAR) -C readline-$(READLINE_VER) --strip-components 1 -xf $<
-	touch -c $@
-$(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE) readline-$(READLINE_VER)/checked
-	$(MAKE) -C readline-$(READLINE_VER) $(READLINE_CFLAGS) install $(MAKE_COMMON)
-	touch -c $@
-else
-READLINE_OBJ_TARGET = $(build_libdir)/libreadline.$(SHLIB_EXT)
-ifneq ($(OS),Darwin)
-READLINE_OBJ_SOURCE = readline-$(READLINE_VER)/shlib/libreadline.$(SHLIB_EXT).$(READLINE_VER)
-else
-READLINE_OBJ_SOURCE = readline-$(READLINE_VER)/shlib/libreadline.$(READLINE_VER).$(SHLIB_EXT)
-endif
-READLINE_URL = ftp://ftp.gnu.org/gnu/readline/readline-$(READLINE_VER).tar.gz
-READLINE_OPTS = --enable-shared --enable-static --with-curses
-READLINE_CFLAGS = 
-readline-$(READLINE_VER).tar.gz:
-	$(JLDOWNLOAD) $@ http://ftp.gnu.org/gnu/readline/$@
-	touch -c $@
-readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
-	$(TAR) zxf $<
-	cd readline-$(READLINE_VER) && patch -p0 < ../readline62-001
-	cd readline-$(READLINE_VER) && patch -p0 < ../readline62-002
-	cd readline-$(READLINE_VER) && patch -p0 < ../readline62-003
-	cd readline-$(READLINE_VER) && patch -p0 < ../readline62-004
-	touch -c $@
-$(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE) readline-$(READLINE_VER)/checked
-	$(MAKE) -C readline-$(READLINE_VER) install $(MAKE_COMMON)
-	chmod +w $(build_libdir)/libreadline.* $(build_libdir)/libhistory.*
-ifeq ($(OS), Darwin)
-	$(INSTALL_NAME_CMD)libreadline.$(SHLIB_EXT) $(build_libdir)/libreadline.$(SHLIB_EXT)
-	$(INSTALL_NAME_CMD)libhistory.dylib $(build_libdir)/libhistory.dylib
-else ifeq ($(OS), Linux)
-	for filename in $(build_libdir)/libhistory.so* $(build_libdir)/libreadline.so* ; do \
-		$(PATCHELF) --set-rpath '$$ORIGIN' $$filename ;\
-	done
-endif
-	touch -c $@
-endif
-
-readline-$(READLINE_VER)/config.status: readline-$(READLINE_VER)/configure
-	cd readline-$(READLINE_VER) && \
-	chmod a+x ./configure && \
-	./configure $(CONFIGURE_COMMON) $(READLINE_OPTS)
-	touch -c $@
-$(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/config.status
-	cd readline-$(READLINE_VER) && \
-	$(MAKE) $(READLINE_CFLAGS)
-	touch -c $@
-readline-$(READLINE_VER)/checked: $(READLINE_OBJ_SOURCE)
-	cd readline-$(READLINE_VER) && \
-	$(MAKE) check $(READLINE_CFLAGS)
-	echo 1 > $@
-
-clean-readline:
-	-$(MAKE) -C readline-$(READLINE_VER) clean
-	-rm -f $(READLINE_OBJ_TARGET)
-distclean-readline:
-	-rm -rf readline-$(READLINE_VER).tar.gz readline-$(READLINE_VER)
-
-get-readline: readline-$(READLINE_VER).tar.gz
-configure-readline: readline-$(READLINE_VER)/config.status
-compile-readline: $(READLINE_OBJ_SOURCE)
-check-readline: readline-$(READLINE_VER)/checked
-install-readline: $(READLINE_OBJ_TARGET) 
 
 
 ## LIBUV ##

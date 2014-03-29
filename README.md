@@ -116,13 +116,26 @@ If the `gcc44` and `gfortran44` packages are installed, you can specify their us
 
 Otherwise, install or contact your systems administrator to install a more recent version of `gcc`.
 
+#### Google Compute Engine
+
+Google Compute Engine is evolving rapidly, as is Julia.  This section is current as of March 2014 and assumes working knowledge of Google Cloud Services.
+
+These notes apply to the Debian 7 image currently available on Google Compute Engine and Julia pre-0.3.  There are only two things you need to do:
+
+1. Install packages required to build on your instance:
+  ```
+  apt-get install bzip2 gcc gfortran git g++ make m4 ncurses-dev
+  ```
+
+2. Now clone `JuliaLang:master` and edit `deps/Versions.make` to select `OPENBLAS_VER = v0.2.9.rc2`. This picks up changes to support the Sandybridge cores used by Google Compute Engine. (Alternatively, you could fall back to the Nehelem architecture via a `make` option, but that would entail performance penalties.)
+
+Now you should be able to build using the generic Linux instructions. These instructions were tested on a `g1-small` instance on 2014-03-28. Other resources include [information on Google Compute Engine](https://cloud.google.com/products/compute-engine/) and a series of [tutorials by Julia Ferraioli](http://www.blog.juliaferraioli.com/2013/12/julia-on-google-compute-engine.html).
+
 #### Linux Build Troubleshooting
 
  Problem              | Possible Solution
 ------------------------|---------------------
  OpenBLAS build failure | Set one of the following build options in `Make.user` and build again: <ul><li> `OPENBLAS_TARGET_ARCH=BARCELONA` (AMD CPUs) or `OPENBLAS_TARGET_ARCH=NEHALEM` (Intel CPUs)<ul>Set `OPENBLAS_DYNAMIC_ARCH = 0` to disable compiling multiple architectures in a single binary.</ul></li><li> `USE_SYSTEM_BLAS=1` uses the system provided `libblas` <ul><li>Set `LIBBLAS=-lopenblas` and `LIBBLASNAME=libopenblas` to force the use of the system provided OpenBLAS when multiple BLAS versions are installed </li></ul></li></ul>
- readline build error   | Set `USE_SYSTEM_READLINE=1` in `Make.user`
- ncurses build error    | Install the `libncurses5` development package <ul><li> Debian/Ubuntu: `apt-get install libncurses5-dev` </li><li> RPM-based systems: `yum install libncurses5-devel` </li></ul>
  Illegal Instruction error | Check if your CPU supports AVX while your OS does not (e.g. through virtualization, as described in [this issue](https://github.com/JuliaLang/julia/issues/3263)), and try installing LLVM 3.3 instead of LLVM 3.2.
 
 ### OS X
@@ -168,7 +181,6 @@ Julia uses the following external libraries, which are automatically downloaded 
 
 - **[LLVM]**                — compiler infrastructure.
 - **[FemtoLisp]**           — packaged with Julia source, and used to implement the compiler front-end.
-- **[readline]**            — library allowing shell-like line editing in the terminal, with history and familiar key bindings.
 - **[libuv]**               — portable, high-performance event-based I/O library
 - **[OpenLibm]**            — a portable libm library containing elementary math functions.
 - **[OpenSpecFun]**         — a library containing Bessel and error functions of complex arguments.
@@ -208,7 +220,6 @@ Julia uses the following external libraries, which are automatically downloaded 
 [PCRE]:         http://www.pcre.org/
 [LLVM]:         http://www.llvm.org/
 [FemtoLisp]:    https://github.com/JeffBezanson/femtolisp
-[readline]:     http://cnswww.cns.cwru.edu/php/chet/readline/rltop.html
 [GMP]:          http://gmplib.org/
 [MPFR]:         http://www.mpfr.org/
 [double-conversion]: http://double-conversion.googlecode.com/
