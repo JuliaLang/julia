@@ -645,7 +645,7 @@ const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
     else {
         size_t fptr = (size_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
         assert(fptr != 0);
-        std::map<size_t, FuncInfo> &fmap = jl_jit_events->getMap();
+        std::map<size_t, FuncInfo, revcomp> &fmap = jl_jit_events->getMap();
         std::map<size_t, FuncInfo>::iterator fit = fmap.find(fptr);
 
         if (fit == fmap.end()) {
