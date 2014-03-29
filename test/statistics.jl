@@ -151,27 +151,27 @@ for vd in [1, 2], zm in [true, false]
         y1 = vec(Y[1,:])
     end
 
-    c = cor(x1; zeromean=zm)
+    c = zm ? cor(x1; mean=0) : cor(x1)
     @test isa(c, Float64)
     @test_approx_eq c Cxx[1,1]
 
-    C = cor(X; vardim=vd, zeromean=zm)
+    C = zm ? cor(X; vardim=vd, mean=0) : cor(X; vardim=vd)
     @test size(C) == (k, k)
     @test_approx_eq C Cxx
 
-    c = cor(x1, y1; zeromean=zm)
+    c = zm ? cor(x1, y1; mean=0) : cor(x1, y1)
     @test isa(c, Float64)
     @test_approx_eq c Cxy[1,1]
 
-    C = cor(x1, Y; vardim=vd, zeromean=zm)
+    C = zm ? cor(x1, Y; vardim=vd, mean=0) : cor(x1, Y; vardim=vd)
     @test size(C) == (1, k)
     @test_approx_eq C Cxy[1,:]
 
-    C = cor(X, y1; vardim=vd, zeromean=zm)
+    C = zm ? cor(X, y1; vardim=vd, mean=0) : cor(X, y1; vardim=vd)
     @test size(C) == (k, 1)
     @test_approx_eq C Cxy[:,1]
 
-    C = cor(X, Y; vardim=vd, zeromean=zm)
+    C = zm ? cor(X, Y; vardim=vd, mean=0) : cor(X, Y; vardim=vd)
     @test size(C) == (k, k)
     @test_approx_eq C Cxy
 end
