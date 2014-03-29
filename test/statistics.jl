@@ -84,27 +84,33 @@ for vd in [1, 2], zm in [true, false], cr in [true, false]
         y1 = vec(Y[1,:])
     end
 
-    c = cov(x1; zeromean=zm, corrected=cr)
+    c = zm ? cov(x1; mean=0, corrected=cr) :
+             cov(x1; corrected=cr)
     @test isa(c, Float64)
     @test_approx_eq c Cxx[1,1]
 
-    C = cov(X; vardim=vd, zeromean=zm, corrected=cr)
+    C = zm ? cov(X; vardim=vd, mean=0, corrected=cr) :
+             cov(X; vardim=vd, corrected=cr)
     @test size(C) == (k, k)
     @test_approx_eq C Cxx
 
-    c = cov(x1, y1; zeromean=zm, corrected=cr)
+    c = zm ? cov(x1, y1; mean=0, corrected=cr) :
+             cov(x1, y1; corrected=cr)
     @test isa(c, Float64)
     @test_approx_eq c Cxy[1,1]
 
-    C = cov(x1, Y; vardim=vd, zeromean=zm, corrected=cr)
+    C = zm ? cov(x1, Y; vardim=vd, mean=0, corrected=cr) :
+             cov(x1, Y; vardim=vd, corrected=cr)
     @test size(C) == (1, k)
     @test_approx_eq C Cxy[1,:]
 
-    C = cov(X, y1; vardim=vd, zeromean=zm, corrected=cr)
+    C = zm ? cov(X, y1; vardim=vd, mean=0, corrected=cr) :
+             cov(X, y1; vardim=vd, corrected=cr) 
     @test size(C) == (k, 1)
     @test_approx_eq C Cxy[:,1]
 
-    C = cov(X, Y; vardim=vd, zeromean=zm, corrected=cr)
+    C = zm ? cov(X, Y; vardim=vd, mean=0, corrected=cr) :
+             cov(X, Y; vardim=vd, corrected=cr)
     @test size(C) == (k, k)
     @test_approx_eq C Cxy
 end
