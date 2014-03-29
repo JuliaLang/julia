@@ -59,37 +59,19 @@ function trailingsize(A, n)
 end
 
 ## Bounds checking ##
-function checkbounds(sz::Int, I::Real)
-    I = to_index(I)
-    if I < 1 || I > sz
-        throw(BoundsError())
-    end
-end
-
-function checkbounds(sz::Int, I::AbstractVector{Bool})
-    if length(I) != sz
-        throw(BoundsError())
-    end
-end
-
-function checkbounds{T<:Integer}(sz::Int, I::Ranges{T})
-    if !isempty(I) && (minimum(I) < 1 || maximum(I) > sz)
-        throw(BoundsError())
-    end
-end
+checkbounds(sz::Int, i::Int) = 1 <= i <= sz || throw(BoundsError())
+checkbounds(sz::Int, i::Real) = checkbounds(sz, to_index(i))
+checkbounds(sz::Int, I::AbstractVector{Bool}) = length(I) == sz || throw(BoundsError())
+checkbounds(sz::Int, r::Ranges{Int}) = isempty(r) || (minimum(r) >= 1 && maximum(r) <= sz) || throw(BoundsError())
+checkbounds{T<:Real}(sz::Int, r::Ranges{T}) = checkbounds(sz, to_index(r))
 
 function checkbounds{T <: Real}(sz::Int, I::AbstractArray{T})
     for i in I
-        i = to_index(i)
-        if i < 1 || i > sz
-            throw(BoundsError())
-        end
+        checkbounds(sz, i)
     end
 end
 
-function checkbounds(A::AbstractArray, I::AbstractArray{Bool})
-    if !isequal(size(A), size(I)) throw(BoundsError()) end
-end
+checkbounds(A::AbstractArray, I::AbstractArray{Bool}) = size(A) == size(I) || throw(BoundsError())
 
 checkbounds(A::AbstractArray, I) = checkbounds(length(A), I)
 
@@ -118,9 +100,7 @@ in_bounds(l::Int, i::Integer) = 1 <= i <= l
 function in_bounds(sz::Dims, I::Int...)
     n = length(I)
     for dim = 1:(n-1)
-        if !(1 <= I[dim] <= sz[dim])
-            return false
-        end
+        1 <= I[dim] <= sz[dim] || return false
     end
     s = sz[n]
     for i = n+1:length(sz)

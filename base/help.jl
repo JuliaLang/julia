@@ -2,14 +2,10 @@ module Help
 
 export help, apropos, @help
 
-CATEGORY_LIST = nothing
-CATEGORY_DICT = nothing
 MODULE_DICT   = nothing
 FUNCTION_DICT = nothing
 
 function clear_cache()
-    global CATEGORY_LIST = nothing
-    global CATEGORY_DICT = nothing
     global MODULE_DICT   = nothing
     global FUNCTION_DICT = nothing
 end
@@ -39,27 +35,19 @@ function helpdb_filename()
 end
 
 function init_help()
-    global CATEGORY_LIST, CATEGORY_DICT,
-           MODULE_DICT, FUNCTION_DICT
-    if CATEGORY_DICT == nothing
-        println("Loading help data...")
+    global MODULE_DICT, FUNCTION_DICT
+    if FUNCTION_DICT == nothing
+        info("Loading help data...")
         helpdb = evalfile(helpdb_filename())
-        CATEGORY_LIST = {}
-        CATEGORY_DICT = Dict()
         MODULE_DICT = Dict()
         FUNCTION_DICT = Dict()
-        for (cat,mod,func,desc) in helpdb
-            if !haskey(CATEGORY_DICT, cat)
-                push!(CATEGORY_LIST, cat)
-                CATEGORY_DICT[cat] = {}
-            end
+        for (mod,func,desc) in helpdb
             if !isempty(mod)
                 mfunc = mod * "." * func
                 desc = decor_help_desc(func, mfunc, desc)
             else
                 mfunc = func
             end
-            push!(CATEGORY_DICT[cat], mfunc)
             if !haskey(FUNCTION_DICT, mfunc)
                 FUNCTION_DICT[mfunc] = {}
             end
@@ -74,56 +62,33 @@ function init_help()
     end
 end
 
-function help()
+function help(io::IO)
     init_help()
-    print(
-"""
+    print(io, """
 
- Welcome to Julia. The full manual is available at
+     Welcome to Julia. The full manual is available at
 
-    http://docs.julialang.org
+        http://docs.julialang.org
 
- To get help, try help(function), help("@macro"), or help("variable").
- To search all help text, try apropos("string"). To see available functions,
- try help(category), for one of the following categories:
-
-""")
-    for cat = CATEGORY_LIST
-        if !isempty(CATEGORY_DICT[cat])
-            print("  ")
-            show(cat); println()
-        end
-    end
+     To get help, try help(function), help("@macro"), or help("variable").
+     To search all help text, try apropos("string").
+    """)
 end
 
-function help(cat::String)
-    init_help()
-    if !haskey(CATEGORY_DICT, cat)
-        # if it's not a category, try another named thing
-        return help_for(cat)
-    end
-    println("Help is available for the following items:")
-    for func = CATEGORY_DICT[cat]
-        print(func, " ")
-    end
-    println()
-end
-
-function print_help_entries(entries)
+function print_help_entries(io::IO, entries)
     first = true
     for desc in entries
         if !first
-            println()
+            println(io)
         end
-        println(strip(desc))
+        println(io, strip(desc))
         first = false
     end
 end
 
 func_expr_from_symbols(s::Vector{Symbol}) = length(s) == 1 ? s[1] : Expr(:., func_expr_from_symbols(s[1:end-1]), Expr(:quote, s[end]))
 
-help_for(s::String) = help_for(s, 0)
-function help_for(fname::String, obj)
+function help(io::IO, fname::String, obj=0)
     init_help()
     found = false
     if haskey(FUNCTION_DICT, fname)
@@ -145,83 +110,81 @@ function help_for(fname::String, obj)
                 found = true
             end
         end
-        found && print_help_entries(alldesc)
+        found && print_help_entries(io, alldesc)
     elseif haskey(FUNCTION_DICT, "Base." * fname)
-        print_help_entries(FUNCTION_DICT["Base." * fname])
+        print_help_entries(io, FUNCTION_DICT["Base." * fname])
         found = true
     end
     if !found
         if isa(obj, DataType)
-            print("DataType   : ")
-            writemime(STDOUT, "text/plain", obj)
-            println()
-            println("  supertype: ", super(obj))
+            print(io, "DataType   : ")
+            writemime(io, "text/plain", obj)
+            println(io)
+            println(io, "  supertype: ", super(obj))
             if obj.abstract
                 st = subtypes(obj)
                 if length(st) > 0
-                    print("  subtypes : ")
-                    showcompact(st)
-                    println()
+                    print(io, "  subtypes : ")
+                    showcompact(io, st)
+                    println(io)
                 end
             end
             if length(obj.names) > 0
-                println("  fields   : ", obj.names)
+                println(io, "  fields   : ", obj.names)
             end
         elseif isgeneric(obj)
-            writemime(STDOUT, "text/plain", obj); println()
+            writemime(io, "text/plain", obj); println()
         else
-            println("No help information found.")
+            println(io, "No help information found.")
         end
     end
 end
 
-function apropos(txt::String)
+apropos(s::String) = apropos(STDOUT, s)
+function apropos(io::IO, txt::String)
     init_help()
     n = 0
     r = Regex("\\Q$txt", Base.PCRE.CASELESS)
-    for (cat, _) in CATEGORY_DICT
-        if ismatch(r, cat)
-            println("Category: \"$cat\"")
-        end
-    end
     for (func, entries) in FUNCTION_DICT
         if ismatch(r, func) || any(e->ismatch(r,e), entries)
             for desc in entries
                 nl = search(desc,'\n')
                 if nl != 0
-                    println(desc[1:(nl-1)])
+                    println(io, desc[1:(nl-1)])
                 else
-                    println(desc)
+                    println(io, desc)
                 end
             end
             n+=1
         end
     end
     if n == 0
-        println("No help information found.")
+        println(io, "No help information found.")
     end
 end
 
-function help(f::Function)
+function help(io::IO, f::Function)
     if is(f,help)
-        return help()
+        return help(io)
     end
-    help_for(string(f), f)
+    help(io, string(f), f)
 end
 
-help(t::DataType) = help_for(string(t.name),t)
-help(t::Module) = help(string(t))
+help(io::IO, t::DataType) = help(io, string(t.name), t)
+help(io::IO, t::Module) = help(io, string(t))
 
-function help(x)
-    show(x)
+function help(io::IO, x)
+    show(io, x)
     t = typeof(x)
     if isa(t,DataType)
-        println(" is of type")
-        help(t)
+        println(io, " is of type")
+        help(io, t)
     else
-        println(" is of type $t")
+        println(io, " is of type $t")
     end
 end
+
+help(args...) = help(STDOUT, args...)
 
 # check whether an expression is a qualified name, e.g. Base.FFTW.FORWARD
 isname(n::Symbol) = true

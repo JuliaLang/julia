@@ -3,7 +3,7 @@ module Broadcast
 using ..Cartesian
 import Base.promote_eltype
 import Base.@get!
-import Base.num_bit_chunks, Base.@_msk_end, Base.getindex_unchecked
+import Base.num_bit_chunks, Base.@_msk_end, Base.unsafe_bitgetindex
 import Base.(.+), Base.(.-), Base.(.*), Base.(./), Base.(.\)
 import Base.(.==), Base.(.<), Base.(.!=), Base.(.<=)
 export broadcast, broadcast!, broadcast_function, broadcast!_function, bitbroadcast
@@ -398,7 +398,7 @@ function bitcache_pow{T}(Ac::Vector{Uint64}, B::Array{T}, l::Int, ind::Int, C::V
     left = l - ind + 1
     @inbounds begin
         for j = 1:min(bitcache_size, left)
-            C[j] = getindex_unchecked(Ac, ind) ^ B[ind]
+            C[j] = unsafe_bitgetindex(Ac, ind) ^ B[ind]
             ind += 1
         end
         C[left+1:bitcache_size] = false

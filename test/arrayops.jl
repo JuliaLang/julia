@@ -161,7 +161,7 @@ a = [5:8]
 @test parent(a) == a
 @test parentindexes(a) == (1:4,)
 
-# 4335
+# issue #4335
 @test_throws slice(A, 1:2)
 @test_throws slice(A, 1:2, 3:4)
 @test_throws slice(A, 1:2, 3:4, 5:6, 7:8)
@@ -183,6 +183,14 @@ sA = slice(A, 2, rng)
 B = slice(sA, rng-1)
 C = sub(B, rng+1)
 @test C == sA
+
+# issue #6218 - logical indexing
+A = rand(2, 2, 3)
+msk = ones(Bool, 2, 2)
+msk[2,1] = false
+sA = sub(A, :, :, 1)
+sA[msk] = 1.0
+@test sA[msk] == ones(countnz(msk))
 
 # get
 let

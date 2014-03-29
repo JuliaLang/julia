@@ -131,7 +131,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
             @test_approx_eq convert(elty, det(R)) one(elty)
         end
 
-    # issue 1490
+    # issue #1490
     @test_approx_eq_eps det(ones(elty, 3,3)) zero(elty) 3*eps(real(one(elty)))
     end
 end
@@ -694,7 +694,7 @@ T = Triangular(randn(3,3),:L)
 @test λ\I === UniformScaling(1/λ)
 
 ## Issue related tests
-# issue 1447
+# issue #1447
 let
     A = [1.+0.im 0; 0 1]
     B = pinv(A)
@@ -703,7 +703,7 @@ let
     end
 end
 
-# issue 2246
+# issue #2246
 let
     A = [1 2 0 0; 0 1 0 0; 0 0 0 0; 0 0 0 0]
     Asq = sqrtm(A)
@@ -718,7 +718,7 @@ let
     @test_approx_eq log(det(eye(N))) logdet(eye(N))
 end
 
-# issue 2637
+# issue #2637
 let
   a = [1, 2, 3]
   b = [4, 5, 6]

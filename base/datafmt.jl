@@ -98,7 +98,8 @@ function dlm_fill{T}(cells::Array{T,2}, offarr::Vector{Vector{Int}}, sbuff::Stri
     const tmp64 = Array(Float64,1)
 
     idx = 1
-    lastrow = lastcol = 1
+    lastrow = 1
+    lastcol = 0
     offidx = 1
     offsets = offarr[1]
     fail = false
@@ -144,15 +145,20 @@ function dlm_fill{T}(cells::Array{T,2}, offarr::Vector{Vector{Int}}, sbuff::Stri
         lastcol = col
     end
 
-    if lastcol < maxcol
-        for cidx in (lastcol+1):maxcol
-            if (T <: String) || (T == Any)
-                cells[lastrow,cidx] = SubString(sbuff, 1, 0)
-            elseif ((T <: Number) || (T <: Char)) && auto
-                return dlm_fill(Array(Any,maxrow,maxcol), offarr, sbuff, false, row_offset, eol)
-            else
-                error("missing value at row $lastrow column $cidx")
+    if (lastcol < maxcol) || (lastrow < maxrow)
+        while lastrow <= maxrow
+            (lastcol == maxcol) && (lastcol = 0; lastrow += 1)
+            for cidx in (lastcol+1):maxcol
+                if (T <: String) || (T == Any)
+                    cells[lastrow,cidx] = SubString(sbuff, 1, 0)
+                elseif ((T <: Number) || (T <: Char)) && auto
+                    return dlm_fill(Array(Any,maxrow,maxcol), offarr, sbuff, false, row_offset, eol)
+                else
+                    error("missing value at row $lastrow column $cidx")
+                end
             end
+            lastcol = maxcol
+            (lastrow == maxrow) && break;
         end
     end
     cells
@@ -298,7 +304,7 @@ readcsv(io, T::Type; opts...) = readdlm(io, ',', T; opts...)
 # todo: keyword argument for # of digits to print
 writedlm_cell(io::IO, elt::FloatingPoint, dlm) = print_shortest(io, elt)
 function writedlm_cell{T}(io::IO, elt::String, dlm::T)
-    if ('"' == elt[1]) || ('\n' in elt) || ((T <: Char) ? (dlm in elt) : contains(elt, dlm))
+    if !isempty(elt) && (('"' == elt[1]) || ('\n' in elt) || ((T <: Char) ? (dlm in elt) : contains(elt, dlm)))
         print(io, '"', replace(elt, r"\"", "\"\""), '"')
     else
         print(io, elt)

@@ -1,7 +1,7 @@
 .. _man-strings:
 
 *********
- Strings  
+ Strings
 *********
 
 Strings are finite sequences of characters. Of course, the real trouble
@@ -520,10 +520,11 @@ quite what is needed. For these kinds of situations, Julia provides
 :ref:`non-standard string literals <man-non-standard-string-literals2>`.
 A non-standard string literal looks like
 a regular double-quoted string literal, but is immediately prefixed by
-an identifier, and doesn't behave quite like a normal string literal.
-Regular expressions, as described below, are one example of a
-non-standard string literal. Other examples are given in the
-:ref:`metaprogramming <man-non-standard-string-literals2>` section.
+an identifier, and doesn't behave quite like a normal string literal. Regular
+expressions, byte array literals and version number literals, as described
+below, are some examples of non-standard string literals. Other examples are
+given in the :ref:`metaprogramming <man-non-standard-string-literals2>`
+section.
 
 Regular Expressions
 -------------------
@@ -707,7 +708,7 @@ supported (and may be convenient for regular expressions containing
 quotation marks or newlines).
 
 Byte Array Literals
-~~~~~~~~~~~~~~~~~~~
+-------------------
 
 Another useful non-standard string literal is the byte-array string
 literal: ``b"..."``. This form lets you use string notation to express
@@ -792,3 +793,53 @@ and Character
 Sets" <http://www.joelonsoftware.com/articles/Unicode.html>`_. It's an
 excellent introduction to Unicode and UTF-8, and may help alleviate some
 confusion regarding the matter.
+
+.. _man-version-number-literals:
+
+Version Number Literals
+-----------------------
+
+Version numbers can easily be expressed with non-standard string literals of
+the form ``v"..."``. Version number literals create ``VersionNumber`` objects
+which follow the specifications of `semantic versioning <http://semver.org>`_,
+and therefore are composed of major, minor and patch numeric values, followed
+by pre-release and build alpha-numeric annotations. For example,
+``v"0.2.1-rc1+win64"`` is broken into major version ``0``, minor version ``2``,
+patch version ``1``, pre-release ``rc1`` and build ``win64``. When entering a
+version literal, everything except the major version number is optional,
+therefore e.g.  ``v"0.2"`` is equivalent to ``v"0.2.0"`` (with empty
+pre-release/build annotations), ``v"2"`` is equivalent to ``v"2.0.0"``, and so
+on.
+
+``VersionNumber`` objects are mostly useful to easily and correctly compare two
+(or more) versions. For example, the constant ``VERSION`` holds Julia verison
+number as a ``VersionNumber`` object, and therefore one can define some
+version-specific behaviour using simple statements as::
+
+    if v"0.2" <= VERSION < v"0.3-"
+        # do something specific to 0.2 release series
+    end
+
+Note that in the above example the non-standard version number ``v"0.3-"`` is
+used, with a trailing ``-``: this notation is a Julia extension of the
+standard, and it's used to indicate a version which is lower than any ``0.3``
+release, including all of its pre-releases. So in the above example the code
+would only run with stable ``0.2`` versions, and exclude such versions as
+``v"0.3.0-rc1"``. In order to also allow for unstable (i.e. pre-release)
+``0.2`` versions, the lower bound check should be modified like this: ``v"0.2-"
+<= VERSION``.
+
+Another non-standard version specification extension allows to use a trailing
+``+`` to express an upper limit on build versions, e.g.  ``VERSION >
+"v"0.2-rc1+"`` can be used to mean any version above ``0.2-rc1`` and any of its
+builds: it will return ``false`` for version ``v"0.2-rc1+win64"`` and ``true``
+for ``v"0.2-rc2"``.
+
+It is good practice to use such special versions in comparisons (particularly,
+the trailing ``-`` should always be used on upper bounds unless there's a good
+reason not to), but they must not be used as the actual version number of
+anything, as they are illegal in the semantic versioning scheme.
+
+Besides being used for the ``VERSION`` constant, ``VersionNumber`` objects are
+widely used in the ``Pkg`` module, to specify packages versions and their
+dependencies.
