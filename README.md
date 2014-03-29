@@ -127,7 +127,7 @@ These notes apply to the Debian 7 image currently available on Google Compute En
   apt-get install bzip2 gcc gfortran git g++ make m4 ncurses-dev
   ```
 
-2. Edit `deps/Versions.make` in the julia source tree to select `OPENBLAS_VER = v0.2.9.rc2`. This picks up changes to support Google's Sandybridge cores. (Alternatively, you could fall back to the Nehelem architecture via a `make` option, but that would entail performance penalties.)
+2. Edit `deps/Versions.make` in the julia source tree to select `OPENBLAS_VER = v0.2.9.rc2`. This picks up changes to support the Sandybridge cores used by Google Compute Engine. (Alternatively, you could fall back to the Nehelem architecture via a `make` option, but that would entail performance penalties.)
 
 Now you should be able to build using the generic Linux instructions. These instructions were tested on a `g1-small` instance on 2014-03-28. Other resources include [information on Google Compute Engine](https://cloud.google.com/products/compute-engine/) and a series of [tutorials by Julia Ferraioli](http://www.blog.juliaferraioli.com/2013/12/julia-on-google-compute-engine.html).
 
