@@ -1167,9 +1167,9 @@ function stchanged(new::Union(StateUpdate,VarTable), old, vars)
     return false
 end
 
-function findlabel(body, l)
-    i = get(labels, l, nothing)
-    if i === nothing
+function findlabel(labels, l)
+    i = l+1 > length(labels) ? 0 : labels[l+1]
+    if i == 0
         error("label ",l," not found")
     end
     return i
@@ -1290,11 +1290,19 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     body = (ast.args[3].args)::Array{Any,1}
     n = length(body)
 
-    labels = Dict{Int, Int}()
+    maxlabel = 0
     for i=1:length(body)
         b = body[i]
         if isa(b,LabelNode)
-            labels[b.label] = i
+            maxlabel = max(maxlabel, b.label+1)
+        end
+    end
+    labels = zeros(Int, maxlabel)
+
+    for i=1:length(body)
+        b = body[i]
+        if isa(b,LabelNode)
+            labels[b.label+1] = i
         end
     end
 
