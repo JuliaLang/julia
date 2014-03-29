@@ -224,7 +224,6 @@ end
 function cov(x::AbstractVector, y::AbstractVector; corrected::Bool=true, mean=nothing)
     mean == 0 ? covzm(x, y; corrected=corrected) :
     mean == nothing ? covm(x, Base.mean(x), y, Base.mean(y); corrected=corrected) :
-    isa(mean, Number) ? covm(x, mean, y, mean; corrected=corrected) :
     isa(mean, (Number,Number)) ? covm(x, mean[1], y, mean[2]; corrected=corrected) :
     error("Invalid value of mean.")
 end
