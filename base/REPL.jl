@@ -2,7 +2,7 @@ module REPL
 
 using Base.Meta
 using Base.Terminals
-using Base.Readline
+using Base.LineEdit
 using Base.REPLCompletions
 
 export StreamREPL, BasicREPL
@@ -13,7 +13,7 @@ import Base: AsyncStream,
              writemime
 
 import Base.Terminals: raw!
-import Base.Readline: CompletionProvider,
+import Base.LineEdit: CompletionProvider,
                       HistoryProvider,
                       add_history,
                       char_move_left,
@@ -135,7 +135,7 @@ function print_response(d::REPLDisplay,errio::IO,r::AbstractREPL,val::ANY, bt, s
         end
     end
 end
-type ReadlineREPL <: AbstractREPL
+type LineEditREPL <: AbstractREPL
     t::TextTerminal
     prompt_color::String
     input_color::String
@@ -147,9 +147,9 @@ type ReadlineREPL <: AbstractREPL
     in_help::Bool
     consecutive_returns::Int
 end
-outstream(r::ReadlineREPL) = r.t
+outstream(r::LineEditREPL) = r.t
 
-ReadlineREPL(t::TextTerminal) =  ReadlineREPL(t, julia_green,
+LineEditREPL(t::TextTerminal) =  LineEditREPL(t, julia_green,
                                               Base.input_color(),
                                               Base.answer_color(),
                                               Base.text_colors[:red],
@@ -157,11 +157,11 @@ ReadlineREPL(t::TextTerminal) =  ReadlineREPL(t, julia_green,
                                               true, false, false, 0)
 
 type REPLCompletionProvider <: CompletionProvider
-    r::ReadlineREPL
+    r::LineEditREPL
 end
 
 type ShellCompletionProvider <: CompletionProvider
-    r::ReadlineREPL
+    r::LineEditREPL
 end
 
 function completeLine(c::REPLCompletionProvider,s)
@@ -228,7 +228,7 @@ function add_history(hist::REPLHistoryProvider,s)
         return
     end
     push!(hist.history,str)
-    c = mode_idx(hist,Readline.mode(s))
+    c = mode_idx(hist,LineEdit.mode(s))
     push!(hist.modes,c)
     if hist.history_file !== nothing
         write(hist.history_file,c)
@@ -240,44 +240,44 @@ end
 
 function history_adjust(hist::REPLHistoryProvider,s)
     if 0 < hist.cur_idx <= length(hist.history)
-        hist.history[hist.cur_idx] = Readline.input_string(s)
-        hist.modes[hist.cur_idx] = mode_idx(hist,Readline.mode(s))
+        hist.history[hist.cur_idx] = LineEdit.input_string(s)
+        hist.modes[hist.cur_idx] = mode_idx(hist,LineEdit.mode(s))
     end
 end
 
-function history_prev(s::Readline.MIState,hist::REPLHistoryProvider)
+function history_prev(s::LineEdit.MIState,hist::REPLHistoryProvider)
     if hist.cur_idx > 1
         if hist.cur_idx == length(hist.history)+1
-            hist.last_mode = Readline.mode(s)
-            hist.last_buffer = copy(Readline.buffer(s))
+            hist.last_mode = LineEdit.mode(s)
+            hist.last_buffer = copy(LineEdit.buffer(s))
         else
             history_adjust(hist,s)
         end
         hist.cur_idx-=1
-        Readline.transition(s,hist.mode_mapping[hist.modes[hist.cur_idx]])
-        Readline.replace_line(s,hist.history[hist.cur_idx])
-        Readline.refresh_line(s)
+        LineEdit.transition(s,hist.mode_mapping[hist.modes[hist.cur_idx]])
+        LineEdit.replace_line(s,hist.history[hist.cur_idx])
+        LineEdit.refresh_line(s)
     else
-        Terminals.beep(Readline.terminal(s))
+        Terminals.beep(LineEdit.terminal(s))
     end
 end
 
-function history_next(s::Readline.MIState,hist::REPLHistoryProvider)
+function history_next(s::LineEdit.MIState,hist::REPLHistoryProvider)
     if hist.cur_idx < length(hist.history)
         history_adjust(hist,s)
         hist.cur_idx+=1
-        Readline.transition(s,hist.mode_mapping[hist.modes[hist.cur_idx]])
-        Readline.replace_line(s,hist.history[hist.cur_idx])
-        Readline.refresh_line(s)
+        LineEdit.transition(s,hist.mode_mapping[hist.modes[hist.cur_idx]])
+        LineEdit.replace_line(s,hist.history[hist.cur_idx])
+        LineEdit.refresh_line(s)
     elseif hist.cur_idx == length(hist.history)
         hist.cur_idx+=1
         buf = hist.last_buffer
         hist.last_buffer = IOBuffer()
-        Readline.transition(s,hist.last_mode)
-        Readline.replace_line(s,buf)
-        Readline.refresh_line(s)
+        LineEdit.transition(s,hist.last_mode)
+        LineEdit.replace_line(s,buf)
+        LineEdit.refresh_line(s)
     else
-        Terminals.beep(Readline.terminal(s))
+        Terminals.beep(LineEdit.terminal(s))
     end
 end
 
@@ -338,7 +338,7 @@ end
 function history_reset_state(hist::REPLHistoryProvider)
     hist.cur_idx = length(hist.history)+1
 end
-Readline.reset_state(hist::REPLHistoryProvider) = history_reset_state(hist)
+LineEdit.reset_state(hist::REPLHistoryProvider) = history_reset_state(hist)
 
 const julia_green = "\033[1m\033[32m"
 
@@ -486,7 +486,7 @@ function setup_interface(d::REPLDisplay,req,rep;extra_repl_keymap=Dict{Any,Any}[
     shell_mode.hist = hp
     help_mode.hist = hp
 
-    (hkp,hkeymap) = Readline.setup_search_keymap(hp)
+    (hkp,hkeymap) = LineEdit.setup_search_keymap(hp)
 
     # Canonicalize user keymap input
     if isa(extra_repl_keymap,Dict)
@@ -495,21 +495,21 @@ function setup_interface(d::REPLDisplay,req,rep;extra_repl_keymap=Dict{Any,Any}[
 
     const repl_keymap = {
         ';' => function (s)
-            if isempty(s) || position(Readline.buffer(s)) == 0
-                buf = copy(Readline.buffer(s))
+            if isempty(s) || position(LineEdit.buffer(s)) == 0
+                buf = copy(LineEdit.buffer(s))
                 transition(s,shell_mode)
-                Readline.state(s,shell_mode).input_buffer = buf
-                Readline.refresh_line(s)
+                LineEdit.state(s,shell_mode).input_buffer = buf
+                LineEdit.refresh_line(s)
             else
                 edit_insert(s,';')
             end
         end,
         '?' => function (s)
-            if isempty(s) || position(Readline.buffer(s)) == 0
-                buf = copy(Readline.buffer(s))
+            if isempty(s) || position(LineEdit.buffer(s)) == 0
+                buf = copy(LineEdit.buffer(s))
                 transition(s,help_mode)
-                Readline.state(s,help_mode).input_buffer = buf
-                Readline.refresh_line(s)
+                LineEdit.state(s,help_mode).input_buffer = buf
+                LineEdit.refresh_line(s)
             else
                 edit_insert(s,'?')
             end
@@ -517,14 +517,14 @@ function setup_interface(d::REPLDisplay,req,rep;extra_repl_keymap=Dict{Any,Any}[
 
         # Bracketed Paste Mode
         "\e[200~" => s->begin
-            ps = Readline.state(s,Readline.mode(s))
+            ps = LineEdit.state(s,LineEdit.mode(s))
             input = readuntil(ps.terminal,"\e[201~")[1:(end-6)]
             input = replace(input,'\r','\n')
-            if position(Readline.buffer(s)) == 0
+            if position(LineEdit.buffer(s)) == 0
                 indent = Base.indentation(input)[1]
                 input = Base.unindent(input[(indent+1):end],indent)
             end
-            buf = copy(Readline.buffer(s))
+            buf = copy(LineEdit.buffer(s))
             edit_insert(buf,input)
             string = takebuf_string(buf)
             pos = 0
@@ -533,15 +533,15 @@ function setup_interface(d::REPLDisplay,req,rep;extra_repl_keymap=Dict{Any,Any}[
                 ast, pos = Base.parse(string, pos; raise=false)
                 # Get the line and strip leading and trailing whitespace
                 line = strip(string[max(oldpos,1):min(pos-1,length(string))])
-                Readline.replace_line(s,line)
-                Readline.refresh_line(s)
+                LineEdit.replace_line(s,line)
+                LineEdit.refresh_line(s)
                 if !isa(ast,Expr) || (ast.head != :continue && ast.head != :incomplete)
-                    Readline.commit_line(s)
+                    LineEdit.commit_line(s)
                     # This is slightly ugly but ok for now
-                    terminal = Readline.terminal(s)
+                    terminal = LineEdit.terminal(s)
                     stop_reading(terminal)
                     raw!(terminal,false) && disable_bracketed_paste(terminal)
-                    Readline.mode(s).on_done(s,Readline.buffer(s),true)
+                    LineEdit.mode(s).on_done(s,LineEdit.buffer(s),true)
                     raw!(terminal,true) && enable_bracketed_paste(terminal)
                     start_reading(terminal)
                 else
@@ -551,26 +551,26 @@ function setup_interface(d::REPLDisplay,req,rep;extra_repl_keymap=Dict{Any,Any}[
         end,
     }
 
-    a = Dict{Any,Any}[hkeymap, repl_keymap, Readline.history_keymap(hp), Readline.default_keymap,Readline.escape_defaults]
+    a = Dict{Any,Any}[hkeymap, repl_keymap, LineEdit.history_keymap(hp), LineEdit.default_keymap,LineEdit.escape_defaults]
     prepend!(a,extra_repl_keymap)
-    @eval @Readline.keymap repl_keymap_func $(a)
+    @eval @LineEdit.keymap repl_keymap_func $(a)
 
     main_prompt.keymap_func = repl_keymap_func
 
     const mode_keymap = {
-        '\b' => s->(isempty(s) ? transition(s,main_prompt) : Readline.edit_backspace(s) )
+        '\b' => s->(isempty(s) ? transition(s,main_prompt) : LineEdit.edit_backspace(s) )
     }
 
-    b = Dict{Any,Any}[hkeymap, mode_keymap, Readline.history_keymap(hp), Readline.default_keymap,Readline.escape_defaults]
+    b = Dict{Any,Any}[hkeymap, mode_keymap, LineEdit.history_keymap(hp), LineEdit.default_keymap,LineEdit.escape_defaults]
 
-    @eval @Readline.keymap mode_keymap_func $(b)
+    @eval @LineEdit.keymap mode_keymap_func $(b)
 
     shell_mode.keymap_func = help_mode.keymap_func = mode_keymap_func
 
     ModalInterface([main_prompt,shell_mode,help_mode,hkp])
 end
 
-run_frontend(repl::ReadlineREPL,repl_channel,response_channel) = run_interface(repl.t,setup_interface(REPLDisplay(repl),repl_channel,response_channel))
+run_frontend(repl::LineEditREPL,repl_channel,response_channel) = run_interface(repl.t,setup_interface(REPLDisplay(repl),repl_channel,response_channel))
 
 if isdefined(Base,:banner_color)
     banner(io,t) = banner(io,hascolor(t))
@@ -579,13 +579,13 @@ else
     banner(io,t) = Base.banner(io)
 end
 
-function run_repl(repl::ReadlineREPL)
+function run_repl(repl::LineEditREPL)
     repl_channel = RemoteRef()
     response_channel = RemoteRef()
     start_repl_backend(repl_channel, response_channel)
     run_frontend(repl, repl_channel, response_channel)
 end
-run_repl(t::TextTerminal) = run_repl(ReadlineREPL(t))
+run_repl(t::TextTerminal) = run_repl(LineEditREPL(t))
 
 type BasicREPL <: AbstractREPL
 end
@@ -603,12 +603,12 @@ outstream(s::StreamREPL) = s.stream
 
 StreamREPL(stream::AsyncStream) = StreamREPL(stream,julia_green,Base.text_colors[:white],Base.answer_color())
 
-answer_color(r::ReadlineREPL) = r.answer_color
+answer_color(r::LineEditREPL) = r.answer_color
 answer_color(r::StreamREPL) = r.answer_color
 answer_color(::BasicREPL) = Base.text_colors[:white]
 
 print_response(d::REPLDisplay,r::StreamREPL,args...) = print_response(d, r.stream,r, args...)
-print_response(d::REPLDisplay,r::ReadlineREPL,args...) = print_response(d, r.t, r, args...)
+print_response(d::REPLDisplay,r::LineEditREPL,args...) = print_response(d, r.t, r, args...)
 print_response(d::REPLDisplay,args...) = print_response(d,d.repl,args...)
 
 function run_repl(stream::AsyncStream)
