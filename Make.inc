@@ -12,7 +12,6 @@ OPENBLAS_TARGET_ARCH=
 # Use libraries available on the system instead of building them
 USE_SYSTEM_LLVM=0
 USE_SYSTEM_LIBUNWIND=0
-USE_SYSTEM_READLINE=0
 USE_SYSTEM_PCRE=0
 USE_SYSTEM_LIBM=0
 USE_SYSTEM_OPENLIBM=0
@@ -163,7 +162,7 @@ fPIC = -fPIC
 EXE =
 endif
 
-DEFAULT_REPL = readline
+DEFAULT_REPL = basic
 JULIAGC = MARKSWEEP
 USE_COPY_STACKS = 1
 
@@ -348,22 +347,6 @@ LLVM_LLC ?= llc$(EXE)
 else
 LLVM_CONFIG=$(LLVMROOT)/bin/llvm-config$(EXE)
 LLVM_LLC=$(LLVMROOT)/bin/llc$(EXE)
-endif
-
-ifeq ($(USE_SYSTEM_READLINE), 1)
-READLINE = -lreadline
-else
-ifeq ($(OS),WINNT)
-READLINE = $(build_libdir)/libreadline.a
-else
-READLINE = $(build_libdir)/libreadline.a
-endif
-endif
-
-ifeq ($(OS),WINNT)
-READLINE += $(build_libdir)/libhistory.a
-else
-READLINE += -lncurses
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 1)
