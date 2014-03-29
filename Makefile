@@ -161,9 +161,7 @@ $(eval $(call std_dll,gcc_s_sjlj-1))
 else
 $(eval $(call std_dll,gcc_s_seh-1))
 endif
-ifneq ($(BUILD_OS),WINNT)
 $(eval $(call std_dll,ssp-0))
-endif
 endif
 
 prefix ?= $(abspath julia-$(JULIA_COMMIT))
