@@ -282,7 +282,7 @@ end
 
 function edit_move_left(s::PromptState)
     if position(s.input_buffer)>0
-        #move t=o the next UTF8 character to the left
+        #move to the next UTF8 character to the left
         char_move_left(s.input_buffer)
         refresh_line(s)
     end
@@ -944,6 +944,7 @@ const default_keymap =
     # Enter
     '\r' => quote
         if LineEdit.on_enter(s)
+            LineEdit.move_input_end(s)
             LineEdit.commit_line(s)
             return :done
         else
