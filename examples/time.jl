@@ -3,7 +3,7 @@ export TimeDelta
 
 import Base.show, Base.+, Base.-, Base.convert, Base.promote_rule
 
-type TimeDelta{p}
+immutable TimeDelta{p}
     v::Int64
 end
 
