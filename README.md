@@ -116,6 +116,24 @@ If the `gcc44` and `gfortran44` packages are installed, you can specify their us
 
 Otherwise, install or contact your systems administrator to install a more recent version of `gcc`.
 
+#### Google Compute Engine
+
+Google Compute Engine is evolving rapidly, as is Julia.  This section is current as of March 2014 and assumes working knowledge of Google Cloud Services.
+
+These instructions currently cover only the Debian image currently available on Google Compute Engine.  There are only two things you need to do:
+
+1. Do `apt-get install` for the following packages on your build instance:
+
+* bzip2
+* gcc
+* gfortran
+* g++
+* make
+* m4
+* ncurses-dev
+
+2. As of Julia pre-0.3, you will need to edit `deps/Versions.make` to select `OPENBLAS_VER = v0.2.9.rc2` to build on Google's Sandybridge cores. (Alternatively, you could fall back to the Nehelem architecture via a `make` option, but that would entail performance penalties.)
+
 #### Linux Build Troubleshooting
 
  Problem              | Possible Solution
