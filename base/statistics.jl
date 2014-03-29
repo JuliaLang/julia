@@ -152,6 +152,7 @@ end
 _vmean(x::AbstractVector, vardim::Int) = mean(x)
 _vmean(x::AbstractMatrix, vardim::Int) = mean(x, vardim)
 
+
 # core functions
 
 unscaled_covzm(x::AbstractVector) = dot(x, x)
@@ -165,7 +166,7 @@ unscaled_covzm(x::AbstractMatrix, y::AbstractVector, vardim::Int) =
 unscaled_covzm(x::AbstractMatrix, y::AbstractMatrix, vardim::Int) = 
     (vardim == 1 ? At_mul_B(x, _conj(y)) : A_mul_Bc(x, y))
 
-# covzm (non-exported, with centered data)
+# covzm (with centered data)
 
 covzm(x::AbstractVector; corrected::Bool=true) = unscaled_covzm(x, x) / (length(x) - int(corrected))
 
@@ -178,7 +179,7 @@ covzm(x::AbstractVector, y::AbstractVector; corrected::Bool=true) =
 covzm(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, corrected::Bool=true) = 
     scale!(unscaled_covzm(x, y, vardim), inv(_getnobs(x, y, vardim) - int(corrected)))
 
-# covm
+# covm (with provided mean)
 
 covm(x::AbstractVector, xmean; corrected::Bool=true) = 
     covzm(x .- xmean; corrected=corrected)
@@ -192,23 +193,43 @@ covm(x::AbstractVector, xmean, y::AbstractVector, ymean; corrected::Bool=true) =
 covm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean; vardim::Int=1, corrected::Bool=true) = 
     covzm(x .- xmean, y .- ymean; vardim=vardim, corrected=corrected)
 
-# cov
+# cov (API)
 
-cov(x::AbstractVector; corrected::Bool=true, zeromean::Bool=false) =
-    zeromean ? covzm(x; corrected=corrected) :
-               covm(x, mean(x); corrected=corrected)
+function cov(x::AbstractVector; corrected::Bool=true, mean=nothing)
+    mean == 0 ? covzm(x; corrected=corrected) :
+    mean == nothing ? covm(x, Base.mean(x); corrected=corrected) :
+    isa(mean, Number) ? covm(x, mean; corrected=corrected) :
+    error("Invalid value of mean.")
+end
 
-cov(x::AbstractMatrix; vardim::Int=1, corrected::Bool=true, zeromean::Bool=false) =
-    zeromean ? covzm(x; vardim=vardim, corrected=corrected) :
-               covm(x, mean(x, vardim); vardim=vardim, corrected=corrected)
+function cov(x::AbstractMatrix; vardim::Int=1, corrected::Bool=true, mean=nothing)
+    mean == 0 ? covzm(x; vardim=vardim, corrected=corrected) :
+    mean == nothing ? covm(x, _vmean(x, vardim); vardim=vardim, corrected=corrected) :
+    isa(mean, AbstractArray) ? covm(x, mean; vardim=vardim, corrected=corrected) :
+    error("Invalid value of mean.")
+end
 
-cov(x::AbstractVector, y::AbstractVector; corrected::Bool=true, zeromean::Bool=false) =
-    zeromean ? covzm(x, y; corrected=corrected) :
-               covm(x, mean(x), y, mean(y); corrected=corrected)
+function cov(x::AbstractVector, y::AbstractVector; corrected::Bool=true, mean=nothing)
+    mean == 0 ? covzm(x, y; corrected=corrected) :
+    mean == nothing ? covm(x, Base.mean(x), y, Base.mean(y); corrected=corrected) :
+    isa(mean, Number) ? covm(x, mean, y, mean; corrected=corrected) :
+    isa(mean, (Number,Number)) ? covm(x, mean[1], y, mean[2]; corrected=corrected) :
+    error("Invalid value of mean.")
+end
 
-cov(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, corrected::Bool=true, zeromean::Bool=false) =
-    zeromean ? covzm(x, y; vardim=vardim, corrected=corrected) :
-               covm(x, _vmean(x, vardim), y, _vmean(y, vardim); vardim=vardim, corrected=corrected)
+function cov(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, corrected::Bool=true, mean=nothing)
+    if mean == 0
+        covzm(x, y; vardim=vardim, corrected=corrected)
+    elseif mean == nothing
+        covm(x, _vmean(x, vardim), y, _vmean(y, vardim); vardim=vardim, corrected=corrected)
+    elseif isa(mean, AbstractArray)
+        covm(x, mean, y, mean; vardim=vardim, corrected=corrected)
+    elseif isa(mean, (AbstractArray,AbstractArray))
+        covm(x, mean[1], y, mean[2]; vardim=vardim, corrected=corrected)
+    else
+        error("Invalid value of mean.")
+    end
+end
 
 # cov2cor!
 
