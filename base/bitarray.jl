@@ -1321,7 +1321,7 @@ end
 
 # returns the index of the next non-zero element, or 0 if all zeros
 function findnext(B::BitArray, start::Integer)
-    if start < 0
+    if start <= 0
         throw(BoundsError())
     elseif start > length(B)
         return 0
@@ -1349,7 +1349,7 @@ end
 
 # aux function: same as findnext(~B, start), but performed without temporaries
 function findnextnot(B::BitArray, start::Integer)
-    if start < 0
+    if start <= 0
         throw(BoundsError())
     elseif start > length(B)
         return 0
