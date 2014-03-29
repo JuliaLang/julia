@@ -132,9 +132,7 @@ include("multi.jl")
 # Polling (requires multi.jl)
 include("poll.jl")
 
-# front end & code loading
-include("repl.jl")
-include("client.jl")
+# code loading
 include("loading.jl")
 
 begin
@@ -184,6 +182,14 @@ include("help.jl")
 using .I18n
 using .Help
 push!(I18n.CALLBACKS, Help.clear_cache)
+
+# frontend
+include("Terminals.jl")
+include("LineEdit.jl")
+include("REPLCompletions.jl")
+include("REPL.jl")
+include("replutil.jl")
+include("client.jl")
 
 # sparse matrices and linear algebra
 include("sparse.jl")

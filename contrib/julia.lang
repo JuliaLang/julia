@@ -148,7 +148,6 @@
       </match>
     </context>
 
-    <!-- See *lang_keywords[] in ui/repl-readline.c for a list -->
     <context id="keyword" style-ref="keyword">
       <!-- code blocks -->
       <keyword>begin</keyword>

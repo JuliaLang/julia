@@ -1,6 +1,6 @@
 Julia is licensed under the MIT License:
 
-> Copyright (c) 2009-2013: Jeff Bezanson, Stefan Karpinski, Viral B. Shah, 
+> Copyright (c) 2009-2014: Jeff Bezanson, Stefan Karpinski, Viral B. Shah,
 > and other contributors:
 > 
 > https://github.com/JuliaLang/julia/contributors
@@ -23,25 +23,6 @@ Julia is licensed under the MIT License:
 > LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 > OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 > WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-[`repl-readline.c`](https://github.com/JuliaLang/julia/blob/master/ui/repl-readline.c)
-is licensed under the GNU General Public License Version 2:
-
-> Copyright (c) 2009-2013: Jeff Bezanson, Stefan Karpinski, Viral B. Shah.
-> 
-> This program is free software; you can redistribute it and/or modify
-> it under the terms of the GNU General Public License as published by
-> the Free Software Foundation; either version 2 of the License, or
-> (at your option) any later version.
-> 
-> This program is distributed in the hope that it will be useful,
-> but WITHOUT ANY WARRANTY; without even the implied warranty of
-> MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-> GNU General Public License for more details.
-> 
-> You should have received a copy of the GNU General Public License along
-> with this program; if not, write to the Free Software Foundation, Inc.,
-> 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 External libraries, if used, include their own licenses:
 
@@ -67,7 +48,6 @@ External libraries, if used, include their own licenses:
 - [OPENBLAS](https://raw.github.com/xianyi/OpenBLAS/master/LICENSE)
 - [PATCHELF](http://hydra.nixos.org/build/1524660/download/1/README)
 - [PCRE](http://www.pcre.org/licence.txt)
-- [READLINE](http://cnswww.cns.cwru.edu/php/chet/readline/rltop.html)
 - [RMATH](http://www.r-project.org/Licenses/)
 - [SUITESPARSE](http://www.cise.ufl.edu/research/sparse/SuiteSparse/current/SuiteSparse/)
 - [ZLIB](http://zlib.net/zlib_license.html)
