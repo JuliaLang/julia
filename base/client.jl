@@ -359,7 +359,7 @@ function _start()
             end
             quiet || REPL.banner(term,term)
             ccall(:jl_install_sigint_handler, Void, ())
-            repl = REPL.ReadlineREPL(term)
+            repl = REPL.LineEditREPL(term)
             repl.use_history_file = history
             REPL.run_repl(repl)
         end

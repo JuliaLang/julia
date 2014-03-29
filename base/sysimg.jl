@@ -185,7 +185,7 @@ push!(I18n.CALLBACKS, Help.clear_cache)
 
 # frontend
 include("Terminals.jl")
-include("Readline.jl")
+include("LineEdit.jl")
 include("REPLCompletions.jl")
 include("REPL.jl")
 include("replutil.jl")
