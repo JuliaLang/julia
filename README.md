@@ -122,17 +122,14 @@ Google Compute Engine is evolving rapidly, as is Julia.  This section is current
 
 These instructions currently cover only the Debian image currently available on Google Compute Engine.  There are only two things you need to do:
 
-1. Do `apt-get install` for the following packages on your build instance:
-
-* bzip2
-* gcc
-* gfortran
-* g++
-* make
-* m4
-* ncurses-dev
+1. Install packages required to build on your instance:
+  ```
+  apt-get install bzip2 gcc gfortran git g++ make m4 ncurses-dev
+  ```
 
 2. As of Julia pre-0.3, you will need to edit `deps/Versions.make` to select `OPENBLAS_VER = v0.2.9.rc2` to build on Google's Sandybridge cores. (Alternatively, you could fall back to the Nehelem architecture via a `make` option, but that would entail performance penalties.)
+
+Now you should be able to build using the generic Linux instructions above. These instructions were tested on a `g1-small` instance on 2014-03-28.
 
 #### Linux Build Troubleshooting
 
