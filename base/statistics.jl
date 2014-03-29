@@ -234,9 +234,7 @@ function cov(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, corrected:
         covzm(x, y; vardim=vardim, corrected=corrected)
     elseif mean == nothing
         covm(x, _vmean(x, vardim), y, _vmean(y, vardim); vardim=vardim, corrected=corrected)
-    elseif isa(mean, AbstractArray)
-        covm(x, mean, y, mean; vardim=vardim, corrected=corrected)
-    elseif isa(mean, (AbstractArray,AbstractArray))
+    elseif isa(mean, (Any,Any))
         covm(x, mean[1], y, mean[2]; vardim=vardim, corrected=corrected)
     else
         error("Invalid value of mean.")
@@ -361,7 +359,6 @@ end
 function cor(x::AbstractVector, y::AbstractVector; mean=nothing)
     mean == 0 ? corzm(x, y) : 
     mean == nothing ? corm(x, Base.mean(x), y, Base.mean(y)) :
-    isa(mean, Number) ? corm(x, mean, y, mean) :
     isa(mean, (Number,Number)) ? corm(x, mean[1], y, mean[2]) :
     error("Invalid value of mean.")
 end
@@ -371,9 +368,7 @@ function cor(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, mean=nothi
         corzm(x, y; vardim=vardim)
     elseif mean == nothing 
         corm(x, _vmean(x, vardim), y, _vmean(y, vardim); vardim=vardim)
-    elseif isa(mean, AbstractArray)
-        corm(x, mean, y, mean; vardim=vardim)
-    elseif isa(mean, (AbstractArray,AbstractArray))
+    elseif isa(mean, (Any,Any))
         corm(x, mean[1], y, mean[2]; vardim=vardim)
     else
         error("Invalid value of mean.")
