@@ -82,22 +82,34 @@ function varzm(v::AbstractArray; corrected::Bool=true)
     return sumabs2(v) / (n - int(corrected))
 end
 
+function varzm(v::AbstractArray, region; corrected::Bool=true)
+    cn = regionsize(v, region) - int(corrected)
+    sumabs2(v, region) / cn    
+end
+
 function varm(v::AbstractArray, m::Number; corrected::Bool=true)
     n = length(v)
     n == 0 && return NaN
     return varm_pairwise(v, m, 1, n) / (n - int(corrected))
 end
 
-var(v::AbstractArray; corrected::Bool=true, zeromean::Bool=false) = 
-    zeromean ? varzm(v; corrected=corrected) : varm(v, mean(v); corrected=corrected)
-
-function var(v::AbstractArray, region; corrected::Bool=true, zeromean::Bool=false)
+function varm(v::AbstractArray, m::AbstractArray, region; corrected::Bool=true)
     cn = regionsize(v, region) - int(corrected)
-    if zeromean
-        return sumabs2(v, region) / cn
-    else
-        return sumabs2(v .- mean(v, region), region) / cn
-    end
+    sumabs2(v .- m, region) / cn
+end
+
+function var(v::AbstractArray; corrected::Bool=true, mean=nothing)
+    mean == 0 ? varzm(v; corrected=corrected) :
+    mean == nothing ? varm(v, Base.mean(v); corrected=corrected) :
+    isa(mean, Number) ? varm(v, mean; corrected=corrected) :
+    error("Invalid value of mean.")
+end
+
+function var(v::AbstractArray, region; corrected::Bool=true, mean=nothing)
+    mean == 0 ? varzm(v, region; corrected=corrected) :
+    mean == nothing ? varm(v, Base.mean(v, region), region; corrected=corrected) :
+    isa(mean, AbstractArray) ? varm(v, mean, region; corrected=corrected) :
+    error("Invalid value of mean.")
 end
 
 
@@ -126,11 +138,11 @@ end
 stdm(v::AbstractArray, m::Number; corrected::Bool=true) = 
     sqrt(varm(v, m; corrected=corrected))
 
-std(v::AbstractArray; corrected::Bool=true, zeromean::Bool=false) = 
-    sqrt(var(v; corrected=corrected, zeromean=zeromean))
+std(v::AbstractArray; corrected::Bool=true, mean=nothing) = 
+    sqrt(var(v; corrected=corrected, mean=mean))
 
-std(v::AbstractArray, region; corrected::Bool=true, zeromean::Bool=false) = 
-    sqrt!(var(v, region; corrected=corrected, zeromean=zeromean))
+std(v::AbstractArray, region; corrected::Bool=true, mean=nothing) = 
+    sqrt!(var(v, region; corrected=corrected, mean=mean))
 
 
 ## pearson covariance functions ##

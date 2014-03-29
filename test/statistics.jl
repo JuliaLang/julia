@@ -27,8 +27,8 @@
 @test_approx_eq varm([1,2,3], 2) 1.
 @test_approx_eq var([1,2,3]) 1.
 @test_approx_eq var([1,2,3]; corrected=false) 2.0/3
-@test_approx_eq var([1,2,3]; zeromean=true) 7.
-@test_approx_eq var([1,2,3]; zeromean=true, corrected=false) 14.0/3
+@test_approx_eq var([1,2,3]; mean=0) 7.
+@test_approx_eq var([1,2,3]; mean=0, corrected=false) 14.0/3
 
 @test_approx_eq var([1 2 3 4 5; 6 7 8 9 10], 2) [2.5 2.5]'
 @test_approx_eq var([1 2 3 4 5; 6 7 8 9 10], 2; corrected=false) [2.0 2.0]'
@@ -36,8 +36,8 @@
 @test_approx_eq stdm([1,2,3], 2) 1.
 @test_approx_eq std([1,2,3]) 1.
 @test_approx_eq std([1,2,3]; corrected=false) sqrt(2.0/3)
-@test_approx_eq std([1,2,3]; zeromean=true) sqrt(7.0)
-@test_approx_eq std([1,2,3]; zeromean=true, corrected=false) sqrt(14.0/3)
+@test_approx_eq std([1,2,3]; mean=0) sqrt(7.0)
+@test_approx_eq std([1,2,3]; mean=0, corrected=false) sqrt(14.0/3)
 
 @test_approx_eq std([1 2 3 4 5; 6 7 8 9 10], 2) sqrt([2.5 2.5]')
 @test_approx_eq std([1 2 3 4 5; 6 7 8 9 10], 2; corrected=false) sqrt([2.0 2.0]')
