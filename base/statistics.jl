@@ -332,20 +332,41 @@ corm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean; vardim::Int=1) =
 
 # cor
 
-cor(x::AbstractVector; zeromean::Bool=false) =
-    zeromean ? corzm(x) : corm(x, mean(x))
+function cor(x::AbstractVector; mean=nothing)
+    mean == 0 ? corzm(x) :
+    mean == nothing ? corm(x, Base.mean(x)) :
+    isa(mean, Number) ? corm(x, mean) :
+    error("Invalid value of mean.")
+end
 
-cor(x::AbstractMatrix; vardim::Int=1, zeromean::Bool=false) =
-    zeromean ? corzm(x; vardim=vardim) :
-               corm(x, mean(x, vardim); vardim=vardim)
+function cor(x::AbstractMatrix; vardim::Int=1, mean=nothing)
+    mean == 0 ? corzm(x; vardim=vardim) :
+    mean == nothing ? corm(x, _vmean(x, vardim); vardim=vardim) :
+    isa(mean, AbstractArray) ? corm(x, mean; vardim=vardim) :
+    error("Invalid value of mean.")
+end
 
-cor(x::AbstractVector, y::AbstractVector; zeromean::Bool=false) =
-    zeromean ? corzm(x, y) : corm(x, mean(x), y, mean(y))
+function cor(x::AbstractVector, y::AbstractVector; mean=nothing)
+    mean == 0 ? corzm(x, y) : 
+    mean == nothing ? corm(x, Base.mean(x), y, Base.mean(y)) :
+    isa(mean, Number) ? corm(x, mean, y, mean) :
+    isa(mean, (Number,Number)) ? corm(x, mean[1], y, mean[2]) :
+    error("Invalid value of mean.")
+end
 
-cor(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, zeromean::Bool=false) =
-    zeromean ? corzm(x, y; vardim=vardim) :
-               corm(x, _vmean(x, vardim), y, _vmean(y, vardim); vardim=vardim)
-
+function cor(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, mean=nothing)
+    if mean == 0
+        corzm(x, y; vardim=vardim)
+    elseif mean == nothing 
+        corm(x, _vmean(x, vardim), y, _vmean(y, vardim); vardim=vardim)
+    elseif isa(mean, AbstractArray)
+        corm(x, mean, y, mean; vardim=vardim)
+    elseif isa(mean, (AbstractArray,AbstractArray))
+        corm(x, mean[1], y, mean[2]; vardim=vardim)
+    else
+        error("Invalid value of mean.")
+    end
+end
 
 ## nice-valued ranges for histograms
 
