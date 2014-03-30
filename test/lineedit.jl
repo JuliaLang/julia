@@ -44,3 +44,45 @@ run_test(test2_func,IOBuffer("aaabb"))
 run_test(test3_func,IOBuffer("aab"))
 @test a_bar == 2
 @test b_bar == 1
+
+buf = IOBuffer("type X\n    a::Int\nend")
+for i = 0:6
+    seek(buf,i)
+    @test !LineEdit.edit_move_up(buf)
+    @test position(buf) == i
+    seek(buf,i)
+    @test LineEdit.edit_move_down(buf)
+    @test position(buf) == i+7
+end
+for i = 7:17
+    seek(buf,i)
+    @test LineEdit.edit_move_up(buf)
+    @test position(buf) == min(i-7,6)
+    seek(buf,i)
+    @test LineEdit.edit_move_down(buf)
+    @test position(buf) == min(i+11,21)
+end
+for i = 18:21
+    seek(buf,i)
+    @test LineEdit.edit_move_up(buf)
+    @test position(buf) == i-11
+    seek(buf,i)
+    @test !LineEdit.edit_move_down(buf)
+    @test position(buf) == i
+end
+
+buf = IOBuffer("type X\n\n")
+seekend(buf)
+@test LineEdit.edit_move_up(buf)
+@test position(buf) == 7
+@test LineEdit.edit_move_up(buf)
+@test position(buf) == 0
+@test !LineEdit.edit_move_up(buf)
+@test position(buf) == 0
+seek(buf,0)
+@test LineEdit.edit_move_down(buf)
+@test position(buf) == 7
+@test LineEdit.edit_move_down(buf)
+@test position(buf) == 8
+@test !LineEdit.edit_move_down(buf)
+@test position(buf) == 8
