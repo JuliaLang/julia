@@ -2859,6 +2859,11 @@ So far only the second case can actually occur.
 
 (define (analyze-variables e) (analyze-vars e '() '()))
 
+(define (not-bool e)
+  (cond ((memq e '(true #t))  'false)
+	((memq e '(false #f)) 'true)
+	(else                 `(call (top !) ,e))))
+
 ; remove if, _while, block, break-block, and break
 ; replaced with goto and gotoifnot
 ; TODO: remove type-assignment-affecting expressions from conditional branch.
@@ -2926,7 +2931,7 @@ So far only the second case can actually occur.
 		     (mark-label topl)
 		     (compile (cadddr e) break-labels vi)
 		     (compile test-blk break-labels vi)
-		     (emit `(gotoifnot (call (top !) ,(goto-form (caddr e))) ,topl))
+		     (emit `(gotoifnot ,(not-bool (goto-form (caddr e))) ,topl))
 		     (mark-label endl))
 
 		   (let ((topl (make&mark-label)))
