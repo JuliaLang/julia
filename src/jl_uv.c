@@ -898,6 +898,19 @@ DLLEXPORT int jl_connect_raw(uv_tcp_t *handle,struct sockaddr_storage *addr)
     return uv_tcp_connect(req,handle,(struct sockaddr*)addr,&jl_uv_connectcb);
 }
 
+#ifdef _OS_LINUX_
+DLLEXPORT int jl_tcp_quickack(uv_tcp_t *handle, int on)
+{
+    int fd = (handle)->io_watcher.fd;
+    if (fd != -1) {
+        if (setsockopt(fd, IPPROTO_TCP, TCP_QUICKACK, &on, sizeof(on))) {
+            return -1;
+        }
+    }
+  return 0;
+}
+#endif
+
 DLLEXPORT char *jl_ios_buf_base(ios_t *ios)
 {
     return ios->buf;
