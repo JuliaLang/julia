@@ -656,7 +656,7 @@ Now:
 - From a shell (called shell 1), type ``xterm -e oterm &``. You'll see
   a new window pop up; this will be called terminal 2.
 
-- From within shell 1, ``gdb julia-debug-basic``. You can find this
+- From within shell 1, ``gdb julia-debug``. You can find this
   executable within ``julia/usr/bin``.
 
 - From within shell 1, ``(gdb) tty /dev/pts/#`` where ``#`` is the
@@ -679,7 +679,7 @@ Now:
 Within emacs
 ^^^^^^^^^^^^
 
-- ``M-x gdb``, then enter ``julia-debug-basic`` (this is easiest from
+- ``M-x gdb``, then enter ``julia-debug`` (this is easiest from
   within julia/usr/bin, or you can specify the full path)
 
 - ``(gdb) run``
