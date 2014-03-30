@@ -39,7 +39,7 @@
 		    </execution>
 		  </executions>
 		  <configuration>
-		    <mainClass>PerfJavaBLAS</mainClass>
+		    <mainClass>PerfBLAS</mainClass>
 		  </configuration>
 		</plugin>
 	  </plugins>

@@ -6,7 +6,7 @@ import java.util.Random;
 
 import org.ejml.simple.SimpleMatrix;
 
-public class PerfJavaPure {
+public class PerfPure {
 	private static final int NITER = 5;
 	private static Random rand = new Random(0);
 	
