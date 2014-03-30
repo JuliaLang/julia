@@ -582,7 +582,7 @@ install-openlibm: $(OPENLIBM_OBJ_TARGET)
 
 ## openspecfun ##
 
-OPENSPECFUN_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) FFLAGS="$(JFFLAGS)" USE_OPENLIBM=1 OPENLIBM_HOME=$(JULIAHOME)/deps/openlibm
+OPENSPECFUN_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) FFLAGS="$(JFFLAGS)" USE_OPENLIBM=1
 
 OPENSPECFUN_OBJ_TARGET = $(build_shlibdir)/libopenspecfun.$(SHLIB_EXT)
 OPENSPECFUN_OBJ_SOURCE = openspecfun/libopenspecfun.$(SHLIB_EXT)
@@ -595,17 +595,23 @@ endif
 ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/openspecfun ] && echo exists ))
 $(OPENSPECFUN_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/openspecfun/HEAD
 endif
-$(OPENSPECFUN_OBJ_SOURCE): openspecfun/Makefile
+$(OPENSPECFUN_OBJ_SOURCE): openspecfun/Makefile $(OPENLIBM_OBJ_TARGET)
 	$(MAKE) -C openspecfun $(OPENSPECFUN_FLAGS) $(MAKE_COMMON)
 	touch -c $@
-$(OPENSPECFUN_OBJ_TARGET): $(OPENSPECFUN_OBJ_SOURCE) | $(build_shlibdir)
-	cp openspecfun/libopenspecfun.a $(build_libdir)/libopenspecfun.a
+$(OPENSPECFUN_OBJ_TARGET): $(OPENSPECFUN_OBJ_SOURCE)
+ifeq ($(OS),WINNT)
+	cp -a openspecfun/libopenspecfun.a $(build_libdir)/libopenspecfun.a
 	cp $< $@
+else
+	$(MAKE) -C openspecfun install $(OPENSPECFUN_FLAGS) $(MAKE_COMMON)
 	$(INSTALL_NAME_CMD)libopenspecfun.$(SHLIB_EXT) $@
+	touch -c $@
+endif
 
 clean-openspecfun:
 	-$(MAKE) -C openspecfun distclean $(OPENSPECFUN_FLAGS)
 	-rm $(OPENSPECFUN_OBJ_TARGET)
+	-rm $(build_libdir)/libopenspecfun.a
 distclean-openspecfun: clean-openspecfun
 	-cd openspecfun && git clean -fdx
 
