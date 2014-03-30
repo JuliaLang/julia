@@ -1253,7 +1253,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(powi_llvm,2) {
         x = FP(x);
         y = JL_INT(y);
-        Type *ts[2] = { x->getType(), T_int32 };
+        Type *ts[1] = { x->getType() };
         return builder.CreateCall2(Intrinsic::getDeclaration(jl_Module, Intrinsic::powi,
                                                              ArrayRef<Type*>(ts)),
                                    x, y);

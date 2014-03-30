@@ -663,7 +663,7 @@ function updatehook(pkgs::Vector)
     """)
 end
 
-const JULIA = joinpath(JULIA_HOME, "julia-basic")
+const JULIA = joinpath(JULIA_HOME, "julia")
 
 function test!(pkg::String, errs::Vector{String}, notests::Vector{String})
     const reqs_path = abspath(pkg,"test","REQUIRE")

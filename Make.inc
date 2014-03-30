@@ -162,7 +162,6 @@ fPIC = -fPIC
 EXE =
 endif
 
-DEFAULT_REPL = basic
 JULIAGC = MARKSWEEP
 USE_COPY_STACKS = 1
 
@@ -600,8 +599,8 @@ wine_pathsearch = $(firstword $(wildcard $(addsuffix /$(1),$(shell printf %s\n '
 endif
 pathsearch = $(firstword $(wildcard $(addsuffix /$(1),$(subst :, ,$(2)))))
 
-JULIA_EXECUTABLE_debug = $(build_bindir)/julia-debug-$(DEFAULT_REPL)$(EXE)
-JULIA_EXECUTABLE_release = $(build_bindir)/julia-$(DEFAULT_REPL)$(EXE)
+JULIA_EXECUTABLE_debug = $(build_bindir)/julia-debug$(EXE)
+JULIA_EXECUTABLE_release = $(build_bindir)/julia$(EXE)
 
 ifeq ($(OS), WINNT)
 JULIA_EXECUTABLE = $(JULIA_EXECUTABLE_release)

@@ -384,7 +384,7 @@ function respond(f,d,main,req,rep)
         if !isempty(line)
             reset(d)
             (val,bt) = send_to_backend(f(line),req,rep)
-            if !ends_with_semicolon(line)
+            if !ends_with_semicolon(line) || !is(bt,nothing)
                 print_response(d,val,bt,true,have_color(s))
             end
         end
@@ -522,7 +522,7 @@ function setup_interface(d::REPLDisplay,req,rep;extra_repl_keymap=Dict{Any,Any}[
             input = replace(input,'\r','\n')
             if position(LineEdit.buffer(s)) == 0
                 indent = Base.indentation(input)[1]
-                input = Base.unindent(input[(indent+1):end],indent)
+                input = Base.unindent(lstrip(input),indent)
             end
             buf = copy(LineEdit.buffer(s))
             edit_insert(buf,input)
