@@ -1235,7 +1235,7 @@ DLLEXPORT uv_idle_t * jl_make_idle(uv_loop_t *loop, jl_value_t *julia_struct);
 DLLEXPORT int jl_idle_start(uv_idle_t *idle);
 DLLEXPORT int jl_idle_stop(uv_idle_t *idle);
 
-DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream);
+DLLEXPORT int jl_putc(char c, uv_stream_t *stream);
 DLLEXPORT int jl_puts(char *str, uv_stream_t *stream);
 DLLEXPORT int jl_pututf8(uv_stream_t *s, uint32_t wchar);
 

@@ -457,10 +457,13 @@ DLLEXPORT int jl_fs_sendfile(int src_fd, int dst_fd,
     return ret;
 }
 
-DLLEXPORT int jl_fs_write(int handle, char *buf, size_t len, size_t offset)
+DLLEXPORT int jl_fs_write(int handle, char *data, size_t len, size_t offset)
 {
     uv_fs_t req;
-    int ret = uv_fs_write(jl_io_loop, &req, handle, buf, len, offset, NULL);
+    uv_buf_t buf[1];
+    buf[0].base = data;
+    buf[0].len = len;
+    int ret = uv_fs_write(jl_io_loop, &req, handle, buf, 1, offset, NULL);
     uv_fs_req_cleanup(&req);
     return ret;
 }
@@ -468,15 +471,21 @@ DLLEXPORT int jl_fs_write(int handle, char *buf, size_t len, size_t offset)
 DLLEXPORT int jl_fs_write_byte(int handle, char c)
 {
     uv_fs_t req;
-    int ret = uv_fs_write(jl_io_loop, &req, handle, &c, 1, -1, NULL);
+    uv_buf_t buf[1];
+    buf[0].base = &c;
+    buf[0].len = 1;
+    int ret = uv_fs_write(jl_io_loop, &req, handle, buf, 1, -1, NULL);
     uv_fs_req_cleanup(&req);
     return ret;
 }
 
-DLLEXPORT int jl_fs_read(int handle, char *buf, size_t len)
+DLLEXPORT int jl_fs_read(int handle, char *data, size_t len)
 {
     uv_fs_t req;
-    int ret = uv_fs_read(jl_io_loop, &req, handle, buf, len, -1, NULL);
+    uv_buf_t buf[1];
+    buf[0].base = data;
+    buf[0].len = len;
+    int ret = uv_fs_read(jl_io_loop, &req, handle, buf, 1, -1, NULL);
     uv_fs_req_cleanup(&req);
     return ret;
 }
@@ -484,12 +493,15 @@ DLLEXPORT int jl_fs_read(int handle, char *buf, size_t len)
 DLLEXPORT int jl_fs_read_byte(int handle)
 {
     uv_fs_t req;
-    char buf;
-    int ret = uv_fs_read(jl_io_loop, &req, handle, &buf, 1, -1, NULL);
+    char c;
+    uv_buf_t buf[1];
+    buf[0].base = &c;
+    buf[0].len = 1;
+    int ret = uv_fs_read(jl_io_loop, &req, handle, buf, 1, -1, NULL);
     uv_fs_req_cleanup(&req);
     if (ret == -1)
         return ret;
-    return (int)buf;
+    return (int)c;
 }
 
 DLLEXPORT int jl_fs_close(int handle)
@@ -537,7 +549,7 @@ DLLEXPORT int jl_write_copy(uv_stream_t *stream, const char *str, size_t n, uv_w
     return err;
 }
 
-DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
+DLLEXPORT int jl_putc(char c, uv_stream_t *stream)
 {
     int err;
     if (stream!=0) {
@@ -547,7 +559,10 @@ DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
                 jl_uv_file_t *file = (jl_uv_file_t *)stream;
                 // Do a blocking write for now
                 uv_fs_t req;
-                err = uv_fs_write(file->loop, &req, file->file, &c, 1, -1, NULL);
+                uv_buf_t buf[1];
+                buf[0].base = &c;
+                buf[0].len = 1;
+                err = uv_fs_write(file->loop, &req, file->file, buf, 1, -1, NULL);
                 JL_SIGATOMIC_END();
                 return err ? 0 : 1;
             }
@@ -616,7 +631,10 @@ DLLEXPORT size_t jl_write(uv_stream_t *stream, const char *str, size_t n)
             jl_uv_file_t *file = (jl_uv_file_t *)stream;
             // Do a blocking write for now
             uv_fs_t req;
-            err = uv_fs_write(file->loop, &req, file->file, (void*)str, n, -1, NULL);
+            uv_buf_t buf[1];
+            buf[0].base = (char*)str;
+            buf[0].len = n;
+            err = uv_fs_write(file->loop, &req, file->file, buf, 1, -1, NULL);
             JL_SIGATOMIC_END();
             return err ? 0 : n;
         }
@@ -684,11 +702,6 @@ DLLEXPORT void jl_exit(int exitcode)
     uv_tty_reset_mode();
     uv_atexit_hook();
     exit(exitcode);
-}
-
-DLLEXPORT int jl_cwd(char *buffer, size_t size)
-{
-    return uv_cwd(buffer,size);
 }
 
 DLLEXPORT int jl_getpid()
