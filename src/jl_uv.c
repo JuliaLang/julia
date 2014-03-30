@@ -996,11 +996,14 @@ DLLEXPORT int jl_tty_set_mode(uv_tty_t *handle, int mode)
 
 DLLEXPORT int jl_tty_get_winsize(uv_tty_t* handle, int* width, int* height)
 {
+#ifdef _OS_WINDOWS_
     if (ispty((uv_pipe_t*)handle)) {
+        //TODO: query for size: `\e[18` returns `\e[4;height;width;t`
         *width=0;
         *height=0;
         return 0;
     }
+#endif
     if (handle->type != UV_TTY) return UV_ENOTSUP;
     return uv_tty_get_winsize(handle, width, height);
 }
