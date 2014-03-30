@@ -6,7 +6,7 @@ import java.util.Random;
 
 import org.jblas.DoubleMatrix;
 
-public class PerfJavaBLAS {
+public class PerfBLAS {
 	private static final int NITER = 5;
 	private static Random rand = new Random(0);
 	
