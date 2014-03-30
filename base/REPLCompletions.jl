@@ -118,6 +118,18 @@ function complete_path(path::ByteString)
     matches
 end
 
+function complete_methods(input::String)
+    tokens = split(input, '.')
+    fn = Main
+    for token in tokens
+        sym = symbol(token)
+        isdefined(fn, sym) || return UTF8String[]
+        fn = fn.(sym)
+    end
+    isgeneric(fn) || return UTF8String[]
+    UTF8String[string(m) for m in methods(fn)]
+end
+
 const non_word_chars = " \t\n\"\\'`@\$><=:;|&{}()[].,+-*/?%^~"
 
 function completions(string,pos)
@@ -125,6 +137,7 @@ function completions(string,pos)
     dotpos = 0
     instring = false
     incmd = false
+    infunc = false
     escaped = false
     nearquote = false
     i = start(string)
@@ -160,6 +173,8 @@ function completions(string,pos)
             elseif in(c, non_word_chars)
                 if c == '.'
                     dotpos = i
+                elseif i == pos && c == '('
+                    infunc = true
                 else
                     startpos = j
                 end
@@ -174,13 +189,16 @@ function completions(string,pos)
         if instring && length(paths) == 1
             paths[1] *= "\""
         end
-        return sort(paths), r
+        return sort(paths), r, true
     end
 
     ffunc = (mod,x)->true
     suggestions = UTF8String[]
     r = rsearch(string,"using",startpos)
-    if !isempty(r) && all(isspace,string[nextind(string,last(r)):prevind(string,startpos)])
+    if infunc
+        # We're right after the start of a function call
+        return (complete_methods(string[startpos:pos-1]), startpos:pos,false)
+    elseif !isempty(r) && all(isspace,string[nextind(string,last(r)):prevind(string,startpos)])
         # We're right after using. Let's look only for packages
         # and modules we can reach from here
 
@@ -203,7 +221,7 @@ function completions(string,pos)
         dotpos = startpos-1
     end
     append!(suggestions,complete_symbol(string[startpos:pos],ffunc))
-    sort(unique(suggestions)), (dotpos+1):pos
+    sort(unique(suggestions)), (dotpos+1):pos, true
 end
 
 function shell_completions(string,pos)
@@ -233,13 +251,13 @@ function shell_completions(string,pos)
             end
         end
         r = (nextind(string,pos-sizeof(name))):pos
-        return (ret,r)
+        return (ret,r,true)
     elseif isexpr(arg,:escape) && (isexpr(arg.args[1],:incomplete) || isexpr(arg.args[1],:error))
         r = first(last_parse):prevind(last_parse,last(last_parse))
         partial = scs[r]
         ret, range = completions(partial,endof(partial))
         range += first(r)-1
-        return (ret,range)
+        return (ret,range,true)
     end
 end
 
