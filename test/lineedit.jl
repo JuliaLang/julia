@@ -45,6 +45,8 @@ run_test(test3_func,IOBuffer("aab"))
 @test a_bar == 2
 @test b_bar == 1
 
+## edit_move_{up,down} ##
+
 buf = IOBuffer("type X\n    a::Int\nend")
 for i = 0:6
     seek(buf,i)
@@ -86,3 +88,19 @@ seek(buf,0)
 @test position(buf) == 8
 @test !LineEdit.edit_move_down(buf)
 @test position(buf) == 8
+
+## edit_delete_prev_word ##
+
+buf = IOBuffer("type X\n ")
+seekend(buf)
+@test LineEdit.edit_delete_prev_word(buf)
+@test position(buf) == 5
+@test buf.size == 5
+@test bytestring(buf.data[1:buf.size]) == "type "
+
+buf = IOBuffer("4 +aaa+ x")
+seek(buf,8)
+@test LineEdit.edit_delete_prev_word(buf)
+@test position(buf) == 2
+@test buf.size == 3
+@test bytestring(buf.data[1:buf.size]) == "4 x"
