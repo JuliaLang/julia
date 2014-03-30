@@ -95,10 +95,33 @@ function common_prefix(completions)
     end
 end
 
+# Show available completions
+function show_completions(s::PromptState, completions)
+    colmax = maximum(map(length,completions))
+    num_cols = max(div(width(LineEdit.terminal(s)),colmax+2),1)
+    entries_per_col, r = divrem(length(completions),num_cols)
+    entries_per_col += r != 0
+    println(LineEdit.terminal(s))
+    for row = 1:entries_per_col
+        for col = 0:num_cols
+            idx = row + col*entries_per_col
+            if idx <= length(completions)
+                cmove_col(LineEdit.terminal(s),(colmax+2)*col)
+                print(LineEdit.terminal(s),completions[idx])
+            end
+        end
+        println(LineEdit.terminal(s))
+    end
+end
+
 function completeLine(s::PromptState)
-    (completions,partial) = completeLine(s.p.complete,s)
+    (completions,partial,should_complete) = completeLine(s.p.complete,s)
     if length(completions) == 0
         beep(LineEdit.terminal(s))
+    elseif !should_complete
+        # should_complete is false for cases where we only want to show
+        # a list of possible completions but not complete, e.g. foo(\t
+        show_completions(s, completions)
     elseif length(completions) == 1
         # Replace word by completion
         prev_pos = position(s.input_buffer)
@@ -113,21 +136,7 @@ function completeLine(s::PromptState)
             seek(s.input_buffer,prev_pos-sizeof(partial))
             edit_replace(s,position(s.input_buffer),prev_pos,p)
         else
-            # Show available completions
-            colmax = maximum(map(length,completions))
-            num_cols = div(width(LineEdit.terminal(s)),colmax+2)
-            entries_per_col = div(length(completions),num_cols)+1
-            println(LineEdit.terminal(s))
-            for row = 1:entries_per_col
-                for col = 0:num_cols
-                    idx = row + col*entries_per_col
-                    if idx <= length(completions)
-                        cmove_col(LineEdit.terminal(s),(colmax+2)*col)
-                        print(LineEdit.terminal(s),completions[idx])
-                    end
-                end
-                println(LineEdit.terminal(s))
-            end
+            show_completions(s, completions)
         end
     end
 end
