@@ -16,8 +16,6 @@ import Base.Terminals: raw!
 import Base.LineEdit: CompletionProvider,
                       HistoryProvider,
                       add_history,
-                      char_move_left,
-                      char_move_word_left,
                       completeLine,
                       history_prev,
                       history_next,
