@@ -2728,6 +2728,50 @@ So far only the second case can actually occur.
 				   (flatten-scopes x)))
 		   e))))
 
+(define (find-symbolic-label-defs e tbl)
+  (if (or (not (pair? e)) (quoted? e))
+    '()
+    (if (eq? (car e) 'symboliclabel)
+      (put! tbl (cadr e) #t)
+      (map (lambda (x) (find-symbolic-label-defs x tbl)) e))))
+
+(define (find-symbolic-label-refs e tbl)
+  (if (or (not (pair? e)) (quoted? e))
+    '()
+    (if (eq? (car e) 'symbolicgoto)
+      (put! tbl (cadr e) #t)
+      (map (lambda (x) (find-symbolic-label-refs x tbl)) e))))
+
+(define (find-symbolic-labels e)
+  (let
+    ((defs (table))
+     (refs (table)))
+    (find-symbolic-label-defs e defs)
+    (find-symbolic-label-refs e refs)
+    (table.foldl
+      (lambda (label v labels)
+        (if (has? refs label)
+          (cons label labels)
+          labels))
+      '() defs)))
+
+(define (rename-symbolic-labels- e relabel)
+  (cond
+    ((or (not (pair? e)) (quoted? e)) e)
+    ((eq? (car e) 'symbolicgoto)
+     (let ((newlabel (assq (cadr e) relabel)))
+       (if newlabel `(symbolicgoto ,(cdr newlabel)) e)))
+    ((eq? (car e) 'symboliclabel)
+     (let ((newlabel (assq (cadr e) relabel)))
+       (if newlabel `(symboliclabel ,(cdr newlabel)) e)))
+    (else (map (lambda (x) (rename-symbolic-labels- x relabel)) e))))
+
+(define (rename-symbolic-labels e)
+  (let*
+    ((labels (find-symbolic-labels e))
+     (relabel (pair-with-gensyms labels)))
+    (rename-symbolic-labels- e relabel)))
+
 (define (make-var-info name) (list name 'Any 0))
 (define vinfo:name car)
 (define vinfo:type cadr)
@@ -2897,6 +2941,7 @@ So far only the second case can actually occur.
   (let ((code '())
 	(label-counter 0)
     (label-map (table))
+    (label-decl (table))
 	(handler-level 0))
     (define (emit c)
       (set! code (cons c code)))
@@ -2985,12 +3030,16 @@ So far only the second case can actually occur.
 		       (if m
 			   (emit `(label ,m))
 			   (let ((l (make&mark-label)))
-                 (put! label-map (cadr e) l)))))
+                 (put! label-map (cadr e) l)))
+               (put! label-decl (cadr e) #t)))
         ((symboliclabel) (let ((m (get label-map (cadr e) #f)))
                (if m
-               (emit `(label ,m))
+                 (if (get label-decl (cadr e) #f)
+                   (error (string "label \"" (cadr e) "\" defined multiple times"))
+                   (emit `(label ,m)))
                (let ((l (make&mark-label)))
-                 (put! label-map (cadr e) l)))))
+                 (put! label-map (cadr e) l)))
+               (put! label-decl (cadr e) #t)))
         ((symbolicgoto) (let ((m (get label-map (cadr e) #f)))
                (if m
                    (emit `(goto ,m))
@@ -3051,6 +3100,10 @@ So far only the second case can actually occur.
 	  ((eq? (car e) 'lambda)
 	   (compile (cadddr e) '() (append (cadr (caddr e))
 					   (caddr (caddr e))))
+       (table.foreach (lambda (l m)
+           (if (not (get label-decl l #f))
+             (error (string "label \"" l "\" referenced but not defined"))))
+           label-map)
 	   `(lambda ,(cadr e) ,(caddr e)
 		    ,(cons 'body (reverse! code))))
 	  (else (cons (car e)
@@ -3120,8 +3173,9 @@ So far only the second case can actually occur.
 	   (let ((form (car form))
 		 (m    (cdr form)))
 	     ;; m is the macro's def module, or #f if def env === use env
-	     (julia-expand-macros-
-	      (resolve-expansion-vars form m)))))
+	     (rename-symbolic-labels
+           (julia-expand-macros-
+             (resolve-expansion-vars form m))))))
 	(else
 	 (map julia-expand-macros- e))))
 
