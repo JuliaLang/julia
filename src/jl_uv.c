@@ -943,9 +943,66 @@ DLLEXPORT int jl_uv_unix_fd_is_watched(int fd, uv_poll_t *handle, uv_loop_t *loo
 
 #endif
 
+#ifdef _OS_WINDOWS_
+static inline int ishexchar(char c) {
+   if (c >= '0' && c <= '9') return 1;
+   if (c >= 'a' && c <= 'z') return 1;
+   return 0;
+}
+static int ispty(uv_pipe_t *pipe) {
+    if (pipe->type != UV_NAMED_PIPE) return 0;
+    size_t len = 0;
+    if (uv_pipe_getsockname(pipe, NULL, &len) != UV_ENOBUFS) return 0;
+    char *name = alloca(len);
+    if (uv_pipe_getsockname(pipe, name, &len)) return 0;
+    // return true if name matches regex:
+    // ^\\\\?\\pipe\\(msys|cygwin)-[0-9a-z]{16}-[pt]ty[1-9][0-9]*-
+    //JL_PRINTF(JL_STDERR,"pipe_name: %s\n", name);
+    int n = 0;
+    if (!strncmp(name,"\\\\?\\pipe\\msys-",14))
+        n = 14;
+    else if (!strncmp(name,"\\\\?\\pipe\\cygwin-",16)) 
+        n = 16;
+    else
+        return 0;
+    //JL_PRINTF(JL_STDERR,"prefix pass\n");
+    name += n;
+    for (int n = 0; n < 16; n++)
+        if (!ishexchar(*name++)) return 0;
+    //JL_PRINTF(JL_STDERR,"hex pass\n");
+    if ((*name++)!='-') return 0;
+    if (*name != 'p' && *name != 't') return 0;
+    name++;
+    if (*name++ != 't' || *name++ != 'y') return 0;
+    //JL_PRINTF(JL_STDERR,"tty pass\n");
+    return 1;
+}
+#endif
+ 
 DLLEXPORT uv_handle_type jl_uv_handle_type(uv_handle_t *handle)
 {
+#ifdef _OS_WINDOWS_
+    if (ispty((uv_pipe_t*)handle))
+        return UV_TTY;
+#endif
     return handle->type;
+}
+
+DLLEXPORT int jl_tty_set_mode(uv_tty_t *handle, int mode)
+{
+    if (handle->type != UV_TTY) return 0;
+    return uv_tty_set_mode(handle, mode);
+}
+
+DLLEXPORT int jl_tty_get_winsize(uv_tty_t* handle, int* width, int* height)
+{
+    if (ispty((uv_pipe_t*)handle)) {
+        *width=0;
+        *height=0;
+        return 0;
+    }
+    if (handle->type != UV_TTY) return UV_ENOTSUP;
+    return uv_tty_get_winsize(handle, width, height);
 }
 
 DLLEXPORT uv_file jl_uv_file_handle(jl_uv_file_t *f)
@@ -976,18 +1033,21 @@ int uv___stream_fd(uv_stream_t* handle);
 #else
 #define uv__stream_fd(handle) ((handle)->io_watcher.fd)
 #endif /* defined(__APPLE__) */
-DLLEXPORT int jl_uv_pipe_fd(uv_pipe_t *handle)
+DLLEXPORT int jl_uv_handle(uv_stream_t *handle)
 {
-    return uv__stream_fd((uv_stream_t*)handle);
+    return uv__stream_fd(handle);
 }
 #else
-DLLEXPORT HANDLE jl_uv_pipe_handle(uv_pipe_t *handle)
+DLLEXPORT HANDLE jl_uv_handle(uv_stream_t *handle)
 {
-    return handle->handle;
-}
-DLLEXPORT HANDLE jl_uv_tty_handle(uv_tty_t *handle)
-{
-    return handle->handle;
+    switch (handle->type) {
+    case UV_TTY:
+        return ((uv_tty_t*)handle)->handle;
+    case UV_NAMED_PIPE:
+        return ((uv_pipe_t*)handle)->handle;
+    default:
+        return INVALID_HANDLE_VALUE;
+    }
 }
 #endif
 #ifdef __cplusplus

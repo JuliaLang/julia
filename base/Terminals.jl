@@ -117,13 +117,13 @@ cmove_line_up(t::UnixTerminal,n) = (cmove_up(t,n);cmove_col(t,0))
 cmove_line_down(t::UnixTerminal,n) = (cmove_down(t,n);cmove_col(t,0))
 cmove_col(t::UnixTerminal,n) = write(t.out_stream,"$(CSI)$(n)G")
 
-raw!(t::UnixTerminal,raw::Bool) = ccall(:uv_tty_set_mode,Int32,(Ptr{Void},Int32),t.in_stream.handle,raw?1:0)!=-1
+raw!(t::UnixTerminal,raw::Bool) = ccall((@windows ? :jl_tty_set_mode : :uv_tty_set_mode),Int32,(Ptr{Void},Int32),t.in_stream.handle,raw?1:0)!=-1
 enable_bracketed_paste(t::UnixTerminal) = write(t.out_stream,"$(CSI)?2004h")
 disable_bracketed_paste(t::UnixTerminal) = write(t.out_stream,"$(CSI)?2004l")
 
 function size(t::UnixTerminal)
     s = Array(Int32,2)
-    Base.uv_error("size (TTY)",ccall(:uv_tty_get_winsize,Int32,(Ptr{Void},Ptr{Int32},Ptr{Int32}),t.out_stream.handle,pointer(s,1),pointer(s,2))!=0)
+    Base.uv_error("size (TTY)",ccall((@windows ? :jl_tty_get_winsize : :uv_tty_get_winsize),Int32,(Ptr{Void},Ptr{Int32},Ptr{Int32}),t.out_stream.handle,pointer(s,1),pointer(s,2))!=0)
     Size(s[1],s[2])
 end
 
