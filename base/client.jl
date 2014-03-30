@@ -328,11 +328,11 @@ function _start()
 
         local term
         if repl
-            term = Terminals.UnixTerminal(get(ENV,"TERM",""),STDIN,STDOUT,STDERR)
             if !isa(STDIN,TTY)
                 global is_interactive = !isa(STDIN,Union(File,IOStream))
                 color_set || (global have_color = false)
             else
+                term = Terminals.UnixTerminal(get(ENV,"TERM",""),STDIN,STDOUT,STDERR)
                 global is_interactive = true
                 color_set || (global have_color = Terminals.hascolor(term))
             end

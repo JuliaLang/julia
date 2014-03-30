@@ -123,6 +123,8 @@ yield()
 exename=joinpath(JULIA_HOME,(ccall(:jl_is_debugbuild,Cint,())==0?"julia":"julia-debug"))
 @test readall(`$exename -f -e 'println(STDERR,"Hello World")'` .> `cat`) == "Hello World\n"
 
+# issue #6310
+@test readall(`echo "2+2"` |> `$exename`) == "4\n"
 
 # issue #5904
 @test run(ignorestatus(`false`) |> `true`) === nothing
