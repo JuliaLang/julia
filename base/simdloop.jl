@@ -25,24 +25,29 @@ function compile(x)
     length(x.args) == 2 || throw(SimdError("1D for loop expected"))
 
     var,range = parse_iteration_space(x.args[1])
-    svar = Expr(:call, :symbol, string(var))
+    r = gensym("r") # Range value
     n = gensym("n") # Trip count
     s = gensym("s") # Step
     i = gensym("i") # Index variable
-    # LLVM vectorizer needs to compute a trip count, so make it obvious.
     quote
-        let $var = first($range)
-            local $n = length($range)
-            local $s = step($range)
-            local $i = zero($n)
-            while $i < $n
-                $(x.args[2])
-                $var += $s
-                $i += 1
-                $(Expr(:simdloop))  # Mark loop as SIMD loop
+        # Evaluate range value once, to enhance type and data flow analysis by optimizers.
+        let $r = $range, $n = length($r)
+            if zero($n) < $n
+                let $var = first($r)
+                    # LLVM vectorizer needs to compute a trip count, so make it obvious.
+                    local $s = step($r)
+                    local $i = zero($n)
+                    while $i < $n
+                        $(x.args[2])
+                        $var += $s
+                        $i += 1
+                        $(Expr(:simdloop))  # Mark loop as SIMD loop
+                    end
+                end
+                # Set index to last value just like a regular for loop would
+                $var = last($r)
             end
         end
-        isdefined($svar) && ($var = last($range))
         nothing
     end
 end
