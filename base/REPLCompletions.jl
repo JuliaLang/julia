@@ -205,7 +205,7 @@ function completions(string,pos)
         # If there's no dot, we're in toplevel, so we should
         # also search for packages
         s = string[startpos:pos]
-        if dotpos == 0
+        if dotpos <= startpos
             append!(suggestions,filter(pname->begin
                 pname[1] != '.' &&
                 pname != "METADATA" &&
@@ -217,7 +217,7 @@ function completions(string,pos)
     if startpos == 0
         pos = -1
     end
-    if dotpos == 0
+    if dotpos <= startpos
         dotpos = startpos-1
     end
     append!(suggestions,complete_symbol(string[startpos:pos],ffunc))
