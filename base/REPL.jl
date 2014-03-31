@@ -569,7 +569,16 @@ function setup_interface(d::REPLDisplay,req,rep;extra_repl_keymap=Dict{Any,Any}[
     main_prompt.keymap_func = repl_keymap_func
 
     const mode_keymap = {
-        '\b' => s->(isempty(s) ? transition(s,main_prompt) : LineEdit.edit_backspace(s) )
+        '\b' => function (s)
+            if (isempty(s) || position(LineEdit.buffer(s)) == 0) && LineEdit.mode(s) != main_prompt
+                buf = copy(LineEdit.buffer(s))
+                transition(s,main_prompt)
+                LineEdit.state(s,main_prompt).input_buffer = buf
+                LineEdit.refresh_line(s)
+            else
+                LineEdit.edit_backspace(s)
+            end
+        end
     }
 
     b = Dict{Any,Any}[hkeymap, mode_keymap, LineEdit.history_keymap(hp), LineEdit.default_keymap,LineEdit.escape_defaults]
