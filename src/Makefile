@@ -4,6 +4,7 @@ include $(JULIAHOME)/deps/Versions.make
 
 override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
+override CPPFLAGS += $(JCPPFLAGS)
 
 SRCS = \
 	jltypes gf ast builtins module codegen interpreter \

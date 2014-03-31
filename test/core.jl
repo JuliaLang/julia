@@ -1471,3 +1471,7 @@ function g6175(); print(""); (); end
 g6175(i::Real, I...) = g6175(I...)
 g6175(i, I...) = tuple(length(i), g6175(I...)...)
 @test g6175(1:5) === (5,)
+
+# issue #6242
+f6242{N}(x::NTuple{N,Int})=(N==0 ? 1 : ntuple(n->x[n],N))
+@test f6242(()) === 1

@@ -182,7 +182,7 @@ function edit(file::String, line::Integer)
         run(`$edpath $file +$line`)
     elseif edname == "textmate" || edname == "mate"
         spawn(`$edpath $file -l $line`)
-    elseif edname == "subl"
+    elseif beginswith(edname, "subl")
         spawn(`$edpath $file:$line`)
     elseif OS_NAME == :Windows && (edname == "start" || edname == "open")
         spawn(`start /b $file`)
@@ -209,6 +209,12 @@ edit(f::Union(Function,DataType))    = edit(functionloc(f)...)
 edit(f::Union(Function,DataType), t) = edit(functionloc(f,t)...)
 less(f::Union(Function,DataType))    = less(functionloc(f)...)
 less(f::Union(Function,DataType), t) = less(functionloc(f,t)...)
+
+function edit( m::Method )
+	tv, decls, file, line = arg_decl_parts(m)
+	edit( string(file), line )
+end
+
 
 # clipboard copy and paste
 

@@ -51,19 +51,23 @@
  * The previous signal state is NOT restored.
  */
 
+#ifndef _MSC_VER
 .intel_syntax
+#else
+.model small,C
+#endif
 ENTRY(jl_longjmp)
-    mov    edx,DWORD PTR [esp+0x04]
-    mov    eax,DWORD PTR [esp+0x08]
-    mov    ebp,DWORD PTR [edx+0x00]
-    mov    ebx,DWORD PTR [edx+0x04]
-    mov    edi,DWORD PTR [edx+0x08]
-    mov    esi,DWORD PTR [edx+0x0c]
-    mov    esp,DWORD PTR [edx+0x10]
-    mov    ecx,DWORD PTR [edx+0x14]
+    mov    edx,DWORD PTR [esp+4]
+    mov    eax,DWORD PTR [esp+8]
+    mov    ebp,DWORD PTR [edx+0]
+    mov    ebx,DWORD PTR [edx+4]
+    mov    edi,DWORD PTR [edx+8]
+    mov    esi,DWORD PTR [edx+12]
+    mov    esp,DWORD PTR [edx+16]
+    mov    ecx,DWORD PTR [edx+20]
     test   eax,eax
-    jne    1f
+    jne    a
     inc    eax
-1:  mov    DWORD PTR [esp],ecx
+a:  mov    DWORD PTR [esp],ecx
     ret
 END(jl_longjmp)

@@ -1,16 +1,14 @@
-#include "libsupport.h"
 #define _GNU_SOURCE
+#include "libsupport.h"
 #include <stdlib.h>
 #include <locale.h>
 
-#if !defined(_OS_WINDOWS_) 
-// This code path should be used for systems that support the strtod_l function 
-
+#if defined(__APPLE__) || defined(__FreeBSD__)
 #include <xlocale.h>
-#if defined(_OS_LINUX_)
-extern double strtod_l(const char *nptr, char **endptr, locale_t loc);
-extern float strtof_l(const char *nptr, char **endptr, locale_t loc);
 #endif
+
+#if !defined(_OS_WINDOWS_)
+// This code path should be used for systems that support the strtod_l function
 
 // Cache locale object
 static int c_locale_initialized = 0;

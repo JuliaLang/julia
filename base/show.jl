@@ -445,7 +445,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 
     # type declaration
     elseif is(head, :type) && nargs==3
-        show_block(io, head, args[2], args[3], indent); print(io, "end")
+        show_block(io, args[1] ? :type : :immutable, args[2], args[3], indent)
+        print(io, "end")
 
     # empty return (i.e. "function f() return end")
     elseif is(head, :return) && nargs == 1 && is(args[1], nothing)
@@ -513,6 +514,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             end
         end
         print(io, '"', a..., '"')
+
+    elseif is(head, :&) && length(args) == 1
+        print(io, '&')
+        show_unquoted(io, args[1])
 
     # print anything else as "Expr(head, args...)"
     else

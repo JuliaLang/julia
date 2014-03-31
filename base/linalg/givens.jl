@@ -181,8 +181,18 @@ function givensAlgorithm{T<:FloatingPoint}(f::Complex{T}, g::Complex{T})
     return cs, sn, r
 end
 
-givens{T}(f::T, g::T, i1::Integer, i2::Integer, size::Integer) = i2 <= size ? (i1 < i2 ? Givens(size, i1, i2, convert((T,T,T), givensAlgorithm(f, g))...) : error("second index must be larger than the first")) : error("indices cannot be larger than size Givens rotation matrix")
-givens{T}(A::AbstractMatrix{T}, i1::Integer, i2::Integer, col::Integer) = i1 < i2 ? Givens(size(A, 1), i1, i2, convert((T,T,T), givensAlgorithm(A[i1,col], A[i2,col]))...) : error("second row index must be larger than the first")
+function givens{T}(f::T, g::T, i1::Integer, i2::Integer, size::Integer)
+    i2 <= size || error("indices cannot be larger than size Givens rotation matrix")
+    i1 < i2 || error("second index must be larger than the first")
+    h = givensAlgorithm(f, g)
+    Givens(size, i1, i2, convert(T, h[1]), convert(T, h[2]), convert(T, h[3]))
+end
+
+function givens{T}(A::AbstractMatrix{T}, i1::Integer, i2::Integer, col::Integer)
+    i1 < i2 || error("second index must be larger than the first")
+    h = givensAlgorithm(A[i1,col], A[i2,col])
+    Givens(size(A, 1), i1, i2, convert(T, h[1]), convert(T, h[2]), convert(T, h[3]))
+end
 
 *{T}(G1::Givens{T}, G2::Givens{T}) = Rotation(push!(push!(Givens{T}[], G2), G1))
 *(G::Givens, B::BitArray{2}) = error("method not defined")

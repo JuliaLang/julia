@@ -51,16 +51,20 @@
  * The previous signal state is NOT restored.
  */
 
+#ifndef _MSC_VER
 .intel_syntax
+#else
+.model small,C
+#endif
 ENTRY(jl_setjmp)
-    mov    eax,DWORD PTR [esp+0x04]
-    mov    edx,DWORD PTR [esp+0x00]
-    mov    DWORD PTR [eax+0x00],ebp  /* rta */
-    mov    DWORD PTR [eax+0x04],ebx
-    mov    DWORD PTR [eax+0x08],edi
-    mov    DWORD PTR [eax+0x0c],esi
-    mov    DWORD PTR [eax+0x10],esp
-    mov    DWORD PTR [eax+0x14],edx
+    mov    eax,DWORD PTR [esp+4]
+    mov    edx,DWORD PTR [esp+0]
+    mov    DWORD PTR [eax+0],ebp  /* rta */
+    mov    DWORD PTR [eax+4],ebx
+    mov    DWORD PTR [eax+8],edi
+    mov    DWORD PTR [eax+12],esi
+    mov    DWORD PTR [eax+16],esp
+    mov    DWORD PTR [eax+20],edx
     xor    eax,eax
     ret
 END(jl_setjmp)
