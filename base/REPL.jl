@@ -256,7 +256,8 @@ function history_prev(s::LineEdit.MIState,hist::REPLHistoryProvider)
         hist.cur_idx-=1
         LineEdit.transition(s,hist.mode_mapping[hist.modes[hist.cur_idx]])
         LineEdit.replace_line(s,hist.history[hist.cur_idx])
-        LineEdit.refresh_line(s)
+        LineEdit.move_input_start(s)
+        LineEdit.move_line_end(s)
     else
         Terminals.beep(LineEdit.terminal(s))
     end
@@ -268,23 +269,23 @@ function history_next(s::LineEdit.MIState,hist::REPLHistoryProvider)
         hist.cur_idx+=1
         LineEdit.transition(s,hist.mode_mapping[hist.modes[hist.cur_idx]])
         LineEdit.replace_line(s,hist.history[hist.cur_idx])
-        LineEdit.refresh_line(s)
+        LineEdit.move_input_end(s)
     elseif hist.cur_idx == length(hist.history)
         hist.cur_idx+=1
         buf = hist.last_buffer
         hist.last_buffer = IOBuffer()
         LineEdit.transition(s,hist.last_mode)
         LineEdit.replace_line(s,buf)
-        LineEdit.refresh_line(s)
+        LineEdit.move_input_end(s)
     elseif 0 < hist.last_idx < length(hist.history)
-        # issue #6321
+        # issue #6312
         hist.cur_idx = hist.last_idx + 1
         hist.last_idx = -1
         hist.last_mode = LineEdit.mode(s)
         hist.last_buffer = copy(LineEdit.buffer(s))
         LineEdit.transition(s,hist.mode_mapping[hist.modes[hist.cur_idx]])
         LineEdit.replace_line(s,hist.history[hist.cur_idx])
-        LineEdit.refresh_line(s)
+        LineEdit.move_input_end(s)
     else
         Terminals.beep(LineEdit.terminal(s))
     end

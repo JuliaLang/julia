@@ -545,7 +545,7 @@ function history_prev(s,hist)
     (l,ok) = history_prev(mode(s).hist)
     if ok
         replace_line(s,l)
-        refresh_line(s)
+        move_input_start(s)
     else
         beep(LineEdit.terminal(s))
     end
@@ -554,7 +554,7 @@ function history_next(s,hist)
     (l,ok) = history_next(mode(s).hist)
     if ok
         replace_line(s,l)
-        refresh_line(s)
+        move_input_end(s)
     else
         beep(LineEdit.terminal(s))
     end
