@@ -16,7 +16,7 @@ import Base.Terminals: raw!
 import Base.LineEdit: CompletionProvider,
                       HistoryProvider,
                       add_history,
-                      completeLine,
+                      complete_line,
                       history_prev,
                       history_next,
                       history_search
@@ -162,13 +162,13 @@ type ShellCompletionProvider <: CompletionProvider
     r::LineEditREPL
 end
 
-function completeLine(c::REPLCompletionProvider,s)
+function complete_line(c::REPLCompletionProvider,s)
     partial = bytestring(s.input_buffer.data[1:position(s.input_buffer)])
     ret, range, should_complete = completions(partial,endof(partial))
     return (ret, partial[range], should_complete)
 end
 
-function completeLine(c::ShellCompletionProvider,s)
+function complete_line(c::ShellCompletionProvider,s)
     # First parse everything up to the current position
     partial = bytestring(s.input_buffer.data[1:position(s.input_buffer)])
     ret, range, should_complete = shell_completions(partial,endof(partial))
