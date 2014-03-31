@@ -248,8 +248,8 @@ getindex(A::Array, i0::Real, i1::Real, i2::Real, i3::Real,  i4::Real, i5::Real) 
 getindex(A::Array, i0::Real, i1::Real, i2::Real, i3::Real,  i4::Real, i5::Real, I::Real...) =
     arrayref(A,to_index(i0),to_index(i1),to_index(i2),to_index(i3),to_index(i4),to_index(i5),to_index(I)...)
 
-# Fast copy using copy! for Range1
-function getindex(A::Array, I::Range1{Int})
+# Fast copy using copy! for UnitRange
+function getindex(A::Array, I::UnitRange{Int})
     lI = length(I)
     X = similar(A, lI)
     if lI > 0
@@ -316,7 +316,7 @@ function setindex!{T<:Real}(A::Array, x, I::AbstractVector{T})
     return A
 end
 
-function setindex!{T}(A::Array{T}, X::Array{T}, I::Range1{Int})
+function setindex!{T}(A::Array{T}, X::Array{T}, I::UnitRange{Int})
     if length(X) != length(I)
         throw_setindex_mismatch(X, (I,))
     end
@@ -545,7 +545,7 @@ function deleteat!(a::Vector, i::Integer)
     return _deleteat!(a, i, 1)
 end
 
-function deleteat!{T<:Integer}(a::Vector, r::Range1{T})
+function deleteat!{T<:Integer}(a::Vector, r::UnitRange{T})
     n = length(a)
     f = first(r)
     l = last(r)
@@ -599,7 +599,7 @@ function splice!(a::Vector, i::Integer, ins::AbstractArray=_default_splice)
     return v
 end
 
-function splice!{T<:Integer}(a::Vector, r::Range1{T}, ins::AbstractArray=_default_splice)
+function splice!{T<:Integer}(a::Vector, r::UnitRange{T}, ins::AbstractArray=_default_splice)
     v = a[r]
     m = length(ins)
     if m == 0
@@ -1157,7 +1157,7 @@ function indexin{T}(a::AbstractArray{T}, b::AbstractArray{T})
 end
 
 # findin (the index of intersection)
-function findin(a, b::Range1)
+function findin(a, b::UnitRange)
     ind = Array(Int, 0)
     f = first(b)
     l = last(b)

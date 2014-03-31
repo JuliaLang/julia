@@ -286,6 +286,9 @@ Deprecated or removed
 
   * `*` and `div` are no longer supported for `Char`.
 
+  * `Range` is renamed `StepRange` and `Range1` is renamed `UnitRange`.
+    `Ranges` is renamed `Range`.
+
 [#4042]: https://github.com/JuliaLang/julia/issues/4042
 [#5164]: https://github.com/JuliaLang/julia/issues/5164
 [#4026]: https://github.com/JuliaLang/julia/issues/4026

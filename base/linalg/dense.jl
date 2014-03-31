@@ -13,7 +13,7 @@ isposdef{T<:Number}(A::Matrix{T}, UL::Char) = isposdef!(float64(A), UL)
 isposdef{T<:Number}(A::Matrix{T}) = isposdef!(float64(A))
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
 
-function norm{T<:BlasFloat, TI<:Integer}(x::StridedVector{T}, rx::Union(Range1{TI},Range{TI}))
+function norm{T<:BlasFloat, TI<:Integer}(x::StridedVector{T}, rx::Union(UnitRange{TI},Range{TI}))
     (minimum(rx) < 1 || maximum(rx) > length(x)) && throw(BoundsError())
     BLAS.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
 end
