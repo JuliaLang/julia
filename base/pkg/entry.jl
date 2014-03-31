@@ -28,10 +28,7 @@ function edit(f::Function, pkg::String, args...)
 end
 
 function edit()
-    editor = get(ENV,"VISUAL",get(ENV,"EDITOR",nothing))
-    editor != nothing ||
-        error("set the EDITOR environment variable to an edit command")
-    editor = Base.shell_split(editor)
+    editor = Base.shell_split(Base.find_editor())
     reqs = Reqs.parse("REQUIRE")
     run(`$editor REQUIRE`)
     reqsʹ = Reqs.parse("REQUIRE")
