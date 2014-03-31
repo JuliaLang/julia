@@ -1072,9 +1072,8 @@ function getindex(x::StateUpdate, s::Symbol)
     return get(x.state,s,NF)
 end
 
-abstract_interpret(e, vtypes, sv::StaticVarInfo) = vtypes
-
-function abstract_interpret(e::Expr, vtypes, sv::StaticVarInfo)
+function abstract_interpret(e::ANY, vtypes, sv::StaticVarInfo)
+    !isa(e,Expr) && return vtypes
     # handle assignment
     if is(e.head,:(=))
         t = abstract_eval(e.args[2], vtypes, sv)
