@@ -313,7 +313,8 @@ static value_t fl_path_cwd(value_t *args, uint32_t nargs)
         argcount("path.cwd", nargs, 1);
     if (nargs == 0) {
         char buf[1024];
-        err = uv_cwd(buf, sizeof(buf));
+        size_t len = sizeof(buf);
+        err = uv_cwd(buf, &len);
         if (err != 0)
           lerrorf(IOError, "path.cwd: could not get cwd: %s", uv_strerror(err));
         return string_from_cstr(buf);
