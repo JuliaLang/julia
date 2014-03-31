@@ -634,7 +634,7 @@ const limit_tuple_type_n = function (t::Tuple, lim::Int)
 end
 
 function abstract_call_gf(f, fargs, argtypes, e)
-    if length(argtypes)>1 && isa(argtypes[1],Tuple) && argtypes[2]===Int
+    if length(argtypes)>1 && (argtypes[1] <: Tuple) && argtypes[2]===Int
         # allow tuple indexing functions to take advantage of constant
         # index arguments.
         if f === Main.Base.getindex
@@ -1072,9 +1072,8 @@ function getindex(x::StateUpdate, s::Symbol)
     return get(x.state,s,NF)
 end
 
-abstract_interpret(e, vtypes, sv::StaticVarInfo) = vtypes
-
-function abstract_interpret(e::Expr, vtypes, sv::StaticVarInfo)
+function abstract_interpret(e::ANY, vtypes, sv::StaticVarInfo)
+    !isa(e,Expr) && return vtypes
     # handle assignment
     if is(e.head,:(=))
         t = abstract_eval(e.args[2], vtypes, sv)
@@ -2030,7 +2029,14 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
     if !is(mfrom, mto)
         expr = resolve_globals(expr, mfrom, mto, args, spnames)
     end
-    return (sym_replace(expr, args, spnames, argexprs, spvals), stmts)
+    expr = sym_replace(expr, args, spnames, argexprs, spvals)
+    if isa(expr,Expr)
+        old_t = e.typ
+        if old_t <: expr.typ
+            expr.typ = old_t
+        end
+    end
+    return (expr, stmts)
 end
 
 const top_tupleref = TopNode(:tupleref)

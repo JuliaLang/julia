@@ -149,6 +149,36 @@ let s = 0
         @test s <= 2
     end
     @test s == 2
+
+    # loops covering the full range of smaller integer types
+    s = 0
+    for i = typemin(Uint8):typemax(Uint8)
+        s += 1
+    end
+    @test s == 256
+
+    # loops past typemax(Int)
+    n = 0
+    s = int128(0)
+    for i = typemax(Uint64)-2:typemax(Uint64)
+        n += 1
+        s += i
+    end
+    @test n == 3
+    @test s == 3*int128(typemax(Uint64)) - 3
+
+    # loops over empty ranges
+    s = 0
+    for i = 0xff:0x00
+        s += 1
+    end
+    @test s == 0
+
+    s = 0
+    for i = int128(typemax(Int128)):int128(typemin(Int128))
+        s += 1
+    end
+    @test s == 0
 end
 
 # sums (see #5798)
@@ -160,7 +190,7 @@ else
     @test sum(int64(1:10^9-1)) == div(10^9 * (int64(10^9)-1), 2)
 end
 
-# with ranges
+# operations between ranges and arrays
 @test all(([1:5] + (5:-1:1)) .== 6)
 @test all(((5:-1:1) + [1:5]) .== 6)
 @test all(([1:5] - (1:5)) .== 0)

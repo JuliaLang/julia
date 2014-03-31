@@ -271,9 +271,8 @@ function translate_indexes(s::SubArray, I::Union(Real,AbstractArray)...)
     for i = 1:n-havelinear
         newindexes[pdims[i]] = s.indexes[pdims[i]][I[i]]
     end
-    lastdim = pdims[n]
     if havelinear
-        newindexes = newindexes[1:lastdim]
+        newindexes = newindexes[1:pdims[n]]
         newindexes[pdims[n]] = translate_linear_indexes(s, n, I[end], pdims)
     end
     newindexes
@@ -388,11 +387,11 @@ end
 
 # to avoid ambiguity warning
 function setindex!(s::SubArray, v, I::Real)
-    newindexes = translate_indexes(s, (I,))
+    newindexes = translate_indexes(s, (to_index(I),))
     setindex!(s.parent, v, newindexes...)
 end
 function setindex!(s::SubArray, v, I::Union(Real,AbstractArray)...)
-    newindexes = translate_indexes(s, I...)
+    newindexes = translate_indexes(s, to_index(I)...)
     setindex!(s.parent, v, newindexes...)
 end
 

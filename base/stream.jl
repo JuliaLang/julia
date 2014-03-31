@@ -885,11 +885,9 @@ dup(src::RawFD,target::RawFD) = systemerror("dup",-1==
     (Int32,Int32),src.fd,target.fd))
 
 @unix_only _fd(x::AsyncStream) = RawFD(
-    ccall(:jl_uv_pipe_fd,Int32,(Ptr{Void},),x.handle))
-@windows_only _fd(x::Pipe) = WindowsRawSocket(
-    ccall(:jl_uv_pipe_handle,Ptr{Void},(Ptr{Void},),x.handle))
-@windows_only _fd(x::TTY) = WindowsRawSocket(
-    ccall(:jl_uv_tty_handle,Ptr{Void},(Ptr{Void},),x.handle))
+    ccall(:jl_uv_handle,Int32,(Ptr{Void},),x.handle))
+@windows_only _fd(x::AsyncStream) = WindowsRawSocket(
+    ccall(:jl_uv_handle,Ptr{Void},(Ptr{Void},),x.handle))
 
 for (x,writable,unix_fd,c_symbol) in ((:STDIN,false,0,:jl_uv_stdin),(:STDOUT,true,1,:jl_uv_stdout),(:STDERR,true,2,:jl_uv_stderr))
     f = symbol("redirect_"*lowercase(string(x)))

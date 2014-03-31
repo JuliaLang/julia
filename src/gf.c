@@ -1279,12 +1279,16 @@ jl_function_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t na
     return sf;
 }
 
+void jl_add_constructors(jl_datatype_t *t);
+
 // compile-time method lookup
 jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types)
 {
-    assert(jl_is_gf(f));
     if (!jl_is_leaf_type((jl_value_t*)types))
         return NULL;
+    if (f->fptr == jl_f_ctor_trampoline)
+        jl_add_constructors((jl_datatype_t*)f);
+    assert(jl_is_gf(f));
     jl_methtable_t *mt = jl_gf_mtable(f);
     jl_function_t *sf = jl_method_lookup_by_type(mt, types, 1, 1);
     if (sf == jl_bottom_func) {
@@ -1606,8 +1610,6 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
     JL_GC_POP();
     return (jl_value_t*)t;
 }
-
-void jl_add_constructors(jl_datatype_t *t);
 
 // return a cell array of tuples, each describing a method match:
 // {(t, spvals, li, cenv), ...}

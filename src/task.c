@@ -16,7 +16,7 @@
 #include <winbase.h>
 #include <malloc.h>
 #include <dbghelp.h>
-static volatile int in_stackwalk = 0;
+volatile int jl_in_stackwalk = 0;
 #else
 #include <unistd.h>
 // This gives unwind only local unwinding options ==> faster code
@@ -451,24 +451,24 @@ static void init_task(jl_task_t *t)
 ptrint_t bt_data[MAX_BT_SIZE+1];
 size_t bt_size = 0;
 
-void getFunctionInfo(const char **name, int *line, const char **filename, size_t pointer);
+void jl_getFunctionInfo(const char **name, int *line, const char **filename, size_t pointer);
 
 static const char* name_unknown = "???";
 static int frame_info_from_ip(const char **func_name, int *line_num, const char **file_name, size_t ip, int doCframes)
 {
     int fromC = 0;
 
-    getFunctionInfo(func_name, line_num, file_name, ip);
+    jl_getFunctionInfo(func_name, line_num, file_name, ip);
     if (*func_name == NULL && doCframes) {
         fromC = 1;
 #if defined(_OS_WINDOWS_)
-        if (in_stackwalk) {
+        if (jl_in_stackwalk) {
             *func_name = name_unknown;
             *file_name = name_unknown;
             *line_num = ip;
         }
         else {
-            in_stackwalk = 1;
+            jl_in_stackwalk = 1;
             DWORD64 dwDisplacement64 = 0;
             DWORD64 dwAddress = ip;
 
@@ -504,7 +504,7 @@ static int frame_info_from_ip(const char **func_name, int *line_num, const char 
                 //DWORD error = GetLastError();
                 //printf("SymGetLineFromAddr64 returned error : %d\n", error);
             }
-            in_stackwalk = 0;
+            jl_in_stackwalk = 0;
         }
 #else
         Dl_info dlinfo;
@@ -537,23 +537,23 @@ DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize)
 {
     CONTEXT Context;
     memset(&Context, 0, sizeof(Context));
-    in_stackwalk = 1;
+    jl_in_stackwalk = 1;
     RtlCaptureContext(&Context);
-    in_stackwalk = 0;
+    jl_in_stackwalk = 0;
     return rec_backtrace_ctx(data, maxsize, &Context);
 }
 DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Context)
 {
-    if (in_stackwalk) {
+    if (jl_in_stackwalk) {
         return 0;
     }
     STACKFRAME64 stk;
     memset(&stk, 0, sizeof(stk));
 
     if (needsSymRefreshModuleList && hSymRefreshModuleList != 0) {
-        in_stackwalk = 1;
+        jl_in_stackwalk = 1;
         hSymRefreshModuleList(GetCurrentProcess());
-        in_stackwalk = 0;
+        jl_in_stackwalk = 0;
         needsSymRefreshModuleList = 0;
     }
 #if defined(_CPU_X86_64_) 
@@ -576,10 +576,10 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Cont
     size_t n = 0;
     intptr_t lastsp = stk.AddrStack.Offset;
     while (n < maxsize) {
-        in_stackwalk = 1;
+        jl_in_stackwalk = 1;
         BOOL result = StackWalk64(MachineType, GetCurrentProcess(), hMainThread,
             &stk, Context, NULL, SymFunctionTableAccess64, SymGetModuleBase64, NULL);
-        in_stackwalk = 0;
+        jl_in_stackwalk = 0;
         data[n++] = (intptr_t)stk.AddrPC.Offset;
         intptr_t sp = (intptr_t)stk.AddrStack.Offset;
         if (!result || sp == 0 || 

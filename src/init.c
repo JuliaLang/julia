@@ -319,6 +319,7 @@ EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord, 
 
     return rval;
 } 
+void* CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserContext);
 #endif
 
 #else // #ifdef _OS_WINDOWS_
@@ -657,10 +658,15 @@ void julia_init(char *imageFile)
     if (!DuplicateHandle(GetCurrentProcess(), GetCurrentThread(),
                          GetCurrentProcess(), (PHANDLE)&hMainThread, 0,
                          TRUE, DUPLICATE_SAME_ACCESS)) {
-        JL_PRINTF(JL_STDERR, "Couldn't access handle to main thread\n");
+        JL_PRINTF(JL_STDERR, "WARNING: failed to access handle to main thread\n");
     }
     SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
-    SymInitialize(GetCurrentProcess(), NULL, 1);
+    if (!SymInitialize(GetCurrentProcess(), NULL, 1)) {
+        JL_PRINTF(JL_STDERR, "WARNING: failed to initalize stack walk info\n");
+    }
+#if defined(_CPU_X86_64_)
+    if (!SymRegisterFunctionEntryCallback64(GetCurrentProcess(), jl_getUnwindInfo, 0)) JL_PRINTF(JL_STDERR, "WARNING: failed to install backtrace info callback\n");
+#endif
     needsSymRefreshModuleList = 0;
     uv_lib_t jl_dbghelp;
     uv_dlopen("dbghelp.dll",&jl_dbghelp);

@@ -22,8 +22,6 @@
 /openblas-*
 /patchelf-*
 /pcre-*
-/readline-*
-!readline-win.h
 /root
 /SuiteSparse-*
 /zlib-*
