@@ -136,9 +136,6 @@ void __attribute__(()) __stack_chk_fail()
 static LLVMContext &jl_LLVMContext = getGlobalContext();
 static IRBuilder<> builder(getGlobalContext());
 static bool nested_compile=false;
-#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3
-static TargetMachine *jl_TargetMachine;
-#endif
 static ExecutionEngine *jl_ExecutionEngine;
 static TargetMachine *jl_TargetMachine;
 #ifdef USE_MCJIT
@@ -4233,9 +4230,7 @@ extern "C" void jl_init_codegen(void)
 #else
         .setMAttrs(attrvec);
 #endif
-#if LLVM_VERSION_MINOR >= 3
     jl_TargetMachine = eb.selectTarget();
-#endif
     jl_ExecutionEngine = eb.create(jl_TargetMachine);
 #endif // LLVM VERSION
     jl_ExecutionEngine->DisableLazyCompilation();
