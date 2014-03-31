@@ -282,7 +282,9 @@ end
 # convert to integer index
 to_index(i::Int) = i
 to_index(i::Real) = convert(Int, i)
+to_index(r::UnitRange{Int}) = r
 to_index(r::Range{Int}) = r
+to_index(I::UnitRange{Bool}) = find(I)
 to_index(I::Range{Bool}) = find(I)
 to_index{T<:Real}(r::UnitRange{T}) = to_index(first(r)):to_index(last(r))
 to_index{T<:Real}(r::StepRange{T}) = to_index(first(r)):to_index(step(r)):to_index(last(r))
