@@ -189,20 +189,20 @@ end
 # contiguous multidimensional indexing: if the first dimension is a range,
 # we can get some performance from using copy_chunks!
 
-function unsafe_getindex(B::BitArray, I0::Range1{Int})
+function unsafe_getindex(B::BitArray, I0::UnitRange{Int})
     X = BitArray(length(I0))
     copy_chunks!(X.chunks, 1, B.chunks, first(I0), length(I0))
     return X
 end
 
-function getindex(B::BitArray, I0::Range1{Int})
+function getindex(B::BitArray, I0::UnitRange{Int})
     checkbounds(B, I0)
     return unsafe_getindex(B, I0)
 end
 
-getindex{T<:Real}(B::BitArray, I0::Range1{T}) = getindex(B, to_index(I0))
+getindex{T<:Real}(B::BitArray, I0::UnitRange{T}) = getindex(B, to_index(I0))
 
-@ngenerate N BitArray{length(index_shape(I0, I...))} function unsafe_getindex(B::BitArray, I0::Range1{Int}, I::NTuple{N,Union(Int,Range1{Int})}...)
+@ngenerate N BitArray{length(index_shape(I0, I...))} function unsafe_getindex(B::BitArray, I0::UnitRange{Int}, I::NTuple{N,Union(Int,UnitRange{Int})}...)
     X = BitArray(index_shape(I0, I...))
 
     f0 = first(I0)
@@ -285,7 +285,7 @@ end
 # contiguous multidimensional indexing: if the first dimension is a range,
 # we can get some performance from using copy_chunks!
 
-function unsafe_setindex!(B::BitArray, X::BitArray, I0::Range1{Int})
+function unsafe_setindex!(B::BitArray, X::BitArray, I0::UnitRange{Int})
     l0 = length(I0)
     l0 == 0 && return B
     f0 = first(I0)
@@ -293,7 +293,7 @@ function unsafe_setindex!(B::BitArray, X::BitArray, I0::Range1{Int})
     return B
 end
 
-function unsafe_setindex!(B::BitArray, x::Bool, I0::Range1{Int})
+function unsafe_setindex!(B::BitArray, x::Bool, I0::UnitRange{Int})
     l0 = length(I0)
     l0 == 0 && return B
     f0 = first(I0)
@@ -301,7 +301,7 @@ function unsafe_setindex!(B::BitArray, x::Bool, I0::Range1{Int})
     return B
 end
 
-@ngenerate N typeof(B) function unsafe_setindex!(B::BitArray, X::BitArray, I0::Range1{Int}, I::NTuple{N,Union(Int,Range1{Int})}...)
+@ngenerate N typeof(B) function unsafe_setindex!(B::BitArray, X::BitArray, I0::UnitRange{Int}, I::NTuple{N,Union(Int,UnitRange{Int})}...)
     length(X) == 0 && return B
     f0 = first(I0)
     l0 = length(I0)
@@ -329,7 +329,7 @@ end
     return B
 end
 
-@ngenerate N typeof(B) function unsafe_setindex!(B::BitArray, x::Bool, I0::Range1{Int}, I::NTuple{N,Union(Int,Range1{Int})}...)
+@ngenerate N typeof(B) function unsafe_setindex!(B::BitArray, x::Bool, I0::UnitRange{Int}, I::NTuple{N,Union(Int,UnitRange{Int})}...)
     f0 = first(I0)
     l0 = length(I0)
     l0 == 0 && return B

@@ -202,7 +202,7 @@ end
 copy(a::AbstractArray) = copy!(similar(a), a)
 copy(a::AbstractArray{None}) = a # cannot be assigned into so is immutable
 
-function copy!{R,S}(B::AbstractMatrix{R}, ir_dest::Ranges{Int}, jr_dest::Ranges{Int}, A::AbstractMatrix{S}, ir_src::Ranges{Int}, jr_src::Ranges{Int})
+function copy!{R,S}(B::AbstractMatrix{R}, ir_dest::Range{Int}, jr_dest::Range{Int}, A::AbstractMatrix{S}, ir_src::Range{Int}, jr_src::Range{Int})
     if length(ir_dest) != length(ir_src) || length(jr_dest) != length(jr_src)
         error("source and destination must have same size")
     end
@@ -220,7 +220,7 @@ function copy!{R,S}(B::AbstractMatrix{R}, ir_dest::Ranges{Int}, jr_dest::Ranges{
     return B
 end
 
-function copy_transpose!{R,S}(B::AbstractMatrix{R}, ir_dest::Ranges{Int}, jr_dest::Ranges{Int}, A::AbstractVecOrMat{S}, ir_src::Ranges{Int}, jr_src::Ranges{Int})
+function copy_transpose!{R,S}(B::AbstractMatrix{R}, ir_dest::Range{Int}, jr_dest::Range{Int}, A::AbstractVecOrMat{S}, ir_src::Range{Int}, jr_src::Range{Int})
     if length(ir_dest) != length(jr_src) || length(jr_dest) != length(ir_src)
         error("source and destination must have same size")
     end
@@ -322,7 +322,7 @@ full(x::AbstractArray) = x
 for fn in _numeric_conversion_func_names
     @eval begin
         $fn(r::StepRange) = $fn(r.start):$fn(r.step):$fn(last(r))
-        $fn(r::Range1) = $fn(r.start):$fn(last(r))
+        $fn(r::UnitRange) = $fn(r.start):$fn(last(r))
     end
 end
 
@@ -456,7 +456,7 @@ end
 
 ## get (getindex with a default value) ##
 
-typealias RangeVecIntList{A<:AbstractVector{Int}} Union((Union(Range, AbstractVector{Int})...), AbstractVector{Range1{Int}}, AbstractVector{Range{Int}}, AbstractVector{A})
+typealias RangeVecIntList{A<:AbstractVector{Int}} Union((Union(Range, AbstractVector{Int})...), AbstractVector{UnitRange{Int}}, AbstractVector{Range{Int}}, AbstractVector{A})
 
 get(A::AbstractArray, i::Integer, default) = in_bounds(length(A), i) ? A[i] : default
 get(A::AbstractArray, I::(), default) = similar(A, typeof(default), 0)

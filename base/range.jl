@@ -21,13 +21,13 @@ immutable StepRange{T,S,D} <: OrdinalRange{T,S}
         if D<:FloatingPoint || S<:FloatingPoint
             error("StepRange should not be used with floating point")
         end
-        step == 0 && error("step cannot be zero")
+        step == zero(S) && error("step cannot be zero")
         step != step && error("step cannot be NaN")
 
         start = convert(D, start)
         stop = convert(D, stop)
 
-        if (step>0 && stop<start) || (step<0 && stop>start)
+        if (step>zero(S) && stop<start) || (step<0 && stop>start)
             sentinel = start
         else
             remain = (stop - start) % step  # should be robust to overflow
@@ -48,10 +48,6 @@ immutable UnitRange{T<:Real,D} <: OrdinalRange{T,Int}
     UnitRange(start, stop) = new(start, ifelse(stop >= start, stop+1, convert(D,start)))
 end
 UnitRange{T<:Real}(start::T, stop::T) = UnitRange{T, typeof(start+1)}(start, stop)
-
-# deprecated
-export Range1
-const Range1 = UnitRange
 
 colon(a, b) = colon(promote(a,b)...)
 
@@ -238,7 +234,6 @@ end
 getindex(r::FloatRange, s::UnitRange) = r[first(s)]:step(r):r[last(s)]
 
 function show(io::IO, r::Range)
-    step(r) == 0 ? invoke(show,(IO,Any),io,r) :
     print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
 end
 show(io::IO, r::UnitRange) = print(io, repr(first(r)), ':', repr(last(r)))
