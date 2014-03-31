@@ -94,6 +94,7 @@ function test_approx_eq(va, vb, Eps, astr, bstr)
     end
 end
 
+array_eps{T}(a::AbstractArray{Complex{T}}) = eps(float(maximum(x->(isfinite(x) ? abs(x) : nan(T)), a)))
 array_eps(a) = eps(float(maximum(x->(isfinite(x) ? abs(x) : nan(x)), a)))
 
 test_approx_eq(va, vb, astr, bstr) =
