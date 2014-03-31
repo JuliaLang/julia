@@ -119,6 +119,9 @@ blocks as desired can be used. The condition expressions in the
 evaluates to ``true``, after which the associated block is evaluated,
 and no further condition expressions or blocks are evaluated.
 
+Note that very short conditional statements (one-liners) are frequently expressed using
+Short-Circuit Evaluation in Julia, as outlined in the next section.
+
 Unlike C, MATLAB, Perl, Python, and Ruby — but like Java, and a few
 other stricter, typed languages — it is an error if the value of a
 conditional expression is anything but ``true`` or ``false``:
@@ -275,6 +278,34 @@ this behavior:
 
 You can easily experiment in the same way with the associativity and
 precedence of various combinations of ``&&`` and ``||`` operators.
+
+This behavior is frequently used in Julia to form an alternative to very short
+``if`` statements. Instead of ``if <cond> <statement> end``, one can write 
+``<cond> && <statement>`` (which could be read as: <cond> *and then* <statement>).
+Similarly, instead of ``if ! <cond> <statement> end``, one can write
+``<cond> || <statement>`` (which could be read as: <cond> *or else* <statement>).
+
+For example, a recursive factorial routine could be defined like this:
+
+.. doctest::
+
+    julia> function factorial(n::Int)
+               n >= 0 || error("n must be non-negative")
+               n == 0 && return 1
+               n * factorial(n-1)
+           end
+    factorial (generic function with 1 method)
+    
+    julia> factorial(5)
+    120
+    
+    julia> factorial(0)
+    1
+    
+    julia> factorial(-1)
+    ERROR: n must be non-negative
+     in factorial at none:2
+
 
 Boolean operations *without* short-circuit evaluation can be done with the
 bitwise boolean operators introduced in :ref:`man-mathematical-operations`:
