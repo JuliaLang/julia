@@ -1475,3 +1475,10 @@ g6175(i, I...) = tuple(length(i), g6175(I...)...)
 # issue #6242
 f6242{N}(x::NTuple{N,Int})=(N==0 ? 1 : ntuple(n->x[n],N))
 @test f6242(()) === 1
+
+# issue #6292
+let i = 0
+    global g6292() = i+=1
+end
+@test g6292() == 1
+@test g6292() == 2
