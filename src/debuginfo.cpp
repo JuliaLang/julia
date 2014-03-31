@@ -12,7 +12,7 @@ struct FuncInfo{
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
 #include <dbghelp.h>
 extern "C" EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord,void *EstablisherFrame, PCONTEXT ContextRecord, void *DispatcherContext);
-extern volatile int jl_in_stackwalk;
+extern "C" volatile int jl_in_stackwalk;
 #endif
 
 struct revcomp {
