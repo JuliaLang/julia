@@ -134,7 +134,7 @@ export
     StackOverflowError, UndefRefError, UndefVarError,
     # AST representation
     Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode, SymbolNode, TopNode,
-    GetfieldNode,
+    GetfieldNode, NewvarNode,
     # object model functions
     apply, arraylen, arrayref, arrayset, arraysize, fieldtype, getfield,
     setfield!, yieldto, throw, tuple, tuplelen, tupleref, is, ===, isdefined,
