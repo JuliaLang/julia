@@ -1146,6 +1146,51 @@
 	   (expand-binding-forms (cons 'function (cdr e)))
 	   (map expand-binding-forms e)))
 
+      ((const)
+       (if (atom? (cadr e))
+	   e
+	   (case (car (cadr e))
+	     ((global local)
+	      (expand-binding-forms
+	       (qualified-const-expr (cdr (cadr e)) e)))
+	     ((=)
+	      (let ((lhs (cadr (cadr e)))
+		    (rhs (caddr (cadr e))))
+		(let ((vars (if (and (pair? lhs) (eq? (car lhs) 'tuple))
+				(cdr lhs)
+				(list lhs))))
+		  `(block
+		    ,.(map (lambda (v)
+			     `(const ,(const-check-symbol (decl-var v))))
+			   vars)
+		    ,(expand-binding-forms `(= ,lhs ,rhs))))))
+	     (else
+	      e))))
+
+      ((local global)
+       (if (and (symbol? (cadr e)) (length= e 2))
+	   e
+	   (expand-binding-forms (expand-decls (car e) (cdr e)))))
+
+      ((typealias)
+       (if (and (pair? (cadr e))
+		(eq? (car (cadr e)) 'curly))
+	   (let ((name (cadr (cadr e)))
+		 (params (cddr (cadr e)))
+		 (type-ex (caddr e)))
+	     (receive
+	      (params bounds)
+	      (sparam-name-bounds params '() '())
+	      `(call (lambda ,params
+		       (block
+			(const ,name)
+			(= ,name (call (top TypeConstructor)
+				       (call (top tuple) ,@params)
+				       ,(expand-binding-forms type-ex)))))
+		     ,@(symbols->typevars params bounds #t))))
+	   (expand-binding-forms
+	    `(const (= ,(cadr e) ,(caddr e))))))
+
       (else
        (map expand-binding-forms e))))))
 
@@ -1244,6 +1289,11 @@
 		   `(function (call ,name ,@argl) ,body))
    ))
 
+(define (assigned-name e)
+  (if (and (pair? e) (memq (car e) '(call curly)))
+      (assigned-name (cadr e))
+      e))
+
 ; local x, y=2, z => local x;local y;local z;y = 2
 (define (expand-decls what binds)
   (if (not (list? binds))
@@ -1261,7 +1311,7 @@
 	(let ((x (car b)))
 	  (cond ((and (pair? x) (memq (car x) assignment-ops))
 		 (loop (cdr b)
-		       (cons (cadr x) vars)
+		       (cons (assigned-name (cadr x)) vars)
 		       (cons `(,(car x) ,(decl-var (cadr x)) ,(caddr x))
 			     assigns)))
 		((and (pair? x) (eq? (car x) '|::|))
@@ -1554,26 +1604,6 @@
 	(receive (name params super) (analyze-type-sig sig)
 		 (bits-def-expr n name params super)))))
 
-   'typealias
-   (lambda (e)
-     (if (and (pair? (cadr e))
-	      (eq? (car (cadr e)) 'curly))
-	 (let ((name (cadr (cadr e)))
-	       (params (cddr (cadr e)))
-	       (type-ex (caddr e)))
-	   (receive
-	    (params bounds)
-	    (sparam-name-bounds params '() '())
-	    `(call (lambda ,params
-		     (block
-		      (const ,name)
-		      (= ,name (call (top TypeConstructor)
-				     (call (top tuple) ,@params)
-				     ,(expand-forms type-ex)))))
-		   ,@(symbols->typevars params bounds #t))))
-	 (expand-forms
-	  `(const (= ,(cadr e) ,(caddr e))))))
-
    'comparison
    (lambda (e)
      (expand-forms (expand-compare-chain (cdr e))))
@@ -1715,20 +1745,6 @@
    'string
    (lambda (e) (expand-forms `(call (top string) ,@(cdr e))))
 
-   'local
-   (lambda (e)
-     (if (and (symbol? (cadr e)) (length= e 2))
-	 e
-	 (expand-forms
-	  (expand-decls 'local (cdr e)))))
-
-   'global
-   (lambda (e)
-     (if (and (symbol? (cadr e)) (length= e 2))
-	 e
-	 (expand-forms
-	  (expand-decls 'global (cdr e)))))
-
    '|::|
    (lambda (e)
      (if (length= e 2)
@@ -1737,28 +1753,6 @@
 	 `(call (top typeassert)
 		,(expand-forms (cadr e)) ,(expand-forms (caddr e)))
 	 (map expand-forms e)))
-
-   'const
-   (lambda (e)
-     (if (atom? (cadr e))
-	 e
-	 (case (car (cadr e))
-	   ((global local)
-	    (expand-forms
-	     (qualified-const-expr (cdr (cadr e)) e)))
-	   ((=)
-	    (let ((lhs (cadr (cadr e)))
-		  (rhs (caddr (cadr e))))
-	      (let ((vars (if (and (pair? lhs) (eq? (car lhs) 'tuple))
-			      (cdr lhs)
-			      (list lhs))))
-		`(block
-		  ,.(map (lambda (v)
-			   `(const ,(const-check-symbol (decl-var v))))
-			 vars)
-		  ,(expand-forms `(= ,lhs ,rhs))))))
-	   (else
-	    e))))
 
    'while
    (lambda (e)
