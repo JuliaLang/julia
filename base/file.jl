@@ -4,7 +4,7 @@ function pwd()
     b = Array(Uint8,1024)
     len = Csize_t[length(b),]
     uv_error(:getcwd, ccall(:uv_cwd, Cint, (Ptr{Uint8}, Ptr{Csize_t}), b, len))
-    bytestring(b[1:len[1]])
+    bytestring(b[1:len[1]-1])
 end
 
 function cd(dir::String) 
