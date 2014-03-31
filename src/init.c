@@ -317,8 +317,10 @@ EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord, 
             rval = ExceptionContinueExecution; break;
         case EXCEPTION_CONTINUE_SEARCH:
             rval = ExceptionContinueSearch; break;
+#ifndef _MSC_VER
         case EXCEPTION_EXECUTE_HANDLER:
             rval = ExceptionExecuteHandler; break;
+#endif
     }
 
     return rval;
