@@ -975,6 +975,7 @@ function move_line_end(s)
 end
 
 function commit_line(s)
+    LineEdit.move_input_end(s)
     println(LineEdit.terminal(s))
     LineEdit.add_history(s)
     LineEdit.state(s,LineEdit.mode(s)).ias =
@@ -1008,7 +1009,6 @@ const default_keymap =
     # Enter
     '\r' => quote
         if LineEdit.on_enter(s)
-            LineEdit.move_input_end(s)
             LineEdit.commit_line(s)
             return :done
         else
