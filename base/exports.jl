@@ -112,6 +112,7 @@ export
     TmStruct,
     Triangular,
     Tridiagonal,
+    UnitRange,
     UTF16String,
     UTF32String,
     VecOrMat,

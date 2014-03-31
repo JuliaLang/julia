@@ -388,6 +388,9 @@ const Stat = StatStruct
 export CharString
 const CharString = UTF32String
 
+export Ranges
+const Ranges = Range
+
 @deprecate set_rounding(r::RoundingMode) set_rounding(Float64,r)
 @deprecate get_rounding() get_rounding(Float64)
 @deprecate with_rounding(f::Function, r::RoundingMode) with_rounding(f::Function, Float64, r)

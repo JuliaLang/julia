@@ -149,14 +149,14 @@ immutable RandIntGen{T<:Integer, U<:Unsigned}
     RandIntGen(a::T, k::U) = new(a, k, div(typemax(U),k)*k)
 end
 
-RandIntGen{T<:Unsigned}(r::Range1{T}) = RandIntGen{T,T}(first(r), convert(T, length(r)))
+RandIntGen{T<:Unsigned}(r::UnitRange{T}) = RandIntGen{T,T}(first(r), convert(T, length(r)))
 
 # specialized versions
 for (T, U) in [(Uint8, Uint32), (Uint16, Uint32), (Int8, Uint32), (Int16, Uint32), 
                (Int32, Uint32), (Int64, Uint64), (Int128, Uint128), 
                (Bool, Uint32), (Char, Uint32)]
 
-    @eval RandIntGen(r::Range1{$T}) = RandIntGen{$T, $U}(first(r), convert($U, length(r)))
+    @eval RandIntGen(r::UnitRange{$T}) = RandIntGen{$T, $U}(first(r), convert($U, length(r)))
 end
 
 function rand{T<:Integer,U<:Unsigned}(g::RandIntGen{T,U})
@@ -167,7 +167,7 @@ function rand{T<:Integer,U<:Unsigned}(g::RandIntGen{T,U})
     convert(T, g.a + rem(x, g.k))
 end
 
-rand{T<:Union(Signed,Unsigned,Bool,Char)}(r::Range1{T}) = rand(RandIntGen(r))
+rand{T<:Union(Signed,Unsigned,Bool,Char)}(r::UnitRange{T}) = rand(RandIntGen(r))
 rand{T<:Real}(r::Range{T}) = convert(T, first(r) + rand(0:(length(r)-1)) * step(r))
 
 function rand!(g::RandIntGen, A::AbstractArray)
