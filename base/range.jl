@@ -41,18 +41,18 @@ end
 StepRange{T,S}(start::T, step::S, stop::T) =
     StepRange{T, S, typeof(start+step)}(start, step, stop)
 
-immutable UnitRange{T<:Real,D} <: OrdinalRange{T,Int}
-    start::D
-    sentinel::D
+immutable UnitRange{T<:Real} <: OrdinalRange{T,Int}
+    start::T
+    stop::T
 
-    UnitRange(start, stop) = new(start, ifelse(stop >= start, stop+1, convert(D,start)))
+    UnitRange(start, stop) = new(start, ifelse(stop >= start, stop, start-1))
 end
-UnitRange{T<:Real}(start::T, stop::T) = UnitRange{T, typeof(start+1)}(start, stop)
+UnitRange{T<:Real}(start::T, stop::T) = UnitRange{T}(start, stop)
 
 colon(a, b) = colon(promote(a,b)...)
 
 colon{T<:Real}(start::T, stop::T) = UnitRange(start, stop)
-range(a::Real, len::Integer) = UnitRange{typeof(a), typeof(a+len-1)}(a, a+len-1)
+range(a::Real, len::Integer) = UnitRange{typeof(a)}(a, a+len-1)
 
 colon{T}(start::T, stop::T) = StepRange(start, one(stop-start), stop)
 range{T}(a::T, len::Integer) =
@@ -145,26 +145,28 @@ similar(r::Range, T::Type, dims::Dims) = Array(T, dims)
 
 size(r::Range) = (length(r),)
 
+isempty(r::StepRange) = r.start == r.sentinel
+isempty(r::UnitRange) = r.start > r.stop
 isempty(r::FloatRange) = length(r)==0
-isempty(r::OrdinalRange) = r.start == r.sentinel
 
 step(r::StepRange) = r.step
-step(r::UnitRange) = one(r.sentinel - r.start)
+step(r::UnitRange) = 1
 step(r::FloatRange) = r.step/r.divisor
 
 length(r::StepRange) = integer(div(r.sentinel - r.start, r.step))
-length(r::UnitRange) = integer(r.sentinel - r.start)
+length(r::UnitRange) = integer(r.stop - r.start + 1)
 length(r::FloatRange) = integer(r.len)
 
 length{T<:Union(Int,Uint)}(r::StepRange{T}) =
     checked_add(div(checked_sub(r.sentinel-r.step, r.start), r.step), one(T))
 length{T<:Union(Int,Uint)}(r::UnitRange{T}) =
-    checked_add(checked_sub(r.sentinel-one(T), r.start), one(T))
+    checked_add(checked_sub(r.stop, r.start), one(T))
 
 first{T}(r::OrdinalRange{T}) = oftype(T, r.start)
 first(r::FloatRange) = r.start/r.divisor
 
-last{T}(r::OrdinalRange{T}) = oftype(T, r.sentinel-step(r))
+last{T}(r::StepRange{T}) = oftype(T, r.sentinel-step(r))
+last(r::UnitRange) = r.stop
 last{T}(r::FloatRange{T}) = oftype(T, (r.start + (r.len-1)*r.step)/r.divisor)
 
 minimum(r::UnitRange) = isempty(r) ? error("range must be non-empty") : first(r)
@@ -185,11 +187,13 @@ start(r::FloatRange) = 0
 next{T}(r::FloatRange{T}, i) = (oftype(T, (r.start + i*r.step)/r.divisor), i+1)
 done(r::FloatRange, i) = (length(r) <= i)
 
-start(r::OrdinalRange) = r.start
-next{T}(r::OrdinalRange{T}, i) = (oftype(T,i), i+step(r))
-done(r::OrdinalRange, i) = i==r.sentinel
+start(r::StepRange) = r.start
+next{T}(r::StepRange{T}, i) = (oftype(T,i), i+step(r))
+done(r::StepRange, i) = i==r.sentinel
 
-next{T,D}(r::UnitRange{T,D}, i) = (oftype(T,i), oftype(D, i+1))
+start(r::UnitRange) = oftype(r.start+1, r.start)
+next{T}(r::UnitRange{T}, i) = (oftype(T,i), i+1)
+done(r::OrdinalRange, i) = i==oftype(i,r.stop)+1
 
 
 ## indexing
