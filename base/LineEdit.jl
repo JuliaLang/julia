@@ -72,7 +72,7 @@ terminal(s::PromptState) = s.terminal
 
 for f in [:terminal,:edit_insert,:on_enter,:add_history,:buffer,:edit_backspace,:(Base.isempty),
         :replace_line,:refreshMultiLine,:input_string,:completeLine,:edit_move_left,:edit_move_right,
-        :update_display_buffer]
+        :edit_move_word_left,:edit_move_word_right,:update_display_buffer]
     @eval ($f)(s::MIState,args...) = $(f)(s.mode_state[s.current_mode],args...)
 end
 
@@ -297,6 +297,13 @@ function edit_move_left(s::PromptState)
     end
 end
 
+function edit_move_word_left(s)
+    if position(s.input_buffer) > 0
+        char_move_word_left(s.input_buffer)
+        refresh_line(s)
+    end
+end
+
 char_move_right(s) = char_move_right(buffer(s))
 function char_move_right(buf::IOBuffer)
     while position(buf) != buf.size
@@ -312,7 +319,14 @@ function char_move_right(buf::IOBuffer)
 end
 
 function char_move_word_right(buf::IOBuffer)
-    while !eof(buf) && !isspace(read(buf,Char))
+    while !eof(buf) && isspace(read(buf,Char))
+    end
+    while !eof(buf)
+        c = peek(buf)
+        if isspace(char(c))
+            break
+        end
+        read(buf,Char)
     end
 end
 
@@ -341,6 +355,13 @@ function edit_move_right(s)
     if position(s.input_buffer)!=s.input_buffer.size
         #move to the next UTF8 character to the right
         char_move_right(s)
+        refresh_line(s)
+    end
+end
+
+function edit_move_word_right(s)
+    if position(s.input_buffer)!=s.input_buffer.size
+        char_move_word_right(s)
         refresh_line(s)
     end
 end
@@ -488,6 +509,20 @@ function edit_delete_prev_word(buf::IOBuffer)
 end
 function edit_delete_prev_word(s)
     edit_delete_prev_word(buffer(s)) && refresh_line(s)
+end
+
+function edit_delete_next_word(buf::IOBuffer)
+    pos0 = position(buf)
+    char_move_word_right(buf)
+    pos1 = position(buf)
+    pos0 < pos1 || return false
+    seek(buf,pos0)
+    memmove(buf, pos0+1, buf, pos1+1, buf.size-pos1)
+    buf.size -= pos1 - pos0
+    true
+end
+function edit_delete_next_word(s)
+    edit_delete_next_word(buffer(s)) && refresh_line(s)
 end
 
 function replace_line(s::PromptState,l::IOBuffer)
@@ -997,6 +1032,10 @@ const default_keymap =
     2 => edit_move_left,
     # ^F
     6 => edit_move_right,
+    # Meta B
+    "\eb" => edit_move_word_left,
+    # Meta F
+    "\ef" => edit_move_word_right,
     # Meta Enter
     "\e\r" => :(LineEdit.edit_insert(s,'\n')),
     # Simply insert it into the buffer by default
@@ -1016,6 +1055,8 @@ const default_keymap =
     12 => :( Terminals.clear(LineEdit.terminal(s)); LineEdit.refresh_line(s) ),
     # ^W
     23 => edit_delete_prev_word,
+    # Meta D
+    "\ed" => edit_delete_next_word,
     # ^C
     "^C" => s->begin
         move_input_end(s);
