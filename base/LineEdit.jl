@@ -1019,6 +1019,9 @@ const default_keymap =
     # Backspace/^H
     '\b' => edit_backspace,
     127 => '\b',
+    # Meta Backspace
+    "\e\b" => edit_delete_prev_word,
+    "\e\x7f" => "\e\b",
     # ^D
     4 => quote
         if LineEdit.buffer(s).size > 0
