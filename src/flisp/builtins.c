@@ -316,7 +316,7 @@ static value_t fl_path_cwd(value_t *args, uint32_t nargs)
         size_t len = sizeof(buf);
         err = uv_cwd(buf, &len);
         if (err != 0)
-          lerrorf(IOError, "path.cwd: could not get cwd: %s", uv_strerror(err));
+            lerrorf(IOError, "path.cwd: could not get cwd: %s", uv_strerror(err));
         return string_from_cstr(buf);
     }
     char *ptr = tostring(args[0], "path.cwd");
