@@ -147,7 +147,7 @@ function parse_input_line(io::IO)
     while !eof(io)
         s = s*readline(io)
         e = parse_input_line(s)
-        if !(isa(e,Expr) && e.head === :incomplete)
+        if !(isa(e,Expr) && e.head in incomplete_tags)
             return e
         end
     end

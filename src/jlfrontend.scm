@@ -4,19 +4,30 @@
 (load "julia-parser.scm")
 (load "julia-syntax.scm")
 
+(define incomplete-tags
+  '(("?" incomplete) ("block" incomplete_block) ("char" incomplete_char)
+    ("cmd" incomplete_cmd) ("#=" incomplete_comment) ("string" incomplete_string)))
+
+(define (incomplete-pfx tag)
+  (string "incomplete [" tag "]:"))
+
 ;; exception handler for parser. turns known errors into special expressions,
 ;; and prevents throwing an exception past a C caller.
 (define (parser-wrap thk)
   (with-exception-catcher
    (lambda (e)
      (if (and (pair? e) (eq? (car e) 'error))
-	 (let ((msg (cadr e))
-	       (pfx "incomplete:"))
-	   (if (and (string? msg) (>= (string-length msg) (string-length pfx))
-		    (equal? pfx
-			    (substring msg 0 (string-length pfx))))
-	       `(incomplete ,msg)
-	       e))
+	 (let ((msg (cadr e)))
+	   (let loop ((pfx (incomplete-pfx (caar incomplete-tags)))
+                      (tag (cadar incomplete-tags))
+                      (oth (cdr incomplete-tags)))
+             (if (and (string? msg)
+                      (>= (string-length msg) (string-length pfx))
+                      (equal? pfx (substring msg 0 (string-length pfx))))
+                 `(,tag ,(string "incomplete:" (substring msg (string-length pfx) (string-length msg))))
+                 (if (null? oth)
+                     e
+                     (loop (incomplete-pfx (caar oth)) (cadar oth) (cdr oth))))))
 	 (begin
 	   ;;(newline)
 	   ;;(display "unexpected error: ")

@@ -365,7 +365,8 @@ function return_callback(repl,s)
         repl.consecutive_returns = 0
     end
     ast = parse_input_line(bytestring(copy(s.input_buffer.data)))
-    if repl.consecutive_returns > 1 || !isa(ast, Expr) || (ast.head != :continue && ast.head != :incomplete)
+    if repl.consecutive_returns > 1 || !isa(ast, Expr) ||
+       !(ast.head == :continue || ast.head in Base.incomplete_tags)
         return true
     else
         return false

@@ -3094,6 +3094,11 @@ void jl_init_types(void)
     dots_sym = jl_symbol("Vararg");
     line_sym = jl_symbol("line");
     jl_incomplete_sym = jl_symbol("incomplete");
+    jl_incomplete_block_sym = jl_symbol("incomplete_block");
+    jl_incomplete_char_sym = jl_symbol("incomplete_char");
+    jl_incomplete_cmd_sym = jl_symbol("incomplete_cmd");
+    jl_incomplete_comment_sym = jl_symbol("incomplete_comment");
+    jl_incomplete_string_sym = jl_symbol("incomplete_string");
     error_sym = jl_symbol("error");
     goto_sym = jl_symbol("goto");
     goto_ifnot_sym = jl_symbol("gotoifnot");
