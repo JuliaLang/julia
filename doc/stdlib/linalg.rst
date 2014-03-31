@@ -637,9 +637,9 @@ Usually a function has 4 methods defined, one each for ``Float64``,
    Returns ``alpha*A*B`` or the other three variants
    according to ``tA`` (transpose ``A``) and ``tB``.
 
-.. function:: gemm(tA, tB, alpha, A, B)
+.. function:: gemm(tA, tB, A, B)
 
-   Returns ``alpha*A*B`` or the other three variants
+   Returns ``A*B`` or the other three variants
    according to ``tA`` (transpose ``A``) and ``tB``.
 
 .. function:: gemv!(tA, alpha, A, x, beta, y)
@@ -653,7 +653,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
    Returns ``alpha*A*x`` or ``alpha*A'x`` according to ``tA``
    (transpose ``A``).
 
-.. function:: gemv(tA, alpha, A, x)
+.. function:: gemv(tA, A, x)
 
    Returns ``A*x`` or ``A'x`` according to ``tA`` (transpose ``A``).
 
