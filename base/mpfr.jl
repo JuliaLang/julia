@@ -30,7 +30,7 @@ type BigFloat <: FloatingPoint
     prec::Clong
     sign::Cint
     exp::Clong
-    d::Ptr{Void}
+    d::Ptr{Culong}
     function BigFloat()
         N = get_bigfloat_precision()
         z = new(zero(Clong), zero(Cint), zero(Clong), C_NULL)

@@ -3,27 +3,37 @@
 struct FuncInfo{
     const Function* func;
     size_t lengthAdr;
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+    PRUNTIME_FUNCTION fnentry;
+#endif
     std::vector<JITEvent_EmittedFunctionDetails::LineStart> lines;
 };
 
-#ifdef _OS_WINDOWS_
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+#include <dbghelp.h>
 extern "C" EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord,void *EstablisherFrame, PCONTEXT ContextRecord, void *DispatcherContext);
+extern volatile int jl_in_stackwalk;
 #endif
+
+struct revcomp {
+  bool operator() (const size_t& lhs, const size_t& rhs) const
+  {return lhs>rhs;}
+};
 
 class JuliaJITEventListener: public JITEventListener
 {
-    std::map<size_t, FuncInfo> info;
-    
+    std::map<size_t, FuncInfo, revcomp> info;
+
 public:	
     JuliaJITEventListener(){}
     virtual ~JuliaJITEventListener() {}
-    
+
     virtual void NotifyFunctionEmitted(const Function &F, void *Code,
                                        size_t Size, const EmittedFunctionDetails &Details)
     {
-        FuncInfo tmp = {&F, Size, Details.LineStarts};
-        info[(size_t)(Code)] = tmp;
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+        assert(!jl_in_stackwalk);
+        jl_in_stackwalk = 1;
         uintptr_t catchjmp = (uintptr_t)Code+Size;
         *(uint8_t*)(catchjmp+0) = 0x48;
         *(uint8_t*)(catchjmp+1) = 0xb8; // mov RAX, QWORD PTR [...]
@@ -43,11 +53,27 @@ public:
         UnwindData[6] = 1;    // first instruction
         UnwindData[7] = 0x50; // push RBP
         *(DWORD*)&UnwindData[8] = (DWORD)(catchjmp-(intptr_t)Code);
-        RtlAddFunctionTable(tbl,1,(DWORD64)Code);
+        DWORD mod_size = (DWORD)(size_t)(&UnwindData[8]-(uint8_t*)Code);
+        if (!SymLoadModuleEx(GetCurrentProcess(), NULL, NULL, NULL, (DWORD64)Code, mod_size, NULL, SLMFLAG_VIRTUAL)) {
+            JL_PRINTF(JL_STDERR, "WARNING: failed to insert function info for backtrace\n");
+        }
+        else {
+            if (!SymAddSymbol(GetCurrentProcess(), (ULONG64)Code, F.getName().data(), (DWORD64)Code, mod_size, 0)) {
+                JL_PRINTF(JL_STDERR, "WARNING: failed to insert function name into debug info\n");
+            }
+            if (!RtlAddFunctionTable(tbl,1,(DWORD64)Code)) {
+                JL_PRINTF(JL_STDERR, "WARNING: failed to insert function stack unwind info\n");
+            }
+        }
+        jl_in_stackwalk = 0;
+        FuncInfo tmp = {&F, Size, tbl, Details.LineStarts};
+#else
+        FuncInfo tmp = {&F, Size, Details.LineStarts};
 #endif
+        if (tmp.lines.size() != 0) info[(size_t)(Code)] = tmp;
     }
-    
-    std::map<size_t, FuncInfo>& getMap()
+
+    std::map<size_t, FuncInfo, revcomp>& getMap()
     {
         return info;
     }
@@ -55,62 +81,66 @@ public:
 
 JuliaJITEventListener *jl_jit_events;
 
-extern "C" void getFunctionInfo(const char **name, int *line, const char **filename,size_t pointer);
+extern "C" void jl_getFunctionInfo(const char **name, int *line, const char **filename,size_t pointer);
 
-void getFunctionInfo(const char **name, int *line, const char **filename, size_t pointer)
+void jl_getFunctionInfo(const char **name, int *line, const char **filename, size_t pointer)
 {
-    std::map<size_t, FuncInfo> &info = jl_jit_events->getMap();
+    std::map<size_t, FuncInfo, revcomp> &info = jl_jit_events->getMap();
     *name = NULL;
     *line = -1;
     *filename = "no file";
-    for (std::map<size_t, FuncInfo>::iterator it= info.begin(); it!= info.end(); it++) {
-        if ((*it).first <= pointer) {
-            if ((size_t)(*it).first + (*it).second.lengthAdr >= pointer) {
-                // commenting these lines out skips functions that don't
-                // have explicit debug info. this is useful for hiding
-                // the jlcall wrapper functions we generate.
+    std::map<size_t, FuncInfo, revcomp>::iterator it = info.lower_bound(pointer);
+    if (it != info.end() && (size_t)(*it).first + (*it).second.lengthAdr >= pointer) {
+        // commenting these lines out skips functions that don't
+        // have explicit debug info. this is useful for hiding
+        // the jlcall wrapper functions we generate.
 #if LLVM_VERSION_MAJOR == 3
 #if LLVM_VERSION_MINOR == 0
-                //*name = &(*(*it).second.func).getNameStr()[0];
+        //*name = &(*(*it).second.func).getNameStr()[0];
 #elif LLVM_VERSION_MINOR >= 1
-                //*name = (((*(*it).second.func).getName()).data());
+        //*name = (((*(*it).second.func).getName()).data());
 #endif
 #endif
-                if ((*it).second.lines.size() == 0) {
-                    continue;
-                }
-                
-                std::vector<JITEvent_EmittedFunctionDetails::LineStart>::iterator vit = (*it).second.lines.begin();
-                JITEvent_EmittedFunctionDetails::LineStart prev = *vit;
+        std::vector<JITEvent_EmittedFunctionDetails::LineStart>::iterator vit = (*it).second.lines.begin();
+        JITEvent_EmittedFunctionDetails::LineStart prev = *vit;
 
-                DISubprogram debugscope =
-                    DISubprogram(prev.Loc.getScope((*it).second.func->getContext()));
-                *filename = debugscope.getFilename().data();
-                // the DISubprogram has the un-mangled name, so use that if
-                // available.
-                *name = debugscope.getName().data();
-                
-                vit++;
-                
-                while (vit != (*it).second.lines.end()) {
-                    if (pointer <= (*vit).Address) {
-                        *line = prev.Loc.getLine();
-                        break;
-                    }
-                    prev = *vit;
-                    vit++;
-                }
-                if (*line == -1) {
-                    *line = prev.Loc.getLine();
-                }
-                
+        DISubprogram debugscope =
+            DISubprogram(prev.Loc.getScope((*it).second.func->getContext()));
+        *filename = debugscope.getFilename().data();
+        // the DISubprogram has the un-mangled name, so use that if
+        // available.
+        *name = debugscope.getName().data();
+
+        vit++;
+
+        while (vit != (*it).second.lines.end()) {
+            if (pointer <= (*vit).Address) {
+                *line = prev.Loc.getLine();
                 break;
             }
+            prev = *vit;
+            vit++;
+        }
+        if (*line == -1) {
+            *line = prev.Loc.getLine();
         }
     }
 }
 
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+
+extern "C" void* CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserContext);
+
+void* CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserContext)
+{
+    std::map<size_t, FuncInfo, revcomp> &info = jl_jit_events->getMap();
+    std::map<size_t, FuncInfo, revcomp>::iterator it = info.lower_bound(AddrBase);
+    if (it != info.end() && (size_t)(*it).first + (*it).second.lengthAdr >= AddrBase) {
+        return (void*)(*it).second.fnentry;
+    }
+    return NULL;
+}
+
 class JITMemoryManagerWin : public JITMemoryManager {
 private:
   JITMemoryManager *JMM;

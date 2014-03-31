@@ -24,10 +24,10 @@ end
     #aux_chunksA = zeros(Uint64, col_ch)
     #aux_chunksB = [zeros(Uint64, col_ch) for j=1:nB]
     #for j = 1:nB
-        #Base.copy_chunks(aux_chunksB[j], 1, B.chunks, (j-1)*mA+1, mA)
+        #Base.copy_chunks!(aux_chunksB[j], 1, B.chunks, (j-1)*mA+1, mA)
     #end
     #for i = 1:nA
-        #Base.copy_chunks(aux_chunksA, 1, A.chunks, (i-1)*mA+1, mA)
+        #Base.copy_chunks!(aux_chunksA, 1, A.chunks, (i-1)*mA+1, mA)
         #for j = 1:nB
             #for k = 1:col_ch
                 ## TODO: improve
@@ -47,7 +47,7 @@ function triu(B::BitMatrix, k::Integer)
     Bc = B.chunks
     for i = max(k+1,1):n
         j = clamp((i - 1) * m + 1, 1, i * m)
-        Base.copy_chunks(Ac, j, Bc, j, min(i-k, m))
+        Base.copy_chunks!(Ac, j, Bc, j, min(i-k, m))
     end
     A
 end
@@ -59,7 +59,7 @@ function tril(B::BitMatrix, k::Integer)
     Bc = B.chunks
     for i = 1:min(n, m+k)
         j = clamp((i - 1) * m + i - k, 1, i * m)
-        Base.copy_chunks(Ac, j, Bc, j, max(m-i+k+1, 0))
+        Base.copy_chunks!(Ac, j, Bc, j, max(m-i+k+1, 0))
     end
     A
 end
@@ -108,7 +108,7 @@ function kron(a::BitVector, b::BitVector)
     Rc = R.chunks
     bc = b.chunks
     for j = 1:m
-        a[j] && Base.copy_chunks(Rc, (j-1)*n+1, bc, 1, n)
+        a[j] && Base.copy_chunks!(Rc, (j-1)*n+1, bc, 1, n)
     end
     R
 end

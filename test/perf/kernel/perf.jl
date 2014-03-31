@@ -1,6 +1,14 @@
 include("../perfutil.jl")
 
-require("$JULIA_HOME/../../examples/list.jl")
+abstract List{T}
+
+type Nil{T} <: List{T}
+end
+
+type Cons{T} <: List{T}
+    head::T
+    tail::List{T}
+end
 
 function listn1n2(n1::Int,n2::Int)
     l1 = Nil{Int}()

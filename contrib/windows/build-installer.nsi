@@ -38,7 +38,7 @@ Section "Dummy Section" SecDummy
     SetOutPath $INSTDIR
     File /a /r "julia-${Commit}\*"
     WriteUninstaller "$INSTDIR\Uninstall.exe"
-    CreateShortcut "$INSTDIR\julia.lnk" "$INSTDIR\bin\julia-readline.exe"
+    CreateShortcut "$INSTDIR\julia.lnk" "$INSTDIR\bin\julia.exe"
 SectionEnd
  
 Section "uninstall"

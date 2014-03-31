@@ -2,15 +2,13 @@
 
 function pwd()
     b = Array(Uint8,1024)
-    @unix_only p = ccall(:getcwd, Ptr{Uint8}, (Ptr{Uint8}, Csize_t), b, length(b))
-    @windows_only p = ccall(:_getcwd, Ptr{Uint8}, (Ptr{Uint8}, Cint), b, length(b))
-    systemerror(:getcwd, p == C_NULL)
-    bytestring(p)
+    len = Csize_t[length(b),]
+    uv_error(:getcwd, ccall(:uv_cwd, Cint, (Ptr{Uint8}, Ptr{Csize_t}), b, len))
+    bytestring(b[1:len[1]-1])
 end
 
 function cd(dir::String) 
-    @windows_only systemerror("chdir $dir", ccall(:_chdir,Int32,(Ptr{Uint8},),dir) == -1)
-    @unix_only systemerror("chdir $dir", ccall(:chdir,Int32,(Ptr{Uint8},),dir) == -1)
+    uv_error("chdir $dir", ccall(:uv_chdir, Cint, (Ptr{Uint8},), bytestring(dir)))
 end
 cd() = cd(homedir())
 
@@ -146,7 +144,7 @@ function readdir(path::String)
     # The list of dir entries is returned as a contiguous sequence of null-terminated
     # strings, the first of which is pointed to by ptr in uv_readdir_req.
     # The following lines extracts those strings into dirent
-    entries = String[]
+    entries = ByteString[]
     offset = 0
 
     for i = 1:file_count

@@ -7,7 +7,8 @@ testnames = [
     "priorityqueue", "arpack", "file", "suitesparse", "version",
     "resolve", "pollfd", "mpfr", "broadcast", "complex", "socket",
     "floatapprox", "readdlm", "regex", "float16", "combinatorics",
-    "sysinfo", "rounding", "ranges", "mod2pi", "euler", "show"
+    "sysinfo", "rounding", "ranges", "mod2pi", "euler", "show",
+    "lineedit", "replcompletions"
 ]
 @unix_only push!(testnames, "unicode")
 

@@ -8,7 +8,7 @@
 
 set SYS_PATH=%PATH%
 set PATH=%~dp0;%~dp0bin;%~dp0usr\bin;%~dp0..\usr\bin;%~dp0..\..\usr\bin;%SYS_PATH%
-set JULIA_EXE=julia-readline.exe
+set JULIA_EXE=julia.exe
 for %%A in (%JULIA_EXE%) do set JULIA_HOME=%%~dp$PATH:A
 set JULIA=%JULIA_HOME%%JULIA_EXE%
 set PATH=%SYS_PATH%

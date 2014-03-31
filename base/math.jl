@@ -22,7 +22,7 @@ import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
              max, min, minmax, ceil, floor, trunc, round, ^, exp2, exp10
 
-import Core.Intrinsics: nan_dom_err, sqrt_llvm, box, unbox
+import Core.Intrinsics: nan_dom_err, sqrt_llvm, box, unbox, powi_llvm
 
 # non-type specific math functions
 
@@ -409,8 +409,10 @@ modf(x) = rem(x,one(x)), trunc(x)
 ^(x::Float64, y::Float64) = nan_dom_err(ccall((:pow,libm),  Float64, (Float64,Float64), x, y), x+y)
 ^(x::Float32, y::Float32) = nan_dom_err(ccall((:powf,libm), Float32, (Float32,Float32), x, y), x+y)
 
-^(x::Float64, y::Integer) = ccall((:pow,libm),  Float64, (Float64,Float64), x, y)
-^(x::Float32, y::Integer) = ccall((:powf,libm), Float32, (Float32,Float32), x, y)
+^(x::Float64, y::Integer) =
+    box(Float64, powi_llvm(unbox(Float64,x), unbox(Int32,int32(y))))
+^(x::Float32, y::Integer) =
+    box(Float32, powi_llvm(unbox(Float32,x), unbox(Int32,int32(y))))
 
 # special functions
 

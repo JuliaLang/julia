@@ -132,9 +132,7 @@ include("multi.jl")
 # Polling (requires multi.jl)
 include("poll.jl")
 
-# front end & code loading
-include("repl.jl")
-include("client.jl")
+# code loading
 include("loading.jl")
 
 begin
@@ -177,6 +175,7 @@ include("version.jl")
 include("datafmt.jl")
 include("deepcopy.jl")
 include("util.jl")
+include("replutil.jl")
 include("test.jl")
 include("meta.jl")
 include("i18n.jl")
@@ -188,6 +187,13 @@ push!(I18n.CALLBACKS, Help.clear_cache)
 # SIMD loops
 include("simdloop.jl")
 importall .SimdLoop
+
+# frontend
+include("Terminals.jl")
+include("LineEdit.jl")
+include("REPLCompletions.jl")
+include("REPL.jl")
+include("client.jl")
 
 # sparse matrices and linear algebra
 include("sparse.jl")

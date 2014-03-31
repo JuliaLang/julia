@@ -457,10 +457,13 @@ DLLEXPORT int jl_fs_sendfile(int src_fd, int dst_fd,
     return ret;
 }
 
-DLLEXPORT int jl_fs_write(int handle, char *buf, size_t len, size_t offset)
+DLLEXPORT int jl_fs_write(int handle, char *data, size_t len, size_t offset)
 {
     uv_fs_t req;
-    int ret = uv_fs_write(jl_io_loop, &req, handle, buf, len, offset, NULL);
+    uv_buf_t buf[1];
+    buf[0].base = data;
+    buf[0].len = len;
+    int ret = uv_fs_write(jl_io_loop, &req, handle, buf, 1, offset, NULL);
     uv_fs_req_cleanup(&req);
     return ret;
 }
@@ -468,15 +471,21 @@ DLLEXPORT int jl_fs_write(int handle, char *buf, size_t len, size_t offset)
 DLLEXPORT int jl_fs_write_byte(int handle, char c)
 {
     uv_fs_t req;
-    int ret = uv_fs_write(jl_io_loop, &req, handle, &c, 1, -1, NULL);
+    uv_buf_t buf[1];
+    buf[0].base = &c;
+    buf[0].len = 1;
+    int ret = uv_fs_write(jl_io_loop, &req, handle, buf, 1, -1, NULL);
     uv_fs_req_cleanup(&req);
     return ret;
 }
 
-DLLEXPORT int jl_fs_read(int handle, char *buf, size_t len)
+DLLEXPORT int jl_fs_read(int handle, char *data, size_t len)
 {
     uv_fs_t req;
-    int ret = uv_fs_read(jl_io_loop, &req, handle, buf, len, -1, NULL);
+    uv_buf_t buf[1];
+    buf[0].base = data;
+    buf[0].len = len;
+    int ret = uv_fs_read(jl_io_loop, &req, handle, buf, 1, -1, NULL);
     uv_fs_req_cleanup(&req);
     return ret;
 }
@@ -484,12 +493,15 @@ DLLEXPORT int jl_fs_read(int handle, char *buf, size_t len)
 DLLEXPORT int jl_fs_read_byte(int handle)
 {
     uv_fs_t req;
-    char buf;
-    int ret = uv_fs_read(jl_io_loop, &req, handle, &buf, 1, -1, NULL);
+    char c;
+    uv_buf_t buf[1];
+    buf[0].base = &c;
+    buf[0].len = 1;
+    int ret = uv_fs_read(jl_io_loop, &req, handle, buf, 1, -1, NULL);
     uv_fs_req_cleanup(&req);
     if (ret == -1)
         return ret;
-    return (int)buf;
+    return (int)c;
 }
 
 DLLEXPORT int jl_fs_close(int handle)
@@ -537,7 +549,7 @@ DLLEXPORT int jl_write_copy(uv_stream_t *stream, const char *str, size_t n, uv_w
     return err;
 }
 
-DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
+DLLEXPORT int jl_putc(char c, uv_stream_t *stream)
 {
     int err;
     if (stream!=0) {
@@ -547,7 +559,10 @@ DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
                 jl_uv_file_t *file = (jl_uv_file_t *)stream;
                 // Do a blocking write for now
                 uv_fs_t req;
-                err = uv_fs_write(file->loop, &req, file->file, &c, 1, -1, NULL);
+                uv_buf_t buf[1];
+                buf[0].base = &c;
+                buf[0].len = 1;
+                err = uv_fs_write(file->loop, &req, file->file, buf, 1, -1, NULL);
                 JL_SIGATOMIC_END();
                 return err ? 0 : 1;
             }
@@ -616,7 +631,10 @@ DLLEXPORT size_t jl_write(uv_stream_t *stream, const char *str, size_t n)
             jl_uv_file_t *file = (jl_uv_file_t *)stream;
             // Do a blocking write for now
             uv_fs_t req;
-            err = uv_fs_write(file->loop, &req, file->file, (void*)str, n, -1, NULL);
+            uv_buf_t buf[1];
+            buf[0].base = (char*)str;
+            buf[0].len = n;
+            err = uv_fs_write(file->loop, &req, file->file, buf, 1, -1, NULL);
             JL_SIGATOMIC_END();
             return err ? 0 : n;
         }
@@ -684,11 +702,6 @@ DLLEXPORT void jl_exit(int exitcode)
     uv_tty_reset_mode();
     uv_atexit_hook();
     exit(exitcode);
-}
-
-DLLEXPORT int jl_cwd(char *buffer, size_t size)
-{
-    return uv_cwd(buffer,size);
 }
 
 DLLEXPORT int jl_getpid()
@@ -885,6 +898,19 @@ DLLEXPORT int jl_connect_raw(uv_tcp_t *handle,struct sockaddr_storage *addr)
     return uv_tcp_connect(req,handle,(struct sockaddr*)addr,&jl_uv_connectcb);
 }
 
+#ifdef _OS_LINUX_
+DLLEXPORT int jl_tcp_quickack(uv_tcp_t *handle, int on)
+{
+    int fd = (handle)->io_watcher.fd;
+    if (fd != -1) {
+        if (setsockopt(fd, IPPROTO_TCP, TCP_QUICKACK, &on, sizeof(on))) {
+            return -1;
+        }
+    }
+    return 0;
+}
+#endif
+
 DLLEXPORT char *jl_ios_buf_base(ios_t *ios)
 {
     return ios->buf;
@@ -917,9 +943,72 @@ DLLEXPORT int jl_uv_unix_fd_is_watched(int fd, uv_poll_t *handle, uv_loop_t *loo
 
 #endif
 
+#ifdef _OS_WINDOWS_
+static inline int ishexchar(char c)
+{
+   if (c >= '0' && c <= '9') return 1;
+   if (c >= 'a' && c <= 'z') return 1;
+   return 0;
+}
+
+DLLEXPORT int jl_ispty(uv_pipe_t *pipe)
+{
+    if (pipe->type != UV_NAMED_PIPE) return 0;
+    size_t len = 0;
+    if (uv_pipe_getsockname(pipe, NULL, &len) != UV_ENOBUFS) return 0;
+    char *name = alloca(len);
+    if (uv_pipe_getsockname(pipe, name, &len)) return 0;
+    // return true if name matches regex:
+    // ^\\\\?\\pipe\\(msys|cygwin)-[0-9a-z]{16}-[pt]ty[1-9][0-9]*-
+    //JL_PRINTF(JL_STDERR,"pipe_name: %s\n", name);
+    int n = 0;
+    if (!strncmp(name,"\\\\?\\pipe\\msys-",14))
+        n = 14;
+    else if (!strncmp(name,"\\\\?\\pipe\\cygwin-",16)) 
+        n = 16;
+    else
+        return 0;
+    //JL_PRINTF(JL_STDERR,"prefix pass\n");
+    name += n;
+    for (int n = 0; n < 16; n++)
+        if (!ishexchar(*name++)) return 0;
+    //JL_PRINTF(JL_STDERR,"hex pass\n");
+    if ((*name++)!='-') return 0;
+    if (*name != 'p' && *name != 't') return 0;
+    name++;
+    if (*name++ != 't' || *name++ != 'y') return 0;
+    //JL_PRINTF(JL_STDERR,"tty pass\n");
+    return 1;
+}
+#endif
+ 
 DLLEXPORT uv_handle_type jl_uv_handle_type(uv_handle_t *handle)
 {
+#ifdef _OS_WINDOWS_
+    if (jl_ispty((uv_pipe_t*)handle))
+        return UV_TTY;
+#endif
     return handle->type;
+}
+
+DLLEXPORT int jl_tty_set_mode(uv_tty_t *handle, int mode)
+{
+    if (handle->type != UV_TTY) return 0;
+    return uv_tty_set_mode(handle, mode);
+}
+
+DLLEXPORT int jl_tty_get_winsize(uv_tty_t* handle, int* width, int* height)
+{
+#ifdef _OS_WINDOWS_
+    if (jl_ispty((uv_pipe_t*)handle)) {
+        //TODO: query for size: `\e[18` returns `\e[4;height;width;t`
+        *width=80;
+        *height=24;
+        return 0;
+    }
+#endif
+    if (handle->type != UV_TTY) return UV_ENOTSUP;
+    return uv_tty_get_winsize(handle, width, height);
 }
 
 DLLEXPORT uv_file jl_uv_file_handle(jl_uv_file_t *f)
@@ -950,18 +1039,21 @@ int uv___stream_fd(uv_stream_t* handle);
 #else
 #define uv__stream_fd(handle) ((handle)->io_watcher.fd)
 #endif /* defined(__APPLE__) */
-DLLEXPORT int jl_uv_pipe_fd(uv_pipe_t *handle)
+DLLEXPORT int jl_uv_handle(uv_stream_t *handle)
 {
-    return uv__stream_fd((uv_stream_t*)handle);
+    return uv__stream_fd(handle);
 }
 #else
-DLLEXPORT HANDLE jl_uv_pipe_handle(uv_pipe_t *handle)
+DLLEXPORT HANDLE jl_uv_handle(uv_stream_t *handle)
 {
-    return handle->handle;
-}
-DLLEXPORT HANDLE jl_uv_tty_handle(uv_tty_t *handle)
-{
-    return handle->handle;
+    switch (handle->type) {
+    case UV_TTY:
+        return ((uv_tty_t*)handle)->handle;
+    case UV_NAMED_PIPE:
+        return ((uv_pipe_t*)handle)->handle;
+    default:
+        return INVALID_HANDLE_VALUE;
+    }
 }
 #endif
 #ifdef __cplusplus

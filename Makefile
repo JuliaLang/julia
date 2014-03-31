@@ -34,10 +34,10 @@ debug release: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/ju
 	$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(build_libdir):$(LD_LIBRARY_PATH) JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$@)" $(build_private_libdir)/sys.$(SHLIB_EXT)
 
 julia-debug-symlink:
-	@ln -sf $(build_bindir)/julia-debug-$(DEFAULT_REPL) julia
+	@ln -sf $(build_bindir)/julia-debug julia
 
 julia-release-symlink:
-	@ln -sf $(build_bindir)/julia-$(DEFAULT_REPL) julia
+	@ln -sf $(build_bindir)/julia julia
 
 julia-debug julia-release: git-submodules
 	@$(MAKE) $(QUIET_MAKE) -C deps
@@ -161,9 +161,7 @@ $(eval $(call std_dll,gcc_s_sjlj-1))
 else
 $(eval $(call std_dll,gcc_s_seh-1))
 endif
-ifneq ($(BUILD_OS),WINNT)
 $(eval $(call std_dll,ssp-0))
-endif
 endif
 
 prefix ?= $(abspath julia-$(JULIA_COMMIT))
@@ -179,7 +177,6 @@ ifeq ($(OS),WINNT)
 	-$(INSTALL_M) $(build_bindir)/*.dll $(build_bindir)/*.bat $(DESTDIR)$(bindir)/
 else
 	-cp -a $(build_libexecdir) $(DESTDIR)$(prefix)
-	cd $(DESTDIR)$(bindir) && ln -sf julia-$(DEFAULT_REPL) julia
 
 	for suffix in $(JL_LIBS) ; do \
 		$(INSTALL_M) $(build_libdir)/lib$${suffix}*.$(SHLIB_EXT)* $(DESTDIR)$(private_libdir) ; \
@@ -213,19 +210,19 @@ endif
 	# Update RPATH entries of Julia if $(private_libdir_rel) != $(build_private_libdir_rel)
 ifneq ($(private_libdir_rel),$(build_private_libdir_rel))
 ifeq ($(OS), Darwin)
-	for julia in $(DESTDIR)$(bindir)/julia-* ; do \
+	for julia in $(DESTDIR)$(bindir)/julia* ; do \
 		install_name_tool -rpath @executable_path/$(build_private_libdir_rel) @executable_path/$(private_libdir_rel) $$julia; \
 		install_name_tool -rpath @executable_path/$(build_libdir_rel) @executable_path/$(libdir_rel) $$julia; \
 	done
 else ifeq ($(OS), Linux)
-	for julia in $(DESTDIR)$(bindir)/julia-* ; do \
+	for julia in $(DESTDIR)$(bindir)/julia* ; do \
 		patchelf --set-rpath '$$ORIGIN/$(private_libdir_rel):$$ORIGIN/$(libdir_rel)' $$julia; \
 	done
 endif
 endif
 
 	# Overwrite JL_SYSTEM_IMAGE_PATH in julia binaries:
-	for julia in $(DESTDIR)$(bindir)/julia-* ; do \
+	for julia in $(DESTDIR)$(bindir)/julia* ; do \
 		$(build_bindir)/stringpatch $$(strings -t x - $$julia | grep "sys.ji$$" | awk '{print $$1;}' ) "$(private_libdir_rel)/sys.ji" 256 $(call cygpath_w,$$julia); \
 	done
 
@@ -233,7 +230,7 @@ endif
 	cp -R $(build_sysconfdir)/julia $(DESTDIR)$(sysconfdir)/
 
 dist-clean:
-	rm -fr julia-*.tar.gz julia-*.exe julia-*.7z julia-$(JULIA_COMMIT)
+	rm -fr julia-*.tar.gz julia*.exe julia-*.7z julia-$(JULIA_COMMIT)
 
 dist: dist-clean
 ifeq ($(USE_SYSTEM_BLAS),0)

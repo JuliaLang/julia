@@ -280,14 +280,17 @@ function setindex_shape_check{T}(X::AbstractArray{T,2}, i, j)
 end
 
 # convert to integer index
-to_index(i)       = error("invalid index: $i")
+to_index(i::Int) = i
 to_index(i::Real) = convert(Int, i)
-to_index(i::Int)  = i
 to_index(r::Range1{Int}) = r
-to_index{T<:Real}(r::Range1{T}) = to_index(first(r)):to_index(last(r))
-to_index(I::AbstractArray{Bool,1}) = find(I)
+to_index(r::Ranges{Int}) = r
 to_index(I::Range1{Bool}) = find(I)
-to_index{T<:Real}(A::AbstractArray{T}) = int(A)
+to_index(I::Ranges{Bool}) = find(I)
+to_index{T<:Real}(r::Range1{T}) = to_index(first(r)):to_index(last(r))
+to_index{T<:Real}(r::Ranges{T}) = to_index(first(r)):to_index(step(r)):to_index(last(r))
+to_index(I::AbstractArray{Bool}) = find(I)
+to_index(A::AbstractArray{Int}) = A
+to_index{T<:Real}(A::AbstractArray{T}) = [to_index(x) for x in A]
 to_index(i1, i2)         = to_index(i1), to_index(i2)
 to_index(i1, i2, i3)     = to_index(i1), to_index(i2), to_index(i3)
 to_index(i1, i2, i3, i4) = to_index(i1), to_index(i2), to_index(i3), to_index(i4)
@@ -297,6 +300,7 @@ to_index(I::(Any,Any,))        = (to_index(I[1]), to_index(I[2]))
 to_index(I::(Any,Any,Any))     = (to_index(I[1]), to_index(I[2]), to_index(I[3]))
 to_index(I::(Any,Any,Any,Any)) = (to_index(I[1]), to_index(I[2]), to_index(I[3]), to_index(I[4]))
 to_index(I::Tuple) = map(to_index, I)
+to_index(i) = error("invalid index: $i")
 
 # vectorization
 

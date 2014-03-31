@@ -175,35 +175,35 @@ P,post = Base.LinAlg.etree(A, true)
 @test P == int32([6,3,8,6,8,7,9,10,10,11,0])
 @test post == int32([2,3,5,8,1,4,6,7,9,10,11])
 
-# reinterpret issue 4986
+# issue #4986, reinterpret
 sfe22 = speye(Float64, 2)
 mfe22 = eye(Float64, 2)
 @test reinterpret(Int64, sfe22) == reinterpret(Int64, mfe22)
 
-# Issue 5190
+# issue #5190
 @test_throws sparsevec([3,5,7],[0.1,0.0,3.2],4)
 
 # issue #5169
 @test nfilled(sparse([1,1],[1,2],[0.0,-0.0])) == 0
 
 # issue #5386
-I,J,V = findnz(SparseMatrixCSC(2,1,[1,3],[1,2],[1.0,0.0]))
-@test length(I) == length(J) == length(V) == 1
+K,J,V = findnz(SparseMatrixCSC(2,1,[1,3],[1,2],[1.0,0.0]))
+@test length(K) == length(J) == length(V) == 1
 
 # issue #5437
 @test nfilled(sparse([1,2,3],[1,2,3],[0.0,1.0,2.0])) == 2
 
-# issue 5824
+# issue #5824
 @test sprand(4,5,0.5).^0 == sparse(ones(4,5))
 
-#issue 5985
+# issue #5985
 @test sprandbool(4, 5, 0.0) == sparse(zeros(Bool, 4, 5))
 @test sprandbool(4, 5, 1.00) == sparse(ones(Bool, 4, 5))
 sprb45 = sprandbool(4, 5, 0.5)
 @test length(sprb45) == 20
 @test (sum(sprb45)[1] - 10) <= 5
 
-# issue 5853, sparse diff
+# issue #5853, sparse diff
 for i=1:2, a={[1 2 3], [1 2 3]', speye(3)}
     @test all(diff(sparse(a),i) == diff(a,i))
 end

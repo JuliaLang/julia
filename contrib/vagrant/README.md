@@ -40,4 +40,4 @@ downloaded during provisioning. To take advantage of these dependencies, use
 the `jlmake` alias in place of `make`.
 
 When the build is complete, you can run
-`~/julia/usr/bin/julia-readline` to start Julia.
+`~/julia/usr/bin/julia` to start Julia.

@@ -34,7 +34,7 @@ namespace JL_I {
         nan_dom_err,
         // functions
         abs_float, copysign_float, flipsign_int, select_value,
-        sqrt_llvm,
+        sqrt_llvm, powi_llvm,
         // pointer access
         pointerref, pointerset, pointertoref,
         // c interface
@@ -1250,6 +1250,14 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                                                             ArrayRef<Type*>(x->getType())),
                                   x);
     }
+    HANDLE(powi_llvm,2) {
+        x = FP(x);
+        y = JL_INT(y);
+        Type *ts[1] = { x->getType() };
+        return builder.CreateCall2(Intrinsic::getDeclaration(jl_Module, Intrinsic::powi,
+                                                             ArrayRef<Type*>(ts)),
+                                   x, y);
+    }
     default:
         assert(false);
     }
@@ -1329,6 +1337,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(fptrunc); ADD_I(fpext);
     ADD_I(abs_float); ADD_I(copysign_float);
     ADD_I(flipsign_int); ADD_I(select_value); ADD_I(sqrt_llvm);
+    ADD_I(powi_llvm);
     ADD_I(pointerref); ADD_I(pointerset); ADD_I(pointertoref);
     ADD_I(checked_sadd); ADD_I(checked_uadd);
     ADD_I(checked_ssub); ADD_I(checked_usub);
