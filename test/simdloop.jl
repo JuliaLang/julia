@@ -42,3 +42,28 @@ for T in {Int32,Int64,Float32,Float64}
     end
 end
 
+# Test that scope rules match regular for
+let j=4
+    # Use existing local variable.
+    @simd for j=1:0 end
+    @test j==4
+    @simd for j=1:3 end
+    @test j==3
+
+    # Use global variable
+    global simd_glob = 4
+    @simd for simd_glob=1:0 end
+    @test simd_glob==4
+    @simd for simd_glob=1:3 end
+    @test simd_glob==3
+
+    # Index that is local to loop
+    @simd for simd_loop_local=1:0 end
+    simd_loop_local_present = true
+    try 
+        simd_loop_local += 1
+    catch
+        simd_loop_local_present = false
+    end
+    @test !simd_loop_local_present
+end
