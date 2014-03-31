@@ -66,13 +66,13 @@ end
 
 reset_state(::EmptyHistoryProvider) = nothing
 
-completeLine(c::EmptyCompletionProvider,s) = []
+complete_line(c::EmptyCompletionProvider,s) = []
 
 terminal(s::IO) = s
 terminal(s::PromptState) = s.terminal
 
 for f in [:terminal,:edit_insert,:on_enter,:add_history,:buffer,:edit_backspace,:(Base.isempty),
-        :replace_line,:refreshMultiLine,:input_string,:completeLine,:edit_move_left,:edit_move_right,
+        :replace_line,:refreshMultiLine,:input_string,:complete_line,:edit_move_left,:edit_move_right,
         :edit_move_word_left,:edit_move_word_right,:update_display_buffer]
     @eval ($f)(s::MIState,args...) = $(f)(s.mode_state[s.current_mode],args...)
 end
@@ -115,8 +115,8 @@ function show_completions(s::PromptState, completions)
     end
 end
 
-function completeLine(s::PromptState)
-    (completions,partial,should_complete) = completeLine(s.p.complete,s)
+function complete_line(s::PromptState)
+    (completions,partial,should_complete) = complete_line(s.p.complete,s)
     if length(completions) == 0
         beep(LineEdit.terminal(s))
     elseif !should_complete
@@ -1020,7 +1020,7 @@ const default_keymap =
                 return
             end
         end
-        LineEdit.completeLine(s)
+        LineEdit.complete_line(s)
         LineEdit.refresh_line(s)
     end,
     # Enter
