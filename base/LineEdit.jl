@@ -20,6 +20,7 @@ type MIState
     current_mode
     aborted::Bool
     mode_state
+    kill_buffer::ByteString
 end
 
 type Mode <: TextInterface
@@ -525,6 +526,18 @@ function edit_delete_next_word(s)
     edit_delete_next_word(buffer(s)) && refresh_line(s)
 end
 
+function edit_yank(s::MIState)
+    edit_insert(buffer(s),s.kill_buffer)
+    refresh_line(s)
+end
+
+function edit_kill(s::MIState)
+    pos = position(buffer(s))
+    s.kill_buffer = readall(buffer(s))
+    truncate(buffer(s),pos);
+    refresh_line(s)
+end
+
 function replace_line(s::PromptState,l::IOBuffer)
     s.input_buffer = l
 end
@@ -913,6 +926,10 @@ function setup_search_keymap(hp)
         127     => '\b',
         "^C"    => s->transition(s,state(s,p).parent),
         "^D"    => s->transition(s,state(s,p).parent),
+        # ^K
+        11      => s->transition(s,state(s,p).parent),
+        # ^Y
+        25      => :(LineEdit.edit_yank(s); LineEdit.update_display_buffer(s,data)),
         # ^A
         1       => s->(accept_result(s,p); move_line_start(s)),
         # ^E
@@ -1046,7 +1063,9 @@ const default_keymap =
     # ^U
     21 => :( truncate(LineEdit.buffer(s),0); LineEdit.refresh_line(s) ),
     # ^K
-    11 => :( truncate(LineEdit.buffer(s),position(LineEdit.buffer(s))); LineEdit.refresh_line(s) ),
+    11 => edit_kill,
+    # ^Y
+    25 => edit_yank,
     # ^A
     1 => move_line_start,
     # ^E
@@ -1168,7 +1187,7 @@ end
 init_state(terminal,prompt::Prompt) = PromptState(terminal,prompt,IOBuffer(),InputAreaState(1,1),length(prompt.prompt))
 
 function init_state(terminal,m::ModalInterface)
-    s = MIState(m,m.modes[1],false,Dict{Any,Any}())
+    s = MIState(m,m.modes[1],false,Dict{Any,Any}(),"")
     for mode in m.modes
         s.mode_state[mode] = init_state(terminal,mode)
     end
