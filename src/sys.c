@@ -409,15 +409,9 @@ JL_STREAM *jl_stdin_stream(void)  { return (JL_STREAM*)JL_STDIN; }
 JL_STREAM *jl_stdout_stream(void) { return (JL_STREAM*)JL_STDOUT; }
 JL_STREAM *jl_stderr_stream(void) { return (JL_STREAM*)JL_STDERR; }
 
-// -- set/clear the FZ/DAZ flags on x86 & x86-64 --
+// CPUID
 
-#ifdef __SSE__
-
-#ifdef _OS_WINDOWS_
-#define cpuid    __cpuid
-#else
-
-void cpuid(int32_t CPUInfo[4], int32_t InfoType)
+DLLEXPORT void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
 {
     __asm__ __volatile__ (
         #if defined(__i386__) && defined(__PIC__)
@@ -436,16 +430,17 @@ void cpuid(int32_t CPUInfo[4], int32_t InfoType)
     );
 }
 
-#endif
+// -- set/clear the FZ/DAZ flags on x86 & x86-64 --
+#ifdef __SSE__
 
 DLLEXPORT uint8_t jl_zero_subnormals(uint8_t isZero)
 {
     uint32_t flags = 0x00000000;
     int32_t info[4];
 
-    cpuid(info, 0);
+    jl_cpuid(info, 0);
     if (info[0] >= 1) {
-        cpuid(info, 0x00000001);
+        jl_cpuid(info, 0x00000001);
         if ((info[3] & ((int)1 << 26)) != 0) {
             // SSE2 supports both FZ and DAZ
             flags = 0x00008040;

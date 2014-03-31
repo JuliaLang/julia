@@ -959,6 +959,10 @@ DLLEXPORT HANDLE jl_uv_pipe_handle(uv_pipe_t *handle)
 {
     return handle->handle;
 }
+DLLEXPORT HANDLE jl_uv_tty_handle(uv_tty_t *handle)
+{
+    return handle->handle;
+}
 #endif
 #ifdef __cplusplus
 }

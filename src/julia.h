@@ -386,8 +386,8 @@ extern DLLEXPORT jl_datatype_t *jl_task_type;
 
 extern DLLEXPORT jl_tuple_t *jl_null;
 #define JL_NULL ((void*)jl_null)
-extern jl_value_t *jl_true;
-extern jl_value_t *jl_false;
+DLLEXPORT extern jl_value_t *jl_true;
+DLLEXPORT extern jl_value_t *jl_false;
 DLLEXPORT extern jl_value_t *jl_nothing;
 
 DLLEXPORT extern uv_lib_t *jl_dl_handle;
@@ -834,10 +834,6 @@ DLLEXPORT void jl_undefined_var_error(jl_sym_t *var);
 void jl_check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx);
 DLLEXPORT jl_value_t *jl_exception_occurred(void);
 DLLEXPORT void jl_exception_clear(void);
-STATIC_INLINE char *jl_get_exception_str(jl_value_t *exception)
-{
-    return jl_string_data(jl_fieldref(exception, 0));
-}
 
 #define JL_NARGS(fname, min, max)                               \
     if (nargs < min) jl_too_few_args(#fname, min);              \

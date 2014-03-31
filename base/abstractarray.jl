@@ -290,14 +290,14 @@ for (f,T) in ((:float16,    Float16),
               (:float64,    Float64),
               (:complex64,  Complex64),
               (:complex128, Complex128))
-    @eval ($f)(x::AbstractArray) = convert(AbstractArray{$T}, x)
+    @eval ($f){S,N}(x::AbstractArray{S,N}) = convert(AbstractArray{$T,N}, x)
 end
 
 float{T<:FloatingPoint}(x::AbstractArray{T}) = x
 complex{T<:Complex}(x::AbstractArray{T}) = x
 
-float   (x::AbstractArray) = copy!(similar(x,typeof(float(one(eltype(x))))), x)
-complex (x::AbstractArray) = copy!(similar(x,typeof(complex(one(eltype(x))))), x)
+float{T,N}(x::AbstractArray{T,N}) = convert(AbstractArray{typeof(float(one(T))),N},x)
+complex{T,N}(x::AbstractArray{T,N}) = convert(AbstractArray{typeof(complex(one(T))),N}, x)
 
 full(x::AbstractArray) = x
 

@@ -42,6 +42,10 @@ USE_INTEL_JITEVENTS = 0
 # libc++ is standard on OS X 10.9, but not for earlier releases
 USE_LIBCPP = 0
 
+# Select the cpu architecture to target
+# Current available options are "native" and "core2"
+JULIA_CPU_TARGET = native
+
 # we include twice to pickup user definitions better
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
@@ -208,6 +212,7 @@ endif
 CC = $(CROSS_COMPILE)gcc
 CXX = $(CROSS_COMPILE)g++
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
+JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -O0 -ggdb3 -DDEBUG -fstack-protector-all
 SHIPFLAGS = -O3 -falign-functions
@@ -217,6 +222,7 @@ ifeq ($(USECLANG),1)
 CC = $(CROSS_COMPILE)clang
 CXX = $(CROSS_COMPILE)clang++
 JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
+JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -O0 -g -DDEBUG -fstack-protector-all
 SHIPFLAGS = -O3
@@ -229,7 +235,7 @@ else
 CC += $(STDLIBCPP_FLAG) -mmacosx-version-min=10.6
 CXX += $(STDLIBCPP_FLAG) -mmacosx-version-min=10.6
 endif
-JCFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
+JCPPFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
 endif
 
@@ -241,6 +247,14 @@ AS := $(CROSS_COMPILE)as
 LD := $(CROSS_COMPILE)ld
 RANLIB := $(CROSS_COMPILE)ranlib
 
+ifeq ($(JULIA_CPU_TARGET),native)
+  JCPPFLAGS += -DJULIA_TARGET_NATIVE
+else ifeq ($(JULIA_CPU_TARGET),core2)
+  JCPPFLAGS += -DJULIA_TARGET_CORE2
+else
+  $(error Unknown cpu target architecture)
+endif
+
 
 # Calculate relative paths to libdir and private_libdir
 build_libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(build_bindir) $(build_libdir))
@@ -250,7 +264,7 @@ build_private_libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(build
 private_libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(private_libdir))
 
 # if not absolute, then relative to the directory of the julia executable
-JCFLAGS += "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys.ji\""
+JCPPFLAGS += "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys.ji\""
 
 # On Windows, we want shared library files to end up in $(build_bindir), instead of $(build_libdir)
 ifeq ($(OS),WINNT)
@@ -321,7 +335,7 @@ endif
 else
 ifeq ($(OS),Darwin)
 LIBUNWIND=$(build_libdir)/libosxunwind.a
-JCFLAGS+=-DLIBOSXUNWIND
+JCPPFLAGS+=-DLIBOSXUNWIND
 else
 LIBUNWIND=$(build_libdir)/libunwind-generic.a $(build_libdir)/libunwind.a
 endif
@@ -485,8 +499,7 @@ endif
 ifeq ($(OS), WINNT)
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap \
 	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -lssp
-JCFLAGS += -D_WIN32_WINNT=0x0600
-JCXXFLAGS += -D_WIN32_WINNT=0x0600
+JCPPFLAGS += -D_WIN32_WINNT=0x0600
 JLDFLAGS = -Wl,--stack,8388608
 ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware

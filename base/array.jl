@@ -201,10 +201,7 @@ end
 fill(v, dims::Dims)       = fill!(Array(typeof(v), dims), v)
 fill(v, dims::Integer...) = fill!(Array(typeof(v), dims...), v)
 
-for (fname, felt) in ((:zeros,:zero),
-                      (:ones,:one),
-                      (:infs,:inf),
-                      (:nans,:nan))
+for (fname, felt) in ((:zeros,:zero), (:ones,:one))
     @eval begin
         ($fname){T}(::Type{T}, dims...)  = fill!(Array(T, dims...), ($felt)(T))
         ($fname)(dims...)                = fill!(Array(Float64, dims...), ($felt)(Float64))

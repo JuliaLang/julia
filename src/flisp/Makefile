@@ -61,7 +61,9 @@ $(LIBTARGET).a: $(OBJS)
 
 $(EXENAME)-debug: $(DOBJS) $(LIBFILES) $(LIBTARGET)-debug.a flmain.do
 	@$(call PRINT_CC, $(CC) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME)-debug $(LIBTARGET).a $(LIBS) $(OSLIBS))
+ifndef CROSS_COMPILE
 	$(call spawn,./$(EXENAME)-debug) unittest.lsp
+endif
 
 $(EXENAME): $(OBJS) $(LIBFILES) $(LIBTARGET).a flmain.o
 	@$(call PRINT_CC, $(CC) $(SHIPFLAGS) $(OBJS) flmain.o $(LDFLAGS) -o $(EXENAME) $(LIBTARGET).a $(LIBS) $(OSLIBS))

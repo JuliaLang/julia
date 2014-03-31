@@ -87,6 +87,7 @@ void jl_init_tasks(void *stack, size_t ssize);
 void jl_init_serializer(void);
 
 void jl_dump_bitcode(char *fname);
+void jl_dump_objfile(char *fname, int jit_model);
 int32_t jl_get_llvm_gv(jl_value_t *p);
 
 #ifdef _OS_LINUX_
