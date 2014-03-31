@@ -907,7 +907,7 @@ DLLEXPORT int jl_tcp_quickack(uv_tcp_t *handle, int on)
             return -1;
         }
     }
-  return 0;
+    return 0;
 }
 #endif
 
@@ -944,12 +944,15 @@ DLLEXPORT int jl_uv_unix_fd_is_watched(int fd, uv_poll_t *handle, uv_loop_t *loo
 #endif
 
 #ifdef _OS_WINDOWS_
-static inline int ishexchar(char c) {
+static inline int ishexchar(char c)
+{
    if (c >= '0' && c <= '9') return 1;
    if (c >= 'a' && c <= 'z') return 1;
    return 0;
 }
-DLLEXPORT int jl_ispty(uv_pipe_t *pipe) {
+
+DLLEXPORT int jl_ispty(uv_pipe_t *pipe)
+{
     if (pipe->type != UV_NAMED_PIPE) return 0;
     size_t len = 0;
     if (uv_pipe_getsockname(pipe, NULL, &len) != UV_ENOBUFS) return 0;
