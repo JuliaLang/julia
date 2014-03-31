@@ -227,8 +227,14 @@ end
 function shell_completions(string,pos)
     # First parse everything up to the current position
     scs = string[1:pos]
-    args, last_parse = Base.shell_parse(scs,true)
+    local args, last_parse
+    try
+        args, last_parse = Base.shell_parse(scs,true)
+    catch
+        return UTF8String[], 0:-1, false
+    end
     # Now look at the last this we parsed
+    isempty(args.args[end].args) && return UTF8String[], 0:-1, false
     arg = args.args[end].args[end]
     if isa(arg,String)
         # Treat this as a path (perhaps give a list of comands in the future as well?)
@@ -237,7 +243,7 @@ function shell_completions(string,pos)
             files = readdir()
         else
             if !isdir(dir)
-                return ([],0:-1)
+                return UTF8String[], 0:-1, false
             end
             files = readdir(dir)
         end
