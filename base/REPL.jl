@@ -179,13 +179,14 @@ type REPLHistoryProvider <: HistoryProvider
     history::Array{String,1}
     history_file
     cur_idx::Int
+    last_idx::Int
     last_buffer::IOBuffer
     last_mode
     mode_mapping
     modes::Array{Uint8,1}
 end
 REPLHistoryProvider(mode_mapping) =
-    REPLHistoryProvider(String[], nothing, 0, IOBuffer(),
+    REPLHistoryProvider(String[], nothing, 0, -1, IOBuffer(),
                         nothing, mode_mapping, Uint8[])
 
 function hist_from_file(hp, file)
@@ -244,6 +245,7 @@ function history_adjust(hist::REPLHistoryProvider,s)
 end
 
 function history_prev(s::LineEdit.MIState,hist::REPLHistoryProvider)
+    hist.last_idx = -1
     if hist.cur_idx > 1
         if hist.cur_idx == length(hist.history)+1
             hist.last_mode = LineEdit.mode(s)
@@ -273,6 +275,15 @@ function history_next(s::LineEdit.MIState,hist::REPLHistoryProvider)
         hist.last_buffer = IOBuffer()
         LineEdit.transition(s,hist.last_mode)
         LineEdit.replace_line(s,buf)
+        LineEdit.refresh_line(s)
+    elseif 0 < hist.last_idx < length(hist.history)
+        # issue #6321
+        hist.cur_idx = hist.last_idx + 1
+        hist.last_idx = -1
+        hist.last_mode = LineEdit.mode(s)
+        hist.last_buffer = copy(LineEdit.buffer(s))
+        LineEdit.transition(s,hist.mode_mapping[hist.modes[hist.cur_idx]])
+        LineEdit.replace_line(s,hist.history[hist.cur_idx])
         LineEdit.refresh_line(s)
     else
         Terminals.beep(LineEdit.terminal(s))
@@ -334,6 +345,7 @@ function history_search(hist::REPLHistoryProvider,query_buffer::IOBuffer,respons
 end
 
 function history_reset_state(hist::REPLHistoryProvider)
+    hist.last_idx = hist.cur_idx
     hist.cur_idx = length(hist.history)+1
 end
 LineEdit.reset_state(hist::REPLHistoryProvider) = history_reset_state(hist)
