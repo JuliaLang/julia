@@ -138,7 +138,7 @@ compile: $(addprefix compile-, $(LIBS))
 check: $(addprefix check-, $(LIBS))
 install: $(addprefix install-, $(LIBS))
 cleanall: $(addprefix clean-, $(LIBS))
-distclean: $(addprefix distclean-, $(LIBS))
+distcleanall: $(addprefix distclean-, $(LIBS))
 	rm -rf $(build_prefix)
 getall: get-llvm get-uv get-pcre get-double-conversion get-openlibm get-openspecfun get-random get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf get-utf8proc
 
@@ -1597,6 +1597,6 @@ install-git: $(GIT_TARGET)
 
 ## phony targets ##
 
-.PHONY: default compile install cleanall distclean \
+.PHONY: default compile install cleanall distcleanall \
 	get-* configure-* compile-* check-* install-* \
 	clean-* distclean-*

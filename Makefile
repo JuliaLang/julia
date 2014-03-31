@@ -321,13 +321,13 @@ ifeq ($(OS),WINNT)
 endif
 	@$(MAKE) -C deps clean-uv
 
-distclean: cleanall
-	@$(MAKE) -C deps distclean
+distcleanall: cleanall
+	@$(MAKE) -C deps distcleanall
 	@$(MAKE) -C doc cleanall
 	rm -fr $(build_prefix)
 
 .PHONY: default debug release julia-debug julia-release \
-	test testall testall1 test-* clean distclean cleanall \
+	test testall testall1 test-* clean distcleanall cleanall \
 	run-julia run-julia-debug run-julia-release run \
 	install dist source-dist git-submodules
 
