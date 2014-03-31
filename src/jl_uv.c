@@ -949,7 +949,7 @@ static inline int ishexchar(char c) {
    if (c >= 'a' && c <= 'z') return 1;
    return 0;
 }
-static int ispty(uv_pipe_t *pipe) {
+DLLEXPORT int jl_ispty(uv_pipe_t *pipe) {
     if (pipe->type != UV_NAMED_PIPE) return 0;
     size_t len = 0;
     if (uv_pipe_getsockname(pipe, NULL, &len) != UV_ENOBUFS) return 0;
@@ -982,7 +982,7 @@ static int ispty(uv_pipe_t *pipe) {
 DLLEXPORT uv_handle_type jl_uv_handle_type(uv_handle_t *handle)
 {
 #ifdef _OS_WINDOWS_
-    if (ispty((uv_pipe_t*)handle))
+    if (jl_ispty((uv_pipe_t*)handle))
         return UV_TTY;
 #endif
     return handle->type;
@@ -997,10 +997,10 @@ DLLEXPORT int jl_tty_set_mode(uv_tty_t *handle, int mode)
 DLLEXPORT int jl_tty_get_winsize(uv_tty_t* handle, int* width, int* height)
 {
 #ifdef _OS_WINDOWS_
-    if (ispty((uv_pipe_t*)handle)) {
+    if (jl_ispty((uv_pipe_t*)handle)) {
         //TODO: query for size: `\e[18` returns `\e[4;height;width;t`
-        *width=0;
-        *height=0;
+        *width=80;
+        *height=24;
         return 0;
     }
 #endif
