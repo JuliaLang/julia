@@ -207,12 +207,12 @@ function ndigits0z(n::Unsigned, b::Int)
     end
     return d
 end
-ndigits0z(x::Integer, b::Integer) = ndigits0z(unsigned(abs(x)),b)
+ndigits0z(x::Integer, b::Integer) = ndigits0z(unsigned(abs(x)),int(b))
 
-ndigits(x::Unsigned, b::Integer) = x==0 ? 1 : ndigits0z(x,b)
+ndigits(x::Unsigned, b::Integer) = x==0 ? 1 : ndigits0z(x,int(b))
 ndigits(x::Unsigned)             = x==0 ? 1 : ndigits0z(x)
 
-ndigits(x::Integer, b::Integer) = ndigits(unsigned(abs(x)),b)
+ndigits(x::Integer, b::Integer) = ndigits(unsigned(abs(x)),int(b))
 ndigits(x::Integer) = ndigits(unsigned(abs(x)))
 
 ## integer to string functions ##
