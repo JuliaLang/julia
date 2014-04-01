@@ -248,10 +248,12 @@ precision(::Float64) = 53
 
 function float_lex_order(f::Integer, delta::Integer)
     # convert from signed magnitude to 2's complement and back
-    if f < 0
+    neg = f < 0
+    if neg
         f = oftype(f, -(f & typemax(f)))
     end
     f = oftype(f, f + delta)
+    neg && f == 0 && return typemin(f)  # nextfloat(-5e-324) === -0.0
     f < 0 ? oftype(f, -(f & typemax(f))) : f
 end
 

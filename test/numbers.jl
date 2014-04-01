@@ -1719,7 +1719,7 @@ end
 @test prevfloat(0.0) == -5.0e-324
 @test nextfloat(-0.0) == 5.0e-324
 @test prevfloat(-0.0) == -5.0e-324
-@test nextfloat(-5.0e-324) == 0.0
+@test nextfloat(-5.0e-324) === -0.0
 @test prevfloat(5.0e-324) == 0.0
 @test nextfloat(-1.0) > -1.0
 @test prevfloat(-1.0) < -1.0
