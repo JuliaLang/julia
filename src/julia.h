@@ -327,7 +327,6 @@ extern DLLEXPORT jl_datatype_t *jl_module_type;
 extern DLLEXPORT jl_datatype_t *jl_vararg_type;
 extern DLLEXPORT jl_datatype_t *jl_function_type;
 extern DLLEXPORT jl_datatype_t *jl_abstractarray_type;
-extern DLLEXPORT jl_datatype_t *jl_storedarray_type;
 extern DLLEXPORT jl_datatype_t *jl_densearray_type;
 extern DLLEXPORT jl_datatype_t *jl_array_type;
 extern DLLEXPORT jl_typename_t *jl_array_typename;
@@ -427,6 +426,7 @@ extern jl_sym_t *abstracttype_sym; extern jl_sym_t *bitstype_sym;
 extern jl_sym_t *compositetype_sym; extern jl_sym_t *type_goto_sym;
 extern jl_sym_t *global_sym;  extern jl_sym_t *tuple_sym;
 extern jl_sym_t *boundscheck_sym; extern jl_sym_t *copyast_sym;
+extern jl_sym_t *simdloop_sym;
 
 
 // object accessors -----------------------------------------------------------

@@ -1024,9 +1024,13 @@
 	 (expect-end s)
 	 `(let ,ex ,@binds))))
     ((global local)
-     (let* ((const (and (eq? (peek-token s) 'const)
+     (let* ((lno (input-port-line (ts:port s)))
+	    (const (and (eq? (peek-token s) 'const)
 			(take-token s)))
-	    (expr  (cons word (parse-comma-separated-assignments s))))
+	    (expr  (cons word
+			 (map (lambda (x)
+				(short-form-function-loc x lno))
+			      (parse-comma-separated-assignments s)))))
        (if const
 	   `(const ,expr)
 	   expr)))

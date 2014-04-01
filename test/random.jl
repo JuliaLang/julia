@@ -21,8 +21,8 @@ A = zeros(2, 2)
 randn!(MersenneTwister(42), A)
 @test A == [-0.5560268761438383 0.027155338009146598; -0.44438335710729554 -0.2994840903585204]
 
-for T in (Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Int128, Uint128, Char, BigInt,
-	Float16, Float32, Float64, Rational{Int})
+for T in (Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Int128, Uint128,
+          Char, Float16, Float32, Float64, Rational{Int})
     r = rand(convert(T, 97):convert(T, 122))
     @test typeof(r) == T
     @test 97 <= r <= 122

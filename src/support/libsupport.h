@@ -16,6 +16,14 @@
 #include "dirpath.h"
 #include "strtod.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 DLLEXPORT void libsupport_init(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

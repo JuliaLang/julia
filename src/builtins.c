@@ -28,6 +28,10 @@
 #include "julia_internal.h"
 #include "builtin_proto.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // exceptions -----------------------------------------------------------------
 
 DLLEXPORT void jl_error(const char *str)
@@ -671,6 +675,11 @@ DLLEXPORT int jl_strtod(char *str, double *out)
     return 0;
 }
 
+// MSVC pre-2013 did not define HUGE_VALF
+#ifndef HUGE_VALF
+#define HUGE_VALF (1e25f * 1e25f)
+#endif
+
 DLLEXPORT int jl_substrtof(char *str, int offset, int len, float *out)
 {
     char *p;
@@ -1048,7 +1057,6 @@ void jl_init_primitives(void)
     add_builtin("Task", (jl_value_t*)jl_task_type);
 
     add_builtin("AbstractArray", (jl_value_t*)jl_abstractarray_type);
-    add_builtin("StoredArray", (jl_value_t*)jl_storedarray_type);
     add_builtin("DenseArray", (jl_value_t*)jl_densearray_type);
     add_builtin("Array", (jl_value_t*)jl_array_type);
 
@@ -1349,3 +1357,7 @@ DLLEXPORT void jl_breakpoint(jl_value_t* v)
 {
     // put a breakpoint in you debugger here
 }
+
+#ifdef __cplusplus
+}
+#endif

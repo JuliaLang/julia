@@ -81,7 +81,7 @@ function select!(v::AbstractVector, k::Int, lo::Int, hi::Int, o::Ordering)
     return v[lo]
 end
 
-function select!(v::AbstractVector, r::Range1, lo::Int, hi::Int, o::Ordering)
+function select!(v::AbstractVector, r::UnitRange, lo::Int, hi::Int, o::Ordering)
     a, b = first(r), last(r)
     lo <= a <= b <= hi || error("select index $k is out of range $lo:$hi")
     @inbounds while true
@@ -111,12 +111,12 @@ function select!(v::AbstractVector, r::Range1, lo::Int, hi::Int, o::Ordering)
     end
 end
 
-select!(v::AbstractVector, k::Union(Int,Range1), o::Ordering) = select!(v,k,1,length(v),o)
-select!(v::AbstractVector, k::Union(Int,Range1);
+select!(v::AbstractVector, k::Union(Int,UnitRange), o::Ordering) = select!(v,k,1,length(v),o)
+select!(v::AbstractVector, k::Union(Int,UnitRange);
     lt::Function=isless, by::Function=identity, rev::Bool=false, order::Ordering=Forward) =
     select!(v, k, ord(lt,by,rev,order))
 
-select(v::AbstractVector, k::Union(Int,Range1); kws...) = select!(copy(v), k; kws...)
+select(v::AbstractVector, k::Union(Int,UnitRange); kws...) = select!(copy(v), k; kws...)
 
 # reference on sorted binary search:
 #   http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary
@@ -174,7 +174,7 @@ function searchsorted(v::AbstractVector, x, lo::Int, hi::Int, o::Ordering)
     return lo+1:hi-1
 end
 
-function searchsortedlast{T<:Real}(a::Ranges{T}, x::Real, o::Ordering=Forward)
+function searchsortedlast{T<:Real}(a::Range{T}, x::Real, o::Ordering=Forward)
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
@@ -183,7 +183,7 @@ function searchsortedlast{T<:Real}(a::Ranges{T}, x::Real, o::Ordering=Forward)
     end
 end
 
-function searchsortedfirst{T<:Real}(a::Ranges{T}, x::Real, o::Ordering=Forward)
+function searchsortedfirst{T<:Real}(a::Range{T}, x::Real, o::Ordering=Forward)
     if step(a) == 0
         lt(o, first(a), x) ? length(a)+1 : 1
     else
@@ -192,7 +192,7 @@ function searchsortedfirst{T<:Real}(a::Ranges{T}, x::Real, o::Ordering=Forward)
     end
 end
 
-function searchsortedlast{T<:Integer}(a::Ranges{T}, x::Real, o::Ordering=Forward)
+function searchsortedlast{T<:Integer}(a::Range{T}, x::Real, o::Ordering=Forward)
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
@@ -200,7 +200,7 @@ function searchsortedlast{T<:Integer}(a::Ranges{T}, x::Real, o::Ordering=Forward
     end
 end
 
-function searchsortedfirst{T<:Integer}(a::Ranges{T}, x::Real, o::Ordering=Forward)
+function searchsortedfirst{T<:Integer}(a::Range{T}, x::Real, o::Ordering=Forward)
     if step(a) == 0
         lt(o, first(a), x) ? length(a)+1 : 1
     else
@@ -208,7 +208,7 @@ function searchsortedfirst{T<:Integer}(a::Ranges{T}, x::Real, o::Ordering=Forwar
     end
 end
 
-searchsorted{T<:Real}(a::Ranges{T}, x::Real; kws...) =
+searchsorted{T<:Real}(a::Range{T}, x::Real; kws...) =
     searchsortedfirst(a,x; kws...):searchsortedlast(a,x; kws...)
 
 for s in {:searchsortedfirst, :searchsortedlast, :searchsorted}

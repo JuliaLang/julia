@@ -254,7 +254,7 @@ end
 # Allocation-free variants
 # Note that solve is non-aliasing, so you can use the same array for
 # input and output
-function solve!{T<:BlasFloat}(x::AbstractArray{T}, xrng::Ranges{Int}, M::Tridiagonal{T}, rhs::AbstractArray{T}, rhsrng::Ranges{Int})
+function solve!{T<:BlasFloat}(x::AbstractArray{T}, xrng::Range{Int}, M::Tridiagonal{T}, rhs::AbstractArray{T}, rhsrng::Range{Int})
     d = M.d
     N = length(d)
     if length(xrng) != N || length(rhsrng) != N
@@ -309,7 +309,7 @@ function solve!(X::StridedMatrix, M::Tridiagonal, B::StridedMatrix)
     size(X) == size(B) || throw(DimensionMismatch(""))
     m, n = size(B)
     for j = 1:n
-        r = Range1((j-1)*m+1,m)
+        r = ((j-1)*m+1):((j-1)*m+m)
         solve!(X, r, M, B, r)
     end
     X
@@ -319,7 +319,7 @@ end
 \(M::Tridiagonal, rhs::StridedVecOrMat) = solve(M, rhs)
 
 # Tridiagonal multiplication
-function mult(x::AbstractArray, xrng::Ranges{Int}, M::Tridiagonal, v::AbstractArray, vrng::Ranges{Int})
+function mult(x::AbstractArray, xrng::Range{Int}, M::Tridiagonal, v::AbstractArray, vrng::Range{Int})
     dl = M.dl
     d = M.d
     du = M.du
@@ -346,7 +346,7 @@ function mult(X::StridedMatrix, M::Tridiagonal, B::StridedMatrix)
     size(X) == size(B) || throw(DimensionMismatch(""))
     m, n = size(B)
     for j = 1:n
-        r = Range1((j-1)*m+1,m)
+        r = ((j-1)*m+1):((j-1)*m+m)
         mult(X, r, M, B, r)
     end
     X

@@ -28,14 +28,14 @@ scale(b::Vector, A::Matrix) = scale!(similar(b, promote_type(eltype(A),eltype(b)
 
 dot{T<:BlasReal}(x::Vector{T}, y::Vector{T}) = BLAS.dot(x, y)
 dot{T<:BlasComplex}(x::Vector{T}, y::Vector{T}) = BLAS.dotc(x, y)
-function dot{T<:BlasReal, TI<:Integer}(x::Vector{T}, rx::Union(Range1{TI},Range{TI}), y::Vector{T}, ry::Union(Range1{TI},Range{TI}))
+function dot{T<:BlasReal, TI<:Integer}(x::Vector{T}, rx::Union(UnitRange{TI},Range{TI}), y::Vector{T}, ry::Union(UnitRange{TI},Range{TI}))
     length(rx)==length(ry) || throw(DimensionMismatch(""))
     if minimum(rx) < 1 || maximum(rx) > length(x) || minimum(ry) < 1 || maximum(ry) > length(y)
         throw(BoundsError())
     end
     BLAS.dot(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
 end
-function dot{T<:BlasComplex, TI<:Integer}(x::Vector{T}, rx::Union(Range1{TI},Range{TI}), y::Vector{T}, ry::Union(Range1{TI},Range{TI}))
+function dot{T<:BlasComplex, TI<:Integer}(x::Vector{T}, rx::Union(UnitRange{TI},Range{TI}), y::Vector{T}, ry::Union(UnitRange{TI},Range{TI}))
     length(rx)==length(ry) || throw(DimensionMismatch(""))
     if minimum(rx) < 1 || maximum(rx) > length(x) || minimum(ry) < 1 || maximum(ry) > length(y)
         throw(BoundsError())
@@ -239,9 +239,9 @@ end
 # blas.jl defines matmul for floats; other integer and mixed precision
 # cases are handled here
 
-lapack_size(t::Char, M::StridedVecOrMat) = (size(M, t=='N' ? 1:2), size(M, t=='N' ? 2:1))
+lapack_size(t::Char, M::AbstractVecOrMat) = (size(M, t=='N' ? 1:2), size(M, t=='N' ? 2:1))
 
-function copy!{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, tM::Char, M::StridedMatrix{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
+function copy!{R,S}(B::AbstractMatrix{R}, ir_dest::UnitRange{Int}, jr_dest::UnitRange{Int}, tM::Char, M::AbstractMatrix{S}, ir_src::UnitRange{Int}, jr_src::UnitRange{Int})
     if tM == 'N'
         copy!(B, ir_dest, jr_dest, M, ir_src, jr_src)
     else
@@ -250,7 +250,7 @@ function copy!{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, tM
     end
 end
 
-function copy_transpose!{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, tM::Char, M::StridedVecOrMat{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
+function copy_transpose!{R,S}(B::AbstractMatrix{R}, ir_dest::UnitRange{Int}, jr_dest::UnitRange{Int}, tM::Char, M::AbstractVecOrMat{S}, ir_src::UnitRange{Int}, jr_src::UnitRange{Int})
     if tM == 'N'
         Base.copy_transpose!(B, ir_dest, jr_dest, M, ir_src, jr_src)
     else
@@ -264,17 +264,17 @@ end
 
 # NOTE: the generic version is also called as fallback for
 #       strides != 1 cases in libalg_blas.jl
-(*){T,S}(A::StridedMatrix{T}, B::StridedVector{S}) = generic_matvecmul('N', A, B)
+(*){T,S}(A::AbstractMatrix{T}, B::AbstractVector{S}) = generic_matvecmul('N', A, B)
 
 arithtype(T) = T
 arithtype(::Type{Bool}) = Int
 
-function generic_matvecmul{T,S}(tA::Char, A::StridedMatrix{T}, B::StridedVector{S})
+function generic_matvecmul{T,S}(tA::Char, A::AbstractMatrix{T}, B::AbstractVector{S})
     C = similar(B, promote_type(arithtype(T),arithtype(S)), size(A, tA=='N' ? 1 : 2))
     generic_matvecmul(C, tA, A, B)
 end
 
-function generic_matvecmul{T,S,R}(C::StridedVector{R}, tA, A::StridedMatrix{T}, B::StridedVector{S})
+function generic_matvecmul{T,S,R}(C::AbstractVector{R}, tA, A::AbstractMatrix{T}, B::AbstractVector{S})
     mB = length(B)
     mA, nA = lapack_size(tA, A)
     mB==nA || throw(DimensionMismatch("*"))
@@ -318,9 +318,9 @@ end
 
 # NOTE: the generic version is also called as fallback for strides != 1 cases
 #       in libalg_blas.jl
-(*){T,S}(A::StridedVecOrMat{T}, B::StridedMatrix{S}) = generic_matmatmul('N', 'N', A, B)
+(*){T,S}(A::AbstractVecOrMat{T}, B::AbstractMatrix{S}) = generic_matmatmul('N', 'N', A, B)
 
-function generic_matmatmul{T,S}(tA, tB, A::StridedVecOrMat{T}, B::StridedMatrix{S})
+function generic_matmatmul{T,S}(tA, tB, A::AbstractVecOrMat{T}, B::AbstractMatrix{S})
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
     C = similar(B, promote_type(arithtype(T),arithtype(S)), mA, nB)
@@ -332,7 +332,7 @@ const Abuf = Array(Uint8, tilebufsize)
 const Bbuf = Array(Uint8, tilebufsize)
 const Cbuf = Array(Uint8, tilebufsize)
 
-function generic_matmatmul{T,S,R}(C::StridedVecOrMat{R}, tA, tB, A::StridedVecOrMat{T}, B::StridedMatrix{S})
+function generic_matmatmul{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat{T}, B::AbstractMatrix{S})
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
     mB==nA || throw(DimensionMismatch("*"))
@@ -482,11 +482,11 @@ end
 
 
 # multiply 2x2 matrices
-function matmul2x2{T,S}(tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
+function matmul2x2{T,S}(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S})
     matmul2x2(similar(B, promote_type(T,S), 2, 2), tA, tB, A, B)
 end
 
-function matmul2x2{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
+function matmul2x2{T,S,R}(C::AbstractMatrix{R}, tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S})
     if tA == 'T'
         A11 = A[1,1]; A12 = A[2,1]; A21 = A[1,2]; A22 = A[2,2]
     elseif tA == 'C'
@@ -509,11 +509,11 @@ function matmul2x2{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMatrix{T}, B::S
 end
 
 # Multiply 3x3 matrices
-function matmul3x3{T,S}(tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
+function matmul3x3{T,S}(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S})
     matmul3x3(similar(B, promote_type(T,S), 3, 3), tA, tB, A, B)
 end
 
-function matmul3x3{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
+function matmul3x3{T,S,R}(C::AbstractMatrix{R}, tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S})
     if tA == 'T'
         A11 = A[1,1]; A12 = A[2,1]; A13 = A[3,1];
         A21 = A[1,2]; A22 = A[2,2]; A23 = A[3,2];

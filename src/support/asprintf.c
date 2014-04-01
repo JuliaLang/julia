@@ -40,6 +40,10 @@
 
 #define INIT_SZ 128
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int
 vasprintf(char **str, const char *fmt, va_list ap)
 {
@@ -98,5 +102,9 @@ int asprintf(char **str, const char *fmt, ...)
         va_end(ap);
 
         return ret;
+}
+#endif
+
+#ifdef __cplusplus
 }
 #endif

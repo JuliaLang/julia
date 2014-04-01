@@ -10,16 +10,21 @@ LIBTARGET = lib$(NAME)
 
 SRCS = flisp.c builtins.c string.c equalhash.c table.c iostream.c \
         julia_extensions.c
+ifeq ($(USEMSVC), 1)
+SRCS += basename.c dirname.c
+endif
 
 OBJS = $(SRCS:%.c=%.o)
 DOBJS = $(SRCS:%.c=%.do)
 LLTDIR = ../support
 LLT = $(LLTDIR)/libsupport.a $(LIBUV) $(LIBUTF8PROC)
 
-FLAGS = -Wall -Wno-strict-aliasing -I$(LLTDIR) $(CFLAGS) \
-	-DUSE_COMPUTED_GOTO $(HFILEDIRS:%=-I%) \
+FLAGS = -I$(LLTDIR) $(CFLAGS) $(HFILEDIRS:%=-I%) \
         -I$(LIBUV_INC) -I$(JULIAHOME)/usr/include $(LIBDIRS:%=-L%) \
-        -fvisibility=hidden -DLIBRARY_EXPORTS
+        -DLIBRARY_EXPORTS
+ifneq ($(USEMSVC), 1)
+FLAGS += -Wall -Wno-strict-aliasing -DUSE_COMPUTED_GOTO -fvisibility=hidden 
+endif
 LIBFILES = $(LLT)
 LIBS = $(LIBFILES)
 ifneq ($(OS),WINNT)
@@ -59,15 +64,25 @@ $(LIBTARGET).a: $(OBJS)
 	rm -rf $@
 	@$(call PRINT_LINK, $(AR) -rcs $@ $(OBJS))
 
+ifneq ($(USEMSVC), 1)
+CCLD = $(CC)
+else
+CCLD = $(LD)
+endif
+
 $(EXENAME)-debug: $(DOBJS) $(LIBFILES) $(LIBTARGET)-debug.a flmain.do
-	@$(call PRINT_CC, $(CC) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME)-debug $(LIBTARGET).a $(LIBS) $(OSLIBS))
+	@$(call PRINT_LINK, $(CCLD) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME)-debug $(LIBTARGET).a $(LIBS) $(OSLIBS))
 ifndef CROSS_COMPILE
+ifneq ($(USEMSVC), 1)
 	$(call spawn,./$(EXENAME)-debug) unittest.lsp
+endif
 endif
 
 $(EXENAME): $(OBJS) $(LIBFILES) $(LIBTARGET).a flmain.o
-	@$(call PRINT_CC, $(CC) $(SHIPFLAGS) $(OBJS) flmain.o $(LDFLAGS) -o $(EXENAME) $(LIBTARGET).a $(LIBS) $(OSLIBS))
+	@$(call PRINT_LINK, $(CCLD) $(SHIPFLAGS) $(OBJS) flmain.o $(LDFLAGS) -o $(EXENAME) $(LIBTARGET).a $(LIBS) $(OSLIBS))
+ifneq ($(USEMSVC), 1)
 	$(call spawn,./$(EXENAME)) unittest.lsp
+endif
 
 clean:
 	rm -f *.o

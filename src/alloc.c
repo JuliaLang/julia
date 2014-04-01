@@ -8,6 +8,10 @@
 #include "julia.h"
 #include "julia_internal.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 jl_value_t *jl_true;
 jl_value_t *jl_false;
 
@@ -87,6 +91,7 @@ jl_sym_t *compositetype_sym; jl_sym_t *type_goto_sym;
 jl_sym_t *global_sym; jl_sym_t *tuple_sym;
 jl_sym_t *dot_sym;    jl_sym_t *newvar_sym;
 jl_sym_t *boundscheck_sym; jl_sym_t *copyast_sym;
+jl_sym_t *simdloop_sym;
 
 typedef struct {
     int64_t a;
@@ -930,3 +935,7 @@ JL_CALLABLE(jl_f_default_ctor_2)
         jl_type_error(((jl_datatype_t*)F)->name->name->name, ft, args[1]);
     return jl_new_struct((jl_datatype_t*)F, args[0], args[1]);
 }
+
+#ifdef __cplusplus
+}
+#endif

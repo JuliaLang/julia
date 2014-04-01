@@ -8,14 +8,15 @@ override CPPFLAGS += $(JCPPFLAGS)
 
 SRCS = \
 	jltypes gf ast builtins module codegen interpreter \
-	alloc dlload sys init task array dump toplevel jl_uv jlapi profile
+	alloc dlload sys init task array dump toplevel jl_uv jlapi profile llvm-simdloop
 
 FLAGS = \
-	-D_GNU_SOURCE \
-	-Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
-	-Iflisp -Isupport -fvisibility=hidden -fno-common \
+	-D_GNU_SOURCE -Iflisp -Isupport \
 	-I$(call exec,$(LLVM_CONFIG) --includedir) \
 	-I$(LIBUV_INC) -I$(build_includedir) -DLIBRARY_EXPORTS
+ifneq ($(USEMSVC), 1)
+FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -fvisibility=hidden -fno-common
+endif
 
 LLVMLINK = $(call exec,$(LLVM_CONFIG) --libs) $(call exec,$(LLVM_CONFIG) --system-libs 2> /dev/null)
 ifeq ($(USE_LLVM_SHLIB),1)
@@ -78,8 +79,14 @@ flisp/libflisp.a: flisp/*.h flisp/*.c support/libsupport.a
 flisp/libflisp-debug.a: flisp/*.h flisp/*.c support/libsupport-debug.a
 	$(MAKE) -C flisp debug
 
+ifneq ($(USEMSVC), 1)
+CXXLD = $(CXX) -shared
+else
+CXXLD = $(LD) -dll -export:jl_setjmp -export:jl_longjmp
+endif
+
 $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT): julia.expmap $(DOBJS) flisp/libflisp-debug.a support/libsupport-debug.a $(LIBUV)
-	@$(call PRINT_LINK, $(CXX) $(DEBUGFLAGS) $(DOBJS) $(RPATH_ORIGIN) -shared -o $@ $(LDFLAGS) $(DEBUG_LIBS))
+	@$(call PRINT_LINK, $(CXXLD) $(DEBUGFLAGS) $(DOBJS) $(RPATH_ORIGIN) -o $@ $(LDFLAGS) $(DEBUG_LIBS))
 	$(INSTALL_NAME_CMD)libjulia-debug.$(SHLIB_EXT) $@
 libjulia-debug.a: julia.expmap $(DOBJS) flisp/libflisp-debug.a support/libsupport-debug.a
 	rm -f $@
@@ -93,7 +100,7 @@ else
 endif
 
 $(build_shlibdir)/libjulia.$(SHLIB_EXT): julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a $(LIBUV)
-	@$(call PRINT_LINK, $(CXX) $(SHIPFLAGS) $(OBJS) $(RPATH_ORIGIN) -shared -o $@ $(LDFLAGS) $(RELEASE_LIBS) $(SONAME))
+	@$(call PRINT_LINK, $(CXXLD) $(SHIPFLAGS) $(OBJS) $(RPATH_ORIGIN) -o $@ $(LDFLAGS) $(RELEASE_LIBS) $(SONAME))
 	$(INSTALL_NAME_CMD)libjulia.$(SHLIB_EXT) $@
 libjulia.a: julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
 	rm -f $@

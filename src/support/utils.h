@@ -1,6 +1,10 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 DLLEXPORT char *uint2str(char *dest, size_t len, uint64_t num, uint32_t base);
 int str2int(char *str, size_t len, int64_t *res, uint32_t base);
 int isdigit_base(char c, int base);
@@ -92,6 +96,10 @@ STATIC_INLINE u_int64_t ByteSwap64(u_int64_t x)
 }
 #define bswap_64(x) ByteSwap64(x)
 
+#endif
+
+#ifdef __cplusplus
+}
 #endif
 
 #endif

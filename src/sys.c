@@ -17,12 +17,6 @@
 #endif
 #include <errno.h>
 #include <signal.h>
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
-char *basename(char *);
-char *dirname(char *);
-#else
-#include <libgen.h>
-#endif
 #include <fcntl.h>
 
 #ifdef __APPLE__
@@ -44,6 +38,18 @@ char *dirname(char *);
 
 #if defined _MSC_VER
 #include <io.h>
+#include <intrin.h>
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+DLLEXPORT char *basename(char *);
+DLLEXPORT char *dirname(char *);
+#else
+#include <libgen.h>
 #endif
 
 DLLEXPORT uint32_t jl_getutf8(ios_t *s)
@@ -413,6 +419,9 @@ JL_STREAM *jl_stderr_stream(void) { return (JL_STREAM*)JL_STDERR; }
 
 DLLEXPORT void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
 {
+#if defined _MSC_VER
+    __cpuid(CPUInfo, InfoType);
+#else
     __asm__ __volatile__ (
         #if defined(__i386__) && defined(__PIC__)
         "xchg %%ebx, %%esi;"
@@ -428,6 +437,7 @@ DLLEXPORT void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
         "=d" (CPUInfo[3]) :
         "a" (InfoType)
     );
+#endif
 }
 
 // -- set/clear the FZ/DAZ flags on x86 & x86-64 --
@@ -620,3 +630,7 @@ DLLEXPORT const char *jl_pathname_for_handle(uv_lib_t *uv_lib)
 #endif
     return NULL;
 }
+
+#ifdef __cplusplus
+}
+#endif

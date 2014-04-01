@@ -5,9 +5,8 @@
     nothing
 end
 
-
 unsafe_getindex(v::Real, ind::Int) = v
-unsafe_getindex(v::Ranges, ind::Int) = first(v) + (ind-1)*step(v)
+unsafe_getindex(v::Range, ind::Int) = first(v) + (ind-1)*step(v)
 unsafe_getindex(v::BitArray, ind::Int) = Base.unsafe_bitgetindex(v.chunks, ind)
 unsafe_getindex(v::AbstractArray, ind::Int) = v[ind]
 unsafe_getindex(v, ind::Real) = unsafe_getindex(v, to_index(ind))
@@ -15,7 +14,6 @@ unsafe_getindex(v, ind::Real) = unsafe_getindex(v, to_index(ind))
 unsafe_setindex!{T}(v::AbstractArray{T}, x::T, ind::Int) = (v[ind] = x; v)
 unsafe_setindex!(v::BitArray, x::Bool, ind::Int) = (Base.unsafe_bitsetindex!(v.chunks, x, ind); v)
 unsafe_setindex!{T}(v::AbstractArray{T}, x::T, ind::Real) = unsafe_setindex!(v, x, to_index(ind))
-
 
 # Version that uses cartesian indexing for src
 @ngenerate N typeof(dest) function _getindex!(dest::Array, src::AbstractArray, I::NTuple{N,Union(Int,AbstractVector)}...)
@@ -139,14 +137,14 @@ eval(ngenerate(:N, nothing, :(setindex!{T}(s::SubArray{T,N}, v, ind::Integer)), 
 
 ### from abstractarray.jl
 
-@ngenerate N typeof(A) function fill!{T,N}(A::StoredArray{T,N}, x)
+@ngenerate N typeof(A) function fill!{T,N}(A::AbstractArray{T,N}, x)
     @nloops N i A begin
         @inbounds (@nref N A i) = x
     end
     A
 end
 
-@ngenerate N typeof(dest) function copy!{T,N}(dest::StoredArray{T,N}, src::StoredArray{T,N})
+@ngenerate N typeof(dest) function copy!{T,N}(dest::AbstractArray{T,N}, src::AbstractArray{T,N})
     if @nall N d->(size(dest,d) == size(src,d))
         @nloops N i dest begin
             @inbounds (@nref N dest i) = (@nref N src i)
@@ -191,20 +189,20 @@ end
 # contiguous multidimensional indexing: if the first dimension is a range,
 # we can get some performance from using copy_chunks!
 
-function unsafe_getindex(B::BitArray, I0::Range1{Int})
+function unsafe_getindex(B::BitArray, I0::UnitRange{Int})
     X = BitArray(length(I0))
     copy_chunks!(X.chunks, 1, B.chunks, first(I0), length(I0))
     return X
 end
 
-function getindex(B::BitArray, I0::Range1{Int})
+function getindex(B::BitArray, I0::UnitRange{Int})
     checkbounds(B, I0)
     return unsafe_getindex(B, I0)
 end
 
-getindex{T<:Real}(B::BitArray, I0::Range1{T}) = getindex(B, to_index(I0))
+getindex{T<:Real}(B::BitArray, I0::UnitRange{T}) = getindex(B, to_index(I0))
 
-@ngenerate N BitArray{length(index_shape(I0, I...))} function unsafe_getindex(B::BitArray, I0::Range1{Int}, I::NTuple{N,Union(Int,Range1{Int})}...)
+@ngenerate N BitArray{length(index_shape(I0, I...))} function unsafe_getindex(B::BitArray, I0::UnitRange{Int}, I::NTuple{N,Union(Int,UnitRange{Int})}...)
     X = BitArray(index_shape(I0, I...))
 
     f0 = first(I0)
@@ -287,7 +285,7 @@ end
 # contiguous multidimensional indexing: if the first dimension is a range,
 # we can get some performance from using copy_chunks!
 
-function unsafe_setindex!(B::BitArray, X::BitArray, I0::Range1{Int})
+function unsafe_setindex!(B::BitArray, X::BitArray, I0::UnitRange{Int})
     l0 = length(I0)
     l0 == 0 && return B
     f0 = first(I0)
@@ -295,7 +293,7 @@ function unsafe_setindex!(B::BitArray, X::BitArray, I0::Range1{Int})
     return B
 end
 
-function unsafe_setindex!(B::BitArray, x::Bool, I0::Range1{Int})
+function unsafe_setindex!(B::BitArray, x::Bool, I0::UnitRange{Int})
     l0 = length(I0)
     l0 == 0 && return B
     f0 = first(I0)
@@ -303,7 +301,7 @@ function unsafe_setindex!(B::BitArray, x::Bool, I0::Range1{Int})
     return B
 end
 
-@ngenerate N typeof(B) function unsafe_setindex!(B::BitArray, X::BitArray, I0::Range1{Int}, I::NTuple{N,Union(Int,Range1{Int})}...)
+@ngenerate N typeof(B) function unsafe_setindex!(B::BitArray, X::BitArray, I0::UnitRange{Int}, I::NTuple{N,Union(Int,UnitRange{Int})}...)
     length(X) == 0 && return B
     f0 = first(I0)
     l0 = length(I0)
@@ -331,7 +329,7 @@ end
     return B
 end
 
-@ngenerate N typeof(B) function unsafe_setindex!(B::BitArray, x::Bool, I0::Range1{Int}, I::NTuple{N,Union(Int,Range1{Int})}...)
+@ngenerate N typeof(B) function unsafe_setindex!(B::BitArray, x::Bool, I0::UnitRange{Int}, I::NTuple{N,Union(Int,UnitRange{Int})}...)
     f0 = first(I0)
     l0 = length(I0)
     l0 == 0 && return B

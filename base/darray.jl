@@ -1,4 +1,4 @@
-type DArray{T,N,A} <: StoredArray{T,N}
+type DArray{T,N,A} <: AbstractArray{T,N}
     dims::NTuple{N,Int}
 
     chunks::Array{RemoteRef,N}
@@ -7,7 +7,7 @@ type DArray{T,N,A} <: StoredArray{T,N}
     pmap::Vector{Int}
 
     # indexes held by piece i
-    indexes::Array{NTuple{N,Range1{Int}},N}
+    indexes::Array{NTuple{N,UnitRange{Int}},N}
     # cuts[d][i] = first index of chunk i in dimension d
     cuts::Vector{Vector{Int}}
 
@@ -104,7 +104,7 @@ end
 function chunk_idxs(dims, chunks)
     cuts = map(defaultdist, dims, chunks)
     n = length(dims)
-    idxs = Array(NTuple{n,Range1{Int}},chunks...)
+    idxs = Array(NTuple{n,UnitRange{Int}},chunks...)
     cartesianmap(tuple(chunks...)) do cidx...
         idxs[cidx...] = ntuple(n, i->(cuts[i][cidx[i]]:cuts[i][cidx[i]+1]-1))
     end
@@ -184,7 +184,7 @@ end
 function convert{S,T,N}(::Type{Array{S,N}}, s::SubDArray{T,N})
     I = s.indexes
     d = s.parent
-    if isa(I,(Range1{Int}...)) && S<:T && T<:S
+    if isa(I,(UnitRange{Int}...)) && S<:T && T<:S
         l = locate(d, map(first, I)...)
         if isequal(d.indexes[l...], I)
             # SubDArray corresponds to a chunk
@@ -243,14 +243,14 @@ function getindex{T}(d::DArray{T}, I::(Int...))
 end
 
 getindex(d::DArray) = d[1]
-getindex(d::DArray, I::Union(Int,Range1{Int})...) = sub(d,I)
+getindex(d::DArray, I::Union(Int,UnitRange{Int})...) = sub(d,I)
 
 copy(d::SubOrDArray) = d
 
 # local copies are obtained by convert(Array, ) or assigning from
 # a SubDArray to a local Array.
 
-function setindex!(a::Array, d::DArray, I::Range1{Int}...)
+function setindex!(a::Array, d::DArray, I::UnitRange{Int}...)
     n = length(I)
     @sync begin
         for i = 1:length(d.chunks)
@@ -261,7 +261,7 @@ function setindex!(a::Array, d::DArray, I::Range1{Int}...)
     a
 end
 
-function setindex!(a::Array, s::SubDArray, I::Range1{Int}...)
+function setindex!(a::Array, s::SubDArray, I::UnitRange{Int}...)
     n = length(I)
     d = s.parent
     J = s.indexes
@@ -293,7 +293,7 @@ end
 # to disambiguate
 setindex!(a::Array{Any}, d::SubOrDArray, i::Int) = arrayset(a, d, i)
 
-setindex!(a::Array, d::SubOrDArray, I::Union(Int,Range1{Int})...) =
+setindex!(a::Array, d::SubOrDArray, I::Union(Int,UnitRange{Int})...) =
     setindex!(a, d, [isa(i,Int) ? (i:i) : i for i in I ]...)
 
 ## higher-order functions ##

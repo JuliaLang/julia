@@ -5,6 +5,10 @@
 #include "dtypes.h"
 #include "utils.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 double conv_to_double(void *data, numerictype_t tag)
 {
     double d=0;
@@ -226,3 +230,7 @@ int cmp_eq(void *a, numerictype_t atag, void *b, numerictype_t btag,
     }
     return 1;
 }
+
+#ifdef __cplusplus
+}
+#endif

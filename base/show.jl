@@ -1009,7 +1009,7 @@ end
 
 show(io::IO, X::AbstractArray) = showarray(io, X, header=_limit_output, repr=!_limit_output)
 
-print(io::IO, X::AbstractArray) = writedlm(io, X)
+print(io::IO, X::AbstractArray) = writedlm(io, X; quotes=false)
 
 function with_output_limit(thk, lim=true)
     global _limit_output

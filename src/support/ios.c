@@ -30,6 +30,10 @@
 
 #define MOST_OF(x) ((x) - ((x)>>4))
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* OS-level primitive wrappers */
 
 #if defined(__APPLE__) || defined(_OS_WINDOWS_)
@@ -1079,3 +1083,7 @@ int ios_printf(ios_t *s, const char *format, ...)
     va_end(args);
     return c;
 }
+
+#ifdef __cplusplus
+}
+#endif

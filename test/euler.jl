@@ -76,7 +76,9 @@ function euler11(grid,n)
         j = n:size(grid,2)-n+1,
         di = -1:1, dj = -1:1
         di == dj == 0 && continue
-        idx = sub2ind(size(grid),Range(i,di,n),Range(j,dj,n))
+        idx = sub2ind(size(grid),
+                      di==0 ? fill(i,n) : range(i,di,n),
+                      dj==0 ? fill(j,n) : range(j,dj,n))
         m = max(m,prod(grid[idx]))
     end
     return m

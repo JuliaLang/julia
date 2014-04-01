@@ -41,6 +41,13 @@ c,r = test_complete(s)
 @test r == 20:20
 @test s[r] == "f"
 
+# issue #6333
+s = "Base.return_types(getin"
+c,r = test_complete(s)
+@test in("getindex",c)
+@test r == 19:23
+@test s[r] == "getin"
+
 ## Test completion of packages
 #mkp(p) = ((@assert !isdir(p)); mkdir(p))
 #temp_pkg_dir() do
