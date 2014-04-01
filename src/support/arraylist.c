@@ -7,6 +7,10 @@
 #include "dtypes.h"
 #include "arraylist.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 arraylist_t *arraylist_new(arraylist_t *a, size_t size)
 {
     a->len = 0;
@@ -67,3 +71,7 @@ void *arraylist_pop(arraylist_t *a)
     a->items[a->len] = NULL;
     return p;
 }
+
+#ifdef __cplusplus
+}
+#endif

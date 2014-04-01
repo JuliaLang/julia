@@ -1,6 +1,10 @@
 #include <locale.h>
 #include "libsupport.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 double D_PNAN;
 double D_NNAN;
 double D_PINF;
@@ -24,3 +28,7 @@ void libsupport_init(void)
         isInitialized=1;
     }
 }
+
+#ifdef __cplusplus
+}
+#endif

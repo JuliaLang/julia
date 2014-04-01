@@ -33,8 +33,13 @@
 #include <string.h>
 #include <locale.h>
 #include <malloc.h>
+#include "dtypes.h"
 
-char *basename( char *path )
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+DLLEXPORT char *basename( char *path )
 {
     size_t len;
     static char *retfail = NULL;
@@ -168,5 +173,9 @@ char *basename( char *path )
     free( locale );
     return( retfail );
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 /* $RCSfile: basename.c,v $$Revision: 1.2 $: end of file */

@@ -11,6 +11,10 @@
 #include "julia_internal.h"
 #include "builtin_proto.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 static htable_t ser_tag;
 static htable_t deser_tag;
 static htable_t backref_table;
@@ -1104,7 +1108,7 @@ void jl_restore_system_image(char *fname)
 void jl_init_restored_modules()
 {
     while (modules_to_init.len > 0) {
-        jl_module_run_initializer(arraylist_pop(&modules_to_init));
+        jl_module_run_initializer((jl_module_t *) arraylist_pop(&modules_to_init));
     }
 }
 
@@ -1341,3 +1345,7 @@ void jl_init_serializer(void)
         i += 1;
     }
 }
+
+#ifdef __cplusplus
+}
+#endif

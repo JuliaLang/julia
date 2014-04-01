@@ -1,5 +1,8 @@
 #include "repl.h"
-#include <unistd.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 static char *stdin_buf = NULL;
 static size_t stdin_buf_len = 0;
@@ -7,7 +10,7 @@ static size_t stdin_buf_maxlen = 128;
 static char *given_prompt=NULL, *prompt_to_use=NULL;
 static int callback_en=0;
 
-#ifndef __WIN32__
+#ifndef _WIN32
 void sigcont_handler(int arg)
 {
     if (callback_en) {
@@ -19,9 +22,9 @@ void sigcont_handler(int arg)
 
 void jl_init_repl(int history)
 {
-    stdin_buf = malloc(stdin_buf_maxlen);
+    stdin_buf = (char *) malloc(stdin_buf_maxlen);
     stdin_buf_len = 0;
-#ifndef __WIN32__
+#ifndef _WIN32
     signal(SIGCONT, sigcont_handler);
 #endif
 }
@@ -61,7 +64,7 @@ void repl_callback_enable(char *prompt)
         if (prompt_to_use) free(prompt_to_use);
         // remove \001 and \002
         size_t n = strlen(prompt);
-        prompt_to_use = malloc(n+1);
+        prompt_to_use = (char *) malloc(n+1);
         size_t o=0;
         for(size_t i=0; i < n; i++) {
             if (prompt[i] > 2)
@@ -77,7 +80,7 @@ static void stdin_buf_pushc(char c)
 {
     if (stdin_buf_len >= stdin_buf_maxlen) {
         stdin_buf_maxlen *= 2;
-        stdin_buf = realloc(stdin_buf, stdin_buf_maxlen);
+        stdin_buf = (char *) realloc(stdin_buf, stdin_buf_maxlen);
         if (!stdin_buf) {
             // we can safely ignore this error and continue, if that is preferred
             perror("realloc");
@@ -116,11 +119,11 @@ void jl_read_buffer(unsigned char* base, ssize_t nread)
                 raise(SIGTERM);
                 break;
             case '\x1A':
-#ifndef __WIN32__
+#ifndef _WIN32
                 raise(SIGTSTP);
 #endif
                 break;
-            case '\e':
+            case '\x1B': // MSVC does not understand \e
                 esc = 1;
                 break;
             case 127:
@@ -153,9 +156,13 @@ void jl_read_buffer(unsigned char* base, ssize_t nread)
     if (newline) basic_stdin_callback();
 }
 
-DLLEXPORT void jl_reset_input(void)
+void jl_reset_input(void)
 {
     stdin_buf_len = 0;
     stdin_buf[0] = 0;
     JL_WRITE(jl_uv_stdout,"\n",1);
 }
+
+#ifdef __cplusplus
+}
+#endif

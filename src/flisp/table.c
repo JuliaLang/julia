@@ -8,6 +8,10 @@
 #include "flisp.h"
 #include "equalhash.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 static value_t tablesym;
 static fltype_t *tabletype;
 
@@ -208,3 +212,7 @@ void table_init(void)
                                    &table_vtable, NULL);
     assign_global_builtins(tablefunc_info);
 }
+
+#ifdef __cplusplus
+}
+#endif

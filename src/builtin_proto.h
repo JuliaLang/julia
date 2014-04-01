@@ -1,6 +1,10 @@
 #ifndef BUILTIN_PROTO_H
 #define BUILTIN_PROTO_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // declarations for julia-callable builtin functions
 
 JL_CALLABLE(jl_f_new_expr);
@@ -37,5 +41,9 @@ JL_CALLABLE(jl_f_applicable);
 JL_CALLABLE(jl_f_invoke);
 JL_CALLABLE(jl_f_task);
 JL_CALLABLE(jl_f_yieldto);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
