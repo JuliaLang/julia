@@ -246,3 +246,26 @@ end
 # issue #2959
 @test 1.0:1.5 == 1.0:1.0:1.5 == 1.0:1.0
 #@test 1.0:(.3-.1)/.1 == 1.0:2.0
+
+let r = typemin(Int64):2:typemax(Int64), s = typemax(Int64):-2:typemin(Int64)
+    @test first(r) == typemin(Int64)
+    @test last(r) == (typemax(Int64)-1)
+    @test_throws length(r)
+
+    @test first(s) == typemax(Int64)
+    @test last(s) == (typemin(Int64)+1)
+    @test_throws length(s)
+end
+
+@test length(typemin(Int64):3:typemax(Int64)) == 6148914691236517206
+@test length(typemax(Int64):-3:typemin(Int64)) == 6148914691236517206
+
+for s in 3:100
+    @test length(typemin(Int):s:typemax(Int)) == length(big(typemin(Int)):big(s):big(typemax(Int)))
+    @test length(typemax(Int):-s:typemin(Int)) == length(big(typemax(Int)):big(-s):big(typemin(Int)))
+end
+
+@test length(uint(1):uint(1):uint(0)) == 0
+@test length(typemax(Uint):uint(1):(typemax(Uint)-1)) == 0
+@test length(typemax(Uint):uint(2):(typemax(Uint)-1)) == 0
+@test length((typemin(Int)+3):5:(typemin(Int)+1)) == 0
