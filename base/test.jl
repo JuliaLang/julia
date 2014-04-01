@@ -61,7 +61,7 @@ macro test_fails(ex)
     :(@test_throws $ex)
 end
 
-approx_full(x::StoredArray) = x
+approx_full(x::AbstractArray) = x
 approx_full(x::Number) = x
 approx_full(x) = full(x)
 

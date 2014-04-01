@@ -12,9 +12,9 @@ New language features
   * Default "inner" constructors now accept any arguments. Constructors that
     look like `MyType(a, b) = new(a, b)` can and should be removed ([#4026]).
 
-  * Expanded array type hierarchy, including ``StoredArray`` for all
-    container-like arrays, and ``DenseArray`` for in-memory arrays with
-    standard strided storage ([#987], [#2345]).
+  * Expanded array type hierarchy to include an abstract ``DenseArray`` for
+    in-memory arrays with standard strided storage ([#987], [#2345],
+    [#6212]).
 
   * When reloading code, types whose definitions have not changed can be
     ignored in some cases.
