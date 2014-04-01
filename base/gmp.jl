@@ -157,6 +157,13 @@ if sizeof(Int64) == sizeof(Clong)
 end
 convert(::Type{Int128}, x::BigInt) = copysign(int128(uint128(abs(x))),x)
 
+function convert(::Type{Float64}, n::BigInt)
+    # TODO: this should round to nearest but instead rounds to zero
+    ccall((:__gmpz_get_d, :libgmp), Float64, (Ptr{BigInt},), &n)
+end
+convert(::Type{Float32}, n::BigInt) = float32(float64(n))
+convert(::Type{Float16}, n::BigInt) = float16(float64(n))
+
 promote_rule{T<:Integer}(::Type{BigInt}, ::Type{T}) = BigInt
 
 # serialization
