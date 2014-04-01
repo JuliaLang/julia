@@ -120,6 +120,14 @@ convert(::Type{SharedArray}, A::Array) = (S = SharedArray(eltype(A), size(A)); c
 convert{T}(::Type{SharedArray{T}}, A::Array) = (S = SharedArray(T, size(A)); copy!(S, A))
 convert{TS,TA,N}(::Type{SharedArray{TS,N}}, A::Array{TA,N}) = (S = SharedArray(TS, size(A)); copy!(S, A))
 
+function deepcopy_internal(S::SharedArray, stackdict::ObjectIdDict)
+    haskey(stackdict, S) && return stackdict[S]
+    # Note: copy can be used here because SharedArrays are restricted to isbits types
+    R = copy(S)
+    stackdict[S] = R
+    return R
+end
+
 function range_1dim(S::SharedArray, pidx)
     l = length(S)
     nw = length(S.pids)
