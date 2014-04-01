@@ -437,7 +437,7 @@ endif
 	echo 1 > $@
 $(UV_OBJ_TARGET): $(UV_SRC_TARGET)
 	$(MAKE) -C libuv install $(MAKE_COMMON)
-	$(INSTALL_NAME_CMD)libuv.dylib $(build_shlibdir)/libuv.dylib
+	$(INSTALL_NAME_CMD)libuv.$(SHLIB_EXT) $(build_shlibdir)/libuv.$(SHLIB_EXT)
 
 clean-uv:
 	-$(MAKE) -C libuv clean
@@ -476,7 +476,7 @@ endif
 	echo 1 > $@
 $(PCRE_OBJ_TARGET): $(PCRE_SRC_TARGET) pcre-$(PCRE_VER)/checked
 	$(MAKE) -C pcre-$(PCRE_VER) $(LIBTOOL_CCLD) install $(MAKE_COMMON)
-	$(INSTALL_NAME_CMD)libpcre.dylib $@
+	$(INSTALL_NAME_CMD)libpcre.$(SHLIB_EXT) $@
 	touch -c $@
 
 clean-pcre:
@@ -518,11 +518,11 @@ $(GRISU_OBJ_TARGET): double-conversion-$(GRISU_VER)/Makefile
 	$(CXX) -c $(GRISU_OPTS) -o src/strtod.o -Isrc src/strtod.cc && \
 	$(CXX) -c $(GRISU_OPTS) -o src/libdouble-conversion.o -I.. -Isrc ../double_conversion_wrapper.cpp && \
 	$(CXX) $(GRISU_OPTS) src/*.o $(LDFLAGS) -shared -dead_strip -o $@ && \
-	$(INSTALL_NAME_CMD)libgrisu.dylib $@
+	$(INSTALL_NAME_CMD)libgrisu.$(SHLIB_EXT) $@
 else
 $(GRISU_OBJ_TARGET):
 	$(CXX) $(GRISU_OPTS) -I/usr/include/double-conversion double_conversion_wrapper.cpp -shared $(LDFLAGS) -o $@ -ldouble-conversion && \
-	$(INSTALL_NAME_CMD)libgrisu.dylib $@
+	$(INSTALL_NAME_CMD)libgrisu.$(SHLIB_EXT) $@
 endif
 
 clean-double-conversion:
@@ -562,7 +562,7 @@ ifeq ($(OS),WINNT)
 	cp $< $@
 else
 	$(MAKE) -C openlibm install $(OPENLIBM_FLAGS) $(MAKE_COMMON)
-	$(INSTALL_NAME_CMD)libopenlibm.dylib $@
+	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $@
 	touch -c $@
 endif
 
@@ -582,7 +582,7 @@ install-openlibm: $(OPENLIBM_OBJ_TARGET)
 
 ## openspecfun ##
 
-OPENSPECFUN_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) FFLAGS="$(JFFLAGS)" USE_OPENLIBM=1 OPENLIBM_HOME=$(JULIAHOME)/deps/openlibm
+OPENSPECFUN_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) FFLAGS="$(JFFLAGS)" USE_OPENLIBM=1
 
 OPENSPECFUN_OBJ_TARGET = $(build_shlibdir)/libopenspecfun.$(SHLIB_EXT)
 OPENSPECFUN_OBJ_SOURCE = openspecfun/libopenspecfun.$(SHLIB_EXT)
@@ -595,17 +595,23 @@ endif
 ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/openspecfun ] && echo exists ))
 $(OPENSPECFUN_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/openspecfun/HEAD
 endif
-$(OPENSPECFUN_OBJ_SOURCE): openspecfun/Makefile
+$(OPENSPECFUN_OBJ_SOURCE): openspecfun/Makefile $(OPENLIBM_OBJ_TARGET)
 	$(MAKE) -C openspecfun $(OPENSPECFUN_FLAGS) $(MAKE_COMMON)
 	touch -c $@
-$(OPENSPECFUN_OBJ_TARGET): $(OPENSPECFUN_OBJ_SOURCE) | $(build_shlibdir)
-	cp openspecfun/libopenspecfun.a $(build_libdir)/libopenspecfun.a
+$(OPENSPECFUN_OBJ_TARGET): $(OPENSPECFUN_OBJ_SOURCE)
+ifeq ($(OS),WINNT)
+	cp -a openspecfun/libopenspecfun.a $(build_libdir)/libopenspecfun.a
 	cp $< $@
+else
+	$(MAKE) -C openspecfun install $(OPENSPECFUN_FLAGS) $(MAKE_COMMON)
 	$(INSTALL_NAME_CMD)libopenspecfun.$(SHLIB_EXT) $@
+	touch -c $@
+endif
 
 clean-openspecfun:
 	-$(MAKE) -C openspecfun distclean $(OPENSPECFUN_FLAGS)
 	-rm $(OPENSPECFUN_OBJ_TARGET)
+	-rm $(build_libdir)/libopenspecfun.a
 distclean-openspecfun: clean-openspecfun
 	-cd openspecfun && git clean -fdx
 
@@ -880,12 +886,12 @@ GFORTBLAS_FFLAGS += -cpp -ffree-line-length-0 -ffixed-line-length-0 \
 endif
 endif
 
-libgfortblas.dylib: gfortblas.c gfortblas.alias
+libgfortblas.$(SHLIB_EXT): gfortblas.c gfortblas.alias
 	$(CC) -Wall -O3 $(CPPFLAGS) $(CFLAGS) $(fPIC) -shared $< -o $@ -pipe \
 				-Wl,-reexport_framework,vecLib -Wl,-alias_list,gfortblas.alias
-$(build_shlibdir)/libgfortblas.dylib: libgfortblas.dylib
+$(build_shlibdir)/libgfortblas.$(SHLIB_EXT): libgfortblas.$(SHLIB_EXT)
 	cp -f $< $@
-	$(INSTALL_NAME_CMD)libgfortblas.dylib $@
+	$(INSTALL_NAME_CMD)libgfortblas.$(SHLIB_EXT) $@
 endif
 
 ## LAPACK ##
@@ -912,7 +918,7 @@ lapack-$(LAPACK_VER)/Makefile: lapack-$(LAPACK_VER).tgz
 ifeq ($(USE_SYSTEM_BLAS), 0)
 lapack-$(LAPACK_VER)/liblapack.a: | $(OPENBLAS_OBJ_TARGET)
 else ifeq ($(OS),Darwin)
-lapack-$(LAPACK_VER)/liblapack.a: | $(build_shlibdir)/libgfortblas.dylib
+lapack-$(LAPACK_VER)/liblapack.a: | $(build_shlibdir)/libgfortblas.$(SHLIB_EXT)
 endif
 lapack-$(LAPACK_VER)/liblapack.a: lapack-$(LAPACK_VER)/Makefile
 	cd lapack-$(LAPACK_VER) && \
@@ -928,7 +934,7 @@ $(LAPACK_OBJ_SOURCE): lapack-$(LAPACK_VER)/liblapack.a
 	$(FC) -shared $(FFLAGS) $(JFFLAGS) SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o $(LIBBLAS) -o liblapack.$(SHLIB_EXT)
 $(LAPACK_OBJ_TARGET): $(LAPACK_OBJ_SOURCE)
 	cp $< $@
-	$(INSTALL_NAME_CMD)liblapack.dylib $@
+	$(INSTALL_NAME_CMD)liblapack.$(SHLIB_EXT) $@
 
 clean-lapack:
 	-$(MAKE) -C lapack-$(LAPACK_VER) clean
@@ -1071,9 +1077,9 @@ $(FFTW_SINGLE_OBJ_TARGET): $(FFTW_SINGLE_SRC_TARGET) fftw-$(FFTW_VER)-single/che
 	$(MAKE) -C fftw-$(FFTW_VER)-single install $(MAKE_COMMON)
 	touch -c $@
 ifeq ($(OS), Darwin)
-	$(INSTALL_NAME_CMD)libfftw3f.dylib $(build_shlibdir)/libfftw3f.dylib
+	$(INSTALL_NAME_CMD)libfftw3f.$(SHLIB_EXT) $(build_shlibdir)/libfftw3f.$(SHLIB_EXT)
 	$(INSTALL_NAME_CMD)libfftw3f_threads.$(SHLIB_EXT) $(build_shlibdir)/libfftw3f_threads.$(SHLIB_EXT)
-	$(INSTALL_NAME_CHANGE_CMD) $(build_shlibdir)/libfftw3f.3.dylib $(INSTALL_NAME_ID_DIR)libfftw3f.dylib $(build_shlibdir)/libfftw3f_threads.dylib
+	$(INSTALL_NAME_CHANGE_CMD) $(build_shlibdir)/libfftw3f.3.$(SHLIB_EXT) $(INSTALL_NAME_ID_DIR)libfftw3f.$(SHLIB_EXT) $(build_shlibdir)/libfftw3f_threads.$(SHLIB_EXT)
 else ifeq ($(OS), WINNT)
 	mv -f $(build_shlibdir)/libfftw3f-3.dll $@
 else ifeq ($(OS), Linux)
@@ -1110,7 +1116,7 @@ $(FFTW_DOUBLE_OBJ_TARGET): $(FFTW_DOUBLE_SRC_TARGET) fftw-$(FFTW_VER)-double/che
 ifeq ($(OS), Darwin)
 	$(INSTALL_NAME_CMD)libfftw3.$(SHLIB_EXT) $(build_shlibdir)/libfftw3.$(SHLIB_EXT)
 	$(INSTALL_NAME_CMD)libfftw3_threads.$(SHLIB_EXT) $(build_shlibdir)/libfftw3_threads.$(SHLIB_EXT)
-	$(INSTALL_NAME_CHANGE_CMD) $(build_shlibdir)/libfftw3.3.dylib $(INSTALL_NAME_ID_DIR)libfftw3.dylib $(build_shlibdir)/libfftw3_threads.dylib
+	$(INSTALL_NAME_CHANGE_CMD) $(build_shlibdir)/libfftw3.3.$(SHLIB_EXT) $(INSTALL_NAME_ID_DIR)libfftw3.$(SHLIB_EXT) $(build_shlibdir)/libfftw3_threads.$(SHLIB_EXT)
 else ifeq ($(OS), WINNT)
 	mv -f $(build_shlibdir)/libfftw3-3.dll $@
 else ifeq ($(OS), Linux)
@@ -1393,7 +1399,7 @@ $(GMP_OBJ_TARGET): $(GMP_SRC_TARGET) gmp-$(GMP_VER)/checked
 ifeq ($(OS),WINNT)
 	mv -f $(build_libdir)/libgmp.$(SHLIB_EXT) $@
 endif
-	$(INSTALL_NAME_CMD)libgmp.dylib $@
+	$(INSTALL_NAME_CMD)libgmp.$(SHLIB_EXT) $@
 	touch -c $@
 
 clean-gmp:
@@ -1438,7 +1444,7 @@ endif
 	echo 1 > $@
 $(MPFR_OBJ_TARGET): $(MPFR_SRC_TARGET) mpfr-$(MPFR_VER)/checked
 	$(MAKE) -C mpfr-$(MPFR_VER) $(LIBTOOL_CCLD) install $(MAKE_COMMON)
-	$(INSTALL_NAME_CMD)libmpfr.dylib $@
+	$(INSTALL_NAME_CMD)libmpfr.$(SHLIB_EXT) $@
 	touch -c $@
 
 clean-mpfr:
@@ -1496,7 +1502,7 @@ ifeq ($(OS), WINNT)
 else
 	$(MAKE) -C zlib-$(ZLIB_VER) install prefix=$(CROSS_COMPILE) $(MAKE_COMMON)
 endif
-	$(INSTALL_NAME_CMD)libz.dylib $@
+	$(INSTALL_NAME_CMD)libz.$(SHLIB_EXT) $@
 	touch -c $@
 
 clean-zlib:
