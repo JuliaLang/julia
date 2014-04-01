@@ -245,6 +245,9 @@ Library improvements
     * Very large ranges (e.g. `0:typemax(Int)`) can now be constructed, but some
       operations (e.g. `length`) will raise an `OverflowError`.
 
+  * Extended API for ``cov`` and ``cor``, which accept keyword arguments ``vardim``, 
+    ``corrected``, and ``mean`` ([#6273])
+
 
 Deprecated or removed
 ---------------------
@@ -363,13 +366,11 @@ Deprecated or removed
 [#6169]: https://github.com/JuliaLang/julia/issues/6169
 [#5970]: https://github.com/JuliaLang/julia/issues/5970
 [#6197]: https://github.com/JuliaLang/julia/pull/6197
-<<<<<<< HEAD
 [#5387]: https://github.com/JuliaLang/julia/pull/5387
 [#5671]: https://github.com/JuliaLang/julia/pull/5671
 [#5380]: https://github.com/JuliaLang/julia/pull/5380
-=======
 [#5585]: https://github.com/JuliaLang/julia/issues/5585
->>>>>>> remove * and div for Char
+[#6273]: https://github.com/JuliaLang/julia/pull/6273
 
 Julia v0.2.0 Release Notes
 ==========================
