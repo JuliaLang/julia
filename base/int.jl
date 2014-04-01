@@ -50,6 +50,36 @@ end
 /(x::Integer, y::Integer) = float(x)/float(y)
 inv(x::Integer) = float(one(x))/float(x)
 
+isodd(n::Integer) = bool(rem(n,2))
+iseven(n::Integer) = !isodd(n)
+
+signbit(x::Unsigned) = 0
+signbit(x::Int8) = int(x>>>7)
+signbit(x::Int16) = int(x>>>15)
+signbit(x::Int32) = int(x>>>31)
+signbit(x::Int64) = int(x>>>63)
+signbit(x::Int128) = int(x>>>127)
+
+flipsign(x::Int,    y::Int)    = box(Int,flipsign_int(unbox(Int,x),unbox(Int,y)))
+flipsign(x::Int64,  y::Int64)  = box(Int64,flipsign_int(unbox(Int64,x),unbox(Int64,y)))
+flipsign(x::Int128, y::Int128) = box(Int128,flipsign_int(unbox(Int128,x),unbox(Int128,y)))
+
+flipsign{T<:Signed}(x::T,y::T)  = flipsign(int(x),int(y))
+flipsign(x::Signed, y::Signed)  = flipsign(promote(x,y)...)
+flipsign(x::Signed, y::Float32) = flipsign(x, reinterpret(Int32,y))
+flipsign(x::Signed, y::Float64) = flipsign(x, reinterpret(Int64,y))
+flipsign(x::Signed, y::Real)    = flipsign(x, -oftype(x,signbit(y)))
+
+copysign(x::Signed, y::Signed)  = flipsign(x, x$y)
+copysign(x::Signed, y::Float32) = copysign(x, reinterpret(Int32,y))
+copysign(x::Signed, y::Float64) = copysign(x, reinterpret(Int64,y))
+copysign(x::Signed, y::Real)    = copysign(x, -oftype(x,signbit(y)))
+
+abs(x::Unsigned) = x
+abs(x::Signed) = flipsign(x,x)
+
+~(n::Integer) = -n-1
+
 div(x::Signed, y::Unsigned) = flipsign(signed(div(unsigned(abs(x)),y)),x)
 div(x::Unsigned, y::Signed) = unsigned(flipsign(signed(div(x,unsigned(abs(y)))),y))
 
