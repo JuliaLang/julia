@@ -87,6 +87,16 @@ for p in procs(d)
     @test d[idxl] == p 
 end
 
+# issue #6362
+d = Base.shmem_rand(dims)
+s = copy(sdata(d))
+ds = deepcopy(d)
+@test ds == d
+remotecall_fetch(findfirst(id->(id != myid()), procs(ds)), setindex!, ds, 1.0, 1:10)
+@test ds != d
+@test s == d
+
+
 # SharedArray as an array
 # Since the data in d will depend on the nprocs, just test that these operations work
 a = d[1:5]
