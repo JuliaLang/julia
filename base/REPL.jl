@@ -467,7 +467,7 @@ function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,
         complete = replc,
         # When we're done transform the entered line into a call to help("$line")
         on_done = respond(d, main_prompt, req, rep) do line
-            parse("Base.@help $line")
+            parse("Base.@help $line", raise=false)
         end)
 
     # Set up shell mode
