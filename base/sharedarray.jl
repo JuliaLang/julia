@@ -127,7 +127,7 @@ function range_1dim(S::SharedArray, pidx)
 
     if l < nw
         if pidx <= l 
-            return pidx:1
+            return pidx:pidx
         else
             return 1:0
         end
