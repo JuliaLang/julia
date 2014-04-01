@@ -4541,11 +4541,11 @@ Parallel Computing
    
 .. function:: nprocs()
 
-   Get the number of available processors.
+   Get the number of available processes.
 
 .. function:: nworkers()
 
-   Get the number of available worker processors. This is one less than nprocs(). Equal to nprocs() if nprocs() == 1.
+   Get the number of available worker processes. This is one less than nprocs(). Equal to nprocs() if nprocs() == 1.
 
 .. function:: procs()
 
@@ -4567,7 +4567,7 @@ Parallel Computing
 
 .. function:: myid()
 
-   Get the id of the current processor.
+   Get the id of the current process.
 
 .. function:: pmap(f, lsts...; err_retry=true, err_stop=false)
 
@@ -4581,7 +4581,7 @@ Parallel Computing
 
 .. function:: remotecall(id, func, args...)
 
-   Call a function asynchronously on the given arguments on the specified processor. Returns a ``RemoteRef``.
+   Call a function asynchronously on the given arguments on the specified process. Returns a ``RemoteRef``.
 
 .. function:: wait([x])
 
@@ -4639,7 +4639,7 @@ Parallel Computing
 
 .. function:: RemoteRef(n)
 
-   Make an uninitialized remote reference on processor ``n``.
+   Make an uninitialized remote reference on process ``n``.
 
 .. function:: timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
 
@@ -4648,13 +4648,13 @@ Parallel Computing
    
 .. function:: @spawn
 
-   Execute an expression on an automatically-chosen processor, returning a
+   Execute an expression on an automatically-chosen process, returning a
    ``RemoteRef`` to the result.
 
 .. function:: @spawnat
 
    Accepts two arguments, ``p`` and an expression, and runs the expression
-   asynchronously on processor ``p``, returning a ``RemoteRef`` to the result.
+   asynchronously on process ``p``, returning a ``RemoteRef`` to the result.
 
 .. function:: @fetch
 
@@ -4704,7 +4704,7 @@ Distributed Arrays
 
    Construct a distributed array. ``init`` is a function that accepts a tuple of index ranges. 
    This function should allocate a local chunk of the distributed array and initialize it for the specified indices. 
-   ``dims`` is the overall size of the distributed array. ``procs`` optionally specifies a vector of processor IDs to use. 
+   ``dims`` is the overall size of the distributed array. ``procs`` optionally specifies a vector of process IDs to use. 
    If unspecified, the array is distributed over all worker processes only. Typically, when runnning in distributed mode,
    i.e., ``nprocs() > 1``, this would mean that no chunk of the distributed array exists on the process hosting the 
    interactive julia prompt.
@@ -4744,12 +4744,12 @@ Distributed Arrays
 
 .. function:: localindexes(d)
 
-   A tuple describing the indexes owned by the local processor. Returns a tuple with empty ranges 
+   A tuple describing the indexes owned by the local process. Returns a tuple with empty ranges 
    if no local part exists on the calling process.
 
 .. function:: procs(d)
 
-   Get the vector of processors storing pieces of ``d``
+   Get the vector of processes storing pieces of ``d``
 
    
 Shared Arrays (Experimental, UNIX-only feature)
