@@ -235,6 +235,27 @@ function map!(f::Callable, S::SharedArray)
     return S
 end
 
+copy!(S::SharedArray, A::Array) = copy!(S.s, A)
+
+function copy!(S::SharedArray, R::SharedArray)
+    length(S) == length(R) || throw(BoundsError())
+    ps = intersect(procs(S), procs(R))
+    isempty(ps) && error("source and destination arrays don't share any process")
+    l = length(S)
+    length(ps) > l && (ps = ps[1:l])
+    nw = length(ps)
+    partlen = div(l, nw)
+
+    @sync for i = 1:nw
+        p = ps[i]
+        idx = i < nw ?  ((i-1)*partlen+1:i*partlen) : ((i-1)*partlen+1:l)
+        @spawnat p begin
+            S.s[idx] = R.s[idx]
+        end
+    end
+
+    return S
+end
 
 function print_shmem_limits(slen)
     try
