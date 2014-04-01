@@ -8,38 +8,31 @@ abstract Range{T} <: AbstractArray{T,1}
 
 abstract OrdinalRange{T,S} <: Range{T}
 
-# A StepRange has a start point, and moves by some step up through a last point.
-# The element type is T, but we allow T+S to give a value from a lifted
-# domain D instead of from T. We store a sentinel value stop+step from domain D,
-# since T might not have any available sentinel value.
-immutable StepRange{T,S,D} <: OrdinalRange{T,S}
-    start::D
+immutable StepRange{T,S} <: OrdinalRange{T,S}
+    start::T
     step::S
-    sentinel::D
+    stop::T
 
-    function StepRange(start, step::S, stop)
-        if D<:FloatingPoint || S<:FloatingPoint
+    function StepRange(start::T, step::S, stop::T)
+        if T<:FloatingPoint || S<:FloatingPoint
             error("StepRange should not be used with floating point")
         end
         step == zero(S) && error("step cannot be zero")
         step != step && error("step cannot be NaN")
 
-        start = convert(D, start)
-        stop = convert(D, stop)
-
-        if (step>zero(S) && stop<start) || (step<0 && stop>start)
-            sentinel = start
+        if (step>zero(S) && stop<start) || (step<zero(S) && stop>start)
+            last = start-step
         else
             remain = (stop - start) % step  # should be robust to overflow
-            sentinel = stop + (step - remain)
+            last = stop - remain
         end
 
-        new(start, step, sentinel)
+        new(start, step, last)
     end
 end
 
 StepRange{T,S}(start::T, step::S, stop::T) =
-    StepRange{T, S, typeof(start+step)}(start, step, stop)
+    StepRange{T, S}(start, step, stop)
 
 immutable UnitRange{T<:Real} <: OrdinalRange{T,Int}
     start::T
@@ -56,7 +49,7 @@ range(a::Real, len::Integer) = UnitRange{typeof(a)}(a, a+len-1)
 
 colon{T}(start::T, stop::T) = StepRange(start, one(stop-start), stop)
 range{T}(a::T, len::Integer) =
-    StepRange{T, typeof(a-a), typeof(a+one(a-a))}(a, one(a-a), a+oftype(a-a,(len-1)))
+    StepRange{T, typeof(a-a)}(a, one(a-a), a+oftype(a-a,(len-1)))
 
 # first promote start and stop, leaving step alone
 # this is for non-numeric ranges where step can be quite different
@@ -65,7 +58,7 @@ colon{A,C}(a::A, b, c::C) = colon(convert(promote_type(A,C),a), b, convert(promo
 colon{T}(start::T, step, stop::T) = StepRange(start, step, stop)
 
 range{T,S}(a::T, step::S, len::Integer) =
-    StepRange{T, S, typeof(a+one(S))}(a, step, a+step*(len-1))
+    StepRange{T, S}(a, step, a+step*(len-1))
 
 ## floating point ranges
 
@@ -145,7 +138,7 @@ similar(r::Range, T::Type, dims::Dims) = Array(T, dims)
 
 size(r::Range) = (length(r),)
 
-isempty(r::StepRange) = r.start == r.sentinel
+isempty(r::StepRange) = r.start == r.stop+r.step
 isempty(r::UnitRange) = r.start > r.stop
 isempty(r::FloatRange) = length(r)==0
 
@@ -153,19 +146,19 @@ step(r::StepRange) = r.step
 step(r::UnitRange) = 1
 step(r::FloatRange) = r.step/r.divisor
 
-length(r::StepRange) = integer(div(r.sentinel - r.start, r.step))
+length(r::StepRange) = integer(div(r.stop+r.step - r.start, r.step))
 length(r::UnitRange) = integer(r.stop - r.start + 1)
 length(r::FloatRange) = integer(r.len)
 
 length{T<:Union(Int,Uint)}(r::StepRange{T}) =
-    checked_add(div(checked_sub(r.sentinel-r.step, r.start), r.step), one(T))
+    checked_add(div(checked_sub(r.stop, r.start), r.step), one(T))
 length{T<:Union(Int,Uint)}(r::UnitRange{T}) =
     checked_add(checked_sub(r.stop, r.start), one(T))
 
 first{T}(r::OrdinalRange{T}) = oftype(T, r.start)
 first(r::FloatRange) = r.start/r.divisor
 
-last{T}(r::StepRange{T}) = oftype(T, r.sentinel-step(r))
+last{T}(r::StepRange{T}) = r.stop
 last(r::UnitRange) = r.stop
 last{T}(r::FloatRange{T}) = oftype(T, (r.start + (r.len-1)*r.step)/r.divisor)
 
@@ -187,9 +180,11 @@ start(r::FloatRange) = 0
 next{T}(r::FloatRange{T}, i) = (oftype(T, (r.start + i*r.step)/r.divisor), i+1)
 done(r::FloatRange, i) = (length(r) <= i)
 
-start(r::StepRange) = r.start
-next{T}(r::StepRange{T}, i) = (oftype(T,i), i+step(r))
-done(r::StepRange, i) = i==r.sentinel
+# NOTE: For ordinal ranges, we assume start+step might be from a
+# lifted domain (e.g. Int8+Int8 => Int); use that for iterating.
+start(r::StepRange) = oftype(r.start+r.step, r.start)
+next{T}(r::StepRange{T}, i) = (oftype(T,i), i+r.step)
+done(r::StepRange, i) = i==oftype(i,r.stop)+r.step
 
 start(r::UnitRange) = oftype(r.start+1, r.start)
 next{T}(r::UnitRange{T}, i) = (oftype(T,i), i+1)
