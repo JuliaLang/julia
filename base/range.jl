@@ -17,14 +17,37 @@ immutable StepRange{T,S} <: OrdinalRange{T,S}
         if T<:FloatingPoint || S<:FloatingPoint
             error("StepRange should not be used with floating point")
         end
-        step == zero(S) && error("step cannot be zero")
+        z = zero(S)
+        step == z && error("step cannot be zero")
         step != step && error("step cannot be NaN")
 
-        if (step>zero(S) && stop<start) || (step<zero(S) && stop>start)
-            last = start-step
+        if stop == start
+            last = stop
         else
-            remain = (stop - start) % step  # should be robust to overflow
-            last = stop - remain
+            if (step > z) != (stop > start)
+                # empty range has a special representation where stop = start-1
+                # this is needed to avoid the wrap-around that can happen computing
+                # start - step, which leads to a range that looks very large instead
+                # of empty.
+                if step > z
+                    last = start - one(step)
+                else
+                    last = start + one(step)
+                end
+            else
+                diff = stop - start
+                if T<:Signed && (diff > zero(diff)) != (stop > start)
+                    # handle overflowed subtraction with unsigned rem
+                    if diff > zero(diff)
+                        remain = -oftype(T, unsigned(-diff) % abs(step))
+                    else
+                        remain = oftype(T, unsigned(diff) % abs(step))
+                    end
+                else
+                    remain = diff % step
+                end
+                last = stop - remain
+            end
         end
 
         new(start, step, last)
@@ -138,7 +161,8 @@ similar(r::Range, T::Type, dims::Dims) = Array(T, dims)
 
 size(r::Range) = (length(r),)
 
-isempty(r::StepRange) = r.start == r.stop+r.step
+isempty(r::StepRange) =
+    (r.start != r.stop) && ((r.step > zero(r.step)) != (r.stop > r.start))
 isempty(r::UnitRange) = r.start > r.stop
 isempty(r::FloatRange) = length(r)==0
 
@@ -146,12 +170,24 @@ step(r::StepRange) = r.step
 step(r::UnitRange) = 1
 step(r::FloatRange) = r.step/r.divisor
 
-length(r::StepRange) = integer(div(r.stop+r.step - r.start, r.step))
+function length(r::StepRange)
+    n = integer(div(r.stop+r.step - r.start, r.step))
+    isempty(r) ? zero(n) : n
+end
 length(r::UnitRange) = integer(r.stop - r.start + 1)
 length(r::FloatRange) = integer(r.len)
 
-length{T<:Union(Int,Uint)}(r::StepRange{T}) =
-    checked_add(div(checked_sub(r.stop, r.start), r.step), one(T))
+function length{T<:Union(Int,Uint)}(r::StepRange{T})
+    isempty(r) && return zero(T)
+    if r.step > 1
+        return checked_add(oftype(T, div(unsigned(r.stop - r.start), r.step)), one(T))
+    elseif r.step < -1
+        return checked_add(oftype(T, div(unsigned(r.start - r.stop), -r.step)), one(T))
+    else
+        checked_add(div(checked_sub(r.stop, r.start), r.step), one(T))
+    end
+end
+
 length{T<:Union(Int,Uint)}(r::UnitRange{T}) =
     checked_add(checked_sub(r.stop, r.start), one(T))
 
@@ -184,11 +220,11 @@ done(r::FloatRange, i) = (length(r) <= i)
 # lifted domain (e.g. Int8+Int8 => Int); use that for iterating.
 start(r::StepRange) = oftype(r.start+r.step, r.start)
 next{T}(r::StepRange{T}, i) = (oftype(T,i), i+r.step)
-done(r::StepRange, i) = i==oftype(i,r.stop)+r.step
+done(r::StepRange, i) = (i==oftype(i,r.stop)+r.step) | isempty(r)
 
 start(r::UnitRange) = oftype(r.start+1, r.start)
 next{T}(r::UnitRange{T}, i) = (oftype(T,i), i+1)
-done(r::OrdinalRange, i) = i==oftype(i,r.stop)+1
+done(r::UnitRange, i) = i==oftype(i,r.stop)+1
 
 
 ## indexing
