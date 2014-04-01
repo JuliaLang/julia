@@ -13,6 +13,13 @@ size(D::Diagonal,d::Integer) = d<1 ? error("dimension out of range") : (d<=2 ? l
 full(D::Diagonal) = diagm(D.diag)
 getindex(D::Diagonal, i::Integer, j::Integer) = i == j ? D.diag[i] : zero(eltype(D.diag))
 
+function getindex(D::Diagonal, i::Integer)
+    n = length(D.diag)
+    id = div(i-1, n)
+    id + id * n == i-1 && return D.diag[id+1]
+    zero(eltype(D.diag))
+end
+
 ishermitian(D::Diagonal) = true
 issym(D::Diagonal) = true
 isposdef(D::Diagonal) = all(D.diag .> 0)

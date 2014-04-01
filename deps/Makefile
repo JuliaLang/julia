@@ -8,7 +8,9 @@ ifneq ($(XC_HOST),)
 CONFIGURE_COMMON += --host=$(XC_HOST)
 endif
 ifeq ($(OS),WINNT)
+ifneq ($(USEMSVC), 1)
 CONFIGURE_COMMON += LDFLAGS=-Wl,--stack,8388608
+endif
 endif
 CONFIGURE_COMMON += F77="$(FC)" CC="$(CC)" CXX="$(CXX)"
 
@@ -403,6 +405,11 @@ install-llvm: $(LLVM_OBJ_TARGET)
 
 UV_SRC_TARGET = libuv/.libs/libuv.a
 UV_OBJ_TARGET = $(build_libdir)/libuv.a
+ifneq ($(USEMSVC), 1)
+UV_OPTS =
+else
+UV_OPTS = CFLAGS=-DBUILDING_UV_SHARED
+endif
 
 libuv/configure:
 	(cd .. && git submodule init && git submodule update)
@@ -414,7 +421,7 @@ libuv/config.status: $(JULIAHOME)/.git/modules/deps/libuv/HEAD
 endif
 libuv/config.status: libuv/configure
 	cd libuv && \
-	./configure --with-pic $(CONFIGURE_COMMON)
+	./configure --with-pic $(CONFIGURE_COMMON) $(UV_OPTS)
 	touch -c $@
 $(UV_SRC_TARGET): libuv/config.status
 	touch -c libuv/aclocal.m4
@@ -613,9 +620,13 @@ install-openspecfun: $(OPENSPECFUN_OBJ_TARGET)
 LIBRANDOM_OBJ_TARGET = $(build_shlibdir)/librandom.$(SHLIB_EXT)
 LIBRANDOM_OBJ_SOURCE = random/librandom.$(SHLIB_EXT)
 
-LIBRANDOM_CFLAGS = $(CFLAGS) -O3 -finline-functions -fomit-frame-pointer -DNDEBUG -fno-strict-aliasing \
-				   --param max-inline-insns-single=1800 -Wmissing-prototypes -Wall  -std=c99 \
-				   -DDSFMT_MEXP=19937 $(fPIC) -shared -DDSFMT_DO_NOT_USE_OLD_NAMES
+LIBRANDOM_CFLAGS = $(CFLAGS) -DNDEBUG -DDSFMT_MEXP=19937 $(fPIC) -DDSFMT_DO_NOT_USE_OLD_NAMES
+ifneq ($(USEMSVC), 1)
+LIBRANDOM_CFLAGS += -O3 -finline-functions -fomit-frame-pointer -fno-strict-aliasing \
+		--param max-inline-insns-single=1800 -Wmissing-prototypes -Wall  -std=c99 -shared
+else
+LIBRANDOM_CFLAGS += -Wl,-dll
+endif
 ifeq ($(ARCH), x86_64)
 LIBRANDOM_CFLAGS += -msse2 -DHAVE_SSE2
 endif
@@ -1150,6 +1161,7 @@ utf8proc-v$(UTF8PROC_VER).tar.gz:
 utf8proc-v$(UTF8PROC_VER)/Makefile: utf8proc-v$(UTF8PROC_VER).tar.gz
 	$(TAR) -xzf $<
 	patch $@ < utf8proc_Makefile.patch
+	cd utf8proc-v$(UTF8PROC_VER) && patch < ../utf8proc_msvc.patch
 	touch -c $@
 
 $(UTF8PROC_OBJ_SOURCE): utf8proc-v$(UTF8PROC_VER)/Makefile

@@ -929,7 +929,7 @@ end
 # S = A[I, J]
 function getindex{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector)
     m = size(A, 1)
-    if isa(I, Ranges) 
+    if isa(I, Range) 
         if I == 1:m # whole columns
             return getindex_cols(A, J)
         else # ranges are always sorted, but maybe in reverse

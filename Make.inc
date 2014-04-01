@@ -167,12 +167,17 @@ USE_COPY_STACKS = 1
 
 # Compiler specific stuff
 
+ifeq ($(USEMSVC), 1)
+USEGCC = 0
+USECLANG = 0
+else
 ifeq ($(CC), clang)
 USEGCC ?= 0
 USECLANG ?= 1
 else
 USEGCC ?= 1
 USECLANG ?= 0
+endif
 endif
 
 STDLIBCPP_FLAG = 
@@ -239,10 +244,21 @@ endif
 
 JFFLAGS = -O2 $(fPIC)
 JF2CFLAGS = -ff2c -fno-second-underscore
+ifneq ($(USEMSVC),1)
 CPP = $(CC) -E
 AR := $(CROSS_COMPILE)ar
 AS := $(CROSS_COMPILE)as
 LD := $(CROSS_COMPILE)ld
+else
+CPP = $(CC) -EP
+AR := lib
+ifeq ($(ARCH),x86_64)
+AS := ml64
+else
+AS := ml
+endif
+LD := link
+endif
 RANLIB := $(CROSS_COMPILE)ranlib
 
 ifeq ($(JULIA_CPU_TARGET),native)
@@ -453,7 +469,7 @@ endif
 ifeq ($(OS), Darwin)
   WHOLE_ARCHIVE = -Xlinker -all_load
   NO_WHOLE_ARCHIVE =
-else
+else ifneq ($(USEMSVC), 1)
   WHOLE_ARCHIVE = -Wl,--whole-archive
   NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
 endif
@@ -479,13 +495,18 @@ JLDFLAGS =
 endif
 
 ifeq ($(OS), WINNT)
+ifneq ($(USEMSVC), 1)
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap \
 	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -lssp
-JCPPFLAGS += -D_WIN32_WINNT=0x0600
 JLDFLAGS = -Wl,--stack,8388608
 ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
 endif
+else
+OSLIBS += kernel32.lib ws2_32.lib psapi.lib advapi32.lib iphlpapi.lib shell32.lib winmm.lib
+JLDFLAGS =
+endif
+JCPPFLAGS += -D_WIN32_WINNT=0x0600
 UNTRUSTED_SYSTEM_LIBM = 1
 endif
 

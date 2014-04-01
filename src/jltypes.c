@@ -14,6 +14,10 @@
 #include "julia_internal.h"
 #include "builtin_proto.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 jl_datatype_t *jl_any_type;
 jl_datatype_t *jl_type_type;
 jl_datatype_t *jl_typename_type;
@@ -31,7 +35,6 @@ jl_value_t *jl_bottom_type;
 jl_value_t *jl_top_type;
 jl_datatype_t *jl_vararg_type;
 jl_datatype_t *jl_abstractarray_type;
-jl_datatype_t *jl_storedarray_type;
 jl_datatype_t *jl_densearray_type;
 
 jl_datatype_t *jl_bool_type;
@@ -2897,15 +2900,11 @@ void jl_init_types(void)
                             jl_any_type, tv);
 
     tv = jl_tuple2(tvar("T"), tvar("N"));
-    jl_storedarray_type =
-        jl_new_abstracttype((jl_value_t*)jl_symbol("StoredArray"),
-                            (jl_datatype_t*)jl_apply_type((jl_value_t*)jl_abstractarray_type, tv),
-                            tv);
 
     tv = jl_tuple2(tvar("T"), tvar("N"));
     jl_densearray_type =
         jl_new_abstracttype((jl_value_t*)jl_symbol("DenseArray"),
-                            (jl_datatype_t*)jl_apply_type((jl_value_t*)jl_storedarray_type, tv),
+                            (jl_datatype_t*)jl_apply_type((jl_value_t*)jl_abstractarray_type, tv),
                             tv);
 
     tv = jl_tuple2(tvar("T"), tvar("N"));
@@ -3134,4 +3133,9 @@ void jl_init_types(void)
     boundscheck_sym = jl_symbol("boundscheck");
     newvar_sym = jl_symbol("newvar");
     copyast_sym = jl_symbol("copyast");
+    simdloop_sym = jl_symbol("simdloop");
 }
+
+#ifdef __cplusplus
+}
+#endif

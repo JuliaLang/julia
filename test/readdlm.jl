@@ -72,6 +72,14 @@ let x = ["a" "b"; "d" ""], io = IOBuffer()
     @test readdlm(io) == x
 end
 
+let x = ["\"hello\"", "world\""], io = IOBuffer()
+    print(io, x)
+    @assert takebuf_string(io) == "\"hello\"\nworld\"\n"
+
+    writedlm(io, x)
+    @assert takebuf_string(io) == "\"\"\"hello\"\"\"\n\"world\"\"\"\n"
+end
+
 
 # source: http://www.i18nguy.com/unicode/unicode-example-utf8.zip
 let i18n_data = ["Origin (English)", "Name (English)", "Origin (Native)", "Name (Native)", 

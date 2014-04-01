@@ -8,7 +8,6 @@ typealias DenseVector{T} DenseArray{T,1}
 typealias DenseMatrix{T} DenseArray{T,2}
 typealias DenseVecOrMat{T} Union(DenseVector{T}, DenseMatrix{T})
 
-typealias StoredVector{T} StoredArray{T,1}
 typealias StridedArray{T,N,A<:DenseArray} Union(DenseArray{T,N}, SubArray{T,N,A})
 typealias StridedVector{T,A<:DenseArray}  Union(DenseArray{T,1}, SubArray{T,1,A})
 typealias StridedMatrix{T,A<:DenseArray}  Union(DenseArray{T,2}, SubArray{T,2,A})
@@ -57,53 +56,6 @@ function copy!{T}(dest::Array{T}, dsto::Integer, src::Array{T}, so::Integer, N::
 end
 
 copy!{T}(dest::Array{T}, src::Array{T}) = copy!(dest, 1, src, 1, length(src))
-
-function copy!{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, A::StridedMatrix{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
-    if length(ir_dest) != length(ir_src) || length(jr_dest) != length(jr_src)
-        error("source and destination must have same size")
-    end
-    checkbounds(B, ir_dest, jr_dest)
-    checkbounds(A, ir_src, jr_src)
-    jdest = first(jr_dest)
-    Askip = size(A, 1)
-    Bskip = size(B, 1)
-    if stride(A, 1) == 1 && R == S
-        for jsrc in jr_src
-            copy!(B, (jdest-1)*Bskip+first(ir_dest), A, (jsrc-1)*Askip+first(ir_src), length(ir_src))
-            jdest += 1
-        end
-    else
-        for jsrc in jr_src
-            aoffset = (jsrc-1)*Askip
-            boffset = (jdest-1)*Bskip
-            idest = first(ir_dest)
-            for isrc in ir_src
-                B[boffset+idest] = A[aoffset+isrc]
-                idest += 1
-            end
-            jdest += 1
-        end
-    end
-end
-
-function copy_transpose!{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, A::StridedVecOrMat{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
-    if length(ir_dest) != length(jr_src) || length(jr_dest) != length(ir_src)
-        error("source and destination must have same size")
-    end
-    checkbounds(B, ir_dest, jr_dest)
-    checkbounds(A, ir_src, jr_src)
-    idest = first(ir_dest)
-    Askip = size(A, 1)
-    for jsrc in jr_src
-        offset = (jsrc-1)*Askip
-        jdest = first(jr_dest)
-        for isrc in ir_src
-            B[idest,jdest] = A[offset+isrc]
-            jdest += 1
-        end
-        idest += 1
-    end
-end
 
 function reinterpret{T,S}(::Type{T}, a::Array{S,1})
     nel = int(div(length(a)*sizeof(S),sizeof(T)))
@@ -166,11 +118,11 @@ end
 getindex(T::(Type...)) = Array(T,0)
 
 # T[a:b] and T[a:s:b] also contruct typed ranges
-function getindex{T<:Number}(::Type{T}, r::Ranges)
+function getindex{T<:Number}(::Type{T}, r::Range)
     copy!(Array(T,length(r)), r)
 end
 
-function getindex{T<:Number}(::Type{T}, r1::Ranges, rs::Ranges...)
+function getindex{T<:Number}(::Type{T}, r1::Range, rs::Range...)
     a = Array(T,length(r1)+sum(length,rs))
     o = 1
     copy!(a, o, r1)
@@ -296,8 +248,8 @@ getindex(A::Array, i0::Real, i1::Real, i2::Real, i3::Real,  i4::Real, i5::Real) 
 getindex(A::Array, i0::Real, i1::Real, i2::Real, i3::Real,  i4::Real, i5::Real, I::Real...) =
     arrayref(A,to_index(i0),to_index(i1),to_index(i2),to_index(i3),to_index(i4),to_index(i5),to_index(I)...)
 
-# Fast copy using copy! for Range1
-function getindex(A::Array, I::Range1{Int})
+# Fast copy using copy! for UnitRange
+function getindex(A::Array, I::UnitRange{Int})
     lI = length(I)
     X = similar(A, lI)
     if lI > 0
@@ -309,10 +261,10 @@ end
 function getindex{T<:Real}(A::Array, I::AbstractVector{T})
     return [ A[i] for i in to_index(I) ]
 end
-function getindex{T<:Real}(A::Ranges, I::AbstractVector{T})
+function getindex{T<:Real}(A::Range, I::AbstractVector{T})
     return [ A[i] for i in to_index(I) ]
 end
-function getindex(A::Ranges, I::AbstractVector{Bool})
+function getindex(A::Range, I::AbstractVector{Bool})
     checkbounds(A, I)
     return [ A[i] for i in to_index(I) ]
 end
@@ -364,7 +316,7 @@ function setindex!{T<:Real}(A::Array, x, I::AbstractVector{T})
     return A
 end
 
-function setindex!{T}(A::Array{T}, X::Array{T}, I::Range1{Int})
+function setindex!{T}(A::Array{T}, X::Array{T}, I::UnitRange{Int})
     if length(X) != length(I)
         throw_setindex_mismatch(X, (I,))
     end
@@ -593,7 +545,7 @@ function deleteat!(a::Vector, i::Integer)
     return _deleteat!(a, i, 1)
 end
 
-function deleteat!{T<:Integer}(a::Vector, r::Range1{T})
+function deleteat!{T<:Integer}(a::Vector, r::UnitRange{T})
     n = length(a)
     f = first(r)
     l = last(r)
@@ -647,7 +599,7 @@ function splice!(a::Vector, i::Integer, ins::AbstractArray=_default_splice)
     return v
 end
 
-function splice!{T<:Integer}(a::Vector, r::Range1{T}, ins::AbstractArray=_default_splice)
+function splice!{T<:Integer}(a::Vector, r::UnitRange{T}, ins::AbstractArray=_default_splice)
     v = a[r]
     m = length(ins)
     if m == 0
@@ -689,7 +641,7 @@ end
 
 ## Unary operators ##
 
-function conj!{T<:Number}(A::StoredArray{T})
+function conj!{T<:Number}(A::AbstractArray{T})
     for i=1:length(A)
         A[i] = conj(A[i])
     end
@@ -764,7 +716,7 @@ for f in (:+, :-, :div, :mod, :&, :|, :$)
             return F
         end
         # interaction with Ranges
-        function ($f){S,T<:Real}(A::StridedArray{S}, B::Ranges{T})
+        function ($f){S,T<:Real}(A::StridedArray{S}, B::Range{T})
             F = similar(A, promote_type(S,T), promote_shape(size(A),size(B)))
             i = 1
             for b in B
@@ -773,7 +725,7 @@ for f in (:+, :-, :div, :mod, :&, :|, :$)
             end
             return F
         end
-        function ($f){S<:Real,T}(A::Ranges{S}, B::StridedArray{T})
+        function ($f){S<:Real,T}(A::Range{S}, B::StridedArray{T})
             F = similar(B, promote_type(S,T), promote_shape(size(A),size(B)))
             i = 1
             for a in A
@@ -994,7 +946,7 @@ end
 rotr90(A::AbstractMatrix, k::Integer) = rotl90(A,-k)
 rot180(A::AbstractMatrix, k::Integer) = mod(k, 2) == 1 ? rot180(A) : copy(A)
 
-# note: probably should be StridedVector or StoredVector
+# note: probably should be StridedVector or AbstractVector
 function reverse(A::AbstractVector, s=1, n=length(A))
     B = similar(A)
     for i = 1:s-1
@@ -1205,7 +1157,7 @@ function indexin{T}(a::AbstractArray{T}, b::AbstractArray{T})
 end
 
 # findin (the index of intersection)
-function findin(a, b::Range1)
+function findin(a, b::UnitRange)
     ind = Array(Int, 0)
     f = first(b)
     l = last(b)
@@ -1392,7 +1344,7 @@ _cumsum_type(v) = typeof(v[1]+v[1])
 for (f, fp, op) = ((:cumsum, :cumsum_pairwise, :+),
                    (:cumprod, :cumprod_pairwise, :*) )
     # in-place cumsum of c = s+v(i1:n), using pairwise summation as for sum
-    @eval function ($fp)(v::StoredVector, c::StoredVector, s, i1, n)
+    @eval function ($fp)(v::AbstractVector, c::AbstractVector, s, i1, n)
         if n < 128
             @inbounds c[i1] = ($op)(s, v[i1])
             for i = i1+1:i1+n-1
@@ -1405,7 +1357,7 @@ for (f, fp, op) = ((:cumsum, :cumsum_pairwise, :+),
         end
     end
 
-    @eval function ($f)(v::StoredVector)
+    @eval function ($f)(v::AbstractVector)
         n = length(v)
         c = $(op===:+ ? (:(similar(v,_cumsum_type(v)))) :
                         (:(similar(v))))
@@ -1445,7 +1397,7 @@ for (f, fp, op) = ((:cumsum, :cumsum_pairwise, :+),
 end
 
 for (f, op) = ((:cummin, :min), (:cummax, :max))
-    @eval function ($f)(v::StoredVector)
+    @eval function ($f)(v::AbstractVector)
         n = length(v)
         cur_val = v[1]
         res = similar(v, n)

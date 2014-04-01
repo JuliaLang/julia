@@ -40,7 +40,7 @@ readdlm(input, dlm::Char, T::Type, eol::Char; opts...) = readdlm_auto(input, dlm
 
 function readdlm_auto(input, dlm::Char, T::Type, eol::Char, auto::Bool; opts...)
     optsd = val_opts(opts)
-    isa(input, String) && (fsz = filesize(input); input = get(optsd, :use_mmap, true) && fsz < typemax(Int) ? as_mmap(input,fsz) : readall(input))
+    isa(input, String) && (fsz = filesize(input); input = get(optsd, :use_mmap, true) && (fsz > 0) && fsz < typemax(Int) ? as_mmap(input,fsz) : readall(input))
     sinp = isa(input, Vector{Uint8}) ? ccall(:jl_array_to_string, ByteString, (Array{Uint8,1},), input) :
            isa(input, IO) ? readall(input) :
            input
@@ -302,22 +302,24 @@ readcsv(io; opts...)          = readdlm(io, ','; opts...)
 readcsv(io, T::Type; opts...) = readdlm(io, ',', T; opts...)
 
 # todo: keyword argument for # of digits to print
-writedlm_cell(io::IO, elt::FloatingPoint, dlm) = print_shortest(io, elt)
-function writedlm_cell{T}(io::IO, elt::String, dlm::T)
-    if !isempty(elt) && (('"' == elt[1]) || ('\n' in elt) || ((T <: Char) ? (dlm in elt) : contains(elt, dlm)))
+writedlm_cell(io::IO, elt::FloatingPoint, dlm, quotes) = print_shortest(io, elt)
+function writedlm_cell{T}(io::IO, elt::String, dlm::T, quotes::Bool)
+    if quotes && !isempty(elt) && (('"' in elt) || ('\n' in elt) || ((T <: Char) ? (dlm in elt) : contains(elt, dlm)))
         print(io, '"', replace(elt, r"\"", "\"\""), '"')
     else
         print(io, elt)
     end
 end
-writedlm_cell(io::IO, elt, dlm) = print(io, elt)
-function writedlm(io::IO, a::AbstractVecOrMat, dlm)
+writedlm_cell(io::IO, elt, dlm, quotes) = print(io, elt)
+function writedlm(io::IO, a::AbstractVecOrMat, dlm; opts...)
+    optsd = val_opts(opts)
+    quotes = get(optsd, :quotes, true)
     pb = PipeBuffer()
     nr = size(a,1)
     nc = size(a,2)
     for i = 1:nr
         for j = 1:nc
-            writedlm_cell(pb, a[i,j], dlm)
+            writedlm_cell(pb, a[i,j], dlm, quotes)
             j == nc ? write(pb,'\n') : print(pb,dlm)
         end
         (nb_available(pb) > (16*1024)) && write(io, takebuf_array(pb))
@@ -326,12 +328,12 @@ function writedlm(io::IO, a::AbstractVecOrMat, dlm)
     nothing
 end
 
-writedlm{T}(io::IO, a::AbstractArray{T,0}, dlm) = writedlm(io, reshape(a,1), dlm)
+writedlm{T}(io::IO, a::AbstractArray{T,0}, dlm; opts...) = writedlm(io, reshape(a,1), dlm; opts...)
 
-function writedlm(io::IO, a::AbstractArray, dlm)
+function writedlm(io::IO, a::AbstractArray, dlm; opts...)
     tail = size(a)[3:end]
     function print_slice(idxs...)
-        writedlm(io, sub(a, 1:size(a,1), 1:size(a,2), idxs...), dlm)
+        writedlm(io, sub(a, 1:size(a,1), 1:size(a,2), idxs...), dlm; opts...)
         if idxs != tail
             print("\n")
         end
@@ -339,13 +341,15 @@ function writedlm(io::IO, a::AbstractArray, dlm)
     cartesianmap(print_slice, tail)
 end
 
-function writedlm(io::IO, itr, dlm)
+function writedlm(io::IO, itr, dlm; opts...)
+    optsd = val_opts(opts)
+    quotes = get(optsd, :quotes, true)
     pb = PipeBuffer()
     for row in itr
         state = start(row)
         while !done(row, state)
             (x, state) = next(row, state)
-            writedlm_cell(pb, x, dlm)
+            writedlm_cell(pb, x, dlm, quotes)
             done(row, state) ? write(pb,'\n') : print(pb,dlm)
         end
         (nb_available(pb) > (16*1024)) && write(io, takebuf_array(pb))
@@ -354,14 +358,14 @@ function writedlm(io::IO, itr, dlm)
     nothing
 end
 
-function writedlm(fname::String, a, dlm)
+function writedlm(fname::String, a, dlm; opts...)
     open(fname, "w") do io
-        writedlm(io, a, dlm)
+        writedlm(io, a, dlm; opts...)
     end
 end
 
-writedlm(io, a) = writedlm(io, a, '\t')
-writecsv(io, a) = writedlm(io, a, ',')
+writedlm(io, a; opts...) = writedlm(io, a, '\t'; opts...)
+writecsv(io, a; opts...) = writedlm(io, a, ','; opts...)
 
 writemime(io::IO, ::MIME"text/csv", a::AbstractVecOrMat) = writedlm(io, a, ',')
 writemime(io::IO, ::MIME"text/tab-separated-values", a::AbstractVecOrMat) = writedlm(io, a, '\t')

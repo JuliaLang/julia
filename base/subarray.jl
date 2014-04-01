@@ -1,8 +1,8 @@
 ## subarrays ##
 
-typealias RangeIndex Union(Int, Range{Int}, Range1{Int})
+typealias RangeIndex Union(Int, Range{Int}, UnitRange{Int})
 
-type SubArray{T,N,A<:StoredArray,I<:(RangeIndex...,)} <: StoredArray{T,N}
+type SubArray{T,N,A<:AbstractArray,I<:(RangeIndex...,)} <: AbstractArray{T,N}
     parent::A
     indexes::I
     dims::NTuple{N,Int}
@@ -17,7 +17,7 @@ type SubArray{T,N,A<:StoredArray,I<:(RangeIndex...,)} <: StoredArray{T,N}
         end
     #linear indexing constructor (ranges)
     elseif N == 1 && length(I) == 1 && A <: Array
-        function SubArray(p::A, i::(Range1{Int},))
+        function SubArray(p::A, i::(UnitRange{Int},))
             new(p, i, (length(i[1]),), [1], first(i[1]))
         end
         function SubArray(p::A, i::(Range{Int},))
@@ -35,7 +35,7 @@ type SubArray{T,N,A<:StoredArray,I<:(RangeIndex...,)} <: StoredArray{T,N}
                 else
                     push!(newdims, length(i[j]))
                     #may want to return error if step(i[j]) <= 0
-                    push!(newstrides, isa(i[j],Range1) ? pstride :
+                    push!(newstrides, isa(i[j],UnitRange) ? pstride :
                          pstride * step(i[j]))
                     newfirst += (first(i[j])-1)*pstride
                 end
@@ -47,7 +47,7 @@ type SubArray{T,N,A<:StoredArray,I<:(RangeIndex...,)} <: StoredArray{T,N}
 end
 
 #linear indexing sub (may want to rename as slice)
-function sub{T,N}(A::Array{T,N}, i::(Union(Range{Int}, Range1{Int}),))
+function sub{T,N}(A::Array{T,N}, i::(Union(Range{Int}, UnitRange{Int}),))
     SubArray{T,1,typeof(A),typeof(i)}(A, i)
 end
 
@@ -100,7 +100,7 @@ end
 # Drops all Ints from a tuple of RangeIndexes
 ranges_only(I::Int...) = ()
 ranges_only(i::Int, I...) = ranges_only(I...)
-ranges_only(i::Union(Range{Int}, Range1{Int}), I...) = tuple(i, ranges_only(I...)...)
+ranges_only(i::Union(Range{Int}, UnitRange{Int}), I...) = tuple(i, ranges_only(I...)...)
 
 function slice_internal{T,N,L}(A::AbstractArray{T,N}, i::NTuple{N,RangeIndex}, ::NTuple{L,RangeIndex})
     SubArray{T,L,typeof(A),typeof(i)}(A, i)
@@ -249,7 +249,7 @@ getindex{T}(S::SubArray{T,3}, I::AbstractArray{Bool,3}) = getindex_bool_1d(S, I)
 getindex{T}(S::SubArray{T,4}, I::AbstractArray{Bool,4}) = getindex_bool_1d(S, I)
 getindex{T}(S::SubArray{T,5}, I::AbstractArray{Bool,5}) = getindex_bool_1d(S, I)
 
-getindex{T}(s::SubArray{T,1}, I::Range1{Int}) =
+getindex{T}(s::SubArray{T,1}, I::UnitRange{Int}) =
     getindex(s.parent, (s.first_index+(first(I)-1)*s.strides[1]):s.strides[1]:(s.first_index+(last(I)-1)*s.strides[1]))
 
 getindex{T}(s::SubArray{T,1}, I::Range{Int}) =
@@ -371,7 +371,7 @@ setindex!{T}(s::SubArray{T,4}, v, i::Integer, j::Integer, k::Integer, l::Integer
 setindex!{T}(s::SubArray{T,5}, v, i::Integer, j::Integer, k::Integer, l::Integer, m::Integer) =
     setindex!(s.parent, v, s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]+(k-1)*s.strides[3]+(l-1)*s.strides[4]+(m-1)*s.strides[5])
 
-setindex!{T}(s::SubArray{T,1}, v, I::Range1{Int}) =
+setindex!{T}(s::SubArray{T,1}, v, I::UnitRange{Int}) =
     setindex!(s.parent, v, (s.first_index+(first(I)-1)*s.strides[1]):s.strides[1]:(s.first_index+(last(I)-1)*s.strides[1]))
 
 setindex!{T}(s::SubArray{T,1}, v, I::Range{Int}) =

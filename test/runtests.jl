@@ -1,7 +1,7 @@
 # linalg tests take the longest - start them off first
 testnames = [
     "linalg1", "linalg2", "core", "keywordargs", "numbers", "strings",
-    "collections", "hashing", "remote", "iobuffer", "arrayops",
+    "collections", "hashing", "remote", "iobuffer", "arrayops", "simdloop",
     "blas", "fft", "dsp", "sparse", "bitarray", "random", "math",
     "functional", "bigint", "sorting", "statistics", "spawn",
     "priorityqueue", "arpack", "file", "suitesparse", "version",

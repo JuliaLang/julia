@@ -12,9 +12,9 @@ New language features
   * Default "inner" constructors now accept any arguments. Constructors that
     look like `MyType(a, b) = new(a, b)` can and should be removed ([#4026]).
 
-  * Expanded array type hierarchy, including ``StoredArray`` for all
-    container-like arrays, and ``DenseArray`` for in-memory arrays with
-    standard strided storage ([#987], [#2345]).
+  * Expanded array type hierarchy to include an abstract ``DenseArray`` for
+    in-memory arrays with standard strided storage ([#987], [#2345],
+    [#6212]).
 
   * When reloading code, types whose definitions have not changed can be
     ignored in some cases.
@@ -38,9 +38,7 @@ New language features
 Library improvements
 --------------------
 
-  * `convert(Ptr{T1}, x::Array{T2})` is now deprecated unless `T1 == T2`
-    or `T1 == None` ([#6073]).  (You can still explicitly `convert`
-    one pointer type into another if needed.)
+  * Implement shared-memory parallelism with `SharedArray`s ([#5380]).
 
   * Well-behaved floating-point ranges ([#2333], [#5636]).
     Introduced the `FloatRange` type for floating-point ranges with a step,
@@ -224,8 +222,39 @@ Library improvements
   * New function `widen` for widening numeric types and values, and `widemul`
     for multiplying to a larger type ([#6169])
 
+  * Broadcasting now works on arbitrary `AbstractArrays` ([#5387])
+
+  * Reduction functions that accept a pre-allocated output array, including
+    `sum!`, `prod!`, `maximum!`, `minimum!`, `all!`, `any!` ([#6197], [#5387])
+
+  * Faster performance on `fill!` and `copy!` for array types not supporting
+    efficient linear indexing ([#5671], [#5387])
+
+  * Changes to range types ([#5585])
+
+    * `Range` is now the abstract range type, instead of `Ranges`
+
+    * New function `range` for constructing ranges by length
+
+    * `Range` is now `StepRange`, and `Range1` is now `UnitRange`. Their
+      constructors accept end points instead of lengths. Both are subtypes of a
+      new abstract type `OrdinalRange`.
+
+    * Ranges now support `BigInt` and general ordinal types.
+
+    * Very large ranges (e.g. `0:typemax(Int)`) can now be constructed, but some
+      operations (e.g. `length`) will raise an `OverflowError`.
+
+  * Extended API for ``cov`` and ``cor``, which accept keyword arguments ``vardim``, 
+    ``corrected``, and ``mean`` ([#6273])
+
+
 Deprecated or removed
 ---------------------
+
+  * `convert(Ptr{T1}, x::Array{T2})` is now deprecated unless `T1 == T2`
+    or `T1 == None` ([#6073]).  (You can still explicitly `convert`
+    one pointer type into another if needed.)
 
   * `Sys.shlib_ext` has been renamed to `Sys.dlext`
 
@@ -245,7 +274,7 @@ Deprecated or removed
   * `myindexes` has been renamed to `localindexes` ([#5475])
 
   * `factorize!` is deprecated in favor of `factorize`. ([#5526])
-  
+
   * `nnz` is removed. Use `countnz` or `nfilled` instead ([#5538])
 
   * `setfield` is renamed `setfield!` ([#5748])
@@ -256,10 +285,12 @@ Deprecated or removed
 
   * `read` methods that modify a passed array are now called `read!` ([#5970])
 
-  * Reduction functions that accept a pre-allocated output array, including
-    `sum!`, `prod!`, `maximum!`, `minimum!`, `all!`, `any!` ([#6197])
-
   * `infs` and `nans` are deprecated in favor of the more general `fill`.
+
+  * `*` and `div` are no longer supported for `Char`.
+
+  * `Range` is renamed `StepRange` and `Range1` is renamed `UnitRange`.
+    `Ranges` is renamed `Range`.
 
 [#4042]: https://github.com/JuliaLang/julia/issues/4042
 [#5164]: https://github.com/JuliaLang/julia/issues/5164
@@ -335,6 +366,11 @@ Deprecated or removed
 [#6169]: https://github.com/JuliaLang/julia/issues/6169
 [#5970]: https://github.com/JuliaLang/julia/issues/5970
 [#6197]: https://github.com/JuliaLang/julia/pull/6197
+[#5387]: https://github.com/JuliaLang/julia/pull/5387
+[#5671]: https://github.com/JuliaLang/julia/pull/5671
+[#5380]: https://github.com/JuliaLang/julia/pull/5380
+[#5585]: https://github.com/JuliaLang/julia/issues/5585
+[#6273]: https://github.com/JuliaLang/julia/pull/6273
 
 Julia v0.2.0 Release Notes
 ==========================

@@ -705,7 +705,7 @@ function eigmin(A::Union(Number, AbstractMatrix); kwargs...)
     iseltype(v,Complex) ? error("DomainError: complex eigenvalues cannot be ordered") : minimum(v)
 end
 
-inv(A::Eigen) = scale(A.vectors, 1.0/A.values)*A.vectors'
+inv(A::Eigen) = A.vectors/Diagonal(A.values)*A.vectors'
 det(A::Eigen) = prod(A.values)
 
 # Generalized eigenproblem

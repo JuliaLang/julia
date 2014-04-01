@@ -1,12 +1,14 @@
 import Base: +, -, *, /, copy, ctranspose, getindex, showarray, transpose
 import Base.LinAlg: SingularException
-immutable UniformScaling{T<:Number} <: AbstractMatrix{T}
+immutable UniformScaling{T<:Number}
     λ::T
 end
 
 const I = UniformScaling(1)
 
-getindex(J::UniformScaling, i::Integer, j::Integer) = ifelse(i==j, J.λ, zero(J.λ))
+eltype{T}(J::UniformScaling{T}) = T
+ndims(J::UniformScaling) = 2
+getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ))
 
 showarray(io::IO, J::UniformScaling; kw...) = print(io, "$(typeof(J))\n$(J.λ)*I")
 copy(J::UniformScaling) = UniformScaling(J.λ)

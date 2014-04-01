@@ -12,6 +12,11 @@
 #include <errno.h>
 #include "julia.h"
 #include "julia_internal.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #if defined(_OS_WINDOWS_)
 #include <winbase.h>
 #include <malloc.h>
@@ -930,3 +935,7 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_task_arg_in_transit = (jl_value_t*)jl_null;
     jl_unprotect_stack_func = jl_new_closure(jl_unprotect_stack, (jl_value_t*)jl_null, NULL);
 }
+
+#ifdef __cplusplus
+}
+#endif

@@ -62,8 +62,8 @@ end
 checkbounds(sz::Int, i::Int) = 1 <= i <= sz || throw(BoundsError())
 checkbounds(sz::Int, i::Real) = checkbounds(sz, to_index(i))
 checkbounds(sz::Int, I::AbstractVector{Bool}) = length(I) == sz || throw(BoundsError())
-checkbounds(sz::Int, r::Ranges{Int}) = isempty(r) || (minimum(r) >= 1 && maximum(r) <= sz) || throw(BoundsError())
-checkbounds{T<:Real}(sz::Int, r::Ranges{T}) = checkbounds(sz, to_index(r))
+checkbounds(sz::Int, r::Range{Int}) = isempty(r) || (minimum(r) >= 1 && maximum(r) <= sz) || throw(BoundsError())
+checkbounds{T<:Real}(sz::Int, r::Range{T}) = checkbounds(sz, to_index(r))
 
 function checkbounds{T <: Real}(sz::Int, I::AbstractArray{T})
     for i in I
@@ -143,7 +143,7 @@ function squeeze(A::AbstractArray, dims)
     reshape(A, d)
 end
 
-function copy!(dest::StoredArray, src)
+function copy!(dest::AbstractArray, src)
     i = 1
     for x in src
         dest[i] = x
@@ -154,7 +154,7 @@ end
 
 # copy with minimal requirements on src
 # if src is not an AbstractArray, moving to the offset might be O(n)
-function copy!(dest::StoredArray, doffs::Integer, src, soffs::Integer=1)
+function copy!(dest::AbstractArray, doffs::Integer, src, soffs::Integer=1)
     st = start(src)
     for j = 1:(soffs-1)
         _, st = next(src, st)
@@ -171,13 +171,13 @@ end
 # NOTE: this is to avoid ambiguity with the deprecation of
 #   copy!(dest::AbstractArray, src, doffs::Integer)
 # Remove this when that deprecation is removed.
-function copy!(dest::StoredArray, doffs::Integer, src::Integer)
+function copy!(dest::AbstractArray, doffs::Integer, src::Integer)
     dest[doffs] = src
     return dest
 end
 
 # this method must be separate from the above since src might not have a length
-function copy!(dest::StoredArray, doffs::Integer, src, soffs::Integer, n::Integer)
+function copy!(dest::AbstractArray, doffs::Integer, src, soffs::Integer, n::Integer)
     n == 0 && return dest
     st = start(src)
     for j = 1:(soffs-1)
@@ -192,7 +192,7 @@ function copy!(dest::StoredArray, doffs::Integer, src, soffs::Integer, n::Intege
 end
 
 # if src is an AbstractArray and a source offset is passed, use indexing
-function copy!(dest::StoredArray, doffs::Integer, src::AbstractArray, soffs::Integer, n::Integer=length(src))
+function copy!(dest::AbstractArray, doffs::Integer, src::AbstractArray, soffs::Integer, n::Integer=length(src))
     for i = 0:(n-1)
         dest[doffs+i] = src[soffs+i]
     end
@@ -201,6 +201,42 @@ end
 
 copy(a::AbstractArray) = copy!(similar(a), a)
 copy(a::AbstractArray{None}) = a # cannot be assigned into so is immutable
+
+function copy!{R,S}(B::AbstractMatrix{R}, ir_dest::Range{Int}, jr_dest::Range{Int}, A::AbstractMatrix{S}, ir_src::Range{Int}, jr_src::Range{Int})
+    if length(ir_dest) != length(ir_src) || length(jr_dest) != length(jr_src)
+        error("source and destination must have same size")
+    end
+    checkbounds(B, ir_dest, jr_dest)
+    checkbounds(A, ir_src, jr_src)
+    jdest = first(jr_dest)
+    for jsrc in jr_src
+        idest = first(ir_dest)
+        for isrc in ir_src
+            B[idest,jdest] = A[isrc,jsrc]
+            idest += step(ir_dest)
+        end
+        jdest += step(jr_dest)
+    end
+    return B
+end
+
+function copy_transpose!{R,S}(B::AbstractMatrix{R}, ir_dest::Range{Int}, jr_dest::Range{Int}, A::AbstractVecOrMat{S}, ir_src::Range{Int}, jr_src::Range{Int})
+    if length(ir_dest) != length(jr_src) || length(jr_dest) != length(ir_src)
+        error("source and destination must have same size")
+    end
+    checkbounds(B, ir_dest, jr_dest)
+    checkbounds(A, ir_src, jr_src)
+    idest = first(ir_dest)
+    for jsrc in jr_src
+        jdest = first(jr_dest)
+        for isrc in ir_src
+            B[idest,jdest] = A[isrc,jsrc]
+            jdest += step(jr_dest)
+        end
+        idest += step(ir_dest)
+    end
+    return B
+end
 
 zero{T}(x::AbstractArray{T}) = fill!(similar(x), zero(T))
 
@@ -228,9 +264,9 @@ for (f,t) in ((:char,   Char),
               (:uint128,Uint128))
     @eval begin
         ($f)(x::AbstractArray{$t}) = x
-        ($f)(x::StoredArray{$t}) = x
+        ($f)(x::AbstractArray{$t}) = x
 
-        function ($f)(x::StoredArray)
+        function ($f)(x::AbstractArray)
             y = similar(x,$t)
             i = 1
             for e in x
@@ -246,9 +282,9 @@ for (f,t) in ((:integer, Integer),
               (:unsigned, Unsigned))
     @eval begin
         ($f){T<:$t}(x::AbstractArray{T}) = x
-        ($f){T<:$t}(x::StoredArray{T}) = x
+        ($f){T<:$t}(x::AbstractArray{T}) = x
 
-        function ($f)(x::StoredArray)
+        function ($f)(x::AbstractArray)
             y = similar(x,typeof(($f)(one(eltype(x)))))
             i = 1
             for e in x
@@ -285,8 +321,13 @@ full(x::AbstractArray) = x
 
 for fn in _numeric_conversion_func_names
     @eval begin
-        $fn(r::Range ) = Range($fn(r.start), $fn(r.step), r.len)
-        $fn(r::Range1) = Range1($fn(r.start), r.len)
+        $fn(r::StepRange) = $fn(r.start):$fn(r.step):$fn(last(r))
+        $fn(r::UnitRange) = $fn(r.start):$fn(last(r))
+    end
+end
+
+for fn in (:float,:float16,:float32,:float64)
+    @eval begin
         $fn(r::FloatRange) = FloatRange($fn(r.start), $fn(r.step), r.len, $fn(r.divisor))
     end
 end
@@ -415,13 +456,13 @@ end
 
 ## get (getindex with a default value) ##
 
-typealias RangeVecIntList{A<:AbstractVector{Int}} Union((Union(Ranges, AbstractVector{Int})...), AbstractVector{Range1{Int}}, AbstractVector{Range{Int}}, AbstractVector{A})
+typealias RangeVecIntList{A<:AbstractVector{Int}} Union((Union(Range, AbstractVector{Int})...), AbstractVector{UnitRange{Int}}, AbstractVector{Range{Int}}, AbstractVector{A})
 
 get(A::AbstractArray, i::Integer, default) = in_bounds(length(A), i) ? A[i] : default
 get(A::AbstractArray, I::(), default) = similar(A, typeof(default), 0)
 get(A::AbstractArray, I::Dims, default) = in_bounds(size(A), I...) ? A[I...] : default
 
-function get!{T}(X::AbstractArray{T}, A::AbstractArray, I::Union(Ranges, AbstractVector{Int}), default::T)
+function get!{T}(X::AbstractArray{T}, A::AbstractArray, I::Union(Range, AbstractVector{Int}), default::T)
     ind = findin(I, 1:length(A))
     X[ind] = A[I[ind]]
     X[1:first(ind)-1] = default
@@ -429,7 +470,7 @@ function get!{T}(X::AbstractArray{T}, A::AbstractArray, I::Union(Ranges, Abstrac
     X
 end
 
-get(A::AbstractArray, I::Ranges, default) = get!(similar(A, typeof(default), length(I)), A, I, default)
+get(A::AbstractArray, I::Range, default) = get!(similar(A, typeof(default), length(I)), A, I, default)
 
 function get!{T}(X::AbstractArray{T}, A::AbstractArray, I::RangeVecIntList, default::T)
     fill!(X, default)
@@ -787,7 +828,7 @@ function isequal(A::AbstractArray, B::AbstractArray)
     if size(A) != size(B)
         return false
     end
-    if isa(A,Ranges) != isa(B,Ranges)
+    if isa(A,Range) != isa(B,Range)
         return false
     end
     for i = 1:length(A)
@@ -811,7 +852,7 @@ function (==)(A::AbstractArray, B::AbstractArray)
     if size(A) != size(B)
         return false
     end
-    if isa(A,Ranges) != isa(B,Ranges)
+    if isa(A,Range) != isa(B,Range)
         return false
     end
     for i = 1:length(A)
@@ -1208,7 +1249,7 @@ end
 
 
 ## 1 argument
-function map_to!(f::Callable, first, dest::StoredArray, A::AbstractArray)
+function map_to!(f::Callable, first, dest::AbstractArray, A::AbstractArray)
     dest[1] = first
     for i=2:length(A)
         dest[i] = f(A[i])
@@ -1224,7 +1265,7 @@ function map(f::Callable, A::AbstractArray)
 end
 
 ## 2 argument
-function map_to!(f::Callable, first, dest::StoredArray, A::AbstractArray, B::AbstractArray)
+function map_to!(f::Callable, first, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
     dest[1] = first
     for i=2:length(A)
         dest[i] = f(A[i], B[i])
@@ -1243,7 +1284,7 @@ function map(f::Callable, A::AbstractArray, B::AbstractArray)
 end
 
 ## N argument
-function map_to!(f::Callable, first, dest::StoredArray, As::AbstractArray...)
+function map_to!(f::Callable, first, dest::AbstractArray, As::AbstractArray...)
     n = length(As[1])
     i = 1
     ith = a->a[i]

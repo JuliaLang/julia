@@ -1342,7 +1342,7 @@ function splitrange(N::Int, np::Int)
     each = div(N,np)
     extras = rem(N,np)
     nchunks = each > 0 ? np : extras
-    chunks = Array(Range1{Int}, nchunks)
+    chunks = Array(UnitRange{Int}, nchunks)
     lo = 1
     for i in 1:nchunks
         hi = lo + each - 1
@@ -1415,7 +1415,7 @@ macro parallel(args...)
                 var = loop.args[1+i].args[1]
                 loop.args[1+i] = :( $(esc(var)) = ($(ranges[i]))[I[$i]] )
             end
-            return :( DArray((I::(Range1{Int}...))->($loop),
+            return :( DArray((I::(UnitRange{Int}...))->($loop),
                              tuple($(map(r->:(length($r)),ranges)...))) )
         end
     elseif na==2

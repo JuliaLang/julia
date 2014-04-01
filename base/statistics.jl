@@ -115,9 +115,9 @@ end
 
 ## variances over ranges
 
-varm(v::Ranges, m::Number) = var(v)
+varm(v::Range, m::Number) = var(v)
 
-function var(v::Ranges)
+function var(v::Range)
     s = step(v)
     l = length(v)
     if l == 0 || l == 1
@@ -378,7 +378,7 @@ end
 
 function histrange{T<:FloatingPoint,N}(v::AbstractArray{T,N}, n::Integer)
     if length(v) == 0
-        return Range(0.0,1.0,1)
+        return 0.0:1.0:0.0
     end
     lo, hi = minimum(v), maximum(v)
     if hi == lo
@@ -396,12 +396,13 @@ function histrange{T<:FloatingPoint,N}(v::AbstractArray{T,N}, n::Integer)
         end
     end
     start = step*(ceil(lo/step)-1)
-    Range(start,step,1+iceil((hi - start)/step))
+    nm1 = iceil((hi - start)/step)
+    start:step:(start + nm1*step)
 end
 
 function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
     if length(v) == 0
-        return Range(0,1,1)
+        return 0:1:0
     end
     lo, hi = minimum(v), maximum(v)
     if hi == lo
@@ -420,12 +421,13 @@ function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
             step = 10*e
         end
     end
-    start = step*(iceil(lo/step)-1)
-    Range(start,step,1+iceil((hi - start)/step))
+    start = step*(ceil(lo/step)-1)
+    nm1 = iceil((hi - start)/step)
+    start:step:(start + nm1*step)
 end
 
 ## midpoints of intervals
-midpoints(r::Ranges) = r[1:length(r)-1] + 0.5*step(r)
+midpoints(r::Range) = r[1:length(r)-1] + 0.5*step(r)
 midpoints(v::AbstractVector) = [0.5*(v[i] + v[i+1]) for i in 1:length(v)-1]
 
 ## hist ##
@@ -434,7 +436,7 @@ function sturges(n)  # Sturges' formula
     iceil(log2(n))+1
 end
 
-function hist!{HT}(h::StoredArray{HT}, v::AbstractVector, edg::AbstractVector; init::Bool=true)
+function hist!{HT}(h::AbstractArray{HT}, v::AbstractVector, edg::AbstractVector; init::Bool=true)
     n = length(edg) - 1
     length(h) == n || error("length(h) must equal length(edg) - 1.")
     if init
@@ -453,7 +455,7 @@ hist(v::AbstractVector, edg::AbstractVector) = hist!(Array(Int, length(edg)-1), 
 hist(v::AbstractVector, n::Integer) = hist(v,histrange(v,n))
 hist(v::AbstractVector) = hist(v,sturges(length(v)))
 
-function hist!{HT}(H::StoredArray{HT,2}, A::AbstractMatrix, edg::AbstractVector; init::Bool=true)
+function hist!{HT}(H::AbstractArray{HT,2}, A::AbstractMatrix, edg::AbstractVector; init::Bool=true)
     m, n = size(A)
     size(H) == (length(edg)-1, n) || error("Incorrect size of H.")
     if init
@@ -471,7 +473,7 @@ hist(A::AbstractMatrix) = hist(A,sturges(size(A,1)))
 
 
 ## hist2d
-function hist2d!{HT}(H::StoredArray{HT,2}, v::AbstractMatrix, 
+function hist2d!{HT}(H::AbstractArray{HT,2}, v::AbstractMatrix, 
                      edg1::AbstractVector, edg2::AbstractVector; init::Bool=true)
     size(v,2) == 2 || error("hist2d requires an Nx2 matrix.")
     n = length(edg1) - 1

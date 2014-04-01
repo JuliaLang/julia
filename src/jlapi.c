@@ -9,13 +9,18 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#include "julia.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
-char * __cdecl dirname(char *);
-char * __cdecl basename(char *);
+DLLEXPORT char * __cdecl dirname(char *);
+DLLEXPORT char * __cdecl basename(char *);
 #else
 #include <libgen.h>
 #endif
-#include "julia.h"
 
 DLLEXPORT char *jl_locate_sysimg(char *jlhome, char* imgpath)
 {
@@ -257,3 +262,7 @@ DLLEXPORT int jl_is_debugbuild(void)
     return 0;
 #endif
 }
+
+#ifdef __cplusplus
+}
+#endif

@@ -12,7 +12,7 @@ import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
 type BigInt <: Integer
     alloc::Cint
     size::Cint
-    d::Ptr{Void}
+    d::Ptr{Culong}
     function BigInt()
         b = new(zero(Cint), zero(Cint), C_NULL)
         ccall((:__gmpz_init,:libgmp), Void, (Ptr{BigInt},), &b)

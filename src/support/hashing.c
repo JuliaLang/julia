@@ -8,6 +8,10 @@
 #include "timefuncs.h"
 #include "ios.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 uint_t nextipow2(uint_t i)
 {
     if (i==0) return 1;
@@ -100,3 +104,7 @@ uint32_t memhash32_seed(const char* buf, size_t n, uint32_t seed)
     MurmurHash3_x86_32(buf, n, seed, &out);
     return out;
 }
+
+#ifdef __cplusplus
+}
+#endif

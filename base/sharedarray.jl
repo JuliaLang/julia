@@ -194,15 +194,15 @@ end
 shmem_fill(v, I::Int...; kwargs...) = shmem_fill(v, I; kwargs...)
 
 # rand variant with range
-function shmem_rand(TR::Union(DataType, Range1), dims; kwargs...) 
-    if isa(TR, Range1)
+function shmem_rand(TR::Union(DataType, UnitRange), dims; kwargs...) 
+    if isa(TR, UnitRange)
         SharedArray(Int, dims; init = S -> map!((x)->rand(TR), S.loc_subarr_1d), kwargs...)
     else
         SharedArray(TR, dims; init = S -> map!((x)->rand(TR), S.loc_subarr_1d), kwargs...)
     end
 end
-shmem_rand(TR::Union(DataType, Range1), i::Int; kwargs...) = shmem_rand(TR, (i,); kwargs...)  
-shmem_rand(TR::Union(DataType, Range1), I::Int...; kwargs...) = shmem_rand(TR, I; kwargs...)  
+shmem_rand(TR::Union(DataType, UnitRange), i::Int; kwargs...) = shmem_rand(TR, (i,); kwargs...)  
+shmem_rand(TR::Union(DataType, UnitRange), I::Int...; kwargs...) = shmem_rand(TR, I; kwargs...)  
 
 shmem_rand(dims; kwargs...) = shmem_rand(Float64, dims; kwargs...)
 shmem_rand(I::Int...; kwargs...) = shmem_rand(I; kwargs...)

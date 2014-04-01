@@ -214,8 +214,8 @@ function axpy!{T<:BlasFloat,Ta<:Number}(alpha::Ta, x::Array{T}, y::Array{T})
     axpy!(length(x), convert(T,alpha), x, 1, y, 1)
 end
 
-function axpy!{T<:BlasFloat,Ta<:Number,Ti<:Integer}(alpha::Ta, x::Array{T}, rx::Union(Range1{Ti},Range{Ti}),
-                                         y::Array{T}, ry::Union(Range1{Ti},Range{Ti}))
+function axpy!{T<:BlasFloat,Ta<:Number,Ti<:Integer}(alpha::Ta, x::Array{T}, rx::Union(UnitRange{Ti},Range{Ti}),
+                                         y::Array{T}, ry::Union(UnitRange{Ti},Range{Ti}))
 
     length(rx)==length(ry) || throw(DimensionMismatch(""))
 
@@ -845,8 +845,8 @@ end
 
 end # module
 
-function copy!{T<:BlasFloat,Ti<:Integer}(dest::Array{T}, rdest::Union(Range1{Ti},Range{Ti}), 
-                                          src::Array{T}, rsrc::Union(Range1{Ti},Range{Ti}))
+function copy!{T<:BlasFloat,Ti<:Integer}(dest::Array{T}, rdest::Union(UnitRange{Ti},Range{Ti}), 
+                                          src::Array{T}, rsrc::Union(UnitRange{Ti},Range{Ti}))
     if minimum(rdest) < 1 || maximum(rdest) > length(dest) || minimum(rsrc) < 1 || maximum(rsrc) > length(src)
         throw(BoundsError())
     end

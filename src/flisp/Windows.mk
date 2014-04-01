@@ -31,16 +31,17 @@ OBJECTS = \
 	basename.obj
 
 LIBUV = $(MAKEDIR)\..\..\deps\libuv\libuv.lib
+LIBUTF8PROC = $(MAKEDIR)\..\..\deps\utf8proc-v1.1.6\libutf8proc.lib
 LIBSUPPORT = $(MAKEDIR)\..\support\libsupport.lib
 
-INCLUDE = $(INCLUDE);$(MAKEDIR)\..\..\deps\libuv\include;$(MAKEDIR)\..\support
+INCLUDE = $(INCLUDE);$(MAKEDIR)\..\..\deps\libuv\include;$(MAKEDIR)\..\..\deps\utf8proc-v1.1.6;$(MAKEDIR)\..\support
 
 CFLAGS = $(CFLAGS) /Qstd=c99 -D_CRT_SECURE_NO_WARNINGS -DLIBRARY_EXPORTS
 LFLAGS = $(LFLAGS) kernel32.lib ws2_32.lib psapi.lib advapi32.lib iphlpapi.lib
 
 default: $(NAME).exe
 
-$(NAME).exe: lib$(NAME).lib flmain.obj $(LIBSUPPORT) $(LIBUV)
+$(NAME).exe: lib$(NAME).lib flmain.obj $(LIBSUPPORT) $(LIBUV) $(LIBUTF8PROC)
 	$(LINK) $(LFLAGS) /OUT:$(NAME).exe /PDB:$(NAME).pdb /MAP $** 
 
 $(LIBSUPPORT):
@@ -48,6 +49,9 @@ $(LIBSUPPORT):
 
 $(LIBUV):
 	PUSHD $(MAKEDIR)\..\..\deps\libuv && $(MAKE) /NOLOGO /F Windows.mk  && POPD
+
+$(LIBUTF8PROC):
+	PUSHD $(MAKEDIR)\..\..\deps\utf8proc-v1.1.6 && cl -nologo /c utf8proc.c && $(AR) /OUT:libutf8proc.lib utf8proc.obj && POPD
 
 lib$(NAME).lib: $(OBJECTS)
 	$(AR) /OUT:lib$(NAME).lib $**
