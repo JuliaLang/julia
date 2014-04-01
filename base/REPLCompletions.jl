@@ -99,6 +99,23 @@ function complete_symbol(sym, ffunc)
     suggestions
 end
 
+function complete_keyword(s::ByteString)
+    const sorted_keywords = [
+        "abstract", "baremodule", "begin", "bitstype", "break", "catch", "ccall",
+        "const", "continue", "do", "else", "elseif", "end", "export", "finally",
+        "for", "function", "global", "if", "immutable", "import", "importall",
+        "let", "local", "macro", "module", "quote", "return", "try", "type",
+        "typealias", "using", "while"]
+    r = searchsorted(sorted_keywords, s)
+    i = first(r)
+    n = length(sorted_keywords)
+    while i <= n && beginswith(sorted_keywords[i],s)
+        r = first(r):i
+        i += 1
+    end
+    sorted_keywords[r]
+end
+
 function complete_path(path::ByteString)
     matches = ByteString[]
     dir, prefix = splitdir(path)
@@ -206,7 +223,9 @@ function completions(string,pos)
     end
     startpos == 0 && (pos = -1)
     dotpos <= startpos && (dotpos = startpos - 1)
-    append!(suggestions, complete_symbol(string[startpos:pos], ffunc))
+    s = string[startpos:pos]
+    append!(suggestions, complete_keyword(s))
+    append!(suggestions, complete_symbol(s, ffunc))
     return sort(unique(suggestions)), (dotpos+1):pos, true
 end
 
