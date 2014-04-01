@@ -844,7 +844,7 @@ function refreshMultiLine(s::SearchState)
     write(buf, readall(s.respose_buffer))
     buf.ptr = offset+ptr-1
     s.respose_buffer.ptr = ptr
-    refreshMultiLine(s.terminal, buf, s.ias, s.backward ? "(reverse-i-search)`" : "(i-search)`")
+    s.ias = refreshMultiLine(s.terminal, buf, s.ias, s.backward ? "(reverse-i-search)`" : "(i-search)`")
 end
 
 function reset_state(s::SearchState)
