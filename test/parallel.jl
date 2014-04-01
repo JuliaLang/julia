@@ -70,6 +70,14 @@ end
 @test ones(10, 10, 10) == Base.shmem_fill(1.0, (10,10,10))
 @test zeros(Int32, 10, 10, 10) == Base.shmem_fill(0, (10,10,10))
 
+d = Base.shmem_rand(dims)
+s = Base.shmem_rand(dims)
+copy!(s, d)
+@test s == d
+s = Base.shmem_rand(dims)
+copy!(s, sdata(d))
+@test s == d
+
 d = SharedArray(Int, dims; init = D->fill!(D.loc_subarr_1d, myid()))
 for p in procs(d)
     idxes_in_p = remotecall_fetch(p, D -> parentindexes(D.loc_subarr_1d)[1], d)
