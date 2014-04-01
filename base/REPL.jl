@@ -223,7 +223,8 @@ end
 function add_history(hist::REPLHistoryProvider,s)
     # bytestring copies
     str = bytestring(pointer(s.input_buffer.data),s.input_buffer.size)
-    if isempty(strip(str)) # Do not add empty strings to the history
+    if isempty(strip(str)) || # Do not add empty strings to the history
+       (length(hist.history) > 0 && str == hist.history[end]) # Do not add consecutive duplicate entries
         return
     end
     push!(hist.history,str)
