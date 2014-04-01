@@ -661,7 +661,7 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
     dt->fptr = jl_deserialize_fptr(s);
     if (dt->name == jl_array_type->name || dt->name == jl_pointer_type->name ||
         dt->name == jl_type_type->name || dt->name == jl_vararg_type->name ||
-        dt->name == jl_abstractarray_type->name || dt->name == jl_storedarray_type->name ||
+        dt->name == jl_abstractarray_type->name ||
         dt->name == jl_densearray_type->name) {
         // builtin types are not serialized, so their caches aren't
         // explicitly saved. so we reconstruct the caches of builtin
@@ -1285,7 +1285,7 @@ void jl_init_serializer(void)
                      jl_gotonode_type, jl_quotenode_type, jl_topnode_type,
                      jl_type_type, jl_bottom_type, jl_pointer_type,
                      jl_vararg_type, jl_ntuple_type, jl_abstractarray_type,
-                     jl_storedarray_type, jl_densearray_type, jl_box_type,
+                     jl_densearray_type, jl_box_type,
                      jl_typector_type, jl_undef_type, jl_top_type, jl_typename_type,
                      jl_task_type, jl_uniontype_type, jl_typetype_type, jl_typetype_tvar,
                      jl_ANY_flag, jl_array_any_type, jl_intrinsic_type, jl_method_type,
@@ -1297,7 +1297,7 @@ void jl_init_serializer(void)
                      jl_typename_type->name, jl_type_type->name, jl_methtable_type->name,
                      jl_method_type->name, jl_tvar_type->name, jl_vararg_type->name,
                      jl_ntuple_type->name, jl_abstractarray_type->name,
-                     jl_storedarray_type->name, jl_densearray_type->name,
+                     jl_densearray_type->name,
                      jl_lambda_info_type->name, jl_module_type->name, jl_box_type->name,
                      jl_function_type->name, jl_typector_type->name,
                      jl_intrinsic_type->name, jl_undef_type->name, jl_task_type->name,

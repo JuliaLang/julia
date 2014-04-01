@@ -2,7 +2,7 @@
 
 typealias RangeIndex Union(Int, Range{Int}, Range1{Int})
 
-type SubArray{T,N,A<:StoredArray,I<:(RangeIndex...,)} <: StoredArray{T,N}
+type SubArray{T,N,A<:AbstractArray,I<:(RangeIndex...,)} <: AbstractArray{T,N}
     parent::A
     indexes::I
     dims::NTuple{N,Int}
