@@ -282,12 +282,12 @@ end
 # convert to integer index
 to_index(i::Int) = i
 to_index(i::Real) = convert(Int, i)
-to_index(r::Range1{Int}) = r
-to_index(r::Ranges{Int}) = r
-to_index(I::Range1{Bool}) = find(I)
-to_index(I::Ranges{Bool}) = find(I)
-to_index{T<:Real}(r::Range1{T}) = to_index(first(r)):to_index(last(r))
-to_index{T<:Real}(r::Ranges{T}) = to_index(first(r)):to_index(step(r)):to_index(last(r))
+to_index(r::UnitRange{Int}) = r
+to_index(r::Range{Int}) = r
+to_index(I::UnitRange{Bool}) = find(I)
+to_index(I::Range{Bool}) = find(I)
+to_index{T<:Real}(r::UnitRange{T}) = to_index(first(r)):to_index(last(r))
+to_index{T<:Real}(r::StepRange{T}) = to_index(first(r)):to_index(step(r)):to_index(last(r))
 to_index(I::AbstractArray{Bool}) = find(I)
 to_index(A::AbstractArray{Int}) = A
 to_index{T<:Real}(A::AbstractArray{T}) = [to_index(x) for x in A]

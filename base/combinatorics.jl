@@ -191,7 +191,7 @@ immutable Combinations{T}
 end
 
 eltype(c::Combinations) = typeof(c.a)
-eltype{T}(c::Combinations{Range1{T}}) = Array{T,1}
+eltype{T}(c::Combinations{UnitRange{T}}) = Array{T,1}
 eltype{T}(c::Combinations{Range{T}}) = Array{T,1}
 
 length(c::Combinations) = binomial(length(c.a),c.t)
@@ -231,7 +231,7 @@ immutable Permutations{T}
 end
 
 eltype(c::Permutations) = typeof(c.a)
-eltype{T}(c::Permutations{Range1{T}}) = Array{T,1}
+eltype{T}(c::Permutations{UnitRange{T}}) = Array{T,1}
 eltype{T}(c::Permutations{Range{T}}) = Array{T,1}
 
 length(c::Permutations) = factorial(length(c.a))

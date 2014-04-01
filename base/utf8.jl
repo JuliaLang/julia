@@ -97,7 +97,7 @@ isvalid(s::UTF8String, i::Integer) =
 
 const empty_utf8 = UTF8String(Uint8[])
 
-function getindex(s::UTF8String, r::Range1{Int})
+function getindex(s::UTF8String, r::UnitRange{Int})
     isempty(r) && return empty_utf8
     i, j = first(r), last(r)
     d = s.data

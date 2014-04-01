@@ -57,7 +57,7 @@ done(s::String,i) = (i > endof(s))
 getindex(s::String, i::Int) = next(s,i)[1]
 getindex(s::String, i::Integer) = s[int(i)]
 getindex(s::String, x::Real) = s[to_index(x)]
-getindex{T<:Integer}(s::String, r::Range1{T}) = s[int(first(r)):int(last(r))]
+getindex{T<:Integer}(s::String, r::UnitRange{T}) = s[int(first(r)):int(last(r))]
 # TODO: handle other ranges with stride ±1 specially?
 getindex(s::String, v::AbstractVector) =
     sprint(length(v), io->(for i in v write(io,s[i]) end))
@@ -657,7 +657,7 @@ function serialize{T}(s, ss::SubString{T})
     invoke(serialize, (Any,Any), s, convert(SubString{T}, convert(T,ss)))
 end
 
-function getindex(s::String, r::Range1{Int})
+function getindex(s::String, r::UnitRange{Int})
     if first(r) < 1 || endof(s) < last(r)
         error(BoundsError)
     end
