@@ -135,7 +135,7 @@ that runs it. For example, type the following into the julia prompt::
 
     julia> exception on 2: in anonymous: rand2 not defined 
 
-Processor 1 knew about the function ``rand2``, but process 2 did not.
+Process 1 knew about the function ``rand2``, but process 2 did not.
 To make your code available to all processes, the ``require`` function will
 automatically load a source file on all currently available processes::
 
@@ -158,7 +158,7 @@ A file can also be preloaded on multiple processes at startup, and a driver scri
 Each process has an associated identifier. The process providing the interactive julia prompt
 always has an id equal to 1, as would the julia process running the driver script in the
 example above.
-The processors used by default for parallel operations are referred to as ``workers``.
+The processes used by default for parallel operations are referred to as ``workers``.
 When there is only one process, process 1 is considered a worker. Otherwise, workers are
 considered to be all processes other than process 1.
 
@@ -427,7 +427,7 @@ Common kinds of arrays can be constructed with functions beginning with
 
 In the last case, each element will be initialized to the specified
 value ``x``. These functions automatically pick a distribution for you.
-For more control, you can specify which processors to use, and how the
+For more control, you can specify which processes to use, and how the
 data should be distributed::
 
     dzeros((100,100), workers()[1:4], [1,4])
@@ -444,7 +444,7 @@ this array specifies how many pieces dimension n should be divided into.
 In this example the first dimension will not be divided, and the second
 dimension will be divided into 4 pieces. Therefore each local chunk will be
 of size ``(100,25)``. Note that the product of the distribution array must
-equal the number of processors.
+equal the number of processes.
 
 ``distribute(a::Array)`` converts a local array to a distributed array.
 
@@ -454,7 +454,7 @@ of a ``DArray``.
 ``localindexes(a::DArray)`` gives a tuple of the index ranges owned by the
 local process.
 
-``convert(Array, a::DArray)`` brings all the data to the local processor.
+``convert(Array, a::DArray)`` brings all the data to the local process.
 
 Indexing a ``DArray`` (square brackets) with ranges of indexes always
 creates a ``SubArray``, not copying any data.
@@ -470,7 +470,7 @@ The primitive ``DArray`` constructor has the following somewhat elaborate signat
 ``init`` is a function that accepts a tuple of index ranges. This function should
 allocate a local chunk of the distributed array and initialize it for the specified
 indices. ``dims`` is the overall size of the distributed array.
-``procs`` optionally specifies a vector of processor IDs to use.
+``procs`` optionally specifies a vector of process IDs to use.
 ``dist`` is an integer vector specifying how many chunks the
 distributed array should be divided into in each dimension.
 
@@ -493,7 +493,7 @@ major utility is allowing communication to be done via array indexing, which
 is convenient for many problems. As an example, consider implementing the
 "life" cellular automaton, where each cell in a grid is updated according
 to its neighboring cells. To compute a chunk of the result of one iteration,
-each processor needs the immediate neighbor cells of its local chunk. The
+each process needs the immediate neighbor cells of its local chunk. The
 following code accomplishes this::
 
     function life_step(d::DArray)
