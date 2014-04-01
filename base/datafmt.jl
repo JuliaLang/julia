@@ -115,7 +115,8 @@ function dlm_fill{T}(cells::Array{T,2}, offarr::Vector{Vector{Int}}, sbuff::Stri
         (row < 1) && continue
         (row > maxrow) && break
 
-        if (row > lastrow) && (lastcol < maxcol)
+        while lastrow < row
+            (lastcol == maxcol) && (lastcol = 0; lastrow += 1)
             for cidx in (lastcol+1):maxcol
                 if (T <: String) || (T == Any)
                     cells[lastrow,cidx] = SubString(sbuff, 1, 0)
@@ -125,6 +126,8 @@ function dlm_fill{T}(cells::Array{T,2}, offarr::Vector{Vector{Int}}, sbuff::Stri
                     error("missing value at row $lastrow column $cidx")
                 end
             end
+            lastcol = maxcol
+        (lastrow == row) && break
         end
 
         endpos = prevind(sbuff, nextind(sbuff,endpos))
@@ -158,7 +161,7 @@ function dlm_fill{T}(cells::Array{T,2}, offarr::Vector{Vector{Int}}, sbuff::Stri
                 end
             end
             lastcol = maxcol
-            (lastrow == maxrow) && break;
+            (lastrow == maxrow) && break
         end
     end
     cells
@@ -234,17 +237,15 @@ function dlm_dims{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, ign_adj_dlm::Bool, al
                         expct_col = true
                         col += 1
                         offidx = store_column(offsets, nrows+1, col, false, col_start_idx, idx-2, offidx)
-                        col_start_idx = idx
-                    else
-                        col_start_idx = idx
                     end
+                    col_start_idx = idx
                 elseif is_eol
                     nrows += 1
                     if expct_col 
                         col += 1
                         offidx = store_column(offsets, nrows, col, false, col_start_idx, idx-2, offidx)
-                        col_start_idx = idx
                     end
+                    col_start_idx = idx
                     ncols = max(ncols, col)
                     col = 0
                     expct_col = false
