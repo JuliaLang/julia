@@ -239,25 +239,39 @@ function add_history(hist::REPLHistoryProvider, s)
     end
 end
 
-function history_adjust(hist::REPLHistoryProvider, s)
-    if 0 < hist.cur_idx <= length(hist.history)
+function history_move(s::LineEdit.MIState, hist::REPLHistoryProvider, idx::Int)
+    max_idx = length(hist.history) + 1
+    @assert 1 <= hist.cur_idx <= max_idx
+    (1 <= idx <= max_idx) || return false
+    idx != hist.cur_idx || return false
+
+    # save the current line
+    if hist.cur_idx == max_idx
+        hist.last_mode = LineEdit.mode(s)
+        hist.last_buffer = copy(LineEdit.buffer(s))
+    else
         hist.history[hist.cur_idx] = LineEdit.input_string(s)
         hist.modes[hist.cur_idx] = mode_idx(hist, LineEdit.mode(s))
     end
+
+    # load the saved line
+    if idx == max_idx
+        LineEdit.transition(s, hist.last_mode)
+        LineEdit.replace_line(s, hist.last_buffer)
+        hist.last_mode = nothing
+        hist.last_buffer = IOBuffer()
+    else
+        LineEdit.transition(s, hist.mode_mapping[hist.modes[idx]])
+        LineEdit.replace_line(s, hist.history[idx])
+    end
+
+    hist.cur_idx = idx
+    true
 end
 
 function history_prev(s::LineEdit.MIState, hist::REPLHistoryProvider)
     hist.last_idx = -1
-    if hist.cur_idx > 1
-        if hist.cur_idx == length(hist.history)+1
-            hist.last_mode = LineEdit.mode(s)
-            hist.last_buffer = copy(LineEdit.buffer(s))
-        else
-            history_adjust(hist, s)
-        end
-        hist.cur_idx -= 1
-        LineEdit.transition(s, hist.mode_mapping[hist.modes[hist.cur_idx]])
-        LineEdit.replace_line(s, hist.history[hist.cur_idx])
+    if history_move(s, hist, hist.cur_idx-1)
         LineEdit.move_input_start(s)
         LineEdit.move_line_end(s)
     else
@@ -266,27 +280,13 @@ function history_prev(s::LineEdit.MIState, hist::REPLHistoryProvider)
 end
 
 function history_next(s::LineEdit.MIState, hist::REPLHistoryProvider)
-    if hist.cur_idx < length(hist.history)
-        history_adjust(hist, s)
-        hist.cur_idx += 1
-        LineEdit.transition(s, hist.mode_mapping[hist.modes[hist.cur_idx]])
-        LineEdit.replace_line(s, hist.history[hist.cur_idx])
-        LineEdit.move_input_end(s)
-    elseif hist.cur_idx == length(hist.history)
-        hist.cur_idx += 1
-        buf = hist.last_buffer
-        hist.last_buffer = IOBuffer()
-        LineEdit.transition(s, hist.last_mode)
-        LineEdit.replace_line(s, buf)
-        LineEdit.move_input_end(s)
-    elseif 0 < hist.last_idx < length(hist.history)
+    cur_idx = hist.cur_idx
+    if 0 < hist.last_idx
         # issue #6312
-        hist.cur_idx = hist.last_idx + 1
+        cur_idx = hist.last_idx
         hist.last_idx = -1
-        hist.last_mode = LineEdit.mode(s)
-        hist.last_buffer = copy(LineEdit.buffer(s))
-        LineEdit.transition(s, hist.mode_mapping[hist.modes[hist.cur_idx]])
-        LineEdit.replace_line(s, hist.history[hist.cur_idx])
+    end
+    if history_move(s, hist, cur_idx+1)
         LineEdit.move_input_end(s)
     else
         Terminals.beep(LineEdit.terminal(s))
@@ -548,8 +548,10 @@ function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,
                 ast, pos = Base.parse(string, pos, raise=false)
                 # Get the line and strip leading and trailing whitespace
                 line = strip(string[max(oldpos, 1):min(pos-1, length(string))])
+                isempty(line) && continue
                 LineEdit.replace_line(s, line)
                 LineEdit.refresh_line(s)
+                (pos > length(string) && last(string) != '\n') && break
                 if !isa(ast, Expr) || (ast.head != :continue && ast.head != :incomplete)
                     LineEdit.commit_line(s)
                     # This is slightly ugly but ok for now
