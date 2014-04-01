@@ -3,6 +3,8 @@
 #  problems: http://projecteuler.net/problems
 #  solutions: https://code.google.com/p/projecteuler-solutions/wiki/ProjectEulerSolutions
 
+t = time()
+
 #1: 233168
 @test sum(filter(n->(n%3==0)|(n%5==0),1:999)) == 233168
 
@@ -236,11 +238,59 @@ end
 @test euler14(999999) == 837799
 
 #15: 137846528820
+function euler15(n)
+    p = ones(Int,n+1)
+    for j in 1:n
+        for k in 1:n
+            p[k+1] += p[k]
+        end
+    end
+    p[end]
+end
+@test euler15(20) == 137846528820
 
 #16: 1366
 @test sum(digits(big(2)^1000)) == 1366
 
 #17: 21124
+spelling = [
+    1 => "one",
+    2 => "two",
+    3 => "three",
+    4 => "four",
+    5 => "five",
+    6 => "six",
+    7 => "seven",
+    8 => "eight",
+    9 => "nine",
+    10 => "ten",
+    11 => "eleven",
+    12 => "twelfe",
+    13 => "thirteen",
+    15 => "fifteen",
+    18 => "eighteen",
+    20 => "twenty",
+    30 => "thirty",
+    40 => "forty",
+    50 => "fifty",
+    60 => "sixty",
+    70 => "seventy",
+    80 => "eighty",
+    90 => "ninety", 
+  1000 => "one thousand"]
+
+function spell(n)
+    n > 1000 && error("can only spell up to 1000 for now...")
+    haskey(spelling,n) && return spelling[n]
+    n >= 100 && return string(spell( div(n,100) )," hundred", n % 100 == 0 ? "" : string(" and ",spell( n % 100 )) )
+    n >= 20 && return string(spell( div(n,10) * 10 ), n % 10 == 0 ? "" : string("-",spell( n % 10 )) )
+    return string(spell( n % 10 ),"teen")
+end
+
+euler17(n) = sum( [ length(replace(spell(i),Set('-',' '),"")) for i in 1:n ])
+
+@test euler17(1000) == 21124
+
 #18: 1074
 #19: 171
 
@@ -361,16 +411,218 @@ end
 #129: 1000023
 #130: 149253
 #131: 173
+function euler131(B)
+    n, count = 2,0
+    cube_prev = 1
+    while true
+        cube = n*n*n
+        diff = cube - cube_prev
+        if diff > B
+            break
+        end
+        if isprime(diff)
+            count += 1
+            # println("p $diff n3 $cube_prev n^3+pn^2 $cube")
+        end
+        n += 1
+        cube_prev = cube
+    end
+    return count
+end
+
+@test euler131(1000000) == 173
+
 #132: 843296
 #133: 453647705
 #134: 18613426663617118
 #135: 4989
+function euler135(B)
+    ns = zeros(Int,B)
+    for a = 1:(div(3B,4)+3)
+        d = div(a,3) + 1
+        n = (d+a)*(3d-a)  # try 3d^2+2ad-aa
+        if n >= B
+            continue
+        end
+        while n < B
+            ns[n] += 1
+            d += 1
+            n = (d+a)*(3d-a)  # try 3d^2+2ad-aa
+        end
+        a += 1
+    end
+    count( x -> x==10, ns)
+end
+
+@test euler135(10^6) == 4989
+
 #136: 2544559
 #137: 1120149658760
+immutable generalFibG
+    a0::Integer
+    a1::Integer
+end
+
+Base.start(f::generalFibG) = (f.a0,f.a1)
+
+function Base.next(f::generalFibG, st)
+    an, anp = st
+    an,(anp,anp+an)
+end
+
+Base.done(f::generalFibG, st) = false
+
+function euler137(n)
+    nug_sum = 0
+    fg = generalFibG(1,1) 
+    for (i,k) in enumerate(fg)
+        mod(i,4) == 3 && (nug_sum += k)  # note: without parentheses, get syntax error
+        i > 4*n-2 && break
+    end
+    return nug_sum
+end
+
+@test euler137(15) == 1120149658760
+
 #138: 1118049290473932
+immutable sqrtCFG # square root continued fraction generator
+    n::Integer
+end
+    # For integer n, returns the continued fraction expansion a_n for sqrt(n),
+    # as well as p_n, q_n with p_n/q_n being the n-th convergent.
+
+Base.start(g::sqrtCFG) = (zero(g.n),one(g.n), one(g.n),zero(g.n), zero(g.n),one(g.n)) 
+                        #       c,       d,        p,    p_old,         q,   q_old
+
+function Base.next(g::sqrtCFG, st)
+    c,d, p,p_old, q,q_old = st
+
+    a = zero(g.n)
+    while (c+d)*(c+d) <= g.n
+        c += d
+        a += one(g.n)
+    end
+    p, p_old = (p * a + p_old), p
+    q, q_old = (q * a + q_old), q
+    c, d     = -c, div(g.n - c*c, d)
+
+    return (a,p,q), (c,d, p,p_old, q,q_old)
+end
+
+Base.done(g::sqrtCFG, st) = (st[2] == 0) # d == 0
+
+
+function euler138(n)
+    i,s = 0,0
+    B = 2*n
+    for (a,p,q) in sqrtCFG(5)
+        if i>0 && iseven(i)
+            # println("i $i a $a p $p q $q  pp/qq $(p*p/(q*q))")
+            s += q
+        end
+        i += 1
+        if i > B
+           break
+       end
+    end
+    s
+end
+
+@test euler138(12) == 1118049290473932
+
 #139: 10057761
+function euler139(B)
+    m = 2
+    nStart = 1
+    s, p = 0,0
+    while 2*m*m < B
+        for n = nStart:2:(m-1)
+            gcd(n,m) > 1 && continue
+            a = m*m-n*n
+            b = 2*m*n
+            c = m*m+n*n
+            d = abs(a-b)
+            p = 2*m*(m+n)
+            # p = a+b+c
+            p > B && continue
+            # println("m $m n $n a $a  b $b  c $c  d $d  a*a $(a*a)  b*b $(b*b)  c*c $(c*c)")
+            # println("p $p  mod  $(mod(c,d))   div  $(div(B,p)) ")
+            if mod(c,d) == 0
+                s += div(B,p)
+            end     
+        end
+        m += 1
+        nStart = 3 - nStart
+    end
+    return s
+end
+
+# @test euler139(100000000) == 10057761
+# takes 3 seconds - too slow?
+
 #140: 5673835352990
+function euler140(n)
+    s = 0
+    fibp = generalFibG(1,2) # see problem 137
+    alt0 = generalFibG(2,5)
+    alt1 = generalFibG(4,5)
+    for (i,(f,al0,al1)) in enumerate(zip(fibp,alt0,alt1))
+        # println("i $i f $f a0 $al0 a1 $al1")
+        if mod(i,2) == 1
+            nug = f*al0
+            f_prev = f
+        else
+            nug = f_prev*al1
+        end 
+        s += nug
+        i == n && break
+    end 
+    s 
+end
+
+@test euler140(30) == 5673835352990
+
 #141: 878454337159
+# note: 141 might fail for Int32 systems?
+function issquare6(n::Integer)
+    n&2 == 0 || return false
+    rt = ifloor(sqrt(n)+0.1)
+    return rt*rt == n
+end
+
+function euler141(B)
+    # d > q > r, q = r x/y, d = r x^2/y^2, take r = b y^2
+    # n = d^3/r + r = x^3/y^3 r^2 + r = b^2 x^3 y + b y^2, x > y, gcd(x,y) = 1
+    s = 0
+    x = 2
+    while true
+        xxx = x*x*x
+        xxx >= B && break # done, too big even for b == y ==1
+        for y = 1:(x-1)
+            gcd(x,y) > 1 && continue # try next y
+            yy = y*y
+            n = xxx * y + yy
+            n > B && break # too big, even for b == 1, try next x
+            v = 1
+            while n <= B
+                if issquare6(n)
+                    s += n
+                    # r = v*yy
+                    # q = v*x*y
+                    # d = v*x*x
+                    # println("$n  sum $s  q $q  d $d  r $r  x $x  y $y b $b")
+                end
+                v += 1 
+                n = xxx * y * v*v + yy*v
+            end # over v
+        end # for y
+        x += 1
+    end
+    return s
+end
+
+@test euler141(10^12) == 878454337159
+
 #142: 1006193
 #143: 30758397
 #144: 354
@@ -660,3 +912,5 @@ end
 #428:
 #429: 98792821
 #430: 5000624921.38
+
+println("Solved Euler Probs in $(time()-t) seconds.")
