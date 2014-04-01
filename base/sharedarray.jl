@@ -225,15 +225,14 @@ reduce(f::Function, S::SharedArray) =
 
 
 function map!(f::Callable, S::SharedArray)
-    @sync begin
-        for p in procs(S)
-            @spawnat p begin
-                for idx in localindexes(S)
-                    S.s[idx] = f(S.s[idx])
-                end
+    @sync for p in procs(S)
+        @spawnat p begin
+            for idx in localindexes(S)
+                S.s[idx] = f(S.s[idx])
             end
         end
     end
+    return S
 end
 
 
