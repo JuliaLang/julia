@@ -570,7 +570,7 @@ function setup_interface(d::REPLDisplay,req,rep;extra_repl_keymap=Dict{Any,Any}[
 
     const mode_keymap = {
         '\b' => function (s)
-            if (isempty(s) || position(LineEdit.buffer(s)) == 0) && LineEdit.mode(s) != main_prompt
+            if isempty(s) || position(LineEdit.buffer(s)) == 0
                 buf = copy(LineEdit.buffer(s))
                 transition(s,main_prompt)
                 LineEdit.state(s,main_prompt).input_buffer = buf
