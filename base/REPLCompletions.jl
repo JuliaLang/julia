@@ -5,13 +5,13 @@ export completions, shell_completions
 using Base.Meta
 
 function completes_global(x, name)
-    return beginswith(x, name) && !in('#', x)
+    return beginswith(x, name) && !('#' in x)
 end
 
 # REPL Symbol Completions
-function complete_symbol(sym,ffunc)
+function complete_symbol(sym, ffunc)
     # Find module
-    strs = split(sym,".")
+    strs = split(sym, ".")
     # Maybe be smarter in the future
     context_module = Main
 
@@ -21,9 +21,9 @@ function complete_symbol(sym,ffunc)
     for name in strs[1:(end-1)]
         s = symbol(name)
         if lookup_module
-            if isdefined(mod,s)
+            if isdefined(mod, s)
                 b = mod.(s)
-                if isa(b,Module)
+                if isa(b, Module)
                     mod = b
                 elseif Base.isstructtype(typeof(b))
                     lookup_module = false
@@ -66,33 +66,33 @@ function complete_symbol(sym,ffunc)
         # We will exlcude the results that the user does not want, as well
         # as excluding Main.Main.Main, etc., because that's most likely not what
         # the user wants
-        p = s->(ffunc(mod,s) && s != module_name(mod))
+        p = s->(ffunc(mod, s) && s != module_name(mod))
         # Looking for a binding in a module
         if mod == context_module
             # Also look in modules we got through `using`
-            mods = ccall(:jl_module_usings,Any,(Any,),Main)
+            mods = ccall(:jl_module_usings, Any, (Any,), Main)
             for m in mods
                 ssyms = names(m)
-                filter!(p,ssyms)
-                syms = map!(string,Array(UTF8String,length(ssyms)),ssyms)
-                append!(suggestions,syms[map((x)->completes_global(x,name),syms)])
+                filter!(p, ssyms)
+                syms = map!(string, Array(UTF8String, length(ssyms)), ssyms)
+                append!(suggestions, syms[map((x)->completes_global(x, name), syms)])
             end
-            ssyms = names(mod,true,true)
-            filter!(p,ssyms)
-            syms = map!(string,Array(UTF8String,length(ssyms)),ssyms)
+            ssyms = names(mod, true, true)
+            filter!(p, ssyms)
+            syms = map!(string, Array(UTF8String, length(ssyms)), ssyms)
         else
-            ssyms = names(mod,true,false)
-            filter!(p,ssyms)
-            syms = map!(string,Array(UTF8String,length(ssyms)),ssyms)
+            ssyms = names(mod, true, false)
+            filter!(p, ssyms)
+            syms = map!(string, Array(UTF8String, length(ssyms)), ssyms)
         end
-        append!(suggestions,syms[map((x)->completes_global(x,name),syms)])
+        append!(suggestions, syms[map((x)->completes_global(x, name), syms)])
     else
         # Looking for a member of a type
         fields = t.names
         for field in fields
             s = string(field)
-            if beginswith(s,name)
-                push!(suggestions,s)
+            if beginswith(s, name)
+                push!(suggestions, s)
             end
         end
     end
@@ -101,7 +101,7 @@ end
 
 function complete_path(path::ByteString)
     matches = ByteString[]
-    dir,prefix = splitdir(path)
+    dir, prefix = splitdir(path)
     if length(dir) == 0
         files = readdir()
     elseif isdir(dir)
@@ -133,7 +133,7 @@ end
 const non_word_chars = " \t\n\"\\'`@\$><=:;|&{}()[].,+-*/?%^~"
 
 function completions(string,pos)
-    startpos = min(pos,1)
+    startpos = min(pos, 1)
     dotpos = 0
     instring = false
     incmd = false
@@ -144,33 +144,23 @@ function completions(string,pos)
     while i <= pos
         c,j = next(string, i)
         if c == '\\'
-            if instring
-                escaped $= true
-            end
+            instring && (escaped $= true)
             nearquote = false
         elseif c == '\''
-            if !instring
-                nearquote = true
-            end
+            !instring && (nearquote = true)
         elseif c == '"'
-            if !escaped && !nearquote && !incmd
-                instring $= true
-            end
+            (!escaped && !nearquote && !incmd) && (instring $= true)
             escaped = nearquote = false
         elseif c == '`'
-            if !escaped && !nearquote && !instring
-                incmd $= true
-            end
+            (!escaped && !nearquote && !instring) && (incmd $= true)
             escaped = nearquote = false
         else
             escaped = nearquote = false
         end
         if c < 0x80
             if instring || incmd
-                if in(c, " \t\n\"\\'`@\$><=;|&{(")
-                    startpos = j
-                end
-            elseif in(c, non_word_chars)
+                c in " \t\n\"\\'`@\$><=;|&{(" && (startpos = j)
+            elseif c in non_word_chars
                 if c == '.'
                     dotpos = i
                 elseif i == pos && c == '('
@@ -194,11 +184,11 @@ function completions(string,pos)
 
     ffunc = (mod,x)->true
     suggestions = UTF8String[]
-    r = rsearch(string,"using",startpos)
+    r = rsearch(string, "using", startpos)
     if infunc
         # We're right after the start of a function call
         return (complete_methods(string[startpos:pos-1]), startpos:pos,false)
-    elseif !isempty(r) && all(isspace,string[nextind(string,last(r)):prevind(string,startpos)])
+    elseif !isempty(r) && all(isspace, string[nextind(string, last(r)):prevind(string, startpos)])
         # We're right after using. Let's look only for packages
         # and modules we can reach from here
 
@@ -206,22 +196,18 @@ function completions(string,pos)
         # also search for packages
         s = string[startpos:pos]
         if dotpos <= startpos
-            append!(suggestions,filter(pname->begin
+            append!(suggestions, filter(pname->begin
                 pname[1] != '.' &&
                 pname != "METADATA" &&
-                beginswith(pname,s)
+                beginswith(pname, s)
             end,readdir(Pkg.dir())))
         end
-        ffunc = (mod,x)->(isdefined(mod,x) && isa(mod.(x),Module))
+        ffunc = (mod,x)->(isdefined(mod, x) && isa(mod.(x), Module))
     end
-    if startpos == 0
-        pos = -1
-    end
-    if dotpos <= startpos
-        dotpos = startpos-1
-    end
-    append!(suggestions,complete_symbol(string[startpos:pos],ffunc))
-    sort(unique(suggestions)), (dotpos+1):pos, true
+    startpos == 0 && (pos = -1)
+    dotpos <= startpos && (dotpos = startpos - 1)
+    append!(suggestions, complete_symbol(string[startpos:pos], ffunc))
+    return sort(unique(suggestions)), (dotpos+1):pos, true
 end
 
 function shell_completions(string,pos)
@@ -229,7 +215,7 @@ function shell_completions(string,pos)
     scs = string[1:pos]
     local args, last_parse
     try
-        args, last_parse = Base.shell_parse(scs,true)
+        args, last_parse = Base.shell_parse(scs, true)
     catch
         return UTF8String[], 0:-1, false
     end
@@ -242,28 +228,26 @@ function shell_completions(string,pos)
         if isempty(dir)
             files = readdir()
         else
-            if !isdir(dir)
-                return UTF8String[], 0:-1, false
-            end
+            isdir(dir) || return UTF8String[], 0:-1, false
             files = readdir(dir)
         end
         # Filter out files and directories that do not begin with the partial name we were
         # completing and append "/" to directories to simplify further completion
-        ret = map(filter(x->beginswith(x,name),files)) do x
-            if !isdir(joinpath(dir,x))
+        ret = map(filter(x->beginswith(x, name), files)) do x
+            if !isdir(joinpath(dir, x))
                 return x
             else
                 return x*"/"
             end
         end
-        r = (nextind(string,pos-sizeof(name))):pos
-        return (ret,r,true)
-    elseif isexpr(arg,:escape) && (isexpr(arg.args[1],:incomplete) || isexpr(arg.args[1],:error))
-        r = first(last_parse):prevind(last_parse,last(last_parse))
+        r = (nextind(string, pos-sizeof(name))):pos
+        return ret, r, true
+    elseif isexpr(arg, :escape) && (isexpr(arg.args[1], :incomplete) || isexpr(arg.args[1], :error))
+        r = first(last_parse):prevind(last_parse, last(last_parse))
         partial = scs[r]
-        ret, range = completions(partial,endof(partial))
-        range += first(r)-1
-        return (ret,range,true)
+        ret, range = completions(partial, endof(partial))
+        range += first(r) - 1
+        return ret, range, true
     end
 end
 
