@@ -101,6 +101,17 @@ seekend(buf)
 buf = IOBuffer("4 +aaa+ x")
 seek(buf,8)
 @test LineEdit.edit_delete_prev_word(buf)
-@test position(buf) == 2
-@test buf.size == 3
-@test bytestring(buf.data[1:buf.size]) == "4 x"
+@test position(buf) == 3
+@test buf.size == 4
+@test bytestring(buf.data[1:buf.size]) == "4 +x"
+
+buf = IOBuffer("x = func(arg1,arg2 , arg3)")
+seekend(buf)
+LineEdit.char_move_word_left(buf)
+@test position(buf) == 21
+@test LineEdit.edit_delete_prev_word(buf)
+@test bytestring(buf.data[1:buf.size]) == "x = func(arg1,arg3)"
+@test LineEdit.edit_delete_prev_word(buf)
+@test bytestring(buf.data[1:buf.size]) == "x = func(arg3)"
+@test LineEdit.edit_delete_prev_word(buf)
+@test bytestring(buf.data[1:buf.size]) == "x = arg3)"
