@@ -1,6 +1,10 @@
 #ifndef UTF8_H
 #define UTF8_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern DLLEXPORT int locale_is_utf8;
 
 /* is c the start of a utf8 sequence? */
@@ -111,5 +115,9 @@ DLLEXPORT int u8_isvalid(const char *str, size_t length);
 /* reverse a UTF-8 string. len is length in bytes. dest and src must both
    be allocated to at least len+1 bytes. returns 1 for error, 0 otherwise */
 DLLEXPORT int u8_reverse(char *dest, char *src, size_t len);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

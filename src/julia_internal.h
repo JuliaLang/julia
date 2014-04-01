@@ -79,7 +79,7 @@ jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, 
 
 void jl_init_types(void);
 void jl_init_box_caches(void);
-void jl_init_frontend(void);
+DLLEXPORT void jl_init_frontend(void);
 void jl_init_primitives(void);
 void jl_init_codegen(void);
 void jl_init_intrinsic_functions(void);

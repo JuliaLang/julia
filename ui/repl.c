@@ -12,6 +12,14 @@
 #error "JL_SYSTEM_IMAGE_PATH not defined!"
 #endif
 
+#ifdef _MSC_VER
+#define PATH_MAX MAX_PATH
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 char system_image[256] = JL_SYSTEM_IMAGE_PATH;
 
 static int lisp_prompt = 0;
@@ -162,7 +170,7 @@ void parse_opts(int *argcp, char ***argvp)
 
 int ends_with_semicolon(const char *input)
 {
-    char *p = strrchr(input, ';');
+    char *p = (char *) strrchr(input, ';');
     if (p++) {
         while (isspace(*p)) p++;
         if (*p == '\0' || *p == '#')
@@ -240,8 +248,8 @@ static void print_profile(void)
 uv_buf_t *jl_alloc_read_buffer(uv_handle_t* handle, size_t suggested_size)
 {
     if(suggested_size>512) suggested_size = 512; //Readline has a max buffer of 512
-    char *buf = malloc(suggested_size);
-    uv_buf_t *ret = malloc(sizeof(uv_buf_t));
+    char *buf = (char *) malloc(suggested_size);
+    uv_buf_t *ret = (uv_buf_t *) malloc(sizeof(uv_buf_t));
     *ret = uv_buf_init(buf,suggested_size);
     return ret;
 }
@@ -315,3 +323,7 @@ int main(int argc, char *argv[])
     julia_init(lisp_prompt ? NULL : image_file);
     return julia_trampoline(argc, argv, true_main);
 }
+
+#ifdef __cplusplus
+}
+#endif

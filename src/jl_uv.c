@@ -760,9 +760,9 @@ DLLEXPORT int jl_udp_send(uv_udp_t* handle, uint16_t port, uint32_t host, void *
     addr.sin_addr.s_addr = host;
     addr.sin_family = AF_INET;
     uv_buf_t buf[1];
-    buf[0].base = data;
+    buf[0].base = (char *) data;
     buf[0].len = size;
-    uv_udp_send_t *req = malloc(sizeof(uv_udp_send_t));
+    uv_udp_send_t *req = (uv_udp_send_t *) malloc(sizeof(uv_udp_send_t));
     req->data = handle->data;
     return uv_udp_send(req, handle, buf, 1, (struct sockaddr*)&addr, &jl_uv_sendcb);
 }
@@ -775,9 +775,9 @@ DLLEXPORT int jl_udp_send6(uv_udp_t* handle, uint16_t port, void *host, void *da
     memcpy(&addr.sin6_addr, host, 16);
     addr.sin6_family = AF_INET6;
     uv_buf_t buf[1];
-    buf[0].base = data;
+    buf[0].base = (char *) data;
     buf[0].len = size;
-    uv_udp_send_t *req = malloc(sizeof(uv_udp_send_t));
+    uv_udp_send_t *req = (uv_udp_send_t *) malloc(sizeof(uv_udp_send_t));
     req->data = handle->data;
     return uv_udp_send(req, handle, buf, 1, (struct sockaddr*)&addr, &jl_uv_sendcb);
 }
@@ -956,7 +956,7 @@ DLLEXPORT int jl_ispty(uv_pipe_t *pipe)
     if (pipe->type != UV_NAMED_PIPE) return 0;
     size_t len = 0;
     if (uv_pipe_getsockname(pipe, NULL, &len) != UV_ENOBUFS) return 0;
-    char *name = alloca(len);
+    char *name = (char *) alloca(len);
     if (uv_pipe_getsockname(pipe, name, &len)) return 0;
     // return true if name matches regex:
     // ^\\\\?\\pipe\\(msys|cygwin)-[0-9a-z]{16}-[pt]ty[1-9][0-9]*-

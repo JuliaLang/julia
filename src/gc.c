@@ -15,6 +15,10 @@
 #define GC_PAGE_SZ (2048*sizeof(void*))//bytes
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct _gcpage_t {
     char data[GC_PAGE_SZ];
     union {
@@ -1151,3 +1155,7 @@ static void big_obj_stats(void)
     JL_PRINTF(JL_STDOUT, "%d bytes in %d large objects\n", nbytes, nused);
 }
 #endif //MEMPROFILE
+
+#ifdef __cplusplus
+}
+#endif

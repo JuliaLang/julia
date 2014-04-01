@@ -28,6 +28,10 @@
 #include "julia_internal.h"
 #include <stdio.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef _OS_WINDOWS_
 #define WIN32_LEAN_AND_MEAN
 // Copied from MINGW_FLOAT_H which may not be found due to a colision with the builtin gcc float.h
@@ -313,8 +317,10 @@ EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord, 
             rval = ExceptionContinueExecution; break;
         case EXCEPTION_CONTINUE_SEARCH:
             rval = ExceptionContinueSearch; break;
+#ifndef _MSC_VER
         case EXCEPTION_EXECUTE_HANDLER:
             rval = ExceptionExecuteHandler; break;
+#endif
     }
 
     return rval;
@@ -974,3 +980,7 @@ DLLEXPORT void jl_get_system_hooks(void)
     jl_loaderror_type = (jl_datatype_t*)basemod("LoadError");
     jl_weakref_type = (jl_datatype_t*)basemod("WeakRef");
 }
+
+#ifdef __cplusplus
+}
+#endif

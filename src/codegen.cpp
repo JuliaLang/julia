@@ -1,4 +1,7 @@
 #include "platform.h"
+#if defined(_OS_WINDOWS_)
+#define NOMINMAX
+#endif
 #include "julia.h"
 #include "julia_internal.h"
 
@@ -10,7 +13,6 @@
  * including <math.h> (or rather its content).
  */
 #if defined(_OS_WINDOWS_)
-#define NOMINMAX
 #include <malloc.h>
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -443,6 +445,7 @@ static Type *NoopType;
 
 // --- utilities ---
 
+extern "C" {
 #if defined(JULIA_TARGET_CORE2)
 const char *jl_cpu_string = "core2";
 #elif defined(JULIA_TARGET_NATIVE)
@@ -451,7 +454,6 @@ const char *jl_cpu_string = "native";
 #error "Must select julia cpu target"
 #endif
 
-extern "C" {
     int globalUnique = 0;
 }
 

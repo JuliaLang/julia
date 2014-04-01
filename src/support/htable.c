@@ -12,6 +12,10 @@
 #include "htable.h"
 #include "hashing.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 htable_t *htable_new(htable_t *h, size_t size)
 {
     if (size <= HT_N_INLINE/2) {
@@ -52,3 +56,7 @@ void htable_reset(htable_t *h, size_t sz)
     for(i=0; i < hsz; i++)
         h->table[i] = HT_NOTFOUND;
 }
+
+#ifdef __cplusplus
+}
+#endif

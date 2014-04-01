@@ -5,6 +5,10 @@
 #include "julia.h"
 #include "julia_internal.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 jl_module_t *jl_main_module=NULL;
 jl_module_t *jl_core_module=NULL;
 jl_module_t *jl_base_module=NULL;
@@ -439,3 +443,7 @@ void jl_module_run_initializer(jl_module_t *m)
         JL_PRINTF(JL_STDERR, "\n");
     }
 }
+
+#ifdef __cplusplus
+}
+#endif
