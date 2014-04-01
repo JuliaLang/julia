@@ -78,7 +78,7 @@ det(W::Woodbury)=det(W.A)*det(W.C)/det(W.Cp)
 
 # Allocation-free solver for arbitrary strides (requires that W.A has a
 # non-aliasing "solve" routine, e.g., is Tridiagonal)
-function solve!(x::AbstractArray, xrng::Ranges{Int}, W::Woodbury, rhs::AbstractArray, rhsrng::Ranges{Int})
+function solve!(x::AbstractArray, xrng::Range{Int}, W::Woodbury, rhs::AbstractArray, rhsrng::Range{Int})
     solve!(W.tmpN1, 1:length(W.tmpN1), W.A, rhs, rhsrng)
     A_mul_B!(W.tmpk1, W.V, W.tmpN1)
     A_mul_B!(W.tmpk2, W.Cp, W.tmpk1)

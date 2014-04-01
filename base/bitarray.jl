@@ -707,7 +707,7 @@ function deleteat!(B::BitVector, i::Integer)
     return _deleteat!(B, i)
 end
 
-function deleteat!(B::BitVector, r::Range1{Int})
+function deleteat!(B::BitVector, r::UnitRange{Int})
     n = length(B)
     i_f = first(r)
     i_l = last(r)
@@ -787,7 +787,7 @@ splice!(B::BitVector, i::Integer, ins::AbstractVector{Bool}) = splice!(B, i, bit
 
 const _default_bit_splice = BitVector(0)
 
-function splice!(B::BitVector, r::Range1{Int}, ins::BitVector = _default_bit_splice)
+function splice!(B::BitVector, r::UnitRange{Int}, ins::BitVector = _default_bit_splice)
     n = length(B)
     i_f = first(r)
     i_l = last(r)
@@ -829,7 +829,7 @@ function splice!(B::BitVector, r::Range1{Int}, ins::BitVector = _default_bit_spl
 
     return v
 end
-splice!(B::BitVector, r::Range1{Int}, ins::AbstractVector{Bool}) = splice!(B, r, bitpack(ins))
+splice!(B::BitVector, r::UnitRange{Int}, ins::AbstractVector{Bool}) = splice!(B, r, bitpack(ins))
 
 function empty!(B::BitVector)
     ccall(:jl_array_del_end, Void, (Any, Uint), B.chunks, length(B.chunks))

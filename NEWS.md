@@ -230,6 +230,22 @@ Library improvements
   * Faster performance on `fill!` and `copy!` for array types not supporting
     efficient linear indexing ([#5671], [#5387])
 
+  * Changes to range types ([#5585])
+
+    * `Range` is now the abstract range type, instead of `Ranges`
+
+    * New function `range` for constructing ranges by length
+
+    * `Range` is now `StepRange`, and `Range1` is now `UnitRange`. Their
+      constructors accept end points instead of lengths. Both are subtypes of a
+      new abstract type `OrdinalRange`.
+
+    * Ranges now support `BigInt` and general ordinal types.
+
+    * Very large ranges (e.g. `0:typemax(Int)`) can now be constructed, but some
+      operations (e.g. `length`) will raise an `OverflowError`.
+
+
 Deprecated or removed
 ---------------------
 
@@ -267,6 +283,11 @@ Deprecated or removed
   * `read` methods that modify a passed array are now called `read!` ([#5970])
 
   * `infs` and `nans` are deprecated in favor of the more general `fill`.
+
+  * `*` and `div` are no longer supported for `Char`.
+
+  * `Range` is renamed `StepRange` and `Range1` is renamed `UnitRange`.
+    `Ranges` is renamed `Range`.
 
 [#4042]: https://github.com/JuliaLang/julia/issues/4042
 [#5164]: https://github.com/JuliaLang/julia/issues/5164
@@ -342,9 +363,13 @@ Deprecated or removed
 [#6169]: https://github.com/JuliaLang/julia/issues/6169
 [#5970]: https://github.com/JuliaLang/julia/issues/5970
 [#6197]: https://github.com/JuliaLang/julia/pull/6197
+<<<<<<< HEAD
 [#5387]: https://github.com/JuliaLang/julia/pull/5387
 [#5671]: https://github.com/JuliaLang/julia/pull/5671
 [#5380]: https://github.com/JuliaLang/julia/pull/5380
+=======
+[#5585]: https://github.com/JuliaLang/julia/issues/5585
+>>>>>>> remove * and div for Char
 
 Julia v0.2.0 Release Notes
 ==========================

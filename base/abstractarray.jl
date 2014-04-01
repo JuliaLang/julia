@@ -62,8 +62,8 @@ end
 checkbounds(sz::Int, i::Int) = 1 <= i <= sz || throw(BoundsError())
 checkbounds(sz::Int, i::Real) = checkbounds(sz, to_index(i))
 checkbounds(sz::Int, I::AbstractVector{Bool}) = length(I) == sz || throw(BoundsError())
-checkbounds(sz::Int, r::Ranges{Int}) = isempty(r) || (minimum(r) >= 1 && maximum(r) <= sz) || throw(BoundsError())
-checkbounds{T<:Real}(sz::Int, r::Ranges{T}) = checkbounds(sz, to_index(r))
+checkbounds(sz::Int, r::Range{Int}) = isempty(r) || (minimum(r) >= 1 && maximum(r) <= sz) || throw(BoundsError())
+checkbounds{T<:Real}(sz::Int, r::Range{T}) = checkbounds(sz, to_index(r))
 
 function checkbounds{T <: Real}(sz::Int, I::AbstractArray{T})
     for i in I
@@ -202,7 +202,7 @@ end
 copy(a::AbstractArray) = copy!(similar(a), a)
 copy(a::AbstractArray{None}) = a # cannot be assigned into so is immutable
 
-function copy!{R,S}(B::AbstractMatrix{R}, ir_dest::Ranges{Int}, jr_dest::Ranges{Int}, A::AbstractMatrix{S}, ir_src::Ranges{Int}, jr_src::Ranges{Int})
+function copy!{R,S}(B::AbstractMatrix{R}, ir_dest::Range{Int}, jr_dest::Range{Int}, A::AbstractMatrix{S}, ir_src::Range{Int}, jr_src::Range{Int})
     if length(ir_dest) != length(ir_src) || length(jr_dest) != length(jr_src)
         error("source and destination must have same size")
     end
@@ -220,7 +220,7 @@ function copy!{R,S}(B::AbstractMatrix{R}, ir_dest::Ranges{Int}, jr_dest::Ranges{
     return B
 end
 
-function copy_transpose!{R,S}(B::AbstractMatrix{R}, ir_dest::Ranges{Int}, jr_dest::Ranges{Int}, A::AbstractVecOrMat{S}, ir_src::Ranges{Int}, jr_src::Ranges{Int})
+function copy_transpose!{R,S}(B::AbstractMatrix{R}, ir_dest::Range{Int}, jr_dest::Range{Int}, A::AbstractVecOrMat{S}, ir_src::Range{Int}, jr_src::Range{Int})
     if length(ir_dest) != length(jr_src) || length(jr_dest) != length(ir_src)
         error("source and destination must have same size")
     end
@@ -321,8 +321,13 @@ full(x::AbstractArray) = x
 
 for fn in _numeric_conversion_func_names
     @eval begin
-        $fn(r::Range ) = Range($fn(r.start), $fn(r.step), r.len)
-        $fn(r::Range1) = Range1($fn(r.start), r.len)
+        $fn(r::StepRange) = $fn(r.start):$fn(r.step):$fn(last(r))
+        $fn(r::UnitRange) = $fn(r.start):$fn(last(r))
+    end
+end
+
+for fn in (:float,:float16,:float32,:float64)
+    @eval begin
         $fn(r::FloatRange) = FloatRange($fn(r.start), $fn(r.step), r.len, $fn(r.divisor))
     end
 end
@@ -451,13 +456,13 @@ end
 
 ## get (getindex with a default value) ##
 
-typealias RangeVecIntList{A<:AbstractVector{Int}} Union((Union(Ranges, AbstractVector{Int})...), AbstractVector{Range1{Int}}, AbstractVector{Range{Int}}, AbstractVector{A})
+typealias RangeVecIntList{A<:AbstractVector{Int}} Union((Union(Range, AbstractVector{Int})...), AbstractVector{UnitRange{Int}}, AbstractVector{Range{Int}}, AbstractVector{A})
 
 get(A::AbstractArray, i::Integer, default) = in_bounds(length(A), i) ? A[i] : default
 get(A::AbstractArray, I::(), default) = similar(A, typeof(default), 0)
 get(A::AbstractArray, I::Dims, default) = in_bounds(size(A), I...) ? A[I...] : default
 
-function get!{T}(X::AbstractArray{T}, A::AbstractArray, I::Union(Ranges, AbstractVector{Int}), default::T)
+function get!{T}(X::AbstractArray{T}, A::AbstractArray, I::Union(Range, AbstractVector{Int}), default::T)
     ind = findin(I, 1:length(A))
     X[ind] = A[I[ind]]
     X[1:first(ind)-1] = default
@@ -465,7 +470,7 @@ function get!{T}(X::AbstractArray{T}, A::AbstractArray, I::Union(Ranges, Abstrac
     X
 end
 
-get(A::AbstractArray, I::Ranges, default) = get!(similar(A, typeof(default), length(I)), A, I, default)
+get(A::AbstractArray, I::Range, default) = get!(similar(A, typeof(default), length(I)), A, I, default)
 
 function get!{T}(X::AbstractArray{T}, A::AbstractArray, I::RangeVecIntList, default::T)
     fill!(X, default)
@@ -823,7 +828,7 @@ function isequal(A::AbstractArray, B::AbstractArray)
     if size(A) != size(B)
         return false
     end
-    if isa(A,Ranges) != isa(B,Ranges)
+    if isa(A,Range) != isa(B,Range)
         return false
     end
     for i = 1:length(A)
@@ -847,7 +852,7 @@ function (==)(A::AbstractArray, B::AbstractArray)
     if size(A) != size(B)
         return false
     end
-    if isa(A,Ranges) != isa(B,Ranges)
+    if isa(A,Range) != isa(B,Range)
         return false
     end
     for i = 1:length(A)

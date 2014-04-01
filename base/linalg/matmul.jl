@@ -28,14 +28,14 @@ scale(b::Vector, A::Matrix) = scale!(similar(b, promote_type(eltype(A),eltype(b)
 
 dot{T<:BlasReal}(x::Vector{T}, y::Vector{T}) = BLAS.dot(x, y)
 dot{T<:BlasComplex}(x::Vector{T}, y::Vector{T}) = BLAS.dotc(x, y)
-function dot{T<:BlasReal, TI<:Integer}(x::Vector{T}, rx::Union(Range1{TI},Range{TI}), y::Vector{T}, ry::Union(Range1{TI},Range{TI}))
+function dot{T<:BlasReal, TI<:Integer}(x::Vector{T}, rx::Union(UnitRange{TI},Range{TI}), y::Vector{T}, ry::Union(UnitRange{TI},Range{TI}))
     length(rx)==length(ry) || throw(DimensionMismatch(""))
     if minimum(rx) < 1 || maximum(rx) > length(x) || minimum(ry) < 1 || maximum(ry) > length(y)
         throw(BoundsError())
     end
     BLAS.dot(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
 end
-function dot{T<:BlasComplex, TI<:Integer}(x::Vector{T}, rx::Union(Range1{TI},Range{TI}), y::Vector{T}, ry::Union(Range1{TI},Range{TI}))
+function dot{T<:BlasComplex, TI<:Integer}(x::Vector{T}, rx::Union(UnitRange{TI},Range{TI}), y::Vector{T}, ry::Union(UnitRange{TI},Range{TI}))
     length(rx)==length(ry) || throw(DimensionMismatch(""))
     if minimum(rx) < 1 || maximum(rx) > length(x) || minimum(ry) < 1 || maximum(ry) > length(y)
         throw(BoundsError())
@@ -241,7 +241,7 @@ end
 
 lapack_size(t::Char, M::AbstractVecOrMat) = (size(M, t=='N' ? 1:2), size(M, t=='N' ? 2:1))
 
-function copy!{R,S}(B::AbstractMatrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, tM::Char, M::AbstractMatrix{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
+function copy!{R,S}(B::AbstractMatrix{R}, ir_dest::UnitRange{Int}, jr_dest::UnitRange{Int}, tM::Char, M::AbstractMatrix{S}, ir_src::UnitRange{Int}, jr_src::UnitRange{Int})
     if tM == 'N'
         copy!(B, ir_dest, jr_dest, M, ir_src, jr_src)
     else
@@ -250,7 +250,7 @@ function copy!{R,S}(B::AbstractMatrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{
     end
 end
 
-function copy_transpose!{R,S}(B::AbstractMatrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, tM::Char, M::AbstractVecOrMat{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
+function copy_transpose!{R,S}(B::AbstractMatrix{R}, ir_dest::UnitRange{Int}, jr_dest::UnitRange{Int}, tM::Char, M::AbstractVecOrMat{S}, ir_src::UnitRange{Int}, jr_src::UnitRange{Int})
     if tM == 'N'
         Base.copy_transpose!(B, ir_dest, jr_dest, M, ir_src, jr_src)
     else

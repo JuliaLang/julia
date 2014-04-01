@@ -12,7 +12,7 @@ function writemime(io::IO, ::MIME"text/plain", f::Function)
 end
 
 function writemime(io::IO, ::MIME"text/plain", v::AbstractVector)
-    if isa(v, Ranges)
+    if isa(v, Range)
         show(io, v)
     else
         print(io, summary(v))

@@ -2262,6 +2262,10 @@ Mathematical Operators
 
    Called by ``:`` syntax for constructing ranges.
 
+.. function:: range(start, [step], length)
+
+   Construct a range by length, given a starting value and optional step (defaults to 1).
+
 .. _==:
 .. function:: ==(x, y)
 
