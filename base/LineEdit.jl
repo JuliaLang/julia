@@ -796,11 +796,11 @@ const escape_defaults = {
 
 function write_response_buffer(s::PromptState, data)
     offset = s.input_buffer.ptr
-    ptr = data.respose_buffer.ptr
-    seek(data.respose_buffer, 0)
-    write(s.input_buffer, readall(data.respose_buffer))
+    ptr = data.response_buffer.ptr
+    seek(data.response_buffer, 0)
+    write(s.input_buffer, readall(data.response_buffer))
     s.input_buffer.ptr = offset + ptr - 2
-    data.respose_buffer.ptr = ptr
+    data.response_buffer.ptr = ptr
     refresh_line(s)
 end
 
@@ -810,7 +810,7 @@ type SearchState
     #rsearch (true) or ssearch (false)
     backward::Bool
     query_buffer::IOBuffer
-    respose_buffer::IOBuffer
+    response_buffer::IOBuffer
     ias::InputAreaState
     #The prompt whose input will be replaced by the matched history
     parent
@@ -820,13 +820,13 @@ end
 terminal(s::SearchState) = s.terminal
 
 function update_display_buffer(s::SearchState, data)
-    history_search(data.histprompt.hp, data.query_buffer, data.respose_buffer, data.backward, false) || beep(LineEdit.terminal(s))
+    history_search(data.histprompt.hp, data.query_buffer, data.response_buffer, data.backward, false) || beep(LineEdit.terminal(s))
     refresh_line(s)
 end
 
 function history_next_result(s::MIState, data::SearchState)
-    #truncate(data.query_buffer, s.input_buffer.size - data.respose_buffer.size)
-    history_search(data.histprompt.hp, data.query_buffer, data.respose_buffer, data.backward, true) || beep(LineEdit.terminal(s))
+    #truncate(data.query_buffer, s.input_buffer.size - data.response_buffer.size)
+    history_search(data.histprompt.hp, data.query_buffer, data.response_buffer, data.backward, true) || beep(LineEdit.terminal(s))
     refresh_line(data)
 end
 
@@ -839,11 +839,11 @@ function refreshMultiLine(s::SearchState)
     write(buf, pointer(s.query_buffer.data), s.query_buffer.ptr-1)
     write(buf, "': ")
     offset = buf.ptr
-    ptr = s.respose_buffer.ptr
-    seek(s.respose_buffer,0)
-    write(buf, readall(s.respose_buffer))
+    ptr = s.response_buffer.ptr
+    seek(s.response_buffer,0)
+    write(buf, readall(s.response_buffer))
     buf.ptr = offset+ptr-1
-    s.respose_buffer.ptr = ptr
+    s.response_buffer.ptr = ptr
     s.ias = refreshMultiLine(s.terminal, buf, s.ias, s.backward ? "(reverse-i-search)`" : "(i-search)`")
 end
 
@@ -852,9 +852,9 @@ function reset_state(s::SearchState)
         s.query_buffer.size = 0
         s.query_buffer.ptr = 1
     end
-    if s.respose_buffer.size != 0
-        s.respose_buffer.size = 0
-        s.respose_buffer.ptr = 1
+    if s.response_buffer.size != 0
+        s.response_buffer.size = 0
+        s.response_buffer.ptr = 1
     end
     reset_state(s.histprompt.hp)
 end
@@ -875,7 +875,7 @@ mode(s::SearchState) = @assert false
 
 function accept_result(s, p)
     parent = state(s, p).parent
-    replace_line(state(s, parent), state(s, p).respose_buffer)
+    replace_line(state(s, parent), state(s, p).response_buffer)
     transition(s, parent)
 end
 
