@@ -147,65 +147,35 @@ function complete_methods(input::String)
     UTF8String[string(m) for m in methods(fn)]
 end
 
-const non_word_chars = " \t\n\"\\'`@\$><=:;|&{}()[].,+-*/?%^~"
+const non_word_chars = [" \t\n\"\\'`@\$><=:;|&{}()[],+-*/?%^~"...]
+const non_filename_chars = [" \t\n\"\\'`@\$><=;|&{("...]
 
-function completions(string,pos)
-    startpos = min(pos, 1)
-    dotpos = 0
-    instring = false
-    incmd = false
-    infunc = false
-    escaped = false
-    nearquote = false
-    i = start(string)
-    while i <= pos
-        c,j = next(string, i)
-        if c == '\\'
-            instring && (escaped $= true)
-            nearquote = false
-        elseif c == '\''
-            !instring && (nearquote = true)
-        elseif c == '"'
-            (!escaped && !nearquote && !incmd) && (instring $= true)
-            escaped = nearquote = false
-        elseif c == '`'
-            (!escaped && !nearquote && !instring) && (incmd $= true)
-            escaped = nearquote = false
-        else
-            escaped = nearquote = false
-        end
-        if c < 0x80
-            if instring || incmd
-                c in " \t\n\"\\'`@\$><=;|&{(" && (startpos = j)
-            elseif c in non_word_chars
-                if c == '.'
-                    dotpos = i
-                elseif i == pos && c == '('
-                    infunc = true
-                else
-                    startpos = j
-                end
-            end
-        end
-        i = j
-    end
-
-    if instring || incmd
+function completions(string, pos)
+    ex = parse(string[1:pos], raise=false)
+    if Meta.isexpr(ex, [:incomplete_cmd, :incomplete_string])
+        startpos = nextind(string, rsearch(string, non_filename_chars, pos))
         r = startpos:pos
         paths = complete_path(string[r])
-        if instring && length(paths) == 1
+        if Meta.isexpr(ex, :incomplete_string) && length(paths) == 1
             paths[1] *= "\""
         end
         return sort(paths), r, true
+    elseif Meta.isexpr(ex, :incomplete) && string[pos] == '('
+        endpos = prevind(string, pos)
+        startpos = nextind(string, rsearch(string, non_word_chars, endpos))
+        return complete_methods(string[startpos:endpos]), startpos:endpos, false
+    elseif Meta.isexpr(ex, :incomplete_comment)
+        return UTF8String[], 0:-1, false
     end
+
+    dotpos = rsearch(string, '.', pos)
+    startpos = nextind(string, rsearch(string, non_word_chars, pos))
 
     ffunc = (mod,x)->true
     suggestions = UTF8String[]
     r = rsearch(string, "using", startpos)
-    if infunc
-        # We're right after the start of a function call
-        return (complete_methods(string[startpos:pos-1]), startpos:pos,false)
-    elseif !isempty(r) && all(isspace, string[nextind(string, last(r)):prevind(string, startpos)])
+    if !isempty(r) && all(c->(isspace(c) || isalnum(c) || c == ','),
+                          string[nextind(string,last(r)):prevind(string,startpos)])
         # We're right after using. Let's look only for packages
         # and modules we can reach from here
 
@@ -217,7 +187,7 @@ function completions(string,pos)
                 pname[1] != '.' &&
                 pname != "METADATA" &&
                 beginswith(pname, s)
-            end,readdir(Pkg.dir())))
+            end, readdir(Pkg.dir())))
         end
         ffunc = (mod,x)->(isdefined(mod, x) && isa(mod.(x), Module))
     end
@@ -261,7 +231,7 @@ function shell_completions(string,pos)
         end
         r = (nextind(string, pos-sizeof(name))):pos
         return ret, r, true
-    elseif isexpr(arg, :escape) && (isexpr(arg.args[1], :incomplete) || isexpr(arg.args[1], :error))
+    elseif isexpr(arg, :escape) && (isexpr(arg.args[1], Base.incomplete_tags) || isexpr(arg.args[1], :error))
         r = first(last_parse):prevind(last_parse, last(last_parse))
         partial = scs[r]
         ret, range = completions(partial, endof(partial))

@@ -73,7 +73,13 @@ jl_sym_t *export_sym;  jl_sym_t *import_sym;
 jl_sym_t *importall_sym; jl_sym_t *toplevel_sym;
 jl_sym_t *quote_sym;   jl_sym_t *amp_sym;
 jl_sym_t *top_sym;     jl_sym_t *colons_sym;
-jl_sym_t *line_sym;    jl_sym_t *jl_incomplete_sym;
+jl_sym_t *line_sym;
+jl_sym_t *jl_incomplete_sym;
+jl_sym_t *jl_incomplete_block_sym;
+jl_sym_t *jl_incomplete_char_sym;
+jl_sym_t *jl_incomplete_cmd_sym;
+jl_sym_t *jl_incomplete_comment_sym;
+jl_sym_t *jl_incomplete_string_sym;
 // head symbols for each expression type
 jl_sym_t *goto_sym;    jl_sym_t *goto_ifnot_sym;
 jl_sym_t *label_sym;   jl_sym_t *return_sym;

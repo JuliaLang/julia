@@ -54,3 +54,13 @@ macro assert(ex,msgs...)
     end
     :($(esc(ex)) ? $(nothing) : error($msg))
 end
+
+## incomplete expressions
+
+incomplete_tags = {
+    :incomplete,
+    :incomplete_block,
+    :incomplete_char,
+    :incomplete_cmd,
+    :incomplete_comment,
+    :incomplete_string}

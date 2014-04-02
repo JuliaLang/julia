@@ -360,7 +360,7 @@
   (define (skip-multiline-comment port count)
     (let ((c (read-char port)))
       (if (eof-object? c) 
-          (error "incomplete: unterminated multi-line comment #= ... =#")
+          (error "incomplete [#=]: unterminated multi-line comment #= ... =#")
           (begin (if (eqv? c #\=)
                      (let ((c (peek-char port)))
                        (if (eqv? c #\#)
@@ -440,7 +440,7 @@
 (define (require-token s)
   (let ((t (or (ts:pbtok s) (ts:last-tok s) (next-token (ts:port s) s))))
     (if (eof-object? t)
-	(error "incomplete: premature end of input")
+	(error "incomplete [?]: premature end of input")
 	(if (newline? t)
 	    (begin (take-token s)
 		   (require-token s))
@@ -950,7 +950,7 @@
   (let ((t (peek-token s)))
     (cond ((eq? t 'end) (take-token s))
 	  ((eof-object? t)
-	   (error (string "incomplete: \"" word "\" at "
+	   (error (string "incomplete [block]: \"" word "\" at "
 			  current-filename ":" expect-end-current-line
 			  " requires end")))
 	  (else
@@ -1483,7 +1483,7 @@
 
 (define (not-eof-2 c)
   (if (eof-object? c)
-      (error "incomplete: invalid \"`\" syntax")
+      (error "incomplete [cmd]: invalid \"`\" syntax")
       c))
 
 (define (parse-backquote s)
@@ -1505,7 +1505,7 @@
 
 (define (not-eof-3 c)
   (if (eof-object? c)
-      (error "incomplete: invalid string syntax")
+      (error "incomplete [string]: invalid string syntax")
       c))
 
 (define (take-char p)
@@ -1592,7 +1592,7 @@
 
 (define (not-eof-1 c)
   (if (eof-object? c)
-      (error "incomplete: invalid character literal")
+      (error "incomplete [char]: invalid character literal")
       c))
 
 (define (unescape-string s)
