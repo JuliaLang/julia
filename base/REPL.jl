@@ -13,13 +13,17 @@ import Base: AsyncStream,
              writemime
 
 import Base.Terminals: raw!
-import Base.LineEdit: CompletionProvider,
-                      HistoryProvider,
-                      add_history,
-                      complete_line,
-                      history_prev,
-                      history_next,
-                      history_search
+
+import Base.LineEdit:
+    CompletionProvider,
+    HistoryProvider,
+    add_history,
+    complete_line,
+    history_next,
+    history_next_prefix,
+    history_prev,
+    history_prev_prefix,
+    history_search
 
 abstract AbstractREPL
 
@@ -292,6 +296,29 @@ function history_next(s::LineEdit.MIState, hist::REPLHistoryProvider)
         Terminals.beep(LineEdit.terminal(s))
     end
 end
+
+function history_move_prefix(s::LineEdit.MIState,
+                             hist::REPLHistoryProvider,
+                             backwards::Bool)
+    buf = LineEdit.buffer(s)
+    n = buf.ptr - 1
+    prefix = bytestring(buf.data[1:min(n,buf.size)])
+    idxs = backwards ? ((hist.cur_idx-1):-1:1) : ((hist.cur_idx+1):length(hist.history))
+    for idx in idxs
+        if beginswith(hist.history[idx], prefix)
+            history_move(s, hist, idx)
+            seek(LineEdit.buffer(s), n)
+            LineEdit.refresh_line(s)
+            return
+        end
+    end
+    Terminals.beep(LineEdit.terminal(s))
+end
+history_next_prefix(s::LineEdit.MIState, hist::REPLHistoryProvider) =
+    hist.cur_idx == length(hist.history) ?
+        history_next(s, hist) : history_move_prefix(s, hist, false)
+history_prev_prefix(s::LineEdit.MIState, hist::REPLHistoryProvider) =
+    history_move_prefix(s, hist, true)
 
 function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, response_buffer::IOBuffer,
                         backwards::Bool=false, skip_current::Bool=false)

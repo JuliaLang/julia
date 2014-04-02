@@ -546,6 +546,8 @@ history_next(::EmptyHistoryProvider) = ("", false)
 history_search(::EmptyHistoryProvider, args...) = false
 add_history(::EmptyHistoryProvider, s) = nothing
 add_history(s::PromptState) = add_history(mode(s).hist, s)
+history_next_prefix(s, hist) = false
+history_prev_prefix(s, hist) = false
 
 function history_prev(s, hist)
     l, ok = history_prev(mode(s).hist)
@@ -1134,7 +1136,11 @@ function history_keymap(hist)
         # Up Arrow
         "\e[A" => :(LineEdit.edit_move_up(s) || LineEdit.history_prev(s, $hist)),
         # Down Arrow
-        "\e[B" => :(LineEdit.edit_move_down(s) || LineEdit.history_next(s, $hist))
+        "\e[B" => :(LineEdit.edit_move_down(s) || LineEdit.history_next(s, $hist)),
+        # Page Up
+        "\e[5~" => :(LineEdit.history_prev_prefix(s, $hist)),
+        # Page Down
+        "\e[6~" => :(LineEdit.history_next_prefix(s, $hist))
     }
 end
 
