@@ -428,7 +428,7 @@ end
 -(r::OrdinalRange) = range(-r.start, -step(r), length(r))
 -(r::FloatRange)   = FloatRange(-r.start, -r.step, r.len, r.divisor)
 
-+(x::Integer, r::UnitRange)  = range(x + r.start, length(r))
++(x::Real, r::UnitRange)  = range(x + r.start, length(r))
 +(x::Real, r::Range) = (x+first(r)):step(r):(x+last(r))
 #+(x::Real, r::StepRange)  = range(x + r.start, r.step, length(r))
 +(x::Real, r::FloatRange) = FloatRange(r.divisor*x + r.start, r.step, r.len, r.divisor)
@@ -437,7 +437,7 @@ end
 
 -(x::Real, r::Range)      = (x-first(r)):-step(r):(x-last(r))
 -(x::Real, r::FloatRange) = FloatRange(r.divisor*x - r.start, -r.step, r.len, r.divisor)
--(r::UnitRange, x::Integer)  = range(r.start-x, length(r))
+-(r::UnitRange, x::Real)  = range(r.start-x, length(r))
 -(r::StepRange , x::Real) = range(r.start-x, r.step, length(r))
 -(r::FloatRange, x::Real) = FloatRange(r.start - r.divisor*x, r.step, r.len, r.divisor)
 

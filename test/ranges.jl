@@ -171,6 +171,16 @@ else
     @test sum(int64(1:10^9-1)) == div(10^9 * (int64(10^9)-1), 2)
 end
 
+# operations with scalars
+@test (1:3) - 2 == -1:1
+@test (1:3) - 0.25 == 1-0.25:3-0.25
+@test (1:3) + 2 == 3:5
+@test (1:3) + 0.25 == 1+0.25:3+0.25
+@test (1:2:6) + 1 == 2:2:6
+@test (1:2:6) + 0.3 == 1+0.3:2:5+0.3
+@test (1:2:6) - 1 == 0:2:4
+@test (1:2:6) - 0.3 == 1-0.3:2:5-0.3
+
 # operations between ranges and arrays
 @test all(([1:5] + (5:-1:1)) .== 6)
 @test all(((5:-1:1) + [1:5]) .== 6)
