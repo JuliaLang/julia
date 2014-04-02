@@ -23,9 +23,9 @@ endif
 release debug:
 	$(MAKE) julia-$@
 
-%.o: %.c repl.h
+%.o: %.c
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@)
-%.do: %.c repl.h
+%.do: %.c
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 ifeq ($(OS),WINNT)
@@ -54,9 +54,9 @@ else
 CXXLD = $(LD)
 endif
 
-$(build_bindir)/julia$(EXE): repl.o repl-basic.o
+$(build_bindir)/julia$(EXE): repl.o
 	@$(call PRINT_LINK, $(CXXLD) $(LINK_FLAGS) $(SHIPFLAGS) $^ -o $@ -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -ljulia $(JLDFLAGS))
-$(build_bindir)/julia-debug$(EXE): repl.do repl-basic.do
+$(build_bindir)/julia-debug$(EXE): repl.do
 	@$(call PRINT_LINK, $(CXXLD) $(LINK_FLAGS) $(DEBUGFLAGS) $^ -o $@ -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -ljulia-debug $(JLDFLAGS))
 
 clean: | $(CLEAN_TARGETS)

@@ -3,7 +3,26 @@
   system startup, main(), and console interaction
 */
 
-#include "repl.h"
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdarg.h>
+#include <setjmp.h>
+#include <signal.h>
+#include <assert.h>
+#include <time.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#ifndef _MSC_VER
+#include <unistd.h>
+#include <libgen.h>
+#endif
+#include <limits.h>
+#include <errno.h>
+#include <math.h>
+#include <getopt.h>
+#include <ctype.h>
+
 #include "uv.h"
 #define WHOLE_ARCHIVE
 #include "../src/julia.h"
@@ -19,6 +38,13 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#ifdef _MSC_VER
+DLLEXPORT char * dirname(char *);
+#endif
+
+extern int tab_width;
+extern DLLEXPORT char *julia_home;
 
 char system_image[256] = JL_SYSTEM_IMAGE_PATH;
 
@@ -168,17 +194,6 @@ void parse_opts(int *argcp, char ***argvp)
     }
 }
 
-int ends_with_semicolon(const char *input)
-{
-    char *p = (char *) strrchr(input, ';');
-    if (p++) {
-        while (isspace(*p)) p++;
-        if (*p == '\0' || *p == '#')
-            return 1;
-    }
-    return 0;
-}
-
 static int exec_program(void)
 {
     int err = 0;
@@ -207,23 +222,6 @@ static int exec_program(void)
     return 0;
 }
 
-// handle a command line input event
-void handle_input(jl_value_t *ast, int end, int show_value)
-{
-    if (end) {
-        show_value = -1;
-        ast = jl_nothing;
-    }
-    jl_value_t *f = jl_get_global(jl_base_module,jl_symbol("repl_callback"));
-    assert(f);
-    jl_value_t **fargs;
-    JL_GC_PUSHARGS(fargs, 2);
-    fargs[0] = ast;
-    fargs[1] = jl_box_long(show_value);
-    jl_apply((jl_function_t*)f, fargs, 2);
-    JL_GC_POP();
-}
-
 void jl_lisp_prompt();
 
 #ifdef JL_GF_PROFILE
@@ -244,16 +242,6 @@ static void print_profile(void)
     }
 }
 #endif
-
-uv_buf_t *jl_alloc_read_buffer(uv_handle_t* handle, size_t suggested_size)
-{
-    if(suggested_size>512) suggested_size = 512; //Readline has a max buffer of 512
-    char *buf = (char *) malloc(suggested_size);
-    uv_buf_t *ret = (uv_buf_t *) malloc(sizeof(uv_buf_t));
-    *ret = uv_buf_init(buf,suggested_size);
-    return ret;
-}
-
 
 int true_main(int argc, char *argv[])
 {
@@ -279,16 +267,11 @@ int true_main(int argc, char *argv[])
     jl_function_t *start_client =
         (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("_start"));
 
-    //uv_read_start(jl_stdin_tty,jl_alloc_read_buffer,&read_buffer);
-
     if (start_client) {
         jl_apply(start_client, NULL, 0);
-        //rl_cleanup_after_signal();
         return 0;
     }
 
-    // client event loop not available; use fallback blocking version
-    //install_read_event_handler(&echoBack);
     int iserr = 0;
 
  again:
