@@ -888,6 +888,17 @@ function accept_result(s, p)
     transition(s, parent)
 end
 
+function enter_search(s::MIState, p::HistoryPrompt, backward::Bool)
+    # a bit of hack to help fix #6325
+    p.hp.last_mode = mode(s)
+    p.hp.last_buffer = copy(buffer(s))
+
+    ss = state(s, p)
+    ss.parent = mode(s)
+    ss.backward = backward
+    transition(s, p)
+end
+
 function setup_search_keymap(hp)
     p = HistoryPrompt(hp)
     pkeymap = {
@@ -918,8 +929,8 @@ function setup_search_keymap(hp)
     @eval @LineEdit.keymap keymap_func $([pkeymap, escape_defaults])
     p.keymap_func = keymap_func
     keymap = {
-        "^R"    => s->(state(s, p).parent = mode(s); state(s, p).backward = true; transition(s, p)),
-        "^S"    => s->(state(s, p).parent = mode(s); state(s, p).backward = false; transition(s, p)),
+        "^R"    => s->(enter_search(s, p, true)),
+        "^S"    => s->(enter_search(s, p, false)),
     }
     (p, keymap)
 end
