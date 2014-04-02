@@ -854,7 +854,7 @@ function reset_state(s::SearchState)
     end
     if s.respose_buffer.size != 0
         s.respose_buffer.size = 0
-        s.query_buffer.ptr = 1
+        s.respose_buffer.ptr = 1
     end
     reset_state(s.histprompt.hp)
 end
