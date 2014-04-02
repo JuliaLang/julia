@@ -205,7 +205,8 @@ function completions(string,pos)
     if infunc
         # We're right after the start of a function call
         return (complete_methods(string[startpos:pos-1]), startpos:pos,false)
-    elseif !isempty(r) && all(isspace, string[nextind(string, last(r)):prevind(string, startpos)])
+    elseif !isempty(r) && all(c->(isspace(c) || isalnum(c) || c == ','),
+                          string[nextind(string,last(r)):prevind(string,startpos)])
         # We're right after using. Let's look only for packages
         # and modules we can reach from here
 
@@ -217,7 +218,7 @@ function completions(string,pos)
                 pname[1] != '.' &&
                 pname != "METADATA" &&
                 beginswith(pname, s)
-            end,readdir(Pkg.dir())))
+            end, readdir(Pkg.dir())))
         end
         ffunc = (mod,x)->(isdefined(mod, x) && isa(mod.(x), Module))
     end
