@@ -110,7 +110,7 @@ libjulia-release: $(build_shlibdir)/libjulia.$(SHLIB_EXT)
 clean:
 	-rm -f $(build_shlibdir)/libjulia*
 	-rm -f julia_flisp.boot julia_flisp.boot.inc
-	-rm -f *.do *.o *~ *# *.$(SHLIB_EXT) *.a h2j
+	-rm -f *.do *.o *~ *# *.$(SHLIB_EXT) *.a
 
 clean-flisp:
 	-$(MAKE) -C flisp clean
@@ -122,11 +122,3 @@ cleanall: clean clean-flisp clean-support
 
 .PHONY: debug release clean cleanall clean-*
 
-
-h2j: h2j.cpp
-	@$(call PRINT_CC, $(CXX) $(CFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(DEBUGFLAGS) $(call exec,$(LLVM_CONFIG) --cppflags) $< -o $@ \
-		-lclangFrontendTool -lclangBasic -lclangLex -lclangDriver -lclangFrontend -lclangParse \
-		-lclangAST -lclangSema -lclangAnalysis -lclangEdit \
-		-lclangRewrite -lclangSerialization -lclangStaticAnalyzerCheckers \
-		-lclangStaticAnalyzerCore -lclangStaticAnalyzerFrontend -lclangTooling \
-		-lclangCodeGen -lclangARCMigrate -lclang  $(LIBS) $(LDFLAGS))
