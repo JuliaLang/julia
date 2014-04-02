@@ -586,14 +586,14 @@ function normalize_key(key::String)
             write(buf, '\0')
         elseif c == '^'
             c, i = next(key, i)
-            write(buf,uppercase(c)-64)
+            write(buf, uppercase(c)-64)
         elseif c == '\\'
             c, i == next(key, i)
             if c == 'C'
                 c, i == next(key, i)
                 @assert c == '-'
                 c, i == next(key, i)
-                write(buf,uppercase(c)-64)
+                write(buf, uppercase(c)-64)
             elseif c == 'M'
                 c, i == next(key, i)
                 @assert c == '-'
@@ -1033,6 +1033,7 @@ const default_keymap =
     "\ef" => edit_move_word_right,
     # Meta Enter
     "\e\r" => :(LineEdit.edit_insert(s, '\n')),
+    "\e\n" => "\e\r",
     # Simply insert it into the buffer by default
     "*" => :(LineEdit.edit_insert(s, c1)),
     # ^U
