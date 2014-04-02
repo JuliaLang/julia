@@ -925,6 +925,10 @@ function setup_search_keymap(hp)
         11       => s->transition(s, state(s, p).parent),
         # ^Y
         25       => :(LineEdit.edit_yank(s); LineEdit.update_display_buffer(s, data)),
+        # ^U
+        21       => :(LineEdit.edit_clear(data.query_buffer);
+                      LineEdit.edit_clear(data.response_buffer);
+                      LineEdit.update_display_buffer(s, data)),
         # Right Arrow
         "\e[C"   => s->(accept_result(s, p); edit_move_right(s)),
         # Left Arrow
