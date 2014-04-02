@@ -5,7 +5,7 @@ using Base.Terminals
 import Base.Terminals: raw!, width, height, cmove, getX,
                        getY, clear_line, beep
 
-import Base: ensureroom, peek
+import Base: ensureroom, peek, show
 
 abstract TextInterface
 
@@ -38,6 +38,8 @@ type Prompt <: TextInterface
     on_done
     hist
 end
+
+show(io::IO, x::Prompt) = show(io, string("Prompt(\"", x.prompt, "\",...)"))
 
 immutable InputAreaState
     num_rows::Int64

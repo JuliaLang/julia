@@ -99,8 +99,8 @@ function display_error(io::IO, er, bt)
     end
 end
 
-immutable REPLDisplay <: Display
-    repl::AbstractREPL
+immutable REPLDisplay{R<:AbstractREPL} <: Display
+    repl::R
 end
 function display(d::REPLDisplay, ::MIME"text/plain", x)
     io = outstream(d.repl)
@@ -437,7 +437,7 @@ function respond(f, d, main, req, rep)
     end
 end
 
-function reset(d::REPLDisplay)
+function reset(d::REPLDisplay{LineEditREPL})
     raw!(d.repl.t, false)
     print(Base.text_colors[:normal])
 end
@@ -670,9 +670,8 @@ answer_color(r::LineEditREPL) = r.answer_color
 answer_color(r::StreamREPL) = r.answer_color
 answer_color(::BasicREPL) = Base.text_colors[:white]
 
-print_response(d::REPLDisplay, r::StreamREPL,args...) = print_response(d, r.stream,r, args...)
-print_response(d::REPLDisplay, r::LineEditREPL,args...) = print_response(d, r.t, r, args...)
-print_response(d::REPLDisplay, args...) = print_response(d, d.repl, args...)
+print_response(d::REPLDisplay{StreamREPL}, args...)   = print_response(d, d.repl.stream, d.repl, args...)
+print_response(d::REPLDisplay{LineEditREPL}, args...) = print_response(d, d.repl.t, d.repl, args...)
 
 function run_repl(stream::AsyncStream)
     repl =
