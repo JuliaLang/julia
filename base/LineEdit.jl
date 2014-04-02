@@ -919,6 +919,7 @@ function setup_search_keymap(hp)
         "^C"     => :(LineEdit.edit_clear(data.query_buffer);
                       LineEdit.edit_clear(data.response_buffer);
                       LineEdit.update_display_buffer(s, data);
+                      LineEdit.reset_state(data.histprompt.hp);
                       LineEdit.transition(s, data.parent)),
         "^D"     => "^C",
         # ^K
