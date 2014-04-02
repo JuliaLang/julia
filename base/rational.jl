@@ -43,7 +43,12 @@ convert(::Type{Rational}, x::Integer) = convert(Rational{typeof(x)},x)
 
 convert(::Type{Bool}, x::Rational) = (x!=0) # to resolve ambiguity
 convert{T<:Integer}(::Type{T}, x::Rational) = (isinteger(x) ? convert(T, x.num) : throw(InexactError()))
-convert{T<:FloatingPoint}(::Type{T}, x::Rational) = convert(T,x.num)/convert(T,x.den)
+
+convert(::Type{FloatingPoint}, x::Rational) = float(x.num)/float(x.den)
+function convert{T<:FloatingPoint,S}(::Type{T}, x::Rational{S})
+    P = promote_type(T,S)
+    convert(P,x.num)/convert(P,x.den)
+end
 
 function convert{T<:Integer}(::Type{Rational{T}}, x::FloatingPoint)
     r = rationalize(T, x, tol=0)
