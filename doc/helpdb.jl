@@ -3302,6 +3302,13 @@ popdisplay(d::Display)
 
 "),
 
+("Base","range","range(start[, step], length)
+
+   Construct a range by length, given a starting value and optional
+   step (defaults to 1).
+
+"),
+
 ("Base","==","==(x, y)
 
    Numeric equality operator. Compares numbers and number-like values
@@ -6081,21 +6088,52 @@ popdisplay(d::Display)
 
 "),
 
-("Base","cov","cov(v1[, v2])
+("Base","cov","cov(v1[, v2][, vardim=1, corrected=true, mean=nothing])
 
-   Compute the Pearson covariance between two vectors \"v1\" and
-   \"v2\". If called with a single element \"v\", then computes
-   covariance of columns of \"v\". Note: Julia does not ignore \"NaN\"
-   values in the computation.
+   Compute the Pearson covariance between the vector(s) in \"v1\" and
+   \"v2\". Here, \"v1\" and \"v2\" can be either vectors or matrices.
+
+   This function accepts three keyword arguments:
+
+   * \"vardim\": the dimension of variables. When \"vardim = 1\",
+     variables
+
+   are considered in columns while observations in rows; when \"vardim
+   = 2\", variables are in rows while observations in columns. By
+   default, it is set to \"1\".
+
+   * \"corrected\": whether to apply Bessel's correction (divide by
+     \"n-1\"
+
+   instead of \"n\"). By default, it is set to \"true\".
+
+   * \"mean\": allow users to supply mean values that are known. By
+     default, it
+
+   is set to \"nothing\", which indicates that the mean(s) are
+   unknown, and the function will compute the mean. Users can use
+   \"mean=0\" to indicate that the input data are centered, and hence
+   there's no need to subtract the mean.
+
+   The size of the result depends on the size of \"v1\" and \"v2\".
+   When both \"v1\" and \"v2\" are vectors, it returns the covariance
+   between them as a scalar. When either one is a matrix, it returns a
+   covariance matrix of size \"(n1, n2)\", where \"n1\" and \"n2\" are
+   the numbers of slices in \"v1\" and \"v2\", which depend on the
+   setting of \"vardim\".
+
+   Note: \"v2\" can be omitted, which indicates \"v2 = v1\".
 
 "),
 
-("Base","cor","cor(v1[, v2])
+("Base","cor","cor(v1[, v2][, vardim=1, mean=nothing])
 
-   Compute the Pearson correlation between two vectors \"v1\" and
-   \"v2\". If called with a single element \"v\", then computes
-   correlation of columns of \"v\". Note: Julia does not ignore
-   \"NaN\" values in the computation.
+   Compute the Pearson correlation between the vector(s) in \"v1\" and
+   \"v2\".
+
+   Users can use the keyword argument \"vardim\" to specify the
+   variable dimension, and \"mean\" to supply pre-computed mean
+   values.
 
 "),
 
@@ -6563,14 +6601,14 @@ popdisplay(d::Display)
 
 ("Base","nprocs","nprocs()
 
-   Get the number of available processors.
+   Get the number of available processes.
 
 "),
 
 ("Base","nworkers","nworkers()
 
-   Get the number of available worker processors. This is one less
-   than nprocs(). Equal to nprocs() if nprocs() == 1.
+   Get the number of available worker processes. This is one less than
+   nprocs(). Equal to nprocs() if nprocs() == 1.
 
 "),
 
@@ -6602,7 +6640,7 @@ popdisplay(d::Display)
 
 ("Base","myid","myid()
 
-   Get the id of the current processor.
+   Get the id of the current process.
 
 "),
 
@@ -6623,7 +6661,7 @@ popdisplay(d::Display)
 ("Base","remotecall","remotecall(id, func, args...)
 
    Call a function asynchronously on the given arguments on the
-   specified processor. Returns a \"RemoteRef\".
+   specified process. Returns a \"RemoteRef\".
 
 "),
 
@@ -6709,7 +6747,7 @@ popdisplay(d::Display)
 
 ("Base","RemoteRef","RemoteRef(n)
 
-   Make an uninitialized remote reference on processor \"n\".
+   Make an uninitialized remote reference on process \"n\".
 
 "),
 
@@ -6723,15 +6761,15 @@ popdisplay(d::Display)
 
 ("Base","@spawn","@spawn()
 
-   Execute an expression on an automatically-chosen processor,
-   returning a \"RemoteRef\" to the result.
+   Execute an expression on an automatically-chosen process, returning
+   a \"RemoteRef\" to the result.
 
 "),
 
 ("Base","@spawnat","@spawnat()
 
    Accepts two arguments, \"p\" and an expression, and runs the
-   expression asynchronously on processor \"p\", returning a
+   expression asynchronously on process \"p\", returning a
    \"RemoteRef\" to the result.
 
 "),
@@ -6792,7 +6830,7 @@ popdisplay(d::Display)
    a tuple of index ranges. This function should allocate a local
    chunk of the distributed array and initialize it for the specified
    indices. \"dims\" is the overall size of the distributed array.
-   \"procs\" optionally specifies a vector of processor IDs to use. If
+   \"procs\" optionally specifies a vector of process IDs to use. If
    unspecified, the array is distributed over all worker processes
    only. Typically, when runnning in distributed mode, i.e.,
    \"nprocs() > 1\", this would mean that no chunk of the distributed
@@ -6857,15 +6895,15 @@ popdisplay(d::Display)
 
 ("Base","localindexes","localindexes(d)
 
-   A tuple describing the indexes owned by the local processor.
-   Returns a tuple with empty ranges if no local part exists on the
-   calling process.
+   A tuple describing the indexes owned by the local process. Returns
+   a tuple with empty ranges if no local part exists on the calling
+   process.
 
 "),
 
 ("Base","procs","procs(d)
 
-   Get the vector of processors storing pieces of \"d\"
+   Get the vector of processes storing pieces of \"d\"
 
 "),
 
@@ -8384,91 +8422,91 @@ popdisplay(d::Display)
 
 "),
 
-("Base","Vec2","Vec2(x, y)
+("Base.Graphics","Vec2","Vec2(x, y)
 
    Creates a point in two dimensions
 
 "),
 
-("Base","BoundingBox","BoundingBox(xmin, xmax, ymin, ymax)
+("Base.Graphics","BoundingBox","BoundingBox(xmin, xmax, ymin, ymax)
 
    Creates a box in two dimensions with the given edges
 
 "),
 
-("Base","BoundingBox","BoundingBox(objs...)
+("Base.Graphics","BoundingBox","BoundingBox(objs...)
 
    Creates a box in two dimensions that encloses all objects
 
 "),
 
-("Base","width","width(obj)
+("Base.Graphics","width","width(obj)
 
    Computes the width of an object
 
 "),
 
-("Base","height","height(obj)
+("Base.Graphics","height","height(obj)
 
    Computes the height of an object
 
 "),
 
-("Base","xmin","xmin(obj)
+("Base.Graphics","xmin","xmin(obj)
 
    Computes the minimum x-coordinate contained in an object
 
 "),
 
-("Base","xmax","xmax(obj)
+("Base.Graphics","xmax","xmax(obj)
 
    Computes the maximum x-coordinate contained in an object
 
 "),
 
-("Base","ymin","ymin(obj)
+("Base.Graphics","ymin","ymin(obj)
 
    Computes the minimum y-coordinate contained in an object
 
 "),
 
-("Base","ymax","ymax(obj)
+("Base.Graphics","ymax","ymax(obj)
 
    Computes the maximum y-coordinate contained in an object
 
 "),
 
-("Base","diagonal","diagonal(obj)
+("Base.Graphics","diagonal","diagonal(obj)
 
    Return the length of the diagonal of an object
 
 "),
 
-("Base","aspect_ratio","aspect_ratio(obj)
+("Base.Graphics","aspect_ratio","aspect_ratio(obj)
 
    Compute the height/width of an object
 
 "),
 
-("Base","center","center(obj)
+("Base.Graphics","center","center(obj)
 
    Return the point in the center of an object
 
 "),
 
-("Base","xrange","xrange(obj)
+("Base.Graphics","xrange","xrange(obj)
 
    Returns a tuple \"(xmin(obj), xmax(obj))\"
 
 "),
 
-("Base","yrange","yrange(obj)
+("Base.Graphics","yrange","yrange(obj)
 
    Returns a tuple \"(ymin(obj), ymax(obj))\"
 
 "),
 
-("Base","rotate","rotate(obj, angle, origin) -> newobj
+("Base.Graphics","rotate","rotate(obj, angle, origin) -> newobj
 
    Rotates an object around origin by the specified angle (radians),
    returning a new object of the same type.  Because of type-
@@ -8479,46 +8517,46 @@ popdisplay(d::Display)
 
 "),
 
-("Base","shift","shift(obj, dx, dy)
+("Base.Graphics","shift","shift(obj, dx, dy)
 
    Returns an object shifted horizontally and vertically by the
    indicated amounts
 
 "),
 
-("Base","*","*(obj, s::Real)
+("Base.Graphics","*","*(obj, s::Real)
 
    Scale the width and height of a graphics object, keeping the center
    fixed
 
 "),
 
-("Base","+","+(bb1::BoundingBox, bb2::BoundingBox) -> BoundingBox
+("Base.Graphics","+","+(bb1::BoundingBox, bb2::BoundingBox) -> BoundingBox
 
    Returns the smallest box containing both boxes
 
 "),
 
-("Base","&","&(bb1::BoundingBox, bb2::BoundingBox) -> BoundingBox
+("Base.Graphics","&","&(bb1::BoundingBox, bb2::BoundingBox) -> BoundingBox
 
    Returns the intersection, the largest box contained in both boxes
 
 "),
 
-("Base","deform","deform(bb::BoundingBox, dxmin, dxmax, dymin, dymax)
+("Base.Graphics","deform","deform(bb::BoundingBox, dxmin, dxmax, dymin, dymax)
 
    Returns a bounding box with all edges shifted by the indicated
    amounts
 
 "),
 
-("Base","isinside","isinside(bb::BoundingBox, x, y)
+("Base.Graphics","isinside","isinside(bb::BoundingBox, x, y)
 
    True if the given point is inside the box
 
 "),
 
-("Base","isinside","isinside(bb::BoundingBox, point)
+("Base.Graphics","isinside","isinside(bb::BoundingBox, point)
 
    True if the given point is inside the box
 
@@ -9584,10 +9622,10 @@ popdisplay(d::Display)
 
 "),
 
-("Base.LinAlg.BLAS","gemm","gemm(tA, tB, alpha, A, B)
+("Base.LinAlg.BLAS","gemm","gemm(tA, tB, A, B)
 
-   Returns \"alpha*A*B\" or the other three variants according to
-   \"tA\" (transpose \"A\") and \"tB\".
+   Returns \"A*B\" or the other three variants according to \"tA\"
+   (transpose \"A\") and \"tB\".
 
 "),
 
@@ -9606,7 +9644,7 @@ popdisplay(d::Display)
 
 "),
 
-("Base.LinAlg.BLAS","gemv","gemv(tA, alpha, A, x)
+("Base.LinAlg.BLAS","gemv","gemv(tA, A, x)
 
    Returns \"A*x\" or \"A'x\" according to \"tA\" (transpose \"A\").
 
