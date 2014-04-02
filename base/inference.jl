@@ -2378,7 +2378,7 @@ function inlining_pass(e::Expr, sv, ast)
         end
 
         for ninline = 1:100
-            atypes = tuple(map(exprtype, e.args[2:])...)
+            atypes = tuple(map(exprtype, e.args[2:end])...)
             if length(atypes) > MAX_TUPLETYPE_LEN
                 atypes = limit_tuple_type(atypes)
             end
