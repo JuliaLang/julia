@@ -357,7 +357,7 @@ LineEdit.reset_state(hist::REPLHistoryProvider) = history_reset_state(hist)
 
 const julia_green = "\033[1m\033[32m"
 
-function return_callback(repl,s)
+function return_callback(repl, s)
     if position(s.input_buffer) != 0 && eof(s.input_buffer) &&
         (seek(s.input_buffer, position(s.input_buffer)-1); read(s.input_buffer, Uint8) == '\n')
         repl.consecutive_returns += 1
@@ -568,7 +568,7 @@ function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,
         end,
     }
 
-    a = Dict{Any,Any}[hkeymap, repl_keymap, LineEdit.history_keymap(hp), LineEdit.default_keymap,LineEdit.escape_defaults]
+    a = Dict{Any,Any}[hkeymap, repl_keymap, LineEdit.history_keymap(hp), LineEdit.default_keymap, LineEdit.escape_defaults]
     prepend!(a, extra_repl_keymap)
     @eval @LineEdit.keymap repl_keymap_func $(a)
 
@@ -584,6 +584,14 @@ function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,
             else
                 LineEdit.edit_backspace(s)
             end
+        end,
+        "^C" => function (s)
+            LineEdit.move_input_end(s)
+            LineEdit.refresh_line(s)
+            print(LineEdit.terminal(s), "^C\n\n")
+            transition(s, main_prompt)
+            transition(s, :reset)
+            LineEdit.refresh_line(s)
         end
     }
 
