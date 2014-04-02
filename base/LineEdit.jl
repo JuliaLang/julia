@@ -524,6 +524,13 @@ function edit_kill(s::MIState)
     refresh_line(s)
 end
 
+edit_clear(buf::IOBuffer) = truncate(buf, 0)
+
+function edit_clear(s::MIState)
+    edit_clear(buffer(s))
+    refresh_line(s)
+end
+
 function replace_line(s::PromptState, l::IOBuffer)
     s.input_buffer = l
 end
@@ -536,8 +543,8 @@ end
 
 history_prev(::EmptyHistoryProvider) = ("", false)
 history_next(::EmptyHistoryProvider) = ("", false)
-history_search(::EmptyHistoryProvider,args...) = false
-add_history(::EmptyHistoryProvider,s) = nothing
+history_search(::EmptyHistoryProvider, args...) = false
+add_history(::EmptyHistoryProvider, s) = nothing
 add_history(s::PromptState) = add_history(mode(s).hist, s)
 
 function history_prev(s, hist)
@@ -902,16 +909,20 @@ function setup_search_keymap(hp)
 
         # Backspace/^H
         '\b'     => :(LineEdit.edit_backspace(data.query_buffer) ?
-                        LineEdit.update_display_buffer(s,data) : beep(LineEdit.terminal(s))),
+                        LineEdit.update_display_buffer(s, data) : beep(LineEdit.terminal(s))),
         127      => '\b',
         # Meta Backspace
         "\e\b"   => :(LineEdit.edit_delete_prev_word(data.query_buffer) ?
-                        LineEdit.update_display_buffer(s,data) : beep(LineEdit.terminal(s))),
+                        LineEdit.update_display_buffer(s, data) : beep(LineEdit.terminal(s))),
         "\e\x7f" => "\e\b",
-        "^C"     => s->transition(s,state(s, p).parent),
-        "^D"     => s->transition(s,state(s, p).parent),
+        # ^C and ^D
+        "^C"     => :(LineEdit.edit_clear(data.query_buffer);
+                      LineEdit.edit_clear(data.response_buffer);
+                      LineEdit.update_display_buffer(s, data);
+                      LineEdit.transition(s, data.parent)),
+        "^D"     => "^C",
         # ^K
-        11       => s->transition(s,state(s, p).parent),
+        11       => s->transition(s, state(s, p).parent),
         # ^Y
         25       => :(LineEdit.edit_yank(s); LineEdit.update_display_buffer(s, data)),
         # Right Arrow
@@ -1058,7 +1069,7 @@ const default_keymap =
     # Simply insert it into the buffer by default
     "*" => :(LineEdit.edit_insert(s, c1)),
     # ^U
-    21 => :(truncate(LineEdit.buffer(s), 0); LineEdit.refresh_line(s)),
+    21 => edit_clear,
     # ^K
     11 => edit_kill,
     # ^Y
@@ -1173,7 +1184,10 @@ function Prompt(prompt;
     keymap_func_data = nothing,
     input_color = "",
     complete = EmptyCompletionProvider(),
-    on_enter = default_enter_cb, on_done = ()->nothing, hist = EmptyHistoryProvider())
+    on_enter = default_enter_cb,
+    on_done = ()->nothing,
+    hist = EmptyHistoryProvider())
+
     Prompt(prompt, first_prompt, prompt_color, keymap_func, keymap_func_data,
            input_color, complete, on_enter, on_done, hist)
 end
