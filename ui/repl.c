@@ -224,6 +224,13 @@ static int exec_program(void)
 
 void jl_lisp_prompt();
 
+#ifndef _WIN32
+int jl_repl_raise_sigtstp(void)
+{
+    return raise(SIGTSTP);
+}
+#endif
+
 #ifdef JL_GF_PROFILE
 static void print_profile(void)
 {
