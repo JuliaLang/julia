@@ -266,6 +266,7 @@ end
 
 
 # Edit functionality
+is_non_word_char(c) = in(c," \t\n\"\\'`@\$><=:;|&{}()[].,+-*/?%^~")
 
 char_move_left(s::PromptState) = char_move_left(s.input_buffer)
 function char_move_left(buf::IOBuffer)
@@ -274,6 +275,10 @@ function char_move_left(buf::IOBuffer)
         c = peek(buf)
         (((c & 0x80) == 0) || ((c & 0xc0) == 0xc0)) && break
     end
+    pos = position(buf)
+    c = read(buf,Char)
+    seek(buf,pos)
+    c
 end
 
 function edit_move_left(s::PromptState)
@@ -293,37 +298,28 @@ end
 
 char_move_right(s) = char_move_right(buffer(s))
 function char_move_right(buf::IOBuffer)
-    while position(buf) != buf.size
-        seek(buf, position(buf)+1)
-        position(buf) == buf.size && break
-        c = peek(buf)
-        (((c & 0x80) == 0) || ((c & 0xc0) == 0xc0)) && break
-    end
+    !eof(buf) && read(buf, Char)
 end
 
-function char_move_word_right(buf::IOBuffer)
-    while !eof(buf) && isspace(read(buf, Char))
+function char_move_word_right(buf::IOBuffer, is_delimiter=is_non_word_char)
+    while !eof(buf) && is_delimiter(char_move_right(buf))
     end
     while !eof(buf)
-        c = peek(buf)
-        if isspace(char(c))
+        pos = position(buf)
+        if is_delimiter(char_move_right(buf))
+            seek(buf,pos)
             break
         end
-        read(buf, Char)
     end
 end
 
-function char_move_word_left(buf::IOBuffer)
-    while position(buf) > 0
-        char_move_left(buf)
-        c = peek(buf)
-        !isspace(char(c)) && break
+function char_move_word_left(buf::IOBuffer,is_delimiter=is_non_word_char)
+    while position(buf) > 0 && is_delimiter(char_move_left(buf))
     end
     while position(buf) > 0
-        char_move_left(buf)
-        c = peek(buf)
-        if isspace(char(c))
-            read(buf, Uint8)
+        pos = position(buf)
+        if is_delimiter(char_move_left(buf))
+            seek(buf,pos)
             break
         end
     end
@@ -474,6 +470,19 @@ function edit_delete(s)
     else
         beep(LineEdit.terminal(s))
     end
+end
+
+function edit_werase(buf::IOBuffer)
+    pos1 = position(buf)
+    char_move_word_left(buf,isspace)
+    pos0 = position(buf)
+    pos0 < pos1 || return false
+    memmove(buf, pos0+1, buf, pos1+1, buf.size-pos1)
+    buf.size -= pos1 - pos0
+    true
+end
+function edit_werase(s)
+    edit_werase(buffer(s)) && refresh_line(s)
 end
 
 function edit_delete_prev_word(buf::IOBuffer)
@@ -1039,7 +1048,7 @@ const default_keymap =
     # ^L
     12 => :(Terminals.clear(LineEdit.terminal(s)); LineEdit.refresh_line(s)),
     # ^W
-    23 => edit_delete_prev_word,
+    23 => edit_werase,
     # Meta D
     "\ed" => edit_delete_next_word,
     # ^C
