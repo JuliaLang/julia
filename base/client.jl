@@ -162,7 +162,7 @@ function process_options(args::Vector{UTF8String})
     repl = true
     startup = true
     color_set = false
-    history = true
+    no_history_file = false
     i = 1
     while i <= length(args)
         if args[i]=="-q" || args[i]=="--quiet"
@@ -209,7 +209,11 @@ function process_options(args::Vector{UTF8String})
             println("julia version ", VERSION)
             exit(0)
         elseif args[i]=="--no-history"
-            history = false
+            # deprecated in v0.3
+            warn("'--no-history' is deprecated; use '--no-history-file'")
+            no_history_file = true
+        elseif args[i] == "--no-history-file"
+            no_history_file = true
         elseif args[i] == "-f" || args[i] == "--no-startup"
             startup = false
         elseif args[i] == "-F"
@@ -249,7 +253,7 @@ function process_options(args::Vector{UTF8String})
         end
         i += 1
     end
-    return (quiet,repl,startup,color_set,history)
+    return (quiet,repl,startup,color_set,no_history_file)
 end
 
 const roottask = current_task()
@@ -307,8 +311,7 @@ function _start()
     try
         any(a->(a=="--worker"), ARGS) || init_head_sched()
         init_load_path()
-        (quiet,repl,startup,color_set,history) = process_options(copy(ARGS))
-        global _use_history = history
+        (quiet,repl,startup,color_set,no_history_file) = process_options(copy(ARGS))
 
         local term
         if repl
@@ -344,7 +347,7 @@ function _start()
             quiet || REPL.banner(term,term)
             ccall(:jl_install_sigint_handler, Void, ())
             repl = REPL.LineEditREPL(term)
-            repl.use_history_file = history
+            repl.no_history_file = no_history_file
             REPL.run_repl(repl)
         end
     catch err
