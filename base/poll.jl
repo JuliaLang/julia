@@ -171,7 +171,7 @@ end
 # on unix
 
 let
-    global fdwatcher_init
+    global fdwatcher_init, wait
     @unix_only begin
         local fdwatcher_array
         function fdwatcher_init()
