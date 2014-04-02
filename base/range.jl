@@ -216,9 +216,9 @@ done(r::FloatRange, i) = (length(r) <= i)
 
 # NOTE: For ordinal ranges, we assume start+step might be from a
 # lifted domain (e.g. Int8+Int8 => Int); use that for iterating.
-start(r::StepRange) = oftype(r.start+r.step, r.start)
+start(r::StepRange) = convert(typeof(r.start+r.step), r.start)
 next{T}(r::StepRange{T}, i) = (oftype(T,i), i+r.step)
-done(r::StepRange, i) = (i==oftype(i,r.stop)+r.step) | isempty(r)
+done{T,S}(r::StepRange{T,S}, i) = (i!=r.stop) & ((r.step>zero(S))==(i>r.stop))
 
 start(r::UnitRange) = oftype(r.start+1, r.start)
 next{T}(r::UnitRange{T}, i) = (oftype(T,i), i+1)
