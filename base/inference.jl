@@ -2238,7 +2238,7 @@ function inline_worthy(body::Expr)
 #        shift!(body.args)
 #        return true
 #    end
-    if length(body.args) < 11 && occurs_more(body, e->true, 50) < 50
+    if length(body.args) < 4 && occurs_more(body, e->true, 50) < 50
         return true
     end
     return false
