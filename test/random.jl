@@ -16,10 +16,11 @@
 @test rand(MersenneTwister(5294967296)) == 0.3498809918210497
 
 # randn
-@test randn(MersenneTwister(42)) == -0.5560268761438383
+@test randn(MersenneTwister(42)) == -0.5560268761438381
 A = zeros(2, 2)
 randn!(MersenneTwister(42), A)
-@test A == [-0.5560268761438383 0.027155338009146598; -0.44438335710729554 -0.2994840903585204]
+@test A == [-0.5560268761438381  0.02715533800914659;
+            -0.4443833571072952 -0.29948409035852047]
 
 for T in (Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Int128, Uint128,
           Char, Float16, Float32, Float64, Rational{Int})
