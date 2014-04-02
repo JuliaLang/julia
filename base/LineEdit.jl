@@ -71,7 +71,7 @@ terminal(s::IO) = s
 terminal(s::PromptState) = s.terminal
 
 for f in [:terminal, :edit_insert, :on_enter, :add_history, :buffer, :edit_backspace, :(Base.isempty),
-        :replace_line, :refreshMultiLine, :input_string, :complete_line, :edit_move_left, :edit_move_right,
+        :replace_line, :refresh_multi_line, :input_string, :complete_line, :edit_move_left, :edit_move_right,
         :edit_move_word_left, :edit_move_word_right, :update_display_buffer]
     @eval ($f)(s::MIState,args...) = $(f)(s.mode_state[s.current_mode], args...)
 end
@@ -157,9 +157,9 @@ end
 prompt_string(s::PromptState) = s.p.prompt
 prompt_string(s::String) = s
 
-refreshMultiLine(s::PromptState) = s.ias = refreshMultiLine(s.terminal, buffer(s), s.ias, s, indent = s.indent)
+refresh_multi_line(s::PromptState) = s.ias = refresh_multi_line(s.terminal, buffer(s), s.ias, s, indent = s.indent)
 
-function refreshMultiLine(terminal, buf, state::InputAreaState,prompt = ""; indent = 0)
+function refresh_multi_line(terminal, buf, state::InputAreaState,prompt = ""; indent = 0)
     cols = width(terminal)
 
     clear_input_area(terminal, state)
@@ -559,7 +559,7 @@ function history_next(s, hist)
     end
 end
 
-refresh_line(s) = refreshMultiLine(s)
+refresh_line(s) = refresh_multi_line(s)
 
 default_completion_cb(::IOBuffer) = []
 default_enter_cb(_) = true
@@ -843,7 +843,7 @@ function history_set_backward(s::SearchState, backward)
     s.backward = backward
 end
 
-function refreshMultiLine(s::SearchState)
+function refresh_multi_line(s::SearchState)
     buf = IOBuffer()
     write(buf, pointer(s.query_buffer.data), s.query_buffer.ptr-1)
     write(buf, "': ")
@@ -853,7 +853,7 @@ function refreshMultiLine(s::SearchState)
     write(buf, readall(s.response_buffer))
     buf.ptr = offset+ptr-1
     s.response_buffer.ptr = ptr
-    s.ias = refreshMultiLine(s.terminal, buf, s.ias, s.backward ? "(reverse-i-search)`" : "(i-search)`")
+    s.ias = refresh_multi_line(s.terminal, buf, s.ias, s.backward ? "(reverse-i-search)`" : "(i-search)`")
 end
 
 function reset_state(s::SearchState)
