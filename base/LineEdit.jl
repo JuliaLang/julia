@@ -950,7 +950,7 @@ function setup_search_keymap(hp)
         1        => s->(accept_result(s, p); move_line_start(s)),
         # ^E
         5        => s->(accept_result(s, p); move_line_end(s)),
-        "^Z"     => :(return :suspend),
+        "^Z"     => :(return @unix? :suspend : :ok),
         # Try to catch all Home/End keys
         "\e[H"   => s->(accept_result(s, p); move_input_start(s)),
         "\e[F"   => s->(accept_result(s, p); move_input_end(s)),
@@ -1101,7 +1101,7 @@ const default_keymap =
         transition(s, :reset)
         LineEdit.refresh_line(s)
     end,
-    "^Z" => :(return :suspend),
+    "^Z" => :(return @unix? :suspend : :ok),
     # Right Arrow
     "\e[C" => edit_move_right,
     # Left Arrow
