@@ -373,13 +373,20 @@ function return_callback(repl, s)
 end
 
 function find_hist_file()
-    if isfile(".julia_history2")
-        return ".julia_history2"
+    filename = ".julia_history2"
+    if isfile(filename)
+        return filename
     elseif haskey(ENV,"JULIA_HISTORY")
         return ENV["JULIA_HISTORY"]
     else
-        @windows_only return ENV["AppData"] * "/julia/history2"
-        @unix_only return ENV["HOME"] * "/.julia_history2"
+        @unix_only return joinpath(ENV["HOME"], filename)
+        @windows_only begin
+            if haskey(ENV,"HOMEDRIVE") && haskey(ENV,"HOMEPATH")
+                return joinpath(ENV["HOMEDRIVE"], ENV["HOMEPATH"], filename)
+            else
+                return joinpath(ENV["AppData"], "julia", "history2")
+            end
+        end
     end
 end
 
