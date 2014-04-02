@@ -11,9 +11,10 @@ The Julia standard library contains a range of functions and macros appropriate 
 
 Some general notes:
 
-* Except for functions in :ref:`built-in-modules`, all functions documented here are directly available for use in programs.
+* Except for functions in buit-in modules (:mod:`~Base.Pkg`, :mod:`~Base.Collections`, :mod:`~Base.Graphics`,
+  :mod:`~Base.Test` and :mod:`~Base.Profile`), all functions documented here are directly available for use in programs.
 * To use module functions, use ``import Module`` to import the module, and ``Module.fn(x)`` to use the functions.
-* Alternatively, ``using ModuleName`` will import all exported ``Module`` functions into the current namespace.
+* Alternatively, ``using Module`` will import all exported ``Module`` functions into the current namespace.
 * By convention, function names ending with an exclamation point (``!``) modify their arguments.  Some functions have both modifying (e.g., ``sort!``) and non-modifying (``sort``) versions.
 
 Getting Around

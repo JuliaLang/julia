@@ -1,7 +1,7 @@
+.. module:: Base.Test
+
 Unit and Functional Testing
 ===========================
-
-.. module:: Base.Test
 
 The ``Test`` module contains macros and functions related to testing.
 A default handler is provided to run the tests, and a custom one can be

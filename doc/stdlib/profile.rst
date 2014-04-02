@@ -1,9 +1,9 @@
+.. module:: Base.Profile
+
 .. _stdlib-profiling:
 
 Profiling
 =========
-
-.. module:: Base.Profile
 
 The ``Profile`` module provides tools to help developers improve the
 performance of their code. When used, it takes measurements on running

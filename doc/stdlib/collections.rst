@@ -1,7 +1,7 @@
+.. module:: Base.Collections
+
 Collections and Data Structures
 ===============================
-
-.. module:: Base.Collections
 
 The ``Collections`` module contains implementations of some common data
 structures.

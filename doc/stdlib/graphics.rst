@@ -2,8 +2,6 @@
 
 .. module:: Base.Graphics
 
-.. currentmodule:: Base
-
 Graphics
 ----------
 
