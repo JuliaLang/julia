@@ -120,17 +120,17 @@ function frange{T<:FloatingPoint}(start::T, step::T, stop::T)
     hi = nextfloat((nextfloat(stop)-prevfloat(start))/n)
     if lo <= step <= hi
         a, b = rat(start)
-        a = convert(T,a)
-        if a/convert(T,b) == start
+        ac = convert(T,a)
+        if ac/convert(T,b) == start
             c, d = rat(step)
-            c = convert(T,c)
-            if c/convert(T,d) == step
+            cc = convert(T,c)
+            if cc/convert(T,d) == step
                 e = lcm(b,d)
-                a *= div(e,b)
-                c *= div(e,d)
-                e = convert(T,e)
-                if (a+n*c)/e == stop
-                    return a, c, n+1, e
+                ac *= div(e,b)
+                cc *= div(e,d)
+                ec = convert(T,e)
+                if (ac+n*cc)/ec == stop
+                    return ac, cc, n+1, ec
                 end
             end
         end
@@ -144,11 +144,18 @@ colon{T<:Real}(a::T, b::FloatingPoint, c::T) = colon(promote(a,b,c)...)
 colon{T<:FloatingPoint}(a::T, b::FloatingPoint, c::T) = colon(promote(a,b,c)...)
 colon{T<:FloatingPoint}(a::T, b::Real, c::T) = colon(promote(a,b,c)...)
 
-colon{T<:FloatingPoint}(start::T, step::T, stop::T) =
-          step == 0              ? error("range step cannot be zero") :
-         start == stop           ? FloatRange{T}(start,step,1,1) :
-    (0 < step) != (start < stop) ? FloatRange{T}(start,step,0,1) :
-                                   FloatRange{T}(frange(start,step,stop)...)
+function colon{T<:FloatingPoint}(start::T, step::T, stop::T)
+    if step == 0
+        error("step cannot be zero in colon syntax")
+    elseif start == stop
+        FloatRange{T}(start,step,1,1)
+    elseif (0 < step) != (start < stop)
+        FloatRange{T}(start,step,0,1)
+    else
+        start,step,len,divisor = frange(start,step,stop)
+        FloatRange{T}(start,step,len,divisor)
+    end
+end
 
 range(a::FloatingPoint, len::Integer) = colon(a, oftype(a,a+len-1))
 range(a::FloatingPoint, st::FloatingPoint, len::Integer) = colon(a, st, a+oftype(st,(len-1)*st))
