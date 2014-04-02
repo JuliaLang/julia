@@ -894,29 +894,50 @@ end
 function setup_search_keymap(hp)
     p = HistoryPrompt(hp)
     pkeymap = {
-        "^R"    => :(LineEdit.history_set_backward(data, true); LineEdit.history_next_result(s, data)),
-        "^S"    => :(LineEdit.history_set_backward(data, false); LineEdit.history_next_result(s, data)),
-        "\r"    => s->accept_result(s, p),
-        "\t"    => nothing, #TODO: Maybe allow tab completion in R-Search?
+        "^R"     => :(LineEdit.history_set_backward(data, true); LineEdit.history_next_result(s, data)),
+        "^S"     => :(LineEdit.history_set_backward(data, false); LineEdit.history_next_result(s, data)),
+        '\r'     => s->accept_result(s, p),
+        '\n'     => '\r',
+        '\t'     => nothing, #TODO: Maybe allow tab completion in R-Search?
 
         # Backspace/^H
-        '\b'    => :(LineEdit.edit_backspace(data.query_buffer) ?
+        '\b'     => :(LineEdit.edit_backspace(data.query_buffer) ?
                         LineEdit.update_display_buffer(s,data) : beep(LineEdit.terminal(s))),
-        127     => '\b',
-        "^C"    => s->transition(s,state(s, p).parent),
-        "^D"    => s->transition(s,state(s, p).parent),
+        127      => '\b',
+        # Meta Backspace
+        "\e\b"   => :(LineEdit.edit_delete_prev_word(data.query_buffer) ?
+                        LineEdit.update_display_buffer(s,data) : beep(LineEdit.terminal(s))),
+        "\e\x7f" => "\e\b",
+        "^C"     => s->transition(s,state(s, p).parent),
+        "^D"     => s->transition(s,state(s, p).parent),
         # ^K
-        11      => s->transition(s,state(s, p).parent),
+        11       => s->transition(s,state(s, p).parent),
         # ^Y
-        25      => :(LineEdit.edit_yank(s); LineEdit.update_display_buffer(s, data)),
+        25       => :(LineEdit.edit_yank(s); LineEdit.update_display_buffer(s, data)),
+        # Right Arrow
+        "\e[C"   => s->(accept_result(s, p); edit_move_right(s)),
+        # Left Arrow
+        "\e[D"   => s->(accept_result(s, p); edit_move_left(s)),
+        # Up Arrow
+        "\e[A"   => s->(accept_result(s, p); edit_move_up(s)),
+        # Down Arrow
+        "\e[B"   => s->(accept_result(s, p); edit_move_down(s)),
+        # ^B
+        2        => s->(accept_result(s, p); edit_move_left(s)),
+        # ^F
+        6        => s->(accept_result(s, p); edit_move_right(s)),
+        # Meta B
+        "\eb"    => s->(accept_result(s, p); edit_move_word_left(s)),
+        # Meta F
+        "\ef"    => s->(accept_result(s, p); edit_move_word_right(s)),
         # ^A
-        1       => s->(accept_result(s, p); move_line_start(s)),
+        1        => s->(accept_result(s, p); move_line_start(s)),
         # ^E
-        5       => s->(accept_result(s, p); move_line_end(s)),
+        5        => s->(accept_result(s, p); move_line_end(s)),
         # Try to catch all Home/End keys
-        "\e[H"  => s->(accept_result(s, p); move_input_start(s)),
-        "\e[F"  => s->(accept_result(s, p); move_input_end(s)),
-        "*"     => :(LineEdit.edit_insert(data.query_buffer, c1); LineEdit.update_display_buffer(s, data))
+        "\e[H"   => s->(accept_result(s, p); move_input_start(s)),
+        "\e[F"   => s->(accept_result(s, p); move_input_end(s)),
+        "*"      => :(LineEdit.edit_insert(data.query_buffer, c1); LineEdit.update_display_buffer(s, data))
     }
     @eval @LineEdit.keymap keymap_func $([pkeymap, escape_defaults])
     p.keymap_func = keymap_func
