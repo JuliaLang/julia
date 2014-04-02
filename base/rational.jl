@@ -45,7 +45,7 @@ convert(::Type{Bool}, x::Rational) = (x!=0) # to resolve ambiguity
 convert{T<:Integer}(::Type{T}, x::Rational) = (isinteger(x) ? convert(T, x.num) : throw(InexactError()))
 
 convert(::Type{FloatingPoint}, x::Rational) = float(x.num)/float(x.den)
-function convert{T<:FloatingPoint,S<:Integer}(::Type{T}, x::Rational{S})
+function convert{T<:FloatingPoint,S}(::Type{T}, x::Rational{S})
     P = promote_type(T,S)
     convert(P,x.num)/convert(P,x.den)
 end

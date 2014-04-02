@@ -82,7 +82,7 @@ BigFloat(x::Union(Float16,Float32)) = BigFloat(float64(x))
 BigFloat(x::Rational) = BigFloat(num(x)) / BigFloat(den(x))
 
 convert(::Type{Rational}, x::BigFloat) = convert(Rational{BigInt}, x)
-convert(::Type{BigFloat}, x::Rational) = BigFloat(x) # to resolve ambiguity
+convert{S}(::Type{BigFloat}, x::Rational{S}) = BigFloat(x) # to resolve ambiguity
 convert(::Type{BigFloat}, x::Real) = BigFloat(x)
 convert(::Type{FloatingPoint}, x::BigInt) = BigFloat(x)
 
