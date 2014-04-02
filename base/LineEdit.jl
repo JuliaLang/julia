@@ -574,49 +574,44 @@ function write_prompt(terminal, s::PromptState,prompt)
 end
 write_prompt(terminal, s::ASCIIString) = write(terminal, s)
 
-function normalize_key(key)
-    if isa(key, Char)
-        return string(key)
-    elseif isa(key, Integer)
-        return string(char(key))
-    elseif isa(key, String)
-        '\0' in key && error("Matching \\0 not currently supported.")
-        buf = IOBuffer()
-        i = start(key)
-        while !done(key, i)
+normalize_key(key::Char) = string(key)
+normalize_key(key::Integer) = normalize_key(char(key))
+function normalize_key(key::String)
+    '\0' in key && error("Matching \\0 not currently supported.")
+    buf = IOBuffer()
+    i = start(key)
+    while !done(key, i)
+        c, i = next(key, i)
+        if c == '*'
+            write(buf, '\0')
+        elseif c == '^'
             c, i = next(key, i)
-            if c == '*'
-                write(buf, '\0')
-            elseif c == '^'
-                c, i = next(key, i)
-                write(buf,uppercase(c)-64)
-            elseif c == '\\'
+            write(buf,uppercase(c)-64)
+        elseif c == '\\'
+            c, i == next(key, i)
+            if c == 'C'
                 c, i == next(key, i)
-                if c == 'C'
-                    c, i == next(key, i)
-                    @assert c == '-'
-                    c, i == next(key, i)
-                    write(buf,uppercase(c)-64)
-                elseif c == 'M'
-                    c, i == next(key, i)
-                    @assert c == '-'
-                    c, i == next(key, i)
-                    write(buf, '\e')
-                    write(buf, c)
-                end
-            else
+                @assert c == '-'
+                c, i == next(key, i)
+                write(buf,uppercase(c)-64)
+            elseif c == 'M'
+                c, i == next(key, i)
+                @assert c == '-'
+                c, i == next(key, i)
+                write(buf, '\e')
                 write(buf, c)
             end
+        else
+            write(buf, c)
         end
-        return takebuf_string(buf)
     end
+    return takebuf_string(buf)
 end
 
-# Turn an Dict{Any,Any} into a Dict{'Char',Any}
+# Turn a Dict{Any,Any} into a Dict{Char,Any}
 # For now we use \0 to represent unknown chars so that they are sorted before everything else
-# If we ever actually want to mach \0 in input, this will have to be
-# reworked
-function normalize_keymap(keymap)
+# If we ever actually want to match \0 in input, this will have to be reworked
+function normalize_keymap(keymap::Dict)
     ret = Dict{Char,Any}()
     for key in keys(keymap)
         newkey = normalize_key(key)
@@ -645,11 +640,11 @@ function normalize_keymap(keymap)
     ret
 end
 
-keymap_gen_body(keymaps,body::Expr, level) = body
-keymap_gen_body(keymaps,body::Function, level) = keymap_gen_body(keymaps, :($(body)(s)))
-keymap_gen_body(keymaps,body::Char, level) = keymap_gen_body(keymaps, keymaps[body])
-keymap_gen_body(keymaps,body::Nothing, level) = nothing
-function keymap_gen_body(keymaps,body::String, level)
+keymap_gen_body(keymaps, body::Expr, level) = body
+keymap_gen_body(keymaps, body::Function, level) = keymap_gen_body(keymaps, :($(body)(s)))
+keymap_gen_body(keymaps, body::Char, level) = keymap_gen_body(keymaps, keymaps[body])
+keymap_gen_body(keymaps, body::Nothing, level) = nothing
+function keymap_gen_body(keymaps, body::String, level)
     if length(body) == 1
         return keymap_gen_body(keymaps, body[1], level)
     end
@@ -686,9 +681,7 @@ function keymap_gen_body(dict, subdict::Dict, level)
         c == '\0' && continue
         cblock = Expr(:if, :($bc == $c))
         push!(cblock.args, keymap_gen_body(dict, subdict[c], level+1))
-        if isa(cblock, Expr)
-            push!(cblock.args, last_if)
-        end
+        isa(cblock, Expr) && push!(cblock.args, last_if)
         last_if = cblock
     end
 
@@ -751,12 +744,10 @@ function fix_conflicts!(dict::Dict, level)
     end
 end
 
-function keymap_prepare(keymaps)
-    if isa(keymaps, Dict)
-        keymaps = [keymaps]
-    end
+keymap_prepare(keymaps::Expr) = keymap_prepare(eval(keymaps))
+keymap_prepare(keymaps::Dict) = keymap_prepare([keymaps])
+function keymap_prepare{D<:Dict}(keymaps::Array{D})
     push!(keymaps, {"*"=>:(error("Unrecognized input"))})
-    @assert isa(keymaps, Array) && eltype(keymaps) <: Dict
     keymaps = map(normalize_keymap, keymaps)
     map(fix_conflicts!, keymaps)
     keymaps
@@ -773,7 +764,7 @@ function keymap_unify(keymaps)
 end
 
 macro keymap(func, keymaps)
-    dict = keymap_unify(keymap_prepare(isa(keymaps, Expr) ? eval(keymaps) : keymaps))
+    dict = keymap_unify(keymap_prepare(keymaps))
     body = keymap_gen_body(dict, dict)
     esc(quote
         function $(func)(s, data)
@@ -823,7 +814,8 @@ type SearchState
     ias::InputAreaState
     #The prompt whose input will be replaced by the matched history
     parent
-    SearchState(a, b, c, d, e) = new(a, b, c, d, e, InputAreaState(0,0))
+    SearchState(terminal, histprompt, backward, query_buffer, response_buffer) =
+        new(terminal, histprompt, backward, query_buffer, response_buffer, InputAreaState(0,0))
 end
 
 terminal(s::SearchState) = s.terminal
@@ -849,9 +841,9 @@ function refresh_multi_line(s::SearchState)
     write(buf, "': ")
     offset = buf.ptr
     ptr = s.response_buffer.ptr
-    seek(s.response_buffer,0)
+    seek(s.response_buffer, 0)
     write(buf, readall(s.response_buffer))
-    buf.ptr = offset+ptr-1
+    buf.ptr = offset + ptr - 1
     s.response_buffer.ptr = ptr
     s.ias = refresh_multi_line(s.terminal, buf, s.ias, s.backward ? "(reverse-i-search)`" : "(i-search)`")
 end
