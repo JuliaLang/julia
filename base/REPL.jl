@@ -141,7 +141,7 @@ type LineEditREPL <: AbstractREPL
     answer_color::String
     shell_color::String
     help_color::String
-    use_history_file::Bool
+    no_history_file::Bool
     in_shell::Bool
     in_help::Bool
     consecutive_returns::Int
@@ -153,7 +153,7 @@ LineEditREPL(t::TextTerminal) =  LineEditREPL(t, julia_green,
                                               Base.answer_color(),
                                               Base.text_colors[:red],
                                               Base.text_colors[:yellow],
-                                              true, false, false, 0)
+                                              false, false, false, 0)
 
 type REPLCompletionProvider <: CompletionProvider
     r::LineEditREPL
@@ -498,7 +498,7 @@ function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,
                                           uint8(';') => shell_mode,
                                           uint8('?') => help_mode,
                                           uint8('>') => main_prompt])
-    if repl.use_history_file
+    if !repl.no_history_file
         f = open(find_hist_file(), true, true, true, false, false)
         finalizer(replc, replc->close(f))
         hist_from_file(hp, f)
