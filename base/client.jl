@@ -153,6 +153,21 @@ function parse_input_line(io::IO)
     end
 end
 
+# detect the reason which caused an :incomplete expression
+# from the error message
+# NOTE: the error messages are defined in src/julia-parser.scm
+incomplete_tag(ex) = :none
+function incomplete_tag(ex::Expr)
+    Meta.isexpr(ex, :incomplete) || return :none
+    msg = ex.args[1]
+    contains(msg, "string") && return :string
+    contains(msg, "comment") && return :comment
+    contains(msg, "requires end") && return :block
+    contains(msg, "\"`\"") && return :cmd
+    contains(msg, "character") && return :char
+    return :other
+end
+
 # try to include() a file, ignoring if not found
 try_include(path::String) = isfile(path) && include(path)
 
