@@ -22,6 +22,7 @@ end
 @test size(readcsv(IOBuffer("1,2,3,4\r\n"))) == (1,4)
 @test size(readcsv(IOBuffer("1,2,3,4\r\n1,2,3\r\n"))) == (2,4)
 @test size(readcsv(IOBuffer("1,2,3,4\r\n1,2,3,4\r\n"))) == (2,4)
+@test size(readcsv(IOBuffer("1,2,3,\"4\"\r\n1,2,3,4\r\n"))) == (2,4)
 
 @test size(readdlm(IOBuffer("1 2 3 4\n1 2 3"))) == (2,4)
 @test size(readdlm(IOBuffer("1\t2 3 4\n1 2 3"))) == (2,4)
@@ -49,6 +50,7 @@ let result1 = reshape({1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, ""}, 2, 4)
     @test isequaldlm(readdlm(IOBuffer("1,2,3,4\n1,2,3\n"), ','), result1, Any)
     @test isequaldlm(readdlm(IOBuffer("1,2,3,4\n1,2,3"), ','), result1, Any)
     @test isequaldlm(readdlm(IOBuffer("1,2,3,4\r\n1,2,3\r\n"), ','), result1, Any)
+    @test isequaldlm(readdlm(IOBuffer("1,2,3,\"4\"\r\n1,2,3\r\n"), ','), result1, Any)
 end
 
 let result1 = reshape({"abc", "hello", "def,ghi", " \"quote\" ", "new\nline", "world"}, 2, 3),
