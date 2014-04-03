@@ -79,7 +79,6 @@ export
     RoundNearest,
     RoundToZero,
     RoundUp,
-    Schur,
     Set,
     SharedArray,
     SparseMatrixCSC,
