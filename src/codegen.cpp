@@ -4152,7 +4152,7 @@ static void init_julia_llvm_env(Module *m)
     // Subsequent passes not stripping metadata from terminator
     FPM->add(createInstructionCombiningPass()); 
     FPM->add(createIndVarSimplifyPass());       // Canonicalize indvars
-    //FPM->add(createLoopDeletionPass());         // Delete dead loops
+    FPM->add(createLoopDeletionPass());         // Delete dead loops
     FPM->add(createLoopUnrollPass());           // Unroll small loops
     //FPM->add(createLoopStrengthReducePass());   // (jwb added)
     
