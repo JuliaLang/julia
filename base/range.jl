@@ -54,8 +54,7 @@ immutable StepRange{T,S} <: OrdinalRange{T,S}
     end
 end
 
-StepRange{T,S}(start::T, step::S, stop::T) =
-    StepRange{T, S}(start, step, stop)
+StepRange{T,S}(start::T, step::S, stop::T) = StepRange{T,S}(start, step, stop)
 
 immutable UnitRange{T<:Real} <: OrdinalRange{T,Int}
     start::T
@@ -65,23 +64,26 @@ immutable UnitRange{T<:Real} <: OrdinalRange{T,Int}
 end
 UnitRange{T<:Real}(start::T, stop::T) = UnitRange{T}(start, stop)
 
-colon(a, b) = colon(promote(a,b)...)
+colon(a::Real, b::Real) = colon(promote(a,b)...)
 
-colon{T<:Real}(start::T, stop::T) = UnitRange(start, stop)
+colon{T<:Real}(start::T, stop::T) = UnitRange{T}(start, stop)
+
 range(a::Real, len::Integer) = UnitRange{typeof(a)}(a, a+len-1)
 
 colon{T}(start::T, stop::T) = StepRange(start, one(stop-start), stop)
+
 range{T}(a::T, len::Integer) =
     StepRange{T, typeof(a-a)}(a, one(a-a), a+oftype(a-a,(len-1)))
 
 # first promote start and stop, leaving step alone
 # this is for non-numeric ranges where step can be quite different
-colon{A,C}(a::A, b, c::C) = colon(convert(promote_type(A,C),a), b, convert(promote_type(A,C),c))
+colon{A<:Real,C<:Real}(a::A, b, c::C) = colon(convert(promote_type(A,C),a), b, convert(promote_type(A,C),c))
+
+colon{T<:Real}(start::T, step, stop::T) = StepRange(start, step, stop)
 
 colon{T}(start::T, step, stop::T) = StepRange(start, step, stop)
 
-range{T,S}(a::T, step::S, len::Integer) =
-    StepRange{T, S}(a, step, a+step*(len-1))
+range{T,S}(a::T, step::S, len::Integer) = StepRange{T,S}(a, step, a+step*(len-1))
 
 ## floating point ranges
 
