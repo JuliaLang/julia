@@ -970,7 +970,7 @@ function setup_search_keymap(hp)
         1         => s->(accept_result(s, p); move_line_start(s)),
         # ^E
         5         => s->(accept_result(s, p); move_line_end(s)),
-        "^Z"      => :(return @unix? :suspend : :ok),
+        "^Z"      => :(return :suspend),
         # Try to catch all Home/End keys
         "\e[H"    => s->(accept_result(s, p); move_input_start(s)),
         "\e[F"    => s->(accept_result(s, p); move_input_end(s)),
@@ -1125,7 +1125,7 @@ const default_keymap =
         transition(s, :reset)
         LineEdit.refresh_line(s)
     end,
-    "^Z" => :(return @unix? :suspend : :ok),
+    "^Z" => :(return :suspend),
     # Right Arrow
     "\e[C" => edit_move_right,
     # Left Arrow
@@ -1245,7 +1245,7 @@ function run_interface(terminal, m::ModalInterface)
         p = s.current_mode
         buf, ok, suspend = prompt!(terminal, m, s)
         while suspend
-            ccall(:jl_repl_raise_sigtstp, Cint, ())
+            @unix_only ccall(:jl_repl_raise_sigtstp, Cint, ())
             buf, ok, suspend = prompt!(terminal, m, s)
         end
         s.mode_state[s.current_mode].p.on_done(s, buf, ok)
@@ -1275,8 +1275,10 @@ function prompt!(terminal, prompt, s = init_state(terminal, prompt))
                 stop_reading(terminal)
                 return buffer(s), true, false
             elseif state == :suspend
-                stop_reading(terminal)
-                return buffer(s), true, true
+                @unix_only begin
+                    stop_reading(terminal)
+                    return buffer(s), true, true
+                end
             else
                 @assert state == :ok
             end
