@@ -112,21 +112,21 @@ debug && println("QR decomposition (without pivoting)")
 debug && println("(Automatic) Fat (pivoted) QR decomposition") # Pivoting is only implemented for BlasFloats
     qrpa  = factorize(a[1:5,:])
     q,r = qrpa[:Q], qrpa[:R]
-    if isa(qrpa,QRPivoted) p = qrpa[:p] end # Reconsider if pivoted QR gets implemented in julia
+    if isa(qrpa, Base.QRPivoted) p = qrpa[:p] end # Reconsider if pivoted QR gets implemented in julia
     @test_approx_eq q'*full(q, thin=false) eye(5)
     @test_approx_eq q*full(q, thin=false)' eye(5)
-    @test_approx_eq q*r isa(qrpa,QRPivoted) ? a[1:5,p] : a[1:5,:]
-    @test_approx_eq isa(qrpa, QRPivoted) ? q*r[:,invperm(p)] : q*r a[1:5,:]
+    @test_approx_eq q*r isa(qrpa, Base.QRPivoted) ? a[1:5,p] : a[1:5,:]
+    @test_approx_eq isa(qrpa, Base.QRPivoted) ? q*r[:,invperm(p)] : q*r a[1:5,:]
     @test_approx_eq_eps a[1:5,:]*(qrpa\b[1:5]) b[1:5] 5000ε
 
 debug && println("(Automatic) Thin (pivoted) QR decomposition") # Pivoting is only implemented for BlasFloats
     qrpa  = factorize(a[:,1:5])
     q,r = qrpa[:Q], qrpa[:R]
-    if isa(qrpa, QRPivoted) p = qrpa[:p] end # Reconsider if pivoted QR gets implemented in julia
+    if isa(qrpa, Base.QRPivoted) p = qrpa[:p] end # Reconsider if pivoted QR gets implemented in julia
     @test_approx_eq q'*full(q, thin=false) eye(n)
     @test_approx_eq q*full(q, thin=false)' eye(n)
-    @test_approx_eq q*r isa(qrpa, QRPivoted) ? a[:,p] : a[:,1:5]
-    @test_approx_eq isa(qrpa, QRPivoted) ? q*r[:,invperm(p)] : q*r a[:,1:5]
+    @test_approx_eq q*r isa(qrpa, Base.QRPivoted) ? a[:,p] : a[:,1:5]
+    @test_approx_eq isa(qrpa, Base.QRPivoted) ? q*r[:,invperm(p)] : q*r a[:,1:5]
 
 debug && println("symmetric eigen-decomposition")
     if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
