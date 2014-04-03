@@ -115,8 +115,8 @@ function dlm_fill{T}(cells::Array{T,2}, offarr::Vector{Vector{Int}}, sbuff::Stri
         (row < 1) && continue
         (row > maxrow) && break
 
-        while lastrow < row
-            (lastcol == maxcol) && (lastcol = 0; lastrow += 1)
+        while ((row - lastrow) > 1) || ((row > lastrow) && (lastcol < maxcol))
+            (lastcol == maxcol) && (lastcol = 0)
             for cidx in (lastcol+1):maxcol
                 if (T <: String) || (T == Any)
                     cells[lastrow,cidx] = SubString(sbuff, 1, 0)
@@ -127,7 +127,7 @@ function dlm_fill{T}(cells::Array{T,2}, offarr::Vector{Vector{Int}}, sbuff::Stri
                 end
             end
             lastcol = maxcol
-        (lastrow == row) && break
+            lastrow += 1
         end
 
         endpos = prevind(sbuff, nextind(sbuff,endpos))
