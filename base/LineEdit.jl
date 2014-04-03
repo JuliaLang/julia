@@ -54,6 +54,14 @@ end
 
 input_string(s::PromptState) = bytestring(pointer(s.input_buffer.data), s.input_buffer.size)
 
+input_string_newlines(s::PromptState) = count(c->(c == '\n'), input_string(s))
+function input_string_newlines_aftercursor(s::PromptState)
+    str = input_string(s)
+    length(str) == 0 && return 0
+    rest = str[nextind(str, position(s.input_buffer)):end]
+    return count(c->(c == '\n'), rest)
+end
+
 abstract HistoryProvider
 abstract CompletionProvider
 
@@ -97,6 +105,8 @@ function show_completions(s::PromptState, completions)
     num_cols = max(div(width(LineEdit.terminal(s)), colmax+2), 1)
     entries_per_col, r = divrem(length(completions), num_cols)
     entries_per_col += r != 0
+    # skip any lines of input after the cursor
+    cmove_down(LineEdit.terminal(s), input_string_newlines_aftercursor(s))
     println(LineEdit.terminal(s))
     for row = 1:entries_per_col
         for col = 0:num_cols
@@ -106,6 +116,10 @@ function show_completions(s::PromptState, completions)
                 print(LineEdit.terminal(s), completions[idx])
             end
         end
+        println(LineEdit.terminal(s))
+    end
+    # make space for the prompt
+    for i = 1:input_string_newlines(s)
         println(LineEdit.terminal(s))
     end
 end
