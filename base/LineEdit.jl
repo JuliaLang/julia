@@ -704,7 +704,7 @@ function keymap_gen_body(dict, subdict::Dict, level)
         c == '\0' && continue
         cblock = Expr(:if, :($bc == $c))
         push!(cblock.args, keymap_gen_body(dict, subdict[c], level+1))
-        isa(cblock, Expr) && push!(cblock.args, last_if)
+        push!(cblock.args, last_if)
         last_if = cblock
     end
 
