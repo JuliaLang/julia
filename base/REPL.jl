@@ -406,14 +406,7 @@ function find_hist_file()
     elseif haskey(ENV,"JULIA_HISTORY")
         return ENV["JULIA_HISTORY"]
     else
-        @unix_only return joinpath(ENV["HOME"], filename)
-        @windows_only begin
-            if haskey(ENV,"HOMEDRIVE") && haskey(ENV,"HOMEPATH")
-                return joinpath(ENV["HOMEDRIVE"], ENV["HOMEPATH"], filename)
-            else
-                return joinpath(ENV["AppData"], "julia", "history2")
-            end
-        end
+        return joinpath(homedir(), filename)
     end
 end
 
