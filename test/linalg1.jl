@@ -1,7 +1,6 @@
 debug = false
 
-import Base.LinAlg
-import Base.LinAlg: BlasComplex, BlasFloat, BlasReal
+import Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted
 
 n     = 10
 srand(1234321)
