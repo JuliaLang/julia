@@ -222,6 +222,7 @@ function completions(string, pos)
             append!(suggestions, filter(readdir(Pkg.dir())) do pname
                 pname[1] != '.' &&
                 pname != "METADATA" &&
+                pname != "REQUIRE" &&
                 beginswith(pname, s)
             end)
         end
