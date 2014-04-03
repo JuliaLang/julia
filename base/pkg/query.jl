@@ -90,16 +90,21 @@ function check_requirements(reqs::Requires, deps::Dict{ByteString,Dict{VersionNu
         if !any([(vn in vs) for vn in keys(deps[p])])
             remaining_vs = VersionSet()
             err_msg = "fixed packages introduce conflicting requirements for $p: \n"
+            available_list = sort(collect(keys(deps[p])))
             for (p1,f1) in fix
                 f1r = f1.requires
                 haskey(f1r, p) || continue
-                err_msg *= "         $p1 requires versions $(f1r[p])\n"
+                err_msg *= "         $p1 requires versions $(f1r[p])"
+                if !any([vn in f1r[p] for vn in available_list])
+                    err_msg *= " [none of the available versions can satisfy this requirement]"
+                end
+                err_msg *= "\n"
                 remaining_vs = intersect(remaining_vs, f1r[p])
             end
             if isempty(remaining_vs)
-                err_msg *= "       intersection is empty"
+                err_msg *= "       the requirements are unsatisfiable because their intersection is empty"
             else
-                err_msg *= "       intersection is $remaining_vs; available versions are $(join(sort(collect(keys(deps[p]))), ", ", " and "))"
+                err_msg *= "       available versions are $(join(available_list, ", ", " and "))"
             end
             error(err_msg)
         end
