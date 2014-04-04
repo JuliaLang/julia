@@ -1,6 +1,6 @@
 # linalg tests take the longest - start them off first
 testnames = [
-    "linalg1", "linalg2", "core", "keywordargs", "numbers", "strings",
+    "linalg", "core", "keywordargs", "numbers", "strings",
     "collections", "hashing", "remote", "iobuffer", "arrayops", "simdloop",
     "blas", "fft", "dsp", "sparse", "bitarray", "random", "math",
     "functional", "bigint", "sorting", "statistics", "spawn",
@@ -20,7 +20,7 @@ tests = ARGS==["all"] ? testnames : ARGS
 if "linalg" in tests
     # specifically selected case
     filter!(x -> x != "linalg", tests)
-    prepend!(tests, ["linalg1", "linalg2"])
+    prepend!(tests, ["linalg1", "linalg2", "linalg3"])
 end
 
 

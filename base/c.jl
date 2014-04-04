@@ -74,6 +74,9 @@ sigatomic_end() = ccall(:jl_sigatomic_end, Void, ())
 disable_sigint(f::Function) = try sigatomic_begin(); f(); finally sigatomic_end(); end
 reenable_sigint(f::Function) = try sigatomic_end(); f(); finally sigatomic_begin(); end
 
+# flush C stdio output from external libraries
+flush_cstdio() = ccall(:jl_flush_cstdio, Void, ())
+
 function find_library{T<:ByteString, S<:ByteString}(libnames::Array{T,1}, extrapaths::Array{S,1}=ASCIIString[])
     for lib in libnames
         for path in extrapaths
@@ -91,4 +94,33 @@ function find_library{T<:ByteString, S<:ByteString}(libnames::Array{T,1}, extrap
         end
     end
     return ""
+end
+
+function ccallable(f::Callable, rt::Type, argt::(Type...), name::Union(String,Symbol)=string(f))
+    ccall(:jl_extern_c, Void, (Any, Any, Any, Ptr{Uint8}), f, rt, argt, name)
+end
+
+function ccallable(f::Callable, argt::(Type...), name::Union(String,Symbol)=string(f))
+    ccall(:jl_extern_c, Void, (Any, Ptr{Void}, Any, Ptr{Uint8}), f, C_NULL, argt, name)
+end
+
+macro ccallable(def)
+    if isa(def,Expr) && (def.head === :(=) || def.head === :function)
+        sig = def.args[1]
+        if sig.head === :call
+            name = sig.args[1]
+            at = map(sig.args[2:end]) do a
+                if isa(a,Expr) && a.head === :(::)
+                    a.args[2]
+                else
+                    :Any
+                end
+            end
+            return quote
+                $(esc(def))
+                ccallable($(esc(name)), $(Expr(:tuple, map(esc, at)...)))
+            end
+        end
+    end
+    error("expected method definition in @ccallable")
 end

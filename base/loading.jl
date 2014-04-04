@@ -24,6 +24,14 @@ end
 find_in_node1_path(name) = myid()==1 ?
     find_in_path(name) : remotecall_fetch(1, find_in_path, name)
 
+function find_source_file(file)
+    (isabspath(file) || isfile(file)) && return file
+    file2 = find_in_path(file)
+    file2 != nothing && return file2
+    file2 = "$JULIA_HOME/../share/julia/base/$file"
+    isfile(file2) ? file2 : nothing
+end
+
 # Store list of files and their load time
 package_list = (ByteString=>Float64)[]
 # to synchronize multiple tasks trying to require something

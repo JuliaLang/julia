@@ -28,21 +28,18 @@ function complete_symbol(sym, ffunc)
     for name in strs[1:(end-1)]
         s = symbol(name)
         if lookup_module
-            if isdefined(mod, s)
-                b = mod.(s)
-                if isa(b, Module)
-                    mod = b
-                elseif Base.isstructtype(typeof(b))
-                    lookup_module = false
-                    t = typeof(b)
-                else
-                    # A.B.C where B is neither a type nor a
-                    # module. Will have to be revisited if
-                    # overloading is allowed
-                    return UTF8String[]
-                end
+            # If we're considering A.B.C where B doesn't exist in A, give up
+            isdefined(mod, s) || return UTF8String[]
+            b = mod.(s)
+            if isa(b, Module)
+                mod = b
+            elseif Base.isstructtype(typeof(b))
+                lookup_module = false
+                t = typeof(b)
             else
-                # A.B.C where B doesn't exist in A. Give up
+                # A.B.C where B is neither a type nor a
+                # module. Will have to be revisited if
+                # overloading is allowed
                 return UTF8String[]
             end
         else
@@ -50,19 +47,14 @@ function complete_symbol(sym, ffunc)
             fields = t.names
             found = false
             for i in 1:length(fields)
-                if s == fields[i]
-                    t = t.types[i]
-                    if !Base.isstructtype(t)
-                        return UTF8String[]
-                    end
-                    found = true
-                    break
-                end
+                s == fields[i] || continue
+                t = t.types[i]
+                Base.isstructtype(t) || return UTF8String[]
+                found = true
+                break
             end
-            if !found
-                #Same issue as above, but with types instead of modules
-                return UTF8String[]
-            end
+            #Same issue as above, but with types instead of modules
+            found || return UTF8String[]
         end
     end
 
@@ -70,7 +62,7 @@ function complete_symbol(sym, ffunc)
 
     suggestions = UTF8String[]
     if lookup_module
-        # We will exlcude the results that the user does not want, as well
+        # We will exclude the results that the user does not want, as well
         # as excluding Main.Main.Main, etc., because that's most likely not what
         # the user wants
         p = s->(ffunc(mod, s) && s != module_name(mod))
@@ -146,7 +138,8 @@ function complete_methods(input::String)
     UTF8String[string(m) for m in methods(fn)]
 end
 
-const non_word_chars = " \t\n\"\\'`@\$><=:;|&{}()[].,+-*/?%^~"
+const non_word_chars = [" \t\n\"\\'`@\$><=:;|&{}()[],+-*/?%^~"...]
+const non_filename_chars = [" \t\n\"\\'`@\$><=;|&{("...]
 
 # Aux function to detect whether we're right after a
 # using or import keyword
@@ -162,59 +155,25 @@ function afterusing(string::ByteString, startpos::Int)
 end
 
 function completions(string, pos)
-    startpos = min(pos, 1)
-    dotpos = 0
-    instring = false
-    incmd = false
-    infunc = false
-    escaped = false
-    nearquote = false
-    i = start(string)
-    while i <= pos
-        c,j = next(string, i)
-        if c == '\\'
-            instring && (escaped $= true)
-            nearquote = false
-        elseif c == '\''
-            !instring && (nearquote = true)
-        elseif c == '"'
-            (!escaped && !nearquote && !incmd) && (instring $= true)
-            escaped = nearquote = false
-        elseif c == '`'
-            (!escaped && !nearquote && !instring) && (incmd $= true)
-            escaped = nearquote = false
-        else
-            escaped = nearquote = false
-        end
-        if c < 0x80
-            if instring || incmd
-                c in " \t\n\"\\'`@\$><=;|&{(" && (startpos = j)
-            elseif c in non_word_chars
-                if c == '.'
-                    dotpos = i
-                elseif i == pos && c == '('
-                    infunc = true
-                else
-                    startpos = j
-                end
-            end
-        end
-        i = j
-    end
-
-    if instring || incmd
+    inc_tag = Base.incomplete_tag(parse(string[1:pos], raise=false))
+    if inc_tag in [:cmd, :string]
+        startpos = nextind(string, rsearch(string, non_filename_chars, pos))
         r = startpos:pos
         paths = complete_path(string[r])
-        if instring && length(paths) == 1
+        if inc_tag == :string && length(paths) == 1
             paths[1] *= "\""
         end
         return sort(paths), r, true
+    elseif inc_tag == :other && string[pos] == '('
+        endpos = prevind(string, pos)
+        startpos = nextind(string, rsearch(string, non_word_chars, endpos))
+        return complete_methods(string[startpos:endpos]), startpos:endpos, false
+    elseif inc_tag == :comment
+        return UTF8String[], 0:-1, false
     end
 
-    if infunc
-        # We're right after the start of a function call
-        return (complete_methods(string[startpos:pos-1]), startpos:pos, false)
-    end
+    dotpos = rsearch(string, '.', pos)
+    startpos = nextind(string, rsearch(string, non_word_chars, pos))
 
     ffunc = (mod,x)->true
     suggestions = UTF8String[]
@@ -230,6 +189,7 @@ function completions(string, pos)
             append!(suggestions, filter(readdir(Pkg.dir())) do pname
                 pname[1] != '.' &&
                 pname != "METADATA" &&
+                pname != "REQUIRE" &&
                 beginswith(pname, s)
             end)
         end
