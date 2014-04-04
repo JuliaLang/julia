@@ -303,9 +303,10 @@ function history_move_prefix(s::LineEdit.MIState,
     buf = LineEdit.buffer(s)
     n = buf.ptr - 1
     prefix = bytestring(buf.data[1:min(n,buf.size)])
+    allbuf = bytestring(buf)
     idxs = backwards ? ((hist.cur_idx-1):-1:1) : ((hist.cur_idx+1):length(hist.history))
     for idx in idxs
-        if beginswith(hist.history[idx], prefix)
+        if beginswith(hist.history[idx], prefix) && hist.history[idx] != allbuf
             history_move(s, hist, idx)
             seek(LineEdit.buffer(s), n)
             LineEdit.refresh_line(s)

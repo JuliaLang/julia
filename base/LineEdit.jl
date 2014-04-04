@@ -704,7 +704,7 @@ function keymap_gen_body(dict, subdict::Dict, level)
         c == '\0' && continue
         cblock = Expr(:if, :($bc == $c))
         push!(cblock.args, keymap_gen_body(dict, subdict[c], level+1))
-        isa(cblock, Expr) && push!(cblock.args, last_if)
+        push!(cblock.args, last_if)
         last_if = cblock
     end
 
@@ -917,60 +917,64 @@ end
 function setup_search_keymap(hp)
     p = HistoryPrompt(hp)
     pkeymap = {
-        "^R"     => :(LineEdit.history_set_backward(data, true); LineEdit.history_next_result(s, data)),
-        "^S"     => :(LineEdit.history_set_backward(data, false); LineEdit.history_next_result(s, data)),
-        '\r'     => s->accept_result(s, p),
-        '\n'     => '\r',
-        '\t'     => nothing, #TODO: Maybe allow tab completion in R-Search?
+        "^R"      => :(LineEdit.history_set_backward(data, true); LineEdit.history_next_result(s, data)),
+        "^S"      => :(LineEdit.history_set_backward(data, false); LineEdit.history_next_result(s, data)),
+        '\r'      => s->accept_result(s, p),
+        '\n'      => '\r',
+        '\t'      => nothing, #TODO: Maybe allow tab completion in R-Search?
 
         # Backspace/^H
-        '\b'     => :(LineEdit.edit_backspace(data.query_buffer) ?
+        '\b'      => :(LineEdit.edit_backspace(data.query_buffer) ?
                         LineEdit.update_display_buffer(s, data) : beep(LineEdit.terminal(s))),
-        127      => '\b',
+        127       => '\b',
         # Meta Backspace
-        "\e\b"   => :(LineEdit.edit_delete_prev_word(data.query_buffer) ?
+        "\e\b"    => :(LineEdit.edit_delete_prev_word(data.query_buffer) ?
                         LineEdit.update_display_buffer(s, data) : beep(LineEdit.terminal(s))),
-        "\e\x7f" => "\e\b",
+        "\e\x7f"  => "\e\b",
         # ^C and ^D
-        "^C"     => :(LineEdit.edit_clear(data.query_buffer);
-                      LineEdit.edit_clear(data.response_buffer);
-                      LineEdit.update_display_buffer(s, data);
-                      LineEdit.reset_state(data.histprompt.hp);
-                      LineEdit.transition(s, data.parent)),
-        "^D"     => "^C",
+        "^C"      => :(LineEdit.edit_clear(data.query_buffer);
+                       LineEdit.edit_clear(data.response_buffer);
+                       LineEdit.update_display_buffer(s, data);
+                       LineEdit.reset_state(data.histprompt.hp);
+                       LineEdit.transition(s, data.parent)),
+        "^D"      => "^C",
         # ^K
-        11       => s->transition(s, state(s, p).parent),
+        11        => s->transition(s, state(s, p).parent),
         # ^Y
-        25       => :(LineEdit.edit_yank(s); LineEdit.update_display_buffer(s, data)),
+        25        => :(LineEdit.edit_yank(s); LineEdit.update_display_buffer(s, data)),
         # ^U
-        21       => :(LineEdit.edit_clear(data.query_buffer);
-                      LineEdit.edit_clear(data.response_buffer);
-                      LineEdit.update_display_buffer(s, data)),
+        21        => :(LineEdit.edit_clear(data.query_buffer);
+                       LineEdit.edit_clear(data.response_buffer);
+                       LineEdit.update_display_buffer(s, data)),
         # Right Arrow
-        "\e[C"   => s->(accept_result(s, p); edit_move_right(s)),
+        "\e[C"    => s->(accept_result(s, p); edit_move_right(s)),
         # Left Arrow
-        "\e[D"   => s->(accept_result(s, p); edit_move_left(s)),
+        "\e[D"    => s->(accept_result(s, p); edit_move_left(s)),
         # Up Arrow
-        "\e[A"   => s->(accept_result(s, p); edit_move_up(s)),
+        "\e[A"    => s->(accept_result(s, p); edit_move_up(s)),
         # Down Arrow
-        "\e[B"   => s->(accept_result(s, p); edit_move_down(s)),
+        "\e[B"    => s->(accept_result(s, p); edit_move_down(s)),
         # ^B
-        2        => s->(accept_result(s, p); edit_move_left(s)),
+        2         => s->(accept_result(s, p); edit_move_left(s)),
         # ^F
-        6        => s->(accept_result(s, p); edit_move_right(s)),
+        6         => s->(accept_result(s, p); edit_move_right(s)),
         # Meta B
-        "\eb"    => s->(accept_result(s, p); edit_move_word_left(s)),
+        "\eb"     => s->(accept_result(s, p); edit_move_word_left(s)),
         # Meta F
-        "\ef"    => s->(accept_result(s, p); edit_move_word_right(s)),
+        "\ef"     => s->(accept_result(s, p); edit_move_word_right(s)),
+        # Ctrl-Left Arrow
+        "\e[1;5D" => "\eb",
+        # Ctrl-Right Arrow
+        "\e[1;5C" => "\ef",
         # ^A
-        1        => s->(accept_result(s, p); move_line_start(s)),
+        1         => s->(accept_result(s, p); move_line_start(s)),
         # ^E
-        5        => s->(accept_result(s, p); move_line_end(s)),
-        "^Z"     => :(return @unix? :suspend : :ok),
+        5         => s->(accept_result(s, p); move_line_end(s)),
+        "^Z"      => :(return :suspend),
         # Try to catch all Home/End keys
-        "\e[H"   => s->(accept_result(s, p); move_input_start(s)),
-        "\e[F"   => s->(accept_result(s, p); move_input_end(s)),
-        "*"      => :(LineEdit.edit_insert(data.query_buffer, c1); LineEdit.update_display_buffer(s, data))
+        "\e[H"    => s->(accept_result(s, p); move_input_start(s)),
+        "\e[F"    => s->(accept_result(s, p); move_input_end(s)),
+        "*"       => :(LineEdit.edit_insert(data.query_buffer, c1); LineEdit.update_display_buffer(s, data))
     }
     @eval @LineEdit.keymap keymap_func $([pkeymap, escape_defaults])
     p.keymap_func = keymap_func
@@ -1085,6 +1089,10 @@ const default_keymap =
     "\eb" => edit_move_word_left,
     # Meta F
     "\ef" => edit_move_word_right,
+    # Ctrl-Left Arrow
+    "\e[1;5D" => "\eb",
+    # Ctrl-Right Arrow
+    "\e[1;5C" => "\ef",
     # Meta Enter
     "\e\r" => :(LineEdit.edit_insert(s, '\n')),
     "\e\n" => "\e\r",
@@ -1117,7 +1125,7 @@ const default_keymap =
         transition(s, :reset)
         LineEdit.refresh_line(s)
     end,
-    "^Z" => :(return @unix? :suspend : :ok),
+    "^Z" => :(return :suspend),
     # Right Arrow
     "\e[C" => edit_move_right,
     # Left Arrow
@@ -1237,7 +1245,7 @@ function run_interface(terminal, m::ModalInterface)
         p = s.current_mode
         buf, ok, suspend = prompt!(terminal, m, s)
         while suspend
-            ccall(:jl_repl_raise_sigtstp, Cint, ())
+            @unix_only ccall(:jl_repl_raise_sigtstp, Cint, ())
             buf, ok, suspend = prompt!(terminal, m, s)
         end
         s.mode_state[s.current_mode].p.on_done(s, buf, ok)
@@ -1267,8 +1275,10 @@ function prompt!(terminal, prompt, s = init_state(terminal, prompt))
                 stop_reading(terminal)
                 return buffer(s), true, false
             elseif state == :suspend
-                stop_reading(terminal)
-                return buffer(s), true, true
+                @unix_only begin
+                    stop_reading(terminal)
+                    return buffer(s), true, true
+                end
             else
                 @assert state == :ok
             end

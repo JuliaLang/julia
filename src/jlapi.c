@@ -44,14 +44,19 @@ DLLEXPORT void *jl_eval_string(char *str);
 
 int jl_is_initialized(void) { return jl_main_module!=NULL; }
 
-// argument is the usr/lib directory where libjulia is, or NULL to guess.
+// First argument is the usr/lib directory where libjulia is, or NULL to guess.
 // if that doesn't work, try the full path to the "lib" directory that
 // contains lib/julia/sys.ji
-DLLEXPORT void jl_init(char *julia_home_dir)
+// Second argument is the path of a system image file (*.ji) relative to the
+// first argument path, or relative to the default julia home dir. The default
+// is something like ../lib/julia/sys.ji
+DLLEXPORT void jl_init_with_image(char *julia_home_dir, char *image_relative_path)
 {
     if (jl_is_initialized()) return;
     libsupport_init();
-    char *image_file = jl_locate_sysimg(julia_home_dir, JL_SYSTEM_IMAGE_PATH);
+    if (image_relative_path == NULL)
+        image_relative_path = JL_SYSTEM_IMAGE_PATH;
+    char *image_file = jl_locate_sysimg(julia_home_dir, image_relative_path);
     julia_init(image_file);
     jl_set_const(jl_core_module, jl_symbol("JULIA_HOME"),
                  jl_cstr_to_string(julia_home));
@@ -60,6 +65,11 @@ DLLEXPORT void jl_init(char *julia_home_dir)
     jl_eval_string("Base.init_head_sched()");
     jl_eval_string("Base.init_load_path()");
     jl_exception_clear();
+}
+
+DLLEXPORT void jl_init(char *julia_home_dir)
+{
+    jl_init_with_image(julia_home_dir, JL_SYSTEM_IMAGE_PATH);
 }
 
 DLLEXPORT void *jl_eval_string(char *str)

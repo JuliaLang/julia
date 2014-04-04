@@ -615,13 +615,18 @@ void jl_cstyle_compile(jl_function_t *f)
     }
 }
 
-extern "C" DLLEXPORT
-void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
+// Get the LLVM Function* for the C-callable entry point for a certain function
+// and argument types. If rt is NULL then whatever return type is present is
+// accepted.
+static Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
 {
-    JL_TYPECHK(jl_function_ptr, type, rt);
+    if (rt) {
+        JL_TYPECHK(jl_function_ptr, type, rt);
+    }
     JL_TYPECHK(jl_function_ptr, tuple, argt);
     JL_TYPECHK(jl_function_ptr, type, argt);
-    if (jl_is_gf(f) && (jl_is_leaf_type(rt) || rt == (jl_value_t*)jl_bottom_type) && jl_is_leaf_type(argt)) {
+    if (jl_is_gf(f) && (rt == NULL || jl_is_leaf_type(rt) || rt == (jl_value_t*)jl_bottom_type) &&
+        jl_is_leaf_type(argt)) {
         jl_function_t *ff = jl_get_specialization(f, (jl_tuple_t*)argt);
         if (ff != NULL && ff->env==(jl_value_t*)jl_null && ff->linfo != NULL) {
             if (ff->linfo->cFunctionObject == NULL) {
@@ -629,27 +634,48 @@ void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
             }
             if (ff->linfo->cFunctionObject != NULL) {
                 jl_lambda_info_t *li = ff->linfo;
-                jl_value_t *astrt = jl_ast_rettype(li, li->ast);
                 if (!jl_types_equal((jl_value_t*)li->specTypes, argt)) {
                     jl_errorf("cfunction: type signature of %s does not match",
                               li->name->name);
                 }
-                if (!jl_types_equal(astrt, rt) &&
-                    !(astrt==(jl_value_t*)jl_nothing->type && rt==(jl_value_t*)jl_bottom_type)) {
-                    if (astrt == (jl_value_t*)jl_bottom_type) {
-                        jl_errorf("cfunction: %s does not return", li->name->name);
-                    }
-                    else {
-                        jl_errorf("cfunction: return type of %s does not match",
-                                  li->name->name);
+                if (rt != NULL) {
+                    jl_value_t *astrt = jl_ast_rettype(li, li->ast);
+                    if (!jl_types_equal(astrt, rt) &&
+                        !(astrt==(jl_value_t*)jl_nothing->type && rt==(jl_value_t*)jl_bottom_type)) {
+                        if (astrt == (jl_value_t*)jl_bottom_type) {
+                            jl_errorf("cfunction: %s does not return", li->name->name);
+                        }
+                        else {
+                            jl_errorf("cfunction: return type of %s does not match",
+                                      li->name->name);
+                        }
                     }
                 }
-                return jl_ExecutionEngine->getPointerToFunction((Function*)ff->linfo->cFunctionObject);
+                return (Function*)ff->linfo->cFunctionObject;
             }
         }
     }
     jl_error("function is not yet c-callable");
     return NULL;
+}
+
+// get the address of a C-callable entry point for a function
+extern "C" DLLEXPORT
+void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
+{
+    Function *llvmf = jl_cfunction_object(f, rt, argt);
+    assert(llvmf);
+    return jl_ExecutionEngine->getPointerToFunction(llvmf);
+}
+
+// export a C-callable entry point for a function, with a given name
+extern "C" DLLEXPORT
+void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
+{
+    Function *llvmf = jl_cfunction_object(f, rt, argt);
+    if (llvmf) {
+        new GlobalAlias(llvmf->getType(), GlobalValue::ExternalLinkage, name, llvmf, llvmf->getParent());
+    }
 }
 
 // --- native code info, and dump function to IR and ASM ---
@@ -2911,7 +2937,12 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
 static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Function *f)
 {
     std::stringstream funcName;
-    funcName << "jlcall_" << f->getName().str();
+    const std::string &fname = f->getName().str();
+    funcName << "jlcall_";
+    if (fname.compare(0, 6, "julia_") == 0)
+        funcName << fname.substr(6);
+    else
+        funcName << fname;
 
     Function *w = Function::Create(jl_func_sig, Function::ExternalLinkage,
                                    funcName.str(), f->getParent());
@@ -4121,7 +4152,7 @@ static void init_julia_llvm_env(Module *m)
     // Subsequent passes not stripping metadata from terminator
     FPM->add(createInstructionCombiningPass()); 
     FPM->add(createIndVarSimplifyPass());       // Canonicalize indvars
-    //FPM->add(createLoopDeletionPass());         // Delete dead loops
+    FPM->add(createLoopDeletionPass());         // Delete dead loops
     FPM->add(createLoopUnrollPass());           // Unroll small loops
     //FPM->add(createLoopStrengthReducePass());   // (jwb added)
     

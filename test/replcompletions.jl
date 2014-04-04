@@ -14,7 +14,7 @@ test_scomplete(s) = shell_completions(s,endof(s))
 s = ""
 c,r = test_complete(s)
 @test in("CompletionFoo",c)
-@test r == 0:-1
+@test isempty(r)
 @test s[r] == ""
 
 s = "Comp"
