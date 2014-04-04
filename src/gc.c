@@ -675,7 +675,7 @@ static jl_value_t *lookforme = NULL;
 DLLEXPORT void jl_gc_lookfor(jl_value_t *v) { lookforme = v; }
 */
 
-#define MAX_MARK_DEPTH 1000
+#define MAX_MARK_DEPTH 400
 
 static void push_root(jl_value_t *v, int d)
 {
