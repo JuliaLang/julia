@@ -99,8 +99,8 @@ function display_error(io::IO, er, bt)
     end
 end
 
-immutable REPLDisplay <: Display
-    repl::AbstractREPL
+immutable REPLDisplay{R<:AbstractREPL} <: Display
+    repl::R
 end
 function display(d::REPLDisplay, ::MIME"text/plain", x)
     io = outstream(d.repl)
@@ -437,7 +437,7 @@ function respond(f, d, main, req, rep)
     end
 end
 
-function reset(d::REPLDisplay)
+function reset(d::REPLDisplay{LineEditREPL})
     raw!(d.repl.t, false)
     print(Base.text_colors[:normal])
 end
@@ -599,9 +599,8 @@ function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,
 
     a = Dict{Any,Any}[hkeymap, repl_keymap, LineEdit.history_keymap(hp), LineEdit.default_keymap, LineEdit.escape_defaults]
     prepend!(a, extra_repl_keymap)
-    @eval @LineEdit.keymap repl_keymap_func $(a)
 
-    main_prompt.keymap_func = repl_keymap_func
+    main_prompt.keymap_func = @eval @LineEdit.keymap $(a)
 
     const mode_keymap = {
         '\b' => function (s)
@@ -626,9 +625,7 @@ function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,
 
     b = Dict{Any,Any}[hkeymap, mode_keymap, LineEdit.history_keymap(hp), LineEdit.default_keymap, LineEdit.escape_defaults]
 
-    @eval @LineEdit.keymap mode_keymap_func $(b)
-
-    shell_mode.keymap_func = help_mode.keymap_func = mode_keymap_func
+    shell_mode.keymap_func = help_mode.keymap_func = @eval @LineEdit.keymap $(b)
 
     ModalInterface([main_prompt, shell_mode, help_mode,hkp])
 end
@@ -671,9 +668,8 @@ answer_color(r::LineEditREPL) = r.answer_color
 answer_color(r::StreamREPL) = r.answer_color
 answer_color(::BasicREPL) = Base.text_colors[:white]
 
-print_response(d::REPLDisplay, r::StreamREPL,args...) = print_response(d, r.stream,r, args...)
-print_response(d::REPLDisplay, r::LineEditREPL,args...) = print_response(d, r.t, r, args...)
-print_response(d::REPLDisplay, args...) = print_response(d, d.repl, args...)
+print_response(d::REPLDisplay{StreamREPL}, args...)   = print_response(d, d.repl.stream, d.repl, args...)
+print_response(d::REPLDisplay{LineEditREPL}, args...) = print_response(d, d.repl.t, d.repl, args...)
 
 function run_repl(stream::AsyncStream)
     repl =

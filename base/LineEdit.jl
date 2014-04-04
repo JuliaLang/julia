@@ -5,7 +5,7 @@ using Base.Terminals
 import Base.Terminals: raw!, width, height, cmove, getX,
                        getY, clear_line, beep
 
-import Base: ensureroom, peek
+import Base: ensureroom, peek, show
 
 abstract TextInterface
 
@@ -38,6 +38,8 @@ type Prompt <: TextInterface
     on_done
     hist
 end
+
+show(io::IO, x::Prompt) = show(io, string("Prompt(\"", x.prompt, "\",...)"))
 
 immutable InputAreaState
     num_rows::Int64
@@ -786,11 +788,11 @@ function keymap_unify(keymaps)
     return ret
 end
 
-macro keymap(func, keymaps)
+macro keymap(keymaps)
     dict = keymap_unify(keymap_prepare(keymaps))
     body = keymap_gen_body(dict, dict)
     esc(quote
-        function $(func)(s, data)
+        (s, data) -> begin
             $body
             return :ok
         end
@@ -976,8 +978,7 @@ function setup_search_keymap(hp)
         "\e[F"    => s->(accept_result(s, p); move_input_end(s)),
         "*"       => :(LineEdit.edit_insert(data.query_buffer, c1); LineEdit.update_display_buffer(s, data))
     }
-    @eval @LineEdit.keymap keymap_func $([pkeymap, escape_defaults])
-    p.keymap_func = keymap_func
+    p.keymap_func = @eval @LineEdit.keymap $([pkeymap, escape_defaults])
     keymap = {
         "^R"    => s->(enter_search(s, p, true)),
         "^S"    => s->(enter_search(s, p, false)),
@@ -1210,7 +1211,7 @@ function reset_state(s::MIState)
     end
 end
 
-@LineEdit.keymap default_keymap_func [LineEdit.default_keymap, LineEdit.escape_defaults]
+const default_keymap_func = @LineEdit.keymap [LineEdit.default_keymap, LineEdit.escape_defaults]
 
 function Prompt(prompt;
     first_prompt = prompt,
