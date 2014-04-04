@@ -1412,6 +1412,21 @@ let
           ex == Expr(:error, "invalid assignment location \"#<julia_value>\"")
 end
 
+# make sure that incomplete tags are detected correctly
+# (i.e. error messages in src/julia-parser.scm must be matched correctly
+# by the code in base/client.jl)
+for (str, tag) in ["" => :none, "\"" => :string, "#=" => :comment, "'" => :char,
+                   "`" => :cmd, "begin;" => :block, "quote;" => :block,
+                   "let;" => :block, "for i=1;" => :block, "function f();" => :block,
+                   "f() do x;" => :block, "module X;" => :block, "type X;" => :block,
+                   "immutable X;" => :block, "(" => :other, "[" => :other,
+                   "{" => :other, "begin" => :other, "quote" => :other,
+                   "let" => :other, "for" => :other, "function" => :other,
+                   "f() do" => :other, "module" => :other, "type" => :other,
+                   "immutable" => :other]
+    @test Base.incomplete_tag(parse(str, raise=false)) == tag
+end
+
 # issue #6031
 macro m6031(x); x; end
 @test @m6031([2,4,6])[3] == 6

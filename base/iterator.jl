@@ -10,7 +10,8 @@ enumerate(itr) = Enumerate(itr)
 length(e::Enumerate) = length(e.itr)
 start(e::Enumerate) = (1, start(e.itr))
 function next(e::Enumerate, state)
-    (state[1],next(e.itr,state[2])[1]), (state[1]+1,next(e.itr,state[2])[2])
+    n = next(e.itr,state[2])
+    (state[1],n[1]), (state[1]+1,n[2])
 end
 done(e::Enumerate, state) = done(e.itr, state[2])
 

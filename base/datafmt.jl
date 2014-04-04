@@ -115,8 +115,8 @@ function dlm_fill{T}(cells::Array{T,2}, offarr::Vector{Vector{Int}}, sbuff::Stri
         (row < 1) && continue
         (row > maxrow) && break
 
-        while lastrow < row
-            (lastcol == maxcol) && (lastcol = 0; lastrow += 1)
+        while ((row - lastrow) > 1) || ((row > lastrow) && (lastcol < maxcol))
+            (lastcol == maxcol) && (lastcol = 0)
             for cidx in (lastcol+1):maxcol
                 if (T <: String) || (T == Any)
                     cells[lastrow,cidx] = SubString(sbuff, 1, 0)
@@ -127,7 +127,7 @@ function dlm_fill{T}(cells::Array{T,2}, offarr::Vector{Vector{Int}}, sbuff::Stri
                 end
             end
             lastcol = maxcol
-        (lastrow == row) && break
+            lastrow += 1
         end
 
         endpos = prevind(sbuff, nextind(sbuff,endpos))
@@ -204,9 +204,11 @@ function dlm_dims{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, ign_adj_dlm::Bool, al
     try
         slen = sizeof(dbuff)
         col_start_idx = 1
+        was_cr = false
         while idx <= slen
             val,idx = next(dbuff, idx)
             is_eol = (val == eol)
+            is_cr = (eol == '\n') && (val == '\r')
             is_dlm = is_eol ? false : is_default_dlm ? in(val, _default_delims) : (val == dlm)
             is_quote = (val == qchar)
 
@@ -220,7 +222,7 @@ function dlm_dims{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, ign_adj_dlm::Bool, al
                 elseif is_eol
                     nrows += 1
                     col += 1
-                    offidx = store_column(offsets, nrows, col, false, col_start_idx, idx-2, offidx)
+                    offidx = store_column(offsets, nrows, col, false, col_start_idx, idx - (was_cr ? 3 : 2), offidx)
                     col_start_idx = idx
                     ncols = max(ncols, col)
                     col = 0
@@ -230,7 +232,7 @@ function dlm_dims{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, ign_adj_dlm::Bool, al
                 is_quote && (state = 3)
             elseif 0 == state   # begin field
                 if is_quote
-                    state = allow_quote ? 1 : 2
+                    state = (allow_quote && !was_cr) ? 1 : 2
                     expct_col = false
                 elseif is_dlm
                     if !ign_adj_dlm 
@@ -243,20 +245,20 @@ function dlm_dims{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, ign_adj_dlm::Bool, al
                     nrows += 1
                     if expct_col 
                         col += 1
-                        offidx = store_column(offsets, nrows, col, false, col_start_idx, idx-2, offidx)
+                        offidx = store_column(offsets, nrows, col, false, col_start_idx, idx - (was_cr ? 3 : 2), offidx)
                     end
                     col_start_idx = idx
                     ncols = max(ncols, col)
                     col = 0
                     expct_col = false
-                else
+                elseif !is_cr
                     state = 2
                     expct_col = false
                 end
             elseif 3 == state   # second quote
-                if is_quote
+                if is_quote && !was_cr
                     state = 1
-                elseif is_dlm
+                elseif is_dlm && !was_cr
                     state = 0
                     col += 1
                     offidx = store_column(offsets, nrows+1, col, true, col_start_idx, idx-2, offidx)
@@ -265,16 +267,17 @@ function dlm_dims{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, ign_adj_dlm::Bool, al
                 elseif is_eol
                     nrows += 1
                     col += 1
-                    offidx = store_column(offsets, nrows, col, true, col_start_idx, idx-2, offidx)
+                    offidx = store_column(offsets, nrows, col, true, col_start_idx, idx - (was_cr ? 3 : 2), offidx)
                     col_start_idx = idx
                     ncols = max(ncols, col)
                     col = 0
                     state = 0
-                else
-                    error_str = "unexpected character '$(char(val))' after quoted field at row $(nrows+1) column $(col+1)"
+                elseif (is_cr && was_cr) || !is_cr
+                    error_str = escape_string("unexpected character '$(char(val))' after quoted field at row $(nrows+1) column $(col+1)")
                     break
                 end
             end
+            was_cr = is_cr
         end
 
         if isempty(error_str)

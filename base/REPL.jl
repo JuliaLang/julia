@@ -13,13 +13,17 @@ import Base: AsyncStream,
              writemime
 
 import Base.Terminals: raw!
-import Base.LineEdit: CompletionProvider,
-                      HistoryProvider,
-                      add_history,
-                      complete_line,
-                      history_prev,
-                      history_next,
-                      history_search
+
+import Base.LineEdit:
+    CompletionProvider,
+    HistoryProvider,
+    add_history,
+    complete_line,
+    history_next,
+    history_next_prefix,
+    history_prev,
+    history_prev_prefix,
+    history_search
 
 abstract AbstractREPL
 
@@ -293,6 +297,30 @@ function history_next(s::LineEdit.MIState, hist::REPLHistoryProvider)
     end
 end
 
+function history_move_prefix(s::LineEdit.MIState,
+                             hist::REPLHistoryProvider,
+                             backwards::Bool)
+    buf = LineEdit.buffer(s)
+    n = buf.ptr - 1
+    prefix = bytestring(buf.data[1:min(n,buf.size)])
+    allbuf = bytestring(buf)
+    idxs = backwards ? ((hist.cur_idx-1):-1:1) : ((hist.cur_idx+1):length(hist.history))
+    for idx in idxs
+        if beginswith(hist.history[idx], prefix) && hist.history[idx] != allbuf
+            history_move(s, hist, idx)
+            seek(LineEdit.buffer(s), n)
+            LineEdit.refresh_line(s)
+            return
+        end
+    end
+    Terminals.beep(LineEdit.terminal(s))
+end
+history_next_prefix(s::LineEdit.MIState, hist::REPLHistoryProvider) =
+    hist.cur_idx == length(hist.history) ?
+        history_next(s, hist) : history_move_prefix(s, hist, false)
+history_prev_prefix(s::LineEdit.MIState, hist::REPLHistoryProvider) =
+    history_move_prefix(s, hist, true)
+
 function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, response_buffer::IOBuffer,
                         backwards::Bool=false, skip_current::Bool=false)
     if !(query_buffer.ptr > 1)
@@ -379,14 +407,7 @@ function find_hist_file()
     elseif haskey(ENV,"JULIA_HISTORY")
         return ENV["JULIA_HISTORY"]
     else
-        @unix_only return joinpath(ENV["HOME"], filename)
-        @windows_only begin
-            if haskey(ENV,"HOMEDRIVE") && haskey(ENV,"HOMEPATH")
-                return joinpath(ENV["HOMEDRIVE"], ENV["HOMEPATH"], filename)
-            else
-                return joinpath(ENV["AppData"], "julia", "history2")
-            end
-        end
+        return joinpath(homedir(), filename)
     end
 end
 
@@ -550,15 +571,16 @@ function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,
             edit_insert(buf,input)
             string = takebuf_string(buf)
             pos = 0
-            while pos <= length(string)
+            sz = length(string.data)
+            while pos <= sz
                 oldpos = pos
                 ast, pos = Base.parse(string, pos, raise=false)
                 # Get the line and strip leading and trailing whitespace
-                line = strip(string[max(oldpos, 1):min(pos-1, length(string))])
+                line = strip(bytestring(string.data[max(oldpos, 1):min(pos-1, sz)]))
                 isempty(line) && continue
                 LineEdit.replace_line(s, line)
                 LineEdit.refresh_line(s)
-                (pos > length(string) && last(string) != '\n') && break
+                (pos > sz && last(string) != '\n') && break
                 if !isa(ast, Expr) || (ast.head != :continue && ast.head != :incomplete)
                     LineEdit.commit_line(s)
                     # This is slightly ugly but ok for now

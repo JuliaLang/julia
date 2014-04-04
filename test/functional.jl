@@ -47,3 +47,11 @@ end
 # zip and filter iterators
 # issue #4718
 @test collect(filter(x->x[1], zip([true, false, true, false],"abcd"))) == {(true,'a'),(true,'c')}
+
+# enumerate (issue #6284)
+let b = IOBuffer("1\n2\n3\n"), a = {}
+    for (i,x) in enumerate(eachline(b))
+        push!(a, (i,x))
+    end
+    @test a == {(1,"1\n"),(2,"2\n"),(3,"3\n")}
+end
