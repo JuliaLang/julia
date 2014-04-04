@@ -1,4 +1,5 @@
 #include <locale.h>
+#include <math.h>
 #include "libsupport.h"
 
 #ifdef __cplusplus
@@ -21,10 +22,10 @@ void libsupport_init(void)
 
         ios_init_stdstreams();
 
-        D_PNAN = strtod("+NaN",NULL);
-        D_NNAN = -strtod("+NaN",NULL);
-        D_PINF = strtod("+Inf",NULL);
-        D_NINF = strtod("-Inf",NULL);
+        D_PNAN = +NAN;
+        D_NNAN = -NAN;
+        D_PINF = +INFINITY;
+        D_NINF = -INFINITY;
         isInitialized=1;
     }
 }
