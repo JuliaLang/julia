@@ -1,6 +1,10 @@
 #ifndef BITVECTOR_H
 #define BITVECTOR_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 DLLEXPORT u_int32_t *bitvector_new(u_int64_t n, int initzero);
 DLLEXPORT
 u_int32_t *bitvector_resize(u_int32_t *b, uint64_t oldsz, uint64_t newsz,
@@ -15,5 +19,9 @@ DLLEXPORT
 u_int64_t bitvector_count(u_int32_t *b, u_int64_t offs, u_int64_t nbits);
 DLLEXPORT
 u_int32_t bitvector_any1(u_int32_t *b, u_int64_t offs, u_int64_t nbits);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
