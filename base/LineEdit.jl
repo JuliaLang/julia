@@ -412,23 +412,22 @@ function edit_move_down(s)
     changed
 end
 
-function memmove(dst::IOBuffer, idst::Int, src::IOBuffer, isrc::Int, num::Int)
-    num == 0 && return
-    @assert 0 < num
-    @assert 0 < idst <= length(dst.data) - num + 1
-    @assert 0 < isrc <= length(src.data) - num + 1
-    pdst = pointer(dst.data, idst)
-    psrc = pointer(src.data, isrc)
-    ccall(:memmove, Void, (Ptr{Void},Ptr{Void},Csize_t), pdst, psrc, num)
+# splice! for IOBuffer: convert from 0-indexed positions, update the size,
+# and keep the cursor position stable with the text
+function splice_buffer!{T<:Integer}(buf::IOBuffer, r::UnitRange{T}, ins::String = "")
+    pos = position(buf)
+    if !isempty(r) && pos in r
+        seek(buf, first(r))
+    elseif pos > last(r)
+        seek(buf, pos - length(r))
+    end
+    splice!(buf.data, r .+ 1, ins.data) # position(), etc, are 0-indexed
+    buf.size = buf.size + sizeof(ins) - length(r)
+    seek(buf, position(buf) + sizeof(ins))
 end
 
 function edit_replace(s, from, to, str)
-    room = length(str.data) - (to - from)
-    ensureroom(s.input_buffer, s.input_buffer.size + room)
-    memmove(s.input_buffer, to+room+1, s.input_buffer, to+1, s.input_buffer.size-to)
-    s.input_buffer.size += room
-    seek(s.input_buffer, from)
-    write(s.input_buffer, str)
+    splice_buffer!(buffer(s), from:to-1, str)
 end
 
 function edit_insert(s::PromptState, c)
@@ -443,17 +442,11 @@ function edit_insert(s::PromptState, c)
     end
 end
 
-# TODO: Don't use memmove
 function edit_insert(buf::IOBuffer, c)
     if eof(buf)
         write(buf, c)
     else
-        s = string(c)
-        ensureroom(buf, buf.size-position(buf)+sizeof(s))
-        oldpos = position(buf)
-        memmove(buf, position(buf)+1+sizeof(s), buf, position(buf)+1, buf.size-position(buf))
-        buf.size += sizeof(s)
-        write(buf, c)
+        splice_buffer!(buf, position(buf):position(buf)-1, string(c))
     end
 end
 
@@ -468,8 +461,7 @@ function edit_backspace(buf::IOBuffer)
     if position(buf) > 0 && buf.size > 0
         oldpos = position(buf)
         char_move_left(buf)
-        memmove(buf, position(buf)+1, buf, oldpos+1, buf.size-oldpos)
-        buf.size -= oldpos-position(buf)
+        splice_buffer!(buf, position(buf):oldpos-1)
         return true
     else
         return false
@@ -478,17 +470,11 @@ end
 
 edit_delete(s) = edit_delete(buffer(s)) ? refresh_line(s) : beep(LineEdit.terminal(s))
 function edit_delete(buf::IOBuffer)
-    # (buf.size == 0 || eof(buf)) && return false
-    if buf.size > 0 && position(buf) < buf.size
-        oldpos = position(buf)
-        char_move_right(buf)
-        memmove(buf, oldpos+1, buf, position(buf)+1, buf.size-position(buf))
-        buf.size -= position(buf) - oldpos
-        seek(buf, oldpos)
-        return true
-    else
-        return false
-    end
+    eof(buf) && return false
+    oldpos = position(buf)
+    char_move_right(buf)
+    splice_buffer!(buf, oldpos:position(buf)-1)
+    true
 end
 
 function edit_werase(buf::IOBuffer)
@@ -496,8 +482,7 @@ function edit_werase(buf::IOBuffer)
     char_move_word_left(buf,isspace)
     pos0 = position(buf)
     pos0 < pos1 || return false
-    memmove(buf, pos0+1, buf, pos1+1, buf.size-pos1)
-    buf.size -= pos1 - pos0
+    splice_buffer!(buf, pos0:pos1-1)
     true
 end
 function edit_werase(s)
@@ -509,8 +494,7 @@ function edit_delete_prev_word(buf::IOBuffer)
     char_move_word_left(buf)
     pos0 = position(buf)
     pos0 < pos1 || return false
-    memmove(buf, pos0+1, buf, pos1+1, buf.size-pos1)
-    buf.size -= pos1 - pos0
+    splice_buffer!(buf, pos0:pos1-1)
     true
 end
 function edit_delete_prev_word(s)
@@ -522,9 +506,7 @@ function edit_delete_next_word(buf::IOBuffer)
     char_move_word_right(buf)
     pos1 = position(buf)
     pos0 < pos1 || return false
-    seek(buf,pos0)
-    memmove(buf, pos0+1, buf, pos1+1, buf.size-pos1)
-    buf.size -= pos1 - pos0
+    splice_buffer!(buf, pos0:pos1-1)
     true
 end
 function edit_delete_next_word(s)
@@ -537,16 +519,14 @@ function edit_yank(s::MIState)
 end
 
 function edit_kill_line(s::MIState)
-    pos = position(buffer(s))
-    s.kill_buffer = readline(buffer(s))
-    rest = readall(buffer(s))
-    truncate(buffer(s), pos)
-    if !isempty(s.kill_buffer) && s.kill_buffer[end] == '\n'
+    buf = buffer(s)
+    pos = position(buf)
+    s.kill_buffer = readline(buf)
+    if length(s.kill_buffer) > 1 && s.kill_buffer[end] == '\n'
         s.kill_buffer = s.kill_buffer[1:end-1]
-        isempty(s.kill_buffer) || print(buffer(s), '\n')
+        char_move_left(buf)
     end
-    print(buffer(s), rest)
-    seek(buffer(s), pos)
+    splice_buffer!(buf, pos:position(buf)-1)
     refresh_line(s)
 end
 
