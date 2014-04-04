@@ -360,7 +360,7 @@
   (define (skip-multiline-comment port count)
     (let ((c (read-char port)))
       (if (eof-object? c) 
-          (error "incomplete: unterminated multi-line comment #= ... =#")
+          (error "incomplete: unterminated multi-line comment #= ... =#") ; NOTE: changing this may affect code in base/client.jl
           (begin (if (eqv? c #\=)
                      (let ((c (peek-char port)))
                        (if (eqv? c #\#)
@@ -440,7 +440,7 @@
 (define (require-token s)
   (let ((t (or (ts:pbtok s) (ts:last-tok s) (next-token (ts:port s) s))))
     (if (eof-object? t)
-	(error "incomplete: premature end of input")
+	(error "incomplete: premature end of input") ; NOTE: changing this may affect code in base/client.jl
 	(if (newline? t)
 	    (begin (take-token s)
 		   (require-token s))
@@ -950,7 +950,7 @@
   (let ((t (peek-token s)))
     (cond ((eq? t 'end) (take-token s))
 	  ((eof-object? t)
-	   (error (string "incomplete: \"" word "\" at "
+	   (error (string "incomplete: \"" word "\" at " ; NOTE: changing this may affect code in base/client.jl
 			  current-filename ":" expect-end-current-line
 			  " requires end")))
 	  (else
@@ -1483,7 +1483,7 @@
 
 (define (not-eof-2 c)
   (if (eof-object? c)
-      (error "incomplete: invalid \"`\" syntax")
+      (error "incomplete: invalid \"`\" syntax") ; NOTE: changing this may affect code in base/client.jl
       c))
 
 (define (parse-backquote s)
@@ -1505,7 +1505,7 @@
 
 (define (not-eof-3 c)
   (if (eof-object? c)
-      (error "incomplete: invalid string syntax")
+      (error "incomplete: invalid string syntax") ; NOTE: changing this may affect code in base/client.jl
       c))
 
 (define (take-char p)
@@ -1592,7 +1592,7 @@
 
 (define (not-eof-1 c)
   (if (eof-object? c)
-      (error "incomplete: invalid character literal")
+      (error "incomplete: invalid character literal") ; NOTE: changing this may affect code in base/client.jl
       c))
 
 (define (unescape-string s)
