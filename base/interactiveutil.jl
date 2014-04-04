@@ -279,7 +279,7 @@ end
 ## file downloading ##
 
 downloadcmd = nothing
-function download(url::String, filename::String)
+@unix_only function download(url::String, filename::String)
     global downloadcmd
     if downloadcmd === nothing
         for checkcmd in (:curl, :wget, :fetch)
@@ -300,6 +300,17 @@ function download(url::String, filename::String)
     end
     filename
 end
+
+@windows_only function download(url::String, filename::String)
+    b_dest = bytestring(filename)
+    b_url = bytestring(url)
+    res = ccall((:URLDownloadToFileA,:urlmon),stdcall,Cuint,
+                (Ptr{Void},Ptr{Uint8},Ptr{Uint8},Cint,Ptr{Void}),0,b_url,b_dest,0,0)
+    if res != 0
+        error("automatic download failed (error: $res): $url")
+    end
+end
+
 function download(url::String)
     filename = tempname()
     download(url, filename)
