@@ -49,6 +49,8 @@ Library improvements
 
   * New functions `minmax` and `extrema` ([#5275]).
 
+  * New macros `@edit`, `@less`, `@code_typed`, `@code_lowered`, `@code_llvm` and `@code_native` that all function like `@which` ([#5832]).
+
   * `consume(p)` extended to `consume(p, args...)`, allowing it
     to optionally pass `args...` back to the producer ([#4775]).
 
@@ -756,6 +758,7 @@ Too numerous to mention.
 [#3605]: https://github.com/JuliaLang/julia/pull/3605
 [#3233]: https://github.com/JuliaLang/julia/pull/3233
 [#4811]: https://github.com/JuliaLang/julia/pull/4811
+[#5832]: https://github.com/JuliaLang/julia/pull/5832
 
 [packages chapter]: http://docs.julialang.org/en/latest/manual/packages/
 [sorting functions]: http://docs.julialang.org/en/latest/stdlib/sort/
