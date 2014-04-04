@@ -92,6 +92,7 @@ real matrix mandel()
 // pi series
 real scalar pi_sum() 
 {
+	real scalar sum
     sum = 0.0
     for(j = 1; j <= 500; ++j) {
         sum = 0.0
@@ -137,6 +138,112 @@ real matrix rand_mat_mul(real scalar n)
 end // end mata
 
 
+
+program fib, rclass
+args n
+	if (`n' < 2) {
+		return scalar fib = 2
+	}
+	else {
+		fib `= `n' - 1'
+		local x = r(fib)
+		fib `= `n' - 2'
+		return scalar fib = `x' + r(fib)
+	}
+end
+
+
+program parse_int
+args t
+	tempname r n m
+	forvalues i = 0 / `t' {
+		scalar `r' = runiform()
+		scalar `n' = floor(2^31 - `r')
+		local s = string(`n', "%21x")
+		scalar `m' = real("`s'")
+		assert `m'==`n'
+	}
+end
+
+
+
+// quick sort
+program qsort_kernel
+args a lo hi
+	tempname t pivot
+	local i = `lo'
+	local j = `hi'
+	quietly while (`i' < `hi') {
+		local idx = floor((`lo' + `hi') / 2)
+		scalar `pivot' = `a'[`idx']
+		while (`i' <= `j') {
+			while (`a'[`i'] < `pivot') { 
+				local ++i
+			}
+			while (`a'[`j'] > `pivot') {
+				local --j
+			}
+			if (`i' <= `j') {
+				scalar `t' = `a'[`i']
+				replace `a' = `a'[`j'] in `i'
+				replace `a' = `t' in `j'
+				local ++i
+				local --j
+			}
+		}
+		if (`lo' < `j') qsort_kernel `a' `lo' `j'
+		local lo = `i'
+		local j = `hi'
+	}
+end
+
+program quicksort
+args n
+	drop _all
+	set obs `n'
+	tempvar x 
+	g `x' = runiform()
+	qsort_kernel `x' 1 `n'
+end
+
+
+// mandelbrot
+program mandel
+	tempname vr vi ri
+	forvalues r = -20/5 {
+		forvalues i = -10/10 {
+			scalar `vr' = `r' / 10
+			scalar `vi' = `i' / 10
+			local j 0
+			forvalues n = 1 / 80 {
+				if (sqrt(`vr'^2 + `vi'^2) > 2) continue, break
+				scalar `ri' = `vr' * `vi'
+				scalar `vr' = `vr'^2 - `vi'^2 + `r' / 10
+				scalar `vi' = 2 * `ri' + `i' / 10
+				local j `n'
+			}
+			di %4.0g `j' _c
+		}
+		di
+	}
+end
+
+// pi
+program pi_sum
+	tempname sum
+    scalar `sum' = 0
+    forvalues j = 1/500 {
+        scalar `sum' = 0
+        forvalues k = 1/10000 {
+            scalar `sum' = `sum' + 1 / (`k' * `k')
+        }
+    }
+    di `sum'
+end
+
+
+
+
 // arguments 
 local fib 20
 local parse_int 1000
@@ -150,14 +257,27 @@ set seed 200897813
 tempname results
 file open `results' using `1', write append
 
+// RUN MATA TESTS
 qui foreach test in fib parse_int quicksort mandel pi_sum rand_mat_stat rand_mat_mul {
 	timer clear 1
 	timer on 1
 	mata : `test'(``test'')
 	timer off 1
 	timer list 1
-	file write `results' "stata,`test',`=r(t1)'" _n
+	file write `results' "stata,`test',`=r(t1) * 1000'" _n
 }
+
+// RUN STATA TESTS
+qui foreach test in fib parse_int quicksort mandel pi_sum {
+	timer clear 1
+	timer on 1
+	`test' ``test''
+	timer off 1
+	timer list 1
+	file write `results' "stata,`test'_stata,`=r(t1) * 1000'" _n
+}
+
+
 
 file close `results'
 
