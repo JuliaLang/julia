@@ -571,15 +571,16 @@ function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,
             edit_insert(buf,input)
             string = takebuf_string(buf)
             pos = 0
-            while pos <= length(string)
+            sz = length(string.data)
+            while pos <= sz
                 oldpos = pos
                 ast, pos = Base.parse(string, pos, raise=false)
                 # Get the line and strip leading and trailing whitespace
-                line = strip(string[max(oldpos, 1):min(pos-1, length(string))])
+                line = strip(bytestring(string.data[max(oldpos, 1):min(pos-1, sz)]))
                 isempty(line) && continue
                 LineEdit.replace_line(s, line)
                 LineEdit.refresh_line(s)
-                (pos > length(string) && last(string) != '\n') && break
+                (pos > sz && last(string) != '\n') && break
                 if !isa(ast, Expr) || (ast.head != :continue && ast.head != :incomplete)
                     LineEdit.commit_line(s)
                     # This is slightly ugly but ok for now
