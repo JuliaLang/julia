@@ -598,9 +598,8 @@ function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,
 
     a = Dict{Any,Any}[hkeymap, repl_keymap, LineEdit.history_keymap(hp), LineEdit.default_keymap, LineEdit.escape_defaults]
     prepend!(a, extra_repl_keymap)
-    @eval @LineEdit.keymap repl_keymap_func $(a)
 
-    main_prompt.keymap_func = repl_keymap_func
+    main_prompt.keymap_func = @eval @LineEdit.keymap $(a)
 
     const mode_keymap = {
         '\b' => function (s)
@@ -625,9 +624,7 @@ function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,
 
     b = Dict{Any,Any}[hkeymap, mode_keymap, LineEdit.history_keymap(hp), LineEdit.default_keymap, LineEdit.escape_defaults]
 
-    @eval @LineEdit.keymap mode_keymap_func $(b)
-
-    shell_mode.keymap_func = help_mode.keymap_func = mode_keymap_func
+    shell_mode.keymap_func = help_mode.keymap_func = @eval @LineEdit.keymap $(b)
 
     ModalInterface([main_prompt, shell_mode, help_mode,hkp])
 end
