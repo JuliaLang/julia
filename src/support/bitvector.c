@@ -13,6 +13,10 @@
 #include <malloc.h>
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 u_int32_t *bitvector_resize(u_int32_t *b, uint64_t oldsz, uint64_t newsz,
                             int initzero)
 {
@@ -190,3 +194,7 @@ u_int32_t bitvector_any1(u_int32_t *b, u_int64_t offs, u_int64_t nbits)
     }
     return 0;
 }
+
+#ifdef __cplusplus
+}
+#endif
