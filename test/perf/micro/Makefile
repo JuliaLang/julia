@@ -111,8 +111,7 @@ BENCHMARKS = \
 	benchmarks/octave.csv \
 	benchmarks/r.csv \
 	benchmarks/javascript.csv \
-	benchmarks/mathematica.csv \
-	benchmarks/stata.csv
+	benchmarks/mathematica.csv
 
 benchmarks.csv: bin/collect.pl $(BENCHMARKS)
 	@$(call PRINT_PERL, $^ >$@)
