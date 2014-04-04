@@ -33,7 +33,7 @@ New language features
 
   * Multi-line comments ([#69], [#6128]): `#= .... =#` 
 
-  * --bounds-check=yes|no compiler option
+  * `--bounds-check=yes|no` compiler option
 
 Library improvements
 --------------------
@@ -71,7 +71,7 @@ Library improvements
 
   * `errno([code])` function to get or set the C library's `errno`.
 
-  * `GitHub` module for interacting with the GitHub API
+  * `GitHub` module for interacting with the GitHub API.
 
   * Package improvements
 
@@ -95,7 +95,7 @@ Library improvements
     * Multi-key `Dict`s: `D[x,y...]` is now a synonym for `D[(x,y...)]`
       for associations `D` ([#4870]).
 
-    * `push!` and `unshift!` can push multiple arguments ([#4782])
+    * `push!` and `unshift!` can push multiple arguments ([#4782]).
 
     * `writedlm` and `writecsv` now accept any iterable collection of
       iterable rows, in addition to `AbstractArray` arguments, and the
@@ -161,6 +161,9 @@ Library improvements
       * `+` and `-` now require the sizes of the arrays to be the
         same: the operations no longer do broadcasting. New
         `UniformScaling` matrix type and identity `I` constant (#5810).
+
+      * None of the concrete matrix factorization types are exported from Base
+        by default anymore.
 
     * Sparse linear algebra
 

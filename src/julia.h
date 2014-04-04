@@ -854,6 +854,7 @@ DLLEXPORT void jl_exception_clear(void);
 DLLEXPORT void julia_init(char *imageFile);
 DLLEXPORT int julia_trampoline(int argc, char *argv[], int (*pmain)(int ac,char *av[]));
 DLLEXPORT void jl_init(char *julia_home_dir);
+DLLEXPORT void jl_init_with_image(char *julia_home_dir, char *image_relative_path);
 DLLEXPORT int jl_is_initialized(void);
 DLLEXPORT extern char *julia_home;
 
