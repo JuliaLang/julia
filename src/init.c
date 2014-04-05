@@ -34,7 +34,7 @@ extern "C" {
 
 #ifdef _OS_WINDOWS_
 #define WIN32_LEAN_AND_MEAN
-// Copied from MINGW_FLOAT_H which may not be found due to a colision with the builtin gcc float.h
+// Copied from MINGW_FLOAT_H which may not be found due to a collision with the builtin gcc float.h
 // eventually we can probably integrate this into OpenLibm.
 #if defined(_COMPILER_MINGW_)
 void __cdecl __MINGW_NOTHROW _fpreset (void);
@@ -482,10 +482,10 @@ void *init_stdio_handle(uv_file fd,int readable)
     uv_handle_type type = uv_guess_handle(fd);
     jl_uv_file_t *file;
 #ifndef _OS_WINDOWS_    
-    // Duplicate the file descritor so we can later dup it over if we want to redirect
+    // Duplicate the file descriptor so we can later dup it over if we want to redirect
     // STDIO without having to worry about closing the associated libuv object.
     // On windows however, libuv objects remember streams by their HANDLE, so this is
-    // unnessecary.
+    // unnecessary.
     fd = dup(fd);
 #endif
     //printf("%d: %d -- %d\n", fd, type, 0);
@@ -620,7 +620,7 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
         unw_context_t *uc = (unw_context_t*)state.__rsp;
         state.__rsp -= 512;
         // This is for alignment. In particular note that the sizeof(void*) is necessary
-        // since it would usually specify the return address (i.e. we are aligning the call
+        // since it would usually specify the return address (i.e., we are aligning the call
         // frame to a 16 byte boundary as required by the abi, but the stack pointer
         // to point to the byte beyond that. Not doing this leads to funny behavior on
         // the first access to an external function will fail due to stack misalignment
@@ -645,7 +645,7 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
 
 void julia_init(char *imageFile)
 {
-    jl_io_loop = uv_default_loop(); // this loop will internal events (spawining process etc.),
+    jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
                                     // best to call this first, since it also initializes libuv
     jl_page_size = jl_getpagesize();
     jl_find_stack_bottom();
