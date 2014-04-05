@@ -420,6 +420,18 @@ function memmove(dst::IOBuffer, idst::Int, src::IOBuffer, isrc::Int, num::Int)
     ccall(:memmove, Void, (Ptr{Void},Ptr{Void},Csize_t), pdst, psrc, num)
 end
 
+function cut(buf::IOBuffer, from::Int, to::Int)
+    @assert from <= to
+    pos = position(buf)
+    if from < pos <= to
+        seek(buf, from)
+    elseif pos > to
+        seek(buf, pos - (to - from))
+    end
+    memmove(buf, from+1, buf, to+1, buf.size-to)
+    buf.size -= to - from
+end
+
 function edit_replace(s, from, to, str)
     room = length(str.data) - (to - from)
     ensureroom(s.input_buffer, s.input_buffer.size + room)
@@ -466,8 +478,7 @@ function edit_backspace(buf::IOBuffer)
     if position(buf) > 0 && buf.size > 0
         oldpos = position(buf)
         char_move_left(buf)
-        memmove(buf, position(buf)+1, buf, oldpos+1, buf.size-oldpos)
-        buf.size -= oldpos-position(buf)
+        cut(buf, position(buf), oldpos)
         return true
     else
         return false
@@ -479,9 +490,7 @@ function edit_delete(s)
     if buf.size > 0 && position(buf) < buf.size
         oldpos = position(buf)
         char_move_right(s)
-        memmove(buf, oldpos+1, buf, position(buf)+1, buf.size-position(buf))
-        buf.size -= position(buf) - oldpos
-        seek(buf, oldpos)
+        cut(buf, oldpos, position(buf))
         refresh_line(s)
     else
         beep(LineEdit.terminal(s))
@@ -493,8 +502,7 @@ function edit_werase(buf::IOBuffer)
     char_move_word_left(buf,isspace)
     pos0 = position(buf)
     pos0 < pos1 || return false
-    memmove(buf, pos0+1, buf, pos1+1, buf.size-pos1)
-    buf.size -= pos1 - pos0
+    cut(buf, pos0, pos1)
     true
 end
 function edit_werase(s)
@@ -506,8 +514,7 @@ function edit_delete_prev_word(buf::IOBuffer)
     char_move_word_left(buf)
     pos0 = position(buf)
     pos0 < pos1 || return false
-    memmove(buf, pos0+1, buf, pos1+1, buf.size-pos1)
-    buf.size -= pos1 - pos0
+    cut(buf, pos0, pos1)
     true
 end
 function edit_delete_prev_word(s)
@@ -519,9 +526,7 @@ function edit_delete_next_word(buf::IOBuffer)
     char_move_word_right(buf)
     pos1 = position(buf)
     pos0 < pos1 || return false
-    seek(buf,pos0)
-    memmove(buf, pos0+1, buf, pos1+1, buf.size-pos1)
-    buf.size -= pos1 - pos0
+    cut(buf, pos0, pos1)
     true
 end
 function edit_delete_next_word(s)
@@ -534,9 +539,10 @@ function edit_yank(s::MIState)
 end
 
 function edit_kill(s::MIState)
-    pos = position(buffer(s))
-    s.kill_buffer = readall(buffer(s))
-    truncate(buffer(s), pos)
+    buf = buffer(s)
+    pos0 = position(buf)
+    s.kill_buffer = readuntil(buf,'\n')
+    cut(buf, pos0, position(buf))
     refresh_line(s)
 end
 
