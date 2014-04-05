@@ -392,7 +392,7 @@ function return_callback(repl, s)
     else
         repl.consecutive_returns = 0
     end
-    ast = parse_input_line(bytestring(copy(s.input_buffer.data)))
+    ast = parse_input_line(bytestring(copy(s.input_buffer)))
     if repl.consecutive_returns > 1 || !isa(ast, Expr) || (ast.head != :continue && ast.head != :incomplete)
         return true
     else
