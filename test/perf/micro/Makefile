@@ -19,10 +19,8 @@ endif
 FFLAGS=-fexternal-blas
 ifeq ($(findstring gfortran, $(FC)), gfortran)
 ifeq ($(USE_BLAS64), 1)
-echo !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-echo WARNING: gfortran cannot multiply matrices using 64-bit external BLAS.
-echo          External BLAS usage is turned OFF.
-echo !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#gfortran cannot multiply matrices using 64-bit external BLAS.
+#External BLAS usage is turned OFF.
 FFLAGS=
 endif
 FFLAGS+= -static-libgfortran
@@ -97,6 +95,9 @@ benchmarks/javascript.csv: perf.js
 benchmarks/mathematica.csv: perf.nb
 	for t in 1 2 3 4 5; do $(MATHEMATICABIN) -noprompt -run "<<$<; Exit[]"; done >$@
 
+benchmarks/lua.csv: perf.lua
+	for t in 1 2 3 4 5; do gsl-shell $<; done >$@
+
 BENCHMARKS = \
 	benchmarks/c.csv \
 	benchmarks/fortran.csv \
@@ -106,6 +107,7 @@ BENCHMARKS = \
 	benchmarks/matlab.csv \
 	benchmarks/octave.csv \
 	benchmarks/r.csv \
+	benchmarks/lua.csv \
 	benchmarks/javascript.csv \
 	benchmarks/mathematica.csv
 
