@@ -138,7 +138,7 @@ function complete_line(s::PromptState)
         # Replace word by completion
         prev_pos = position(s.input_buffer)
         seek(s.input_buffer, prev_pos-sizeof(partial))
-        edit_replace(s, position(s.input_buffer), prev_pos,completions[1])
+        edit_replace(s, position(s.input_buffer), prev_pos, completions[1])
     else
         p = common_prefix(completions)
         if length(p) > 0 && p != partial
@@ -533,10 +533,17 @@ function edit_yank(s::MIState)
     refresh_line(s)
 end
 
-function edit_kill(s::MIState)
+function edit_kill_line(s::MIState)
     pos = position(buffer(s))
-    s.kill_buffer = readall(buffer(s))
+    s.kill_buffer = readline(buffer(s))
+    rest = readall(buffer(s))
     truncate(buffer(s), pos)
+    if !isempty(s.kill_buffer) && s.kill_buffer[end] == '\n'
+        s.kill_buffer = s.kill_buffer[1:end-1]
+        isempty(s.kill_buffer) || print(buffer(s), '\n')
+    end
+    print(buffer(s), rest)
+    seek(buffer(s), pos)
     refresh_line(s)
 end
 
@@ -1102,7 +1109,7 @@ const default_keymap =
     # ^U
     21 => edit_clear,
     # ^K
-    11 => edit_kill,
+    11 => edit_kill_line,
     # ^Y
     25 => edit_yank,
     # ^A
