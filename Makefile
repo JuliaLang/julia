@@ -99,7 +99,7 @@ $(build_bindir)/stringpatch: $(build_bindir) contrib/stringpatch.c
 JL_LIBS = julia julia-debug
 
 # private libraries, that are installed in $(prefix)/lib/julia
-JL_PRIVATE_LIBS = random suitesparse_wrapper grisu
+JL_PRIVATE_LIBS = random suitesparse_wrapper grisu Rmath
 ifeq ($(USE_SYSTEM_FFTW),0)
 JL_PRIVATE_LIBS += fftw3 fftw3f fftw3_threads fftw3f_threads
 endif
