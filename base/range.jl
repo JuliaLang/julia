@@ -177,7 +177,7 @@ end
 length(r::UnitRange) = integer(r.stop - r.start + 1)
 length(r::FloatRange) = integer(r.len)
 
-function length{T<:Union(Int,Uint)}(r::StepRange{T})
+function length{T<:Union(Int,Uint,Int64,Uint64)}(r::StepRange{T})
     isempty(r) && return zero(T)
     if r.step > 1
         return checked_add(oftype(T, div(unsigned(r.stop - r.start), r.step)), one(T))
@@ -188,7 +188,7 @@ function length{T<:Union(Int,Uint)}(r::StepRange{T})
     end
 end
 
-length{T<:Union(Int,Uint)}(r::UnitRange{T}) =
+length{T<:Union(Int,Uint,Int64,Uint64)}(r::UnitRange{T}) =
     checked_add(checked_sub(r.stop, r.start), one(T))
 
 first{T}(r::OrdinalRange{T}) = oftype(T, r.start)
