@@ -1931,6 +1931,17 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
             return (e.args[3],())
         end
     end
+    if is(f, convert_tuple) && length(atypes)==3
+        # convert((T...),x::(S...)) => x, when S<:T
+        istuple = isa(atypes[1],Tuple) # if true, is (Type{T}, Type{S}) not Type{(T, S)}
+        if (istuple && all(isType,atypes[1])) || (atypes[1] <: Tuple && isType(atypes[1])) && isleaftype(atypes[1])
+           tparams = (istuple ? map(t->t.parameters[1], atypes[1]) : atypes[1].parameters[1])
+            if atypes[2] <: tparams
+                # todo: if T expression has side effects??!
+                return (e.args[3],())
+            end
+        end
+    end
     if length(atypes)==2 && is(f,unbox) && isa(atypes[2],DataType) && !atypes[2].mutable && atypes[2].pointerfree
         # remove redundant unbox
         return (e.args[3],())
