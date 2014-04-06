@@ -24,15 +24,7 @@ function edit(file::String, line::Integer)
         file = find_source_file(file)
     end
     if beginswith(edname, "emacs")
-        jmode = joinpath(JULIA_HOME, "..", "..", "contrib", "julia-mode.el")
-        if issrc && isreadable(jmode)
-            run(`$edpath $file --eval "(progn
-                                     (require 'julia-mode \"$jmode\")
-                                     (julia-mode)
-                                     (goto-line $line))"`)
-        else
-            run(`$edpath $file --eval "(goto-line $line)"`)
-        end
+        spawn(`$edpath +$line $file`)
     elseif edname == "vim"
         run(`$edpath $file +$line`)
     elseif edname == "textmate" || edname == "mate"
