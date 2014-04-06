@@ -1493,3 +1493,24 @@ let i = 0
 end
 @test g6292() == 1
 @test g6292() == 2
+
+# issue #6404
+type type_2{T <: Integer, N} <: Number
+    x::T
+    type_2(n::T) = new(n)
+end
+type type_1{T <: Number} <: Number
+    x::Vector{T}
+    type_1(x::Vector{T}) = new(x)
+end
+type_1{T <: Number}(x::Vector{T}) = type_1{T}(x)
+type_1{T <: Number}(c::T) = type_1{T}([c])
+Base.convert{T<:Number, S<:Number}(::Type{type_1{T}}, x::S) = type_1(convert(T, x))
++{T <: Number}(a::type_1{T}, b::type_1{T}) = a
+
+function func1_6404(v1::Integer)
+    e1 = type_1([type_2{Int,v1}(0)])
+    e1+e1
+end
+
+@test isa(func1_6404(3), type_1)
