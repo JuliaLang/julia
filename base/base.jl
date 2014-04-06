@@ -1,6 +1,8 @@
 # important core definitions
 
-using Core.Intrinsics
+using Core: Intrinsics, arraylen, arrayref, arrayset, arraysize,
+            tuplelen, tupleref, convert_default, convert_tuple, kwcall,
+            typeassert, apply_type
 
 import Core.Array  # to add methods
 
