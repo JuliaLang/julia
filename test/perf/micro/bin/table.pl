@@ -19,13 +19,14 @@ our @benchmarks = qw(
   rand_mat_mul
 );
 
-our $julia_ver = `julia -e 'print(Base.BUILD_INFO.version_string)'`;
+our $julia_ver = `julia -v | cut -f3 -d" "`;
 our $fortran_ver = `gfortran-4.8 -v 2>&1 | grep "gcc version" | cut -f3 -d" "`;
 our $python_ver = `python -V 2>&1 | cut -f2 -d" "`;
 our $matlab_ver = `matlab -nodisplay -nojvm -nosplash -r "version -release, quit" | tail -n 3 | head -n 1`;
 our $R_ver = `R --version | grep "R version" | cut -f3 -d" "`;
 our $octave_ver = `octave -v | grep version | cut -f4 -d" "`;
 our $go_ver = `go version | cut -f3 -d" "`;
+our $lua_ver = `gsl-shell -v 2>&1 | grep Shell | cut -f3 -d" " | cut -f1 -d,`;
 our $javascript_ver = `node -e "console.log(process.versions.v8)"`;
 our $mathematica_ver = `echo quit | math -version | head -n 1 | cut -f2 -d" "`;
 
@@ -39,9 +40,10 @@ our %systems = (
   "javascript" => ["JavaScript", "V8 $javascript_ver"],
   "go"         => ["Go"          , $go_ver ],
   "mathematica"=> ["Mathematica" , $mathematica_ver ],
+  "lua"	       => ["Lua" , "gsl-shell $lua_ver"],
 );
 
-our @systems = qw(fortran julia python r matlab octave mathematica javascript go);
+our @systems = qw(fortran julia python r matlab octave mathematica javascript go lua);
 
 print qq[<table class="benchmarks">\n];
 print qq[<colgroup>\n];
