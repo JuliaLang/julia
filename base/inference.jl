@@ -1842,26 +1842,32 @@ function without_linenums(a::Array{Any,1})
     l
 end
 
-const _pure_builtins = {getfield, tuple, tupleref, tuplelen, fieldtype, apply_type}
+const _pure_builtins = {tuple, tupleref, tuplelen, fieldtype, apply_type, is, isa, typeof} # known affect-free calls (also effect-free)
+const _pure_builtins_volatile = {getfield, arrayref} # known effect-free calls (might not be affect-free)
 
 function is_pure_builtin(f)
     if contains_is(_pure_builtins, f)
         return true
     end
+    if contains_is(_pure_builtins_volatile, f)
+        return true
+    end
     if isa(f,IntrinsicFunction)
-        if !(f === Intrinsics.pointerref ||
-             f === Intrinsics.pointerset ||
-             f === Intrinsics.ccall ||
-             f === Intrinsics.jl_alloca ||
-             f === Intrinsics.pointertoref)
+        if !(f === Intrinsics.pointerref || # this one is volatile
+             f === Intrinsics.pointerset || # this one is never effect-free
+             f === Intrinsics.ccall ||      # this one is never effect-free
+             f === Intrinsics.jl_alloca ||  # this one is volatile, TODO: possibly also effect-free?
+             f === Intrinsics.pointertoref) # this one is volatile
             return true
         end
     end
     return false
 end
 
-# detect some important side-effect-free calls
-function effect_free(e::ANY, sv, any_expr::Bool)
+# detect some important side-effect-free calls (allow_volatile=true)
+# and some affect-free calls (allow_volatile=false) -- affect_free means the call
+# cannot be affected by previous calls, except assignment nodes
+function effect_free(e::ANY, sv, allow_volatile::Bool)
     if isa(e,Symbol) || isa(e,SymbolNode) || isa(e,Number) || isa(e,String) ||
         isa(e,TopNode) || isa(e,QuoteNode) || isa(e,Type)
         return true
@@ -1874,7 +1880,8 @@ function effect_free(e::ANY, sv, any_expr::Bool)
         ea = e.args
         if e.head === :call || e.head === :call1
             if is_known_call_p(e, is_pure_builtin, sv)
-                if !any_expr && is_known_call(e, getfield, sv)
+                if !allow_volatile && is_known_call_p(e, (f)->contains_is(_pure_builtins_volatile, f), sv)
+                    # arguments must be immutable to ensure e is affect_free
                     for a in ea
                         if isa(a,Symbol)
                             return false
@@ -1887,22 +1894,23 @@ function effect_free(e::ANY, sv, any_expr::Bool)
                                 end
                             end
                         end
-                        if !effect_free(a,sv,any_expr)
+                        if !effect_free(a,sv,allow_volatile)
                             return false
                         end
                     end
                 else
+                    # arguments must also be effect_free
                     for a in ea
-                        if !effect_free(a,sv,any_expr)
+                        if !effect_free(a,sv,allow_volatile)
                             return false
                         end
                     end
                 end
                 return true
             end
-        elseif e.head === :new
+        elseif e.head === :new || e.head == :return
             for a in ea
-                if !effect_free(a,sv,any_expr)
+                if !effect_free(a,sv,allow_volatile)
                     return false
                 end
             end
@@ -2105,9 +2113,21 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
         end
     end
 
-    stmts = {}
+    # annotate variables in the body expression with their module
+    mfrom = linfo.module; mto = (inference_stack::CallStack).mod
+    try
+        body = resolve_globals(body, enc_locllist, enclosing_ast.args[1], mfrom, mto, args, spnames)
+    catch ex
+        if isa(ex,GetfieldNode)
+            return NF
+        end
+        rethrow(ex)
+    end
+
     # see if each argument occurs only once in the body expression
-    for i=1:length(args)
+    stmts = {}
+    stmts_free = true # true = all entries of stmts are effect_free
+    for i=length(args):-1:1 # stmts_free needs to be calculated in reverse-argument order
         a = args[i]
         aei = argexprs[i]
         aeitype = exprtype(aei)
@@ -2127,31 +2147,38 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
         end
 
         # ok for argument to occur more than once if the actual argument
-        # is a symbol or constant
-        occ = occurs_more(body, x->is(x,a), 1)
-        if islocal || !effect_free(aei,sv,false) || (occ==0 && is(aeitype,None))
-            if occ != 0
+        # is a symbol or constant, or is not affected by previous statements
+        # that will exist after the inlining pass finishes
+        affect_free = stmts_free && !islocal # false = previous statements might affect the result of evaluating argument
+        occ = 0
+        for j = length(body.args):-1:1
+            b = body.args[j]
+            if occ < 1
+                occ += occurs_more(b, x->is(x,a), 1)
+            end
+            if occ > 0 && (!affect_free || !effect_free(b, sv, true)) #TODO: we could short-circuit this test better by memoizing effect_free(b) in the for loop over i
+                affect_free = false
+                break
+            end
+        end
+        free = effect_free(aei,sv,true)
+        affect_unfree = (islocal || (affect_free && !free) || (!affect_free && !effect_free(aei,sv,false)))
+        if affect_unfree || (occ==0 && is(aeitype,None))
+            if occ != 0 # islocal=true is implied
                 # introduce variable for this argument
                 vnew = unique_name(enclosing_ast, ast)
                 add_variable(enclosing_ast, vnew, aeitype, !islocal)
-                push!(stmts, Expr(:(=), vnew, aei))
+                unshift!(stmts, Expr(:(=), vnew, aei))
                 argexprs[i] = aeitype===Any ? vnew : SymbolNode(vnew,aeitype)
-            elseif !(isType(aeitype) || effect_free(aei,sv,true))
-                push!(stmts, aei)
+                stmts_free &= free
+            elseif !free && !isType(aeitype)
+                unshift!(stmts, aei)
+                stmts_free = false
             end
         end
     end
 
     # ok, substitute argument expressions for argument names in the body
-    mfrom = linfo.module; mto = (inference_stack::CallStack).mod
-    try
-        body = resolve_globals(body, enc_locllist, enclosing_ast.args[1], mfrom, mto, args, spnames)
-    catch ex
-        if isa(ex,GetfieldNode)
-            return NF
-        end
-        rethrow(ex)
-    end
     body = sym_replace(body, args, spnames, argexprs, spvals)
 
     # make labels / goto statements unique
@@ -2333,7 +2360,13 @@ function inlining_pass(e::Expr, sv, ast)
                     res2 = res[2]::Array{Any,1}
                     if length(res2) > 0
                         prepend!(stmts,res2)
-                        has_stmts = true
+                        if !has_stmts
+                            for stmt in res2
+                                if !effect_free(stmt, sv, true)
+                                    has_stmts = true
+                                end
+                            end
+                        end
                     end
                 end
             end
