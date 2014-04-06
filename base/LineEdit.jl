@@ -1005,9 +1005,9 @@ function setup_search_keymap(hp)
         # Ctrl-Right Arrow
         "\e[1;5C" => "\ef",
         # ^A
-        1         => s->(accept_result(s, p); move_line_start(s)),
+        1         => s->(accept_result(s, p); move_line_start(s); refresh_line(s)),
         # ^E
-        5         => s->(accept_result(s, p); move_line_end(s)),
+        5         => s->(accept_result(s, p); move_line_end(s); refresh_line(s)),
         "^Z"      => :(return :suspend),
         # Try to catch all Home/End keys
         "\e[H"    => s->(accept_result(s, p); move_input_start(s); refresh_line(s)),
@@ -1141,9 +1141,9 @@ const default_keymap =
     # ^Y
     25 => edit_yank,
     # ^A
-    1 => move_line_start,
+    1 => :( LineEdit.move_line_start(s); LineEdit.refresh_line(s) ),
     # ^E
-    5 => move_line_end,
+    5 => :( LineEdit.move_line_end(s); LineEdit.refresh_line(s) ),
     # Try to catch all Home/End keys
     "\e[H"  => :(LineEdit.move_input_start(s); LineEdit.refresh_line(s)),
     "\e[F"  => :(LineEdit.move_input_end(s); LineEdit.refresh_line(s)),
