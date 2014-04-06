@@ -858,7 +858,6 @@ function update_display_buffer(s::SearchState, data)
 end
 
 function history_next_result(s::MIState, data::SearchState)
-    #truncate(data.query_buffer, s.input_buffer.size - data.response_buffer.size)
     history_search(data.histprompt.hp, data.query_buffer, data.response_buffer, data.backward, true) || beep(LineEdit.terminal(s))
     refresh_line(data)
 end
@@ -912,14 +911,25 @@ function accept_result(s, p)
     transition(s, parent)
 end
 
+function copybuf!(dst::IOBuffer, src::IOBuffer)
+    n = src.size
+    ensureroom(dst, n)
+    copy!(dst.data, 1, src.data, 1, n)
+    dst.size = src.size
+    dst.ptr = src.ptr
+end
+
 function enter_search(s::MIState, p::HistoryPrompt, backward::Bool)
     # a bit of hack to help fix #6325
+    buf = buffer(s)
     p.hp.last_mode = mode(s)
-    p.hp.last_buffer = copy(buffer(s))
+    p.hp.last_buffer = copy(buf)
 
     ss = state(s, p)
     ss.parent = mode(s)
     ss.backward = backward
+    truncate(ss.query_buffer, 0)
+    copybuf!(ss.response_buffer, buf)
     transition(s, p)
 end
 
