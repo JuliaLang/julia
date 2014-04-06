@@ -34,3 +34,9 @@ end
 @test binomial(int64(67), int64(29)) == binomial(BigInt(67), BigInt(29)) == 7886597962249166160
 @test binomial(int128(131), int128(62)) == binomial(BigInt(131), BigInt(62)) == 157311720980559117816198361912717812000 
 
+# Cartesian product iteration
+A = reshape(1:6, 2, 3)
+indexes = ((1,1),(2,1),(1,2),(2,2),(1,3),(2,3))
+for (I,ind) in zip(eachindex(A), indexes)
+    @test I == ind
+end
