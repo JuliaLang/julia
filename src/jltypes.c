@@ -1323,16 +1323,25 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
         tvarslen = jl_tuple_len(tvars);
     }
     for(int tk=0; tk < tvarslen; tk++) {
-        jl_value_t *tv = tvs[tk];
+        jl_tvar_t *tv = (jl_tvar_t*)tvs[tk];
         for(e=0; e < env0; e+=2) {
-            if (eqc.data[e] == tv) {
+            if (eqc.data[e] == (jl_value_t*)tv) {
                 break;
             }
         }
-        // bind type vars to themselves if they were not matched explicitly
+        // bind type vars to new similar tvars if they were not matched explicitly
         // during type intersection.
-        if (e >= env0)
-            extend_(tv, tv, &eqc, 1, 0);
+        if (e >= env0) {
+            /*
+              Note: we used to bind T=T, but this can cause a loop if a recursion
+              is set up such that in a future call T=Foo{T}. If the RHS is
+              instantiated, we unintentionally construct Foo{Foo{T}} since the
+              typevar happens to match. This caused issue #6404.
+            */
+            jl_tvar_t *ntv = jl_new_typevar(tv->name, tv->lb, tv->ub);
+            ntv->bound = tv->bound;
+            extend_((jl_value_t*)tv, (jl_value_t*)ntv, &eqc, 1, 1);
+        }
     }
 
     *penv = jl_alloc_tuple_uninit(eqc.n);

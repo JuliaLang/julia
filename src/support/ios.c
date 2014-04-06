@@ -618,7 +618,7 @@ void ios_close(ios_t *s)
 
 int ios_isopen(ios_t *s)
 {
-	 return s->fd != -1;
+    return s->fd != -1;
 }
 
 static void _buf_init(ios_t *s, bufmode_t bm)
