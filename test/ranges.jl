@@ -94,6 +94,9 @@ r = (-4*int64(maxintfloat(is(Int,Int32) ? Float32 : Float64))):5
 @test (3 in r)
 @test (3.0 in r)
 
+@test !(1 in 1:0)
+@test !(1.0 in 1.0:0.0)
+
 # indexing range with empty range (#4309)
 @test (3:6)[5:4] == 7:6
 @test_throws (3:6)[5:5]
