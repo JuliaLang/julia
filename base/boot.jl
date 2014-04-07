@@ -135,11 +135,12 @@ export
     Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode, SymbolNode, TopNode,
     GetfieldNode, NewvarNode,
     # object model functions
-    apply, arraylen, arrayref, arrayset, arraysize, fieldtype, getfield,
-    setfield!, yieldto, throw, tuple, tuplelen, tupleref, is, ===, isdefined,
-    convert_default, convert_tuple, kwcall,
+    apply, fieldtype, getfield, setfield!, yieldto, throw, tuple, is, ===, isdefined,
+    # arraylen, arrayref, arrayset, arraysize, tuplelen, tupleref, convert_default,
+    # convert_tuple, kwcall,
     # type reflection
-    issubtype, typeassert, typeof, apply_type, isa,
+    issubtype, typeof, isa,
+    # typeassert, apply_type,
     # method reflection
     applicable, invoke, method_exists,
     # constants
