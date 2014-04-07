@@ -130,7 +130,7 @@ function print_response(d::REPLDisplay, errio::IO, r::AbstractREPL, val::ANY, bt
             break
         catch err
             if bt !== nothing
-                println(errio,"SYSTEM: show(lasterr) caused an error")
+                println(errio, "SYSTEM: show(lasterr) caused an error")
                 break
             end
             val = err
@@ -167,15 +167,17 @@ type ShellCompletionProvider <: CompletionProvider
     r::LineEditREPL
 end
 
+bytestring_beforecursor(buf::IOBuffer) = bytestring(pointer(buf.data), buf.ptr-1)
+
 function complete_line(c::REPLCompletionProvider, s)
-    partial = bytestring(s.input_buffer.data[1:position(s.input_buffer)])
+    partial = bytestring_beforecursor(s.input_buffer)
     ret, range, should_complete = completions(partial, endof(partial))
     return ret, partial[range], should_complete
 end
 
 function complete_line(c::ShellCompletionProvider, s)
     # First parse everything up to the current position
-    partial = bytestring(s.input_buffer.data[1:position(s.input_buffer)])
+    partial = bytestring_beforecursor(s.input_buffer)
     ret, range, should_complete = shell_completions(partial, endof(partial))
     return ret, partial[range], should_complete
 end
@@ -211,7 +213,7 @@ function hist_from_file(hp, file)
     hp
 end
 
-function mode_idx(hist::REPLHistoryProvider,mode)
+function mode_idx(hist::REPLHistoryProvider, mode)
     c::Uint8 = 0
     for (k,v) in hist.mode_mapping
         if k == uint8('\0')
@@ -227,7 +229,7 @@ end
 
 function add_history(hist::REPLHistoryProvider, s)
     # bytestring copies
-    str = bytestring(pointer(s.input_buffer.data), s.input_buffer.size)
+    str = bytestring(s.input_buffer)
     if isempty(strip(str)) || # Do not add empty strings to the history
        (length(hist.history) > 0 && str == hist.history[end]) # Do not add consecutive duplicate entries
         return
@@ -278,6 +280,7 @@ function history_prev(s::LineEdit.MIState, hist::REPLHistoryProvider)
     if history_move(s, hist, hist.cur_idx-1)
         LineEdit.move_input_start(s)
         LineEdit.move_line_end(s)
+        LineEdit.refresh_line(s)
     else
         Terminals.beep(LineEdit.terminal(s))
     end
@@ -292,6 +295,7 @@ function history_next(s::LineEdit.MIState, hist::REPLHistoryProvider)
     end
     if history_move(s, hist, cur_idx+1)
         LineEdit.move_input_end(s)
+        LineEdit.refresh_line(s)
     else
         Terminals.beep(LineEdit.terminal(s))
     end
@@ -301,14 +305,14 @@ function history_move_prefix(s::LineEdit.MIState,
                              hist::REPLHistoryProvider,
                              backwards::Bool)
     buf = LineEdit.buffer(s)
-    n = buf.ptr - 1
-    prefix = bytestring(buf.data[1:min(n,buf.size)])
+    pos = position(buf)
+    prefix = bytestring_beforecursor(buf)
     allbuf = bytestring(buf)
     idxs = backwards ? ((hist.cur_idx-1):-1:1) : ((hist.cur_idx+1):length(hist.history))
     for idx in idxs
         if beginswith(hist.history[idx], prefix) && hist.history[idx] != allbuf
             history_move(s, hist, idx)
-            seek(LineEdit.buffer(s), n)
+            seek(LineEdit.buffer(s), pos)
             LineEdit.refresh_line(s)
             return
         end
@@ -326,7 +330,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
 
     qpos = position(query_buffer)
     qpos > 0 || return true
-    searchdata = bytestring(query_buffer.data[1:qpos])
+    searchdata = bytestring_beforecursor(query_buffer)
 
     # Alright, first try to see if the current match still works
     a = position(response_buffer) + 1
@@ -379,7 +383,7 @@ function return_callback(repl, s)
     else
         repl.consecutive_returns = 0
     end
-    ast = parse_input_line(bytestring(copy(s.input_buffer)))
+    ast = parse_input_line(bytestring(s.input_buffer))
     if repl.consecutive_returns > 1 || !isa(ast, Expr) || (ast.head != :continue && ast.head != :incomplete)
         return true
     else
@@ -391,7 +395,7 @@ function find_hist_file()
     filename = ".julia_history2"
     if isfile(filename)
         return filename
-    elseif haskey(ENV,"JULIA_HISTORY")
+    elseif haskey(ENV, "JULIA_HISTORY")
         return ENV["JULIA_HISTORY"]
     else
         return joinpath(homedir(), filename)

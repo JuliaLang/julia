@@ -1035,7 +1035,7 @@ function create_worker(privhost, port, pubhost, stream, config, manage)
             @async begin
                 while !eof(stream)
                     line = readline(stream)
-                    print("\tFrom worker $(wrker.id):\t",bytestring(line))
+                    print("\tFrom worker $(wrker.id):\t$line")
                 end
             end
         end
