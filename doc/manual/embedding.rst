@@ -26,11 +26,13 @@ We start with a simple C program that initializes Julia and calls some Julia cod
       return 0;
   }
 
-In order to build this program you have to put the path to the Julia header into the include path and link against ``libjulia``. For instance, when Julia is installed to ``$JULIA_DIR``, one can compile the above test program ``test.c`` with gcc using::
+In order to build this program you have to put the path to the Julia header into the include path and link against ``libjulia``. For instance, when the Julia header files are installed to ``JULIA_INC_DIR`` and ``libjulia`` is located at ``JULIA_LIB_DIR``, one can compile the above test program ``test.c`` with gcc using::
 
-    gcc -o test -I$JULIA_DIR/include/julia -L$JULIA_DIR/usr/lib -ljulia test.c
+    gcc -o test -IJULIA_INC_DIR -LJULIA_LIB_DIR -ljulia test.c
 
-Alternatively, look at the ``embedding.c`` program in the julia source tree in the ``examples/`` folder.
+To execute ``test`` one has to ensure that ``libjulia`` is located in the search path for shared libraries. 
+Under linux/unix this can be done by appending JULIA_LIB_DIR to the environment variable ``LD_LIBRARY_PATH``. 
+When compiling Julia from source one can also look at the ``embedding.c`` program in the julia source tree in the ``examples/`` folder.
 
 The first thing that has do be done before calling any other Julia C function is to initialize Julia. This is done by calling ``jl_init``, which takes as argument a C string (``const char*``) to the location where Julia is installed. When the argument is ``NULL``, Julia tries to determine the install location automatically.
 
