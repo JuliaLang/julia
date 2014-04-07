@@ -209,7 +209,7 @@ function _jl_spawn(cmd::Ptr{Uint8}, argv::Ptr{Ptr{Uint8}}, loop::Ptr{Void}, pp::
     if error != 0
         disassociate_julia_struct(proc)
         ccall(:jl_forceclose_uv,Void,(Ptr{Void},),proc)
-        throw(UVError("spawn",error))
+        throw(UVError("could not spawn "*string(pp.cmd), error))
     end
     associate_julia_struct(proc,pp)
     return proc
