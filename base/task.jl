@@ -162,12 +162,13 @@ function consume(P::Task, values...)
     schedule_and_wait(P)
 end
 
-start(t::Task) = nothing
-function done(t::Task, val)
+start(t::Task) = (istaskstarted(t) || (t.result = consume(t)); return nothing)
+done(t::Task, val) = istaskdone(t)
+function next(t::Task, val) 
+    result = t.result
     t.result = consume(t)
-    istaskdone(t)
+    (result, nothing)
 end
-next(t::Task, val) = (t.result, nothing)
 
 
 ## condition variables
