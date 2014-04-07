@@ -144,40 +144,41 @@ function reinit_displays()
     pushdisplay(TextDisplay(STDOUT))
 end
 
+macro try_display(expr)
+  quote
+    try $(esc(expr))
+    catch e
+      isa(e, MethodError) && e.f in (display, redisplay, writemime) ||
+        rethrow()
+    end
+  end
+end
+
 function display(x)
     for i = length(displays):-1:1
-        try
-            return display(displays[i], x)
-        catch e
-            if !isa(e, MethodError)
-                rethrow()
-            end
-        end
+        displayable(displays[i], x) &&
+            @try_display return display(displays[i], x)
     end
     throw(MethodError(display, (x,)))
 end
 
 function display(m::MIME, x)
     for i = length(displays):-1:1
-        try
-            return display(displays[i], m, x)
-        catch e
-            if !isa(e, MethodError)
-                rethrow()
-            end
-        end
+        displayable(displays[i], m, x) &&
+            @try_display return display(displays[i], m, x)
     end
     throw(MethodError(display, (m, x)))
 end
+
+displayable(D::Display, args...) =
+  applicable(display, D, args...)
 
 displayable{D<:Display,mime}(d::D, ::MIME{mime}) =
   method_exists(display, (D, MIME{mime}, Any))
 
 function displayable(m::MIME)
     for d in displays
-        if displayable(d, m)
-            return true
-        end
+        displayable(d, m) && return true
     end
     return false
 end
@@ -192,26 +193,16 @@ end
 
 function redisplay(x)
     for i = length(displays):-1:1
-        try
-            return redisplay(displays[i], x)
-        catch e
-            if !isa(e, MethodError)
-                rethrow()
-            end
-        end
+        applicable(redisplay, displays[i], x) &&
+            @try_display return redisplay(displays[i], x)
     end
     throw(MethodError(redisplay, (x,)))
 end
 
 function redisplay(m::Union(MIME,String), x)
     for i = length(displays):-1:1
-        try
-            return redisplay(displays[i], m, x)
-        catch e
-            if !isa(e, MethodError)
-                rethrow()
-            end
-        end
+        applicable(redisplay, displays[i], m, x) &&
+            @try_display return redisplay(displays[i], m, x)
     end
     throw(MethodError(redisplay, (m, x)))
 end
