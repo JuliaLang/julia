@@ -557,14 +557,9 @@ $(OPENLIBM_OBJ_SOURCE): openlibm/Makefile
 	$(MAKE) -C openlibm $(OPENLIBM_FLAGS) $(MAKE_COMMON)
 	touch -c $@
 $(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE)
-ifeq ($(OS),WINNT)
-	cp -a openlibm/libopenlibm.a $(build_libdir)/libopenlibm.a
-	cp $< $@
-else
 	$(MAKE) -C openlibm install $(OPENLIBM_FLAGS) $(MAKE_COMMON)
 	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $@
 	touch -c $@
-endif
 
 clean-openlibm:
 	-$(MAKE) -C openlibm distclean $(OPENLIBM_FLAGS)
@@ -599,14 +594,9 @@ $(OPENSPECFUN_OBJ_SOURCE): openspecfun/Makefile $(OPENLIBM_OBJ_TARGET)
 	$(MAKE) -C openspecfun $(OPENSPECFUN_FLAGS) $(MAKE_COMMON)
 	touch -c $@
 $(OPENSPECFUN_OBJ_TARGET): $(OPENSPECFUN_OBJ_SOURCE)
-ifeq ($(OS),WINNT)
-	cp -a openspecfun/libopenspecfun.a $(build_libdir)/libopenspecfun.a
-	cp $< $@
-else
 	$(MAKE) -C openspecfun install $(OPENSPECFUN_FLAGS) $(MAKE_COMMON)
 	$(INSTALL_NAME_CMD)libopenspecfun.$(SHLIB_EXT) $@
 	touch -c $@
-endif
 
 clean-openspecfun:
 	-$(MAKE) -C openspecfun distclean $(OPENSPECFUN_FLAGS)
