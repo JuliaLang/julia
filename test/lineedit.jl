@@ -115,3 +115,38 @@ LineEdit.char_move_word_left(buf)
 @test bytestring(buf.data[1:buf.size]) == "x = func(arg3)"
 @test LineEdit.edit_delete_prev_word(buf)
 @test bytestring(buf.data[1:buf.size]) == "x = arg3)"
+
+## edit_transpose ##
+let buf = IOBuffer()
+    LineEdit.edit_insert(buf, "abcde")
+    seek(buf,0)
+    LineEdit.edit_transpose(buf)
+    @test bytestring(buf.data[1:buf.size]) == "abcde"
+    LineEdit.char_move_right(buf)
+    LineEdit.edit_transpose(buf)
+    @test bytestring(buf.data[1:buf.size]) == "bacde"
+    LineEdit.edit_transpose(buf)
+    @test bytestring(buf.data[1:buf.size]) == "bcade"
+    seekend(buf)
+    LineEdit.edit_transpose(buf)
+    @test bytestring(buf.data[1:buf.size]) == "bcaed"
+    LineEdit.edit_transpose(buf)
+    @test bytestring(buf.data[1:buf.size]) == "bcade"
+
+    seek(buf, 0)
+    LineEdit.edit_clear(buf)
+    LineEdit.edit_insert(buf, "αβγδε")
+    seek(buf,0)
+    LineEdit.edit_transpose(buf)
+    @test bytestring(buf.data[1:buf.size]) == "αβγδε"
+    LineEdit.char_move_right(buf)
+    LineEdit.edit_transpose(buf)
+    @test bytestring(buf.data[1:buf.size]) == "βαγδε"
+    LineEdit.edit_transpose(buf)
+    @test bytestring(buf.data[1:buf.size]) == "βγαδε"
+    seekend(buf)
+    LineEdit.edit_transpose(buf)
+    @test bytestring(buf.data[1:buf.size]) == "βγαεδ"
+    LineEdit.edit_transpose(buf)
+    @test bytestring(buf.data[1:buf.size]) == "βγαδε"
+end
