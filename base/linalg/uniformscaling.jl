@@ -1,5 +1,6 @@
-import Base: +, -, *, /, copy, ctranspose, getindex, showarray, transpose
+import Base: copy, ctranspose, getindex, showarray, transpose
 import Base.LinAlg: SingularException
+
 immutable UniformScaling{T<:Number}
     λ::T
 end
@@ -16,9 +17,13 @@ copy(J::UniformScaling) = UniformScaling(J.λ)
 transpose(J::UniformScaling) = J
 ctranspose(J::UniformScaling) = UniformScaling(conj(J.λ))
 
-+(J1::UniformScaling, J2::UniformScaling)  = UniformScaling(J1.λ+J2.λ)
++(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ+J2.λ)
 +{T}(B::BitArray{2},J::UniformScaling{T}) = bitunpack(B) + J
-+(J::UniformScaling, B::BitArray{2}) 	  = J + bitunpack(B)
++(J::UniformScaling, B::BitArray{2})      = J + bitunpack(B)
++(J::UniformScaling, A::AbstractMatrix)   = A + J
++(J::UniformScaling, x::Number)           = J.λ + x
++(x::Number, J::UniformScaling)           = x + J.λ
+
 function +{TA,TJ}(A::AbstractMatrix{TA}, J::UniformScaling{TJ})
     n = chksquare(A)
     B = similar(A, promote_type(TA,TJ))
@@ -28,11 +33,14 @@ function +{TA,TJ}(A::AbstractMatrix{TA}, J::UniformScaling{TJ})
     end
     B
 end
-+(J::UniformScaling, A::AbstractMatrix) = A + J
 
+-(J::UniformScaling)                      = UniformScaling(-J.λ)
 -(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ-J2.λ)
--(B::BitArray{2}, J::UniformScaling) 	 = bitunpack(B) - J
--(J::UniformScaling, B::BitArray{2}) 	 = J - bitunpack(B)
+-(B::BitArray{2}, J::UniformScaling)      = bitunpack(B) - J
+-(J::UniformScaling, B::BitArray{2})      = J - bitunpack(B)
+-(J::UniformScaling, x::Number)           = J.λ - x
+-(x::Number, J::UniformScaling)           = x - J.λ
+
 function -{TA,TJ<:Number}(A::AbstractMatrix{TA}, J::UniformScaling{TJ})
     n = chksquare(A)
     B = similar(A, promote_type(TA,TJ))
