@@ -76,7 +76,7 @@ ifeq ($(shell [ -f version_git.jl ] && echo "true"), true)
 	    echo "WARNING: Using boilerplate git version info" >&2; \
 	fi
 else
-	$(warning "WARNING: Using boilerplate git version info")
+	$(warning "WARNING: Generating boilerplate git version info")
 	@sh version_git.sh NO_GIT > version_git.jl
 endif
 endif
