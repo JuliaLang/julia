@@ -191,7 +191,7 @@ function which(f::Callable, t::(Type...))
         throw(ErrorException("not a generic function, no methods available"))
     end
     ms = methods(f, t)
-    isempty(ms) && throw(MethodError(f, t))
+    isempty(ms) && error("no method found for the specified argument types")
     ms[1]
 end
 
@@ -203,11 +203,11 @@ function gen_call_with_extracted_types(fcn, ex0)
         # keyword args not used in dispatch, so just remove them
         args = filter(a->!(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args)
         return Expr(:call, fcn, esc(args[1]),
-            Expr(:call, :typesof, map(esc, args[2:end])...))
+                    Expr(:call, :typesof, map(esc, args[2:end])...))
     end
     if isa(ex0, Expr) && ex0.head == :call
         return Expr(:call, fcn, esc(ex0.args[1]),
-            Expr(:call, :typesof, map(esc, ex0.args[2:end])...))
+                    Expr(:call, :typesof, map(esc, ex0.args[2:end])...))
     end
     ex = expand(ex0)
     exret = Expr(:call, :error, "expression is not a function call")
@@ -221,7 +221,7 @@ function gen_call_with_extracted_types(fcn, ex0)
                          Expr(:call, :typesof, map(esc, ex.args[3:end])...))
         else
             exret = Expr(:call, fcn, esc(ex.args[1]),
-                Expr(:call, :typesof, map(esc, ex.args[2:end])...))
+                         Expr(:call, :typesof, map(esc, ex.args[2:end])...))
         end
     elseif ex.head == :body
         a1 = ex.args[1]
@@ -229,7 +229,7 @@ function gen_call_with_extracted_types(fcn, ex0)
             a11 = a1.args[1]
             if a11 == :setindex!
                 exret = Expr(:call, fcn, a11,
-                    Expr(:call, :typesof, map(esc, a1.args[2:end])...))
+                             Expr(:call, :typesof, map(esc, a1.args[2:end])...))
             end
         end
     elseif ex.head == :thunk
@@ -243,7 +243,7 @@ end
 for fname in [:which, :less, :edit, :code_typed, :code_lowered, :code_llvm, :code_native]
     @eval begin
         macro ($fname)(ex0)
-            gen_call_with_extracted_types($fname, ex0)
+            gen_call_with_extracted_types($(Expr(:quote,fname)), ex0)
         end
     end
 end
