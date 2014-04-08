@@ -462,12 +462,12 @@ function hist!{HT}(H::AbstractArray{HT,2}, A::AbstractMatrix, edg::AbstractVecto
         fill!(H, zero(HT))
     end
     for j = 1:n
-        hist!(sub(H(H, :, j), sub(A, :, j), edg))
+        hist!(sub(H, :, j), sub(A, :, j), edg)
     end
     edg, H
 end
 
-hist(A::AbstractMatrix, edg::AbstractVector) = hist!(Array(Int, length(edg-1), size(A,2)), A, edg)
+hist(A::AbstractMatrix, edg::AbstractVector) = hist!(Array(Int, length(edg)-1, size(A,2)), A, edg)
 hist(A::AbstractMatrix, n::Integer) = hist(A,histrange(A,n))
 hist(A::AbstractMatrix) = hist(A,sturges(size(A,1)))
 
