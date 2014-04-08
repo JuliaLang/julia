@@ -2741,7 +2741,7 @@ function replace_tupleref!(ast, e::ANY, tupname, vals, sv, i0)
     end
 end
 
-function code_typed(f::Callable, types)
+function code_typed(f::Callable, types::(Type...))
     asts = {}
     for x in _methods(f,types,-1)
         linfo = x[3].func.code

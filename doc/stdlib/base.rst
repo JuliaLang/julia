@@ -49,6 +49,10 @@ Getting Around
 
    Edit the definition of a function, optionally specifying a tuple of types to indicate which method to edit.
 
+.. function:: @edit
+
+   Evaluates the arguments to the function call, determines their types, and calls the ``edit`` function on the resulting expression
+
 .. function:: less(file::String, [line])
 
    Show a file using the default pager, optionally providing a starting line number. Returns to the julia prompt when you quit the pager.
@@ -56,6 +60,10 @@ Getting Around
 .. function:: less(function, [types])
 
    Show the definition of a function using the default pager, optionally specifying a tuple of types to indicate which method to see.
+
+.. function:: @less
+
+   Evaluates the arguments to the function call, determines their types, and calls the ``less`` function on the resulting expression
 
 .. function:: clipboard(x)
 
@@ -89,9 +97,9 @@ Getting Around
 
    Search documentation for functions related to ``string``.
 
-.. function:: which(f, args...)
+.. function:: which(f, types)
 
-   Return the method of ``f`` (a ``Method`` object) that will be called for the given arguments.
+   Return the method of ``f`` (a ``Method`` object) that will be called for arguments with the given types.
 
 .. function:: @which
 
@@ -5520,17 +5528,33 @@ Internals
 
    Returns an array of lowered ASTs for the methods matching the given generic function and type signature.
 
+.. function:: @code_lowered
+
+   Evaluates the arguments to the function call, determines their types, and calls the ``code_lowered`` function on the resulting expression
+
 .. function:: code_typed(f, types)
 
    Returns an array of lowered and type-inferred ASTs for the methods matching the given generic function and type signature.
+
+.. function:: @code_typed
+
+   Evaluates the arguments to the function call, determines their types, and calls the ``code_typed`` function on the resulting expression
 
 .. function:: code_llvm(f, types)
 
    Prints the LLVM bitcodes generated for running the method matching the given generic function and type signature to STDOUT.
 
+.. function:: @code_llvm
+
+   Evaluates the arguments to the function call, determines their types, and calls the ``code_llvm`` function on the resulting expression
+
 .. function:: code_native(f, types)
 
    Prints the native assembly instructions generated for running the method matching the given generic function and type signature to STDOUT.
+
+.. function:: @code_native
+
+   Evaluates the arguments to the function call, determines their types, and calls the ``code_native`` function on the resulting expression
 
 .. function:: precompile(f,args::(Any...,))
 

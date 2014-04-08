@@ -51,11 +51,10 @@ function less(file::String, line::Integer)
     run(`$pager +$(line)g $file`)
 end
 less(file::String) = less(file, 1)
-
-edit(f::Union(Function,DataType))    = edit(functionloc(f)...)
-edit(f::Union(Function,DataType), t) = edit(functionloc(f,t)...)
-less(f::Union(Function,DataType))    = less(functionloc(f)...)
-less(f::Union(Function,DataType), t) = less(functionloc(f,t)...)
+edit(f::Callable)               = edit(functionloc(f)...)
+edit(f::Callable, t::(Type...)) = edit(functionloc(f,t)...)
+less(f::Callable)               = less(functionloc(f)...)
+less(f::Callable, t::(Type...)) = less(functionloc(f,t)...)
 
 function edit( m::Method )
     tv, decls, file, line = arg_decl_parts(m)
@@ -187,51 +186,66 @@ versioninfo(verbose::Bool) = versioninfo(STDOUT,verbose)
 
 # searching definitions
 
-function which(f::Callable, args...)
+function which(f::Callable, t::(Type...))
     if !isgeneric(f)
         throw(ErrorException("not a generic function, no methods available"))
     end
-    ms = methods(f, map(a->(isa(a,Type) ? Type{a} : typeof(a)), args))
-    isempty(ms) && throw(MethodError(f, args))
+    ms = methods(f, t)
+    isempty(ms) && throw(MethodError(f, t))
     ms[1]
 end
 
-macro which(ex0)
-    if isa(ex0,Expr) &&
-        any(a->(Meta.isexpr(a,:kw) || Meta.isexpr(a,:parameters)), ex0.args)
+typesof(args...) = map(a->(isa(a,Type) ? Type{a} : typeof(a)), args)
+
+function gen_call_with_extracted_types(fcn, ex0)
+    if isa(ex0, Expr) &&
+        any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args)
         # keyword args not used in dispatch, so just remove them
-        args = filter(a->!(Meta.isexpr(a,:kw) || Meta.isexpr(a,:parameters)), ex0.args)
-        return Expr(:call, :which, map(esc, args)...)
+        args = filter(a->!(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args)
+        return Expr(:call, fcn, esc(args[1]),
+            Expr(:call, :typesof, map(esc, args[2:end])...))
     end
     if isa(ex0, Expr) && ex0.head == :call
-        return Expr(:call, :which, map(esc, ex0.args)...)
+        return Expr(:call, fcn, esc(ex0.args[1]),
+            Expr(:call, :typesof, map(esc, ex0.args[2:end])...))
     end
     ex = expand(ex0)
     exret = Expr(:call, :error, "expression is not a function call")
     if !isa(ex, Expr)
         # do nothing -> error
     elseif ex.head == :call
-        if any(e->(isa(e,Expr) && e.head==:(...)), ex0.args) &&
-            isa(ex.args[1],TopNode) && ex.args[1].name == :apply
-            exret = Expr(:call, ex.args[1], :which,
+        if any(e->(isa(e, Expr) && e.head==:(...)), ex0.args) &&
+            isa(ex.args[1], TopNode) && ex.args[1].name == :apply
+            exret = Expr(:call, ex.args[1], fcn,
                          Expr(:tuple, esc(ex.args[2])),
-                         map(esc, ex.args[3:end])...)
+                         Expr(:call, :typesof, map(esc, ex.args[3:end])...))
         else
-            exret = Expr(:call, :which, map(esc, ex.args)...)
+            exret = Expr(:call, fcn, esc(ex.args[1]),
+                Expr(:call, :typesof, map(esc, ex.args[2:end])...))
         end
     elseif ex.head == :body
         a1 = ex.args[1]
         if isa(a1, Expr) && a1.head == :call
             a11 = a1.args[1]
             if a11 == :setindex!
-                exret = Expr(:call, :which, a11, map(esc, a1.args[2:end])...)
+                exret = Expr(:call, fcn, a11,
+                    Expr(:call, :typesof, map(esc, a1.args[2:end])...))
             end
         end
     elseif ex.head == :thunk
-        exret = Expr(:call, :error, "expression is not a function call, or is too complex for @which to analyze; "
+        exret = Expr(:call, :error, "expression is not a function call, "
+                                  * "or is too complex for @which to analyze; "
                                   * "break it down to simpler parts if possible")
     end
     exret
+end
+
+for fname in [:which, :less, :edit, :code_typed, :code_lowered, :code_llvm, :code_native]
+    @eval begin
+        macro ($fname)(ex0)
+            gen_call_with_extracted_types($fname, ex0)
+        end
+    end
 end
 
 # `methodswith` -- shows a list of methods using the type given
