@@ -110,7 +110,7 @@ function readme(pkg::String, user::String=""; force::Bool=false)
         println(io, "# $pkg")
         isempty(user) && return
         url = "https://travis-ci.org/$user/$pkg.jl"
-        println(io, "\n[![Build Status]($url.png)]($url)")
+        println(io, "\n[![Build Status]($url.svg)]($url)")
     end
 end
 
