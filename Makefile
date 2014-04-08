@@ -195,6 +195,9 @@ else
 endif
 	$(INSTALL_F) $(build_includedir)/uv* $(DESTDIR)$(includedir)/julia
 endif
+ifeq ($(USE_SYSTEM_UTF8PROC),0)
+	$(INSTALL_F) $(build_includedir)/utf8proc.h $(DESTDIR)$(includedir)/julia
+endif
 	$(INSTALL_F) src/julia.h src/options.h src/support/*.h $(DESTDIR)$(includedir)/julia
 	# Copy system image
 	$(INSTALL_F) $(build_private_libdir)/sys.ji $(DESTDIR)$(private_libdir)
