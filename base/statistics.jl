@@ -380,7 +380,7 @@ function histrange{T<:FloatingPoint,N}(v::AbstractArray{T,N}, n::Integer)
     if length(v) == 0
         return 0.0:1.0:0.0
     end
-    lo, hi = minimum(v), maximum(v)
+    lo, hi = extrema(v)
     if hi == lo
         step = 1.0
     else
@@ -404,7 +404,7 @@ function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
     if length(v) == 0
         return 0:1:0
     end
-    lo, hi = minimum(v), maximum(v)
+    lo, hi = extrema(v)
     if hi == lo
         step = 1
     else
@@ -462,12 +462,12 @@ function hist!{HT}(H::AbstractArray{HT,2}, A::AbstractMatrix, edg::AbstractVecto
         fill!(H, zero(HT))
     end
     for j = 1:n
-        hist!(sub(H(H, :, j), sub(A, :, j), edg))
+        hist!(sub(H, :, j), sub(A, :, j), edg)
     end
     edg, H
 end
 
-hist(A::AbstractMatrix, edg::AbstractVector) = hist!(Array(Int, length(edg-1), size(A,2)), A, edg)
+hist(A::AbstractMatrix, edg::AbstractVector) = hist!(Array(Int, length(edg)-1, size(A,2)), A, edg)
 hist(A::AbstractMatrix, n::Integer) = hist(A,histrange(A,n))
 hist(A::AbstractMatrix) = hist(A,sturges(size(A,1)))
 
