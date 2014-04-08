@@ -87,7 +87,7 @@ let x = ["a" "b"; "d" ""], io = IOBuffer()
 end
 
 let x = ["\"hello\"", "world\""], io = IOBuffer()
-    print(io, x)
+    writedlm(io, x, quotes=false)
     @assert takebuf_string(io) == "\"hello\"\nworld\"\n"
 
     writedlm(io, x)
