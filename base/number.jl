@@ -42,10 +42,10 @@ reinterpret{T<:Real}(::Type{T}, x::Real) = box(T,x)
 
 map(f::Callable, x::Number) = f(x)
 
-zero(x::Number) = oftype(x,0.0)
-zero{T<:Number}(::Type{T}) = oftype(T,0.0)
-one(x::Number)  = oftype(x,1.0)
-one{T<:Number}(::Type{T}) = oftype(T,1.0)
+zero(x::Number) = oftype(x,0)
+zero{T<:Number}(::Type{T}) = oftype(T,0)
+one(x::Number)  = oftype(x,1)
+one{T<:Number}(::Type{T}) = oftype(T,1)
 
 const _numeric_conversion_func_names =
     (:int,:integer,:signed,:int8,:int16,:int32,:int64,:int128,
