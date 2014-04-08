@@ -21,6 +21,11 @@ end
 
 Bidiagonal(A::AbstractMatrix, isupper::Bool)=Bidiagonal(diag(A), diag(A, isupper?1:-1), isupper)
 
+function getindex{T}(A::Bidiagonal{T}, i::Integer, j::Integer)
+    (1<=i<=size(A,2) && 1<=j<=size(A,2)) || throw(BoundsError())
+    i == j ? A.dv[i] : (A.isupper && (i == j-1)) || (!A.isupper && (i == j+1)) ? A.ev[min(i,j)] : zero(T)
+end
+
 #Converting from Bidiagonal to dense Matrix
 full{T}(M::Bidiagonal{T}) = convert(Matrix{T}, M)
 convert{T}(::Type{Matrix{T}}, A::Bidiagonal{T})=diagm(A.dv) + diagm(A.ev, A.isupper?1:-1)
