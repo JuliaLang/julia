@@ -169,6 +169,7 @@ function done(t::Task, val)
 end
 next(t::Task, val) = (t.result, nothing)
 
+isempty(::Task) = error("isempty not defined for Tasks")
 
 ## condition variables
 
