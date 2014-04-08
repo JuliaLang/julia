@@ -476,17 +476,18 @@ function edit_backspace(buf::IOBuffer)
     end
 end
 
-function edit_delete(s)
-    buf = buffer(s)
+edit_delete(s) = edit_delete(buffer(s)) ? refresh_line(s) : beep(LineEdit.terminal(s))
+function edit_delete(buf::IOBuffer)
+    # (buf.size == 0 || eof(buf)) && return false
     if buf.size > 0 && position(buf) < buf.size
         oldpos = position(buf)
-        char_move_right(s)
+        char_move_right(buf)
         memmove(buf, oldpos+1, buf, position(buf)+1, buf.size-position(buf))
         buf.size -= position(buf) - oldpos
         seek(buf, oldpos)
-        refresh_line(s)
+        return true
     else
-        beep(LineEdit.terminal(s))
+        return false
     end
 end
 
@@ -547,6 +548,18 @@ function edit_kill_line(s::MIState)
     print(buffer(s), rest)
     seek(buffer(s), pos)
     refresh_line(s)
+end
+
+edit_transpose(s) = edit_transpose(buffer(s)) && refresh_line(s)
+function edit_transpose(buf::IOBuffer)
+    position(buf) == 0 && return false
+    eof(buf) && char_move_left(buf)
+    char_move_left(buf)
+    pos = position(buf)
+    a, b = read(buf, Char), read(buf, Char)
+    seek(buf, pos)
+    write(buf, b, a)
+    return true
 end
 
 edit_clear(buf::IOBuffer) = truncate(buf, 0)
@@ -1183,6 +1196,13 @@ const default_keymap =
         end
         edit_insert(s, input)
     end,
+    "^T"      => edit_transpose,
+    # Unused and unprintable control character combinations
+    "^G"      => nothing,
+    "^O"      => nothing,
+    "^Q"      => nothing,
+    "^V"      => nothing,
+    "^X"      => nothing,
 }
 
 function history_keymap(hist)
