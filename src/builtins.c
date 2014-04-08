@@ -1101,7 +1101,7 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
     // mimic jl_show, but never calling a julia method
     size_t n = 0;
     if (v == NULL) {
-        n += JL_PRINTF(out, "<null>");
+        n += JL_PRINTF(out, "#<null>");
     }
     else if (jl_is_lambda_info(v)) {
         jl_lambda_info_t *li = (jl_lambda_info_t*)v;
@@ -1147,11 +1147,11 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
             n += JL_PRINTF(out, "%s", jl_gf_name(v)->name);
         }
         else {
-            n += JL_PRINTF(out, "<# function>");
+            n += JL_PRINTF(out, "#<function>");
         }
     }
     else if (jl_typeis(v, jl_intrinsic_type)) {
-        n += JL_PRINTF(out, "<# intrinsic function %d>", *(uint32_t*)jl_data_ptr(v));
+        n += JL_PRINTF(out, "#<intrinsic function %d>", *(uint32_t*)jl_data_ptr(v));
     }
     else if (jl_is_int64(v)) {
         n += JL_PRINTF(out, "%d", jl_unbox_int64(v));
@@ -1244,11 +1244,6 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
         n += jl_static_show(out, jl_fieldref(v,0));
         n += JL_PRINTF(out, " end");
     }
-    else if (jl_is_newvarnode(v)) {
-        n += JL_PRINTF(out, "<newvar ");
-        n += jl_static_show(out, jl_fieldref(v,0));
-        n += JL_PRINTF(out, ">");
-    }
     else if (jl_is_topnode(v)) {
         n += JL_PRINTF(out, "top(");
         n += jl_static_show(out, jl_fieldref(v,0));
@@ -1283,9 +1278,14 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
         n += JL_PRINTF(out, "[");
         size_t j, tlen = jl_array_len(v);
         for (j = 0; j < tlen; j++) {
-            n += jl_static_show(out, jl_arrayref((jl_array_t*)v,j));
+            jl_value_t *elt;
+            if (((jl_array_t*)v)->ptrarray)
+                elt = jl_cellref(v, j);
+            else
+                elt = jl_arrayref((jl_array_t*)v,j);
+            n += jl_static_show(out, elt);
             if (j != tlen-1)
-               n += JL_PRINTF(out, ", ");
+                n += JL_PRINTF(out, ", ");
         }
         n += JL_PRINTF(out, "]");
     }
