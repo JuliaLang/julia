@@ -43,9 +43,13 @@ function dot{T<:BlasComplex, TI<:Integer}(x::Vector{T}, rx::Union(UnitRange{TI},
     BLAS.dotc(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
 end
 function dot(x::AbstractVector, y::AbstractVector)
-    length(x)==length(y) || throw(DimensionMismatch(""))
-    s = zero(eltype(x))*zero(eltype(y))
-    for i=1:length(x)
+    lx = length(x)
+    lx==length(y) || throw(DimensionMismatch(""))
+    if lx == 0
+        return zero(eltype(x))*zero(eltype(y))
+    end
+    s = conj(x[1])*y[1]
+    @inbounds for i = 2:lx
         s += conj(x[i])*y[i]
     end
     s

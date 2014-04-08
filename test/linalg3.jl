@@ -198,3 +198,6 @@ Ai = int(ceil(Ar*100))
 @test isequal(scale(Float64[1.0], big(2.0)im), Complex{BigFloat}[2.0im])
 @test isequal(scale(BigFloat[1.0], 2.0im),     Complex{BigFloat}[2.0im])
 @test isequal(scale(BigFloat[1.0], 2.0f0im),   Complex{BigFloat}[2.0im])
+
+# issue #6450
+@test dot({1.0,2.0},{3.5,4.5}) === 12.5
