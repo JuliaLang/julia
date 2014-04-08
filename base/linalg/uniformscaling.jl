@@ -82,3 +82,10 @@ end
 \(A::AbstractMatrix, J::UniformScaling) = inv(A)*J.λ
 
 \(x::Number, J::UniformScaling) = UniformScaling(x\J.λ)
+
+.*(x::Number,J::UniformScaling) = UniformScaling(x*J.λ)
+.*(J::UniformScaling,x::Number) = UniformScaling(J.λ*x)
+
+./(J::UniformScaling,x::Number) = UniformScaling(J.λ/x)
+
+==(J1::UniformScaling,J2::UniformScaling) = (J1.λ == J2.λ)
