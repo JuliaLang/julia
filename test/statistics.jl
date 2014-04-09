@@ -11,10 +11,10 @@
 @test median([1.,-1.,Inf,-Inf]) == 0.0
 @test isnan(median([-Inf,Inf]))
 
-@test_throws median([])
-@test_throws median([NaN])
-@test_throws median([0.0,NaN])
-@test_throws median([NaN,0.0])
+@test_throws median([]) ErrorException
+@test_throws median([NaN]) ErrorException
+@test_throws median([0.0,NaN]) ErrorException
+@test_throws median([NaN,0.0]) ErrorException
 
 @test mean([1,2,3]) == 2.
 @test mean([0 1 2; 4 5 6], 1) == [2.  3.  4.]
@@ -60,7 +60,7 @@ end
 X = [1. 2. 3. 4. 5.; 5. 4. 6. 2. 1.]'
 Y = [6. 1. 5. 3. 2.; 2. 7. 8. 4. 3.]'
 
-for vd in [1, 2], zm in [true, false], cr in [true, false] 
+for vd in [1, 2], zm in [true, false], cr in [true, false]
     # println("vd = $vd: zm = $zm, cr = $cr")
     if vd == 1
         k = size(X, 2)
@@ -105,7 +105,7 @@ for vd in [1, 2], zm in [true, false], cr in [true, false]
     @test_approx_eq C Cxy[1,:]
 
     C = zm ? cov(X, y1; vardim=vd, mean=0, corrected=cr) :
-             cov(X, y1; vardim=vd, corrected=cr) 
+             cov(X, y1; vardim=vd, corrected=cr)
     @test size(C) == (k, 1)
     @test_approx_eq C Cxy[:,1]
 
@@ -118,7 +118,7 @@ end
 # test correlation
 
 function safe_cor(x, y, zm::Bool)
-    if !zm 
+    if !zm
         x = x .- mean(x)
         y = y .- mean(y)
     end
@@ -197,5 +197,3 @@ end
 @test quantile([1,2,3,4],0.5) == 2.5
 @test quantile([1., 3],[.25,.5,.75])[2] == median([1., 3])
 @test quantile([0.:100.],[.1,.2,.3,.4,.5,.6,.7,.8,.9])[1] == 10.0
-
-

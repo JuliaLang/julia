@@ -40,12 +40,21 @@ function do_test(body,qex)
     end)
 end
 
-function do_test_throws(body,qex)
+function do_test_throws(body, qex, bt, extype...)
     handler()(try
         body()
         Failure(qex)
-    catch
-        Success(qex)
+    catch err
+        if length(extype) == 0
+            Base.warn("@test_throws without an exception type is deprecated\n\t Use @test_throws $(qex) $(typeof(err))", bt = bt)
+            Success(qex)
+        else
+            if isa(err, extype[1])
+                Success(qex)
+            else
+                rethrow()
+            end
+        end
     end)
 end
 
@@ -53,12 +62,13 @@ macro test(ex)
     :(do_test(()->($(esc(ex))),$(Expr(:quote,ex))))
 end
 
-macro test_throws(ex)
-    :(do_test_throws(()->($(esc(ex))),$(Expr(:quote,ex))))
+macro test_throws(ex, extype...)
+    :(do_test_throws(()->($(esc(ex))),$(Expr(:quote,ex)),backtrace(),$(extype...)))
 end
+
 macro test_fails(ex)
     Base.warn_once("@test_fails is deprecated, use @test_throws instead.")
-    :(@test_throws $ex)
+    :(@test_throws $ex Exception)
 end
 
 approx_full(x::AbstractArray) = x
