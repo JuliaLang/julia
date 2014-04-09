@@ -45,7 +45,7 @@ let T = TypeVar(:T,true)
                   (Number, Array{Number,1}))
     @test !is(None, typeintersect((Array{T}, Array{T}), (Array, Array{Any})))
     f47{T}(x::Vector{Vector{T}}) = 0
-    @test_throws f47(Array(Vector,0))
+    @test_throws f47(Array(Vector,0)) MethodError
     @test f47(Array(Vector{Int},0)) == 0
     @test typeintersect((T,T), (Union(Float64,Int64),Int64)) == (Int64,Int64)
     @test typeintersect((T,T), (Int64,Union(Float64,Int64))) == (Int64,Int64)
@@ -338,7 +338,7 @@ function let_undef()
         end
     end
 end
-@test_throws let_undef()
+@test_throws let_undef() UndefVarError
 
 # const implies local in a local scope block
 function const_implies_local()
@@ -396,7 +396,7 @@ begin
     @test  isdefined("a", 1)
     @test !isdefined("a", 2)
 
-    @test_throws isdefined(2)
+    @test_throws isdefined(2) TypeError
 end
 
 # dispatch
@@ -537,9 +537,9 @@ begin
         v[i] = getfield(z, i)
     end
     @test v == [3,4]
-    @test_throws getfield(z, -1)
-    @test_throws getfield(z, 0)
-    @test_throws getfield(z, 3)
+    @test_throws getfield(z, -1) BoundsError
+    @test_throws getfield(z, 0) BoundsError
+    @test_throws getfield(z, 3) BoundsError
 
     strct = LoadError("", 0, "")
     setfield!(strct, 2, 8)
@@ -548,9 +548,9 @@ begin
     @test strct.error == "hi"
     setfield!(strct, 1, "yo")
     @test strct.file == "yo"
-    @test_throws getfield(strct, 10)
-    @test_throws setfield!(strct, 0, "")
-    @test_throws setfield!(strct, 4, "")
+    @test_throws getfield(strct, 10) BoundsError
+    @test_throws setfield!(strct, 0, "") BoundsError
+    @test_throws setfield!(strct, 4, "") BoundsError
 end
 
 # allow typevar in Union to match as long as the arguments contain
@@ -575,7 +575,7 @@ begin
     c = Vector[a]
 
     @test my_func(c,c)==0
-    @test_throws my_func(a,c)
+    @test_throws my_func(a,c) MethodError
 end
 
 begin
@@ -596,9 +596,9 @@ begin
 
     # issue #1202
     foor(x::UnionType) = 1
-    @test_throws foor(StridedArray)
+    @test_throws foor(StridedArray) MethodError
     @test foor(StridedArray.body) == 1
-    @test_throws foor(StridedArray)
+    @test_throws foor(StridedArray) MethodError
 end
 
 # issue #1153
@@ -706,9 +706,9 @@ function NewEntity{ T<:Component }(components::Type{T}...)
   map((c)->c(), components)
 end
 
-@test_throws NewEntity(Transform, Transform, Body, Body)
+@test_throws NewEntity(Transform, Transform, Body, Body) MethodError
 @test isa(NewEntity(Transform, Transform), (Transform, Transform))
-@test_throws NewEntity(Transform, Transform, Body, Body)
+@test_throws NewEntity(Transform, Transform, Body, Body) MethodError
 
 # issue #1826
 let
@@ -897,7 +897,7 @@ end
 
 # issue #3221
 let x = fill(nothing, 1)
-    @test_throws x[1] = 1
+    @test_throws x[1] = 1 MethodError
 end
 
 # issue #3220
@@ -1035,10 +1035,10 @@ end
 
 # make sure convert_default error isn't swallowed by typeof()
 convert_default_should_fail_here() = similar([1],typeof(zero(typeof(rand(2,2)))))
-@test_throws convert_default_should_fail_here()
+@test_throws convert_default_should_fail_here() MethodError
 
 # issue #4343
-@test_throws Array{Float64}{Int, 2}
+@test_throws Array{Float64}{Int, 2} ErrorException
 
 type Foo4376{T}
     x
@@ -1047,7 +1047,7 @@ type Foo4376{T}
 end
 
 @test isa(Foo4376{Float32}(Foo4376{Int}(2)), Foo4376{Float32})
-@test_throws Foo4376{Float32}(Foo4376{Float32}(2.0f0))
+@test_throws Foo4376{Float32}(Foo4376{Float32}(2.0f0)) MethodError
 
 type _0_test_ctor_syntax_
     _0_test_ctor_syntax_{T<:String}(files::Vector{T},step) = 0
@@ -1084,9 +1084,9 @@ end
 
 # issue #4526
 f4526(x) = isa(x.a, Nothing)
-@test_throws f4526(1)
-@test_throws f4526(im)
-@test_throws f4526(1+2im)
+@test_throws f4526(1) ErrorException
+@test_throws f4526(im) ErrorException
+@test_throws f4526(1+2im) ErrorException
 
 # issue #4528
 function f4528(A, B)
@@ -1095,7 +1095,7 @@ function f4528(A, B)
     end
 end
 @test f4528(false, int32(12)) === nothing
-@test_throws f4528(true, int32(12))
+@test_throws f4528(true, int32(12)) ErrorException
 
 # issue #4518
 f4518(x, y::Union(Int32,Int64)) = 0
@@ -1114,7 +1114,7 @@ end
 
 # issue #4645
 i4645(x) = (println(zz); zz = x; zz)
-@test_throws i4645(4)
+@test_throws i4645(4) UndefVarError
 
 # issue #4505
 let
@@ -1130,7 +1130,7 @@ type Z4681
     Z4681() = new(C_NULL)
 end
 Base.convert(::Type{Ptr{Z4681}},b::Z4681) = b.x
-@test_throws ccall(:printf,Int,(Ptr{Uint8},Ptr{Z4681}),"",Z4681())
+@test_throws ccall(:printf,Int,(Ptr{Uint8},Ptr{Z4681}),"",Z4681()) TypeError
 
 # issue #4479
 f4479(::Real,c) = 1
@@ -1155,7 +1155,7 @@ type SIQ{A,B} <: Number
 end
 import Base: promote_rule
 promote_rule{T,T2,S,S2}(A::Type{SIQ{T,T2}},B::Type{SIQ{S,S2}}) = SIQ{promote_type(T,S)}
-@test_throws promote_type(SIQ{Int},SIQ{Float64})
+@test_throws promote_type(SIQ{Int},SIQ{Float64}) ErrorException
 
 # issue #4675
 f4675(x::StridedArray...) = 1
@@ -1194,7 +1194,7 @@ let
     @test test1() == 1
     @test test2() == 1
     @test test3(1) == 1
-    @test_throws test3(2)
+    @test_throws test3(2) MethodError
 end
 
 # issue #4873
@@ -1245,11 +1245,11 @@ let
     t2 = TupleParam{(1,:b)}(true)
 
     # tuple type params can't contain invalid type params
-    @test_throws t3 = TupleParam{(1,"nope")}(true)
+    @test_throws t3 = TupleParam{(1,"nope")}(true) TypeError
 
     # dispatch works properly
     @test tupledispatch(t1) == true
-    @test_throws tupledispatch(t2)
+    @test_throws tupledispatch(t2) MethodError
 end
 
 # issue #5254
@@ -1302,7 +1302,7 @@ function h5142(a::Int)
     x[a]::Int5142
 end
 h5142(true)
-@test_throws h5142(1)
+@test_throws h5142(1) TypeError
 h5142(2)
 
 bitstype 8 Int5142b
@@ -1311,7 +1311,7 @@ function h5142b(a::Int)
     x[a]::(Int8,Int8)
 end
 h5142b(1)
-@test_throws h5142b(2)
+@test_throws h5142b(2) TypeError
 
 # accessing bits tuples of structs
 function test_bits_tuples()
@@ -1470,8 +1470,8 @@ test5536(a::Union(Real, AbstractArray)) = "Non-splatting"
 
 # multiline comments (#6139 and others raised in #6128)
 @test 3 == include_string("1 + 2") == include_string("1 + #==# 2") == include_string("1 + #===# 2") == include_string("1 + #= #= blah =# =# 2") == include_string("1 + #= #= #= nested =# =# =# 2")
-@test_throws include_string("#=")
-@test_throws include_string("#= #= #= =# =# =")
+@test_throws include_string("#=") LoadError
+@test_throws include_string("#= #= #= =# =# =") LoadError
 
 # issue #6142
 type A6142 <: AbstractMatrix{Float64}; end

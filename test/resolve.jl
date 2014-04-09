@@ -204,7 +204,7 @@ reqs_data = {
     {"A", v"1", v"2"},
     {"C", v"2"}
 }
-@test_throws resolve_tst(deps_data, reqs_data)
+@test_throws resolve_tst(deps_data, reqs_data) ErrorException
 
 
 ## DEPENDENCY SCHEME 4: TWO PACKAGES, DAG, WITH TRIVIAL INCONSISTENCY
@@ -248,7 +248,7 @@ want = resolve_tst(deps_data, reqs_data)
 reqs_data = {
     {"A", v"2"}
 }
-@test_throws resolve_tst(deps_data, reqs_data)
+@test_throws resolve_tst(deps_data, reqs_data) ErrorException
 
 
 ## DEPENDENCY SCHEME 6: TWO PACKAGES, CYCLIC, TOTALLY INCONSISTENT
@@ -266,13 +266,13 @@ deps_data = {
 reqs_data = {
     {"A"}
 }
-@test_throws resolve_tst(deps_data, reqs_data)
+@test_throws resolve_tst(deps_data, reqs_data) ErrorException
 
 # require B (impossible)
 reqs_data = {
     {"B"}
 }
-@test_throws resolve_tst(deps_data, reqs_data)
+@test_throws resolve_tst(deps_data, reqs_data) ErrorException
 
 
 ## DEPENDENCY SCHEME 7: THREE PACKAGES, CYCLIC, WITH INCONSISTENCY
@@ -306,7 +306,7 @@ want = resolve_tst(deps_data, reqs_data)
 reqs_data = {
     {"C", v"1", v"2"}
 }
-@test_throws resolve_tst(deps_data, reqs_data)
+@test_throws resolve_tst(deps_data, reqs_data) ErrorException
 
 
 ## DEPENDENCY SCHEME 8: THREE PACKAGES, CYCLIC, TOTALLY INCONSISTENT
@@ -327,19 +327,19 @@ deps_data = {
 reqs_data = {
     {"A"}
 }
-@test_throws resolve_tst(deps_data, reqs_data)
+@test_throws resolve_tst(deps_data, reqs_data) ErrorException
 
 # require B (impossible)
 reqs_data = {
     {"B"}
 }
-@test_throws resolve_tst(deps_data, reqs_data)
+@test_throws resolve_tst(deps_data, reqs_data) ErrorException
 
 # require C (impossible)
 reqs_data = {
     {"C"}
 }
-@test_throws resolve_tst(deps_data, reqs_data)
+@test_throws resolve_tst(deps_data, reqs_data) ErrorException
 
 ## DEPENDENCY SCHEME 9: SIX PACKAGES, DAG
 deps_data = {

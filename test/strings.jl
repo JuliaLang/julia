@@ -216,9 +216,9 @@ parsehex(s) = parseint(s,16)
 @test parseint(" 2") == 2
 @test parseint("+2\n") == 2
 @test parseint("-2") == -2
-@test_throws parseint("   2 \n 0")
-@test_throws parseint("2x")
-@test_throws parseint("-")
+@test_throws parseint("   2 \n 0") ErrorException
+@test_throws parseint("2x") ErrorException
+@test_throws parseint("-") ErrorException
 
 @test parseint("1234") == 1234
 @test parseint("0x1234") == 0x1234
@@ -232,8 +232,9 @@ parsehex(s) = parseint(s,16)
 for T in (Int8,Uint8,Int16,Uint16,Int32,Uint32,Int64,Uint64)#,Int128,Uint128) ## FIXME: #4905
     @test parseint(T,string(typemin(T))) == typemin(T)
     @test parseint(T,string(typemax(T))) == typemax(T)
-    @test_throws parseint(T,string(big(typemin(T))-1))
-    @test_throws parseint(T,string(big(typemax(T))+1))
+    # NOTE: This doesn't reliably raise OverflowErrors!
+    @test_throws parseint(T,string(big(typemin(T))-1)) Exception
+    @test_throws parseint(T,string(big(typemax(T))+1)) OverflowError
 end
 
 # string manipulation
@@ -796,10 +797,10 @@ bin_val = hex2bytes("07bf")
 @test "0123456789abcdefabcdef" == bytes2hex(hex2bytes("0123456789abcdefABCDEF"))
 
 # odd size
-@test_throws hex2bytes("0123456789abcdefABCDEF0")
+@test_throws hex2bytes("0123456789abcdefABCDEF0") ErrorException
 
 #non-hex characters
-@test_throws hex2bytes("0123456789abcdefABCDEFGH")
+@test_throws hex2bytes("0123456789abcdefABCDEFGH") ErrorException
 
 # sizeof
 @test sizeof("abc") == 3
@@ -887,7 +888,7 @@ end
 
 #Tests from Unicode SA#15, "Unicode normalization forms"
 #http://www.unicode.org/reports/tr15/
- 
+
 #1. Canonical equivalence
 let ==(a::Array{Char},b::Array{Char}) = normalize_string(string(a...), :NFC)==normalize_string(string(b...), :NFC)
     ==(a,b) = Base.(:(==))(a,b)
@@ -915,13 +916,13 @@ end
 @test normalize_string("\U212b", :NFD) == "A\U030a"
 @test normalize_string("\U212b", :NFC) == "\U00c5"
 @test normalize_string("\U2126", :NFC) == normalize_string("\U2126", :NFD) == "\U03a9"
- 
+
 #4. Canonical Composites
 @test normalize_string("\U00c5", :NFC) == "\U00c5"
 @test normalize_string("\U00c5", :NFD) == "A\U030a"
 @test normalize_string("\U00f4", :NFC) == "\U00f4"
 @test normalize_string("\U00f4", :NFD) == "o\U0302"
- 
+
 #5. Multiple Combining Marks
 @test normalize_string("\U1e69", :NFD) == "s\U0323\U0307"
 @test normalize_string("\U1e69", :NFC) == "\U1e69"
@@ -929,7 +930,7 @@ end
 @test normalize_string("\U1e0b\U0323", :NFC) == "\U1e0d\U0307"
 @test normalize_string("q\U0307\U0323", :NFC) == "q\U0323\U0307"
 @test normalize_string("q\U0307\U0323", :NFD) == "q\U0323\U0307"
- 
+
 #6. Compatibility Composites
 @test normalize_string("\Ufb01", :NFD) == normalize_string("\Ufb01", :NFC) == "\Ufb01"
 @test normalize_string("\Ufb01", :NFKD) == normalize_string("\Ufb01", :NFKC) == "fi"
