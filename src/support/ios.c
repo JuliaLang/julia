@@ -72,6 +72,8 @@ static int _enonfatal(int err)
 }
 
 #define SLEEP_TIME 5//ms
+#define MAXSIZE ((1l << 31) - 1)   // OSX cannot handle blocks larger than this
+#define MIN(a,b) (((a)<(b))?(a):(b))
 
 // return error code, #bytes read in *nread
 // these wrappers retry operations until success or a fatal error
@@ -80,7 +82,7 @@ static int _os_read(long fd, void *buf, size_t n, size_t *nread)
     ssize_t r;
 
     while (1) {
-        r = read((int)fd, buf, n);
+        r = read((int)fd, buf, MIN(n, MAXSIZE));
         if (r > -1) {
             *nread = (size_t)r;
             return 0;
@@ -116,7 +118,7 @@ static int _os_write(long fd, const void *buf, size_t n, size_t *nwritten)
     ssize_t r;
 
     while (1) {
-        r = write((int)fd, buf, n);
+        r = write((int)fd, buf, MIN(n, MAXSIZE));
         if (r > -1) {
             *nwritten = (size_t)r;
             return 0;
