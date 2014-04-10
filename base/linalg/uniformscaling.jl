@@ -11,7 +11,7 @@ eltype{T}(J::UniformScaling{T}) = T
 ndims(J::UniformScaling) = 2
 getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ))
 
-showarray(io::IO, J::UniformScaling; kw...) = print(io, "$(typeof(J))\n$(J.λ)*I")
+show(io::IO, J::UniformScaling) = print(io, "$(typeof(J))\n$(J.λ)*I")
 copy(J::UniformScaling) = UniformScaling(J.λ)
 
 transpose(J::UniformScaling) = J
