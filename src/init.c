@@ -881,6 +881,7 @@ DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *
             free(build_ji);
             char *build_o;
             if (asprintf(&build_o, "%s.o",build_path) > 0) {
+                jl_dump_linedebug_info();
                 jl_dump_objfile(build_o,0);
                 free(build_o);
             }
