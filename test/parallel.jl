@@ -100,7 +100,7 @@ remotecall_fetch(findfirst(id->(id != myid()), procs(ds)), setindex!, ds, 1.0, 1
 # SharedArray as an array
 # Since the data in d will depend on the nprocs, just test that these operations work
 a = d[1:5]
-@test_throws d[-1:5] BoundsError
+@test_throws BoundsError d[-1:5]
 a = d[1,1,1:3:end]
 d[2:4] = 7
 d[5,1:2:4,8] = 19
@@ -168,7 +168,7 @@ if haskey(ENV, "PTEST_FULL")
     println("START of parallel tests that print errors")
 
     # make sure exceptions propagate when waiting on Tasks
-    @test_throws (@sync (@async error("oops"))) ErrorException
+    @test_throws ErrorException (@sync (@async error("oops")))
 
     # pmap tests
     # needs at least 4 processors (which are being created above for the @parallel tests)

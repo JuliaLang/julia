@@ -40,16 +40,16 @@ function do_test(body,qex)
     end)
 end
 
-function do_test_throws(body, qex, bt, extype...)
+function do_test_throws(body, qex, bt, extype)
     handler()(try
         body()
         Failure(qex)
     catch err
-        if length(extype) == 0
-            Base.warn("@test_throws without an exception type is deprecated\n\t Use @test_throws $(qex) $(typeof(err))", bt = bt)
+        if extype == nothing
+            Base.warn("@test_throws without an exception type is deprecated\n\t Use @test_throws $(typeof(err)) $(qex)", bt = bt)
             Success(qex)
         else
-            if isa(err, extype[1])
+            if isa(err, extype)
                 Success(qex)
             else
                 rethrow()
@@ -62,8 +62,17 @@ macro test(ex)
     :(do_test(()->($(esc(ex))),$(Expr(:quote,ex))))
 end
 
-macro test_throws(ex, extype...)
-    :(do_test_throws(()->($(esc(ex))),$(Expr(:quote,ex)),backtrace(),$(extype...)))
+macro test_throws(args...)
+    ex = nothing
+    extype = nothing
+    # Users should pass (ExceptionType, Expression) but we give a warning to users that only pass (Expression)
+    if length(args) == 1
+        ex = args[1]
+    elseif length(args) == 2
+        ex = args[2]
+        extype = args[1]
+    end
+    :(do_test_throws(()->($(esc(ex))),$(Expr(:quote,ex)),backtrace(),$(extype)))
 end
 
 macro test_fails(ex)
