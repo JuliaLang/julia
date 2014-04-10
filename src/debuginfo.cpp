@@ -249,3 +249,51 @@ extern "C" void jl_write_coverage_data(void)
         }
     }
 }
+
+typedef std::map<size_t, FuncInfo, revcomp> FuncInfoMap;
+extern "C" void jl_dump_linedebug_info() {
+    FuncInfoMap info = jl_jit_events->getMap();
+    FuncInfoMap::iterator infoiter = info.begin();
+    std::vector<JITEvent_EmittedFunctionDetails::LineStart>::iterator lineiter = (*infoiter).second.lines.begin();
+
+    Type *li_types[2] = {T_size, T_size};
+    StructType *T_lineinfo = StructType::get(jl_LLVMContext, ArrayRef<Type *>(std::vector<Type *>(li_types, li_types+2)), true);
+    
+    std::vector<Constant *> funcinfo_array;
+    funcinfo_array.push_back( ConstantInt::get(T_size, 0) );
+
+    for (; infoiter != info.end(); infoiter++) {
+        // loop over the EmittedFunctionDetails vector
+        lineiter = (*infoiter).second.lines.begin();
+
+        // get the base address for offset calculation
+        size_t fptr = (size_t)(*infoiter).first;
+         
+        std::vector<Constant*> functionlines;
+        while (lineiter != (*infoiter).second.lines.end()) {
+            // store the individual {offset, line} entries
+            Constant* tmpline[2] = { ConstantInt::get(T_size, (*lineiter).Address - fptr),
+                                     ConstantInt::get(T_size, (*lineiter).Loc.getLine()) };
+            Constant *lineinfo = ConstantStruct::get(T_lineinfo, makeArrayRef(tmpline));
+            functionlines.push_back(lineinfo);
+            lineiter++;
+        }
+        Constant *info_data[4] = { ConstantDataArray::getString( jl_LLVMContext, StringRef((*infoiter).second.func->getName().str())),
+                                   ConstantInt::get(T_size, (*infoiter).second.lengthAdr),
+                                   ConstantInt::get(T_size, functionlines.size()),
+                                   ConstantArray::get(ArrayType::get(T_lineinfo, functionlines.size()), ArrayRef<Constant *>(functionlines))
+                                 };
+        Constant *st = ConstantStruct::getAnon(jl_LLVMContext, ArrayRef<Constant *>(info_data), true);
+        funcinfo_array.push_back( st );
+    }
+    // set first element to the total number of FuncInfo entries
+    funcinfo_array[0] = ConstantInt::get(T_size, funcinfo_array.size() - 1);
+    Constant *st_lineinfo = ConstantStruct::getAnon( jl_LLVMContext, ArrayRef<Constant*>(funcinfo_array), true );
+    new GlobalVariable(
+            *jl_Module,
+            st_lineinfo->getType(),
+            true,
+            GlobalVariable::ExternalLinkage,
+            st_lineinfo,
+            "jl_linedebug_info");
+}
