@@ -509,7 +509,12 @@ t_func[apply_type] = (1, Inf, apply_type_tfunc)
 
 function builtin_tfunction(f::ANY, args::ANY, argtypes::ANY)
     if is(f,tuple)
-        return limit_tuple_depth(argtypes)
+        t = limit_tuple_depth(argtypes)
+        # tuple(Type{T...}) should give Type{(T...)}
+        if t!==() && all(isType, t) && isvarargtype(t[length(t)].parameters[1])
+            return Type{map(t->t.parameters[1], t)}
+        end
+        return t
     elseif is(f,arrayset)
         if length(argtypes) < 3
             return None
@@ -764,6 +769,16 @@ function invoke_tfunc(f, types, argtypes)
     return Any
 end
 
+function to_tuple_of_Types(t::ANY)
+    if isType(t)
+        p1 = t.parameters[1]
+        if isa(p1,Tuple) && !isvatuple(p1)
+            return map(t->Type{t}, p1)
+        end
+    end
+    return t
+end
+
 function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
     if is(f,apply) && length(fargs)>0
         if isType(argtypes[1]) && isleaftype(argtypes[1].parameters[1])
@@ -773,7 +788,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
             af = isconstantfunc(fargs[1], sv)
         end
         if !is(af,false)
-            aargtypes = argtypes[2:end]
+            aargtypes = map(to_tuple_of_Types, argtypes[2:end])
             if all(x->isa(x,Tuple), aargtypes) &&
                 !any(isvatuple, aargtypes[1:(length(aargtypes)-1)])
                 e.head = :call1
@@ -2289,9 +2304,9 @@ const top_setfield = TopNode(:setfield)
 const top_tupleref = TopNode(:tupleref)
 const top_tuple = TopNode(:tuple)
 
-function mk_tupleref(texpr, i)
+function mk_tupleref(texpr, i, T)
     e = :(($top_tupleref)($texpr, $i))
-    e.typ = exprtype(texpr)[i]
+    e.typ = T
     e
 end
 
@@ -2445,7 +2460,7 @@ function inlining_pass(e::Expr, sv, ast)
                 newargs = cell(na-2)
                 for i = 3:na
                     aarg = e.args[i]
-                    t = exprtype(aarg)
+                    t = to_tuple_of_Types(exprtype(aarg))
                     if isa(aarg,Expr) && is_known_call(aarg, tuple, sv)
                         # apply(f,tuple(x,y,...)) => f(x,y,...)
                         newargs[i-2] = aarg.args[2:end]
@@ -2453,7 +2468,7 @@ function inlining_pass(e::Expr, sv, ast)
                         newargs[i-2] = { QuoteNode(x) for x in aarg }
                     elseif isa(t,Tuple) && !isvatuple(t) && effect_free(aarg,sv,true)
                         # apply(f,t::(x,y)) => f(t[1],t[2])
-                        newargs[i-2] = { mk_tupleref(aarg,j) for j=1:length(t) }
+                        newargs[i-2] = { mk_tupleref(aarg,j,t[j]) for j=1:length(t) }
                     else
                         # not all args expandable
                         return (e,stmts)
