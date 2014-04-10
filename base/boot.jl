@@ -137,7 +137,7 @@ export
     # object model functions
     apply, fieldtype, getfield, setfield!, yieldto, throw, tuple, is, ===, isdefined,
     # arraylen, arrayref, arrayset, arraysize, tuplelen, tupleref, convert_default,
-    # convert_tuple, kwcall,
+    # kwcall,
     # type reflection
     issubtype, typeof, isa,
     # typeassert, apply_type,

@@ -1,7 +1,7 @@
 # important core definitions
 
 using Core: Intrinsics, arraylen, arrayref, arrayset, arraysize,
-            tuplelen, tupleref, convert_default, convert_tuple, kwcall,
+            tuplelen, tupleref, convert_default, kwcall,
             typeassert, apply_type
 
 import Core.Array  # to add methods
@@ -10,8 +10,21 @@ const NonTupleType = Union(DataType,UnionType,TypeConstructor)
 
 typealias Callable Union(Function,DataType)
 
-convert(T, x)               = convert_default(T, x, convert)
-convert(T::Tuple, x::Tuple) = convert_tuple(T, x, convert)
+convert(T, x) = convert_default(T, x, convert)
+
+convert(::(), ::()) = ()
+convert(::Type{Tuple}, x::Tuple) = x
+
+argtail(x, rest...) = rest
+tupletail(x::Tuple) = argtail(x...)
+
+convert(T::(Any, Any...), x::(Any, Any...)) =
+    tuple(convert(T[1],x[1]), convert(tupletail(T), tupletail(x))...)
+
+convert{T}(::Type{(T...)}, x::Tuple) = cnvt_all(T, x...)
+cnvt_all(T) = ()
+cnvt_all(T, x, rest...) = tuple(convert(T,x), cnvt_all(T, rest...)...)
+
 
 ptr_arg_convert{T}(::Type{Ptr{T}}, x) = convert(T, x)
 ptr_arg_convert(::Type{Ptr{Void}}, x) = x
