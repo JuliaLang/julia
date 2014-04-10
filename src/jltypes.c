@@ -1927,7 +1927,7 @@ static int jl_tuple_subtype_(jl_value_t **child, size_t cl,
         if (cseq && !pseq)
             return 0;
         if (ci >= cl)
-            return pi>=pl || pseq;
+            return pi>=pl || (pseq && !invariant);
         if (pi >= pl)
             return 0;
         jl_value_t *ce = child[ci];
@@ -1937,9 +1937,6 @@ static int jl_tuple_subtype_(jl_value_t **child, size_t cl,
 
         if (!jl_subtype_le(ce, pe, ta, invariant))
             return 0;
-
-        if (cseq && !pseq)
-            return 1;
 
         if (cseq && pseq) return 1;
         if (!cseq) ci++;
@@ -1987,7 +1984,7 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int invariant)
     }
     size_t i;
     if (jl_is_tuple(a)) {
-        if ((jl_tuple_t*)b == jl_tuple_type) return 1;
+        if ((jl_tuple_t*)b == jl_tuple_type && !invariant) return 1;
         if (jl_is_datatype(b) &&
             ((jl_datatype_t*)b)->name == jl_ntuple_typename) {
             jl_tuple_t *tp = ((jl_datatype_t*)b)->parameters;
@@ -2156,7 +2153,7 @@ static int jl_tuple_morespecific_(jl_value_t **child, size_t cl,
         int cseq = (ci<cl) && jl_is_vararg_type(child[ci]);
         int pseq = (pi<pl) && jl_is_vararg_type(parent[pi]);
         if (ci >= cl)
-            return mode || pi>=pl || pseq;
+            return mode || pi>=pl || (pseq && !invariant);
         if (pi >= pl)
             return mode;
         jl_value_t *ce = child[ci];
@@ -2236,7 +2233,7 @@ static int jl_type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant)
     }
     size_t i;
     if (jl_is_tuple(a)) {
-        if ((jl_tuple_t*)b == jl_tuple_type) return 1;
+        if ((jl_tuple_t*)b == jl_tuple_type && !invariant) return 1;
         if (jl_is_datatype(b) &&
             ((jl_datatype_t*)b)->name == jl_ntuple_typename) {
             jl_tuple_t *tp = ((jl_datatype_t*)b)->parameters;
@@ -2407,7 +2404,7 @@ static jl_value_t *tuple_match(jl_tuple_t *child, jl_tuple_t *parent,
         if (!morespecific && cseq && !pseq)
             return jl_false;
         if (ci >= cl)
-            return (mode || pi>=pl || pseq) ? jl_true : jl_false;
+            return (mode || pi>=pl || (pseq && !invariant)) ? jl_true : jl_false;
         if (pi >= pl)
             return mode ? jl_true : jl_false;
         jl_value_t *ce = jl_tupleref(child,ci);

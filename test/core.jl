@@ -104,6 +104,8 @@ end
 @test !isa(Type{(Int,Int)},Tuple)
 @test Type{(Int,Int)} <: Tuple
 @test Type{(Int,)} <: (DataType,)
+@test !isa((Int,), Type{(Int...,)})
+@test !isa((Int,), Type{(Any...,)})
 
 # this is fancy: know that any type T<:Number must be either a DataType or a UnionType
 @test Type{TypeVar(:T,Number)} <: Union(DataType,UnionType)
