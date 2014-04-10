@@ -6,7 +6,10 @@ size(S::LDLt) = size(S.data)
 size(S::LDLt, i::Integer) = size(S.data, i)
 
 convert{T,S}(::Type{LDLt{T,S}}, F::LDLt) = LDLt{T,S}(convert(S, F.data))
-convert{T,S,U}(::Type{LDLt{T}}, F::LDLt{S,U}) = convert(LDLt{T,U}, F)
+# NOTE: the annotaion <:AbstractMatrix shouldn't be necessary, it is introduced
+#       to avoid an ambiguity warning (see issue #6383)
+convert{T,S,U<:AbstractMatrix}(::Type{LDLt{T}}, F::LDLt{S,U}) = convert(LDLt{T,U}, F)
+
 convert{T,S,U}(::Type{Factorization{T}}, F::LDLt{S,U}) = convert(LDLt{T,U}, F)
 
 # SymTridiagonal
