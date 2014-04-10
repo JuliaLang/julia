@@ -291,7 +291,7 @@ const tupleref_tfunc = function (A, t, i)
         end
         T = reduce(tmerge, None, types)
         if wrapType
-            return isleaftype(T) ? Type{T} : Type{TypeVar(:_,T)}
+            return isleaftype(T) || isa(T,TypeVar) ? Type{T} : Type{TypeVar(:_,T)}
         else
             return T
         end
