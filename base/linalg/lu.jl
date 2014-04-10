@@ -65,8 +65,9 @@ lufact{T<:BlasFloat}(A::AbstractMatrix{T}; pivot = true) = lufact!(copy(A), pivo
 lufact{T}(A::AbstractMatrix{T}; pivot = true) = (S = typeof(one(T)/one(T)); S != T ? lufact!(convert(AbstractMatrix{S}, A), pivot=pivot) : lufact!(copy(A), pivot=pivot))
 lufact(x::Number) = LU(fill(x, 1, 1), BlasInt[1], x == 0 ? one(BlasInt) : zero(BlasInt))
 
-function lu(A::Union(Number, AbstractMatrix))
-    F = lufact(A)
+lu(x::Number) = (one(x), x, 1)
+function lu(A::AbstractMatrix; pivot = true)
+    F = lufact(A, pivot = pivot)
     F[:L], F[:U], F[:p]
 end
 
