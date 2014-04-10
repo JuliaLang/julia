@@ -160,7 +160,7 @@ function completions(string, pos)
         startpos = nextind(string, rsearch(string, non_filename_chars, pos))
         r = startpos:pos
         paths = complete_path(string[r])
-        if inc_tag == :string && length(paths) == 1
+        if inc_tag == :string && length(paths) == 1 && !isdir(paths[1])
             paths[1] *= "\""
         end
         return sort(paths), r, true
