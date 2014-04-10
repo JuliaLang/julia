@@ -620,6 +620,8 @@ export
     istril,
     istriu,
     kron,
+    ldltfact,
+    ldltfact!,
     linreg,
     logdet,
     lu,

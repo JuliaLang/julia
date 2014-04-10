@@ -43,41 +43,41 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the LU factorization of ``A``, such that ``A[p,:] = L*U``.
 
-.. function:: lufact(A) -> F
+.. function:: lufact(A, [pivot=true]) -> F
 
-   Compute the LU factorization of ``A``. The return type of ``F`` depends on the type of ``A``.
+   Compute the LU factorization of ``A``. The return type of ``F`` depends on the type of ``A``. In most cases, if ``A`` is a subtype ``S`` of AbstractMatrix with an element type ``T``` supporting ``+``, ``-``, ``*`` and ``/`` the return type is ``LU{T,S{T}}``. If pivoting is chosen (default) the element type should also support ``abs`` and ``<``. When ``A`` is sparse and have element of type ``Float32``, ``Float64``, ``Complex{Float32}``, or ``Complex{Float64}`` the return type is ``UmfpackLU``. Some examples are shown in the table below.
 
-      ======================= ==================== ========================================
-      Type of input ``A``     Type of output ``F`` Relationship between ``F`` and ``A``
-      ----------------------- -------------------- ----------------------------------------
-      :func:`Matrix`           ``LU``              ``F[:L]*F[:U] == A[F[:p], :]``
-      :func:`Tridiagonal`      ``LUTridiagonal``     N/A
-      :func:`SparseMatrixCSC`  ``UmfpackLU``       ``F[:L]*F[:U] == Rs .* A[F[:p], F[:q]]``
-      ======================= ==================== ========================================
+      ======================= ======================== ========================================
+      Type of input ``A``     Type of output ``F``     Relationship between ``F`` and ``A``
+      ----------------------- ------------------------ ----------------------------------------
+      :func:`Matrix`           ``LU``                  ``F[:L]*F[:U] == A[F[:p], :]``
+      :func:`Tridiagonal`      ``LU{T,Tridiagonal{T}}``  N/A
+      :func:`SparseMatrixCSC`  ``UmfpackLU``           ``F[:L]*F[:U] == Rs .* A[F[:p], F[:q]]``
+      ======================= ======================== ========================================
 
    The individual components of the factorization ``F`` can be accessed by indexing:
 
-      =========== ======================================= ====== ================= =============
-      Component   Description                             ``LU`` ``LUTridiagonal`` ``UmfpackLU``
-      ----------- --------------------------------------- ------ ----------------- -------------
-      ``F[:L]``   ``L`` (lower triangular) part of ``LU``    ✓                      ✓
-      ``F[:U]``   ``U`` (upper triangular) part of ``LU``    ✓                      ✓
-      ``F[:p]``   (right) permutation ``Vector``             ✓                      ✓
-      ``F[:P]``   (right) permutation ``Matrix``             ✓
-      ``F[:q]``   left permutation ``Vector``                                       ✓
-      ``F[:Rs]``  ``Vector`` of scaling factors                                     ✓
-      ``F[:(:)]`` ``(L,U,p,q,Rs)`` components                                       ✓
-      =========== ======================================= ====== ================= =============
+      =========== ======================================= ====== ======================= ==============
+      Component   Description                             ``LU`` ``LU{T,Tridiagonal{T}}`` ``UmfpackLU``
+      ----------- --------------------------------------- ------ ----------------------- -------------
+      ``F[:L]``   ``L`` (lower triangular) part of ``LU``    ✓                                     ✓
+      ``F[:U]``   ``U`` (upper triangular) part of ``LU``    ✓                                     ✓
+      ``F[:p]``   (right) permutation ``Vector``             ✓                                     ✓
+      ``F[:P]``   (right) permutation ``Matrix``             ✓              
+      ``F[:q]``   left permutation ``Vector``                                                      ✓
+      ``F[:Rs]``  ``Vector`` of scaling factors                                                    ✓
+      ``F[:(:)]`` ``(L,U,p,q,Rs)`` components                                                      ✓
+      =========== ======================================= ====== ======================= =============
 
-      ================== ====== ================= =============
-      Supported function ``LU`` ``LUTridiagonal`` ``UmfpackLU``
-      ------------------ ------ ----------------- -------------
+      ================== ====== ======================= =============
+      Supported function ``LU`` ``LU{T,Tridiagonal{T}}`` ``UmfpackLU``
+      ------------------ ------ ----------------------- -------------
            ``/``            ✓
-           ``\``            ✓        ✓             ✓
-           ``cond``         ✓                      ✓
-           ``det``          ✓                      ✓
-           ``size``         ✓
-      ================== ====== ================= =============
+           ``\``            ✓                       ✓             ✓
+           ``cond``         ✓                                     ✓
+           ``det``          ✓                       ✓             ✓
+           ``size``         ✓                       ✓
+      ================== ====== ======================= =============
 
 .. function:: lufact!(A) -> LU
 
@@ -93,11 +93,15 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: cholfact(A, [ll]) -> CholmodFactor
 
-   Compute the sparse Cholesky factorization of a sparse matrix ``A``.  If ``A`` is Hermitian its Cholesky factor is determined.  If ``A`` is not Hermitian the Cholesky factor of ``A*A'`` is determined. A fill-reducing permutation is used.  Methods for ``size``, ``solve``, ``\``, ``findn_nzs``, ``diag``, ``det`` and ``logdet``.  One of the solve methods includes an integer argument that can be used to solve systems involving parts of the factorization only.  The optional boolean argument, ``ll`` determines whether the factorization returned is of the ``A[p,p] = L*L'`` form, where ``L`` is lower triangular or ``A[p,p] = scale(L,D)*L'`` form where ``L`` is unit lower triangular and ``D`` is a non-negative vector.  The default is LDL.
+   Compute the sparse Cholesky factorization of a sparse matrix ``A``.  If ``A`` is Hermitian its Cholesky factor is determined.  If ``A`` is not Hermitian the Cholesky factor of ``A*A'`` is determined. A fill-reducing permutation is used.  Methods for ``size``, ``solve``, ``\``, ``findn_nzs``, ``diag``, ``det`` and ``logdet``.  One of the solve methods includes an integer argument that can be used to solve systems involving parts of the factorization only.  The optional boolean argument, ``ll`` determines whether the factorization returned is of the ``A[p,p] = L*L'`` form, where ``L`` is lower triangular or ``A[p,p] = L*Diagonal(D)*L'`` form where ``L`` is unit lower triangular and ``D`` is a non-negative vector.  The default is LDL.
 
 .. function:: cholfact!(A, [LU,][pivot=false,][tol=-1.0]) -> Cholesky
 
    ``cholfact!`` is the same as :func:`cholfact`, but saves space by overwriting the input ``A``, instead of creating a copy.
+
+.. function:: ldltfact(A) -> LDLtFactorization
+
+   Compute a factorization of a positive definite matrix ``A`` such that ``A=L*Diagonal(d)*L'`` where ``L`` is a unit lower triangular matrix and ``d`` is a vector with non-negative elements.
 
 .. function:: qr(A, [pivot=false,][thin=true]) -> Q, R, [p]
 

@@ -213,9 +213,9 @@ trace(x::Number) = x
 inv(a::AbstractVector) = error("argument must be a square matrix")
 inv{T}(A::AbstractMatrix{T}) = A_ldiv_B!(A,eye(T, chksquare(A)))
 
-function \{TA,TB}(A::AbstractMatrix{TA}, B::AbstractVecOrMat{TB})
+function \{TA,TB,N}(A::AbstractMatrix{TA}, B::AbstractArray{TB,N})
     TC = typeof(one(TA)/one(TB))
-    A_ldiv_B!(convert(typeof(A).name.primary{TC}, A), TB == TC ? copy(B) : convert(typeof(B).name.primary{TC}, B))
+    A_ldiv_B!(TA == TC ? copy(A) : convert(AbstractMatrix{TC}, A), TB == TC ? copy(B) : convert(AbstractArray{TC,N}, B))
 end
 \(a::AbstractVector, b::AbstractArray) = reshape(a, length(a), 1) \ b
 /(A::AbstractVecOrMat, B::AbstractVecOrMat) = (B' \ A')'
