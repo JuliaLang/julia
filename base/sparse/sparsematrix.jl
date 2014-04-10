@@ -162,7 +162,7 @@ function convert{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, M::Matrix)
                              convert(Vector{Tv},V), 
                              m, n)
 end
-
+convert{T}(::Type{AbstractMatrix{T}}, A::SparseMatrixCSC) = convert(SparseMatrixCSC{T}, A)
 convert(::Type{Matrix}, S::SparseMatrixCSC) = full(S)
 
 function full{Tv}(S::SparseMatrixCSC{Tv})

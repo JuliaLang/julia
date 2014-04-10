@@ -1,7 +1,7 @@
 #### Specialized matrix types ####
 
 ## Hermitian tridiagonal matrices
-type SymTridiagonal{T} <: AbstractMatrix{T}
+immutable SymTridiagonal{T} <: AbstractMatrix{T}
     dv::Vector{T}                        # diagonal
     ev::Vector{T}                        # subdiagonal
     function SymTridiagonal(dv::Vector{T}, ev::Vector{T})
@@ -10,7 +10,7 @@ type SymTridiagonal{T} <: AbstractMatrix{T}
     end
 end
 
-SymTridiagonal{T}(dv::Vector{T}, ev::Vector{T}) = SymTridiagonal{T}(copy(dv), copy(ev))
+SymTridiagonal{T}(dv::Vector{T}, ev::Vector{T}) = SymTridiagonal{T}(dv, ev)
 
 function SymTridiagonal{Td,Te}(dv::Vector{Td}, ev::Vector{Te})
     T = promote_type(Td,Te)
@@ -19,6 +19,8 @@ end
 
 SymTridiagonal(A::AbstractMatrix) = diag(A,1)==diag(A,-1)?SymTridiagonal(diag(A), diag(A,1)):throw(DimensionMismatch("matrix is not symmetric; cannot convert to SymTridiagonal"))
 full{T}(M::SymTridiagonal{T}) = convert(Matrix{T}, M)
+convert{T}(::Type{SymTridiagonal{T}}, S::SymTridiagonal) = SymTridiagonal(convert(Vector{T}, S.dv), convert(Vector{T}, S.ev))
+convert{T}(::Type{AbstractMatrix{T}}, S::SymTridiagonal) = SymTridiagonal(convert(Vector{T}, S.dv), convert(Vector{T}, S.ev))
 convert{T}(::Type{Matrix{T}}, M::SymTridiagonal{T})=diagm(M.dv)+diagm(M.ev,-1)+conj(diagm(M.ev,1))
 
 size(m::SymTridiagonal) = (length(m.dv), length(m.dv))
@@ -136,32 +138,21 @@ function getindex{T}(A::SymTridiagonal{T}, i::Integer, j::Integer)
 end
 
 ## Tridiagonal matrices ##
-type Tridiagonal{T} <: AbstractMatrix{T}
+immutable Tridiagonal{T} <: AbstractMatrix{T}
     dl::Vector{T}    # sub-diagonal
     d::Vector{T}     # diagonal
     du::Vector{T}    # sup-diagonal
-    dutmp::Vector{T} # scratch space for vector RHS solver, sup-diagonal
-    rhstmp::Vector{T}# scratch space, rhs
-
-    function Tridiagonal(N::Integer)
-        dutmp = Array(T, N-1)
-        rhstmp = Array(T, N)
-        new(dutmp, rhstmp, similar(dutmp), similar(dutmp), similar(rhstmp))
-    end
-
-    function Tridiagonal(dl::Vector{T}, d::Vector{T}, du::Vector{T})
-        N = length(d)
-        if (length(dl) != N-1 || length(du) != N-1)
-            error(string("Cannot make Tridiagonal from incompatible lengths of subdiagonal, diagonal and superdiagonal: (", length(dl), ", ", length(d), ", ", length(du),")"))
-        end
-        new(copy(dl), copy(d), copy(du), Array(T,N-1), Array(T,N))
-    end
+    du2::Vector{T}   # supsup-diagonal for pivoting
 end
-
-Tridiagonal{T}(dl::Vector{T}, d::Vector{T}, du::Vector{T}) = Tridiagonal{T}(dl, d, du)
-
+function Tridiagonal{T}(dl::Vector{T}, d::Vector{T}, du::Vector{T})
+    n = length(d)
+    if (length(dl) != n-1 || length(du) != n-1)
+        error(string("Cannot make Tridiagonal from incompatible lengths of subdiagonal, diagonal and superdiagonal: (", length(dl), ", ", length(d), ", ", length(du),")"))
+    end
+    Tridiagonal(dl, d, du, zeros(T,n-2))
+end
 function Tridiagonal{Tl, Td, Tu}(dl::Vector{Tl}, d::Vector{Td}, du::Vector{Tu})
-    Tridiagonal(map(v->copy(convert(Vector{promote_type(Tl,Td,Tu)}, v)), (dl, d, du))...)
+    Tridiagonal(map(v->convert(Vector{promote_type(Tl,Td,Tu)}, v), (dl, d, du))...)
 end
 
 size(M::Tridiagonal) = (length(M.d), length(M.d))
@@ -183,16 +174,16 @@ function similar(M::Tridiagonal, T, dims::Dims)
     if length(dims) != 2 || dims[1] != dims[2]
         throw(DimensionMismatch("Tridiagonal matrices must be square"))
     end
-    Tridiagonal{T}(dims[1])
+    Tridiagonal{T}(similar(M.dl), similar(M.d), similar(M.du), similar(M.du2))
 end
 
 # Operations on Tridiagonal matrices
-copy!(dest::Tridiagonal, src::Tridiagonal) = Tridiagonal(copy!(dest.dl, src.dl), copy!(dest.d, src.d), copy!(dest.du, src.du))
+copy!(dest::Tridiagonal, src::Tridiagonal) = Tridiagonal(copy!(dest.dl, src.dl), copy!(dest.d, src.d), copy!(dest.du, src.du), copy!(dest.du2, src.du2))
 
 #Elementary operations
 for func in (:copy, :round, :iround, :conj) 
     @eval begin
-        ($func)(M::Tridiagonal) = Tridiagonal(map(($func), (M.dl, M.d, M.du))...)
+        ($func)(M::Tridiagonal) = Tridiagonal(map(($func), (M.dl, M.d, M.du, M.du2))...)
     end
 end
 
@@ -200,12 +191,10 @@ transpose(M::Tridiagonal) = Tridiagonal(M.du, M.d, M.dl)
 ctranspose(M::Tridiagonal) = conj(transpose(M))
 
 diag{T}(M::Tridiagonal{T}, n::Integer=0) = n==0 ? M.d : n==-1 ? M.dl : n==1 ? M.du : abs(n)<size(M,1) ? zeros(T,size(M,1)-abs(n)) : throw(BoundsError()) 
-
 function getindex{T}(A::Tridiagonal{T}, i::Integer, j::Integer)
     (1<=i<=size(A,2) && 1<=j<=size(A,2)) || throw(BoundsError())
     i==j ? A.d[i] : i==j+1 ? A.dl[j] : i+1==j ? A.du[i] : zero(T)
 end
-
 
 ###################
 # Generic methods #
@@ -231,181 +220,32 @@ convert(::Type{Tridiagonal}, A::SymTridiagonal) = Tridiagonal(A.ev, A.dv, A.ev)
 -(A::Tridiagonal, B::SymTridiagonal) = Tridiagonal(A.dl-B.ev, A.d-B.dv, A.du-B.ev)
 -(A::SymTridiagonal, B::Tridiagonal) = Tridiagonal(A.ev-B.dl, A.dv-B.d, A.ev-B.du)
 
-convert{T}(::Type{Tridiagonal{T}},M::Tridiagonal) = Tridiagonal(convert(Vector{T}, M.dl), convert(Vector{T}, M.d), convert(Vector{T}, M.du))
-convert{T}(::Type{AbstractMatrix{T}},M::Tridiagonal) = Tridiagonal(convert(Vector{T}, M.dl), convert(Vector{T}, M.d), convert(Vector{T}, M.du))
+convert{T}(::Type{Tridiagonal{T}},M::Tridiagonal) = Tridiagonal(convert(Vector{T}, M.dl), convert(Vector{T}, M.d), convert(Vector{T}, M.du), convert(Vector{T}, M.du2))
+convert{T}(::Type{AbstractMatrix{T}},M::Tridiagonal) = convert(Tridiagonal{T}, M)
 convert{T}(::Type{Tridiagonal{T}}, M::SymTridiagonal{T}) = Tridiagonal(M)
 convert{T}(::Type{SymTridiagonal{T}}, M::Tridiagonal) = M.dl==M.du ? (SymTridiagonal(M.dl, M.d)) :
     error("Tridiagonal is not symmetric, cannot convert to SymTridiagonal")
 convert{T}(::Type{SymTridiagonal{T}},M::SymTridiagonal) = SymTridiagonal(convert(Vector{T}, M.dv), convert(Vector{T}, M.ev))
 
-## Solvers
-
-#### Tridiagonal matrix routines ####
-function \{T<:BlasFloat}(M::Tridiagonal{T}, rhs::StridedVecOrMat{T})
-    if stride(rhs, 1) == 1
-        return LAPACK.gtsv!(copy(M.dl), copy(M.d), copy(M.du), copy(rhs))
+function A_mul_B!(C::AbstractVecOrMat, A::Tridiagonal, B::AbstractVecOrMat)
+    size(C,1) == size(B,1) == (nA = size(A,1)) || throw(DimensionMismatch(""))
+    size(C,2) == (nB = size(B,2)) || throw(DimensionMismatch(""))
+    l = A.dl
+    d = A.d
+    u = A.du
+    @inbounds begin
+        for j = 1:nB
+            C[1,j] = d[1]*B[1,j] + u[1]*B[2,j]
+            for i = 2:nA-1
+                C[i,j] = l[i-1]*B[i-1,j] + d[i]*B[i,j] + u[i]*B[i+1,j]
+            end
+            C[nA,j] = l[nA-1]*B[nA-1,j] + d[nA]*B[nA,j]
+        end
     end
-    solve(M, rhs)  # use the Julia "fallback"
+    C
 end
+*(A::Tridiagonal, B::AbstractVecOrMat) = A_mul_B!(similar(B), A, B)
 
-# This is definitely not going to work
-#eig(M::Tridiagonal) = LAPACK.stev!('V', copy(M))
-
-# Allocation-free variants
-# Note that solve is non-aliasing, so you can use the same array for
-# input and output
-function solve!{T<:BlasFloat}(x::AbstractArray{T}, xrng::Range{Int}, M::Tridiagonal{T}, rhs::AbstractArray{T}, rhsrng::Range{Int})
-    d = M.d
-    N = length(d)
-    if length(xrng) != N || length(rhsrng) != N
-        throw(DimensionMismatch(""))
-    end
-    dl = M.dl
-    du = M.du
-    dutmp = M.dutmp
-    rhstmp = M.rhstmp
-    xstart = first(xrng)
-    xstride = step(xrng)
-    rhsstart = first(rhsrng)
-    rhsstride = step(rhsrng)
-    # Forward sweep
-    denom = d[1]
-    dulast = du[1] / denom
-    dutmp[1] = dulast
-    rhslast = rhs[rhsstart] / denom
-    rhstmp[1] = rhslast
-    irhs = rhsstart+rhsstride
-    for i in 2:N-1
-        dltmp = dl[i-1]
-        denom = d[i] - dltmp*dulast
-        dulast = du[i] / denom
-        dutmp[i] = dulast
-        rhslast = (rhs[irhs] - dltmp*rhslast)/denom
-        rhstmp[i] = rhslast
-        irhs += rhsstride
-    end
-    dltmp = dl[N-1]
-    denom = d[N] - dltmp*dulast
-    xlast = (rhs[irhs] - dltmp*rhslast)/denom
-    # Backward sweep
-    ix = xstart + (N-2)*xstride
-    x[ix+xstride] = xlast
-    for i in N-1:-1:1
-        xlast = rhstmp[i] - dutmp[i]*xlast
-        x[ix] = xlast
-        ix -= xstride
-    end
-    nothing
-end
-
-function solve!(x::StridedVector, M::Tridiagonal, rhs::StridedVector)
-    solve!(x, 1:length(x), M, rhs, 1:length(rhs))
-    x
-end
-solve{TM<:BlasFloat,TB<:BlasFloat}(M::Tridiagonal{TM}, B::StridedVecOrMat{TB}) = solve!(zeros(typeof(one(TM)/one(TB)), size(B)), M, B)
-solve(M::Tridiagonal, B::StridedVecOrMat) = solve(float(M), float(B))
-function solve!(X::StridedMatrix, M::Tridiagonal, B::StridedMatrix)
-    size(B, 1) == size(M, 1) || throw(DimensionMismatch(""))
-    size(X) == size(B) || throw(DimensionMismatch(""))
-    m, n = size(B)
-    for j = 1:n
-        r = ((j-1)*m+1):((j-1)*m+m)
-        solve!(X, r, M, B, r)
-    end
-    X
-end
-
-# User-friendly solver
-\(M::Tridiagonal, rhs::StridedVecOrMat) = solve(M, rhs)
-
-# Tridiagonal multiplication
-function mult(x::AbstractArray, xrng::Range{Int}, M::Tridiagonal, v::AbstractArray, vrng::Range{Int})
-    dl = M.dl
-    d = M.d
-    du = M.du
-    N = length(d)
-    xi = first(xrng)
-    xstride = step(xrng)
-    vi = first(vrng)
-    vstride = step(vrng)
-    x[xi] = d[1]*v[vi] + du[1]*v[vi+vstride]
-    xi += xstride
-    for i = 2:N-1
-        x[xi] = dl[i-1]*v[vi] + d[i]*v[vi+vstride] + du[i]*v[vi+2*vstride]
-        xi += xstride
-        vi += vstride
-    end
-    x[xi] = dl[N-1]*v[vi] + d[N]*v[vi+vstride]
-    x
-end
-
-mult(x::StridedVector, M::Tridiagonal, v::StridedVector) = mult(x, 1:length(x), M, v, 1:length(v))
-
-function mult(X::StridedMatrix, M::Tridiagonal, B::StridedMatrix)
-    size(B, 1) == size(M, 1) || throw(DimensionMismatch(""))
-    size(X) == size(B) || throw(DimensionMismatch(""))
-    m, n = size(B)
-    for j = 1:n
-        r = ((j-1)*m+1):((j-1)*m+m)
-        mult(X, r, M, B, r)
-    end
-    X
-end
-
-mult(X::StridedMatrix, M1::Tridiagonal, M2::Tridiagonal) = mult(X, M1, full(M2))
-
-*(M::Tridiagonal, B::Union(StridedVector,StridedMatrix)) = mult(similar(B), M, B)
-*(A::Tridiagonal, B::Tridiagonal) = A*full(B)
-
-#### Factorizations for Tridiagonal ####
-type LDLTTridiagonal{T<:BlasFloat,S<:BlasFloat} <: Factorization{T}
-    D::Vector{S}
-    E::Vector{T}
-    function LDLTTridiagonal(D::Vector{S}, E::Vector{T})
-        typeof(real(E[1])) == eltype(D) ? new(D, E) : error("element types do not match")
-        new(D, E)
-    end
-end
-
-LDLTTridiagonal{S<:BlasFloat,T<:BlasFloat}(D::Vector{S}, E::Vector{T}) = LDLTTridiagonal{T,S}(D, E)
-
-ldltd!{T<:BlasFloat}(A::SymTridiagonal{T}) = LDLTTridiagonal(LAPACK.pttrf!(real(A.dv),A.ev)...)
-ldltd{T<:BlasFloat}(A::SymTridiagonal{T}) = ldltd!(copy(A))
-ldltd{T}(A::SymTridiagonal{T}) = (S = promote_type(typeof(sqrt(one(T))),Float32); S != T ? ldltd!(convert(SymTridiagonal{S},A)) : ldltd!(copy(A)))
-factorize(A::SymTridiagonal) = ldltd(A)
-
-A_ldiv_B!{T<:BlasReal}(C::LDLTTridiagonal{T}, B::StridedVecOrMat{T}) = LAPACK.pttrs!(C.D, C.E, B)
-A_ldiv_B!{T<:BlasComplex}(C::LDLTTridiagonal{T}, B::StridedVecOrMat{T}) = LAPACK.pttrs!('L', C.D, C.E, B)
-A_ldiv_B!(C::LDLTTridiagonal, B::StridedVecOrMat) = A_ldiv_B!(C, float(B))
-
-type LUTridiagonal{T} <: Factorization{T}
-    dl::Vector{T}
-    d::Vector{T}
-    du::Vector{T}
-    du2::Vector{T}
-    ipiv::Vector{BlasInt}
-    # function LUTridiagonal(dl::Vector{T}, d::Vector{T}, du::Vector{T},
-    #                        du2::Vector{T}, ipiv::Vector{BlasInt})
-    #     n = length(d)
-    #     if length(dl) != n - 1 || length(du) != n - 1 || length(ipiv) != n || length(du2) != n-2
-    #         throw(DimensionMismatch("LUTridiagonal")
-    #     end
-    #     new(dl, d, du, du2, ipiv)
-    # end
-end
-lufact!{T<:BlasFloat}(A::Tridiagonal{T}) = LUTridiagonal{T}(LAPACK.gttrf!(A.dl,A.d,A.du)...)
-lufact{T<:BlasFloat}(A::Tridiagonal{T}) = lufact!(copy(A))
-lufact{T}(A::Tridiagonal{T}) = (S = promote_type(typeof(sqrt(one(T))),Float32); S != T ? lufact!(convert(Tridiagonal{S},A)) : lufact!(copy(A)))
-factorize(A::Tridiagonal) = lufact(A)
-#show(io, lu::LUTridiagonal) = print(io, "LU decomposition of ", summary(lu.lu))
-
-function det{T}(lu::LUTridiagonal{T})
-    n = length(lu.d)
-    prod(lu.d) * (bool(sum(lu.ipiv .!= 1:n) % 2) ? -one(T) : one(T))
-end
-
-det{T<:BlasFloat}(A::Tridiagonal{T}) = det(lufact(A))
-
-A_ldiv_B!{T<:BlasFloat}(lu::LUTridiagonal{T}, B::StridedVecOrMat{T}) =
-    LAPACK.gttrs!('N', lu.dl, lu.d, lu.du, lu.du2, lu.ipiv, B)
-A_ldiv_B!(lu::LUTridiagonal, B::StridedVecOrMat) = A_ldiv_B!(lu, float(B))
+A_ldiv_B!(A::Tridiagonal,B::AbstractVecOrMat) = A_ldiv_B!(lufact!(A), B)
+At_ldiv_B!(A::Tridiagonal,B::AbstractVecOrMat) = At_ldiv_B!(lufact!(A), B)
+Ac_ldiv_B!(A::Tridiagonal,B::AbstractVecOrMat) = Ac_ldiv_B!(lufact!(A), B)
