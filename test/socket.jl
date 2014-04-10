@@ -4,11 +4,11 @@
 @test ip"192.0xFFFF" == IPv4(192,0,255,255)
 @test ip"192.0xFFFFF" == IPv4(192,15,255,255)
 @test ip"192.0xFFFFFF" == IPv4(192,255,255,255)
-@test_throws Base.parseipv4("192.0xFFFFFFF") ErrorException
+@test_throws ErrorException Base.parseipv4("192.0xFFFFFFF")
 @test ip"022.0.0.1" == IPv4(18,0,0,1)
 
-@test_throws Base.parseipv4("192.0xFFFFFFFFF") ErrorException
-@test_throws Base.parseipv4("192.") ErrorException
+@test_throws ErrorException Base.parseipv4("192.0xFFFFFFFFF")
+@test_throws ErrorException Base.parseipv4("192.")
 
 @test ip"::1" == IPv6(1)
 @test ip"2605:2700:0:3::4713:93e3" == IPv6(parseint(Uint128,"260527000000000300000000471393e3",16))
@@ -50,21 +50,21 @@ end
 wait(c)
 @test readall(connect(socketname)) == "Hello World\n"
 
-@test_throws getaddrinfo(".invalid") Base.UVError
-@test_throws connect("localhost", 21452) Base.UVError
+@test_throws Base.UVError getaddrinfo(".invalid")
+@test_throws Base.UVError connect("localhost", 21452)
 
 server = listen(2134)
-@async @test_throws accept(server) ErrorException
+@async @test_throws ErrorException accept(server)
 sleep(0.1)
 close(server)
 
 server = listen(2134)
 @async connect("localhost",2134)
 s1 = accept(server)
-@test_throws accept(server,s1) ErrorException
+@test_throws ErrorException accept(server,s1)
 close(server)
 
-@test_throws connect(".invalid",80) Base.UVError
+@test_throws Base.UVError connect(".invalid",80)
 
 a = UdpSocket()
 b = UdpSocket()
@@ -79,7 +79,7 @@ end
 send(b,ip"127.0.0.1",2134,"Hello World")
 wait(c)
 
-@test_throws bind(UdpSocket(),2134) MethodError
+@test_throws MethodError bind(UdpSocket(),2134)
 
 close(a)
 close(b)

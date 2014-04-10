@@ -11,10 +11,10 @@
 @test median([1.,-1.,Inf,-Inf]) == 0.0
 @test isnan(median([-Inf,Inf]))
 
-@test_throws median([]) ErrorException
-@test_throws median([NaN]) ErrorException
-@test_throws median([0.0,NaN]) ErrorException
-@test_throws median([NaN,0.0]) ErrorException
+@test_throws ErrorException median([])
+@test_throws ErrorException median([NaN])
+@test_throws ErrorException median([0.0,NaN])
+@test_throws ErrorException median([NaN,0.0])
 
 @test mean([1,2,3]) == 2.
 @test mean([0 1 2; 4 5 6], 1) == [2.  3.  4.]

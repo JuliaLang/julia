@@ -291,14 +291,14 @@
 #  tanh(-z) = -tanh(z)
 @test isequal(tanh(complex( 0.0, 0.0)),complex(0.0,0.0))
 @test isequal(tanh(complex( 0.0,-0.0)),complex(0.0,-0.0))
-@test_throws  tanh(complex( 0.0, Inf)) DomainError
-@test_throws  tanh(complex( 0.0,-Inf)) DomainError
+@test_throws DomainError  tanh(complex( 0.0, Inf))
+@test_throws DomainError  tanh(complex( 0.0,-Inf))
 @test isequal(tanh(complex( 0.0, NaN)),complex(NaN,NaN))
 
 @test isequal(tanh(complex(-0.0, 0.0)),complex(-0.0,0.0))
 @test isequal(tanh(complex(-0.0,-0.0)),complex(-0.0,-0.0))
 
-@test_throws  tanh(complex( 5.0, Inf)) DomainError
+@test_throws DomainError  tanh(complex( 5.0, Inf))
 @test isequal(tanh(complex( 5.0, NaN)),complex(NaN,NaN))
 
 @test isequal(tanh(complex( Inf, 0.0)),complex(1.0, 0.0))
@@ -340,7 +340,7 @@
 @test isequal(tan(complex(-5.0,-Inf)),complex(sin(2*5.0)*-0.0,-1.0))
 @test isequal(tan(complex(-5.0, NaN)),complex( NaN, NaN))
 
-@test_throws  tan(complex( Inf, 5.0)) DomainError
+@test_throws DomainError  tan(complex( Inf, 5.0))
 @test isequal(tan(complex( Inf, Inf)),complex( 0.0, 1.0))
 @test isequal(tan(complex( Inf,-Inf)),complex (0.0,-1.0))
 @test isequal(tan(complex(-Inf, Inf)),complex(-0.0, 1.0))
@@ -602,7 +602,7 @@
 
 @test complex(1//2,1//3)^2 === complex(5//36, 1//3)
 @test complex(2,2)^2 === complex(0,8)
-@test_throws complex(2,2)^(-2) DomainError
+@test_throws DomainError complex(2,2)^(-2)
 @test complex(2.0,2.0)^(-2) === complex(0.0, -0.125)
 
 # robust division of Float64

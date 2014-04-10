@@ -192,8 +192,8 @@ debug && println("Generalized svd")
 debug && println("Solve square general system of equations")
     κ = cond(a,1)
     x = a \ b
-    @test_throws b'\b DimensionMismatch
-    @test_throws b\b' DimensionMismatch
+    @test_throws DimensionMismatch b'\b
+    @test_throws DimensionMismatch b\b'
     @test norm(a*x - b, 1)/norm(b) < ε*κ*n*2 # Ad hoc, revisit!
 
 debug && println("Solve upper triangular system")

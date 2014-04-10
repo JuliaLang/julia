@@ -189,7 +189,7 @@ Ai = int(ceil(Ar*100))
 @test_approx_eq vecnorm(Ai)    vecnorm(full(Ai))
 
 # scale real matrix by complex type
-@test_throws scale!([1.0], 2.0im) ErrorException
+@test_throws ErrorException scale!([1.0], 2.0im)
 @test isequal(scale([1.0], 2.0im),             Complex{Float64}[2.0im])
 @test isequal(scale(Float32[1.0], 2.0f0im),    Complex{Float32}[2.0im])
 @test isequal(scale(Float32[1.0], 2.0im),      Complex{Float64}[2.0im])

@@ -216,9 +216,9 @@ parsehex(s) = parseint(s,16)
 @test parseint(" 2") == 2
 @test parseint("+2\n") == 2
 @test parseint("-2") == -2
-@test_throws parseint("   2 \n 0") ErrorException
-@test_throws parseint("2x") ErrorException
-@test_throws parseint("-") ErrorException
+@test_throws ErrorException parseint("   2 \n 0")
+@test_throws ErrorException parseint("2x")
+@test_throws ErrorException parseint("-")
 
 @test parseint("1234") == 1234
 @test parseint("0x1234") == 0x1234
@@ -229,12 +229,19 @@ parsehex(s) = parseint(s,16)
 @test parseint("-0o1234") == -int(0o1234)
 @test parseint("-0b1011") == -int(0b1011)
 
-for T in (Int8,Uint8,Int16,Uint16,Int32,Uint32,Int64,Uint64)#,Int128,Uint128) ## FIXME: #4905
+## FIXME: #4905, do these tests for Int128/UInt128!
+for T in (Int8, Int16, Int32, Int64)
     @test parseint(T,string(typemin(T))) == typemin(T)
     @test parseint(T,string(typemax(T))) == typemax(T)
-    # NOTE: This doesn't reliably raise OverflowErrors!
-    @test_throws parseint(T,string(big(typemin(T))-1)) Exception
-    @test_throws parseint(T,string(big(typemax(T))+1)) OverflowError
+    @test_throws OverflowError parseint(T,string(big(typemin(T))-1))
+    @test_throws OverflowError parseint(T,string(big(typemax(T))+1))
+end
+
+for T in (Uint8,Uint16,Uint32,Uint64)
+    @test parseint(T,string(typemin(T))) == typemin(T)
+    @test parseint(T,string(typemax(T))) == typemax(T)
+    @test_throws ErrorException parseint(T,string(big(typemin(T))-1))
+    @test_throws OverflowError parseint(T,string(big(typemax(T))+1))
 end
 
 # string manipulation
@@ -797,10 +804,10 @@ bin_val = hex2bytes("07bf")
 @test "0123456789abcdefabcdef" == bytes2hex(hex2bytes("0123456789abcdefABCDEF"))
 
 # odd size
-@test_throws hex2bytes("0123456789abcdefABCDEF0") ErrorException
+@test_throws ErrorException hex2bytes("0123456789abcdefABCDEF0")
 
 #non-hex characters
-@test_throws hex2bytes("0123456789abcdefABCDEFGH") ErrorException
+@test_throws ErrorException hex2bytes("0123456789abcdefABCDEFGH")
 
 # sizeof
 @test sizeof("abc") == 3
