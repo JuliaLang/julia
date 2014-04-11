@@ -63,6 +63,9 @@ let T = TypeVar(:T,true)
                         (Type{Array{T,N}}, Array{S,N})) == (Type{Vector{Complex128}},Vector)
 
     @test typeintersect(Type{Array{T}}, Type{AbstractArray{T}}) === None
+
+    @test typeintersect(Type{(Bool,Int...)}, Type{(T...)}) === None
+    @test typeintersect(Type{(Bool,Int...)}, Type{(T,T...)}) === None
 end
 let N = TypeVar(:N,true)
     @test isequal(typeintersect((NTuple{N,Integer},NTuple{N,Integer}),
@@ -91,6 +94,10 @@ end
 @test !is(None, typeintersect(DataType, Type{Int}))
 @test !is(None, typeintersect(DataType, Type{TypeVar(:T,Int)}))
 @test !is(None, typeintersect(DataType, Type{TypeVar(:T,Integer)}))
+
+@test typeintersect((Int...), (Bool...)) === ()
+@test typeintersect(Type{(Int...)}, Type{(Bool...)}) === None
+@test typeintersect((Bool,Int...), (Bool...)) === (Bool,)
 
 @test isa(Int,Type{TypeVar(:T,Number)})
 @test !isa(DataType,Type{TypeVar(:T,Number)})
@@ -1533,3 +1540,5 @@ f6426(x,t::(Type...)) = string(t)
 # issue #6502
 f6502() = convert(Base.tupletail((Bool,Int...)), (10,))
 @test f6502() === (10,)
+@test convert((Bool,Int...,), (true,10)) === (true,10)
+@test convert((Int,Bool...), (true,1,0)) === (1,true,false)
