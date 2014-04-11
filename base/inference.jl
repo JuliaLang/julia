@@ -466,14 +466,21 @@ t_func[apply_type] = (1, Inf, apply_type_tfunc)
 
 # other: apply
 
+function tuple_tfunc(argtypes::ANY, limit)
+    t = argtypes
+    if limit
+        t = limit_tuple_depth(t)
+    end
+    # tuple(Type{T...}) should give Type{(T...)}
+    if t!==() && all(isType, t) && isvarargtype(t[length(t)].parameters[1])
+        return Type{map(t->t.parameters[1], t)}
+    end
+    return t
+end
+
 function builtin_tfunction(f::ANY, args::ANY, argtypes::ANY)
     if is(f,tuple)
-        t = limit_tuple_depth(argtypes)
-        # tuple(Type{T...}) should give Type{(T...)}
-        if t!==() && all(isType, t) && isvarargtype(t[length(t)].parameters[1])
-            return Type{map(t->t.parameters[1], t)}
-        end
-        return t
+        return tuple_tfunc(argtypes, true)
     elseif is(f,arrayset)
         if length(argtypes) < 3
             return None
@@ -2261,7 +2268,7 @@ end
 
 function mk_tuplecall(args)
     e = Expr(:call1, top_tuple, args...)
-    e.typ = tuple(map(exprtype, args)...)
+    e.typ = tuple_tfunc(tuple(map(exprtype, args)...), false)
     e
 end
 
