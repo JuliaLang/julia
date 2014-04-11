@@ -1529,3 +1529,7 @@ f5577(::Type) = true
 f6426(x,args...) = f6426(x,map(a->(isa(a,Type) ? Type{a} : typeof(a)), args))
 f6426(x,t::(Type...)) = string(t)
 @test f6426(1, (1.,2.)) == "((Float64,Float64),)"
+
+# issue #6502
+f6502() = convert(Base.tupletail((Bool,Int...)), (10,))
+@test f6502() === (10,)
