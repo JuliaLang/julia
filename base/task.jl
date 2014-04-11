@@ -217,6 +217,8 @@ notify1_error(c::Condition, err) = notify(c, err, error=true, all=false)
 
 ## scheduler and work queue
 
+global const Workqueue = Any[]
+
 function enq_work(t::Task)
     ccall(:uv_stop,Void,(Ptr{Void},),eventloop())
     push!(Workqueue, t)
