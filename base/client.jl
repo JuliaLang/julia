@@ -286,8 +286,6 @@ function init_load_path()
     push!(LOAD_PATH,abspath(JULIA_HOME,"..","share","julia","site",vers))
 end
 
-global const Workqueue = Any[]
-
 function init_head_sched()
     # start in "head node" mode
     global PGRP
