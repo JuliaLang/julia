@@ -80,7 +80,7 @@ for i = 1:5
     @test (maximum(abs(a\b - full(a)\b)) < 1000*eps())
     @test (maximum(abs(a'\b - full(a')\b)) < 1000*eps())
     @test (maximum(abs(a.'\b - full(a.')\b)) < 1000*eps())
-    
+
     a = speye(5) + 0.1*sprandn(5, 5, 0.2) + 0.1*im*sprandn(5, 5, 0.2)
     b = randn(5,3)
     @test (maximum(abs(a*b - full(a)*b)) < 100*eps())
@@ -162,7 +162,7 @@ end
 @test prod(se33, 2) == [0.0 0.0 0.0]'
 
 # spdiagm
-@test full(spdiagm((ones(2), ones(2)), (0, -1), 3, 3)) ==  
+@test full(spdiagm((ones(2), ones(2)), (0, -1), 3, 3)) ==
                        [1.0  0.0  0.0; 1.0  1.0  0.0;  0.0  1.0  0.0]
 
 # elimination tree
@@ -181,7 +181,7 @@ mfe22 = eye(Float64, 2)
 @test reinterpret(Int64, sfe22) == reinterpret(Int64, mfe22)
 
 # issue #5190
-@test_throws sparsevec([3,5,7],[0.1,0.0,3.2],4)
+@test_throws DimensionMismatch sparsevec([3,5,7],[0.1,0.0,3.2],4)
 
 # issue #5169
 @test nfilled(sparse([1,1],[1,2],[0.0,-0.0])) == 0
