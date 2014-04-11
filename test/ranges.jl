@@ -99,18 +99,18 @@ r = (-4*int64(maxintfloat(is(Int,Int32) ? Float32 : Float64))):5
 
 # indexing range with empty range (#4309)
 @test (3:6)[5:4] == 7:6
-@test_throws (3:6)[5:5]
-@test_throws (3:6)[5]
+@test_throws BoundsError (3:6)[5:5]
+@test_throws BoundsError (3:6)[5]
 @test (0:2:10)[7:6] == 12:2:10
-@test_throws (0:2:10)[7:7]
+@test_throws BoundsError (0:2:10)[7:7]
 
 # avoiding intermediate overflow (#5065)
 @test length(1:4:typemax(Int)) == div(typemax(Int),4) + 1
 
 # overflow in length
-@test_throws length(0:typemax(Int))
-@test_throws length(typemin(Int):typemax(Int))
-@test_throws length(-1:typemax(Int)-1)
+@test_throws OverflowError length(0:typemax(Int))
+@test_throws OverflowError length(typemin(Int):typemax(Int))
+@test_throws OverflowError length(-1:typemax(Int)-1)
 
 let s = 0
     # loops ending at typemax(Int)
@@ -263,11 +263,11 @@ end
 let r = typemin(Int64):2:typemax(Int64), s = typemax(Int64):-2:typemin(Int64)
     @test first(r) == typemin(Int64)
     @test last(r) == (typemax(Int64)-1)
-    @test_throws length(r)
+    @test_throws OverflowError length(r)
 
     @test first(s) == typemax(Int64)
     @test last(s) == (typemin(Int64)+1)
-    @test_throws length(s)
+    @test_throws OverflowError length(s)
 end
 
 @test length(typemin(Int64):3:typemax(Int64)) == 6148914691236517206

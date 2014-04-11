@@ -2,7 +2,7 @@ ioslength(io::IOBuffer) = (io.seekable ? io.size : nb_available(io))
 
 let io = IOBuffer()
 @test eof(io)
-@test_throws read(io,Uint8)
+@test_throws EOFError read(io,Uint8)
 @test write(io,"abc") == 3
 @test ioslength(io) == 3
 @test position(io) == 3
@@ -29,14 +29,14 @@ seek(io, 2)
 truncate(io, 10)
 @test ioslength(io) == 10
 io.readable = false
-@test_throws read!(io,Uint8[0])
+@test_throws ErrorException read!(io,Uint8[0])
 truncate(io, 0)
 @test write(io,"boston\ncambridge\n") > 0
 @test takebuf_string(io) == "boston\ncambridge\n"
 @test takebuf_string(io) == ""
 close(io)
-@test_throws write(io,Uint8[0])
-@test_throws seek(io,0)
+@test_throws ErrorException write(io,Uint8[0])
+@test_throws ErrorException seek(io,0)
 @test eof(io)
 end
 
@@ -44,19 +44,19 @@ let io = IOBuffer("hamster\nguinea pig\nturtle")
 @test position(io) == 0
 @test readline(io) == "hamster\n"
 @test readall(io) == "guinea pig\nturtle"
-@test_throws read(io,Uint8)
+@test_throws EOFError read(io,Uint8)
 seek(io,0)
 @test read(io,Uint8) == 'h'
-@test_throws truncate(io,0)
-@test_throws write(io,uint8(0))
-@test_throws write(io,Uint8[0])
+@test_throws ErrorException truncate(io,0)
+@test_throws ErrorException write(io,uint8(0))
+@test_throws ErrorException write(io,Uint8[0])
 @test takebuf_string(io) == "hamster\nguinea pig\nturtle"
 @test takebuf_string(io) == "hamster\nguinea pig\nturtle" #should be unchanged
 close(io)
 end
 
 let io = PipeBuffer()
-@test_throws read(io,Uint8)
+@test_throws EOFError read(io,Uint8)
 @test write(io,"pancakes\nwaffles\nblueberries\n") > 0
 @test position(io) == 0
 @test readline(io) == "pancakes\n"
@@ -64,8 +64,8 @@ Base.compact(io)
 @test readline(io) == "waffles\n"
 @test write(io,"whipped cream\n") > 0
 @test readline(io) == "blueberries\n"
-@test_throws seek(io,0)
-@test_throws truncate(io,0)
+@test_throws ErrorException seek(io,0)
+@test_throws ErrorException truncate(io,0)
 @test readline(io) == "whipped cream\n"
 Base.compact(io)
 @test position(io) == 0
@@ -122,7 +122,7 @@ end
 # issue 5453
 let io=IOBuffer("abcdef")
 a = Array(Uint8,1024)
-@test_throws read!(io,a)
+@test_throws EOFError read!(io,a)
 @test eof(io)
 end
 

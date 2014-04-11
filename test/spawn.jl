@@ -38,7 +38,7 @@ begin
     kill(p)
 end
 
-@test_throws run(`foo_is_not_a_valid_command`)
+@test_throws Base.UVError run(`foo_is_not_a_valid_command`)
 
 if false
     prefixer(prefix, sleep) = `perl -nle '$|=1; print "'$prefix' ", $_; sleep '$sleep';'`

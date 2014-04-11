@@ -49,7 +49,7 @@ for arr in (identity, as_sub)
 
     A = arr(eye(2)); @test broadcast!(+, A, A, arr([1, 4])) == arr([2 1; 4 5])
     A = arr(eye(2)); @test broadcast!(+, A, A, arr([1  4])) == arr([2 4; 1 5])
-    A = arr([1  0]); @test_throws broadcast!(+, A, A, arr([1, 4]))
+    A = arr([1  0]); @test_throws ErrorException broadcast!(+, A, A, arr([1, 4]))
     A = arr([1  0]); @test broadcast!(+, A, A, arr([1  4])) == arr([2 4])
 
     @test arr([ 1    2])   .* arr([3,   4])   == [ 3 6; 4 8]
@@ -63,8 +63,8 @@ for arr in (identity, as_sub)
 
     M = arr([11 12; 21 22])
     @test broadcast_getindex(M, eye(Int, 2).+1,arr([1, 2])) == [21 11; 12 22]
-    @test_throws broadcast_getindex(M, eye(Int, 2).+1,arr([1, -1]))
-    @test_throws broadcast_getindex(M, eye(Int, 2).+1,arr([1, 2]), [2])
+    @test_throws BoundsError broadcast_getindex(M, eye(Int, 2).+1,arr([1, -1]))
+    @test_throws BoundsError broadcast_getindex(M, eye(Int, 2).+1,arr([1, 2]), [2])
     @test broadcast_getindex(M, eye(Int, 2).+1,arr([2, 1]), [1]) == [22 12; 11 21]
 
     A = arr(zeros(2,2))
@@ -77,7 +77,7 @@ for arr in (identity, as_sub)
     A = arr(zeros(3,3))
     broadcast_setindex!(A, 10:12, 1:3, 1:3)
     @test A == diagm(10:12)
-    @test_throws broadcast_setindex!(A, 7, [1,-1], [1 2])
+    @test_throws BoundsError broadcast_setindex!(A, 7, [1,-1], [1 2])
 
     for (f, ewf) in (((==), (.==)),
                      ((<) , (.<) ),

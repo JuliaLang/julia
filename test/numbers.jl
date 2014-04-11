@@ -39,7 +39,7 @@
 @test bool(-1.0) == true
 @test bool(Complex(0,0)) == false
 @test bool(Complex(1,0)) == true
-@test_throws bool(Complex(0,1)) == true
+@test_throws InexactError bool(Complex(0,1)) == true
 @test bool(0//1) == false
 @test bool(1//1) == true
 @test bool(1//2) == true
@@ -744,7 +744,7 @@ for a = -5:5, b = -5:5
     @test rationalize(a/b) == a//b
     @test a//b == a//b
     if b == 0
-        @test_throws integer(a//b) == integer(a/b)
+        @test_throws DivideError integer(a//b) == integer(a/b)
     else
         @test integer(a//b) == integer(a/b)
     end
@@ -835,8 +835,8 @@ for A = real_types, B = real_types
 end
 
 # comparison should fail on complex
-@test_throws complex(1,2) > 0
-@test_throws complex(1,2) > complex(0,0)
+@test_throws MethodError complex(1,2) > 0
+@test_throws MethodError complex(1,2) > complex(0,0)
 
 # div, fld, rem, mod
 for yr = {
@@ -1189,21 +1189,21 @@ for x = 2^24-10:2^24+10
     @test iceil(y)      == i
 end
 
-@test_throws iround(Inf)
-@test_throws iround(NaN)
+@test_throws InexactError iround(Inf)
+@test_throws InexactError iround(NaN)
 @test iround(2.5) == 3
 @test iround(-1.9) == -2
-@test_throws iround(Int64, 9.223372036854776e18)
+@test_throws InexactError iround(Int64, 9.223372036854776e18)
 @test       iround(Int64, 9.223372036854775e18) == 9223372036854774784
-@test_throws iround(Int64, -9.223372036854778e18)
+@test_throws InexactError iround(Int64, -9.223372036854778e18)
 @test       iround(Int64, -9.223372036854776e18) == typemin(Int64)
-@test_throws iround(Uint64, 1.8446744073709552e19)
+@test_throws InexactError iround(Uint64, 1.8446744073709552e19)
 @test       iround(Uint64, 1.844674407370955e19) == 0xfffffffffffff800
-@test_throws iround(Int32, 2.1474836f9)
+@test_throws InexactError iround(Int32, 2.1474836f9)
 @test       iround(Int32, 2.1474835f9) == 2147483520
-@test_throws iround(Int32, -2.147484f9)
+@test_throws InexactError iround(Int32, -2.147484f9)
 @test       iround(Int32, -2.1474836f9) == typemin(Int32)
-@test_throws iround(Uint32, 4.2949673f9)
+@test_throws InexactError iround(Uint32, 4.2949673f9)
 @test       iround(Uint32, 4.294967f9) == 0xffffff00
 
 for n = 1:100
@@ -1224,7 +1224,7 @@ end
 
 @test iround(Uint, 0.5) == 1
 @test iround(Uint, prevfloat(0.5)) == 0
-@test_throws iround(Uint, -0.5)
+@test_throws InexactError iround(Uint, -0.5)
 @test iround(Uint, nextfloat(-0.5)) == 0
 
 @test iround(Int, 0.5f0) == 1
@@ -1234,7 +1234,7 @@ end
 
 @test iround(Uint, 0.5f0) == 1
 @test iround(Uint, prevfloat(0.5f0)) == 0
-@test_throws iround(Uint, -0.5f0)
+@test_throws InexactError iround(Uint, -0.5f0)
 @test iround(Uint, nextfloat(-0.5f0)) == 0
 
 # numbers that can't be rounded by trunc(x+0.5)
@@ -1644,8 +1644,8 @@ for i = -20:20, j = -20:20
     @test lcm(i,j) == lcm(ib,jb)
     @test gcdx(i,j) == gcdx(ib,jb)
     if j == 0
-        @test_throws invmod(i,j)
-        @test_throws invmod(ib,jb)
+        @test_throws ErrorException invmod(i,j)
+        @test_throws ErrorException invmod(ib,jb)
     elseif d == 1
         n = invmod(i,j)
         @test n == invmod(ib,jb)
@@ -1667,23 +1667,23 @@ end
 @test powermod(1,0,-1) == 0
 @test powermod(big(1),0,-1) == 0
 # divide by zero error
-@test_throws powermod(1,0,0)
-@test_throws powermod(big(1),0,0)
+@test_throws DivideError powermod(1,0,0)
+@test_throws DivideError powermod(big(1),0,0)
 # negative power domain error
-@test_throws powermod(1,-2,1)
-@test_throws powermod(big(1),-2,1)
+@test_throws DomainError powermod(1,-2,1)
+@test_throws DomainError powermod(big(1),-2,1)
 
 # other divide-by-zero errors
-@test_throws div(1,0)
-@test_throws rem(1,0)
-@test_throws mod(1,0)
-@test_throws div(-1,0)
-@test_throws rem(-1,0)
-@test_throws mod(-1,0)
-@test_throws div(uint(1),uint(0))
-@test_throws rem(uint(1),uint(0))
-@test_throws mod(uint(1),uint(0))
-@test_throws div(typemin(Int),-1)
+@test_throws DivideError div(1,0)
+@test_throws DivideError rem(1,0)
+@test_throws DivideError mod(1,0)
+@test_throws DivideError div(-1,0)
+@test_throws DivideError rem(-1,0)
+@test_throws DivideError mod(-1,0)
+@test_throws DivideError div(uint(1),uint(0))
+@test_throws DivideError rem(uint(1),uint(0))
+@test_throws DivideError mod(uint(1),uint(0))
+@test_throws DivideError div(typemin(Int),-1)
 @test rem(typemin(Int),-1) == 0
 @test mod(typemin(Int),-1) == 0
 
@@ -1706,11 +1706,11 @@ end
 @test nextpow(3,241) == 243
 @test prevpow(3,244) == 243
 for a = -1:1
-    @test_throws nextpow(a, 2)
-    @test_throws prevpow(a, 2)
+    @test_throws DomainError nextpow(a, 2)
+    @test_throws DomainError prevpow(a, 2)
 end
-@test_throws nextpow(2,0)
-@test_throws prevpow(2,0)
+@test_throws DomainError nextpow(2,0)
+@test_throws DomainError prevpow(2,0)
 
 @test nextprod([2,3,5],30) == 30
 @test nextprod([2,3,5],33) == 36
@@ -1754,7 +1754,7 @@ end
 
 # edge cases of intrinsics
 let g() = sqrt(-1.0)
-    @test_throws sqrt(-1.0)
+    @test_throws DomainError sqrt(-1.0)
 end
 @test sqrt(NaN) === NaN
 let g() = sqrt(NaN)

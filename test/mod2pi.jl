@@ -14,11 +14,11 @@
 
 # Test Cases. Each row contains: x and x mod 2pi (as from Wolfram Alpha)
 # The values x are:
-# -pi/2, pi/2, -pi, pi, 2pi, -2pi 
-#   (or rather, the Float64 approx to those numbers. 
+# -pi/2, pi/2, -pi, pi, 2pi, -2pi
+#   (or rather, the Float64 approx to those numbers.
 #   Thus, x mod pi will result in a small, but positive number)
-# ΓΓ = 6411027962775774 / 2^47  
-#   from [2], section 1.2: 
+# ΓΓ = 6411027962775774 / 2^47
+#   from [2], section 1.2:
 #   the Float64 greater than 8, and less than 2**63 − 1 closest to a multiple of π/4 is
 #   Γ = 6411027962775774 / 2^48. We take ΓΓ = 2*Γ to get cancellation with pi/2 already
 # 3.14159265359, -3.14159265359
@@ -168,9 +168,9 @@ function testModPi()
             newDiff  = abs(xNew - xSoln)  # should be zero, ideally (our new function)
             oldDiff  = abs(xOld - xSoln)  # should be zero in a perfect world, but often bigger due to cancellation
             oldDiff  = min(oldDiff, abs(xDivisor - oldDiff)) # we are being generous here:
-            # if xOld happens to end up "on the wrong side of 0", eg 
-            # if xSoln = 3.14 (correct), but xOld reports 0.01, 
-            # we don't take the long way around the circle of 3.14 - 0.01, but the short way of 3.1415.. - (3.14 - 0.1) 
+            # if xOld happens to end up "on the wrong side of 0", eg
+            # if xSoln = 3.14 (correct), but xOld reports 0.01,
+            # we don't take the long way around the circle of 3.14 - 0.01, but the short way of 3.1415.. - (3.14 - 0.1)
             push!(errsNew,abs(newDiff))
             push!(errsOld,abs(oldDiff))
         end
@@ -190,5 +190,5 @@ testModPi()
 @test_approx_eq mod2pi(int32(355))  3.1416227979431572
 @test_approx_eq mod2pi(355.0)       3.1416227979431572
 @test_approx_eq mod2pi(355.0f0)     3.1416228f0
-@test mod2pi(int64(2)^60) == mod2pi(2.0^60) 
-@test_throws mod2pi(int64(2)^60-1)
+@test mod2pi(int64(2)^60) == mod2pi(2.0^60)
+@test_throws ErrorException mod2pi(int64(2)^60-1)

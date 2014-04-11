@@ -79,7 +79,7 @@ A = rand(1:20, 5, 5) .- 10
 B = rand(1:20, 5, 5) .- 10
 @test At_mul_B(A, B) == A'*B
 @test A_mul_Bt(A, B) == A*B'
- 
+
 # Preallocated
 C = Array(Int, size(A, 1), size(B, 2))
 @test A_mul_B!(C, A, B) == A*B
@@ -124,7 +124,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         71.797032399996  91.8825693231832 111.968106246371]')
         @test_approx_eq expm(A1) eA1
 
-        A2  = convert(Matrix{elty}, 
+        A2  = convert(Matrix{elty},
             [29.87942128909879    0.7815750847907159 -2.289519314033932;
             0.7815750847907159 25.72656945571064    8.680737820540137;
             -2.289519314033932   8.680737820540137  34.39400925519054])
@@ -157,7 +157,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test_approx_eq expm(A5) eA5
 
         # Hessenberg
-        @test_approx_eq hessfact(A1)[:H] convert(Matrix{elty}, 
+        @test_approx_eq hessfact(A1)[:H] convert(Matrix{elty},
                         [4.000000000000000  -1.414213562373094  -1.414213562373095
                         -1.414213562373095   4.999999999999996  -0.000000000000000
                                          0  -0.000000000000002   3.000000000000000])
@@ -189,7 +189,7 @@ Ai = int(ceil(Ar*100))
 @test_approx_eq vecnorm(Ai)    vecnorm(full(Ai))
 
 # scale real matrix by complex type
-@test_throws scale!([1.0], 2.0im)
+@test_throws ErrorException scale!([1.0], 2.0im)
 @test isequal(scale([1.0], 2.0im),             Complex{Float64}[2.0im])
 @test isequal(scale(Float32[1.0], 2.0f0im),    Complex{Float32}[2.0im])
 @test isequal(scale(Float32[1.0], 2.0im),      Complex{Float64}[2.0im])
