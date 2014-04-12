@@ -203,19 +203,20 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::TTYTerminal, buf,
     # Now go through the buffer line by line
     while cur_row == 0 || (!isempty(l) && l[end] == '\n')
         l = readline(buf)
+        hasnl = !isempty(l) && l[end] == '\n'
         cur_row += 1
         # We need to deal with UTF8 characters. Since the IOBuffer is a bytearray, we just count bytes
         llength = length(l)
         slength = length(l.data)
-        if cur_row == 1 #First line
+        if cur_row == 1 # First line
             if line_pos < slength
                 num_chars = length(l[1:line_pos])
                 curs_row = div(plength+num_chars-1, cols) + 1
                 curs_pos = (plength+num_chars-1) % cols + 1
             end
-            # One -1 for the '\n' at the end of the line (since it doesn't take up a column)
+            # Substract -1 if there's a '\n' at the end of the line (since it doesn't take up a column)
             # The other -1, since we want 10,20 for cols=10 to still not add a row (but we want 11,21 to)
-            cur_row += div(max(plength+(llength-1)-1,0), cols)
+            cur_row += div(max(plength+(llength-hasnl)-1,0), cols)
             line_pos -= slength
             write(termbuf, l)
         else
@@ -227,18 +228,21 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::TTYTerminal, buf,
                     curs_row = cur_row + div(indent+num_chars-1, cols)
                     curs_pos = (indent+num_chars-1) % cols + 1
                 end
-                line_pos -= slength #'\n' gets an extra pos
-                cur_row += div(max(indent+(llength-1)-1,0), cols)
+                line_pos -= slength # '\n' gets an extra pos
+                cur_row += div(max(indent+(llength-hasnl)-1,0), cols)
                 cmove_col(termbuf, indent+1)
                 write(termbuf, l)
-                # There's an issue if the last character we wrote was at the very right end of the screen. In that case we need to
-                # emit a new line and move the cursor there.
+                # There's an issue if the cursor is after the very right end of the screen. In that case we need to
+                # move the cursor to the next line, and emit a newline if needed
                 if curs_pos == cols
-                    write(termbuf, "\n")
-                    cmove_col(termbuf, 1)
+                    # only emit the newline if the cursor is at the end of the line we're writing
+                    if line_pos == 0
+                        write(termbuf, "\n")
+                        cur_row += 1
+                    end
                     curs_row += 1
                     curs_pos = 0
-                    cur_row += 1
+                    cmove_col(termbuf, 1)
                 end
             else
                 cur_row += div(llength+indent-1, cols)
@@ -261,11 +265,13 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::TTYTerminal, buf,
     # Same issue as above. TODO: We should figure out
     # how to refactor this to avoid duplcating functionality.
     if curs_pos == cols
-        write(termbuf, "\n")
-        cmove_col(termbuf, 1)
+        if line_pos == 0
+            write(termbuf, "\n")
+            cur_row += 1
+        end
         curs_row += 1
         curs_pos = 0
-        cur_row += 1
+        cmove_col(termbuf, 1)
     end
 
     # Let's move the cursor to the right position
