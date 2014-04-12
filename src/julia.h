@@ -1288,8 +1288,6 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v);
 void jl_print_gc_stats(JL_STREAM *s);
 #endif
 
-DLLEXPORT void jl_dump_linedebug_info();
-
 // compiler options -----------------------------------------------------------
 
 typedef struct {

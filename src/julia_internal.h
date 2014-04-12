@@ -117,6 +117,11 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, bt_context_t 
 size_t rec_backtrace_ctx_dwarf(ptrint_t *data, size_t maxsize, bt_context_t ctx);
 #endif
 
+#ifndef _OS_WINDOWS_
+DLLEXPORT void jl_dump_linedebug_info();
+DLLEXPORT void jl_restore_linedebug_info(uv_lib_t* handle);
+#endif
+
 #ifdef __cplusplus
 }
 #endif
