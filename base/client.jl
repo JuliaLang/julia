@@ -333,6 +333,11 @@ function _start()
                 color_set || (global have_color = false)
             else
                 term = Terminals.TTYTerminal(get(ENV,"TERM",""),STDIN,STDOUT,STDERR)
+                # Some programs (e.g., top) don't clean up after themselves
+                # and leave the terminal in application mode, causing the
+                # up-arrow to send \eOA instead of \e[A. This resets the
+                # terminal to normal mode.
+                @unix_only Terminals.end_keypad_transmit_mode(term)
                 global is_interactive = true
                 color_set || (global have_color = Terminals.hascolor(term))
             end
