@@ -140,7 +140,10 @@ function size(t::TTYTerminal)
     Base.uv_error("size (TTY)", ccall((@windows ? :jl_tty_get_winsize : :uv_tty_get_winsize),
                                       Int32, (Ptr{Void}, Ptr{Int32}, Ptr{Int32}),
                                       t.out_stream.handle, pointer(s,1), pointer(s,2)) != 0)
-    Size(s[1], s[2])
+    w,h = s[1],s[2]
+    w > 0 || (w = 80)
+    h > 0 || (h = 24)
+    Size(w,h)
 end
 
 clear(t::UnixTerminal) = write(t.out_stream, "\x1b[H\x1b[2J")
