@@ -814,7 +814,7 @@ const escape_defaults = {
     "\e*" => nothing,
     "\e[*" => nothing,
     # Also ignore extended escape sequences
-    # TODO: Support tanges of characters
+    # TODO: Support ranges of characters
     "\e[1**" => nothing,
     "\e[2**" => nothing,
     "\e[3**" => nothing,
@@ -825,6 +825,10 @@ const escape_defaults = {
     "\e[4~" => "\e[F",
     "\e[7~" => "\e[H",
     "\e[8~" => "\e[F",
+    "\eOA"  => "\e[A",
+    "\eOB"  => "\e[B",
+    "\eOC"  => "\e[C",
+    "\eOD"  => "\e[D",
     "\eOH"  => "\e[H",
     "\eOF"  => "\e[F",
 }

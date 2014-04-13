@@ -15,13 +15,15 @@ export
     cmove_up,
     disable_bracketed_paste,
     enable_bracketed_paste,
+    end_keypad_transmit_mode,
     getX,
     getY,
     hascolor,
     pos,
     writepos
 
-import Base: flush,
+import Base:
+    flush,
     read,
     readuntil,
     size,
@@ -130,13 +132,18 @@ raw!(t::TTYTerminal, raw::Bool) = ccall((@windows ? :jl_tty_set_mode : :uv_tty_s
                                          t.in_stream.handle, raw ? 1 : 0) != -1
 enable_bracketed_paste(t::UnixTerminal) = write(t.out_stream, "$(CSI)?2004h")
 disable_bracketed_paste(t::UnixTerminal) = write(t.out_stream, "$(CSI)?2004l")
+end_keypad_transmit_mode(t::UnixTerminal) = # tput rmkx
+    write(t.out_stream, "$(CSI)?1l\x1b>")
 
 function size(t::TTYTerminal)
     s = Array(Int32, 2)
     Base.uv_error("size (TTY)", ccall((@windows ? :jl_tty_get_winsize : :uv_tty_get_winsize),
                                       Int32, (Ptr{Void}, Ptr{Int32}, Ptr{Int32}),
                                       t.out_stream.handle, pointer(s,1), pointer(s,2)) != 0)
-    Size(s[1], s[2])
+    w,h = s[1],s[2]
+    w > 0 || (w = 80)
+    h > 0 || (h = 24)
+    Size(w,h)
 end
 
 clear(t::UnixTerminal) = write(t.out_stream, "\x1b[H\x1b[2J")
