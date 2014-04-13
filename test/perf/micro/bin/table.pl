@@ -31,16 +31,16 @@ our $javascript_ver = `node -e "console.log(process.versions.v8)"`;
 our $mathematica_ver = `echo quit | math -version | head -n 1 | cut -f2 -d" "`;
 
 our %systems = (
-  "fortran"    => ["Fortran" , "GCC $fortran_ver" ],
+  "fortran"    => ["Fortran"     , "GCC $fortran_ver" ],
   "julia"      => ["Julia"       , $julia_ver  ],
   "python"     => ["Python"      , $python_ver ],
   "matlab"     => ["Matlab"      , "R$matlab_ver" ],
   "octave"     => ["Octave"      , $octave_ver ],
   "r"          => ["R"           , $R_ver ],
-  "javascript" => ["JavaScript", "V8 $javascript_ver"],
+  "javascript" => ["JavaScript"  , "V8 $javascript_ver" ],
   "go"         => ["Go"          , $go_ver ],
   "mathematica"=> ["Mathematica" , $mathematica_ver ],
-  "lua"	       => ["Lua" , "gsl-shell $lua_ver"],
+  "lua"	       => ["LuaJIT"      , "gsl-shell $lua_ver" ],
 );
 
 our @systems = qw(fortran julia python r matlab octave mathematica javascript go lua);
