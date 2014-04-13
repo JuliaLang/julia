@@ -494,12 +494,12 @@ end
     if isa(P,BitArray)
         elszP=1
     else
-        elszP=sizeof(T1)
+        elszP=isbits(T1) ? sizeof(T1) : sizeof(Ptr)
     end
     if isa(B,BitArray)
         elszB=1
     else
-        elszB=sizeof(T2)
+        elszB=isbits(T2) ? sizeof(T2) : sizeof(Ptr)
     end
     bdims=blockdims(dims,elszP,stridesP,elszB,stridesB)
     # bdims=blockdims(dims,sizeof(T1),stridesP,sizeof(T2),stridesB)
