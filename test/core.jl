@@ -81,6 +81,9 @@ let N = TypeVar(:N,true)
     @test isequal(typeintersect((NTuple{N,Any},Array{Int,N}),
                                 ((Int,Int...),Array{Int,2})),
                   ((Int,Int), Array{Int,2}))
+
+    @test isequal(typeintersect((Type{Nothing},Type{Nothing}), Type{NTuple{N,Nothing}}),
+                  Type{(Nothing,Nothing)})
 end
 @test is(None, typeintersect(Type{Any},Type{Complex}))
 @test is(None, typeintersect(Type{Any},Type{TypeVar(:T,Real)}))
