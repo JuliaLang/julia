@@ -442,54 +442,54 @@ end
 ## permutedims
 
 
+# 
+# for (V, PT, BT) in {((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)}
+#     @eval @ngenerate N typeof(P) function permutedims!{$(V...)}(P::$PT{$(V...)}, B::$BT{$(V...)}, perm)
+#         dimsB = size(B)
+#         length(perm) == N || error("expected permutation of size $N, but length(perm)=$(length(perm))")
+#         isperm(perm) || error("input is not a permutation")
+#         dimsP = size(P)
+#         for i = 1:length(perm)
+#             dimsP[i] == dimsB[perm[i]] || throw(DimensionMismatch("destination tensor of incorrect size"))
+#         end
+# 
+#         #calculates all the strides
+#         strides_1 = 0
+#         @nexprs N d->(strides_{d+1} = stride(B, perm[d]))
+# 
+#         #Creates offset, because indexing starts at 1
+#         offset = 1 - sum(@ntuple N d->strides_{d+1})
+# 
+#         if isa(B, SubArray)
+#             offset += B.first_index - 1
+#             B = B.parent
+#         end
+# 
+#         ind = 1
+#         @nexprs 1 d->(counts_{N+1} = strides_{N+1}) # a trick to set counts_($N+1)
+#         @nloops(N, i, P,
+#             d->(counts_d = strides_d), # PRE
+#             d->(counts_{d+1} += strides_{d+1}), # POST
+#             begin # BODY
+#                 sumc = sum(@ntuple N d->counts_{d+1})
+#                 @inbounds P[ind] = B[sumc+offset]
+#                 ind += 1
+#             end)
+# 
+#         return P
+#     end
+# end
 
-for (V, PT, BT) in {((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)}
-    @eval @ngenerate N typeof(P) function permutedims!{$(V...)}(P::$PT{$(V...)}, B::$BT{$(V...)}, perm)
-        dimsB = size(B)
-        length(perm) == N || error("expected permutation of size $N, but length(perm)=$(length(perm))")
-        isperm(perm) || error("input is not a permutation")
-        dimsP = size(P)
-        for i = 1:length(perm)
-            dimsP[i] == dimsB[perm[i]] || throw(DimensionMismatch("destination tensor of incorrect size"))
-        end
 
-        #calculates all the strides
-        strides_1 = 0
-        @nexprs N d->(strides_{d+1} = stride(B, perm[d]))
-
-        #Creates offset, because indexing starts at 1
-        offset = 1 - sum(@ntuple N d->strides_{d+1})
-
-        if isa(B, SubArray)
-            offset += B.first_index - 1
-            B = B.parent
-        end
-
-        ind = 1
-        @nexprs 1 d->(counts_{N+1} = strides_{N+1}) # a trick to set counts_($N+1)
-        @nloops(N, i, P,
-            d->(counts_d = strides_d), # PRE
-            d->(counts_{d+1} += strides_{d+1}), # POST
-            begin # BODY
-                sumc = sum(@ntuple N d->counts_{d+1})
-                @inbounds P[ind] = B[sumc+offset]
-                ind += 1
-            end)
-
-        return P
-    end
-end
-
-
-@ngenerate N typeof(P) function permutedims2!{T1,T2,N}(P::StridedArray{T1,N},B::StridedArray{T2,N}, perm)
+@ngenerate N typeof(P) function permutedims!{T1,T2,N}(P::StridedArray{T1,N},B::StridedArray{T2,N}, perm)
     length(perm) == N || error("expected permutation of size $N, but length(perm)=$(length(perm))")
     isperm(perm) || error("input is not a permutation")
     dims = size(P)
     for i = 1:N
         dims[i] == size(B,perm[i]) || throw(DimensionMismatch("destination tensor of incorrect size"))
     end
-    stridesP=strides(P)
-    stridesB=strides(B)[perm]
+    stridesP=ntuple(d->stride(P,d),N)
+    stridesB=ntuple(d->stride(B,perm[d]),N)
     
     if isa(P,BitArray)
         elszP=1
