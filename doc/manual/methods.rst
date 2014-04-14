@@ -196,7 +196,7 @@ which shows that f has two methods, one taking two ``Float64``
 arguments and one taking arguments of type ``Number``. It also
 indicates the file and line number where the methods were defined:
 because these methods were defined at the REPL, we get the apparent
-line number ``none:'``.
+line number ``none:1``.
 
 In the absence of a type declaration with ``::``, the type of a method
 parameter is ``Any`` by default, meaning that it is unconstrained since
