@@ -47,19 +47,19 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the LU factorization of ``A``. The return type of ``F`` depends on the type of ``A``. In most cases, if ``A`` is a subtype ``S`` of AbstractMatrix with an element type ``T``` supporting ``+``, ``-``, ``*`` and ``/`` the return type is ``LU{T,S{T}}``. If pivoting is chosen (default) the element type should also support ``abs`` and ``<``. When ``A`` is sparse and have element of type ``Float32``, ``Float64``, ``Complex{Float32}``, or ``Complex{Float64}`` the return type is ``UmfpackLU``. Some examples are shown in the table below.
 
-      ======================= ======================== ========================================
-      Type of input ``A``     Type of output ``F``     Relationship between ``F`` and ``A``
-      ----------------------- ------------------------ ----------------------------------------
-      :func:`Matrix`           ``LU``                  ``F[:L]*F[:U] == A[F[:p], :]``
+      ======================= ========================= ========================================
+      Type of input ``A``     Type of output ``F``      Relationship between ``F`` and ``A``
+      ----------------------- ------------------------- ----------------------------------------
+      :func:`Matrix`           ``LU``                   ``F[:L]*F[:U] == A[F[:p], :]``
       :func:`Tridiagonal`      ``LU{T,Tridiagonal{T}}``  N/A
-      :func:`SparseMatrixCSC`  ``UmfpackLU``           ``F[:L]*F[:U] == Rs .* A[F[:p], F[:q]]``
-      ======================= ======================== ========================================
+      :func:`SparseMatrixCSC`  ``UmfpackLU``            ``F[:L]*F[:U] == Rs .* A[F[:p], F[:q]]``
+      ======================= ========================= ========================================
 
    The individual components of the factorization ``F`` can be accessed by indexing:
 
-      =========== ======================================= ====== ======================= ==============
+      =========== ======================================= ====== ======================== =============
       Component   Description                             ``LU`` ``LU{T,Tridiagonal{T}}`` ``UmfpackLU``
-      ----------- --------------------------------------- ------ ----------------------- -------------
+      ----------- --------------------------------------- ------ ------------------------ -------------
       ``F[:L]``   ``L`` (lower triangular) part of ``LU``    ✓                                     ✓
       ``F[:U]``   ``U`` (upper triangular) part of ``LU``    ✓                                     ✓
       ``F[:p]``   (right) permutation ``Vector``             ✓                                     ✓
@@ -67,17 +67,17 @@ Linear algebra functions in Julia are largely implemented by calling functions f
       ``F[:q]``   left permutation ``Vector``                                                      ✓
       ``F[:Rs]``  ``Vector`` of scaling factors                                                    ✓
       ``F[:(:)]`` ``(L,U,p,q,Rs)`` components                                                      ✓
-      =========== ======================================= ====== ======================= =============
+      =========== ======================================= ====== ======================== =============
 
-      ================== ====== ======================= =============
+      ================== ====== ======================== =============
       Supported function ``LU`` ``LU{T,Tridiagonal{T}}`` ``UmfpackLU``
-      ------------------ ------ ----------------------- -------------
+      ------------------ ------ ------------------------ -------------
            ``/``            ✓
            ``\``            ✓                       ✓             ✓
            ``cond``         ✓                                     ✓
            ``det``          ✓                       ✓             ✓
            ``size``         ✓                       ✓
-      ================== ====== ======================= =============
+      ================== ====== ======================== =============
 
 .. function:: lufact!(A) -> LU
 
