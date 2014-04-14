@@ -332,7 +332,7 @@ function _start()
                 global is_interactive = !isa(STDIN,Union(File,IOStream))
                 color_set || (global have_color = false)
             else
-                term = Terminals.TTYTerminal(get(ENV,"TERM",""),STDIN,STDOUT,STDERR)
+                term = Terminals.TTYTerminal(get(ENV,"TERM","dumb"),STDIN,STDOUT,STDERR)
                 global is_interactive = true
                 color_set || (global have_color = Terminals.hascolor(term))
             end
@@ -359,8 +359,13 @@ function _start()
             end
             quiet || REPL.banner(term,term)
             ccall(:jl_install_sigint_handler, Void, ())
-            repl = REPL.LineEditREPL(term)
-            repl.no_history_file = no_history_file
+            local repl
+            if term.term_type == "dumb"
+                repl = REPL.BasicREPL(term)
+            else
+                repl = REPL.LineEditREPL(term)
+                repl.no_history_file = no_history_file
+            end
             REPL.run_repl(repl)
         end
     catch err

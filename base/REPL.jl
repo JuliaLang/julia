@@ -5,14 +5,16 @@ using Base.Terminals
 using Base.LineEdit
 using Base.REPLCompletions
 
-export StreamREPL, BasicREPL
+export
+    BasicREPL,
+    LineEditREPL,
+    StreamREPL
 
-import Base: AsyncStream,
-             Display,
-             display,
-             writemime
-
-import Base.Terminals: raw!
+import Base:
+    AsyncStream,
+    Display,
+    display,
+    writemime
 
 import Base.LineEdit:
     CompletionProvider,
@@ -27,13 +29,15 @@ import Base.LineEdit:
 
 abstract AbstractREPL
 
+answer_color(::AbstractREPL) = ""
+
 type REPLBackend
     repl_channel::RemoteRef
     response_channel::RemoteRef
     ans
 end
 
-function eval_user_input(ast::ANY, backend)
+function eval_user_input(ast::ANY, backend::REPLBackend)
     iserr, lasterr, bt = false, (), nothing
     while true
         try
@@ -73,7 +77,7 @@ function parse_input_line(s::String)
     ccall(:jl_parse_input_line, Any, (Ptr{Uint8},), s)
 end
 
-function start_repl_backend(repl_channel, response_channel)
+function start_repl_backend(repl_channel::RemoteRef, response_channel::RemoteRef)
     backend = REPLBackend(repl_channel, response_channel, nothing)
     @async begin
         # include looks at this to determine the relative include path
@@ -88,7 +92,6 @@ function start_repl_backend(repl_channel, response_channel)
             end
             eval_user_input(ast, backend)
         end
-
     end
 end
 
@@ -110,7 +113,9 @@ function display(d::REPLDisplay, ::MIME"text/plain", x)
 end
 display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
 
-function print_response(d::REPLDisplay, errio::IO, r::AbstractREPL, val::ANY, bt, show_value, have_color)
+print_response(d::REPLDisplay, val::ANY, bt, show_value::Bool, have_color::Bool) =
+    print_response(d, outstream(d.repl), val, bt, show_value, have_color)
+function print_response(d::REPLDisplay, errio::IO, val::ANY, bt, show_value::Bool, have_color::Bool)
     while true
         try
             if bt !== nothing
@@ -138,6 +143,48 @@ function print_response(d::REPLDisplay, errio::IO, r::AbstractREPL, val::ANY, bt
         end
     end
 end
+
+function run_repl(repl::AbstractREPL)
+    repl_channel = RemoteRef()
+    response_channel = RemoteRef()
+    start_repl_backend(repl_channel, response_channel)
+    run_frontend(repl, repl_channel, response_channel)
+end
+
+## BasicREPL ##
+
+type BasicREPL <: AbstractREPL
+    terminal::TextTerminal
+end
+
+outstream(r::BasicREPL) = r.terminal
+
+function run_frontend(repl::BasicREPL, repl_channel::RemoteRef, response_channel::RemoteRef)
+    d = REPLDisplay(repl)
+    while true
+        write(repl.terminal, "julia> ")
+        line = ""
+        ast = nothing
+        while true
+            line *= readline(repl.terminal)
+            ast = Base.parse_input_line(line)
+            (isa(ast,Expr) && ast.head == :incomplete) || break
+        end
+        if !isempty(line)
+            put!(repl_channel, (ast, 1))
+            val, bt = take!(response_channel)
+            if !ends_with_semicolon(line)
+                print_response(d, val, bt, true, false)
+            end
+        end
+        write(repl.terminal, '\n')
+    end
+    # terminate backend
+    put!(repl_channel, (nothing, -1))
+end
+
+## LineEditREPL ##
+
 type LineEditREPL <: AbstractREPL
     t::TextTerminal
     prompt_color::String
@@ -433,8 +480,6 @@ function reset(d::REPLDisplay{LineEditREPL})
     print(Base.text_colors[:normal])
 end
 
-
-
 function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,Any}[])
     ###
     #
@@ -631,18 +676,7 @@ else
     banner(io,t) = Base.banner(io)
 end
 
-function run_repl(repl::LineEditREPL)
-    repl_channel = RemoteRef()
-    response_channel = RemoteRef()
-    start_repl_backend(repl_channel, response_channel)
-    run_frontend(repl, repl_channel, response_channel)
-end
-run_repl(t::TextTerminal) = run_repl(LineEditREPL(t))
-
-type BasicREPL <: AbstractREPL
-end
-
-outstream(::BasicREPL) = STDOUT
+## StreamREPL ##
 
 type StreamREPL <: AbstractREPL
     stream::IO
@@ -657,10 +691,6 @@ StreamREPL(stream::AsyncStream) = StreamREPL(stream, julia_green, Base.text_colo
 
 answer_color(r::LineEditREPL) = r.answer_color
 answer_color(r::StreamREPL) = r.answer_color
-answer_color(::BasicREPL) = Base.text_colors[:white]
-
-print_response(d::REPLDisplay{StreamREPL}, args...)   = print_response(d, d.repl.stream, d.repl, args...)
-print_response(d::REPLDisplay{LineEditREPL}, args...) = print_response(d, d.repl.t, d.repl, args...)
 
 function run_repl(stream::AsyncStream)
     repl =
