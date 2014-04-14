@@ -1851,7 +1851,7 @@ end
 # cannot be affected by previous calls, except assignment nodes
 function effect_free(e::ANY, sv, allow_volatile::Bool)
     if isa(e,Symbol) || isa(e,SymbolNode) || isa(e,Number) || isa(e,String) ||
-        isa(e,TopNode) || isa(e,QuoteNode) || isa(e,Type)
+        isa(e,TopNode) || isa(e,QuoteNode) || isa(e,Type) || isa(e,Tuple)
         return true
     end
     if isa(e,Expr)
@@ -2642,20 +2642,24 @@ function tupleref_elim_pass(e::Expr, sv)
         if isa(ei,Expr)
             tupleref_elim_pass(ei, sv)
             if is_known_call(ei, tupleref, sv) && length(ei.args)==3 &&
-                isa(ei.args[2],Expr) && isa(ei.args[3],Int)
+                isa(ei.args[3],Int)
                 e1 = ei.args[2]
                 j = ei.args[3]
-                if is_known_call(e1, tuple, sv) && (1 <= j < length(e1.args))
-                    ok = true
-                    for k = 2:length(e1.args)
-                        k == j+1 && continue
-                        if !effect_free(e1.args[k], sv, true)
-                            ok = false; break
+                if isa(e1,Expr)
+                    if is_known_call(e1, tuple, sv) && (1 <= j < length(e1.args))
+                        ok = true
+                        for k = 2:length(e1.args)
+                            k == j+1 && continue
+                            if !effect_free(e1.args[k], sv, true)
+                                ok = false; break
+                            end
+                        end
+                        if ok
+                            e.args[i] = e1.args[j+1]
                         end
                     end
-                    if ok
-                        e.args[i] = e1.args[j+1]
-                    end
+                elseif isa(e1,Tuple) && (1 <= j <= length(e1))
+                    e.args[i] = e1[j]
                 end
             end
         end
