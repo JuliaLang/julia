@@ -243,7 +243,7 @@ function map!(f::Callable, S::SharedArray)
     return S
 end
 
-copy!(S::SharedArray, A::Array) = copy!(S.s, A)
+copy!(S::SharedArray, A::Array) = (copy!(S.s, A); S)
 
 function copy!(S::SharedArray, R::SharedArray)
     length(S) == length(R) || throw(BoundsError())
