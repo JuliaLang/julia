@@ -2659,7 +2659,14 @@ function tupleref_elim_pass(e::Expr, sv)
                         end
                     end
                 elseif isa(e1,Tuple) && (1 <= j <= length(e1))
-                    e.args[i] = QuoteNode(e1[j])
+                    e1j = e1[j]
+                    if !(isa(e1j,Number) || isa(e1j,String) || isa(e1j,Tuple) ||
+                         isa(e1j,Type))
+                        e1j = QuoteNode(e1j)
+                    end
+                    e.args[i] = e1j
+                elseif isa(e1,QuoteNode) && isa(e1.value,Tuple) && (1 <= j <= length(e1.value))
+                    e.args[i] = QuoteNode(e1.value[j])
                 end
             end
         end
