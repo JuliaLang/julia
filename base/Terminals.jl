@@ -20,6 +20,7 @@ export
     getY,
     hascolor,
     pos,
+    raw!,
     writepos
 
 import Base:
@@ -136,7 +137,7 @@ end_keypad_transmit_mode(t::UnixTerminal) = # tput rmkx
     write(t.out_stream, "$(CSI)?1l\x1b>")
 
 function size(t::TTYTerminal)
-    s = Array(Int32, 2)
+    s = zeros(Int32, 2)
     Base.uv_error("size (TTY)", ccall((@windows ? :jl_tty_get_winsize : :uv_tty_get_winsize),
                                       Int32, (Ptr{Void}, Ptr{Int32}, Ptr{Int32}),
                                       t.out_stream.handle, pointer(s,1), pointer(s,2)) != 0)
