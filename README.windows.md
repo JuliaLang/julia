@@ -115,6 +115,8 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
     make -j 4   # Adjust the number of cores (4) to match your build environment.
 ```
 
+  5. In case of the issues with building packages (i.e. ICU fails to build with the following error message ```error compiling xp_parse: error compiling xp_make_parser: could not load module libexpat-1: %```) run ```make win-extras``` and then copy everything from the ```dist-extras``` folder into ```usr/bin```.
+
 ## Building on Windows with MinGW-builds/MSYS
 
 ### The MSYS build of `make` is fragile and may not reliably support parallel builds. Use MSYS2 as described above, if you can. If you must use MSYS, take care to notice the special comments in this section.
