@@ -621,7 +621,8 @@ end
 
 function maximum{T}(A::SparseMatrixCSC{T})
     isempty(A) && throw(ArgumentError("argument must not be empty"))
-    max(maximum(A.nzval), zero(T))
+    m = maximum(A.nzval)
+    nfilled(A)!=length(A) ? max(m,zero(T)) : m
 end
 
 maximum{T}(A::SparseMatrixCSC{T}, region) =
@@ -629,7 +630,8 @@ maximum{T}(A::SparseMatrixCSC{T}, region) =
 
 function minimum{T}(A::SparseMatrixCSC{T})
     isempty(A) && throw(ArgumentError("argument must not be empty"))
-    min(minimum(A.nzval), zero(T))
+    m = minimum(A.nzval)
+    nfilled(A)!=length(A) ? min(m,zero(T)) : m
 end
 
 minimum{T}(A::SparseMatrixCSC{T}, region) =
