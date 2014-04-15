@@ -441,6 +441,43 @@ end
 
 ## permutedims
 
+for (V, PT, BT) in {((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)}
+    @eval @ngenerate N typeof(P) function permutedimsold!{$(V...)}(P::$PT{$(V...)}, B::$BT{$(V...)}, perm)
+        dimsB = size(B)
+        length(perm) == N || error("expected permutation of size $N, but length(perm)=$(length(perm))")
+        isperm(perm) || error("input is not a permutation")
+        dimsP = size(P)
+        for i = 1:length(perm)
+            dimsP[i] == dimsB[perm[i]] || throw(DimensionMismatch("destination tensor of incorrect size"))
+        end
+
+        #calculates all the strides
+        strides_1 = 0
+        @nexprs N d->(strides_{d+1} = stride(B, perm[d]))
+
+        #Creates offset, because indexing starts at 1
+        offset = 1 - sum(@ntuple N d->strides_{d+1})
+
+        if isa(B, SubArray)
+            offset += B.first_index - 1
+            B = B.parent
+        end
+
+        ind = 1
+        @nexprs 1 d->(counts_{N+1} = strides_{N+1}) # a trick to set counts_($N+1)
+        @nloops(N, i, P,
+            d->(counts_d = strides_d), # PRE
+            d->(counts_{d+1} += strides_{d+1}), # POST
+            begin # BODY
+                sumc = sum(@ntuple N d->counts_{d+1})
+                @inbounds P[ind] = B[sumc+offset]
+                ind += 1
+            end)
+
+        return P
+    end
+end
+
 @ngenerate N typeof(P) function permutedims!{T1,T2,N}(P::StridedArray{T1,N},B::StridedArray{T2,N}, perm)
     length(perm) == N || error("expected permutation of size $N, but length(perm)=$(length(perm))")
     isperm(perm) || error("input is not a permutation")
@@ -465,7 +502,11 @@ end
     else
         elszB=isbits(T2) ? sizeof(T2) : sizeof(Ptr)
     end
-    bdims=blockdims(dims,elszP,(@ntuple N d->stridesP_{d}),elszB,(@ntuple N d->stridesB_{d}))
+    if (elszB+elszP)*length(P)<=1<<15
+        bdims=dims
+    else
+        bdims=blockdims(dims,elszP,(@ntuple N d->stridesP_{d}),elszB,(@ntuple N d->stridesB_{d}))
+    end
     @nexprs N d->(bdims_{d} = bdims[d])
 
     if isa(B, SubArray)
@@ -521,45 +562,42 @@ function blockdims{N}(dims::NTuple{N,Int},elszA::Int,stridesA::NTuple{N,Int},els
         end
     
         # cache-friendly blocking strategy:
-        bstep=ones(Int,N)
-        for i=1:N
-            bstep[i]=max(1,div(cacheline,elszA*stridesA[i]),div(cacheline,elszB*stridesB[i]))
-            # bstep is the number of elements along that dimension that can be expected to be
-            # within a single cacheline for either array A or B; it would be suboptimal not to
-            # use all of them immediately
-        end
+        # bstep=ones(Int,N)
+        # for i=1:N
+        #     bstep[i]=max(1,div(cacheline,elszA*stridesA[i]),div(cacheline,elszB*stridesB[i]))
+        #     # bstep is the number of elements along that dimension that can be expected to be
+        #     # within a single cacheline for either array A or B; it would be suboptimal not to
+        #     # use all of them immediately
+        # end
         
-        bdims=copy(bstep)
+        bdims=ones(Int,N)
         i=1
         j=1
         # loop will try to make blocks maximal along dimensions of minimal strides
         # for both A and B, until the blockdim equals the full dim along those
         # dimensions, and then continue with the next dimensions
         while true
-            bdims[pA[i]]+=bstep[pA[i]]
-            if (cachesizeA+cachesizeB)*prod(bdims)>effectivecachesize # this must become true at some point
-                bdims[pA[i]]-=bstep[pA[i]]
-                break
-            end
-            if bdims[pA[i]]>=dims[pA[i]]
-                bdims[pA[i]]=dims[pA[i]]
+            while bdims[pA[i]]==dims[pA[i]]
                 i+=1
             end
-            
-            bdims[pB[j]]+=bstep[pB[j]]
+            bdims[pA[i]]+=1#bstep[pA[i]]
             if (cachesizeA+cachesizeB)*prod(bdims)>effectivecachesize # this must become true at some point
-                bdims[pB[j]]-=bstep[pB[j]]
+                bdims[pA[i]]-=1#bstep[pA[i]]
                 break
             end
-            if bdims[pB[j]]>=dims[pB[j]]
-                bdims[pB[j]]=dims[pB[j]]
+            
+            while bdims[pB[j]]==dims[pB[j]]
                 j+=1
+            end
+            bdims[pB[j]]+=1#bstep[pB[j]]
+            if (cachesizeA+cachesizeB)*prod(bdims)>effectivecachesize # this must become true at some point
+                bdims[pB[j]]-=1#bstep[pB[j]]
+                break
             end
         end
         return tuple(bdims...)
     end
 end
-
 
 ## unique across dim
 
