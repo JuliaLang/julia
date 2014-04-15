@@ -65,10 +65,12 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
         end
 
         # All good, immediately unlink the segment.
-        if onlocalhost
-            shm_unlink(shm_seg_name)
-        else
-            remotecall_fetch(shmmem_create_pid, shm_unlink, shm_seg_name)
+        if prod(dims) > 0
+            if onlocalhost
+                shm_unlink(shm_seg_name)
+            else
+                remotecall_fetch(shmmem_create_pid, shm_unlink, shm_seg_name)
+            end
         end
         S = SharedArray{T,N}(dims, pids, refs, shm_seg_name)
         shm_seg_name = ""
@@ -265,6 +267,8 @@ function copy!(S::SharedArray, R::SharedArray)
     return S
 end
 
+complex(S1::SharedArray,S2::SharedArray) = convert(SharedArray, complex(S1.s, S2.s))
+
 function print_shmem_limits(slen)
     try
         @linux_only pfx = "kernel"
@@ -289,6 +293,11 @@ end
 function shm_mmap_array(T, dims, shm_seg_name, mode)
     local s = nothing
     local A = nothing
+
+    if prod(dims) == 0
+        return Array(T, dims)
+    end
+    
     try
         fd_mem = shm_open(shm_seg_name, mode, S_IRUSR | S_IWUSR)
         systemerror("shm_open() failed for " * shm_seg_name, fd_mem <= 0)
