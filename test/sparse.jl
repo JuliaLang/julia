@@ -226,3 +226,6 @@ end
 @test maximum(P, (1,)) == [1.0 2.0 3.0]
 @test maximum(P, (2,)) == reshape([1.0,2.0,3.0],3,1)
 @test maximum(P, (1,2)) == reshape([3.0],1,1)
+
+@test maximum(sparse(-ones(3,3))) == -1
+@test minimum(sparse(ones(3,3))) == 1
