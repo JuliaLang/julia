@@ -255,7 +255,7 @@
 			<array>
 				<dict>
 					<key>match</key>
-					<string>((\b0(x|X)[0-9a-fA-F]+)|(\b0o[0-7]+)|(\b0b[0-1]+)|((\b[0-9]+\.?[0-9]*)|(\.[0-9]+))((e|E)(\+|-)?[0-9]*)?(im)?|\bInf(32)?\b|\bNaN(32)?\b)</string>
+					<string>((\b0(x|X)[0-9a-fA-F](_?[0-9a-fA-F])*)|(\b0o[0-7](_?[0-7])*)|(\b0b[0-1](_?[0-1])*)|((\b[0-9](_?[0-9])*\.?(_?[0-9]*))|(\.[0-9](_?[0-9])*))((e|E)(\+|-)?(_?[0-9])*)?(im)?|\bInf(32)?\b|\bNaN(32)?\b)</string>
 					<key>name</key>
 					<string>constant.numeric.julia</string>
 				</dict>
