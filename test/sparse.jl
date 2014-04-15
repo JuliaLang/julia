@@ -217,5 +217,12 @@ P = spzeros(Float64, 3, 3)
 for i = 1:3
     P[i,i] = i
 end
-@test minimum(P) == [0]
-@test maximum(P) == [3]
+
+@test minimum(P) === 0.0
+@test maximum(P) === 3.0
+@test minimum(-P) === -3.0
+@test maximum(-P) === 0.0
+
+@test maximum(P, (1,)) == [1.0 2.0 3.0]
+@test maximum(P, (2,)) == reshape([1.0,2.0,3.0],3,1)
+@test maximum(P, (1,2)) == reshape([3.0],1,1)
