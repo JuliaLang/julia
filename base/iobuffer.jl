@@ -33,7 +33,7 @@ IOBuffer(data::Vector{Uint8},readable::Bool,writable::Bool,maxsize::Int) =
         IOBuffer(data,readable,writable,true,false,maxsize)
 IOBuffer(data::Vector{Uint8},readable::Bool,writable::Bool) = IOBuffer(data,readable,writable,typemax(Int))
 IOBuffer(data::Vector{Uint8}) = IOBuffer(data, true, false)
-IOBuffer(str::String) = IOBuffer(str.data, true, false)
+IOBuffer(str::ByteString) = IOBuffer(str.data, true, false)
 IOBuffer(readable::Bool,writable::Bool) = IOBuffer(Uint8[],readable,writable)
 IOBuffer() = IOBuffer(Uint8[], true, true)
 IOBuffer(maxsize::Int) = (x=IOBuffer(Array(Uint8,maxsize),true,true,maxsize); x.size=0; x)
