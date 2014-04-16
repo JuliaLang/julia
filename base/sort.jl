@@ -82,8 +82,9 @@ function select!(v::AbstractVector, k::Int, lo::Int, hi::Int, o::Ordering)
 end
 
 function select!(v::AbstractVector, r::UnitRange, lo::Int, hi::Int, o::Ordering)
+    isempty(r) && (return v[r])
     a, b = first(r), last(r)
-    lo <= a <= b <= hi || error("select index $k is out of range $lo:$hi")
+    lo <= a <= b <= hi || error("selection $r is out of range $lo:$hi")
     @inbounds while true
         if lo == a && hi == b
             sort!(v, lo, hi, DEFAULT_UNSTABLE, o)
