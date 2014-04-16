@@ -104,24 +104,25 @@ jl_value_t ***sysimg_gvars = NULL;
 extern int globalUnique;
 extern void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType);
 extern const char *jl_cpu_string;
+uv_lib_t *jl_sysimg_handle = NULL;
 
 static void jl_load_sysimg_so(char *fname)
 {
     // attempt to load the pre-compiled sysimg at fname
     // if this succeeds, sysimg_gvars will be a valid array
     // otherwise, it will be NULL
-    uv_lib_t *sysimg_handle = jl_load_dynamic_library_e(fname, JL_RTLD_DEFAULT | JL_RTLD_GLOBAL);
-    if (sysimg_handle != 0) {
-        sysimg_gvars = (jl_value_t***)jl_dlsym(sysimg_handle, "jl_sysimg_gvars");
-        globalUnique = *(size_t*)jl_dlsym(sysimg_handle, "jl_globalUnique");
-        const char *cpu_target = (const char*)jl_dlsym(sysimg_handle, "jl_sysimg_cpu_target");
+    jl_sysimg_handle = jl_load_dynamic_library_e(fname, JL_RTLD_DEFAULT | JL_RTLD_GLOBAL);
+    if (jl_sysimg_handle != 0) {
+        sysimg_gvars = (jl_value_t***)jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars");
+        globalUnique = *(size_t*)jl_dlsym(jl_sysimg_handle, "jl_globalUnique");
+        const char *cpu_target = (const char*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_target");
         if (strcmp(cpu_target,jl_cpu_string) != 0)
             jl_error("Julia and the system image were compiled for different architectures.\n"
                      "Please delete or regenerate sys.{so,dll,dylib}.");
         uint32_t info[4];
         jl_cpuid((int32_t*)info, 1);
         if (strcmp(cpu_target, "native") == 0) {
-            uint64_t saved_cpuid = *(uint64_t*)jl_dlsym(sysimg_handle, "jl_sysimg_cpu_cpuid");
+            uint64_t saved_cpuid = *(uint64_t*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_cpuid");
             if (saved_cpuid != (((uint64_t)info[2])|(((uint64_t)info[3])<<32)))
                 jl_error("Target architecture mismatch. Please delete or regenerate sys.{so,dll,dylib}.");
         }
@@ -1103,6 +1104,10 @@ void jl_restore_system_image(char *fname)
     jl_get_binding_wr(jl_core_module, jl_symbol("JULIA_HOME"))->value =
         jl_cstr_to_string(julia_home);
     jl_update_all_fptrs();
+#ifndef _OS_WINDOWS_
+    // restore the line information for Julia backtraces
+    if (jl_sysimg_handle != NULL) jl_restore_linedebug_info(jl_sysimg_handle);
+#endif
 }
 
 void jl_init_restored_modules()
