@@ -240,6 +240,7 @@ bitbroadcast(f::Function, As...) = broadcast!(f, BitArray(broadcast_shape(As...)
 
 broadcast!_function(f::Function) = (B, As...) -> broadcast!(f, B, As...)
 broadcast_function(f::Function) = (As...) -> broadcast(f, As...)
+broadcast_function(f::Function, T::DataType) = (As...) -> broadcast(f, T, As...)
 
 broadcast_getindex(src::AbstractArray, I::AbstractArray...) = broadcast_getindex!(Array(eltype(src), broadcast_shape(I...)), src, I...)
 @ngenerate N typeof(dest) function broadcast_getindex!(dest::AbstractArray, src::AbstractArray, I::NTuple{N, AbstractArray}...)
