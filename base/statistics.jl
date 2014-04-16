@@ -1,4 +1,3 @@
-
 function mean(iterable)
     state = start(iterable)
     if done(iterable, state)
@@ -112,6 +111,44 @@ function var(v::AbstractArray, region; corrected::Bool=true, mean=nothing)
     error("Invalid value of mean.")
 end
 
+function var(iterable; corrected::Bool=true, mean=nothing)
+    state = start(iterable)
+    if done(iterable, state)
+        error("variance of empty collection undefined: $(repr(iterable))")
+    end
+    count = 1
+    value, state = next(iterable, state)
+    if mean == nothing
+        # Use Welford algorithm as seen in (among other places) 
+        # Knuth's TAOCP, Vol 2, page 232, 3rd edition. 
+        M = value
+        S = zero(M)
+        while !done(iterable, state)
+            value, state = next(iterable, state)
+            count += 1
+            new_M = M + (value - M) / count
+            S = S + (value - M) * (value - new_M)
+            M = new_M
+        end
+        return S / (count - int(corrected))
+    else # mean provided
+        # Cannot use a compensated version, e.g. the one from
+        # "Updating Formulae and a Pairwise Algorithm for Computing Sample Variances."
+        # by Chan, Golub, and LeVeque, Technical Report STAN-CS-79-773, 
+        # Department of Computer Science, Stanford University,
+        # because user can provide mean value that is different to mean(iterable)
+        sum2 = (value - mean)^2
+        while !done(iterable, state)
+            value, state = next(iterable, state)
+            count += 1
+            sum2 += (value - mean)^2
+        end
+        return sum2 / (count - int(corrected))
+    end
+end
+
+varm(iterable, m::Number; corrected::Bool=true) =
+    var(iterable, corrected=corrected, mean=m)
 
 ## variances over ranges
 
@@ -144,6 +181,11 @@ std(v::AbstractArray; corrected::Bool=true, mean=nothing) =
 std(v::AbstractArray, region; corrected::Bool=true, mean=nothing) = 
     sqrt!(var(v, region; corrected=corrected, mean=mean))
 
+std(iterable; corrected::Bool=true, mean=nothing) =
+    sqrt(var(iterable, corrected=corrected, mean=mean))
+
+stdm(iterable, m::Number; corrected::Bool=true) =
+    std(iterable, corrected=corrected, mean=m)
 
 ## pearson covariance functions ##
 
