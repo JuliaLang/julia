@@ -1303,7 +1303,9 @@ Strings
 .. function:: utf16(s)
 
    Create a UTF-16 string from a byte array, array of ``Uint16``, or
-   any other string type.  (Data must be valid UTF-16.)
+   any other string type.  (Data must be valid UTF-16.  Conversions of
+   byte arrays check for a byte-order marker in the first two bytes,
+   and do not include it in the resulting string.)
 
 .. function:: is_valid_utf16(s)
 
