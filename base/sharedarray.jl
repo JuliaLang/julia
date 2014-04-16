@@ -108,6 +108,21 @@ SharedArray(T, I::Int...; kwargs...) = SharedArray(T, I; kwargs...)
 length(S::SharedArray) = prod(S.dims)
 size(S::SharedArray) = S.dims
 
+function reshape{T,N}(a::SharedArray{T}, dims::NTuple{N,Int})
+    refs = Array(RemoteRef, length(a.pids))
+    for (i, p) in enumerate(a.pids)
+        refs[i] = remotecall(p, (r,d)->reshape(fetch(r),d), a.refs[i], dims)
+    end
+
+    A = SharedArray{T,N}(dims, a.pids, refs, a.segname)
+    A.pidx = a.pidx
+    if A.pidx > 0
+        A.s = reshape(a.s, dims)
+        A.loc_subarr_1d = sub_1dim(A, A.pidx)
+    end
+    A
+end
+
 procs(S::SharedArray) = S.pids
 indexpids(S::SharedArray) = S.pidx
 
