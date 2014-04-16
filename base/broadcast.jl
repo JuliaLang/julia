@@ -230,8 +230,11 @@ for (Bsig, Asig, gbf, gbb) in
     end  # let broadcast_cache
 end
 
+broadcast(f::Function, T::DataType, As...) =
+    broadcast!(f, Array(T, broadcast_shape(As...)), As...)
 
-broadcast(f::Function, As...) = broadcast!(f, Array(promote_eltype(As...), broadcast_shape(As...)), As...)
+broadcast(f::Function, As...) =
+    broadcast(f, promote_eltype(As...), As...)
 
 bitbroadcast(f::Function, As...) = broadcast!(f, BitArray(broadcast_shape(As...)), As...)
 
