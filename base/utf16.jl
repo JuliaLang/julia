@@ -72,6 +72,15 @@ function convert(::Type{UTF16String}, data::Array{Uint16})
 end
 
 function convert(T::Type{UTF16String}, bytes::Array{Uint8})
+    isempty(bytes) && return UTF16String(Uint16[])
     isodd(length(bytes)) && throw(ArgumentError("odd number of bytes"))
-    convert(T, reinterpret(Uint16, bytes))
+    data = reinterpret(Uint16, bytes)    
+    # check for byte-order mark (BOM):
+    if data[1] == 0xfeff        # native byte order
+        convert(T, data[2:end])
+    elseif data[1] == 0xfffe    # byte-swapped
+        convert(T, Uint16[bswap(data[i]) for i=2:length(data)])
+    else
+        convert(T, copy(data)) # assume native byte order
+    end
 end
