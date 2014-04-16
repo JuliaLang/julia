@@ -48,3 +48,30 @@ convert(::Type{Array{Uint16}}, s::UTF16String) = s.data
 sizeof(s::UTF16String) = sizeof(s.data)
 convert{T<:Union(Int16,Uint16)}(::Type{Ptr{T}}, s::UTF16String) =
     convert(Ptr{T}, s.data)
+
+function is_valid_utf16(data::Array{Uint16})
+    i = 1
+    n = length(data)
+    while i < n # check for unpaired surrogates
+        if utf16_is_lead(data[i]) && utf16_is_trail(data[i+1])
+            i += 2
+        elseif utf16_is_surrogate(data[i])
+            return false
+        else
+            i += 1
+        end
+    end
+    return i > n || !utf16_is_surrogate(data[i])
+end
+
+is_valid_utf16(s::UTF16String) = is_valid_utf16(s.data)
+
+function convert(::Type{UTF16String}, data::Array{Uint16})
+    !is_valid_utf16(data) && throw(ArgumentError("invalid UTF16 data"))
+    UTF16String(data)
+end
+
+function convert(T::Type{UTF16String}, bytes::Array{Uint8})
+    isodd(length(bytes)) && throw(ArgumentError("odd number of bytes"))
+    convert(T, reinterpret(Uint16, bytes))
+end

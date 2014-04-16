@@ -1300,6 +1300,14 @@ Strings
 
    General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`escape_string`. See also :func:`print_unescaped`.
 
+.. function:: utf16(s)
+
+   Create a UTF-16 string from a byte array, array of ``Uint16``, or
+   any other string type.  (Data must be valid UTF-16.)
+
+.. function:: is_valid_utf16(s)
+
+   Returns true if the string or ``Uint16`` array is valid UTF-16.
 
 I/O
 ---
