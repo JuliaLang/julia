@@ -109,17 +109,15 @@ length(S::SharedArray) = prod(S.dims)
 size(S::SharedArray) = S.dims
 
 function reshape{T,N}(a::SharedArray{T}, dims::NTuple{N,Int})
+    (length(a) != prod(dims)) && error("dimensions must be consistent with array size")
     refs = Array(RemoteRef, length(a.pids))
     for (i, p) in enumerate(a.pids)
         refs[i] = remotecall(p, (r,d)->reshape(fetch(r),d), a.refs[i], dims)
     end
 
     A = SharedArray{T,N}(dims, a.pids, refs, a.segname)
-    A.pidx = a.pidx
-    if A.pidx > 0
-        A.s = reshape(a.s, dims)
-        A.loc_subarr_1d = sub_1dim(A, A.pidx)
-    end
+    init_loc_flds(A)
+    (a.pidx == 0) && isdefined(a, :s) && (A.s = reshape(a.s, dims))
     A
 end
 
@@ -350,13 +348,13 @@ end
 @unix_only shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Int, (Ptr{Uint8}, Int, Int), shm_seg_name, oflags, permissions)
 
 
-function assert_same_host(procs)
-    first_privip = getprivipaddr(procs[1])
-    if !all(x -> getprivipaddr(x) == first_privip, procs)
+function assert_same_host(pids)
+    first_privip = getprivipaddr(pids[1])
+    if !all(x -> getprivipaddr(x) == first_privip, pids)
         error("SharedArray requires all requested processes to be on the same machine.")
     end
 
-    return myid() in procs
+    return myid() in procs(pids[1])
 end
 
 
