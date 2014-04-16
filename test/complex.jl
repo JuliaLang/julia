@@ -103,6 +103,41 @@
 @test isequal(exp(complex( NaN, 5.0)), complex( NaN, NaN))
 @test isequal(exp(complex( NaN, NaN)), complex( NaN, NaN))
 
+# expm1:
+#  expm1(conj(z)) = conj(expm1(z))
+
+@test isequal(expm1(complex( 0.0, 0.0)), complex(0.0, 0.0))
+@test isequal(expm1(complex( 0.0,-0.0)), complex(0.0,-0.0))
+@test isequal(expm1(complex( 0.0, Inf)), complex(NaN, NaN))
+@test isequal(expm1(complex( 0.0,-Inf)), complex(NaN, NaN))
+@test isequal(expm1(complex( 0.0, NaN)), complex(NaN, NaN))
+
+@test isequal(expm1(complex(-0.0, 0.0)), complex(-0.0, 0.0))
+@test isequal(expm1(complex(-0.0,-0.0)), complex(-0.0,-0.0))
+
+@test isequal(expm1(complex( 5.0, Inf)), complex(NaN, NaN))
+
+@test isequal(expm1(complex( Inf, 0.0)), complex(Inf, 0.0))
+@test isequal(expm1(complex( Inf,-0.0)), complex(Inf,-0.0))
+@test isequal(expm1(complex( Inf, 5.0)), complex(cos(5.0)*Inf,sin(5.0)* Inf))
+@test isequal(expm1(complex( Inf,-5.0)), complex(cos(5.0)*Inf,sin(5.0)*-Inf))
+@test isequal(expm1(complex( Inf, NaN)), complex(-Inf, NaN))
+@test isequal(expm1(complex( Inf, Inf)), complex(-Inf, NaN))
+@test isequal(expm1(complex( Inf,-Inf)), complex(-Inf, NaN))
+
+@test isequal(expm1(complex(-Inf, 0.0)), complex(-1.0, 0.0))
+@test isequal(expm1(complex(-Inf,-0.0)), complex(-1.0,-0.0))
+@test isequal(expm1(complex(-Inf, 5.0)), complex(-1.0,sin(5.0)* 0.0))
+@test isequal(expm1(complex(-Inf,-5.0)), complex(-1.0,sin(5.0)*-0.0))
+@test isequal(expm1(complex(-Inf, Inf)), complex(-1.0, 0.0))
+@test isequal(expm1(complex(-Inf,-Inf)), complex(-1.0,-0.0))
+@test isequal(expm1(complex(-Inf, NaN)), complex(-1.0, 0.0))
+
+@test isequal(expm1(complex( NaN, 0.0)), complex( NaN, 0.0))
+@test isequal(expm1(complex( NaN,-0.0)), complex( NaN,-0.0))
+@test isequal(expm1(complex( NaN, 5.0)), complex( NaN, NaN))
+@test isequal(expm1(complex( NaN, NaN)), complex( NaN, NaN))
+
 # ^ (cpow)
 #  equivalent to exp(y*log(x))
 #    except for 0^0?
