@@ -428,6 +428,8 @@ minimum{T<:Real}(A::AbstractArray{T}) = minimum_rgn(A, 1, length(A))
 
 ## extrema
 
+extrema(r::Range) = (minimum(r), maximum(r))
+
 function extrema(itr)
     s = start(itr)
     if done(itr, s)
