@@ -33,7 +33,11 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
         pids = procs(myid())
         onlocalhost = true
     else
-        onlocalhost = assert_same_host(pids)
+        if !check_same_host(pids) 
+            error("SharedArray requires all requested processes to be on the same machine.")
+        end
+    
+        onlocalhost = myid() in procs(pids[1])
     end
 
     local shm_seg_name = ""
@@ -346,15 +350,5 @@ end
 end
 
 @unix_only shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Int, (Ptr{Uint8}, Int, Int), shm_seg_name, oflags, permissions)
-
-
-function assert_same_host(pids)
-    first_privip = getprivipaddr(pids[1])
-    if !all(x -> getprivipaddr(x) == first_privip, pids)
-        error("SharedArray requires all requested processes to be on the same machine.")
-    end
-
-    return myid() in procs(pids[1])
-end
 
 

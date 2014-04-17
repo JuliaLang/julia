@@ -171,8 +171,27 @@ end
 # try to include() a file, ignoring if not found
 try_include(path::String) = isfile(path) && include(path)
 
+function init_bind_addr(args::Vector{UTF8String})
+    # Treat --bind-to in a position independent manner in ARGS since
+    # --worker, -n and --machinefile options are affected by it
+    btoidx = findfirst(args, "--bind-to")
+    if btoidx > 0
+        bind_addr = parseip(args[btoidx+1])
+    else
+        try
+            bind_addr = getipaddr()
+        catch
+            # All networking is unavailable, initialize bind_addr to the loopback address
+            # Will cause an exception to be raised only when used. 
+            bind_addr = ip"127.0.0.1"
+        end
+    end
+    global LPROC
+    LPROC.bind_addr = bind_addr
+end
+
+
 function process_options(args::Vector{UTF8String})
-    global bind_addr
     quiet = false
     repl = true
     startup = true
@@ -186,8 +205,7 @@ function process_options(args::Vector{UTF8String})
             start_worker()
             # doesn't return
         elseif args[i]=="--bind-to"
-            i += 1
-            bind_addr = args[i]
+            i+=1 # has already been processed
         elseif args[i]=="-e" || args[i]=="--eval"
             repl = false
             i+=1
@@ -322,6 +340,7 @@ function _start()
     early_init()
 
     try
+        init_bind_addr(ARGS)
         any(a->(a=="--worker"), ARGS) || init_head_sched()
         init_load_path()
         (quiet,repl,startup,color_set,no_history_file) = process_options(copy(ARGS))
