@@ -41,4 +41,12 @@ else
     exit 1
 fi
 
-$GETURL $URL || $GETURL $MIRROR_URL
+if [[ -z "$JLDOWNLOAD_PREFER_MIRROR" ]]; then
+    $GETURL $URL || $GETURL $MIRROR_URL
+else
+    # Still try downloading from the original URL if the mirror fails.
+    # User may want to get around a single failure, only to run into a dep
+    # that we haven't mirrored yet, so better to be safe than sorry and try 
+    # the original URL in that case
+    $GETURL $MIRROR_URL || $GETURL $URL
+fi
