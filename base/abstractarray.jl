@@ -1247,6 +1247,11 @@ function mapslices(f::Function, A::AbstractArray, dims::AbstractVector)
     return R
 end
 
+function promote_setindex!{T}(a::AbstractArray{T}, v::T, ids...)
+    a[ids...] = v
+    return a
+end
+
 function promote_setindex!{T, S}(a::AbstractArray{T}, v::S, ids...)
     Super = promote_type(T, S)
     T == Super || (a = convert(AbstractArray{Super}, a))
