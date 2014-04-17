@@ -1306,7 +1306,7 @@ function map(f::Callable, As::AbstractArray...)
 end
 
 # Explicit control over return eltype
-function map(f::Callable, T::DataType, As::AbstractArray...)
+function map(f::Callable, T::Type, As::AbstractArray...)
     shape = mapreduce(size, promote_shape, As)
     prod(shape) == 0 && return similar(As[1], T, shape)
 
