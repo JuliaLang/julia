@@ -121,7 +121,7 @@ function var(iterable; corrected::Bool=true, mean=nothing)
     if mean == nothing
         # Use Welford algorithm as seen in (among other places) 
         # Knuth's TAOCP, Vol 2, page 232, 3rd edition. 
-        M = value
+        M = value / 1
         S = zero(M)
         while !done(iterable, state)
             value, state = next(iterable, state)
