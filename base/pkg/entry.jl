@@ -663,8 +663,6 @@ function updatehook(pkgs::Vector)
     """)
 end
 
-const JULIA = joinpath(JULIA_HOME, "julia")
-
 function test!(pkg::String, errs::Vector{String}, notests::Vector{String})
     const reqs_path = abspath(pkg,"test","REQUIRE")
     if isfile(reqs_path)
@@ -679,7 +677,7 @@ function test!(pkg::String, errs::Vector{String}, notests::Vector{String})
         info("Testing $pkg")
         cd(dirname(test_path)) do
             try
-                run(`$JULIA $test_path`)
+                run(`$JULIA_HOME/julia $test_path`)
                 info("$pkg tests passed")
             catch err
                 warnbanner(err, label="[ ERROR: $pkg ]")
