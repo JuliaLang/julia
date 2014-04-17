@@ -64,6 +64,7 @@ end
 lufact{T<:BlasFloat}(A::AbstractMatrix{T}; pivot = true) = lufact!(copy(A), pivot=pivot)
 lufact{T}(A::AbstractMatrix{T}; pivot = true) = (S = typeof(one(T)/one(T)); S != T ? lufact!(convert(AbstractMatrix{S}, A), pivot=pivot) : lufact!(copy(A), pivot=pivot))
 lufact(x::Number) = LU(fill(x, 1, 1), BlasInt[1], x == 0 ? one(BlasInt) : zero(BlasInt))
+lufact(F::LU) = F
 
 lu(x::Number) = (one(x), x, 1)
 function lu(A::AbstractMatrix; pivot = true)
@@ -218,7 +219,7 @@ factorize(A::Tridiagonal) = lufact(A)
 # See dgtts2.f
 function A_ldiv_B!{T}(A::LU{T,Tridiagonal{T}}, B::AbstractVecOrMat)
     n = size(A,1)
-    n == size(B,1) || throw(DimentionsMismatch(""))
+    n == size(B,1) || throw(DimensionMismatch(""))
     nrhs = size(B,2)
     dl = A.factors.dl
     d = A.factors.d
