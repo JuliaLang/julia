@@ -341,8 +341,10 @@ extern "C" void jl_restore_linedebug_info(uv_lib_t *handle) {
 
         for (size_t j = 0; j < numel; j++) {
             // loop over individual {offset, line} entries
+            uintptr_t offset = (*infoptr++);
+            uintptr_t line = (*infoptr++);
             JITEvent_EmittedFunctionDetails::LineStart linestart =
-                { (uintptr_t)fptr + (*infoptr++), DebugLoc::get( (*infoptr++), 0, MDNode::get(jl_LLVMContext, tmpelt) ) };
+                { (uintptr_t)fptr + offset, DebugLoc::get( line, 0, MDNode::get(jl_LLVMContext, tmpelt) ) };
             linestarts.push_back(linestart);
         }
         FuncInfo info = { NULL, lengthAdr, std::string(name), std::string(filename), linestarts };
