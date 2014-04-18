@@ -149,12 +149,6 @@ end
 # reduction along dims
 include("reducedim.jl")  # macros in this file relies on string.jl
 
-# random number generation and statistics
-include("statistics.jl")
-include("librandom.jl")
-include("random.jl")
-importall .Random
-
 # basic data structures
 include("ordering.jl")
 importall .Order
@@ -164,6 +158,27 @@ include("collections.jl")
 include("sort.jl")
 importall .Sort
 include("combinatorics.jl")
+
+# rounding utilities
+include("rounding.jl")
+importall .Rounding
+
+# BigInts and BigFloats
+include("gmp.jl")
+importall .GMP
+include("mpfr.jl")
+importall .MPFR
+big(n::Integer) = convert(BigInt,n)
+big(x::FloatingPoint) = convert(BigFloat,x)
+big(q::Rational) = big(num(q))//big(den(q))
+big(z::Complex) = complex(big(real(z)),big(imag(z)))
+@vectorize_1arg Number big
+
+# random number generation and statistics
+include("statistics.jl")
+include("librandom.jl")
+include("random.jl")
+importall .Random
 
 # distributed arrays and memory-mapped arrays
 include("darray.jl")
@@ -208,21 +223,6 @@ importall .Broadcast
 include("fftw.jl")
 include("dsp.jl")
 importall .DSP
-
-# rounding utilities
-include("rounding.jl")
-importall .Rounding
-
-# BigInts and BigFloats
-include("gmp.jl")
-importall .GMP
-include("mpfr.jl")
-importall .MPFR
-big(n::Integer) = convert(BigInt,n)
-big(x::FloatingPoint) = convert(BigFloat,x)
-big(q::Rational) = big(num(q))//big(den(q))
-big(z::Complex) = complex(big(real(z)),big(imag(z)))
-@vectorize_1arg Number big
 
 # (s)printf macros
 include("printf.jl")

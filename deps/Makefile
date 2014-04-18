@@ -614,7 +614,7 @@ install-openspecfun: $(OPENSPECFUN_OBJ_TARGET)
 ## LIBRANDOM ##
 
 LIBRANDOM_OBJ_TARGET = $(build_shlibdir)/librandom.$(SHLIB_EXT)
-LIBRANDOM_OBJ_SOURCE = random/librandom.$(SHLIB_EXT)
+LIBRANDOM_OBJ_SOURCE = librandom.$(SHLIB_EXT)
 
 LIBRANDOM_CFLAGS = $(CFLAGS) -DNDEBUG -DDSFMT_MEXP=19937 $(fPIC) -DDSFMT_DO_NOT_USE_OLD_NAMES
 ifneq ($(USEMSVC), 1)
@@ -627,29 +627,27 @@ ifeq ($(ARCH), x86_64)
 LIBRANDOM_CFLAGS += -msse2 -DHAVE_SSE2
 endif
 
-random/dsfmt-$(DSFMT_VER).tar.gz:
+dsfmt-$(DSFMT_VER).tar.gz:
 	$(JLDOWNLOAD) $@ http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/dSFMT-src-$(DSFMT_VER).tar.gz 
 	touch -c $@
-random/dsfmt-$(DSFMT_VER)/config.status: random/dsfmt-$(DSFMT_VER).tar.gz
-	cd random && \
+dsfmt-$(DSFMT_VER)/config.status: dsfmt-$(DSFMT_VER).tar.gz
 	mkdir -p dsfmt-$(DSFMT_VER) && \
 	$(TAR) -C dsfmt-$(DSFMT_VER) --strip-components 1 -xf dsfmt-$(DSFMT_VER).tar.gz && \
 	cd dsfmt-$(DSFMT_VER) && patch < ../dSFMT.h.patch && patch < ../dSFMT.c.patch
 	echo 1 > $@
-$(LIBRANDOM_OBJ_SOURCE): random/jl_random.c random/randmtzig.c random/dsfmt-$(DSFMT_VER)/config.status
-	cd random && \
-	$(CC) $(CPPFLAGS) $(LIBRANDOM_CFLAGS) $(LDFLAGS) jl_random.c -o librandom.$(SHLIB_EXT) && \
+$(LIBRANDOM_OBJ_SOURCE): dsfmt-$(DSFMT_VER)/config.status dsfmt-$(DSFMT_VER)/dSFMT.c 
+	$(CC) $(CPPFLAGS) $(LIBRANDOM_CFLAGS) $(LDFLAGS) dsfmt-$(DSFMT_VER)/dSFMT.c -o librandom.$(SHLIB_EXT) && \
 	$(INSTALL_NAME_CMD)librandom.$(SHLIB_EXT) librandom.$(SHLIB_EXT)
 $(LIBRANDOM_OBJ_TARGET): $(LIBRANDOM_OBJ_SOURCE)
 	cp $< $@
 
 clean-random:
-	-rm -f random/librandom.$(SHLIB_EXT)
+	-rm -f librandom.$(SHLIB_EXT)
 distclean-random: clean-random
-	-cd random && rm -rf *.tar.gz dsfmt-$(DSFMT_VER)
+	-rf *.tar.gz dsfmt-$(DSFMT_VER)
 
-get-random: random/dsfmt-$(DSFMT_VER).tar.gz
-configure-random: random/dsfmt-$(DSFMT_VER)/config.status
+get-random: dsfmt-$(DSFMT_VER).tar.gz
+configure-random: dsfmt-$(DSFMT_VER)/config.status
 compile-random: $(LIBRANDOM_OBJ_SOURCE)
 check-random: compile-random
 install-random: $(LIBRANDOM_OBJ_TARGET)
