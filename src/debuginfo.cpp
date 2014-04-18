@@ -26,7 +26,7 @@ class JuliaJITEventListener: public JITEventListener
 {
     std::map<size_t, FuncInfo, revcomp> info;
 
-public:	
+public:
     JuliaJITEventListener(){}
     virtual ~JuliaJITEventListener() {}
 
@@ -149,6 +149,9 @@ void* CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserC
     return NULL;
 }
 
+// Custom memory manager for exception handling on Windows
+// we overallocate 48 bytes at the end of each function
+// for unwind information (see NotifyFunctionEmitted)
 class JITMemoryManagerWin : public JITMemoryManager {
 private:
   JITMemoryManager *JMM;
@@ -259,6 +262,7 @@ extern "C" void jl_write_coverage_data(void)
 }
 
 #ifndef _OS_WINDOWS_
+// disabled pending system image backtrace support on Windows
 typedef std::map<size_t, FuncInfo, revcomp> FuncInfoMap;
 extern "C" void jl_dump_linedebug_info() {
     FuncInfoMap info = jl_jit_events->getMap();
@@ -267,19 +271,19 @@ extern "C" void jl_dump_linedebug_info() {
 
     Type *li_types[2] = {T_size, T_size};
     StructType *T_lineinfo = StructType::get(jl_LLVMContext, ArrayRef<Type *>(std::vector<Type *>(li_types, li_types+2)), true);
-    
+
     std::vector<Constant *> funcinfo_array;
     funcinfo_array.push_back( ConstantInt::get(T_size, 0) );
-    
+
     for (; infoiter != info.end(); infoiter++) {
         std::vector<Constant*> functionlines;
- 
+
         // get the base address for offset calculation
         size_t fptr = (size_t)(*infoiter).first;
-        
+
         lineiter = (*infoiter).second.lines.begin();
         JITEvent_EmittedFunctionDetails::LineStart prev = *lineiter;
-        
+
         // loop over the EmittedFunctionDetails vector
         while (lineiter != (*infoiter).second.lines.end()) {
             // store the individual {offset, line} entries
@@ -293,6 +297,7 @@ extern "C" void jl_dump_linedebug_info() {
         DISubprogram debugscope =
             DISubprogram(prev.Loc.getScope((*infoiter).second.func->getContext()));
 
+        // store function pointer, name and filename, length, number of line entries, and then array of line mappings
         Constant *info_data[6] = { ConstantExpr::getBitCast( const_cast<Function *>((*infoiter).second.func), T_psize),
                                    ConstantDataArray::getString( jl_LLVMContext, StringRef(debugscope.getName().str())),
                                    ConstantDataArray::getString( jl_LLVMContext, StringRef(debugscope.getFilename().str())),
@@ -316,10 +321,11 @@ extern "C" void jl_dump_linedebug_info() {
 }
 
 extern "C" void jl_restore_linedebug_info(uv_lib_t *handle) {
-    uintptr_t *infoptr = (uintptr_t*)jl_dlsym(handle, const_cast<char*>("jl_linedebug_info")); 
+    uintptr_t *infoptr = (uintptr_t*)jl_dlsym(handle, const_cast<char*>("jl_linedebug_info"));
     size_t funccount = (size_t)(*infoptr++);
 
     for (size_t i = 0; i < funccount; i++) {
+        // loop over function info entries
         uintptr_t fptr = (*infoptr++);
         char *name = (char*)infoptr;
         infoptr = (uintptr_t*)(((char*)infoptr) + strlen( (const char*)infoptr) + 1);
@@ -329,10 +335,12 @@ extern "C" void jl_restore_linedebug_info(uv_lib_t *handle) {
         size_t numel = (*infoptr++);
 
         std::vector<JITEvent_EmittedFunctionDetails::LineStart> linestarts;
-        
+
+        // dummy element for the MDNode, which we need so that the DebucLoc keeps info
+        SmallVector <Value *, 1> tmpelt;
+
         for (size_t j = 0; j < numel; j++) {
-            // dummy element for the MDNode, which we need so that the DebucLoc keeps info
-            SmallVector <Value *, 1> tmpelt;
+            // loop over individual {offset, line} entries
             JITEvent_EmittedFunctionDetails::LineStart linestart =
                 { (uintptr_t)fptr + (*infoptr++), DebugLoc::get( (*infoptr++), 0, MDNode::get(jl_LLVMContext, tmpelt) ) };
             linestarts.push_back(linestart);
