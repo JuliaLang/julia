@@ -351,7 +351,7 @@ function _start()
                 global is_interactive = !isa(STDIN,Union(File,IOStream))
                 color_set || (global have_color = false)
             else
-                term = Terminals.TTYTerminal(get(ENV,"TERM","dumb"),STDIN,STDOUT,STDERR)
+                term = Terminals.TTYTerminal(get(ENV,"TERM",@windows? "" : "dumb"),STDIN,STDOUT,STDERR)
                 global is_interactive = true
                 color_set || (global have_color = Terminals.hascolor(term))
             end
