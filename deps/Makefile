@@ -644,7 +644,7 @@ $(LIBRANDOM_OBJ_TARGET): $(LIBRANDOM_OBJ_SOURCE)
 clean-random:
 	-rm -f librandom.$(SHLIB_EXT)
 distclean-random: clean-random
-	-rf *.tar.gz dsfmt-$(DSFMT_VER)
+	-rm -rf *.tar.gz dsfmt-$(DSFMT_VER)
 
 get-random: dsfmt-$(DSFMT_VER).tar.gz
 configure-random: dsfmt-$(DSFMT_VER)/config.status
