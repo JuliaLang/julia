@@ -354,7 +354,7 @@ void jl_dump_objfile(char* fname, int jit_model)
         jl_TargetMachine->getTargetCPU(),
         jl_TargetMachine->getTargetFeatureString(),
         jl_TargetMachine->Options,
-#ifdef _OS_LINUX_
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
         Reloc::PIC_,
 #else
         jit_model ? Reloc::PIC_ : Reloc::Default,
