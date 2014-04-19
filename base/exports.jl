@@ -661,6 +661,7 @@ export
     triu!,
     triu,
     vecnorm,
+    ⋅,
 
 # sparse
     etree,
