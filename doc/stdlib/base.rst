@@ -3962,16 +3962,16 @@ Combinatorics
 
    In-place version of :func:`reverse`.
 
-.. function:: combinations(itr, n)
+.. function:: combinations(arr, n)
 
-   Generate all combinations of ``n`` elements from a given iterable
+   Generate all combinations of ``n`` elements from an indexable
    object.  Because the number of combinations can be very large, this
    function returns an iterator object. Use
    ``collect(combinations(a,n))`` to get an array of all combinations.
 
-.. function:: permutations(itr)
+.. function:: permutations(arr)
 
-   Generate all permutations of a given iterable object.  Because the
+   Generate all permutations of an indexable object.  Because the
    number of permutations can be very large, this function returns an
    iterator object. Use ``collect(permutations(a,n))`` to get an array
    of all permutations.
