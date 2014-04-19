@@ -108,6 +108,7 @@ export
     WeakRef,
     Woodbury,
     Zip,
+    ∅,
 
 # Ccall types
     Cchar,

@@ -5,6 +5,7 @@ type Set{T}
     Set(itr) = union!(new(Dict{T,Nothing}()), itr)
 end
 Set() = Set{Any}()
+∅ = Set()
 Set(itr) = Set{eltype(itr)}(itr)
 
 show(io::IO, s::Set) = (show(io, typeof(s)); show_comma_array(io, s,"({","})"))
