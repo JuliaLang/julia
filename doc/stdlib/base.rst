@@ -1012,7 +1012,7 @@ Strings
 
 .. function:: bytestring(::Ptr{Uint8}, [length])
 
-   Create a string from the address of a C (0-terminated) string. A copy is made; the ptr can be safely freed. If ``length`` is specified, the string does not have to be 0-terminated. The string will be encoded as either ASCII or UTF-8.
+   Create a string from the address of a C (0-terminated) string encoded in ASCII or UTF-8. A copy is made; the ptr can be safely freed. If ``length`` is specified, the string does not have to be 0-terminated.
 
 .. function:: bytestring(s)
 
