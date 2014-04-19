@@ -115,6 +115,7 @@ export
     tril!,
     triu!,
     vecnorm,
+    ⋅,
 
 # Operators
     \,
