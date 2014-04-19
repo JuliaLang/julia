@@ -639,6 +639,7 @@ DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
 DLLEXPORT jl_datatype_t *jl_new_bitstype(jl_value_t *name, jl_datatype_t *super,
                                jl_tuple_t *parameters, size_t nbits);
 jl_datatype_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
+jl_datatype_t *jl_wrap_vararg(jl_value_t *t); // x -> x...
 
 // constructors
 DLLEXPORT jl_value_t *jl_new_bits(jl_value_t *bt, void *data);
