@@ -65,76 +65,53 @@ function dsfmt_gv_init_by_array(seed::Vector{Uint32})
         seed, length(seed))
 end
 
-for (genrand, gv_genrand) in 
-    ((:dsfmt_genrand_close1_open2,    :dsfmt_gv_genrand_close1_open2),
-     (:dsfmt_genrand_close_open,      :dsfmt_gv_genrand_close_open),
-     (:dsfmt_genrand_open_close,      :dsfmt_gv_genrand_open_close),
-     (:dsfmt_genrand_open_open,       :dsfmt_gv_genrand_open_open))
-    @eval begin
-     
-        function ($genrand)(s::DSFMT_state)
-            ccall(($(string(genrand)),:librandom),
-                  Float64,
-                  (Ptr{Void},),
-                  s.val)
-        end
-
-        function ($gv_genrand)()
-            ccall(($(string(gv_genrand)),:librandom),
-                  Float64,
-                  ())
-        end
-        
-    end
+function dsfmt_genrand_close_open(s::DSFMT_state)
+    ccall((:dsfmt_genrand_close_open, :librandom),
+    Float64,
+    (Ptr{Void},),
+    s.val)
 end
 
-for (genrand_fill, gv_genrand_fill, genrand_fill_name, gv_genrand_fill_name) in
-    ((:dsfmt_fill_array_close1_open2,  :dsfmt_gv_fill_array_close1_open2,
-      :dsfmt_fill_array_close1_open2!, :dsfmt_gv_fill_array_close1_open2!),
-     (:dsfmt_fill_array_close_open,    :dsfmt_gv_fill_array_close_open,
-      :dsfmt_fill_array_close_open!,   :dsfmt_gv_fill_array_close_open!),
-     (:dsfmt_fill_array_open_close,    :dsfmt_gv_fill_array_open_close,
-      :dsfmt_fill_array_open_close!,   :dsfmt_gv_fill_array_open_close!),
-     (:dsfmt_fill_array_open_open,     :dsfmt_gv_fill_array_open_open,
-      :dsfmt_fill_array_open_open!,    :dsfmt_gv_fill_array_open_open!))
-    @eval begin
+function dsfmt_gv_genrand_close_open()
+    ccall((:dsfmt_gv_genrand_close_open, :librandom),
+    Float64,
+    ())
+end
 
-        function ($genrand_fill_name)(s::DSFMT_state, A::Array{Float64})
-            n = length(A)
-            if n <= dsfmt_min_array_size
-                for i = 1:n
-                    A[i] = rand()
-                end
-            else
-                ccall(($(string(genrand_fill)),:librandom),
-                      Void,
-                      (Ptr{Void}, Ptr{Float64}, Int),
-                      s.val, A, n & 0xfffffffffffffffe)
-                if isodd(n)
-                    A[n] = rand()
-                end
-            end
-            return A
+function dsfmt_fill_array_close_open!(s::DSFMT_state, A::Array{Float64})
+    n = length(A)
+    if n <= dsfmt_min_array_size
+        for i = 1:n
+            A[i] = dsfmt_genrand_close_open(s)
         end
-        
-        function ($gv_genrand_fill_name)(A::Array{Float64})
-            n = length(A)
-            if n <= dsfmt_min_array_size
-                for i = 1:n
-                    A[i] = rand()
-                end
-            else
-                ccall(($(string(gv_genrand_fill)),:librandom),
-                      Void,
-                      (Ptr{Void}, Int),
-                      A, n & 0xfffffffffffffffe)
-                if isodd(n)
-                    A[n] = rand()
-                end
-            end
-            return A
+    else
+        ccall((:dsfmt_fill_array_close_open,:librandom),
+        Void,
+        (Ptr{Void}, Ptr{Float64}, Int),
+        s.val, A, n & 0xfffffffffffffffe)
+        if isodd(n)
+            A[n] = dsfmt_genrand_close_open(s)
         end
     end
+    return A
+end
+        
+function dsfmt_gv_fill_array_close_open!(A::Array{Float64})
+    n = length(A)
+    if n <= dsfmt_min_array_size
+        for i = 1:n
+            A[i] = dsfmt_gv_genrand_close_open()
+        end
+    else
+        ccall((:dsfmt_gv_fill_array_close_open,:librandom),
+        Void,
+        (Ptr{Void}, Int),
+        A, n & 0xfffffffffffffffe)
+        if isodd(n)
+            A[i] = dsfmt_gv_genrand_close_open()
+        end
+    end
+    return A
 end
 
 function dsfmt_genrand_uint32(s::DSFMT_state)
