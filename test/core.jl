@@ -117,6 +117,14 @@ end
 @test !isa((Int,), Type{(Int...,)})
 @test !isa((Int,), Type{(Any...,)})
 
+# issue #6561
+@test issubtype(Array{Tuple}, Array{NTuple})
+@test issubtype(Array{(Any...)}, Array{NTuple})
+@test !issubtype(Array{(Int...)}, Array{NTuple})
+@test !issubtype(Array{(Int,Int)}, Array{NTuple})
+@test issubtype(Type{(Nothing,)}, (Type{Nothing},))
+@test issubtype((Type{Nothing},),Type{(Nothing,)})
+
 # this is fancy: know that any type T<:Number must be either a DataType or a UnionType
 @test Type{TypeVar(:T,Number)} <: Union(DataType,UnionType)
 @test !(Type{TypeVar(:T,Number)} <: DataType)
