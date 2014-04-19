@@ -755,6 +755,8 @@ export
     ⊂,
     ⊄,
     ⊊,
+    ∩,
+    ∪,
 
 # strings and text output
     ascii,
