@@ -747,6 +747,8 @@ export
     union,
     unique,
     values,
+    ∈,
+    ∋,
 
 # strings and text output
     ascii,
