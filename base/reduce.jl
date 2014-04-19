@@ -121,6 +121,8 @@ function in(x, itr)
     end
     return false
 end
+const ∈ = in
+∋(itr, x) = ∈(x, itr)
 
 function contains(itr, x)
     depwarn("contains(collection, item) is deprecated, use in(item, collection) instead", :contains)
