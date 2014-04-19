@@ -2239,15 +2239,11 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
 end
 
 function inline_worthy(body::Expr)
-    # see if body is only "return <expr>", or is otherwise considered worth inlining
-    if length(body.args) == 1
-        return true
-    end
 #    if isa(body.args[1],QuoteNode) && (body.args[1]::QuoteNode).value === :inline
 #        shift!(body.args)
 #        return true
 #    end
-    if length(body.args) < 4 && occurs_more(body, e->true, 50) < 50
+    if length(body.args) < 6 && occurs_more(body, e->true, 40) < 40
         return true
     end
     return false
