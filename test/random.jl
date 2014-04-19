@@ -1,3 +1,7 @@
+# Issue #6573
+srand(0); rand(); x = rand(384);
+@test find(x .== rand()) == []
+
 @test rand() != rand()
 @test 0.0 <= rand() < 1.0
 @test rand(Uint32) >= 0
