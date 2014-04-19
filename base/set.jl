@@ -51,6 +51,7 @@ function union(s::Set, sets::Set...)
     end
     return u
 end
+const ∪ = union
 
 intersect(s::Set) = copy(s)
 function intersect(s::Set, sets::Set...)
@@ -65,6 +66,7 @@ function intersect(s::Set, sets::Set...)
     end
     return i
 end
+const ∩ = intersect
 
 function setdiff(a::Set, b::Set)
     d = copy(a)
