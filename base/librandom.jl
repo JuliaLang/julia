@@ -5,12 +5,7 @@ export DSFMT_state, dsfmt_get_min_array_size, dsfmt_get_idstring,
        dsfmt_init_by_array, dsfmt_gv_init_by_array,
        dsfmt_genrand_close1_open2, dsfmt_gv_genrand_close1_open2,
        dsfmt_genrand_close_open, dsfmt_gv_genrand_close_open, 
-       dsfmt_genrand_open_close, dsfmt_gv_genrand_open_close, 
-       dsfmt_genrand_open_open, dsfmt_gv_genrand_open_open, 
-       dsfmt_fill_array_close1_open2!, dsfmt_gv_fill_array_close1_open2!,
        dsfmt_fill_array_close_open!, dsfmt_gv_fill_array_close_open!, 
-       dsfmt_fill_array_open_close!, dsfmt_gv_fill_array_open_close!, 
-       dsfmt_fill_array_open_open!, dsfmt_gv_fill_array_open_open!, 
        dsfmt_genrand_uint32, dsfmt_gv_genrand_uint32, 
        randmtzig_randn, randmtzig_exprnd,
        win32_SystemFunction036!
@@ -74,6 +69,19 @@ end
 
 function dsfmt_gv_genrand_close_open()
     ccall((:dsfmt_gv_genrand_close_open, :librandom),
+    Float64,
+    ())
+end
+
+function dsfmt_genrand_close1_open2(s::DSFMT_state)
+    ccall((:dsfmt_genrand_close1_open2, :librandom),
+    Float64,
+    (Ptr{Void},),
+    s.val)
+end
+
+function dsfmt_gv_genrand_close1_open2()
+    ccall((:dsfmt_gv_genrand_close1_open2, :librandom),
     Float64,
     ())
 end
