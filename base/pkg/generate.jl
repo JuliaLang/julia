@@ -118,7 +118,7 @@ function tests(pkg::String; force::Bool=false)
     genfile(pkg,"test/runtests.jl",force) do io
         print(io, """
         using $pkg
-        using Base.Test  
+        using Base.Test
 
         # write your own tests here
         @test 1 == 1
