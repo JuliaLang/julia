@@ -635,7 +635,7 @@ dsfmt-$(DSFMT_VER)/config.status: dsfmt-$(DSFMT_VER).tar.gz
 	$(TAR) -C dsfmt-$(DSFMT_VER) --strip-components 1 -xf dsfmt-$(DSFMT_VER).tar.gz && \
 	cd dsfmt-$(DSFMT_VER) && patch < ../dSFMT.h.patch && patch < ../dSFMT.c.patch
 	echo 1 > $@
-$(LIBRANDOM_OBJ_SOURCE): dsfmt-$(DSFMT_VER)/config.status dsfmt-$(DSFMT_VER)/dSFMT.c 
+$(LIBRANDOM_OBJ_SOURCE): dsfmt-$(DSFMT_VER)/config.status
 	$(CC) $(CPPFLAGS) $(LIBRANDOM_CFLAGS) $(LDFLAGS) dsfmt-$(DSFMT_VER)/dSFMT.c -o librandom.$(SHLIB_EXT) && \
 	$(INSTALL_NAME_CMD)librandom.$(SHLIB_EXT) librandom.$(SHLIB_EXT)
 $(LIBRANDOM_OBJ_TARGET): $(LIBRANDOM_OBJ_SOURCE)
