@@ -111,6 +111,7 @@ fld{T<:Real}(x::T, y::T) = convert(T,round((x-mod(x,y))/y))
 const % = rem
 .%(x::Real, y::Real) = x%y
 const ⊗ = kron
+const ÷ = div
 
 # mod returns in [0,y) whereas mod1 returns in (0,y]
 mod1{T<:Real}(x::T, y::T) = y-mod(y-x,y)
@@ -398,6 +399,7 @@ export
     <|,
     ~,
     ⊗,
+    ÷,
     colon,
     hcat,
     vcat,
