@@ -440,6 +440,7 @@ export
     unsigned,
     widemul,
     zero,
+    √,
 
 # specfun
     airy,
