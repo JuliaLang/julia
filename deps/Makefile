@@ -660,7 +660,8 @@ RMATH_OBJ_SOURCE = Rmath/src/libRmath-julia.$(SHLIB_EXT)
 
 RMATH_FLAGS += CC="$(CC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) \
 			   OS="$(OS)" ARCH="$(ARCH)" \
-			   USE_LIBRANDOM=1 LIBRANDOM_PATH="$(build_shlibdir)"
+			   USE_LIBRANDOM=1 LIBRANDOM_PATH="$(build_shlibdir)" \
+			   DSFMT_PATH=$(JULIAHOME)/deps/dsfmt-$(DSFMT_VER)
 
 Rmath/Make.inc:
 	(cd .. && git submodule init && git submodule update)
