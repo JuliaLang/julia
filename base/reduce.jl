@@ -122,7 +122,9 @@ function in(x, itr)
     return false
 end
 const ∈ = in
-∋(itr, x) = ∈(x, itr)
+∉(x, itr)=!∈(x, itr)
+∋(itr, x)= ∈(x, itr)
+∌(itr, x)=!∋(itr, x)
 
 function contains(itr, x)
     depwarn("contains(collection, item) is deprecated, use in(item, collection) instead", :contains)
