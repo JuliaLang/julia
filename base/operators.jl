@@ -13,14 +13,19 @@ isequal(T::Type, S::Type) = typeseq(T, S)
 isequal(x,y) = is(x,y)
 ==(x,y) = isequal(x,y)
 !=(x,y) = !(x==y)
+const ≠ = !=
+const ≡ = is
 !==(x,y) = !is(x,y)
-
+const ≢ = !==
 < (x,y) = isless(x,y)
 > (x,y) = y < x
 <=(x,y) = !(y < x)
+const ≤ = <=
 >=(x,y) = (y <= x)
+const ≥ = >=
 .> (x,y) = y.<x
 .>=(x,y) = y.<=x
+const .≥ = .>=
 
 # this definition allows Number types to implement < instead of isless,
 # which is more idiomatic:
@@ -90,6 +95,8 @@ end
 .!=(x::Number,y::Number) = x!=y
 .< (x::Real,y::Real) = x<y
 .<=(x::Real,y::Real) = x<=y
+const .≤ = .<=
+const .≠ = .!=
 
 # core << >> and >>> takes Int32 as second arg
 <<(x,y::Integer)  = x << convert(Int32,y)
