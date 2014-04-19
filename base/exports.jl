@@ -750,6 +750,7 @@ export
     values,
     ∈,
     ∋,
+    ⊆,
 
 # strings and text output
     ascii,

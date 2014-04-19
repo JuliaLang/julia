@@ -86,6 +86,7 @@ function issubset(l, r)
     end
     return true
 end
+const ⊆ = issubset
 
 function unique(C)
     out = Array(eltype(C),0)
