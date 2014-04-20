@@ -117,16 +117,12 @@ rand(::Type{Int128})  = int128(rand(Uint128))
 
 # Arrays of random numbers
 
-## Disable fill_array routines to address #6573
-#rand!(A::Array{Float64}) = dsfmt_gv_fill_array_close_open!(A)
 rand(::Type{Float64}, dims::Dims) = rand!(Array(Float64, dims))
 rand(::Type{Float64}, dims::Int...) = rand(Float64, dims)
 
 rand(dims::Dims) = rand(Float64, dims)
 rand(dims::Int...) = rand(Float64, dims)
 
-## Disable fill_array routines to address #6573
-#rand!(r::MersenneTwister, A::Array{Float64}) = dsfmt_fill_array_close_open!(r.state, A)
 rand(r::AbstractRNG, dims::Dims) = rand!(r, Array(Float64, dims))
 rand(r::AbstractRNG, dims::Int...) = rand(r, dims)
 
