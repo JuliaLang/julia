@@ -5,7 +5,6 @@ export DSFMT_state, dsfmt_get_min_array_size, dsfmt_get_idstring,
        dsfmt_init_by_array, dsfmt_gv_init_by_array,
        dsfmt_genrand_close1_open2, dsfmt_gv_genrand_close1_open2,
        dsfmt_genrand_close_open, dsfmt_gv_genrand_close_open, 
-       dsfmt_fill_array_close_open!, dsfmt_gv_fill_array_close_open!, 
        dsfmt_genrand_uint32, dsfmt_gv_genrand_uint32, 
        randmtzig_randn, randmtzig_exprnd,
        win32_SystemFunction036!
@@ -84,42 +83,6 @@ function dsfmt_gv_genrand_close1_open2()
     ccall((:dsfmt_gv_genrand_close1_open2, :librandom),
     Float64,
     ())
-end
-
-function dsfmt_fill_array_close_open!(s::DSFMT_state, A::Array{Float64})
-    n = length(A)
-    if n <= dsfmt_min_array_size
-        for i = 1:n
-            A[i] = dsfmt_genrand_close_open(s)
-        end
-    else
-        ccall((:dsfmt_fill_array_close_open,:librandom),
-        Void,
-        (Ptr{Void}, Ptr{Float64}, Int),
-        s.val, A, n & 0xfffffffffffffffe)
-        if isodd(n)
-            A[n] = dsfmt_genrand_close_open(s)
-        end
-    end
-    return A
-end
-        
-function dsfmt_gv_fill_array_close_open!(A::Array{Float64})
-    n = length(A)
-    if n <= dsfmt_min_array_size
-        for i = 1:n
-            A[i] = dsfmt_gv_genrand_close_open()
-        end
-    else
-        ccall((:dsfmt_gv_fill_array_close_open,:librandom),
-        Void,
-        (Ptr{Void}, Int),
-        A, n & 0xfffffffffffffffe)
-        if isodd(n)
-            A[i] = dsfmt_gv_genrand_close_open()
-        end
-    end
-    return A
 end
 
 function dsfmt_genrand_uint32(s::DSFMT_state)
