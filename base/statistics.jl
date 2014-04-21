@@ -1,4 +1,3 @@
-
 function mean(iterable)
     state = start(iterable)
     if done(iterable, state)
@@ -112,6 +111,44 @@ function var(v::AbstractArray, region; corrected::Bool=true, mean=nothing)
     error("Invalid value of mean.")
 end
 
+function var(iterable; corrected::Bool=true, mean=nothing)
+    state = start(iterable)
+    if done(iterable, state)
+        error("variance of empty collection undefined: $(repr(iterable))")
+    end
+    count = 1
+    value, state = next(iterable, state)
+    if mean == nothing
+        # Use Welford algorithm as seen in (among other places) 
+        # Knuth's TAOCP, Vol 2, page 232, 3rd edition. 
+        M = value / 1
+        S = zero(M)
+        while !done(iterable, state)
+            value, state = next(iterable, state)
+            count += 1
+            new_M = M + (value - M) / count
+            S = S + (value - M) * (value - new_M)
+            M = new_M
+        end
+        return S / (count - int(corrected))
+    else # mean provided
+        # Cannot use a compensated version, e.g. the one from
+        # "Updating Formulae and a Pairwise Algorithm for Computing Sample Variances."
+        # by Chan, Golub, and LeVeque, Technical Report STAN-CS-79-773, 
+        # Department of Computer Science, Stanford University,
+        # because user can provide mean value that is different to mean(iterable)
+        sum2 = (value - mean)^2
+        while !done(iterable, state)
+            value, state = next(iterable, state)
+            count += 1
+            sum2 += (value - mean)^2
+        end
+        return sum2 / (count - int(corrected))
+    end
+end
+
+varm(iterable, m::Number; corrected::Bool=true) =
+    var(iterable, corrected=corrected, mean=m)
 
 ## variances over ranges
 
@@ -144,6 +181,11 @@ std(v::AbstractArray; corrected::Bool=true, mean=nothing) =
 std(v::AbstractArray, region; corrected::Bool=true, mean=nothing) = 
     sqrt!(var(v, region; corrected=corrected, mean=mean))
 
+std(iterable; corrected::Bool=true, mean=nothing) =
+    sqrt(var(iterable, corrected=corrected, mean=mean))
+
+stdm(iterable, m::Number; corrected::Bool=true) =
+    std(iterable, corrected=corrected, mean=m)
 
 ## pearson covariance functions ##
 
@@ -380,7 +422,7 @@ function histrange{T<:FloatingPoint,N}(v::AbstractArray{T,N}, n::Integer)
     if length(v) == 0
         return 0.0:1.0:0.0
     end
-    lo, hi = minimum(v), maximum(v)
+    lo, hi = extrema(v)
     if hi == lo
         step = 1.0
     else
@@ -404,7 +446,7 @@ function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
     if length(v) == 0
         return 0:1:0
     end
-    lo, hi = minimum(v), maximum(v)
+    lo, hi = extrema(v)
     if hi == lo
         step = 1
     else
@@ -462,12 +504,12 @@ function hist!{HT}(H::AbstractArray{HT,2}, A::AbstractMatrix, edg::AbstractVecto
         fill!(H, zero(HT))
     end
     for j = 1:n
-        hist!(sub(H(H, :, j), sub(A, :, j), edg))
+        hist!(sub(H, :, j), sub(A, :, j), edg)
     end
     edg, H
 end
 
-hist(A::AbstractMatrix, edg::AbstractVector) = hist!(Array(Int, length(edg-1), size(A,2)), A, edg)
+hist(A::AbstractMatrix, edg::AbstractVector) = hist!(Array(Int, length(edg)-1, size(A,2)), A, edg)
 hist(A::AbstractMatrix, n::Integer) = hist(A,histrange(A,n))
 hist(A::AbstractMatrix) = hist(A,sturges(size(A,1)))
 

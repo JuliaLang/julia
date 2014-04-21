@@ -61,3 +61,8 @@ eltype{T}(::Ptr{T}) = T
 +(x::Ptr, y::Integer) = oftype(x, uint(uint(x) + y))
 -(x::Ptr, y::Integer) = oftype(x, uint(uint(x) - y))
 +(x::Integer, y::Ptr) = y + x
+
+zero{T}(::Type{Ptr{T}}) = convert(Ptr{T}, 0)
+zero{T}(x::Ptr{T}) = convert(Ptr{T}, 0)
+one{T}(::Type{Ptr{T}}) = convert(Ptr{T}, 1)
+one{T}(x::Ptr{T}) = convert(Ptr{T}, 1)

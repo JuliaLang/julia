@@ -24,7 +24,8 @@
     (modify-syntax-entry ?_ "w" table)   ; underscores in words
     (modify-syntax-entry ?@ "w" table)
     (modify-syntax-entry ?. "_" table)
-    (modify-syntax-entry ?# "<" table)   ; #  single-line comment start
+    (modify-syntax-entry ?# "< 14" table)  ; # single-line and multiline start
+    (modify-syntax-entry ?= ". 23bn" table)
     (modify-syntax-entry ?\n ">" table)  ; \n single-line comment end
     (modify-syntax-entry ?\{ "(} " table)
     (modify-syntax-entry ?\} "){ " table)
@@ -45,7 +46,6 @@
     (modify-syntax-entry ?- "." table)
     (modify-syntax-entry ?< "." table)
     (modify-syntax-entry ?> "." table)
-    (modify-syntax-entry ?= "." table)
     (modify-syntax-entry ?% "." table)
     table)
   "Syntax table for `julia-mode'.")

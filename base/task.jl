@@ -169,6 +169,7 @@ function done(t::Task, val)
 end
 next(t::Task, val) = (t.result, nothing)
 
+isempty(::Task) = error("isempty not defined for Tasks")
 
 ## condition variables
 
@@ -215,6 +216,8 @@ notify1_error(c::Condition, err) = notify(c, err, error=true, all=false)
 
 
 ## scheduler and work queue
+
+global const Workqueue = Any[]
 
 function enq_work(t::Task)
     ccall(:uv_stop,Void,(Ptr{Void},),eventloop())

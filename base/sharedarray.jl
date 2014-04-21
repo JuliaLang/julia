@@ -33,7 +33,11 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
         pids = procs(myid())
         onlocalhost = true
     else
-        onlocalhost = assert_same_host(pids)
+        if !check_same_host(pids) 
+            error("SharedArray requires all requested processes to be on the same machine.")
+        end
+    
+        onlocalhost = myid() in procs(pids[1])
     end
 
     local shm_seg_name = ""
@@ -65,10 +69,12 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
         end
 
         # All good, immediately unlink the segment.
-        if onlocalhost
-            shm_unlink(shm_seg_name)
-        else
-            remotecall_fetch(shmmem_create_pid, shm_unlink, shm_seg_name)
+        if prod(dims) > 0
+            if onlocalhost
+                shm_unlink(shm_seg_name)
+            else
+                remotecall_fetch(shmmem_create_pid, shm_unlink, shm_seg_name)
+            end
         end
         S = SharedArray{T,N}(dims, pids, refs, shm_seg_name)
         shm_seg_name = ""
@@ -105,6 +111,19 @@ SharedArray(T, I::Int...; kwargs...) = SharedArray(T, I; kwargs...)
 
 length(S::SharedArray) = prod(S.dims)
 size(S::SharedArray) = S.dims
+
+function reshape{T,N}(a::SharedArray{T}, dims::NTuple{N,Int})
+    (length(a) != prod(dims)) && error("dimensions must be consistent with array size")
+    refs = Array(RemoteRef, length(a.pids))
+    for (i, p) in enumerate(a.pids)
+        refs[i] = remotecall(p, (r,d)->reshape(fetch(r),d), a.refs[i], dims)
+    end
+
+    A = SharedArray{T,N}(dims, a.pids, refs, a.segname)
+    init_loc_flds(A)
+    (a.pidx == 0) && isdefined(a, :s) && (A.s = reshape(a.s, dims))
+    A
+end
 
 procs(S::SharedArray) = S.pids
 indexpids(S::SharedArray) = S.pidx
@@ -243,7 +262,7 @@ function map!(f::Callable, S::SharedArray)
     return S
 end
 
-copy!(S::SharedArray, A::Array) = copy!(S.s, A)
+copy!(S::SharedArray, A::Array) = (copy!(S.s, A); S)
 
 function copy!(S::SharedArray, R::SharedArray)
     length(S) == length(R) || throw(BoundsError())
@@ -264,6 +283,8 @@ function copy!(S::SharedArray, R::SharedArray)
 
     return S
 end
+
+complex(S1::SharedArray,S2::SharedArray) = convert(SharedArray, complex(S1.s, S2.s))
 
 function print_shmem_limits(slen)
     try
@@ -289,6 +310,11 @@ end
 function shm_mmap_array(T, dims, shm_seg_name, mode)
     local s = nothing
     local A = nothing
+
+    if prod(dims) == 0
+        return Array(T, dims)
+    end
+    
     try
         fd_mem = shm_open(shm_seg_name, mode, S_IRUSR | S_IWUSR)
         systemerror("shm_open() failed for " * shm_seg_name, fd_mem <= 0)
@@ -324,15 +350,5 @@ end
 end
 
 @unix_only shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Int, (Ptr{Uint8}, Int, Int), shm_seg_name, oflags, permissions)
-
-
-function assert_same_host(procs)
-    first_privip = getprivipaddr(procs[1])
-    if !all(x -> getprivipaddr(x) == first_privip, procs)
-        error("SharedArray requires all requested processes to be on the same machine.")
-    end
-
-    return myid() in procs
-end
 
 

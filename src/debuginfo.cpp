@@ -3,6 +3,8 @@
 struct FuncInfo{
     const Function* func;
     size_t lengthAdr;
+    std::string name;
+    std::string filename;
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
     PRUNTIME_FUNCTION fnentry;
 #endif
@@ -24,7 +26,7 @@ class JuliaJITEventListener: public JITEventListener
 {
     std::map<size_t, FuncInfo, revcomp> info;
 
-public:	
+public:
     JuliaJITEventListener(){}
     virtual ~JuliaJITEventListener() {}
 
@@ -66,9 +68,10 @@ public:
             }
         }
         jl_in_stackwalk = 0;
-        FuncInfo tmp = {&F, Size, tbl, Details.LineStarts};
+
+        FuncInfo tmp = {&F, Size, std::string(), std::string(), tbl, Details.LineStarts};
 #else
-        FuncInfo tmp = {&F, Size, Details.LineStarts};
+        FuncInfo tmp = {&F, Size, std::string(), std::string(), Details.LineStarts};
 #endif
         if (tmp.lines.size() != 0) info[(size_t)(Code)] = tmp;
     }
@@ -104,12 +107,17 @@ void jl_getFunctionInfo(const char **name, int *line, const char **filename, siz
         std::vector<JITEvent_EmittedFunctionDetails::LineStart>::iterator vit = (*it).second.lines.begin();
         JITEvent_EmittedFunctionDetails::LineStart prev = *vit;
 
-        DISubprogram debugscope =
-            DISubprogram(prev.Loc.getScope((*it).second.func->getContext()));
-        *filename = debugscope.getFilename().data();
-        // the DISubprogram has the un-mangled name, so use that if
-        // available.
-        *name = debugscope.getName().data();
+        if ((*it).second.func) {
+            DISubprogram debugscope =
+                DISubprogram(prev.Loc.getScope((*it).second.func->getContext()));
+            *filename = debugscope.getFilename().data();
+            // the DISubprogram has the un-mangled name, so use that if
+            // available.
+            *name = debugscope.getName().data();
+        } else {
+            *name = (*it).second.name.c_str();
+            *filename = (*it).second.filename.c_str();
+        }
 
         vit++;
 
@@ -141,6 +149,9 @@ void* CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserC
     return NULL;
 }
 
+// Custom memory manager for exception handling on Windows
+// we overallocate 48 bytes at the end of each function
+// for unwind information (see NotifyFunctionEmitted)
 class JITMemoryManagerWin : public JITMemoryManager {
 private:
   JITMemoryManager *JMM;
@@ -249,3 +260,95 @@ extern "C" void jl_write_coverage_data(void)
         }
     }
 }
+
+#ifndef _OS_WINDOWS_
+// disabled pending system image backtrace support on Windows
+typedef std::map<size_t, FuncInfo, revcomp> FuncInfoMap;
+extern "C" void jl_dump_linedebug_info() {
+    FuncInfoMap info = jl_jit_events->getMap();
+    FuncInfoMap::iterator infoiter = info.begin();
+    std::vector<JITEvent_EmittedFunctionDetails::LineStart>::iterator lineiter = (*infoiter).second.lines.begin();
+
+    Type *li_types[2] = {T_size, T_size};
+    StructType *T_lineinfo = StructType::get(jl_LLVMContext, ArrayRef<Type *>(std::vector<Type *>(li_types, li_types+2)), true);
+
+    std::vector<Constant *> funcinfo_array;
+    funcinfo_array.push_back( ConstantInt::get(T_size, 0) );
+
+    for (; infoiter != info.end(); infoiter++) {
+        std::vector<Constant*> functionlines;
+
+        // get the base address for offset calculation
+        size_t fptr = (size_t)(*infoiter).first;
+
+        lineiter = (*infoiter).second.lines.begin();
+        JITEvent_EmittedFunctionDetails::LineStart prev = *lineiter;
+
+        // loop over the EmittedFunctionDetails vector
+        while (lineiter != (*infoiter).second.lines.end()) {
+            // store the individual {offset, line} entries
+            Constant* tmpline[2] = { ConstantInt::get(T_size, (*lineiter).Address - fptr),
+                                     ConstantInt::get(T_size, (*lineiter).Loc.getLine()) };
+            Constant *lineinfo = ConstantStruct::get(T_lineinfo, makeArrayRef(tmpline));
+            functionlines.push_back(lineinfo);
+            lineiter++;
+        }
+
+        DISubprogram debugscope =
+            DISubprogram(prev.Loc.getScope((*infoiter).second.func->getContext()));
+
+        // store function pointer, name and filename, length, number of line entries, and then array of line mappings
+        Constant *info_data[6] = { ConstantExpr::getBitCast( const_cast<Function *>((*infoiter).second.func), T_psize),
+                                   ConstantDataArray::getString( jl_LLVMContext, StringRef(debugscope.getName().str())),
+                                   ConstantDataArray::getString( jl_LLVMContext, StringRef(debugscope.getFilename().str())),
+                                   ConstantInt::get(T_size, (*infoiter).second.lengthAdr),
+                                   ConstantInt::get(T_size, functionlines.size()),
+                                   ConstantArray::get(ArrayType::get(T_lineinfo, functionlines.size()), ArrayRef<Constant *>(functionlines))
+                                 };
+        Constant *st = ConstantStruct::getAnon(jl_LLVMContext, ArrayRef<Constant *>(info_data), true);
+        funcinfo_array.push_back( st );
+    }
+    // set first element to the total number of FuncInfo entries
+    funcinfo_array[0] = ConstantInt::get(T_size, funcinfo_array.size() - 1);
+    Constant *st_lineinfo = ConstantStruct::getAnon( jl_LLVMContext, ArrayRef<Constant*>(funcinfo_array), true );
+    new GlobalVariable(
+            *jl_Module,
+            st_lineinfo->getType(),
+            true,
+            GlobalVariable::ExternalLinkage,
+            st_lineinfo,
+            "jl_linedebug_info");
+}
+
+extern "C" void jl_restore_linedebug_info(uv_lib_t *handle) {
+    uintptr_t *infoptr = (uintptr_t*)jl_dlsym(handle, const_cast<char*>("jl_linedebug_info"));
+    size_t funccount = (size_t)(*infoptr++);
+
+    for (size_t i = 0; i < funccount; i++) {
+        // loop over function info entries
+        uintptr_t fptr = (*infoptr++);
+        char *name = (char*)infoptr;
+        infoptr = (uintptr_t*)(((char*)infoptr) + strlen( (const char*)infoptr) + 1);
+        char *filename = (char*)infoptr;
+        infoptr = (uintptr_t*)(((char*)infoptr) + strlen( (const char*)infoptr) + 1);
+        size_t lengthAdr = (*infoptr++);
+        size_t numel = (*infoptr++);
+
+        std::vector<JITEvent_EmittedFunctionDetails::LineStart> linestarts;
+
+        // dummy element for the MDNode, which we need so that the DebucLoc keeps info
+        SmallVector <Value *, 1> tmpelt;
+
+        for (size_t j = 0; j < numel; j++) {
+            // loop over individual {offset, line} entries
+            uintptr_t offset = (*infoptr++);
+            uintptr_t line = (*infoptr++);
+            JITEvent_EmittedFunctionDetails::LineStart linestart =
+                { (uintptr_t)fptr + offset, DebugLoc::get( line, 0, MDNode::get(jl_LLVMContext, tmpelt) ) };
+            linestarts.push_back(linestart);
+        }
+        FuncInfo info = { NULL, lengthAdr, std::string(name), std::string(filename), linestarts };
+        jl_jit_events->getMap()[(size_t)fptr] = info;
+    }
+}
+#endif

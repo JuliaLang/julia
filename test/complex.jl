@@ -291,14 +291,14 @@
 #  tanh(-z) = -tanh(z)
 @test isequal(tanh(complex( 0.0, 0.0)),complex(0.0,0.0))
 @test isequal(tanh(complex( 0.0,-0.0)),complex(0.0,-0.0))
-@test_throws   tanh(complex( 0.0, Inf)) #complex(NaN,0.0)
-@test_throws   tanh(complex( 0.0,-Inf)) #complex(NaN,-0.0)
+@test_throws DomainError  tanh(complex( 0.0, Inf))
+@test_throws DomainError  tanh(complex( 0.0,-Inf))
 @test isequal(tanh(complex( 0.0, NaN)),complex(NaN,NaN))
 
 @test isequal(tanh(complex(-0.0, 0.0)),complex(-0.0,0.0))
 @test isequal(tanh(complex(-0.0,-0.0)),complex(-0.0,-0.0))
 
-@test_throws   tanh(complex( 5.0, Inf)) #complex(NaN,NaN)
+@test_throws DomainError  tanh(complex( 5.0, Inf))
 @test isequal(tanh(complex( 5.0, NaN)),complex(NaN,NaN))
 
 @test isequal(tanh(complex( Inf, 0.0)),complex(1.0, 0.0))
@@ -340,7 +340,7 @@
 @test isequal(tan(complex(-5.0,-Inf)),complex(sin(2*5.0)*-0.0,-1.0))
 @test isequal(tan(complex(-5.0, NaN)),complex( NaN, NaN))
 
-@test_throws   tan(complex( Inf, 5.0)) #complex(NaN,NaN)
+@test_throws DomainError  tan(complex( Inf, 5.0))
 @test isequal(tan(complex( Inf, Inf)),complex( 0.0, 1.0))
 @test isequal(tan(complex( Inf,-Inf)),complex (0.0,-1.0))
 @test isequal(tan(complex(-Inf, Inf)),complex(-0.0, 1.0))
@@ -602,7 +602,7 @@
 
 @test complex(1//2,1//3)^2 === complex(5//36, 1//3)
 @test complex(2,2)^2 === complex(0,8)
-@test_throws complex(2,2)^(-2)
+@test_throws DomainError complex(2,2)^(-2)
 @test complex(2.0,2.0)^(-2) === complex(0.0, -0.125)
 
 # robust division of Float64
@@ -624,7 +624,7 @@ harddivs = ((1.0+im*1.0, 1.0+im*2^1023.0, 2^-1023.0-im*2^-1023.0), #1
 
 # calculate "accurate bits" in range 0:53 by algorithm given in arxiv.1210.4539
 function sb_accuracy(x,expected)
-  min(logacc(real(x),real(expected)), 
+  min(logacc(real(x),real(expected)),
     logacc(imag(x),imag(expected)) )
 end
 relacc(x,expected) = abs(x-expected)/abs(expected)
@@ -636,7 +636,7 @@ function logacc(x::Float64,expected::Float64)
   ra = relacc(BigFloat(x),BigFloat(expected))
   max(ifloor(-log2(ra)),0)
 end
-# the robust division algorithm should have 53 or 52 
+# the robust division algorithm should have 53 or 52
 # bits accuracy for each of the hard divisions
 @test 52 <= minimum([sb_accuracy(h[1]/h[2],h[3]) for h in harddivs])
 

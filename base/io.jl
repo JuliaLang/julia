@@ -228,7 +228,7 @@ end
 next(itr::EachLine, nada) = (readline(itr.stream), nothing)
 eltype(itr::EachLine) = ByteString
 
-readlines(s) = collect(eachline(s))
+readlines(s=STDIN) = collect(eachline(s))
 
 
 ## IOStream

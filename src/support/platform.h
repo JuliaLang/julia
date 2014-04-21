@@ -58,7 +58,7 @@
 *******************************************************************************/
 
 #if defined(__FreeBSD__)
-#define _OS_FREEBSD__
+#define _OS_FREEBSD_
 #elif defined(__linux__)
 #define _OS_LINUX_
 #elif defined(_WIN32) || defined(_WIN64)

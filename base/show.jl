@@ -578,7 +578,7 @@ function xdump_elts(fn::Function, io::IO, x::Array{Any}, n::Int, indent, i0, i1)
     for i in i0:i1
         print(io, indent, "  ", i, ": ")
         if !isdefined(x,i)
-            println(undef_ref_str)
+            println(io, undef_ref_str)
         else
             fn(io, x[i], n - 1, string(indent, "  "))
         end
@@ -611,7 +611,7 @@ function xdump(fn::Function, io::IO, x::DataType, n::Int, indent)
                 if isa(x.types[idx], DataType)
                     xdump(fn, io, x.types[idx], n - 1, string(indent, "  "))
                 else
-                    println(x.types[idx])
+                    println(io, x.types[idx])
                 end
             end
         end
@@ -687,7 +687,7 @@ dump(io::IO, args...) = error("invalid arguments to dump")
 dump(args...) = with_output_limit(()->dump(STDOUT::IO, args...), true)
 
 function dump(io::IO, x::Dict, n::Int, indent)
-    println(typeof(x), " len ", length(x))
+    println(io, typeof(x), " len ", length(x))
     if n > 0
         i = 1
         for (k,v) in x
@@ -1008,8 +1008,6 @@ function showarray(io::IO, X::AbstractArray;
 end
 
 show(io::IO, X::AbstractArray) = showarray(io, X, header=_limit_output, repr=!_limit_output)
-
-print(io::IO, X::AbstractArray) = writedlm(io, X; quotes=false)
 
 function with_output_limit(thk, lim=true)
     global _limit_output

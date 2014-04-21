@@ -38,7 +38,7 @@ begin
     kill(p)
 end
 
-@test_throws run(`foo_is_not_a_valid_command`)
+@test_throws Base.UVError run(`foo_is_not_a_valid_command`)
 
 if false
     prefixer(prefix, sleep) = `perl -nle '$|=1; print "'$prefix' ", $_; sleep '$sleep';'`
@@ -124,7 +124,7 @@ exename=joinpath(JULIA_HOME,(ccall(:jl_is_debugbuild,Cint,())==0?"julia":"julia-
 @test readall(`$exename -f -e 'println(STDERR,"Hello World")'` .> `cat`) == "Hello World\n"
 
 # issue #6310
-@test readall(`echo "2+2"` |> `$exename`) == "4\n"
+@test readall(`echo "2+2"` |> `$exename -f`) == "4\n"
 
 # issue #5904
 @test run(ignorestatus(`false`) |> `true`) === nothing
