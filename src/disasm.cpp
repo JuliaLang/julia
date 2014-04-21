@@ -89,16 +89,6 @@ void jl_dump_function_asm(void* Fptr, size_t Fsize,
     std::string err;
     const Target* TheTarget = TargetRegistry::lookupTarget(TripleName, err);
 
-    // Set up Subtarget and Disassembler
-    OwningPtr<MCSubtargetInfo>
-        STI(TheTarget->createMCSubtargetInfo(TripleName, MCPU, Features.getString()));
-
-    OwningPtr<const MCDisassembler> DisAsm(TheTarget->createMCDisassembler(*STI));
-    if (!DisAsm) {
-        JL_PRINTF(JL_STDERR, "error: no disassembler for target", TripleName.c_str(), "\n");
-        return;
-    }
- 
     // Set up required helpers and streamer 
     OwningPtr<MCStreamer> Streamer;
     SourceMgr SrcMgr;
@@ -120,6 +110,19 @@ void jl_dump_function_asm(void* Fptr, size_t Fsize,
     MCContext Ctx(*MAI, *MRI, MOFI.get(), &SrcMgr);
 #endif    
     MOFI->InitMCObjectFileInfo(TripleName, Reloc::Default, CodeModel::Default, Ctx);
+
+    // Set up Subtarget and Disassembler
+    OwningPtr<MCSubtargetInfo>
+        STI(TheTarget->createMCSubtargetInfo(TripleName, MCPU, Features.getString()));
+#ifdef LLVM35
+    OwningPtr<const MCDisassembler> DisAsm(TheTarget->createMCDisassembler(*STI, Ctx));
+#else
+    OwningPtr<const MCDisassembler> DisAsm(TheTarget->createMCDisassembler(*STI));
+#endif
+    if (!DisAsm) {
+        JL_PRINTF(JL_STDERR, "error: no disassembler for target", TripleName.c_str(), "\n");
+        return;
+    }
 
     unsigned OutputAsmVariant = 1;
     bool ShowEncoding = false;

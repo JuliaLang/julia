@@ -73,6 +73,13 @@ static int _enonfatal(int err)
 
 #define SLEEP_TIME 5//ms
 
+#ifdef __APPLE__
+#define MAXSIZE ((1l << 31) - 1)   // OSX cannot handle blocks larger than this
+#define LIMIT_IO_SIZE(n) ((n) < MAXSIZE ? (n) : MAXSIZE)
+#else
+#define LIMIT_IO_SIZE(n) (n)
+#endif
+
 // return error code, #bytes read in *nread
 // these wrappers retry operations until success or a fatal error
 static int _os_read(long fd, void *buf, size_t n, size_t *nread)
@@ -80,7 +87,7 @@ static int _os_read(long fd, void *buf, size_t n, size_t *nread)
     ssize_t r;
 
     while (1) {
-        r = read((int)fd, buf, n);
+        r = read((int)fd, buf, LIMIT_IO_SIZE(n));
         if (r > -1) {
             *nread = (size_t)r;
             return 0;
@@ -116,7 +123,7 @@ static int _os_write(long fd, const void *buf, size_t n, size_t *nwritten)
     ssize_t r;
 
     while (1) {
-        r = write((int)fd, buf, n);
+        r = write((int)fd, buf, LIMIT_IO_SIZE(n));
         if (r > -1) {
             *nwritten = (size_t)r;
             return 0;
@@ -618,7 +625,7 @@ void ios_close(ios_t *s)
 
 int ios_isopen(ios_t *s)
 {
-	 return s->fd != -1;
+    return s->fd != -1;
 }
 
 static void _buf_init(ios_t *s, bufmode_t bm)

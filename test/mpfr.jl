@@ -144,9 +144,9 @@ y = BigFloat(1)
 
 # exponent
 x = BigFloat(0)
-@test_throws exponent(x)
+@test_throws DomainError exponent(x)
 x = BigFloat(Inf)
-@test_throws exponent(x)
+@test_throws DomainError exponent(x)
 x = BigFloat(15.674)
 @test exponent(x) == exponent(15.674)
 
@@ -160,7 +160,7 @@ prevfloat(y)
 @test x == y
 
 # sqrt DomainError
-@test_throws sqrt(BigFloat(-1))
+@test_throws DomainError sqrt(BigFloat(-1))
 
 # precision
 old_precision = get_bigfloat_precision()
@@ -178,7 +178,7 @@ end
 @test precision(z) == 240
 x = BigFloat(12)
 @test precision(x) == old_precision
-@test_throws set_bigfloat_precision(1)
+@test_throws DomainError set_bigfloat_precision(1)
 
 # isinteger
 @test isinteger(BigFloat(12))
@@ -229,9 +229,9 @@ imi = BigFloat(-Inf)
 # cmp
 @test cmp(big(-0.0), big(0.0)) == 0
 @test cmp(big(0.0), big(-0.0)) == 0
-@test_throws cmp(big(1.0), big(NaN))
-@test_throws cmp(big(NaN), big(NaN))
-@test_throws cmp(big(NaN), big(1.0))
+@test_throws DomainError cmp(big(1.0), big(NaN))
+@test_throws DomainError cmp(big(NaN), big(NaN))
+@test_throws DomainError cmp(big(NaN), big(1.0))
 
 # signbit
 @test signbit(BigFloat(-1.0)) == 1
@@ -295,13 +295,13 @@ with_bigfloat_precision(53) do
 x = BigFloat(42)
     @test log(x) == log(42)
     @test isinf(log(BigFloat(0)))
-    @test_throws log(BigFloat(-1))
+    @test_throws DomainError log(BigFloat(-1))
     @test log2(x) == log2(42)
     @test isinf(log2(BigFloat(0)))
-    @test_throws log2(BigFloat(-1))
+    @test_throws DomainError log2(BigFloat(-1))
     @test log10(x) == log10(42)
     @test isinf(log10(BigFloat(0)))
-    @test_throws log10(BigFloat(-1))
+    @test_throws DomainError log10(BigFloat(-1))
 end
 
 # exp / exp2 / exp10
@@ -315,11 +315,11 @@ end
 # convert to integer types
 x = BigFloat(12.1)
 y = BigFloat(42)
-@test_throws convert(Int32, x)
-@test_throws convert(Int64, x)
-@test_throws convert(BigInt, x)
-@test_throws convert(Uint32, x)
-@test_throws convert(Uint32, x)
+@test_throws InexactError convert(Int32, x)
+@test_throws InexactError convert(Int64, x)
+@test_throws InexactError convert(BigInt, x)
+@test_throws InexactError convert(Uint32, x)
+@test_throws InexactError convert(Uint32, x)
 @test convert(Int32, y) == 42
 @test convert(Int64, y) == 42
 @test convert(BigInt, y) == 42
@@ -355,7 +355,7 @@ x = eps(BigFloat)
 
 # realmin/realmax
 x = realmin(BigFloat)
-@test x > 0 
+@test x > 0
 @test prevfloat(x) == 0
 x = realmax(BigFloat)
 @test !isinf(x)
@@ -367,8 +367,8 @@ with_bigfloat_precision(256) do
     @test factorial(x) == factorial(BigInt(42))
     x = BigFloat(10)
     @test factorial(x) == factorial(10)
-    @test_throws factorial(BigFloat(-1))
-    @test_throws factorial(BigFloat(331.3))
+    @test_throws DomainError factorial(BigFloat(-1))
+    @test_throws DomainError factorial(BigFloat(331.3))
 end
 
 # bessel functions
@@ -393,7 +393,7 @@ with_bigfloat_precision(53) do
     for f in (:acos,:asin,:acosh,:atanh),
         j in (-2, -1.5)
         @eval begin
-            @test_throws ($f)(BigFloat($j))
+            @test_throws DomainError ($f)(BigFloat($j))
         end
     end
     for f in (:sin,:cos,:tan,:sec,:csc,:cot,:cosh,:sinh,:tanh,

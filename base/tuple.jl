@@ -36,6 +36,9 @@ ntuple(f::Function, n::Integer) =
     n==5 ? (f(1),f(2),f(3),f(4),f(5),) :
     tuple(ntuple(n-2,f)..., f(n-1), f(n))
 
+argtail(x, rest...) = rest
+tail(x::Tuple) = argtail(x...)
+
 # 0 argument function
 map(f::Callable) = f()
 # 1 argument function
@@ -44,7 +47,7 @@ map(f::Callable, t::(Any,))               = (f(t[1]),)
 map(f::Callable, t::(Any, Any))           = (f(t[1]), f(t[2]))
 map(f::Callable, t::(Any, Any, Any))      = (f(t[1]), f(t[2]), f(t[3]))
 map(f::Callable, t::(Any, Any, Any, Any)) = (f(t[1]), f(t[2]), f(t[3]), f(t[4]))
-map(f::Callable, t::Tuple)                = tuple([f(ti) for ti in t]...)
+map(f::Callable, t::Tuple)                = tuple(f(t[1]), map(f,tail(t))...)
 # 2 argument function
 map(f::Callable, t::(),        s::())        = ()
 map(f::Callable, t::(Any,),    s::(Any,))    = (f(t[1],s[1]),)
@@ -108,7 +111,10 @@ end
 isempty(x::()) = true
 isempty(x::Tuple) = false
 
-reverse(x::Tuple) = (n=length(x); tuple([x[n-k+1] for k=1:n]...))
+revargs() = ()
+revargs(x, r...) = tuple(revargs(r...)..., x)
+
+reverse(t::Tuple) = revargs(t...)
 
 ## specialized reduction ##
 

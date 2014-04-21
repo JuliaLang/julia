@@ -81,9 +81,10 @@ function select!(v::AbstractVector, k::Int, lo::Int, hi::Int, o::Ordering)
     return v[lo]
 end
 
-function select!(v::AbstractVector, r::UnitRange, lo::Int, hi::Int, o::Ordering)
-    a, b = first(r), last(r)
-    lo <= a <= b <= hi || error("select index $k is out of range $lo:$hi")
+function select!(v::AbstractVector, r::OrdinalRange, lo::Int, hi::Int, o::Ordering)
+    isempty(r) && (return v[r])
+    a, b = extrema(r)
+    lo <= a <= b <= hi || error("selection $r is out of range $lo:$hi")
     @inbounds while true
         if lo == a && hi == b
             sort!(v, lo, hi, DEFAULT_UNSTABLE, o)
@@ -111,12 +112,12 @@ function select!(v::AbstractVector, r::UnitRange, lo::Int, hi::Int, o::Ordering)
     end
 end
 
-select!(v::AbstractVector, k::Union(Int,UnitRange), o::Ordering) = select!(v,k,1,length(v),o)
-select!(v::AbstractVector, k::Union(Int,UnitRange);
+select!(v::AbstractVector, k::Union(Int,OrdinalRange), o::Ordering) = select!(v,k,1,length(v),o)
+select!(v::AbstractVector, k::Union(Int,OrdinalRange);
     lt::Function=isless, by::Function=identity, rev::Bool=false, order::Ordering=Forward) =
     select!(v, k, ord(lt,by,rev,order))
 
-select(v::AbstractVector, k::Union(Int,UnitRange); kws...) = select!(copy(v), k; kws...)
+select(v::AbstractVector, k::Union(Int,OrdinalRange); kws...) = select!(copy(v), k; kws...)
 
 # reference on sorted binary search:
 #   http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary

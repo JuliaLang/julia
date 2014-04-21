@@ -24,7 +24,7 @@ export
     Hessenberg,
     LU,
     LUTridiagonal,
-    LDLTTridiagonal,
+    LDLt,
     QR,
     QRPivoted,
     Schur,
@@ -78,8 +78,8 @@ export
     istril,
     istriu,
     kron,
-    ldltd!,
-    ldltd,
+    ldltfact!,
+    ldltfact,
     linreg,
     logdet,
     lu,
@@ -196,13 +196,14 @@ include("linalg/matmul.jl")
 include("linalg/lapack.jl")
 
 include("linalg/dense.jl")
+include("linalg/tridiag.jl")
 include("linalg/factorization.jl")
+include("linalg/lu.jl")
 
 include("linalg/bunchkaufman.jl")
 include("linalg/triangular.jl")
 include("linalg/symmetric.jl")
 include("linalg/woodbury.jl")
-include("linalg/tridiag.jl")
 include("linalg/diagonal.jl")
 include("linalg/bidiag.jl")
 include("linalg/uniformscaling.jl")
@@ -210,6 +211,7 @@ include("linalg/rectfullpacked.jl")
 include("linalg/givens.jl")
 include("linalg/special.jl")
 include("linalg/bitarray.jl")
+include("linalg/ldlt.jl")
 
 include("linalg/sparse.jl")
 include("linalg/umfpack.jl")

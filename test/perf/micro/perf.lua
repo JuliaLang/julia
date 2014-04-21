@@ -41,7 +41,7 @@ local function timeit(f, name)
         local tx = elapsed(f)
         t = t and min(t, tx) or tx
     end
-    print(format("gsl_shell,%s,%g", name, t))
+    print(format("lua,%s,%g", name, t))
 end
 
 local function fib(n)

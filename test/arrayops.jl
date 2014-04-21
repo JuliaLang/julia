@@ -101,7 +101,7 @@ sA = sub(A, 2, 1:5, :)
 @test parentindexes(sA) == (2:2, 1:5, 1:8)
 @test Base.parentdims(sA) == [1:3]
 @test size(sA) == (1, 5, 8)
-@test_throws sA[2, 1:8]
+@test_throws BoundsError sA[2, 1:8]
 @test sA[1, 2, 1:8][:] == [5:15:120]
 sA[2:5:end] = -1
 @test all(sA[2:5:end] .== -1)
@@ -162,22 +162,22 @@ a = [5:8]
 @test parentindexes(a) == (1:4,)
 
 # issue #4335
-@test_throws slice(A, 1:2)
-@test_throws slice(A, 1:2, 3:4)
-@test_throws slice(A, 1:2, 3:4, 5:6, 7:8)
+@test_throws BoundsError slice(A, 1:2)
+@test_throws BoundsError slice(A, 1:2, 3:4)
+@test_throws BoundsError slice(A, 1:2, 3:4, 5:6, 7:8)
 
 # Out-of-bounds construction. See #4044
 A = rand(7,7)
 rng = 1:4
 sA = sub(A, 2, rng-1)
-@test_throws sA[1,1]
+@test_throws BoundsError sA[1,1]
 @test sA[1,2] == A[2,1]
 sA = sub(A, 2, rng)
 B = sub(sA, 1, rng-1)
 C = sub(B, 1, rng+1)
 @test C == sA
 sA = slice(A, 2, rng-1)
-@test_throws sA[1]
+@test_throws BoundsError sA[1]
 @test sA[2] == A[2,1]
 sA = slice(A, 2, rng)
 B = slice(sA, rng-1)
@@ -492,7 +492,7 @@ begin
     @test R == [1 1; 2 2]
 
     R = repeat([1 2;
-                3 4], inner = [1, 1], outer = [1, 1]) 
+                3 4], inner = [1, 1], outer = [1, 1])
     @test R == [1 2;
                   3 4]
     R = repeat([1 2;
@@ -657,28 +657,28 @@ end
 
 @test (1:5)[[true,false,true,false,true]] == [1,3,5]
 @test [1:5][[true,false,true,false,true]] == [1,3,5]
-@test_throws (1:5)[[true,false,true,false]]
-@test_throws (1:5)[[true,false,true,false,true,false]]
-@test_throws [1:5][[true,false,true,false]]
-@test_throws [1:5][[true,false,true,false,true,false]]
+@test_throws BoundsError (1:5)[[true,false,true,false]]
+@test_throws BoundsError (1:5)[[true,false,true,false,true,false]]
+@test_throws BoundsError [1:5][[true,false,true,false]]
+@test_throws BoundsError [1:5][[true,false,true,false,true,false]]
 a = [1:5]
 a[[true,false,true,false,true]] = 6
 @test a == [6,2,6,4,6]
 a[[true,false,true,false,true]] = [7,8,9]
 @test a == [7,2,8,4,9]
-@test_throws (a[[true,false,true,false,true]] = [7,8,9,10])
+@test_throws DimensionMismatch (a[[true,false,true,false,true]] = [7,8,9,10])
 A = reshape(1:15, 3, 5)
 @test A[[true, false, true], [false, false, true, true, false]] == [7 10; 9 12]
-@test_throws A[[true, false], [false, false, true, true, false]]
-@test_throws A[[true, false, true], [false, true, true, false]]
-@test_throws A[[true, false, true, true], [false, false, true, true, false]]
-@test_throws A[[true, false, true], [false, false, true, true, false, true]]
+@test_throws BoundsError A[[true, false], [false, false, true, true, false]]
+@test_throws BoundsError A[[true, false, true], [false, true, true, false]]
+@test_throws BoundsError A[[true, false, true, true], [false, false, true, true, false]]
+@test_throws BoundsError A[[true, false, true], [false, false, true, true, false, true]]
 A = ones(Int, 3, 5)
-@test_throws A[2,[true, false, true, true, false]] = 2:5
+@test_throws DimensionMismatch A[2,[true, false, true, true, false]] = 2:5
 A[2,[true, false, true, true, false]] = 2:4
 @test A == [1 1 1 1 1; 2 1 3 4 1; 1 1 1 1 1]
-@test_throws A[[true,false,true], 5] = [19]
-@test_throws A[[true,false,true], 5] = 19:21
+@test_throws DimensionMismatch A[[true,false,true], 5] = [19]
+@test_throws DimensionMismatch A[[true,false,true], 5] = 19:21
 A[[true,false,true], 5] = 7
 @test A == [1 1 1 1 7; 2 1 3 4 1; 1 1 1 1 7]
 
@@ -740,29 +740,29 @@ begin
     @test all(b.==6)
 
     # issue #5141
-    ## Update Removed the version that removes the dimensions when dims==1:ndims(A) 
+    ## Update Removed the version that removes the dimensions when dims==1:ndims(A)
     c1 = mapslices(x-> maximum(-x), a, [])
     @test c1 == -a
-    
+
     # other types than Number
     @test mapslices(prod,["1" "2"; "3" "4"],1) == ["13" "24"]
-    
+
     # issue #5177
-    
+
     c = ones(2,3,4)
     m1 = mapslices(x-> ones(2,3), c, [1,2])
     m2 = mapslices(x-> ones(2,4), c, [1,3])
     m3 = mapslices(x-> ones(3,4), c, [2,3])
     @test size(m1) == size(m2) == size(m3) == size(c)
-    
+
     n1 = mapslices(x-> ones(6), c, [1,2])
     n2 = mapslices(x-> ones(6), c, [1,3])
     n3 = mapslices(x-> ones(6), c, [2,3])
     n1a = mapslices(x-> ones(1,6), c, [1,2])
     n2a = mapslices(x-> ones(1,6), c, [1,3])
     n3a = mapslices(x-> ones(1,6), c, [2,3])
-    @test size(n1a) == (1,6,4) && size(n2a) == (1,3,6)  && size(n3a) == (2,1,6)  
-    @test size(n1) == (6,1,4) && size(n2) == (6,3,1)  && size(n3) == (2,6,1)  
+    @test size(n1a) == (1,6,4) && size(n2a) == (1,3,6)  && size(n3a) == (2,1,6)
+    @test size(n1) == (6,1,4) && size(n2) == (6,3,1)  && size(n3) == (2,6,1)
 end
 
 
@@ -875,7 +875,7 @@ end
 @test isequal([1,2,3], [a for (a,b) in enumerate(2:4)])
 @test isequal([2,3,4], [b for (a,b) in enumerate(2:4)])
 
-@test_throws (10.^[-1])[1] == 0.1
+@test_throws DomainError (10.^[-1])[1] == 0.1
 @test (10.^[-1.])[1] == 0.1
 
 # reverse
@@ -895,10 +895,10 @@ end
 @test isequal(flipdim([2,3,1], 2), [2,3,1])
 @test isequal(flipdim([2 3 1], 1), [2 3 1])
 @test isequal(flipdim([2 3 1], 2), [1 3 2])
-@test_throws flipdim([2,3,1], -1)
+@test_throws ErrorException flipdim([2,3,1], -1)
 @test isequal(flipdim(1:10, 1), 10:-1:1)
 @test isequal(flipdim(1:10, 2), 1:10)
-@test_throws flipdim(1:10, -1)
+@test_throws ErrorException flipdim(1:10, -1)
 @test isequal(flipdim(Array(Int,0,0),1), Array(Int,0,0))  # issue #5872
 
 # issue 4228
@@ -917,7 +917,7 @@ B = reshape(A, 4)
 @test push!(B,5) == [1,2,3,4,5]
 @test pop!(B) == 5
 C = reshape(B, 1, 4)
-@test_throws push!(C, 5)
+@test_throws MethodError push!(C, 5)
 
 A = [NaN]; B = [NaN]
 @test !(A==A)

@@ -11,10 +11,10 @@
 @test median([1.,-1.,Inf,-Inf]) == 0.0
 @test isnan(median([-Inf,Inf]))
 
-@test_throws median([])
-@test_throws median([NaN])
-@test_throws median([0.0,NaN])
-@test_throws median([NaN,0.0])
+@test_throws ErrorException median([])
+@test_throws ErrorException median([NaN])
+@test_throws ErrorException median([0.0,NaN])
+@test_throws ErrorException median([NaN,0.0])
 
 @test mean([1,2,3]) == 2.
 @test mean([0 1 2; 4 5 6], 1) == [2.  3.  4.]
@@ -30,6 +30,12 @@
 @test_approx_eq var([1,2,3]; mean=0) 7.
 @test_approx_eq var([1,2,3]; mean=0, corrected=false) 14.0/3
 
+@test_approx_eq varm((1,2,3), 2) 1.
+@test_approx_eq var((1,2,3)) 1.
+@test_approx_eq var((1,2,3); corrected=false) 2.0/3
+@test_approx_eq var((1,2,3); mean=0) 7.
+@test_approx_eq var((1,2,3); mean=0, corrected=false) 14.0/3
+
 @test_approx_eq var([1 2 3 4 5; 6 7 8 9 10], 2) [2.5 2.5]'
 @test_approx_eq var([1 2 3 4 5; 6 7 8 9 10], 2; corrected=false) [2.0 2.0]'
 
@@ -38,6 +44,12 @@
 @test_approx_eq std([1,2,3]; corrected=false) sqrt(2.0/3)
 @test_approx_eq std([1,2,3]; mean=0) sqrt(7.0)
 @test_approx_eq std([1,2,3]; mean=0, corrected=false) sqrt(14.0/3)
+
+@test_approx_eq stdm((1,2,3), 2) 1.
+@test_approx_eq std((1,2,3)) 1.
+@test_approx_eq std((1,2,3); corrected=false) sqrt(2.0/3)
+@test_approx_eq std((1,2,3); mean=0) sqrt(7.0)
+@test_approx_eq std((1,2,3); mean=0, corrected=false) sqrt(14.0/3)
 
 @test_approx_eq std([1 2 3 4 5; 6 7 8 9 10], 2) sqrt([2.5 2.5]')
 @test_approx_eq std([1 2 3 4 5; 6 7 8 9 10], 2; corrected=false) sqrt([2.0 2.0]')
@@ -60,7 +72,7 @@ end
 X = [1. 2. 3. 4. 5.; 5. 4. 6. 2. 1.]'
 Y = [6. 1. 5. 3. 2.; 2. 7. 8. 4. 3.]'
 
-for vd in [1, 2], zm in [true, false], cr in [true, false] 
+for vd in [1, 2], zm in [true, false], cr in [true, false]
     # println("vd = $vd: zm = $zm, cr = $cr")
     if vd == 1
         k = size(X, 2)
@@ -105,7 +117,7 @@ for vd in [1, 2], zm in [true, false], cr in [true, false]
     @test_approx_eq C Cxy[1,:]
 
     C = zm ? cov(X, y1; vardim=vd, mean=0, corrected=cr) :
-             cov(X, y1; vardim=vd, corrected=cr) 
+             cov(X, y1; vardim=vd, corrected=cr)
     @test size(C) == (k, 1)
     @test_approx_eq C Cxy[:,1]
 
@@ -118,7 +130,7 @@ end
 # test correlation
 
 function safe_cor(x, y, zm::Bool)
-    if !zm 
+    if !zm
         x = x .- mean(x)
         y = y .- mean(y)
     end
@@ -188,6 +200,7 @@ end
 @test all(hist([1:100]/100,0.0:0.01:1.0)[2] .==1)
 @test hist([1,1,1,1,1])[2][1] == 5
 @test sum(hist2d(rand(100, 2))[3]) == 100
+@test hist([1 2 3 4;1 2 3 4]) == (0.0:2.0:4.0, [2 2 0 0; 0 0 2 2])
 
 @test midpoints(1.0:1.0:10.0) == 1.5:1.0:9.5
 @test midpoints(1:10) == 1.5:9.5
@@ -196,5 +209,3 @@ end
 @test quantile([1,2,3,4],0.5) == 2.5
 @test quantile([1., 3],[.25,.5,.75])[2] == median([1., 3])
 @test quantile([0.:100.],[.1,.2,.3,.4,.5,.6,.7,.8,.9])[1] == 10.0
-
-

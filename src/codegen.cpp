@@ -354,7 +354,7 @@ void jl_dump_objfile(char* fname, int jit_model)
         jl_TargetMachine->getTargetCPU(),
         jl_TargetMachine->getTargetFeatureString(),
         jl_TargetMachine->Options,
-#ifdef _OS_LINUX_
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
         Reloc::PIC_,
 #else
         jit_model ? Reloc::PIC_ : Reloc::Default,
@@ -3463,10 +3463,12 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     for(i=0; i < nreq; i++) {
         jl_sym_t *s = jl_decl_var(jl_cellref(largs,i));
         Value *argPtr = NULL;
+        jl_value_t *argType = NULL;
         if (specsig) {
+            argType = jl_tupleref(lam->specTypes,i);
             if (!ctx.vars[s].isGhost) {
                 argPtr = AI++;
-                argPtr = mark_julia_type(argPtr, jl_tupleref(lam->specTypes,i));
+                argPtr = mark_julia_type(argPtr, argType);
             }
         }
         else {
@@ -3499,13 +3501,13 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             ctx.vars[s].passedAs = theArg;
             if (isBoxed(s, &ctx)) {
                 if (specsig) {
-                    theArg = boxed(theArg,&ctx);
+                    theArg = boxed(theArg,&ctx,argType);
                     builder.CreateStore(theArg, lv); // temporarily root
                 }
                 builder.CreateStore(builder.CreateCall(prepare_call(jlbox_func), theArg), lv);
             }
             else if (dyn_cast<GetElementPtrInst>(lv) != NULL) {
-                builder.CreateStore(boxed(theArg,&ctx), lv);
+                builder.CreateStore(boxed(theArg,&ctx,argType), lv);
             }
             else if (dyn_cast<AllocaInst>(lv)->getAllocatedType() == jl_pvalue_llvmt) {
                 builder.CreateStore(theArg,lv);

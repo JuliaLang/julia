@@ -124,6 +124,8 @@ function (*){TvA,TiA,TX}(A::SparseMatrixCSC{TvA,TiA}, X::AbstractMatrix{TX})
 end
 
 *{TvA,TiA}(X::BitArray{2}, A::SparseMatrixCSC{TvA,TiA}) = invoke(*, (AbstractMatrix, SparseMatrixCSC), X, A)
+# TODO: Tridiagonal * Sparse should be implemented more efficiently
+*{TX,TvA,TiA}(X::Tridiagonal{TX}, A::SparseMatrixCSC{TvA,TiA}) = invoke(*, (Tridiagonal, AbstractMatrix), X, A)
 function *{TX,TvA,TiA}(X::AbstractMatrix{TX}, A::SparseMatrixCSC{TvA,TiA})
     mX, nX = size(X)
     nX == A.m || throw(DimensionMismatch(""))

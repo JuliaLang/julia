@@ -12,7 +12,7 @@ TESTS = all core keywordargs numbers strings unicode collections hashing	\
 default: all
 
 $(TESTS) ::
-	@$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) ./runtests.jl $@)
+	@$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) -f ./runtests.jl $@)
 
 perf:
 	@$(MAKE) -C perf all

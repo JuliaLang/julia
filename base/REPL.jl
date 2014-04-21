@@ -5,14 +5,16 @@ using Base.Terminals
 using Base.LineEdit
 using Base.REPLCompletions
 
-export StreamREPL, BasicREPL
+export
+    BasicREPL,
+    LineEditREPL,
+    StreamREPL
 
-import Base: AsyncStream,
-             Display,
-             display,
-             writemime
-
-import Base.Terminals: raw!
+import Base:
+    AsyncStream,
+    Display,
+    display,
+    writemime
 
 import Base.LineEdit:
     CompletionProvider,
@@ -27,13 +29,15 @@ import Base.LineEdit:
 
 abstract AbstractREPL
 
+answer_color(::AbstractREPL) = ""
+
 type REPLBackend
     repl_channel::RemoteRef
     response_channel::RemoteRef
     ans
 end
 
-function eval_user_input(ast::ANY, backend)
+function eval_user_input(ast::ANY, backend::REPLBackend)
     iserr, lasterr, bt = false, (), nothing
     while true
         try
@@ -73,7 +77,7 @@ function parse_input_line(s::String)
     ccall(:jl_parse_input_line, Any, (Ptr{Uint8},), s)
 end
 
-function start_repl_backend(repl_channel, response_channel)
+function start_repl_backend(repl_channel::RemoteRef, response_channel::RemoteRef)
     backend = REPLBackend(repl_channel, response_channel, nothing)
     @async begin
         # include looks at this to determine the relative include path
@@ -88,7 +92,6 @@ function start_repl_backend(repl_channel, response_channel)
             end
             eval_user_input(ast, backend)
         end
-
     end
 end
 
@@ -99,8 +102,8 @@ function display_error(io::IO, er, bt)
     end
 end
 
-immutable REPLDisplay <: Display
-    repl::AbstractREPL
+immutable REPLDisplay{R<:AbstractREPL} <: Display
+    repl::R
 end
 function display(d::REPLDisplay, ::MIME"text/plain", x)
     io = outstream(d.repl)
@@ -110,7 +113,9 @@ function display(d::REPLDisplay, ::MIME"text/plain", x)
 end
 display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
 
-function print_response(d::REPLDisplay, errio::IO, r::AbstractREPL, val::ANY, bt, show_value, have_color)
+print_response(d::REPLDisplay, val::ANY, bt, show_value::Bool, have_color::Bool) =
+    print_response(d, outstream(d.repl), val, bt, show_value, have_color)
+function print_response(d::REPLDisplay, errio::IO, val::ANY, bt, show_value::Bool, have_color::Bool)
     while true
         try
             if bt !== nothing
@@ -130,7 +135,7 @@ function print_response(d::REPLDisplay, errio::IO, r::AbstractREPL, val::ANY, bt
             break
         catch err
             if bt !== nothing
-                println(errio,"SYSTEM: show(lasterr) caused an error")
+                println(errio, "SYSTEM: show(lasterr) caused an error")
                 break
             end
             val = err
@@ -138,6 +143,48 @@ function print_response(d::REPLDisplay, errio::IO, r::AbstractREPL, val::ANY, bt
         end
     end
 end
+
+function run_repl(repl::AbstractREPL)
+    repl_channel = RemoteRef()
+    response_channel = RemoteRef()
+    start_repl_backend(repl_channel, response_channel)
+    run_frontend(repl, repl_channel, response_channel)
+end
+
+## BasicREPL ##
+
+type BasicREPL <: AbstractREPL
+    terminal::TextTerminal
+end
+
+outstream(r::BasicREPL) = r.terminal
+
+function run_frontend(repl::BasicREPL, repl_channel::RemoteRef, response_channel::RemoteRef)
+    d = REPLDisplay(repl)
+    while true
+        write(repl.terminal, "julia> ")
+        line = ""
+        ast = nothing
+        while true
+            line *= readline(repl.terminal)
+            ast = Base.parse_input_line(line)
+            (isa(ast,Expr) && ast.head == :incomplete) || break
+        end
+        if !isempty(line)
+            put!(repl_channel, (ast, 1))
+            val, bt = take!(response_channel)
+            if !ends_with_semicolon(line)
+                print_response(d, val, bt, true, false)
+            end
+        end
+        write(repl.terminal, '\n')
+    end
+    # terminate backend
+    put!(repl_channel, (nothing, -1))
+end
+
+## LineEditREPL ##
+
 type LineEditREPL <: AbstractREPL
     t::TextTerminal
     prompt_color::String
@@ -167,15 +214,17 @@ type ShellCompletionProvider <: CompletionProvider
     r::LineEditREPL
 end
 
+bytestring_beforecursor(buf::IOBuffer) = bytestring(pointer(buf.data), buf.ptr-1)
+
 function complete_line(c::REPLCompletionProvider, s)
-    partial = bytestring(s.input_buffer.data[1:position(s.input_buffer)])
+    partial = bytestring_beforecursor(s.input_buffer)
     ret, range, should_complete = completions(partial, endof(partial))
     return ret, partial[range], should_complete
 end
 
 function complete_line(c::ShellCompletionProvider, s)
     # First parse everything up to the current position
-    partial = bytestring(s.input_buffer.data[1:position(s.input_buffer)])
+    partial = bytestring_beforecursor(s.input_buffer)
     ret, range, should_complete = shell_completions(partial, endof(partial))
     return ret, partial[range], should_complete
 end
@@ -211,7 +260,7 @@ function hist_from_file(hp, file)
     hp
 end
 
-function mode_idx(hist::REPLHistoryProvider,mode)
+function mode_idx(hist::REPLHistoryProvider, mode)
     c::Uint8 = 0
     for (k,v) in hist.mode_mapping
         if k == uint8('\0')
@@ -227,7 +276,7 @@ end
 
 function add_history(hist::REPLHistoryProvider, s)
     # bytestring copies
-    str = bytestring(pointer(s.input_buffer.data), s.input_buffer.size)
+    str = bytestring(s.input_buffer)
     if isempty(strip(str)) || # Do not add empty strings to the history
        (length(hist.history) > 0 && str == hist.history[end]) # Do not add consecutive duplicate entries
         return
@@ -278,6 +327,7 @@ function history_prev(s::LineEdit.MIState, hist::REPLHistoryProvider)
     if history_move(s, hist, hist.cur_idx-1)
         LineEdit.move_input_start(s)
         LineEdit.move_line_end(s)
+        LineEdit.refresh_line(s)
     else
         Terminals.beep(LineEdit.terminal(s))
     end
@@ -292,6 +342,7 @@ function history_next(s::LineEdit.MIState, hist::REPLHistoryProvider)
     end
     if history_move(s, hist, cur_idx+1)
         LineEdit.move_input_end(s)
+        LineEdit.refresh_line(s)
     else
         Terminals.beep(LineEdit.terminal(s))
     end
@@ -301,14 +352,14 @@ function history_move_prefix(s::LineEdit.MIState,
                              hist::REPLHistoryProvider,
                              backwards::Bool)
     buf = LineEdit.buffer(s)
-    n = buf.ptr - 1
-    prefix = bytestring(buf.data[1:min(n,buf.size)])
+    pos = position(buf)
+    prefix = bytestring_beforecursor(buf)
     allbuf = bytestring(buf)
     idxs = backwards ? ((hist.cur_idx-1):-1:1) : ((hist.cur_idx+1):length(hist.history))
     for idx in idxs
         if beginswith(hist.history[idx], prefix) && hist.history[idx] != allbuf
             history_move(s, hist, idx)
-            seek(LineEdit.buffer(s), n)
+            seek(LineEdit.buffer(s), pos)
             LineEdit.refresh_line(s)
             return
         end
@@ -323,58 +374,45 @@ history_prev_prefix(s::LineEdit.MIState, hist::REPLHistoryProvider) =
 
 function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, response_buffer::IOBuffer,
                         backwards::Bool=false, skip_current::Bool=false)
-    if !(query_buffer.ptr > 1)
-        #truncate(response_buffer,0)
+
+    qpos = position(query_buffer)
+    qpos > 0 || return true
+    searchdata = bytestring_beforecursor(query_buffer)
+
+    # Alright, first try to see if the current match still works
+    a = position(response_buffer) + 1
+    b = a + sizeof(searchdata) - 1
+    if !skip_current && (0 < a <= b <= response_buffer.size) &&
+       searchdata == bytestring(response_buffer.data[a:b])
         return true
     end
 
-    # Alright, first try to see if the current match still works
-    searchdata = bytestring(query_buffer.data[1:(query_buffer.ptr-1)])
-    pos = position(response_buffer)
-    if !skip_current && !((response_buffer.size == 0) || (pos+query_buffer.ptr-2 == 0)) &&
-        (response_buffer.size >= (pos+query_buffer.ptr-2)) && (pos != 0) &&
-        (searchdata == bytestring(response_buffer.data[pos:(pos+query_buffer.ptr-2)]))
-        return true
-    end
+    searchfunc,delta = backwards ? (rsearch,-1) : (search,1)
 
     # Start searching
     # First the current response buffer
-    match = backwards ?
-            rsearch(bytestring(response_buffer.data[1:response_buffer.size]), searchdata, response_buffer.ptr-1) :
-            response_buffer.ptr + 1 < response_buffer.size ?
-            search(bytestring(response_buffer.data[1:response_buffer.size]), searchdata, response_buffer.ptr+1) :
-            0:-1
-
+    response_str = bytestring(response_buffer)
+    match = searchfunc(response_str, searchdata, a+delta)
     if match != 0:-1
         seek(response_buffer, first(match)-1)
         return true
     end
 
     # Now search all the other buffers
-    idx = hist.cur_idx
-    found = false
-    while true
-        idx += backwards ? -1 : 1
-        if !(0 < idx <= length(hist.history))
-            break
-        end
-        match = backwards ? rsearch(hist.history[idx], searchdata):
-                            search(hist.history[idx], searchdata);
-        if match != 0:-1
-            found = true
+    idxs = backwards ? ((hist.cur_idx-1):-1:1) : ((hist.cur_idx+1):length(hist.history))
+    for idx in idxs
+        h = hist.history[idx]
+        match = searchfunc(h, searchdata)
+        if match != 0:-1 && h != response_str
             truncate(response_buffer, 0)
-            write(response_buffer, hist.history[idx])
+            write(response_buffer, h)
             seek(response_buffer, first(match)-1)
-            break
+            hist.cur_idx = idx
+            return true
         end
     end
-    if found
-        #if hist.cur_idx == length(hist.history)+1
-        #    hist.last_buffer = copy(s.input_buffer)
-        #end
-        hist.cur_idx = idx
-    end
-    return found
+
+    return false
 end
 
 function history_reset_state(hist::REPLHistoryProvider)
@@ -392,7 +430,7 @@ function return_callback(repl, s)
     else
         repl.consecutive_returns = 0
     end
-    ast = parse_input_line(bytestring(copy(s.input_buffer.data)))
+    ast = parse_input_line(bytestring(s.input_buffer))
     if repl.consecutive_returns > 1 || !isa(ast, Expr) || (ast.head != :continue && ast.head != :incomplete)
         return true
     else
@@ -404,7 +442,7 @@ function find_hist_file()
     filename = ".julia_history2"
     if isfile(filename)
         return filename
-    elseif haskey(ENV,"JULIA_HISTORY")
+    elseif haskey(ENV, "JULIA_HISTORY")
         return ENV["JULIA_HISTORY"]
     else
         return joinpath(homedir(), filename)
@@ -437,12 +475,10 @@ function respond(f, d, main, req, rep)
     end
 end
 
-function reset(d::REPLDisplay)
+function reset(d::REPLDisplay{LineEditREPL})
     raw!(d.repl.t, false)
     print(Base.text_colors[:normal])
 end
-
-
 
 function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,Any}[])
     ###
@@ -599,9 +635,8 @@ function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,
 
     a = Dict{Any,Any}[hkeymap, repl_keymap, LineEdit.history_keymap(hp), LineEdit.default_keymap, LineEdit.escape_defaults]
     prepend!(a, extra_repl_keymap)
-    @eval @LineEdit.keymap repl_keymap_func $(a)
 
-    main_prompt.keymap_func = repl_keymap_func
+    main_prompt.keymap_func = @eval @LineEdit.keymap $(a)
 
     const mode_keymap = {
         '\b' => function (s)
@@ -626,9 +661,7 @@ function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,
 
     b = Dict{Any,Any}[hkeymap, mode_keymap, LineEdit.history_keymap(hp), LineEdit.default_keymap, LineEdit.escape_defaults]
 
-    @eval @LineEdit.keymap mode_keymap_func $(b)
-
-    shell_mode.keymap_func = help_mode.keymap_func = mode_keymap_func
+    shell_mode.keymap_func = help_mode.keymap_func = @eval @LineEdit.keymap $(b)
 
     ModalInterface([main_prompt, shell_mode, help_mode,hkp])
 end
@@ -643,18 +676,7 @@ else
     banner(io,t) = Base.banner(io)
 end
 
-function run_repl(repl::LineEditREPL)
-    repl_channel = RemoteRef()
-    response_channel = RemoteRef()
-    start_repl_backend(repl_channel, response_channel)
-    run_frontend(repl, repl_channel, response_channel)
-end
-run_repl(t::TextTerminal) = run_repl(LineEditREPL(t))
-
-type BasicREPL <: AbstractREPL
-end
-
-outstream(::BasicREPL) = STDOUT
+## StreamREPL ##
 
 type StreamREPL <: AbstractREPL
     stream::IO
@@ -669,11 +691,6 @@ StreamREPL(stream::AsyncStream) = StreamREPL(stream, julia_green, Base.text_colo
 
 answer_color(r::LineEditREPL) = r.answer_color
 answer_color(r::StreamREPL) = r.answer_color
-answer_color(::BasicREPL) = Base.text_colors[:white]
-
-print_response(d::REPLDisplay, r::StreamREPL,args...) = print_response(d, r.stream,r, args...)
-print_response(d::REPLDisplay, r::LineEditREPL,args...) = print_response(d, r.t, r, args...)
-print_response(d::REPLDisplay, args...) = print_response(d, d.repl, args...)
 
 function run_repl(stream::AsyncStream)
     repl =

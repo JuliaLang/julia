@@ -256,14 +256,16 @@ static jl_function_t *jl_method_table_assoc_exact(jl_methtable_t *mt,
                 if (n==2) {
                     // some manually-unrolled common special cases
                     jl_value_t *a1 = args[1];
-                    jl_methlist_t *mn = ml;
-                    if (jl_tuple_len(mn->sig)==2 &&
-                        jl_tupleref(mn->sig,1)==(jl_value_t*)jl_typeof(a1))
-                        return mn->func;
-                    mn = mn->next;
-                    if (mn!=JL_NULL && jl_tuple_len(mn->sig)==2 &&
-                        jl_tupleref(mn->sig,1)==(jl_value_t*)jl_typeof(a1))
-                        return mn->func;
+                    if (!jl_is_tuple(a1)) {  // issue #6426
+                        jl_methlist_t *mn = ml;
+                        if (jl_tuple_len(mn->sig)==2 &&
+                            jl_tupleref(mn->sig,1)==(jl_value_t*)jl_typeof(a1))
+                            return mn->func;
+                        mn = mn->next;
+                        if (mn!=JL_NULL && jl_tuple_len(mn->sig)==2 &&
+                            jl_tupleref(mn->sig,1)==(jl_value_t*)jl_typeof(a1))
+                            return mn->func;
+                    }
                 }
             }
         }
@@ -561,7 +563,9 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                 while (curr != JL_NULL && curr->func!=method) {
                     jl_tuple_t *sig = curr->sig;
                     if (jl_tuple_len(sig) > i &&
-                        jl_is_tuple(jl_tupleref(sig,i))) {
+                        (jl_is_tuple(jl_tupleref(sig,i)) ||
+                         // tuples can also be Types (issue #5577)
+                         jl_subtype(jl_tupleref(sig,i), (jl_value_t*)jl_type_type, 0))) {
                         need_guard_entries = 1;
                         break;
                     }

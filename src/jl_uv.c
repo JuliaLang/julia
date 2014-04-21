@@ -52,13 +52,13 @@ enum CALLBACK_TYPE { CB_PTR, CB_INT32, CB_INT64 };
 
 //These callbacks are implemented in stream.jl
 #define JL_CB_TYPES(XX) \
-	XX(close) \
-	XX(return_spawn) \
-	XX(readcb) \
-	XX(alloc_buf) \
-	XX(connectcb) \
-	XX(connectioncb) \
-	XX(asynccb) \
+    XX(close) \
+    XX(return_spawn) \
+    XX(readcb) \
+    XX(alloc_buf) \
+    XX(connectcb) \
+    XX(connectioncb) \
+    XX(asynccb) \
     XX(getaddrinfo) \
     XX(pollcb) \
     XX(fspollcb) \

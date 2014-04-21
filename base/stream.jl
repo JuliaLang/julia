@@ -713,20 +713,6 @@ function _uv_hook_writecb(s::AsyncStream, req::Ptr{Void}, status::Int32)
     nothing
 end
 
-# Do not task-block TTY methods. These writes are process-blocking anyway, so we use the non-copying versions
-write(s::TTY, b::Uint8) = @uv_write 1 ccall(:jl_putc_copy, Int32, (Uint8, Ptr{Void}, Ptr{Void}, Ptr{Void}), b, handle(s), uvw, uv_jl_writecb::Ptr{Void})
-write(s::TTY, c::Char) = @uv_write utf8sizeof(c) ccall(:jl_pututf8_copy, Int32, (Ptr{Void},Uint32, Ptr{Void}, Ptr{Void}), handle(s), c, uvw, uv_jl_writecb::Ptr{Void})
-function write{T}(s::TTY, a::Array{T}) 
-    if isbits(T)
-        n = uint(length(a)*sizeof(T))
-        @uv_write n ccall(:jl_write_no_copy, Int32, (Ptr{Void}, Ptr{Void}, Uint, Ptr{Void}, Ptr{Void}), handle(s), a, n, uvw, uv_jl_writecb::Ptr{Void})
-    else
-        check_open(s)
-        invoke(write,(IO,Array),s,a)
-    end
-end
-write(s::TTY, p::Ptr, nb::Integer) = @uv_write nb ccall(:jl_write_no_copy, Int32, (Ptr{Void}, Ptr{Void}, Uint, Ptr{Void}, Ptr{Void}), handle(s), p, nb, uvw, uv_jl_writecb::Ptr{Void})
-
 function write(s::AsyncStream, b::Uint8)
     @uv_write 1 ccall(:jl_putc_copy, Int32, (Uint8, Ptr{Void}, Ptr{Void}, Ptr{Void}), b, handle(s), uvw, uv_jl_writecb_task::Ptr{Void})
     ct = current_task()

@@ -183,7 +183,7 @@ a system compiler, and some downloaders.
 
 On Ubuntu: 
     
-    apt-add repository ppa:ubuntu-wine/ppa
+    apt-add-repository ppa:ubuntu-wine/ppa
     apt-get upate
     apt-get install wine1.7 subversion cvs gcc wget p7zip-full
     

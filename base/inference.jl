@@ -154,61 +154,20 @@ t_func[arraysize] = (1, 2, arraysize_tfunc)
 t_func[pointerref] = (2,2,(a,i)->(isa(a,DataType) && a<:Ptr ? a.parameters[1] : Any))
 t_func[pointerset] = (3, 3, (a,v,i)->a)
 
-function static_convert(to::ANY, from::ANY)
-    if !isa(to,Tuple) || !isa(from,Tuple)
-        if isa(to,TypeVar)
-            return to
-        end
-        if from <: to
-            return from
-        end
-        return typeintersect(from,to)
+const convert_default_tfunc = function (to, from, f)
+    !isType(to) && return Any
+    to = to.parameters[1]
+
+    if isa(to,TypeVar)
+        return to
     end
-    if is(to,Tuple)
+    if from <: to
         return from
     end
-    pl = length(to)::Int; cl = length(from)::Int
-    pseq = false
-    result = Array(Any, cl)
-    local pe  # used across iterations
-    for i=1:cl
-        ce = from[i]
-        if pseq
-        elseif i <= pl
-            pe = to[i]
-            if isvarargtype(pe)
-                pe = pe.parameters[1]
-                pseq = true
-            elseif isa(pe,TypeVar) && isvarargtype(pe.ub)
-                pe = pe.ub.parameters[1]
-                pseq = true
-            end
-        else
-            return None
-        end
-        # tuple conversion calls convert recursively
-        if isvarargtype(ce)
-            R = abstract_call_gf(convert, (), (Type{pe}, ce.parameters[1]), ())
-            #R = static_convert(pe, ce.parameters[1])
-            isType(R) && (R = R.parameters[1])
-            result[i] = Vararg{R}
-        else
-            R = abstract_call_gf(convert, (), (Type{pe}, ce), ())
-            #R = static_convert(pe, ce)
-            isType(R) && (R = R.parameters[1])
-            result[i] = R
-        end
-    end
-    a2t(result)
+    return typeintersect(from,to)
 end
-t_func[convert_default] =
-    (3, 3, (t,x,f)->(isType(t) ? static_convert(t.parameters[1],x) : Any))
-t_func[convert_tuple] =
-    (3, 3, (t,x,f)->(if isa(t,Tuple) && all(isType,t)
-                         t = Type{map(t->t.parameters[1],t)}
-                     end;
-                     isType(t) ? static_convert(t.parameters[1],x) :
-                     Any))
+t_func[convert_default] = (3, 3, convert_default_tfunc)
+
 const typeof_tfunc = function (t)
     if isType(t)
         t = t.parameters[1]
@@ -291,7 +250,7 @@ const tupleref_tfunc = function (A, t, i)
         end
         T = reduce(tmerge, None, types)
         if wrapType
-            return isleaftype(T) ? Type{T} : Type{TypeVar(:_,T)}
+            return isleaftype(T) || isa(T,TypeVar) ? Type{T} : Type{TypeVar(:_,T)}
         else
             return T
         end
@@ -507,9 +466,21 @@ t_func[apply_type] = (1, Inf, apply_type_tfunc)
 
 # other: apply
 
+function tuple_tfunc(argtypes::ANY, limit)
+    t = argtypes
+    if limit
+        t = limit_tuple_depth(t)
+    end
+    # tuple(Type{T...}) should give Type{(T...)}
+    if t!==() && all(isType, t) && isvarargtype(t[length(t)].parameters[1])
+        return Type{map(t->t.parameters[1], t)}
+    end
+    return t
+end
+
 function builtin_tfunction(f::ANY, args::ANY, argtypes::ANY)
     if is(f,tuple)
-        return limit_tuple_depth(argtypes)
+        return tuple_tfunc(argtypes, true)
     elseif is(f,arrayset)
         if length(argtypes) < 3
             return None
@@ -764,6 +735,16 @@ function invoke_tfunc(f, types, argtypes)
     return Any
 end
 
+function to_tuple_of_Types(t::ANY)
+    if isType(t)
+        p1 = t.parameters[1]
+        if isa(p1,Tuple) && !isvatuple(p1)
+            return map(t->Type{t}, p1)
+        end
+    end
+    return t
+end
+
 function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
     if is(f,apply) && length(fargs)>0
         if isType(argtypes[1]) && isleaftype(argtypes[1].parameters[1])
@@ -773,7 +754,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
             af = isconstantfunc(fargs[1], sv)
         end
         if !is(af,false)
-            aargtypes = argtypes[2:end]
+            aargtypes = map(to_tuple_of_Types, argtypes[2:end])
             if all(x->isa(x,Tuple), aargtypes) &&
                 !any(isvatuple, aargtypes[1:(length(aargtypes)-1)])
                 e.head = :call1
@@ -1501,6 +1482,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         # inlining can add variables
         sv.vars = append_any(f_argnames(fulltree), fulltree.args[2][1])
         tuple_elim_pass(fulltree)
+        tupleref_elim_pass(fulltree.args[3], sv)
         linfo.inferred = true
         fulltree = ccall(:jl_compress_ast, Any, (Any,Any), def, fulltree)
     end
@@ -1842,28 +1824,34 @@ function without_linenums(a::Array{Any,1})
     l
 end
 
-const _pure_builtins = {getfield, tuple, tupleref, tuplelen, fieldtype, apply_type}
+const _pure_builtins = {tuple, tupleref, tuplelen, fieldtype, apply_type, is, isa, typeof} # known affect-free calls (also effect-free)
+const _pure_builtins_volatile = {getfield, arrayref} # known effect-free calls (might not be affect-free)
 
 function is_pure_builtin(f)
     if contains_is(_pure_builtins, f)
         return true
     end
+    if contains_is(_pure_builtins_volatile, f)
+        return true
+    end
     if isa(f,IntrinsicFunction)
-        if !(f === Intrinsics.pointerref ||
-             f === Intrinsics.pointerset ||
-             f === Intrinsics.ccall ||
-             f === Intrinsics.jl_alloca ||
-             f === Intrinsics.pointertoref)
+        if !(f === Intrinsics.pointerref || # this one is volatile
+             f === Intrinsics.pointerset || # this one is never effect-free
+             f === Intrinsics.ccall ||      # this one is never effect-free
+             f === Intrinsics.jl_alloca ||  # this one is volatile, TODO: possibly also effect-free?
+             f === Intrinsics.pointertoref) # this one is volatile
             return true
         end
     end
     return false
 end
 
-# detect some important side-effect-free calls
-function effect_free(e::ANY, sv, any_expr::Bool)
+# detect some important side-effect-free calls (allow_volatile=true)
+# and some affect-free calls (allow_volatile=false) -- affect_free means the call
+# cannot be affected by previous calls, except assignment nodes
+function effect_free(e::ANY, sv, allow_volatile::Bool)
     if isa(e,Symbol) || isa(e,SymbolNode) || isa(e,Number) || isa(e,String) ||
-        isa(e,TopNode) || isa(e,QuoteNode) || isa(e,Type)
+        isa(e,TopNode) || isa(e,QuoteNode) || isa(e,Type) || isa(e,Tuple)
         return true
     end
     if isa(e,Expr)
@@ -1874,7 +1862,8 @@ function effect_free(e::ANY, sv, any_expr::Bool)
         ea = e.args
         if e.head === :call || e.head === :call1
             if is_known_call_p(e, is_pure_builtin, sv)
-                if !any_expr && is_known_call(e, getfield, sv)
+                if !allow_volatile && is_known_call_p(e, (f)->contains_is(_pure_builtins_volatile, f), sv)
+                    # arguments must be immutable to ensure e is affect_free
                     for a in ea
                         if isa(a,Symbol)
                             return false
@@ -1887,22 +1876,23 @@ function effect_free(e::ANY, sv, any_expr::Bool)
                                 end
                             end
                         end
-                        if !effect_free(a,sv,any_expr)
+                        if !effect_free(a,sv,allow_volatile)
                             return false
                         end
                     end
                 else
+                    # arguments must also be effect_free
                     for a in ea
-                        if !effect_free(a,sv,any_expr)
+                        if !effect_free(a,sv,allow_volatile)
                             return false
                         end
                     end
                 end
                 return true
             end
-        elseif e.head === :new
+        elseif e.head === :new || e.head == :return
             for a in ea
-                if !effect_free(a,sv,any_expr)
+                if !effect_free(a,sv,allow_volatile)
                     return false
                 end
             end
@@ -2105,9 +2095,21 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
         end
     end
 
-    stmts = {}
+    # annotate variables in the body expression with their module
+    mfrom = linfo.module; mto = (inference_stack::CallStack).mod
+    try
+        body = resolve_globals(body, enc_locllist, enclosing_ast.args[1], mfrom, mto, args, spnames)
+    catch ex
+        if isa(ex,GetfieldNode)
+            return NF
+        end
+        rethrow(ex)
+    end
+
     # see if each argument occurs only once in the body expression
-    for i=1:length(args)
+    stmts = {}
+    stmts_free = true # true = all entries of stmts are effect_free
+    for i=length(args):-1:1 # stmts_free needs to be calculated in reverse-argument order
         a = args[i]
         aei = argexprs[i]
         aeitype = exprtype(aei)
@@ -2127,31 +2129,38 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
         end
 
         # ok for argument to occur more than once if the actual argument
-        # is a symbol or constant
-        occ = occurs_more(body, x->is(x,a), 1)
-        if islocal || !effect_free(aei,sv,false) || (occ==0 && is(aeitype,None))
-            if occ != 0
+        # is a symbol or constant, or is not affected by previous statements
+        # that will exist after the inlining pass finishes
+        affect_free = stmts_free && !islocal # false = previous statements might affect the result of evaluating argument
+        occ = 0
+        for j = length(body.args):-1:1
+            b = body.args[j]
+            if occ < 1
+                occ += occurs_more(b, x->is(x,a), 1)
+            end
+            if occ > 0 && (!affect_free || !effect_free(b, sv, true)) #TODO: we could short-circuit this test better by memoizing effect_free(b) in the for loop over i
+                affect_free = false
+                break
+            end
+        end
+        free = effect_free(aei,sv,true)
+        affect_unfree = (islocal || (affect_free && !free) || (!affect_free && !effect_free(aei,sv,false)))
+        if affect_unfree || (occ==0 && is(aeitype,None))
+            if occ != 0 # islocal=true is implied
                 # introduce variable for this argument
                 vnew = unique_name(enclosing_ast, ast)
                 add_variable(enclosing_ast, vnew, aeitype, !islocal)
-                push!(stmts, Expr(:(=), vnew, aei))
+                unshift!(stmts, Expr(:(=), vnew, aei))
                 argexprs[i] = aeitype===Any ? vnew : SymbolNode(vnew,aeitype)
-            elseif !(isType(aeitype) || effect_free(aei,sv,true))
-                push!(stmts, aei)
+                stmts_free &= free
+            elseif !free && !isType(aeitype)
+                unshift!(stmts, aei)
+                stmts_free = false
             end
         end
     end
 
     # ok, substitute argument expressions for argument names in the body
-    mfrom = linfo.module; mto = (inference_stack::CallStack).mod
-    try
-        body = resolve_globals(body, enc_locllist, enclosing_ast.args[1], mfrom, mto, args, spnames)
-    catch ex
-        if isa(ex,GetfieldNode)
-            return NF
-        end
-        rethrow(ex)
-    end
     body = sym_replace(body, args, spnames, argexprs, spvals)
 
     # make labels / goto statements unique
@@ -2230,15 +2239,11 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
 end
 
 function inline_worthy(body::Expr)
-    # see if body is only "return <expr>", or is otherwise considered worth inlining
-    if length(body.args) == 1
-        return true
-    end
 #    if isa(body.args[1],QuoteNode) && (body.args[1]::QuoteNode).value === :inline
 #        shift!(body.args)
 #        return true
 #    end
-    if length(body.args) < 4 && occurs_more(body, e->true, 50) < 50
+    if length(body.args) < 6 && occurs_more(body, e->true, 40) < 40
         return true
     end
     return false
@@ -2251,15 +2256,15 @@ const top_setfield = TopNode(:setfield)
 const top_tupleref = TopNode(:tupleref)
 const top_tuple = TopNode(:tuple)
 
-function mk_tupleref(texpr, i)
+function mk_tupleref(texpr, i, T)
     e = :(($top_tupleref)($texpr, $i))
-    e.typ = exprtype(texpr)[i]
+    e.typ = T
     e
 end
 
 function mk_tuplecall(args)
     e = Expr(:call1, top_tuple, args...)
-    e.typ = tuple(map(exprtype, args)...)
+    e.typ = tuple_tfunc(tuple(map(exprtype, args)...), false)
     e
 end
 
@@ -2333,7 +2338,13 @@ function inlining_pass(e::Expr, sv, ast)
                     res2 = res[2]::Array{Any,1}
                     if length(res2) > 0
                         prepend!(stmts,res2)
-                        has_stmts = true
+                        if !has_stmts
+                            for stmt in res2
+                                if !effect_free(stmt, sv, true)
+                                    has_stmts = true
+                                end
+                            end
+                        end
                     end
                 end
             end
@@ -2401,7 +2412,7 @@ function inlining_pass(e::Expr, sv, ast)
                 newargs = cell(na-2)
                 for i = 3:na
                     aarg = e.args[i]
-                    t = exprtype(aarg)
+                    t = to_tuple_of_Types(exprtype(aarg))
                     if isa(aarg,Expr) && is_known_call(aarg, tuple, sv)
                         # apply(f,tuple(x,y,...)) => f(x,y,...)
                         newargs[i-2] = aarg.args[2:end]
@@ -2409,7 +2420,7 @@ function inlining_pass(e::Expr, sv, ast)
                         newargs[i-2] = { QuoteNode(x) for x in aarg }
                     elseif isa(t,Tuple) && !isvatuple(t) && effect_free(aarg,sv,true)
                         # apply(f,t::(x,y)) => f(t[1],t[2])
-                        newargs[i-2] = { mk_tupleref(aarg,j) for j=1:length(t) }
+                        newargs[i-2] = { mk_tupleref(aarg,j,t[j]) for j=1:length(t) }
                     else
                         # not all args expandable
                         return (e,stmts)
@@ -2620,6 +2631,44 @@ function occurs_outside_tupleref(e::ANY, sym::ANY, sv::StaticVarInfo, tuplen::In
     return false
 end
 
+# replace tupleref(tuple(exprs...), i) with exprs[i]
+function tupleref_elim_pass(e::Expr, sv)
+    for i = 1:length(e.args)
+        ei = e.args[i]
+        if isa(ei,Expr)
+            tupleref_elim_pass(ei, sv)
+            if is_known_call(ei, tupleref, sv) && length(ei.args)==3 &&
+                isa(ei.args[3],Int)
+                e1 = ei.args[2]
+                j = ei.args[3]
+                if isa(e1,Expr)
+                    if is_known_call(e1, tuple, sv) && (1 <= j < length(e1.args))
+                        ok = true
+                        for k = 2:length(e1.args)
+                            k == j+1 && continue
+                            if !effect_free(e1.args[k], sv, true)
+                                ok = false; break
+                            end
+                        end
+                        if ok
+                            e.args[i] = e1.args[j+1]
+                        end
+                    end
+                elseif isa(e1,Tuple) && (1 <= j <= length(e1))
+                    e1j = e1[j]
+                    if !(isa(e1j,Number) || isa(e1j,String) || isa(e1j,Tuple) ||
+                         isa(e1j,Type))
+                        e1j = QuoteNode(e1j)
+                    end
+                    e.args[i] = e1j
+                elseif isa(e1,QuoteNode) && isa(e1.value,Tuple) && (1 <= j <= length(e1.value))
+                    e.args[i] = QuoteNode(e1.value[j])
+                end
+            end
+        end
+    end
+end
+
 # eliminate allocation of unnecessary tuples
 function tuple_elim_pass(ast::Expr)
     sv = inference_stack.sv
@@ -2697,7 +2746,7 @@ function replace_tupleref!(ast, e::ANY, tupname, vals, sv, i0)
     end
 end
 
-function code_typed(f::Callable, types)
+function code_typed(f::Callable, types::(Type...))
     asts = {}
     for x in _methods(f,types,-1)
         linfo = x[3].func.code

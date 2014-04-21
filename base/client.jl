@@ -171,8 +171,27 @@ end
 # try to include() a file, ignoring if not found
 try_include(path::String) = isfile(path) && include(path)
 
+function init_bind_addr(args::Vector{UTF8String})
+    # Treat --bind-to in a position independent manner in ARGS since
+    # --worker, -n and --machinefile options are affected by it
+    btoidx = findfirst(args, "--bind-to")
+    if btoidx > 0
+        bind_addr = parseip(args[btoidx+1])
+    else
+        try
+            bind_addr = getipaddr()
+        catch
+            # All networking is unavailable, initialize bind_addr to the loopback address
+            # Will cause an exception to be raised only when used. 
+            bind_addr = ip"127.0.0.1"
+        end
+    end
+    global LPROC
+    LPROC.bind_addr = bind_addr
+end
+
+
 function process_options(args::Vector{UTF8String})
-    global bind_addr
     quiet = false
     repl = true
     startup = true
@@ -186,8 +205,7 @@ function process_options(args::Vector{UTF8String})
             start_worker()
             # doesn't return
         elseif args[i]=="--bind-to"
-            i += 1
-            bind_addr = args[i]
+            i+=1 # has already been processed
         elseif args[i]=="-e" || args[i]=="--eval"
             repl = false
             i+=1
@@ -286,8 +304,6 @@ function init_load_path()
     push!(LOAD_PATH,abspath(JULIA_HOME,"..","share","julia","site",vers))
 end
 
-global const Workqueue = Any[]
-
 function init_head_sched()
     # start in "head node" mode
     global PGRP
@@ -324,6 +340,7 @@ function _start()
     early_init()
 
     try
+        init_bind_addr(ARGS)
         any(a->(a=="--worker"), ARGS) || init_head_sched()
         init_load_path()
         (quiet,repl,startup,color_set,no_history_file) = process_options(copy(ARGS))
@@ -334,7 +351,7 @@ function _start()
                 global is_interactive = !isa(STDIN,Union(File,IOStream))
                 color_set || (global have_color = false)
             else
-                term = Terminals.UnixTerminal(get(ENV,"TERM",""),STDIN,STDOUT,STDERR)
+                term = Terminals.TTYTerminal(get(ENV,"TERM",@windows? "" : "dumb"),STDIN,STDOUT,STDERR)
                 global is_interactive = true
                 color_set || (global have_color = Terminals.hascolor(term))
             end
@@ -361,8 +378,13 @@ function _start()
             end
             quiet || REPL.banner(term,term)
             ccall(:jl_install_sigint_handler, Void, ())
-            repl = REPL.LineEditREPL(term)
-            repl.no_history_file = no_history_file
+            local repl
+            if term.term_type == "dumb"
+                repl = REPL.BasicREPL(term)
+            else
+                repl = REPL.LineEditREPL(term)
+                repl.no_history_file = no_history_file
+            end
             REPL.run_repl(repl)
         end
     catch err

@@ -1,4 +1,4 @@
-# NOTE: worker processes cannot add more workers, only the client process can. 
+# NOTE: worker processes cannot add more workers, only the client process can.
 require("testdefs.jl")
 
 if nprocs() < 2
@@ -36,11 +36,11 @@ dims = (20,20,20)
 @linux_only begin
     S = SharedArray(Int64, dims)
     @test beginswith(S.segname, "/jl")
-    @test !ispath("/dev/shm" * S.segname)    
+    @test !ispath("/dev/shm" * S.segname)
 
     S = SharedArray(Int64, dims; pids=[id_other])
     @test beginswith(S.segname, "/jl")
-    @test !ispath("/dev/shm" * S.segname)    
+    @test !ispath("/dev/shm" * S.segname)
 end
 
 # TODO : Need a similar test of shmem cleanup for OSX
@@ -83,8 +83,8 @@ for p in procs(d)
     idxes_in_p = remotecall_fetch(p, D -> parentindexes(D.loc_subarr_1d)[1], d)
     idxf = first(idxes_in_p)
     idxl = last(idxes_in_p)
-    @test d[idxf] == p 
-    @test d[idxl] == p 
+    @test d[idxf] == p
+    @test d[idxl] == p
 end
 
 # issue #6362
@@ -100,7 +100,7 @@ remotecall_fetch(findfirst(id->(id != myid()), procs(ds)), setindex!, ds, 1.0, 1
 # SharedArray as an array
 # Since the data in d will depend on the nprocs, just test that these operations work
 a = d[1:5]
-@test_throws d[-1:5]
+@test_throws BoundsError d[-1:5]
 a = d[1,1,1:3:end]
 d[2:4] = 7
 d[5,1:2:4,8] = 19
@@ -161,14 +161,14 @@ et=toq()
 # TODO: The below block should be always enabled but the error is printed by the event loop
 
 # Hence in the event of any relevant changes to the parallel codebase,
-# please define an ENV variable PTEST_FULL and ensure that the below block is 
+# please define an ENV variable PTEST_FULL and ensure that the below block is
 # executed successfully before committing/merging
 
 if haskey(ENV, "PTEST_FULL")
     println("START of parallel tests that print errors")
 
     # make sure exceptions propagate when waiting on Tasks
-    @test_throws (@sync (@async error("oops")))
+    @test_throws ErrorException (@sync (@async error("oops")))
 
     # pmap tests
     # needs at least 4 processors (which are being created above for the @parallel tests)
@@ -196,7 +196,6 @@ if haskey(ENV, "PTEST_FULL")
     res = pmap(x->(x=='a') ? error("test error. don't panic.") : uppercase(x), s; err_retry=false, err_stop=false);
     @test length(res) == length(ups)
     @test isa(res[1], Exception)
-    
+
     println("END of parallel tests that print errors")
 end
-
