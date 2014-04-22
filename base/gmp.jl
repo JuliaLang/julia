@@ -9,6 +9,14 @@ import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              serialize, deserialize, bin, oct, dec, hex, isequal, invmod,
              prevpow2, nextpow2, ndigits0z, widen
 
+if Clong == Int32
+    typealias ClongMax Union(Int8, Int16, Int32)
+    typealias CulongMax Union(Uint8, Uint16, Uint32)
+else
+    typealias ClongMax Union(Int8, Int16, Int32, Int64)
+    typealias CulongMax Union(Uint8, Uint16, Uint32, Uint64)
+end
+
 type BigInt <: Integer
     alloc::Cint
     size::Cint
@@ -235,10 +243,10 @@ function +(x::BigInt, c::Culong)
     return z
 end
 +(c::Culong, x::BigInt) = x + c
-+(c::Unsigned, x::BigInt) = x + convert(Culong, c)
-+(x::BigInt, c::Unsigned) = x + convert(Culong, c)
-+(x::BigInt, c::Signed) = c < 0 ? -(x, convert(Culong, -c)) : x + convert(Culong, c)
-+(c::Signed, x::BigInt) = c < 0 ? -(x, convert(Culong, -c)) : x + convert(Culong, c)
++(c::CulongMax, x::BigInt) = x + convert(Culong, c)
++(x::BigInt, c::CulongMax) = x + convert(Culong, c)
++(x::BigInt, c::ClongMax) = c < 0 ? -(x, convert(Culong, -c)) : x + convert(Culong, c)
++(c::ClongMax, x::BigInt) = c < 0 ? -(x, convert(Culong, -c)) : x + convert(Culong, c)
 
 function -(x::BigInt, c::Culong)
     z = BigInt()
@@ -250,10 +258,10 @@ function -(c::Culong, x::BigInt)
     ccall((:__gmpz_ui_sub, :libgmp), Void, (Ptr{BigInt}, Culong, Ptr{BigInt}), &z, c, &x)
     return z
 end
--(x::BigInt, c::Unsigned) = -(x, convert(Culong, c))
--(c::Unsigned, x::BigInt) = -(convert(Culong, c), x)
--(x::BigInt, c::Signed) = c < 0 ? +(x, convert(Culong, -c)) : -(x, convert(Culong, c))
--(c::Signed, x::BigInt) = c < 0 ? -(x + convert(Culong, -c)) : -(convert(Culong, c), x)
+-(x::BigInt, c::CulongMax) = -(x, convert(Culong, c))
+-(c::CulongMax, x::BigInt) = -(convert(Culong, c), x)
+-(x::BigInt, c::ClongMax) = c < 0 ? +(x, convert(Culong, -c)) : -(x, convert(Culong, c))
+-(c::ClongMax, x::BigInt) = c < 0 ? -(x + convert(Culong, -c)) : -(convert(Culong, c), x)
 
 function *(x::BigInt, c::Culong)
     z = BigInt()
@@ -261,16 +269,16 @@ function *(x::BigInt, c::Culong)
     return z
 end
 *(c::Culong, x::BigInt) = x * c
-*(c::Unsigned, x::BigInt) = x * convert(Culong, c)
-*(x::BigInt, c::Unsigned) = x * convert(Culong, c)
+*(c::CulongMax, x::BigInt) = x * convert(Culong, c)
+*(x::BigInt, c::CulongMax) = x * convert(Culong, c)
 function *(x::BigInt, c::Clong)
     z = BigInt()
     ccall((:__gmpz_mul_si, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Clong), &z, &x, c)
     return z
 end
 *(c::Clong, x::BigInt) = x * c
-*(x::BigInt, c::Signed) = x * convert(Clong, c)
-*(c::Signed, x::BigInt) = x * convert(Clong, c)
+*(x::BigInt, c::ClongMax) = x * convert(Clong, c)
+*(c::ClongMax, x::BigInt) = x * convert(Clong, c)
 
 # unary ops
 for (fJ, fC) in ((:-, :neg), (:~, :com))
