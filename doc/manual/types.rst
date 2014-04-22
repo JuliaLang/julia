@@ -353,6 +353,15 @@ this implied type signature:
     julia> Foo((), 23.5, 1)
     ERROR: no method Foo((), Float64, Int64)
 
+You may find a list of field names using the ``names`` function.
+
+.. doctest::
+    julia> names(foo)
+    3-element Array{Any,1}:
+     :bar
+     :baz
+     :qux
+     
 You can access the field values of a composite object using the
 traditional ``foo.bar`` notation:
 
