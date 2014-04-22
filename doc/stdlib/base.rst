@@ -2770,6 +2770,7 @@ Mathematical Functions
 .. function:: minmax(x, y)
 
    Return ``(min(x,y), max(x,y))``.
+   See also: ``extrema(x)`` that returns ``(minimum(x), maximum(x))`` 
 
 .. function:: clamp(x, lo, hi)
 
