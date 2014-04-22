@@ -775,6 +775,7 @@ export
     is_valid_ascii,
     is_valid_char,
     is_valid_utf8,
+    is_valid_utf16,
     isalnum,
     isalpha,
     isascii,
