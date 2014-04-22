@@ -41,17 +41,11 @@ our %systems = (
   "javascript" => ["JavaScript"  , "V8 $javascript_ver" ],
   "go"         => ["Go"          , $go_ver ],
   "mathematica"=> ["Mathematica" , $mathematica_ver ],
-<<<<<<< HEAD
+  "lua"	       => ["LuaJIT"      , "gsl-shell $lua_ver" ],
   "stata"      => ["Stata"       , $stata_ver ],
 );
 
-our @systems = qw(fortran julia python r matlab octave mathematica javascript go stata);
-=======
-  "lua"	       => ["LuaJIT"      , "gsl-shell $lua_ver" ],
-);
-
 our @systems = qw(fortran julia python r matlab octave mathematica javascript go lua);
->>>>>>> upstream/master
 
 print qq[<table class="benchmarks">\n];
 print qq[<colgroup>\n];
