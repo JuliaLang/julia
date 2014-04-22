@@ -43,8 +43,10 @@ cholfact(x::Number) = @assertposdef Cholesky(fill(sqrt(x), 1, 1), :U) !(imag(x) 
 chol(A::Union(Number, AbstractMatrix), uplo::Symbol) = cholfact(A, uplo)[uplo]
 chol(A::Union(Number, AbstractMatrix)) = triu!(cholfact(A, :U).UL)
 
-convert{T,S}(::Type{Cholesky{T}},C::Cholesky{S}) = Cholesky(convert(Matrix{T},C.UL),C.uplo)
-convert{T,S}(::Type{CholeskyPivoted{T}},C::CholeskyPivoted{S}) = CholeskyPivoted(convert(Matrix{T},C.UL),C.uplo,C.piv,C.rank,C.tol,C.info)
+convert{T}(::Type{Cholesky{T}},C::Cholesky) = Cholesky(convert(Matrix{T},C.UL),C.uplo)
+convert{T}(::Type{Factorization{T}}, C::Cholesky) = convert(Cholesky{T}, C)
+convert{T}(::Type{CholeskyPivoted{T}},C::CholeskyPivoted) = CholeskyPivoted(convert(Matrix{T},C.UL),C.uplo,C.piv,C.rank,C.tol,C.info)
+convert{T}(::Type{Factorization{T}}, C::CholeskyPivoted) = convert(CholeskyPivoted{T}, C)
 
 size(C::Union(Cholesky, CholeskyPivoted)) = size(C.UL)
 size(C::Union(Cholesky, CholeskyPivoted), d::Integer) = size(C.UL,d)
@@ -121,139 +123,6 @@ chkfullrank(C::CholeskyPivoted) = C.rank<size(C.UL, 1) && throw(RankDeficientExc
 rank(C::CholeskyPivoted) = C.rank
 
 ####################
-# LU Factorization #
-####################
-immutable LU{T} <: Factorization{T}
-    factors::Matrix{T}
-    ipiv::Vector{BlasInt}
-    info::BlasInt
-end
-
-lufact!{T<:BlasFloat}(A::StridedMatrix{T}) = LU(LAPACK.getrf!(A)...)
-function lufact!{T}(A::AbstractMatrix{T})
-    m, n = size(A)
-    minmn = min(m,n)
-    info = 0
-    ipiv = Array(BlasInt, minmn)
-    for k = 1:minmn
-        # find index max
-        kp = k
-        amax = real(zero(T))
-        for i = k:m
-            absi = abs(A[i,k])
-            if absi > amax
-                kp = i
-                amax = absi
-            end
-        end
-        ipiv[k] = kp
-        if A[kp,k] != 0
-            if k != kp
-                # Interchange
-                for i = 1:n
-                    tmp = A[k,i]
-                    A[k,i] = A[kp,i]
-                    A[kp,i] = tmp
-                end
-            end
-            # Scale first column
-            Akkinv = inv(A[k,k])
-            for i = k+1:m
-                A[i,k] *= Akkinv
-            end
-        elseif info == 0
-            info = k
-        end
-        # Update the rest
-        for j = k+1:n
-            for i = k+1:m
-                A[i,j] -= A[i,k]*A[k,j]
-            end
-        end        
-    end
-    LU(A, ipiv, convert(BlasInt, info))
-end
-lufact{T<:BlasFloat}(A::StridedMatrix{T}) = lufact!(copy(A))
-lufact{T}(A::StridedMatrix{T}) = (S = typeof(one(T)/one(T)); S != T ? lufact!(convert(Matrix{S}, A)) : lufact!(copy(A)))
-lufact(x::Number) = LU(fill(x, 1, 1), BlasInt[1], x == 0 ? one(BlasInt) : zero(BlasInt))
-
-function lu(A::Union(Number, AbstractMatrix))
-    F = lufact(A)
-    F[:L], F[:U], F[:p]
-end
-
-convert{T}(::Type{LU{T}}, F::LU) = LU(convert(Matrix{T}, F.factors), F.ipiv, F.info)
-
-size(A::LU) = size(A.factors)
-size(A::LU,n) = size(A.factors,n)
-
-function ipiv2perm{T}(v::AbstractVector{T}, maxi::Integer)
-    p = T[1:maxi]
-    @inbounds for i in 1:length(v)
-        p[i], p[v[i]] = p[v[i]], p[i]
-    end
-    return p
-end
-
-function getindex{T}(A::LU{T}, d::Symbol)
-    m, n = size(A)
-    d == :L && return tril(A.factors[1:m, 1:min(m,n)], -1) + eye(T, m, min(m,n))
-    d == :U && return triu(A.factors[1:min(m,n),1:n])
-    d == :p && return ipiv2perm(A.ipiv, m)
-    if d == :P
-        p = A[:p]
-        P = zeros(T, m, m)
-        for i in 1:m
-            P[i,p[i]] = one(T)
-        end
-        return P
-    end
-    throw(KeyError(d))
-end
-
-function det{T}(A::LU{T})
-    n = chksquare(A)
-    A.info > 0 && return zero(typeof(A.factors[1]))
-    return prod(diag(A.factors)) * (bool(sum(A.ipiv .!= 1:n) % 2) ? -one(T) : one(T))
-end
-
-function logdet2{T<:Real}(A::LU{T})  # return log(abs(det)) and sign(det)
-    n = chksquare(A)
-    dg = diag(A.factors)
-    s = (bool(sum(A.ipiv .!= 1:n) % 2) ? -one(T) : one(T)) * prod(sign(dg))
-    sum(log(abs(dg))), s 
-end
-
-function logdet{T<:Real}(A::LU{T})
-    d,s = logdet2(A)
-    s>=0 || error("DomainError: determinant is negative")
-    d
-end
-
-function logdet{T<:Complex}(A::LU{T})
-    n = chksquare(A)
-    s = sum(log(diag(A.factors))) + (bool(sum(A.ipiv .!= 1:n) % 2) ? complex(0,pi) : 0) 
-    r, a = reim(s)
-    a = pi-mod(pi-a,2pi) #Take principal branch with argument (-pi,pi] 
-    complex(r,a)    
-end
-
-A_ldiv_B!{T<:BlasFloat}(A::LU{T}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('N', A.factors, A.ipiv, B) A.info
-A_ldiv_B!(A::LU, b::StridedVector) = A_ldiv_B!(Triangular(A.factors, :U, false), A_ldiv_B!(Triangular(A.factors, :L, true), b[ipiv2perm(A.ipiv, length(b))]))
-A_ldiv_B!(A::LU, B::StridedMatrix) = A_ldiv_B!(Triangular(A.factors, :U, false), A_ldiv_B!(Triangular(A.factors, :L, true), B[ipiv2perm(A.ipiv, size(B, 1)),:]))
-At_ldiv_B{T<:BlasFloat}(A::LU{T}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('T', A.factors, A.ipiv, copy(B)) A.info
-Ac_ldiv_B{T<:BlasComplex}(A::LU{T}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('C', A.factors, A.ipiv, copy(B)) A.info
-At_ldiv_Bt{T<:BlasFloat}(A::LU{T}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('T', A.factors, A.ipiv, transpose(B)) A.info
-Ac_ldiv_Bc{T<:BlasComplex}(A::LU{T}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('C', A.factors, A.ipiv, ctranspose(B)) A.info
-
-/{T}(B::Matrix{T},A::LU{T}) = At_ldiv_Bt(A,B).'
-
-inv{T<:BlasFloat}(A::LU{T}) = @assertnonsingular LAPACK.getri!(copy(A.factors), A.ipiv) A.info
-
-cond{T<:BlasFloat}(A::LU{T}, p::Number) = inv(LAPACK.gecon!(p == 1 ? '1' : 'I', A.factors, norm(A[:L][A[:p],:]*A[:U], p)))
-cond(A::LU, p::Number) = norm(A[:L]*A[:U],p)*norm(inv(A),p)
-
-####################
 # QR Factorization #
 ####################
 
@@ -307,8 +176,11 @@ function qr(A::Union(Number, AbstractMatrix); pivot=false, thin::Bool=true)
 end
 
 convert{T}(::Type{QR{T}},A::QR) = QR(convert(Matrix{T}, A.factors), convert(Vector{T}, A.τ))
+convert{T}(::Type{Factorization{T}}, A::QR) = convert(QR{T}, A)
 convert{T}(::Type{QRCompactWY{T}},A::QRCompactWY) = QRCompactWY(convert(Matrix{T}, A.factors), convert(Matrix{T}, A.T))
+convert{T}(::Type{Factorization{T}}, A::QRCompactWY) = convert(QRCompactWY{T}, A)
 convert{T}(::Type{QRPivoted{T}},A::QRPivoted) = QRPivoted(convert(Matrix{T}, A.factors), convert(Vector{T}, A.τ), A.jpvt)
+convert{T}(::Type{Factorization{T}}, A::QRPivoted) = convert(QRPivoted{T}, A)
 
 function getindex(A::QR, d::Symbol)
     d == :R && return triu(A.factors[1:minimum(size(A)),:])
@@ -345,8 +217,10 @@ immutable QRCompactWYQ{S} <: AbstractMatrix{S}
     T::Matrix{S}                       
 end
 
-convert{T,S}(::Type{QRPackedQ{T}}, Q::QRPackedQ{S}) = QRPackedQ(convert(Matrix{T}, Q.factors), convert(Vector{T}, Q.τ))
-convert{S1,S2}(::Type{QRCompactWYQ{S1}}, Q::QRCompactWYQ{S2}) = QRCompactWYQ(convert(Matrix{S1}, Q.factors), convert(Matrix{S1}, Q.T))
+convert{T}(::Type{QRPackedQ{T}}, Q::QRPackedQ) = QRPackedQ(convert(Matrix{T}, Q.factors), convert(Vector{T}, Q.τ))
+convert{T}(::Type{AbstractMatrix{T}}, Q::QRPackedQ) = convert(QRPackedQ{T}, Q)
+convert{S}(::Type{QRCompactWYQ{S}}, Q::QRCompactWYQ) = QRCompactWYQ(convert(Matrix{S}, Q.factors), convert(Matrix{S}, Q.T))
+convert{S}(::Type{AbstractMatrix{S}}, Q::QRCompactWYQ) = convert(QRCompactWYQ{S}, Q)
 
 size(A::Union(QR,QRCompactWY,QRPivoted), dim::Integer) = size(A.factors, dim)
 size(A::Union(QR,QRCompactWY,QRPivoted)) = size(A.factors)
@@ -383,13 +257,13 @@ function A_mul_B!{T}(A::QRPackedQ{T}, B::AbstractVecOrMat{T})
 end
 function *{TA,Tb}(A::Union(QRPackedQ{TA},QRCompactWYQ{TA}), b::StridedVector{Tb})
     TAb = promote_type(TA,Tb)
-    Anew = convert(typeof(A).name.primary{TAb},A)
+    Anew = convert(AbstractMatrix{TAb},A)
     bnew = size(A.factors,1) == length(b) ? (Tb == TAb ? copy(b) : convert(Vector{TAb}, b)) : (size(A.factors,2) == length(b) ? [b,zeros(TAb, size(A.factors,1)-length(b))] : throw(DimensionMismatch("")))
     A_mul_B!(Anew,bnew)
 end
 function *{TA,TB}(A::Union(QRPackedQ{TA},QRCompactWYQ{TA}), B::StridedMatrix{TB})
     TAB = promote_type(TA,TB)
-    Anew = convert(typeof(A).name.primary{TAB},A)
+    Anew = convert(AbstractMatrix{TAB},A)
     Bnew = size(A.factors,1) == size(B,1) ? (TB == TAB ? copy(B) : convert(Matrix{TAB}, B)) : (size(A.factors,2) == size(B,1) ? [B;zeros(TAB, size(A.factors,1)-size(B,1),size(B,2))] : throw(DimensionMismatch("")))
     A_mul_B!(Anew,Bnew)
 end
@@ -420,9 +294,9 @@ function Ac_mul_B!{T}(A::QRPackedQ{T}, B::AbstractVecOrMat{T})
     end
     B
 end
-function Ac_mul_B{TQ<:Number,TB<:Number}(Q::Union(QRPackedQ{TQ},QRCompactWYQ{TQ}), B::StridedVecOrMat{TB})
+function Ac_mul_B{TQ<:Number,TB<:Number,N}(Q::Union(QRPackedQ{TQ},QRCompactWYQ{TQ}), B::StridedArray{TB,N})
     TQB = promote_type(TQ,TB)
-    Ac_mul_B!(convert(typeof(Q).name.primary{TQB}, Q), TB == TQB ? copy(B) : convert(typeof(B).name.primary{TQB}, B))
+    Ac_mul_B!(convert(AbstractMatrix{TQB}, Q), TB == TQB ? copy(B) : convert(AbstractArray{TQB,N}, B))
 end
 ### AQ
 A_mul_B!{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRCompactWYQ{T}) = LAPACK.gemqrt!('R','N', B.factors, B.T, A)
@@ -449,9 +323,9 @@ function A_mul_B!{T}(A::StridedMatrix{T},Q::QRPackedQ{T})
     end
     A
 end
-function *{TA,TQ}(A::StridedVecOrMat{TA}, Q::Union(QRPackedQ{TQ},QRCompactWYQ{TQ}))
+function *{TA,TQ,N}(A::StridedArray{TA,N}, Q::Union(QRPackedQ{TQ},QRCompactWYQ{TQ}))
     TAQ = promote_type(TA, TQ)
-    A_mul_B!(TA==TAQ ? copy(A) : convert(Matrix{TAQ}, A), convert(typeof(Q).name.primary{TAQ}, Q))
+    A_mul_B!(TA==TAQ ? copy(A) : convert(AbstractArray{TAQ,N}, A), convert(AbstractMatrix{TAQ}, Q))
 end
 ### AQc
 A_mul_Bc!{T<:BlasReal}(A::StridedVecOrMat{T}, B::QRCompactWYQ{T}) = LAPACK.gemqrt!('R','T',B.factors,B.T,A)
@@ -480,9 +354,9 @@ function A_mul_Bc!{T}(A::AbstractMatrix{T},Q::QRPackedQ{T})
     end
     A
 end
-function A_mul_Bc{TA,TB}(A::AbstractVecOrMat{TA}, B::Union(QRCompactWYQ{TB},QRPackedQ{TB}))
+function A_mul_Bc{TA,TB,N}(A::AbstractArray{TA,N}, B::Union(QRCompactWYQ{TB},QRPackedQ{TB}))
     TAB = promote_type(TA,TB)
-    A_mul_Bc!(size(A,2)==size(B.factors,1) ? (TA == TAB ? copy(A) : convert(Matrix{TAB}, A)) : (size(A,2)==size(B.factors,2) ? [A zeros(T, size(A, 1), size(B.factors, 1) - size(B.factors, 2))] : throw(DimensionMismatch(""))),B)
+    A_mul_Bc!(size(A,2)==size(B.factors,1) ? (TA == TAB ? copy(A) : convert(AbstractMatrix{TAB,N}, A)) : (size(A,2)==size(B.factors,2) ? [A zeros(T, size(A, 1), size(B.factors, 1) - size(B.factors, 2))] : throw(DimensionMismatch(""))),convert(AbstractMatrix{TAB}, B))
 end
 
 # Julia implementation similarly to xgelsy
@@ -572,13 +446,13 @@ function \{TA,Tb}(A::Union(QR{TA},QRCompactWY{TA},QRPivoted{TA}),b::StridedVecto
     S = promote_type(TA,Tb)
     m,n = size(A)
     m == length(b) || throw(DimensionMismatch("left hand side has $(m) rows, but right hand side has length $(length(b))"))
-    n > m ? A_ldiv_B!(convert(typeof(A).name.primary{S},A),[b,zeros(S,n-m)]) : A_ldiv_B!(convert(typeof(A).name.primary{S},A), S == Tb ? copy(b) : convert(Vector{S}, b))
+    n > m ? A_ldiv_B!(convert(Factorization{S},A),[b,zeros(S,n-m)]) : A_ldiv_B!(convert(Factorization{S},A), S == Tb ? copy(b) : convert(AbstractVector{S}, b))
 end
 function \{TA,TB}(A::Union(QR{TA},QRCompactWY{TA},QRPivoted{TA}),B::StridedMatrix{TB})
     S = promote_type(TA,TB)
     m,n = size(A)
     m == size(B,1) || throw(DimensionMismatch("left hand side has $(m) rows, but right hand side has $(size(B,1)) rows"))
-    n > m ? A_ldiv_B!(convert(typeof(A).name.primary{S},A),[B;zeros(S,n-m,size(B,2))]) : A_ldiv_B!(convert(typeof(A).name.primary{S},A), S == TB ? copy(B) : convert(Matrix{S}, B))
+    n > m ? A_ldiv_B!(convert(Factorization{S},A),[B;zeros(S,n-m,size(B,2))]) : A_ldiv_B!(convert(Factorization{S},A), S == TB ? copy(B) : convert(AbstractMatrix{S}, B))
 end
 
 ##TODO:  Add methods for rank(A::QRP{T}) and adjust the (\) method accordingly
@@ -917,18 +791,19 @@ function schur(A::AbstractMatrix, B::AbstractMatrix)
 end
 
 ### General promotion rules
+convert{T}(::Type{Factorization{T}}, F::Factorization{T}) = F
 inv{T}(F::Factorization{T}) = A_ldiv_B!(F, eye(T, size(F,1)))
-function \{TF<:Number,TB<:Number}(F::Factorization{TF}, B::AbstractVecOrMat{TB})
+function \{TF<:Number,TB<:Number,N}(F::Factorization{TF}, B::AbstractArray{TB,N})
     TFB = typeof(one(TF)/one(TB)) 
-    A_ldiv_B!(convert(typeof(F).name.primary{TFB}, F), TB == TFB ? copy(B) : convert(typeof(B).name.primary{TFB}, B))
+    A_ldiv_B!(convert(Factorization{TFB}, F), TB == TFB ? copy(B) : convert(AbstractArray{TFB,N}, B))
 end
 
-function Ac_ldiv_B{TF<:Number,TB<:Number}(F::Factorization{TF}, B::AbstractVecOrMat{TB})
+function Ac_ldiv_B{TF<:Number,TB<:Number,N}(F::Factorization{TF}, B::AbstractArray{TB,N})
     TFB = typeof(one(TF)/one(TB)) 
-    Ac_ldiv_B!(convert(typeof(F).name.primary{TFB}, F), TB == TFB ? copy(B) : convert(typeof(B).name.primary{TFB}, B))
+    Ac_ldiv_B!(convert(Factorization{TFB}, F), TB == TFB ? copy(B) : convert(AbstractArray{TFB,N}, B))
 end
 
-function At_ldiv_B{TF<:Number,TB<:Number}(F::Factorization{TF}, B::AbstractVecOrMat{TB})
+function At_ldiv_B{TF<:Number,TB<:Number,N}(F::Factorization{TF}, B::AbstractArray{TB,N})
     TFB = typeof(one(TF)/one(TB)) 
-    At_ldiv_B!(convert(typeof(F).name.primary{TFB}, F), TB == TFB ? copy(B) : convert(typeof(B).name.primary{TFB}, B))
+    At_ldiv_B!(convert(Factorization{TFB}, F), TB == TFB ? copy(B) : convert(AbstractArray{TFB,N}, B))
 end

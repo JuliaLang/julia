@@ -564,51 +564,6 @@ JL_CALLABLE(jl_f_field_type)
 
 // conversion -----------------------------------------------------------------
 
-static jl_value_t *convert(jl_value_t *to, jl_value_t *x, jl_function_t *conv_f)
-{
-    jl_value_t *args[2];
-    if (jl_subtype(x, (jl_value_t*)to, 1))
-        return x;
-    args[0] = (jl_value_t*)to; args[1] = x;
-    return jl_apply(conv_f, args, 2);
-}
-
-JL_CALLABLE(jl_f_convert_tuple)
-{
-    jl_tuple_t *to = (jl_tuple_t*)args[0];
-    jl_tuple_t *x = (jl_tuple_t*)args[1];
-    if (to == jl_tuple_type)
-        return (jl_value_t*)x;
-    size_t i, cl=jl_tuple_len(x), pl=jl_tuple_len(to);
-    jl_tuple_t *out = jl_alloc_tuple(cl);
-    JL_GC_PUSH1(&out);
-    jl_value_t *ce, *pe=NULL;
-    int pseq=0;
-    jl_function_t *f = (jl_function_t*)args[2];
-    for(i=0; i < cl; i++) {
-        ce = jl_tupleref(x,i);
-        if (pseq) {
-        }
-        else if (i < pl) {
-            pe = jl_tupleref(to,i);
-            if (jl_is_vararg_type(pe)) {
-                pe = jl_tparam0(pe);
-                pseq = 1;
-            }
-        }
-        else {
-            out = NULL;
-            break;
-        }
-        assert(pe != NULL);
-        jl_tupleset(out, i, convert((jl_value_t*)pe, ce, f));
-    }
-    JL_GC_POP();
-    if (out == NULL)
-        jl_error("convert: invalid tuple conversion");
-    return (jl_value_t*)out;
-}
-
 JL_CALLABLE(jl_f_convert_default)
 {
     jl_value_t *to = args[0];
@@ -1015,7 +970,6 @@ void jl_init_primitives(void)
     
     // functions for internal use
     add_builtin_func("convert_default", jl_f_convert_default);
-    add_builtin_func("convert_tuple", jl_f_convert_tuple);
     add_builtin_func("tupleref",  jl_f_tupleref);
     add_builtin_func("tuplelen",  jl_f_tuplelen);
     add_builtin_func("getfield",  jl_f_get_field);
@@ -1101,7 +1055,7 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
     // mimic jl_show, but never calling a julia method
     size_t n = 0;
     if (v == NULL) {
-        n += JL_PRINTF(out, "<null>");
+        n += JL_PRINTF(out, "#<null>");
     }
     else if (jl_is_lambda_info(v)) {
         jl_lambda_info_t *li = (jl_lambda_info_t*)v;
@@ -1147,11 +1101,11 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
             n += JL_PRINTF(out, "%s", jl_gf_name(v)->name);
         }
         else {
-            n += JL_PRINTF(out, "<# function>");
+            n += JL_PRINTF(out, "#<function>");
         }
     }
     else if (jl_typeis(v, jl_intrinsic_type)) {
-        n += JL_PRINTF(out, "<# intrinsic function %d>", *(uint32_t*)jl_data_ptr(v));
+        n += JL_PRINTF(out, "#<intrinsic function %d>", *(uint32_t*)jl_data_ptr(v));
     }
     else if (jl_is_int64(v)) {
         n += JL_PRINTF(out, "%d", jl_unbox_int64(v));
@@ -1244,11 +1198,6 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
         n += jl_static_show(out, jl_fieldref(v,0));
         n += JL_PRINTF(out, " end");
     }
-    else if (jl_is_newvarnode(v)) {
-        n += JL_PRINTF(out, "<newvar ");
-        n += jl_static_show(out, jl_fieldref(v,0));
-        n += JL_PRINTF(out, ">");
-    }
     else if (jl_is_topnode(v)) {
         n += JL_PRINTF(out, "top(");
         n += jl_static_show(out, jl_fieldref(v,0));
@@ -1283,9 +1232,14 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
         n += JL_PRINTF(out, "[");
         size_t j, tlen = jl_array_len(v);
         for (j = 0; j < tlen; j++) {
-            n += jl_static_show(out, jl_arrayref((jl_array_t*)v,j));
+            jl_value_t *elt;
+            if (((jl_array_t*)v)->ptrarray)
+                elt = jl_cellref(v, j);
+            else
+                elt = jl_arrayref((jl_array_t*)v,j);
+            n += jl_static_show(out, elt);
             if (j != tlen-1)
-               n += JL_PRINTF(out, ", ");
+                n += JL_PRINTF(out, ", ");
         }
         n += JL_PRINTF(out, "]");
     }

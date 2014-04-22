@@ -68,20 +68,22 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     @test_approx_eq T*v F*v
     invFv = F\v
     @test_approx_eq T\v invFv
-    @test_approx_eq Base.solve(T,v) invFv
-    @test_approx_eq Base.solve(T, B) F\B
+    # @test_approx_eq Base.solve(T,v) invFv
+    # @test_approx_eq Base.solve(T, B) F\B
     Tlu = factorize(T)
     x = Tlu\v
     @test_approx_eq x invFv
     @test_approx_eq det(T) det(F)
 
     # symmetric tridiagonal
-    Ts = SymTridiagonal(d, dl)
-    Fs = full(Ts)
-    invFsv = Fs\v
-    Tldlt = Base.ldltd(Ts)
-    x = Tldlt\v
-    @test_approx_eq x invFsv
+    if elty <: Real
+        Ts = SymTridiagonal(d, dl)
+        Fs = full(Ts)
+        invFsv = Fs\v
+        Tldlt = ldltfact(Ts)
+        x = Tldlt\v
+        @test_approx_eq x invFsv
+    end
 
     # eigenvalues/eigenvectors of symmetric tridiagonal
     if elty === Float32 || elty === Float64
@@ -100,7 +102,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     @test abs((det(W) - det(F))/det(F)) <= n*cond(F)*ε # Revisit. Condition number is wrong
     iWv = similar(iFv)
     if elty != Int
-        Base.LinAlg.solve!(iWv, W, v)
+        iWv = A_ldiv_B!(W, copy(v))
         @test_approx_eq iWv iFv
     end
 
@@ -477,7 +479,7 @@ for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
             A = convert(Matrix{elty}, complex(randn(10,nn),randn(10,nn)))
         end    ## LU (only equal for real because LAPACK uses different absolute value when choosing permutations)
         if elty <: Real
-            FJulia  = invoke(lufact!, (AbstractMatrix,), copy(A)) 
+            FJulia  = Base.LinAlg.generic_lufact!(copy(A))
             FLAPACK = Base.LinAlg.LAPACK.getrf!(copy(A))
             @test_approx_eq FJulia.factors FLAPACK[1]
             @test_approx_eq FJulia.ipiv FLAPACK[2]

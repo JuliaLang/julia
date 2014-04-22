@@ -143,9 +143,6 @@ At_ldiv_Bt(a,b) = transpose(a)\transpose(b)
 oftype{T}(::Type{T},c) = convert(T,c)
 oftype{T}(x::T,c) = convert(T,c)
 
-zero(x) = oftype(x,0)
-one(x)  = oftype(x,1)
-
 widen{T<:Number}(x::T) = convert(widen(T), x)
 
 sizeof(T::Type) = error(string("size of type ",T," unknown"))

@@ -1,3 +1,4 @@
+s
 .. currentmodule:: Base
 
 
@@ -160,6 +161,8 @@ RTS internals
 
 misc
 ----
+JLDOWNLOAD_PREFER_MIRROR environment variable
+
 
 IP address stuff
 ----------------
@@ -195,4 +198,3 @@ C interface
 
 Macros
 ------
-

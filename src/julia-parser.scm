@@ -371,12 +371,16 @@
                            (skip-multiline-comment port count)))
 		     (if (eqv? c #\#)
 			 (skip-multiline-comment port
-                          (if (eqv? (peek-char port) #\=) (+ count 1) count))
+						 (if (eqv? (peek-char port) #\=)
+						     (begin (read-char port)
+							    (+ count 1))
+						     count))
 			 (skip-multiline-comment port count)))))))
 
   (read-char port) ; read # that was already peeked
   (if (eqv? (peek-char port) #\=)
-      (skip-multiline-comment port 1)
+      (begin (read-char port) ; read initial =
+	     (skip-multiline-comment port 1))
       (skip-to-eol port)))
 
 (define (skip-ws-and-comments port)

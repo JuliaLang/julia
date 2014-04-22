@@ -63,7 +63,6 @@ function init_help()
 end
 
 function help(io::IO)
-    init_help()
     print(io, """
 
      Welcome to Julia. The full manual is available at
@@ -163,13 +162,7 @@ function apropos(io::IO, txt::String)
     end
 end
 
-function help(io::IO, f::Function)
-    if is(f,help)
-        return help(io)
-    end
-    help(io, string(f), f)
-end
-
+help(io::IO, f::Function) = help(io, string(f), f)
 help(io::IO, t::DataType) = help(io, string(t.name), t)
 help(io::IO, t::Module) = help(io, string(t))
 
@@ -192,7 +185,9 @@ isname(ex::Expr) = ((ex.head == :. && isname(ex.args[1]) && isname(ex.args[2]))
                     || (ex.head == :quote && isname(ex.args[1])))
 
 macro help(ex)
-    if !isa(ex, Expr) || isname(ex)
+    if ex === :? || ex === :help
+        return Expr(:call, :help)
+    elseif !isa(ex, Expr) || isname(ex)
         return Expr(:call, :help, esc(ex))
     elseif ex.head == :macrocall && length(ex.args) == 1
         # e.g., "julia> @help @printf"

@@ -140,7 +140,7 @@ install: $(addprefix install-, $(LIBS))
 cleanall: $(addprefix clean-, $(LIBS))
 distcleanall: $(addprefix distclean-, $(LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-uv get-pcre get-double-conversion get-openlibm get-openspecfun get-random get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf get-utf8proc
+getall: get-llvm get-uv get-pcre get-double-conversion get-openlibm get-openspecfun get-random get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf get-utf8proc
 
 ## PATHS ##
 # sort is used to remove potential duplicates
@@ -557,14 +557,9 @@ $(OPENLIBM_OBJ_SOURCE): openlibm/Makefile
 	$(MAKE) -C openlibm $(OPENLIBM_FLAGS) $(MAKE_COMMON)
 	touch -c $@
 $(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE)
-ifeq ($(OS),WINNT)
-	cp -a openlibm/libopenlibm.a $(build_libdir)/libopenlibm.a
-	cp $< $@
-else
 	$(MAKE) -C openlibm install $(OPENLIBM_FLAGS) $(MAKE_COMMON)
 	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $@
 	touch -c $@
-endif
 
 clean-openlibm:
 	-$(MAKE) -C openlibm distclean $(OPENLIBM_FLAGS)
@@ -599,14 +594,9 @@ $(OPENSPECFUN_OBJ_SOURCE): openspecfun/Makefile $(OPENLIBM_OBJ_TARGET)
 	$(MAKE) -C openspecfun $(OPENSPECFUN_FLAGS) $(MAKE_COMMON)
 	touch -c $@
 $(OPENSPECFUN_OBJ_TARGET): $(OPENSPECFUN_OBJ_SOURCE)
-ifeq ($(OS),WINNT)
-	cp -a openspecfun/libopenspecfun.a $(build_libdir)/libopenspecfun.a
-	cp $< $@
-else
 	$(MAKE) -C openspecfun install $(OPENSPECFUN_FLAGS) $(MAKE_COMMON)
 	$(INSTALL_NAME_CMD)libopenspecfun.$(SHLIB_EXT) $@
 	touch -c $@
-endif
 
 clean-openspecfun:
 	-$(MAKE) -C openspecfun distclean $(OPENSPECFUN_FLAGS)
@@ -624,7 +614,7 @@ install-openspecfun: $(OPENSPECFUN_OBJ_TARGET)
 ## LIBRANDOM ##
 
 LIBRANDOM_OBJ_TARGET = $(build_shlibdir)/librandom.$(SHLIB_EXT)
-LIBRANDOM_OBJ_SOURCE = random/librandom.$(SHLIB_EXT)
+LIBRANDOM_OBJ_SOURCE = librandom.$(SHLIB_EXT)
 
 LIBRANDOM_CFLAGS = $(CFLAGS) -DNDEBUG -DDSFMT_MEXP=19937 $(fPIC) -DDSFMT_DO_NOT_USE_OLD_NAMES
 ifneq ($(USEMSVC), 1)
@@ -637,29 +627,27 @@ ifeq ($(ARCH), x86_64)
 LIBRANDOM_CFLAGS += -msse2 -DHAVE_SSE2
 endif
 
-random/dsfmt-$(DSFMT_VER).tar.gz:
+dsfmt-$(DSFMT_VER).tar.gz:
 	$(JLDOWNLOAD) $@ http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/dSFMT-src-$(DSFMT_VER).tar.gz 
 	touch -c $@
-random/dsfmt-$(DSFMT_VER)/config.status: random/dsfmt-$(DSFMT_VER).tar.gz
-	cd random && \
+dsfmt-$(DSFMT_VER)/config.status: dsfmt-$(DSFMT_VER).tar.gz
 	mkdir -p dsfmt-$(DSFMT_VER) && \
 	$(TAR) -C dsfmt-$(DSFMT_VER) --strip-components 1 -xf dsfmt-$(DSFMT_VER).tar.gz && \
 	cd dsfmt-$(DSFMT_VER) && patch < ../dSFMT.h.patch && patch < ../dSFMT.c.patch
 	echo 1 > $@
-$(LIBRANDOM_OBJ_SOURCE): random/jl_random.c random/randmtzig.c random/dsfmt-$(DSFMT_VER)/config.status
-	cd random && \
-	$(CC) $(CPPFLAGS) $(LIBRANDOM_CFLAGS) $(LDFLAGS) jl_random.c -o librandom.$(SHLIB_EXT) && \
+$(LIBRANDOM_OBJ_SOURCE): dsfmt-$(DSFMT_VER)/config.status
+	$(CC) $(CPPFLAGS) $(LIBRANDOM_CFLAGS) $(LDFLAGS) dsfmt-$(DSFMT_VER)/dSFMT.c -o librandom.$(SHLIB_EXT) && \
 	$(INSTALL_NAME_CMD)librandom.$(SHLIB_EXT) librandom.$(SHLIB_EXT)
 $(LIBRANDOM_OBJ_TARGET): $(LIBRANDOM_OBJ_SOURCE)
 	cp $< $@
 
 clean-random:
-	-rm -f random/librandom.$(SHLIB_EXT)
+	-rm -f librandom.$(SHLIB_EXT)
 distclean-random: clean-random
-	-cd random && rm -rf *.tar.gz dsfmt-$(DSFMT_VER)
+	-rm -rf *.tar.gz dsfmt-$(DSFMT_VER)
 
-get-random: random/dsfmt-$(DSFMT_VER).tar.gz
-configure-random: random/dsfmt-$(DSFMT_VER)/config.status
+get-random: dsfmt-$(DSFMT_VER).tar.gz
+configure-random: dsfmt-$(DSFMT_VER)/config.status
 compile-random: $(LIBRANDOM_OBJ_SOURCE)
 check-random: compile-random
 install-random: $(LIBRANDOM_OBJ_TARGET)
@@ -672,7 +660,8 @@ RMATH_OBJ_SOURCE = Rmath/src/libRmath-julia.$(SHLIB_EXT)
 
 RMATH_FLAGS += CC="$(CC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) \
 			   OS="$(OS)" ARCH="$(ARCH)" \
-			   USE_LIBRANDOM=1 LIBRANDOM_PATH="$(build_shlibdir)"
+			   USE_LIBRANDOM=1 LIBRANDOM_PATH="$(build_shlibdir)" \
+			   DSFMT_PATH=$(JULIAHOME)/deps/dsfmt-$(DSFMT_VER)
 
 Rmath/Make.inc:
 	(cd .. && git submodule init && git submodule update)

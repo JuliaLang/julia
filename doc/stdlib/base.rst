@@ -11,7 +11,7 @@ The Julia standard library contains a range of functions and macros appropriate 
 
 Some general notes:
 
-* Except for functions in buit-in modules (:mod:`~Base.Pkg`, :mod:`~Base.Collections`, :mod:`~Base.Graphics`,
+* Except for functions in built-in modules (:mod:`~Base.Pkg`, :mod:`~Base.Collections`, :mod:`~Base.Graphics`,
   :mod:`~Base.Test` and :mod:`~Base.Profile`), all functions documented here are directly available for use in programs.
 * To use module functions, use ``import Module`` to import the module, and ``Module.fn(x)`` to use the functions.
 * Alternatively, ``using Module`` will import all exported ``Module`` functions into the current namespace.
@@ -49,6 +49,10 @@ Getting Around
 
    Edit the definition of a function, optionally specifying a tuple of types to indicate which method to edit.
 
+.. function:: @edit
+
+   Evaluates the arguments to the function call, determines their types, and calls the ``edit`` function on the resulting expression
+
 .. function:: less(file::String, [line])
 
    Show a file using the default pager, optionally providing a starting line number. Returns to the julia prompt when you quit the pager.
@@ -56,6 +60,10 @@ Getting Around
 .. function:: less(function, [types])
 
    Show the definition of a function using the default pager, optionally specifying a tuple of types to indicate which method to see.
+
+.. function:: @less
+
+   Evaluates the arguments to the function call, determines their types, and calls the ``less`` function on the resulting expression
 
 .. function:: clipboard(x)
 
@@ -89,9 +97,9 @@ Getting Around
 
    Search documentation for functions related to ``string``.
 
-.. function:: which(f, args...)
+.. function:: which(f, types)
 
-   Return the method of ``f`` (a ``Method`` object) that will be called for the given arguments.
+   Return the method of ``f`` (a ``Method`` object) that will be called for arguments with the given types.
 
 .. function:: @which
 
@@ -1004,11 +1012,11 @@ Strings
 
 .. function:: bytestring(::Ptr{Uint8}, [length])
 
-   Create a string from the address of a C (0-terminated) string. A copy is made; the ptr can be safely freed. If ``length`` is specified, the string does not have to be 0-terminated.
+   Create a string from the address of a C (0-terminated) string encoded in ASCII or UTF-8. A copy is made; the ptr can be safely freed. If ``length`` is specified, the string does not have to be 0-terminated.
 
 .. function:: bytestring(s)
 
-   Convert a string to a contiguous byte array representation appropriate for passing it to C functions.
+   Convert a string to a contiguous byte array representation appropriate for passing it to C functions. The string will be encoded as either ASCII or UTF-8.
 
 .. function:: ascii(::Array{Uint8,1})
 
@@ -1292,6 +1300,16 @@ Strings
 
    General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`escape_string`. See also :func:`print_unescaped`.
 
+.. function:: utf16(s)
+
+   Create a UTF-16 string from a byte array, array of ``Uint16``, or
+   any other string type.  (Data must be valid UTF-16.  Conversions of
+   byte arrays check for a byte-order marker in the first two bytes,
+   and do not include it in the resulting string.)
+
+.. function:: is_valid_utf16(s)
+
+   Returns true if the string or ``Uint16`` array is valid UTF-16.
 
 I/O
 ---
@@ -3954,16 +3972,16 @@ Combinatorics
 
    In-place version of :func:`reverse`.
 
-.. function:: combinations(itr, n)
+.. function:: combinations(arr, n)
 
-   Generate all combinations of ``n`` elements from a given iterable
+   Generate all combinations of ``n`` elements from an indexable
    object.  Because the number of combinations can be very large, this
    function returns an iterator object. Use
    ``collect(combinations(a,n))`` to get an array of all combinations.
 
-.. function:: permutations(itr)
+.. function:: permutations(arr)
 
-   Generate all permutations of a given iterable object.  Because the
+   Generate all permutations of an indexable object.  Because the
    number of permutations can be very large, this function returns an
    iterator object. Use ``collect(permutations(a,n))`` to get an array
    of all permutations.
@@ -4528,8 +4546,9 @@ Parallel Computing
    Add processes on remote machines via SSH. 
    Requires julia to be installed in the same location on each node, or to be available via a shared file system.
    
-   ``machines`` is a vector of host definitions of the form ``[user@]host[:port]``. A worker is started
-   for each such definition.
+   ``machines`` is a vector of host definitions of the form ``[user@]host[:port] [bind_addr]``. ``user`` defaults 
+   to current user, ``port`` to the standard ssh port. Optionally, in case of multi-homed hosts, ``bind_addr`` 
+   may be used to explicitly specify an interface.
    
    Keyword arguments:
 
@@ -4717,27 +4736,27 @@ Distributed Arrays
 
 .. function:: dzeros(dims, ...)
 
-   Construct a distributed array of zeros. Trailing arguments are the same as those accepted by ``darray``.
+   Construct a distributed array of zeros. Trailing arguments are the same as those accepted by :func:`DArray`.
 
 .. function:: dones(dims, ...)
 
-   Construct a distributed array of ones. Trailing arguments are the same as those accepted by ``darray``.
+   Construct a distributed array of ones. Trailing arguments are the same as those accepted by :func:`DArray`.
 
 .. function:: dfill(x, dims, ...)
 
-   Construct a distributed array filled with value ``x``. Trailing arguments are the same as those accepted by ``darray``.
+   Construct a distributed array filled with value ``x``. Trailing arguments are the same as those accepted by :func:`DArray`.
 
 .. function:: drand(dims, ...)
 
-   Construct a distributed uniform random array. Trailing arguments are the same as those accepted by ``darray``.
+   Construct a distributed uniform random array. Trailing arguments are the same as those accepted by :func:`DArray`.
 
 .. function:: drandn(dims, ...)
 
-   Construct a distributed normal random array. Trailing arguments are the same as those accepted by ``darray``.
+   Construct a distributed normal random array. Trailing arguments are the same as those accepted by :func:`DArray`.
 
 .. function:: distribute(a)
 
-   Convert a local array to distributed
+   Convert a local array to distributed.
 
 .. function:: localpart(d)
 
@@ -4750,7 +4769,7 @@ Distributed Arrays
 
 .. function:: procs(d)
 
-   Get the vector of processes storing pieces of ``d``
+   Get the vector of processes storing pieces of ``d``.
 
    
 Shared Arrays (Experimental, UNIX-only feature)
@@ -5520,17 +5539,33 @@ Internals
 
    Returns an array of lowered ASTs for the methods matching the given generic function and type signature.
 
+.. function:: @code_lowered
+
+   Evaluates the arguments to the function call, determines their types, and calls the ``code_lowered`` function on the resulting expression
+
 .. function:: code_typed(f, types)
 
    Returns an array of lowered and type-inferred ASTs for the methods matching the given generic function and type signature.
+
+.. function:: @code_typed
+
+   Evaluates the arguments to the function call, determines their types, and calls the ``code_typed`` function on the resulting expression
 
 .. function:: code_llvm(f, types)
 
    Prints the LLVM bitcodes generated for running the method matching the given generic function and type signature to STDOUT.
 
+.. function:: @code_llvm
+
+   Evaluates the arguments to the function call, determines their types, and calls the ``code_llvm`` function on the resulting expression
+
 .. function:: code_native(f, types)
 
    Prints the native assembly instructions generated for running the method matching the given generic function and type signature to STDOUT.
+
+.. function:: @code_native
+
+   Evaluates the arguments to the function call, determines their types, and calls the ``code_native`` function on the resulting expression
 
 .. function:: precompile(f,args::(Any...,))
 

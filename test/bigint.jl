@@ -274,5 +274,5 @@ ndigits_mismatch(n) = ndigits(n) != ndigits(BigInt(n))
 
 # conversion from float
 @test BigInt(2.0) == BigInt(2.0f0) == BigInt(big(2.0)) == 2
-@test_throws convert(BigInt, 2.1)
-@test_throws convert(BigInt, big(2.1))
+@test_throws InexactError convert(BigInt, 2.1)
+@test_throws InexactError convert(BigInt, big(2.1))

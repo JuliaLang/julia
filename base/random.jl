@@ -117,14 +117,12 @@ rand(::Type{Int128})  = int128(rand(Uint128))
 
 # Arrays of random numbers
 
-rand!(A::Array{Float64}) = dsfmt_gv_fill_array_close_open!(A)
 rand(::Type{Float64}, dims::Dims) = rand!(Array(Float64, dims))
 rand(::Type{Float64}, dims::Int...) = rand(Float64, dims)
 
 rand(dims::Dims) = rand(Float64, dims)
 rand(dims::Int...) = rand(Float64, dims)
 
-rand!(r::MersenneTwister, A::Array{Float64}) = dsfmt_fill_array_close_open!(r.state, A)
 rand(r::AbstractRNG, dims::Dims) = rand!(r, Array(Float64, dims))
 rand(r::AbstractRNG, dims::Int...) = rand(r, dims)
 
@@ -213,10 +211,10 @@ randbool!(B::BitArray) = rand!(B)
 # The Ziggurat Method for generating random variables - Marsaglia and Tsang
 # Paper and reference code: http://www.jstatsoft.org/v05/i08/ 
 
-randn() = randmtzig_gv_randn()
+randn() = randmtzig_randn()
 randn(rng::MersenneTwister) = randmtzig_randn(rng.state)
-randn!(A::Array{Float64}) = randmtzig_gv_fill_randn!(A)
-randn!(rng::MersenneTwister, A::Array{Float64}) = randmtzig_fill_randn!(rng.state, A)
+randn!(A::Array{Float64}) = (for i = 1:length(A);A[i] = randmtzig_randn();end;A)
+randn!(rng::MersenneTwister, A::Array{Float64}) = (for i = 1:length(A);A[i] = randmtzig_randn(rng.state);end;A)
 randn(dims::Dims) = randn!(Array(Float64, dims))
 randn(dims::Int...) = randn!(Array(Float64, dims...))
 

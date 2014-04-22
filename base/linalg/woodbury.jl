@@ -11,7 +11,7 @@ type Woodbury{T} <: AbstractMatrix{T}
     tmpk1::Vector{T}
     tmpk2::Vector{T}
 
-    function Woodbury(A::AbstractMatrix{T}, U::Matrix{T}, C, V::Matrix{T})
+    function Woodbury(A, U::Matrix{T}, C, V::Matrix{T})
         N = size(A, 1)
         k = size(U, 2)
         if size(A, 2) != N || size(U, 1) != N || size(V, 1) != k || size(V, 2) != N
@@ -33,8 +33,8 @@ type Woodbury{T} <: AbstractMatrix{T}
     end
 end
 
-Woodbury{T}(A::AbstractMatrix{T}, U::Matrix{T}, C, V::Matrix{T}) = Woodbury{T}(A, U, C, V)
-Woodbury{T}(A::AbstractMatrix{T}, U::Vector{T}, C, V::Matrix{T}) = Woodbury{T}(A, reshape(U, length(U), 1), C, V)
+Woodbury{T}(A, U::Matrix{T}, C, V::Matrix{T}) = Woodbury{T}(A, U, C, V)
+Woodbury{T}(A, U::Vector{T}, C, V::Matrix{T}) = Woodbury{T}(A, reshape(U, length(U), 1), C, V)
 
 size(W::Woodbury) = size(W.A)
 
@@ -76,38 +76,17 @@ end
 
 det(W::Woodbury)=det(W.A)*det(W.C)/det(W.Cp)
 
-# Allocation-free solver for arbitrary strides (requires that W.A has a
-# non-aliasing "solve" routine, e.g., is Tridiagonal)
-function solve!(x::AbstractArray, xrng::Range{Int}, W::Woodbury, rhs::AbstractArray, rhsrng::Range{Int})
-    solve!(W.tmpN1, 1:length(W.tmpN1), W.A, rhs, rhsrng)
+function A_ldiv_B!(W::Woodbury, B::AbstractVecOrMat)
+    length(B) == size(W, 1) || throw(DimensionMismatch("Vector length $(length(B)) must match matrix size $(size(W,1))"))
+    copy!(W.tmpN1, B)
+    Alu = lufact(W.A) # Note. This makes an allocation (unless A::LU). Alternative is to destroy W.A.
+    A_ldiv_B!(Alu, W.tmpN1)
     A_mul_B!(W.tmpk1, W.V, W.tmpN1)
     A_mul_B!(W.tmpk2, W.Cp, W.tmpk1)
     A_mul_B!(W.tmpN2, W.U, W.tmpk2)
-    solve!(W.tmpN2, W.A, W.tmpN2)
-    indx = first(xrng)
-    xinc = step(xrng)
+    A_ldiv_B!(Alu, W.tmpN2)
     for i = 1:length(W.tmpN2)
-        x[indx] = W.tmpN1[i] - W.tmpN2[i]
-        indx += xinc
+        @inbounds B[i] = W.tmpN1[i] - W.tmpN2[i]
     end
-    nothing
+    B
 end
-
-function solve!(x::AbstractVector, W::Woodbury, rhs::AbstractVector)
-    solve!(x, 1:length(x), W, rhs, 1:length(rhs))
-    x
-end
-solve(W::Woodbury, rhs::AbstractVector) = solve!(similar(rhs), W, rhs)
-solve(W::Woodbury, B::StridedMatrix)=solve!(similar(B), W, B)
-function solve!(X::StridedMatrix, W::Woodbury, B::StridedMatrix)
-    size(B, 1) == size(W, 1) || throw(DimensionMismatch(""))
-    size(X) == size(B) || throw(DimensionMismatch(""))
-    m, n = size(B)
-    r = 1:m
-    for j = 1:n
-        r.start = (j-1)*m+1
-        solve!(X, r, W, B, r)
-    end
-    X
-end
-

@@ -8,7 +8,7 @@ export UmfpackLU,
 
 import Base: (\), Ac_ldiv_B, At_ldiv_B, findnz, getindex, show, size
 
-import ..LinAlg: A_ldiv_B!, Ac_ldiv_B!, At_ldiv_B!, Factorization, det, lufact, lufact!, solve
+import ..LinAlg: A_ldiv_B!, Ac_ldiv_B!, At_ldiv_B!, Factorization, det, lufact, lufact!
 
 include("umfpack_h.jl")
 type MatrixIllConditionedException <: Exception

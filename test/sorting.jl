@@ -6,6 +6,12 @@
 @test reverse([2,3,1]) == [1,3,2]
 @test select([3,6,30,1,9],3) == 6
 @test select([3,6,30,1,9],3:4) == [6,9]
+let a=[1:10]
+    for r in {2:4, 1:2, 10:10, 4:2, 2:1, 4:-1:2, 2:-1:1, 10:-1:10, 4:1:3, 1:2:8, 10:-3:1}
+        @test select(a, r) == [r]
+        @test select(a, r, rev=true) == (11 .- [r])
+    end
+end
 @test sum(randperm(6)) == 21
 @test nthperm([0,1,2],3) == [1,0,2]
 
