@@ -1337,7 +1337,6 @@ end
 symdiff(a) = a
 symdiff(a, b) = union(setdiff(a,b), setdiff(b,a))
 symdiff(a, b, rest...) = symdiff(a, symdiff(b, rest...))
-const △ = symdiff
 
 _cumsum_type{T<:Number}(v::AbstractArray{T}) = typeof(+zero(T))
 _cumsum_type(v) = typeof(v[1]+v[1])
