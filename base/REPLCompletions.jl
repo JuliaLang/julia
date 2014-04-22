@@ -138,7 +138,7 @@ function complete_methods(input::String)
     UTF8String[string(m) for m in methods(fn)]
 end
 
-const non_word_chars = [" \t\n\"\\'`@\$><=:;|&{}()[],+-*/?%^~"...]
+const non_identifier_chars = [" \t\n\"\\'`\$><=:;|&{}()[],+-*/?%^~"...]
 const non_filename_chars = [" \t\n\"\\'`@\$><=;|&{("...]
 
 # Aux function to detect whether we're right after a
@@ -160,20 +160,20 @@ function completions(string, pos)
         startpos = nextind(string, rsearch(string, non_filename_chars, pos))
         r = startpos:pos
         paths = complete_path(string[r])
-        if inc_tag == :string && length(paths) == 1
+        if inc_tag == :string && length(paths) == 1 && !isdir(paths[1])
             paths[1] *= "\""
         end
         return sort(paths), r, true
     elseif inc_tag == :other && string[pos] == '('
         endpos = prevind(string, pos)
-        startpos = nextind(string, rsearch(string, non_word_chars, endpos))
+        startpos = nextind(string, rsearch(string, non_identifier_chars, endpos))
         return complete_methods(string[startpos:endpos]), startpos:endpos, false
     elseif inc_tag == :comment
         return UTF8String[], 0:-1, false
     end
 
     dotpos = rsearch(string, '.', pos)
-    startpos = nextind(string, rsearch(string, non_word_chars, pos))
+    startpos = nextind(string, rsearch(string, non_identifier_chars, pos))
 
     ffunc = (mod,x)->true
     suggestions = UTF8String[]

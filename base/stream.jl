@@ -342,18 +342,18 @@ end
 
 ## BUFFER ##
 ## Allocate a simple buffer
-function alloc_request(buffer::IOBuffer, recommended_size::Int32)
+function alloc_request(buffer::IOBuffer, recommended_size::Uint)
     ensureroom(buffer, int(recommended_size))
     ptr = buffer.append ? buffer.size + 1 : buffer.ptr
     return (pointer(buffer.data, ptr), length(buffer.data)-ptr+1)
 end
-function _uv_hook_alloc_buf(stream::AsyncStream, recommended_size::Int32)
+function _uv_hook_alloc_buf(stream::AsyncStream, recommended_size::Uint)
     (buf,size) = alloc_request(stream.buffer, recommended_size)
     @assert size>0 # because libuv requires this (TODO: possibly stop reading too if it fails)
-    (buf,int32(size))
+    (buf,uint(size))
 end
 
-function notify_filled(buffer::IOBuffer, nread::Int, base::Ptr{Void}, len::Int32)
+function notify_filled(buffer::IOBuffer, nread::Int, base::Ptr{Void}, len::Uint)
     if buffer.append
         buffer.size += nread
     else
@@ -376,7 +376,7 @@ function notify_filled(stream::AsyncStream, nread::Int)
     end
 end
 
-function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::Int32)
+function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::Uint)
     if nread < 0
         if nread != UV_EOF
             # This is a fatal connectin error. Shutdown requests as per the usual 
@@ -712,20 +712,6 @@ function _uv_hook_writecb(s::AsyncStream, req::Ptr{Void}, status::Int32)
     status < 0 && close(s)
     nothing
 end
-
-# Do not task-block TTY methods. These writes are process-blocking anyway, so we use the non-copying versions
-write(s::TTY, b::Uint8) = @uv_write 1 ccall(:jl_putc_copy, Int32, (Uint8, Ptr{Void}, Ptr{Void}, Ptr{Void}), b, handle(s), uvw, uv_jl_writecb::Ptr{Void})
-write(s::TTY, c::Char) = @uv_write utf8sizeof(c) ccall(:jl_pututf8_copy, Int32, (Ptr{Void},Uint32, Ptr{Void}, Ptr{Void}), handle(s), c, uvw, uv_jl_writecb::Ptr{Void})
-function write{T}(s::TTY, a::Array{T}) 
-    if isbits(T)
-        n = uint(length(a)*sizeof(T))
-        @uv_write n ccall(:jl_write_no_copy, Int32, (Ptr{Void}, Ptr{Void}, Uint, Ptr{Void}, Ptr{Void}), handle(s), a, n, uvw, uv_jl_writecb::Ptr{Void})
-    else
-        check_open(s)
-        invoke(write,(IO,Array),s,a)
-    end
-end
-write(s::TTY, p::Ptr, nb::Integer) = @uv_write nb ccall(:jl_write_no_copy, Int32, (Ptr{Void}, Ptr{Void}, Uint, Ptr{Void}, Ptr{Void}), handle(s), p, nb, uvw, uv_jl_writecb::Ptr{Void})
 
 function write(s::AsyncStream, b::Uint8)
     @uv_write 1 ccall(:jl_putc_copy, Int32, (Uint8, Ptr{Void}, Ptr{Void}, Ptr{Void}), b, handle(s), uvw, uv_jl_writecb_task::Ptr{Void})

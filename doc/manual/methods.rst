@@ -181,9 +181,22 @@ function object itself in an interactive session:
     julia> f
     f (generic function with 2 methods)
 
-This output tells us that ``f`` is a function object with two methods:
-one taking two ``Float64`` arguments and one taking arguments of type
-``Number``.
+This output tells us that ``f`` is a function object with two
+methods. To find out what the signatures of those methods are, use the
+``methods`` function:
+
+.. doctest::
+
+    julia> methods(f)
+    # 2 methods for generic function "f":
+    f(x::Float64,y::Float64) at none:1
+    f(x::Number,y::Number) at none:1
+
+which shows that f has two methods, one taking two ``Float64``
+arguments and one taking arguments of type ``Number``. It also
+indicates the file and line number where the methods were defined:
+because these methods were defined at the REPL, we get the apparent
+line number ``none:1``.
 
 In the absence of a type declaration with ``::``, the type of a method
 parameter is ``Any`` by default, meaning that it is unconstrained since

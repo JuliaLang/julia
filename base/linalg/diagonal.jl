@@ -1,11 +1,20 @@
 ## Diagonal matrices
 
-type Diagonal{T} <: AbstractMatrix{T}
+immutable Diagonal{T} <: AbstractMatrix{T}
     diag::Vector{T}
 end
 Diagonal(A::Matrix) = Diagonal(diag(A))
 
-convert{T<:Number,S<:Number}(::Type{Diagonal{T}}, A::Diagonal{S}) = T == S ? A : Diagonal(convert(Vector{T}, A.diag))
+convert{T}(::Type{Diagonal{T}}, D::Diagonal{T}) = D
+convert{T}(::Type{Diagonal{T}}, D::Diagonal) = Diagonal{T}(convert(Vector{T}, D.diag))
+convert{T}(::Type{AbstractMatrix{T}}, D::Diagonal) = convert(Diagonal{T}, D)
+
+function similar{T}(D::Diagonal, ::Type{T}, d::(Int,Int))
+    d[1] == d[2] || throw(ArgumentError("Diagonal matrix must be square"))
+    return Diagonal{T}(Array(T,d[1]))
+end
+
+copy!(D1::Diagonal, D2::Diagonal) = (copy!(D1.diag, D2.diag); D1)
 
 size(D::Diagonal) = (length(D.diag),length(D.diag))
 size(D::Diagonal,d::Integer) = d<1 ? error("dimension out of range") : (d<=2 ? length(D.diag) : 1)

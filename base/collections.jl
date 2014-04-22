@@ -9,6 +9,7 @@ export
     dequeue!,
     enqueue!,
     heapify!,
+    heapify,
     heappop!,
     heappush!,
     isheap,

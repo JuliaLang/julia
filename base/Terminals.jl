@@ -3,6 +3,8 @@ module Terminals
 export
     TextTerminal,
     UnixTerminal,
+    TerminalBuffer,
+    TTYTerminal,
     cmove,
     cmove_col,
     cmove_down,
@@ -13,13 +15,16 @@ export
     cmove_up,
     disable_bracketed_paste,
     enable_bracketed_paste,
+    end_keypad_transmit_mode,
     getX,
     getY,
     hascolor,
     pos,
+    raw!,
     writepos
 
-import Base: flush,
+import Base:
+    flush,
     read,
     readuntil,
     size,
@@ -100,7 +105,13 @@ disable_bracketed_paste(t::TextTerminal) = nothing
 
 ## UnixTerminal ##
 
-type UnixTerminal <: TextTerminal
+abstract UnixTerminal <: TextTerminal
+
+type TerminalBuffer <: UnixTerminal
+    out_stream::Base.IO
+end
+
+type TTYTerminal <: UnixTerminal
     term_type::ASCIIString
     in_stream::Base.TTY
     out_stream::Base.TTY
@@ -117,18 +128,23 @@ cmove_line_up(t::UnixTerminal, n) = (cmove_up(t, n); cmove_col(t, 0))
 cmove_line_down(t::UnixTerminal, n) = (cmove_down(t, n); cmove_col(t, 0))
 cmove_col(t::UnixTerminal, n) = write(t.out_stream, "$(CSI)$(n)G")
 
-raw!(t::UnixTerminal, raw::Bool) = ccall((@windows ? :jl_tty_set_mode : :uv_tty_set_mode),
+raw!(t::TTYTerminal, raw::Bool) = ccall((@windows ? :jl_tty_set_mode : :uv_tty_set_mode),
                                          Int32, (Ptr{Void},Int32),
                                          t.in_stream.handle, raw ? 1 : 0) != -1
 enable_bracketed_paste(t::UnixTerminal) = write(t.out_stream, "$(CSI)?2004h")
 disable_bracketed_paste(t::UnixTerminal) = write(t.out_stream, "$(CSI)?2004l")
+end_keypad_transmit_mode(t::UnixTerminal) = # tput rmkx
+    write(t.out_stream, "$(CSI)?1l\x1b>")
 
-function size(t::UnixTerminal)
-    s = Array(Int32, 2)
+function size(t::TTYTerminal)
+    s = zeros(Int32, 2)
     Base.uv_error("size (TTY)", ccall((@windows ? :jl_tty_get_winsize : :uv_tty_get_winsize),
                                       Int32, (Ptr{Void}, Ptr{Int32}, Ptr{Int32}),
                                       t.out_stream.handle, pointer(s,1), pointer(s,2)) != 0)
-    Size(s[1], s[2])
+    w,h = s[1],s[2]
+    w > 0 || (w = 80)
+    h > 0 || (h = 24)
+    Size(w,h)
 end
 
 clear(t::UnixTerminal) = write(t.out_stream, "\x1b[H\x1b[2J")
@@ -147,7 +163,7 @@ read(t::UnixTerminal, ::Type{Uint8}) = read(t.in_stream, Uint8)
 start_reading(t::UnixTerminal) = start_reading(t.in_stream)
 stop_reading(t::UnixTerminal) = stop_reading(t.in_stream)
 
-@unix_only hascolor(t::UnixTerminal) = (beginswith(t.term_type, "xterm") || success(`tput setaf 0`))
-@windows_only hascolor(t::UnixTerminal) = true
+@unix_only hascolor(t::TTYTerminal) = (beginswith(t.term_type, "xterm") || success(`tput setaf 0`))
+@windows_only hascolor(t::TTYTerminal) = true
 
 end # module

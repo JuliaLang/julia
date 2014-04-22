@@ -56,7 +56,7 @@ debug && println("(Automatic) upper Cholesky factor")
         @test_approx_eq logdet(capd) log(det(capd)) # logdet is less likely to overflow
 
 debug && println("lower Cholesky factor")
-        l = cholfact(apd, :L)[:L] 
+        l = cholfact(apd, :L)[:L]
         @test_approx_eq l*l' apd
     end
 
@@ -149,7 +149,7 @@ debug && println("symmetric generalized eigenproblem")
         @test_approx_eq f[:values] eigvals(asym[1:5,1:5], a610'a610)
         @test_approx_eq_eps prod(f[:values]) prod(eigvals(asym[1:5,1:5]/(a610'a610))) 200ε
     end
- 
+
 debug && println("Non-symmetric generalized eigenproblem")
     if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
         f = eigfact(a[1:5,1:5], a[6:10,6:10])
@@ -169,7 +169,7 @@ debug && println("Schur")
 
 debug && println("Generalized Schur")
     if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
-        f = schurfact(a[1:5,1:5], a[6:10,6:10]) 
+        f = schurfact(a[1:5,1:5], a[6:10,6:10])
         @test_approx_eq f[:Q]*f[:S]*f[:Z]' a[1:5,1:5]
         @test_approx_eq f[:Q]*f[:T]*f[:Z]' a[6:10,6:10]
         @test istriu(f[:S]) || iseltype(a,Real)
@@ -192,8 +192,8 @@ debug && println("Generalized svd")
 debug && println("Solve square general system of equations")
     κ = cond(a,1)
     x = a \ b
-    @test_throws b'\b
-    @test_throws b\b'
+    @test_throws DimensionMismatch b'\b
+    @test_throws DimensionMismatch b\b'
     @test norm(a*x - b, 1)/norm(b) < ε*κ*n*2 # Ad hoc, revisit!
 
 debug && println("Solve upper triangular system")

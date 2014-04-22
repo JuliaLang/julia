@@ -125,6 +125,9 @@ double pisum() {
 struct double_pair { double s1, s2; };
 
 struct double_pair randmatstat(int t) {
+    dsfmt_t dsfmt;
+    dsfmt_init_gen_rand(&dsfmt, 1234);
+
     int n = 5;
     struct double_pair r;
     double *v = (double*)calloc(t,sizeof(double));
@@ -140,10 +143,10 @@ struct double_pair randmatstat(int t) {
     double *QtQ1 = (double*)malloc((2*n)*(2*n)*sizeof(double));
     double *QtQ2 = (double*)malloc((2*n)*(2*n)*sizeof(double));
     for (int i=0; i < t; i++) {
-        randmtzig_fill_randn(a, n*n);
-        randmtzig_fill_randn(b, n*n);
-        randmtzig_fill_randn(c, n*n);
-        randmtzig_fill_randn(d, n*n);
+        randmtzig_fill_randn(&dsfmt, a, n*n);
+        randmtzig_fill_randn(&dsfmt, b, n*n);
+        randmtzig_fill_randn(&dsfmt, c, n*n);
+        randmtzig_fill_randn(&dsfmt, d, n*n);
         memcpy(P+0*n*n, a, n*n*sizeof(double));
         memcpy(P+1*n*n, b, n*n*sizeof(double));
         memcpy(P+2*n*n, c, n*n*sizeof(double));

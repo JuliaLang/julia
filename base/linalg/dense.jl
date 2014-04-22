@@ -302,7 +302,7 @@ function factorize{T}(A::Matrix{T})
         if m == 1 return A[1] end
         utri    = true
         utri1   = true
-        herm    = T <: Complex
+        herm    = true
         sym     = true
         for j = 1:n-1, i = j+1:m
             if utri1
@@ -314,7 +314,7 @@ function factorize{T}(A::Matrix{T})
             if sym
                 sym &= A[i,j] == A[j,i]
             end
-            if (T <: Complex) & herm
+            if herm
                 herm &= A[i,j] == conj(A[j,i])
             end
             if !(utri1|herm|sym) break end
@@ -346,7 +346,9 @@ function factorize{T}(A::Matrix{T})
             end
             if utri1
                 if (herm & (T <: Complex)) | sym
-                    return ldltd(SymTridiagonal(diag(A), diag(A, -1)))
+                    try 
+                        return ldltfact!(SymTridiagonal(diag(A), diag(A, -1)))
+                    end
                 end
                 return lufact(Tridiagonal(diag(A, -1), diag(A), diag(A, 1)))
             end
@@ -355,31 +357,12 @@ function factorize{T}(A::Matrix{T})
             return Triangular(A, :U)
         end
         if herm
-            if T <: BlasFloat
-                C, info = LAPACK.potrf!('U', copy(A))
-            else 
-                S = typeof(one(T)/one(T))
-                if S <: BlasFloat
-                    C, info = LAPACK.potrf!('U', convert(Matrix{S}, A))
-                else
-                    C, info = S <: Real ? LAPACK.potrf!('U', complex128(A)) : LAPACK.potrf!('U', complex128(A))
-                end
+            try
+                return cholfact(A)
             end
-            if info == 0 return Cholesky(C, 'U') end
             return factorize(Hermitian(A))
         end
         if sym
-            if T <: BlasFloat
-                C, info = LAPACK.potrf!('U', copy(A))
-            else
-                S = eltype(one(T)/one(T))
-                if S <: BlasFloat
-                    C, info = LAPACK.potrf!('U', convert(Matrix{S},A))
-                else
-                    C, info = S <: Real ? LAPACK.potrf!('U', float64(A)) : LAPACK.potrf!('U', complex(A))
-                end
-            end
-            if info == 0 return Cholesky(C, 'U') end
             return factorize(Symmetric(A))
         end
         return lufact(A)

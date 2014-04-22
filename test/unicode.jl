@@ -54,4 +54,5 @@ else
 	@test length(u16) == 4
 	@test utf8(u16) == u8
 	@test collect(u8) == collect(u16)
+        @test u16 == utf16(u16.data) == utf16(reinterpret(Uint8, u16.data))
 end
