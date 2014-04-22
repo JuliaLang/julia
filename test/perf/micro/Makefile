@@ -95,14 +95,11 @@ benchmarks/javascript.csv: perf.js
 benchmarks/mathematica.csv: perf.nb
 	for t in 1 2 3 4 5; do $(MATHEMATICABIN) -noprompt -run "<<$<; Exit[]"; done >$@
 
-<<<<<<< HEAD
 benchmarks/stata.csv: perf.do
 	for t in 1 2 3 4 5; do stata -b do $^ $@; done
 
-=======
 benchmarks/lua.csv: perf.lua
 	for t in 1 2 3 4 5; do gsl-shell $<; done >$@
->>>>>>> upstream/master
 
 BENCHMARKS = \
 	benchmarks/c.csv \
