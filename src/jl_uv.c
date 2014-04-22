@@ -36,11 +36,13 @@ extern "C" {
 
 /** libuv callbacks */
 
-enum CALLBACK_TYPE { CB_PTR, CB_INT32, CB_INT64 };
+enum CALLBACK_TYPE { CB_PTR, CB_INT32, CB_UINT32, CB_INT64, CB_UINT64 };
 #ifdef _P64
 #define CB_INT CB_INT64
+#define CB_UINT CB_UINT64
 #else
 #define CB_INT CB_INT32
+#define CB_UINT CB_UINT32
 #endif
 
 /*
@@ -132,8 +134,14 @@ jl_value_t *jl_callback_call(jl_function_t *f,jl_value_t *val,int count,...)
         case CB_INT32:
             argv[i] = jl_box_int32(va_arg(argp,int32_t));
             break;
+        case CB_UINT32:
+            argv[i] = jl_box_uint32(va_arg(argp,uint32_t));
+            break;
         case CB_INT64:
             argv[i] = jl_box_int64(va_arg(argp,int64_t));
+            break;
+        case CB_UINT64:
+            argv[i] = jl_box_uint64(va_arg(argp,uint64_t));
             break;
         default: jl_error("callback: only Ints and Pointers are supported at this time");
             //excecution never reaches here
@@ -175,17 +183,23 @@ DLLEXPORT void jl_uv_return_spawn(uv_process_t *p, int64_t exit_status, int term
 
 DLLEXPORT void jl_uv_readcb(uv_stream_t *handle, ssize_t nread, const uv_buf_t* buf)
 {
-    JULIA_CB(readcb,handle->data,3,CB_INT,nread,CB_PTR,(buf->base),CB_INT32,buf->len);
+    JULIA_CB(readcb,handle->data,3,CB_INT,nread,CB_PTR,(buf->base),CB_UINT,buf->len);
     (void)ret;
 }
 
 DLLEXPORT void jl_uv_alloc_buf(uv_handle_t *handle, size_t suggested_size, uv_buf_t* buf)
 {
     if (handle->data) {
-        JULIA_CB(alloc_buf,handle->data,1,CB_INT32,suggested_size);
-        assert(jl_is_tuple(ret) && jl_is_pointer(jl_t0(ret)) && jl_is_int32(jl_t1(ret)));
+        JULIA_CB(alloc_buf,handle->data,1,CB_UINT,suggested_size);
+        assert(jl_is_tuple(ret) && jl_is_pointer(jl_t0(ret)));
         buf->base = (char*)jl_unbox_voidpointer(jl_t0(ret));
-        buf->len = jl_unbox_int32(jl_t1(ret));
+#ifdef _P64
+        assert(jl_is_uint64(jl_t1(ret)));
+        buf->len = jl_unbox_uint64(jl_t1(ret));
+#else
+        assert(jl_is_uint32(jl_t1(ret)));
+        buf->len = jl_unbox_uint32(jl_t1(ret));
+#endif
     }
     else {
         buf->len = 0;
@@ -238,7 +252,7 @@ DLLEXPORT void jl_uv_fseventscb(uv_fs_event_t* handle, const char* filename, int
 
 DLLEXPORT void jl_uv_recvcb(uv_udp_t* handle, ssize_t nread, const uv_buf_t *buf, struct sockaddr* addr, unsigned flags)
 {
-    JULIA_CB(recv,handle->data,5,CB_PTR,nread,CB_PTR,(buf->base),CB_INT32,buf->len,CB_PTR,addr,CB_INT32,flags)
+    JULIA_CB(recv,handle->data,5,CB_INT,nread,CB_PTR,(buf->base),CB_UINT,buf->len,CB_PTR,addr,CB_INT32,flags)
     (void)ret;
 }
 
