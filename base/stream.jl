@@ -342,18 +342,18 @@ end
 
 ## BUFFER ##
 ## Allocate a simple buffer
-function alloc_request(buffer::IOBuffer, recommended_size::Int32)
+function alloc_request(buffer::IOBuffer, recommended_size::Uint)
     ensureroom(buffer, int(recommended_size))
     ptr = buffer.append ? buffer.size + 1 : buffer.ptr
     return (pointer(buffer.data, ptr), length(buffer.data)-ptr+1)
 end
-function _uv_hook_alloc_buf(stream::AsyncStream, recommended_size::Int32)
+function _uv_hook_alloc_buf(stream::AsyncStream, recommended_size::Uint)
     (buf,size) = alloc_request(stream.buffer, recommended_size)
     @assert size>0 # because libuv requires this (TODO: possibly stop reading too if it fails)
-    (buf,int32(size))
+    (buf,uint(size))
 end
 
-function notify_filled(buffer::IOBuffer, nread::Int, base::Ptr{Void}, len::Int32)
+function notify_filled(buffer::IOBuffer, nread::Int, base::Ptr{Void}, len::Uint)
     if buffer.append
         buffer.size += nread
     else
@@ -376,7 +376,7 @@ function notify_filled(stream::AsyncStream, nread::Int)
     end
 end
 
-function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::Int32)
+function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::Uint)
     if nread < 0
         if nread != UV_EOF
             # This is a fatal connectin error. Shutdown requests as per the usual 
