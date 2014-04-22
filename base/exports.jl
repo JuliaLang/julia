@@ -865,7 +865,9 @@ export
 # statistics
     cor,
     cov,
+    Histogram,
     hist,
+    BivariateHistogram,
     hist2d,
     histrange,
     mean!,

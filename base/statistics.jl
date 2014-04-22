@@ -478,64 +478,83 @@ function sturges(n)  # Sturges' formula
     iceil(log2(n))+1
 end
 
-function hist!{HT}(h::AbstractArray{HT}, v::AbstractVector, edg::AbstractVector; init::Bool=true)
-    n = length(edg) - 1
-    length(h) == n || error("length(h) must equal length(edg) - 1.")
-    if init
-        fill!(h, zero(HT))
+immutable Histogram{E<:AbstractVector,T<:Real}
+    edges::E
+    weights::Vector{T}
+    function Histogram{S<:Real,T<:Real}(edges::AbstractVector{S},weights::Vector{T})
+        length(edges)-1 == length(weights) || error("Histogram edge vector must be 1 longer than weights")
+        new(edges,weights)
     end
+end
+Histogram{S<:Real,T<:Real}(edges::AbstractVector{S},v::Vector{T}) = Histogram{typeof(edges),T}(edges,v)
+Histogram{S<:Real,T<:Real}(edges::AbstractVector{S},::Type{T}) = Histogram(edges,zeros(T,length(edges)-1))
+Histogram{S<:Real}(edges::AbstractVector{S}) = Histogram(edges,Int)
+
+function push!{E,T}(h::Histogram{E,T}, x::Real)
+    i = searchsortedfirst(h.edges, x) - 1
+    if 1 <= i <= length(h.weights)
+        @inbounds h.weights[i] += one(T)
+    end
+    h
+end
+function append!{T<:Real}(h::Histogram, v::AbstractVector{T})
     for x in v
-        i = searchsortedfirst(edg, x)-1
-        if 1 <= i <= n
-            h[i] += 1
-        end
+        push!(h,x)
     end
-    edg, h
+    h
 end
 
-hist(v::AbstractVector, edg::AbstractVector) = hist!(Array(Int, length(edg)-1), v, edg)
+isequal(h1::Histogram,h2::Histogram) = isequal(h1.edges,h2.edges) && isequal(h1.weights,h2.weights)
+
+hist(v::AbstractVector, edg::AbstractVector) = append!(Histogram(edg),v)
 hist(v::AbstractVector, n::Integer) = hist(v,histrange(v,n))
 hist(v::AbstractVector) = hist(v,sturges(length(v)))
 
-function hist!{HT}(H::AbstractArray{HT,2}, A::AbstractMatrix, edg::AbstractVector; init::Bool=true)
-    m, n = size(A)
-    size(H) == (length(edg)-1, n) || error("Incorrect size of H.")
-    if init
-        fill!(H, zero(HT))
-    end
-    for j = 1:n
-        hist!(sub(H, :, j), sub(A, :, j), edg)
-    end
-    edg, H
-end
-
-hist(A::AbstractMatrix, edg::AbstractVector) = hist!(Array(Int, length(edg)-1, size(A,2)), A, edg)
+# Matrix arguments
+hist(A::AbstractMatrix, edg::AbstractVector) = [hist(sub(A,:,i),edg) for i = 1:size(A,2)]
 hist(A::AbstractMatrix, n::Integer) = hist(A,histrange(A,n))
 hist(A::AbstractMatrix) = hist(A,sturges(size(A,1)))
 
-
 ## hist2d
-function hist2d!{HT}(H::AbstractArray{HT,2}, v::AbstractMatrix, 
-                     edg1::AbstractVector, edg2::AbstractVector; init::Bool=true)
-    size(v,2) == 2 || error("hist2d requires an Nx2 matrix.")
-    n = length(edg1) - 1
-    m = length(edg2) - 1
-    size(H) == (n, m) || error("Incorrect size of H.")
-    if init
-        fill!(H, zero(HT))
+immutable BivariateHistogram{Ex<:AbstractVector,Ey<:AbstractVector,T<:Real}
+    xedges::Ex
+    yedges::Ey
+    weights::Matrix{T}
+    function BivariateHistogram{Sx<:Real,Sy<:Real,T<:Real}(ex::AbstractVector{Sx},ey::AbstractVector{Sy},weights::Matrix{T})
+        length(ex)-1 == size(weights,1) && length(ey)-1 == size(weights,2) || error("Histogram edge vectors must be 1 longer than weight dimension")
+        new(ex,ey,weights)
     end
-    for i = 1:size(v,1)
-        x = searchsortedfirst(edg1, v[i,1]) - 1
-        y = searchsortedfirst(edg2, v[i,2]) - 1
-        if 1 <= x <= n && 1 <= y <= m
-            @inbounds H[x,y] += 1
-        end
+end
+BivariateHistogram{Sx<:Real,Sy<:Real,T<:Real}(ex::AbstractVector{Sx},ey::AbstractVector{Sy},weights::Matrix{T}) = 
+    BivariateHistogram{typeof(ex),typeof(ey),T}(ex,ey,weights)
+
+BivariateHistogram{T<:Real}(ex::AbstractVector,ey::AbstractVector,::Type{T}) =
+    BivariateHistogram(ex,ey,zeros(T,length(ex)-1,length(ey)-1))
+
+BivariateHistogram(ex::AbstractVector,ey::AbstractVector) =
+    BivariateHistogram(ex,ey,Int)
+
+function push!{Ex,Ey,T}(h::BivariateHistogram{Ex,Ey,T}, x::Real, y::Real)
+    i = searchsortedfirst(h.xedges, x) - 1
+    j = searchsortedfirst(h.yedges, y) - 1
+    if 1 <= i <= size(h.weights,1) && 1 <= j <= size(h.weights,2)
+        @inbounds h.weights[i,j] += one(T)
     end
-    edg1, edg2, H
+    h
+end
+function append!{T<:Real}(h::BivariateHistogram, v::AbstractMatrix{T})
+    size(v,2) == 2 || error("BivariateHistogram requires an Nx2 matrix")
+    for i in 1:size(v,1)
+        push!(h,v[i,1],v[i,2])
+    end
+    h
 end
 
-hist2d(v::AbstractMatrix, edg1::AbstractVector, edg2::AbstractVector) = 
-    hist2d!(Array(Int, length(edg1)-1, length(edg2)-1), v, edg1, edg2)
+isequal(h1::BivariateHistogram,h2::BivariateHistogram) =
+    isequal(h1.xedges,h2.xedges) && isequal(h1.yedges,h2.yedges) && isequal(h1.weights,h2.weights)
+
+hist2d(v::AbstractMatrix,ex::AbstractVector,ey::AbstractVector) =
+    append!(BivariateHistogram(ex,ey),v)
 
 hist2d(v::AbstractMatrix, edg::AbstractVector) = hist2d(v, edg, edg)
 
@@ -543,6 +562,7 @@ hist2d(v::AbstractMatrix, n1::Integer, n2::Integer) =
     hist2d(v, histrange(sub(v,:,1),n1), histrange(sub(v,:,2),n2))
 hist2d(v::AbstractMatrix, n::Integer) = hist2d(v, n, n)
 hist2d(v::AbstractMatrix) = hist2d(v, sturges(size(v,1)))
+
 
 
 ## quantiles ##
