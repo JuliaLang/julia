@@ -567,12 +567,18 @@ negative real value:
     try sqrt(complex(x))
      in sqrt at math.jl:284
 
+You may define your own exceptions in the following way:
+
+.. doctest::
+
+    julia> type MyCustomException <: Exception end
+
 The ``throw`` function
 ~~~~~~~~~~~~~~~~~~~~~~
 
 Exceptions can be created explicitly with ``throw``. For example, a function
 defined only for nonnegative numbers could be written to ``throw`` a ``DomainError``
-if the argument is negative. :
+if the argument is negative:
 
 .. doctest::
 
@@ -587,7 +593,7 @@ if the argument is negative. :
      in f at none:1
 
 Note that ``DomainError`` without parentheses is not an exception, but a type of
-exception. It needs to be called to obtain an ``Exception`` object :
+exception. It needs to be called to obtain an ``Exception`` object:
 
 .. doctest::
 
@@ -596,6 +602,24 @@ exception. It needs to be called to obtain an ``Exception`` object :
     
     julia> typeof(DomainError) <: Exception
     false
+
+Additionally, some exception types take one or more arguments that are used for
+error reporting:
+
+.. doctest::
+
+    julia> throw(UndefVarError(:x))
+    ERROR: x not defined
+
+This mechanism can be implemented easily by custom exception types following
+the way ``UndefVarError`` is written:
+
+.. doctest::
+
+    julia> type UndefVarError <: Exception
+               var::Symbol
+           end
+    julia> showerror(io::IO, e::UndefVarError) = print(io, e.var, " not defined")
 
 Errors
 ~~~~~~

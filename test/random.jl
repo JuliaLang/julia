@@ -45,10 +45,10 @@ end
 
 # Test ziggurat tables
 ziggurat_table_size = 256
-nmantissa           = 2^51 # one bit for the sign
+nmantissa           = int64(2)^51 # one bit for the sign
 ziggurat_nor_r      = BigFloat("3.65415288536100879635194725185604664812733315920964488827246397029393565706474")
 nor_section_area    = ziggurat_nor_r*exp(-ziggurat_nor_r^2/2) + erfc(ziggurat_nor_r/sqrt(BigFloat(2)))*sqrt(big(π)/2)
-emantissa           = 2^52
+emantissa           = int64(2)^52
 ziggurat_exp_r      = BigFloat("7.69711747013104971404462804811408952334296818528283253278834867283241051210533")
 exp_section_area    = (ziggurat_exp_r + 1)*exp(-ziggurat_exp_r)
 
@@ -72,7 +72,7 @@ function randmtzig_fill_ziggurat_tables() # Operates on the global arrays
     # defines this as
     # k_0 = 2^31 * r * f(r) / v, w_0 = 0.5^31 * v / f(r), f_0 = 1,
     # where v is the area of each strip of the ziggurat.
-    ki[1] = uint(itrunc(x1*fib[256]/nor_section_area*nmantissa))
+    ki[1] = uint64(itrunc(x1*fib[256]/nor_section_area*nmantissa))
     wib[1] = nor_section_area/fib[256]/nmantissa
     fib[1] = one(BigFloat)
 
