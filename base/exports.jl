@@ -867,8 +867,6 @@ export
     cov,
     Histogram,
     hist,
-    BivariateHistogram,
-    hist2d,
     histrange,
     mean!,
     mean,
