@@ -443,8 +443,13 @@ end
 
 _uv_hook_alloc_buf(sock::UdpSocket,size::Uint) = (c_malloc(size),size)
 
-_recv_start(sock::UdpSocket) = uv_error("recv_start",ccall(:uv_udp_recv_start,Cint,(Ptr{Void},Ptr{Void},Ptr{Void}),
-                                                sock.handle,cglobal(:jl_uv_alloc_buf),cglobal(:jl_uv_recvcb)))
+function _recv_start(sock::UdpSocket)
+    if ccall(:uv_is_active,Cint,(Ptr{Void},),sock.handle) == 0
+        uv_error("recv_start",ccall(:uv_udp_recv_start,Cint,(Ptr{Void},Ptr{Void},Ptr{Void}),
+                                        sock.handle,cglobal(:jl_uv_alloc_buf),cglobal(:jl_uv_recvcb)))
+    end
+end
+
 _recv_stop(sock::UdpSocket) = uv_error("recv_stop",ccall(:uv_udp_recv_stop,Cint,(Ptr{Void},),sock.handle))
 
 function recv(sock::UdpSocket)
