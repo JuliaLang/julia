@@ -643,10 +643,10 @@ static BOOL CALLBACK jl_EnumerateLoadedModulesProc64(
   _In_opt_  PVOID a
 )
 {
+    jl_array_grow_end(a, 1);
+    //XXX: change to jl_arrayset if array storage allocation for Array{String,1} changes:
     jl_value_t *v = jl_cstr_to_string(ModuleName);
-    JL_GC_PUSH1(v);
-    jl_cell_1d_push(a, v);
-    JL_GC_POP();
+    jl_cellset(a, jl_array_dim0(a)-1, v);
     return TRUE;
 }
 // Takes a handle (as returned from dlopen()) and returns the absolute path to the image loaded
