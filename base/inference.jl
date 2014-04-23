@@ -1864,7 +1864,12 @@ function effect_free(e::ANY, sv, allow_volatile::Bool)
             if is_known_call_p(e, is_pure_builtin, sv)
                 if !allow_volatile && is_known_call_p(e, (f)->contains_is(_pure_builtins_volatile, f), sv)
                     # arguments must be immutable to ensure e is affect_free
+                    first = true
                     for a in ea
+                        if first # first "arg" is the function name
+                            first = false
+                            continue
+                        end
                         if isa(a,Symbol)
                             return false
                         end
@@ -1890,7 +1895,21 @@ function effect_free(e::ANY, sv, allow_volatile::Bool)
                 end
                 return true
             end
-        elseif e.head === :new || e.head == :return
+        elseif e.head == :new
+            first = !allow_volatile
+            for a in ea
+                if first
+                    first = false
+                    isa(a,SymbolNode) || return false
+                    typ = (a::SymbolNode).typ
+                    isa(typ,DataType) || return false
+                    !(typ::DataType).mutable || return false
+                elseif !effect_free(a,sv,allow_volatile)
+                    return false
+                end
+            end
+            return true
+        elseif e.head == :return
             for a in ea
                 if !effect_free(a,sv,allow_volatile)
                     return false
