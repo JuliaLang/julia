@@ -48,6 +48,7 @@ export
     FileMonitor,
     FileOffset,
     Filter,
+    FloatRange,
     Hermitian,
     UniformScaling,
     InsertionSort,
