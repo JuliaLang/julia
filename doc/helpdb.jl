@@ -48,6 +48,13 @@
 
 "),
 
+("Base","@edit","@edit()
+
+   Evaluates the arguments to the function call, determines their
+   types, and calls the \"edit\" function on the resulting expression
+
+"),
+
 ("Base","less","less(file::String[, line])
 
    Show a file using the default pager, optionally providing a
@@ -61,6 +68,13 @@
    Show the definition of a function using the default pager,
    optionally specifying a tuple of types to indicate which method to
    see.
+
+"),
+
+("Base","@less","@less()
+
+   Evaluates the arguments to the function call, determines their
+   types, and calls the \"less\" function on the resulting expression
 
 "),
 
@@ -130,10 +144,10 @@
 
 "),
 
-("Base","which","which(f, args...)
+("Base","which","which(f, types)
 
    Return the method of \"f\" (a \"Method\" object) that will be
-   called for the given arguments.
+   called for arguments with the given types.
 
 "),
 
@@ -1450,16 +1464,18 @@
 
 ("Base","bytestring","bytestring(::Ptr{Uint8}[, length])
 
-   Create a string from the address of a C (0-terminated) string. A
-   copy is made; the ptr can be safely freed. If \"length\" is
-   specified, the string does not have to be 0-terminated.
+   Create a string from the address of a C (0-terminated) string
+   encoded in ASCII or UTF-8. A copy is made; the ptr can be safely
+   freed. If \"length\" is specified, the string does not have to be
+   0-terminated.
 
 "),
 
 ("Base","bytestring","bytestring(s)
 
    Convert a string to a contiguous byte array representation
-   appropriate for passing it to C functions.
+   appropriate for passing it to C functions. The string will be
+   encoded as either ASCII or UTF-8.
 
 "),
 
@@ -1932,6 +1948,21 @@
 
    General unescaping of traditional C and Unicode escape sequences.
    Reverse of \"escape_string()\". See also \"print_unescaped()\".
+
+"),
+
+("Base","utf16","utf16(s)
+
+   Create a UTF-16 string from a byte array, array of \"Uint16\", or
+   any other string type.  (Data must be valid UTF-16.  Conversions of
+   byte arrays check for a byte-order marker in the first two bytes,
+   and do not include it in the resulting string.)
+
+"),
+
+("Base","is_valid_utf16","is_valid_utf16(s)
+
+   Returns true if the string or \"Uint16\" array is valid UTF-16.
 
 "),
 
@@ -4027,7 +4058,8 @@ popdisplay(d::Display)
 
 ("Base","minmax","minmax(x, y)
 
-   Return \"(min(x,y), max(x,y))\".
+   Return \"(min(x,y), max(x,y))\". See also: \"extrema()\" that
+   returns \"(minimum(x), maximum(x))\"
 
 "),
 
@@ -5864,18 +5896,18 @@ popdisplay(d::Display)
 
 "),
 
-("Base","combinations","combinations(itr, n)
+("Base","combinations","combinations(arr, n)
 
-   Generate all combinations of \"n\" elements from a given iterable
+   Generate all combinations of \"n\" elements from an indexable
    object.  Because the number of combinations can be very large, this
    function returns an iterator object. Use
    \"collect(combinations(a,n))\" to get an array of all combinations.
 
 "),
 
-("Base","permutations","permutations(itr)
+("Base","permutations","permutations(arr)
 
-   Generate all permutations of a given iterable object.  Because the
+   Generate all permutations of an indexable object.  Because the
    number of permutations can be very large, this function returns an
    iterator object. Use \"collect(permutations(a,n))\" to get an array
    of all permutations.
@@ -6096,24 +6128,18 @@ popdisplay(d::Display)
    This function accepts three keyword arguments:
 
    * \"vardim\": the dimension of variables. When \"vardim = 1\",
-     variables
-
-   are considered in columns while observations in rows; when \"vardim
-   = 2\", variables are in rows while observations in columns. By
-   default, it is set to \"1\".
+     variables are considered in columns while observations in rows;
+     when \"vardim = 2\", variables are in rows while observations in
+     columns. By default, it is set to \"1\".
 
    * \"corrected\": whether to apply Bessel's correction (divide by
-     \"n-1\"
-
-   instead of \"n\"). By default, it is set to \"true\".
+     \"n-1\" instead of \"n\"). By default, it is set to \"true\".
 
    * \"mean\": allow users to supply mean values that are known. By
-     default, it
-
-   is set to \"nothing\", which indicates that the mean(s) are
-   unknown, and the function will compute the mean. Users can use
-   \"mean=0\" to indicate that the input data are centered, and hence
-   there's no need to subtract the mean.
+     default, it is set to \"nothing\", which indicates that the
+     mean(s) are unknown, and the function will compute the mean.
+     Users can use \"mean=0\" to indicate that the input data are
+     centered, and hence there's no need to subtract the mean.
 
    The size of the result depends on the size of \"v1\" and \"v2\".
    When both \"v1\" and \"v2\" are vectors, it returns the covariance
@@ -6583,8 +6609,10 @@ popdisplay(d::Display)
    a shared file system.
 
    \"machines\" is a vector of host definitions of the form
-   \"[user@]host[:port]\". A worker is started for each such
-   definition.
+   \"[user@]host[:port] [bind_addr]\". \"user\" defaults to current
+   user, \"port\" to the standard ssh port. Optionally, in case of
+   multi-homed hosts, \"bind_addr\" may be used to explicitly specify
+   an interface.
 
    Keyword arguments:
 
@@ -6848,41 +6876,41 @@ popdisplay(d::Display)
 ("Base","dzeros","dzeros(dims, ...)
 
    Construct a distributed array of zeros. Trailing arguments are the
-   same as those accepted by \"darray\".
+   same as those accepted by \"DArray()\".
 
 "),
 
 ("Base","dones","dones(dims, ...)
 
    Construct a distributed array of ones. Trailing arguments are the
-   same as those accepted by \"darray\".
+   same as those accepted by \"DArray()\".
 
 "),
 
 ("Base","dfill","dfill(x, dims, ...)
 
    Construct a distributed array filled with value \"x\". Trailing
-   arguments are the same as those accepted by \"darray\".
+   arguments are the same as those accepted by \"DArray()\".
 
 "),
 
 ("Base","drand","drand(dims, ...)
 
    Construct a distributed uniform random array. Trailing arguments
-   are the same as those accepted by \"darray\".
+   are the same as those accepted by \"DArray()\".
 
 "),
 
 ("Base","drandn","drandn(dims, ...)
 
    Construct a distributed normal random array. Trailing arguments are
-   the same as those accepted by \"darray\".
+   the same as those accepted by \"DArray()\".
 
 "),
 
 ("Base","distribute","distribute(a)
 
-   Convert a local array to distributed
+   Convert a local array to distributed.
 
 "),
 
@@ -6903,7 +6931,7 @@ popdisplay(d::Display)
 
 ("Base","procs","procs(d)
 
-   Get the vector of processes storing pieces of \"d\"
+   Get the vector of processes storing pieces of \"d\".
 
 "),
 
@@ -8075,10 +8103,26 @@ popdisplay(d::Display)
 
 "),
 
+("Base","@code_lowered","@code_lowered()
+
+   Evaluates the arguments to the function call, determines their
+   types, and calls the \"code_lowered\" function on the resulting
+   expression
+
+"),
+
 ("Base","code_typed","code_typed(f, types)
 
    Returns an array of lowered and type-inferred ASTs for the methods
    matching the given generic function and type signature.
+
+"),
+
+("Base","@code_typed","@code_typed()
+
+   Evaluates the arguments to the function call, determines their
+   types, and calls the \"code_typed\" function on the resulting
+   expression
 
 "),
 
@@ -8089,11 +8133,27 @@ popdisplay(d::Display)
 
 "),
 
+("Base","@code_llvm","@code_llvm()
+
+   Evaluates the arguments to the function call, determines their
+   types, and calls the \"code_llvm\" function on the resulting
+   expression
+
+"),
+
 ("Base","code_native","code_native(f, types)
 
    Prints the native assembly instructions generated for running the
    method matching the given generic function and type signature to
    STDOUT.
+
+"),
+
+("Base","@code_native","@code_native()
+
+   Evaluates the arguments to the function call, determines their
+   types, and calls the \"code_native\" function on the resulting
+   expression
 
 "),
 
@@ -8152,11 +8212,11 @@ popdisplay(d::Display)
 
 "),
 
-("Base.Collections","heappush!","heappush!(v[, ord])
+("Base.Collections","heappush!","heappush!(v, x[, ord])
 
-   Given a binary heap-ordered array, push a new element, preserving
-   the heap property. For efficiency, this function does not check
-   that the array is indeed heap-ordered.
+   Given a binary heap-ordered array, push a new element \"x\",
+   preserving the heap property. For efficiency, this function does
+   not check that the array is indeed heap-ordered.
 
 "),
 
@@ -8627,44 +8687,52 @@ popdisplay(d::Display)
 
 "),
 
-("Base","lufact","lufact(A) -> F
+("Base","lufact","lufact(A[, pivot=true]) -> F
 
    Compute the LU factorization of \"A\". The return type of \"F\"
-   depends on the type of \"A\".
+   depends on the type of \"A\". In most cases, if \"A\" is a subtype
+   \"S\" of AbstractMatrix with an element type \"T`\" supporting
+   \"+\", \"-\", \"*\" and \"/\" the return type is \"LU{T,S{T}}\". If
+   pivoting is chosen (default) the element type should also support
+   \"abs\" and \"<\". When \"A\" is sparse and have element of type
+   \"Float32\", \"Float64\", \"Complex{Float32}\", or
+   \"Complex{Float64}\" the return type is \"UmfpackLU\". Some
+   examples are shown in the table below.
 
-      +-------------------------+----------------------+------------------------------------------+
-      | Type of input \\\"A\\\"     | Type of output \\\"F\\\" | Relationship between \\\"F\\\" and \\\"A\\\"     |
-      +-------------------------+----------------------+------------------------------------------+
-      | \\\"Matrix()\\\"            | \\\"LU\\\"               | \\\"F[:L]*F[:U] == A[F[:p], :]\\\"           |
-      +-------------------------+----------------------+------------------------------------------+
-      | \\\"Tridiagonal()\\\"       | \\\"LUTridiagonal\\\"    | N/A                                      |
-      +-------------------------+----------------------+------------------------------------------+
-      | \\\"SparseMatrixCSC()\\\"   | \\\"UmfpackLU\\\"        | \\\"F[:L]*F[:U] == Rs .* A[F[:p], F[:q]]\\\" |
-      +-------------------------+----------------------+------------------------------------------+
+      +-------------------------+---------------------------+------------------------------------------+
+      | Type of input \\\"A\\\"     | Type of output \\\"F\\\"      | Relationship between \\\"F\\\" and \\\"A\\\"     |
+      +-------------------------+---------------------------+------------------------------------------+
+      | \\\"Matrix()\\\"            | \\\"LU\\\"                    | \\\"F[:L]*F[:U] == A[F[:p], :]\\\"           |
+      +-------------------------+---------------------------+------------------------------------------+
+      | \\\"Tridiagonal()\\\"       | \\\"LU{T,Tridiagonal{T}}\\\"  | N/A                                      |
+      +-------------------------+---------------------------+------------------------------------------+
+      | \\\"SparseMatrixCSC()\\\"   | \\\"UmfpackLU\\\"             | \\\"F[:L]*F[:U] == Rs .* A[F[:p], F[:q]]\\\" |
+      +-------------------------+---------------------------+------------------------------------------+
 
    The individual components of the factorization \"F\" can be
    accessed by indexing:
 
-      +-------------+-----------------------------------------+--------+-------------------+---------------+
-      | Component   | Description                             | \\\"LU\\\" | \\\"LUTridiagonal\\\" | \\\"UmfpackLU\\\" |
-      +-------------+-----------------------------------------+--------+-------------------+---------------+
-      +-------------+-----------------------------------------+--------+-------------------+---------------+
-      +-------------+-----------------------------------------+--------+-------------------+---------------+
-      +-------------+-----------------------------------------+--------+-------------------+---------------+
-      +-------------+-----------------------------------------+--------+-------------------+---------------+
-      +-------------+-----------------------------------------+--------+-------------------+---------------+
-      +-------------+-----------------------------------------+--------+-------------------+---------------+
-      +-------------+-----------------------------------------+--------+-------------------+---------------+
+      +-------------+-----------------------------------------+--------+--------------------------+---------------+
+      | Component   | Description                             | \\\"LU\\\" | \\\"LU{T,Tridiagonal{T}}\\\" | \\\"UmfpackLU\\\" |
+      +-------------+-----------------------------------------+--------+--------------------------+---------------+
+      +-------------+-----------------------------------------+--------+--------------------------+---------------+
+      +-------------+-----------------------------------------+--------+--------------------------+---------------+
+      +-------------+-----------------------------------------+--------+--------------------------+---------------+
+      +-------------+-----------------------------------------+--------+--------------------------+---------------+
+      +-------------+-----------------------------------------+--------+--------------------------+---------------+
+      +-------------+-----------------------------------------+--------+--------------------------+---------------+
+      +-------------+-----------------------------------------+--------+--------------------------+---------------+
 
-      +--------------------+--------+-------------------+---------------+
-      | Supported function | \\\"LU\\\" | \\\"LUTridiagonal\\\" | \\\"UmfpackLU\\\" |
-      +--------------------+--------+-------------------+---------------+
-      +--------------------+--------+-------------------+---------------+
-      | \\\"\\\\\\\"             | ✓      | ✓                 | ✓             |
-      +--------------------+--------+-------------------+---------------+
-      +--------------------+--------+-------------------+---------------+
-      +--------------------+--------+-------------------+---------------+
-      +--------------------+--------+-------------------+---------------+
+      +--------------------+--------+--------------------------+---------------+
+      | Supported function | \\\"LU\\\" | \\\"LU{T,Tridiagonal{T}}\\\" | \\\"UmfpackLU\\\" |
+      +--------------------+--------+--------------------------+---------------+
+      +--------------------+--------+--------------------------+---------------+
+      | \\\"\\\\\\\"             | ✓      | ✓                        | ✓             |
+      +--------------------+--------+--------------------------+---------------+
+      +--------------------+--------+--------------------------+---------------+
+      | \\\"det\\\"            | ✓      | ✓                        | ✓             |
+      +--------------------+--------+--------------------------+---------------+
+      +--------------------+--------+--------------------------+---------------+
 
 "),
 
@@ -8715,9 +8783,9 @@ popdisplay(d::Display)
    used to solve systems involving parts of the factorization only.
    The optional boolean argument, \"ll\" determines whether the
    factorization returned is of the \"A[p,p] = L*L'\" form, where
-   \"L\" is lower triangular or \"A[p,p] = scale(L,D)*L'\" form where
-   \"L\" is unit lower triangular and \"D\" is a non-negative vector.
-   The default is LDL.
+   \"L\" is lower triangular or \"A[p,p] = L*Diagonal(D)*L'\" form
+   where \"L\" is unit lower triangular and \"D\" is a non-negative
+   vector.  The default is LDL.
 
 "),
 
@@ -8725,6 +8793,14 @@ popdisplay(d::Display)
 
    \"cholfact!\" is the same as \"cholfact()\", but saves space by
    overwriting the input \"A\", instead of creating a copy.
+
+"),
+
+("Base","ldltfact","ldltfact(A) -> LDLtFactorization
+
+   Compute a factorization of a positive definite matrix \"A\" such
+   that \"A=L*Diagonal(d)*L'\" where \"L\" is a unit lower triangular
+   matrix and \"d\" is a vector with non-negative elements.
 
 "),
 
@@ -8828,12 +8904,6 @@ popdisplay(d::Display)
    \"BunchKaufman\" object. The following functions are available for
    \"BunchKaufman\" objects: \"size\", \"\\\", \"inv\", \"issym\",
    \"ishermitian\".
-
-   [Bunch1977] J R Bunch and L Kaufman, Some stable methods for
-               calculating inertia and solving symmetric linear
-               systems, Mathematics of Computation 31:137 (1977),
-               163-179. >>`url<http://www.ams.org/journals/mcom/1977-3
-               1-137/S0025-5718-1977-0428694-0>`_<<.
 
 "),
 
