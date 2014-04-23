@@ -1130,6 +1130,15 @@ let
     @test ys == xs
 end
 
+# issue #6591
+function f6591(d)
+    Intrinsics.box(Int64, d)
+    (f->f(d))(identity)
+end
+let d = Intrinsics.box(Date4581{Int}, 1)
+    @test isa(f6591(d), Date4581)
+end
+
 # issue #4645
 i4645(x) = (println(zz); zz = x; zz)
 @test_throws UndefVarError i4645(4)
