@@ -441,7 +441,7 @@ function setopt(sock::UdpSocket; multicast_loop = nothing, multicast_ttl=nothing
     end
 end
 
-_uv_hook_alloc_buf(sock::UdpSocket,size::Int32) = (c_malloc(size),size)
+_uv_hook_alloc_buf(sock::UdpSocket,size::Uint) = (c_malloc(size),size)
 
 _recv_start(sock::UdpSocket) = uv_error("recv_start",ccall(:uv_udp_recv_start,Cint,(Ptr{Void},Ptr{Void},Ptr{Void}),
                                                 sock.handle,cglobal(:jl_uv_alloc_buf),cglobal(:jl_uv_recvcb)))
@@ -456,8 +456,7 @@ function recv(sock::UdpSocket)
     stream_wait(sock,sock.recvnotify)::Vector{Uint8}
 end
 
-function _uv_hook_recv(sock::UdpSocket, nread::Ptr{Void}, buf_addr::Ptr{Void}, buf_size::Int32, addr::Ptr{Void}, flags::Int32)
-    nread = convert(Cssize_t,nread)
+function _uv_hook_recv(sock::UdpSocket, nread::Int, buf_addr::Ptr{Void}, buf_size::Uint, addr::Ptr{Void}, flags::Int32)
     if flags & UV_UDP_PARTIAL > 0
         # TODO: Decide what to do in this case. For now throw an error
         c_free(buf_addr)
