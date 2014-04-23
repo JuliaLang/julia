@@ -626,10 +626,35 @@ DLLEXPORT const char *jl_pathname_for_handle(uv_lib_t *uv_lib)
 #endif
 
 #ifdef _OS_WINDOWS_
-    // Not supported yet...
+    char tclfile[260];
+    int len = GetModuleFileNameA(handle,tclfile,sizeof(tclfile));
+    if (len)
+        return strdup(tclfile);
 #endif
     return NULL;
 }
+
+#ifdef _OS_WINDOWS_
+#include <dbghelp.h>
+static BOOL CALLBACK jl_EnumerateLoadedModulesProc64(
+  _In_      PCTSTR ModuleName,
+  _In_      DWORD64 ModuleBase,
+  _In_      ULONG ModuleSize,
+  _In_opt_  PVOID a
+)
+{
+    jl_value_t *v = jl_cstr_to_string(ModuleName);
+    JL_GC_PUSH1(v);
+    jl_cell_1d_push(a, v);
+    JL_GC_POP();
+    return TRUE;
+}
+// Takes a handle (as returned from dlopen()) and returns the absolute path to the image loaded
+DLLEXPORT int jl_dllist(jl_array_t *list)
+{
+    return EnumerateLoadedModules64(GetCurrentProcess(), jl_EnumerateLoadedModulesProc64, list);
+}
+#endif
 
 #ifdef __cplusplus
 }
