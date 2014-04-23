@@ -2155,16 +2155,19 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
         for j = length(body.args):-1:1
             b = body.args[j]
             if occ < 1
-                occ += occurs_more(b, x->is(x,a), 1)
+                occ += occurs_more(b, x->is(x,a), 5)
             end
-            if occ > 0 && (!affect_free || !effect_free(b, sv, true)) #TODO: we could short-circuit this test better by memoizing effect_free(b) in the for loop over i
+            if occ > 0 && affect_free && !effect_free(b, sv, true) #TODO: we could short-circuit this test better by memoizing effect_free(b) in the for loop over i
                 affect_free = false
+            end
+            if occ > 5
+                occ = 6
                 break
             end
         end
         free = effect_free(aei,sv,true)
-        affect_unfree = (islocal || (affect_free && !free) || (!affect_free && !effect_free(aei,sv,false)))
-        if affect_unfree || (occ==0 && is(aeitype,None))
+        if ((occ==0 && is(aeitype,None)) || islocal || !inline_worthy(aei, occ) ||
+                (affect_free && !free) || (!affect_free && !effect_free(aei,sv,false)))
             if occ != 0 # islocal=true is implied
                 # introduce variable for this argument
                 vnew = unique_name(enclosing_ast, ast)
@@ -2257,13 +2260,19 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
     return (expr, stmts)
 end
 
-function inline_worthy(body::Expr)
+inline_worthy(body, occurences::Int) = true
+function inline_worthy(body::Expr, occurences::Int=1) # 0 <= occurrences <= 6
+    occurences == 0 && return true
 #    if isa(body.args[1],QuoteNode) && (body.args[1]::QuoteNode).value === :inline
 #        shift!(body.args)
 #        return true
 #    end
-    if length(body.args) < 6 && occurs_more(body, e->true, 40) < 40
-        return true
+    symlim = div(8,occurences)
+    if length(body.args) < symlim
+        symlim *= 12
+        if occurs_more(body, e->true, symlim) < symlim
+            return true
+        end
     end
     return false
 end
