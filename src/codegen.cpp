@@ -1210,7 +1210,8 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
                 }
                 assert(val != NULL);
                 if (val->getType() != jl_pvalue_llvmt) {
-                    val = boxed(val,ctx);
+                    assert(vari.declType != (jl_value_t*)jl_any_type);
+                    val = boxed(val,ctx,vari.declType);
                     make_gcroot(val, ctx);
                 }
             }
@@ -2791,10 +2792,10 @@ static Value *alloc_local(jl_sym_t *s, jl_codectx_t *ctx)
     if (vtype != T_void && !vtype->isEmptyTy()) {
         lv = builder.CreateAlloca(vtype, 0, s->name);
         if (vtype != jl_pvalue_llvmt)
-            mark_julia_type(lv, jt);
+            lv = mark_julia_type(lv, jt);
         vi.isGhost = false;
         assert(lv != NULL);
-    } 
+    }
     else {
         vi.isGhost = true;
     }
