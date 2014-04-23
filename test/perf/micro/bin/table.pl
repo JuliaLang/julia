@@ -29,6 +29,7 @@ our $go_ver = `go version | cut -f3 -d" "`;
 our $lua_ver = `gsl-shell -v 2>&1 | grep Shell | cut -f3 -d" " | cut -f1 -d,`;
 our $javascript_ver = `node -e "console.log(process.versions.v8)"`;
 our $mathematica_ver = `echo quit | math -version | head -n 1 | cut -f2 -d" "`;
+our $stata_ver = `stata -q -b version && grep version stata.log | cut -f2 -d" " && rm stata.log`;
 
 our %systems = (
   "fortran"    => ["Fortran"     , "GCC $fortran_ver" ],
@@ -41,6 +42,7 @@ our %systems = (
   "go"         => ["Go"          , $go_ver ],
   "mathematica"=> ["Mathematica" , $mathematica_ver ],
   "lua"	       => ["LuaJIT"      , "gsl-shell $lua_ver" ],
+  "stata"      => ["Stata"       , $stata_ver ],
 );
 
 our @systems = qw(fortran julia python r matlab octave mathematica javascript go lua);

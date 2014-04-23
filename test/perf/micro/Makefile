@@ -95,6 +95,9 @@ benchmarks/javascript.csv: perf.js
 benchmarks/mathematica.csv: perf.nb
 	for t in 1 2 3 4 5; do $(MATHEMATICABIN) -noprompt -run "<<$<; Exit[]"; done >$@
 
+benchmarks/stata.csv: perf.do
+	for t in 1 2 3 4 5; do stata -b do $^ $@; done
+
 benchmarks/lua.csv: perf.lua
 	for t in 1 2 3 4 5; do gsl-shell $<; done >$@
 
@@ -118,6 +121,6 @@ benchmarks.html: bin/table.pl benchmarks.csv
 	@$(call PRINT_PERL, $^ >$@)
 
 clean:
-	@rm -rf perf.h bin/perf* bin/fperf* benchmarks/*.csv benchmarks.csv mods *~ octave-core
+	@rm -rf perf.h bin/perf* bin/fperf* benchmarks/*.csv benchmarks.csv mods *~ octave-core perf.log
 
 .PHONY: all perf clean
