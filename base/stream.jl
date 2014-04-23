@@ -870,24 +870,30 @@ dup(src::RawFD,target::RawFD) = systemerror("dup",-1==
     ccall((@windows? :_dup2 : :dup2),Int32,
     (Int32,Int32),src.fd,target.fd))
 
-@unix_only _fd(x::AsyncStream) = RawFD(
-    ccall(:jl_uv_handle,Int32,(Ptr{Void},),x.handle))
+_fd(x::IOStream) = RawFD(fd(x))
+@unix_only _fd(x::AsyncStream) = RawFD(ccall(:jl_uv_handle,Int32,(Ptr{Void},),x.handle))
 @windows_only _fd(x::AsyncStream) = WindowsRawSocket(
     ccall(:jl_uv_handle,Ptr{Void},(Ptr{Void},),x.handle))
 
 for (x,writable,unix_fd,c_symbol) in ((:STDIN,false,0,:jl_uv_stdin),(:STDOUT,true,1,:jl_uv_stdout),(:STDERR,true,2,:jl_uv_stderr))
     f = symbol("redirect_"*lowercase(string(x)))
+    _f = symbol(string("_",f))
     @eval begin
-        function ($f)(handle::AsyncStream)
+        function ($_f)(stream)
             global $x
             @windows? (
                 ccall(:SetStdHandle,stdcall,Int32,(Uint32,Ptr{Void}),
-                    $(-10-unix_fd),_get_osfhandle(_fd(handle)).handle) :
-                dup(_fd(handle),  RawFD($unix_fd)) )
+                    $(-10-unix_fd),_get_osfhandle(_fd(stream)).handle) :
+                dup(_fd(stream),  RawFD($unix_fd)) )
+            $x = stream
+        end
+        function ($f)(handle::AsyncStream)
+            $(_f)(handle)
             unsafe_store!(cglobal($(Expr(:quote,c_symbol)),Ptr{Void}),
                 handle.handle)
-            $x = handle
+            handle
         end
+        ($f)(handle::IOStream) = ($_f)(handle)
         function ($f)()
             read,write = (Pipe(C_NULL), Pipe(C_NULL))
             link_pipe(read,$(writable),write,$(!writable))

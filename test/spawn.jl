@@ -136,3 +136,13 @@ ducer = @async for i=1:100; produce(i); end
 yield()
 @test consume(ducer) == 1
 @test consume(ducer) == 2
+
+# redirect_*
+OLD_STDOUT = STDOUT
+fname = tempname()
+f = open(fname,"w")
+redirect_stdout(f)
+println("Hello World")
+redirect_stdout(STDOUT)
+close(f)
+@test "Hello World\n" == readall(fname)
