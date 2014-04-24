@@ -1079,7 +1079,7 @@ setindex!{T<:Integer}(A::SparseMatrixCSC, v::AbstractMatrix, i::Integer, J::Abst
 setindex!{T<:Integer}(A::SparseMatrixCSC, v::AbstractMatrix, I::AbstractVector{T}, j::Integer) = setindex!(A, v, I, [j])
 
 setindex!{Tv,T<:Integer}(A::SparseMatrixCSC{Tv}, x::Number, I::AbstractVector{T}, J::AbstractVector{T}) =
-      setindex!(A, fill(x::Tv, length(I), length(J)), I, J)
+      setindex!(A, fill(convert(Tv,x), length(I), length(J)), I, J)
 
 setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, S::Matrix, I::AbstractVector{T}, J::AbstractVector{T}) =
       setindex!(A, convert(SparseMatrixCSC{Tv,Ti}, S), I, J)
