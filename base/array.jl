@@ -208,8 +208,6 @@ convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
 convert{T,n,S}(::Type{Array{T}}, x::Array{S,n}) = convert(Array{T,n}, x)
 convert{T,n,S}(::Type{Array{T,n}}, x::Array{S,n}) = copy!(similar(x,T), x)
 
-convert{T,S,N}(::Type{AbstractArray{T,N}}, B::StridedArray{S,N}) = copy!(similar(B,T), B)
-
 function collect(T::Type, itr)
     if applicable(length, itr)
         # when length() isn't defined this branch might pollute the
