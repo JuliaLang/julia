@@ -34,6 +34,8 @@ LIBM = $(LIBMDIR)libopenlibm.a
 endif
 endif
 
+DSFMTDIR = $(JULIAHOME)/deps/random/dsfmt-$(DSFMT_VER)
+
 default: benchmarks.html
 
 export OMP_NUM_THREADS=1
@@ -45,7 +47,7 @@ perf.h: $(JULIAHOME)/deps/Versions.make
 	echo '#include "$(JULIAHOME)/deps/random/dsfmt-$(DSFMT_VER)/dSFMT.c"' >> $@
 
 bin/perf%: perf.c perf.h
-	$(CC) -std=c99 -O$* $< -o $@ -L$(BLASDIR) $(LIBBLAS) -L$(LIBMDIR) $(LIBM) -lpthread
+	$(CC) -std=c99 -O$* $< -o $@  -I$(DSFMTDIR) -L$(BLASDIR) $(LIBBLAS) -L$(LIBMDIR) $(LIBM) $(CFLAGS) -lpthread
 
 bin/fperf%: perf.f90
 	mkdir -p mods/$@ #Modules for each binary go in separate directories 
