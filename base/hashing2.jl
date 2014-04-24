@@ -1,6 +1,6 @@
 ## hashing BigInts, BigFloats, and Float16s ##
 
-function hash_integer(n::BigInt, h::Uint=zero(Uint))
+function hash_integer(n::BigInt, h::Uint)
     s = n.size
     s == 0 && return hash_integer(0, h)
     p = convert(Ptr{Uint}, n.d)
@@ -23,19 +23,19 @@ function decompose(x::BigFloat)
     s, int(x.exp - x.prec), int(x.sign)
 end
 
-hash(x::Float16, h::Uint=zero(Uint)) = hash(float64(x), h)
+hash(x::Float16, h::Uint) = hash(float64(x), h)
 
 ## hashing strings ##
 
-function hash{T<:ByteString}(s::Union(T,SubString{T}), h::Uint=zero(Uint))
+function hash{T<:ByteString}(s::Union(T,SubString{T}), h::Uint)
     h += 0x71e729fd56419c81
     ccall(:memhash_seed, Uint64, (Ptr{Void}, Int, Uint32), pointer(s), sizeof(s), h) + h
 end
-hash(s::String, h::Uint=zero(Uint)) = hash(bytestring(s), h)
+hash(s::String, h::Uint) = hash(bytestring(s), h)
 
 ## hashing collections ##
 
-function hash(v::Union(Tuple,AbstractArray,Associative), h::Uint=zero(Uint))
+function hash(v::Union(Tuple,AbstractArray,Associative), h::Uint)
     h += object_id(eltype(v))
     for x = v
         h = hash(x, h)
@@ -43,16 +43,16 @@ function hash(v::Union(Tuple,AbstractArray,Associative), h::Uint=zero(Uint))
     return h
 end
 
-hash(s::Set, h::Uint=zero(Uint)) = hash(sort(s.dict.keys[s.dict.slots .!= 0]), h)
+hash(s::Set, h::Uint) = hash(sort(s.dict.keys[s.dict.slots .!= 0]), h)
 
-hash(r::Range{Bool}, h::Uint=zero(Uint)) = invoke(hash, (Range, Uint), r, h)
-hash(B::BitArray, h::Uint=zero(Uint)) = hash((size(B),B.chunks), h)
-hash(a::AbstractArray{Bool}, h::Uint=zero(Uint)) = hash(bitpack(a), h)
+hash(r::Range{Bool}, h::Uint) = invoke(hash, (Range, Uint), r, h)
+hash(B::BitArray, h::Uint) = hash((size(B),B.chunks), h)
+hash(a::AbstractArray{Bool}, h::Uint) = hash(bitpack(a), h)
 
 # hashing ranges by component at worst leads to collisions for very similar ranges
-hash{T<:Range}(r::T, h::Uint=zero(Uint)) =
+hash{T<:Range}(r::T, h::Uint) =
     hash(first(r), hash(step(r), hash(last(r), h + object_id(eltype(T)))))
 
 ## hashing general objects and expressions ##
 
-hash(x::ANY,  h::Uint=zero(Uint)) = hash(object_id(x), h)
+hash(x::ANY,  h::Uint) = hash(object_id(x), h)

@@ -1,3 +1,7 @@
+## hashing a single value ##
+
+hash(x::Any) = hash(x, zero(Uint))
+
 ## core data hashing functions ##
 
 function hash_uint(n::Uint64)
@@ -25,7 +29,7 @@ end
 
 ## efficient value-based hashing of integers ##
 
-function hash_integer(n::Integer, h::Uint=zero(Uint))
+function hash_integer(n::Integer, h::Uint)
     h = hash_uint(uint(n & typemax(Uint)) $ h) $ h
     n = ifelse(n < 0, oftype(n,-n), n)
     n >>>= sizeof(Uint) << 3
@@ -88,20 +92,14 @@ end
 
 hx(a::Uint64, b::Float64, h::Uint) = hash_uint((3a + reinterpret(Uint64,b)) - h)
 
-hash(x::Uint64,  h::Uint=zero(Uint)) = hx(x, float64(x), h)
-hash(x::Int64,   h::Uint=zero(Uint)) = hx(reinterpret(Uint64,x), float64(x), h)
-hash(x::Float64, h::Uint=zero(Uint)) = hx(box(Uint64,fptosi(unbox(Float64,x))), ifelse(x==x,x,NaN), h)
+hash(x::Uint64,  h::Uint) = hx(x, float64(x), h)
+hash(x::Int64,   h::Uint) = hx(reinterpret(Uint64,x), float64(x), h)
+hash(x::Float64, h::Uint) = hx(box(Uint64,fptosi(unbox(Float64,x))), ifelse(x==x,x,NaN), h)
 
-hash(x::Union(Int8,Uint8,Int16,Uint16,Int32,Uint32)) = hash(int64(x))
-hash(x::Union(Float16,Float32)) = hash(float64(x))
+hash(x::Union(Int8,Uint8,Int16,Uint16,Int32,Uint32), h::Uint) = hash(int64(x), h)
+hash(x::Float32, h::Uint) = hash(float64(x), h)
 
-const hash_NaN = hash(NaN)
-const hash_pos_Inf = hash(+Inf)
-const hash_neg_Inf = hash(-Inf)
-const hash_pos_zero = hash(+0.)
-const hash_neg_zero = hash(-0.)
-
-function hash(x::Real, h::Uint=zero(Uint))
+function hash(x::Real, h::Uint)
     # decompose x as num*2^pow/den
     num, pow, den = decompose(x)::(Integer,Integer,Integer)
 
@@ -157,7 +155,7 @@ end
 const h_imag = 0x32a7a07f3e7cd1f9
 const hash_0_imag = hash(0, h_imag)
 
-function hash(z::Complex, h::Uint=zero(Uint))
+function hash(z::Complex, h::Uint)
     # TODO: with default argument specialization, this would be better:
     # hash(real(z), h $ hash(imag(z), h $ h_imag) $ hash(0, h $ h_imag))
     hash(real(z), h $ hash(imag(z), h_imag) $ hash_0_imag)
@@ -165,10 +163,10 @@ end
 
 ## special hashing for booleans and characters ##
 
-hash(x::Bool, h::Uint=zero(Uint)) = hash(int(x), h + 0x4cd135a1755139a5)
-hash(x::Char, h::Uint=zero(Uint)) = hash(int(x), h + 0x10f989ff0f886f11)
+hash(x::Bool, h::Uint) = hash(int(x), h + 0x4cd135a1755139a5)
+hash(x::Char, h::Uint) = hash(int(x), h + 0x10f989ff0f886f11)
 
 ## expression hashing ##
 
-hash(x::Symbol, h::Uint=zero(Uint)) = hash(object_id(x), h)
-hash(x::Expr, h::Uint=zero(Uint)) = hash(x.args, hash(x.head, h + 0x83c7900696d26dc6))
+hash(x::Symbol, h::Uint) = hash(object_id(x), h)
+hash(x::Expr, h::Uint) = hash(x.args, hash(x.head, h + 0x83c7900696d26dc6))

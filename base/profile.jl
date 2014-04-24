@@ -76,7 +76,7 @@ const UNKNOWN = LineInfo("?", "?", -1)
 
 isequal(a::LineInfo, b::LineInfo) = a.line == b.line && a.func == b.func && a.file == b.file
 
-function hash(li::LineInfo, h::Uint=zero(Uint))
+function hash(li::LineInfo, h::Uint)
     h += 0xf4fbda67fe20ce88
     h = hash(li.line, h)
     h = hash(li.file, h)
