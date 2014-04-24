@@ -1562,3 +1562,10 @@ f6502() = convert(Base.tupletail((Bool,Int...)), (10,))
 @test f6502() === (10,)
 @test convert((Bool,Int...,), (true,10)) === (true,10)
 @test convert((Int,Bool...), (true,1,0)) === (1,true,false)
+
+# issue on the flight from DFW
+# (type inference deducing Type{:x} rather than Symbol)
+type FooBarDFW{s}; end
+fooDFW(p::Type{FooBarDFW}) = string(p.parameters[1])
+fooDFW(p) = string(p.parameters[1])
+@test fooDFW(FooBarDFW{:x}) == "x" # not ":x"
