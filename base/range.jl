@@ -157,6 +157,8 @@ range(a::FloatingPoint, st::FloatingPoint, len::Integer) = FloatRange(a,st,len,o
 range(a::Real, st::FloatingPoint, len::Integer) = FloatRange(float(a), st, len, one(st))
 range(a::FloatingPoint, st::Real, len::Integer) = FloatRange(a, float(st), len, one(a))
 
+linrange(a::Real,b::Real,len::Integer) = range(a, (b-a)/(len-1),len)
+
 ## interface implementations
 
 similar(r::Range, T::Type, dims::Dims) = Array(T, dims)
