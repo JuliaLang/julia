@@ -538,8 +538,8 @@ Iterable Collections
 .. function:: reduce(op, v0, itr)
 
    Reduce the given collection ``ìtr`` with the given binary operator. Reductions
-   for certain commonly-used operators are available in a more convenient
-   1-argument form: ``maximum(itr)``, ``minimum(itr)``, ``sum(itr)``,
+   for certain commonly-used operators have special implementations which should be
+   used instead: ``maximum(itr)``, ``minimum(itr)``, ``sum(itr)``,
    ``prod(itr)``, ``any(itr)``, ``all(itr)``.
 
    The associativity of the reduction is implementation-dependent. This means

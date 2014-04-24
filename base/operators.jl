@@ -51,12 +51,6 @@ scalarmin(x::AbstractArray, y               ) = error("ordering is not well-defi
 
 ## definitions providing basic traits of arithmetic operators ##
 
-+() = 0
-*() = 1
-(&)() = error("zero-argument & is ambiguous")
-(|)() = error("zero-argument | is ambiguous")
-($)() = error("zero-argument \$ is ambiguous")
-
 +(x::Number) = x
 *(x::Number) = x
 (&)(x::Integer) = x

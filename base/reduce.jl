@@ -19,7 +19,7 @@ function reduce(op::Callable, itr) # this is a left fold
     end
     s = start(itr)
     if done(itr, s)
-        return op()  # empty collection
+        error("argument is empty")
     end
     (v, s) = next(itr, s)
     if done(itr, s)
@@ -51,7 +51,7 @@ end
 
 function reduce(op::Callable, A::AbstractArray)
     n = length(A)
-    n == 0 ? op() : n == 1 ? A[1] : r_pairwise(op,A, 1,n)
+    n == 0 ? error("argument is empty") : n == 1 ? A[1] : r_pairwise(op,A, 1,n)
 end
 
 function reduce(op::Callable, v0, A::AbstractArray)
@@ -179,7 +179,7 @@ end
 function sum(itr)
     s = start(itr)
     if done(itr, s)
-        if method_exists(eltype, (typeof(itr),))
+        if applicable(eltype, itr)
             T = eltype(itr)
             return zero(T) + zero(T)
         else
@@ -315,7 +315,7 @@ end
 function prod(itr)
     s = start(itr)
     if done(itr, s)
-        if method_exists(eltype, (typeof(itr),))
+        if applicable(eltype, itr)
             T = eltype(itr)
             return one(T) * one(T)
         else
@@ -505,7 +505,7 @@ end
 function mapreduce(f::Callable, op::Callable, itr)
     s = start(itr)
     if done(itr, s)
-        return op()  # empty collection
+        error("argument is empty")
     end
     (x, s) = next(itr, s)
     v = f(x)
@@ -545,7 +545,7 @@ function mr_pairwise(f::Callable, op::Callable, A::AbstractArray, i1,n)
 end
 function mapreduce(f::Callable, op::Callable, A::AbstractArray)
     n = length(A)
-    n == 0 ? op() : n == 1 ? f(A[1]) : mr_pairwise(f,op,A, 1,n)
+    n == 0 ? error("argument is empty") : n == 1 ? f(A[1]) : mr_pairwise(f,op,A, 1,n)
 end
 function mapreduce(f::Callable, op::Callable, v0, A::AbstractArray)
     n = length(A)
