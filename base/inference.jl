@@ -255,7 +255,7 @@ const tupleref_tfunc = function (A, t, i)
             return T
         end
     end
-    return wrapType ? Type{T} : T
+    return wrapType ? (isa(T,Type) ? Type{T} : typeof(T)) : T
 end
 t_func[tupleref] = (2, 2, tupleref_tfunc)
 
