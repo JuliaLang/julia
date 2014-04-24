@@ -145,7 +145,7 @@ function isless(a::VersionNumber, b::VersionNumber)
     return false
 end
 
-function hash(v::VersionNumber, h::Uint=zero(Uint))
+function hash(v::VersionNumber, h::Uint)
     h += 0x8ff4ffdb75f9fede
     h = hash(v.major, h)
     h = hash(v.minor, h)

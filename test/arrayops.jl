@@ -363,7 +363,7 @@ D = cat(3, B, B)
 immutable HashCollision
     x::Float64
 end
-Base.hash(::HashCollision) = uint(0)
+Base.hash(::HashCollision, h::Uint) = h
 @test map(x->x.x, unique(map(HashCollision, B), 1)) == C
 
 ## reduce ##
