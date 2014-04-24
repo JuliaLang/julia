@@ -103,6 +103,9 @@ benchmarks/stata.csv: perf.do
 benchmarks/lua.csv: perf.lua
 	for t in 1 2 3 4 5; do gsl-shell $<; done >$@
 
+benchmarks/java.csv: java/src/main/java/PerfBLAS.java
+	for t in 1 2 3 4 5; do cd java; mvn -q exec:java; done >$@
+
 BENCHMARKS = \
 	benchmarks/c.csv \
 	benchmarks/fortran.csv \
@@ -114,7 +117,8 @@ BENCHMARKS = \
 	benchmarks/r.csv \
 	benchmarks/lua.csv \
 	benchmarks/javascript.csv \
-	benchmarks/mathematica.csv
+	benchmarks/mathematica.csv \
+	benchmarks/java.csv
 
 benchmarks.csv: bin/collect.pl $(BENCHMARKS)
 	@$(call PRINT_PERL, $^ >$@)
