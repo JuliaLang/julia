@@ -39,7 +39,7 @@ end
 ## hashing rational values ##
 
 #=
-`decompose(x)`: non-canonical decomposition of rational values as `den*2^pow/num`.
+`decompose(x)`: non-canonical decomposition of rational values as `num*2^pow/den`.
 
 The decompose function is the point where rational-valued numeric types that support
 hashing hook into the hashing protocol. `decompose(x)` should return three integer
