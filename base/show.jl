@@ -2,7 +2,7 @@
 show(x) = show(STDOUT::IO, x)
 
 function print(io::IO, s::Symbol)
-    pname = convert(Ptr{Uint8}, s)
+    pname = cconvert(Ptr{Uint8}, s)
     write(io, pname, int(ccall(:strlen, Csize_t, (Ptr{Uint8},), pname)))
 end
 

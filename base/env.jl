@@ -98,7 +98,7 @@ function next(::EnvHash, i)
     if env == nothing
         error(BoundsError)
     end
-    env::ByteString
+    env = env::ByteString
     m = match(r"^(.*?)=(.*)$"s, env)
     if m == nothing
         error("malformed environment entry: $env")
