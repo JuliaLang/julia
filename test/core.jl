@@ -1121,9 +1121,9 @@ f4518(x::ASCIIString, y::Union(Int32,Int64)) = 1
 @test f4518("",1) == 1
 
 # issue #4581
-bitstype 64 Date4581{T}
+bitstype WORD_SIZE Date4581{T}
 let
-    x = Intrinsics.box(Date4581{Int}, Intrinsics.unbox(Int64,int64(1234)))
+    x = Intrinsics.box(Date4581{Int}, Intrinsics.unbox(Int,int(1234)))
     xs = Date4581[x]
     ys = copy(xs)
     @test ys !== xs
@@ -1132,7 +1132,7 @@ end
 
 # issue #6591
 function f6591(d)
-    Intrinsics.box(Int64, d)
+    Intrinsics.box(Int, d)
     (f->f(d))(identity)
 end
 let d = Intrinsics.box(Date4581{Int}, 1)
