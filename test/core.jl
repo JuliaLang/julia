@@ -1135,7 +1135,7 @@ function f6591(d)
     Intrinsics.box(Int64, d)
     (f->f(d))(identity)
 end
-let d = Intrinsics.box(Date4581{Int}, 1)
+let d = Intrinsics.box(Date4581{Int}, int64(1))
     @test isa(f6591(d), Date4581)
 end
 
