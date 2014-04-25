@@ -127,6 +127,29 @@ function decompose(x::BigFloat)
     s, int(x.exp - x.prec), int(x.sign)
 end
 
+## streamlined hashing for smallish rational types ##
+
+function hash{T<:Integer64}(x::Rational{T}, h::Uint)
+    num, den = Base.num(x), Base.den(x)
+    den == 1 && return hash(num, h)
+    den == 0 && return hash(ifelse(num > 0, Inf, -Inf), h)
+    if isodd(den)
+        pow = trailing_zeros(num)
+        num >>= pow
+    else
+        pow = trailing_zeros(den)
+        den >>= pow
+        pow = -pow
+        if den == 1 && abs(num) < 9007199254740992
+            return hash(float64(num) * 2.0^pow)
+        end
+    end
+    h = hash_integer(den, h)
+    h = hash_integer(pow, h)
+    h = hash_integer(num, h)
+    return h
+end
+
 ## hashing Float16s ##
 
 hash(x::Float16, h::Uint) = hash(float64(x), h)

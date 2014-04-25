@@ -96,6 +96,8 @@ mod(x::Unsigned, y::Signed) = rem(y+signed(rem(x,y)),y)
 # while there is a substantial performance penalty to 64-bit promotion.
 typealias Signed64 Union(Int8,Int16,Int32,Int64)
 typealias Unsigned64 Union(Uint8,Uint16,Uint32,Uint64)
+typealias Integer64 Union(Signed64,Unsigned64)
+
 div{T<:Signed64}  (x::T, y::T) = box(T,sdiv_int(unbox(T,x),unbox(T,y)))
 div{T<:Unsigned64}(x::T, y::T) = box(T,udiv_int(unbox(T,x),unbox(T,y)))
 rem{T<:Signed64}  (x::T, y::T) = box(T,srem_int(unbox(T,x),unbox(T,y)))
