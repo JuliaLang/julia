@@ -422,7 +422,15 @@ end
 # Result is sparse
 for (op, restype) in ((:iceil, Int), (:ceil, Nothing), 
                       (:ifloor, Int), (:floor, Nothing),
-                      (:sin, Nothing), (:tan, Nothing) )
+                      (:itrunc, Int), (:trunc, Nothing),
+                      (:iround, Int), (:round, Nothing),
+                      (:sin, Nothing), (:tan, Nothing), 
+                      (:sinh, Nothing), (:tanh, Nothing), 
+                      (:asin, Nothing), (:atan, Nothing), 
+                      (:asinh, Nothing), (:atanh, Nothing), 
+                      (:sinpi, Nothing), (:cosc, Nothing), 
+                      (:sind, Nothing), (:tand, Nothing), 
+                      (:asind, Nothing), (:atand, Nothing) )
     @eval begin
 
         function ($op){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti})
@@ -455,7 +463,7 @@ end # macro
 
 # Operations that map nonzeros to nonzeros, and zeros to zeros
 # Result is sparse
-for op in (:-, :abs, :abs2, )
+for op in (:-, :abs, :abs2, :log1p, :expm1)
     @eval begin
 
         function ($op)(A::SparseMatrixCSC)
@@ -473,7 +481,10 @@ end
 
 # Operations that map nonzeros to nonzeros, and zeros to nonzeros
 # Result is dense
-for op in (:cos, )
+for op in (:cos, :cosh, :acos, :sec, :csc, :cot, :acot, :sech, 
+           :csch, :coth, :asech, :acsch, :cospi, :sinc, :cosd, 
+           :cotd, :cscd, :secd, :acosd, :acotd, :log, :log2, :log10,
+           :exp, :exp2, :exp10)
     @eval begin
 
         function ($op){Tv}(A::SparseMatrixCSC{Tv})
