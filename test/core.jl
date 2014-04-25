@@ -1569,3 +1569,11 @@ type FooBarDFW{s}; end
 fooDFW(p::Type{FooBarDFW}) = string(p.parameters[1])
 fooDFW(p) = string(p.parameters[1])
 @test fooDFW(FooBarDFW{:x}) == "x" # not ":x"
+
+# issue #6611
+function crc6611(spec)
+    direcn = spec ? 1 : 2
+    local remainder::blech
+    ()->(remainder=1)
+end
+@test_throws UndefVarError crc6611(true)()
