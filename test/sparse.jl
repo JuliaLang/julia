@@ -229,3 +229,12 @@ end
 
 @test maximum(sparse(-ones(3,3))) == -1
 @test minimum(sparse(ones(3,3))) == 1
+
+# Unary functions
+a = sprand(5,15, 0.5)
+afull = full(a)
+for op in (:sin, :cos, :tan, :iceil, :ifloor, :ceil, :floor, :abs, :abs2)
+    @eval begin
+        @test ($op)(afull) == full($(op)(a))
+    end
+end
