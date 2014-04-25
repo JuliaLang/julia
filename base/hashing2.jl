@@ -27,7 +27,7 @@ end
 
 function hash(x::Real, h::Uint)
     # decompose x as num*2^pow/den
-    num, pow, den = decompose(x)::(Integer,Integer,Integer)
+    num, pow, den = decompose(x)
 
     # handle special values
     num == 0 && den == 0 && return hash(NaN, h)
