@@ -1900,11 +1900,12 @@ function effect_free(e::ANY, sv, allow_volatile::Bool)
             for a in ea
                 if first
                     first = false
-                    isa(a,SymbolNode) || return false
-                    typ = (a::SymbolNode).typ
-                    isa(typ,DataType) || return false
-                    !(typ::DataType).mutable || return false
-                elseif !effect_free(a,sv,allow_volatile)
+                    typ = exprtype(a)
+                    if !isType(typ) || !isa((typ::Type).parameters[1],DataType) || ((typ::Type).parameters[1]::DataType).mutable
+                        return false
+                    end
+                end
+                if !effect_free(a,sv,allow_volatile)
                     return false
                 end
             end
@@ -2166,7 +2167,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
             end
         end
         free = effect_free(aei,sv,true)
-        if ((occ==0 && is(aeitype,None)) || islocal || !inline_worthy(aei, occ) ||
+        if ((occ==0 && is(aeitype,None)) || islocal || (occ > 1 && !inline_worthy(aei, occ)) ||
                 (affect_free && !free) || (!affect_free && !effect_free(aei,sv,false)))
             if occ != 0 # islocal=true is implied
                 # introduce variable for this argument
@@ -2261,15 +2262,14 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
 end
 
 inline_worthy(body, occurences::Int) = true
-function inline_worthy(body::Expr, occurences::Int=1) # 0 <= occurrences <= 6
-    occurences == 0 && return true
+function inline_worthy(body::Expr, occurences::Int=1) # 0 < occurrences <= 6
 #    if isa(body.args[1],QuoteNode) && (body.args[1]::QuoteNode).value === :inline
 #        shift!(body.args)
 #        return true
 #    end
-    symlim = div(8,occurences)
+    symlim = div(6,occurences)
     if length(body.args) < symlim
-        symlim *= 12
+        symlim *= 6
         if occurs_more(body, e->true, symlim) < symlim
             return true
         end
