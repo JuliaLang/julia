@@ -30,10 +30,11 @@ end
 ## hashing small, built-in numeric types ##
 
 hx(a::Uint64, b::Float64, h::Uint) = hash_uint((3a + reinterpret(Uint64,b)) - h)
+const hx_NaN = hx(uint(0), NaN, uint(0))
 
 hash(x::Uint64,  h::Uint) = hx(x, float64(x), h)
 hash(x::Int64,   h::Uint) = hx(reinterpret(Uint64,x), float64(x), h)
-hash(x::Float64, h::Uint) = hx(box(Uint64,fptosi(unbox(Float64,x))), ifelse(isnan(x), NaN, x), h)
+hash(x::Float64, h::Uint) = isnan(x) ? (hx_NaN $ h) : hx(box(Uint64,fptosi(unbox(Float64,x))), x, h)
 
 hash(x::Union(Int8,Uint8,Int16,Uint16,Int32,Uint32), h::Uint) = hash(int64(x), h)
 hash(x::Float32, h::Uint) = hash(float64(x), h)
