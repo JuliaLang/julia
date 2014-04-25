@@ -1,3 +1,20 @@
+# Cartesian product iteration
+
+immutable SizeIterator{N}
+    I::NTuple{N,Int}
+end
+getindex(I::SizeIterator, n) = I.I[n]
+
+@ngenerate N NTuple{N,Int} start{N}(lim::SizeIterator{N}) = @ntuple N d->1
+done{N}(lim::SizeIterator{N}, I::NTuple{N,Int}) = I[N] > lim[N]
+@ngenerate N (NTuple{N,Int},NTuple{N,Int}) function next{N}(lim::SizeIterator{N}, I::NTuple{N,Int})
+    @nif N i->I[i]<lim[i] i->(newI = @ntuple N d->((d < i)  ? 1 : ((d == i) ? I[d]+1 : I[d])))
+    I, newI
+end
+
+eachindex(A::Array) = SizeIterator(size(A))
+eachindex(dims::Dims) = SizeIterator(dims)
+
 ### From array.jl
 
 @ngenerate N Nothing function checksize(A::AbstractArray, I::NTuple{N, Any}...)

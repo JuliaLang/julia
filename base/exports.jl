@@ -922,6 +922,7 @@ export
 # iteration
     done,
     enumerate,
+    eachindex,
     next,
     start,
     zip,
