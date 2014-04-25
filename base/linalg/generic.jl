@@ -311,7 +311,7 @@ function peakflops(n::Integer=2000; parallel::Bool=false)
     t = @elapsed a*a
     a = rand(n,n)
     t = @elapsed a*a
-    parallel ? sum(pmap(peakflops, [ n for i in 1:nworkers()])) : (2*n^3/t)
+    parallel ? sum(pmap(peakflops, [ n for i in 1:nworkers()])) : (2*float64(n)^3/t)
 end
 
 # BLAS-like in-place y=alpha*x+y function (see also the version in blas.jl
