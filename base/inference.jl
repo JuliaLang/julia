@@ -1864,7 +1864,12 @@ function effect_free(e::ANY, sv, allow_volatile::Bool)
             if is_known_call_p(e, is_pure_builtin, sv)
                 if !allow_volatile && is_known_call_p(e, (f)->contains_is(_pure_builtins_volatile, f), sv)
                     # arguments must be immutable to ensure e is affect_free
+                    first = true
                     for a in ea
+                        if first # first "arg" is the function name
+                            first = false
+                            continue
+                        end
                         if isa(a,Symbol)
                             return false
                         end
@@ -1890,7 +1895,22 @@ function effect_free(e::ANY, sv, allow_volatile::Bool)
                 end
                 return true
             end
-        elseif e.head === :new || e.head == :return
+        elseif e.head == :new
+            first = !allow_volatile
+            for a in ea
+                if first
+                    first = false
+                    typ = exprtype(a)
+                    if !isType(typ) || !isa((typ::Type).parameters[1],DataType) || ((typ::Type).parameters[1]::DataType).mutable
+                        return false
+                    end
+                end
+                if !effect_free(a,sv,allow_volatile)
+                    return false
+                end
+            end
+            return true
+        elseif e.head == :return
             for a in ea
                 if !effect_free(a,sv,allow_volatile)
                     return false
@@ -2136,16 +2156,19 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
         for j = length(body.args):-1:1
             b = body.args[j]
             if occ < 1
-                occ += occurs_more(b, x->is(x,a), 1)
+                occ += occurs_more(b, x->is(x,a), 5)
             end
-            if occ > 0 && (!affect_free || !effect_free(b, sv, true)) #TODO: we could short-circuit this test better by memoizing effect_free(b) in the for loop over i
+            if occ > 0 && affect_free && !effect_free(b, sv, true) #TODO: we could short-circuit this test better by memoizing effect_free(b) in the for loop over i
                 affect_free = false
+            end
+            if occ > 5
+                occ = 6
                 break
             end
         end
         free = effect_free(aei,sv,true)
-        affect_unfree = (islocal || (affect_free && !free) || (!affect_free && !effect_free(aei,sv,false)))
-        if affect_unfree || (occ==0 && is(aeitype,None))
+        if ((occ==0 && is(aeitype,None)) || islocal || (occ > 1 && !inline_worthy(aei, occ)) ||
+                (affect_free && !free) || (!affect_free && !effect_free(aei,sv,false)))
             if occ != 0 # islocal=true is implied
                 # introduce variable for this argument
                 vnew = unique_name(enclosing_ast, ast)
@@ -2238,13 +2261,18 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
     return (expr, stmts)
 end
 
-function inline_worthy(body::Expr)
+inline_worthy(body, occurences::Int) = true
+function inline_worthy(body::Expr, occurences::Int=1) # 0 < occurrences <= 6
 #    if isa(body.args[1],QuoteNode) && (body.args[1]::QuoteNode).value === :inline
 #        shift!(body.args)
 #        return true
 #    end
-    if length(body.args) < 6 && occurs_more(body, e->true, 40) < 40
-        return true
+    symlim = div(6,occurences)
+    if length(body.args) < symlim
+        symlim *= 6
+        if occurs_more(body, e->true, symlim) < symlim
+            return true
+        end
     end
     return false
 end
