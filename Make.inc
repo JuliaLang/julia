@@ -397,8 +397,8 @@ LIBLAPACK = $(LIBBLAS)
 LIBLAPACKNAME = $(LIBBLASNAME)
 else
 ifeq ($(USE_SYSTEM_LAPACK), 1)
-LIBLAPACK = -llapack
-LIBLAPACKNAME = liblapack
+LIBLAPACK ?= -llapack
+LIBLAPACKNAME ?= liblapack
 else
 LIBLAPACK = -L$(build_shlibdir) -llapack $(LIBBLAS)
 LIBLAPACKNAME = liblapack
