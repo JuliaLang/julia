@@ -629,7 +629,7 @@ besselh(nu::Real, k::Integer, z::Complex) = besselh(float64(nu), k, complex128(z
 besselh(nu::Real, k::Integer, x::Real) = besselh(float64(nu), k, complex128(x))
 @vectorize_2arg Number besselh
 
-besseli(nu::Real, z::Complex64) = complex64(bessely(float64(nu), complex128(z)))
+besseli(nu::Real, z::Complex64) = complex64(besseli(float64(nu), complex128(z)))
 besseli(nu::Real, z::Complex) = besseli(float64(nu), complex128(z))
 besseli(nu::Real, x::Integer) = besseli(nu, float64(x))
 function besseli(nu::Real, x::FloatingPoint)
