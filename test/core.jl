@@ -1577,3 +1577,14 @@ function crc6611(spec)
     ()->(remainder=1)
 end
 @test_throws UndefVarError crc6611(true)()
+
+# issue #6634
+function crc6634(spec)
+    A = Uint
+    remainder::A = 1
+    function handler(append)
+        remainder = append ? 1 : 2
+    end
+end
+@test crc6634(0x1)(true) == 1
+@test crc6634(0x1)(false) == 2
