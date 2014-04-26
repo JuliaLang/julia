@@ -26,11 +26,16 @@ import Core.Intrinsics: nan_dom_err, sqrt_llvm, box, unbox, powi_llvm
 
 # non-type specific math functions
 
-clamp(x::Real, lo::Real, hi::Real) = ifelse(x > hi, hi, ifelse(x < lo, lo, x))
-clamp{T<:Real}(x::AbstractArray{T,1}, lo::Real, hi::Real) = [clamp(xx, lo, hi) for xx in x]
-clamp{T<:Real}(x::AbstractArray{T,2}, lo::Real, hi::Real) =
+clamp{X,L,H}(x::X, lo::L, hi::H) =
+    ifelse(x > hi, convert(promote_type(X,L,H), hi),
+           ifelse(x < lo,
+                  convert(promote_type(X,L,H), lo),
+                  convert(promote_type(X,L,H), x)))
+
+clamp{T}(x::AbstractArray{T,1}, lo, hi) = [clamp(xx, lo, hi) for xx in x]
+clamp{T}(x::AbstractArray{T,2}, lo, hi) =
     [clamp(x[i,j], lo, hi) for i in 1:size(x,1), j in 1:size(x,2)]
-clamp{T<:Real}(x::AbstractArray{T}, lo::Real, hi::Real) =
+clamp{T}(x::AbstractArray{T}, lo, hi) =
     reshape([clamp(xx, lo, hi) for xx in x], size(x))
 
 # evaluate p[1] + x * (p[2] + x * (....)), i.e. a polynomial via Horner's rule
