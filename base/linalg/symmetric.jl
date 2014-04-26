@@ -37,14 +37,13 @@ ctranspose(A::Hermitian) = A
 factorize(A::HermOrSym) = bkfact(A.S, symbol(A.uplo), issym(A))
 \(A::HermOrSym, B::StridedVecOrMat) = \(bkfact(A.S, symbol(A.uplo), issym(A)), B)
 
-eigfact!{T<:BlasReal}(A::Symmetric{T}) = Eigen(LAPACK.syevr!('V', 'A', A.uplo, A.S, 0.0, 0.0, 0, 0, -1.0)...)
-eigfact!{T<:BlasComplex}(A::Hermitian{T}) = Eigen(LAPACK.syevr!('V', 'A', A.uplo, A.S, 0.0, 0.0, 0, 0, -1.0)...)
-eigfact{T<:BlasFloat}(A::HermOrSym{T}) = eigfact!(copy(A))
+eigfact!{T<:BlasFloat}(A::HermOrSym{T}) = Eigen(LAPACK.syevr!('V', 'A', A.uplo, A.S, 0.0, 0.0, 0, 0, -1.0)...)
+eigfact!{T<:BlasFloat}(A::HermOrSym{T}, il::Int, ih::Int) = Eigen(LAPACK.syevr!('V', 'I', A.uplo, A.S, 0.0, 0.0, il, ih, -1.0)...)
+eigfact!{T<:BlasFloat}(A::HermOrSym{T}, vl::Real, vh::Real) = Eigen(LAPACK.syevr!('V', 'V', A.uplo, A.S, vl, vh, 0, 0, -1.0)...)
 eigfact{T}(A::HermOrSym{T}) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); S != T ? eigfact!(convert(AbstractMatrix{S}, A)) : eigfact!(copy(A)))
-eigvals!{T<:BlasReal}(A::Symmetric{T}, il::Int=1, ih::Int=size(A,1)) = LAPACK.syevr!('N', 'I', A.uplo, A.S, 0.0, 0.0, il, ih, -1.0)[1]
-eigvals!{T<:BlasReal}(A::Symmetric{T}, vl::Real, vh::Real) = LAPACK.syevr!('N', 'V', A.uplo, A.S, vl, vh, 0, 0, -1.0)[1]
-eigvals!{T<:BlasComplex}(A::Hermitian{T}, il::Int=1, ih::Int=size(A,1)) = LAPACK.syevr!('N', 'I', A.uplo, A.S, 0.0, 0.0, il, ih, -1.0)[1]
-eigvals!{T<:BlasComplex}(A::Hermitian{T}, vl::Real, vh::Real) = LAPACK.syevr!('N', 'V', A.uplo, A.S, vl, vh, 0, 0, -1.0)[1]
+eigfact{T,U<:Number}(A::HermOrSym{T},l::U,h::U) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); S != T ? eigfact!(convert(AbstractMatrix{S}, A),l,h) : eigfact!(copy(A),l,h))
+eigvals!{T<:BlasFloat}(A::HermOrSym{T}, il::Int=1, ih::Int=size(A,1)) = LAPACK.syevr!('N', 'I', A.uplo, A.S, 0.0, 0.0, il, ih, -1.0)[1]
+eigvals!{T<:BlasFloat}(A::HermOrSym{T}, vl::Real, vh::Real) = LAPACK.syevr!('N', 'V', A.uplo, A.S, vl, vh, 0, 0, -1.0)[1]
 eigvals{T<:BlasFloat}(A::HermOrSym{T},l::Real=1,h::Real=size(A,1)) = eigvals!(copy(A),l,h)
 eigvals{T}(A::HermOrSym{T},l::Real=1,h::Real=size(A,1)) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); S != T ? eigvals!(convert(AbstractMatrix{S}, A, l, h)) : eigvals!(copy(A), l, h))
 eigmax(A::HermOrSym) = eigvals(A, size(A, 1), size(A, 1))[1]

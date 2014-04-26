@@ -548,8 +548,8 @@ eigfact(x::Number) = Eigen([x], fill(one(x), 1, 1))
 #     F = eigfact(A, permute=permute, scale=scale)
 #     F[:values], F[:vectors]
 # end
-function eig(A::Union(Number, AbstractMatrix); kwargs...)
-    F = eigfact(A, kwargs...)
+function eig(A::Union(Number, AbstractMatrix), args...; kwargs...)
+    F = eigfact(A, args..., kwargs...)
     F[:values], F[:vectors]
 end
 #Calculates eigenvectors
@@ -611,11 +611,6 @@ function eigfact!{T<:BlasComplex}(A::StridedMatrix{T}, B::StridedMatrix{T})
 end
 eigfact{T<:BlasFloat}(A::AbstractMatrix{T}, B::StridedMatrix{T}) = eigfact!(copy(A),copy(B))
 eigfact{TA,TB}(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) = (S = promote_type(Float32,typeof(one(TA)/norm(one(TA))),TB); eigfact!(S != TA ? convert(Matrix{S},A) : copy(A), S != TB ? convert(Matrix{S},B) : copy(B)))
-
-function eig(A::AbstractMatrix, B::AbstractMatrix)
-    F = eigfact(A, B)
-    F[:values], F[:vectors]
-end
 
 function eigvals!{T<:BlasReal}(A::StridedMatrix{T}, B::StridedMatrix{T})
     issym(A) && issym(B) && return eigvals!(Symmetric(A), Symmetric(B))
