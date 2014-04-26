@@ -531,8 +531,13 @@ macro handle_zero(ex)
     end
 end
 
+decode_oct(d::Real) = decode_oct(integer(d)) # TODO: real float decoding.
+decode_0ct(d::Real) = decode_0ct(integer(d)) # TODO: real float decoding.
+decode_dec(d::Real) = decode_dec(integer(d)) # TODO: real float decoding.
+decode_hex(d::Real) = decode_hex(integer(d)) # TODO: real float decoding.
+decode_HEX(d::Real) = decode_HEX(integer(d)) # TODO: real float decoding.
+
 handlenegative(d::Unsigned) = (false, d)
-handlenegative(d::Real) = handlenegative(integer(d)) # TODO: real float decoding.
 function handlenegative(d::Integer)
     if d < 0
         return true, unsigned(oftype(d,-d))
@@ -541,7 +546,7 @@ function handlenegative(d::Integer)
     end
 end
 
-function decode_oct(d::Real)
+function decode_oct(d::Integer)
     neg, x = handlenegative(d)
     @handle_zero x
     pt = i = div((sizeof(x)<<3)-leading_zeros(x)+2,3)
@@ -553,7 +558,7 @@ function decode_oct(d::Real)
     return neg, int32(pt), int32(pt)
 end
 
-function decode_0ct(d::Real)
+function decode_0ct(d::Integer)
     neg, x = handlenegative(d)
     # doesn't need special handling for zero
     pt = i = div((sizeof(x)<<3)-leading_zeros(x)+5,3)
@@ -565,7 +570,7 @@ function decode_0ct(d::Real)
     return neg, int32(pt), int32(pt)
 end
 
-function decode_dec(d::Real)
+function decode_dec(d::Integer)
     neg, x = handlenegative(d)
     @handle_zero x
     pt = i = Base.ndigits0z(x)
@@ -577,7 +582,7 @@ function decode_dec(d::Real)
     return neg, int32(pt), int32(pt)
 end
 
-function decode_hex(d::Real, symbols::Array{Uint8,1})
+function decode_hex(d::Integer, symbols::Array{Uint8,1})
     neg, x = handlenegative(d)
     @handle_zero x
     pt = i = (sizeof(x)<<1)-(leading_zeros(x)>>2)
@@ -592,8 +597,8 @@ end
 const hex_symbols = "0123456789abcdef".data
 const HEX_symbols = "0123456789ABCDEF".data
 
-decode_hex(x::Real) = decode_hex(x,hex_symbols)
-decode_HEX(x::Real) = decode_hex(x,HEX_symbols)
+decode_hex(x::Integer) = decode_hex(x,hex_symbols)
+decode_HEX(x::Integer) = decode_hex(x,HEX_symbols)
 
 function decode(b::Int, x::BigInt)
     neg = x.size < 0
@@ -636,9 +641,8 @@ end
 #   *_0ct(x,n) => ensure that the first octal digits is zero
 #   *_HEX(x,n) => use uppercase digits for hexadecimal
 
-# - sets neg[1]
-# - sets point[1]
-# - implies len[1] = point[1]
+# - returns (neg, point, len)
+# - implies len = point
 #
 
 function decode_dec(x::SmallFloatingPoint)
@@ -660,9 +664,8 @@ end
 
 ## fix decoding functions ##
 #
-# - sets neg[1]
-# - sets point[1]
-# - sets len[1]; if less than point[1], trailing zeros implied
+# - returns (neg, point, len)
+# - if len less than point, trailing zeros implied
 #
 
 fix_dec(x::Integer, n::Int) = decode_dec(x)
@@ -680,9 +683,8 @@ end
 
 ## ini decoding functions ##
 #
-# - sets neg[1]
-# - sets point[1]
-# - implies len[1] = n (requested digits)
+# - returns (neg, point, len)
+# - implies len = n (requested digits)
 #
 
 function ini_dec(d::Integer, n::Int)
