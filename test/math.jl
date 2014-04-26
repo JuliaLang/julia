@@ -136,6 +136,7 @@ y33 = bessely(3,3.)
 # issue #6653
 for f in (besselj,bessely,besseli,besselk,hankelh1,hankelh2)
     @test_approx_eq f(0,1) f(0,complex128(1))
+    @test_approx_eq f(0,1) f(0,complex64(1))
 end
 
 # beta, lbeta
