@@ -1157,6 +1157,9 @@ const default_keymap =
     "\ed" => edit_delete_next_word,
     # ^C
     "^C" => s->begin
+        try # raise the debugger if present
+            ccall(:jl_raise_debugger, Int, ())
+        end
         move_input_end(s)
         refresh_line(s)
         print(terminal(s), "^C\n\n")
