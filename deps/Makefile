@@ -201,7 +201,7 @@ endif
 endif
 
 LLVM_TARGET_FLAGS= --enable-targets=host
-LLVM_FLAGS = --disable-profiling --enable-shared --enable-static $(LLVM_TARGET_FLAGS) --disable-bindings --disable-docs
+LLVM_FLAGS += --disable-profiling --enable-shared --enable-static $(LLVM_TARGET_FLAGS) --disable-bindings --disable-docs
 LLVM_MFLAGS =
 ifeq ($(LLVM_ASSERTIONS), 1)
 LLVM_FLAGS += --enable-assertions 
@@ -212,7 +212,7 @@ else
 LLVM_FLAGS += --disable-assertions
 endif
 ifeq ($(LLVM_DEBUG), 1)
-LLVM_FLAGS += --disable-optimized
+LLVM_FLAGS += --disable-optimized --enable-debug-symbols --enable-keep-symbols
 else
 LLVM_FLAGS += --enable-optimized
 endif
