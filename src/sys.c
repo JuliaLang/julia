@@ -661,7 +661,7 @@ DLLEXPORT int jl_dllist(jl_array_t *list)
 DLLEXPORT void jl_raise_debugger(void)
 {
     size_t debugger = 0;
-#if defined(__APPLE__) && defined(DEBUG)
+#if defined(__APPLE__)
     // Code derived from:
     // https://developer.apple.com/library/mac/samplecode/sc2195/Listings/PublicUtility_CADebugger_cpp.html
     int                 junk;
