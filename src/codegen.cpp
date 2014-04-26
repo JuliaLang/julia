@@ -540,7 +540,7 @@ extern "C" jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *ty
 
 static void jl_setup_module(Module *m, bool add)
 {
-    m->addModuleFlag(llvm::Module::Warning, "Dwarf Version",4);
+    m->addModuleFlag(llvm::Module::Warning, "Dwarf Version",3);
 #ifdef LLVM34
     m->addModuleFlag(llvm::Module::Error, "Debug Info Version",
         llvm::DEBUG_METADATA_VERSION);
