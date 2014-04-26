@@ -3,6 +3,8 @@ using Base.Grisu
 export @printf, @sprintf
 
 ### printf formatter generation ###
+const SmallFloatingPoint = Union(Float64,Float32,Float16)
+const SmallNumber = Union(SmallFloatingPoint,Base.Signed64,Base.Unsigned64,Uint128,Int128)
 
 function gen(s::String)
     args = {}
@@ -196,11 +198,17 @@ function print_fixed(out, precision, pt, ndigits)
     end
 end
 
-function print_exp(out, exp)
+function print_exp(out, exp::Integer)
     write(out, exp < 0 ? '-' : '+')
     exp = abs(exp)
     d = div(exp,100)
-    d > 0 && write(out, char('0'+d))
+    if d > 0
+        if d >= 10
+            print(out, exp)
+            return
+        end
+        write(out, char('0'+d))
+    end
     exp = rem(exp,100)
     write(out, char('0'+div(exp,10)))
     write(out, char('0'+rem(exp,10)))
@@ -371,11 +379,31 @@ function gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     if '+' in flags || ' ' in flags
         width -= 1 # for the sign indicator
         if width > 0
-            padding = :($width-((exp<=-100)|(100<=exp)))
+            padding = quote
+                padn=$width
+                if (exp<=-100)|(100<=exp)
+                    if isa($x,SmallNumber)
+                        padn -= 1
+                    else
+                        padn -= Base.ndigits0z(exp) - 2
+                    end
+                end
+                padn
+            end
         end
     else
         if width > 0
-            padding = :($width-((exp<=-100)|(100<=exp))-neg)
+            padding = quote
+                padn=$width-neg
+                if (exp<=-100)|(100<=exp)
+                    if isa($x,SmallNumber)
+                        padn -= 1
+                    else
+                        padn -= Base.ndigits0z(exp) - 2
+                    end
+                end
+                padn
+            end
         end
     end
     # print space padding
@@ -613,7 +641,6 @@ end
 # - implies len[1] = point[1]
 #
 
-const SmallFloatingPoint = Union(Float64,Float32,Float16)
 function decode_dec(x::SmallFloatingPoint)
     if x == 0.0
         DIGITS[1] = '0'
