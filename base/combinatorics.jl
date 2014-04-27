@@ -41,6 +41,16 @@ else
 factorial(n::Union(Int8,Uint8,Int16,Uint16,Int32,Uint32)) = factorial(int64(n))
 end
 
+function factorial(n::Integer)
+    n < 0 && throw(DomainError())
+    local f::typeof(n*n), i::typeof(n*n)
+    f = 1
+    for i = 2:n
+        f *= i
+    end
+    return f
+end
+
 # computes n!/k!
 function factorial{T<:Integer}(n::T, k::T)
     if k < 0 || n < 0 || k > n
