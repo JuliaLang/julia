@@ -42,6 +42,8 @@ function median!{T<:Real}(v::AbstractVector{T}; checknan::Bool=true)
 end
 median{T<:Real}(v::AbstractArray{T}; checknan::Bool=true) =
     median!(vec(copy(v)), checknan=checknan)
+median{T}(v::AbstractArray{T}, region; checknan::Bool=true) = 
+    mapslices( x->median(x; checknan=checknan), v, region )
 
 
 ## variances
