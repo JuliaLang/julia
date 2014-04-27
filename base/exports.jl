@@ -537,7 +537,6 @@ export
     permutations,
     permute!,
     permutedims,
-    permutedims!,
     prod!,
     prod,
     promote_shape,
