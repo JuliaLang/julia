@@ -164,13 +164,13 @@ RandIntGen{T}(a::T, k::Uint64) = RandIntGen{T,Uint64}(a, k, maxmultiplemix(k))
 
 
 # generator for ranges
-RandIntGen{T<:Unsigned}(r::UnitRange{T}) = RandIntGen(first(r), convert(T,last(r) - first(r) + 1))
+RandIntGen{T<:Unsigned}(r::UnitRange{T}) = isempty(r) ? error("range must be non-empty") : RandIntGen(first(r), convert(T,last(r) - first(r) + 1))
 # specialized versions
 for (T, U) in [(Uint8, Uint32), (Uint16, Uint32),
                (Int8, Uint32), (Int16, Uint32), (Int32, Uint32), (Int64, Uint64), (Int128, Uint128),
                (Bool, Uint32), (Char, Uint32)]
 
-    @eval RandIntGen(r::UnitRange{$T}) = RandIntGen(first(r), convert($U, last(r) - first(r) + 1)) # overflow ok
+    @eval RandIntGen(r::UnitRange{$T}) = isempty(r) ? error("range must be non-empty") : RandIntGen(first(r), convert($U, last(r) - first(r) + 1)) # overflow ok
 end
 
 # this function uses 32 bit entropy for small ranges of length <= typemax(Uint32) + 1
