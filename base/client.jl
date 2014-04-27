@@ -286,6 +286,7 @@ function process_options(args::Vector{UTF8String})
         end
         i += 1
     end
+    atexit(cleanup_multi)
     return (quiet,repl,startup,color_set,no_history_file)
 end
 
