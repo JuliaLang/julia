@@ -282,3 +282,6 @@ end
 @test length(typemax(Uint):uint(1):(typemax(Uint)-1)) == 0
 @test length(typemax(Uint):uint(2):(typemax(Uint)-1)) == 0
 @test length((typemin(Int)+3):5:(typemin(Int)+1)) == 0
+
+# issue #6364
+@test length((1:64)*(pi/5)) == 64
