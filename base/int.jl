@@ -53,12 +53,8 @@ inv(x::Integer) = float(one(x))/float(x)
 isodd(n::Integer) = bool(rem(n,2))
 iseven(n::Integer) = !isodd(n)
 
-signbit(x::Unsigned) = 0
-signbit(x::Int8) = int(x>>>7)
-signbit(x::Int16) = int(x>>>15)
-signbit(x::Int32) = int(x>>>31)
-signbit(x::Int64) = int(x>>>63)
-signbit(x::Int128) = int(x>>>127)
+signbit(x::Integer) = x < 0
+signbit(x::Unsigned) = false
 
 flipsign(x::Int,    y::Int)    = box(Int,flipsign_int(unbox(Int,x),unbox(Int,y)))
 flipsign(x::Int64,  y::Int64)  = box(Int64,flipsign_int(unbox(Int64,x),unbox(Int64,y)))
