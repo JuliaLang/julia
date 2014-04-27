@@ -220,17 +220,14 @@ end
 abs(x::Float64) = box(Float64,abs_float(unbox(Float64,x)))
 abs(x::Float32) = box(Float32,abs_float(unbox(Float32,x)))
 
-isnan(x::FloatingPoint) = (x != x)
-isnan(x::Real) = isnan(float(x))
-isnan(x::Integer) = false
+isnan(x::FloatingPoint) = x != x
+isnan(x::Real) = false
 
-isinf(x::FloatingPoint) = (abs(x) == Inf)
-isinf(x::Real) = isinf(float(x))
-isinf(x::Integer) = false
-
-isfinite(x::FloatingPoint) = (x-x == 0)
-isfinite(x::Real) = isfinite(float(x))
+isfinite(x::FloatingPoint) = x - x == 0
+isfinite(x::Real) = decompose(x)[3] != 0
 isfinite(x::Integer) = true
+
+isinf(x::Real) = !isnan(x) & !isfinite(x)
 
 ## floating point traits ##
 
