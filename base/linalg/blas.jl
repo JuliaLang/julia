@@ -17,6 +17,8 @@ export
     gbmv,
     gemv!,
     gemv,
+    hemv!,
+    hemv,
     sbmv!,
     sbmv,
     symv!,
@@ -356,6 +358,35 @@ for (fname, elty) in ((:dsymv_,:Float64),
         end
         function symv(uplo::BlasChar, A::StridedMatrix{$elty}, x::StridedVector{$elty})
             symv(uplo, one($elty), A, x)
+        end
+    end
+end
+
+### hemv
+for (fname, elty) in ((:zhemv_,:Complex128),
+                      (:cgemv_,:Complex64))
+    @eval begin
+        function hemv!(uplo::Char, α::$elty, A::StridedMatrix{$elty}, x::StridedVector{$elty}, β::$elty, y::StridedVector{$elty})
+            n = size(A, 2)
+            n == length(x) || throw(DimensionMismatch(""))
+            size(A, 1) == length(y) || throw(DimensionMismatch(""))
+            lda = max(1, stride(A, 2))
+            incx = stride(x, 1)
+            incy = stride(y, 1)
+            ccall(($fname, libblas), Void,
+                (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
+                 Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                 Ptr{$elty}, Ptr{BlasInt}),
+                &uplo, &n, &α, A,
+                &lda, x, &incx, &β,
+                y, &incy)
+            y
+        end
+        function hemv(uplo::BlasChar, α::($elty), A::StridedMatrix{$elty}, x::StridedVector{$elty})
+            hemv!(uplo, α, A, x, zero($elty), similar(x))
+        end
+        function hemv(uplo::BlasChar, A::StridedMatrix{$elty}, x::StridedVector{$elty})
+            hemv(uplo, one($elty), A, x)
         end
     end
 end
