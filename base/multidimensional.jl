@@ -441,67 +441,161 @@ end
 
 ## permutedims
 
-@ngenerate N typeof(P) function permutedims!{T1,T2,N}(P::StridedArray{T1,N},B::StridedArray{T2,N}, perm)
+for (V, PT, BT) in {((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)}
+    @eval @ngenerate N typeof(P) function permutedims!{$(V...)}(P::$PT{$(V...)}, B::$BT{$(V...)}, perm)
+        dimsB = size(B)
+        length(perm) == N || error("expected permutation of size $N, but length(perm)=$(length(perm))")
+        isperm(perm) || error("input is not a permutation")
+        dimsP = size(P)
+        for i = 1:length(perm)
+            dimsP[i] == dimsB[perm[i]] || throw(DimensionMismatch("destination tensor of incorrect size"))
+        end
+
+        #calculates all the strides
+        strides_1 = 0
+        @nexprs N d->(strides_{d+1} = stride(B, perm[d]))
+
+        #Creates offset, because indexing starts at 1
+        offset = 1 - sum(@ntuple N d->strides_{d+1})
+
+        if isa(B, SubArray)
+            offset += B.first_index - 1
+            B = B.parent
+        end
+
+        ind = 1
+        @nexprs 1 d->(counts_{N+1} = strides_{N+1}) # a trick to set counts_($N+1)
+        @nloops(N, i, P,
+            d->(counts_d = strides_d), # PRE
+            d->(counts_{d+1} += strides_{d+1}), # POST
+            begin # BODY
+                sumc = sum(@ntuple N d->counts_{d+1})
+                @inbounds P[ind] = B[sumc+offset]
+                ind += 1
+            end)
+
+        return P
+    end
+end
+
+function permutedims1!{T1,T2,N}(P::StridedArray{T1,N},B::StridedArray{T2,N},perm;basesize=1024)
     length(perm) == N || error("expected permutation of size $N, but length(perm)=$(length(perm))")
     isperm(perm) || error("input is not a permutation")
     dims = size(P)
     for i = 1:N
         dims[i] == size(B,perm[i]) || throw(DimensionMismatch("destination tensor of incorrect size"))
     end
-
-    #calculates all the strides and dims as variables
-    @nexprs N d->(stridesB_{d} = stride(B, perm[d]))
-    @nexprs N d->(stridesP_{d} = stride(P, d))
-    @nexprs N d->(dims_{d} = dims[d])
     
-    # calculate blocking strategy
-    if isa(P,BitArray)
-        elszP=1
+    if collect(perm)==[1:N]
+        copy!(P,B)
+    elseif prod(dims)<=basesize
+        stridesP=ntuple(N,d->stride(P,d))
+        stridesB=ntuple(N,d->stride(B,perm[d]))
+        basepermutedims!(P,B,stridesP,stridesB,dims,ntuple(N,d->1))
     else
-        elszP=isbits(T1) ? sizeof(T1) : sizeof(Ptr)
+        # apply blocked permutation
+        stridesP=ntuple(N,d->stride(P,d))
+        stridesB=ntuple(N,d->stride(B,perm[d]))
+        bdims=blockdims(dims,stridesP,stridesB,basesize)
+        blockedpermutedims!(P,B,stridesP,stridesB,dims,bdims)
     end
-    if isa(B,BitArray)
-        elszB=1
+    return P
+end
+function permutedims2!{T1,T2,N}(P::StridedArray{T1,N},B::StridedArray{T2,N},perm;basesize=1024)
+    length(perm) == N || error("expected permutation of size $N, but length(perm)=$(length(perm))")
+    isperm(perm) || error("input is not a permutation")
+    dims = size(P)
+    for i = 1:N
+        dims[i] == size(B,perm[i]) || throw(DimensionMismatch("destination tensor of incorrect size"))
+    end
+    
+    if collect(perm)==[1:N]
+        copy!(P,B)
+    elseif prod(dims)<=basesize
+        stridesP=ntuple(N,d->stride(P,d))
+        stridesB=ntuple(N,d->stride(B,perm[d]))
+        basepermutedims!(P,B,stridesP,stridesB,dims,ntuple(N,d->1))
     else
-        elszB=isbits(T2) ? sizeof(T2) : sizeof(Ptr)
+        # apply recursive permutation
+        stridesP=ntuple(N,d->stride(P,d))
+        stridesB=ntuple(N,d->stride(B,perm[d]))
+        minstrides=ntuple(N,d->min(stridesP[d],stridesB[d]))
+        recursivepermutedims!(P,B,minstrides,stridesP,stridesB,dims,0,0,basesize)
     end
-    if (elszB+elszP)*length(P)<=1<<15
-        bdims=dims
-    else
-        bdims=blockdims(dims,elszP,(@ntuple N d->stridesP_{d}),elszB,(@ntuple N d->stridesB_{d}))
-    end
+    return P
+end
+
+@ngenerate N typeof(P) function blockedpermutedims!{T1,T2,N}(P::StridedArray{T1,N},B::StridedArray{T2,N},stridesP::NTuple{N,Int},stridesB::NTuple{N,Int},dims::NTuple{N,Int},bdims::NTuple{N,Int})
+    @nexprs N d->(dims_{d} = dims[d])
     @nexprs N d->(bdims_{d} = bdims[d])
-
-    if isa(B, SubArray)
-        offsetB = B.first_index
-        B = B.parent
-    else
-        offsetB = 1
-    end
-    if isa(P, SubArray)
-        offsetP = P.first_index
-        P = P.parent
-    else
-        offsetP = 1
-    end
-
-    @nexprs 1 d->(indB_{N} = offsetB)
-    @nexprs 1 d->(indP_{N} = offsetP)
-    @nloops(N, outer, d->1:bdims_{d}:dims_{d},
+    
+    # use blocked algorithms
+    @nexprs 1 d->(indB_{N} = 1)
+    @nexprs 1 d->(indP_{N} = 1)
+    @nloops(N, i, d->1:bdims_{d}:dims_{d},
         d->(indB_{d-1} = indB_{d};indP_{d-1}=indP_{d}), # PRE
         d->(indB_{d} += bdims_{d}*stridesB_{d};indP_{d} += bdims_{d}*stridesP_{d}), # POST
         begin # BODY
-            @nexprs 1 e->(ind2B_{N} = indB_0)
-            @nexprs 1 e->(ind2P_{N} = indP_0)
-            @nloops(N, inner, e->outer_{e}:min(outer_{e}+bdims_{e}-1,dims_{e}),
-                e->(ind2B_{e-1} = ind2B_{e};ind2P_{e-1}=ind2P_{e}), # PRE
-                e->(ind2B_{e} += stridesB_{e};ind2P_{e} += stridesP_{e}), # POST
-                @inbounds P[ind2P_0]=B[ind2B_0]) #BODY
+            offsetB=indB_0
+            offsetP=indP_0
+            blockdims=@ntuple N d->min(bdims_{d},dims_{d}-i_{d}+1)
+            basepermutedims!(P,B,stridesP,stridesB,blockdims,offsetP,offsetB) # base algorithm in block
         end)
     return P
 end
 
-function blockdims{N}(dims::NTuple{N,Int},elszA::Int,stridesA::NTuple{N,Int},elszB::Int,stridesB::NTuple{N,Int})
+function recursivepermutedims!{T1,T2,N}(P::StridedArray{T1,N},B::StridedArray{T2,N},minstrides::NTuple{N,Int},stridesP::NTuple{N,Int},stridesB::NTuple{N,Int},dims::NTuple{N,Int},offsetP::Int,offsetB::Int,basesize::Int)
+    if prod(dims)<=basesize
+        basepermutedims!(P,B,stridesP,stridesB,dims,offsetP,offsetB) # fall back to base algorithm for sufficiently small sizes
+    else
+        dmax=1
+        max=dims[dmax]*minstrides[dmax]
+        for d=2:N
+            newmax=dims[d]*minstrides[d]
+            if dims[d]>1 && newmax>max
+                dmax=d
+                max=newmax
+            end
+        end
+        newdim=dims[dmax]>>1
+        recursivepermutedims!(P,B,minstrides,stridesP,stridesB,ntuple(N,d->(d==dmax ? newdim : dims[d])),offsetP,offsetB,basesize)
+        recursivepermutedims!(P,B,minstrides,stridesP,stridesB,ntuple(N,d->(d==dmax ? dims[d]-newdim : dims[d])),offsetP+stridesP[dmax]*newdim,offsetB+stridesB[dmax]*newdim,basesize)
+    end
+    return P
+end
+
+@ngenerate N typeof(P) function basepermutedims!{T1,T2,N}(P::StridedArray{T1,N},B::StridedArray{T2,N},stridesP::NTuple{N,Int},stridesB::NTuple{N,Int},dims::NTuple{N,Int},offsetP::Int=0,offsetB::Int=0)
+    #calculates strides, dims and offset
+    @nexprs N d->(stridesB_{d} = stridesB[d])
+    @nexprs N d->(stridesP_{d} = stridesP[d])
+    @nexprs N d->(dims_{d} = dims[d])
+    if isa(B, SubArray)
+        startB = B.first_index
+        B = B.parent
+    else
+        startB = 1
+    end
+    if isa(P, SubArray)
+        startP = P.first_index
+        P = P.parent
+    else
+        startP = 1
+    end
+    startP+=offsetP
+    startB+=offsetB
+    
+    # copy data
+    @nexprs 1 d->(indB_{N} = startB)
+    @nexprs 1 d->(indP_{N} = startP)
+    @nloops(N, i, d->1:dims_{d},
+        d->(indB_{d-1} = indB_{d};indP_{d-1}=indP_{d}), # PRE
+        d->(indB_{d} += stridesB_{d};indP_{d} += stridesP_{d}), # POST
+        @inbounds P[indP_0]=B[indB_0])
+        
+    return P
+end
+
+function blockdims{N}(dims::NTuple{N,Int},stridesA::NTuple{N,Int},stridesB::NTuple{N,Int},blocksize::Int)
     # blocking strategy for permutedims
     if N==0
         return ()
@@ -509,30 +603,12 @@ function blockdims{N}(dims::NTuple{N,Int},elszA::Int,stridesA::NTuple{N,Int},els
         pA=sortperm(collect(stridesA))
         pB=sortperm(collect(stridesB))
         
-        cacheline=64
-        # determine cache
-        effectivecachesize=25600 # 64*400 = ifloor(cachesize/1.28) with cachesize=32k and 1.28 safety margin to prevent complete cachefill
-        
-        # if smallest stride of A or B is not 1, then the effect size a subblock of A
-        # or B will take in the cache depends not only on the element size but also on
-        # the number of unused data that will be copied together with every element
-        cachesizeA=min(elszA*stridesA[pA[1]],cacheline)
-        cachesizeB=min(elszB*stridesB[pB[1]],cacheline)
-    
-        # check if complete data fits into cache:
-        if (cachesizeA+cachesizeB)*prod(dims)<=effectivecachesize
+        # check if complete data fits into block:
+        if prod(dims)<=blocksize
             return dims
         end
     
-        # cache-friendly blocking strategy:
-        # bstep=ones(Int,N)
-        # for i=1:N
-        #     bstep[i]=max(1,div(cacheline,elszA*stridesA[i]),div(cacheline,elszB*stridesB[i]))
-        #     # bstep is the number of elements along that dimension that can be expected to be
-        #     # within a single cacheline for either array A or B; it would be suboptimal not to
-        #     # use all of them immediately
-        # end
-        
+        # blocking strategy:        
         bdims=ones(Int,N)
         i=1
         j=1
@@ -543,22 +619,22 @@ function blockdims{N}(dims::NTuple{N,Int},elszA::Int,stridesA::NTuple{N,Int},els
             while bdims[pA[i]]==dims[pA[i]]
                 i+=1
             end
-            bdims[pA[i]]+=1#bstep[pA[i]]
-            if (cachesizeA+cachesizeB)*prod(bdims)>effectivecachesize # this must become true at some point
-                bdims[pA[i]]-=1#bstep[pA[i]]
+            bdims[pA[i]]+=1
+            if prod(bdims)>blocksize # this must become true at some point
+                bdims[pA[i]]-=1
                 break
             end
             
             while bdims[pB[j]]==dims[pB[j]]
                 j+=1
             end
-            bdims[pB[j]]+=1#bstep[pB[j]]
-            if (cachesizeA+cachesizeB)*prod(bdims)>effectivecachesize # this must become true at some point
-                bdims[pB[j]]-=1#bstep[pB[j]]
+            bdims[pB[j]]+=1
+            if prod(bdims)>blocksize # this must become true at some point
+                bdims[pB[j]]-=1
                 break
             end
         end
-        return tuple(bdims...)
+        return tuple(bdims...)::NTuple{N,Int}
     end
 end
 
