@@ -48,7 +48,7 @@ Consider the following::
 
 Because ``a`` is a an array of abstract type ``Real``, it must be able
 to hold any Real value.  Since ``Real`` objects can be of arbitrary
-size and structure, a must be represented as an array of pointers to
+size and structure, ``a`` must be represented as an array of pointers to
 individually allocated ``Real`` objects.  Because ``f`` will always be
 a ``Float64``, we should instead, use::
 
