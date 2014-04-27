@@ -356,6 +356,7 @@ this implied type signature:
 You may find a list of field names using the ``names`` function.
 
 .. doctest::
+
     julia> names(foo)
     3-element Array{Any,1}:
      :bar
