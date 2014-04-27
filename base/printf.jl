@@ -531,11 +531,12 @@ macro handle_zero(ex)
     end
 end
 
-decode_oct(d::Real) = decode_oct(integer(d)) # TODO: real float decoding.
-decode_0ct(d::Real) = decode_0ct(integer(d)) # TODO: real float decoding.
-decode_dec(d::Real) = decode_dec(integer(d)) # TODO: real float decoding.
-decode_hex(d::Real) = decode_hex(integer(d)) # TODO: real float decoding.
-decode_HEX(d::Real) = decode_HEX(integer(d)) # TODO: real float decoding.
+# fallbacks for Real types without explicit decode_* implementation
+decode_oct(d::Real) = decode_oct(integer(d))
+decode_0ct(d::Real) = decode_0ct(integer(d))
+decode_dec(d::Real) = decode_dec(integer(d))
+decode_hex(d::Real) = decode_hex(integer(d))
+decode_HEX(d::Real) = decode_HEX(integer(d))
 
 handlenegative(d::Unsigned) = (false, d)
 function handlenegative(d::Integer)
@@ -661,6 +662,7 @@ function decode_dec(x::SmallFloatingPoint)
     end
     return NEG[1], POINT[1], LEN[1]
 end
+# TODO: implement decode_oct, decode_0ct, decode_hex, decode_HEX for SmallFloatingPoint
 
 ## fix decoding functions ##
 #
@@ -668,24 +670,31 @@ end
 # - if len less than point, trailing zeros implied
 #
 
-fix_dec(x::Integer, n::Int) = decode_dec(x)
+# fallback for Real types without explicit fix_dec implementation
 fix_dec(x::Real, n::Int) = fix_dec(float(x),n)
+
+fix_dec(x::Integer, n::Int) = decode_dec(x)
 
 function fix_dec(x::SmallFloatingPoint, n::Int)
     if n > BUFLEN-1; n = BUFLEN-1; end
     @grisu_ccall x Grisu.FIXED n
     if LEN[1] == 0
         DIGITS[1] = '0'
-        return (neg, int32(1), int32(1))
+        return (NEG[1], int32(1), int32(1))
     end
     return NEG[1], POINT[1], LEN[1]
 end
+
+# TODO: implement fix_dec for BigFloat
 
 ## ini decoding functions ##
 #
 # - returns (neg, point, len)
 # - implies len = n (requested digits)
 #
+
+# fallback for Real types without explicit fix_dec implementation
+ini_dec(x::Real, n::Int) = ini_dec(float(x),n)
 
 function ini_dec(d::Integer, n::Int)
     neg, x = handlenegative(d)
@@ -718,7 +727,6 @@ function ini_dec(d::Integer, n::Int)
     end
     return neg, pt, n
 end
-ini_dec(x::Real, n::Int) = ini_dec(float(x),n)
 
 function ini_dec(x::SmallFloatingPoint, n::Int)
     if x == 0.0
@@ -745,6 +753,8 @@ function ini_dec(x::BigInt, n::Int)
     end
     return (decode_dec(iround(x/big(10)^(d-n)))[1], d, n)
 end
+
+# TODO: implement ini_dec for BigFloat
 
 ### external printf interface ###
 
