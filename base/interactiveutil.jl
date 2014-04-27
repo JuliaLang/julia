@@ -257,7 +257,10 @@ function methodswith(t::Type, m::Module, showparents::Bool=false)
            mt = eval(m, nm)
            d = mt.env.defs
            while !is(d,())
-               if any(map(x -> x == t || (showparents && t <: x && x != Any && x != ANY && !isa(x, TypeVar)), d.sig))
+               if any(map(x -> begin
+                                   x == t || (showparents ? (t <: x) : (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
+                                   x != Any && x != ANY
+                               end, d.sig))
                    push!(meths, d)
                end
                d = d.next
