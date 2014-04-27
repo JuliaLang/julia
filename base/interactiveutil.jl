@@ -258,7 +258,8 @@ function methodswith(t::Type, m::Module, showparents::Bool=false)
            d = mt.env.defs
            while !is(d,())
                if any(map(x -> begin
-                                   x == t || (showparents ? (t <: x) : (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
+                                   x == t || (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
+                                                            (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
                                    x != Any && x != ANY
                                end, d.sig))
                    push!(meths, d)
@@ -267,7 +268,7 @@ function methodswith(t::Type, m::Module, showparents::Bool=false)
            end
         end
     end
-    return meths
+    return unique(meths)
 end
 
 function methodswith(t::Type, showparents::Bool=false)
