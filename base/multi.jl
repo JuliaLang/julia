@@ -1592,12 +1592,12 @@ function check_same_host(pids)
     end
 end
 
-function cleanup_multi()
+function terminate_all_workers()
     if myid() != 1
         return
     end
     
-    if nworkers() > 1
+    if nprocs() > 1
         ret = rmprocs(workers(); waitfor=0.5)
         if ret != :ok
             warn("Forcibly interrupting busy workers")
@@ -1610,4 +1610,3 @@ function cleanup_multi()
         end
      end   
 end
-
