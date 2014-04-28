@@ -136,32 +136,67 @@ rand(T::Type, dims::Dims) = rand!(Array(T, dims))
 rand{T<:Number}(::Type{T}) = error("no random number generator for type $T; try a more specific type")
 rand{T<:Number}(::Type{T}, dims::Int...) = rand(T, dims)
 
-# Generate random integer within a range
+
+## Generate random integer within a range
+
+# remainder function according to Knuth, where rem_knuth(a, 0) = a
+rem_knuth(a::Uint, b::Uint) = a % (b + (b == 0)) + a * (b == 0)
+rem_knuth{T<:Unsigned}(a::T, b::T) = b != 0 ? a % b : a
+
+# maximum multiple of k <= 2^bits(T) decremented by one,
+# that is 0xFFFFFFFF if k = typemax(T) - typemin(T) with intentional underflow
+maxmultiple(k::Uint32) = convert(Uint32, div(0x0000000100000000,k + (k == 0))*k - 1)
+maxmultiple(k::Uint64) = convert(Uint64, div(0x00000000000000010000000000000000, k + (k == 0))*k - 1)
+# maximum multiple of k within 1:typemax(Uint128)
+maxmultiple(k::Uint128) = div(typemax(Uint128), k + (k == 0))*k - 1
+# maximum multiple of k within 1:2^32 or 1:2^64, depending on size
+maxmultiplemix(k::Uint64) = convert(Uint64, div((k >> 32 != 0)*0x0000000000000000FFFFFFFF00000000 + 0x0000000100000000, k + (k == 0))*k - 1)
 
 immutable RandIntGen{T<:Integer, U<:Unsigned}
     a::T   # first element of the range
-    k::U   # range length
-    u::U   # maximum multiple of k within the domain of U
-
-    RandIntGen(a::T, k::U) = new(a, k, div(typemax(U),k)*k)
+    k::U   # range length or zero for full range
+    u::U   # rejection threshold
 end
+# generators with 32, 128 bits entropy
+RandIntGen{T, U<:Union(Uint32, Uint128)}(a::T, k::U) = RandIntGen{T, U}(a, k, maxmultiple(k))
+# mixed 32/64 bits entropy generator
+RandIntGen{T}(a::T, k::Uint64) = RandIntGen{T,Uint64}(a, k, maxmultiplemix(k))
 
-RandIntGen{T<:Unsigned}(r::UnitRange{T}) = RandIntGen{T,T}(first(r), convert(T, length(r)))
 
+# generator for ranges
+RandIntGen{T<:Unsigned}(r::UnitRange{T}) = isempty(r) ? error("range must be non-empty") : RandIntGen(first(r), convert(T,last(r) - first(r) + 1))
 # specialized versions
-for (T, U) in [(Uint8, Uint32), (Uint16, Uint32), (Int8, Uint32), (Int16, Uint32), 
-               (Int32, Uint32), (Int64, Uint64), (Int128, Uint128), 
+for (T, U) in [(Uint8, Uint32), (Uint16, Uint32),
+               (Int8, Uint32), (Int16, Uint32), (Int32, Uint32), (Int64, Uint64), (Int128, Uint128),
                (Bool, Uint32), (Char, Uint32)]
 
-    @eval RandIntGen(r::UnitRange{$T}) = RandIntGen{$T, $U}(first(r), convert($U, length(r)))
+    @eval RandIntGen(r::UnitRange{$T}) = isempty(r) ? error("range must be non-empty") : RandIntGen(first(r), convert($U, last(r) - first(r) + 1)) # overflow ok
 end
 
-function rand{T<:Integer,U<:Unsigned}(g::RandIntGen{T,U})
+# this function uses 32 bit entropy for small ranges of length <= typemax(Uint32) + 1
+# RandIntGen is responsible for providing the right value of k
+function rand{T<:Union(Uint64, Int64)}(g::RandIntGen{T,Uint64})
+    local x::Uint64
+    if (g.k - 1) >> 32 == 0
+        x = rand(Uint32)
+        while x > g.u
+            x = rand(Uint32)
+        end
+    else
+        x = rand(Uint64)
+        while x > g.u
+            x = rand(Uint64)
+        end
+    end
+    return convert(T, g.a + rem_knuth(x, g.k))
+end
+
+function rand{T<:Integer, U<:Unsigned}(g::RandIntGen{T,U})
     x = rand(U)
-    while x >= g.u
+    while x > g.u
         x = rand(U)
     end
-    convert(T, g.a + rem(x, g.k))
+    convert(T, g.a + rem_knuth(x, g.k))
 end
 
 rand{T<:Union(Signed,Unsigned,Bool,Char)}(r::UnitRange{T}) = rand(RandIntGen(r))
