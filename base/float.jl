@@ -150,18 +150,10 @@ mod{T<:FloatingPoint}(x::T, y::T) = rem(y+rem(x,y),y)
 <=(x::Float32, y::Float32) = le_float(unbox(Float32,x),unbox(Float32,y))
 <=(x::Float64, y::Float64) = le_float(unbox(Float64,x),unbox(Float64,y))
 
-isequal{T<:FloatingPoint}(x::T, y::T) =
-    ((x==y) & (signbit(x)==signbit(y))) | (isnan(x)&isnan(y))
-
 isequal(x::Float32, y::Float32) = fpiseq(unbox(Float32,x),unbox(Float32,y))
 isequal(x::Float64, y::Float64) = fpiseq(unbox(Float64,x),unbox(Float64,y))
 isless (x::Float32, y::Float32) = fpislt(unbox(Float32,x),unbox(Float32,y))
 isless (x::Float64, y::Float64) = fpislt(unbox(Float64,x),unbox(Float64,y))
-
-isless(a::FloatingPoint, b::FloatingPoint) =
-    (a<b) | (!isnan(a) & (isnan(b) | (signbit(a)>signbit(b))))
-isless(a::Real, b::FloatingPoint) = (a<b) | isless(float(a),b)
-isless(a::FloatingPoint, b::Real) = (a<b) | isless(a,float(b))
 
 function cmp(x::FloatingPoint, y::FloatingPoint)
     (isnan(x) || isnan(y)) && throw(DomainError())

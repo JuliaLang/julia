@@ -115,7 +115,7 @@ function ident_cmp(A::(Union(Int,ASCIIString)...),
     !done(A,i) && done(B,j) ? +1 : 0
 end
 
-function isequal(a::VersionNumber, b::VersionNumber)
+function ==(a::VersionNumber, b::VersionNumber)
     (a.major != b.major) && return false
     (a.minor != b.minor) && return false
     (a.patch != b.patch) && return false
@@ -126,7 +126,7 @@ end
 
 issupbuild(v::VersionNumber) = length(v.build)==1 && isempty(v.build[1])
 
-function isless(a::VersionNumber, b::VersionNumber)
+function <(a::VersionNumber, b::VersionNumber)
     (a.major < b.major) && return true
     (a.major > b.major) && return false
     (a.minor < b.minor) && return true

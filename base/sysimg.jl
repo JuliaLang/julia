@@ -175,7 +175,7 @@ big(q::Rational) = big(num(q))//big(den(q))
 big(z::Complex) = complex(big(real(z)),big(imag(z)))
 @vectorize_1arg Number big
 
-# moer hashing definitions
+# more hashing definitions
 include("hashing2.jl")
 
 # random number generation and statistics
