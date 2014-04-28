@@ -718,7 +718,7 @@ function alignment(x::Real)
                    (length(m.captures[1]), length(m.captures[2]))
 end
 function alignment(x::Complex)
-    m = match(r"^(.*,)(.*)$", sprint(showcompact_lim, x))
+    m = match(r"^(.*[\+\-])(.*)$", sprint(showcompact_lim, x))
     m == nothing ? (length(sprint(showcompact_lim, x)), 0) :
                    (length(m.captures[1]), length(m.captures[2]))
 end
