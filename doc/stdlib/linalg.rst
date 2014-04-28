@@ -302,7 +302,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: diag(M[, k])
 
-   The ``k``-th diagonal of a matrix, as a vector.
+   The ``k``-th diagonal of a matrix, as a vector. Use ``diagm`` to construct a diagonal matrix.
 
 .. function:: diagm(v[, k])
 
