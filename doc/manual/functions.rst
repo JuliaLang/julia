@@ -548,10 +548,34 @@ in a certain directory::
         end
     end
 
-The function argument to ``cd`` takes no arguments; it is just a block of
-code. The function argument to ``open`` receives a handle to the opened
-file.
+The function argument to ``cd`` does not have to accept any arguments;
+a somewhat simplified version of its implementation is::
 
+    function cd(f::Function, dir::String)
+        old = pwd()
+        try
+            cd(dir)
+            f()
+        finally
+            cd(old)
+        end
+    end
+
+In contrast, the function argument to ``open`` receives a handle to the
+opened file::
+
+    function open(f::Function, args...)
+        io = open(args...)
+        try
+            f(io)
+        finally
+            close(io)
+        end
+    end
+
+In using the ``do`` block syntax, it helps to check the documentation
+or implementation, to know which arguments are passed to the user
+function.
 
 Further Reading
 ---------------
