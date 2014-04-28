@@ -562,6 +562,9 @@ function isconstantfunc(f::ANY, sv::StaticVarInfo)
     if isa(f,QuoteNode) && isa(f.value, Function)
         return f.value
     end
+    if isa(f,Function)
+        return f
+    end
     if isa(f,SymbolNode)
         f = f.name
     end
