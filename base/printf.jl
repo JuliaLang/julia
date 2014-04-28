@@ -242,11 +242,11 @@ function gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
     else
         fn = :decode_dec
     end
-    push!(blk.args, :((do_out, args) = $fn(out, $x, $flags, $width, $precision, $c)::(Bool,Tuple)))
+    push!(blk.args, :((do_out, args) = $fn(out, $x, $flags, $width, $precision, $c)))
     ifblk = Expr(:if, :do_out, Expr(:block))
     push!(blk.args, ifblk)
     blk = ifblk.args[2]
-    push!(blk.args, :((len, pt, neg) = args::(Int32,Int32,Bool)))
+    push!(blk.args, :((len, pt, neg) = args))
     # calculate padding
     width -= length(prefix)
     space_pad = width > max(1,precision) && '-' in flags ||
@@ -309,11 +309,11 @@ function gen_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
     x, ex, blk = special_handler(flags,width)
     # interpret the number
     if precision < 0; precision = 6; end
-    push!(blk.args, :((do_out, args) = fix_dec(out, $x, $flags, $width, $precision, $c)::(Bool,Tuple)))
+    push!(blk.args, :((do_out, args) = fix_dec(out, $x, $flags, $width, $precision, $c)))
     ifblk = Expr(:if, :do_out, Expr(:block))
     push!(blk.args, ifblk)
     blk = ifblk.args[2]
-    push!(blk.args, :((len, pt, neg) = args::(Int32,Int32,Bool)))
+    push!(blk.args, :((len, pt, neg) = args))
     # calculate padding
     padding = nothing
     if precision > 0 || '#' in flags
@@ -373,11 +373,11 @@ function gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # interpret the number
     if precision < 0; precision = 6; end
     ndigits = min(precision+1,BUFLEN-1)
-    push!(blk.args, :((do_out, args) = ini_dec(out,$x,$ndigits, $flags, $width, $precision, $c)::(Bool,Tuple)))
+    push!(blk.args, :((do_out, args) = ini_dec(out,$x,$ndigits, $flags, $width, $precision, $c)))
     ifblk = Expr(:if, :do_out, Expr(:block))
     push!(blk.args, ifblk)
     blk = ifblk.args[2]
-    push!(blk.args, :((len, pt, neg) = args::(Int32,Int32,Bool)))
+    push!(blk.args, :((len, pt, neg) = args))
     push!(blk.args, :(exp = pt-1))
     expmark = c=='E' ? "E" : "e"
     if precision==0 && '#' in flags
