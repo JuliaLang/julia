@@ -603,8 +603,33 @@ function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,
                 indent = Base.indentation(input)[1]
                 input = Base.unindent(lstrip(input), indent)
             end
-            edit_insert(LineEdit.buffer(s),input)
-            LineEdit.refresh_line(s)
+            buf = copy(LineEdit.buffer(s))
+            edit_insert(buf,input)
+            string = takebuf_string(buf)
+            pos = 0
+            sz = length(string.data)
+            while pos <= sz
+                oldpos = pos
+                ast, pos = Base.parse(string, pos, raise=false)
+                # Get the line and strip leading and trailing whitespace
+                line = strip(bytestring(string.data[max(oldpos, 1):min(pos-1, sz)]))
+                isempty(line) && continue
+                LineEdit.replace_line(s, line)
+                LineEdit.refresh_line(s)
+                (pos > sz && last(string) != '\n') && break
+                if !isa(ast, Expr) || (ast.head != :continue && ast.head != :incomplete)
+                    LineEdit.commit_line(s)
+                    # This is slightly ugly but ok for now
+                    terminal = LineEdit.terminal(s)
+                    stop_reading(terminal)
+                    raw!(terminal, false) && disable_bracketed_paste(terminal)
+                    LineEdit.mode(s).on_done(s, LineEdit.buffer(s), true)
+                    raw!(terminal, true) && enable_bracketed_paste(terminal)
+                    start_reading(terminal)
+                else
+                    break
+                end
+            end
         end,
     }
 
