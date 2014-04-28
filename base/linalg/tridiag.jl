@@ -57,17 +57,19 @@ function \{T<:BlasFloat}(M::SymTridiagonal{T}, rhs::StridedVecOrMat{T})
 end
 
 #Wrap LAPACK DSTE{GR,BZ} to compute eigenvalues
-eig{T<:BlasFloat}(m::SymTridiagonal{T}) = LAPACK.stegr!('V', copy(m.dv), copy(m.ev))
-eigvals{T<:BlasFloat}(m::SymTridiagonal{T}, il::Int, iu::Int) = LAPACK.stegr!('N', 'I', copy(m.dv), copy(m.ev), 0.0, 0.0, il, iu)[1]
-eigvals{T<:BlasFloat}(m::SymTridiagonal{T}, vl::Real, vu::Real) = LAPACK.stegr!('N', 'V', copy(m.dv), copy(m.ev), vl, vu, 0, 0)[1]
-eigvals{T<:BlasFloat}(m::SymTridiagonal{T}) = LAPACK.stev!('N', copy(m.dv), copy(m.ev))[1]
+eigfact!{T<:BlasFloat}(m::SymTridiagonal{T}) = Eigen(LAPACK.stegr!('V', m.dv, m.ev)...)
+eigfact!{T<:BlasFloat}(m::SymTridiagonal{T}, irange::UnitRange) = Eigen(LAPACK.stegr!('V', 'I', m.dv, m.ev, 0.0, 0.0, irange.start, irange.stop)...)
+eigfact!{T<:BlasFloat}(m::SymTridiagonal{T}, vl::Real, vu::Real) = Eigen(LAPACK.stegr!('V', m.dv, m.ev, convert(T, vl), convert(T, vu), 0, 0)...)
+eigvals!{T<:BlasFloat}(m::SymTridiagonal{T}) = LAPACK.stegr!('N', 'A', m.dv, m.ev, 0.0, 0.0, 0, 0)[1]
+eigvals!{T<:BlasFloat}(m::SymTridiagonal{T}, irange::UnitRange) = LAPACK.stegr!('N', 'I', m.dv, m.ev, 0.0, 0.0, irange.start, irange.stop)[1]
+eigvals!{T<:BlasFloat}(m::SymTridiagonal{T}, vl::Real, vu::Real) = LAPACK.stegr!('N', 'V', m.dv, m.ev, vl, vu, 0, 0)[1]
 
 #Computes largest and smallest eigenvalue
 eigmax(m::SymTridiagonal) = eigvals(m, size(m, 1), size(m, 1))[1]
 eigmin(m::SymTridiagonal) = eigvals(m, 1, 1)[1]
 
 #Compute selected eigenvectors only corresponding to particular eigenvalues
-eigvecs(m::SymTridiagonal) = eig(m)[2]
+eigvecs(m::SymTridiagonal) = eigfact(m)[:vectors]
 eigvecs{T<:BlasFloat,Eigenvalue<:Real}(m::SymTridiagonal{T}, eigvals::Vector{Eigenvalue}) = LAPACK.stein!(m.dv, m.ev, eigvals)
 
 ###################
