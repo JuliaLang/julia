@@ -6017,9 +6017,10 @@ popdisplay(d::Display)
 
 "),
 
-("Base","median","median(v; checknan::Bool=true)
+("Base","median","median(v[, region]; checknan::Bool=true)
 
-   Compute the median of a vector \"v\". If keyword argument
+   Compute the median of a vector \"v\", optionally
+   along dimensions in \"region\". If keyword argument
    \"checknan\" is true (the default), an error is raised for data
    containing NaN values. Note: Julia does not ignore \"NaN\" values
    in the computation. For applications requiring the handling of
