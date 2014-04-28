@@ -478,7 +478,74 @@ for (V, PT, BT) in {((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)}
     end
 end
 
-function permutedims1!{T1,T2,N}(P::StridedArray{T1,N},B::StridedArray{T2,N},perm;basesize::Int=1024)
+@ngenerate N typeof(P) function permutedims0!{T1,T2,N}(P::Array{T1,N},B::StridedArray{T2,N},perm)
+    length(perm) == N || error("expected permutation of size $N, but length(perm)=$(length(perm))")
+    isperm(perm) || error("input is not a permutation")
+    dims = size(P)
+    for i = 1:N
+        dims[i] == size(B,perm[i]) || throw(DimensionMismatch("destination tensor of incorrect size"))
+    end
+    
+    #calculates strides, dims and offset
+    @nexprs N d->(stridesB_{d} = stride(B,perm[d]))
+    @nexprs N d->(dims_{d} = dims[d])
+    if isa(B, SubArray)
+        startB = B.first_index
+        B = B.parent
+    else
+        startB = 1
+    end
+    
+    # copy data
+    @nexprs 1 d->(indB_{N} = startB)
+    indP=1
+    @nloops(N, i, d->1:dims_{d},
+        d->(indB_{d-1} = indB_{d}), # PRE
+        d->(indB_{d} += stridesB_{d}), # POST
+        begin
+            @inbounds P[indP]=B[indB_0]
+            indP+=1
+        end)
+        
+    return P
+end
+@ngenerate N typeof(P) function permutedims1!{T1,T2,N}(P::StridedArray{T1,N},B::StridedArray{T2,N},perm)
+    length(perm) == N || error("expected permutation of size $N, but length(perm)=$(length(perm))")
+    isperm(perm) || error("input is not a permutation")
+    dims = size(P)
+    for i = 1:N
+        dims[i] == size(B,perm[i]) || throw(DimensionMismatch("destination tensor of incorrect size"))
+    end
+
+    #calculates strides, dims and offset
+    @nexprs N d->(stridesB_{d} = stride(B,perm[d]))
+    @nexprs N d->(stridesP_{d} = stride(P,d))
+    @nexprs N d->(dims_{d} = dims[d])
+    if isa(B, SubArray)
+        startB = B.first_index
+        B = B.parent
+    else
+        startB = 1
+    end
+    if isa(P, SubArray)
+        startP = P.first_index
+        P = P.parent
+    else
+        startP = 1
+    end
+    
+    # copy data
+    @nexprs 1 d->(indB_{N} = startB)
+    @nexprs 1 d->(indP_{N} = startP)
+    @nloops(N, i, d->1:dims_{d},
+        d->(indB_{d-1} = indB_{d};indP_{d-1}=indP_{d}), # PRE
+        d->(indB_{d} += stridesB_{d};indP_{d} += stridesP_{d}), # POST
+        @inbounds P[indP_0]=B[indB_0])
+        
+    return P
+end
+
+function permutedims2!{T1,T2,N}(P::StridedArray{T1,N},B::StridedArray{T2,N},perm,basesize::Int=1024)
     length(perm) == N || error("expected permutation of size $N, but length(perm)=$(length(perm))")
     isperm(perm) || error("input is not a permutation")
     dims = size(P)
@@ -488,14 +555,10 @@ function permutedims1!{T1,T2,N}(P::StridedArray{T1,N},B::StridedArray{T2,N},perm
     
     if collect(perm)==[1:N]
         copy!(P,B)
-    elseif prod(dims)<=basesize
-        stridesB=ntuple(N,d->stride(B,perm[d]))
-        if isa(P,Array) || isa(P,BitArray)
-            simplepermutedims!(P,B,stridesB,dims)
-        else
-            stridesP=ntuple(N,d->stride(P,d))
-            basepermutedims!(P,B,stridesP,stridesB,dims)
-        end
+    elseif prod(dims)<=4*basesize
+        stridesB=strides(B)[perm]
+        stridesP=strides(P)
+        basepermutedims!(P,B,stridesP,stridesB,dims)
     else
         # apply blocked permutation
         stridesP=ntuple(N,d->stride(P,d))
@@ -505,7 +568,7 @@ function permutedims1!{T1,T2,N}(P::StridedArray{T1,N},B::StridedArray{T2,N},perm
     end
     return P
 end
-function permutedims2!{T1,T2,N}(P::StridedArray{T1,N},B::StridedArray{T2,N},perm;basesize::Int=1024)
+@ngenerate N typeof(P) function permutedims3!{T1,T2,N}(P::StridedArray{T1,N},B::StridedArray{T2,N},perm,basesize::Int=1024)
     length(perm) == N || error("expected permutation of size $N, but length(perm)=$(length(perm))")
     isperm(perm) || error("input is not a permutation")
     dims = size(P)
@@ -515,20 +578,132 @@ function permutedims2!{T1,T2,N}(P::StridedArray{T1,N},B::StridedArray{T2,N},perm
     
     if collect(perm)==[1:N]
         copy!(P,B)
-    elseif prod(dims)<=basesize
-        stridesB=ntuple(N,d->stride(B,perm[d]))
-        if isa(P,Array) || isa(P,BitArray)
-            simplepermutedims!(P,B,stridesB,dims)
+    elseif prod(dims)<=4*basesize
+        @nexprs N d->(stridesB_{d} = stride(B,perm[d]))
+        @nexprs N d->(stridesP_{d} = stride(P,d))
+        @nexprs N d->(dims_{d} = dims[d])
+        if isa(B, SubArray)
+            startB = B.first_index
+            B = B.parent
         else
-            stridesP=ntuple(N,d->stride(P,d))
-            basepermutedims!(P,B,stridesP,stridesB,dims)
+            startB = 1
         end
+        if isa(P, SubArray)
+            startP = P.first_index
+            P = P.parent
+        else
+            startP = 1
+        end
+    
+        # copy data
+        @nexprs 1 d->(indB_{N} = startB)
+        @nexprs 1 d->(indP_{N} = startP)
+        @nloops(N, i, d->1:dims_{d},
+            d->(indB_{d-1} = indB_{d};indP_{d-1}=indP_{d}), # PRE
+            d->(indB_{d} += stridesB_{d};indP_{d} += stridesP_{d}), # POST
+            @inbounds P[indP_0]=B[indB_0])
+        
+        return P
     else
         # apply recursive permutation
         stridesP=ntuple(N,d->stride(P,d))
         stridesB=ntuple(N,d->stride(B,perm[d]))
         minstrides=ntuple(N,d->min(stridesP[d],stridesB[d]))
         recursivepermutedims!(P,B,minstrides,stridesP,stridesB,dims,0,0,basesize)
+    end
+    return P
+end
+
+@ngenerate N typeof(P) function permutedimsnew!{T1,T2,N}(P::StridedArray{T1,N},B::StridedArray{T2,N},perm,basesize::Int=1024)
+    length(perm) == N || error("expected permutation of size $N, but length(perm)=$(length(perm))")
+    isperm(perm) || error("input is not a permutation")
+    dims = size(P)
+    for i = 1:N
+        dims[i] == size(B,perm[i]) || throw(DimensionMismatch("destination tensor of incorrect size"))
+    end
+    @nexprs N d->(stridesB_{d} = stride(B,perm[d]))
+    @nexprs N d->(stridesP_{d} = stride(P,d))
+    @nexprs N d->(dims_{d} = dims[d])
+    
+    if isa(B, SubArray)
+        startB = B.first_index
+        B = B.parent
+    else
+        startB = 1
+    end
+    if isa(P, SubArray)
+        startP = P.first_index
+        P = P.parent
+    else
+        startP = 1
+    end
+    
+    if prod(dims)<=4*basesize
+        # copy data
+        @nexprs 1 d->(indB_{N} = startB)
+        @nexprs 1 d->(indP_{N} = startP)
+        @nloops(N, i, d->1:dims_{d},
+            d->(indB_{d-1} = indB_{d};indP_{d-1}=indP_{d}), # PRE
+            d->(indB_{d} += stridesB_{d};indP_{d} += stridesP_{d}), # POST
+            @inbounds P[indP_0]=B[indB_0])
+    else
+        @nexprs N d->(minstrides_{d} = min(stridesB_{d},stridesP_{d}))
+    
+        M=iceil(log2(prod(dims)/basesize))
+        step=zeros(Int,M)
+        level=1
+        @nexprs N d->(vecbdims_{d} = zeros(Int,M))
+        @nexprs N d->(vecbdims_{d}[level] = dims_{d})
+        vecoffsetB=zeros(Int,M)
+        vecoffsetP=zeros(Int,M)
+        vecdP=zeros(Int,M)
+        vecdB=zeros(Int,M)
+        vecdmax=zeros(Int,M)
+        vecnewdim=zeros(Int,M)
+        while level>0
+            if level==M
+                @nexprs N d->(bdims_{d} = vecbdims_{d}[M])
+                @nexprs 1 d->(indP_{N} = startP+vecoffsetP[M])
+                @nexprs 1 d->(indB_{N} = startB+vecoffsetB[M])
+                @nloops(N, i, d->1:bdims_{d},
+                    d->(indB_{d-1} = indB_{d};indP_{d-1}=indP_{d}), # PRE
+                    d->(indB_{d} += stridesB_{d};indP_{d} += stridesP_{d}), # POST
+                    @inbounds P[indP_0]=B[indB_0])
+                level-=1
+            elseif step[level]==0
+                @nexprs N d->(bdims_{d} = vecbdims_{d}[level])
+                dmax=1
+                maxval=minstrides_1*bdims_1
+                newdim=bdims_1>>1
+                dP=stridesP_1
+                dB=stridesB_1
+                @nexprs N d->(newmax=minstrides_{d}*bdims_{d};if bdims_{d}>1 && newmax>maxval;dmax=d;newdim=bdims_{d}>>1;dP=stridesP_{d};dB=stridesB_{d};maxval=newmax;end)
+                vecnewdim[level]=newdim
+                vecdmax[level]=dmax
+                vecdP[level]=dP
+                vecdB[level]=dB
+            
+                @nexprs N d->(vecbdims_{d}[level+1] = (d==dmax ? newdim : bdims_{d}))
+                vecoffsetP[level+1]=vecoffsetP[level]
+                vecoffsetB[level+1]=vecoffsetB[level]
+                step[level+1]=0
+            
+                step[level]+=1
+                level+=1
+            elseif step[level]==1
+                @nexprs N d->(bdims_{d} = vecbdims_{d}[level])
+            
+                @nexprs N d->(vecbdims_{d}[level+1] = (d==vecdmax[level] ? bdims_{d}-vecnewdim[level] : bdims_{d}))
+                vecoffsetP[level+1]=vecoffsetP[level]+vecdP[level]*vecnewdim[level]
+                vecoffsetB[level+1]=vecoffsetB[level]+vecdB[level]*vecnewdim[level]
+                step[level+1]=0
+            
+                step[level]+=1
+                level+=1
+            else
+                level-=1
+            end
+        end
     end
     return P
 end
@@ -604,32 +779,6 @@ end
         
     return P
 end
-@ngenerate N typeof(P) function simplepermutedims!{T1,T2,N}(P::Array{T1,N},B::StridedArray{T2,N},stridesB::NTuple{N,Int},dims::NTuple{N,Int},offsetB::Int=0)
-    #calculates strides, dims and offset
-    @nexprs N d->(stridesB_{d} = stridesB[d])
-    @nexprs N d->(dims_{d} = dims[d])
-    if isa(B, SubArray)
-        startB = B.first_index
-        B = B.parent
-    else
-        startB = 1
-    end
-    startB+=offsetB
-    
-    # copy data
-    @nexprs 1 d->(indB_{N} = startB)
-    indP=1
-    @nloops(N, i, d->1:dims_{d},
-        d->(indB_{d-1} = indB_{d}), # PRE
-        d->(indB_{d} += stridesB_{d}), # POST
-        begin
-            @inbounds P[indP]=B[indB_0]
-            indP+=1
-        end)
-        
-    return P
-end
-
 
 function blockdims{N}(dims::NTuple{N,Int},stridesA::NTuple{N,Int},stridesB::NTuple{N,Int},blocksize::Int)
     # blocking strategy for permutedims
