@@ -530,7 +530,7 @@ function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,
     main_prompt.on_done = respond(Base.parse_input_line, d, main_prompt, req, rep)
 
     # Setup help mode
-    help_mode = Prompt("help> ",
+    help_mode = Prompt(" help> ",
         prompt_color = repl.help_color,
         input_color = repl.input_color,
         keymap_func_data = repl,
