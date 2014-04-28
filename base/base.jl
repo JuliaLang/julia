@@ -112,8 +112,6 @@ isequal(w::WeakRef, v::WeakRef) = isequal(w.value, v.value)
 isequal(w::WeakRef, v) = isequal(w.value, v)
 isequal(w, v::WeakRef) = isequal(w, v.value)
 
-hash(w::WeakRef, h::Uint) = hash(w.value, h)
-
 function finalizer(o::ANY, f::Union(Function,Ptr))
     if isimmutable(o)
         error("objects of type ", typeof(o), " cannot be finalized")

@@ -1,6 +1,7 @@
 ## hashing a single value ##
 
 hash(x::Any) = hash(x, zero(Uint))
+hash(w::WeakRef, h::Uint) = hash(w.value, h)
 
 ## core data hashing functions ##
 
