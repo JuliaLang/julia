@@ -478,7 +478,7 @@ for (V, PT, BT) in {((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)}
     end
 end
 
-function permutedims1!{T1,T2,N}(P::StridedArray{T1,N},B::StridedArray{T2,N},perm;basesize=1024)
+function permutedims1!{T1,T2,N}(P::StridedArray{T1,N},B::StridedArray{T2,N},perm;basesize::Int=1024)
     length(perm) == N || error("expected permutation of size $N, but length(perm)=$(length(perm))")
     isperm(perm) || error("input is not a permutation")
     dims = size(P)
@@ -489,9 +489,13 @@ function permutedims1!{T1,T2,N}(P::StridedArray{T1,N},B::StridedArray{T2,N},perm
     if collect(perm)==[1:N]
         copy!(P,B)
     elseif prod(dims)<=basesize
-        stridesP=ntuple(N,d->stride(P,d))
         stridesB=ntuple(N,d->stride(B,perm[d]))
-        basepermutedims!(P,B,stridesP,stridesB,dims,ntuple(N,d->1))
+        if isa(P,Array) || isa(P,BitArray)
+            simplepermutedims!(P,B,stridesB,dims)
+        else
+            stridesP=ntuple(N,d->stride(P,d))
+            basepermutedims!(P,B,stridesP,stridesB,dims)
+        end
     else
         # apply blocked permutation
         stridesP=ntuple(N,d->stride(P,d))
@@ -501,7 +505,7 @@ function permutedims1!{T1,T2,N}(P::StridedArray{T1,N},B::StridedArray{T2,N},perm
     end
     return P
 end
-function permutedims2!{T1,T2,N}(P::StridedArray{T1,N},B::StridedArray{T2,N},perm;basesize=1024)
+function permutedims2!{T1,T2,N}(P::StridedArray{T1,N},B::StridedArray{T2,N},perm;basesize::Int=1024)
     length(perm) == N || error("expected permutation of size $N, but length(perm)=$(length(perm))")
     isperm(perm) || error("input is not a permutation")
     dims = size(P)
@@ -512,9 +516,13 @@ function permutedims2!{T1,T2,N}(P::StridedArray{T1,N},B::StridedArray{T2,N},perm
     if collect(perm)==[1:N]
         copy!(P,B)
     elseif prod(dims)<=basesize
-        stridesP=ntuple(N,d->stride(P,d))
         stridesB=ntuple(N,d->stride(B,perm[d]))
-        basepermutedims!(P,B,stridesP,stridesB,dims,ntuple(N,d->1))
+        if isa(P,Array) || isa(P,BitArray)
+            simplepermutedims!(P,B,stridesB,dims)
+        else
+            stridesP=ntuple(N,d->stride(P,d))
+            basepermutedims!(P,B,stridesP,stridesB,dims)
+        end
     else
         # apply recursive permutation
         stridesP=ntuple(N,d->stride(P,d))
@@ -528,10 +536,12 @@ end
 @ngenerate N typeof(P) function blockedpermutedims!{T1,T2,N}(P::StridedArray{T1,N},B::StridedArray{T2,N},stridesP::NTuple{N,Int},stridesB::NTuple{N,Int},dims::NTuple{N,Int},bdims::NTuple{N,Int})
     @nexprs N d->(dims_{d} = dims[d])
     @nexprs N d->(bdims_{d} = bdims[d])
+    @nexprs N d->(stridesP_{d} = stridesP[d])
+    @nexprs N d->(stridesB_{d} = stridesB[d])
     
     # use blocked algorithms
-    @nexprs 1 d->(indB_{N} = 1)
-    @nexprs 1 d->(indP_{N} = 1)
+    @nexprs 1 d->(indB_{N} = 0)
+    @nexprs 1 d->(indP_{N} = 0)
     @nloops(N, i, d->1:bdims_{d}:dims_{d},
         d->(indB_{d-1} = indB_{d};indP_{d-1}=indP_{d}), # PRE
         d->(indB_{d} += bdims_{d}*stridesB_{d};indP_{d} += bdims_{d}*stridesP_{d}), # POST
@@ -594,6 +604,32 @@ end
         
     return P
 end
+@ngenerate N typeof(P) function simplepermutedims!{T1,T2,N}(P::Array{T1,N},B::StridedArray{T2,N},stridesB::NTuple{N,Int},dims::NTuple{N,Int},offsetB::Int=0)
+    #calculates strides, dims and offset
+    @nexprs N d->(stridesB_{d} = stridesB[d])
+    @nexprs N d->(dims_{d} = dims[d])
+    if isa(B, SubArray)
+        startB = B.first_index
+        B = B.parent
+    else
+        startB = 1
+    end
+    startB+=offsetB
+    
+    # copy data
+    @nexprs 1 d->(indB_{N} = startB)
+    indP=1
+    @nloops(N, i, d->1:dims_{d},
+        d->(indB_{d-1} = indB_{d}), # PRE
+        d->(indB_{d} += stridesB_{d}), # POST
+        begin
+            @inbounds P[indP]=B[indB_0]
+            indP+=1
+        end)
+        
+    return P
+end
+
 
 function blockdims{N}(dims::NTuple{N,Int},stridesA::NTuple{N,Int},stridesB::NTuple{N,Int},blocksize::Int)
     # blocking strategy for permutedims
