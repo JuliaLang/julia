@@ -1,6 +1,6 @@
 module Cartesian
 
-export @ngenerate, @nsplat, @nloops, @nref, @ncall, @nexprs, @nextract, @nall, @ntuple, @nif, ngenerate
+export @ngenerate, @nsplat, @nloops, @nfunction, @nref, @ncall, @nexprs, @nextract, @nall, @ntuple, @nif, ngenerate
 
 const CARTESIAN_DIMS = 4
 
@@ -297,6 +297,34 @@ function _nloops(N::Int, itersym::Symbol, rangeexpr::Expr, args::Expr...)
         end
     end
     ex
+end
+
+# Generate function f(pre,i_1::T,i_2::T,..) from @nfunction N f pre i::T body
+macro nfunction(N, fname, args...)
+    _nfunction(N, fname, args...)
+end
+
+function _nfunction(N::Int, fname::Symbol, args...)
+    if length(args) < 2
+        error("argument missing")
+    end
+    
+    prearg = args[1:end-2]
+    for k=1:length(prearg)
+        if !(isa(prearg[k],Symbol) || (isa(prearg[k],Expr) && prearg[k].head==:(::) && isa(prearg[k].args[1],Symbol) && isa(prearg[k].args[2],Symbol)))
+            error("invalid argument type for pre arguments")
+        end
+    end
+    iterarg = args[end-1]
+    if !(isa(iterarg,Symbol) || (isa(iterarg,Expr) && iterarg.head==:(::) && isa(iterarg.args[1],Symbol) && isa(iterarg.args[2],Symbol)))
+        error("invalid argument type for argument that will be iterated ")
+    end
+    iterarglist=(isa(iterarg,Symbol) ? [inlineanonymous(iterarg,i) for i=1:N] : [Expr(:(::),inlineanonymous(iterarg.args[1],i),iterarg.args[2]) for i=1:N])
+    fcall=Expr(:call,fname,prearg...,iterarglist...)
+    
+    body = args[end]
+    
+    ex=Expr(:escape,Expr(:function,fcall,body))
 end
 
 # Generate expression A[i1, i2, ...]

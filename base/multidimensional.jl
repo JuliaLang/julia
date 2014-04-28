@@ -572,6 +572,78 @@ end
     return P
 end
 
+@ngenerate N typeof(P) function permutedimsnew2!{T1,T2,N}(P::StridedArray{T1,N},B::StridedArray{T2,N},perm,basesize::Int=1024)
+    length(perm) == N || error("expected permutation of size $N, but length(perm)=$(length(perm))")
+    isperm(perm) || error("input is not a permutation")
+    dims = size(P)
+    for i = 1:N
+        dims[i] == size(B,perm[i]) || throw(DimensionMismatch("destination tensor of incorrect size"))
+    end
+    @nexprs N d->(stridesB_{d} = stride(B,perm[d]))
+    @nexprs N d->(stridesP_{d} = stride(P,d))
+    @nexprs N d->(dims_{d} = dims[d])
+    
+    if isa(B, SubArray)
+        startB = B.first_index
+        B = B.parent
+    else
+        startB = 1
+    end
+    if isa(P, SubArray)
+        startP = P.first_index
+        P = P.parent
+    else
+        startP = 1
+    end
+    
+    @nfunction(N,innerbase,offsetP::Int,offsetB::Int,bdims::Int,begin
+        @nexprs 1 d->(indB_{N} = startB+offsetP)
+        @nexprs 1 d->(indP_{N} = startP+offsetB)
+        @nloops(N, i, d->1:bdims_{d},
+            d->(indB_{d-1} = indB_{d};indP_{d-1}=indP_{d}), # PRE
+            d->(indB_{d} += stridesB_{d};indP_{d} += stridesP_{d}), # POST
+            @inbounds P[indP_0]=B[indB_0])
+        end)
+    
+    if prod(dims)<=4*basesize
+        @ncall N innerbase 0 0 dims
+    else
+        @nexprs N d->(minstrides_{d} = min(stridesB_{d},stridesP_{d}))
+    
+        @nfunction(N,innerrec,offsetP::Int,offsetB::Int,bdims::Int,begin
+                currentsize=1
+                @nexprs N d->(currentsize *=bdims_{d})
+                if currentsize<=basesize
+                    @ncall N innerbase offsetP offsetB bdims
+                else
+                    dmax=1
+                    maxval=minstrides_1*bdims_1
+                    @nexprs N d->(begin
+                            newmax=minstrides_{d}*bdims_{d}
+                            if bdims_{d}>1 && newmax>maxval
+                                dmax=d
+                                maxval=newmax
+                            end
+                        end)
+                    @nexprs N d->(begin
+                            if d==dmax
+                                olddim=bdims_{d}
+                                newdim=olddim>>1
+                                bdims_{d}=newdim
+                                @ncall N innerrec offsetP offsetB bdims
+                                bdims_{d}=olddim-newdim
+                                offsetP+=stridesP_{d}*newdim
+                                offsetB+=stridesB_{d}*newdim
+                                @ncall N innerrec offsetP offsetB bdims
+                            end
+                        end)
+                end
+            end)
+        @ncall N innerrec 0 0 dims
+    end
+    return P
+end
+
 ## unique across dim
 
 immutable Prehashed
