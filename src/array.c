@@ -546,7 +546,13 @@ static void array_resize_buffer(jl_array_t *a, size_t newlen, size_t oldlen, siz
         }
     }
     else {
-        if (nbytes >= MALLOC_THRESH) {
+        if (
+#ifdef _P64
+            nbytes >= MALLOC_THRESH
+#else
+            es > 4
+#endif
+            ) {
             newdata = (char*)jl_gc_managed_malloc(nbytes);
             jl_gc_track_malloced_array(a);
             a->how = 2;
