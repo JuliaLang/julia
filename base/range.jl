@@ -273,15 +273,7 @@ function show(io::IO, r::Range)
 end
 show(io::IO, r::UnitRange) = print(io, repr(first(r)), ':', repr(last(r)))
 
-isequal{T<:Range}(r::T, s::T) =
-    (first(r)==first(s)) & (step(r)==step(s)) & (last(r)==last(s))
-
-isequal(r::Range, s::Range) = false
-
-=={T<:Range}(r::T, s::T) = isequal(r, s)
-
-=={T<:Integer, S<:Integer}(r::Range{T}, s::Range{S}) =
-    (first(r)==first(s)) & (step(r)==step(s)) & (last(r)==last(s))
+=={T<:Range}(r::T, s::T) = (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
 
 function ==(r::Range, s::Range)
     lr = length(r)
@@ -298,8 +290,6 @@ function ==(r::Range, s::Range)
     end
     return true
 end
-
-# TODO: isless?
 
 intersect{T1<:Integer, T2<:Integer}(r::UnitRange{T1}, s::UnitRange{T2}) = max(r.start,s.start):min(last(r),last(s))
 

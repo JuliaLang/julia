@@ -73,8 +73,8 @@ function setdiff(a::Set, b::Set)
     d
 end
 
-isequal(l::Set, r::Set) = (length(l) == length(r)) && (l <= r)
-<(l::Set, r::Set) = (length(l) < length(r)) && (l <= r)
+==(l::Set, r::Set) = (length(l) == length(r)) && (l <= r)
+< (l::Set, r::Set) = (length(l) < length(r)) && (l <= r)
 <=(l::Set, r::Set) = issubset(l, r)
 
 function issubset(l, r)

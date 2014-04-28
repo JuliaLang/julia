@@ -482,8 +482,8 @@ function cmp(a::String, b::String)
     !done(a,i) && done(b,j) ? +1 : 0
 end
 
-isequal(a::String, b::String) = cmp(a,b) == 0
-isless(a::String, b::String)  = cmp(a,b) <  0
+==(a::String, b::String) = cmp(a,b) == 0
+< (a::String, b::String) = cmp(a,b) <  0
 
 # begins with and ends with predicates
 
@@ -515,18 +515,17 @@ function endswith(a::String, b::String)
 end
 endswith(a::String, c::Char) = !isempty(a) && a[end] == c
 
-# faster comparisons for byte strings
+# faster comparisons for byte strings and symbols
 
-cmp(a::ByteString, b::ByteString)     = lexcmp(a.data, b.data)
-isequal(a::ByteString, b::ByteString) = endof(a)==endof(b) && cmp(a,b)==0
+cmp(a::ByteString, b::ByteString) = lexcmp(a.data, b.data)
+cmp(a::Symbol, b::Symbol) = int(sign(ccall(:strcmp, Int32, (Ptr{Uint8}, Ptr{Uint8}), a, b)))
+
+==(a::ByteString, b::ByteString) = endof(a) == endof(b) && cmp(a,b) == 0
+<(a::Symbol, b::Symbol) = cmp(a,b) < 0
+
 beginswith(a::ByteString, b::ByteString) = beginswith(a.data, b.data)
-
 beginswith(a::Array{Uint8,1}, b::Array{Uint8,1}) =
     (length(a) >= length(b) && ccall(:strncmp, Int32, (Ptr{Uint8}, Ptr{Uint8}, Uint), a, b, length(b)) == 0)
-
-cmp(a::Symbol, b::Symbol) =
-    int(sign(ccall(:strcmp, Int32, (Ptr{Uint8}, Ptr{Uint8}), a, b)))
-isless(a::Symbol, b::Symbol) = cmp(a,b)<0
 
 # TODO: fast endswith
 
