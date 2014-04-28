@@ -133,7 +133,7 @@ debug && println("symmetric eigen-decomposition")
         @test_approx_eq asym*v[:,1] d[1]*v[:,1]
         @test_approx_eq v*Diagonal(d)*v' asym
         @test isequal(eigvals(asym[1]), eigvals(asym[1:1,1:1]))
-        @test_approx_eq abs(eigfact(Hermitian(asym), 1,2)[:vectors]'v[:,1:2]) eye(eltya, 2)
+        @test_approx_eq abs(eigfact(Hermitian(asym), 1:2)[:vectors]'v[:,1:2]) eye(eltya, 2)
     end
 
 debug && println("non-symmetric eigen decomposition")
