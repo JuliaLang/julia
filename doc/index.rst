@@ -5,6 +5,7 @@
 
 * :ref:`manual`
 * :ref:`stdlib`
+* :ref:`devdocs`
 
 .. _manual:
 
@@ -65,3 +66,14 @@
    stdlib/graphics
    stdlib/test
    stdlib/profile
+
+.. _devdocs:
+
+#######################
+Developer Documentation
+#######################
+
+.. toctree::
+   :maxdepth: 1
+
+   devdocs/cartesian
