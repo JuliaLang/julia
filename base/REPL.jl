@@ -613,6 +613,13 @@ function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,
             while pos <= sz
                 oldpos = pos
                 ast, pos = Base.parse(string, pos, raise=false)
+                if isa(ast, Expr) && ast.head == :error
+                    # Insert all the remaining text as one line (might be empty)
+                    LineEdit.replace_line(s, strip(bytestring(string.data[max(oldpos, 1):end])))
+                    seek(LineEdit.buffer(s), max(curspos-oldpos+inputsz, 0))
+                    LineEdit.refresh_line(s)
+                    break
+                end
                 # Get the line and strip leading and trailing whitespace
                 line = strip(bytestring(string.data[max(oldpos, 1):min(pos-1, sz)]))
                 isempty(line) && continue
@@ -622,8 +629,7 @@ function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,
                 end
                 LineEdit.refresh_line(s)
                 (pos > sz && last(string) != '\n') && break
-                if !isa(ast, Expr) || (ast.head != :continue && ast.head != :incomplete &&
-                    ast.head != :error)
+                if !isa(ast, Expr) || (ast.head != :continue && ast.head != :incomplete)
                     LineEdit.commit_line(s)
                     # This is slightly ugly but ok for now
                     terminal = LineEdit.terminal(s)
