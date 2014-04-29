@@ -3,6 +3,8 @@ module LinAlg
 importall Base
 import Base: USE_BLAS64, size, copy, copy_transpose!, power_by_squaring, print_matrix
 
+using Base.SparseMatrix
+
 export 
 # Modules
     LAPACK,

@@ -13,8 +13,10 @@
 # Section 2.4: Triplet form
 # http://www.cise.ufl.edu/research/sparse/CSparse/
 function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti}, 
-                                V::AbstractVector{Tv},
-                                nrow::Integer, ncol::Integer, combine::Function)
+                                V::AbstractVector{Tv}, dims::NTuple{Int}, combine::Function)
+
+    nrow = dims[1]
+    ncol = (length(dims) == 1) ? 1 : dims[2]
 
     if length(I) == 0; return spzeros(eltype(V),nrow,ncol); end
 
@@ -111,7 +113,7 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
         end
     end
 
-    return SparseMatrixCSC(nrow, ncol, RpT, RiT, RxT)
+    return SparseCSC(dims, RpT, RiT, RxT)
 end
 
 ## Transpose
@@ -142,7 +144,7 @@ function transpose!{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, T::SparseMatrixCSC{Tv,Ti})
         nzval_T[q] = nzval_S[p]
     end
 
-    return SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
+    return SparseCSC((mT, nT), colptr_T, rowval_T, nzval_T)
 end
 
 function transpose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
@@ -160,7 +162,7 @@ function transpose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     end
     colptr_T = cumsum(colptr_T)
 
-    T = SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
+    T = SparseCSC((mT, nT), colptr_T, rowval_T, nzval_T)
     return transpose!(S, T)
 end
 
@@ -186,7 +188,7 @@ function ctranspose!{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, T::SparseMatrixCSC{Tv,Ti}
         nzval_T[q] = conj(nzval_S[p])
     end
 
-    return SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
+    return SparseCSC((mT, nT), colptr_T, rowval_T, nzval_T)
 end
 
 function ctranspose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}) 
@@ -204,7 +206,7 @@ function ctranspose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     end
     colptr_T = cumsum(colptr_T)
 
-    T = SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
+    T = SparseCSC((mT, nT), colptr_T, rowval_T, nzval_T)
     return ctranspose!(S, T)
 end
 
@@ -337,7 +339,7 @@ end
 function fkeep!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f, other)
     nzorig = nfilled(A)
     nz = 1
-    for j = 1:A.n
+    for j = 1:size(A,2)
         p = A.colptr[j]                 # record current position
         A.colptr[j] = nz                # set new position
         while p < A.colptr[j+1]
@@ -349,7 +351,7 @@ function fkeep!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f, other)
             p += 1
         end
     end
-    A.colptr[A.n + 1] = nz
+    A.colptr[size(A,2) + 1] = nz
     nz -= 1
     if nz < nzorig
         resize!(A.nzval, nz)

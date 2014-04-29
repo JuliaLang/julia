@@ -10,6 +10,8 @@ import Base: (\), Ac_ldiv_B, At_ldiv_B, findnz, getindex, show, size
 
 import ..LinAlg: A_ldiv_B!, Ac_ldiv_B!, At_ldiv_B!, Factorization, det, lufact, lufact!
 
+using Base.SparseMatrix
+
 include("umfpack_h.jl")
 type MatrixIllConditionedException <: Exception
     message :: String
@@ -107,10 +109,10 @@ type UmfpackLU{Tv<:UMFVTypes,Ti<:UMFITypes} <: Factorization{Tv}
 end
 
 function lufact{Tv<:UMFVTypes,Ti<:UMFITypes}(S::SparseMatrixCSC{Tv,Ti})
-    S.m == S.n || error("argument matrix must be square")
+    size(S,1) == size(S,2) || error("argument matrix must be square")
 
     zerobased = S.colptr[1] == 0
-    res = UmfpackLU(C_NULL, C_NULL, S.m, S.n,
+    res = UmfpackLU(C_NULL, C_NULL, size(S,1), size(S,2),
                     zerobased ? copy(S.colptr) : decrement(S.colptr),
                     zerobased ? copy(S.rowval) : decrement(S.rowval),
                     copy(S.nzval))
@@ -119,10 +121,10 @@ function lufact{Tv<:UMFVTypes,Ti<:UMFITypes}(S::SparseMatrixCSC{Tv,Ti})
 end
 
 function lufact!{Tv<:UMFVTypes,Ti<:UMFITypes}(S::SparseMatrixCSC{Tv,Ti})
-    S.m == S.n || error("argument matrix must be square")
+    size(S,1) == size(S,2) || error("argument matrix must be square")
 
     zerobased = S.colptr[1] == 0
-    res = UmfpackLU(C_NULL, C_NULL, S.m, S.n,
+    res = UmfpackLU(C_NULL, C_NULL, size(S,1), size(S,2),
                     zerobased ? S.colptr : decrement!(S.colptr),
                     zerobased ? S.rowval : decrement!(S.rowval),
                     S.nzval)
@@ -291,8 +293,8 @@ for (sym_r,sym_c,num_r,num_c,sol_r,sol_c,det_r,det_z,lunz,get_num_r,get_num_z,it
                            Up,Ui,Ux,
                            P, Q, C_NULL,
                            &0, Rs, lu.numeric)
-            (transpose(SparseMatrixCSC(n_row,n_row,increment!(Lp),increment!(Lj),Lx)),
-             SparseMatrixCSC(n_row,n_col,increment!(Up),increment!(Ui),Ux),
+            (transpose(SparseCSC((n_row,n_row),increment!(Lp),increment!(Lj),Lx)),
+             SparseCSC((n_row,n_col),increment!(Up),increment!(Ui),Ux),
              increment!(P), increment!(Q), Rs)
         end
     end

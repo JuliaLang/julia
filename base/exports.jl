@@ -85,6 +85,8 @@ export
     SharedMatrix,
     SharedVector,
     SparseMatrixCSC,
+    SparseVector,
+    SparseVecOrMat,
     StatStruct,
     StepRange,
     StridedArray,
