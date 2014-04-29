@@ -1588,3 +1588,21 @@ function crc6634(spec)
 end
 @test crc6634(0x1)(true) == 1
 @test crc6634(0x1)(false) == 2
+
+# issue #5876
+module A5876
+macro x()
+    quote
+        function $(esc(:f5876)){T}(::Type{T})
+            T
+        end
+        42
+    end
+end
+end
+
+let
+    z = A5876.@x()
+    @test z == 42
+    @test f5876(Int) === Int
+end
