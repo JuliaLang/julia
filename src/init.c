@@ -906,7 +906,6 @@ jl_function_t *jl_typeinf_func=NULL;
 
 DLLEXPORT void jl_enable_inference(void)
 {
-    if (jl_typeinf_func != NULL) return;
     jl_typeinf_func = (jl_function_t*)jl_get_global(jl_base_module,
                                                     jl_symbol("typeinf_ext"));
 }

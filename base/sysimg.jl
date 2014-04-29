@@ -264,14 +264,6 @@ include("precompile.jl")
 
 include = include_from_node1
 
-# invoke type inference, running the existing inference code on the new
-# inference code to cache an optimized version of it.
-begin
-    local atypes = (LambdaStaticData, Tuple, (), LambdaStaticData, Bool)
-    local minf = _methods(typeinf, atypes, -1)
-    typeinf_ext(minf[1][3].func.code, atypes, (), minf[1][3].func.code)
-end
-
 end # baremodule Base
 
 using Base
