@@ -1200,7 +1200,8 @@
   (pattern-set
    ;; function with static parameters
    (pattern-lambda (function (call (curly name . sparams) . argl) body)
-		   (cons 'varlist (llist-vars (fix-arglist argl))))
+		   (cons 'varlist (append (llist-vars (fix-arglist argl))
+					  (map sparam-name sparams))))
 
    ;; function definition
    (pattern-lambda (function (call name . argl) body)
