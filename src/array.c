@@ -582,7 +582,7 @@ static void array_try_unshare(jl_array_t *a)
     }
 }
 
-size_t limit_overallocation(jl_array_t *a, size_t alen, size_t newlen, size_t inc)
+static size_t limit_overallocation(jl_array_t *a, size_t alen, size_t newlen, size_t inc)
 {
     // Limit overallocation to jl_arr_xtralloc_limit
     size_t es = a->elsize;

@@ -1327,9 +1327,9 @@ function pmap(f, lsts...; err_retry=true, err_stop=false)
     function getnext_tasklet()
         if is_task_in_error() && err_stop
             return nothing
-        elseif all([!done(lsts[idx],states[idx]) for idx in 1:len])
+        elseif !any(idx->done(lsts[idx],states[idx]), 1:len)
             nxts = [next(lsts[idx],states[idx]) for idx in 1:len]
-            map(idx->states[idx]=nxts[idx][2], 1:len)
+            for idx in 1:len; states[idx] = nxts[idx][2]; end
             nxtvals = [x[1] for x in nxts]
             return (getnextidx(), nxtvals)
             
