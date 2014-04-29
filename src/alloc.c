@@ -416,7 +416,8 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
 
 static jl_sym_t *symtab = NULL;
 
-static uptrint_t hash_symbol(const char *str, size_t len) {
+static uptrint_t hash_symbol(const char *str, size_t len)
+{
     return memhash(str, len) ^ ~(uptrint_t)0/3*2;
 }
 
