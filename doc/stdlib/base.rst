@@ -2996,6 +2996,10 @@ Mathematical Functions
 
    Airy function derivative :math:`\operatorname{Bi}'(x)`.
 
+.. function:: airyx(k,x)
+
+   Compute ``airy(k,x) * exp(2/3 * x * sqrt(x))`` for ``k==0 || k==1``, and ``airy(k,x) * exp(-abs(real(2/3 * x * sqrt(x))))`` for ``k==2 || k==3``.
+
 .. function:: besselj0(x)
 
    Bessel function of the first kind of order 0, :math:`J_0(x)`.
@@ -3008,6 +3012,10 @@ Mathematical Functions
 
    Bessel function of the first kind of order ``nu``, :math:`J_\nu(x)`.
 
+.. function:: besseljx(nu, x)
+
+   Compute ``besselj(nu,x) * exp(-abs(imag(x)))``.
+
 .. function:: bessely0(x)
 
    Bessel function of the second kind of order 0, :math:`Y_0(x)`.
@@ -3019,6 +3027,10 @@ Mathematical Functions
 .. function:: bessely(nu, x)
 
    Bessel function of the second kind of order ``nu``, :math:`Y_\nu(x)`.
+
+.. function:: besselyx(nu, x)
+
+   Compute ``bessely(nu,x) * exp(-abs(imag(x)))``.
 
 .. function:: hankelh1(nu, x)
 
@@ -3033,13 +3045,25 @@ Mathematical Functions
    Bessel function of the third kind of order ``nu`` (Hankel function).
    ``k`` is either 1 or 2, selecting ``hankelh1`` or ``hankelh2``, respectively.
 
+.. function:: besselhx(nu, k, x)
+
+   Compute ``besselh(nu,1,x) * exp(-x * im)`` for ``k == 1``, and ``besselh(nu,2,x) * exp(x * im)`` for ``k == 2``.
+
 .. function:: besseli(nu, x)
 
    Modified Bessel function of the first kind of order ``nu``, :math:`I_\nu(x)`.
 
+.. function:: besselix(nu, x)
+
+   Compute ``besseli(nu,x) * exp(-abs(real(x)))``.
+
 .. function:: besselk(nu, x)
 
    Modified Bessel function of the second kind of order ``nu``, :math:`K_\nu(x)`.
+
+.. function:: besselkx(nu, x)
+
+   Compute ``besselk(nu,x) * exp(x)``.
 
 .. function:: beta(x, y)
 
