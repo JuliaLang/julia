@@ -14,21 +14,21 @@ convert{T}(::Type{Ptr{T}}, p::Ptr{T}) = p
 convert{T}(::Type{Ptr{T}}, p::Ptr) = box(Ptr{T}, unbox(Ptr,p))
 
 # object to pointer
-convert(::Type{Ptr{Uint8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{Uint8}, (Any,), x)
-convert(::Type{Ptr{Int8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{Int8}, (Any,), x)
-convert(::Type{Ptr{Uint8}}, s::ByteString) = convert(Ptr{Uint8}, s.data)
-convert(::Type{Ptr{Int8}}, s::ByteString) = convert(Ptr{Int8}, s.data)
+cconvert(::Type{Ptr{Uint8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{Uint8}, (Any,), x)
+cconvert(::Type{Ptr{Int8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{Int8}, (Any,), x)
+cconvert(::Type{Ptr{Uint8}}, s::ByteString) = cconvert(Ptr{Uint8}, s.data)
+cconvert(::Type{Ptr{Int8}}, s::ByteString) = cconvert(Ptr{Int8}, s.data)
 
-convert{T}(::Type{Ptr{T}}, a::Array{T}) = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
-convert(::Type{Ptr{None}}, a::Array) = ccall(:jl_array_ptr, Ptr{None}, (Any,), a)
+cconvert{T}(::Type{Ptr{T}}, a::Array{T}) = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
+cconvert(::Type{Ptr{None}}, a::Array) = ccall(:jl_array_ptr, Ptr{None}, (Any,), a)
 
 pointer{T}(::Type{T}, x::Uint) = convert(Ptr{T}, x)
 pointer{T}(::Type{T}, x::Ptr) = convert(Ptr{T}, x)
 # note: these definitions don't mean any AbstractArray is convertible to
 # pointer. they just map the array element type to the pointer type for
 # convenience in cases that work.
-pointer{T}(x::AbstractArray{T}) = convert(Ptr{T},x)
-pointer{T}(x::AbstractArray{T}, i::Integer) = convert(Ptr{T},x)+(i-1)*sizeof(T)
+pointer{T}(x::AbstractArray{T}) = cconvert(Ptr{T},x)
+pointer{T}(x::AbstractArray{T}, i::Integer) = cconvert(Ptr{T},x)+(i-1)*sizeof(T)
 
 # unsafe pointer to array conversions
 pointer_to_array(p, dims::Dims) = pointer_to_array(p, dims, false)
