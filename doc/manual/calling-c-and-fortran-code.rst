@@ -216,8 +216,6 @@ Julia type with the same name, prefixed by C. This can help for writing portable
 **System-independent:**
 
 +------------------------+-------------------+--------------------------------+
-| ``bool`` (8 bits)      | ``Cbool``         | ``Bool``                       |
-+------------------------+-------------------+--------------------------------+
 | ``signed char``        |                   | ``Int8``                       |
 +------------------------+-------------------+--------------------------------+
 | ``unsigned char``      | ``Cuchar``        | ``Uint8``                      |
@@ -266,11 +264,6 @@ Julia type with the same name, prefixed by C. This can help for writing portable
 +------------------------+-------------------+--------------------------------+
 | ``jl_value_t*`` (any Julia Type)           | ``Ptr{Any}``                   |
 +------------------------+-------------------+--------------------------------+
-
-*Note:* the ``bool`` type is only defined by C++, where it is 8 bits
-wide. In C, however, ``int`` is often used for boolean values. Since
-``int`` is 32-bits wide (on all supported systems), there is some
-potential for confusion here.
 
 Julia's ``Char`` type is 32 bits, which is not the same as the wide
 character type (``wchar_t`` or ``wint_t``) on all platforms.
