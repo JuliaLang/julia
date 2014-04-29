@@ -606,7 +606,9 @@ function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,
             buf = copy(LineEdit.buffer(s))
             edit_insert(buf,input)
             string = takebuf_string(buf)
+            curspos = position(LineEdit.buffer(s))
             pos = 0
+            inputsz = length(input)
             sz = length(string.data)
             while pos <= sz
                 oldpos = pos
@@ -615,9 +617,13 @@ function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,
                 line = strip(bytestring(string.data[max(oldpos, 1):min(pos-1, sz)]))
                 isempty(line) && continue
                 LineEdit.replace_line(s, line)
+                if oldpos <= curspos
+                    seek(LineEdit.buffer(s),curspos-oldpos+inputsz)
+                end
                 LineEdit.refresh_line(s)
                 (pos > sz && last(string) != '\n') && break
-                if !isa(ast, Expr) || (ast.head != :continue && ast.head != :incomplete)
+                if !isa(ast, Expr) || (ast.head != :continue && ast.head != :incomplete &&
+                    ast.head != :error)
                     LineEdit.commit_line(s)
                     # This is slightly ugly but ok for now
                     terminal = LineEdit.terminal(s)
