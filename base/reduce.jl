@@ -149,9 +149,8 @@ end
 
 function countnz{T}(a::AbstractArray{T})
     n = 0
-    z = zero(T)
     for i = 1:length(a)
-        @inbounds n += (a[i] != z)
+        @inbounds n += (a[i] != 0)
     end
     return n
 end
