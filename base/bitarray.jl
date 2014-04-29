@@ -16,25 +16,17 @@ type BitArray{N} <: DenseArray{Bool, N}
     len::Int
     dims::NTuple{N,Int}
     function BitArray(dims::Int...)
-        if length(dims) != N
-            error("number of dimensions must be $N (got $(length(dims)))")
-        end
+        length(dims) == N || error("number of dimensions must be $N (got $(length(dims)))")
         n = 1
         for d in dims
-            if d < 0
-                error("dimension size must be nonnegative (got $d)")
-            end
+            d >= 0 || error("dimension size must be nonnegative (got $d)")
             n *= d
         end
         nc = num_bit_chunks(n)
         chunks = Array(Uint64, nc)
-        if nc > 0
-            chunks[end] = uint64(0)
-        end
+        nc > 0 && (chunks[end] = uint64(0))
         b = new(chunks, n)
-        if N != 1
-            b.dims = dims
-        end
+        N != 1 && (b.dims = dims)
         return b
     end
 end
@@ -102,9 +94,7 @@ function copy_chunks!(dest::Vector{Uint64}, pos_d::Integer, src::Vector{Uint64},
 
     dest[kd0] = (dest[kd0] & msk_d0) | ((chunk_s0 << ld0) & ~msk_d0)
 
-    if delta_kd == 0
-        return
-    end
+    delta_kd == 0 && return
 
     for i = 1 : kd1 - kd0 - 1
         chunk_s1 = glue_src_bitchunks(src, ks0 + i, ks1, msk_s0, ls0)
@@ -130,11 +120,8 @@ function copy_chunks!(dest::Vector{Uint64}, pos_d::Integer, src::Vector{Uint64},
 end
 
 function copy_chunks_rtol!(chunks::Vector{Uint64}, pos_d::Integer, pos_s::Integer, numbits::Integer)
-    if pos_d == pos_s
-        return
-    elseif pos_d < pos_s
-        return copy_chunks!(chunks, pos_d, chunks, pos_s, numbits)
-    end
+    pos_d == pos_s && return
+    pos_d < pos_s && return copy_chunks!(chunks, pos_d, chunks, pos_s, numbits)
 
     left = numbits
     s = min(left, 64)
@@ -226,9 +213,7 @@ similar(B::BitArray, T::Type, dims::Dims) = Array(T, dims)
 
 function fill!(B::BitArray, x)
     y = convert(Bool, x)
-    if length(B) == 0
-        return B
-    end
+    length(B) == 0 && return B
     Bc = B.chunks
     if !y
         fill!(Bc, 0)
@@ -243,7 +228,7 @@ falses(args...) = fill!(BitArray(args...), false)
 trues(args...) = fill!(BitArray(args...), true)
 
 function one(x::BitMatrix)
-    m,n = size(x)
+    m, n = size(x)
     m == n || throw(DimensionMismatch("multiplicative identity defined only for square matrices"))
     a = falses(n, n)
     for i = 1:n
@@ -257,9 +242,7 @@ function copy!(dest::BitArray, src::BitArray)
     nc_d = length(destc)
     nc_s = length(srcc)
     nc = min(nc_s, nc_d)
-    if nc == 0
-        return dest
-    end
+    nc == 0 && return dest
     @inbounds begin
         for i = 1 : nc - 1
             destc[i] = srcc[i]
@@ -284,18 +267,13 @@ function copy!(dest::BitArray, pos_d::Integer, src::BitArray, pos_s::Integer, nu
 end
 
 function reshape{N}(B::BitArray, dims::NTuple{N,Int})
-    if prod(dims) != length(B)
+    prod(dims) == length(B) ||
         throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(B))"))
-    end
-    if dims == size(B)
-        return B
-    end
+    dims == size(B) && return B
     Br = BitArray{N}(ntuple(N,i->0)...)
     Br.chunks = B.chunks
     Br.len = prod(dims)
-    if N != 1
-        Br.dims = dims
-    end
+    N != 1 && (Br.dims = dims)
     return Br
 end
 
@@ -316,18 +294,14 @@ function convert{T,N}(::Type{BitArray{N}}, A::AbstractArray{T,N})
     B = BitArray(size(A))
     Bc = B.chunks
     l = length(B)
-    if l == 0
-        return B
-    end
+    l == 0 && return B
     ind = 1
     @inbounds begin
         for i = 1:length(Bc)-1
             u = uint64(1)
             c = uint64(0)
             for j = 0:63
-                if bool(A[ind])
-                    c |= u
-                end
+                bool(A[ind]) && (c |= u)
                 ind += 1
                 u <<= 1
             end
@@ -336,9 +310,7 @@ function convert{T,N}(::Type{BitArray{N}}, A::AbstractArray{T,N})
         u = uint64(1)
         c = uint64(0)
         for j = 0:@_mod64(l-1)
-            if bool(A[ind])
-                c |= u
-            end
+            bool(A[ind]) && (c |= u)
             ind += 1
             u <<= 1
         end
@@ -360,15 +332,10 @@ bitpack{T,N}(A::AbstractArray{T,N}) = convert(BitArray{N}, A)
 ## Random ##
 
 function bitarray_rand_fill!(B::BitArray)
-    if length(B) == 0
-        return B
-    end
+    length(B) == 0 && return B
     Bc = B.chunks
-    for i = 1 : length(Bc) - 1
-        Bc[i] = rand(Uint64)
-    end
-    msk = @_msk_end length(B)
-    Bc[end] = msk & rand(Uint64)
+    rand!(Bc)
+    Bc[end] &= @_msk_end length(B)
     return B
 end
 
@@ -549,11 +516,10 @@ function sizehint(B::BitVector, sz::Integer)
 end
 
 function resize!(B::BitVector, n::Integer)
-    if n < 0
-        throw(BoundsError())
-    end
     n0 = length(B)
-    if n <= n0
+    n == n0 && return B
+    n >= 0 || throw(BoundsError())
+    if n < n0
         splice!(B, n+1:n0)
         return B
     end
@@ -569,16 +535,12 @@ function resize!(B::BitVector, n::Integer)
 end
 
 function pop!(B::BitVector)
-    if isempty(B)
-        error("argument must not be empty")
-    end
+    isempty(B) && error("argument must not be empty")
     item = B[end]
     B[end] = false
 
     l = @_mod64 length(B)
-    if l == 1
-        ccall(:jl_array_del_end, Void, (Any, Uint), B.chunks, 1)
-    end
+    l == 1 && ccall(:jl_array_del_end, Void, (Any, Uint), B.chunks, 1)
     B.len -= 1
 
     return item
@@ -607,9 +569,7 @@ function unshift!(B::BitVector, item)
 end
 
 function shift!(B::BitVector)
-    if isempty(B)
-        error("argument must not be empty")
-    end
+    isempty(B) && error("argument must not be empty")
     @inbounds begin
         item = B[1]
 
@@ -632,9 +592,7 @@ function shift!(B::BitVector)
 end
 
 function insert!(B::BitVector, i::Integer, item)
-    if i < 1
-        throw(BoundsError())
-    end
+    i < 1 && throw(BoundsError())
     item = convert(Bool, item)
 
     n = length(B)
@@ -700,9 +658,7 @@ end
 
 function deleteat!(B::BitVector, i::Integer)
     n = length(B)
-    if !(1 <= i <= n)
-        throw(BoundsError())
-    end
+    1 <= i <= n || throw(BoundsError())
 
     return _deleteat!(B, i)
 end
@@ -711,9 +667,7 @@ function deleteat!(B::BitVector, r::UnitRange{Int})
     n = length(B)
     i_f = first(r)
     i_l = last(r)
-    if !(1 <= i_f && i_l <= n)
-        throw(BoundsError())
-    end
+    (1 <= i_f && i_l <= n) || throw(BoundsError())
 
     Bc = B.chunks
     new_l = length(B) - length(r)
@@ -721,9 +675,7 @@ function deleteat!(B::BitVector, r::UnitRange{Int})
 
     copy_chunks!(Bc, i_f, Bc, i_l+1, n-i_l)
 
-    if delta_k < 0
-        ccall(:jl_array_del_end, Void, (Any, Uint), Bc, -delta_k)
-    end
+    delta_k < 0 && ccall(:jl_array_del_end, Void, (Any, Uint), Bc, -delta_k)
 
     B.len = new_l
 
@@ -774,9 +726,7 @@ end
 
 function splice!(B::BitVector, i::Integer)
     n = length(B)
-    if !(1 <= i <= n)
-        throw(BoundsError())
-    end
+    1 <= i <= n || throw(BoundsError())
 
     v = B[i]   # TODO: change to a copy if/when subscripting becomes an ArrayView
     _deleteat!(B, i)
@@ -791,12 +741,10 @@ function splice!(B::BitVector, r::UnitRange{Int}, ins::BitVector = _default_bit_
     n = length(B)
     i_f = first(r)
     i_l = last(r)
-    if !(1 <= i_f <= n+1)
-        throw(BoundsError())
-    end
-    if !(i_l <= n)
-        throw(BoundsError())
-    end
+
+    1 <= i_f <= n+1 || throw(BoundsError())
+    i_l <= n || throw(BoundsError())
+
     if (i_f > n)
         append!(B, ins)
         return BitVector(0)
@@ -812,14 +760,12 @@ function splice!(B::BitVector, r::UnitRange{Int}, ins::BitVector = _default_bit_
     new_l = length(B) + lins - ldel
     delta_k = num_bit_chunks(new_l) - length(Bc)
 
-    if delta_k > 0
-        ccall(:jl_array_grow_end, Void, (Any, Uint), Bc, delta_k)
-    end
+    delta_k > 0 && ccall(:jl_array_grow_end, Void, (Any, Uint), Bc, delta_k)
+
     copy_chunks!(Bc, i_f+lins, Bc, i_l+1, n-i_l)
     copy_chunks!(Bc, i_f, ins.chunks, 1, lins)
-    if delta_k < 0
-        ccall(:jl_array_del_end, Void, (Any, Uint), Bc, -delta_k)
-    end
+
+    delta_k < 0 && ccall(:jl_array_del_end, Void, (Any, Uint), Bc, -delta_k)
 
     B.len = new_l
 
@@ -848,9 +794,7 @@ end
 function (-)(B::BitArray)
     A = zeros(Int, size(B))
     l = length(B)
-    if l == 0
-        return A
-    end
+    l == 0 && return A
     Bc = B.chunks
     ind = 1
     for i = 1:length(Bc)-1
@@ -882,11 +826,10 @@ function (~)(B::BitArray)
     Bc = B.chunks
     if !isempty(Bc)
         Cc = C.chunks
-        for i = 1:length(Bc)-1
+        for i = 1:length(Bc)
             Cc[i] = ~Bc[i]
         end
-        msk = @_msk_end length(B)
-        Cc[end] = msk & (~Bc[end])
+        Cc[end] &= @_msk_end length(B)
     end
     return C
 end
@@ -894,11 +837,10 @@ end
 function flipbits!(B::BitArray)
     Bc = B.chunks
     @inbounds if !isempty(Bc)
-        for i = 1:length(B.chunks) - 1
+        for i = 1:length(Bc)
             Bc[i] = ~Bc[i]
         end
-        msk = @_msk_end length(B)
-        Bc[end] = msk & (~Bc[end])
+        Bc[end] &= @_msk_end length(B)
     end
     return B
 end
@@ -1024,17 +966,15 @@ for f in (:&, :|, :$)
             Fc = F.chunks
             Ac = A.chunks
             Bc = B.chunks
-            if !isempty(Ac) && !isempty(Bc)
-                for i = 1:length(Fc) - 1
-                    Fc[i] = ($f)(Ac[i], Bc[i])
-                end
-                msk = @_msk_end length(F)
-                Fc[end] = msk & ($f)(Ac[end], Bc[end])
+            (isempty(Ac) || isempty(Bc)) && return F
+            for i = 1:length(Fc)
+                Fc[i] = ($f)(Ac[i], Bc[i])
             end
+            Fc[end] &= @_msk_end length(F)
             return F
         end
-        ($f)(A::Array{Bool}, B::BitArray) = ($f)(bitpack(A), B)
-        ($f)(B::BitArray, A::Array{Bool}) = ($f)(B, bitpack(A))
+        ($f)(A::DenseArray{Bool}, B::BitArray) = ($f)(bitpack(A), B)
+        ($f)(B::BitArray, A::DenseArray{Bool}) = ($f)(B, bitpack(A))
         ($f)(x::Number, B::BitArray) = ($f)(x, bitunpack(B))
         ($f)(B::BitArray, x::Number) = ($f)(bitunpack(B), x)
     end
@@ -1119,16 +1059,12 @@ end
 ## comparison operators ##
 
 function (==)(A::BitArray, B::BitArray)
-    if size(A) != size(B)
-        return false
-    end
+    size(A) != size(B) && return false
     return A.chunks == B.chunks
 end
 
 function (!=)(A::BitArray, B::BitArray)
-    if size(A) != size(B)
-        return true
-    end
+    size(A) != size(B) && return true
     return A.chunks != B.chunks
 end
 
@@ -1181,7 +1117,7 @@ function flipdim(A::BitArray, d::Integer)
     for i = 1:nd
         nnd += int(size(A,i)==1 || i==d)
     end
-    if nnd==nd
+    if nnd == nd
         # flip along the only non-singleton dimension
         for i = 1:sd
             B[i] = A[sd+1-i]
@@ -1195,7 +1131,7 @@ function flipdim(A::BitArray, d::Integer)
     N = length(A)
     stride = M * sd
 
-    if M==1
+    if M == 1
         for j = 0:stride:(N-stride)
             for i = 1:sd
                 ri = sd+1-i
@@ -1227,15 +1163,14 @@ end
 
 function reverse!(B::BitVector)
     n = length(B)
-    if n == 0
-        return B
-    end
+    n == 0 && return B
+
     pnc = length(B.chunks) & 1
     hnc = (length(B.chunks) >>> 1)
 
     aux_chunks = Array(Uint64, 1)
 
-    for i = 1 : hnc
+    for i = 1:hnc
         j = ((i - 1) << 6)
         aux_chunks[1] = reverse_bits(B.chunks[i])
         copy_chunks!(B.chunks, j+1, B.chunks, n-63-j, 64)
@@ -1243,9 +1178,7 @@ function reverse!(B::BitVector)
         copy_chunks!(B.chunks, n-63-j, aux_chunks, 1, 64)
     end
 
-    if pnc == 0
-        return B
-    end
+    pnc == 0 && return B
 
     i = hnc + 1
     j = hnc << 6
@@ -1321,11 +1254,9 @@ end
 
 # returns the index of the next non-zero element, or 0 if all zeros
 function findnext(B::BitArray, start::Integer)
-    if start <= 0
-        throw(BoundsError())
-    elseif start > length(B)
-        return 0
-    end
+    start > 0 || throw(BoundsError())
+    start > length(B) && return 0
+
     Bc = B.chunks
 
     chunk_start = @_div64(start-1)+1
@@ -1349,17 +1280,12 @@ end
 
 # aux function: same as findnext(~B, start), but performed without temporaries
 function findnextnot(B::BitArray, start::Integer)
-    if start <= 0
-        throw(BoundsError())
-    elseif start > length(B)
-        return 0
-    end
+    start > 0 || throw(BoundsError())
+    start > length(B) && return 0
 
     Bc = B.chunks
     l = length(Bc)
-    if l == 0
-        return 0
-    end
+    l == 0 && return 0
 
     chunk_start = @_div64(start-1)+1
     within_chunk_start = @_mod64(start-1)
@@ -1386,13 +1312,9 @@ findfirstnot(B::BitArray) = findnextnot(B,1)
 
 # returns the index of the first matching element
 function findnext(B::BitArray, v, start::Integer)
-    if v == false
-        return findnextnot(B, start)
-    elseif v == true
-        return findnext(B, start)
-    else
-        return 0
-    end
+    v == false && return findnextnot(B, start)
+    v == true && return findnext(B, start)
+    return 0
 end
 #findfirst(B::BitArray, v) = findnext(B, 1, v)  ## defined in array.jl
 
@@ -1400,15 +1322,11 @@ end
 function findnext(testf::Function, B::BitArray, start::Integer)
     f0::Bool = testf(false)
     f1::Bool = testf(true)
-    if length(B) == 0 || !(f0 || f1)
-        return 0
-    elseif f0 && f1
-        return 1
-    elseif !f0 && f1
-        return findnext(B, start)
-    else
-        return findnextnot(B, start)
-    end
+    length(B) == 0 && return 0
+    f0 || f1 || return 0
+    f0 && f1 && return 1
+    !f0 && f1 && return findnext(B, start)
+    return findnextnot(B, start)
 end
 #findfirst(testf::Function, B::BitArray) = findnext(testf, B, 1)  ## defined in array.jl
 
@@ -1416,9 +1334,7 @@ function find(B::BitArray)
     l = length(B)
     nnzB = countnz(B)
     I = Array(Int, nnzB)
-    if nnzB == 0
-        return I
-    end
+    nnzB == 0 && return I
     Bc = B.chunks
     Bcount = 1
     Icount = 1
@@ -1454,26 +1370,26 @@ function findn(B::BitMatrix)
     I = Array(Int, nnzB)
     J = Array(Int, nnzB)
     count = 1
-    for j=1:size(B,2), i=1:size(B,1)
+    for j = 1:size(B,2), i = 1:size(B,1)
         if B[i,j]
             I[count] = i
             J[count] = j
             count += 1
         end
     end
-    return (I, J)
+    return I, J
 end
 
 function findnz(B::BitMatrix)
     I, J = findn(B)
-    return (I, J, trues(length(I)))
+    return I, J, trues(length(I))
 end
 
 nonzeros(B::BitArray) = trues(countnz(B))
 
 ## Reductions ##
 
-sum(A::BitArray, region) = reducedim(+,A,region,0,Array(Int,reduced_dims(A,region)))
+sum(A::BitArray, region) = reducedim(+, A, region, 0, Array(Int,reduced_dims(A,region)))
 
 sum(B::BitArray) = countnz(B)
 
@@ -1482,13 +1398,9 @@ function all(B::BitArray)
     Bc = B.chunks
     @inbounds begin
         for i = 1:length(Bc)-1
-            if Bc[i] != _msk64
-                return false
-            end
+            Bc[i] == _msk64 || return false
         end
-        if Bc[end] != @_msk_end length(B)
-            return false
-        end
+        Bc[end] == (@_msk_end length(B)) || return false
     end
     return true
 end
@@ -1498,9 +1410,7 @@ function any(B::BitArray)
     Bc = B.chunks
     @inbounds begin
         for i = 1:length(Bc)
-            if Bc[i] != 0
-                return true
-            end
+            Bc[i] == 0 || return true
         end
     end
     return false
@@ -1512,35 +1422,35 @@ maximum(B::BitArray) = isempty(B) ? error("argument must be non-empty") : any(B)
 ## map over bitarrays ##
 
 function map!(f::Callable, A::Union(StridedArray,BitArray))
-    for i=1:length(A)
+    for i = 1:length(A)
         A[i] = f(A[i])
     end
     return A
 end
 
 function map!(f::Callable, dest::Union(StridedArray,BitArray), A::Union(StridedArray,BitArray))
-    for i=1:length(A)
+    for i = 1:length(A)
         dest[i] = f(A[i])
     end
     return dest
 end
 
 function map!(f::Callable, dest::Union(StridedArray,BitArray), A::Union(StridedArray,BitArray), B::Union(StridedArray,BitArray))
-    for i=1:length(A)
+    for i = 1:length(A)
         dest[i] = f(A[i], B[i])
     end
     return dest
 end
 
 function map!(f::Callable, dest::Union(StridedArray,BitArray), A::Union(StridedArray,BitArray), B::Number)
-    for i=1:length(A)
+    for i = 1:length(A)
         dest[i] = f(A[i], B)
     end
     return dest
 end
 
 function map!(f::Callable, dest::Union(StridedArray,BitArray), A::Number, B::Union(StridedArray,BitArray))
-    for i=1:length(B)
+    for i = 1:length(B)
         dest[i] = f(A, B[i])
     end
     return dest
@@ -1550,7 +1460,7 @@ function map!(f::Callable, dest::Union(StridedArray,BitArray), As::Union(Strided
     n = length(As[1])
     i = 1
     ith = a->a[i]
-    for i=1:n
+    for i = 1:n
         dest[i] = f(map(ith, As)...)
     end
     return dest
@@ -1584,10 +1494,8 @@ function form_8x8_chunk(Bc::Vector{Uint64}, i1::Int, i2::Int, m::Int, cgap::Int,
 
     k, l = get_chunks_id(i1 + (i2 - 1) * m)
     r = 0
-    for j = 1 : 8
-        if k > nc
-            break
-        end
+    for j = 1:8
+        k > nc && break
         x |= ((Bc[k] >>> l) & msk8) << r
         if l + 8 >= 64 && nc > k
             r0 = 8 - (@_mod64 (l + 8))
@@ -1604,10 +1512,8 @@ end
 function put_8x8_chunk(Bc::Vector{Uint64}, i1::Int, i2::Int, x::Uint64, m::Int, cgap::Int, cinc::Int, nc::Int, msk8::Uint64)
     k, l = get_chunks_id(i1 + (i2 - 1) * m)
     r = 0
-    for j = 1 : 8
-        if k > nc
-            break
-        end
+    for j = 1:8
+        k > nc && break
         Bc[k] |= ((x >>> r) & msk8) << l
         if l + 8 >= 64 && nc > k
             r0 = 8 - (@_mod64 (l + 8))
@@ -1636,14 +1542,14 @@ function transpose(B::BitMatrix)
 
     nc = length(Bc)
 
-    for i = 1 : 8 : l1
+    for i = 1:8:l1
 
         msk8_1 = uint64(0xff)
         if (l1 < i + 7)
             msk8_1 >>>= i + 7 - l1
         end
 
-        for j = 1 : 8 : l2
+        for j = 1:8:l2
             x = form_8x8_chunk(Bc, i, j, l1, cgap1, cinc1, nc, msk8_1)
             x = transpose8x8(x)
 
@@ -1715,7 +1621,7 @@ function hcat(A::Union(BitMatrix,BitVector)...)
     B = BitArray(nrows, ncols)
 
     pos = 1
-    for k=1:nargs
+    for k = 1:nargs
         Ak = A[k]
         n = length(Ak)
         copy_chunks!(B.chunks, pos, Ak.chunks, 1, n)
@@ -1729,7 +1635,7 @@ function vcat(A::BitMatrix...)
     nrows = sum(a->size(a, 1), A)::Int
     ncols = size(A[1], 2)
     for j = 2:nargs
-        if size(A[j], 2) != ncols; error("columns must match"); end
+        size(A[j], 2) == ncols || error("columns must match")
     end
     B = BitArray(nrows, ncols)
     Bc = B.chunks
@@ -1737,12 +1643,10 @@ function vcat(A::BitMatrix...)
     Ac = [a.chunks for a in A]
     pos_d = 1
     pos_s = ones(Int, nargs)
-    for j = 1:ncols
-        for k = 1:nargs
-            copy_chunks!(Bc, pos_d, Ac[k], pos_s[k], nrowsA[k])
-            pos_s[k] += nrowsA[k]
-            pos_d += nrowsA[k]
-        end
+    for j = 1:ncols, k = 1:nargs
+        copy_chunks!(Bc, pos_d, Ac[k], pos_s[k], nrowsA[k])
+        pos_s[k] += nrowsA[k]
+        pos_d += nrowsA[k]
     end
     return B
 end
@@ -1768,19 +1672,15 @@ function cat(catdim::Integer, X::Union(BitArray, Integer)...)
     d_max = maximum(ndimsX)
 
     if catdim > d_max + 1
-        for i=1:nargs
-            if dimsX[1] != dimsX[i]
-                error("all inputs must have same dimensions when concatenating along a higher dimension");
-            end
+        for i = 1:nargs
+            dimsX[1] == dimsX[i] || error("all inputs must have same dimensions when concatenating along a higher dimension");
         end
     elseif nargs >= 2
-        for d=1:d_max
-            if d == catdim; continue; end
+        for d = 1:d_max
+            d == catdim && continue
             len = d <= ndimsX[1] ? dimsX[1][d] : 1
             for i = 2:nargs
-                if len != (d <= ndimsX[i] ? dimsX[i][d] : 1)
-                    error("mismatch in dimension ", d)
-                end
+                len == (d <= ndimsX[i] ? dimsX[i][d] : 1) || error("mismatch in dimension ", d)
             end
         end
     end
@@ -1789,17 +1689,11 @@ function cat(catdim::Integer, X::Union(BitArray, Integer)...)
 
     function compute_dims(d)
         if d == catdim
-            if catdim <= d_max
-                return sum(cat_ranges)
-            else
-                return nargs
-            end
+            catdim <= d_max && return sum(cat_ranges)
+            return nargs
         else
-            if d <= ndimsX[1]
-                return dimsX[1][d]
-            else
-                return 1
-            end
+            d <= ndimsX[1] && return dimsX[1][d]
+            return 1
         end
     end
 
@@ -1814,7 +1708,7 @@ function cat(catdim::Integer, X::Union(BitArray, Integer)...)
 
     range = 1
     for k = 1:nargs
-        nextrange = range+cat_ranges[k]
+        nextrange = range + cat_ranges[k]
         cat_one = ntuple(ndimsC, i->(i != catdim ?
                                      (1:dimsC[i]) : (range:nextrange-1) ))
         # note: when C and X are BitArrays, this calls
