@@ -1392,7 +1392,8 @@ static Value *emit_f_is(jl_value_t *rt1, jl_value_t *rt2,
             answer = builder.CreateICmpEQ(JL_INT(varg1),JL_INT(varg2));
             goto done;
         }
-        if (at1->isStructTy() && !ptr_comparable) {
+        bool isStruct = at1->isStructTy();
+        if ((isStruct || at1->isVectorTy()) && !ptr_comparable) {
             jl_tuple_t *types;
             if (jl_is_datatype(rt1)) {
                 types = ((jl_datatype_t*)rt1)->types;
@@ -1405,11 +1406,21 @@ static Value *emit_f_is(jl_value_t *rt1, jl_value_t *rt2,
             size_t l = jl_tuple_len(types);
             for(unsigned i=0; i < l; i++) {
                 jl_value_t *fldty = jl_tupleref(types,i);
-                Value *subAns =
-                    emit_f_is(fldty, fldty, NULL, NULL,
-                              builder.CreateExtractValue(varg1, ArrayRef<unsigned>(&i,1)),
-                              builder.CreateExtractValue(varg2, ArrayRef<unsigned>(&i,1)),
-                              ctx);
+                Value *subAns;
+                if (isStruct) {
+                    subAns =
+                        emit_f_is(fldty, fldty, NULL, NULL,
+                                  builder.CreateExtractValue(varg1, ArrayRef<unsigned>(&i,1)),
+                                  builder.CreateExtractValue(varg2, ArrayRef<unsigned>(&i,1)),
+                                  ctx);
+                }
+                else {
+                    subAns =
+                        emit_f_is(fldty, fldty, NULL, NULL,
+                                  builder.CreateExtractElement(varg1, ConstantInt::get(T_int32,i)),
+                                  builder.CreateExtractElement(varg2, ConstantInt::get(T_int32,i)),
+                                  ctx);
+                }
                 answer = builder.CreateAnd(answer, subAns);
             }
             goto done;
