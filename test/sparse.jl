@@ -187,7 +187,7 @@ mfe22 = eye(Float64, 2)
 @test nfilled(sparse([1,1],[1,2],[0.0,-0.0])) == 0
 
 # issue #5386
-K,J,V = findnz(SparseMatrixCSC(2,1,[1,3],[1,2],[1.0,0.0]))
+K,J,V = findnz(sparse([1,2],[1,1],[1.0,0.0],2,1))
 @test length(K) == length(J) == length(V) == 1
 
 # issue #5437

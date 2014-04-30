@@ -407,8 +407,11 @@ eval(Sys, :(@deprecate shlib_list dllist))
 @deprecate degrees2radians deg2rad
 @deprecate radians2degrees rad2deg
 
-@deprecate spzeros(m::Integer) spzeros(m, m)
-@deprecate spzeros(Tv::Type, m::Integer) spzeros(Tv, m, m)
+# This syntax is being used for sparse vectors now.
+# It is probably inappropriate to reinstate deprecated methods with a different behavior.
+# Decision required...
+#@deprecate spzeros(m::Integer) spzeros(m, m)
+#@deprecate spzeros(Tv::Type, m::Integer) spzeros(Tv, m, m)
 
 @deprecate myindexes localindexes
 

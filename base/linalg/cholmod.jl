@@ -12,6 +12,7 @@ export                                  # types
  etree
 
 using Base.LinAlg.UMFPACK               # for decrement, increment, etc.
+using Base.Sparse
  
 import Base: (*), convert, copy, ctranspose, eltype, findnz, getindex, hcat,
              isvalid, nfilled, show, size, sort!, transpose, vcat
@@ -1024,10 +1025,10 @@ full(A::CholmodSparse) = CholmodDense(A).mat
 full(A::CholmodDense) = A.mat
 function sparse(A::CholmodSparse)
     if bool(A.c.stype) return sparse!(copysym(A)) end
-    SparseMatrixCSC(A.c.m, A.c.n, increment(A.colptr0), increment(A.rowval0), copy(A.nzval))
+    SparseCSC((A.c.m, A.c.n), increment(A.colptr0), increment(A.rowval0), copy(A.nzval))
 end
 function sparse!(A::CholmodSparse)
-    SparseMatrixCSC(A.c.m, A.c.n, increment!(A.colptr0), increment!(A.rowval0), A.nzval)
+    SparseCSC((A.c.m, A.c.n), increment!(A.colptr0), increment!(A.rowval0), A.nzval)
 end    
 sparse(L::CholmodFactor) = sparse!(CholmodSparse(L))
 sparse(D::CholmodDense) = sparse!(CholmodSparse(D))
