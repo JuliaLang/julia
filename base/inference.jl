@@ -2807,7 +2807,7 @@ function code_typed(f::Callable, types::(Type...))
     asts
 end
 
-function return_type(f::Base.Callable, types::Tuple)
+function return_type(f::Callable, types::Tuple)
     if isdefined(f, :code)
         typeinf(f.code, types, f.code.sparams, f.code, true)[2]
     else
