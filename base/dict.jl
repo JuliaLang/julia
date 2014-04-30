@@ -425,6 +425,7 @@ function setindex!{K,V}(h::Dict{K,V}, v0, key0)
     index = ht_keyindex2(h, key)
 
     if index > 0
+        h.keys[index] = key
         h.vals[index] = v
     else
         _setindex!(h, v, key, -index)
