@@ -44,7 +44,7 @@ immutable StepRange{T,S} <: OrdinalRange{T,S}
                         remain = oftype(T, unsigned(diff) % step)
                     end
                 else
-                    remain = diff % step
+                    remain = steprem(start,stop,step)
                 end
                 last = stop - remain
             end
@@ -53,6 +53,8 @@ immutable StepRange{T,S} <: OrdinalRange{T,S}
         new(start, step, last)
     end
 end
+
+steprem(start,stop,step) = (stop-start) % step
 
 StepRange{T,S}(start::T, step::S, stop::T) = StepRange{T,S}(start, step, stop)
 
@@ -150,10 +152,10 @@ colon{T<:Real}(a::T, b::FloatingPoint, c::T) = colon(promote(a,b,c)...)
 colon{T<:FloatingPoint}(a::T, b::FloatingPoint, c::T) = colon(promote(a,b,c)...)
 colon{T<:FloatingPoint}(a::T, b::Real, c::T) = colon(promote(a,b,c)...)
 
-range(a::FloatingPoint, len::Integer) = FloatRange(a,one(a),len,one(a))
-range(a::FloatingPoint, st::FloatingPoint, len::Integer) = FloatRange(a,st,len,one(a))
-range(a::Real, st::FloatingPoint, len::Integer) = FloatRange(float(a), st, len, one(st))
-range(a::FloatingPoint, st::Real, len::Integer) = FloatRange(a, float(st), len, one(a))
+range(a::FloatingPoint, len::Integer) = colon(a, oftype(a,a+len-1))
+range(a::FloatingPoint, st::FloatingPoint, len::Integer) = colon(a, st, a+oftype(st,(len-1)*st))
+range(a::Real, st::FloatingPoint, len::Integer) = colon(a, st, a+oftype(st,(len-1)*st))
+range(a::FloatingPoint, st::Real, len::Integer) = colon(a, st, oftype(a,a+(len-1)*st))
 
 ## interface implementations
 
@@ -272,38 +274,6 @@ function show(io::IO, r::Range)
     print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
 end
 show(io::IO, r::UnitRange) = print(io, repr(first(r)), ':', repr(last(r)))
-
-isequal{T<:Range}(r::T, s::T) =
-    (first(r)==first(s)) & (step(r)==step(s)) & (last(r)==last(s))
-
-isequal(r::Range, s::Range) = false
-
-=={T<:Range}(r::T, s::T) = isequal(r, s)
-
-=={T<:Integer, S<:Integer}(r::Range{T}, s::Range{S}) =
-    (first(r)==first(s)) & (step(r)==step(s)) & (last(r)==last(s))
-
-function ==(r::Range, s::Range)
-    lr = length(r)
-    if lr != length(s)
-        return false
-    end
-    u, v = start(r), start(s)
-    while !done(r, u)
-        x, u = next(r, u)
-        y, v = next(s, v)
-        if x != y
-            return false
-        end
-    end
-    return true
-end
-
-# hashing ranges by component at worst leads to collisions for very similar ranges
-hash(r::Range) =
-    bitmix(hash(first(r)), bitmix(hash(step(r)), bitmix(hash(last(r)), uint(0xaaeeaaee))))
-
-# TODO: isless?
 
 intersect{T1<:Integer, T2<:Integer}(r::UnitRange{T1}, s::UnitRange{T2}) = max(r.start,s.start):min(last(r),last(s))
 
@@ -507,14 +477,15 @@ reverse(r::FloatRange)   = FloatRange(last(r), -r.step, r.len, r.divisor)
 
 issorted(r::UnitRange) = true
 issorted(r::Range) = step(r) >= 0
+issorted{T,S}(r::StepRange{T,S}) = step(r) >= zero(S)
 
 sort(r::UnitRange) = r
 sort!(r::UnitRange) = r
 
-sort{T<:Real}(r::Range{T}) = issorted(r) ? r : reverse(r)
+sort(r::Range) = issorted(r) ? r : reverse(r)
 
 sortperm(r::UnitRange) = 1:length(r)
-sortperm{T<:Real}(r::Range{T}) = issorted(r) ? (1:1:length(r)) : (length(r):-1:1)
+sortperm(r::Range) = issorted(r) ? (1:1:length(r)) : (length(r):-1:1)
 
 function sum{T<:Real}(r::Range{T})
     l = length(r)
@@ -550,6 +521,10 @@ end
 
 function in(x, r::Range)
     n = step(r) == 0 ? 1 : iround((x-first(r))/step(r))+1
+    n >= 1 && n <= length(r) && r[n] == x
+end
+function in{T,S}(x, r::StepRange{T,S})
+    n = step(r) == zero(S) ? 1 : iround((x-first(r))/step(r))+1
     n >= 1 && n <= length(r) && r[n] == x
 end
 
