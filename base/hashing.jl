@@ -5,7 +5,7 @@ hash(w::WeakRef, h::Uint) = hash(w.value, h)
 
 ## core data hashing functions ##
 
-function hash_uint(n::Uint64)
+function hash_64_64(n::Uint64)
     local a::Uint64 = n
     a = ~a + a << 21
     a =  a $ a >> 24
@@ -17,7 +17,18 @@ function hash_uint(n::Uint64)
     return a
 end
 
-function hash_uint(n::Uint32)
+function hash_64_32(n::Uint64)
+    local a::Uint64 = n
+    a = ~a + a << 18
+    a =  a $ a >> 31
+    a =  a * 21
+    a =  a $ a >> 11
+    a =  a + a << 6
+    a =  a $ a >> 22
+    return uint32(a)
+end
+
+function hash_32_32(n::Uint32)
     local a::Uint32 = n
     a = a + 0x7ed55d16 + a << 12
     a = a $ 0xc761c23c $ a >> 19
@@ -28,10 +39,18 @@ function hash_uint(n::Uint32)
     return a
 end
 
+if Uint == Uint64
+    hash_uint64(x::Uint64) = hash_64_64(x)
+    hash_uint(x::Uint)     = hash_64_64(x)
+else
+    hash_uint64(x::Uint64) = hash_64_32(x)
+    hash_uint(x::Uint)     = hash_32_32(x)
+end
+
 ## hashing small, built-in numeric types ##
 
-hx(a::Uint64, b::Float64, h::Uint) = hash_uint((3a + reinterpret(Uint64,b)) - h)
-const hx_NaN = hx(uint(0), NaN, uint(0))
+hx(a::Uint64, b::Float64, h::Uint) = hash_uint64((3a + reinterpret(Uint64,b)) - h)
+const hx_NaN = hx(uint64(0), NaN, uint(0  ))
 
 hash(x::Uint64,  h::Uint) = hx(x, float64(x), h)
 hash(x::Int64,   h::Uint) = hx(reinterpret(Uint64,x), float64(x), h)
@@ -42,7 +61,7 @@ hash(x::Float32, h::Uint) = hash(float64(x), h)
 
 ## hashing complex numbers ##
 
-const h_imag = 0x32a7a07f3e7cd1f9
+const h_imag = uint(0x32a7a07f3e7cd1f9)
 const hash_0_imag = hash(0, h_imag)
 
 function hash(z::Complex, h::Uint)
@@ -53,10 +72,10 @@ end
 
 ## special hashing for booleans and characters ##
 
-hash(x::Bool, h::Uint) = hash(int(x), h + 0x4cd135a1755139a5)
-hash(x::Char, h::Uint) = hash(int(x), h + 0x10f989ff0f886f11)
+hash(x::Bool, h::Uint) = hash(int(x), h + uint(0x4cd135a1755139a5))
+hash(x::Char, h::Uint) = hash(int(x), h + uint(0x10f989ff0f886f11))
 
 ## symbol & expression hashing ##
 
 hash(x::Symbol, h::Uint) = hash(object_id(x), h)
-hash(x::Expr, h::Uint) = hash(x.args, hash(x.head, h + 0x83c7900696d26dc6))
+hash(x::Expr, h::Uint) = hash(x.args, hash(x.head, h + uint(0x83c7900696d26dc6)))
