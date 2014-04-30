@@ -44,7 +44,7 @@ immutable StepRange{T,S} <: OrdinalRange{T,S}
                         remain = oftype(T, unsigned(diff) % step)
                     end
                 else
-                    remain = diff % step
+                    remain = steprem(start,stop,step)
                 end
                 last = stop - remain
             end
@@ -53,6 +53,8 @@ immutable StepRange{T,S} <: OrdinalRange{T,S}
         new(start, step, last)
     end
 end
+
+steprem(start,stop,step) = (stop-start) % step
 
 StepRange{T,S}(start::T, step::S, stop::T) = StepRange{T,S}(start, step, stop)
 
@@ -507,14 +509,15 @@ reverse(r::FloatRange)   = FloatRange(last(r), -r.step, r.len, r.divisor)
 
 issorted(r::UnitRange) = true
 issorted(r::Range) = step(r) >= 0
+issorted{T,S}(r::StepRange{T,S}) = step(r) >= zero(S)
 
 sort(r::UnitRange) = r
 sort!(r::UnitRange) = r
 
-sort{T<:Real}(r::Range{T}) = issorted(r) ? r : reverse(r)
+sort(r::Range) = issorted(r) ? r : reverse(r)
 
 sortperm(r::UnitRange) = 1:length(r)
-sortperm{T<:Real}(r::Range{T}) = issorted(r) ? (1:1:length(r)) : (length(r):-1:1)
+sortperm(r::Range) = issorted(r) ? (1:1:length(r)) : (length(r):-1:1)
 
 function sum{T<:Real}(r::Range{T})
     l = length(r)
@@ -550,6 +553,11 @@ end
 
 function in(x, r::Range)
     n = step(r) == 0 ? 1 : iround((x-first(r))/step(r))+1
+    n >= 1 && n <= length(r) && r[n] == x
+end
+
+function in{T,S}(x, r::StepRange{T,S})
+    n = step(r) == zero(S) ? 1 : iround((x-first(r))/step(r))+1
     n >= 1 && n <= length(r) && r[n] == x
 end
 
