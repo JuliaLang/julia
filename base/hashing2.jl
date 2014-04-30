@@ -156,9 +156,11 @@ hash(x::Float16, h::Uint) = hash(float64(x), h)
 
 ## hashing strings ##
 
+const memhash = Uint == Uint64 ? :memhash_seed : :memhash32_seed
+
 function hash{T<:ByteString}(s::Union(T,SubString{T}), h::Uint)
-    h += 0x71e729fd56419c81
-    ccall(:memhash_seed, Uint64, (Ptr{Void}, Int, Uint32), pointer(s), sizeof(s), h) + h
+    h += uint(0x71e729fd56419c81)
+    ccall(memhash, Uint, (Ptr{Uint8}, Csize_t, Uint32), pointer(s), sizeof(s), h) + h
 end
 hash(s::String, h::Uint) = hash(bytestring(s), h)
 
@@ -179,8 +181,12 @@ hash(B::BitArray, h::Uint) = hash((size(B),B.chunks), h)
 hash(a::AbstractArray{Bool}, h::Uint) = hash(bitpack(a), h)
 
 # hashing ranges by component at worst leads to collisions for very similar ranges
-hash{T<:Range}(r::T, h::Uint) =
-    hash(first(r), hash(step(r), hash(last(r), h + object_id(eltype(T)))))
+function hash{T<:Range}(r::T, h::Uint)
+    h += uint(0x80707b6821b70087)
+    h = hash(first(r), h)
+    h = hash(step(r), h)
+    h = hash(last(r), h)
+end
 
 ## hashing general objects ##
 
