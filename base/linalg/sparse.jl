@@ -191,7 +191,7 @@ function *{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti})
     # The Gustavson algorithm does not guarantee the product to have sorted row indices.
     Cunsorted = SparseCSC((mA, nB), colptrC, rowvalC, nzvalC)
     Ct = Cunsorted.'
-    Ctt = Base.SparseMatrix.transpose!(Ct, SparseCSC((mA, nB), colptrC, rowvalC, nzvalC))
+    Ctt = Base.Sparse.transpose!(Ct, SparseCSC((mA, nB), colptrC, rowvalC, nzvalC))
 end
 
 ## solvers

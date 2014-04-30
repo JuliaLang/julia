@@ -213,7 +213,7 @@ include("client.jl")
 
 # sparse matrices and linear algebra
 include("sparse.jl")
-importall .SparseMatrix
+importall .Sparse
 include("linalg.jl")
 importall .LinAlg
 include("broadcast.jl")

@@ -1,6 +1,6 @@
 include("sparse/abstractsparse.jl")
 
-module SparseMatrix
+module Sparse
 
 importall Base
 import Base.NonTupleType, Base.float, Base.showarray, Base.dims2string
@@ -15,4 +15,4 @@ export SparseMatrixCSC, SparseCSC, SparseVector, SparseVecOrMat,
 include("sparse/sparsematrix.jl")
 include("sparse/csparse.jl")
 
-end # module SparseMatrix
+end # module Sparse

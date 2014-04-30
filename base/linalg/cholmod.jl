@@ -12,7 +12,7 @@ export                                  # types
  etree
 
 using Base.LinAlg.UMFPACK               # for decrement, increment, etc.
-using Base.SparseMatrix
+using Base.Sparse
  
 import Base: (*), convert, copy, ctranspose, eltype, findnz, getindex, hcat,
              isvalid, nfilled, show, size, sort!, transpose, vcat
