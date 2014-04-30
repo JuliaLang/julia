@@ -378,6 +378,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     qpos = position(query_buffer)
     qpos > 0 || return true
     searchdata = bytestring_beforecursor(query_buffer)
+    response_str = bytestring(response_buffer)
 
     # Alright, first try to see if the current match still works
     a = position(response_buffer) + 1
@@ -391,11 +392,12 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
 
     # Start searching
     # First the current response buffer
-    response_str = bytestring(response_buffer)
-    match = searchfunc(response_str, searchdata, a+delta)
-    if match != 0:-1
-        seek(response_buffer, first(match)-1)
-        return true
+    if 1 <= a+delta <= length(response_str)
+        match = searchfunc(response_str, searchdata, a+delta)
+        if match != 0:-1
+            seek(response_buffer, first(match)-1)
+            return true
+        end
     end
 
     # Now search all the other buffers
