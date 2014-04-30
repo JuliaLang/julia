@@ -608,8 +608,8 @@ function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,
             string = takebuf_string(buf)
             curspos = position(LineEdit.buffer(s))
             pos = 0
-            inputsz = length(input)
-            sz = length(string.data)
+            inputsz = sizeof(input)
+            sz = sizeof(string)
             while pos <= sz
                 oldpos = pos
                 ast, pos = Base.parse(string, pos, raise=false)
