@@ -803,7 +803,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
         end
     end
     if isdefined(Main.Base,:return_type) && f === Main.Base.return_type &&
-       length(fargs) == 2 && argtypes[2] <: Tuple && all(isType, argtypes[2])
+       length(fargs) == 2 && argtypes[2] <: Tuple && isleaftype(argtypes[2])
         af = const_func_or_constructor(fargs[1], argtypes[1], sv)
         if !is(af,false)
             e.head = :call1
