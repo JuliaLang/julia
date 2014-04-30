@@ -2167,45 +2167,66 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
     stmts = {}
     stmts_free = true # true = all entries of stmts are effect_free
 
+    # when 1 method matches the inferred types, there is still a chance
+    # of a no-method error at run time, unless the inferred types are a
+    # subset of the method signature.
+    if !(atypes <: meth[1])
+        t = Expr(:call) # tuple(argexprs...)
+        t.typ = Tuple
+        argexprs2 = t.args
+        icall = genlabel(sv)
+        partmatch = Expr(:gotoifnot, false, icall.label)
+        push!(stmts, partmatch)
+        thrw = Expr(:call, :throw, Expr(:call, :MethodError, f, t))
+        thrw.typ = None
+        push!(stmts, thrw)
+        push!(stmts, icall)
+        incompletematch = true
+    else
+        incompletematch = false
+    end
     methargs = meth[1]
     nm = length(methargs)
+
     for i=na:-1:1 # stmts_free needs to be calculated in reverse-argument order
         a = args[i]
         aei = argexprs[i]
-        aeitype = argtype = typeintersect(exprtype(aei),Any)  # remove Undef
+        aeitype = argtype = exprtype(aei)
         if aeitype == ANY
             aeitype = Any
         end
-        if isva
-            if nm == 0
-                methitype = ()
-            elseif i > nm
-                methitype = methargs[end]
-                if isvarargtype(methitype)
-                    methitype = (methitype,)
-                else
-                    methitype = ()
-                end
-            else
-                methitype = tuple(methargs[i:end]...)
-            end
-            isva = false
-        else
-            if i < nm
-                methitype = methargs[i]
-            else
-                methitype = methargs[end]
-                if isvarargtype(methitype)
-                    methitype = (methitype::Vararg).parameters[1]
-                else
-                    @assert i==nm
-                end
-            end
-        end
         needtypeassert = false
-        if !(aeitype <: methitype)
-            needtypeassert = true
-            aeitype = methitype
+        if incompletematch
+            if isva
+                if nm == 0
+                    methitype = ()
+                elseif i > nm
+                    methitype = methargs[end]
+                    if isvarargtype(methitype)
+                        methitype = (methitype,)
+                    else
+                        methitype = ()
+                    end
+                else
+                    methitype = tuple(methargs[i:end]...)
+                end
+                isva = false
+            else
+                if i < nm
+                    methitype = methargs[i]
+                else
+                    methitype = methargs[end]
+                    if isvarargtype(methitype)
+                        methitype = (methitype::Vararg).parameters[1]
+                    else
+                        @assert i==nm
+                    end
+                end
+            end
+            if !(aeitype <: methitype)
+                needtypeassert = true
+                aeitype = methitype
+            end
         end
 
         islocal = false # if the argument name is also used as a local variable,
@@ -2240,10 +2261,11 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
                 break
             end
         end
+
         free = effect_free(aei,sv,true)
         if ((occ==0 && is(aeitype,None)) || islocal || needtypeassert || (occ > 1 && !inline_worthy(aei, occ)) ||
                 (affect_free && !free) || (!affect_free && !effect_free(aei,sv,false)))
-            if occ != 0 || needtypeassert # islocal=true is implied
+            if occ != 0 || needtypeassert || (incompletematch && !free) # islocal=true is implied by occ!=0
                 # introduce variable for this argument
                 vnew = unique_name(enclosing_ast, ast)
                 add_variable(enclosing_ast, vnew, aeitype, !islocal)
@@ -2251,7 +2273,19 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
                 if needtypeassert
                     vnew2 = unique_name(enclosing_ast, ast)
                     add_variable(enclosing_ast, vnew2, argtype, true)
-                    push!(stmts, Expr(:(=), vnew, Expr(:call, TopNode(:typeassert), vnew2, aeitype)))
+                    vnew2expr = (argtype===Any ? vnew2 : SymbolNode(vnew2,argtype))
+                    push!(stmts, Expr(:(=), vnew, vnew2expr))
+                    unshift!(argexprs2, vnew2expr)
+                    # it's really late in codegen, so we expand the typeassert manually: cond = !isa(vnew2, methitype) | cond
+                    cond = Expr(:call, TopNode(:isa), vnew2expr, methitype)
+                    cond.typ = Bool
+                    cond = Expr(:call, TopNode(:not_int), cond)
+                    cond.typ = Bool
+                    cond = Expr(:call, TopNode(:or_int), cond, partmatch.args[1])
+                    cond.typ = Bool
+                    cond = Expr(:call, TopNode(:box), Bool, cond)
+                    cond.typ = Bool
+                    partmatch.args[1] = cond
                 else
                     vnew2 = vnew
                 end
@@ -2262,6 +2296,12 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
                 stmts_free = false
             end
         end
+        if !needtypeassert && incompletematch
+            unshift!(argexprs2, argexprs[i])
+        end
+    end
+    if incompletematch
+        unshift!(argexprs2, TopNode(:tuple))
     end
 
     # ok, substitute argument expressions for argument names in the body
