@@ -86,8 +86,10 @@
 #include "llvm/Support/IRBuilder.h"
 #endif
 #include "llvm/Target/TargetOptions.h"
+#include "llvm/Transforms/IPO.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
+#include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Instrumentation.h"
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 1
 #include "llvm/Transforms/Vectorize.h"
@@ -101,6 +103,11 @@
 #include "llvm/Support/CommandLine.h"
 #endif
 #include "llvm/Transforms/Utils/Cloning.h"
+#ifndef LLVM35
+#include "llvm/Assembly/PrintModulePass.h"
+#else
+#include "llvm/IR/IRPrintingPasses.h"
+#endif
 #include <setjmp.h>
 
 #include <string>
@@ -693,7 +700,29 @@ const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
     llvm::formatted_raw_ostream fstream(stream);
     Function *llvmf = (Function*)f;
     if (dumpasm == false) {
-        llvmf->print(stream);
+        PassManager PM;
+        llvm::Module *m = llvm::CloneModule(llvmf->getParent());
+        std::vector<GlobalValue*> Gvs;
+        Gvs.push_back(m->getFunction(llvmf->getName()));
+
+#if defined(LLVM35)
+        m->setDataLayout(jl_ExecutionEngine->getDataLayout());
+        PM.add(new DataLayoutPass(m));
+        PM.add(createGVExtractionPass(Gvs, false));
+        PM.add(createStripDeadPrototypesPass());
+        PM.add(createStripSymbolsPass(true));
+        PM.add(createPrintModulePass(stream));
+#else
+        m->setDataLayout(
+            jl_ExecutionEngine->getDataLayout()->getStringRepresentation());
+        PM.add(new DataLayout(m));
+        PM.add(createGVExtractionPass(Gvs, false));
+        PM.add(createStripDeadPrototypesPass());
+        PM.add(createStripSymbolsPass(true));
+        PM.add(createPrintModulePass(&stream));
+#endif
+        PM.run(*m);
+        delete m;
     }
     else {
         size_t fptr = (size_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
