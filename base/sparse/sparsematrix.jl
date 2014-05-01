@@ -293,7 +293,7 @@ function findn{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
 
     count = 1
     for col = 1 : S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
-        if S.nzval[k] != zero(Tv)
+        if S.nzval[k] != 0
             I[count] = S.rowval[k]
             J[count] = col
             count += 1
@@ -317,7 +317,7 @@ function findnz{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
 
     count = 1
     for col = 1 : S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
-        if S.nzval[k] != zero(Tv)
+        if S.nzval[k] != 0
             I[count] = S.rowval[k]
             J[count] = col
             V[count] = S.nzval[k]
@@ -1421,7 +1421,7 @@ function istriu{Tv}(A::SparseMatrixCSC{Tv})
             if A.rowval[l1-i] <= col
                 break
             end
-            if A.nzval[l1-i] != zero(Tv)
+            if A.nzval[l1-i] != 0
                 return false
             end
         end
@@ -1435,7 +1435,7 @@ function istril{Tv}(A::SparseMatrixCSC{Tv})
             if A.rowval[i] >= col
                 break
             end
-            if A.nzval[i] != zero(Tv)
+            if A.nzval[i] != 0
                 return false
             end
         end
