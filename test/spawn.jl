@@ -65,6 +65,7 @@ end
 file = tempname()
 run(`echo hello world` |> file)
 @test readall(file |> `cat`) == "hello world\n"
+rm(file)
 
 # Stream Redirection
 @unix_only begin
@@ -101,6 +102,7 @@ file = tempname()
 stdin, proc = writesto(`cat -` |> file)
 write(stdin, str)
 close(stdin)
+rm(file)
 
 # issue #3373
 # fixing up Conditions after interruptions
