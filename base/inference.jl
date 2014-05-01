@@ -2167,16 +2167,13 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
     nm = length(methargs)
     if !(atypes <: methargs)
         incompletematch = true
-        t = Expr(:call) # tuple(argexprs...)
+        t = Expr(:call) # tuple(args...)
         t.typ = Tuple
         argexprs2 = t.args
-        icall = genlabel(sv)
+        icall = LabelNode(label_counter(body.args)+1)
         partmatch = Expr(:gotoifnot, false, icall.label)
-        push!(stmts, partmatch)
         thrw = Expr(:call, :throw, Expr(:call, :MethodError, f, t))
         thrw.typ = None
-        push!(stmts, thrw)
-        push!(stmts, icall)
     else
         incompletematch = false
     end
@@ -2217,6 +2214,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
                 methitype = methitype.ub
             end
             if !(aeitype <: methitype)
+                #TODO: make Undef a faster special-case
                 needtypeassert = true
                 aeitype = methitype
             end
@@ -2240,61 +2238,68 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
         # is a symbol or constant, or is not affected by previous statements
         # that will exist after the inlining pass finishes
         affect_free = stmts_free && !islocal && !needtypeassert # false = previous statements might affect the result of evaluating argument
-        occ = 0
-        for j = length(body.args):-1:1
-            b = body.args[j]
-            if occ < 1
-                occ += occurs_more(b, x->is(x,a), 5)
-            end
-            if occ > 0 && affect_free && !effect_free(b, sv, true) #TODO: we could short-circuit this test better by memoizing effect_free(b) in the for loop over i
-                affect_free = false
-            end
-            if occ > 5
-                occ = 6
-                break
+        if needtypeassert
+            vnew1 = unique_name(enclosing_ast, ast)
+            add_variable(enclosing_ast, vnew1, aeitype, !islocal)
+            v1 = (aeitype===Any ? vnew1 : SymbolNode(vnew1,aeitype))
+            push!(spnames, a)
+            push!(spvals, v1)
+            vnew2 = unique_name(enclosing_ast, ast)
+            v2 = (argtype===Any ? vnew2 : SymbolNode(vnew2,argtype))
+            unshift!(body.args, Expr(:(=), a, v2))
+            args[i] = a = vnew2
+            islocal = false
+            aeitype = argtype
+            occ = 3
+            # it's really late in codegen, so we expand the typeassert manually: cond = !isa(vnew2, methitype) | cond
+            cond = Expr(:call, Intrinsics.isa, v2, methitype)
+            cond.typ = Bool
+            cond = Expr(:call, Intrinsics.not_int, cond)
+            cond.typ = Bool
+            cond = Expr(:call, Intrinsics.or_int, cond, partmatch.args[1])
+            cond.typ = Bool
+            cond = Expr(:call, Intrinsics.box, Bool, cond)
+            cond.typ = Bool
+            partmatch.args[1] = cond
+        else
+            occ = 0
+            for j = length(body.args):-1:1
+                b = body.args[j]
+                if occ < 1
+                    occ += occurs_more(b, x->is(x,a), 5)
+                end
+                if occ > 0 && affect_free && !effect_free(b, sv, true) #TODO: we could short-circuit this test better by memoizing effect_free(b) in the for loop over i
+                    affect_free = false
+                end
+                if occ > 5
+                    occ = 6
+                    break
+                end
             end
         end
-
         free = effect_free(aei,sv,true)
-        if ((occ==0 && is(aeitype,None)) || islocal || needtypeassert || (occ > 1 && !inline_worthy(aei, occ)) ||
+        if ((occ==0 && is(aeitype,None)) || islocal || (occ > 1 && !inline_worthy(aei, occ)) ||
                 (affect_free && !free) || (!affect_free && !effect_free(aei,sv,false)))
-            if occ != 0 || needtypeassert || (incompletematch && !free) # islocal=true is implied by occ!=0
-                # introduce variable for this argument
+            if (occ != 0) # islocal=true is implied by occ!=0
                 vnew = unique_name(enclosing_ast, ast)
                 add_variable(enclosing_ast, vnew, aeitype, !islocal)
-                argexprs[i] = aeitype===Any ? vnew : SymbolNode(vnew,aeitype)
-                if needtypeassert
-                    vnew2 = unique_name(enclosing_ast, ast)
-                    add_variable(enclosing_ast, vnew2, argtype, true)
-                    vnew2expr = (argtype===Any ? vnew2 : SymbolNode(vnew2,argtype))
-                    push!(stmts, Expr(:(=), vnew, vnew2expr))
-                    unshift!(argexprs2, vnew2expr)
-                    # it's really late in codegen, so we expand the typeassert manually: cond = !isa(vnew2, methitype) | cond
-                    cond = Expr(:call, TopNode(:isa), vnew2expr, methitype)
-                    cond.typ = Bool
-                    cond = Expr(:call, TopNode(:not_int), cond)
-                    cond.typ = Bool
-                    cond = Expr(:call, TopNode(:or_int), cond, partmatch.args[1])
-                    cond.typ = Bool
-                    cond = Expr(:call, TopNode(:box), Bool, cond)
-                    cond.typ = Bool
-                    partmatch.args[1] = cond
-                else
-                    vnew2 = vnew
-                end
-                unshift!(stmts, Expr(:(=), vnew2, aei))
+                unshift!(stmts, Expr(:(=), vnew, aei))
+                argexprs[i] = (argtype===Any ? vnew : SymbolNode(vnew,aeitype))
                 stmts_free &= free
             elseif !free && !isType(aeitype)
                 unshift!(stmts, aei)
                 stmts_free = false
             end
         end
-        if !needtypeassert && incompletematch
-            unshift!(argexprs2, argexprs[i])
+        if incompletematch
+            unshift!(argexprs2, a)
         end
     end
-    if incompletematch
-        unshift!(argexprs2, TopNode(:tuple))
+    if incompletematch && partmatch.args[1] != false
+        unshift!(body.args, icall)
+        unshift!(body.args, thrw)
+        unshift!(body.args, partmatch)
+        unshift!(argexprs2, top_tuple)
     end
 
     # ok, substitute argument expressions for argument names in the body
@@ -2697,10 +2702,10 @@ function remove_redundant_temp_vars(ast, sa)
                 # this transformation is not valid for vars used before def.
                 # we need to preserve the point of assignment to know where to
                 # throw errors (issue #4645).
-            delete_var!(ast, v)
-            sym_replace(ast.args[3], {v}, {}, {init}, {})
+                delete_var!(ast, v)
+                sym_replace(ast.args[3], {v}, {}, {init}, {})
+            end
         end
-    end
     end
     ast
 end
