@@ -1,5 +1,12 @@
+#if USE_MCJIT
+typedef object::SymbolRef SymRef;
+#endif
+
+#include <iostream> // TODO: temp
+
 // --- storing and accessing source location metadata ---
 
+#ifndef USE_MCJIT
 struct FuncInfo{
     const Function* func;
     size_t lengthAdr;
@@ -10,6 +17,12 @@ struct FuncInfo{
 #endif
     std::vector<JITEvent_EmittedFunctionDetails::LineStart> lines;
 };
+#else
+struct ObjectInfo {
+    object::ObjectFile* object;
+    object::SymbolRef symref;
+};
+#endif
 
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
 #include <dbghelp.h>
@@ -24,12 +37,17 @@ struct revcomp {
 
 class JuliaJITEventListener: public JITEventListener
 {
+#ifndef USE_MCJIT
     std::map<size_t, FuncInfo, revcomp> info;
+#else
+    std::map<size_t, ObjectInfo> objectmap;
+#endif
 
 public:
     JuliaJITEventListener(){}
     virtual ~JuliaJITEventListener() {}
 
+#ifndef USE_MCJIT
     virtual void NotifyFunctionEmitted(const Function &F, void *Code,
                                        size_t Size, const EmittedFunctionDetails &Details)
     {
@@ -80,6 +98,39 @@ public:
     {
         return info;
     }
+#endif // ndef USE_MCJIT
+
+#if USE_MCJIT
+    
+    virtual void NotifyObjectEmitted(const ObjectImage &obj)
+    {
+        object::symbol_iterator sym_iter = obj.begin_symbols();
+        object::symbol_iterator sym_end = obj.end_symbols();
+      
+        StringRef Name;
+        uint64_t Addr;
+        //uint64_t Size;
+        object::SymbolRef::Type SymbolType;
+
+        error_code itererr; 
+        for (; sym_iter != sym_end; sym_iter.increment(itererr)) {
+            sym_iter->getType(SymbolType);
+            if (SymbolType != object::SymbolRef::ST_Function) continue;
+            sym_iter->getAddress(Addr);
+
+            ObjectInfo tmp = {obj.getObjectFile(), *sym_iter};
+            objectmap[Addr] = tmp;
+        }
+    }
+
+    // must implement if we ever start freeing code
+    // virtual void NotifyFreeingObject(const ObjectImage &obj) {}
+
+    std::map<size_t, ObjectInfo>& getObjectMap()
+    {
+        return objectmap;
+    }
+#endif // USE_MCJIT
 };
 
 JuliaJITEventListener *jl_jit_events;
@@ -88,10 +139,35 @@ extern "C" void jl_getFunctionInfo(const char **name, int *line, const char **fi
 
 void jl_getFunctionInfo(const char **name, int *line, const char **filename, size_t pointer)
 {
-    std::map<size_t, FuncInfo, revcomp> &info = jl_jit_events->getMap();
     *name = NULL;
     *line = -1;
     *filename = "no file";
+
+#if USE_MCJIT
+// With MCJIT we can get information directly from the ObjectFile
+
+    return; // TODO
+    std::map<size_t, ObjectInfo> &objmap = jl_jit_events->getObjectMap();
+    std::map<size_t, ObjectInfo>::iterator it = objmap.lower_bound(pointer);
+
+    if (it == objmap.end()) return;
+    DIContext *context = DIContext::getDWARFContext(it->second.object);
+    if (context == NULL) return;
+    DILineInfo info = context->getLineInfoForAddress(pointer);
+
+    #ifndef LLVM35 // <= LLVM34 
+    *name = info.getFunctionName();
+    *line = info.getLine();
+    *filename = info.getFileName();
+    #else
+    *name = info.FunctionName.c_str();
+    *line = info.Line;
+    *filename = info.FileName.c_str();
+    #endif //LLVM35
+
+#else
+// Without MCJIT we use the FuncInfo structure containing address maps
+    std::map<size_t, FuncInfo, revcomp> &info = jl_jit_events->getMap();
     std::map<size_t, FuncInfo, revcomp>::iterator it = info.lower_bound(pointer);
     if (it != info.end() && (size_t)(*it).first + (*it).second.lengthAdr >= pointer) {
         // commenting these lines out skips functions that don't
@@ -133,6 +209,7 @@ void jl_getFunctionInfo(const char **name, int *line, const char **filename, siz
             *line = prev.Loc.getLine();
         }
     }
+#endif // USE_MCJIT
 }
 
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
@@ -261,7 +338,7 @@ extern "C" void jl_write_coverage_data(void)
     }
 }
 
-#ifndef _OS_WINDOWS_
+#if !defined(_OS_WINDOWS_) && !defined(USE_MCJIT)
 // disabled pending system image backtrace support on Windows
 typedef std::map<size_t, FuncInfo, revcomp> FuncInfoMap;
 extern "C" void jl_dump_linedebug_info() {
@@ -351,4 +428,7 @@ extern "C" void jl_restore_linedebug_info(uv_lib_t *handle) {
         jl_jit_events->getMap()[(size_t)fptr] = info;
     }
 }
+#else
+extern "C" void jl_dump_linedebug_info() {}
+extern "C" void jl_restore_linedebug_info(uv_lib_t* handle) {}
 #endif
