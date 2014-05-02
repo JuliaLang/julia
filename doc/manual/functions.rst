@@ -531,27 +531,48 @@ Julia provides a reserved word ``do`` for rewriting this code more clearly::
         end
     end
 
-The ``do x`` syntax creates an anonymous function with argument ``x`` and
-passes it as the first argument to ``map``. This syntax makes it easier to
-use functions to effectively extend the language, since calls look like
-normal code blocks. There are many possible uses quite different from ``map``,
-such as managing system state. For example, the standard library provides
-a function ``cd`` for running code in a given directory, and switching back
-to the previous directory when the code finishes or aborts. There is also
-a definition of ``open`` that runs code ensuring that the opened file is
-eventually closed. We can combine these functions to safely write a file
-in a certain directory::
+The ``do x`` syntax creates an anonymous function with argument ``x``
+and passes it as the first argument to ``map``. Similarly, ``do a,b``
+would create a two-argument anonymous function, and a plain ``do``
+would declare that what follows is an anonymous function of the form
+``() -> ...``.
 
-    cd("data") do
-        open("outfile", "w") do f
-            write(f, data)
+How these arguments are initialized depends on the "outer" function;
+here, ``map`` will sequentially set ``x`` to ``A``, ``B``, ``C``,
+calling the anonymous function on each, just as would happen in the
+syntax ``map(func, [A, B, C])``.
+
+This syntax makes it easier to use functions to effectively extend the
+language, since calls look like normal code blocks. There are many
+possible uses quite different from ``map``, such as managing system
+state. For example, there is a version of ``open`` that runs code
+ensuring that the opened file is eventually closed::
+
+    open("outfile", "w") do io
+        write(io, data)
+    end
+
+This is accomplished by the following definition::
+
+    function open(f::Function, args...)
+        io = open(args...)
+        try
+            f(io)
+        finally
+            close(io)
         end
     end
 
-The function argument to ``cd`` takes no arguments; it is just a block of
-code. The function argument to ``open`` receives a handle to the opened
-file.
+In contrast to the ``map`` example, here ``io`` is initialized by the
+*result* of ``open("outfile", "w")``.  The stream is then passed to
+your anonymous function, which performs the writing; finally, the
+``open`` function ensures that the stream is closed after your
+function exits.  The ``try/finally`` construct will be described in
+:ref:`man-control-flow`.
 
+With the ``do`` block syntax, it helps to check the documentation or
+implementation to know how the arguments of the user function are
+initialized.
 
 Further Reading
 ---------------

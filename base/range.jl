@@ -150,10 +150,10 @@ colon{T<:Real}(a::T, b::FloatingPoint, c::T) = colon(promote(a,b,c)...)
 colon{T<:FloatingPoint}(a::T, b::FloatingPoint, c::T) = colon(promote(a,b,c)...)
 colon{T<:FloatingPoint}(a::T, b::Real, c::T) = colon(promote(a,b,c)...)
 
-range(a::FloatingPoint, len::Integer) = colon(a, oftype(a,a+len-1))
-range(a::FloatingPoint, st::FloatingPoint, len::Integer) = colon(a, st, a+oftype(st,(len-1)*st))
-range(a::Real, st::FloatingPoint, len::Integer) = colon(a, st, a+oftype(st,(len-1)*st))
-range(a::FloatingPoint, st::Real, len::Integer) = colon(a, st, oftype(a,a+(len-1)*st))
+range(a::FloatingPoint, len::Integer) = FloatRange(a,one(a),len,one(a))
+range(a::FloatingPoint, st::FloatingPoint, len::Integer) = FloatRange(a,st,len,one(a))
+range(a::Real, st::FloatingPoint, len::Integer) = FloatRange(float(a), st, len, one(st))
+range(a::FloatingPoint, st::Real, len::Integer) = FloatRange(a, float(st), len, one(a))
 
 ## interface implementations
 

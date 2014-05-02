@@ -1569,3 +1569,40 @@ type FooBarDFW{s}; end
 fooDFW(p::Type{FooBarDFW}) = string(p.parameters[1])
 fooDFW(p) = string(p.parameters[1])
 @test fooDFW(FooBarDFW{:x}) == "x" # not ":x"
+
+# issue #6611
+function crc6611(spec)
+    direcn = spec ? 1 : 2
+    local remainder::blech
+    ()->(remainder=1)
+end
+@test_throws UndefVarError crc6611(true)()
+
+# issue #6634
+function crc6634(spec)
+    A = Uint
+    remainder::A = 1
+    function handler(append)
+        remainder = append ? 1 : 2
+    end
+end
+@test crc6634(0x1)(true) == 1
+@test crc6634(0x1)(false) == 2
+
+# issue #5876
+module A5876
+macro x()
+    quote
+        function $(esc(:f5876)){T}(::Type{T})
+            T
+        end
+        42
+    end
+end
+end
+
+let
+    z = A5876.@x()
+    @test z == 42
+    @test f5876(Int) === Int
+end

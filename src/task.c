@@ -459,12 +459,12 @@ size_t bt_size = 0;
 void jl_getFunctionInfo(const char **name, int *line, const char **filename, size_t pointer);
 
 static const char* name_unknown = "???";
-static int frame_info_from_ip(const char **func_name, int *line_num, const char **file_name, size_t ip, int doCframes)
+static int frame_info_from_ip(const char **func_name, int *line_num, const char **file_name, size_t ip)
 {
     int fromC = 0;
 
     jl_getFunctionInfo(func_name, line_num, file_name, ip);
-    if (*func_name == NULL && doCframes) {
+    if (*func_name == NULL) {
         fromC = 1;
 #if defined(_OS_WINDOWS_)
         if (jl_in_stackwalk) {
@@ -660,21 +660,19 @@ DLLEXPORT jl_value_t *jl_backtrace_from_here(void)
     return (jl_value_t*)bt;
 }
 
-DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int doCframes)
+DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip)
 {
     const char *func_name;
     int line_num;
     const char *file_name;
-#ifdef _OS_WINDOWS_
-    int fromC =
-#endif
-        frame_info_from_ip(&func_name, &line_num, &file_name, (size_t)ip, doCframes);
+    int fromC = frame_info_from_ip(&func_name, &line_num, &file_name, (size_t)ip);
     if (func_name != NULL) {
-        jl_value_t *r = (jl_value_t*)jl_alloc_tuple(3);
+        jl_value_t *r = (jl_value_t*)jl_alloc_tuple(4);
         JL_GC_PUSH1(&r);
         jl_tupleset(r, 0, jl_symbol(func_name));
         jl_tupleset(r, 1, jl_symbol(file_name));
         jl_tupleset(r, 2, jl_box_long(line_num));
+        jl_tupleset(r, 3, jl_box_bool(fromC));
 #ifdef _OS_WINDOWS_
         if (fromC && func_name != name_unknown) free((void*)func_name);
         if (fromC && file_name != name_unknown) free((void*)file_name);
@@ -702,7 +700,7 @@ DLLEXPORT void gdblookup(ptrint_t ip)
     const char *func_name;
     int line_num;
     const char *file_name;
-    int fromC = frame_info_from_ip(&func_name, &line_num, &file_name, ip, 1);
+    int fromC = frame_info_from_ip(&func_name, &line_num, &file_name, ip);
     if (func_name != NULL) {
         if (fromC)
             ios_printf(ios_stderr, "%s at %s: offset %x\n", func_name, file_name, line_num);

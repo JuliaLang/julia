@@ -154,9 +154,11 @@ macro try_display(expr)
   end
 end
 
+xdisplayable(D::Display, args...) = applicable(display, D, args...)
+
 function display(x)
     for i = length(displays):-1:1
-        displayable(displays[i], x) &&
+        xdisplayable(displays[i], x) &&
             @try_display return display(displays[i], x)
     end
     throw(MethodError(display, (x,)))
@@ -164,14 +166,11 @@ end
 
 function display(m::MIME, x)
     for i = length(displays):-1:1
-        displayable(displays[i], m, x) &&
+        xdisplayable(displays[i], m, x) &&
             @try_display return display(displays[i], m, x)
     end
     throw(MethodError(display, (m, x)))
 end
-
-displayable(D::Display, args...) =
-  applicable(display, D, args...)
 
 displayable{D<:Display,mime}(d::D, ::MIME{mime}) =
   method_exists(display, (D, MIME{mime}, Any))

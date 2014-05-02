@@ -648,6 +648,7 @@ void julia_init(char *imageFile)
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
                                     // best to call this first, since it also initializes libuv
     jl_page_size = jl_getpagesize();
+    jl_arr_xtralloc_limit = uv_get_total_memory() / 100;  // Extra allocation limited to 1% of total RAM 
     jl_find_stack_bottom();
     jl_dl_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT);
 #ifdef RTLD_DEFAULT
@@ -905,7 +906,6 @@ jl_function_t *jl_typeinf_func=NULL;
 
 DLLEXPORT void jl_enable_inference(void)
 {
-    if (jl_typeinf_func != NULL) return;
     jl_typeinf_func = (jl_function_t*)jl_get_global(jl_base_module,
                                                     jl_symbol("typeinf_ext"));
 }

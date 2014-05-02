@@ -82,6 +82,8 @@ export
     RoundUp,
     Set,
     SharedArray,
+    SharedMatrix,
+    SharedVector,
     SparseMatrixCSC,
     StatStruct,
     StepRange,
