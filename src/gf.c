@@ -467,6 +467,14 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         jl_value_t *elt = jl_tupleref(type,i);
         jl_value_t *decl_i = nth_slot_type(decl,i);
         if (jl_is_type_type(elt) && jl_is_tuple(jl_tparam0(elt)) &&
+            /*
+              NOTE: without this, () is sometimes specialized as () and
+              sometimes as Type{()}. In #6624, this caused a
+                TypeError(func=:tuplelen, context="", expected=(Any...,), got=Type{()}())
+              inside ==, inside isstructtype. Not quite clear why, however.
+            */
+            jl_tparam0(elt) != (jl_value_t*)jl_null &&
+
             !jl_is_type_type(decl_i)) {
             jl_methlist_t *curr = mt->defs;
             int ok=1;
