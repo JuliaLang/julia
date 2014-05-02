@@ -1525,6 +1525,13 @@
         `(dict_comprehension ,@(cdr c))
         (error "invalid dict comprehension"))))
 
+(define (parse-generator s first closer)
+  (let ((r (parse-comma-separated-iters s)))
+    (if (not (eqv? (require-token s) closer))
+	(error (string "expected " closer))
+        (take-token s))
+    `(macrocall @generator ,first ,@r)))
+
 (define (parse-matrix s first closer gotnewline)
   (define (fix head v) (cons head (reverse v)))
   (define (update-outer v outer)
