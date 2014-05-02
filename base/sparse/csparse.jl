@@ -7,7 +7,7 @@
 
 # Because these functions are based on code covered by LGPL-2.1+ the same license
 # must apply to the code in this file which is
-# Copyright (c) 2013 Viral Shah, Douglas Bates and other contributors
+# Copyright (c) 2013-2014 Viral Shah, Douglas Bates and other contributors
 
 # Based on Direct Methods for Sparse Linear Systems, T. A. Davis, SIAM, Philadelphia, Sept. 2006.
 # Section 2.4: Triplet form
@@ -27,7 +27,7 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
     Rnz[1] = 1
     nz = 0
     for k=1:length(I)
-        if V[k] != zero(Tv)
+        if V[k] != 0
             Rnz[I[k]+1] += 1
             nz += 1
         end
@@ -45,7 +45,7 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
         ind = I[k]
         p = Wj[ind]
         Vk = V[k]
-        if Vk != zero(Tv)
+        if Vk != 0
             Wj[ind] += 1
             Rx[p] = Vk
             Ri[p] = J[k]
@@ -216,8 +216,8 @@ function etree{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, postorder::Bool)
     m,n = size(A)
     Ap = A.colptr
     Ai = A.rowval
-    parent = zeros(Tv, n)
-    ancestor = zeros(Tv, n)
+    parent = zeros(Ti, n)
+    ancestor = zeros(Ti, n)
     for k in 1:n, p in Ap[k]:(Ap[k+1] - 1)
         i = Ai[p]
         while i != 0 && i < k
@@ -228,16 +228,16 @@ function etree{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, postorder::Bool)
         end
     end
     if !postorder return parent end
-    head = zeros(Tv,n)                   # empty linked lists
-    next = zeros(Tv,n)
+    head = zeros(Ti,n)                   # empty linked lists
+    next = zeros(Ti,n)
     for j in n:-1:1                      # traverse in reverse order
-        if (parent[j] == zero(Tv)); continue; end # j is a root
+        if (parent[j] == 0); continue; end # j is a root
         next[j] = head[parent[j]]        # add j to list of its parent
         head[parent[j]] = j
     end
-    stack = Tv[]
+    stack = Ti[]
     sizehint(stack, n)
-    post = zeros(Tv,n)
+    post = zeros(Ti,n)
     k = 1
     for j in 1:n
         if (parent[j] != 0) continue end # skip j if it is not a root
@@ -359,7 +359,7 @@ function fkeep!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f, other)
 end
 
 droptol!(A::SparseMatrixCSC, tol) = fkeep!(A, (i,j,x,other)->abs(x)>other, tol)
-dropzeros!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->x!=zero(Tv), None)
+dropzeros!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->x!=0, None)
 triu!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->(j>=i), None)
 triu(A::SparseMatrixCSC) = triu!(copy(A))
 tril!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->(i>=j), None)

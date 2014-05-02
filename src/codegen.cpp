@@ -507,18 +507,21 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
     }
     assert(f != NULL);
     nested_compile = last_n_c;
-    #ifdef DEBUG
-    #ifndef LLVM35
-    if (verifyFunction(*f,PrintMessageAction)) {
-    #else
+#ifdef DEBUG
+#ifdef LLVM35
     llvm::raw_fd_ostream out(1,false);
-    if (verifyFunction(*f,&out))
-    {
-    #endif
+#endif
+    if (
+#ifdef LLVM35
+        verifyFunction(*f,&out)
+#else
+        verifyFunction(*f,PrintMessageAction)
+#endif
+        ) {
         f->dump();
         abort();
     }
-    #endif
+#endif
     FPM->run(*f);
     //n_compile++;
     // print out the function's LLVM code
@@ -540,7 +543,7 @@ extern "C" jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *ty
 
 static void jl_setup_module(Module *m, bool add)
 {
-    m->addModuleFlag(llvm::Module::Warning, "Dwarf Version",4);
+    m->addModuleFlag(llvm::Module::Warning, "Dwarf Version",3);
 #ifdef LLVM34
     m->addModuleFlag(llvm::Module::Error, "Debug Info Version",
         llvm::DEBUG_METADATA_VERSION);
@@ -1383,30 +1386,47 @@ static Value *emit_f_is(jl_value_t *rt1, jl_value_t *rt2,
     Type *at1 = varg1->getType();
     Type *at2 = varg2->getType();
     if (at1 != jl_pvalue_llvmt && at2 != jl_pvalue_llvmt) {
-        if (at1 == at2) {
-            if (at1->isIntegerTy() || at1->isPointerTy() ||
-                at1->isFloatingPointTy()) {
-                answer = builder.CreateICmpEQ(JL_INT(varg1),JL_INT(varg2));
-                goto done;
+        assert(at1 == at2);
+        if (at1->isIntegerTy() || at1->isPointerTy() ||
+            at1->isFloatingPointTy()) {
+            answer = builder.CreateICmpEQ(JL_INT(varg1),JL_INT(varg2));
+            goto done;
+        }
+        bool isStruct = at1->isStructTy();
+        if ((isStruct || at1->isVectorTy()) && !ptr_comparable) {
+            jl_tuple_t *types;
+            if (jl_is_datatype(rt1)) {
+                types = ((jl_datatype_t*)rt1)->types;
             }
-            if (at1->isStructTy() && !ptr_comparable) {
-                // TODO: tuples
-                jl_datatype_t *sty = (jl_datatype_t*)rt1;
-                assert(jl_is_datatype(sty));
-                answer = ConstantInt::get(T_int1, 1);
-                for(unsigned i=0; i < jl_tuple_len(sty->names); i++) {
-                    jl_value_t *fldty = jl_tupleref(sty->types,i);
-                    Value *subAns =
+            else {
+                assert(jl_is_tuple(rt1));
+                types = (jl_tuple_t*)rt1;
+            }
+            answer = ConstantInt::get(T_int1, 1);
+            size_t l = jl_tuple_len(types);
+            for(unsigned i=0; i < l; i++) {
+                jl_value_t *fldty = jl_tupleref(types,i);
+                Value *subAns;
+                if (isStruct) {
+                    subAns =
                         emit_f_is(fldty, fldty, NULL, NULL,
                                   builder.CreateExtractValue(varg1, ArrayRef<unsigned>(&i,1)),
                                   builder.CreateExtractValue(varg2, ArrayRef<unsigned>(&i,1)),
                                   ctx);
-                    answer = builder.CreateAnd(answer, subAns);
                 }
-                goto done;
+                else {
+                    subAns =
+                        emit_f_is(fldty, fldty, NULL, NULL,
+                                  builder.CreateExtractElement(varg1, ConstantInt::get(T_int32,i)),
+                                  builder.CreateExtractElement(varg2, ConstantInt::get(T_int32,i)),
+                                  ctx);
+                }
+                answer = builder.CreateAnd(answer, subAns);
             }
+            goto done;
         }
     }
+    assert(at1 == jl_pvalue_llvmt || at2 == jl_pvalue_llvmt);
     varg1 = boxed(varg1,ctx); varg2 = boxed(varg2,ctx);
     if (ptr_comparable)
         answer = builder.CreateICmpEQ(varg1, varg2);

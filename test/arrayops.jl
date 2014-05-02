@@ -944,3 +944,10 @@ for N = 1:Nmax
     N > 1 && @test Base.return_types(getindex, tuple(BitArray{N}, args...)) == {BitArray{N-1}}
     N > 1 && @test Base.return_types(setindex!, tuple(Array{Float32, N}, Array{Int, 1}, args...)) == {Array{Float32, N}}
 end
+
+# issue #6645 (32-bit)
+let
+    x = Float64[]
+    for i=1:5; push!(x, 1.0); end
+    @test dot(zeros(5),x) == 0.0
+end

@@ -201,7 +201,7 @@ endif
 endif
 
 LLVM_TARGET_FLAGS= --enable-targets=host
-LLVM_FLAGS = --disable-profiling --enable-shared --enable-static $(LLVM_TARGET_FLAGS) --disable-bindings --disable-docs
+LLVM_FLAGS += --disable-profiling --enable-shared --enable-static $(LLVM_TARGET_FLAGS) --disable-bindings --disable-docs
 LLVM_MFLAGS =
 ifeq ($(LLVM_ASSERTIONS), 1)
 LLVM_FLAGS += --enable-assertions 
@@ -212,7 +212,7 @@ else
 LLVM_FLAGS += --disable-assertions
 endif
 ifeq ($(LLVM_DEBUG), 1)
-LLVM_FLAGS += --disable-optimized
+LLVM_FLAGS += --disable-optimized --enable-debug-symbols --enable-keep-symbols
 else
 LLVM_FLAGS += --enable-optimized
 endif
@@ -471,7 +471,9 @@ $(PCRE_SRC_TARGET): pcre-$(PCRE_VER)/config.status
 	touch -c $@
 pcre-$(PCRE_VER)/checked: $(PCRE_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
+ifneq ($(OS),WINNT)
 	$(MAKE) -C pcre-$(PCRE_VER) check -j1
+endif
 endif
 	echo 1 > $@
 $(PCRE_OBJ_TARGET): $(PCRE_SRC_TARGET) pcre-$(PCRE_VER)/checked
@@ -577,7 +579,12 @@ install-openlibm: $(OPENLIBM_OBJ_TARGET)
 
 ## openspecfun ##
 
-OPENSPECFUN_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) FFLAGS="$(JFFLAGS)" USE_OPENLIBM=1
+OPENSPECFUN_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) FFLAGS="$(JFFLAGS)"
+
+ifeq ($(USE_SYSTEM_LIBM),0)
+	OPENSPECFUN_FLAGS += USE_OPENLIBM=1
+	OPENLIBM_FAKE_TARGET = $(OPENLIBM_OBJ_TARGET)
+endif
 
 OPENSPECFUN_OBJ_TARGET = $(build_shlibdir)/libopenspecfun.$(SHLIB_EXT)
 OPENSPECFUN_OBJ_SOURCE = openspecfun/libopenspecfun.$(SHLIB_EXT)
@@ -590,7 +597,8 @@ endif
 ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/openspecfun ] && echo exists ))
 $(OPENSPECFUN_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/openspecfun/HEAD
 endif
-$(OPENSPECFUN_OBJ_SOURCE): openspecfun/Makefile $(OPENLIBM_OBJ_TARGET)
+
+$(OPENSPECFUN_OBJ_SOURCE): openspecfun/Makefile $(OPENLIBM_FAKE_TARGET)
 	$(MAKE) -C openspecfun $(OPENSPECFUN_FLAGS) $(MAKE_COMMON)
 	touch -c $@
 $(OPENSPECFUN_OBJ_TARGET): $(OPENSPECFUN_OBJ_SOURCE)

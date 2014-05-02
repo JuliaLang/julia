@@ -11,6 +11,7 @@
 #ifndef _OS_WINDOWS_
 #include <sys/sysctl.h>
 #include <sys/wait.h>
+#include <sys/ptrace.h>
 #include <unistd.h>
 #include <sys/mman.h>
 #include <dlfcn.h>
@@ -22,6 +23,7 @@
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
 #include <mach-o/nlist.h>
+#include <sys/types.h> // for jl_raise_debugger
 #endif
 
 #ifdef _OS_LINUX_
@@ -655,6 +657,45 @@ DLLEXPORT int jl_dllist(jl_array_t *list)
     return EnumerateLoadedModules64(GetCurrentProcess(), jl_EnumerateLoadedModulesProc64, list);
 }
 #endif
+
+DLLEXPORT void jl_raise_debugger(void)
+{
+    size_t debugger = 0;
+#if defined(__APPLE__)
+    // Code derived from:
+    // https://developer.apple.com/library/mac/samplecode/sc2195/Listings/PublicUtility_CADebugger_cpp.html
+    int                 junk;
+    int                 mib[4];
+    struct kinfo_proc   info;
+    size_t              size;
+
+    info.kp_proc.p_flag = 0;
+
+    mib[0] = CTL_KERN;
+    mib[1] = KERN_PROC;
+    mib[2] = KERN_PROC_PID;
+    mib[3] = getpid();
+
+    size = sizeof(info);
+    junk = sysctl(mib, sizeof(mib) / sizeof(*mib), &info, &size, NULL, 0);
+    assert(junk == 0);
+
+    debugger = ( (info.kp_proc.p_flag & P_TRACED) != 0 ) ? 1 : 0;
+    // end of derivative code
+#elif defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
+    debugger = ( ptrace(PTRACE_TRACEME, 0, 0, 0) < 0 ) ? 1 : 0;
+#elif defined(_OS_WINDOWS_)
+    debugger = (IsDebuggerPresent() == 1) ? 1 : 0;
+#endif // #ifdef __APPLE__
+
+    if (debugger == 1) {
+#ifdef _OS_WINDOWS_
+        DebugBreak();
+#else
+        raise(SIGINT);
+#endif // _OS_WINDOWS_
+    }
+}
 
 #ifdef __cplusplus
 }

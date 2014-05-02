@@ -437,6 +437,19 @@ static int is_kind(jl_value_t *v)
             v==(jl_value_t*)jl_typector_type);
 }
 
+static int jl_is_specializable_tuple(jl_tuple_t *t)
+{
+    if (t == jl_null) return 1;
+    jl_value_t *e0 = jl_tupleref(t,0);
+    if (jl_is_tuple(e0) || e0 == (jl_value_t*)jl_datatype_type) return 0;
+    size_t i, l=jl_tuple_len(t);
+    // allow specialization on homogeneous tuples
+    for(i=1; i < l; i++) {
+        if (jl_tupleref(t,i) != e0) return 0;
+    }
+    return 1;
+}
+
 static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                               jl_sym_t *name, int lim);
 
@@ -503,7 +516,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         }
         if (set_to_any) {
         }
-        else if (jl_is_tuple(elt)) {
+        else if (jl_is_tuple(elt) && !jl_is_specializable_tuple((jl_tuple_t*)elt)) {
             /*
               don't cache tuple type exactly; just remember that it was
               a tuple, unless the declaration asks for something more

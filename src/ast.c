@@ -814,6 +814,7 @@ static void eval_decl_types(jl_array_t *vi, jl_tuple_t *spenv)
             jl_cellref(v, 1) = ty;
         }
         JL_CATCH {
+            jl_cellref(v, 1) = (jl_value_t*)jl_any_type;
         }
     }
 }

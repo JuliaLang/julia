@@ -2774,7 +2774,7 @@ Mathematical Functions
 
 .. function:: clamp(x, lo, hi)
 
-   Return x if ``lo <= x <= hi``. If ``x < lo``, return ``lo``. If ``x > hi``, return ``hi``.
+   Return x if ``lo <= x <= hi``. If ``x < lo``, return ``lo``. If ``x > hi``, return ``hi``. Arguments are promoted to a common type. Operates elementwise over ``x`` if it is an array.
 
 .. function:: abs(x)
 
@@ -3743,7 +3743,9 @@ Indexing, Assignment, and Concatenation
 
 .. function:: find(A)
 
-   Return a vector of the linear indexes of the non-zeros in ``A``.
+   Return a vector of the linear indexes of the non-zeros in ``A`` (determined by ``A[i]!=0``).
+   A common use of this is to convert a boolean array to an array of indexes of the ``true``
+   elements.
 
 .. function:: find(f,A)
 
@@ -3751,7 +3753,8 @@ Indexing, Assignment, and Concatenation
 
 .. function:: findn(A)
 
-   Return a vector of indexes for each dimension giving the locations of the non-zeros in ``A``.
+   Return a vector of indexes for each dimension giving the locations of the non-zeros in ``A``
+   (determined by ``A[i]!=0``).
 
 .. function:: findnz(A)
 
@@ -3759,11 +3762,11 @@ Indexing, Assignment, and Concatenation
 
 .. function:: nonzeros(A)
 
-   Return a vector of the non-zero values in array ``A``.
+   Return a vector of the non-zero values in array ``A`` (determined by ``A[i]!=0``).
 
 .. function:: findfirst(A)
 
-   Return the index of the first non-zero value in ``A``.
+   Return the index of the first non-zero value in ``A`` (determined by ``A[i]!=0``).
 
 .. function:: findfirst(A,v)
 
