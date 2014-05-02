@@ -1199,6 +1199,12 @@ void jl_longjmp(jmp_buf _Buf,int _Value);
         for (i__ca=1, jl_eh_restore_state(&__eh); i__ca; i__ca=0)
 #endif
 
+DLLEXPORT void jl_par_apply(jl_function_t * func, jl_value_t* args, size_t num_threads, size_t start, size_t step, size_t length );
+
+DLLEXPORT void* jl_create_thread(jl_function_t* f, jl_tuple_t* targs);
+DLLEXPORT void jl_join_thread(void* t);
+DLLEXPORT void jl_destroy_thread(void* t);
+
 
 // I/O system -----------------------------------------------------------------
 

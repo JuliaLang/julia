@@ -253,6 +253,8 @@ include("graphics.jl")
 include("profile.jl")
 importall .Profile
 
+include("threading.jl")
+
 function __init__()
     # Base library init
     reinit_stdio()

@@ -8,12 +8,12 @@ override CPPFLAGS += $(JCPPFLAGS)
 
 SRCS = \
 	jltypes gf ast builtins module codegen interpreter \
-	alloc dlload sys init task array dump toplevel jl_uv jlapi profile llvm-simdloop
+	alloc dlload sys init task array dump toplevel jl_uv jlapi profile llvm-simdloop threading
 
 FLAGS = \
 	-D_GNU_SOURCE -Iflisp -Isupport \
 	-I$(call exec,$(LLVM_CONFIG) --includedir) \
-	-I$(LIBUV_INC) -I$(build_includedir) -DLIBRARY_EXPORTS
+	-I$(LIBUV_INC) -I$(build_includedir) -DLIBRARY_EXPORTS 
 ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -fvisibility=hidden -fno-common
 endif
@@ -51,9 +51,9 @@ HEADERS = julia.h julia_internal.h options.h $(wildcard support/*.h) $(LIBUV_INC
 %.do: %.c $(HEADERS)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 %.o: %.cpp $(HEADERS)
-	@$(call PRINT_CC, $(CXX) $(call exec,$(LLVM_CONFIG) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(SHIPFLAGS) -c $< -o $@)
+	@$(call PRINT_CC, $(CXX) $(call exec,$(LLVM_CONFIG) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(SHIPFLAGS) -c $< -o $@) -std=c++0x -stdlib=libc++
 %.do: %.cpp $(HEADERS)
-	@$(call PRINT_CC, $(CXX) $(call exec,$(LLVM_CONFIG) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@)
+	@$(call PRINT_CC, $(CXX) $(call exec,$(LLVM_CONFIG) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@) -std=c++0x -stdlib=libc++
 
 ast.o ast.do: julia_flisp.boot.inc flisp/*.h
 
