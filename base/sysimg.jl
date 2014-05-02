@@ -188,6 +188,7 @@ include("sharedarray.jl")
 # utilities - version, timing, help, edit, metaprogramming
 include("version.jl")
 include("datafmt.jl")
+importall .DataFmt
 include("deepcopy.jl")
 include("util.jl")
 include("interactiveutil.jl")
