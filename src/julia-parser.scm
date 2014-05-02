@@ -1469,6 +1469,7 @@
                        (begin (take-token s) (loop (cons nxt lst))))
                       ((eqv? c #\;)          (loop (cons nxt lst)))
                       ((equal? c closer)     (loop (cons nxt lst)))
+                      ((eq? c 'for)          (take-token s) (parse-generator s t closer))
                       ;; newline character isn't detectable here
                       #;((eqv? c #\newline)
                        (error "unexpected line break in argument list"))
@@ -1522,6 +1523,13 @@
     (if (dict-literal? (cadr c))
         `(dict_comprehension ,@(cdr c))
         (error "invalid dict comprehension"))))
+
+(define (parse-generator s first closer)
+  (let ((r (parse-comma-separated-iters s)))
+    (if (not (eqv? (require-token s) closer))
+	(error (string "expected " closer))
+        (take-token s))
+    `(macrocall @generator ,first ,@r)))
 
 (define (parse-matrix s first closer gotnewline)
   (define (fix head v) (cons head (reverse v)))
