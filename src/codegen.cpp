@@ -104,7 +104,6 @@
 #include "llvm/Support/CommandLine.h"
 #endif
 #include "llvm/Transforms/Utils/Cloning.h"
-
 #include <setjmp.h>
 
 #include <string>
@@ -710,6 +709,7 @@ const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
 #ifndef USE_MCJIT
         std::map<size_t, FuncInfo, revcomp> &fmap = jl_jit_events->getMap();
         std::map<size_t, FuncInfo>::iterator fit = fmap.find(fptr);
+
         if (fit == fmap.end()) {
             JL_PRINTF(JL_STDERR, "Warning: Unable to find function pointer\n");
             return jl_cstr_to_string(const_cast<char*>(""));
@@ -1446,6 +1446,7 @@ static Value *emit_f_is(jl_value_t *rt1, jl_value_t *rt2,
                                   builder.CreateExtractValue(varg1, ArrayRef<unsigned>(&i,1)),
                                   builder.CreateExtractValue(varg2, ArrayRef<unsigned>(&i,1)),
                                   ctx);
+                    answer = builder.CreateAnd(answer, subAns);
                 }
                 else {
                     subAns =
@@ -3222,7 +3223,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     m = jl_Module;
 #endif
 
-    funcName << globalUnique++;
+    funcName << ";" << globalUnique++;
 
     if (specsig) {
         std::vector<Type*> fsig(0);

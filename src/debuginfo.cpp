@@ -117,6 +117,7 @@ public:
             sym_iter->getType(SymbolType);
             if (SymbolType != object::SymbolRef::ST_Function) continue;
             sym_iter->getAddress(Addr);
+            sym_iter->getName(Name);
 
             ObjectInfo tmp = {obj.getObjectFile(), *sym_iter};
             objectmap[Addr] = tmp;
@@ -133,9 +134,24 @@ public:
 #endif // USE_MCJIT
 };
 
+#if USE_MCJIT
+extern "C"
+const char *jl_demangle(const char *name) {
+    const char *start = name;
+    while ((*start++ != '_') && (*start != '\0'));
+    if (*name == '\0') goto done;
+    const char *end = start;
+    while ((*end++ != ';') && (*end != '\0'));
+    if (*name == '\0') goto done;
+    return strndup(start, end-start-1);
+    done:
+        return strdup(name);
+}
+#endif
+
 JuliaJITEventListener *jl_jit_events;
 
-extern "C" void jl_getFunctionInfo(const char **name, int *line, const char **filename,size_t pointer);
+extern "C" void jl_getFunctionInfo(const char **name, int *line, const char **filename, uintptr_t pointer);
 
 void jl_getFunctionInfo(const char **name, int *line, const char **filename, size_t pointer)
 {
@@ -146,23 +162,27 @@ void jl_getFunctionInfo(const char **name, int *line, const char **filename, siz
 #if USE_MCJIT
 // With MCJIT we can get information directly from the ObjectFile
 
-    return; // TODO
     std::map<size_t, ObjectInfo> &objmap = jl_jit_events->getObjectMap();
     std::map<size_t, ObjectInfo>::iterator it = objmap.lower_bound(pointer);
 
     if (it == objmap.end()) return;
     DIContext *context = DIContext::getDWARFContext(it->second.object);
     if (context == NULL) return;
-    DILineInfo info = context->getLineInfoForAddress(pointer);
+    int infoflags = DILineInfoSpecifier::FileLineInfo |
+                    DILineInfoSpecifier::AbsoluteFilePath |
+                    DILineInfoSpecifier::FunctionName;
+    DILineInfo info = context->getLineInfoForAddress(pointer, infoflags);
 
-    #ifndef LLVM35 // <= LLVM34 
+    #ifndef LLVM35 // LLVM <= 3.4
+    if (strcmp(info.getFunctionName(), "<invalid>") == 0) return;
     *name = info.getFunctionName();
     *line = info.getLine();
     *filename = info.getFileName();
     #else
-    *name = info.FunctionName.c_str();
+    if (strcmp(info.FunctionName.c_str(), "<invalid>") == 0) return;
+    *name = jl_demangle(info.FunctionName.c_str());
     *line = info.Line;
-    *filename = info.FileName.c_str();
+    *filename = strdup(info.FileName.c_str());
     #endif //LLVM35
 
 #else
@@ -430,5 +450,7 @@ extern "C" void jl_restore_linedebug_info(uv_lib_t *handle) {
 }
 #else
 extern "C" void jl_dump_linedebug_info() {}
-extern "C" void jl_restore_linedebug_info(uv_lib_t* handle) {}
+extern "C" void jl_restore_linedebug_info(uv_lib_t* handle) {
+            
+}
 #endif
