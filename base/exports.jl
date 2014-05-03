@@ -217,7 +217,6 @@ export
     .^,
     /,
     //,
-    ⫽,
     <,
     <:,
     <<,
@@ -236,10 +235,7 @@ export
     |,
     ~,
     :,
-    ⊗,
     ÷,
-    ∣,
-    ∤,
     A_ldiv_B!,
     A_ldiv_Bc,
     A_ldiv_Bt,
@@ -773,7 +769,6 @@ export
     ⊊,
     ∩,
     ∪,
-    △,
 
 # strings and text output
     ascii,

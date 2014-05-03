@@ -20,7 +20,6 @@ end
 scale!(s::Number, X::AbstractArray) = scale!(X, s)
 
 cross(a::AbstractVector, b::AbstractVector) = [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
-const × = cross
 
 triu(M::AbstractMatrix) = triu(M,0)
 tril(M::AbstractMatrix) = tril(M,0)

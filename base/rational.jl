@@ -26,7 +26,6 @@ function //(x::Complex, y::Complex)
     yy = real(y*y')
     complex(real(xy)//yy, imag(xy)//yy)
 end
-const ⫽ = //
 
 function show(io::IO, x::Rational)
     if isinf(x)
