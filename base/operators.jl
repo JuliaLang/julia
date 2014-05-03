@@ -111,10 +111,7 @@ fld{T<:Real}(x::T, y::T) = convert(T,round((x-mod(x,y))/y))
 # operator alias
 const % = rem
 .%(x::Real, y::Real) = x%y
-const ⊗ = kron
 const ÷ = div
-∣(x::Real, y::Real) = y%x==0 #x∣y = x divides y
-∤(x::Real, y::Real) = !∣(x,y)
 
 # mod returns in [0,y) whereas mod1 returns in (0,y]
 mod1{T<:Real}(x::T, y::T) = y-mod(y-x,y)
@@ -354,7 +351,7 @@ function ifelse(c::AbstractArray{Bool}, x, y::AbstractArray)
 end
 
 # some operators not defined yet
-global //, .>>, .<<, >:, <|, |>, hcat, hvcat
+global //, .>>, .<<, >:, <|, |>, hcat, hvcat, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪
 
 module Operators
 
@@ -391,6 +388,12 @@ export
     ==,
     >,
     >=,
+    ≥,
+    ≤,
+    ≠,
+    .≥,
+    .≤,
+    .≠,
     >>,
     .>>,
     .<<,
@@ -401,8 +404,18 @@ export
     |>,
     <|,
     ~,
-    ⊗,
     ÷,
+    ⋅,
+    ×,
+    ∈,
+    ∉,
+    ∋,
+    ∌,
+    ⊆,
+    ⊈,
+    ⊊,
+    ∩,
+    ∪,
     colon,
     hcat,
     vcat,
@@ -415,6 +428,7 @@ export
 import Base: !, !=, $, %, .%, &, *, +, -, .!=, .+, .-, .*, ./, .<, .<=, .==, .>,
     .>=, .\, .^, /, //, <, <:, <<, <=, ==, >, >=, >>, .>>, .<<, >>>,
     <|, |>, \, ^, |, ~, !==, >:, colon, hcat, vcat, hvcat, getindex, setindex!,
-    transpose, ctranspose
+    transpose, ctranspose,
+    ≥, ≤, ≠, .≥, .≤, .≠, ÷, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪
 
 end

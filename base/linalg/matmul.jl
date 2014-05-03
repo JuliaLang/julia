@@ -58,7 +58,6 @@ function dot(x::AbstractVector, y::AbstractVector)
     s
 end
 dot(x::Number, y::Number) = conj(x) * y
-const ⋅ = dot
 Ac_mul_B(x::Vector, y::Vector) = [dot(x, y)]
 At_mul_B{T<:Real}(x::Vector{T}, y::Vector{T}) = [dot(x, y)]
 At_mul_B{T<:BlasComplex}(x::Vector{T}, y::Vector{T}) = [BLAS.dotu(x, y)]
