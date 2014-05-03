@@ -120,9 +120,9 @@ reverse(t::Tuple) = revargs(t...)
 
 # TODO: these definitions cannot yet be combined, since +(x...)
 # where x might be any tuple matches too many methods.
-sum(x::()) = 0
 sum(x::(Any, Any...)) = +(x...)
 
+# NOTE: should remove, but often used on array sizes
 prod(x::()) = 1
 prod(x::(Any, Any...)) = *(x...)
 

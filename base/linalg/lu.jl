@@ -142,9 +142,9 @@ function logdet{T<:Complex,S}(A::LU{T,S})
     complex(r,a)    
 end
 
-inv{T<:BlasFloat}(A::LU{T,StridedMatrix{T}}) = @assertnonsingular LAPACK.getri!(copy(A.factors), A.ipiv) A.info
+inv{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}) = @assertnonsingular LAPACK.getri!(copy(A.factors), A.ipiv) A.info
 
-cond{T<:BlasFloat}(A::LU{T,StridedMatrix{T}}, p::Number) = inv(LAPACK.gecon!(p == 1 ? '1' : 'I', A.factors, norm(A[:L][A[:p],:]*A[:U], p)))
+cond{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}, p::Number) = inv(LAPACK.gecon!(p == 1 ? '1' : 'I', A.factors, norm(A[:L][A[:p],:]*A[:U], p)))
 cond(A::LU, p::Number) = norm(A[:L]*A[:U],p)*norm(inv(A),p)
 
 # Tridiagonal

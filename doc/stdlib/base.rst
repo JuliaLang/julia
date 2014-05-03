@@ -538,8 +538,8 @@ Iterable Collections
 .. function:: reduce(op, v0, itr)
 
    Reduce the given collection ``ìtr`` with the given binary operator. Reductions
-   for certain commonly-used operators are available in a more convenient
-   1-argument form: ``maximum(itr)``, ``minimum(itr)``, ``sum(itr)``,
+   for certain commonly-used operators have special implementations which should be
+   used instead: ``maximum(itr)``, ``minimum(itr)``, ``sum(itr)``,
    ``prod(itr)``, ``any(itr)``, ``all(itr)``.
 
    The associativity of the reduction is implementation-dependent. This means
@@ -1012,11 +1012,11 @@ Strings
 
 .. function:: bytestring(::Ptr{Uint8}, [length])
 
-   Create a string from the address of a C (0-terminated) string. A copy is made; the ptr can be safely freed. If ``length`` is specified, the string does not have to be 0-terminated.
+   Create a string from the address of a C (0-terminated) string encoded in ASCII or UTF-8. A copy is made; the ptr can be safely freed. If ``length`` is specified, the string does not have to be 0-terminated.
 
 .. function:: bytestring(s)
 
-   Convert a string to a contiguous byte array representation appropriate for passing it to C functions.
+   Convert a string to a contiguous byte array representation appropriate for passing it to C functions. The string will be encoded as either ASCII or UTF-8.
 
 .. function:: ascii(::Array{Uint8,1})
 
@@ -1300,6 +1300,16 @@ Strings
 
    General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`escape_string`. See also :func:`print_unescaped`.
 
+.. function:: utf16(s)
+
+   Create a UTF-16 string from a byte array, array of ``Uint16``, or
+   any other string type.  (Data must be valid UTF-16.  Conversions of
+   byte arrays check for a byte-order marker in the first two bytes,
+   and do not include it in the resulting string.)
+
+.. function:: is_valid_utf16(s)
+
+   Returns true if the string or ``Uint16`` array is valid UTF-16.
 
 I/O
 ---
@@ -2760,10 +2770,11 @@ Mathematical Functions
 .. function:: minmax(x, y)
 
    Return ``(min(x,y), max(x,y))``.
+   See also: :func:`extrema` that returns ``(minimum(x), maximum(x))`` 
 
 .. function:: clamp(x, lo, hi)
 
-   Return x if ``lo <= x <= hi``. If ``x < lo``, return ``lo``. If ``x > hi``, return ``hi``.
+   Return x if ``lo <= x <= hi``. If ``x < lo``, return ``lo``. If ``x > hi``, return ``hi``. Arguments are promoted to a common type. Operates elementwise over ``x`` if it is an array.
 
 .. function:: abs(x)
 
@@ -3732,7 +3743,9 @@ Indexing, Assignment, and Concatenation
 
 .. function:: find(A)
 
-   Return a vector of the linear indexes of the non-zeros in ``A``.
+   Return a vector of the linear indexes of the non-zeros in ``A`` (determined by ``A[i]!=0``).
+   A common use of this is to convert a boolean array to an array of indexes of the ``true``
+   elements.
 
 .. function:: find(f,A)
 
@@ -3740,7 +3753,8 @@ Indexing, Assignment, and Concatenation
 
 .. function:: findn(A)
 
-   Return a vector of indexes for each dimension giving the locations of the non-zeros in ``A``.
+   Return a vector of indexes for each dimension giving the locations of the non-zeros in ``A``
+   (determined by ``A[i]!=0``).
 
 .. function:: findnz(A)
 
@@ -3748,11 +3762,11 @@ Indexing, Assignment, and Concatenation
 
 .. function:: nonzeros(A)
 
-   Return a vector of the non-zero values in array ``A``.
+   Return a vector of the non-zero values in array ``A`` (determined by ``A[i]!=0``).
 
 .. function:: findfirst(A)
 
-   Return the index of the first non-zero value in ``A``.
+   Return the index of the first non-zero value in ``A`` (determined by ``A[i]!=0``).
 
 .. function:: findfirst(A,v)
 
@@ -3962,16 +3976,16 @@ Combinatorics
 
    In-place version of :func:`reverse`.
 
-.. function:: combinations(itr, n)
+.. function:: combinations(arr, n)
 
-   Generate all combinations of ``n`` elements from a given iterable
+   Generate all combinations of ``n`` elements from an indexable
    object.  Because the number of combinations can be very large, this
    function returns an iterator object. Use
    ``collect(combinations(a,n))`` to get an array of all combinations.
 
-.. function:: permutations(itr)
+.. function:: permutations(arr)
 
-   Generate all permutations of a given iterable object.  Because the
+   Generate all permutations of an indexable object.  Because the
    number of permutations can be very large, this function returns an
    iterator object. Use ``collect(permutations(a,n))`` to get an array
    of all permutations.
@@ -4132,17 +4146,18 @@ Statistics
    This function accepts three keyword arguments:
 
    - ``vardim``: the dimension of variables. When ``vardim = 1``, variables 
-   are considered in columns while observations in rows; when ``vardim = 2``, 
-   variables are in rows while observations in columns. By default, it is
-   set to ``1``.
+     are considered in columns while observations in rows; when ``vardim = 2``, 
+     variables are in rows while observations in columns. By default, it is
+     set to ``1``.
 
    - ``corrected``: whether to apply Bessel's correction (divide by ``n-1`` 
-   instead of ``n``). By default, it is set to ``true``.
+     instead of ``n``). By default, it is set to ``true``.
 
-   - ``mean``: allow users to supply mean values that are known. By default, it 
-   is set to ``nothing``, which indicates that the mean(s) are unknown, and the 
-   function will compute the mean. Users can use ``mean=0`` to indicate that 
-   the input data are centered, and hence there's no need to subtract the mean.
+   - ``mean``: allow users to supply mean values that are known. By default,
+     it is set to ``nothing``, which indicates that the mean(s) are unknown,
+     and the function will compute the mean. Users can use ``mean=0`` to
+     indicate that the input data are centered, and hence there's no need to
+     subtract the mean.
 
    The size of the result depends on the size of ``v1`` and ``v2``. When both 
    ``v1`` and ``v2`` are vectors, it returns the covariance between them as a 

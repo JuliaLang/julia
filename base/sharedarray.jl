@@ -108,6 +108,8 @@ end
 
 SharedArray(T, I::Int...; kwargs...) = SharedArray(T, I; kwargs...)
 
+typealias SharedVector{T} SharedArray{T,1}
+typealias SharedMatrix{T} SharedArray{T,2}
 
 length(S::SharedArray) = prod(S.dims)
 size(S::SharedArray) = S.dims
@@ -213,6 +215,30 @@ setindex!(S::SharedArray, x) = (setindex!(S.s, x); S)
 setindex!(S::SharedArray, x, I::Real) = (setindex!(S.s, x, I); S)
 setindex!(S::SharedArray, x, I::AbstractArray) = (setindex!(S.s, x, I); S)
 @nsplat N 1:5 setindex!(S::SharedArray, x, I::NTuple{N,Any}...) = (setindex!(S.s, x, I...); S)
+
+function fill!(S::SharedArray, v)
+    f = S->fill!(S.loc_subarr_1d, v)
+    @sync for p in procs(S)
+        @async remotecall_wait(p, f, S)
+    end
+    return S
+end
+
+function rand!{T}(S::SharedArray{T})
+    f = S->map!(x->rand(T), S.loc_subarr_1d)
+    @sync for p in procs(S)
+        @async remotecall_wait(p, f, S)
+    end
+    return S
+end
+
+function randn!(S::SharedArray)
+    f = S->map!(x->randn, S.loc_subarr_1d)
+    @sync for p in procs(S)
+        @async remotecall_wait(p, f, S)
+    end
+    return S
+end
 
 # convenience constructors
 function shmem_fill(v, dims; kwargs...)

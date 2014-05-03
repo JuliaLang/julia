@@ -133,6 +133,12 @@ y33 = bessely(3,3.)
 @test_approx_eq bessely(3,complex(-3)) 0.53854161610503161800 - 0.61812544451050328724im
 @test_throws Base.Math.AmosException bessely(200.5,0.1)
 
+# issue #6653
+for f in (besselj,bessely,besseli,besselk,hankelh1,hankelh2)
+    @test_approx_eq f(0,1) f(0,complex128(1))
+    @test_approx_eq f(0,1) f(0,complex64(1))
+end
+
 # beta, lbeta
 @test_approx_eq beta(3/2,7/2) 5π/128
 @test_approx_eq beta(3,5) 1/105

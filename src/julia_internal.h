@@ -77,6 +77,8 @@ void jl_compute_field_offsets(jl_datatype_t *st);
 jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, size_t *dims,
                                              int isunboxed, int elsz);
 
+extern size_t jl_arr_xtralloc_limit;
+
 void jl_init_types(void);
 void jl_init_box_caches(void);
 DLLEXPORT void jl_init_frontend(void);
@@ -118,8 +120,9 @@ size_t rec_backtrace_ctx_dwarf(ptrint_t *data, size_t maxsize, bt_context_t ctx)
 #endif
 
 #ifndef _OS_WINDOWS_
-DLLEXPORT void jl_dump_linedebug_info();
+DLLEXPORT void jl_dump_linedebug_info(void);
 DLLEXPORT void jl_restore_linedebug_info(uv_lib_t* handle);
+DLLEXPORT void jl_raise_debugger(void);
 #endif
 
 #ifdef __cplusplus

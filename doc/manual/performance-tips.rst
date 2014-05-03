@@ -48,7 +48,7 @@ Consider the following::
 
 Because ``a`` is a an array of abstract type ``Real``, it must be able
 to hold any Real value.  Since ``Real`` objects can be of arbitrary
-size and structure, a must be represented as an array of pointers to
+size and structure, ``a`` must be represented as an array of pointers to
 individually allocated ``Real`` objects.  Because ``f`` will always be
 a ``Float64``, we should instead, use::
 
@@ -464,17 +464,42 @@ properties.
 
 Here is an example with both forms of markup::
 
-    function tightloop( x, y, z )
-        s = zero(eltype(z))
-        n = min(length(x),length(y),length(z))
-        @simd for i in 1:n
-            @inbounds begin
-                z[i] = x[i]-y[i]
-                s += z[i]*z[i]
-            end
+    function inner( x, y )
+        s = zero(eltype(x))
+        for i=1:length(x)
+            @inbounds s += x[i]*y[i]
         end
         s
     end
+
+    function innersimd( x, y )
+        s = zero(eltype(x))
+        @simd for i=1:length(x)
+            @inbounds s += x[i]*y[i]
+        end
+        s
+    end
+ 
+    function timeit( n, reps )
+        x = rand(Float32,n)
+        y = rand(Float32,n)
+        s = zero(Float64)
+        time = @elapsed for j in 1:reps
+            s+=inner(x,y)
+        end
+        println("GFlop        = ",2.0*n*reps/time*1E-9)
+        time = @elapsed for j in 1:reps
+            s+=innersimd(x,y)
+        end
+        println("GFlop (SIMD) = ",2.0*n*reps/time*1E-9)
+    end
+
+    timeit(1000,1000)
+
+On a computer with a 2.4GHz Intel Core i5 processor, this produces::
+
+    GFlop        = 1.9467069505224963
+    GFlop (SIMD) = 17.578554163920018
 
 The range for a ``@simd for`` loop should be a one-dimensional range.
 A variable used for accumulating, such as ``s`` in the example, is called
@@ -487,10 +512,16 @@ properties of the loop:
    possibly causing different results than without ``@simd``.
 -  No iteration ever waits on another iteration to make forward progress.
 
-Using ``@simd`` merely gives the compiler license to vectorize. Whether
-it actually does so depends on the compiler. The current implementation
-will not vectorize if there are possible early exits from the loop, such
-as from array bounds checking. This limitation may be lifted in the future.
+Using ``@simd`` merely gives the compiler license to vectorize. Whether 
+it actually does so depends on the compiler. To actually benefit from the 
+current implementation, your loop should have the following additional 
+properties:
+
+-  The loop must be an innermost loop.
+-  The loop body must be straight-line code. This is why ``@inbounds`` is currently needed for all array accesses.
+-  Accesses must have a stride pattern and cannot be "gathers" (random-index reads) or "scatters" (random-index writes).
+- The stride should be unit stride.
+- In some simple cases, for example with 2-3 arrays accessed in a loop, the LLVM auto-vectorization may kick in automatically, leading to no further speedup with ``@simd``. 
 
 Tools
 -----

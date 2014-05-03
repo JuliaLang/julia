@@ -34,6 +34,8 @@ LIBM = $(LIBMDIR)libopenlibm.a
 endif
 endif
 
+DSFMTDIR = $(JULIAHOME)/deps/random/dsfmt-$(DSFMT_VER)
+
 default: benchmarks.html
 
 export OMP_NUM_THREADS=1
@@ -45,7 +47,7 @@ perf.h: $(JULIAHOME)/deps/Versions.make
 	echo '#include "$(JULIAHOME)/deps/random/dsfmt-$(DSFMT_VER)/dSFMT.c"' >> $@
 
 bin/perf%: perf.c perf.h
-	$(CC) -std=c99 -O$* $< -o $@ -L$(BLASDIR) $(LIBBLAS) -L$(LIBMDIR) $(LIBM) -lpthread
+	$(CC) -std=c99 -O$* $< -o $@  -I$(DSFMTDIR) -L$(BLASDIR) $(LIBBLAS) -L$(LIBMDIR) $(LIBM) $(CFLAGS) -lpthread
 
 bin/fperf%: perf.f90
 	mkdir -p mods/$@ #Modules for each binary go in separate directories 
@@ -95,8 +97,14 @@ benchmarks/javascript.csv: perf.js
 benchmarks/mathematica.csv: perf.nb
 	for t in 1 2 3 4 5; do $(MATHEMATICABIN) -noprompt -run "<<$<; Exit[]"; done >$@
 
+benchmarks/stata.csv: perf.do
+	for t in 1 2 3 4 5; do stata -b do $^ $@; done
+
 benchmarks/lua.csv: perf.lua
 	for t in 1 2 3 4 5; do gsl-shell $<; done >$@
+
+benchmarks/java.csv: java/src/main/java/PerfBLAS.java
+	for t in 1 2 3 4 5; do cd java; mvn -q exec:java; done >$@
 
 BENCHMARKS = \
 	benchmarks/c.csv \
@@ -109,7 +117,8 @@ BENCHMARKS = \
 	benchmarks/r.csv \
 	benchmarks/lua.csv \
 	benchmarks/javascript.csv \
-	benchmarks/mathematica.csv
+	benchmarks/mathematica.csv \
+	benchmarks/java.csv
 
 benchmarks.csv: bin/collect.pl $(BENCHMARKS)
 	@$(call PRINT_PERL, $^ >$@)
@@ -118,6 +127,6 @@ benchmarks.html: bin/table.pl benchmarks.csv
 	@$(call PRINT_PERL, $^ >$@)
 
 clean:
-	@rm -rf perf.h bin/perf* bin/fperf* benchmarks/*.csv benchmarks.csv mods *~ octave-core
+	@rm -rf perf.h bin/perf* bin/fperf* benchmarks/*.csv benchmarks.csv mods *~ octave-core perf.log
 
 .PHONY: all perf clean

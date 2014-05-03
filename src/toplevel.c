@@ -552,9 +552,6 @@ jl_value_t *jl_load(const char *fname)
     }
     jl_value_t *result = jl_parse_eval_all(fpath);
     if (fpath != fname) free(fpath);
-    if (jl_current_module == jl_base_module) {
-        jl_printf(JL_STDOUT, "\x1B[1F\x1B[2K");
-    }
     return result;
 }
 
