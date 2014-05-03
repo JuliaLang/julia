@@ -11,7 +11,7 @@ and efficient to call C and Fortran functions. Julia has a "no
 boilerplate" philosophy: functions can be called directly from Julia
 without any "glue" code, code generation, or compilation — even from the
 interactive prompt. This is accomplished just by making an appropriate call
-with ``call`` syntax, which looks like an ordinary function call.
+with ``ccall`` syntax, which looks like an ordinary function call.
 
 The code to be called must be available as a shared library. Most C and
 Fortran libraries ship compiled as shared libraries already, but if you
