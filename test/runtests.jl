@@ -23,12 +23,28 @@ if "linalg" in tests
     prepend!(tests, ["linalg1", "linalg2", "linalg3"])
 end
 
+net_required_for = ["socket", "parallel"]
+net_on = true
+try
+    ip = getipaddr()
+catch
+    warn_str = "Networking unavailable: Skipping tests [$(net_required_for[1])"
+    for x in net_required_for[2:end]
+        warn_str = warn_str * ", $x"
+    end
+    warn_str = warn_str * "]"
+    warn(warn_str)
+    net_on = false
+end
 
-n = min(8, CPU_CORES, length(tests))
-
-n > 1 && addprocs(n)
-
-blas_set_num_threads(1)
+n = 1
+if net_on 
+    n = min(8, CPU_CORES, length(tests))
+    n > 1 && addprocs(n)
+    blas_set_num_threads(1)
+else
+    filter!(x -> !(x in net_required_for), tests)
+end
 
 @everywhere include("testdefs.jl")
 
