@@ -2054,7 +2054,16 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
             spvals[i] = QuoteNode(spvals[i])
         end
     end
-    (ast, ty) = typeinf(linfo, meth[1], meth[2], linfo)
+
+    methargs = meth[1]::Tuple
+    nm = length(methargs)
+    if !(atypes <: methargs)
+        incompletematch = true
+    else
+        incompletematch = false
+    end
+
+    (ast, ty) = typeinf(linfo, methargs, meth[2]::Tuple, linfo)
     if is(ast,())
         return NF
     end
@@ -2074,7 +2083,14 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
 
     body = Expr(:block)
     body.args = without_linenums(ast.args[3].args)::Array{Any,1}
-    if !inline_worthy(body)
+    cost = 1.0
+    if incompletematch
+        cost *= 4
+    end
+    if is(f, next) || is(f, done)
+        cost /= 4
+    end
+    if !inline_worthy(body, cost)
         return NF
     end
 
@@ -2171,10 +2187,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
     # when 1 method matches the inferred types, there is still a chance
     # of a no-method error at run time, unless the inferred types are a
     # subset of the method signature.
-    methargs = meth[1]
-    nm = length(methargs)
-    if !(atypes <: methargs)
-        incompletematch = true
+    if incompletematch
         t = Expr(:call) # tuple(args...)
         t.typ = Tuple
         argexprs2 = t.args
@@ -2182,8 +2195,6 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
         partmatch = Expr(:gotoifnot, false, icall.label)
         thrw = Expr(:call, :throw, Expr(:call, :MethodError, f, t))
         thrw.typ = None
-    else
-        incompletematch = false
     end
 
     for i=na:-1:1 # stmts_free needs to be calculated in reverse-argument order
@@ -2245,7 +2256,6 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
         # ok for argument to occur more than once if the actual argument
         # is a symbol or constant, or is not affected by previous statements
         # that will exist after the inlining pass finishes
-        affect_free = stmts_free && !islocal && !needtypeassert # false = previous statements might affect the result of evaluating argument
         if needtypeassert
             vnew1 = unique_name(enclosing_ast, ast)
             add_variable(enclosing_ast, vnew1, aeitype, !islocal)
@@ -2258,6 +2268,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
             args[i] = a = vnew2
             islocal = false
             aeitype = argtype
+            affect_free = stmts_free
             occ = 3
             # it's really late in codegen, so we expand the typeassert manually: cond = !isa(vnew2, methitype) | cond
             cond = Expr(:call, Intrinsics.isa, v2, methitype)
@@ -2270,6 +2281,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
             cond.typ = Bool
             partmatch.args[1] = cond
         else
+            affect_free = stmts_free && !islocal # false = previous statements might affect the result of evaluating argument
             occ = 0
             for j = length(body.args):-1:1
                 b = body.args[j]
@@ -2288,11 +2300,11 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
         free = effect_free(aei,sv,true)
         if ((occ==0 && is(aeitype,None)) || islocal || (occ > 1 && !inline_worthy(aei, occ)) ||
                 (affect_free && !free) || (!affect_free && !effect_free(aei,sv,false)))
-            if (occ != 0) # islocal=true is implied by occ!=0
+            if occ != 0 # islocal=true is implied by occ!=0
                 vnew = unique_name(enclosing_ast, ast)
                 add_variable(enclosing_ast, vnew, aeitype, !islocal)
                 unshift!(stmts, Expr(:(=), vnew, aei))
-                argexprs[i] = (argtype===Any ? vnew : SymbolNode(vnew,aeitype))
+                argexprs[i] = argtype===Any ? vnew : SymbolNode(vnew,aeitype)
                 stmts_free &= free
             elseif !free && !isType(aeitype)
                 unshift!(stmts, aei)
@@ -2388,13 +2400,13 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
     return (expr, stmts)
 end
 
-inline_worthy(body, occurences::Int) = true
-function inline_worthy(body::Expr, occurences::Int=1) # 0 < occurrences <= 6
+inline_worthy(body, cost::Real) = true
+function inline_worthy(body::Expr, cost::Real=1) # 0 < occurrences <= 6
 #    if isa(body.args[1],QuoteNode) && (body.args[1]::QuoteNode).value === :inline
 #        shift!(body.args)
 #        return true
 #    end
-    symlim = div(6,occurences)
+    symlim = iceil(6/cost)
     if length(body.args) < symlim
         symlim *= 6
         if occurs_more(body, e->true, symlim) < symlim
