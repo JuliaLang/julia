@@ -335,56 +335,48 @@ function findnz{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     return (I, J, V)
 end
 
-truebools(n::Integer) = ones(Bool, n)
-function sprand{T}(m::Integer, n::Integer, density::FloatingPoint, rng::Function,::Type{T}=eltype(rng(1)))
-    0 <= density <= 1 || throw(ArgumentError("density must be between 0 and 1"))
+function sprand{T}(m::Integer, n::Integer, density::FloatingPoint,
+                   rng::Function,::Type{T}=eltype(rng(1)))
+    0 <= density <= 1 || throw(ArgumentError("$density not in [0,1]"))
     N = n*m
     N == 0 && return spzeros(T,m,n)
     N == 1 && return rand() <= density ? sparse(rng(1)) : spzeros(T,1,1)
-    # if density < 0.5, we'll randomly generate the indices to set
-    #        otherwise, we'll randomly generate the indices to skip
-    K = (density > 0.5) ? N*(1-density) : N*density
-    # Use Newton's method to invert the birthday problem
-    l = log(1.0-1.0/N)
-    k = K
-    k = k + ((1-K/N)*exp(-k*l) - 1)/l
-    k = k + ((1-K/N)*exp(-k*l) - 1)/l # for K<N/2, 2 iterations suffice
-    ik = int(k)
-    ind = sort(rand(1:N, ik))
-    uind = Array(Int, 0)   # unique indices
-    sizehint(uind, int(N*density))
-    if density < 0.5
-        if ik == 0
-            return sparse(Int[],Int[],Array(T,0),m,n)
-        end
-        j = ind[1]
-        push!(uind, j)
-        uj = j
-        for i = 2:length(ind)
-            j = ind[i]
-            if j != uj
-                push!(uind, j)
-                uj = j
-            end
-        end
-    else
-        push!(ind, N+1) # sentinel
-        ii = 1
-        for i = 1:N
-            if i != ind[ii]
-                push!(uind, i)
-            else
-                while (i == ind[ii])
-                    ii += 1
-                end
-            end
+
+    I, J = Array(Int, 0), Array(Int, 0) # indices of nonzero elements
+    sizehint(I, int(N*density))
+    sizehint(J, int(N*density))
+
+    # density of nonzero columns:
+    L = log1p(-density)
+    coldensity = -expm1(m*L) # = 1 - (1-density)^m 
+    colsparsity = exp(m*L) # = 1 - coldensity
+    L = 1/L
+    
+    rows = Array(Int, 0)
+    for j in randsubseq(1:n, coldensity)
+        # To get the right statistics, we *must* have a nonempty column j
+        # even if p*m << 1.   To do this, we use an approach similar to
+        # the one in randsubseq to compute the expected first nonzero row k,
+        # except given that at least one is nonzero (via Bayes' rule);
+        # carefully rearranged to avoid excessive roundoff errors.
+        k = ceil(log(colsparsity + rand()*coldensity) * L)
+        ik = k < 1 ? 1 : k > m ? m : int(k) # roundoff-error/underflow paranoia
+        randsubseq!(rows, 1:m-ik, density)
+        push!(rows, m-ik+1)
+        append!(I, rows)
+        nrows = length(rows)
+        Jlen = length(J)
+        resize!(J, Jlen+nrows)
+        for i = Jlen+1:length(J)
+            J[i] = j
         end
     end
-    I, J = ind2sub((m,n), uind)
-    return sparse_IJ_sorted!(I, J, rng(length(uind)), m, n, +)  # it will never need to combine
+    return sparse_IJ_sorted!(I, J, rng(length(I)), m, n, +)  # it will never need to combine
 end
+
 sprand(m::Integer, n::Integer, density::FloatingPoint) = sprand(m,n,density,rand,Float64)
 sprandn(m::Integer, n::Integer, density::FloatingPoint) = sprand(m,n,density,randn,Float64)
+truebools(n::Integer) = ones(Bool, n)
 sprandbool(m::Integer, n::Integer, density::FloatingPoint) = sprand(m,n,density,truebools,Bool)
 
 spones{T}(S::SparseMatrixCSC{T}) =
