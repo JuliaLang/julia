@@ -1129,6 +1129,9 @@ function tmerge(typea::ANY, typeb::ANY)
     if typeb <: typea
         return typea
     end
+    if typea <: Tuple && typeb <: Tuple
+        return Tuple
+    end
     u = Union(typea, typeb)
     if length(u.types) > MAX_TYPEUNION_LEN || type_too_complex(u, 0)
         # don't let type unions get too big
