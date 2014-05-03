@@ -2401,12 +2401,12 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
 end
 
 inline_worthy(body, cost::Real) = true
-function inline_worthy(body::Expr, cost::Real=1) # 0 < occurrences <= 6
+function inline_worthy(body::Expr, cost::Real=1) # precondition: 0<cost
 #    if isa(body.args[1],QuoteNode) && (body.args[1]::QuoteNode).value === :inline
 #        shift!(body.args)
 #        return true
 #    end
-    symlim = iceil(6/cost)
+    symlim = int(5/cost)+1
     if length(body.args) < symlim
         symlim *= 6
         if occurs_more(body, e->true, symlim) < symlim
