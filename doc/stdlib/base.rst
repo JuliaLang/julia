@@ -3814,6 +3814,19 @@ Indexing, Assignment, and Concatenation
 
    Throw an error if the specified indexes are not in bounds for the given array.
 
+.. function:: randsubseq(A, p) -> Vector
+   
+   Return a vector consisting of a random subsequence of the given array ``A``,
+   where each element of ``A`` is included (in order) with independent
+   probability ``p``.   (Complexity is linear in ``p*length(A)``, so this
+   function is efficient even if ``p`` is small and ``A`` is large.)
+
+.. function:: randsubseq!(S, A, p)
+
+   Like ``randsubseq``, but the results are stored in ``S`` (which is
+   resized as needed).
+   
+
 Array functions
 ~~~~~~~~~~~~~~~
 
