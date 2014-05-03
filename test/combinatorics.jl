@@ -34,3 +34,13 @@ end
 @test binomial(int64(67), int64(29)) == binomial(BigInt(67), BigInt(29)) == 7886597962249166160
 @test binomial(int128(131), int128(62)) == binomial(BigInt(131), BigInt(62)) == 157311720980559117816198361912717812000 
 
+# issue #6579
+@test factorial(0) == 1
+@test factorial(int64(20)) == 2432902008176640000
+@test_throws OverflowError factorial(int64(21))
+@test_throws DomainError factorial(-1)
+@test typeof(factorial(int8(2))) == typeof(factorial(int8(1)))
+if Int === Int32
+@test factorial(int32(12)) === int32(479001600)
+@test_throws OverflowError factorial(int32(13))
+end

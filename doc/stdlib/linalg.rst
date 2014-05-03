@@ -167,7 +167,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the Bunch-Kaufman [Bunch1977]_ factorization of a real symmetric or complex Hermitian matrix ``A`` and return a ``BunchKaufman`` object. The following functions are available for ``BunchKaufman`` objects: ``size``, ``\``, ``inv``, ``issym``, ``ishermitian``.
 
-   .. [Bunch1977] J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. `url<http://www.ams.org/journals/mcom/1977-31-137/S0025-5718-1977-0428694-0>`_.
+.. [Bunch1977] J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. `url <http://www.ams.org/journals/mcom/1977-31-137/S0025-5718-1977-0428694-0>`_.
 
 .. function:: bkfact!(A) -> BunchKaufman
 
@@ -179,17 +179,19 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ``sqrtm`` uses a polyalgorithm, computing the matrix square root using Schur factorizations (:func:`schurfact`) unless it detects the matrix to be Hermitian or real symmetric, in which case it computes the matrix square root from an eigendecomposition (:func:`eigfact`). In the latter situation for positive definite matrices, the matrix square root has ``Real`` elements, otherwise it has ``Complex`` elements.
 
-.. function:: eig(A,[permute=true,][scale=true]) -> D, V
+.. function:: eig(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> D, V
 
-   Wrapper around ``eigfact`` extracting all parts the factorization to a tuple. Direct use of ``eigfact`` is therefore generally more efficient. Computes eigenvalues and eigenvectors of ``A``. See :func:`eigfact` for details on the ``permute`` and ``scale`` keyword arguments.
+   Wrapper around ``eigfact`` extracting all parts the factorization to a tuple. Direct use of ``eigfact`` is therefore generally more efficient. Computes eigenvalues and eigenvectors of ``A``. See :func:`eigfact` for details on adiitional arguments.
 
 .. function:: eig(A, B) -> D, V
 
    Wrapper around ``eigfact`` extracting all parts the factorization to a tuple. Direct use of ``eigfact`` is therefore generally more efficient. Computes generalized eigenvalues and vectors of ``A`` with respect to ``B``.
 
-.. function:: eigvals(A)
+.. function:: eigvals(A,[irange,][vl,][vu])
 
-   Returns the eigenvalues of ``A``.
+   Returns the eigenvalues of ``A``. If ``A`` is ``Symmetric``, ``Hermitian`` or ``SymTridiagonal``, it is possible to calculate only a subset of the eigenvalues by specifying either a `UnitRange`` ``irange`` covering indices of the sorted eigenvalues or a pair ``vl`` and ``vu`` for the lower and upper boundaries of the eigenvalues.
+
+   For general non-symmetric matrices it is possible to specify how the matrix is balanced before the eigenvector calculation. The option ``permute=true`` permutes the matrix to become closer to upper triangular, and ``scale=true`` scales the matrix by its diagonal elements to make rows and columns more equal in norm. The default is ``true`` for both options.
 
 .. function:: eigmax(A)
 
@@ -206,10 +208,12 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    For ``SymTridiagonal`` matrices, if the optional vector of eigenvalues ``eigvals`` is specified, returns the specific corresponding eigenvectors.
 
-.. function:: eigfact(A,[permute=true,][scale=true])
+.. function:: eigfact(A,[il,][iu,][vl,][vu,][permute=true,][scale=true])
 
    Compute the eigenvalue decomposition of ``A`` and return an ``Eigen`` object. If ``F`` is the factorization object, the eigenvalues can be accessed with ``F[:values]`` and the eigenvectors with ``F[:vectors]``. The following functions are available for ``Eigen`` objects: ``inv``, ``det``.
    
+   If ``A`` is ``Symmetric``, ``Hermitian`` or ``SymTridiagonal``, it is possible to calculate only a subset of the eigenvalues by specifying either a `UnitRange`` ``irange`` covering indices of the sorted eigenvalues or a pair ``vl`` and ``vu`` for the lower and upper boundaries of the eigenvalues. 
+
    For general non-symmetric matrices it is possible to specify how the matrix is balanced before the eigenvector calculation. The option ``permute=true`` permutes the matrix to become closer to upper triangular, and ``scale=true`` scales the matrix by its diagonal elements to make rows and columns more equal in norm. The default is ``true`` for both options.
 
 .. function:: eigfact(A, B)
@@ -302,7 +306,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: diag(M[, k])
 
-   The ``k``-th diagonal of a matrix, as a vector.
+   The ``k``-th diagonal of a matrix, as a vector. Use ``diagm`` to construct a diagonal matrix.
 
 .. function:: diagm(v[, k])
 

@@ -1327,9 +1327,9 @@ function pmap(f, lsts...; err_retry=true, err_stop=false)
     function getnext_tasklet()
         if is_task_in_error() && err_stop
             return nothing
-        elseif all([!done(lsts[idx],states[idx]) for idx in 1:len])
+        elseif !any(idx->done(lsts[idx],states[idx]), 1:len)
             nxts = [next(lsts[idx],states[idx]) for idx in 1:len]
-            map(idx->states[idx]=nxts[idx][2], 1:len)
+            for idx in 1:len; states[idx] = nxts[idx][2]; end
             nxtvals = [x[1] for x in nxts]
             return (getnextidx(), nxtvals)
             
@@ -1592,3 +1592,21 @@ function check_same_host(pids)
     end
 end
 
+function terminate_all_workers()
+    if myid() != 1
+        return
+    end
+    
+    if nprocs() > 1
+        ret = rmprocs(workers(); waitfor=0.5)
+        if ret != :ok
+            warn("Forcibly interrupting busy workers")
+            # Might be computation bound, interrupt them and try again
+            interrupt(workers())
+            ret = rmprocs(workers(); waitfor=0.5)
+            if ret != :ok
+                warn("Unable to terminate all workers")
+            end
+        end
+     end   
+end

@@ -330,7 +330,11 @@ function early_init()
         # Prevent openblas from stating to many threads, unless/until specifically requested
         ENV["OPENBLAS_NUM_THREADS"] = 8
     end
+end
+
+function init_parallel()
     start_gc_msgs_task()
+    atexit(terminate_all_workers)
 end
 
 import .Terminals
@@ -340,6 +344,7 @@ function _start()
     early_init()
 
     try
+        init_parallel()
         init_bind_addr(ARGS)
         any(a->(a=="--worker"), ARGS) || init_head_sched()
         init_load_path()
