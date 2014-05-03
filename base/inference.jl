@@ -2124,7 +2124,15 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
             argexprs = {argexprs[1:(na-1)]..., vararg}
             isva = true
         end
+    elseif na != length(argexprs)
+        # we have a method match only because an earlier
+        # inference step shortened our call args list, even
+        # though we have too many arguments to actually
+        # call this function
+        @assert isvarargtype(atypes[na])
+        return NF
     end
+
     @assert na == length(argexprs)
 
     if needcopy
