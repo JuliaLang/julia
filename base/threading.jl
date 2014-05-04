@@ -11,7 +11,7 @@ type Thread
 end
 
 join(t::Thread)=(ccall(:jl_join_thread,Void,(Ptr{Void},),t.handle))
-
+run(t::Thread)=(ccall(:jl_run_thread,Void,(Ptr{Void},),t.handle))
 destroy(t::Thread)=(ccall(:jl_destroy_thread,Void,(Ptr{Void},),t.handle))
 
 function Thread(f::Function,args...)
@@ -48,6 +48,10 @@ function parapply_jl(f::Function, args,  numthreads::Int, start::Int, step::Int,
     rem -= chunk
   end
   t[numthreads] = Base.Thread(par_do_work,f,args,int(start+(numthreads-1)*chunk*step), step, rem)
+
+  for i=1:numthreads
+    Base.run(t[i])
+  end
 
   for i=1:numthreads
     Base.join(t[i])

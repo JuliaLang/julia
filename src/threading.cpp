@@ -36,30 +36,51 @@ void run_thread(jl_function_t* f, jl_tuple_t* targs)
   delete[] args;
 }
 
+struct Thread
+{
+  std::thread t;
+  jl_function_t* f;
+  jl_tuple_t* targs;
+  
+  Thread(jl_function_t* f, jl_tuple_t* targs)
+  {
+    int nargs = jl_tuple_len(targs);
+            
+    jl_tuple_t* argtypes = arg_type_tuple(&jl_tupleref(targs,0), nargs);
+    this->f = jl_get_specialization(f, argtypes);
+    this->targs = targs;
+  }
+  
+  void run()
+  {
+    t = std::thread(run_thread,f,targs);
+  }
+  
+  void join()
+  {
+    t.join();
+  }
+};
+
 void* jl_create_thread(jl_function_t* f, jl_tuple_t* targs)
 {
-  _ct_mutex.lock();
-  
-  int nargs = jl_tuple_len(targs);
-            
-  jl_tuple_t* argtypes = arg_type_tuple(&jl_tupleref(targs,0), nargs);
-  jl_function_t *mfunc = jl_get_specialization(f, argtypes);
-
-  _ct_mutex.unlock();
-
-  std::thread* t = new std::thread[1];
-  t[0] = std::thread(run_thread,mfunc,targs);
+  Thread* t = new Thread(f,targs);
   return (void*) t;
+}
+
+void jl_run_thread(void* t)
+{
+  ((Thread*)t)->run();
 }
 
 void jl_join_thread(void* t)
 {
-  ((std::thread*)t)->join();
+  ((Thread*)t)->join();
 }
 
 void jl_destroy_thread(void* t)
 {
-  delete[] ((std::thread*)t);
+  delete ((Thread*)t);
 }
 
 static std::mutex _do_work_mutex;

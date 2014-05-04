@@ -50,6 +50,7 @@ let N=1000
   y=copy(x)
 
   t=Base.Thread(sqrt!,x)
+  Base.run(t)
   sqrt!(y)
   Base.join(t)
 
