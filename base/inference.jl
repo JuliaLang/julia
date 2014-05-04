@@ -2298,7 +2298,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
             end
         end
         free = effect_free(aei,sv,true)
-        if ((occ==0 && is(aeitype,None)) || islocal || (occ > 1 && !inline_worthy(aei, occ)) ||
+        if ((occ==0 && is(aeitype,None)) || islocal || (occ > 1 && !inline_worthy(aei, occ*2)) ||
                 (affect_free && !free) || (!affect_free && !effect_free(aei,sv,false)))
             if occ != 0 # islocal=true is implied by occ!=0
                 vnew = unique_name(enclosing_ast, ast)
@@ -2401,14 +2401,14 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
 end
 
 inline_worthy(body, cost::Real) = true
-function inline_worthy(body::Expr, cost::Real=1) # precondition: 0<cost
+function inline_worthy(body::Expr, cost::Real=1.0) # precondition: 0<cost
 #    if isa(body.args[1],QuoteNode) && (body.args[1]::QuoteNode).value === :inline
 #        shift!(body.args)
 #        return true
 #    end
-    symlim = int(5/cost)+1
+    symlim = 1+5/cost
     if length(body.args) < symlim
-        symlim *= 6
+        symlim *= 16
         if occurs_more(body, e->true, symlim) < symlim
             return true
         end
