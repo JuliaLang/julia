@@ -329,6 +329,7 @@ Dict(ks, vs) = Dict{Any,Any}(ks, vs)
 
 # conversion between Dict types
 convert{K,V}(::Type{Dict{K,V}},d::Dict) = Dict{K,V}(d)
+convert{K,V}(::Type{Dict{K,V}},d::Dict{K,V}) = d
 
 # syntax entry points
 Dict{K,V}(ks::(K...), vs::(V...)) = Dict{K  ,V  }(ks, vs)
