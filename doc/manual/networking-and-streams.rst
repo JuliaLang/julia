@@ -76,6 +76,59 @@ the difference between the two)::
 
     julia> print(STDOUT,0x61)
     97
+    
+Working with Files
+------------------
+
+Like many other environments, Julia has an `open` function, which takes a filename and returns an `IOStream` object
+that you can use to read and write things from the file. For example if we have a file, `hello.txt`, whose contents
+are "Hello, World!"::
+
+    julia> f = open("hello.txt")
+    IOStream(<file hello.txt>)
+
+    julia> readlines(f)
+    1-element Array{Union(ASCIIString,UTF8String),1}:
+     "Hello, World!\n"
+    
+If you want to write to a file, you can open it with the write (`"w"`) flag::
+
+    julia> f = open("hello.txt","w")
+    IOStream(<file hello.txt>)
+    
+    julia> write(f,"Hello again.")
+    12
+    
+If you examine the contents of `hello.txt` at this point, you will notice that it is empty; nothing has actually
+been written to disk yet. This is because the IOStream must be closed before the write is actually flushed to disk::
+
+    julia> close(f)
+    
+Examining hello.txt again will show it's contents have been changed.
+
+Opening a file, doing something to it's contents, and closing it again is a very common pattern.
+To make this easier, there exists another invocation of `open` which takes a function
+as it's first argument and filename as it's second, opens the file, calls the function with the file as
+an argument, and then closes it again. For example, given a function::
+
+    function read_and_capitalize(f::IOStream)
+        return uppercase(readall(f))
+    end
+    
+You can call::
+
+    julia> open(read_and_capitalize, "hello.txt")
+    "HELLO AGAIN."
+    
+to open `hello.txt`, call `read_and_capitalize on it`, close `hello.txt`. and return the capitalized contents.
+
+To avoid even having to define a named function, you can use the `do` syntax, which creates an anonymous
+function on the fly::
+
+    julia> open("hello.txt") do f
+              uppercase(readall(f))
+           end
+    "HELLO AGAIN."
 
 
 A simple TCP example
