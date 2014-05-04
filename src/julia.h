@@ -962,6 +962,9 @@ jl_value_t *jl_apply(jl_function_t *f, jl_value_t **args, uint32_t nargs)
     return f->fptr((jl_value_t*)f, args, nargs);
 }
 
+DLLEXPORT jl_function_t *jl_method_table_assoc_exact(jl_methtable_t *mt,
+                                                  jl_value_t **args, size_t n);
+
 DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t nargs);
 DLLEXPORT jl_value_t *jl_call0(jl_function_t *f);
 DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a);
@@ -1204,6 +1207,8 @@ DLLEXPORT void jl_par_apply(jl_function_t * func, jl_value_t* args, size_t num_t
 DLLEXPORT void* jl_create_thread(jl_function_t* f, jl_tuple_t* targs);
 DLLEXPORT void jl_join_thread(void* t);
 DLLEXPORT void jl_destroy_thread(void* t);
+DLLEXPORT void jl_global_lock();
+DLLEXPORT void jl_global_unlock();
 
 
 // I/O system -----------------------------------------------------------------

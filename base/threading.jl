@@ -1,50 +1,57 @@
+### parallel apply function (scheduling in C).
 
-function par_apply(f::Function, args::ANY, numthreads, start, step, len)
+function parapply(f::Function, args::ANY, numthreads, start, step, len)
   ccall(:jl_par_apply,Void,(Any,Any,Int,Int,Int,Int),f,args,numthreads, start, step, len)
 end
 
-function thread(f::Function,args...; precomp=true)
-  if precomp
-    precompile(f, ntuple(length(args),d->typeof(args[d])) )
-  end
-  ccall(:jl_create_thread,Ptr{Void},(Any,Any),f,args)
+### Thread type
+
+type Thread
+  handle::Ptr{Void}
 end
 
-join(t)=(ccall(:jl_join_thread,Void,(Ptr{Void},),t))
+join(t::Thread)=(ccall(:jl_join_thread,Void,(Ptr{Void},),t.handle))
 
-destroy(t)=(ccall(:jl_destroy_thread,Void,(Ptr{Void},),t))
+destroy(t::Thread)=(ccall(:jl_destroy_thread,Void,(Ptr{Void},),t.handle))
 
-function par_do_work(f::Function, args, start, step, len)
-  for i=start:step:(start+(len-1)*step)
-    f(args,i)
+function Thread(f::Function,args...)
+  t=Thread(ccall(:jl_create_thread,Ptr{Void},(Any,Any),f,args))
+    
+  finalizer(t, destroy)
+  t    
+end
+
+global_lock() = ccall(:jl_global_lock,Void,())
+global_unlock() = ccall(:jl_global_unlock,Void,())
+
+
+### parallel apply function (scheduling in julia).
+
+function par_do_work(f::Function, args, start::Int, step::Int, len::Int)
+  i = start
+  while i<=(start+(len-1)*step)
+    f(args...,i)
+    i += step
   end
 end
-  
-function par_apply2(f::Function, args,  numthreads, start, step, len)
+
+function parapply_jl(f::Function, args,  numthreads::Int, start::Int, step::Int, len::Int)
   gc_disable()
 
-  # precompilation TODO: Don't compute the first time
-  # f(args, start)
-  par_do_work(f,args, start, 1, 1)
+  t = Array(Base.Thread,numthreads)
 
-  t = Ptr{Void}[]
+  chunk = ifloor(len / numthreads)
+  rem = len
 
-  N = len - 1
-  chunk = ifloor(N / numthreads)
-  rem = N
-
-  for i=0:(numthreads-1)
-    push!(t, Base.thread(par_do_work,f,args,start+1+i*chunk*step, step, chunk, precomp=true))
+  for i=0:(numthreads-2)
+    t[i+1] = Base.Thread(par_do_work,f,args,int(start+i*chunk*step), step, chunk)
     rem -= chunk
   end
-  push!(t, Base.thread(par_do_work,f,args,start+1+(numthreads-1)*chunk*step, step, rem, precomp=true))
+  t[numthreads] = Base.Thread(par_do_work,f,args,int(start+(numthreads-1)*chunk*step), step, rem)
 
   for i=1:numthreads
     Base.join(t[i])
-    Base.destroy(t[i])
   end
- 
+
   gc_enable()
-
 end
-

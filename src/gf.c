@@ -235,7 +235,8 @@ static jl_function_t *jl_method_table_assoc_exact_by_type(jl_methtable_t *mt,
     return jl_bottom_func;
 }
 
-static jl_function_t *jl_method_table_assoc_exact(jl_methtable_t *mt,
+
+ jl_function_t *jl_method_table_assoc_exact(jl_methtable_t *mt,
                                                   jl_value_t **args, size_t n)
 {
     // NOTE: This function is a huge performance hot spot!!
@@ -1242,7 +1243,7 @@ jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na)
     return jl_nothing;
 }
 
-static jl_tuple_t *arg_type_tuple(jl_value_t **args, size_t nargs)
+jl_tuple_t *arg_type_tuple(jl_value_t **args, size_t nargs)
 {
     jl_tuple_t *tt = jl_alloc_tuple(nargs);
     JL_GC_PUSH1(&tt);
