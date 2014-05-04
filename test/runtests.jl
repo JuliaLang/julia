@@ -26,14 +26,9 @@ end
 net_required_for = ["socket", "parallel"]
 net_on = true
 try
-    ip = getipaddr()
+    getipaddr()
 catch
-    warn_str = "Networking unavailable: Skipping tests [$(net_required_for[1])"
-    for x in net_required_for[2:end]
-        warn_str = warn_str * ", $x"
-    end
-    warn_str = warn_str * "]"
-    warn(warn_str)
+    warn("Networking unavailable: Skipping tests [" * join(net_required_for, ", ") * "]")
     net_on = false
 end
 
