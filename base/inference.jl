@@ -2304,7 +2304,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
                 vnew = unique_name(enclosing_ast, ast)
                 add_variable(enclosing_ast, vnew, aeitype, !islocal)
                 unshift!(stmts, Expr(:(=), vnew, aei))
-                argexprs[i] = argtype===Any ? vnew : SymbolNode(vnew,aeitype)
+                argexprs[i] = aeitype===Any ? vnew : SymbolNode(vnew,aeitype)
                 stmts_free &= free
             elseif !free && !isType(aeitype)
                 unshift!(stmts, aei)
