@@ -167,16 +167,22 @@ function run_frontend(repl::BasicREPL, repl_channel::RemoteRef, response_channel
         write(repl.terminal, "julia> ")
         line = ""
         ast = nothing
-        while true
-            line *= readline(repl.terminal)
-            ast = Base.parse_input_line(line)
-            (isa(ast,Expr) && ast.head == :incomplete) || break
-        end
-        if !isempty(line)
-            put!(repl_channel, (ast, 1))
-            val, bt = take!(response_channel)
-            if !ends_with_semicolon(line)
-                print_response(d, val, bt, true, false)
+        try
+            while true
+                line *= readline(repl.terminal)
+                ast = Base.parse_input_line(line)
+                (isa(ast,Expr) && ast.head == :incomplete) || break
+            end
+            if !isempty(line)
+                put!(repl_channel, (ast, 1))
+                val, bt = take!(response_channel)
+                if !ends_with_semicolon(line)
+                    print_response(d, val, bt, true, false)
+                end
+            end
+        catch e
+            if ! isa(e, InterruptException)
+                throw(e)
             end
         end
         write(repl.terminal, '\n')
