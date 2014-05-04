@@ -1888,6 +1888,9 @@ function effect_free(e::ANY, sv, allow_volatile::Bool)
         isa(e,TopNode) || isa(e,QuoteNode) || isa(e,Type) || isa(e,Tuple)
         return true
     end
+    if isconstantfunc(e, sv) !== false
+        return true
+    end
     if isa(e,Expr)
         e = e::Expr
         if e.head === :static_typeof
@@ -1896,27 +1899,31 @@ function effect_free(e::ANY, sv, allow_volatile::Bool)
         ea = e.args
         if e.head === :call || e.head === :call1
             if is_known_call_p(e, is_pure_builtin, sv)
-                if !allow_volatile && is_known_call_p(e, (f)->contains_is(_pure_builtins_volatile, f), sv)
-                    # arguments must be immutable to ensure e is affect_free
-                    first = true
-                    for a in ea
-                        if first # first "arg" is the function name
-                            first = false
-                            continue
-                        end
-                        if isa(a,Symbol)
-                            return false
-                        end
-                        if isa(a,SymbolNode)
-                            typ = (a::SymbolNode).typ
-                            if !isa(typ,Tuple)
-                                if !isa(typ,DataType) || typ.mutable
-                                    return false
+                if !allow_volatile
+                    if is_known_call(e, arrayref, sv)
+                        return false
+                    elseif is_known_call(e, getfield, sv)
+                        # arguments must be immutable to ensure e is affect_free
+                        first = true
+                        for a in ea
+                            if first # first "arg" is the function name
+                                first = false
+                                continue
+                            end
+                            if isa(a,Symbol)
+                                return false
+                            end
+                            if isa(a,SymbolNode)
+                                typ = (a::SymbolNode).typ
+                                if !isa(typ,Tuple)
+                                    if !isa(typ,DataType) || typ.mutable
+                                        return false
+                                    end
                                 end
                             end
-                        end
-                        if !effect_free(a,sv,allow_volatile)
-                            return false
+                            if !effect_free(a,sv,allow_volatile)
+                                return false
+                            end
                         end
                     end
                 else
@@ -1929,7 +1936,7 @@ function effect_free(e::ANY, sv, allow_volatile::Bool)
                 end
                 return true
             end
-        elseif e.head == :new
+        elseif e.head === :new
             first = !allow_volatile
             for a in ea
                 if first
@@ -1944,7 +1951,7 @@ function effect_free(e::ANY, sv, allow_volatile::Bool)
                 end
             end
             return true
-        elseif e.head == :return
+        elseif e.head === :return
             for a in ea
                 if !effect_free(a,sv,allow_volatile)
                     return false
@@ -2083,6 +2090,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
 
     body = Expr(:block)
     body.args = without_linenums(ast.args[3].args)::Array{Any,1}
+    need_mod_annotate = true
     cost = 1.0
     if incompletematch
         cost *= 4
@@ -2091,7 +2099,31 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
         cost /= 4
     end
     if !inline_worthy(body, cost)
-        return NF
+        if incompletematch
+            # inline a typeassert-based call-site, rather than a
+            # full generic lookup, using the inliner to handle
+            # all the fiddly details
+            numarg = length(argexprs)
+            newnames = unique_names(ast,numarg)
+            sp = ()
+            spvals = {}
+            meth = (methargs, sp)
+            locals = {}
+            newcall = Expr(:call, e.args[1])
+            newcall.typ = ty
+            for i = 1:numarg
+                name = newnames[i]
+                argtype = exprtype(argexprs[i])
+                argtype = typeintersect(argtype,Any)  # remove Undef
+                push!(locals, {name,argtype,0})
+                push!(newcall.args, argtype===Any ? name : SymbolNode(name, argtype))
+            end
+            body.args = {Expr(:return, newcall)}
+            ast = Expr(:lambda, newnames, {{}, locals, {}}, body)
+            need_mod_annotate = false
+        else
+            return NF
+        end
     end
 
     spnames = { sp[i].name for i=1:2:length(sp) }
@@ -2170,14 +2202,16 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
     end
 
     # annotate variables in the body expression with their module
-    mfrom = linfo.module; mto = (inference_stack::CallStack).mod
-    try
-        body = resolve_globals(body, enc_locllist, enclosing_ast.args[1], mfrom, mto, args, spnames)
-    catch ex
-        if isa(ex,GetfieldNode)
-            return NF
+    if need_mod_annotate
+        mfrom = linfo.module; mto = (inference_stack::CallStack).mod
+        try
+            body = resolve_globals(body, enc_locllist, enclosing_ast.args[1], mfrom, mto, args, spnames)
+        catch ex
+            if isa(ex,GetfieldNode)
+                return NF
+            end
+            rethrow(ex)
         end
-        rethrow(ex)
     end
 
     # see if each argument occurs only once in the body expression
@@ -2193,7 +2227,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
         argexprs2 = t.args
         icall = LabelNode(label_counter(body.args)+1)
         partmatch = Expr(:gotoifnot, false, icall.label)
-        thrw = Expr(:call, :throw, Expr(:call, :MethodError, f, t))
+        thrw = Expr(:call, :throw, Expr(:call, Main.Base.MethodError, f, t))
         thrw.typ = None
     end
 
@@ -2312,7 +2346,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
             end
         end
         if incompletematch
-            unshift!(argexprs2, a)
+            unshift!(argexprs2, (argtype===Any ? a : SymbolNode(a,argtype)))
         end
     end
     if incompletematch && partmatch.args[1] != false
@@ -2447,19 +2481,9 @@ function inlining_pass(e::Expr, sv, ast)
         return (e,())
     end
     arg1 = eargs[1]
-    # don't inline first (global) arguments of ccall, as this needs to be evaluated
-    # by the interpreter and inlining might put in something it can't handle,
-    # like another ccall (or try to move the variables out into the function)
-    if is_known_call(e, Core.Intrinsics.ccall, sv)
-        i0 = 5
-        isccall = true
-    else
-        i0 = 1
-        isccall = false
-    end
     stmts = {}
     if e.head === :body
-        i = i0
+        i = 1
         while i <= length(eargs)
             ei = eargs[i]
             if isa(ei,Expr)
@@ -2476,6 +2500,16 @@ function inlining_pass(e::Expr, sv, ast)
             i += 1
         end
     else
+        # don't inline first (global) arguments of ccall, as this needs to be evaluated
+        # by the interpreter and inlining might put in something it can't handle,
+        # like another ccall (or try to move the variables out into the function)
+        if is_known_call(e, Core.Intrinsics.ccall, sv)
+            i0 = 5
+            isccall = true
+        else
+            i0 = 1
+            isccall = false
+        end
         has_stmts = false # needed to preserve order-of-execution
         for i=length(eargs):-1:i0
             ei = eargs[i]
@@ -2516,94 +2550,94 @@ function inlining_pass(e::Expr, sv, ast)
                 end
             end
         end
-    end
-    if isccall
-        le = length(eargs)
-        for i=5:2:le
-            if i<le && (isa(eargs[i],Symbol) || isa(eargs[i],SymbolNode))
-                eargs[i+1] = 0
+        if isccall
+            le = length(eargs)
+            for i=5:2:le
+                if i<le && (isa(eargs[i],Symbol) || isa(eargs[i],SymbolNode))
+                    eargs[i+1] = 0
+                end
             end
         end
-    end
-    if is(e.head,:call1)
-        e.head = :call
-        ET = exprtype(arg1)
-        if isType(ET)
-            f = ET.parameters[1]
-        else
-            f = _ieval(arg1)
-        end
+        if is(e.head,:call1)
+            e.head = :call
+            ET = exprtype(arg1)
+            if isType(ET)
+                f = ET.parameters[1]
+            else
+                f = _ieval(arg1)
+            end
 
-        if is(f, ^) || is(f, .^)
-            if length(e.args) == 3 && isa(e.args[3],Union(Int32,Int64))
-                a1 = e.args[2]
-                if isa(a1,basenumtype) || ((isa(a1,Symbol) || isa(a1,SymbolNode)) &&
-                                           exprtype(a1) <: basenumtype)
-                    if e.args[3]==2
-                        e.args = {TopNode(:*), a1, a1}
-                        f = *
-                    elseif e.args[3]==3
-                        e.args = {TopNode(:*), a1, a1, a1}
-                        f = *
+            if is(f, ^) || is(f, .^)
+                if length(e.args) == 3 && isa(e.args[3],Union(Int32,Int64))
+                    a1 = e.args[2]
+                    if isa(a1,basenumtype) || ((isa(a1,Symbol) || isa(a1,SymbolNode)) &&
+                                               exprtype(a1) <: basenumtype)
+                        if e.args[3]==2
+                            e.args = {TopNode(:*), a1, a1}
+                            f = *
+                        elseif e.args[3]==3
+                            e.args = {TopNode(:*), a1, a1, a1}
+                            f = *
+                        end
                     end
                 end
             end
-        end
 
-        for ninline = 1:100
-            atypes = tuple(Any[exprtype(x) for x in e.args[2:end]]...)
-            if length(atypes) > MAX_TUPLETYPE_LEN
-                atypes = limit_tuple_type(atypes)
-            end
-            res = inlineable(f, e, atypes, sv, ast)
-            if isa(res,Tuple)
-                if isa(res[2],Array)
-                    append!(stmts,res[2])
+            for ninline = 1:100
+                atypes = tuple(Any[exprtype(x) for x in e.args[2:end]]...)
+                if length(atypes) > MAX_TUPLETYPE_LEN
+                    atypes = limit_tuple_type(atypes)
                 end
-                res = res[1]
-            end
-
-            if !is(res,NF)
-                # iteratively inline apply(f, tuple(...), tuple(...), ...) in order
-                # to simplify long vararg lists as in multi-arg +
-                if isa(res,Expr) && is_known_call(res, apply, sv)
-                    e = res::Expr
-                    f = apply
-                else
-                    return (res,stmts)
+                res = inlineable(f, e, atypes, sv, ast)
+                if isa(res,Tuple)
+                    if isa(res[2],Array)
+                        append!(stmts,res[2])
+                    end
+                    res = res[1]
                 end
-            end
 
-            if is(f,apply)
-                na = length(e.args)
-                newargs = cell(na-2)
-                for i = 3:na
-                    aarg = e.args[i]
-                    t = to_tuple_of_Types(exprtype(aarg))
-                    if isa(aarg,Expr) && is_known_call(aarg, tuple, sv)
-                        # apply(f,tuple(x,y,...)) => f(x,y,...)
-                        newargs[i-2] = aarg.args[2:end]
-                    elseif isa(aarg, Tuple)
-                        newargs[i-2] = { QuoteNode(x) for x in aarg }
-                    elseif isa(t,Tuple) && !isvatuple(t) && effect_free(aarg,sv,true)
-                        # apply(f,t::(x,y)) => f(t[1],t[2])
-                        newargs[i-2] = { mk_tupleref(aarg,j,t[j]) for j=1:length(t) }
+                if !is(res,NF)
+                    # iteratively inline apply(f, tuple(...), tuple(...), ...) in order
+                    # to simplify long vararg lists as in multi-arg +
+                    if isa(res,Expr) && is_known_call(res, apply, sv)
+                        e = res::Expr
+                        f = apply
                     else
-                        # not all args expandable
+                        return (res,stmts)
+                    end
+                end
+
+                if is(f,apply)
+                    na = length(e.args)
+                    newargs = cell(na-2)
+                    for i = 3:na
+                        aarg = e.args[i]
+                        t = to_tuple_of_Types(exprtype(aarg))
+                        if isa(aarg,Expr) && is_known_call(aarg, tuple, sv)
+                            # apply(f,tuple(x,y,...)) => f(x,y,...)
+                            newargs[i-2] = aarg.args[2:end]
+                        elseif isa(aarg, Tuple)
+                            newargs[i-2] = { QuoteNode(x) for x in aarg }
+                        elseif isa(t,Tuple) && !isvatuple(t) && effect_free(aarg,sv,true)
+                            # apply(f,t::(x,y)) => f(t[1],t[2])
+                            newargs[i-2] = { mk_tupleref(aarg,j,t[j]) for j=1:length(t) }
+                        else
+                            # not all args expandable
+                            return (e,stmts)
+                        end
+                    end
+                    e.args = [{e.args[2]}, newargs...]
+
+                    # now try to inline the simplified call
+
+                    f = isconstantfunc(e.args[1], sv)
+                    if f===false
                         return (e,stmts)
                     end
-                end
-                e.args = [{e.args[2]}, newargs...]
-
-                # now try to inline the simplified call
-
-                f = isconstantfunc(e.args[1], sv)
-                if f===false
+                    f = _ieval(f)
+                else
                     return (e,stmts)
                 end
-                f = _ieval(f)
-            else
-                return (e,stmts)
             end
         end
     end
@@ -2622,32 +2656,39 @@ const some_names = {:_var0, :_var1, :_var2, :_var3, :_var4, :_var5, :_var6,
                     :_var7, :_var8, :_var9, :_var10, :_var11, :_var12,
                     :_var13, :_var14, :_var15, :_var16, :_var17, :_var18,
                     :_var19, :_var20, :_var21, :_var22, :_var23, :_var24}
-
+function contains_is1(vinflist::Array{Any,1}, x::Symbol)
+    for y in vinflist
+        if is(y[1],x)
+            return true
+        end
+    end
+    return false
+end
 function unique_name(ast)
-    locllist = ast.args[2][1]::Array{Any,1}
+    locllist = ast.args[2][2]::Array{Any,1}
     for g in some_names
-        if !contains_is(locllist, g)
+        if !contains_is1(locllist, g)
             return g
         end
     end
     g = gensym()
-    while contains_is(locllist, g)
+    while contains_is1(locllist, g)
         g = gensym()
     end
     g
 end
 function unique_name(ast1, ast2)
-    locllist1 = ast1.args[2][1]::Array{Any,1}
-    locllist2 = ast2.args[2][1]::Array{Any,1}
+    locllist1 = ast1.args[2][2]::Array{Any,1}
+    locllist2 = ast2.args[2][2]::Array{Any,1}
     for g in some_names
-        if !contains_is(locllist1, g) &&
-           !contains_is(locllist2, g)
+        if !contains_is1(locllist1, g) &&
+           !contains_is1(locllist2, g)
             return g
         end
     end
     g = gensym()
-    while contains_is(locllist1, g) |
-          contains_is(locllist2, g)
+    while contains_is1(locllist1, g) |
+          contains_is1(locllist2, g)
         g = gensym()
     end
     g
@@ -2655,9 +2696,9 @@ end
 
 function unique_names(ast, n)
     ns = {}
-    locllist = ast.args[2][1]::Array{Any,1}
+    locllist = ast.args[2][2]::Array{Any,1}
     for g in some_names
-        if !contains_is(locllist, g)
+        if !contains_is1(locllist, g)
             push!(ns, g)
             if length(ns)==n
                 return ns
@@ -2666,7 +2707,7 @@ function unique_names(ast, n)
     end
     while length(ns)<n
         g = gensym()
-        while contains_is(locllist, g) || contains_is(ns, g)
+        while contains_is1(locllist, g) || contains_is(ns, g)
             g = gensym()
         end
         push!(ns, g)
@@ -2722,12 +2763,29 @@ function remove_redundant_temp_vars(ast, sa)
                 # this transformation is not valid for vars used before def.
                 # we need to preserve the point of assignment to know where to
                 # throw errors (issue #4645).
-                delete_var!(ast, v)
-                sym_replace(ast.args[3], {v}, {}, {init}, {})
+
+                if (isa(init,SymbolNode) ? (init.typ<:local_typeof(v, varinfo)) : true)
+                    # the transformation is not ideal if the assignment
+                    # is present for the auto-unbox functionality
+                    # (from inlining improved type inference information)
+                    # and this transformation would worsen the type information
+                    # everywhere later in the function
+
+                    delete_var!(ast, v)
+                    sym_replace(ast.args[3], {v}, {}, {init}, {})
+                end
             end
         end
     end
     ast
+end
+function local_typeof(v, varinfo)
+    for (v2, typ, info) in varinfo
+        if v === v2
+            return typ
+        end
+    end
+    @assert false "v not in varinfo"
 end
 
 occurs_undef(var, expr) =
