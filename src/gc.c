@@ -120,7 +120,9 @@ DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 {
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
+    jl_global_lock();
     allocd_bytes += sz;
+    jl_global_unlock();
     void *b = malloc(sz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
@@ -130,14 +132,18 @@ DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 DLLEXPORT void jl_gc_counted_free(void *p, size_t sz)
 {
     free(p);
+    jl_global_lock();
     freed_bytes += sz;
+    jl_global_unlock();
 }
 
 DLLEXPORT void *jl_gc_counted_realloc(void *p, size_t sz)
 {
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
+    jl_global_lock();
     allocd_bytes += ((sz+1)/2);  // NOTE: wild guess at growth amount
+    jl_global_unlock();
     void *b = realloc(p, sz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
@@ -149,7 +155,11 @@ DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t 
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
     if (sz > old)
+    {
+        jl_global_lock();
         allocd_bytes += (sz-old);
+        jl_global_unlock();
+    }
     void *b = realloc(p, sz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
@@ -160,11 +170,16 @@ void *jl_gc_managed_malloc(size_t sz)
 {
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
+    jl_global_lock();
     sz = (sz+15) & -16;
     void *b = malloc_a16(sz);
     if (b == NULL)
+    {
+        jl_global_unlock();
         jl_throw(jl_memory_exception);
+    }
     allocd_bytes += sz;
+    jl_global_unlock();
     return b;
 }
 
@@ -172,6 +187,7 @@ void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned)
 {
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
+    jl_global_lock();
     sz = (sz+15) & -16;
     void *b;
 #ifdef _P64
@@ -192,8 +208,12 @@ void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned)
     }
 #endif
     if (b == NULL)
+    {
+        jl_global_unlock();
         jl_throw(jl_memory_exception);
+    }
     allocd_bytes += sz;
+    jl_global_unlock();
     return b;
 }
 
@@ -225,7 +245,9 @@ DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value)
     jl_weakref_t *wr = (jl_weakref_t*)alloc_2w();
     wr->type = (jl_value_t*)jl_weakref_type;
     wr->value = value;
+    jl_global_lock();
     arraylist_push(&weak_refs, wr);
+    jl_global_unlock();
     return wr;
 }
 
@@ -320,6 +342,7 @@ void jl_gc_run_all_finalizers(void)
 
 void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
 {
+    jl_global_lock();
     jl_value_t **bp = (jl_value_t**)ptrhash_bp(&finalizer_table, v);
     if (*bp == HT_NOTFOUND) {
         *bp = (jl_value_t*)f;
@@ -327,6 +350,7 @@ void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
     else {
         *bp = (jl_value_t*)jl_tuple2((jl_value_t*)f, *bp);
     }
+    jl_global_unlock();
 }
 
 // big value list
@@ -337,6 +361,7 @@ static void *alloc_big(size_t sz)
 {
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
+    jl_global_lock();
     size_t offs = BVOFFS*sizeof(void*);
     if (sz+offs+15 < offs+15)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
@@ -344,7 +369,10 @@ static void *alloc_big(size_t sz)
     bigval_t *v = (bigval_t*)malloc_a16(allocsz);
     allocd_bytes += allocsz;
     if (v == NULL)
+    {
+        jl_global_unlock();
         jl_throw(jl_memory_exception);
+    }
 #ifdef MEMDEBUG
     //memset(v, 0xee, allocsz);
 #endif
@@ -352,6 +380,7 @@ static void *alloc_big(size_t sz)
     v->flags = 0;
     v->next = big_objects;
     big_objects = v;
+    jl_global_unlock();
     return &v->_data[0];
 }
 
@@ -451,6 +480,7 @@ static pool_t *pools = &norm_pools[0];
 
 static void add_page(pool_t *p)
 {
+
     gcpage_t *pg = (gcpage_t*)malloc_a16(sizeof(gcpage_t));
     if (pg == NULL)
         jl_throw(jl_memory_exception);

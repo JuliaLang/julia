@@ -216,7 +216,7 @@ CC = $(CROSS_COMPILE)gcc
 CXX = $(CROSS_COMPILE)g++
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCPPFLAGS =
-JCXXFLAGS = -pipe $(fPIC) -fno-rtti
+JCXXFLAGS = -pipe $(fPIC) -fno-rtti -std=gnu++11
 DEBUGFLAGS = -O0 -ggdb3 -DDEBUG -fstack-protector-all
 SHIPFLAGS = -O3 -falign-functions
 endif
@@ -226,7 +226,7 @@ CC = $(CROSS_COMPILE)clang
 CXX = $(CROSS_COMPILE)clang++
 JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCPPFLAGS =
-JCXXFLAGS = -pipe $(fPIC) -fno-rtti
+JCXXFLAGS = -pipe $(fPIC) -fno-rtti -std=gnu++11
 DEBUGFLAGS = -O0 -g -DDEBUG -fstack-protector-all
 SHIPFLAGS = -O3
 ifeq ($(OS), Darwin)
