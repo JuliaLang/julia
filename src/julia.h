@@ -1204,10 +1204,16 @@ void jl_longjmp(jmp_buf _Buf,int _Value);
 
 DLLEXPORT void jl_par_apply(jl_function_t * func, jl_value_t* args, size_t num_threads, size_t start, size_t step, size_t length );
 
-DLLEXPORT void* jl_create_thread(jl_function_t* f, jl_tuple_t* targs);
-DLLEXPORT void jl_run_thread(void* t);
-DLLEXPORT void jl_join_thread(void* t);
-DLLEXPORT void jl_destroy_thread(void* t);
+typedef struct {
+  uv_thread_t t;
+  jl_function_t* f;
+  jl_tuple_t* targs;
+} jl_thread_t;
+
+DLLEXPORT jl_thread_t* jl_create_thread(jl_function_t* f, jl_tuple_t* targs);
+DLLEXPORT void jl_run_thread(jl_thread_t* t);
+DLLEXPORT void jl_join_thread(jl_thread_t* t);
+DLLEXPORT void jl_destroy_thread(jl_thread_t* t);
 DLLEXPORT void jl_global_lock();
 DLLEXPORT void jl_global_unlock();
 

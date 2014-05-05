@@ -1,115 +1,107 @@
 #include "julia.h"
 #include <stdio.h>
 #include <math.h>
-#include <thread>
 #include <iostream>
-#include <mutex>
+#include "uv.h"
 
 extern "C" {
 
 extern jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types);
 extern jl_tuple_t *arg_type_tuple(jl_value_t **args, size_t nargs);
 
-static std::mutex _global_lock;
+static uv_mutex_t global_mutex;
+
+void jl_init_threading()
+{
+  uv_mutex_init(&global_mutex);
+}
 
 void jl_global_lock()
 {
-  _global_lock.lock();
+  uv_mutex_lock(&global_mutex);
 }
 
 void jl_global_unlock()
 {
-  _global_lock.unlock();
+  uv_mutex_unlock(&global_mutex);
 }
 
-std::mutex _ct_mutex;
-void run_thread(jl_function_t* f, jl_tuple_t* targs)
+void run_thread(void* t)
 {
-  _ct_mutex.lock();
-  jl_value_t** args = new jl_value_t*[jl_tuple_len(targs)];
+  jl_function_t* f = ((jl_thread_t*)t)->f;
+  jl_tuple_t* targs = ((jl_thread_t*)t)->targs;
+
+  jl_value_t** args = (jl_value_t**) alloca( sizeof(jl_value_t*)*jl_tuple_len(targs));
   for(int l=0; l<jl_tuple_len(targs); l++)
     args[l] = jl_tupleref(targs,l);
-  _ct_mutex.unlock();
 
   jl_apply(f,args,jl_tuple_len(targs));
-
-  delete[] args;
 }
 
-struct Thread
+jl_thread_t* jl_create_thread(jl_function_t* f, jl_tuple_t* targs)
 {
-  std::thread t;
-  jl_function_t* f;
-  jl_tuple_t* targs;
-  
-  Thread(jl_function_t* f, jl_tuple_t* targs)
-  {
-    int nargs = jl_tuple_len(targs);
+  int nargs = jl_tuple_len(targs);
+  jl_thread_t* t = (jl_thread_t*) malloc(sizeof(jl_thread_t));
             
-    jl_tuple_t* argtypes = arg_type_tuple(&jl_tupleref(targs,0), nargs);
-    this->f = jl_get_specialization(f, argtypes);
-    this->targs = targs;
-  }
+  jl_tuple_t* argtypes = arg_type_tuple(&jl_tupleref(targs,0), nargs);
+  t->f = jl_get_specialization(f, argtypes);
+  jl_compile(t->f);
+  t->targs = targs;
+  return t;
+}
   
-  void run()
-  {
-    t = std::thread(run_thread,f,targs);
-  }
-  
-  void join()
-  {
-    t.join();
-  }
-};
-
-void* jl_create_thread(jl_function_t* f, jl_tuple_t* targs)
+void jl_run_thread(jl_thread_t* t)
 {
-  Thread* t = new Thread(f,targs);
-  return (void*) t;
+  uv_thread_create(&(t->t), run_thread, t);
 }
 
-void jl_run_thread(void* t)
+void jl_join_thread(jl_thread_t* t)
 {
-  ((Thread*)t)->run();
+  uv_thread_join(&(t->t));
 }
 
-void jl_join_thread(void* t)
+void jl_destroy_thread(jl_thread_t* t)
 {
-  ((Thread*)t)->join();
+  free(t);
 }
 
-void jl_destroy_thread(void* t)
-{
-  delete ((Thread*)t);
-}
+static uv_mutex_t parapply_mutex;
 
-static std::mutex _do_work_mutex;
+typedef struct {
+  uv_thread_t t;
+  jl_function_t *f; 
+  jl_value_t** args; 
+  int nargs; 
+  size_t start; 
+  size_t step; 
+  size_t length;
+} parapply_thread_t;
 
-void do_work(jl_function_t * func, jl_value_t** args, int nargs, size_t start, size_t step, size_t length)
+void parapply_do_work(void* av)
 {
-    //printf("do_work(start=%ld,stop=%ld) \n", start, start+length*step);
+    parapply_thread_t* a = (parapply_thread_t*) av;
+    //printf("do_work(start=%ld,stop=%ld) \n", start, a->start+a->length*a->step);
     
-    jl_value_t** args2 = new jl_value_t*[nargs];
-    for(int i=0; i< nargs -1; i++)
-      args2[i] = args[i];
+    jl_value_t** args = (jl_value_t**) alloca(sizeof(jl_value_t*)*a->nargs);
+    for(int i=0; i< a->nargs -1; i++)
+      args[i] = a->args[i];
     
-    for(size_t i=start; i<start+length*step; i+=step)
+    for(size_t i=a->start; i<a->start+a->length*a->step; i+=a->step)
     {
-        _do_work_mutex.lock();
-        args2[nargs-1] = jl_box_int64(i);
-        _do_work_mutex.unlock();
+        uv_mutex_lock(&parapply_mutex);
+        args[a->nargs-1] = jl_box_int64(i);
+        uv_mutex_unlock(&parapply_mutex);
         
-        jl_apply(func,args2,nargs);
-        
+        jl_apply(a->f,args,a->nargs);
     }
-    
-    delete[] args2;
 }
 
 void jl_par_apply(jl_function_t * func, jl_value_t* targs, size_t num_threads, size_t start, size_t step, size_t length)
 {
     jl_gc_disable();
-
+    
+    uv_mutex_init(&parapply_mutex);
+    
     int nargs = jl_tuple_len(targs)+1;
     
     // convert tuple into array
@@ -128,27 +120,32 @@ void jl_par_apply(jl_function_t * func, jl_value_t* targs, size_t num_threads, s
     jl_tupleset(argtypes, nargs-1, jl_int64_type);
     jl_function_t *mfunc = jl_get_specialization(func, argtypes);
 
-    std::thread* t = new std::thread[num_threads];
+    parapply_thread_t* t = (parapply_thread_t*) alloca(sizeof(parapply_thread_t)*num_threads);
 
     size_t chunk = length / num_threads;
     size_t rem = length;
-    for(size_t i=0; i < num_threads - 1; i++)
+    for(size_t i=0; i < num_threads; i++)
     {
-      t[i] = std::thread(do_work,mfunc,args,nargs,start+i*chunk*step, step, chunk  );
+      t[i].f = mfunc;
+      t[i].args = args;
+      t[i].nargs = nargs;
+      t[i].start = start+i*chunk*step;
+      t[i].step = step;
+      t[i].length = i < num_threads-1 ? chunk : rem;
+   
+      uv_thread_create(&(t[i].t), parapply_do_work, &t[i]);
       rem -= chunk;
     }
-    t[num_threads-1] = std::thread(do_work,mfunc,args,nargs,start+(num_threads-1)*chunk*step, step, rem );
 
     // std::cout << "Launched from the main thread \n";
 
     for(size_t i=0; i < num_threads; i++)
     {
-      t[i].join();
+      uv_thread_join(&(t[i].t));
     }
 
-    delete[] t;
+    uv_mutex_destroy(&parapply_mutex);
     
-    JL_GC_POP();
     jl_gc_enable();
 }
 

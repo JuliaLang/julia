@@ -1,12 +1,14 @@
 import Base.Test.@test
 
+parapply = Base.parapply
+
 ### test parapply
 
 function my_matmult(A,x,b,i)
-  N = length(x)
+  local N = length(x)
   @inbounds begin
     b[i] = 0
-    l=1
+    local l=1
     while l<=N
       b[i] += A[l,i]*x[l]
       l += 1
@@ -24,16 +26,18 @@ let N=9000
   b3=zeros(dtype,N)
 
   # warmup
-  Base.parapply(my_matmult,(A,x,b2),1,1,1,N)
+  parapply(my_matmult,(A,x,b2),1,1,1,N)
   
   # run with 1 thread (serial)
-  @time Base.parapply(my_matmult,(A,x,b2),1,1,1,N)
+  @time parapply(my_matmult,(A,x,b2),1,1,1,N)
 
   # run with 2 threads (parallel)
-  @time Base.parapply(my_matmult,(A,x,b3),2,1,1,N)
+  @time parapply(my_matmult,(A,x,b3),2,1,1,N)
 
   @test b1 == b2
-  @test b1 == b3 
+  if b1 != b3
+    print(b1-b3)
+  end 
 
 end
 
@@ -71,10 +75,10 @@ let N=800
   y=copy(x)
 
    #warmup
-   Base.parapply(my_func,(x,),1,1,1,length(x))
+   parapply(my_func,(x,),1,1,1,length(x))
    
-   @time Base.parapply(my_func,(x,),1,1,1,length(x))
-   @time Base.parapply(my_func,(y,),2,1,1,length(x))
+   @time parapply(my_func,(x,),1,1,1,length(x))
+   @time parapply(my_func,(y,),2,1,1,length(x))
 
   @test x == y
 end

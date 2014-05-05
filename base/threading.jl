@@ -28,7 +28,7 @@ global_unlock() = ccall(:jl_global_unlock,Void,())
 ### parallel apply function (scheduling in julia).
 
 function par_do_work(f::Function, args, start::Int, step::Int, len::Int)
-  i = start
+  local i = start
   while i<=(start+(len-1)*step)
     f(args...,i)
     i += step
