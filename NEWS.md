@@ -35,6 +35,17 @@ New language features
 
   * `--bounds-check=yes|no` compiler option
 
+  * Support for a limited number of infix unicode operators ([#552], [#6582]):
+  
+    | Precedence class | Operators (with synonyms, if any)
+    | ---------------- | ---------------------------------
+    |   ==             |  ≥ (>=), ≤ (<=), ≡ (===), ≠ (!=), ≢ (!==), .≥ (.>=), .≤ (.<=), .!= (.≠), ∈ (`in`) ∉ (`x, y->!in(x, y)`) ∋ (`x, y->in(y, x)`) ∌ (`x, y->!in(y, x)`) ⊆ (`issubset`) ⊈ (`x, y -> !issubset(x, y)`) ⊂ ⊄ ⊊ |
+    |   +              | ⊕ ⊖ ⊞ ⊟ ∪ (`union`) ∨ △ |
+    |   *              | ÷ (`div`) ∣ ∤ ⋅ (`dot`) × (`cross`) ∩ (`intersect`) ∧ ⊗ ⊘ ⊙ ⊚ ⊛ ⦸ ⦼ ⊠ ⊡ |
+    |   //             | ⫽ (`//`) |
+
+  * Support `√` as synonym for `sqrt` ([#6582])
+
 Library improvements
 --------------------
 
@@ -376,6 +387,8 @@ Deprecated or removed
 [#5380]: https://github.com/JuliaLang/julia/pull/5380
 [#5585]: https://github.com/JuliaLang/julia/issues/5585
 [#6273]: https://github.com/JuliaLang/julia/pull/6273
+[#552]: https://github.com/JuliaLang/julia/issues/552
+[#6582]: https://github.com/JuliaLang/julia/pull/6582
 
 Julia v0.2.0 Release Notes
 ==========================
