@@ -94,6 +94,13 @@ let x = ["\"hello\"", "world\""], io = IOBuffer()
     @assert takebuf_string(io) == "\"\"\"hello\"\"\"\n\"world\"\"\"\n"
 end
 
+# test comments
+@test isequaldlm(readcsv(IOBuffer("#this is comment\n1,2,3\n#one more comment\n4,5,6")), [1. 2. 3.;4. 5. 6.], Float64)
+@test isequaldlm(readcsv(IOBuffer("#this is \n#comment\n1,2,3\n#one more \n#comment\n4,5,6")), [1. 2. 3.;4. 5. 6.], Float64)
+@test isequaldlm(readcsv(IOBuffer("1,2,#3\n4,5,6")), [1. 2. "";4. 5. 6.], Any)
+@test isequaldlm(readcsv(IOBuffer("1#,2,3\n4,5,6")), [1. "" "";4. 5. 6.], Any)
+@test isequaldlm(readcsv(IOBuffer("1,2,\"#3\"\n4,5,6")), [1. 2. "#3";4. 5. 6.], Any)
+@test isequaldlm(readcsv(IOBuffer("1,2,3\n #with leading whitespace\n4,5,6")), [1. 2. 3.;" " "" "";4. 5. 6.], Any)
 
 # source: http://www.i18nguy.com/unicode/unicode-example-utf8.zip
 let i18n_data = ["Origin (English)", "Name (English)", "Origin (Native)", "Name (Native)", 
