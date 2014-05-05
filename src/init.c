@@ -72,6 +72,7 @@ jl_compileropts_t jl_compileropts = { NULL, // build_path
 };
 
 int jl_boot_file_loaded = 0;
+int exit_on_sigint = 0;
 
 char *jl_stack_lo;
 char *jl_stack_hi;
@@ -191,6 +192,7 @@ DLLEXPORT void gdblookup(ptrint_t ip);
 
 static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {
+    if (exit_on_sigint) jl_exit(0);
     int sig;
     //windows signals use different numbers from unix
     switch(wsig) {
@@ -339,6 +341,7 @@ void restore_signals(void)
 
 void sigint_handler(int sig, siginfo_t *info, void *context)
 {
+    if (exit_on_sigint) jl_exit(0);
     if (jl_defer_signal) {
         jl_signal_pending = sig;
     }
@@ -836,6 +839,8 @@ void julia_init(char *imageFile)
 
     if (imageFile)
         jl_init_restored_modules();
+
+    jl_install_sigint_handler();
 }
 
 DLLEXPORT void jl_install_sigint_handler()
@@ -983,6 +988,8 @@ DLLEXPORT void jl_get_system_hooks(void)
     jl_loaderror_type = (jl_datatype_t*)basemod("LoadError");
     jl_weakref_type = (jl_datatype_t*)basemod("WeakRef");
 }
+
+DLLEXPORT void jl_exit_on_sigint(int on) {exit_on_sigint = on;}
 
 #ifdef __cplusplus
 }
