@@ -452,24 +452,17 @@ Function                               Description
 |airyprimelist|                        the derivative of the Airy Ai function at ``z`` 
 ``airybi(z)``, ``airy(2,z)``           the `Airy Bi function <http://en.wikipedia.org/wiki/Airy_function>`_ at ``z`` 
 ``airybiprime(z)``, ``airy(3,z)``      the derivative of the Airy Bi function at ``z`` 
-``airyx(0,z)``, ``airyx(1,z)``         ``airy(0,z)``, ``airy(1,z)`` scaled by ``exp(2/3 * z * sqrt(z))``
-``airyx(2,z)``, ``airyx(3,z)``         ``airy(2,z)``, ``airy(3,z)`` scaled by ``exp(-abs(real(2/3 * z * sqrt(z))))``
 ``besselj(nu,z)``                      the `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the first kind of order ``nu`` at ``z`` 
 ``besselj0(z)``                        ``besselj(0,z)``  
 ``besselj1(z)``                        ``besselj(1,z)``  
-``besseljx(nu,z)``                     ``besselj(nu,z) * exp(-abs(imag(z)))``
 ``bessely(nu,z)``                      the `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the second kind of order ``nu`` at ``z``  
 ``bessely0(z)``                        ``bessely(0,z)``  
 ``bessely1(z)``                        ``bessely(1,z)``  
-``besselyx(nu,z)``                     ``bessely(nu,z) * exp(-abs(imag(z)))``
 ``besselh(nu,k,z)``                    the `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the third kind (a.k.a. Hankel function) of order ``nu`` at ``z``; ``k`` must be either ``1`` or ``2``  
-``hankelh1(nu,z)``                     ``besselh(nu,1,z)``  
-``hankelh2(nu,z)``                     ``besselh(nu,2,z)``  
-``besselhx(nu,k,z)``                   ``besselh(nu,k,z) * exp(s * z * im)`` with ``s=-1`` for ``k==1``, ``s=1`` for ``k==2``
+``hankelh1(nu,z)``                     ``besselh(nu, 1, z)``  
+``hankelh2(nu,z)``                     ``besselh(nu, 2, z)``  
 ``besseli(nu,z)``                      the modified `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the first kind of order ``nu`` at ``z``  
-``besselix(nu,z)``                     ``besseli(nu,z) * exp(-abs(real(z)))``
 ``besselk(nu,z)``                      the modified `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the second kind of order ``nu`` at ``z``  
-``besselkx(nu,z)``                     ``besselk(nu,z) * exp(z)``
 ====================================== ==============================================================================
 
 .. |airylist| replace:: ``airy(z)``, ``airyai(z)``, ``airy(0,z)``
