@@ -240,6 +240,8 @@ end
 function readdlm_string(sbuff::String, dlm::Char, T::Type, eol::Char, auto::Bool, optsd::Dict)
     ign_empty = (dlm == invalid_dlm)
     quotes = get(optsd, :quotes, true)
+    comments = get(optsd, :comments, true)
+    comment_char = get(optsd, :comment_char, '#')
     dims = get(optsd, :dims, nothing)
     has_header = get(optsd, :has_header, false)
 
@@ -247,7 +249,7 @@ function readdlm_string(sbuff::String, dlm::Char, T::Type, eol::Char, auto::Bool
 
     for retry in 1:2
         try
-            dims = dlm_parse(sbuff, eol, dlm, '"', ign_empty, quotes, offset_handler)
+            dims = dlm_parse(sbuff, eol, dlm, '"', comment_char, ign_empty, quotes, comments, offset_handler)
             break
         catch ex
             if isa(ex, TypeError) && (ex.func == :store_cell)
@@ -270,10 +272,10 @@ function readdlm_string(sbuff::String, dlm::Char, T::Type, eol::Char, auto::Bool
     return readdlm_string(sbuff, dlm, T, eol, auto, optsd)
 end
 
-const valid_opts = [:has_header, :ignore_invalid_chars, :use_mmap, :quotes, :dims]
-const valid_opt_types = [Bool, Bool, Bool, Bool, NTuple{2,Integer}]
+const valid_opts = [:has_header, :ignore_invalid_chars, :use_mmap, :quotes, :comments, :dims, :comment_char]
+const valid_opt_types = [Bool, Bool, Bool, Bool, Bool, NTuple{2,Integer}, Char]
 function val_opts(opts)
-    d = Dict{Symbol,Union(Bool,NTuple{2,Integer})}()
+    d = Dict{Symbol,Union(Bool,NTuple{2,Integer},Char)}()
     for opt in opts
         !in(opt[1], valid_opts) && error("unknown option $(opt[1])")
         opt_typ = valid_opt_types[findfirst(valid_opts, opt[1])]
@@ -315,15 +317,15 @@ colval{T<:Char, S<:String}(sval::S, cells::Array{T,2}, row::Int, col::Int, tmp64
 colval{S<:String}(sval::S, cells::Array, row::Int, col::Int, tmp64::Array{Float64,1}) = true
 
 
-dlm_parse(s::ASCIIString, eol::Char, dlm::Char, qchar::Char, ign_adj_dlm::Bool, allow_quote::Bool, dh::DLMHandler) = dlm_parse(s.data, uint8(eol), uint8(dlm), uint8(qchar), ign_adj_dlm, allow_quote, dh)
-function dlm_parse{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, ign_adj_dlm::Bool, allow_quote::Bool, dh::DLMHandler)
-    qascii = !allow_quote || (D <: Uint8) || isascii(qchar)
-    (T <: UTF8String) && isascii(eol) && isascii(dlm) && qascii && (return dlm_parse(dbuff.data, uint8(eol), uint8(dlm), uint8(qchar), ign_adj_dlm, allow_quote, dh))
+dlm_parse(s::ASCIIString, eol::Char, dlm::Char, qchar::Char, cchar::Char, ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool, dh::DLMHandler) = dlm_parse(s.data, uint8(eol), uint8(dlm), uint8(qchar), uint8(cchar), ign_adj_dlm, allow_quote, allow_comments, dh)
+function dlm_parse{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, cchar::D, ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool, dh::DLMHandler)
+    all_ascii = (D <: Uint8) || (isascii(eol) && isascii(dlm) && (!allow_quote || isascii(qchar)) && (!allow_comments || isascii(cchar)))
+    (T <: UTF8String) && all_ascii && (return dlm_parse(dbuff.data, uint8(eol), uint8(dlm), uint8(qchar), uint8(cchar), ign_adj_dlm, allow_quote, allow_comments, dh))
     ncols = nrows = col = 0
     is_default_dlm = (dlm == convert(D, invalid_dlm))
     error_str = ""
-    state = 0   # 0: begin field, 1: quoted field, 2: unquoted field, 3: second quote (could either be end of field or escape character)
-    is_eol = is_dlm = is_quote = expct_col = false
+    state = 0   # 0: begin field, 1: quoted field, 2: unquoted field, 3: second quote (could either be end of field or escape character), 4: comment
+    is_eol = is_dlm = is_cr = is_quote = is_comment = expct_col = false
     idx = 1
     try
         slen = sizeof(dbuff)
@@ -331,10 +333,17 @@ function dlm_parse{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, ign_adj_dlm::Bool, a
         was_cr = false
         while idx <= slen
             val,idx = next(dbuff, idx)
-            is_eol = (val == eol)
-            is_cr = (eol == '\n') && (val == '\r')
-            is_dlm = is_eol ? false : is_default_dlm ? in(val, _default_delims) : (val == dlm)
-            is_quote = (val == qchar)
+            if (is_eol = (val == eol))
+                is_dlm = is_comment = is_cr = is_quote = false
+            elseif (is_dlm = (is_default_dlm ? in(val, _default_delims) : (val == dlm)))
+                is_comment = is_cr = is_quote = false
+            elseif (is_quote = (val == qchar))
+                is_comment = is_cr = false
+            elseif (is_comment = (val == cchar))
+                is_cr = false
+            else
+                is_cr = (eol == '\n') && (val == '\r')
+            end
 
             if 2 == state   # unquoted field
                 if is_dlm
@@ -351,9 +360,21 @@ function dlm_parse{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, ign_adj_dlm::Bool, a
                     ncols = max(ncols, col)
                     col = 0
                     state = 0
+                elseif (is_comment && allow_comments)
+                    nrows += 1
+                    col += 1
+                    store_cell(dh, nrows, col, false, col_start_idx, idx - 2)
+                    ncols = max(ncols, col)
+                    col = 0
+                    state = 4
                 end
             elseif 1 == state   # quoted field
                 is_quote && (state = 3)
+            elseif 4 == state   # comment line
+                if is_eol
+                    col_start_idx = idx
+                    state = 0
+                end
             elseif 0 == state   # begin field
                 if is_quote
                     state = (allow_quote && !was_cr) ? 1 : 2
@@ -375,6 +396,18 @@ function dlm_parse{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, ign_adj_dlm::Bool, a
                     ncols = max(ncols, col)
                     col = 0
                     expct_col = false
+                elseif is_comment && allow_comments
+                    if col > 0
+                        nrows += 1
+                        if expct_col
+                            col += 1
+                            store_cell(dh, nrows, col, false, col_start_idx, idx - 2)
+                        end
+                        ncols = max(ncols, col)
+                        col = 0
+                    end
+                    expct_col = false
+                    state = 4
                 elseif !is_cr
                     state = 2
                     expct_col = false
@@ -396,6 +429,13 @@ function dlm_parse{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, ign_adj_dlm::Bool, a
                     ncols = max(ncols, col)
                     col = 0
                     state = 0
+                elseif is_comment && allow_comments && !was_cr
+                    nrows += 1
+                    col += 1
+                    store_cell(dh, nrows, col, true, col_start_idx, idx - 2)
+                    ncols = max(ncols, col)
+                    col = 0
+                    state = 4
                 elseif (is_cr && was_cr) || !is_cr
                     error_str = escape_string("unexpected character '$(char(val))' after quoted field at row $(nrows+1) column $(col+1)")
                     break

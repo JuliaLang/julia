@@ -1812,7 +1812,7 @@ Text I/O
 
    Create an iterable object that will yield each line from a stream.
 
-.. function:: readdlm(source, delim::Char, T::Type, eol::Char; has_header=false, use_mmap=true, ignore_invalid_chars=false, quotes=true, dims)
+.. function:: readdlm(source, delim::Char, T::Type, eol::Char; has_header=false, use_mmap=true, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
 
    Read a matrix from the source where each line (separated by ``eol``) gives one row, with elements separated by the given delimeter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source. 
 
@@ -1827,6 +1827,8 @@ Text I/O
    If ``quotes`` is ``true``, column enclosed within double-quote (``) characters are allowed to contain new lines and column delimiters. Double-quote characters within a quoted field must be escaped with another double-quote.
 
    Specifying ``dims`` as a tuple of the expected rows and columns (including header, if any) may speed up reading of large files.
+
+   If ``comments`` is ``true``, lines beginning with ``comment_char`` and text following ``comment_char`` in any line are ignored.
 
 .. function:: readdlm(source, delim::Char, eol::Char; options...)
 
