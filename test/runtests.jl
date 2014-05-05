@@ -4,7 +4,7 @@ testnames = [
     "collections", "hashing", "remote", "iobuffer", "arrayops", "simdloop",
     "blas", "fft", "dsp", "sparse", "bitarray", "random", "math",
     "functional", "bigint", "sorting", "statistics", "spawn",
-    "priorityqueue", "arpack", "file", "suitesparse", "version",
+    "backtrace", "priorityqueue", "arpack", "file", "suitesparse", "version",
     "resolve", "pollfd", "mpfr", "broadcast", "complex", "socket",
     "floatapprox", "readdlm", "regex", "float16", "combinatorics",
     "sysinfo", "rounding", "ranges", "mod2pi", "euler", "show",
