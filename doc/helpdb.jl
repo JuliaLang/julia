@@ -2785,6 +2785,9 @@
    Double-quote characters within a quoted field must be escaped with
    another double-quote.
 
+   Specifying \"dims\" as a tuple of the expected rows and columns 
+   (including header, if any) may speed up reading of large files.
+
 "),
 
 ("Base","readdlm","readdlm(source, delim::Char, eol::Char; options...)
