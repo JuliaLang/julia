@@ -1925,40 +1925,29 @@ function effect_free(e::ANY, sv, allow_volatile::Bool)
                                 return false
                             end
                         end
-                    end
-                else
-                    # arguments must also be effect_free
-                    for a in ea
-                        if !effect_free(a,sv,allow_volatile)
-                            return false
-                        end
+                        return true
                     end
                 end
-                return true
             end
         elseif e.head === :new
-            first = !allow_volatile
-            for a in ea
-                if first
-                    first = false
-                    typ = exprtype(a)
-                    if !isType(typ) || !isa((typ::Type).parameters[1],DataType) || ((typ::Type).parameters[1]::DataType).mutable
-                        return false
-                    end
-                end
-                if !effect_free(a,sv,allow_volatile)
+            if !allow_volatile
+                a = ea[1]
+                typ = exprtype(a)
+                if !isType(typ) || !isa((typ::Type).parameters[1],DataType) || ((typ::Type).parameters[1]::DataType).mutable
                     return false
                 end
             end
-            return true
         elseif e.head === :return
-            for a in ea
-                if !effect_free(a,sv,allow_volatile)
-                    return false
-                end
-            end
-            return true
+            # pass
+        else
+            return false
         end
+        for a in ea
+            if !effect_free(a,sv,allow_volatile)
+                return false
+            end
+        end
+        return true
     end
     return false
 end
