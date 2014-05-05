@@ -664,6 +664,9 @@ function besselk(nu::Real, x::FloatingPoint)
     if x < 0
         throw(DomainError())
     end
+    if x == 0
+        return oftype(x, Inf)
+    end
     oftype(x, real(besselk(float64(nu), complex128(x))))
 end
 @vectorize_2arg Number besselk
