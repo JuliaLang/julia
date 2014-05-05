@@ -328,7 +328,18 @@ Dict{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V}) = Dict{K,V}(ks,vs)
 Dict(ks, vs) = Dict{Any,Any}(ks, vs)
 
 # conversion between Dict types
-convert{K,V}(::Type{Dict{K,V}},d::Dict) = Dict{K,V}(d)
+function convert{K,V}(::Type{Dict{K,V}},d::Dict)
+    h = Dict{K,V}()
+    for (k,v) in d
+        ck = convert(K,k)
+        if !haskey(h,ck)
+            h[ck] = convert(V,v)
+        else
+            error("key collision during dictionary conversion")
+        end
+    end
+    return h
+end
 convert{K,V}(::Type{Dict{K,V}},d::Dict{K,V}) = d
 
 # syntax entry points
