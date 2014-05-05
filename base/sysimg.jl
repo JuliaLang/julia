@@ -217,6 +217,8 @@ include("sparse.jl")
 importall .SparseMatrix
 include("linalg.jl")
 importall .LinAlg
+const ⋅ = dot
+const × = cross
 include("broadcast.jl")
 importall .Broadcast
 
