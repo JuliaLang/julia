@@ -39,10 +39,9 @@ New language features
   
     | Precedence class | Operators (with synonyms, if any)
     | ---------------- | ---------------------------------
-    |   ==             |  ≥ (>=), ≤ (<=), ≡ (===), ≠ (!=), ≢ (!==), .≥ (.>=), .≤ (.<=), .!= (.≠), ∈ (`in`) ∉ (`x, y->!in(x, y)`) ∋ (`x, y->in(y, x)`) ∌ (`x, y->!in(y, x)`) ⊆ (`issubset`) ⊈ (`x, y -> !issubset(x, y)`) ⊂ ⊄ ⊊ |
-    |   +              | ⊕ ⊖ ⊞ ⊟ ∪ (`union`) ∨ △ |
-    |   *              | ÷ (`div`) ∣ ∤ ⋅ (`dot`) × (`cross`) ∩ (`intersect`) ∧ ⊗ ⊘ ⊙ ⊚ ⊛ ⦸ ⦼ ⊠ ⊡ |
-    |   //             | ⫽ (`//`) |
+    |   ==             |  ≥ (>=) ≤ (<=) ≡ (===) ≠ (!=) ≢ (!==) .≥ (.>=) .≤ (.<=) .!= (.≠) ∈ (`in`) ∉ (`(x,y)->!in(x, y)`) ∋ (`(x,y)->in(y, x)`) ∌ (`(x,y)->!in(y, x)`) ⊆ (`issubset`) ⊈ (`(x,y)->!issubset(x, y)`) ⊊ (`(x,y)->x⊆y && x!=y`) ⊂ ⊄ |
+    |   +              | ⊕ ⊖ ⊞ ⊟ ∪ (`union`) ∨ ⊔ |
+    |   *              | ÷ (`div`) ⋅ (`dot`) ∘ × (`cross`) ∩ (`intersect`) ∧ ⊓ ⊗ ⊘ ⊙ ⊚ ⊛ ⊠ ⊡ |
 
   * Support `√` as synonym for `sqrt` ([#6582])
 
