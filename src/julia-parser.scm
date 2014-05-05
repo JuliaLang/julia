@@ -83,8 +83,8 @@
 ; operators that are special forms, not function names
 (define syntactic-operators
   '(= := += -= *= /= //= .//= .*= ./= |\\=| |.\\=| ^= .^= %= .%= |\|=| &= $= =>
-      <<= >>= >>>= -> --> |\|\|| && |::| |.| ... |.+=| |.-=|))
-(define syntactic-unary-operators '($ &))
+      <<= >>= >>>= -> --> |\|\|| && |.| ... |.+=| |.-=|))
+(define syntactic-unary-operators '($ & |::|))
 
 (define reserved-words '(begin while if for try return break continue
 			 function macro quote let local global const
@@ -466,7 +466,7 @@
      (if (not (memq t ,ops))
 	 ex
 	 (begin (take-token ,s)
-		(if (or (syntactic-op? t) (eq? t 'in))
+		(if (or (syntactic-op? t) (eq? t 'in) (eq? t '|::|))
 		    (loop (list t ex (,down ,s)) (peek-token ,s))
 		    (loop (list 'call t ex (,down ,s)) (peek-token ,s)))))))
 
@@ -821,10 +821,7 @@
   (parse-factor-h s parse-decl (prec-ops 12)))
 
 (define (parse-decl s)
-  (let loop ((ex (if (eq? (peek-token s) '|::|)
-		     (begin (take-token s)
-			    `(|::| ,(parse-call s)))
-		     (parse-call s))))
+  (let loop ((ex (parse-call s)))
     (let ((t (peek-token s)))
       (case t
 	((|::|) (take-token s)
@@ -849,8 +846,8 @@
     (if (syntactic-unary-op? op)
 	(begin (take-token s)
 	       (cond ((closing-token? (peek-token s))  op)
-		     ((eq? op '&)  (list op (parse-call s)))
-		     (else         (list op (parse-atom s)))))
+		     ((memq op '(& |::|))  (list op (parse-call s)))
+		     (else                 (list op (parse-atom s)))))
 	(parse-atom s))))
 
 ;; parse function call, indexing, dot, and transpose expressions
