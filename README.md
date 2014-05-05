@@ -75,6 +75,12 @@ Now you should be able to run Julia like this:
 
 If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation. (Errors related to libraries might be caused by old, incompatible libraries sitting around in your PATH. In that case, try moving the `julia` directory earlier in the PATH).
 
+Your first test of Julia should be to determine whether your
+build is working properly. From the UNIX/Windows command prompt inside
+the julia source directory, type `make testall`. You should see output
+that lists a series of tests being run; if they complete without
+error, you should be in good shape to start using Julia.
+
 You can read about [getting started](http://julialang.org/manual/getting-started) in the manual.
 
 If you are building a Julia package for distribution on Linux, OS X,
