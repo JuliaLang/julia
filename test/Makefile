@@ -7,7 +7,7 @@ TESTS = all core keywordargs numbers strings unicode collections hashing	\
 	git pkg resolve suitesparse complex version pollfd mpfr	broadcast       \
 	socket floatapprox priorityqueue readdlm regex float16 combinatorics    \
 	sysinfo rounding ranges mod2pi euler show linalg1 linalg2 linalg3 lineedit      \
-	replcompletions
+	replcompletions backtrace
 
 default: all
 
