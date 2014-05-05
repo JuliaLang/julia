@@ -969,8 +969,6 @@ function start_worker(out::IO)
     #close(STDIN)
 
     disable_threaded_libs()
-
-    ccall(:jl_install_sigint_handler, Void, ())
     disable_nagle(sock)
 
     try

@@ -279,6 +279,7 @@ function process_options(args::Vector{UTF8String})
             repl = false
             # remove julia's arguments
             splice!(ARGS, 1:length(ARGS), args[i+1:end])
+            ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
             include(args[i])
             break
         else
@@ -382,7 +383,6 @@ function _start()
                 quit()
             end
             quiet || REPL.banner(term,term)
-            ccall(:jl_install_sigint_handler, Void, ())
             local repl
             if term.term_type == "dumb"
                 repl = REPL.BasicREPL(term)

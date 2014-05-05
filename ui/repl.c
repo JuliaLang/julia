@@ -267,7 +267,7 @@ int true_main(int argc, char *argv[])
             jl_arrayset(args, s, i);
         }
     }
-    
+
     // run program if specified, otherwise enter REPL
     if (program) {
         int ret = exec_program();
