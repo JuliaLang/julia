@@ -53,7 +53,7 @@ HEADERS = julia.h julia_internal.h options.h $(wildcard support/*.h) $(LIBUV_INC
 %.o: %.cpp $(HEADERS)
 	@$(call PRINT_CC, $(CXX) $(call exec,$(LLVM_CONFIG) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(SHIPFLAGS) -c $< -o $@)
 %.do: %.cpp $(HEADERS)
-	@$(call PRINT_CC, $(CXX) $(call exec,$(LLVM_CONFIG) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@) -std=c++0x -stdlib=libc++
+	@$(call PRINT_CC, $(CXX) $(call exec,$(LLVM_CONFIG) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 ast.o ast.do: julia_flisp.boot.inc flisp/*.h
 
