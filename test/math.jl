@@ -68,13 +68,11 @@ end
 @test_approx_eq airybiprime(1.8) 2.98554005084659907283
 @test_throws Base.Math.AmosException airy(200im)
 @test_throws Base.Math.AmosException airybi(200)
-
-# airyx
 z = 1.8 + 1.0im
-@test_approx_eq airyx(0, z) airy(0, z) * exp(2/3 * z * sqrt(z))
-@test_approx_eq airyx(1, z) airy(1, z) * exp(2/3 * z * sqrt(z))
-@test_approx_eq airyx(2, z) airy(2, z) * exp(-abs(real(2/3 * z * sqrt(z))))
-@test_approx_eq airyx(3, z) airy(3, z) * exp(-abs(real(2/3 * z * sqrt(z))))
+@test_approx_eq airy(0, z, true) airy(0, z) * exp(2/3 * z * sqrt(z))
+@test_approx_eq airy(1, z, true) airy(1, z) * exp(2/3 * z * sqrt(z))
+@test_approx_eq airy(2, z, true) airy(2, z) * exp(-abs(real(2/3 * z * sqrt(z))))
+@test_approx_eq airy(3, z, true) airy(3, z) * exp(-abs(real(2/3 * z * sqrt(z))))
 
 # besselh
 true_h133 = 0.30906272225525164362 - 0.53854161610503161800im
@@ -146,22 +144,22 @@ for f in (besselj,bessely,besseli,besselk,hankelh1,hankelh2)
     @test_approx_eq f(0,1) f(0,complex64(1))
 end
 
-# bessel{h,i,j,k,y}x
+# scaled bessel[ijky] and hankelh[12]
 for x in (1.0, 0.0, -1.0), y in (1.0, 0.0, -1.0), nu in (1.0, 0.0, -1.0)
     z = complex128(x + y * im)
-    z == zero(z) || @test_approx_eq besselhx(nu, 1, z) besselh(nu, 1, z) * exp(-z * im)
-    z == zero(z) || @test_approx_eq besselhx(nu, 2, z) besselh(nu, 2, z) * exp(z * im)
-    (nu < 0 && z == zero(z)) || @test_approx_eq besselix(nu, z) besseli(nu, z) * exp(-abs(real(z)))
-    (nu < 0 && z == zero(z)) || @test_approx_eq besseljx(nu, z) besselj(nu, z) * exp(-abs(imag(z)))
-    z == zero(z) || @test_approx_eq besselkx(nu, z) besselk(nu, z) * exp(z)
-    z == zero(z) || @test_approx_eq besselyx(nu, z) bessely(nu, z) * exp(-abs(imag(z)))
+    z == zero(z) || @test_approx_eq hankelh1(nu, z, true) hankelh1(nu, z) * exp(-z * im)
+    z == zero(z) || @test_approx_eq hankelh2(nu, z, true) hankelh2(nu, z) * exp(z * im)
+    (nu < 0 && z == zero(z)) || @test_approx_eq besseli(nu, z, true) besseli(nu, z) * exp(-abs(real(z)))
+    (nu < 0 && z == zero(z)) || @test_approx_eq besselj(nu, z, true) besselj(nu, z) * exp(-abs(imag(z)))
+    z == zero(z) || @test_approx_eq besselk(nu, z, true) besselk(nu, z) * exp(z)
+    z == zero(z) || @test_approx_eq bessely(nu, z, true) bessely(nu, z) * exp(-abs(imag(z)))
 end
-@test_throws Base.Math.AmosException besselhx(1, 1, 0)
-@test_throws Base.Math.AmosException besselhx(1, 2, 0)
-@test_throws Base.Math.AmosException besselix(-1, 0)
-@test_throws Base.Math.AmosException besseljx(-1, 0)
-@test_throws Base.Math.AmosException besselkx(1, 0)
-@test_throws Base.Math.AmosException besselyx(1, 0)
+@test_throws Base.Math.AmosException hankelh1(1, 0, true)
+@test_throws Base.Math.AmosException hankelh2(1, 0, true)
+@test_throws Base.Math.AmosException besseli(-1, 0, true)
+@test_throws Base.Math.AmosException besselj(-1, 0, true)
+@test_throws Base.Math.AmosException besselk(1, 0, true)
+@test_throws Base.Math.AmosException bessely(1, 0, true)
 
 # beta, lbeta
 @test_approx_eq beta(3/2,7/2) 5π/128

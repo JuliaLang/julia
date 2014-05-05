@@ -12,10 +12,9 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        ceil, floor, trunc, round, significand, 
        lgamma, hypot, gamma, lfact, max, min, minmax, ldexp, frexp,
        clamp, modf, ^, mod2pi,
-       airy, airyai, airyprime, airyaiprime, airybi, airybiprime, airyx,
+       airy, airyai, airyprime, airyaiprime, airybi, airybiprime,
        besselj0, besselj1, besselj, bessely0, bessely1, bessely,
        hankelh1, hankelh2, besseli, besselk, besselh,
-       besselhx, besselix, besseljx, besselkx, besselyx,
        beta, lbeta, eta, zeta, polygamma, invdigamma, digamma, trigamma,
        erfinv, erfcinv
 
@@ -513,7 +512,7 @@ airy(k::Number, z::Complex64) = complex64(airy(k, complex128(z)))
 airy(k::Number, z::Complex) = airy(convert(Int,k), complex128(z))
 @vectorize_2arg Number airy
 
-function airyx(k::Int, z::Complex128)
+function _airyx(k::Int, z::Complex128)
     id = int32(k==1 || k==3)
     if k == 0 || k == 1
         return _airy(z, id, int32(2))
@@ -524,14 +523,18 @@ function airyx(k::Int, z::Complex128)
     end
 end
 
-airyx(z) = airyx(0,z)
-@vectorize_1arg Number airyx
+_airyx(z) = _airyx(0,z)
+@vectorize_1arg Number _airyx
 
-airyx(k::Number, x::FloatingPoint) = oftype(x, real(airyx(k, complex(x))))
-airyx(k::Number, x::Real) = airyx(k, float(x))
-airyx(k::Number, z::Complex64) = complex64(airyx(k, complex128(z)))
-airyx(k::Number, z::Complex) = airyx(convert(Int,k), complex128(z))
-@vectorize_2arg Number airyx
+_airyx(k::Number, x::FloatingPoint) = oftype(x, real(_airyx(k, complex(x))))
+_airyx(k::Number, x::Real) = _airyx(k, float(x))
+_airyx(k::Number, z::Complex64) = complex64(_airyx(k, complex128(z)))
+_airyx(k::Number, z::Complex) = _airyx(convert(Int,k), complex128(z))
+@vectorize_2arg Number _airyx
+
+airy{T1 <: Number, T2 <: Number}(
+    k::Union(T1, AbstractArray{T1}), x::Union(T2, AbstractArray{T2}),
+    scaled::Bool) = scaled ? _airyx(k, x) : airy(k, x)
 
 const cy = Array(Float64,2)
 const ae = Array(Int32,2)
@@ -617,7 +620,7 @@ function besselh(nu::Float64, k::Integer, z::Complex128)
     return _besselh(nu,int32(k),z,int32(1))
 end
 
-function besselhx(nu::Float64, k::Integer, z::Complex128)
+function _besselhx(nu::Float64, k::Integer, z::Complex128)
     if nu < 0
         s = (k == 1) ? 1 : -1
         return _besselh(-nu,int32(k),z,int32(2)) * complex(cospi(nu),-s*sinpi(nu))
@@ -633,7 +636,7 @@ function besseli(nu::Float64, z::Complex128)
     end
 end
 
-function besselix(nu::Float64, z::Complex128)
+function _besselix(nu::Float64, z::Complex128)
     if nu < 0
         return _besseli(-nu,z,int32(2)) - 2_besselk(-nu,z,int32(2))*exp(-abs(real(z))-z)*sinpi(nu)/pi
     else
@@ -657,7 +660,7 @@ besselj(nu::Integer, x::Float32) = typemin(Int32) <= nu <= typemax(Int32) ?
     ccall((:jnf, libm), Float32, (Cint, Float32), nu, x) :
     besselj(float64(nu), x)
 
-function besseljx(nu::Float64, z::Complex128)
+function _besseljx(nu::Float64, z::Complex128)
     if nu < 0
         return _besselj(-nu,z,int32(2))*cospi(nu) + _bessely(-nu,z,int32(2))*sinpi(nu)
     else
@@ -667,7 +670,7 @@ end
 
 besselk(nu::Float64, z::Complex128) = _besselk(abs(nu), z, int32(1))
 
-besselkx(nu::Float64, z::Complex128) = _besselk(abs(nu), z, int32(2))
+_besselkx(nu::Float64, z::Complex128) = _besselk(abs(nu), z, int32(2))
 
 function bessely(nu::Float64, z::Complex128)
     if nu < 0
@@ -677,7 +680,7 @@ function bessely(nu::Float64, z::Complex128)
     end
 end
 
-function besselyx(nu::Float64, z::Complex128)
+function _besselyx(nu::Float64, z::Complex128)
     if nu < 0
         return _bessely(-nu,z,int32(2))*cospi(nu) - _besselj(-nu,z,int32(2))*sinpi(nu) 
     else
@@ -691,11 +694,29 @@ besselh(nu::Real, k::Integer, z::Complex) = besselh(float64(nu), k, complex128(z
 besselh(nu::Real, k::Integer, x::Real) = besselh(float64(nu), k, complex128(x))
 @vectorize_2arg Number besselh
 
-besselhx(nu, z) = besselhx(nu, 1, z)
-besselhx(nu::Real, k::Integer, z::Complex64) = complex64(besselhx(float64(nu), k, complex128(z)))
-besselhx(nu::Real, k::Integer, z::Complex) = besselhx(float64(nu), k, complex128(z))
-besselhx(nu::Real, k::Integer, x::Real) = besselhx(float64(nu), k, complex128(x))
-@vectorize_2arg Number besselhx
+hankelh1(nu, z) = besselh(nu, 1, z)
+@vectorize_2arg Number hankelh1
+
+hankelh2(nu, z) = besselh(nu, 2, z)
+@vectorize_2arg Number hankelh2
+
+_besselhx(nu::Real, k::Integer, z::Complex64) = complex64(_besselhx(float64(nu), k, complex128(z)))
+_besselhx(nu::Real, k::Integer, z::Complex) = _besselhx(float64(nu), k, complex128(z))
+_besselhx(nu::Real, k::Integer, x::Real) = _besselhx(float64(nu), k, complex128(x))
+
+_hankelh1x(nu, z) = _besselhx(nu, 1, z)
+@vectorize_2arg Number _hankelh1x
+
+hankelh1{T1 <: Number, T2 <: Number}(
+    k::Union(T1, AbstractArray{T1}), x::Union(T2, AbstractArray{T2}),
+    scaled::Bool) = scaled ? _hankelh1x(k, x) : hankelh1(k, x)
+
+_hankelh2x(nu, z) = _besselhx(nu, 2, z)
+@vectorize_2arg Number _hankelh2x
+
+hankelh2{T1 <: Number, T2 <: Number}(
+    k::Union(T1, AbstractArray{T1}), x::Union(T2, AbstractArray{T2}),
+    scaled::Bool) = scaled ? _hankelh2x(k, x) : hankelh2(k, x)
 
 function besseli(nu::Real, x::FloatingPoint)
     if x < 0 && !isinteger(nu)
@@ -704,11 +725,11 @@ function besseli(nu::Real, x::FloatingPoint)
     oftype(x, real(besseli(float64(nu), complex128(x))))
 end
 
-function besselix(nu::Real, x::FloatingPoint)
+function _besselix(nu::Real, x::FloatingPoint)
     if x < 0 && !isinteger(nu)
         throw(DomainError())
     end
-    oftype(x, real(besselix(float64(nu), complex128(x))))
+    oftype(x, real(_besselix(float64(nu), complex128(x))))
 end
 
 function besselj(nu::FloatingPoint, x::FloatingPoint)
@@ -722,11 +743,11 @@ function besselj(nu::FloatingPoint, x::FloatingPoint)
     oftype(x, real(besselj(float64(nu), complex128(x))))
 end
 
-function besseljx(nu::Real, x::FloatingPoint)
+function _besseljx(nu::Real, x::FloatingPoint)
     if x < 0 && !isinteger(nu)
         throw(DomainError())
     end
-    oftype(x, real(besseljx(float64(nu), complex128(x))))
+    oftype(x, real(_besseljx(float64(nu), complex128(x))))
 end
 
 function besselk(nu::Real, x::FloatingPoint)
@@ -736,11 +757,11 @@ function besselk(nu::Real, x::FloatingPoint)
     oftype(x, real(besselk(float64(nu), complex128(x))))
 end
 
-function besselkx(nu::Real, x::FloatingPoint)
+function _besselkx(nu::Real, x::FloatingPoint)
     if x < 0
         throw(DomainError())
     end
-    oftype(x, real(besselkx(float64(nu), complex128(x))))
+    oftype(x, real(_besselkx(float64(nu), complex128(x))))
 end
 
 function bessely(nu::Real, x::FloatingPoint)
@@ -765,28 +786,29 @@ function bessely(nu::Integer, x::Float32)
     return ccall((:ynf, libm), Float32, (Cint, Float32), nu, x)
 end
 
-function besselyx(nu::Real, x::FloatingPoint)
+function _besselyx(nu::Real, x::FloatingPoint)
     if x < 0
         throw(DomainError())
     end
-    oftype(x, real(besselyx(float64(nu), complex128(x))))
+    oftype(x, real(_besselyx(float64(nu), complex128(x))))
 end
 
-for f in ("i", "j", "k", "y"), g in ("", "x")
-    bfn = symbol(string("bessel", f, g))
+for f in ("i", "j", "k", "y")
+    bfns = (symbol(string("bessel", f)), symbol(string("_bessel", f, "x")))
+    for bfn in bfns
+        @eval begin
+            $bfn(nu::Real, z::Complex64) = complex64($bfn(float64(nu), complex128(z)))
+            $bfn(nu::Real, z::Complex) = $bfn(float64(nu), complex128(z))
+            $bfn(nu::Real, x::Integer) = $bfn(nu, float64(x))
+            @vectorize_2arg Number $bfn
+        end
+    end
     @eval begin
-        $bfn(nu::Real, z::Complex64) = complex64($bfn(float64(nu), complex128(z)))
-        $bfn(nu::Real, z::Complex) = $bfn(float64(nu), complex128(z))
-        $bfn(nu::Real, x::Integer) = $bfn(nu, float64(x))
-        @vectorize_2arg Number $bfn
+        $(bfns[1]){T1 <: Number, T2 <: Number}(
+            nu::Union(T1, AbstractArray{T1}), z::Union(T2, AbstractArray{T2}),
+            scaled::Bool) = scaled ? $(bfns[2])(nu, z) : $(bfns[1])(nu, z)
     end
 end
-
-hankelh1(nu, z) = besselh(nu, 1, z)
-@vectorize_2arg Number hankelh1
-
-hankelh2(nu, z) = besselh(nu, 2, z)
-@vectorize_2arg Number hankelh2
 
 
 function angle_restrict_symm(theta)
