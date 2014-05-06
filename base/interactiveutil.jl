@@ -319,6 +319,7 @@ end
     if res != 0
         error("automatic download failed (error: $res): $url")
     end
+    filename
 end
 
 function download(url::String)
