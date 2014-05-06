@@ -185,6 +185,8 @@ Library improvements
 
       * `eigs(A, sigma)` now uses shift-and-invert for nonzero shifts `sigma` and inverse iteration for `which="SM"`. If `sigma==nothing` (the new default), computes ordinary (forward) iterations. ([#5776])
 
+      * `sprand` is faster, and whether any entry is nonzero is now determined independently with the specified probability ([#6726]).
+
     * Dense linear algebra for special matrix types
 
       * Interconversions between the special matrix types `Diagonal`, `Bidiagonal`,
@@ -262,6 +264,8 @@ Library improvements
 
   * Extended API for ``cov`` and ``cor``, which accept keyword arguments ``vardim``, 
     ``corrected``, and ``mean`` ([#6273])
+
+  * New functions `randsubseq` and `randsubseq!` to create a random subsequence of an array ([#6726])
 
 
 Deprecated or removed
