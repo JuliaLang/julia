@@ -238,3 +238,19 @@ for op in (:sin, :cos, :tan, :iceil, :ifloor, :ceil, :floor, :abs, :abs2)
         @test ($op)(afull) == full($(op)(a))
     end
 end
+
+# setindex tests
+a = spzeros(Int, 10, 10)
+@test nfilled(a) == 0
+a[1,:] = 1
+@test nfilled(a) == 10
+@test a[1,:] == sparse(ones(Int,1,10))
+a[:,2] = 2
+@test nfilled(a) == 19
+@test a[:,2] == 2*sparse(ones(Int,10,1))
+
+a[1,:] = 1:10
+@test a[1,:] == sparse([1:10]')
+a[:,2] = 1:10
+@test a[:,2] == sparse([1:10])
+
