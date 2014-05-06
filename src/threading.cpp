@@ -10,10 +10,17 @@ extern jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types)
 extern jl_tuple_t *arg_type_tuple(jl_value_t **args, size_t nargs);
 
 static uv_mutex_t global_mutex;
+static uv_mutex_t pgcstack_mutex;
+static int pgcstack_locked = 0;
+uv_mutex_t inference_mutex;
+uv_mutex_t cache_mutex;
 
 void jl_init_threading()
 {
   uv_mutex_init(&global_mutex);
+  uv_mutex_init(&pgcstack_mutex);
+  uv_mutex_init(&inference_mutex);
+  uv_mutex_init(&cache_mutex);
 }
 
 void jl_global_lock()
@@ -24,6 +31,25 @@ void jl_global_lock()
 void jl_global_unlock()
 {
   uv_mutex_unlock(&global_mutex);
+}
+
+void jl_pgcstack_lock(int* locked)
+{
+  if(!pgcstack_locked)
+  {
+    uv_mutex_lock(&pgcstack_mutex);
+    pgcstack_locked = 1;
+    *locked = 1;
+  }
+}
+
+void jl_pgcstack_unlock(int locked)
+{
+  if(locked)
+  {
+    pgcstack_locked = 0;
+    uv_mutex_unlock(&pgcstack_mutex);
+  }
 }
 
 void run_thread(void* t)

@@ -1005,35 +1005,43 @@ typedef struct _jl_gcframe_t {
 // x = f(); y = g(); foo(x, y)
 
 extern DLLEXPORT jl_gcframe_t *jl_pgcstack;
+DLLEXPORT void jl_pgcstack_lock(int* locked); 
+DLLEXPORT void jl_pgcstack_unlock(int locked); 
 
 #define JL_GC_PUSH(...)                                                   \
+  int _locked = 0; jl_pgcstack_lock(&_locked);                              \
   void *__gc_stkf[] = {(void*)((VA_NARG(__VA_ARGS__)<<1)|1), jl_pgcstack, \
                        __VA_ARGS__};                                      \
-  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
+  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;                                 \
 
 #define JL_GC_PUSH1(arg1)                                                 \
+  int _locked = 0; jl_pgcstack_lock(&_locked);                              \
   void *__gc_stkf[] = {(void*)3, jl_pgcstack, arg1};                      \
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 
 #define JL_GC_PUSH2(arg1, arg2)                                           \
+  int _locked = 0; jl_pgcstack_lock(&_locked);                              \
   void *__gc_stkf[] = {(void*)5, jl_pgcstack, arg1, arg2};                \
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 
 #define JL_GC_PUSH3(arg1, arg2, arg3)                                     \
+  int _locked = 0; jl_pgcstack_lock(&_locked);                              \
   void *__gc_stkf[] = {(void*)7, jl_pgcstack, arg1, arg2, arg3};          \
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 
 #define JL_GC_PUSH4(arg1, arg2, arg3, arg4)                               \
+  int _locked = 0; jl_pgcstack_lock(&_locked);                              \
   void *__gc_stkf[] = {(void*)9, jl_pgcstack, arg1, arg2, arg3, arg4};    \
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 
 #define JL_GC_PUSHARGS(rts_var,n)                               \
+  int _locked = 0; jl_pgcstack_lock(&_locked);                              \
   rts_var = ((jl_value_t**)alloca(((n)+2)*sizeof(jl_value_t*)))+2;    \
   ((void**)rts_var)[-2] = (void*)(((size_t)n)<<1);              \
   ((void**)rts_var)[-1] = jl_pgcstack;                          \
   jl_pgcstack = (jl_gcframe_t*)&(((void**)rts_var)[-2])
 
-#define JL_GC_POP() (jl_pgcstack = jl_pgcstack->prev)
+#define JL_GC_POP() jl_pgcstack = jl_pgcstack->prev; jl_pgcstack_unlock(_locked)
 
 void jl_gc_init(void);
 void jl_gc_setmark(jl_value_t *v);
