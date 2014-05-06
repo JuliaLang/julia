@@ -555,6 +555,8 @@ export
     promote_shape,
     randcycle,
     randperm,
+    randsubseq!,
+    randsubseq,
     range,
     reducedim,
     repmat,
