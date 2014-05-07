@@ -607,11 +607,23 @@ DLLEXPORT int jl_substrtod(char *str, size_t offset, int len, double *out)
     char *p;
     errno = 0;
     char *bstr = str+offset;
+    char *pend = bstr+len;
+    int err = 0;
+    if (!(*pend == '\0' || isspace(*pend) || *pend == ',')) {
+        // confusing data outside substring. must copy.
+        char *newstr = malloc(len+1);
+        memcpy(newstr, bstr, len);
+        newstr[len] = 0;
+        bstr = newstr;
+        pend = bstr+len;
+    }
     *out = strtod_c(bstr, &p);
-    if ((p == bstr) || (p != (bstr+len)) ||
+    if ((p == bstr) || (p != pend) ||
         (errno==ERANGE && (*out==0 || *out==HUGE_VAL || *out==-HUGE_VAL)))
-        return 1;
-    return 0;
+        err = 1;
+    if (bstr != str+offset)
+        free(bstr);
+    return err;
 }
 
 DLLEXPORT int jl_strtod(char *str, double *out)
@@ -640,16 +652,28 @@ DLLEXPORT int jl_substrtof(char *str, int offset, int len, float *out)
     char *p;
     errno = 0;
     char *bstr = str+offset;
+    char *pend = bstr+len;
+    int err = 0;
+    if (!(*pend == '\0' || isspace(*pend) || *pend == ',')) {
+        // confusing data outside substring. must copy.
+        char *newstr = malloc(len+1);
+        memcpy(newstr, bstr, len);
+        newstr[len] = 0;
+        bstr = newstr;
+        pend = bstr+len;
+    }
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
     *out = (float)strtod_c(bstr, &p);
 #else
     *out = strtof_c(bstr, &p);
 #endif
 
-    if ((p == bstr) || (p != (bstr+len)) ||
+    if ((p == bstr) || (p != pend) ||
         (errno==ERANGE && (*out==0 || *out==HUGE_VALF || *out==-HUGE_VALF)))
-        return 1;
-    return 0;
+        err = 1;
+    if (bstr != str+offset)
+        free(bstr);
+    return err;
 }
 
 DLLEXPORT int jl_strtof(char *str, float *out)

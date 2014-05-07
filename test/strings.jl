@@ -867,6 +867,11 @@ bin_val = hex2bytes("07bf")
 @test rsplit(RevString("ailuj"),'l') == {"ju","ia"}
 @test float64(RevString("64")) === 46.0
 
+# issue #6772
+@test float(SubString("10",1,1)) === 1.0
+@test float(SubString("1 0",1,1)) === 1.0
+@test float32(SubString("10",1,1)) === 1.0f0
+
 for T = (Uint8,Int8,Uint16,Int16,Uint32,Int32,Uint64,Int64,Uint128,Int128,BigInt),
     b = 2:62, _ = 1:10
     n = T != BigInt ? rand(T) : BigInt(rand(Int128))
