@@ -55,17 +55,17 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    Construct a sparse diagonal matrix. ``B`` is a tuple of vectors containing the diagonals and ``d`` is a tuple containing the positions of the diagonals. In the case the input contains only one diagonaly, ``B`` can be a vector (instead of a tuple) and ``d`` can be the diagonal position (instead of a tuple), defaulting to 0 (diagonal). Optionally, ``m`` and ``n`` specify the size of the resulting sparse matrix.
 
-.. function:: sprand(m,n,density[,rng])
+.. function:: sprand(m,n,p[,rng])
 
-   Create a random sparse matrix with the specified density. Nonzeros are sampled from the distribution specified by ``rng``. The uniform distribution is used in case ``rng`` is not specified.
+   Create a random ``m`` by ``n`` sparse matrix, in which the probability of any element being nonzero is independently given by ``p`` (and hence the mean density of nonzeros is also exactly ``p``). Nonzero values are sampled from the distribution specified by ``rng``. The uniform distribution is used in case ``rng`` is not specified.
 
-.. function:: sprandn(m,n,density)
+.. function:: sprandn(m,n,p)
 
-   Create a random sparse matrix of specified density with nonzeros sampled from the normal distribution.
+   Create a random ``m`` by ``n`` sparse matrix with the specified (independent) probability ``p`` of any entry being nonzero, where nonzero values are sampled from the normal distribution.
 
-.. function:: sprandbool(m,n,density)
+.. function:: sprandbool(m,n,p)
 
-   Create a random sparse boolean matrix with the specified density.
+   Create a random ``m`` by ``n`` sparse boolean matrix with the specified (independent) probability ``p`` of any entry being ``true``.
 
 .. function:: etree(A[, post])
 

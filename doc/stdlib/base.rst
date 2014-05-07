@@ -1798,7 +1798,7 @@ Text I/O
 
    Create an iterable object that will yield each line from a stream.
 
-.. function:: readdlm(source, delim::Char, T::Type, eol::Char; has_header=false, use_mmap=true, ignore_invalid_chars=false, quotes=true)
+.. function:: readdlm(source, delim::Char, T::Type, eol::Char; has_header=false, use_mmap=true, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
 
    Read a matrix from the source where each line (separated by ``eol``) gives one row, with elements separated by the given delimeter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source. 
 
@@ -1811,6 +1811,10 @@ Text I/O
    If ``ignore_invalid_chars`` is ``true``, bytes in ``source`` with invalid character encoding will be ignored. Otherwise an error is thrown indicating the offending character position.
 
    If ``quotes`` is ``true``, column enclosed within double-quote (``) characters are allowed to contain new lines and column delimiters. Double-quote characters within a quoted field must be escaped with another double-quote.
+
+   Specifying ``dims`` as a tuple of the expected rows and columns (including header, if any) may speed up reading of large files.
+
+   If ``comments`` is ``true``, lines beginning with ``comment_char`` and text following ``comment_char`` in any line are ignored.
 
 .. function:: readdlm(source, delim::Char, eol::Char; options...)
 
@@ -3809,6 +3813,20 @@ Indexing, Assignment, and Concatenation
 .. function:: checkbounds(array, indexes...)
 
    Throw an error if the specified indexes are not in bounds for the given array.
+
+.. function:: randsubseq(A, p) -> Vector
+   
+   Return a vector consisting of a random subsequence of the given array ``A``,
+   where each element of ``A`` is included (in order) with independent
+   probability ``p``.   (Complexity is linear in ``p*length(A)``, so this
+   function is efficient even if ``p`` is small and ``A`` is large.)  Technically,
+   this process is known as "Bernoulli sampling" of ``A``.
+
+.. function:: randsubseq!(S, A, p)
+
+   Like ``randsubseq``, but the results are stored in ``S`` (which is
+   resized as needed).
+   
 
 Array functions
 ~~~~~~~~~~~~~~~
