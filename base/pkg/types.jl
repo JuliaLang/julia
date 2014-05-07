@@ -1,7 +1,7 @@
 module Types
 
 export VersionInterval, VersionSet, Requires, Available, Fixed, merge_requires!, satisfies
-import Base: show, isempty, in, intersect, isequal, hash, deepcopy_internal
+import Base: show, isempty, in, intersect, hash, deepcopy_internal
 
 immutable VersionInterval
     lower::VersionNumber
@@ -14,7 +14,7 @@ show(io::IO, i::VersionInterval) = print(io, "[$(i.lower),$(i.upper))")
 isempty(i::VersionInterval) = i.upper <= i.lower
 in(v::VersionNumber, i::VersionInterval) = i.lower <= v < i.upper
 intersect(a::VersionInterval, b::VersionInterval) = VersionInterval(max(a.lower,b.lower), min(a.upper,b.upper))
-isequal(a::VersionInterval, b::VersionInterval) = (a.lower == b.lower) & (a.upper == b.upper)
+==(a::VersionInterval, b::VersionInterval) = a.lower == b.lower && a.upper == b.upper
 
 immutable VersionSet
     intervals::Vector{VersionInterval}
@@ -43,8 +43,8 @@ function intersect(A::VersionSet, B::VersionSet)
     sort!(ivals, by=i->i.lower)
     VersionSet(ivals)
 end
-isequal(A::VersionSet, B::VersionSet) = (A.intervals == B.intervals)
-hash(s::VersionSet) = hash(s.intervals)
+==(A::VersionSet, B::VersionSet) = A.intervals == B.intervals
+hash(s::VersionSet, h::Uint) = hash(s.intervals, h + uint(0x2fd2ca6efa023f44))
 deepcopy_internal(vs::VersionSet, ::ObjectIdDict) = VersionSet(copy(vs.intervals))
 
 typealias Requires Dict{ByteString,VersionSet}
@@ -64,7 +64,7 @@ immutable Available
     requires::Requires
 end
 
-isequal(a::Available, b::Available) = (a.sha1 == b.sha1 && a.requires == b.requires)
+==(a::Available, b::Available) = a.sha1 == b.sha1 && a.requires == b.requires
 
 show(io::IO, a::Available) = isempty(a.requires) ?
     print(io, "Available(", repr(a.sha1), ")") :
@@ -76,7 +76,7 @@ immutable Fixed
 end
 Fixed(v::VersionNumber) = Fixed(v,Requires())
 
-isequal(a::Fixed, b::Fixed) = (a.version == b.version && a.requires == b.requires)
+==(a::Fixed, b::Fixed) = a.version == b.version && a.requires == b.requires
 
 show(io::IO, f::Fixed) = isempty(f.requires) ?
     print(io, "Fixed(", repr(f.version), ")") :

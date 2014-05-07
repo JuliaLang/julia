@@ -139,5 +139,3 @@ hypot(a::Float16, b::Float16) = float16(hypot(float32(a), float32(b)))
 ldexp(a::Float16, b::Integer) = float16(ldexp(float32(a), b))
 exponent(x::Float16) = exponent(float32(x))
 ^(x::Float16, y::Integer) = x^float16(y)
-
-hash(x::Float16) = hash(reinterpret(Uint16, isnan(x) ? NaN16 : x))

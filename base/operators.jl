@@ -4,27 +4,39 @@ const (<:) = issubtype
 
 super(T::DataType) = T.super
 
+## generic comparison ##
+
+==(x,y) = x === y
+
+isequal(x, y) = x == y
+isequal(x::FloatingPoint, y::FloatingPoint) = (isnan(x) & isnan(y)) | (signbit(x) == signbit(y)) & (x == y)
+isequal(x::Real,          y::FloatingPoint) = (isnan(x) & isnan(y)) | (signbit(x) == signbit(y)) & (x == y)
+isequal(x::FloatingPoint, y::Real         ) = (isnan(x) & isnan(y)) | (signbit(x) == signbit(y)) & (x == y)
+
+isless(x::FloatingPoint, y::FloatingPoint) = (!isnan(x) & isnan(y)) | (signbit(x) & !signbit(y)) | (x < y)
+isless(x::Real,          y::FloatingPoint) = (!isnan(x) & isnan(y)) | (signbit(x) & !signbit(y)) | (x < y)
+isless(x::FloatingPoint, y::Real         ) = (!isnan(x) & isnan(y)) | (signbit(x) & !signbit(y)) | (x < y)
+
 # avoid ambiguity with isequal(::Tuple, ::Tuple)
-isequal(T::(Type...), S::(Type...)) = typeseq(T, S)
-isequal(T::Type, S::Type) = typeseq(T, S)
+==(T::(Type...), S::(Type...)) = typeseq(T, S)
+==(T::Type, S::Type) = typeseq(T, S)
 
-## comparison ##
+## comparison fallbacks ##
 
-isequal(x,y) = is(x,y)
-==(x,y) = isequal(x,y)
 !=(x,y) = !(x==y)
 const ≠ = !=
 const ≡ = is
 !==(x,y) = !is(x,y)
 const ≢ = !==
-< (x,y) = isless(x,y)
-> (x,y) = y < x
+
+<(x,y) = isless(x,y)
+>(x,y) = y < x
 <=(x,y) = !(y < x)
 const ≤ = <=
 >=(x,y) = (y <= x)
 const ≥ = >=
-.> (x,y) = y.<x
-.>=(x,y) = y.<=x
+.>(x,y) = y .< x
+.>=(x,y) = y .<= x
 const .≥ = .>=
 
 # this definition allows Number types to implement < instead of isless,
@@ -85,20 +97,20 @@ end
 .+(x,y) = x+y
 .-(x,y) = x-y
 
-.==(x::Number,y::Number) = x==y
-.!=(x::Number,y::Number) = x!=y
-.< (x::Real,y::Real) = x<y
-.<=(x::Real,y::Real) = x<=y
+.==(x::Number,y::Number) = x == y
+.!=(x::Number,y::Number) = x != y
+.< (x::Real,y::Real) = x < y
+.<=(x::Real,y::Real) = x <= y
 const .≤ = .<=
 const .≠ = .!=
 
 # core << >> and >>> takes Int32 as second arg
-<<(x,y::Integer)  = x << convert(Int32,y)
 <<(x,y::Int32)    = no_op_err("<<", typeof(x))
->>(x,y::Integer)  = x >> convert(Int32,y)
 >>(x,y::Int32)    = no_op_err(">>", typeof(x))
->>>(x,y::Integer) = x >>> convert(Int32,y)
 >>>(x,y::Int32)   = no_op_err(">>>", typeof(x))
+<<(x,y::Integer)  = x << convert(Int32,y)
+>>(x,y::Integer)  = x >> convert(Int32,y)
+>>>(x,y::Integer) = x >>> convert(Int32,y)
 
 # fallback div and fld implementations
 # NOTE: C89 fmod() and x87 FPREM implicitly provide truncating float division,

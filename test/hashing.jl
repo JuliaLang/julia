@@ -35,7 +35,3 @@ end
 @test hash(:(X.x)) != hash(:(X.y))
 
 @test hash([1,2]) == hash(sub([1,2,3,4],1:2))
-
-# make sure >>> is used
-@test bitmix(2, -3) != bitmix(2, -4)
-@test bitmix(-3, 2) != bitmix(-4, 2)

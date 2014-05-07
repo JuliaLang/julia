@@ -1720,9 +1720,3 @@ function cat(catdim::Integer, X::Union(BitArray, Integer)...)
 end
 
 # hvcat -> use fallbacks in abstractarray.jl
-
-isequal(A::BitArray, B::BitArray) = (A == B)
-
-# Hashing
-
-hash(B::BitArray) = hash((size(B), B.chunks))

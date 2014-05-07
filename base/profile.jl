@@ -69,7 +69,12 @@ const UNKNOWN = LineInfo("?", "?", -1, true)
 
 isequal(a::LineInfo, b::LineInfo) = a.line == b.line && a.fromC == b.fromC && a.func == b.func && a.file == b.file
 
-hash(li::LineInfo) = bitmix(hash(li.func), bitmix(hash(li.file), bitmix(hash(li.line), hash(li.fromC))))
+function hash(li::LineInfo, h::Uint)
+    h += uint(0xf4fbda67fe20ce88)
+    h = hash(li.line, h)
+    h = hash(li.file, h)
+    h = hash(li.func, h)
+end
 
 # C wrappers
 start_timer() = ccall(:jl_profile_start_timer, Cint, ())

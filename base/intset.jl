@@ -258,7 +258,7 @@ function symdiff!(s::IntSet, s2::IntSet)
     s
 end
 
-function isequal(s1::IntSet, s2::IntSet)
+function ==(s1::IntSet, s2::IntSet)
     if s1.fill1s != s2.fill1s
         return false
     end
