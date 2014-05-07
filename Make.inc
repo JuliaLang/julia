@@ -510,6 +510,11 @@ JCPPFLAGS += -D_WIN32_WINNT=0x0600
 UNTRUSTED_SYSTEM_LIBM = 1
 endif
 
+# Intel VTune Amplifier
+ifeq ($(USE_INTEL_JITEVENTS), 1)
+JCPPFLAGS += -DJL_USE_INTEL_JITEVENTS
+endif
+
 # Intel libraries
 
 ifeq ($(USE_INTEL_LIBM), 1)
