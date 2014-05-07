@@ -10,17 +10,20 @@ extern jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types)
 extern jl_tuple_t *arg_type_tuple(jl_value_t **args, size_t nargs);
 
 static uv_mutex_t global_mutex;
-static uv_mutex_t pgcstack_mutex;
-static int pgcstack_locked = 0;
+static uv_mutex_t gc_mutex;
+static long gc_thread_id = -1;
+static int nested_gc = 0;
+static long mainthread_id = -1;
 uv_mutex_t inference_mutex;
 uv_mutex_t cache_mutex;
 
 void jl_init_threading()
 {
   uv_mutex_init(&global_mutex);
-  uv_mutex_init(&pgcstack_mutex);
+  uv_mutex_init(&gc_mutex);
   uv_mutex_init(&inference_mutex);
   uv_mutex_init(&cache_mutex);
+  mainthread_id = uv_thread_self();
 }
 
 void jl_global_lock()
@@ -33,23 +36,23 @@ void jl_global_unlock()
   uv_mutex_unlock(&global_mutex);
 }
 
-void jl_pgcstack_lock(int* locked)
+int jl_gc_lock()
 {
-  if(!pgcstack_locked)
+  if(!nested_gc && gc_thread_id != uv_thread_self() && mainthread_id != uv_thread_self())
   {
-    uv_mutex_lock(&pgcstack_mutex);
-    pgcstack_locked = 1;
-    *locked = 1;
+    uv_mutex_lock(&gc_mutex);
+    nested_gc = 1;
+    gc_thread_id = uv_thread_self();
+    return 1;
   }
+  return 0;
 }
 
-void jl_pgcstack_unlock(int locked)
+void jl_gc_unlock()
 {
-  if(locked)
-  {
-    pgcstack_locked = 0;
-    uv_mutex_unlock(&pgcstack_mutex);
-  }
+  nested_gc = 0;
+  gc_thread_id = -1;
+  uv_mutex_unlock(&gc_mutex);
 }
 
 void run_thread(void* t)
@@ -71,7 +74,7 @@ jl_thread_t* jl_create_thread(jl_function_t* f, jl_tuple_t* targs)
             
   jl_tuple_t* argtypes = arg_type_tuple(&jl_tupleref(targs,0), nargs);
   t->f = jl_get_specialization(f, argtypes);
-  jl_compile(t->f);
+  //jl_compile(t->f);
   t->targs = targs;
   return t;
 }
@@ -173,6 +176,7 @@ void jl_par_apply(jl_function_t * func, jl_value_t* targs, size_t num_threads, s
     uv_mutex_destroy(&parapply_mutex);
     
     jl_gc_enable();
+    JL_GC_POP();
 }
 
 

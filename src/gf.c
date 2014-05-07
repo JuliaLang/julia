@@ -385,15 +385,17 @@ extern jl_function_t *jl_typeinf_func;
 */
 int jl_in_inference = 0;
 extern uv_mutex_t inference_mutex;
+long inference_thread_id = -1;
 void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
                    jl_lambda_info_t *def)
 {
     int last_ii = jl_in_inference;
     int locked = 0;
-    if(!jl_in_inference)
+    if(!jl_in_inference && inference_thread_id != uv_thread_self())
     {
         uv_mutex_lock(&inference_mutex);
         locked = 1;
+        inference_thread_id = uv_thread_self();
     }
     jl_in_inference = 1;
     if (jl_typeinf_func != NULL) {
@@ -421,7 +423,10 @@ void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
     }
     jl_in_inference = last_ii;
     if(locked)
+    {
+      inference_thread_id = -1;
       uv_mutex_unlock(&inference_mutex);
+    }
 }
 
 static jl_value_t *nth_slot_type(jl_tuple_t *sig, size_t i)

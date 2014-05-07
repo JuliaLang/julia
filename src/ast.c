@@ -852,7 +852,7 @@ jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_tuple_t *sparams)
       uv_mutex_lock(&ast_mutex);
       nested_prepare_ast = 1;
       locked = 1;
-    }
+    }
     JL_GC_PUSH2(&spenv, &ast);
     spenv = jl_tuple_tvars_to_symbols(sparams);
     if (!jl_is_expr(ast)) {
