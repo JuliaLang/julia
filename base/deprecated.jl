@@ -441,6 +441,8 @@ Set{T<:Number}(xs::T...) = Set{T}(xs)
 @deprecate infs(dims...)                 fill(Inf, dims)
 @deprecate infs{T}(x::AbstractArray{T})  fill(convert(T,Inf), size(x))
 
+@deprecate bitmix hash
+
 # 0.3 discontinued functions
 
 function nnz(X)
