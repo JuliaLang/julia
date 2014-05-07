@@ -485,7 +485,7 @@ General Collections
 
    Determine whether a collection is empty (has no elements).
 
-.. function:: empty!(collection) -> Collection
+.. function:: empty!(collection) -> collection
 
    Remove all elements from a ``collection``.
 
