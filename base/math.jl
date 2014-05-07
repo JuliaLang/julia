@@ -16,7 +16,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        besselj0, besselj1, besselj, bessely0, bessely1, bessely,
        hankelh1, hankelh2, besseli, besselk, besselh,
        beta, lbeta, eta, zeta, polygamma, invdigamma, digamma, trigamma,
-       erfinv, erfcinv
+       erfinv, erfcinv, √
 
 import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
@@ -284,6 +284,7 @@ sqrt(x::Float64) = box(Float64,sqrt_llvm(unbox(Float64,x)))
 sqrt(x::Float32) = box(Float32,sqrt_llvm(unbox(Float32,x)))
 sqrt(x::Real) = sqrt(float(x))
 @vectorize_1arg Number sqrt
+const √=sqrt
 
 for f in (:ceil, :trunc, :significand) # :rint, :nearbyint
     @eval begin
@@ -662,6 +663,9 @@ besselk(nu::Real, x::Integer) = besselk(nu, float64(x))
 function besselk(nu::Real, x::FloatingPoint)
     if x < 0
         throw(DomainError())
+    end
+    if x == 0
+        return oftype(x, Inf)
     end
     oftype(x, real(besselk(float64(nu), complex128(x))))
 end

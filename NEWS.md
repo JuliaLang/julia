@@ -35,6 +35,16 @@ New language features
 
   * `--bounds-check=yes|no` compiler option
 
+  * Support for a limited number of infix unicode operators ([#552], [#6582]):
+  
+    | Precedence class | Operators (with synonyms, if any)
+    | ---------------- | ---------------------------------
+    |   ==             |  ≥ (>=) ≤ (<=) ≡ (===) ≠ (!=) ≢ (!==) .≥ (.>=) .≤ (.<=) .!= (.≠) ∈ (`in`) ∉ (`(x,y)->!in(x, y)`) ∋ (`(x,y)->in(y, x)`) ∌ (`(x,y)->!in(y, x)`) ⊆ (`issubset`) ⊈ (`(x,y)->!issubset(x, y)`) ⊊ (`(x,y)->x⊆y && x!=y`) ⊂ ⊄ |
+    |   +              | ⊕ ⊖ ⊞ ⊟ ∪ (`union`) ∨ ⊔ |
+    |   *              | ÷ (`div`) ⋅ (`dot`) ∘ × (`cross`) ∩ (`intersect`) ∧ ⊓ ⊗ ⊘ ⊙ ⊚ ⊛ ⊠ ⊡ |
+
+  * Support `√` as synonym for `sqrt` ([#6582])
+
 Library improvements
 --------------------
 
@@ -175,6 +185,8 @@ Library improvements
 
       * `eigs(A, sigma)` now uses shift-and-invert for nonzero shifts `sigma` and inverse iteration for `which="SM"`. If `sigma==nothing` (the new default), computes ordinary (forward) iterations. ([#5776])
 
+      * `sprand` is faster, and whether any entry is nonzero is now determined independently with the specified probability ([#6726]).
+
     * Dense linear algebra for special matrix types
 
       * Interconversions between the special matrix types `Diagonal`, `Bidiagonal`,
@@ -252,6 +264,8 @@ Library improvements
 
   * Extended API for ``cov`` and ``cor``, which accept keyword arguments ``vardim``, 
     ``corrected``, and ``mean`` ([#6273])
+
+  * New functions `randsubseq` and `randsubseq!` to create a random subsequence of an array ([#6726])
 
 
 Deprecated or removed
@@ -376,6 +390,8 @@ Deprecated or removed
 [#5380]: https://github.com/JuliaLang/julia/pull/5380
 [#5585]: https://github.com/JuliaLang/julia/issues/5585
 [#6273]: https://github.com/JuliaLang/julia/pull/6273
+[#552]: https://github.com/JuliaLang/julia/issues/552
+[#6582]: https://github.com/JuliaLang/julia/pull/6582
 
 Julia v0.2.0 Release Notes
 ==========================

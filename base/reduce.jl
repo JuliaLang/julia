@@ -121,6 +121,10 @@ function in(x, itr)
     end
     return false
 end
+const ∈ = in
+∉(x, itr)=!∈(x, itr)
+∋(itr, x)= ∈(x, itr)
+∌(itr, x)=!∋(itr, x)
 
 function contains(itr, x)
     depwarn("contains(collection, item) is deprecated, use in(item, collection) instead", :contains)
@@ -269,6 +273,13 @@ function sum_pairwise(a::AbstractArray, ifirst::Int, ilast::Int)
         imid = (ifirst + ilast) >>> 1
         sum_pairwise(a, ifirst, imid) + sum_pairwise(a, imid+1, ilast)
     end
+end
+
+function sum{T<:AbstractArray}(a::AbstractArray{T})
+    n = length(a)
+    n == 0 && error("argument is empty")
+    n == 1 && return a[1] + zero(a[1])
+    sum_pairwise(a, 1, length(a))
 end
 
 function sum{T}(a::AbstractArray{T})
