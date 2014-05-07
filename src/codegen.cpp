@@ -487,10 +487,10 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle);
 static Function *to_function(jl_lambda_info_t *li, bool cstyle)
 {
     bool locked = false;
-    if(!nested_compile && codegen_thread_id != uv_thread_self())
+    if(!nested_compile || codegen_thread_id != uv_thread_self())
     {  
         uv_mutex_lock(&codegen_mutex);
-        printf("lock codegen by %ld current %ld \n", uv_thread_self(), codegen_thread_id);
+        //printf("lock codegen by %ld current %ld \n", uv_thread_self(), codegen_thread_id);
         locked = true;
         codegen_thread_id = uv_thread_self();
     }
@@ -517,7 +517,7 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
         JL_SIGATOMIC_END();
         if(locked)
         {
-          printf("unlock codegen by %ld current %ld \n", uv_thread_self(), codegen_thread_id);
+          //printf("unlock codegen by %ld current %ld \n", uv_thread_self(), codegen_thread_id);
           codegen_thread_id = -1;
           uv_mutex_unlock(&codegen_mutex);
         }
@@ -553,7 +553,7 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
     JL_SIGATOMIC_END();
     if(locked)
     {
-        printf("unlock codegen by %ld current %ld \n", uv_thread_self(), codegen_thread_id);
+        //printf("unlock codegen by %ld current %ld \n", uv_thread_self(), codegen_thread_id);
         codegen_thread_id = -1;
         uv_mutex_unlock(&codegen_mutex);
     }

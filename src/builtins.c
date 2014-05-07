@@ -285,9 +285,11 @@ JL_CALLABLE(jl_f_apply)
         }
         else {
             if (jl_append_any_func == NULL) {
+                jl_global_lock();
                 jl_append_any_func =
                     (jl_function_t*)jl_get_global(jl_base_module,
                                                   jl_symbol("append_any"));
+                jl_global_unlock();
                 if (jl_append_any_func == NULL) {
                     // error if append_any not available
                     JL_TYPECHK(apply, tuple, args[i]);

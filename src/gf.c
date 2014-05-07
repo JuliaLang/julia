@@ -472,17 +472,19 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
 
 extern uv_mutex_t cache_mutex;
 int nested_cache = 0;
+static long cache_thread_id = -1;
 
 static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                                    jl_function_t *method, jl_tuple_t *decl,
                                    jl_tuple_t *sparams)
 {
     int locked = 0;
-    if(!nested_cache)
+    if(!nested_cache || cache_thread_id != uv_thread_self())
     {
         uv_mutex_lock(&cache_mutex);
         locked = 1;
         nested_cache = 1;
+        cache_thread_id = uv_thread_self();
     }
     size_t i;
     int need_guard_entries = 0;
@@ -818,6 +820,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         if(locked)
         {
             nested_cache = 0;
+            cache_thread_id = -1;
             uv_mutex_unlock(&cache_mutex);
         }
         return newmeth;
@@ -869,6 +872,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     if(locked)
     {
         nested_cache = 0;
+        cache_thread_id = -1;
         uv_mutex_unlock(&cache_mutex);
     }    
     return newmeth;

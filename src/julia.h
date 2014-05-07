@@ -1004,47 +1004,39 @@ typedef struct _jl_gcframe_t {
 // jl_value_t *x=NULL, *y=NULL; JL_GC_PUSH(&x, &y);
 // x = f(); y = g(); foo(x, y)
 
+extern DLLEXPORT long jl_main_thread_id;
 extern DLLEXPORT jl_gcframe_t *jl_pgcstack;
-DLLEXPORT int jl_gc_lock(); 
+DLLEXPORT void jl_gc_lock(); 
 DLLEXPORT void jl_gc_unlock();
 
-#define JL_GC_LOCK() int _locked = jl_gc_lock() 
-#define JL_GC_UNLOCK() if(_locked) { jl_gc_unlock(); }
-
 #define JL_GC_PUSH(...)                                                   \
-  JL_GC_LOCK();                                                           \
   void *__gc_stkf[] = {(void*)((VA_NARG(__VA_ARGS__)<<1)|1), jl_pgcstack, \
                        __VA_ARGS__};                                      \
-  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;                                 \
+  if(jl_main_thread_id == uv_thread_self()) { jl_pgcstack = (jl_gcframe_t*)__gc_stkf; }
 
 #define JL_GC_PUSH1(arg1)                                                 \
-  JL_GC_LOCK();                                                           \
   void *__gc_stkf[] = {(void*)3, jl_pgcstack, arg1};                      \
-  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
+  if(jl_main_thread_id == uv_thread_self()) { jl_pgcstack = (jl_gcframe_t*)__gc_stkf; }
 
 #define JL_GC_PUSH2(arg1, arg2)                                           \
-  JL_GC_LOCK();                                                           \
   void *__gc_stkf[] = {(void*)5, jl_pgcstack, arg1, arg2};                \
-  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
+  if(jl_main_thread_id == uv_thread_self()) { jl_pgcstack = (jl_gcframe_t*)__gc_stkf; }
 
 #define JL_GC_PUSH3(arg1, arg2, arg3)                                     \
-  JL_GC_LOCK();                                                           \
   void *__gc_stkf[] = {(void*)7, jl_pgcstack, arg1, arg2, arg3};          \
-  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
+  if(jl_main_thread_id == uv_thread_self()) { jl_pgcstack = (jl_gcframe_t*)__gc_stkf; }
 
 #define JL_GC_PUSH4(arg1, arg2, arg3, arg4)                               \
-  JL_GC_LOCK();                                                           \
   void *__gc_stkf[] = {(void*)9, jl_pgcstack, arg1, arg2, arg3, arg4};    \
-  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
+  if(jl_main_thread_id == uv_thread_self()) { jl_pgcstack = (jl_gcframe_t*)__gc_stkf; }
 
 #define JL_GC_PUSHARGS(rts_var,n)                               \
-  JL_GC_LOCK();                                                           \
   rts_var = ((jl_value_t**)alloca(((n)+2)*sizeof(jl_value_t*)))+2;    \
   ((void**)rts_var)[-2] = (void*)(((size_t)n)<<1);              \
   ((void**)rts_var)[-1] = jl_pgcstack;                          \
-  jl_pgcstack = (jl_gcframe_t*)&(((void**)rts_var)[-2])
+  if(jl_main_thread_id == uv_thread_self()) { jl_pgcstack = (jl_gcframe_t*)&(((void**)rts_var)[-2]); }
 
-#define JL_GC_POP() jl_pgcstack = jl_pgcstack->prev; JL_GC_UNLOCK()
+#define JL_GC_POP() if(jl_main_thread_id == uv_thread_self()) {jl_pgcstack = jl_pgcstack->prev;}
 
 void jl_gc_init(void);
 void jl_gc_setmark(jl_value_t *v);

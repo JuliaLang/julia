@@ -11,9 +11,7 @@ extern jl_tuple_t *arg_type_tuple(jl_value_t **args, size_t nargs);
 
 static uv_mutex_t global_mutex;
 static uv_mutex_t gc_mutex;
-static long gc_thread_id = -1;
-static int nested_gc = 0;
-static long mainthread_id = -1;
+long jl_main_thread_id = -1;
 uv_mutex_t inference_mutex;
 uv_mutex_t cache_mutex;
 
@@ -23,7 +21,7 @@ void jl_init_threading()
   uv_mutex_init(&gc_mutex);
   uv_mutex_init(&inference_mutex);
   uv_mutex_init(&cache_mutex);
-  mainthread_id = uv_thread_self();
+  jl_main_thread_id = uv_thread_self();
 }
 
 void jl_global_lock()
@@ -36,22 +34,13 @@ void jl_global_unlock()
   uv_mutex_unlock(&global_mutex);
 }
 
-int jl_gc_lock()
+void jl_gc_lock()
 {
-  if(!nested_gc && gc_thread_id != uv_thread_self() && mainthread_id != uv_thread_self())
-  {
-    uv_mutex_lock(&gc_mutex);
-    nested_gc = 1;
-    gc_thread_id = uv_thread_self();
-    return 1;
-  }
-  return 0;
+  uv_mutex_lock(&gc_mutex);
 }
 
 void jl_gc_unlock()
 {
-  nested_gc = 0;
-  gc_thread_id = -1;
   uv_mutex_unlock(&gc_mutex);
 }
 
@@ -74,7 +63,7 @@ jl_thread_t* jl_create_thread(jl_function_t* f, jl_tuple_t* targs)
             
   jl_tuple_t* argtypes = arg_type_tuple(&jl_tupleref(targs,0), nargs);
   t->f = jl_get_specialization(f, argtypes);
-  //jl_compile(t->f);
+  jl_compile(t->f);
   t->targs = targs;
   return t;
 }
