@@ -26,7 +26,7 @@ Getting Around
 
 .. function:: quit()
 
-   Quit the program indicating that the processes completed succesfully. This function calls ``exit(0)`` (see :func:`exit').
+   Quit the program indicating that the processes completed succesfully. This function calls ``exit(0)`` (see :func:`exit`).
 
 .. function:: atexit(f)
 
