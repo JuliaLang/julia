@@ -803,6 +803,10 @@
 	  (defs2 (if (null? defs)
 		     (list (default-inner-ctor name field-names field-types))
 		     defs)))
+     (for-each (lambda (v)
+		 (if (not (symbol? v))
+		     (error (string "field name \"" (deparse v) "\" is not a symbol"))))
+	       field-names)
      (if (null? params)
 	 `(block
 	   (global ,name)
