@@ -26,13 +26,13 @@ Getting Around
 
 .. function:: quit()
 
-   Calls ``exit(0)``.
+   Quit the program indicating that the processes completed succesfully. This function calls ``exit(0)`` (see :func:`exit`).
 
 .. function:: atexit(f)
 
    Register a zero-argument function to be called at exit.
 
-.. function:: isinteractive()
+.. function:: isinteractive() -> Bool
 
    Determine whether Julia is running an interactive session.
 
@@ -71,7 +71,7 @@ Getting Around
 
 .. function:: clipboard() -> String
 
-   Return the contents of the operating system clipboard ("paste").
+   Return a string with the contents of the operating system clipboard ("paste").
 
 .. function:: require(file::String...)
 
@@ -129,13 +129,13 @@ Getting Around
 All Objects
 -----------
 
-.. function:: is(x, y)
+.. function:: is(x, y) -> Bool
 
    Determine whether ``x`` and ``y`` are identical, in the sense that no program could distinguish them. Compares mutable objects by address in memory, and compares immutable objects (such as numbers) by contents at the bit level. This function is sometimes called ``egal``. The ``===`` operator is an alias for this function.
 
-.. function:: isa(x, type)
+.. function:: isa(x, type) -> Bool
 
-   Determine whether ``x`` is of the given type.
+   Determine whether ``x`` is of the given ``type``.
 
 .. function:: isequal(x, y)
 
@@ -475,7 +475,7 @@ General Collections
 
 .. function:: empty!(collection) -> collection
 
-   Remove all elements from a collection.
+   Remove all elements from a ``collection``.
 
 .. function:: length(collection) -> Integer
 
@@ -485,7 +485,10 @@ General Collections
 
    Returns the last index of the collection.
 
-   **Example**: ``endof([1,2,4]) = 3``
+   **Example**::
+   
+   	julia> endof([1,2,4])
+   	3
 
 Fully implemented by: ``Range``, ``Range1``, ``Tuple``, ``Number``, ``AbstractArray``, ``IntSet``, ``Dict``, ``WeakKeyDict``, ``String``, ``Set``.
 
@@ -671,9 +674,12 @@ Iterable Collections
    Transform collection ``c`` by applying ``f`` to each element.
    For multiple collection arguments, apply ``f`` elementwise.
 
-   **Examples**:
-     * ``map((x) -> x * 2, [1, 2, 3]) = [2, 4, 6]``
-     * ``map(+, [1, 2, 3], [10, 20, 30]) = [11, 22, 33]``
+   **Examples**::
+   
+     julia> map((x) -> x * 2, [1, 2, 3])
+     [2, 4, 6]
+     julia> map(+, [1, 2, 3], [10, 20, 30])
+     [11, 22, 33]
 
 .. function:: map!(function, collection)
 
@@ -980,13 +986,15 @@ Strings
 
 .. function:: *(s, t)
 
-   Concatenate strings.
+   Concatenate strings. The ``*`` operator is an alias to this function.
 
-   **Example**: ``"Hello " * "world" == "Hello world"``
+   **Example**::
+   julia> "Hello " * "world"
+   "Hello world"
 
 .. function:: ^(s, n)
 
-   Repeat string ``s`` ``n`` times.
+   Repeat ``n`` times the string ``s``. The ``^`` operator is an alias to this function.
 
    **Example**: ``"Julia "^3 == "Julia Julia Julia "``
 
@@ -2940,7 +2948,7 @@ Mathematical Functions
 
 .. function:: invmod(x,m)
 
-   Take the inverse of ``x`` modulo ``m``: `y` such that :math:`xy = 1 \pmod m`
+   Take the inverse of ``x`` modulo ``m``: `y` such that :math:`xy = 1 \pmod m`
 
 .. function:: powermod(x, p, m)
 
