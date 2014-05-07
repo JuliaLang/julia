@@ -139,14 +139,14 @@ All Objects
 
 .. function:: isequal(x, y)
 
-   Similar to ``==``, except treats all floating-point ``NaN`` values as equal to each other
-   and greater than all other real values, and treats ``-0.0`` as unequal to ``0.0``.
+   Similar to ``==``, except treats all floating-point ``NaN`` values as equal to each other,
+   and treats ``-0.0`` as unequal to ``0.0``.
    For values that are not floating-point, ``isequal`` is the same as ``==``.
 
    ``isequal`` is the comparison function used by hash tables (``Dict``).
    ``isequal(x,y)`` must imply that ``hash(x) == hash(y)``.
 
-   Mutable containers typically implement ``isequal`` by calling ``isequal`` recursively on
+   Collections typically implement ``isequal`` by calling ``isequal`` recursively on
    all contents.
 
    Scalar types generally do not need to implement ``isequal``, unless they
@@ -2282,7 +2282,7 @@ Mathematical Operators
 
    Follows IEEE semantics for floating-point numbers.
 
-   Mutable containers should generally implement ``==`` by calling ``==`` recursively on all contents.
+   Collections should generally implement ``==`` by calling ``==`` recursively on all contents.
 
    New numeric types should implement this function for two arguments of the new type, and handle
    comparison to other types via promotion rules where possible.

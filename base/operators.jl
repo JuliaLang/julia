@@ -13,7 +13,6 @@ isequal(x::FloatingPoint, y::FloatingPoint) = (isnan(x) & isnan(y)) | (signbit(x
 isequal(x::Real,          y::FloatingPoint) = (isnan(x) & isnan(y)) | (signbit(x) == signbit(y)) & (x == y)
 isequal(x::FloatingPoint, y::Real         ) = (isnan(x) & isnan(y)) | (signbit(x) == signbit(y)) & (x == y)
 
-isless(x::Any, y::Any) = x < y
 isless(x::FloatingPoint, y::FloatingPoint) = (!isnan(x) & isnan(y)) | (signbit(x) & !signbit(y)) | (x < y)
 isless(x::Real,          y::FloatingPoint) = (!isnan(x) & isnan(y)) | (signbit(x) & !signbit(y)) | (x < y)
 isless(x::FloatingPoint, y::Real         ) = (!isnan(x) & isnan(y)) | (signbit(x) & !signbit(y)) | (x < y)
@@ -27,6 +26,7 @@ isless(x::FloatingPoint, y::Real         ) = (!isnan(x) & isnan(y)) | (signbit(x
 !=(x,y) = !(x==y)
 !==(x,y) = !is(x,y)
 
+<(x,y) = isless(x,y)
 >(x,y) = y < x
 <=(x,y) = !(y < x)
 >=(x,y) = (y <= x)
@@ -35,6 +35,7 @@ isless(x::FloatingPoint, y::Real         ) = (!isnan(x) & isnan(y)) | (signbit(x
 
 # this definition allows Number types to implement < instead of isless,
 # which is more idiomatic:
+isless(x::Real, y::Real) = x<y
 lexcmp(x::Real, y::Real) = isless(x,y) ? -1 : ifelse(isless(y,x), 1, 0)
 
 ifelse(c::Bool, x, y) = Intrinsics.select_value(c, x, y)
