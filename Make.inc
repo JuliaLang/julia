@@ -134,6 +134,7 @@ endif
 endif
 
 JLDOWNLOAD = $(JULIAHOME)/deps/jldownload
+JLCHECKSUM = $(JULIAHOME)/deps/jlchecksum
 
 # Figure out OS and architecture
 OS := $(BUILD_OS)
