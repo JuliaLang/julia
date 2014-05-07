@@ -547,6 +547,16 @@ void init_stdio()
     JL_STDIN = (uv_stream_t*)init_stdio_handle(0,1);
 }
 
+#ifdef JL_USE_INTEL_JITEVENTS
+char jl_using_intel_jitevents; // Non-zero if running under Intel VTune Amplifier
+#endif
+
+#if defined(JL_USE_INTEL_JITEVENTS) && defined(__linux__)
+unsigned sig_stack_size = SIGSTKSZ; 
+#else
+#define sig_stack_size SIGSTKSZ
+#endif
+
 #ifndef _OS_WINDOWS_
 static void *signal_stack;
 #endif
@@ -614,7 +624,7 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
         old_state = state;
         // memset(&state,0,sizeof(x86_thread_state64_t));
         // Setup libunwind information
-        state.__rsp = (uint64_t)signal_stack + SIGSTKSZ;
+        state.__rsp = (uint64_t)signal_stack + sig_stack_size;
         state.__rsp -= sizeof(unw_context_t);
         state.__rsp &= -16;
         unw_context_t *uc = (unw_context_t*)state.__rsp;
@@ -681,6 +691,18 @@ void julia_init(char *imageFile)
         hSymRefreshModuleList = 0;
 #endif
     init_stdio();
+
+#if defined(JL_USE_INTEL_JITEVENTS)
+    const char* jit_profiling = getenv("ENABLE_JITPROFILING");
+    if (jit_profiling && atoi(jit_profiling)) {
+        jl_using_intel_jitevents = 1;
+#if defined(__linux__)
+        // Intel VTune Amplifier needs at least 64k for alternate stack.
+        if (SIGSTKSZ < 1<<16) 
+            sig_stack_size = 1<<16; 
+#endif
+    }
+#endif
 
 #if defined(__linux__)
     int ncores = jl_cpu_cores();
@@ -765,7 +787,7 @@ void julia_init(char *imageFile)
 
 
 #ifndef _OS_WINDOWS_
-    signal_stack = malloc(SIGSTKSZ);
+    signal_stack = malloc(sig_stack_size);
     struct sigaction actf;
     memset(&actf, 0, sizeof(struct sigaction));
     sigemptyset(&actf.sa_mask);
@@ -806,7 +828,7 @@ void julia_init(char *imageFile)
 #else // defined(_OS_DARWIN_)
     stack_t ss;
     ss.ss_flags = 0;
-    ss.ss_size = SIGSTKSZ;
+    ss.ss_size = sig_stack_size;
     ss.ss_sp = signal_stack;
     if (sigaltstack(&ss, NULL) < 0) {
         JL_PRINTF(JL_STDERR, "sigaltstack: %s\n", strerror(errno));
