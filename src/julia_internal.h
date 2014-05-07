@@ -76,7 +76,9 @@ void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name);
 void jl_compute_field_offsets(jl_datatype_t *st);
 jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, size_t *dims,
                                              int isunboxed, int elsz);
-
+#ifdef JL_USE_INTEL_JITEVENTS 
+extern char jl_using_intel_jitevents;
+#endif
 extern size_t jl_arr_xtralloc_limit;
 
 void jl_init_types(void);

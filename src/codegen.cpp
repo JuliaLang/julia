@@ -4296,12 +4296,11 @@ extern "C" void jl_init_codegen(void)
 
     jl_jit_events = new JuliaJITEventListener();
     jl_ExecutionEngine->RegisterJITEventListener(jl_jit_events);
-#if LLVM_USE_INTEL_JITEVENTS
-    if (const char* jit_profiling = std::getenv("ENABLE_JITPROFILING"))
-        if (std::atoi(jit_profiling))
-            jl_ExecutionEngine->RegisterJITEventListener(
-                JITEventListener::createIntelJITEventListener());
-#endif // LLVM_USE_INTEL_JITEVENTS
+#ifdef JL_USE_INTEL_JITEVENTS
+    if (jl_using_intel_jitevents) 
+        jl_ExecutionEngine->RegisterJITEventListener(
+            JITEventListener::createIntelJITEventListener());
+#endif // JL_USE_INTEL_JITEVENTS
 
     BOX_F(int8,int32);  BOX_F(uint8,uint32);
     BOX_F(int16,int16); BOX_F(uint16,uint16);
