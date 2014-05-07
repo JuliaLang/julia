@@ -75,8 +75,8 @@ function setdiff(a::Set, b::Set)
     d
 end
 
-isequal(l::Set, r::Set) = (length(l) == length(r)) && (l <= r)
-<(l::Set, r::Set) = (length(l) < length(r)) && (l <= r)
+==(l::Set, r::Set) = (length(l) == length(r)) && (l <= r)
+< (l::Set, r::Set) = (length(l) < length(r)) && (l <= r)
 <=(l::Set, r::Set) = issubset(l, r)
 
 function issubset(l, r)
@@ -112,5 +112,3 @@ function filter!(f::Function, s::Set)
     return s
 end
 filter(f::Function, s::Set) = filter!(f, copy(s))
-
-hash(s::Set) = hash(sort(s.dict.keys[s.dict.slots .!= 0]))

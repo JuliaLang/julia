@@ -448,7 +448,7 @@ type RemoteRef
     next_id() = (id=(myid(),REQ_ID); REQ_ID+=1; id)
 end
 
-hash(r::RemoteRef) = hash(r.whence)+3*hash(r.id)
+hash(r::RemoteRef, h::Uint) = hash(r.whence, hash(r.id, h))
 isequal(r::RemoteRef, s::RemoteRef) = (r.whence==s.whence && r.id==s.id)
 
 rr2id(r::RemoteRef) = (r.whence, r.id)

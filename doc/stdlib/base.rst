@@ -139,33 +139,19 @@ All Objects
 
 .. function:: isequal(x, y)
 
-   True if and only if ``x`` and ``y`` would cause a typical function to behave the
-   same. A "typical" function is one that uses only intended interfaces, and does not
-   unreasonably exploit implementation details of its arguments. For example,
-   floating-point ``NaN`` values are ``isequal`` regardless of their sign bits, since
-   the sign of a ``NaN`` has no meaning in the vast majority of cases (but can be
-   discovered if you really want to).
+   Similar to ``==``, except treats all floating-point ``NaN`` values as equal to each other,
+   and treats ``-0.0`` as unequal to ``0.0``.
+   For values that are not floating-point, ``isequal`` is the same as ``==``.
 
-   One implication of this definition is that implementing ``isequal`` for a new type
-   encapsulates, to a large extent, what the true abstraction presented by that type
-   is. For example, a ``String`` is a sequence of characters, so two strings are
-   ``isequal`` if they generate the same characters. Other concerns, such as encoding,
-   are not considered.
+   ``isequal`` is the comparison function used by hash tables (``Dict``).
+   ``isequal(x,y)`` must imply that ``hash(x) == hash(y)``.
 
-   When calling ``isequal``, be aware that it cannot be all things to all people.
-   For example, if your use of strings *does* care about encoding, you will have to
-   perform a check like ``typeof(x)==typeof(y) && isequal(x,y)``.
+   Collections typically implement ``isequal`` by calling ``isequal`` recursively on
+   all contents.
 
-   ``isequal`` is the default comparison function used by hash tables (``Dict``).
-   ``isequal(x,y)`` must imply ``hash(x)==hash(y)``.
-
-   New types with a notion of equality should implement this function, except for
-   numbers, which should implement ``==`` instead. However, numeric types with special
-   values like ``NaN`` might need to implement ``isequal`` as well. Numbers of different
-   types are considered unequal.
-
-   Mutable containers should generally implement ``isequal`` by calling ``isequal``
-   recursively on all contents.
+   Scalar types generally do not need to implement ``isequal``, unless they
+   represent floating-point numbers amenable to a more efficient implementation
+   than that provided as a generic fallback (based on ``isnan``, ``signbit``, and ``==``).
 
 .. function:: isless(x, y)
 
@@ -2292,8 +2278,18 @@ Mathematical Operators
 .. _==:
 .. function:: ==(x, y)
 
-   Numeric equality operator. Compares numbers and number-like values (e.g. arrays) by numeric value. True for numbers of different types that represent the same value (e.g. ``2`` and ``2.0``). Follows IEEE semantics for floating-point numbers.
-   New numeric types should implement this function for two arguments of the new type.
+   Generic equality operator, giving a single ``Bool`` result. Falls back to ``===``.
+   Should be implemented for all types with a notion of equality, based
+   on the abstract value that an instance represents. For example, all numeric types are compared
+   by numeric value, ignoring type. Strings are compared as sequences of characters, ignoring
+   encoding.
+
+   Follows IEEE semantics for floating-point numbers.
+
+   Collections should generally implement ``==`` by calling ``==`` recursively on all contents.
+
+   New numeric types should implement this function for two arguments of the new type, and handle
+   comparison to other types via promotion rules where possible.
 
 .. _!=:
 .. function:: !=(x, y)

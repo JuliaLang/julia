@@ -60,8 +60,8 @@ function Base.cmp{T}(a::HierarchicalValue{T}, b::HierarchicalValue{T})
     end
     return cmp(a.rest, b.rest)
 end
-Base.isless{T}(a::HierarchicalValue{T}, b::HierarchicalValue{T}) = (cmp(a, b) == -1)
-Base.isequal{T}(a::HierarchicalValue{T}, b::HierarchicalValue{T}) = (a.v == b.v) && (a.rest == b.rest)
+Base.isless{T}(a::HierarchicalValue{T}, b::HierarchicalValue{T}) = cmp(a,b) < 0
+=={T}(a::HierarchicalValue{T}, b::HierarchicalValue{T}) = a.v == b.v && a.rest == b.rest
 
 Base.abs{T}(a::HierarchicalValue{T}) = HierarchicalValue(T[abs(x) for x in a.v], abs(a.rest))
 
@@ -88,8 +88,8 @@ function Base.cmp(a::VWPreBuildItem, b::VWPreBuildItem)
     c = cmp(a.s, b.s); c != 0 && return c
     return cmp(a.i, b.i)
 end
-Base.isless(a::VWPreBuildItem, b::VWPreBuildItem) = (cmp(a,b) == -1)
-Base.isequal(a::VWPreBuildItem, b::VWPreBuildItem) = (cmp(a,b) == 0)
+Base.isless(a::VWPreBuildItem, b::VWPreBuildItem) = cmp(a,b) < 0
+==(a::VWPreBuildItem, b::VWPreBuildItem) = cmp(a,b) == 0
 
 Base.abs(a::VWPreBuildItem) = VWPreBuildItem(abs(a.nonempty), abs(a.s), abs(a.i))
 
@@ -125,8 +125,8 @@ function Base.cmp(a::VWPreBuild, b::VWPreBuild)
     c = cmp(a.nonempty, b.nonempty); c != 0 && return c
     return cmp(a.w, b.w)
 end
-Base.isless(a::VWPreBuild, b::VWPreBuild) = (cmp(a,b) == -1)
-Base.isequal(a::VWPreBuild, b::VWPreBuild) = (cmp(a,b) == 0)
+Base.isless(a::VWPreBuild, b::VWPreBuild) = cmp(a,b) < 0
+==(a::VWPreBuild, b::VWPreBuild) = cmp(a,b) == 0
 
 Base.abs(a::VWPreBuild) = VWPreBuild(abs(a.nonempty), abs(a.w))
 
@@ -179,8 +179,8 @@ function Base.cmp(a::VersionWeight, b::VersionWeight)
     c = cmp(a.build, b.build); c != 0 && return c
     return cmp(a.uninstall, b.uninstall)
 end
-Base.isless(a::VersionWeight, b::VersionWeight) = (cmp(a, b) == -1)
-Base.isequal(a::VersionWeight, b::VersionWeight) = (cmp(a, b) == 0)
+Base.isless(a::VersionWeight, b::VersionWeight) = cmp(a,b) < 0
+==(a::VersionWeight, b::VersionWeight) = cmp(a,b) == 0
 
 Base.abs(a::VersionWeight) =
     VersionWeight(abs(a.major), abs(a.minor), abs(a.patch),

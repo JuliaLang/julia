@@ -39,11 +39,9 @@ function __init__()
     catch
         println(STDERR, "Entropy pool not available to seed RNG; using ad-hoc entropy sources.")
         seed = reinterpret(Uint64, time())
-        seed = bitmix(seed, uint64(getpid()))
+        seed = hash(seed, uint64(getpid()))
         try
-            seed = bitmix(seed, parseint(Uint64, readall(`ifconfig` |> `sha1sum`)[1:40], 16))
-        catch
-            # ignore
+        seed = hash(seed, parseint(Uint64, readall(`ifconfig` |> `sha1sum`)[1:40], 16))
         end
         srand(seed)
     end
