@@ -40,7 +40,7 @@ Base.typemin(::Type{FieldValue}) = (x=typemin(Int); y=typemin(VersionWeight); Fi
 Base.(:-)(a::FieldValue, b::FieldValue) = FieldValue(a.l0-b.l0, a.l1-b.l1, a.l2-b.l2, a.l3-b.l3, a.l4-b.l4)
 Base.(:+)(a::FieldValue, b::FieldValue) = FieldValue(a.l0+b.l0, a.l1+b.l1, a.l2+b.l2, a.l3+b.l3, a.l4+b.l4)
 
-function <(a::FieldValue, b::FieldValue)
+function Base.isless(a::FieldValue, b::FieldValue)
     a.l0 < b.l0 && return true
     a.l0 > b.l0 && return false
     c = cmp(a.l1, b.l1)

@@ -126,7 +126,7 @@ end
 
 issupbuild(v::VersionNumber) = length(v.build)==1 && isempty(v.build[1])
 
-function <(a::VersionNumber, b::VersionNumber)
+function isless(a::VersionNumber, b::VersionNumber)
     (a.major < b.major) && return true
     (a.major > b.major) && return false
     (a.minor < b.minor) && return true

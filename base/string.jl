@@ -483,7 +483,7 @@ function cmp(a::String, b::String)
 end
 
 ==(a::String, b::String) = cmp(a,b) == 0
-< (a::String, b::String) = cmp(a,b) <  0
+isless(a::String, b::String) = cmp(a,b) < 0
 
 # begins with and ends with predicates
 
@@ -521,7 +521,7 @@ cmp(a::ByteString, b::ByteString) = lexcmp(a.data, b.data)
 cmp(a::Symbol, b::Symbol) = int(sign(ccall(:strcmp, Int32, (Ptr{Uint8}, Ptr{Uint8}), a, b)))
 
 ==(a::ByteString, b::ByteString) = endof(a) == endof(b) && cmp(a,b) == 0
-<(a::Symbol, b::Symbol) = cmp(a,b) < 0
+isless(a::Symbol, b::Symbol) = cmp(a,b) < 0
 
 beginswith(a::ByteString, b::ByteString) = beginswith(a.data, b.data)
 beginswith(a::Array{Uint8,1}, b::Array{Uint8,1}) =
