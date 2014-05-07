@@ -43,12 +43,12 @@ New language features
     |   +              | ⊕ ⊖ ⊞ ⊟ ∪ (`union`) ∨ ⊔ |
     |   *              | ÷ (`div`) ⋅ (`dot`) ∘ × (`cross`) ∩ (`intersect`) ∧ ⊓ ⊗ ⊘ ⊙ ⊚ ⊛ ⊠ ⊡ |
 
-  * Support `√` as synonym for `sqrt` ([#6582])
-
 Library improvements
 --------------------
 
-  * Implement shared-memory parallelism with `SharedArray`s ([#5380]).
+  * `isequal` now compares all numbers by value, ignoring type ([#6624]).
+
+  * Implement limited shared-memory parallelism with `SharedArray`s ([#5380]).
 
   * Well-behaved floating-point ranges ([#2333], [#5636]).
     Introduced the `FloatRange` type for floating-point ranges with a step,
@@ -311,6 +311,8 @@ Deprecated or removed
   * `Range` is renamed `StepRange` and `Range1` is renamed `UnitRange`.
     `Ranges` is renamed `Range`.
 
+  * `bitmix` is replaced by a 2-argument form of `hash`.
+
 [#4042]: https://github.com/JuliaLang/julia/issues/4042
 [#5164]: https://github.com/JuliaLang/julia/issues/5164
 [#4026]: https://github.com/JuliaLang/julia/issues/4026
@@ -392,6 +394,7 @@ Deprecated or removed
 [#6273]: https://github.com/JuliaLang/julia/pull/6273
 [#552]: https://github.com/JuliaLang/julia/issues/552
 [#6582]: https://github.com/JuliaLang/julia/pull/6582
+[#6624]:https://github.com/JuliaLang/julia/pull/6624
 
 Julia v0.2.0 Release Notes
 ==========================

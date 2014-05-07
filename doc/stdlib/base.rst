@@ -188,9 +188,11 @@ All Objects
 
    Get a unique integer id for ``x``. ``object_id(x)==object_id(y)`` if and only if ``is(x,y)``.
 
-.. function:: hash(x)
+.. function:: hash(x[, h])
 
    Compute an integer hash code such that ``isequal(x,y)`` implies ``hash(x)==hash(y)``.
+   The optional second argument ``h`` is a hash code to be mixed with the result.
+   New types should implement the 2-argument form.
 
 .. function:: finalizer(x, function)
 
@@ -3056,11 +3058,6 @@ Mathematical Functions
 .. function:: zeta(x)
 
    Riemann zeta function :math:`\zeta(s)`.
-
-.. function:: bitmix(x, y)
-
-   Hash two integers into a single integer. Useful for constructing hash
-   functions.
 
 .. function:: ndigits(n, b)
 
