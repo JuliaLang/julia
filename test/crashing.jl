@@ -7,23 +7,16 @@ parapply = Base.parapply_jl
 function my_matmult(A,x,b,i)
   local N = length(x)
   @inbounds begin
-    b[i] = 0
-    local l=1
-    while l<=N
-      b[i] += A[l,i]*x[l]
-      l += 1
-    end
+    b[i] = sum( A[:,i].*x )
   end
   nothing
 end
 
-let N=8000
+let N=2000
   dtype = Int128
   x=ones(dtype,N)
   A=ones(dtype,N,N)
   b3=zeros(dtype,N)
-
-  #  my_matmult(A,x,b3,1)
 
   for i=1:100
     println(i)

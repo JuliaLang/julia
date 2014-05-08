@@ -32,6 +32,8 @@
 extern "C" {
 #endif
 
+JL_DEFINE_MUTEX_EXT(codegen)
+
 // exceptions -----------------------------------------------------------------
 
 DLLEXPORT void jl_error(const char *str)
@@ -371,6 +373,7 @@ extern int jl_lineno;
 
 JL_CALLABLE(jl_f_top_eval)
 {
+    JL_LOCK(codegen)
     jl_module_t *m;
     jl_value_t *ex;
     if (nargs == 1) {
@@ -383,14 +386,17 @@ JL_CALLABLE(jl_f_top_eval)
         m = (jl_module_t*)args[0];
         ex = args[1];
     }
-    if (jl_is_symbol(ex)) {
-        return jl_eval_global_var(m, (jl_sym_t*)ex);
-    }
     jl_value_t *v=NULL;
+    if (jl_is_symbol(ex)) {
+        v = jl_eval_global_var(m, (jl_sym_t*)ex);
+        JL_UNLOCK(codegen)
+        return v;
+    }
     int last_lineno = jl_lineno;
     if (m == jl_current_module) {
         v = jl_toplevel_eval(ex);
         jl_lineno = last_lineno;
+        JL_UNLOCK(codegen)
         return v;
     }
     jl_module_t *last_m = jl_current_module;
@@ -403,12 +409,14 @@ JL_CALLABLE(jl_f_top_eval)
         jl_lineno = last_lineno;
         jl_current_module = last_m;
         jl_current_task->current_module = task_last_m;
+        JL_UNLOCK(codegen)
         jl_rethrow();
     }
     jl_lineno = last_lineno;
     jl_current_module = last_m;
     jl_current_task->current_module = task_last_m;
     assert(v);
+    JL_UNLOCK(codegen)
     return v;
 }
 
@@ -720,8 +728,6 @@ void jl_show(jl_value_t *stream, jl_value_t *v)
 extern int jl_in_inference;
 extern int jl_boot_file_loaded;
 int jl_eval_with_compiler_p(jl_expr_t *expr, int compileloops);
-
-JL_DEFINE_MUTEX_EXT(codegen)
 
 JL_CALLABLE(jl_trampoline)
 {
