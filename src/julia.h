@@ -1233,7 +1233,7 @@ DLLEXPORT void jl_global_unlock();
 
 #define JL_LOCK(m) \
   int locked = 0; \
-  if( m ## _thread_id != uv_thread_self()) \
+  if( m ## _thread_id != uv_thread_self() && jl_main_thread_id != uv_thread_self()) \
   { \
       uv_mutex_lock(& m ## _mutex); \
       locked = 1; \
