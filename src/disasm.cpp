@@ -163,9 +163,9 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
     // Make the MemoryObject wrapper
     FuncMCView memoryObject(Fptr, Fsize);
 
-    uint64_t Size;
-    uint64_t Index;
-    uint64_t absAddr;
+    uint64_t Size = 0;
+    uint64_t Index = 0;
+    uint64_t absAddr = 0;
 
     // Set up the line info
     typedef std::vector<JITEvent_EmittedFunctionDetails::LineStart> LInfoVec;
@@ -220,7 +220,6 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
         break;
         }
     }
-
 #else // MCJIT version
     FuncMCView memoryObject(Fptr, Fsize); // MemoryObject wrapper
 
@@ -234,24 +233,31 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
     DILineInfoTable::iterator lines_end = lineinfo.end();
 
     uint64_t nextLineAddr = -1;
-    DISubprogram debugscope;
 
     if (lines_iter != lineinfo.end()) {
         nextLineAddr = lines_iter->first;
+        #ifdef LLVM35
+        stream << "Filename: " << lines_iter->second.FileName << "\n";
+        #else
         stream << "Filename: " << lines_iter->second.getFileName() << "\n";
+        #endif
     }
 
-    uint64_t Index;
-    uint64_t absAddr;
-    uint64_t insSize; 
+    uint64_t Index = 0;
+    uint64_t absAddr = 0;
+    uint64_t insSize = 0; 
 
     // Do the disassembly
     for (Index = 0, absAddr = (uint64_t)Fptr;
          Index < memoryObject.getExtent(); Index += insSize, absAddr += insSize) {
         
         if (nextLineAddr != (uint64_t)-1 && absAddr == nextLineAddr) {
+            #ifdef LLVM35
+            stream << "Source line: " << lines_iter->second.Line << "\n";
+            #else
             stream << "Source line: " << lines_iter->second.getLine() << "\n";
-            nextLineAddr = lines_iter->first;
+            #endif
+            nextLineAddr = (++lines_iter)->first;
         }
 
         MCInst Inst;

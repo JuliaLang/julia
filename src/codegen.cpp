@@ -717,17 +717,28 @@ const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
         
         jl_dump_function_asm((void*)fptr, fit->second.lengthAdr, fit->second.lines, fstream);
 #else // MCJIT version
-        std::map<size_t, ObjectInfo> objmap = jl_jit_events->getObjectMap();
-        std::map<size_t, ObjectInfo>::iterator fit = objmap.find(fptr);
+        std::map<size_t, ObjectInfo, revcomp> objmap = jl_jit_events->getObjectMap();
+        std::map<size_t, ObjectInfo, revcomp>::iterator fit = objmap.find(fptr);
         
         if (fit == objmap.end()) {
-            JL_PRINTF(JL_STDERR, "Warning: Unable to find ObjectFile for function");
+            JL_PRINTF(JL_STDERR, "Warning: Unable to find ObjectFile for function\n");
             return jl_cstr_to_string(const_cast<char*>(""));
         }
         
-        error_code itererr;
         object::SymbolRef::Type symtype;
         size_t symsize, symaddr;
+
+        #ifdef LLVM35
+        for (const object::SymbolRef &sym_iter : fit->second.object->symbols()) {
+            sym_iter.getType(symtype);
+            sym_iter.getAddress(symaddr);
+            if (symtype != object::SymbolRef::ST_Function || symaddr != fptr)
+                continue;
+            sym_iter.getSize(symsize);
+            jl_dump_function_asm((void*)fptr, symsize, fit->second.object, fstream);
+        }
+        #else
+        error_code itererr;
         object::symbol_iterator sym_iter = fit->second.object->begin_symbols();
         object::symbol_iterator sym_end = fit->second.object->end_symbols();
         for (; sym_iter != sym_end; sym_iter.increment(itererr)) {
@@ -738,6 +749,7 @@ const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
             sym_iter->getSize(symsize);
             jl_dump_function_asm((void*)fptr, symsize, fit->second.object, fstream);
         }
+        #endif // LLVM35
 #endif 
         fstream.flush();
     }
@@ -1446,7 +1458,6 @@ static Value *emit_f_is(jl_value_t *rt1, jl_value_t *rt2,
                                   builder.CreateExtractValue(varg1, ArrayRef<unsigned>(&i,1)),
                                   builder.CreateExtractValue(varg2, ArrayRef<unsigned>(&i,1)),
                                   ctx);
-                    answer = builder.CreateAnd(answer, subAns);
                 }
                 else {
                     subAns =
@@ -3219,11 +3230,11 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     else {
         m = shadow_module;
     }
+    funcName << ";" << globalUnique++;
 #else
     m = jl_Module;
+    funcName << globalUnique++;
 #endif
-
-    funcName << ";" << globalUnique++;
 
     if (specsig) {
         std::vector<Type*> fsig(0);

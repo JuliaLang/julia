@@ -2,8 +2,6 @@
 typedef object::SymbolRef SymRef;
 #endif
 
-#include <iostream> // TODO: temp
-
 // --- storing and accessing source location metadata ---
 
 #ifndef USE_MCJIT
@@ -40,7 +38,7 @@ class JuliaJITEventListener: public JITEventListener
 #ifndef USE_MCJIT
     std::map<size_t, FuncInfo, revcomp> info;
 #else
-    std::map<size_t, ObjectInfo> objectmap;
+    std::map<size_t, ObjectInfo, revcomp> objectmap;
 #endif
 
 public:
@@ -101,46 +99,52 @@ public:
 #endif // ndef USE_MCJIT
 
 #if USE_MCJIT
-    
     virtual void NotifyObjectEmitted(const ObjectImage &obj)
     {
-        object::symbol_iterator sym_iter = obj.begin_symbols();
-        object::symbol_iterator sym_end = obj.end_symbols();
-      
-        StringRef Name;
         uint64_t Addr;
-        //uint64_t Size;
         object::SymbolRef::Type SymbolType;
 
+        #ifdef LLVM35
+        for (const object::SymbolRef &sym_iter : obj.symbols()) {
+            sym_iter.getType(SymbolType);
+            if (SymbolType != object::SymbolRef::ST_Function) continue;
+            
+            sym_iter.getAddress(Addr);
+            ObjectInfo tmp = {obj.getObjectFile(), sym_iter};
+            objectmap[Addr] = tmp;
+        }
+        #else
         error_code itererr; 
+        object::symbol_iterator sym_iter = obj.begin_symbols();
+        object::symbol_iterator sym_end = obj.end_symbols();
         for (; sym_iter != sym_end; sym_iter.increment(itererr)) {
             sym_iter->getType(SymbolType);
             if (SymbolType != object::SymbolRef::ST_Function) continue;
             sym_iter->getAddress(Addr);
-            sym_iter->getName(Name);
 
             ObjectInfo tmp = {obj.getObjectFile(), *sym_iter};
             objectmap[Addr] = tmp;
         }
+        #endif
     }
 
     // must implement if we ever start freeing code
     // virtual void NotifyFreeingObject(const ObjectImage &obj) {}
 
-    std::map<size_t, ObjectInfo>& getObjectMap()
+    std::map<size_t, ObjectInfo, revcomp>& getObjectMap()
     {
         return objectmap;
     }
 #endif // USE_MCJIT
 };
 
-#if USE_MCJIT
+#if defined(USE_MCJIT) && !defined(LLVM35)
 extern "C"
 const char *jl_demangle(const char *name) {
     const char *start = name;
+    const char *end = start;
     while ((*start++ != '_') && (*start != '\0'));
     if (*name == '\0') goto done;
-    const char *end = start;
     while ((*end++ != ';') && (*end != '\0'));
     if (*name == '\0') goto done;
     return strndup(start, end-start-1);
@@ -160,32 +164,38 @@ void jl_getFunctionInfo(const char **name, int *line, const char **filename, siz
     *filename = "no file";
 
 #if USE_MCJIT
-// With MCJIT we can get information directly from the ObjectFile
-
-    std::map<size_t, ObjectInfo> &objmap = jl_jit_events->getObjectMap();
-    std::map<size_t, ObjectInfo>::iterator it = objmap.lower_bound(pointer);
+// With MCJIT we can get function information directly from the ObjectFile
+    std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
+    std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(pointer);
 
     if (it == objmap.end()) return;
+
     DIContext *context = DIContext::getDWARFContext(it->second.object);
     if (context == NULL) return;
-    int infoflags = DILineInfoSpecifier::FileLineInfo |
+    #ifdef LLVM35
+    DILineInfoSpecifier infoSpec(DILineInfoSpecifier::FileLineInfoKind::AbsoluteFilePath,
+                             DILineInfoSpecifier::FunctionNameKind::ShortName);
+    #else
+    int infoSpec = DILineInfoSpecifier::FileLineInfo |
                     DILineInfoSpecifier::AbsoluteFilePath |
                     DILineInfoSpecifier::FunctionName;
-    DILineInfo info = context->getLineInfoForAddress(pointer, infoflags);
+    #endif 
+    DILineInfo info = context->getLineInfoForAddress(pointer, infoSpec);
 
     #ifndef LLVM35 // LLVM <= 3.4
     if (strcmp(info.getFunctionName(), "<invalid>") == 0) return;
-    *name = info.getFunctionName();
+    *name = jl_demangle(info.getFunctionName());
     *line = info.getLine();
-    *filename = info.getFileName();
+    *filename = strdup(info.getFileName());
     #else
     if (strcmp(info.FunctionName.c_str(), "<invalid>") == 0) return;
-    *name = jl_demangle(info.FunctionName.c_str());
+    *name = strdup(info.FunctionName.c_str());
     *line = info.Line;
     *filename = strdup(info.FileName.c_str());
-    #endif //LLVM35
+    #endif
 
-#else
+#else // !USE_MCJIT
+
 // Without MCJIT we use the FuncInfo structure containing address maps
     std::map<size_t, FuncInfo, revcomp> &info = jl_jit_events->getMap();
     std::map<size_t, FuncInfo, revcomp>::iterator it = info.lower_bound(pointer);
@@ -450,7 +460,5 @@ extern "C" void jl_restore_linedebug_info(uv_lib_t *handle) {
 }
 #else
 extern "C" void jl_dump_linedebug_info() {}
-extern "C" void jl_restore_linedebug_info(uv_lib_t* handle) {
-            
-}
+extern "C" void jl_restore_linedebug_info(uv_lib_t* handle) {}
 #endif
