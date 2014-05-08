@@ -962,9 +962,6 @@ jl_value_t *jl_apply(jl_function_t *f, jl_value_t **args, uint32_t nargs)
     return f->fptr((jl_value_t*)f, args, nargs);
 }
 
-DLLEXPORT jl_function_t *jl_method_table_assoc_exact(jl_methtable_t *mt,
-                                                  jl_value_t **args, size_t n);
-
 DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t nargs);
 DLLEXPORT jl_value_t *jl_call0(jl_function_t *f);
 DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a);
@@ -1205,6 +1202,8 @@ void jl_longjmp(jmp_buf _Buf,int _Value);
         for (i__ca=1, jl_eh_restore_state(&__eh); i__ca; i__ca=0)
 #endif
 
+// Threads
+
 DLLEXPORT void jl_par_apply(jl_function_t * func, jl_value_t* args, size_t num_threads, size_t start, size_t step, size_t length );
 
 typedef struct {
@@ -1217,6 +1216,12 @@ DLLEXPORT jl_thread_t* jl_create_thread(jl_function_t* f, jl_tuple_t* targs);
 DLLEXPORT void jl_run_thread(jl_thread_t* t);
 DLLEXPORT void jl_join_thread(jl_thread_t* t);
 DLLEXPORT void jl_destroy_thread(jl_thread_t* t);
+
+DLLEXPORT uv_mutex_t* jl_create_mutex();
+DLLEXPORT void jl_lock_mutex(uv_mutex_t* m);
+DLLEXPORT void jl_unlock_mutex(uv_mutex_t* m);
+DLLEXPORT void jl_destroy_mutex(uv_mutex_t* m);
+
 DLLEXPORT void jl_global_lock();
 DLLEXPORT void jl_global_unlock();
 

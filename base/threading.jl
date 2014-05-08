@@ -21,6 +21,23 @@ function Thread(f::Function,args...)
   t    
 end
 
+### Mutex type
+
+type Mutex
+  handle::Ptr{Void}
+end
+
+lock(m::Mutex)=(ccall(:jl_lock_mutex,Void,(Ptr{Void},),m.handle))
+unlock(m::Mutex)=(ccall(:jl_unlock_mutex,Void,(Ptr{Void},),m.handle))
+destroy(m::Mutex)=(ccall(:jl_destroy_mutex,Void,(Ptr{Void},),m.handle))
+
+function Mutex()
+  m=Mutex(ccall(:jl_create_mutex,Ptr{Void},()))
+
+  finalizer(m, destroy)
+  m
+end
+
 global_lock() = ccall(:jl_global_lock,Void,())
 global_unlock() = ccall(:jl_global_unlock,Void,())
 

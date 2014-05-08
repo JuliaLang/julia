@@ -17,10 +17,10 @@ uv_mutex_t codegen_mutex;
 
 void jl_init_threading()
 {
-  uv_mutex_init(&global_mutex);
-  uv_mutex_init(&gc_mutex);
-  uv_mutex_init(&codegen_mutex);
-  jl_main_thread_id = uv_thread_self();
+    uv_mutex_init(&global_mutex);
+    uv_mutex_init(&gc_mutex);
+    uv_mutex_init(&codegen_mutex);
+    jl_main_thread_id = uv_thread_self();
 }
 
 void jl_global_lock()
@@ -30,57 +30,84 @@ void jl_global_lock()
 
 void jl_global_unlock()
 {
-  uv_mutex_unlock(&global_mutex);
+    uv_mutex_unlock(&global_mutex);
 }
 
 void jl_gc_lock()
 {
-  uv_mutex_lock(&gc_mutex);
+    uv_mutex_lock(&gc_mutex);
 }
 
 void jl_gc_unlock()
 {
-  uv_mutex_unlock(&gc_mutex);
+    uv_mutex_unlock(&gc_mutex);
 }
 
 void run_thread(void* t)
 {
-  jl_function_t* f = ((jl_thread_t*)t)->f;
-  jl_tuple_t* targs = ((jl_thread_t*)t)->targs;
+    jl_function_t* f = ((jl_thread_t*)t)->f;
+    jl_tuple_t* targs = ((jl_thread_t*)t)->targs;
 
-  jl_value_t** args = (jl_value_t**) alloca( sizeof(jl_value_t*)*jl_tuple_len(targs));
-  for(int l=0; l<jl_tuple_len(targs); l++)
-    args[l] = jl_tupleref(targs,l);
+    jl_value_t** args = (jl_value_t**) alloca( sizeof(jl_value_t*)*jl_tuple_len(targs));
+    for(int l=0; l<jl_tuple_len(targs); l++)
+      args[l] = jl_tupleref(targs,l);
 
-  jl_apply(f,args,jl_tuple_len(targs));
+    jl_apply(f,args,jl_tuple_len(targs));
 }
 
 jl_thread_t* jl_create_thread(jl_function_t* f, jl_tuple_t* targs)
 {
-  int nargs = jl_tuple_len(targs);
-  jl_thread_t* t = (jl_thread_t*) malloc(sizeof(jl_thread_t));
+    int nargs = jl_tuple_len(targs);
+    jl_thread_t* t = (jl_thread_t*) malloc(sizeof(jl_thread_t));
             
-  jl_tuple_t* argtypes = arg_type_tuple(&jl_tupleref(targs,0), nargs);
-  t->f = jl_get_specialization(f, argtypes);
-  jl_compile(t->f);
-  t->targs = targs;
-  return t;
+    jl_tuple_t* argtypes = arg_type_tuple(&jl_tupleref(targs,0), nargs);
+    t->f = jl_get_specialization(f, argtypes);
+    jl_compile(t->f); // does this make sense here?
+    t->targs = targs;
+    return t;
 }
   
 void jl_run_thread(jl_thread_t* t)
 {
-  uv_thread_create(&(t->t), run_thread, t);
+    uv_thread_create(&(t->t), run_thread, t);
 }
 
 void jl_join_thread(jl_thread_t* t)
 {
-  uv_thread_join(&(t->t));
+    uv_thread_join(&(t->t));
 }
 
 void jl_destroy_thread(jl_thread_t* t)
 {
-  free(t);
+    free(t);
 }
+
+// locks
+
+uv_mutex_t* jl_create_mutex()
+{
+    uv_mutex_t* m = (uv_mutex_t*) malloc(sizeof(uv_mutex_t));
+    uv_mutex_init(m);
+    return m;
+}
+
+void jl_lock_mutex(uv_mutex_t* m)
+{
+    uv_mutex_lock(m);
+}
+
+void jl_unlock_mutex(uv_mutex_t* m)
+{
+    uv_mutex_unlock(m);
+}
+
+void jl_destroy_mutex(uv_mutex_t* m)
+{
+    uv_mutex_destroy(m);
+    free(m);
+}
+
+// parapply
 
 static uv_mutex_t parapply_mutex;
 

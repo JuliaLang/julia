@@ -978,7 +978,7 @@ void *allocb(size_t sz)
     void *b;
     sz += sizeof(void*);
 #ifdef MEMDEBUG
-    b = alloc_big(sz)
+    b = alloc_big(sz);
 #else
     if (sz > 2048) {
         b = alloc_big(sz);

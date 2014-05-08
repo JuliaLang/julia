@@ -840,7 +840,7 @@ jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_tuple_t *sparams)
 {
     jl_tuple_t *spenv = NULL;
     jl_value_t *ast = li->ast;
-    if (ast == NULL) return NULL;    
+    if (ast == NULL) return NULL;
     JL_GC_PUSH2(&spenv, &ast);
     spenv = jl_tuple_tvars_to_symbols(sparams);
     if (!jl_is_expr(ast)) {
