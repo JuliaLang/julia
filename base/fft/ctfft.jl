@@ -174,7 +174,7 @@ macro twiddle(T, forward, n)
             @inbounds @simd for i in 0:vn-1
                 $(fftgen(Complex{eval(T)}, forward, n,
                          j -> j == 0 ? :(X[(x0 + xvs*i) + xs*$j]) :
-                              forward ? :(W[$(j+1),i+1] * X[(x0 + xvs*i) + xs*$j]) : :(mulconj(W[$(j+1),i+1], X[(x0 + xvs*i) + xs*$j])),
+                              forward ? :(W[$j,i+1] * X[(x0 + xvs*i) + xs*$j]) : :(mulconj(W[$j,i+1], X[(x0 + xvs*i) + xs*$j])),
                          j -> :(X[(x0 + xvs*i) + xs*$j])))
             end
             X
@@ -222,7 +222,7 @@ end
 
 Nontwiddle(T, n::Int, forw::Bool) = (T <: CTComplex && n in fft_kernel_sizes) || n in generic_kernel_sizes ? NontwiddleKernelStep{T}(n, forw) : NontwiddleBluesteinStep{T}(n, forw)
 
-Twiddle(T, n::Int, r::Int, forw::Bool) = (T <: CTComplex && r in fft_kernel_sizes) || r == 4 ? TwiddleKernelStep{T}(n, r, forw) : TwiddleBluesteinStep{T}(n, r, forw)
+Twiddle(T, n::Int, r::Int, forw::Bool) = (T <: CTComplex && r in fft_kernel_sizes) || r == 4 || r == 2 ? TwiddleKernelStep{T}(n, r, forw) : TwiddleBluesteinStep{T}(n, r, forw)
 
 #############################################################################
 # Combining pregenerated kernels into generic-size FFT plans:
@@ -322,7 +322,7 @@ immutable TwiddleKernelStep{T} <: TwiddleStep{T}
         m = div(n, r)
         Tr = promote_type(Float64, real(T))
         twopi_n = -2(π/convert(Tr,n))
-        W = T[exp((twopi_n*mod(j1*k2,n))*im) for j1=0:r-1, k2=0:m-1]
+        W = T[exp((twopi_n*mod(j1*k2,n))*im) for j1=1:r-1, k2=0:m-1]
         TwiddleKernelStep{T}(m, r, forward, W)
     end
 end
@@ -462,7 +462,7 @@ inv{T}(s::NontwiddleBluesteinStep{T}) =
     NontwiddleBluesteinStep{T}(s.n, !s.forward)
 
 show(io::IO, s::NontwiddleBluesteinStep) =
-    print(io, "size ", s.n, "Bluestein-", s.n2)
+    print(io, "size ", s.n, " Bluestein-", s.n2)
 
 function applystep{T}(ns::NontwiddleBluesteinStep{T}, r,
                       x::AbstractArray{T}, x0, xs,
@@ -526,13 +526,13 @@ immutable TwiddleBluesteinStep{T} <: TwiddleStep{T}
         b = bluestein_b(T, forward, r, r2)
         B = p * b
         new(r, m,
-            T[exp((twopi_n*mod(j1*k2,n))*im) for j1=0:r-1, k2=0:m-1],
+            T[exp((twopi_n*mod(j1*k2,n))*im) for j1=1:r-1, k2=0:m-1],
             r2, p, a, A, b, B, forward)
     end
 end
 
 show(io::IO, s::TwiddleBluesteinStep) =
-    print(io, "radix ", s.r, "Bluestein-", s.r2)
+    print(io, "radix ", s.r, " Bluestein-", s.r2)
 
 inv{T}(s::TwiddleBluesteinStep{T}) =
     TwiddleBluesteinStep{T}(s.r*s.m, s.r, !s.forward)
@@ -546,8 +546,9 @@ function applystep{T}(ts::TwiddleBluesteinStep{T}, y::AbstractArray{T}, y0,ys)
     z = zero(T)
     ys_ = ys*ts.m
     for i = 1:ts.m
-        @inbounds for j = 1:ts.r
-            a[j] = W[j,i] * y[y0 + ys_*(j-1)] * b[j]'
+        a[1] = y[y0] * b[1]'
+        @inbounds for j = 2:ts.r
+            a[j] = W[j-1,i] * y[y0 + ys_*(j-1)] * b[j]'
         end
         @inbounds for j = ts.r+1:ts.r2
             a[j] = z

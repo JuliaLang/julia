@@ -278,7 +278,7 @@ function fft_test{T<:Complex}(p::Base.DFT.Plan{T}, ntrials=4,
 end
 
 for T in (Complex64, Complex128)
-    for n in [1:100, 1000, 1024, 1031, 2000, 2048]
+    for n in [1:100, 121, 143, 1000, 1024, 1031, 2000, 2048]
         x = zeros(T, n)
         fft_test(plan_fft(x))
         fft_test(plan_fft_(x))
