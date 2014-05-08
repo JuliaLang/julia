@@ -103,7 +103,7 @@ static int jl_has_typevars__(jl_value_t *v, int incl_wildcard, jl_tuple_t *p)
     if (jl_is_uniontype(v))
         t = ((jl_uniontype_t*)v)->types;
     else if (jl_is_datatype(v)) {
-        if (p==NULL && is_unspec((jl_datatype_t*)v))
+        if (is_unspec((jl_datatype_t*)v))
             return 0;
         t = ((jl_datatype_t*)v)->parameters;
     }
@@ -133,6 +133,8 @@ static int jl_has_typevars_(jl_value_t *v, int incl_wildcard)
 
 static int jl_has_typevars_from(jl_value_t *v, jl_tuple_t *p)
 {
+    if (jl_tuple_len(p) == 0)
+        return 0;
     return jl_has_typevars__(v, 0, p);
 }
 
@@ -980,7 +982,9 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
       by rewriting this type to Range{_<:Date{C}}, effectively tagging type
       parameters that are variable due to the extra (dropped) environment.
     */
-    if (jl_has_typevars_from((jl_value_t*)sub->super, ((jl_datatype_t*)sub->name->primary)->parameters))
+    if (var == covariant &&
+        sub == (jl_datatype_t*)sub->name->primary &&
+        jl_has_typevars_from((jl_value_t*)sub->super, ((jl_datatype_t*)sub->name->primary)->parameters))
         env = approxify_type((jl_datatype_t*)sub->super, ((jl_datatype_t*)sub->name->primary)->parameters);
     else
         env = (jl_value_t*)sub->super;

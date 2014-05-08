@@ -1631,3 +1631,7 @@ function day_in(obj::ObjMember)
     @test isa(x[1], Date6387{Int64})
 end
 day_in(obj)
+
+# issue #6784
+@test ndims(Array(Array{Float64},3,5)) == 2
+@test ndims(Array(Array,3,5)) == 2
