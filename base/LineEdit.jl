@@ -809,8 +809,9 @@ macro keymap(keymaps)
     end)
 end
 
-const escape_defaults = {
-    # Ignore other escape sequences by default
+const escape_defaults = merge!(
+    {i => nothing for i=1:31}, # Ignore control characters by default
+    { # And ignore other escape sequences by default
     "\e*" => nothing,
     "\e[*" => nothing,
     # Also ignore extended escape sequences
@@ -831,7 +832,7 @@ const escape_defaults = {
     "\eOD"  => "\e[D",
     "\eOH"  => "\e[H",
     "\eOF"  => "\e[F",
-}
+})
 
 function write_response_buffer(s::PromptState, data)
     offset = s.input_buffer.ptr
@@ -1025,13 +1026,6 @@ function setup_search_keymap(hp)
         # Use ^N and ^P to change search directions and iterate through results
         "^N"      => :(LineEdit.history_set_backward(data, false); LineEdit.history_next_result(s, data)),
         "^P"      => :(LineEdit.history_set_backward(data, true); LineEdit.history_next_result(s, data)),
-        # Should we transpose the last characters of the query buf?
-        "^T"      => nothing,
-        # Unused and unprintable control characters
-        "^O"      => nothing,
-        "^Q"      => nothing,
-        "^V"      => nothing,
-        "^X"      => nothing,
         "*"       => :(LineEdit.edit_insert(data.query_buffer, c1); LineEdit.update_display_buffer(s, data))
     }
     p.keymap_func = @eval @LineEdit.keymap $([pkeymap, escape_defaults])
@@ -1206,12 +1200,6 @@ const default_keymap =
         edit_insert(s, input)
     end,
     "^T"      => edit_transpose,
-    # Unused and unprintable control character combinations
-    "^G"      => nothing,
-    "^O"      => nothing,
-    "^Q"      => nothing,
-    "^V"      => nothing,
-    "^X"      => nothing,
 }
 
 function history_keymap(hist)
