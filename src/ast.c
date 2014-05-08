@@ -30,8 +30,6 @@ static uint8_t flisp_system_image[] = {
 extern fltype_t *iostreamtype;
 static fltype_t *jvtype=NULL;
 
-static uv_mutex_t ast_mutex;
-
 static jl_value_t *scm_to_julia(value_t e, int expronly);
 static value_t julia_to_scm(jl_value_t *v);
 
@@ -116,7 +114,6 @@ static value_t false_sym;
 
 DLLEXPORT void jl_init_frontend(void)
 {
-    uv_mutex_init(&ast_mutex);
     fl_init(2*512*1024);
     value_t img = cvalue(iostreamtype, sizeof(ios_t));
     ios_t *pi = value2c(ios_t*, img);
@@ -834,8 +831,6 @@ jl_tuple_t *jl_tuple_tvars_to_symbols(jl_tuple_t *t)
     return s;
 }
 
-static int nested_prepare_ast = 0;
-
 // given a new lambda_info with static parameter values, make a copy
 // of the tree with declared types evaluated and static parameters passed
 // on to all enclosed functions.
@@ -843,16 +838,9 @@ static int nested_prepare_ast = 0;
 DLLEXPORT
 jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_tuple_t *sparams)
 {
-    int locked = 0;
     jl_tuple_t *spenv = NULL;
     jl_value_t *ast = li->ast;
     if (ast == NULL) return NULL;    
-    if(!nested_prepare_ast)
-    {
-      uv_mutex_lock(&ast_mutex);
-      nested_prepare_ast = 1;
-      locked = 1;
-    }
     JL_GC_PUSH2(&spenv, &ast);
     spenv = jl_tuple_tvars_to_symbols(sparams);
     if (!jl_is_expr(ast)) {
@@ -870,21 +858,10 @@ jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_tuple_t *sparams)
     }
     JL_CATCH {
         jl_current_module = last_m;
-        if(nested_prepare_ast)
-        if(locked)
-        {
-            nested_prepare_ast = 0;
-            uv_mutex_unlock(&ast_mutex);
-        } 
         jl_rethrow();
     }
     jl_current_module = last_m;
     JL_GC_POP();
-    if(locked)
-    {  
-        nested_prepare_ast = 0;
-        uv_mutex_unlock(&ast_mutex);
-    }    
     return ast;
 }
 
