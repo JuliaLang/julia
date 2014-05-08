@@ -476,9 +476,8 @@ static void jl_rethrow_with_add(const char *fmt, ...)
     jl_rethrow();
 }
 
-static uv_mutex_t codegen_mutex;
-static long codegen_thread_id = -1;
-static uv_mutex_t genfptr_mutex;
+extern uv_mutex_t codegen_mutex;
+extern long codegen_thread_id;
 
 // --- entry point ---
 //static int n_emit=0;
@@ -602,13 +601,11 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
 
         Function *llvmf = (Function*)li->functionObject;
        
-        uv_mutex_lock(&genfptr_mutex); 
 #ifdef USE_MCJIT
         li->fptr = (jl_fptr_t)jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
 #else
         li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
 #endif
-        uv_mutex_unlock(&genfptr_mutex); 
         assert(li->fptr != NULL);
         if (li->cFunctionObject != NULL) {
 #ifdef USE_MCJIT
@@ -4368,9 +4365,6 @@ extern "C" void jl_init_codegen(void)
                                          (void*)&restore_arg_area_loc);
 
     typeToTypeId = jl_alloc_cell_1d(16);
-    
-    uv_mutex_init(&codegen_mutex);
-    uv_mutex_init(&genfptr_mutex);
 }
 
 /*

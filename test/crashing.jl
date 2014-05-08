@@ -23,7 +23,7 @@ let N=8000
   A=ones(dtype,N,N)
   b3=zeros(dtype,N)
 
-  # my_matmult(A,x,b3,1)
+  #  my_matmult(A,x,b3,1)
 
   for i=1:100
     println(i)

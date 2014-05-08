@@ -384,18 +384,18 @@ extern jl_function_t *jl_typeinf_func;
   can be equal to "li" if not applicable.
 */
 int jl_in_inference = 0;
-extern uv_mutex_t inference_mutex;
-long inference_thread_id = -1;
+extern uv_mutex_t codegen_mutex;
+extern long codegen_thread_id;
 void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
                    jl_lambda_info_t *def)
 {
     int last_ii = jl_in_inference;
     int locked = 0;
-    if(!jl_in_inference || inference_thread_id != uv_thread_self())
+    if(codegen_thread_id != uv_thread_self())
     {
-        uv_mutex_lock(&inference_mutex);
+        uv_mutex_lock(&codegen_mutex);
         locked = 1;
-        inference_thread_id = uv_thread_self();
+        codegen_thread_id = uv_thread_self();
     }
     jl_in_inference = 1;
     if (jl_typeinf_func != NULL) {
@@ -424,8 +424,8 @@ void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
     jl_in_inference = last_ii;
     if(locked)
     {
-      inference_thread_id = -1;
-      uv_mutex_unlock(&inference_mutex);
+      codegen_thread_id = -1;
+      uv_mutex_unlock(&codegen_mutex);
     }
 }
 
@@ -470,21 +470,16 @@ static int is_kind(jl_value_t *v)
 static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                               jl_sym_t *name, int lim);
 
-extern uv_mutex_t cache_mutex;
-int nested_cache = 0;
-static long cache_thread_id = -1;
-
 static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                                    jl_function_t *method, jl_tuple_t *decl,
                                    jl_tuple_t *sparams)
 {
     int locked = 0;
-    if(!nested_cache || cache_thread_id != uv_thread_self())
+    if(codegen_thread_id != uv_thread_self())
     {
-        uv_mutex_lock(&cache_mutex);
+        uv_mutex_lock(&codegen_mutex);
         locked = 1;
-        nested_cache = 1;
-        cache_thread_id = uv_thread_self();
+        codegen_thread_id = uv_thread_self();
     }
     size_t i;
     int need_guard_entries = 0;
@@ -819,9 +814,8 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         JL_GC_POP();
         if(locked)
         {
-            nested_cache = 0;
-            cache_thread_id = -1;
-            uv_mutex_unlock(&cache_mutex);
+            codegen_thread_id = -1;
+            uv_mutex_unlock(&codegen_mutex);
         }
         return newmeth;
     }
@@ -871,9 +865,8 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     JL_GC_POP();
     if(locked)
     {
-        nested_cache = 0;
-        cache_thread_id = -1;
-        uv_mutex_unlock(&cache_mutex);
+        codegen_thread_id = -1;
+        uv_mutex_unlock(&codegen_mutex);
     }    
     return newmeth;
 }
@@ -1389,19 +1382,8 @@ static void show_call(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 #endif
 
 
-extern uv_mutex_t apply_gen_mutex;
-static long apply_gen_thread_id = -1;
-
 JL_CALLABLE(jl_apply_generic)
 {
-    int locked = 0;
-    if( apply_gen_thread_id != uv_thread_self() && jl_main_thread_id != uv_thread_self())
-    {
-        //printf("lock apply_gen by %ld current %ld \n", uv_thread_self(), apply_gen_thread_id);
-        uv_mutex_lock(&apply_gen_mutex);
-        locked = 1;
-        apply_gen_thread_id = uv_thread_self();
-    }
     jl_methtable_t *mt = jl_gf_mtable(F);
 #ifdef JL_GF_PROFILE
     mt->ncalls++;
@@ -1447,25 +1429,11 @@ JL_CALLABLE(jl_apply_generic)
         }
 #endif
 
-    if(locked)
-    {
-        apply_gen_thread_id = -1;
-        //printf("unlock apply_gen by %ld current %ld \n", uv_thread_self(), apply_gen_thread_id);
-        uv_mutex_unlock(&apply_gen_mutex);
-    }
-    jl_value_t* ret = jl_no_method_error((jl_function_t*)F, args, nargs);
-    return ret;  
+    return jl_no_method_error((jl_function_t*)F, args, nargs);
   }
     assert(!mfunc->linfo || !mfunc->linfo->inInference);
 
-    jl_value_t* ret = jl_apply(mfunc, args, nargs);
-    if(locked)
-    {
-        apply_gen_thread_id = -1;
-        //printf("unlock apply_gen by %ld current %ld \n", uv_thread_self(), apply_gen_thread_id);
-        uv_mutex_unlock(&apply_gen_mutex);
-    }
-    return ret;
+    return jl_apply(mfunc, args, nargs);
 }
 
 // invoke()

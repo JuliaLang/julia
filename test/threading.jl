@@ -1,6 +1,6 @@
 import Base.Test.@test
 
-parapply = Base.parapply
+parapply = Base.parapply_jl
 
 ### test parapply
 

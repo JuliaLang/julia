@@ -12,17 +12,14 @@ extern jl_tuple_t *arg_type_tuple(jl_value_t **args, size_t nargs);
 static uv_mutex_t global_mutex;
 static uv_mutex_t gc_mutex;
 long jl_main_thread_id = -1;
-uv_mutex_t inference_mutex;
-uv_mutex_t cache_mutex;
-uv_mutex_t apply_gen_mutex;
+long codegen_thread_id = -1;
+uv_mutex_t codegen_mutex;
 
 void jl_init_threading()
 {
   uv_mutex_init(&global_mutex);
   uv_mutex_init(&gc_mutex);
-  uv_mutex_init(&inference_mutex);
-  uv_mutex_init(&cache_mutex);
-  uv_mutex_init(&apply_gen_mutex);
+  uv_mutex_init(&codegen_mutex);
   jl_main_thread_id = uv_thread_self();
 }
 
