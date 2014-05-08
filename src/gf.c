@@ -391,7 +391,7 @@ void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
 {
     int last_ii = jl_in_inference;
     int locked = 0;
-    if(!jl_in_inference && inference_thread_id != uv_thread_self())
+    if(!jl_in_inference || inference_thread_id != uv_thread_self())
     {
         uv_mutex_lock(&inference_mutex);
         locked = 1;
@@ -1388,8 +1388,20 @@ static void show_call(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 }
 #endif
 
+
+extern uv_mutex_t apply_gen_mutex;
+static long apply_gen_thread_id = -1;
+
 JL_CALLABLE(jl_apply_generic)
 {
+    int locked = 0;
+    if( apply_gen_thread_id != uv_thread_self() && jl_main_thread_id != uv_thread_self())
+    {
+        //printf("lock apply_gen by %ld current %ld \n", uv_thread_self(), apply_gen_thread_id);
+        uv_mutex_lock(&apply_gen_mutex);
+        locked = 1;
+        apply_gen_thread_id = uv_thread_self();
+    }
     jl_methtable_t *mt = jl_gf_mtable(F);
 #ifdef JL_GF_PROFILE
     mt->ncalls++;
@@ -1434,11 +1446,26 @@ JL_CALLABLE(jl_apply_generic)
             show_call(F, args, nargs);
         }
 #endif
-        return jl_no_method_error((jl_function_t*)F, args, nargs);
+
+    if(locked)
+    {
+        apply_gen_thread_id = -1;
+        //printf("unlock apply_gen by %ld current %ld \n", uv_thread_self(), apply_gen_thread_id);
+        uv_mutex_unlock(&apply_gen_mutex);
     }
+    jl_value_t* ret = jl_no_method_error((jl_function_t*)F, args, nargs);
+    return ret;  
+  }
     assert(!mfunc->linfo || !mfunc->linfo->inInference);
 
-    return jl_apply(mfunc, args, nargs);
+    jl_value_t* ret = jl_apply(mfunc, args, nargs);
+    if(locked)
+    {
+        apply_gen_thread_id = -1;
+        //printf("unlock apply_gen by %ld current %ld \n", uv_thread_self(), apply_gen_thread_id);
+        uv_mutex_unlock(&apply_gen_mutex);
+    }
+    return ret;
 }
 
 // invoke()

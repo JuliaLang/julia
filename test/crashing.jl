@@ -17,15 +17,18 @@ function my_matmult(A,x,b,i)
   nothing
 end
 
-let N=1000
+let N=8000
   dtype = Int128
   x=ones(dtype,N)
   A=ones(dtype,N,N)
   b3=zeros(dtype,N)
 
+  # my_matmult(A,x,b3,1)
+
   for i=1:100
     println(i)
     parapply(my_matmult,(A,x,b3),2,1,1,N)
+    gc()
   end
 end
 

@@ -14,6 +14,7 @@ static uv_mutex_t gc_mutex;
 long jl_main_thread_id = -1;
 uv_mutex_t inference_mutex;
 uv_mutex_t cache_mutex;
+uv_mutex_t apply_gen_mutex;
 
 void jl_init_threading()
 {
@@ -21,12 +22,13 @@ void jl_init_threading()
   uv_mutex_init(&gc_mutex);
   uv_mutex_init(&inference_mutex);
   uv_mutex_init(&cache_mutex);
+  uv_mutex_init(&apply_gen_mutex);
   jl_main_thread_id = uv_thread_self();
 }
 
 void jl_global_lock()
 {
-  uv_mutex_lock(&global_mutex);
+    uv_mutex_lock(&global_mutex);
 }
 
 void jl_global_unlock()

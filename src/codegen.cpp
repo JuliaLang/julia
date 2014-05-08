@@ -487,7 +487,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle);
 static Function *to_function(jl_lambda_info_t *li, bool cstyle)
 {
     bool locked = false;
-    if(!nested_compile || codegen_thread_id != uv_thread_self())
+    if( codegen_thread_id != uv_thread_self())
     {  
         uv_mutex_lock(&codegen_mutex);
         //printf("lock codegen by %ld current %ld \n", uv_thread_self(), codegen_thread_id);
@@ -575,6 +575,14 @@ static void jl_setup_module(Module *m, bool add)
 
 extern "C" void jl_generate_fptr(jl_function_t *f)
 {
+    bool locked = false;
+    if( codegen_thread_id != uv_thread_self())
+    {
+        uv_mutex_lock(&codegen_mutex);
+        //printf("lock codegen by %ld current %ld \n", uv_thread_self(), codegen_thread_id);
+        locked = true;
+        codegen_thread_id = uv_thread_self();
+    }
     // objective: assign li->fptr
     jl_lambda_info_t *li = f->linfo;
     assert(li->functionObject);
@@ -617,6 +625,11 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
         }
     }
     f->fptr = li->fptr;
+    if(locked)
+    {
+        codegen_thread_id = -1;
+        uv_mutex_unlock(&codegen_mutex);
+    }
 }
 
 extern "C" void jl_compile(jl_function_t *f)
