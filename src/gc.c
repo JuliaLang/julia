@@ -19,7 +19,9 @@
 extern "C" {
 #endif
 
-#define LOCK(x) jl_gc_lock(); x; jl_gc_unlock();
+#define LOCK(x) JL_LOCK(gc); x; JL_UNLOCK(gc);
+
+JL_DEFINE_MUTEX_EXT(gc)
 
 typedef struct _gcpage_t {
     char data[GC_PAGE_SZ];
@@ -132,18 +134,18 @@ DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 DLLEXPORT void jl_gc_counted_free(void *p, size_t sz)
 {
     free(p);
-    jl_gc_lock();
+    JL_LOCK(gc)
     freed_bytes += sz;
-    jl_gc_unlock();
+    JL_UNLOCK(gc)
 }
 
 DLLEXPORT void *jl_gc_counted_realloc(void *p, size_t sz)
 {
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
-    jl_gc_lock();
+    JL_LOCK(gc)
     allocd_bytes += ((sz+1)/2);  // NOTE: wild guess at growth amount
-    jl_gc_unlock();
+    JL_UNLOCK(gc)
     void *b = realloc(p, sz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
@@ -168,16 +170,16 @@ void *jl_gc_managed_malloc(size_t sz)
 {
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
-    jl_gc_lock();
+    JL_LOCK(gc)
     sz = (sz+15) & -16;
     void *b = malloc_a16(sz);
     if (b == NULL)
     {
-        jl_gc_unlock();
+        JL_UNLOCK(gc)
         jl_throw(jl_memory_exception);
     }
     allocd_bytes += sz;
-    jl_gc_unlock();
+    JL_UNLOCK(gc)
     return b;
 }
 
@@ -185,7 +187,7 @@ void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned)
 {
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
-    jl_gc_lock();
+    JL_LOCK(gc)
     sz = (sz+15) & -16;
     void *b;
 #ifdef _P64
@@ -207,11 +209,11 @@ void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned)
 #endif
     if (b == NULL)
     {
-        jl_gc_unlock();
+        JL_UNLOCK(gc)
         jl_throw(jl_memory_exception);
     }
     allocd_bytes += sz;
-    jl_gc_unlock();
+    JL_UNLOCK(gc)
     return b;
 }
 
@@ -243,9 +245,9 @@ DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value)
     jl_weakref_t *wr = (jl_weakref_t*)alloc_2w();
     wr->type = (jl_value_t*)jl_weakref_type;
     wr->value = value;
-    jl_gc_lock();
+    JL_LOCK(gc)
     arraylist_push(&weak_refs, wr);
-    jl_gc_unlock();
+    JL_UNLOCK(gc)
     return wr;
 }
 
@@ -340,7 +342,7 @@ void jl_gc_run_all_finalizers(void)
 
 void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
 {
-    jl_gc_lock();
+    JL_LOCK(gc)
     jl_value_t **bp = (jl_value_t**)ptrhash_bp(&finalizer_table, v);
     if (*bp == HT_NOTFOUND) {
         *bp = (jl_value_t*)f;
@@ -348,7 +350,7 @@ void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
     else {
         *bp = (jl_value_t*)jl_tuple2((jl_value_t*)f, *bp);
     }
-    jl_gc_unlock();
+    JL_UNLOCK(gc)
 }
 
 // big value list
@@ -974,7 +976,7 @@ void jl_gc_collect(void)
 
 void *allocb(size_t sz)
 {
-    jl_gc_lock();
+    JL_LOCK(gc)
     void *b;
     sz += sizeof(void*);
 #ifdef MEMDEBUG
@@ -987,37 +989,37 @@ void *allocb(size_t sz)
         b = pool_alloc(&pools[szclass(sz)]);
     }
 #endif
-    jl_gc_unlock();
+    JL_UNLOCK(gc)
     return (void*)((void**)b + 1);
 }
 
 DLLEXPORT void *allocobj(size_t sz)
 {
-    jl_gc_lock();
+    JL_LOCK(gc)
     void* a;
 #ifdef MEMDEBUG
     a = alloc_big(sz);
-    jl_gc_unlock();
+    JL_UNLOCK(gc)
     return a;
 #endif
     if (sz > 2048)
     {
         a = alloc_big(sz);
-    jl_gc_unlock();
-    return a;
+        JL_UNLOCK(gc)
+        return a;
     }
     a = pool_alloc(&pools[szclass(sz)]);
-    jl_gc_unlock();
+    JL_UNLOCK(gc)
     return a;
 }
 
 DLLEXPORT void *alloc_2w(void)
 {
-    jl_gc_lock();
+    JL_LOCK(gc)
     void* b;
 #ifdef MEMDEBUG
     b = alloc_big(2*sizeof(void*));
-    jl_gc_unlock();
+    JL_UNLOCK(gc)
     return b;
 #endif
 #ifdef _P64
@@ -1025,17 +1027,17 @@ DLLEXPORT void *alloc_2w(void)
 #else
     b = pool_alloc(&pools[0]);
 #endif
-    jl_gc_unlock();
+    JL_UNLOCK(gc)
     return b;
 }
 
 DLLEXPORT void *alloc_3w(void)
 {
-    jl_gc_lock();
+    JL_LOCK(gc)
     void* b;
 #ifdef MEMDEBUG
     b = alloc_big(3*sizeof(void*));
-    jl_gc_unlock();
+    JL_UNLOCK(gc)
     return b;
 #endif
 #ifdef _P64
@@ -1043,17 +1045,17 @@ DLLEXPORT void *alloc_3w(void)
 #else
     b = pool_alloc(&pools[1]);
 #endif
-    jl_gc_unlock();
+    JL_UNLOCK(gc)
     return b;
 }
 
 DLLEXPORT void *alloc_4w(void)
 {
-    jl_gc_lock();
+    JL_LOCK(gc)
     void* b;
 #ifdef MEMDEBUG
     b = alloc_big(4*sizeof(void*));
-    jl_gc_unlock();
+    JL_UNLOCK(gc)
     return b;
 #endif
 #ifdef _P64
@@ -1061,7 +1063,7 @@ DLLEXPORT void *alloc_4w(void)
 #else
     b = pool_alloc(&pools[2]);
 #endif
-    jl_gc_unlock();
+    JL_UNLOCK(gc)
     return b;
 }
 

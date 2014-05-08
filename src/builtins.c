@@ -721,18 +721,11 @@ extern int jl_in_inference;
 extern int jl_boot_file_loaded;
 int jl_eval_with_compiler_p(jl_expr_t *expr, int compileloops);
 
-extern uv_mutex_t codegen_mutex;
-extern long codegen_thread_id;
+JL_DEFINE_MUTEX_EXT(codegen)
 
 JL_CALLABLE(jl_trampoline)
 {
-    int locked = 0;
-    if(codegen_thread_id != uv_thread_self())
-    {
-      uv_mutex_lock(&codegen_mutex);
-      locked = 1;
-      codegen_thread_id = uv_thread_self();
-    }
+    JL_LOCK(codegen)
     assert(jl_is_func(F));
     jl_function_t *f = (jl_function_t*)F;
     assert(f->linfo != NULL);
@@ -757,11 +750,7 @@ JL_CALLABLE(jl_trampoline)
     if (jl_boot_file_loaded && jl_is_expr(f->linfo->ast)) {
         f->linfo->ast = jl_compress_ast(f->linfo, f->linfo->ast);
     }
-    if(locked)
-    {
-      codegen_thread_id = -1;
-      uv_mutex_unlock(&codegen_mutex);
-    }
+    JL_UNLOCK(codegen)
 
     return jl_apply(f, args, nargs);
 }

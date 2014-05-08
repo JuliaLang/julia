@@ -10,10 +10,10 @@ extern jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types)
 extern jl_tuple_t *arg_type_tuple(jl_value_t **args, size_t nargs);
 
 static uv_mutex_t global_mutex;
-static uv_mutex_t gc_mutex;
 long jl_main_thread_id = -1;
-long codegen_thread_id = -1;
-uv_mutex_t codegen_mutex;
+
+JL_DEFINE_MUTEX(gc)
+JL_DEFINE_MUTEX(codegen)
 
 void jl_init_threading()
 {
@@ -31,16 +31,6 @@ void jl_global_lock()
 void jl_global_unlock()
 {
     uv_mutex_unlock(&global_mutex);
-}
-
-void jl_gc_lock()
-{
-    uv_mutex_lock(&gc_mutex);
-}
-
-void jl_gc_unlock()
-{
-    uv_mutex_unlock(&gc_mutex);
 }
 
 void run_thread(void* t)

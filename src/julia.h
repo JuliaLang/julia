@@ -1003,8 +1003,6 @@ typedef struct _jl_gcframe_t {
 
 extern DLLEXPORT long jl_main_thread_id;
 extern DLLEXPORT jl_gcframe_t *jl_pgcstack;
-DLLEXPORT void jl_gc_lock(); 
-DLLEXPORT void jl_gc_unlock();
 
 #define JL_GC_PUSH(...)                                                   \
   void *__gc_stkf[] = {(void*)((VA_NARG(__VA_ARGS__)<<1)|1), jl_pgcstack, \
@@ -1224,6 +1222,29 @@ DLLEXPORT void jl_destroy_mutex(uv_mutex_t* m);
 
 DLLEXPORT void jl_global_lock();
 DLLEXPORT void jl_global_unlock();
+
+#define JL_DEFINE_MUTEX_EXT(m) \
+  extern uv_mutex_t m ## _mutex; \
+  extern long m ## _thread_id;
+
+#define JL_DEFINE_MUTEX(m) \
+  uv_mutex_t m ## _mutex; \
+  long m ## _thread_id;
+
+#define JL_LOCK(m) \
+  int locked = 0; \
+  if( m ## _thread_id != uv_thread_self()) \
+  { \
+      uv_mutex_lock(& m ## _mutex); \
+      locked = 1; \
+      m ## _thread_id = uv_thread_self(); \
+  }
+
+#define JL_UNLOCK(m) \
+  if(locked) { \
+      m ## _thread_id = -1; \
+      uv_mutex_unlock(& m ## _mutex); \
+  }
 
 
 // I/O system -----------------------------------------------------------------

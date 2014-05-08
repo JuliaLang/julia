@@ -375,19 +375,12 @@ extern jl_function_t *jl_typeinf_func;
   can be equal to "li" if not applicable.
 */
 int jl_in_inference = 0;
-extern uv_mutex_t codegen_mutex;
-extern long codegen_thread_id;
+JL_DEFINE_MUTEX_EXT(codegen)
 void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
                    jl_lambda_info_t *def)
 {
+    JL_LOCK(codegen)
     int last_ii = jl_in_inference;
-    int locked = 0;
-    if(codegen_thread_id != uv_thread_self())
-    {
-        uv_mutex_lock(&codegen_mutex);
-        locked = 1;
-        codegen_thread_id = uv_thread_self();
-    }
     jl_in_inference = 1;
     if (jl_typeinf_func != NULL) {
         // TODO: this should be done right before code gen, so if it is
@@ -413,11 +406,7 @@ void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
         li->inInference = 0;
     }
     jl_in_inference = last_ii;
-    if(locked)
-    {
-      codegen_thread_id = -1;
-      uv_mutex_unlock(&codegen_mutex);
-    }
+    JL_UNLOCK(codegen)
 }
 
 static jl_value_t *nth_slot_type(jl_tuple_t *sig, size_t i)
@@ -465,13 +454,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                                    jl_function_t *method, jl_tuple_t *decl,
                                    jl_tuple_t *sparams)
 {
-    int locked = 0;
-    if(codegen_thread_id != uv_thread_self())
-    {
-        uv_mutex_lock(&codegen_mutex);
-        locked = 1;
-        codegen_thread_id = uv_thread_self();
-    }
+    JL_LOCK(codegen)
     size_t i;
     int need_guard_entries = 0;
     jl_value_t *temp=NULL;
@@ -803,11 +786,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         newmeth = jl_reinstantiate_method(method, li);
         (void)jl_method_cache_insert(mt, type, newmeth);
         JL_GC_POP();
-        if(locked)
-        {
-            codegen_thread_id = -1;
-            uv_mutex_unlock(&codegen_mutex);
-        }
+        JL_UNLOCK(codegen)
         return newmeth;
     }
     else {
@@ -854,11 +833,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         jl_type_infer(newmeth->linfo, type, method->linfo);
     }
     JL_GC_POP();
-    if(locked)
-    {
-        codegen_thread_id = -1;
-        uv_mutex_unlock(&codegen_mutex);
-    }    
+    JL_UNLOCK(codegen)    
     return newmeth;
 }
 
