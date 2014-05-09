@@ -1635,3 +1635,14 @@ day_in(obj)
 # issue #6784
 @test ndims(Array(Array{Float64},3,5)) == 2
 @test ndims(Array(Array,3,5)) == 2
+
+# issue #6793
+function segfault6793(;gamma=1)
+    A = 1
+    B = 1
+    print()
+    return
+    -gamma
+    nothing
+end
+@test segfault6793() === nothing

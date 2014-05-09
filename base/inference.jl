@@ -1036,6 +1036,10 @@ function abstract_eval_symbol(s::Symbol, vtypes, sv::StaticVarInfo)
                 return abstract_eval_constant(val)
             end
         end
+        if s in sv.vars
+            # local variable use not reached
+            return Top
+        end
         # global
         return abstract_eval_global(s)
     end
