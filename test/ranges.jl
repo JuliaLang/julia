@@ -245,12 +245,10 @@ let
     for r in Rs
         ar = collect(r)
         @test r != ar
-        @test !isequal(r, ar)
+        @test !isequal(r,ar)
         for s in Rs
             as = collect(s)
-
-            @test !isequal(r, s) || hash(r)==hash(s)
-
+            @test !isequal(r,s) || hash(r)==hash(s)
             @test (r==s) == (ar==as)
         end
     end

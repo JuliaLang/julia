@@ -50,6 +50,7 @@ function union(s::Set, sets::Set...)
     end
     return u
 end
+const ∪ = union
 
 intersect(s::Set) = copy(s)
 function intersect(s::Set, sets::Set...)
@@ -64,6 +65,7 @@ function intersect(s::Set, sets::Set...)
     end
     return i
 end
+const ∩ = intersect
 
 function setdiff(a::Set, b::Set)
     d = copy(a)
@@ -73,8 +75,8 @@ function setdiff(a::Set, b::Set)
     d
 end
 
-isequal(l::Set, r::Set) = (length(l) == length(r)) && (l <= r)
-<(l::Set, r::Set) = (length(l) < length(r)) && (l <= r)
+==(l::Set, r::Set) = (length(l) == length(r)) && (l <= r)
+< (l::Set, r::Set) = (length(l) < length(r)) && (l <= r)
 <=(l::Set, r::Set) = issubset(l, r)
 
 function issubset(l, r)
@@ -85,6 +87,9 @@ function issubset(l, r)
     end
     return true
 end
+const ⊆ = issubset
+⊊(l::Set, r::Set) = ⊆(l, r) && l!=r
+⊈(l::Set, r::Set) = !⊆(l, r)
 
 function unique(C)
     out = Array(eltype(C),0)
@@ -107,5 +112,3 @@ function filter!(f::Function, s::Set)
     return s
 end
 filter(f::Function, s::Set) = filter!(f, copy(s))
-
-hash(s::Set) = hash(sort(s.dict.keys[s.dict.slots .!= 0]))

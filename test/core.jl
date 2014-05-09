@@ -1588,3 +1588,50 @@ function crc6634(spec)
 end
 @test crc6634(0x1)(true) == 1
 @test crc6634(0x1)(false) == 2
+
+# issue #5876
+module A5876
+macro x()
+    quote
+        function $(esc(:f5876)){T}(::Type{T})
+            T
+        end
+        42
+    end
+end
+end
+
+let
+    z = A5876.@x()
+    @test z == 42
+    @test f5876(Int) === Int
+end
+
+# issue #6387
+bitstype 64 Date6387{C}
+
+type DateRange6387{C} <: Range{Date6387{C}}
+end
+
+type ObjMember
+    member::DateRange6387
+end
+
+obj = ObjMember(DateRange6387{Int64}())
+
+function v6387{T}(r::Range{T})
+    a = Array(T,1)
+    a[1] = Intrinsics.box(Date6387{Int64}, Intrinsics.unbox(Int64,int64(1)))
+    a
+end
+
+function day_in(obj::ObjMember)
+    x = v6387(obj.member)
+    @test isa(x, Vector{Date6387{Int64}})
+    @test isa(x[1], Date6387{Int64})
+end
+day_in(obj)
+
+# issue #6784
+@test ndims(Array(Array{Float64},3,5)) == 2
+@test ndims(Array(Array,3,5)) == 2

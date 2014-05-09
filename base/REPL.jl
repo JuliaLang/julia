@@ -46,8 +46,10 @@ function eval_user_input(ast::ANY, backend::REPLBackend)
                 iserr, lasterr = false, ()
             else
                 ast = expand(ast)
-                ans = Base.Meta.quot(backend.ans)
-                eval(Main, :(ans = $(ans)))
+                ans = backend.ans
+                # note: value wrapped in a non-syntax value to avoid evaluating
+                # possibly-invalid syntax (issue #6763).
+                eval(Main, :(ans = $({ans})[1]))
                 value = eval(Main, ast)
                 backend.ans = value
                 put!(backend.response_channel, (value, nothing))
@@ -378,6 +380,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     qpos = position(query_buffer)
     qpos > 0 || return true
     searchdata = bytestring_beforecursor(query_buffer)
+    response_str = bytestring(response_buffer)
 
     # Alright, first try to see if the current match still works
     a = position(response_buffer) + 1
@@ -391,11 +394,12 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
 
     # Start searching
     # First the current response buffer
-    response_str = bytestring(response_buffer)
-    match = searchfunc(response_str, searchdata, a+delta)
-    if match != 0:-1
-        seek(response_buffer, first(match)-1)
-        return true
+    if 1 <= a+delta <= length(response_str)
+        match = searchfunc(response_str, searchdata, a+delta)
+        if match != 0:-1
+            seek(response_buffer, first(match)-1)
+            return true
+        end
     end
 
     # Now search all the other buffers
@@ -606,15 +610,27 @@ function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,
             buf = copy(LineEdit.buffer(s))
             edit_insert(buf,input)
             string = takebuf_string(buf)
+            curspos = position(LineEdit.buffer(s))
             pos = 0
-            sz = length(string.data)
+            inputsz = sizeof(input)
+            sz = sizeof(string)
             while pos <= sz
                 oldpos = pos
                 ast, pos = Base.parse(string, pos, raise=false)
+                if isa(ast, Expr) && ast.head == :error
+                    # Insert all the remaining text as one line (might be empty)
+                    LineEdit.replace_line(s, strip(bytestring(string.data[max(oldpos, 1):end])))
+                    seek(LineEdit.buffer(s), max(curspos-oldpos+inputsz, 0))
+                    LineEdit.refresh_line(s)
+                    break
+                end
                 # Get the line and strip leading and trailing whitespace
                 line = strip(bytestring(string.data[max(oldpos, 1):min(pos-1, sz)]))
                 isempty(line) && continue
                 LineEdit.replace_line(s, line)
+                if oldpos <= curspos
+                    seek(LineEdit.buffer(s),curspos-oldpos+inputsz)
+                end
                 LineEdit.refresh_line(s)
                 (pos > sz && last(string) != '\n') && break
                 if !isa(ast, Expr) || (ast.head != :continue && ast.head != :incomplete)

@@ -58,6 +58,7 @@ include("bitarray.jl")
 include("intset.jl")
 include("dict.jl")
 include("set.jl")
+include("hashing.jl")
 include("iterator.jl")
 
 # compiler
@@ -174,6 +175,9 @@ big(q::Rational) = big(num(q))//big(den(q))
 big(z::Complex) = complex(big(real(z)),big(imag(z)))
 @vectorize_1arg Number big
 
+# more hashing definitions
+include("hashing2.jl")
+
 # random number generation and statistics
 include("statistics.jl")
 include("librandom.jl")
@@ -188,6 +192,7 @@ include("sharedarray.jl")
 # utilities - version, timing, help, edit, metaprogramming
 include("version.jl")
 include("datafmt.jl")
+importall .DataFmt
 include("deepcopy.jl")
 include("util.jl")
 include("interactiveutil.jl")
@@ -216,6 +221,8 @@ include("sparse.jl")
 importall .SparseMatrix
 include("linalg.jl")
 importall .LinAlg
+const ⋅ = dot
+const × = cross
 include("broadcast.jl")
 importall .Broadcast
 
@@ -263,14 +270,6 @@ end
 include("precompile.jl")
 
 include = include_from_node1
-
-# invoke type inference, running the existing inference code on the new
-# inference code to cache an optimized version of it.
-begin
-    local atypes = (LambdaStaticData, Tuple, (), LambdaStaticData, Bool)
-    local minf = _methods(typeinf, atypes, -1)
-    typeinf_ext(minf[1][3].func.code, atypes, (), minf[1][3].func.code)
-end
 
 end # baremodule Base
 

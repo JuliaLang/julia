@@ -1253,10 +1253,14 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(powi_llvm,2) {
         x = FP(x);
         y = JL_INT(y);
-        Type *ts[1] = { x->getType() };
-        return builder.CreateCall2(Intrinsic::getDeclaration(jl_Module, Intrinsic::powi,
-                                                             ArrayRef<Type*>(ts)),
-                                   x, y);
+        Type *tx = x->getType();
+        // TODO: use powi when LLVM is fixed. issue #6506
+        // http://llvm.org/bugs/show_bug.cgi?id=19530
+        Type *ts[2] = { tx, tx };
+        return builder.
+            CreateCall2(jl_Module->getOrInsertFunction(tx==T_float64 ? "pow" : "powf",
+                                                       FunctionType::get(tx, ts, false)),
+                        x, builder.CreateSIToFP(y, tx));
     }
     default:
         assert(false);

@@ -27,7 +27,7 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
     Rnz[1] = 1
     nz = 0
     for k=1:length(I)
-        if V[k] != zero(Tv)
+        if V[k] != 0
             Rnz[I[k]+1] += 1
             nz += 1
         end
@@ -45,7 +45,7 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
         ind = I[k]
         p = Wj[ind]
         Vk = V[k]
-        if Vk != zero(Tv)
+        if Vk != 0
             Wj[ind] += 1
             Rx[p] = Vk
             Ri[p] = J[k]
@@ -231,7 +231,7 @@ function etree{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, postorder::Bool)
     head = zeros(Ti,n)                   # empty linked lists
     next = zeros(Ti,n)
     for j in n:-1:1                      # traverse in reverse order
-        if (parent[j] == zero(Ti)); continue; end # j is a root
+        if (parent[j] == 0); continue; end # j is a root
         next[j] = head[parent[j]]        # add j to list of its parent
         head[parent[j]] = j
     end
@@ -359,7 +359,7 @@ function fkeep!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f, other)
 end
 
 droptol!(A::SparseMatrixCSC, tol) = fkeep!(A, (i,j,x,other)->abs(x)>other, tol)
-dropzeros!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->x!=zero(Tv), None)
+dropzeros!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->x!=0, None)
 triu!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->(j>=i), None)
 triu(A::SparseMatrixCSC) = triu!(copy(A))
 tril!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->(i>=j), None)

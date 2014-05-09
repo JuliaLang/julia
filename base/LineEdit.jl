@@ -809,8 +809,9 @@ macro keymap(keymaps)
     end)
 end
 
-const escape_defaults = {
-    # Ignore other escape sequences by default
+const escape_defaults = merge!(
+    {i => nothing for i=1:31}, # Ignore control characters by default
+    { # And ignore other escape sequences by default
     "\e*" => nothing,
     "\e[*" => nothing,
     # Also ignore extended escape sequences
@@ -831,7 +832,7 @@ const escape_defaults = {
     "\eOD"  => "\e[D",
     "\eOH"  => "\e[H",
     "\eOF"  => "\e[F",
-}
+})
 
 function write_response_buffer(s::PromptState, data)
     offset = s.input_buffer.ptr
@@ -963,6 +964,7 @@ function setup_search_keymap(hp)
         '\r'      => s->accept_result(s, p),
         '\n'      => '\r',
         '\t'      => nothing, #TODO: Maybe allow tab completion in R-Search?
+        "^L"      => :(Terminals.clear(LineEdit.terminal(s)); LineEdit.update_display_buffer(s, data)),
 
         # Backspace/^H
         '\b'      => :(LineEdit.edit_backspace(data.query_buffer) ?
@@ -972,6 +974,9 @@ function setup_search_keymap(hp)
         "\e\b"    => :(LineEdit.edit_delete_prev_word(data.query_buffer) ?
                         LineEdit.update_display_buffer(s, data) : beep(LineEdit.terminal(s))),
         "\e\x7f"  => "\e\b",
+        # Word erase to whitespace
+        "^W"      => :(LineEdit.edit_werase(data.query_buffer) ?
+                        LineEdit.update_display_buffer(s, data) : beep(LineEdit.terminal(s))),
         # ^C and ^D
         "^C"      => :(LineEdit.edit_clear(data.query_buffer);
                        LineEdit.edit_clear(data.response_buffer);
@@ -979,6 +984,9 @@ function setup_search_keymap(hp)
                        LineEdit.reset_state(data.histprompt.hp);
                        LineEdit.transition(s, data.parent)),
         "^D"      => "^C",
+        # Other ways to cancel search mode (it's difficult to bind \e itself)
+        "^G"      => "^C",
+        "\e\e"    => "^C",
         # ^K
         11        => s->transition(s, state(s, p).parent),
         # ^Y
@@ -1015,6 +1023,9 @@ function setup_search_keymap(hp)
         # Try to catch all Home/End keys
         "\e[H"    => s->(accept_result(s, p); move_input_start(s); refresh_line(s)),
         "\e[F"    => s->(accept_result(s, p); move_input_end(s); refresh_line(s)),
+        # Use ^N and ^P to change search directions and iterate through results
+        "^N"      => :(LineEdit.history_set_backward(data, false); LineEdit.history_next_result(s, data)),
+        "^P"      => :(LineEdit.history_set_backward(data, true); LineEdit.history_next_result(s, data)),
         "*"       => :(LineEdit.edit_insert(data.query_buffer, c1); LineEdit.update_display_buffer(s, data))
     }
     p.keymap_func = @eval @LineEdit.keymap $([pkeymap, escape_defaults])
@@ -1189,12 +1200,6 @@ const default_keymap =
         edit_insert(s, input)
     end,
     "^T"      => edit_transpose,
-    # Unused and unprintable control character combinations
-    "^G"      => nothing,
-    "^O"      => nothing,
-    "^Q"      => nothing,
-    "^V"      => nothing,
-    "^X"      => nothing,
 }
 
 function history_keymap(hist)

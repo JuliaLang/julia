@@ -21,6 +21,9 @@ end
 @test searchsorted([1, 1, 2, 2, 3, 3], 4) == 7:6
 @test searchsorted([1.0, 1, 2, 2, 3, 3], 2.5) == 5:4
 
+@test searchsorted([1:10], 1, by=(x -> x >= 5)) == 1:4
+@test searchsorted([1:10], 10, by=(x -> x >= 5)) == 5:10
+
 for (rg,I) in {(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)}
     rg_r = reverse(rg)
     rgv, rgv_r = [rg], [rg_r]
@@ -43,6 +46,9 @@ for i = 1:100
     @test searchsorted(rg_r, prevfloat(rg_r[i]), rev=true) == i+1:i
     @test searchsorted(rg_r, nextfloat(rg_r[i]), rev=true) == i:i-1
 end
+
+@test searchsorted(1:10, 1, by=(x -> x >= 5)) == searchsorted([1:10], 1, by=(x -> x >= 5))
+@test searchsorted(1:10, 10, by=(x -> x >= 5)) == searchsorted([1:10], 10, by=(x -> x >= 5))
 
 a = rand(1:10000, 1000)
 

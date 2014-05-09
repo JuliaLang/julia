@@ -2756,7 +2756,7 @@
 
 "),
 
-("Base","readdlm","readdlm(source, delim::Char, T::Type, eol::Char; has_header=false, use_mmap=true, ignore_invalid_chars=false, quotes=true)
+("Base","readdlm","readdlm(source, delim::Char, T::Type, eol::Char; has_header=false, use_mmap=true, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
 
    Read a matrix from the source where each line (separated by
    \"eol\") gives one row, with elements separated by the given
@@ -2785,6 +2785,11 @@
    Double-quote characters within a quoted field must be escaped with
    another double-quote.
 
+   Specifying \"dims\" as a tuple of the expected rows and columns 
+   (including header, if any) may speed up reading of large files.
+
+   If \"comments\" is \"true\", lines beginning with \"comment_char\" 
+   and text following \"comment_char\" in any line are ignored.
 "),
 
 ("Base","readdlm","readdlm(source, delim::Char, eol::Char; options...)
@@ -6017,9 +6022,10 @@ popdisplay(d::Display)
 
 "),
 
-("Base","median","median(v; checknan::Bool=true)
+("Base","median","median(v[, region]; checknan::Bool=true)
 
-   Compute the median of a vector \"v\". If keyword argument
+   Compute the median of a vector \"v\", optionally
+   along dimensions in \"region\". If keyword argument
    \"checknan\" is true (the default), an error is raised for data
    containing NaN values. Note: Julia does not ignore \"NaN\" values
    in the computation. For applications requiring the handling of

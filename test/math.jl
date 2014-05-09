@@ -122,7 +122,8 @@ true_k3m3 = -0.1221703757571835679 - 3.0151549516807985776im
 @test_approx_eq besselk(3,complex(-3)) true_k3m3
 @test_approx_eq besselk(-3,complex(-3)) true_k3m3
 @test_throws Base.Math.AmosException besselk(200,0.01)
-
+# issue #6564
+@test besselk(1.0,0.0) == Inf
 
 # bessely
 y33 = bessely(3,3.)

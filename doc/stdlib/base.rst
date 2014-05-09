@@ -26,13 +26,13 @@ Getting Around
 
 .. function:: quit()
 
-   Calls ``exit(0)``.
+   Quit the program indicating that the processes completed succesfully. This function calls ``exit(0)`` (see :func:`exit`).
 
 .. function:: atexit(f)
 
    Register a zero-argument function to be called at exit.
 
-.. function:: isinteractive()
+.. function:: isinteractive() -> Bool
 
    Determine whether Julia is running an interactive session.
 
@@ -71,7 +71,7 @@ Getting Around
 
 .. function:: clipboard() -> String
 
-   Return the contents of the operating system clipboard ("paste").
+   Return a string with the contents of the operating system clipboard ("paste").
 
 .. function:: require(file::String...)
 
@@ -129,43 +129,29 @@ Getting Around
 All Objects
 -----------
 
-.. function:: is(x, y)
+.. function:: is(x, y) -> Bool
 
    Determine whether ``x`` and ``y`` are identical, in the sense that no program could distinguish them. Compares mutable objects by address in memory, and compares immutable objects (such as numbers) by contents at the bit level. This function is sometimes called ``egal``. The ``===`` operator is an alias for this function.
 
-.. function:: isa(x, type)
+.. function:: isa(x, type) -> Bool
 
-   Determine whether ``x`` is of the given type.
+   Determine whether ``x`` is of the given ``type``.
 
 .. function:: isequal(x, y)
 
-   True if and only if ``x`` and ``y`` would cause a typical function to behave the
-   same. A "typical" function is one that uses only intended interfaces, and does not
-   unreasonably exploit implementation details of its arguments. For example,
-   floating-point ``NaN`` values are ``isequal`` regardless of their sign bits, since
-   the sign of a ``NaN`` has no meaning in the vast majority of cases (but can be
-   discovered if you really want to).
+   Similar to ``==``, except treats all floating-point ``NaN`` values as equal to each other,
+   and treats ``-0.0`` as unequal to ``0.0``.
+   For values that are not floating-point, ``isequal`` is the same as ``==``.
 
-   One implication of this definition is that implementing ``isequal`` for a new type
-   encapsulates, to a large extent, what the true abstraction presented by that type
-   is. For example, a ``String`` is a sequence of characters, so two strings are
-   ``isequal`` if they generate the same characters. Other concerns, such as encoding,
-   are not considered.
+   ``isequal`` is the comparison function used by hash tables (``Dict``).
+   ``isequal(x,y)`` must imply that ``hash(x) == hash(y)``.
 
-   When calling ``isequal``, be aware that it cannot be all things to all people.
-   For example, if your use of strings *does* care about encoding, you will have to
-   perform a check like ``typeof(x)==typeof(y) && isequal(x,y)``.
+   Collections typically implement ``isequal`` by calling ``isequal`` recursively on
+   all contents.
 
-   ``isequal`` is the default comparison function used by hash tables (``Dict``).
-   ``isequal(x,y)`` must imply ``hash(x)==hash(y)``.
-
-   New types with a notion of equality should implement this function, except for
-   numbers, which should implement ``==`` instead. However, numeric types with special
-   values like ``NaN`` might need to implement ``isequal`` as well. Numbers of different
-   types are considered unequal.
-
-   Mutable containers should generally implement ``isequal`` by calling ``isequal``
-   recursively on all contents.
+   Scalar types generally do not need to implement ``isequal``, unless they
+   represent floating-point numbers amenable to a more efficient implementation
+   than that provided as a generic fallback (based on ``isnan``, ``signbit``, and ``==``).
 
 .. function:: isless(x, y)
 
@@ -202,9 +188,11 @@ All Objects
 
    Get a unique integer id for ``x``. ``object_id(x)==object_id(y)`` if and only if ``is(x,y)``.
 
-.. function:: hash(x)
+.. function:: hash(x[, h])
 
    Compute an integer hash code such that ``isequal(x,y)`` implies ``hash(x)==hash(y)``.
+   The optional second argument ``h`` is a hash code to be mixed with the result.
+   New types should implement the 2-argument form.
 
 .. function:: finalizer(x, function)
 
@@ -487,7 +475,7 @@ General Collections
 
 .. function:: empty!(collection) -> collection
 
-   Remove all elements from a collection.
+   Remove all elements from a ``collection``.
 
 .. function:: length(collection) -> Integer
 
@@ -497,7 +485,10 @@ General Collections
 
    Returns the last index of the collection.
 
-   **Example**: ``endof([1,2,4]) = 3``
+   **Example**::
+   
+   	julia> endof([1,2,4])
+   	3
 
 Fully implemented by: ``Range``, ``Range1``, ``Tuple``, ``Number``, ``AbstractArray``, ``IntSet``, ``Dict``, ``WeakKeyDict``, ``String``, ``Set``.
 
@@ -683,9 +674,12 @@ Iterable Collections
    Transform collection ``c`` by applying ``f`` to each element.
    For multiple collection arguments, apply ``f`` elementwise.
 
-   **Examples**:
-     * ``map((x) -> x * 2, [1, 2, 3]) = [2, 4, 6]``
-     * ``map(+, [1, 2, 3], [10, 20, 30]) = [11, 22, 33]``
+   **Examples**::
+   
+     julia> map((x) -> x * 2, [1, 2, 3])
+     [2, 4, 6]
+     julia> map(+, [1, 2, 3], [10, 20, 30])
+     [11, 22, 33]
 
 .. function:: map!(function, collection)
 
@@ -992,13 +986,15 @@ Strings
 
 .. function:: *(s, t)
 
-   Concatenate strings.
+   Concatenate strings. The ``*`` operator is an alias to this function.
 
-   **Example**: ``"Hello " * "world" == "Hello world"``
+   **Example**::
+   julia> "Hello " * "world"
+   "Hello world"
 
 .. function:: ^(s, n)
 
-   Repeat string ``s`` ``n`` times.
+   Repeat ``n`` times the string ``s``. The ``^`` operator is an alias to this function.
 
    **Example**: ``"Julia "^3 == "Julia Julia Julia "``
 
@@ -1812,7 +1808,7 @@ Text I/O
 
    Create an iterable object that will yield each line from a stream.
 
-.. function:: readdlm(source, delim::Char, T::Type, eol::Char; has_header=false, use_mmap=true, ignore_invalid_chars=false, quotes=true)
+.. function:: readdlm(source, delim::Char, T::Type, eol::Char; has_header=false, use_mmap=true, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
 
    Read a matrix from the source where each line (separated by ``eol``) gives one row, with elements separated by the given delimeter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source. 
 
@@ -1825,6 +1821,10 @@ Text I/O
    If ``ignore_invalid_chars`` is ``true``, bytes in ``source`` with invalid character encoding will be ignored. Otherwise an error is thrown indicating the offending character position.
 
    If ``quotes`` is ``true``, column enclosed within double-quote (``) characters are allowed to contain new lines and column delimiters. Double-quote characters within a quoted field must be escaped with another double-quote.
+
+   Specifying ``dims`` as a tuple of the expected rows and columns (including header, if any) may speed up reading of large files.
+
+   If ``comments`` is ``true``, lines beginning with ``comment_char`` and text following ``comment_char`` in any line are ignored.
 
 .. function:: readdlm(source, delim::Char, eol::Char; options...)
 
@@ -2288,8 +2288,18 @@ Mathematical Operators
 .. _==:
 .. function:: ==(x, y)
 
-   Numeric equality operator. Compares numbers and number-like values (e.g. arrays) by numeric value. True for numbers of different types that represent the same value (e.g. ``2`` and ``2.0``). Follows IEEE semantics for floating-point numbers.
-   New numeric types should implement this function for two arguments of the new type.
+   Generic equality operator, giving a single ``Bool`` result. Falls back to ``===``.
+   Should be implemented for all types with a notion of equality, based
+   on the abstract value that an instance represents. For example, all numeric types are compared
+   by numeric value, ignoring type. Strings are compared as sequences of characters, ignoring
+   encoding.
+
+   Follows IEEE semantics for floating-point numbers.
+
+   Collections should generally implement ``==`` by calling ``==`` recursively on all contents.
+
+   New numeric types should implement this function for two arguments of the new type, and handle
+   comparison to other types via promotion rules where possible.
 
 .. _!=:
 .. function:: !=(x, y)
@@ -2938,7 +2948,7 @@ Mathematical Functions
 
 .. function:: invmod(x,m)
 
-   Take the inverse of ``x`` modulo ``m``: `y` such that :math:`xy = 1 \pmod m`
+   Take the inverse of ``x`` modulo ``m``: `y` such that :math:`xy = 1 \pmod m`
 
 .. function:: powermod(x, p, m)
 
@@ -3056,11 +3066,6 @@ Mathematical Functions
 .. function:: zeta(x)
 
    Riemann zeta function :math:`\zeta(s)`.
-
-.. function:: bitmix(x, y)
-
-   Hash two integers into a single integer. Useful for constructing hash
-   functions.
 
 .. function:: ndigits(n, b)
 
@@ -3743,7 +3748,9 @@ Indexing, Assignment, and Concatenation
 
 .. function:: find(A)
 
-   Return a vector of the linear indexes of the non-zeros in ``A``.
+   Return a vector of the linear indexes of the non-zeros in ``A`` (determined by ``A[i]!=0``).
+   A common use of this is to convert a boolean array to an array of indexes of the ``true``
+   elements.
 
 .. function:: find(f,A)
 
@@ -3751,7 +3758,8 @@ Indexing, Assignment, and Concatenation
 
 .. function:: findn(A)
 
-   Return a vector of indexes for each dimension giving the locations of the non-zeros in ``A``.
+   Return a vector of indexes for each dimension giving the locations of the non-zeros in ``A``
+   (determined by ``A[i]!=0``).
 
 .. function:: findnz(A)
 
@@ -3759,11 +3767,11 @@ Indexing, Assignment, and Concatenation
 
 .. function:: nonzeros(A)
 
-   Return a vector of the non-zero values in array ``A``.
+   Return a vector of the non-zero values in array ``A`` (determined by ``A[i]!=0``).
 
 .. function:: findfirst(A)
 
-   Return the index of the first non-zero value in ``A``.
+   Return the index of the first non-zero value in ``A`` (determined by ``A[i]!=0``).
 
 .. function:: findfirst(A,v)
 
@@ -3810,6 +3818,20 @@ Indexing, Assignment, and Concatenation
 .. function:: checkbounds(array, indexes...)
 
    Throw an error if the specified indexes are not in bounds for the given array.
+
+.. function:: randsubseq(A, p) -> Vector
+   
+   Return a vector consisting of a random subsequence of the given array ``A``,
+   where each element of ``A`` is included (in order) with independent
+   probability ``p``.   (Complexity is linear in ``p*length(A)``, so this
+   function is efficient even if ``p`` is small and ``A`` is large.)  Technically,
+   this process is known as "Bernoulli sampling" of ``A``.
+
+.. function:: randsubseq!(S, A, p)
+
+   Like ``randsubseq``, but the results are stored in ``S`` (which is
+   resized as needed).
+   
 
 Array functions
 ~~~~~~~~~~~~~~~

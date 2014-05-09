@@ -546,6 +546,7 @@ const _sizeof_uv_interface_address = ccall(:jl_uv_sizeof_interface_address,Int32
 function getipaddr()
     addr = Array(Ptr{Uint8},1)
     count = Array(Int32,1)
+    lo_present = false
     err = ccall(:jl_uv_interface_addresses,Int32,(Ptr{Ptr{Uint8}},Ptr{Int32}),addr,count)
     addr, count = addr[1],count[1]
     if err != 0
@@ -555,6 +556,7 @@ function getipaddr()
     for i = 0:(count-1)
         current_addr = addr + i*_sizeof_uv_interface_address
         if 1 == ccall(:jl_uv_interface_address_is_internal,Int32,(Ptr{Uint8},),current_addr)
+            lo_present = true
             continue
         end
         sockaddr = ccall(:jl_uv_interface_address_sockaddr,Ptr{Void},(Ptr{Uint8},),current_addr)
@@ -568,7 +570,7 @@ function getipaddr()
         end
     end
     ccall(:uv_free_interface_addresses,Void,(Ptr{Uint8},Int32),addr,count)
-    return ip"127.0.0.1"
+    lo_present ? ip"127.0.0.1" : error("No networking interface available")
 end
 
 ##

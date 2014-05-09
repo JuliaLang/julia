@@ -562,6 +562,9 @@ function isconstantfunc(f::ANY, sv::StaticVarInfo)
     if isa(f,QuoteNode) && isa(f.value, Function)
         return f.value
     end
+    if isa(f,Function)
+        return f
+    end
     if isa(f,SymbolNode)
         f = f.name
     end
@@ -1078,21 +1081,6 @@ function abstract_interpret(e::ANY, vtypes, sv::StaticVarInfo)
     return vtypes
 end
 
-tchanged(n::ANY, o::ANY) = is(o,NF) || (!is(n,NF) && !(n <: o))
-
-function stchanged(new::Union(StateUpdate,VarTable), old, vars)
-    if is(old,())
-        return true
-    end
-    for i = 1:length(vars)
-        v = vars[i]
-        if tchanged(new[v], get(old,v,NF))
-            return true
-        end
-    end
-    return false
-end
-
 function type_too_complex(t::ANY, d)
     if d > MAX_TYPE_DEPTH
         return true
@@ -1129,6 +1117,9 @@ function tmerge(typea::ANY, typeb::ANY)
     if typeb <: typea
         return typea
     end
+    if typea <: Tuple && typeb <: Tuple
+        return Tuple
+    end
     u = Union(typea, typeb)
     if length(u.types) > MAX_TYPEUNION_LEN || type_too_complex(u, 0)
         # don't let type unions get too big
@@ -1138,10 +1129,12 @@ function tmerge(typea::ANY, typeb::ANY)
     return u
 end
 
-function stupdate(state, changes::Union(StateUpdate,VarTable), vars)
-    if is(state,())
-        state = ObjectIdDict()
-    end
+tchanged(n::ANY, o::ANY) = is(o,NF) || (!is(n,NF) && !(n <: o))
+
+stupdate(state::(), changes::VarTable, vars) = copy(changes)
+stupdate(state::(), changes::StateUpdate, vars) = stupdate(ObjectIdDict(), changes, vars)
+
+function stupdate(state::ObjectIdDict, changes::Union(StateUpdate,VarTable), vars)
     for i = 1:length(vars)
         v = vars[i]
         newtype = changes[v]
@@ -1151,6 +1144,19 @@ function stupdate(state, changes::Union(StateUpdate,VarTable), vars)
         end
     end
     state
+end
+
+function stchanged(new::Union(StateUpdate,VarTable), old, vars)
+    if is(old,())
+        return true
+    end
+    for i = 1:length(vars)
+        v = vars[i]
+        if tchanged(new[v], get(old,v,NF))
+            return true
+        end
+    end
+    return false
 end
 
 function findlabel(body, l)
@@ -1491,11 +1497,23 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         if is(def.tfunc,())
             def.tfunc = {}
         end
-        push!(def.tfunc::Array{Any,1}, atypes)
+        tfarr = def.tfunc::Array{Any,1}
+        idx = -1
+        for i = 1:3:length(tfarr)
+            if typeseq(tfarr[i],atypes)
+                idx = i; break
+            end
+        end
+        if idx == -1
+            l = length(tfarr)
+            idx = l+1
+            resize!(tfarr, l+3)
+        end
+        tfarr[idx] = atypes
         # in the "rec" state this tree will not be used again, so store
         # just the return type in place of it.
-        push!(def.tfunc::Array{Any,1}, rec ? frame.result : fulltree)
-        push!(def.tfunc::Array{Any,1}, rec)
+        tfarr[idx+1] = rec ? frame.result : fulltree
+        tfarr[idx+2] = rec
     else
         def.tfunc[tfunc_idx] = rec ? frame.result : fulltree
         def.tfunc[tfunc_idx+1] = rec
