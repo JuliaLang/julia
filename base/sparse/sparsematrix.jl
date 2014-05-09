@@ -1142,8 +1142,172 @@ setindex!{T<:Integer}(A::SparseMatrixCSC, v::AbstractMatrix, I::AbstractVector{T
 setindex!{T<:Integer}(A::SparseMatrixCSC, x::Number, i::Integer, J::AbstractVector{T}) = setindex!(A, x, [i], J)
 setindex!{T<:Integer}(A::SparseMatrixCSC, x::Number, I::AbstractVector{T}, j::Integer) = setindex!(A, x, I, [j])
 
-setindex!{Tv,T<:Integer}(A::SparseMatrixCSC{Tv}, x::Number, I::AbstractVector{T}, J::AbstractVector{T}) =
-      setindex!(A, fill(convert(Tv,x), length(I), length(J)), I, J)
+setindex!{Tv,T<:Integer}(A::SparseMatrixCSC{Tv}, x::Number, I::AbstractVector{T}, J::AbstractVector{T}) = 
+    (0 == x) ? spdelete!(A, I, J) : spset!(A, convert(Tv,x), I, J)
+
+function spset!{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv}, x::Tv, I::AbstractVector{Ti}, J::AbstractVector{Ti})
+    !issorted(I) && (I = I[sortperm(I)])
+    !issorted(J) && (J = J[sortperm(J)])
+
+    m, n = size(A)
+    ((I[end] > m) || (J[end] > n)) && throw(DimensionMismatch(""))
+    nnzA = nfilled(A) + length(I) * length(J)
+
+    colptrA = colptr = A.colptr
+    rowvalA = rowval = A.rowval
+    nzvalA = nzval = A.nzval
+
+    rowidx = 1
+    nadd = 0
+    for col in 1:n
+        rrange = colptr[col]:(colptr[col+1]-1)
+        (nadd > 0) && (colptrA[col] = colptr[col] + nadd)
+
+        if col in J
+            if isempty(rrange) # set new vals only
+                nincl = length(I)
+                if nadd == 0
+                    colptrA = copy(colptr)
+                    rowvalA = Array(Ti, nnzA); copy!(rowvalA, 1, rowval, 1, length(rowval))
+                    nzvalA = Array(Tv, nnzA); copy!(nzvalA, 1, nzval, 1, length(nzval))
+                end
+                r = rowidx:(rowidx+nincl-1)
+                rowvalA[r] = I
+                nzvalA[r] = x
+                rowidx += nincl
+                nadd += nincl
+            else # set old + new vals
+                old_ptr = rrange[1]
+                old_stop = rrange[end]
+                new_ptr = 1
+                new_stop = length(I)
+
+                while true
+                    old_row = rowval[old_ptr]
+                    new_row = I[new_ptr]
+                    if old_row < new_row
+                        rowvalA[rowidx] = old_row
+                        nzvalA[rowidx] = nzval[old_ptr]
+                        rowidx += 1
+                        old_ptr += 1
+                    else
+                        if old_row == new_row
+                            old_ptr += 1
+                        else
+                            if nadd == 0
+                                colptrA = copy(colptr)
+                                rowvalA = Array(Ti, nnzA); copy!(rowvalA, 1, rowval, 1, length(rowval))
+                                nzvalA = Array(Tv, nnzA); copy!(nzvalA, 1, nzval, 1, length(nzval))
+                            end
+                            nadd += 1
+                        end
+                        rowvalA[rowidx] = new_row
+                        nzvalA[rowidx] = x
+                        rowidx += 1
+                        new_ptr += 1
+                    end
+
+                    if old_ptr > old_stop
+                        if new_ptr <= new_stop
+                            if nadd == 0
+                                colptrA = copy(colptr)
+                                rowvalA = Array(Ti, nnzA); copy!(rowvalA, 1, rowval, 1, length(rowval))
+                                nzvalA = Array(Tv, nnzA); copy!(nzvalA, 1, nzval, 1, length(nzval))
+                            end
+                            r = rowidx:(rowidx+(new_stop-new_ptr))
+                            rowvalA[r] = I[new_ptr:new_stop]
+                            nzvalA[r] = x
+                            rowidx += length(r)
+                            nadd += length(r)
+                        end
+                        break
+                    end
+
+                    if new_ptr > new_stop
+                        nincl = old_stop-old_ptr+1
+                        copy!(rowvalA, rowidx, rowval, old_ptr, nincl)
+                        copy!(nzvalA, rowidx, nzval, old_ptr, nincl)
+                        rowidx += nincl
+                        break
+                    end
+                end
+            end
+        elseif !isempty(rrange) # set old vals only
+            nincl = length(rrange)
+            copy!(rowvalA, rowidx, rowval, rrange[1], nincl)
+            copy!(nzvalA, rowidx, nzval, rrange[1], nincl)
+            rowidx += nincl
+        end
+    end
+
+    if nadd > 0
+        colptrA[n+1] = rowidx
+        splice!(rowvalA, rowidx:nnzA)
+        splice!(nzvalA, rowidx:nnzA)
+        
+        A.colptr = colptrA
+        A.rowval = rowvalA
+        A.nzval = nzvalA
+    end
+    return A
+end
+
+function spdelete!{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv}, I::AbstractVector{Ti}, J::AbstractVector{Ti})
+    m, n = size(A)
+    nnzA = nfilled(A)
+    (nnzA == 0) && (return A)
+
+    !issorted(I) && (I = I[sortperm(I)])
+    !issorted(J) && (J = J[sortperm(J)])
+
+    ((I[end] > m) || (J[end] > n)) && throw(DimensionMismatch(""))
+
+    colptr = colptrA = A.colptr
+    rowval = rowvalA = A.rowval
+    nzval = nzvalA = A.nzval
+    rowidx = 1
+    ndel = 0
+    for col in 1:n
+        rrange = colptr[col]:(colptr[col+1]-1)
+        (ndel > 0) && (colptrA[col] = colptr[col] - ndel)
+        if isempty(rrange) || !(col in J) 
+            nincl = length(rrange)
+            if(ndel > 0) && !isempty(rrange) 
+                copy!(rowvalA, rowidx, rowval, rrange[1], nincl)
+                copy!(nzvalA, rowidx, nzval, rrange[1], nincl)
+            end
+            rowidx += nincl
+        else
+            for ridx in rrange
+                if rowval[ridx] in I
+                    if ndel == 0
+                        colptrA = copy(colptr)
+                        rowvalA = copy(rowval)
+                        nzvalA = copy(nzval)
+                    end
+                    ndel += 1
+                else
+                    if ndel > 0
+                        rowvalA[rowidx] = rowval[ridx]
+                        nzvalA[rowidx] = nzval[ridx]
+                    end
+                    rowidx += 1
+                end
+            end
+        end
+    end
+
+    if ndel > 0
+        colptrA[n+1] = rowidx
+        splice!(rowvalA, rowidx:nnzA)
+        splice!(nzvalA, rowidx:nnzA)
+        
+        A.colptr = colptrA
+        A.rowval = rowvalA
+        A.nzval = nzvalA
+    end
+    return A
+end
 
 setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, S::Matrix, I::AbstractVector{T}, J::AbstractVector{T}) =
       setindex!(A, convert(SparseMatrixCSC{Tv,Ti}, S), I, J)
