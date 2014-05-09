@@ -152,6 +152,14 @@ type ObjectIdDict <: Associative{Any,Any}
         end
         d
     end
+
+    function ObjectIdDict(o::ObjectIdDict)
+        N = length(o.ht)
+        ht = cell(N)
+        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint),
+              ht, o.ht, N*sizeof(Ptr))
+        new(ht)
+    end
 end
 
 similar(d::ObjectIdDict) = ObjectIdDict()
@@ -192,6 +200,8 @@ function length(d::ObjectIdDict)
     end
     n
 end
+
+copy(o::ObjectIdDict) = ObjectIdDict(o)
 
 # dict
 
