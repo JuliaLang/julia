@@ -27,7 +27,7 @@ New language features
   * Unicode identifiers are normalized (NFC) so that different encodings
     of equivalent strings are treated as the same identifier ([#5462]).
 
-  * If a module contains a function `__init__()`, it will be called when
+  * If a module contains a function `_init()`, it will be called when
     the module is first loaded, and on process startup if a pre-compiled
     version of the module is present ([#1268]).
 
