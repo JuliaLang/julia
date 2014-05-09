@@ -44,9 +44,9 @@ end
 @vectorize_1arg Number abs2
 @vectorize_1arg Number angle
 
-@vectorize_1arg Real isnan
-@vectorize_1arg Real isinf
-@vectorize_1arg Real isfinite
+@vectorize_1arg Number isnan
+@vectorize_1arg Number isinf
+@vectorize_1arg Number isfinite
 
 iround{T<:Integer,R<:Real}(::Type{T}, x::AbstractArray{R,1}) = [ iround(T, x[i]) for i = 1:length(x) ]
 iround{T<:Integer,R<:Real}(::Type{T}, x::AbstractArray{R,2}) = [ iround(T, x[i,j]) for i = 1:size(x,1), j = 1:size(x,2) ]
