@@ -1414,6 +1414,9 @@ static Value *allocate_box_dynamic(Value *jlty, Value *nb, Value *v)
 
 static jl_value_t *static_void_instance(jl_value_t *jt)
 {
+    if (jl_is_type_type(jt) && jl_tparam0(jt) == (jl_value_t*)jl_null) {
+        return (jl_value_t*)jl_null;
+    }
     if (jl_is_datatype(jt)) {
         jl_datatype_t *jb = (jl_datatype_t*)jt;
         if (jb->instance == NULL)
