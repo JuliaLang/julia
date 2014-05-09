@@ -591,8 +591,8 @@ for (op, restype) in ( (:+, Nothing), (:-, Nothing), (:.*, Nothing),
                 colptrS[col+1] = ptrS
             end
 
-            splice!(rowvalS, colptrS[end]:length(rowvalS))
-            splice!(nzvalS, colptrS[end]:length(nzvalS))
+            deleteat!(rowvalS, colptrS[end]:length(rowvalS))
+            deleteat!(nzvalS, colptrS[end]:length(nzvalS))
             return SparseMatrixCSC(m, n, colptrS, rowvalS, nzvalS)
         end
 
@@ -1053,8 +1053,8 @@ function setindex!{T,Ti}(A::SparseMatrixCSC{T,Ti}, v, i0::Integer, i1::Integer)
             end
         end
         if loc != -1
-            splice!(A.rowval, loc)
-            splice!(A.nzval, loc)
+            deleteat!(A.rowval, loc)
+            deleteat!(A.nzval, loc)
             for j = (i1+1):(A.n+1)
                 A.colptr[j] = A.colptr[j] - 1
             end
@@ -1242,8 +1242,8 @@ function spset!{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv}, x::Tv, I::AbstractVector
 
     if nadd > 0
         colptrA[n+1] = rowidx
-        splice!(rowvalA, rowidx:nnzA)
-        splice!(nzvalA, rowidx:nnzA)
+        deleteat!(rowvalA, rowidx:nnzA)
+        deleteat!(nzvalA, rowidx:nnzA)
         
         A.colptr = colptrA
         A.rowval = rowvalA
@@ -1299,8 +1299,8 @@ function spdelete!{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv}, I::AbstractVector{Ti}
 
     if ndel > 0
         colptrA[n+1] = rowidx
-        splice!(rowvalA, rowidx:nnzA)
-        splice!(nzvalA, rowidx:nnzA)
+        deleteat!(rowvalA, rowidx:nnzA)
+        deleteat!(nzvalA, rowidx:nnzA)
         
         A.colptr = colptrA
         A.rowval = rowvalA
@@ -1427,8 +1427,8 @@ function setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixC
         colB += 1
     end
 
-    splice!(rowvalS, colptrS[end]:length(rowvalS))
-    splice!(nzvalS, colptrS[end]:length(nzvalS))
+    deleteat!(rowvalS, colptrS[end]:length(rowvalS))
+    deleteat!(nzvalS, colptrS[end]:length(nzvalS))
 
     A.colptr = colptrS
     A.rowval = rowvalS
