@@ -83,3 +83,58 @@ let N=800
   @test x == y
 end
 
+### Median filter
+
+
+function median_filter(im::Matrix, filterSize=3)
+  N = size(im)
+  out = similar(im)
+  K = int(floor(filterSize/2))
+  for x=1:N[1], y=1:N[2]
+    x_min = max(1, x-K)
+    x_max = min(N[1], x+K)
+    y_min = max(1, y-K)
+    y_max = min(N[2], y+K)
+
+    s = im[x_min:x_max, y_min:y_max]
+    out[x,y] = median(s[:])
+  end
+  out
+end
+
+function pmedian_filter_core(im::Matrix, out::Matrix, K, y)
+  N = size(im)
+  y_min = max(1, y-K)
+  y_max = min(N[2], y+K)
+  for x=1:N[1]
+    x_min = max(1, x-K)
+    x_max = min(N[1], x+K)
+
+    s = im[x_min:x_max, y_min:y_max]
+    out[x,y] = median(s[:])
+  end
+
+end
+
+
+function pmedian_filter(im::Matrix, filterSize=3; num_threads=2)
+  N = size(im)
+  out = similar(im)
+  K = int(floor(filterSize/2))
+  Base.parapply_jl(pmedian_filter_core, (im, out, K), num_threads, 1, 1, N[2])
+  out
+end
+
+
+let N = 900
+  A=rand(N,N)
+
+  B = median_filter(A) 
+  @time B = median_filter(A) 
+  @time D = pmedian_filter(A,num_threads=1) 
+  @time C = pmedian_filter(A,num_threads=2) 
+
+  @test B == C
+
+end
+
