@@ -21,6 +21,7 @@ unpreserve_handle(x) = (v = uvhandles[x]; v == 1 ? pop!(uvhandles,x) : (uvhandle
 immutable RawFD
     fd::Int32
     RawFD(fd::Integer) = new(int32(fd))
+    RawFD(fd::RawFD) = fd
 end
 
 convert(::Type{Int32}, fd::RawFD) = fd.fd
