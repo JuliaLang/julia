@@ -74,7 +74,7 @@ accessible via ``ssh`` and each machine definition takes the form
     
     
 If you have code that you want executed whenever julia is run, you can
-put it in ``~\.juliarc.jl``:
+put it in ``~/.juliarc.jl``:
 
 .. raw:: latex
 
