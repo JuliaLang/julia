@@ -1,33 +1,54 @@
-    begin
-    local n,a,asym,d,v
+begin
+    srand(1234)
+    local n,a,asym,b,bsym,d,v
     n = 10
     areal  = randn(n,n)
+    breal  = randn(n,n)
     acmplx = complex(randn(n,n), randn(n,n))
+    bcmplx = complex(randn(n,n), randn(n,n))
 
     for elty in (Float32, Float64, Complex64, Complex128)
         if elty == Complex64 || elty == Complex128
             a = acmplx
+            b = bcmplx
         else
             a = areal
+            b = breal
         end
         a     = convert(Matrix{elty}, a)
         asym  = a' + a                  # symmetric indefinite
         apd   = a'*a                    # symmetric positive-definite
 
+        b     = convert(Matrix{elty}, b)
+        bsym  = b' + b
+        bpd   = b'*b
+
+        if elty == Complex64 || elty == Float32
+            testtol = 1e-3
+        else
+            testtol = 1e-6
+        end
+
 	(d,v) = eigs(a, nev=3)
 	@test_approx_eq a*v[:,2] d[2]*v[:,2]
+	(d,v) = eigs(a, b, nev=3, tol=1e-8)
+	@test_approx_eq_eps a*v[:,2] d[2]*b*v[:,2] testtol
 
 	(d,v) = eigs(asym, nev=3)
 	@test_approx_eq asym*v[:,1] d[1]*v[:,1]
-#        @test_approx_eq eigs(asym; nev=1, sigma=d[3])[1][1] d[3]
+        @test_approx_eq eigs(asym; nev=1, sigma=d[3])[1][1] d[3]
 
 	(d,v) = eigs(apd, nev=3)
 	@test_approx_eq apd*v[:,3] d[3]*v[:,3]
-#        @test_approx_eq eigs(apd; nev=1, sigma=d[3])[1][1] d[3]
+        @test_approx_eq eigs(apd; nev=1, sigma=d[3])[1][1] d[3]
+	(d,v) = eigs(apd, bpd, nev=3, tol=1e-8)
+	@test_approx_eq_eps apd*v[:,2] d[2]*bpd*v[:,2] testtol
 
-    # test (shift-and-)invert mode
-    (d,v) = eigs(apd, nev=3, sigma=0)
-    @test_approx_eq apd*v[:,3] d[3]*v[:,3]
+        # test (shift-and-)invert mode
+        (d,v) = eigs(apd, nev=3, sigma=0)
+        @test_approx_eq apd*v[:,3] d[3]*v[:,3]
+        (d,v) = eigs(apd, bpd, nev=3, sigma=0, tol=1e-8)
+        @test_approx_eq_eps apd*v[:,1] d[1]*bpd*v[:,1] testtol
 
     end
 end
