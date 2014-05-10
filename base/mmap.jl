@@ -18,7 +18,7 @@ msync(B::BitArray) = msync(pointer(B.chunks), length(B.chunks)*sizeof(Uint64))
 @unix_only begin
 # Low-level routines
 # These are needed for things like MAP_ANONYMOUS
-function mmap(len::Integer, prot::Integer, flags::Integer, fd::Integer, offset::FileOffset)
+function mmap(len::Integer, prot::Integer, flags::Integer, fd, offset::Integer)
     const pagesize::Int = ccall(:jl_getpagesize, Clong, ())
     # Check that none of the computations will overflow
     if len > typemax(Int)-pagesize
