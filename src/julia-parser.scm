@@ -117,14 +117,6 @@
   (let ((chrs (string->list "()[]{},;\"`@")))
     (lambda (c) (memv c chrs))))
 (define (newline? c) (eqv? c #\newline))
-(define (identifier-char? c) (or (and (char>=? c #\A)
-				      (char<=? c #\Z))
-				 (and (char>=? c #\a)
-				      (char<=? c #\z))
-				 (and (char>=? c #\0)
-				      (char<=? c #\9))
-				 (char>=? c #\uA1)
-				 (eqv? c #\_)))
 ;; characters that can be in an operator
 (define (opchar? c) (and (char? c) (string.find op-chars c)))
 ;; characters that can follow . in an operator
@@ -418,7 +410,7 @@
 
 	  ((opchar? c)  (read-operator port (read-char port)))
 
-	  ((identifier-char? c) (accum-julia-symbol c port))
+	  ((identifier-start-char? c) (accum-julia-symbol c port))
 
 	  (else (error (string "invalid character \"" (read-char port) "\""))))))
 
@@ -1523,7 +1515,7 @@
 (define (parse-interpolate s)
   (let* ((p (ts:port s))
          (c (peek-char p)))
-    (cond ((identifier-char? c)
+    (cond ((identifier-start-char? c)
            (parse-atom s))
           ((eqv? c #\()
            (read-char p)
