@@ -967,12 +967,20 @@ ifneq ($(OS),WINNT)
 ARPACK_FLAGS += LDFLAGS="-Wl,-rpath,'$(build_libdir)'"
 endif
 
-arpack-ng-$(ARPACK_VER).tar.gz:
-	$(JLDOWNLOAD) $@ http://forge.scilab.org/index.php/p/arpack-ng/downloads/get/arpack-ng-$(ARPACK_VER).tar.gz
+# ARPACK-NG upstream keeps changing their download filenames
+arpack-ng_$(ARPACK_VER).tar.gz:
+	$(JLDOWNLOAD) $@ http://forge.scilab.org/index.php/p/arpack-ng/downloads/get/$@
 	touch -c $@
-arpack-ng-$(ARPACK_VER)/configure: arpack-ng-$(ARPACK_VER).tar.gz
-	$(TAR) zxf $< 
+arpack-ng-$(ARPACK_VER)/configure: arpack-ng_$(ARPACK_VER).tar.gz
+	$(TAR) zxf $<
 	touch -c $@
+
+#arpack-ng-$(ARPACK_VER).tar.gz:
+#	$(JLDOWNLOAD) $@ http://forge.scilab.org/index.php/p/arpack-ng/downloads/get/arpack-ng-$(ARPACK_VER).tar.gz
+#	touch -c $@
+#arpack-ng-$(ARPACK_VER)/configure: arpack-ng-$(ARPACK_VER).tar.gz
+#	$(TAR) zxf $<
+#	touch -c $@
 
 ifeq ($(USE_ATLAS), 1)
 arpack-ng-$(ARPACK_VER)/config.status: | $(ATLAS_OBJ_TARGET)
