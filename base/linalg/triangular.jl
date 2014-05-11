@@ -82,7 +82,12 @@ end
 ####################
 
 size(A::Triangular, args...) = size(A.UL, args...)
+
 convert(::Type{Matrix}, A::Triangular) = full(A)
+convert{T}(::Type{Triangular{T}}, A::Triangular{T}) = A
+convert{T}(::Type{Triangular{T}}, A::Triangular) = Triangular(convert(AbstractMatrix{T}, A.UL), A.uplo, A.unitdiag)
+convert{T}(::Type{AbstractMatrix{T}}, A::Triangular) = convert(Triangular{T}, A)
+
 full(A::Triangular) = A.uplo == 'U' ? triu!(A.UL) : tril!(A.UL)
 
 getindex{T}(A::Triangular{T}, i::Integer, j::Integer) = i == j ? (A.unitdiag == 'U' ? one(T) : A.UL[i,j]) : ((A.uplo == 'U') == (i < j) ? getindex(A.UL, i, j) : zero(T))

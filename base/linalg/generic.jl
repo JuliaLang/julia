@@ -211,7 +211,10 @@ trace(x::Number) = x
 #det(a::AbstractMatrix)
 
 inv(a::AbstractVector) = error("argument must be a square matrix")
-inv{T}(A::AbstractMatrix{T}) = A_ldiv_B!(A,eye(T, chksquare(A)))
+function inv{T}(A::AbstractMatrix{T})
+    S = typeof(one(T)/one(T))
+    A_ldiv_B!(convert(AbstractMatrix{S}, A), eye(S, chksquare(A)))
+end
 
 function \{TA,TB,N}(A::AbstractMatrix{TA}, B::AbstractArray{TB,N})
     TC = typeof(one(TA)/one(TB))
