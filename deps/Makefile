@@ -1060,10 +1060,6 @@ fftw-$(FFTW_VER).tar.gz:
 fftw-$(FFTW_VER)-single/configure: fftw-$(FFTW_VER).tar.gz
 	mkdir -p fftw-$(FFTW_VER)-single && \
 	$(TAR) -C fftw-$(FFTW_VER)-single --strip-components 1 -xf $<
-ifeq ($(OS),WINNT)
-	patch fftw-$(FFTW_VER)-single/configure < fftw-config-nopthreads.patch
-	patch fftw-$(FFTW_VER)-single/kernel/ifftw.h < ifftw.h.patch
-endif
 	touch -c $@
 fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
 	cd fftw-$(FFTW_VER)-single && \
@@ -1097,10 +1093,6 @@ endif
 fftw-$(FFTW_VER)-double/configure: fftw-$(FFTW_VER).tar.gz
 	mkdir -p fftw-$(FFTW_VER)-double && \
 	$(TAR) -C fftw-$(FFTW_VER)-double --strip-components 1 -xf $<
-ifeq ($(OS),WINNT)
-	patch fftw-$(FFTW_VER)-double/configure < fftw-config-nopthreads.patch
-	patch fftw-$(FFTW_VER)-double/kernel/ifftw.h < ifftw.h.patch
-endif
 	touch -c $@
 fftw-$(FFTW_VER)-double/config.status: fftw-$(FFTW_VER)-double/configure
 	cd fftw-$(FFTW_VER)-double && \
