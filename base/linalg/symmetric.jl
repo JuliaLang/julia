@@ -37,16 +37,16 @@ ctranspose(A::Hermitian) = A
 factorize(A::HermOrSym) = bkfact(A.S, symbol(A.uplo), issym(A))
 \(A::HermOrSym, B::StridedVecOrMat) = \(bkfact(A.S, symbol(A.uplo), issym(A)), B)
 
-eigfact!{T<:BlasFloat}(A::HermOrSym{T}) = Eigen(LAPACK.syevr!('V', 'A', A.uplo, A.S, 0.0, 0.0, 0, 0, -1.0)...)
-eigfact!{T<:BlasFloat}(A::HermOrSym{T}, irange::UnitRange) = Eigen(LAPACK.syevr!('V', 'I', A.uplo, A.S, 0.0, 0.0, irange.start, irange.stop, -1.0)...)
-eigfact!{T<:BlasFloat}(A::HermOrSym{T}, vl::Real, vh::Real) = Eigen(LAPACK.syevr!('V', 'V', A.uplo, A.S, convert(T, vl), convert(T, vh), 0, 0, -1.0)...)
-eigvals!{T<:BlasFloat}(A::HermOrSym{T}) = LAPACK.syevr!('N', 'A', A.uplo, A.S, 0.0, 0.0, 0, 0, -1.0)[1]
-eigvals!{T<:BlasFloat}(A::HermOrSym{T}, irange::UnitRange) = LAPACK.syevr!('N', 'I', A.uplo, A.S, 0.0, 0.0, irange.start, irange.stop, -1.0)[1]
-eigvals!{T<:BlasFloat}(A::HermOrSym{T}, vl::Real, vh::Real) = LAPACK.syevr!('N', 'V', A.uplo, A.S, convert(T, vl), convert(T, vh), 0, 0, -1.0)[1]
-eigmax(A::HermOrSym) = eigvals(A, size(A, 1), size(A, 1))[1]
-eigmin(A::HermOrSym) = eigvals(A, 1, 1)[1]
+eigfact!{T<:BlasReal}(A::Union(HermOrSym{T}, Hermitian{Complex{T}})) = Eigen(LAPACK.syevr!('V', 'A', A.uplo, A.S, 0.0, 0.0, 0, 0, -1.0)...)
+eigfact!{T<:BlasReal}(A::Union(HermOrSym{T}, Hermitian{Complex{T}}), irange::UnitRange) = Eigen(LAPACK.syevr!('V', 'I', A.uplo, A.S, 0.0, 0.0, irange.start, irange.stop, -1.0)...)
+eigfact!{T<:BlasReal}(A::Union(HermOrSym{T}, Hermitian{Complex{T}}), vl::Real, vh::Real) = Eigen(LAPACK.syevr!('V', 'V', A.uplo, A.S, convert(T, vl), convert(T, vh), 0, 0, -1.0)...)
+eigvals!{T<:BlasReal}(A::Union(HermOrSym{T}, Hermitian{Complex{T}})) = LAPACK.syevr!('N', 'A', A.uplo, A.S, 0.0, 0.0, 0, 0, -1.0)[1]
+eigvals!{T<:BlasReal}(A::Union(HermOrSym{T}, Hermitian{Complex{T}}), irange::UnitRange) = LAPACK.syevr!('N', 'I', A.uplo, A.S, 0.0, 0.0, irange.start, irange.stop, -1.0)[1]
+eigvals!{T<:BlasReal}(A::Union(HermOrSym{T}, Hermitian{Complex{T}}), vl::Real, vh::Real) = LAPACK.syevr!('N', 'V', A.uplo, A.S, convert(T, vl), convert(T, vh), 0, 0, -1.0)[1]
+eigmax{T<:BlasReal}(A::Union(HermOrSym{T}, Hermitian{Complex{T}})) = eigvals(A, size(A, 1), size(A, 1))[1]
+eigmin{T<:BlasReal}(A::Union(HermOrSym{T}, Hermitian{Complex{T}})) = eigvals(A, 1, 1)[1]
 
-function eigfact!{T<:BlasReal}(A::Symmetric{T}, B::Symmetric{T})
+function eigfact!{T<:BlasReal}(A::HermOrSym{T}, B::HermOrSym{T})
     vals, vecs, _ = LAPACK.sygvd!(1, 'V', A.uplo, A.S, B.uplo == A.uplo ? B.S : B.S')
     GeneralizedEigen(vals, vecs)
 end
@@ -54,7 +54,7 @@ function eigfact!{T<:BlasComplex}(A::Hermitian{T}, B::Hermitian{T})
     vals, vecs, _ = LAPACK.sygvd!(1, 'V', A.uplo, A.S, B.uplo == A.uplo ? B.S : B.S')
     GeneralizedEigen(vals, vecs)
 end
-eigvals!{T<:BlasReal}(A::Symmetric{T}, B::Symmetric{T}) = LAPACK.sygvd!(1, 'N', A.uplo, A.S, B.uplo == A.uplo ? B.S : B.S')[1]
+eigvals!{T<:BlasReal}(A::HermOrSym{T}, B::HermOrSym{T}) = LAPACK.sygvd!(1, 'N', A.uplo, A.S, B.uplo == A.uplo ? B.S : B.S')[1]
 eigvals!{T<:BlasComplex}(A::Hermitian{T}, B::Hermitian{T}) = LAPACK.sygvd!(1, 'N', A.uplo, A.S, B.uplo == A.uplo ? B.S : B.S')[1]
 
 #Matrix-valued functions
