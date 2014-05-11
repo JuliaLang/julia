@@ -1261,7 +1261,7 @@ function map_to!(f::Callable, first, dest::AbstractArray, A::AbstractArray)
 end
 
 function map(f::Callable, A::AbstractArray)
-    if isempty(A); return {}; end
+    if isempty(A); return []; end
     first = f(A[1])
     dest = similar(A, typeof(first))
     return map_to!(f, first, dest, A)
