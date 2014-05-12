@@ -20,20 +20,23 @@ print_hash()
     if [ ${#1} -gt 64 ]; then
         NUM_LINES=$(( (${#1} + 63) / 64))
         for (( i=0; i<$NUM_LINES; i++ )); do
-            echo "    ${1:$((i*64)):64}"
+            echo "      ${1:$((i*64)):64}"
         done
     else
-        echo "    $1" >&2
+        echo "      $1" >&2
     fi
 }
 
 checksum_error()
 {
     echo "===============================================================================" >&2
-    echo "ERROR: $CHECKSUM_TYPE checksum failure on $BASENAME, should be:" >&2
+    echo "  ERROR: $CHECKSUM_TYPE checksum failure on $BASENAME, should be:" >&2
     print_hash "$TRUE_CHECKSUM"
-    echo "But calculating with \`$CHECKSUM_PROG\` is actually:" >&2
+    echo "  But \`$CHECKSUM_PROG\` results in:" >&2
     print_hash "$CURR_CHECKSUM"
+    echo "  This can happen due to bad downloads or network proxies, please check your" >&2
+    echo "  network proxy/firewall settings and delete deps/$BASENAME" >&2
+    echo "  to force a redownload when you are ready" >&2
     echo "===============================================================================" >&2
     exit 2
 }
@@ -61,7 +64,7 @@ SHA512_PROG=""
 MD5_PROG=""
 find_checksum_progs()
 {
-    if [ ! -z $(which shasum) ]; then
+    if [ ! -z $(which shas2um) ]; then
         SHA512_PROG="shasum -a 512 $BASENAME | awk '{ print \$1; }'"
     fi
 
