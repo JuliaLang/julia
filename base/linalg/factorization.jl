@@ -52,8 +52,8 @@ size(C::Union(Cholesky, CholeskyPivoted)) = size(C.UL)
 size(C::Union(Cholesky, CholeskyPivoted), d::Integer) = size(C.UL,d)
 
 function getindex(C::Cholesky, d::Symbol)
-    d == :U && return triu!(symbol(C.uplo) == d ? C.UL : C.UL')
-    d == :L && return tril!(symbol(C.uplo) == d ? C.UL : C.UL')
+    d == :U && return Triangular(triu!(symbol(C.uplo) == d ? C.UL : C.UL'),:U)
+    d == :L && return Triangular(tril!(symbol(C.uplo) == d ? C.UL : C.UL'),:L)
     d == :UL && return Triangular(C.UL, symbol(C.uplo))
     throw(KeyError(d))
 end
