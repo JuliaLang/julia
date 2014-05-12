@@ -1143,6 +1143,51 @@ function findmin(a)
     return (m, mi)
 end
 
+
+# findmax(A,dim)
+function findmax(A::Array,dim::Int)
+
+    adim   = size(A)    
+    outdim = size(A)[setdiff(1:ndims(A),dim)]
+
+
+    M    = zeros(typeof(A[1]),outdim)
+    Mi   = zeros(Int,outdim)
+  
+    # number of elements before dim
+    n1   = prod(adim[1:dim-1]) 
+    # number of elements after dim
+    n2   = prod(adim[dim+1:end]) 
+    # number of elements in dim
+    n3   = adim[dim] 
+
+    step = stride(A,dim)
+
+    @inbounds for i2 = 1:n2
+        @inbounds for i1=1:n1
+            maxstart = i1+n1*n3*(i2-1)
+            maxidx   = 1 
+            maxval   = A[maxstart]
+            @inbounds for i3 = 2:n3
+                # println("i1=$(i1), i2=$(i2), i3=$i3, maxidx=$maxidx idx=$(maxidx+(i3-1)*step)")
+                m = A[maxstart+(i3-1)*step]
+                if m > maxval || m != m 
+                    maxval = m
+                    maxidx = i3
+                end
+            end
+            # println("----")
+            M[i1+n1*(i2-1)] = maxval
+            Mi[i1+n1*(i2-1)] = maxidx
+
+        end
+    end
+
+    return(M,Mi)
+
+end
+
+
 indmax(a) = findmax(a)[2]
 indmin(a) = findmin(a)[2]
 
