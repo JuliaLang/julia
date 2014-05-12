@@ -3,6 +3,7 @@ include $(JULIAHOME)/Make.inc
 
 override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
+override CPPFLAGS += $(JCPPFLAGS)
 
 NAME = flisp
 EXENAME = $(NAME)
