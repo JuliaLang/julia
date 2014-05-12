@@ -1261,7 +1261,7 @@ function map_to!(f::Callable, first, dest::AbstractArray, A::AbstractArray)
 end
 
 function map(f::Callable, A::AbstractArray)
-    if isempty(A); return []; end
+    if isempty(A); return similar(A); end
     first = f(A[1])
     dest = similar(A, typeof(first))
     return map_to!(f, first, dest, A)
@@ -1278,8 +1278,8 @@ end
 
 function map(f::Callable, A::AbstractArray, B::AbstractArray)
     shp = promote_shape(size(A),size(B))
-    if isempty(A)
-        return similar(A, Any, shp)
+    if prod(shp) == 0
+        return similar(A, promote_type(eltype(A),eltype(B)), shp)
     end
     first = f(A[1], B[1])
     dest = similar(A, typeof(first), shp)
