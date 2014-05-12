@@ -210,11 +210,13 @@ All Objects
 
    While it isn't normally necessary, user-defined types can override the default ``deepcopy`` behavior by defining a specialized version of the function ``deepcopy_internal(x::T, dict::ObjectIdDict)`` (which shouldn't otherwise be used), where ``T`` is the type to be specialized for, and ``dict`` keeps track of objects copied so far within the recursion. Within the definition, ``deepcopy_internal`` should be used in place of ``deepcopy``, and the ``dict`` variable should be updated as appropriate before returning.
 
-.. function:: isdefined(object, index | symbol)
+.. function:: isdefined([object,] index | symbol)
 
    Tests whether an assignable location is defined. The arguments can be an
    array and index, a composite object and field name (as a symbol), or a
    module and a symbol.
+   With a single symbol argument, tests whether a global variable with that
+   name is defined in ``current_module()``.
 
 .. function:: convert(type, x)
 
@@ -388,9 +390,11 @@ Generic Functions
 Syntax
 ------
 
-.. function:: eval(expr::Expr)
+.. function:: eval([m::Module], expr::Expr)
 
-   Evaluate an expression and return the value.
+   Evaluate an expression in the given module and return the result.
+   Every module (except those defined with ``baremodule``) has its own 1-argument definition
+   of ``eval``, which evaluates expressions in that module.
 
 .. function:: @eval
 
@@ -5514,6 +5518,7 @@ Reflection
 .. function:: isconst([m::Module], s::Symbol) -> Bool
 
    Determine whether a global is declared ``const`` in a given module.
+   The default module argument is ``current_module()``.
 
 .. function:: isgeneric(f::Function) -> Bool
 
