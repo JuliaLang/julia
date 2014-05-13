@@ -26,7 +26,7 @@ At_mul_B{T<:BlasReal}(A::Triangular{T}, b::Vector{T}) = BLAS.trmv(A.uplo, 'T', A
 
 # Matrix multiplication
 *{T<:BlasFloat}(A::Triangular{T}, B::StridedMatrix{T}) = BLAS.trmm('L', A.uplo, 'N', A.unitdiag, one(T), A.UL, B)
-*{T<:BlasFloat}(A::StridedMatrix{T}, B::Triangular{T}) = BLAS.trmm('R', B.uplo, 'N', B.unitdiag, one(T), A, B.UL)
+*{T<:BlasFloat}(A::StridedMatrix{T}, B::Triangular{T}) = BLAS.trmm('R', B.uplo, 'N', B.unitdiag, one(T), B.UL, A)
 A_mul_B!{T<:BlasFloat}(A::Triangular{T},B::Matrix{T}) = BLAS.trmm!('L',A.uplo,'N',A.unitdiag,one(eltype(A)),A.UL,B)
 Ac_mul_B!{T<:BlasComplex}(A::Triangular{T}, B::StridedMatrix{T}) = BLAS.trmm('L', A.uplo, 'C', A.unitdiag, one(T), A.UL, B)
 Ac_mul_B!{T<:BlasReal}(A::Triangular{T}, B::StridedMatrix{T}) = BLAS.trmm('L', A.uplo, 'T', A.unitdiag, one(T), A.UL, B)
@@ -105,8 +105,9 @@ big(A::Triangular) = Triangular(big(A.UL), A.uplo, A.unitdiag)
 #Generic multiplication
 for func in (:*, :Ac_mul_B, :A_mul_Bc, :/, :A_rdiv_Bc)
     @eval begin
-        ($func){T}(A::Triangular{T}, B::AbstractVector{T}) = ($func)(full(A), B)
-        #($func){T}(A::AbstractArray{T}, B::Triangular{T}) = ($func)(full(A), B)
+        ($func)(A::Triangular, B::AbstractVector) = ($func)(full(A), B)
+        ($func)(A::Triangular, B::AbstractMatrix) = ($func)(full(A), B)
+        ($func)(A::AbstractMatrix, B::Triangular) = ($func)(A, full(B))
     end
 end
 

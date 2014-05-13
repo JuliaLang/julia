@@ -221,6 +221,11 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
 
     for M in (triu(A), tril(A))
         TM = Triangular(M)
+        #Multiplication
+        @test_approx_eq A*M A*TM
+        @test_approx_eq M*A TM*A
+        @test_approx_eq M*M TM*TM
+        @test_approx_eq M*b TM*b
         condM = elty <:BlasFloat ? cond(TM, Inf) : convert(relty, cond(complex128(M), Inf))
         #Linear solver
         x = M \ b
