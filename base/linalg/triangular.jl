@@ -102,11 +102,14 @@ ctranspose!(A::Triangular) = Triangular(copytri!(A.UL, A.uplo, true), A.uplo=='U
 diag(A::Triangular) = diag(A.UL)
 big(A::Triangular) = Triangular(big(A.UL), A.uplo, A.unitdiag)
 
+*(A::Tridiagonal, B::Triangular) = A*full(B)
+A_mul_Bc{TB}(A::Triangular, B::Union(QRCompactWYQ{TB},QRPackedQ{TB})) = A_mul_Bc(full(A),B)
+
 #Generic multiplication
 for func in (:*, :Ac_mul_B, :A_mul_Bc, :/, :A_rdiv_Bc)
     @eval begin
-        ($func)(A::Triangular, B::AbstractVector) = ($func)(full(A), B)
-        ($func)(A::Triangular, B::AbstractMatrix) = ($func)(full(A), B)
+        ($func)(A::Triangular, B::Triangular) = ($func)(A, full(B))
+        ($func)(A::Triangular, B::AbstractVecOrMat) = ($func)(full(A), B)
         ($func)(A::AbstractMatrix, B::Triangular) = ($func)(A, full(B))
     end
 end
