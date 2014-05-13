@@ -1,6 +1,6 @@
 module Profile
 
-import Base: hash, isequal
+import Base: hash, ==
 
 export @profile
 
@@ -67,7 +67,7 @@ end
 
 const UNKNOWN = LineInfo("?", "?", -1, true)
 
-isequal(a::LineInfo, b::LineInfo) = a.line == b.line && a.fromC == b.fromC && a.func == b.func && a.file == b.file
+==(a::LineInfo, b::LineInfo) = a.line == b.line && a.fromC == b.fromC && a.func == b.func && a.file == b.file
 
 function hash(li::LineInfo, h::Uint)
     h += uint(0xf4fbda67fe20ce88)
