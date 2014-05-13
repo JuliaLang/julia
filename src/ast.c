@@ -364,32 +364,45 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
     return (jl_value_t*)jl_null;
 }
 
-static value_t array_to_list(jl_array_t *a)
+static value_t julia_to_scm_(jl_value_t *v);
+
+static value_t julia_to_scm(jl_value_t *v)
+{
+    value_t temp;
+    // need try/catch to reset GC handle stack in case of error
+    FL_TRY_EXTERN {
+        temp = julia_to_scm_(v);
+    }
+    FL_CATCH_EXTERN {
+        temp = fl_list2(symbol("error"), cvalue_static_cstring("expression too large"));
+    }
+    return temp;
+}
+
+static void array_to_list(jl_array_t *a, value_t *pv)
 {
     if (jl_array_len(a) > 300000)
-        jl_error("expression too large");
-    value_t lst=FL_NIL, temp=FL_NIL;
-    fl_gc_handle(&lst);
-    fl_gc_handle(&temp);
+        lerror(MemoryError, "expression too large");
+    value_t temp;
     for(long i=jl_array_len(a)-1; i >= 0; i--) {
-        temp = julia_to_scm(jl_cellref(a,i));
-        lst = fl_cons(temp, lst);
+        *pv = fl_cons(FL_NIL, *pv);
+        temp = julia_to_scm_(jl_cellref(a,i));
+        // note: must be separate statement
+        car_(*pv) = temp;
     }
-    fl_free_gc_handles(2);
-    return lst;
 }
 
 static value_t julia_to_list2(jl_value_t *a, jl_value_t *b)
 {
-    value_t sa = julia_to_scm(a);
+    value_t sa = julia_to_scm_(a);
     fl_gc_handle(&sa);
-    value_t sb = julia_to_scm(b);
+    value_t sb = julia_to_scm_(b);
     value_t l = fl_list2(sa, sb);
     fl_free_gc_handles(1);
     return l;
 }
 
-static value_t julia_to_scm(jl_value_t *v)
+static value_t julia_to_scm_(jl_value_t *v)
 {
     if (jl_is_symbol(v)) {
         return symbol(((jl_sym_t*)v)->name);
@@ -405,9 +418,10 @@ static value_t julia_to_scm(jl_value_t *v)
     }
     if (jl_is_expr(v)) {
         jl_expr_t *ex = (jl_expr_t*)v;
-        value_t args = array_to_list(ex->args);
+        value_t args = FL_NIL;
         fl_gc_handle(&args);
-        value_t hd = julia_to_scm((jl_value_t*)ex->head);
+        array_to_list(ex->args, &args);
+        value_t hd = julia_to_scm_((jl_value_t*)ex->head);
         value_t scmv = fl_cons(hd, args);
         fl_free_gc_handles(1);
         return scmv;
