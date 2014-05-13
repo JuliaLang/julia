@@ -99,7 +99,7 @@ static uint32_t curr_frame = 0;
 #define POP()   (Stack[--SP])
 #define POPN(n) (SP-=(n))
 
-#define N_GC_HANDLES 1024
+#define N_GC_HANDLES 8192
 static value_t *GCHandleStack[N_GC_HANDLES];
 static uint32_t N_GCHND = 0;
 
