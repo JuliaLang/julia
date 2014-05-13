@@ -1011,12 +1011,12 @@ function abstract_eval_global(M, s::Symbol)
     return Any
 end
 
-function abstract_eval_symbol(s::Symbol, vtypes, sv::StaticVarInfo)
+function abstract_eval_symbol(s::Symbol, vtypes::ObjectIdDict, sv::StaticVarInfo)
     if haskey(sv.cenv,s)
         # consider closed vars to always have their propagated (declared) type
         return sv.cenv[s]
     end
-    t = is(vtypes,()) ? NF : get(vtypes,s,NF)
+    t = get(vtypes,s,NF)
     if is(t,NF)
         sp = sv.sp
         for i=1:2:length(sp)
@@ -1627,7 +1627,8 @@ function type_annotate(ast::Expr, states::Array{Any,1}, sv::ANY, rettype::ANY,
     closures = {}
     body = ast.args[3].args::Array{Any,1}
     for i=1:length(body)
-        body[i] = eval_annotate(body[i], states[i], sv, decls, closures)
+        st_i = states[i]
+        body[i] = eval_annotate(body[i], (st_i === () ? emptydict : st_i), sv, decls, closures)
     end
     ast.args[3].typ = rettype
 
@@ -1805,6 +1806,8 @@ function occurs_more(e::ANY, pred, n)
     return 0
 end
 
+const emptydict = ObjectIdDict()
+
 function exprtype(x::ANY)
     if isa(x,Expr)
         return x.typ
@@ -1817,7 +1820,7 @@ function exprtype(x::ANY)
         if is_local(sv, x)
             return Any
         end
-        return abstract_eval(x, (), sv)
+        return abstract_eval(x, emptydict, sv)
     elseif isa(x,QuoteNode)
         v = x.value
         if isa(v,Type)

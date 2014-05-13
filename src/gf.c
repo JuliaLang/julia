@@ -1594,6 +1594,13 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                         break;
                     }
                 }
+                // don't analyze slots declared with ANY
+                l = jl_tuple_len(ml->sig);
+                size_t m = jl_tuple_len(ti);
+                for(i=0; i < l && i < m; i++) {
+                    if (jl_tupleref(ml->sig, i) == jl_ANY_flag)
+                        jl_tupleset(ti, i, jl_any_type);
+                }
             }
             if (!skip) {
                 len++;
