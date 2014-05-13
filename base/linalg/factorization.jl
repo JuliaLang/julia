@@ -563,7 +563,7 @@ function eigvals!{T<:BlasComplex}(A::StridedMatrix{T}; permute::Bool=true, scale
     ishermitian(A) && return eigvals(Hermitian(A))
     return LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)[2]
 end
-eigvals{T}(A::AbstractMatrix{T}; kwargs...) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); S != T ? eigvals!(convert(AbstractMatrix{S}, A); kwargs...) : eigvals!(copy(A); kwargs...))
+eigvals{T}(A::AbstractMatrix{T}, args...; kwargs...) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); S != T ? eigvals!(convert(AbstractMatrix{S}, A), args...; kwargs...) : eigvals!(copy(A), args...; kwargs...))
 eigvals{T<:Number}(x::T; kwargs...) = (val = convert(promote_type(Float32,typeof(one(T)/norm(one(T)))),x); imag(val) == 0 ? [real(val)] : [val])
 
 #Computes maximum and minimum eigenvalue
