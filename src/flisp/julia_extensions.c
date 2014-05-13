@@ -47,9 +47,6 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_propval_t cat)
             cat == UTF8PROC_CATEGORY_LO || cat == UTF8PROC_CATEGORY_NL ||
             cat == UTF8PROC_CATEGORY_SC ||  // allow currency symbols
             cat == UTF8PROC_CATEGORY_SO ||  // other symbols
-            // allow all latin-1 characters except math symbols and quotes
-            (wc <= 0xff && cat != UTF8PROC_CATEGORY_SM &&
-             cat != UTF8PROC_CATEGORY_PF && cat != UTF8PROC_CATEGORY_PI) ||
             // Other_ID_Start
             wc == 0x2118 || wc == 0x212E || (wc >= 0x309B && wc <= 0x309C));
 }
@@ -77,6 +74,7 @@ static int jl_id_char(uint32_t wc)
     if (cat == UTF8PROC_CATEGORY_MN || cat == UTF8PROC_CATEGORY_MC ||
         cat == UTF8PROC_CATEGORY_ND || cat == UTF8PROC_CATEGORY_PC ||
         cat == UTF8PROC_CATEGORY_SK || cat == UTF8PROC_CATEGORY_ME ||
+        cat == UTF8PROC_CATEGORY_NO ||
         // primes
         (wc >= 0x2032 && wc <= 0x2034) ||
         // Other_ID_Continue
