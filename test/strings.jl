@@ -963,5 +963,5 @@ let
     sym = symbol(char(0xdcdb))
     @test string(sym) == "\udcdb"
     @test expand(sym) === sym
-    @test parse("\udcdb = 1",1,raise=false)[1] == Expr(:error, "error normalizing identifier \udcdb: Invalid UTF-8 string")
+    @test parse("\udcdb = 1",1,raise=false)[1] == Expr(:error, "invalid character \"\udcdb\"")
 end
