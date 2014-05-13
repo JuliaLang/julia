@@ -1311,6 +1311,7 @@ libunwind-$(UNWIND_VER).tar.gz:
 	$(JLDOWNLOAD) $@ http://download.savannah.gnu.org/releases/libunwind/$@ 
 libunwind-$(UNWIND_VER)/configure: libunwind-$(UNWIND_VER).tar.gz
 	$(TAR) xfz $<
+	cd libunwind-$(UNWIND_VER) && patch -p1 < ../0001-Change-the-RBP-validation-heuristic-to-allow-size-0-.patch
 	touch -c $@
 libunwind-$(UNWIND_VER)/config.status: libunwind-$(UNWIND_VER)/configure
 	cd libunwind-$(UNWIND_VER) && \
