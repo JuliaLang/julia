@@ -497,7 +497,7 @@ function beginswith(a::String, b::String)
     end
     done(b,i)
 end
-beginswith(a::String, c::Char) = !isempty(a) && a[start(a)] == c
+beginswith(str::String, chars::Chars) = !isempty(str) && str[start(str)] in chars
 
 function endswith(a::String, b::String)
     i = endof(a)
@@ -513,7 +513,7 @@ function endswith(a::String, b::String)
     end
     j < b1
 end
-endswith(a::String, c::Char) = !isempty(a) && a[end] == c
+endswith(str::String, chars::Chars) = !isempty(str) && str[end] in chars
 
 # faster comparisons for byte strings and symbols
 
