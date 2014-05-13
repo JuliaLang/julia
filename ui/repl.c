@@ -43,7 +43,6 @@ extern "C" {
 DLLEXPORT char * dirname(char *);
 #endif
 
-extern int tab_width;
 extern DLLEXPORT char *julia_home;
 
 char system_image[256] = JL_SYSTEM_IMAGE_PATH;
@@ -52,15 +51,13 @@ static int lisp_prompt = 0;
 static int codecov=0;
 static char *program = NULL;
 char *image_file = NULL;
-int tab_width = 2;
 
 static const char *usage = "julia [options] [program] [args...]\n";
 static const char *opts =
     " -v --version             Display version information\n"
     " -h --help                Print this message\n"
     " -q --quiet               Quiet startup without banner\n"
-    " -H --home <dir>          Set location of julia executable\n"
-    " -T --tab <size>          Set REPL tab width to <size>\n\n"
+    " -H --home <dir>          Set location of julia executable\n\n"
 
     " -e --eval <expr>         Evaluate <expr>\n"
     " -E --print <expr>        Evaluate and show <expr>\n"
@@ -111,10 +108,6 @@ void parse_opts(int *argcp, char ***argvp)
             break;
         case 'H':
             julia_home = strdup(optarg);
-            break;
-        case 'T':
-            // TODO: more robust error checking.
-            tab_width = atoi(optarg);
             break;
         case 'b':
             jl_compileropts.build_path = strdup(optarg);
