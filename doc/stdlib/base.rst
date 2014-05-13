@@ -1143,23 +1143,23 @@ Strings
 
 .. function:: strip(string, [chars])
 
-   Return ``string`` with any leading and trailing whitespace removed. If a string ``chars`` is provided, instead remove characters contained in that string.
+   Return ``string`` with any leading and trailing whitespace removed. If ``chars`` (a character, or vector or set of characters) is provided, instead remove characters contained in it.
 
 .. function:: lstrip(string, [chars])
 
-   Return ``string`` with any leading whitespace removed. If a string ``chars`` is provided, instead remove characters contained in that string.
+   Return ``string`` with any leading whitespace removed. If ``chars`` (a character, or vector or set of characters) is provided, instead remove characters contained in it.
 
 .. function:: rstrip(string, [chars])
 
-   Return ``string`` with any trailing whitespace removed. If a string ``chars`` is provided, instead remove characters contained in that string.
+   Return ``string`` with any trailing whitespace removed. If ``chars`` (a character, or vector or set of characters) is provided, instead remove characters contained in it.
 
-.. function:: beginswith(string, prefix)
+.. function:: beginswith(string, prefix | chars)
 
-   Returns ``true`` if ``string`` starts with ``prefix``.
+   Returns ``true`` if ``string`` starts with ``prefix``. If the second argument is a vector or set of characters, tests whether the first character of ``string`` belongs to that set.
 
-.. function:: endswith(string, suffix)
+.. function:: endswith(string, suffix | chars)
 
-   Returns ``true`` if ``string`` ends with ``suffix``.
+   Returns ``true`` if ``string`` ends with ``suffix``. If the second argument is a vector or set of characters, tests whether the last character of ``string`` belongs to that set.
 
 .. function:: uppercase(string)
 
