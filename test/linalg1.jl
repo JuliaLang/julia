@@ -207,9 +207,9 @@ debug && println("Solve upper triangular system")
     γ = n*ε/(1-n*ε)
     if eltya != BigFloat
         bigA = big(triu(a))
-        ̂x = bigA \ b
+        x̂ = bigA \ b
         for i=1:size(b, 2)
-            @test norm(̂x[:,i]-x[:,i], Inf)/norm(x[:,i], Inf) <= abs(condskeel(bigA, x[:,i])*γ/(1-condskeel(bigA)*γ))
+            @test norm(x̂[:,i]-x[:,i], Inf)/norm(x[:,i], Inf) <= abs(condskeel(bigA, x[:,i])*γ/(1-condskeel(bigA)*γ))
         end
     end
     #Test backward error [JIN 5705]
@@ -224,9 +224,9 @@ debug && println("Solve lower triangular system")
     γ = n*ε/(1-n*ε)
     if eltya != BigFloat
         bigA = big(tril(a))
-        ̂x = bigA \ b
+        x̂ = bigA \ b
         for i=1:size(b, 2)
-            @test norm(̂x[:,i]-x[:,i], Inf)/norm(x[:,i], Inf) <= abs(condskeel(bigA, x[:,i])*γ/(1-condskeel(bigA)*γ))
+            @test norm(x̂[:,i]-x[:,i], Inf)/norm(x[:,i], Inf) <= abs(condskeel(bigA, x[:,i])*γ/(1-condskeel(bigA)*γ))
         end
     end
     #Test backward error [JIN 5705]
