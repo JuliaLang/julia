@@ -1,20 +1,17 @@
 import Base.Test.@test
 
-parapply = Base.parapply_jl
+using ArrayViews
 
 ### test parapply
 
 function my_matmult(A,x,b,i)
-  local N = length(x)
+  N = length(x)
   @inbounds begin
     b[i] = 0
-    local l=1
-    while l<=N
+    for l=1:N
       b[i] += A[l,i]*x[l]
-      l += 1
     end
   end
-  nothing
 end
 
 let N=9000
@@ -35,9 +32,7 @@ let N=9000
   @time parapply(my_matmult,(A,x,b3),2,1,1,N)
 
   @test b1 == b2
-  if b1 != b3
-    print(b1-b3)
-  end 
+  @test b1 == b3
 
 end
 
@@ -102,18 +97,21 @@ function median_filter(im::Matrix, filterSize=3)
   out
 end
 
-function pmedian_filter_core(im::Matrix, out::Matrix, K, y)
+function pmedian_filter_core(im, out, K, y)
+  @inbounds begin
   N = size(im)
   y_min = max(1, y-K)
   y_max = min(N[2], y+K)
+  
+  s = zeros(eltype(im),(2*K+1)^2)
   for x=1:N[1]
     x_min = max(1, x-K)
     x_max = min(N[1], x+K)
-
+  
     s = im[x_min:x_max, y_min:y_max]
     out[x,y] = median(s[:])
   end
-
+ end
 end
 
 
@@ -121,12 +119,13 @@ function pmedian_filter(im::Matrix, filterSize=3; num_threads=2)
   N = size(im)
   out = similar(im)
   K = int(floor(filterSize/2))
-  Base.parapply_jl(pmedian_filter_core, (im, out, K), num_threads, 1, 1, N[2])
+
+  parapply(pmedian_filter_core, (im, out, K), num_threads, 1, 1, N[2], preapply=false)
   out
 end
 
 
-let N = 900
+let N = 901
   A=rand(N,N)
 
   B = median_filter(A) 
@@ -137,4 +136,5 @@ let N = 900
   @test B == C
 
 end
+
 

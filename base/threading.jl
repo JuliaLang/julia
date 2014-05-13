@@ -52,10 +52,16 @@ function par_do_work(f::Function, args, start::Int, step::Int, len::Int)
   end
 end
 
-function parapply_jl(f::Function, args,  numthreads::Int, start::Int, step::Int, len::Int)
+function parapply_jl(f::Function, args,  numthreads::Int, start::Int, step::Int, len::Int; preapply::Bool = false)
   gc_disable()
 
   t = Array(Base.Thread,numthreads)
+
+  if(preapply)
+    par_do_work(f,args,start,1,1)
+    start = start + 1
+    len = len - 1
+  end
 
   chunk = ifloor(len / numthreads)
   rem = len
