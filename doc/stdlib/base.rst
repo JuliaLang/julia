@@ -2952,7 +2952,7 @@ Mathematical Functions
 
 .. function:: invmod(x,m)
 
-   Take the inverse of ``x`` modulo ``m``: `y` such that :math:`xy = 1 \pmod m`
+   Take the inverse of ``x`` modulo ``m``: ``y`` such that :math:`xy = 1 \pmod m`
 
 .. function:: powermod(x, p, m)
 
