@@ -1,6 +1,57 @@
 import Base.Test.@test
 
-using ArrayViews
+parapply = Base.parapply_jl
+
+### perfect threading
+
+function my_kernel(i)
+  z = 0.0
+  for l=1:40000
+    z += sin(2*pi*l/40000)
+  end
+end
+
+let N=1000
+  # warmup
+  parapply(my_kernel,(),1,1,1,N)
+
+  # run with 1 thread (serial)
+  println("my_kernel - 1 thread")
+  @time parapply(my_kernel,(),1,1,1,N)
+
+  # run with 2 threads (parallel)
+  println("my_kernel - 2 threads")
+  @time parapply(my_kernel,(),2,1,1,N)
+end
+
+### bad threading
+
+type MyType
+  i::Int
+end
+
+function my_bad_kernel(i)
+  z = 0.0
+  for l=1:4000
+    tmp = MyType(i)
+    for k=1:10
+      z += sin(2*pi*l/40000)
+    end
+  end
+end
+
+let N=1000
+  # warmup
+  parapply(my_kernel,(),1,1,1,N)
+
+  # run with 1 thread (serial)
+  println("\nmy_bad_kernel - 1 thread")
+  @time parapply(my_bad_kernel,(),1,1,1,N)
+
+  # run with 2 threads (parallel)
+  println("my_bad_kernel - 2 threads")
+  @time parapply(my_bad_kernel,(),2,1,1,N)
+end
 
 ### test parapply
 
@@ -26,9 +77,11 @@ let N=9000
   parapply(my_matmult,(A,x,b2),1,1,1,N)
   
   # run with 1 thread (serial)
+  println("\nmy_matmult - 1 thread")
   @time parapply(my_matmult,(A,x,b2),1,1,1,N)
 
   # run with 2 threads (parallel)
+  println("my_matmult - 2 threads")
   @time parapply(my_matmult,(A,x,b3),2,1,1,N)
 
   @test b1 == b2
@@ -57,29 +110,7 @@ let N=1000
 end
 
 
-### just another test
-
-function my_func(x,i) 
-  for l=1:length(x) 
-    @inbounds x[i]=float(sin(i*l)) 
-  end
-end
-
-let N=800
-  x=zeros(N)
-  y=copy(x)
-
-   #warmup
-   parapply(my_func,(x,),1,1,1,length(x))
-   
-   @time parapply(my_func,(x,),1,1,1,length(x))
-   @time parapply(my_func,(y,),2,1,1,length(x))
-
-  @test x == y
-end
-
 ### Median filter
-
 
 function median_filter(im::Matrix, filterSize=3)
   N = size(im)
@@ -128,9 +159,12 @@ end
 let N = 901
   A=rand(N,N)
 
+  println("\nmedian_filter - serial")
   B = median_filter(A) 
   @time B = median_filter(A) 
+  println("median_filter - 1 thread")
   @time D = pmedian_filter(A,num_threads=1) 
+  println("median_filter - 2 threads")
   @time C = pmedian_filter(A,num_threads=2) 
 
   @test B == C
