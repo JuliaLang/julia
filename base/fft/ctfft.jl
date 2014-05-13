@@ -4,6 +4,143 @@
 # cases for large prime factors).
 
 #############################################################################
+# Combining pregenerated kernels into generic-size FFT plans:
+
+# now, we define a CTPlan (Cooley-Tukey plan) as a sequence of twiddle steps
+# followed by a nontwiddle step:
+
+abstract TwiddleStep{T}
+abstract NontwiddleStep{T}
+
+type CTPlan{T,forward,Tt,Tn} <: Plan{T}
+    n::Int
+    tsteps::Tt # a tuple of TwiddleSteps
+    nstep::Tn # a NontwiddleStep
+    pinv::ScaledPlan{T}
+    CTPlan(n,tsteps,nstep) = new(n,tsteps,nstep)
+end
+
+summary{T,forw}(p::CTPlan{T,forw}) = string(forw ? "for" : "back",
+                                            "ward CTPlan{$T} of size ", p.n)
+function show(io::IO, p::CTPlan)
+    if p.n == 0
+        print(io, "(no transform)") # untransformed dims in multi-dim plans
+    else
+        ns = length(p.tsteps)
+        print(io, summary(p), ":\n    ", length(p.tsteps),
+              " Cooley-Tukey step", ns == 0 ? "s." : ns == 1 ? ": " : "s: ",
+              join(map(string, p.tsteps), ", "), "\n    base case: ", p.nstep)
+    end
+end
+
+size(p::CTPlan) = (p.n,)
+
+# unscaled inverse:
+invCT{T,forward,Tt,Tn}(p::CTPlan{T,forward,Tt,Tn}) =
+    CTPlan{T,!forward,Tt,Tn}(p.n, map(inv, p.tsteps), inv(p.nstep))
+
+plan_inv{T}(p::CTPlan{T}) =
+    ScaledPlan(invCT(p), normalization(real(T), p.n, 1))
+
+# steps for pregenerated kernels:
+immutable TwiddleKernelStep{T,r,forward} <: TwiddleStep{T} # radix-r
+    m::Int # n / r
+    W::Matrix{T}
+    TwiddleKernelStep(m::Int, W::Matrix{T}) = new(m, W)
+    function TwiddleKernelStep(n::Int)
+        m = div(n, r)
+        Tr = promote_type(Float64, real(T))
+        twopi_n = -2(π/convert(Tr,n))
+        W = T[exp((twopi_n*mod(j1*k2,n))*im) for j1=1:r-1, k2=0:m-1]
+        new(m, W)
+    end
+end
+length{T,r}(ts::TwiddleKernelStep{T,r}) = r
+applystep{T}(ts::TwiddleKernelStep{T}, y::AbstractArray{T}, y0, ys) =
+    applystep(ts, ts.m, y, y0, ts.m * ys, ys, ts.W)
+inv{T,r,forward}(ts::TwiddleKernelStep{T,r,forward}) =
+    TwiddleKernelStep{T,r,!forward}(ts.m, ts.W)
+show{T,r}(io::IO, ts::TwiddleKernelStep{T,r}) = print(io, "radix ", r)
+
+immutable NontwiddleKernelStep{T,n,forward} <: NontwiddleStep{T} end
+length{T,n}(ns::NontwiddleKernelStep{T,n}) = n
+applystep{T,n}(ns::NontwiddleKernelStep{T,n}, r::Integer,
+               x::AbstractArray{T}, x0::Integer, xs::Integer,
+               y::AbstractArray{T}, y0::Integer, ys::Integer) =
+    applystep(ns, r, x,x0,xs*r,xs, y,y0,ys,ys*n)
+inv{T,n,forward}(ns::NontwiddleKernelStep{T,n,forward}) =
+    NontwiddleKernelStep{T,n,!forward}()
+show{T,n}(io::IO, ns::NontwiddleKernelStep{T,n}) =
+    print(io, "size ", n, " kernel")
+
+# create null plans for untransformed dimensions and 0-size arrays
+immutable NullNontwiddleStep{T} <: NontwiddleStep{T} end
+applystep(::NullNontwiddleStep, r, x, x0, xs, y, y0, ys) = nothing
+show(io::IO, ::NullNontwiddleStep) = print(io, "null transform")
+inv(s::NullNontwiddleStep) = s
+CTPlan(T,forward) =
+    CTPlan{T,forward,(),NullNontwiddleStep{T}}(0, (), NullNontwiddleStep{T}())
+
+function CTPlan{Tr<:FloatingPoint}(::Type{Complex{Tr}}, forward::Bool, n::Int)
+    T = Complex{Tr}
+    n == 0 && return CTPlan(T,forward)
+    factors = fft_factors(T, n)
+    m = n
+    tsteps = Array(TwiddleStep{T}, length(factors)-1)
+    for i = 1:length(tsteps)
+        tsteps[i] = Twiddle(T, m, factors[i], forward)
+        m = tsteps[i].m
+    end
+    @assert m == factors[end]
+    tsteps_ = tuple(tsteps...)
+    nt = Nontwiddle(T, m, forward)
+    CTPlan{T,forward,map(typeof,tsteps_),typeof(nt)}(n, tsteps_, nt)
+end
+
+plan_fft{Tr<:FloatingPoint}(x::AbstractVector{Complex{Tr}}) =
+    CTPlan(Complex{Tr}, true, length(x))
+plan_bfft{Tr<:FloatingPoint}(x::AbstractVector{Complex{Tr}}) =
+    CTPlan(Complex{Tr}, false, length(x))
+
+function applystep{T}(p::CTPlan{T},
+                      x::AbstractArray{T}, x0, xs,
+                      y::AbstractArray{T}, y0, ys,
+                      step::Int)
+    nsteps = length(p.tsteps)
+    if step > nsteps
+        applystep(p.nstep, 1, x,x0,xs, y,y0,ys)
+    else
+        # decimation in time: perform r DFTs of length m
+        tstep = p.tsteps[step]
+        m = tstep.m
+        r = length(tstep)
+        if step == nsteps
+            applystep(p.nstep, r, x,x0,xs, y,y0,ys)
+        else
+            xs_ = xs*r
+            x0_ = x0
+            y0_ = y0
+            for i = 1:r-1
+                applystep(p, x,x0_,xs_, y,y0_,ys, step+1)
+                x0_ += xs
+                y0_ += m
+            end
+            applystep(p, x,x0_,xs_, y,y0_,ys, step+1)
+        end
+        # combine sub-transforms with twiddle step:
+        applystep(tstep, y,y0,ys)
+    end
+end
+
+function A_mul_B!{T}(y::AbstractVector{T}, p::CTPlan{T}, x::AbstractVector{T})
+    p.n == length(y) == length(x) || throw(BoundsError())
+    applystep(p, x,1,1, y,1,1, 1)
+    return y
+end
+
+*{T}(p::CTPlan{T}, x::AbstractVector{T}) = A_mul_B!(similar(x), p, x)
+
+#############################################################################
 # FFT code generation:
 
 # Choose the default radix for pregenerated FFT of length `n`.  To get
@@ -126,20 +263,19 @@ fftgen(T, forward::Bool, n::Integer, X::Symbol, Y::Symbol) = fftgen(T, forward, 
 
 # Analogous to FFTW's nontwiddle codelets (direct solvers), we
 # generate a bunch of solvers for small fixed sizes.  Each solver is
-# of the form `_fft_N(vn, X, x0, xs, xvs, Y, y0, ys, yvs)` and
+# of the form `fft_N(vn, X, x0, xs, xvs, Y, y0, ys, yvs)` and
 # computes `i in 0:vn-1` transforms, with the `i`-th transform
 # performing `X[x0 + xvs*i + (0:N-1)*xs] = fft(Y[x0 + yvs*i +
 # (0:N-1)*ys])`.  Each such solver is generated by the
 # `@nontwiddle(T,forward,n)` macro:
-nontwiddle_name(forward::Bool, n::Integer) = symbol(string(forward ? "_fft_" : "_bfft_", n))
 macro nontwiddle(T, forward, n)
-    name = nontwiddle_name(forward, n)
     quote
-        function $(esc(name)){T<:$T}(vn::Integer,
-                              X::AbstractArray{Complex{T}},
-                              x0::Integer, xs::Integer, xvs::Integer,
-                              Y::AbstractArray{Complex{T}},
-                              y0::Integer, ys::Integer, yvs::Integer)
+        function $(esc(:applystep)){T<:$T}(ns::NontwiddleKernelStep{Complex{T},$n,$forward},
+                                  vn::Integer,
+                                  X::AbstractArray{Complex{T}},
+                                  x0::Integer, xs::Integer, xvs::Integer,
+                                  Y::AbstractArray{Complex{T}},
+                                  y0::Integer, ys::Integer, yvs::Integer)
             @inbounds @simd for i in 0:vn-1
                 $(fftgen(Complex{eval(T)}, forward, n,
                          j -> :(X[(x0 + xvs*i) + xs*$j]),
@@ -158,19 +294,18 @@ mulconj(z::Complex, w::Complex) =
 # Analogous to FFTW's twiddle codelets, we also generate solvers that
 # perform *in-place* FFTs of small fixed sizes where the data is
 # pre-multipled by a precomputed 2d array `W[j+1,i+1]` of twiddle
-# factors (with `W[1,_] = 1`).  These are called `_twiddle_N(vn, X,
+# factors (with `W[1,_] = 1`).  These are of the form `twiddle_N(vn, X,
 # x0, xs, xvs, W)`, and the meaning of the parameter is otherwise
 # identical to the nontwiddle codelets with `Y=X`.   The twiddle array
 # is the same for both forward and backward transforms, and is conjugated
 # as needed.
-twiddle_name(forward::Bool, n::Integer) = symbol(string(forward ? "_twiddle_" : "_btwiddle_", n))
 macro twiddle(T, forward, n)
-    name = twiddle_name(forward, n)
     quote
-        function $(esc(name)){T<:$T}(vn::Integer,
-                              X::AbstractArray{Complex{T}},
-                              x0::Integer, xs::Integer, xvs::Integer,
-                              W::AbstractMatrix{Complex{T}})
+        function  $(esc(:applystep)){T<:$T}(ts::TwiddleKernelStep{Complex{T},$n,$forward},
+                                   vn::Integer,
+                                   X::AbstractArray{Complex{T}},
+                                   x0::Integer, xs::Integer, xvs::Integer,
+                                   W::AbstractMatrix{Complex{T}})
             @inbounds @simd for i in 0:vn-1
                 $(fftgen(Complex{eval(T)}, forward, n,
                          j -> j == 0 ? :(X[(x0 + xvs*i) + xs*$j]) :
@@ -185,16 +320,12 @@ end
 # Now, we will generate nontwiddle and twiddle kernels for a set of
 # fixed sizes, to be composed to build an arbitrary-$n$ FFT algorithm.
 const fft_kernel_sizes = Set([3, 5:10..., 12, 14, 15, 16, 20, 25, 32])
-const nontwiddle_kernels = Dict{(Bool,Int), Function}()
-const twiddle_kernels = Dict{(Bool,Int), Function}()
 for forward in (true,false)
     for n in fft_kernel_sizes
         for T in (Float32, Float64)
             @eval @nontwiddle($T, $forward, $n)
             @eval @twiddle($T, $forward, $n)
         end
-        nontwiddle_kernels[forward,n] = eval(nontwiddle_name(forward,n))
-        twiddle_kernels[forward,n] = eval(twiddle_name(forward,n))
     end
 end
 const fft_kernel_sizes_sorted = sort!(Int[n for n in fft_kernel_sizes],
@@ -206,212 +337,14 @@ typealias CTComplex Union(Complex64,Complex128) # types of pregenerated kernels
 # include hard-coded transcendental constants.  The following kernels
 # are generic to any floating-point type.
 const generic_kernel_sizes = Set([1,2,4])
-for n in (1,2)
+for n in (1,2,4)
     @eval @nontwiddle(FloatingPoint, true, $n)
-    nontwiddle_kernels[true, n] = nontwiddle_kernels[false, n] =
-        eval(nontwiddle_name(true, n))
+    @eval @nontwiddle(FloatingPoint, false, $n)
 end
-@eval @twiddle(FloatingPoint, true, 2)
-twiddle_kernels[true,2] = twiddle_kernels[false,2] = eval(twiddle_name(true,2))
 for forward in (true,false)
-    @eval @nontwiddle(FloatingPoint, $forward, 4)
+    @eval @twiddle(FloatingPoint, $forward, 2)
     @eval @twiddle(FloatingPoint, $forward, 4)
-    nontwiddle_kernels[forward,4] = eval(nontwiddle_name(forward,4))
-    twiddle_kernels[forward,4] = eval(twiddle_name(forward,4))
 end
-
-Nontwiddle(T, n::Int, forw::Bool) = (T <: CTComplex && n in fft_kernel_sizes) || n in generic_kernel_sizes ? NontwiddleKernelStep{T}(n, forw) : NontwiddleBluesteinStep{T}(n, forw)
-
-Twiddle(T, n::Int, r::Int, forw::Bool) = (T <: CTComplex && r in fft_kernel_sizes) || r == 4 || r == 2 ? TwiddleKernelStep{T}(n, r, forw) : TwiddleBluesteinStep{T}(n, r, forw)
-
-#############################################################################
-# Combining pregenerated kernels into generic-size FFT plans:
-
-# Break n into a series of factors for type T, avoiding small kernels
-# if possible
-function fft_factors(T::Type, n::Integer)
-    factors = Int[]
-    if n == 1
-        push!(factors, 1)
-    else
-        m = n
-        if T <: CTComplex
-            for r in fft_kernel_sizes_sorted
-                while m % r == 0
-                    push!(factors, r)
-                    m = div(m, r)
-                end
-                m == 1 && break
-            end
-        end
-        # generic radix-4 and radix-2 twiddle kernels:
-        while m % 4 == 0
-            push!(factors, 4)
-            m = div(m, 4)
-        end
-        if iseven(m)
-            push!(factors, 2)
-            m = div(m, 2)
-        end
-        # sometimes there will be a small factor (e.g. 2) left over at the end;
-        # try to combine this with larger earlier factors if possible:
-        if length(factors) > 1
-            for i = 1:length(factors)-1
-                factors[end] >= 16 && break
-                while factors[i] % 2 == 0 && div(factors[i], 2) > factors[end]
-                    factors[i] = div(factors[i], 2)
-                    factors[end] *= 2
-                end
-            end
-        end
-        # get any leftover prime factors:
-        for (f,k) in factor(m)
-            for i=1:k
-                push!(factors, f)
-            end
-        end
-    end
-    factors
-end
-
-# now, we define a CTPlan (Cooley-Tukey plan) as a sequence of twiddle steps
-# followed by a nontwiddle step:
-
-abstract TwiddleStep{T}
-abstract NontwiddleStep{T}
-
-type CTPlan{T,forward} <: Plan{T}
-    n::Int
-    tsteps::Vector{TwiddleStep{T}}
-    nstep::NontwiddleStep{T}
-    pinv::ScaledPlan{T}
-    CTPlan(n,tsteps,nstep) = new(n,tsteps,nstep)
-end
-
-summary{T,forw}(p::CTPlan{T,forw}) = string(forw ? "for" : "back",
-                                            "ward CTPlan{$T} of size ", p.n)
-function show(io::IO, p::CTPlan)
-    if p.n == 0
-        print(io, "(no transform)") # untransformed dims in multi-dim plans
-    else
-        print(io, summary(p), ":\n    ", length(p.tsteps),
-              " Cooley-Tukey steps: ",
-              join(map(string, p.tsteps), ", "), "\n    base case: ", p.nstep)
-    end
-end
-
-size(p::CTPlan) = (p.n,)
-
-# unscaled inverse:
-invCT{T,forward}(p::CTPlan{T,forward}) =
-    CTPlan{T,!forward}(p.n, map(inv, p.tsteps), inv(p.nstep))
-
-plan_inv{T}(p::CTPlan{T}) =
-    ScaledPlan(invCT(p), normalization(real(T), p.n, 1))
-
-# steps for pregenerated kernels:
-immutable TwiddleKernelStep{T} <: TwiddleStep{T}
-    r::Int # radix
-    m::Int # n / r
-    kernel::Function
-    W::Array{T}
-    forward::Bool
-    TwiddleKernelStep(m::Int, r::Int, forward::Bool, W::Array{T}) =
-        new(r, m, twiddle_kernels[forward, r], W, forward)
-    function TwiddleKernelStep(n::Int, r::Int, forward::Bool)
-        m = div(n, r)
-        Tr = promote_type(Float64, real(T))
-        twopi_n = -2(π/convert(Tr,n))
-        W = T[exp((twopi_n*mod(j1*k2,n))*im) for j1=1:r-1, k2=0:m-1]
-        TwiddleKernelStep{T}(m, r, forward, W)
-    end
-end
-function applystep{T}(ts::TwiddleKernelStep{T}, y::AbstractArray{T}, y0, ys)
-    ts.kernel(ts.m, y, y0, ts.m * ys, ys, ts.W)
-end
-inv{T}(ts::TwiddleKernelStep{T}) =
-    TwiddleKernelStep{T}(ts.m, ts.r, !ts.forward, ts.W)
-show(io::IO, ts::TwiddleKernelStep) = print(io, "radix ", ts.r)
-
-immutable NontwiddleKernelStep{T} <: NontwiddleStep{T}
-    kernel::Function
-    n::Int
-    forward::Bool
-    NontwiddleKernelStep(n::Int, forward::Bool) =
-        new(nontwiddle_kernels[forward, n], n, forward)
-end
-function applystep{T}(ns::NontwiddleKernelStep{T}, r,
-                      x::AbstractArray{T}, x0, xs,
-                      y::AbstractArray{T}, y0, ys)
-    ns.kernel(r, x,x0,xs*r,xs, y,y0,ys,ys*ns.n)
-end
-inv{T}(ns::NontwiddleKernelStep{T}) = NontwiddleKernelStep{T}(ns.n,!ns.forward)
-show(io::IO, ns::NontwiddleKernelStep) = print(io, "size ", ns.n, " kernel")
-
-# create null plans for untransformed dimensions and 0-size arrays
-immutable NullNontwiddleStep{T} <: NontwiddleStep{T} end
-applystep(::NullNontwiddleStep, r, x, x0, xs, y, y0, ys) = nothing
-show(io::IO, ::NullNontwiddleStep) = print(io, "null transform")
-inv(s::NullNontwiddleStep) = s
-CTPlan(T,forward) = CTPlan{T,forward}(0, Array(TwiddleStep{T},0),
-                                      NullNontwiddleStep{T}())
-
-function CTPlan{Tr<:FloatingPoint}(::Type{Complex{Tr}}, forward::Bool, n::Int)
-    T = Complex{Tr}
-    n == 0 && return CTPlan(T,forward)
-    factors = fft_factors(T, n)
-    m = n
-    tsteps = Array(TwiddleStep{T}, length(factors)-1)
-    for i = 1:length(tsteps)
-        tsteps[i] = Twiddle(T, m, factors[i], forward)
-        m = tsteps[i].m
-    end
-    @assert m == factors[end]
-    CTPlan{T,forward}(n, tsteps, Nontwiddle(T, m, forward))
-end
-
-plan_fft{Tr<:FloatingPoint}(x::AbstractVector{Complex{Tr}}) =
-    CTPlan(Complex{Tr}, true, length(x))
-plan_bfft{Tr<:FloatingPoint}(x::AbstractVector{Complex{Tr}}) =
-    CTPlan(Complex{Tr}, false, length(x))
-
-function applystep{T}(p::CTPlan{T},
-                      x::AbstractArray{T}, x0, xs,
-                      y::AbstractArray{T}, y0, ys,
-                      step::Int)
-    nsteps = length(p.tsteps)
-    if step > nsteps
-        applystep(p.nstep, 1, x,x0,xs, y,y0,ys)
-    else
-        # decimation in time: perform r DFTs of length m
-        tstep = p.tsteps[step]
-        m = tstep.m
-        r = tstep.r
-        if step == nsteps
-            applystep(p.nstep, r, x,x0,xs, y,y0,ys)
-        else
-            xs_ = xs*r
-            x0_ = x0
-            y0_ = y0
-            for i = 1:r-1
-                applystep(p, x,x0_,xs_, y,y0_,ys, step+1)
-                x0_ += xs
-                y0_ += m
-            end
-            applystep(p, x,x0_,xs_, y,y0_,ys, step+1)
-        end
-        # combine sub-transforms with twiddle step:
-        applystep(tstep, y,y0,ys)
-    end
-end
-
-function A_mul_B!{T}(y::AbstractVector{T}, p::CTPlan{T}, x::AbstractVector{T})
-    p.n == length(y) == length(x) || throw(BoundsError())
-    applystep(p, x,1,1, y,1,1, 1)
-    return y
-end
-
-*{T}(p::CTPlan{T}, x::AbstractVector{T}) = A_mul_B!(similar(x), p, x)
 
 #############################################################################
 # Generic solver for arbitrary prime (or nonprime) factors using
@@ -457,6 +390,8 @@ immutable NontwiddleBluesteinStep{T} <: NontwiddleStep{T}
         new(n, n2, p, a, A, b, B, forward)
     end
 end
+
+length(s::NontwiddleBluesteinStep) = s.n
 
 inv{T}(s::NontwiddleBluesteinStep{T}) =
     NontwiddleBluesteinStep{T}(s.n, !s.forward)
@@ -531,6 +466,8 @@ immutable TwiddleBluesteinStep{T} <: TwiddleStep{T}
     end
 end
 
+length(s::TwiddleBluesteinStep) = s.r
+
 show(io::IO, s::TwiddleBluesteinStep) =
     print(io, "radix ", s.r, " Bluestein-", s.r2)
 
@@ -567,3 +504,59 @@ function applystep{T}(ts::TwiddleBluesteinStep{T}, y::AbstractArray{T}, y0,ys)
         y0 += ys
     end
 end
+
+#############################################################################
+# Step selection for CTPlan:
+
+Nontwiddle(T, n::Int, forw::Bool) = (T <: CTComplex && n in fft_kernel_sizes) || n in generic_kernel_sizes ? NontwiddleKernelStep{T,n,forw}() : NontwiddleBluesteinStep{T}(n, forw)
+
+Twiddle(T, n::Int, r::Int, forw::Bool) = (T <: CTComplex && r in fft_kernel_sizes) || r == 4 || r == 2 ? TwiddleKernelStep{T,r,forw}(n) : TwiddleBluesteinStep{T}(n, r, forw)
+
+# Break n into a series of factors for type T, avoiding small kernels
+# if possible
+function fft_factors(T::Type, n::Integer)
+    factors = Int[]
+    if n == 1
+        push!(factors, 1)
+    else
+        m = n
+        if T <: CTComplex
+            for r in fft_kernel_sizes_sorted
+                while m % r == 0
+                    push!(factors, r)
+                    m = div(m, r)
+                end
+                m == 1 && break
+            end
+        end
+        # generic radix-4 and radix-2 twiddle kernels:
+        while m % 4 == 0
+            push!(factors, 4)
+            m = div(m, 4)
+        end
+        if iseven(m)
+            push!(factors, 2)
+            m = div(m, 2)
+        end
+        # sometimes there will be a small factor (e.g. 2) left over at the end;
+        # try to combine this with larger earlier factors if possible:
+        if length(factors) > 1
+            for i = 1:length(factors)-1
+                factors[end] >= 16 && break
+                while factors[i] % 2 == 0 && div(factors[i], 2) > factors[end]
+                    factors[i] = div(factors[i], 2)
+                    factors[end] *= 2
+                end
+            end
+        end
+        # get any leftover prime factors:
+        for (f,k) in factor(m)
+            for i=1:k
+                push!(factors, f)
+            end
+        end
+    end
+    factors
+end
+
+#############################################################################
