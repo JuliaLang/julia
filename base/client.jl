@@ -253,6 +253,8 @@ function process_options(args::Vector{UTF8String})
             # load juliarc now before processing any more options
             load_juliarc()
             startup = false
+        elseif args[i] == "-i"
+            global is_interactive = true
         elseif beginswith(args[i], "--color")
             if args[i] == "--color"
                 color_set = true
@@ -354,7 +356,7 @@ function _start()
         local term
         if repl
             if !isa(STDIN,TTY)
-                global is_interactive = !isa(STDIN,Union(File,IOStream))
+                global is_interactive |= !isa(STDIN,Union(File,IOStream))
                 color_set || (global have_color = false)
             else
                 term = Terminals.TTYTerminal(get(ENV,"TERM",@windows? "" : "dumb"),STDIN,STDOUT,STDERR)

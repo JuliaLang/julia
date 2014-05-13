@@ -68,6 +68,7 @@ static const char *opts =
     " -p n                     Run n local processes\n"
     " --machinefile file       Run processes on hosts listed in file\n\n"
 
+    " -i                       Force isinteractive() to be true\n"
     " --no-history-file        Don't load or save history\n"
     " -f --no-startup          Don't load ~/.juliarc.jl\n"
     " -F                       Load ~/.juliarc.jl, then handle remaining inputs\n"
