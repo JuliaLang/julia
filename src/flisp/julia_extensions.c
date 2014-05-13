@@ -89,7 +89,7 @@ value_t fl_julia_identifier_char(value_t *args, u_int32_t nargs)
     if (!iscprim(args[0]) || ((cprim_t*)ptr(args[0]))->type != wchartype)
         type_error("identifier-char?", "wchar", args[0]);
     uint32_t wc = *(uint32_t*)cp_data((cprim_t*)ptr(args[0]));
-    return jl_id_char(wc);
+    return jl_id_char(wc) ? FL_T : FL_F;
 }
 
 value_t fl_julia_identifier_start_char(value_t *args, u_int32_t nargs)
@@ -98,7 +98,7 @@ value_t fl_julia_identifier_start_char(value_t *args, u_int32_t nargs)
     if (!iscprim(args[0]) || ((cprim_t*)ptr(args[0]))->type != wchartype)
         type_error("identifier-start-char?", "wchar", args[0]);
     uint32_t wc = *(uint32_t*)cp_data((cprim_t*)ptr(args[0]));
-    return jl_id_start_char(wc);
+    return jl_id_start_char(wc) ? FL_T : FL_F;
 }
 
 // return NFC-normalized UTF8-encoded version of s
