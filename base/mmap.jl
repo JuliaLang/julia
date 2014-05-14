@@ -1,15 +1,15 @@
 ### Generic interface ###
 
 # Arrays
-mmap_array{T,N}(::Type{T}, dims::NTuple{N,Int}, s::IO) = mmap_array(T, dims, s, position(s))
+mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::IO) = mmap_array(T, dims, s, position(s))
 
 msync{T}(A::Array{T}) = msync(pointer(A), length(A)*sizeof(T))
 
 # BitArrays
-mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Int}, s::IOStream, offset::FileOffset) =
+mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Integer}, s::IOStream, offset::FileOffset) =
     mmap_bitarray(dims, s, offset)
-mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Int}, s::IOStream) = mmap_bitarray(dims, s, position(s))
-mmap_bitarray{N}(dims::NTuple{N,Int}, s::IOStream) = mmap_bitarray(dims, s, position(s))
+mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Integer}, s::IOStream) = mmap_bitarray(dims, s, position(s))
+mmap_bitarray{N}(dims::NTuple{N,Integer}, s::IOStream) = mmap_bitarray(dims, s, position(s))
 
 msync(B::BitArray) = msync(pointer(B.chunks), length(B.chunks)*sizeof(Uint64))
 
@@ -21,6 +21,9 @@ msync(B::BitArray) = msync(pointer(B.chunks), length(B.chunks)*sizeof(Uint64))
 function mmap(len::Integer, prot::Integer, flags::Integer, fd, offset::Integer)
     const pagesize::Int = ccall(:jl_getpagesize, Clong, ())
     # Check that none of the computations will overflow
+    if len < 0
+        error("requested size is negative")
+    end
     if len > typemax(Int)-pagesize
         error("requested size is too large")
     end
@@ -95,7 +98,7 @@ function mmap_stream_settings(s::IO)
 end
 
 # Mmapped-array constructor
-function mmap_array{T,N,TInt<:Integer}(::Type{T}, dims::NTuple{N,TInt}, s::IO, offset::FileOffset; grow::Bool=true)
+function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::IO, offset::FileOffset; grow::Bool=true)
     prot, flags, iswrite = mmap_stream_settings(s)
     len = prod(dims)*sizeof(T)
     if len > typemax(Int)
@@ -116,7 +119,7 @@ end
 ### Windows implementation ###
 @windows_only begin
 # Mmapped-array constructor
-function mmap_array{T,N,TInt<:Integer}(::Type{T}, dims::NTuple{N,TInt}, s::IO, offset::FileOffset)
+function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::IO, offset::FileOffset)
     shandle = _get_osfhandle(RawFD(fd(s)))
     if int(shandle.handle) == -1
         error("could not get handle for file to map")
@@ -124,6 +127,9 @@ function mmap_array{T,N,TInt<:Integer}(::Type{T}, dims::NTuple{N,TInt}, s::IO, o
     ro = isreadonly(s)
     flprotect = ro ? 0x02 : 0x04
     len = prod(dims)*sizeof(T)
+    if len < 0
+        error("requested size is negative")
+    end
     if len > typemax(Int)
         error("file is too large to memory-map on this platform")
     end
@@ -161,7 +167,7 @@ end
 end
 
 # Mmapped-bitarray constructor
-function mmap_bitarray{N,TInt<:Integer}(dims::NTuple{N,TInt}, s::IOStream, offset::FileOffset)
+function mmap_bitarray{N}(dims::NTuple{N,Integer}, s::IOStream, offset::FileOffset)
     iswrite = !isreadonly(s)
     n = 1
     for d in dims
