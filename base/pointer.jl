@@ -37,6 +37,14 @@ function pointer_to_array{T,N}(p::Ptr{T}, dims::NTuple{N,Int}, own::Bool)
     ccall(:jl_ptr_to_array, Array{T,N}, (Any, Ptr{T}, Any, Int32),
           Array{T,N}, p, dims, own)
 end
+function pointer_to_array{T,N}(p::Ptr{T}, dims::NTuple{N,Integer}, own::Bool)
+    newdims = ntuple(N, i-> if dims[i] >= 0 && dims[i] < typemax(Int)
+                                return int(dims[i])
+                            else
+                                error("invalid Array dimensions")
+                            end)
+    pointer_to_array(p, newdims, own)
+end
 unsafe_load(p::Ptr,i::Integer) = pointerref(p, int(i))
 unsafe_load(p::Ptr) = unsafe_load(p, 1)
 unsafe_store!(p::Ptr{Any}, x::ANY, i::Integer) = pointerset(p, x, int(i))
