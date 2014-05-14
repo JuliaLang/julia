@@ -300,11 +300,12 @@ Macros
 ------
 
 Macros are the analogue of functions for expression generation at
-compile time: they allow the programmer to automatically generate
-expressions by transforming zero or more argument expressions into a
-single result expression, which then takes the place of the macro call
-in the final syntax tree. Macros are invoked with the following general
-syntax::
+compile time. Just as functions map a tuple of argument values to a 
+return value, macros map a tuple of argument *expressions* to a returned
+*expression*. They allow the programmer to arbitrarily transform the
+written code to a resulting expression, which then takes the place of
+the macro call in the final syntax tree. Macros are invoked with the
+following general syntax::
 
     @name expr1 expr2 ...
     @name(expr1, expr2, ...)
@@ -319,19 +320,18 @@ one argument to the macro::
     @name (expr1, expr2, ...)
 
 Before the program runs, this statement will be replaced with the
-result of calling an expander function for ``name`` on the expression
-arguments. Expanders are defined with the ``macro`` keyword::
+returned result of calling an expander function for ``@name`` on the
+expression arguments. Expanders are defined with the ``macro`` keyword::
 
     macro name(expr1, expr2, ...)
         ...
+        return resulting_expr
     end
 
-Here, for example, is the definition of Julia's ``@assert``
-macro (see
-`error.jl <https://github.com/JuliaLang/julia/blob/master/base/error.jl>`_)::
+Here, for example, is a simplified definition of Julia's ``@assert`` macro::
 
     macro assert(ex)
-        :($ex ? nothing : error("Assertion failed: ", $(string(ex))))
+        return :($ex ? nothing : error("Assertion failed: ", $(string(ex))))
     end
 
 This macro can be used like this:
@@ -341,11 +341,11 @@ This macro can be used like this:
     julia> @assert 1==1.0
 
     julia> @assert 1==0
-    ERROR: assertion failed: :((1==0))
-     in error at error.jl:21
+    ERROR: Assertion failed: 1 == 0
+     in error at error.jl:22
 
-Macro calls are expanded so that the above calls are precisely
-equivalent to writing::
+In place of the written syntax, the macro call is expanded at parse time to
+its returned result. This is equivalent to writing::
 
     1==1.0 ? nothing : error("Assertion failed: ", "1==1.0")
     1==0 ? nothing : error("Assertion failed: ", "1==0")
@@ -354,28 +354,105 @@ That is, in the first call, the expression ``:(1==1.0)`` is spliced into
 the test condition slot, while the value of ``string(:(1==1.0))`` is
 spliced into the assertion message slot. The entire expression, thus
 constructed, is placed into the syntax tree where the ``@assert`` macro
-call occurs. Therefore, if the test expression is true when evaluated,
-the entire expression evaluates to nothing, whereas if the test
-expression is false, an error is raised indicating the asserted
-expression that was false. Notice that it would not be possible to write
-this as a function, since only the *value* of the condition and not the
-expression that computed it would be available.
+call occurs. Then at execution time, if the test expression evaluates to
+true, then ``nothing`` is returned, whereas if the test is false, an error 
+is raised indicating the asserted expression that was false. Notice that 
+it would not be possible to write this as a function, since only the 
+*value* of the condition is available and it would be impossible to
+display the expression that computed it in the error message.
 
-The ``@assert`` example also shows how macros can include a ``quote``
-block, which allows for convenient manipulation of expressions inside
-the macro body.
+The actual definition of ``@assert`` in the standard library is more
+complicated. It allows the user to optionally specify their own error
+message, instead of just printing the failed expression. Just like in
+functions with a variable number of arguments, this is specified with an
+ellipses following the last argument::
+
+    macro assert(ex, msgs...)
+        msg_body = isempty(msgs) ? ex : msgs[1]
+        msg = string("assertion failed: ", msg_body)
+        return :($ex ? nothing : error($msg))
+    end
+
+Now ``@assert`` has two modes of operation, depending upon the number of
+arguments it receives! If there's only one argument, the tuple of expressions
+captured by ``msgs`` will be empty and it will behave the same as the simpler
+definition above. But now if the user specifies a second argument, it is
+printed in the message body instead of the failing expression. You can inspect
+the result of a macro expansion with the aptly named :func:`macroexpand`
+function:
+
+.. doctest::
+
+    julia> macroexpand(:(@assert a==b))
+    :(if a == b
+            nothing
+        else
+            error("assertion failed: a == b")
+        end)
+
+    julia> macroexpand(:(@assert a==b "a should equal b!"))
+    :(if a == b
+            nothing
+        else
+            error("assertion failed: a should equal b!")
+        end)
+
+There is yet another case that the actual ``@assert`` macro handles: what
+if, in addition to printing "a should equal b," we wanted to print their
+values? One might naively try to use string interpolation in the custom
+message, e.g., ``@assert a==b "a ($a) should equal b ($b)!"``, but this 
+won't work as expected with the above macro. Can you see why? Recall
+from :ref:`string interpolation <man-string-interpolation>` that an 
+interpolated string is rewritten to a call to the ``string`` function.
+Compare:
+
+.. doctest::
+
+    julia> typeof(:("a should equal b"))
+    ASCIIString (constructor with 1 method)
+
+    julia> typeof(:("a ($a) should equal b ($b)!"))
+    Expr
+
+    julia> dump(:("a ($a) should equal b ($b)!"))
+    Expr
+      head: Symbol string
+      args: Array(Any,(5,))
+        1: ASCIIString "a ("
+        2: Symbol a
+        3: ASCIIString ") should equal b ("
+        4: Symbol b
+        5: ASCIIString ")!"
+      typ: Any
+
+So now instead of getting a plain string in ``msg_body``, the macro is
+receiving a full expression that will need to be evaluated in order to
+display as expected. This can be spliced directly into the returned expression
+as an argument to the ``string`` call; see `error.jl
+<https://github.com/JuliaLang/julia/blob/master/base/error.jl>`_ for
+the complete implementation.
+
+The ``@assert`` macro makes great use of splicing into quoted expressions
+to simplify the manipulation of expressions inside the macro body.
 
 
 Hygiene
 ~~~~~~~
 
 An issue that arises in more complex macros is that of
-`hygiene <http://en.wikipedia.org/wiki/Hygienic_macro>`_. In short, Julia
-must ensure that variables introduced and used by macros do not
-accidentally clash with the variables used in code interpolated into
-those macros. Another concern arises from the fact that a macro may be called
-in a different module from where it was defined. In this case we need to
-ensure that all global variables are resolved to the correct module.
+`hygiene <http://en.wikipedia.org/wiki/Hygienic_macro>`_. In short, macros must
+ensure that the variables they introduce in their returned expressions do not
+accidentally clash with existing variables in the surrounding code they expand
+into. Conversely, the expressions that are passed into a macro as arguments are
+often *expected* to evaluate in the context of the surrounding code,
+interacting with and modifying the existing variables. Another concern arises
+from the fact that a macro may be called in a different module from where it
+was defined. In this case we need to ensure that all global variables are
+resolved to the correct module. Julia already has a major advantage over
+languages with textual macro expansion (like C) in that it only needs to
+consider the returned expression. All the other variables (such as ``msg`` in
+``@assert`` above) follow the :ref:`normal scoping block behavior
+<man-variables-and-scoping>`.
 
 To demonstrate these issues,
 let us consider writing a ``@time`` macro that takes an expression as
@@ -385,7 +462,7 @@ and then has the value of the expression as its final value.
 The macro might look like this::
 
     macro time(ex)
-      quote
+      return quote
         local t0 = time()
         local val = $ex
         local t1 = time()
@@ -444,7 +521,7 @@ in order to introduce or manipulate user variables. For example, the
 following macro sets ``x`` to zero in the call environment::
 
     macro zerox()
-      esc(:(x = 0))
+      return esc(:(x = 0))
     end
 
     function foo()
