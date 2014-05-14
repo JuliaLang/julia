@@ -31,12 +31,12 @@ New language features
     the module is first loaded, and on process startup if a pre-compiled
     version of the module is present ([#1268]).
 
-  * Multi-line comments ([#69], [#6128]): `#= .... =#` 
+  * Multi-line comments ([#69], [#6128]): `#= .... =#`
 
   * `--bounds-check=yes|no` compiler option
 
   * Support for a limited number of infix unicode operators ([#552], [#6582]):
-  
+
     | Precedence class | Operators (with synonyms, if any)
     | ---------------- | ---------------------------------
     |   ==             |  ≥ (>=) ≤ (<=) ≡ (===) ≠ (!=) ≢ (!==) .≥ (.>=) .≤ (.<=) .!= (.≠) ∈ (`in`) ∉ (`(x,y)->!in(x, y)`) ∋ (`(x,y)->in(y, x)`) ∌ (`(x,y)->!in(y, x)`) ⊆ (`issubset`) ⊈ (`(x,y)->!issubset(x, y)`) ⊊ (`(x,y)->x⊆y && x!=y`) ⊂ ⊄ |
@@ -76,7 +76,7 @@ Library improvements
     fixed-width or messy whitespace-delimited data ([#5403]).
 
   * The Airy, Bessel, Hankel, and related functions (`airy*`,
-    `bessel*`, `hankel*`) now detect errors returned by the underlying 
+    `bessel*`, `hankel*`) now detect errors returned by the underlying
     AMOS library, throwing an `AmosException` in that case ([#4967]).
 
   * `methodswith` now returns an array of `Method`s ([#5464]) rather
@@ -162,7 +162,7 @@ Library improvements
 
       * `condskeel` for Skeel condition numbers ([#5726]).
 
-      * `norm(::Matrix)` no longer calculates a vector norm when the first 
+      * `norm(::Matrix)` no longer calculates a vector norm when the first
         dimension is one ([#5545]); it always uses the operator (induced)
         matrix norm.
 
@@ -263,10 +263,17 @@ Library improvements
     * Very large ranges (e.g. `0:typemax(Int)`) can now be constructed, but some
       operations (e.g. `length`) will raise an `OverflowError`.
 
-  * Extended API for ``cov`` and ``cor``, which accept keyword arguments ``vardim``, 
+  * Extended API for ``cov`` and ``cor``, which accept keyword arguments ``vardim``,
     ``corrected``, and ``mean`` ([#6273])
 
   * New functions `randsubseq` and `randsubseq!` to create a random subsequence of an array ([#6726])
+
+
+Build improvements
+------------------
+
+  * Dependencies are now verified against stored MD5/SHA512 hashes, to ensure
+    that the correct file has been downloaded and was not modified. ([#6773])
 
 
 Deprecated or removed
@@ -286,8 +293,8 @@ Deprecated or removed
     argument specifying the floating point type to which they apply. The old
     behaviour and `[get/set/with]_bigfloat_rounding` functions are deprecated ([#5007])
 
-  * `cholpfact` and `qrpfact` are deprecated in favor of keyword arguments in 
-    `cholfact(...,pivot=true)` and `qrfact(...,pivot=true)` ([#5330]) 
+  * `cholpfact` and `qrpfact` are deprecated in favor of keyword arguments in
+    `cholfact(...,pivot=true)` and `qrfact(...,pivot=true)` ([#5330])
 
   * `symmetrize!` is deprecated in favor of `Base.LinAlg.copytri!` ([#5427])
 
@@ -490,12 +497,12 @@ New library functions
 
   * `varm`, `stdm` ([#2265]).
 
-  * `digamma`, `invdigamma`, `trigamma` and `polygamma` for calculating derivatives of `gamma` function ([#3233]). 
+  * `digamma`, `invdigamma`, `trigamma` and `polygamma` for calculating derivatives of `gamma` function ([#3233]).
 
   * `logdet` ([#3070]).
 
   * Names for C-compatible types: `Cchar`, `Clong`, etc. ([#2370]).
-  
+
   * `cglobal` to access global variables ([#1815]).
 
   * `unsafe_pointer_to_objref` ([#2468]) and `pointer_from_objref` ([#2515]).
@@ -514,9 +521,9 @@ New library functions
     ([#3050]).
 
   * `interrupt` for interrupting worker processes ([#3819]).
-  
+
   * `timedwait` does a polled wait for an event till a specified timeout.
-  
+
   * `Condition` type with `wait` and `notify` functions for `Task` synchronization.
 
   * `versioninfo` provides detailed version information, especially useful when
