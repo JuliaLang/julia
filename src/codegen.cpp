@@ -97,7 +97,7 @@
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/DynamicLibrary.h"
 #include "llvm/Config/llvm-config.h"
-#ifdef DEBUG
+#ifdef JL_DEBUG_BUILD
 #include "llvm/Support/CommandLine.h"
 #endif
 #include "llvm/Transforms/Utils/Cloning.h"
@@ -507,7 +507,7 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
     }
     assert(f != NULL);
     nested_compile = last_n_c;
-#ifdef DEBUG
+#ifdef JL_DEBUG_BUILD
 #ifdef LLVM35
     llvm::raw_fd_ostream out(1,false);
 #endif
@@ -3246,7 +3246,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             AttributeSet::FunctionIndex,*attr));
 #endif
 #endif
-#ifdef DEBUG
+#ifdef JL_DEBUG_BUILD
 #if LLVM32 && !LLVM33
     f->addFnAttr(Attributes::StackProtectReq);
 #else
@@ -4208,7 +4208,7 @@ static void init_julia_llvm_env(Module *m)
 
 extern "C" void jl_init_codegen(void)
 {
-#ifdef DEBUG
+#ifdef JL_DEBUG_BUILD
     cl::ParseEnvironmentOptions("Julia", "JULIA_LLVM_ARGS");
 #endif
     imaging_mode = jl_compileropts.build_path != NULL;
@@ -4237,7 +4237,7 @@ extern "C" void jl_init_codegen(void)
 
 #if !defined(LLVM_VERSION_MAJOR) || (LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 0)
     jl_ExecutionEngine = EngineBuilder(m).setEngineKind(EngineKind::JIT).create();
-#ifdef DEBUG
+#ifdef JL_DEBUG_BUILD
     llvm::JITEmitDebugInfo = true;
 #endif
     //llvm::JITEmitDebugInfoToDisk = true;
@@ -4249,7 +4249,7 @@ extern "C" void jl_init_codegen(void)
 #elif LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 1
     TargetOptions options = TargetOptions();
     //options.PrintMachineCode = true; //Print machine code produced during JIT compiling
-#ifdef DEBUG
+#ifdef JL_DEBUG_BUILD
     options.JITEmitDebugInfo = true;
 #endif 
     options.NoFramePointerElim = true;
