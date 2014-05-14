@@ -14,12 +14,15 @@ long jl_main_thread_id = -1;
 
 JL_DEFINE_MUTEX(gc)
 JL_DEFINE_MUTEX(codegen)
+uv_mutex_t gc_pool_mutex[N_GC_THREADS];
 
 void jl_init_threading()
 {
     uv_mutex_init(&global_mutex);
     uv_mutex_init(&gc_mutex);
     uv_mutex_init(&codegen_mutex);
+    for(int n=0; n<N_GC_THREADS; n++)
+        uv_mutex_init(gc_pool_mutex+n);
     jl_main_thread_id = uv_thread_self();
 }
 
