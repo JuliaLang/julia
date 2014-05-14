@@ -292,7 +292,7 @@ end
 
 # convert to integer index
 to_index(i::Int) = i
-to_index(i::Real) = convert(Int, i)
+to_index(i::Real) = convert(Int,i)::Int
 to_index(r::UnitRange{Int}) = r
 to_index(r::Range{Int}) = r
 to_index(I::UnitRange{Bool}) = find(I)
