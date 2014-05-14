@@ -655,6 +655,20 @@ end
                                      x -> x+1, 314158)) == 314159
 @test unsafe_pointer_to_objref(pointer_from_objref(e+pi)) == e+pi
 
+begin
+    local a, aa
+    a = [1,2,3]
+    aa = pointer_to_array(pointer(a), length(a))
+    @test aa == a
+    aa = pointer_to_array(pointer(a), (length(a),))
+    @test aa == a
+    aa = pointer_to_array(pointer(a), uint(length(a)))
+    @test aa == a
+    aa = pointer_to_array(pointer(a), uint16(length(a)))
+    @test aa == a
+    @test_throws ErrorException pointer_to_array(pointer(a), -3)
+end
+
 immutable FooBar
     foo::Int
     bar::Int
