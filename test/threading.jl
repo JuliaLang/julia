@@ -13,15 +13,15 @@ end
 
 let N=1000
   # warmup
-  parapply(my_kernel,(),1,1,1,N)
+  parapply(my_kernel,(),1,1:N)
 
   # run with 1 thread (serial)
   println("my_kernel - 1 thread")
-  @time parapply(my_kernel,(),1,1,1,N)
+  @time parapply(my_kernel,(),1,1:N)
 
   # run with 2 threads (parallel)
   println("my_kernel - 2 threads")
-  @time parapply(my_kernel,(),2,1,1,N)
+  @time parapply(my_kernel,(),2,1:N)
 end
 
 ### bad threading
@@ -42,15 +42,15 @@ end
 
 let N=1000
   # warmup
-  parapply(my_kernel,(),1,1,1,N)
+  parapply(my_kernel,(),1,1:N)
 
   # run with 1 thread (serial)
   println("\nmy_bad_kernel - 1 thread")
-  @time parapply(my_bad_kernel,(),1,1,1,N)
+  @time parapply(my_bad_kernel,(),1,1:N)
 
   # run with 2 threads (parallel)
   println("my_bad_kernel - 2 threads")
-  @time parapply(my_bad_kernel,(),2,1,1,N)
+  @time parapply(my_bad_kernel,(),2,1:N)
 end
 
 ### test parapply
@@ -74,15 +74,15 @@ let N=9000
   b3=zeros(dtype,N)
 
   # warmup
-  parapply(my_matmult,(A,x,b2),1,1,1,N)
+  parapply(my_matmult,(A,x,b2),1,1:N)
   
   # run with 1 thread (serial)
   println("\nmy_matmult - 1 thread")
-  @time parapply(my_matmult,(A,x,b2),1,1,1,N)
+  @time parapply(my_matmult,(A,x,b2),1,1:N)
 
   # run with 2 threads (parallel)
   println("my_matmult - 2 threads")
-  @time parapply(my_matmult,(A,x,b3),2,1,1,N)
+  @time parapply(my_matmult,(A,x,b3),2,1:N)
 
   @test b1 == b2
   @test b1 == b3
@@ -150,7 +150,7 @@ function pmedian_filter(im::Matrix, filterSize=3; num_threads=2)
   out = similar(im)
   K = int(floor(filterSize/2))
 
-  parapply(pmedian_filter_core, (im, out, K), num_threads, 1, 1, N[2], preapply=false)
+  parapply(pmedian_filter_core, (im, out, K), num_threads, 1:N[2], preapply=false)
   out
 end
 

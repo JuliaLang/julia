@@ -1,7 +1,7 @@
 ### parallel apply function (scheduling in C).
 
-function parapply(f::Function, args::ANY, numthreads, start, step, len)
-  ccall(:jl_par_apply,Void,(Any,Any,Int,Int,Int,Int),f,args,numthreads, start, step, len)
+function parapply(f::Function, args::ANY, numthreads, r::Range)
+  ccall(:jl_par_apply,Void,(Any,Any,Int,Int,Int,Int),f,args,numthreads, start(r), step(r), length(r))
 end
 
 ### Thread type
@@ -52,14 +52,18 @@ function par_do_work(f::Function, args, start::Int, step::Int, len::Int)
   end
 end
 
-function parapply_jl(f::Function, args,  numthreads::Int, start::Int, step::Int, len::Int; preapply::Bool = false)
+function parapply_jl(f::Function, args,  numthreads::Int, r::Range; preapply::Bool = false)
   gc_disable()
+
+  st = start(r)
+  len = length(r)
+  s = step(r)
 
   t = Array(Base.Thread,numthreads)
 
   if(preapply)
-    par_do_work(f,args,start,1,1)
-    start = start + 1
+    par_do_work(f,args,st,1,1)
+    st = st + 1
     len = len - 1
   end
 
@@ -67,10 +71,10 @@ function parapply_jl(f::Function, args,  numthreads::Int, start::Int, step::Int,
   rem = len
 
   for i=0:(numthreads-2)
-    t[i+1] = Base.Thread(par_do_work,f,args,int(start+i*chunk*step), step, chunk)
+    t[i+1] = Base.Thread(par_do_work,f,args,int(st+i*chunk*s), s, chunk)
     rem -= chunk
   end
-  t[numthreads] = Base.Thread(par_do_work,f,args,int(start+(numthreads-1)*chunk*step), step, rem)
+  t[numthreads] = Base.Thread(par_do_work,f,args,int(st+(numthreads-1)*chunk*s), s, rem)
 
   for i=1:numthreads
     Base.run(t[i])

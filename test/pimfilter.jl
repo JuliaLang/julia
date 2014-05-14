@@ -35,7 +35,7 @@ end
 function _pimfilter{T}(A::Vector{T}, coefficients::Vector{T}, offsets::Vector{Int}, in_height::Int, in_width::Int, out_height::Int, out_width::Int, start_index::Int; num_threads=2)
     B = zeros(T, out_height, out_width)
     num_coefficients = length(coefficients)
-    parapply(_pimfilter_core, (A,B,coefficients,offsets,in_height,out_height,start_index), num_threads, 1, 1, out_width, preapply=false)
+    parapply(_pimfilter_core, (A,B,coefficients,offsets,in_height,out_height,start_index), num_threads, 1:out_width, preapply=false)
     return B
 end
 
