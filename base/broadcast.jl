@@ -46,7 +46,7 @@ function broadcast_shape(As::AbstractArray...)
 end
 
 # Check that all arguments are broadcast compatible with shape
-function check_broadcast_shape(shape::Dims, As::AbstractArray...)
+function check_broadcast_shape(shape::Dims, As::Union(AbstractArray,Number)...)
     for A in As
         if ndims(A) > length(shape)
             error("cannot broadcast array to have fewer dimensions")
@@ -205,9 +205,9 @@ function gen_broadcast_function_tobitarray(genbody::Function, nd::Int, narrays::
 end
 
 for (Bsig, Asig, gbf, gbb) in
-    ((BitArray                          , Union(Array,BitArray)                   ,
+    ((BitArray                          , Union(Array,BitArray,Number)                   ,
       :gen_broadcast_function_tobitarray, :gen_broadcast_body_iter_tobitarray     ),
-     (Any                               , Union(Array,BitArray)                   ,
+     (Any                               , Union(Array,BitArray,Number)                   ,
       :gen_broadcast_function           , :gen_broadcast_body_iter                ),
      (BitArray                          , Any                                     ,
       :gen_broadcast_function_tobitarray, :gen_broadcast_body_cartesian_tobitarray),
