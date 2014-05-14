@@ -112,3 +112,7 @@ function filter!(f::Function, s::Set)
     return s
 end
 filter(f::Function, s::Set) = filter!(f, copy(s))
+
+function map( f::Function, s::Set )
+    Set( [ f(x) for x in s ] )
+end
