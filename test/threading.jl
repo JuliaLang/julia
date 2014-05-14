@@ -134,7 +134,6 @@ function pmedian_filter_core(im, out, K, y)
   y_min = max(1, y-K)
   y_max = min(N[2], y+K)
   
-  s = zeros(eltype(im),(2*K+1)^2)
   for x=1:N[1]
     x_min = max(1, x-K)
     x_max = min(N[1], x+K)
@@ -156,16 +155,17 @@ function pmedian_filter(im::Matrix, filterSize=3; num_threads=2)
 end
 
 
-let N = 901
+let N = 512
   A=rand(N,N)
+  filterSize = 3
 
   println("\nmedian_filter - serial")
-  B = median_filter(A) 
-  @time B = median_filter(A) 
+  B = median_filter(A,filterSize) 
+  @time B = median_filter(A,filterSize) 
   println("median_filter - 1 thread")
-  @time D = pmedian_filter(A,num_threads=1) 
+  @time D = pmedian_filter(A,filterSize,num_threads=1) 
   println("median_filter - 2 threads")
-  @time C = pmedian_filter(A,num_threads=2) 
+  @time C = pmedian_filter(A,filterSize,num_threads=2) 
 
   @test B == C
 
