@@ -382,6 +382,14 @@
 	     (skip-ws-and-comments port)))
   #t)
 
+(define (zero-width-space? c)
+  (memv c '(#\u200b #\u2060 #\ufeff)))
+
+(define (default-ignorable-char? c)
+  (or (zero-width-space? c)
+      (and (char>=? c #\u200c) (char<=? c #\u200f))
+      (memv c '(#\u00ad #\u2061 #\u115f))))
+
 (define (next-token port s)
   (aset! s 2 (eq? (skip-ws port whitespace-newline) #t))
   (let ((c (peek-char port)))
@@ -393,7 +401,7 @@
 
 	  ((eqv? c #\#)         (skip-comment port) (next-token port s))
 
-	  ; . is difficult to handle; it could start a number or operator
+	  ;; . is difficult to handle; it could start a number or operator
 	  ((and (eqv? c #\.)
 		(let ((c (read-char port))
 		      (nextc (peek-char port)))
@@ -412,7 +420,11 @@
 
 	  ((identifier-start-char? c) (accum-julia-symbol c port))
 
-	  (else (error (string "invalid character \"" (read-char port) "\""))))))
+	  (else
+	   (read-char port)
+	   (if (default-ignorable-char? c)
+	       (error (string "invisible character \\u" (number->string (fixnum c) 16)))
+	       (error (string "invalid character \"" c "\"")))))))
 
 ; --- parser ---
 
