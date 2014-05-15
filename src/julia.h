@@ -1206,6 +1206,10 @@ DLLEXPORT void jl_par_apply(jl_function_t * func, jl_value_t* args, size_t num_t
 
 typedef struct {
   uv_thread_t t;
+  uv_mutex_t m;
+  uv_cond_t c;
+  int busy;
+  int poolnum;
   jl_function_t* f;
   jl_tuple_t* targs;
 } jl_thread_t;
@@ -1219,9 +1223,6 @@ DLLEXPORT uv_mutex_t* jl_create_mutex();
 DLLEXPORT void jl_lock_mutex(uv_mutex_t* m);
 DLLEXPORT void jl_unlock_mutex(uv_mutex_t* m);
 DLLEXPORT void jl_destroy_mutex(uv_mutex_t* m);
-
-DLLEXPORT void jl_global_lock();
-DLLEXPORT void jl_global_unlock();
 
 #define JL_DEFINE_MUTEX_EXT(m) \
   extern uv_mutex_t m ## _mutex; \

@@ -38,9 +38,6 @@ function Mutex()
   m
 end
 
-global_lock() = ccall(:jl_global_lock,Void,())
-global_unlock() = ccall(:jl_global_unlock,Void,())
-
 
 ### parallel apply function (scheduling in julia).
 
