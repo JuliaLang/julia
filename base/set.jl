@@ -116,3 +116,13 @@ filter(f::Function, s::Set) = filter!(f, copy(s))
 function map( f::Function, s::Set )
     Set( [ f(x) for x in s ] )
 end
+
+function map( f::Function, s::Set )
+    el = first( s )
+    t = typeof( f( el ) )
+    newset = Set{t}()
+    for x in s
+        push!( newset, f( x ) )
+    end
+    newset
+end
