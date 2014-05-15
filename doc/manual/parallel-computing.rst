@@ -533,9 +533,7 @@ is ``DArray``\ -specific, but we list it here for completeness::
                 nc = +(old[i-1,j-1], old[i-1,j], old[i-1,j+1],
                        old[i  ,j-1],             old[i  ,j+1],
                        old[i+1,j-1], old[i+1,j], old[i+1,j+1])
-                new[i-1,j-1] = (nc == 3 ? 1 :
-                                nc == 2 ? old[i,j] :
-                                0)
+                new[i-1,j-1] = (nc == 3 || nc == 2 && old[i,j])
             end
         end
         new
