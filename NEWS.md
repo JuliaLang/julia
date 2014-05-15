@@ -24,9 +24,6 @@ New language features
 
   * Structure fields can now be accessed by index ([#4806]).
 
-  * Unicode identifiers are normalized (NFC) so that different encodings
-    of equivalent strings are treated as the same identifier ([#5462]).
-
   * If a module contains a function `__init__()`, it will be called when
     the module is first loaded, and on process startup if a pre-compiled
     version of the module is present ([#1268]).
@@ -35,7 +32,15 @@ New language features
 
   * `--bounds-check=yes|no` compiler option
 
-  * Support for a limited number of infix unicode operators ([#552], [#6582]):
+  * Unicode identifiers are normalized (NFC) so that different encodings
+    of equivalent strings are treated as the same identifier ([#5462]).
+
+  * The set of characters permitted in identifiers has been restricted based
+    on Unicode categories. Generally, punctuation, formatting and control
+    characters, and operator symbols are not allowed in identifiers.
+    Number-like characters cannot begin identifiers ([#5936]).
+
+  * Support for a limited number of infix Unicode operators ([#552], [#6582]):
 
     | Precedence class | Operators (with synonyms, if any)
     | ---------------- | ---------------------------------
@@ -402,7 +407,8 @@ Deprecated or removed
 [#6273]: https://github.com/JuliaLang/julia/pull/6273
 [#552]: https://github.com/JuliaLang/julia/issues/552
 [#6582]: https://github.com/JuliaLang/julia/pull/6582
-[#6624]:https://github.com/JuliaLang/julia/pull/6624
+[#6624]: https://github.com/JuliaLang/julia/pull/6624
+[#5936]: https://github.com/JuliaLang/julia/issues/5936
 
 Julia v0.2.0 Release Notes
 ==========================
