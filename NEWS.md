@@ -48,6 +48,8 @@ New language features
     |   +              | ⊕ ⊖ ⊞ ⊟ ∪ (`union`) ∨ ⊔ |
     |   *              | ÷ (`div`) ⋅ (`dot`) ∘ × (`cross`) ∩ (`intersect`) ∧ ⊓ ⊗ ⊘ ⊙ ⊚ ⊛ ⊠ ⊡ |
     |   unary          | √ |
+    
+  * Improved reporting of syntax errors ([#6179])
 
 Library improvements
 --------------------
