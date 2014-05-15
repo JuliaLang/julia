@@ -47,6 +47,35 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_propval_t cat)
             cat == UTF8PROC_CATEGORY_LO || cat == UTF8PROC_CATEGORY_NL ||
             cat == UTF8PROC_CATEGORY_SC ||  // allow currency symbols
             cat == UTF8PROC_CATEGORY_SO ||  // other symbols
+
+            // math symbol whitelist
+            (wc >= 0x2140 && wc <= 0x2a1c &&
+             (wc == 0x2140 || wc == 0x22be ||
+
+              (wc >= 0x2202 && wc <= 0x2233 &&
+               (wc == 0x2202 || wc == 0x2206 ||
+                wc == 0x2207 || wc == 0x220f ||
+                wc == 0x2210 || wc == 0x2211 ||
+                wc == 0x221e || wc == 0x221f ||
+                wc >= 0x222b)) ||
+
+              (wc >= 0x266f &&
+               (wc == 0x266f ||
+                (wc >= 0x29b0 && wc <= 0x29b4) ||
+                (wc >= 0x2a0a && wc <= 0x2a16) ||
+                wc == 0x2a1b || wc == 0x2a1c)))) ||
+
+            (wc >= 0x1d6c1 &&
+             (wc == 0x1d6c1 || wc == 0x1d6db ||
+              wc == 0x1d6fb || wc == 0x1d715 ||
+              wc == 0x1d735 || wc == 0x1d74f ||
+              wc == 0x1d76f || wc == 0x1d789 ||
+              wc == 0x1d7a9 || wc == 0x1d7c3)) ||
+
+            // angle symbols
+            (wc >= 0x2220 && wc <= 0x2222) ||
+            (wc >= 0x299b && wc <= 0x29af) ||
+
             // Other_ID_Start
             wc == 0x2118 || wc == 0x212E || (wc >= 0x309B && wc <= 0x309C));
 }
