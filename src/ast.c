@@ -30,6 +30,11 @@ static uint8_t flisp_system_image[] = {
 extern fltype_t *iostreamtype;
 static fltype_t *jvtype=NULL;
 
+static value_t true_sym;
+static value_t false_sym;
+static value_t fl_error_sym;
+static value_t fl_null_sym;
+
 static jl_value_t *scm_to_julia(value_t e, int expronly);
 static value_t julia_to_scm(jl_value_t *v);
 
@@ -75,7 +80,7 @@ value_t fl_invoke_julia_macro(value_t *args, uint32_t nargs)
         JL_GC_POP();
         value_t opaque = cvalue(jvtype, sizeof(void*));
         *(jl_value_t**)cv_data((cvalue_t*)ptr(opaque)) = jl_exception_in_transit;
-        return fl_list2(symbol("error"), opaque);
+        return fl_list2(fl_error_sym, opaque);
     }
     // protect result from GC, otherwise it could be freed during future
     // macro expansions, since it will be referenced only from scheme and
@@ -109,9 +114,6 @@ static builtinspec_t julia_flisp_ast_ext[] = {
     { NULL, NULL }
 };
 
-static value_t true_sym;
-static value_t false_sym;
-
 DLLEXPORT void jl_init_frontend(void)
 {
     fl_init(2*512*1024);
@@ -132,6 +134,8 @@ DLLEXPORT void jl_init_frontend(void)
     assign_global_builtins(julia_flisp_ast_ext);
     true_sym = symbol("true");
     false_sym = symbol("false");
+    fl_error_sym = symbol("error");
+    fl_null_sym = symbol("null");
 }
 
 DLLEXPORT void jl_lisp_prompt(void)
@@ -374,7 +378,7 @@ static value_t julia_to_scm(jl_value_t *v)
         temp = julia_to_scm_(v);
     }
     FL_CATCH_EXTERN {
-        temp = fl_list2(symbol("error"), cvalue_static_cstring("expression too large"));
+        temp = fl_list2(fl_error_sym, cvalue_static_cstring("expression too large"));
     }
     return temp;
 }
@@ -414,7 +418,7 @@ static value_t julia_to_scm_(jl_value_t *v)
         return FL_F;
     }
     if (v == jl_nothing) {
-        return fl_cons(symbol("null"), FL_NIL);
+        return fl_cons(fl_null_sym, FL_NIL);
     }
     if (jl_is_expr(v)) {
         jl_expr_t *ex = (jl_expr_t*)v;
@@ -514,9 +518,12 @@ jl_value_t *jl_parse_next(void)
         if (isfixnum(a)) {
             jl_lineno = numval(a);
             //jl_printf(JL_STDERR, "  on line %d\n", jl_lineno);
-            return scm_to_julia(cdr_(c),0);
+            c = cdr_(c);
         }
     }
+    // for error, get most recent line number
+    if (iscons(c) && car_(c) == fl_error_sym)
+        jl_lineno = numval(fl_applyn(0, symbol_value(symbol("jl-parser-current-lineno"))));
     return scm_to_julia(c,0);
 }
 
