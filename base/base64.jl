@@ -34,10 +34,10 @@ const b64chars = ['A':'Z','a':'z','0':'9','+','/']
 
 function b64(x::Uint8, y::Uint8, z::Uint8)
     n = int(x)<<16 | int(y)<<8 | int(z)
-    b64chars[(n >> 18) + 1],
-    b64chars[(n >> 12) & 0b111111 + 1],
-    b64chars[(n >> 6) & 0b111111 + 1],
-    b64chars[(n ) & 0b111111 + 1]
+    b64chars[((n >> 18)) + 1],
+    b64chars[((n >> 12) & 0b111111) + 1],
+    b64chars[((n >> 6) & 0b111111) + 1],
+    b64chars[((n ) & 0b111111) + 1]
 end
 
 function b64(x::Uint8, y::Uint8)

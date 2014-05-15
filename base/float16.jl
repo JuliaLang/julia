@@ -50,36 +50,36 @@ const shifttable = Array(Uint8, 512)
 for i = 0:255
     e = i - 127
     if e < -24  # Very small numbers map to zero
-        basetable[i|0x000+1] = 0x0000
-        basetable[i|0x100+1] = 0x8000
-        shifttable[i|0x000+1] = 24
-        shifttable[i|0x100+1] = 24
+        basetable[(i|0x000)+1] = 0x0000
+        basetable[(i|0x100)+1] = 0x8000
+        shifttable[(i|0x000)+1] = 24
+        shifttable[(i|0x100)+1] = 24
     elseif e < -14  # Small numbers map to denorms
-        basetable[i|0x000+1] = (0x0400>>(-e-14))
-        basetable[i|0x100+1] = (0x0400>>(-e-14)) | 0x8000
-        shifttable[i|0x000+1] = -e-1
-        shifttable[i|0x100+1] = -e-1
+        basetable[(i|0x000)+1] = (0x0400>>(-e-14))
+        basetable[(i|0x100)+1] = (0x0400>>(-e-14)) | 0x8000
+        shifttable[(i|0x000)+1] = -e-1
+        shifttable[(i|0x100)+1] = -e-1
     elseif e <= 15  # Normal numbers just lose precision
-        basetable[i|0x000+1] = ((e+15)<<10)
-        basetable[i|0x100+1] = ((e+15)<<10) | 0x8000
-        shifttable[i|0x000+1] = 13
-        shifttable[i|0x100+1] = 13
+        basetable[(i|0x000)+1] = ((e+15)<<10)
+        basetable[(i|0x100)+1] = ((e+15)<<10) | 0x8000
+        shifttable[(i|0x000)+1] = 13
+        shifttable[(i|0x100)+1] = 13
     elseif e < 128  # Large numbers map to Infinity
-        basetable[i|0x000+1] = 0x7C00
-        basetable[i|0x100+1] = 0xFC00
-        shifttable[i|0x000+1] = 24
-        shifttable[i|0x100+1] = 24
+        basetable[(i|0x000)+1] = 0x7C00
+        basetable[(i|0x100)+1] = 0xFC00
+        shifttable[(i|0x000)+1] = 24
+        shifttable[(i|0x100)+1] = 24
     else  # Infinity and NaN's stay Infinity and NaN's
-        basetable[i|0x000+1] = 0x7C00
-        basetable[i|0x100+1] = 0xFC00
-        shifttable[i|0x000+1] = 13
-        shifttable[i|0x100+1] = 13
+        basetable[(i|0x000)+1] = 0x7C00
+        basetable[(i|0x100)+1] = 0xFC00
+        shifttable[(i|0x000)+1] = 13
+        shifttable[(i|0x100)+1] = 13
     end
 end
 
 function convert(::Type{Float16}, val::Float32)
     f = reinterpret(Uint32, val)
-    i = (f >> 23) & 0x1ff + 1
+    i = ((f >> 23) & 0x1ff) + 1
     sh = shifttable[i]
     f &= 0x007fffff
     h::Uint16 = uint16(basetable[i] + (f >> sh))
@@ -88,7 +88,7 @@ function convert(::Type{Float16}, val::Float32)
     # getting truncated anyway so "rounding" it might not matter
     nextbit = (f >> (sh-1)) & 1
     if nextbit != 0
-        if h&1 == 1 ||  # round halfway to even
+        if (h&1) == 1 ||  # round halfway to even
             (f & ((1<<(sh-1))-1)) != 0  # check lower bits
             h += 1
         end
@@ -110,17 +110,17 @@ trunc(x::Float16) = float16(trunc(float32(x)))
 floor(x::Float16) = float16(floor(float32(x)))
  ceil(x::Float16) = float16( ceil(float32(x)))
 
-isnan(x::Float16)    = reinterpret(Uint16,x)&0x7fff  > 0x7c00
-isinf(x::Float16)    = reinterpret(Uint16,x)&0x7fff == 0x7c00
-isfinite(x::Float16) = reinterpret(Uint16,x)&0x7c00 != 0x7c00
+isnan(x::Float16)    = (reinterpret(Uint16,x)&0x7fff)  > 0x7c00
+isinf(x::Float16)    = (reinterpret(Uint16,x)&0x7fff) == 0x7c00
+isfinite(x::Float16) = (reinterpret(Uint16,x)&0x7c00) != 0x7c00
 
 function ==(x::Float16, y::Float16)
     ix = reinterpret(Uint16,x)
     iy = reinterpret(Uint16,y)
-    if (ix|iy)&0x7fff > 0x7c00 #isnan(x) || isnan(y)
+    if ((ix|iy)&0x7fff) > 0x7c00 #isnan(x) || isnan(y)
         return false
     end
-    if (ix|iy)&0x7fff == 0x0000
+    if ((ix|iy)&0x7fff) == 0x0000
         return true
     end
     return ix == iy

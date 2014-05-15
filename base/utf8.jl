@@ -44,7 +44,7 @@ function next(s::UTF8String, i::Int)
     # d = s.data
     # a::Uint32 = d[i]
     # if a < 0x80; return char(a); end
-    # #if a&0xc0==0x80; return '\ufffd'; end
+    # #if (a&0xc0)==0x80; return '\ufffd'; end
     # b::Uint32 = a<<6 + d[i+1]
     # if a < 0xe0; return char(b - 0x00003080); end
     # c::Uint32 = b<<6 + d[i+2]
