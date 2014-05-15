@@ -91,7 +91,7 @@ type Worker
     host::ByteString
     port::Uint16
     socket::TcpSocket
-    sendbuf::IOBuffer
+    write_lock
     del_msgs::Array{Any,1}
     add_msgs::Array{Any,1}
     id::Int
@@ -100,8 +100,11 @@ type Worker
     manage::Function
     config::Dict
     
-    Worker(host::String, port::Integer, sock::TcpSocket, id::Int) =
-        new(bytestring(host), uint16(port), sock, IOBuffer(), {}, {}, id, false)
+    function Worker(host::String, port::Integer, sock::TcpSocket, id::Int)
+        w = new(bytestring(host), uint16(port), sock, RemoteRef(), {}, {}, id, false)
+        set_buffer_writes(sock, true)
+        w
+    end
 end
 Worker(host::String, port::Integer, sock::TcpSocket) =
     Worker(host, port, sock, 0)
@@ -157,26 +160,24 @@ function flush_gc_msgs(w::Worker)
     end
 end
 
-#TODO: Move to different Thread
-function enq_send_req(sock::TcpSocket,buf,now::Bool)
-    arr=takebuf_array(buf)
-    write(sock,arr)
-    #TODO implement "now"
-end
-
 function send_msg_(w::Worker, kind, args, now::Bool)
-    #println("Sending msg $kind")
-    buf = w.sendbuf
-    serialize(buf, kind)
+    sock = w.socket
+    
+    tid = object_id(current_task())
+    try_lock = isready(w.write_lock) ? fetch(w.write_lock) != tid : true
+    try_lock && put!(w.write_lock, tid)
+    
+    serialize(sock, kind)
     for arg in args
-        serialize(buf, arg)
+        serialize(sock, arg)
     end
-
+    
     if !now && w.gcflag
         flush_gc_msgs(w)
     else
-        enq_send_req(w.socket,buf,now)
+        flush(sock)
     end
+    try_lock && take!(w.write_lock)
 end
 
 function flush_gc_msgs()
@@ -347,7 +348,7 @@ end
 function worker_id_from_socket(s)
     w = get(map_sock_wrkr, s, nothing)
     if isa(w,Worker)
-        if is(s, w.socket) || is(s, w.sendbuf)
+        if is(s, w.socket)
             return w.id
         end
     end
@@ -365,7 +366,6 @@ function register_worker(pg, w)
     map_pid_wrkr[w.id] = w
     if isa(w, Worker)
         map_sock_wrkr[w.socket] = w
-        map_sock_wrkr[w.sendbuf] = w
     end
 end
 
@@ -375,7 +375,6 @@ function deregister_worker(pg, pid)
     w = pop!(map_pid_wrkr, pid, nothing)
     if isa(w, Worker) 
         pop!(map_sock_wrkr, w.socket)
-        pop!(map_sock_wrkr, w.sendbuf)
         
         # Notify the cluster manager of this workers death
         if myid() == 1

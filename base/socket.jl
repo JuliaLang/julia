@@ -244,6 +244,9 @@ type TcpSocket <: Socket
     status::Int
     line_buffered::Bool
     buffer::IOBuffer
+    sendbuf::IOBuffer
+    buffer_writes::Bool      # If true, write's are collected. Written when there are 
+                             # enough bytes or on an explicit flush
     readcb::Callback
     readnotify::Condition
     ccb::Callback
@@ -255,6 +258,7 @@ type TcpSocket <: Socket
         StatusUninit,
         true,
         PipeBuffer(),
+        PipeBuffer(), false,
         false,Condition(),
         false,Condition(),
         false,Condition())
@@ -663,3 +667,79 @@ function listenany(default_port)
         end
     end
 end
+
+
+const SENDBUF_SZ=1048576
+function buffer_send(s::TcpSocket, nb) 
+    if !s.buffer_writes
+        return (false, false)
+    else 
+        totb = nb_available(s.sendbuf) + nb
+        if totb < SENDBUF_SZ
+            return (true, false)
+        elseif nb > SENDBUF_SZ
+            flush(s)
+            return (false, false)
+        else
+            return (true, true)
+        end
+    end
+end    
+
+function write(s::TcpSocket, b::Uint8)
+    (do_buffering, do_flushing) = buffer_send(s, 1)
+    if do_buffering
+        write(s.sendbuf, b)
+    else
+        return invoke(write,(AsyncStream,Uint8),s,b)
+    end
+    do_flushing && flush(s)
+    return 1
+end
+
+function write(s::TcpSocket, c::Char)
+    (do_buffering, do_flushing) = buffer_send(s, utf8sizeof(c))
+    if do_buffering
+        write(s.sendbuf, c)
+    else
+        return invoke(write,(AsyncStream,Char),s,c)
+    end
+    do_flushing && flush(s)
+    return utf8sizeof(c)
+end
+function write{T}(s::TcpSocket, a::Array{T})
+    if isbits(T)
+        n = uint(length(a)*sizeof(T))
+        (do_buffering, do_flushing) = buffer_send(s, n)
+        if do_buffering
+            write(s.sendbuf, a)
+        else
+            return invoke(write,(AsyncStream,Array),s,a)
+        end
+        do_flushing && flush(s)
+        return n
+    else
+        return invoke(write,(AsyncStream, Array), s, a)
+    end
+end
+function write(s::TcpSocket, p::Ptr, nb::Integer)
+    (do_buffering, do_flushing) = buffer_send(s, nb)
+    if do_buffering
+        write(s.sendbuf, p, nb)
+    else
+        return invoke(write,(AsyncStream,Ptr, Integer), s, p, nb)
+    end
+    do_flushing && flush(s)
+    return nb
+end
+
+function flush(s::TcpSocket) 
+    nb = nb_available(s.sendbuf)
+    if nb > 0
+        a = readbytes(s.sendbuf, nb)
+        invoke(write,(AsyncStream, Array), s, a)
+    end
+end
+
+set_buffer_writes(s::TcpSocket, on::Bool) = (s.buffer_writes = on)
+
