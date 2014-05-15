@@ -64,7 +64,9 @@ SHA512_PROG=""
 MD5_PROG=""
 find_checksum_progs()
 {
-    if [ ! -z $(which shasum) ]; then
+    if [ ! -z $(which sha512sum) ]; then
+        SHA512_PROG="sha512sum $BASENAME | awk '{ print \$1; }'"
+    elif [ ! -z $(which shasum) ]; then
         SHA512_PROG="shasum -a 512 $BASENAME | awk '{ print \$1; }'"
     fi
 
