@@ -201,7 +201,7 @@ K,J,V = findnz(SparseMatrixCSC(2,1,[1,3],[1,2],[1.0,0.0]))
 @test sprandbool(4, 5, 1.00) == sparse(ones(Bool, 4, 5))
 sprb45 = sprandbool(4, 5, 0.5)
 @test length(sprb45) == 20
-@test (sum(sprb45)[1] - 10) <= 5
+@test 4 <= sum(sprb45)[1] <= 16
 
 # issue #5853, sparse diff
 for i=1:2, a={[1 2 3], [1 2 3]', speye(3)}
