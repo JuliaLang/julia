@@ -73,7 +73,7 @@ const golden = φ
 for T in (MathConst, Rational, Integer, Number)
     ^(::MathConst{:e}, x::T) = exp(x)
 end
-for T in (Range, BitArray, SparseMatrixCSC, StridedArray, AbstractArray)
+for T in (Range, BitArray, CompressedSparseMatrix, StridedArray, AbstractArray)
     .^(::MathConst{:e}, x::T) = exp(x)
 end
 ^(::MathConst{:e}, x::AbstractMatrix) = expm(x)
