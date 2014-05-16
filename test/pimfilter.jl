@@ -1,10 +1,8 @@
-import Base.Test.@test
+import Base.Test.@test, Base.parapply
 
 using Images 
 
-parapply = Base.parapply_jl
-
-function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String, value::T; num_threads=0)
+function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String, value::T; numthreads=0)
     sf = size(filter)
     fw = int(([sf...] .- 1) / 2)
     A = padarray(img, fw, fw, border, value)
@@ -15,8 +13,8 @@ function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String, value::T
     kernel_values = filter[I]
     kernel_offsets = offsets[I]
     start_index = int(floor(m / 2) + floor(n / 2) * size(A, 1))
-    if(num_threads > 0)
-        return _pimfilter(A[:], kernel_values, kernel_offsets, size(A, 1), size(A, 2), size(img, 1), size(img, 2), start_index, num_threads=num_threads)
+    if(numthreads > 0)
+        return _pimfilter(A[:], kernel_values, kernel_offsets, size(A, 1), size(A, 2), size(img, 1), size(img, 2), start_index, numthreads=numthreads)
     else
         return _imfilter(A[:], kernel_values, kernel_offsets, size(A, 1), size(A, 2), size(img, 1), size(img, 2), start_index)
     end
@@ -32,10 +30,10 @@ function _imfilter{T}(A::Vector{T}, coefficients::Vector{T}, offsets::Vector{Int
     return B    
 end
 
-function _pimfilter{T}(A::Vector{T}, coefficients::Vector{T}, offsets::Vector{Int}, in_height::Int, in_width::Int, out_height::Int, out_width::Int, start_index::Int; num_threads=2)
+function _pimfilter{T}(A::Vector{T}, coefficients::Vector{T}, offsets::Vector{Int}, in_height::Int, in_width::Int, out_height::Int, out_width::Int, start_index::Int; numthreads=2)
     B = zeros(T, out_height, out_width)
     num_coefficients = length(coefficients)
-    parapply(_pimfilter_core, (A,B,coefficients,offsets,in_height,out_height,start_index), num_threads, 1:out_width, preapply=false)
+    parapply(_pimfilter_core, (A,B,coefficients,offsets,in_height,out_height,start_index), 1:out_width, numthreads=numthreads)
     return B
 end
 
@@ -55,19 +53,18 @@ end
 
 
 let N = 1024
-  A=rand(N,N)
-  kern = ones(19,19)
+    A = rand(N,N)
+    kern = ones(19,19)
 
-  B = imfilter(A,kern,"replicate",0.0)
-  B = imfilter(A,kern,"replicate",0.0,num_threads=1)
-  println("imfilter - serial")
-  @time B = imfilter(A,kern,"replicate",0.0)
-  println("imfilter - 1 thread")
-  @time D = imfilter(A,kern,"replicate",0.0,num_threads=1)
-  println("imfilter - 2 threads")
-  @time C = imfilter(A,kern,"replicate",0.0,num_threads=2)
+    B = imfilter(A,kern,"replicate",0.0)
+    B = imfilter(A,kern,"replicate",0.0,numthreads=1)
+    println("imfilter - serial")
+    @time B = imfilter(A,kern,"replicate",0.0)
+    println("imfilter - 1 thread")
+    @time D = imfilter(A,kern,"replicate",0.0,numthreads=1)
+    println("imfilter - 2 threads")
+    @time C = imfilter(A,kern,"replicate",0.0,numthreads=2)
 
-  @test B == C
-
+    @test B == C
 end
 

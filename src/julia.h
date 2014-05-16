@@ -1202,16 +1202,14 @@ void jl_longjmp(jmp_buf _Buf,int _Value);
 
 // Threads
 
-DLLEXPORT void jl_par_apply(jl_function_t * func, jl_value_t* args, size_t num_threads, size_t start, size_t step, size_t length );
-
 typedef struct {
-  uv_thread_t t;
-  uv_mutex_t m;
-  uv_cond_t c;
-  int busy;
-  int poolnum;
-  jl_function_t* f;
-  jl_tuple_t* targs;
+    uv_thread_t t;
+    uv_mutex_t m;
+    uv_cond_t c;
+    int busy;
+    int poolid;
+    jl_function_t* f;
+    jl_tuple_t* targs;
 } jl_thread_t;
 
 DLLEXPORT jl_thread_t* jl_create_thread(jl_function_t* f, jl_tuple_t* targs);
@@ -1246,8 +1244,6 @@ DLLEXPORT void jl_destroy_mutex(uv_mutex_t* m);
       m ## _thread_id = -1; \
       uv_mutex_unlock(& m ## _mutex); \
   }
-
-#define N_GC_THREADS 16
 
 // I/O system -----------------------------------------------------------------
 

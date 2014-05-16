@@ -235,7 +235,6 @@ static jl_function_t *jl_method_table_assoc_exact_by_type(jl_methtable_t *mt,
     return jl_bottom_func;
 }
 
-
 static jl_function_t *jl_method_table_assoc_exact(jl_methtable_t *mt,
                                                   jl_value_t **args, size_t n)
 {
@@ -253,9 +252,7 @@ static jl_function_t *jl_method_table_assoc_exact(jl_methtable_t *mt,
             ml = mtcache_hash_lookup(mt->cache_arg1, ty, 0);
             if (ml != JL_NULL) {
                 if (ml->next==JL_NULL && n==1 && jl_tuple_len(ml->sig)==1)
-                {
                     return ml->func;
-                }
                 if (n==2) {
                     // some manually-unrolled common special cases
                     jl_value_t *a1 = args[1];
@@ -263,15 +260,11 @@ static jl_function_t *jl_method_table_assoc_exact(jl_methtable_t *mt,
                         jl_methlist_t *mn = ml;
                         if (jl_tuple_len(mn->sig)==2 &&
                             jl_tupleref(mn->sig,1)==(jl_value_t*)jl_typeof(a1))
-                        {
                             return mn->func;
-                        }
                         mn = mn->next;
                         if (mn!=JL_NULL && jl_tuple_len(mn->sig)==2 &&
                             jl_tupleref(mn->sig,1)==(jl_value_t*)jl_typeof(a1))
-                        {
                             return mn->func;
-                        }
                     }
                 }
             }
@@ -1395,7 +1388,7 @@ JL_CALLABLE(jl_apply_generic)
         }
 #endif
         return jl_no_method_error((jl_function_t*)F, args, nargs);
-  }
+    }
     assert(!mfunc->linfo || !mfunc->linfo->inInference);
 
     return jl_apply(mfunc, args, nargs);
