@@ -465,7 +465,7 @@ The ``state`` object may be anything, and should be chosen appropriately for eac
 
 .. function:: enumerate(iter)
 
-   Return an iterator that yields ``(i, x)`` where ``i`` is an index starting at 1, and ``x`` is the ``ith`` value from the given iterator. It's useful when you need not only the values `x` over witch you are iterating, but also the index `i` of the iterations.
+   Return an iterator that yields ``(i, x)`` where ``i`` is an index starting at 1, and ``x`` is the ``ith`` value from the given iterator. It's useful when you need not only the values `x` over which you are iterating, but also the index `i` of the iterations.
    
    **Example**::
    	julia> a = ["a", "b", "c"]
