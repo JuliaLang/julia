@@ -64,9 +64,9 @@ Suppose you call a function like this::
 	julia> x # x is unchanged!
 	10
 
-In Julia, any function (including ``change_value!()``) can't change what value a local variable in the calling scope is bound to. In other words, doesn't matter the function, the value ``x`` is bound to cannot be changed. 
+In Julia, any function (including ``change_value!()``) can't change the binding of a local variable. If ``x`` (in the calling scope) is bound to a constant, you can't modify the constant; likewise, if x is bound in the calling scope to a Dict, you can't change it to be bound to an ASCIIString. 
 
-But here is a thing you should pay attention to: suppose x is bound to an Array. You cannot "unbind" x from this Array, but, since an Array is a *mutable* type, you can change the Array from it's inside. For example::
+But here is a thing you should pay attention to: suppose x is bound to an Array (or any other mutable type). You cannot "unbind" x from this Array, but, since an Array is a *mutable* type, you can change the Array from it's inside. For example::
 
 	julia> x = [1,2,3]
 	3-element Array{Int64,1}:
@@ -84,7 +84,7 @@ But here is a thing you should pay attention to: suppose x is bound to an Array.
 	2
 	3
 
-Here we created a function ``change_array!()``, that assign ``5`` to the first element of the Array. We passed x (which was previously bound to an Array) to the function. Notice that, after the function call, ``x`` is still bound to the same Array, but that Array changed! Now that Array's first element is five, since we modified it inside ``change_array!()``.
+Here we created a function ``change_array!()``, that assigns ``5`` to the first element of the Array. We passed ``x`` (which was previously bound to an Array) to the function. Notice that, after the function call, ``x`` is still bound to the same Array, but that Array changed.
 
 Types, type declarations, and constructors
 ------------------------------------------
