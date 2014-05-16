@@ -243,7 +243,7 @@ All Objects
    julia> widen(1.5f0)
    1.5
 
-.. function:: identity(x) -> x
+.. function:: identity(x)
 
    The identity function. Returns its argument.
 
@@ -3164,7 +3164,7 @@ Data Formats
 
    Convert a number to a maximum precision representation (typically ``BigInt`` or ``BigFloat``). See ``BigFloat`` for information about some pitfalls with floating-point numbers.
 
-.. function:: bool(x) -> Bool
+.. function:: bool(x)
 
    Convert a number or numeric array to boolean
 
@@ -3172,11 +3172,11 @@ Data Formats
 
    Convert a number or array to the default integer type on your platform. Alternatively, ``x`` can be a string, which is parsed as an integer.
 
-.. function:: uint(x) -> Unsigned
+.. function:: uint(x)
 
    Convert a number or array to the default unsigned integer type on your platform. Alternatively, ``x`` can be a string, which is parsed as an unsigned integer.
 
-.. function:: integer(x) -> Integer
+.. function:: integer(x)
 
    Convert a number or array to integer type. If ``x`` is already of integer type it is unchanged, otherwise it converts it to the default integer type on your platform.
 
@@ -3188,55 +3188,55 @@ Data Formats
 
    Convert a number to an unsigned integer
 
-.. function:: int8(x) -> Int8
+.. function:: int8(x)
 
    Convert a number or array to ``Int8`` data type
 
-.. function:: int16(x) -> Int16
+.. function:: int16(x)
 
    Convert a number or array to ``Int16`` data type
 
-.. function:: int32(x) -> Int32
+.. function:: int32(x)
 
    Convert a number or array to ``Int32`` data type
 
-.. function:: int64(x) -> Int64
+.. function:: int64(x)
 
    Convert a number or array to ``Int64`` data type
 
-.. function:: int128(x) -> Int128
+.. function:: int128(x)
 
    Convert a number or array to ``Int128`` data type
 
-.. function:: uint8(x) -> Uint8
+.. function:: uint8(x)
 
    Convert a number or array to ``Uint8`` data type
 
-.. function:: uint16(x) -> Uint16
+.. function:: uint16(x)
 
    Convert a number or array to ``Uint16`` data type
 
-.. function:: uint32(x) -> Uint32
+.. function:: uint32(x)
 
    Convert a number or array to ``Uint32`` data type
 
-.. function:: uint64(x) -> Uint64
+.. function:: uint64(x)
 
    Convert a number or array to ``Uint64`` data type
 
-.. function:: uint128(x) -> Uint128
+.. function:: uint128(x)
 
    Convert a number or array to ``Uint128`` data type
 
-.. function:: float16(x) -> Float16
+.. function:: float16(x)
 
    Convert a number or array to ``Float16`` data type
 
-.. function:: float32(x) -> Float32
+.. function:: float32(x)
 
    Convert a number or array to ``Float32`` data type
 
-.. function:: float64(x) -> Float63
+.. function:: float64(x)
 
    Convert a number or array to ``Float64`` data type
 
@@ -3248,7 +3248,7 @@ Data Formats
 
    Convert a number or array to ``Float64`` data type, returning true if successful. The result of the conversion is stored in ``out[1]``.
 
-.. function:: float(x) -> FloatingPoint
+.. function:: float(x)
 
    Convert a number, array, or string to a ``FloatingPoint`` data type. For numeric data, the smallest suitable ``FloatingPoint`` type is used. For strings, it converts to ``Float64``.
 
@@ -3262,19 +3262,19 @@ Data Formats
 
    Get the exponent of a normalized floating-point number.
 
-.. function:: complex64(r,i) -> Complex64
+.. function:: complex64(r,i)
 
    Convert to ``r+i*im`` represented as a ``Complex64`` data type
 
-.. function:: complex128(r,i) -> Complex128
+.. function:: complex128(r,i)
 
    Convert to ``r+i*im`` represented as a ``Complex128`` data type
 
-.. function:: char(x) -> Char
+.. function:: char(x)
 
    Convert a number or array to ``Char`` data type
 
-.. function:: complex(r,i) -> Complex
+.. function:: complex(r,i)
 
    Convert real numbers or arrays to complex
 
