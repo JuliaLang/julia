@@ -413,8 +413,8 @@ eval(Sys, :(@deprecate shlib_list dllist))
 @deprecate degrees2radians deg2rad
 @deprecate radians2degrees rad2deg
 
-@deprecate spzeros(m::Integer) spzeros(m, m)
-@deprecate spzeros(Tv::Type, m::Integer) spzeros(Tv, m, m)
+@deprecate spzeros(m::Integer; format=CSC) spzeros(m, m; format=format)
+@deprecate spzeros(Tv::Type, m::Integer; format=CSC) spzeros(Tv, m, m; format=format)
 
 @deprecate myindexes localindexes
 

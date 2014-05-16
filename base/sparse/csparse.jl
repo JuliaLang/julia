@@ -12,11 +12,28 @@
 # Based on Direct Methods for Sparse Linear Systems, T. A. Davis, SIAM, Philadelphia, Sept. 2006.
 # Section 2.4: Triplet form
 # http://www.cise.ufl.edu/research/sparse/CSparse/
-function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti}, 
-                                V::AbstractVector{Tv},
-                                nrow::Integer, ncol::Integer, combine::Function)
 
-    if length(I) == 0; return spzeros(eltype(V),nrow,ncol); end
+function sparse{Tv,Ti<:Integer}(nrow::Integer, ncol::Integer, data::TripletSparseStore{Tv,Ti}, combine::Function; format=CSC)
+    valsptype(format)
+    I = data.rows
+    J = data.cols
+    V = data.vals
+
+    (length(I) == 0) && (return spzeros(eltype(V), nrow, ncol, format=format))
+
+    if format === CSC
+        (ncdim, cdim, RpT, RiT, RxT) = sparse_compress(I, J, V, nrow, ncol, combine)
+        SparseMatrixCSC(ncdim, cdim, RpT, RiT, RxT)
+    else
+        (ncdim, cdim, RpT, RiT, RxT) = sparse_compress(J, I, V, ncol, nrow, combine)
+        SparseMatrixCSR(cdim, ncdim, RpT, RiT, RxT)
+    end
+end
+sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti}, V::AbstractVector{Tv}, nrow::Integer, ncol::Integer, combine::Function) = 
+    sparse(nrow, ncol, TripletSparseStore(I, J, V), combine, format=CSC)
+
+function sparse_compress{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti}, V::AbstractVector{Tv},
+                                nrow::Integer, ncol::Integer, combine::Function)
 
     # Work array
     Wj = Array(Ti, max(nrow,ncol)+1)
@@ -85,7 +102,7 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
     RiT = Array(Ti, anz)
     RxT = Array(Tv, anz)
 
-    # Reset work array to build the final colptr
+    # Reset work array to build the final indptr
     Wj[1] = 1
     for i=2:(ncol+1); Wj[i] = 0; end
     for j = 1:nrow
@@ -111,7 +128,7 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
         end
     end
 
-    return SparseMatrixCSC(nrow, ncol, RpT, RiT, RxT)
+    (nrow, ncol, RpT, RiT, RxT)
 end
 
 ## Transpose
@@ -120,91 +137,86 @@ end
 # Section 2.5: Transpose
 # http://www.cise.ufl.edu/research/sparse/CSparse/
 
-# NOTE: When calling transpose!(S,T), the colptr in the result matrix T must be set up
+# NOTE: When calling transpose!(S,T), the indptr in the result matrix T must be set up
 # by counting the nonzeros in every row of S.
-function transpose!{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, T::SparseMatrixCSC{Tv,Ti})
-    (mT, nT) = size(T)
-    colptr_T = T.colptr
-    rowval_T = T.rowval
+function transpose!{Tv,Ti,Ts}(S::CompressedSparseMatrix{Tv,Ti,Ts}, T::CompressedSparseMatrix{Tv,Ti,Ts})
+    indptr_T = getindptr(T)
+    indval_T = getindval(T)
     nzval_T = T.nzval
 
     nnzS = nnz(S)
-    colptr_S = S.colptr
-    rowval_S = S.rowval
+    indptr_S = getindptr(S)
+    indval_S = getindval(S)
     nzval_S = S.nzval
 
-    w = copy(colptr_T)
-    @inbounds for j = 1:mT, p = colptr_S[j]:(colptr_S[j+1]-1)
-        ind = rowval_S[p]
+    w = copy(indptr_T)
+    @inbounds for j = 1:nspdim(T), p = indptr_S[j]:(indptr_S[j+1]-1)
+        ind = indval_S[p]
         q = w[ind]
         w[ind] += 1
-        rowval_T[q] = j
+        indval_T[q] = j
         nzval_T[q] = nzval_S[p]
     end
 
-    return SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
+    return sparse(size(T,1), size(T,2), CompressedSparseStore(indptr_T, indval_T, nzval_T), format=Ts)
 end
 
-function transpose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
-    (nT, mT) = size(S)
+function transpose{Tv,Ti,Ts}(S::CompressedSparseMatrix{Tv,Ti,Ts})
     nnzS = nnz(S)    
-    rowval_S = S.rowval
+    indval_S = getindval(S)
 
-    rowval_T = Array(Ti, nnzS)
+    indval_T = Array(Ti, nnzS)
     nzval_T = Array(Tv, nnzS)
 
-    colptr_T = zeros(Ti, nT+1)
-    colptr_T[1] = 1
+    indptr_T = zeros(Ti, nspdim(S)+1)
+    indptr_T[1] = 1
     @inbounds for i=1:nnz(S)
-        colptr_T[rowval_S[i]+1] += 1
+        indptr_T[indval_S[i]+1] += 1
     end
-    colptr_T = cumsum(colptr_T)
+    indptr_T = cumsum(indptr_T)
 
-    T = SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
+    T = sparse(size(S,2), size(S,1), CompressedSparseStore(indptr_T, indval_T, nzval_T), format=Ts)
     return transpose!(S, T)
 end
 
-# NOTE: When calling ctranspose!(S,T), the colptr in the result matrix T must be set up
+# NOTE: When calling ctranspose!(S,T), the indptr in the result matrix T must be set up
 # by counting the nonzeros in every row of S.
-function ctranspose!{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, T::SparseMatrixCSC{Tv,Ti})
-    (mT, nT) = size(T)
-    colptr_T = T.colptr
-    rowval_T = T.rowval
+function ctranspose!{Tv,Ti,Ts}(S::CompressedSparseMatrix{Tv,Ti,Ts}, T::CompressedSparseMatrix{Tv,Ti,Ts})
+    indptr_T = getindptr(T)
+    indval_T = getindval(T)
     nzval_T = T.nzval
 
     nnzS = nnz(S)
-    colptr_S = S.colptr
-    rowval_S = S.rowval
+    indptr_S = getindptr(S)
+    indval_S = getindval(S)
     nzval_S = S.nzval
 
-    w = copy(colptr_T)
-    @inbounds for j = 1:mT, p = colptr_S[j]:(colptr_S[j+1]-1)
-        ind = rowval_S[p]
+    w = copy(indptr_T)
+    @inbounds for j = 1:nspdim(T), p = indptr_S[j]:(indptr_S[j+1]-1)
+        ind = indval_S[p]
         q = w[ind]
         w[ind] += 1
-        rowval_T[q] = j
+        indval_T[q] = j
         nzval_T[q] = conj(nzval_S[p])
     end
-
-    return SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
+    return sparse(size(T,1), size(T,2), CompressedSparseStore(indptr_T, indval_T, nzval_T), format=Ts)
 end
 
-function ctranspose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}) 
-    (nT, mT) = size(S)
+function ctranspose{Tv,Ti,Ts}(S::CompressedSparseMatrix{Tv,Ti,Ts}) 
     nnzS = nnz(S)
-    rowval_S = S.rowval
+    indval_S = getindval(S)
     
-    rowval_T = Array(Ti, nnzS)
+    indval_T = Array(Ti, nnzS)
     nzval_T = Array(Tv, nnzS)
 
-    colptr_T = zeros(Ti, nT+1)
-    colptr_T[1] = 1
+    indptr_T = zeros(Ti, nspdim(S)+1)
+    indptr_T[1] = 1
     @inbounds for i=1:nnz(S)
-        colptr_T[rowval_S[i]+1] += 1
+        indptr_T[indval_S[i]+1] += 1
     end
-    colptr_T = cumsum(colptr_T)
+    indptr_T = cumsum(indptr_T)
 
-    T = SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
+    T = sparse(size(S,2), size(S,1), CompressedSparseStore(indptr_T, indval_T, nzval_T), format=Ts)
     return ctranspose!(S, T)
 end
 
@@ -214,8 +226,8 @@ end
 # A trivial example is speye(n, n) in which every node is a root.
 function etree{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, postorder::Bool)
     m,n = size(A)
-    Ap = A.colptr
-    Ai = A.rowval
+    Ap = getindptr(A)
+    Ai = getindval(A)
     parent = zeros(Ti, n)
     ancestor = zeros(Ti, n)
     for k in 1:n, p in Ap[k]:(Ap[k+1] - 1)
@@ -263,7 +275,7 @@ etree(A::SparseMatrixCSC) = etree(A, false)
 # find nonzero pattern of Cholesky L[k,1:k-1] using etree and triu(A[:,k])
 # based on cs_ereach p. 43, "Direct Methods for Sparse Linear Systems"
 function ereach{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, k::Integer, parent::Vector{Ti})
-    m,n = size(A); Ap = A.colptr; Ai = A.rowval
+    m,n = size(A); Ap = getindptr(A); Ai = getindval(A)
     s = Ti[]; sizehint(s, n)            # to be used as a stack
     visited = falses(n)
     visited[k] = true
@@ -281,12 +293,12 @@ end
 
 # based on cs_permute p. 21, "Direct Methods for Sparse Linear Systems"
 function csc_permute{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, pinv::Vector{Ti}, q::Vector{Ti})
-    m,n = size(A); Ap = A.colptr; Ai = A.rowval; Ax = A.nzval
+    m,n = size(A); Ap = getindptr(A); Ai = getindval(A); Ax = A.nzval
     if length(pinv) != m || length(q) !=  n 
         error("dimension mismatch, size(A) = $(size(A)), length(pinv) = $(length(pinv)) and length(q) = $(length(q))")
     end
     if !isperm(pinv) || !isperm(q) error("both pinv and q must be permutations") end
-    C = copy(A); Cp = C.colptr; Ci = C.rowval; Cx = C.nzval
+    C = copy(A); Cp = getindptr(C); Ci = getindval(C); Cx = C.nzval
     nz = zero(Ti)
     for k in 1:n
         Cp[k] = nz
@@ -304,10 +316,10 @@ end
 # based on cs_symperm p. 21, "Direct Methods for Sparse Linear Systems"
 # form A[p,p] for a symmetric A stored in the upper triangle
 function symperm{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, pinv::Vector{Ti})
-    m,n = size(A); Ap = A.colptr; Ai = A.rowval; Ax = A.nzval
+    m,n = size(A); Ap = getindptr(A); Ai = getindval(A); Ax = A.nzval
     isperm(pinv) || error("perm must be a permutation")
     m == n == length(pinv) || error("dimension mismatch")
-    C = copy(A); Cp = C.colptr; Ci = C.rowval; Cx = C.nzval
+    C = copy(A); Cp = getindptr(C); Ci = getindval(C); Cx = C.nzval
     w = zeros(Ti,n)
     for j in 1:n                   # count entries in each column of C
         j2 = pinv[j]
@@ -337,23 +349,26 @@ end
 function fkeep!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f, other)
     nzorig = nnz(A)
     nz = 1
+    indptrA = getindptr(A)
+    indvalA = getindval(A)
+    nzvalA = A.nzval
     for j = 1:A.n
-        p = A.colptr[j]                 # record current position
-        A.colptr[j] = nz                # set new position
-        while p < A.colptr[j+1]
-            if f(A.rowval[p], j, A.nzval[p], other)
-                A.nzval[nz] = A.nzval[p]
-                A.rowval[nz] = A.rowval[p]
+        p = indptrA[j]                 # record current position
+        indptrA[j] = nz                # set new position
+        while p < indptrA[j+1]
+            if f(indvalA[p], j, nzvalA[p], other)
+                nzvalA[nz] = nzvalA[p]
+                indvalA[nz] = indvalA[p]
                 nz += 1
             end
             p += 1
         end
     end
-    A.colptr[A.n + 1] = nz
+    indptrA[A.n + 1] = nz
     nz -= 1
     if nz < nzorig
-        resize!(A.nzval, nz)
-        resize!(A.rowval, nz)
+        resize!(nzvalA, nz)
+        resize!(indvalA, nz)
     end
     A
 end
