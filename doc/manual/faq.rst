@@ -48,6 +48,43 @@ while developing you might use a workflow something like this::
     obj3 = MyModule.someotherfunction(obj2, c)
     ...
 
+Functions
+---------
+
+I passed an argument ``x`` to a function, modified it inside that function, but on the outside, the variable ``x`` is still unchanged. Why?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Suppose you call a function like this::
+
+	julia> x = 10
+	julia> function change_value!(y) # Create a new function
+	           y = 17
+	       end
+	julia> change_value!(x)
+	julia> x # x is unchanged!
+	10
+
+In Julia, any function (including ``change_value!()``) can't change what value a local variable in the calling scope is bound to. In other words, doesn't matter the function, the value ``x`` is bound to cannot be changed. 
+
+But here is a thing you should pay attention to: suppose x is bound to an Array. You cannot "unbind" x from this Array, but, since an Array is a *mutable* type, you can change the Array from it's inside. For example::
+
+	julia> x = [1,2,3]
+	3-element Array{Int64,1}:
+	1
+	2
+	3
+
+	julia> function change_array!(A) # Create a new function
+	           A[1] = 5
+	       end
+	julia> change_array!(x)
+	julia> x
+	3-element Array{Int64,1}:
+	5
+	2
+	3
+
+Here we created a function ``change_array!()``, that assign ``5`` to the first element of the Array. We passed x (which was previously bound to an Array) to the function. Notice that, after the function call, ``x`` is still bound to the same Array, but that Array changed! Now that Array's first element is five, since we modified it inside ``change_array!()``.
 
 Types, type declarations, and constructors
 ------------------------------------------
