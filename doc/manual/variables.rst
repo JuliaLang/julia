@@ -80,7 +80,8 @@ Julia will even let you redefine built-in constants and functions if needed:
     julia> pi
     3
     
-    julia> 
+    julia> sqrt(100)
+    10
     
     julia> sqrt = 4
     4
