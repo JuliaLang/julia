@@ -64,9 +64,9 @@ Suppose you call a function like this::
 	julia> x # x is unchanged!
 	10
 
-In Julia, any function (including ``change_value!()``) can't change the binding of a local variable. If ``x`` (in the calling scope) is bound to a constant, you can't modify the constant; likewise, if x is bound in the calling scope to a Dict, you can't change it to be bound to an ASCIIString. 
+In Julia, any function (including ``change_value!()``) can't change the binding of a local variable. If ``x`` (in the calling scope) is bound to a immutable object (like a real number), you can't modify the object; likewise, if x is bound in the calling scope to a Dict, you can't change it to be bound to an ASCIIString. 
 
-But here is a thing you should pay attention to: suppose ``x`` is bound to an Array (or any other mutable type). You cannot "unbind" ``x`` from this Array, but, since an Array is a *mutable* type, you can change its content. For example::
+But here is a thing you should pay attention to: suppose ``x`` is bound to an Array (or any other mutable type). You cannot "unbind" ``x`` from this Array. But, since an Array is a *mutable* type, you can change its content. For example::
 
 	julia> x = [1,2,3]
 	3-element Array{Int64,1}:
