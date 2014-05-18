@@ -196,16 +196,22 @@ end
 
 
 # test hist
+@test sum(hist([1,2,3]).weights) == 3
+@test hist([]).weights == []
+@test hist([1]).weights == [1]
+@test hist([1,2,3],[0,2,4]) == Histogram([0,2,4],[2,1])
+@test hist([1,2,3],[0,2,4]) != Histogram([0,2,4],[1,1])
+@test hist([1,2,3],0:2:4) == Histogram(0:2:4,[2,1])
+@test all(hist([1:100]/100,0.0:0.01:1.0).weights .==1)
+@test hist([1,1,1,1,1]).weights[1] == 5
+@test sum(hist((rand(100),rand(100))).weights) == 100
+@test hist(1:100,5;interval=:right).weights == [20,20,20,20,20]
+@test hist(1:100,5;interval=:left).weights == [19,20,20,20,20,1]
+@test hist(0:99,5;interval=:right).weights == [1,20,20,20,20,19]
+@test hist(0:99,5;interval=:left).weights == [20,20,20,20,20]
 
-@test sum(hist([1,2,3])[2]) == 3
-@test hist([])[2] == []
-@test hist([1])[2] == [1]
-@test hist([1,2,3],[0,2,4]) == ([0,2,4],[2,1])
-@test hist([1,2,3],0:2:4) == (0:2:4,[2,1])
-@test all(hist([1:100]/100,0.0:0.01:1.0)[2] .==1)
-@test hist([1,1,1,1,1])[2][1] == 5
-@test sum(hist2d(rand(100, 2))[3]) == 100
-@test hist([1 2 3 4;1 2 3 4]) == (0.0:2.0:4.0, [2 2 0 0; 0 0 2 2])
+#r = 0.0:2.0:4.0
+#@test hist([1 2 3 4;1 2 3 4],r) == [Histogram(r,[2,0]),Histogram(r,[2,0]),Histogram(r,[0,2]),Histogram(r,[0,2])]
 
 @test midpoints(1.0:1.0:10.0) == 1.5:1.0:9.5
 @test midpoints(1:10) == 1.5:9.5

@@ -892,8 +892,8 @@ export
 # statistics
     cor,
     cov,
+    Histogram,
     hist,
-    hist2d,
     histrange,
     mean!,
     mean,

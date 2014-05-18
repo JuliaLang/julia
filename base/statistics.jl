@@ -424,7 +424,7 @@ end
 
 ## nice-valued ranges for histograms
 
-function histrange{T<:FloatingPoint,N}(v::AbstractArray{T,N}, n::Integer)
+function histrange{T<:FloatingPoint,N}(v::AbstractArray{T,N}, n::Integer, interval::Symbol)
     if length(v) == 0
         return 0.0:1.0:0.0
     end
@@ -443,12 +443,17 @@ function histrange{T<:FloatingPoint,N}(v::AbstractArray{T,N}, n::Integer)
             step = 10*e
         end
     end
-    start = step*(ceil(lo/step)-1)
-    nm1 = iceil((hi - start)/step)
+    if interval == :right
+        start = step*(ceil(lo/step)-1)
+        nm1 = iceil((hi - start)/step)       
+    else
+        start = step*floor(lo/step)
+        nm1 = ifloor((hi - start)/step)+1    
+    end
     start:step:(start + nm1*step)
 end
 
-function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
+function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer, interval::Symbol)
     if length(v) == 0
         return 0:1:0
     end
@@ -457,7 +462,7 @@ function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
         step = 1
     else
         bw = (hi - lo) / n
-        e = 10^max(0,ifloor(log10(bw)))
+        e = int(10^max(0,ifloor(log10(bw))))
         r = bw / e
         if r <= 1
             step = e
@@ -469,8 +474,13 @@ function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
             step = 10*e
         end
     end
-    start = step*(ceil(lo/step)-1)
-    nm1 = iceil((hi - start)/step)
+    if interval == :right
+        start = step*(iceil(lo/step)-1)
+        nm1 = iceil((hi - start)/step)
+    else
+        start = step*ifloor(lo/step)
+        nm1 = ifloor((hi - start)/step)+1
+    end
     start:step:(start + nm1*step)
 end
 
@@ -484,71 +494,76 @@ function sturges(n)  # Sturges' formula
     iceil(log2(n))+1
 end
 
-function hist!{HT}(h::AbstractArray{HT}, v::AbstractVector, edg::AbstractVector; init::Bool=true)
-    n = length(edg) - 1
-    length(h) == n || error("length(h) must equal length(edg) - 1.")
-    if init
-        fill!(h, zero(HT))
+# N-dimensional histogram object
+immutable Histogram{T<:Real,N,E}
+    edges::E
+    weights::Array{T,N}
+    interval::Symbol
+    function Histogram(edges::NTuple{N,AbstractArray},weights::Array{T,N},interval::Symbol)
+        interval == :right || interval == :left || error("interval must :left or :right")
+        map(x -> length(x)-1,edges) == size(weights) || error("Histogram edge vectors must be 1 longer than corresponding weight dimensions")
+        new(edges,weights,interval)
     end
+end
+Histogram{T,N}(edges::NTuple{N,AbstractVector},weights::AbstractArray{T,N},interval::Symbol=:right) = Histogram{T,N,typeof(edges)}(edges,weights,interval)
+Histogram{T,N}(edges::NTuple{N,AbstractVector},::Type{T},interval::Symbol=:right) = Histogram(edges,zeros(T,map(x -> length(x)-1,edges)...),interval)
+Histogram{N}(edges::NTuple{N,AbstractVector},interval::Symbol=:right) = Histogram(edges,Int,interval)
+
+isequal(h1::Histogram,h2::Histogram) = isequal(h1.edges,h2.edges) && isequal(h1.weights,h2.weights)
+
+# 1-dimensional
+Histogram{T}(edge::AbstractVector,weights::AbstractVector{T},interval::Symbol=:right) = Histogram{T,1,(typeof(edge),)}((edge,),weights,interval)
+Histogram{T}(edge::AbstractVector,::Type{T},interval::Symbol=:right) = Histogram(edge,zeros(T,length(edge)-1),interval)
+Histogram(edge::AbstractVector,interval::Symbol=:right) = Histogram(edge,Int,interval)
+
+function push!{T,E}(h::Histogram{T,1,E}, x::Real)
+    i = if h.interval == :right 
+        searchsortedfirst(h.edges[1], x) - 1 
+    else
+        searchsortedlast(h.edges[1], x)
+    end
+    if 1 <= i <= length(h.weights)
+        @inbounds h.weights[i] += one(T)
+    end
+    h
+end
+
+function append!{T}(h::Histogram{T,1}, v::AbstractVector)
     for x in v
-        i = searchsortedfirst(edg, x)-1
-        if 1 <= i <= n
-            h[i] += 1
-        end
+        push!(h,x)
     end
-    edg, h
+    h
 end
 
-hist(v::AbstractVector, edg::AbstractVector) = hist!(Array(Int, length(edg)-1), v, edg)
-hist(v::AbstractVector, n::Integer) = hist(v,histrange(v,n))
-hist(v::AbstractVector) = hist(v,sturges(length(v)))
+hist(v::AbstractVector, edg::AbstractVector; interval::Symbol=:right) = append!(Histogram(edg,interval),v)
+hist(v::AbstractVector, n::Integer; interval::Symbol=:right) = hist(v,histrange(v,n,interval);interval=interval)
+hist(v::AbstractVector; interval::Symbol=:right) = hist(v,sturges(length(v));interval=interval)
 
-function hist!{HT}(H::AbstractArray{HT,2}, A::AbstractMatrix, edg::AbstractVector; init::Bool=true)
-    m, n = size(A)
-    size(H) == (length(edg)-1, n) || error("Incorrect size of H.")
-    if init
-        fill!(H, zero(HT))
+# N-dimensional
+function push!{T,N}(h::Histogram{T,N},xs::NTuple{N,Real})
+    is = if h.interval == :right
+        map((edge, x) -> searchsortedfirst(edge,x) - 1, h.edges, xs)
+    else
+        map(searchsortedlast, h.edges, xs)
     end
-    for j = 1:n
-        hist!(sub(H, :, j), sub(A, :, j), edg)
+    try
+        h.weights[is...] += one(T)
+    catch e
+        isa(e,BoundsError) || rethrow(e)
     end
-    edg, H
+    h
+end
+function append!{T,N}(h::Histogram{T,N}, vs::NTuple{N,AbstractVector})
+    for xs in zip(vs...)
+        push!(h,xs)
+    end
+    h
 end
 
-hist(A::AbstractMatrix, edg::AbstractVector) = hist!(Array(Int, length(edg)-1, size(A,2)), A, edg)
-hist(A::AbstractMatrix, n::Integer) = hist(A,histrange(A,n))
-hist(A::AbstractMatrix) = hist(A,sturges(size(A,1)))
-
-
-## hist2d
-function hist2d!{HT}(H::AbstractArray{HT,2}, v::AbstractMatrix, 
-                     edg1::AbstractVector, edg2::AbstractVector; init::Bool=true)
-    size(v,2) == 2 || error("hist2d requires an Nx2 matrix.")
-    n = length(edg1) - 1
-    m = length(edg2) - 1
-    size(H) == (n, m) || error("Incorrect size of H.")
-    if init
-        fill!(H, zero(HT))
-    end
-    for i = 1:size(v,1)
-        x = searchsortedfirst(edg1, v[i,1]) - 1
-        y = searchsortedfirst(edg2, v[i,2]) - 1
-        if 1 <= x <= n && 1 <= y <= m
-            @inbounds H[x,y] += 1
-        end
-    end
-    edg1, edg2, H
-end
-
-hist2d(v::AbstractMatrix, edg1::AbstractVector, edg2::AbstractVector) = 
-    hist2d!(Array(Int, length(edg1)-1, length(edg2)-1), v, edg1, edg2)
-
-hist2d(v::AbstractMatrix, edg::AbstractVector) = hist2d(v, edg, edg)
-
-hist2d(v::AbstractMatrix, n1::Integer, n2::Integer) = 
-    hist2d(v, histrange(sub(v,:,1),n1), histrange(sub(v,:,2),n2))
-hist2d(v::AbstractMatrix, n::Integer) = hist2d(v, n, n)
-hist2d(v::AbstractMatrix) = hist2d(v, sturges(size(v,1)))
+hist{N}(vs::NTuple{N,AbstractVector}, edges::NTuple{N,AbstractVector}; interval::Symbol=:right) = append!(Histogram(edges,interval),vs)
+hist{N}(vs::NTuple{N,AbstractVector}, ns::NTuple{N,Integer}; interval::Symbol=:right) = hist(vs, map((v,n) -> histrange(v,n,interval),vs,ns);interval=interval)
+hist{N}(vs::NTuple{N,AbstractVector}, n::Integer; interval::Symbol=:right) = hist(vs, map(v -> histrange(v,n,interval),vs);interval=interval)
+hist{N}(vs::NTuple{N,AbstractVector}; interval::Symbol=:right) = hist(vs, sturges(length(vs[1]));interval=interval)
 
 
 ## quantiles ##
