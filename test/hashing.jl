@@ -29,6 +29,17 @@ for T=types, S=types, x=vals
     # end
 end
 
+# hashing collections (e.g. issue #6870)
+vals = {[1,2,3,4], [1 2;3 4], {1,2,3,4}, [1,3,2,4],
+        Set([1,2,3,4]),
+        [42 => 101, 77 => 93], {42 => 101, 77 => 93},
+        (1,2,3,4), (1.0,2.0,3.0,4.0), (1,3,2,4),
+        ("a","b"), (SubString("a",1,1), SubString("b",1,1))}
+
+for a in vals, b in vals
+    @test !isequal(a,b) || hash(a)==hash(b)
+end
+
 @test hash(RopeString("1","2")) == hash("12")
 @test hash(SubString("--hello--",3,7)) == hash("hello")
 @test hash(:(X.x)) == hash(:(X.x))
