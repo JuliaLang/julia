@@ -441,7 +441,10 @@ Set{T<:Number}(xs::T...) = Set{T}(xs)
 @deprecate infs(dims...)                 fill(Inf, dims)
 @deprecate infs{T}(x::AbstractArray{T})  fill(convert(T,Inf), size(x))
 
-@deprecate bitmix hash
+@deprecate bitmix(x, y::Uint)                 hash(x, y)
+@deprecate bitmix(x, y::Int)                  hash(x, uint(y))
+@deprecate bitmix(x, y::Union(Uint32, Int32)) convert(Uint32, hash(x, uint(y)))
+@deprecate bitmix(x, y::Union(Uint64, Int64)) convert(Uint64, hash(x, hash(y)))
 
 # 0.3 discontinued functions
 
