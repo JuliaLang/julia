@@ -113,8 +113,8 @@ function filter!(f::Function, s::Set)
 end
 filter(f::Function, s::Set) = filter!(f, copy(s))
 
-function subsets{T}( s::Set{T}, n::Int )
-    card = length( s )
+function subsets{T}(s::Set{T}, n::Int)
+    card = length(s)
     if card < n 
         return Set()
     end        
@@ -124,13 +124,13 @@ function subsets{T}( s::Set{T}, n::Int )
     if card == 0
         return Set()
     end
-    el = first( s )
-    rest = delete!( copy( s ), el )
-    ans = sizehint( subsets( rest, n ), binomial( card, n ) )
-    smalls = subsets( rest, n - 1 )
+    el = first(s)
+    rest = delete!(copy(s), el)
+    ans = sizehint(subsets(rest, n), binomial(card, n))
+    smalls = subsets(rest, n - 1)
     for ss in smalls
-        push!( ss, el )
+        push!(ss, el)
     end
-    union!( ans, smalls )
+    union!(ans, smalls)
     ans
 end
