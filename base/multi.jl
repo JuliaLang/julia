@@ -195,7 +195,7 @@ end
 type LocalProcess
     id::Int
     bind_addr::IpAddr
-    LocalProcess() = new()
+    LocalProcess() = new(1)
 end
 
 const LPROC = LocalProcess()
