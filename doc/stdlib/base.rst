@@ -237,11 +237,12 @@ All Objects
    Otherwise the argument ``x`` is converted to ``widen(typeof(x))``.
 
    **Examples**::
-   julia> widen(Int32)
-   Int64
    
-   julia> widen(1.5f0)
-   1.5
+	   julia> widen(Int32)
+	   Int64
+	   
+	   julia> widen(1.5f0)
+	   1.5
 
 .. function:: identity(x)
 
@@ -367,10 +368,14 @@ Generic Functions
    list, which is then passed to ``f`` as its argument list.
    
    **Example**:
-   	julia> function f(x, y) # Define a function f
+   	
+   	# Define a function f
+   	julia> function f(x, y)
    	           x + y
    	       end
-   	julia> apply(f, [1 2]) # Apply f with 1 and 2 as arguments
+   	
+   	# Apply f with 1 and 2 as arguments
+   	julia> apply(f, [1 2])
    	3
 
    
@@ -390,15 +395,16 @@ Generic Functions
    Determine whether the given generic function has a method applicable to the given arguments.
    
    **Examples**::
+   
    	julia> function f(x, y)
    	           x + y
    	       end
    	       
    	julia> applicable(f, 1)
-	false
+   	false
 	
-	julia> applicable(f, 1, 2)
-	true
+   	julia> applicable(f, 1, 2)
+   	true
 
 .. function:: invoke(f, (types...), args...)
 
@@ -502,13 +508,14 @@ General Collections
    Determine whether a collection is empty (has no elements).
    
    **Examples**::
+   
    	julia> a = []
-	julia> isempty(a)
-	true
+   	julia> isempty(a)
+   	true
 	
-	julia> b = [1 2 3]
-	julia> isempty(b)
-	false
+   	julia> b = [1 2 3]
+   	julia> isempty(b)
+   	false
 
 
 .. function:: empty!(collection) -> collection
@@ -706,8 +713,9 @@ Iterable Collections
    Determine whether predicate ``p`` returns true for all elements of ``itr``.
 
    **Example**::
-   julia> all(i->(4<=i<=6), [4,5,6])
-   true
+   
+   	julia> all(i->(4<=i<=6), [4,5,6])
+   	true
 
 .. function:: map(f, c...) -> collection
 
@@ -716,10 +724,10 @@ Iterable Collections
 
    **Examples**::
    
-     julia> map((x) -> x * 2, [1, 2, 3])
-     [2, 4, 6]
-     julia> map(+, [1, 2, 3], [10, 20, 30])
-     [11, 22, 33]
+   	julia> map((x) -> x * 2, [1, 2, 3])
+   	[2, 4, 6]
+   	julia> map(+, [1, 2, 3], [10, 20, 30])
+   	[11, 22, 33]
 
 .. function:: map!(function, collection)
 
@@ -1029,6 +1037,7 @@ Strings
    Concatenate strings. The ``*`` operator is an alias to this function.
 
    **Example**::
+   
 	   julia> "Hello " * "world"
 	   "Hello world"
 
@@ -1037,8 +1046,9 @@ Strings
    Repeat ``n`` times the string ``s``. The ``^`` operator is an alias to this function.
 
    **Example**::
-	   julia> "Test "^3
-	   "Test Test Test "
+   
+   	julia> "Test "^3
+   	"Test Test Test "
 
 .. function:: string(xs...)
 
@@ -2943,8 +2953,9 @@ Mathematical Functions
    Compute the prime factorization of an integer ``n``. Returns a dictionary. The keys of the dictionary correspond to the factors, and hence are of the same type as ``n``. The value associated with each key indicates the number of times the factor appears in the factorization.
 
    **Example**: :math:`100=2*2*5*5`; then::
+   
    	julia> factor(100)
-	[5=>2,2=>2]
+   	[5=>2,2=>2]
 	
 .. function:: gcd(x,y)
 
@@ -3472,8 +3483,9 @@ Integers
    Returns ``true`` if ``x`` is prime, and ``false`` otherwise.
 
    **Example**::
-	   julia> isprime(3)
-	   true
+   
+   	julia> isprime(3)
+   	true
 
 .. function:: primes(n)
 
@@ -3484,22 +3496,24 @@ Integers
    Returns ``true`` if ``x`` is odd (that is, not divisible by 2), and ``false`` otherwise.
 
    **Examples**::
-   julia> isodd(9)
-   false
    
-   julia> isodd(10)
-   true
+   	julia> isodd(9)
+   	false
+   
+   	julia> isodd(10)
+   	true
 
 .. function:: iseven(x::Integer) -> Bool
 
    Returns ``true`` is ``x`` is even (that is, divisible by 2), and ``false`` otherwise.
 
    **Examples**::
-   julia> iseven(10)
-   false
    
-   julia> iseven(9)
-   true
+   	julia> iseven(10)
+   	false
+   
+   	julia> iseven(9)
+   	true
 
 BigFloats
 ---------
@@ -5094,13 +5108,13 @@ C Interface
 
    For example::
 
-    function foo()
-      # body
+   	function foo()
+   	    # body
 
-      retval::Float64
-    end
+   	    retval::Float64
+   	end
 
-    bar = cfunction(foo, Float64, ())
+   	bar = cfunction(foo, Float64, ())
 
 
 .. function:: dlopen(libfile::String [, flags::Integer])
