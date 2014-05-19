@@ -785,6 +785,7 @@ double clock_now(void);
 
 extern jl_module_t *jl_old_base_module;
 extern jl_array_t *typeToTypeId;
+extern jl_array_t *jl_late_modules;
 
 static void gc_mark(void)
 {
@@ -809,6 +810,7 @@ static void gc_mark(void)
     gc_push_root(jl_typetype_type, 0);
     gc_push_root(jl_tupletype_type, 0);
     gc_push_root(typeToTypeId, 0);
+    if (jl_late_modules) gc_push_root(jl_late_modules, 0);
 
     // constants
     gc_push_root(jl_null, 0);
