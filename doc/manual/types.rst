@@ -83,7 +83,8 @@ do this:
 2. To provide extra type information to the compiler, which can then
    improve performance in some cases
 
-The ``::`` operator is read as "is an instance of" and can be used
+When appended to an expression computing a *value*, the ``::``
+operator is read as "is an instance of". It can be used
 anywhere to assert that the value of the expression on the left is an
 instance of the type on the right. When the type on the right is
 concrete, the value on the left must have that type as its
@@ -101,9 +102,14 @@ exception is thrown, otherwise, the left-hand value is returned:
     julia> (1+2)::Int
     3
 
-This allows a type assertion to be attached to any expression in-place.
+This allows a type assertion to be attached to any expression
+in-place. The most common usage of ``::`` as an assertion is in
+function/methods signatures, such as ``f(x::Int8) = ...`` (see
+:ref:`man-methods`).
 
-When attached to a variable, the ``::`` operator means something a bit
+
+When appended to a *variable* in a statement context, the ``::``
+operator means something a bit
 different: it declares the variable to always have the specified type,
 like a type declaration in a statically-typed language such as C. Every
 value assigned to the variable will be converted to the declared type
@@ -133,10 +139,13 @@ The "declaration" behavior only occurs in specific contexts::
     local x::Int8  # in a local declaration
     x::Int8 = 10   # as the left-hand side of an assignment
 
-In value contexts, such as ``f(x::Int8)``, the ``::`` is a type
-assertion again and not a declaration. Note that these declarations
-cannot be used in global scope currently, in the REPL, since Julia
-does not yet have constant-type globals.
+and applies to the whole current scope, even before the declaration.
+Currently, type declarations cannot be used in global scope, e.g. in
+the REPL, since Julia does not yet have constant-type globals.  Note
+that in a function return statement, the first two of the above
+expressions compute a value and then ``::`` is a type assertion and
+not a declaration.
+
 
 .. _man-abstract-types:
 
