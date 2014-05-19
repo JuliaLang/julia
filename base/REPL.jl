@@ -116,8 +116,8 @@ end
 display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
 
 print_response(d::REPLDisplay, val::ANY, bt, show_value::Bool, have_color::Bool) =
-    print_response(d, outstream(d.repl), val, bt, show_value, have_color)
-function print_response(d::REPLDisplay, errio::IO, val::ANY, bt, show_value::Bool, have_color::Bool)
+    print_response(outstream(d.repl), val, bt, show_value, have_color)
+function print_response(errio::IO, val::ANY, bt, show_value::Bool, have_color::Bool)
     while true
         try
             if bt !== nothing
@@ -127,7 +127,7 @@ function print_response(d::REPLDisplay, errio::IO, val::ANY, bt, show_value::Boo
             else
                 if val !== nothing && show_value
                     try
-                        display(d, val)
+                        display(val)
                     catch err
                         println(errio, "Error showing value of type ", typeof(val), ":")
                         rethrow(err)
@@ -163,6 +163,7 @@ outstream(r::BasicREPL) = r.terminal
 
 function run_frontend(repl::BasicREPL, repl_channel::RemoteRef, response_channel::RemoteRef)
     d = REPLDisplay(repl)
+    pushdisplay(d)
     while true
         write(repl.terminal, "julia> ")
         line = ""
@@ -183,6 +184,7 @@ function run_frontend(repl::BasicREPL, repl_channel::RemoteRef, response_channel
     end
     # terminate backend
     put!(repl_channel, (nothing, -1))
+    popdisplay(d)
 end
 
 ## LineEditREPL ##
@@ -682,8 +684,12 @@ function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,
     ModalInterface([main_prompt, shell_mode, help_mode,hkp])
 end
 
-run_frontend(repl::LineEditREPL, repl_channel, response_channel) =
-    run_interface(repl.t, setup_interface(REPLDisplay(repl), repl_channel, response_channel))
+function run_frontend(repl::LineEditREPL, repl_channel, response_channel)
+    d = REPLDisplay(repl)
+    pushdisplay(d)
+    run_interface(repl.t, setup_interface(d, repl_channel, response_channel))
+    popdisplay(d)
+end
 
 if isdefined(Base, :banner_color)
     banner(io, t) = banner(io, hascolor(t))
@@ -734,6 +740,7 @@ function run_frontend(repl::StreamREPL, repl_channel, response_channel)
     have_color = true
     banner(repl.stream, have_color)
     d = REPLDisplay(repl)
+    pushdisplay(d)
     while repl.stream.open
         if have_color
             print(repl.stream,repl.prompt_color)
@@ -757,6 +764,7 @@ function run_frontend(repl::StreamREPL, repl_channel, response_channel)
     end
     # Terminate Backend
     put!(repl_channel, (nothing, -1))
+    popdisplay(d)
 end
 
 function start_repl_server(port)
