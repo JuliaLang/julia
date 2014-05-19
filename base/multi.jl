@@ -91,7 +91,6 @@ type Worker
     host::ByteString
     port::Uint16
     socket::TcpSocket
-    write_lock
     del_msgs::Array{Any,1}
     add_msgs::Array{Any,1}
     id::Int
@@ -101,8 +100,9 @@ type Worker
     config::Dict
     
     function Worker(host::String, port::Integer, sock::TcpSocket, id::Int)
-        w = new(bytestring(host), uint16(port), sock, RemoteRef(), {}, {}, id, false)
+        w = new(bytestring(host), uint16(port), sock, {}, {}, id, false)
         set_buffer_writes(sock, true)
+        make_lockable(sock)
         w
     end
 end
@@ -162,10 +162,7 @@ end
 
 function send_msg_(w::Worker, kind, args, now::Bool)
     sock = w.socket
-    
-    tid = object_id(current_task())
-    try_lock = isready(w.write_lock) ? fetch(w.write_lock) != tid : true
-    try_lock && put!(w.write_lock, tid)
+    unlock = lock_w(sock; track_recursive=false)    
     
     serialize(sock, kind)
     for arg in args
@@ -177,7 +174,7 @@ function send_msg_(w::Worker, kind, args, now::Bool)
     else
         flush(sock)
     end
-    try_lock && take!(w.write_lock)
+    unlock && unlock_w(sock)    
 end
 
 function flush_gc_msgs()
@@ -673,7 +670,6 @@ end
 
 function remotecall(w::Worker, f, args...)
     rr = RemoteRef(w)
-    #println("$(myid()) asking for $rr")
     send_msg(w, :call, rr2id(rr), f, args)
     rr
 end
@@ -871,7 +867,17 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                     put!(lookup_ref(oid), val)
                 elseif is(msg, :identify_socket)
                     otherid = deserialize(sock)
+                    start = time()
+                    while (myid() == 1) && ((time() - start) < 60.0)
+                        # master process never receives a :identify_socket, hence if myid is 1
+                        # it means we haven't recd a :join_pgrp msg yet and hence don't know our id
+                        sleep(0.05)
+                    end
+                    if myid() == 1
+                        error("Worker process not initialized properly")
+                    end
                     register_worker(Worker("", 0, sock, otherid))
+                    
                 elseif is(msg, :join_pgrp)
                     # first connection; get process group info from client
                     self_pid = LPROC.id = deserialize(sock)
