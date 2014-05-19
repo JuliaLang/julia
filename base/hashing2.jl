@@ -166,9 +166,18 @@ hash(s::String, h::Uint) = hash(bytestring(s), h)
 
 ## hashing collections ##
 
-function hash(v::Union(AbstractArray,Associative), h::Uint)
-    h += uint(isa(v,Associative) ? 0x6d35bb51952d5539 : 0x7f53e68ceb575e76)
-    for x in v
+function hash(a::AbstractArray, h::Uint)
+    h += uint(0x7f53e68ceb575e76)
+    h += hash(size(a))
+    for x in a
+        h = hash(x, h)
+    end
+    return h
+end
+
+function hash(a::Associative, h::Uint)
+    h += uint(0x6d35bb51952d5539)
+    for x in a
         h = hash(x, h)
     end
     return h
@@ -179,7 +188,7 @@ hash(x::(Any,), h::Uint)    = hash(x[1], hash((), h))
 hash(x::(Any,Any), h::Uint) = hash(x[1], hash(x[2], hash((), h)))
 hash(x::Tuple, h::Uint)     = hash(x[1], hash(x[2], hash(tupletail(x), h)))
 
-hash(s::Set, h::Uint) = hash(sort(s.dict.keys[s.dict.slots .!= 0]), h)
+hash(s::Set, h::Uint) = hash(sort(s.dict.keys[s.dict.slots .!= 0]), h+uint(0x852ada37cfe8e0ce))
 
 hash(r::Range{Bool}, h::Uint) = invoke(hash, (Range, Uint), r, h)
 hash(B::BitArray, h::Uint) = hash((size(B),B.chunks), h)
