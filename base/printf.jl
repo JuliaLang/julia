@@ -4,7 +4,7 @@ export @printf, @sprintf
 
 ### printf formatter generation ###
 
-function gen(s::String)
+@hygienic function gen(s::String)
     args = {}
     blk = Expr(:block, :(local neg, pt, len, exp))
     for x in parse(s)
@@ -131,7 +131,7 @@ end
 
 ### printf formatter generation ###
 
-function special_handler(flags::ASCIIString, width::Int)
+@hygienic function special_handler(flags::ASCIIString, width::Int)
     @gensym x
     blk = Expr(:block)
     pad = '-' in flags ? rpad : lpad
@@ -146,7 +146,7 @@ function special_handler(flags::ASCIIString, width::Int)
     x, ex, blk
 end
 
-function pad(m::Int, n, c::Char)
+@hygienic function pad(m::Int, n, c::Char)
     if m <= 1
         :($n > 0 && write(out,$c))
     else
@@ -208,7 +208,7 @@ function print_exp(out, exp)
     write(out, char('0'+rem(exp,10)))
 end
 
-function gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
+@hygienic function gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print integer:
     #  [dDiu]: print decimal digits
     #  [o]:    print octal digits
@@ -226,8 +226,7 @@ function gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # interpret the number
     prefix = ""
     if lowercase(c)=='o'
-        f = '#' in flags ? :int_0ct : :int_oct
-        push!(blk.args, :(($f)($x)))
+	push!(blk.args, '#' in flags ? :(int_0ct($x)) : :(int_oct($x)))
     elseif c=='x'
         '#' in flags && (prefix = "0x")
         push!(blk.args, :(int_hex($x)))
@@ -287,7 +286,7 @@ function gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
     :(($x)::Real), ex
 end
 
-function gen_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
+@hygienic function gen_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print to fixed trailing precision
     #  [fF]: the only choice
     #
@@ -348,7 +347,7 @@ function gen_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
     :(($x)::Real), ex
 end
 
-function gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
+@hygienic function gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print float in scientific form:
     #  [e]: use 'e' to introduce exponent
     #  [E]: use 'E' to introduce exponent
@@ -419,7 +418,7 @@ function gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     :(($x)::Real), ex
 end
 
-function gen_c(flags::ASCIIString, width::Int, precision::Int, c::Char)
+@hygienic function gen_c(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print a character:
     #  [cC]: both the same for us (Unicode)
     #
@@ -440,7 +439,7 @@ function gen_c(flags::ASCIIString, width::Int, precision::Int, c::Char)
     :(($x)::Integer), blk
 end
 
-function gen_s(flags::ASCIIString, width::Int, precision::Int, c::Char)
+@hygienic function gen_s(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print a string:
     #  [sS]: both the same for us (Unicode)
     #
@@ -475,7 +474,7 @@ end
 
 # TODO: faster pointer printing.
 
-function gen_p(flags::ASCIIString, width::Int, precision::Int, c::Char)
+@hygienic function gen_p(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print pointer:
     #  [p]: the only option
     #
@@ -495,7 +494,7 @@ function gen_p(flags::ASCIIString, width::Int, precision::Int, c::Char)
     :(($x)::Ptr), blk
 end
 
-function gen_g(flags::ASCIIString, width::Int, precision::Int, c::Char)
+@hygienic function gen_g(flags::ASCIIString, width::Int, precision::Int, c::Char)
     error("printf \"%g\" format specifier not implemented")
 end
 
@@ -751,7 +750,7 @@ is_str_expr(ex) =
     isa(ex,Expr) && (ex.head == :string || (ex.head == :macrocall && isa(ex.args[1],Symbol) &&
     endswith(string(ex.args[1]),"str")))
 
-function _printf(macroname, io, fmt, args)
+@hygienic function _printf(macroname, io, fmt, args)
     isa(fmt, String) || error("$macroname: format must be a plain static string (no interpolation or prefix)")
     sym_args, blk = gen(fmt)
     if length(sym_args) != length(args)
@@ -780,7 +779,8 @@ macro sprintf(args...)
     !isempty(args) || error("@sprintf: called with zero arguments")
     isa(args[1], String) || is_str_expr(args[1]) || 
         error("@sprintf: first argument must be a format string")
-    :(sprint(io->$(_printf("@sprintf", :io, args[1], args[2:end]))))
+    io = gensym("io")
+    :(sprint($io->$(_printf("@sprintf", io, args[1], args[2:end]))))
 end
 
 end # module
