@@ -43,6 +43,10 @@ debug && println("(Automatic) upper Cholesky factor")
         for i=1:n, j=1:n
             @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
         end
+        E = abs(apd - full(capd))
+        for i=1:n, j=1:n
+            @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
+        end
 
         #Test error bound on linear solver: LAWNS 14, Theorem 2.1
         #This is a surprisingly loose bound...
@@ -56,7 +60,9 @@ debug && println("(Automatic) upper Cholesky factor")
         @test_approx_eq logdet(capd) log(det(capd)) # logdet is less likely to overflow
 
 debug && println("lower Cholesky factor")
-        l = cholfact(apd, :L)[:L]
+        lapd = cholfact(apd, :L)
+        @test_approx_eq full(lapd) apd
+        l = lapd[:L]
         @test_approx_eq l*l' apd
     end
 
