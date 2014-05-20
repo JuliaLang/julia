@@ -35,3 +35,93 @@ R = reducedim((a,b) -> a+b, [1 2; 3 4], 2, 0.0)
 # inferred return types
 rt = Base.return_types(reducedim, (Function, Array{Float64, 3}, Int, Float64))
 @test length(rt) == 1 && rt[1] == Array{Float64, 3}
+
+
+# tests for findmax(A,dim)
+function testFindmax()
+
+    A = rand(3,4,5,18,2)
+
+    # test output dimensions
+    d = 1
+    fm1 = findmax(A,d)
+    @test size(fm1[1]) == (4,5,18,2)
+    @test size(fm1[2]) == (4,5,18,2)
+
+    d = 3
+    fm1 = findmax(A,d)
+    @test size(fm1[1]) == (3,4,18,2)
+    @test size(fm1[2]) == (3,4,18,2)
+    
+    d = 5
+    fm1 = findmax(A,d)
+    @test size(fm1[1]) == (3,4,5,18)
+    @test size(fm1[2]) == (3,4,5,18)
+
+
+    # test results against mapslices
+    d = 2
+    base = mapslices(Base.findmax,A,d)
+    mine = findmax(A,d)
+
+    for i1=1:size(A,1)
+        for i3=1:size(A,3)
+            for i4=1:size(A,4)
+                for i5=1:size(A,5)
+                    @test base[i1,:,i3,i4,i5][1][1] == mine[1][i1,i3,i4,i5]
+                    @test base[i1,:,i3,i4,i5][1][2] == mine[2][i1,i3,i4,i5]
+                end
+            end
+        end
+    end
+
+    d = 5
+    base = mapslices(Base.findmax,A,d)
+    mine = findmax(A,d)
+
+    for i1=1:size(A,1)
+        for i2=1:size(A,2)
+            for i3=1:size(A,3)
+                for i4=1:size(A,4)
+                    @test base[i1,i2,i3,i4,:][1][1] == mine[1][i1,i2,i3,i4]
+                    @test base[i1,i2,i3,i4,:][1][2] == mine[2][i1,i2,i3,i4]
+                end
+            end
+        end
+    end
+
+    d = 1
+    base = mapslices(Base.findmax,A,d)
+    mine = findmax(A,d)
+
+    for i2=1:size(A,2)
+        for i3=1:size(A,3)
+            for i4=1:size(A,4)
+                for i5=1:size(A,5)
+                    @test base[:,i2,i3,i4,i5][1][1] == mine[1][i2,i3,i4,i5]
+                    @test base[:,i2,i3,i4,i5][1][2] == mine[2][i2,i3,i4,i5]
+                end
+            end
+        end
+    end
+
+    # test timing
+    # timing worsense for mapslices
+    # the more dims you have. surprise.
+    A = rand(10,10,10,50,10,10,10)
+    d = 4
+    function xbase (A,d)
+        mapslices(Base.findmax,A,d)
+        return nothing
+    end
+
+    function xmine (A,d)
+        xmine = findmax(A,d)
+        return nothing
+    end
+
+    @time x1=xbase(A,d);
+    @time x2=xmine(A,d);
+
+
+end  
