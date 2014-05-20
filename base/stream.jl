@@ -656,10 +656,10 @@ function read!{Uint8}(s::AsyncStream, a::Vector{Uint8})
         return read!(sbuf, a)
     end
     
-     if nb <= 65536 # Arbitrary 64K limit under which we are OK with copying the array from the stream's buffer
+    if nb <= 65536 # Arbitrary 64K limit under which we are OK with copying the array from the stream's buffer
         wait_readnb(s,nb)
         read!(sbuf, a)
-     else
+    else
         stop_reading(s) # Just playing it safe, since we are going to switch buffers.
         newbuf = PipeBuffer(a, nb) 
         newbuf.size = 0
@@ -667,9 +667,9 @@ function read!{Uint8}(s::AsyncStream, a::Vector{Uint8})
         write(newbuf, sbuf) 
         wait_readnb(s,nb)
         s.buffer = sbuf
-     end
-     return a
-end    
+    end
+    return a
+end
 
 function read{T}(s::AsyncStream, ::Type{T}, dims::Dims) 
     isbits(T) || error("read from buffer only supports bits types or arrays of bits types")

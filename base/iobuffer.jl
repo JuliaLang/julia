@@ -262,4 +262,3 @@ function readuntil(io::IOBuffer, delim::Uint8)
     end
     read!(io, Array(Uint8, nb))
 end
-
