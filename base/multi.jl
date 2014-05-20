@@ -867,17 +867,9 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                     put!(lookup_ref(oid), val)
                 elseif is(msg, :identify_socket)
                     otherid = deserialize(sock)
-                    start = time()
-                    while (myid() == 1) && ((time() - start) < 60.0)
-                        # master process never receives a :identify_socket, hence if myid is 1
-                        # it means we haven't recd a :join_pgrp msg yet and hence don't know our id
-                        sleep(0.05)
-                    end
-                    if myid() == 1
-                        error("Worker process not initialized properly")
-                    end
+                    assert(myid() != 1) # master process never receives a :identify_socket and 
+                                        # we expect to have recd and processed a :join_pgrp by now
                     register_worker(Worker("", 0, sock, otherid))
-                    
                 elseif is(msg, :join_pgrp)
                     # first connection; get process group info from client
                     self_pid = LPROC.id = deserialize(sock)
