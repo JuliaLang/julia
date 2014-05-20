@@ -155,11 +155,12 @@ end
 ## printing with color ##
 
 function with_output_color(f::Function, color::Symbol, io::IO, args...)
-    have_color || return f(io, args...)
-    print(io, get(text_colors, color, color_normal))
-    try f(io, args...)
+    buf = IOBuffer()
+    have_color && print(buf, get(text_colors, color, color_normal))
+    try f(buf, args...)
     finally
-        print(io, color_normal)
+        have_color && print(buf, color_normal)
+        print(io, takebuf_string(buf))
     end
 end
 
@@ -167,12 +168,15 @@ print_with_color(color::Symbol, io::IO, msg::String...) =
     with_output_color(print, color, io, msg...)
 print_with_color(color::Symbol, msg::String...) =
     print_with_color(color, STDOUT, msg...)
+println_with_color(color::Symbol, io::IO, msg::String...) =
+    with_output_color(println, color, io, msg...)
+println_with_color(color::Symbol, msg::String...) =
+    println_with_color(color, STDOUT, msg...)
 
 ## warnings and messages ##
 
 function info(msg::String...; prefix="INFO: ")
-    with_output_color(print, :blue, STDERR, prefix, chomp(string(msg...)))
-    println(STDERR)
+    println_with_color(:blue, STDERR, prefix, chomp(string(msg...)))
 end
 
 # print a warning only once
@@ -189,11 +193,13 @@ function warn(msg::String...; prefix="WARNING: ", once=false, key=nothing, bt=no
         (key in have_warned) && return
         push!(have_warned, key)
     end
-    with_output_color(print, :red,  STDERR, prefix, str)
-    if bt !== nothing
-        show_backtrace(STDERR, bt)
+    with_output_color(:red, STDERR) do io
+        print(io, prefix, str)
+        if bt !== nothing
+            show_backtrace(io, bt)
+        end
+        println(io)
     end
-    println(STDERR)
 end
 
 warn(err::Exception; prefix="ERROR: ", kw...) =

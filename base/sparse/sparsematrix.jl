@@ -293,7 +293,7 @@ function findn{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
 
     count = 1
     for col = 1 : S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
-        if S.nzval[k] != zero(Tv)
+        if S.nzval[k] != 0
             I[count] = S.rowval[k]
             J[count] = col
             count += 1
@@ -317,7 +317,7 @@ function findnz{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
 
     count = 1
     for col = 1 : S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
-        if S.nzval[k] != zero(Tv)
+        if S.nzval[k] != 0
             I[count] = S.rowval[k]
             J[count] = col
             V[count] = S.nzval[k]
@@ -335,56 +335,48 @@ function findnz{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     return (I, J, V)
 end
 
-truebools(n::Integer) = ones(Bool, n)
-function sprand{T}(m::Integer, n::Integer, density::FloatingPoint, rng::Function,::Type{T}=eltype(rng(1)))
-    0 <= density <= 1 || throw(ArgumentError("density must be between 0 and 1"))
+function sprand{T}(m::Integer, n::Integer, density::FloatingPoint,
+                   rng::Function,::Type{T}=eltype(rng(1)))
+    0 <= density <= 1 || throw(ArgumentError("$density not in [0,1]"))
     N = n*m
     N == 0 && return spzeros(T,m,n)
     N == 1 && return rand() <= density ? sparse(rng(1)) : spzeros(T,1,1)
-    # if density < 0.5, we'll randomly generate the indices to set
-    #        otherwise, we'll randomly generate the indices to skip
-    K = (density > 0.5) ? N*(1-density) : N*density
-    # Use Newton's method to invert the birthday problem
-    l = log(1.0-1.0/N)
-    k = K
-    k = k + ((1-K/N)*exp(-k*l) - 1)/l
-    k = k + ((1-K/N)*exp(-k*l) - 1)/l # for K<N/2, 2 iterations suffice
-    ik = int(k)
-    ind = sort(rand(1:N, ik))
-    uind = Array(Int, 0)   # unique indices
-    sizehint(uind, int(N*density))
-    if density < 0.5
-        if ik == 0
-            return sparse(Int[],Int[],Array(T,0),m,n)
-        end
-        j = ind[1]
-        push!(uind, j)
-        uj = j
-        for i = 2:length(ind)
-            j = ind[i]
-            if j != uj
-                push!(uind, j)
-                uj = j
-            end
-        end
-    else
-        push!(ind, N+1) # sentinel
-        ii = 1
-        for i = 1:N
-            if i != ind[ii]
-                push!(uind, i)
-            else
-                while (i == ind[ii])
-                    ii += 1
-                end
-            end
+
+    I, J = Array(Int, 0), Array(Int, 0) # indices of nonzero elements
+    sizehint(I, int(N*density))
+    sizehint(J, int(N*density))
+
+    # density of nonzero columns:
+    L = log1p(-density)
+    coldensity = -expm1(m*L) # = 1 - (1-density)^m 
+    colsparsity = exp(m*L) # = 1 - coldensity
+    L = 1/L
+    
+    rows = Array(Int, 0)
+    for j in randsubseq(1:n, coldensity)
+        # To get the right statistics, we *must* have a nonempty column j
+        # even if p*m << 1.   To do this, we use an approach similar to
+        # the one in randsubseq to compute the expected first nonzero row k,
+        # except given that at least one is nonzero (via Bayes' rule);
+        # carefully rearranged to avoid excessive roundoff errors.
+        k = ceil(log(colsparsity + rand()*coldensity) * L)
+        ik = k < 1 ? 1 : k > m ? m : int(k) # roundoff-error/underflow paranoia
+        randsubseq!(rows, 1:m-ik, density)
+        push!(rows, m-ik+1)
+        append!(I, rows)
+        nrows = length(rows)
+        Jlen = length(J)
+        resize!(J, Jlen+nrows)
+        for i = Jlen+1:length(J)
+            J[i] = j
         end
     end
-    I, J = ind2sub((m,n), uind)
-    return sparse_IJ_sorted!(I, J, rng(length(uind)), m, n, +)  # it will never need to combine
+    return sparse_IJ_sorted!(I, J, rng(length(I)), m, n, +)  # it will never need to combine
 end
+
 sprand(m::Integer, n::Integer, density::FloatingPoint) = sprand(m,n,density,rand,Float64)
 sprandn(m::Integer, n::Integer, density::FloatingPoint) = sprand(m,n,density,randn,Float64)
+truebools(n::Integer) = ones(Bool, n)
 sprandbool(m::Integer, n::Integer, density::FloatingPoint) = sprand(m,n,density,truebools,Bool)
 
 spones{T}(S::SparseMatrixCSC{T}) =
@@ -418,14 +410,83 @@ end
 
 ## Unary arithmetic and boolean operators
 
-for op in (:-, )
+# Operations that may map nonzeros to zero, and zero to zero
+# Result is sparse
+for (op, restype) in ((:iceil, Int), (:ceil, Nothing), 
+                      (:ifloor, Int), (:floor, Nothing),
+                      (:itrunc, Int), (:trunc, Nothing),
+                      (:iround, Int), (:round, Nothing),
+                      (:sin, Nothing), (:tan, Nothing), 
+                      (:sinh, Nothing), (:tanh, Nothing), 
+                      (:asin, Nothing), (:atan, Nothing), 
+                      (:asinh, Nothing), (:atanh, Nothing), 
+                      (:sinpi, Nothing), (:cosc, Nothing), 
+                      (:sind, Nothing), (:tand, Nothing), 
+                      (:asind, Nothing), (:atand, Nothing) )
+    @eval begin
+
+        function ($op){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti})
+            nfilledA = nfilled(A)
+            colptrB = Array(Ti, A.n+1)
+            rowvalB = Array(Ti, nfilledA)
+            nzvalB = Array($(restype==Nothing ? (:Tv) : restype), nfilledA)
+
+            k = 0 # number of additional zeros introduced by op(A)
+            for i = 1 : A.n
+                colptrB[i] = A.colptr[i] - k
+                for j = A.colptr[i] : A.colptr[i+1]-1
+                    opAj = $(op)(A.nzval[j])
+                    if opAj == 0
+                        k += 1
+                    else
+                        rowvalB[j - k] = A.rowval[j]
+                        nzvalB[j - k] = opAj
+                    end
+                end
+            end
+            colptrB[end] = A.colptr[end] - k
+            deleteat!(rowvalB, colptrB[end]:nfilledA)
+            deleteat!(nzvalB, colptrB[end]:nfilledA)
+            return SparseMatrixCSC(A.m, A.n, colptrB, rowvalB, nzvalB)
+        end
+
+    end # quote
+end # macro
+
+# Operations that map nonzeros to nonzeros, and zeros to zeros
+# Result is sparse
+for op in (:-, :abs, :abs2, :log1p, :expm1)
     @eval begin
 
         function ($op)(A::SparseMatrixCSC)
-            B = copy(A)
+            B = similar(A)
             nzvalB = B.nzval
+            nzvalA = A.nzval
             for i=1:length(nzvalB)
-                nzvalB[i] = ($op)(nzvalB[i])
+                nzvalB[i] = ($op)(nzvalA[i])
+            end
+            return B
+        end
+
+    end
+end
+
+# Operations that map nonzeros to nonzeros, and zeros to nonzeros
+# Result is dense
+for op in (:cos, :cosh, :acos, :sec, :csc, :cot, :acot, :sech, 
+           :csch, :coth, :asech, :acsch, :cospi, :sinc, :cosd, 
+           :cotd, :cscd, :secd, :acosd, :acotd, :log, :log2, :log10,
+           :exp, :exp2, :exp10)
+    @eval begin
+
+        function ($op){Tv}(A::SparseMatrixCSC{Tv})
+            B = fill($(op)(zero(Tv)), size(A))
+            for col = 1 : A.n                
+                for j = A.colptr[col] : A.colptr[col+1]-1
+                    row = A.rowval[j]
+                    nz = A.nzval[j]
+                    B[row,col] = $(op)(nz)
+                end
             end
             return B
         end
@@ -530,8 +591,8 @@ for (op, restype) in ( (:+, Nothing), (:-, Nothing), (:.*, Nothing),
                 colptrS[col+1] = ptrS
             end
 
-            splice!(rowvalS, colptrS[end]:length(rowvalS))
-            splice!(nzvalS, colptrS[end]:length(nzvalS))
+            deleteat!(rowvalS, colptrS[end]:length(rowvalS))
+            deleteat!(nzvalS, colptrS[end]:length(nzvalS))
             return SparseMatrixCSC(m, n, colptrS, rowvalS, nzvalS)
         end
 
@@ -992,8 +1053,8 @@ function setindex!{T,Ti}(A::SparseMatrixCSC{T,Ti}, v, i0::Integer, i1::Integer)
             end
         end
         if loc != -1
-            splice!(A.rowval, loc)
-            splice!(A.nzval, loc)
+            deleteat!(A.rowval, loc)
+            deleteat!(A.nzval, loc)
             for j = (i1+1):(A.n+1)
                 A.colptr[j] = A.colptr[j] - 1
             end
@@ -1078,11 +1139,184 @@ end
 setindex!{T<:Integer}(A::SparseMatrixCSC, v::AbstractMatrix, i::Integer, J::AbstractVector{T}) = setindex!(A, v, [i], J)
 setindex!{T<:Integer}(A::SparseMatrixCSC, v::AbstractMatrix, I::AbstractVector{T}, j::Integer) = setindex!(A, v, I, [j])
 
-setindex!{Tv,T<:Integer}(A::SparseMatrixCSC{Tv}, x::Number, I::AbstractVector{T}, J::AbstractVector{T}) =
-      setindex!(A, fill(x::Tv, length(I), length(J)), I, J)
+setindex!{T<:Integer}(A::SparseMatrixCSC, x::Number, i::Integer, J::AbstractVector{T}) = setindex!(A, x, [i], J)
+setindex!{T<:Integer}(A::SparseMatrixCSC, x::Number, I::AbstractVector{T}, j::Integer) = setindex!(A, x, I, [j])
+
+setindex!{Tv,T<:Integer}(A::SparseMatrixCSC{Tv}, x::Number, I::AbstractVector{T}, J::AbstractVector{T}) = 
+    (0 == x) ? spdelete!(A, I, J) : spset!(A, convert(Tv,x), I, J)
+
+function spset!{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv}, x::Tv, I::AbstractVector{Ti}, J::AbstractVector{Ti})
+    !issorted(I) && (I = I[sortperm(I)])
+    !issorted(J) && (J = J[sortperm(J)])
+
+    m, n = size(A)
+    ((I[end] > m) || (J[end] > n)) && throw(DimensionMismatch(""))
+    nnzA = nfilled(A) + length(I) * length(J)
+
+    colptrA = colptr = A.colptr
+    rowvalA = rowval = A.rowval
+    nzvalA = nzval = A.nzval
+
+    rowidx = 1
+    nadd = 0
+    for col in 1:n
+        rrange = colptr[col]:(colptr[col+1]-1)
+        (nadd > 0) && (colptrA[col] = colptr[col] + nadd)
+
+        if col in J
+            if isempty(rrange) # set new vals only
+                nincl = length(I)
+                if nadd == 0
+                    colptrA = copy(colptr)
+                    rowvalA = Array(Ti, nnzA); copy!(rowvalA, 1, rowval, 1, length(rowval))
+                    nzvalA = Array(Tv, nnzA); copy!(nzvalA, 1, nzval, 1, length(nzval))
+                end
+                r = rowidx:(rowidx+nincl-1)
+                rowvalA[r] = I
+                nzvalA[r] = x
+                rowidx += nincl
+                nadd += nincl
+            else # set old + new vals
+                old_ptr = rrange[1]
+                old_stop = rrange[end]
+                new_ptr = 1
+                new_stop = length(I)
+
+                while true
+                    old_row = rowval[old_ptr]
+                    new_row = I[new_ptr]
+                    if old_row < new_row
+                        rowvalA[rowidx] = old_row
+                        nzvalA[rowidx] = nzval[old_ptr]
+                        rowidx += 1
+                        old_ptr += 1
+                    else
+                        if old_row == new_row
+                            old_ptr += 1
+                        else
+                            if nadd == 0
+                                colptrA = copy(colptr)
+                                rowvalA = Array(Ti, nnzA); copy!(rowvalA, 1, rowval, 1, length(rowval))
+                                nzvalA = Array(Tv, nnzA); copy!(nzvalA, 1, nzval, 1, length(nzval))
+                            end
+                            nadd += 1
+                        end
+                        rowvalA[rowidx] = new_row
+                        nzvalA[rowidx] = x
+                        rowidx += 1
+                        new_ptr += 1
+                    end
+
+                    if old_ptr > old_stop
+                        if new_ptr <= new_stop
+                            if nadd == 0
+                                colptrA = copy(colptr)
+                                rowvalA = Array(Ti, nnzA); copy!(rowvalA, 1, rowval, 1, length(rowval))
+                                nzvalA = Array(Tv, nnzA); copy!(nzvalA, 1, nzval, 1, length(nzval))
+                            end
+                            r = rowidx:(rowidx+(new_stop-new_ptr))
+                            rowvalA[r] = I[new_ptr:new_stop]
+                            nzvalA[r] = x
+                            rowidx += length(r)
+                            nadd += length(r)
+                        end
+                        break
+                    end
+
+                    if new_ptr > new_stop
+                        nincl = old_stop-old_ptr+1
+                        copy!(rowvalA, rowidx, rowval, old_ptr, nincl)
+                        copy!(nzvalA, rowidx, nzval, old_ptr, nincl)
+                        rowidx += nincl
+                        break
+                    end
+                end
+            end
+        elseif !isempty(rrange) # set old vals only
+            nincl = length(rrange)
+            copy!(rowvalA, rowidx, rowval, rrange[1], nincl)
+            copy!(nzvalA, rowidx, nzval, rrange[1], nincl)
+            rowidx += nincl
+        end
+    end
+
+    if nadd > 0
+        colptrA[n+1] = rowidx
+        deleteat!(rowvalA, rowidx:nnzA)
+        deleteat!(nzvalA, rowidx:nnzA)
+        
+        A.colptr = colptrA
+        A.rowval = rowvalA
+        A.nzval = nzvalA
+    end
+    return A
+end
+
+function spdelete!{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv}, I::AbstractVector{Ti}, J::AbstractVector{Ti})
+    m, n = size(A)
+    nnzA = nfilled(A)
+    (nnzA == 0) && (return A)
+
+    !issorted(I) && (I = I[sortperm(I)])
+    !issorted(J) && (J = J[sortperm(J)])
+
+    ((I[end] > m) || (J[end] > n)) && throw(DimensionMismatch(""))
+
+    colptr = colptrA = A.colptr
+    rowval = rowvalA = A.rowval
+    nzval = nzvalA = A.nzval
+    rowidx = 1
+    ndel = 0
+    for col in 1:n
+        rrange = colptr[col]:(colptr[col+1]-1)
+        (ndel > 0) && (colptrA[col] = colptr[col] - ndel)
+        if isempty(rrange) || !(col in J) 
+            nincl = length(rrange)
+            if(ndel > 0) && !isempty(rrange) 
+                copy!(rowvalA, rowidx, rowval, rrange[1], nincl)
+                copy!(nzvalA, rowidx, nzval, rrange[1], nincl)
+            end
+            rowidx += nincl
+        else
+            for ridx in rrange
+                if rowval[ridx] in I
+                    if ndel == 0
+                        colptrA = copy(colptr)
+                        rowvalA = copy(rowval)
+                        nzvalA = copy(nzval)
+                    end
+                    ndel += 1
+                else
+                    if ndel > 0
+                        rowvalA[rowidx] = rowval[ridx]
+                        nzvalA[rowidx] = nzval[ridx]
+                    end
+                    rowidx += 1
+                end
+            end
+        end
+    end
+
+    if ndel > 0
+        colptrA[n+1] = rowidx
+        deleteat!(rowvalA, rowidx:nnzA)
+        deleteat!(nzvalA, rowidx:nnzA)
+        
+        A.colptr = colptrA
+        A.rowval = rowvalA
+        A.nzval = nzvalA
+    end
+    return A
+end
 
 setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, S::Matrix, I::AbstractVector{T}, J::AbstractVector{T}) =
       setindex!(A, convert(SparseMatrixCSC{Tv,Ti}, S), I, J)
+
+setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, v::AbstractVector, I::AbstractVector{T}, j::Integer) = setindex!(A, v, I, [j])
+setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, v::AbstractVector, i::Integer, J::AbstractVector{T}) = setindex!(A, v, [i], J)
+setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, v::AbstractVector, I::AbstractVector{T}, J::AbstractVector{T}) =
+      setindex!(A, reshape(v, length(I), length(J)), I, J)
+
 
 # A[I,J] = B
 function setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}, I::AbstractVector{T}, J::AbstractVector{T})
@@ -1193,8 +1427,8 @@ function setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixC
         colB += 1
     end
 
-    splice!(rowvalS, colptrS[end]:length(rowvalS))
-    splice!(nzvalS, colptrS[end]:length(nzvalS))
+    deleteat!(rowvalS, colptrS[end]:length(rowvalS))
+    deleteat!(nzvalS, colptrS[end]:length(nzvalS))
 
     A.colptr = colptrS
     A.rowval = rowvalS
@@ -1352,7 +1586,7 @@ function istriu{Tv}(A::SparseMatrixCSC{Tv})
             if A.rowval[l1-i] <= col
                 break
             end
-            if A.nzval[l1-i] != zero(Tv)
+            if A.nzval[l1-i] != 0
                 return false
             end
         end
@@ -1366,7 +1600,7 @@ function istril{Tv}(A::SparseMatrixCSC{Tv})
             if A.rowval[i] >= col
                 break
             end
-            if A.nzval[i] != zero(Tv)
+            if A.nzval[i] != 0
                 return false
             end
         end

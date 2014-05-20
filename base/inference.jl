@@ -255,7 +255,7 @@ const tupleref_tfunc = function (A, t, i)
             return T
         end
     end
-    return wrapType ? Type{T} : T
+    return wrapType ? (isa(T,Type) ? Type{T} : typeof(T)) : T
 end
 t_func[tupleref] = (2, 2, tupleref_tfunc)
 
@@ -561,6 +561,9 @@ function isconstantfunc(f::ANY, sv::StaticVarInfo)
 
     if isa(f,QuoteNode) && isa(f.value, Function)
         return f.value
+    end
+    if isa(f,Function)
+        return f
     end
     if isa(f,SymbolNode)
         f = f.name
@@ -1008,12 +1011,12 @@ function abstract_eval_global(M, s::Symbol)
     return Any
 end
 
-function abstract_eval_symbol(s::Symbol, vtypes, sv::StaticVarInfo)
+function abstract_eval_symbol(s::Symbol, vtypes::ObjectIdDict, sv::StaticVarInfo)
     if haskey(sv.cenv,s)
         # consider closed vars to always have their propagated (declared) type
         return sv.cenv[s]
     end
-    t = is(vtypes,()) ? NF : get(vtypes,s,NF)
+    t = get(vtypes,s,NF)
     if is(t,NF)
         sp = sv.sp
         for i=1:2:length(sp)
@@ -1032,6 +1035,10 @@ function abstract_eval_symbol(s::Symbol, vtypes, sv::StaticVarInfo)
                 end
                 return abstract_eval_constant(val)
             end
+        end
+        if s in sv.vars
+            # local variable use not reached
+            return Top
         end
         # global
         return abstract_eval_global(s)
@@ -1078,21 +1085,6 @@ function abstract_interpret(e::ANY, vtypes, sv::StaticVarInfo)
     return vtypes
 end
 
-tchanged(n::ANY, o::ANY) = is(o,NF) || (!is(n,NF) && !(n <: o))
-
-function stchanged(new::Union(StateUpdate,VarTable), old, vars)
-    if is(old,())
-        return true
-    end
-    for i = 1:length(vars)
-        v = vars[i]
-        if tchanged(new[v], get(old,v,NF))
-            return true
-        end
-    end
-    return false
-end
-
 function type_too_complex(t::ANY, d)
     if d > MAX_TYPE_DEPTH
         return true
@@ -1129,6 +1121,9 @@ function tmerge(typea::ANY, typeb::ANY)
     if typeb <: typea
         return typea
     end
+    if typea <: Tuple && typeb <: Tuple
+        return Tuple
+    end
     u = Union(typea, typeb)
     if length(u.types) > MAX_TYPEUNION_LEN || type_too_complex(u, 0)
         # don't let type unions get too big
@@ -1138,10 +1133,12 @@ function tmerge(typea::ANY, typeb::ANY)
     return u
 end
 
-function stupdate(state, changes::Union(StateUpdate,VarTable), vars)
-    if is(state,())
-        state = ObjectIdDict()
-    end
+tchanged(n::ANY, o::ANY) = is(o,NF) || (!is(n,NF) && !(n <: o))
+
+stupdate(state::(), changes::VarTable, vars) = copy(changes)
+stupdate(state::(), changes::StateUpdate, vars) = stupdate(ObjectIdDict(), changes, vars)
+
+function stupdate(state::ObjectIdDict, changes::Union(StateUpdate,VarTable), vars)
     for i = 1:length(vars)
         v = vars[i]
         newtype = changes[v]
@@ -1151,6 +1148,19 @@ function stupdate(state, changes::Union(StateUpdate,VarTable), vars)
         end
     end
     state
+end
+
+function stchanged(new::Union(StateUpdate,VarTable), old, vars)
+    if is(old,())
+        return true
+    end
+    for i = 1:length(vars)
+        v = vars[i]
+        if tchanged(new[v], get(old,v,NF))
+            return true
+        end
+    end
+    return false
 end
 
 function findlabel(body, l)
@@ -1491,11 +1501,23 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         if is(def.tfunc,())
             def.tfunc = {}
         end
-        push!(def.tfunc::Array{Any,1}, atypes)
+        tfarr = def.tfunc::Array{Any,1}
+        idx = -1
+        for i = 1:3:length(tfarr)
+            if typeseq(tfarr[i],atypes)
+                idx = i; break
+            end
+        end
+        if idx == -1
+            l = length(tfarr)
+            idx = l+1
+            resize!(tfarr, l+3)
+        end
+        tfarr[idx] = atypes
         # in the "rec" state this tree will not be used again, so store
         # just the return type in place of it.
-        push!(def.tfunc::Array{Any,1}, rec ? frame.result : fulltree)
-        push!(def.tfunc::Array{Any,1}, rec)
+        tfarr[idx+1] = rec ? frame.result : fulltree
+        tfarr[idx+2] = rec
     else
         def.tfunc[tfunc_idx] = rec ? frame.result : fulltree
         def.tfunc[tfunc_idx+1] = rec
@@ -1605,7 +1627,8 @@ function type_annotate(ast::Expr, states::Array{Any,1}, sv::ANY, rettype::ANY,
     closures = {}
     body = ast.args[3].args::Array{Any,1}
     for i=1:length(body)
-        body[i] = eval_annotate(body[i], states[i], sv, decls, closures)
+        st_i = states[i]
+        body[i] = eval_annotate(body[i], (st_i === () ? emptydict : st_i), sv, decls, closures)
     end
     ast.args[3].typ = rettype
 
@@ -1783,6 +1806,8 @@ function occurs_more(e::ANY, pred, n)
     return 0
 end
 
+const emptydict = ObjectIdDict()
+
 function exprtype(x::ANY)
     if isa(x,Expr)
         return x.typ
@@ -1795,7 +1820,7 @@ function exprtype(x::ANY)
         if is_local(sv, x)
             return Any
         end
-        return abstract_eval(x, (), sv)
+        return abstract_eval(x, emptydict, sv)
     elseif isa(x,QuoteNode)
         v = x.value
         if isa(v,Type)
@@ -1864,7 +1889,12 @@ function effect_free(e::ANY, sv, allow_volatile::Bool)
             if is_known_call_p(e, is_pure_builtin, sv)
                 if !allow_volatile && is_known_call_p(e, (f)->contains_is(_pure_builtins_volatile, f), sv)
                     # arguments must be immutable to ensure e is affect_free
+                    first = true
                     for a in ea
+                        if first # first "arg" is the function name
+                            first = false
+                            continue
+                        end
                         if isa(a,Symbol)
                             return false
                         end
@@ -1890,7 +1920,22 @@ function effect_free(e::ANY, sv, allow_volatile::Bool)
                 end
                 return true
             end
-        elseif e.head === :new || e.head == :return
+        elseif e.head == :new
+            first = !allow_volatile
+            for a in ea
+                if first
+                    first = false
+                    typ = exprtype(a)
+                    if !isType(typ) || !isa((typ::Type).parameters[1],DataType) || ((typ::Type).parameters[1]::DataType).mutable
+                        return false
+                    end
+                end
+                if !effect_free(a,sv,allow_volatile)
+                    return false
+                end
+            end
+            return true
+        elseif e.head == :return
             for a in ea
                 if !effect_free(a,sv,allow_volatile)
                     return false
@@ -2136,16 +2181,19 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
         for j = length(body.args):-1:1
             b = body.args[j]
             if occ < 1
-                occ += occurs_more(b, x->is(x,a), 1)
+                occ += occurs_more(b, x->is(x,a), 5)
             end
-            if occ > 0 && (!affect_free || !effect_free(b, sv, true)) #TODO: we could short-circuit this test better by memoizing effect_free(b) in the for loop over i
+            if occ > 0 && affect_free && !effect_free(b, sv, true) #TODO: we could short-circuit this test better by memoizing effect_free(b) in the for loop over i
                 affect_free = false
+            end
+            if occ > 5
+                occ = 6
                 break
             end
         end
         free = effect_free(aei,sv,true)
-        affect_unfree = (islocal || (affect_free && !free) || (!affect_free && !effect_free(aei,sv,false)))
-        if affect_unfree || (occ==0 && is(aeitype,None))
+        if ((occ==0 && is(aeitype,None)) || islocal || (occ > 1 && !inline_worthy(aei, occ)) ||
+                (affect_free && !free) || (!affect_free && !effect_free(aei,sv,false)))
             if occ != 0 # islocal=true is implied
                 # introduce variable for this argument
                 vnew = unique_name(enclosing_ast, ast)
@@ -2238,17 +2286,18 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
     return (expr, stmts)
 end
 
-function inline_worthy(body::Expr)
-    # see if body is only "return <expr>", or is otherwise considered worth inlining
-    if length(body.args) == 1
-        return true
-    end
+inline_worthy(body, occurences::Int) = true
+function inline_worthy(body::Expr, occurences::Int=1) # 0 < occurrences <= 6
 #    if isa(body.args[1],QuoteNode) && (body.args[1]::QuoteNode).value === :inline
 #        shift!(body.args)
 #        return true
 #    end
-    if length(body.args) < 4 && occurs_more(body, e->true, 50) < 50
-        return true
+    symlim = div(6,occurences)
+    if length(body.args) < symlim
+        symlim *= 6
+        if occurs_more(body, e->true, symlim) < symlim
+            return true
+        end
     end
     return false
 end

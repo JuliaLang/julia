@@ -441,10 +441,15 @@ function setopt(sock::UdpSocket; multicast_loop = nothing, multicast_ttl=nothing
     end
 end
 
-_uv_hook_alloc_buf(sock::UdpSocket,size::Int32) = (c_malloc(size),size)
+_uv_hook_alloc_buf(sock::UdpSocket,size::Uint) = (c_malloc(size),size)
 
-_recv_start(sock::UdpSocket) = uv_error("recv_start",ccall(:uv_udp_recv_start,Cint,(Ptr{Void},Ptr{Void},Ptr{Void}),
-                                                sock.handle,cglobal(:jl_uv_alloc_buf),cglobal(:jl_uv_recvcb)))
+function _recv_start(sock::UdpSocket)
+    if ccall(:uv_is_active,Cint,(Ptr{Void},),sock.handle) == 0
+        uv_error("recv_start",ccall(:uv_udp_recv_start,Cint,(Ptr{Void},Ptr{Void},Ptr{Void}),
+                                        sock.handle,cglobal(:jl_uv_alloc_buf),cglobal(:jl_uv_recvcb)))
+    end
+end
+
 _recv_stop(sock::UdpSocket) = uv_error("recv_stop",ccall(:uv_udp_recv_stop,Cint,(Ptr{Void},),sock.handle))
 
 function recv(sock::UdpSocket)
@@ -456,8 +461,7 @@ function recv(sock::UdpSocket)
     stream_wait(sock,sock.recvnotify)::Vector{Uint8}
 end
 
-function _uv_hook_recv(sock::UdpSocket, nread::Ptr{Void}, buf_addr::Ptr{Void}, buf_size::Int32, addr::Ptr{Void}, flags::Int32)
-    nread = convert(Cssize_t,nread)
+function _uv_hook_recv(sock::UdpSocket, nread::Int, buf_addr::Ptr{Void}, buf_size::Uint, addr::Ptr{Void}, flags::Int32)
     if flags & UV_UDP_PARTIAL > 0
         # TODO: Decide what to do in this case. For now throw an error
         c_free(buf_addr)
@@ -542,6 +546,7 @@ const _sizeof_uv_interface_address = ccall(:jl_uv_sizeof_interface_address,Int32
 function getipaddr()
     addr = Array(Ptr{Uint8},1)
     count = Array(Int32,1)
+    lo_present = false
     err = ccall(:jl_uv_interface_addresses,Int32,(Ptr{Ptr{Uint8}},Ptr{Int32}),addr,count)
     addr, count = addr[1],count[1]
     if err != 0
@@ -551,6 +556,7 @@ function getipaddr()
     for i = 0:(count-1)
         current_addr = addr + i*_sizeof_uv_interface_address
         if 1 == ccall(:jl_uv_interface_address_is_internal,Int32,(Ptr{Uint8},),current_addr)
+            lo_present = true
             continue
         end
         sockaddr = ccall(:jl_uv_interface_address_sockaddr,Ptr{Void},(Ptr{Uint8},),current_addr)
@@ -564,7 +570,7 @@ function getipaddr()
         end
     end
     ccall(:uv_free_interface_addresses,Void,(Ptr{Uint8},Int32),addr,count)
-    return ip"127.0.0.1"
+    lo_present ? ip"127.0.0.1" : error("No networking interface available")
 end
 
 ##

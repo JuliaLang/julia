@@ -31,7 +31,11 @@ mean{T}(v::AbstractArray{T}, region) =
 
 function median!{T<:Real}(v::AbstractVector{T}; checknan::Bool=true)
     isempty(v) && error("median of an empty array is undefined")
-    checknan && any(isnan,v) && error("median of an array with NaNs is undefined")
+    if checknan
+        for x in v
+            isnan(x) && return x
+        end
+    end
     n = length(v)
     if isodd(n)
         return select!(v,div(n+1,2))
@@ -42,6 +46,8 @@ function median!{T<:Real}(v::AbstractVector{T}; checknan::Bool=true)
 end
 median{T<:Real}(v::AbstractArray{T}; checknan::Bool=true) =
     median!(vec(copy(v)), checknan=checknan)
+median{T}(v::AbstractArray{T}, region; checknan::Bool=true) = 
+    mapslices( x->median(x; checknan=checknan), v, region )
 
 
 ## variances

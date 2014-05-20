@@ -11,6 +11,7 @@
 #ifndef _OS_WINDOWS_
 #include <sys/sysctl.h>
 #include <sys/wait.h>
+#include <sys/ptrace.h>
 #include <unistd.h>
 #include <sys/mman.h>
 #include <dlfcn.h>
@@ -22,6 +23,7 @@
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
 #include <mach-o/nlist.h>
+#include <sys/types.h> // for jl_raise_debugger
 #endif
 
 #ifdef _OS_LINUX_
@@ -626,9 +628,44 @@ DLLEXPORT const char *jl_pathname_for_handle(uv_lib_t *uv_lib)
 #endif
 
 #ifdef _OS_WINDOWS_
-    // Not supported yet...
+    char tclfile[260];
+    int len = GetModuleFileNameA(handle,tclfile,sizeof(tclfile));
+    if (len)
+        return strdup(tclfile);
 #endif
     return NULL;
+}
+
+#ifdef _OS_WINDOWS_
+#include <dbghelp.h>
+static BOOL CALLBACK jl_EnumerateLoadedModulesProc64(
+  _In_      PCTSTR ModuleName,
+  _In_      DWORD64 ModuleBase,
+  _In_      ULONG ModuleSize,
+  _In_opt_  PVOID a
+)
+{
+    jl_array_grow_end(a, 1);
+    //XXX: change to jl_arrayset if array storage allocation for Array{String,1} changes:
+    jl_value_t *v = jl_cstr_to_string(ModuleName);
+    jl_cellset(a, jl_array_dim0(a)-1, v);
+    return TRUE;
+}
+// Takes a handle (as returned from dlopen()) and returns the absolute path to the image loaded
+DLLEXPORT int jl_dllist(jl_array_t *list)
+{
+    return EnumerateLoadedModules64(GetCurrentProcess(), jl_EnumerateLoadedModulesProc64, list);
+}
+#endif
+
+DLLEXPORT void jl_raise_debugger(void)
+{
+#if defined(_OS_WINDOWS_)
+    if (IsDebuggerPresent() == 1)
+        DebugBreak();
+#else
+    raise(SIGINT);
+#endif // _OS_WINDOWS_
 }
 
 #ifdef __cplusplus

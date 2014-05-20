@@ -13,6 +13,11 @@ convert(::Type{Float16}, x::MathConst) = float16(float32(x))
 convert{T<:Real}(::Type{Complex{T}}, x::MathConst) = convert(Complex{T}, float64(x))
 convert{T<:Integer}(::Type{Rational{T}}, x::MathConst) = convert(Rational{T}, float64(x))
 
+=={s}(::MathConst{s}, ::MathConst{s}) = true
+==(::MathConst, ::MathConst) = false
+
+hash(x::MathConst, h::Uint) = hash(object_id(x), h)
+
 -(x::MathConst) = -float64(x)
 for op in {:+, :-, :*, :/, :^}
     @eval $op(x::MathConst, y::MathConst) = $op(float64(x),float64(y))

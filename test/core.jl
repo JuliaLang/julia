@@ -117,6 +117,14 @@ end
 @test !isa((Int,), Type{(Int...,)})
 @test !isa((Int,), Type{(Any...,)})
 
+# issue #6561
+@test issubtype(Array{Tuple}, Array{NTuple})
+@test issubtype(Array{(Any...)}, Array{NTuple})
+@test !issubtype(Array{(Int...)}, Array{NTuple})
+@test !issubtype(Array{(Int,Int)}, Array{NTuple})
+@test issubtype(Type{(Nothing,)}, (Type{Nothing},))
+@test issubtype((Type{Nothing},),Type{(Nothing,)})
+
 # this is fancy: know that any type T<:Number must be either a DataType or a UnionType
 @test Type{TypeVar(:T,Number)} <: Union(DataType,UnionType)
 @test !(Type{TypeVar(:T,Number)} <: DataType)
@@ -647,6 +655,20 @@ end
                                      x -> x+1, 314158)) == 314159
 @test unsafe_pointer_to_objref(pointer_from_objref(e+pi)) == e+pi
 
+begin
+    local a, aa
+    a = [1,2,3]
+    aa = pointer_to_array(pointer(a), length(a))
+    @test aa == a
+    aa = pointer_to_array(pointer(a), (length(a),))
+    @test aa == a
+    aa = pointer_to_array(pointer(a), uint(length(a)))
+    @test aa == a
+    aa = pointer_to_array(pointer(a), uint16(length(a)))
+    @test aa == a
+    @test_throws ErrorException pointer_to_array(pointer(a), -3)
+end
+
 immutable FooBar
     foo::Int
     bar::Int
@@ -1122,6 +1144,15 @@ let
     @test ys == xs
 end
 
+# issue #6591
+function f6591(d)
+    Intrinsics.box(Int64, d)
+    (f->f(d))(identity)
+end
+let d = Intrinsics.box(Date4581{Int}, int64(1))
+    @test isa(f6591(d), Date4581)
+end
+
 # issue #4645
 i4645(x) = (println(zz); zz = x; zz)
 @test_throws UndefVarError i4645(4)
@@ -1545,3 +1576,87 @@ f6502() = convert(Base.tupletail((Bool,Int...)), (10,))
 @test f6502() === (10,)
 @test convert((Bool,Int...,), (true,10)) === (true,10)
 @test convert((Int,Bool...), (true,1,0)) === (1,true,false)
+
+# issue on the flight from DFW
+# (type inference deducing Type{:x} rather than Symbol)
+type FooBarDFW{s}; end
+fooDFW(p::Type{FooBarDFW}) = string(p.parameters[1])
+fooDFW(p) = string(p.parameters[1])
+@test fooDFW(FooBarDFW{:x}) == "x" # not ":x"
+
+# issue #6611
+function crc6611(spec)
+    direcn = spec ? 1 : 2
+    local remainder::blech
+    ()->(remainder=1)
+end
+@test_throws UndefVarError crc6611(true)()
+
+# issue #6634
+function crc6634(spec)
+    A = Uint
+    remainder::A = 1
+    function handler(append)
+        remainder = append ? 1 : 2
+    end
+end
+@test crc6634(0x1)(true) == 1
+@test crc6634(0x1)(false) == 2
+
+# issue #5876
+module A5876
+macro x()
+    quote
+        function $(esc(:f5876)){T}(::Type{T})
+            T
+        end
+        42
+    end
+end
+end
+
+let
+    z = A5876.@x()
+    @test z == 42
+    @test f5876(Int) === Int
+end
+
+# issue #6387
+bitstype 64 Date6387{C}
+
+type DateRange6387{C} <: Range{Date6387{C}}
+end
+
+type ObjMember
+    member::DateRange6387
+end
+
+obj = ObjMember(DateRange6387{Int64}())
+
+function v6387{T}(r::Range{T})
+    a = Array(T,1)
+    a[1] = Intrinsics.box(Date6387{Int64}, Intrinsics.unbox(Int64,int64(1)))
+    a
+end
+
+function day_in(obj::ObjMember)
+    x = v6387(obj.member)
+    @test isa(x, Vector{Date6387{Int64}})
+    @test isa(x[1], Date6387{Int64})
+end
+day_in(obj)
+
+# issue #6784
+@test ndims(Array(Array{Float64},3,5)) == 2
+@test ndims(Array(Array,3,5)) == 2
+
+# issue #6793
+function segfault6793(;gamma=1)
+    A = 1
+    B = 1
+    print()
+    return
+    -gamma
+    nothing
+end
+@test segfault6793() === nothing

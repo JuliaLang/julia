@@ -11,7 +11,8 @@
 
 ("Base","quit","quit()
 
-   Calls \"exit(0)\".
+   Quit the program indicating that the processes completed
+   succesfully. This function calls \"exit(0)\" (see \"exit()\").
 
 "),
 
@@ -21,7 +22,7 @@
 
 "),
 
-("Base","isinteractive","isinteractive()
+("Base","isinteractive","isinteractive() -> Bool
 
    Determine whether Julia is running an interactive session.
 
@@ -48,6 +49,13 @@
 
 "),
 
+("Base","@edit","@edit()
+
+   Evaluates the arguments to the function call, determines their
+   types, and calls the \"edit\" function on the resulting expression
+
+"),
+
 ("Base","less","less(file::String[, line])
 
    Show a file using the default pager, optionally providing a
@@ -64,6 +72,13 @@
 
 "),
 
+("Base","@less","@less()
+
+   Evaluates the arguments to the function call, determines their
+   types, and calls the \"less\" function on the resulting expression
+
+"),
+
 ("Base","clipboard","clipboard(x)
 
    Send a printed form of \"x\" to the operating system clipboard
@@ -73,7 +88,8 @@
 
 ("Base","clipboard","clipboard() -> String
 
-   Return the contents of the operating system clipboard (\"paste\").
+   Return a string with the contents of the operating system clipboard
+   (\"paste\").
 
 "),
 
@@ -130,10 +146,10 @@
 
 "),
 
-("Base","which","which(f, args...)
+("Base","which","which(f, types)
 
    Return the method of \"f\" (a \"Method\" object) that will be
-   called for the given arguments.
+   called for arguments with the given types.
 
 "),
 
@@ -175,7 +191,7 @@
 
 "),
 
-("Base","is","is(x, y)
+("Base","is","is(x, y) -> Bool
 
    Determine whether \"x\" and \"y\" are identical, in the sense that
    no program could distinguish them. Compares mutable objects by
@@ -185,45 +201,30 @@
 
 "),
 
-("Base","isa","isa(x, type)
+("Base","isa","isa(x, type) -> Bool
 
-   Determine whether \"x\" is of the given type.
+   Determine whether \"x\" is of the given \"type\".
 
 "),
 
 ("Base","isequal","isequal(x, y)
 
-   True if and only if \"x\" and \"y\" would cause a typical function
-   to behave the same. A \"typical\" function is one that uses only
-   intended interfaces, and does not unreasonably exploit
-   implementation details of its arguments. For example, floating-
-   point \"NaN\" values are \"isequal\" regardless of their sign bits,
-   since the sign of a \"NaN\" has no meaning in the vast majority of
-   cases (but can be discovered if you really want to).
+   Similar to \"==\", except treats all floating-point \"NaN\" values
+   as equal to each other, and treats \"-0.0\" as unequal to \"0.0\".
+   For values that are not floating-point, \"isequal\" is the same as
+   \"==\".
 
-   One implication of this definition is that implementing \"isequal\"
-   for a new type encapsulates, to a large extent, what the true
-   abstraction presented by that type is. For example, a \"String\" is
-   a sequence of characters, so two strings are \"isequal\" if they
-   generate the same characters. Other concerns, such as encoding, are
-   not considered.
+   \"isequal\" is the comparison function used by hash tables
+   (\"Dict\"). \"isequal(x,y)\" must imply that \"hash(x) ==
+   hash(y)\".
 
-   When calling \"isequal\", be aware that it cannot be all things to
-   all people. For example, if your use of strings *does* care about
-   encoding, you will have to perform a check like
-   \"typeof(x)==typeof(y) && isequal(x,y)\".
+   Collections typically implement \"isequal\" by calling \"isequal\"
+   recursively on all contents.
 
-   \"isequal\" is the default comparison function used by hash tables
-   (\"Dict\"). \"isequal(x,y)\" must imply \"hash(x)==hash(y)\".
-
-   New types with a notion of equality should implement this function,
-   except for numbers, which should implement \"==\" instead. However,
-   numeric types with special values like \"NaN\" might need to
-   implement \"isequal\" as well. Numbers of different types are
-   considered unequal.
-
-   Mutable containers should generally implement \"isequal\" by
-   calling \"isequal\" recursively on all contents.
+   Scalar types generally do not need to implement \"isequal\", unless
+   they represent floating-point numbers amenable to a more efficient
+   implementation than that provided as a generic fallback (based on
+   \"isnan\", \"signbit\", and \"==\").
 
 "),
 
@@ -289,10 +290,12 @@
 
 "),
 
-("Base","hash","hash(x)
+("Base","hash","hash(x[, h])
 
    Compute an integer hash code such that \"isequal(x,y)\" implies
-   \"hash(x)==hash(y)\".
+   \"hash(x)==hash(y)\". The optional second argument \"h\" is a hash
+   code to be mixed with the result. New types should implement the
+   2-argument form.
 
 "),
 
@@ -335,11 +338,13 @@
 
 "),
 
-("Base","isdefined","isdefined(object, index | symbol)
+("Base","isdefined","isdefined([object], index | symbol)
 
    Tests whether an assignable location is defined. The arguments can
    be an array and index, a composite object and field name (as a
-   symbol), or a module and a symbol.
+   symbol), or a module and a symbol. With a single symbol argument,
+   tests whether a global variable with that name is defined in
+   \"current_module()\".
 
 "),
 
@@ -615,9 +620,12 @@
 
 "),
 
-("Base","eval","eval(expr::Expr)
+("Base","eval","eval([m::Module], expr::Expr)
 
-   Evaluate an expression and return the value.
+   Evaluate an expression in the given module and return the result.
+   Every module (except those defined with \"baremodule\") has its own
+   1-argument definition of \"eval\", which evaluates expressions in
+   that module.
 
 "),
 
@@ -727,7 +735,7 @@
 
 ("Base","empty!","empty!(collection) -> collection
 
-   Remove all elements from a collection.
+   Remove all elements from a \"collection\".
 
 "),
 
@@ -743,7 +751,10 @@
 
    Returns the last index of the collection.
 
-   **Example**: \"endof([1,2,4]) = 3\"
+   **Example**:
+
+      julia> endof([1,2,4])
+      3
 
 "),
 
@@ -794,8 +805,8 @@
 ("Base","reduce","reduce(op, v0, itr)
 
    Reduce the given collection \"ìtr\" with the given binary operator.
-   Reductions for certain commonly-used operators are available in a
-   more convenient 1-argument form: \"maximum(itr)\",
+   Reductions for certain commonly-used operators have special
+   implementations which should be used instead: \"maximum(itr)\",
    \"minimum(itr)\", \"sum(itr)\", \"prod(itr)\", \"any(itr)\",
    \"all(itr)\".
 
@@ -1007,9 +1018,11 @@
    multiple collection arguments, apply \"f\" elementwise.
 
    **Examples**:
-      * \"map((x) -> x * 2, [1, 2, 3]) = [2, 4, 6]\"
 
-      * \"map(+, [1, 2, 3], [10, 20, 30]) = [11, 22, 33]\"
+      julia> map((x) -> x * 2, [1, 2, 3])
+      [2, 4, 6]
+      julia> map(+, [1, 2, 3], [10, 20, 30])
+      [11, 22, 33]
 
 "),
 
@@ -1422,15 +1435,17 @@
 
 ("Base","*","*(s, t)
 
-   Concatenate strings.
+   Concatenate strings. The \"*\" operator is an alias to this
+   function.
 
-   **Example**: \"\"Hello \" * \"world\" == \"Hello world\"\"
+   **Example**:: julia> \"Hello \" * \"world\" \"Hello world\"
 
 "),
 
 ("Base","^","^(s, n)
 
-   Repeat string \"s\" \"n\" times.
+   Repeat \"n\" times the string \"s\". The \"^\" operator is an alias
+   to this function.
 
    **Example**: \"\"Julia \"^3 == \"Julia Julia Julia \"\"
 
@@ -1450,16 +1465,18 @@
 
 ("Base","bytestring","bytestring(::Ptr{Uint8}[, length])
 
-   Create a string from the address of a C (0-terminated) string. A
-   copy is made; the ptr can be safely freed. If \"length\" is
-   specified, the string does not have to be 0-terminated.
+   Create a string from the address of a C (0-terminated) string
+   encoded in ASCII or UTF-8. A copy is made; the ptr can be safely
+   freed. If \"length\" is specified, the string does not have to be
+   0-terminated.
 
 "),
 
 ("Base","bytestring","bytestring(s)
 
    Convert a string to a contiguous byte array representation
-   appropriate for passing it to C functions.
+   appropriate for passing it to C functions. The string will be
+   encoded as either ASCII or UTF-8.
 
 "),
 
@@ -1932,6 +1949,21 @@
 
    General unescaping of traditional C and Unicode escape sequences.
    Reverse of \"escape_string()\". See also \"print_unescaped()\".
+
+"),
+
+("Base","utf16","utf16(s)
+
+   Create a UTF-16 string from a byte array, array of \"Uint16\", or
+   any other string type.  (Data must be valid UTF-16.  Conversions of
+   byte arrays check for a byte-order marker in the first two bytes,
+   and do not include it in the resulting string.)
+
+"),
+
+("Base","is_valid_utf16","is_valid_utf16(s)
+
+   Returns true if the string or \"Uint16\" array is valid UTF-16.
 
 "),
 
@@ -2725,7 +2757,7 @@
 
 "),
 
-("Base","readdlm","readdlm(source, delim::Char, T::Type, eol::Char; has_header=false, use_mmap=true, ignore_invalid_chars=false, quotes=true)
+("Base","readdlm","readdlm(source, delim::Char, T::Type, eol::Char; has_header=false, use_mmap=true, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
 
    Read a matrix from the source where each line (separated by
    \"eol\") gives one row, with elements separated by the given
@@ -2753,6 +2785,12 @@
    characters are allowed to contain new lines and column delimiters.
    Double-quote characters within a quoted field must be escaped with
    another double-quote.
+
+   Specifying \"dims\" as a tuple of the expected rows and columns
+   (including header, if any) may speed up reading of large files.
+
+   If \"comments\" is \"true\", lines beginning with \"comment_char\"
+   and text following \"comment_char\" in any line are ignored.
 
 "),
 
@@ -3311,11 +3349,21 @@ popdisplay(d::Display)
 
 ("Base","==","==(x, y)
 
-   Numeric equality operator. Compares numbers and number-like values
-   (e.g. arrays) by numeric value. True for numbers of different types
-   that represent the same value (e.g. \"2\" and \"2.0\"). Follows
-   IEEE semantics for floating-point numbers. New numeric types should
-   implement this function for two arguments of the new type.
+   Generic equality operator, giving a single \"Bool\" result. Falls
+   back to \"===\". Should be implemented for all types with a notion
+   of equality, based on the abstract value that an instance
+   represents. For example, all numeric types are compared by numeric
+   value, ignoring type. Strings are compared as sequences of
+   characters, ignoring encoding.
+
+   Follows IEEE semantics for floating-point numbers.
+
+   Collections should generally implement \"==\" by calling \"==\"
+   recursively on all contents.
+
+   New numeric types should implement this function for two arguments
+   of the new type, and handle comparison to other types via promotion
+   rules where possible.
 
 "),
 
@@ -4027,14 +4075,16 @@ popdisplay(d::Display)
 
 ("Base","minmax","minmax(x, y)
 
-   Return \"(min(x,y), max(x,y))\".
+   Return \"(min(x,y), max(x,y))\". See also: \"extrema()\" that
+   returns \"(minimum(x), maximum(x))\"
 
 "),
 
 ("Base","clamp","clamp(x, lo, hi)
 
    Return x if \"lo <= x <= hi\". If \"x < lo\", return \"lo\". If \"x
-   > hi\", return \"hi\".
+   > hi\", return \"hi\". Arguments are promoted to a common type.
+   Operates elementwise over \"x\" if it is an array.
 
 "),
 
@@ -4289,7 +4339,7 @@ popdisplay(d::Display)
 
 ("Base","invmod","invmod(x, m)
 
-   Take the inverse of \"x\" modulo \"m\": *y* such that xy = 1 \\pmod
+   Take the inverse of \"x\" modulo \"m\": *y* such that xy = 1 \\pmod
    m
 
 "),
@@ -4475,13 +4525,6 @@ popdisplay(d::Display)
 ("Base","zeta","zeta(x)
 
    Riemann zeta function \\zeta(s).
-
-"),
-
-("Base","bitmix","bitmix(x, y)
-
-   Hash two integers into a single integer. Useful for constructing
-   hash functions.
 
 "),
 
@@ -5529,7 +5572,9 @@ popdisplay(d::Display)
 
 ("Base","find","find(A)
 
-   Return a vector of the linear indexes of the non-zeros in \"A\".
+   Return a vector of the linear indexes of the non-zeros in \"A\"
+   (determined by \"A[i]!=0\"). A common use of this is to convert a
+   boolean array to an array of indexes of the \"true\" elements.
 
 "),
 
@@ -5543,7 +5588,7 @@ popdisplay(d::Display)
 ("Base","findn","findn(A)
 
    Return a vector of indexes for each dimension giving the locations
-   of the non-zeros in \"A\".
+   of the non-zeros in \"A\" (determined by \"A[i]!=0\").
 
 "),
 
@@ -5557,13 +5602,15 @@ popdisplay(d::Display)
 
 ("Base","nonzeros","nonzeros(A)
 
-   Return a vector of the non-zero values in array \"A\".
+   Return a vector of the non-zero values in array \"A\" (determined
+   by \"A[i]!=0\").
 
 "),
 
 ("Base","findfirst","findfirst(A)
 
-   Return the index of the first non-zero value in \"A\".
+   Return the index of the first non-zero value in \"A\" (determined
+   by \"A[i]!=0\").
 
 "),
 
@@ -5641,6 +5688,24 @@ popdisplay(d::Display)
 
    Throw an error if the specified indexes are not in bounds for the
    given array.
+
+"),
+
+("Base","randsubseq","randsubseq(A, p) -> Vector
+
+   Return a vector consisting of a random subsequence of the given
+   array \"A\", where each element of \"A\" is included (in order)
+   with independent probability \"p\".   (Complexity is linear in
+   \"p*length(A)\", so this function is efficient even if \"p\" is
+   small and \"A\" is large.)  Technically, this process is known as
+   \"Bernoulli sampling\" of \"A\".
+
+"),
+
+("Base","randsubseq!","randsubseq!(S, A, p)
+
+   Like \"randsubseq\", but the results are stored in \"S\" (which is
+   resized as needed).
 
 "),
 
@@ -5864,18 +5929,18 @@ popdisplay(d::Display)
 
 "),
 
-("Base","combinations","combinations(itr, n)
+("Base","combinations","combinations(arr, n)
 
-   Generate all combinations of \"n\" elements from a given iterable
+   Generate all combinations of \"n\" elements from an indexable
    object.  Because the number of combinations can be very large, this
    function returns an iterator object. Use
    \"collect(combinations(a,n))\" to get an array of all combinations.
 
 "),
 
-("Base","permutations","permutations(itr)
+("Base","permutations","permutations(arr)
 
-   Generate all permutations of a given iterable object.  Because the
+   Generate all permutations of an indexable object.  Because the
    number of permutations can be very large, this function returns an
    iterator object. Use \"collect(permutations(a,n))\" to get an array
    of all permutations.
@@ -6096,24 +6161,18 @@ popdisplay(d::Display)
    This function accepts three keyword arguments:
 
    * \"vardim\": the dimension of variables. When \"vardim = 1\",
-     variables
-
-   are considered in columns while observations in rows; when \"vardim
-   = 2\", variables are in rows while observations in columns. By
-   default, it is set to \"1\".
+     variables are considered in columns while observations in rows;
+     when \"vardim = 2\", variables are in rows while observations in
+     columns. By default, it is set to \"1\".
 
    * \"corrected\": whether to apply Bessel's correction (divide by
-     \"n-1\"
-
-   instead of \"n\"). By default, it is set to \"true\".
+     \"n-1\" instead of \"n\"). By default, it is set to \"true\".
 
    * \"mean\": allow users to supply mean values that are known. By
-     default, it
-
-   is set to \"nothing\", which indicates that the mean(s) are
-   unknown, and the function will compute the mean. Users can use
-   \"mean=0\" to indicate that the input data are centered, and hence
-   there's no need to subtract the mean.
+     default, it is set to \"nothing\", which indicates that the
+     mean(s) are unknown, and the function will compute the mean.
+     Users can use \"mean=0\" to indicate that the input data are
+     centered, and hence there's no need to subtract the mean.
 
    The size of the result depends on the size of \"v1\" and \"v2\".
    When both \"v1\" and \"v2\" are vectors, it returns the covariance
@@ -6583,8 +6642,10 @@ popdisplay(d::Display)
    a shared file system.
 
    \"machines\" is a vector of host definitions of the form
-   \"[user@]host[:port]\". A worker is started for each such
-   definition.
+   \"[user@]host[:port] [bind_addr]\". \"user\" defaults to current
+   user, \"port\" to the standard ssh port. Optionally, in case of
+   multi-homed hosts, \"bind_addr\" may be used to explicitly specify
+   an interface.
 
    Keyword arguments:
 
@@ -6848,41 +6909,41 @@ popdisplay(d::Display)
 ("Base","dzeros","dzeros(dims, ...)
 
    Construct a distributed array of zeros. Trailing arguments are the
-   same as those accepted by \"darray\".
+   same as those accepted by \"DArray()\".
 
 "),
 
 ("Base","dones","dones(dims, ...)
 
    Construct a distributed array of ones. Trailing arguments are the
-   same as those accepted by \"darray\".
+   same as those accepted by \"DArray()\".
 
 "),
 
 ("Base","dfill","dfill(x, dims, ...)
 
    Construct a distributed array filled with value \"x\". Trailing
-   arguments are the same as those accepted by \"darray\".
+   arguments are the same as those accepted by \"DArray()\".
 
 "),
 
 ("Base","drand","drand(dims, ...)
 
    Construct a distributed uniform random array. Trailing arguments
-   are the same as those accepted by \"darray\".
+   are the same as those accepted by \"DArray()\".
 
 "),
 
 ("Base","drandn","drandn(dims, ...)
 
    Construct a distributed normal random array. Trailing arguments are
-   the same as those accepted by \"darray\".
+   the same as those accepted by \"DArray()\".
 
 "),
 
 ("Base","distribute","distribute(a)
 
-   Convert a local array to distributed
+   Convert a local array to distributed.
 
 "),
 
@@ -6903,7 +6964,7 @@ popdisplay(d::Display)
 
 ("Base","procs","procs(d)
 
-   Get the vector of processes storing pieces of \"d\"
+   Get the vector of processes storing pieces of \"d\".
 
 "),
 
@@ -7999,6 +8060,7 @@ popdisplay(d::Display)
 ("Base","isconst","isconst([m::Module], s::Symbol) -> Bool
 
    Determine whether a global is declared \"const\" in a given module.
+   The default module argument is \"current_module()\".
 
 "),
 
@@ -8075,10 +8137,26 @@ popdisplay(d::Display)
 
 "),
 
+("Base","@code_lowered","@code_lowered()
+
+   Evaluates the arguments to the function call, determines their
+   types, and calls the \"code_lowered\" function on the resulting
+   expression
+
+"),
+
 ("Base","code_typed","code_typed(f, types)
 
    Returns an array of lowered and type-inferred ASTs for the methods
    matching the given generic function and type signature.
+
+"),
+
+("Base","@code_typed","@code_typed()
+
+   Evaluates the arguments to the function call, determines their
+   types, and calls the \"code_typed\" function on the resulting
+   expression
 
 "),
 
@@ -8089,11 +8167,27 @@ popdisplay(d::Display)
 
 "),
 
+("Base","@code_llvm","@code_llvm()
+
+   Evaluates the arguments to the function call, determines their
+   types, and calls the \"code_llvm\" function on the resulting
+   expression
+
+"),
+
 ("Base","code_native","code_native(f, types)
 
    Prints the native assembly instructions generated for running the
    method matching the given generic function and type signature to
    STDOUT.
+
+"),
+
+("Base","@code_native","@code_native()
+
+   Evaluates the arguments to the function call, determines their
+   types, and calls the \"code_native\" function on the resulting
+   expression
 
 "),
 
@@ -8152,11 +8246,11 @@ popdisplay(d::Display)
 
 "),
 
-("Base.Collections","heappush!","heappush!(v[, ord])
+("Base.Collections","heappush!","heappush!(v, x[, ord])
 
-   Given a binary heap-ordered array, push a new element, preserving
-   the heap property. For efficiency, this function does not check
-   that the array is indeed heap-ordered.
+   Given a binary heap-ordered array, push a new element \"x\",
+   preserving the heap property. For efficiency, this function does
+   not check that the array is indeed heap-ordered.
 
 "),
 
@@ -8627,44 +8721,52 @@ popdisplay(d::Display)
 
 "),
 
-("Base","lufact","lufact(A) -> F
+("Base","lufact","lufact(A[, pivot=true]) -> F
 
    Compute the LU factorization of \"A\". The return type of \"F\"
-   depends on the type of \"A\".
+   depends on the type of \"A\". In most cases, if \"A\" is a subtype
+   \"S\" of AbstractMatrix with an element type \"T`\" supporting
+   \"+\", \"-\", \"*\" and \"/\" the return type is \"LU{T,S{T}}\". If
+   pivoting is chosen (default) the element type should also support
+   \"abs\" and \"<\". When \"A\" is sparse and have element of type
+   \"Float32\", \"Float64\", \"Complex{Float32}\", or
+   \"Complex{Float64}\" the return type is \"UmfpackLU\". Some
+   examples are shown in the table below.
 
-      +-------------------------+----------------------+------------------------------------------+
-      | Type of input \\\"A\\\"     | Type of output \\\"F\\\" | Relationship between \\\"F\\\" and \\\"A\\\"     |
-      +-------------------------+----------------------+------------------------------------------+
-      | \\\"Matrix()\\\"            | \\\"LU\\\"               | \\\"F[:L]*F[:U] == A[F[:p], :]\\\"           |
-      +-------------------------+----------------------+------------------------------------------+
-      | \\\"Tridiagonal()\\\"       | \\\"LUTridiagonal\\\"    | N/A                                      |
-      +-------------------------+----------------------+------------------------------------------+
-      | \\\"SparseMatrixCSC()\\\"   | \\\"UmfpackLU\\\"        | \\\"F[:L]*F[:U] == Rs .* A[F[:p], F[:q]]\\\" |
-      +-------------------------+----------------------+------------------------------------------+
+      +-------------------------+---------------------------+------------------------------------------+
+      | Type of input \\\"A\\\"     | Type of output \\\"F\\\"      | Relationship between \\\"F\\\" and \\\"A\\\"     |
+      +-------------------------+---------------------------+------------------------------------------+
+      | \\\"Matrix()\\\"            | \\\"LU\\\"                    | \\\"F[:L]*F[:U] == A[F[:p], :]\\\"           |
+      +-------------------------+---------------------------+------------------------------------------+
+      | \\\"Tridiagonal()\\\"       | \\\"LU{T,Tridiagonal{T}}\\\"  | N/A                                      |
+      +-------------------------+---------------------------+------------------------------------------+
+      | \\\"SparseMatrixCSC()\\\"   | \\\"UmfpackLU\\\"             | \\\"F[:L]*F[:U] == Rs .* A[F[:p], F[:q]]\\\" |
+      +-------------------------+---------------------------+------------------------------------------+
 
    The individual components of the factorization \"F\" can be
    accessed by indexing:
 
-      +-------------+-----------------------------------------+--------+-------------------+---------------+
-      | Component   | Description                             | \\\"LU\\\" | \\\"LUTridiagonal\\\" | \\\"UmfpackLU\\\" |
-      +-------------+-----------------------------------------+--------+-------------------+---------------+
-      +-------------+-----------------------------------------+--------+-------------------+---------------+
-      +-------------+-----------------------------------------+--------+-------------------+---------------+
-      +-------------+-----------------------------------------+--------+-------------------+---------------+
-      +-------------+-----------------------------------------+--------+-------------------+---------------+
-      +-------------+-----------------------------------------+--------+-------------------+---------------+
-      +-------------+-----------------------------------------+--------+-------------------+---------------+
-      +-------------+-----------------------------------------+--------+-------------------+---------------+
+      +-------------+-----------------------------------------+--------+--------------------------+---------------+
+      | Component   | Description                             | \\\"LU\\\" | \\\"LU{T,Tridiagonal{T}}\\\" | \\\"UmfpackLU\\\" |
+      +-------------+-----------------------------------------+--------+--------------------------+---------------+
+      +-------------+-----------------------------------------+--------+--------------------------+---------------+
+      +-------------+-----------------------------------------+--------+--------------------------+---------------+
+      +-------------+-----------------------------------------+--------+--------------------------+---------------+
+      +-------------+-----------------------------------------+--------+--------------------------+---------------+
+      +-------------+-----------------------------------------+--------+--------------------------+---------------+
+      +-------------+-----------------------------------------+--------+--------------------------+---------------+
+      +-------------+-----------------------------------------+--------+--------------------------+---------------+
 
-      +--------------------+--------+-------------------+---------------+
-      | Supported function | \\\"LU\\\" | \\\"LUTridiagonal\\\" | \\\"UmfpackLU\\\" |
-      +--------------------+--------+-------------------+---------------+
-      +--------------------+--------+-------------------+---------------+
-      | \\\"\\\\\\\"             | ✓      | ✓                 | ✓             |
-      +--------------------+--------+-------------------+---------------+
-      +--------------------+--------+-------------------+---------------+
-      +--------------------+--------+-------------------+---------------+
-      +--------------------+--------+-------------------+---------------+
+      +--------------------+--------+--------------------------+---------------+
+      | Supported function | \\\"LU\\\" | \\\"LU{T,Tridiagonal{T}}\\\" | \\\"UmfpackLU\\\" |
+      +--------------------+--------+--------------------------+---------------+
+      +--------------------+--------+--------------------------+---------------+
+      | \\\"\\\\\\\"             | ✓      | ✓                        | ✓             |
+      +--------------------+--------+--------------------------+---------------+
+      +--------------------+--------+--------------------------+---------------+
+      | \\\"det\\\"            | ✓      | ✓                        | ✓             |
+      +--------------------+--------+--------------------------+---------------+
+      +--------------------+--------+--------------------------+---------------+
 
 "),
 
@@ -8715,9 +8817,9 @@ popdisplay(d::Display)
    used to solve systems involving parts of the factorization only.
    The optional boolean argument, \"ll\" determines whether the
    factorization returned is of the \"A[p,p] = L*L'\" form, where
-   \"L\" is lower triangular or \"A[p,p] = scale(L,D)*L'\" form where
-   \"L\" is unit lower triangular and \"D\" is a non-negative vector.
-   The default is LDL.
+   \"L\" is lower triangular or \"A[p,p] = L*Diagonal(D)*L'\" form
+   where \"L\" is unit lower triangular and \"D\" is a non-negative
+   vector.  The default is LDL.
 
 "),
 
@@ -8725,6 +8827,14 @@ popdisplay(d::Display)
 
    \"cholfact!\" is the same as \"cholfact()\", but saves space by
    overwriting the input \"A\", instead of creating a copy.
+
+"),
+
+("Base","ldltfact","ldltfact(A) -> LDLtFactorization
+
+   Compute a factorization of a positive definite matrix \"A\" such
+   that \"A=L*Diagonal(d)*L'\" where \"L\" is a unit lower triangular
+   matrix and \"d\" is a vector with non-negative elements.
 
 "),
 
@@ -8829,12 +8939,6 @@ popdisplay(d::Display)
    \"BunchKaufman\" objects: \"size\", \"\\\", \"inv\", \"issym\",
    \"ishermitian\".
 
-   [Bunch1977] J R Bunch and L Kaufman, Some stable methods for
-               calculating inertia and solving symmetric linear
-               systems, Mathematics of Computation 31:137 (1977),
-               163-179. >>`url<http://www.ams.org/journals/mcom/1977-3
-               1-137/S0025-5718-1977-0428694-0>`_<<.
-
 "),
 
 ("Base","bkfact!","bkfact!(A) -> BunchKaufman
@@ -8859,28 +8963,52 @@ popdisplay(d::Display)
 
 "),
 
-("Base","eig","eig(A,[permute=true,][scale=true]) -> D, V
+("Base","eig","eig(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> D, V
 
-   Wrapper around \"eigfact\" extracting all parts the factorization
-   to a tuple. Direct use of \"eigfact\" is therefore generally more
-   efficient. Computes eigenvalues and eigenvectors of \"A\". See
-   \"eigfact()\" for details on the \"permute\" and \"scale\" keyword
-   arguments.
+   Compute eigenvalues and eigenvectors of \"A\". See \"eigfact()\"
+   for details on the \"balance\" keyword argument.
+
+   Example:
+
+      julia> eig(a = [1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
+      ([1.0,3.0,18.0],
+      3x3 Array{Float64,2}:
+       1.0  0.0  0.0
+       0.0  1.0  0.0
+       0.0  0.0  1.0)
+
+   \"eig\" is a wrapper around \"eigfact()\", extracting all parts of
+   the factorization to a tuple; where possible, using \"eigfact()\"
+   is recommended.
 
 "),
 
 ("Base","eig","eig(A, B) -> D, V
 
-   Wrapper around \"eigfact\" extracting all parts the factorization
-   to a tuple. Direct use of \"eigfact\" is therefore generally more
-   efficient. Computes generalized eigenvalues and vectors of \"A\"
-   with respect to \"B\".
+   Computes generalized eigenvalues and vectors of \"A\" with respect
+   to \"B\".
+
+   \"eig\" is a wrapper around \"eigfact()\", extracting all parts of
+   the factorization to a tuple; where possible, using \"eigfact()\"
+   is recommended.
 
 "),
 
-("Base","eigvals","eigvals(A)
+("Base","eigvals","eigvals(A,[irange,][vl,][vu])
 
-   Returns the eigenvalues of \"A\".
+   Returns the eigenvalues of \"A\". If \"A\" is \"Symmetric()\",
+   \"Hermitian()\" or \"SymTridiagonal()\", it is possible to
+   calculate only a subset of the eigenvalues by specifying either a
+   \"UnitRange()\" \"irange\" covering indices of the sorted
+   eigenvalues, or a pair \"vl\" and \"vu\" for the lower and upper
+   boundaries of the eigenvalues.
+
+   For general non-symmetric matrices it is possible to specify how
+   the matrix is balanced before the eigenvector calculation. The
+   option \"permute=true\" permutes the matrix to become closer to
+   upper triangular, and \"scale=true\" scales the matrix by its
+   diagonal elements to make rows and columns more equal in norm. The
+   default is \"true\" for both options.
 
 "),
 
@@ -8901,19 +9029,25 @@ popdisplay(d::Display)
    Returns the eigenvectors of \"A\". The \"permute\" and \"scale\"
    keywords are the same as for \"eigfact()\".
 
-   For \"SymTridiagonal\" matrices, if the optional vector of
+   For \"SymTridiagonal()\" matrices, if the optional vector of
    eigenvalues \"eigvals\" is specified, returns the specific
    corresponding eigenvectors.
 
 "),
 
-("Base","eigfact","eigfact(A,[permute=true,][scale=true])
+("Base","eigfact","eigfact(A,[il,][iu,][vl,][vu,][permute=true,][scale=true])
 
    Compute the eigenvalue decomposition of \"A\" and return an
    \"Eigen\" object. If \"F\" is the factorization object, the
    eigenvalues can be accessed with \"F[:values]\" and the
    eigenvectors with \"F[:vectors]\". The following functions are
    available for \"Eigen\" objects: \"inv\", \"det\".
+
+   If \"A\" is \"Symmetric\", \"Hermitian\" or \"SymTridiagonal\", it
+   is possible to calculate only a subset of the eigenvalues by
+   specifying either a *UnitRange`* \"irange\" covering indices of the
+   sorted eigenvalues or a pair \"vl\" and \"vu\" for the lower and
+   upper boundaries of the eigenvalues.
 
    For general non-symmetric matrices it is possible to specify how
    the matrix is balanced before the eigenvector calculation. The
@@ -9107,7 +9241,8 @@ popdisplay(d::Display)
 
 ("Base","diag","diag(M[, k])
 
-   The \"k\"-th diagonal of a matrix, as a vector.
+   The \"k\"-th diagonal of a matrix, as a vector. Use \"diagm\" to
+   construct a diagonal matrix.
 
 "),
 
@@ -9308,10 +9443,19 @@ popdisplay(d::Display)
 
 "),
 
-("Base","linreg","linreg(x, y)
+("Base","linreg","linreg(x, y) -> [a; b]
 
-   Determine parameters \"[a, b]\" that minimize the squared error
-   between \"y\" and \"a+b*x\".
+   Linear Regression. Returns \"a\" and \"b\" such that \"a+b*x\" is
+   the closest line to the given points \"(x,y)\". In other words,
+   this function determines parameters \"[a, b]\" that minimize the
+   squared error between \"y\" and \"a+b*x\". **Example**:
+
+      using PyPlot;
+      x = float([1:12])
+      y = [5.5; 6.3; 7.6; 8.8; 10.9; 11.79; 13.48; 15.02; 17.77; 20.81; 22.0; 22.99]
+      a, b = linreg(x,y) # Linear regression
+      plot(x, y, \"o\") # Plot (x,y) points
+      plot(x, [a+b*i for i in x]) # Plot the line determined by the linear regression
 
 "),
 
@@ -10066,7 +10210,7 @@ popdisplay(d::Display)
 
 "),
 
-("Base.Profile","retrieve","retrieve(;C = false) -> data, lidict
+("Base.Profile","retrieve","retrieve() -> data, lidict
 
    \"Exports\" profiling results in a portable format, returning the
    set of all backtraces (\"data\") and a dictionary that maps the
@@ -10287,24 +10431,30 @@ popdisplay(d::Display)
 
 "),
 
-("Base","sprand","sprand(m, n, density[, rng])
+("Base","sprand","sprand(m, n, p[, rng])
 
-   Create a random sparse matrix with the specified density. Nonzeros
-   are sampled from the distribution specified by \"rng\". The uniform
-   distribution is used in case \"rng\" is not specified.
-
-"),
-
-("Base","sprandn","sprandn(m, n, density)
-
-   Create a random sparse matrix of specified density with nonzeros
-   sampled from the normal distribution.
+   Create a random \"m\" by \"n\" sparse matrix, in which the
+   probability of any element being nonzero is independently given by
+   \"p\" (and hence the mean density of nonzeros is also exactly
+   \"p\"). Nonzero values are sampled from the distribution specified
+   by \"rng\". The uniform distribution is used in case \"rng\" is not
+   specified.
 
 "),
 
-("Base","sprandbool","sprandbool(m, n, density)
+("Base","sprandn","sprandn(m, n, p)
 
-   Create a random sparse boolean matrix with the specified density.
+   Create a random \"m\" by \"n\" sparse matrix with the specified
+   (independent) probability \"p\" of any entry being nonzero, where
+   nonzero values are sampled from the normal distribution.
+
+"),
+
+("Base","sprandbool","sprandbool(m, n, p)
+
+   Create a random \"m\" by \"n\" sparse boolean matrix with the
+   specified (independent) probability \"p\" of any entry being
+   \"true\".
 
 "),
 

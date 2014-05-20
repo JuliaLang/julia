@@ -110,7 +110,7 @@ function readme(pkg::String, user::String=""; force::Bool=false)
         println(io, "# $pkg")
         isempty(user) && return
         url = "https://travis-ci.org/$user/$pkg.jl"
-        println(io, "\n[![Build Status]($url.svg)]($url)")
+        println(io, "\n[![Build Status]($url.svg?branch=master)]($url)")
     end
 end
 
@@ -118,7 +118,7 @@ function tests(pkg::String; force::Bool=false)
     genfile(pkg,"test/runtests.jl",force) do io
         print(io, """
         using $pkg
-        using Base.Test  
+        using Base.Test
 
         # write your own tests here
         @test 1 == 1

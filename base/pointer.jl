@@ -31,11 +31,18 @@ pointer{T}(x::AbstractArray{T}) = convert(Ptr{T},x)
 pointer{T}(x::AbstractArray{T}, i::Integer) = convert(Ptr{T},x)+(i-1)*sizeof(T)
 
 # unsafe pointer to array conversions
-pointer_to_array(p, dims::Dims) = pointer_to_array(p, dims, false)
-pointer_to_array(p, d::Int, own=false) = pointer_to_array(p, (d,), own)
-function pointer_to_array{T,N}(p::Ptr{T}, dims::NTuple{N,Int}, own::Bool)
+pointer_to_array(p, d::Integer, own=false) = pointer_to_array(p, (d,), own)
+function pointer_to_array{T,N}(p::Ptr{T}, dims::NTuple{N,Int}, own::Bool=false)
     ccall(:jl_ptr_to_array, Array{T,N}, (Any, Ptr{T}, Any, Int32),
           Array{T,N}, p, dims, own)
+end
+function pointer_to_array{T,N}(p::Ptr{T}, dims::NTuple{N,Integer}, own::Bool=false)
+    for d in dims
+        if !(0 <= d <= typemax(Int))
+            error("invalid Array dimensions")
+        end
+    end
+    pointer_to_array(p, convert((Int...), dims), own)
 end
 unsafe_load(p::Ptr,i::Integer) = pointerref(p, int(i))
 unsafe_load(p::Ptr) = unsafe_load(p, 1)

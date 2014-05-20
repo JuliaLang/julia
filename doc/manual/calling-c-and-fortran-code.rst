@@ -11,7 +11,7 @@ and efficient to call C and Fortran functions. Julia has a "no
 boilerplate" philosophy: functions can be called directly from Julia
 without any "glue" code, code generation, or compilation — even from the
 interactive prompt. This is accomplished just by making an appropriate call
-with ``call`` syntax, which looks like an ordinary function call.
+with ``ccall`` syntax, which looks like an ordinary function call.
 
 The code to be called must be available as a shared library. Most C and
 Fortran libraries ship compiled as shared libraries already, but if you
@@ -216,8 +216,6 @@ Julia type with the same name, prefixed by C. This can help for writing portable
 **System-independent:**
 
 +------------------------+-------------------+--------------------------------+
-| ``bool`` (8 bits)      | ``Cbool``         | ``Bool``                       |
-+------------------------+-------------------+--------------------------------+
 | ``signed char``        |                   | ``Int8``                       |
 +------------------------+-------------------+--------------------------------+
 | ``unsigned char``      | ``Cuchar``        | ``Uint8``                      |
@@ -266,11 +264,6 @@ Julia type with the same name, prefixed by C. This can help for writing portable
 +------------------------+-------------------+--------------------------------+
 | ``jl_value_t*`` (any Julia Type)           | ``Ptr{Any}``                   |
 +------------------------+-------------------+--------------------------------+
-
-*Note:* the ``bool`` type is only defined by C++, where it is 8 bits
-wide. In C, however, ``int`` is often used for boolean values. Since
-``int`` is 32-bits wide (on all supported systems), there is some
-potential for confusion here.
 
 Julia's ``Char`` type is 32 bits, which is not the same as the wide
 character type (``wchar_t`` or ``wint_t``) on all platforms.

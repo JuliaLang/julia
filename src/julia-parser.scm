@@ -7,12 +7,12 @@
      ; the way the lexer works, every prefix of an operator must also
      ; be an operator.
      (-- -->)
-     (> < >= <= == === != !== |.>| |.<| |.>=| |.<=| |.==| |.!=| |.=| |.!| |<:| |>:|)
+     (> < >= ≥ <= ≤ == === ≡ != ≠ !== ≢ |.>| |.<| |.>=| |.≥| |.<=| |.≤| |.==| |.!=| |.≠| |.=| |.!| |<:| |>:| ∈ ∉ ∋ ∌ ⊆ ⊈ ⊂ ⊄ ⊊)
      (|\|>| |<\||)
      (: |..|)
-     (+ - |.+| |.-| |\|| $)
+     (+ - ⊕ ⊖ ⊞ ⊟ |.+| |.-| |\|| ∪ ∨ $ ⊔)
      (<< >> >>> |.<<| |.>>| |.>>>|)
-     (* / |./| % |.%| & |.*| |\\| |.\\|)
+     (* / |./| ÷ % ⋅ ∘ × |.%| |.*| |\\| |.\\| & ∩ ∧ ⊗ ⊘ ⊙ ⊚ ⊛ ⊠ ⊡ ⊓)
      (// .//)
      (^ |.^|)
      (|::|)
@@ -75,7 +75,7 @@
 (define (kwarg? e)
   (and (pair? e) (eq? (car e) 'kw)))
 
-(define unary-ops '(+ - ! ~ |<:| |>:|))
+(define unary-ops '(+ - ! ~ |<:| |>:| √))
 
 ; operators that are both unary and binary
 (define unary-and-binary-ops '(+ - $ & ~))
@@ -83,8 +83,8 @@
 ; operators that are special forms, not function names
 (define syntactic-operators
   '(= := += -= *= /= //= .//= .*= ./= |\\=| |.\\=| ^= .^= %= .%= |\|=| &= $= =>
-      <<= >>= >>>= -> --> |\|\|| && |::| |.| ... |.+=| |.-=|))
-(define syntactic-unary-operators '($ &))
+      <<= >>= >>>= -> --> |\|\|| && |.| ... |.+=| |.-=|))
+(define syntactic-unary-operators '($ & |::|))
 
 (define reserved-words '(begin while if for try return break continue
 			 function macro quote let local global const
@@ -98,7 +98,7 @@
 (define ctrans-op (string->symbol "'"))
 (define vararg-op (string->symbol "..."))
 
-(define operators (list* '~ '! '-> ctrans-op trans-op vararg-op
+(define operators (list* '~ '! '-> '√ ctrans-op trans-op vararg-op
 			 (delete-duplicates
 			  (apply append (vector->list ops-by-prec)))))
 
@@ -117,14 +117,6 @@
   (let ((chrs (string->list "()[]{},;\"`@")))
     (lambda (c) (memv c chrs))))
 (define (newline? c) (eqv? c #\newline))
-(define (identifier-char? c) (or (and (char>=? c #\A)
-				      (char<=? c #\Z))
-				 (and (char>=? c #\a)
-				      (char<=? c #\z))
-				 (and (char>=? c #\0)
-				      (char<=? c #\9))
-				 (char>=? c #\uA1)
-				 (eqv? c #\_)))
 ;; characters that can be in an operator
 (define (opchar? c) (and (char? c) (string.find op-chars c)))
 ;; characters that can follow . in an operator
@@ -390,6 +382,14 @@
 	     (skip-ws-and-comments port)))
   #t)
 
+(define (zero-width-space? c)
+  (memv c '(#\u200b #\u2060 #\ufeff)))
+
+(define (default-ignorable-char? c)
+  (or (zero-width-space? c)
+      (and (char>=? c #\u200c) (char<=? c #\u200f))
+      (memv c '(#\u00ad #\u2061 #\u115f))))
+
 (define (next-token port s)
   (aset! s 2 (eq? (skip-ws port whitespace-newline) #t))
   (let ((c (peek-char port)))
@@ -401,7 +401,7 @@
 
 	  ((eqv? c #\#)         (skip-comment port) (next-token port s))
 
-	  ; . is difficult to handle; it could start a number or operator
+	  ;; . is difficult to handle; it could start a number or operator
 	  ((and (eqv? c #\.)
 		(let ((c (read-char port))
 		      (nextc (peek-char port)))
@@ -418,9 +418,13 @@
 
 	  ((opchar? c)  (read-operator port (read-char port)))
 
-	  ((identifier-char? c) (accum-julia-symbol c port))
+	  ((identifier-start-char? c) (accum-julia-symbol c port))
 
-	  (else (error (string "invalid character \"" (read-char port) "\""))))))
+	  (else
+	   (read-char port)
+	   (if (default-ignorable-char? c)
+	       (error (string "invisible character \\u" (number->string (fixnum c) 16)))
+	       (error (string "invalid character \"" c "\"")))))))
 
 ; --- parser ---
 
@@ -466,7 +470,7 @@
      (if (not (memq t ,ops))
 	 ex
 	 (begin (take-token ,s)
-		(if (or (syntactic-op? t) (eq? t 'in))
+		(if (or (syntactic-op? t) (eq? t 'in) (eq? t '|::|))
 		    (loop (list t ex (,down ,s)) (peek-token ,s))
 		    (loop (list 'call t ex (,down ,s)) (peek-token ,s)))))))
 
@@ -821,10 +825,7 @@
   (parse-factor-h s parse-decl (prec-ops 12)))
 
 (define (parse-decl s)
-  (let loop ((ex (if (eq? (peek-token s) '|::|)
-		     (begin (take-token s)
-			    `(|::| ,(parse-call s)))
-		     (parse-call s))))
+  (let loop ((ex (parse-call s)))
     (let ((t (peek-token s)))
       (case t
 	((|::|) (take-token s)
@@ -849,8 +850,8 @@
     (if (syntactic-unary-op? op)
 	(begin (take-token s)
 	       (cond ((closing-token? (peek-token s))  op)
-		     ((eq? op '&)  (list op (parse-call s)))
-		     (else         (list op (parse-atom s)))))
+		     ((memq op '(& |::|))  (list op (parse-call s)))
+		     (else                 (list op (parse-atom s)))))
 	(parse-atom s))))
 
 ;; parse function call, indexing, dot, and transpose expressions
@@ -1526,7 +1527,7 @@
 (define (parse-interpolate s)
   (let* ((p (ts:port s))
          (c (peek-char p)))
-    (cond ((identifier-char? c)
+    (cond ((identifier-start-char? c)
            (parse-atom s))
           ((eqv? c #\()
            (read-char p)

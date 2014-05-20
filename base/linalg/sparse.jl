@@ -126,6 +126,7 @@ end
 *{TvA,TiA}(X::BitArray{2}, A::SparseMatrixCSC{TvA,TiA}) = invoke(*, (AbstractMatrix, SparseMatrixCSC), X, A)
 # TODO: Tridiagonal * Sparse should be implemented more efficiently
 *{TX,TvA,TiA}(X::Tridiagonal{TX}, A::SparseMatrixCSC{TvA,TiA}) = invoke(*, (Tridiagonal, AbstractMatrix), X, A)
+*{TvA,TiA}(X::Triangular, A::SparseMatrixCSC{TvA,TiA}) = full(X)*A
 function *{TX,TvA,TiA}(X::AbstractMatrix{TX}, A::SparseMatrixCSC{TvA,TiA})
     mX, nX = size(X)
     nX == A.m || throw(DimensionMismatch(""))
@@ -563,8 +564,19 @@ function kron{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti}, b::SparseMatrixCSC{Tv,Ti})
             end
         end
     end
-    SparseMatrixCSC{Tv,Ti}(m, n, colptr, rowval, nzval)
+    SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
+
+function kron{Tv1,Ti1,Tv2,Ti2}(A::SparseMatrixCSC{Tv1,Ti1}, B::SparseMatrixCSC{Tv2,Ti2})
+    Tv_res = promote_type(Tv1, Tv2)
+    Ti_res = promote_type(Ti1, Ti2)
+    A = convert(SparseMatrixCSC{Tv_res,Ti_res}, A)
+    B = convert(SparseMatrixCSC{Tv_res,Ti_res}, B)
+    return kron(A,B)
+end
+
+kron(A::SparseMatrixCSC, B::VecOrMat) = kron(A, sparse(B))
+kron(A::VecOrMat, B::SparseMatrixCSC) = kron(sparse(A), B)
 
 ## det, inv, cond
 

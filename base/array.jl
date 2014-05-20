@@ -84,12 +84,21 @@ function reinterpret{T,S,N}(::Type{T}, a::Array{S}, dims::NTuple{N,Int})
 end
 reinterpret(t::Type,x) = reinterpret(t,[x])[1]
 
-function reshape{T,N}(a::Array{T}, dims::NTuple{N,Int})
+# reshaping to same # of dimensions
+function reshape{T,N}(a::Array{T,N}, dims::NTuple{N,Int})
     if prod(dims) != length(a)
         throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(a))"))
     end
     if dims == size(a)
         return a
+    end
+    ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
+end
+
+# reshaping to different # of dimensions
+function reshape{T,N}(a::Array{T}, dims::NTuple{N,Int})
+    if prod(dims) != length(a)
+        throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(a))"))
     end
     ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
 end
@@ -207,8 +216,6 @@ convert{T,n}(::Type{Array{T}}, x::Array{T,n}) = x
 convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
 convert{T,n,S}(::Type{Array{T}}, x::Array{S,n}) = convert(Array{T,n}, x)
 convert{T,n,S}(::Type{Array{T,n}}, x::Array{S,n}) = copy!(similar(x,T), x)
-
-convert{T,S,N}(::Type{AbstractArray{T,N}}, B::StridedArray{S,N}) = copy!(similar(B,T), B)
 
 function collect(T::Type, itr)
     if applicable(length, itr)
@@ -678,10 +685,9 @@ end
 ## Binary arithmetic operators ##
 
 promote_array_type{Scalar, Arry}(::Type{Scalar}, ::Type{Arry}) = promote_type(Scalar, Arry)
-promote_array_type{S<:Real, A<:Real}(::Type{S}, ::Type{A}) = A
-promote_array_type{S<:Complex, A<:Complex}(::Type{S}, ::Type{A}) = A
+promote_array_type{S<:Real, A<:FloatingPoint}(::Type{S}, ::Type{A}) = A
+promote_array_type{S<:Union(Complex, Real), AT<:FloatingPoint}(::Type{S}, ::Type{Complex{AT}}) = Complex{AT}
 promote_array_type{S<:Integer, A<:Integer}(::Type{S}, ::Type{A}) = A
-promote_array_type{S<:Real, A<:Integer}(::Type{S}, ::Type{A}) = promote_type(S, A)
 promote_array_type{S<:Integer}(::Type{S}, ::Type{Bool}) = S
 
 ./{T<:Integer}(x::Integer, y::StridedArray{T}) =

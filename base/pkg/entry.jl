@@ -305,9 +305,11 @@ end
 function publish(branch::String)
     Git.branch(dir="METADATA") == branch ||
         error("METADATA must be on $branch to publish changes")
-    Git.success(`push -q -n origin $branch`, dir="METADATA") ||
-        error("METADATA is behind origin/$branch – run `Pkg.update()` before publishing")
     Git.run(`fetch -q`, dir="METADATA")
+    ahead_remote, ahead_local = map(int,split(Git.readchomp(`rev-list --count --left-right origin/$branch...$branch`, dir="METADATA"),'\t'))
+    ahead_remote > 0 && error("METADATA is behind origin/$branch – run `Pkg.update()` before publishing")
+    ahead_local == 0 && error("There are no METADATA changes to publish")
+
     info("Validating METADATA")
     check_metadata()
     tags = Dict{ASCIIString,Vector{ASCIIString}}()

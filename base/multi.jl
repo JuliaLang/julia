@@ -106,8 +106,23 @@ end
 Worker(host::String, port::Integer, sock::TcpSocket) =
     Worker(host, port, sock, 0)
 function Worker(host::String, port::Integer) 
-    w = Worker(host, port, connect(host,uint16(port)))
-    w.bind_addr = getaddrinfo(host)
+    # Connect to the loopback port if requested host has the same ipaddress as self.
+    if host == string(LPROC.bind_addr)
+        w = Worker(host, port, connect("127.0.0.1", uint16(port)))
+    else
+        w = Worker(host, port, connect(host, uint16(port)))
+    end
+    # Avoid calling getaddrinfo if possible - involves a DNS lookup
+    # host may be a stringified ipv4 / ipv6 address or a dns name
+    if host == "localhost"
+        w.bind_addr = parseip("127.0.0.1")
+    else
+        try 
+            w.bind_addr = parseip(host)
+        catch
+            w.bind_addr = getaddrinfo(host) 
+        end
+    end
     w
 end
 function Worker(host::String, bind_addr::String, port::Integer, tunnel_user::String, sshflags) 
@@ -180,7 +195,7 @@ end
 type LocalProcess
     id::Int
     bind_addr::IpAddr
-    LocalProcess() = new()
+    LocalProcess() = new(1)
 end
 
 const LPROC = LocalProcess()
@@ -433,8 +448,8 @@ type RemoteRef
     next_id() = (id=(myid(),REQ_ID); REQ_ID+=1; id)
 end
 
-hash(r::RemoteRef) = hash(r.whence)+3*hash(r.id)
-isequal(r::RemoteRef, s::RemoteRef) = (r.whence==s.whence && r.id==s.id)
+hash(r::RemoteRef, h::Uint) = hash(r.whence, hash(r.id, h))
+==(r::RemoteRef, s::RemoteRef) = (r.whence==s.whence && r.id==s.id)
 
 rr2id(r::RemoteRef) = (r.whence, r.id)
 
@@ -954,8 +969,6 @@ function start_worker(out::IO)
     #close(STDIN)
 
     disable_threaded_libs()
-
-    ccall(:jl_install_sigint_handler, Void, ())
     disable_nagle(sock)
 
     try
@@ -1312,9 +1325,9 @@ function pmap(f, lsts...; err_retry=true, err_stop=false)
     function getnext_tasklet()
         if is_task_in_error() && err_stop
             return nothing
-        elseif all([!done(lsts[idx],states[idx]) for idx in 1:len])
+        elseif !any(idx->done(lsts[idx],states[idx]), 1:len)
             nxts = [next(lsts[idx],states[idx]) for idx in 1:len]
-            map(idx->states[idx]=nxts[idx][2], 1:len)
+            for idx in 1:len; states[idx] = nxts[idx][2]; end
             nxtvals = [x[1] for x in nxts]
             return (getnextidx(), nxtvals)
             
@@ -1577,3 +1590,21 @@ function check_same_host(pids)
     end
 end
 
+function terminate_all_workers()
+    if myid() != 1
+        return
+    end
+    
+    if nprocs() > 1
+        ret = rmprocs(workers(); waitfor=0.5)
+        if ret != :ok
+            warn("Forcibly interrupting busy workers")
+            # Might be computation bound, interrupt them and try again
+            interrupt(workers())
+            ret = rmprocs(workers(); waitfor=0.5)
+            if ret != :ok
+                warn("Unable to terminate all workers")
+            end
+        end
+     end   
+end

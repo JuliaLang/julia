@@ -326,12 +326,26 @@ infix operator syntax, but always evaluate their arguments:
 
 Just like condition expressions used in ``if``, ``elseif`` or the
 ternary operator, the operands of ``&&`` or ``||`` must be boolean
-values (``true`` or ``false``). Using a non-boolean value is an error:
+values (``true`` or ``false``). Using a non-boolean value anywhere 
+except for the last entry in a conditional chain is an error:
 
 .. doctest::
 
-    julia> 1 && 2
+    julia> 1 && true
     ERROR: type: non-boolean (Int64) used in boolean context
+
+On the other hand, any type of expression can be used at the end of a conditional chain.  
+It will be evaluated and returned depending on the preceding conditionals:
+
+.. doctest::
+
+    julia> true && (x = rand(2,2))
+    2x2 Array{Float64,2}:
+      0.104159  0.402732
+      0.377173  0.163156
+
+    julia> false && (x = rand(2,2))
+    false
 
 .. _man-loops:
 
@@ -567,12 +581,18 @@ negative real value:
     try sqrt(complex(x))
      in sqrt at math.jl:284
 
+You may define your own exceptions in the following way:
+
+.. doctest::
+
+    julia> type MyCustomException <: Exception end
+
 The ``throw`` function
 ~~~~~~~~~~~~~~~~~~~~~~
 
 Exceptions can be created explicitly with ``throw``. For example, a function
 defined only for nonnegative numbers could be written to ``throw`` a ``DomainError``
-if the argument is negative. :
+if the argument is negative:
 
 .. doctest::
 
@@ -587,7 +607,7 @@ if the argument is negative. :
      in f at none:1
 
 Note that ``DomainError`` without parentheses is not an exception, but a type of
-exception. It needs to be called to obtain an ``Exception`` object :
+exception. It needs to be called to obtain an ``Exception`` object:
 
 .. doctest::
 
@@ -596,6 +616,24 @@ exception. It needs to be called to obtain an ``Exception`` object :
     
     julia> typeof(DomainError) <: Exception
     false
+
+Additionally, some exception types take one or more arguments that are used for
+error reporting:
+
+.. doctest::
+
+    julia> throw(UndefVarError(:x))
+    ERROR: x not defined
+
+This mechanism can be implemented easily by custom exception types following
+the way ``UndefVarError`` is written:
+
+.. doctest::
+
+    julia> type UndefVarError <: Exception
+               var::Symbol
+           end
+    julia> showerror(io::IO, e::UndefVarError) = print(io, e.var, " not defined")
 
 Errors
 ~~~~~~

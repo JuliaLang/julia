@@ -144,7 +144,7 @@ vecnorm(x::Number, p::Real=2) = p == 0 ? real(x==0 ? zero(x) : one(x)) : abs(x)
 norm(x::AbstractVector, p::Real=2) = vecnorm(x, p)
 
 function norm1{T}(A::AbstractMatrix{T})
-    m,n = size(A)
+    m, n = size(A)
     Tnorm = typeof(float(real(zero(T))))
     Tsum = promote_type(Float64,Tnorm)
     nrm::Tsum = 0
@@ -161,6 +161,7 @@ function norm1{T}(A::AbstractMatrix{T})
 end
 function norm2{T}(A::AbstractMatrix{T})
     m,n = size(A)
+    if m == 1 || n == 1 return vecnorm2(A) end
     Tnorm = typeof(float(real(zero(T))))
     (m == 0 || n == 0) ? zero(Tnorm) : convert(Tnorm, svdvals(A)[1])
 end
@@ -211,7 +212,10 @@ trace(x::Number) = x
 #det(a::AbstractMatrix)
 
 inv(a::AbstractVector) = error("argument must be a square matrix")
-inv{T}(A::AbstractMatrix{T}) = A_ldiv_B!(A,eye(T, chksquare(A)))
+function inv{T}(A::AbstractMatrix{T})
+    S = typeof(one(T)/one(T))
+    A_ldiv_B!(convert(AbstractMatrix{S}, A), eye(S, chksquare(A)))
+end
 
 function \{TA,TB,N}(A::AbstractMatrix{TA}, B::AbstractArray{TB,N})
     TC = typeof(one(TA)/one(TB))
@@ -311,7 +315,7 @@ function peakflops(n::Integer=2000; parallel::Bool=false)
     t = @elapsed a*a
     a = rand(n,n)
     t = @elapsed a*a
-    parallel ? sum(pmap(peakflops, [ n for i in 1:nworkers()])) : (2*n^3/t)
+    parallel ? sum(pmap(peakflops, [ n for i in 1:nworkers()])) : (2*float64(n)^3/t)
 end
 
 # BLAS-like in-place y=alpha*x+y function (see also the version in blas.jl

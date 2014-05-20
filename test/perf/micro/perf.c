@@ -5,7 +5,7 @@
 #include "perf.h"
 
 // include RNG code:
-#include "../../../deps/random/randmtzig.c"
+#include "../../../deps/Rmath/src/randmtzig.c"
 
 double *myrand(int n) {
     double *d = (double *)malloc(n*sizeof(double));

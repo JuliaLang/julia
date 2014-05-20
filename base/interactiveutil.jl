@@ -30,7 +30,7 @@ function edit(file::String, line::Integer)
     elseif edname == "textmate" || edname == "mate"
         spawn(`$edpath $file -l $line`)
     elseif beginswith(edname, "subl")
-        spawn(`$edpath $file:$line`)
+        spawn(`$(shell_split(edpath)) $file:$line`)
     elseif OS_NAME == :Windows && (edname == "start" || edname == "open")
         spawn(`start /b $file`)
     elseif OS_NAME == :Darwin && (edname == "start" || edname == "open")
@@ -257,14 +257,18 @@ function methodswith(t::Type, m::Module, showparents::Bool=false)
            mt = eval(m, nm)
            d = mt.env.defs
            while !is(d,())
-               if any(map(x -> x == t || (showparents && t <: x && x != Any && x != ANY && !isa(x, TypeVar)), d.sig))
+               if any(map(x -> begin
+                                   x == t || (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
+                                                            (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
+                                   x != Any && x != ANY
+                               end, d.sig))
                    push!(meths, d)
                end
                d = d.next
            end
         end
     end
-    return meths
+    return unique(meths)
 end
 
 function methodswith(t::Type, showparents::Bool=false)
@@ -315,6 +319,7 @@ end
     if res != 0
         error("automatic download failed (error: $res): $url")
     end
+    filename
 end
 
 function download(url::String)

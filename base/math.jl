@@ -20,17 +20,23 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
 
 import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
-             max, min, minmax, ceil, floor, trunc, round, ^, exp2, exp10
+             max, min, minmax, ceil, floor, trunc, round, ^, exp2,
+             exp10, expm1
 
 import Core.Intrinsics: nan_dom_err, sqrt_llvm, box, unbox, powi_llvm
 
 # non-type specific math functions
 
-clamp(x::Real, lo::Real, hi::Real) = ifelse(x > hi, hi, ifelse(x < lo, lo, x))
-clamp{T<:Real}(x::AbstractArray{T,1}, lo::Real, hi::Real) = [clamp(xx, lo, hi) for xx in x]
-clamp{T<:Real}(x::AbstractArray{T,2}, lo::Real, hi::Real) =
+clamp{X,L,H}(x::X, lo::L, hi::H) =
+    ifelse(x > hi, convert(promote_type(X,L,H), hi),
+           ifelse(x < lo,
+                  convert(promote_type(X,L,H), lo),
+                  convert(promote_type(X,L,H), x)))
+
+clamp{T}(x::AbstractArray{T,1}, lo, hi) = [clamp(xx, lo, hi) for xx in x]
+clamp{T}(x::AbstractArray{T,2}, lo, hi) =
     [clamp(x[i,j], lo, hi) for i in 1:size(x,1), j in 1:size(x,2)]
-clamp{T<:Real}(x::AbstractArray{T}, lo::Real, hi::Real) =
+clamp{T}(x::AbstractArray{T}, lo, hi) =
     reshape([clamp(xx, lo, hi) for xx in x], size(x))
 
 # evaluate p[1] + x * (p[2] + x * (....)), i.e. a polynomial via Horner's rule
@@ -624,7 +630,7 @@ besselh(nu::Real, k::Integer, z::Complex) = besselh(float64(nu), k, complex128(z
 besselh(nu::Real, k::Integer, x::Real) = besselh(float64(nu), k, complex128(x))
 @vectorize_2arg Number besselh
 
-besseli(nu::Real, z::Complex64) = complex64(bessely(float64(nu), complex128(z)))
+besseli(nu::Real, z::Complex64) = complex64(besseli(float64(nu), complex128(z)))
 besseli(nu::Real, z::Complex) = besseli(float64(nu), complex128(z))
 besseli(nu::Real, x::Integer) = besseli(nu, float64(x))
 function besseli(nu::Real, x::FloatingPoint)
@@ -657,6 +663,9 @@ besselk(nu::Real, x::Integer) = besselk(nu, float64(x))
 function besselk(nu::Real, x::FloatingPoint)
     if x < 0
         throw(DomainError())
+    end
+    if x == 0
+        return oftype(x, Inf)
     end
     oftype(x, real(besselk(float64(nu), complex128(x))))
 end

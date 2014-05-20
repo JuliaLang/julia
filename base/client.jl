@@ -253,6 +253,8 @@ function process_options(args::Vector{UTF8String})
             # load juliarc now before processing any more options
             load_juliarc()
             startup = false
+        elseif args[i] == "-i"
+            global is_interactive = true
         elseif beginswith(args[i], "--color")
             if args[i] == "--color"
                 color_set = true
@@ -279,6 +281,7 @@ function process_options(args::Vector{UTF8String})
             repl = false
             # remove julia's arguments
             splice!(ARGS, 1:length(ARGS), args[i+1:end])
+            ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
             include(args[i])
             break
         else
@@ -330,7 +333,11 @@ function early_init()
         # Prevent openblas from stating to many threads, unless/until specifically requested
         ENV["OPENBLAS_NUM_THREADS"] = 8
     end
+end
+
+function init_parallel()
     start_gc_msgs_task()
+    atexit(terminate_all_workers)
 end
 
 import .Terminals
@@ -340,6 +347,7 @@ function _start()
     early_init()
 
     try
+        init_parallel()
         init_bind_addr(ARGS)
         any(a->(a=="--worker"), ARGS) || init_head_sched()
         init_load_path()
@@ -348,7 +356,7 @@ function _start()
         local term
         if repl
             if !isa(STDIN,TTY)
-                global is_interactive = !isa(STDIN,Union(File,IOStream))
+                global is_interactive |= !isa(STDIN,Union(File,IOStream))
                 color_set || (global have_color = false)
             else
                 term = Terminals.TTYTerminal(get(ENV,"TERM",@windows? "" : "dumb"),STDIN,STDOUT,STDERR)
@@ -377,7 +385,6 @@ function _start()
                 quit()
             end
             quiet || REPL.banner(term,term)
-            ccall(:jl_install_sigint_handler, Void, ())
             local repl
             if term.term_type == "dumb"
                 repl = REPL.BasicREPL(term)

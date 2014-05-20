@@ -46,8 +46,10 @@ function eval_user_input(ast::ANY, backend::REPLBackend)
                 iserr, lasterr = false, ()
             else
                 ast = expand(ast)
-                ans = Base.Meta.quot(backend.ans)
-                eval(Main, :(ans = $(ans)))
+                ans = backend.ans
+                # note: value wrapped in a non-syntax value to avoid evaluating
+                # possibly-invalid syntax (issue #6763).
+                eval(Main, :(ans = $({ans})[1]))
                 value = eval(Main, ast)
                 backend.ans = value
                 put!(backend.response_channel, (value, nothing))
@@ -114,8 +116,8 @@ end
 display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
 
 print_response(d::REPLDisplay, val::ANY, bt, show_value::Bool, have_color::Bool) =
-    print_response(d, outstream(d.repl), val, bt, show_value, have_color)
-function print_response(d::REPLDisplay, errio::IO, val::ANY, bt, show_value::Bool, have_color::Bool)
+    print_response(outstream(d.repl), val, bt, show_value, have_color)
+function print_response(errio::IO, val::ANY, bt, show_value::Bool, have_color::Bool)
     while true
         try
             if bt !== nothing
@@ -125,7 +127,7 @@ function print_response(d::REPLDisplay, errio::IO, val::ANY, bt, show_value::Boo
             else
                 if val !== nothing && show_value
                     try
-                        display(d, val)
+                        display(val)
                     catch err
                         println(errio, "Error showing value of type ", typeof(val), ":")
                         rethrow(err)
@@ -161,6 +163,7 @@ outstream(r::BasicREPL) = r.terminal
 
 function run_frontend(repl::BasicREPL, repl_channel::RemoteRef, response_channel::RemoteRef)
     d = REPLDisplay(repl)
+    pushdisplay(d)
     while true
         write(repl.terminal, "julia> ")
         line = ""
@@ -181,6 +184,7 @@ function run_frontend(repl::BasicREPL, repl_channel::RemoteRef, response_channel
     end
     # terminate backend
     put!(repl_channel, (nothing, -1))
+    popdisplay(d)
 end
 
 ## LineEditREPL ##
@@ -378,6 +382,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     qpos = position(query_buffer)
     qpos > 0 || return true
     searchdata = bytestring_beforecursor(query_buffer)
+    response_str = bytestring(response_buffer)
 
     # Alright, first try to see if the current match still works
     a = position(response_buffer) + 1
@@ -391,11 +396,12 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
 
     # Start searching
     # First the current response buffer
-    response_str = bytestring(response_buffer)
-    match = searchfunc(response_str, searchdata, a+delta)
-    if match != 0:-1
-        seek(response_buffer, first(match)-1)
-        return true
+    if 1 <= a+delta <= length(response_str)
+        match = searchfunc(response_str, searchdata, a+delta)
+        if match != 0:-1
+            seek(response_buffer, first(match)-1)
+            return true
+        end
     end
 
     # Now search all the other buffers
@@ -606,15 +612,27 @@ function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,
             buf = copy(LineEdit.buffer(s))
             edit_insert(buf,input)
             string = takebuf_string(buf)
+            curspos = position(LineEdit.buffer(s))
             pos = 0
-            sz = length(string.data)
+            inputsz = sizeof(input)
+            sz = sizeof(string)
             while pos <= sz
                 oldpos = pos
                 ast, pos = Base.parse(string, pos, raise=false)
+                if isa(ast, Expr) && ast.head == :error
+                    # Insert all the remaining text as one line (might be empty)
+                    LineEdit.replace_line(s, strip(bytestring(string.data[max(oldpos, 1):end])))
+                    seek(LineEdit.buffer(s), max(curspos-oldpos+inputsz, 0))
+                    LineEdit.refresh_line(s)
+                    break
+                end
                 # Get the line and strip leading and trailing whitespace
                 line = strip(bytestring(string.data[max(oldpos, 1):min(pos-1, sz)]))
                 isempty(line) && continue
                 LineEdit.replace_line(s, line)
+                if oldpos <= curspos
+                    seek(LineEdit.buffer(s),curspos-oldpos+inputsz)
+                end
                 LineEdit.refresh_line(s)
                 (pos > sz && last(string) != '\n') && break
                 if !isa(ast, Expr) || (ast.head != :continue && ast.head != :incomplete)
@@ -666,8 +684,12 @@ function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,
     ModalInterface([main_prompt, shell_mode, help_mode,hkp])
 end
 
-run_frontend(repl::LineEditREPL, repl_channel, response_channel) =
-    run_interface(repl.t, setup_interface(REPLDisplay(repl), repl_channel, response_channel))
+function run_frontend(repl::LineEditREPL, repl_channel, response_channel)
+    d = REPLDisplay(repl)
+    pushdisplay(d)
+    run_interface(repl.t, setup_interface(d, repl_channel, response_channel))
+    popdisplay(d)
+end
 
 if isdefined(Base, :banner_color)
     banner(io, t) = banner(io, hascolor(t))
@@ -718,6 +740,7 @@ function run_frontend(repl::StreamREPL, repl_channel, response_channel)
     have_color = true
     banner(repl.stream, have_color)
     d = REPLDisplay(repl)
+    pushdisplay(d)
     while repl.stream.open
         if have_color
             print(repl.stream,repl.prompt_color)
@@ -741,6 +764,7 @@ function run_frontend(repl::StreamREPL, repl_channel, response_channel)
     end
     # Terminate Backend
     put!(repl_channel, (nothing, -1))
+    popdisplay(d)
 end
 
 function start_repl_server(port)

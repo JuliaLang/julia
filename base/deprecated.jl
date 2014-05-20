@@ -42,12 +42,12 @@ function firstcaller(bt::Array{Ptr{None},1}, funcsym::Symbol)
     # Identify the calling line
     i = 1
     while i <= length(bt)
-        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Int32), bt[i], 0)
+        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void},), bt[i])
         i += 1
         if lkup === ()
             continue
         end
-        fname, file, line = lkup
+        fname, file, line, fromC = lkup
         if fname == funcsym
             break
         end
@@ -440,6 +440,8 @@ Set{T<:Number}(xs::T...) = Set{T}(xs)
 @deprecate infs{T}(::Type{T}, dims...)   fill(convert(T,Inf), dims)
 @deprecate infs(dims...)                 fill(Inf, dims)
 @deprecate infs{T}(x::AbstractArray{T})  fill(convert(T,Inf), size(x))
+
+@deprecate bitmix hash
 
 # 0.3 discontinued functions
 

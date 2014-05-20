@@ -58,6 +58,7 @@ include("bitarray.jl")
 include("intset.jl")
 include("dict.jl")
 include("set.jl")
+include("hashing.jl")
 include("iterator.jl")
 
 # compiler
@@ -116,6 +117,7 @@ include("methodshow.jl")
 include("floatfuncs.jl")
 include("math.jl")
 importall .Math
+const (√)=sqrt
 include("float16.jl")
 
 # multidimensional arrays
@@ -149,12 +151,6 @@ end
 # reduction along dims
 include("reducedim.jl")  # macros in this file relies on string.jl
 
-# random number generation and statistics
-include("statistics.jl")
-include("librandom.jl")
-include("random.jl")
-importall .Random
-
 # basic data structures
 include("ordering.jl")
 importall .Order
@@ -165,6 +161,30 @@ include("sort.jl")
 importall .Sort
 include("combinatorics.jl")
 
+# rounding utilities
+include("rounding.jl")
+importall .Rounding
+
+# BigInts and BigFloats
+include("gmp.jl")
+importall .GMP
+include("mpfr.jl")
+importall .MPFR
+big(n::Integer) = convert(BigInt,n)
+big(x::FloatingPoint) = convert(BigFloat,x)
+big(q::Rational) = big(num(q))//big(den(q))
+big(z::Complex) = complex(big(real(z)),big(imag(z)))
+@vectorize_1arg Number big
+
+# more hashing definitions
+include("hashing2.jl")
+
+# random number generation and statistics
+include("statistics.jl")
+include("librandom.jl")
+include("random.jl")
+importall .Random
+
 # distributed arrays and memory-mapped arrays
 include("darray.jl")
 include("mmap.jl")
@@ -173,6 +193,7 @@ include("sharedarray.jl")
 # utilities - version, timing, help, edit, metaprogramming
 include("version.jl")
 include("datafmt.jl")
+importall .DataFmt
 include("deepcopy.jl")
 include("util.jl")
 include("interactiveutil.jl")
@@ -201,6 +222,8 @@ include("sparse.jl")
 importall .SparseMatrix
 include("linalg.jl")
 importall .LinAlg
+const ⋅ = dot
+const × = cross
 include("broadcast.jl")
 importall .Broadcast
 
@@ -208,21 +231,6 @@ importall .Broadcast
 include("fftw.jl")
 include("dsp.jl")
 importall .DSP
-
-# rounding utilities
-include("rounding.jl")
-importall .Rounding
-
-# BigInts and BigFloats
-include("gmp.jl")
-importall .GMP
-include("mpfr.jl")
-importall .MPFR
-big(n::Integer) = convert(BigInt,n)
-big(x::FloatingPoint) = convert(BigFloat,x)
-big(q::Rational) = big(num(q))//big(den(q))
-big(z::Complex) = complex(big(real(z)),big(imag(z)))
-@vectorize_1arg Number big
 
 # (s)printf macros
 include("printf.jl")
@@ -265,14 +273,6 @@ end
 include("precompile.jl")
 
 include = include_from_node1
-
-# invoke type inference, running the existing inference code on the new
-# inference code to cache an optimized version of it.
-begin
-    local atypes = (LambdaStaticData, Tuple, (), LambdaStaticData, Bool)
-    local minf = _methods(typeinf, atypes, -1)
-    typeinf_ext(minf[1][3].func.code, atypes, (), minf[1][3].func.code)
-end
 
 end # baremodule Base
 

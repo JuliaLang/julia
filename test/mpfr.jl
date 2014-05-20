@@ -26,22 +26,30 @@ y = BigFloat(12//1)
 x = BigFloat(12)
 y = BigFloat(30)
 @test x + y == BigFloat(42)
+@test x + typemax(Uint128) == x + BigInt(typemax(Uint128))
+@test x + typemax(Int128) == x + BigInt(typemax(Int128))
 
 # -
 x = BigFloat(12)
 y = BigFloat(-30)
 @test x - y == BigFloat(42)
+@test x - typemax(Uint128) == x - BigInt(typemax(Uint128))
+@test x - typemax(Int128) == x - BigInt(typemax(Int128))
 
 # *
 x = BigFloat(6)
 y = BigFloat(9)
 @test x * y != BigFloat(42)
 @test x * y == BigFloat(54)
+@test x * typemax(Uint128) == x * BigInt(typemax(Uint128))
+@test x * typemax(Int128) == x * BigInt(typemax(Int128))
 
 # /
 x = BigFloat(9)
 y = BigFloat(6)
 @test x / y == BigFloat(9/6)
+@test x / typemax(Uint128) == x / BigInt(typemax(Uint128))
+@test x / typemax(Int128) == x / BigInt(typemax(Int128))
 
 # iterated arithmetic
 a = BigFloat(12.25)

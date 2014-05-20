@@ -74,7 +74,12 @@ bind(b,ip"127.0.0.1",2135)
 c = Condition()
 @async begin
     @test bytestring(recv(a)) == "Hello World"
-    notify(c)
+    # Issue 6505
+    @async begin
+        @test bytestring(recv(a)) == "Hello World"
+        notify(c)
+    end
+    send(b,ip"127.0.0.1",2134,"Hello World")
 end
 send(b,ip"127.0.0.1",2134,"Hello World")
 wait(c)

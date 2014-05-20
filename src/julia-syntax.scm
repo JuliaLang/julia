@@ -803,6 +803,10 @@
 	  (defs2 (if (null? defs)
 		     (list (default-inner-ctor name field-names field-types))
 		     defs)))
+     (for-each (lambda (v)
+		 (if (not (symbol? v))
+		     (error (string "field name \"" (deparse v) "\" is not a symbol"))))
+	       field-names)
      (if (null? params)
 	 `(block
 	   (global ,name)
@@ -1199,8 +1203,14 @@
 (define vars-introduced-by-patterns
   (pattern-set
    ;; function with static parameters
-   (pattern-lambda (function (call (curly name . sparams) . argl) body)
-		   (cons 'varlist (llist-vars (fix-arglist argl))))
+   (pattern-lambda
+    (function (call (curly name . sparams) . argl) body)
+    (cons 'varlist (append (llist-vars (fix-arglist argl))
+			   (apply nconc
+				  (map (lambda (v) (trycatch
+						    (list (sparam-name v))
+						    (lambda (e) '())))
+				       sparams)))))
 
    ;; function definition
    (pattern-lambda (function (call name . argl) body)
@@ -2795,7 +2805,13 @@ So far only the second case can actually occur.
 	 (letrec ((args (lam:args e))
 		  (locl (cdr (caddr e)))
 		  (allv (nconc (map arg-name args) locl))
-		  (fv   (diff (free-vars (lam:body e)) allv))
+		  (fv   (let* ((fv (diff (free-vars (lam:body e)) allv))
+			       ;; add variables referenced in declared types for free vars
+			       (dv (apply nconc (map (lambda (v)
+						       (let ((vi (var-info-for v env)))
+							 (if vi (free-vars (vinfo:type vi)) '())))
+						     fv))))
+			  (append (diff dv fv) fv)))
 		  (glo  (declared-global-vars (lam:body e)))
 		  ; make var-info records for vars introduced by this lambda
 		  (vi   (nconc

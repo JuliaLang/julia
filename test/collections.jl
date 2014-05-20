@@ -80,7 +80,7 @@ type I1438T
     id
 end
 import Base.hash
-hash(x::I1438T) = x.id
+hash(x::I1438T, h::Uint) = hash(x.id, h)
 
 begin
     local seq, xs, s

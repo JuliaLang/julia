@@ -299,7 +299,10 @@ end
 bool(x::AbstractArray{Bool}) = x
 bool(x::AbstractArray) = copy!(similar(x,Bool), x)
 
-convert{T,S,N}(::Type{AbstractArray{T,N}}, A::Array{S,N}) = convert(Array{T,N}, A)
+convert{T,N}(::Type{AbstractArray{T,N}}, A::AbstractArray{T,N}) = A
+convert{T,S,N}(::Type{AbstractArray{T,N}}, A::AbstractArray{S,N}) = copy!(similar(A,T), A)
+
+convert{T,N}(::Type{Array}, A::AbstractArray{T,N}) = convert(Array{T,N}, A)
 
 for (f,T) in ((:float16,    Float16),
               (:float32,    Float32),
@@ -1258,7 +1261,7 @@ function map_to!(f::Callable, first, dest::AbstractArray, A::AbstractArray)
 end
 
 function map(f::Callable, A::AbstractArray)
-    if isempty(A); return {}; end
+    if isempty(A); return similar(A); end
     first = f(A[1])
     dest = similar(A, typeof(first))
     return map_to!(f, first, dest, A)
@@ -1275,8 +1278,8 @@ end
 
 function map(f::Callable, A::AbstractArray, B::AbstractArray)
     shp = promote_shape(size(A),size(B))
-    if isempty(A)
-        return similar(A, Any, shp)
+    if prod(shp) == 0
+        return similar(A, promote_type(eltype(A),eltype(B)), shp)
     end
     first = f(A[1], B[1])
     dest = similar(A, typeof(first), shp)
@@ -1313,3 +1316,44 @@ push!(A, a, b, c...) = push!(push!(A, a, b), c...)
 unshift!(A) = A
 unshift!(A, a, b) = unshift!(unshift!(A, b), a)
 unshift!(A, a, b, c...) = unshift!(unshift!(A, c...), a, b)
+
+# Fill S (resized as needed) with a random subsequence of A, where
+# each element of A is included in S with independent probability p.
+# (Note that this is different from the problem of finding a random
+#  size-m subset of A where m is fixed!)
+function randsubseq!(S::AbstractArray, A::AbstractArray, p::Real)
+    0 <= p <= 1 || throw(ArgumentError("probability $p not in [0,1]"))
+    n = length(A)
+    p == 1 && return copy!(resize!(S, n), A)
+    empty!(S)
+    p == 0 && return S
+    nexpected = p * length(A)
+    sizehint(S, iround(nexpected + 5*sqrt(nexpected)))
+    if p > 0.15 # empirical threshold for trivial O(n) algorithm to be better
+        for i = 1:n
+            rand() <= p && push!(S, A[i])
+        end
+    else
+        # Skip through A, in order, from each element i to the next element i+s
+        # included in S. The probability that the next included element is 
+        # s==k (k > 0) is (1-p)^(k-1) * p, and hence the probability (CDF) that
+        # s is in {1,...,k} is 1-(1-p)^k = F(k).   Thus, we can draw the skip s
+        # from this probability distribution via the discrete inverse-transform
+        # method: s = iceil(F^{-1}(u)) where u = rand(), which is simply
+        # s = iceil(log(rand()) / log1p(-p)).
+        L = 1 / log1p(-p)
+        i = 0
+        while true
+            s = log(rand()) * L # note that rand() < 1, so s > 0
+            s >= n - i && return S # compare before iceil to avoid overflow
+            push!(S, A[i += iceil(s)])
+        end
+        # [This algorithm is similar in spirit to, but much simpler than,
+        #  the one by Vitter for a related problem in "Faster methods for
+        #  random sampling," Comm. ACM Magazine 7, 703-718 (1984).]
+    end
+    return S
+end
+
+randsubseq{T}(A::AbstractArray{T}, p::Real) = randsubseq!(T[], A, p)
+

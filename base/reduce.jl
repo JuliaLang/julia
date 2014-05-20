@@ -19,7 +19,7 @@ function reduce(op::Callable, itr) # this is a left fold
     end
     s = start(itr)
     if done(itr, s)
-        return op()  # empty collection
+        error("argument is empty")
     end
     (v, s) = next(itr, s)
     if done(itr, s)
@@ -51,7 +51,7 @@ end
 
 function reduce(op::Callable, A::AbstractArray)
     n = length(A)
-    n == 0 ? op() : n == 1 ? A[1] : r_pairwise(op,A, 1,n)
+    n == 0 ? error("argument is empty") : n == 1 ? A[1] : r_pairwise(op,A, 1,n)
 end
 
 function reduce(op::Callable, v0, A::AbstractArray)
@@ -121,6 +121,10 @@ function in(x, itr)
     end
     return false
 end
+const ∈ = in
+∉(x, itr)=!∈(x, itr)
+∋(itr, x)= ∈(x, itr)
+∌(itr, x)=!∋(itr, x)
 
 function contains(itr, x)
     depwarn("contains(collection, item) is deprecated, use in(item, collection) instead", :contains)
@@ -149,9 +153,8 @@ end
 
 function countnz{T}(a::AbstractArray{T})
     n = 0
-    z = zero(T)
     for i = 1:length(a)
-        @inbounds n += (a[i] != z)
+        @inbounds n += (a[i] != 0)
     end
     return n
 end
@@ -179,7 +182,7 @@ end
 function sum(itr)
     s = start(itr)
     if done(itr, s)
-        if method_exists(eltype, (typeof(itr),))
+        if applicable(eltype, itr)
             T = eltype(itr)
             return zero(T) + zero(T)
         else
@@ -272,6 +275,13 @@ function sum_pairwise(a::AbstractArray, ifirst::Int, ilast::Int)
     end
 end
 
+function sum{T<:AbstractArray}(a::AbstractArray{T})
+    n = length(a)
+    n == 0 && error("argument is empty")
+    n == 1 && return a[1] + zero(a[1])
+    sum_pairwise(a, 1, length(a))
+end
+
 function sum{T}(a::AbstractArray{T})
     n = length(a)
     n == 0 && return zero(T) + zero(T)
@@ -315,7 +325,7 @@ end
 function prod(itr)
     s = start(itr)
     if done(itr, s)
-        if method_exists(eltype, (typeof(itr),))
+        if applicable(eltype, itr)
             T = eltype(itr)
             return one(T) * one(T)
         else
@@ -505,7 +515,7 @@ end
 function mapreduce(f::Callable, op::Callable, itr)
     s = start(itr)
     if done(itr, s)
-        return op()  # empty collection
+        error("argument is empty")
     end
     (x, s) = next(itr, s)
     v = f(x)
@@ -545,7 +555,7 @@ function mr_pairwise(f::Callable, op::Callable, A::AbstractArray, i1,n)
 end
 function mapreduce(f::Callable, op::Callable, A::AbstractArray)
     n = length(A)
-    n == 0 ? op() : n == 1 ? f(A[1]) : mr_pairwise(f,op,A, 1,n)
+    n == 0 ? error("argument is empty") : n == 1 ? f(A[1]) : mr_pairwise(f,op,A, 1,n)
 end
 function mapreduce(f::Callable, op::Callable, v0, A::AbstractArray)
     n = length(A)

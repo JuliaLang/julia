@@ -122,7 +122,8 @@ true_k3m3 = -0.1221703757571835679 - 3.0151549516807985776im
 @test_approx_eq besselk(3,complex(-3)) true_k3m3
 @test_approx_eq besselk(-3,complex(-3)) true_k3m3
 @test_throws Base.Math.AmosException besselk(200,0.01)
-
+# issue #6564
+@test besselk(1.0,0.0) == Inf
 
 # bessely
 y33 = bessely(3,3.)
@@ -132,6 +133,12 @@ y33 = bessely(3,3.)
 @test_throws DomainError bessely(3,-3)
 @test_approx_eq bessely(3,complex(-3)) 0.53854161610503161800 - 0.61812544451050328724im
 @test_throws Base.Math.AmosException bessely(200.5,0.1)
+
+# issue #6653
+for f in (besselj,bessely,besseli,besselk,hankelh1,hankelh2)
+    @test_approx_eq f(0,1) f(0,complex128(1))
+    @test_approx_eq f(0,1) f(0,complex64(1))
+end
 
 # beta, lbeta
 @test_approx_eq beta(3/2,7/2) 5π/128

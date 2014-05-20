@@ -21,6 +21,7 @@ unpreserve_handle(x) = (v = uvhandles[x]; v == 1 ? pop!(uvhandles,x) : (uvhandle
 immutable RawFD
     fd::Int32
     RawFD(fd::Integer) = new(int32(fd))
+    RawFD(fd::RawFD) = fd
 end
 
 convert(::Type{Int32}, fd::RawFD) = fd.fd
@@ -342,18 +343,18 @@ end
 
 ## BUFFER ##
 ## Allocate a simple buffer
-function alloc_request(buffer::IOBuffer, recommended_size::Int32)
+function alloc_request(buffer::IOBuffer, recommended_size::Uint)
     ensureroom(buffer, int(recommended_size))
     ptr = buffer.append ? buffer.size + 1 : buffer.ptr
     return (pointer(buffer.data, ptr), length(buffer.data)-ptr+1)
 end
-function _uv_hook_alloc_buf(stream::AsyncStream, recommended_size::Int32)
+function _uv_hook_alloc_buf(stream::AsyncStream, recommended_size::Uint)
     (buf,size) = alloc_request(stream.buffer, recommended_size)
     @assert size>0 # because libuv requires this (TODO: possibly stop reading too if it fails)
-    (buf,int32(size))
+    (buf,uint(size))
 end
 
-function notify_filled(buffer::IOBuffer, nread::Int, base::Ptr{Void}, len::Int32)
+function notify_filled(buffer::IOBuffer, nread::Int, base::Ptr{Void}, len::Uint)
     if buffer.append
         buffer.size += nread
     else
@@ -376,7 +377,8 @@ function notify_filled(stream::AsyncStream, nread::Int)
     end
 end
 
-function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::Int32)
+const READ_BUFFER_SZ=10485760           # 10 MB 
+function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::Uint)
     if nread < 0
         if nread != UV_EOF
             # This is a fatal connectin error. Shutdown requests as per the usual 
@@ -396,7 +398,15 @@ function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::
         notify_filled(stream, nread)
         notify(stream.readnotify)
     end
-end
+
+    # Stop reading when 
+    # 1) when we have an infinite buffer, and we have accumulated a lot of unread data OR
+    # 2) we have an alternate buffer that has reached its limit. 
+    if (is_maxsize_unlimited(stream.buffer) && (nb_available(stream.buffer) > READ_BUFFER_SZ )) ||
+       (nb_available(stream.buffer) == stream.buffer.maxsize)
+        stop_reading(stream)
+    end
+ end
 ##########################################
 # Async Workers
 ##########################################
@@ -629,17 +639,44 @@ function readall(stream::AsyncStream)
     return takebuf_string(stream.buffer)
 end
 
-function read!{T}(this::AsyncStream, a::Array{T})
+function read!{T}(s::AsyncStream, a::Array{T})
     isbits(T) || error("read from buffer only supports bits types or arrays of bits types")
-    nb = length(a)*sizeof(T)
-    buf = this.buffer
-    @assert buf.seekable == false
-    @assert buf.maxsize >= nb
-    start_reading(this)
-    wait_readnb(this,nb)
-    read!(this.buffer, a)
+    nb = length(a) * sizeof(T)
+    read!(s, reshape(reinterpret(Uint8, a), nb))
     return a
 end
+
+function read!{Uint8}(s::AsyncStream, a::Vector{Uint8})
+    nb = length(a)
+    sbuf = s.buffer
+    @assert sbuf.seekable == false
+    @assert sbuf.maxsize >= nb
+    
+    if nb_available(sbuf) >= nb
+        return read!(sbuf, a)
+    end
+    
+    if nb <= 65536 # Arbitrary 64K limit under which we are OK with copying the array from the stream's buffer
+        wait_readnb(s,nb)
+        read!(sbuf, a)
+    else
+        stop_reading(s) # Just playing it safe, since we are going to switch buffers.
+        newbuf = PipeBuffer(a, nb) 
+        newbuf.size = 0
+        s.buffer = newbuf
+        write(newbuf, sbuf) 
+        wait_readnb(s,nb)
+        s.buffer = sbuf
+    end
+    return a
+end
+
+function read{T}(s::AsyncStream, ::Type{T}, dims::Dims) 
+    isbits(T) || error("read from buffer only supports bits types or arrays of bits types")
+    nb = prod(dims)*sizeof(T)
+    a = read!(s, Array(Uint8, nb)) 
+    reshape(reinterpret(T, a), dims)
+end    
 
 function read(this::AsyncStream,::Type{Uint8})
     buf = this.buffer
@@ -870,24 +907,30 @@ dup(src::RawFD,target::RawFD) = systemerror("dup",-1==
     ccall((@windows? :_dup2 : :dup2),Int32,
     (Int32,Int32),src.fd,target.fd))
 
-@unix_only _fd(x::AsyncStream) = RawFD(
-    ccall(:jl_uv_handle,Int32,(Ptr{Void},),x.handle))
+_fd(x::IOStream) = RawFD(fd(x))
+@unix_only _fd(x::AsyncStream) = RawFD(ccall(:jl_uv_handle,Int32,(Ptr{Void},),x.handle))
 @windows_only _fd(x::AsyncStream) = WindowsRawSocket(
     ccall(:jl_uv_handle,Ptr{Void},(Ptr{Void},),x.handle))
 
 for (x,writable,unix_fd,c_symbol) in ((:STDIN,false,0,:jl_uv_stdin),(:STDOUT,true,1,:jl_uv_stdout),(:STDERR,true,2,:jl_uv_stderr))
     f = symbol("redirect_"*lowercase(string(x)))
+    _f = symbol(string("_",f))
     @eval begin
-        function ($f)(handle::AsyncStream)
+        function ($_f)(stream)
             global $x
             @windows? (
                 ccall(:SetStdHandle,stdcall,Int32,(Uint32,Ptr{Void}),
-                    $(-10-unix_fd),_get_osfhandle(_fd(handle)).handle) :
-                dup(_fd(handle),  RawFD($unix_fd)) )
+                    $(-10-unix_fd),_get_osfhandle(_fd(stream)).handle) :
+                dup(_fd(stream),  RawFD($unix_fd)) )
+            $x = stream
+        end
+        function ($f)(handle::AsyncStream)
+            $(_f)(handle)
             unsafe_store!(cglobal($(Expr(:quote,c_symbol)),Ptr{Void}),
                 handle.handle)
-            $x = handle
+            handle
         end
+        ($f)(handle::IOStream) = ($_f)(handle)
         function ($f)()
             read,write = (Pipe(C_NULL), Pipe(C_NULL))
             link_pipe(read,$(writable),write,$(!writable))
