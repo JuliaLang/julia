@@ -183,12 +183,18 @@ function hash(a::Associative, h::Uint)
     return h
 end
 
+function hash(s::Set, h::Uint)
+    h += uint(0x852ada37cfe8e0ce)
+    for x in s
+        h $= hash(x)
+    end
+    return h
+end
+
 hash(::(), h::Uint) = h + uint(0x77cfa1eef01bca90)
 hash(x::(Any,), h::Uint)    = hash(x[1], hash((), h))
 hash(x::(Any,Any), h::Uint) = hash(x[1], hash(x[2], hash((), h)))
 hash(x::Tuple, h::Uint)     = hash(x[1], hash(x[2], hash(tupletail(x), h)))
-
-hash(s::Set, h::Uint) = hash(sort(s.dict.keys[s.dict.slots .!= 0]), h+uint(0x852ada37cfe8e0ce))
 
 hash(r::Range{Bool}, h::Uint) = invoke(hash, (Range, Uint), r, h)
 hash(B::BitArray, h::Uint) = hash((size(B),B.chunks), h)
