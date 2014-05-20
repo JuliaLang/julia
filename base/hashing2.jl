@@ -177,8 +177,8 @@ end
 
 function hash(a::Associative, h::Uint)
     h += uint(0x6d35bb51952d5539)
-    for x in a
-        h = hash(x, h)
+    for (k,v) in a
+        h $= hash(k, hash(v))
     end
     return h
 end
