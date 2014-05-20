@@ -138,6 +138,20 @@
 @test isequal(expm1(complex( NaN, 5.0)), complex( NaN, NaN))
 @test isequal(expm1(complex( NaN, NaN)), complex( NaN, NaN))
 
+@test isequal(expm1(complex( 1e-20, 0.0)), complex(expm1( 1e-20), 0.0))
+@test isequal(expm1(complex(-1e-20, 0.0)), complex(expm1(-1e-20), 0.0))
+
+@test_approx_eq expm1(complex( 1e-20, 1e-10)) complex( 5e-21, 1e-10)
+@test_approx_eq expm1(complex( 1e-20,-1e-10)) complex( 5e-21,-1e-10)
+@test_approx_eq expm1(complex(-1e-20, 1e-10)) complex(-1.5e-20, 1e-10)
+@test_approx_eq expm1(complex(-1e-20,-1e-10)) complex(-1.5e-20,-1e-10)
+
+@test_approx_eq expm1(complex( 10.0, 10.0)) exp(complex( 10.0, 10.0))-1
+@test_approx_eq expm1(complex( 10.0,-10.0)) exp(complex( 10.0,-10.0))-1
+@test_approx_eq expm1(complex(-10.0, 10.0)) exp(complex(-10.0, 10.0))-1
+@test_approx_eq expm1(complex(-10.0,-10.0)) exp(complex(-10.0,-10.0))-1
+
+
 # ^ (cpow)
 #  equivalent to exp(y*log(x))
 #    except for 0^0?
