@@ -1,5 +1,5 @@
 ## Triangular
-immutable Triangular{T<:Number} <: AbstractMatrix{T}
+immutable Triangular{T<:Number} <: StructuredMatrix{T}
     UL::Matrix{T}
     uplo::Char
     unitdiag::Char

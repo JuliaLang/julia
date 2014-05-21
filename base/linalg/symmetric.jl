@@ -1,10 +1,10 @@
 #Symmetric and Hermitian matrices
-immutable Symmetric{T} <: AbstractMatrix{T}
+immutable Symmetric{T} <: StructuredMatrix{T}
     S::Matrix{T}
     uplo::Char
 end
 Symmetric(A::Matrix, uplo::Symbol=:U) = (chksquare(A);Symmetric(A, string(uplo)[1]))
-immutable Hermitian{T} <: AbstractMatrix{T}
+immutable Hermitian{T} <: StructuredMatrix{T}
     S::Matrix{T}
     uplo::Char
 end

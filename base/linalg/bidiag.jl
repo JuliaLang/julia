@@ -1,5 +1,5 @@
 # Bidiagonal matrices
-type Bidiagonal{T} <: AbstractMatrix{T}
+type Bidiagonal{T} <: StructuredMatrix{T}
     dv::AbstractVector{T} # diagonal
     ev::AbstractVector{T} # sub/super diagonal
     isupper::Bool # is upper bidiagonal (true) or lower (false)

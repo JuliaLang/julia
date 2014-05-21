@@ -1,7 +1,7 @@
 #### Specialized matrix types ####
 
 ## Hermitian tridiagonal matrices
-immutable SymTridiagonal{T} <: AbstractMatrix{T}
+immutable SymTridiagonal{T} <: StructuredMatrix{T}
     dv::Vector{T}                        # diagonal
     ev::Vector{T}                        # subdiagonal
     function SymTridiagonal(dv::Vector{T}, ev::Vector{T})
@@ -140,7 +140,7 @@ function getindex{T}(A::SymTridiagonal{T}, i::Integer, j::Integer)
 end
 
 ## Tridiagonal matrices ##
-immutable Tridiagonal{T} <: AbstractMatrix{T}
+immutable Tridiagonal{T} <: StructuredMatrix{T}
     dl::Vector{T}    # sub-diagonal
     d::Vector{T}     # diagonal
     du::Vector{T}    # sup-diagonal
