@@ -144,6 +144,8 @@ Library improvements
 
     * `rand` now supports arbitrary `Ranges` arguments ([#5059]).
 
+    * `expm1` and `log1p` now support complex arguments ([#3141]).
+
   * `String` improvements
 
     * Triple-quoted regex strings, `r"""..."""` ([#4934]).
