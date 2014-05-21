@@ -41,6 +41,11 @@ end
 
 const latex_symbols = [
 
+# manual additions:
+
+    "\\sqrt" => "\u221A",
+    "\\cbrt" => "\u221B",
+
 # 732 symbols generated from unicode.xml
     "\\textexclamdown" => "¡",
     "\\sterling" => "£",
