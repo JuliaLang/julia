@@ -151,3 +151,59 @@ prod{T}(A::AbstractArray{T}, region) = _prod!(reduction_init(A, region, one(T)*o
 
 prod(A::AbstractArray{Bool}, region) = error("use all() instead of prod() for boolean arrays")
 
+
+### findmin/findmax
+# Generate the body for a reduction function reduce!(f, Rval, Rind, A), using a comparison operator f
+# Rind contains the index of A from which Rval was taken
+function gen_findreduction_body(N, f::Function)
+    F = Expr(:quote, f)
+    quote
+        (isempty(Rval) || isempty(A)) && return Rval, Rind
+        for i = 1:$N
+            (size(Rval, i) == size(A, i) || size(Rval, i) == 1) || throw(DimensionMismatch("Find-reduction on array of size $(size(A)) with output of size $(size(Rval))"))
+            size(Rval, i) == size(Rind, i) || throw(DimensionMismatch("Find-reduction: outputs must be of the same size"))
+        end
+        @nexprs $N d->(sizeR_d = size(Rval,d))
+        # If we're reducing along dimension 1, for efficiency we can make use of a temporary.
+        # Otherwise, keep the result in Rval/Rind so that we traverse A in storage order.
+        k = 0
+        @inbounds if size(Rval, 1) < size(A, 1)
+            @nloops $N i d->(d>1? (1:size(A,d)) : (1:1)) d->(j_d = sizeR_d==1 ? 1 : i_d) begin
+                tmpRv = (@nref $N Rval j)
+                tmpRi = (@nref $N Rind j)
+                for i_1 = 1:size(A,1)
+                    k += 1
+                    tmpAv = (@nref $N A i)
+                    if ($F)(tmpAv, tmpRv)
+                        tmpRv = tmpAv
+                        tmpRi = k
+                    end
+                end
+                (@nref $N Rval j) = tmpRv
+                (@nref $N Rind j) = tmpRi
+            end
+        else
+            @nloops $N i A d->(j_d = sizeR_d==1 ? 1 : i_d) begin
+                k += 1
+                tmpAv = (@nref $N A i)
+                if ($F)(tmpAv, (@nref $N Rval j))
+                    (@nref $N Rval j) = tmpAv
+                    (@nref $N Rind j) = k
+                end
+            end
+        end
+        Rval, Rind
+    end
+end
+
+eval(ngenerate(:N, :(typeof((Rval,Rind))), :(_findmin!{T,N}(Rval::AbstractArray, Rind::AbstractArray, A::AbstractArray{T,N})), N->gen_findreduction_body(N, <)))
+findmin!{R}(rval::AbstractArray{R}, rind::AbstractArray, A::AbstractArray; init::Bool=true) = _findmin!(initarray!(rval, typemax(R), init), rind, A)
+findmin{T}(A::AbstractArray{T}, region) = 
+    isempty(A) ? (similar(A,reduced_dims0(A,region)), zeros(Int,reduced_dims0(A,region))) :
+                  _findmin!(reduction_init(A, region, typemax(T)), zeros(Int,reduced_dims0(A,region)), A)
+
+eval(ngenerate(:N, :(typeof((Rval,Rind))), :(_findmax!{T,N}(Rval::AbstractArray, Rind::AbstractArray, A::AbstractArray{T,N})), N->gen_findreduction_body(N, >)))
+findmax!{R}(rval::AbstractArray{R}, rind::AbstractArray, A::AbstractArray; init::Bool=true) = _findmax!(initarray!(rval, typemin(R), init), rind, A)
+findmax{T}(A::AbstractArray{T}, region) = 
+    isempty(A) ? (similar(A,reduced_dims0(A,region)), zeros(Int,reduced_dims0(A,region))) :
+                  _findmax!(reduction_init(A, region, typemin(T)), zeros(Int,reduced_dims0(A,region)), A)
