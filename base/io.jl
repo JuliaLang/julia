@@ -94,6 +94,11 @@ function write(s::IO, p::Ptr, n::Integer)
     n
 end
 
+function write(io::IO, s::Symbol)
+    pname = convert(Ptr{Uint8}, s)
+    write(io, pname, int(ccall(:strlen, Csize_t, (Ptr{Uint8},), pname)))
+end
+
 # all subtypes should implement this
 read(s::IO, x::Type{Uint8}) = error(typeof(s)," does not support byte I/O")
 
