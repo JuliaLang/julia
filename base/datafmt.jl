@@ -129,7 +129,7 @@ end
 
 function result(dlmoffsets::DLMOffsets)
     trimsz = (dlmoffsets.offidx-1)%offs_chunk_size
-    (trimsz > 0) && resize!(dlmoffsets.oarr[end], trimsz)
+    (trimsz >= 0) && resize!(dlmoffsets.oarr[end], trimsz)
     dlmoffsets.oarr
 end
 
@@ -150,7 +150,8 @@ end
 
 function DLMStore{T,S<:String}(::Type{T}, dims::NTuple{2,Integer}, has_header::Bool, sbuff::S, auto::Bool, eol::Char)
     (nrows,ncols) = dims
-    ((nrows <= 0) || (ncols <= 0)) && error("Invalid dimensions")
+    ((nrows == 0) || (ncols == 0)) && error("Empty input")
+    ((nrows < 0) || (ncols < 0)) && error("Invalid dimensions")
     hdr_offset = has_header ? 1 : 0
     DLMStore{T,S}(fill(SubString(sbuff,1,0), 1, ncols), Array(T, nrows-hdr_offset, ncols), nrows, ncols, 1, 0, hdr_offset, sbuff, auto, eol, Array(Float64,1))
 end
@@ -463,8 +464,6 @@ function dlm_parse{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, cchar::D, ign_adj_dl
     end
     !isempty(error_str) && error(error_str)
     
-    ncols = max(ncols, 1)
-    nrows = max(nrows, 1)
     return (nrows, ncols)
 end
 
