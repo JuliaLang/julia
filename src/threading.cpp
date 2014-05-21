@@ -127,6 +127,8 @@ jl_thread_t* jl_create_thread(jl_function_t* f, jl_tuple_t* targs)
     
     jl_tuple_t* argtypes = arg_type_tuple(&jl_tupleref(targs,0), nargs);
     t->f = jl_get_specialization(f, argtypes);
+    if(t->f == NULL)
+      t->f = f;
     jl_compile(t->f); // does this make sense here?
     t->targs = targs;
     return t;    

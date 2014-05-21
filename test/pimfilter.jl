@@ -23,22 +23,20 @@ end
 
 function _imfilter{T}(A::Vector{T}, coefficients::Vector{T}, offsets::Vector{Int}, in_height::Int, in_width::Int, out_height::Int, out_width::Int, start_index::Int)
     B = zeros(T, out_height, out_width)
-    num_coefficients = length(coefficients)
-    for n = 1:out_width
-        _pimfilter_core(A,B,coefficients,offsets,in_height,out_height,start_index,n)    
-    end
+    _pimfilter_core(1:out_width,A,B,coefficients,offsets,in_height,out_height,start_index) 
     return B    
 end
 
 function _pimfilter{T}(A::Vector{T}, coefficients::Vector{T}, offsets::Vector{Int}, in_height::Int, in_width::Int, out_height::Int, out_width::Int, start_index::Int; numthreads=2)
     B = zeros(T, out_height, out_width)
     num_coefficients = length(coefficients)
-    parapply(_pimfilter_core, (A,B,coefficients,offsets,in_height,out_height,start_index), 1:out_width, numthreads=numthreads)
+    parapply(_pimfilter_core, 1:out_width, A,B,coefficients,offsets,in_height,out_height,start_index, numthreads=numthreads)
     return B
 end
 
-function _pimfilter_core{T}(A::Vector{T}, B::Matrix{T}, coefficients::Vector{T}, offsets::Vector{Int}, in_height::Int, out_height::Int, start_index::Int, n::Int)
+function _pimfilter_core{T}(r, A::Vector{T}, B::Matrix{T}, coefficients::Vector{T}, offsets::Vector{Int}, in_height::Int, out_height::Int, start_index::Int)
     num_coefficients = length(coefficients)
+    for n in r
         for m = 1:out_height
             index = m + (n - 1) * in_height + start_index;
             sum = zero(T)
@@ -47,7 +45,7 @@ function _pimfilter_core{T}(A::Vector{T}, B::Matrix{T}, coefficients::Vector{T},
             end
             @inbounds B[m, n] = sum;
         end
-    nothing
+    end
 end
 
 

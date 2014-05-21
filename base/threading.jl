@@ -34,25 +34,15 @@ end
 
 ### parallel apply function (scheduling in julia).
 
-function par_do_work(f::Function, args, start::Int, step::Int, len::Int)
-    local i = start
-    while i<=(start+(len-1)*step)
-        f(args...,i)
-        i += step
-    end
-end
-
-function parapply(f::Function, args,  r::Range; preapply::Bool = false, numthreads::Int = CPU_CORES)
-    gc_disable()
+function parapply(f::Function, r::UnitRange, args...; preapply::Bool = false, numthreads::Int = CPU_CORES)
 
     st = start(r)
     len = length(r)
-    s = step(r)
 
     t = Array(Base.Thread,numthreads)
 
     if(preapply)
-        par_do_work(f,args,st,1,1)
+        f(range(st, 1), args...)
         st = st + 1
         len = len - 1
     end
@@ -60,11 +50,12 @@ function parapply(f::Function, args,  r::Range; preapply::Bool = false, numthrea
     chunk = ifloor(len / numthreads)
     rem = len
 
+    gc_disable()
     for i=0:(numthreads-2)
-        t[i+1] = Base.Thread(par_do_work,f,args,int(st+i*chunk*s), s, chunk)
+        t[i+1] = Base.Thread(f,range(int(st+i*chunk), chunk), args...)
         rem -= chunk
     end
-    t[numthreads] = Base.Thread(par_do_work,f,args,int(st+(numthreads-1)*chunk*s), s, rem)
+    t[numthreads] = Base.Thread(f,range(int(st+(numthreads-1)*chunk),  rem), args...)  
 
     for i=1:numthreads
         Base.run(t[i])
@@ -75,4 +66,5 @@ function parapply(f::Function, args,  r::Range; preapply::Bool = false, numthrea
     end
 
     gc_enable()
+    #gc()
 end
