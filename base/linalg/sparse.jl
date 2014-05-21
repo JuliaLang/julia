@@ -483,7 +483,8 @@ function norm(A::SparseMatrixCSC,p::Real=1)
     if m == 0 || n == 0 || isempty(A)
         return float(real(zero(eltype(A))))
     elseif m == 1 || n == 1
-        return norm(reshape(full(A), length(A)), p)
+        # TODO: compute more efficiently using A.nzval directly
+        return norm(full(A), p)
     else
         Tnorm = typeof(float(real(zero(eltype(A)))))
         Tsum = promote_type(Float64,Tnorm)
