@@ -690,7 +690,7 @@ each field in a `Point` is stored in the `types` field of the Point object::
 has four (concrete) subtypes::
 	
 	julia> subtypes(FloatingPoint)
-	5-element Array{Any,1}:
+	4-element Array{Any,1}:
 	 BigFloat
 	 Float16
 	 Float32

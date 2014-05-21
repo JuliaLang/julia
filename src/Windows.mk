@@ -40,7 +40,7 @@ LIBUV = ..\deps\libuv\libuv.lib
 FLISP = flisp\flisp.exe
 
 INCLUDE = $(INCLUDE);$(MAKEDIR)\..\deps\libuv\include;$(MAKEDIR)\flisp;$(MAKEDIR)\support;C:\Program Files\llvm\include
-!ifdef DEBUG
+!ifdef JL_DEBUG_BUILD
 LIB = $(LIB);C:\Program Files\llvm\lib\Debug
 !else
 LIB = $(LIB);C:\Program Files\llvm\lib\Release

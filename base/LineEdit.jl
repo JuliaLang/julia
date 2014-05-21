@@ -886,7 +886,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, s::SearchState)
     write(buf, readall(s.response_buffer))
     buf.ptr = offset + ptr - 1
     s.response_buffer.ptr = ptr
-    s.ias = refresh_multi_line(termbuf, s.terminal, buf, s.ias, s.backward ? "(reverse-i-search)`" : "(i-search)`")
+    s.ias = refresh_multi_line(termbuf, s.terminal, buf, s.ias, s.backward ? "(reverse-i-search)`" : "(forward-i-search)`")
 end
 
 function refresh_multi_line(s::Union(SearchState,PromptState))

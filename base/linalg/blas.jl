@@ -466,7 +466,7 @@ for (fname, elty) in ((:dsyr_,:Float64),
     @eval begin
         function syr!(uplo::Char, α::$elty, x::StridedVector{$elty}, A::StridedMatrix{$elty})
             n = chksquare(A)
-            length(x) == A || throw(DimensionMismatch("Length of vector must be the same as the matrix dimensions"))
+            length(x) == n || throw(DimensionMismatch("Length of vector must be the same as the matrix dimensions"))
             ccall(($(string(fname)), libblas), Void,
                 (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),

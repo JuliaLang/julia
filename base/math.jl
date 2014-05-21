@@ -20,7 +20,8 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
 
 import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
-             max, min, minmax, ceil, floor, trunc, round, ^, exp2, exp10
+             max, min, minmax, ceil, floor, trunc, round, ^, exp2,
+             exp10, expm1, log1p
 
 import Core.Intrinsics: nan_dom_err, sqrt_llvm, box, unbox, powi_llvm
 

@@ -1,7 +1,6 @@
 ## serializing values ##
 
 # dummy types to tell number of bytes used to store length (4 or 1)
-abstract LongSymbol
 abstract LongTuple
 abstract LongExpr
 abstract UndefRefTag
@@ -14,11 +13,11 @@ let i = 2
     for t = {Symbol, Int8, Uint8, Int16, Uint16, Int32, Uint32,
              Int64, Uint64, Int128, Uint128, Float32, Float64, Char, Ptr,
              DataType, UnionType, Function,
-             Tuple, Array, Expr, LongSymbol, LongTuple, LongExpr,
+             Tuple, Array, Expr, :reserved21, LongTuple, LongExpr,
              LineNumberNode, SymbolNode, LabelNode, GotoNode,
              QuoteNode, TopNode, TypeVar, Box, LambdaStaticData,
-             Module, UndefRefTag, Task, :reserved4,
-             :reserved5, :reserved6, :reserved7, :reserved8,
+             Module, UndefRefTag, Task, ASCIIString, UTF8String,
+             :reserved6, :reserved7, :reserved8,
              :reserved9, :reserved10, :reserved11, :reserved12,
              
              (), Bool, Any, :Any, None, Top, Undef, Type,
@@ -31,7 +30,7 @@ let i = 2
              :mul_float, :unbox, :box,
              :eq_int, :slt_int, :sle_int, :ne_int,
              :arrayset, :arrayref,
-             :reserved13, :reserved14, :reserved15, :reserved16,
+             :Core, :Base, :reserved15, :reserved16,
              :reserved17, :reserved18, :reserved19, :reserved20,
              false, true, nothing, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
              12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
@@ -79,16 +78,9 @@ function serialize(s, x::Symbol)
     if haskey(ser_tag, x)
         return write_as_tag(s, x)
     end
-    name = string(x)
-    ln = sizeof(name)
-    if ln <= 255
-        writetag(s, Symbol)
-        write(s, uint8(ln))
-    else
-        writetag(s, LongSymbol)
-        write(s, int32(ln))
-    end
-    write(s, name)
+    writetag(s, Symbol)
+    write(s, x)
+    write(s, 0x00)
 end
 
 function serialize_array_data(s, a)
@@ -323,8 +315,11 @@ end
 
 deserialize_tuple(s, len) = ntuple(len, i->deserialize(s))
 
-deserialize(s, ::Type{Symbol}) = symbol(read(s, Uint8, int32(read(s, Uint8))))
-deserialize(s, ::Type{LongSymbol}) = symbol(read(s, Uint8, read(s, Int32)))
+function deserialize(s, ::Type{Symbol})
+    r = readuntil(s,0x00)
+    pop!(r)
+    symbol(r)
+end
 
 function deserialize(s, ::Type{Module})
     path = deserialize(s)

@@ -52,7 +52,10 @@
 #define USE_MCJIT 1
 #include "llvm/ExecutionEngine/MCJIT.h"
 #include "llvm/ExecutionEngine/SectionMemoryManager.h"
+#include "llvm/ExecutionEngine/ObjectImage.h"
 #include "llvm/ADT/DenseMapInfo.h"
+#include "llvm/DebugInfo/DIContext.h"
+#include "llvm/Object/ObjectFile.h"
 #endif
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3
 #include "llvm/IR/DerivedTypes.h"
@@ -97,7 +100,7 @@
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/DynamicLibrary.h"
 #include "llvm/Config/llvm-config.h"
-#ifdef DEBUG
+#ifdef JL_DEBUG_BUILD
 #include "llvm/Support/CommandLine.h"
 #endif
 #include "llvm/Transforms/Utils/Cloning.h"
@@ -507,7 +510,7 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
     }
     assert(f != NULL);
     nested_compile = last_n_c;
-#ifdef DEBUG
+#ifdef JL_DEBUG_BUILD
 #ifdef LLVM35
     llvm::raw_fd_ostream out(1,false);
 #endif
@@ -677,7 +680,12 @@ void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
 {
     Function *llvmf = jl_cfunction_object(f, rt, argt);
     if (llvmf) {
+        #ifndef LLVM35
         new GlobalAlias(llvmf->getType(), GlobalValue::ExternalLinkage, name, llvmf, llvmf->getParent());
+        #else
+        GlobalAlias::create(llvmf->getType()->getElementType(), llvmf->getType()->getAddressSpace(),
+                            GlobalValue::ExternalLinkage, name, llvmf, llvmf->getParent());
+        #endif
     }
 }
 
@@ -698,6 +706,7 @@ const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
     else {
         size_t fptr = (size_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
         assert(fptr != 0);
+#ifndef USE_MCJIT
         std::map<size_t, FuncInfo, revcomp> &fmap = jl_jit_events->getMap();
         std::map<size_t, FuncInfo>::iterator fit = fmap.find(fptr);
 
@@ -705,7 +714,43 @@ const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
             JL_PRINTF(JL_STDERR, "Warning: Unable to find function pointer\n");
             return jl_cstr_to_string(const_cast<char*>(""));
         }
+        
         jl_dump_function_asm((void*)fptr, fit->second.lengthAdr, fit->second.lines, fstream);
+#else // MCJIT version
+        std::map<size_t, ObjectInfo, revcomp> objmap = jl_jit_events->getObjectMap();
+        std::map<size_t, ObjectInfo, revcomp>::iterator fit = objmap.find(fptr);
+        
+        if (fit == objmap.end()) {
+            JL_PRINTF(JL_STDERR, "Warning: Unable to find ObjectFile for function\n");
+            return jl_cstr_to_string(const_cast<char*>(""));
+        }
+        
+        object::SymbolRef::Type symtype;
+        size_t symsize, symaddr;
+
+        #ifdef LLVM35
+        for (const object::SymbolRef &sym_iter : fit->second.object->symbols()) {
+            sym_iter.getType(symtype);
+            sym_iter.getAddress(symaddr);
+            if (symtype != object::SymbolRef::ST_Function || symaddr != fptr)
+                continue;
+            sym_iter.getSize(symsize);
+            jl_dump_function_asm((void*)fptr, symsize, fit->second.object, fstream);
+        }
+        #else
+        error_code itererr;
+        object::symbol_iterator sym_iter = fit->second.object->begin_symbols();
+        object::symbol_iterator sym_end = fit->second.object->end_symbols();
+        for (; sym_iter != sym_end; sym_iter.increment(itererr)) {
+            sym_iter->getType(symtype);
+            sym_iter->getAddress(symaddr);
+            if (symtype != object::SymbolRef::ST_Function || symaddr != fptr)
+                continue;
+            sym_iter->getSize(symsize);
+            jl_dump_function_asm((void*)fptr, symsize, fit->second.object, fstream);
+        }
+        #endif // LLVM35
+#endif 
         fstream.flush();
     }
     return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
@@ -3185,11 +3230,11 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     else {
         m = shadow_module;
     }
+    funcName << ";" << globalUnique++;
 #else
     m = jl_Module;
-#endif
-
     funcName << globalUnique++;
+#endif
 
     if (specsig) {
         std::vector<Type*> fsig(0);
@@ -3241,7 +3286,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             AttributeSet::FunctionIndex,*attr));
 #endif
 #endif
-#ifdef DEBUG
+#ifdef JL_DEBUG_BUILD
 #if LLVM32 && !LLVM33
     f->addFnAttr(Attributes::StackProtectReq);
 #else
@@ -4203,7 +4248,7 @@ static void init_julia_llvm_env(Module *m)
 
 extern "C" void jl_init_codegen(void)
 {
-#ifdef DEBUG
+#ifdef JL_DEBUG_BUILD
     cl::ParseEnvironmentOptions("Julia", "JULIA_LLVM_ARGS");
 #endif
     imaging_mode = jl_compileropts.build_path != NULL;
@@ -4232,7 +4277,7 @@ extern "C" void jl_init_codegen(void)
 
 #if !defined(LLVM_VERSION_MAJOR) || (LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 0)
     jl_ExecutionEngine = EngineBuilder(m).setEngineKind(EngineKind::JIT).create();
-#ifdef DEBUG
+#ifdef JL_DEBUG_BUILD
     llvm::JITEmitDebugInfo = true;
 #endif
     //llvm::JITEmitDebugInfoToDisk = true;
@@ -4244,7 +4289,7 @@ extern "C" void jl_init_codegen(void)
 #elif LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 1
     TargetOptions options = TargetOptions();
     //options.PrintMachineCode = true; //Print machine code produced during JIT compiling
-#ifdef DEBUG
+#ifdef JL_DEBUG_BUILD
     options.JITEmitDebugInfo = true;
 #endif 
     options.NoFramePointerElim = true;

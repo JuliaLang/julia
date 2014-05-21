@@ -260,7 +260,9 @@ else ifeq ($(OS), WINNT)
 endif
 
 	# purge sys.{dll,so,dylib} as that file is not relocatable across processor architectures
+ifeq ($(JULIA_CPU_TARGET), native)
 	-rm -f $(DESTDIR)$(private_libdir)/sys.$(SHLIB_EXT)
+endif
 
 ifeq ($(OS), WINNT)
 	[ ! -d dist-extras ] || ( cd dist-extras && \

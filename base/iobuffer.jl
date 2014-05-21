@@ -38,6 +38,8 @@ IOBuffer(readable::Bool,writable::Bool) = IOBuffer(Uint8[],readable,writable)
 IOBuffer() = IOBuffer(Uint8[], true, true)
 IOBuffer(maxsize::Int) = (x=IOBuffer(Array(Uint8,maxsize),true,true,maxsize); x.size=0; x)
 
+is_maxsize_unlimited(io::IOBuffer) = (io.maxsize == typemax(Int))
+
 read!(from::IOBuffer, a::Array) = read_sub(from, a, 1, length(a))
 
 function read_sub{T}(from::IOBuffer, a::Array{T}, offs, nel)
@@ -191,6 +193,11 @@ function takebuf_array(io::IOBuffer)
     data
 end
 takebuf_string(io::IOBuffer) = bytestring(takebuf_array(io))
+
+function write(to::IOBuffer, from::IOBuffer) 
+    write(to, pointer(from.data,from.ptr), nb_available(from))
+    from.ptr += nb_available(from)
+end
 
 write(to::IOBuffer, p::Ptr, nb::Integer) = write(to, p, int(nb))
 function write(to::IOBuffer, p::Ptr, nb::Int)

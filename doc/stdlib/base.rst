@@ -614,9 +614,19 @@ Iterable Collections
 
    Returns the maximum element and its index.
 
+.. function:: findmax(A, dims) -> (maxval, index)
+
+   For an array input, returns the value and index of the maximum over
+   the given dimensions.
+
 .. function:: findmin(itr) -> (x, index)
 
    Returns the minimum element and its index.
+
+.. function:: findmin(A, dims) -> (minval, index)
+
+   For an array input, returns the value and index of the minimum over
+   the given dimensions.
 
 .. function:: sum(itr)
 

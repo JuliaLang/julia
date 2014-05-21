@@ -494,9 +494,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    The conjugate transposition operator (``'``).
 
-.. function:: eigs(A; nev=6, which="LM", tol=0.0, maxiter=1000, sigma=nothing, ritzvec=true, op_part=:real,v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
+.. function:: eigs(A, [B,]; nev=6, which="LM", tol=0.0, maxiter=1000, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
 
-   ``eigs`` computes eigenvalues ``d`` of ``A`` using Lanczos or Arnoldi iterations for real symmetric or general nonsymmetric matrices respectively. The following keyword arguments are supported:
+   ``eigs`` computes eigenvalues ``d`` of ``A`` using Lanczos or Arnoldi iterations for real symmetric or general nonsymmetric matrices respectively. If ``B`` is provided, the generalized eigen-problem is solved.  The following keyword arguments are supported:
     * ``nev``: Number of eigenvalues
     * ``which``: type of eigenvalues to compute. See the note below.
 
@@ -518,7 +518,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
     * ``maxiter``: Maximum number of iterations
     * ``sigma``: Specifies the level shift used in inverse iteration. If ``nothing`` (default), defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to ``sigma`` using shift and invert iterations.
     * ``ritzvec``: Returns the Ritz vectors ``v`` (eigenvectors) if ``true``
-    * ``op_part``: which part of linear operator to use for real ``A`` (``:real``, ``:imag``)
     * ``v0``: starting vector from which to start the iterations
 
    ``eigs`` returns the ``nev`` requested eigenvalues in ``d``, the corresponding Ritz vectors ``v`` (only if ``ritzvec=true``), the number of converged eigenvalues ``nconv``, the number of iterations ``niter`` and the number of matrix vector multiplications ``nmult``, as well as the final residual vector ``resid``.

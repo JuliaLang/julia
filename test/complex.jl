@@ -103,6 +103,76 @@
 @test isequal(exp(complex( NaN, 5.0)), complex( NaN, NaN))
 @test isequal(exp(complex( NaN, NaN)), complex( NaN, NaN))
 
+# expm1:
+#  expm1(conj(z)) = conj(expm1(z))
+
+@test isequal(expm1(complex( 0.0, 0.0)), complex(0.0, 0.0))
+@test isequal(expm1(complex( 0.0,-0.0)), complex(0.0,-0.0))
+@test isequal(expm1(complex( 0.0, Inf)), complex(NaN, NaN))
+@test isequal(expm1(complex( 0.0,-Inf)), complex(NaN, NaN))
+@test isequal(expm1(complex( 0.0, NaN)), complex(NaN, NaN))
+
+@test isequal(expm1(complex(-0.0, 0.0)), complex(-0.0, 0.0))
+@test isequal(expm1(complex(-0.0,-0.0)), complex(-0.0,-0.0))
+
+@test isequal(expm1(complex( 5.0, Inf)), complex(NaN, NaN))
+
+@test isequal(expm1(complex( Inf, 0.0)), complex(Inf, 0.0))
+@test isequal(expm1(complex( Inf,-0.0)), complex(Inf,-0.0))
+@test isequal(expm1(complex( Inf, 5.0)), complex(cos(5.0)*Inf,sin(5.0)* Inf))
+@test isequal(expm1(complex( Inf,-5.0)), complex(cos(5.0)*Inf,sin(5.0)*-Inf))
+@test isequal(expm1(complex( Inf, NaN)), complex(-Inf, NaN))
+@test isequal(expm1(complex( Inf, Inf)), complex(-Inf, NaN))
+@test isequal(expm1(complex( Inf,-Inf)), complex(-Inf, NaN))
+
+@test isequal(expm1(complex(-Inf, 0.0)), complex(-1.0, 0.0))
+@test isequal(expm1(complex(-Inf,-0.0)), complex(-1.0,-0.0))
+@test isequal(expm1(complex(-Inf, 5.0)), complex(-1.0,sin(5.0)* 0.0))
+@test isequal(expm1(complex(-Inf,-5.0)), complex(-1.0,sin(5.0)*-0.0))
+@test isequal(expm1(complex(-Inf, Inf)), complex(-1.0, 0.0))
+@test isequal(expm1(complex(-Inf,-Inf)), complex(-1.0,-0.0))
+@test isequal(expm1(complex(-Inf, NaN)), complex(-1.0, 0.0))
+
+@test isequal(expm1(complex( NaN, 0.0)), complex( NaN, 0.0))
+@test isequal(expm1(complex( NaN,-0.0)), complex( NaN,-0.0))
+@test isequal(expm1(complex( NaN, 5.0)), complex( NaN, NaN))
+@test isequal(expm1(complex( NaN, NaN)), complex( NaN, NaN))
+
+@test isequal(expm1(complex( 1e-20, 0.0)), complex(expm1( 1e-20), 0.0))
+@test isequal(expm1(complex(-1e-20, 0.0)), complex(expm1(-1e-20), 0.0))
+
+@test_approx_eq expm1(complex( 1e-20, 1e-10)) complex( 5e-21, 1e-10)
+@test_approx_eq expm1(complex( 1e-20,-1e-10)) complex( 5e-21,-1e-10)
+@test_approx_eq expm1(complex(-1e-20, 1e-10)) complex(-1.5e-20, 1e-10)
+@test_approx_eq expm1(complex(-1e-20,-1e-10)) complex(-1.5e-20,-1e-10)
+
+@test_approx_eq expm1(complex( 10.0, 10.0)) exp(complex( 10.0, 10.0))-1
+@test_approx_eq expm1(complex( 10.0,-10.0)) exp(complex( 10.0,-10.0))-1
+@test_approx_eq expm1(complex(-10.0, 10.0)) exp(complex(-10.0, 10.0))-1
+@test_approx_eq expm1(complex(-10.0,-10.0)) exp(complex(-10.0,-10.0))-1
+
+# log1p:
+@test isequal(log1p(complex(Inf, 3)), complex(Inf, +0.))
+@test isequal(log1p(complex(Inf, -3)), complex(Inf, -0.))
+@test isequal(log1p(complex(-Inf, 3)), complex(Inf, +pi))
+@test isequal(log1p(complex(-Inf, -3)), complex(Inf, -pi))
+@test isequal(log1p(complex(Inf, NaN)), complex(Inf, NaN))
+@test isequal(log1p(complex(NaN, 0)), complex(NaN, NaN))
+@test isequal(log1p(complex(0, NaN)), complex(NaN, NaN))
+@test isequal(log1p(complex(-1, +0.)), complex(-Inf, +0.))
+@test isequal(log1p(complex(-1, -0.)), complex(-Inf, -0.))
+@test isequal(log1p(complex(-2, 1e-10)), log(1 + complex(-2, 1e-10)))
+@test isequal(log1p(complex(1, Inf)), complex(Inf, pi/2))
+@test isequal(log1p(complex(1, -Inf)), complex(Inf, -pi/2))
+import Base.Math.@horner
+for z in (1e-10+1e-9im, 1e-10-1e-9im, -1e-10+1e-9im, -1e-10-1e-9im)
+    @test_approx_eq log1p(z) @horner(z, 0, 1, -0.5, 1/3, -0.25, 0.2)
+end
+for z in (15+4im, 0.2+3im, 0.08-0.9im)
+    @test_approx_eq log1p(z) log(1+z)
+end
+
+
 # ^ (cpow)
 #  equivalent to exp(y*log(x))
 #    except for 0^0?
