@@ -89,7 +89,7 @@ function applydim{T}(p::MultiDimPlan{T}, d, k, y::StridedArray{T}, y0)
             applystep(P, y,y0,sy, w,1,1, 1)
             jy = y0
             @inbounds for j = 1:ny
-                 y[jy] = w[j]
+                y[jy] = w[j]
                 jy += sy
             end
             y0 += sy_k
