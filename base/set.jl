@@ -112,3 +112,25 @@ function filter!(f::Function, s::Set)
     return s
 end
 filter(f::Function, s::Set) = filter!(f, copy(s))
+
+function subsets{T}(s::Set{T}, n::Int)
+    card = length(s)
+    if card < n 
+        return Set()
+    end        
+    if n == 0 
+        return Set({Set{T}()})
+    end
+    if card == 0
+        return Set()
+    end
+    el = first(s)
+    rest = delete!(copy(s), el)
+    ans = sizehint(subsets(rest, n), binomial(card, n))
+    smalls = subsets(rest, n - 1)
+    for ss in smalls
+        push!(ss, el)
+    end
+    union!(ans, smalls)
+    ans
+end
