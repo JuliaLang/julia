@@ -8,6 +8,7 @@
 using LightXML
 xdoc = parse_file("unicode.xml")
 latexsym = {}
+Ls = Set()
 for c in child_nodes(root(xdoc))
     if name(c) == "character" && is_elementnode(c)
         ce = XMLElement(c)
@@ -21,8 +22,13 @@ for c in child_nodes(root(xdoc))
             id = attribute(ce, "id")
             U = string(map(s -> char(parseint(s, 16)),
                            split(id[2:end], "-"))...)
-            if ismatch(r"^\\[A-Za-z]+$", L) && !isa(U, ASCIIString)
-                push!(latexsym, (L, U))
+            if ismatch(r"^\\[A-Za-z]+$",L) && !isa(U,ASCIIString)
+                if L in Ls
+                    println("# duplicated symbol $L ($id)")
+                else
+                    push!(latexsym, (L, U))
+                    push!(Ls, L)
+                end
             end
         end
     end
@@ -35,7 +41,7 @@ end
 
 const latex_symbols = [
 
-# 755 symbols generated from unicode.xml
+# 732 symbols generated from unicode.xml
     "\\textexclamdown" => "¡",
     "\\sterling" => "£",
     "\\yen" => "¥",
@@ -82,7 +88,6 @@ const latex_symbols = [
     "\\oe" => "œ",
     "\\texthvlig" => "ƕ",
     "\\textnrleg" => "ƞ",
-    "\\eth" => "ƪ",
     "\\textdoublepipe" => "ǂ",
     "\\Elztrna" => "ɐ",
     "\\Elztrnsa" => "ɒ",
@@ -180,7 +185,6 @@ const latex_symbols = [
     "\\beta" => "β",
     "\\gamma" => "γ",
     "\\delta" => "δ",
-    "\\varepsilon" => "ε",
     "\\zeta" => "ζ",
     "\\eta" => "η",
     "\\theta" => "θ",
@@ -201,7 +205,6 @@ const latex_symbols = [
     "\\psi" => "ψ",
     "\\omega" => "ω",
     "\\vartheta" => "ϑ",
-    "\\Upsilon" => "ϒ",
     "\\phi" => "ϕ",
     "\\varpi" => "ϖ",
     "\\Stigma" => "Ϛ",
@@ -249,9 +252,7 @@ const latex_symbols = [
     "\\Re" => "ℜ",
     "\\Elzxrat" => "℞",
     "\\texttrademark" => "™",
-    "\\Omega" => "Ω",
     "\\mho" => "℧",
-    "\\AA" => "Å",
     "\\aleph" => "ℵ",
     "\\beth" => "ℶ",
     "\\gimel" => "ℷ",
@@ -308,7 +309,6 @@ const latex_symbols = [
     "\\leftrightharpoons" => "⇋",
     "\\rightleftharpoons" => "⇌",
     "\\nLeftarrow" => "⇍",
-    "\\nleftrightarrow" => "⇎",
     "\\nRightarrow" => "⇏",
     "\\Leftarrow" => "⇐",
     "\\Uparrow" => "⇑",
@@ -318,7 +318,6 @@ const latex_symbols = [
     "\\Updownarrow" => "⇕",
     "\\Lleftarrow" => "⇚",
     "\\Rrightarrow" => "⇛",
-    "\\rightsquigarrow" => "⇝",
     "\\DownArrowUpArrow" => "⇵",
     "\\leftarrowtriangle" => "⇽",
     "\\rightarrowtriangle" => "⇾",
@@ -331,7 +330,6 @@ const latex_symbols = [
     "\\nabla" => "∇",
     "\\in" => "∈",
     "\\notin" => "∉",
-    "\\in" => "∊",
     "\\ni" => "∋",
     "\\prod" => "∏",
     "\\coprod" => "∐",
@@ -342,7 +340,6 @@ const latex_symbols = [
     "\\setminus" => "∖",
     "\\ast" => "∗",
     "\\circ" => "∘",
-    "\\bullet" => "∙",
     "\\surd" => "√",
     "\\propto" => "∝",
     "\\infty" => "∞",
@@ -566,7 +563,6 @@ const latex_symbols = [
     "\\diagdown" => "╲",
     "\\blacksquare" => "■",
     "\\square" => "□",
-    "\\blacksquare" => "▪",
     "\\Elzvrecto" => "▯",
     "\\bigtriangleup" => "△",
     "\\blacktriangle" => "▴",
@@ -587,7 +583,6 @@ const latex_symbols = [
     "\\Elzsqfl" => "◧",
     "\\Elzsqfr" => "◨",
     "\\Elzsqfse" => "◪",
-    "\\bigcirc" => "◯",
     "\\bigstar" => "★",
     "\\rightmoon" => "☾",
     "\\mercury" => "☿",
@@ -652,8 +647,6 @@ const latex_symbols = [
     "\\rdiagovsearrow" => "⤰",
     "\\neovnwarrow" => "⤱",
     "\\nwovnearrow" => "⤲",
-    "\\circlearrowleft" => "⥀",
-    "\\circlearrowright" => "⥁",
     "\\ElzRlarr" => "⥂",
     "\\ElzrLarr" => "⥄",
     "\\Elzrarrx" => "⥇",
@@ -781,15 +774,6 @@ const latex_symbols = [
     "\\openbracketright" => "〛",
     "\\overbrace" => "︷",
     "\\underbrace" => "︸",
-    "\\partial" => "𝛛",
-    "\\in" => "𝛜",
-    "\\partial" => "𝜕",
-    "\\in" => "𝜖",
-    "\\partial" => "𝝏",
-    "\\in" => "𝝐",
-    "\\partial" => "𝞉",
-    "\\in" => "𝞊",
-    "\\partial" => "𝟃",
-    "\\in" => "𝟄",
+
 
 ]
