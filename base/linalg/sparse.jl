@@ -478,7 +478,7 @@ diff(a::SparseMatrixCSC, dim::Integer)= dim==1 ? sparse_diff1(a) : sparse_diff2(
 ## norm and rank
 vecnorm(A::SparseMatrixCSC, p::Real=2) = vecnorm(A.nzval, p)
 
-function norm(A::SparseMatrixCSC,p::Real=1)
+function norm(A::SparseMatrixCSC,p::Real=2)
     m, n = size(A)
     if m == 0 || n == 0 || isempty(A)
         return float(real(zero(eltype(A))))
@@ -498,6 +498,8 @@ function norm(A::SparseMatrixCSC,p::Real=1)
                 nA = max(nA, colSum)
             end
             return convert(Tnorm, nA)
+        elseif p==2
+            throw(ArgumentError("2-norm not yet implemented for sparse matrices. Try norm(full(A)) or norm(A, p) where p=1 or Inf."))
         elseif p==Inf
             rowSum = zeros(Tsum,m)
             for i=1:length(A.nzval)
