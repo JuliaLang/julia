@@ -27,7 +27,7 @@ type Mode <: TextInterface
 end
 
 type Prompt <: TextInterface
-    prompt::ASCIIString
+    prompt
     first_prompt
     # A string or function to be printed before the prompt. May not change the length of the prompt.
     # This may be used for changing the color, issuing other terminal escape codes, etc.

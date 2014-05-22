@@ -363,15 +363,14 @@ function _start()
                 term = Terminals.TTYTerminal(get(ENV,"TERM",@windows? "" : "dumb"),STDIN,STDOUT,STDERR)
                 global is_interactive = true
                 color_set || (global have_color = Terminals.hascolor(term))
-            end
+                if term.term_type == "dumb"
+                    active_repl = REPL.BasicREPL(term)
+                else
+                    active_repl = REPL.LineEditREPL(term)
+                    active_repl.no_history_file = no_history_file
+                end
 
-            quiet || REPL.banner(term,term)
-            local repl
-            if term.term_type == "dumb"
-                active_repl = REPL.BasicREPL(term)
-            else
-                active_repl = REPL.LineEditREPL(term)
-                active_repl.no_history_file = no_history_file
+                quiet || REPL.banner(term,term)
             end
         end
 
