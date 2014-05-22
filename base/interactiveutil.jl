@@ -202,7 +202,7 @@ typesof(args...) = map(a->(isa(a,Type) ? Type{a} : typeof(a)), args)
     hfcn = Expr(:hygienic, fcn)
     if isa(ex0, Expr) &&
         any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args)
-	# keyword args not used in dispatch, so just remove them
+        # keyword args not used in dispatch, so just remove them
         args = filter(a->!(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args)
         return quote ($hfcn)($(args[1]), typesof($(args[2:end]...))) end
     end
@@ -229,8 +229,8 @@ typesof(args...) = map(a->(isa(a,Type) ? Type{a} : typeof(a)), args)
                     end
         end
     elseif ex.head == :body
-	a1 = ex.args[1]
-	if isa(a1, Expr) && a1.head == :call
+        a1 = ex.args[1]
+        if isa(a1, Expr) && a1.head == :call
             a11 = a1.args[1]
             if a11 == :setindex!
                 exret = quote ($hfcn)($a11, typesof($(a1.args[2:end]...))) end
