@@ -143,8 +143,8 @@ a character or string as its argument:
     julia> symbol("'")
     :'
 
-``eval`` and Interpolation
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+``eval``
+~~~~~~~~
 
 Given an expression object, one can cause Julia to evaluate (execute) it
 at the *top level* scope — i.e. in effect like loading from a file or
@@ -223,6 +223,11 @@ the important distinction between the way ``a`` and ``b`` are used:
    the symbol ``:b`` is resolved by looking up the value of the variable
    ``b``.
 
+.. _man-quote:
+
+``quote`` and Interpolation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 Constructing ``Expr`` objects like this is powerful, but somewhat
 tedious and ugly. Since the Julia parser is already excellent at
 producing expression objects, Julia allows "splicing" or interpolation
@@ -244,6 +249,45 @@ interpolation is intentionally reminiscent of
 :ref:`command interpolation <man-command-interpolation>`.
 Expression interpolation allows convenient, readable programmatic construction
 of complex Julia expressions.
+
+Expression interpolation can also be used with the long form of
+``quote`` instead of ``:``.  For example:
+
+.. doctest::
+
+    julia> ex = quote $a + b end
+    :(begin  # none, line 1:
+	    1 + b
+	end)
+
+Expression interpolation supports "splatting" to interpolate a
+sequence of expression objects into a quote expression.  For example:
+
+.. doctest::
+
+    julia> args = {:arg1, :arg2, :arg3}
+    3-element Array{Any,1}:
+     :arg1
+     :arg2
+     :arg3
+
+    julia> quote fcn($(args...)) end
+    :(begin  # none, line 1:
+	    fcn(arg1,arg2,arg3)
+	end)
+
+Note that the parentheses after the dollar sign are mandatory.  Without them:
+
+.. doctest::
+
+    julia> quote fcn($args...) end
+    :(begin  # none, line 1:
+	    fcn({:arg1,:arg2,:arg3}...)
+	end)
+
+which is splatting at run time, not splatting while constructing the
+quoted expression.
+
 
 Code Generation
 ~~~~~~~~~~~~~~~
