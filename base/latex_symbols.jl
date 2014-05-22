@@ -45,6 +45,8 @@ const latex_symbols = [
 
     "\\sqrt" => "\u221A",
     "\\cbrt" => "\u221B",
+    "\\female" => "♀",
+    "\\mars" => "♂",
 
 # 732 symbols generated from unicode.xml
     "\\textexclamdown" => "¡",
