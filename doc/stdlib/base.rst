@@ -406,7 +406,7 @@ Syntax
 
 .. function:: esc(e::ANY)
 
-   Deprecated.  Just returns its argument now.
+   Deprecated.  Does nothing and returns its argument.
 
 .. function:: gensym([tag])
 
