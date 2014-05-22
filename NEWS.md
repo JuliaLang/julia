@@ -51,6 +51,14 @@ New language features
     
   * Improved reporting of syntax errors ([#6179])
 
+REPL improvements
+-----------------
+
+  * New native-Julia REPL implementation, eliminating many problems
+    stemming from the old GNU Readline-based REPL ([#6270]).
+
+  * Tab-substitution of LaTeX math symbols (e.g. `\alpha` by `α`) ([#6340]).
+
 Library improvements
 --------------------
 
