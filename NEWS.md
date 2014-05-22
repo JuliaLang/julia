@@ -57,7 +57,8 @@ REPL improvements
   * New native-Julia REPL implementation, eliminating many problems
     stemming from the old GNU Readline-based REPL ([#6270]).
 
-  * Tab-substitution of LaTeX math symbols (e.g. `\alpha` by `α`) ([#6340]).
+  * Tab-substitution of LaTeX math symbols (e.g. `\alpha` by `α`) ([#6911]).
+    This also works in IJulia and in Emacs ([#6920]).
 
 Library improvements
 --------------------
