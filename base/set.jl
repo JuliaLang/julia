@@ -1,41 +1,116 @@
 type Set{T}
-    dict::Dict{T,Nothing}
+    slots::Array{Uint8,1}
+    keys::Array{T,1}
+    ndel::Int
+    count::Int
 
-    Set() = new(Dict{T,Nothing}())
-    Set(itr) = union!(new(Dict{T,Nothing}()), itr)
+    function Set()
+	n = 16
+	new(zeros(Uint8,n), Array(T,n), 0, 0)
+    end
+    function Set(itr)
+        //todo:  n should be _tablesz(length(itr)) if itr has a length function
+	n = 16
+	union!(new(zeros(Uint8,n), Array(T,n), 0, 0), itr)
+    end
 end
 Set() = Set{Any}()
 Set(itr) = Set{eltype(itr)}(itr)
 
 show(io::IO, s::Set) = (show(io, typeof(s)); show_comma_array(io, s,"({","})"))
 
-isempty(s::Set) = isempty(s.dict)
-length(s::Set)  = length(s.dict)
+isempty(s::Set) = (s.count == 0)
+length(s::Set)  = s.count
 eltype{T}(s::Set{T}) = T
 
-in(x, s::Set) = haskey(s.dict, x)
+in(x, s::Set) = (sht_keyindex(s, x) >= 0)
 
-push!(s::Set, x) = (s.dict[x] = nothing; s)
-pop!(s::Set, x) = (pop!(s.dict, x); x)
-pop!(s::Set, x, deflt) = pop!(s.dict, x, deflt) == deflt ? deflt : x
-delete!(s::Set, x) = (delete!(s.dict, x); s)
+function push!{T}(s::Set{T}, x) 
+    key = convert(T,x)
+    if !isequal(key,x)
+        error(x, " is not a valid key for type ", T)
+    end
 
+    index = sht_keyindex2(s, key)
+
+    if index > 0
+        s.keys[index] = key
+    else
+    	s.slots[-index] = 0x1
+    	s.keys[-index] = key
+    	s.count += 1
+
+    	sz = length(s.keys)
+    	# Rehash now if necessary
+    	if s.ndel >= ((3*sz)>>2) || s.count*3 > sz*2
+           # > 3/4 deleted or > 2/3 full
+           srehash(s, s.count > 64000 ? s.count*2 : s.count*4)
+    	end
+    end
+    s
+end
+
+function pop!(s::Set, x) 
+    index = sht_keyindex(s, x)
+    index > 0 ? _delete!(s, index) : throw(KeyError(key))
+    x
+end
+
+function pop!(s::Set, x, deflt)
+    index = sht_keyindex(s, key)
+    if index > 0 
+        _delete!(s, index)
+        return x
+    else 
+       return deflt
+    end
+end
+function delete!(s::Set, x) 
+    index = sht_keyindex(s, x)
+    if index > 0; _delete!(s, index); end
+    s
+end
 union!(s::Set, xs) = (for x=xs; push!(s,x); end; s)
 setdiff!(s::Set, xs) = (for x=xs; delete!(s,x); end; s)
 
 similar{T}(s::Set{T}) = Set{T}()
 copy(s::Set) = union!(similar(s), s)
 
-sizehint(s::Set, newsz) = (sizehint(s.dict, newsz); s)
-empty!{T}(s::Set{T}) = (empty!(s.dict); s)
+function sizehint(s::Set, newsz)
+    oldsz = length(s.slots)
+    if newsz <= oldsz
+        # todo: shrink
+        # be careful: rehash() assumes everything fits. it was only designed
+        # for growing.
+        return s
+    end
+    # grow at least 25%
+    newsz = max(newsz, (oldsz*5)>>2)
+    srehash(s, newsz)
+    s
+end
+function empty!{T}(s::Set{T}) 
+    fill!(s.slots, 0x0)
+    sz = length(s.slots)
+    s.keys = Array(T, sz)
+    s.ndel = 0
+    s.count = 0
+    s
+end
 
-start(s::Set)       = start(s.dict)
-done(s::Set, state) = done(s.dict, state)
-# NOTE: manually optimized to take advantage of Dict representation
-next(s::Set, i)     = (s.dict.keys[i], skip_deleted(s.dict,i+1))
+start(s::Set) = skip_deleted(s, 1)
+done(s::Set, i) = done(s.keys, i)
+next(s::Set, i) = (s.keys[i], skip_deleted(s,i+1))
 
-# TODO: simplify me?
-pop!(s::Set) = (val = s.dict.keys[start(s.dict)]; delete!(s.dict, val); val)
+
+
+# TODO: Throw error on empty
+function pop!(s::Set)
+   index = skip_deleted(s,1)
+   val = s.keys[index]
+   _delete!(s, index)
+   val
+end
 
 join_eltype() = None
 join_eltype(v1, vs...) = typejoin(eltype(v1), join_eltype(vs...))
@@ -124,3 +199,133 @@ function filter(f::Function, s::Set)
     end
     return u
 end
+
+#implementation taken from dict.jl with Dict crossed out and Set written in with crayon
+isslotempty(h::Set, i::Int) = h.slots[i] == 0x0
+isslotfilled(h::Set, i::Int) = h.slots[i] == 0x1
+isslotmissing(h::Set, i::Int) = h.slots[i] == 0x2
+
+function srehash{T}(s::Set{T}, newsz)
+    olds = s.slots
+    oldk = s.keys
+    sz = length(olds)
+    newsz = _tablesz(newsz)
+    if s.count == 0
+        resize!(s.slots, newsz)
+        fill!(s.slots, 0)
+        resize!(s.keys, newsz)
+        s.ndel = 0
+        return s
+    end
+
+    slots = zeros(Uint8,newsz)
+    keys = Array(T, newsz)
+    count0 = s.count
+    count = 0
+
+    for i = 1:sz
+        if olds[i] == 0x1
+            k = oldk[i]
+            index = hashindex(k, newsz)
+            while slots[index] != 0
+                index = (index & (newsz-1)) + 1
+            end
+            slots[index] = 0x1
+            keys[index] = k
+            count += 1
+
+            if s.count != count0
+                # if items are removed by finalizers, retry
+                return srehash(s, newsz)
+            end
+        end
+    end
+
+    s.slots = slots
+    s.keys = keys
+    s.count = count
+    s.ndel = 0
+
+    return s
+end
+
+# get the index where a key is stored, or -1 if not present
+function sht_keyindex{T}(s::Set{T}, key)
+    sz = length(s.keys)
+    iter = 0
+    maxprobe = max(16, sz>>6)
+    index = hashindex(key, sz)
+    keys = s.keys
+
+    while true
+        if isslotempty(s,index)
+            break
+        end
+        if !isslotmissing(s,index) && isequal(key,keys[index])
+            return index
+        end
+
+        index = (index & (sz-1)) + 1
+        iter+=1
+        iter > maxprobe && break
+    end
+
+    return -1
+end
+
+
+# get the index where a key is stored, or -pos if not present
+# and the key would be inserted at pos
+# This version is for use by setindex! and get!
+function sht_keyindex2{T}(s::Set{T}, key)
+    sz = length(s.keys)
+    iter = 0
+    maxprobe = max(16, sz>>6)
+    index = hashindex(key, sz)
+    avail = 0
+    keys = s.keys
+
+    while true
+        if isslotempty(s,index)
+            avail < 0 && return avail
+            return -index
+        end
+
+        if isslotmissing(s,index)
+            if avail == 0
+                # found an available slot, but need to keep scanning
+                # in case "key" already exists in a later collided slot.
+                avail = -index
+            end
+        elseif isequal(key, keys[index])
+            return index
+        end
+
+        index = (index & (sz-1)) + 1
+        iter+=1
+        iter > maxprobe && break
+    end
+
+    avail < 0 && return avail
+
+    srehash(s, s.count > 64000 ? sz*2 : sz*4)
+
+    return sht_keyindex2(s, key)
+end
+
+function _delete!(s::Set, index)
+    s.slots[index] = 0x2
+    ccall(:jl_arrayunset, Void, (Any, Uint), s.keys, index-1)
+    s.ndel += 1
+    s.count -= 1
+    s
+end
+
+function skip_deleted(s::Set, i)
+    L = length(s.slots)
+    while i<=L && !isslotfilled(s,i)
+        i += 1
+    end
+    return i
+end
+
