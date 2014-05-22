@@ -3051,6 +3051,19 @@ So far only the second case can actually occur.
        (length= (cadr e) 2)   (eq? (caadr e) 'tuple)
        (vararg? (cadadr e))))
 
+#;(define *trace-expand-backquote* #f)
+
+;; To turn on tracing, evaluate quote trace_expand_backquote($x) end
+#;(define (expand-backquote e hygienic)
+  (if (eq? e 'trace_expand_backquote)
+      (set! *trace-expand-backquote* #t))
+  (cond (*trace-expand-backquote*
+	 (print `(enter expand-backquote ,e ,hygienic)) (newline)
+	 (let ((ans (expand-backquote-TRACED e hygienic)))
+	   (print `(leave expand-backquote ,ans)) (newline)
+	   ans))
+	(else (expand-backquote-TRACED e hygienic))))
+
 (define (expand-backquote e hygienic)
   (cond ((or (eq? e 'true) (eq? e 'false))  e)
 	((symbol? e)
@@ -3061,7 +3074,7 @@ So far only the second case can actually occur.
 	((eq? (car e) '$)     (cadr e))
 	((eq? (car e) 'inert) e)
 	((and (eq? (car e) 'quote) (pair? (cadr e)))
-	 ;--- Is this really supposed to be expanded twice?  --Moon
+	 ;; Double expansion of nested backquote is needed by @ngenerate
 	 (expand-backquote (expand-backquote (cadr e) hygienic) hygienic))
 	((and (not (contains (lambda (e) (and (pair? e) (eq? (car e) '$))) e))
 	      (or (not hygienic) (eq? (car e) 'quote) (eq? (car e) 'line)))
@@ -3130,7 +3143,7 @@ So far only the second case can actually occur.
 	       (else s)))
        v))
 
-;--- should not be needed any more
+;TODO: Remove this after all uses of Expr(:escape ... have been eliminated
 (define (unescape e)
   (if (and (pair? e) (eq? (car e) 'escape))
       (cadr e)
@@ -3180,7 +3193,7 @@ So far only the second case can actually occur.
 	      (if a (cdr a)
 		  (if m `(|.| ,m (quote ,(cadr e)))
 		      (cadr e)))))
-	   ;---next line should not be needed any more
+	   ;TODO: Remove this after all uses of Expr(:escape ... have been eliminated
 	   ((escape) (cadr e))
 	   ((using import importall export) (map unescape e))
 	   ((macrocall)
