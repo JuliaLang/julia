@@ -50,19 +50,26 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_propval_t cat)
 
             // math symbol whitelist
             (wc >= 0x2140 && wc <= 0x2a1c &&
-             (wc == 0x2140 || wc == 0x22be ||
+             ((wc >= 0x2140 && wc <= 0x2144) ||
+              wc == 0x223f || wc == 0x22be || wc == 0x22bf ||
+              (wc >= 0x22ee && wc <= 0x22f1) ||
 
               (wc >= 0x2202 && wc <= 0x2233 &&
-               (wc == 0x2202 || wc == 0x2206 ||
-                wc == 0x2207 || wc == 0x220f ||
+               (wc == 0x2202 || wc == 0x2205 || wc == 0x2206 ||
+                wc == 0x2207 || wc == 0x220e || wc == 0x220f ||
                 wc == 0x2210 || wc == 0x2211 ||
                 wc == 0x221e || wc == 0x221f ||
                 wc >= 0x222b)) ||
 
+              (wc >= 0x22c0 && wc <= 0x22c3) ||  // N-ary big operators
+              (wc >= 0x25F8 && wc <= 0x25ff) ||  // shapes
+
               (wc >= 0x266f &&
-               (wc == 0x266f ||
+               (wc == 0x266f || wc == 0x27d8 || wc == 0x27d9 ||
+                (wc >= 0x27c0 && wc <= 0x27c2) ||
                 (wc >= 0x29b0 && wc <= 0x29b4) ||
-                (wc >= 0x2a0a && wc <= 0x2a16) ||
+                (wc >= 0x2a00 && wc <= 0x2a06) ||  // more N-ary big operators
+                (wc >= 0x2a09 && wc <= 0x2a16) ||  // big operators and integrals
                 wc == 0x2a1b || wc == 0x2a1c)))) ||
 
             (wc >= 0x1d6c1 &&
@@ -71,6 +78,10 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_propval_t cat)
               wc == 0x1d735 || wc == 0x1d74f ||
               wc == 0x1d76f || wc == 0x1d789 ||
               wc == 0x1d7a9 || wc == 0x1d7c3)) ||
+
+            // super- and subscript +-=
+            (wc >= 0x207a && wc <= 0x207c) ||
+            (wc >= 0x208a && wc <= 0x208c) ||
 
             // angle symbols
             (wc >= 0x2220 && wc <= 0x2222) ||
