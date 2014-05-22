@@ -62,9 +62,10 @@ function pop!(s::Set, x, deflt)
         _delete!(s, index)
         return x
     else 
-       return deflt
+        return deflt
     end
 end
+
 function delete!(s::Set, x) 
     index = sht_keyindex(s, x)
     if index > 0; _delete!(s, index); end
@@ -106,10 +107,10 @@ next(s::Set, i) = (s.keys[i], skip_deleted(s,i+1))
 
 # TODO: Throw error on empty
 function pop!(s::Set)
-   index = skip_deleted(s,1)
-   val = s.keys[index]
-   _delete!(s, index)
-   val
+    index = skip_deleted(s,1)
+    val = s.keys[index]
+    _delete!(s, index)
+    val
 end
 
 join_eltype() = None
