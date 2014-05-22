@@ -79,7 +79,11 @@ function varm_pairwise(A::AbstractArray, m::Number, i1::Int, n::Int) # see sum_p
 end
 
 sumabs2(v::AbstractArray) = varzm_pairwise(v, 1, length(v))
-sumabs2(v::AbstractArray, region) = sum(abs2(v), region)
+
+plusabs2(x, y) = x + abs2(y)
+eval(ngenerate(:N, :(typeof(R)), :(_sumabs2!{T,N}(R::AbstractArray, A::AbstractArray{T,N})), N->gen_reduction_body(N, plusabs2)))
+sumabs2!{R}(r::AbstractArray{R}, A::AbstractArray; init::Bool=true) = _sumabs2!(initarray!(r, zero(R), init), A)
+sumabs2{T}(A::AbstractArray{T}, region) = _sumabs2!(reduction_init(A, region, abs2(zero(T))+abs2(zero(T))), A)
 
 function varzm(v::AbstractArray; corrected::Bool=true)
     n = length(v)
@@ -98,10 +102,18 @@ function varm(v::AbstractArray, m::Number; corrected::Bool=true)
     return varm_pairwise(v, m, 1, n) / (n - int(corrected))
 end
 
-function varm(v::AbstractArray, m::AbstractArray, region; corrected::Bool=true)
-    cn = regionsize(v, region) - int(corrected)
-    sumabs2(v .- m, region) / cn
+@ngenerate N Array{typeof((abs2(zero(T))+abs2(zero(T)))/1), N} function _varm{S,T,N}(v::AbstractArray{S,N}, m::AbstractArray{T,N}, region, corrected::Bool)
+    rdims = reduced_dims(v, region)
+    rdims == size(m) || error(DimensionMismatch("size of mean does not match reduced dimensions"))
+
+    R = fill!(similar(v, typeof((abs2(zero(T))+abs2(zero(T)))/1), rdims), 0)
+    @nextract N sizeR d->size(R,d)
+    @nloops N i v d->(j_d = sizeR_d==1 ? 1 : i_d) begin
+        @inbounds (@nref N R j) += abs2((@nref N v i) - (@nref N m j))
+    end
+    scale!(R, 1/(regionsize(v, region) - int(corrected)))
 end
+varm{S,T,N}(v::AbstractArray{S,N}, m::AbstractArray{T,N}, region; corrected::Bool=true) = _varm(v, m, region, corrected)
 
 function var(v::AbstractArray; corrected::Bool=true, mean=nothing)
     mean == 0 ? varzm(v; corrected=corrected) :
