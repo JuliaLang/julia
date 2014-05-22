@@ -1,3 +1,30 @@
+#=
+This file contains experimental threading support for Julia. The following rules 
+should be taken into account when using the threading functions.
+
+- The function Base.parapply is the best way to use multiple threads. It takes as argument
+a function of the form f(r::UnitRange, args...) that operates over a certain range r. parapply
+gets as second argument the full range over that f should be executed wheras internally the 
+range will be split into chunks that are executed in different threads. The variables f is 
+supposed to work on are passes as varargs after the range argument. parapply has two keyword arguments:
+preapply is used to execute the function f once on the main thread. This is very useful for finding
+syntax errors that would otherwise crash the Julia process. The other keyword argument is numthreads
+that can be used to control the number of threads used.
+
+- Base.parapply does switch the garbage collector of. Thus one should not allocate more memory in the
+threads than absolutely needed. It is much better to preallocate it and pass it to the threads.
+
+- Do not use print statements in the threading functions (Hopefully we can fix this)
+
+- When locking is required there is a Mutex type.
+
+- Running threads in an @async task is probably a very bad idea (Fixme)
+
+- There is a low level Thread type. When using this the main thread should directly join it so that the main
+thread is waiting until the worker threads are done. Further one should switch the garbage collector off before
+running the threads.
+=#
+
 
 ### Thread type
 
