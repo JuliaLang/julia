@@ -1660,3 +1660,9 @@ function segfault6793(;gamma=1)
     nothing
 end
 @test segfault6793() === nothing
+
+# issue #6896
+g6896(x) = x::Int=x
+@test g6896(5.0) === 5.0
+f6896(x) = y::Int=x
+@test f6896(5.0) === 5.0
