@@ -5,13 +5,13 @@ type Set{T}
     count::Int
 
     function Set()
-	n = 16
-	new(zeros(Uint8,n), Array(T,n), 0, 0)
+        n = 16
+        new(zeros(Uint8,n), Array(T,n), 0, 0)
     end
     function Set(itr)
         //todo:  n should be _tablesz(length(itr)) if itr has a length function
-	n = 16
-	union!(new(zeros(Uint8,n), Array(T,n), 0, 0), itr)
+        n = 16
+        union!(new(zeros(Uint8,n), Array(T,n), 0, 0), itr)
     end
 end
 Set() = Set{Any}()
@@ -36,16 +36,16 @@ function push!{T}(s::Set{T}, x)
     if index > 0
         s.keys[index] = key
     else
-    	s.slots[-index] = 0x1
-    	s.keys[-index] = key
-    	s.count += 1
+        s.slots[-index] = 0x1
+        s.keys[-index] = key
+        s.count += 1
 
-    	sz = length(s.keys)
-    	# Rehash now if necessary
-    	if s.ndel >= ((3*sz)>>2) || s.count*3 > sz*2
+        sz = length(s.keys)
+        # Rehash now if necessary
+        if s.ndel >= ((3*sz)>>2) || s.count*3 > sz*2
            # > 3/4 deleted or > 2/3 full
            srehash(s, s.count > 64000 ? s.count*2 : s.count*4)
-    	end
+        end
     end
     s
 end
