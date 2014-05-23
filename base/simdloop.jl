@@ -13,7 +13,7 @@ end
 #       symbol '=' range
 #       symbol 'in' range
 function parse_iteration_space(x)
-    Meta.isexpr(x, [:(=), :in]) || throw(SimdError("= or in expected"))
+    (isa(x, Expr) && x.head in (:(=), :in)) || throw(SimdError("= or in expected"))
     length(x.args) == 2 || throw(SimdError("simd range syntax is wrong"))
     isa(x.args[1], Symbol) || throw(SimdError("simd loop index must be a symbol"))
     x.args # symbol, range
@@ -21,7 +21,7 @@ end
 
 # Compile Expr x in context of @simd.
 function compile(x)
-    Meta.isexpr(x, :for) || throw(SimdError("for loop expected"))
+    (isa(x, Expr) && x.head == :for) || throw(SimdError("for loop expected"))
     length(x.args) == 2 || throw(SimdError("1D for loop expected"))
 
     var,range = parse_iteration_space(x.args[1])

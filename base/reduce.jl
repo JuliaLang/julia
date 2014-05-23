@@ -206,44 +206,12 @@ sum(A::AbstractArray{Bool}) = countnz(A)
 # a fast implementation of sum in sequential order (from left to right).
 # to allow type-stable loops, requires length > 1
 function sum_seq{T}(a::AbstractArray{T}, ifirst::Int, ilast::Int)
-    
-    @inbounds if ifirst + 6 >= ilast  # length(a) < 8
-        i = ifirst
-        s = a[i] + a[i+1]
-        i = i+1
-        while i < ilast
-            s += a[i+=1]
+    @inbounds begin
+        s = a[ifirst] + a[ifirst+1]
+        @simd for i = ifirst+2:ilast
+            s += a[i]
         end
         return s
-
-    else # length(a) >= 8
-
-        # more effective utilization of the instruction
-        # pipeline through manually unrolling the sum
-        # into four-way accumulation. Benchmark shows
-        # that this results in about 2x speed-up.                
-
-        s1 = a[ifirst] + a[ifirst + 4]
-        s2 = a[ifirst + 1] + a[ifirst + 5]
-        s3 = a[ifirst + 2] + a[ifirst + 6]
-        s4 = a[ifirst + 3] + a[ifirst + 7]
-
-        i = ifirst + 8
-        il = ilast - 3
-        while i <= il
-            s1 += a[i]
-            s2 += a[i+1]
-            s3 += a[i+2]
-            s4 += a[i+3]
-            i += 4
-        end
-
-        while i <= ilast
-            s1 += a[i]
-            i += 1
-        end
-
-        return s1 + s2 + s3 + s4
     end
 end
 
