@@ -559,6 +559,10 @@ Julia's automatic hygiene works by interpreting transparent variables
 in the macro *call* environment, but interpreting hygienic variables in
 the macro *definition* environment.
 
+Note that if a macro constructs its result using explicit calls to ``Expr``
+instead of using ``quote`` or its abbreviation ``:`` the macro will not
+get automatic hygiene.
+
 Hygienic or not?
 ~~~~~~~~~~~~~~~~
 
