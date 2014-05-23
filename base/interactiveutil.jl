@@ -238,7 +238,7 @@ typesof(args...) = map(a->(isa(a,Type) ? Type{a} : typeof(a)), args)
         end
     elseif ex.head == :thunk
         exret = quote error("expression is not a function call, "
-                            * "or is too complex for @$fcn to analyze; "
+                            * "or is too complex for @", $fcn, " to analyze; "
                             * "break it down to simpler parts if possible")
                 end
     end
