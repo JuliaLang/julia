@@ -79,9 +79,9 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_propval_t cat)
               wc == 0x1d76f || wc == 0x1d789 ||
               wc == 0x1d7a9 || wc == 0x1d7c3)) ||
 
-            // super- and subscript +-=
-            (wc >= 0x207a && wc <= 0x207c) ||
-            (wc >= 0x208a && wc <= 0x208c) ||
+            // super- and subscript +-=()
+            (wc >= 0x207a && wc <= 0x207e) ||
+            (wc >= 0x208a && wc <= 0x208e) ||
 
             // angle symbols
             (wc >= 0x2220 && wc <= 0x2222) || // ∠, ∡, ∢
