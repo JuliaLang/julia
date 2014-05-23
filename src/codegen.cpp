@@ -726,7 +726,8 @@ const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
         }
         
         object::SymbolRef::Type symtype;
-        size_t symsize, symaddr;
+        uint64_t symsize;
+        uint64_t symaddr;
 
         #ifdef LLVM35
         for (const object::SymbolRef &sym_iter : fit->second.object->symbols()) {

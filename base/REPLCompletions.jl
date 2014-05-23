@@ -166,12 +166,6 @@ function completions(string, pos)
             paths[1] *= "\""
         end
         return sort(paths), r, true
-    elseif inc_tag == :other && string[pos] == '('
-        endpos = prevind(string, pos)
-        startpos = nextind(string, rsearch(string, non_identifier_chars, endpos))
-        return complete_methods(string[startpos:endpos]), startpos:endpos, false
-    elseif inc_tag == :comment
-        return UTF8String[], 0:-1, false
     end
 
     slashpos = rsearch(string, '\\', pos)
@@ -180,6 +174,14 @@ function completions(string, pos)
         if !isempty(latex)
             return [latex], slashpos:pos, true
         end
+    end
+
+    if inc_tag == :other && string[pos] == '('
+        endpos = prevind(string, pos)
+        startpos = nextind(string, rsearch(string, non_identifier_chars, endpos))
+        return complete_methods(string[startpos:endpos]), startpos:endpos, false
+    elseif inc_tag == :comment
+        return UTF8String[], 0:-1, false
     end
 
     dotpos = rsearch(string, '.', pos)
