@@ -446,6 +446,9 @@ Set{T<:Number}(xs::T...) = Set{T}(xs)
 @deprecate bitmix(x, y::Union(Uint32, Int32)) convert(Uint32, hash(x, uint(y)))
 @deprecate bitmix(x, y::Union(Uint64, Int64)) convert(Uint64, hash(x, hash(y)))
 
+@deprecate readsfrom(cmd, args...)      open(cmd, "r", args...)
+@deprecate writesto(cmd, args...)      open(cmd, "w", args...)
+
 # 0.3 discontinued functions
 
 function nnz(X)
