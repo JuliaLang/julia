@@ -9,7 +9,7 @@ type Set{T}
         new(zeros(Uint8,n), Array(T,n), 0, 0)
     end
     function Set(itr)
-        //todo:  n should be _tablesz(length(itr)) if itr has a length function
+        #todo:  n should be _tablesz(length(itr)) if itr has a length function
         n = 16
         union!(new(zeros(Uint8,n), Array(T,n), 0, 0), itr)
     end
