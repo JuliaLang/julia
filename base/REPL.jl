@@ -550,7 +550,8 @@ function setup_interface(d::REPLDisplay, req, rep; extra_repl_keymap = Dict{Any,
         # and pass into Base.repl_cmd for processing (handles `ls` and `cd`
         # special)
         on_done = respond(d, main_prompt, req, rep) do line
-            Expr(:call, :(Base.repl_cmd), macroexpand(Expr(:macrocall, symbol("@cmd"),line)))
+            cmdmac = Expr(:., :Base, Expr(:quote, symbol("@cmd")))
+            Expr(:call, :(Base.repl_cmd), macroexpand(Expr(:macrocall, cmdmac, line)))
         end)
 
     ################################# Stage II #############################
