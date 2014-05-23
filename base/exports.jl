@@ -451,6 +451,7 @@ export
     widemul,
     zero,
     √,
+    ∛,
 
 # specfun
     airy,

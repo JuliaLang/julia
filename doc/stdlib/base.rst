@@ -2884,6 +2884,7 @@ Mathematical Functions
 .. function:: sqrt(x)
 
    Return :math:`\sqrt{x}`. Throws ``DomainError`` for negative ``Real`` arguments. Use complex negative arguments instead.
+   The prefix operator ``√`` is equivalent to ``sqrt``.
 
 .. function:: isqrt(n)
 
@@ -2891,7 +2892,7 @@ Mathematical Functions
 
 .. function:: cbrt(x)
 
-   Return :math:`x^{1/3}`
+   Return :math:`x^{1/3}`.   The prefix operator ``∛`` is equivalent to ``cbrt``.
 
 .. function:: erf(x)
 

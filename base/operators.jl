@@ -363,7 +363,7 @@ function ifelse(c::AbstractArray{Bool}, x, y::AbstractArray)
 end
 
 # some operators not defined yet
-global //, .>>, .<<, >:, <|, |>, hcat, hvcat, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √
+global //, .>>, .<<, >:, <|, |>, hcat, hvcat, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
 
 module Operators
 
@@ -429,6 +429,7 @@ export
     ∩,
     ∪,
     √,
+    ∛,
     colon,
     hcat,
     vcat,
@@ -442,6 +443,6 @@ import Base: !, !=, $, %, .%, &, *, +, -, .!=, .+, .-, .*, ./, .<, .<=, .==, .>,
     .>=, .\, .^, /, //, <, <:, <<, <=, ==, >, >=, >>, .>>, .<<, >>>,
     <|, |>, \, ^, |, ~, !==, >:, colon, hcat, vcat, hvcat, getindex, setindex!,
     transpose, ctranspose,
-    ≥, ≤, ≠, .≥, .≤, .≠, ÷, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √
+    ≥, ≤, ≠, .≥, .≤, .≠, ÷, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
 
 end
