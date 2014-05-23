@@ -186,14 +186,14 @@ isname(ex::Expr) = ((ex.head == :. && isname(ex.args[1]) && isname(ex.args[2]))
 
 macro help(ex)
     if ex === :? || ex === :help
-        return Expr(:call, :help)
+        return :(help())
     elseif !isa(ex, Expr) || isname(ex)
-        return Expr(:call, :help, esc(ex))
+        return :(help($ex))
     elseif ex.head == :macrocall && length(ex.args) == 1
         # e.g., "julia> @help @printf"
-        return Expr(:call, :help, string(ex.args[1]))
+        return :(help($(string(ex.args[1]))))
     else
-        return Expr(:macrocall, symbol("@which"), esc(ex))
+        return :(@which $ex)
     end
 end
 
