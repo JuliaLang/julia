@@ -1666,3 +1666,16 @@ g6896(x) = x::Int=x
 @test g6896(5.0) === 5.0
 f6896(x) = y::Int=x
 @test f6896(5.0) === 5.0
+
+# issue #6938
+module M6938
+macro mac()
+    quote
+        let
+            y = 0
+            y
+        end
+    end
+end
+end
+@test @M6938.mac() == 0
