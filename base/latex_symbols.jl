@@ -48,6 +48,9 @@ const latex_symbols = [
     "\\female" => "♀",
     "\\mars" => "♂",
 
+    "\\sout" => "̶",# ulem package, same as Elzbar
+    "\\euro" => "€",
+
 # 732 symbols generated from unicode.xml
     "\\textexclamdown" => "¡",
     "\\sterling" => "£",
@@ -781,6 +784,5 @@ const latex_symbols = [
     "\\openbracketright" => "〛",
     "\\overbrace" => "︷",
     "\\underbrace" => "︸",
-
 
 ]
