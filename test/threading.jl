@@ -62,7 +62,7 @@ end
 function ptanh(x; numthreads=CPU_CORES)
     y = similar(x)
     N = length(x)
-    parapply(tanh_core, 1:N, x, y, numthreads=numthreads)
+    parapply(tanh_core, 1:N, x, y, preapply=true, numthreads=numthreads)
     y
 end
 
@@ -166,6 +166,32 @@ let
 
     @test x[1] == 20000
 end
+
+### Exception test
+
+function i_will_throw() 
+    error("An error in thread!")
+end
+
+let N=100
+
+    nthrows = 0
+    for l=1:N
+        try
+            t1 = Base.Thread(i_will_throw)
+            t2 = Base.Thread(i_will_throw)
+            Base.run(t1)
+            Base.run(t2)
+            Base.join(t1)
+            Base.join(t2)
+        catch
+            nthrows += 1
+        end
+    end
+
+    @test nthrows == N
+end
+
 
 ### Median filter
 

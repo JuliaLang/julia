@@ -752,6 +752,11 @@ void NORETURN throw_internal(jl_value_t *e)
 DLLEXPORT void jl_throw(jl_value_t *e)
 {
     assert(e != NULL);
+    // Threads use a special exit here to tell the main thread that
+    // an exception occurred. This means that try/catch should not be
+    // used in threads currently.
+    if(jl_main_thread_id != uv_thread_self())
+        jl_longjmp(jl_thread_eh,1);
     record_backtrace();
     throw_internal(e);
 }

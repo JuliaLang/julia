@@ -18,10 +18,12 @@ extern "C" {
 #ifndef _OS_WINDOWS_
 #  define jl_jmp_buf sigjmp_buf
 #  define MAX_ALIGN sizeof(void*)
+#  define __JL_THREAD __thread
 #else
 #  define jl_jmp_buf jmp_buf
 #  include <malloc.h> //for _resetstkoflw
 #  define MAX_ALIGN 8
+#  define __JL_THREAD __declspec(thread)
 #endif
 
 #ifdef _P64
@@ -1211,6 +1213,7 @@ typedef struct {
     uv_cond_t c;
     int busy;
     int poolid;
+    int exception;
     jl_function_t* f;
     jl_tuple_t* targs;
 } jl_thread_t;
@@ -1219,6 +1222,7 @@ DLLEXPORT jl_thread_t* jl_create_thread(jl_function_t* f, jl_tuple_t* targs);
 DLLEXPORT void jl_run_thread(jl_thread_t* t);
 DLLEXPORT void jl_join_thread(jl_thread_t* t);
 DLLEXPORT void jl_destroy_thread(jl_thread_t* t);
+DLLEXPORT int jl_thread_exception(jl_thread_t* t);
 
 DLLEXPORT uv_mutex_t* jl_create_mutex();
 DLLEXPORT void jl_lock_mutex(uv_mutex_t* m);
@@ -1247,6 +1251,8 @@ DLLEXPORT void jl_destroy_mutex(uv_mutex_t* m);
       m ## _thread_id = -1; \
       uv_mutex_unlock(& m ## _mutex); \
   }
+
+extern __JL_THREAD jl_jmp_buf jl_thread_eh;
 
 // I/O system -----------------------------------------------------------------
 

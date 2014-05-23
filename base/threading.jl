@@ -32,9 +32,15 @@ type Thread
     handle::Ptr{Void}
 end
 
-join(t::Thread) = (ccall(:jl_join_thread,Void,(Ptr{Void},),t.handle))
+function join(t::Thread)
+    ccall(:jl_join_thread,Void,(Ptr{Void},),t.handle)
+    if exception_occured(t) 
+        error("An exception occurred in a thread!") 
+    end
+end
 run(t::Thread) = (ccall(:jl_run_thread,Void,(Ptr{Void},),t.handle))
 destroy(t::Thread) = (ccall(:jl_destroy_thread,Void,(Ptr{Void},),t.handle))
+exception_occured(t::Thread) = bool(ccall(:jl_thread_exception,Cint,(Ptr{Void},),t.handle))
 
 function Thread(f::Function,args...)
     t = Thread(ccall(:jl_create_thread,Ptr{Void},(Any,Any),f,args))
@@ -61,7 +67,7 @@ end
 
 ### parallel apply function (scheduling in julia).
 
-function parapply(f::Function, r::UnitRange, args...; preapply::Bool = false, numthreads::Int = CPU_CORES)
+function parapply(f::Function, r::UnitRange, args...; preapply::Bool = true, numthreads::Int = CPU_CORES)
 
     st = start(r)
     len = length(r)
