@@ -3251,7 +3251,7 @@ So far only the second case can actually occur.
   (if (or (not (pair? e)) (quoted? e))
       '()
       (case (car e)
-	((escape let)  '())
+	((escape)  '())
 	((= function)
 	 (append! (filter
 		   symbol?
