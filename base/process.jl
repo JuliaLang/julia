@@ -426,11 +426,23 @@ function readsfrom(cmds::AbstractCmd, stdin::AsyncStream)
     (out, processes)
 end
 
-function writesto(cmds::AbstractCmd, stdout::UVStream)
+function writesto(cmds::AbstractCmd, stdout::UVStream=DevNull)
     processes = @tmp_wpipe tmp inpipe spawn(false, cmds, (tmp,stdout,STDERR))
     (inpipe, processes)
 end
-writesto(cmds::AbstractCmd) = writesto(cmds, DevNull)
+
+function writesto(f::Function, cmds::AbstractCmd, stdout::UVStream=DevNull)
+    io, P = writesto(cmds, stdout)
+    try
+        ret = f(io)
+        close(io)
+        wait(P)
+        return ret
+    catch
+        kill(P)
+        rethrow()
+    end
+end
 
 function readandwrite(cmds::AbstractCmd)
     (out, processes) = @tmp_wpipe tmp inpipe readsfrom(cmds, tmp)

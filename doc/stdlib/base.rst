@@ -4953,9 +4953,17 @@ System
 
    Starts running a command asynchronously, and returns a tuple (stream,process). The first value is a stream reading from the process' standard output.
 
-.. function:: writesto(command)
+.. function:: writesto(command, stdout=DevNull)
 
-   Starts running a command asynchronously, and returns a tuple (stream,process). The first value is a stream writing to the process' standard input.
+   Starts running a command asynchronously (optionally writing to the given ``stdout`` stream), and returns a tuple ``(stream,process)``, where ``stream`` writing to the process' standard input.
+
+.. function:: writesto(f::Function, command, stdout=DevNull)
+
+   Given a function ``f(stream)`` that writes to a ``stream``, starts
+   running the command and uses ``f`` to write to the process' standard input,
+   then closes the stream and waits for the process to complete.  (The
+   optional ``stdout`` argument specifies the process' standard output.)
+   Returns the value returned by ``f``.
 
 .. function:: readandwrite(command)
 

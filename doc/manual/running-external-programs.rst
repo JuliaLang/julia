@@ -47,6 +47,15 @@ can be used instead::
     julia> (chomp(a)) == "hello"
     true
 
+Conversely, if you want to write to the standard input of the external
+command, you can use a ``writesto`` method, for example::
+
+    julia> writesto(`less`, STDOUT) do io
+               for i = 1:1000
+                   println(io, i)
+               end
+           end
+
 .. _man-command-interpolation:
 
 Interpolation
