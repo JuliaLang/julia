@@ -66,10 +66,9 @@ end
 
 @osx_only begin
     function clipboard(x)
-        w,p = writesto(`pbcopy`)
-        print(w,x)
-        close(w)
-        wait(p)
+        open(`pbcopy`, "w") do io
+            print(io, x)
+        end
     end
     clipboard() = readall(`pbpaste`)
 end
@@ -89,10 +88,9 @@ end
         cmd = c == :xsel  ? `xsel --nodetach --input --clipboard` :
               c == :xclip ? `xclip -quiet -in -selection clipboard` :
             error("unexpected clipboard command: $c")
-        w,p = writesto(cmd)
-        print(w,x)
-        close(w)
-        wait(p)
+        open(cmd, "w") do io
+            print(io, x)
+        end
     end
     function clipboard()
         c = clipboardcmd()
