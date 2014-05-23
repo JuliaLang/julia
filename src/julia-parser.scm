@@ -21,6 +21,30 @@
 (define prec-decl        '(|::|))
 (define prec-dot         '(|.|))
 
+(define prec-names '(prec-assignment
+		     prec-conditional prec-lazy-or prec-lazy-and prec-arrow prec-comparison
+		     prec-pipe prec-colon prec-plus prec-bitshift prec-times prec-rational
+		     prec-power prec-decl prec-dot))
+
+(define (Set l)
+  ;; construct a length-specialized membership tester
+  (cond ((length= l 1)
+	 (eval `(lambda (x)
+		  (,(if (symbol? (car l)) 'eq? 'eqv?) x (quote ,(car l))))))
+	((not (length> l 8))
+	 (eval `(lambda (x)
+		  (not (not (,(if (every symbol? l) 'memq 'memv) x (quote ,l)))))))
+	(else
+	 (let ((t (table)))
+	   (for-each (lambda (x) (put! t x #t)) l)
+	   (lambda (x)
+	     (has? t x))))))
+
+;; for each prec-x generate an is-prec-x? procedure
+(for-each (lambda (name)
+	    (eval `(define ,(symbol (string "is-" name "?")) (Set ,name))))
+	  prec-names)
+
 (define unary-ops '(+ - ! ~ |<:| |>:| √))
 
 ; operators that are both unary and binary
@@ -41,22 +65,7 @@
 
 (define operators (list* '~ '! '-> '√ ctrans-op trans-op vararg-op
 			 (delete-duplicates
-			  (append
-			   prec-assignment
-			   prec-conditional
-			   prec-lazy-or
-			   prec-lazy-and
-			   prec-arrow
-			   prec-comparison
-			   prec-pipe
-			   prec-colon
-			   prec-plus
-			   prec-bitshift
-			   prec-times
-			   prec-rational
-			   prec-power
-			   prec-decl
-			   prec-dot))))
+			  (apply append (map eval prec-names)))))
 
 (define op-chars
   (list->string
@@ -125,7 +134,7 @@
   (and (pair? e) (eq? (car e) '=)))
 
 (define (assignment-like? e)
-  (and (pair? e) (memq (car e) prec-assignment)))
+  (and (pair? e) (is-prec-assignment? (car e))))
 
 (define (kwarg? e)
   (and (pair? e) (eq? (car e) 'kw)))
@@ -486,7 +495,7 @@
 (define-macro (parse-LtoR s down ops)
   `(let loop ((ex (,down ,s))
 	      (t  (peek-token ,s)))
-     (if (not (memq t ,ops))
+     (if (not (,ops t))
 	 ex
 	 (begin (take-token ,s)
 		(if (or (syntactic-op? t) (eq? t 'in) (eq? t '|::|))
@@ -499,7 +508,7 @@
   (let loop ((ex  (down s))
 	     (t   (peek-token s))
 	     (spc (ts:space? s)))
-    (if (not (memq t ops))
+    (if (not (ops t))
 	ex
 	(begin (take-token s)
 	       (cond ((and space-sensitive spc (memq t unary-and-binary-ops)
@@ -510,7 +519,7 @@
 		      (list t ex (parse-RtoL s down ops)))
 		     ((eq? t '~)
 		      (let ((args (parse-chain s down '~)))
-			(if (memq (peek-token s) ops)
+			(if (ops (peek-token s))
 			    `(macrocall @~ ,ex ,@(butlast args)
 					,(loop (last args)
 					       (peek-token s)
@@ -678,16 +687,15 @@
 (define (parse-eq s)
   (let ((lno (input-port-line (ts:port s))))
     (short-form-function-loc
-     (parse-RtoL s parse-comma prec-assignment) lno)))
+     (parse-RtoL s parse-comma is-prec-assignment?) lno)))
 
 ; parse-eq* is used where commas are special, for example in an argument list
-(define (parse-eq* s)   (parse-RtoL s parse-cond  prec-assignment))
+(define (parse-eq* s)   (parse-RtoL s parse-cond  is-prec-assignment?))
 ; parse-comma is needed for commas outside parens, for example a = b,c
 (define (parse-comma s) (parse-Nary s parse-cond  '(#\,) 'tuple '() #f))
-(define (parse-or s)    (parse-LtoR s parse-and   prec-lazy-or))
-(define (parse-and s)   (parse-LtoR s parse-arrow prec-lazy-and))
-(define (parse-arrow s) (parse-RtoL s parse-ineq  prec-arrow))
-(define (parse-ineq s)  (parse-comparison s prec-comparison))
+(define (parse-or s)    (parse-LtoR s parse-and   is-prec-lazy-or?))
+(define (parse-and s)   (parse-LtoR s parse-arrow is-prec-lazy-and?))
+(define (parse-arrow s) (parse-RtoL s parse-comparison  is-prec-arrow?))
 
 ;; parse left to right chains of a certain binary operator
 ;; returns a list of arguments
@@ -713,7 +721,7 @@
   (let loop ((ex (down s)))
     (let* ((t   (peek-token s))
 	   (spc (ts:space? s)))
-      (if (not (memq t ops))
+      (if (not (ops t))
 	  ex
 	  (begin
 	    (take-token s)
@@ -728,23 +736,24 @@
 		  (else
 		   (loop (list 'call t ex (down s))))))))))
 
-(define (parse-expr s) (parse-with-chains s parse-shift prec-plus '+))
+(define (parse-expr s) (parse-with-chains s parse-shift is-prec-plus? '+))
 
-(define (parse-shift s) (parse-LtoR s parse-term prec-bitshift))
+(define (parse-shift s) (parse-LtoR s parse-term is-prec-bitshift?))
 
-(define (parse-term s) (parse-with-chains s parse-rational prec-times '*))
+(define (parse-term s) (parse-with-chains s parse-rational is-prec-times? '*))
 
-(define (parse-rational s) (parse-LtoR s parse-unary prec-rational))
+(define (parse-rational s) (parse-LtoR s parse-unary is-prec-rational?))
 
-(define (parse-pipes s)    (parse-LtoR s parse-range prec-pipe))
+(define (parse-pipes s)    (parse-LtoR s parse-range is-prec-pipe?))
 
-(define (parse-in s)       (parse-LtoR s parse-pipes '(in)))
+(define is-in? (Set '(in)))
+(define (parse-in s)       (parse-LtoR s parse-pipes is-in?))
 
-(define (parse-comparison s ops)
+(define (parse-comparison s)
   (let loop ((ex (parse-in s))
 	     (first #t))
     (let ((t (peek-token s)))
-      (if (not (memq t ops))
+      (if (not (is-prec-comparison? t))
 	  ex
 	  (begin (take-token s)
 		 (if first
@@ -806,7 +815,7 @@
 			(parse-juxtapose
 			 (read-number (ts:port s) (eqv? nch #\.) (eq? op '-))
 			 s)))
-		   (if (memq (peek-token s) '(^ .^))
+		   (if (memq (peek-token s) '(^ |.^|))
 		       ;; -2^x parsed as (- (^ 2 x))
 		       (begin (ts:put-back! s (maybe-negate op num))
 			      (list 'call op (parse-factor s)))
@@ -830,7 +839,7 @@
 (define (parse-factor-h s down ops)
   (let ((ex (down s))
 	(t (peek-token s)))
-    (cond ((not (memq t ops))
+    (cond ((not (ops t))
 	   ex)
 	  (else
 	   (list 'call
@@ -839,7 +848,7 @@
 ; -2^3 is parsed as -(2^3), so call parse-decl for the first argument,
 ; and parse-unary from then on (to handle 2^-3)
 (define (parse-factor s)
-  (parse-factor-h s parse-decl prec-power))
+  (parse-factor-h s parse-decl is-prec-power?))
 
 (define (parse-decl s)
   (let loop ((ex (parse-call s)))
@@ -981,7 +990,7 @@
 			  " expected \"end\", got \"" t "\""))))))
 
 (define (parse-subtype-spec s)
-  (subtype-syntax (parse-ineq s)))
+  (subtype-syntax (parse-comparison s)))
 
 ; parse expressions or blocks introduced by syntactic reserved words
 (define (parse-resword s word)

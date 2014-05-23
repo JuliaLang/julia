@@ -292,12 +292,20 @@ static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
     while (1) {
         if (jl_binding_resolved_p(m, var)) {
             jl_binding_t *mb = jl_get_binding(m, var);
+            jl_module_t *m0 = m;
             assert(mb != NULL);
-            if (mb->owner == m || mb->imported) {
+            if (mb->owner == m0 || mb->imported) {
                 m = (jl_module_t*)mb->value;
-                if (m == NULL || !jl_is_module(m))
+                if ((mb->owner == m0 && m != NULL && !jl_is_module(m)) ||
+                    (mb->imported && (m == NULL || !jl_is_module(m))))
                     jl_errorf("invalid module path (%s does not name a module)", var->name);
-                break;
+                // If the binding has been resolved but is (1) undefined, and (2) owned
+                // by the module we're importing into, then allow the import into the
+                // undefined variable (by setting m back to m0).
+                if (m == NULL)
+                    m = m0;
+                else
+                    break;
             }
         }
         if (m == jl_main_module) {

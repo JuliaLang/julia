@@ -57,6 +57,13 @@ function strptime(fmt::String, timestr::String)
     if r == C_NULL
         error("invalid arguments")
     end
+    @osx_only begin
+        # if we didn't explicitly parse the weekday or year day, use mktime
+        # to fill them in automatically.
+        if !ismatch(r"([^%]|^)%(a|A|j|w|Ow)", fmt)
+            ccall(:mktime, Int, (Ptr{Void},), &tm)
+        end
+    end
     tm
 end
 
