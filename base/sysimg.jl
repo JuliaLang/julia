@@ -50,8 +50,6 @@ include("rational.jl")
 
 # core data structures (used by type inference)
 include("abstractarray.jl")
-include("reduce.jl")
-
 include("subarray.jl")
 include("array.jl")
 include("bitarray.jl")
@@ -60,6 +58,12 @@ include("dict.jl")
 include("set.jl")
 include("hashing.jl")
 include("iterator.jl")
+
+# SIMD loops
+include("simdloop.jl")
+importall .SimdLoop
+
+include("reduce.jl")
 
 # compiler
 import Core.Undef  # used internally by compiler
@@ -205,10 +209,6 @@ include("help.jl")
 using .I18n
 using .Help
 push!(I18n.CALLBACKS, Help.clear_cache)
-
-# SIMD loops
-include("simdloop.jl")
-importall .SimdLoop
 
 # frontend
 include("Terminals.jl")
