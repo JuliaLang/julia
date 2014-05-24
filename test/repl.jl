@@ -14,10 +14,10 @@ rc != 0 && error("grantpt failed")
 rc = ccall(:unlockpt,Cint,(Cint,),fdm)
 rc != 0 && error("unlockpt")
 
-fds = ccall(:open,Cint,(Ptr{Uint8},Cint),ccall(:ptsname,Ptr{Uint8},(Cint,),fdm), O_RDWR)
+fds = ccall(:open,Cint,(Ptr{Uint8},Cint),ccall(:ptsname,Ptr{Uint8},(Cint,),fdm), O_RDWR|O_NOCTTY)
 
 # slave
-slave   = Base.TTY(RawFD(fds); readable = true)
+slave   = RawFD(fds)
 master = Base.TTY(RawFD(fdm); readable = true)
 
 nENV = copy(ENV)
@@ -32,8 +32,8 @@ wait(p)
 output = readavailable(master)
 @test output == "julia> 1\r\nquit()\r\n1\r\n\r\njulia> "
 
-close(slave)
 close(master)
+ccall(:close,Cint,(Cint,),fds)
 
 end
 

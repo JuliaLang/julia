@@ -106,7 +106,12 @@ uvhandle(x::Ptr) = x
 uvtype(::Ptr) = UV_STREAM
 uvtype(::DevNullStream) = UV_STREAM
 
-typealias Redirectable Union(UVStream,FS.File,FileRedirect,DevNullStream,IOStream)
+# Not actually a pointer, but that's how we pass it through the C API
+# so it's fine
+uvhandle(x::RawFD) = convert(Ptr{Void},x.fd)
+uvtype(x::RawFD) = UV_RAW_FD
+
+typealias Redirectable Union(UVStream,FS.File,FileRedirect,DevNullStream,IOStream,RawFD)
 
 type CmdRedirect <: AbstractCmd
     cmd::AbstractCmd
