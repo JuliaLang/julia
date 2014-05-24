@@ -38,6 +38,7 @@ External libraries, if used, include their own licenses:
 - [GMP](http://gmplib.org/manual/Copying.html#Copying)
 - [LAPACK](http://netlib.org/lapack/LICENSE.txt)
 - [LIBEXPAT](http://expat.cvs.sourceforge.net/viewvc/expat/expat/README)
+- [LIBGIT2](https://github.com/libgit2/libgit2/blob/development/COPYING)
 - [LIBUNWIND](http://git.savannah.gnu.org/gitweb/?p=libunwind.git;a=blob_plain;f=LICENSE;hb=master)
 - [LIBUV](https://github.com/joyent/libuv/blob/master/LICENSE)
 - [LLVM](http://llvm.org/releases/3.0/LICENSE.TXT)
