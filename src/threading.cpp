@@ -11,8 +11,11 @@ long jl_main_thread_id = -1;
 
 __JL_THREAD jl_jmp_buf jl_thread_eh;
 
+long jl_nr_running_threads = 0;
+
 JL_DEFINE_MUTEX(gc)
 JL_DEFINE_MUTEX(codegen)
+JL_DEFINE_MUTEX(nr_running_threads)
 uv_mutex_t gc_pool_mutex[N_GC_THREADS];
 
 #if N_THREAD_POOL > 0
@@ -78,6 +81,7 @@ void jl_init_threading()
 {
     uv_mutex_init(&gc_mutex);
     uv_mutex_init(&codegen_mutex);
+    uv_mutex_init(&nr_running_threads_mutex);
     for(int n=0; n<N_GC_THREADS; n++)
         uv_mutex_init(gc_pool_mutex+n);
     jl_main_thread_id = uv_thread_self();
@@ -151,6 +155,10 @@ jl_thread_t* jl_create_thread(jl_function_t* f, jl_tuple_t* targs)
 
 void jl_run_thread(jl_thread_t* t)
 {
+    uv_mutex_lock(&nr_running_threads_mutex);
+    jl_nr_running_threads++;
+    uv_mutex_unlock(&nr_running_threads_mutex);
+
     #if N_THREAD_POOL > 0
     if(t->poolid != -1)
     {
@@ -175,6 +183,12 @@ void jl_join_thread(jl_thread_t* t)
     else
     #endif
         uv_thread_join(&(t->t));
+
+    uv_mutex_lock(&nr_running_threads_mutex);
+    jl_nr_running_threads--;
+    uv_mutex_unlock(&nr_running_threads_mutex);
+
+
 }
 
 void jl_destroy_thread(jl_thread_t* t)

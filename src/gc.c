@@ -986,7 +986,7 @@ static inline void* thread_safe_pool_alloc(size_t szclass_)
     if(jl_main_thread_id == uv_thread_self() || gc_thread_id == uv_thread_self() )
         return pool_alloc(&pools[szclass_]);
 
-    for(int n=0; n<N_GC_THREADS; n++)
+    for(int n=1; n<N_GC_THREADS; n++)
     {
         if(uv_mutex_trylock(gc_pool_mutex+n) == 0)
         {
@@ -997,9 +997,9 @@ static inline void* thread_safe_pool_alloc(size_t szclass_)
     }
 
     // all pools are locked
-    uv_mutex_lock(gc_pool_mutex);
-    a = pool_alloc(&pools[szclass_]);
-    uv_mutex_unlock(gc_pool_mutex);
+    uv_mutex_lock(gc_pool_mutex+1);
+    a = pool_alloc(&pools[N_POOLS+szclass_]);
+    uv_mutex_unlock(gc_pool_mutex+1);
     return a;
 }
 

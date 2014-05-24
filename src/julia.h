@@ -1229,6 +1229,8 @@ DLLEXPORT void jl_lock_mutex(uv_mutex_t* m);
 DLLEXPORT void jl_unlock_mutex(uv_mutex_t* m);
 DLLEXPORT void jl_destroy_mutex(uv_mutex_t* m);
 
+extern long jl_nr_running_threads;
+
 #define JL_DEFINE_MUTEX_EXT(m) \
   extern uv_mutex_t m ## _mutex; \
   extern long m ## _thread_id;
@@ -1239,7 +1241,7 @@ DLLEXPORT void jl_destroy_mutex(uv_mutex_t* m);
 
 #define JL_LOCK(m) \
   int locked = 0; \
-  if( m ## _thread_id != uv_thread_self() && jl_main_thread_id != uv_thread_self()) \
+  if( m ## _thread_id != uv_thread_self() && (jl_main_thread_id != uv_thread_self() || jl_nr_running_threads > 0) ) \
   { \
       uv_mutex_lock(& m ## _mutex); \
       locked = 1; \
