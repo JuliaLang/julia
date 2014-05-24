@@ -149,6 +149,12 @@ function print_response(errio::IO, val::ANY, bt, show_value::Bool, have_color::B
     end
 end
 
+# A reference to a backend
+immutable REPLBackendRef
+    repl_channel::RemoteRef
+    response_channel::RemoteRef
+end
+
 function run_repl(repl::AbstractREPL)
     repl_channel = RemoteRef()
     response_channel = RemoteRef()
@@ -160,13 +166,16 @@ end
 
 type BasicREPL <: AbstractREPL
     terminal::TextTerminal
+    waserror::Bool
+    BasicREPL(t) = new(t,false)
 end
 
 outstream(r::BasicREPL) = r.terminal
 
-function run_frontend(repl::BasicREPL, repl_channel::RemoteRef, response_channel::RemoteRef)
+function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
     d = REPLDisplay(repl)
     pushdisplay(d)
+    repl_channel, response_channel = backend.repl_channel, backend.response_channel
     while true
         write(repl.terminal, "julia> ")
         line = ""
@@ -188,11 +197,6 @@ function run_frontend(repl::BasicREPL, repl_channel::RemoteRef, response_channel
     # terminate backend
     put!(repl_channel, (nothing, -1))
     popdisplay(d)
-end
-
-immutable REPLBackendRef
-    repl_channel::RemoteRef
-    response_channel::RemoteRef
 end
 
 ## LineEditREPL ##
@@ -725,6 +729,8 @@ type StreamREPL <: AbstractREPL
     prompt_color::String
     input_color::String
     answer_color::String
+    waserror::Bool
+    StreamREPL(stream,pc,ic,ac) = new(stream,pc,ic,ac,false)
 end
 
 outstream(s::StreamREPL) = s.stream
@@ -756,11 +762,12 @@ function ends_with_semicolon(line)
     return false
 end
 
-function run_frontend(repl::StreamREPL, repl_channel, response_channel)
+function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     have_color = true
     banner(repl.stream, have_color)
     d = REPLDisplay(repl)
     pushdisplay(d)
+    repl_channel, response_channel = backend.repl_channel, backend.response_channel
     while repl.stream.open
         if have_color
             print(repl.stream,repl.prompt_color)
