@@ -53,7 +53,7 @@ diag(A::AbstractVector) = error("use diagm instead of diag to construct a diagon
 #diagm{T}(v::AbstractVecOrMat{T})
 
 # special cases of vecnorm; note that they don't need to handle isempty(x)
-function vecnormMinusInf(x)
+function generic_vecnormMinusInf(x)
     s = start(x)
     (v, s) = next(x, s)
     minabs = abs(v)
@@ -63,7 +63,8 @@ function vecnormMinusInf(x)
     end
     return float(minabs)
 end
-function vecnormInf(x)
+
+function generic_vecnormInf(x)
     s = start(x)
     (v, s) = next(x, s)
     maxabs = abs(v)
@@ -73,7 +74,8 @@ function vecnormInf(x)
     end
     return float(maxabs)
 end
-function vecnorm1(x)
+
+function generic_vecnorm1(x)
     s = start(x)
     (v, s) = next(x, s)
     av = float(abs(v))
@@ -85,7 +87,8 @@ function vecnorm1(x)
     end
     return convert(T, sum)
 end
-function vecnorm2(x)
+
+function generic_vecnorm2(x)
     maxabs = vecnormInf(x)
     maxabs == 0 && return maxabs
     s = start(x)
@@ -101,7 +104,8 @@ function vecnorm2(x)
     end
     return convert(T, maxabs * sqrt(sum))
 end
-function vecnormp(x, p)
+
+function generic_vecnormp(x, p)
     if p > 1 || p < 0 # need to rescale to avoid overflow/underflow
         maxabs = vecnormInf(x)
         maxabs == 0 && return maxabs
@@ -130,6 +134,13 @@ function vecnormp(x, p)
         return convert(T, sum^inv(pp))
     end
 end
+
+vecnormMinusInf(x) = generic_vecnormMinusInf(x)
+vecnormInf(x) = generic_vecnormInf(x)
+vecnorm1(x) = generic_vecnorm1(x)
+vecnorm2(x) = generic_vecnorm2(x)
+vecnormp(x, p) = generic_vecnormp(x, p)
+
 function vecnorm(itr, p::Real=2)
     isempty(itr) && return float(real(zero(eltype(itr))))
     p == 2 && return vecnorm2(itr)
