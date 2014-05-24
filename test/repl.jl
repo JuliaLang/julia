@@ -22,7 +22,7 @@ master = Base.TTY(RawFD(fdm); readable = true)
 
 nENV = copy(ENV)
 nENV["TERM"] = "dumb"
-p = spawn(setenv(`$exename --quiet`,nENV),slave,slave,slave)
+p = spawn(setenv(`$exename -f --quiet`,nENV),slave,slave,slave)
 start_reading(master)
 Base.wait_readnb(master,1)
 write(master,"1\nquit()\n")
@@ -38,7 +38,7 @@ ccall(:close,Cint,(Cint,),fds)
 end
 
 # Test stream mode
-outs, ins, p = readandwrite(`$exename --quiet`)
+outs, ins, p = readandwrite(`$exename -f --quiet`)
 write(ins,"1\nquit()\n")
 @test readall(outs) == "1\n"
 end
