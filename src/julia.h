@@ -18,10 +18,12 @@ extern "C" {
 #ifndef _OS_WINDOWS_
 #  define jl_jmp_buf sigjmp_buf
 #  define MAX_ALIGN sizeof(void*)
+#  define __JL_THREAD __thread
 #else
 #  define jl_jmp_buf jmp_buf
 #  include <malloc.h> //for _resetstkoflw
 #  define MAX_ALIGN 8
+#  define __JL_THREAD __declspec(thread)
 #endif
 
 #ifdef _P64
@@ -1002,36 +1004,37 @@ typedef struct _jl_gcframe_t {
 // jl_value_t *x=NULL, *y=NULL; JL_GC_PUSH(&x, &y);
 // x = f(); y = g(); foo(x, y)
 
+extern DLLEXPORT long jl_main_thread_id;
 extern DLLEXPORT jl_gcframe_t *jl_pgcstack;
 
 #define JL_GC_PUSH(...)                                                   \
   void *__gc_stkf[] = {(void*)((VA_NARG(__VA_ARGS__)<<1)|1), jl_pgcstack, \
                        __VA_ARGS__};                                      \
-  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
+  if(jl_main_thread_id == uv_thread_self()) { jl_pgcstack = (jl_gcframe_t*)__gc_stkf; }
 
 #define JL_GC_PUSH1(arg1)                                                 \
   void *__gc_stkf[] = {(void*)3, jl_pgcstack, arg1};                      \
-  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
+  if(jl_main_thread_id == uv_thread_self()) { jl_pgcstack = (jl_gcframe_t*)__gc_stkf; }
 
 #define JL_GC_PUSH2(arg1, arg2)                                           \
   void *__gc_stkf[] = {(void*)5, jl_pgcstack, arg1, arg2};                \
-  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
+  if(jl_main_thread_id == uv_thread_self()) { jl_pgcstack = (jl_gcframe_t*)__gc_stkf; }
 
 #define JL_GC_PUSH3(arg1, arg2, arg3)                                     \
   void *__gc_stkf[] = {(void*)7, jl_pgcstack, arg1, arg2, arg3};          \
-  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
+  if(jl_main_thread_id == uv_thread_self()) { jl_pgcstack = (jl_gcframe_t*)__gc_stkf; }
 
 #define JL_GC_PUSH4(arg1, arg2, arg3, arg4)                               \
   void *__gc_stkf[] = {(void*)9, jl_pgcstack, arg1, arg2, arg3, arg4};    \
-  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
+  if(jl_main_thread_id == uv_thread_self()) { jl_pgcstack = (jl_gcframe_t*)__gc_stkf; }
 
 #define JL_GC_PUSHARGS(rts_var,n)                               \
   rts_var = ((jl_value_t**)alloca(((n)+2)*sizeof(jl_value_t*)))+2;    \
   ((void**)rts_var)[-2] = (void*)(((size_t)n)<<1);              \
   ((void**)rts_var)[-1] = jl_pgcstack;                          \
-  jl_pgcstack = (jl_gcframe_t*)&(((void**)rts_var)[-2])
+  if(jl_main_thread_id == uv_thread_self()) { jl_pgcstack = (jl_gcframe_t*)&(((void**)rts_var)[-2]); }
 
-#define JL_GC_POP() (jl_pgcstack = jl_pgcstack->prev)
+#define JL_GC_POP() if(jl_main_thread_id == uv_thread_self()) {jl_pgcstack = jl_pgcstack->prev;}
 
 void jl_gc_init(void);
 void jl_gc_setmark(jl_value_t *v);
@@ -1202,6 +1205,54 @@ void jl_longjmp(jmp_buf _Buf,int _Value);
         for (i__ca=1, jl_eh_restore_state(&__eh); i__ca; i__ca=0)
 #endif
 
+// Threads
+
+typedef struct {
+    uv_thread_t t;
+    uv_mutex_t m;
+    uv_cond_t c;
+    int busy;
+    int poolid;
+    int exception;
+    jl_function_t* f;
+    jl_tuple_t* targs;
+} jl_thread_t;
+
+DLLEXPORT jl_thread_t* jl_create_thread(jl_function_t* f, jl_tuple_t* targs);
+DLLEXPORT void jl_run_thread(jl_thread_t* t);
+DLLEXPORT void jl_join_thread(jl_thread_t* t);
+DLLEXPORT void jl_destroy_thread(jl_thread_t* t);
+DLLEXPORT int jl_thread_exception(jl_thread_t* t);
+
+DLLEXPORT uv_mutex_t* jl_create_mutex();
+DLLEXPORT void jl_lock_mutex(uv_mutex_t* m);
+DLLEXPORT void jl_unlock_mutex(uv_mutex_t* m);
+DLLEXPORT void jl_destroy_mutex(uv_mutex_t* m);
+
+#define JL_DEFINE_MUTEX_EXT(m) \
+  extern uv_mutex_t m ## _mutex; \
+  extern long m ## _thread_id;
+
+#define JL_DEFINE_MUTEX(m) \
+  uv_mutex_t m ## _mutex; \
+  long m ## _thread_id;
+
+#define JL_LOCK(m) \
+  int locked = 0; \
+  if( m ## _thread_id != uv_thread_self() && jl_main_thread_id != uv_thread_self()) \
+  { \
+      uv_mutex_lock(& m ## _mutex); \
+      locked = 1; \
+      m ## _thread_id = uv_thread_self(); \
+  }
+
+#define JL_UNLOCK(m) \
+  if(locked) { \
+      m ## _thread_id = -1; \
+      uv_mutex_unlock(& m ## _mutex); \
+  }
+
+extern __JL_THREAD jl_jmp_buf jl_thread_eh;
 
 // I/O system -----------------------------------------------------------------
 
