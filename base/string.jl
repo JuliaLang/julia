@@ -64,8 +64,8 @@ getindex(s::String, v::AbstractVector) =
 
 symbol(s::String) = symbol(bytestring(s))
 
-print(io::IO, s::String) = write(io, s)
-write(io::IO, s::String) = for c in s write(io, c) end
+print(io::IO, s::String) = (write(io, s); nothing)
+write(io::IO, s::String) = (len = 0; for c in s; len += write(io, c); end; len)
 show(io::IO, s::String) = print_quoted(io, s)
 
 sizeof(s::String) = error("type $(typeof(s)) has no canonical binary representation")

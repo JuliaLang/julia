@@ -215,10 +215,15 @@ function write_sub{T}(to::IOBuffer, a::Array{T}, offs, nel)
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
     end
-    if !isbits(T)
-        error("write to IOBuffer only supports bits types or arrays of bits types; got "*string(T))
+    if isbits(T)
+        write(to, pointer(a,offs), nel*sizeof(T))
+    else
+        nb = 0
+        for i = offs:offs+nel-1
+            nb += write(to, a[i])
+        end
+        nb
     end
-    write(to, pointer(a,offs), nel*sizeof(T))
 end
 
 write(to::IOBuffer, a::Array) = write_sub(to, a, 1, length(a))
