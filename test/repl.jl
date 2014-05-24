@@ -5,7 +5,7 @@ let exename=joinpath(JULIA_HOME,(ccall(:jl_is_debugbuild,Cint,())==0?"julia":"ju
 @unix_only begin
 
 const O_RDWR = Base.FS.JL_O_RDWR
-const O_NOCTTY = 0x20000
+const O_NOCTTY = Base.FS.JL_O_NOCTTY
 
 fdm = ccall(:posix_openpt,Cint,(Cint,),O_RDWR|O_NOCTTY)
 fdm == -1 && error("Failed to open PTY master")
