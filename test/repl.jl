@@ -1,8 +1,8 @@
 # REPL tests
+let exename=joinpath(JULIA_HOME,(ccall(:jl_is_debugbuild,Cint,())==0?"julia":"julia-debug"))
 
+# Test REPL in dumb mode
 @unix_only begin
-
-exename=joinpath(JULIA_HOME,(ccall(:jl_is_debugbuild,Cint,())==0?"julia":"julia-debug"))
 
 const O_RDWR = Base.FS.JL_O_RDWR
 const O_NOCTTY = 0x20000
@@ -17,24 +17,28 @@ rc != 0 && error("unlockpt")
 fds = ccall(:open,Cint,(Ptr{Uint8},Cint),ccall(:ptsname,Ptr{Uint8},(Cint,),fdm), O_RDWR)
 
 # slave
-slaveSTDIN   = Base.TTY(RawFD(fds); readable = true)
-slaveSTDERR  = Base.TTY(RawFD(fds))
-slaveSTDOUT  = Base.TTY(RawFD(fds))
+slave   = Base.TTY(RawFD(fds); readable = true)
 master = Base.TTY(RawFD(fdm); readable = true)
 
-# First test REPL in dumb mode
 nENV = copy(ENV)
 nENV["TERM"] = "dumb"
-p = spawn(setenv(`$exename --quiet`,nENV),slaveSTDIN,slaveSTDOUT,slaveSTDERR)
+p = spawn(setenv(`$exename --quiet`,nENV),slave,slave,slave)
+start_reading(master)
+Base.wait_readnb(master,1)
 write(master,"1\nquit()\n")
 
 wait(p)
 
-@test readavailable(master) == "julia> 1\r\nquit()\r\n1\r\n\r\njulia> "
+output = readavailable(master)
+@test output == "julia> 1\r\nquit()\r\n1\r\n\r\njulia> "
 
+close(slave)
 close(master)
-close(slaveSTDIN)
-close(slaveSTDOUT)
-close(slaveSTDERR)
 
+end
+
+# Test stream mode
+outs, ins, p = readandwrite(`$exename --quiet`)
+write(ins,"1\nquit()\n")
+@test readall(outs) == "1\n"
 end
