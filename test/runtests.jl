@@ -8,7 +8,7 @@ testnames = [
     "resolve", "pollfd", "mpfr", "broadcast", "complex", "socket",
     "floatapprox", "readdlm", "regex", "float16", "combinatorics",
     "sysinfo", "rounding", "ranges", "mod2pi", "euler", "show",
-    "lineedit", "replcompletions"
+    "lineedit", "replcompletions", "repl"
 ]
 @unix_only push!(testnames, "unicode")
 
@@ -35,7 +35,7 @@ end
 n = 1
 if net_on 
     n = min(8, CPU_CORES, length(tests))
-    n > 1 && addprocs(n)
+    n > 0  && addprocs(n)
     blas_set_num_threads(1)
 else
     filter!(x -> !(x in net_required_for), tests)
