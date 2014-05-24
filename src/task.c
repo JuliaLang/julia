@@ -272,6 +272,9 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
 extern int jl_in_gc;
 static jl_value_t *switchto(jl_task_t *t)
 {
+    // prevent threads to switch tasks
+    if( jl_main_thread_id != uv_thread_self())
+        return jl_nothing;
     if (t->state == done_sym || t->state == failed_sym) {
         jl_task_arg_in_transit = (jl_value_t*)jl_null;
         if (t->exception != jl_nothing)
