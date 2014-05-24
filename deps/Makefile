@@ -20,6 +20,7 @@ MAKE_COMMON = DESTDIR="" prefix=$(build_prefix) bindir=$(build_bindir) libdir=$(
 
 #autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf uv
 #custom Makefile rules: openlibm Rmath double-conversion dsfmt suitesparse-wrapper suitesparse lapack openblas mojibake
+#CMake libs: libgit2
 
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
@@ -87,6 +88,10 @@ ifeq ($(USE_SYSTEM_GMP), 0)
 STAGE1_DEPS += gmp
 endif
 
+ifeq ($(USE_SYSTEM_LIBGIT2), 0)
+STAGE1_DEPS += libgit2
+endif
+
 #ifeq ($(USE_SYSTEM_ZLIB), 0)
 #STAGE1_DEPS += zlib
 #endif
@@ -144,7 +149,7 @@ install: $(addprefix install-, $(LIBS))
 cleanall: $(addprefix clean-, $(LIBS))
 distcleanall: $(addprefix distclean-, $(LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-uv get-pcre get-double-conversion get-openlibm get-openspecfun get-dsfmt get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf get-mojibake
+getall: get-llvm get-uv get-pcre get-double-conversion get-openlibm get-openspecfun get-dsfmt get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf get-mojibake get-libgit2
 
 ## PATHS ##
 # sort is used to remove potential duplicates
@@ -1736,6 +1741,46 @@ configure-git: git-$(GIT_VER)/config.status
 compile-git: $(GIT_SOURCE)
 check-git: git-$(GIT_VER)/checked
 install-git: $(GIT_TARGET)
+
+## libgit2
+
+LIBGIT2_SOURCE = libgit2-$(LIBGIT2_VER)/build/libgit2.$(LIBGIT2_VER).$(SHLIB_EXT)
+LIBGIT2_TARGET = $(build_shlibdir)/libgit2.$(SHLIB_EXT)
+
+libgit2-$(LIBGIT2_VER).tar.gz:
+	$(JLDOWNLOAD) $@ https://github.com/libgit2/libgit2/archive/v$(LIBGIT2_VER).tar.gz
+libgit2-$(LIBGIT2_VER)/CMakelists.txt: libgit2-$(LIBGIT2_VER).tar.gz
+	$(JLCHECKSUM) $<
+	$(TAR) zxf $<
+	touch -c $@
+libgit2-$(LIBGIT2_VER)/build/Makefile: libgit2-$(LIBGIT2_VER)/CMakelists.txt
+	mkdir -p libgit2-$(LIBGIT2_VER)/build
+	cd libgit2-$(LIBGIT2_VER)/build/ && \
+	cmake ..
+	touch -c $@
+$(LIBGIT2_SOURCE): libgit2-$(LIBGIT2_VER)/build/Makefile
+	cd libgit2-$(LIBGIT2_VER)/build/ && \
+	cmake --build .
+	touch -c $@
+libgit2-$(LIBGIT2_VER)/build/checked: $(LIBGIT2_SOURCE)
+	#cd libgit2-$(LIBGIT2_VER)/build/ && \
+	#ctest
+	echo 1 > $@
+$(LIBGIT2_TARGET): $(LIBGIT2_SOURCE) | $(build_shlibdir)
+	cp $< $@
+	# Should the includes get included?
+	#cp -R libgit2-$(LIBGIT2_VER)/include/* $(build_includedir)
+
+clean-libgit2:
+	-rm -rf libgit2-$(LIBGIT2_VER)/build/
+	-rm -f $(LIBGIT2_OBJ_TARGET)
+distclean-libgit2: clean-libgit2
+
+get-libgit2: libgit2-$(LIBGIT2_VER).tar.gz
+configure-libgit2: libgit2-$(LIBGIT2_VER)/Makefile
+compile-libgit2: $(LIBGIT2_SOURCE)
+check-libgit2: compile-libgit2
+install-libgit2: $(LIBGIT2_TARGET)
 
 ## phony targets ##
 
