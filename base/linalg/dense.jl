@@ -27,8 +27,11 @@ function norm{T<:BlasFloat, TI<:Integer}(x::StridedVector{T}, rx::Union(UnitRang
     BLAS.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
 end
 
-vecnorm1{T<:BlasReal}(x::Union(Array{T},StridedVector{T})) = BLAS.asum(x)
-vecnorm2{T<:BlasFloat}(x::Union(Array{T},StridedVector{T})) = BLAS.nrm2(x)
+vecnorm1{T<:BlasReal}(x::Union(Array{T},StridedVector{T})) = 
+    length(x) > 16 ? BLAS.asum(x) : generic_vecnorm1(x)
+
+vecnorm2{T<:BlasFloat}(x::Union(Array{T},StridedVector{T})) = 
+    length(x) > 8 ? BLAS.nrm2(x) : generic_vecnorm2(x)
 
 function triu!{T}(M::Matrix{T}, k::Integer)
     m, n = size(M)
