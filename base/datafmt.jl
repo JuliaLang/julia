@@ -129,7 +129,7 @@ end
 
 function result(dlmoffsets::DLMOffsets)
     trimsz = (dlmoffsets.offidx-1)%offs_chunk_size
-    (trimsz >= 0) && resize!(dlmoffsets.oarr[end], trimsz)
+    ((trimsz > 0) || (dlmoffsets.offidx == 1)) && resize!(dlmoffsets.oarr[end], trimsz)
     dlmoffsets.oarr
 end
 
