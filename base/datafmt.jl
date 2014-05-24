@@ -504,7 +504,7 @@ function writedlm(io::IO, a::AbstractArray, dlm; opts...)
     function print_slice(idxs...)
         writedlm(io, sub(a, 1:size(a,1), 1:size(a,2), idxs...), dlm; opts...)
         if idxs != tail
-            print("\n")
+            print(io, "\n")
         end
     end
     cartesianmap(print_slice, tail)
