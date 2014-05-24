@@ -1,6 +1,15 @@
 # Linear algebra functions for dense matrices in column major format
 
-scale!{T<:BlasFloat}(X::Array{T}, s::Number) = BLAS.scal!(length(X), convert(T,s), X, 1)
+function scale!{T<:BlasFloat}(X::Array{T}, s::T)
+    if length(X) < 2048
+        generic_scale!(X, s)
+    else
+        BLAS.scal!(length(X), s, X, 1)
+    end
+    X
+end
+
+scale!{T<:BlasFloat}(X::Array{T}, s::Number) = scale!(X, convert(T, s))
 scale!{T<:BlasComplex}(X::Array{T}, s::Real) = BLAS.scal!(length(X), oftype(real(zero(T)),s), X, 1)
 
 #Test whether a matrix is positive-definite
