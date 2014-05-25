@@ -203,21 +203,25 @@ function copytri!(A::StridedMatrix, uplo::Char, conjugate::Bool=false)
     A
 end
 
-function gemv!{T<:BlasFloat}(y::StridedVector{T}, tA::Char, A::StridedMatrix{T}, x::StridedVector{T})
-    stride(A, 1)==1 || return generic_matvecmul!(y, tA, A, x)
+gemv!{T<:BlasFloat}(y::StridedVector{T}, tA::Char, A::StridedMatrix{T}, x::StridedVector{T}) = generic_matvecmul!(y, tA, A, x)
 
-    if tA != 'N'
-        (nA, mA) = size(A)
-    else
-        (mA, nA) = size(A)
-    end
+## Avoid calling BLAS.gemv! until #6941 is fixed.
+# function gemv!{T<:BlasFloat}(y::StridedVector{T}, tA::Char, A::StridedMatrix{T}, x::StridedVector{T})
 
-    nA==length(x) || throw(DimensionMismatch(""))
-    mA==length(y) || throw(DimensionMismatch(""))
-    mA == 0 && return zeros(T, 0)
-    nA == 0 && return zeros(T, mA)
-    return BLAS.gemv!(tA, one(T), A, x, zero(T), y)
-end
+#     stride(A, 1)==1 || return generic_matvecmul!(y, tA, A, x)
+
+#     if tA != 'N'
+#         (nA, mA) = size(A)
+#     else
+#         (mA, nA) = size(A)
+#     end
+
+#     nA==length(x) || throw(DimensionMismatch(""))
+#     mA==length(y) || throw(DimensionMismatch(""))
+#     mA == 0 && return zeros(T, 0)
+#     nA == 0 && return zeros(T, mA)
+#     return BLAS.gemv!(tA, one(T), A, x, zero(T), y)
+# end
 
 function syrk_wrapper!{T<:BlasFloat}(C::StridedMatrix{T}, tA::Char, A::StridedMatrix{T})
     nC = chksquare(C)
