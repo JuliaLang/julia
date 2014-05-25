@@ -1385,8 +1385,6 @@ function findnz(B::BitMatrix)
     return I, J, trues(length(I))
 end
 
-nonzeros(B::BitArray) = trues(countnz(B))
-
 ## Reductions ##
 
 sum(A::BitArray, region) = reducedim(+, A, region, 0, Array(Int,reduced_dims(A,region)))
