@@ -2,7 +2,7 @@ using .ARPACK
 
 ## eigs
 
-eigs(A; args...) = eigs(A, :Identity; args...)
+eigs(A; args...) = eigs(A, I; args...)
 
 function eigs(A, B;
               nev::Integer=6, ncv::Integer=20, which::ASCIIString="LM",
@@ -10,13 +10,14 @@ function eigs(A, B;
               ritzvec::Bool=true)
 
     n = chksquare(A)
-    (n <= 6) && (nev = min(n-1, nev))
-    ncv = blas_int(min(max(2*nev+2, ncv), n))
 
-    sym   = issym(A)
-    T     = eltype(A)
-    iscmplx = T<:Complex
-    isgeneral = B !== :Identity    
+    T = eltype(A)
+    iscmplx = T <: Complex
+    isgeneral = B !== I
+    sym = issym(A)
+    (nev = min(nev, sym ? n - 1 : n - 2)) > 0 || throw(ArgumentError("nev must be at least one"))
+    ncv = blas_int(min(max(2*nev + 2, ncv), n))
+    isgeneral && !isposdef(B) && throw(PosDefException(0))
     bmat = isgeneral ? "G" : "I"
     isshift = sigma !== nothing
     sigma = isshift ? sigma : zero(T)
@@ -37,16 +38,16 @@ function eigs(A, B;
             solveSI(x) = x
         else                #    Shift-invert mode
             mode       = 3
-            solveSI(x) = lufact(sigma==0 ? A : A-sigma*eye(A)) \ x
+            solveSI(x) = factorize(sigma==0 ? A : A - UniformScaling(sigma)) \ x
         end
     else                    # Generalized eigen problem
         matvecB(x) = B * x
         if !isshift         #    Regular inverse mode
             mode       = 2
-            solveSI(x) = lufact(B) \ x
+            solveSI(x) = factorize(B) \ x
         else                #    Shift-invert mode
             mode       = 3
-            solveSI(x) = lufact(sigma==0 ? A : A-sigma*B) \ x
+            solveSI(x) = factorize(sigma==0 ? A : A-sigma*B) \ x
         end
     end
 
