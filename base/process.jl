@@ -433,16 +433,17 @@ function open(cmds::AbstractCmd, mode::String="r", stdio::AsyncStream=DevNull)
 end
 
 function open(f::Function, cmds::AbstractCmd, args...)
-    try
-        io, P = open(cmds, args...)
-        ret = f(io)
-        close(io)
-        !success(P) && pipeline_error(P)
-        return ret
+    io, P = open(cmds, args...)
+    ret = try
+        f(io)
     catch
         kill(P)
         rethrow()
+    finally
+        close(io)
     end
+    success(P) || pipeline_error(P)
+    return ret
 end
 
 # TODO: convert this to use open(cmd, "r+"), with a single read/write pipe
