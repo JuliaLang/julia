@@ -1,6 +1,15 @@
 # Linear algebra functions for dense matrices in column major format
 
-scale!{T<:BlasFloat}(X::Array{T}, s::Number) = BLAS.scal!(length(X), convert(T,s), X, 1)
+function scale!{T<:BlasFloat}(X::Array{T}, s::T)
+    if length(X) < 2048
+        generic_scale!(X, s)
+    else
+        BLAS.scal!(length(X), s, X, 1)
+    end
+    X
+end
+
+scale!{T<:BlasFloat}(X::Array{T}, s::Number) = scale!(X, convert(T, s))
 scale!{T<:BlasComplex}(X::Array{T}, s::Real) = BLAS.scal!(length(X), oftype(real(zero(T)),s), X, 1)
 
 #Test whether a matrix is positive-definite
@@ -18,8 +27,11 @@ function norm{T<:BlasFloat, TI<:Integer}(x::StridedVector{T}, rx::Union(UnitRang
     BLAS.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
 end
 
-vecnorm1{T<:BlasReal}(x::Union(Array{T},StridedVector{T})) = BLAS.asum(x)
-vecnorm2{T<:BlasFloat}(x::Union(Array{T},StridedVector{T})) = BLAS.nrm2(x)
+vecnorm1{T<:BlasReal}(x::Union(Array{T},StridedVector{T})) = 
+    length(x) > 16 ? BLAS.asum(x) : generic_vecnorm1(x)
+
+vecnorm2{T<:BlasFloat}(x::Union(Array{T},StridedVector{T})) = 
+    length(x) > 8 ? BLAS.nrm2(x) : generic_vecnorm2(x)
 
 function triu!{T}(M::Matrix{T}, k::Integer)
     m, n = size(M)
