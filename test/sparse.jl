@@ -184,14 +184,14 @@ mfe22 = eye(Float64, 2)
 @test_throws DimensionMismatch sparsevec([3,5,7],[0.1,0.0,3.2],4)
 
 # issue #5169
-@test nfilled(sparse([1,1],[1,2],[0.0,-0.0])) == 0
+@test nnz(sparse([1,1],[1,2],[0.0,-0.0])) == 0
 
 # issue #5386
 K,J,V = findnz(SparseMatrixCSC(2,1,[1,3],[1,2],[1.0,0.0]))
 @test length(K) == length(J) == length(V) == 1
 
 # issue #5437
-@test nfilled(sparse([1,2,3],[1,2,3],[0.0,1.0,2.0])) == 2
+@test nnz(sparse([1,2,3],[1,2,3],[0.0,1.0,2.0])) == 2
 
 # issue #5824
 @test sprand(4,5,0.5).^0 == sparse(ones(4,5))
