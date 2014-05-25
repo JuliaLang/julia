@@ -975,7 +975,7 @@ static inline void* thread_safe_pool_alloc(size_t szclass_)
 {
     void* a;
 
-    if(jl_main_thread_id == uv_thread_self() || gc_thread_id == uv_thread_self() )
+    if(jl_main_thread_id == uv_thread_self() )
         return pool_alloc(&pools[szclass_]);
 
     for(int n=1; n<N_GC_THREADS; n++)
