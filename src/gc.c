@@ -19,8 +19,6 @@
 extern "C" {
 #endif
 
-#define LOCK(x) JL_LOCK(gc); x; JL_UNLOCK(gc);
-
 JL_DEFINE_MUTEX_EXT(gc)
 extern uv_mutex_t gc_pool_mutex[N_GC_THREADS];
 
@@ -125,7 +123,7 @@ DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 {
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
-    __sync_fetch_and_add(&allocd_bytes,sz);
+    JL_ATOMIC_FETCH_AND_ADD(allocd_bytes,sz);
     void *b = malloc(sz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
@@ -135,16 +133,14 @@ DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 DLLEXPORT void jl_gc_counted_free(void *p, size_t sz)
 {
     free(p);
-    JL_LOCK(gc)
-    freed_bytes += sz;
-    JL_UNLOCK(gc)
+    JL_ATOMIC_FETCH_AND_ADD(freed_bytes,sz);
 }
 
 DLLEXPORT void *jl_gc_counted_realloc(void *p, size_t sz)
 {
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
-    __sync_fetch_and_add(&allocd_bytes,((sz+1)/2)); // NOTE: wild guess at growth amount
+    JL_ATOMIC_FETCH_AND_ADD(allocd_bytes,((sz+1)/2)); // NOTE: wild guess at growth amount
     void *b = realloc(p, sz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
@@ -156,9 +152,7 @@ DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t 
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
     if (sz > old)
-    {
-        __sync_fetch_and_add(&allocd_bytes,sz-old);
-    }
+        JL_ATOMIC_FETCH_AND_ADD(allocd_bytes,sz-old);
     void *b = realloc(p, sz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
@@ -175,7 +169,7 @@ void *jl_gc_managed_malloc(size_t sz)
     {
         jl_throw(jl_memory_exception);
     }
-    __sync_fetch_and_add(&allocd_bytes,sz);    
+    JL_ATOMIC_FETCH_AND_ADD(allocd_bytes,sz);    
     return b;
 }
 
@@ -206,7 +200,7 @@ void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned)
     {
         jl_throw(jl_memory_exception);
     }
-    __sync_fetch_and_add(&allocd_bytes,sz);    
+    JL_ATOMIC_FETCH_AND_ADD(allocd_bytes,sz);    
     return b;
 }
 
@@ -221,12 +215,16 @@ int jl_gc_n_preserved_values(void)
 
 void jl_gc_preserve(jl_value_t *v)
 {
-   LOCK( arraylist_push(&preserved_values, (void*)v) )
+    JL_LOCK(gc) 
+    arraylist_push(&preserved_values, (void*)v);
+    JL_UNLOCK(gc)
 }
 
 void jl_gc_unpreserve(void)
 {
-   LOCK( (void)arraylist_pop(&preserved_values) )
+    JL_LOCK(gc) 
+    (void)arraylist_pop(&preserved_values);
+    JL_UNLOCK(gc)
 }
 
 // weak references
@@ -359,7 +357,7 @@ static void *alloc_big(size_t sz)
         jl_throw(jl_memory_exception);
     size_t allocsz = (sz+offs+15) & -16;
     bigval_t *v = (bigval_t*)malloc_a16(allocsz);
-    __sync_fetch_and_add(&allocd_bytes,allocsz);  
+    JL_ATOMIC_FETCH_AND_ADD(allocd_bytes,allocsz);  
     if (v == NULL)
     {
         jl_throw(jl_memory_exception);
@@ -498,7 +496,7 @@ static inline void *pool_alloc(pool_t *p)
 {
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
-    __sync_fetch_and_add(&allocd_bytes,p->osize);
+    JL_ATOMIC_FETCH_AND_ADD(allocd_bytes,p->osize);
     if (p->freelist == NULL) {
         add_page(p);
     }

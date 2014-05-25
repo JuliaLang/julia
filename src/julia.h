@@ -1231,6 +1231,15 @@ DLLEXPORT void jl_destroy_mutex(uv_mutex_t* m);
 
 extern long jl_nr_running_threads;
 
+// TODO: Implement a fallback that uses a mutex
+#if defined( __GNUC__ )
+#  define JL_ATOMIC_FETCH_AND_ADD(a,b) __sync_fetch_and_add(& a, b )
+#elif defined( _WIN32 )
+#  define JL_ATOMIC_FETCH_AND_ADD(a,b) _InterlockedExchangeAdd ((volatile LONG*) & a, b);
+#else
+#  error "No atomic operations supported."
+#endif
+
 #define JL_DEFINE_MUTEX_EXT(m) \
   extern uv_mutex_t m ## _mutex; \
   extern long m ## _thread_id;
