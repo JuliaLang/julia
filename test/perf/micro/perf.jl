@@ -138,13 +138,10 @@ end
 
 @unix_only begin
     function printfd(n)
-        io = open("/dev/null","w")
-        try
+        open("/dev/null","w") do io
             for i = 1:n
                 @printf(io,"%d %d\n",i,i+1)
             end
-        finally
-            close(io)
         end
     end
 
