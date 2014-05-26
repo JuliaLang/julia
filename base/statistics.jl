@@ -52,6 +52,15 @@ median{T}(v::AbstractArray{T}, region; checknan::Bool=true) =
 
 ## variances
 
+function varzm_pairwise{T<:Base.LinAlg.BlasFloat}(A::StridedArray{T}, i1::Int, n::Int)
+    if n <= 2048
+        BLAS.dot(n, pointer(A, i1), stride(A, 1), pointer(A, i1), stride(A, 1))
+    else
+        n2 = div(n,2)
+        varzm_pairwise(A, i1, n2) + varzm_pairwise(A, i1+n2, n-n2)
+    end
+end
+
 function varzm_pairwise(A::AbstractArray, i1::Int, n::Int)
     if n < 256
         @inbounds s = abs2(A[i1])
