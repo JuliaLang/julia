@@ -1238,56 +1238,94 @@ function filter(f::Function, a::Vector)
 end
 
 ## Transpose ##
-
-const sqrthalfcache = 1<<7
-function transpose!{T<:Number}(B::Matrix{T}, A::Matrix{T})
+const transposebaselength=64
+function transpose!(B::StridedMatrix,A::StridedMatrix)
     m, n = size(A)
-    if size(B) != (n,m)
-        error("input and output must have same size")
-    end
-    elsz = isbits(T) ? sizeof(T) : sizeof(Ptr)
-    blocksize = ifloor(sqrthalfcache/elsz/1.4) # /1.4 to avoid complete fill of cache
-    if m*n <= 4*blocksize*blocksize
-        # For small sizes, use a simple linear-indexing algorithm
-        for i2 = 1:n
-            j = i2
-            offset = (j-1)*m
-            for i = offset+1:offset+m
-                B[j] = A[i]
-                j += n
-            end
-        end
-        return B
-    end
-    # For larger sizes, use a cache-friendly algorithm
-    for outer2 = 1:blocksize:size(A, 2)
-        for outer1 = 1:blocksize:size(A, 1)
-            for inner2 = outer2:min(n,outer2+blocksize)
-                i = (inner2-1)*m + outer1
-                j = inner2 + (outer1-1)*n
-                for inner1 = outer1:min(m,outer1+blocksize)
-                    B[j] = A[i]
-                    i += 1
-                    j += n
+    size(B) == (n,m) || throw(DimensionMismatch("transpose"))
+
+    if m*n<=4*transposebaselength
+        @inbounds begin
+            for j = 1:n
+                for i = 1:m
+                    B[j,i] = A[i,j]
                 end
             end
         end
+    else
+        transposeblock!(B,A,m,n,0,0)
     end
-    B
+    return B
+end
+function transposeblock!(B::StridedMatrix,A::StridedMatrix,m::Int,n::Int,offseti::Int,offsetj::Int)
+    if m*n<=transposebaselength
+        @inbounds begin
+            for j = offsetj+(1:n)
+                for i = offseti+(1:m)
+                    B[j,i] = A[i,j]
+                end
+            end
+        end
+    elseif m>n
+        newm=m>>1
+        transposeblock!(B,A,newm,n,offseti,offsetj)
+        transposeblock!(B,A,m-newm,n,offseti+newm,offsetj)
+    else
+        newn=n>>1
+        transposeblock!(B,A,m,newn,offseti,offsetj)
+        transposeblock!(B,A,m,n-newn,offseti,offsetj+newn)
+    end
+    return B
+end
+function ctranspose!(B::StridedMatrix,A::StridedMatrix)
+    m, n = size(A)
+    size(B) == (n,m) || throw(DimensionMismatch("transpose"))
+
+    if m*n<=4*transposebaselength
+        @inbounds begin
+            for j = 1:n
+                for i = 1:m
+                    B[j,i] = conj(A[i,j])
+                end
+            end
+        end
+    else
+        ctransposeblock!(B,A,m,n,0,0)
+    end
+    return B
+end
+function ctransposeblock!(B::StridedMatrix,A::StridedMatrix,m::Int,n::Int,offseti::Int,offsetj::Int)
+    if m*n<=transposebaselength
+        @inbounds begin
+            for j = offsetj+(1:n)
+                for i = offseti+(1:m)
+                    B[j,i] = conj(A[i,j])
+                end
+            end
+        end
+    elseif m>n
+        newm=m>>1
+        ctransposeblock!(B,A,newm,n,offseti,offsetj)
+        ctransposeblock!(B,A,m-newm,n,offseti+newm,offsetj)
+    else
+        newn=n>>1
+        ctransposeblock!(B,A,m,newn,offseti,offsetj)
+        ctransposeblock!(B,A,m,n-newn,offseti,offsetj+newn)
+    end
+    return B
 end
 
-function transpose{T<:Number}(A::Matrix{T})
+function transpose(A::StridedMatrix)
     B = similar(A, size(A, 2), size(A, 1))
     transpose!(B, A)
 end
-
+function ctranspose{T<:Complex}(A::StridedMatrix{T})
+    B = similar(A, size(A, 2), size(A, 1))
+    ctranspose!(B, A)
+end
 ctranspose{T<:Real}(A::StridedVecOrMat{T}) = transpose(A)
 
 transpose(x::StridedVector) = [ x[j] for i=1, j=1:size(x,1) ]
-transpose(x::StridedMatrix) = [ x[j,i] for i=1:size(x,2), j=1:size(x,1) ]
-
 ctranspose{T}(x::StridedVector{T}) = T[ conj(x[j]) for i=1, j=1:size(x,1) ]
-ctranspose{T}(x::StridedMatrix{T}) = T[ conj(x[j,i]) for i=1:size(x,2), j=1:size(x,1) ]
 
 # set-like operators for vectors
 # These are moderately efficient, preserve order, and remove dupes.
