@@ -1248,6 +1248,15 @@ extern long jl_nr_running_threads;
   uv_mutex_t m ## _mutex; \
   long m ## _thread_id;
 
+// The macros JL_LOCK and JL_UNLOCK are used to prevent different threads to execute the same code
+// at the same time. They are implemented in a recursive manner so that a thread will not deadlock
+// when it already holds the lock.
+//
+// There is a special case that the main thread should not acquire locks when no further threads are
+// running. If this is not done the threads will deadlock when running code from the REPL as the main
+// thread holds the lock when spawning the thread. However, when the threads are running, the main thread
+// will also acquire the lock in order to prevent race consitions
+
 #define JL_LOCK(m) \
   int locked = 0; \
   if( m ## _thread_id != uv_thread_self() && (jl_main_thread_id != uv_thread_self() || jl_nr_running_threads > 0) ) \
@@ -1263,6 +1272,8 @@ extern long jl_nr_running_threads;
       uv_mutex_unlock(& m ## _mutex); \
   }
 
+// This is the thread local exception handler that is used to catch exceptions in threads and rethrow
+// them in the main thread when the threads are joining.
 extern __JL_THREAD jl_jmp_buf jl_thread_eh;
 
 // I/O system -----------------------------------------------------------------
