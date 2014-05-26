@@ -1213,7 +1213,7 @@ typedef struct {
     uv_cond_t c;
     int busy;
     int poolid;
-    int exception;
+    jl_value_t* exception;
     jl_function_t* f;
     jl_tuple_t* targs;
 } jl_thread_t;
@@ -1222,7 +1222,7 @@ DLLEXPORT jl_thread_t* jl_create_thread(jl_function_t* f, jl_tuple_t* targs);
 DLLEXPORT void jl_run_thread(jl_thread_t* t);
 DLLEXPORT void jl_join_thread(jl_thread_t* t);
 DLLEXPORT void jl_destroy_thread(jl_thread_t* t);
-DLLEXPORT int jl_thread_exception(jl_thread_t* t);
+DLLEXPORT jl_value_t* jl_thread_exception(jl_thread_t* t);
 
 DLLEXPORT uv_mutex_t* jl_create_mutex();
 DLLEXPORT void jl_lock_mutex(uv_mutex_t* m);
@@ -1275,6 +1275,7 @@ extern long jl_nr_running_threads;
 // This is the thread local exception handler that is used to catch exceptions in threads and rethrow
 // them in the main thread when the threads are joining.
 extern __JL_THREAD jl_jmp_buf jl_thread_eh;
+extern __JL_THREAD jl_value_t* jl_thread_exception_in_transit;
 
 // I/O system -----------------------------------------------------------------
 

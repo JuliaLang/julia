@@ -737,7 +737,10 @@ void NORETURN throw_internal(jl_value_t *e)
     // an exception occurred. This means that try/catch should not be
     // used in threads currently.
     if(jl_main_thread_id != uv_thread_self())
+    {
+        jl_thread_exception_in_transit = e;
         jl_longjmp(jl_thread_eh,1);
+    }
 
     jl_exception_in_transit = e;
     if (jl_current_task->eh != NULL) {
@@ -765,7 +768,10 @@ DLLEXPORT void jl_throw(jl_value_t *e)
     // an exception occurred. This means that try/catch should not be
     // used in threads currently.
     if(jl_main_thread_id != uv_thread_self())
+    {
+        jl_thread_exception_in_transit = e;
         jl_longjmp(jl_thread_eh,1);
+    } 
     record_backtrace();
     throw_internal(e);
 }

@@ -10,6 +10,7 @@ extern "C" {
 long jl_main_thread_id = -1;
 
 __JL_THREAD jl_jmp_buf jl_thread_eh;
+__JL_THREAD jl_value_t* jl_thread_exception_in_transit;
 
 long jl_nr_running_threads = 0;
 
@@ -43,13 +44,13 @@ void run_pool_thread(void* t_)
         for(int l=0; l<jl_tuple_len(t->targs); l++)
             args[l] = jl_tupleref(t->targs,l);
             
-        t->exception = 0;
+        t->exception = jl_nothing;
 
         // try/catch
         if(!jl_setjmp(jl_thread_eh,0)) {
             jl_apply(t->f,args,jl_tuple_len(t->targs));
         } else {
-            t->exception = 1;
+            t->exception = jl_thread_exception_in_transit;
         }
         
         t->busy = 0;
@@ -73,7 +74,7 @@ void run_standalone_thread(void* t)
     if(!jl_setjmp(jl_thread_eh,0)) {
         jl_apply(f,args,jl_tuple_len(targs));
     } else {
-        ((jl_thread_t*)t)->exception = 1;
+        ((jl_thread_t*)t)->exception = jl_thread_exception_in_transit;
     }
 }
 
@@ -142,7 +143,7 @@ jl_thread_t* jl_create_thread(jl_function_t* f, jl_tuple_t* targs)
     // Thread pool is full. Create new thread
     jl_thread_t* t = (jl_thread_t*) malloc(sizeof(jl_thread_t));
     t->poolid = -1; // This tells us that this thread is standalone
-    t->exception = 0;
+    t->exception = jl_nothing;
 
     jl_tuple_t* argtypes = arg_type_tuple(&jl_tupleref(targs,0), nargs);
     t->f = jl_get_specialization(f, argtypes);
@@ -199,7 +200,7 @@ void jl_destroy_thread(jl_thread_t* t)
         free(t);
 }
 
-int jl_thread_exception(jl_thread_t* t)
+jl_value_t* jl_thread_exception(jl_thread_t* t)
 {
   return t->exception;
 }

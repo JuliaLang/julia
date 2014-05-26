@@ -34,13 +34,14 @@ end
 
 function join(t::Thread)
     ccall(:jl_join_thread,Void,(Ptr{Void},),t.handle)
-    if exception_occured(t) 
-        error("An exception occurred in a thread!") 
+    e = exception(t)
+    if e != nothing
+        throw(e) 
     end
 end
 run(t::Thread) = (ccall(:jl_run_thread,Void,(Ptr{Void},),t.handle))
 destroy(t::Thread) = (ccall(:jl_destroy_thread,Void,(Ptr{Void},),t.handle))
-exception_occured(t::Thread) = bool(ccall(:jl_thread_exception,Cint,(Ptr{Void},),t.handle))
+exception(t::Thread) = ccall(:jl_thread_exception,Exception,(Ptr{Void},),t.handle)
 
 function Thread(f::Function,args...)
     t = Thread(ccall(:jl_create_thread,Ptr{Void},(Any,Any),f,args))
