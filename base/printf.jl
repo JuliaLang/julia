@@ -542,13 +542,13 @@ macro handle_zero(ex)
     end
 end
 
-decode_oct(out::IO, d, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, decode_oct(d))
-decode_0ct(out::IO, d, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, decode_0ct(d))
-decode_dec(out::IO, d, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, decode_dec(d))
-decode_hex(out::IO, d, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, decode_hex(d))
-decode_HEX(out::IO, d, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, decode_HEX(d))
-fix_dec(out::IO, d, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, fix_dec(d, precision))
-ini_dec(out::IO, d, ndigits::Int, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, ini_dec(d, ndigits))
+decode_oct(out, d, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, decode_oct(d))
+decode_0ct(out, d, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, decode_0ct(d))
+decode_dec(out, d, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, decode_dec(d))
+decode_hex(out, d, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, decode_hex(d))
+decode_HEX(out, d, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, decode_HEX(d))
+fix_dec(out, d, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, fix_dec(d, precision))
+ini_dec(out, d, ndigits::Int, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, ini_dec(d, ndigits))
 
 
 # fallbacks for Real types without explicit decode_* implementation
@@ -773,9 +773,9 @@ function ini_dec(x::BigInt, n::Int)
 end
 
 #BigFloat
-fix_dec(out::IO, d::BigFloat, flags::ASCIIString, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
-ini_dec(out::IO, d::BigFloat, ndigits::Int, flags::ASCIIString, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
-function bigfloat_printf(out::IO, d, flags::ASCIIString, width::Int, precision::Int, c::Char)
+fix_dec(out, d::BigFloat, flags::ASCIIString, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
+ini_dec(out, d::BigFloat, ndigits::Int, flags::ASCIIString, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
+function bigfloat_printf(out, d, flags::ASCIIString, width::Int, precision::Int, c::Char)
     fmt_len = sizeof(flags)+4
     if width > 0
         fmt_len += ndigits(width)
