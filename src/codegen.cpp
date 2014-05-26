@@ -1,10 +1,3 @@
-#include "platform.h"
-#if defined(_OS_WINDOWS_)
-#define NOMINMAX
-#endif
-#include "julia.h"
-#include "julia_internal.h"
-
 /*
  * We include <mathimf.h> here, because somewhere below <math.h> is included also.
  * As a result, Intel C++ Composer generates an error. To prevent this error, we
@@ -107,6 +100,38 @@
 #include "llvm/Support/CommandLine.h"
 #endif
 #include "llvm/Transforms/Utils/Cloning.h"
+ // For disasm
+#include "llvm/Support/MachO.h"
+#include "llvm/MC/MCDisassembler.h"
+#include "llvm/MC/MCInst.h"
+#include "llvm/MC/MCStreamer.h"
+#include "llvm/MC/MCSubtargetInfo.h"
+#include "llvm/MC/MCObjectFileInfo.h"
+#include "llvm/MC/MCRegisterInfo.h"
+#include "llvm/MC/MCAsmInfo.h"
+#include "llvm/MC/MCAsmBackend.h"
+#include "llvm/MC/MCCodeEmitter.h"
+#include "llvm/MC/MCInstPrinter.h"
+#include "llvm/MC/MCInstrInfo.h"
+#include "llvm/MC/MCContext.h"
+#include "llvm/ADT/OwningPtr.h"
+#include "llvm/ADT/Triple.h"
+#include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/MemoryObject.h"
+#include "llvm/Support/SourceMgr.h"
+#include "llvm/Support/TargetRegistry.h"
+#include "llvm/Support/Host.h"
+#include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/system_error.h"
+
+#include "platform.h"
+#if defined(_OS_WINDOWS_)
+#define NOMINMAX
+#endif
+
+#include "julia.h"
+#include "julia_internal.h"
+
 #include <setjmp.h>
 
 #include <string>

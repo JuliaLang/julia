@@ -243,6 +243,10 @@ JCPPFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
 endif
 
+ifeq ($(LLVM_VER),svn)
+JCXXFLAGS += -std=c++11
+endif
+
 JFFLAGS = -O2 $(fPIC)
 JF2CFLAGS = -ff2c -fno-second-underscore
 ifneq ($(USEMSVC),1)
