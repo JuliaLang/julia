@@ -81,7 +81,7 @@ debug && println("(Automatic) Bunch-Kaufman factor of indefinite matrix")
     if eltya != BigFloat && eltyb != BigFloat # Not implemented for BigFloat and I don't think it will.
         bc1 = factorize(asym)
         @test_approx_eq inv(bc1) * asym eye(n)
-        @test_approx_eq_eps asym * (bc1\b) b 600ε
+        @test_approx_eq_eps asym * (bc1\b) b 1000ε
 
 debug && println("Bunch-Kaufman factors of a pos-def matrix")
         bc2 = bkfact(apd)
