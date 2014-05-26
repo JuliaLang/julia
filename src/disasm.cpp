@@ -17,28 +17,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/MC/MCDisassembler.h"
-#include "llvm/MC/MCInst.h"
-#include "llvm/MC/MCStreamer.h"
-#include "llvm/MC/MCSubtargetInfo.h"
-#include "llvm/MC/MCObjectFileInfo.h"
-#include "llvm/MC/MCRegisterInfo.h"
-#include "llvm/MC/MCAsmInfo.h"
-#include "llvm/MC/MCAsmBackend.h"
-#include "llvm/MC/MCCodeEmitter.h"
-#include "llvm/MC/MCInstPrinter.h"
-#include "llvm/MC/MCInstrInfo.h"
-#include "llvm/MC/MCContext.h"
-#include "llvm/ADT/OwningPtr.h"
-#include "llvm/ADT/Triple.h"
-#include "llvm/Support/MemoryBuffer.h"
-#include "llvm/Support/MemoryObject.h"
-#include "llvm/Support/SourceMgr.h"
-#include "llvm/Support/TargetRegistry.h"
-#include "llvm/Support/Host.h"
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/system_error.h"
-
 #include <string>
 #include <iostream>
 
