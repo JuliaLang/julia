@@ -52,16 +52,16 @@ median{T}(v::AbstractArray{T}, region; checknan::Bool=true) =
 
 ## variances
 
-function varzm_pairwise{T<:Base.LinAlg.BlasFloat}(A::StridedArray{T}, i1::Int, n::Int)
+function sumabs2_pairwise{T<:Base.LinAlg.BlasFloat}(A::StridedArray{T}, i1::Int, n::Int)
     if n <= 2048
         BLAS.dot(n, pointer(A, i1), stride(A, 1), pointer(A, i1), stride(A, 1))
     else
         n2 = div(n,2)
-        varzm_pairwise(A, i1, n2) + varzm_pairwise(A, i1+n2, n-n2)
+        sumabs2_pairwise(A, i1, n2) + sumabs2_pairwise(A, i1+n2, n-n2)
     end
 end
 
-function varzm_pairwise(A::AbstractArray, i1::Int, n::Int)
+function sumabs2_pairwise(A::AbstractArray, i1::Int, n::Int)
     if n < 256
         @inbounds s = abs2(A[i1])
         for i=i1+1:i1+n-1
@@ -70,24 +70,11 @@ function varzm_pairwise(A::AbstractArray, i1::Int, n::Int)
         return s
     else
         n2 = div(n,2)
-        return varzm_pairwise(A, i1, n2) + varzm_pairwise(A, i1+n2, n-n2)
+        return sumabs2_pairwise(A, i1, n2) + sumabs2_pairwise(A, i1+n2, n-n2)
     end
 end
 
-function varm_pairwise(A::AbstractArray, m::Number, i1::Int, n::Int) # see sum_pairwise
-    if n < 256
-        @inbounds s = abs2(A[i1] - m)
-        for i = i1+1:i1+n-1
-            @inbounds s += abs2(A[i] - m)
-        end
-        return s
-    else
-        n2 = div(n,2)
-        return varm_pairwise(A, m, i1, n2) + varm_pairwise(A, m, i1+n2, n-n2)
-    end
-end
-
-sumabs2(v::AbstractArray) = varzm_pairwise(v, 1, length(v))
+sumabs2(v::AbstractArray) = sumabs2_pairwise(v, 1, length(v))
 
 plusabs2(x, y) = x + abs2(y)
 eval(ngenerate(:N, :(typeof(R)), :(_sumabs2!{T,N}(R::AbstractArray, A::AbstractArray{T,N})), N->gen_reduction_body(N, plusabs2)))
@@ -103,6 +90,19 @@ end
 function varzm(v::AbstractArray, region; corrected::Bool=true)
     cn = regionsize(v, region) - int(corrected)
     sumabs2(v, region) / cn    
+end
+
+function varm_pairwise(A::AbstractArray, m::Number, i1::Int, n::Int) # see sum_pairwise
+    if n < 256
+        @inbounds s = abs2(A[i1] - m)
+        for i = i1+1:i1+n-1
+            @inbounds s += abs2(A[i] - m)
+        end
+        return s
+    else
+        n2 = div(n,2)
+        return varm_pairwise(A, m, i1, n2) + varm_pairwise(A, m, i1+n2, n-n2)
+    end
 end
 
 function varm(v::AbstractArray, m::Number; corrected::Bool=true)
