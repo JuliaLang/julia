@@ -283,3 +283,12 @@ end
 
 # issue #6364
 @test length((1:64)*(pi/5)) == 64
+
+# issue #6973
+let r1 = 1.0:0.1:2.0, r2 = 1.0f0:0.2f0:3.0f0, r3 = 1:2:21
+    @test r1 + r1 == 2*r1
+    @test r1 + r2 == 2.0:0.3:5.0
+    @test (r1 + r2) - r2 == r1
+    @test r1 + r3 == convert(FloatRange{Float64}, r3) + r1
+    @test r3 + r3 == 2 * r3
+end
