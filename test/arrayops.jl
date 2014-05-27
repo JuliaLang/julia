@@ -951,3 +951,6 @@ let
     for i=1:5; push!(x, 1.0); end
     @test dot(zeros(5),x) == 0.0
 end
+
+# issue #6977
+@test []' == Array(None,1,0)
