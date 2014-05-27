@@ -1,11 +1,102 @@
 ## reductions ##
 
-###### higher level reduction functions ######
+###### Functors ######
+
+# Note that functors are merely used as an
+# internal machinery to enhance code reuse.
+# They are not exported.
+#
+# When function arguments can be inlined, 
+# the use of functors can be easily removed.
+#
+
+abstract Func{N}
+
+type AddFun <: Func{2} end
+type MulFun <: Func{2} end
+type AndFun <: Func{2} end
+type OrFun <: Func{2} end
+
+evaluate(::AddFun, x, y) = x + y
+evaluate(::MulFun, x, y) = x * y
+evaluate(::AndFun, x, y) = x & y
+evaluate(::OrFun, x, y) = x | y
+
+
+###### Generic reduction functions ######
 
 # Note that getting type-stable results from reduction functions,
 # or at least having type-stable loops, is nontrivial (#6069).
 
-# reduce
+## foldl
+
+function _foldl(op::Callable, v0, itr, i)
+    # use a type stable procedure
+    if done(itr, i)
+        return v0
+    else
+        (x, i) = next(itr, i)
+        v = op(v0, x)
+        while !done(itr, i)
+            (x, i) = next(itr, i)
+            v = op(v, x)
+        end
+        return v
+    end
+end
+
+function _foldl(op::Func{2}, v0, itr, i)
+    if done(itr, i)
+        return v0
+    else
+        (x, i) = next(itr, i)
+        v = evaluate(op, v0, x)
+        while !done(itr, i)
+            (x, i) = next(itr, i)
+            v = evaluate(op, v, x)
+        end
+        return v
+    end
+end
+
+function foldl(op::Callable, v0, itr, i)
+    is(op, +) && return _foldl(AddFun(), v0, itr, i)
+    is(op, *) && return _foldl(MulFun(), v0, itr, i)
+    is(op, &) && return _foldl(AndFun(), v0, itr, i)
+    is(op, |) && return _foldl(OrFun(), v0, itr, i)
+    return _foldl(op, v0, itr, i)
+end
+
+foldl(op::Union(Callable,Func{2}), v0, itr) = foldl(op, v0, itr, start(itr))
+
+function foldl(op::Callable, itr)
+    i = start(itr)
+    done(itr, i) && error("Argument is empty.")
+    (v0, i) = next(itr, i)
+    return foldl(op, v0, itr, i)
+end
+
+## foldr
+
+function foldr(op::Callable, v0, itr, i=endof(itr))
+    # use type stable procedure
+    if i == 0
+        return v0
+    else
+        v = op(itr[i], v0)
+        while i > 1
+            x = itr[i -= 1]
+            v = op(x, v)
+        end
+        return v
+    end
+end
+
+foldr(op::Callable, itr) = (i = endof(itr); foldr(op, itr[i], itr, i-1))
+
+## reduce
+
+reduce(op::Callable, v, itr) = foldl(op, v, itr)
 
 function reduce(op::Callable, itr) # this is a left fold
     if is(op,+)
@@ -17,22 +108,7 @@ function reduce(op::Callable, itr) # this is a left fold
     elseif is(op,&)
         return all(itr)
     end
-    s = start(itr)
-    if done(itr, s)
-        error("argument is empty")
-    end
-    (v, s) = next(itr, s)
-    if done(itr, s)
-        return v
-    else # specialize for length > 1 to have a hopefully type-stable loop
-        (x, s) = next(itr, s)
-        result = op(v, x)
-        while !done(itr, s)
-            (x, s) = next(itr, s)
-            result = op(result, x)
-        end
-        return result
-    end
+    return foldl(op, itr)
 end
 
 # pairwise reduction, requires n > 1 (to allow type-stable loop)
@@ -57,55 +133,6 @@ end
 function reduce(op::Callable, v0, A::AbstractArray)
     n = length(A)
     n == 0 ? v0 : n == 1 ? op(v0, A[1]) : op(v0, r_pairwise(op,A, 1,n))
-end
-
-function reduce(op::Callable, v0, itr)
-    v = v0
-    if is(op,+)
-        for x in itr
-            v = v+x
-        end
-    elseif is(op,*)
-        for x in itr
-            v = v*x
-        end
-    else
-        u = v0
-        for x in itr
-            u = op(u,x)
-        end
-        return u
-    end
-    return v
-end
-
-# foldl & foldr
-
-function foldl(op::Callable, v0, itr, i=start(itr))
-    v = v0
-    while !done(itr,i)
-        x, i = next(itr,i)
-        v = op(v,x)
-    end
-    return v
-end
-function foldl(op::Callable, itr)
-    v0, i = next(itr,start(itr))
-    foldl(op, v0, itr, i)
-end
-
-function foldr(op::Callable, v0, itr, i=endof(itr))
-    v = v0
-    while i > 0
-        x = itr[i]
-        v = op(x,v)
-        i = i - 1
-    end
-    return v
-end
-function foldr(op::Callable, itr)
-    i = endof(itr)
-    foldr(op, itr[i], itr, i-1)
 end
 
 
