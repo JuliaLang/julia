@@ -160,7 +160,7 @@ const memhash = Uint == Uint64 ? :memhash_seed : :memhash32_seed
 
 function hash{T<:ByteString}(s::Union(T,SubString{T}), h::Uint)
     h += uint(0x71e729fd56419c81)
-    ccall(memhash, Uint, (Ptr{Uint8}, Csize_t, Uint32), pointer(s), sizeof(s), h) + h
+    ccall(memhash, Uint, (Ptr{Uint8}, Csize_t, Uint32), s, sizeof(s), h) + h
 end
 hash(s::String, h::Uint) = hash(bytestring(s), h)
 
@@ -196,12 +196,8 @@ hash(x::(Any,), h::Uint)    = hash(x[1], hash((), h))
 hash(x::(Any,Any), h::Uint) = hash(x[1], hash(x[2], hash((), h)))
 hash(x::Tuple, h::Uint)     = hash(x[1], hash(x[2], hash(tupletail(x), h)))
 
-hash(r::Range{Bool}, h::Uint) = invoke(hash, (Range, Uint), r, h)
-hash(B::BitArray, h::Uint) = hash((size(B),B.chunks), h)
-hash(a::AbstractArray{Bool}, h::Uint) = hash(bitpack(a), h)
-
 # hashing ranges by component at worst leads to collisions for very similar ranges
-function hash{T<:Range}(r::T, h::Uint)
+function hash(r::Range, h::Uint)
     h += uint(0x80707b6821b70087)
     h = hash(first(r), h)
     h = hash(step(r), h)

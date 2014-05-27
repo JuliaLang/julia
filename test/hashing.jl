@@ -1,4 +1,5 @@
 types = {
+    Bool, Char,
     Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Float32, Float64,
     Rational{Int8}, Rational{Uint8}, Rational{Int16}, Rational{Uint16},
     Rational{Int32}, Rational{Uint32}, Rational{Int64}, Rational{Uint64}
@@ -18,6 +19,9 @@ vals = [
 for T=types, S=types, x=vals
     a = convert(T,x)
     b = convert(S,x)
+    if (isa(a,Char) && !is_valid_char(a)) || (isa(b,Char) && !is_valid_char(b))
+        continue
+    end
     #println("$(typeof(a)) $a")
     #println("$(typeof(b)) $b")
     @test isequal(a,b) == (hash(a)==hash(b))
@@ -31,6 +35,7 @@ end
 
 # hashing collections (e.g. issue #6870)
 vals = {[1,2,3,4], [1 3;2 4], {1,2,3,4}, [1,3,2,4],
+        [1,0], [true,false], bitpack([true,false]),
         Set([1,2,3,4]),
         Set([1:10]),                 # these lead to different key orders
         Set([7,9,4,10,2,3,5,8,6,1]), #
