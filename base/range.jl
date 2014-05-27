@@ -437,18 +437,17 @@ end
 ./(r::OrdinalRange, x::Real) = range(r.start/x, step(r)/x, length(r))
 ./(r::FloatRange, x::Real)   = FloatRange(r.start/x, r.step/x, r.len, r.divisor)
 
-# TODO: better implementations for FloatRanges?
-function +(r1::OrdinalRange, r2::OrdinalRange)
-    r1l = length(r1)
-    r1l == length(r2) || error("argument dimensions must match")
-    range(r1.start+r2.start, step(r1)+step(r2), r1l)
-end
+promote_rule{T1,T2}(::Type{FloatRange{T1}},::Type{FloatRange{T2}}) =
+    FloatRange{promote_type(T1,T2)}
+convert{T}(::Type{FloatRange{T}}, r::FloatRange) =
+    FloatRange{T}(r.start,r.step,r.len,r.divisor)
 
-function -(r1::OrdinalRange, r2::OrdinalRange)
-    r1l = length(r1)
-    r1l == length(r2) || error("argument dimensions must match")
-    range(r1.start-r2.start, step(r1)-step(r2), r1l)
-end
+promote_rule{F,OR<:OrdinalRange}(::Type{FloatRange{F}}, ::Type{OR}) =
+    FloatRange{promote_type(F,eltype(OR))}
+convert{T}(::Type{FloatRange{T}}, r::OrdinalRange) =
+    FloatRange{T}(start(r), step(r), length(r), one(T))
+
+# +/- of ranges is defined in operators.jl (to be able to use @eval etc.)
 
 ## non-linear operations on ranges ##
 
