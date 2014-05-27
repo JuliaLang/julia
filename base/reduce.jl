@@ -180,9 +180,21 @@ function countnz(itr)
     return n
 end
 
+function countnz(a::AbstractArray)
+    n = 0
+    for i = 1:length(a)
+        @inbounds x = a[i]
+        if x != 0
+            n += 1
+        end
+    end
+    return n
+end
+
 function countnz(a::AbstractArray{Bool})
     n = 0
-    for x in a
+    for i = 1:length(a)
+        @inbounds x = a[i]
         if x; n += 1; end
     end
     return n
