@@ -1300,7 +1300,7 @@ function transpose(A::StridedMatrix)
     B = similar(A, size(A, 2), size(A, 1))
     transpose!(B, A)
 end
-function ctranspose{T<:Complex}(A::StridedMatrix{T})
+function ctranspose(A::StridedMatrix)
     B = similar(A, size(A, 2), size(A, 1))
     ctranspose!(B, A)
 end

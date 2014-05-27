@@ -15,6 +15,7 @@ The main homepage for Julia can be found at [julialang.org](http://julialang.org
 This is the GitHub repository of Julia source code, including instructions for compiling and installing Julia, below.
 
 <a name="Resources"/>
+## Resources
 
 - **Homepage:** <http://julialang.org>
 - **Binaries:** <http://julialang.org/downloads/>
@@ -29,6 +30,16 @@ The mailing list for developer discussion is
 <http://groups.google.com/group/julia-dev/>. All are welcome, but the volume
 of messages is higher, and the discussions tend to be more esoteric. New
 developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md) helpful to start contributing to the Julia codebase.
+
+### External Resources
+<a name="External-Resources"/>
+
+- [**StackOverflow**](https://stackoverflow.com/questions/tagged/julia-lang)
+- [**Youtube**](https://www.youtube.com/channel/UC9IuUwwE2xdjQUT_LMLONoA)
+- [**Twitter**](https://twitter.com/JuliaLanguage)
+- [**Facebook Group**](https://www.facebook.com/juliaLanguageUserGroup)
+- [**Google+**](https://plus.google.com/communities/111295162646766639102)
+- [**Meetup**](http://julia.meetup.com/)
 
 <a name="Currently-Supported-Platforms"/>
 ## Currently Supported Platforms
