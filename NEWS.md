@@ -46,7 +46,7 @@ New language features
     | ---------------- | ---------------------------------
     |   ==             |  ≥ (>=) ≤ (<=) ≡ (===) ≠ (!=) ≢ (!==) .≥ (.>=) .≤ (.<=) .!= (.≠) ∈ (`in`) ∉ (`(x,y)->!in(x, y)`) ∋ (`(x,y)->in(y, x)`) ∌ (`(x,y)->!in(y, x)`) ⊆ (`issubset`) ⊈ (`(x,y)->!issubset(x, y)`) ⊊ (`(x,y)->x⊆y && x!=y`) |
     |   +              | ∪ (`union`) |
-    |   *              | ÷ (`div`) ⋅ (`dot`) ∘ × (`cross`) ∩ (`intersect`) |
+    |   *              | ÷ (`div`) ⋅ (`dot`) × (`cross`) ∩ (`intersect`) |
     |   unary          | √ ∛ |
 
     In addition to these, many of the Unicode operator symbols are parsed
@@ -425,6 +425,7 @@ Deprecated or removed
 [#6582]: https://github.com/JuliaLang/julia/pull/6582
 [#6624]: https://github.com/JuliaLang/julia/pull/6624
 [#5936]: https://github.com/JuliaLang/julia/issues/5936
+[#6179]: https://github.com/JuliaLang/julia/issues/6179
 
 Julia v0.2.0 Release Notes
 ==========================
