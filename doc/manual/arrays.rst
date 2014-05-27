@@ -528,12 +528,15 @@ The row indices in every column need to be sorted. If your `SparseMatrixCSC`
 object contains unsorted row indices, one quick way to sort them is by
 doing a double transpose.
 
-In some applications, it is convenient to store explicit zero values in 
-a `SparseMatrixCSC`. These *are* accepted by functions in ``Base`` (but
-there is no guarantee that they will be preserved in mutating operations).
-Because of this, ``countnz`` is not a constant-time operation; instead,
-``nfilled`` should be used to obtain the number of elements in a sparse
-matrix.
+In some applications, it is convenient to store explicit zero values
+in a `SparseMatrixCSC`. These *are* accepted by functions in ``Base``
+(but there is no guarantee that they will be preserved in mutating
+operations).  Such explicitly stored zeros are treated as structural
+nonzeros by many routines.  The ``nnz`` function returns the number of
+elements explicitly stored in the sparse data structure,
+including structural nonzeros. In order to count the exact number of actual
+values that are nonzero, use ``countnz``, which inspects every stored
+element of a sparse matrix.
 
 Sparse matrix constructors
 --------------------------

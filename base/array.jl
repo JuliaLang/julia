@@ -1102,24 +1102,6 @@ function findnz{T}(A::StridedMatrix{T})
     return (I, J, NZs)
 end
 
-function nonzeros{T}(A::StridedArray{T})
-    nnzA = countnz(A)
-    V = similar(A, T, nnzA)
-    count = 1
-    if nnzA > 0
-        for i=1:length(A)
-            Ai = A[i]
-            if Ai != 0
-                V[count] = Ai
-                count += 1
-            end
-        end
-    end
-    return V
-end
-
-nonzeros(x::Number) = x == 0 ? Array(typeof(x),0) : [x]
-
 function findmax(a)
     if isempty(a)
         error("array must be non-empty")

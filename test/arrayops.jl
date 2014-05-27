@@ -3,7 +3,7 @@
 ## basics
 
 @test length([1, 2, 3]) == 3
-@test nfilled([1, 2, 3]) == 3
+@test countnz([1, 2, 3]) == 3
 
 a = ones(4)
 b = a+a

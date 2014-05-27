@@ -320,7 +320,7 @@ Deprecated or removed
 
   * `factorize!` is deprecated in favor of `factorize`. ([#5526])
 
-  * `nnz` is removed. Use `countnz` or `nfilled` instead ([#5538])
+  * `nnz` counts the number of structural nonzeros in a sparse matrix. Use `countnz` for the actual number of nonzeros. ([#6769])
 
   * `setfield` is renamed `setfield!` ([#5748])
 
@@ -383,7 +383,7 @@ Deprecated or removed
 [#4888]: https://github.com/JuliaLang/julia/pull/4888
 [#5475]: https://github.com/JuliaLang/julia/pull/5475
 [#5526]: https://github.com/JuliaLang/julia/pull/5526
-[#5538]: https://github.com/JuliaLang/julia/pull/5538
+[#6769]: https://github.com/JuliaLang/julia/pull/6769
 [#5726]: https://github.com/JuliaLang/julia/pull/5726
 [#5811]: https://github.com/JuliaLang/julia/pull/5811
 [#5462]: https://github.com/JuliaLang/julia/pull/5462
