@@ -186,10 +186,14 @@ should be written as::
     foo(x::Real) = ...
 
 instead, especially if ``T`` is not used in the function body.
-If ``T`` is used, it can be replaced with ``typeof(x)`` if convenient.
+Even if ``T`` is used, it can be replaced with ``typeof(x)`` if convenient.
 There is no performance difference.
 Note that this is not a general caution against static parameters, just
 against uses where they are not needed.
+
+Note also that container types, specifically may need type parameters in
+function calls. See the FAQ on `container type fields <faq.html#man-abstract-container-type>`_
+for more information.
 
 Avoid confusion about whether something is an instance or a type
 ----------------------------------------------------------------
