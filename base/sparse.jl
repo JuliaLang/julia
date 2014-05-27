@@ -7,7 +7,7 @@ import Base.NonTupleType, Base.float
 
 export SparseMatrixCSC, 
        blkdiag, dense, diag, diagm, droptol!, dropzeros!, etree, full, 
-       getindex, ishermitian, issparse, issym, istril, istriu, 
+       getindex, ishermitian, issparse, issym, istril, istriu, nnz,
        setindex!, sparse, sparsevec, spdiagm, speye, spones, 
        sprand, sprandbool, sprandn, spzeros, symperm, trace, tril, tril!, 
        triu, triu!

@@ -3839,8 +3839,9 @@ Indexing, Assignment, and Concatenation
 
 .. function:: find(A)
 
-   Return a vector of the linear indexes of the non-zeros in ``A`` (determined by ``A[i]!=0``).
-   A common use of this is to convert a boolean array to an array of indexes of the ``true``
+   Return a vector of the linear indexes of the non-zeros in ``A``
+   (determined by ``A[i]!=0``).  A common use of this is to convert a
+   boolean array to an array of indexes of the ``true``
    elements.
 
 .. function:: find(f,A)
@@ -3849,16 +3850,13 @@ Indexing, Assignment, and Concatenation
 
 .. function:: findn(A)
 
-   Return a vector of indexes for each dimension giving the locations of the non-zeros in ``A``
-   (determined by ``A[i]!=0``).
+   Return a vector of indexes for each dimension giving the locations of the non-zeros in ``A`` (determined by ``A[i]!=0``).
 
 .. function:: findnz(A)
 
-   Return a tuple ``(I, J, V)`` where ``I`` and ``J`` are the row and column indexes of the non-zero values in matrix ``A``, and ``V`` is a vector of the non-zero values.
-
-.. function:: nonzeros(A)
-
-   Return a vector of the non-zero values in array ``A`` (determined by ``A[i]!=0``).
+   Return a tuple ``(I, J, V)`` where ``I`` and ``J`` are the row and
+   column indexes of the non-zero values in matrix ``A``, and ``V`` is
+   a vector of the non-zero values.
 
 .. function:: findfirst(A)
 

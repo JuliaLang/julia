@@ -75,4 +75,6 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    Return the symmetric permutation of A, which is ``A[p,p]``. A should be symmetric and sparse, where only the upper triangular part of the matrix is stored. This algorithm ignores the lower triangular part of the matrix. Only the upper triangular part of the result is returned as well.
 
+.. function:: nonzeros(A)
 
+   Return a vector of the structural nonzero values in sparse matrix ``A``. This includes zeros that are explicitly stored in the sparse matrix. The returned vector points directly to the internal nonzero storage of ``A``, and any modifications to the returned vector will mutate ``A`` as well.
