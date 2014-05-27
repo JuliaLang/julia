@@ -600,13 +600,25 @@ Iterable Collections
    the algorithm. Note that the elements are not reordered if you use an ordered
    collection.
 
+.. function:: reduce(op, itr)
+
+   Like ``reduce`` but using the first element as v0.
+
 .. function:: foldl(op, v0, itr)
 
-   Like ``reduce``, but with guaranteed left associativity. 
+   Like ``reduce``, but with guaranteed left associativity.
+
+.. function:: foldl(op, itr)
+
+   Like ``foldl``, but using the first element as v0.
 
 .. function:: foldr(op, v0, itr)
 
-   Like ``reduce``, but with guaranteed right associativity. 
+   Like ``reduce``, but with guaranteed right associativity.
+
+.. function:: foldr(op, itr)
+
+   Like ``foldr``, but using the last element as v0.
 
 .. function:: maximum(itr)
 
