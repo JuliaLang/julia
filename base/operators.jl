@@ -322,7 +322,7 @@ for f in (:+, :-)
             range($f(r1.start,r2.start), $f(step(r1),step(r2)), r1l)
         end
 
-        function $f{T}(r1::FloatRange{T}, r2::FloatRange{T})
+        function $f{T<:FloatingPoint}(r1::FloatRange{T}, r2::FloatRange{T})
             len = r1.len
             len == r2.len || error("argument dimensions must match")
             divisor1, divisor2 = r1.divisor, r2.divisor
