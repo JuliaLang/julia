@@ -18,7 +18,7 @@ import Base: (*), convert, copy, ctranspose, eltype, findnz, getindex, hcat,
 
 import ..LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul_B,
                  cholfact, cholfact!, copy, det, diag,
-                 full, logdet, norm, scale, scale!, sparse
+                 full, isposdef!, logdet, norm, scale, scale!, sparse
 
 include("cholmod_h.jl")
 
@@ -1032,4 +1032,17 @@ end
 sparse(L::CholmodFactor) = sparse!(CholmodSparse(L))
 sparse(D::CholmodDense) = sparse!(CholmodSparse(D))
 sparse(T::CholmodTriplet) = sparse!(CholmodSparse(T))
+
+isposdef!{Tv<:CHMVTypes,Ti}(A::SparseMatrixCSC{Tv,Ti}) = ishermitian(A) && cholfact(A).c.minor == size(A,1)
+
 end #module
+
+# placing factorize here for now. Maybe add a new file
+function factorize(A::SparseMatrixCSC)
+    m, n = size(A)
+    if m == n
+        Ac = cholfact(A)
+        Ac.c.minor == m && ishermitian(A) && return Ac
+    end
+    return lufact(A)
+end

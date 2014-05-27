@@ -2909,7 +2909,7 @@ for (syev, syevr, sygvd, elty) in
                 end
             end
             @assertargsok
-            @assertnonsingular
+            @assertposdef
             w, A, B
         end
     end
@@ -3058,7 +3058,7 @@ for (syev, syevr, sygvd, elty, relty) in
                 end
             end
             @assertargsok
-            @assertnonsingular
+            @assertposdef
             w, A, B
         end
     end
