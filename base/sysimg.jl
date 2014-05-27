@@ -118,6 +118,7 @@ include("floatfuncs.jl")
 include("math.jl")
 importall .Math
 const (√)=sqrt
+const (∛)=cbrt
 include("float16.jl")
 
 # multidimensional arrays

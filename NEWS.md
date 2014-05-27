@@ -40,14 +40,17 @@ New language features
     characters, and operator symbols are not allowed in identifiers.
     Number-like characters cannot begin identifiers ([#5936]).
 
-  * Support for a limited number of infix Unicode operators ([#552], [#6582]):
+  * Define a limited number of infix Unicode operators ([#552], [#6582]):
 
     | Precedence class | Operators (with synonyms, if any)
     | ---------------- | ---------------------------------
-    |   ==             |  ≥ (>=) ≤ (<=) ≡ (===) ≠ (!=) ≢ (!==) .≥ (.>=) .≤ (.<=) .!= (.≠) ∈ (`in`) ∉ (`(x,y)->!in(x, y)`) ∋ (`(x,y)->in(y, x)`) ∌ (`(x,y)->!in(y, x)`) ⊆ (`issubset`) ⊈ (`(x,y)->!issubset(x, y)`) ⊊ (`(x,y)->x⊆y && x!=y`) ⊂ ⊄ |
-    |   +              | ⊕ ⊖ ⊞ ⊟ ∪ (`union`) ∨ ⊔ |
-    |   *              | ÷ (`div`) ⋅ (`dot`) ∘ × (`cross`) ∩ (`intersect`) ∧ ⊓ ⊗ ⊘ ⊙ ⊚ ⊛ ⊠ ⊡ |
-    |   unary          | √ |
+    |   ==             |  ≥ (>=) ≤ (<=) ≡ (===) ≠ (!=) ≢ (!==) .≥ (.>=) .≤ (.<=) .!= (.≠) ∈ (`in`) ∉ (`(x,y)->!in(x, y)`) ∋ (`(x,y)->in(y, x)`) ∌ (`(x,y)->!in(y, x)`) ⊆ (`issubset`) ⊈ (`(x,y)->!issubset(x, y)`) ⊊ (`(x,y)->x⊆y && x!=y`) |
+    |   +              | ∪ (`union`) |
+    |   *              | ÷ (`div`) ⋅ (`dot`) ∘ × (`cross`) ∩ (`intersect`) |
+    |   unary          | √ ∛ |
+
+    In addition to these, many of the Unicode operator symbols are parsed
+    as infix operators and are available for user-defined methods ([#6929]).
     
   * Improved reporting of syntax errors ([#6179])
 
