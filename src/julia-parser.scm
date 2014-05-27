@@ -68,13 +68,12 @@
 			  (apply append (map eval prec-names)))))
 
 (define op-chars
-  (list->string
-   (delete-duplicates
-    (apply append
-	   (map string->list (map symbol->string operators))))))
+  (delete-duplicates
+   (apply append
+	  (map string->list (map symbol->string operators)))))
 
 ;; characters that can be in an operator
-(define (opchar? c) (and (char? c) (string.find op-chars c)))
+(define opchar? (Set op-chars))
 ;; characters that can follow . in an operator
 (define (dot-opchar? c) (and (char? c) (string.find ".*^/\\+-'<>!=%" c)))
 (define operator? (Set operators))
