@@ -80,13 +80,13 @@ foldr(op::Callable, itr) = (i = endof(itr); foldr(op, itr[i], itr, i-1))
 reduce(op::Callable, v, itr) = foldl(op, v, itr)
 
 function reduce(op::Callable, itr) # this is a left fold
-    if is(op,+)
+    if is(op, +)
         return sum(itr)
-    elseif is(op,*)
+    elseif is(op, *)
         return prod(itr)
-    elseif is(op,|)
+    elseif is(op, |)
         return any(itr)
-    elseif is(op,&)
+    elseif is(op, &)
         return all(itr)
     end
     return foldl(op, itr)
@@ -123,7 +123,7 @@ end
 
 function in(x, itr)
     for y in itr
-        if y==x
+        if y == x
             return true
         end
     end
@@ -141,49 +141,56 @@ end
 
 function contains(eq::Function, itr, x)
     for y in itr
-        if eq(y,x)
+        if eq(y, x)
             return true
         end
     end
     return false
 end
 
-## countnz & count
 
+## countnz & count
 
 function countnz(itr)
     n = 0
     for x in itr
-        n += (x != 0)
+        if x != 0
+            n += 1
+        end
     end
     return n
 end
 
-function countnz{T}(a::AbstractArray{T})
+function countnz(a::AbstractArray)
     n = 0
     for i = 1:length(a)
-        @inbounds n += (a[i] != 0)
+        @inbounds x = a[i]
+        if x != 0
+            n += 1
+        end
     end
     return n
 end
 
 function countnz(a::AbstractArray{Bool})
     n = 0
-    for x in a
+    for i = 1:length(a)
+        @inbounds x = a[i]
         if x; n += 1; end
     end
     return n
 end
 
 function count(pred::Function, itr)
-    s = 0
+    n = 0
     for x in itr
         if pred(x)
-            s+=1
+            n += 1
         end
     end
-    s
+    return n
 end
+
 
 ## sum
 
