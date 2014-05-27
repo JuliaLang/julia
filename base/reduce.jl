@@ -2,13 +2,9 @@
 
 ###### Functors ######
 
-# Note that functors are merely used as an
-# internal machinery to enhance code reuse.
+# Note that functors are merely used as internal machinery to enhance code reuse.
 # They are not exported.
-#
-# When function arguments can be inlined, 
-# the use of functors can be easily removed.
-#
+# When function arguments can be inlined, the use of functors can be removed.
 
 abstract Func{N}
 
@@ -21,7 +17,7 @@ evaluate(::AddFun, x, y) = x + y
 evaluate(::MulFun, x, y) = x * y
 evaluate(::AndFun, x, y) = x & y
 evaluate(::OrFun, x, y) = x | y
-
+evaluate(f::Callable, x, y) = f(x,y)
 
 ###### Generic reduction functions ######
 
@@ -30,22 +26,7 @@ evaluate(::OrFun, x, y) = x | y
 
 ## foldl
 
-function _foldl(op::Callable, v0, itr, i)
-    # use a type stable procedure
-    if done(itr, i)
-        return v0
-    else
-        (x, i) = next(itr, i)
-        v = op(v0, x)
-        while !done(itr, i)
-            (x, i) = next(itr, i)
-            v = op(v, x)
-        end
-        return v
-    end
-end
-
-function _foldl(op::Func{2}, v0, itr, i)
+function _foldl(op, v0, itr, i)
     if done(itr, i)
         return v0
     else
@@ -67,7 +48,7 @@ function foldl(op::Callable, v0, itr, i)
     return _foldl(op, v0, itr, i)
 end
 
-foldl(op::Union(Callable,Func{2}), v0, itr) = foldl(op, v0, itr, start(itr))
+foldl(op::Callable, v0, itr) = foldl(op, v0, itr, start(itr))
 
 function foldl(op::Callable, itr)
     i = start(itr)
@@ -613,4 +594,3 @@ function all(pred::Function, itr)
     end
     return true
 end
-
