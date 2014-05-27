@@ -79,13 +79,17 @@ end
 ## foldr
 
 function foldr(op::Callable, v0, itr, i=endof(itr))
-    v = v0
-    while i > 0
-        x = itr[i]
-        v = op(x, v)
-        i -= 1
+    # use type stable procedure
+    if i == 0
+        return v0
+    else
+        v = op(itr[i], v0)
+        while i > 1
+            x = itr[i -= 1]
+            v = op(x, v)
+        end
+        return v
     end
-    return v
 end
 
 foldr(op::Callable, itr) = (i = endof(itr); foldr(op, itr[i], itr, i-1))
