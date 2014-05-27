@@ -56,8 +56,8 @@
       <<= >>= >>>= -> --> |\|\|| && |.| ... |.+=| |.-=|))
 (define syntactic-unary-operators '($ & |::|))
 
-(define (syntactic-op? op) (memq op syntactic-operators))
-(define (syntactic-unary-op? op) (memq op syntactic-unary-operators))
+(define syntactic-op? (Set syntactic-operators))
+(define syntactic-unary-op? (Set syntactic-unary-operators))
 
 (define trans-op (string->symbol ".'"))
 (define ctrans-op (string->symbol "'"))
@@ -77,7 +77,7 @@
 (define (opchar? c) (and (char? c) (string.find op-chars c)))
 ;; characters that can follow . in an operator
 (define (dot-opchar? c) (and (char? c) (string.find ".*^/\\+-'<>!=%" c)))
-(define (operator? c) (memq c operators))
+(define operator? (Set operators))
 
 (define reserved-words '(begin while if for try return break continue
 			 function macro quote let local global const
@@ -815,7 +815,7 @@
 			(parse-juxtapose
 			 (read-number (ts:port s) (eqv? nch #\.) (eq? op '-))
 			 s)))
-		   (if (memq (peek-token s) '(^ |.^|))
+		   (if (is-prec-power? (peek-token s))
 		       ;; -2^x parsed as (- (^ 2 x))
 		       (begin (ts:put-back! s (maybe-negate op num))
 			      (list 'call op (parse-factor s)))
@@ -1636,7 +1636,7 @@
 ; parse numbers, identifiers, parenthesized expressions, lists, vectors, etc.
 (define (parse-atom s)
   (let ((ex (parse-atom- s)))
-    (if (or (memq ex syntactic-operators)
+    (if (or (syntactic-op? ex)
 	    (eq? ex '....))
 	(error (string "invalid identifier name \"" ex "\"")))
     ex))
@@ -1697,7 +1697,7 @@
 	    ((eqv? (require-token s) #\) )
 	     ;; empty tuple ()
 	     (begin (take-token s) '(tuple)))
-	    ((memq (peek-token s) syntactic-operators)
+	    ((syntactic-op? (peek-token s))
 	     ;; allow (=) etc.
 	     (let ((tok (take-token s)))
 	       (if (not (eqv? (require-token s) #\) ))
