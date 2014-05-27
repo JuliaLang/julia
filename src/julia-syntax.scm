@@ -1319,7 +1319,7 @@
 	      ,.(map (lambda (x) `(,what ,x)) vars)
 	      ,.(reverse assigns)))
 	(let ((x (car b)))
-	  (cond ((and (pair? x) (memq (car x) prec-assignment))
+	  (cond ((assignment-like? x)
 		 (loop (cdr b)
 		       (cons (assigned-name (cadr x)) vars)
 		       (cons `(,(car x) ,(decl-var (cadr x)) ,(caddr x))
