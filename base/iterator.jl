@@ -73,27 +73,27 @@ function start_filter(pred, itr)
     while !done(itr,s)
         v,t = next(itr,s)
         if pred(v)
-            break
+            return (false, v, t)
         end
         s=t
     end
-    s
+    (true,)
 end
 
 next(f::Filter, s) = advance_filter(f.flt, f.itr, s)
-function advance_filter(pred, itr, s)
-    v,s = next(itr,s)
+function advance_filter(pred, itr, st)
+    _, v, s = st
     while !done(itr,s)
         w,t = next(itr,s)
         if pred(w)
-            break
+            return v, (false, w, t)
         end
         s=t
     end
-    v,s
+    v, (true,)
 end
 
-done(f::Filter, s) = done(f.itr,s)
+done(f::Filter, s) = s[1]
 
 eltype(f::Filter) = eltype(f.itr)
 
