@@ -237,7 +237,7 @@ function sum(itr)
     _sum(IdFun(), itr, s)
 end
 
-function sum(f::Function, itr)
+function sum(f::Union(Function,Func{1}), itr)
     s = start(itr)
     done(itr, s) && error("Argument is empty.")
     _sum(f, itr, s)
@@ -245,6 +245,9 @@ end
 
 sum(x::Number) = x
 sum(A::AbstractArray{Bool}) = countnz(A)
+
+sumabs(itr) = sum(AbsFun(), itr)
+sumabs2(itr) = sum(Abs2Fun(), itr)
 
 # Note: sum_seq uses four accumulators, so each accumulator gets at most 256 numbers
 const PAIRWISE_SUM_BLOCKSIZE = 1024
