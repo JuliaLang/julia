@@ -144,10 +144,11 @@ eval(ngenerate(:N, nothing, :(setindex!{T}(s::SubArray{T,N}, v, ind::Integer)), 
     A
 end
 
-@ngenerate N typeof(dest) function copy!{T,N}(dest::AbstractArray{T,N}, src::AbstractArray{T,N})
+@ngenerate N typeof(dest) function copy!{S,T,N}(dest::AbstractArray{S,N}, src::AbstractArray{T,N})
+    defined = !isa(src, Array)
     if @nall N d->(size(dest,d) == size(src,d))
         @nloops N i dest begin
-            @inbounds (@nref N dest i) = (@nref N src i)
+            @inbounds (defined || @ncall N isdefined src i) && ((@nref N dest i) = (@nref N src i))
         end
     else
         invoke(copy!, (typeof(dest), Any), dest, src)

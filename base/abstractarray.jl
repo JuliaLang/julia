@@ -1249,12 +1249,23 @@ function mapslices(f::Function, A::AbstractArray, dims::AbstractVector)
     return R
 end
 
+function promote_setindex!{T}(a::AbstractArray{T}, v::T, ids...)
+    a[ids...] = v
+    return a
+end
+
+function promote_setindex!{T, S}(a::AbstractArray{T}, v::S, ids...)
+    Super = promote_type(T, S)
+    T == Super || (a = convert(AbstractArray{Super}, a))
+    a[ids...] = v
+    return a
+end
 
 ## 1 argument
 function map_to!(f::Callable, first, dest::AbstractArray, A::AbstractArray)
     dest[1] = first
     for i=2:length(A)
-        dest[i] = f(A[i])
+        dest = promote_setindex!(dest, f(A[i]), i)
     end
     return dest
 end
@@ -1270,7 +1281,7 @@ end
 function map_to!(f::Callable, first, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
     dest[1] = first
     for i=2:length(A)
-        dest[i] = f(A[i], B[i])
+        dest = promote_setindex!(dest, f(A[i], B[i]), i)
     end
     return dest
 end
@@ -1292,7 +1303,7 @@ function map_to!(f::Callable, first, dest::AbstractArray, As::AbstractArray...)
     ith = a->a[i]
     dest[1] = first
     for i=2:n
-        dest[i] = f(map(ith, As)...)
+        dest = promote_setindex!(dest, f(map(ith, As)...), i)
     end
     return dest
 end
