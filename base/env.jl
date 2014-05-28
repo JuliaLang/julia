@@ -5,69 +5,93 @@
     _hasenv(s::String) = _getenv(s) != C_NULL
 end
 @windows_only begin
-_getenvlen(var::String) = ccall(:GetEnvironmentVariableA,stdcall,Uint32,(Ptr{Uint8},Ptr{Uint8},Uint32),var,C_NULL,0)
-_hasenv(s::String) = _getenvlen(s)!=0
-function _jl_win_getenv(s::String,len::Uint32)
-    val=zeros(Uint8,len-1)
-    ret=ccall(:GetEnvironmentVariableA,stdcall,Uint32,(Ptr{Uint8},Ptr{Uint8},Uint32),s,val,len)
-    if ret==0||ret!=len-1 #Trailing 0 is only included on first call to GetEnvA
-        error("unknown system error: ", s, len, ret)
+const ERROR_ENVVAR_NOT_FOUND = uint32(203)
+const FORMAT_MESSAGE_ALLOCATE_BUFFER = uint32(0x100)
+const FORMAT_MESSAGE_FROM_SYSTEM = uint32(0x1000)
+const FORMAT_MESSAGE_IGNORE_INSERTS = uint32(0x200)
+const FORMAT_MESSAGE_MAX_WIDTH_MASK = uint32(0xFF)
+GetLastError() = ccall(:GetLastError,stdcall,Uint32,())
+function FormatMessage(e=GetLastError())
+    lpMsgBuf = Array(Ptr{Uint16})
+    lpMsgBuf[1] = 0
+    len = ccall(:FormatMessageW,stdcall,Uint32,(Cint, Ptr{Void}, Cint, Cint, Ptr{Ptr{Uint16}}, Cint, Ptr{Void}),
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_MAX_WIDTH_MASK,
+        C_NULL, e, 0, lpMsgBuf, 0, C_NULL)
+    p = lpMsgBuf[1]
+    len == 0 && return utf8("")
+    len = len + 1
+    buf = Array(Uint16, len)
+    unsafe_copy!(pointer(buf), p, len)
+    ccall(:LocalFree,stdcall,Ptr{Void},(Ptr{Void},),p)
+    return utf8(UTF16String(buf))
+end
+
+_getenvlen(var::UTF16String) = ccall(:GetEnvironmentVariableW,stdcall,Uint32,(Ptr{Uint16},Ptr{Uint8},Uint32),utf16(var),C_NULL,0)
+_hasenv(s::UTF16String) = _getenvlen(s)!=0 || GetLastError()!=ERROR_ENVVAR_NOT_FOUND
+_hasenv(s::String) = _hasenv(utf16(s))
+function _jl_win_getenv(s::UTF16String,len::Uint32)
+    val=zeros(Uint16,len)
+    ret=ccall(:GetEnvironmentVariableW,stdcall,Uint32,(Ptr{Uint16},Ptr{Uint16},Uint32),s,val,len)
+    if ret==0 || ret != len-1 || val[end] != 0
+        error(string("system error getenv: ", s, ' ', len, "-1 != ", ret, ": ", FormatMessage()))
     end
     val
 end
 end
 
-
 macro accessEnv(var,errorcase)
-@unix_only return quote
-     val=_getenv($(esc(var)))
-     if val == C_NULL
-        $(esc(errorcase))
-     end
-     bytestring(val)
-end
-@windows_only return quote
-    len=_getenvlen($(esc(var)))
-    if len == 0
-        $(esc(errorcase))
+    @unix_only return quote
+         val=_getenv($(esc(var)))
+         if val == C_NULL
+            $(esc(errorcase))
+         end
+         bytestring(val)
     end
-    bytestring(_jl_win_getenv($(esc(var)),len))
-end
+    @windows_only return quote
+        let var = utf16($(esc(var)))
+            len=_getenvlen(var)
+            if len == 0
+                if GetLastError() != ERROR_ENVVAR_NOT_FOUND
+                    return utf8("")
+                else
+                    $(esc(errorcase))
+                end
+            end
+            utf8(UTF16String(_jl_win_getenv(var,len)))
+        end
+    end
 end
 
 function _setenv(var::String, val::String, overwrite::Bool)
-@unix_only begin
-    ret = ccall(:setenv, Int32, (Ptr{Uint8},Ptr{Uint8},Int32), var, val, overwrite)
-    systemerror(:setenv, ret != 0)
-end
-@windows_only begin
-    if overwrite||!_hasenv(var)
-        ret = ccall(:SetEnvironmentVariableA,stdcall,Int32,(Ptr{Uint8},Ptr{Uint8}),var,val)
-        systemerror(:setenv, ret == 0)
+    @unix_only begin
+        ret = ccall(:setenv, Int32, (Ptr{Uint8},Ptr{Uint8},Int32), var, val, overwrite)
+        systemerror(:setenv, ret != 0)
     end
-end
+    @windows_only begin
+        var = utf16(var)
+        if overwrite || !_hasenv(var)
+            ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Ptr{Uint16},Ptr{Uint16}),utf16(var),utf16(val))
+            systemerror(:setenv, ret == 0)
+        end
+    end
 end
 
 _setenv(var::String, val::String) = _setenv(var, val, true)
 
 function _unsetenv(var::String)
-@unix_only begin
-    ret = ccall(:unsetenv, Int32, (Ptr{Uint8},), var)
-    systemerror(:unsetenv, ret != 0)
-end
-@windows_only begin
-    ret = ccall(:SetEnvironmentVariableA,stdcall,Int32,(Ptr{Uint8},Ptr{Uint8}),var,C_NULL)
-    systemerror(:setenv, ret == 0)
-end
+    @unix_only begin
+        ret = ccall(:unsetenv, Int32, (Ptr{Uint8},), var)
+        systemerror(:unsetenv, ret != 0)
+    end
+    @windows_only begin
+        ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Ptr{Uint16},Ptr{Uint16}),utf16(var),C_NULL)
+        systemerror(:setenv, ret == 0)
+    end
 end
 
 ## ENV: hash interface ##
 
-@unix_only type EnvHash <: Associative{ByteString,ByteString}; end
-@windows_only type EnvHash <: Associative{ByteString,ByteString}
-    block::Ptr{Uint8}
-    EnvHash() = new(C_NULL)
-end
+type EnvHash <: Associative{ByteString,ByteString}; end
 const ENV = EnvHash()
 
 similar(::EnvHash) = Dict{ByteString,ByteString}()
@@ -108,23 +132,26 @@ end
 end
 
 @windows_only begin
-start(hash::EnvHash) = (hash.block = ccall(:GetEnvironmentStringsA,stdcall,Ptr{Uint8},()))
-function done(hash::EnvHash, pos::Ptr{Uint8})
-    if ccall(:jl_env_done,Any,(Ptr{Uint8},),pos)::Bool
-        ccall(:FreeEnvironmentStringsA,stdcall,Int32,(Ptr{Uint8},),hash.block)
-        hash.block=C_NULL
+start(hash::EnvHash) = (pos = ccall(:GetEnvironmentStringsW,stdcall,Ptr{Uint16},()); (pos,pos))
+function done(hash::EnvHash, block::(Ptr{Uint16},Ptr{Uint16}))
+    if unsafe_load(block[1])==0
+        ccall(:FreeEnvironmentStringsW,stdcall,Int32,(Ptr{Uint16},),block[2])
         return true
     end
     false
 end
-function next(hash::EnvHash, pos::Ptr{Uint8})
-    len = ccall(:strlen, Uint, (Ptr{Uint8},), pos)
-    env=ccall(:jl_pchar_to_string, Any, (Ptr{Uint8},Int), pos, len)::ByteString
-    m = match(r"^(.*?)=(.*)$"s, env)
+function next(hash::EnvHash, block::(Ptr{Uint16},Ptr{Uint16}))
+    pos = block[1]
+    blk = block[2]
+    len = ccall(:wcslen, Uint, (Ptr{Uint16},), pos)+1
+    buf = Array(Uint16, len)
+    unsafe_copy!(pointer(buf), pos, len)
+    env = utf8(UTF16String(buf))
+    m = match(r"^(=?[^=]+)=(.*)$"s, env)
     if m == nothing
         error("malformed environment entry: $env")
     end
-    (ByteString[convert(typeof(env),x) for x in m.captures], pos+len+1)
+    (ByteString[convert(typeof(env),x) for x in m.captures], (pos+len*2, blk))
 end
 end
 
