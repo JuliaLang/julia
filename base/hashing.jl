@@ -3,6 +3,10 @@
 hash(x::Any) = hash(x, zero(Uint))
 hash(w::WeakRef, h::Uint) = hash(w.value, h)
 
+## hashing general objects ##
+
+hash(x::ANY, h::Uint) = hash(object_id(x), h)
+
 ## core data hashing functions ##
 
 function hash_64_64(n::Uint64)
