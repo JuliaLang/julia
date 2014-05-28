@@ -101,7 +101,8 @@ end
 error_codes = (Int=>ASCIIString)[
     -1=>"cannot specify signal action for profiling",
     -2=>"cannot create the timer for profiling",
-    -3=>"cannot start the timer for profiling"]
+    -3=>"cannot start the timer for profiling",
+    -4=>"cannot unblock SIGUSR1"]
 
 function fetch()
     len = len_data()
