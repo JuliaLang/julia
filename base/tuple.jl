@@ -45,6 +45,7 @@ map(f::Callable) = f()
 map(f::Callable, t::())                   = ()
 map(f::Callable, t::(Any,))               = (f(t[1]),)
 map(f::Callable, t::(Any, Any))           = (f(t[1]), f(t[2]))
+map(f::Callable, t::(Any, Any, Any))      = (f(t[1]), f(t[2]), f(t[3]))
 map(f::Callable, t::Tuple)                = tuple(f(t[1]), map(f,tail(t))...)
 # 2 argument function
 map(f::Callable, t::(),        s::())        = ()

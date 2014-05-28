@@ -514,25 +514,6 @@ function map!(f::Callable, dest, r::Range)
     dest
 end
 
-function map_range_to!(f::Callable, first, dest, r::Range, state)
-    dest[1] = first
-    i = 2
-    while !done(r, state)
-        ri, state = next(r, state)
-        dest[i] = f(ri)
-        i += 1
-    end
-    dest
-end
-
-function map(f::Callable, r::Range)
-    if isempty(r); return {}; end
-    state = start(r)
-    (ri, state) = next(r, state)
-    first = f(ri)
-    map_range_to!(f, first, Array(typeof(first), length(r)), r, state)
-end
-
 function in(x, r::Range)
     n = step(r) == 0 ? 1 : iround((x-first(r))/step(r))+1
     n >= 1 && n <= length(r) && r[n] == x
