@@ -185,18 +185,34 @@ end
 
 ## sum
 
+# result type inference for sum
+
+sumtype{T}(::Type{T}) = typeof(zero(T) + zero(T))
+sumzero{T}(::Type{T}) = zero(T) + zero(T)
+addzero(x) = x + zero(x) 
+
+typealias SumResultNumber Union(Int,Int64,Int128,Float32,Float64,Complex64,Complex128)
+
+sumtype{T<:SumResultNumber}(::Type{T}) = T
+sumzero{T<:SumResultNumber}(::Type{T}) = zero(T)
+addzero(x::SumResultNumber) = x
+
+sumzero{T<:AbstractArray}(::Type{T}) = error("Summing over an empty collection of arrays is not allowed.")
+addzero(a::AbstractArray) = a
+
+# general sum over iterables
+
 function sum(itr)
     s = start(itr)
     if done(itr, s)
         if applicable(eltype, itr)
-            T = eltype(itr)
-            return zero(T) + zero(T)
+            return sumzero(eltype(itr))
         else
             throw(ArgumentError("sum(itr) is undefined for empty collections; instead, do isempty(itr) ? z : sum(itr), where z is the correct type of zero for your sum"))
         end
     end
     (v, s) = next(itr, s)
-    done(itr, s) && return v + zero(v) # adding zero for type stability
+    done(itr, s) && return addzero(v) # adding zero for type stability
     # specialize for length > 1 to have type-stable loop
     (x, s) = next(itr, s)
     result = v + x
@@ -207,7 +223,11 @@ function sum(itr)
     return result
 end
 
+sum(x::Number) = x
 sum(A::AbstractArray{Bool}) = countnz(A)
+
+# Note: sum_seq uses four accumulators, so each accumulator gets at most 256 numbers
+const PAIRWISE_SUM_BLOCKSIZE = 1024
 
 # a fast implementation of sum in sequential order (from left to right).
 # to allow type-stable loops, requires length > 1
@@ -265,11 +285,6 @@ end
 #        Manfred Tasche and Hansmartin Zeuner, Handbook of
 #        Analytic-Computational Methods in Applied Mathematics (2000).
 #
-
-# Note: sum_seq uses four accumulators, so each accumulator gets at most 256 numbers
-const PAIRWISE_SUM_BLOCKSIZE = 1024
-
-# note: requires length > 1, due to sum_seq
 function sum_pairwise(a::AbstractArray, ifirst::Int, ilast::Int)
     # bsiz: maximum block size
 
@@ -281,38 +296,30 @@ function sum_pairwise(a::AbstractArray, ifirst::Int, ilast::Int)
     end
 end
 
-function sum{T<:AbstractArray}(a::AbstractArray{T})
-    n = length(a)
-    n == 0 && error("argument is empty")
-    n == 1 && return a[1] + zero(a[1])
-    sum_pairwise(a, 1, length(a))
-end
+# sum_impl requires length(a) > 1 
+#
+sum_impl{T<:Integer}(a::AbstractArray{T}, ifirst::Int, ilast::Int) = sum_seq(a, ifirst, ilast)
+sum_impl(a::AbstractArray, ifirst::Int, ilast::Int) = sum_pairwise(a, ifirst, ilast)
 
 function sum{T}(a::AbstractArray{T})
     n = length(a)
-    n == 0 && return zero(T) + zero(T)
-    n == 1 && return a[1] + zero(a[1])
-    sum_pairwise(a, 1, length(a))
+    n == 0 && return sumzero(T)
+    n == 1 && return addzero(a[1])
+    sum_impl(a, 1, length(a))
 end
 
-function sum{T<:Integer}(a::AbstractArray{T})
-    n = length(a)
-    n == 0 && return zero(T) + zero(T)
-    n == 1 && return a[1] + zero(a[1])
-    sum_seq(a, 1, length(a))
-end
 
 # Kahan (compensated) summation: O(1) error growth, at the expense
 # of a considerable increase in computational expense.
 function sum_kbn{T<:FloatingPoint}(A::AbstractArray{T})
     n = length(A)
-    if (n == 0)
-        return zero(T)+zero(T)
+    if n == 0
+        return sumzero(T)
     end
-    s = A[1]+zero(T)
-    c = zero(T)+zero(T)
+    s = addzero(A[1])
+    c = sumzero(T)
     for i in 2:n
-        Ai = A[i]
+        @inbounds Ai = A[i]
         t = s + Ai
         if abs(s) >= abs(Ai)
             c += ((s-t) + Ai)
