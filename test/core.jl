@@ -1679,3 +1679,14 @@ macro mac()
 end
 end
 @test @M6938.mac() == 0
+
+# issue #7012
+let x = zeros(2)
+    x[1]::Float64 = 1
+    @test x == [1.0, 0.0]
+    @test_throws TypeError (x[1]::Int = 1)
+
+    x[1]::Float64 += 1
+    @test x == [2.0, 0.0]
+    @test_throws TypeError (x[1]::Int += 1)
+end
