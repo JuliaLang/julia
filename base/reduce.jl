@@ -185,18 +185,31 @@ end
 
 ## sum
 
+# result type inference for sum
+
+sumtype{T}(::Type{T}) = typeof(zero(T) + zero(T))
+sumzero{T}(::Type{T}) = zero(T) + zero(T)
+addzero(x) = x + zero(x) 
+
+typealias SumResultNumber Union(Int,Int64,Int128,Float32,Float64,Complex64,Complex128)
+
+sumtype{T<:SumResultNumber}(::Type{T}) = T
+sumzero{T<:SumResultNumber}(::Type{T}) = zero(T)
+addzero(x::SumResultNumber) = x
+
+# general sum over iterables
+
 function sum(itr)
     s = start(itr)
     if done(itr, s)
         if applicable(eltype, itr)
-            T = eltype(itr)
-            return zero(T) + zero(T)
+            return sumzero(eltype(itr))
         else
             throw(ArgumentError("sum(itr) is undefined for empty collections; instead, do isempty(itr) ? z : sum(itr), where z is the correct type of zero for your sum"))
         end
     end
     (v, s) = next(itr, s)
-    done(itr, s) && return v + zero(v) # adding zero for type stability
+    done(itr, s) && return addzero(v) # adding zero for type stability
     # specialize for length > 1 to have type-stable loop
     (x, s) = next(itr, s)
     result = v + x
@@ -284,21 +297,21 @@ end
 function sum{T<:AbstractArray}(a::AbstractArray{T})
     n = length(a)
     n == 0 && error("argument is empty")
-    n == 1 && return a[1] + zero(a[1])
+    n == 1 && return addzero(a[1])
     sum_pairwise(a, 1, length(a))
 end
 
 function sum{T}(a::AbstractArray{T})
     n = length(a)
-    n == 0 && return zero(T) + zero(T)
-    n == 1 && return a[1] + zero(a[1])
+    n == 0 && return sumzero(T)
+    n == 1 && return addzero(a[1])
     sum_pairwise(a, 1, length(a))
 end
 
 function sum{T<:Integer}(a::AbstractArray{T})
     n = length(a)
-    n == 0 && return zero(T) + zero(T)
-    n == 1 && return a[1] + zero(a[1])
+    n == 0 && return sumzero(T)
+    n == 1 && return addzero(a[1])
     sum_seq(a, 1, length(a))
 end
 
@@ -306,13 +319,13 @@ end
 # of a considerable increase in computational expense.
 function sum_kbn{T<:FloatingPoint}(A::AbstractArray{T})
     n = length(A)
-    if (n == 0)
-        return zero(T)+zero(T)
+    if n == 0
+        return sumzero(T)
     end
-    s = A[1]+zero(T)
-    c = zero(T)+zero(T)
+    s = addzero(A[1])
+    c = sumzero(T)
     for i in 2:n
-        Ai = A[i]
+        @inbounds Ai = A[i]
         t = s + Ai
         if abs(s) >= abs(Ai)
             c += ((s-t) + Ai)
