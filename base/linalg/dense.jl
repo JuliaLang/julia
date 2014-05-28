@@ -20,6 +20,24 @@ isposdef{T}(A::AbstractMatrix{T}, UL::Symbol) = (S = typeof(sqrt(one(T))); ispos
 isposdef{T}(A::AbstractMatrix{T}) = (S = typeof(sqrt(one(T))); isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A)))
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
 
+
+Base.sumabs{T<:BlasFloat}(x::Union(Array{T},StridedVector{T})) = 
+    length(x) > 32 ? BLAS.asum(x) : Base._sumabs(x)
+
+stride1(x::Array) = 1
+stride1(x::StridedVector) = stride(x, 1)::Int
+
+function Base.sumabs2{T<:BlasFloat}(x::Union(Array{T},StridedVector{T}))
+    n = length(x)
+    if n > 128
+        px = pointer(x)
+        incx = stride1(x)
+        return BLAS.dot(n, px, incx, px, incx)
+    else
+        return Base._sumabs2(x)
+    end
+end
+
 function norm{T<:BlasFloat, TI<:Integer}(x::StridedVector{T}, rx::Union(UnitRange{TI},Range{TI}))
     (minimum(rx) < 1 || maximum(rx) > length(x)) && throw(BoundsError())
     BLAS.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
