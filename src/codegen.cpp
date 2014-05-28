@@ -2148,7 +2148,8 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
                 assert(dyn_cast<UndefValue>(argvals[idx]) == 0);
                 // TODO: there should be a function emit_rooted that handles this, leaving
                 // the value rooted if it was already, to avoid redundant stores.
-                if (origval->getType() != jl_pvalue_llvmt || might_need_root(args[i+1])) {
+                if (origval->getType() != jl_pvalue_llvmt ||
+                    (might_need_root(args[i+1]) && !is_stable_expr(args[i+1], ctx))) {
                     make_gcroot(argvals[idx], ctx);
                 }
             }
