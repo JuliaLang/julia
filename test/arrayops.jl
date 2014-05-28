@@ -974,3 +974,6 @@ end
 
 # issue #6996
 @test { 1 2; 3 4 }' == { 1 2; 3 4 }.'
+
+# map with promotion (issue #6541)
+@test map(join, ["z", "я"]) == ["z", "я"]
