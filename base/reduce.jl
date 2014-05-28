@@ -197,6 +197,9 @@ sumtype{T<:SumResultNumber}(::Type{T}) = T
 sumzero{T<:SumResultNumber}(::Type{T}) = zero(T)
 addzero(x::SumResultNumber) = x
 
+sumzero{T<:AbstractArray}(::Type{T}) = error("Summing over an empty collection of arrays is not allowed.")
+addzero{T<:AbstractArray}(a::Type{T}) = a
+
 # general sum over iterables
 
 function sum(itr)
@@ -221,6 +224,10 @@ function sum(itr)
 end
 
 sum(A::AbstractArray{Bool}) = countnz(A)
+
+
+# Note: sum_seq uses four accumulators, so each accumulator gets at most 256 numbers
+const PAIRWISE_SUM_BLOCKSIZE = 1024
 
 # a fast implementation of sum in sequential order (from left to right).
 # to allow type-stable loops, requires length > 1
@@ -278,11 +285,6 @@ end
 #        Manfred Tasche and Hansmartin Zeuner, Handbook of
 #        Analytic-Computational Methods in Applied Mathematics (2000).
 #
-
-# Note: sum_seq uses four accumulators, so each accumulator gets at most 256 numbers
-const PAIRWISE_SUM_BLOCKSIZE = 1024
-
-# note: requires length > 1, due to sum_seq
 function sum_pairwise(a::AbstractArray, ifirst::Int, ilast::Int)
     # bsiz: maximum block size
 
@@ -294,26 +296,18 @@ function sum_pairwise(a::AbstractArray, ifirst::Int, ilast::Int)
     end
 end
 
-function sum{T<:AbstractArray}(a::AbstractArray{T})
-    n = length(a)
-    n == 0 && error("argument is empty")
-    n == 1 && return addzero(a[1])
-    sum_pairwise(a, 1, length(a))
-end
+# sum_impl requires length(a) > 1 
+#
+sum_impl{T<:Integer}(a::AbstractArray{T}, ifirst::Int, ilast::Int) = sum_seq(a, ifirst, ilast)
+sum_impl(a::AbstractArray, ifirst::Int, ilast::Int) = sum_pairwise(a, ifirst, ilast)
 
 function sum{T}(a::AbstractArray{T})
     n = length(a)
     n == 0 && return sumzero(T)
     n == 1 && return addzero(a[1])
-    sum_pairwise(a, 1, length(a))
+    sum_impl(a, 1, length(a))
 end
 
-function sum{T<:Integer}(a::AbstractArray{T})
-    n = length(a)
-    n == 0 && return sumzero(T)
-    n == 1 && return addzero(a[1])
-    sum_seq(a, 1, length(a))
-end
 
 # Kahan (compensated) summation: O(1) error growth, at the expense
 # of a considerable increase in computational expense.
