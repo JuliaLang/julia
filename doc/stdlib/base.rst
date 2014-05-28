@@ -1901,7 +1901,7 @@ Text I/O
 
    If ``has_header`` is ``true``, the first row of data would be read as headers and the tuple ``(data_cells, header_cells)`` is returned instead of only ``data_cells``.
 
-   If ``use_mmap`` is ``true``, the file specified by ``source`` is memory mapped for potential speedups. Default is ``true`` except on Windows.
+   If ``use_mmap`` is ``true``, the file specified by ``source`` is memory mapped for potential speedups. Default is ``true`` except on Windows. On Windows, you may want to specify ``true`` if the file is large, and is only read once and not written to.
 
    If ``ignore_invalid_chars`` is ``true``, bytes in ``source`` with invalid character encoding will be ignored. Otherwise an error is thrown indicating the offending character position.
 
@@ -5263,12 +5263,12 @@ C Interface
 
 .. function:: copy!(dest, src)
 
-   Copy all elements from collection ``src`` to array ``dest``.
+   Copy all elements from collection ``src`` to array ``dest``. Returns ``dest``.
 
 .. function:: copy!(dest, do, src, so, N)
 
    Copy ``N`` elements from collection ``src`` starting at offset ``so``, to
-   array ``dest`` starting at offset ``do``.
+   array ``dest`` starting at offset ``do``. Returns ``dest``.
 
 .. function:: pointer(a[, index])
 
