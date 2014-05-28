@@ -51,7 +51,8 @@ readdlm(input, dlm::Char, T::Type, eol::Char; opts...) = readdlm_auto(input, dlm
 
 function readdlm_auto(input, dlm::Char, T::Type, eol::Char, auto::Bool; opts...)
     optsd = val_opts(opts)
-    isa(input, String) && (fsz = filesize(input); input = get(optsd, :use_mmap, true) && (fsz > 0) && fsz < typemax(Int) ? as_mmap(input,fsz) : readall(input))
+    use_mmap = get(optsd, :use_mmap, @windows ? false : true)
+    isa(input, String) && (fsz = filesize(input); input = use_mmap && (fsz > 0) && fsz < typemax(Int) ? as_mmap(input,fsz) : readall(input))
     sinp = isa(input, Vector{Uint8}) ? ccall(:jl_array_to_string, ByteString, (Array{Uint8,1},), input) :
            isa(input, IO) ? readall(input) :
            input
