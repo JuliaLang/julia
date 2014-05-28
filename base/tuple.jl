@@ -45,29 +45,18 @@ map(f::Callable) = f()
 map(f::Callable, t::())                   = ()
 map(f::Callable, t::(Any,))               = (f(t[1]),)
 map(f::Callable, t::(Any, Any))           = (f(t[1]), f(t[2]))
-map(f::Callable, t::(Any, Any, Any))      = (f(t[1]), f(t[2]), f(t[3]))
-map(f::Callable, t::(Any, Any, Any, Any)) = (f(t[1]), f(t[2]), f(t[3]), f(t[4]))
 map(f::Callable, t::Tuple)                = tuple(f(t[1]), map(f,tail(t))...)
 # 2 argument function
 map(f::Callable, t::(),        s::())        = ()
 map(f::Callable, t::(Any,),    s::(Any,))    = (f(t[1],s[1]),)
 map(f::Callable, t::(Any,Any), s::(Any,Any)) = (f(t[1],s[1]), f(t[2],s[2]))
-map(f::Callable, t::(Any,Any,Any), s::(Any,Any,Any)) =
-    (f(t[1],s[1]), f(t[2],s[2]), f(t[3],s[3]))
-map(f::Callable, t::(Any,Any,Any,Any), s::(Any,Any,Any,Any)) =
-    (f(t[1],s[1]), f(t[2],s[2]), f(t[3],s[3]), f(t[4],s[4]))
 # n argument function
-map(f::Callable, ts::Tuple...) = tuple([f(map(t->t[n],ts)...) for n=1:length_checked_equal(ts...)]...)
-
-function length_checked_equal(args...) 
-    n = length(args[1])
-    for i=2:length(args)
-        if length(args[i]) != n
-            error("argument dimensions must match")
-        end
-    end
-    n
-end
+heads() = ()
+heads(t::Tuple, ts::Tuple...) = tuple(t[1], heads(ts...)...)
+tails() = ()
+tails(t::Tuple, ts::Tuple...) = tuple(tail(t), tails(ts...)...)
+map(f::Callable, ts::Tuple...) =
+    tuple(f(heads(ts...)...), map(f, tails(ts...)...)...)
 
 ## comparison ##
 
