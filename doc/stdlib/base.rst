@@ -1893,7 +1893,7 @@ Text I/O
 
    Create an iterable object that will yield each line from a stream.
 
-.. function:: readdlm(source, delim::Char, T::Type, eol::Char; has_header=false, use_mmap=true, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
+.. function:: readdlm(source, delim::Char, T::Type, eol::Char; has_header=false, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
 
    Read a matrix from the source where each line (separated by ``eol``) gives one row, with elements separated by the given delimeter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source. 
 
@@ -1901,7 +1901,7 @@ Text I/O
 
    If ``has_header`` is ``true``, the first row of data would be read as headers and the tuple ``(data_cells, header_cells)`` is returned instead of only ``data_cells``.
 
-   If ``use_mmap`` is ``true``, the file specified by ``source`` is memory mapped for potential speedups.
+   If ``use_mmap`` is ``true``, the file specified by ``source`` is memory mapped for potential speedups. Default is ``true`` except on Windows.
 
    If ``ignore_invalid_chars`` is ``true``, bytes in ``source`` with invalid character encoding will be ignored. Otherwise an error is thrown indicating the offending character position.
 

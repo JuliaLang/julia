@@ -2837,7 +2837,7 @@
 
 "),
 
-("Base","readdlm","readdlm(source, delim::Char, T::Type, eol::Char; has_header=false, use_mmap=true, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
+("Base","readdlm","readdlm(source, delim::Char, T::Type, eol::Char; has_header=false, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
 
    Read a matrix from the source where each line (separated by
    \"eol\") gives one row, with elements separated by the given
@@ -2855,7 +2855,8 @@
    instead of only \"data_cells\".
 
    If \"use_mmap\" is \"true\", the file specified by \"source\" is
-   memory mapped for potential speedups.
+   memory mapped for potential speedups. Default is \"true\" except 
+   on Windows.
 
    If \"ignore_invalid_chars\" is \"true\", bytes in \"source\" with
    invalid character encoding will be ignored. Otherwise an error is
