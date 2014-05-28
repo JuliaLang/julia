@@ -198,7 +198,7 @@ sumzero{T<:SumResultNumber}(::Type{T}) = zero(T)
 addzero(x::SumResultNumber) = x
 
 sumzero{T<:AbstractArray}(::Type{T}) = error("Summing over an empty collection of arrays is not allowed.")
-addzero{T<:AbstractArray}(a::Type{T}) = a
+addzero(a::AbstractArray) = a
 
 # general sum over iterables
 
