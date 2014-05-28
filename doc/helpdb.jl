@@ -876,15 +876,33 @@
 
 "),
 
+("Base","reduce","reduce(op, itr)
+
+   Like \"reduce\" but using the first element as v0.
+
+"),
+
 ("Base","foldl","foldl(op, v0, itr)
 
    Like \"reduce\", but with guaranteed left associativity.
 
 "),
 
+("Base","foldl","foldl(op, itr)
+
+   Like \"foldl\", but using the first element as v0.
+
+"),
+
 ("Base","foldr","foldr(op, v0, itr)
 
    Like \"reduce\", but with guaranteed right associativity.
+
+"),
+
+("Base","foldr","foldr(op, itr)
+
+   Like \"foldr\", but using the last element as v0.
 
 "),
 
@@ -1099,6 +1117,14 @@
 ("Base","map!","map!(function, collection)
 
    In-place version of \"map()\".
+
+"),
+
+("Base","map!","map!(function, destination, collection...)
+
+   Like \"map()\", but stores the result in \"destination\" rather
+   than a new collection. \"destination\" must be at least as large as
+   the first collection.
 
 "),
 
@@ -2855,8 +2881,9 @@
    instead of only \"data_cells\".
 
    If \"use_mmap\" is \"true\", the file specified by \"source\" is
-   memory mapped for potential speedups. Default is \"true\" except 
-   on Windows.
+   memory mapped for potential speedups. Default is \"true\" except on
+   Windows. On Windows, you may want to specify \"true\" if the file
+   is large, and is only read once and not written to.
 
    If \"ignore_invalid_chars\" is \"true\", bytes in \"source\" with
    invalid character encoding will be ignored. Otherwise an error is
@@ -4211,7 +4238,8 @@ popdisplay(d::Display)
 ("Base","sqrt","sqrt(x)
 
    Return \\sqrt{x}. Throws \"DomainError\" for negative \"Real\"
-   arguments. Use complex negative arguments instead.
+   arguments. Use complex negative arguments instead. The prefix
+   operator \"√\" is equivalent to \"sqrt\".
 
 "),
 
@@ -4224,7 +4252,8 @@ popdisplay(d::Display)
 
 ("Base","cbrt","cbrt(x)
 
-   Return x^{1/3}
+   Return x^{1/3}.   The prefix operator \"∛\" is equivalent to
+   \"cbrt\".
 
 "),
 
@@ -5672,7 +5701,7 @@ popdisplay(d::Display)
 ("Base","find","find(A)
 
    Return a vector of the linear indexes of the non-zeros in \"A\"
-   (determined by \"A[i]!=0\"). A common use of this is to convert a
+   (determined by \"A[i]!=0\").  A common use of this is to convert a
    boolean array to an array of indexes of the \"true\" elements.
 
 "),
@@ -5696,13 +5725,6 @@ popdisplay(d::Display)
    Return a tuple \"(I, J, V)\" where \"I\" and \"J\" are the row and
    column indexes of the non-zero values in matrix \"A\", and \"V\" is
    a vector of the non-zero values.
-
-"),
-
-("Base","nonzeros","nonzeros(A)
-
-   Return a vector of the non-zero values in array \"A\" (determined
-   by \"A[i]!=0\").
 
 "),
 
@@ -7645,13 +7667,15 @@ popdisplay(d::Display)
 ("Base","copy!","copy!(dest, src)
 
    Copy all elements from collection \"src\" to array \"dest\".
+   Returns \"dest\".
 
 "),
 
 ("Base","copy!","copy!(dest, do, src, so, N)
 
    Copy \"N\" elements from collection \"src\" starting at offset
-   \"so\", to array \"dest\" starting at offset \"do\".
+   \"so\", to array \"dest\" starting at offset \"do\". Returns
+   \"dest\".
 
 "),
 
@@ -8150,10 +8174,16 @@ popdisplay(d::Display)
 
 "),
 
-("Base","names","names(x)
+("Base","names","names(x::Module[, all=false[, imported=false]])
 
-   Get an array of the names exported by a module, or the fields of a
-   data type.
+   Get an array of the names exported by a module, with optionally
+   more module globals according to the additional parameters.
+
+"),
+
+("Base","names","names(x::DataType)
+
+   Get an array of the fields of a data type.
 
 "),
 
@@ -10580,6 +10610,16 @@ popdisplay(d::Display)
    part of the matrix is stored. This algorithm ignores the lower
    triangular part of the matrix. Only the upper triangular part of
    the result is returned as well.
+
+"),
+
+("Base","nonzeros","nonzeros(A)
+
+   Return a vector of the structural nonzero values in sparse matrix
+   \"A\". This includes zeros that are explicitly stored in the sparse
+   matrix. The returned vector points directly to the internal nonzero
+   storage of \"A\", and any modifications to the returned vector will
+   mutate \"A\" as well.
 
 "),
 

@@ -766,6 +766,12 @@ Iterable Collections
 
    In-place version of :func:`map`.
 
+.. function:: map!(function, destination, collection...)
+
+   Like :func:`map()`, but stores the result in ``destination`` rather than a
+   new collection. ``destination`` must be at least as large as the first
+   collection.
+
 .. function:: mapreduce(f, op, itr)
 
    Applies function ``f`` to each element in ``itr`` and then reduces the result using the binary function ``op``.
@@ -5611,9 +5617,14 @@ Reflection
    Get the fully-qualified name of a module as a tuple of symbols. For example,
    ``fullname(Base.Pkg)`` gives ``(:Base,:Pkg)``, and ``fullname(Main)`` gives ``()``.
 
-.. function:: names(x)
+.. function:: names(x::Module[, all=false[, imported=false]])
 
-   Get an array of the names exported by a module, or the fields of a data type.
+   Get an array of the names exported by a module, with optionally more module
+   globals according to the additional parameters.
+
+.. function:: names(x::DataType)
+
+   Get an array of the fields of a data type.
 
 .. function:: isconst([m::Module], s::Symbol) -> Bool
 
