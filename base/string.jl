@@ -672,6 +672,16 @@ end
 
 isascii(s::SubString{ASCIIString}) = true
 
+## hashing strings ##
+
+const memhash = Uint == Uint64 ? :memhash_seed : :memhash32_seed
+
+function hash{T<:ByteString}(s::Union(T,SubString{T}), h::Uint)
+    h += uint(0x71e729fd56419c81)
+    ccall(memhash, Uint, (Ptr{Uint8}, Csize_t, Uint32), s, sizeof(s), h) + h
+end
+hash(s::String, h::Uint) = hash(bytestring(s), h)
+
 ## efficient representation of repeated strings ##
 
 immutable RepString <: String

@@ -154,16 +154,6 @@ end
 
 hash(x::Float16, h::Uint) = hash(float64(x), h)
 
-## hashing strings ##
-
-const memhash = Uint == Uint64 ? :memhash_seed : :memhash32_seed
-
-function hash{T<:ByteString}(s::Union(T,SubString{T}), h::Uint)
-    h += uint(0x71e729fd56419c81)
-    ccall(memhash, Uint, (Ptr{Uint8}, Csize_t, Uint32), s, sizeof(s), h) + h
-end
-hash(s::String, h::Uint) = hash(bytestring(s), h)
-
 ## hashing collections ##
 
 function hash(a::AbstractArray, h::Uint)
@@ -191,11 +181,6 @@ function hash(s::Set, h::Uint)
     return h
 end
 
-hash(::(), h::Uint) = h + uint(0x77cfa1eef01bca90)
-hash(x::(Any,), h::Uint)    = hash(x[1], hash((), h))
-hash(x::(Any,Any), h::Uint) = hash(x[1], hash(x[2], hash((), h)))
-hash(x::Tuple, h::Uint)     = hash(x[1], hash(x[2], hash(tupletail(x), h)))
-
 # hashing ranges by component at worst leads to collisions for very similar ranges
 function hash(r::Range, h::Uint)
     h += uint(0x80707b6821b70087)
@@ -203,7 +188,3 @@ function hash(r::Range, h::Uint)
     h = hash(step(r), h)
     h = hash(last(r), h)
 end
-
-## hashing general objects ##
-
-hash(x::ANY,  h::Uint) = hash(object_id(x), h)
