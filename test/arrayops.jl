@@ -419,7 +419,23 @@ let es = sum_kbn(z), es2 = sum_kbn(z[1:10^5])
     @test (es - cs[end]) < es * 1e-13
     @test (es2 - cs[10^5]) < es2 * 1e-13
 end
-@test_approx_eq sum(sin(z)) sum(sin, z)
+
+@test_throws ErrorException sum(sin, Int[])
+@test Base.sumabs(Float64[]) === 0.0
+@test Base.sumabs2(Float64[]) === 0.0
+
+@test sum(sin, [1]) == sin(1)
+@test Base.sumabs([int8(-2)]) === 2
+@test Base.sumabs2([int8(-2)]) === 4
+
+x = -2:3
+@test sum(sin, x) == sum(sin(x))
+@test Base.sumabs(x) === 9
+@test Base.sumabs2(x) === 19
+
+@test_approx_eq sum(sin, z) sum(sin(z))
+@test_approx_eq Base.sumabs(z) sum(abs(z))
+@test_approx_eq Base.sumabs2(z) sum(abs2(z))
 
 @test maximum([4, 3, 5, 2]) == 5
 @test minimum([4, 3, 5, 2]) == 2
@@ -440,6 +456,7 @@ end
 
 @test all([true true; false true], 2) == [true false]'
 @test all([true false; false true], 1) == [false false]
+
 
 ## large matrices transpose ##
 
