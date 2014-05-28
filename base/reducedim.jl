@@ -110,7 +110,7 @@ function gen_reduction_body(N, f::Function)
     end
 end
 
-reduction_init{T}(A::AbstractArray, region, initial::T) = fill!(similar(A,T,reduced_dims(A,region)), initial)
+reduction_init{T}(A::AbstractArray, region, initial::T, Tr=T) = fill!(similar(A,Tr,reduced_dims(A,region)), initial)
 
 
 ### Pre-generated cases
@@ -143,11 +143,25 @@ minimum{T}(A::AbstractArray{T}, region) =
 
 eval(ngenerate(:N, :(typeof(R)), :(_sum!{T,N}(R::AbstractArray, A::AbstractArray{T,N})), N->gen_reduction_body(N, +)))
 sum!{R}(r::AbstractArray{R}, A::AbstractArray; init::Bool=true) = _sum!(initarray!(r, zero(R), init), A)
-sum{T}(A::AbstractArray{T}, region) = _sum!(reduction_init(A, region, zero(T)+zero(T)), A)
 
 eval(ngenerate(:N, :(typeof(R)), :(_prod!{T,N}(R::AbstractArray, A::AbstractArray{T,N})), N->gen_reduction_body(N, *)))
 prod!{R}(r::AbstractArray{R}, A::AbstractArray; init::Bool=true) = _prod!(initarray!(r, one(R), init), A)
-prod{T}(A::AbstractArray{T}, region) = _prod!(reduction_init(A, region, one(T)*one(T)), A)
+
+for (f,init,op) in ((:sum,:zero,:+), (:prod,:one,:*))
+    _f = symbol(string("_",f,"!")) # _sum!, _prod!
+    @eval function $f{T}(A::AbstractArray{T}, region)
+        if method_exists($init, (Type{T},))
+            z = $op($init(T), $init(T))
+            Tr = typeof(z) == typeof($init(T)) ? T : typeof(z)
+        else
+            # TODO: handle more heterogeneous sums.  e.g. sum(A, 1) where
+            # A is a Matrix{Any} with one column of numbers and one of vectors
+            z = $init($f(A))
+            Tr = typeof(z)
+        end
+        $_f(reduction_init(A, region, z, Tr), A)
+    end
+end
 
 prod(A::AbstractArray{Bool}, region) = error("use all() instead of prod() for boolean arrays")
 
