@@ -223,7 +223,7 @@ function sum(itr)
     return result
 end
 
-sum(x::Number) = addzero(x)
+sum(x::Number) = x
 sum(A::AbstractArray{Bool}) = countnz(A)
 
 # Note: sum_seq uses four accumulators, so each accumulator gets at most 256 numbers
