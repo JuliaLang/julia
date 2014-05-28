@@ -2193,7 +2193,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
         end
         free = effect_free(aei,sv,true)
         if ((occ==0 && is(aeitype,None)) || islocal || (occ > 1 && !inline_worthy(aei, occ)) ||
-                (affect_free && !free) || (!affect_free && !effect_free(aei,sv,false)))
+            (affect_free && !free) || (!affect_free && !effect_free(aei,sv,false)))
             if occ != 0 # islocal=true is implied
                 # introduce variable for this argument
                 vnew = unique_name(enclosing_ast, ast)

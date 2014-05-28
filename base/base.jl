@@ -148,6 +148,45 @@ function append_any(xs...)
     out
 end
 
+# used by { } syntax
+function cell_1d(xs::ANY...)
+    n = length(xs)
+    a = Array(Any,n)
+    for i=1:n
+        arrayset(a,xs[i],i)
+    end
+    a
+end
+
+function cell_2d(nr, nc, xs::ANY...)
+    a = Array(Any,nr,nc)
+    for i=1:(nr*nc)
+        arrayset(a,xs[i],i)
+    end
+    a
+end
+
+# simple Array{Any} operations needed for bootstrap
+setindex!(A::Array{Any}, x::ANY, i::Real) = arrayset(A, x, to_index(i))
+
+function length_checked_equal(args...)
+    n = length(args[1])
+    for i=2:length(args)
+        if length(args[i]) != n
+            error("argument dimensions must match")
+        end
+    end
+    n
+end
+
+map(f::Callable, a::Array{Any,1}) = { f(a[i]) for i=1:length(a) }
+map(f::Callable, a::Array{Any,1}, b::Array{Any,1}) =
+    { f(a[i],b[i]) for i=1:length_checked_equal(a, b) }
+function map(f::Callable, as::Array{Any,1}...)
+    n = length_checked_equal(as...)
+    { f(map(a->a[i],as)...) for i=1:n }
+end
+
 macro thunk(ex); :(()->$(esc(ex))); end
 macro L_str(s); s; end
 
