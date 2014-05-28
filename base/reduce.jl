@@ -339,19 +339,21 @@ function sum(f::Function, a::AbstractArray)
     sum_impl(f, a, 1, n)
 end
 
-function sumabs{T}(a::AbstractArray{T})
+function _sumabs{T}(a::AbstractArray{T})
     n = length(a)
-    n == 0 && return sumzero(abs(zero(T)))
+    n == 0 && return addzero(abs(zero(T)))
     n == 1 && return addzero(abs(a[1]))
     sum_impl(AbsFun(), a, 1, n)
 end
+sumabs(a::AbstractArray) = _sumabs(a)
 
-function sumabs2{T}(a::AbstractArray{T})
+function _sumabs2{T}(a::AbstractArray{T})
     n = length(a)
-    n == 0 && return sumzero(abs2(zero(T)))
+    n == 0 && return addzero(abs2(zero(T)))
     n == 1 && return addzero(abs2(a[1]))
     sum_impl(Abs2Fun(), a, 1, n)
 end
+sumabs2(a::AbstractArray) = _sumabs2(a)
 
 # Kahan (compensated) summation: O(1) error growth, at the expense
 # of a considerable increase in computational expense.

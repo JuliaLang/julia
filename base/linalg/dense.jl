@@ -22,7 +22,7 @@ isposdef(x::Number) = imag(x)==0 && real(x) > 0
 
 
 Base.sumabs{T<:BlasFloat}(x::Union(Array{T},StridedVector{T})) = 
-    (n = length(x); n > 32 ? BLAS.asum(x) : Base.sum_impl(Base.AbsFun(), x, 1, n))
+    length(x) > 32 ? BLAS.asum(x) : Base._sumabs(x)
 
 stride1(x::Array) = 1
 stride1(x::StridedVector) = stride(x, 1)::Int
@@ -34,7 +34,7 @@ function Base.sumabs2{T<:BlasFloat}(x::Union(Array{T},StridedVector{T}))
         incx = stride1(x)
         return BLAS.dot(n, px, incx, px, incx)
     else
-        return Base.sum_impl(Base.Abs2Fun(), x, 1, n)
+        return Base._sumabs2(x)
     end
 end
 
@@ -45,7 +45,7 @@ end
 
 vecnorm1{T<:BlasReal}(x::Union(Array{T},StridedVector{T})) = 
     length(x) > 16 ? BLAS.asum(x) : generic_vecnorm1(x)
-    
+
 vecnorm2{T<:BlasFloat}(x::Union(Array{T},StridedVector{T})) = 
     length(x) > 8 ? BLAS.nrm2(x) : generic_vecnorm2(x)
 
