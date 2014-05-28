@@ -746,7 +746,8 @@ end
 write!(s::AsyncStream, string::ByteString) = write!(s,string.data)
 
 function _uv_hook_writecb(s::AsyncStream, req::Ptr{Void}, status::Int32)
-    status < 0 && close(s)
+    err = UVError("write",status)
+    showerror(STDERR, err, backtrace())
     nothing
 end
 
@@ -793,9 +794,10 @@ function _uv_hook_writecb_task(s::AsyncStream,req::Ptr{Void},status::Int32)
     d = uv_req_data(req)
     if status < 0
         err = UVError("write",status)
-        close(s)
         if d != C_NULL
             schedule(unsafe_pointer_to_objref(d)::Task,err,error=true)
+	else
+            showerror(STDERR, err, backtrace())
         end
     elseif d != C_NULL
         schedule(unsafe_pointer_to_objref(d)::Task)
