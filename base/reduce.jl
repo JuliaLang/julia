@@ -172,15 +172,6 @@ function countnz(a::AbstractArray)
     return n
 end
 
-function countnz(a::AbstractArray{Bool})
-    n = 0
-    for i = 1:length(a)
-        @inbounds x = a[i]
-        if x; n += 1; end
-    end
-    return n
-end
-
 function count(pred::Function, itr)
     n = 0
     for x in itr
