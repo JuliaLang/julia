@@ -4780,12 +4780,20 @@ Parallel Computing
 
    Fetch the value of a remote reference, removing it so that the reference is empty again.
 
-.. function:: isready(RemoteRef)
+.. function:: isready(r::RemoteRef)
 
    Determine whether a ``RemoteRef`` has a value stored to it. Note that this function
-   can easily cause race conditions, since by the time you receive its result it may
+   can cause race conditions, since by the time you receive its result it may
    no longer be true. It is recommended that this function only be used on a
    ``RemoteRef`` that is assigned once.
+
+   If the argument ``RemoteRef`` is owned by a different node, this call will block to
+   wait for the answer. It is recommended to wait for ``r`` in a separate task instead,
+   or to use a local ``RemoteRef`` as a proxy::
+
+       rr = RemoteRef()
+       @async put!(rr, remotecall_fetch(p, long_computation))
+       isready(rr)  # will not block
 
 .. function:: RemoteRef()
 
