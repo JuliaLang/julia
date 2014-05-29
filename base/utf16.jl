@@ -57,7 +57,7 @@ sizeof(s::UTF16String) = sizeof(s.data) - sizeof(Uint16)
 convert{T<:Union(Int16,Uint16)}(::Type{Ptr{T}}, s::UTF16String) =
     convert(Ptr{T}, s.data)
 
-function is_valid_utf16(data::Array{Uint16})
+function is_valid_utf16(data::AbstractArray{Uint16})
     i = 1
     n = length(data) # this may include NULL termination; that's okay
     while i < n # check for unpaired surrogates
@@ -74,7 +74,7 @@ end
 
 is_valid_utf16(s::UTF16String) = is_valid_utf16(s.data)
 
-function convert(::Type{UTF16String}, data::Vector{Uint16})
+function convert(::Type{UTF16String}, data::AbstractVector{Uint16})
     !is_valid_utf16(data) && throw(ArgumentError("invalid UTF16 data"))
     len = length(data)
     d = Array(Uint16, len + 1)
@@ -82,10 +82,13 @@ function convert(::Type{UTF16String}, data::Vector{Uint16})
     UTF16String(copy!(d,1, data,1, len))
 end
 
-convert(T::Type{UTF16String}, data::Array{Uint16}) =
+convert(T::Type{UTF16String}, data::AbstractArray{Uint16}) =
     convert(T, reshape(data, length(data)))
 
-function convert(T::Type{UTF16String}, bytes::Array{Uint8})
+convert(T::Type{UTF16String}, data::AbstractArray{Int16}) =
+    convert(T, reinterpret(Uint16, data))
+
+function convert(T::Type{UTF16String}, bytes::AbstractArray{Uint8})
     isempty(bytes) && return UTF16String(Uint16[0])
     isodd(length(bytes)) && throw(ArgumentError("odd number of bytes"))
     data = reinterpret(Uint16, bytes)    
@@ -105,4 +108,12 @@ function convert(T::Type{UTF16String}, bytes::Array{Uint8})
     d[end] = 0 # NULL terminate
     !is_valid_utf16(d) && throw(ArgumentError("invalid UTF16 data"))
     UTF16String(d)
+end
+
+utf16(p::Ptr{Uint16}, len::Integer) = utf16(pointer_to_array(p, len))
+utf16(p::Ptr{Int16}, len::Integer) = utf16(convert(Ptr{Char}, p), len)
+function utf16(p::Union(Ptr{Uint16}, Ptr{Int16}))
+    len = 0
+    while unsafe_load(p, len+1) != 0; len += 1; end
+    utf16(p, len)
 end

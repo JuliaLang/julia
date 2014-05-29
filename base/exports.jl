@@ -110,6 +110,7 @@ export
     WeakKeyDict,
     WeakRef,
     Woodbury,
+    WString,
     Zip,
 
 # Ccall types
@@ -868,6 +869,7 @@ export
     utf16,
     utf32,
     warn,
+    wstring,
     xdump,
 
 # random numbers
