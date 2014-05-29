@@ -1258,7 +1258,7 @@ function map_to!{T}(f::Callable, offs, dest::AbstractArray{T}, A::AbstractArray)
         el = f(A[i])
         S = typeof(el)
         if (S !== T) && !(S <: T)
-            R = promote_type(T, S)
+            R = typejoin(T, S)
             new = similar(dest, R)
             copy!(new,1, dest,1, i-1)
             new[i] = el
@@ -1283,7 +1283,7 @@ function map_to!{T}(f::Callable, offs, dest::AbstractArray{T}, A::AbstractArray,
         el = f(A[i], B[i])
         S = typeof(el)
         if (S !== T) && !(S <: T)
-            R = promote_type(T, S)
+            R = typejoin(T, S)
             new = similar(dest, R)
             copy!(new,1, dest,1, i-1)
             new[i] = el
@@ -1313,7 +1313,7 @@ function map_to!{T}(f::Callable, offs, dest::AbstractArray{T}, As::AbstractArray
         el = f(map(ith, As)...)
         S = typeof(el)
         if (S !== T) && !(S <: T)
-            R = promote_type(T, S)
+            R = typejoin(T, S)
             new = similar(dest, R)
             copy!(new,1, dest,1, i-1)
             new[i] = el
