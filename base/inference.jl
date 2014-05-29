@@ -1185,7 +1185,7 @@ end
 genlabel(sv) = LabelNode(sv.label_counter += 1)
 
 f_argnames(ast) =
-    map(x->(isa(x,Expr) ? x.args[1] : x), ast.args[1]::Array{Any,1})
+    Any[(isa(x,Expr) ? x.args[1] : x) for x in ast.args[1]::Array{Any,1}]
 
 is_rest_arg(arg::ANY) = (ccall(:jl_is_rest_arg,Int32,(Any,), arg) != 0)
 
@@ -2317,7 +2317,7 @@ end
 
 function mk_tuplecall(args)
     e = Expr(:call1, top_tuple, args...)
-    e.typ = tuple_tfunc(tuple(map(exprtype, args)...), false)
+    e.typ = tuple_tfunc(tuple(Any[exprtype(x) for x in args]...), false)
     e
 end
 
@@ -2437,7 +2437,7 @@ function inlining_pass(e::Expr, sv, ast)
         end
 
         for ninline = 1:100
-            atypes = tuple(map(exprtype, e.args[2:end])...)
+            atypes = tuple(Any[exprtype(x) for x in e.args[2:end]]...)
             if length(atypes) > MAX_TUPLETYPE_LEN
                 atypes = limit_tuple_type(atypes)
             end

@@ -73,7 +73,7 @@ isgeneric(f::ANY) = (isa(f,Function)||isa(f,DataType)) && isa(f.env,MethodTable)
 function_name(f::Function) = isgeneric(f) ? f.env.name : (:anonymous)
 
 code_lowered(f::Function,t::(Type...)) = map(m->uncompressed_ast(m.func.code), methods(f,t))
-methods(f::ANY,t::ANY) = map(m->m[3], _methods(f,t,-1))::Array{Any,1}
+methods(f::ANY,t::ANY) = Any[m[3] for m in _methods(f,t,-1)]
 _methods(f::ANY,t::ANY,lim) = _methods(f,{(t::Tuple)...},length(t::Tuple),lim,{})
 function _methods(f::ANY,t::Array,i,lim::Integer,matching::Array{Any,1})
     if i == 0
