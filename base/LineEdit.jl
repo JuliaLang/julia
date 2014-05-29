@@ -87,7 +87,7 @@ terminal(s::IO) = s
 terminal(s::PromptState) = s.terminal
 
 for f in [:terminal, :edit_insert, :on_enter, :add_history, :buffer, :edit_backspace, :(Base.isempty),
-        :replace_line, :refresh_multi_line, :input_string, :complete_line, :edit_move_left, :edit_move_right,
+        :replace_line, :refresh_multi_line, :input_string, :edit_move_left, :edit_move_right,
         :edit_move_word_left, :edit_move_word_right, :update_display_buffer]
     @eval ($f)(s::MIState, args...) = $(f)(s.mode_state[s.current_mode], args...)
 end
@@ -135,7 +135,8 @@ function show_completions(s::PromptState, completions)
 end
 
 # Prompt Completions
-function complete_line(s::PromptState)
+complete_line(s::MIState) = complete_line(s.mode_state[s.current_mode], s.key_repeats)
+function complete_line(s::PromptState, repeats)
     completions, partial, should_complete = complete_line(s.p.complete, s)
     if length(completions) == 0
         beep(terminal(s))
@@ -156,7 +157,7 @@ function complete_line(s::PromptState)
             prev_pos = position(s.input_buffer)
             seek(s.input_buffer, prev_pos-sizeof(partial))
             edit_replace(s, position(s.input_buffer), prev_pos, p)
-        else
+        elseif repeats > 0
             show_completions(s, completions)
         end
     end
@@ -971,7 +972,7 @@ mode(s::PromptState) = s.p
 mode(s::SearchState) = @assert false
 
 # Search Mode completions
-function complete_line(s::SearchState)
+function complete_line(s::SearchState, repeats)
     completions, partial, should_complete = complete_line(s.histprompt.complete, s)
     # For now only allow exact completions in search mode
     if length(completions) == 1
