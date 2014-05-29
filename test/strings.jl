@@ -569,6 +569,11 @@ end
 @test isequal(split("abcd", r"d+"), ["abc",""])
 @test isequal(split("abcd", r"[ad]?"), ["","b","c",""])
 
+# splititr
+@test isequal(collect(splititr("foo bar", ' ')), ["foo", "bar"])
+@test isequal(collect(splititr("foo bar", " ")), ["foo", "bar"])
+@test isequal(collect(splititr("foo bar", r" ")), ["foo", "bar"])
+
 # replace
 @test replace("foobar", 'o', '0') == "f00bar"
 @test replace("foobar", 'o', '0', 1) == "f0obar"

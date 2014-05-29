@@ -1333,6 +1333,31 @@ rsplit(s::String, spl, keep::Bool) = rsplit(s, spl, 0, keep)
 rsplit(s::String, spl)             = rsplit(s, spl, 0, true)
 #rsplit(str::String) = rsplit(str, _default_delims, 0, false)
 
+immutable SplitItr
+    str::String
+    splitter
+end
+
+splititr(s, splitter) = SplitItr(s, splitter)
+splititr(s) = SplitItr(s, _default_delims)
+
+start(::SplitItr) = 1
+done(itr::SplitItr, pos) = pos > endof(itr.str)
+eltype(itr::SplitItr) = String
+
+function next(itr::SplitItr, pos)
+    match = search(itr.str, itr.splitter, pos)
+    if first(match) > 0
+        delstart = first(match)
+        delend = last(match)
+    else
+        delstart = endof(itr.str) + 1
+        delend = delstart
+    end
+    chunk = SubString(itr.str, pos, prevind(itr.str, delstart))
+    return (chunk, nextind(itr.str, delend))
+end
+
 function replace(str::ByteString, pattern, repl::Function, limit::Integer)
     n = 1
     e = endof(str)
