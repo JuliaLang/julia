@@ -712,8 +712,7 @@ prod{T}(A::SparseMatrixCSC{T}, region) = reducedim(*,A,region,one(T))
 #sum(A::SparseMatrixCSC{Bool}) = countnz(A)
 
 ## getindex
-getindex(A::SparseMatrixCSC, i::Integer) = getindex(A, ind2sub(size(A),i))
-getindex(A::SparseMatrixCSC, I::(Integer,Integer)) = getindex(A, I[1], I[2])
+getindex(A::SparseMatrixCSC, i::Integer) = getindex(A, ind2sub(size(A),i)...)
 
 function getindex{T}(A::SparseMatrixCSC{T}, i0::Integer, i1::Integer)
     if !(1 <= i0 <= A.m && 1 <= i1 <= A.n); throw(BoundsError()); end

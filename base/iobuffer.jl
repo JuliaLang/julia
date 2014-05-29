@@ -16,7 +16,7 @@ end
 
 function copy(b::IOBuffer) 
     ret = IOBuffer(b.writable?copy(b.data):b.data,
-            b.readable,b.writable,b.seekable,b.append,b.maxsize)
+                   b.readable,b.writable,b.seekable,b.append,b.maxsize)
     ret.size = b.size
     ret.ptr  = b.ptr
     ret

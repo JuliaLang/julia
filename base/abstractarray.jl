@@ -12,6 +12,7 @@ eltype{T,n}(::AbstractArray{T,n}) = T
 eltype{T,n}(::Type{AbstractArray{T,n}}) = T
 eltype{T<:AbstractArray}(::Type{T}) = eltype(super(T))
 iseltype(x,T) = eltype(x) <: T
+elsize{T}(::AbstractArray{T}) = sizeof(T)
 isinteger(x::AbstractArray) = all(isinteger,x)
 isinteger{T<:Integer,n}(x::AbstractArray{T,n}) = true
 isreal(x::AbstractArray) = all(isreal,x)

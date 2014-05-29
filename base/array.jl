@@ -19,9 +19,8 @@ size(a::Array) = arraysize(a)
 size(a::Array, d) = arraysize(a, d)
 size(a::Matrix) = (arraysize(a,1), arraysize(a,2))
 length(a::Array) = arraylen(a)
-function sizeof{T}(a::Array{T})
-    (isbits(T) ? sizeof(eltype(a)) : sizeof(Ptr)) * length(a)
-end
+elsize{T}(a::Array{T}) = isbits(T) ? sizeof(T) : sizeof(Ptr)
+sizeof(a::Array) = elsize(a) * length(a)
 
 strides{T}(a::Array{T,1}) = (1,)
 strides{T}(a::Array{T,2}) = (1, size(a,1))
@@ -396,8 +395,9 @@ end
 
 function _growat_beg!(a::Vector, i::Integer, delta::Integer)
     ccall(:jl_array_grow_beg, Void, (Any, Uint), a, delta)
-    @inbounds for k = 1:i-1
-        a[k] = a[k+delta]
+    if i > 1
+        ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Csize_t),
+              pointer(a, 1), pointer(a, 1+delta), (i-1)*elsize(a))
     end
     return a
 end
@@ -405,8 +405,9 @@ end
 function _growat_end!(a::Vector, i::Integer, delta::Integer)
     ccall(:jl_array_grow_end, Void, (Any, Uint), a, delta)
     n = length(a)
-    @inbounds for k = n:-1:(i+delta)
-        a[k] = a[k-delta]
+    if n >= i+delta
+        ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Csize_t),
+              pointer(a, i+delta), pointer(a, i), (n-i-delta+1)*elsize(a))
     end
     return a
 end
@@ -425,8 +426,9 @@ function _deleteat!(a::Vector, i::Integer, delta::Integer)
 end
 
 function _deleteat_beg!(a::Vector, i::Integer, delta::Integer)
-    @inbounds for k = i+delta-1:-1:1+delta
-        a[k] = a[k-delta]
+    if i > 1
+        ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Csize_t),
+              pointer(a, 1+delta), pointer(a, 1), (i-1)*elsize(a))
     end
     ccall(:jl_array_del_beg, Void, (Any, Uint), a, delta)
     return a
@@ -434,8 +436,9 @@ end
 
 function _deleteat_end!(a::Vector, i::Integer, delta::Integer)
     n = length(a)
-    @inbounds for k = i:n-delta
-        a[k] = a[k+delta]
+    if n >= i+delta
+        ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Csize_t),
+              pointer(a, i), pointer(a, i+delta), (n-i-delta+1)*elsize(a))
     end
     ccall(:jl_array_del_end, Void, (Any, Uint), a, delta)
     return a
