@@ -300,8 +300,6 @@ function wait_readbyte(x::AsyncStream, c::Uint8)
     end
 end
 
-wait_readline(x) = wait_readbyte(x, uint8('\n'))
-
 function wait_readnb(x::AsyncStream, nb::Int)
     while isopen(x) && nb_available(x.buffer) < nb
         start_reading(x)
@@ -676,7 +674,7 @@ function read{T}(s::AsyncStream, ::Type{T}, dims::Dims)
     nb = prod(dims)*sizeof(T)
     a = read!(s, Array(Uint8, nb)) 
     reshape(reinterpret(T, a), dims)
-end    
+end
 
 function read(this::AsyncStream,::Type{Uint8})
     buf = this.buffer
@@ -685,12 +683,7 @@ function read(this::AsyncStream,::Type{Uint8})
     read(buf,Uint8)
 end
 
-function readline(this::AsyncStream)
-    buf = this.buffer
-    @assert buf.seekable == false
-    wait_readline(this)
-    readline(buf)
-end
+readline(this::AsyncStream) = readuntil(this, '\n')
 
 readline() = readline(STDIN)
 
