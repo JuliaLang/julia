@@ -28,7 +28,7 @@ pointer{T}(::Type{T}, x::Ptr) = convert(Ptr{T}, x)
 # pointer. they just map the array element type to the pointer type for
 # convenience in cases that work.
 pointer{T}(x::AbstractArray{T}) = convert(Ptr{T},x)
-pointer{T}(x::AbstractArray{T}, i::Integer) = convert(Ptr{T},x)+(i-1)*sizeof(T)
+pointer{T}(x::AbstractArray{T}, i::Integer) = convert(Ptr{T},x) + (i-1)*elsize(x)
 
 # unsafe pointer to array conversions
 pointer_to_array(p, d::Integer, own=false) = pointer_to_array(p, (d,), own)
