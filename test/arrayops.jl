@@ -437,6 +437,9 @@ x = -2:3
 @test_approx_eq Base.sumabs(z) sum(abs(z))
 @test_approx_eq Base.sumabs2(z) sum(abs2(z))
 
+@test maximum(5) == 5
+@test minimum(5) == 5
+
 @test maximum([4, 3, 5, 2]) == 5
 @test minimum([4, 3, 5, 2]) == 2
 @test extrema([4, 3, 5, 2]) == (2, 5)
@@ -450,6 +453,14 @@ x = -2:3
 @test extrema([4., 3., NaN, 5., 2.]) == (2., 5.)
 
 @test extrema(1:5) == (1,5)
+
+@test Base.maxabs(-2) == 2
+@test Base.minabs(-2) == 2
+@test Base.maxabs([1, -2, 3, -4]) == 4
+@test Base.minabs([-1, 2, -3, 4]) == 1
+
+@test maximum(abs2, 3:7) == 49
+@test minimum(abs2, 3:7) == 9
 
 @test any([true false; false false], 2) == [true false]'
 @test any([true false; false false], 1) == [true false]
