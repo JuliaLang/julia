@@ -21,7 +21,10 @@ type MIState
     aborted::Bool
     mode_state
     kill_buffer::ByteString
+    previous_key::Array{Char,1}
+    key_repeats::Int
 end
+MIState(i, c, a, m) = MIState(i, c, a, m, "", Char[], 0)
 
 type Mode <: TextInterface
 end
@@ -730,22 +733,34 @@ function keymap_gen_body(dict, subdict::Dict, level)
     bc = symbol("c" * string(level))
     push!(block.args, :($bc = read(LineEdit.terminal(s), Char)))
 
-    if haskey(subdict, '\0')
-        last_if = keymap_gen_body(dict, subdict['\0'], level+1)
-    else
-        last_if = nothing
-    end
+    last_if = Expr(:block)
+    haskey(subdict, '\0') && push!(last_if.args, keymap_gen_body(dict, subdict['\0'], level+1))
+    level == 1 && push!(last_if.args, :(LineEdit.update_key_repeats(s, [$bc])))
 
     for c in keys(subdict)
         c == '\0' && continue
         cblock = Expr(:if, :($bc == $c))
-        push!(cblock.args, keymap_gen_body(dict, subdict[c], level+1))
+        cthen = Expr(:block)
+        if !isa(subdict[c], Dict)
+            cs = [symbol("c" * string(i)) for i=1:level]
+            push!(cthen.args, :(LineEdit.update_key_repeats(s, [$(cs...)])))
+        end
+        push!(cthen.args, keymap_gen_body(dict, subdict[c], level+1))
+
+        push!(cblock.args, cthen)
         push!(cblock.args, last_if)
         last_if = cblock
     end
 
     push!(block.args, last_if)
     return block
+end
+
+update_key_repeats(s, keystroke) = nothing
+function update_key_repeats(s::MIState, keystroke)
+    s.key_repeats  = s.previous_key == keystroke ? s.key_repeats + 1 : 0
+    s.previous_key = keystroke
+    return
 end
 
 export @keymap
@@ -1150,7 +1165,7 @@ const default_keymap =
     end,
     # Enter
     '\r' => quote
-        if LineEdit.on_enter(s)
+        if LineEdit.on_enter(s) || (eof(LineEdit.buffer(s)) && s.key_repeats > 1)
             LineEdit.commit_line(s)
             return :done
         else
@@ -1330,7 +1345,7 @@ run_interface(::Prompt) = nothing
 init_state(terminal, prompt::Prompt) = PromptState(terminal, prompt, IOBuffer(), InputAreaState(1, 1), length(prompt.prompt))
 
 function init_state(terminal, m::ModalInterface)
-    s = MIState(m, m.modes[1], false, Dict{Any,Any}(), "")
+    s = MIState(m, m.modes[1], false, Dict{Any,Any}())
     for mode in m.modes
         s.mode_state[mode] = init_state(terminal, mode)
     end
