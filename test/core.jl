@@ -1690,3 +1690,10 @@ let x = zeros(2)
     @test x == [2.0, 0.0]
     @test_throws TypeError (x[1]::Int += 1)
 end
+
+# issue #6980
+abstract A6980
+type B6980 <: A6980 end
+f6980(::Union(Int, Float64), ::A6980) = false
+f6980(::Union(Int, Float64), ::B6980) = true
+@test f6980(1, B6980())

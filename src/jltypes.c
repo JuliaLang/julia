@@ -2264,14 +2264,14 @@ static int jl_tuple_morespecific_(jl_value_t **child, size_t cl,
                                   jl_value_t **parent, size_t pl, int invariant)
 {
     size_t ci=0, pi=0;
-    int mode = 0;
+    int some_morespecific = 0;
     while (1) {
         int cseq = (ci<cl) && jl_is_vararg_type(child[ci]);
         int pseq = (pi<pl) && jl_is_vararg_type(parent[pi]);
         if (ci >= cl)
-            return mode || pi>=pl || (pseq && !invariant);
+            return some_morespecific || pi>=pl || (pseq && !invariant);
         if (pi >= pl)
-            return mode;
+            return some_morespecific;
         jl_value_t *ce = child[ci];
         jl_value_t *pe = parent[pi];
         if (cseq) ce = jl_tparam0(ce);
@@ -2279,24 +2279,26 @@ static int jl_tuple_morespecific_(jl_value_t **child, size_t cl,
 
         if (!jl_type_morespecific_(ce, pe, invariant)) {
             if (type_eqv_(ce,pe)) {
-                if (ci==cl-1 && pi==pl-1 && !cseq && pseq) {
-                    return 1;
+                if (ci==cl-1 && pi==pl-1) {
+                    if (!cseq && pseq)
+                        return 1;
+                    if (!some_morespecific)
+                        return 0;
                 }
-                if (!mode) return 0;
             }
             else {
                 return 0;
             }
         }
 
-        if (mode && cseq && !pseq)
+        if (some_morespecific && cseq && !pseq)
             return 1;
 
         // at this point we know one element is strictly more specific
         if (!(jl_types_equal(ce,pe) ||
               (jl_is_typevar(pe) &&
                jl_types_equal(ce,((jl_tvar_t*)pe)->ub)))) {
-            mode = 1;
+            some_morespecific = 1;
             // here go into a different mode where we return 1
             // if the only reason the child is not more specific is
             // argument count (i.e. ...)
