@@ -249,6 +249,9 @@ sum(A::AbstractArray{Bool}) = countnz(A)
 sumabs(itr) = sum(AbsFun(), itr)
 sumabs2(itr) = sum(Abs2Fun(), itr)
 
+sumabs(x::Number) = abs(x)
+sumabs2(x::Number) = abs2(x)
+
 # Note: sum_seq uses four accumulators, so each accumulator gets at most 256 numbers
 sum_pairwise_blocksize(f) = 1024
 
@@ -414,45 +417,48 @@ prod{T}(A::AbstractArray{T}) = prod_rgn(A, 1, length(A))
 
 ## maximum & minimum 
 
-function maximum(itr)
+function maximum(f::Union(Function,Func{1}), itr)
     s = start(itr)
     if done(itr, s)
         error("argument is empty")
     end
-    (v, s) = next(itr, s)
+    (x, s) = next(itr, s)
+    v = evaluate(f, x)
     while !done(itr, s)
         (x, s) = next(itr, s)
-        v = scalarmax(v,x)
+        v = scalarmax(v, evaluate(f, x))
     end
     return v
 end
 
-function minimum(itr)
+function minimum(f::Union(Function,Func{1}), itr)
     s = start(itr)
     if done(itr, s)
         error("argument is empty")
     end
-    (v, s) = next(itr, s)
+    (x, s) = next(itr, s)
+    v = evaluate(f, x)
     while !done(itr, s)
         (x, s) = next(itr, s)
-        v = scalarmin(v,x)
+        v = scalarmin(v, evaluate(f, x))
     end
     return v
 end
 
-function maximum_rgn{T<:Real}(A::AbstractArray{T}, first::Int, last::Int)
-    if first > last; error("argument range must not be empty"); end
+maximum(itr) = maximum(IdFun(), itr)
+minimum(itr) = minimum(IdFun(), itr)
 
+function maximum_impl(f, A::AbstractArray, first::Int, last::Int)
     # locate the first non NaN number
-    v = A[first]
+    v = evaluate(f, A[first])
     i = first + 1
     while v != v && i <= last
-        @inbounds v = A[i]
+        @inbounds v = evaluate(f, A[i])
         i += 1
     end
 
     while i <= last
-        @inbounds x = A[i]
+        @inbounds x = evaluate(f, A[i])
         if x > v
             v = x
         end
@@ -461,19 +467,17 @@ function maximum_rgn{T<:Real}(A::AbstractArray{T}, first::Int, last::Int)
     v
 end
 
-function minimum_rgn{T<:Real}(A::AbstractArray{T}, first::Int, last::Int)
-    if first > last; error("argument range must not be empty"); end
-
+function minimum_impl(f, A::AbstractArray, first::Int, last::Int)
     # locate the first non NaN number
-    v = A[first]
+    v = evaluate(f, A[first])
     i = first + 1
     while v != v && i <= last
-        @inbounds v = A[i]
+        @inbounds v = evaluate(f, A[i])
         i += 1
     end
 
     while i <= last
-        @inbounds x = A[i]
+        @inbounds x = evaluate(f, A[i])
         if x < v
             v = x
         end
@@ -482,8 +486,39 @@ function minimum_rgn{T<:Real}(A::AbstractArray{T}, first::Int, last::Int)
     v
 end
 
-maximum{T<:Real}(A::AbstractArray{T}) = maximum_rgn(A, 1, length(A))
-minimum{T<:Real}(A::AbstractArray{T}) = minimum_rgn(A, 1, length(A))
+function maximum(f::Union(Function,Func{1}), A::AbstractArray)
+    n = length(A)
+    n == 0 && error("Argument is empty.")
+    n == 1 && return evaluate(f, A[1])
+    maximum_impl(f, A, 1, n)
+end
+
+function minimum(f::Union(Function,Func{1}), A::AbstractArray) 
+    n = length(A)
+    n == 0 && error("Argument is empty.")
+    n == 1 && return evaluate(f, A[1])
+    minimum_impl(f, A, 1, n)
+end
+
+maximum(A::AbstractArray) = maximum(IdFun(), A)
+minimum(A::AbstractArray) = minimum(IdFun(), A)
+
+minabs(A::AbstractArray) = minimum(AbsFun(), A)
+
+# maxabs accepts empty array
+function maxabs(A::AbstractArray)
+    n = length(A)
+    n == 0 && return abs(zero(T))
+    n == 1 && return abs(A[1])
+    maximum_impl(AbsFun(), A, 1, n)
+end
+
+
+maximum(x::Real) = x
+minimum(x::Real) = x
+maxabs(x::Number) = abs(x)
+minabs(x::Number) = abs(x)
+
 
 ## extrema
 
@@ -613,9 +648,7 @@ end
 
 # specific mapreduce functions
 
-maximum(f::Function, itr) = mapreduce(f, scalarmax, itr)
-minimum(f::Function, itr) = mapreduce(f, scalarmin, itr)
-prod(f::Function, itr)    = mapreduce(f, *        , itr)
+prod(f::Function, itr)    = mapreduce(f, *, itr)
 
 function any(pred::Function, itr)
     for x in itr
