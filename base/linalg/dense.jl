@@ -1,7 +1,14 @@
 # Linear algebra functions for dense matrices in column major format
 
+## BLAS cutoff threshold constants
+
+const SCAL_CUTOFF = 2048
+const DOT_CUTOFF = 128
+const ASUM_CUTOFF = 32
+const NRM2_CUTOFF = 32
+
 function scale!{T<:BlasFloat}(X::Array{T}, s::T)
-    if length(X) < 2048
+    if length(X) < SCAL_CUTOFF
         generic_scale!(X, s)
     else
         BLAS.scal!(length(X), s, X, 1)
@@ -29,12 +36,12 @@ stride1(x::StridedVector) = stride(x, 1)::Int
 
 function Base.sumabs2{T<:BlasFloat}(x::Union(Array{T},StridedVector{T}))
     n = length(x)
-    if n > 128
+    if n < DOT_CUTOFF
+        return Base._sumabs2(x)
+    else
         px = pointer(x)
         incx = stride1(x)
-        return BLAS.dot(n, px, incx, px, incx)
-    else
-        return Base._sumabs2(x)
+        return BLAS.dot(n, px, incx, px, incx)        
     end
 end
 
@@ -44,10 +51,10 @@ function norm{T<:BlasFloat, TI<:Integer}(x::StridedVector{T}, rx::Union(UnitRang
 end
 
 vecnorm1{T<:BlasReal}(x::Union(Array{T},StridedVector{T})) = 
-    length(x) > 16 ? BLAS.asum(x) : generic_vecnorm1(x)
+    length(x) < ASUM_CUTOFF ? generic_vecnorm1(x) : BLAS.asum(x)
 
 vecnorm2{T<:BlasFloat}(x::Union(Array{T},StridedVector{T})) = 
-    length(x) > 8 ? BLAS.nrm2(x) : generic_vecnorm2(x)
+    length(x) < NRM2_CUTOFF ? generic_vecnorm2(x) : BLAS.nrm2(x)
 
 function triu!{T}(M::Matrix{T}, k::Integer)
     m, n = size(M)
