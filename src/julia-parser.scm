@@ -1096,7 +1096,7 @@
 	   ;; allow "immutable type"
 	   (take-token s))
        (let ((sig (parse-subtype-spec s)))
-	 (begin0 (list 'type (if (eq? word 'type) 'true 'false)
+	 (begin0 (list 'type (if (eq? word 'type) #t #f)
 		       sig (parse-block s))
 		 (expect-end s)))))
     ((bitstype)
