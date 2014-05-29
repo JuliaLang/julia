@@ -141,30 +141,76 @@ minimum!{R}(r::AbstractArray{R}, A::AbstractArray; init::Bool=true) = _minimum!(
 minimum{T}(A::AbstractArray{T}, region) =
     isempty(A) ? similar(A, reduced_dims0(A, region)) : _minimum!(reduction_init(A, region, typemax(T)), A)
 
-eval(ngenerate(:N, :(typeof(R)), :(_sum!{T,N}(R::AbstractArray, A::AbstractArray{T,N})), N->gen_reduction_body(N, +)))
-sum!{R}(r::AbstractArray{R}, A::AbstractArray; init::Bool=true) = _sum!(initarray!(r, zero(R), init), A)
-
 eval(ngenerate(:N, :(typeof(R)), :(_prod!{T,N}(R::AbstractArray, A::AbstractArray{T,N})), N->gen_reduction_body(N, *)))
 prod!{R}(r::AbstractArray{R}, A::AbstractArray; init::Bool=true) = _prod!(initarray!(r, one(R), init), A)
 
-for (f,init,op) in ((:sum,:zero,:+), (:prod,:one,:*))
-    _f = symbol(string("_",f,"!")) # _sum!, _prod!
-    @eval function $f{T}(A::AbstractArray{T}, region)
-        if method_exists($init, (Type{T},))
-            z = $op($init(T), $init(T))
-            Tr = typeof(z) == typeof($init(T)) ? T : typeof(z)
-        else
-            # TODO: handle more heterogeneous sums.  e.g. sum(A, 1) where
-            # A is a Matrix{Any} with one column of numbers and one of vectors
-            z = $init($f(A))
-            Tr = typeof(z)
-        end
-        $_f(reduction_init(A, region, z, Tr), A)
+function prod{T}(A::AbstractArray{T}, region)
+    if method_exists(one, (Type{T},))
+        z = one(T) * one(T)
+        Tr = typeof(z) == typeof(one(T)) ? T : typeof(z)
+    else
+        # TODO: handle more heterogeneous sums.  e.g. sum(A, 1) where
+        # A is a Matrix{Any} with one column of numbers and one of vectors
+        z = one(prod(A))
+        Tr = typeof(z)
     end
+    _prod!(reduction_init(A, region, z, Tr), A)
 end
 
 prod(A::AbstractArray{Bool}, region) = error("use all() instead of prod() for boolean arrays")
 
+@ngenerate N typeof(R) function _sum!{T,N}(f, R::AbstractArray, A::AbstractArray{T,N})
+    (isempty(R) || isempty(A)) && return R
+    rdims = 0
+    for i = 1:N
+        if size(R, i) == size(A, i)
+        elseif size(R, i) == 1
+            rdims += 1
+        else
+            throw(DimensionMismatch("sum of array of size $(size(A)) with output of size $(size(R))"))
+        end
+    end
+    @nextract N sizeR d->size(R,d)
+    # If we're reducing along dimension 1 and dimension 1 is
+    # sufficiently large, use the pairwise implementation. Otherwise,
+    # keep the result in R so that we traverse A in storage order.
+    sz1 = size(A, 1)
+    if size(R, 1) < sz1 && sz1 >= 16 && rdims == 1
+        for i = 1:div(length(A), sz1)
+            @inbounds R[i] = sum_impl(f, A, (i-1)*sz1+1, i*sz1)
+        end
+    else
+        @nloops N i A d->(j_d = sizeR_d==1 ? 1 : i_d) begin
+            @inbounds (@nref N R j) += evaluate(f, @nref N A i)
+        end
+    end
+    R
+end
+
+function sum{T}(f::Union(Function,Func{1}), A::AbstractArray{T}, region)
+    if method_exists(zero, (Type{T},))
+        fz = evaluate(f, zero(T))
+        z = fz + fz
+        Tr = typeof(z) == typeof(fz) && !isbits(T) ? T : typeof(z)
+    else
+        # TODO: handle more heterogeneous sums.  e.g. sum(A, 1) where
+        # A is a Matrix{Any} with one column of numbers and one of vectors
+        z = zero(sum(f, A))
+        Tr = typeof(z)
+    end
+    _sum!(f, reduction_init(A, region, z, Tr), A)
+end
+
+sum!{R}(f::Union(Function,Func{1}), r::AbstractArray{R}, A::AbstractArray; init::Bool=true) =
+    _sum!(f, initarray!(r, zero(R), init), A)
+
+for (fname, func) in ((:sum, :IdFun), (:sumabs, :AbsFun), (:sumabs2, :Abs2Fun))
+    @eval begin
+        $fname(A::AbstractArray, region) = sum($func(), A, region)
+        $(symbol("$(fname)!")){R}(r::AbstractArray{R}, A::AbstractArray; init::Bool=true) =
+            sum!($func(), r, A; init=init)
+    end
+end
 
 ### findmin/findmax
 # Generate the body for a reduction function reduce!(f, Rval, Rind, A), using a comparison operator f
