@@ -363,8 +363,8 @@ static jl_value_t *intersect_union(jl_uniontype_t *a, jl_value_t *b,
     int eq0 = eqc->n, co0 = penv->n;
     jl_tuple_t *t = jl_alloc_tuple(jl_tuple_len(a->types));
     JL_GC_PUSH1(&t);
-    size_t i;
-    for(i=0; i < jl_tuple_len(t); i++) {
+    size_t i, l=jl_tuple_len(t);
+    for(i=0; i < l; i++) {
         int eq_l = eqc->n, co_l = penv->n;
         jl_value_t *ti = jl_type_intersect(jl_tupleref(a->types,i), b,
                                            penv, eqc, var);
@@ -1817,7 +1817,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
                                                    env, n, stack, 1);
         assert(jl_is_tuple(tw));
         JL_GC_PUSH1(&tw);
-        jl_value_t *res = (jl_value_t*)jl_new_uniontype(tw);
+        jl_value_t *res = (jl_value_t*)jl_type_union(tw);
         JL_GC_POP();
         return res;
     }
