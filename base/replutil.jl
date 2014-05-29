@@ -103,6 +103,12 @@ showerror(io::IO, e::InterruptException) = print(io, "interrupt")
 
 function showerror(io::IO, e::MethodError)
     name = isgeneric(e.f) ? e.f.env.name : :anonymous
+    iface, parent = isinterface(symbol(name), e.args)
+    if iface
+        d = typeof(e.args[1])
+        println(io, "Type $(d) has to implement $(name) to be a subtype of $(parent)!")
+    end
+
     if isa(e.f, DataType)
         print(io, "no method $(e.f)(")
     else

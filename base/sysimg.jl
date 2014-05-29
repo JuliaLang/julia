@@ -197,6 +197,7 @@ importall .DataFmt
 include("deepcopy.jl")
 include("util.jl")
 include("interactiveutil.jl")
+include("interfaces.jl")
 include("replutil.jl")
 include("test.jl")
 include("meta.jl")
