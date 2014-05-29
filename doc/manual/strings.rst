@@ -356,9 +356,14 @@ exception handling required:
     y
 
 UTF-8 is not the only encoding that Julia supports, and adding support
-for new encodings is quite easy, but discussion of other encodings and
-how to implement support for them is beyond the scope of this document
-for the time being. For further discussion of UTF-8 encoding issues, see
+for new encodings is quite easy.  In particular, Julia also provides
+``UTF16String`` and ``UTF32String`` types, constructed by the
+``utf16(s)`` and ``utf32(s)`` functions respectively, for UTF-16 and
+UTF-32 encodings.  It also provides aliases ``WString`` and
+``wstring(s)`` for either UTF-16 or UTF-32 strings, depending on the
+size of ``Cwchar_t``. Additional discussion of other encodings and how to
+implement support for them is beyond the scope of this document for
+the time being. For further discussion of UTF-8 encoding issues, see
 the section below on `byte array literals <#Byte+Array+Literals>`_,
 which goes into some greater detail.
 

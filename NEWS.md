@@ -162,15 +162,20 @@ Library improvements
 
     * Triple-quoted regex strings, `r"""..."""` ([#4934]).
 
-    * New string type, `UTF16String` ([#4930]), constructed by `utf16(s)`
-      from another string, a `Uint32` array, or a byte array (possibly
-      prefixed by a byte-order marker to indicate endian-ness).  Its
-      data is internally `NULL`-terminated for passing to C ([#7016]).
+    * New string type, `UTF16String` ([#4930]), constructed by
+      `utf16(s)` from another string, a `Uint16` array or pointer, or
+      a byte array (possibly prefixed by a byte-order marker to
+      indicate endian-ness).  Its data is internally `NULL`-terminated
+      for passing to C ([#7016]).
 
     * `CharString` is renamed to `UTF32String` ([#4943]), and its data
       is now internally `NULL`-terminated for passing to C ([#7016]).
       `CharString(c::Char...)` is deprecated in favor of `utf32(c...)`,
       and `utf32(s)` otherwise has functionality similar to `utf16(s)`.
+
+    * New `WString` and `wstring` synonyms for either `UTF16String`
+      and `utf16` or `UTF32String` and `utf32`, respectively, depending
+      on the width of `Cwchar_t` ([#7016]).
 
     * `normalize_string` function to perform Unicode normalization,
       case-folding, and other transformations ([#5576]).
@@ -290,8 +295,8 @@ Library improvements
     * Very large ranges (e.g. `0:typemax(Int)`) can now be constructed, but some
       operations (e.g. `length`) will raise an `OverflowError`.
 
-  * Extended API for ``cov`` and ``cor``, which accept keyword arguments ``vardim``,
-    ``corrected``, and ``mean`` ([#6273])
+  * Extended API for `cov` and `cor`, which accept keyword arguments `vardim`,
+    `corrected`, and `mean` ([#6273])
 
   * New functions `randsubseq` and `randsubseq!` to create a random subsequence of an array ([#6726])
 

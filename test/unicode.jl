@@ -6,7 +6,7 @@ u16 = utf16(u8)
 @test length(u16) == 4
 @test utf8(u16) == u8
 @test collect(u8) == collect(u16)
-@test u8 == utf16(u16.data[1:end-1]) == utf16(copy!(Array(Uint8, 14), 1, reinterpret(Uint8, u16.data), 1, 14))
+@test u8 == utf16(u16.data[1:end-1]) == utf16(copy!(Array(Uint8, 14), 1, reinterpret(Uint8, u16.data), 1, 14)) == utf16(pointer(u16))
 
 # UTF32
 u32 = utf32(u8)
@@ -15,7 +15,12 @@ u32 = utf32(u8)
 @test length(u32) == 4
 @test utf8(u32) == u8
 @test collect(u8) == collect(u32)
-@test u8 == utf32(u32.data[1:end-1]) == utf32(copy!(Array(Uint8, 16), 1, reinterpret(Uint8, u32.data), 1, 16))
+@test u8 == utf32(u32.data[1:end-1]) == utf32(copy!(Array(Uint8, 16), 1, reinterpret(Uint8, u32.data), 1, 16)) == utf32(pointer(u32))
+
+# Wstring
+w = wstring(u8)
+@test length(w) == 4 && utf8(w) == u8 && collect(u8) == collect(w)
+@test u8 == WString(w.data)
 
 if !success(`iconv --version`)
     warn("iconv not found, skipping unicode tests!")

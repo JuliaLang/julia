@@ -1652,6 +1652,14 @@ function repr(x)
     takebuf_string(s)
 end
 
+if sizeof(Cwchar_t) == 2
+    const WString = UTF16String # const, not typealias, to get constructor
+    const wstring = utf16
+elseif sizeof(Cwchar_t) == 4
+    const WString = UTF32String # const, not typealias, to get constructor
+    const wstring = utf32
+end
+
 # pointer conversions of ASCII/UTF8/UTF16/UTF32 strings:
 pointer(x::Union(ByteString,UTF16String,UTF32String)) = pointer(x.data)
 pointer{T<:ByteString}(x::SubString{T}) = pointer(x.string.data) + x.offset
@@ -1660,3 +1668,4 @@ pointer{T<:ByteString}(x::SubString{T}, i::Integer) = pointer(x.string.data) + x
 pointer(x::Union(UTF16String,UTF32String), i::Integer) = pointer(x)+(i-1)*sizeof(eltype(x.data))
 pointer{T<:Union(UTF16String,UTF32String)}(x::SubString{T}) = pointer(x.string.data) + x.offset*sizeof(eltype(x.data))
 pointer{T<:Union(UTF16String,UTF32String)}(x::SubString{T}, i::Integer) = pointer(x.string.data) + (x.offset + (i-1))*sizeof(eltype(x.data))
+
