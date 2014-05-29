@@ -162,9 +162,15 @@ Library improvements
 
     * Triple-quoted regex strings, `r"""..."""` ([#4934]).
 
-    * New string type, `UTF16String` ([#4930]).
+    * New string type, `UTF16String` ([#4930]), constructed by `utf16(s)`
+      from another string, a `Uint32` array, or a byte array (possibly
+      prefixed by a byte-order marker to indicate endian-ness).  Its
+      data is internally `NULL`-terminated for passing to C ([#7016]).
 
-    * `CharString` is renamed to `UTF32String` ([#4943]).
+    * `CharString` is renamed to `UTF32String` ([#4943]), and its data
+      is now internally `NULL`-terminated for passing to C ([#7016]).
+      `CharString(c::Char...)` is deprecated in favor of `utf32(c...)`,
+      and `utf32(s)` otherwise has functionality similar to `utf16(s)`.
 
     * `normalize_string` function to perform Unicode normalization,
       case-folding, and other transformations ([#5576]).
