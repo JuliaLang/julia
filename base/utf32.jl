@@ -47,7 +47,7 @@ end
 convert{T<:Union(Int32,Uint32)}(::Type{UTF32String}, data::AbstractVector{T}) =
     convert(UTF32String, reinterpret(Char, data))
 
-convert{T<:String}(::Type{T}, v::AbstractVector{Char}) = convert(T, UTF32String(v))
+convert{T<:String}(::Type{T}, v::AbstractVector{Char}) = convert(T, utf32(v))
 
 # specialize for performance reasons:
 function convert{T<:ByteString}(::Type{T}, data::AbstractVector{Char})
