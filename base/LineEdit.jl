@@ -552,11 +552,13 @@ end
 function edit_kill_line(s::MIState)
     buf = buffer(s)
     pos = position(buf)
-    s.kill_buffer = readline(buf)
-    if length(s.kill_buffer) > 1 && s.kill_buffer[end] == '\n'
-        s.kill_buffer = s.kill_buffer[1:end-1]
+    killbuf = readline(buf)
+    if length(killbuf) > 1 && killbuf[end] == '\n'
+        killbuf = killbuf[1:end-1]
         char_move_left(buf)
     end
+    s.kill_buffer = s.key_repeats > 0 ? s.kill_buffer * killbuf : killbuf
+
     splice_buffer!(buf, pos:position(buf)-1)
     refresh_line(s)
 end
