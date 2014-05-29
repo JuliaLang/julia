@@ -27,22 +27,20 @@ isposdef{T}(A::AbstractMatrix{T}, UL::Symbol) = (S = typeof(sqrt(one(T))); ispos
 isposdef{T}(A::AbstractMatrix{T}) = (S = typeof(sqrt(one(T))); isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A)))
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
 
-
-Base.sumabs{T<:BlasFloat}(x::Union(Array{T},StridedVector{T})) = 
-    length(x) > 32 ? BLAS.asum(x) : Base._sumabs(x)
-
 stride1(x::Array) = 1
 stride1(x::StridedVector) = stride(x, 1)::Int
 
-function Base.sumabs2{T<:BlasFloat}(x::Union(Array{T},StridedVector{T}))
-    n = length(x)
-    if n < DOT_CUTOFF
-        return Base._sumabs2(x)
-    else
-        px = pointer(x)
-        incx = stride1(x)
-        return BLAS.dot(n, px, incx, px, incx)        
-    end
+Base.sum_seq{T<:BlasFloat}(::Base.AbsFun, a::Union(Array{T},StridedVector{T}), ifirst::Int, ilast::Int) =
+    BLAS.asum(ilast-ifirst+1, pointer(a, ifirst), stride1(a))
+
+# This appears to show a benefit from a larger block size
+Base.sum_pairwise_blocksize(::Base.Abs2Fun) = 4096
+
+function Base.sum_seq{T<:BlasFloat}(::Base.Abs2Fun, a::Union(Array{T},StridedVector{T}), ifirst::Int, ilast::Int)
+    n = ilast-ifirst+1
+    px = pointer(a, ifirst)
+    incx = stride1(a)
+    BLAS.dot(n, px, incx, px, incx)
 end
 
 function norm{T<:BlasFloat, TI<:Integer}(x::StridedVector{T}, rx::Union(UnitRange{TI},Range{TI}))
