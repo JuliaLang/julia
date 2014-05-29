@@ -1,0 +1,90 @@
+## UTF-32 in the native byte order, i.e. plain old character arrays ##
+
+immutable UTF32String <: DirectIndexString
+    data::Array{Char,1} # includes 32-bit NULL termination after string chars
+
+    function UTF32String(a::Array{Char,1})
+        if length(a) < 1 || a[end] != 0
+            throw(ArgumentError("UTF32String data must be NULL-terminated"))
+        end
+        new(a)
+    end
+end
+
+next(s::UTF32String, i::Int) = (s.data[i], i+1)
+endof(s::UTF32String) = length(s.data) - 1
+length(s::UTF32String) = length(s.data) - 1
+
+function utf32(c::Integer...)
+    a = Array(Char, length(c) + 1)
+    for i = 1:length(c)
+        a[i] = c[i]
+    end
+    a[end] = 0
+    UTF32String(a)
+end
+
+utf32(x) = convert(UTF32String, x)
+convert(::Type{UTF32String}, s::UTF32String) = s
+
+function convert(::Type{UTF32String}, s::String)
+    a = Array(Char, length(s) + 1)
+    i = 0
+    for c in s
+        a[i += 1] = c
+    end
+    a[end] = 0 # NULL terminate
+    UTF32String(a)
+end
+
+function convert(::Type{UTF32String}, data::Vector{Char})
+    len = length(data)
+    d = Array(Char, len + 1)
+    d[end] = 0 # NULL terminate
+    UTF32String(copy!(d,1, data,1, len))
+end
+
+convert{T<:Union(Int32,Uint32)}(::Type{UTF32String}, data::Vector{T}) =
+    convert(UTF32String, reinterpret(Char, data))
+
+convert{T<:String}(::Type{T}, v::Vector{Char}) = convert(T, UTF32String(v))
+
+# specialize for performance reasons:
+function convert{T<:ByteString}(::Type{T}, data::Vector{Char})
+    s = IOBuffer(Array(Uint8,length(data)), true, true)
+    truncate(s,0)
+    for x in data
+        print(s, x)
+    end
+    convert(T, takebuf_string(s))
+end
+
+convert(::Type{Array{Char,1}}, s::UTF32String) = s.data
+convert(::Type{Array{Char}}, s::UTF32String) = s.data
+
+reverse(s::UTF32String) = UTF32String(reverse!(copy(s.data), 1, length(s)))
+
+sizeof(s::UTF32String) = sizeof(s.data) - sizeof(Char)
+convert{T<:Union(Int32,Uint32,Char)}(::Type{Ptr{T}}, s::UTF32String) =
+    convert(Ptr{T}, s.data)
+
+function convert(T::Type{UTF32String}, bytes::Array{Uint8})
+    isempty(bytes) && return UTF32String(Char[0])
+    length(bytes) & 3 != 0 && throw(ArgumentError("need multiple of 4 bytes"))
+    data = reinterpret(Char, bytes)    
+    # check for byte-order mark (BOM):
+    if data[1] == 0x0000feff        # native byte order
+        d = Array(Char, length(data))
+        copy!(d,1, data,2, length(data)-1)
+    elseif data[1] == 0xfffe0000    # byte-swapped
+        d = Array(Char, length(data))
+        for i = 2:length(data)
+            d[i-1] = bswap(data[i])
+        end
+    else
+        d = Array(Char, length(data) + 1)
+        copy!(d,1, data,1, length(data)) # assume native byte order
+    end
+    d[end] = 0 # NULL terminate
+    UTF32String(d)
+end

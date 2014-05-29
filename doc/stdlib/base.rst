@@ -1388,19 +1388,38 @@ Strings
    byte arrays check for a byte-order marker in the first two bytes,
    and do not include it in the resulting string.)
 
-   Note that the resulting ``UTF16String`` data is terminated by
-   NULL codepoint (16-bit zero), which is not treated as a character in the
-   string, so that it can be passed directly to external functions
-   requiring NULL-terminated data.  This NULL is appended automatically
-   by the `utf16(s)` conversion function.   If you have a ``Uint16`` array
-   ``A`` that is already NULL terminated valid UTF-16 data, then you can
-   instead use `UTF16String(A)`` to construct the string without making a
-   copy of the data and treating the NULL as a terminator rather than as
-   part of the string.
+   Note that the resulting ``UTF16String`` data is terminated by NULL
+   codepoint (16-bit zero), which is not treated as a character in the
+   string (so that it is mostly invisible in Julia); this allows the
+   string to be passed directly to external functions requiring
+   NULL-terminated data.  This NULL is appended automatically by the
+   `utf16(s)` conversion function.  If you have a ``Uint16`` array
+   ``A`` that is already NULL-terminated valid UTF-16 data, then you
+   can instead use `UTF16String(A)`` to construct the string without
+   making a copy of the data and treating the NULL as a terminator
+   rather than as part of the string.
 
 .. function:: is_valid_utf16(s) -> Bool
 
    Returns true if the string or ``Uint16`` array is valid UTF-16.
+
+.. function:: utf32(s)
+
+   Create a UTF-32 string from a byte array, array of ``Uint32``, or
+   any other string type.  (Conversions of byte arrays check for a
+   byte-order marker in the first four bytes, and do not include it in
+   the resulting string.)
+
+   Note that the resulting ``UTF32String`` data is terminated by NULL
+   codepoint (32-bit zero), which is not treated as a character in the
+   string (so that it is mostly invisible in Julia); this allows the
+   string to be passed directly to external functions requiring
+   NULL-terminated data.  This NULL is appended automatically by the
+   `utf32(s)` conversion function.  If you have a ``Uint32`` array
+   ``A`` that is already NULL-terminated UTF-32 data, then you
+   can instead use `UTF32String(A)`` to construct the string without
+   making a copy of the data and treating the NULL as a terminator
+   rather than as part of the string.
 
 I/O
 ---

@@ -816,7 +816,7 @@ bin_val = hex2bytes("07bf")
 @test sizeof(RopeString("abc","def")) == 6
 
 # issue #3597
-@test string(UTF32String(['T', 'e', 's', 't'])[1:1], "X") == "TX"
+@test string(utf32(['T', 'e', 's', 't'])[1:1], "X") == "TX"
 
 # issue #3710
 @test prevind(SubString("{var}",2,4),4) == 3
