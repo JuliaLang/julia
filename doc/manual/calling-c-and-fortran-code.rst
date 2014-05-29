@@ -192,17 +192,18 @@ When a scalar value is passed with ``&`` as an argument of type
 Array conversions
 ~~~~~~~~~~~~~~~~~
 
-When an ``Array{T}`` is passed to C as a ``Ptr{T}`` or ``Ptr{Void}``
-argument, it is "converted" simply by taking the address of the first
-element. This is done in order to avoid copying arrays unnecessarily.
+When an array is passed to C as a ``Ptr{T}`` argument, it is
+never converted: Julia simply checks that the element type of the
+array matches ``T``, and the address of the first element is passed.
+This is done in order to avoid copying arrays unnecessarily.
 
 Therefore, if an ``Array`` contains data in the wrong format, it will
 have to be explicitly converted using a call such as ``int32(a)``.
 
 To pass an array ``A`` as a pointer of a different type *without*
-converting the data (for example, to pass a ``Float64`` array to a
-function that operates on uninterpreted bytes), you can either declare
-the argument as ``Ptr{Void}`` or you can explicitly call
+converting the data beforehand (for example, to pass a ``Float64`` array
+to a function that operates on uninterpreted bytes), you can either
+declare the argument as ``Ptr{Void}`` or you can explicitly call
 ``convert(Ptr{T}, pointer(A))``.
 
 
