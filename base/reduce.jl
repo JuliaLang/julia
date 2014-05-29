@@ -250,7 +250,7 @@ sumabs(itr) = sum(AbsFun(), itr)
 sumabs2(itr) = sum(Abs2Fun(), itr)
 
 # Note: sum_seq uses four accumulators, so each accumulator gets at most 256 numbers
-const PAIRWISE_SUM_BLOCKSIZE = 1024
+sum_pairwise_blocksize(f) = 1024
 
 # a fast implementation of sum in sequential order (from left to right).
 # to allow type-stable loops, requires length > 1
@@ -308,29 +308,18 @@ end
 #        Manfred Tasche and Hansmartin Zeuner, Handbook of
 #        Analytic-Computational Methods in Applied Mathematics (2000).
 #
-function sum_pairwise(f, a::AbstractArray, ifirst::Int, ilast::Int)
-    # bsiz: maximum block size
-
-    if ifirst + PAIRWISE_SUM_BLOCKSIZE >= ilast
+# sum_impl requires length(a) > 1
+#
+function sum_impl(f, a::AbstractArray, ifirst::Int, ilast::Int)
+    if ifirst + sum_pairwise_blocksize(f) >= ilast
         sum_seq(f, a, ifirst, ilast)
     else
         imid = (ifirst + ilast) >>> 1
-        sum_pairwise(f, a, ifirst, imid) + sum_pairwise(f, a, imid+1, ilast)
+        sum_impl(f, a, ifirst, imid) + sum_impl(f, a, imid+1, ilast)
     end
 end
-
-# sum_impl requires length(a) > 1 
-#
-sum_impl(f, a::AbstractArray, ifirst::Int, ilast::Int) = sum_pairwise(f, a, ifirst, ilast)
 sum_impl{T<:Integer}(f::Union(IdFun,AbsFun,Abs2Fun), a::AbstractArray{T}, ifirst::Int, ilast::Int) = 
     sum_seq(f, a, ifirst, ilast)
-
-function sum{T}(a::AbstractArray{T})
-    n = length(a)
-    n == 0 && return sumzero(T)
-    n == 1 && return addzero(a[1])
-    sum_impl(IdFun(), a, 1, n)
-end
 
 function sum(f::Function, a::AbstractArray)
     n = length(a)
@@ -339,21 +328,23 @@ function sum(f::Function, a::AbstractArray)
     sum_impl(f, a, 1, n)
 end
 
-function _sumabs{T}(a::AbstractArray{T})
-    n = length(a)
-    n == 0 && return addzero(abs(zero(T)))
-    n == 1 && return addzero(abs(a[1]))
-    sum_impl(AbsFun(), a, 1, n)
+for (fname, func, cutoff) in ((:sum, :IdFun, 16), (:sumabs, :AbsFun, 32), (:sumabs2, :Abs2Fun, 32))
+    @eval function $fname{T}(a::AbstractArray{T})
+        n = length(a)
+        n == 0 && return addzero(evaluate($func(), zero(T)))
+        n == 1 && return addzero(evaluate($func(), a[1]))
+        if n < $cutoff
+            # It is important that this is inlined to provide good
+            # performance for small inputs
+            @inbounds s = evaluate($func(), a[1]) + evaluate($func(), a[2])
+            for i = 3:length(a)
+                @inbounds s += evaluate($func(), a[i])
+            end
+            return s
+        end
+        sum_impl($func(), a, 1, n)
+    end
 end
-sumabs(a::AbstractArray) = _sumabs(a)
-
-function _sumabs2{T}(a::AbstractArray{T})
-    n = length(a)
-    n == 0 && return addzero(abs2(zero(T)))
-    n == 1 && return addzero(abs2(a[1]))
-    sum_impl(Abs2Fun(), a, 1, n)
-end
-sumabs2(a::AbstractArray) = _sumabs2(a)
 
 # Kahan (compensated) summation: O(1) error growth, at the expense
 # of a considerable increase in computational expense.
