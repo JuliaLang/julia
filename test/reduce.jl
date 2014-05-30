@@ -1,4 +1,21 @@
-## reduce ##
+## foldl & foldr
+
+# folds -- reduce.jl
+@test foldl(-,[1:5]) == -13
+@test foldl(-,10,[1:5]) == foldl(-,[10,1:5])
+
+@test foldr(-,[1:5]) == 3
+@test foldr(-,10,[1:5]) == foldr(-,[1:5,10])
+
+# reduce -- reduce.jl
+@test reduce((x,y)->"($x+$y)", [9:11]) == "((9+10)+11)"
+@test reduce(max, [8 6 7 5 3 0 9]) == 9
+@test reduce(+, 1000, [1:5]) == (1000 + 1 + 2 + 3 + 4 + 5)
+
+# mapreduce -- reduce.jl
+@test mapreduce(-, +, [-10 -9 -3]) == ((10 + 9) + 3)
+@test mapreduce((x)->x[1:3], (x,y)->"($x+$y)", ["abcd", "efgh", "01234"]) == "((abc+efg)+012)"
+
 
 z = zeros(2,2,2,2)
 for i=1:16
