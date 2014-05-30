@@ -170,7 +170,7 @@ function completions(string, pos)
     end
 
     slashpos = rsearch(string, '\\', pos)
-    if 0 <= rsearch(string, whitespace_chars, pos) < slashpos
+    if rsearch(string, whitespace_chars, pos) < slashpos
         # latex symbol substitution
         s = string[slashpos:pos]
         latex = get(latex_symbols, s, "")
