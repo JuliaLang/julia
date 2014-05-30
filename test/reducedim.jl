@@ -8,6 +8,8 @@ safe_sum{T}(A::Array{T}, region) = safe_mapslices(sum, A, region)
 safe_prod{T}(A::Array{T}, region) = safe_mapslices(prod, A, region)
 safe_maximum{T}(A::Array{T}, region) = safe_mapslices(maximum, A, region)
 safe_minimum{T}(A::Array{T}, region) = safe_mapslices(minimum, A, region)
+safe_sumabs{T}(A::Array{T}, region) = safe_mapslices(sum, abs(A), region)
+safe_sumabs2{T}(A::Array{T}, region) = safe_mapslices(sum, abs2(A), region)
 
 Areduc = rand(3, 4, 5, 6)
 for region in {
@@ -19,11 +21,15 @@ for region in {
     @test_approx_eq prod!(r, Areduc) safe_prod(Areduc, region)
     @test_approx_eq maximum!(r, Areduc) safe_maximum(Areduc, region)
     @test_approx_eq minimum!(r, Areduc) safe_minimum(Areduc, region)
+    @test_approx_eq Base.sumabs!(r, Areduc) safe_sumabs(Areduc, region)
+    @test_approx_eq Base.sumabs2!(r, Areduc) safe_sumabs2(Areduc, region)
 
     @test_approx_eq sum(Areduc, region) safe_sum(Areduc, region)
     @test_approx_eq prod(Areduc, region) safe_prod(Areduc, region)
     @test_approx_eq maximum(Areduc, region) safe_maximum(Areduc, region)
     @test_approx_eq minimum(Areduc, region) safe_minimum(Areduc, region)
+    @test_approx_eq Base.sumabs(Areduc, region) safe_sumabs(Areduc, region)
+    @test_approx_eq Base.sumabs2(Areduc, region) safe_sumabs2(Areduc, region)
 end
 
 @test reducedim((a,b) -> a|b, [true false; false false], 1, false) == [true false]

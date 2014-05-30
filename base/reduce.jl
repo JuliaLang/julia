@@ -328,10 +328,10 @@ end
 sum_impl{T<:Integer}(f::Union(IdFun,AbsFun,Abs2Fun), a::AbstractArray{T}, ifirst::Int, ilast::Int) = 
     sum_seq(f, a, ifirst, ilast)
 
-function sum(f::Function, a::AbstractArray)
+function sum(f::Union(Function,Func{1}), a::AbstractArray)
     n = length(a)
     n == 0 && error("Argument is empty.")
-    n == 1 && return addzero(f(a[1]))
+    n == 1 && return addzero(evaluate(f, a[1]))
     sum_impl(f, a, 1, n)
 end
 
