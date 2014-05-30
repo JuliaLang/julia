@@ -34,7 +34,7 @@ syntax tree of the expression in question.
 Another macro is provided to check if the given expression throws an error,
 :func:`@test_throws`::
 
-  julia> @test_throws error("An error")
+  julia> @test_throws ErrorException error("An error")
 
   julia> @test_throws 1 == 1
   ERROR: test failed: :((1==1))
@@ -106,9 +106,9 @@ A different handler can be used for a block (with :func:`with_handler`)::
 Macros
 ______
 
-.. function:: @test(ex)
+.. function:: @test(extype, ex)
 
-   Test the expression ``ex`` and calls the current handler to handle the result.
+   Test the expression ``ex`` throws an exception of type ``extype`` and calls the current handler to handle the result.
 
 .. function:: @test_throws(ex)
 
