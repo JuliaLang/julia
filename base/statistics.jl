@@ -52,11 +52,6 @@ median{T}(v::AbstractArray{T}, region; checknan::Bool=true) =
 
 ## variances
 
-plusabs2(x, y) = x + abs2(y)
-eval(ngenerate(:N, :(typeof(R)), :(_sumabs2!{T,N}(R::AbstractArray, A::AbstractArray{T,N})), N->gen_reduction_body(N, plusabs2)))
-sumabs2!{R}(r::AbstractArray{R}, A::AbstractArray; init::Bool=true) = _sumabs2!(initarray!(r, zero(R), init), A)
-sumabs2{T}(A::AbstractArray{T}, region) = _sumabs2!(reduction_init(A, region, abs2(zero(T))+abs2(zero(T))), A)
-
 function varzm(v::AbstractArray; corrected::Bool=true)
     n = length(v)
     n == 0 && return NaN
