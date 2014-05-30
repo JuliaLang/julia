@@ -66,7 +66,7 @@ reverse(s::UTF32String) = UTF32String(reverse!(copy(s.data), 1, length(s)))
 
 sizeof(s::UTF32String) = sizeof(s.data) - sizeof(Char)
 convert{T<:Union(Int32,Uint32,Char)}(::Type{Ptr{T}}, s::UTF32String) =
-    convert(Ptr{T}, s.data)
+    convert(Ptr{T}, pointer(s))
 
 function convert(T::Type{UTF32String}, bytes::AbstractArray{Uint8})
     isempty(bytes) && return UTF32String(Char[0])
