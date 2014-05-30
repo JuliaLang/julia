@@ -32,61 +32,67 @@ evaluate(::AndFun, x, y) = x & y
 evaluate(::OrFun, x, y) = x | y
 evaluate(f::Callable, x, y) = f(x, y)
 
-###### Generic reduction functions ######
+###### Generic (map)reduce functions ######
 
-# Note that getting type-stable results from reduction functions,
-# or at least having type-stable loops, is nontrivial (#6069).
+## foldl && mapfoldl
 
-## foldl
-
-function _foldl(op, v0, itr, i)
+function mapfoldl_impl(f, op, v0, itr, i)
     if done(itr, i)
         return v0
     else
         (x, i) = next(itr, i)
-        v = evaluate(op, v0, x)
+        v = evaluate(op, v0, evaluate(f, x))
         while !done(itr, i)
             (x, i) = next(itr, i)
-            v = evaluate(op, v, x)
+            v = evaluate(op, v, evaluate(f, x))
         end
         return v
     end
 end
 
-function foldl(op::Callable, v0, itr, i)
-    is(op, +) && return _foldl(AddFun(), v0, itr, i)
-    is(op, *) && return _foldl(MulFun(), v0, itr, i)
-    is(op, &) && return _foldl(AndFun(), v0, itr, i)
-    is(op, |) && return _foldl(OrFun(), v0, itr, i)
-    return _foldl(op, v0, itr, i)
+mapfoldl(f, op, v0, itr) = mapfoldl_impl(op, v0, itr, start(itr))
+
+function mapfoldl(f, op::Function, v0, itr)
+    is(op, +) && return mapfoldl(f, AddFun(), v0, itr)
+    is(op, *) && return mapfoldl(f, MulFun(), v0, itr)
+    is(op, &) && return mapfoldl(f, AndFun(), v0, itr)
+    is(op, |) && return mapfoldl(f, OrFun(), v0, itr)
+    return mapfoldl_impl(f, op, v0, itr, start(itr))
 end
 
-foldl(op::Callable, v0, itr) = foldl(op, v0, itr, start(itr))
-
-function foldl(op::Callable, itr)
+function mapfoldl(f, op, itr)
     i = start(itr)
     done(itr, i) && error("Argument is empty.")
-    (v0, i) = next(itr, i)
-    return foldl(op, v0, itr, i)
+    (x, i) = next(itr, i)
+    v0 = evaluate(f, x)
+    mapfoldl_impl(f, op, v0, itr, i)
 end
+
+foldl(op, v0, itr) = mapfoldl(IdFun(), op, v0, itr)
+foldl(op, itr) = mapfoldl(IdFun(), op, itr)
 
 ## foldr
 
-function foldr(op::Callable, v0, itr, i=endof(itr))
-    # use type stable procedure
+# core implementation
+function mapfoldr_impl(f, op, v0, itr, i::Integer)
     if i == 0
         return v0
     else
-        v = op(itr[i], v0)
+        x = itr[i]
+        v = evaluate(op, evaluate(f, x), v0)
         while i > 1
             x = itr[i -= 1]
-            v = op(x, v)
+            v = evaluate(op, evaluate(f, x), v)
         end
         return v
     end
 end
 
-foldr(op::Callable, itr) = (i = endof(itr); foldr(op, itr[i], itr, i-1))
+mapfoldr(f, op, v0, itr) = mapfoldr_impl(f, op, v0, itr, endof(itr))
+mapfoldr(f, op, itr) = (i = endof(itr); mapfoldr_impl(f, op, itr[i], itr, i-1))
+
+foldr(op, v0, itr) = mapfoldr(IdFun(), op, v0, itr)
+foldr(op, itr) = mapfoldr(IdFun(), op, itr)
 
 ## reduce
 
