@@ -107,9 +107,9 @@ function test_approx_eq(va, vb, Eps, astr, bstr)
     if !isnan(Eps) && !(diff <= Eps)
         sdiff = string("|", astr, " - ", bstr, "| <= ", Eps)
         error("assertion failed: ", sdiff,
-	      "\n  ", astr, " = ", va,
-	      "\n  ", bstr, " = ", vb,
-	      "\n  difference = ", diff, " > ", Eps)
+              "\n  ", astr, " = ", va,
+              "\n  ", bstr, " = ", vb,
+              "\n  difference = ", diff, " > ", Eps)
     end
 end
 
