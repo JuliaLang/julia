@@ -1574,11 +1574,12 @@
 
 "),
 
-("Base","bytestring","bytestring(s)
+("Base","bytestring","bytestring(s::String)
 
    Convert a string to a contiguous byte array representation
    appropriate for passing it to C functions. The string will be
-   encoded as either ASCII or UTF-8.
+   encoded as either ASCII or UTF-8, and its underlying representation
+   will be null-terminated.
 
 "),
 
