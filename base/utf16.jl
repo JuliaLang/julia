@@ -111,7 +111,7 @@ function convert(T::Type{UTF16String}, bytes::AbstractArray{Uint8})
 end
 
 utf16(p::Ptr{Uint16}, len::Integer) = utf16(pointer_to_array(p, len))
-utf16(p::Ptr{Int16}, len::Integer) = utf16(convert(Ptr{Char}, p), len)
+utf16(p::Ptr{Int16}, len::Integer) = utf16(convert(Ptr{Uint16}, p), len)
 function utf16(p::Union(Ptr{Uint16}, Ptr{Int16}))
     len = 0
     while unsafe_load(p, len+1) != 0; len += 1; end

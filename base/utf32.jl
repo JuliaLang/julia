@@ -90,7 +90,7 @@ function convert(T::Type{UTF32String}, bytes::AbstractArray{Uint8})
 end
 
 utf32(p::Ptr{Char}, len::Integer) = utf32(pointer_to_array(p, len))
-utf32(p::Union(Ptr{Uint32}, Ptr{Int32}), len::Integer) = utf32(convert(Ptr{Uint32}, p), len)
+utf32(p::Union(Ptr{Uint32}, Ptr{Int32}), len::Integer) = utf32(convert(Ptr{Char}, p), len)
 function utf32(p::Union(Ptr{Char}, Ptr{Uint32}, Ptr{Int32}))
     len = 0
     while unsafe_load(p, len+1) != 0; len += 1; end
