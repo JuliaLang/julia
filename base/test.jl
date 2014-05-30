@@ -52,7 +52,7 @@ function do_test_throws(body, qex, bt, extype)
             if isa(err, extype)
                 Success(qex)
             else
-                rethrow()
+                Failure(qex)
             end
         end
     end)
