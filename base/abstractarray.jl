@@ -315,8 +315,8 @@ end
 float{T<:FloatingPoint}(x::AbstractArray{T}) = x
 complex{T<:Complex}(x::AbstractArray{T}) = x
 
-float{T,N}(x::AbstractArray{T,N}) = convert(AbstractArray{typeof(float(one(T))),N},x)
-complex{T,N}(x::AbstractArray{T,N}) = convert(AbstractArray{typeof(complex(one(T))),N}, x)
+float(A::AbstractArray)   = map_promote(x->convert(FloatingPoint,x), A)
+complex(A::AbstractArray) = map_promote(x->convert(Complex,x), A)
 
 full(x::AbstractArray) = x
 
@@ -783,8 +783,11 @@ function hvcat{T<:Number}(rows::(Int...), xs::T...)
     nc = rows[1]
 
     a = Array(T, nr, nc)
+    if length(a) != length(xs)
+        error("argument count does not match specified shape")
+    end
     k = 1
-    for i=1:nr
+    @inbounds for i=1:nr
         if nc != rows[i]
             error("row ", i, " has mismatched number of columns")
         end
@@ -800,7 +803,7 @@ function hvcat_fill(a, xs)
     k = 1
     nr, nc = size(a,1), size(a,2)
     for i=1:nr
-        for j=1:nc
+        @inbounds for j=1:nc
             a[i,j] = xs[k]
             k += 1
         end
@@ -820,6 +823,9 @@ function hvcat(rows::(Int...), xs::Number...)
     T = typeof(xs[1])
     for i=2:length(xs)
         T = promote_type(T,typeof(xs[i]))
+    end
+    if nr*nc != length(xs)
+        error("argument count does not match specified shape")
     end
     hvcat_fill(Array(T, nr, nc), xs)
 end
@@ -1251,21 +1257,53 @@ function mapslices(f::Function, A::AbstractArray, dims::AbstractVector)
 end
 
 
-## 1 argument
-function map_to!{T}(f::Callable, offs, dest::AbstractArray{T}, A::AbstractArray)
+# using promote_type
+function promote_to!{T}(f::Callable, offs, dest::AbstractArray{T}, A::AbstractArray)
     # map to dest array, checking the type of each result. if a result does not
     # match, do a type promotion and re-dispatch.
     @inbounds for i = offs:length(A)
         el = f(A[i])
         S = typeof(el)
-        if (S !== T) && !(S <: T)
+        if S === T || S <: T
+            dest[i] = el::T
+        else
+            R = promote_type(T, S)
+            if R !== T
+                new = similar(dest, R)
+                copy!(new,1, dest,1, i-1)
+                new[i] = el
+                return promote_to!(f, i+1, new, A)
+            end
+            dest[i] = el
+        end
+    end
+    return dest
+end
+
+function map_promote(f::Callable, A::AbstractArray)
+    if isempty(A); return similar(A, None); end
+    first = f(A[1])
+    dest = similar(A, typeof(first))
+    dest[1] = first
+    return promote_to!(f, 2, dest, A)
+end
+
+## 1 argument
+function map_to!{T}(f::Callable, offs, dest::AbstractArray{T}, A::AbstractArray)
+    # map to dest array, checking the type of each result. if a result does not
+    # match, widen the result type and re-dispatch.
+    @inbounds for i = offs:length(A)
+        el = f(A[i])
+        S = typeof(el)
+        if S === T || S <: T
+            dest[i] = el::T
+        else
             R = typejoin(T, S)
             new = similar(dest, R)
             copy!(new,1, dest,1, i-1)
             new[i] = el
             return map_to!(f, i+1, new, A)
         end
-        dest[i] = el::T
     end
     return dest
 end
@@ -1328,7 +1366,7 @@ end
 function map(f::Callable, As::AbstractArray...)
     shape = mapreduce(size, promote_shape, As)
     if prod(shape) == 0
-        return similar(As[1], mapreduce(eltype, promote_type, As), shape)
+        return similar(As[1], promote_eltype(As...), shape)
     end
     first = f(map(a->a[1], As)...)
     dest = similar(As[1], typeof(first), shape)
