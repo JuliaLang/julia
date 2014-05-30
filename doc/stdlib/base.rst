@@ -3301,7 +3301,9 @@ Data Formats
 
 .. function:: float(x)
 
-   Convert a number, array, or string to a ``FloatingPoint`` data type. For numeric data, the smallest suitable ``FloatingPoint`` type is used. For strings, it converts to ``Float64``.
+   Convert a number, array, or string to a ``FloatingPoint`` data type. For numeric data, the smallest suitable ``FloatingPoint`` type is used. Converts strings to ``Float64``.
+
+   This function is not recommended for arrays. It is better to use a more specific function such as ``float32`` or ``float64``.
 
 .. function:: significand(x)
 
@@ -3313,21 +3315,21 @@ Data Formats
 
    Get the exponent of a normalized floating-point number.
 
-.. function:: complex64(r,i)
+.. function:: complex64(r, [i])
 
-   Convert to ``r+i*im`` represented as a ``Complex64`` data type
+   Convert to ``r + i*im`` represented as a ``Complex64`` data type. ``i`` defaults to zero.
 
-.. function:: complex128(r,i)
+.. function:: complex128(r, [i])
 
-   Convert to ``r+i*im`` represented as a ``Complex128`` data type
+   Convert to ``r + i*im`` represented as a ``Complex128`` data type. ``i`` defaults to zero.
+
+.. function:: complex(r, [i])
+
+   Convert real numbers or arrays to complex. ``i`` defaults to zero.
 
 .. function:: char(x)
 
    Convert a number or array to ``Char`` data type
-
-.. function:: complex(r,i)
-
-   Convert real numbers or arrays to complex
 
 .. function:: bswap(n)
 
