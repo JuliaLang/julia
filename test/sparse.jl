@@ -340,3 +340,43 @@ let ASZ = 1000, TSZ = 800
     @test A == B
 end
 
+let A = speye(Int, 5), I=[1:10], X=reshape([trues(10), falses(15)],5,5)
+    @test A[I] == A[X] == reshape([1,0,0,0,0,0,1,0,0,0], 10, 1)
+    A[I] = [1:10]
+    @test A[I] == A[X] == reshape([1:10], 10, 1)
+end
+
+let S = sprand(50, 30, 0.5, x->int(rand(x)*100)), I = sprandbool(50, 30, 0.2)
+    FS = full(S)
+    FI = full(I)
+    @test sparse(FS[FI]) == S[I] == S[FI]
+    @test sum(S[FI]) + sum(S[!FI]) == sum(S)
+
+    sumS1 = sum(S)
+    sumFI = sum(S[FI])
+    S[FI] = 0
+    @test sum(S[FI]) == 0
+    sumS2 = sum(S)
+    @test (sum(S) + sumFI) == sumS1
+
+    S[FI] = 10
+    @test sum(S) == sumS2 + 10*sum(FI)
+    S[FI] = 0
+    @test sum(S) == sumS2
+
+    S[FI] = [1:sum(FI)]
+    @test sum(S) == sumS2 + sum(1:sum(FI))
+end
+
+let S = sprand(50, 30, 0.5, x->int(rand(x)*100))
+    N = length(S) >> 2
+    I = randperm(N) .* 4
+    J = randperm(N)
+    sumS1 = sum(S)
+    sumS2 = sum(S[I])
+    S[I] = 0
+    @test sum(S) == (sumS1 - sumS2)
+    S[I] = J
+    @test sum(S) == (sumS1 - sumS2 + sum(J))
+end
+
