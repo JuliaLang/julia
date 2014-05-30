@@ -1697,3 +1697,10 @@ type B6980 <: A6980 end
 f6980(::Union(Int, Float64), ::A6980) = false
 f6980(::Union(Int, Float64), ::B6980) = true
 @test f6980(1, B6980())
+
+# issue #7049
+typealias Maybe7049{T} Union(T,Nothing)
+function ttt7049(;init::Maybe7049{Union(String,(Int,Char))} = nothing)
+    string("init=", init)
+end
+@test ttt7049(init="a") == "init=a"

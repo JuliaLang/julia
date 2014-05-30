@@ -797,9 +797,9 @@ JL_CALLABLE(jl_f_new_type_constructor)
 JL_CALLABLE(jl_f_typevar)
 {
     if (nargs < 1 || nargs > 3) {
-        JL_NARGS(typevar, 1, 1);
+        JL_NARGS(TypeVar, 1, 1);
     }
-    JL_TYPECHK(typevar, symbol, args[0]);
+    JL_TYPECHK(TypeVar, symbol, args[0]);
     jl_value_t *lb = (jl_value_t*)jl_bottom_type;
     jl_value_t *ub = (jl_value_t*)jl_any_type;
     int b = 0;
@@ -808,9 +808,9 @@ JL_CALLABLE(jl_f_typevar)
         nargs--;
     }
     if (nargs > 1) {
-        JL_TYPECHK(typevar, type, args[1]);
+        JL_TYPECHK(TypeVar, type, args[1]);
         if (nargs > 2) {
-            JL_TYPECHK(typevar, type, args[2]);
+            JL_TYPECHK(TypeVar, type, args[2]);
             lb = args[1];
             ub = args[2];
         }
