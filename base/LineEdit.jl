@@ -1106,27 +1106,24 @@ on_enter(s::PromptState) = s.p.on_enter(s)
 
 move_input_start(s) = (seek(buffer(s), 0))
 move_input_end(s) = (seekend(buffer(s)))
-function move_line_start(s)
+function move_line_start(s::MIState)
     buf = buffer(s)
     curpos = position(buf)
     curpos == 0 && return
-    if buf.data[curpos] == '\n'
+    if s.key_repeats > 0
         move_input_start(s)
     else
         seek(buf, rsearch(buf.data, '\n', curpos-1))
     end
 end
-function move_line_end(s)
+function move_line_end(s::MIState)
     buf = buffer(s)
-    curpos = position(buf)
     eof(buf) && return
-    c = read(buf, Char)
-    if c == '\n'
+    if s.key_repeats > 0
         move_input_end(s)
         return
     end
-    seek(buf, curpos)
-    pos = search(buffer(s).data, '\n', curpos+1)
+    pos = search(buffer(s).data, '\n', position(buf)+1)
     if pos == 0
         move_input_end(s)
         return
