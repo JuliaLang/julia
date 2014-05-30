@@ -89,7 +89,7 @@ function mapfoldr_impl(f, op, v0, itr, i::Integer)
 end
 
 mapfoldr(f, op, v0, itr) = mapfoldr_impl(f, op, v0, itr, endof(itr))
-mapfoldr(f, op, itr) = (i = endof(itr); mapfoldr_impl(f, op, itr[i], itr, i-1))
+mapfoldr(f, op, itr) = (i = endof(itr); mapfoldr_impl(f, op, evaluate(f, itr[i]), itr, i-1))
 
 foldr(op, v0, itr) = mapfoldr(IdFun(), op, v0, itr)
 foldr(op, itr) = mapfoldr(IdFun(), op, itr)
