@@ -11,6 +11,8 @@ abstract Func{N}
 type IdFun <: Func{1} end
 type AbsFun <: Func{1} end
 type Abs2Fun <: Func{1} end
+type ExpFun <: Func{1} end
+type LogFun <: Func{1} end
 
 type AddFun <: Func{2} end
 type MulFun <: Func{2} end
@@ -20,6 +22,8 @@ type OrFun <: Func{2} end
 evaluate(::IdFun, x) = x
 evaluate(::AbsFun, x) = abs(x)
 evaluate(::Abs2Fun, x) = abs2(x)
+evaluate(::ExpFun, x) = exp(x)
+evaluate(::LogFun, x) = log(x)
 evaluate(f::Callable, x) = f(x)
 
 evaluate(::AddFun, x, y) = x + y
@@ -374,45 +378,72 @@ end
 
 ## prod
 
+prodtype{T}(::Type{T}) = typeof(zero(T) * zero(T))
+prodone{T}(::Type{T}) = one(T) * one(T) 
+multone(x) = x * one(x)
+
+function _prod(f, itr, s)
+    (x, s) = next(itr, s)
+    v = evaluate(f, x)
+    done(itr, s) && return multone(v) # multiplying by one for type stability
+    # specialize for length > 1 to have type-stable loop
+    (x, s) = next(itr, s)
+    result = v * evaluate(f, x)
+    while !done(itr, s)
+        (x, s) = next(itr, s)
+        result *= evaluate(f, x)
+    end
+    return result
+end
+
 function prod(itr)
     s = start(itr)
     if done(itr, s)
         if applicable(eltype, itr)
             T = eltype(itr)
-            return one(T) * one(T)
+            return prodone(T)
         else
             throw(ArgumentError("prod(itr) is undefined for empty collections; instead, do isempty(itr) ? o : prod(itr), where o is the correct type of identity for your product"))
         end
     end
-    (v, s) = next(itr, s)
-    done(itr, s) && return v * one(v) # multiplying by one for type stability
-    # specialize for length > 1 to have type-stable loop
-    (x, s) = next(itr, s)
-    result = v * x
-    while !done(itr, s)
-        (x, s) = next(itr, s)
-        result *= x
-    end
-    return result
+    _prod(IdFun(), itr, s)
 end
+
+function prod(f::Function, itr)
+    s = start(itr)
+    done(itr, s) && error("Argument is empty.")
+    _prod(f, itr, s)
+end
+
+prod(x::Number) = x
 
 prod(A::AbstractArray{Bool}) =
     error("use all() instead of prod() for boolean arrays")
 
-function prod_rgn{T}(A::AbstractArray{T}, first::Int, last::Int)
-    if first > last
-        return one(T) * one(T)
-    end
+function prod_impl{T}(f, A::AbstractArray{T}, first::Int, last::Int)
+    # pre-condition: last > first
     i = first
-    @inbounds v = A[i]
-    i == last && return v * one(v)
-    @inbounds result = v * A[i+=1]
+    @inbounds v = evaluate(f, A[i])
+    @inbounds result = v * evaluate(f, A[i+=1])
     while i < last
-        @inbounds result *= A[i+=1]
+        @inbounds result *= evaluate(f, A[i+=1])
     end
     return result
 end
-prod{T}(A::AbstractArray{T}) = prod_rgn(A, 1, length(A))
+
+function prod{T}(A::AbstractArray{T})
+    n = length(A)
+    n == 0 && return prodone(T)
+    n == 1 && return multone(A[1])
+    prod_impl(IdFun(), A, 1, n)
+end 
+
+function prod(f::Function, A::AbstractArray) 
+    n = length(A)
+    n == 0 && error("Argument is empty.")
+    n == 1 && return multone(evaluate(f, A[1]))
+    prod_impl(f, A, 1, n)
+end
 
 
 ## maximum & minimum 
@@ -593,6 +624,24 @@ function any(itr)
     return false
 end
 
+function any(pred::Union(Function,Func{1}), itr)
+    for x in itr
+        if pred(x)
+            return true
+        end
+    end
+    return false
+end
+
+function all(pred::Union(Function,Func{1}), itr)
+    for x in itr
+        if !pred(x)
+            return false
+        end
+    end
+    return true
+end
+
 
 ###### mapreduce ######
 
@@ -646,24 +695,3 @@ function mapreduce(f::Callable, op::Callable, v0, A::AbstractArray)
     n == 0 ? v0 : n == 1 ? op(v0, f(A[1])) : op(v0, mr_pairwise(f,op,A, 1,n))
 end
 
-# specific mapreduce functions
-
-prod(f::Function, itr)    = mapreduce(f, *, itr)
-
-function any(pred::Function, itr)
-    for x in itr
-        if pred(x)
-            return true
-        end
-    end
-    return false
-end
-
-function all(pred::Function, itr)
-    for x in itr
-        if !pred(x)
-            return false
-        end
-    end
-    return true
-end
