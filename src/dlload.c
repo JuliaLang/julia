@@ -89,8 +89,8 @@ static uv_lib_t *jl_load_dynamic_library_(char *modname, unsigned flags, int thr
 
     if (modname == NULL) {
 #ifdef _OS_WINDOWS_
-        if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                                (LPCSTR)(&jl_load_dynamic_library),
+        if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                (LPCWSTR)(&jl_load_dynamic_library),
                                 &handle->handle))
             jl_errorf("could not load base module", modname);
 #else

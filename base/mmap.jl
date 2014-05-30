@@ -135,7 +135,8 @@ function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::IO, offset::File
     end
     szarray = convert(Csize_t, len)
     szfile = szarray + convert(Csize_t, offset)
-    mmaphandle = ccall(:CreateFileMappingA, stdcall, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Cint, Cint, Cint, Ptr{Void}), shandle.handle, C_NULL, flprotect, szfile>>32, szfile&0xffffffff, C_NULL)
+    mmaphandle = ccall(:CreateFileMappingW, stdcall, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Cint, Cint, Cint, Ptr{Uint16}),
+        shandle.handle, C_NULL, flprotect, szfile>>32, szfile&0xffffffff, C_NULL)
     if mmaphandle == C_NULL
         error("could not create file mapping")
     end

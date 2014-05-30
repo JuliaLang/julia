@@ -57,6 +57,7 @@ function rmdir(path::String)
     systemerror(:rmdir, ret != 0)
 end
 
+
 # The following use Unix command line facilites
 
 rm(path::String) = FS.unlink(path)
@@ -65,40 +66,28 @@ mv(src::String, dst::String) = FS.rename(src, dst)
 touch(path::String) = run(`touch $path`)
 
 # Obtain a temporary filename.
-function tempname()
-    @unix_only begin
-        d = get(ENV, "TMPDIR", C_NULL) # tempnam ignores TMPDIR on darwin
-        p = ccall(:tempnam, Ptr{Uint8}, (Ptr{Uint8},Ptr{Uint8}), d, "julia")
-        systemerror(:tempnam, p == C_NULL)
-        s = bytestring(p)
-        c_free(p)
-        return s
-    end
-    @windows_only begin
-        d = get(ENV, "TMPDIR", C_NULL)
-        p = ccall(:_wtempnam, Ptr{Uint16}, (Ptr{Uint16},Ptr{Uint16}), d!=C_NULL?utf16(d):C_NULL, utf16("julia"))
-        systemerror(:tempnam, p == C_NULL)
-        len = ccall(:wcslen, Uint, (Ptr{Uint16},), p)+1
-        buf = Array(Uint16, len)
-        unsafe_copy!(pointer(buf), p, len)
-        c_free(p)
-        return utf8(UTF16String(buf))
-    end
+@unix_only function tempname()
+    d = get(ENV, "TMPDIR", C_NULL) # tempnam ignores TMPDIR on darwin
+    p = ccall(:tempnam, Ptr{Uint8}, (Ptr{Uint8},Ptr{Uint8}), d, "julia")
+    systemerror(:tempnam, p == C_NULL)
+    s = bytestring(p)
+    c_free(p)
+    return s
 end
 
 # Obtain a temporary directory's path.
-tempdir() = dirname(tempname())
+@unix_only tempdir() = dirname(tempname())
 
 # Create and return the name of a temporary file along with an IOStream
 @unix_only function mktemp()
     b = joinpath(tempdir(), "tmpXXXXXX")
-    p = ccall(:mkstemp, Int32, (Ptr{Uint8}, ), b)
+    p = ccall(:mkstemp, Int32, (Ptr{Uint8}, ), b) # modifies b
     return (b, fdio(p, true))
 end
 
 @windows_only begin 
-function GetTempPath()
-    temppath = Array(Uint16,261)
+function tempdir()
+    temppath = Array(Uint16,32767)
     lentemppath = ccall(:GetTempPathW,stdcall,Uint32,(Uint32,Ptr{Uint16}),length(temppath),temppath)
     if lentemppath >= length(temppath) || lentemppath == 0
         error("GetTempPath failed: $(FormatMessage())")
@@ -106,11 +95,11 @@ function GetTempPath()
     resize!(temppath,lentemppath+1)
     return utf8(UTF16String(temppath))
 end
-GetTempFileName(uunique::Uint32=uint32(0)) = GetTempFileName(GetTempPath(), uunique)
-function GetTempFileName(temppath::String,uunique::Uint32)
-    tname = Array(Uint16,261)
+tempname(uunique::Uint32=uint32(0)) = tempname(tempdir(), uunique)
+function tempname(temppath::String,uunique::Uint32)
+    tname = Array(Uint16,32767)
     uunique = ccall(:GetTempFileNameW,stdcall,Uint32,(Ptr{Uint16},Ptr{Uint16},Uint32,Ptr{Uint16}),
-        utf16(temppath),utf16("julia"),uunique,tname)
+        utf16(temppath),utf16("jul"),uunique,tname)
     lentname = findfirst(tname,0)-1
     if uunique == 0 || lentname <= 0
         error("GetTempFileName failed: $(FormatMessage())")
@@ -119,7 +108,7 @@ function GetTempFileName(temppath::String,uunique::Uint32)
     return utf8(UTF16String(tname))
 end
 function mktemp()
-    filename = GetTempFileName()
+    filename = tempname()
     return (filename, open(filename,"r+"))
 end
 end
@@ -133,8 +122,12 @@ end
 
 @windows_only function mktempdir()
     seed::Uint32 = rand(Uint32)
+    dir = tempdir()
     while true
-        filename = GetTempFileName(seed)
+        if uint16(seed) == 0
+            seed += 1
+        end
+        filename = tempname(dir, seed)
         ret = ccall(:_wmkdir, Int32, (Ptr{Uint16},), utf16(filename))
         if ret == 0
             return filename
