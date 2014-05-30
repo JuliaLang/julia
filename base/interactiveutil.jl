@@ -312,10 +312,8 @@ downloadcmd = nothing
 end
 
 @windows_only function download(url::String, filename::String)
-    b_dest = bytestring(filename)
-    b_url = bytestring(url)
-    res = ccall((:URLDownloadToFileA,:urlmon),stdcall,Cuint,
-                (Ptr{Void},Ptr{Uint8},Ptr{Uint8},Cint,Ptr{Void}),0,b_url,b_dest,0,0)
+    res = ccall((:URLDownloadToFileW,:urlmon),stdcall,Cuint,
+                (Ptr{Void},Ptr{Uint16},Ptr{Uint16},Cint,Ptr{Void}),0,utf16(url),utf16(filename),0,0)
     if res != 0
         error("automatic download failed (error: $res): $url")
     end
