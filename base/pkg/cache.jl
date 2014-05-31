@@ -33,7 +33,7 @@ function prefetch{S<:String}(pkg::String, url::String, sha1s::Vector{S})
         info("Cloning cache of $pkg from $url")
         try Git.run(`clone -q --mirror $url $cache`)
         catch
-            run(`rm -rf $cache`)
+            rmdir(cache, true)
             rethrow()
         end
     end
