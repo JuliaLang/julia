@@ -169,7 +169,7 @@ end
 mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, A)
 mapreduce(f, op, a::Number) = evaluate(f, a)
 
-function mapreduce(f, op, A::AbstractArray)
+function mapreduce(f, op::Function, A::AbstractArray)
     is(op, +) ? _mapreduce(f, AddFun(), A) :
     is(op, *) ? _mapreduce(f, MulFun(), A) :
     is(op, &) ? _mapreduce(f, AndFun(), A) :
