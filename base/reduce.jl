@@ -359,6 +359,45 @@ function extrema{T<:Real}(A::AbstractArray{T})
 end
 
 
+## all & any
+
+function all(itr)
+    for x in itr
+        if !x
+            return false
+        end
+    end
+    return true
+end
+
+function any(itr)
+    for x in itr
+        if x
+            return true
+        end
+    end
+    return false
+end
+
+function any(pred::Union(Function,Func{1}), itr)
+    for x in itr
+        if evaluate(pred, x)
+            return true
+        end
+    end
+    return false
+end
+
+function all(pred::Union(Function,Func{1}), itr)
+    for x in itr
+        if !evaluate(pred, x)
+            return false
+        end
+    end
+    return true
+end
+
+
 ## in & contains
 
 function in(x, itr)
@@ -421,42 +460,3 @@ function count(pred::Function, itr)
     end
     return n
 end
-
-## all & any
-
-function all(itr)
-    for x in itr
-        if !x
-            return false
-        end
-    end
-    return true
-end
-
-function any(itr)
-    for x in itr
-        if x
-            return true
-        end
-    end
-    return false
-end
-
-function any(pred::Union(Function,Func{1}), itr)
-    for x in itr
-        if pred(x)
-            return true
-        end
-    end
-    return false
-end
-
-function all(pred::Union(Function,Func{1}), itr)
-    for x in itr
-        if !pred(x)
-            return false
-        end
-    end
-    return true
-end
-
