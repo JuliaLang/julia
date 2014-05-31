@@ -221,6 +221,7 @@ mapreduce_impl(f, op::AddFun, A::AbstractArray, ifirst::Int, ilast::Int) =
 
 sum(f::Union(Function,Func{1}), a) = mapreduce(f, AddFun(), a)
 sum(a) = mapreduce(IdFun(), AddFun(), a)
+sum(a::AbstractArray{Bool}) = countnz(a)
 sumabs(a) = mapreduce(AbsFun(), AddFun(), a)
 sumabs2(a) = mapreduce(Abs2Fun(), AddFun(), a)
 
@@ -245,6 +246,12 @@ function sum_kbn{T<:FloatingPoint}(A::AbstractArray{T})
     end
     s + c
 end
+
+
+## prod
+
+prod(f::Union(Function,Func{1}), a) = mapreduce(f, MulFun(), a)
+prod(a) = mapreduce(IdFun(), MulFun(), a)
 
 
 ## in & contains
@@ -313,72 +320,72 @@ end
 
 ## prod
 
-prodtype{T}(::Type{T}) = typeof(zero(T) * zero(T))
-prodone{T}(::Type{T}) = one(T) * one(T) 
-multone(x) = x * one(x)
+# prodtype{T}(::Type{T}) = typeof(zero(T) * zero(T))
+# prodone{T}(::Type{T}) = one(T) * one(T) 
+# multone(x) = x * one(x)
 
-function _prod(f, itr, s)
-    (x, s) = next(itr, s)
-    v = evaluate(f, x)
-    done(itr, s) && return multone(v) # multiplying by one for type stability
-    # specialize for length > 1 to have type-stable loop
-    (x, s) = next(itr, s)
-    result = v * evaluate(f, x)
-    while !done(itr, s)
-        (x, s) = next(itr, s)
-        result *= evaluate(f, x)
-    end
-    return result
-end
+# function _prod(f, itr, s)
+#     (x, s) = next(itr, s)
+#     v = evaluate(f, x)
+#     done(itr, s) && return multone(v) # multiplying by one for type stability
+#     # specialize for length > 1 to have type-stable loop
+#     (x, s) = next(itr, s)
+#     result = v * evaluate(f, x)
+#     while !done(itr, s)
+#         (x, s) = next(itr, s)
+#         result *= evaluate(f, x)
+#     end
+#     return result
+# end
 
-function prod(itr)
-    s = start(itr)
-    if done(itr, s)
-        if applicable(eltype, itr)
-            T = eltype(itr)
-            return prodone(T)
-        else
-            throw(ArgumentError("prod(itr) is undefined for empty collections; instead, do isempty(itr) ? o : prod(itr), where o is the correct type of identity for your product"))
-        end
-    end
-    _prod(IdFun(), itr, s)
-end
+# function prod(itr)
+#     s = start(itr)
+#     if done(itr, s)
+#         if applicable(eltype, itr)
+#             T = eltype(itr)
+#             return prodone(T)
+#         else
+#             throw(ArgumentError("prod(itr) is undefined for empty collections; instead, do isempty(itr) ? o : prod(itr), where o is the correct type of identity for your product"))
+#         end
+#     end
+#     _prod(IdFun(), itr, s)
+# end
 
-function prod(f::Function, itr)
-    s = start(itr)
-    done(itr, s) && error("Argument is empty.")
-    _prod(f, itr, s)
-end
+# function prod(f::Function, itr)
+#     s = start(itr)
+#     done(itr, s) && error("Argument is empty.")
+#     _prod(f, itr, s)
+# end
 
-prod(x::Number) = x
+# prod(x::Number) = x
 
-prod(A::AbstractArray{Bool}) =
-    error("use all() instead of prod() for boolean arrays")
+# prod(A::AbstractArray{Bool}) =
+#     error("use all() instead of prod() for boolean arrays")
 
-function prod_impl{T}(f, A::AbstractArray{T}, first::Int, last::Int)
-    # pre-condition: last > first
-    i = first
-    @inbounds v = evaluate(f, A[i])
-    @inbounds result = v * evaluate(f, A[i+=1])
-    while i < last
-        @inbounds result *= evaluate(f, A[i+=1])
-    end
-    return result
-end
+# function prod_impl{T}(f, A::AbstractArray{T}, first::Int, last::Int)
+#     # pre-condition: last > first
+#     i = first
+#     @inbounds v = evaluate(f, A[i])
+#     @inbounds result = v * evaluate(f, A[i+=1])
+#     while i < last
+#         @inbounds result *= evaluate(f, A[i+=1])
+#     end
+#     return result
+# end
 
-function prod{T}(A::AbstractArray{T})
-    n = length(A)
-    n == 0 && return prodone(T)
-    n == 1 && return multone(A[1])
-    prod_impl(IdFun(), A, 1, n)
-end 
+# function prod{T}(A::AbstractArray{T})
+#     n = length(A)
+#     n == 0 && return prodone(T)
+#     n == 1 && return multone(A[1])
+#     prod_impl(IdFun(), A, 1, n)
+# end 
 
-function prod(f::Function, A::AbstractArray) 
-    n = length(A)
-    n == 0 && error("Argument is empty.")
-    n == 1 && return multone(evaluate(f, A[1]))
-    prod_impl(f, A, 1, n)
-end
+# function prod(f::Function, A::AbstractArray) 
+#     n = length(A)
+#     n == 0 && error("Argument is empty.")
+#     n == 1 && return multone(evaluate(f, A[1]))
+#     prod_impl(f, A, 1, n)
+# end
 
 
 ## maximum & minimum 
