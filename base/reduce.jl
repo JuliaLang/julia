@@ -18,6 +18,8 @@ type AddFun <: Func{2} end
 type MulFun <: Func{2} end
 type AndFun <: Func{2} end
 type OrFun <: Func{2} end
+type MaxFun <: Func{2} end
+type MinFun <: Func{2} end
 
 evaluate(::IdFun, x) = x
 evaluate(::AbsFun, x) = abs(x)
@@ -30,6 +32,8 @@ evaluate(::AddFun, x, y) = x + y
 evaluate(::MulFun, x, y) = x * y
 evaluate(::AndFun, x, y) = x & y
 evaluate(::OrFun, x, y) = x | y
+evaluate(::MaxFun, x, y) = scalarmax(x, y)
+evaluate(::MinFun, x, y) = scalarmin(x, y)
 evaluate(f::Callable, x, y) = f(x, y)
 
 
@@ -253,6 +257,107 @@ end
 prod(f::Union(Function,Func{1}), a) = mapreduce(f, MulFun(), a)
 prod(a) = mapreduce(IdFun(), MulFun(), a)
 
+prod(A::AbstractArray{Bool}) =
+    error("use all() instead of prod() for boolean arrays")
+
+## maximum & minimum
+
+function mapreduce_seq_impl(f, op::MaxFun, A::AbstractArray, first::Int, last::Int)
+    # locate the first non NaN number
+    v = evaluate(f, A[first])
+    i = first + 1
+    while v != v && i <= last
+        @inbounds v = evaluate(f, A[i])
+        i += 1
+    end
+    while i <= last
+        @inbounds x = evaluate(f, A[i])
+        if x > v
+            v = x
+        end
+        i += 1
+    end
+    v
+end
+
+function mapreduce_seq_impl(f, op::MinFun, A::AbstractArray, first::Int, last::Int)
+    # locate the first non NaN number
+    v = evaluate(f, A[first])
+    i = first + 1
+    while v != v && i <= last
+        @inbounds v = evaluate(f, A[i])
+        i += 1
+    end
+    while i <= last
+        @inbounds x = evaluate(f, A[i])
+        if x < v
+            v = x
+        end
+        i += 1
+    end
+    v
+end
+
+maximum(f::Union(Function,Func{1}), a) = mapreduce(f, MaxFun(), a)
+minimum(f::Union(Function,Func{1}), a) = mapreduce(f, MinFun(), a)
+
+maximum(a) = mapreduce(IdFun(), MaxFun(), a)
+minimum(a) = mapreduce(IdFun(), MinFun(), a)
+
+maxabs(a) = mapreduce(AbsFun(), MaxFun(), a)
+minabs(a) = mapreduce(AbsFun(), MinFun(), a)
+
+## extrema
+
+extrema(r::Range) = (minimum(r), maximum(r))
+
+function extrema(itr)
+    s = start(itr)
+    if done(itr, s)
+        error("argument is empty")
+    end
+    (v, s) = next(itr, s)
+    vmin = v
+    vmax = v
+    while !done(itr, s)
+        (x, s) = next(itr, s)
+        if x == x
+            if x > vmax
+                vmax = x
+            elseif x < vmin
+                vmin = x
+            end
+        end
+    end
+    return (vmin, vmax)
+end
+
+function extrema{T<:Real}(A::AbstractArray{T})
+    if isempty(A); error("argument must not be empty"); end
+    n = length(A)
+
+    # locate the first non NaN number
+    v = A[1]
+    i = 2
+    while v != v && i <= n
+        @inbounds v = A[i]
+        i += 1
+    end
+
+    vmin = v
+    vmax = v
+    while i <= n
+        @inbounds v = A[i]
+        if v > vmax
+            vmax = v
+        elseif v < vmin
+            vmin = v
+        end
+        i += 1
+    end
+    return (vmin, vmax)
+end
+
 
 ## in & contains
 
@@ -316,235 +421,6 @@ function count(pred::Function, itr)
     end
     return n
 end
-
-
-## prod
-
-# prodtype{T}(::Type{T}) = typeof(zero(T) * zero(T))
-# prodone{T}(::Type{T}) = one(T) * one(T) 
-# multone(x) = x * one(x)
-
-# function _prod(f, itr, s)
-#     (x, s) = next(itr, s)
-#     v = evaluate(f, x)
-#     done(itr, s) && return multone(v) # multiplying by one for type stability
-#     # specialize for length > 1 to have type-stable loop
-#     (x, s) = next(itr, s)
-#     result = v * evaluate(f, x)
-#     while !done(itr, s)
-#         (x, s) = next(itr, s)
-#         result *= evaluate(f, x)
-#     end
-#     return result
-# end
-
-# function prod(itr)
-#     s = start(itr)
-#     if done(itr, s)
-#         if applicable(eltype, itr)
-#             T = eltype(itr)
-#             return prodone(T)
-#         else
-#             throw(ArgumentError("prod(itr) is undefined for empty collections; instead, do isempty(itr) ? o : prod(itr), where o is the correct type of identity for your product"))
-#         end
-#     end
-#     _prod(IdFun(), itr, s)
-# end
-
-# function prod(f::Function, itr)
-#     s = start(itr)
-#     done(itr, s) && error("Argument is empty.")
-#     _prod(f, itr, s)
-# end
-
-# prod(x::Number) = x
-
-# prod(A::AbstractArray{Bool}) =
-#     error("use all() instead of prod() for boolean arrays")
-
-# function prod_impl{T}(f, A::AbstractArray{T}, first::Int, last::Int)
-#     # pre-condition: last > first
-#     i = first
-#     @inbounds v = evaluate(f, A[i])
-#     @inbounds result = v * evaluate(f, A[i+=1])
-#     while i < last
-#         @inbounds result *= evaluate(f, A[i+=1])
-#     end
-#     return result
-# end
-
-# function prod{T}(A::AbstractArray{T})
-#     n = length(A)
-#     n == 0 && return prodone(T)
-#     n == 1 && return multone(A[1])
-#     prod_impl(IdFun(), A, 1, n)
-# end 
-
-# function prod(f::Function, A::AbstractArray) 
-#     n = length(A)
-#     n == 0 && error("Argument is empty.")
-#     n == 1 && return multone(evaluate(f, A[1]))
-#     prod_impl(f, A, 1, n)
-# end
-
-
-## maximum & minimum 
-
-function maximum(f::Union(Function,Func{1}), itr)
-    s = start(itr)
-    if done(itr, s)
-        error("argument is empty")
-    end
-    (x, s) = next(itr, s)
-    v = evaluate(f, x)
-    while !done(itr, s)
-        (x, s) = next(itr, s)
-        v = scalarmax(v, evaluate(f, x))
-    end
-    return v
-end
-
-function minimum(f::Union(Function,Func{1}), itr)
-    s = start(itr)
-    if done(itr, s)
-        error("argument is empty")
-    end
-    (x, s) = next(itr, s)
-    v = evaluate(f, x)
-    while !done(itr, s)
-        (x, s) = next(itr, s)
-        v = scalarmin(v, evaluate(f, x))
-    end
-    return v
-end
-
-maximum(itr) = maximum(IdFun(), itr)
-minimum(itr) = minimum(IdFun(), itr)
-
-function maximum_impl(f, A::AbstractArray, first::Int, last::Int)
-    # locate the first non NaN number
-    v = evaluate(f, A[first])
-    i = first + 1
-    while v != v && i <= last
-        @inbounds v = evaluate(f, A[i])
-        i += 1
-    end
-
-    while i <= last
-        @inbounds x = evaluate(f, A[i])
-        if x > v
-            v = x
-        end
-        i += 1
-    end
-    v
-end
-
-function minimum_impl(f, A::AbstractArray, first::Int, last::Int)
-    # locate the first non NaN number
-    v = evaluate(f, A[first])
-    i = first + 1
-    while v != v && i <= last
-        @inbounds v = evaluate(f, A[i])
-        i += 1
-    end
-
-    while i <= last
-        @inbounds x = evaluate(f, A[i])
-        if x < v
-            v = x
-        end
-        i += 1
-    end
-    v
-end
-
-function maximum(f::Union(Function,Func{1}), A::AbstractArray)
-    n = length(A)
-    n == 0 && error("Argument is empty.")
-    n == 1 && return evaluate(f, A[1])
-    maximum_impl(f, A, 1, n)
-end
-
-function minimum(f::Union(Function,Func{1}), A::AbstractArray) 
-    n = length(A)
-    n == 0 && error("Argument is empty.")
-    n == 1 && return evaluate(f, A[1])
-    minimum_impl(f, A, 1, n)
-end
-
-maximum(A::AbstractArray) = maximum(IdFun(), A)
-minimum(A::AbstractArray) = minimum(IdFun(), A)
-
-minabs(A::AbstractArray) = minimum(AbsFun(), A)
-
-# maxabs accepts empty array
-function maxabs(A::AbstractArray)
-    n = length(A)
-    n == 0 && return abs(zero(T))
-    n == 1 && return abs(A[1])
-    maximum_impl(AbsFun(), A, 1, n)
-end
-
-
-maximum(x::Real) = x
-minimum(x::Real) = x
-maxabs(x::Number) = abs(x)
-minabs(x::Number) = abs(x)
-
-
-## extrema
-
-extrema(r::Range) = (minimum(r), maximum(r))
-
-function extrema(itr)
-    s = start(itr)
-    if done(itr, s)
-        error("argument is empty")
-    end
-    (v, s) = next(itr, s)
-    vmin = v
-    vmax = v
-    while !done(itr, s)
-        (x, s) = next(itr, s)
-        if x == x
-            if x > vmax
-                vmax = x
-            elseif x < vmin
-                vmin = x
-            end
-        end
-    end
-    return (vmin, vmax)
-end
-
-function extrema{T<:Real}(A::AbstractArray{T})
-    if isempty(A); error("argument must not be empty"); end
-    n = length(A)
-
-    # locate the first non NaN number
-    v = A[1]
-    i = 2
-    while v != v && i <= n
-        @inbounds v = A[i]
-        i += 1
-    end
-
-    vmin = v
-    vmax = v
-    while i <= n
-        @inbounds v = A[i]
-        if v > vmax
-            vmax = v
-        elseif v < vmin
-            vmin = v
-        end
-        i += 1
-    end
-
-    return (vmin, vmax)
-end
-
 
 ## all & any
 
