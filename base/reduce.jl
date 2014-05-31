@@ -35,6 +35,12 @@ evaluate(f::Callable, x, y) = f(x, y)
 
 ###### Generic (map)reduce functions ######
 
+# r_promote: promote x to the type of reduce(op, [x])
+r_promote(op, x) = x
+r_promote(::AddFun, x) = x + zero(x)
+r_promote(::MulFun, x) = x * one(x)
+
+
 ## foldl && mapfoldl
 
 function mapfoldl_impl(f, op, v0, itr, i)
@@ -121,25 +127,39 @@ end
 
 mapreduce(f, op, itr) = mapfoldl(f, op, itr)
 mapreduce(f, op, v0, itr) = mapfoldl(f, op, v0, itr)
-
-# select different implementation depending on input arguments
 mapreduce_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int) = 
     mapreduce_seq_impl(f, op, A, ifirst, ilast)
 
-# Note: sum_seq uses four accumulators, so each accumulator gets at most 256 numbers
-sum_pairwise_blocksize(f) = 1024
+# for specific functions
+reduce_empty(f, op, T) = error("Reducing over an empty array is not allow.")
+reduce_empty(::IdFun, op::AddFun, T) = r_promote(op, zero(T))
+reduce_empty(::AbsFun, op::AddFun, T) = r_promote(op, abs(zero(T)))
+reduce_empty(::Abs2Fun, op::AddFun, T) = r_promote(op, abs2(zero(T)))
+reduce_empty(::IdFun, op::MulFun, T) = r_promote(op, one(T))
 
-mapreduce_impl(f, op::AddFun, A::AbstractArray, ifirst::Int, ilast::Int) = 
-    mapreduce_pairwise_impl(f, op, A, ifirst, ilast, sum_pairwise_blocksize(f))
-
-function _mapreduce(f, op, A::AbstractArray)
+function _mapreduce{T}(f, op, A::AbstractArray{T})
     n = length(A)
-    n == 0 ? error("Argument is empty.") :
-    n == 1 ? evaluate(f, A[1]) :
-    mapreduce_impl(f, op, A, 1, n)
+    if n == 0
+        return reduce_empty(f, op, T)
+    elseif n == 1
+        return r_promote(op, evaluate(f, A[1]))
+    elseif n < 16
+        @inbounds fx1 = evaluate(f, A[1])
+        @inbounds fx2 = evaluate(f, A[2])
+        s = evaluate(op, fx1, fx2)
+        i = 2
+        while i < n
+            @inbounds fx = evaluate(f, A[i+=1])
+            s = evaluate(op, s, fx)
+        end
+        return s
+    else
+        return mapreduce_impl(f, op, A, 1, n)
+    end
 end
 
 mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, A)
+mapreduce(f, op, a::Number) = evaluate(f, a)
 
 function mapreduce(f, op, A::AbstractArray)
     is(op, +) ? _mapreduce(f, AddFun(), A) :
@@ -151,9 +171,81 @@ end
 
 reduce(op, v0, itr) = mapreduce(IdFun(), op, v0, itr)
 reduce(op, itr) = mapreduce(IdFun(), op, itr)
+reduce(op, a::Number) = a
 
 
 ###### Specific reduction functions ######
+
+## sum
+
+function mapreduce_seq_impl(f, op::AddFun, a::AbstractArray, ifirst::Int, ilast::Int)
+    @inbounds if ifirst + 6 >= ilast  # length(a) < 8
+        i = ifirst
+        s = evaluate(f, a[i]) + evaluate(f, a[i+1])
+        i = i+1
+        while i < ilast
+            s += evaluate(f, a[i+=1])
+        end
+        return s
+
+    else # length(a) >= 8, manual unrolling
+        s1 = evaluate(f, a[ifirst]) + evaluate(f, a[ifirst + 4])
+        s2 = evaluate(f, a[ifirst + 1]) + evaluate(f, a[ifirst + 5])
+        s3 = evaluate(f, a[ifirst + 2]) + evaluate(f, a[ifirst + 6])
+        s4 = evaluate(f, a[ifirst + 3]) + evaluate(f, a[ifirst + 7])
+        i = ifirst + 8
+        il = ilast - 3
+        while i <= il
+            s1 += evaluate(f, a[i])
+            s2 += evaluate(f, a[i+1])
+            s3 += evaluate(f, a[i+2])
+            s4 += evaluate(f, a[i+3])
+            i += 4
+        end
+        while i <= ilast
+            s1 += evaluate(f, a[i])
+            i += 1
+        end
+        return s1 + s2 + s3 + s4
+    end    
+end
+
+# Note: sum_seq uses four accumulators, so each accumulator gets at most 256 numbers
+sum_pairwise_blocksize(f) = 1024
+
+# This appears to show a benefit from a larger block size
+sum_pairwise_blocksize(::Abs2Fun) = 4096
+
+mapreduce_impl(f, op::AddFun, A::AbstractArray, ifirst::Int, ilast::Int) = 
+    mapreduce_pairwise_impl(f, op, A, ifirst, ilast, sum_pairwise_blocksize(f))
+
+sum(f::Union(Function,Func{1}), a) = mapreduce(f, AddFun(), a)
+sum(a) = mapreduce(IdFun(), AddFun(), a)
+sumabs(a) = mapreduce(AbsFun(), AddFun(), a)
+sumabs2(a) = mapreduce(Abs2Fun(), AddFun(), a)
+
+# Kahan (compensated) summation: O(1) error growth, at the expense
+# of a considerable increase in computational expense.
+function sum_kbn{T<:FloatingPoint}(A::AbstractArray{T})
+    n = length(A)
+    if n == 0
+        return sumzero(T)
+    end
+    c = zero(T)
+    s = A[1] + c
+    for i in 2:n
+        @inbounds Ai = A[i]
+        t = s + Ai
+        if abs(s) >= abs(Ai)
+            c += ((s-t) + Ai)
+        else
+            c += ((Ai-t) + s)
+        end
+        s = t
+    end
+    s + c
+end
+
 
 ## in & contains
 
@@ -216,183 +308,6 @@ function count(pred::Function, itr)
         end
     end
     return n
-end
-
-
-## sum
-
-# result type inference for sum
-
-sumtype{T}(::Type{T}) = typeof(zero(T) + zero(T))
-sumzero{T}(::Type{T}) = zero(T) + zero(T)
-addzero(x) = x + zero(x) 
-
-typealias SumResultNumber Union(Uint,Uint64,Uint128,Int,Int64,Int128,Float32,Float64,Complex64,Complex128)
-
-sumtype{T<:SumResultNumber}(::Type{T}) = T
-sumzero{T<:SumResultNumber}(::Type{T}) = zero(T)
-addzero(x::SumResultNumber) = x
-
-sumzero{T<:AbstractArray}(::Type{T}) = error("Summing over an empty collection of arrays is not allowed.")
-addzero(a::AbstractArray) = a
-
-# general sum over iterables
-
-function _sum(f, itr, s)  # deal with non-empty cases
-    # pre-condition: s = start(itr) && !done(itr, s)
-    (v, s) = next(itr, s)
-    done(itr, s) && return addzero(evaluate(f, v)) # adding zero for type stability
-    # specialize for length > 1 to have type-stable loop
-    (x, s) = next(itr, s)
-    result = evaluate(f, v) + evaluate(f, x)
-    while !done(itr, s)
-        (x, s) = next(itr, s)
-        result += evaluate(f, x)
-    end
-    return result    
-end 
-
-function sum(itr)
-    s = start(itr)
-    if done(itr, s)
-        if applicable(eltype, itr)
-            return sumzero(eltype(itr))
-        else
-            throw(ArgumentError("sum(itr) is undefined for empty collections; instead, do isempty(itr) ? z : sum(itr), where z is the correct type of zero for your sum"))
-        end
-    end
-    _sum(IdFun(), itr, s)
-end
-
-function sum(f::Union(Function,Func{1}), itr)
-    s = start(itr)
-    done(itr, s) && error("Argument is empty.")
-    _sum(f, itr, s)
-end
-
-sum(x::Number) = x
-sum(A::AbstractArray{Bool}) = countnz(A)
-
-sumabs(itr) = sum(AbsFun(), itr)
-sumabs2(itr) = sum(Abs2Fun(), itr)
-
-sumabs(x::Number) = abs(x)
-sumabs2(x::Number) = abs2(x)
-
-# a fast implementation of sum in sequential order (from left to right).
-# to allow type-stable loops, requires length > 1
-function sum_seq(f, a::AbstractArray, ifirst::Int, ilast::Int)
-    
-    @inbounds if ifirst + 6 >= ilast  # length(a) < 8
-        i = ifirst
-        s = evaluate(f, a[i]) + evaluate(f, a[i+1])
-        i = i+1
-        while i < ilast
-            s += evaluate(f, a[i+=1])
-        end
-        return s
-
-    else # length(a) >= 8
-
-        # more effective utilization of the instruction
-        # pipeline through manually unrolling the sum
-        # into four-way accumulation. Benchmark shows
-        # that this results in about 2x speed-up.                
-
-        s1 = evaluate(f, a[ifirst]) + evaluate(f, a[ifirst + 4])
-        s2 = evaluate(f, a[ifirst + 1]) + evaluate(f, a[ifirst + 5])
-        s3 = evaluate(f, a[ifirst + 2]) + evaluate(f, a[ifirst + 6])
-        s4 = evaluate(f, a[ifirst + 3]) + evaluate(f, a[ifirst + 7])
-
-        i = ifirst + 8
-        il = ilast - 3
-        while i <= il
-            s1 += evaluate(f, a[i])
-            s2 += evaluate(f, a[i+1])
-            s3 += evaluate(f, a[i+2])
-            s4 += evaluate(f, a[i+3])
-            i += 4
-        end
-
-        while i <= ilast
-            s1 += evaluate(f, a[i])
-            i += 1
-        end
-
-        return s1 + s2 + s3 + s4
-    end
-end
-
-# Pairwise (cascade) summation of A[i1:i1+n-1], which has O(log n) error growth
-# [vs O(n) for a simple loop] with negligible performance cost if
-# the base case is large enough.  See, e.g.:
-#        http://en.wikipedia.org/wiki/Pairwise_summation
-#        Higham, Nicholas J. (1993), "The accuracy of floating point
-#        summation", SIAM Journal on Scientific Computing 14 (4): 783–799.
-# In fact, the root-mean-square error growth, assuming random roundoff
-# errors, is only O(sqrt(log n)), which is nearly indistinguishable from O(1)
-# in practice.  See:
-#        Manfred Tasche and Hansmartin Zeuner, Handbook of
-#        Analytic-Computational Methods in Applied Mathematics (2000).
-#
-# sum_impl requires length(a) > 1
-#
-function sum_impl(f, a::AbstractArray, ifirst::Int, ilast::Int)
-    if ifirst + sum_pairwise_blocksize(f) >= ilast
-        sum_seq(f, a, ifirst, ilast)
-    else
-        imid = (ifirst + ilast) >>> 1
-        sum_impl(f, a, ifirst, imid) + sum_impl(f, a, imid+1, ilast)
-    end
-end
-sum_impl{T<:Integer}(f::Union(IdFun,AbsFun,Abs2Fun), a::AbstractArray{T}, ifirst::Int, ilast::Int) = 
-    sum_seq(f, a, ifirst, ilast)
-
-function sum(f::Union(Function,Func{1}), a::AbstractArray)
-    n = length(a)
-    n == 0 && error("Argument is empty.")
-    n == 1 && return addzero(evaluate(f, a[1]))
-    sum_impl(f, a, 1, n)
-end
-
-for (fname, func, cutoff) in ((:sum, :IdFun, 16), (:sumabs, :AbsFun, 32), (:sumabs2, :Abs2Fun, 32))
-    @eval function $fname{T}(a::AbstractArray{T})
-        n = length(a)
-        n == 0 && return addzero(evaluate($func(), zero(T)))
-        n == 1 && return addzero(evaluate($func(), a[1]))
-        if n < $cutoff
-            # It is important that this is inlined to provide good
-            # performance for small inputs
-            @inbounds s = evaluate($func(), a[1]) + evaluate($func(), a[2])
-            for i = 3:length(a)
-                @inbounds s += evaluate($func(), a[i])
-            end
-            return s
-        end
-        sum_impl($func(), a, 1, n)
-    end
-end
-
-# Kahan (compensated) summation: O(1) error growth, at the expense
-# of a considerable increase in computational expense.
-function sum_kbn{T<:FloatingPoint}(A::AbstractArray{T})
-    n = length(A)
-    if n == 0
-        return sumzero(T)
-    end
-    s = addzero(A[1])
-    c = sumzero(T)
-    for i in 2:n
-        @inbounds Ai = A[i]
-        t = s + Ai
-        if abs(s) >= abs(Ai)
-            c += ((s-t) + Ai)
-        else
-            c += ((Ai-t) + s)
-        end
-        s = t
-    end
-    s + c
 end
 
 
