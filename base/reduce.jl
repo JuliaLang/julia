@@ -322,45 +322,20 @@ function extrema(itr)
     (v, s) = next(itr, s)
     vmin = v
     vmax = v
+    while v != v && !done(itr, s)
+        (x, s) = next(itr, s)
+        v = x
+    end
     while !done(itr, s)
         (x, s) = next(itr, s)
-        if x == x
-            if x > vmax
-                vmax = x
-            elseif x < vmin
-                vmin = x
-            end
+        if x > vmax
+            vmax = x
+        elseif x < vmin
+            vmin = x
         end
     end
     return (vmin, vmax)
 end
-
-function extrema{T<:Real}(A::AbstractArray{T})
-    if isempty(A); error("argument must not be empty"); end
-    n = length(A)
-
-    # locate the first non NaN number
-    v = A[1]
-    i = 2
-    while v != v && i <= n
-        @inbounds v = A[i]
-        i += 1
-    end
-
-    vmin = v
-    vmax = v
-    while i <= n
-        @inbounds v = A[i]
-        if v > vmax
-            vmax = v
-        elseif v < vmin
-            vmin = v
-        end
-        i += 1
-    end
-    return (vmin, vmax)
-end
-
 
 ## all & any
 
@@ -455,11 +430,8 @@ end
 
 function count(pred::Union(Function,Func{1}), a::AbstractArray)
     n = 0
-    i = 0
-    len = length(a)
-    while i < len
-        @inbounds x = a[i+=1]
-        if evaluate(pred, x)
+    for i = 1:length(a)
+        @inbounds if evaluate(pred, a[i])
             n += 1
         end
     end
