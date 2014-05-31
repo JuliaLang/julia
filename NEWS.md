@@ -342,6 +342,8 @@ Deprecated or removed
 
   * `bitmix` is replaced by a 2-argument form of `hash`.
 
+  * `readsfrom` and `writesto` are replaced by `open` ([#6948]).
+
 [#4042]: https://github.com/JuliaLang/julia/issues/4042
 [#5164]: https://github.com/JuliaLang/julia/issues/5164
 [#4026]: https://github.com/JuliaLang/julia/issues/4026
