@@ -1259,12 +1259,10 @@ export
     process_exited,
     process_running,
     readandwrite,
-    readsfrom,
     run,
     setenv,
     spawn,
     success,
-    writesto,
 
 # C interface
     c_free,

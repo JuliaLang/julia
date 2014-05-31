@@ -4978,13 +4978,22 @@ System
 
    Send a signal to a process. The default is to terminate the process.
 
-.. function:: readsfrom(command)
+.. function:: open(command, mode::String="r", stdio=DevNull)
 
-   Starts running a command asynchronously, and returns a tuple (stream,process). The first value is a stream reading from the process' standard output.
+   Start running ``command`` asynchronously, and return a tuple
+   ``(stream,process)``.  If ``mode`` is ``"r"``, then ``stream``
+   reads from the process's standard output and ``stdio`` optionally
+   specifies the process's standard input stream.  If ``mode`` is
+   ``"w"``, then ``stream`` writes to the process's standard input
+   and ``stdio`` optionally specifies the process's standard output
+   stream.
 
-.. function:: writesto(command)
+.. function:: open(f::Function, command, mode::String="r", stdio=DevNull)
 
-   Starts running a command asynchronously, and returns a tuple (stream,process). The first value is a stream writing to the process' standard input.
+   Similar to ``open(command, mode, stdio)``, but calls ``f(stream)``
+   on the resulting read or write stream, then closes the stream
+   and waits for the process to complete.  Returns the value returned
+   by ``f``.
 
 .. function:: readandwrite(command)
 
