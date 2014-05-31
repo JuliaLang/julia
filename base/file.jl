@@ -53,9 +53,9 @@ mkpath(path::String, mode::Signed) = error("mode must be an unsigned integer; tr
 
 function rmdir(path::String, recursive::Bool=false)
     if recursive
-        dir_contents = map(p -> joinpath(path, p), readdir(path))
-        for f=dir_contents
-            isfile(f) && rm(f) || rmdir(f, true)
+        for p=readdir(path)
+            p = joinpath(path, p)
+            isfile(p) && rm(p) || rmdir(p, true)
         end
     end
     @unix_only ret = ccall(:rmdir, Int32, (Ptr{Uint8},), bytestring(path))
