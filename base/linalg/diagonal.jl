@@ -1,6 +1,6 @@
 ## Diagonal matrices
 
-immutable Diagonal{T} <: AbstractMatrix{T}
+immutable Diagonal{T} <: StructuredMatrix{T}
     diag::Vector{T}
 end
 Diagonal(A::Matrix) = Diagonal(diag(A))

@@ -1,6 +1,6 @@
 # Rectangular Full Packed Matrices
 
-type SymmetricRFP{T<:BlasFloat} <: AbstractMatrix{T}
+type SymmetricRFP{T<:BlasFloat} <: StructuredMatrix{T}
     data::Vector{T}
     transr::Char
     uplo::Char
@@ -12,7 +12,7 @@ function Ac_mul_A_RFP{T<:BlasFloat}(A::Matrix{T})
     SymmetricRFP(C, 'N', 'U')
 end
 
-type TriangularRFP{T<:BlasFloat} <: AbstractMatrix{T}
+type TriangularRFP{T<:BlasFloat} <: StructuredMatrix{T}
     data::Vector{T}
     transr::Char
     uplo::Char

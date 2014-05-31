@@ -91,6 +91,8 @@ export
     StridedMatrix,
     StridedVecOrMat,
     StridedVector,
+    StructuredArray,
+    StructuredMatrix,
     SubArray,
     SubDArray,
     SubOrDArray,

@@ -1,4 +1,4 @@
-immutable Givens{T} <: AbstractMatrix{T}
+immutable Givens{T} <: StructuredMatrix{T}
     size::Int
     i1::Int
     i2::Int
