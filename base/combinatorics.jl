@@ -565,7 +565,7 @@ function nfixedsetpartitions(n::Int,m::Int)
 end
 
 
-# For a list of integers i1, i2, i3, find the smallest 
+# For a list of integers i1, i2, i3, find the smallest
 #     i1^n1 * i2^n2 * i3^n3 >= x
 # for integer n1, n2, n3
 function nextprod(a::Vector{Int}, x)
@@ -579,7 +579,7 @@ function nextprod(a::Vector{Int}, x)
     p::widen(Int) = mx[1]             # initial value of product in this case
     best = p
     icarry = 1
-    
+
     while v[end] < mx[end]
         if p >= x
             best = p < best ? p : best  # keep the best found yet
@@ -621,7 +621,7 @@ function prevprod(a::Vector{Int}, x)
     p::widen(Int) = first
     best = p
     icarry = 1
-    
+
     while v[end] < mx[end]
         while p <= x
             best = p > best ? p : best
