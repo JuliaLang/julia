@@ -595,6 +595,20 @@ text after the comment character. We could do the following:
     julia> m = match(r"^\s*(?:#\s*(.*?)\s*$|$)", "# a comment ")
     RegexMatch("# a comment ", 1="a comment")
 
+When calling ``match``, you have the option to specify an index at
+which to start the search. For example:
+
+.. doctest::
+
+   julia> m = match(r"[0-9]","aaaa1aaaa2aaaa3",1)
+   RegexMatch("1")
+
+   julia> m = match(r"[0-9]","aaaa1aaaa2aaaa3",6)
+   RegexMatch("2")
+
+   julia> m = match(r"[0-9]","aaaa1aaaa2aaaa3",11)
+   RegexMatch("3")
+
 You can extract the following info from a ``RegexMatch`` object:
 
 -  the entire substring matched: ``m.match``
