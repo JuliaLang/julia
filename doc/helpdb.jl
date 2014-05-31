@@ -2864,7 +2864,7 @@
 
 "),
 
-("Base","readdlm","readdlm(source, delim::Char, T::Type, eol::Char; has_header=false, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
+("Base","readdlm","readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
 
    Read a matrix from the source where each line (separated by
    \"eol\") gives one row, with elements separated by the given
@@ -2877,9 +2877,12 @@
    or zero. Other useful values of \"T\" include \"ASCIIString\",
    \"String\", and \"Any\".
 
-   If \"has_header\" is \"true\", the first row of data would be read
-   as headers and the tuple \"(data_cells, header_cells)\" is returned
+   If \"header\" is \"true\", the first row of data will be read
+   as header and the tuple \"(data_cells, header_cells)\" is returned
    instead of only \"data_cells\".
+
+   Specifying \"skipstart\" will ignore the corresponding number
+   of initial lines from the input.
 
    If \"use_mmap\" is \"true\", the file specified by \"source\" is
    memory mapped for potential speedups. Default is \"true\" except on
