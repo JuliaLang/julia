@@ -1174,7 +1174,7 @@ Strings
 
 .. function:: match(r::Regex, s::String[, idx::Integer[, addopts]])
 
-   Search for the first match of the regular expression ``r`` in ``s`` and return a RegexMatch object containing the match, or nothing if the match failed. The matching substring can be retrieved by accessing ``m.match`` and the captured sequences can be retrieved by accessing ``m.captures``
+   Search for the first match of the regular expression ``r`` in ``s`` and return a RegexMatch object containing the match, or nothing if the match failed. The matching substring can be retrieved by accessing ``m.match`` and the captured sequences can be retrieved by accessing ``m.captures`` The optional ``idx`` argument specifies an index at which to start the search.
 
 .. function:: eachmatch(r::Regex, s::String[, overlap::Bool=false])
 
