@@ -120,72 +120,20 @@ function mapreduce_pairwise_impl(f, op, A::AbstractArray, ifirst::Int, ilast::In
     end
 end
 
-mapreduce(f, op::Union(Function,Func{2}), itr) = mapfoldl(f, op, itr)
-mapreduce(f, op::Union(Function,Func{2}), v0, itr) = mapfoldl(f, op, v0, itr)
+mapreduce(f, op, itr) = mapfoldl(f, op, itr)
+mapreduce(f, op, v0, itr) = mapfoldl(f, op, v0, itr)
 
 # select different implementation depending on input arguments
-mapreduce_impl(f, op::Union(Function,Func{2}), A::AbstractArray) = mapreduce_seq_impl(f, op, A, 1, length(A))
+mapreduce_impl(f, op, A::AbstractArray) = mapreduce_seq_impl(f, op, A, 1, length(A))
 mapreduce_impl(f, op::AddFun, A::AbstractArray) = 
     mapreduce_pairwise_impl(f, op, A, 1, length(A), sum_pairwise_blocksize(f))
 
-function mapreduce(f, op::Union(Function,Func{2}), A::AbstractArray)
+function mapreduce(f, op, A::AbstractArray)
     n = length(A)
     n == 0 && error("Argument is empty.")
-    n == 1 && evaluate(f, A[1])
+    n == 1 && return evaluate(f, A[1])
     mapreduce_impl(f, op, A)
 end
-
-
-# function mapreduce(f::Callable, op::Callable, itr)
-#     s = start(itr)
-#     if done(itr, s)
-#         error("argument is empty")
-#     end
-#     (x, s) = next(itr, s)
-#     v = f(x)
-#     if done(itr, s)
-#         return v
-#     else # specialize for length > 1 to have a hopefully type-stable loop
-#         (x, s) = next(itr, s)
-#         result = op(v, f(x))
-#         while !done(itr, s)
-#             (x, s) = next(itr, s)
-#             result = op(result, f(x))
-#         end
-#         return result
-#     end
-# end
-
-function mapreduce(f::Callable, op::Callable, v0, itr)
-    v = v0
-    for x in itr
-        v = op(v,f(x))
-    end
-    return v
-end
-
-# # pairwise reduction, requires n > 1 (to allow type-stable loop)
-# function mr_pairwise(f::Callable, op::Callable, A::AbstractArray, i1,n)
-#     if n < 128
-#         @inbounds v = op(f(A[i1]), f(A[i1+1]))
-#         for i = i1+2:i1+n-1
-#             @inbounds v = op(v,f(A[i]))
-#         end
-#         return v
-#     else
-#         n2 = div(n,2)
-#         return op(mr_pairwise(f,op,A, i1,n2), mr_pairwise(f,op,A, i1+n2,n-n2))
-#     end
-# end
-# function mapreduce(f::Callable, op::Callable, A::AbstractArray)
-#     n = length(A)
-#     n == 0 ? error("argument is empty") : n == 1 ? f(A[1]) : mr_pairwise(f,op,A, 1,n)
-# end
-# function mapreduce(f::Callable, op::Callable, v0, A::AbstractArray)
-#     n = length(A)
-#     n == 0 ? v0 : n == 1 ? op(v0, f(A[1])) : op(v0, mr_pairwise(f,op,A, 1,n))
-# end
-
 
 reduce(op::Callable, v, itr) = foldl(op, v, itr)
 
