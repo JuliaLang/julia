@@ -51,14 +51,14 @@ function mapfoldl_impl(f, op, v0, itr, i)
     end
 end
 
-mapfoldl(f, op, v0, itr) = mapfoldl_impl(op, v0, itr, start(itr))
+mapfoldl(f, op, v0, itr) = mapfoldl_impl(f, op, v0, itr, start(itr))
 
 function mapfoldl(f, op::Function, v0, itr)
-    is(op, +) && return mapfoldl(f, AddFun(), v0, itr)
-    is(op, *) && return mapfoldl(f, MulFun(), v0, itr)
-    is(op, &) && return mapfoldl(f, AndFun(), v0, itr)
-    is(op, |) && return mapfoldl(f, OrFun(), v0, itr)
-    return mapfoldl_impl(f, op, v0, itr, start(itr))
+    is(op, +) ? mapfoldl(f, AddFun(), v0, itr) :
+    is(op, *) ? mapfoldl(f, MulFun(), v0, itr) :
+    is(op, &) ? mapfoldl(f, AndFun(), v0, itr) :
+    is(op, |) ? mapfoldl(f, OrFun(), v0, itr) :
+    mapfoldl_impl(f, op, v0, itr, start(itr))
 end
 
 function mapfoldl(f, op, itr)
@@ -97,7 +97,6 @@ foldr(op, itr) = mapfoldr(IdFun(), op, itr)
 ## reduce & mapreduce
 
 # mapreduce_***_impl require ifirst < ilast
-
 function mapreduce_seq_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int)
     @inbounds fx1 = evaluate(f, A[ifirst])
     @inbounds fx2 = evaluate(f, A[ifirst+=1])
@@ -110,13 +109,13 @@ function mapreduce_seq_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int)
 end
 
 function mapreduce_pairwise_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int, blksize::Int)
-    if ifirst + blksiz < ilast
+    if ifirst + blksize > ilast
         return mapreduce_seq_impl(f, op, A, ifirst, ilast)
     else
         imid = (ifirst + ilast) >>> 1
         v1 = mapreduce_seq_impl(f, op, A, ifirst, imid)
         v2 = mapreduce_seq_impl(f, op, A, imid+1, ilast)
-        evaluate(op, v1, v2)
+        return evaluate(op, v1, v2)
     end
 end
 
@@ -124,55 +123,34 @@ mapreduce(f, op, itr) = mapfoldl(f, op, itr)
 mapreduce(f, op, v0, itr) = mapfoldl(f, op, v0, itr)
 
 # select different implementation depending on input arguments
-mapreduce_impl(f, op, A::AbstractArray) = mapreduce_seq_impl(f, op, A, 1, length(A))
-mapreduce_impl(f, op::AddFun, A::AbstractArray) = 
-    mapreduce_pairwise_impl(f, op, A, 1, length(A), sum_pairwise_blocksize(f))
+mapreduce_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int) = 
+    mapreduce_seq_impl(f, op, A, ifirst, ilast)
+
+# Note: sum_seq uses four accumulators, so each accumulator gets at most 256 numbers
+sum_pairwise_blocksize(f) = 1024
+
+mapreduce_impl(f, op::AddFun, A::AbstractArray, ifirst::Int, ilast::Int) = 
+    mapreduce_pairwise_impl(f, op, A, ifirst, ilast, sum_pairwise_blocksize(f))
+
+function _mapreduce(f, op, A::AbstractArray)
+    n = length(A)
+    n == 0 ? error("Argument is empty.") :
+    n == 1 ? evaluate(f, A[1]) :
+    mapreduce_impl(f, op, A, 1, n)
+end
+
+mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, A)
 
 function mapreduce(f, op, A::AbstractArray)
-    n = length(A)
-    n == 0 && error("Argument is empty.")
-    n == 1 && return evaluate(f, A[1])
-    mapreduce_impl(f, op, A)
+    is(op, +) ? _mapreduce(f, AddFun(), A) :
+    is(op, *) ? _mapreduce(f, MulFun(), A) :
+    is(op, &) ? _mapreduce(f, AndFun(), A) :
+    is(op, |) ? _mapreduce(f, OrFun(), A) :
+    _mapreduce(f, op, A)
 end
 
-reduce(op::Callable, v, itr) = foldl(op, v, itr)
-
-function reduce(op::Callable, itr) # this is a left fold
-    if is(op, +)
-        return sum(itr)
-    elseif is(op, *)
-        return prod(itr)
-    elseif is(op, |)
-        return any(itr)
-    elseif is(op, &)
-        return all(itr)
-    end
-    return foldl(op, itr)
-end
-
-# pairwise reduction, requires n > 1 (to allow type-stable loop)
-function r_pairwise(op::Callable, A::AbstractArray, i1,n)
-    if n < 128
-        @inbounds v = op(A[i1], A[i1+1])
-        for i = i1+2:i1+n-1
-            @inbounds v = op(v,A[i])
-        end
-        return v
-    else
-        n2 = div(n,2)
-        return op(r_pairwise(op,A, i1,n2), r_pairwise(op,A, i1+n2,n-n2))
-    end
-end
-
-function reduce(op::Callable, A::AbstractArray)
-    n = length(A)
-    n == 0 ? error("argument is empty") : n == 1 ? A[1] : r_pairwise(op,A, 1,n)
-end
-
-function reduce(op::Callable, v0, A::AbstractArray)
-    n = length(A)
-    n == 0 ? v0 : n == 1 ? op(v0, A[1]) : op(v0, r_pairwise(op,A, 1,n))
-end
+reduce(op, v0, itr) = mapreduce(IdFun(), op, v0, itr)
+reduce(op, itr) = mapreduce(IdFun(), op, itr)
 
 
 ###### Specific reduction functions ######
@@ -300,9 +278,6 @@ sumabs2(itr) = sum(Abs2Fun(), itr)
 
 sumabs(x::Number) = abs(x)
 sumabs2(x::Number) = abs2(x)
-
-# Note: sum_seq uses four accumulators, so each accumulator gets at most 256 numbers
-sum_pairwise_blocksize(f) = 1024
 
 # a fast implementation of sum in sequential order (from left to right).
 # to allow type-stable loops, requires length > 1
