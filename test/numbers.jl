@@ -1468,6 +1468,8 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 # issue 3412
 @test convert(Rational{Int32},0.5) === int32(1)//int32(2)
 
+@test isa(convert(Float64, big(1)//2), Float64)
+
 # primes
 
 @test Base.primes(10000) == [
