@@ -134,17 +134,19 @@ mapreduce(f, op, v0, itr) = mapfoldl(f, op, v0, itr)
 mapreduce_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int) = 
     mapreduce_seq_impl(f, op, A, ifirst, ilast)
 
-# for specific functions
-reduce_empty(f, op, T) = error("Reducing over an empty array is not allow.")
-reduce_empty(::IdFun, op::AddFun, T) = r_promote(op, zero(T))
-reduce_empty(::AbsFun, op::AddFun, T) = r_promote(op, abs(zero(T)))
-reduce_empty(::Abs2Fun, op::AddFun, T) = r_promote(op, abs2(zero(T)))
-reduce_empty(::IdFun, op::MulFun, T) = r_promote(op, one(T))
+# handling empty arrays
+mr_empty(f, op, T) = error("Reducing over an empty array is not allow.")
+mr_empty(::IdFun, op::AddFun, T) = r_promote(op, zero(T))
+mr_empty(::AbsFun, op::AddFun, T) = r_promote(op, abs(zero(T)))
+mr_empty(::Abs2Fun, op::AddFun, T) = r_promote(op, abs2(zero(T)))
+mr_empty(::IdFun, op::MulFun, T) = r_promote(op, one(T))
+mr_empty(::AbsFun, op::MaxFun, T) = abs(zero(T))
+mr_empty(::Abs2Fun, op::MaxFun, T) = abs2(zero(T))
 
 function _mapreduce{T}(f, op, A::AbstractArray{T})
     n = length(A)
     if n == 0
-        return reduce_empty(f, op, T)
+        return mr_empty(f, op, T)
     elseif n == 1
         return r_promote(op, evaluate(f, A[1]))
     elseif n < 16
@@ -310,12 +312,11 @@ minabs(a) = mapreduce(AbsFun(), MinFun(), a)
 ## extrema
 
 extrema(r::Range) = (minimum(r), maximum(r))
+extrema(x::Real) = (x, x)
 
 function extrema(itr)
     s = start(itr)
-    if done(itr, s)
-        error("argument is empty")
-    end
+    done(itr, s) && error("argument is empty")
     (v, s) = next(itr, s)
     vmin = v
     vmax = v

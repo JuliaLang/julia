@@ -1,6 +1,5 @@
-## foldl & foldr
 
-# folds 
+# fold(l|r) & mapfold(l|r)
 @test foldl(-, 1:5) == -13
 @test foldl(-, 10, 1:5) == -5
 
@@ -13,23 +12,49 @@
 @test Base.mapfoldr(abs2, -, 2:5) == -14
 @test Base.mapfoldr(abs2, -, 10, 2:5) == -4
 
-
-# reduce 
+# reduce & mapreduce
 @test reduce((x,y)->"($x+$y)", [9:11]) == "((9+10)+11)"
 @test reduce(max, [8 6 7 5 3 0 9]) == 9
 @test reduce(+, 1000, [1:5]) == (1000 + 1 + 2 + 3 + 4 + 5)
 
-# mapreduce 
 @test mapreduce(-, +, [-10 -9 -3]) == ((10 + 9) + 3)
 @test mapreduce((x)->x[1:3], (x,y)->"($x+$y)", ["abcd", "efgh", "01234"]) == "((abc+efg)+012)"
 
+# sum
 
-z = zeros(2,2,2,2)
-for i=1:16
-    z[i] = i
-end
+@test sum(Int8[]) === 0
+@test sum(Int[]) === 0
+@test sum(Float64[]) === 0.0
 
-@test sum(z) == sum(z,(1,2,3,4))[1] == 136
+@test sum(int8(3)) === int8(3)
+@test sum(3) === 3
+@test sum(3.0) === 3.0
+
+@test sum([int8(3)]) === 3
+@test sum([3]) === 3
+@test sum([3.0]) === 3.0
+
+z = reshape(1:16, (2,2,2,2))
+fz = float(z)
+@test sum(z) === 136
+@test sum(fz) === 136.0
+
+@test_throws ErrorException sum(sin, Int[])
+@test sum(sin, 3) == sin(3.0)
+@test sum(sin, [3]) == sin(3.0)
+@test sum(sin, z) == sum(sin, fz) == sum(sin(fz))
+
+z = [-4, -3, 2, 5]
+fz = float(z)
+@test Base.sumabs(Float64[]) === 0.0
+@test Base.sumabs([int8(-2)]) === 2
+@test Base.sumabs(z) === 14
+@test Base.sumabs(fz) === 14.0
+
+@test Base.sumabs2(Float64[]) === 0.0
+@test Base.sumabs2([int8(-2)]) === 4
+@test Base.sumabs2(z) === 54
+@test Base.sumabs2(fz) === 54.0
 
 # check variants of summation for type-stability and other issues (#6069)
 sum2(itr) = invoke(sum, (Any,), itr)
@@ -55,48 +80,36 @@ for f in (sum3, sum4, sum7, sum8)
 end
 @test typeof(sum(Int8[])) == typeof(sum(Int8[1])) == typeof(sum(Int8[1 7]))
 
-prod2(itr) = invoke(prod, (Any,), itr)
-@test prod(Int[]) == prod2(Int[]) == 1
-@test prod(Int[7]) == prod2(Int[7]) == 7
-@test typeof(prod(Int8[])) == typeof(prod(Int8[1])) == typeof(prod(Int8[1 7])) == typeof(prod2(Int8[])) == typeof(prod2(Int8[1])) == typeof(prod2(Int8[1 7]))
-
-v = cell(2,2,1,1)
-v[1,1,1,1] = 28.0
-v[1,2,1,1] = 36.0
-v[2,1,1,1] = 32.0
-v[2,2,1,1] = 40.0
-
-@test isequal(v,sum(z,(3,4)))
-
 @test sum_kbn([1,1e100,1,-1e100]) == 2
 
-z = rand(10^6)
-let es = sum_kbn(z), es2 = sum_kbn(z[1:10^5])
-    @test (es - sum(z)) < es * 1e-13
-    cs = cumsum(z)
-    @test (es - cs[end]) < es * 1e-13
-    @test (es2 - cs[10^5]) < es2 * 1e-13
-end
+# prod
 
-@test_throws ErrorException sum(sin, Int[])
-@test Base.sumabs(Float64[]) === 0.0
-@test Base.sumabs2(Float64[]) === 0.0
+prod(Int[]) === 0
+prod(Int8[]) === 0
+prod(Float64[]) === 0.0
 
-@test sum(sin, [1]) == sin(1)
-@test Base.sumabs([int8(-2)]) === 2
-@test Base.sumabs2([int8(-2)]) === 4
+prod([3]) === 0
+prod([int8(3)]) === 0
+prod([3.0]) === 0.0
 
-x = -2:3
-@test sum(sin, x) == sum(sin(x))
-@test Base.sumabs(x) === 9
-@test Base.sumabs2(x) === 19
+prod(z) === 120
+prod(fz) === 120.0
 
-@test_approx_eq sum(sin, z) sum(sin(z))
-@test_approx_eq Base.sumabs(z) sum(abs(z))
-@test_approx_eq Base.sumabs2(z) sum(abs2(z))
+# check type-stability
+prod2(itr) = invoke(prod, (Any,), itr)
+@test prod(Int[]) === prod2(Int[]) === 1
+@test prod(Int[7]) === prod2(Int[7]) === 7
+@test typeof(prod(Int8[])) == typeof(prod(Int8[1])) == typeof(prod(Int8[1, 7])) == Int 
+@test typeof(prod2(Int8[])) == typeof(prod2(Int8[1])) == typeof(prod2(Int8[1 7])) == Int
+
+# maximum & minimum & extrema
+
+@test_throws ErrorException maximum(Int[])
+@test_throws ErrorException minimum(Int[])
 
 @test maximum(5) == 5
 @test minimum(5) == 5
+@test extrema(5) == (5, 5)
 
 @test maximum([4, 3, 5, 2]) == 5
 @test minimum([4, 3, 5, 2]) == 2
@@ -110,24 +123,59 @@ x = -2:3
 @test minimum([4., 3., NaN, 5., 2.]) == 2.
 @test extrema([4., 3., NaN, 5., 2.]) == (2., 5.)
 
-@test extrema(1:5) == (1,5)
+@test Base.maxabs(Int[]) == 0
+@test_throws ErrorException Base.minabs(Int[])
 
 @test Base.maxabs(-2) == 2
 @test Base.minabs(-2) == 2
 @test Base.maxabs([1, -2, 3, -4]) == 4
 @test Base.minabs([-1, 2, -3, 4]) == 1
 
-@test maximum(abs2, 3:7) == 49
-@test minimum(abs2, 3:7) == 9
+@test maximum(x->abs2(x), 3:7) == 49
+@test minimum(x->abs2(x), 3:7) == 9
 
-@test any([true false; false false], 2) == [true false]'
-@test any([true false; false false], 1) == [true false]
+# any & all
 
-@test all([true true; false true], 2) == [true false]'
-@test all([true false; false true], 1) == [false false]
+@test any(Bool[]) == false
+@test any([true]) == true
+@test any([false, false]) == false
+@test any([false, true]) == true
+@test any([true, false]) == true
+@test any([true, true]) == true
+@test any([true, true, true]) == true
+@test any([true, false, true]) == true
+@test any([false, false, false]) == false
+
+@test all(Bool[]) == true
+@test all([true]) == true
+@test all([false, false]) == false
+@test all([false, true]) == false
+@test all([true, false]) == false
+@test all([true, true]) == true
+@test all([true, true, true]) == true
+@test all([true, false, true]) == false
+@test all([false, false, false]) == false
+
+@test any(x->x>0, Int[]) == false
+@test any(x->x>0, [-3]) == false
+@test any(x->x>0, [4]) == true
+@test any(x->x>0, [-3, 4, 5]) == true
+
+@test all(x->x>0, Int[]) == true
+@test all(x->x>0, [-3]) == false
+@test all(x->x>0, [4]) == true
+@test all(x->x>0, [-3, 4, 5]) == false
 
 
 ## cumsum, cummin, cummax
+
+z = rand(10^6)
+let es = sum_kbn(z), es2 = sum_kbn(z[1:10^5])
+    @test (es - sum(z)) < es * 1e-13
+    cs = cumsum(z)
+    @test (es - cs[end]) < es * 1e-13
+    @test (es2 - cs[10^5]) < es2 * 1e-13
+end
 
 @test isequal(cummin([1, 2, 5, -1, 3, -2]), [1, 1, 1, -1, -1, -2])
 @test isequal(cummax([1, 2, 5, -1, 3, -2]), [1, 2, 5, 5, 5, 5])
