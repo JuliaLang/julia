@@ -32,7 +32,7 @@ end
 #Issue 6154
 @test binomial(int32(34), int32(15)) == binomial(BigInt(34), BigInt(15)) == 1855967520
 @test binomial(int64(67), int64(29)) == binomial(BigInt(67), BigInt(29)) == 7886597962249166160
-@test binomial(int128(131), int128(62)) == binomial(BigInt(131), BigInt(62)) == 157311720980559117816198361912717812000 
+@test binomial(int128(131), int128(62)) == binomial(BigInt(131), BigInt(62)) == 157311720980559117816198361912717812000
 
 # issue #6579
 @test factorial(0) == 1
