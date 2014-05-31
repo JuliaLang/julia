@@ -23,7 +23,7 @@ end
 function install(pkg::String, sha1::String)
     prefetch(pkg, sha1)
     if isdir(".trash/$pkg")
-        run(`mv .trash/$pkg ./`)
+        mv(".trash/$pkg", "./$pkg")
     else
         Git.run(`clone -q $(Cache.path(pkg)) $pkg`)
     end
@@ -40,7 +40,7 @@ end
 function remove(pkg::String)
     isdir(".trash") || mkdir(".trash")
     ispath(".trash/$pkg") && run(`rm -rf .trash/$pkg`)
-    run(`mv $pkg .trash/`)
+    mv(pkg, ".trash/$pkg")
 end
 
 end # module
