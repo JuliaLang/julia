@@ -166,6 +166,25 @@ prod2(itr) = invoke(prod, (Any,), itr)
 @test all(x->x>0, [4]) == true
 @test all(x->x>0, [-3, 4, 5]) == false
 
+# in
+
+@test in(1, Int[]) == false
+@test in(1, Int[1]) == true
+@test in(1, Int[2]) == false
+@test in(0, 1:3) == false
+@test in(1, 1:3) == true
+@test in(2, 1:3) == true
+
+# count & countnz
+
+@test count(x->x>0, Int[]) == 0
+@test count(x->x>0, -3:5) == 5
+
+@test countnz(Int[]) == 0
+@test countnz(Int[0]) == 0
+@test countnz(Int[1]) == 1
+@test countnz([1, 0, 2, 0, 3, 0, 4]) == 4
+
 
 ## cumsum, cummin, cummax
 

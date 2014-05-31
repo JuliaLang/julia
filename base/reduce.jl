@@ -142,6 +142,8 @@ mr_empty(::Abs2Fun, op::AddFun, T) = r_promote(op, abs2(zero(T)))
 mr_empty(::IdFun, op::MulFun, T) = r_promote(op, one(T))
 mr_empty(::AbsFun, op::MaxFun, T) = abs(zero(T))
 mr_empty(::Abs2Fun, op::MaxFun, T) = abs2(zero(T))
+mr_empty(f, op::AndFun, T) = true
+mr_empty(f, op::OrFun, T) = false
 
 function _mapreduce{T}(f, op, A::AbstractArray{T})
     n = length(A)
@@ -264,7 +266,7 @@ prod(A::AbstractArray{Bool}) =
 
 ## maximum & minimum
 
-function mapreduce_seq_impl(f, op::MaxFun, A::AbstractArray, first::Int, last::Int)
+function mapreduce_impl(f, op::MaxFun, A::AbstractArray, first::Int, last::Int)
     # locate the first non NaN number
     v = evaluate(f, A[first])
     i = first + 1
@@ -282,7 +284,7 @@ function mapreduce_seq_impl(f, op::MaxFun, A::AbstractArray, first::Int, last::I
     v
 end
 
-function mapreduce_seq_impl(f, op::MinFun, A::AbstractArray, first::Int, last::Int)
+function mapreduce_impl(f, op::MinFun, A::AbstractArray, first::Int, last::Int)
     # locate the first non NaN number
     v = evaluate(f, A[first])
     i = first + 1
@@ -362,53 +364,63 @@ end
 
 ## all & any
 
-function all(itr)
+function mapfoldl(f, ::AndFun, itr)
     for x in itr
-        if !x
+        if !evaluate(f, x)
             return false
         end
     end
     return true
 end
 
-function any(itr)
+function mapfoldl(f, ::OrFun, itr)
     for x in itr
-        if x
+        if evaluate(f, x)
             return true
         end
     end
     return false
 end
 
-function any(pred::Union(Function,Func{1}), itr)
-    for x in itr
-        if evaluate(pred, x)
-            return true
-        end
-    end
-    return false
-end
-
-function all(pred::Union(Function,Func{1}), itr)
-    for x in itr
-        if !evaluate(pred, x)
+function mapreduce_impl(f, op::AndFun, A::AbstractArray, ifirst::Int, ilast::Int)
+    while ifirst <= ilast
+        @inbounds x = A[ifirst]
+        if !evaluate(f, x)
             return false
         end
+        ifirst += 1
     end
     return true
 end
+
+function mapreduce_impl(f, op::OrFun, A::AbstractArray, ifirst::Int, ilast::Int)
+    while ifirst <= ilast
+        @inbounds x = A[ifirst]
+        if evaluate(f, x)
+            return true
+        end
+        ifirst += 1
+    end
+    return false
+end
+
+all(a) = mapreduce(IdFun(), AndFun(), a)
+any(a) = mapreduce(IdFun(), OrFun(), a)
+
+all(pred::Union(Function,Func{1}), a) = mapreduce(pred, AndFun(), a)
+any(pred::Union(Function,Func{1}), a) = mapreduce(pred, OrFun(), a)
 
 
 ## in & contains
 
-function in(x, itr)
-    for y in itr
-        if y == x
-            return true
-        end
-    end
-    return false
+immutable EqX{T} <: Func{1}
+    x::T
 end
+EqX{T}(x::T) = EqX{T}(x)
+evaluate(f::EqX, y) = (y == f.x)
+
+in(x, itr) = any(EqX(x), itr)
+
 const ∈ = in
 ∉(x, itr)=!∈(x, itr)
 ∋(itr, x)= ∈(x, itr)
@@ -431,33 +443,31 @@ end
 
 ## countnz & count
 
-function countnz(itr)
+function count(pred::Union(Function,Func{1}), itr)
     n = 0
     for x in itr
-        if x != 0
+        if evaluate(pred, x)
             n += 1
         end
     end
     return n
 end
 
-function countnz(a::AbstractArray)
+function count(pred::Union(Function,Func{1}), a::AbstractArray)
     n = 0
-    for i = 1:length(a)
-        @inbounds x = a[i]
-        if x != 0
+    i = 0
+    len = length(a)
+    while i < len
+        @inbounds x = a[i+=1]
+        if evaluate(pred, x)
             n += 1
         end
     end
     return n
 end
 
-function count(pred::Function, itr)
-    n = 0
-    for x in itr
-        if pred(x)
-            n += 1
-        end
-    end
-    return n
-end
+type NotEqZero <: Func{1} end
+evaluate(NotEqZero, x) = (x != 0)
+
+countnz(a) = count(NotEqZero(), a)
+
