@@ -443,7 +443,7 @@ length(p::SetPartitions) = nsetpartitions(length(p.s))
 partitions(s::AbstractVector) = SetPartitions(s)
 
 start(p::SetPartitions) = (n = length(p.s); (zeros(Int32, n), ones(Int32, n-1), n, 1))
-done(p::SetPartitions, s) = !isempty(s) && s[1][1] > 0
+done(p::SetPartitions, s) = s[1][1] > 0
 next(p::SetPartitions, s) = nextsetpartition(p.s, s...)
 
 function nextsetpartition(s::AbstractVector, a, b, n, m)
