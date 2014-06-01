@@ -99,6 +99,7 @@ function study(regex::Ptr{Void}, options::Integer)
     end
     extra
 end
+
 study(re::Ptr{Void}) = study(re, int32(0))
 
 free_study(extra::Ptr{Void}) =
@@ -106,17 +107,24 @@ free_study(extra::Ptr{Void}) =
 free(regex::Ptr{Void}) =
     ccall(unsafe_load(cglobal((:pcre_free, :libpcre),Ptr{Void})), Void, (Ptr{Void},), regex)
 
-exec(regex::Ptr{Void}, extra::Ptr{Void}, str::SubString, offset::Integer, options::Integer, cap::Bool) =
-    exec(regex, extra, str.string, str.offset, offset, sizeof(str), options, cap)
-exec(regex::Ptr{Void}, extra::Ptr{Void}, str::ByteString, offset::Integer, options::Integer, cap::Bool) =
-    exec(regex, extra, str, 0, offset, sizeof(str), options, cap)
+function exec(regex::Ptr{Void}, extra::Ptr{Void}, str::SubString, offset::Integer,
+              options::Integer, ovec::Vector{Int32})
+    return exec(regex, extra, str.string, str.offset, offset, sizeof(str),
+                options, ovec)
+end
+
+function exec(regex::Ptr{Void}, extra::Ptr{Void}, str::ByteString, offset::Integer,
+              options::Integer, ovec::Vector{Int32})
+    return exec(regex, extra, str, 0, offset, sizeof(str), options, ovec)
+end
+
 function exec(regex::Ptr{Void}, extra::Ptr{Void},
-              str::ByteString, shift::Integer, offset::Integer, len::Integer, options::Integer, cap::Bool)
+              str::ByteString, shift::Integer, offset::Integer,
+              len::Integer, options::Integer,
+              ovec::Vector{Int32})
     if offset < 0 || len < offset || len+shift > sizeof(str)
         error(BoundsError)
     end
-    ncap = info(regex, extra, INFO_CAPTURECOUNT, Int32)
-    ovec = Array(Int32, 3(ncap+1))
     n = ccall((:pcre_exec, :libpcre), Int32,
               (Ptr{Void}, Ptr{Void}, Ptr{Uint8}, Int32,
                Int32, Int32, Ptr{Int32}, Int32),
@@ -125,7 +133,7 @@ function exec(regex::Ptr{Void}, extra::Ptr{Void},
     if n < -1
         error("error $n")
     end
-    cap ? ((n > -1 ? ovec[1:2(ncap+1)] : Array(Int32,0)), ncap) : n > -1
+    return n > -1
 end
 
 end # module
