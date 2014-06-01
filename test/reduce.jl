@@ -119,6 +119,10 @@ prod2(itr) = invoke(prod, (Any,), itr)
 @test isnan(minimum([NaN]))
 @test isequal(extrema([NaN]), (NaN, NaN))
 
+@test maximum([NaN, 2., 3.]) == 3.
+@test minimum([NaN, 2., 3.]) == 2.
+@test extrema([NaN, 2., 3.]) == (2., 3.)
+
 @test maximum([4., 3., NaN, 5., 2.]) == 5.
 @test minimum([4., 3., NaN, 5., 2.]) == 2.
 @test extrema([4., 3., NaN, 5., 2.]) == (2., 5.)

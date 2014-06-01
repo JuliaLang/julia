@@ -320,12 +320,12 @@ function extrema(itr)
     s = start(itr)
     done(itr, s) && error("argument is empty")
     (v, s) = next(itr, s)
-    vmin = v
-    vmax = v
     while v != v && !done(itr, s)
         (x, s) = next(itr, s)
         v = x
     end
+    vmin = v
+    vmax = v
     while !done(itr, s)
         (x, s) = next(itr, s)
         if x > vmax
