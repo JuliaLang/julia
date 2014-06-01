@@ -248,6 +248,8 @@ include("constants.jl")
 # Numerical integration
 include("quadgk.jl")
 importall .QuadGK
+include("integrate.jl")
+importall .Integrate
 
 # deprecated functions
 include("deprecated.jl")
