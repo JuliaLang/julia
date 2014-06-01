@@ -260,10 +260,27 @@ function search(buf::IOBuffer, delim)
     q = ccall(:memchr,Ptr{Uint8},(Ptr{Uint8},Int32,Csize_t),p,delim,nb_available(buf))
     nb = (q == C_NULL ? 0 : q-p+1)
 end
+
 function readuntil(io::IOBuffer, delim::Uint8)
-    nb = search(io, delim)
-    if nb == 0
-        nb = nb_available(io)
+    lb = 70
+    A = Array(Uint8, lb)
+    n = 0
+    data = io.data
+    for i = io.ptr : io.size
+        n += 1
+        if n > lb
+            lb = n*2
+            resize!(A, lb)
+        end
+        @inbounds b = data[i]
+        @inbounds A[n] = b
+        if b == delim
+            break
+        end
     end
-    read!(io, Array(Uint8, nb))
+    io.ptr += n
+    if lb != n
+        resize!(A, n)
+    end
+    A
 end
