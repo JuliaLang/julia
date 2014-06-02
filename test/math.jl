@@ -219,27 +219,18 @@ end
 @test_approx_eq quadgk(cos, 0,0.7,1, norm=abs)[1] sin(1)
 
 # simple integration: trapz, simps
-# first test functional accuracy
-@test_approx_eq trapz(x -> 3x, 0.5,1)  3/2*(1 - 0.5^2) 
-@test_approx_eq trapz(x -> x, 0,5,100) (5^2)/2
-@test_approx_eq simps(x -> 4.5x^2, 1, 2)  4.5/3*(2^3 - 1)
-@test_approx_eq_eps trapz(cos,BigFloat(0),BigFloat(1),100) sin(BigFloat(1)) 1e-5
-@test_approx_eq_eps simps(cos,BigFloat(0),BigFloat(1),100) sin(BigFloat(1)) 1e-10
+@test_approx_eq trapz([1:9])  (9^2 - 1)/2
+@test_approx_eq simps(4.5*[1:0.1:2].^2, 0.1)  4.5/3*(2^3 - 1)
 # now test consistency between methods
-function test_integrate(f::Function, a, b, n, fint::Function)
-    x = linspace(a,b,n+1)
+for (fint,a,b,n,f) in [ (trapz, 1,  2, 10, x->2x), 
+                        (simps, 1, 11, 20, x->3x^2) ] 
     dx = (b - a) / n
+    x = [a:dx:b]
     y = map(f,x)
-    res = fint(f,a,b,n)
-    # test scalar dx, y-vector version
-    @test_approx_eq res fint(y,dx)
-    # test x-,y- vector version
-    @test_approx_eq res fint(y,x)
+    @test_approx_eq fint(y,dx) fint(y,x)
 end
-test_integrate(x->x, 1,2,10, trapz)
-test_integrate(x->x^2, 1,2,10, simps)
 # test unequal spacings for vector input
-@test_approx_eq simps([3,192,243], [1,8,9]) (9^3 - 1)
+@test_approx_eq simps(3*[1,8,9].^2, [1,8,9]) (9^3 - 1)
 @test_approx_eq trapz([1,8,9], [1,8,9]) (9^2 - 1)/2
 
 # Ensure subnormal flags functions don't segfault
