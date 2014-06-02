@@ -275,7 +275,7 @@ static void run_finalizer(jl_value_t *o, jl_value_t *ff)
         }
         JL_CATCH {
             JL_PRINTF(JL_STDERR, "error in running finalizer: ");
-            jl_show(jl_stderr_obj(), jl_exception_in_transit);
+            jl_static_show(JL_STDERR, jl_exception_in_transit);
             JL_PUTC('\n',JL_STDERR);
         }
         ff = jl_t1(ff);
@@ -287,7 +287,7 @@ static void run_finalizer(jl_value_t *o, jl_value_t *ff)
     }
     JL_CATCH {
         JL_PRINTF(JL_STDERR, "error in running finalizer: ");
-        jl_show(jl_stderr_obj(), jl_exception_in_transit);
+        jl_static_show(JL_STDERR, jl_exception_in_transit);
         JL_PUTC('\n',JL_STDERR);
     }
 }
