@@ -310,7 +310,7 @@ function uvfinalize(uv)
     uv.handle = 0
 end
 
-function uvfinalize(uv::Union(TTY,Pipe,TcpServer,TcpSocket))
+function uvfinalize(uv::Union(TTY,Pipe,PipeServer,TcpServer,TcpSocket))
     if (uv.status != StatusUninit && uv.status != StatusInit)
         close(uv)
     end
