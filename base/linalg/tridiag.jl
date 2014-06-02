@@ -144,14 +144,14 @@ immutable Tridiagonal{T} <: AbstractMatrix{T}
     dl::Vector{T}    # sub-diagonal
     d::Vector{T}     # diagonal
     du::Vector{T}    # sup-diagonal
-    du2::Vector{T}   # supsup-diagonal for pivoting
+    function Tridiagonal(dl::Vector{T}, d::Vector{T}, du::Vector{T})
+        length(dl) == length(d)-1 == length(du) || error(string("Cannot make Tridiagonal from incompatible lengths of subdiagonal, diagonal and superdiagonal: (", length(dl), ", ", length(d), ", ", length(du),")"))
+        new(dl, d, du)
+    end   
 end
+
 function Tridiagonal{T}(dl::Vector{T}, d::Vector{T}, du::Vector{T})
-    n = length(d)
-    if (length(dl) != n-1 || length(du) != n-1)
-        error(string("Cannot make Tridiagonal from incompatible lengths of subdiagonal, diagonal and superdiagonal: (", length(dl), ", ", length(d), ", ", length(du),")"))
-    end
-    Tridiagonal(dl, d, du, zeros(T,n-2))
+    Tridiagonal{T}(dl::Vector{T}, d::Vector{T}, du::Vector{T})
 end
 function Tridiagonal{Tl, Td, Tu}(dl::Vector{Tl}, d::Vector{Td}, du::Vector{Tu})
     Tridiagonal(map(v->convert(Vector{promote_type(Tl,Td,Tu)}, v), (dl, d, du))...)
@@ -176,23 +176,30 @@ function similar(M::Tridiagonal, T, dims::Dims)
     if length(dims) != 2 || dims[1] != dims[2]
         throw(DimensionMismatch("Tridiagonal matrices must be square"))
     end
-    Tridiagonal{T}(similar(M.dl), similar(M.d), similar(M.du), similar(M.du2))
+    Tridiagonal{T}(similar(M.dl), similar(M.d), similar(M.du))
 end
 
 # Operations on Tridiagonal matrices
-copy!(dest::Tridiagonal, src::Tridiagonal) = Tridiagonal(copy!(dest.dl, src.dl), copy!(dest.d, src.d), copy!(dest.du, src.du), copy!(dest.du2, src.du2))
+copy!(dest::Tridiagonal, src::Tridiagonal) = Tridiagonal(copy!(dest.dl, src.dl), copy!(dest.d, src.d), copy!(dest.du, src.du))
 
 #Elementary operations
 for func in (:copy, :round, :iround, :conj) 
     @eval begin
-        ($func)(M::Tridiagonal) = Tridiagonal(map(($func), (M.dl, M.d, M.du, M.du2))...)
+        ($func)(M::Tridiagonal) = Tridiagonal(map(($func), (M.dl, M.d, M.du,))...)
     end
 end
 
 transpose(M::Tridiagonal) = Tridiagonal(M.du, M.d, M.dl)
 ctranspose(M::Tridiagonal) = conj(transpose(M))
 
-diag{T}(M::Tridiagonal{T}, n::Integer=0) = n==0 ? M.d : n==-1 ? M.dl : n==1 ? M.du : abs(n)<size(M,1) ? zeros(T,size(M,1)-abs(n)) : throw(BoundsError()) 
+function diag{T}(M::Tridiagonal{T}, n::Integer=0) 
+    n==0 ? M.d : 
+    n==-1 ? M.dl : 
+    n==1 ? M.du : 
+    abs(n)<size(M,1) ? zeros(T,size(M,1)-abs(n)) : 
+    throw(BoundsError()) 
+end
+
 function getindex{T}(A::Tridiagonal{T}, i::Integer, j::Integer)
     (1<=i<=size(A,2) && 1<=j<=size(A,2)) || throw(BoundsError())
     i==j ? A.d[i] : i==j+1 ? A.dl[j] : i+1==j ? A.du[i] : zero(T)
@@ -222,7 +229,7 @@ convert(::Type{Tridiagonal}, A::SymTridiagonal) = Tridiagonal(A.ev, A.dv, A.ev)
 -(A::Tridiagonal, B::SymTridiagonal) = Tridiagonal(A.dl-B.ev, A.d-B.dv, A.du-B.ev)
 -(A::SymTridiagonal, B::Tridiagonal) = Tridiagonal(A.ev-B.dl, A.dv-B.d, A.ev-B.du)
 
-convert{T}(::Type{Tridiagonal{T}},M::Tridiagonal) = Tridiagonal(convert(Vector{T}, M.dl), convert(Vector{T}, M.d), convert(Vector{T}, M.du), convert(Vector{T}, M.du2))
+convert{T}(::Type{Tridiagonal{T}},M::Tridiagonal) = Tridiagonal(convert(Vector{T}, M.dl), convert(Vector{T}, M.d), convert(Vector{T}, M.du))
 convert{T}(::Type{AbstractMatrix{T}},M::Tridiagonal) = convert(Tridiagonal{T}, M)
 convert{T}(::Type{Tridiagonal{T}}, M::SymTridiagonal{T}) = Tridiagonal(M)
 convert{T}(::Type{SymTridiagonal{T}}, M::Tridiagonal) = M.dl==M.du ? (SymTridiagonal(M.dl, M.d)) :
