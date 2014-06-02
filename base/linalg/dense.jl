@@ -30,13 +30,12 @@ isposdef(x::Number) = imag(x)==0 && real(x) > 0
 stride1(x::Array) = 1
 stride1(x::StridedVector) = stride(x, 1)::Int
 
-Base.sum_seq{T<:BlasFloat}(::Base.AbsFun, a::Union(Array{T},StridedVector{T}), ifirst::Int, ilast::Int) =
+import Base: mapreduce_seq_impl, AbsFun, Abs2Fun, AddFun
+
+mapreduce_seq_impl{T<:BlasFloat}(::AbsFun, ::AddFun, a::Union(Array{T},StridedVector{T}), ifirst::Int, ilast::Int) =
     BLAS.asum(ilast-ifirst+1, pointer(a, ifirst), stride1(a))
 
-# This appears to show a benefit from a larger block size
-Base.sum_pairwise_blocksize(::Base.Abs2Fun) = 4096
-
-function Base.sum_seq{T<:BlasFloat}(::Base.Abs2Fun, a::Union(Array{T},StridedVector{T}), ifirst::Int, ilast::Int)
+function mapreduce_seq_impl{T<:BlasFloat}(::Abs2Fun, ::AddFun, a::Union(Array{T},StridedVector{T}), ifirst::Int, ilast::Int)
     n = ilast-ifirst+1
     px = pointer(a, ifirst)
     incx = stride1(a)
