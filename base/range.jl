@@ -508,8 +508,7 @@ reverse(r::FloatRange)   = FloatRange(last(r), -r.step, r.len, r.divisor)
 ## sorting ##
 
 issorted(r::UnitRange) = true
-issorted(r::Range) = step(r) >= 0
-issorted{T,S}(r::StepRange{T,S}) = step(r) >= zero(S)
+issorted(r::Range) = step(r) >= zero(step(r))
 
 sort(r::UnitRange) = r
 sort!(r::UnitRange) = r
@@ -552,12 +551,7 @@ function map(f::Callable, r::Range)
 end
 
 function in(x, r::Range)
-    n = step(r) == 0 ? 1 : iround((x-first(r))/step(r))+1
-    n >= 1 && n <= length(r) && r[n] == x
-end
-
-function in{T,S}(x, r::StepRange{T,S})
-    n = step(r) == zero(S) ? 1 : iround((x-first(r))/step(r))+1
+    n = step(r) == zero(step(r)) ? 1 : iround((x-first(r))/step(r))+1
     n >= 1 && n <= length(r) && r[n] == x
 end
 
