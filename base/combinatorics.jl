@@ -41,6 +41,14 @@ else
 factorial(n::Union(Int8,Uint8,Int16,Uint16,Int32,Uint32)) = factorial(int64(n))
 end
 
+function gamma(n::Union(Int8,Uint8,Int16,Uint16,Int32,Uint32,Int64,Uint64))
+    n < 0 && throw(DomainError())
+    n == 0 && return Inf
+    n <= 2 && return 1.0
+    n > 20 && return gamma(float64(n))
+    @inbounds return float64(_fact_table64[n-1])
+end
+
 function factorial(n::Integer)
     n < 0 && throw(DomainError())
     local f::typeof(n*n), i::typeof(n*n)

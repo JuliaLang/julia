@@ -143,13 +143,7 @@ for relty in (Float32, Float64), elty in (relty, )#XXX Complex{relty}) doesn't w
 
     (e, v)=eig(SymTridiagonal(a,b))
     @test_approx_eq e w
-    #Take into account possible phase (sign) difference in eigenvectors
-    for i=1:n
-        ev1 = v[:,i]
-        ev2 = evecs[:,i]
-        deviation = min(abs(norm(ev1-ev2)),abs(norm(ev1+ev2)))
-        @test_approx_eq_eps deviation 0.0 n^2*eps(abs(convert(elty, 2.0)))
-    end
+    test_approx_eq_vecs(v, evecs)
 
     #stein! call using iblock and isplit
     w, iblock, isplit = LinAlg.LAPACK.stebz!('V','B',-infinity,infinity,0,0,zero,a,b)
