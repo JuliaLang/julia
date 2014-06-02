@@ -412,6 +412,18 @@ end
 
 modf(x) = rem(x,one(x)), trunc(x)
 
+const _modff_temp = Float32[0]
+function modf(x::Float32)
+    f = ccall((:modff,libm), Float32, (Float32,Ptr{Float32}), x, _modff_temp)
+    f, _modff_temp[1]
+end
+
+const _modf_temp = Float64[0]
+function modf(x::Float64)
+    f = ccall((:modf,libm), Float64, (Float64,Ptr{Float64}), x, _modf_temp)
+    f, _modf_temp[1]
+end
+
 ^(x::Float64, y::Float64) = nan_dom_err(ccall((:pow,libm),  Float64, (Float64,Float64), x, y), x+y)
 ^(x::Float32, y::Float32) = nan_dom_err(ccall((:powf,libm), Float32, (Float32,Float32), x, y), x+y)
 
