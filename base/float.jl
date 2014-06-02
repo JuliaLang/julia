@@ -72,7 +72,7 @@ iround{T<:Integer}(::Type{T}, x::FloatingPoint) = convert(T,round(x))
 
 if WORD_SIZE == 64
     iround(x::Float32) = iround(float64(x))
-    itrunc(x::Float32) = itrunc(float64(x))
+    itrunc(x::Float32) = box(Int64,fptosi(Int64,unbox(Float32,x)))
     iround(x::Float64) = box(Int64,fpsiround(unbox(Float64,x)))
     itrunc(x::Float64) = box(Int64,fptosi(unbox(Float64,x)))
 else
@@ -175,10 +175,10 @@ end
 ==(x::Int64  , y::Float64) = eqfsi64(unbox(Float64,y),unbox(Int64,x))
 ==(x::Uint64 , y::Float64) = eqfui64(unbox(Float64,y),unbox(Uint64,x))
 
-==(x::Float32, y::Int64  ) = eqfsi64(unbox(Float64,float64(x)),unbox(Int64,y))
-==(x::Float32, y::Uint64 ) = eqfui64(unbox(Float64,float64(x)),unbox(Uint64,y))
-==(x::Int64  , y::Float32) = eqfsi64(unbox(Float64,float64(y)),unbox(Int64,x))
-==(x::Uint64 , y::Float32) = eqfui64(unbox(Float64,float64(y)),unbox(Uint64,x))
+==(x::Float32, y::Int64  ) = eqfsi64(unbox(Float32,x),unbox(Int64,y))
+==(x::Float32, y::Uint64 ) = eqfui64(unbox(Float32,x),unbox(Uint64,y))
+==(x::Int64  , y::Float32) = eqfsi64(unbox(Float32,y),unbox(Int64,x))
+==(x::Uint64 , y::Float32) = eqfui64(unbox(Float32,y),unbox(Uint64,x))
 
 < (x::Float64, y::Int64  ) = ltfsi64(unbox(Float64,x),unbox(Int64,y))
 < (x::Float64, y::Uint64 ) = ltfui64(unbox(Float64,x),unbox(Uint64,y))
