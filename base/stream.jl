@@ -294,7 +294,9 @@ function wait_connected(x)
 end
 
 function wait_readbyte(x::AsyncStream, c::Uint8)
-    while isopen(x) && search(x.buffer,c) <= 0
+    nb = 0
+    while isopen(x) && search(x.buffer,c,nb) <= 0
+        nb = nb_available(x.buffer)
         start_reading(x)
         stream_wait(x,x.readnotify)
     end
