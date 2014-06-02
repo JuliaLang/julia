@@ -59,7 +59,7 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         if elty <:BlasFloat
             #Condition number tests - can be VERY approximate
             for p in [1.0, Inf]
-                @test_approx_eq_eps cond(TM, p) cond(M, p) (cond(TM,p)+cond(M,p))*0.2
+                @test_approx_eq_eps cond(TM, p) cond(M, p) (cond(TM,p)+cond(M,p))
             end
         end
 
