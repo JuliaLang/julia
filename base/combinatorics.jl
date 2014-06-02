@@ -386,10 +386,14 @@ end
 
 length(f::FixedPartitions) = npartitions(f.n,f.m)
 
-partitions(n::Integer, m::Integer) = (@assert 2 <= m <= n; FixedPartitions(n,m))
+partitions(n::Integer, m::Integer) = n >= 1 && m >= 1 ? FixedPartitions(n,m) : throw(DomainError())
 
 start(f::FixedPartitions) = Int[]
-done(f::FixedPartitions, s::Vector{Int}) = !isempty(s) && s[1]-1 <= s[end]
+function done(f::FixedPartitions, s::Vector{Int})
+    f.m <= f.n || return true
+    isempty(s) && return false
+    return f.m == 1 || s[1]-1 <= s[end]
+end
 next(f::FixedPartitions, s::Vector{Int}) = (xs = nextfixedpartition(f.n,f.m,s); (xs,xs))
 
 function nextfixedpartition(n, m, bs)
@@ -447,7 +451,7 @@ length(p::SetPartitions) = nsetpartitions(length(p.s))
 partitions(s::AbstractVector) = SetPartitions(s)
 
 start(p::SetPartitions) = (n = length(p.s); (zeros(Int32, n), ones(Int32, n-1), n, 1))
-done(p::SetPartitions, s) = !isempty(s) && s[1][1] > 0
+done(p::SetPartitions, s) = s[1][1] > 0
 next(p::SetPartitions, s) = nextsetpartition(p.s, s...)
 
 function nextsetpartition(s::AbstractVector, a, b, n, m)
@@ -511,13 +515,19 @@ end
 
 length(p::FixedSetPartitions) = nfixedsetpartitions(length(p.s),p.m)
 
-partitions(s::AbstractVector,m::Int) = (@assert 2 <= m <= length(s); FixedSetPartitions(s,m))
+partitions(s::AbstractVector,m::Int) = length(s) >= 1 && m >= 1 ? FixedSetPartitions(s,m) : throw(DomainError())
 
-start(p::FixedSetPartitions) = (n = length(p.s);m=p.m; (vcat(ones(Int, n-m),1:m), vcat(1,n-m+2:n), n))
-# state consists of vector a of length n describing to which partition every element of s belongs and
-# a vector b of length m describing the first index b[i] that belongs to partition i
+function start(p::FixedSetPartitions)
+    n = length(p.s)
+    m = p.m
+    m <= n ? (vcat(ones(Int, n-m),1:m), vcat(1,n-m+2:n), n) : (Int[], Int[], n)
+end
+# state consists of:
+# vector a of length n describing to which partition every element of s belongs
+# vector b of length n describing the first index b[i] that belongs to partition i
+# integer n
 
-done(p::FixedSetPartitions, s) = !isempty(s) && s[1][1] > 1
+done(p::FixedSetPartitions, s) = length(s[1]) == 0 || s[1][1] > 1
 next(p::FixedSetPartitions, s) = nextfixedsetpartition(p.s,p.m, s...)
 
 function nextfixedsetpartition(s::AbstractVector, m, a, b, n)
@@ -530,6 +540,11 @@ function nextfixedsetpartition(s::AbstractVector, m, a, b, n)
     end
 
     part = makeparts(s,a)
+
+    if m == 1
+        a[1] = 2
+        return (part, (a, b, n))
+    end
 
     if a[end] != m
         a[end] += 1
@@ -573,7 +588,7 @@ function nfixedsetpartitions(n::Int,m::Int)
 end
 
 
-# For a list of integers i1, i2, i3, find the smallest 
+# For a list of integers i1, i2, i3, find the smallest
 #     i1^n1 * i2^n2 * i3^n3 >= x
 # for integer n1, n2, n3
 function nextprod(a::Vector{Int}, x)
@@ -587,7 +602,7 @@ function nextprod(a::Vector{Int}, x)
     p::widen(Int) = mx[1]             # initial value of product in this case
     best = p
     icarry = 1
-    
+
     while v[end] < mx[end]
         if p >= x
             best = p < best ? p : best  # keep the best found yet
@@ -629,7 +644,7 @@ function prevprod(a::Vector{Int}, x)
     p::widen(Int) = first
     best = p
     icarry = 1
-    
+
     while v[end] < mx[end]
         while p <= x
             best = p > best ? p : best
