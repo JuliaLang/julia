@@ -8,7 +8,10 @@ type Success <: Result
 end
 type Failure <: Result
     expr
+    lhs
+    rhs
 end
+Failure(expr) = Failure(expr, nothing, nothing)
 type Error <: Result
     expr
     err
@@ -16,7 +19,12 @@ type Error <: Result
 end
 
 default_handler(r::Success) = nothing
-default_handler(r::Failure) = error("test failed: $(r.expr)")
+function default_handler(r::Failure)
+    if r.lhs != nothing && r.rhs != nothing
+        error("test failed: $(r.expr) [$(r.lhs) $(r.expr.args[2]) $(r.rhs)]")
+    end
+    error("test failed: $(r.expr)")
+end
 default_handler(r::Error)   = rethrow(r)
 
 handler() = get(task_local_storage(), :TEST_HANDLER, default_handler)
@@ -32,9 +40,9 @@ function showerror(io::IO, r::Error, bt)
     showerror(io, r.err, r.backtrace)
 end
 
-function do_test(body,qex)
+function do_test(body,qex,lhs=nothing,rhs=nothing)
     handler()(try
-        body() ? Success(qex) : Failure(qex)
+        body() ? Success(qex) : Failure(qex,lhs,rhs)
     catch err
         Error(qex,err,catch_backtrace())
     end)
@@ -59,7 +67,21 @@ function do_test_throws(body, qex, bt, extype)
 end
 
 macro test(ex)
-    :(do_test(()->($(esc(ex))),$(Expr(:quote,ex))))
+    if typeof(ex) == Expr && ex.head == :comparison && length(ex.args) == 3
+        lhssym = gensym()
+        rhssym = gensym()
+        quote
+            $lhssym = nothing
+            $rhssym = nothing
+            try
+                $lhssym = $(esc(ex.args[1]))
+                $rhssym = $(esc(ex.args[3]))
+            end
+            do_test( ()->($(esc(ex))), $(Expr(:quote,ex)), $lhssym, $rhssym )
+        end
+    else
+        :(do_test(()->($(esc(ex))),$(Expr(:quote,ex))))
+    end
 end
 
 macro test_throws(args...)
