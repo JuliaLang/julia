@@ -132,7 +132,7 @@ static void jl_load_sysimg_so(char *fname)
                 jl_error("The current host does not support SSSE3, but the system image was compiled for Core2.\n"
                          "Please delete or regenerate sys.{so,dll,dylib}.");
         }
-        else {
+        else if(strcmp(cpu_target,"i386") != 0) {
             jl_error("System image has unknown target cpu architecture.\n"
                      "Please delete or regenerate sys.{so,dll,dylib}.");
         }
