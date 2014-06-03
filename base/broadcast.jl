@@ -4,7 +4,7 @@ using ..Cartesian
 import Base.promote_eltype
 import Base.@get!
 import Base.num_bit_chunks, Base.@_msk_end, Base.unsafe_bitgetindex
-import Base.(.+), Base.(.-), Base.(.*), Base.(./), Base.(.\)
+import Base.(.+), Base.(.-), Base.(.*), Base.(./), Base.(.\), Base.(.//)
 import Base.(.==), Base.(.<), Base.(.!=), Base.(.<=)
 export broadcast, broadcast!, broadcast_function, broadcast!_function, bitbroadcast
 export broadcast_getindex, broadcast_setindex!
@@ -302,6 +302,16 @@ end
 
 function .\(A::AbstractArray, B::AbstractArray)
     broadcast!(\, Array(type_div(eltype(A), eltype(B)), broadcast_shape(A, B)), A, B)
+end
+
+typealias RatIntT{T<:Integer} Union(Type{Rational{T}},Type{T})
+typealias CRatIntT{T<:Integer} Union(Type{Complex{Rational{T}}},Type{Complex{T}},Type{Rational{T}},Type{T})
+type_rdiv{T<:Integer,S<:Integer}(::RatIntT{T}, ::RatIntT{S}) =
+    Rational{promote_type(T,S)}
+type_rdiv{T<:Integer,S<:Integer}(::CRatIntT{T}, ::CRatIntT{S}) =
+    Complex{Rational{promote_type(T,S)}}
+function .//(A::AbstractArray, B::AbstractArray)
+    broadcast!(//, Array(type_rdiv(eltype(A), eltype(B)), broadcast_shape(A, B)), A, B)
 end
 
 type_pow(T,S) = promote_type(T,S)
