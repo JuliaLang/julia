@@ -232,7 +232,6 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     end
 end
 
-
 #Diagonal matrices
 for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     d=convert(Vector{elty}, randn(n))
@@ -256,19 +255,18 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
 
     #Simple unary functions
     for func in (det, trace)
-        @test_approx_eq_eps func(D) func(DM) n^2*eps(relty)
+        @test_approx_eq_eps func(D) func(DM) n^2*eps(relty)*(elty<:Complex ? 2:1)
     end
     if relty <: BlasFloat
         for func in (expm,)
-            @test_approx_eq_eps func(D) func(DM) n^2*eps(relty)
+            @test_approx_eq_eps func(D) func(DM) n^3*eps(relty)
         end
     end
     if elty <: BlasComplex
         for func in (logdet, sqrtm)
-            @test_approx_eq_eps func(D) func(DM) n^2*eps(relty)
+            @test_approx_eq_eps func(D) func(DM) n^2*eps(relty)*2
         end
     end
-
     #Binary operations
     d = convert(Vector{elty}, randn(n))
     D2 = Diagonal(d)
@@ -277,7 +275,6 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         @test_approx_eq full(op(D, D2)) op(DM, DM2)
     end
 end
-
 
 
 #Test interconversion between special matrix types
