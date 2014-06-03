@@ -36,7 +36,6 @@ end
 function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
     truncwidth = strwidth(truncmark)
     (width <= 0 || width < truncwidth) && return ""
-    width == truncwidth && return bytestring(truncmark)
 
     wid = truncidx = lastidx = 0
     idx = start(str)
