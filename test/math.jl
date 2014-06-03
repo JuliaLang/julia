@@ -200,6 +200,8 @@ for elty in (Float32, Float64)
     end
 end
 
+@test_approx_eq polygamma(20, 7.) -4.644616027240543262561198814998587152547
+
 # eta, zeta
 @test_approx_eq eta(1) log(2)
 @test_approx_eq eta(2) pi^2/12
