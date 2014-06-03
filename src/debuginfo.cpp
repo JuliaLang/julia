@@ -19,6 +19,7 @@ struct FuncInfo{
 struct ObjectInfo {
     object::ObjectFile* object;
     object::SymbolRef symref;
+    size_t size;
 };
 #endif
 
@@ -108,9 +109,8 @@ public:
         for (const object::SymbolRef &sym_iter : obj.symbols()) {
             sym_iter.getType(SymbolType);
             if (SymbolType != object::SymbolRef::ST_Function) continue;
-            
             sym_iter.getAddress(Addr);
-            ObjectInfo tmp = {obj.getObjectFile(), sym_iter};
+            ObjectInfo tmp = {obj.getObjectFile(), sym_iter, obj.getData().size()};
             objectmap[Addr] = tmp;
         }
         #else
