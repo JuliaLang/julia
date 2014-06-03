@@ -634,15 +634,15 @@ In addition to the syntax-level introspection utilized in metaprogramming,
 Julia provides several other runtime reflection capabilities.
 
 **Type fields** The names of data type fields (or module members) may be interrogated
-using the `names` command. For example, given the following type::
+using the ``names`` function. For example, given the following type::
 
 	type Point
-		x::FloatingPoint
-		y
+	  x::FloatingPoint
+	  y
 	end
 
-`names(Point)` will return the array: `Any[ :x :y ]`. Note that the type of
-each field in a `Point` is stored in the `types` field of the Point object::
+``names(Point)`` will return the array ``Any[:x, :y]``. The type of
+each field in a ``Point`` is stored in the ``types`` field of the Point object::
 
 	julia> typeof(Point)
 	DataType
@@ -650,7 +650,7 @@ each field in a `Point` is stored in the `types` field of the Point object::
 	(FloatingPoint,Any)
 
 **Subtypes** The *direct* subtypes of any DataType may be listed using
-``subtypes(t::DataType)``. For example, the abstract DataType `FloatingPoint`
+``subtypes(t::DataType)``. For example, the abstract DataType ``FloatingPoint``
 has four (concrete) subtypes::
 	
 	julia> subtypes(FloatingPoint)
