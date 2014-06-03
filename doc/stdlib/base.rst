@@ -1394,6 +1394,14 @@ Strings
    byte arrays check for a byte-order marker in the first two bytes,
    and do not include it in the resulting string.)
 
+   Note that the resulting ``UTF16String`` data is terminated by
+   NULL word (16-bit zero), which is not treated as a character in the
+   string, so that it can be passed directly to external functions
+   requiring NULL-terminated data.  The NULL word is appended automatically
+   to conversions from byte arrays or other string types; for conversion
+   from ``Uint16`` arrays, a NULL word is only appended if it is not already
+   present.
+
 .. function:: is_valid_utf16(s) -> Bool
 
    Returns true if the string or ``Uint16`` array is valid UTF-16.

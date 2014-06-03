@@ -376,12 +376,6 @@ jl_value_t *jl_environ(int i)
     char *env = environ[i];
     return env ? jl_pchar_to_string(env, strlen(env)) : jl_nothing;
 }
-#ifdef _OS_WINDOWS_
-jl_value_t *jl_env_done(char *pos)
-{
-    return (*pos==0)?jl_true:jl_false;
-}
-#endif
 
 // -- child process status --
 
@@ -628,10 +622,26 @@ DLLEXPORT const char *jl_pathname_for_handle(uv_lib_t *uv_lib)
 #endif
 
 #ifdef _OS_WINDOWS_
-    char tclfile[260];
-    int len = GetModuleFileNameA(handle,tclfile,sizeof(tclfile));
-    if (len)
-        return strdup(tclfile);
+    wchar_t *pth16 = (wchar_t*)malloc(32768); // max long path length
+    DWORD n16 = GetModuleFileNameW(handle,pth16,32768);
+    if (n16 <= 0) {
+        free(pth16);
+        return NULL;
+    }
+    pth16[n16] = L'\0';
+    DWORD n8 = WideCharToMultiByte(CP_UTF8, 0, pth16, -1, NULL, 0, NULL, NULL);
+    if (n8 == 0) {
+        free(pth16);
+        return NULL;
+    }
+    char *filepath = (char*)malloc(++n8);
+    if (!WideCharToMultiByte(CP_UTF8, 0, pth16, -1, filepath, n8, NULL, NULL)) {
+        free(pth16);
+        free(filepath);
+        return NULL;
+    }
+    free(pth16);
+    return filepath;
 #endif
     return NULL;
 }

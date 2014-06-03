@@ -50,9 +50,10 @@ else
 	# UTF16
 	u8 = "𝕥𝟶f𠂊"
 	u16 = utf16(u8)
-	@test length(u16.data) == 7
+	@test sizeof(u16) == 14
+	@test length(u16.data) == 8 && u16.data[end] == 0
 	@test length(u16) == 4
 	@test utf8(u16) == u8
 	@test collect(u8) == collect(u16)
-        @test u16 == utf16(u16.data) == utf16(reinterpret(Uint8, u16.data))
+        @test u16 == utf16(u16.data) == utf16(copy!(Array(Uint8, 14), 1, reinterpret(Uint8, u16.data), 1, 14))
 end

@@ -817,9 +817,6 @@ DLLEXPORT int jl_is_debugbuild(void);
 
 // environment entries
 DLLEXPORT jl_value_t *jl_environ(int i);
-#ifdef _OS_WINDOWS_
-DLLEXPORT jl_value_t *jl_env_done(char *pos);
-#endif
 
 // throwing common exceptions
 DLLEXPORT void NORETURN jl_error(const char *str);
