@@ -225,9 +225,9 @@ DLLEXPORT void jl_uv_getaddrinfocb(uv_getaddrinfo_t *req,int status, struct addr
     (void)ret;
 }
 
-DLLEXPORT void jl_uv_asynccb(uv_handle_t *handle, int status)
+DLLEXPORT void jl_uv_asynccb(uv_handle_t *handle)
 {
-    JULIA_CB(asynccb,handle->data,1,CB_INT32,status);
+    JULIA_CB(asynccb,handle->data,0);
     (void)ret;
 }
 
