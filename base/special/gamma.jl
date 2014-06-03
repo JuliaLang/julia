@@ -308,7 +308,7 @@ function psifn(x::Float64, n::Int, kode::Int, m::Int)
     ans[1] = s - log(xq)
     return ans
 end
-polygamma(k::Int, x::Float64) = (2rem(k,2) - 1)*psifn(x, k, 1, 1)[1]/gamma(k + 1)
+polygamma(k::Int, x::Float64) = (2rem(k,2) - 1)*psifn(x, k, 1, 1)[1]*gamma(k + 1)
 polygamma(k::Int, x::Float32) = float32(polygamma(k, float64(x)))
 polygamma(k::Int, x::Real) = polygamma(k, float64(x))
 
