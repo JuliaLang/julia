@@ -451,6 +451,8 @@ static Type *NoopType;
 extern "C" {
 #if defined(JULIA_TARGET_CORE2)
 const char *jl_cpu_string = "core2";
+#elif defined(JULIA_TARGET_I386)
+const char *jl_cpu_string = "i386";
 #elif defined(JULIA_TARGET_NATIVE)
 const char *jl_cpu_string = "native";
 #else
