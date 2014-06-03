@@ -115,7 +115,7 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
     make -j 4   # Adjust the number of cores (4) to match your build environment.
 ```
 6. Setup Package Development Environment
-  1. The `Pkg` module in Base provides many convenient tools for [developing and publishing packages](http://docs.julialang.org/en/latest/manual/packages/). One the packages added through pacman above was `openssh`, which will allow secure access to GitHub APIs. Follow GitHub's [guide](https://help.github.com/articles/generating-ssh-keys) to setting up generating SSH keys to ensure your local machine can communicate with GitHub effectively. 
+  1. The `Pkg` module in Base provides many convenient tools for [developing and publishing packages](http://docs.julialang.org/en/latest/manual/packages/). One of the packages added through pacman above was `openssh`, which will allow secure access to GitHub APIs. Follow GitHub's [guide](https://help.github.com/articles/generating-ssh-keys) to setting up SSH keys to ensure your local machine can communicate with GitHub effectively.
 
 ## Building on Windows with MinGW-builds/MSYS
 
