@@ -42,7 +42,7 @@ USE_INTEL_JITEVENTS = 0
 USE_LIBCPP = 0
 
 # Select the cpu architecture to target
-# Current available options are "native" and "core2"
+# Current available options are "native", "core2" and "i386"
 JULIA_CPU_TARGET = native
 
 # we include twice to pickup user definitions better
@@ -266,6 +266,8 @@ ifeq ($(JULIA_CPU_TARGET),native)
   JCPPFLAGS += -DJULIA_TARGET_NATIVE
 else ifeq ($(JULIA_CPU_TARGET),core2)
   JCPPFLAGS += -DJULIA_TARGET_CORE2
+else ifeq ($(JULIA_CPU_TARGET),i386)
+  JCPPFLAGS += -DJULIA_TARGET_I386
 else
   $(error Unknown cpu target architecture)
 endif
