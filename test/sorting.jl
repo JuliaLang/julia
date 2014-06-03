@@ -50,6 +50,10 @@ end
 @test searchsorted(1:10, 1, by=(x -> x >= 5)) == searchsorted([1:10], 1, by=(x -> x >= 5))
 @test searchsorted(1:10, 10, by=(x -> x >= 5)) == searchsorted([1:10], 10, by=(x -> x >= 5))
 
+@test_throws BoundsError searchsortedfirst(1:10, 5,  0, 7, Base.Order.Forward)
+@test_throws BoundsError searchsortedfirst(1:10, 5,  1, 11, Base.Order.Forward)
+@test_throws BoundsError searchsortedfirst(1:10, 5,  5, 1, Base.Order.Forward)
+
 a = rand(1:10000, 1000)
 
 for alg in [InsertionSort, MergeSort]
