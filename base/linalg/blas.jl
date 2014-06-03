@@ -400,7 +400,7 @@ for (fname, elty) in ((:dtrmv_,:Float64),
                 (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                  &uplo, &trans, &diag, &n, 
-                 A, &max(1,stride(A,2)), x, &1)
+                 A, &max(1,stride(A,2)), x, &max(1,stride(x, 1)))
             x
         end
         function trmv(uplo::Char, trans::Char, diag::Char, A::StridedMatrix{$elty}, x::StridedVector{$elty})

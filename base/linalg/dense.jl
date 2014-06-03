@@ -300,7 +300,7 @@ function sqrtm{T<:Real}(A::StridedMatrix{T})
     issym(A) && return sqrtm(Symmetric(A))
     n = chksquare(A)
     SchurF = schurfact(complex(A))
-    R = full(sqrtm(Triangular(SchurF[:T])))
+    R = full(sqrtm(Triangular(SchurF[:T], :U, false)))
     retmat = SchurF[:vectors]*R*SchurF[:vectors]'
     all(imag(retmat) .== 0) ? real(retmat) : retmat
 end
@@ -308,7 +308,7 @@ function sqrtm{T<:Complex}(A::StridedMatrix{T})
     ishermitian(A) && return sqrtm(Hermitian(A))
     n = chksquare(A)
     SchurF = schurfact(A)
-    R = full(sqrtm(Triangular(SchurF[:T])))
+    R = full(sqrtm(Triangular(SchurF[:T], :U, false)))
     SchurF[:vectors]*R*SchurF[:vectors]'
 end
 sqrtm(a::Number) = (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b)

@@ -8,6 +8,7 @@ Diagonal(A::Matrix) = Diagonal(diag(A))
 convert{T}(::Type{Diagonal{T}}, D::Diagonal{T}) = D
 convert{T}(::Type{Diagonal{T}}, D::Diagonal) = Diagonal{T}(convert(Vector{T}, D.diag))
 convert{T}(::Type{AbstractMatrix{T}}, D::Diagonal) = convert(Diagonal{T}, D)
+convert{T}(::Type{Triangular}, A::Diagonal{T}) = Triangular{T, Diagonal{T}, :U, false}(A)
 
 function similar{T}(D::Diagonal, ::Type{T}, d::(Int,Int))
     d[1] == d[2] || throw(ArgumentError("Diagonal matrix must be square"))
@@ -18,6 +19,8 @@ copy!(D1::Diagonal, D2::Diagonal) = (copy!(D1.diag, D2.diag); D1)
 
 size(D::Diagonal) = (length(D.diag),length(D.diag))
 size(D::Diagonal,d::Integer) = d<1 ? error("dimension out of range") : (d<=2 ? length(D.diag) : 1)
+
+fill!(D::Diagonal, x) = (fill!(D.diag, x); D)
 
 full(D::Diagonal) = diagm(D.diag)
 getindex(D::Diagonal, i::Integer, j::Integer) = i == j ? D.diag[i] : zero(eltype(D.diag))
@@ -32,6 +35,9 @@ end
 ishermitian(D::Diagonal) = true
 issym(D::Diagonal) = true
 isposdef(D::Diagonal) = all(D.diag .> 0)
+
+tril!(D::Diagonal,i::Integer) = i == 0 ? D : zeros(D)
+triu!(D::Diagonal,i::Integer) = i == 0 ? D : zeros(D)
 
 ==(Da::Diagonal, Db::Diagonal) = Da.diag == Db.diag
 

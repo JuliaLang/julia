@@ -198,6 +198,8 @@ end
 @deprecate (/)(x::Number,A::Array)          x ./ A
 @deprecate (\)(A::Array,x::Number)          A .\ x
 
+@deprecate Triangular(A::Matrix)    Triangular(A, istril(A) ? :L : (istriu(A) ? istriu(A) : throw(ArgumentError("Matrix is not triangular"))))
+
 deprecated_ls() = run(`ls -l`)
 deprecated_ls(args::Cmd) = run(`ls -l $args`)
 deprecated_ls(args::String...) = run(`ls -l $args`)
