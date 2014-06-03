@@ -32,7 +32,7 @@ end
 
 function curl(url::String, opts::Cmd=``)
     success(`which curl`) || error("using the GitHub API requires having `curl` installed")
-    out, proc = readsfrom(`curl -i -s -S $opts $url`)
+    out, proc = open(`curl -i -s -S $opts $url`,"r")
     head = readline(out)
     status = int(split(head,r"\s+",3)[2])
     for line in eachline(out)
