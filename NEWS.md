@@ -260,6 +260,8 @@ Library improvements
       * new LAPACK wrappers
         - condition number estimate `cond(A::Triangular)` ([#5255])
 
+      * parametrize Triangular on matrix type ([#7064])
+
     * Dense linear algebra for generic matrix element types
 
       * LU factorization ([#5381] and [#5430])
