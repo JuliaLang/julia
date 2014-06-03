@@ -752,6 +752,19 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 builder.CreateBitCast(emit_nthptr_addr(ary, addressOf?1:0), lrt),
                 rt);
     }
+    if (fptr == &jl_is_leaf_type ||
+        (f_lib==NULL && f_name && !strcmp(f_name, "jl_is_leaf_type"))) {
+        assert(lrt->isPointerTy());
+        jl_value_t *arg = args[4];
+        if (jl_is_expr(arg) || jl_is_symbol(arg)) {
+            jl_value_t* ty = expr_type(arg, ctx);
+            if (jl_is_type_type(ty) && !jl_is_typevar(jl_tparam0(ty))) {
+                int isleaf = jl_is_leaf_type(jl_tparam0(ty));
+                JL_GC_POP();
+                return ConstantInt::get(T_int32, isleaf);
+            }
+        }
+    }
 
     // save place before arguments, for possible insertion of temp arg
     // area saving code.
