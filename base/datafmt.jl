@@ -245,13 +245,18 @@ function readdlm_string(sbuff::String, dlm::Char, T::Type, eol::Char, auto::Bool
     comments = get(optsd, :comments, true)
     comment_char = get(optsd, :comment_char, '#')
     dims = get(optsd, :dims, nothing)
-    has_header = get(optsd, :has_header, false)
+
+    has_header = get(optsd, :header, get(optsd, :has_header, false))
+    haskey(optsd, :has_header) && (optsd[:has_header] != has_header) && error("conflicting values for header and has_header")
+
+    skipstart = get(optsd, :skipstart, 0)
+    (skipstart >= 0) || error("invalid value for skipstart")
 
     offset_handler = (dims == nothing) ? DLMOffsets(sbuff) : DLMStore(T, dims, has_header, sbuff, auto, eol)
 
     for retry in 1:2
         try
-            dims = dlm_parse(sbuff, eol, dlm, '"', comment_char, ign_empty, quotes, comments, offset_handler)
+            dims = dlm_parse(sbuff, eol, dlm, '"', comment_char, ign_empty, quotes, comments, skipstart, offset_handler)
             break
         catch ex
             if isa(ex, TypeError) && (ex.func == :store_cell)
@@ -274,15 +279,17 @@ function readdlm_string(sbuff::String, dlm::Char, T::Type, eol::Char, auto::Bool
     return readdlm_string(sbuff, dlm, T, eol, auto, optsd)
 end
 
-const valid_opts = [:has_header, :ignore_invalid_chars, :use_mmap, :quotes, :comments, :dims, :comment_char]
-const valid_opt_types = [Bool, Bool, Bool, Bool, Bool, NTuple{2,Integer}, Char]
+const valid_opts = [:header, :has_header, :ignore_invalid_chars, :use_mmap, :quotes, :comments, :dims, :comment_char, :skipstart]
+const valid_opt_types = [Bool, Bool, Bool, Bool, Bool, Bool, NTuple{2,Integer}, Char, Integer]
+const deprecated_opts = [ :has_header => :header ]
 function val_opts(opts)
-    d = Dict{Symbol,Union(Bool,NTuple{2,Integer},Char)}()
-    for opt in opts
-        !in(opt[1], valid_opts) && error("unknown option $(opt[1])")
-        opt_typ = valid_opt_types[findfirst(valid_opts, opt[1])]
-        !isa(opt[2], opt_typ) && error("$(opt[1]) should be of type $opt_typ")
-        d[opt[1]] = opt[2]
+    d = Dict{Symbol,Union(Bool,NTuple{2,Integer},Char,Integer)}()
+    for (opt_name, opt_val) in opts
+        !in(opt_name, valid_opts) && error("unknown option $opt_name")
+        opt_typ = valid_opt_types[findfirst(valid_opts, opt_name)]
+        !isa(opt_val, opt_typ) && error("$opt_name should be of type $opt_typ")
+        d[opt_name] = opt_val
+        haskey(deprecated_opts, opt_name) && warn("$opt_name is deprecated, use $(deprecated_opts[opt_name]) instead")
     end
     d
 end
@@ -319,14 +326,17 @@ colval{T<:Char, S<:String}(sval::S, cells::Array{T,2}, row::Int, col::Int, tmp64
 colval{S<:String}(sval::S, cells::Array, row::Int, col::Int, tmp64::Array{Float64,1}) = true
 
 
-dlm_parse(s::ASCIIString, eol::Char, dlm::Char, qchar::Char, cchar::Char, ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool, dh::DLMHandler) = dlm_parse(s.data, uint8(eol), uint8(dlm), uint8(qchar), uint8(cchar), ign_adj_dlm, allow_quote, allow_comments, dh)
-function dlm_parse{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, cchar::D, ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool, dh::DLMHandler)
+dlm_parse(s::ASCIIString, eol::Char, dlm::Char, qchar::Char, cchar::Char, ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool, skipstart::Int, dh::DLMHandler) = 
+    dlm_parse(s.data, uint8(eol), uint8(dlm), uint8(qchar), uint8(cchar), ign_adj_dlm, allow_quote, allow_comments, skipstart, dh)
+
+function dlm_parse{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, cchar::D, ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool, skipstart::Int, dh::DLMHandler)
     all_ascii = (D <: Uint8) || (isascii(eol) && isascii(dlm) && (!allow_quote || isascii(qchar)) && (!allow_comments || isascii(cchar)))
-    (T <: UTF8String) && all_ascii && (return dlm_parse(dbuff.data, uint8(eol), uint8(dlm), uint8(qchar), uint8(cchar), ign_adj_dlm, allow_quote, allow_comments, dh))
+    (T <: UTF8String) && all_ascii && (return dlm_parse(dbuff.data, uint8(eol), uint8(dlm), uint8(qchar), uint8(cchar), ign_adj_dlm, allow_quote, allow_comments, skipstart, dh))
     ncols = nrows = col = 0
     is_default_dlm = (dlm == convert(D, invalid_dlm))
     error_str = ""
-    state = 0   # 0: begin field, 1: quoted field, 2: unquoted field, 3: second quote (could either be end of field or escape character), 4: comment
+    # 0: begin field, 1: quoted field, 2: unquoted field, 3: second quote (could either be end of field or escape character), 4: comment, 5: skipstart
+    state = (skipstart > 0) ? 5 : 0
     is_eol = is_dlm = is_cr = is_quote = is_comment = expct_col = false
     idx = 1
     try
@@ -441,6 +451,12 @@ function dlm_parse{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, cchar::D, ign_adj_dl
                 elseif (is_cr && was_cr) || !is_cr
                     error_str = escape_string("unexpected character '$(char(val))' after quoted field at row $(nrows+1) column $(col+1)")
                     break
+                end
+            elseif 5 == state # skip start
+                if is_eol
+                    col_start_idx = idx
+                    skipstart -= 1
+                    (0 == skipstart) && (state = 0)
                 end
             end
             was_cr = is_cr
