@@ -1616,6 +1616,16 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             }
         }
     }
+    else if (f->fptr == &jl_f_subtype && nargs == 2) {
+        rt1 = expr_type(args[1], ctx);
+        rt2 = expr_type(args[2], ctx);
+        if (jl_is_type_type(rt1) && !jl_is_typevar(jl_tparam0(rt1)) &&
+            jl_is_type_type(rt2) && !jl_is_typevar(jl_tparam0(rt2))) {
+            int issub = jl_subtype(jl_tparam0(rt1), jl_tparam0(rt2), 0);
+            JL_GC_POP();
+            return ConstantInt::get(T_int1, issub);
+        }
+    }
     else if (f->fptr == &jl_f_tuplelen && nargs==1) {
         jl_value_t *aty = expr_type(args[1], ctx); rt1 = aty;
         if (jl_is_tuple(aty)) {
