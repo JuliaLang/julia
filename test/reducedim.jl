@@ -32,6 +32,17 @@ for region in {
     @test_approx_eq Base.sumabs2(Areduc, region) safe_sumabs2(Areduc, region)
 end
 
+# Test reduction along first dimension; this is special-cased for
+# size(A, 1) >= 16
+Breduc = rand(64, 3)
+r = fill(NaN, Base.reduced_dims(size(Breduc), 1))
+@test_approx_eq sum!(r, Breduc) safe_sum(Breduc, 1)
+@test_approx_eq Base.sumabs!(r, Breduc) safe_sumabs(Breduc, 1)
+@test_approx_eq Base.sumabs2!(r, Breduc) safe_sumabs2(Breduc, 1)
+@test_approx_eq sum(Breduc, 1) safe_sum(Breduc, 1)
+@test_approx_eq Base.sumabs(Breduc, 1) safe_sumabs(Breduc, 1)
+@test_approx_eq Base.sumabs2(Breduc, 1) safe_sumabs2(Breduc, 1)
+
 @test reducedim((a,b) -> a|b, [true false; false false], 1, false) == [true false]
 R = reducedim((a,b) -> a+b, [1 2; 3 4], 2, 0.0)
 @test eltype(R) == Float64
