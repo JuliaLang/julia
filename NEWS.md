@@ -158,6 +158,8 @@ Library improvements
 
     * `expm1` and `log1p` now support complex arguments ([#3141]).
 
+    * Broadcasting `.//` is now included ([#7094]).
+
   * `String` improvements
 
     * Triple-quoted regex strings, `r"""..."""` ([#4934]).
