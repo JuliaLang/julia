@@ -137,17 +137,17 @@ end
 
 ## Wrappers for UMFPACK functions
 
-for (sym_r,sym_c,num_r,num_c,sol_r,sol_c,det_r,det_z,lunz,get_num_r,get_num_z,itype) in
+for (sym_r,sym_c,num_r,num_c,sol_r,sol_c,det_r,det_z,lunz_r,lunz_z,get_num_r,get_num_z,itype) in
     (("umfpack_di_symbolic","umfpack_zi_symbolic",
       "umfpack_di_numeric","umfpack_zi_numeric",
       "umfpack_di_solve","umfpack_zi_solve",
       "umfpack_di_get_determinant","umfpack_zi_get_determinant",
-      "umfpack_di_get_lunz","umfpack_di_get_numeric","umfpack_zi_get_numeric",:Int32),
+      "umfpack_di_get_lunz","umfpack_zi_get_lunz","umfpack_di_get_numeric","umfpack_zi_get_numeric",:Int32),
      ("umfpack_dl_symbolic","umfpack_zl_symbolic",
       "umfpack_dl_numeric","umfpack_zl_numeric",
       "umfpack_dl_solve","umfpack_zl_solve",
       "umfpack_dl_get_determinant","umfpack_zl_get_determinant",
-      "umfpack_dl_get_lunz","umfpack_dl_get_numeric","umfpack_zl_get_numeric",:Int64))
+      "umfpack_dl_get_lunz","umfpack_zl_get_lunz","umfpack_dl_get_numeric","umfpack_zl_get_numeric",:Int64))
     @eval begin
         function umfpack_symbolic!{Tv<:Float64,Ti<:$itype}(U::UmfpackLU{Tv,Ti})
             if U.symbolic != C_NULL return U end
@@ -259,13 +259,24 @@ for (sym_r,sym_c,num_r,num_c,sol_r,sol_c,det_r,det_z,lunz,get_num_r,get_num_z,it
                            mx, mz, C_NULL, lu.numeric, umf_info)
             complex(mx[1], mz[1])
         end
-        function umf_lunz{Tv<:UMFVTypes,Ti<:$itype}(lu::UmfpackLU{Tv,Ti})
+        function umf_lunz{Tv<:Float64,Ti<:$itype}(lu::UmfpackLU{Tv,Ti})
             lnz = Array(Ti, 1)
             unz = Array(Ti, 1)
             n_row = Array(Ti, 1)
             n_col = Array(Ti, 1)
             nz_diag = Array(Ti, 1)
-            @isok ccall(($lunz,:libumfpack), Ti,
+            @isok ccall(($lunz_r,:libumfpack), Ti,
+                           (Ptr{Ti},Ptr{Ti},Ptr{Ti},Ptr{Ti},Ptr{Ti},Ptr{Void}),
+                           lnz, unz, n_row, n_col, nz_diag, lu.numeric)
+            (lnz[1], unz[1], n_row[1], n_col[1], nz_diag[1])
+        end
+        function umf_lunz{Tv<:Complex128,Ti<:$itype}(lu::UmfpackLU{Tv,Ti})
+            lnz = Array(Ti, 1)
+            unz = Array(Ti, 1)
+            n_row = Array(Ti, 1)
+            n_col = Array(Ti, 1)
+            nz_diag = Array(Ti, 1)
+            @isok ccall(($lunz_z,:libumfpack), Ti,
                            (Ptr{Ti},Ptr{Ti},Ptr{Ti},Ptr{Ti},Ptr{Ti},Ptr{Void}),
                            lnz, unz, n_row, n_col, nz_diag, lu.numeric)
             (lnz[1], unz[1], n_row[1], n_col[1], nz_diag[1])
@@ -293,6 +304,33 @@ for (sym_r,sym_c,num_r,num_c,sol_r,sol_c,det_r,det_z,lunz,get_num_r,get_num_z,it
                            &0, Rs, lu.numeric)
             (transpose(SparseMatrixCSC(n_row,n_row,increment!(Lp),increment!(Lj),Lx)),
              SparseMatrixCSC(n_row,n_col,increment!(Up),increment!(Ui),Ux),
+             increment!(P), increment!(Q), Rs)
+        end
+        function umf_extract{Tv<:Complex128,Ti<:$itype}(lu::UmfpackLU{Tv,Ti})
+            umfpack_numeric!(lu)        # ensure the numeric decomposition exists
+            (lnz,unz,n_row,n_col,nz_diag) = umf_lunz(lu)
+            Lp = Array(Ti, n_col + 1)
+            Lj = Array(Ti, lnz) # L is returned in CSR (compressed sparse row) format
+            Lx = Array(Float64, lnz)
+            Lz = Array(Float64, lnz)
+            Up = Array(Ti, n_col + 1)
+            Ui = Array(Ti, unz)
+            Ux = Array(Float64, unz)
+            Uz = Array(Float64, unz)
+            P  = Array(Ti, n_row)
+            Q  = Array(Ti, n_col)
+            Rs = Array(Float64, n_row)
+            @isok ccall(($get_num_z,:libumfpack), Ti,
+                           (Ptr{Ti},Ptr{Ti},Ptr{Float64},Ptr{Float64},
+                            Ptr{Ti},Ptr{Ti},Ptr{Float64},Ptr{Float64},
+                            Ptr{Ti},Ptr{Ti},Ptr{Void}, Ptr{Void},
+                            Ptr{Ti},Ptr{Float64},Ptr{Void}),
+                           Lp,Lj,Lx,Lz,
+                           Up,Ui,Ux,Uz,
+                           P, Q, C_NULL, C_NULL,
+                           &0, Rs, lu.numeric)
+            (transpose(SparseMatrixCSC(n_row,n_row,increment!(Lp),increment!(Lj),complex(Lx,Lz))),
+             SparseMatrixCSC(n_row,n_col,increment!(Up),increment!(Ui),complex(Ux,Uz)),
              increment!(P), increment!(Q), Rs)
         end
     end
