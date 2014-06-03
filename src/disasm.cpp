@@ -66,10 +66,17 @@ public:
 };
 }
 
+#ifndef USE_MCJIT
 extern "C"
-void jl_dump_function_asm(void* Fptr, size_t Fsize,
+void jl_dump_function_asm(void *Fptr, size_t Fsize,
                           std::vector<JITEvent_EmittedFunctionDetails::LineStart> lineinfo,
                           formatted_raw_ostream &stream) {
+#else
+extern "C"
+void jl_dump_function_asm(void *Fptr, size_t Fsize,
+                          object::ObjectFile *objectfile,
+                          formatted_raw_ostream &stream) {
+#endif
 
     // Initialize targets and assembly printers/parsers.
     // Avoids hard-coded targets - will generally be only host CPU anyway.
@@ -145,17 +152,20 @@ void jl_dump_function_asm(void* Fptr, size_t Fsize,
     Streamer.reset(TheTarget->createAsmStreamer(Ctx, stream, /*asmverbose*/true,
 #ifndef LLVM35
                                            /*useLoc*/ true,
-#endif
                                            /*useCFI*/ true,
+#endif
                                            /*useDwarfDirectory*/ true,
                                            IP, CE, MAB, ShowInst));
     Streamer->InitSections();
+
+#ifndef USE_MCJIT
+// LLVM33 version
     // Make the MemoryObject wrapper
     FuncMCView memoryObject(Fptr, Fsize);
-  
-    uint64_t Size;
-    uint64_t Index;
-    uint64_t absAddr;
+
+    uint64_t Size = 0;
+    uint64_t Index = 0;
+    uint64_t absAddr = 0;
 
     // Set up the line info
     typedef std::vector<JITEvent_EmittedFunctionDetails::LineStart> LInfoVec;
@@ -210,4 +220,73 @@ void jl_dump_function_asm(void* Fptr, size_t Fsize,
         break;
         }
     }
+#else // MCJIT version
+    FuncMCView memoryObject(Fptr, Fsize); // MemoryObject wrapper
+
+    if (!objectfile) return;
+    DIContext *di_ctx = DIContext::getDWARFContext(objectfile);
+    if (di_ctx == NULL) return;
+    DILineInfoTable lineinfo = di_ctx->getLineInfoForAddressRange((size_t)Fptr, Fsize);
+
+    // Set up the line info
+    DILineInfoTable::iterator lines_iter = lineinfo.begin();
+    DILineInfoTable::iterator lines_end = lineinfo.end();
+
+    uint64_t nextLineAddr = -1;
+
+    if (lines_iter != lineinfo.end()) {
+        nextLineAddr = lines_iter->first;
+        #ifdef LLVM35
+        stream << "Filename: " << lines_iter->second.FileName << "\n";
+        #else
+        stream << "Filename: " << lines_iter->second.getFileName() << "\n";
+        #endif
+    }
+
+    uint64_t Index = 0;
+    uint64_t absAddr = 0;
+    uint64_t insSize = 0; 
+
+    // Do the disassembly
+    for (Index = 0, absAddr = (uint64_t)Fptr;
+         Index < memoryObject.getExtent(); Index += insSize, absAddr += insSize) {
+        
+        if (nextLineAddr != (uint64_t)-1 && absAddr == nextLineAddr) {
+            #ifdef LLVM35
+            stream << "Source line: " << lines_iter->second.Line << "\n";
+            #else
+            stream << "Source line: " << lines_iter->second.getLine() << "\n";
+            #endif
+            nextLineAddr = (++lines_iter)->first;
+        }
+
+        MCInst Inst;
+        MCDisassembler::DecodeStatus S;
+        S = DisAsm->getInstruction(Inst, insSize, memoryObject, Index,
+                                  /*REMOVE*/ nulls(), nulls());
+        switch (S) {
+        case MCDisassembler::Fail:
+        SrcMgr.PrintMessage(SMLoc::getFromPointer(memoryObject[Index]),
+                            SourceMgr::DK_Warning,
+                            "invalid instruction encoding");
+        if (insSize == 0)
+            insSize = 1; // skip illegible bytes
+        break;
+
+        case MCDisassembler::SoftFail:
+        SrcMgr.PrintMessage(SMLoc::getFromPointer(memoryObject[Index]),
+                            SourceMgr::DK_Warning,
+                            "potentially undefined instruction encoding");
+        // Fall through
+        case MCDisassembler::Success:
+        #ifdef LLVM35
+            Streamer->EmitInstruction(Inst, *STI);
+        #else
+            Streamer->EmitInstruction(Inst);
+        #endif
+        break;
+        }
+    }
+
+#endif
 }

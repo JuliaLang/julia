@@ -184,14 +184,14 @@ mfe22 = eye(Float64, 2)
 @test_throws DimensionMismatch sparsevec([3,5,7],[0.1,0.0,3.2],4)
 
 # issue #5169
-@test nfilled(sparse([1,1],[1,2],[0.0,-0.0])) == 0
+@test nnz(sparse([1,1],[1,2],[0.0,-0.0])) == 0
 
 # issue #5386
 K,J,V = findnz(SparseMatrixCSC(2,1,[1,3],[1,2],[1.0,0.0]))
 @test length(K) == length(J) == length(V) == 1
 
 # issue #5437
-@test nfilled(sparse([1,2,3],[1,2,3],[0.0,1.0,2.0])) == 2
+@test nnz(sparse([1,2,3],[1,2,3],[0.0,1.0,2.0])) == 2
 
 # issue #5824
 @test sprand(4,5,0.5).^0 == sparse(ones(4,5))
@@ -201,7 +201,7 @@ K,J,V = findnz(SparseMatrixCSC(2,1,[1,3],[1,2],[1.0,0.0]))
 @test sprandbool(4, 5, 1.00) == sparse(ones(Bool, 4, 5))
 sprb45 = sprandbool(4, 5, 0.5)
 @test length(sprb45) == 20
-@test (sum(sprb45)[1] - 10) <= 5
+@test 4 <= sum(sprb45)[1] <= 16
 
 # issue #5853, sparse diff
 for i=1:2, a={[1 2 3], [1 2 3]', speye(3)}
@@ -238,3 +238,54 @@ for op in (:sin, :cos, :tan, :iceil, :ifloor, :ceil, :floor, :abs, :abs2)
         @test ($op)(afull) == full($(op)(a))
     end
 end
+
+# setindex tests
+let a = spzeros(Int, 10, 10)
+    @test countnz(a) == 0
+    a[1,:] = 1
+    @test countnz(a) == 10
+    @test a[1,:] == sparse(ones(Int,1,10))
+    a[:,2] = 2
+    @test countnz(a) == 19
+    @test a[:,2] == 2*sparse(ones(Int,10,1))
+
+    a[1,:] = 1:10
+    @test a[1,:] == sparse([1:10]')
+    a[:,2] = 1:10
+    @test a[:,2] == sparse([1:10])
+end
+
+let A = spzeros(Int, 10, 20)
+    A[1:5,1:10] = 10
+    A[1:5,1:10] = 10
+    @test countnz(A) == 50
+    @test A[1:5,1:10] == 10 * ones(Int, 5, 10)
+    A[6:10,11:20] = 0
+    @test countnz(A) == 50
+    A[6:10,11:20] = 20
+    @test countnz(A) == 100
+    @test A[6:10,11:20] == 20 * ones(Int, 5, 10)
+    A[4:8,8:16] = 15
+    @test countnz(A) == 121
+    @test A[4:8,8:16] == 15 * ones(Int, 5, 9)
+end
+
+let ASZ = 1000, TSZ = 800 
+    A = sprand(ASZ, 2*ASZ, 0.0001)
+    B = copy(A)
+    nA = countnz(A)
+    x = A[1:TSZ, 1:(2*TSZ)]
+    nx = countnz(x)
+    A[1:TSZ, 1:(2*TSZ)] = 0
+    nB = countnz(A)
+    @test nB == (nA - nx)
+    A[1:TSZ, 1:(2*TSZ)] = x
+    @test countnz(A) == nA
+    @test A == B
+    A[1:TSZ, 1:(2*TSZ)] = 10
+    @test countnz(A) == nB + 2*TSZ*TSZ
+    A[1:TSZ, 1:(2*TSZ)] = x
+    @test countnz(A) == nA
+    @test A == B
+end
+

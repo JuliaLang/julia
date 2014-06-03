@@ -1,8 +1,58 @@
+const _fact_table64 =
+    Int64[1,2,6,24,120,720,5040,40320,362880,3628800,39916800,479001600,6227020800,
+          87178291200,1307674368000,20922789888000,355687428096000,6402373705728000,
+          121645100408832000,2432902008176640000]
+
+const _fact_table128 =
+    Uint128[0x00000000000000000000000000000001, 0x00000000000000000000000000000002,
+            0x00000000000000000000000000000006, 0x00000000000000000000000000000018,
+            0x00000000000000000000000000000078, 0x000000000000000000000000000002d0,
+            0x000000000000000000000000000013b0, 0x00000000000000000000000000009d80,
+            0x00000000000000000000000000058980, 0x00000000000000000000000000375f00,
+            0x00000000000000000000000002611500, 0x0000000000000000000000001c8cfc00,
+            0x0000000000000000000000017328cc00, 0x0000000000000000000000144c3b2800,
+            0x00000000000000000000013077775800, 0x00000000000000000000130777758000,
+            0x00000000000000000001437eeecd8000, 0x00000000000000000016beecca730000,
+            0x000000000000000001b02b9306890000, 0x000000000000000021c3677c82b40000,
+            0x0000000000000002c5077d36b8c40000, 0x000000000000003ceea4c2b3e0d80000,
+            0x000000000000057970cd7e2933680000, 0x00000000000083629343d3dcd1c00000,
+            0x00000000000cd4a0619fb0907bc00000, 0x00000000014d9849ea37eeac91800000,
+            0x00000000232f0fcbb3e62c3358800000, 0x00000003d925ba47ad2cd59dae000000,
+            0x0000006f99461a1e9e1432dcb6000000, 0x00000d13f6370f96865df5dd54000000,
+            0x0001956ad0aae33a4560c5cd2c000000, 0x0032ad5a155c6748ac18b9a580000000,
+            0x0688589cc0e9505e2f2fee5580000000, 0xde1bc4d19efcac82445da75b00000000]
+
+function factorial_lookup(n::Integer, table, lim)
+    n < 0 && throw(DomainError())
+    n > lim && throw(OverflowError())
+    n == 0 && return one(n)
+    @inbounds f = table[n]
+    return oftype(n, f)
+end
+
+factorial(n::Int128) = factorial_lookup(n, _fact_table128, 33)
+factorial(n::Uint128) = factorial_lookup(n, _fact_table128, 34)
+factorial(n::Union(Int64,Uint64)) = factorial_lookup(n, _fact_table64, 20)
+
+if Int === Int32
+factorial(n::Union(Int8,Uint8,Int16,Uint16)) = factorial(int32(n))
+factorial(n::Union(Int32,Uint32)) = factorial_lookup(n, _fact_table64, 12)
+else
+factorial(n::Union(Int8,Uint8,Int16,Uint16,Int32,Uint32)) = factorial(int64(n))
+end
+
+function gamma(n::Union(Int8,Uint8,Int16,Uint16,Int32,Uint32,Int64,Uint64))
+    n < 0 && throw(DomainError())
+    n == 0 && return Inf
+    n <= 2 && return 1.0
+    n > 20 && return gamma(float64(n))
+    @inbounds return float64(_fact_table64[n-1])
+end
+
 function factorial(n::Integer)
-    if n < 0
-        return zero(n)
-    end
-    f = one(n)
+    n < 0 && throw(DomainError())
+    local f::typeof(n*n), i::typeof(n*n)
+    f = 1
     for i = 2:n
         f *= i
     end
@@ -87,6 +137,7 @@ end
 function nthperm!(a::AbstractVector, k::Integer)
     k -= 1 # make k 1-indexed
     n = length(a)
+    n == 0 && return a
     f = factorial(oftype(k, n-1))
     for i=1:n-1
         j = div(k, f) + 1
@@ -335,10 +386,14 @@ end
 
 length(f::FixedPartitions) = npartitions(f.n,f.m)
 
-partitions(n::Integer, m::Integer) = (@assert 2 <= m <= n; FixedPartitions(n,m))
+partitions(n::Integer, m::Integer) = n >= 1 && m >= 1 ? FixedPartitions(n,m) : throw(DomainError())
 
 start(f::FixedPartitions) = Int[]
-done(f::FixedPartitions, s::Vector{Int}) = !isempty(s) && s[1]-1 <= s[end]
+function done(f::FixedPartitions, s::Vector{Int})
+    f.m <= f.n || return true
+    isempty(s) && return false
+    return f.m == 1 || s[1]-1 <= s[end]
+end
 next(f::FixedPartitions, s::Vector{Int}) = (xs = nextfixedpartition(f.n,f.m,s); (xs,xs))
 
 function nextfixedpartition(n, m, bs)
@@ -396,7 +451,7 @@ length(p::SetPartitions) = nsetpartitions(length(p.s))
 partitions(s::AbstractVector) = SetPartitions(s)
 
 start(p::SetPartitions) = (n = length(p.s); (zeros(Int32, n), ones(Int32, n-1), n, 1))
-done(p::SetPartitions, s) = !isempty(s) && s[1][1] > 0
+done(p::SetPartitions, s) = s[1][1] > 0
 next(p::SetPartitions, s) = nextsetpartition(p.s, s...)
 
 function nextsetpartition(s::AbstractVector, a, b, n, m)
@@ -460,13 +515,19 @@ end
 
 length(p::FixedSetPartitions) = nfixedsetpartitions(length(p.s),p.m)
 
-partitions(s::AbstractVector,m::Int) = (@assert 2 <= m <= length(s); FixedSetPartitions(s,m))
+partitions(s::AbstractVector,m::Int) = length(s) >= 1 && m >= 1 ? FixedSetPartitions(s,m) : throw(DomainError())
 
-start(p::FixedSetPartitions) = (n = length(p.s);m=p.m; (vcat(ones(Int, n-m),1:m), vcat(1,n-m+2:n), n))
-# state consists of vector a of length n describing to which partition every element of s belongs and
-# a vector b of length m describing the first index b[i] that belongs to partition i
+function start(p::FixedSetPartitions)
+    n = length(p.s)
+    m = p.m
+    m <= n ? (vcat(ones(Int, n-m),1:m), vcat(1,n-m+2:n), n) : (Int[], Int[], n)
+end
+# state consists of:
+# vector a of length n describing to which partition every element of s belongs
+# vector b of length n describing the first index b[i] that belongs to partition i
+# integer n
 
-done(p::FixedSetPartitions, s) = !isempty(s) && s[1][1] > 1
+done(p::FixedSetPartitions, s) = length(s[1]) == 0 || s[1][1] > 1
 next(p::FixedSetPartitions, s) = nextfixedsetpartition(p.s,p.m, s...)
 
 function nextfixedsetpartition(s::AbstractVector, m, a, b, n)
@@ -479,6 +540,11 @@ function nextfixedsetpartition(s::AbstractVector, m, a, b, n)
     end
 
     part = makeparts(s,a)
+
+    if m == 1
+        a[1] = 2
+        return (part, (a, b, n))
+    end
 
     if a[end] != m
         a[end] += 1
@@ -522,7 +588,7 @@ function nfixedsetpartitions(n::Int,m::Int)
 end
 
 
-# For a list of integers i1, i2, i3, find the smallest 
+# For a list of integers i1, i2, i3, find the smallest
 #     i1^n1 * i2^n2 * i3^n3 >= x
 # for integer n1, n2, n3
 function nextprod(a::Vector{Int}, x)
@@ -536,7 +602,7 @@ function nextprod(a::Vector{Int}, x)
     p::widen(Int) = mx[1]             # initial value of product in this case
     best = p
     icarry = 1
-    
+
     while v[end] < mx[end]
         if p >= x
             best = p < best ? p : best  # keep the best found yet
@@ -578,7 +644,7 @@ function prevprod(a::Vector{Int}, x)
     p::widen(Int) = first
     best = p
     icarry = 1
-    
+
     while v[end] < mx[end]
         while p <= x
             best = p > best ? p : best

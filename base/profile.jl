@@ -1,6 +1,6 @@
 module Profile
 
-import Base: hash, isequal
+import Base: hash, ==
 
 export @profile
 
@@ -34,33 +34,25 @@ __init__() = init(1_000_000, 0.001)
 
 clear() = ccall(:jl_profile_clear_data, Void, ())
 
-function print{T<:Unsigned}(io::IO = STDOUT, data::Vector{T} = fetch(); format = :tree, C = false, combine = true, cols = Base.tty_cols())
+function print{T<:Unsigned}(io::IO, data::Vector{T} = fetch(), lidict::Dict = getdict(data); format = :tree, C = false, combine = true, cols = Base.tty_cols())
     if format == :tree
-        tree(io, data, C, combine, cols)
+        tree(io, data, lidict, C, combine, cols)
     elseif format == :flat
-        flat(io, data, C, combine, cols)
+        flat(io, data, lidict, C, combine, cols)
     else
         error("output format ", format, " not recognized")
     end
 end
-print{T<:Unsigned}(data::Vector{T} = fetch(); kwargs...) = print(STDOUT, data; kwargs...)
+print{T<:Unsigned}(data::Vector{T} = fetch(), lidict::Dict = getdict(data); kwargs...) = print(STDOUT, data, lidict; kwargs...)
 
-function print{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict; format = :tree, combine = true, cols = Base.tty_cols())
-    if format == :tree
-        tree(io, data, lidict, combine, cols)
-    elseif format == :flat
-        flat(io, data, lidict, combine, cols)
-    else
-        error("output format ", format, " not recognized")
-    end
-end
-print{T<:Unsigned}(data::Vector{T}, lidict::Dict; kwargs...) = print(STDOUT, data, lidict; kwargs...)
-
-function retrieve(;C = false)
+function retrieve()
     data = fetch()
+    copy(data), getdict(data)
+end
+
+function getdict(data::Vector{Uint})
     uip = unique(data)
-    lidict = Dict(uip, [lookup(ip, C) for ip in uip])
-    return copy(data), lidict
+    Dict(uip, [lookup(ip) for ip in uip])
 end
 
 ####
@@ -70,13 +62,19 @@ immutable LineInfo
     func::ByteString
     file::ByteString
     line::Int
+    fromC::Bool
 end
 
-const UNKNOWN = LineInfo("?", "?", -1)
+const UNKNOWN = LineInfo("?", "?", -1, true)
 
-isequal(a::LineInfo, b::LineInfo) = a.line == b.line && a.func == b.func && a.file == b.file
+==(a::LineInfo, b::LineInfo) = a.line == b.line && a.fromC == b.fromC && a.func == b.func && a.file == b.file
 
-hash(li::LineInfo) = bitmix(hash(li.func), bitmix(hash(li.file), hash(li.line)))
+function hash(li::LineInfo, h::Uint)
+    h += uint(0xf4fbda67fe20ce88)
+    h = hash(li.line, h)
+    h = hash(li.file, h)
+    h = hash(li.func, h)
+end
 
 # C wrappers
 start_timer() = ccall(:jl_profile_start_timer, Cint, ())
@@ -91,10 +89,10 @@ len_data() = convert(Int, ccall(:jl_profile_len_data, Csize_t, ()))
 
 maxlen_data() = convert(Int, ccall(:jl_profile_maxlen_data, Csize_t, ()))
 
-function lookup(ip::Uint, doCframes::Bool)
-    info = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Bool), ip, doCframes)
-    if length(info) == 3
-        return LineInfo(string(info[1]), string(info[2]), int(info[3]))
+function lookup(ip::Uint)
+    info = ccall(:jl_lookup_code_address, Any, (Ptr{Void},), ip)
+    if length(info) == 4
+        return LineInfo(string(info[1]), string(info[2]), int(info[3]), info[4])
     else
         return UNKNOWN
     end
@@ -103,7 +101,8 @@ end
 error_codes = (Int=>ASCIIString)[
     -1=>"cannot specify signal action for profiling",
     -2=>"cannot create the timer for profiling",
-    -3=>"cannot start the timer for profiling"]
+    -3=>"cannot start the timer for profiling",
+    -4=>"cannot unblock SIGUSR1"]
 
 function fetch()
     len = len_data()
@@ -146,37 +145,26 @@ function count_flat{T<:Unsigned}(data::Vector{T})
     return iplist, n
 end
 
-function parse_flat(iplist, n, lidict)
+function parse_flat(iplist, n, lidict, C::Bool)
     # Convert instruction pointers to names & line numbers
     lilist = [lidict[ip] for ip in iplist]
     # Keep only the interpretable ones
     # The ones with no line number might appear multiple times in a single
     # backtrace, giving the wrong impression about the total number of backtraces.
     # Delete them too.
-    keep = !Bool[x == UNKNOWN || x.line == 0 for x in lilist]
+    keep = !Bool[x == UNKNOWN || x.line == 0 || (x.fromC && !C) for x in lilist]
     n = n[keep]
     lilist = lilist[keep]
     lilist, n
 end
 
-function flat{T<:Unsigned}(io::IO, data::Vector{T}, doCframes::Bool, combine::Bool, cols::Integer)
+function flat{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict, C::Bool, combine::Bool, cols::Integer)
     iplist, n = count_flat(data)
     if isempty(n)
         warning_empty()
         return
     end
-    lidict = Dict(iplist, [lookup(ip, doCframes) for ip in iplist])
-    lilist, n = parse_flat(iplist, n, lidict)
-    print_flat(io, lilist, n, combine, cols)
-end
-
-function flat{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict, combine::Bool, cols::Integer)
-    iplist, n = count_flat(data)
-    if isempty(n)
-        warning_empty()
-        return
-    end
-    lilist, n = parse_flat(iplist, n, lidict)
+    lilist, n = parse_flat(iplist, n, lidict, C)
     print_flat(io, lilist, n, combine, cols)
 end
 
@@ -360,13 +348,10 @@ function tree{T<:Unsigned}(io::IO, bt::Vector{Vector{T}}, counts::Vector{Int}, l
     end
 end
 
-function tree{T<:Unsigned}(io::IO, data::Vector{T}, doCframes::Bool, combine::Bool, cols::Integer)
-    uip = unique(data)
-    lidict = Dict(uip, [lookup(ip, doCframes) for ip in uip])
-    tree(io, data, lidict, combine, cols)
-end
-
-function tree{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict, combine::Bool, cols::Integer)
+function tree{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict, C::Bool, combine::Bool, cols::Integer)
+    if !C
+        data = purgeC(data, lidict)
+    end
     bt, counts = tree_aggregate(data)
     if isempty(counts)
         warning_empty()
@@ -406,5 +391,9 @@ warning_empty() = warn("""
             running it multiple times), or adjust the delay between samples with
             Profile.init().""")
 
+function purgeC(data, lidict)
+    keep = Bool[d == 0 || lidict[d].fromC == false for d in data]
+    data[keep]
+end
 
 end # module

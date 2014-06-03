@@ -19,6 +19,7 @@ promote_rule(::Type{Char}, ::Type{Uint128}) = Uint128
 ## character operations & comparisons ##
 
 # numeric operations
+# TODO: this should be removed, but needs to be here as long as Char <: Integer
 +(x::Char   , y::Char   ) = int(x)+int(y)
 
 # ordinal operations

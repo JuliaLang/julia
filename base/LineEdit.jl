@@ -1,8 +1,8 @@
 module LineEdit
 
-using Base.Terminals
+using ..Terminals
 
-import Base.Terminals: raw!, width, height, cmove, getX,
+import ..Terminals: raw!, width, height, cmove, getX,
                        getY, clear_line, beep
 
 import Base: ensureroom, peek, show
@@ -29,10 +29,13 @@ end
 type Prompt <: TextInterface
     prompt
     first_prompt
-    prompt_color::ASCIIString
+    # A string or function to be printed before the prompt. May not change the length of the prompt.
+    # This may be used for changing the color, issuing other terminal escape codes, etc.
+    prompt_prefix
+    # Same as prefix except after the prompt
+    prompt_suffix
     keymap_func
     keymap_func_data
-    input_color
     complete
     on_enter
     on_done
@@ -602,10 +605,12 @@ default_enter_cb(_) = true
 
 write_prompt(terminal, s::PromptState) = write_prompt(terminal, s, s.p.prompt)
 function write_prompt(terminal, s::PromptState, prompt)
-    write(terminal, s.p.prompt_color)
+    prefix = isa(s.p.prompt_prefix,Function) ? s.p.prompt_prefix() : s.p.prompt_prefix
+    suffix = isa(s.p.prompt_suffix,Function) ? s.p.prompt_suffix() : s.p.prompt_suffix
+    write(terminal, prefix)
     write(terminal, prompt)
     write(terminal, Base.text_colors[:normal])
-    write(terminal, s.p.input_color)
+    write(terminal, suffix)
 end
 write_prompt(terminal, s::ASCIIString) = write(terminal, s)
 
@@ -809,8 +814,9 @@ macro keymap(keymaps)
     end)
 end
 
-const escape_defaults = {
-    # Ignore other escape sequences by default
+const escape_defaults = merge!(
+    {i => nothing for i=1:31}, # Ignore control characters by default
+    { # And ignore other escape sequences by default
     "\e*" => nothing,
     "\e[*" => nothing,
     # Also ignore extended escape sequences
@@ -831,7 +837,7 @@ const escape_defaults = {
     "\eOD"  => "\e[D",
     "\eOH"  => "\e[H",
     "\eOF"  => "\e[F",
-}
+})
 
 function write_response_buffer(s::PromptState, data)
     offset = s.input_buffer.ptr
@@ -884,7 +890,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, s::SearchState)
     write(buf, readall(s.response_buffer))
     buf.ptr = offset + ptr - 1
     s.response_buffer.ptr = ptr
-    s.ias = refresh_multi_line(termbuf, s.terminal, buf, s.ias, s.backward ? "(reverse-i-search)`" : "(i-search)`")
+    s.ias = refresh_multi_line(termbuf, s.terminal, buf, s.ias, s.backward ? "(reverse-i-search)`" : "(forward-i-search)`")
 end
 
 function refresh_multi_line(s::Union(SearchState,PromptState))
@@ -963,6 +969,7 @@ function setup_search_keymap(hp)
         '\r'      => s->accept_result(s, p),
         '\n'      => '\r',
         '\t'      => nothing, #TODO: Maybe allow tab completion in R-Search?
+        "^L"      => :(Terminals.clear(LineEdit.terminal(s)); LineEdit.update_display_buffer(s, data)),
 
         # Backspace/^H
         '\b'      => :(LineEdit.edit_backspace(data.query_buffer) ?
@@ -972,6 +979,9 @@ function setup_search_keymap(hp)
         "\e\b"    => :(LineEdit.edit_delete_prev_word(data.query_buffer) ?
                         LineEdit.update_display_buffer(s, data) : beep(LineEdit.terminal(s))),
         "\e\x7f"  => "\e\b",
+        # Word erase to whitespace
+        "^W"      => :(LineEdit.edit_werase(data.query_buffer) ?
+                        LineEdit.update_display_buffer(s, data) : beep(LineEdit.terminal(s))),
         # ^C and ^D
         "^C"      => :(LineEdit.edit_clear(data.query_buffer);
                        LineEdit.edit_clear(data.response_buffer);
@@ -979,6 +989,9 @@ function setup_search_keymap(hp)
                        LineEdit.reset_state(data.histprompt.hp);
                        LineEdit.transition(s, data.parent)),
         "^D"      => "^C",
+        # Other ways to cancel search mode (it's difficult to bind \e itself)
+        "^G"      => "^C",
+        "\e\e"    => "^C",
         # ^K
         11        => s->transition(s, state(s, p).parent),
         # ^Y
@@ -1015,6 +1028,9 @@ function setup_search_keymap(hp)
         # Try to catch all Home/End keys
         "\e[H"    => s->(accept_result(s, p); move_input_start(s); refresh_line(s)),
         "\e[F"    => s->(accept_result(s, p); move_input_end(s); refresh_line(s)),
+        # Use ^N and ^P to change search directions and iterate through results
+        "^N"      => :(LineEdit.history_set_backward(data, false); LineEdit.history_next_result(s, data)),
+        "^P"      => :(LineEdit.history_set_backward(data, true); LineEdit.history_next_result(s, data)),
         "*"       => :(LineEdit.edit_insert(data.query_buffer, c1); LineEdit.update_display_buffer(s, data))
     }
     p.keymap_func = @eval @LineEdit.keymap $([pkeymap, escape_defaults])
@@ -1189,12 +1205,6 @@ const default_keymap =
         edit_insert(s, input)
     end,
     "^T"      => edit_transpose,
-    # Unused and unprintable control character combinations
-    "^G"      => nothing,
-    "^O"      => nothing,
-    "^Q"      => nothing,
-    "^V"      => nothing,
-    "^X"      => nothing,
 }
 
 function history_keymap(hist)
@@ -1264,17 +1274,17 @@ const default_keymap_func = @LineEdit.keymap [LineEdit.default_keymap, LineEdit.
 
 function Prompt(prompt;
     first_prompt = prompt,
-    prompt_color = "",
+    prompt_prefix = "",
+    prompt_suffix = "",
     keymap_func = default_keymap_func,
     keymap_func_data = nothing,
-    input_color = "",
     complete = EmptyCompletionProvider(),
     on_enter = default_enter_cb,
     on_done = ()->nothing,
     hist = EmptyHistoryProvider())
 
-    Prompt(prompt, first_prompt, prompt_color, keymap_func, keymap_func_data,
-           input_color, complete, on_enter, on_done, hist)
+    Prompt(prompt, first_prompt, prompt_prefix, prompt_suffix, keymap_func, keymap_func_data,
+        complete, on_enter, on_done, hist)
 end
 
 run_interface(::Prompt) = nothing

@@ -830,9 +830,9 @@ ios_t *ios_file(ios_t *s, char *fname, int rd, int wr, int create, int trunc)
 #else
     fd = open(fname, flags, S_IRUSR | S_IWUSR /* 0600 */ | S_IRGRP | S_IROTH /* 0644 */);
 #endif
+    s = ios_fd(s, fd, 1, 1);
     if (fd == -1)
         goto open_file_err;
-    s = ios_fd(s, fd, 1, 1);
     if (!rd)
         s->readable = 0;
     if (!wr)

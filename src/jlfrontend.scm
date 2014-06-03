@@ -198,6 +198,9 @@
 			   e
 			   (expand-toplevel-expr e))))))))))
 
+(define (jl-parser-current-lineno)
+  (input-port-line (ts:port current-token-stream)))
+
 ; expand a piece of raw surface syntax to an executable thunk
 (define (jl-expand-to-thunk expr)
   (parser-wrap (lambda ()

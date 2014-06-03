@@ -108,10 +108,9 @@ type Colon
 end
 const (:) = Colon()
 
-hash(w::WeakRef) = hash(w.value)
-isequal(w::WeakRef, v::WeakRef) = isequal(w.value, v.value)
-isequal(w::WeakRef, v) = isequal(w.value, v)
-isequal(w, v::WeakRef) = isequal(w, v.value)
+==(w::WeakRef, v::WeakRef) = isequal(w.value, v.value)
+==(w::WeakRef, v) = isequal(w.value, v)
+==(w, v::WeakRef) = isequal(w, v.value)
 
 function finalizer(o::ANY, f::Union(Function,Ptr))
     if isimmutable(o)
@@ -148,6 +147,39 @@ function append_any(xs...)
     ccall(:jl_array_del_end, Void, (Any, Uint), out, l-i+1)
     out
 end
+
+# used by { } syntax
+function cell_1d(xs::ANY...)
+    n = length(xs)
+    a = Array(Any,n)
+    for i=1:n
+        arrayset(a,xs[i],i)
+    end
+    a
+end
+
+function cell_2d(nr, nc, xs::ANY...)
+    a = Array(Any,nr,nc)
+    for i=1:(nr*nc)
+        arrayset(a,xs[i],i)
+    end
+    a
+end
+
+# simple Array{Any} operations needed for bootstrap
+setindex!(A::Array{Any}, x::ANY, i::Real) = arrayset(A, x, to_index(i))
+
+function length_checked_equal(args...)
+    n = length(args[1])
+    for i=2:length(args)
+        if length(args[i]) != n
+            error("argument dimensions must match")
+        end
+    end
+    n
+end
+
+map(f::Callable, a::Array{Any,1}) = { f(a[i]) for i=1:length(a) }
 
 macro thunk(ex); :(()->$(esc(ex))); end
 macro L_str(s); s; end

@@ -309,18 +309,6 @@ DLLEXPORT void jl_close_uv(uv_handle_t *handle)
 
     if ((handle->type == UV_NAMED_PIPE || handle->type == UV_TCP) &&
         uv_is_writable((uv_stream_t*)handle)) {
-        // Make sure that the stream has not already been marked closed in Julia.
-        // A double shutdown would cause the process to hang on exit.
-        if (handle->data) {
-            JULIA_CB(isopen, handle->data, 0);
-            if (!jl_is_int32(ret)) {
-                jl_error("jl_close_uv: _uv_hook_isopen must return an int32.");
-            }
-            if (!jl_unbox_int32(ret)){
-                return;
-            }
-        }
-
         uv_shutdown_t *req = (uv_shutdown_t*)malloc(sizeof(uv_shutdown_t));
         req->data = 0;
         /*

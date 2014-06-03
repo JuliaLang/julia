@@ -260,7 +260,9 @@ else ifeq ($(OS), WINNT)
 endif
 
 	# purge sys.{dll,so,dylib} as that file is not relocatable across processor architectures
+ifeq ($(JULIA_CPU_TARGET), native)
 	-rm -f $(DESTDIR)$(private_libdir)/sys.$(SHLIB_EXT)
+endif
 
 ifeq ($(OS), WINNT)
 	[ ! -d dist-extras ] || ( cd dist-extras && \
@@ -284,10 +286,10 @@ source-dist: git-submodules
 	# Get all the dependencies downloaded
 	@$(MAKE) -C deps getall
 
-	# Create file source-dist.tmp to hold all the filenames that goes into the tarball
+	# Create file source-dist.tmp to hold all the filenames that go into the tarball
 	echo "base/version_git.jl" > source-dist.tmp
 	git ls-files >> source-dist.tmp
-	ls deps/*.tar.gz deps/*.tar.bz2 deps/*.tgz deps/random/*.tar.gz >> source-dist.tmp
+	ls deps/*.tar.gz deps/*.tar.bz2 deps/*.tgz >> source-dist.tmp
 	git submodule --quiet foreach 'git ls-files | sed "s&^&$$path/&"' >> source-dist.tmp
 
 	# Remove unwanted files

@@ -44,7 +44,7 @@ immutable StepRange{T,S} <: OrdinalRange{T,S}
                         remain = oftype(T, unsigned(diff) % step)
                     end
                 else
-                    remain = diff % step
+                    remain = steprem(start,stop,step)
                 end
                 last = stop - remain
             end
@@ -53,6 +53,8 @@ immutable StepRange{T,S} <: OrdinalRange{T,S}
         new(start, step, last)
     end
 end
+
+steprem(start,stop,step) = (stop-start) % step
 
 StepRange{T,S}(start::T, step::S, stop::T) = StepRange{T,S}(start, step, stop)
 
@@ -273,15 +275,7 @@ function show(io::IO, r::Range)
 end
 show(io::IO, r::UnitRange) = print(io, repr(first(r)), ':', repr(last(r)))
 
-isequal{T<:Range}(r::T, s::T) =
-    (first(r)==first(s)) & (step(r)==step(s)) & (last(r)==last(s))
-
-isequal(r::Range, s::Range) = false
-
-=={T<:Range}(r::T, s::T) = isequal(r, s)
-
-=={T<:Integer, S<:Integer}(r::Range{T}, s::Range{S}) =
-    (first(r)==first(s)) & (step(r)==step(s)) & (last(r)==last(s))
+=={T<:Range}(r::T, s::T) = (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
 
 function ==(r::Range, s::Range)
     lr = length(r)
@@ -298,12 +292,6 @@ function ==(r::Range, s::Range)
     end
     return true
 end
-
-# hashing ranges by component at worst leads to collisions for very similar ranges
-hash(r::Range) =
-    bitmix(hash(first(r)), bitmix(hash(step(r)), bitmix(hash(last(r)), uint(0xaaeeaaee))))
-
-# TODO: isless?
 
 intersect{T1<:Integer, T2<:Integer}(r::UnitRange{T1}, s::UnitRange{T2}) = max(r.start,s.start):min(last(r),last(s))
 
@@ -451,18 +439,17 @@ end
 ./(r::OrdinalRange, x::Real) = range(r.start/x, step(r)/x, length(r))
 ./(r::FloatRange, x::Real)   = FloatRange(r.start/x, r.step/x, r.len, r.divisor)
 
-# TODO: better implementations for FloatRanges?
-function +(r1::OrdinalRange, r2::OrdinalRange)
-    r1l = length(r1)
-    r1l == length(r2) || error("argument dimensions must match")
-    range(r1.start+r2.start, step(r1)+step(r2), r1l)
-end
+promote_rule{T1,T2}(::Type{FloatRange{T1}},::Type{FloatRange{T2}}) =
+    FloatRange{promote_type(T1,T2)}
+convert{T}(::Type{FloatRange{T}}, r::FloatRange) =
+    FloatRange{T}(r.start,r.step,r.len,r.divisor)
 
-function -(r1::OrdinalRange, r2::OrdinalRange)
-    r1l = length(r1)
-    r1l == length(r2) || error("argument dimensions must match")
-    range(r1.start-r2.start, step(r1)-step(r2), r1l)
-end
+promote_rule{F,OR<:OrdinalRange}(::Type{FloatRange{F}}, ::Type{OR}) =
+    FloatRange{promote_type(F,eltype(OR))}
+convert{T}(::Type{FloatRange{T}}, r::OrdinalRange) =
+    FloatRange{T}(start(r), step(r), length(r), one(T))
+
+# +/- of ranges is defined in operators.jl (to be able to use @eval etc.)
 
 ## non-linear operations on ranges ##
 
@@ -506,15 +493,15 @@ reverse(r::FloatRange)   = FloatRange(last(r), -r.step, r.len, r.divisor)
 ## sorting ##
 
 issorted(r::UnitRange) = true
-issorted(r::Range) = step(r) >= 0
+issorted(r::Range) = step(r) >= zero(step(r))
 
 sort(r::UnitRange) = r
 sort!(r::UnitRange) = r
 
-sort{T<:Real}(r::Range{T}) = issorted(r) ? r : reverse(r)
+sort(r::Range) = issorted(r) ? r : reverse(r)
 
 sortperm(r::UnitRange) = 1:length(r)
-sortperm{T<:Real}(r::Range{T}) = issorted(r) ? (1:1:length(r)) : (length(r):-1:1)
+sortperm(r::Range) = issorted(r) ? (1:1:length(r)) : (length(r):-1:1)
 
 function sum{T<:Real}(r::Range{T})
     l = length(r)
@@ -529,27 +516,8 @@ function map!(f::Callable, dest, r::Range)
     dest
 end
 
-function map_range_to!(f::Callable, first, dest, r::Range, state)
-    dest[1] = first
-    i = 2
-    while !done(r, state)
-        ri, state = next(r, state)
-        dest[i] = f(ri)
-        i += 1
-    end
-    dest
-end
-
-function map(f::Callable, r::Range)
-    if isempty(r); return {}; end
-    state = start(r)
-    (ri, state) = next(r, state)
-    first = f(ri)
-    map_range_to!(f, first, Array(typeof(first), length(r)), r, state)
-end
-
 function in(x, r::Range)
-    n = step(r) == 0 ? 1 : iround((x-first(r))/step(r))+1
+    n = step(r) == zero(step(r)) ? 1 : iround((x-first(r))/step(r))+1
     n >= 1 && n <= length(r) && r[n] == x
 end
 

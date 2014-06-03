@@ -127,7 +127,8 @@ true_k3m3 = -0.1221703757571835679 - 3.0151549516807985776im
 @test_approx_eq besselk(3,complex(-3)) true_k3m3
 @test_approx_eq besselk(-3,complex(-3)) true_k3m3
 @test_throws Base.Math.AmosException besselk(200,0.01)
-
+# issue #6564
+@test besselk(1.0,0.0) == Inf
 
 # bessely
 y33 = bessely(3,3.)
@@ -170,6 +171,7 @@ end
 @test_approx_eq lbeta(-1/2, 3) log(16/3)
 
 # gamma, lgamma (complex argument)
+@test gamma(1:25) == gamma(Float64[1:25])
 @test_approx_eq gamma(1/2) sqrt(π)
 @test_approx_eq gamma(-1/2) -2sqrt(π)
 @test_approx_eq lgamma(-1/2) log(abs(gamma(-1/2)))

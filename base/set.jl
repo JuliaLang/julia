@@ -26,7 +26,7 @@ setdiff!(s::Set, xs) = (for x=xs; delete!(s,x); end; s)
 similar{T}(s::Set{T}) = Set{T}()
 copy(s::Set) = union!(similar(s), s)
 
-sizehint(s::Set, newsz) = sizehint(s.dict, newsz)
+sizehint(s::Set, newsz) = (sizehint(s.dict, newsz); s)
 empty!{T}(s::Set{T}) = (empty!(s.dict); s)
 
 start(s::Set)       = start(s.dict)
@@ -50,31 +50,37 @@ function union(s::Set, sets::Set...)
     end
     return u
 end
+const ∪ = union
 
 intersect(s::Set) = copy(s)
 function intersect(s::Set, sets::Set...)
-    i = copy(s)
+    i = similar(s)
     for x in s
+        inall = true
         for t in sets
             if !in(x,t)
-                delete!(i,x)
+                inall = false
                 break
             end
         end
+        inall && push!(i, x)
     end
     return i
 end
+const ∩ = intersect
 
 function setdiff(a::Set, b::Set)
-    d = copy(a)
-    for x in b
-        delete!(d, x)
+    d = similar(a)
+    for x in a
+        if !(x in b)
+            push!(d, x)
+        end
     end
     d
 end
 
-isequal(l::Set, r::Set) = (length(l) == length(r)) && (l <= r)
-<(l::Set, r::Set) = (length(l) < length(r)) && (l <= r)
+==(l::Set, r::Set) = (length(l) == length(r)) && (l <= r)
+< (l::Set, r::Set) = (length(l) < length(r)) && (l <= r)
 <=(l::Set, r::Set) = issubset(l, r)
 
 function issubset(l, r)
@@ -85,6 +91,9 @@ function issubset(l, r)
     end
     return true
 end
+const ⊆ = issubset
+⊊(l::Set, r::Set) = ⊆(l, r) && l!=r
+⊈(l::Set, r::Set) = !⊆(l, r)
 
 function unique(C)
     out = Array(eltype(C),0)
@@ -106,6 +115,12 @@ function filter!(f::Function, s::Set)
     end
     return s
 end
-filter(f::Function, s::Set) = filter!(f, copy(s))
-
-hash(s::Set) = hash(sort(s.dict.keys[s.dict.slots .!= 0]))
+function filter(f::Function, s::Set)
+    u = similar(s)
+    for x in s
+        if f(x)
+            push!(u, x)
+        end
+    end
+    return u
+end

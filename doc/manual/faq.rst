@@ -48,6 +48,43 @@ while developing you might use a workflow something like this::
     obj3 = MyModule.someotherfunction(obj2, c)
     ...
 
+Functions
+---------
+
+I passed an argument ``x`` to a function, modified it inside that function, but on the outside, the variable ``x`` is still unchanged. Why?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Suppose you call a function like this::
+
+	julia> x = 10
+	julia> function change_value!(y) # Create a new function
+	           y = 17
+	       end
+	julia> change_value!(x)
+	julia> x # x is unchanged!
+	10
+
+In Julia, any function (including ``change_value!()``) can't change the binding of a local variable. If ``x`` (in the calling scope) is bound to a immutable object (like a real number), you can't modify the object; likewise, if x is bound in the calling scope to a Dict, you can't change it to be bound to an ASCIIString. 
+
+But here is a thing you should pay attention to: suppose ``x`` is bound to an Array (or any other mutable type). You cannot "unbind" ``x`` from this Array. But, since an Array is a *mutable* type, you can change its content. For example::
+
+	julia> x = [1,2,3]
+	3-element Array{Int64,1}:
+	1
+	2
+	3
+
+	julia> function change_array!(A) # Create a new function
+	           A[1] = 5
+	       end
+	julia> change_array!(x)
+	julia> x
+	3-element Array{Int64,1}:
+	5
+	2
+	3
+
+Here we created a function ``change_array!()``, that assigns ``5`` to the first element of the Array. We passed ``x`` (which was previously bound to an Array) to the function. Notice that, after the function call, ``x`` is still bound to the same Array, but the content of that Array changed.
 
 Types, type declarations, and constructors
 ------------------------------------------
@@ -419,6 +456,9 @@ For reasons of length the results are not shown here, but you may wish
 to try this yourself. Because the type is fully-specified in the first
 case, the compiler doesn't need to generate any code to resolve the
 type at run-time.  This results in shorter and faster code.
+
+
+.. _man-abstract-container-type:
 
 How should I declare "abstract container type" fields?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -11,33 +11,129 @@ function in(p::(Any,Any), a::Associative)
     !is(v, secret_table_token) && (v == p[2])
 end
 
-function show{K,V}(io::IO, t::Associative{K,V})
-    if isempty(t)
-        print(io, typeof(t),"()")
-    else
-        if K === Any && V === Any
-            delims = ['{','}']
-        else
-            delims = ['[',']']
-        end
+function summary(t::Associative)
+    n = length(t)
+    string(typeof(t), " with ", n, (n==1 ? " entry" : " entries"))
+end
+
+function showcompact{K,V}(io::IO, t::Associative{K,V})
+    print(io, summary(t))
+    if !isempty(t)
+        print(io, ": ")
+        delims = (K == V == Any) ? ('{', '}') : ('[', ']')
         print(io, delims[1])
         first = true
-        for (k, v) = t
-            first || print(io, ',')
-            first = false
-            show(io, k)
+        for (k, v) in t
+            first || (print(io, ','); first = false)
+            showcompact(io, k)
             print(io, "=>")
-            show(io, v)
+            showcompact(io, v)
         end
         print(io, delims[2])
     end
 end
+
+function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
+    truncwidth = strwidth(truncmark)
+    (width <= 0 || width < truncwidth) && return ""
+
+    wid = truncidx = lastidx = 0
+    idx = start(str)
+    while !done(str, idx)
+        lastidx = idx
+        c, idx = next(str, idx)
+        wid += charwidth(c)
+        wid >= width - truncwidth && truncidx == 0 && (truncidx = lastidx)
+        (wid >= width || c in chars) && break
+    end
+
+    str[lastidx] in chars && (lastidx = prevind(str, lastidx))
+    truncidx == 0 && (truncidx = lastidx)
+    if lastidx < sizeof(str)
+        return bytestring(SubString(str, 1, truncidx) * truncmark)
+    else
+        return bytestring(str)
+    end
+end
+
+function showdict{K,V}(io::IO, t::Associative{K,V}, limit_output::Bool = false,
+                       rows = tty_rows()-3, cols = tty_cols())
+    print(io, summary(t))
+    isempty(t) && return
+    print(io, ":")
+
+    if limit_output
+        rows < 2   && (print(io, " …"); return)
+        cols < 12  && (cols = 12) # Minimum widths of 2 for key, 4 for value
+        cols -= 6 # Subtract the widths of prefix "  " separator " => "
+        rows -= 2 # Subtract the summary and final ⋮ continuation lines
+
+        # determine max key width to align the output, caching the strings
+        ks = Array(String, min(rows, length(t)))
+        keylen = 0
+        for (i, k) in enumerate(keys(t))
+            i > rows && break
+            ks[i] = sprint(show, k)
+            keylen = clamp(length(ks[i]), keylen, div(cols, 3))
+        end
+    end
+
+    for (i, (k, v)) in enumerate(t)
+        print(io, "\n  ")
+        limit_output && i > rows && (print(io, rpad("⋮", keylen), " => ⋮"); break)
+
+        if limit_output
+            key = rpad(_truncate_at_width_or_chars(ks[i], keylen, "\r\n"), keylen)
+        else
+            key = sprint(show, k)
+        end
+        print(io, key)
+        print(io, " => ")
+
+        val = sprint(show, v)
+        if limit_output
+            val = _truncate_at_width_or_chars(val, cols - keylen, "\r\n")
+        end
+        print(io, val)
+    end
+end
+
+show{K,V}(io::IO, t::Associative{K,V}) = showdict(io, t, false)
+showlimited{K,V}(io::IO, t::Associative{K,V}) = showdict(io, t, true)
 
 immutable KeyIterator{T<:Associative}
     dict::T
 end
 immutable ValueIterator{T<:Associative}
     dict::T
+end
+
+summary{T<:Union(KeyIterator,ValueIterator)}(iter::T) =
+    string(T.name, " for a ", summary(iter.dict))
+
+show(io::IO, iter::Union(KeyIterator,ValueIterator)) = showkv(io, iter, false)
+showlimited(io::IO, iter::Union(KeyIterator,ValueIterator)) = showkv(io, iter, true)
+
+function showkv{T<:Union(KeyIterator,ValueIterator)}(io::IO, iter::T, limit_output::Bool = false,
+                                                     rows = tty_rows()-3, cols = tty_cols())
+    print(io, summary(iter))
+    isempty(iter) && return
+    print(io, ". ", T<:KeyIterator ? "Keys" : "Values", ":")
+    if limit_output
+        rows < 2 && (print(io, " …"); return)
+        cols < 4 && (cols = 4)
+        cols -= 2 # For prefix "  "
+        rows -= 2 # For summary and final ⋮ continuation lines
+    end
+
+    for (i, v) in enumerate(iter)
+        print(io, "\n  ")
+        limit_output && i >= rows && (print(io, "⋮"); break)
+
+        str = sprint(show, v)
+        limit_output && (str = _truncate_at_width_or_chars(str, cols, "\r\n"))
+        print(io, str)
+    end
 end
 
 length(v::Union(KeyIterator,ValueIterator)) = length(v.dict)
@@ -93,14 +189,6 @@ end
 filter(f::Function, d::Associative) = filter!(f,copy(d))
 
 eltype{K,V}(a::Associative{K,V}) = (K,V)
-
-function hash(d::Associative)
-    h::Uint = 0
-    for (k,v) in d
-        h $= bitmix(hash(k),~hash(v))
-    end
-    h
-end
 
 function isequal(l::Associative, r::Associative)
     if isa(l,ObjectIdDict) != isa(r,ObjectIdDict)
@@ -160,6 +248,14 @@ type ObjectIdDict <: Associative{Any,Any}
         end
         d
     end
+
+    function ObjectIdDict(o::ObjectIdDict)
+        N = length(o.ht)
+        ht = cell(N)
+        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint),
+              ht, o.ht, N*sizeof(Ptr))
+        new(ht)
+    end
 end
 
 similar(d::ObjectIdDict) = ObjectIdDict()
@@ -201,95 +297,7 @@ function length(d::ObjectIdDict)
     n
 end
 
-# hashing
-
-function int32hash(n::Uint32)
-    local a::Uint32 = n
-    a = (a + 0x7ed55d16) + a << 12
-    a = (a $ 0xc761c23c) $ a >> 19
-    a = (a + 0x165667b1) + a << 5
-    a = (a + 0xd3a2646c) $ a << 9
-    a = (a + 0xfd7046c5) + a << 3
-    a = (a $ 0xb55a4f09) $ a >> 16
-    return a
-end
-
-function int64hash(n::Uint64)
-    local a::Uint64 = n
-    a = ~a + (a << 21)
-    a =  a $ (a >> 24)
-    a = (a + (a << 3)) + (a << 8)
-    a =  a $ (a >> 14)
-    a = (a + (a << 2)) + (a << 4)
-    a =  a $ (a >> 28)
-    a =  a + (a << 31)
-    return a
-end
-
-function int64to32hash(n::Uint64)
-    local key::Uint64 = n
-    key = ~key + (key << 18)
-    key =  key $ (key >> 31)
-    key =  key * 21
-    key =  key $ (key >> 11)
-    key =  key + (key << 6 )
-    key =  key $ (key >> 22)
-    return uint32(key)
-end
-
-bitmix(a::Union(Int32,Uint32), b::Union(Int32,Uint32)) = int64to32hash((uint64(a)<<32)|uint64(b))
-bitmix(a::Union(Int64,Uint64), b::Union(Int64, Uint64)) = int64hash(uint64(a$((b<<32)|(b>>>32))))
-
-if WORD_SIZE == 64
-    hash64(x::Float64) = int64hash(reinterpret(Uint64,x))
-    hash64(x::Union(Int64,Uint64)) = int64hash(reinterpret(Uint64,x))
-else
-    hash64(x::Float64) = int64to32hash(reinterpret(Uint64,x))
-    hash64(x::Union(Int64,Uint64)) = int64to32hash(reinterpret(Uint64,x))
-end
-
-hash(x::Union(Bool,Char,Int8,Uint8,Int16,Uint16,Int32,Uint32,Int64,Uint64)) =
-    hash64(uint64(x))
-
-function hash(x::Integer)
-    h::Uint = hash(uint64(x&0xffffffffffffffff))
-    if typemin(Int64) <= x <= typemax(Uint64)
-        return h
-    end
-    x >>>= 64
-    while x != 0 && x != -1
-        h = bitmix(h, hash(uint64(x&0xffffffffffffffff)))
-        x >>>= 64
-    end
-    return h
-end
-
-hash(x::Float32) = hash(reinterpret(Uint32, ifelse(isnan(x), NaN32, x)))
-hash(x::Float64) = hash(reinterpret(Uint64, ifelse(isnan(x), NaN, x)))
-
-function hash(t::Tuple)
-    h::Uint = 0
-    for i=1:length(t)
-        h = bitmix(h,int(hash(t[i]))+42)
-    end
-    return h
-end
-
-function hash(a::AbstractArray)
-    h::Uint = hash(size(a))+1
-    for i=1:length(a)
-        h = bitmix(h,int(hash(a[i])))
-    end
-    return h
-end
-
-# make sure Array{Bool} and BitArray can be equivalent
-hash(a::AbstractArray{Bool}) = hash(bitpack(a))
-
-hash(x::ANY) = object_id(x)
-
-hash(x::Expr) = bitmix(hash(x.head),hash(x.args)+43)
-
+copy(o::ObjectIdDict) = ObjectIdDict(o)
 
 # dict
 
@@ -326,6 +334,21 @@ Dict() = Dict{Any,Any}()
 
 Dict{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V}) = Dict{K,V}(ks,vs)
 Dict(ks, vs) = Dict{Any,Any}(ks, vs)
+
+# conversion between Dict types
+function convert{K,V}(::Type{Dict{K,V}},d::Dict)
+    h = Dict{K,V}()
+    for (k,v) in d
+        ck = convert(K,k)
+        if !haskey(h,ck)
+            h[ck] = convert(V,v)
+        else
+            error("key collision during dictionary conversion")
+        end
+    end
+    return h
+end
+convert{K,V}(::Type{Dict{K,V}},d::Dict{K,V}) = d
 
 # syntax entry points
 Dict{K,V}(ks::(K...), vs::(V...)) = Dict{K  ,V  }(ks, vs)
@@ -523,6 +546,7 @@ function setindex!{K,V}(h::Dict{K,V}, v0, key0)
     index = ht_keyindex2(h, key)
 
     if index > 0
+        h.keys[index] = key
         h.vals[index] = v
     else
         _setindex!(h, v, key, -index)

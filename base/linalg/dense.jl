@@ -1,25 +1,57 @@
 # Linear algebra functions for dense matrices in column major format
 
-scale!{T<:BlasFloat}(X::Array{T}, s::Number) = BLAS.scal!(length(X), convert(T,s), X, 1)
+## BLAS cutoff threshold constants
+
+const SCAL_CUTOFF = 2048
+const DOT_CUTOFF = 128
+const ASUM_CUTOFF = 32
+const NRM2_CUTOFF = 32
+
+function scale!{T<:BlasFloat}(X::Array{T}, s::T)
+    if length(X) < SCAL_CUTOFF
+        generic_scale!(X, s)
+    else
+        BLAS.scal!(length(X), s, X, 1)
+    end
+    X
+end
+
+scale!{T<:BlasFloat}(X::Array{T}, s::Number) = scale!(X, convert(T, s))
 scale!{T<:BlasComplex}(X::Array{T}, s::Real) = BLAS.scal!(length(X), oftype(real(zero(T)),s), X, 1)
 
 #Test whether a matrix is positive-definite
-isposdef!{T<:BlasFloat}(A::Matrix{T}, UL::Char) = LAPACK.potrf!(UL, A)[2] == 0
-isposdef!(A::Matrix) = ishermitian(A) && isposdef!(A, 'U')
+isposdef!{T<:BlasFloat}(A::StridedMatrix{T}, UL::Symbol) = LAPACK.potrf!(string(UL)[1], A)[2] == 0
+isposdef!(A::StridedMatrix) = ishermitian(A) && isposdef!(A, :U)
 
-isposdef{T<:BlasFloat}(A::Matrix{T}, UL::Char) = isposdef!(copy(A), UL)
-isposdef{T<:BlasFloat}(A::Matrix{T}) = isposdef!(copy(A))
-isposdef{T<:Number}(A::Matrix{T}, UL::Char) = isposdef!(float64(A), UL)
-isposdef{T<:Number}(A::Matrix{T}) = isposdef!(float64(A))
+isposdef{T}(A::AbstractMatrix{T}, UL::Symbol) = (S = typeof(sqrt(one(T))); isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A), UL))
+isposdef{T}(A::AbstractMatrix{T}) = (S = typeof(sqrt(one(T))); isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A)))
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
+
+stride1(x::Array) = 1
+stride1(x::StridedVector) = stride(x, 1)::Int
+
+import Base: mapreduce_seq_impl, AbsFun, Abs2Fun, AddFun
+
+mapreduce_seq_impl{T<:BlasFloat}(::AbsFun, ::AddFun, a::Union(Array{T},StridedVector{T}), ifirst::Int, ilast::Int) =
+    BLAS.asum(ilast-ifirst+1, pointer(a, ifirst), stride1(a))
+
+function mapreduce_seq_impl{T<:BlasFloat}(::Abs2Fun, ::AddFun, a::Union(Array{T},StridedVector{T}), ifirst::Int, ilast::Int)
+    n = ilast-ifirst+1
+    px = pointer(a, ifirst)
+    incx = stride1(a)
+    BLAS.dot(n, px, incx, px, incx)
+end
 
 function norm{T<:BlasFloat, TI<:Integer}(x::StridedVector{T}, rx::Union(UnitRange{TI},Range{TI}))
     (minimum(rx) < 1 || maximum(rx) > length(x)) && throw(BoundsError())
     BLAS.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
 end
 
-vecnorm1{T<:BlasReal}(x::Union(Array{T},StridedVector{T})) = BLAS.asum(x)
-vecnorm2{T<:BlasFloat}(x::Union(Array{T},StridedVector{T})) = BLAS.nrm2(x)
+vecnorm1{T<:BlasReal}(x::Union(Array{T},StridedVector{T})) = 
+    length(x) < ASUM_CUTOFF ? generic_vecnorm1(x) : BLAS.asum(x)
+
+vecnorm2{T<:BlasFloat}(x::Union(Array{T},StridedVector{T})) = 
+    length(x) < NRM2_CUTOFF ? generic_vecnorm2(x) : BLAS.nrm2(x)
 
 function triu!{T}(M::Matrix{T}, k::Integer)
     m, n = size(M)

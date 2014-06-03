@@ -78,8 +78,8 @@ end
 function showerror(io::IO, e::DomainError, bt)
     print(io, "DomainError")
     for b in bt
-        code = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Int32), b, 0)
-        if length(code) == 3
+        code = ccall(:jl_lookup_code_address, Any, (Ptr{Void},), b)
+        if length(code) == 4
             if code[1] in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
                 print(io, "\n", code[1],
                       " will only return a complex result if called with a complex argument.",
@@ -159,11 +159,12 @@ function show_backtrace(io::IO, top_function::Symbol, t, set)
     local fname, file, line
     count = 0
     for i = 1:length(t)
-        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Int32), t[i], 0)
+        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void},), t[i])
         if lkup === ()
             continue
         end
-        fname, file, line = lkup
+        fname, file, line, fromC = lkup
+        if fromC; continue; end
         if i == 1 && fname == :error; continue; end
         if fname == top_function; break; end
         count += 1

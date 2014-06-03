@@ -72,7 +72,7 @@ iround{T<:Integer}(::Type{T}, x::FloatingPoint) = convert(T,round(x))
 
 if WORD_SIZE == 64
     iround(x::Float32) = iround(float64(x))
-    itrunc(x::Float32) = itrunc(float64(x))
+    itrunc(x::Float32) = box(Int64,fptosi(Int64,unbox(Float32,x)))
     iround(x::Float64) = box(Int64,fpsiround(unbox(Float64,x)))
     itrunc(x::Float64) = box(Int64,fptosi(unbox(Float64,x)))
 else
@@ -150,18 +150,10 @@ mod{T<:FloatingPoint}(x::T, y::T) = rem(y+rem(x,y),y)
 <=(x::Float32, y::Float32) = le_float(unbox(Float32,x),unbox(Float32,y))
 <=(x::Float64, y::Float64) = le_float(unbox(Float64,x),unbox(Float64,y))
 
-isequal{T<:FloatingPoint}(x::T, y::T) =
-    ((x==y) & (signbit(x)==signbit(y))) | (isnan(x)&isnan(y))
-
 isequal(x::Float32, y::Float32) = fpiseq(unbox(Float32,x),unbox(Float32,y))
 isequal(x::Float64, y::Float64) = fpiseq(unbox(Float64,x),unbox(Float64,y))
 isless (x::Float32, y::Float32) = fpislt(unbox(Float32,x),unbox(Float32,y))
 isless (x::Float64, y::Float64) = fpislt(unbox(Float64,x),unbox(Float64,y))
-
-isless(a::FloatingPoint, b::FloatingPoint) =
-    (a<b) | (!isnan(a) & (isnan(b) | (signbit(a)>signbit(b))))
-isless(a::Real, b::FloatingPoint) = (a<b) | isless(float(a),b)
-isless(a::FloatingPoint, b::Real) = (a<b) | isless(a,float(b))
 
 function cmp(x::FloatingPoint, y::FloatingPoint)
     (isnan(x) || isnan(y)) && throw(DomainError())
@@ -183,10 +175,10 @@ end
 ==(x::Int64  , y::Float64) = eqfsi64(unbox(Float64,y),unbox(Int64,x))
 ==(x::Uint64 , y::Float64) = eqfui64(unbox(Float64,y),unbox(Uint64,x))
 
-==(x::Float32, y::Int64  ) = eqfsi64(unbox(Float64,float64(x)),unbox(Int64,y))
-==(x::Float32, y::Uint64 ) = eqfui64(unbox(Float64,float64(x)),unbox(Uint64,y))
-==(x::Int64  , y::Float32) = eqfsi64(unbox(Float64,float64(y)),unbox(Int64,x))
-==(x::Uint64 , y::Float32) = eqfui64(unbox(Float64,float64(y)),unbox(Uint64,x))
+==(x::Float32, y::Int64  ) = eqfsi64(unbox(Float32,x),unbox(Int64,y))
+==(x::Float32, y::Uint64 ) = eqfui64(unbox(Float32,x),unbox(Uint64,y))
+==(x::Int64  , y::Float32) = eqfsi64(unbox(Float32,y),unbox(Int64,x))
+==(x::Uint64 , y::Float32) = eqfui64(unbox(Float32,y),unbox(Uint64,x))
 
 < (x::Float64, y::Int64  ) = ltfsi64(unbox(Float64,x),unbox(Int64,y))
 < (x::Float64, y::Uint64 ) = ltfui64(unbox(Float64,x),unbox(Uint64,y))
@@ -220,17 +212,14 @@ end
 abs(x::Float64) = box(Float64,abs_float(unbox(Float64,x)))
 abs(x::Float32) = box(Float32,abs_float(unbox(Float32,x)))
 
-isnan(x::FloatingPoint) = (x != x)
-isnan(x::Real) = isnan(float(x))
-isnan(x::Integer) = false
+isnan(x::FloatingPoint) = x != x
+isnan(x::Real) = false
 
-isinf(x::FloatingPoint) = (abs(x) == Inf)
-isinf(x::Real) = isinf(float(x))
-isinf(x::Integer) = false
-
-isfinite(x::FloatingPoint) = (x-x == 0)
-isfinite(x::Real) = isfinite(float(x))
+isfinite(x::FloatingPoint) = x - x == 0
+isfinite(x::Real) = decompose(x)[3] != 0
 isfinite(x::Integer) = true
+
+isinf(x::Real) = !isnan(x) & !isfinite(x)
 
 ## floating point traits ##
 

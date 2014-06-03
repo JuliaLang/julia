@@ -53,12 +53,8 @@ inv(x::Integer) = float(one(x))/float(x)
 isodd(n::Integer) = bool(rem(n,2))
 iseven(n::Integer) = !isodd(n)
 
-signbit(x::Unsigned) = 0
-signbit(x::Int8) = int(x>>>7)
-signbit(x::Int16) = int(x>>>15)
-signbit(x::Int32) = int(x>>>31)
-signbit(x::Int64) = int(x>>>63)
-signbit(x::Int128) = int(x>>>127)
+signbit(x::Integer) = x < 0
+signbit(x::Unsigned) = false
 
 flipsign(x::Int,    y::Int)    = box(Int,flipsign_int(unbox(Int,x),unbox(Int,y)))
 flipsign(x::Int64,  y::Int64)  = box(Int64,flipsign_int(unbox(Int64,x),unbox(Int64,y)))
@@ -96,6 +92,8 @@ mod(x::Unsigned, y::Signed) = rem(y+signed(rem(x,y)),y)
 # while there is a substantial performance penalty to 64-bit promotion.
 typealias Signed64 Union(Int8,Int16,Int32,Int64)
 typealias Unsigned64 Union(Uint8,Uint16,Uint32,Uint64)
+typealias Integer64 Union(Signed64,Unsigned64)
+
 div{T<:Signed64}  (x::T, y::T) = box(T,sdiv_int(unbox(T,x),unbox(T,y)))
 div{T<:Unsigned64}(x::T, y::T) = box(T,udiv_int(unbox(T,x),unbox(T,y)))
 rem{T<:Signed64}  (x::T, y::T) = box(T,srem_int(unbox(T,x),unbox(T,y)))

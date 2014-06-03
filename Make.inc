@@ -134,6 +134,7 @@ endif
 endif
 
 JLDOWNLOAD = $(JULIAHOME)/deps/jldownload
+JLCHECKSUM = $(JULIAHOME)/deps/jlchecksum
 
 # Figure out OS and architecture
 OS := $(BUILD_OS)
@@ -217,7 +218,7 @@ CXX = $(CROSS_COMPILE)g++
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
-DEBUGFLAGS = -O0 -ggdb3 -DDEBUG -fstack-protector-all
+DEBUGFLAGS = -O0 -ggdb3 -DJL_DEBUG_BUILD -fstack-protector-all
 SHIPFLAGS = -O3 -falign-functions
 endif
 
@@ -227,7 +228,7 @@ CXX = $(CROSS_COMPILE)clang++
 JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
-DEBUGFLAGS = -O0 -g -DDEBUG -fstack-protector-all
+DEBUGFLAGS = -O0 -g -DJL_DEBUG_BUILD -fstack-protector-all
 SHIPFLAGS = -O3
 ifeq ($(OS), Darwin)
 ifeq ($(USE_LIBCPP), 1)
@@ -508,6 +509,11 @@ JLDFLAGS =
 endif
 JCPPFLAGS += -D_WIN32_WINNT=0x0600
 UNTRUSTED_SYSTEM_LIBM = 1
+endif
+
+# Intel VTune Amplifier
+ifeq ($(USE_INTEL_JITEVENTS), 1)
+JCPPFLAGS += -DJL_USE_INTEL_JITEVENTS
 endif
 
 # Intel libraries

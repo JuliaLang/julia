@@ -21,6 +21,7 @@ unpreserve_handle(x) = (v = uvhandles[x]; v == 1 ? pop!(uvhandles,x) : (uvhandle
 immutable RawFD
     fd::Int32
     RawFD(fd::Integer) = new(int32(fd))
+    RawFD(fd::RawFD) = fd
 end
 
 convert(::Type{Int32}, fd::RawFD) = fd.fd
@@ -299,8 +300,6 @@ function wait_readbyte(x::AsyncStream, c::Uint8)
     end
 end
 
-wait_readline(x) = wait_readbyte(x, uint8('\n'))
-
 function wait_readnb(x::AsyncStream, nb::Int)
     while isopen(x) && nb_available(x.buffer) < nb
         start_reading(x)
@@ -376,6 +375,7 @@ function notify_filled(stream::AsyncStream, nread::Int)
     end
 end
 
+const READ_BUFFER_SZ=10485760           # 10 MB 
 function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::Uint)
     if nread < 0
         if nread != UV_EOF
@@ -396,7 +396,15 @@ function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::
         notify_filled(stream, nread)
         notify(stream.readnotify)
     end
-end
+
+    # Stop reading when 
+    # 1) when we have an infinite buffer, and we have accumulated a lot of unread data OR
+    # 2) we have an alternate buffer that has reached its limit. 
+    if (is_maxsize_unlimited(stream.buffer) && (nb_available(stream.buffer) > READ_BUFFER_SZ )) ||
+       (nb_available(stream.buffer) == stream.buffer.maxsize)
+        stop_reading(stream)
+    end
+ end
 ##########################################
 # Async Workers
 ##########################################
@@ -629,16 +637,43 @@ function readall(stream::AsyncStream)
     return takebuf_string(stream.buffer)
 end
 
-function read!{T}(this::AsyncStream, a::Array{T})
+function read!{T}(s::AsyncStream, a::Array{T})
     isbits(T) || error("read from buffer only supports bits types or arrays of bits types")
-    nb = length(a)*sizeof(T)
-    buf = this.buffer
-    @assert buf.seekable == false
-    @assert buf.maxsize >= nb
-    start_reading(this)
-    wait_readnb(this,nb)
-    read!(this.buffer, a)
+    nb = length(a) * sizeof(T)
+    read!(s, reshape(reinterpret(Uint8, a), nb))
     return a
+end
+
+function read!{Uint8}(s::AsyncStream, a::Vector{Uint8})
+    nb = length(a)
+    sbuf = s.buffer
+    @assert sbuf.seekable == false
+    @assert sbuf.maxsize >= nb
+    
+    if nb_available(sbuf) >= nb
+        return read!(sbuf, a)
+    end
+    
+    if nb <= 65536 # Arbitrary 64K limit under which we are OK with copying the array from the stream's buffer
+        wait_readnb(s,nb)
+        read!(sbuf, a)
+    else
+        stop_reading(s) # Just playing it safe, since we are going to switch buffers.
+        newbuf = PipeBuffer(a, nb) 
+        newbuf.size = 0
+        s.buffer = newbuf
+        write(newbuf, sbuf) 
+        wait_readnb(s,nb)
+        s.buffer = sbuf
+    end
+    return a
+end
+
+function read{T}(s::AsyncStream, ::Type{T}, dims::Dims) 
+    isbits(T) || error("read from buffer only supports bits types or arrays of bits types")
+    nb = prod(dims)*sizeof(T)
+    a = read!(s, Array(Uint8, nb)) 
+    reshape(reinterpret(T, a), dims)
 end
 
 function read(this::AsyncStream,::Type{Uint8})
@@ -648,12 +683,7 @@ function read(this::AsyncStream,::Type{Uint8})
     read(buf,Uint8)
 end
 
-function readline(this::AsyncStream)
-    buf = this.buffer
-    @assert buf.seekable == false
-    wait_readline(this)
-    readline(buf)
-end
+readline(this::AsyncStream) = readuntil(this, '\n')
 
 readline() = readline(STDIN)
 
@@ -709,7 +739,10 @@ end
 write!(s::AsyncStream, string::ByteString) = write!(s,string.data)
 
 function _uv_hook_writecb(s::AsyncStream, req::Ptr{Void}, status::Int32)
-    status < 0 && close(s)
+    if status < 0
+        err = UVError("write",status)
+        showerror(STDERR, err, backtrace())
+    end
     nothing
 end
 
@@ -756,9 +789,10 @@ function _uv_hook_writecb_task(s::AsyncStream,req::Ptr{Void},status::Int32)
     d = uv_req_data(req)
     if status < 0
         err = UVError("write",status)
-        close(s)
         if d != C_NULL
             schedule(unsafe_pointer_to_objref(d)::Task,err,error=true)
+        else
+            showerror(STDERR, err, backtrace())
         end
     elseif d != C_NULL
         schedule(unsafe_pointer_to_objref(d)::Task)

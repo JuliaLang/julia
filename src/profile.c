@@ -352,6 +352,13 @@ DLLEXPORT int jl_profile_start_timer(void)
 {
     struct sigevent sigprof;
     struct sigaction sa;
+    sigset_t ss;
+
+    // Make sure SIGUSR1 is unblocked
+    sigemptyset(&ss);
+    sigaddset(&ss, SIGUSR1);
+    if (sigprocmask(SIG_UNBLOCK, &ss, NULL) == -1)
+        return -4;
 
     // Establish the signal handler
     memset(&sa, 0, sizeof(struct sigaction));

@@ -127,10 +127,29 @@ cmove_left(t::UnixTerminal, n) = write(t.out_stream, "$(CSI)$(n)D")
 cmove_line_up(t::UnixTerminal, n) = (cmove_up(t, n); cmove_col(t, 0))
 cmove_line_down(t::UnixTerminal, n) = (cmove_down(t, n); cmove_col(t, 0))
 cmove_col(t::UnixTerminal, n) = write(t.out_stream, "$(CSI)$(n)G")
-
-raw!(t::TTYTerminal, raw::Bool) = ccall((@windows ? :jl_tty_set_mode : :uv_tty_set_mode),
+    
+@windows ? begin 
+    ispty(s::Base.AsyncStream) = bool(ccall(:jl_ispty, Cint, (Ptr{Void},), s))
+    ispty(s) = false
+    function raw!(t::TTYTerminal,raw::Bool)
+        if ispty(t.in_stream) || ispty(t.out_stream) || ispty(t.err_stream)
+            run(if raw
+                    `stty raw -echo onlcr -ocrnl opost`
+                else
+                    `stty sane`
+                end,t.in_stream,t.out_stream,t.err_stream)
+            true
+        else
+            ccall(:jl_tty_set_mode,
+                 Int32, (Ptr{Void},Int32),
+                 t.in_stream.handle, int32(raw)) != -1
+        end
+    end
+end : begin
+    raw!(t::TTYTerminal, raw::Bool) = ccall(:uv_tty_set_mode,
                                          Int32, (Ptr{Void},Int32),
-                                         t.in_stream.handle, raw ? 1 : 0) != -1
+                                         t.in_stream.handle, int32(raw)) != -1
+end
 enable_bracketed_paste(t::UnixTerminal) = write(t.out_stream, "$(CSI)?2004h")
 disable_bracketed_paste(t::UnixTerminal) = write(t.out_stream, "$(CSI)?2004l")
 end_keypad_transmit_mode(t::UnixTerminal) = # tput rmkx

@@ -195,7 +195,7 @@ end
 type LocalProcess
     id::Int
     bind_addr::IpAddr
-    LocalProcess() = new()
+    LocalProcess() = new(1)
 end
 
 const LPROC = LocalProcess()
@@ -448,8 +448,8 @@ type RemoteRef
     next_id() = (id=(myid(),REQ_ID); REQ_ID+=1; id)
 end
 
-hash(r::RemoteRef) = hash(r.whence)+3*hash(r.id)
-isequal(r::RemoteRef, s::RemoteRef) = (r.whence==s.whence && r.id==s.id)
+hash(r::RemoteRef, h::Uint) = hash(r.whence, hash(r.id, h))
+==(r::RemoteRef, s::RemoteRef) = (r.whence==s.whence && r.id==s.id)
 
 rr2id(r::RemoteRef) = (r.whence, r.id)
 
@@ -969,8 +969,6 @@ function start_worker(out::IO)
     #close(STDIN)
 
     disable_threaded_libs()
-
-    ccall(:jl_install_sigint_handler, Void, ())
     disable_nagle(sock)
 
     try
@@ -1120,7 +1118,7 @@ function launch_local_workers(cman::LocalManager, np::Integer, config::Dict)
 
     # start the processes first...
     for i in 1:np
-        io, pobj = readsfrom(detach(`$(dir)/$(exename) --bind-to $(LPROC.bind_addr) $exeflags`))
+        io, pobj = open(detach(`$(dir)/$(exename) --bind-to $(LPROC.bind_addr) $exeflags`), "r")
         io_objs[i] = io
         configs[i] = merge(config, {:process => pobj})
     end
@@ -1177,7 +1175,7 @@ function launch_ssh_workers(cman::SSHManager, np::Integer, config::Dict)
         cmd = `sh -l -c $(shell_escape(cmd))`                   # shell to launch under
         cmd = `ssh -n $sshflags $host $(shell_escape(cmd))`     # use ssh to remote launch
         
-        io, pobj = readsfrom(detach(cmd))
+        io, pobj = open(detach(cmd), "r")
         io_objs[i] = io
         configs[i] = merge(config, {:machine => cman.machines[i]})
     end
@@ -1327,9 +1325,9 @@ function pmap(f, lsts...; err_retry=true, err_stop=false)
     function getnext_tasklet()
         if is_task_in_error() && err_stop
             return nothing
-        elseif all([!done(lsts[idx],states[idx]) for idx in 1:len])
+        elseif !any(idx->done(lsts[idx],states[idx]), 1:len)
             nxts = [next(lsts[idx],states[idx]) for idx in 1:len]
-            map(idx->states[idx]=nxts[idx][2], 1:len)
+            for idx in 1:len; states[idx] = nxts[idx][2]; end
             nxtvals = [x[1] for x in nxts]
             return (getnextidx(), nxtvals)
             
@@ -1592,3 +1590,21 @@ function check_same_host(pids)
     end
 end
 
+function terminate_all_workers()
+    if myid() != 1
+        return
+    end
+    
+    if nprocs() > 1
+        ret = rmprocs(workers(); waitfor=0.5)
+        if ret != :ok
+            warn("Forcibly interrupting busy workers")
+            # Might be computation bound, interrupt them and try again
+            interrupt(workers())
+            ret = rmprocs(workers(); waitfor=0.5)
+            if ret != :ok
+                warn("Unable to terminate all workers")
+            end
+        end
+     end   
+end
