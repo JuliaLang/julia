@@ -1518,14 +1518,12 @@ end
 function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
     start = time()
     done = RemoteRef()
-    timercb(aw, status) = begin
+    timercb(aw) = begin
         try
             if testcb()
                 put!(done, :ok)
             elseif (time() - start) > secs
                 put!(done, :timed_out)
-            elseif status != 0
-                put!(done, :error)
             end
         catch e
             put!(done, :error)
