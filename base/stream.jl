@@ -458,7 +458,7 @@ end
 _uv_hook_close(uv::AsyncWork) = (uv.handle = C_NULL; nothing)
 
 # This serves as a common callback for all async classes
-function _uv_hook_asynccb(async::AsyncWork, status::Int32)
+function _uv_hook_asynccb(async::AsyncWork)
     if isa(async, Timer)
         if ccall(:uv_timer_get_repeat, Uint64, (Ptr{Void},), async.handle) == 0
             # timer is stopped now
@@ -466,7 +466,7 @@ function _uv_hook_asynccb(async::AsyncWork, status::Int32)
         end
     end
     try
-        async.cb(async, status)
+        async.cb(async)
     catch
     end
     nothing
@@ -492,12 +492,8 @@ end
 
 function sleep(sec::Real)
     w = Condition()
-    timer = Timer(function (tmr,status)
-        if status == 0
-            notify(w)
-        else 
-            notify_error(UVError("timer",status))
-        end
+    timer = Timer(function (tmr)
+        notify(w)
     end)
     start_timer(timer, float(sec), 0)
     try
