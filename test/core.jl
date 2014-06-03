@@ -1221,8 +1221,8 @@ end # module
 abstract IT4805{N, T}
 
 let
-    T = TypeVar(:T,Int)
-    N = TypeVar(:N)
+    T = TypeVar(:T,Int,true)
+    N = TypeVar(:N,true)
     @test typeintersect(Type{IT4805{1,T}}, Type{TypeVar(:_,IT4805{N,Int})}) != None
 end
 
@@ -1616,7 +1616,7 @@ end
 end
 
 let
-    z = A5876.@x()
+    local z = A5876.@x()
     @test z == 42
     @test f5876(Int) === Int
 end
@@ -1704,3 +1704,9 @@ function ttt7049(;init::Maybe7049{Union(String,(Int,Char))} = nothing)
     string("init=", init)
 end
 @test ttt7049(init="a") == "init=a"
+
+# issue #7074
+let z{T<:Union(Float64,Complex{Float64},Float32,Complex{Float32})}(A::StridedMatrix{T}) = T,
+    S = zeros(Complex,2,2)
+    @test_throws MethodError z(S)
+end
