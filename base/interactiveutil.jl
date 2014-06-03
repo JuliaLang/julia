@@ -32,7 +32,7 @@ function edit(file::String, line::Integer)
     elseif beginswith(edname, "subl")
         spawn(`$(shell_split(edpath)) $file:$line`)
     elseif OS_NAME == :Windows && (edname == "start" || edname == "open")
-        spawn(`start /b $file`)
+        spawn(`cmd /c start /b $file`)
     elseif OS_NAME == :Darwin && (edname == "start" || edname == "open")
         spawn(`open -t $file`)
     elseif edname == "kate"
