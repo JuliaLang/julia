@@ -13,10 +13,6 @@ lua = lufact(A)
 L,U,p,q,Rs = lua[:(:)]
 @test_approx_eq scale(Rs,A)[p,q] L*U
 
-lua = lufact(complex(A,A))
-L,U,p,q,Rs = lua[:(:)]
-@test_approx_eq scale(Rs,A)[p,q] L*U
-
 @test_approx_eq det(lua) det(full(A))
 
 b = [8., 45., -3., 3., 19.]
@@ -30,6 +26,11 @@ x = lua'\b
 @test_approx_eq x float([1:5])
 
 @test norm(A'*x-b,1) < eps(1e4)
+
+Ac = complex(A,A)
+lua = lufact(Ac)
+L,U,p,q,Rs = lua[:(:)]
+@test_approx_eq scale(Rs,Ac)[p,q] L*U 
 
 #4523 - complex sparse \
 x = speye(2) + im * speye(2)
