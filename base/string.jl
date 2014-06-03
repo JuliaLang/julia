@@ -64,8 +64,8 @@ getindex(s::String, v::AbstractVector) =
 
 symbol(s::String) = symbol(bytestring(s))
 
-print(io::IO, s::String) = write(io, s)
-write(io::IO, s::String) = for c in s write(io, c) end
+print(io::IO, s::String) = (write(io, s); nothing)
+write(io::IO, s::String) = (len = 0; for c in s; len += write(io, c); end; len)
 show(io::IO, s::String) = print_quoted(io, s)
 
 sizeof(s::String) = error("type $(typeof(s)) has no canonical binary representation")
@@ -482,8 +482,8 @@ function cmp(a::String, b::String)
     !done(a,i) && done(b,j) ? +1 : 0
 end
 
-isequal(a::String, b::String) = cmp(a,b) == 0
-isless(a::String, b::String)  = cmp(a,b) <  0
+==(a::String, b::String) = cmp(a,b) == 0
+isless(a::String, b::String) = cmp(a,b) < 0
 
 # begins with and ends with predicates
 
@@ -497,7 +497,7 @@ function beginswith(a::String, b::String)
     end
     done(b,i)
 end
-beginswith(a::String, c::Char) = !isempty(a) && a[start(a)] == c
+beginswith(str::String, chars::Chars) = !isempty(str) && str[start(str)] in chars
 
 function endswith(a::String, b::String)
     i = endof(a)
@@ -513,20 +513,19 @@ function endswith(a::String, b::String)
     end
     j < b1
 end
-endswith(a::String, c::Char) = !isempty(a) && a[end] == c
+endswith(str::String, chars::Chars) = !isempty(str) && str[end] in chars
 
-# faster comparisons for byte strings
+# faster comparisons for byte strings and symbols
 
-cmp(a::ByteString, b::ByteString)     = lexcmp(a.data, b.data)
-isequal(a::ByteString, b::ByteString) = endof(a)==endof(b) && cmp(a,b)==0
+cmp(a::ByteString, b::ByteString) = lexcmp(a.data, b.data)
+cmp(a::Symbol, b::Symbol) = int(sign(ccall(:strcmp, Int32, (Ptr{Uint8}, Ptr{Uint8}), a, b)))
+
+==(a::ByteString, b::ByteString) = endof(a) == endof(b) && cmp(a,b) == 0
+isless(a::Symbol, b::Symbol) = cmp(a,b) < 0
+
 beginswith(a::ByteString, b::ByteString) = beginswith(a.data, b.data)
-
 beginswith(a::Array{Uint8,1}, b::Array{Uint8,1}) =
     (length(a) >= length(b) && ccall(:strncmp, Int32, (Ptr{Uint8}, Ptr{Uint8}, Uint), a, b, length(b)) == 0)
-
-cmp(a::Symbol, b::Symbol) =
-    int(sign(ccall(:strcmp, Int32, (Ptr{Uint8}, Ptr{Uint8}), a, b)))
-isless(a::Symbol, b::Symbol) = cmp(a,b)<0
 
 # TODO: fast endswith
 
@@ -672,6 +671,16 @@ function convert{P<:Union(Int8,Uint8),T<:ByteString}(::Type{Ptr{P}}, s::SubStrin
 end
 
 isascii(s::SubString{ASCIIString}) = true
+
+## hashing strings ##
+
+const memhash = Uint == Uint64 ? :memhash_seed : :memhash32_seed
+
+function hash{T<:ByteString}(s::Union(T,SubString{T}), h::Uint)
+    h += uint(0x71e729fd56419c81)
+    ccall(memhash, Uint, (Ptr{Uint8}, Csize_t, Uint32), s, sizeof(s), h) + h
+end
+hash(s::String, h::Uint) = hash(bytestring(s), h)
 
 ## efficient representation of repeated strings ##
 
@@ -1560,9 +1569,9 @@ float32_isvalid(s::String, out::Array{Float32,1}) =
     ccall(:jl_strtof, Int32, (Ptr{Uint8},Ptr{Float32}), s, out) == 0
 
 float64_isvalid(s::SubString, out::Array{Float64,1}) =
-    ccall(:jl_substrtod, Int32, (Ptr{Uint8},Csize_t,Int,Ptr{Float64}), s.string, convert(Csize_t,s.offset), s.endof, out) == 0
+    ccall(:jl_substrtod, Int32, (Ptr{Uint8},Csize_t,Cint,Ptr{Float64}), s.string, s.offset, s.endof, out) == 0
 float32_isvalid(s::SubString, out::Array{Float32,1}) =
-    ccall(:jl_substrtof, Int32, (Ptr{Uint8},Csize_t,Int,Ptr{Float32}), s.string, convert(Csize_t,s.offset), s.endof, out) == 0
+    ccall(:jl_substrtof, Int32, (Ptr{Uint8},Csize_t,Cint,Ptr{Float32}), s.string, s.offset, s.endof, out) == 0
 
 begin
     local tmp::Array{Float64,1} = Array(Float64,1)
@@ -1678,19 +1687,3 @@ pointer{T<:ByteString}(x::SubString{T}, i::Integer) = pointer(x.string.data) + x
 pointer(x::Union(UTF16String,UTF32String), i::Integer) = pointer(x)+(i-1)*sizeof(eltype(x.data))
 pointer{T<:Union(UTF16String,UTF32String)}(x::SubString{T}) = pointer(x.string.data) + x.offset*sizeof(eltype(x.data))
 pointer{T<:Union(UTF16String,UTF32String)}(x::SubString{T}, i::Integer) = pointer(x.string.data) + (x.offset + (i-1))*sizeof(eltype(x.data))
-
-# string hashing:
-if WORD_SIZE == 64
-    hash{T<:ByteString}(s::Union(T,SubString{T})) =
-        ccall(:memhash, Uint64, (Ptr{Void}, Int), pointer(s), sizeof(s))
-    hash{T<:ByteString}(s::Union(T,SubString{T}), seed::Union(Int,Uint)) =
-        ccall(:memhash_seed, Uint64, (Ptr{Void}, Int, Uint32),
-              pointer(s), sizeof(s), uint32(seed))
-else
-    hash{T<:ByteString}(s::Union(T,SubString{T})) =
-        ccall(:memhash32, Uint32, (Ptr{Void}, Int), pointer(s), sizeof(s))
-    hash{T<:ByteString}(s::Union(T,SubString{T}), seed::Union(Int,Uint)) =
-        ccall(:memhash32_seed, Uint32, (Ptr{Void}, Int, Uint32),
-              pointer(s), sizeof(s), uint32(seed))
-end
-hash(s::String) = hash(bytestring(s))

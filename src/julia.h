@@ -1091,6 +1091,8 @@ DLLEXPORT extern volatile sig_atomic_t jl_defer_signal;
     } while(0)
 
 DLLEXPORT void restore_signals(void);
+DLLEXPORT void jl_install_sigint_handler();
+
 
 // tasks and exceptions -------------------------------------------------------
 

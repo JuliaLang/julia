@@ -99,8 +99,6 @@ end
 
 isequal(z::Complex, w::Complex) = isequal(real(z),real(w)) & isequal(imag(z),imag(w))
 
-hash(z::Complex) = bitmix(hash(real(z)),hash(imag(z)))
-
 conj(z::Complex) = Complex(real(z),-imag(z))
 abs(z::Complex)  = hypot(real(z), imag(z))
 abs2(z::Complex) = real(z)*real(z) + imag(z)*imag(z)
@@ -330,16 +328,66 @@ log2(z::Complex) = log(z)/oftype(real(z),0.6931471805599453)
 
 function exp(z::Complex)
     zr, zi = reim(z)
-    if isfinite(zr) && !isfinite(zi) return Complex(oftype(zr, NaN), oftype(zi, NaN)) end
-    if zr==Inf && zi==0 return Complex(zr, zi) end
-    if zr==-Inf && !isfinite(zi) return Complex(-zero(zr), copysign(zero(zi), zi)) end
-    if zr==Inf && !isfinite(zi) return Complex(-zr, oftype(zr, NaN)) end
-    if isnan(zr) return Complex(zr, zi==0 ? zi : zr) end
-    er = exp(zr)
-    zi==0 && return Complex(er, zi)
-    wr = er*(isfinite(zi) ? cos(zi) : zi)
-    wi = er*(isfinite(zi) ? sin(zi) : zi)
-    Complex(wr, wi)
+    if isnan(zr)
+        Complex(zr, zi==0 ? zi : zr)
+    elseif !isfinite(zi)
+        if zr == inf(zr)
+            Complex(-zr, nan(zr))
+        elseif zr == -inf(zr)
+            Complex(-zero(zr), copysign(zero(zi), zi))
+        else
+            Complex(nan(zr), nan(zi))
+        end
+    else
+        er = exp(zr)
+        if zi == zero(zi)
+            Complex(er, zi)
+        else
+            Complex(er*cos(zi), er*sin(zi))
+        end
+    end
+end
+
+function expm1(z::Complex)
+    zr,zi = reim(z)
+    if isnan(zr)
+        Complex(zr, zi==0 ? zi : zr)
+    elseif !isfinite(zi)
+        if zr == inf(zr)
+            Complex(-zr, nan(zr))
+        elseif zr == -inf(zr)
+            Complex(-one(zr), copysign(zero(zi), zi))
+        else
+            Complex(nan(zr), nan(zi))
+        end
+    else
+        erm1 = expm1(zr)        
+        if zi == 0
+            Complex(erm1, zi)
+        else            
+            er = erm1+one(erm1)
+            wr = isfinite(er) ? erm1 - 2.0*er*(sin(0.5*zi))^2 : er*cos(zi)
+            Complex(wr, er*sin(zi))
+        end
+    end
+end
+
+function log1p{T}(z::Complex{T})
+    zr,zi = reim(z)
+    if isfinite(zr)
+        isinf(zi) && return log(z)
+        # This is based on a well-known trick for log1p of real z,
+        # allegedly due to Kahan, only modified to handle real(u) <= 0
+        # differently to avoid inaccuracy near z==-2 and for correct branch cut
+        u = float(one(T)) + z
+        u == 1 ? convert(typeof(u), z) : real(u) <= 0 ? log(u) : log(u)*z/(u-1)
+    elseif isnan(zr)
+        Complex(zr, zr)
+    elseif isfinite(zi)
+        Complex(inf(T), copysign(zr > 0 ? zero(T) : convert(T, pi), zi))
+    else
+        Complex(inf(T), nan(T))
+    end
 end
 
 function ^{T<:FloatingPoint}(z::Complex{T}, p::Complex{T})

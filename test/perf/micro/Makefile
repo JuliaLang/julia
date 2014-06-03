@@ -34,7 +34,7 @@ LIBM = $(LIBMDIR)libopenlibm.a
 endif
 endif
 
-DSFMTDIR = $(JULIAHOME)/deps/random/dsfmt-$(DSFMT_VER)
+DSFMTDIR = $(JULIAHOME)/deps/dsfmt-$(DSFMT_VER)
 
 default: benchmarks.html
 
@@ -44,7 +44,7 @@ export OPENBLAS_NUM_THREADS=1
 
 perf.h: $(JULIAHOME)/deps/Versions.make
 	echo '#include "$(BLASDIR)cblas.h"' > $@
-	echo '#include "$(JULIAHOME)/deps/random/dsfmt-$(DSFMT_VER)/dSFMT.c"' >> $@
+	echo '#include "$(DSFMTDIR)/dSFMT.c"' >> $@
 
 bin/perf%: perf.c perf.h
 	$(CC) -std=c99 -O$* $< -o $@  -I$(DSFMTDIR) -L$(BLASDIR) $(LIBBLAS) -L$(LIBMDIR) $(LIBM) $(CFLAGS) -lpthread

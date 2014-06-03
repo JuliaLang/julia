@@ -33,7 +33,6 @@ include("c.jl")
 include("promotion.jl")
 include("tuple.jl")
 include("range.jl")
-include("cell.jl")
 include("expr.jl")
 include("error.jl")
 
@@ -58,6 +57,7 @@ include("bitarray.jl")
 include("intset.jl")
 include("dict.jl")
 include("set.jl")
+include("hashing.jl")
 include("iterator.jl")
 
 # compiler
@@ -116,6 +116,8 @@ include("methodshow.jl")
 include("floatfuncs.jl")
 include("math.jl")
 importall .Math
+const (√)=sqrt
+const (∛)=cbrt
 include("float16.jl")
 
 # multidimensional arrays
@@ -174,8 +176,10 @@ big(q::Rational) = big(num(q))//big(den(q))
 big(z::Complex) = complex(big(real(z)),big(imag(z)))
 @vectorize_1arg Number big
 
-# random number generation and statistics
-include("statistics.jl")
+# more hashing definitions
+include("hashing2.jl")
+
+# random number generation
 include("librandom.jl")
 include("random.jl")
 importall .Random
@@ -188,6 +192,7 @@ include("sharedarray.jl")
 # utilities - version, timing, help, edit, metaprogramming
 include("version.jl")
 include("datafmt.jl")
+importall .DataFmt
 include("deepcopy.jl")
 include("util.jl")
 include("interactiveutil.jl")
@@ -216,8 +221,13 @@ include("sparse.jl")
 importall .SparseMatrix
 include("linalg.jl")
 importall .LinAlg
+const ⋅ = dot
+const × = cross
 include("broadcast.jl")
 importall .Broadcast
+
+# statistics
+include("statistics.jl")
 
 # signal processing
 include("fftw.jl")
@@ -263,14 +273,6 @@ end
 include("precompile.jl")
 
 include = include_from_node1
-
-# invoke type inference, running the existing inference code on the new
-# inference code to cache an optimized version of it.
-begin
-    local atypes = (LambdaStaticData, Tuple, (), LambdaStaticData, Bool)
-    local minf = _methods(typeinf, atypes, -1)
-    typeinf_ext(minf[1][3].func.code, atypes, (), minf[1][3].func.code)
-end
 
 end # baremodule Base
 

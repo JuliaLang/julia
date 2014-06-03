@@ -28,6 +28,7 @@
    linear-algebra
    networking-and-streams
    parallel-computing
+   interacting-with-julia
    running-external-programs
    calling-c-and-fortran-code
    embedding

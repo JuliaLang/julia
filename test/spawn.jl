@@ -65,6 +65,8 @@ end
 file = tempname()
 run(`echo hello world` |> file)
 @test readall(file |> `cat`) == "hello world\n"
+@test open(readall, file |> `cat`, "r") == "hello world\n"
+rm(file)
 
 # Stream Redirection
 @unix_only begin
@@ -98,9 +100,10 @@ str2 = readall(stdout)
 
 # This test hangs if the end of run walk across uv streams calls shutdown on a stream that is shutting down.
 file = tempname()
-stdin, proc = writesto(`cat -` |> file)
-write(stdin, str)
-close(stdin)
+open(`cat -` |> file, "w") do io
+    write(io, str)
+end
+rm(file)
 
 # issue #3373
 # fixing up Conditions after interruptions

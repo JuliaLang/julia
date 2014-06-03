@@ -441,6 +441,8 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         return jl_eval_module_expr(ex);
     }
     else if (ex->head == error_sym || ex->head == jl_incomplete_sym) {
+        if (nargs == 0)
+            jl_error("malformed \"error\" expression");
         if (jl_is_byte_string(args[0]))
             jl_errorf("syntax: %s", jl_string_data(args[0]));
         jl_throw(args[0]);

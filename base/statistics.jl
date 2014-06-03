@@ -31,7 +31,11 @@ mean{T}(v::AbstractArray{T}, region) =
 
 function median!{T<:Real}(v::AbstractVector{T}; checknan::Bool=true)
     isempty(v) && error("median of an empty array is undefined")
-    checknan && any(isnan,v) && error("median of an array with NaNs is undefined")
+    if checknan
+        for x in v
+            isnan(x) && return x
+        end
+    end
     n = length(v)
     if isodd(n)
         return select!(v,div(n+1,2))
@@ -42,21 +46,21 @@ function median!{T<:Real}(v::AbstractVector{T}; checknan::Bool=true)
 end
 median{T<:Real}(v::AbstractArray{T}; checknan::Bool=true) =
     median!(vec(copy(v)), checknan=checknan)
+median{T}(v::AbstractArray{T}, region; checknan::Bool=true) = 
+    mapslices( x->median(x; checknan=checknan), v, region )
 
 
 ## variances
 
-function varzm_pairwise(A::AbstractArray, i1::Int, n::Int)
-    if n < 256
-        @inbounds s = abs2(A[i1])
-        for i=i1+1:i1+n-1
-            @inbounds s += abs2(A[i])
-        end
-        return s
-    else
-        n2 = div(n,2)
-        return varzm_pairwise(A, i1, n2) + varzm_pairwise(A, i1+n2, n-n2)
-    end
+function varzm(v::AbstractArray; corrected::Bool=true)
+    n = length(v)
+    n == 0 && return NaN
+    return sumabs2(v) / (n - int(corrected))
+end
+
+function varzm(v::AbstractArray, region; corrected::Bool=true)
+    cn = regionsize(v, region) - int(corrected)
+    sumabs2(v, region) / cn    
 end
 
 function varm_pairwise(A::AbstractArray, m::Number, i1::Int, n::Int) # see sum_pairwise
@@ -72,30 +76,24 @@ function varm_pairwise(A::AbstractArray, m::Number, i1::Int, n::Int) # see sum_p
     end
 end
 
-sumabs2(v::AbstractArray) = varzm_pairwise(v, 1, length(v))
-sumabs2(v::AbstractArray, region) = sum(abs2(v), region)
-
-function varzm(v::AbstractArray; corrected::Bool=true)
-    n = length(v)
-    n == 0 && return NaN
-    return sumabs2(v) / (n - int(corrected))
-end
-
-function varzm(v::AbstractArray, region; corrected::Bool=true)
-    cn = regionsize(v, region) - int(corrected)
-    sumabs2(v, region) / cn    
-end
-
 function varm(v::AbstractArray, m::Number; corrected::Bool=true)
     n = length(v)
     n == 0 && return NaN
     return varm_pairwise(v, m, 1, n) / (n - int(corrected))
 end
 
-function varm(v::AbstractArray, m::AbstractArray, region; corrected::Bool=true)
-    cn = regionsize(v, region) - int(corrected)
-    sumabs2(v .- m, region) / cn
+@ngenerate N Array{typeof((abs2(zero(T))+abs2(zero(T)))/1), N} function _varm{S,T,N}(v::AbstractArray{S,N}, m::AbstractArray{T,N}, region, corrected::Bool)
+    rdims = reduced_dims(v, region)
+    rdims == size(m) || error(DimensionMismatch("size of mean does not match reduced dimensions"))
+
+    R = fill!(similar(v, typeof((abs2(zero(T))+abs2(zero(T)))/1), rdims), 0)
+    @nextract N sizeR d->size(R,d)
+    @nloops N i v d->(j_d = sizeR_d==1 ? 1 : i_d) begin
+        @inbounds (@nref N R j) += abs2((@nref N v i) - (@nref N m j))
+    end
+    scale!(R, 1/(regionsize(v, region) - int(corrected)))
 end
+varm{S,T,N}(v::AbstractArray{S,N}, m::AbstractArray{T,N}, region; corrected::Bool=true) = _varm(v, m, region, corrected)
 
 function var(v::AbstractArray; corrected::Bool=true, mean=nothing)
     mean == 0 ? varzm(v; corrected=corrected) :

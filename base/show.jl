@@ -1,10 +1,7 @@
 
 show(x) = show(STDOUT::IO, x)
 
-function print(io::IO, s::Symbol)
-    pname = convert(Ptr{Uint8}, s)
-    write(io, pname, int(ccall(:strlen, Csize_t, (Ptr{Uint8},), pname)))
-end
+print(io::IO, s::Symbol) = (write(io,s);nothing)
 
 function show(io::IO, x::ANY)
     t = typeof(x)::DataType
@@ -246,7 +243,7 @@ const expr_infix_wide = Set([:(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(&=),
 const expr_infix = Set([:(:), :(<:), :(->), :(=>), symbol("::")])
 const expr_calls  = [:call =>('(',')'), :ref =>('[',']'), :curly =>('{','}')]
 const expr_parens = [:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>('{','}'),
-                      :hcat =>('[',']'), :row =>('[',']')]
+                     :hcat =>('[',']'), :row =>('[',']')]
 
 ## AST decoding helpers ##
 
@@ -362,7 +359,12 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     elseif (head in expr_infix && nargs==2) || (is(head,:(:)) && nargs==3)
         show_list(io, args, head, indent)
     elseif head in expr_infix_wide && nargs == 2
-        show_list(io, args, " $head ", indent)
+        func_prec = get(bin_op_precs, head, 0)
+        if func_prec < prec
+            show_enclosed_list(io, '(', args, " $head ", ')', indent, func_prec)
+        else
+            show_list(io, args, " $head ", indent, func_prec)
+        end
 
     # list (i.e. "(1,2,3)" or "[1,2,3]")
     elseif haskey(expr_parens, head)               # :tuple/:vcat/:cell1d
@@ -478,10 +480,13 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_block(io, "if",   args[1], args[2], indent)
         show_block(io, "else", args[3], indent)
         print(io, "end")
-    elseif is(head, :try) && nargs == 3
+    elseif is(head, :try) && 3 <= nargs <= 4
         show_block(io, "try", args[1], indent)
-        if !(is(args[2], false) && is_expr(args[3], :block, 0))
-            show_block(io, "catch", args[2], args[3], indent)
+        if is_expr(args[3], :block)
+            show_block(io, "catch", is(args[2], false) ? [] : args[2], args[3], indent)
+        end
+        if nargs >= 4 && is_expr(args[4], :block)
+            show_block(io, "finally", [], args[4], indent)
         end
         print(io, "end")
     elseif is(head, :let) && nargs >= 1
@@ -718,7 +723,7 @@ function alignment(x::Real)
                    (length(m.captures[1]), length(m.captures[2]))
 end
 function alignment(x::Complex)
-    m = match(r"^(.*,)(.*)$", sprint(showcompact_lim, x))
+    m = match(r"^(.*[\+\-])(.*)$", sprint(showcompact_lim, x))
     m == nothing ? (length(sprint(showcompact_lim, x)), 0) :
                    (length(m.captures[1]), length(m.captures[2]))
 end

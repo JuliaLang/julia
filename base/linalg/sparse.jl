@@ -126,6 +126,7 @@ end
 *{TvA,TiA}(X::BitArray{2}, A::SparseMatrixCSC{TvA,TiA}) = invoke(*, (AbstractMatrix, SparseMatrixCSC), X, A)
 # TODO: Tridiagonal * Sparse should be implemented more efficiently
 *{TX,TvA,TiA}(X::Tridiagonal{TX}, A::SparseMatrixCSC{TvA,TiA}) = invoke(*, (Tridiagonal, AbstractMatrix), X, A)
+*{TvA,TiA}(X::Triangular, A::SparseMatrixCSC{TvA,TiA}) = full(X)*A
 function *{TX,TvA,TiA}(X::AbstractMatrix{TX}, A::SparseMatrixCSC{TvA,TiA})
     mX, nX = size(X)
     nX == A.m || throw(DimensionMismatch(""))
@@ -346,7 +347,7 @@ function sparse_diff1{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     m,n = size(S)
     m > 1 || return SparseMatrixCSC{Tv,Ti}(0, n, ones(n+1), Ti[], Tv[])
     colptr = Array(Ti, n+1)
-    numnz = 2 * nfilled(S) # upper bound; will shrink later
+    numnz = 2 * nnz(S) # upper bound; will shrink later
     rowval = Array(Ti, numnz)
     nzval = Array(Tv, numnz)
     numnz = 0
@@ -386,7 +387,7 @@ function sparse_diff2{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti})
 
     m,n = size(a)
     colptr = Array(Ti, max(n,1))
-    numnz = 2 * nfilled(a) # upper bound; will shrink later
+    numnz = 2 * nnz(a) # upper bound; will shrink later
     rowval = Array(Ti, numnz)
     nzval = Array(Tv, numnz)
 
@@ -477,12 +478,13 @@ diff(a::SparseMatrixCSC, dim::Integer)= dim==1 ? sparse_diff1(a) : sparse_diff2(
 ## norm and rank
 vecnorm(A::SparseMatrixCSC, p::Real=2) = vecnorm(A.nzval, p)
 
-function norm(A::SparseMatrixCSC,p::Real=1)
+function norm(A::SparseMatrixCSC,p::Real=2)
     m, n = size(A)
     if m == 0 || n == 0 || isempty(A)
         return float(real(zero(eltype(A))))
     elseif m == 1 || n == 1
-        return norm(reshape(full(A), length(A)), p)
+        # TODO: compute more efficiently using A.nzval directly
+        return norm(full(A), p)
     else
         Tnorm = typeof(float(real(zero(eltype(A)))))
         Tsum = promote_type(Float64,Tnorm)
@@ -496,6 +498,8 @@ function norm(A::SparseMatrixCSC,p::Real=1)
                 nA = max(nA, colSum)
             end
             return convert(Tnorm, nA)
+        elseif p==2
+            throw(ArgumentError("2-norm not yet implemented for sparse matrices. Try norm(full(A)) or norm(A, p) where p=1 or Inf."))
         elseif p==Inf
             rowSum = zeros(Tsum,m)
             for i=1:length(A.nzval)
@@ -512,8 +516,8 @@ end
 # kron
 
 function kron{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti}, b::SparseMatrixCSC{Tv,Ti})
-    numnzA = nfilled(a)
-    numnzB = nfilled(b)
+    numnzA = nnz(a)
+    numnzB = nnz(b)
 
     numnz = numnzA * numnzB
 
@@ -589,7 +593,7 @@ inv(A::SparseMatrixCSC) = error("The inverse of a sparse matrix can often be den
 function scale!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC, b::Vector)
     m, n = size(A)
     (n==length(b) && size(A)==size(C)) || throw(DimensionMismatch(""))
-    numnz = nfilled(A)
+    numnz = nnz(A)
     C.colptr = convert(Array{Ti}, A.colptr)
     C.rowval = convert(Array{Ti}, A.rowval)
     C.nzval = Array(Tv, numnz)
@@ -602,7 +606,7 @@ end
 function scale!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, b::Vector, A::SparseMatrixCSC)
     m, n = size(A)
     (n==length(b) && size(A)==size(C)) || throw(DimensionMismatch(""))
-    numnz = nfilled(A)
+    numnz = nnz(A)
     C.colptr = convert(Array{Ti}, A.colptr)
     C.rowval = convert(Array{Ti}, A.rowval)
     C.nzval = Array(Tv, numnz)

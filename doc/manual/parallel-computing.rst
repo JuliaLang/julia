@@ -55,7 +55,7 @@ equal the number of CPU cores on the machine.
      0.60401   0.501111
      0.174572  0.157411
 
-    julia> s = @spawnat 2 1+fetch(r)
+    julia> s = @spawnat 2 1 .+ fetch(r)
     RemoteRef(2,1,7)
 
     julia> fetch(s)
@@ -98,14 +98,14 @@ a function, and picks where to do the operation for you::
     julia> r = @spawn rand(2,2)
     RemoteRef(1,1,0)
 
-    julia> s = @spawn 1+fetch(r)
+    julia> s = @spawn 1 .+ fetch(r)
     RemoteRef(1,1,1)
 
     julia> fetch(s)
     1.10824216411304866 1.13798233877923116
     1.12376292706355074 1.18750497916607167
 
-Note that we used ``1+fetch(r)`` instead of ``1+r``. This is because we
+Note that we used ``1 .+ fetch(r)`` instead of ``1 .+ r``. This is because we
 do not know where the code will run, so in general a ``fetch`` might be
 required to move ``r`` to the process doing the addition. In this
 case, ``@spawn`` is smart enough to perform the computation on the
@@ -533,9 +533,7 @@ is ``DArray``\ -specific, but we list it here for completeness::
                 nc = +(old[i-1,j-1], old[i-1,j], old[i-1,j+1],
                        old[i  ,j-1],             old[i  ,j+1],
                        old[i+1,j-1], old[i+1,j], old[i+1,j+1])
-                new[i-1,j-1] = (nc == 3 ? 1 :
-                                nc == 2 ? old[i,j] :
-                                0)
+                new[i-1,j-1] = (nc == 3 || nc == 2 && old[i,j])
             end
         end
         new

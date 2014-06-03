@@ -30,7 +30,7 @@ function edit(file::String, line::Integer)
     elseif edname == "textmate" || edname == "mate"
         spawn(`$edpath $file -l $line`)
     elseif beginswith(edname, "subl")
-        spawn(`$edpath $file:$line`)
+        spawn(`$(shell_split(edpath)) $file:$line`)
     elseif OS_NAME == :Windows && (edname == "start" || edname == "open")
         spawn(`start /b $file`)
     elseif OS_NAME == :Darwin && (edname == "start" || edname == "open")
@@ -66,10 +66,9 @@ end
 
 @osx_only begin
     function clipboard(x)
-        w,p = writesto(`pbcopy`)
-        print(w,x)
-        close(w)
-        wait(p)
+        open(`pbcopy`, "w") do io
+            print(io, x)
+        end
     end
     clipboard() = readall(`pbpaste`)
 end
@@ -89,10 +88,9 @@ end
         cmd = c == :xsel  ? `xsel --nodetach --input --clipboard` :
               c == :xclip ? `xclip -quiet -in -selection clipboard` :
             error("unexpected clipboard command: $c")
-        w,p = writesto(cmd)
-        print(w,x)
-        close(w)
-        wait(p)
+        open(cmd, "w") do io
+            print(io, x)
+        end
     end
     function clipboard()
         c = clipboardcmd()
@@ -258,7 +256,8 @@ function methodswith(t::Type, m::Module, showparents::Bool=false)
            d = mt.env.defs
            while !is(d,())
                if any(map(x -> begin
-                                   x == t || (showparents ? (t <: x) : (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
+                                   x == t || (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
+                                                            (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
                                    x != Any && x != ANY
                                end, d.sig))
                    push!(meths, d)
@@ -267,7 +266,7 @@ function methodswith(t::Type, m::Module, showparents::Bool=false)
            end
         end
     end
-    return meths
+    return unique(meths)
 end
 
 function methodswith(t::Type, showparents::Bool=false)
@@ -318,6 +317,7 @@ end
     if res != 0
         error("automatic download failed (error: $res): $url")
     end
+    filename
 end
 
 function download(url::String)

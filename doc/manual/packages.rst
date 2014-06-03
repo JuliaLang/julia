@@ -1,11 +1,5 @@
 .. _man-packages:
 
-.. version_dir is defined in $JULIA_HOME/doc/conf.py
-
-.. |.julia|          replace:: ``~/.julia/``\ |version_dir|
-.. |.julia/REQUIRE|  replace:: |.julia|\ ``/REQUIRE``
-.. |.julia/METADATA| replace:: |.julia|\ ``/METADATA``
-
 **********
  Packages
 **********
@@ -19,12 +13,10 @@ Package Status
 --------------
 
 The ``Pkg.status()`` function prints out a summary of the state of packages you have installed.
-Initially, you'll have no packages installed:
-
-.. parsed-literal::
+Initially, you'll have no packages installed::
 
     julia> Pkg.status()
-    INFO: Initializing package repository /Users/stefan/.julia/|version_dir|
+    INFO: Initializing package repository /Users/stefan/.julia/v0.3
     INFO: Cloning METADATA from git://github.com/JuliaLang/METADATA.jl
     No packages installed.
 
@@ -54,7 +46,7 @@ This means that you tell it what you want and it figures out what versions to in
 So rather than installing a package, you just add it to the list of requirements and then "resolve" what needs to be installed.
 In particular, this means that if some package had been installed because it was needed by a previous version of something you wanted, and a newer version doesn't have that requirement anymore, updating will actually remove that package.
 
-Your package requirements are in the file |.julia/REQUIRE|.
+Your package requirements are in the file ``~/.julia/v0.3/REQUIRE``.
 You can edit this file by hand and then call ``Pkg.resolve()`` to install, upgrade or remove packages to optimally satisfy the requirements, or you can do ``Pkg.edit()``, which will open ``REQUIRE`` in your editor (configured via the ``EDITOR`` or ``VISUAL`` environment variables), and then automatically call ``Pkg.resolve()`` afterwards if necessary.
 If you only want to add or remove the requirement for a single package, you can also use the non-interactive ``Pkg.add`` and ``Pkg.rm`` commands, which add or remove a single requirement to ``REQUIRE`` and then call ``Pkg.resolve()``.
 
@@ -79,19 +71,15 @@ You can add a package to the list of requirements with the ``Pkg.add`` function,
      - NumericExtensions             0.2.17
      - Stats                         0.2.6
 
-What this is doing is first adding ``Distributions`` to your |.julia/REQUIRE| file:
+What this is doing is first adding ``Distributions`` to your ``~/.julia/v0.3/REQUIRE`` file::
 
-.. parsed-literal::
-
-    $ cat |.julia/REQUIRE|
+    $ cat ~/.julia/v0.3/REQUIRE
     Distributions
 
 It then runs ``Pkg.resolve()`` using these new requirements, which leads to the conclusion that the ``Distributions`` package should be installed since it is required but not installed.
-As stated before, you can accomplish the same thing by editing your |.julia/REQUIRE| file by hand and then running ``Pkg.resolve()`` yourself:
+As stated before, you can accomplish the same thing by editing your ``~/.julia/v0.3/REQUIRE`` file by hand and then running ``Pkg.resolve()`` yourself::
 
-.. parsed-literal::
-
-    $ echo UTF16 >> |.julia/REQUIRE|
+    $ echo UTF16 >> ~/.julia/v0.3/REQUIRE
 
     julia> Pkg.resolve()
     INFO: Cloning cache of UTF16 from git://github.com/nolta/UTF16.jl.git
@@ -150,7 +138,7 @@ To install an unregistered package, use ``Pkg.clone(url)``, where ``url`` is a g
     Resolving deltas: 100% (8/8), done.
 
 By convention, Julia repository names end with ``.jl`` (the additional ``.git`` indicates a "bare" git repository), which keeps them from colliding with repositories for other languages, and also makes Julia packages easy to find in search engines.
-When packages are installed in your |.julia| directory, however, the extension is redundant so we leave it off.
+When packages are installed in your ``.julia/v0.3`` directory, however, the extension is redundant so we leave it off.
 
 If unregistered packages contain a ``REQUIRE`` file at the top of their source tree, that file will be used to determine which registered packages the unregistered package depends on, and they will automatically be installed.
 Unregistered packages participate in the same version resolution logic as registered packages, so installed package versions will be adjusted as necessary to satisfy the requirements of both registered and unregistered packages.
@@ -169,7 +157,7 @@ To get the latest and greatest versions of all your packages, just do ``Pkg.upda
     INFO: Upgrading Distributions: v0.2.8 => v0.2.10
     INFO: Upgrading Stats: v0.2.7 => v0.2.8
 
-The first step of updating packages is to pull new changes to |.julia/METADATA| and see if any new registered package versions have been published.
+The first step of updating packages is to pull new changes to ``~/.julia/v0.3/METADATA`` and see if any new registered package versions have been published.
 After this, ``Pkg.update()`` attempts to update packages that are checked out on a branch and not dirty (i.e. no changes have been made to files tracked by git) by pulling changes from the package's upstream repository.
 Upstream changes will only be applied if no merging or rebasing is necessary – i.e. if the branch can be `"fast-forwarded" <http://git-scm.com/book/en/Git-Branching-Basic-Branching-and-Merging>`_.
 If the branch cannot be fast-forwarded, it is assumed that you're working on it and will update the repository yourself.
@@ -182,7 +170,7 @@ A package is considered fixed if it is one of the following:
 3. **Dirty:** changes have been made to files in the repo.
 
 If any of these are the case, the package manager cannot freely change the installed version of the package, so its requirements must be satisfied by whatever other package versions it picks.
-The combination of top-level requirements in |.julia/REQUIRE| and the requirement of fixed packages are used to determine what should be installed.
+The combination of top-level requirements in ``~/.julia/v0.3/REQUIRE`` and the requirement of fixed packages are used to determine what should be installed.
 
 Checkout, Pin and Free
 ----------------------
@@ -308,12 +296,10 @@ You should also `upload <https://github.com/settings/ssh>`_ your public SSH key 
 In the future, we will make this system extensible and support other common git hosting options like `BitBucket <https://bitbucket.org>`_ and allow developers to choose their favorite.
 
 Suppose you want to create a new Julia package called ``FooBar``.
-To get started, do ``Pkg.generate(pkg,license)`` where ``pkg`` is the new package name and ``license`` is the name of a license that the package generator knows about:
-
-.. parsed-literal::
+To get started, do ``Pkg.generate(pkg,license)`` where ``pkg`` is the new package name and ``license`` is the name of a license that the package generator knows about::
 
     julia> Pkg.generate("FooBar","MIT")
-    INFO: Initializing FooBar repo: /Users/stefan/.julia/|version_dir|/FooBar
+    INFO: Initializing FooBar repo: /Users/stefan/.julia/v0.3/FooBar
     INFO: Origin: git://github.com/StefanKarpinski/FooBar.jl.git
     INFO: Generating LICENSE.md
     INFO: Generating README.md
@@ -321,11 +307,9 @@ To get started, do ``Pkg.generate(pkg,license)`` where ``pkg`` is the new packag
     INFO: Generating .travis.yml
     INFO: Committing FooBar generated files
 
-This creates the directory |.julia|\ ``/FooBar``, initializes it as a git repository, generates a bunch of files that all packages should have, and commits them to the repository:
+This creates the directory ``~/.julia/v0.3/FooBar``, initializes it as a git repository, generates a bunch of files that all packages should have, and commits them to the repository::
 
-.. parsed-literal::
-
-    $ cd |.julia|/FooBar && git show --stat
+    $ cd ~/.julia/v0.3/FooBar && git show --stat
 
     commit 84b8e266dae6de30ab9703150b3bf771ec7b6285
     Author: Stefan Karpinski <stefan@karpinski.org>
@@ -348,7 +332,7 @@ This creates the directory |.julia|\ ``/FooBar``, initializes it as a git reposi
      4 files changed, 44 insertions(+)
 
 At the moment, the package manager knows about the MIT "Expat" License, indicated by ``"MIT"``, and the Simplified BSD License, indicated by ``"BSD"``.
-If you want to use a different license, you can ask us to add it to the package generator, or just pick one of these two and then modify the |.julia|\ ``/PACKAGE/LICENSE.md`` file after it has been generated.
+If you want to use a different license, you can ask us to add it to the package generator, or just pick one of these two and then modify the ``~/.julia/v0.3/PACKAGE/LICENSE.md`` file after it has been generated.
 
 If you created a GitHub account and configured git to know about it, ``Pkg.generate`` will set an appropriate origin URL for you.
 It will also automatically generate a ``.travis.yml`` file for using the `Travis <https://travis-ci.org>`_ automated testing service.
@@ -380,11 +364,9 @@ Once you've decided that ``FooBar`` is ready to be registered as an official pac
     INFO: Registering FooBar at git://github.com/StefanKarpinski/FooBar.jl.git
     INFO: Committing METADATA for FooBar
 
-This creates a commit in the |.julia/METADATA| repo:
+This creates a commit in the ``~/.julia/v0.3/METADATA`` repo::
 
-.. parsed-literal::
-
-    $ cd |.julia/METADATA| && git show
+    $ cd ~/.julia/v0.3/METADATA && git show
 
     commit 9f71f4becb05cadacb983c54a72eed744e5c019d
     Author: Stefan Karpinski <stefan@karpinski.org>
@@ -417,18 +399,14 @@ Once you are ready to make an official version your package, you can tag and reg
     INFO: Tagging FooBar v0.0.0
     INFO: Committing METADATA for FooBar
 
-This tags ``v0.0.0`` in the ``FooBar`` repo:
+This tags ``v0.0.0`` in the ``FooBar`` repo::
 
-.. parsed-literal::
-
-    $ cd |.julia|/FooBar && git tag
+    $ cd ~/.julia/v0.3/FooBar && git tag
     v0.0.0
 
-It also creates a new version entry in your local ``METADATA`` repo for ``FooBar``:
+It also creates a new version entry in your local ``METADATA`` repo for ``FooBar``::
 
-.. parsed-literal::
-
-    $ cd |.julia|/FooBar && git show
+    $ cd ~/.julia/v0.3/FooBar && git show
     commit de77ee4dc0689b12c5e8b574aef7f70e8b311b0e
     Author: Stefan Karpinski <stefan@karpinski.org>
     Date:   Wed Oct 16 23:06:18 2013 -0400
@@ -462,7 +440,7 @@ When you fix the requirements in ``METADATA`` for a previous version of a packag
 Requirements
 ------------
 
-The |.julia/REQUIRE| file and ``REQUIRE`` files inside of packages use a simple line-based format to express what ranges of package versions are needed.
+The ``~/.julia/v0.3/REQUIRE`` file and ``REQUIRE`` files inside of packages use a simple line-based format to express what ranges of package versions are needed.
 Here's how these files are parsed and interpreted.
 Everything after a ``#`` mark is stripped from each line as a comment.
 If nothing but whitespace is left, the line is ignored;

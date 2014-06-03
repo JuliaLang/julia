@@ -382,8 +382,8 @@ end
 @test !isequal(+1.0,-1.0)
 @test !isequal(+Inf,-Inf)
 
-@test !isequal(-0.0f0,-0.0)
-@test !isequal( 0.0f0, 0.0)
+@test  isequal(-0.0f0,-0.0)
+@test  isequal( 0.0f0, 0.0)
 @test !isequal(-0.0f0, 0.0)
 @test !isequal(0.0f0 ,-0.0)
 
@@ -459,8 +459,8 @@ end
 @test !isless(+NaN,-NaN)
 @test !isless(+NaN,+NaN)
 
-@test !isequal(   0, 0.0)
-@test !isequal( 0.0,   0)
+@test  isequal(   0, 0.0)
+@test  isequal( 0.0,   0)
 @test !isequal(   0,-0.0)
 @test !isequal(-0.0,   0)
 @test   isless(-0.0,   0)
@@ -1467,6 +1467,8 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 
 # issue 3412
 @test convert(Rational{Int32},0.5) === int32(1)//int32(2)
+
+@test isa(convert(Float64, big(1)//2), Float64)
 
 # primes
 

@@ -115,7 +115,7 @@ function ident_cmp(A::(Union(Int,ASCIIString)...),
     !done(A,i) && done(B,j) ? +1 : 0
 end
 
-function isequal(a::VersionNumber, b::VersionNumber)
+function ==(a::VersionNumber, b::VersionNumber)
     (a.major != b.major) && return false
     (a.minor != b.minor) && return false
     (a.patch != b.patch) && return false
@@ -145,7 +145,14 @@ function isless(a::VersionNumber, b::VersionNumber)
     return false
 end
 
-hash(v::VersionNumber) = hash([v.(n) for n in VersionNumber.names])
+function hash(v::VersionNumber, h::Uint)
+    h += uint(0x8ff4ffdb75f9fede)
+    h = hash(v.major, h)
+    h = hash(v.minor, h)
+    h = hash(v.patch, h)
+    h = hash(v.prerelease, ~h)
+    h = hash(v.build, ~h)
+end
 
 lowerbound(v::VersionNumber) = VersionNumber(v.major, v.minor, v.patch, ("",), ())
 upperbound(v::VersionNumber) = VersionNumber(v.major, v.minor, v.patch, (), ("",))

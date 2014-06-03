@@ -32,6 +32,8 @@ typedef __uint128_t wideint_t;
 typedef uint64_t wideint_t;
 #endif
 
+size_t jl_arr_xtralloc_limit = 0;
+
 #define MAXINTVAL (((size_t)-1)>>1)
 
 static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
@@ -544,7 +546,13 @@ static void array_resize_buffer(jl_array_t *a, size_t newlen, size_t oldlen, siz
         }
     }
     else {
-        if (nbytes >= MALLOC_THRESH) {
+        if (
+#ifdef _P64
+            nbytes >= MALLOC_THRESH
+#else
+            es > 4
+#endif
+            ) {
             newdata = (char*)jl_gc_managed_malloc(nbytes);
             jl_gc_track_malloced_array(a);
             a->how = 2;
@@ -574,6 +582,18 @@ static void array_try_unshare(jl_array_t *a)
     }
 }
 
+static size_t limit_overallocation(jl_array_t *a, size_t alen, size_t newlen, size_t inc)
+{
+    // Limit overallocation to jl_arr_xtralloc_limit
+    size_t es = a->elsize;
+    size_t xtra_elems_mem = (newlen - a->offset - alen - inc) * es;
+    if (xtra_elems_mem > jl_arr_xtralloc_limit) {
+        // prune down
+        return alen + inc + a->offset + (jl_arr_xtralloc_limit / es); 
+    }
+    return newlen;
+}
+
 void jl_array_grow_end(jl_array_t *a, size_t inc)
 {
     if (a->isshared && a->how!=3) jl_error("cannot resize array with shared data");
@@ -583,6 +603,8 @@ void jl_array_grow_end(jl_array_t *a, size_t inc)
         size_t newlen = a->maxsize==0 ? (inc<4?4:inc) : a->maxsize*2;
         while ((alen + inc) > newlen - a->offset)
             newlen *= 2;
+        
+        newlen = limit_overallocation(a, alen, newlen, inc);
         array_resize_buffer(a, newlen, alen, a->offset);
     }
 #ifdef STORE_ARRAY_LEN
@@ -641,6 +663,8 @@ void jl_array_grow_beg(jl_array_t *a, size_t inc)
             size_t newlen = a->maxsize==0 ? inc*2 : a->maxsize*2;
             while (alen+2*inc > newlen-a->offset)
                 newlen *= 2;
+            
+            newlen = limit_overallocation(a, alen, newlen, 2*inc);
             size_t center = (newlen - (alen + inc))/2;
             array_resize_buffer(a, newlen, alen, center+inc);
             char *newdata = (char*)a->data - (center+inc)*es;

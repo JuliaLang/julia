@@ -48,7 +48,7 @@ Let's work with a simple test case::
 
     function myfunc()
         A = rand(100, 100, 200)
-        max(A)
+        maximum(A)
     end
 
 It's a good idea to first run the code you intend to profile at least
@@ -343,7 +343,7 @@ Function reference
    JIT-compiling. This function is primarily for internal use;
    ``Profile.retrieve()`` may be a better choice for most users.
 
-.. function:: retrieve(;C = false) -> data, lidict
+.. function:: retrieve() -> data, lidict
 
    "Exports" profiling results in a portable format, returning the set
    of all backtraces (``data``) and a dictionary that maps the

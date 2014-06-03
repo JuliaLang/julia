@@ -10,9 +10,9 @@
 #include "julia_internal.h"
 
 #ifdef _P64
-#define GC_PAGE_SZ (1536*sizeof(void*))//bytes
+#define GC_PAGE_SZ 12288//bytes
 #else
-#define GC_PAGE_SZ (2048*sizeof(void*))//bytes
+#define GC_PAGE_SZ  8192//bytes
 #endif
 
 #ifdef __cplusplus
@@ -65,13 +65,14 @@ typedef struct _bigval_t {
 static size_t allocd_bytes = 0;
 static int64_t total_allocd_bytes = 0;
 static size_t freed_bytes = 0;
-#define default_collect_interval (3200*1024*sizeof(void*))
-static size_t collect_interval = default_collect_interval;
 #ifdef _P64
+#define default_collect_interval (5600*1024*sizeof(void*))
 static size_t max_collect_interval = 1250000000UL;
 #else
-static size_t max_collect_interval = 500000000UL;
+#define default_collect_interval (3200*1024*sizeof(void*))
+static size_t max_collect_interval =  500000000UL;
 #endif
+static size_t collect_interval = default_collect_interval;
 int jl_in_gc; // referenced from switchto task.c
 
 #ifdef OBJPROFILE
@@ -275,7 +276,7 @@ static void run_finalizer(jl_value_t *o, jl_value_t *ff)
         }
         JL_CATCH {
             JL_PRINTF(JL_STDERR, "error in running finalizer: ");
-            jl_show(jl_stderr_obj(), jl_exception_in_transit);
+            jl_static_show(JL_STDERR, jl_exception_in_transit);
             JL_PUTC('\n',JL_STDERR);
         }
         ff = jl_t1(ff);
@@ -287,7 +288,7 @@ static void run_finalizer(jl_value_t *o, jl_value_t *ff)
     }
     JL_CATCH {
         JL_PRINTF(JL_STDERR, "error in running finalizer: ");
-        jl_show(jl_stderr_obj(), jl_exception_in_transit);
+        jl_static_show(JL_STDERR, jl_exception_in_transit);
         JL_PUTC('\n',JL_STDERR);
     }
 }

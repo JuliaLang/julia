@@ -19,8 +19,8 @@ areal = randn(n,n)/2
 aimg  = randn(n,n)/2
 breal = randn(n,2)/2
 bimg  = randn(n,2)/2
-for eltya in (Float32, Float64, Complex32, Complex64, Complex128, BigFloat, Int)
-    for eltyb in (Float32, Float64, Complex32, Complex64, Complex128, Int)
+for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
+    for eltyb in (Float32, Float64, Complex64, Complex128, Int)
         a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(areal, aimg) : areal)
         b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex(breal, bimg) : breal)
         asym = a'+a                  # symmetric indefinite
@@ -43,6 +43,10 @@ debug && println("(Automatic) upper Cholesky factor")
         for i=1:n, j=1:n
             @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
         end
+        E = abs(apd - full(capd))
+        for i=1:n, j=1:n
+            @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
+        end
 
         #Test error bound on linear solver: LAWNS 14, Theorem 2.1
         #This is a surprisingly loose bound...
@@ -56,7 +60,9 @@ debug && println("(Automatic) upper Cholesky factor")
         @test_approx_eq logdet(capd) log(det(capd)) # logdet is less likely to overflow
 
 debug && println("lower Cholesky factor")
-        l = cholfact(apd, :L)[:L]
+        lapd = cholfact(apd, :L)
+        @test_approx_eq full(lapd) apd
+        l = lapd[:L]
         @test_approx_eq l*l' apd
     end
 
@@ -75,7 +81,7 @@ debug && println("(Automatic) Bunch-Kaufman factor of indefinite matrix")
     if eltya != BigFloat && eltyb != BigFloat # Not implemented for BigFloat and I don't think it will.
         bc1 = factorize(asym)
         @test_approx_eq inv(bc1) * asym eye(n)
-        @test_approx_eq_eps asym * (bc1\b) b 600ε
+        @test_approx_eq_eps asym * (bc1\b) b 1000ε
 
 debug && println("Bunch-Kaufman factors of a pos-def matrix")
         bc2 = bkfact(apd)
@@ -131,8 +137,12 @@ debug && println("symmetric eigen-decomposition")
     if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
         d,v   = eig(asym)
         @test_approx_eq asym*v[:,1] d[1]*v[:,1]
-        @test_approx_eq v*scale(d,v') asym
+        @test_approx_eq v*Diagonal(d)*v' asym
         @test isequal(eigvals(asym[1]), eigvals(asym[1:1,1:1]))
+        @test_approx_eq abs(eigfact(Hermitian(asym), 1:2)[:vectors]'v[:,1:2]) eye(eltya, 2)
+        @test_approx_eq abs(eigfact(Hermitian(asym), d[1]-10*eps(d[1]), d[2]+10*eps(d[2]))[:vectors]'v[:,1:2]) eye(eltya, 2)
+        @test_approx_eq eigvals(Hermitian(asym), 1:2) d[1:2]
+        @test_approx_eq eigvals(Hermitian(asym), d[1]-10*eps(d[1]), d[2]+10*eps(d[2])) d[1:2]
     end
 
 debug && println("non-symmetric eigen decomposition")
@@ -203,9 +213,9 @@ debug && println("Solve upper triangular system")
     γ = n*ε/(1-n*ε)
     if eltya != BigFloat
         bigA = big(triu(a))
-        ̂x = bigA \ b
+        x̂ = bigA \ b
         for i=1:size(b, 2)
-            @test norm(̂x[:,i]-x[:,i], Inf)/norm(x[:,i], Inf) <= abs(condskeel(bigA, x[:,i])*γ/(1-condskeel(bigA)*γ))
+            @test norm(x̂[:,i]-x[:,i], Inf)/norm(x[:,i], Inf) <= abs(condskeel(bigA, x[:,i])*γ/(1-condskeel(bigA)*γ))
         end
     end
     #Test backward error [JIN 5705]
@@ -220,9 +230,9 @@ debug && println("Solve lower triangular system")
     γ = n*ε/(1-n*ε)
     if eltya != BigFloat
         bigA = big(tril(a))
-        ̂x = bigA \ b
+        x̂ = bigA \ b
         for i=1:size(b, 2)
-            @test norm(̂x[:,i]-x[:,i], Inf)/norm(x[:,i], Inf) <= abs(condskeel(bigA, x[:,i])*γ/(1-condskeel(bigA)*γ))
+            @test norm(x̂[:,i]-x[:,i], Inf)/norm(x[:,i], Inf) <= abs(condskeel(bigA, x[:,i])*γ/(1-condskeel(bigA)*γ))
         end
     end
     #Test backward error [JIN 5705]

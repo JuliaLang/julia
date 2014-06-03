@@ -480,6 +480,8 @@ end
 
 ## unique across dim
 
+# TODO: this doesn't fit into the new hashing scheme in any obvious way
+
 immutable Prehashed
     hash::Uint
 end
@@ -492,7 +494,7 @@ hash(x::Prehashed) = x.hash
     # Compute hash for each row
     k = 0
     @nloops N i A d->(if d == dim; k = i_d; end) begin
-       @inbounds hashes[k] = bitmix(hashes[k], hash((@nref N A i)))
+       @inbounds hashes[k] = hash(hashes[k], hash((@nref N A i)))
     end
 
     # Collect index of first row for each hash

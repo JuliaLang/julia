@@ -36,11 +36,11 @@ copy(n::GetfieldNode) = GetfieldNode(n.value, n.name, n.typ)
 
 # copy parts of an AST that the compiler mutates
 astcopy(x::Union(SymbolNode,GetfieldNode,Expr)) = copy(x)
-astcopy(x::Array{Any,1}) = map(astcopy, x)
+astcopy(x::Array{Any,1}) = Any[astcopy(a) for a in x]
 astcopy(x) = x
 
-isequal(x::Expr, y::Expr) = (is(x.head,y.head) && isequal(x.args,y.args))
-isequal(x::QuoteNode, y::QuoteNode) = isequal(x.value, y.value)
+==(x::Expr, y::Expr) = x.head === y.head && x.args == y.args
+==(x::QuoteNode, y::QuoteNode) = x.value == y.value
 
 function show(io::IO, tv::TypeVar)
     if !is(tv.lb, None)
@@ -68,10 +68,12 @@ end
 find_vars(e) = find_vars(e, {})
 function find_vars(e, lst)
     if isa(e,Symbol)
-        if !isdefined(e) || isconst(e)
-            # exclude global constants
-        else
-            push!(lst, e)
+        if current_module()===Main && isdefined(e)
+            # Main runs on process 1, so send globals from there, excluding
+            # things defined in Base.
+            if !isdefined(Base,e) || eval(Base,e)!==eval(current_module(),e)
+                push!(lst, e)
+            end
         end
     elseif isa(e,Expr) && e.head !== :quote && e.head !== :top
         for x in e.args

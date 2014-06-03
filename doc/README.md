@@ -12,11 +12,16 @@ Building the documentation
 The documentation is built using [Sphinx](http://sphinx.pocoo.org/) and LaTeX.
 On ubuntu, you'll need the following packages installed:
 
-    latex-cjk-all
     python-sphinx
+    python-pip
+    latex-cjk-all
     texlive
     texlive-lang-cjk
     texlive-latex-extra
+
+Use pip to install sphinx_rtd_theme:
+
+    $ sudo pip install sphinx_rtd_theme
 
 Then run
 

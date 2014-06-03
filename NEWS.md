@@ -24,21 +24,51 @@ New language features
 
   * Structure fields can now be accessed by index ([#4806]).
 
-  * Unicode identifiers are normalized (NFC) so that different encodings
-    of equivalent strings are treated as the same identifier ([#5462]).
-
   * If a module contains a function `__init__()`, it will be called when
     the module is first loaded, and on process startup if a pre-compiled
     version of the module is present ([#1268]).
 
-  * Multi-line comments ([#69], [#6128]): `#= .... =#` 
+  * Multi-line comments ([#69], [#6128]): `#= .... =#`
 
   * `--bounds-check=yes|no` compiler option
+
+  * Unicode identifiers are normalized (NFC) so that different encodings
+    of equivalent strings are treated as the same identifier ([#5462]).
+
+  * The set of characters permitted in identifiers has been restricted based
+    on Unicode categories. Generally, punctuation, formatting and control
+    characters, and operator symbols are not allowed in identifiers.
+    Number-like characters cannot begin identifiers ([#5936]).
+
+  * Define a limited number of infix Unicode operators ([#552], [#6582]):
+
+    | Precedence class | Operators (with synonyms, if any)
+    | ---------------- | ---------------------------------
+    |   ==             |  ≥ (>=) ≤ (<=) ≡ (===) ≠ (!=) ≢ (!==) .≥ (.>=) .≤ (.<=) .!= (.≠) ∈ (`in`) ∉ (`(x,y)->!in(x, y)`) ∋ (`(x,y)->in(y, x)`) ∌ (`(x,y)->!in(y, x)`) ⊆ (`issubset`) ⊈ (`(x,y)->!issubset(x, y)`) ⊊ (`(x,y)->x⊆y && x!=y`) |
+    |   +              | ∪ (`union`) |
+    |   *              | ÷ (`div`) ⋅ (`dot`) × (`cross`) ∩ (`intersect`) |
+    |   unary          | √ ∛ |
+
+    In addition to these, many of the Unicode operator symbols are parsed
+    as infix operators and are available for user-defined methods ([#6929]).
+    
+  * Improved reporting of syntax errors ([#6179])
+
+REPL improvements
+-----------------
+
+  * New native-Julia REPL implementation, eliminating many problems
+    stemming from the old GNU Readline-based REPL ([#6270]).
+
+  * Tab-substitution of LaTeX math symbols (e.g. `\alpha` by `α`) ([#6911]).
+    This also works in IJulia and in Emacs ([#6920]).
 
 Library improvements
 --------------------
 
-  * Implement shared-memory parallelism with `SharedArray`s ([#5380]).
+  * `isequal` now compares all numbers by value, ignoring type ([#6624]).
+
+  * Implement limited shared-memory parallelism with `SharedArray`s ([#5380]).
 
   * Well-behaved floating-point ranges ([#2333], [#5636]).
     Introduced the `FloatRange` type for floating-point ranges with a step,
@@ -65,7 +95,7 @@ Library improvements
     fixed-width or messy whitespace-delimited data ([#5403]).
 
   * The Airy, Bessel, Hankel, and related functions (`airy*`,
-    `bessel*`, `hankel*`) now detect errors returned by the underlying 
+    `bessel*`, `hankel*`) now detect errors returned by the underlying
     AMOS library, throwing an `AmosException` in that case ([#4967]).
 
   * `methodswith` now returns an array of `Method`s ([#5464]) rather
@@ -126,6 +156,8 @@ Library improvements
 
     * `rand` now supports arbitrary `Ranges` arguments ([#5059]).
 
+    * `expm1` and `log1p` now support complex arguments ([#3141]).
+
   * `String` improvements
 
     * Triple-quoted regex strings, `r"""..."""` ([#4934]).
@@ -151,7 +183,7 @@ Library improvements
 
       * `condskeel` for Skeel condition numbers ([#5726]).
 
-      * `norm(::Matrix)` no longer calculates a vector norm when the first 
+      * `norm(::Matrix)` no longer calculates a vector norm when the first
         dimension is one ([#5545]); it always uses the operator (induced)
         matrix norm.
 
@@ -174,6 +206,8 @@ Library improvements
       * `sparse(A) \ B` now supports a matrix `B` of right-hand sides ([#5196]).
 
       * `eigs(A, sigma)` now uses shift-and-invert for nonzero shifts `sigma` and inverse iteration for `which="SM"`. If `sigma==nothing` (the new default), computes ordinary (forward) iterations. ([#5776])
+
+      * `sprand` is faster, and whether any entry is nonzero is now determined independently with the specified probability ([#6726]).
 
     * Dense linear algebra for special matrix types
 
@@ -250,8 +284,17 @@ Library improvements
     * Very large ranges (e.g. `0:typemax(Int)`) can now be constructed, but some
       operations (e.g. `length`) will raise an `OverflowError`.
 
-  * Extended API for ``cov`` and ``cor``, which accept keyword arguments ``vardim``, 
+  * Extended API for ``cov`` and ``cor``, which accept keyword arguments ``vardim``,
     ``corrected``, and ``mean`` ([#6273])
+
+  * New functions `randsubseq` and `randsubseq!` to create a random subsequence of an array ([#6726])
+
+
+Build improvements
+------------------
+
+  * Dependencies are now verified against stored MD5/SHA512 hashes, to ensure
+    that the correct file has been downloaded and was not modified. ([#6773])
 
 
 Deprecated or removed
@@ -271,8 +314,8 @@ Deprecated or removed
     argument specifying the floating point type to which they apply. The old
     behaviour and `[get/set/with]_bigfloat_rounding` functions are deprecated ([#5007])
 
-  * `cholpfact` and `qrpfact` are deprecated in favor of keyword arguments in 
-    `cholfact(...,pivot=true)` and `qrfact(...,pivot=true)` ([#5330]) 
+  * `cholpfact` and `qrpfact` are deprecated in favor of keyword arguments in
+    `cholfact(...,pivot=true)` and `qrfact(...,pivot=true)` ([#5330])
 
   * `symmetrize!` is deprecated in favor of `Base.LinAlg.copytri!` ([#5427])
 
@@ -280,7 +323,7 @@ Deprecated or removed
 
   * `factorize!` is deprecated in favor of `factorize`. ([#5526])
 
-  * `nnz` is removed. Use `countnz` or `nfilled` instead ([#5538])
+  * `nnz` counts the number of structural nonzeros in a sparse matrix. Use `countnz` for the actual number of nonzeros. ([#6769])
 
   * `setfield` is renamed `setfield!` ([#5748])
 
@@ -296,6 +339,10 @@ Deprecated or removed
 
   * `Range` is renamed `StepRange` and `Range1` is renamed `UnitRange`.
     `Ranges` is renamed `Range`.
+
+  * `bitmix` is replaced by a 2-argument form of `hash`.
+
+  * `readsfrom` and `writesto` are replaced by `open` ([#6948]).
 
 [#4042]: https://github.com/JuliaLang/julia/issues/4042
 [#5164]: https://github.com/JuliaLang/julia/issues/5164
@@ -341,7 +388,7 @@ Deprecated or removed
 [#4888]: https://github.com/JuliaLang/julia/pull/4888
 [#5475]: https://github.com/JuliaLang/julia/pull/5475
 [#5526]: https://github.com/JuliaLang/julia/pull/5526
-[#5538]: https://github.com/JuliaLang/julia/pull/5538
+[#6769]: https://github.com/JuliaLang/julia/pull/6769
 [#5726]: https://github.com/JuliaLang/julia/pull/5726
 [#5811]: https://github.com/JuliaLang/julia/pull/5811
 [#5462]: https://github.com/JuliaLang/julia/pull/5462
@@ -376,6 +423,11 @@ Deprecated or removed
 [#5380]: https://github.com/JuliaLang/julia/pull/5380
 [#5585]: https://github.com/JuliaLang/julia/issues/5585
 [#6273]: https://github.com/JuliaLang/julia/pull/6273
+[#552]: https://github.com/JuliaLang/julia/issues/552
+[#6582]: https://github.com/JuliaLang/julia/pull/6582
+[#6624]: https://github.com/JuliaLang/julia/pull/6624
+[#5936]: https://github.com/JuliaLang/julia/issues/5936
+[#6179]: https://github.com/JuliaLang/julia/issues/6179
 
 Julia v0.2.0 Release Notes
 ==========================
@@ -470,12 +522,12 @@ New library functions
 
   * `varm`, `stdm` ([#2265]).
 
-  * `digamma`, `invdigamma`, `trigamma` and `polygamma` for calculating derivatives of `gamma` function ([#3233]). 
+  * `digamma`, `invdigamma`, `trigamma` and `polygamma` for calculating derivatives of `gamma` function ([#3233]).
 
   * `logdet` ([#3070]).
 
   * Names for C-compatible types: `Cchar`, `Clong`, etc. ([#2370]).
-  
+
   * `cglobal` to access global variables ([#1815]).
 
   * `unsafe_pointer_to_objref` ([#2468]) and `pointer_from_objref` ([#2515]).
@@ -494,9 +546,9 @@ New library functions
     ([#3050]).
 
   * `interrupt` for interrupting worker processes ([#3819]).
-  
+
   * `timedwait` does a polled wait for an event till a specified timeout.
-  
+
   * `Condition` type with `wait` and `notify` functions for `Task` synchronization.
 
   * `versioninfo` provides detailed version information, especially useful when

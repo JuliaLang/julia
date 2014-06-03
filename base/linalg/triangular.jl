@@ -26,7 +26,7 @@ At_mul_B{T<:BlasReal}(A::Triangular{T}, b::Vector{T}) = BLAS.trmv(A.uplo, 'T', A
 
 # Matrix multiplication
 *{T<:BlasFloat}(A::Triangular{T}, B::StridedMatrix{T}) = BLAS.trmm('L', A.uplo, 'N', A.unitdiag, one(T), A.UL, B)
-*{T<:BlasFloat}(A::StridedMatrix{T}, B::Triangular{T}) = BLAS.trmm('R', B.uplo, 'N', B.unitdiag, one(T), A, B.UL)
+*{T<:BlasFloat}(A::StridedMatrix{T}, B::Triangular{T}) = BLAS.trmm('R', B.uplo, 'N', B.unitdiag, one(T), B.UL, A)
 A_mul_B!{T<:BlasFloat}(A::Triangular{T},B::Matrix{T}) = BLAS.trmm!('L',A.uplo,'N',A.unitdiag,one(eltype(A)),A.UL,B)
 Ac_mul_B!{T<:BlasComplex}(A::Triangular{T}, B::StridedMatrix{T}) = BLAS.trmm('L', A.uplo, 'C', A.unitdiag, one(T), A.UL, B)
 Ac_mul_B!{T<:BlasReal}(A::Triangular{T}, B::StridedMatrix{T}) = BLAS.trmm('L', A.uplo, 'T', A.unitdiag, one(T), A.UL, B)
@@ -82,7 +82,12 @@ end
 ####################
 
 size(A::Triangular, args...) = size(A.UL, args...)
+
 convert(::Type{Matrix}, A::Triangular) = full(A)
+convert{T}(::Type{Triangular{T}}, A::Triangular{T}) = A
+convert{T}(::Type{Triangular{T}}, A::Triangular) = Triangular(convert(AbstractMatrix{T}, A.UL), A.uplo, A.unitdiag)
+convert{T}(::Type{AbstractMatrix{T}}, A::Triangular) = convert(Triangular{T}, A)
+
 full(A::Triangular) = A.uplo == 'U' ? triu!(A.UL) : tril!(A.UL)
 
 getindex{T}(A::Triangular{T}, i::Integer, j::Integer) = i == j ? (A.unitdiag == 'U' ? one(T) : A.UL[i,j]) : ((A.uplo == 'U') == (i < j) ? getindex(A.UL, i, j) : zero(T))
@@ -90,16 +95,22 @@ getindex{T}(A::Triangular{T}, i::Integer, j::Integer) = i == j ? (A.unitdiag == 
 istril(A::Triangular) = A.uplo == 'L' || istriu(A.UL)
 istriu(A::Triangular) = A.uplo == 'U' || istril(A.UL)
 
-transpose(A::Triangular) = Triangular(copytri!(A.UL, A.uplo), A.uplo=='U'?'L':'U', A.unitdiag)
-ctranspose(A::Triangular) = Triangular(copytri!(A.UL, A.uplo, true), A.uplo=='U'?'L':'U', A.unitdiag)
+transpose(A::Triangular) = Triangular(transpose(A.UL), A.uplo=='U'?'L':'U', A.unitdiag)
+ctranspose(A::Triangular) = Triangular(ctranspose(A.UL), A.uplo=='U'?'L':'U', A.unitdiag)
+transpose!(A::Triangular) = Triangular(copytri!(A.UL, A.uplo), A.uplo=='U'?'L':'U', A.unitdiag)
+ctranspose!(A::Triangular) = Triangular(copytri!(A.UL, A.uplo, true), A.uplo=='U'?'L':'U', A.unitdiag)
 diag(A::Triangular) = diag(A.UL)
 big(A::Triangular) = Triangular(big(A.UL), A.uplo, A.unitdiag)
+
+*(A::Tridiagonal, B::Triangular) = A*full(B)
+A_mul_Bc{TB}(A::Triangular, B::Union(QRCompactWYQ{TB},QRPackedQ{TB})) = A_mul_Bc(full(A),B)
 
 #Generic multiplication
 for func in (:*, :Ac_mul_B, :A_mul_Bc, :/, :A_rdiv_Bc)
     @eval begin
-        ($func){T}(A::Triangular{T}, B::AbstractVector{T}) = ($func)(full(A), B)
-        #($func){T}(A::AbstractArray{T}, B::Triangular{T}) = ($func)(full(A), B)
+        ($func)(A::Triangular, B::Triangular) = ($func)(A, full(B))
+        ($func)(A::Triangular, B::AbstractVecOrMat) = ($func)(full(A), B)
+        ($func)(A::AbstractMatrix, B::Triangular) = ($func)(A, full(B))
     end
 end
 

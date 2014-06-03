@@ -108,6 +108,8 @@ end
 
 SharedArray(T, I::Int...; kwargs...) = SharedArray(T, I; kwargs...)
 
+typealias SharedVector{T} SharedArray{T,1}
+typealias SharedMatrix{T} SharedArray{T,2}
 
 length(S::SharedArray) = prod(S.dims)
 size(S::SharedArray) = S.dims
@@ -214,6 +216,30 @@ setindex!(S::SharedArray, x, I::Real) = (setindex!(S.s, x, I); S)
 setindex!(S::SharedArray, x, I::AbstractArray) = (setindex!(S.s, x, I); S)
 @nsplat N 1:5 setindex!(S::SharedArray, x, I::NTuple{N,Any}...) = (setindex!(S.s, x, I...); S)
 
+function fill!(S::SharedArray, v)
+    f = S->fill!(S.loc_subarr_1d, v)
+    @sync for p in procs(S)
+        @async remotecall_wait(p, f, S)
+    end
+    return S
+end
+
+function rand!{T}(S::SharedArray{T})
+    f = S->map!(x->rand(T), S.loc_subarr_1d)
+    @sync for p in procs(S)
+        @async remotecall_wait(p, f, S)
+    end
+    return S
+end
+
+function randn!(S::SharedArray)
+    f = S->map!(x->randn, S.loc_subarr_1d)
+    @sync for p in procs(S)
+        @async remotecall_wait(p, f, S)
+    end
+    return S
+end
+
 # convenience constructors
 function shmem_fill(v, dims; kwargs...)
     SharedArray(typeof(v), dims; init = S->fill!(S.loc_subarr_1d, v), kwargs...)
@@ -291,9 +317,9 @@ function print_shmem_limits(slen)
         @linux_only pfx = "kernel"
         @osx_only pfx = "kern.sysv"
 
-        shmmax_MB = div(int(split(readall(readsfrom(`sysctl $(pfx).shmmax`)[1]))[end]), 1024*1024)
-        page_size = int(split(readall(readsfrom(`getconf PAGE_SIZE`)[1]))[end])
-        shmall_MB = div(int(split(readall(readsfrom(`sysctl $(pfx).shmall`)[1]))[end]) * page_size, 1024*1024)
+        shmmax_MB = div(int(split(readall(`sysctl $(pfx).shmmax`))[end]), 1024*1024)
+        page_size = int(split(readall(`getconf PAGE_SIZE`))[end])
+        shmall_MB = div(int(split(readall(`sysctl $(pfx).shmall`))[end]) * page_size, 1024*1024)
 
         println("System max size of single shmem segment(MB) : ", shmmax_MB,
             "\nSystem max size of all shmem segments(MB) : ", shmall_MB,

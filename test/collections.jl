@@ -80,7 +80,7 @@ type I1438T
     id
 end
 import Base.hash
-hash(x::I1438T) = x.id
+hash(x::I1438T, h::Uint) = hash(x.id, h)
 
 begin
     local seq, xs, s
@@ -170,6 +170,39 @@ let f(x) = x^2,
 
     @test d == {8=>19, 19=>2, 42=>4}
 end
+
+# show
+for d in (["\n" => "\n", "1" => "\n", "\n" => "2"],
+          [string(i) => i for i = 1:30],
+          [reshape(1:i^2,i,i) => reshape(1:i^2,i,i) for i = 1:24],
+          [utf8(Char['α':'α'+i]) => utf8(Char['α':'α'+i]) for i = (1:10)*10])
+    for cols in (12, 40, 80), rows in (2, 10, 24)
+        # Ensure output is limited as requested
+        s = IOBuffer()
+        Base.showdict(s, d, true, rows, cols)
+        out = split(takebuf_string(s),'\n')
+        for line in out[2:end]
+            @test strwidth(line) <= cols
+        end
+        @test length(out) <= rows
+
+        for f in (keys, values)
+            s = IOBuffer()
+            Base.showkv(s, f(d), true, rows, cols)
+            out = split(takebuf_string(s),'\n')
+            for line in out[2:end]
+                @test strwidth(line) <= cols
+            end
+            @test length(out) <= rows
+        end
+    end
+    # Simply ensure these do not throw errors
+    Base.showdict(IOBuffer(), d, false)
+    @test !isempty(summary(d))
+    @test !isempty(summary(keys(d)))
+    @test !isempty(summary(values(d)))
+end
+
 
 # issue #2540
 d = {x => 1

@@ -3,12 +3,11 @@ module Order
 ## notions of element ordering ##
 
 export # not exported by Base
-    Ordering, Forward, Lexicographic,
+    Ordering, Forward, Reverse, Lexicographic,
     By, Lt, Perm,
     ReverseOrdering, ForwardOrdering, LexicographicOrdering,
     DirectOrdering,
     lt, uint_mapping, ord, ordtype
-    # Reverse, # TODO: clashes with Reverse iterator
 
 abstract Ordering
 

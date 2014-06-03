@@ -87,7 +87,7 @@ istext(m::String) = istext(MIME(m))
 reprmime(m::String, x) = reprmime(MIME(m), x)
 stringmime(m::String, x) = stringmime(MIME(m), x)
 
-for mime in ["text/vnd.graphviz", "text/latex", "text/calendar", "text/n3", "text/richtext", "text/x-setext", "text/sgml", "text/tab-separated-values", "text/x-vcalendar", "text/x-vcard", "text/cmd", "text/css", "text/csv", "text/html", "text/javascript", "text/plain", "text/vcard", "text/xml", "application/atom+xml", "application/ecmascript", "application/json", "application/rdf+xml", "application/rss+xml", "application/xml-dtd", "application/postscript", "image/svg+xml", "application/x-latex", "application/xhtml+xml", "application/javascript", "application/xml", "model/x3d+xml", "model/x3d+vrml", "model/vrml"]
+for mime in ["text/vnd.graphviz", "text/latex", "text/calendar", "text/n3", "text/richtext", "text/x-setext", "text/sgml", "text/tab-separated-values", "text/x-vcalendar", "text/x-vcard", "text/cmd", "text/css", "text/csv", "text/html", "text/javascript", "text/markdown", "text/plain", "text/vcard", "text/xml", "application/atom+xml", "application/ecmascript", "application/json", "application/rdf+xml", "application/rss+xml", "application/xml-dtd", "application/postscript", "image/svg+xml", "application/x-latex", "application/xhtml+xml", "application/javascript", "application/xml", "model/x3d+xml", "model/x3d+vrml", "model/vrml"]
     @eval @textmime $mime
 end
 
@@ -154,9 +154,11 @@ macro try_display(expr)
   end
 end
 
+xdisplayable(D::Display, args...) = applicable(display, D, args...)
+
 function display(x)
     for i = length(displays):-1:1
-        displayable(displays[i], x) &&
+        xdisplayable(displays[i], x) &&
             @try_display return display(displays[i], x)
     end
     throw(MethodError(display, (x,)))
@@ -164,14 +166,11 @@ end
 
 function display(m::MIME, x)
     for i = length(displays):-1:1
-        displayable(displays[i], m, x) &&
+        xdisplayable(displays[i], m, x) &&
             @try_display return display(displays[i], m, x)
     end
     throw(MethodError(display, (m, x)))
 end
-
-displayable(D::Display, args...) =
-  applicable(display, D, args...)
 
 displayable{D<:Display,mime}(d::D, ::MIME{mime}) =
   method_exists(display, (D, MIME{mime}, Any))

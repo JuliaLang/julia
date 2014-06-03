@@ -41,6 +41,9 @@ if sizeof(Int32) < sizeof(Int)
     r = rand(int32(-1):typemax(Int32))
     @test typeof(r) == Int32
     @test -1 <= r <= typemax(Int32)
+    @test all([div(0x00010000000000000000,k)*k - 1 == Base.Random.RandIntGen(uint64(1:k)).u for k in 13 .+ int64(2).^(32:62)])
+    @test all([div(0x00010000000000000000,k)*k - 1 == Base.Random.RandIntGen(int64(1:k)).u for k in 13 .+ int64(2).^(32:61)])
+
 end
 
 # Test ziggurat tables
@@ -125,3 +128,19 @@ randmtzig_fill_ziggurat_tables()
 @test all(ke == Base.LibRandom.ke)
 @test all(we == Base.LibRandom.we)
 @test all(fe == Base.LibRandom.fe)
+
+#same random numbers on for small ranges on all systems
+
+seed = rand(Uint) #leave state nondeterministic as above
+srand(seed)
+r = int64(rand(int32(97:122)))
+srand(seed)
+@test r == rand(int64(97:122))
+
+srand(seed)
+r = uint64(rand(uint32(97:122)))
+srand(seed)
+@test r == rand(uint64(97:122))
+
+@test all([div(0x000100000000,k)*k - 1 == Base.Random.RandIntGen(uint64(1:k)).u for k in 13 .+ int64(2).^(1:30)])
+@test all([div(0x000100000000,k)*k - 1 == Base.Random.RandIntGen(int64(1:k)).u for k in 13 .+ int64(2).^(1:30)])

@@ -72,7 +72,7 @@ macro test_throws(args...)
         ex = args[2]
         extype = args[1]
     end
-    :(do_test_throws(()->($(esc(ex))),$(Expr(:quote,ex)),backtrace(),$(extype)))
+    :(do_test_throws(()->($(esc(ex))),$(Expr(:quote,ex)),backtrace(),$(esc(extype))))
 end
 
 macro test_fails(ex)

@@ -136,6 +136,10 @@ s = open(file, "r")
 @test isreadonly(s) == true
 c = mmap_array(Uint8, (11,), s)
 @test c == "Hello World".data
+c = mmap_array(Uint8, (uint16(11),), s)
+@test c == "Hello World".data
+@test_throws ErrorException mmap_array(Uint8, (int16(-11),), s)
+@test_throws ErrorException mmap_array(Uint8, (typemax(Uint),), s)
 close(s)
 s = open(file, "r+")
 @test isreadonly(s) == false

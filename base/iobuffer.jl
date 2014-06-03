@@ -16,7 +16,7 @@ end
 
 function copy(b::IOBuffer) 
     ret = IOBuffer(b.writable?copy(b.data):b.data,
-            b.readable,b.writable,b.seekable,b.append,b.maxsize)
+                   b.readable,b.writable,b.seekable,b.append,b.maxsize)
     ret.size = b.size
     ret.ptr  = b.ptr
     ret
@@ -37,6 +37,8 @@ IOBuffer(str::ByteString) = IOBuffer(str.data, true, false)
 IOBuffer(readable::Bool,writable::Bool) = IOBuffer(Uint8[],readable,writable)
 IOBuffer() = IOBuffer(Uint8[], true, true)
 IOBuffer(maxsize::Int) = (x=IOBuffer(Array(Uint8,maxsize),true,true,maxsize); x.size=0; x)
+
+is_maxsize_unlimited(io::IOBuffer) = (io.maxsize == typemax(Int))
 
 read!(from::IOBuffer, a::Array) = read_sub(from, a, 1, length(a))
 
@@ -192,6 +194,11 @@ function takebuf_array(io::IOBuffer)
 end
 takebuf_string(io::IOBuffer) = bytestring(takebuf_array(io))
 
+function write(to::IOBuffer, from::IOBuffer) 
+    write(to, pointer(from.data,from.ptr), nb_available(from))
+    from.ptr += nb_available(from)
+end
+
 write(to::IOBuffer, p::Ptr, nb::Integer) = write(to, p, int(nb))
 function write(to::IOBuffer, p::Ptr, nb::Int)
     !to.writable && error("write failed")
@@ -208,10 +215,15 @@ function write_sub{T}(to::IOBuffer, a::Array{T}, offs, nel)
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
     end
-    if !isbits(T)
-        error("write to IOBuffer only supports bits types or arrays of bits types; got "*string(T))
+    if isbits(T)
+        write(to, pointer(a,offs), nel*sizeof(T))
+    else
+        nb = 0
+        for i = offs:offs+nel-1
+            nb += write(to, a[i])
+        end
+        nb
     end
-    write(to, pointer(a,offs), nel*sizeof(T))
 end
 
 write(to::IOBuffer, a::Array) = write_sub(to, a, 1, length(a))
@@ -248,10 +260,27 @@ function search(buf::IOBuffer, delim)
     q = ccall(:memchr,Ptr{Uint8},(Ptr{Uint8},Int32,Csize_t),p,delim,nb_available(buf))
     nb = (q == C_NULL ? 0 : q-p+1)
 end
+
 function readuntil(io::IOBuffer, delim::Uint8)
-    nb = search(io, delim)
-    if nb == 0
-        nb = nb_available(io)
+    lb = 70
+    A = Array(Uint8, lb)
+    n = 0
+    data = io.data
+    for i = io.ptr : io.size
+        n += 1
+        if n > lb
+            lb = n*2
+            resize!(A, lb)
+        end
+        @inbounds b = data[i]
+        @inbounds A[n] = b
+        if b == delim
+            break
+        end
     end
-    read!(io, Array(Uint8, nb))
+    io.ptr += n
+    if lb != n
+        resize!(A, n)
+    end
+    A
 end

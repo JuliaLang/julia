@@ -167,7 +167,7 @@ multiplication must be explicitly written out:
     julia> a = 1; b = 2; a + b*im
     1 + 2im
 
-Hoever, this is *not* recommended; Use the ``complex`` function instead to
+However, this is *not* recommended; Use the ``complex`` function instead to
 construct a complex value directly from its real and imaginary parts.:
 
 .. doctest::

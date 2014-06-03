@@ -15,8 +15,12 @@ a = randcycle(10)
 @test collect(filter(x->(iseven(x[1])),combinations([1,2,3],2))) == {[2,3]}
 @test collect(partitions(4)) ==  {[4], [3,1], [2,2], [2,1,1], [1,1,1,1]}
 @test collect(partitions(8,3)) == {[6,1,1], [5,2,1], [4,3,1], [4,2,2], [3,3,2]}
+@test collect(partitions(8, 1)) == {[8]}
+@test collect(partitions(8, 9)) == {}
 @test collect(partitions([1,2,3])) == {{[1,2,3]}, {[1,2],[3]}, {[1,3],[2]}, {[1],[2,3]}, {[1],[2],[3]}}
 @test collect(partitions([1,2,3,4],3)) == {{[1,2],[3],[4]}, {[1,3],[2],[4]}, {[1],[2,3],[4]}, {[1,4],[2],[3]}, {[1],[2,4],[3]},{[1],[2],[3,4]}}
+@test collect(partitions([1,2,3,4],1)) == {{[1, 2, 3, 4]}}
+@test collect(partitions([1,2,3,4],5)) == {}
 
 @test length(collect(partitions(30))) == length(partitions(30))
 @test length(collect(partitions(90,4))) == length(partitions(90,4))
@@ -32,5 +36,15 @@ end
 #Issue 6154
 @test binomial(int32(34), int32(15)) == binomial(BigInt(34), BigInt(15)) == 1855967520
 @test binomial(int64(67), int64(29)) == binomial(BigInt(67), BigInt(29)) == 7886597962249166160
-@test binomial(int128(131), int128(62)) == binomial(BigInt(131), BigInt(62)) == 157311720980559117816198361912717812000 
+@test binomial(int128(131), int128(62)) == binomial(BigInt(131), BigInt(62)) == 157311720980559117816198361912717812000
 
+# issue #6579
+@test factorial(0) == 1
+@test factorial(int64(20)) == 2432902008176640000
+@test_throws OverflowError factorial(int64(21))
+@test_throws DomainError factorial(-1)
+@test typeof(factorial(int8(2))) == typeof(factorial(int8(1)))
+if Int === Int32
+@test factorial(int32(12)) === int32(479001600)
+@test_throws OverflowError factorial(int32(13))
+end
