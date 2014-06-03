@@ -537,7 +537,7 @@ function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[]
     replc = REPLCompletionProvider(repl)
 
     # Set up the main Julia prompt
-    main_prompt = Prompt("julia> ";
+    julia_prompt = Prompt("julia> ";
         # Copy colors from the prompt object
         prompt_prefix = repl.prompt_color,
         prompt_suffix = repl.input_color,
@@ -545,7 +545,7 @@ function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[]
         complete = replc,
         on_enter = s->return_callback(repl, s))
 
-    main_prompt.on_done = respond(Base.parse_input_line, repl, main_prompt)
+    julia_prompt.on_done = respond(Base.parse_input_line, repl, julia_prompt)
 
     # Setup help mode
     help_mode = Prompt(" help> ",
@@ -554,7 +554,7 @@ function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[]
         keymap_func_data = repl,
         complete = replc,
         # When we're done transform the entered line into a call to help("$line")
-        on_done = respond(repl, main_prompt) do line
+        on_done = respond(repl, julia_prompt) do line
             parse("Base.@help $line", raise=false)
         end)
 
@@ -567,7 +567,7 @@ function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[]
         # Transform "foo bar baz" into `foo bar baz` (shell quoting)
         # and pass into Base.repl_cmd for processing (handles `ls` and `cd`
         # special)
-        on_done = respond(repl, main_prompt) do line
+        on_done = respond(repl, julia_prompt) do line
             Expr(:call, :(Base.repl_cmd), macroexpand(Expr(:macrocall, symbol("@cmd"),line)))
         end)
 
@@ -575,17 +575,17 @@ function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[]
 
     # Setup history
     # We will have a unified history for all REPL modes
-    hp = REPLHistoryProvider((Uint8=>Any)[uint8('\0') => main_prompt,
+    hp = REPLHistoryProvider((Uint8=>Any)[uint8('\0') => julia_prompt,
                                           uint8(';') => shell_mode,
                                           uint8('?') => help_mode,
-                                          uint8('>') => main_prompt])
+                                          uint8('>') => julia_prompt])
     if !repl.no_history_file
         f = open(find_hist_file(), true, true, true, false, false)
         finalizer(replc, replc->close(f))
         hist_from_file(hp, f)
     end
     history_reset_state(hp)
-    main_prompt.hist = hp
+    julia_prompt.hist = hp
     shell_mode.hist = hp
     help_mode.hist = hp
 
@@ -672,14 +672,14 @@ function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[]
     a = Dict{Any,Any}[hkeymap, repl_keymap, LineEdit.history_keymap(hp), LineEdit.default_keymap, LineEdit.escape_defaults]
     prepend!(a, extra_repl_keymap)
 
-    main_prompt.keymap_func = @eval @LineEdit.keymap $(a)
+    julia_prompt.keymap_func = @eval @LineEdit.keymap $(a)
 
     const mode_keymap = {
         '\b' => function (s)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
                 buf = copy(LineEdit.buffer(s))
-                transition(s, main_prompt)
-                LineEdit.state(s, main_prompt).input_buffer = buf
+                transition(s, julia_prompt)
+                LineEdit.state(s, julia_prompt).input_buffer = buf
                 LineEdit.refresh_line(s)
             else
                 LineEdit.edit_backspace(s)
@@ -689,7 +689,7 @@ function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[]
             LineEdit.move_input_end(s)
             LineEdit.refresh_line(s)
             print(LineEdit.terminal(s), "^C\n\n")
-            transition(s, main_prompt)
+            transition(s, julia_prompt)
             transition(s, :reset)
             LineEdit.refresh_line(s)
         end
@@ -699,7 +699,7 @@ function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[]
 
     shell_mode.keymap_func = help_mode.keymap_func = @eval @LineEdit.keymap $(b)
 
-    ModalInterface([main_prompt, shell_mode, help_mode,hkp])
+    ModalInterface([julia_prompt, shell_mode, help_mode,hkp])
 end
 
 function run_frontend(repl::LineEditREPL, backend)
