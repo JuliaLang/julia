@@ -96,7 +96,7 @@ other algorithms as well::
 Sorting Functions
 -----------------
 
-.. function:: sort!(v, [dim,] [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+.. function:: sort!(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Sort the vector ``v`` in place. ``QuickSort`` is used by default for numeric arrays
    while ``MergeSort`` is used for other arrays. You can specify an algorithm to use via
