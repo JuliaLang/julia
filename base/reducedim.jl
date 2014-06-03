@@ -142,7 +142,7 @@ end
     sz1 = size(A, 1)
     if size(R, 1) < sz1 && sz1 >= 16 && rdims == 1
         for i = 1:div(length(A), sz1)
-            @inbounds R[i] = sum_impl(f, A, (i-1)*sz1+1, i*sz1)
+            @inbounds R[i] = mapreduce_impl(f, AddFun(), A, (i-1)*sz1+1, i*sz1)
         end
     else
         @nloops N i A d->(j_d = sizeR_d==1 ? 1 : i_d) begin
