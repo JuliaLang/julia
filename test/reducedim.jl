@@ -13,9 +13,9 @@ safe_sumabs2{T}(A::Array{T}, region) = safe_mapslices(sum, abs2(A), region)
 
 Areduc = rand(3, 4, 5, 6)
 for region in {
-        1, 2, 3, 4, 5, (1, 2), (1, 3), (1, 4), (2, 3), (2, 4), (3, 4),
+    1, 2, 3, 4, 5, (1, 2), (1, 3), (1, 4), (2, 3), (2, 4), (3, 4),
     (1, 2, 3), (1, 3, 4), (2, 3, 4), (1, 2, 3, 4)}
-
+    # println("region = $region")
     r = fill(NaN, Base.reduced_dims(size(Areduc), region))
     @test_approx_eq sum!(r, Areduc) safe_sum(Areduc, region)
     @test_approx_eq prod!(r, Areduc) safe_prod(Areduc, region)
