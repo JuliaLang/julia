@@ -29,6 +29,7 @@ end
 #Converting from Bidiagonal to dense Matrix
 full{T}(M::Bidiagonal{T}) = convert(Matrix{T}, M)
 convert{T}(::Type{Matrix{T}}, A::Bidiagonal{T})=diagm(A.dv) + diagm(A.ev, A.isupper?1:-1)
+convert{T}(::Type{Matrix}, A::Bidiagonal{T}) = convert(Matrix{T}, A)
 promote_rule{T,S}(::Type{Matrix{T}}, ::Type{Bidiagonal{S}})=Matrix{promote_type(T,S)}
 
 #Converting from Bidiagonal to Tridiagonal

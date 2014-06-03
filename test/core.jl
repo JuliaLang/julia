@@ -1710,3 +1710,9 @@ let z{T<:Union(Float64,Complex{Float64},Float32,Complex{Float32})}(A::StridedMat
     S = zeros(Complex,2,2)
     @test_throws MethodError z(S)
 end
+
+# issue #7062
+f7062{t,n}(::Type{Array{t}}  , ::Array{t,n}) = (t,n,1)
+f7062{t,n}(::Type{Array{t,n}}, ::Array{t,n}) = (t,n,2)
+@test f7062(Array{Int,1}, [1,2,3]) === (Int,1,2)
+@test f7062(Array{Int}  , [1,2,3]) === (Int,1,1)

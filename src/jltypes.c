@@ -507,6 +507,8 @@ static jl_value_t *intersect_tag(jl_datatype_t *a, jl_datatype_t *b,
             jl_value_t *bp = jl_tupleref(b->parameters,i);
             if (jl_is_typevar(ap)) {
                 if (var==invariant && jl_is_typevar(bp)) {
+                    if (((jl_tvar_t*)ap)->bound != ((jl_tvar_t*)bp)->bound)
+                        return (jl_value_t*)jl_bottom_type;
                     if ((is_unspec(a) && is_bnd((jl_tvar_t*)bp,penv)) ||
                         (is_bnd((jl_tvar_t*)ap,penv) && is_unspec(b))) {
                         // Foo{T} and Foo can never be equal since the former
@@ -675,7 +677,7 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
         }
     }
     else {
-        b = jl_type_intersect(a->ub, b, penv, eqc, var);
+        b = jl_type_intersect(a->ub, b, penv, eqc, covariant);
         if (b == jl_bottom_type)
             return b;
     }
