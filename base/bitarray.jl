@@ -1385,8 +1385,7 @@ end
 
 ## Reductions ##
 
-sum(A::BitArray, region) = reducedim(+, A, region, 0, Array(Int,reduced_dims(A,region)))
-
+sum(A::BitArray, region) = reducedim(AddFun(), A, region)
 sum(B::BitArray) = countnz(B)
 
 function all(B::BitArray)
