@@ -13,6 +13,10 @@ lua = lufact(A)
 L,U,p,q,Rs = lua[:(:)]
 @test_approx_eq scale(Rs,A)[p,q] L*U
 
+lua = lufact(complex(A,A))
+L,U,p,q,Rs = lua[:(:)]
+@test_approx_eq scale(Rs,A)[p,q] L*U
+
 @test_approx_eq det(lua) det(full(A))
 
 b = [8., 45., -3., 3., 19.]
