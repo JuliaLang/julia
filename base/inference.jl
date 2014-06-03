@@ -934,6 +934,10 @@ function abstract_eval(e::ANY, vtypes, sv::StaticVarInfo)
         t0 = abstract_eval(e.args[1], vtypes, sv)
         # intersect with Any to remove Undef
         t = typeintersect(t0, Any)
+        if isa(t,DataType) && typeseq(t,t.name.primary)
+            # remove unnecessary typevars
+            t = t.name.primary
+        end
         if is(t,None) && Undef<:t0
             # the first time we see this statement the variable will probably
             # be Undef; return None so this doesn't contribute to the type
