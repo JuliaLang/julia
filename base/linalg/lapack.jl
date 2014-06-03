@@ -1489,7 +1489,7 @@ for (gtsv, gttrf, gttrs, elty) in
                    Ptr{BlasInt}, Ptr{BlasInt}),
                   &n, dl, d, du, du2, ipiv, info)
             @lapackerror
-            dl, d, du, du2, ipiv
+            dl, d, du, du2, ipiv, info[1]
         end
         #       SUBROUTINE DGTTRS( TRANS, N, NRHS, DL, D, DU, DU2, IPIV, B, LDB, INFO )
         #       .. Scalar Arguments ..
