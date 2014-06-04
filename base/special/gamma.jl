@@ -522,8 +522,8 @@ function eta(z::Union(Float64,Complex128))
 end
 
 eta(x::Integer) = eta(float64(x))
-eta(x::Real)    = oftype(x,eta(float64(x)))
-eta(z::Complex) = oftype(z,eta(complex128(z)))
+eta(x::Real)    = oftype(float(x),eta(float64(x)))
+eta(z::Complex) = oftype(float(z),eta(complex128(z)))
 @vectorize_1arg Number eta
 
 function zeta(z::Number)
