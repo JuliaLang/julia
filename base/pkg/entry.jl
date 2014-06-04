@@ -150,7 +150,7 @@ function clone(url::String, pkg::String)
         Git.run(`clone -q $url $pkg`)
         Git.set_remote_url(url, dir=pkg)
     catch
-        run(`rm -rf $pkg`)
+        rmdir(pkg)
         rethrow()
     end
     isempty(Reqs.parse("$pkg/REQUIRE")) && return
