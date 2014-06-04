@@ -580,6 +580,25 @@ end
 <(x::BigFloat, y::BigFloat) = ccall((:mpfr_less_p, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &x, &y) != 0
 >(x::BigFloat, y::BigFloat) = ccall((:mpfr_greater_p, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &x, &y) != 0
 
+function ==(i::BigInt, f::BigFloat)
+    !isnan(f) && ccall((:mpfr_cmp_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigInt}), &f, &i) == 0
+end
+
+==(f::BigFloat, i::BigInt) = i == f
+
+function <(i::BigInt, f::BigFloat)
+    # note: mpfr_cmp_z returns 0 if isnan(f)
+    ccall((:mpfr_cmp_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigInt}), &f, &i) > 0
+end
+
+function <(f::BigFloat, i::BigInt)
+    # note: mpfr_cmp_z returns 0 if isnan(f)
+    ccall((:mpfr_cmp_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigInt}), &f, &i) < 0
+end
+
+<=(i::BigInt, f::BigFloat) = !isnan(f) && !(f < i)
+<=(f::BigFloat, i::BigInt) = !isnan(f) && !(i < f)
+
 signbit(x::BigFloat) = ccall((:mpfr_signbit, :libmpfr), Int32, (Ptr{BigFloat},), &x) != 0
 
 function precision(x::BigFloat)
