@@ -74,8 +74,8 @@ issetuid(st::StatStruct) = (st.mode & 0o4000) > 0
 issetgid(st::StatStruct) = (st.mode & 0o2000) > 0
 issticky(st::StatStruct) = (st.mode & 0o1000) > 0
 
-  isreadable(st::StatStruct) = (st.mode & 0o444) > 0
-  iswritable(st::StatStruct) = (st.mode & 0o222) > 0
+isreadable(st::StatStruct) = (st.mode & 0o444) > 0
+iswritable(st::StatStruct) = (st.mode & 0o222) > 0
 isexecutable(st::StatStruct) = (st.mode & 0o111) > 0
 
 uperm(st::StatStruct) = uint8(st.mode >> 6) & 0x7
@@ -108,6 +108,8 @@ for f in {
 end
 
 islink(path...) = islink(lstat(path...))
+isfileorlink(path...) = isfileorlink(lstat(path...))
+
 
 # some convenience functions
 

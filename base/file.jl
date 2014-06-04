@@ -55,7 +55,7 @@ function rmdir(path::String, recursive::Bool=false)
     if recursive
         for p=readdir(path)
             p = joinpath(path, p)
-            isfileorlink(p) ? rm(p) : rmdir(p, true)(p)
+            isfileorlink(p) ? rm(p) : rmdir(p, true)
         end
     end
     @unix_only ret = ccall(:rmdir, Int32, (Ptr{Uint8},), bytestring(path))
