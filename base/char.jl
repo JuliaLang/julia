@@ -50,4 +50,4 @@ sizeof(::Type{Char}) = 4
 ## printing & showing characters ##
 
 print(io::IO, c::Char) = (write(io,c); nothing)
-show(io::IO, c::Char) = (print(io,'\''); print_escaped(io,UTF32String(c),"'"); print(io,'\''))
+show(io::IO, c::Char) = (print(io,'\''); print_escaped(io,utf32(c),"'"); print(io,'\''))
