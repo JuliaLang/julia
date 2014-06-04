@@ -91,16 +91,18 @@ end
 
 function common_prefix(completions)
     ret = ""
-    i = nexti = 1
-    cc, nexti = next(completions[1], 1)
+    c1 = completions[1]
+    isempty(c1) && return ret
+    i = nexti = start(c1)
+    cc, nexti = next(c1, 1)
     while true
         for c in completions
             (i > length(c) || c[i] != cc) && return ret
         end
         ret *= string(cc)
-        i >= length(completions[1]) && return ret
+        i >= length(c1) && return ret
         i = nexti
-        cc, nexti = next(completions[1], i)
+        cc, nexti = next(c1, i)
     end
 end
 
