@@ -1228,6 +1228,7 @@ export
     isfifo,
     isfile,
     islink,
+    isfileorlink,
     ispath,
     isreadable,
     issetgid,
