@@ -258,7 +258,7 @@ type REPLHistoryProvider <: HistoryProvider
     last_buffer::IOBuffer
     last_mode
     mode_mapping
-    modes::Array{Uint8,1}
+    modes::Array{Symbol,1}
 end
 REPLHistoryProvider(mode_mapping) =
     REPLHistoryProvider(String[], nothing, 0, -1, IOBuffer(),
@@ -268,30 +268,37 @@ function hist_from_file(hp, file)
     hp.history_file = file
     seek(file, 0)
     while !eof(file)
-        b = readuntil(file, '\0')
-        if uint8(b[1]) in keys(hp.mode_mapping)
-            push!(hp.modes, uint8(b[1]))
-            push!(hp.history, b[2:(end-1)]) # Strip trailing \0
-        else # For history backward compatibility
-            push!(hp.modes, 0)
-            push!(hp.history, b[1:(end-1)]) # Strip trailing \0
+        mode = :julia
+        line = utf8(readline(file))
+        line[1] == '#' || error("invalid history entry")
+        while true
+            m = match(r"^#\s*(\w+)\s*:\s*(.*?)\s*$", line)
+            m == nothing && break
+            if symbol(m.captures[1]) == "mode"
+                mode = symbol(m.captures[2])
+            end
+            line = utf8(readline(file))
         end
+        line[1] == '\t' || error("invalid history entry")
+        lines = UTF8String[]
+        while true
+            push!(lines, chomp(line[2:end]))
+            eof(file) && break
+            Base.peek(file) == '\t' || break
+            line = utf8(readline(file))
+        end
+        push!(hp.modes, mode)
+        push!(hp.history, join(lines, '\n'))
     end
     seekend(file)
     hp
 end
 
 function mode_idx(hist::REPLHistoryProvider, mode)
-    c::Uint8 = 0
+    c = :julia
     for (k,v) in hist.mode_mapping
-        if k == uint8('\0')
-            continue
-        elseif v == mode
-            c = k
-            break
-        end
+        v == mode && (c = k)
     end
-    @assert c != 0
     return c
 end
 
@@ -303,14 +310,13 @@ function add_history(hist::REPLHistoryProvider, s)
         return
     end
     push!(hist.history, str)
-    c = mode_idx(hist, LineEdit.mode(s))
-    push!(hist.modes, c)
-    if hist.history_file !== nothing
-        write(hist.history_file, c)
-        write(hist.history_file, str)
-        write(hist.history_file, '\0')
-        flush(hist.history_file)
-    end
+    mode = mode_idx(hist, LineEdit.mode(s))
+    push!(hist.modes, mode)
+    hist.history_file == nothing && return
+    println(hist.history_file, "# mode: $mode")
+    println(hist.history_file, "# time: $(strftime("%F %T %Z", time()))")
+    println(hist.history_file, replace(str, r"^"ms, "\t"))
+    flush(hist.history_file)
 end
 
 function history_move(s::LineEdit.MIState, hist::REPLHistoryProvider, idx::Int)
@@ -462,7 +468,7 @@ function return_callback(repl, s)
 end
 
 function find_hist_file()
-    filename = ".julia_history2"
+    filename = ".julia_history"
     if isfile(filename)
         return filename
     elseif haskey(ENV, "JULIA_HISTORY")
@@ -537,7 +543,7 @@ function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[]
     replc = REPLCompletionProvider(repl)
 
     # Set up the main Julia prompt
-    main_prompt = Prompt("julia> ";
+    julia_prompt = Prompt("julia> ";
         # Copy colors from the prompt object
         prompt_prefix = repl.prompt_color,
         prompt_suffix = repl.input_color,
@@ -545,7 +551,7 @@ function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[]
         complete = replc,
         on_enter = s->return_callback(repl, s))
 
-    main_prompt.on_done = respond(Base.parse_input_line, repl, main_prompt)
+    julia_prompt.on_done = respond(Base.parse_input_line, repl, julia_prompt)
 
     # Setup help mode
     help_mode = Prompt(" help> ",
@@ -554,7 +560,7 @@ function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[]
         keymap_func_data = repl,
         complete = replc,
         # When we're done transform the entered line into a call to help("$line")
-        on_done = respond(repl, main_prompt) do line
+        on_done = respond(repl, julia_prompt) do line
             parse("Base.@help $line", raise=false)
         end)
 
@@ -567,7 +573,7 @@ function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[]
         # Transform "foo bar baz" into `foo bar baz` (shell quoting)
         # and pass into Base.repl_cmd for processing (handles `ls` and `cd`
         # special)
-        on_done = respond(repl, main_prompt) do line
+        on_done = respond(repl, julia_prompt) do line
             Expr(:call, :(Base.repl_cmd), macroexpand(Expr(:macrocall, symbol("@cmd"),line)))
         end)
 
@@ -575,17 +581,16 @@ function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[]
 
     # Setup history
     # We will have a unified history for all REPL modes
-    hp = REPLHistoryProvider((Uint8=>Any)[uint8('\0') => main_prompt,
-                                          uint8(';') => shell_mode,
-                                          uint8('?') => help_mode,
-                                          uint8('>') => main_prompt])
+    hp = REPLHistoryProvider((Symbol=>Any)[:julia => julia_prompt,
+                                           :shell => shell_mode,
+                                           :help  => help_mode])
     if !repl.no_history_file
         f = open(find_hist_file(), true, true, true, false, false)
         finalizer(replc, replc->close(f))
         hist_from_file(hp, f)
     end
     history_reset_state(hp)
-    main_prompt.hist = hp
+    julia_prompt.hist = hp
     shell_mode.hist = hp
     help_mode.hist = hp
 
@@ -672,14 +677,14 @@ function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[]
     a = Dict{Any,Any}[hkeymap, repl_keymap, LineEdit.history_keymap(hp), LineEdit.default_keymap, LineEdit.escape_defaults]
     prepend!(a, extra_repl_keymap)
 
-    main_prompt.keymap_func = @eval @LineEdit.keymap $(a)
+    julia_prompt.keymap_func = @eval @LineEdit.keymap $(a)
 
     const mode_keymap = {
         '\b' => function (s)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
                 buf = copy(LineEdit.buffer(s))
-                transition(s, main_prompt)
-                LineEdit.state(s, main_prompt).input_buffer = buf
+                transition(s, julia_prompt)
+                LineEdit.state(s, julia_prompt).input_buffer = buf
                 LineEdit.refresh_line(s)
             else
                 LineEdit.edit_backspace(s)
@@ -689,7 +694,7 @@ function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[]
             LineEdit.move_input_end(s)
             LineEdit.refresh_line(s)
             print(LineEdit.terminal(s), "^C\n\n")
-            transition(s, main_prompt)
+            transition(s, julia_prompt)
             transition(s, :reset)
             LineEdit.refresh_line(s)
         end
@@ -699,7 +704,7 @@ function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[]
 
     shell_mode.keymap_func = help_mode.keymap_func = @eval @LineEdit.keymap $(b)
 
-    ModalInterface([main_prompt, shell_mode, help_mode,hkp])
+    ModalInterface([julia_prompt, shell_mode, help_mode,hkp])
 end
 
 function run_frontend(repl::LineEditREPL, backend)
