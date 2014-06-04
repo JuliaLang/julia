@@ -11,9 +11,11 @@ close(open(file,"w")) # like touch, but lets the operating system update the tim
 @test isdir(dir)
 @test !isfile(dir)
 @test !islink(dir)
+@test !isfileorlink(dir)
 @test !isdir(file)
 @test isfile(file)
 @test !islink(file)
+@test isfileorlink(file)
 @test isreadable(file)
 @test iswritable(file)
 # Here's something else that might be UNIX-specific?
@@ -37,6 +39,7 @@ newfile = joinpath(dir, "bfile.txt")
 mv(file, newfile)
 @test !ispath(file)
 @test isfile(newfile)
+@test isfileorlink(newfile)
 file = newfile
 
 # Test renaming directories
@@ -56,6 +59,21 @@ b_stat = stat(b_tmpdir)
 @test Base.samefile(a_stat, b_stat)
 
 rmdir(b_tmpdir)
+
+# rmdir recursive TODO add links
+c_tmpdir = mktempdir()
+c_subdir = joinpath(c_tmpdir, "c_subdir")
+mkdir(c_subdir)
+c_file = joinpath(c_tmpdir, "cfile.txt")
+cp(newfile, c_file)
+
+@test isdir(c_subdir)
+@test isfile(c_file)
+@test_throws rmdir(c_tmpdir)
+
+rmdir(c_tmpdir, true)
+@test !isdir(c_tmpdir)
+
 
 #######################################################################
 # This section tests file watchers.                                   #
