@@ -274,7 +274,7 @@ function hist_from_file(hp, file)
         while true
             m = match(r"^#\s*(\w+)\s*:\s*(.*?)\s*$", line)
             m == nothing && break
-            if symbol(m.captures[1]) == "mode"
+            if m.captures[1] == "mode"
                 mode = symbol(m.captures[2])
             end
             line = utf8(readline(file))
