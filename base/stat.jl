@@ -58,14 +58,15 @@ lstat(path...) = lstat(joinpath(path...))
 
 # mode type predicates
 
-    ispath(st::StatStruct) = st.mode & 0xf000 != 0x0000
-    isfifo(st::StatStruct) = st.mode & 0xf000 == 0x1000
- ischardev(st::StatStruct) = st.mode & 0xf000 == 0x2000
-     isdir(st::StatStruct) = st.mode & 0xf000 == 0x4000
-isblockdev(st::StatStruct) = st.mode & 0xf000 == 0x6000
-    isfile(st::StatStruct) = st.mode & 0xf000 == 0x8000
-    islink(st::StatStruct) = st.mode & 0xf000 == 0xa000
-  issocket(st::StatStruct) = st.mode & 0xf000 == 0xc000
+      ispath(st::StatStruct) = st.mode & 0xf000 != 0x0000
+      isfifo(st::StatStruct) = st.mode & 0xf000 == 0x1000
+   ischardev(st::StatStruct) = st.mode & 0xf000 == 0x2000
+       isdir(st::StatStruct) = st.mode & 0xf000 == 0x4000
+  isblockdev(st::StatStruct) = st.mode & 0xf000 == 0x6000
+      isfile(st::StatStruct) = st.mode & 0xf000 == 0x8000
+      islink(st::StatStruct) = st.mode & 0xf000 == 0xa000
+    issocket(st::StatStruct) = st.mode & 0xf000 == 0xc000
+isfileorlink(st::StatStruct) = st.mode & 0xd000 == 0x8000
 
 # mode permission predicates
 
@@ -91,6 +92,7 @@ for f in {
     :isblockdev
     :isfile
     :islink
+    :isfileorlink
     :issocket
     :issetuid
     :issetgid
