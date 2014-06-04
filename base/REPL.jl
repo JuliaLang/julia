@@ -258,7 +258,7 @@ type REPLHistoryProvider <: HistoryProvider
     last_buffer::IOBuffer
     last_mode
     mode_mapping
-    modes::Array{Uint8,1}
+    modes::Array{Symbol,1}
 end
 REPLHistoryProvider(mode_mapping) =
     REPLHistoryProvider(String[], nothing, 0, -1, IOBuffer(),
@@ -268,30 +268,37 @@ function hist_from_file(hp, file)
     hp.history_file = file
     seek(file, 0)
     while !eof(file)
-        b = readuntil(file, '\0')
-        if uint8(b[1]) in keys(hp.mode_mapping)
-            push!(hp.modes, uint8(b[1]))
-            push!(hp.history, b[2:(end-1)]) # Strip trailing \0
-        else # For history backward compatibility
-            push!(hp.modes, 0)
-            push!(hp.history, b[1:(end-1)]) # Strip trailing \0
+        mode = :julia
+        line = utf8(readline(file))
+        line[1] == '#' || error("invalid history entry")
+        while true
+            m = match(r"^#\s*(\w+)\s*:\s*(.*?)\s*$", line)
+            m == nothing && break
+            if symbol(m.captures[1]) == "mode"
+                mode = symbol(m.captures[2])
+            end
+            line = utf8(readline(file))
         end
+        line[1] == '\t' || error("invalid history entry")
+        lines = UTF8String[]
+        while true
+            push!(lines, chomp(line[2:end]))
+            eof(file) && break
+            Base.peek(file) == '\t' || break
+            line = utf8(readline(file))
+        end
+        push!(hp.modes, mode)
+        push!(hp.history, join(lines, '\n'))
     end
     seekend(file)
     hp
 end
 
 function mode_idx(hist::REPLHistoryProvider, mode)
-    c::Uint8 = 0
+    c = :julia
     for (k,v) in hist.mode_mapping
-        if k == uint8('\0')
-            continue
-        elseif v == mode
-            c = k
-            break
-        end
+        v == mode && (c = k)
     end
-    @assert c != 0
     return c
 end
 
@@ -303,14 +310,13 @@ function add_history(hist::REPLHistoryProvider, s)
         return
     end
     push!(hist.history, str)
-    c = mode_idx(hist, LineEdit.mode(s))
-    push!(hist.modes, c)
-    if hist.history_file !== nothing
-        write(hist.history_file, c)
-        write(hist.history_file, str)
-        write(hist.history_file, '\0')
-        flush(hist.history_file)
-    end
+    mode = mode_idx(hist, LineEdit.mode(s))
+    push!(hist.modes, mode)
+    hist.history_file == nothing && return
+    println(hist.history_file, "# mode: $mode")
+    println(hist.history_file, "# time: $(strftime("%F %T %Z", time()))")
+    println(hist.history_file, replace(str, r"^"ms, "\t"))
+    flush(hist.history_file)
 end
 
 function history_move(s::LineEdit.MIState, hist::REPLHistoryProvider, idx::Int)
@@ -462,7 +468,7 @@ function return_callback(repl, s)
 end
 
 function find_hist_file()
-    filename = ".julia_history2"
+    filename = ".julia_history"
     if isfile(filename)
         return filename
     elseif haskey(ENV, "JULIA_HISTORY")
@@ -575,10 +581,9 @@ function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[]
 
     # Setup history
     # We will have a unified history for all REPL modes
-    hp = REPLHistoryProvider((Uint8=>Any)[uint8('\0') => julia_prompt,
-                                          uint8(';') => shell_mode,
-                                          uint8('?') => help_mode,
-                                          uint8('>') => julia_prompt])
+    hp = REPLHistoryProvider((Symbol=>Any)[:julia => julia_prompt,
+                                           :shell => shell_mode,
+                                           :help  => help_mode])
     if !repl.no_history_file
         f = open(find_hist_file(), true, true, true, false, false)
         finalizer(replc, replc->close(f))
