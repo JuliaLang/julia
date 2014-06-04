@@ -292,3 +292,12 @@ let r1 = 1.0:0.1:2.0, r2 = 1.0f0:0.2f0:3.0f0, r3 = 1:2:21
     @test r1 + r3 == convert(FloatRange{Float64}, r3) + r1
     @test r3 + r3 == 2 * r3
 end
+
+# issue #7114
+r = -0.004532318104333742:1.2597349521122731e-5:0.008065031416788989
+@test length(r[1:end-1]) == length(r) - 1
+@test isa(r[1:2:end],Range) && length(r[1:2:end]) == div(length(r)+1, 2)
+@test_approx_eq r[3:5][2] r[4]
+@test_approx_eq r[5:-2:1][2] r[3]
+@test_throws BoundsError r[0:10]
+@test_throws BoundsError r[1:10000]
