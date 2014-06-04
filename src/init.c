@@ -826,8 +826,8 @@ void julia_init(char *imageFile)
     }     
     pthread_attr_destroy(&attr);
 
-    ret = task_set_exception_ports(self,EXC_MASK_BAD_ACCESS,segv_port,EXCEPTION_DEFAULT,MACHINE_THREAD_STATE);
-    HANDLE_MACH_ERROR("task_set_exception_ports",ret);
+    ret = thread_set_exception_ports(mach_thread_self(),EXC_MASK_BAD_ACCESS,segv_port,EXCEPTION_DEFAULT,MACHINE_THREAD_STATE);
+    HANDLE_MACH_ERROR("thread_set_exception_ports",ret);
 #else // defined(_OS_DARWIN_)
     stack_t ss;
     ss.ss_flags = 0;

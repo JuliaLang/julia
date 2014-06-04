@@ -451,6 +451,8 @@ static Type *NoopType;
 extern "C" {
 #if defined(JULIA_TARGET_CORE2)
 const char *jl_cpu_string = "core2";
+#elif defined(JULIA_TARGET_I386)
+const char *jl_cpu_string = "i386";
 #elif defined(JULIA_TARGET_NATIVE)
 const char *jl_cpu_string = "native";
 #else
@@ -726,7 +728,8 @@ const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
         }
         
         object::SymbolRef::Type symtype;
-        size_t symsize, symaddr;
+        uint64_t symsize;
+        uint64_t symaddr;
 
         #ifdef LLVM35
         for (const object::SymbolRef &sym_iter : fit->second.object->symbols()) {
@@ -1615,6 +1618,16 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             }
         }
     }
+    else if (f->fptr == &jl_f_subtype && nargs == 2) {
+        rt1 = expr_type(args[1], ctx);
+        rt2 = expr_type(args[2], ctx);
+        if (jl_is_type_type(rt1) && !jl_is_typevar(jl_tparam0(rt1)) &&
+            jl_is_type_type(rt2) && !jl_is_typevar(jl_tparam0(rt2))) {
+            int issub = jl_subtype(jl_tparam0(rt1), jl_tparam0(rt2), 0);
+            JL_GC_POP();
+            return ConstantInt::get(T_int1, issub);
+        }
+    }
     else if (f->fptr == &jl_f_tuplelen && nargs==1) {
         jl_value_t *aty = expr_type(args[1], ctx); rt1 = aty;
         if (jl_is_tuple(aty)) {
@@ -2041,6 +2054,10 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                                               &jl_tupleref(ctx->sp,0),
                                               jl_tuple_len(ctx->sp)/2);
             if (jl_is_leaf_type(ty)) {
+                if (jl_has_typevars(ty)) {
+                    // add root for types not cached. issue #7065
+                    jl_add_linfo_root(ctx->linfo, ty);
+                }
                 JL_GC_POP();
                 return literal_pointer_val(ty);
             }
@@ -2147,7 +2164,8 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
                 assert(dyn_cast<UndefValue>(argvals[idx]) == 0);
                 // TODO: there should be a function emit_rooted that handles this, leaving
                 // the value rooted if it was already, to avoid redundant stores.
-                if (origval->getType() != jl_pvalue_llvmt || might_need_root(args[i+1])) {
+                if (origval->getType() != jl_pvalue_llvmt ||
+                    (might_need_root(args[i+1]) && !is_stable_expr(args[i+1], ctx))) {
                     make_gcroot(argvals[idx], ctx);
                 }
             }
@@ -2879,8 +2897,10 @@ static void maybe_alloc_arrayvar(jl_sym_t *s, jl_codectx_t *ctx)
         // passed to an external function (ideally only impure functions)
         jl_arrayvar_t av;
         int ndims = jl_unbox_long(jl_tparam1(jt));
-        av.dataptr =
-            builder.CreateAlloca(PointerType::get(julia_type_to_llvm(jl_tparam0(jt)),0));
+        Type *elt = julia_type_to_llvm(jl_tparam0(jt));
+        if (elt == T_void)
+            return;
+        av.dataptr = builder.CreateAlloca(PointerType::get(elt,0));
         av.len = builder.CreateAlloca(T_size);
         for(int i=0; i < ndims-1; i++)
             av.sizes.push_back(builder.CreateAlloca(T_size));

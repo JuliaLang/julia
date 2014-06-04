@@ -33,7 +33,6 @@ include("c.jl")
 include("promotion.jl")
 include("tuple.jl")
 include("range.jl")
-include("cell.jl")
 include("expr.jl")
 include("error.jl")
 
@@ -118,6 +117,7 @@ include("floatfuncs.jl")
 include("math.jl")
 importall .Math
 const (√)=sqrt
+const (∛)=cbrt
 include("float16.jl")
 
 # multidimensional arrays
@@ -179,8 +179,7 @@ big(z::Complex) = complex(big(real(z)),big(imag(z)))
 # more hashing definitions
 include("hashing2.jl")
 
-# random number generation and statistics
-include("statistics.jl")
+# random number generation
 include("librandom.jl")
 include("random.jl")
 importall .Random
@@ -226,6 +225,9 @@ const ⋅ = dot
 const × = cross
 include("broadcast.jl")
 importall .Broadcast
+
+# statistics
+include("statistics.jl")
 
 # signal processing
 include("fftw.jl")

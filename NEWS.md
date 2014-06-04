@@ -40,16 +40,28 @@ New language features
     characters, and operator symbols are not allowed in identifiers.
     Number-like characters cannot begin identifiers ([#5936]).
 
-  * Support for a limited number of infix Unicode operators ([#552], [#6582]):
+  * Define a limited number of infix Unicode operators ([#552], [#6582]):
 
     | Precedence class | Operators (with synonyms, if any)
     | ---------------- | ---------------------------------
-    |   ==             |  ≥ (>=) ≤ (<=) ≡ (===) ≠ (!=) ≢ (!==) .≥ (.>=) .≤ (.<=) .!= (.≠) ∈ (`in`) ∉ (`(x,y)->!in(x, y)`) ∋ (`(x,y)->in(y, x)`) ∌ (`(x,y)->!in(y, x)`) ⊆ (`issubset`) ⊈ (`(x,y)->!issubset(x, y)`) ⊊ (`(x,y)->x⊆y && x!=y`) ⊂ ⊄ |
-    |   +              | ⊕ ⊖ ⊞ ⊟ ∪ (`union`) ∨ ⊔ |
-    |   *              | ÷ (`div`) ⋅ (`dot`) ∘ × (`cross`) ∩ (`intersect`) ∧ ⊓ ⊗ ⊘ ⊙ ⊚ ⊛ ⊠ ⊡ |
-    |   unary          | √ |
+    |   ==             |  ≥ (>=) ≤ (<=) ≡ (===) ≠ (!=) ≢ (!==) .≥ (.>=) .≤ (.<=) .!= (.≠) ∈ (`in`) ∉ (`(x,y)->!in(x, y)`) ∋ (`(x,y)->in(y, x)`) ∌ (`(x,y)->!in(y, x)`) ⊆ (`issubset`) ⊈ (`(x,y)->!issubset(x, y)`) ⊊ (`(x,y)->x⊆y && x!=y`) |
+    |   +              | ∪ (`union`) |
+    |   *              | ÷ (`div`) ⋅ (`dot`) × (`cross`) ∩ (`intersect`) |
+    |   unary          | √ ∛ |
+
+    In addition to these, many of the Unicode operator symbols are parsed
+    as infix operators and are available for user-defined methods ([#6929]).
     
   * Improved reporting of syntax errors ([#6179])
+
+REPL improvements
+-----------------
+
+  * New native-Julia REPL implementation, eliminating many problems
+    stemming from the old GNU Readline-based REPL ([#6270]).
+
+  * Tab-substitution of LaTeX math symbols (e.g. `\alpha` by `α`) ([#6911]).
+    This also works in IJulia and in Emacs ([#6920]).
 
 Library improvements
 --------------------
@@ -311,7 +323,7 @@ Deprecated or removed
 
   * `factorize!` is deprecated in favor of `factorize`. ([#5526])
 
-  * `nnz` is removed. Use `countnz` or `nfilled` instead ([#5538])
+  * `nnz` counts the number of structural nonzeros in a sparse matrix. Use `countnz` for the actual number of nonzeros. ([#6769])
 
   * `setfield` is renamed `setfield!` ([#5748])
 
@@ -329,6 +341,8 @@ Deprecated or removed
     `Ranges` is renamed `Range`.
 
   * `bitmix` is replaced by a 2-argument form of `hash`.
+
+  * `readsfrom` and `writesto` are replaced by `open` ([#6948]).
 
 [#4042]: https://github.com/JuliaLang/julia/issues/4042
 [#5164]: https://github.com/JuliaLang/julia/issues/5164
@@ -374,7 +388,7 @@ Deprecated or removed
 [#4888]: https://github.com/JuliaLang/julia/pull/4888
 [#5475]: https://github.com/JuliaLang/julia/pull/5475
 [#5526]: https://github.com/JuliaLang/julia/pull/5526
-[#5538]: https://github.com/JuliaLang/julia/pull/5538
+[#6769]: https://github.com/JuliaLang/julia/pull/6769
 [#5726]: https://github.com/JuliaLang/julia/pull/5726
 [#5811]: https://github.com/JuliaLang/julia/pull/5811
 [#5462]: https://github.com/JuliaLang/julia/pull/5462
@@ -413,6 +427,7 @@ Deprecated or removed
 [#6582]: https://github.com/JuliaLang/julia/pull/6582
 [#6624]: https://github.com/JuliaLang/julia/pull/6624
 [#5936]: https://github.com/JuliaLang/julia/issues/5936
+[#6179]: https://github.com/JuliaLang/julia/issues/6179
 
 Julia v0.2.0 Release Notes
 ==========================

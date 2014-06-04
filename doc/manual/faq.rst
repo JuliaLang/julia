@@ -457,6 +457,9 @@ to try this yourself. Because the type is fully-specified in the first
 case, the compiler doesn't need to generate any code to resolve the
 type at run-time.  This results in shorter and faster code.
 
+
+.. _man-abstract-container-type:
+
 How should I declare "abstract container type" fields?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

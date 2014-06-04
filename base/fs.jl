@@ -33,6 +33,7 @@ export File,
        JL_O_SHORT_LIVED,
        JL_O_SEQUENTIAL,
        JL_O_RANDOM,
+       JL_O_NOCTTY,
        S_IRUSR, S_IWUSR, S_IXUSR, S_IRWXU,
        S_IRGRP, S_IWGRP, S_IXGRP, S_IRWXG,
        S_IROTH, S_IWOTH, S_IXOTH, S_IRWXO

@@ -1118,7 +1118,7 @@ function launch_local_workers(cman::LocalManager, np::Integer, config::Dict)
 
     # start the processes first...
     for i in 1:np
-        io, pobj = readsfrom(detach(`$(dir)/$(exename) --bind-to $(LPROC.bind_addr) $exeflags`))
+        io, pobj = open(detach(`$(dir)/$(exename) --bind-to $(LPROC.bind_addr) $exeflags`), "r")
         io_objs[i] = io
         configs[i] = merge(config, {:process => pobj})
     end
@@ -1175,7 +1175,7 @@ function launch_ssh_workers(cman::SSHManager, np::Integer, config::Dict)
         cmd = `sh -l -c $(shell_escape(cmd))`                   # shell to launch under
         cmd = `ssh -n $sshflags $host $(shell_escape(cmd))`     # use ssh to remote launch
         
-        io, pobj = readsfrom(detach(cmd))
+        io, pobj = open(detach(cmd), "r")
         io_objs[i] = io
         configs[i] = merge(config, {:machine => cman.machines[i]})
     end
@@ -1518,14 +1518,12 @@ end
 function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
     start = time()
     done = RemoteRef()
-    timercb(aw, status) = begin
+    timercb(aw) = begin
         try
             if testcb()
                 put!(done, :ok)
             elseif (time() - start) > secs
                 put!(done, :timed_out)
-            elseif status != 0
-                put!(done, :error)
             end
         catch e
             put!(done, :error)

@@ -106,7 +106,12 @@ uvhandle(x::Ptr) = x
 uvtype(::Ptr) = UV_STREAM
 uvtype(::DevNullStream) = UV_STREAM
 
-typealias Redirectable Union(UVStream,FS.File,FileRedirect,DevNullStream,IOStream)
+# Not actually a pointer, but that's how we pass it through the C API
+# so it's fine
+uvhandle(x::RawFD) = convert(Ptr{Void},x.fd)
+uvtype(x::RawFD) = UV_RAW_FD
+
+typealias Redirectable Union(UVStream,FS.File,FileRedirect,DevNullStream,IOStream,RawFD)
 
 type CmdRedirect <: AbstractCmd
     cmd::AbstractCmd
@@ -422,30 +427,43 @@ function eachline(cmd::AbstractCmd,stdin)
 end
 eachline(cmd::AbstractCmd) = eachline(cmd,DevNull)
 
-#returns a pipe to read from the last command in the pipelines
-readsfrom(cmds::AbstractCmd) = readsfrom(cmds, DevNull)
-function readsfrom(cmds::AbstractCmd, stdin::AsyncStream)
-    processes = @tmp_rpipe out tmp spawn(false, cmds, (stdin,tmp,STDERR))
-    start_reading(out)
-    (out, processes)
+# return a (Pipe,Process) pair to write/read to/from the pipeline
+function open(cmds::AbstractCmd, mode::String="r", stdio::AsyncStream=DevNull)
+    if mode == "r"
+        processes = @tmp_rpipe out tmp spawn(false, cmds, (stdio,tmp,STDERR))
+        start_reading(out)
+        (out, processes)
+    elseif mode == "w"
+        processes = @tmp_wpipe tmp inpipe spawn(false,cmds, (tmp,stdio,STDERR))
+        (inpipe, processes)
+    else
+        throw(ArgumentError("mode must be \"r\" or \"w\", not \"$mode\""))
+    end
 end
 
-function writesto(cmds::AbstractCmd, stdout::UVStream)
-    processes = @tmp_wpipe tmp inpipe spawn(false, cmds, (tmp,stdout,STDERR))
-    (inpipe, processes)
+function open(f::Function, cmds::AbstractCmd, args...)
+    io, P = open(cmds, args...)
+    ret = try
+        f(io)
+    catch
+        kill(P)
+        rethrow()
+    finally
+        close(io)
+    end
+    success(P) || pipeline_error(P)
+    return ret
 end
-writesto(cmds::AbstractCmd) = writesto(cmds, DevNull)
 
+# TODO: convert this to use open(cmd, "r+"), with a single read/write pipe
 function readandwrite(cmds::AbstractCmd)
-    (out, processes) = @tmp_wpipe tmp inpipe readsfrom(cmds, tmp)
+    (out, processes) = @tmp_wpipe tmp inpipe open(cmds, "r", tmp)
     (out, inpipe, processes)
 end
 
 function readbytes(cmd::AbstractCmd, stdin::AsyncStream=DevNull)
-    (out,pc) = readsfrom(cmd, stdin)
-    if !success(pc)
-        pipeline_error(pc)
-    end
+    (out,pc) = open(cmd, "r", stdin)
+    !success(pc) && pipeline_error(pc)
     wait_close(out)
     return takebuf_array(out.buffer)
 end
@@ -454,15 +472,10 @@ function readall(cmd::AbstractCmd, stdin::AsyncStream=DevNull)
     return bytestring(readbytes(cmd, stdin))
 end
 
-writeall(cmd::AbstractCmd, stdin::String) = writeall(cmd, stdin, DevNull)
-function writeall(cmd::AbstractCmd, stdin::String, stdout::AsyncStream)
-    (in,pc) = writesto(cmd, stdout)
-    write(in, stdin)
-    close(in)
-    if !success(pc)
-        pipeline_error(pc)
+function writeall(cmd::AbstractCmd, stdin::String, stdout::AsyncStream=DevNull)
+    open(cmd, "w", stdout) do io
+        write(io, stdin)
     end
-    return true
 end
 
 function run(cmds::AbstractCmd,args...)

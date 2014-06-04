@@ -47,6 +47,15 @@ can be used instead::
     julia> (chomp(a)) == "hello"
     true
 
+More generally, you can use ``open`` to read from or write to an external
+command.  For example:
+
+    julia> open(`less`, "w", STDOUT) do io
+               for i = 1:1000
+                   println(io, i)
+               end
+           end
+
 .. _man-command-interpolation:
 
 Interpolation

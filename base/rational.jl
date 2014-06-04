@@ -47,7 +47,7 @@ convert{T<:Integer}(::Type{T}, x::Rational) = (isinteger(x) ? convert(T, x.num) 
 convert(::Type{FloatingPoint}, x::Rational) = float(x.num)/float(x.den)
 function convert{T<:FloatingPoint,S}(::Type{T}, x::Rational{S})
     P = promote_type(T,S)
-    convert(P,x.num)/convert(P,x.den)
+    convert(T, convert(P,x.num)/convert(P,x.den))
 end
 
 function convert{T<:Integer}(::Type{Rational{T}}, x::FloatingPoint)

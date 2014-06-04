@@ -300,8 +300,6 @@ function wait_readbyte(x::AsyncStream, c::Uint8)
     end
 end
 
-wait_readline(x) = wait_readbyte(x, uint8('\n'))
-
 function wait_readnb(x::AsyncStream, nb::Int)
     while isopen(x) && nb_available(x.buffer) < nb
         start_reading(x)
@@ -460,7 +458,7 @@ end
 _uv_hook_close(uv::AsyncWork) = (uv.handle = C_NULL; nothing)
 
 # This serves as a common callback for all async classes
-function _uv_hook_asynccb(async::AsyncWork, status::Int32)
+function _uv_hook_asynccb(async::AsyncWork)
     if isa(async, Timer)
         if ccall(:uv_timer_get_repeat, Uint64, (Ptr{Void},), async.handle) == 0
             # timer is stopped now
@@ -468,7 +466,7 @@ function _uv_hook_asynccb(async::AsyncWork, status::Int32)
         end
     end
     try
-        async.cb(async, status)
+        async.cb(async)
     catch
     end
     nothing
@@ -494,12 +492,8 @@ end
 
 function sleep(sec::Real)
     w = Condition()
-    timer = Timer(function (tmr,status)
-        if status == 0
-            notify(w)
-        else 
-            notify_error(UVError("timer",status))
-        end
+    timer = Timer(function (tmr)
+        notify(w)
     end)
     start_timer(timer, float(sec), 0)
     try
@@ -676,7 +670,7 @@ function read{T}(s::AsyncStream, ::Type{T}, dims::Dims)
     nb = prod(dims)*sizeof(T)
     a = read!(s, Array(Uint8, nb)) 
     reshape(reinterpret(T, a), dims)
-end    
+end
 
 function read(this::AsyncStream,::Type{Uint8})
     buf = this.buffer
@@ -685,12 +679,7 @@ function read(this::AsyncStream,::Type{Uint8})
     read(buf,Uint8)
 end
 
-function readline(this::AsyncStream)
-    buf = this.buffer
-    @assert buf.seekable == false
-    wait_readline(this)
-    readline(buf)
-end
+readline(this::AsyncStream) = readuntil(this, '\n')
 
 readline() = readline(STDIN)
 
@@ -747,7 +736,10 @@ end
 write!(s::AsyncStream, string::ByteString) = write!(s,string.data)
 
 function _uv_hook_writecb(s::AsyncStream, req::Ptr{Void}, status::Int32)
-    status < 0 && close(s)
+    if status < 0
+        err = UVError("write",status)
+        showerror(STDERR, err, backtrace())
+    end
     nothing
 end
 
@@ -794,9 +786,10 @@ function _uv_hook_writecb_task(s::AsyncStream,req::Ptr{Void},status::Int32)
     d = uv_req_data(req)
     if status < 0
         err = UVError("write",status)
-        close(s)
         if d != C_NULL
             schedule(unsafe_pointer_to_objref(d)::Task,err,error=true)
+        else
+            showerror(STDERR, err, backtrace())
         end
     elseif d != C_NULL
         schedule(unsafe_pointer_to_objref(d)::Task)

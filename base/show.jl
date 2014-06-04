@@ -243,7 +243,7 @@ const expr_infix_wide = Set([:(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(&=),
 const expr_infix = Set([:(:), :(<:), :(->), :(=>), symbol("::")])
 const expr_calls  = [:call =>('(',')'), :ref =>('[',']'), :curly =>('{','}')]
 const expr_parens = [:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>('{','}'),
-                      :hcat =>('[',']'), :row =>('[',']')]
+                     :hcat =>('[',']'), :row =>('[',']')]
 
 ## AST decoding helpers ##
 
@@ -359,7 +359,12 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     elseif (head in expr_infix && nargs==2) || (is(head,:(:)) && nargs==3)
         show_list(io, args, head, indent)
     elseif head in expr_infix_wide && nargs == 2
-        show_list(io, args, " $head ", indent)
+        func_prec = get(bin_op_precs, head, 0)
+        if func_prec < prec
+            show_enclosed_list(io, '(', args, " $head ", ')', indent, func_prec)
+        else
+            show_list(io, args, " $head ", indent, func_prec)
+        end
 
     # list (i.e. "(1,2,3)" or "[1,2,3]")
     elseif haskey(expr_parens, head)               # :tuple/:vcat/:cell1d

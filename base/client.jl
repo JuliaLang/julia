@@ -355,6 +355,7 @@ function _start()
         (quiet,repl,startup,color_set,no_history_file) = process_options(copy(ARGS))
 
         local term
+        global active_repl
         if repl
             if !isa(STDIN,TTY)
                 global is_interactive |= !isa(STDIN,Union(File,IOStream))
@@ -363,6 +364,14 @@ function _start()
                 term = Terminals.TTYTerminal(get(ENV,"TERM",@windows? "" : "dumb"),STDIN,STDOUT,STDERR)
                 global is_interactive = true
                 color_set || (global have_color = Terminals.hascolor(term))
+                if term.term_type == "dumb"
+                    active_repl = REPL.BasicREPL(term)
+                else
+                    active_repl = REPL.LineEditREPL(term)
+                    active_repl.no_history_file = no_history_file
+                end
+
+                quiet || REPL.banner(term,term)
             end
         end
 
@@ -385,15 +394,7 @@ function _start()
                 end
                 quit()
             end
-            quiet || REPL.banner(term,term)
-            local repl
-            if term.term_type == "dumb"
-                repl = REPL.BasicREPL(term)
-            else
-                repl = REPL.LineEditREPL(term)
-                repl.no_history_file = no_history_file
-            end
-            REPL.run_repl(repl)
+            REPL.run_repl(active_repl)
         end
     catch err
         display_error(err,catch_backtrace())

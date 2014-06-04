@@ -1,6 +1,7 @@
 ## serializing values ##
 
 # dummy types to tell number of bytes used to store length (4 or 1)
+abstract LongSymbol
 abstract LongTuple
 abstract LongExpr
 abstract UndefRefTag
@@ -13,7 +14,7 @@ let i = 2
     for t = {Symbol, Int8, Uint8, Int16, Uint16, Int32, Uint32,
              Int64, Uint64, Int128, Uint128, Float32, Float64, Char, Ptr,
              DataType, UnionType, Function,
-             Tuple, Array, Expr, :reserved21, LongTuple, LongExpr,
+             Tuple, Array, Expr, LongSymbol, LongTuple, LongExpr,
              LineNumberNode, SymbolNode, LabelNode, GotoNode,
              QuoteNode, TopNode, TypeVar, Box, LambdaStaticData,
              Module, UndefRefTag, Task, ASCIIString, UTF8String,
@@ -78,9 +79,16 @@ function serialize(s, x::Symbol)
     if haskey(ser_tag, x)
         return write_as_tag(s, x)
     end
-    writetag(s, Symbol)
-    write(s, x)
-    write(s, 0x00)
+    pname = convert(Ptr{Uint8}, x)
+    ln = int(ccall(:strlen, Csize_t, (Ptr{Uint8},), pname))
+    if ln <= 255
+        writetag(s, Symbol)
+        write(s, uint8(ln))
+    else
+        writetag(s, LongSymbol)
+        write(s, int32(ln))
+    end
+    write(s, pname, ln)
 end
 
 function serialize_array_data(s, a)
@@ -106,8 +114,14 @@ end
 function serialize(s, a::Array)
     writetag(s, Array)
     elty = eltype(a)
-    serialize(s, elty)
-    serialize(s, size(a))
+    if elty !== Uint8
+        serialize(s, elty)
+    end
+    if ndims(a) != 1
+        serialize(s, size(a))
+    else
+        serialize(s, length(a))
+    end
     if isbits(elty)
         serialize_array_data(s, a)
     else
@@ -315,11 +329,8 @@ end
 
 deserialize_tuple(s, len) = ntuple(len, i->deserialize(s))
 
-function deserialize(s, ::Type{Symbol})
-    r = readuntil(s,0x00)
-    pop!(r)
-    symbol(r)
-end
+deserialize(s, ::Type{Symbol}) = symbol(read(s, Uint8, int32(read(s, Uint8))))
+deserialize(s, ::Type{LongSymbol}) = symbol(read(s, Uint8, read(s, Int32)))
 
 function deserialize(s, ::Type{Module})
     path = deserialize(s)
@@ -384,8 +395,18 @@ function deserialize(s, ::Type{LambdaStaticData})
 end
 
 function deserialize(s, ::Type{Array})
-    elty = deserialize(s)
-    dims = deserialize(s)::Dims
+    d1 = deserialize(s)
+    if isa(d1,Type)
+        elty = d1
+        d1 = deserialize(s)
+    else
+        elty = Uint8
+    end
+    if isa(d1,Integer)
+        dims = (int(d1),)
+    else
+        dims = convert(Dims, d1)::Dims
+    end
     if isbits(elty)
         n = prod(dims)::Int
         if elty === Bool && n>0

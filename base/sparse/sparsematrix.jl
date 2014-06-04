@@ -15,7 +15,7 @@ SparseMatrixCSC{Tv,Ti}(m::Integer, n::Integer, colptr::Vector{Ti}, rowval::Vecto
     SparseMatrixCSC(int(m), int(n), colptr, rowval, nzval)
 
 size(S::SparseMatrixCSC) = (S.m, S.n)
-nfilled(S::SparseMatrixCSC) = int(S.colptr[end]-1)
+nnz(S::SparseMatrixCSC) = int(S.colptr[end]-1)
 countnz(S::SparseMatrixCSC) = countnz(S.nzval)
 
 function Base.showarray(io::IO, S::SparseMatrixCSC;
@@ -24,7 +24,7 @@ function Base.showarray(io::IO, S::SparseMatrixCSC;
     # TODO: repr?
 
     if header
-        print(io, S.m, "x", S.n, " sparse matrix with ", nfilled(S), " ", eltype(S), " entries:")
+        print(io, S.m, "x", S.n, " sparse matrix with ", nnz(S), " ", eltype(S), " entries:")
     end
 
     if limit
@@ -36,7 +36,7 @@ function Base.showarray(io::IO, S::SparseMatrixCSC;
     k = 0
     sep = "\n\t"
     for col = 1:S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
-        if k < half_screen_rows || k > nfilled(S)-half_screen_rows
+        if k < half_screen_rows || k > nnz(S)-half_screen_rows
             print(io, sep, '[', rpad(S.rowval[k], pad), ", ", lpad(col, pad), "]  =  ")
             showcompact(io, S.nzval[k])
         elseif k == half_screen_rows
@@ -96,7 +96,7 @@ function reinterpret{T,Tv,Ti,N}(::Type{T}, a::SparseMatrixCSC{Tv,Ti}, dims::NTup
     end
     mS,nS = dims
     mA,nA = size(a)
-    numnz = nfilled(a)
+    numnz = nnz(a)
     colptr = Array(Ti, nS+1)
     rowval = Array(Ti, numnz)
     nzval = reinterpret(T, a.nzval)
@@ -112,7 +112,7 @@ function reshape{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti}, dims::NTuple{2,Int})
     end
     mS,nS = dims
     mA,nA = size(a)
-    numnz = nfilled(a)
+    numnz = nnz(a)
     colptr = Array(Ti, nS+1)
     rowval = Array(Ti, numnz)
     nzval = a.nzval
@@ -203,7 +203,7 @@ function sparsevec(a::Vector)
     n = length(a)
     I = find(a)
     J = ones(Int, n)
-    V = nonzeros(a)
+    V = a[I]
     return sparse_IJ_sorted!(I,J,V,n,1,+)
 end
 
@@ -287,7 +287,7 @@ function find(S::SparseMatrixCSC)
 end
 
 function findn{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
-    numnz = nfilled(S)
+    numnz = nnz(S)
     I = Array(Ti, numnz)
     J = Array(Ti, numnz)
 
@@ -310,7 +310,7 @@ function findn{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
 end
 
 function findnz{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
-    numnz = nfilled(S)
+    numnz = nnz(S)
     I = Array(Ti, numnz)
     J = Array(Ti, numnz)
     V = Array(Tv, numnz)
@@ -334,6 +334,8 @@ function findnz{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
 
     return (I, J, V)
 end
+
+nonzeros(S::SparseMatrixCSC) = S.nzval
 
 function sprand{T}(m::Integer, n::Integer, density::FloatingPoint,
                    rng::Function,::Type{T}=eltype(rng(1)))
@@ -426,7 +428,7 @@ for (op, restype) in ((:iceil, Int), (:ceil, Nothing),
     @eval begin
 
         function ($op){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti})
-            nfilledA = nfilled(A)
+            nfilledA = nnz(A)
             colptrB = Array(Ti, A.n+1)
             rowvalB = Array(Ti, nfilledA)
             nzvalB = Array($(restype==Nothing ? (:Tv) : restype), nfilledA)
@@ -516,7 +518,7 @@ for (op, restype) in ( (:+, Nothing), (:-, Nothing), (:.*, Nothing),
             (m, n) = size(A)
 
             # TODO: Need better method to estimate result space
-            nnzS = nfilled(A) + nfilled(B)
+            nnzS = nnz(A) + nnz(B)
             colptrS = Array(Ti, A.n+1)
             rowvalS = Array(Ti, nnzS)
             nzvalS = Array($(restype==Nothing ? (:Tv) : restype), nnzS)
@@ -671,7 +673,7 @@ function reducedim{Tv,Ti}(f::Function, A::SparseMatrixCSC{Tv,Ti}, region, v0)
         for i = 1 : A.n, j = A.colptr[i] : A.colptr[i+1]-1
             S = f(S, A.nzval[j])
         end
-        if nfilled(A) != A.m*A.n; S = f(S, zero(Tv)); end
+        if nnz(A) != A.m*A.n; S = f(S, zero(Tv)); end
 
         return fill(S, 1, 1)
 
@@ -683,7 +685,7 @@ end
 function maximum{T}(A::SparseMatrixCSC{T})
     isempty(A) && throw(ArgumentError("argument must not be empty"))
     m = maximum(A.nzval)
-    nfilled(A)!=length(A) ? max(m,zero(T)) : m
+    nnz(A)!=length(A) ? max(m,zero(T)) : m
 end
 
 maximum{T}(A::SparseMatrixCSC{T}, region) =
@@ -692,7 +694,7 @@ maximum{T}(A::SparseMatrixCSC{T}, region) =
 function minimum{T}(A::SparseMatrixCSC{T})
     isempty(A) && throw(ArgumentError("argument must not be empty"))
     m = minimum(A.nzval)
-    nfilled(A)!=length(A) ? min(m,zero(T)) : m
+    nnz(A)!=length(A) ? min(m,zero(T)) : m
 end
 
 minimum{T}(A::SparseMatrixCSC{T}, region) =
@@ -701,7 +703,7 @@ minimum{T}(A::SparseMatrixCSC{T}, region) =
 sum{T}(A::SparseMatrixCSC{T})          = sum(A.nzval)
 sum{T}(A::SparseMatrixCSC{T}, region)  = reducedim(+,A,region,zero(T))
 
-prod{T}(A::SparseMatrixCSC{T})         = nfilled(A)!=length(A) ? zero(T) : prod(A.nzval)
+prod{T}(A::SparseMatrixCSC{T})         = nnz(A)!=length(A) ? zero(T) : prod(A.nzval)
 prod{T}(A::SparseMatrixCSC{T}, region) = reducedim(*,A,region,one(T))
 
 #all(A::SparseMatrixCSC{Bool}, region) = reducedim(all,A,region,true)
@@ -710,8 +712,7 @@ prod{T}(A::SparseMatrixCSC{T}, region) = reducedim(*,A,region,one(T))
 #sum(A::SparseMatrixCSC{Bool}) = countnz(A)
 
 ## getindex
-getindex(A::SparseMatrixCSC, i::Integer) = getindex(A, ind2sub(size(A),i))
-getindex(A::SparseMatrixCSC, I::(Integer,Integer)) = getindex(A, I[1], I[2])
+getindex(A::SparseMatrixCSC, i::Integer) = getindex(A, ind2sub(size(A),i)...)
 
 function getindex{T}(A::SparseMatrixCSC{T}, i0::Integer, i1::Integer)
     if !(1 <= i0 <= A.m && 1 <= i1 <= A.n); throw(BoundsError()); end
@@ -771,7 +772,7 @@ end
 
 # TODO: See if growing arrays is faster than pre-computing structure
 # and then populating nonzeros
-# TODO: Use binary search in cases where nI >> nfilled(A[:,j]) or nI << nfilled(A[:,j])
+# TODO: Use binary search in cases where nI >> nnz(A[:,j]) or nI << nnz(A[:,j])
 function getindex_I_sorted{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector)
 
     (m, n) = size(A)
@@ -1151,7 +1152,7 @@ function spset!{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv}, x::Tv, I::AbstractVector
 
     m, n = size(A)
     ((I[end] > m) || (J[end] > n)) && throw(DimensionMismatch(""))
-    nnzA = nfilled(A) + length(I) * length(J)
+    nnzA = nnz(A) + length(I) * length(J)
 
     colptrA = colptr = A.colptr
     rowvalA = rowval = A.rowval
@@ -1254,7 +1255,7 @@ end
 
 function spdelete!{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv}, I::AbstractVector{Ti}, J::AbstractVector{Ti})
     m, n = size(A)
-    nnzA = nfilled(A)
+    nnzA = nnz(A)
     (nnzA == 0) && (return A)
 
     !issorted(I) && (I = I[sortperm(I)])
@@ -1348,7 +1349,7 @@ function setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixC
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
     colptrB = B.colptr; rowvalB = B.rowval; nzvalB = B.nzval
 
-    nnzS = nfilled(A) + nfilled(B)
+    nnzS = nnz(A) + nnz(B)
     colptrS = Array(Ti, n+1)
     rowvalS = Array(Ti, nnzS)
     nzvalS = Array(Tv, nnzS)
@@ -1466,7 +1467,7 @@ function vcat(X::SparseMatrixCSC...)
     Ti = promote_type(map(x->eltype(x.rowval), X)...)
 
     colptr = Array(Ti, n + 1)
-    nnzX = [ nfilled(x) for x in X ]
+    nnzX = [ nnz(x) for x in X ]
     nnz_res = sum(nnzX)
     rowval = Array(Ti, nnz_res)
     nzval = Array(Tv, nnz_res)
@@ -1504,7 +1505,7 @@ function hcat(X::SparseMatrixCSC...)
     Ti = promote_type(map(x->eltype(x.rowval), X)...)
 
     colptr = Array(Ti, n + 1)
-    nnzX = [ nfilled(x) for x in X ]
+    nnzX = [ nnz(x) for x in X ]
     nnz_res = sum(nnzX)
     rowval = Array(Ti, nnz_res)
     nzval = Array(Tv, nnz_res)
@@ -1545,7 +1546,7 @@ function blkdiag(X::SparseMatrixCSC...)
     Ti = promote_type(map(x->eltype(x.rowval), X)...)
 
     colptr = Array(Ti, n + 1)
-    nnzX = [ nfilled(x) for x in X ]
+    nnzX = [ nnz(x) for x in X ]
     nnz_res = sum(nnzX)
     rowval = Array(Ti, nnz_res)
     nzval = Array(Tv, nnz_res)
@@ -1718,7 +1719,7 @@ function diagm{Tv,Ti}(v::SparseMatrixCSC{Tv,Ti})
     end
 
     n = length(v)
-    numnz = nfilled(v)
+    numnz = nnz(v)
     colptr = Array(Ti, n+1)
     rowval = Array(Ti, numnz)
     nzval = Array(Tv, numnz)

@@ -149,6 +149,7 @@ end
 @test_approx_eq lbeta(-1/2, 3) log(16/3)
 
 # gamma, lgamma (complex argument)
+@test gamma(1:25) == gamma(Float64[1:25])
 @test_approx_eq gamma(1/2) sqrt(π)
 @test_approx_eq gamma(-1/2) -2sqrt(π)
 @test_approx_eq lgamma(-1/2) log(abs(gamma(-1/2)))
@@ -198,6 +199,8 @@ for elty in (Float32, Float64)
         @test abs(invdigamma(digamma(convert(elty, val))) - convert(elty, val)) < 1e-8
     end
 end
+
+@test_approx_eq polygamma(20, 7.) -4.644616027240543262561198814998587152547
 
 # eta, zeta
 @test_approx_eq eta(1) log(2)

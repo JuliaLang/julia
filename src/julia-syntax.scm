@@ -173,21 +173,30 @@
 		 e)
 	    (reverse a))))))
 
-(define (expand-update-operator- op lhs rhs)
+(define (expand-update-operator- op lhs rhs declT)
   (let ((e (remove-argument-side-effects lhs)))
     `(block ,@(cdr e)
-	    (= ,(car e) (call ,op ,(car e) ,rhs)))))
+	    ,(if (null? declT)
+		 `(= ,(car e) (call ,op ,(car e) ,rhs))
+		 `(= ,(car e) (call ,op (:: ,(car e) ,(car declT)) ,rhs))))))
 
-(define (expand-update-operator op lhs rhs)
-  (if (and (pair? lhs) (eq? (car lhs) 'ref))
-      ;; expand indexing inside op= first, to remove "end" and ":"
-      (let* ((ex (partially-expand-ref lhs))
-	     (stmts (butlast (cdr ex)))
-	     (refex (last    (cdr ex)))
-	     (nuref `(ref ,(caddr refex) ,@(cdddr refex))))
-	`(block ,@stmts
-		,(expand-update-operator- op nuref rhs)))
-      (expand-update-operator- op lhs rhs)))
+(define (expand-update-operator op lhs rhs . declT)
+  (cond ((and (pair? lhs) (eq? (car lhs) 'ref))
+	 ;; expand indexing inside op= first, to remove "end" and ":"
+	 (let* ((ex (partially-expand-ref lhs))
+		(stmts (butlast (cdr ex)))
+		(refex (last    (cdr ex)))
+		(nuref `(ref ,(caddr refex) ,@(cdddr refex))))
+	   `(block ,@stmts
+		   ,(expand-update-operator- op nuref rhs declT))))
+	((and (pair? lhs) (eq? (car lhs) '|::|))
+	 ;; (+= (:: x T) rhs)
+	 (let ((e (remove-argument-side-effects (cadr lhs)))
+	       (T (caddr lhs)))
+	   `(block ,@(cdr e)
+		   ,(expand-update-operator op (car e) rhs T))))
+	(else
+	 (expand-update-operator- op lhs rhs declT))))
 
 (define (dotop? o) (and (symbol? o) (eqv? (string.char (string o) 0) #\.)))
 
@@ -1324,7 +1333,7 @@
 	      ,.(map (lambda (x) `(,what ,x)) vars)
 	      ,.(reverse assigns)))
 	(let ((x (car b)))
-	  (cond ((and (pair? x) (memq (car x) assignment-ops))
+	  (cond ((assignment-like? x)
 		 (loop (cdr b)
 		       (cons (assigned-name (cadr x)) vars)
 		       (cons `(,(car x) ,(decl-var (cadr x)) ,(caddr x))
@@ -1593,9 +1602,10 @@
 		  (T (caddr (cadr e)))
 		  (rhs (caddr e)))
 	      (let ((e (remove-argument-side-effects x)))
-		`(block ,.(map expand-forms (cdr e))
-			(|::| ,(car e) ,(expand-forms T))
-			(= ,(car e) ,(expand-forms rhs))))))
+		(expand-forms
+		 `(block ,@(cdr e)
+			 (|::| ,(car e) ,T)
+			 (= ,(car e) ,rhs))))))
 
 	   ((vcat)
 	    ;; (= (vcat . args) rhs)
@@ -2335,7 +2345,9 @@
 		 (list* (if tail `(return ,(car r)) (car r))
 		 `(= ,LHS ,(car r))
 		 (cdr r))))
-		 ((effect-free? RHS)
+		 ((and (effect-free? RHS)
+		       ;; need temp var for `x::Int = x` (issue #6896)
+		       (not (eq? RHS (decl-var LHS))))
 		  (cond ((symbol? dest)  (list `(= ,LHS ,RHS)
 					       `(= ,dest ,RHS)))
 			(dest  (list (if tail `(return ,RHS) RHS)
@@ -3291,7 +3303,7 @@ So far only the second case can actually occur.
   (if (or (not (pair? e)) (quoted? e))
       '()
       (case (car e)
-	((escape let)  '())
+	((escape)  '())
 	((= function)
 	 (append! (filter
 		   (lambda (x) (and (pair? x) (eq? (car x) 'hygienic)))

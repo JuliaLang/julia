@@ -380,6 +380,17 @@ end
 export mmread
 
 # 0.3 deprecations
+
+function nfilled(X)
+    depwarn("nfilled has been renamed to nnz", :nfilled)
+    nnz(X)
+end
+export nfilled
+
+@deprecate nonzeros(A::StridedArray) A[find(A)]
+@deprecate nonzeros(B::BitArray) trues(countnz(B))
+@deprecate nnz(A::StridedArray) countnz(A)
+
 @deprecate dense  full
 
 export Stat
@@ -441,15 +452,15 @@ Set{T<:Number}(xs::T...) = Set{T}(xs)
 @deprecate infs(dims...)                 fill(Inf, dims)
 @deprecate infs{T}(x::AbstractArray{T})  fill(convert(T,Inf), size(x))
 
-@deprecate bitmix hash
+@deprecate bitmix(x, y::Uint)                 hash(x, y)
+@deprecate bitmix(x, y::Int)                  hash(x, uint(y))
+@deprecate bitmix(x, y::Union(Uint32, Int32)) convert(Uint32, hash(x, uint(y)))
+@deprecate bitmix(x, y::Union(Uint64, Int64)) convert(Uint64, hash(x, hash(y)))
+
+@deprecate readsfrom(cmd, args...)      open(cmd, "r", args...)
+@deprecate writesto(cmd, args...)      open(cmd, "w", args...)
 
 # 0.3 discontinued functions
-
-function nnz(X)
-    depwarn("nnz has been renamed to countnz and is no longer computed in constant time for sparse matrices. Instead, use nfilled() for the number of elements in a sparse matrix.", :nnz)
-    countnz(X)
-end
-export nnz
 
 scale!{T<:Base.LinAlg.BlasReal}(X::Array{T}, s::Complex) = error("scale!: Cannot scale a real array by a complex value in-place.  Use scale(X::Array{Real}, s::Complex) instead.")
 

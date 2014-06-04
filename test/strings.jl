@@ -965,3 +965,12 @@ let
     @test expand(sym) === sym
     @test parse("\udcdb = 1",1,raise=false)[1] == Expr(:error, "invalid character \"\udcdb\"")
 end
+
+# issue #6949
+let f =IOBuffer(),
+    x = split("1 2 3")
+    @test write(f, x) == 3
+    @test takebuf_string(f) == "123"
+    @test invoke(write, (IO, AbstractArray), f, x) == 3
+    @test takebuf_string(f) == "123"
+end

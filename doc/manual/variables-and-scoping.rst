@@ -167,6 +167,24 @@ inside the loop. However, in code not entered into the interactive
 prompt this declaration would be necessary in order to modify a global
 variable.
 
+Multiple variables can be declared global using the following syntax::
+
+    function foo()
+        global x=1, y="bar", z=3
+    end
+    
+    julia> foo()
+    3
+    
+    julia> x
+    1
+    
+    julia> y
+    "bar"
+    
+    julia> z
+    3
+
 The ``let`` statement provides a different way to introduce variables.
 Unlike assignments to local variables, ``let`` statements allocate new
 variable bindings each time they run. An assignment modifies an existing

@@ -363,8 +363,8 @@ static jl_value_t *intersect_union(jl_uniontype_t *a, jl_value_t *b,
     int eq0 = eqc->n, co0 = penv->n;
     jl_tuple_t *t = jl_alloc_tuple(jl_tuple_len(a->types));
     JL_GC_PUSH1(&t);
-    size_t i;
-    for(i=0; i < jl_tuple_len(t); i++) {
+    size_t i, l=jl_tuple_len(t);
+    for(i=0; i < l; i++) {
         int eq_l = eqc->n, co_l = penv->n;
         jl_value_t *ti = jl_type_intersect(jl_tupleref(a->types,i), b,
                                            penv, eqc, var);
@@ -507,6 +507,8 @@ static jl_value_t *intersect_tag(jl_datatype_t *a, jl_datatype_t *b,
             jl_value_t *bp = jl_tupleref(b->parameters,i);
             if (jl_is_typevar(ap)) {
                 if (var==invariant && jl_is_typevar(bp)) {
+                    if (((jl_tvar_t*)ap)->bound != ((jl_tvar_t*)bp)->bound)
+                        return (jl_value_t*)jl_bottom_type;
                     if ((is_unspec(a) && is_bnd((jl_tvar_t*)bp,penv)) ||
                         (is_bnd((jl_tvar_t*)ap,penv) && is_unspec(b))) {
                         // Foo{T} and Foo can never be equal since the former
@@ -655,7 +657,7 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
     if (jl_subtype(b, (jl_value_t*)a, 0)) {
         if (!a->bound) return b;
     }
-    else if (var==invariant && !jl_has_typevars_(b,1)) {
+    else if (var==invariant && !jl_has_typevars_(b,0)) {
         // for typevar a and non-typevar type b, b must be within a's bounds
         // in invariant contexts.
         return (jl_value_t*)jl_bottom_type;
@@ -675,7 +677,7 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
         }
     }
     else {
-        b = jl_type_intersect(a->ub, b, penv, eqc, var);
+        b = jl_type_intersect(a->ub, b, penv, eqc, covariant);
         if (b == jl_bottom_type)
             return b;
     }
@@ -1817,7 +1819,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
                                                    env, n, stack, 1);
         assert(jl_is_tuple(tw));
         JL_GC_PUSH1(&tw);
-        jl_value_t *res = (jl_value_t*)jl_new_uniontype(tw);
+        jl_value_t *res = (jl_value_t*)jl_type_union(tw);
         JL_GC_POP();
         return res;
     }
@@ -2264,14 +2266,14 @@ static int jl_tuple_morespecific_(jl_value_t **child, size_t cl,
                                   jl_value_t **parent, size_t pl, int invariant)
 {
     size_t ci=0, pi=0;
-    int mode = 0;
+    int some_morespecific = 0;
     while (1) {
         int cseq = (ci<cl) && jl_is_vararg_type(child[ci]);
         int pseq = (pi<pl) && jl_is_vararg_type(parent[pi]);
         if (ci >= cl)
-            return mode || pi>=pl || (pseq && !invariant);
+            return some_morespecific || pi>=pl || (pseq && !invariant);
         if (pi >= pl)
-            return mode;
+            return some_morespecific;
         jl_value_t *ce = child[ci];
         jl_value_t *pe = parent[pi];
         if (cseq) ce = jl_tparam0(ce);
@@ -2279,24 +2281,26 @@ static int jl_tuple_morespecific_(jl_value_t **child, size_t cl,
 
         if (!jl_type_morespecific_(ce, pe, invariant)) {
             if (type_eqv_(ce,pe)) {
-                if (ci==cl-1 && pi==pl-1 && !cseq && pseq) {
-                    return 1;
+                if (ci==cl-1 && pi==pl-1) {
+                    if (!cseq && pseq)
+                        return 1;
+                    if (!some_morespecific)
+                        return 0;
                 }
-                if (!mode) return 0;
             }
             else {
                 return 0;
             }
         }
 
-        if (mode && cseq && !pseq)
+        if (some_morespecific && cseq && !pseq)
             return 1;
 
         // at this point we know one element is strictly more specific
         if (!(jl_types_equal(ce,pe) ||
               (jl_is_typevar(pe) &&
                jl_types_equal(ce,((jl_tvar_t*)pe)->ub)))) {
-            mode = 1;
+            some_morespecific = 1;
             // here go into a different mode where we return 1
             // if the only reason the child is not more specific is
             // argument count (i.e. ...)

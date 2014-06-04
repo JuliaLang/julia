@@ -732,12 +732,10 @@ function splice!(B::BitVector, i::Integer)
     _deleteat!(B, i)
     return v
 end
-splice!(B::BitVector, i::Integer, ins::BitVector) = splice!(B, int(i):int(i), ins)
-splice!(B::BitVector, i::Integer, ins::AbstractVector{Bool}) = splice!(B, i, bitpack(ins))
 
 const _default_bit_splice = BitVector(0)
 
-function splice!(B::BitVector, r::UnitRange{Int}, ins::BitVector = _default_bit_splice)
+function splice!(B::BitVector, r::Union(UnitRange{Int}, Integer), ins::BitVector = _default_bit_splice)
     n = length(B)
     i_f = first(r)
     i_l = last(r)
@@ -775,7 +773,7 @@ function splice!(B::BitVector, r::UnitRange{Int}, ins::BitVector = _default_bit_
 
     return v
 end
-splice!(B::BitVector, r::UnitRange{Int}, ins::AbstractVector{Bool}) = splice!(B, r, bitpack(ins))
+splice!(B::BitVector, r::Union(UnitRange{Int}, Integer), ins::AbstractVector{Bool}) = splice!(B, r, bitpack(ins))
 
 function empty!(B::BitVector)
     ccall(:jl_array_del_end, Void, (Any, Uint), B.chunks, length(B.chunks))
@@ -1384,8 +1382,6 @@ function findnz(B::BitMatrix)
     I, J = findn(B)
     return I, J, trues(length(I))
 end
-
-nonzeros(B::BitArray) = trues(countnz(B))
 
 ## Reductions ##
 

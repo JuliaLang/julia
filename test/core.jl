@@ -1221,8 +1221,8 @@ end # module
 abstract IT4805{N, T}
 
 let
-    T = TypeVar(:T,Int)
-    N = TypeVar(:N)
+    T = TypeVar(:T,Int,true)
+    N = TypeVar(:N,true)
     @test typeintersect(Type{IT4805{1,T}}, Type{TypeVar(:_,IT4805{N,Int})}) != None
 end
 
@@ -1616,7 +1616,7 @@ end
 end
 
 let
-    z = A5876.@x()
+    local z = A5876.@x()
     @test z == 42
     @test f5876(Int) === Int
 end
@@ -1660,3 +1660,59 @@ function segfault6793(;gamma=1)
     nothing
 end
 @test segfault6793() === nothing
+
+# issue #6896
+g6896(x) = x::Int=x
+@test g6896(5.0) === 5.0
+f6896(x) = y::Int=x
+@test f6896(5.0) === 5.0
+
+# issue #6938
+module M6938
+macro mac()
+    quote
+        let
+            y = 0
+            y
+        end
+    end
+end
+end
+@test @M6938.mac() == 0
+
+# issue #7012
+let x = zeros(2)
+    x[1]::Float64 = 1
+    @test x == [1.0, 0.0]
+    @test_throws TypeError (x[1]::Int = 1)
+
+    x[1]::Float64 += 1
+    @test x == [2.0, 0.0]
+    @test_throws TypeError (x[1]::Int += 1)
+end
+
+# issue #6980
+abstract A6980
+type B6980 <: A6980 end
+f6980(::Union(Int, Float64), ::A6980) = false
+f6980(::Union(Int, Float64), ::B6980) = true
+@test f6980(1, B6980())
+
+# issue #7049
+typealias Maybe7049{T} Union(T,Nothing)
+function ttt7049(;init::Maybe7049{Union(String,(Int,Char))} = nothing)
+    string("init=", init)
+end
+@test ttt7049(init="a") == "init=a"
+
+# issue #7074
+let z{T<:Union(Float64,Complex{Float64},Float32,Complex{Float32})}(A::StridedMatrix{T}) = T,
+    S = zeros(Complex,2,2)
+    @test_throws MethodError z(S)
+end
+
+# issue #7062
+f7062{t,n}(::Type{Array{t}}  , ::Array{t,n}) = (t,n,1)
+f7062{t,n}(::Type{Array{t,n}}, ::Array{t,n}) = (t,n,2)
+@test f7062(Array{Int,1}, [1,2,3]) === (Int,1,2)
+@test f7062(Array{Int}  , [1,2,3]) === (Int,1,1)

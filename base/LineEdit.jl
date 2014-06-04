@@ -1,8 +1,8 @@
 module LineEdit
 
-using Base.Terminals
+using ..Terminals
 
-import Base.Terminals: raw!, width, height, cmove, getX,
+import ..Terminals: raw!, width, height, cmove, getX,
                        getY, clear_line, beep
 
 import Base: ensureroom, peek, show
@@ -29,10 +29,13 @@ end
 type Prompt <: TextInterface
     prompt
     first_prompt
-    prompt_color::ASCIIString
+    # A string or function to be printed before the prompt. May not change the length of the prompt.
+    # This may be used for changing the color, issuing other terminal escape codes, etc.
+    prompt_prefix
+    # Same as prefix except after the prompt
+    prompt_suffix
     keymap_func
     keymap_func_data
-    input_color
     complete
     on_enter
     on_done
@@ -602,10 +605,12 @@ default_enter_cb(_) = true
 
 write_prompt(terminal, s::PromptState) = write_prompt(terminal, s, s.p.prompt)
 function write_prompt(terminal, s::PromptState, prompt)
-    write(terminal, s.p.prompt_color)
+    prefix = isa(s.p.prompt_prefix,Function) ? s.p.prompt_prefix() : s.p.prompt_prefix
+    suffix = isa(s.p.prompt_suffix,Function) ? s.p.prompt_suffix() : s.p.prompt_suffix
+    write(terminal, prefix)
     write(terminal, prompt)
     write(terminal, Base.text_colors[:normal])
-    write(terminal, s.p.input_color)
+    write(terminal, suffix)
 end
 write_prompt(terminal, s::ASCIIString) = write(terminal, s)
 
@@ -1270,17 +1275,17 @@ const default_keymap_func = @LineEdit.keymap [LineEdit.default_keymap, LineEdit.
 
 function Prompt(prompt;
     first_prompt = prompt,
-    prompt_color = "",
+    prompt_prefix = "",
+    prompt_suffix = "",
     keymap_func = default_keymap_func,
     keymap_func_data = nothing,
-    input_color = "",
     complete = EmptyCompletionProvider(),
     on_enter = default_enter_cb,
     on_done = ()->nothing,
     hist = EmptyHistoryProvider())
 
-    Prompt(prompt, first_prompt, prompt_color, keymap_func, keymap_func_data,
-           input_color, complete, on_enter, on_done, hist)
+    Prompt(prompt, first_prompt, prompt_prefix, prompt_suffix, keymap_func, keymap_func_data,
+        complete, on_enter, on_done, hist)
 end
 
 run_interface(::Prompt) = nothing

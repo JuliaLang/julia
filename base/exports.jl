@@ -451,6 +451,7 @@ export
     widemul,
     zero,
     √,
+    ∛,
 
 # specfun
     airy,
@@ -536,7 +537,7 @@ export
     minimum,
     minmax,
     ndims,
-    nfilled,
+    nnz,
     nonzeros,
     nthperm!,
     nthperm,
@@ -1258,12 +1259,10 @@ export
     process_exited,
     process_running,
     readandwrite,
-    readsfrom,
     run,
     setenv,
     spawn,
     success,
-    writesto,
 
 # C interface
     c_free,

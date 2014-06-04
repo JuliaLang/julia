@@ -12,6 +12,7 @@ eltype{T,n}(::AbstractArray{T,n}) = T
 eltype{T,n}(::Type{AbstractArray{T,n}}) = T
 eltype{T<:AbstractArray}(::Type{T}) = eltype(super(T))
 iseltype(x,T) = eltype(x) <: T
+elsize{T}(::AbstractArray{T}) = sizeof(T)
 isinteger(x::AbstractArray) = all(isinteger,x)
 isinteger{T<:Integer,n}(x::AbstractArray{T,n}) = true
 isreal(x::AbstractArray) = all(isreal,x)
@@ -19,7 +20,6 @@ isreal{T<:Real,n}(x::AbstractArray{T,n}) = true
 ndims{T,n}(::AbstractArray{T,n}) = n
 ndims{T,n}(::Type{AbstractArray{T,n}}) = n
 ndims{T<:AbstractArray}(::Type{T}) = ndims(super(T))
-nfilled(t::AbstractArray) = length(t)
 length(t::AbstractArray) = prod(size(t))::Int
 endof(a::AbstractArray) = length(a)
 first(a::AbstractArray) = a[1]
@@ -315,8 +315,8 @@ end
 float{T<:FloatingPoint}(x::AbstractArray{T}) = x
 complex{T<:Complex}(x::AbstractArray{T}) = x
 
-float{T,N}(x::AbstractArray{T,N}) = convert(AbstractArray{typeof(float(one(T))),N},x)
-complex{T,N}(x::AbstractArray{T,N}) = convert(AbstractArray{typeof(complex(one(T))),N}, x)
+float(A::AbstractArray)   = map_promote(x->convert(FloatingPoint,x), A)
+complex(A::AbstractArray) = map_promote(x->convert(Complex,x), A)
 
 full(x::AbstractArray) = x
 
@@ -783,8 +783,11 @@ function hvcat{T<:Number}(rows::(Int...), xs::T...)
     nc = rows[1]
 
     a = Array(T, nr, nc)
+    if length(a) != length(xs)
+        error("argument count does not match specified shape")
+    end
     k = 1
-    for i=1:nr
+    @inbounds for i=1:nr
         if nc != rows[i]
             error("row ", i, " has mismatched number of columns")
         end
@@ -800,7 +803,7 @@ function hvcat_fill(a, xs)
     k = 1
     nr, nc = size(a,1), size(a,2)
     for i=1:nr
-        for j=1:nc
+        @inbounds for j=1:nc
             a[i,j] = xs[k]
             k += 1
         end
@@ -820,6 +823,9 @@ function hvcat(rows::(Int...), xs::Number...)
     T = typeof(xs[1])
     for i=2:length(xs)
         T = promote_type(T,typeof(xs[i]))
+    end
+    if nr*nc != length(xs)
+        error("argument count does not match specified shape")
     end
     hvcat_fill(Array(T, nr, nc), xs)
 end
@@ -1251,11 +1257,53 @@ function mapslices(f::Function, A::AbstractArray, dims::AbstractVector)
 end
 
 
-## 1 argument
-function map_to!(f::Callable, first, dest::AbstractArray, A::AbstractArray)
+# using promote_type
+function promote_to!{T}(f::Callable, offs, dest::AbstractArray{T}, A::AbstractArray)
+    # map to dest array, checking the type of each result. if a result does not
+    # match, do a type promotion and re-dispatch.
+    @inbounds for i = offs:length(A)
+        el = f(A[i])
+        S = typeof(el)
+        if S === T || S <: T
+            dest[i] = el::T
+        else
+            R = promote_type(T, S)
+            if R !== T
+                new = similar(dest, R)
+                copy!(new,1, dest,1, i-1)
+                new[i] = el
+                return promote_to!(f, i+1, new, A)
+            end
+            dest[i] = el
+        end
+    end
+    return dest
+end
+
+function map_promote(f::Callable, A::AbstractArray)
+    if isempty(A); return similar(A, None); end
+    first = f(A[1])
+    dest = similar(A, typeof(first))
     dest[1] = first
-    for i=2:length(A)
-        dest[i] = f(A[i])
+    return promote_to!(f, 2, dest, A)
+end
+
+## 1 argument
+function map_to!{T}(f::Callable, offs, dest::AbstractArray{T}, A::AbstractArray)
+    # map to dest array, checking the type of each result. if a result does not
+    # match, widen the result type and re-dispatch.
+    @inbounds for i = offs:length(A)
+        el = f(A[i])
+        S = typeof(el)
+        if S === T || S <: T
+            dest[i] = el::T
+        else
+            R = typejoin(T, S)
+            new = similar(dest, R)
+            copy!(new,1, dest,1, i-1)
+            new[i] = el
+            return map_to!(f, i+1, new, A)
+        end
     end
     return dest
 end
@@ -1264,14 +1312,23 @@ function map(f::Callable, A::AbstractArray)
     if isempty(A); return similar(A); end
     first = f(A[1])
     dest = similar(A, typeof(first))
-    return map_to!(f, first, dest, A)
+    dest[1] = first
+    return map_to!(f, 2, dest, A)
 end
 
 ## 2 argument
-function map_to!(f::Callable, first, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
-    dest[1] = first
-    for i=2:length(A)
-        dest[i] = f(A[i], B[i])
+function map_to!{T}(f::Callable, offs, dest::AbstractArray{T}, A::AbstractArray, B::AbstractArray)
+    @inbounds for i = offs:length(A)
+        el = f(A[i], B[i])
+        S = typeof(el)
+        if (S !== T) && !(S <: T)
+            R = typejoin(T, S)
+            new = similar(dest, R)
+            copy!(new,1, dest,1, i-1)
+            new[i] = el
+            return map_to!(f, i+1, new, A, B)
+        end
+        dest[i] = el::T
     end
     return dest
 end
@@ -1283,17 +1340,25 @@ function map(f::Callable, A::AbstractArray, B::AbstractArray)
     end
     first = f(A[1], B[1])
     dest = similar(A, typeof(first), shp)
-    return map_to!(f, first, dest, A, B)
+    dest[1] = first
+    return map_to!(f, 2, dest, A, B)
 end
 
 ## N argument
-function map_to!(f::Callable, first, dest::AbstractArray, As::AbstractArray...)
-    n = length(As[1])
-    i = 1
+function map_to!{T}(f::Callable, offs, dest::AbstractArray{T}, As::AbstractArray...)
+    local i
     ith = a->a[i]
-    dest[1] = first
-    for i=2:n
-        dest[i] = f(map(ith, As)...)
+    @inbounds for i = offs:length(As[1])
+        el = f(map(ith, As)...)
+        S = typeof(el)
+        if (S !== T) && !(S <: T)
+            R = typejoin(T, S)
+            new = similar(dest, R)
+            copy!(new,1, dest,1, i-1)
+            new[i] = el
+            return map_to!(f, i+1, new, As...)
+        end
+        dest[i] = el::T
     end
     return dest
 end
@@ -1301,11 +1366,12 @@ end
 function map(f::Callable, As::AbstractArray...)
     shape = mapreduce(size, promote_shape, As)
     if prod(shape) == 0
-        return similar(As[1], Any, shape)
+        return similar(As[1], promote_eltype(As...), shape)
     end
     first = f(map(a->a[1], As)...)
     dest = similar(As[1], typeof(first), shape)
-    return map_to!(f, first, dest, As...)
+    dest[1] = first
+    return map_to!(f, 2, dest, As...)
 end
 
 # multi-item push!, unshift! (built on top of type-specific 1-item version)

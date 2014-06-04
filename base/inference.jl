@@ -460,7 +460,7 @@ const apply_type_tfunc = function (A, args...)
     if type_too_complex(appl,0)
         return Type{TypeVar(:_,headtype)}
     end
-    uncertain ? Type{TypeVar(:_,appl)} : Type{appl}
+    uncertain && !isa(appl,TypeVar) ? Type{TypeVar(:_,appl)} : Type{appl}
 end
 t_func[apply_type] = (1, Inf, apply_type_tfunc)
 
@@ -934,6 +934,10 @@ function abstract_eval(e::ANY, vtypes, sv::StaticVarInfo)
         t0 = abstract_eval(e.args[1], vtypes, sv)
         # intersect with Any to remove Undef
         t = typeintersect(t0, Any)
+        if isa(t,DataType) && typeseq(t,t.name.primary)
+            # remove unnecessary typevars
+            t = t.name.primary
+        end
         if is(t,None) && Undef<:t0
             # the first time we see this statement the variable will probably
             # be Undef; return None so this doesn't contribute to the type
@@ -1185,7 +1189,7 @@ end
 genlabel(sv) = LabelNode(sv.label_counter += 1)
 
 f_argnames(ast) =
-    map(x->(isa(x,Expr) ? x.args[1] : x), ast.args[1]::Array{Any,1})
+    Any[(isa(x,Expr) ? x.args[1] : x) for x in ast.args[1]::Array{Any,1}]
 
 is_rest_arg(arg::ANY) = (ccall(:jl_is_rest_arg,Int32,(Any,), arg) != 0)
 
@@ -2193,7 +2197,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
         end
         free = effect_free(aei,sv,true)
         if ((occ==0 && is(aeitype,None)) || islocal || (occ > 1 && !inline_worthy(aei, occ)) ||
-                (affect_free && !free) || (!affect_free && !effect_free(aei,sv,false)))
+            (affect_free && !free) || (!affect_free && !effect_free(aei,sv,false)))
             if occ != 0 # islocal=true is implied
                 # introduce variable for this argument
                 vnew = unique_name(enclosing_ast, ast)
@@ -2317,7 +2321,7 @@ end
 
 function mk_tuplecall(args)
     e = Expr(:call1, top_tuple, args...)
-    e.typ = tuple_tfunc(tuple(map(exprtype, args)...), false)
+    e.typ = tuple_tfunc(tuple(Any[exprtype(x) for x in args]...), false)
     e
 end
 
@@ -2437,7 +2441,7 @@ function inlining_pass(e::Expr, sv, ast)
         end
 
         for ninline = 1:100
-            atypes = tuple(map(exprtype, e.args[2:end])...)
+            atypes = tuple(Any[exprtype(x) for x in e.args[2:end]]...)
             if length(atypes) > MAX_TUPLETYPE_LEN
                 atypes = limit_tuple_type(atypes)
             end
