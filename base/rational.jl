@@ -27,6 +27,10 @@ function //(x::Complex, y::Complex)
     complex(real(xy)//yy, imag(xy)//yy)
 end
 
+//(X::AbstractArray, y::Number) = X .// y
+.//(X::AbstractArray, y::Number) = reshape([ x // y for x in X ], size(X))
+.//(y::Number, X::AbstractArray) = reshape([ y // x for x in X ], size(X))
+
 function show(io::IO, x::Rational)
     if isinf(x)
         print(io, x.num > 0 ? "Inf" : "-Inf")
