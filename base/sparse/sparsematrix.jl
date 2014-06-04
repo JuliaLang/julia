@@ -712,31 +712,40 @@ prod{T}(A::SparseMatrixCSC{T}, region) = reducedim(*,A,region,one(T))
 #sum(A::SparseMatrixCSC{Bool}) = countnz(A)
 
 ## getindex
-getindex(A::SparseMatrixCSC, i::Integer) = getindex(A, ind2sub(size(A),i)...)
+function binarysearch(haystack::AbstractVector, needle, lo::Int, hi::Int)
+    # Finds the first occurrence of needle in haystack[lo:hi]
+    lo = lo-1
+    hi2 = hi
+    hi = hi+1
+    @inbounds while lo < hi-1
+        m = (lo+hi)>>>1
+        if haystack[m] < needle
+            lo = m
+        else
+            hi = m
+        end
+    end
+    (hi==hi2+1 || haystack[hi]!=needle) ? -1 : hi
+end
+function rangesearch(haystack::Range, needle)
+    (i,rem) = divrem(needle - first(haystack), step(haystack))
+    (rem==0 && 1<=i+1<=length(haystack)) ? i+1 : -1
+end
+
+getindex(A::SparseMatrixCSC, i::Integer) = getindex(A, ind2sub(size(A),i))
+getindex(A::SparseMatrixCSC, I::(Integer,Integer)) = getindex(A, I[1], I[2])
 
 function getindex{T}(A::SparseMatrixCSC{T}, i0::Integer, i1::Integer)
     if !(1 <= i0 <= A.m && 1 <= i1 <= A.n); throw(BoundsError()); end
-    first = A.colptr[i1]
-    last = A.colptr[i1+1]-1
-    while first <= last
-        mid = (first + last) >> 1
-        t = A.rowval[mid]
-        if t == i0
-            return A.nzval[mid]
-        elseif t > i0
-            last = mid - 1
-        else
-            first = mid + 1
-        end
-    end
-    return zero(T)
+    ind = binarysearch(A.rowval, i0, A.colptr[i1], A.colptr[i1+1]-1)
+    ind > -1 ? A.nzval[ind] : zero(T)
 end
 
 getindex{T<:Integer}(A::SparseMatrixCSC, I::AbstractVector{T}, j::Integer) = getindex(A,I,[j])
 getindex{T<:Integer}(A::SparseMatrixCSC, i::Integer, J::AbstractVector{T}) = getindex(A,[i],J)
 
 function getindex_cols{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, J::AbstractVector)
-
+    # for indexing whole columns
     (m, n) = size(A)
     nJ = length(J)
 
@@ -758,35 +767,26 @@ function getindex_cols{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, J::AbstractVector)
 
     for j = 1:nJ
         col = J[j]
-
         for k = colptrA[col]:colptrA[col+1]-1
             ptrS += 1
             rowvalS[ptrS] = rowvalA[k]
             nzvalS[ptrS] = nzvalA[k]
         end
     end
-
     return SparseMatrixCSC(m, nJ, colptrS, rowvalS, nzvalS)
-
 end
 
-# TODO: See if growing arrays is faster than pre-computing structure
-# and then populating nonzeros
-# TODO: Use binary search in cases where nI >> nnz(A[:,j]) or nI << nnz(A[:,j])
-function getindex_I_sorted{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector)
-
+function getindex{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv,Ti}, I::Range, J::AbstractVector)
+    # Ranges for indexing rows
     (m, n) = size(A)
+    # whole columns:
+    if I == 1:m
+        return getindex_cols(A, J)
+    end
+
     nI = length(I)
     nJ = length(J)
-
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
-
-    I_ref = falses(m)
-    I_ref[I] = true
-
-    I_repeat = zeros(Int, m)
-    for i=1:nI; I_repeat[I[i]] += 1; end
-
     colptrS = Array(Ti, nJ+1)
     colptrS[1] = 1
     nnzS = 0
@@ -794,16 +794,8 @@ function getindex_I_sorted{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, 
     # Form the structure of the result and compute space
     for j = 1:nJ
         col = J[j]
-
-        for k = colptrA[col]:colptrA[col+1]-1
-            rowA = rowvalA[k]
-            
-            if I_ref[rowA]
-                for r = 1:I_repeat[rowA]
-                    nnzS += 1
-                end
-            end
-
+        for k in colptrA[col]:colptrA[col+1]-1
+            if rowvalA[k] in I; nnzS += 1 end # `in` is fast for ranges
         end
         colptrS[j+1] = nnzS+1
     end
@@ -813,41 +805,30 @@ function getindex_I_sorted{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, 
     nzvalS  = Array(Tv, nnzS)
     ptrS    = 1
 
-    fI = zeros(Ti, m)
-    for k=1:nI
-        Ik = I[k]
-        if fI[Ik] == 0; fI[Ik] = k; end
-    end
-
     for j = 1:nJ
         col = J[j]
-
         for k = colptrA[col]:colptrA[col+1]-1
             rowA = rowvalA[k]
-            
-            if I_ref[rowA]
-                for r = 1:I_repeat[rowA]
-                    rowvalS[ptrS] = fI[rowA] + r - 1
-                    nzvalS[ptrS] = nzvalA[k]
-                    ptrS += 1
-                end
+            i = rangesearch(I, rowA)
+            if i > -1
+                rowvalS[ptrS] = i
+                nzvalS[ptrS] = nzvalA[k]
+                ptrS += 1
             end
-
         end
     end
 
     return SparseMatrixCSC(nI, nJ, colptrS, rowvalS, nzvalS)
 end
 
-# getindex_I_sorted based on merging of sorted lists
-function getindex_I_sorted_old{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::AbstractVector)
-
+function getindex_I_sorted{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector)
+    # Sorted vectors for indexing rows.
+    # Similar to getindex_general but without the transpose trick.
     (m, n) = size(A)
     nI = length(I)
     nJ = length(J)
 
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
-
     colptrS = Array(Ti, nJ+1)
     colptrS[1] = 1
     nnzS = 0
@@ -855,12 +836,9 @@ function getindex_I_sorted_old{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::A
     # Form the structure of the result and compute space
     for j = 1:nJ
         col = J[j]
-
-        ptrI::Int = 1
-
+        ptrI::Int = 1 # runs through I
         ptrA::Int = colptrA[col]
         stopA::Int = colptrA[col+1]
-
         while ptrI <= nI && ptrA < stopA
             rowA = rowvalA[ptrA]
             rowI = I[ptrI]
@@ -874,22 +852,17 @@ function getindex_I_sorted_old{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::A
                 ptrI += 1
             end
         end
-        colptrS[j+1] = nnzS+1
-
+        colptrS[j+1] = nnzS+1        
     end
-
-    fI = find(I)
 
     # Populate the values in the result
     rowvalS = Array(Ti, nnzS)
     nzvalS  = Array(Tv, nnzS)
-    ptrS = 0
+    ptrS    = 1
 
     for j = 1:nJ
         col = J[j]
-
-        ptrI::Int = 1
-
+        ptrI::Int = 1 # runs through I
         ptrA::Int = colptrA[col]
         stopA::Int = colptrA[col+1]
 
@@ -902,30 +875,27 @@ function getindex_I_sorted_old{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::A
             elseif rowI < rowA
                 ptrI += 1
             else
-                ptrS += 1
-                rowvalS[ptrS] = fI[ptrI]
+                rowvalS[ptrS] = ptrI
                 nzvalS[ptrS] = nzvalA[ptrA]
+                ptrS += 1
                 ptrI += 1
             end
         end
-
     end
-
     return SparseMatrixCSC(nI, nJ, colptrS, rowvalS, nzvalS)
 end
 
-function getindex_general{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::AbstractVector)
+function getindex_general{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector)
+    # Anything for indexing rows.
+    # This sorts I first then does some trick with constructing the transpose.
     (m, n) = size(A)
     nI = length(I)
     nJ = length(J)
 
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
-
     nnzS = 0
-
     pI = sortperm(I); I = I[pI]
     fI = find(I)
-
     W = zeros(Int, nI + 1) # Keep row counts
     W[1] = 1               # For cumsum later
 
@@ -993,36 +963,24 @@ function getindex_general{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Vector, J::Abstra
     # Transpose so that rows are in sorted order and return
     S_T = SparseMatrixCSC(nJ, nI, colptrS_T, rowvalS_T, nzvalS_T)
     return S_T.'
-
 end
 
-# S = A[I, J]
+
+# the general case:
 function getindex{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector)
-    m = size(A, 1)
-    if isa(I, Range) 
-        if I == 1:m # whole columns
-            return getindex_cols(A, J)
-        else # ranges are always sorted, but maybe in reverse
-            if step(I)>0
-                return getindex_I_sorted(A, I, J)
-            else 
-                I = [I]
-                return getindex_general(A, I, J)
-                # todo:
-                # return reverse(getindex_I_sorted(A, reverse(I), J))
-            end
-        end
-    else    
-        if issorted(I)
-            return getindex_I_sorted(A, I, J)
-        else
-            return getindex_general(A, I, J)
-        end
+    loop_overI_threshold = 0 # ~40 but doesn't matter much. 
+    if issorted(I)
+        return getindex_I_sorted(A, I, J)
+    else
+        return getindex_general(A, I, J)
     end
 end
 
 # logical getindex
+getindex{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv,Ti}, I::Range{Bool}, J::AbstractVector{Bool}) = error("Cannot index with Range{Bool}")
+getindex{Tv,Ti<:Integer,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, I::Range{Bool}, J::AbstractVector{T}) = error("Cannot index with Range{Bool}")
 
+getindex{T<:Integer}(A::SparseMatrixCSC, I::Range{T}, J::AbstractVector{Bool}) = A[I,find(J)]
 getindex(A::SparseMatrixCSC, I::Integer, J::AbstractVector{Bool}) = A[I,find(J)]
 getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::Integer) = A[find(I),J]
 getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = A[find(I),find(J)]
