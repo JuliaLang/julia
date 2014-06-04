@@ -132,60 +132,43 @@ function check_reducdims(R, A)
     return lsiz
 end
 
-function mapreducedim!_func(N::Int)
-    @eval begin
-        local _F_
-        function _F_(f, op, R, A)
-            lsiz = check_reducdims(R, A)
-            isempty(A) && return R
-            @nextract $N sizeR d->size(R,d)
-            sizA1 = size(A, 1)
+function mapreducedim_body(N::Int)
+    quote
+        lsiz = check_reducdims(R, A)
+        isempty(A) && return R
+        @nextract $N sizeR d->size(R,d)
+        sizA1 = size(A, 1)
 
-            if has_fast_linear_indexing(A) && lsiz > 16
-                # use mapreduce_impl, which is probably better tuned to achieve higher performance
-                nslices = div(length(A), lsiz)
-                ibase = 0
-                for i = 1:nslices
-                    @inbounds R[i] = mapreduce_impl(f, op, A, ibase+1, ibase+lsiz)
-                    ibase += lsiz
-                end
-            elseif size(R, 1) == 1 && sizA1 > 1
-                # keep the accumulator as a local variable when reducing along the first dimension
-                @nloops $N i d->(d>1? (1:size(A,d)) : (1:1)) d->(j_d = sizeR_d==1 ? 1 : i_d) begin
-                    @inbounds r = (@nref $N R j)
-                    for i_1 = 1:sizA1
-                        @inbounds v = evaluate(f, (@nref $N A i))
-                        r = evaluate(op, r, v)
-                    end
-                    @inbounds (@nref $N R j) = r
-                end 
-            else
-                # general implementation
-                @nloops $N i A d->(j_d = sizeR_d==1 ? 1 : i_d) begin
-                    @inbounds v = evaluate(f, (@nref $N A i))
-                    @inbounds (@nref $N R j) = evaluate(op, (@nref $N R j), v)
-                end
+        if has_fast_linear_indexing(A) && lsiz > 16
+            # use mapreduce_impl, which is probably better tuned to achieve higher performance
+            nslices = div(length(A), lsiz)
+            ibase = 0
+            for i = 1:nslices
+                @inbounds R[i] = mapreduce_impl(f, op, A, ibase+1, ibase+lsiz)
+                ibase += lsiz
             end
-            return R
+        elseif size(R, 1) == 1 && sizA1 > 1
+            # keep the accumulator as a local variable when reducing along the first dimension
+            @nloops $N i d->(d>1? (1:size(A,d)) : (1:1)) d->(j_d = sizeR_d==1 ? 1 : i_d) begin
+                @inbounds r = (@nref $N R j)
+                for i_1 = 1:sizA1
+                    @inbounds v = evaluate(f, (@nref $N A i))
+                    r = evaluate(op, r, v)
+                end
+                @inbounds (@nref $N R j) = r
+            end 
+        else
+            # general implementation
+            @nloops $N i A d->(j_d = sizeR_d==1 ? 1 : i_d) begin
+                @inbounds v = evaluate(f, (@nref $N A i))
+                @inbounds (@nref $N R j) = evaluate(op, (@nref $N R j), v)
+            end
         end
-        _F_
-    end  # @eval
-end
-
-let mapreducedim_fcache = (Int=>Function)[]
-global _mapreducedim!
-function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
-    isempty(R) && return R
-    ndimsA = ndims(A)
-    if !haskey(mapreducedim_fcache, ndimsA)
-        func! = mapreducedim!_func(ndimsA)
-        mapreducedim_fcache[ndimsA] = func!
-    else
-        func! = mapreducedim_fcache[ndimsA]
+        return R        
     end
-    func!(f, op, R, A)::typeof(R)
 end
-end # let mapreducedim_fcache
+eval(ngenerate(:N, :(typeof(R)), 
+    :(_mapreducedim!{T,N}(f, op, R::AbstractArray, A::AbstractArray{T,N})), mapreducedim_body))
 
 mapreducedim!(f, op, R::AbstractArray, A::AbstractArray) = _mapreducedim!(f, op, R, A)
 
