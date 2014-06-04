@@ -95,6 +95,21 @@ reducedim_init{T}(f::Union(AbsFun,Abs2Fun), op::MaxFun, A::AbstractArray{T}, reg
 reducedim_init(f, op::AndFun, A::AbstractArray, region) = reducedim_initarray(A, region, true)
 reducedim_init(f, op::OrFun, A::AbstractArray, region) = reducedim_initarray(A, region, false)
 
+# specialize to make initialization more efficient for common cases
+
+typealias CommonReduceResult Union(Uint64,Uint128,Int64,Int128,Float32,Float64,Complex64,Complex128)
+
+for (IT, RT) in ((:CommonReduceResult, :T), (:SmallSigned, :Int), (:SmallUnsigned, :Uint))
+    @eval begin
+        reducedim_init{T<:$IT}(f::Union(IdFun,AbsFun,Abs2Fun), op::AddFun, A::AbstractArray{T}, region) = 
+            reducedim_initarray(A, region, zero($RT))
+        reducedim_init{T<:$IT}(f::Union(IdFun,AbsFun,Abs2Fun), op::MulFun, A::AbstractArray{T}, region) = 
+            reducedim_initarray(A, region, one($RT))
+    end    
+end
+reducedim_init(f::Union(IdFun,AbsFun,Abs2Fun), op::AddFun, A::AbstractArray{Bool}, region) = 
+    reducedim_initarray(A, region, 0)
+
 
 ## generic (map)reduction
 
