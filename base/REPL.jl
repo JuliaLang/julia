@@ -264,13 +264,17 @@ REPLHistoryProvider(mode_mapping) =
     REPLHistoryProvider(String[], nothing, 0, -1, IOBuffer(),
                         nothing, mode_mapping, Uint8[])
 
+const invalid_history_message = """
+Invalid history format. If you have a ~/.julia_history file left over from an older version of Julia, try renaming or deleting it.
+"""
+
 function hist_from_file(hp, file)
     hp.history_file = file
     seek(file, 0)
     while !eof(file)
         mode = :julia
         line = utf8(readline(file))
-        line[1] == '#' || error("invalid history entry")
+        line[1] == '#' || error(invalid_history_message)
         while true
             m = match(r"^#\s*(\w+)\s*:\s*(.*?)\s*$", line)
             m == nothing && break
@@ -279,7 +283,7 @@ function hist_from_file(hp, file)
             end
             line = utf8(readline(file))
         end
-        line[1] == '\t' || error("invalid history entry")
+        line[1] == '\t' || error(invalid_history_message)
         lines = UTF8String[]
         while true
             push!(lines, chomp(line[2:end]))
