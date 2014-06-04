@@ -135,7 +135,7 @@ mapreduce_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int) =
     mapreduce_seq_impl(f, op, A, ifirst, ilast)
 
 # handling empty arrays
-mr_empty(f, op, T) = error("Reducing over an empty array is not allow.")
+mr_empty(f, op, T) = error("Reducing over an empty array is not allowed.")
 mr_empty(::IdFun, op::AddFun, T) = r_promote(op, zero(T))
 mr_empty(::AbsFun, op::AddFun, T) = r_promote(op, abs(zero(T)))
 mr_empty(::Abs2Fun, op::AddFun, T) = r_promote(op, abs2(zero(T)))
