@@ -300,6 +300,13 @@ can be called via the following Julia code::
     argv = [ "a.out", "arg1", "arg2" ]
     ccall(:main, Int32, (Int32, Ptr{Ptr{Uint8}}), length(argv), argv)
 
+For ``wchar_t*`` arguments, the Julia type should be ``Ptr{Wchar_t}``,
+and data can be converted to/from ordinary Julia strings by the
+``wstring(s)`` function (equivalent to either ``utf16(s)`` or ``utf32(s)``
+depending upon the width of ``Cwchar_t``.    Note also that ASCII, UTF-8,
+UTF-16, and UTF-32 string data in Julia is internally NUL-terminated, so
+it can be passed to C functions expecting NUL-terminated data without making
+a copy.
 
 Accessing Data through a Pointer
 --------------------------------

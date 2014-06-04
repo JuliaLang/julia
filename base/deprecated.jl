@@ -398,6 +398,8 @@ const Stat = StatStruct
 
 export CharString
 const CharString = UTF32String
+@deprecate UTF32String(c::Integer...) utf32(c...)
+@deprecate UTF32String(s::String) utf32(s)
 
 export Ranges
 const Ranges = Range
