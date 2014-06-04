@@ -232,18 +232,18 @@ end
     # interpret the number
     prefix = ""
     if lowercase(c)=='o'
-	push!(blk.args, '#' in flags ? :(decode_0ct($x)) : :(decode_oct($x)))
+	fn = '#' in flags ? quote decode_0ct end : quote decode_oct end
     elseif c=='x'
         '#' in flags && (prefix = "0x")
-        fn = :decode_hex
+        fn = quote decode_hex end
     elseif c=='X'
         '#' in flags && (prefix = "0X")
-        fn = :decode_HEX
+        fn = quote decode_HEX end
     else
-        fn = :decode_dec
+        fn = quote decode_dec end
     end
     push!(blk.args, :((do_out, args) = $fn(out, $x, $flags, $width, $precision, $c)))
-    ifblk = Expr(:if, :do_out, Expr(:block))
+    ifblk = Expr(:if, quote do_out end, Expr(:block))
     push!(blk.args, ifblk)
     blk = ifblk.args[2]
     push!(blk.args, :((len, pt, neg) = args))
@@ -310,7 +310,7 @@ end
     # interpret the number
     if precision < 0; precision = 6; end
     push!(blk.args, :((do_out, args) = fix_dec(out, $x, $flags, $width, $precision, $c)))
-    ifblk = Expr(:if, :do_out, Expr(:block))
+    ifblk = Expr(:if, quote do_out end, Expr(:block))
     push!(blk.args, ifblk)
     blk = ifblk.args[2]
     push!(blk.args, :((len, pt, neg) = args))
@@ -374,7 +374,7 @@ end
     if precision < 0; precision = 6; end
     ndigits = min(precision+1,BUFLEN-1)
     push!(blk.args, :((do_out, args) = ini_dec(out,$x,$ndigits, $flags, $width, $precision, $c)))
-    ifblk = Expr(:if, :do_out, Expr(:block))
+    ifblk = Expr(:if, quote do_out end, Expr(:block))
     push!(blk.args, ifblk)
     blk = ifblk.args[2]
     push!(blk.args, :((len, pt, neg) = args))
@@ -830,7 +830,7 @@ end
 macro printf(args...)
     !isempty(args) || error("@printf: called with zero arguments")
     if isa(args[1], String) || is_str_expr(args[1])
-        _printf("@printf", :STDOUT, args[1], args[2:end])
+        _printf("@printf", quote STDOUT end, args[1], args[2:end])
     else
         (length(args) >= 2 && (isa(args[2], String) || is_str_expr(args[2]))) ||
             error("@printf: first or second argument must be a format string")
