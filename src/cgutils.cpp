@@ -240,7 +240,7 @@ static void jl_gen_llvm_gv_array()
             ConstantInt::get(T_size,globalUnique+1),
             "jl_globalUnique");
 
-    Constant *feature_string = ConstantDataArray::getString(jl_LLVMContext, jl_cpu_string);
+    Constant *feature_string = ConstantDataArray::getString(jl_LLVMContext, jl_compileropts.cpu_target);
     new GlobalVariable(*jl_Module,
                        feature_string->getType(),
                        true,
@@ -249,7 +249,7 @@ static void jl_gen_llvm_gv_array()
                        "jl_sysimg_cpu_target");
 
     // For native also store the cpuid
-    if (strcmp(jl_cpu_string,"native") == 0) {
+    if (strcmp(jl_compileropts.cpu_target, "native") == 0) {
         uint32_t info[4];
 
         jl_cpuid((int32_t*)info, 1);

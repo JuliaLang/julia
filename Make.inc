@@ -266,17 +266,6 @@ LD := link
 endif
 RANLIB := $(CROSS_COMPILE)ranlib
 
-ifeq ($(JULIA_CPU_TARGET),native)
-  JCPPFLAGS += -DJULIA_TARGET_NATIVE
-else ifeq ($(JULIA_CPU_TARGET),core2)
-  JCPPFLAGS += -DJULIA_TARGET_CORE2
-else ifeq ($(JULIA_CPU_TARGET),i386)
-  JCPPFLAGS += -DJULIA_TARGET_I386
-else
-  $(error Unknown cpu target architecture)
-endif
-
-
 # Calculate relative paths to libdir and private_libdir
 build_libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(build_bindir) $(build_libdir))
 libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(libdir))

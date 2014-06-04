@@ -59,11 +59,12 @@ static const char *opts =
     " -q, --quiet              Quiet startup without banner\n"
     " -H, --home <dir>         Set location of julia executable\n\n"
 
-    " -e, --eval <expr>        Evaluate <expr>\n"
-    " -E, --print <expr>       Evaluate and show <expr>\n"
-    " -P, --post-boot <expr>   Evaluate <expr> right after boot\n"
-    " -L, --load <file>        Load <file> right after boot on all processors\n"
-    " -J, --sysimage <file>    Start up with the given system image file\n\n"
+    " -e --eval <expr>         Evaluate <expr>\n"
+    " -E --print <expr>        Evaluate and show <expr>\n"
+    " -P --post-boot <expr>    Evaluate <expr> right after boot\n"
+    " -L --load <file>         Load <file> right after boot on all processors\n"
+    " -J --sysimage <file>     Start up with the given system image file\n"
+    " -C --cpu-target <target> Limit usage of cpu features up to <target>\n\n"
 
     " -p <n>                   Run n local processes\n"
     " --machinefile <file>     Run processes on hosts listed in <file>\n\n"
@@ -80,7 +81,7 @@ static const char *opts =
 
 void parse_opts(int *argcp, char ***argvp)
 {
-    static char* shortopts = "+H:T:hJ:";
+    static char* shortopts = "+H:hJ:C:";
     static struct option longopts[] = {
         { "home",          required_argument, 0, 'H' },
         { "tab",           required_argument, 0, 'T' },
@@ -89,6 +90,7 @@ void parse_opts(int *argcp, char ***argvp)
         { "help",          no_argument,       0, 'h' },
         { "sysimage",      required_argument, 0, 'J' },
         { "code-coverage", no_argument,       &codecov, 1 },
+        { "cpu-target",    required_argument, 0, 'C' },
         { "check-bounds",  required_argument, 0, 300 },
         { "int-literals",  required_argument, 0, 301 },
         { 0, 0, 0, 0 }
@@ -118,6 +120,15 @@ void parse_opts(int *argcp, char ***argvp)
         case 'J':
             image_file = strdup(optarg);
             imagepathspecified = 1;
+            break;
+        case 'C':
+            if( strcmp(optarg, "native") == 0 || strcmp(optarg, "i386") == 0 || strcmp(optarg, "core2") == 0 ) {
+                jl_compileropts.cpu_target = strdup(optarg);
+            }
+            else {
+                ios_printf(ios_stderr, "julia: invalid cpu-target \"%s\" specified\n", optarg );
+                exit(1);
+            }
             break;
         case 'h':
             printf("%s%s", usage, opts);

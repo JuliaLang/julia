@@ -493,16 +493,6 @@ static Type *NoopType;
 // --- utilities ---
 
 extern "C" {
-#if defined(JULIA_TARGET_CORE2)
-const char *jl_cpu_string = "core2";
-#elif defined(JULIA_TARGET_I386)
-const char *jl_cpu_string = "i386";
-#elif defined(JULIA_TARGET_NATIVE)
-const char *jl_cpu_string = "native";
-#else
-#error "Must select julia cpu target"
-#endif
-
     int globalUnique = 0;
 }
 
@@ -4413,17 +4403,18 @@ extern "C" void jl_init_codegen(void)
     const char *mattr[] = {"-bmi2", "-avx2"};
     std::vector<std::string> attrvec (mattr, mattr+2);
 #endif
+
+    const char * cpu_target = jl_compileropts.cpu_target;
+    if (strcmp(cpu_target, "native") == 0)
+        cpu_target = "";
+
     EngineBuilder eb = EngineBuilder(engine_module)
         .setEngineKind(EngineKind::JIT)
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_) && !defined(USE_MCJIT)
         .setJITMemoryManager(new JITMemoryManagerWin())
 #endif
         .setTargetOptions(options)
-#if defined(JULIA_TARGET_NATIVE)
-        .setMCPU("")
-#else
-        .setMCPU(jl_cpu_string)
-#endif
+        .setMCPU(cpu_target)
 #ifdef USE_MCJIT
         .setUseMCJIT(true)
         .setMAttrs(attrvec);
