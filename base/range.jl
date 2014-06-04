@@ -268,7 +268,10 @@ function getindex(r::StepRange, s::Range{Int})
     range(st, step(r)*step(s), sl)
 end
 
-getindex(r::FloatRange, s::UnitRange) = r[first(s)]:step(r):r[last(s)]
+function getindex(r::FloatRange, s::OrdinalRange)
+    0 < last(s) <= length(r) || throw(BoundsError())
+    FloatRange(r[first(s)],step(r)*step(s),length(s),r.divisor)
+end
 
 function show(io::IO, r::Range)
     print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
