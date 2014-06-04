@@ -1254,7 +1254,8 @@
 		     (if (null? binds)
 			 (cons 'varlist vars)
 			 (cond
-			  ((or (symbol? (car binds)) (decl? (car binds)))
+			  ((or (hygienic-symbol? (car binds))
+			       (decl? (car binds)))
 			   ;; just symbol -> add local
 			   (loop (cdr binds)
 				 (cons (decl-var (car binds)) vars)))
@@ -1262,7 +1263,7 @@
 				(eq? (caar binds) '=))
 			   ;; some kind of assignment
 			   (cond
-			    ((or (symbol? (cadar binds))
+			    ((or (hygienic-symbol? (cadar binds))
 				 (decl?   (cadar binds)))
 			     ;; a=b -> add argument
 			     (loop (cdr binds)
@@ -3328,14 +3329,14 @@ So far only the second case can actually occur.
 
 (define (env-for-expansion e)
   (let ((globals (find-declared-vars-in-expansion e 'global)))
-    (let ((v (diff (delete-duplicates
-		    (append! (find-declared-vars-in-expansion e 'local)
-			     (find-assigned-vars-in-expansion e)
-			     (map (lambda (x)
-				    (if (hygienic-symbol? x) x
-					(car x)))
-				  (vars-introduced-by e))))
-		   globals)))
+    (let ((v (difference (delete-duplicates
+			   (append! (find-declared-vars-in-expansion e 'local)
+				    (find-assigned-vars-in-expansion e)
+				    (map (lambda (x)
+					   (if (hygienic-symbol? x) x
+					       (car x)))
+					 (vars-introduced-by e))))
+			 globals)))
       (append!
        (pair-with-gensyms v)
        (map (lambda (s) (cons s s))
