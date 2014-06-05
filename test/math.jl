@@ -274,3 +274,6 @@ end
 @test polygamma(4, -0.0) == Inf == -polygamma(4, +0.0)
 @test zeta(4, +0.0) == Inf == zeta(4, -0.0)
 @test zeta(5, +0.0) == Inf == -zeta(5, -0.0)
+@test isa([digamma(x) for x in [1.0]], Vector{Float64})
+@test isa([trigamma(x) for x in [1.0]], Vector{Float64})
+@test isa([polygamma(3,x) for x in [1.0]], Vector{Float64})
