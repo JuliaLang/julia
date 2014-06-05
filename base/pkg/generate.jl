@@ -143,6 +143,7 @@ function travis(pkg::String; force::Bool=false)
           - sudo add-apt-repository ppa:staticfloat/\${JULIAVERSION} -y
           - sudo apt-get update -qq -y
           - sudo apt-get install libpcre3-dev julia -y
+          - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
         script:
           - julia -e 'Pkg.init(); Pkg.clone(pwd()); Pkg.test("$pkg")'
         """)
