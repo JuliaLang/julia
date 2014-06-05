@@ -57,333 +57,318 @@ end
 
 gamma(z::Complex) = exp(lgamma(z))
 
-# Derivatives of the digamma function
-function psifn(x::Float64, n::Int, kode::Int, m::Int)
-# Translated from http://www.netlib.org/slatec/src/dpsifn.f
-# Note: Underflow handling at 380 in original is skipped
-    const nmax = 100
-    ans = Array(Float64, m)
-#-----------------------------------------------------------------------
-#             bernoulli numbers
-#-----------------------------------------------------------------------
-    const b =                         [1.00000000000000000e+00,
-              -5.00000000000000000e-01,1.66666666666666667e-01,
-              -3.33333333333333333e-02,2.38095238095238095e-02,
-              -3.33333333333333333e-02,7.57575757575757576e-02,
-              -2.53113553113553114e-01,1.16666666666666667e+00,
-              -7.09215686274509804e+00,5.49711779448621554e+01,
-              -5.29124242424242424e+02,6.19212318840579710e+03,
-              -8.65802531135531136e+04,1.42551716666666667e+06,
-              -2.72982310678160920e+07,6.01580873900642368e+08,
-              -1.51163157670921569e+10,4.29614643061166667e+11,
-              -1.37116552050883328e+13,4.88332318973593167e+14,
-              -1.92965793419400681e+16]
-    trm = Array(Float64, 22)
-    trmr = Array(Float64, 100)
-#***first executable statement  dpsifn
-    if x <= 0.0 throw(DomainError()) end
-    if n < 0 error("n must be non-negative") end
-    if kode < 1 | kode > 2 error("kode must be one or two") end
-    if m < 1 error("m must be larger than one") end
-    mm = m
-    const nx = min(-exponent(realmin(Float64)) + 1, exponent(realmax(Float64)))
-    const r1m5 = log10(2)
-    const r1m4 = Base.eps(Float64) * 0.5
-    const wdtol = max(r1m4, 0.5e-18)
-#-----------------------------------------------------------------------
-#     elim = approximate exponential over and underflow limit
-#-----------------------------------------------------------------------
-    const elim = 2.302*(nx*r1m5 - 3.0)
-    xln = log(x)
-    nn = n + mm - 1
-    fn = nn
-    t = (fn + 1)*xln
-#-----------------------------------------------------------------------
-#     overflow and underflow test for small and large x
-#-----------------------------------------------------------------------
-    if abs(t) > elim
-        if t <= 0.0 error("n too large") end
-        error("overflow; x too small or n+m-1 too large or both")
-    end
-    if x < wdtol
-        ans[1] = x^(-n - 1)
-        if mm != 1
-            k = 1
-            for i = 2:mm
-                ans[k + 1] = ans[k]/x
-                k += 1
-            end
-        end
-        if n != 0 return ans end
-        if kode == 2 ans[1] = ans[1] + xln end
-        return ans
-    end
-#-----------------------------------------------------------------------
-#     compute xmin and the number of terms of the series, fln+1
-#-----------------------------------------------------------------------
-    rln = r1m5 * precision(x)
-    rln = min(rln, 18.06)
-    fln = max(rln, 3.0) - 3.0
-    yint = 3.50 + 0.40*fln
-    slope = 0.21 + fln*(0.0006038*fln + 0.008677)
-    xm = yint + slope*fn
-    mx = itrunc(xm) + 1
-    xmin = mx
-    if n != 0
-        xm = -2.302*rln - min(0.0,xln)
-        arg = xm/n
-        arg = min(0.0,arg)
-        eps = exp(arg)
-        xm = 1.0 - eps
-        if abs(arg) < 1.0e-3 xm = -arg end
-        fln = x*xm/eps
-        xm = xmin - x
-        if (xm > 7.0) & (fln < 15.0)
-            nn = itrunc(fln) + 1
-            np = n + 1
-            t1 = (n + 1)*xln
-            t = exp(-t1)
-            s = t
-            den = x
-            for i = 1:nn
-                den += 1.0
-                trm[i] = den^(-np)
-                s += trm[i]
-            end
-            ans[1] = s
-            if n == 0
-                if kode == 2 ans[1] = s + xln end
-            end
-            if mm == 1 return ans end
-#-----------------------------------------------------------------------
-#     generate higher derivatives, j.gt.n
-#-----------------------------------------------------------------------
-            tol = wdtol/5.0
-            for j = 2:mm
-                t = t/x
-                s = t
-                tols = t*tol
-                den = x
-                for i = 1:nn
-                    den += 1.0
-                    trm[i] = trm[i]/den
-                    s += trm[i]
-                    if trm[i] < tols break end
-                end
-                ans[j] = s
-            end
-            return ans
-        end
-    end
-    
-    xdmy = x
-    xdmln = xln
-    xinc = 0.0
-    if x < xmin
-        nx = itrunc(x)
-        xinc = xmin - nx
-        xdmy = x + xinc
-        xdmln = log(xdmy)
-    end
-#-----------------------------------------------------------------------
-#     generate w(n+mm-1,x) by the asymptotic expansion
-#-----------------------------------------------------------------------
-    t = fn*xdmln
-    t1 = xdmln + xdmln
-    t2 = t + xdmln
-    tk = max(abs(t), abs(t1), abs(t2))
-    if tk > elim error("underflow") end
-    tss = exp(-t)
-    tt = 0.5/xdmy
-    t1 = tt
-    tst = wdtol*tt
-    if nn != 0 t1 = tt + 1.0/fn end
-    rxsq = 1.0/(xdmy*xdmy)
-    ta = 0.5*rxsq
-    t = (fn + 1)*ta
-    s = t*b[3]
-    if abs(s) >= tst
-        tk = 2.0
-        for k = 4:22
-            t = t*((tk + fn + 1)/(tk + 1.0))*((tk + fn)/(tk + 2.0))*rxsq
-            trm[k] = t*b[k]
-            if abs(trm[k]) < tst break end
-            s += trm[k]
-            tk += 2.0
-        end
-    end
-    s = (s + t1)*tss
-    while true
-        if xinc != 0.0
-#-----------------------------------------------------------------------
-#     backward recur from xdmy to x
-#-----------------------------------------------------------------------
-            nx = itrunc(xinc)
-            np = nn + 1
-            if nx > nmax error("n too large") end
-            if nn == 0 break end
-            xm = xinc - 1.0
-            fx = x + xm
-#-----------------------------------------------------------------------
-#     this loop should not be changed. fx is accurate when x is small
-#-----------------------------------------------------------------------
-            for i = 1:nx
-                trmr[i] = fx^(-np)
-                s += trmr[i]
-                xm -= 1.0
-                fx = x + xm
-            end
-        end
-        ans[mm] = s
-        if fn == 0
-            if kode != 2
-                ans[1] = s - xdmln
-                return ans
-            end
-            if xdmy == x return ans end
-            xq = xdmy/x
-            ans[1] = s - log(xq)
-            return ans
-        end
-#-----------------------------------------------------------------------
-#     generate lower derivatives, j.lt.n+mm-1
-#-----------------------------------------------------------------------
-        if mm == 1 return ans end
-        for j = 2:mm
-            fn -= 1
-            tss *= xdmy
-            t1 = tt
-            if fn != 0 t1 = tt + 1.0/fn end
-            t = (fn + 1)*ta
-            s = t*b[3]
-            if abs(s) >= tst
-                tk = 4 + fn
-                for k = 4:22 #110
-                    trm[k] = trm[k]*(fn + 1)/tk
-                    if abs(trm[k]) < tst break end
-                    s += trm[k]
-                    tk += 2.0
-                end
-            end
-            s = (s + t1)*tss
-            if xinc != 0.0
-                if fn == 0 break end
-                xm = xinc - 1.0
-                fx = x + xm
-                for i = 1:nx
-                    trmr[i] = trmr[i]*fx
-                    s += trmr[i]
-                    xm -= 1.0
-                    fx = x + xm
-                end
-            end
-            mx = mm - j + 1
-            ans[mx] = s
-            if fn == 0
-                if kode != 2
-                    ans[1] = s - xdmln
-                    return ans
-                end
-                if xdmy == x return ans end
-                xq = xdmy/x
-                ans[1] = s - log(xq)
-                return ans
-            end
-        end
-        if fn == 0 break end
-        return ans
-    end
-#-----------------------------------------------------------------------
-#     recursion for n = 0
-#-----------------------------------------------------------------------
-    for i = 1:nx
-        s += 1.0/(x + nx - i)
-    end
-    if kode != 2
-        ans[1] = s - xdmln
-        return ans
-    end
-    if xdmy == x return ans end
-    xq = xdmy/x
-    ans[1] = s - log(xq)
-    return ans
-end
-polygamma(k::Int, x::Float64) = (2rem(k,2) - 1)*psifn(x, k, 1, 1)[1]*gamma(k + 1)
-polygamma(k::Int, x::Float32) = float32(polygamma(k, float64(x)))
-polygamma(k::Int, x::Real) = polygamma(k, float64(x))
+# Bernoulli numbers B_{2k}, using tabulated numerators and denominators from
+# the online encyclopedia of integer sequences.  (They actually have data
+# up to k=249, but we stop here at k=20.)  Used for generating the polygamma
+# (Stirling series) coefficients below.
+#   const A000367 = map(BigInt, split("1,1,-1,1,-1,5,-691,7,-3617,43867,-174611,854513,-236364091,8553103,-23749461029,8615841276005,-7709321041217,2577687858367,-26315271553053477373,2929993913841559,-261082718496449122051", ","))
+#   const A002445 = [1,6,30,42,30,66,2730,6,510,798,330,138,2730,6,870,14322,510,6,1919190,6,13530]
+#   const bernoulli = A000367 .// A002445 # even-index Bernoulli numbers
 
-# Translation of psi.c from cephes
-function digamma(x::Float64)  
-    negative = false
-    nz = 0.0
-
-    if x <= 0.0
-        negative = true
-        q = x
-        p = floor(q)
-        if p == q
-            return NaN
-        end
-
-        nz = q - p
-        if nz != 0.5
-            if nz > 0.5
-                p += 1.0
-                nz = q - p
-            end
-            nz = pi / tan(pi * nz)
-        else
-            nz = 0.0
-        end
-        x = 1.0 - x
-    end
-
-    if x <= 10.0 && x == floor(x)
-        y = 0.0
-        for i = 1:x-1
-            y += 1.0 / i
-        end
-        y -= γ  # γ == -digamma(1) == 0.5772156649015328606065121;
-
-        if negative
-            y -= nz
-        end
-        return y
-    end
-
-    w = 0.0
-    while x < 10.0
-        w += 1.0 / x
-        x += 1.0
-    end
-
-    if x < 1.0e17
-        z = 1.0 / (x*x)
-        y = @horner(z, 8.33333333333333333333e-2, -8.33333333333333333333e-3, 3.96825396825396825397e-3,
-                       -4.16666666666666666667e-3, 7.57575757575757575758e-3,-2.10927960927960927961e-2,
-                       8.33333333333333333333e-2)
-        y *= z
+function digamma(z::Union(Float64,Complex{Float64}))
+    # Based on eq. (12), without looking at the accompanying source
+    # code, of: K. S. Kölbig, "Programs for computing the logarithm of
+    # the gamma function, and the digamma function, for complex
+    # argument," Computer Phys. Commun.  vol. 4, pp. 221–226 (1972).
+    x = real(z)
+    if x <= 0 # reflection formula
+        ψ = -π * cot(π*z)
+        z = 1 - z
+        x = real(z)
     else
-        y = 0.0
+        ψ = zero(z)
     end
-
-    y = log(x) - 0.5/x - y - w
-
-    if negative
-        y -= nz
+    if x < 7
+        # shift using recurrence formula
+        n = 7 - ifloor(x)
+        for ν = 1:n-1
+            ψ -= inv(z + ν)
+        end
+        ψ -= inv(z)
+        z += n
     end
-
-    return y
+    t = inv(z)
+    ψ += log(z) - 0.5*t
+    t *= t # 1/z^2
+    # the coefficients here are float64(bernoulli[2:9] .// (2*(1:8)))
+    ψ -= t * @chorner(t,0.08333333333333333,-0.008333333333333333,0.003968253968253968,-0.004166666666666667,0.007575757575757576,-0.021092796092796094,0.08333333333333333,-0.4432598039215686)
 end
-digamma(x::Float32) = float32(digamma(float64(x)))
-digamma(x::Real) = digamma(float64(x))
-@vectorize_1arg Real digamma
 
-trigamma(x::Real) = polygamma(1, x)
-@vectorize_1arg Real trigamma
+function trigamma(z::Union(Float64,Complex{Float64}))
+    # via the derivative of the Kölbig digamma formulation
+    x = real(z)
+    if x <= 0 # reflection formula
+        return (π * csc(π*z))^2 - trigamma(1 - z)
+    end
+    ψ = zero(z)
+    if x < 8
+        # shift using recurrence formula
+        n = 8 - ifloor(x)
+        ψ += inv(z)^2
+        for ν = 1:n-1
+            ψ += inv(z + ν)^2
+        end
+        z += n
+    end
+    t = inv(z)
+    w = t * t # 1/z^2
+    ψ += t + 0.5*w
+    # the coefficients here are float64(bernoulli[2:9])
+    ψ += t*w * @chorner(w,0.16666666666666666,-0.03333333333333333,0.023809523809523808,-0.03333333333333333,0.07575757575757576,-0.2531135531135531,1.1666666666666667,-7.092156862745098)
+end
 
-# Inverse digamma function
-#
+signflip(m::Number, z) = (-1+0im)^m * z
+signflip(m::Integer, z) = iseven(m) ? z : -z
+
+# (-1)^m d^m/dz^m cot(z) = p_m(cot z), where p_m is a polynomial
+# that satisfies the recurrence p_{m+1}(x) = p_m′(x) * (1 + x^2).
+# Note that p_m(x) has only even powers of x if m is odd, and
+# only odd powers of x if m is even.  Therefore, we write p_m(x)
+# as p_m(x) = q_m(x^2) m! for m odd and p_m(x) = x q_m(x^2) m! if m is even.
+# Hence the polynomials q_m(y) satisfy the recurrence:
+#     m odd:  q_{m+1}(y) = 2 q_m′(y) * (1+y) / (m+1)
+#    m even:  q_{m+1}(y) = [q_m(y) + 2 y q_m′(y)] * (1+y) / (m+1)
+# This function computes the coefficients of the polynomial q_m(y),
+# returning an array of the coefficients of 1, y, y^2, ...,
+function cotderiv_q(m::Int)
+    m < 0 && throw(ArgumentError("$m < 0 not allowed"))
+    m == 0 && return [1.0]
+    m == 1 && return [1.0, 1.0]
+    q₋ = cotderiv_q(m-1)
+    d = length(q₋) - 1 # degree of q₋
+    if isodd(m-1)
+        q = Array(Float64, length(q₋))
+        q[end] = d * q₋[end] * 2/m
+        for i = 1:length(q)-1
+            q[i] = ((i-1)*q₋[i] + i*q₋[i+1]) * 2/m
+        end
+    else # iseven(m-1)
+        q = Array(Float64, length(q₋) + 1)
+        q[1] = q₋[1] / m
+        q[end] = (1 + 2d) * q₋[end] / m
+        for i = 2:length(q)-1
+            q[i] = ((1 + 2(i-1))*q₋[i] + (1 + 2(i-2))*q₋[i-1]) / m
+        end
+    end
+    return q
+end
+
+# precompute a table of cot derivative polynomials
+const cotderiv_Q = [cotderiv_q(m) for m in 1:100]
+
+# Evaluate (-1)^m d^m/dz^m [π cot(πz)] / m!.  If m is small, we
+# use the explicit derivative formula (a polynomial in cot(πz));
+# if m is large, we use the derivative of Euler's harmonic series:
+#          π cot(πz) = ∑ inv(z + n)
+function cotderiv(m::Integer, z)
+    isinf(imag(z)) && return zero(z)
+    if m <= 0
+        m == 0 && return π * cot(π*z)
+        throw(DomainError())
+    end
+    if m <= length(cotderiv_Q)
+        q = cotderiv_Q[m]
+        x = cot(π*z)
+        y = x*x
+        s = q[1] + q[2] * y
+        t = y
+        # evaluate q(y) using Horner (TODO: Knuth for complex z?)
+        for i = 3:length(q)
+            t *= y
+            s += q[i] * t
+        end
+        return π^(m+1) * (isodd(m) ? s : x*s)
+    else # m is large, series derivative should converge quickly
+        p = m+1
+        z -= round(real(z))
+        s = inv(z^p)
+        n = 1
+        sₒ = zero(s)
+        while s != sₒ
+            sₒ = s
+            a = (z+n)^p
+            b = (z-n)^p
+            s += (a + b) / (a * b)
+            n += 1
+        end
+        return s
+    end
+end
+
+# Helper macro for polygamma(m, z):
+#   Evaluate p[1]*c[1] + x*p[2]*c[2] + x*p[3]*c[3] + ...
+#   where c[1] = m + 1
+#         c[k] = c[k-1] * (2k+m-1)*(2k+m-2) / ((2k-1)*(2k-2)) = c[k-1] * d[k]
+#         i.e. d[k] = c[k]/c[k-1] = (2k+m-1)*(2k+m-2) / ((2k-1)*(2k-2))
+#   by a modified version of Horner's rule:
+#      c[1] * (p[1] + d[2]*x * (p[2] + d[3]*x * (p[3] + ...))).
+# The entries of p must be literal constants and there must be > 1 of them.
+macro pg_horner(x, m, p...)
+    k = length(p)
+    me = esc(m)
+    xe = esc(x)
+    ex = :(($me + $(2k-1)) * ($me + $(2k-2)) * $(p[end]/((2k-1)*(2k-2))))
+    for k = length(p)-1:-1:2
+        cdiv = 1 / ((2k-1)*(2k-2))
+        ex = :(($cdiv * ($me + $(2k-1)) * ($me + $(2k-2))) *
+               ($(p[k]) + $xe * $ex))
+    end
+    :(($me + 1) * ($(p[1]) + $xe * $ex))
+end
+
+# compute inv(oftype(x, y)) efficiently, choosing the correct branch cut
+inv_oftype(x::Complex, y::Complex) = oftype(x, inv(y))
+function inv_oftype(x::Complex, y::Real)
+    yi = inv(y) # using real arithmetic for efficiency
+    oftype(x, Complex(yi, -zero(yi))) # get correct sign of zero!
+end
+inv_oftype(x::Real, y::Real) = oftype(x, inv(y))
+
+zeta_returntype{T}(s::Integer, z::T) = T
+zeta_returntype(s, z) = Complex128
+
+# Hurwitz zeta function, which is related to polygamma 
+# (at least for integer m > 0 and real(z) > 0) by:
+#    polygamma(m, z) = (-1)^(m+1) * gamma(m+1) * zeta(m+1, z).
+# Our algorithm for the polygamma is just the m-th derivative
+# of our digamma approximation, and this derivative process yields
+# a function of the form
+#          (-1)^(m) * gamma(m+1) * (something)
+# So identifying the (something) with the -zeta function, we get
+# the zeta function for free and might as well export it, especially
+# since this is a common generalization of the Riemann zeta function
+# (which Julia already exports).
+function zeta(s::Union(Int,Float64,Complex{Float64}),
+              z::Union(Float64,Complex{Float64}))
+    ζ = zero(zeta_returntype(s, z))
+    z == 1 && return oftype(ζ, zeta(s))
+    s == 2 && return oftype(ζ, trigamma(z))
+
+    x = real(z)
+
+    # annoying s = Inf or NaN cases:
+    if !isfinite(s)
+        (isnan(s) || isnan(z)) && return (s*z)^2 # type-stable NaN+Nan*im
+        if real(s) == Inf
+            z == 1 && return one(ζ)
+            if x > 1 || (x >= 0.5 ? abs(z) > 1 : abs(z - round(x)) > 1)
+                return zero(ζ) # distance to poles is > 1
+            end
+            x > 0 && imag(z) == 0 && imag(s) == 0 && return oftype(ζ, Inf)
+        end
+        throw(DomainError()) # nothing clever to return
+    end
+
+    # We need a different algorithm for the real(s) < 1 domain
+    real(s) < 1 && throw(ArgumentError("order $s < 1 is not implemented"))
+
+    m = s - 1
+
+    # Algorithm is just the m-th derivative of digamma formula above,
+    # with a modified cutoff of the final asymptotic expansion.
+
+    # Note: we multiply by -(-1)^m m! in polygamma below, so this factor is
+    #       pulled out of all of our derivatives.
+
+    isnan(x) && return oftype(ζ, imag(z)==0 && isa(s,Int) ? x : Complex(x,x))
+
+    cutoff = 7 + real(m) # empirical cutoff for asymptotic series
+    if x < cutoff
+        # shift using recurrence formula
+        xf = floor(x)
+        if x <= 0 && xf == z
+            if isa(s, Int)
+                iseven(s) && return oftype(ζ, Inf)
+                x == 0 && return oftype(ζ, inv(x))
+            end
+            throw(DomainError()) # or return NaN?
+        end
+        nx = int(xf)
+        n = iceil(cutoff - nx)
+        ζ += inv_oftype(ζ, z)^s
+        for ν = -nx:-1:1
+            ζₒ= ζ
+            ζ += inv_oftype(ζ, z + ν)^s
+            ζ == ζₒ && break # prevent long loop for large -x > 0
+                             # FIXME: still slow for small m, large Im(z)
+        end
+        for ν = max(1,1-nx):n-1
+            ζₒ= ζ
+            ζ += inv_oftype(ζ, z + ν)^s
+            ζ == ζₒ && break # prevent long loop for large m
+        end
+        z += n
+    end
+
+    t = inv(z)
+    w = isa(t, Real) ? conj(oftype(ζ, t)^m) : oftype(ζ, t)^m
+    ζ += w * (inv(m) + 0.5*t)
+
+    t *= t # 1/z^2
+    ζ += w*t * @pg_horner(t,m,0.08333333333333333,-0.008333333333333333,0.003968253968253968,-0.004166666666666667,0.007575757575757576,-0.021092796092796094,0.08333333333333333,-0.4432598039215686,3.0539543302701198)
+
+    return ζ
+end
+
+function polygamma(m::Integer, z::Union(Float64,Complex{Float64}))
+
+    m == 0 && return digamma(z)
+    m == 1 && return trigamma(z)
+
+    # In principle, we could support non-integer m here, but the
+    # extension to complex m seems to be non-unique, the obvious
+    # extension (just plugging in a complex m below) does not seem to
+    # be the one used by Mathematica or Maple, and sources do not
+    # agree on what the "right" extension is (e.g. Mathematica & Maple
+    # disagree).   So, at least for now, we require integer m.
+
+    # real(m) < 0 is valid, but I don't think our asymptotic expansion
+    # here works in this case.  m < 0 polygamma is called a
+    # "negapolygamma" function in the literature, and there are
+    # multiple possible definitions arising from different integration
+    # constants. We throw a DomainError() since the definition is unclear.
+    real(m) < 0 && throw(DomainError())
+
+    s = m+1
+    if real(z) <= 0 # reflection formula
+        (zeta(s, 1-z) + signflip(m, cotderiv(m,z))) * (-gamma(s))
+    else
+        signflip(m, zeta(s,z) * (-gamma(s)))
+    end
+end
+
+# If we really cared about single precision, we could make a faster
+# Float32 version by truncating the Stirling series at a smaller cutoff.
+for (f,T) in ((float32,Float32), (float16,Float16))
+    @eval begin
+        zeta(s::Integer, z::Union($T,Complex{$T})) =
+            $f(zeta(int(s), float64(z)))
+        zeta(s::Union(Float64,Complex{Float64}), z::Union($T,Complex{$T})) =
+            zeta(s, float64(z))
+        zeta(s::Number, z::Union($T,Complex{$T})) =
+            $f(zeta(float64(s), float64(z)))
+        polygamma(m::Integer, z::Union($T,Complex{$T})) =
+            $f(polygamma(int(m), float64(z)))
+        digamma(z::Union($T,Complex{$T})) =
+            $f(digamma(float64(z)))
+        trigamma(z::Union($T,Complex{$T})) =
+            $f(trigamma(float64(z)))
+    end
+end
+
+zeta(s::Integer, z::Number) = zeta(int(s), float64(z))
+zeta(s::Number, z::Number) = zeta(float64(s), float64(z))
+for f in (:digamma, :trigamma)
+    @eval begin
+        $f(z::Number) = $f(float64(z))
+        @vectorize_1arg Number $f
+    end
+end
+polygamma(m::Integer, z::Number) = polygamma(m, float64(z))
+@vectorize_2arg Number polygamma
+@vectorize_2arg Number zeta
+
+# Inverse digamma function:
 # Implementation of fixed point algorithm described in
 #  "Estimating a Dirichlet distribution" by Thomas P. Minka, 2000
 function invdigamma(y::Float64)
