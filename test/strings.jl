@@ -692,6 +692,26 @@ for i1 = 1:length(u8str2)
     end
 end
 
+str="tempus fugit"              #length(str)==12
+ss=SubString(str,1,length(str)) #match source string
+@test length(ss)==length(str)
+
+ss=SubString(str,1,0)    #empty SubString
+@test length(ss)==0
+
+ss=SubString(str,14,20)  #start indexed beyond source string length
+@test length(ss)==0
+
+ss=SubString(str,10,16)  #end indexed beyond source string length
+@test length(ss)==3
+
+str2=""
+ss=SubString(str2,1,4)  #empty source string
+@test length(ss)==0
+
+ss=SubString(str2,1,1)  #empty source string, identical start and end index
+@test length(ss)==0
+
 str = "aa\u2200\u2222bb"
 u = SubString(str, 3, 6)
 @test length(u)==2
