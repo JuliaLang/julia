@@ -277,3 +277,5 @@ end
 @test isa([digamma(x) for x in [1.0]], Vector{Float64})
 @test isa([trigamma(x) for x in [1.0]], Vector{Float64})
 @test isa([polygamma(3,x) for x in [1.0]], Vector{Float64})
+@test 1e-13 > errc(zeta(2 + 1im, -1.1), zeta(2 + 1im, -1.1+0im))
+@test 1e-13 > errc(zeta(2 + 1im, -1.1), -1525.8095173321060982383023516086563741006869909580583246557 + 1719.4753293650912305811325486980742946107143330321249869576im)
