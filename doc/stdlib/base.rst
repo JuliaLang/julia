@@ -5651,9 +5651,8 @@ Events
 .. function:: Timer(f::Function)
 
    Create a timer to call the given callback function. The callback
-   is passed two arguments: the timer object itself, and a status code,
-   which will be 0 unless an error occurs. The timer can be started and
-   stopped with ``start_timer`` and ``stop_timer``.
+   is passed one argument, the timer object itself. The timer can be
+   started and stopped with ``start_timer`` and ``stop_timer``.
 
 .. function:: start_timer(t::Timer, delay, repeat)
 
