@@ -45,11 +45,13 @@ macro time(ex)
         local t1 = time_ns()
         local b1 = gc_bytes()
         local tgc1 = gc_time_ns()
-        if tgc1 == tgc0
-            println("elapsed time: ", (t1-t0)/1e9, " seconds (", b1-b0, " bytes allocated)")
+        if tgc1 > tgc0
+            @printf("elapsed time: %s seconds (%d bytes allocated, %.2f%% gc)\n",
+                    (t1-t0)/1e9, b1-b0, 100*(tgc1-tgc0)/(t1-t0))
         else
-            println("elapsed time: ", (t1-t0)/1e9, " seconds (", (tgc1-tgc0)/(t1-t0), "% garbage collection, ", b1-b0, " bytes allocated)")
-        end
+            @printf("elapsed time: %s seconds (%d bytes allocated)\n",
+                    (t1-t0)/1e9, b1-b0)
+        end        
         val
     end
 end
