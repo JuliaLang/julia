@@ -20,6 +20,10 @@ getindex(s::ASCIIString, indx::AbstractVector{Int}) = ASCIIString(s.data[indx])
 search(s::ASCIIString, c::Char, i::Integer) = c < 0x80 ? search(s.data,uint8(c),i) : 0
 rsearch(s::ASCIIString, c::Char, i::Integer) = c < 0x80 ? rsearch(s.data,uint8(c),i) : 0
 
+search(s::ASCIIString, c::Char) = search(s,c,1)
+rsearch(s::ASCIIString, c::Char) = rsearch(s,c,endof(s))
+
+
 function string(c::ASCIIString...)
     if length(c) == 1
         return c[1]
