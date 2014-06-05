@@ -48,6 +48,33 @@ macro horner(x, p...)
     ex
 end
 
+# Evaluate p[1] + z*p[2] + z^2*p[3] + ... + z^(n-1)*p[n], assuming
+# the p[k] are *real* coefficients.   This uses Horner's method if z
+# is real, but for complex z it uses a more efficient algorithm described
+# in Knuth, TAOCP vol. 2, section 4.6.4, equation (3).
+macro chorner(z, p...)
+    a = :($(esc(p[end])))
+    b = :($(esc(p[end-1])))
+    as = {}
+    for i = length(p)-2:-1:1
+        ai = symbol(string("a", i))
+        push!(as, :($ai = $a))
+        a = :($b + r*$ai)
+        b = :($(esc(p[i])) - s * $ai)
+    end
+    ai = :a0
+    push!(as, :($ai = $a))
+    C = Expr(:block,
+             :(x = real($(esc(z)))),
+             :(y = imag($(esc(z)))),
+             :(r = x + x),
+             :(s = x*x + y*y),
+             as...,
+             :($ai * $(esc(z)) + $b))
+    R = Expr(:macrocall, symbol("@horner"), esc(z), p...)
+    :(isa($(esc(z)), Real) ? $R : $C)
+end
+
 rad2deg(z::Real) = oftype(z, 57.29577951308232*z)
 deg2rad(z::Real) = oftype(z, 0.017453292519943295*z)
 rad2deg(z::Integer) = rad2deg(float(z))
