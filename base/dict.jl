@@ -24,7 +24,8 @@ function showcompact{K,V}(io::IO, t::Associative{K,V})
         print(io, delims[1])
         first = true
         for (k, v) in t
-            first || (print(io, ','); first = false)
+            first || print(io, ',')
+            first = false
             showcompact(io, k)
             print(io, "=>")
             showcompact(io, v)
