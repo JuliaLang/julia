@@ -715,11 +715,18 @@
       (map (lambda (x) (gensy)) field-names)
       field-names))
 
-(define (default-inner-ctor name field-names field-types)
+(define (default-inner-ctors name field-names field-types)
   (let ((field-names (safe-field-names field-names field-types)))
-    `(function (call ,name ,@field-names)
-	       (block
-		(call new ,@field-names)))))
+    (list
+     ;; definition with field types for all arguments
+     `(function (call ,name
+		      ,@(map make-decl field-names field-types))
+		(block
+		 (call new ,@field-names)))
+     ;; definition with Any for all arguments
+     `(function (call ,name ,@field-names)
+		(block
+		 (call new ,@field-names))))))
 
 (define (default-outer-ctor name field-names field-types params bounds)
   (let ((field-names (safe-field-names field-names field-types)))
@@ -810,7 +817,7 @@
 	  (field-names (map decl-var fields))
 	  (field-types (map decl-type fields))
 	  (defs2 (if (null? defs)
-		     (list (default-inner-ctor name field-names field-types))
+		     (default-inner-ctors name field-names field-types)
 		     defs)))
      (for-each (lambda (v)
 		 (if (not (symbol? v))

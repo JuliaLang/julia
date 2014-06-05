@@ -9,8 +9,9 @@ New language features
   * `Tuple`s (of `Integer`s, `Symbol`s, or `Bool`s) can now be used as type
     parameters ([#5164]).
 
-  * Default "inner" constructors now accept any arguments. Constructors that
-    look like `MyType(a, b) = new(a, b)` can and should be removed ([#4026]).
+  * An additional default "inner" constructor accepting any arguments is now
+    generated. Constructors that look like `MyType(a, b) = new(a, b)` do not
+    need to be added manually ([#4026], [#7071]).
 
   * Expanded array type hierarchy to include an abstract ``DenseArray`` for
     in-memory arrays with standard strided storage ([#987], [#2345],
@@ -360,6 +361,7 @@ Deprecated or removed
 [#4042]: https://github.com/JuliaLang/julia/issues/4042
 [#5164]: https://github.com/JuliaLang/julia/issues/5164
 [#4026]: https://github.com/JuliaLang/julia/issues/4026
+[#7071]: https://github.com/JuliaLang/julia/issues/7071
 [#4799]: https://github.com/JuliaLang/julia/issues/4799
 [#4862]: https://github.com/JuliaLang/julia/issues/4862
 [#4048]: https://github.com/JuliaLang/julia/issues/4048
