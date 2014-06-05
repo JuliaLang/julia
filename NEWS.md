@@ -160,6 +160,16 @@ Library improvements
 
     * Broadcasting `.//` is now included ([#7094]).
 
+    * `prevfloat` and `nextfloat` now saturate at -Inf and Inf,
+      respectively, and have otherwise been fixed to follow the IEEE-754
+      standard functions `nextDown` and `nextUp` ([#5025]).
+
+    * New function `widen` for widening numeric types and values, and `widemul`
+      for multiplying to a larger type ([#6169]).
+
+    * `polygamma`, `digamma`, and `trigamma` now accept complex
+      arguments, and `zeta(s, z)` now provides the Hurwitz zeta ([#7125]).
+
   * `String` improvements
 
     * Triple-quoted regex strings, `r"""..."""` ([#4934]).
@@ -258,10 +268,6 @@ Library improvements
   * New function `deleteat!` deletes a specified index or indices and
     returns the updated collection
 
-  * `prevfloat` and `nextfloat` now saturate at -Inf and Inf, respectively, and
-    have otherwise been fixed to follow the IEEE-754 standard functions `nextDown`
-    and `nextUp` ([#5025]).
-
   * The `setenv` function for external processes now accepts a `dir` keyword
     argument for specifying the directory to start the child process in ([#4888]).
 
@@ -270,9 +276,6 @@ Library improvements
 
   * Ranges and arrays with the same elements are now unequal. This allows hashing
     and comparing ranges to be faster. ([#5778])
-
-  * New function `widen` for widening numeric types and values, and `widemul`
-    for multiplying to a larger type ([#6169])
 
   * Broadcasting now works on arbitrary `AbstractArrays` ([#5387])
 
