@@ -53,7 +53,7 @@ mkpath(path::String, mode::Signed) = error("mode must be an unsigned integer; tr
 
 function rmdir(path::String)
     @unix_only ret = ccall(:rmdir, Int32, (Ptr{Uint8},), bytestring(path))
-    @windows_only ret = ccall(:_rmdir, Int32, (Ptr{Uint8},), bytestring(path))
+    @windows_only ret = ccall(:_wrmdir, Int32, (Ptr{Uint16},), utf16(path))
     systemerror(:rmdir, ret != 0)
 end
 

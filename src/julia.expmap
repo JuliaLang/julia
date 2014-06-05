@@ -17,7 +17,6 @@
     rec_backtrace;
     julia_*;
     libsupport_init;
-    locale_is_utf8;
     localtime_r;
     memhash;
     memhash32;
