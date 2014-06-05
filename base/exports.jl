@@ -268,6 +268,7 @@ export
     At_rdiv_Bt,
 
 # scalar math
+    @evalpoly,
     abs,
     abs2,
     acos,
