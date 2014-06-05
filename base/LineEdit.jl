@@ -94,7 +94,7 @@ function common_prefix(completions)
     c1 = completions[1]
     isempty(c1) && return ret
     i = 1
-    cc, nexti = c1[i], nextind(c1, i)
+    cc, nexti = next(c1, i)
     while true
         for c in completions
             (i > endof(c) || c[i] != cc) && return ret
@@ -102,7 +102,7 @@ function common_prefix(completions)
         ret *= string(cc)
         i >= endof(c1) && return ret
         i = nexti
-        cc, nexti = c1[i], nextind(c1, i)
+        cc, nexti = next(c1, i)
     end
 end
 
