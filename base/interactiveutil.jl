@@ -101,25 +101,33 @@ end
     end
 end
 
-@windows_only begin
+@windows_only begin # TODO: these functions leak memory and memory locks if they throw an error
     function clipboard(x::String)
-        ccall((:OpenClipboard, "user32"), stdcall, Bool, (Ptr{Void},), C_NULL)
-        ccall((:EmptyClipboard, "user32"), stdcall, Bool, ())
-        p = ccall((:GlobalAlloc, "kernel32"), stdcall, Ptr{Void}, (Uint16,Int32), 2, length(x)+1)
-        p = ccall((:GlobalLock, "kernel32"), stdcall, Ptr{Void}, (Ptr{Void},), p)
-        # write data to locked, allocated space
-        ccall(:memcpy, Ptr{Void}, (Ptr{Void},Ptr{Uint8},Int32), p, x, length(x)+1)
-        ccall((:GlobalUnlock, "kernel32"), stdcall, Void, (Ptr{Void},), p)
-        # set clipboard data type to 13 for Unicode text/string
-        p = ccall((:SetClipboardData, "user32"), stdcall, Ptr{Void}, (Uint32, Ptr{Void}), 1, p)
+        systemerror(:OpenClipboard, 0==ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Void},), C_NULL))
+        systemerror(:EmptyClipboard, 0==ccall((:EmptyClipboard, "user32"), stdcall, Cint, ()))
+        x_u16 = utf16(x)
+        # copy data to locked, allocated space
+        p = ccall((:GlobalAlloc, "kernel32"), stdcall, Ptr{Uint16}, (Uint16, Int32), 2, sizeof(x_u16)+2)
+        systemerror(:GlobalAlloc, p==C_NULL)
+        plock = ccall((:GlobalLock, "kernel32"), stdcall, Ptr{Uint16}, (Ptr{Uint16},), p)
+        systemerror(:GlobalLock, plock==C_NULL)
+        ccall(:memcpy, Ptr{Uint16}, (Ptr{Uint16},Ptr{Uint16},Int), plock, x_u16, sizeof(x_u16)+2)
+        systemerror(:GlobalUnlock, 0==ccall((:GlobalUnlock, "kernel32"), stdcall, Cint, (Ptr{Void},), plock))
+        pdata = ccall((:SetClipboardData, "user32"), stdcall, Ptr{Uint16}, (Uint32, Ptr{Uint16}), 13, p)
+        systemerror(:SetClipboardData, pdata!=p)
         ccall((:CloseClipboard, "user32"), stdcall, Void, ())
     end
     clipboard(x) = clipboard(sprint(io->print(io,x))::ByteString)
 
     function clipboard()
-        ccall((:OpenClipboard, "user32"), stdcall, Bool, (Ptr{Void},), C_NULL)
-        s = bytestring(ccall((:GetClipboardData, "user32"), stdcall, Ptr{Uint8}, (Uint32,), 1))
-        ccall((:CloseClipboard, "user32"), stdcall, Void, ())
+        systemerror(:OpenClipboard, 0==ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Void},), C_NULL))
+        pdata = ccall((:GetClipboardData, "user32"), stdcall, Ptr{Uint16}, (Uint32,), 13)
+        systemerror(:SetClipboardData, pdata==C_NULL)
+        systemerror(:CloseClipboard, 0==ccall((:CloseClipboard, "user32"), stdcall, Cint, ()))
+        plock = ccall((:GlobalLock, "kernel32"), stdcall, Ptr{Uint16}, (Ptr{Uint16},), pdata)
+        systemerror(:GlobalLock, plock==C_NULL)
+        s = utf8(utf16(plock))
+        systemerror(:GlobalUnlock, 0==ccall((:GlobalUnlock, "kernel32"), stdcall, Cint, (Ptr{Uint16},), plock))
         return s
     end
 end
