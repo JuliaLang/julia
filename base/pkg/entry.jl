@@ -176,7 +176,7 @@ end
 function _checkout(pkg::String, what::String, merge::Bool=false, pull::Bool=false)
     Git.transact(dir=pkg) do
         Git.dirty(dir=pkg) && error("$pkg is dirty, bailing")
-        Git.run(`checkout -q $what`, dir=pkg)
+        Git.run(`checkout -q -t $what`, dir=pkg)
         merge && Git.run(`merge -q --ff-only $what`, dir=pkg)
         if pull
             info("Pulling $pkg latest $what...")
