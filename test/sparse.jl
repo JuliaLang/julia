@@ -239,6 +239,57 @@ for op in (:sin, :cos, :tan, :iceil, :ifloor, :ceil, :floor, :abs, :abs2)
     end
 end
 
+# getindex tests
+ni = 23
+nj = 32
+a116 = reshape(1:(ni*nj), ni, nj)
+s116 = sparse(a116)
+
+ad116 = diagm(diag(a116))
+sd116 = sparse(ad116)
+
+for (aa116, ss116) in [(a116, s116), (ad116, sd116)]
+    ij=11; i=3; j=2
+    @test ss116[ij] == aa116[ij]
+    @test ss116[(i,j)] == aa116[i,j]
+    @test ss116[i,j] == aa116[i,j]
+    @test ss116[i-1,j] == aa116[i-1,j]
+    ss116[i,j] = 0
+    @test ss116[i,j] == 0
+    ss116 = sparse(aa116)
+
+    # range indexing
+    @test full(ss116[i,:]) == aa116[i,:]
+    @test full(ss116[:,j]) == aa116[:,j]'' # sparse matrices/vectors always have ndims==2:
+    @test full(ss116[i,1:2:end]) == aa116[i,1:2:end]
+    @test full(ss116[1:2:end,j]) == aa116[1:2:end,j]''
+    @test full(ss116[i,end:-2:1]) == aa116[i,end:-2:1]
+    @test full(ss116[end:-2:1,j]) == aa116[end:-2:1,j]''
+    # float-range indexing is not supported
+
+    # sorted vector indexing
+    @test full(ss116[i,[3:2:end-3]]) == aa116[i,[3:2:end-3]]
+    @test full(ss116[[3:2:end-3],j]) == aa116[[3:2:end-3],j]''
+    @test full(ss116[i,[end-3:-2:1]]) == aa116[i,[end-3:-2:1]]
+    @test full(ss116[[end-3:-2:1],j]) == aa116[[end-3:-2:1],j]''
+
+    # unsorted vector indexing with repetition
+    p = [4, 1, 2, 3, 2, 6]
+    @test full(ss116[p,:]) == aa116[p,:]
+    @test full(ss116[:,p]) == aa116[:,p]
+    @test full(ss116[p,p]) == aa116[p,p]
+
+    # bool indexing
+    li = randbool(size(aa116,1))
+    lj = randbool(size(aa116,2))
+    @test full(ss116[li,j]) == aa116[li,j]''
+    @test full(ss116[li,:]) == aa116[li,:]
+    @test full(ss116[i,lj]) == aa116[i,lj]
+    @test full(ss116[:,lj]) == aa116[:,lj]
+    @test full(ss116[li,lj]) == aa116[li,lj]
+end
+
+
 # setindex tests
 let a = spzeros(Int, 10, 10)
     @test countnz(a) == 0
