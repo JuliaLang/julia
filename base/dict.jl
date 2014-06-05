@@ -16,19 +16,23 @@ function summary(t::Associative)
     string(typeof(t), " with ", n, (n==1 ? " entry" : " entries"))
 end
 
-function showcompact{K,V}(io::IO, t::Associative{K,V})
-    print(io, summary(t))
-    if !isempty(t)
-        print(io, ": ")
-        delims = (K == V == Any) ? ('{', '}') : ('[', ']')
+function print{K,V}(io::IO, t::Associative{K,V})
+    if isempty(t)
+        print(io, typeof(t),"()")
+    else
+        if K === Any && V === Any
+            delims = ['{','}']
+        else
+            delims = ['[',']']
+        end
         print(io, delims[1])
         first = true
         for (k, v) in t
             first || print(io, ',')
             first = false
-            showcompact(io, k)
+            print(io, k)
             print(io, "=>")
-            showcompact(io, v)
+            print(io, v)
         end
         print(io, delims[2])
     end
