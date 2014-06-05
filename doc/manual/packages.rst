@@ -464,7 +464,7 @@ This requirement entry::
     Distributions 0.1 0.2.5
 
 is satisfied by versions from ``0.1.0`` up to, but not including ``0.2.5``.
-If you want to indicate that any ``1.x`` version will do, you will want to write::
+If you want to indicate that any ``0.1.x`` version will do, you will want to write::
 
     Distributions 0.1 0.2-
 
