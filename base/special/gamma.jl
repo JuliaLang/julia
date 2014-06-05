@@ -224,6 +224,9 @@ function inv_oftype(x::Complex, y::Real)
 end
 inv_oftype(x::Real, y::Real) = oftype(x, inv(y))
 
+zeta_returntype{T}(s::Integer, z::T) = T
+zeta_returntype(s, z) = Complex128
+
 # Hurwitz zeta function, which is related to polygamma 
 # (at least for integer m > 0 and real(z) > 0) by:
 #    polygamma(m, z) = (-1)^(m+1) * gamma(m+1) * zeta(m+1, z).
@@ -237,7 +240,7 @@ inv_oftype(x::Real, y::Real) = oftype(x, inv(y))
 # (which Julia already exports).
 function zeta(s::Union(Int,Float64,Complex{Float64}),
               z::Union(Float64,Complex{Float64}))
-    ζ = isa(s, Int) ? zero(z) : complex(zero(z))
+    ζ = zero(zeta_returntype(s, z))
     z == 1 && return oftype(ζ, zeta(s))
     s == 2 && return oftype(ζ, trigamma(z))
 
@@ -245,13 +248,13 @@ function zeta(s::Union(Int,Float64,Complex{Float64}),
 
     # annoying s = Inf or NaN cases:
     if !isfinite(s)
-        (isnan(s) || isnan(z)) && return Complex(NaN, NaN)
+        (isnan(s) || isnan(z)) && return (s*z)^2 # type-stable NaN+Nan*im
         if real(s) == Inf
             z == 1 && return one(ζ)
             if x > 1 || (x >= 0.5 ? abs(z) > 1 : abs(z - round(x)) > 1)
                 return zero(ζ) # distance to poles is > 1
             end
-            x > 0 && imag(z) == 0 && imag(s) == 0 && return Complex(Inf, 0.0)
+            x > 0 && imag(z) == 0 && imag(s) == 0 && return oftype(ζ, Inf)
         end
         throw(DomainError()) # nothing clever to return
     end

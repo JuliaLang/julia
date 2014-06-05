@@ -70,7 +70,7 @@ macro chorner(z, p...)
              :(r = x + x),
              :(s = x*x + y*y),
              as...,
-             :(Complex($ai * x + $b, $ai * y)))
+             :($ai * $(esc(z)) + $b))
     R = Expr(:macrocall, symbol("@horner"), esc(z), p...)
     :(isa($(esc(z)), Real) ? $R : $C)
 end
