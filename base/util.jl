@@ -38,15 +38,15 @@ end
 # print elapsed time, return expression value
 macro time(ex)
     quote
-        local tgc0 = gc_time_ns()
         local b0 = gc_bytes()
         local t0 = time_ns()
+        local tgc0 = gc_time_ns()
         local val = $(esc(ex))
+        local tgc1 = gc_time_ns()
         local t1 = time_ns()
         local b1 = gc_bytes()
-        local tgc1 = gc_time_ns()
         if tgc1 > tgc0
-            @printf("elapsed time: %s seconds (%d bytes allocated, %.2f%% gc)\n",
+            @printf("elapsed time: %s seconds (%d bytes allocated, %.2f%% gc time)\n",
                     (t1-t0)/1e9, b1-b0, 100*(tgc1-tgc0)/(t1-t0))
         else
             @printf("elapsed time: %s seconds (%d bytes allocated)\n",
