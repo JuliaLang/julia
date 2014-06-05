@@ -306,6 +306,8 @@ Library improvements
 
   * New functions `randsubseq` and `randsubseq!` to create a random subsequence of an array ([#6726])
 
+  * New macro `@evalpoly` for efficient inline evaluation of polynomials ([#7146]).
+
 
 Build improvements
 ------------------
