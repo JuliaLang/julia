@@ -301,7 +301,7 @@ function zeta(s::Union(Int,Float64,Complex{Float64}),
     end
 
     t = inv(z)
-    w = isa(t, Real) && isa(m, Real) ? conj(oftype(ζ, t)^m) : oftype(ζ, t)^m
+    w = isa(t, Real) ? conj(oftype(ζ, t))^m : oftype(ζ, t)^m
     ζ += w * (inv(m) + 0.5*t)
 
     t *= t # 1/z^2
