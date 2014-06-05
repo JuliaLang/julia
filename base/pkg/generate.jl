@@ -89,6 +89,7 @@ function init(pkg::String, url::String="")
     end
     isempty(url) && return
     info("Origin: $url")
+    Git.run(`remote add origin $url`,dir=pkg)
     Git.set_remote_url(url,dir=pkg)
 end
 
