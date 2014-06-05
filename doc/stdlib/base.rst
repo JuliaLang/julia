@@ -3204,9 +3204,14 @@ Mathematical Functions
 
    Dirichlet eta function :math:`\eta(s) = \sum^\infty_{n=1}(-)^{n-1}/n^{s}`.
 
-.. function:: zeta(x)
+.. function:: zeta(s)
 
    Riemann zeta function :math:`\zeta(s)`.
+
+.. function:: zeta(s, z)
+
+   Hurwitz zeta function :math:`\zeta(s, z)`.  (This is equivalent to
+   the Riemann zeta function :math:`\zeta(s)` for the case of ``z=1``.)
 
 .. function:: ndigits(n, b)
 
