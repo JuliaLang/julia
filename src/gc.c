@@ -65,6 +65,7 @@ typedef struct _bigval_t {
 static size_t allocd_bytes = 0;
 static int64_t total_allocd_bytes = 0;
 static size_t freed_bytes = 0;
+static uint64_t total_gc_time=0;
 #ifdef _P64
 #define default_collect_interval (5600*1024*sizeof(void*))
 static size_t max_collect_interval = 1250000000UL;
@@ -80,7 +81,6 @@ static htable_t obj_counts;
 #endif
 
 #ifdef GC_FINAL_STATS
-static double total_gc_time=0;
 static size_t total_freed_bytes=0;
 #endif
 
@@ -864,6 +864,7 @@ DLLEXPORT void jl_gc_disable(void)   { is_gc_enabled = 0; }
 DLLEXPORT int jl_gc_is_enabled(void) { return is_gc_enabled; }
 
 DLLEXPORT int64_t jl_gc_total_bytes(void) { return total_allocd_bytes + allocd_bytes; }
+DLLEXPORT uint64_t jl_gc_total_hrtime(void) { return total_gc_time; }
 
 void jl_gc_ephemeral_on(void)  { pools = &ephe_pools[0]; }
 void jl_gc_ephemeral_off(void) { pools = &norm_pools[0]; }
@@ -894,31 +895,29 @@ void jl_gc_collect(void)
     if (is_gc_enabled) {
         JL_SIGATOMIC_BEGIN();
         jl_in_gc = 1;
-#if defined(GCTIME) || defined(GC_FINAL_STATS)
-        double t0 = clock_now();
-#endif
+        uint64_t t0 = jl_hrtime();
         gc_mark();
 #ifdef GCTIME
-        JL_PRINTF(JL_STDERR, "mark time %.3f ms\n", (clock_now()-t0)*1000);
+        JL_PRINTF(JL_STDERR, "mark time %.3f ms\n", (jl_hrtime()-t0)*1.0e6);
 #endif
 #if defined(MEMPROFILE)
         all_pool_stats();
         big_obj_stats();
 #endif
 #ifdef GCTIME
-        t0 = clock_now();
+        uint64_t t1 = jl_hrtime();
 #endif
         sweep_weak_refs();
         gc_sweep();
 #ifdef GCTIME
-        JL_PRINTF(JL_STDERR, "sweep time %.3f ms\n", (clock_now()-t0)*1000);
+        JL_PRINTF(JL_STDERR, "sweep time %.3f ms\n", (jl_hrtime()-t1)*1.0e6);
 #endif
         int nfinal = to_finalize.len;
         run_finalizers();
         jl_in_gc = 0;
         JL_SIGATOMIC_END();
+        total_gc_time += (jl_hrtime()-t0);
 #if defined(GC_FINAL_STATS)
-        total_gc_time += (clock_now()-t0);
         total_freed_bytes += freed_bytes;
 #endif
 #ifdef OBJPROFILE
