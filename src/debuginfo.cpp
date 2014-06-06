@@ -138,7 +138,6 @@ public:
 #endif // USE_MCJIT
 };
 
-#if defined(USE_MCJIT) && !defined(LLVM35)
 extern "C"
 const char *jl_demangle(const char *name) {
     const char *start = name;
@@ -151,7 +150,6 @@ const char *jl_demangle(const char *name) {
     done:
         return strdup(name);
 }
-#endif
 
 JuliaJITEventListener *jl_jit_events;
 
@@ -200,10 +198,18 @@ static obfiletype objfilemap;
 #ifdef _OS_DARWIN_
 bool getObjUUID(llvm::object::MachOObjectFile *obj, uint8_t uuid[16])
 {
+#ifdef LLVM35
     uint32_t LoadCommandCount = obj->getHeader().ncmds;
+#else
+    uint32_t LoadCommandCount = obj->getHeader().NumLoadCommands;
+#endif
     llvm::object::MachOObjectFile::LoadCommandInfo Load = obj->getFirstLoadCommandInfo();
     for (unsigned I = 0; ; ++I) {
+#ifdef LLVM35
         if (Load.C.cmd == LC_UUID)
+#else
+        if (Load.C.Type == LC_UUID)
+#endif
         {
             memcpy(uuid,((MachO::uuid_command*)Load.Ptr)->uuid,16);
             return true;
@@ -248,18 +254,30 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
             // First find the uuid of the object file (we'll use this to make sure we find the
             // correct debug symbol file).
             uint8_t uuid[16], uuid2[16];
+#ifdef LLVM35
             ErrorOr<llvm::object::ObjectFile*> origerrorobj = llvm::object::ObjectFile::createObjectFile(
+#else
+            llvm::object::ObjectFile *origerrorobj = llvm::object::ObjectFile::createObjectFile(
+#endif
                     MemoryBuffer::getMemBuffer(
-                    StringRef((const char *)dlinfo.dli_fbase, (size_t)(((uint64_t)-1)-(uint64_t)dlinfo.dli_fbase)),"",false),
-                    false, sys::fs::file_magic::unknown
+                    StringRef((const char *)dlinfo.dli_fbase, (size_t)(((uint64_t)-1)-(uint64_t)dlinfo.dli_fbase)),"",false)
+#ifdef LLVM35
+                    ,false, sys::fs::file_magic::unknown
+#endif
             );
             if (!origerrorobj) {
-                objfilemap[(uint64_t)dlinfo.dli_fbase] = {obj,context,slide};
+                objfileentry_t entry = {obj,context,slide};
+                objfilemap[(uint64_t)dlinfo.dli_fbase] = entry;
                 return;
             }
+#ifdef LLVM35
             llvm::object::MachOObjectFile *morigobj = (llvm::object::MachOObjectFile *)origerrorobj.get();
+#else
+            llvm::object::MachOObjectFile *morigobj = (llvm::object::MachOObjectFile *)origerrorobj;
+#endif
             if (!getObjUUID(morigobj,uuid)) {
-                objfilemap[(uint64_t)dlinfo.dli_fbase] = {obj,context,slide};
+                objfileentry_t entry = {obj,context,slide};
+                objfilemap[(uint64_t)dlinfo.dli_fbase] = entry;
                 return;
             }
 
@@ -271,16 +289,29 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
             strlcpy(dsympath, dlinfo.dli_fname, sizeof(dsympath));
             strlcat(dsympath, ".dSYM/Contents/Resources/DWARF/", sizeof(dsympath));
             strlcat(dsympath, strrchr(dlinfo.dli_fname,'/')+1, sizeof(dsympath));
+#ifdef LLVM35
             ErrorOr<llvm::object::ObjectFile*> errorobj = llvm::object::ObjectFile::createObjectFile(dsympath);
 #else
+            llvm::object::ObjectFile *errorobj = llvm::object::ObjectFile::createObjectFile(dsympath);
+#endif
+#else
+#ifdef LLVM35
             ErrorOr<llvm::object::ObjectFile*> errorobj = llvm::object::ObjectFile::createObjectFile(
+#else
+            lvm::object::ObjectFile *errorobj = llvm::object::ObjectFile::createObjectFile(
+#endif
                 MemoryBuffer::getMemBuffer(
                 StringRef((const char *)dlinfo.dli_fbase, (size_t)(((uint64_t)-1)-(uint64_t)dlinfo.dli_fbase)),"",false),
                 false, sys::fs::file_magic::unknown
             );
 #endif
+#ifdef LLVM35
             if(errorobj) {
                 obj = errorobj.get();
+#else
+            if(errorobj != NULL) {
+                obj = errorobj;
+#endif
 #ifdef _OS_DARWIN_
                 if (getObjUUID(morigobj,uuid2) && memcmp(uuid,uuid2,sizeof(uuid)) == 0)
                 {
@@ -292,7 +323,8 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
 #endif
 
             }
-            objfilemap[(uint64_t)dlinfo.dli_fbase] = {obj,context,slide};
+            objfileentry_t entry = {obj,context,slide};
+            objfilemap[(uint64_t)dlinfo.dli_fbase] = entry;
         } else {
             obj = it->second.obj;
             context = it->second.ctx;
