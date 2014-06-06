@@ -298,11 +298,13 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
 #ifdef LLVM35
             ErrorOr<llvm::object::ObjectFile*> errorobj = llvm::object::ObjectFile::createObjectFile(
 #else
-            lvm::object::ObjectFile *errorobj = llvm::object::ObjectFile::createObjectFile(
+            llvm::object::ObjectFile *errorobj = llvm::object::ObjectFile::createObjectFile(
 #endif
                 MemoryBuffer::getMemBuffer(
-                StringRef((const char *)dlinfo.dli_fbase, (size_t)(((uint64_t)-1)-(uint64_t)dlinfo.dli_fbase)),"",false),
-                false, sys::fs::file_magic::unknown
+                StringRef((const char *)dlinfo.dli_fbase, (size_t)(((uint64_t)-1)-(uint64_t)dlinfo.dli_fbase)),"",false)
+#ifdef LLVM35
+                ,false, sys::fs::file_magic::unknown
+#endif
             );
 #endif
 #ifdef LLVM35
