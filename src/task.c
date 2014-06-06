@@ -685,7 +685,7 @@ DLLEXPORT void gdblookup(ptrint_t ip)
     const char *func_name;
     int line_num;
     const char *file_name;
-    int fromC = frame_info_from_ip(&func_name, &line_num, &file_name, ip, false);
+    int fromC = frame_info_from_ip(&func_name, &line_num, &file_name, ip, 0);
     if (func_name != NULL) {
         ios_printf(ios_stderr, "%s at %s:%d\n", func_name, file_name, line_num);
 #ifdef _OS_WINDOWS_
