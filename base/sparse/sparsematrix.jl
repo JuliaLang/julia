@@ -1073,102 +1073,29 @@ function setindex!{T,Ti}(A::SparseMatrixCSC{T,Ti}, v, i0::Integer, i1::Integer)
     i1 = convert(Ti, i1)
     if !(1 <= i0 <= A.m && 1 <= i1 <= A.n); throw(BoundsError()); end
     v = convert(T, v)
+    r1 = A.colptr[i1]
+    r2 = A.colptr[i1+1]-1
     if v == 0 #either do nothing or delete entry if it exists
-        first = A.colptr[i1]
-        last = A.colptr[i1+1]-1
-        loc = -1
-        while first <= last
-            mid = (first + last) >> 1
-            t = A.rowval[mid]
-            if t == i0
-                loc = mid
-                break
-            elseif t > i0
-                last = mid - 1
-            else
-                first = mid + 1
-            end
-        end
+        loc = binarysearch(A.rowval, i0, r1, r2)
         if loc != -1
             deleteat!(A.rowval, loc)
             deleteat!(A.nzval, loc)
             for j = (i1+1):(A.n+1)
-                A.colptr[j] = A.colptr[j] - 1
+                A.colptr[j] -= 1
             end
         end
         return A
     end
-    first = A.colptr[i1]
-    last = A.colptr[i1+1]-1
-    #find i such that A.rowval[i] = i0, or A.rowval[i-1] < i0 < A.rowval[i]
-    while last - first >= 3
-        mid = (first + last) >> 1
-        t = A.rowval[mid]
-        if t == i0
-            A.nzval[mid] = v
-            return A
-        elseif t > i0
-            last = mid - 1
-        else
-            first = mid + 1
+    i = (r1 > r2) ? r1 : searchsortedfirst(A.rowval, i0, r1, r2, Forward)
+
+    if (i <= r2) && (A.rowval[i] == i0)
+        A.nzval[i] = v
+    else
+        insert!(A.rowval, i, i0)
+        insert!(A.nzval, i, v)
+        for j = (i1+1):(A.n+1)
+            A.colptr[j] += 1
         end
-    end
-    if last - first == 2
-        mid = first + 1
-        if A.rowval[mid] == i0
-            A.nzval[mid] = v
-            return A
-        elseif A.rowval[mid] > i0
-            if A.rowval[first] == i0
-                A.nzval[first] = v
-                return A
-            elseif A.rowval[first] < i0
-                i = first+1
-            else #A.rowval[first] > i0
-                i = first
-            end
-        else #A.rowval[mid] < i0
-            if A.rowval[last] == i0
-                A.nzval[last] = v
-                return A
-            elseif A.rowval[last] > i0
-                i = last
-            else #A.rowval[last] < i0
-                i = last+1
-            end
-        end
-    elseif last - first == 1
-        if A.rowval[first] == i0
-            A.nzval[first] = v
-            return A
-        elseif A.rowval[first] > i0
-            i = first
-        else #A.rowval[first] < i0
-            if A.rowval[last] == i0
-                A.nzval[last] = v
-                return A
-            elseif A.rowval[last] < i0
-                i = last+1
-            else #A.rowval[last] > i0
-                i = last
-            end
-        end
-    elseif last == first
-        if A.rowval[first] == i0
-            A.nzval[first] = v
-            return A
-        elseif A.rowval[first] < i0
-            i = first+1
-        else #A.rowval[first] > i0
-            i = first
-        end
-    else #last < first to begin with
-        i = first
-    end
-    insert!(A.rowval, i, i0)
-    insert!(A.nzval, i, v)
-    for j = (i1+1):(A.n+1)
-        A.colptr[j] = A.colptr[j] + 1
     end
     return A
 end
@@ -1496,8 +1423,7 @@ function setindex!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractArray{Bool,2}
     colptrB = colptrA; rowvalB = rowvalA; nzvalB = nzvalA
     nadd = ndel = 0
     bidx = xidx = 1
-    ridx = r1 = r2 = 0
-    last = mid = midval = 0
+    r1 = r2 = 0
 
     for col in 1:A.n
         r1 = int(colptrA[col])
@@ -1509,22 +1435,7 @@ function setindex!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractArray{Bool,2}
                 xidx += 1
 
                 if r1 <= r2
-                    ridx = r1
-                    last = r2
-                    @inbounds while ridx <= last
-                        mid = (ridx + last) >> 1
-                        midval = int(rowvalA[mid])
-                        if midval > row
-                            last = mid - 1
-                        elseif midval == row
-                            ridx = mid
-                            break
-                        else
-                            ridx = mid + 1
-                        end
-                    end
-
-                    copylen = ridx - r1
+                    copylen = searchsortedfirst(rowvalA, row, r1, r2, Forward) - r1
                     if (copylen > 0)
                         if (nadd > 0) || (ndel > 0)
                             copy!(rowvalB, bidx, rowvalA, r1, copylen)
@@ -1612,8 +1523,7 @@ function setindex!{Tv,Ti,T<:Real}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractVecto
     bidx = aidx = 1
 
     S = issorted(I) ? (1:n) : sortperm(I)
-    sxidx = ridx = r1 = r2 = 0
-    last = mid = midval = 0
+    sxidx = r1 = r2 = 0
 
     lastcol = 0
     for xidx in 1:n
@@ -1644,22 +1554,7 @@ function setindex!{Tv,Ti,T<:Real}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractVecto
         end
 
         if r1 <= r2
-            ridx = r1
-            last = r2
-            @inbounds while ridx <= last
-                mid = (ridx + last) >> 1
-                midval = int(rowvalA[mid])
-                if midval > row
-                    last = mid - 1
-                elseif midval == row
-                    ridx = mid
-                    break
-                else
-                    ridx = mid + 1
-                end
-            end
-
-            copylen = ridx - r1
+            copylen = searchsortedfirst(rowvalA, row, r1, r2, Forward) - r1
             if (copylen > 0)
                 if (nadd > 0) || (ndel > 0)
                     copy!(rowvalB, bidx, rowvalA, r1, copylen)
@@ -1955,21 +1850,9 @@ start(d::SpDiagIterator) = 1
 done(d::SpDiagIterator, j) = j > d.n
 
 function next{Tv}(d::SpDiagIterator{Tv}, j)
-    p = d.A.colptr; i = d.A.rowval;
-    first = p[j]
-    last = p[j+1]-1
-    while first <= last
-        mid = (first + last) >> 1
-        r = i[mid]
-        if r == j
-            return (d.A.nzval[mid], j+1)
-        elseif r > j
-            last = mid - 1
-        else
-            first = mid + 1
-        end
-    end
-    return (zero(Tv), j+1)
+    A = d.A
+    idx = binarysearch(A.rowval, j, A.colptr[j], A.colptr[j+1]-1)
+    ((idx == -1) ? zero(Tv) : A.nzval[idx], j+1)
 end
 
 function trace{Tv}(A::SparseMatrixCSC{Tv})
