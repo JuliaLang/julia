@@ -119,11 +119,16 @@ Standard functions to manipulate complex values are provided:
     julia> abs2(1 + 2im)
     5
 
-As is common, the absolute value of a complex number is its distance
-from zero. The ``abs2`` function gives the square of the absolute value,
-and is of particular use for complex numbers, where it avoids taking a
-square root. The full gamut of other :ref:`man-elementary-functions` is also
-defined for complex numbers:
+    julia> angle(1 + 2im)
+    1.1071487177940904
+
+As usual, the absolute value (``abs``) of a complex number is its
+distance from zero. The ``abs2`` function gives the square of the
+absolute value, and is of particular use for complex numbers where it
+avoids taking a square root. The ``angle`` function returns the phase
+angle in radians (also known as the *argument* or *arg* function). The
+full gamut of other :ref:`man-elementary-functions` is also defined
+for complex numbers:
 
 .. doctest::
 
