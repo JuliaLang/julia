@@ -40,14 +40,14 @@ macro time(ex)
     quote
         local b0 = gc_bytes()
         local t0 = time_ns()
-        local tgc0 = gc_time_ns()
+        local g0 = gc_time_ns()
         local val = $(esc(ex))
-        local tgc1 = gc_time_ns()
+        local g1 = gc_time_ns()
         local t1 = time_ns()
         local b1 = gc_bytes()
-        if tgc1 > tgc0
+        if g1 > g0
             @printf("elapsed time: %s seconds (%d bytes allocated, %.2f%% gc time)\n",
-                    (t1-t0)/1e9, b1-b0, 100*(tgc1-tgc0)/(t1-t0))
+                    (t1-t0)/1e9, b1-b0, 100*(g1-g0)/(t1-t0))
         else
             @printf("elapsed time: %s seconds (%d bytes allocated)\n",
                     (t1-t0)/1e9, b1-b0)
@@ -81,15 +81,17 @@ macro allocated(ex)
     end
 end
 
-# print nothing, return value, elapsed time & bytes allocated
+# print nothing, return value, elapsed time, bytes allocated & gc time
 macro timed(ex)
     quote
         local b0 = gc_bytes()
         local t0 = time_ns()
+        local g0 = gc_time_ns()
         local val = $(esc(ex))
+        local g1 = gc_time_ns()
         local t1 = time_ns()
         local b1 = gc_bytes()
-        val, (t1-t0)/1e9, b1-b0
+        val, (t1-t0)/1e9, b1-b0, (g1-g0)/1e9
     end
 end
 
