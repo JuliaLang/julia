@@ -198,7 +198,7 @@ function rand{T<:Integer, U<:Unsigned}(g::RandIntGen{T,U})
 end
 
 rand{T<:Union(Signed,Unsigned,Bool,Char)}(r::UnitRange{T}) = rand(RandIntGen(r))
-rand{T<:Real}(r::Range{T}) = convert(T, first(r) + rand(0:(length(r)-1)) * step(r))
+rand{T}(r::Range{T}) = convert(T, first(r) + rand(0:(length(r)-1)) * step(r))
 
 function rand!(g::RandIntGen, A::AbstractArray)
     for i = 1 : length(A)
@@ -209,7 +209,7 @@ end
 
 rand!{T<:Union(Signed,Unsigned,Bool,Char)}(r::UnitRange{T}, A::AbstractArray) = rand!(RandIntGen(r), A)
 
-function rand!{T<:Real}(r::Range{T}, A::AbstractArray)
+function rand!{T}(r::Range{T}, A::AbstractArray)
     g = RandIntGen(0:(length(r)-1))
     f = first(r)
     s = step(r)
@@ -225,7 +225,7 @@ function rand!{T<:Real}(r::Range{T}, A::AbstractArray)
     return A
 end
 
-rand{T<:Real}(r::Range{T}, dims::Dims) = rand!(r, Array(T, dims))
+rand{T}(r::Range{T}, dims::Dims) = rand!(r, Array(T, dims))
 rand(r::Range, dims::Int...) = rand(r, dims)
 
 
