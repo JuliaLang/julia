@@ -90,6 +90,12 @@ endif
 
 ifeq ($(USE_SYSTEM_LIBGIT2), 0)
 STAGE1_DEPS += libgit2
+LIBGIT2_OPTS = -DTHREADSAFE=ON -DCMAKE_BUILD_TYPE=Release
+endif
+ifeq ($(BUILD_OS),WINNT)
+ifeq ($(OS),WINNT)
+LIBGIT2_OPTS = -DBUILD_CLAR=OFF -DWIN32=ON -DMINGW=ON -DUSE_SSH=OFF
+endif
 endif
 
 #ifeq ($(USE_SYSTEM_ZLIB), 0)
@@ -1748,7 +1754,7 @@ LIBGIT2_SOURCE = libgit2-$(LIBGIT2_VER)/build/libgit2.$(LIBGIT2_VER).$(SHLIB_EXT
 LIBGIT2_TARGET = $(build_shlibdir)/libgit2.$(SHLIB_EXT)
 
 libgit2-$(LIBGIT2_VER).tar.gz:
-	$(JLDOWNLOAD) $@ https://github.com/libgit2/libgit2/archive/v$(LIBGIT2_VER).tar.gz
+	$(JLDOWNLOAD) $@ https://github.com/libgit2/libgit2/archive/$(LIBGIT2_VER).tar.gz
 libgit2-$(LIBGIT2_VER)/CMakelists.txt: libgit2-$(LIBGIT2_VER).tar.gz
 	$(JLCHECKSUM) $<
 	$(TAR) zxf $<
@@ -1756,11 +1762,12 @@ libgit2-$(LIBGIT2_VER)/CMakelists.txt: libgit2-$(LIBGIT2_VER).tar.gz
 libgit2-$(LIBGIT2_VER)/build/Makefile: libgit2-$(LIBGIT2_VER)/CMakelists.txt
 	mkdir -p libgit2-$(LIBGIT2_VER)/build
 	cd libgit2-$(LIBGIT2_VER)/build/ && \
-	cmake ..
+	cmake .. $(LIBGIT2_OPTS)
 	touch -c $@
 $(LIBGIT2_SOURCE): libgit2-$(LIBGIT2_VER)/build/Makefile
 	cd libgit2-$(LIBGIT2_VER)/build/ && \
 	cmake --build .
+	cp libgit2-$(LIBGIT2_VER)/build/libgit2.$(SHLIB_EXT) $@
 	touch -c $@
 libgit2-$(LIBGIT2_VER)/build/checked: $(LIBGIT2_SOURCE)
 	#cd libgit2-$(LIBGIT2_VER)/build/ && \
