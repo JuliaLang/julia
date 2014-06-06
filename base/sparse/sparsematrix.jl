@@ -130,7 +130,7 @@ copy(S::SparseMatrixCSC) =
 similar(S::SparseMatrixCSC, Tv::NonTupleType=eltype(S))   = SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), Array(Tv, length(S.nzval)))
 similar{Tv,Ti,TvNew}(S::SparseMatrixCSC{Tv,Ti}, ::Type{TvNew}, ::Type{Ti}) = similar(S, TvNew)
 similar{Tv,Ti,TvNew,TiNew}(S::SparseMatrixCSC{Tv,Ti}, ::Type{TvNew}, ::Type{TiNew}) = SparseMatrixCSC(S.m, S.n, convert(Array{TiNew},S.colptr), convert(Array{TiNew}, S.rowval), Array(TvNew, length(S.nzval)))
-similar(S::SparseMatrixCSC, Tv::Type, d::(Integer,Integer)) = spzeros(Tv, d[1], d[2])
+similar{Tv}(S::SparseMatrixCSC, ::Type{Tv}, d::NTuple{Integer}) = spzeros(Tv, d...)
 
 function convert{Tv,Ti,TvS,TiS}(::Type{SparseMatrixCSC{Tv,Ti}}, S::SparseMatrixCSC{TvS,TiS})
     if Tv == TvS && Ti == TiS
@@ -987,6 +987,84 @@ getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{Bool}) =
 getindex{T<:Integer}(A::SparseMatrixCSC, I::AbstractVector{T}, J::AbstractVector{Bool}) = A[I,find(J)]
 getindex{T<:Integer}(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{T}) = A[find(I),J]
 
+function getindex{Tv}(A::SparseMatrixCSC{Tv}, I::AbstractArray{Bool})
+    checkbounds(A, I)
+    n = sum(I)
+
+    colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
+    colptrB = Int[1,n+1]
+    rowvalB = Array(Int, n)
+    nzvalB = Array(Tv, n)
+    c = 1
+    rowB = 1
+
+    for col in 1:A.n
+        r1 = colptrA[col] 
+        r2 = colptrA[col+1]-1
+
+        for row in 1:A.m
+            if I[row, col]
+                while (r1 <= r2) && (rowvalA[r1] < row)
+                    r1 += 1
+                end
+                if (r1 <= r2) && (rowvalA[r1] == row) 
+                    nzvalB[c] = nzvalA[r1]
+                    rowvalB[c] = rowB
+                    c += 1
+                end
+                rowB += 1
+                (rowB > n) && break
+            end
+        end
+        (rowB > n) && break
+    end
+    colptrB[end] = c
+    n = length(nzvalB)
+    if n > (c-1)
+        deleteat!(nzvalB, c:n)
+        deleteat!(rowvalB, c:n)
+    end
+    SparseMatrixCSC(n, 1, colptrB, rowvalB, nzvalB)
+end
+
+function getindex{Tv}(A::SparseMatrixCSC{Tv}, I::AbstractArray)
+    szA = size(A); colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
+
+    n = length(I)
+    outm = size(I,1)
+    outn = size(I,2)
+    szB = (outm, outn)
+    colptrB = zeros(Int, outn+1)
+    rowvalB = Array(Int, n)
+    nzvalB = Array(Tv, n)
+
+    colB = 1
+    rowB = 1
+    colptrB[colB] = 1
+    idxB = 1
+
+    for i in 1:n
+        row,col = ind2sub(szA, I[i])
+        for r in colptrA[col]:(colptrA[col+1]-1)
+            if rowvalA[r] == row
+                rowB,colB = ind2sub(szB, i)
+                colptrB[colB+1] += 1
+                rowvalB[idxB] = rowB
+                nzvalB[idxB] = nzvalA[r]
+                idxB += 1
+                break
+            end
+        end
+    end
+    colptrB = cumsum(colptrB)
+    if n > (idxB-1)
+        deleteat!(nzvalB, idxB:n)
+        deleteat!(rowvalB, idxB:n)
+    end
+    SparseMatrixCSC(outm, outn, colptrB, rowvalB, nzvalB)
+end
+
+
 ## setindex!
 setindex!(A::SparseMatrixCSC, v, i::Integer) = setindex!(A, v, ind2sub(size(A),i)...)
 
@@ -995,102 +1073,29 @@ function setindex!{T,Ti}(A::SparseMatrixCSC{T,Ti}, v, i0::Integer, i1::Integer)
     i1 = convert(Ti, i1)
     if !(1 <= i0 <= A.m && 1 <= i1 <= A.n); throw(BoundsError()); end
     v = convert(T, v)
+    r1 = A.colptr[i1]
+    r2 = A.colptr[i1+1]-1
     if v == 0 #either do nothing or delete entry if it exists
-        first = A.colptr[i1]
-        last = A.colptr[i1+1]-1
-        loc = -1
-        while first <= last
-            mid = (first + last) >> 1
-            t = A.rowval[mid]
-            if t == i0
-                loc = mid
-                break
-            elseif t > i0
-                last = mid - 1
-            else
-                first = mid + 1
-            end
-        end
+        loc = binarysearch(A.rowval, i0, r1, r2)
         if loc != -1
             deleteat!(A.rowval, loc)
             deleteat!(A.nzval, loc)
             for j = (i1+1):(A.n+1)
-                A.colptr[j] = A.colptr[j] - 1
+                A.colptr[j] -= 1
             end
         end
         return A
     end
-    first = A.colptr[i1]
-    last = A.colptr[i1+1]-1
-    #find i such that A.rowval[i] = i0, or A.rowval[i-1] < i0 < A.rowval[i]
-    while last - first >= 3
-        mid = (first + last) >> 1
-        t = A.rowval[mid]
-        if t == i0
-            A.nzval[mid] = v
-            return A
-        elseif t > i0
-            last = mid - 1
-        else
-            first = mid + 1
+    i = (r1 > r2) ? r1 : searchsortedfirst(A.rowval, i0, r1, r2, Forward)
+
+    if (i <= r2) && (A.rowval[i] == i0)
+        A.nzval[i] = v
+    else
+        insert!(A.rowval, i, i0)
+        insert!(A.nzval, i, v)
+        for j = (i1+1):(A.n+1)
+            A.colptr[j] += 1
         end
-    end
-    if last - first == 2
-        mid = first + 1
-        if A.rowval[mid] == i0
-            A.nzval[mid] = v
-            return A
-        elseif A.rowval[mid] > i0
-            if A.rowval[first] == i0
-                A.nzval[first] = v
-                return A
-            elseif A.rowval[first] < i0
-                i = first+1
-            else #A.rowval[first] > i0
-                i = first
-            end
-        else #A.rowval[mid] < i0
-            if A.rowval[last] == i0
-                A.nzval[last] = v
-                return A
-            elseif A.rowval[last] > i0
-                i = last
-            else #A.rowval[last] < i0
-                i = last+1
-            end
-        end
-    elseif last - first == 1
-        if A.rowval[first] == i0
-            A.nzval[first] = v
-            return A
-        elseif A.rowval[first] > i0
-            i = first
-        else #A.rowval[first] < i0
-            if A.rowval[last] == i0
-                A.nzval[last] = v
-                return A
-            elseif A.rowval[last] < i0
-                i = last+1
-            else #A.rowval[last] > i0
-                i = last
-            end
-        end
-    elseif last == first
-        if A.rowval[first] == i0
-            A.nzval[first] = v
-            return A
-        elseif A.rowval[first] < i0
-            i = first+1
-        else #A.rowval[first] > i0
-            i = first
-        end
-    else #last < first to begin with
-        i = first
-    end
-    insert!(A.rowval, i, i0)
-    insert!(A.nzval, i, v)
-    for j = (i1+1):(A.n+1)
-        A.colptr[j] = A.colptr[j] + 1
     end
     return A
 end
@@ -1409,6 +1414,210 @@ setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVec
 setindex!{T<:Integer}(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{T}, J::AbstractVector{Bool}) = setindex!(A, full(x), I, find(J))
 setindex!{T<:Integer}(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{T}) = setindex!(A, full(x), find(I), J)
 
+function setindex!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractArray{Bool,2})
+    checkbounds(A, I)
+    n = sum(I)
+    (n == 0) && (return A)
+
+    colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
+    colptrB = colptrA; rowvalB = rowvalA; nzvalB = nzvalA
+    nadd = ndel = 0
+    bidx = xidx = 1
+    r1 = r2 = 0
+
+    for col in 1:A.n
+        r1 = int(colptrA[col])
+        r2 = int(colptrA[col+1]-1)
+
+        for row in 1:A.m
+            if I[row, col]
+                v = isa(x, AbstractArray) ? x[xidx] : x
+                xidx += 1
+
+                if r1 <= r2
+                    copylen = searchsortedfirst(rowvalA, row, r1, r2, Forward) - r1
+                    if (copylen > 0)
+                        if (nadd > 0) || (ndel > 0)
+                            copy!(rowvalB, bidx, rowvalA, r1, copylen)
+                            copy!(nzvalB, bidx, nzvalA, r1, copylen)
+                        end
+                        bidx += copylen
+                        r1 += copylen
+                    end
+                end
+
+                # 0: no change, 1: update, 2: delete, 3: add new
+                mode = ((r1 <= r2) && (rowvalA[r1] == row)) ? ((v == 0) ? 2 : 1) : ((v == 0) ? 0 : 3)
+
+                if (mode > 1) && (nadd == 0) && (ndel == 0)
+                    # copy storage to take changes
+                    colptrB = copy(colptrA)
+                    memreq = (x == 0) ? 0 : n
+                    rowvalB = Array(Ti, length(rowvalA)+memreq); copy!(rowvalB, 1, rowvalA, 1, r1-1)
+                    nzvalB = Array(Tv, length(nzvalA)+memreq); copy!(nzvalB, 1, nzvalA, 1, r1-1)
+                end
+                if mode == 1
+                    rowvalB[bidx] = row
+                    nzvalB[bidx] = v
+                    bidx += 1
+                    r1 += 1
+                elseif mode == 2
+                    r1 += 1
+                    ndel += 1
+                elseif mode == 3
+                    rowvalB[bidx] = row
+                    nzvalB[bidx] = v
+                    bidx += 1
+                    nadd += 1
+                end
+                (xidx > n) && break
+            end # if I[row, col]
+        end # for row in 1:A.m
+
+        if ((nadd != 0) || (ndel != 0))
+            l = r2-r1+1
+            if l > 0
+                copy!(rowvalB, bidx, rowvalA, r1, l)
+                copy!(nzvalB, bidx, nzvalA, r1, l)
+                bidx += l
+            end
+            colptrB[col+1] = bidx
+
+            if (xidx > n) && (length(colptrB) > (col+1))
+                diff = nadd - ndel
+                colptrB[(col+2):end] = colptrA[(col+2):end] .+ diff
+                r1 = colptrA[col+1]
+                r2 = colptrA[end]-1
+                l = r2-r1+1
+                if l > 0
+                    copy!(rowvalB, bidx, rowvalA, r1, l)
+                    copy!(nzvalB, bidx, nzvalA, r1, l)
+                    bidx += l
+                end
+            end
+        else
+            bidx = colptrA[col+1]
+        end
+        (xidx > n) && break
+    end # for col in 1:A.n
+
+    if (nadd != 0) || (ndel != 0)
+        n = length(nzvalB)
+        if n > (bidx-1)
+            deleteat!(nzvalB, bidx:n)
+            deleteat!(rowvalB, bidx:n)
+        end
+        A.nzval = nzvalB; A.rowval = rowvalB; A.colptr = colptrB
+    end
+    A
+end
+
+
+function setindex!{Tv,Ti,T<:Real}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractVector{T})
+    n = length(I)
+    (n == 0) && (return A)
+
+    colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval; szA = size(A)
+    colptrB = colptrA; rowvalB = rowvalA; nzvalB = nzvalA
+    nadd = ndel = 0
+    bidx = aidx = 1
+
+    S = issorted(I) ? (1:n) : sortperm(I)
+    sxidx = r1 = r2 = 0
+
+    lastcol = 0
+    for xidx in 1:n
+        sxidx = S[xidx]
+        (sxidx < n) && (I[sxidx] == I[sxidx+1]) && continue
+
+        row,col = ind2sub(szA, I[sxidx])
+        v = isa(x, AbstractArray) ? x[sxidx] : x
+
+        if col > lastcol
+            r1 = int(colptrA[col])
+            r2 = int(colptrA[col+1] - 1)
+
+            # copy from last position till current column
+            if (nadd > 0) || (ndel > 0)
+                colptrB[(lastcol+1):col] = colptrA[(lastcol+1):col] .+ (nadd - ndel)
+                copylen = r1 - aidx
+                if copylen > 0
+                    copy!(rowvalB, bidx, rowvalA, aidx, copylen)
+                    copy!(nzvalB, bidx, nzvalA, aidx, copylen)
+                    aidx += copylen
+                    bidx += copylen
+                end
+            else
+                aidx = bidx = r1
+            end
+            lastcol = col
+        end
+
+        if r1 <= r2
+            copylen = searchsortedfirst(rowvalA, row, r1, r2, Forward) - r1
+            if (copylen > 0)
+                if (nadd > 0) || (ndel > 0)
+                    copy!(rowvalB, bidx, rowvalA, r1, copylen)
+                    copy!(nzvalB, bidx, nzvalA, r1, copylen)
+                end
+                bidx += copylen
+                r1 += copylen
+                aidx += copylen
+            end
+        end
+
+        # 0: no change, 1: update, 2: delete, 3: add new
+        mode = ((r1 <= r2) && (rowvalA[r1] == row)) ? ((v == 0) ? 2 : 1) : ((v == 0) ? 0 : 3)
+
+        if (mode > 1) && (nadd == 0) && (ndel == 0)
+            # copy storage to take changes
+            colptrB = copy(colptrA)
+            memreq = (x == 0) ? 0 : n
+            rowvalB = Array(Ti, length(rowvalA)+memreq); copy!(rowvalB, 1, rowvalA, 1, r1-1)
+            nzvalB = Array(Tv, length(nzvalA)+memreq); copy!(nzvalB, 1, nzvalA, 1, r1-1)
+        end
+        if mode == 1
+            rowvalB[bidx] = row
+            nzvalB[bidx] = v
+            bidx += 1
+            aidx += 1
+            r1 += 1
+        elseif mode == 2
+            r1 += 1
+            aidx += 1
+            ndel += 1
+        elseif mode == 3
+            rowvalB[bidx] = row
+            nzvalB[bidx] = v
+            bidx += 1
+            nadd += 1
+        end
+    end
+
+    # copy the rest
+    if (nadd > 0) || (ndel > 0)
+        colptrB[(lastcol+1):end] = colptrA[(lastcol+1):end] .+ (nadd - ndel)
+        r1 = colptrA[end]-1
+        copylen = r1 - aidx + 1
+        if copylen > 0
+            copy!(rowvalB, bidx, rowvalA, aidx, copylen)
+            copy!(nzvalB, bidx, nzvalA, aidx, copylen)
+            aidx += copylen
+            bidx += copylen
+        end
+
+        n = length(nzvalB)
+        if n > (bidx-1)
+            deleteat!(nzvalB, bidx:n)
+            deleteat!(rowvalB, bidx:n)
+        end
+        A.nzval = nzvalB; A.rowval = rowvalB; A.colptr = colptrB
+    end
+    A
+end
+
+
+
 # Sparse concatenation
 
 function vcat(X::SparseMatrixCSC...)
@@ -1641,21 +1850,9 @@ start(d::SpDiagIterator) = 1
 done(d::SpDiagIterator, j) = j > d.n
 
 function next{Tv}(d::SpDiagIterator{Tv}, j)
-    p = d.A.colptr; i = d.A.rowval;
-    first = p[j]
-    last = p[j+1]-1
-    while first <= last
-        mid = (first + last) >> 1
-        r = i[mid]
-        if r == j
-            return (d.A.nzval[mid], j+1)
-        elseif r > j
-            last = mid - 1
-        else
-            first = mid + 1
-        end
-    end
-    return (zero(Tv), j+1)
+    A = d.A
+    idx = binarysearch(A.rowval, j, A.colptr[j], A.colptr[j+1]-1)
+    ((idx == -1) ? zero(Tv) : A.nzval[idx], j+1)
 end
 
 function trace{Tv}(A::SparseMatrixCSC{Tv})
