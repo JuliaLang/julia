@@ -596,6 +596,8 @@ print(io::IOBuffer, s::SubString) = write(io, s)
 
 sizeof{T<:ByteString}(s::SubString{T}) = s.endof==0 ? 0 : next(s,s.endof)[2]-1
 
+length{T<:DirectIndexString}(s::SubString{T}) = endof(s)
+
 function next(s::SubString, i::Int)
     if i < 1 || i > s.endof
         error(BoundsError)
