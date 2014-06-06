@@ -317,9 +317,14 @@ function add_history(hist::REPLHistoryProvider, s)
     mode = mode_idx(hist, LineEdit.mode(s))
     push!(hist.modes, mode)
     hist.history_file == nothing && return
-    println(hist.history_file, "# mode: $mode")
-    println(hist.history_file, "# time: $(strftime("%F %T %Z", time()))")
-    println(hist.history_file, replace(str, r"^"ms, "\t"))
+    entry = """
+    # mode: $mode
+    # time: $(strftime("%F %T %Z", time()))
+    $(replace(str, r"^"ms, "\t"))
+    """
+    # TODO: write-lock history file
+    seekend(hist.history_file)
+    print(hist.history_file, entry)
     flush(hist.history_file)
 end
 
