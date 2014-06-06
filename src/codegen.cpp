@@ -36,6 +36,9 @@
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Analysis/Passes.h"
 #include "llvm/Bitcode/ReaderWriter.h"
+#ifdef _OS_DARWIN_
+#include "llvm/Object/MachO.h"
+#endif
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 5
 #define LLVM35 1
 #include "llvm/IR/Verifier.h"
@@ -47,6 +50,7 @@
 #else
 #include "llvm/Analysis/Verifier.h"
 #endif
+#include "llvm/DebugInfo/DIContext.h"
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 4
 #define LLVM34 1
 #define USE_MCJIT 1
@@ -54,7 +58,6 @@
 #include "llvm/ExecutionEngine/SectionMemoryManager.h"
 #include "llvm/ExecutionEngine/ObjectImage.h"
 #include "llvm/ADT/DenseMapInfo.h"
-#include "llvm/DebugInfo/DIContext.h"
 #include "llvm/Object/ObjectFile.h"
 #endif
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3
@@ -3250,11 +3253,14 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     else {
         m = shadow_module;
     }
-    funcName << ";" << globalUnique++;
+#ifndef LLVM35
+    funcName << ";";
+#endif
 #else
     m = jl_Module;
-    funcName << globalUnique++;
+    funcName << ";";
 #endif
+    funcName << globalUnique++;
 
     if (specsig) {
         std::vector<Type*> fsig(0);
