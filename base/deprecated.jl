@@ -42,7 +42,7 @@ function firstcaller(bt::Array{Ptr{None},1}, funcsym::Symbol)
     # Identify the calling line
     i = 1
     while i <= length(bt)
-        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void},), bt[i])
+        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void},Cint), bt[i], true)
         i += 1
         if lkup === ()
             continue
