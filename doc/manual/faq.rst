@@ -112,6 +112,41 @@ argument. Since Julia can't predict the return type of this function at
 compile-time, any computation that uses it will have to guard against both
 types possibly occurring, making generation of fast machine code difficult.
 
+Why does Julia give a ``DomainError`` for perfectly-sensible operations?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Certain operations make perfect mathematical sense but result in
+errors::
+
+    julia> sqrt(-2.0)
+    ERROR: DomainError
+     in sqrt at math.jl:128
+
+    julia> 2^-5
+    ERROR: DomainError
+     in power_by_squaring at intfuncs.jl:70
+     in ^ at intfuncs.jl:84
+
+This behavior is an inconvenient consequence of the requirement for
+type-stability.  In the case of ``sqrt``, most users want
+``sqrt(2.0)`` to give a real number, and would be unhappy if it
+produced the complex number ``1.4142135623730951 + 0.0im``.  One could
+write the ``sqrt`` function to switch to a complex-valued output only
+when passed a negative number (which is what ``sqrt`` does in some
+other languages), but then the result would not be `type-stable
+<#man-type-stable>`_ and the ``sqrt`` function would have poor
+performance.
+
+In these and other cases, you can get the result you want by choosing
+an *input type* that conveys your willingness to accept an *output type* in
+which the result can be represented::
+
+    julia> sqrt(-2.0+0im)
+    0.0 + 1.4142135623730951im
+
+    julia> 2.0^-5
+    0.03125
+
 
 Why does Julia use native machine integer arithmetic?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
