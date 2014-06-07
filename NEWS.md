@@ -655,6 +655,10 @@ Library improvements
 
   * Improved backtraces on Windows and OS X.
 
+  * Implementation of reduction functions (including `reduce`, `mapreduce`, `sum`, `prod`, 
+    `maximum`, `minimum`, `all`, and `any`) are refactored, with improved type stability, 
+    efficiency, and consistency. ([#6116], [#7035], [#7061], [#7106])
+
 Deprecated or removed
 ---------------------
 
@@ -829,6 +833,10 @@ Too numerous to mention.
 [#3233]: https://github.com/JuliaLang/julia/pull/3233
 [#4811]: https://github.com/JuliaLang/julia/pull/4811
 [#5832]: https://github.com/JuliaLang/julia/pull/5832
+[#6116]: https://github.com/JuliaLang/julia/pull/6116
+[#7035]: https://github.com/JuliaLang/julia/pull/7035
+[#7061]: https://github.com/JuliaLang/julia/pull/7061
+[#7106]: https://github.com/JuliaLang/julia/pull/7106
 
 [packages chapter]: http://docs.julialang.org/en/latest/manual/packages/
 [sorting functions]: http://docs.julialang.org/en/latest/stdlib/sort/
