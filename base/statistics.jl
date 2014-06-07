@@ -1,3 +1,5 @@
+##### mean #####
+
 function mean(iterable)
     state = start(iterable)
     if done(iterable, state)
@@ -29,28 +31,44 @@ meantype{T}(::Type{T}) = typeof((zero(T) + zero(T)) / 2)
 mean{T}(v::AbstractArray{T}, region) = 
     mean!(Array(meantype(T), reduced_dims(size(v), region)), v)
 
-function median!{T<:Real}(v::AbstractVector{T}; checknan::Bool=true)
-    isempty(v) && error("median of an empty array is undefined")
-    if checknan
-        for x in v
-            isnan(x) && return x
-        end
+
+##### variances #####
+
+function var(iterable; corrected::Bool=true, mean=nothing)
+    state = start(iterable)
+    if done(iterable, state)
+        error("variance of empty collection undefined: $(repr(iterable))")
     end
-    n = length(v)
-    if isodd(n)
-        return select!(v,div(n+1,2))
-    else
-        m = select!(v, div(n,2):div(n,2)+1)
-        return (m[1] + m[2])/2
+    count = 1
+    value, state = next(iterable, state)
+    if mean == nothing
+        # Use Welford algorithm as seen in (among other places) 
+        # Knuth's TAOCP, Vol 2, page 232, 3rd edition. 
+        M = value / 1
+        S = zero(M)
+        while !done(iterable, state)
+            value, state = next(iterable, state)
+            count += 1
+            new_M = M + (value - M) / count
+            S = S + (value - M) * (value - new_M)
+            M = new_M
+        end
+        return S / (count - int(corrected))
+    else # mean provided
+        # Cannot use a compensated version, e.g. the one from
+        # "Updating Formulae and a Pairwise Algorithm for Computing Sample Variances."
+        # by Chan, Golub, and LeVeque, Technical Report STAN-CS-79-773, 
+        # Department of Computer Science, Stanford University,
+        # because user can provide mean value that is different to mean(iterable)
+        sum2 = (value - mean)^2
+        while !done(iterable, state)
+            value, state = next(iterable, state)
+            count += 1
+            sum2 += (value - mean)^2
+        end
+        return sum2 / (count - int(corrected))
     end
 end
-median{T<:Real}(v::AbstractArray{T}; checknan::Bool=true) =
-    median!(vec(copy(v)), checknan=checknan)
-median{T}(v::AbstractArray{T}, region; checknan::Bool=true) = 
-    mapslices( x->median(x; checknan=checknan), v, region )
-
-
-## variances
 
 function varzm(v::AbstractArray; corrected::Bool=true)
     n = length(v)
@@ -109,42 +127,6 @@ function var(v::AbstractArray, region; corrected::Bool=true, mean=nothing)
     error("Invalid value of mean.")
 end
 
-function var(iterable; corrected::Bool=true, mean=nothing)
-    state = start(iterable)
-    if done(iterable, state)
-        error("variance of empty collection undefined: $(repr(iterable))")
-    end
-    count = 1
-    value, state = next(iterable, state)
-    if mean == nothing
-        # Use Welford algorithm as seen in (among other places) 
-        # Knuth's TAOCP, Vol 2, page 232, 3rd edition. 
-        M = value / 1
-        S = zero(M)
-        while !done(iterable, state)
-            value, state = next(iterable, state)
-            count += 1
-            new_M = M + (value - M) / count
-            S = S + (value - M) * (value - new_M)
-            M = new_M
-        end
-        return S / (count - int(corrected))
-    else # mean provided
-        # Cannot use a compensated version, e.g. the one from
-        # "Updating Formulae and a Pairwise Algorithm for Computing Sample Variances."
-        # by Chan, Golub, and LeVeque, Technical Report STAN-CS-79-773, 
-        # Department of Computer Science, Stanford University,
-        # because user can provide mean value that is different to mean(iterable)
-        sum2 = (value - mean)^2
-        while !done(iterable, state)
-            value, state = next(iterable, state)
-            count += 1
-            sum2 += (value - mean)^2
-        end
-        return sum2 / (count - int(corrected))
-    end
-end
-
 varm(iterable, m::Number; corrected::Bool=true) =
     var(iterable, corrected=corrected, mean=m)
 
@@ -161,7 +143,8 @@ function var(v::Range)
     return abs2(s) * (l + 1) * l / 12
 end
 
-## standard deviation
+
+##### standard deviation #####
 
 function sqrt!(v::AbstractArray) 
     for i = 1:length(v)
@@ -185,7 +168,8 @@ std(iterable; corrected::Bool=true, mean=nothing) =
 stdm(iterable, m::Number; corrected::Bool=true) =
     std(iterable, corrected=corrected, mean=m)
 
-## pearson covariance functions ##
+
+###### covariance ######
 
 # auxiliary functions
 
@@ -203,7 +187,6 @@ end
 
 _vmean(x::AbstractVector, vardim::Int) = mean(x)
 _vmean(x::AbstractMatrix, vardim::Int) = mean(x, vardim)
-
 
 # core functions
 
@@ -280,6 +263,9 @@ function cov(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, corrected:
     end
 end
 
+
+##### correlation #####
+
 # cov2cor!
 
 function cov2cor!{T}(C::AbstractMatrix{T}, xsd::AbstractArray)
@@ -331,8 +317,7 @@ function cov2cor!(C::AbstractMatrix, xsd::AbstractArray, ysd::AbstractArray)
     return C
 end
 
-
-# # corzm (non-exported, with centered data)
+# corzm (non-exported, with centered data)
 
 corzm{T}(x::AbstractVector{T}) = float(one(T) * one(T))
 
@@ -413,6 +398,69 @@ function cor(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, mean=nothi
         error("Invalid value of mean.")
     end
 end
+
+
+##### median & quantiles #####
+
+function median!{T<:Real}(v::AbstractVector{T}; checknan::Bool=true)
+    isempty(v) && error("median of an empty array is undefined")
+    if checknan
+        for x in v
+            isnan(x) && return x
+        end
+    end
+    n = length(v)
+    if isodd(n)
+        return select!(v,div(n+1,2))
+    else
+        m = select!(v, div(n,2):div(n,2)+1)
+        return (m[1] + m[2])/2
+    end
+end
+median{T<:Real}(v::AbstractArray{T}; checknan::Bool=true) =
+    median!(vec(copy(v)), checknan=checknan)
+median{T}(v::AbstractArray{T}, region; checknan::Bool=true) = 
+    mapslices( x->median(x; checknan=checknan), v, region )
+
+# for now, use the R/S definition of quantile; may want variants later
+# see ?quantile in R -- this is type 7
+# TODO: need faster implementation (use select!?)
+#
+function quantile!(v::AbstractVector, q::AbstractVector)
+    isempty(v) && error("empty data array")
+    isempty(q) && error("empty quantile array")
+
+    # make sure the quantiles are in [0,1]
+    q = bound_quantiles(q)
+
+    lv = length(v)
+    lq = length(q)
+
+    index = 1 .+ (lv-1)*q
+    lo = ifloor(index)
+    hi = iceil(index)
+    sort!(v)
+    isnan(v[end]) && error("quantiles are undefined in presence of NaNs")
+    i = find(index .> lo)
+    r = float(v[lo])
+    h = (index.-lo)[i]
+    r[i] = (1.-h).*r[i] + h.*v[hi[i]]
+    return r
+end
+quantile(v::AbstractVector, q::AbstractVector) = quantile!(copy(v),q)
+quantile(v::AbstractVector, q::Number) = quantile(v,[q])[1]
+
+function bound_quantiles(qs::AbstractVector)
+    epsilon = 100*eps()
+    if (any(qs .< -epsilon) || any(qs .> 1+epsilon))
+        error("quantiles out of [0,1] range")
+    end
+    [min(1,max(0,q)) for q = qs]
+end
+
+
+
+##### histogram #####
 
 ## nice-valued ranges for histograms
 
@@ -542,39 +590,3 @@ hist2d(v::AbstractMatrix, n1::Integer, n2::Integer) =
 hist2d(v::AbstractMatrix, n::Integer) = hist2d(v, n, n)
 hist2d(v::AbstractMatrix) = hist2d(v, sturges(size(v,1)))
 
-
-## quantiles ##
-
-# for now, use the R/S definition of quantile; may want variants later
-# see ?quantile in R -- this is type 7
-function quantile!(v::AbstractVector, q::AbstractVector)
-    isempty(v) && error("empty data array")
-    isempty(q) && error("empty quantile array")
-
-    # make sure the quantiles are in [0,1]
-    q = bound_quantiles(q)
-
-    lv = length(v)
-    lq = length(q)
-
-    index = 1 .+ (lv-1)*q
-    lo = ifloor(index)
-    hi = iceil(index)
-    sort!(v)
-    isnan(v[end]) && error("quantiles are undefined in presence of NaNs")
-    i = find(index .> lo)
-    r = float(v[lo])
-    h = (index.-lo)[i]
-    r[i] = (1.-h).*r[i] + h.*v[hi[i]]
-    return r
-end
-quantile(v::AbstractVector, q::AbstractVector) = quantile!(copy(v),q)
-quantile(v::AbstractVector, q::Number) = quantile(v,[q])[1]
-
-function bound_quantiles(qs::AbstractVector)
-    epsilon = 100*eps()
-    if (any(qs .< -epsilon) || any(qs .> 1+epsilon))
-        error("quantiles out of [0,1] range")
-    end
-    [min(1,max(0,q)) for q = qs]
-end
