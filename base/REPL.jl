@@ -319,7 +319,7 @@ end
 
 function add_history(hist::REPLHistoryProvider, s)
     # bytestring copies
-    str = bytestring(s.input_buffer)
+    str = rstrip(bytestring(s.input_buffer))
     if isempty(strip(str)) || # Do not add empty strings to the history
        (length(hist.history) > 0 && str == hist.history[end]) # Do not add consecutive duplicate entries
         return
@@ -331,7 +331,7 @@ function add_history(hist::REPLHistoryProvider, s)
     entry = """
     # mode: $mode
     # time: $(strftime("%F %T %Z", time()))
-    $('\t')$(replace(str, '\n', "\n\t"))
+    $(replace(str, r"^"ms, "\t"))
     """
     # TODO: write-lock history file
     seekend(hist.history_file)
