@@ -268,28 +268,39 @@ const invalid_history_message = """
 Invalid history format. If you have a ~/.julia_history file left over from an older version of Julia, try renaming or deleting it.
 """
 
+function hist_getline(file)
+    while !eof(file)
+        line = utf8(readline(file))
+        isempty(line) && return line
+        line[1] in "\r\n" || return line
+    end
+    return utf8("")
+end
+
 function hist_from_file(hp, file)
     hp.history_file = file
     seek(file, 0)
-    while !eof(file)
+    while true
         mode = :julia
-        line = utf8(readline(file))
+        line = hist_getline(file)
+        isempty(line) && break
         line[1] == '#' || error(invalid_history_message)
-        while true
+        while !isempty(line)
             m = match(r"^#\s*(\w+)\s*:\s*(.*?)\s*$", line)
             m == nothing && break
             if m.captures[1] == "mode"
                 mode = symbol(m.captures[2])
             end
-            line = utf8(readline(file))
+            line = hist_getline(file)
         end
+        isempty(line) && break
         line[1] == '\t' || error(invalid_history_message)
         lines = UTF8String[]
-        while true
+        while !isempty(line)
             push!(lines, chomp(line[2:end]))
             eof(file) && break
             Base.peek(file) == '\t' || break
-            line = utf8(readline(file))
+            line = hist_getline(file)
         end
         push!(hp.modes, mode)
         push!(hp.history, join(lines, '\n'))
