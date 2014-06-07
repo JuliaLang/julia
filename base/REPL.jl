@@ -320,7 +320,7 @@ function add_history(hist::REPLHistoryProvider, s)
     entry = """
     # mode: $mode
     # time: $(strftime("%F %T %Z", time()))
-    $(replace(str, r"^"ms, "\t"))
+    $('\t')$(replace(str, '\n', "\n\t"))
     """
     # TODO: write-lock history file
     seekend(hist.history_file)
