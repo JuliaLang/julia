@@ -329,8 +329,8 @@ function add_history(hist::REPLHistoryProvider, s)
     push!(hist.modes, mode)
     hist.history_file == nothing && return
     entry = """
-    # mode: $mode
     # time: $(strftime("%F %T %Z", time()))
+    # mode: $mode
     $(replace(str, r"^"ms, "\t"))
     """
     # TODO: write-lock history file
