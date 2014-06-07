@@ -22,15 +22,11 @@ scale!(s::Number, X::AbstractArray) = generic_scale!(X, s)
 
 cross(a::AbstractVector, b::AbstractVector) = [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
 
-triu(M::AbstractMatrix) = triu(M,0)
-tril(M::AbstractMatrix) = tril(M,0)
-#triu{T}(M::AbstractMatrix{T}, k::Integer)
-#tril{T}(M::AbstractMatrix{T}, k::Integer)
+triu(M::AbstractMatrix) = triu!(copy(M))
+tril(M::AbstractMatrix) = tril!(copy(M))
 triu!(M::AbstractMatrix) = triu!(M,0)
 tril!(M::AbstractMatrix) = tril!(M,0)
 
-#diff(a::AbstractVector)
-#diff(a::AbstractMatrix, dim::Integer)
 diff(a::AbstractMatrix) = diff(a, 1)
 diff(a::AbstractVector) = [ a[i+1] - a[i] for i=1:length(a)-1 ]
 
@@ -45,10 +41,8 @@ end
 
 gradient(F::AbstractVector) = gradient(F, [1:length(F)])
 gradient(F::AbstractVector, h::Real) = gradient(F, [h*(1:length(F))])
-#gradient(F::AbstractVector, h::AbstractVector)
 
 diag(A::AbstractVector) = error("use diagm instead of diag to construct a diagonal matrix")
-#diag(A::AbstractMatrix)
 
 #diagm{T}(v::AbstractVecOrMat{T})
 

@@ -32,8 +32,7 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         b += im*convert(Matrix{elty}, randn(n, 2))
     end
 
-    for M in (triu(A), tril(A))
-        TM = Triangular(M)
+    for (M, TM) in ((triu(A), Triangular(A, :U)), (tril(A), Triangular(A, :L)))
         
         ##Idempotent tests #XXX - not implemented
         #for func in (conj, transpose, ctranspose)
@@ -66,8 +65,7 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
 
         #Binary operations
         B = convert(Matrix{elty}, randn(n, n))
-        for M2 in (triu(B), tril(B))
-            TM2 = Triangular(M2)
+        for (M2, TM2) in ((triu(B), Triangular(B, :U)), (tril(B), Triangular(B, :L)))
             for op in (*,) #+, - not implemented
                 @test_approx_eq full(op(TM, TM2)) op(M, M2)
                 @test_approx_eq full(op(TM, M2)) op(M, M2)
@@ -302,11 +300,11 @@ for newtype in [Tridiagonal, Matrix]
 end
 
 A=Tridiagonal(zeros(n-1), [1.0:n], zeros(n-1)) #morally Diagonal
-for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Triangular, Matrix]
+for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Matrix]
     @test full(convert(newtype, A)) == full(A)
 end
 
-A=Triangular(full(Diagonal(a))) #morally Diagonal
+A=Triangular(full(Diagonal(a)), :L) #morally Diagonal
 for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Triangular, Matrix]
     @test full(convert(newtype, A)) == full(A)
 end

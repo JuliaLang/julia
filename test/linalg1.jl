@@ -94,7 +94,7 @@ debug && println("(Automatic) Square LU decomposition")
     lua   = factorize(a)
     l,u,p = lua[:L], lua[:U], lua[:p]
     @test_approx_eq l*u a[p,:]
-    @test_approx_eq l[invperm(p),:]*u a
+    @test_approx_eq (l*u)[invperm(p),:] a
     @test_approx_eq a * inv(lua) eye(n)
     @test norm(a*(lua\b) - b, 1) < ε*κ*n*2 # Two because the right hand side has two columns
 
