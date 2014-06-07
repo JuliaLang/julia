@@ -479,10 +479,11 @@ function tuple_tfunc(argtypes::ANY, limit)
 end
 
 function builtin_tfunction(f::ANY, args::ANY, argtypes::ANY)
+    isva = isvatuple(argtypes)
     if is(f,tuple)
         return tuple_tfunc(argtypes, true)
     elseif is(f,arrayset)
-        if length(argtypes) < 3 && !isvatuple(argtypes)
+        if length(argtypes) < 3 && !isva
             return None
         end
         a1 = argtypes[1]
@@ -491,14 +492,14 @@ function builtin_tfunction(f::ANY, args::ANY, argtypes::ANY)
         end
         return a1
     elseif is(f,arrayref)
-        if length(argtypes) < 2
+        if length(argtypes) < 2 && !isva
             return None
         end
         a = argtypes[1]
         return (isa(a,DataType) && a<:Array ?
                 a.parameters[1] : Any)
     elseif is(f,Expr)
-        if length(argtypes) < 1
+        if length(argtypes) < 1 && !isva
             return None
         end
         return Expr
@@ -513,7 +514,7 @@ function builtin_tfunction(f::ANY, args::ANY, argtypes::ANY)
         return Any
     end
     tf = tf::(Real, Real, Function)
-    if !(tf[1] <= length(argtypes) <= tf[2])
+    if !(tf[1] <= length(argtypes) <= tf[2]) && !isva
         # wrong # of args
         return None
     end
