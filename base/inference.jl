@@ -482,10 +482,14 @@ function builtin_tfunction(f::ANY, args::ANY, argtypes::ANY)
     if is(f,tuple)
         return tuple_tfunc(argtypes, true)
     elseif is(f,arrayset)
-        if length(argtypes) < 3
+        if length(argtypes) < 3 && !isvatuple(argtypes)
             return None
         end
-        return argtypes[1]
+        a1 = argtypes[1]
+        if isvarargtype(a1)
+            return a1.parameters[1]
+        end
+        return a1
     elseif is(f,arrayref)
         if length(argtypes) < 2
             return None
