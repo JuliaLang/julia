@@ -191,17 +191,20 @@ convert{T}(::Type{QRPivoted{T}},A::QRPivoted) = QRPivoted(convert(AbstractMatrix
 convert{T}(::Type{Factorization{T}}, A::QRPivoted) = convert(QRPivoted{T}, A)
 
 function getindex(A::QR, d::Symbol)
-    d == :R && return triu(A.factors[1:minimum(size(A)),:])
+    m, n = size(A)
+    d == :R && return triu!(A.factors[1:min(m,n), 1:n])
     d == :Q && return QRPackedQ(A.factors,A.τ)
     throw(KeyError(d))
 end
 function getindex(A::QRCompactWY, d::Symbol)
-    d == :R && return triu(A.factors[1:minimum(size(A)),:])
+    m, n = size(A)
+    d == :R && return triu!(A.factors[1:min(m,n), 1:n])
     d == :Q && return QRCompactWYQ(A.factors,A.T)
     throw(KeyError(d))
 end
 function getindex{T}(A::QRPivoted{T}, d::Symbol)
-    d == :R && return triu(A.factors[1:minimum(size(A)),:])
+    m, n = size(A)
+    d == :R && return triu!(A.factors[1:min(m,n), 1:n])
     d == :Q && return QRPackedQ(A.factors,A.τ)
     d == :p && return A.jpvt
     if d == :P

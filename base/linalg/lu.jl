@@ -93,8 +93,12 @@ end
 
 function getindex{T,S<:StridedMatrix}(A::LU{T,S}, d::Symbol)
     m, n = size(A)
-    d == :L && return tril(A.factors[1:m, 1:min(m,n)], -1) + eye(T, m, min(m,n))
-    d == :U && return triu(A.factors[1:min(m,n),1:n])
+    if d == :L
+        L = tril!(A.factors[1:m, 1:min(m,n)])
+        for i = 1:min(m,n); L[i,i] = one(T); end
+        return L
+    end
+    d == :U && return triu!(A.factors[1:min(m,n), 1:n])
     d == :p && return ipiv2perm(A.ipiv, m)
     if d == :P
         p = A[:p]
@@ -144,7 +148,7 @@ end
 
 inv{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}) = @assertnonsingular LAPACK.getri!(copy(A.factors), A.ipiv) A.info
 
-cond{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}, p::Number) = inv(LAPACK.gecon!(p == 1 ? '1' : 'I', A.factors, norm(A[:L][A[:p],:]*A[:U], p)))
+cond{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}, p::Number) = inv(LAPACK.gecon!(p == 1 ? '1' : 'I', A.factors, norm((A[:L]*A[:U])[A[:p],:], p)))
 cond(A::LU, p::Number) = norm(A[:L]*A[:U],p)*norm(inv(A),p)
 
 # Tridiagonal
