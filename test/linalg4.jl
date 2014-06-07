@@ -1,6 +1,7 @@
-using Base.Test
 import Base.LinAlg
 import Base.LinAlg: BlasComplex, BlasFloat, BlasReal
+
+srand(1)
 
 #Test equivalence of eigenvectors/singular vectors taking into account possible phase (sign) differences
 function test_approx_eq_vecs{S<:Real,T<:Real}(a::StridedVecOrMat{S}, b::StridedVecOrMat{T}, error=nothing)
