@@ -574,7 +574,7 @@ function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[]
     julia_prompt.on_done = respond(Base.parse_input_line, repl, julia_prompt)
 
     # Setup help mode
-    help_mode = Prompt(" help> ",
+    help_mode = Prompt("help?> ",
         prompt_prefix = repl.help_color,
         prompt_suffix = repl.input_color,
         keymap_func_data = repl,
