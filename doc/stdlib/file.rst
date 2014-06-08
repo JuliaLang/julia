@@ -75,9 +75,10 @@ Filesystem
 
    Get the file name part of a path.
 
-.. function:: @__FILE__ -> String
+.. function:: @__FILE__() -> String
 
-   Expands to a string with the absolute path and file name of the script being run.
+   ``@__FILE__`` expands to a string with the absolute path and file name of the script being run.
+   Returns ``nothing`` if run from a REPL or an empty string if evaluated by ``julia -e <expr>``.
 
 .. function:: isabspath(path::String) -> Bool
 
