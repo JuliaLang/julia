@@ -3079,10 +3079,9 @@ Mathematical Functions
 
    Compute the polygamma function of order ``m`` of argument ``x`` (the ``(m+1)th`` derivative of the logarithm of ``gamma(x)``)
 
-.. function:: airy(k, x[, scaled::Bool=false])
+.. function:: airy(k,x)
 
    kth derivative of the Airy function :math:`\operatorname{Ai}(x)`.
-   If ``scaled`` is ``true``, return :math:`\operatorname{Ai}(x) e^{\frac{2}{3} x \sqrt{x}}` for ``k == 0 || k == 1``, and :math:`\operatorname{Ai}(x) e^{- \left| \operatorname{Re} \left( \frac{2}{3} x \sqrt{x} \right) \right|}` for ``k == 2 || k == 3``.
 
 .. function:: airyai(x)
 
@@ -3104,6 +3103,10 @@ Mathematical Functions
 
    Airy function derivative :math:`\operatorname{Bi}'(x)`.
 
+.. function:: airyx(k,x)
+
+   scaled kth derivative of the Airy function, return :math:`\operatorname{Ai}(x) e^{\frac{2}{3} x \sqrt{x}}` for ``k == 0 || k == 1``, and :math:`\operatorname{Ai}(x) e^{- \left| \operatorname{Re} \left( \frac{2}{3} x \sqrt{x} \right) \right|}` for ``k == 2 || k == 3``.
+
 .. function:: besselj0(x)
 
    Bessel function of the first kind of order 0, :math:`J_0(x)`.
@@ -3112,10 +3115,13 @@ Mathematical Functions
 
    Bessel function of the first kind of order 1, :math:`J_1(x)`.
 
-.. function:: besselj(nu, x[, scaled::Bool=false])
+.. function:: besselj(nu, x)
 
    Bessel function of the first kind of order ``nu``, :math:`J_\nu(x)`.
-   If ``scaled`` is ``true``, return :math:`J_\nu(x) e^{- | \operatorname{Im}(x) |}`.
+
+.. function:: besseljx(nu, x)
+
+   Scaled Bessel function of the first kind of order ``nu``, :math:`J_\nu(x) e^{- | \operatorname{Im}(x) |}`.
 
 .. function:: bessely0(x)
 
@@ -3125,35 +3131,50 @@ Mathematical Functions
 
    Bessel function of the second kind of order 1, :math:`Y_1(x)`.
 
-.. function:: bessely(nu, x[, scaled::Bool=false])
+.. function:: bessely(nu, x)
 
    Bessel function of the second kind of order ``nu``, :math:`Y_\nu(x)`.
-   If ``scaled`` is ``true``, return :math:`Y_\nu(x) e^{- | \operatorname{Im}(x) |}`.
 
-.. function:: hankelh1(nu, x[, scaled::Bool=false])
+.. function:: besselyx(nu, x)
+
+   Scaled Bessel function of the second kind of order ``nu``, :math:`Y_\nu(x) e^{- | \operatorname{Im}(x) |}`.
+
+.. function:: hankelh1(nu, x)
 
    Bessel function of the third kind of order ``nu``, :math:`H^{(1)}_\nu(x)`.
-   If ``scaled`` is ``true``, return :math:`H^{(1)}_\nu(x) e^{-x i}`.
 
-.. function:: hankelh2(nu, x[, scaled::Bool=false])
+.. function:: hankelh1x(nu, x)
+
+   Scaled Bessel function of the third kind of order ``nu``, :math:`H^{(1)}_\nu(x) e^{-x i}`.
+
+.. function:: hankelh2(nu, x)
 
    Bessel function of the third kind of order ``nu``, :math:`H^{(2)}_\nu(x)`.
-   If ``scaled`` is ``true``, return :math:`H^{(2)}_\nu(x) e^{x i}`.
+
+.. function:: hankelh2x(nu, x)
+
+   Scaled Bessel function of the third kind of order ``nu``, :math:`H^{(2)}_\nu(x) e^{x i}`.
 
 .. function:: besselh(nu, k, x)
 
    Bessel function of the third kind of order ``nu`` (Hankel function).
    ``k`` is either 1 or 2, selecting ``hankelh1`` or ``hankelh2``, respectively.
 
-.. function:: besseli(nu, x[, scaled::Bool=false])
+.. function:: besseli(nu, x)
 
    Modified Bessel function of the first kind of order ``nu``, :math:`I_\nu(x)`.
-   If ``scaled`` is ``true``, return :math:`I_\nu(x) e^{- | \operatorname{Re}(x) |}`.
 
-.. function:: besselk(nu, x[, scaled::Bool=false])
+.. function:: besselix(nu, x)
+
+   Scaled modified Bessel function of the first kind of order ``nu``, :math:`I_\nu(x) e^{- | \operatorname{Re}(x) |}`.
+
+.. function:: besselk(nu, x)
 
    Modified Bessel function of the second kind of order ``nu``, :math:`K_\nu(x)`.
-   If ``scaled`` is ``true``, return :math:`K_\nu(x) e^x`.
+
+.. function:: besselk(nu, x)
+
+   Scaled modified Bessel function of the second kind of order ``nu``, :math:`K_\nu(x) e^x`.
 
 .. function:: beta(x, y)
 
