@@ -75,6 +75,10 @@ Filesystem
 
    Get the file name part of a path.
 
+.. function:: @__FILE__ -> String
+
+   Expands to a string with the absolute path and file name of the script being run.
+
 .. function:: isabspath(path::String) -> Bool
 
    Determines whether a path is absolute (begins at the root directory).
