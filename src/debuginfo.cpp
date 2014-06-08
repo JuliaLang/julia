@@ -142,11 +142,14 @@ extern "C"
 const char *jl_demangle(const char *name) {
     const char *start = name;
     const char *end = start;
+    char *ret;
     while ((*start++ != '_') && (*start != '\0'));
     if (*name == '\0') goto done;
     while ((*end++ != ';') && (*end != '\0'));
     if (*name == '\0') goto done;
-    return strndup(start, end-start-1);
+    ret = (char*)malloc(end-start-1);
+    memcpy(ret,start,end-start-1);
+    return ret;
     done:
         return strdup(name);
 }
@@ -181,12 +184,12 @@ void lookup_pointer(DIContext *context, const char **name, int *line, const char
     #endif
 }
 
-#include <dlfcn.h>
 #ifdef _OS_DARWIN_
     #include <mach-o/dyld.h>
 #endif
-
 #ifndef _OS_WINDOWS_
+#include <dlfnc.h>
+#endif
 typedef struct {
     llvm::object::ObjectFile *obj;
     DIContext *ctx;
@@ -241,11 +244,16 @@ bool jl_is_sysimg(const char *path)
 
 void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename, size_t pointer, int skipC)
 {
+#ifdef _OS_WINDOWS_
+    DWORD fbase = SymGetModuleBase64(GetCurrentProcess(),(DWORD)pointer);
+    if (fbase != 0) {
+#else
     Dl_info dlinfo;
     if (dladdr((void*)pointer, &dlinfo) != 0) {
         if (skipC && !jl_is_sysimg(dlinfo.dli_fname))
             return;
         uint64_t fbase = (uint64_t)dlinfo.dli_fbase;
+#endif
         obfiletype::iterator it = objfilemap.find(fbase);
         llvm::object::ObjectFile *obj = NULL;
         DIContext *context = NULL;
@@ -296,12 +304,21 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
             llvm::object::ObjectFile *errorobj = llvm::object::ObjectFile::createObjectFile(dsympath);
 #endif
 #else
+#ifndef _OS_WINDOWS_
+            char *fname = dlinfo.dli_fname
+#else
+            IMAGEHLP_MODULE64 ModuleInfo;
+            ModuleInfo.SizeOfStruct = sizeof(IMAGEHLP_MODULE64);
+            SymGetModuleInfo64(GetCurrentProcess(), (DWORD64)pointer, &ModuleInfo);
+            char *fname = ModuleInfo.LoadedImageName;
+            JL_PRINTF(JL_STDOUT,fname);
+#endif
             // On non OS X systems we need to mmap another copy because of the permissions on the mmaped
             // shared library.
 #ifdef LLVM35
-            ErrorOr<llvm::object::ObjectFile*> errorobj = llvm::object::ObjectFile::createObjectFile(dlinfo.dli_fname);
+            ErrorOr<llvm::object::ObjectFile*> errorobj = llvm::object::ObjectFile::createObjectFile(fname);
 #else
-            llvm::object::ObjectFile *errorobj = llvm::object::ObjectFile::createObjectFile(dlinfo.dli_fname);
+            llvm::object::ObjectFile *errorobj = llvm::object::ObjectFile::createObjectFile(fname);
 #endif
 #endif
 #ifdef LLVM35
@@ -322,6 +339,13 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
 #endif
 
             }
+            if (errorobj != NULL)
+                JL_PRINTF(JL_STDOUT,"errorobj");
+            if (context != NULL) {
+                JL_PRINTF(JL_STDOUT,"context");
+                raw_fd_ostream out(2,false,true); 
+                context->dump(out);
+            }
             objfileentry_t entry = {obj,context,slide};
             objfilemap[fbase] = entry;
         } else {
@@ -334,13 +358,6 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
     }
     return;
 }
-
-#else
-void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename, size_t pointer, int skipC)
-{
-    return;
-}
-#endif
 
 void jl_getFunctionInfo(const char **name, int *line, const char **filename, size_t pointer, int skipC)
 {
