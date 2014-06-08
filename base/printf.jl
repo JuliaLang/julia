@@ -816,13 +816,25 @@ is_str_expr(ex) =
 function _printf(macroname, io, fmt, args)
     isa(fmt, String) || error("$macroname: format must be a plain static string (no interpolation or prefix)")
     sym_args, blk = gen(fmt)
-    if length(sym_args) != length(args)
-        error("$macroname: wrong number of arguments")
-    end
-    for i = length(args):-1:1
+    for i = length(sym_args):-1:1
         var = sym_args[i].args[1]
-        unshift!(blk.args, :($var = $(esc(args[i]))))
+        unshift!(blk.args, :($var = G[$i]))
     end
+
+    #
+    #  Delay generation of argument list and check until evaluation time instead of macro
+    #  expansion time.
+    #
+    x = Expr(:call,:tuple,args...);
+    unshift!(blk.args,
+       quote
+          G = $(esc(x));
+          if length(G) != $(length(sym_args))
+             error($macroname,": wrong number of arguments (",length(G),") should be (",$(length(sym_args)),")");
+          end
+       end
+    );
+
     unshift!(blk.args, :(out = $io))
     blk
 end
