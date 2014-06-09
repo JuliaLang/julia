@@ -831,7 +831,7 @@ pre-release/build annotations), ``v"2"`` is equivalent to ``v"2.0.0"``, and so
 on.
 
 ``VersionNumber`` objects are mostly useful to easily and correctly compare two
-(or more) versions. For example, the constant ``VERSION`` holds Julia verison
+(or more) versions. For example, the constant ``VERSION`` holds Julia version
 number as a ``VersionNumber`` object, and therefore one can define some
 version-specific behaviour using simple statements as::
 
