@@ -552,7 +552,7 @@ Perhaps surprisingly, these behaviors are not hard-coded into the Julia
 parser or compiler. Instead, they are custom behaviors provided by a
 general mechanism that anyone can use: prefixed string literals are
 parsed as calls to specially-named macros. For example, the regular
-expression macros is just the following::
+expression macro is just the following::
 
     macro r_str(p)
       Regex(p)
