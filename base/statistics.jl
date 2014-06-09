@@ -198,7 +198,7 @@ end
 
 function sqrt!(v::AbstractArray) 
     for i = 1:length(v)
-        v[i] = sqrt(v[i])
+        @inbounds v[i] = sqrt(v[i])
     end
     v
 end
