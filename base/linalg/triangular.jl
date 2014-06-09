@@ -105,7 +105,7 @@ function convert{T,S,UpLo,IsUnit}(::Type{Matrix}, A::Triangular{T,S,UpLo,IsUnit}
     B
 end
 
-function full!(A::Triangular)
+function full!{T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit})
     B = A.data
     (UpLo == :L ? tril! : triu!)(B)
     if IsUnit
