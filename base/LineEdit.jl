@@ -203,7 +203,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::TTYTerminal, buf,
 
     l = ""
 
-    plength = length(prompt)
+    plength = strwidth(prompt)
     pslength = length(prompt.data)
     # Now go through the buffer line by line
     while cur_row == 0 || (!isempty(l) && l[end] == '\n')
@@ -211,11 +211,11 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::TTYTerminal, buf,
         hasnl = !isempty(l) && l[end] == '\n'
         cur_row += 1
         # We need to deal with UTF8 characters. Since the IOBuffer is a bytearray, we just count bytes
-        llength = length(l)
+        llength = strwidth(l)
         slength = length(l.data)
         if cur_row == 1 # First line
             if line_pos < slength
-                num_chars = length(l[1:line_pos])
+                num_chars = strwidth(l[1:line_pos])
                 curs_row = div(plength+num_chars-1, cols) + 1
                 curs_pos = (plength+num_chars-1) % cols + 1
             end
@@ -229,7 +229,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::TTYTerminal, buf,
             # the '\n' at the end of the previous line)
             if curs_row == -1
                 if line_pos < slength
-                    num_chars = length(l[1:line_pos])
+                    num_chars = strwidth(l[1:line_pos])
                     curs_row = cur_row + div(indent+num_chars-1, cols)
                     curs_pos = (indent+num_chars-1) % cols + 1
                 end
@@ -310,13 +310,20 @@ function char_move_left(buf::IOBuffer)
     c
 end
 
-function edit_move_left(s::PromptState)
-    if position(s.input_buffer) > 0
-        #move to the next UTF8 character to the left
-        char_move_left(s.input_buffer)
-        refresh_line(s)
+function edit_move_left(buf::IOBuffer)
+    if position(buf) > 0
+        #move to the next base UTF8 character to the left
+        while true
+            c = char_move_left(buf)
+            if charwidth(c) != 0 || position(buf) == 0
+                break
+            end
+        end
+        return true
     end
+    return false
 end
+edit_move_left(s::PromptState) = edit_move_left(s.input_buffer) && refresh_line(s)
 
 function edit_move_word_left(s)
     if position(s.input_buffer) > 0
@@ -357,13 +364,22 @@ end
 char_move_word_right(s) = char_move_word_right(buffer(s))
 char_move_word_left(s) = char_move_word_left(buffer(s))
 
-function edit_move_right(s)
-    if !eof(s.input_buffer)
-        # move to the next UTF8 character to the right
-        char_move_right(s)
-        refresh_line(s)
+function edit_move_right(buf::IOBuffer)
+    if !eof(buf)
+        # move to the next base UTF8 character to the right
+        while true
+            c = char_move_right(buf)
+            eof(buf) && break
+            pos = position(buf)
+            nextc = read(buf,Char)
+            seek(buf,pos)
+            (charwidth(nextc) != 0) && break
+        end
+        return true
     end
+    return false
 end
+edit_move_right(s::PromptState) = edit_move_right(s.input_buffer) && refresh_line(s)
 
 function edit_move_word_right(s)
     if !eof(s.input_buffer)

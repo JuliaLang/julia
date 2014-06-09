@@ -116,6 +116,17 @@ LineEdit.char_move_word_left(buf)
 @test LineEdit.edit_delete_prev_word(buf)
 @test bytestring(buf.data[1:buf.size]) == "x = arg3)"
 
+# Unicode combining characters
+let buf = IOBuffer()
+    LineEdit.edit_insert(buf, "â")
+    LineEdit.edit_move_left(buf)
+    @test position(buf) == 0
+    LineEdit.edit_move_right(buf)
+    @test nb_available(buf) == 0
+    LineEdit.edit_backspace(buf)
+    @test bytestring(buf.data[1:buf.size]) == "a"
+end
+
 ## edit_transpose ##
 let buf = IOBuffer()
     LineEdit.edit_insert(buf, "abcde")
