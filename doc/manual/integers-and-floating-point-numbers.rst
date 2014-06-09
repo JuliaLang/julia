@@ -80,7 +80,7 @@ Literal integers are represented in the standard manner:
     1234
 
 The default type for an integer literal depends on whether the target
-system has a 32-bit architecture or a 64-bit architecture::
+system has a 32-bit architecture or a 64-bit architecture:
 
     # 32-bit system:
     julia> typeof(1)
@@ -102,7 +102,7 @@ is 32-bit or 64-bit.::
     64
  
 Julia also defines the types ``Int`` and ``Uint``, which are aliases for the
-system's signed and unsigned native integer types respectively.::
+system's signed and unsigned native integer types, respectively:
 
     # 32-bit system:
     julia> Int
@@ -570,7 +570,7 @@ integer and floating point numbers respectively.
 
 Constructors exist to create these types from primitive numerical types, or from ``String``. 
 Once created, they participate in arithmetic with all other numeric types thanks to Julia's 
-:ref:`type promotion and conversion mechanism <man-conversion-and-promotion>`. :
+:ref:`type promotion and conversion mechanism <man-conversion-and-promotion>`:
 
 .. doctest::
 
@@ -590,7 +590,7 @@ Once created, they participate in arithmetic with all other numeric types thanks
     815915283247897734345611269596115894272000000000
 
 However, type promotion between the primitive types above and
-`BigInt`/`BigFloat` is not automatic and must be explicitly stated. :
+`BigInt`/`BigFloat` is not automatic and must be explicitly stated:
 
 .. doctest::
 
