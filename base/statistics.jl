@@ -27,9 +27,12 @@ function mean!{T}(r::AbstractArray{T}, v::AbstractArray)
     return r
 end
 
-meantype{T}(::Type{T}) = typeof((zero(T) + zero(T)) / 2)
+momenttype{T}(::Type{T}) = typeof((zero(T) + zero(T)) / 2)
+momenttype(::Type{Float32}) = Float32
+momenttype{T<:Union(Float64,Int32,Int64,Uint32,Uint64)}(::Type{T}) = Float64
+
 mean{T}(v::AbstractArray{T}, region) = 
-    mean!(Array(meantype(T), reduced_dims(size(v), region)), v)
+    mean!(Array(momenttype(T), reduced_dims(size(v), region)), v)
 
 
 ##### variances #####
@@ -70,16 +73,25 @@ function var(iterable; corrected::Bool=true, mean=nothing)
     end
 end
 
-function varzm(v::AbstractArray; corrected::Bool=true)
+function varzm{T}(v::AbstractArray{T}; corrected::Bool=true)
     n = length(v)
-    n == 0 && return NaN
+    n == 0 && return convert(momenttype(T), NaN)
     return sumabs2(v) / (n - int(corrected))
 end
 
-function varzm(v::AbstractArray, region; corrected::Bool=true)
-    cn = regionsize(v, region) - int(corrected)
-    sumabs2(v, region) / cn    
+function varzm!{S,T}(r::AbstractArray{S}, v::AbstractArray{T}; corrected::Bool=true)
+    if isempty(v)
+        fill!(r, convert(momenttype(T), NaN))
+    else
+        rn = div(length(v), length(r)) - int(corrected)
+        scale!(sumabs2!(r, v; init=true), convert(S, 1/rn))
+    end
+    return r
 end
+
+varzm{T}(v::AbstractArray{T}, region; corrected::Bool=true) = 
+    varzm!(Array(momenttype(T), reduced_dims(v, region)), v; corrected=corrected)
+
 
 function varm_pairwise(A::AbstractArray, m::Number, i1::Int, n::Int) # see sum_pairwise
     if n < 256
