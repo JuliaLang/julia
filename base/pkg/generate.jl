@@ -50,7 +50,7 @@ function package(
                 authors = isnew ? copyright_name(pkg) : git_contributors(pkg,5)
             end
             Generate.license(pkg,license,years,authors,force=force)
-            Generate.readme(pkg,user,force=force)
+            Generate.readme(pkg,license,user,force=force)
             Generate.entrypoint(pkg,force=force)
             Generate.tests(pkg,force=force)
             Generate.travis(pkg,force=force)
@@ -112,12 +112,16 @@ function license(pkg::String, license::String,
     end || info("License file exists, leaving unmodified; use `force=true` to overwrite")
 end
 
-function readme(pkg::String, user::String=""; force::Bool=false)
+function readme(pkg::String, license::String, user::String=""; force::Bool=false)
     genfile(pkg,"README.md",force) do io
         println(io, "# $pkg")
         isempty(user) && return
         url = "https://travis-ci.org/$user/$pkg.jl"
         println(io, "\n[![Build Status]($url.svg?branch=master)]($url)")
+        println(io, """
+        \n## License
+        Available under the $license license. See: [LICENSE.md](./LICENSE.md).
+        """)
     end
 end
 
