@@ -963,6 +963,7 @@ function indentation(s::String)
 end
 
 function unindent(s::String, indent::Int)
+    indent == 0 && return s
     buf = IOBuffer(Array(Uint8,endof(s)), true, true)
     truncate(buf,0)
     a = i = start(s)
@@ -973,7 +974,9 @@ function unindent(s::String, indent::Int)
         if cutting && isblank(c)
             a = i_
             cut += blank_width(c)
-            if cut > indent
+            if cut == indent
+                cutting = false
+            elseif cut > indent
                 cutting = false
                 for _ = (indent+1):cut write(buf, ' ') end
             end
