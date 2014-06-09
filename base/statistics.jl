@@ -79,9 +79,9 @@ function varzm{T}(v::AbstractArray{T}; corrected::Bool=true)
     return sumabs2(v) / (n - int(corrected))
 end
 
-function varzm!{S,T}(r::AbstractArray{S}, v::AbstractArray{T}; corrected::Bool=true)
+function varzm!{S}(r::AbstractArray{S}, v::AbstractArray; corrected::Bool=true)
     if isempty(v)
-        fill!(r, convert(momenttype(T), NaN))
+        fill!(r, convert(S, NaN))
     else
         rn = div(length(v), length(r)) - int(corrected)
         scale!(sumabs2!(r, v; init=true), convert(S, 1/rn))
@@ -92,38 +92,76 @@ end
 varzm{T}(v::AbstractArray{T}, region; corrected::Bool=true) = 
     varzm!(Array(momenttype(T), reduced_dims(v, region)), v; corrected=corrected)
 
-
-function varm_pairwise(A::AbstractArray, m::Number, i1::Int, n::Int) # see sum_pairwise
-    if n < 256
-        @inbounds s = abs2(A[i1] - m)
-        for i = i1+1:i1+n-1
-            @inbounds s += abs2(A[i] - m)
+function centralize_sumabs2(A::AbstractArray, m::Number, i::Int, ilast::Int) 
+    # caller should ensure (i + 1 >= ilast, i.e. length >= 2)
+    if i + 512 > ilast
+        @inbounds s = abs2(A[i] - m) + abs2(A[i+1] - m)
+        i += 1
+        while i < ilast
+            @inbounds s += abs2(A[i+=1] - m)
         end
         return s
     else
-        n2 = div(n,2)
-        return varm_pairwise(A, m, i1, n2) + varm_pairwise(A, m, i1+n2, n-n2)
+        imid = (i + ilast) >>> 1
+        return centralize_sumabs2(A, m, i, imid) + centralize_sumabs2(A, m, imid+1, ilast)
     end
 end
 
-function varm(v::AbstractArray, m::Number; corrected::Bool=true)
-    n = length(v)
-    n == 0 && return NaN
-    return varm_pairwise(v, m, 1, n) / (n - int(corrected))
-end
-
-@ngenerate N Array{typeof((abs2(zero(T))+abs2(zero(T)))/1), N} function _varm{S,T,N}(v::AbstractArray{S,N}, m::AbstractArray{T,N}, region, corrected::Bool)
-    rdims = reduced_dims(v, region)
-    rdims == size(m) || error(DimensionMismatch("size of mean does not match reduced dimensions"))
-
-    R = fill!(similar(v, typeof((abs2(zero(T))+abs2(zero(T)))/1), rdims), 0)
+@ngenerate N typeof(R) function centralize_sumabs2!{S,T,N}(R::AbstractArray{S}, A::AbstractArray{T,N}, means::AbstractArray)
+    # following the implementation of _mapreducedim! at base/reducedim.jl
+    lsiz = check_reducdims(R, A)
+    isempty(R) || fill!(R, zero(S))
+    isempty(A) && return R
     @nextract N sizeR d->size(R,d)
-    @nloops N i v d->(j_d = sizeR_d==1 ? 1 : i_d) begin
-        @inbounds (@nref N R j) += abs2((@nref N v i) - (@nref N m j))
+    sizA1 = size(A, 1)
+
+    if has_fast_linear_indexing(A) && lsiz > 16
+        # use centralize_sumabs2, which is probably better tuned to achieve higher performance
+        nslices = div(length(A), lsiz)
+        ibase = 0
+        for i = 1:nslices
+            @inbounds R[i] = centralize_sumabs2(A, means[i], ibase+1, ibase+lsiz)
+            ibase += lsiz
+        end
+    elseif size(R, 1) == 1 && sizA1 > 1
+        # keep the accumulator as a local variable when reducing along the first dimension
+        @nloops N i d->(d>1? (1:size(A,d)) : (1:1)) d->(j_d = sizeR_d==1 ? 1 : i_d) begin
+            @inbounds r = (@nref N R j)
+            @inbounds m = (@nref N means j) 
+            for i_1 = 1:sizA1
+                @inbounds r += abs2((@nref N A i) - m)
+            end
+            @inbounds (@nref N R j) = r
+        end 
+    else
+        # general implementation
+        @nloops N i A d->(j_d = sizeR_d==1 ? 1 : i_d) begin
+            @inbounds (@nref N R j) += abs2((@nref N A i) - (@nref N means j))
+        end
     end
-    scale!(R, 1/(regionsize(v, region) - int(corrected)))
+    return R   
+
 end
-varm{S,T,N}(v::AbstractArray{S,N}, m::AbstractArray{T,N}, region; corrected::Bool=true) = _varm(v, m, region, corrected)
+
+function varm{T}(A::AbstractArray{T}, m::Number; corrected::Bool=true)
+    n = length(A)
+    n == 0 && return convert(momenttype(T), NaN)
+    return centralize_sumabs2(A, m, 1, n) / (n - int(corrected))
+end
+
+function varm!{S}(R::AbstractArray{S}, A::AbstractArray, m::AbstractArray; corrected::Bool=true)
+    if isempty(A)
+        fill!(R, convert(S, NaN))
+    else
+        rn = div(length(A), length(R)) - int(corrected)
+        scale!(centralize_sumabs2!(R, A, m), convert(S, 1/rn))
+    end
+    return R
+end
+
+varm{T}(A::AbstractArray{T}, m::AbstractArray, region; corrected::Bool=true) = 
+    varm!(Array(momenttype(T), reduced_dims(size(A), region)), A, m; corrected=corrected)
+
 
 function var(v::AbstractArray; corrected::Bool=true, mean=nothing)
     mean == 0 ? varzm(v; corrected=corrected) :
