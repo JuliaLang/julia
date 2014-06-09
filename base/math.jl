@@ -43,16 +43,16 @@ clamp{T}(x::AbstractArray{T}, lo, hi) =
 macro horner(x, p...)
     ex = esc(p[end])
     for i = length(p)-1:-1:1
-        ex = :($(esc(p[i])) + $(esc(x)) * $ex)
+        ex = :($(esc(p[i])) + t * $ex)
     end
-    ex
+    Expr(:block, :(t = $(esc(x))), ex)
 end
 
-# Evaluate p[1] + z*p[2] + z^2*p[3] + ... + z^(n-1)*p[n], assuming
-# the p[k] are *real* coefficients.   This uses Horner's method if z
-# is real, but for complex z it uses a more efficient algorithm described
-# in Knuth, TAOCP vol. 2, section 4.6.4, equation (3).
-macro chorner(z, p...)
+# Evaluate p[1] + z*p[2] + z^2*p[3] + ... + z^(n-1)*p[n].  This uses
+# Horner's method if z is real, but for complex z it uses a more
+# efficient algorithm described in Knuth, TAOCP vol. 2, section 4.6.4,
+# equation (3).
+macro evalpoly(z, p...)
     a = :($(esc(p[end])))
     b = :($(esc(p[end-1])))
     as = {}
@@ -65,14 +65,15 @@ macro chorner(z, p...)
     ai = :a0
     push!(as, :($ai = $a))
     C = Expr(:block,
-             :(x = real($(esc(z)))),
-             :(y = imag($(esc(z)))),
+             :(t = $(esc(z))),
+             :(x = real(t)),
+             :(y = imag(t)),
              :(r = x + x),
              :(s = x*x + y*y),
              as...,
-             :($ai * $(esc(z)) + $b))
+             :($ai * t + $b))
     R = Expr(:macrocall, symbol("@horner"), esc(z), p...)
-    :(isa($(esc(z)), Real) ? $R : $C)
+    :(isa($(esc(z)), Complex) ? $C : $R)
 end
 
 rad2deg(z::Real) = oftype(z, 57.29577951308232*z)

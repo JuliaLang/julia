@@ -3221,6 +3221,14 @@ Mathematical Functions
 
    Multiply ``x`` and ``y``, giving the result as a larger type.
 
+.. function:: @evalpoly(z, c...)
+
+   Evaluate the polynomial :math:`\sum_k c[k] z^{k-1}` for the
+   coefficients ``c[1]``, ``c[2]``, ...; that is, the coefficients are
+   given in ascending order by power of ``z``.  This macro expands to
+   efficient inline code that uses either Horner's method or, for
+   complex ``z``, a more efficient Goertzel-like algorithm.
+
 Data Formats
 ------------
 
