@@ -1858,6 +1858,7 @@ function without_linenums(a::Array{Any,1})
     l
 end
 
+
 const _pure_builtins = {tuple, tupleref, tuplelen, fieldtype, apply_type, is, isa, typeof, typeassert} # known affect-free calls (also effect-free)
 const _pure_builtins_volatile = {getfield, arrayref} # known effect-free calls (might not be affect-free)
 
@@ -2047,7 +2048,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
     sp = tuple(sp..., linfo.sparams...)
     spvals = { sp[i] for i in 2:2:length(sp) }
     for i=1:length(spvals)
-        if isa(spvals[i],TypeVar)
+        if isa(spvals[i], TypeVar)
             return NF
         end
         if isa(spvals[i],Symbol)
@@ -2059,6 +2060,9 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
     nm = length(methargs)
     if !(atypes <: methargs)
         incompletematch = true
+        if !inline_incompletematch_allowed
+            return NF
+        end
     else
         incompletematch = false
     end
@@ -2220,7 +2224,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
         argexprs2 = t.args
         icall = LabelNode(label_counter(body.args)+1)
         partmatch = Expr(:gotoifnot, false, icall.label)
-        thrw = Expr(:call, :throw, Expr(:call, Main.Base.MethodError, f, t))
+        thrw = Expr(:call, :throw, Expr(:call, Main.Base.MethodError, (f, :inline), t))
         thrw.typ = None
     end
 
@@ -2426,6 +2430,9 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
     end
     return (expr, stmts)
 end
+# The inlining incomplete matches optimization currently
+# doesn't work on Tuples of TypeVars
+const inline_incompletematch_allowed = false
 
 inline_worthy(body, cost::Real) = true
 function inline_worthy(body::Expr, cost::Real=1.0) # precondition: 0<cost
