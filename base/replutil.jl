@@ -36,6 +36,12 @@ function writemime(io::IO, ::MIME"text/plain", v::DataType)
     end
 end
 
+writemime(io::IO, ::MIME"text/plain", t::Associative) = 
+    showdict(io, t, limit=true)
+writemime(io::IO, ::MIME"text/plain", t::Union(KeyIterator,ValueIterator)) = 
+    showkv(io, t, limit=true)
+
+
 # showing exception objects as descriptive error messages
 
 showerror(io::IO, e) = show(io, e)
