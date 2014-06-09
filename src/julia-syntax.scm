@@ -1104,6 +1104,8 @@
 		 (var  (caddr e))
 		 (catchb (cadddr e))
 		 (finalb (cadddr (cdr e))))
+         (if (has-unmatched-symbolic-goto? finalb)
+           (error "goto from a finally block is not permitted"))
 	     (let ((hasret (or (contains return? tryb)
 			       (contains return? catchb))))
 	       (let ((err (gensy))
@@ -2727,6 +2729,14 @@ So far only the second case can actually occur.
 	(else (map (lambda (x) (if (not (pair? x)) x
 				   (flatten-scopes x)))
 		   e))))
+
+(define (has-unmatched-symbolic-goto? e)
+  (let ((label-refs (table))
+        (label-defs (table)))
+    (find-symbolic-label-refs e label-refs)
+    (find-symbolic-label-defs e label-defs)
+    (any not (map (lambda (k) (get label-defs k #f))
+      (table.keys label-refs)))))
 
 (define (symbolic-label-handler-levels e levels handler-level)
   (if (or (not (pair? e)) (quoted? e))

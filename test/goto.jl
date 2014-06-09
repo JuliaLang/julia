@@ -56,3 +56,16 @@ end
         end
     end)
 
+
+@test_throws ErrorException eval(
+    quote
+        function goto_test6()
+            try
+            finally
+                @goto a
+            end
+            @label a
+            return
+        end
+    end)
+
