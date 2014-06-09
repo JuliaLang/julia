@@ -102,6 +102,13 @@ end
 @test typeintersect(Type{(Int...)}, Type{(Bool...)}) === None
 @test typeintersect((Bool,Int...), (Bool...)) === (Bool,)
 
+let T = TypeVar(:T,Union(Float32,Float64))
+    @test typeintersect(AbstractArray, Matrix{T}) == Matrix{T}
+end
+let T = TypeVar(:T,Union(Float32,Float64),true)
+    @test typeintersect(AbstractArray, Matrix{T}) == Matrix{T}
+end
+
 @test isa(Int,Type{TypeVar(:T,Number)})
 @test !isa(DataType,Type{TypeVar(:T,Number)})
 @test DataType <: Type{TypeVar(:T,Type)}

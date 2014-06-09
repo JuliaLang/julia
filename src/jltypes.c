@@ -128,6 +128,7 @@ static int jl_has_typevars__(jl_value_t *v, int incl_wildcard, jl_tuple_t *p)
 
 static int jl_has_typevars_(jl_value_t *v, int incl_wildcard)
 {
+    if (jl_is_typevar(v)) return 1;
     return jl_has_typevars__(v, incl_wildcard, NULL);
 }
 
@@ -140,6 +141,7 @@ static int jl_has_typevars_from(jl_value_t *v, jl_tuple_t *p)
 
 int jl_has_typevars(jl_value_t *v)
 {
+    if (jl_is_typevar(v)) return 1;
     return jl_has_typevars__(v, 0, NULL);
 }
 
