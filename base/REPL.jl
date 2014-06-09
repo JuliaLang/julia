@@ -318,15 +318,13 @@ function mode_idx(hist::REPLHistoryProvider, mode)
 end
 
 function add_history(hist::REPLHistoryProvider, s)
-    # bytestring copies
     str = rstrip(bytestring(s.input_buffer))
-    if isempty(strip(str)) || # Do not add empty strings to the history
-       (length(hist.history) > 0 && str == hist.history[end]) # Do not add consecutive duplicate entries
-        return
-    end
-    push!(hist.history, str)
+    isempty(strip(str)) && return
     mode = mode_idx(hist, LineEdit.mode(s))
+    length(hist.history) > 0 &&
+        mode == hist.modes[end] && str == hist.history[end] && return
     push!(hist.modes, mode)
+    push!(hist.history, str)
     hist.history_file == nothing && return
     entry = """
     # time: $(strftime("%Y-%m-%d %H:%M:%S %Z", time()))
