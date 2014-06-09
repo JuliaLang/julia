@@ -61,8 +61,8 @@ end
     quote
         function goto_test6()
             try
-            finally
                 @goto a
+            finally
             end
             @label a
             return
