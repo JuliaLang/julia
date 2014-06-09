@@ -1573,6 +1573,27 @@ int jl_types_equal_generic(jl_value_t *a, jl_value_t *b, int useenv)
     return type_le_generic(a, b, useenv) && type_le_generic(b, a, useenv);
 }
 
+static volatile jl_array_t *custom_parameter_types = NULL;
+DLLEXPORT void jl_register_custom_parameter_types(jl_array_t *t)
+{
+    jl_value_t *el_type = jl_tparam0(jl_typeof(t));
+    if (el_type != (jl_value_t*)jl_datatype_type) {
+	jl_type_error("register_custom_parameter_types", el_type, (jl_value_t*)jl_datatype_type);
+    }
+    custom_parameter_types = t;
+}
+
+static int valid_custom_parameter_type(jl_value_t *v)
+{
+    if (custom_parameter_types == NULL)
+	return 0;
+    jl_value_t **t = (jl_value_t**)jl_array_data(custom_parameter_types);
+    for (int i = 0; i < jl_array_len(custom_parameter_types); i++)
+        if (jl_typeis(v, t[i]))
+            return 1;
+    return 0;
+}
+
 static int valid_type_param(jl_value_t *v)
 {
     if (jl_is_tuple(v)) {
@@ -1585,8 +1606,7 @@ static int valid_type_param(jl_value_t *v)
         return 1;
     }
     else {
-        // TODO: maybe more things
-        return jl_is_type(v) || jl_is_long(v) || jl_is_symbol(v) || jl_is_typevar(v) || jl_is_bool(v);
+        return jl_is_type(v) || jl_is_long(v) || jl_is_symbol(v) || jl_is_typevar(v) || jl_is_bool(v) || valid_custom_parameter_type(v);
     }
 }
 

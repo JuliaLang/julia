@@ -264,11 +264,15 @@ include("graphics.jl")
 include("profile.jl")
 importall .Profile
 
+const CUSTOM_PARAMETER_TYPES = Array(DataType, 0)
+
 function __init__()
     # Base library init
     reinit_stdio()
     Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
     fdwatcher_init()
+    push!(CUSTOM_PARAMETER_TYPES, Rational{Int})
+    ccall(:jl_register_custom_parameter_types, Void, (Any,), CUSTOM_PARAMETER_TYPES)
 end
 
 include("precompile.jl")
