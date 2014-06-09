@@ -806,6 +806,23 @@ s = "   p"
 @test """
        $s
       """ == " $s$(nl)"
+@test """\t""" == "\t"
+@test """
+      \t""" == ""
+@test """
+      foo
+      \tbar""" == "foo\n\tbar"
+@test """
+      foo
+      \tbar
+      """ == "foo\n\tbar\n"
+@test """
+      foo
+      bar\t""" == "foo\nbar\t"
+@test """
+      foo
+      \tbar
+       """ == "foo\n       bar\n"
 
 # bytes2hex and hex2bytes
 hex_str = "d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592"
