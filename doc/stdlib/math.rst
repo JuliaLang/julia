@@ -1694,6 +1694,12 @@ Mathematical Functions
 
    Evaluate the polynomial :math:`\sum_k c[k] z^{k-1}` for the coefficients ``c[1]``\ , ``c[2]``\ , ...; that is, the coefficients are given in ascending order by power of ``z``\ .  This macro expands to efficient inline code that uses either Horner's method or, for complex ``z``\ , a more efficient Goertzel-like algorithm.
 
+.. function:: evalpoly(z, c)
+
+   .. Docstring generated from Julia source
+
+   Evaluate the polynomial c(z).
+
 Statistics
 ----------
 
@@ -2205,4 +2211,3 @@ some built-in integration support in Julia.
    These quadrature rules work best for smooth functions within each interval, so if your function has a known discontinuity or other singularity, it is best to subdivide your interval to put the singularity at an endpoint. For example, if ``f`` has a discontinuity at ``x=0.7`` and you want to integrate from 0 to 1, you should use ``quadgk(f, 0,0.7,1)`` to subdivide the interval at the point of discontinuity. The integrand is never evaluated exactly at the endpoints of the intervals, so it is possible to integrate functions that diverge at the endpoints as long as the singularity is integrable (for example, a ``log(x)`` or ``1/sqrt(x)`` singularity).
 
    For real-valued endpoints, the starting and/or ending points may be infinite. (A coordinate transformation is performed internally to map the infinite interval to a finite one.)
-

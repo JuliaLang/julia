@@ -287,7 +287,6 @@ export
     At_rdiv_Bt,
 
 # scalar math
-    @evalpoly,
     abs,
     abs2,
     acos,
@@ -349,6 +348,8 @@ export
     erfcx,
     erfi,
     erfinv,
+    evalpoly,
+    @evalpoly,
     exp,
     exp10,
     exp2,

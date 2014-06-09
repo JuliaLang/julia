@@ -20,7 +20,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        hankelh1, hankelh2, hankelh1x, hankelh2x,
        besseli, besselix, besselk, besselkx, besselh, besselhx,
        beta, lbeta, eta, zeta, polygamma, invdigamma, digamma, trigamma,
-       erfinv, erfcinv, @evalpoly
+       erfinv, erfcinv, @evalpoly, evalpoly
 
 import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
@@ -90,6 +90,57 @@ macro evalpoly(z, p...)
           isa(tt, Complex) ? $C : $R
       end)
 end
+
+# evaluate c[1] + c[2]*z + c[3]*z^2 + ... by Horner's rule
+function evalpoly{T}(z, c::AbstractVector{T})
+    i = length(c)
+    if i < 2
+        v = (i == 0 ? zero(T) : c[1]) * one(z)
+        return v + zero(v)
+    end
+    p = muladd(c[i], z, c[i-1])
+    i -= 2
+    while i > 0
+        p = muladd(p, z, c[i])
+        i -= 1
+    end
+    return p
+end
+
+# evaluate c[1] + c[2]*z + c[3]*z^2 + by the Knuth algorithm from @evalpoly
+function evalpoly{T}(z::Complex, c::AbstractVector{T})
+    i = length(c)
+    if i < 3
+        i == 2 && return c[1] + c[2]*z
+        v = (i == 0 ? zero(T) : c[1]) * one(z)
+        return v + zero(v)
+    end
+    x = real(z)
+    y = imag(z)
+    r = x + x
+    s = muladd(x, x, y*y)
+    ci = c[i]
+    a = muladd(r, ci, c[i-1])
+    b = c[i -= 2] - s * ci
+    while i > 1
+        ai = a
+        a = muladd(r, ai, b)
+        b = c[i -= 1] - s * ai
+    end
+    return muladd(a, z, b)
+end
+
+evalpoly(Z::AbstractVector, c::AbstractVector) = [evalpoly(z,c) for z in Z]
+
+"""
+    evalpoly(z, c)
+
+Evaluate the polynomial ``\sum_k c[k] z^{k-1}`` for the
+coefficients `c[1]`, `c[2]`, ...; that is, the coefficients are
+given in ascending order by power of `z`.   (If `z` is an array,
+then the polynomial is evaluated for each element of `z`.)
+"""
+evalpoly(z, c)
 
 rad2deg(z::AbstractFloat) = z * (180 / oftype(z, pi))
 deg2rad(z::AbstractFloat) = z * (oftype(z, pi) / 180)

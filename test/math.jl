@@ -662,6 +662,7 @@ end
 @test_approx_eq polygamma(3,5) polygamma(3,5.)
 
 @test @evalpoly(2,3,4,5,6) == 3+2*(4+2*(5+2*6)) == @evalpoly(2+0im,3,4,5,6)
+
 @test let evalcounts=0
           @evalpoly(begin
                         evalcounts += 1
@@ -673,6 +674,11 @@ a0 = 1
 a1 = 2
 c = 3
 @test @evalpoly(c, a0, a1) == 7
+
+@test evalpoly(2,[3,4,5,6]) == 3+2*(4+2*(5+2*6)) == evalpoly(2+0im,[3,4,5,6])
+@test evalpoly(2+1im,[3,4,5,6]) == @evalpoly(2+1im, 3,4,5,6)
+@test typeof(evalpoly([2],[3,4,5,6])) == Vector{Int}
+@test typeof(evalpoly([2+0im],[3,4,5,6])) == Vector{Complex{Int}}
 
 @test 1e-14 > err(eta(1+1e-9), 0.693147180719814213126976796937244130533478392539154928250926)
 @test 1e-14 > err(eta(1+5e-3), 0.693945708117842473436705502427198307157819636785324430166786)
