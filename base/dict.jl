@@ -16,19 +16,23 @@ function summary(t::Associative)
     string(typeof(t), " with ", n, (n==1 ? " entry" : " entries"))
 end
 
-function showcompact{K,V}(io::IO, t::Associative{K,V})
-    print(io, summary(t))
-    if !isempty(t)
-        print(io, ": ")
-        delims = (K == V == Any) ? ('{', '}') : ('[', ']')
+function show{K,V}(io::IO, t::Associative{K,V})
+    if isempty(t)
+        print(io, typeof(t),"()")
+    else
+        if K === Any && V === Any
+            delims = ['{','}']
+        else
+            delims = ['[',']']
+        end
         print(io, delims[1])
         first = true
         for (k, v) in t
             first || print(io, ',')
             first = false
-            showcompact(io, k)
+            show(io, k)
             print(io, "=>")
-            showcompact(io, v)
+            show(io, v)
         end
         print(io, delims[2])
     end
@@ -57,13 +61,14 @@ function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
     end
 end
 
-function showdict{K,V}(io::IO, t::Associative{K,V}, limit_output::Bool = false,
+showdict(t::Associative; kw...) = showdict(STDOUT, t; kw...)
+function showdict{K,V}(io::IO, t::Associative{K,V}; limit::Bool = false,
                        rows = tty_rows()-3, cols = tty_cols())
     print(io, summary(t))
     isempty(t) && return
     print(io, ":")
 
-    if limit_output
+    if limit
         rows < 2   && (print(io, " …"); return)
         cols < 12  && (cols = 12) # Minimum widths of 2 for key, 4 for value
         cols -= 6 # Subtract the widths of prefix "  " separator " => "
@@ -81,9 +86,9 @@ function showdict{K,V}(io::IO, t::Associative{K,V}, limit_output::Bool = false,
 
     for (i, (k, v)) in enumerate(t)
         print(io, "\n  ")
-        limit_output && i > rows && (print(io, rpad("⋮", keylen), " => ⋮"); break)
+        limit && i > rows && (print(io, rpad("⋮", keylen), " => ⋮"); break)
 
-        if limit_output
+        if limit
             key = rpad(_truncate_at_width_or_chars(ks[i], keylen, "\r\n"), keylen)
         else
             key = sprint(show, k)
@@ -92,15 +97,12 @@ function showdict{K,V}(io::IO, t::Associative{K,V}, limit_output::Bool = false,
         print(io, " => ")
 
         val = sprint(show, v)
-        if limit_output
+        if limit
             val = _truncate_at_width_or_chars(val, cols - keylen, "\r\n")
         end
         print(io, val)
     end
 end
-
-show{K,V}(io::IO, t::Associative{K,V}) = showdict(io, t, false)
-showlimited{K,V}(io::IO, t::Associative{K,V}) = showdict(io, t, true)
 
 immutable KeyIterator{T<:Associative}
     dict::T
@@ -112,15 +114,15 @@ end
 summary{T<:Union(KeyIterator,ValueIterator)}(iter::T) =
     string(T.name, " for a ", summary(iter.dict))
 
-show(io::IO, iter::Union(KeyIterator,ValueIterator)) = showkv(io, iter, false)
-showlimited(io::IO, iter::Union(KeyIterator,ValueIterator)) = showkv(io, iter, true)
+show(io::IO, iter::Union(KeyIterator,ValueIterator)) = show(io, collect(iter))
 
-function showkv{T<:Union(KeyIterator,ValueIterator)}(io::IO, iter::T, limit_output::Bool = false,
+showkv(iter::Union(KeyIterator,ValueIterator); kw...) = showkv(STDOUT, iter; kw...)
+function showkv{T<:Union(KeyIterator,ValueIterator)}(io::IO, iter::T; limit::Bool = false,
                                                      rows = tty_rows()-3, cols = tty_cols())
     print(io, summary(iter))
     isempty(iter) && return
     print(io, ". ", T<:KeyIterator ? "Keys" : "Values", ":")
-    if limit_output
+    if limit
         rows < 2 && (print(io, " …"); return)
         cols < 4 && (cols = 4)
         cols -= 2 # For prefix "  "
@@ -129,10 +131,10 @@ function showkv{T<:Union(KeyIterator,ValueIterator)}(io::IO, iter::T, limit_outp
 
     for (i, v) in enumerate(iter)
         print(io, "\n  ")
-        limit_output && i >= rows && (print(io, "⋮"); break)
+        limit && i >= rows && (print(io, "⋮"); break)
 
         str = sprint(show, v)
-        limit_output && (str = _truncate_at_width_or_chars(str, cols, "\r\n"))
+        limit && (str = _truncate_at_width_or_chars(str, cols, "\r\n"))
         print(io, str)
     end
 end
