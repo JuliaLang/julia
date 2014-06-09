@@ -14,25 +14,26 @@ function mean(iterable)
     end
     return total/count
 end
-mean(v::AbstractArray) = sum(v) / length(v)
+mean(A::AbstractArray) = sum(A) / length(A)
 
-function mean!{T}(r::AbstractArray{T}, v::AbstractArray)
-    sum!(r, v; init=true)
-    rs = convert(T, length(v) / length(r))
+function mean!{T}(R::AbstractArray{T}, A::AbstractArray)
+    sum!(R, A; init=true)
+    lenR = length(R)
+    rs = convert(T, length(A) / lenR)
     if rs != 1
-        for i = 1:length(r)
-            @inbounds r[i] /= rs
+        for i = 1:lenR
+            @inbounds R[i] /= rs
         end
     end
-    return r
+    return R
 end
 
 momenttype{T}(::Type{T}) = typeof((zero(T) + zero(T)) / 2)
 momenttype(::Type{Float32}) = Float32
 momenttype{T<:Union(Float64,Int32,Int64,Uint32,Uint64)}(::Type{T}) = Float64
 
-mean{T}(v::AbstractArray{T}, region) = 
-    mean!(Array(momenttype(T), reduced_dims(size(v), region)), v)
+mean{T}(A::AbstractArray{T}, region) = 
+    mean!(Array(momenttype(T), reduced_dims(size(A), region)), A)
 
 
 ##### variances #####
