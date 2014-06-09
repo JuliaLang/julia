@@ -329,7 +329,7 @@ function add_history(hist::REPLHistoryProvider, s)
     push!(hist.modes, mode)
     hist.history_file == nothing && return
     entry = """
-    # time: $(strftime("%F %T %Z", time()))
+    # time: $(strftime("%Y-%m-%d %H:%M:%S %Z", time()))
     # mode: $mode
     $(replace(str, r"^"ms, "\t"))
     """
