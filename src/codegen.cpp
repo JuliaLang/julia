@@ -1599,22 +1599,28 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     else if (f->fptr == &jl_f_isa && nargs==2) {
         jl_value_t *arg = expr_type(args[1], ctx); rt1 = arg;
         jl_value_t *ty  = expr_type(args[2], ctx); rt2 = ty;
-        if (jl_is_type_type(ty) && !jl_is_typevar(jl_tparam0(ty))) {
+        if (arg == jl_bottom_type) {
+            JL_GC_POP();
+            emit_expr(args[1], ctx);
+            return UndefValue::get(T_int1);
+        }
+        if (jl_is_type_type(ty) && !jl_has_typevars(jl_tparam0(ty))) {
             jl_value_t *tp0 = jl_tparam0(ty);
-            if (arg != jl_bottom_type && jl_subtype(arg, tp0, 0)) {
+            if (jl_subtype(arg, tp0, 0)) {
                 JL_GC_POP();
                 return ConstantInt::get(T_int1,1);
             }
-            if (!jl_is_tuple(tp0) && jl_is_leaf_type(tp0) &&
-                !jl_is_type_type(tp0)) {
+            if (!jl_is_tuple(tp0) && !jl_is_type_type(tp0)) {
                 if (jl_is_leaf_type(arg)) {
                     JL_GC_POP();
                     return ConstantInt::get(T_int1,0);
                 }
-                Value *arg1 = emit_expr(args[1], ctx);
-                JL_GC_POP();
-                return builder.CreateICmpEQ(emit_typeof(arg1),
-                                            literal_pointer_val(tp0));
+                if (jl_is_leaf_type(tp0)) {
+                    Value *arg1 = emit_expr(args[1], ctx);
+                    JL_GC_POP();
+                    return builder.CreateICmpEQ(emit_typeof(arg1),
+                                                literal_pointer_val(tp0));
+                }
             }
         }
     }
