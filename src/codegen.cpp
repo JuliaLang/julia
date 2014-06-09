@@ -4225,10 +4225,12 @@ static void init_julia_llvm_env(Module *m)
     FPM->add(createScalarReplAggregatesPass()); // Break up aggregate allocas
     FPM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
     FPM->add(createJumpThreadingPass());        // Thread jumps.
-    FPM->add(createCFGSimplificationPass());    // Merge & remove BBs
+    // NOTE: CFG simp passes after this point seem to hurt native codegen.
+    // See issue #6112. Should be re-evaluated when we switch to MCJIT.
+    //FPM->add(createCFGSimplificationPass());    // Merge & remove BBs
     FPM->add(createInstructionCombiningPass()); // Combine silly seq's
     
-    FPM->add(createCFGSimplificationPass());    // Merge & remove BBs
+    //FPM->add(createCFGSimplificationPass());    // Merge & remove BBs
     FPM->add(createReassociatePass());          // Reassociate expressions
 
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 1
@@ -4267,7 +4269,7 @@ static void init_julia_llvm_env(Module *m)
     FPM->add(createDeadStoreEliminationPass());  // Delete dead stores
 
     FPM->add(createAggressiveDCEPass());         // Delete dead instructions
-    FPM->add(createCFGSimplificationPass());     // Merge & remove BBs
+    //FPM->add(createCFGSimplificationPass());     // Merge & remove BBs
 
     FPM->doInitialization();
 }
