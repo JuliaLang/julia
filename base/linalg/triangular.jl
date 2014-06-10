@@ -163,8 +163,11 @@ end
 
 A_mul_B!{T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, B::Triangular{T,S,UpLo,IsUnit}) = Triangular{T,S,UpLo,IsUnit}(A*full!(B))
 A_mul_B!(A::Tridiagonal, B::Triangular) = A*full!(B)
+A_mul_B!(C::AbstractVecOrMat, A::Triangular, B::AbstractVecOrMat) = A_mul_B!(A, copy!(C, B))
+
 A_mul_Bc!(A::Triangular, B::QRCompactWYQ) = A_mul_Bc!(full!(A),B)
 A_mul_Bc!(A::Triangular, B::QRPackedQ) = A_mul_Bc!(full!(A),B)
+A_mul_Bc!(C::AbstractVecOrMat, A::Triangular, B::AbstractVecOrMat) = A_mul_Bc!(A, copy!(C, B))
 
 #Generic multiplication
 *(A::Tridiagonal, B::Triangular) = A_mul_B!(full(A), B)
