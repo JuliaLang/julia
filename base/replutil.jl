@@ -30,7 +30,8 @@ function writemime{T}(io::IO, ::MIME"text/plain", S::Set{T})
         if length(S) > 10^7
             A = copy!(Array(T, 1000), 1, S, 1, 1000)
         else
-            A = sort!(T[x for x in S])
+            A = T[x for x in S]
+            method_exists(isless, (T, T)) && sort!(A)
         end
         with_output_limit(()->print_matrix(io, A))
     end
