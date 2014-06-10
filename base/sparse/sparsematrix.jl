@@ -884,7 +884,7 @@ function getindex_general{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J
     nnzS = 0
     pI = sortperm(I); I = I[pI]
     fI = find(I)
-    W = zeros(Int, nI + 1) # Keep row counts
+    W = zeros(Ti, nI + 1) # Keep row counts
     W[1] = 1               # For cumsum later
 
     # Form the structure of the result and compute space

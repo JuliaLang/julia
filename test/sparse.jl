@@ -289,13 +289,16 @@ for (aa116, ss116) in [(a116, s116), (ad116, sd116)]
     @test full(ss116[li,lj]) == aa116[li,lj]
 end
 
-let S = SparseMatrixCSC(3, 3, Uint8[1,1,1,1], Uint8[], Int64[])
-    S[1,1] = 1
-    S[5] = 2
-    S[end] = 3
-    @test S[end] == (S[1] + S[2,2])
-    @test 6 == sum(diag(S))
-end
+# workaround issue #7197: comment out let-block
+#let S = SparseMatrixCSC(3, 3, Uint8[1,1,1,1], Uint8[], Int64[])
+S1290 = SparseMatrixCSC(3, 3, Uint8[1,1,1,1], Uint8[], Int64[])
+    S1290[1,1] = 1
+    S1290[5] = 2
+    S1290[end] = 3
+    @test S1290[end] == (S1290[1] + S1290[2,2])
+    @test 6 == sum(diag(S1290))
+    @test (full(S1290)[[3,1],1])'' == full(S1290[[3,1],1])
+# end
 
 
 # setindex tests
