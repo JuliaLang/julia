@@ -74,24 +74,24 @@ function var(iterable; corrected::Bool=true, mean=nothing)
     end
 end
 
-function varzm{T}(v::AbstractArray{T}; corrected::Bool=true)
-    n = length(v)
+function varzm{T}(A::AbstractArray{T}; corrected::Bool=true)
+    n = length(A)
     n == 0 && return convert(momenttype(T), NaN)
-    return sumabs2(v) / (n - int(corrected))
+    return sumabs2(A) / (n - int(corrected))
 end
 
-function varzm!{S}(r::AbstractArray{S}, v::AbstractArray; corrected::Bool=true)
-    if isempty(v)
-        fill!(r, convert(S, NaN))
+function varzm!{S}(R::AbstractArray{S}, A::AbstractArray; corrected::Bool=true)
+    if isempty(A)
+        fill!(R, convert(S, NaN))
     else
-        rn = div(length(v), length(r)) - int(corrected)
-        scale!(sumabs2!(r, v; init=true), convert(S, 1/rn))
+        rn = div(length(A), length(r)) - int(corrected)
+        scale!(sumabs2!(R, A; init=true), convert(S, 1/rn))
     end
-    return r
+    return R
 end
 
-varzm{T}(v::AbstractArray{T}, region; corrected::Bool=true) = 
-    varzm!(Array(momenttype(T), reduced_dims(v, region)), v; corrected=corrected)
+varzm{T}(A::AbstractArray{T}, region; corrected::Bool=true) = 
+    varzm!(Array(momenttype(T), reduced_dims(A, region)), A; corrected=corrected)
 
 function centralize_sumabs2(A::AbstractArray, m::Number, i::Int, ilast::Int) 
     # caller should ensure (i + 1 >= ilast, i.e. length >= 2)
@@ -164,17 +164,17 @@ varm{T}(A::AbstractArray{T}, m::AbstractArray, region; corrected::Bool=true) =
     varm!(Array(momenttype(T), reduced_dims(size(A), region)), A, m; corrected=corrected)
 
 
-function var(v::AbstractArray; corrected::Bool=true, mean=nothing)
-    mean == 0 ? varzm(v; corrected=corrected) :
-    mean == nothing ? varm(v, Base.mean(v); corrected=corrected) :
-    isa(mean, Number) ? varm(v, mean; corrected=corrected) :
+function var(A::AbstractArray; corrected::Bool=true, mean=nothing)
+    mean == 0 ? varzm(A; corrected=corrected) :
+    mean == nothing ? varm(A, Base.mean(A); corrected=corrected) :
+    isa(mean, Number) ? varm(A, mean; corrected=corrected) :
     error("Invalid value of mean.")
 end
 
-function var(v::AbstractArray, region; corrected::Bool=true, mean=nothing)
-    mean == 0 ? varzm(v, region; corrected=corrected) :
-    mean == nothing ? varm(v, Base.mean(v, region), region; corrected=corrected) :
-    isa(mean, AbstractArray) ? varm(v, mean, region; corrected=corrected) :
+function var(A::AbstractArray, region; corrected::Bool=true, mean=nothing)
+    mean == 0 ? varzm(A, region; corrected=corrected) :
+    mean == nothing ? varm(A, Base.mean(A, region), region; corrected=corrected) :
+    isa(mean, AbstractArray) ? varm(A, mean, region; corrected=corrected) :
     error("Invalid value of mean.")
 end
 
@@ -197,21 +197,21 @@ end
 
 ##### standard deviation #####
 
-function sqrt!(v::AbstractArray) 
-    for i = 1:length(v)
-        @inbounds v[i] = sqrt(v[i])
+function sqrt!(A::AbstractArray) 
+    for i = 1:length(A)
+        @inbounds A[i] = sqrt(A[i])
     end
-    v
+    A
 end
 
-stdm(v::AbstractArray, m::Number; corrected::Bool=true) = 
-    sqrt(varm(v, m; corrected=corrected))
+stdm(A::AbstractArray, m::Number; corrected::Bool=true) = 
+    sqrt(varm(A, m; corrected=corrected))
 
-std(v::AbstractArray; corrected::Bool=true, mean=nothing) = 
-    sqrt(var(v; corrected=corrected, mean=mean))
+std(A::AbstractArray; corrected::Bool=true, mean=nothing) = 
+    sqrt(var(A; corrected=corrected, mean=mean))
 
-std(v::AbstractArray, region; corrected::Bool=true, mean=nothing) = 
-    sqrt!(var(v, region; corrected=corrected, mean=mean))
+std(A::AbstractArray, region; corrected::Bool=true, mean=nothing) = 
+    sqrt!(var(A, region; corrected=corrected, mean=mean))
 
 std(iterable; corrected::Bool=true, mean=nothing) =
     sqrt(var(iterable, corrected=corrected, mean=mean))
