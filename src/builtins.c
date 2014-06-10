@@ -1188,7 +1188,9 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
         n += jl_static_show(out, ((jl_typector_t*)v)->body);
     }
     else if (jl_is_typevar(v)) {
-        n += JL_PRINTF(out, "%s", ((jl_tvar_t*)v)->name->name);
+        n += jl_static_show(out, ((jl_tvar_t*)v)->lb);
+        n += JL_PRINTF(out, "<:%s<:", ((jl_tvar_t*)v)->name->name);
+        n += jl_static_show(out, ((jl_tvar_t*)v)->ub);
     }
     else if (jl_is_module(v)) {
         jl_module_t *m = (jl_module_t*)v;
