@@ -222,7 +222,7 @@ const tupleref_tfunc = function (A, t, i)
     n = length(t)
     last = tupleref(t,n)
     vararg = isvarargtype(last)
-    if isa(A[2],Integer)
+    if A !== () && isa(A[2],Integer)
         # index is a constant
         i = A[2]
         if i > n
@@ -618,13 +618,13 @@ function abstract_call_gf(f, fargs, argtypes, e)
         # allow tuple indexing functions to take advantage of constant
         # index arguments.
         if f === Main.Base.getindex
-            e.head = :call1
+            isa(e,Expr) && (e.head = :call1)
             return tupleref_tfunc(fargs, argtypes[1], argtypes[2])
         elseif f === Main.Base.next
-            e.head = :call1
+            isa(e,Expr) && (e.head = :call1)
             return (tupleref_tfunc(fargs, argtypes[1], argtypes[2]), Int)
         elseif f === Main.Base.indexed_next
-            e.head = :call1
+            isa(e,Expr) && (e.head = :call1)
             return (tupleref_tfunc(fargs, argtypes[1], argtypes[2]), Int)
         end
     end
@@ -643,12 +643,12 @@ function abstract_call_gf(f, fargs, argtypes, e)
         if isdefined(Main.Base,:promote_type) && f === Main.Base.promote_type
             try
                 RT = Type{f(c...)}
-                e.head = :call1
+                isa(e,Expr) && (e.head = :call1)
                 return RT
             catch
             end
         else
-            e.head = :call1
+            isa(e,Expr) && (e.head = :call1)
             return Type{f(c...)}
         end
     end
@@ -664,9 +664,7 @@ function abstract_call_gf(f, fargs, argtypes, e)
     rettype = None
     if is(applicable,false)
         # this means too many methods matched
-        if isa(e,Expr)
-            e.head = :call
-        end
+        isa(e,Expr) && (e.head = :call)
         return Any
     end
     x::Array{Any,1} = applicable
