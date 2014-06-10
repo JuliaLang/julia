@@ -23,6 +23,19 @@ function writemime(io::IO, ::MIME"text/plain", v::AbstractVector)
     end
 end
 
+function writemime{T}(io::IO, ::MIME"text/plain", S::Set{T})
+    print(io, summary(S))
+    if !isempty(S)
+        println(io, ":")
+        if length(S) > 10^7
+            A = copy!(Array(T, 1000), 1, S, 1, 1000)
+        else
+            A = sort!(T[x for x in S])
+        end
+        with_output_limit(()->print_matrix(io, A))
+    end
+end
+
 writemime(io::IO, ::MIME"text/plain", v::AbstractArray) =
     with_output_limit(()->showarray(io, v, header=true, repr=false))
 
