@@ -511,15 +511,14 @@ Some C libraries execute their callbacks from a different thread, and
 since Julia isn't thread-safe you'll need to take some extra
 precautions. In particular, you'll need to set up a two-layered
 system: the C callback should only *schedule* (via Julia's event loop)
-the execution of your "real" callback. Your callback
-needs to be written to take two inputs (which you'll most likely just
-discard) and then wrapped by ``SingleAsyncWork``::
+the execution of your "real" callback. To do this, you pass a function
+of one argument (the ``AsyncWork`` object for which the event was
+triggered, which you'll probably just ignore) to ``SingleAsyncWork``::
 
-  cb_from_event_loop = (data, status) -> my_real_callback(args)
-  cb_packaged = Base.SingleAsyncWork(cb_from_event_loop)
+  cb = Base.SingleAsyncWork(data -> my_real_callback(args))
 
 The callback you pass to C should only execute a ``ccall`` to
-``:uv_async_send``, passing ``cb_packaged.handle`` as the argument.
+``:uv_async_send``, passing ``cb.handle`` as the argument.
 
 More About Callbacks
 ~~~~~~~~~~~~~~~~~~~~
