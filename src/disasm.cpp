@@ -178,7 +178,7 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
         nextLineAddr = (*lineIter).Address;
         debugscope = DISubprogram((*lineIter).Loc.getScope(jl_LLVMContext));
 
-        stream << "Filename: " << debugscope.getFilename().data() << "\n";
+        stream << "Filename: " << debugscope.getFilename() << "\n";
         stream << "Source line: " << (*lineIter).Loc.getLine() << "\n";
     }
     
