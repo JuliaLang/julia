@@ -158,6 +158,11 @@ x = BigFloat(Inf)
 x = BigFloat(15.674)
 @test exponent(x) == exponent(15.674)
 
+# significand
+for i in [big(0.2), big(1.2), big(1220.0), big(23414.123)]
+    @test i == significand(i) * 2. ^ exponent(i)
+end
+
 # nextfloat/prevfloat should be immutable
 x = 12.
 y = BigFloat(x)
