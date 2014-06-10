@@ -6,6 +6,8 @@ export
     asum,
     axpy!,
     dot,
+    dotc,
+    dotu,
     scal!,
     scal,
     nrm2,
