@@ -132,13 +132,11 @@ inds = [(intinds, "integers"), (logicalinds, "logical array"), (rangeinds, "a ra
 sizes = [(1, "small", "Small sparse matrix"), (2, "medium", "Medium sparse matrix")]
 
 # - matrix types
-mattyp = [(ts, "10 entries/column"), (us, "100 entries/column")]
-# change to following line, after regression is fixed: https://github.com/JuliaLang/julia/pull/7162#issuecomment-45400517
-#mattyp = [(ts, "10 entries/column"), (us, "100 entries/column"), (uus, "100 entries/column uint32")]
+mattyp = [(ts, "10 entries/column"), (us, "100 entries/column"), (uus, "100 entries/column uint32")]
 
 # - functions
 funs = [(integer_indexing, 1, "indexing"), (one_arg_indexing, 1, "1d indexing"),  
-        (row_indexing, 2, "indexing rows"), (col_indexing, 2, "indexing rows"), 
+        (row_indexing, 2, "indexing rows"), (col_indexing, 2, "indexing columns"), 
         (row_col_indexing, 3, "indexing rows & columns")]
 
 # performance tests:
