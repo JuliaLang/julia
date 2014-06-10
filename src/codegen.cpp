@@ -1309,6 +1309,10 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
     if (jl_is_quotenode(expr) && jl_is_module(jl_fieldref(expr,0)))
         expr = jl_fieldref(expr,0);
 
+    jl_value_t *static_val = static_eval(expr, ctx, true, false);
+    if (static_val != NULL && jl_is_module(static_val))
+        expr = static_val;
+
     if (jl_is_module(expr)) {
         Value *bp =
             global_binding_pointer((jl_module_t*)expr, name, NULL, false);
