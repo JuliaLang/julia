@@ -147,8 +147,9 @@ const char *jl_demangle(const char *name) {
     if (*name == '\0') goto done;
     while ((*end++ != ';') && (*end != '\0'));
     if (*name == '\0') goto done;
-    ret = (char*)malloc(end-start-1);
+    ret = (char*)malloc(end-start);
     memcpy(ret,start,end-start-1);
+    ret[end-start-1] = '\0';
     return ret;
     done:
         return strdup(name);
@@ -188,7 +189,7 @@ void lookup_pointer(DIContext *context, const char **name, int *line, const char
     #include <mach-o/dyld.h>
 #endif
 #ifndef _OS_WINDOWS_
-#include <dlfnc.h>
+#include <dlfcn.h>
 #endif
 typedef struct {
     llvm::object::ObjectFile *obj;
