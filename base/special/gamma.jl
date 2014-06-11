@@ -272,7 +272,7 @@ function zeta(s::Union(Int,Float64,Complex{Float64}),
 
     isnan(x) && return oftype(ζ, imag(z)==0 && isa(s,Int) ? x : Complex(x,x))
 
-    cutoff = 7 + real(m) # empirical cutoff for asymptotic series
+    cutoff = 7 + real(m) + imag(m) # TODO: this cutoff is too conservative?
     if x < cutoff
         # shift using recurrence formula
         xf = floor(x)
@@ -407,112 +407,73 @@ lbeta(x::Number, w::Number) = lgamma(x)+lgamma(w)-lgamma(x+w)
 @vectorize_2arg Number beta
 @vectorize_2arg Number lbeta
 
-const eta_coeffs =
-    [.99999999999999999997,
-     -.99999999999999999821,
-     .99999999999999994183,
-     -.99999999999999875788,
-     .99999999999998040668,
-     -.99999999999975652196,
-     .99999999999751767484,
-     -.99999999997864739190,
-     .99999999984183784058,
-     -.99999999897537734890,
-     .99999999412319859549,
-     -.99999996986230482845,
-     .99999986068828287678,
-     -.99999941559419338151,
-     .99999776238757525623,
-     -.99999214148507363026,
-     .99997457616475604912,
-     -.99992394671207596228,
-     .99978893483826239739,
-     -.99945495809777621055,
-     .99868681159465798081,
-     -.99704078337369034566,
-     .99374872693175507536,
-     -.98759401271422391785,
-     .97682326283354439220,
-     -.95915923302922997013,
-     .93198380256105393618,
-     -.89273040299591077603,
-     .83945793215750220154,
-     -.77148960729470505477,
-     .68992761745934847866,
-     -.59784149990330073143,
-     .50000000000000000000,
-     -.40215850009669926857,
-     .31007238254065152134,
-     -.22851039270529494523,
-     .16054206784249779846,
-     -.10726959700408922397,
-     .68016197438946063823e-1,
-     -.40840766970770029873e-1,
-     .23176737166455607805e-1,
-     -.12405987285776082154e-1,
-     .62512730682449246388e-2,
-     -.29592166263096543401e-2,
-     .13131884053420191908e-2,
-     -.54504190222378945440e-3,
-     .21106516173760261250e-3,
-     -.76053287924037718971e-4,
-     .25423835243950883896e-4,
-     -.78585149263697370338e-5,
-     .22376124247437700378e-5,
-     -.58440580661848562719e-6,
-     .13931171712321674741e-6,
-     -.30137695171547022183e-7,
-     .58768014045093054654e-8,
-     -.10246226511017621219e-8,
-     .15816215942184366772e-9,
-     -.21352608103961806529e-10,
-     .24823251635643084345e-11,
-     -.24347803504257137241e-12,
-     .19593322190397666205e-13,
-     -.12421162189080181548e-14,
-     .58167446553847312884e-16,
-     -.17889335846010823161e-17,
-     .27105054312137610850e-19]
+# Riemann zeta function; algorithm is based on specializing the Hurwitz
+# zeta function above for z==1.
+function zeta(s::Union(Float64,Complex{Float64}))
+    # blows up to ±Inf, but get correct sign of imaginary zero
+    s == 1 && return NaN + zero(s) * imag(s)
 
-function eta(z::Union(Float64,Complex128))
-    if z == 0
-        return oftype(z, 0.5)
+    if !isfinite(s) # annoying NaN and Inf cases
+        isnan(s) && return imag(s) == 0 ? s : s*s
+        if isfinite(imag(s))
+            real(s) > 0 && return 1.0 - zero(s)*imag(s)
+            imag(s) == 0 && return NaN + zero(s)
+        end
+        return NaN*zero(s) # NaN + NaN*im
+    elseif real(s) < 0.5
+        if abs(real(s)) + abs(imag(s)) < 1e-3 # Taylor series for small |s|
+            return @evalpoly(s, -0.5,
+                             -0.918938533204672741780329736405617639861,
+                             -1.0031782279542924256050500133649802190,
+                             -1.00078519447704240796017680222772921424,
+                             -0.9998792995005711649578008136558752359121)
+        end 
+        return zeta(1 - s) * gamma(1 - s) * sinpi(s*0.5) * (2π)^s / π
     end
-    re, im = reim(z)
-    if im==0 && re < 0 && re==round(re/2)*2
-        return zero(z)
+
+    m = s - 1
+
+    # shift using recurrence formula:
+    #   n is a semi-empirical cutoff for the Stirling series, based
+    #   on the error term ~ (|m|/n)^18 / n^real(m)
+    n = iceil(6 + 0.7*abs(imag(s-1))^inv(1 + real(m)*0.05))
+    ζ = one(s)
+    for ν = 2:n
+        ζₒ= ζ
+        ζ += inv(ν)^s
+        ζ == ζₒ && break # prevent long loop for large m 
     end
-    reflect = false
-    if re < 0.5
-        z = 1-z
-        reflect = true
-    end
-    s = zero(z)
-    for n = length(eta_coeffs):-1:1
-        c = eta_coeffs[n]
-        p = n^-z
-        s += c * p
-    end
-    if reflect
-        z2 = 2.0^z
-        b = 2.0 - (2.0*z2)
-        f = z2 - 2
-        piz = pi^z
-        
-        b = b/f/piz
-        
-        return s * gamma(z) * b * cospi(z/2)
-    end
-    return s
+    z = 1 + n
+    t = inv(z)
+    w = t^m
+    ζ += w * (inv(m) + 0.5*t)
+
+    t *= t # 1/z^2                                                              
+    ζ += w*t * @pg_horner(t,m,0.08333333333333333,-0.008333333333333333,0.003968253968253968,-0.004166666666666667,0.007575757575757576,-0.021092796092796094,0.08333333333333333,-0.4432598039215686,3.0539543302701198)
+
+    return ζ
 end
 
+zeta(x::Integer) = zeta(float64(x))
+zeta(x::Real)    = oftype(float(x),zeta(float64(x)))
+zeta(z::Complex) = oftype(float(z),zeta(complex128(z)))
+@vectorize_1arg Number zeta
+
+function eta(z::Union(Float64,Complex{Float64}))
+    δz = 1 - z
+    if abs(real(δz)) + abs(imag(δz)) < 7e-3 # Taylor expand around z==1
+        return 0.6931471805599453094172321214581765 *
+               @evalpoly(δz,
+                         1.0,
+                         -0.23064207462156020589789602935331414700440,
+                         -0.047156357547388879740146103148112380421254,
+                         -0.002263576552598880778433550956278702759143568,
+                         0.001081837223249910136105931217561387128141157)
+    else
+        return -zeta(z) * expm1(0.6931471805599453094172321214581765*δz)
+    end
+end
 eta(x::Integer) = eta(float64(x))
 eta(x::Real)    = oftype(float(x),eta(float64(x)))
 eta(z::Complex) = oftype(float(z),eta(complex128(z)))
 @vectorize_1arg Number eta
-
-function zeta(z::Number)
-    zz = 2^z
-    eta(z) * zz/(zz-2)
-end
-@vectorize_1arg Number zeta

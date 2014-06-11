@@ -782,3 +782,6 @@ i3 = itrunc(f)
 @test i3 == f
 @test i3+1 > f
 @test i3+1 >= f
+
+err(z, x) = abs(z - x) / abs(x)
+@test 1e-60 > err(eta(BigFloat("1.005")), BigFloat("0.693945708117842473436705502427198307157819636785324430166786"))
