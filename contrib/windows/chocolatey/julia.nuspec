@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
+  <metadata>
+    <id>julia</id>
+    <version>VERSIONVERSION</version>
+    <title>Julia</title>
+    <authors>Jeff Bezanson, Stefan Karpinski, Viral B. Shah, and other contributors</authors>
+    <owners>TODO</owners>
+    <licenseUrl>https://github.com/JuliaLang/julia/blob/master/LICENSE.md</licenseUrl>
+    <projectUrl>http://julialang.org/</projectUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>TODO</description>
+    <summary>TODO</summary>
+    <tags>TODO</tags>
+  </metadata>
+</package>
