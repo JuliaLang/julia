@@ -105,6 +105,7 @@ extern int globalUnique;
 extern void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType);
 extern const char *jl_cpu_string;
 uv_lib_t *jl_sysimg_handle = NULL;
+char *jl_sysimage_name = NULL;
 
 static void jl_load_sysimg_so(char *fname)
 {
@@ -136,6 +137,7 @@ static void jl_load_sysimg_so(char *fname)
             jl_error("System image has unknown target cpu architecture.\n"
                      "Please delete or regenerate sys.{so,dll,dylib}.");
         }
+        jl_sysimage_name = strdup(fname);
     }
     else {
         sysimg_gvars = 0;
@@ -1104,10 +1106,6 @@ void jl_restore_system_image(char *fname)
     jl_get_binding_wr(jl_core_module, jl_symbol("JULIA_HOME"))->value =
         jl_cstr_to_string(julia_home);
     jl_update_all_fptrs();
-#ifndef _OS_WINDOWS_
-    // restore the line information for Julia backtraces
-    if (jl_sysimg_handle != NULL) jl_restore_linedebug_info(jl_sysimg_handle);
-#endif
 }
 
 void jl_init_restored_modules()

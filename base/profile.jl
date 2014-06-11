@@ -90,7 +90,7 @@ len_data() = convert(Int, ccall(:jl_profile_len_data, Csize_t, ()))
 maxlen_data() = convert(Int, ccall(:jl_profile_maxlen_data, Csize_t, ()))
 
 function lookup(ip::Uint)
-    info = ccall(:jl_lookup_code_address, Any, (Ptr{Void},), ip)
+    info = ccall(:jl_lookup_code_address, Any, (Ptr{Void},Cint), ip, false)
     if length(info) == 4
         return LineInfo(string(info[1]), string(info[2]), int(info[3]), info[4])
     else

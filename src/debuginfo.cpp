@@ -19,6 +19,7 @@ struct FuncInfo{
 struct ObjectInfo {
     object::ObjectFile* object;
     object::SymbolRef symref;
+    size_t size;
 };
 #endif
 
@@ -108,9 +109,8 @@ public:
         for (const object::SymbolRef &sym_iter : obj.symbols()) {
             sym_iter.getType(SymbolType);
             if (SymbolType != object::SymbolRef::ST_Function) continue;
-            
             sym_iter.getAddress(Addr);
-            ObjectInfo tmp = {obj.getObjectFile(), sym_iter};
+            ObjectInfo tmp = {obj.getObjectFile(), sym_iter, obj.getData().size()};
             objectmap[Addr] = tmp;
         }
         #else
@@ -138,39 +138,29 @@ public:
 #endif // USE_MCJIT
 };
 
-#if defined(USE_MCJIT) && !defined(LLVM35)
 extern "C"
 const char *jl_demangle(const char *name) {
     const char *start = name;
     const char *end = start;
+    char *ret;
     while ((*start++ != '_') && (*start != '\0'));
     if (*name == '\0') goto done;
     while ((*end++ != ';') && (*end != '\0'));
     if (*name == '\0') goto done;
-    return strndup(start, end-start-1);
+    ret = (char*)malloc(end-start);
+    memcpy(ret,start,end-start-1);
+    ret[end-start-1] = '\0';
+    return ret;
     done:
         return strdup(name);
 }
-#endif
 
 JuliaJITEventListener *jl_jit_events;
 
-extern "C" void jl_getFunctionInfo(const char **name, int *line, const char **filename, uintptr_t pointer);
+extern "C" void jl_getFunctionInfo(const char **name, int *line, const char **filename, uintptr_t pointer, int skipC);
 
-void jl_getFunctionInfo(const char **name, int *line, const char **filename, size_t pointer)
+void lookup_pointer(DIContext *context, const char **name, int *line, const char **filename, size_t pointer)
 {
-    *name = NULL;
-    *line = -1;
-    *filename = "no file";
-
-#if USE_MCJIT
-// With MCJIT we can get function information directly from the ObjectFile
-    std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
-    std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(pointer);
-
-    if (it == objmap.end()) return;
-
-    DIContext *context = DIContext::getDWARFContext(it->second.object);
     if (context == NULL) return;
     #ifdef LLVM35
     DILineInfoSpecifier infoSpec(DILineInfoSpecifier::FileLineInfoKind::AbsoluteFilePath,
@@ -179,7 +169,7 @@ void jl_getFunctionInfo(const char **name, int *line, const char **filename, siz
     int infoSpec = DILineInfoSpecifier::FileLineInfo |
                     DILineInfoSpecifier::AbsoluteFilePath |
                     DILineInfoSpecifier::FunctionName;
-    #endif 
+    #endif
     DILineInfo info = context->getLineInfoForAddress(pointer, infoSpec);
 
     #ifndef LLVM35 // LLVM <= 3.4
@@ -193,6 +183,221 @@ void jl_getFunctionInfo(const char **name, int *line, const char **filename, siz
     *line = info.Line;
     *filename = strdup(info.FileName.c_str());
     #endif
+}
+
+#ifdef _OS_DARWIN_
+    #include <mach-o/dyld.h>
+#endif
+#ifndef _OS_WINDOWS_
+#include <dlfcn.h>
+#endif
+typedef struct {
+    llvm::object::ObjectFile *obj;
+    DIContext *ctx;
+    int64_t slide;
+} objfileentry_t;
+typedef std::map<uint64_t, objfileentry_t> obfiletype;
+static obfiletype objfilemap;
+
+#ifdef _OS_DARWIN_
+bool getObjUUID(llvm::object::MachOObjectFile *obj, uint8_t uuid[16])
+{
+#ifdef LLVM35
+    uint32_t LoadCommandCount = obj->getHeader().ncmds;
+#else
+    uint32_t LoadCommandCount = obj->getHeader().NumLoadCommands;
+#endif
+    llvm::object::MachOObjectFile::LoadCommandInfo Load = obj->getFirstLoadCommandInfo();
+    for (unsigned I = 0; ; ++I) {
+#ifdef LLVM35
+        if (Load.C.cmd == LC_UUID)
+#else
+        if (Load.C.Type == LC_UUID)
+#endif
+        {
+            memcpy(uuid,((MachO::uuid_command*)Load.Ptr)->uuid,16);
+            return true;
+        }
+        else if (I == LoadCommandCount - 1)
+        {
+            return false;
+        }
+        else
+        {
+            Load = obj->getNextLoadCommandInfo(Load);
+        }
+    }
+}
+#endif
+
+extern char *jl_sysimage_name;
+
+bool jl_is_sysimg(const char *path)
+{
+    const char *filename = strrchr(path,'/');
+    if (filename == NULL)
+        filename = path;
+    const char *sysimgname = strrchr(jl_sysimage_name,'/');
+    if (sysimgname == NULL)
+        sysimgname = jl_sysimage_name;
+    return strncmp(filename,sysimgname,strrchr(path,'.')-filename) == 0;
+}
+
+#if defined(_OS_WINDOWS_) && !defined(USE_MCJIT)
+void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename, size_t pointer, int skipC)
+{
+return;
+}
+#else
+void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename, size_t pointer, int skipC)
+{
+#ifdef _OS_WINDOWS_
+    DWORD fbase = SymGetModuleBase64(GetCurrentProcess(),(DWORD)pointer);
+    if (fbase != 0) {
+#else
+    Dl_info dlinfo;
+    if (dladdr((void*)pointer, &dlinfo) != 0) {
+        if (skipC && !jl_is_sysimg(dlinfo.dli_fname))
+            return;
+        uint64_t fbase = (uint64_t)dlinfo.dli_fbase;
+#endif
+        obfiletype::iterator it = objfilemap.find(fbase);
+        llvm::object::ObjectFile *obj = NULL;
+        DIContext *context = NULL;
+        int64_t slide = 0;
+        if (it == objfilemap.end()) {
+#ifdef _OS_DARWIN_
+            // First find the uuid of the object file (we'll use this to make sure we find the
+            // correct debug symbol file).
+            uint8_t uuid[16], uuid2[16];
+#ifdef LLVM35
+            ErrorOr<llvm::object::ObjectFile*> origerrorobj = llvm::object::ObjectFile::createObjectFile(
+#else
+            llvm::object::ObjectFile *origerrorobj = llvm::object::ObjectFile::createObjectFile(
+#endif
+                    MemoryBuffer::getMemBuffer(
+                    StringRef((const char *)fbase, (size_t)(((uint64_t)-1)-fbase)),"",false)
+#ifdef LLVM35
+                    ,false, sys::fs::file_magic::unknown
+#endif
+            );
+            if (!origerrorobj) {
+                objfileentry_t entry = {obj,context,slide};
+                objfilemap[fbase] = entry;
+                return;
+            }
+#ifdef LLVM35
+            llvm::object::MachOObjectFile *morigobj = (llvm::object::MachOObjectFile *)origerrorobj.get();
+#else
+            llvm::object::MachOObjectFile *morigobj = (llvm::object::MachOObjectFile *)origerrorobj;
+#endif
+            if (!getObjUUID(morigobj,uuid)) {
+                objfileentry_t entry = {obj,context,slide};
+                objfilemap[fbase] = entry;
+                return;
+            }
+
+            // On OS X debug symbols are not contained in the dynamic library and that's why
+            // we can't have nice things (easily). For now we only support .dSYM files in the same directory
+            // as the shared library. In the future we may use DBGCopyFullDSYMURLForUUID from CoreFoundation to make
+            // use of spotlight to find the .dSYM file.
+            char dsympath[PATH_MAX];
+            strlcpy(dsympath, dlinfo.dli_fname, sizeof(dsympath));
+            strlcat(dsympath, ".dSYM/Contents/Resources/DWARF/", sizeof(dsympath));
+            strlcat(dsympath, strrchr(dlinfo.dli_fname,'/')+1, sizeof(dsympath));
+#ifdef LLVM35
+            ErrorOr<llvm::object::ObjectFile*> errorobj = llvm::object::ObjectFile::createObjectFile(dsympath);
+#else
+            llvm::object::ObjectFile *errorobj = llvm::object::ObjectFile::createObjectFile(dsympath);
+#endif
+#else
+#ifndef _OS_WINDOWS_
+            const char *fname = dlinfo.dli_fname;
+#else
+            IMAGEHLP_MODULE64 ModuleInfo;
+            ModuleInfo.SizeOfStruct = sizeof(IMAGEHLP_MODULE64);
+            SymGetModuleInfo64(GetCurrentProcess(), (DWORD64)pointer, &ModuleInfo);
+            char *fname = ModuleInfo.LoadedImageName;
+            JL_PRINTF(JL_STDOUT,fname);
+#endif
+            // On non OS X systems we need to mmap another copy because of the permissions on the mmaped
+            // shared library.
+#ifdef LLVM35
+            ErrorOr<llvm::object::ObjectFile*> errorobj = llvm::object::ObjectFile::createObjectFile(fname);
+#else
+            llvm::object::ObjectFile *errorobj = llvm::object::ObjectFile::createObjectFile(fname);
+#endif
+#endif
+#ifdef LLVM35
+            if(errorobj) {
+                obj = errorobj.get();
+#else
+            if(errorobj != NULL) {
+                obj = errorobj;
+#endif
+#ifdef _OS_DARWIN_
+                if (getObjUUID(morigobj,uuid2) && memcmp(uuid,uuid2,sizeof(uuid)) == 0)
+                {
+#endif
+                    context = DIContext::getDWARFContext(obj);
+                    slide = -(uint64_t)fbase;
+#ifdef _OS_DARWIN_
+                }
+#endif
+#ifdef _OS_WINDOWS_
+                assert(obj->isCOFF());
+                llvm::object::COFFObjectFile *coffobj = (llvm::object::COFFObjectFile *)obj;
+                const llvm::object::pe32plus_header *pe32plus;
+                coffobj->getPE32PlusHeader(pe32plus);
+                if (pe32plus != NULL)
+                {
+                    slide = pe32plus->ImageBase-fbase;
+                } 
+                else
+                {
+                    const llvm::object::pe32_header *pe32;
+                    coffobj->getPE32Header(pe32); 
+                    if (pe32 == NULL) {
+                        obj = NULL;
+                        context = NULL;
+                    }
+                    else
+                        slide = pe32->ImageBase-fbase;
+                }
+#endif
+
+            }
+            objfileentry_t entry = {obj,context,slide};
+            objfilemap[fbase] = entry;
+        } else {
+            obj = it->second.obj;
+            context = it->second.ctx;
+            slide = it->second.slide;
+        }
+
+        lookup_pointer(context, name, line, filename, pointer+slide);
+    }
+    return;
+}
+#endif
+
+void jl_getFunctionInfo(const char **name, int *line, const char **filename, size_t pointer, int skipC)
+{
+    *name = NULL;
+    *line = -1;
+    *filename = "no file";
+
+#if USE_MCJIT
+// With MCJIT we can get function information directly from the ObjectFile
+    std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
+    std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(pointer);
+    llvm::object::ObjectFile *Obj = it->second.object;
+
+    if (it == objmap.end()) return jl_getDylibFunctionInfo(name,line,filename,pointer,skipC);
+    if ((pointer - it->first) > it->second.size) return jl_getDylibFunctionInfo(name,line,filename,pointer,skipC);
+
+    DIContext *context = DIContext::getDWARFContext(it->second.object);
+    lookup_pointer(context, name, line, filename, pointer);
 
 #else // !USE_MCJIT
 
@@ -238,13 +443,17 @@ void jl_getFunctionInfo(const char **name, int *line, const char **filename, siz
         if (*line == -1) {
             *line = prev.Loc.getLine();
         }
+    } else {
+        jl_getDylibFunctionInfo(name,line,filename,pointer,skipC);
     }
 #endif // USE_MCJIT
 }
 
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
 
+
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
 extern "C" void* CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserContext);
+#ifndef USE_MCJIT
 
 void* CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserContext)
 {
@@ -293,15 +502,29 @@ public:
   virtual unsigned GetNumDataSlabs() { return JMM->GetNumDataSlabs(); }
   virtual unsigned GetNumStubSlabs() { return JMM->GetNumStubSlabs(); }
 
+#ifdef LLVM35
+  virtual uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
+                                       unsigned SectionID, llvm::StringRef SectionName) { return JMM->allocateCodeSection(Size,Alignment,SectionID,SectionName); }
+  virtual uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
+                                       unsigned SectionID, llvm::StringRef SectionName, bool IsReadOnly) { return JMM->allocateDataSection(Size,Alignment,SectionID,SectionName,IsReadOnly); }
+#else
   virtual uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
                                        unsigned SectionID) { return JMM->allocateCodeSection(Size,Alignment,SectionID); }
   virtual uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
                                        unsigned SectionID, bool IsReadOnly) { return JMM->allocateDataSection(Size,Alignment,SectionID,IsReadOnly); }
+#endif
   virtual void *getPointerToNamedFunction(const std::string &Name,
                                           bool AbortOnFailure = true) { return JMM->getPointerToNamedFunction(Name,AbortOnFailure); }
   virtual bool applyPermissions(std::string *ErrMsg = 0) { return JMM->applyPermissions(ErrMsg); }
   virtual void registerEHFrames(StringRef SectionData) { return JMM->registerEHFrames(SectionData); }
 };
+
+#else 
+void* CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserContext)
+{
+    return NULL;
+}
+#endif
 #endif
 
 // Code coverage
@@ -367,98 +590,3 @@ extern "C" void jl_write_coverage_data(void)
         }
     }
 }
-
-#if !defined(_OS_WINDOWS_) && !defined(USE_MCJIT)
-// disabled pending system image backtrace support on Windows
-typedef std::map<size_t, FuncInfo, revcomp> FuncInfoMap;
-extern "C" void jl_dump_linedebug_info() {
-    FuncInfoMap info = jl_jit_events->getMap();
-    FuncInfoMap::iterator infoiter = info.begin();
-    std::vector<JITEvent_EmittedFunctionDetails::LineStart>::iterator lineiter = (*infoiter).second.lines.begin();
-
-    Type *li_types[2] = {T_size, T_size};
-    StructType *T_lineinfo = StructType::get(jl_LLVMContext, ArrayRef<Type *>(std::vector<Type *>(li_types, li_types+2)), true);
-
-    std::vector<Constant *> funcinfo_array;
-    funcinfo_array.push_back( ConstantInt::get(T_size, 0) );
-
-    for (; infoiter != info.end(); infoiter++) {
-        std::vector<Constant*> functionlines;
-
-        // get the base address for offset calculation
-        size_t fptr = (size_t)(*infoiter).first;
-
-        lineiter = (*infoiter).second.lines.begin();
-        JITEvent_EmittedFunctionDetails::LineStart prev = *lineiter;
-
-        // loop over the EmittedFunctionDetails vector
-        while (lineiter != (*infoiter).second.lines.end()) {
-            // store the individual {offset, line} entries
-            Constant* tmpline[2] = { ConstantInt::get(T_size, (*lineiter).Address - fptr),
-                                     ConstantInt::get(T_size, (*lineiter).Loc.getLine()) };
-            Constant *lineinfo = ConstantStruct::get(T_lineinfo, makeArrayRef(tmpline));
-            functionlines.push_back(lineinfo);
-            lineiter++;
-        }
-
-        DISubprogram debugscope =
-            DISubprogram(prev.Loc.getScope((*infoiter).second.func->getContext()));
-
-        // store function pointer, name and filename, length, number of line entries, and then array of line mappings
-        Constant *info_data[6] = { ConstantExpr::getBitCast( const_cast<Function *>((*infoiter).second.func), T_psize),
-                                   ConstantDataArray::getString( jl_LLVMContext, StringRef(debugscope.getName().str())),
-                                   ConstantDataArray::getString( jl_LLVMContext, StringRef(debugscope.getFilename().str())),
-                                   ConstantInt::get(T_size, (*infoiter).second.lengthAdr),
-                                   ConstantInt::get(T_size, functionlines.size()),
-                                   ConstantArray::get(ArrayType::get(T_lineinfo, functionlines.size()), ArrayRef<Constant *>(functionlines))
-                                 };
-        Constant *st = ConstantStruct::getAnon(jl_LLVMContext, ArrayRef<Constant *>(info_data), true);
-        funcinfo_array.push_back( st );
-    }
-    // set first element to the total number of FuncInfo entries
-    funcinfo_array[0] = ConstantInt::get(T_size, funcinfo_array.size() - 1);
-    Constant *st_lineinfo = ConstantStruct::getAnon( jl_LLVMContext, ArrayRef<Constant*>(funcinfo_array), true );
-    new GlobalVariable(
-            *jl_Module,
-            st_lineinfo->getType(),
-            true,
-            GlobalVariable::ExternalLinkage,
-            st_lineinfo,
-            "jl_linedebug_info");
-}
-
-extern "C" void jl_restore_linedebug_info(uv_lib_t *handle) {
-    uintptr_t *infoptr = (uintptr_t*)jl_dlsym(handle, const_cast<char*>("jl_linedebug_info"));
-    size_t funccount = (size_t)(*infoptr++);
-
-    for (size_t i = 0; i < funccount; i++) {
-        // loop over function info entries
-        uintptr_t fptr = (*infoptr++);
-        char *name = (char*)infoptr;
-        infoptr = (uintptr_t*)(((char*)infoptr) + strlen( (const char*)infoptr) + 1);
-        char *filename = (char*)infoptr;
-        infoptr = (uintptr_t*)(((char*)infoptr) + strlen( (const char*)infoptr) + 1);
-        size_t lengthAdr = (*infoptr++);
-        size_t numel = (*infoptr++);
-
-        std::vector<JITEvent_EmittedFunctionDetails::LineStart> linestarts;
-
-        // dummy element for the MDNode, which we need so that the DebucLoc keeps info
-        SmallVector <Value *, 1> tmpelt;
-
-        for (size_t j = 0; j < numel; j++) {
-            // loop over individual {offset, line} entries
-            uintptr_t offset = (*infoptr++);
-            uintptr_t line = (*infoptr++);
-            JITEvent_EmittedFunctionDetails::LineStart linestart =
-                { (uintptr_t)fptr + offset, DebugLoc::get( line, 0, MDNode::get(jl_LLVMContext, tmpelt) ) };
-            linestarts.push_back(linestart);
-        }
-        FuncInfo info = { NULL, lengthAdr, std::string(name), std::string(filename), linestarts };
-        jl_jit_events->getMap()[(size_t)fptr] = info;
-    }
-}
-#else
-extern "C" void jl_dump_linedebug_info() {}
-extern "C" void jl_restore_linedebug_info(uv_lib_t* handle) {}
-#endif
