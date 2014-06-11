@@ -216,9 +216,7 @@ Library improvements
         the same length.  This generalizes and replaces `normfro` ([#6057]),
         and `norm` is now type-stable ([#6056]).
 
-      * `+` and `-` now require the sizes of the arrays to be the
-        same: the operations no longer do broadcasting. New
-        `UniformScaling` matrix type and identity `I` constant (#5810).
+      * New `UniformScaling` matrix type and identity `I` constant (#5810).
 
       * None of the concrete matrix factorization types are exported from Base
         by default anymore.
