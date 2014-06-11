@@ -13,7 +13,7 @@ import
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
         nextfloat, prevfloat, promote_rule, rad2deg, rem, round, show,
         showcompact, sum, sqrt, string, print, trunc, precision, exp10, expm1,
-        gamma, lgamma, digamma, erf, erfc, zeta, log1p, airyai, iceil, ifloor,
+        gamma, lgamma, digamma, erf, erfc, zeta, eta, log1p, airyai, iceil, ifloor,
         itrunc, eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
         serialize, deserialize, inf, nan, cbrt, typemax, typemin,
@@ -398,6 +398,19 @@ for f in (:exp, :exp2, :exp10, :expm1, :digamma, :erf, :erfc, :zeta,
         ccall(($(string(:mpfr_,f)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
         return z
     end
+end
+
+# return log(2)
+function big_ln2()
+    c = BigFloat()
+    ccall((:mpfr_const_log2, :libmpfr), Cint, (Ptr{BigFloat}, Int32),
+          &c, MPFR.ROUNDING_MODE[end])
+    return c
+end
+
+function eta(x::BigFloat)
+    x == 1 && return big(-0.5)
+    return -zeta(x) * expm1(big_ln2()*(1-x))
 end
 
 function airyai(x::BigFloat)
