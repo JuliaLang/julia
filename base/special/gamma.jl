@@ -196,7 +196,7 @@ function cotderiv(m::Integer, z)
 end
 
 # Helper macro for polygamma(m, z):
-#   Evaluate p[1]*c[1] + x*p[2]*c[2] + x*p[3]*c[3] + ...
+#   Evaluate p[1]*c[1] + x*p[2]*c[2] + x^2*p[3]*c[3] + ...
 #   where c[1] = m + 1
 #         c[k] = c[k-1] * (2k+m-1)*(2k+m-2) / ((2k-1)*(2k-2)) = c[k-1] * d[k]
 #         i.e. d[k] = c[k]/c[k-1] = (2k+m-1)*(2k+m-2) / ((2k-1)*(2k-2))
