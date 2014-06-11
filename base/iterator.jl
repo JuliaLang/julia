@@ -2,16 +2,21 @@ isempty(itr) = done(itr, start(itr))
 
 # enumerate
 
-immutable Enumerate{I}
+immutable Enumerate{I,S,T}
     itr::I
+    start::S
+    step::T
 end
-enumerate(itr) = Enumerate(itr)
+
+enumerate(itr, start, step) = Enumerate(itr, start, step)
+enumerate(itr, start) = Enumerate(itr, start, 1)
+enumerate(itr; start::Int=1, step::Int=1) = Enumerate(itr, start, step)
 
 length(e::Enumerate) = length(e.itr)
-start(e::Enumerate) = (1, start(e.itr))
+start(e::Enumerate) = (e.start, start(e.itr))
 function next(e::Enumerate, state)
     n = next(e.itr,state[2])
-    (state[1],n[1]), (state[1]+1,n[2])
+    (state[1],n[1]), (state[1]+e.step,n[2])
 end
 done(e::Enumerate, state) = done(e.itr, state[2])
 

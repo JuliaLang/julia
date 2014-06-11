@@ -786,6 +786,11 @@ let a36 = boo32_64()
 end
 @test isequal([1,2,3], [a for (a,b) in enumerate(2:4)])
 @test isequal([2,3,4], [b for (a,b) in enumerate(2:4)])
+@test isequal([0,1,2], [a for (a,b) in enumerate(2:4, start=0)])
+@test isequal([-1.0,0.0,1.0], [a for (a,b) in enumerate(2:4, -1.0)])
+@test isequal([1,0,-1], [a for (a,b) in enumerate(2:4, step=-1)])
+@test isequal([1.0,0.0,-1.0], [a for (a,b) in enumerate(2:4, 1.0, -1.0)])
+@test isequal([1,1,1], [a for (a,b) in enumerate(2:4, step=0)])
 
 @test_throws DomainError (10.^[-1])[1] == 0.1
 @test (10.^[-1.])[1] == 0.1
