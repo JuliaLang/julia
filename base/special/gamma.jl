@@ -224,9 +224,6 @@ function inv_oftype(x::Complex, y::Real)
 end
 inv_oftype(x::Real, y::Real) = oftype(x, inv(y))
 
-zeta_returntype{T}(s::Integer, z::T) = T
-zeta_returntype(s, z) = Complex128
-
 # Hurwitz zeta function, which is related to polygamma 
 # (at least for integer m > 0 and real(z) > 0) by:
 #    polygamma(m, z) = (-1)^(m+1) * gamma(m+1) * zeta(m+1, z).
@@ -240,7 +237,11 @@ zeta_returntype(s, z) = Complex128
 # (which Julia already exports).
 function zeta(s::Union(Int,Float64,Complex{Float64}),
               z::Union(Float64,Complex{Float64}))
-    ζ = zero(zeta_returntype(s, z))
+    ζ = zero(promote_type(typeof(s), typeof(z)))
+
+    # like sqrt, require complex inputs to get complex outputs
+    !isa(s,Integer) && isa(ζ, Real) && z < 0 && throw(DomainError())
+
     z == 1 && return oftype(ζ, zeta(s))
     s == 2 && return oftype(ζ, trigamma(z))
 
