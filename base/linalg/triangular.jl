@@ -93,8 +93,8 @@ function convert{T,TA,S,UpLo,IsUnit}(::Type{AbstractMatrix{T}}, A::Triangular{TA
     M = convert(AbstractMatrix{T}, A.data)
     Triangular{T,typeof(M),UpLo,IsUnit}(M)
 end
-function convert{T,S,UpLo,IsUnit}(::Type{Matrix}, A::Triangular{T,S,UpLo,IsUnit})
-    B = Array(T, size(A, 1), size(A, 1))
+function convert{Tret,T,S,UpLo,IsUnit}(::Type{Matrix{Tret}}, A::Triangular{T,S,UpLo,IsUnit})
+    B = Array(Tret, size(A, 1), size(A, 1))
     copy!(B, A.data)
     (UpLo == :L ? tril! : triu!)(B)
     if IsUnit
@@ -104,6 +104,7 @@ function convert{T,S,UpLo,IsUnit}(::Type{Matrix}, A::Triangular{T,S,UpLo,IsUnit}
     end
     B
 end
+convert{T,S,UpLo,IsUnit}(::Type{Matrix}, A::Triangular{T,S,UpLo,IsUnit}) = convert(Matrix{T}, A)
 
 function full!{T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit})
     B = A.data
