@@ -322,10 +322,17 @@ det(x::Number) = x
 
 logdet(A::Matrix) = logdet(lufact(A))
 
-function inv(A::Matrix)
-    if istriu(A) return inv(Triangular(A, :U, false)) end
-    if istril(A) return inv(Triangular(A, :L, false)) end
-    return inv(lufact(A))
+function inv{S}(A::StridedMatrix{S})
+    T = typeof(one(S)/one(S))
+    Ac = convert(AbstractMatrix{T}, A)
+    if istriu(Ac)
+        Ai = inv(Triangular(A, :U, false))
+    elseif istril(Ac) 
+        Ai = inv(Triangular(A, :L, false))
+    else 
+        Ai = inv(lufact(Ac))
+    end
+    return convert(typeof(Ac), Ai)
 end
 
 function factorize{T}(A::Matrix{T})
