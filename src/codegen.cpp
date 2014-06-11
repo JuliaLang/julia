@@ -1,10 +1,3 @@
-#include "platform.h"
-#if defined(_OS_WINDOWS_)
-#define NOMINMAX
-#endif
-#include "julia.h"
-#include "julia_internal.h"
-
 /*
  * We include <mathimf.h> here, because somewhere below <math.h> is included also.
  * As a result, Intel C++ Composer generates an error. To prevent this error, we
@@ -23,6 +16,8 @@
 #endif
 #endif
 
+#include "platform.h"
+
 #ifndef __STDC_LIMIT_MACROS
 #define __STDC_LIMIT_MACROS
 #define __STDC_CONSTANT_MACROS
@@ -36,6 +31,12 @@
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Analysis/Passes.h"
 #include "llvm/Bitcode/ReaderWriter.h"
+#ifdef _OS_DARWIN_
+#include "llvm/Object/MachO.h"
+#endif
+#ifdef _OS_WINDOWS_
+#include "llvm/Object/COFF.h"
+#endif
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 5
 #define LLVM35 1
 #include "llvm/IR/Verifier.h"
@@ -47,6 +48,7 @@
 #else
 #include "llvm/Analysis/Verifier.h"
 #endif
+#include "llvm/DebugInfo/DIContext.h"
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 4
 #define LLVM34 1
 #define USE_MCJIT 1
@@ -54,7 +56,6 @@
 #include "llvm/ExecutionEngine/SectionMemoryManager.h"
 #include "llvm/ExecutionEngine/ObjectImage.h"
 #include "llvm/ADT/DenseMapInfo.h"
-#include "llvm/DebugInfo/DIContext.h"
 #include "llvm/Object/ObjectFile.h"
 #endif
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3
@@ -104,6 +105,38 @@
 #include "llvm/Support/CommandLine.h"
 #endif
 #include "llvm/Transforms/Utils/Cloning.h"
+ // For disasm
+#include "llvm/Support/MachO.h"
+#include "llvm/Support/COFF.h"
+#include "llvm/MC/MCDisassembler.h"
+#include "llvm/MC/MCInst.h"
+#include "llvm/MC/MCStreamer.h"
+#include "llvm/MC/MCSubtargetInfo.h"
+#include "llvm/MC/MCObjectFileInfo.h"
+#include "llvm/MC/MCRegisterInfo.h"
+#include "llvm/MC/MCAsmInfo.h"
+#include "llvm/MC/MCAsmBackend.h"
+#include "llvm/MC/MCCodeEmitter.h"
+#include "llvm/MC/MCInstPrinter.h"
+#include "llvm/MC/MCInstrInfo.h"
+#include "llvm/MC/MCContext.h"
+#include "llvm/ADT/OwningPtr.h"
+#include "llvm/ADT/Triple.h"
+#include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/MemoryObject.h"
+#include "llvm/Support/SourceMgr.h"
+#include "llvm/Support/TargetRegistry.h"
+#include "llvm/Support/Host.h"
+#include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/system_error.h"
+
+#if defined(_OS_WINDOWS_) && !defined(NOMINMAX)
+#define NOMINMAX
+#endif
+
+#include "julia.h"
+#include "julia_internal.h"
+
 #include <setjmp.h>
 
 #include <string>
@@ -351,9 +384,13 @@ void jl_dump_objfile(char* fname, int jit_model)
     // We don't want to use MCJIT's target machine because
     // it uses the large code model and we may potentially
     // want less optimizations there.
+    Triple TheTriple = Triple(jl_TargetMachine->getTargetTriple());
+#if defined(_OS_WINDOWS_) && defined(USE_MCJIT)
+    TheTriple.setObjectFormat(Triple::COFF);
+#endif
     OwningPtr<TargetMachine>
     TM(jl_TargetMachine->getTarget().createTargetMachine(
-        jl_TargetMachine->getTargetTriple(),
+        TheTriple.getTriple(),
         jl_TargetMachine->getTargetCPU(),
         jl_TargetMachine->getTargetFeatureString(),
         jl_TargetMachine->Options,
@@ -3260,11 +3297,14 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     else {
         m = shadow_module;
     }
-    funcName << ";" << globalUnique++;
+#ifndef LLVM35
+    funcName << ";";
+#endif
 #else
     m = jl_Module;
-    funcName << globalUnique++;
+    funcName << ";";
 #endif
+    funcName << globalUnique++;
 
     if (specsig) {
         std::vector<Type*> fsig(0);
@@ -3765,7 +3805,11 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
 static MDNode* tbaa_make_child( const char* name, MDNode* parent, bool isConstant=false )
 {
     MDNode* n = mbuilder->createTBAANode(name,parent,isConstant);
+#ifdef LLVM35
+    n->setValueName( ValueName::Create(name));
+#else
     n->setValueName( ValueName::Create(name, name+strlen(name)));
+#endif
     return n;
 }
 
@@ -4348,7 +4392,7 @@ extern "C" void jl_init_codegen(void)
 #endif
     EngineBuilder eb = EngineBuilder(engine_module)
         .setEngineKind(EngineKind::JIT)
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_) && !defined(USE_MCJIT)
         .setJITMemoryManager(new JITMemoryManagerWin())
 #endif
         .setTargetOptions(options)
@@ -4363,7 +4407,19 @@ extern "C" void jl_init_codegen(void)
 #else
         .setMAttrs(attrvec);
 #endif
-    jl_TargetMachine = eb.selectTarget();
+    Triple TheTriple(sys::getProcessTriple());
+#if defined(_OS_WINDOWS_) && defined(USE_MCJIT)
+    TheTriple.setObjectFormat(Triple::ELF);
+#endif
+    SmallVector<std::string, 4> MAttrs;
+    MAttrs.clear();
+    MAttrs.append(attrvec.begin(), attrvec.end());
+#if defined(JULIA_TARGET_NATIVE)
+    jl_TargetMachine = eb.selectTarget(TheTriple,"","",MAttrs);
+#else 
+    jl_TargetMachine = eb.selectTarget(TheTriple,"",jl_cpu_string,MAttrs);
+#endif
+    assert(jl_TargetMachine);
     jl_ExecutionEngine = eb.create(jl_TargetMachine);
 #endif // LLVM VERSION
     jl_ExecutionEngine->DisableLazyCompilation();
