@@ -193,7 +193,7 @@ void lookup_pointer(DIContext *context, const char **name, int *line, const char
 typedef struct {
     llvm::object::ObjectFile *obj;
     DIContext *ctx;
-    uint64_t slide;
+    int64_t slide;
 } objfileentry_t;
 typedef std::map<uint64_t, objfileentry_t> obfiletype;
 static obfiletype objfilemap;
@@ -242,6 +242,12 @@ bool jl_is_sysimg(const char *path)
     return strncmp(filename,sysimgname,strrchr(path,'.')-filename) == 0;
 }
 
+#if defined(_OS_WINDOWS_) && !defined(USE_MCJIT)
+void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename, size_t pointer, int skipC)
+{
+return;
+}
+#else
 void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename, size_t pointer, int skipC)
 {
 #ifdef _OS_WINDOWS_
@@ -257,7 +263,7 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
         obfiletype::iterator it = objfilemap.find(fbase);
         llvm::object::ObjectFile *obj = NULL;
         DIContext *context = NULL;
-        uint64_t slide = 0;
+        int64_t slide = 0;
         if (it == objfilemap.end()) {
 #ifdef _OS_DARWIN_
             // First find the uuid of the object file (we'll use this to make sure we find the
@@ -333,18 +339,32 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
                 {
 #endif
                     context = DIContext::getDWARFContext(obj);
-                    slide = (uint64_t)fbase;
+                    slide = -(uint64_t)fbase;
 #ifdef _OS_DARWIN_
                 }
 #endif
+#ifdef _OS_WINDOWS_
+                assert(obj->isCOFF());
+                llvm::object::COFFObjectFile *coffobj = (llvm::object::COFFObjectFile *)obj;
+                const llvm::object::pe32plus_header *pe32plus;
+                coffobj->getPE32PlusHeader(pe32plus);
+                if (pe32plus != NULL)
+                {
+                    slide = pe32plus->ImageBase-fbase;
+                } 
+                else
+                {
+                    const llvm::object::pe32_header *pe32;
+                    coffobj->getPE32Header(pe32); 
+                    if (pe32 == NULL) {
+                        obj = NULL;
+                        context = NULL;
+                    }
+                    else
+                        slide = pe32->ImageBase-fbase;
+                }
+#endif
 
-            }
-            if (errorobj != NULL)
-                JL_PRINTF(JL_STDOUT,"errorobj");
-            if (context != NULL) {
-                JL_PRINTF(JL_STDOUT,"context");
-                raw_fd_ostream out(2,false,true); 
-                context->dump(out);
             }
             objfileentry_t entry = {obj,context,slide};
             objfilemap[fbase] = entry;
@@ -354,10 +374,11 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
             slide = it->second.slide;
         }
 
-        lookup_pointer(context, name, line, filename, pointer-slide);
+        lookup_pointer(context, name, line, filename, pointer+slide);
     }
     return;
 }
+#endif
 
 void jl_getFunctionInfo(const char **name, int *line, const char **filename, size_t pointer, int skipC)
 {
@@ -427,9 +448,11 @@ void jl_getFunctionInfo(const char **name, int *line, const char **filename, siz
 #endif // USE_MCJIT
 }
 
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
 
+
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
 extern "C" void* CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserContext);
+#ifndef USE_MCJIT
 
 void* CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserContext)
 {
@@ -478,15 +501,29 @@ public:
   virtual unsigned GetNumDataSlabs() { return JMM->GetNumDataSlabs(); }
   virtual unsigned GetNumStubSlabs() { return JMM->GetNumStubSlabs(); }
 
+#ifdef LLVM35
+  virtual uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
+                                       unsigned SectionID, llvm::StringRef SectionName) { return JMM->allocateCodeSection(Size,Alignment,SectionID,SectionName); }
+  virtual uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
+                                       unsigned SectionID, llvm::StringRef SectionName, bool IsReadOnly) { return JMM->allocateDataSection(Size,Alignment,SectionID,SectionName,IsReadOnly); }
+#else
   virtual uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
                                        unsigned SectionID) { return JMM->allocateCodeSection(Size,Alignment,SectionID); }
   virtual uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
                                        unsigned SectionID, bool IsReadOnly) { return JMM->allocateDataSection(Size,Alignment,SectionID,IsReadOnly); }
+#endif
   virtual void *getPointerToNamedFunction(const std::string &Name,
                                           bool AbortOnFailure = true) { return JMM->getPointerToNamedFunction(Name,AbortOnFailure); }
   virtual bool applyPermissions(std::string *ErrMsg = 0) { return JMM->applyPermissions(ErrMsg); }
   virtual void registerEHFrames(StringRef SectionData) { return JMM->registerEHFrames(SectionData); }
 };
+
+#else 
+void* CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserContext)
+{
+    return NULL;
+}
+#endif
 #endif
 
 // Code coverage
