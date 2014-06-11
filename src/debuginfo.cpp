@@ -312,7 +312,7 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
 #endif
 #else
 #ifndef _OS_WINDOWS_
-            char *fname = dlinfo.dli_fname
+            const char *fname = dlinfo.dli_fname;
 #else
             IMAGEHLP_MODULE64 ModuleInfo;
             ModuleInfo.SizeOfStruct = sizeof(IMAGEHLP_MODULE64);
