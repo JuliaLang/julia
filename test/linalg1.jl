@@ -266,3 +266,7 @@ debug && println("Matrix square root")
     end
 end
 end
+
+#6941
+#@test (ones(10^7,4)*ones(4))[3] == 4.0
+
