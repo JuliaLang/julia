@@ -131,6 +131,7 @@ function show_completions(s::PromptState, completions)
     end
 end
 
+# Prompt Completions
 function complete_line(s::PromptState)
     completions, partial, should_complete = complete_line(s.p.complete, s)
     if length(completions) == 0
@@ -939,8 +940,9 @@ end
 
 type HistoryPrompt <: TextInterface
     hp::HistoryProvider
+    complete
     keymap_func::Function
-    HistoryPrompt(hp) = new(hp)
+    HistoryPrompt(hp) = new(hp, EmptyCompletionProvider())
 end
 
 init_state(terminal, p::HistoryPrompt) = SearchState(terminal, p, true, IOBuffer(), IOBuffer())
@@ -950,6 +952,17 @@ state(s::PromptState, p) = (@assert s.p == p; s)
 mode(s::MIState) = s.current_mode
 mode(s::PromptState) = s.p
 mode(s::SearchState) = @assert false
+
+# Search Mode completions
+function complete_line(s::SearchState)
+    completions, partial, should_complete = complete_line(s.histprompt.complete, s)
+    # For now only allow exact completions in search mode
+    if length(completions) == 1
+        prev_pos = position(s.query_buffer)
+        seek(s.query_buffer, prev_pos-sizeof(partial))
+        edit_replace(s, position(s.query_buffer), prev_pos, completions[1])
+    end
+end
 
 function accept_result(s, p)
     parent = state(s, p).parent
@@ -986,7 +999,8 @@ function setup_search_keymap(hp)
         "^S"      => :(LineEdit.history_set_backward(data, false); LineEdit.history_next_result(s, data)),
         '\r'      => s->accept_result(s, p),
         '\n'      => '\r',
-        '\t'      => nothing, #TODO: Maybe allow tab completion in R-Search?
+        # Limited form of tab completions
+        '\t'      => :(LineEdit.complete_line(s); LineEdit.update_display_buffer(s, data)),
         "^L"      => :(Terminals.clear(LineEdit.terminal(s)); LineEdit.update_display_buffer(s, data)),
 
         # Backspace/^H
@@ -1049,6 +1063,12 @@ function setup_search_keymap(hp)
         # Use ^N and ^P to change search directions and iterate through results
         "^N"      => :(LineEdit.history_set_backward(data, false); LineEdit.history_next_result(s, data)),
         "^P"      => :(LineEdit.history_set_backward(data, true); LineEdit.history_next_result(s, data)),
+        # Bracketed paste mode
+        "\e[200~" => quote
+            ps = LineEdit.state(s, LineEdit.mode(s))
+            input = readuntil(ps.terminal, "\e[201~")[1:(end-6)]
+            LineEdit.edit_insert(data.query_buffer, input); LineEdit.update_display_buffer(s, data)
+        end,
         "*"       => :(LineEdit.edit_insert(data.query_buffer, c1); LineEdit.update_display_buffer(s, data))
     }
     p.keymap_func = @eval @LineEdit.keymap $([pkeymap, escape_defaults])

@@ -13,6 +13,7 @@ end
 
 test_complete(s) = completions(s,endof(s))
 test_scomplete(s) = shell_completions(s,endof(s))
+test_latexcomplete(s) = latex_completions(s,endof(s))[2]
 
 s = ""
 c,r = test_complete(s)
@@ -59,6 +60,13 @@ c,r = test_complete(s)
 @test "getindex" in c
 @test r == 19:23
 @test s[r] == "getin"
+
+# test latex symbol completions
+s = "\alpha"
+c,r = test_latexcomplete(s)
+@test c[1] == "α"
+@test r = 1:length(s)
+@test length(c) == 1
 
 ## Test completion of packages
 #mkp(p) = ((@assert !isdir(p)); mkdir(p))

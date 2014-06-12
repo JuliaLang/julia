@@ -240,6 +240,8 @@ type ShellCompletionProvider <: CompletionProvider
     r::LineEditREPL
 end
 
+immutable LatexCompletions <: CompletionProvider; end
+
 bytestring_beforecursor(buf::IOBuffer) = bytestring(pointer(buf.data), buf.ptr-1)
 
 function complete_line(c::REPLCompletionProvider, s)
@@ -254,6 +256,13 @@ function complete_line(c::ShellCompletionProvider, s)
     ret, range, should_complete = shell_completions(partial, endof(partial))
     return ret, partial[range], should_complete
 end
+
+function complete_line(c::LatexCompletions, s)
+    partial = bytestring_beforecursor(LineEdit.buffer(s))
+    ret, range, should_complete = latex_completions(partial, endof(partial))[2]
+    return ret, partial[range], should_complete
+end
+
 
 type REPLHistoryProvider <: HistoryProvider
     history::Array{String,1}
@@ -618,6 +627,8 @@ function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[]
     help_mode.hist = hp
 
     hkp, hkeymap = LineEdit.setup_search_keymap(hp)
+
+    hkp.complete = LatexCompletions()
 
     # Canonicalize user keymap input
     if isa(extra_repl_keymap, Dict)
