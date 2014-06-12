@@ -121,9 +121,9 @@ display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
 
 function print_response(repl::AbstractREPL, val::ANY, bt, show_value::Bool, have_color::Bool)
     repl.waserror = bt !== nothing
-    print_response(outstream(repl), val, bt, show_value, have_color)
+    print_response(outstream(repl), val, bt, show_value, have_color, specialdisplay(repl))
 end
-function print_response(errio::IO, val::ANY, bt, show_value::Bool, have_color::Bool)
+function print_response(errio::IO, val::ANY, bt, show_value::Bool, have_color::Bool, specialdisplay=nothing)
     while true
         try
             if bt !== nothing
@@ -133,7 +133,11 @@ function print_response(errio::IO, val::ANY, bt, show_value::Bool, have_color::B
             else
                 if val !== nothing && show_value
                     try
-                        display(val)
+                        if specialdisplay === nothing
+                            display(val)
+                        else
+                            display(specialdisplay,val)
+                        end
                     catch err
                         println(errio, "Error showing value of type ", typeof(val), ":")
                         rethrow(err)
@@ -218,12 +222,16 @@ type LineEditREPL <: AbstractREPL
     envcolors::Bool
     consecutive_returns::Int
     waserror::Bool
+    specialdisplay
     interface
     backendref::REPLBackendRef
     LineEditREPL(t,prompt_color,input_color,answer_color,shell_color,help_color,no_history_file,in_shell,in_help,envcolors) =
-        new(t,prompt_color,input_color,answer_color,shell_color,help_color,no_history_file,in_shell,in_help,envcolors,0,false)
+        new(t,prompt_color,input_color,answer_color,shell_color,help_color,no_history_file,in_shell,
+            in_help,envcolors,0,false,nothing)
 end
 outstream(r::LineEditREPL) = r.t
+specialdisplay(r::LineEditREPL) = r.specialdisplay
+specialdisplay(r::AbstractREPL) = nothing
 
 LineEditREPL(t::TextTerminal, envcolors = false) =  LineEditREPL(t, julia_green,
                                               Base.input_color(),
@@ -743,7 +751,7 @@ end
 
 function run_frontend(repl::LineEditREPL, backend)
     d = REPLDisplay(repl)
-    dopushdisplay = !in(d,Base.Multimedia.displays)
+    dopushdisplay = repl.specialdisplay === nothing && !in(d,Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
     if !isdefined(repl,:interface)
         interface = repl.interface = setup_interface(repl)

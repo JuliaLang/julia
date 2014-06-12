@@ -111,6 +111,21 @@ type TerminalBuffer <: UnixTerminal
     out_stream::Base.IO
 end
 
+type FakeTerminal <: UnixTerminal
+    in_stream::Base.IO
+    out_stream::Base.IO
+    err_stream::Base.IO
+    hascolor::Bool
+    raw::Bool
+    size::Size
+    FakeTerminal(stdin,stdout,stderr,hascolor=true) =
+        new(stdin,stdout,stderr,hascolor,false,Size(80,80))
+end
+
+hascolor(t::FakeTerminal) = t.hascolor
+raw!(t::FakeTerminal, raw::Bool) = t.raw = raw
+size(t::FakeTerminal) = t.size
+
 type TTYTerminal <: UnixTerminal
     term_type::ASCIIString
     in_stream::Base.TTY

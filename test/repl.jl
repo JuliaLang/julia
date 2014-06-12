@@ -1,4 +1,63 @@
 # REPL tests
+
+# Writing ^C to the repl will cause sigint, so let's not die on that
+ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
+# These are integration tests. If you want to unit test test e.g. completion, or
+# exact LineEdit behavior, put them in the appropriate test files.
+# Furthermore since we are emulating an entire terminal, there may be control characters
+# in the mix. If verification needs to be done, keep it to the bare minimum. Basically
+# this should make sure nothing crashes without depending on how exactly the control
+# characters are being used.
+begin
+# Use pipes so we can easily do blocking reads
+stdin_read,stdin_write = (Base.Pipe(C_NULL), Base.Pipe(C_NULL))
+stdout_read,stdout_write = (Base.Pipe(C_NULL), Base.Pipe(C_NULL))
+stderr_read,stderr_write = (Base.Pipe(C_NULL), Base.Pipe(C_NULL))
+Base.link_pipe(stdin_read,true,stdin_write,true)
+Base.link_pipe(stdout_read,true,stdout_write,true)
+Base.link_pipe(stderr_read,true,stderr_write,true)
+
+repl = Base.REPL.LineEditREPL(Base.Terminals.FakeTerminal(stdin_read, stdout_write, stderr_write))
+# In the future if we want we can add a test that the right object
+# gets displayed by intercepting the display
+repl.specialdisplay = Base.REPL.REPLDisplay(repl)
+
+repltask = @async begin
+    Base.REPL.run_repl(repl)
+end
+
+sendrepl(cmd) = write(stdin_write,"inc || wait(b); r = $cmd; notify(c); r\r")
+
+inc = false
+b = Condition()
+c = Condition()
+sendrepl("\"Hello REPL\"")
+inc=true
+begin
+    notify(b)
+    wait(c)
+end
+# Latex completions
+write(stdin_write, "\x32\\alpha\t")
+readuntil(stdout_read, "α")
+# Bracketed paste in search mode
+write(stdin_write, "\e[200~paste here ;)\e[201~")
+# Abort search (^C)
+write(stdin_write, '\x03')
+# Test basic completion in main mode
+write(stdin_write, "Base.REP\t")
+readuntil(stdout_read, "Base.REPL")
+write(stdin_write, '\x03')
+write(stdin_write, "\\alpha\t")
+readuntil(stdout_read,"α")
+write(stdin_write, '\x03')
+# Close REPL ^D
+write(stdin_write, '\x04')
+wait(repltask)
+end
+
+ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
+
 let exename=joinpath(JULIA_HOME,(ccall(:jl_is_debugbuild,Cint,())==0?"julia":"julia-debug"))
 
 # Test REPL in dumb mode
