@@ -199,7 +199,7 @@ Library improvements
     * `bytestring` is automatically called on `String` arguments for
       conversion to `Ptr{Uint8}` in `ccall` ([#5677]).
 
-  * `LinAlg` (linear algebra) improvements
+  * Linear Algebra improvements
 
       * Balancing options for eigenvector calculations for general matrices ([#5428]).
 
@@ -224,6 +224,10 @@ Library improvements
         by default anymore.
 
     * Sparse linear algebra
+
+      * 1-d sparse getindex has been implemented ([#7047])
+
+      * Faster sparse getindex ([#7131]).
 
       * Faster sparse `kron` ([#4958]).
 
@@ -336,7 +340,7 @@ Deprecated or removed
     behaviour and `[get/set/with]_bigfloat_rounding` functions are deprecated ([#5007])
 
   * `cholpfact` and `qrpfact` are deprecated in favor of keyword arguments in
-    `cholfact(...,pivot=true)` and `qrfact(...,pivot=true)` ([#5330])
+    `cholfact(..., pivot=true)` and `qrfact(..., pivot=true)` ([#5330])
 
   * `symmetrize!` is deprecated in favor of `Base.LinAlg.copytri!` ([#5427])
 
@@ -841,6 +845,8 @@ Too numerous to mention.
 [#7035]: https://github.com/JuliaLang/julia/pull/7035
 [#7061]: https://github.com/JuliaLang/julia/pull/7061
 [#7106]: https://github.com/JuliaLang/julia/pull/7106
+[#7047]: https://github.com/JuliaLang/julia/pull/7047
+[#7131]: https://github.com/JuliaLang/julia/pull/7131
 
 [packages chapter]: http://docs.julialang.org/en/latest/manual/packages/
 [sorting functions]: http://docs.julialang.org/en/latest/stdlib/sort/
