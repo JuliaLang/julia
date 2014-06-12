@@ -261,7 +261,7 @@ function zeta(s::Union(Int,Float64,Complex{Float64}),
     end
 
     # We need a different algorithm for the real(s) < 1 domain
-    real(s) < 1 && throw(ArgumentError("order $s < 1 is not implemented"))
+    real(s) < 1 && throw(ArgumentError("order $s < 1 is not implemented (issue #7228)"))
 
     m = s - 1
 
