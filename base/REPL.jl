@@ -108,6 +108,9 @@ end
 immutable REPLDisplay{R<:AbstractREPL} <: Display
     repl::R
 end
+
+==(a::REPLDisplay, b::REPLDisplay) = a.repl === b.repl
+
 function display(d::REPLDisplay, ::MIME"text/plain", x)
     io = outstream(d.repl)
     write(io, answer_color(d.repl))
@@ -174,7 +177,8 @@ outstream(r::BasicREPL) = r.terminal
 
 function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
     d = REPLDisplay(repl)
-    pushdisplay(d)
+    dopushdisplay = !in(d,Base.Multimedia.displays)
+    dopushdisplay && pushdisplay(d)
     repl_channel, response_channel = backend.repl_channel, backend.response_channel
     while true
         write(repl.terminal, "julia> ")
@@ -196,7 +200,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
     end
     # terminate backend
     put!(repl_channel, (nothing, -1))
-    popdisplay(d)
+    dopushdisplay && popdisplay(d)
 end
 
 ## LineEditREPL ##
@@ -211,21 +215,22 @@ type LineEditREPL <: AbstractREPL
     no_history_file::Bool
     in_shell::Bool
     in_help::Bool
+    envcolors::Bool
     consecutive_returns::Int
     waserror::Bool
     interface
     backendref::REPLBackendRef
-    LineEditREPL(t,prompt_color,input_color,answer_color,shell_color,help_color,no_history_file,in_shell,in_help) =
-        new(t,prompt_color,input_color,answer_color,shell_color,help_color,no_history_file,in_shell,in_help,0,false)
+    LineEditREPL(t,prompt_color,input_color,answer_color,shell_color,help_color,no_history_file,in_shell,in_help,envcolors) =
+        new(t,prompt_color,input_color,answer_color,shell_color,help_color,no_history_file,in_shell,in_help,envcolors,0,false)
 end
 outstream(r::LineEditREPL) = r.t
 
-LineEditREPL(t::TextTerminal) =  LineEditREPL(t, julia_green,
+LineEditREPL(t::TextTerminal, envcolors = false) =  LineEditREPL(t, julia_green,
                                               Base.input_color(),
                                               Base.answer_color(),
                                               Base.text_colors[:red],
                                               Base.text_colors[:yellow],
-                                              false, false, false)
+                                              false, false, false, envcolors)
 
 type REPLCompletionProvider <: CompletionProvider
     r::LineEditREPL
@@ -564,7 +569,7 @@ function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[]
     julia_prompt = Prompt("julia> ";
         # Copy colors from the prompt object
         prompt_prefix = repl.prompt_color,
-        prompt_suffix = repl.input_color,
+        prompt_suffix = repl.envcolors ? Base.input_color() : repl.input_color,
         keymap_func_data = repl,
         complete = replc,
         on_enter = s->return_callback(repl, s))
@@ -574,7 +579,7 @@ function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[]
     # Setup help mode
     help_mode = Prompt("help?> ",
         prompt_prefix = repl.help_color,
-        prompt_suffix = repl.input_color,
+        prompt_suffix = repl.envcolors ? Base.input_color() : repl.input_color,
         keymap_func_data = repl,
         complete = replc,
         # When we're done transform the entered line into a call to help("$line")
@@ -585,7 +590,7 @@ function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[]
     # Set up shell mode
     shell_mode = Prompt("shell> ";
         prompt_prefix = repl.shell_color,
-        prompt_suffix = repl.input_color,
+        prompt_suffix = repl.envcolors ? Base.input_color() : repl.input_color,
         keymap_func_data = repl,
         complete = ShellCompletionProvider(repl),
         # Transform "foo bar baz" into `foo bar baz` (shell quoting)
@@ -727,7 +732,8 @@ end
 
 function run_frontend(repl::LineEditREPL, backend)
     d = REPLDisplay(repl)
-    pushdisplay(d)
+    dopushdisplay = !in(d,Base.Multimedia.displays)
+    dopushdisplay && pushdisplay(d)
     if !isdefined(repl,:interface)
         interface = repl.interface = setup_interface(repl)
     else
@@ -735,7 +741,7 @@ function run_frontend(repl::LineEditREPL, backend)
     end
     repl.backendref = backend
     run_interface(repl.t, interface)
-    popdisplay(d)
+    dopushdisplay && popdisplay(d)
 end
 
 if isdefined(Base, :banner_color)
@@ -760,8 +766,11 @@ outstream(s::StreamREPL) = s.stream
 
 StreamREPL(stream::AsyncStream) = StreamREPL(stream, julia_green, Base.text_colors[:white], Base.answer_color())
 
-answer_color(r::LineEditREPL) = r.answer_color
+answer_color(r::LineEditREPL) = r.envcolors ? Base.answer_color() : r.answer_color
 answer_color(r::StreamREPL) = r.answer_color
+input_color(r::LineEditREPL) = r.envcolors ? Base.input_color() : r.input_color
+input_color(r::StreamREPL) = r.input_color
+
 
 function run_repl(stream::AsyncStream)
     repl =
@@ -789,7 +798,8 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     have_color = true
     banner(repl.stream, have_color)
     d = REPLDisplay(repl)
-    pushdisplay(d)
+    dopushdisplay = !in(d,Base.Multimedia.displays)
+    dopushdisplay && pushdisplay(d)
     repl_channel, response_channel = backend.repl_channel, backend.response_channel
     while repl.stream.open
         if have_color
@@ -797,7 +807,7 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
         end
         print(repl.stream, "julia> ")
         if have_color
-            print(repl.stream, repl.input_color)
+            print(repl.stream, input_color(repl))
         end
         line = readline(repl.stream)
         if !isempty(line)
@@ -814,7 +824,7 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     end
     # Terminate Backend
     put!(repl_channel, (nothing, -1))
-    popdisplay(d)
+    dopushdisplay && popdisplay(d)
 end
 
 function start_repl_server(port)
