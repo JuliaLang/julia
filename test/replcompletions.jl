@@ -62,10 +62,10 @@ c,r = test_complete(s)
 @test s[r] == "getin"
 
 # test latex symbol completions
-s = "\alpha"
+s = "\\alpha"
 c,r = test_latexcomplete(s)
 @test c[1] == "α"
-@test r = 1:length(s)
+@test r == 1:length(s)
 @test length(c) == 1
 
 ## Test completion of packages

@@ -183,7 +183,7 @@ prompt_string(s::String) = s
 refresh_multi_line(termbuf::TerminalBuffer, s::PromptState) = s.ias =
     refresh_multi_line(termbuf, terminal(s), buffer(s), s.ias, s, indent = s.indent)
 
-function refresh_multi_line(termbuf::TerminalBuffer, terminal::TTYTerminal, buf, state::InputAreaState, prompt = ""; indent = 0)
+function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf, state::InputAreaState, prompt = ""; indent = 0)
     cols = width(terminal)
 
     _clear_input_area(termbuf, state)
@@ -916,7 +916,7 @@ function refresh_multi_line(s::Union(SearchState,PromptState))
     refresh_multi_line(terminal(s), s)
 end
 
-function refresh_multi_line(terminal::TTYTerminal, args...; kwargs...)
+function refresh_multi_line(terminal::UnixTerminal, args...; kwargs...)
     outbuf = IOBuffer()
     termbuf = TerminalBuffer(outbuf)
     ret = refresh_multi_line(termbuf, terminal, args...;kwargs...)
