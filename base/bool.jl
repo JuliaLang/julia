@@ -50,7 +50,10 @@ end
 
 function *{T<:Number}(x::Bool, y::T)
     ifelse(x, convert(promote_type(Bool,T),y),
-           ifelse(signbit(y)==0, zero(promote_type(Bool,T)), -zero(promote_type(Bool,T))))
+           ifelse(signbit(y), -zero(promote_type(Bool,T)), zero(promote_type(Bool,T))))
+end
+function *{T<:Unsigned}(x::Bool, y::T)
+    ifelse(x, convert(promote_type(Bool,T),y), zero(promote_type(Bool,T)))
 end
 *(y::Number, x::Bool) = x * y
 
