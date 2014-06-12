@@ -26,8 +26,9 @@ end
 
 # Vector multiplication
 A_mul_B!{T<:BlasFloat,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, b::StridedVector{T}) = BLAS.trmv!(UpLo == :L ? 'L' : 'U', 'N', IsUnit ? 'U' : 'N', A.data, b)
+Ac_mul_B!{T<:BlasReal,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, b::StridedVector{T}) = BLAS.trmv!(UpLo == :L ? 'L' : 'U', 'T', IsUnit ? 'U' : 'N', A.data, b)
 Ac_mul_B!{T<:BlasComplex,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, b::StridedVector{T}) = BLAS.trmv!(UpLo == :L ? 'L' : 'U', 'C', IsUnit ? 'U' : 'N', A.data, b)
-At_mul_B!{T<:BlasReal,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, b::StridedVector{T}) = BLAS.trmv!(UpLo == :L ? 'L' : 'U', 'T', IsUnit ? 'U' : 'N', A.data, b)
+At_mul_B!{T<:BlasFloat,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, b::StridedVector{T}) = BLAS.trmv!(UpLo == :L ? 'L' : 'U', 'T', IsUnit ? 'U' : 'N', A.data, b)
 
 # Matrix multiplication
 A_mul_B!{T<:BlasFloat,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, B::StridedMatrix{T}) = BLAS.trmm!('L', UpLo == :L ? 'L' : 'U', 'N', IsUnit ? 'U' : 'N', one(T), A.data, B)
@@ -127,7 +128,10 @@ function similar{T,S,UpLo,IsUnit,Tnew}(A::Triangular{T,S,UpLo,IsUnit}, ::Type{Tn
     return Triangular{Tnew, typeof(A), UpLo, IsUnit}(A)
 end
 
-getindex{T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, i::Integer, j::Integer) = i == j ? (IsUnit ? one(T) : A.data[i,j]) : ((UpLo == :U) == (i < j) ? getindex(A.data, i, j) : zero(T))
+getindex{T,S}(A::Triangular{T,S,:L,true}, i::Integer, j::Integer) = i == j ? one(T) : (i > j ? A.data[i,j] : zero(T))
+getindex{T,S}(A::Triangular{T,S,:L,false}, i::Integer, j::Integer) = i >= j ? A.data[i,j] : zero(T)
+getindex{T,S}(A::Triangular{T,S,:U,true}, i::Integer, j::Integer) = i == j ? one(T) : (i < j ? A.data[i,j] : zero(T))
+getindex{T,S}(A::Triangular{T,S,:U,false}, i::Integer, j::Integer) = i <= j ? A.data[i,j] : zero(T)
 getindex{T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, i::Integer) = ((m, n) = divrem(i - 1, size(A,1)); A[m + 1, n + 1])
 
 istril{T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}) = UpLo == :L
