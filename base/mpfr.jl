@@ -409,7 +409,7 @@ function big_ln2()
 end
 
 function eta(x::BigFloat)
-    x == 1 && return big(-0.5)
+    x == 1 && return big_ln2()
     return -zeta(x) * expm1(big_ln2()*(1-x))
 end
 
