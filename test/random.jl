@@ -144,3 +144,12 @@ srand(seed)
 
 @test all([div(0x000100000000,k)*k - 1 == Base.Random.RandIntGen(uint64(1:k)).u for k in 13 .+ int64(2).^(1:30)])
 @test all([div(0x000100000000,k)*k - 1 == Base.Random.RandIntGen(int64(1:k)).u for k in 13 .+ int64(2).^(1:30)])
+
+import Base.Random: uuid4, UUID
+
+# UUID
+a = uuid4()
+@test a == UUID(string(a)) == UUID(utf16(string(a))) == UUID(utf32(string(a)))
+@test_throws ArgumentError UUID("550e8400e29b-41d4-a716-446655440000")
+@test_throws ArgumentError UUID("550e8400e29b-41d4-a716-44665544000098")
+@test_throws ArgumentError UUID("z50e8400-e29b-41d4-a716-446655440000")
