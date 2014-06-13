@@ -245,7 +245,7 @@ function issym(A::AbstractMatrix)
     m, n = size(A)
     m==n || return false
     for i = 1:(n-1), j = (i+1):n
-        if A[i,j] != A[j,i]
+        if A[i,j] != transpose(A[j,i])
             return false
         end
     end
@@ -258,7 +258,7 @@ function ishermitian(A::AbstractMatrix)
     m, n = size(A)
     m==n || return false
     for i = 1:n, j = i:n
-        if A[i,j] != conj(A[j,i])
+        if A[i,j] != ctranspose(A[j,i])
             return false
         end
     end
