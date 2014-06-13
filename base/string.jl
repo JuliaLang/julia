@@ -139,8 +139,9 @@ function nextind(s::String, i::Integer)
     next(s,e)[2] # out of range
 end
 
-ind2chr(s::DirectIndexString, i::Integer) = i
-chr2ind(s::DirectIndexString, i::Integer) = i
+# access s[i] to throw an error if i is invalid
+ind2chr(s::DirectIndexString, i::Integer) = begin s[i]; i end
+chr2ind(s::DirectIndexString, i::Integer) = begin s[i]; i end
 
 function ind2chr(s::String, i::Integer)
     s[i] # throws error if invalid
@@ -157,9 +158,7 @@ function ind2chr(s::String, i::Integer)
 end
 
 function chr2ind(s::String, i::Integer)
-    if i < 1
-        return i
-    end
+    i < 1 && throw(BoundsError())
     j = 1
     k = start(s)
     while true
