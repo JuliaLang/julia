@@ -316,7 +316,7 @@ function edit_move_left(buf::IOBuffer)
         #move to the next base UTF8 character to the left
         while true
             c = char_move_left(buf)
-            if charwidth(c) != 0 || position(buf) == 0
+            if charwidth(c) != 0 || c == '\n' || position(buf) == 0
                 break
             end
         end
@@ -374,7 +374,7 @@ function edit_move_right(buf::IOBuffer)
             pos = position(buf)
             nextc = read(buf,Char)
             seek(buf,pos)
-            (charwidth(nextc) != 0) && break
+            (charwidth(nextc) != 0 || nextc == '\n') && break
         end
         return true
     end
