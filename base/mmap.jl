@@ -127,25 +127,29 @@ function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::IO, offset::File
     ro = isreadonly(s)
     flprotect = ro ? 0x02 : 0x04
     len = prod(dims)*sizeof(T)
+    const granularity::Int = ccall(:jl_getallocationgranularity, Clong, ())
     if len < 0
         error("requested size is negative")
     end
-    if len > typemax(Int)
+    if len > typemax(Int)-granularity
         error("file is too large to memory-map on this platform")
     end
+    # Set the offset to a page boundary
+    offset_page::FileOffset = ifloor(offset/granularity)*granularity
     szarray = convert(Csize_t, len)
-    szfile = szarray + convert(Csize_t, offset)
+    szfile = szarray + convert(Csize_t, offset-offset_page)
     mmaphandle = ccall(:CreateFileMappingW, stdcall, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Cint, Cint, Cint, Ptr{Uint16}),
         shandle.handle, C_NULL, flprotect, szfile>>32, szfile&0xffffffff, C_NULL)
     if mmaphandle == C_NULL
         error("could not create file mapping")
     end
     access = ro ? 4 : 2
-    viewhandle = ccall(:MapViewOfFile, stdcall, Ptr{Void}, (Ptr{Void}, Cint, Cint, Cint, Csize_t), mmaphandle, access, offset>>32, offset&0xffffffff, szarray)
+    viewhandle = ccall(:MapViewOfFile, stdcall, Ptr{Void}, (Ptr{Void}, Cint, Cint, Cint, Csize_t),
+        mmaphandle, access, offset_page>>32, offset_page&0xffffffff, szarray)
     if viewhandle == C_NULL
         error("could not create mapping view")
     end
-    A = pointer_to_array(pointer(T, viewhandle), dims)
+    A = pointer_to_array(pointer(T, viewhandle+offset-offset_page), dims)
     finalizer(A, x->munmap(viewhandle, mmaphandle))
     return A
 end

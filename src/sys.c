@@ -525,6 +525,24 @@ long jl_getpagesize(void)
 }
 #endif
 
+#ifdef _OS_WINDOWS_
+static long cachedAllocationGranularity = 0;
+long jl_getallocationgranularity(void)
+{
+    if (!cachedAllocationGranularity) {
+        SYSTEM_INFO systemInfo;
+        GetSystemInfo (&systemInfo);
+        cachedAllocationGranularity = systemInfo.dwAllocationGranularity;
+    }
+    return cachedAllocationGranularity;
+}
+#else
+long jl_getallocationgranularity(void)
+{
+    return jl_getpagesize();
+}
+#endif
+
 DLLEXPORT long jl_SC_CLK_TCK(void)
 {
 #ifndef _OS_WINDOWS_
