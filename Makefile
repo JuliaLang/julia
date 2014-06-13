@@ -74,7 +74,7 @@ $(build_private_libdir)/sys%$(SHLIB_EXT): $(build_private_libdir)/sys%o
 		$$([ $(OS) = Darwin ] && echo -Wl,-undefined,dynamic_lookup || echo -Wl,--unresolved-symbols,ignore-all ) \
 		$$([ $(OS) = WINNT ] && echo -ljulia -lssp)
 ifeq ($(OS), Darwin)
-ifeq ($(shell test `dsymutil -v | cut -d\- -f2` -gt 102 && echo yes), yes)
+ifeq ($(shell test `dsymutil -v | cut -d\- -f2 | cut -d. -f1` -gt 102 && echo yes), yes)
 	dsymutil $@
 endif
 endif
