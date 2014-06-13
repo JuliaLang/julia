@@ -1113,7 +1113,7 @@ function move_line_start(s::MIState)
     if s.key_repeats > 0
         move_input_start(s)
     else
-        seek(buf, rsearch(buf.data, '\n', curpos-1))
+        seek(buf, rsearch(buf.data, '\n', curpos))
     end
 end
 function move_line_end(s::MIState)
