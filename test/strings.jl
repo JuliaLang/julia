@@ -1011,3 +1011,22 @@ let f =IOBuffer(),
     @test invoke(write, (IO, AbstractArray), f, x) == 3
     @test takebuf_string(f) == "123"
 end
+
+# issue #7248
+@test_throws BoundsError ind2chr("hello", -1)
+@test_throws BoundsError chr2ind("hello", -1)
+@test_throws BoundsError ind2chr("hellø", -1)
+@test_throws BoundsError chr2ind("hellø", -1)
+@test_throws BoundsError ind2chr("hello", 10)
+@test_throws BoundsError chr2ind("hello", 10)
+@test_throws BoundsError ind2chr("hellø", 10)
+@test_throws BoundsError chr2ind("hellø", 10)
+@test_throws BoundsError checkbounds("hello", 0)
+@test_throws BoundsError checkbounds("hello", 6)
+@test_throws BoundsError checkbounds("hello", 0:3)
+@test_throws BoundsError checkbounds("hello", 4:6)
+@test_throws BoundsError checkbounds("hello", [0:3])
+@test_throws BoundsError checkbounds("hello", [4:6])
+@test checkbounds("hello", 2)
+@test checkbounds("hello", 1:5)
+@test checkbounds("hello", [1:5])
