@@ -17,7 +17,8 @@ import
         itrunc, eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
         serialize, deserialize, inf, nan, cbrt, typemax, typemin,
-        realmin, realmax, get_rounding, set_rounding, maxintfloat, widen
+        realmin, realmax, get_rounding, set_rounding, maxintfloat, widen,
+        significand
 
 import Base.GMP: ClongMax, CulongMax
 
@@ -659,6 +660,15 @@ function exponent(x::BigFloat)
     end
     # The '- 1' is to make it work as Base.exponent
     return ccall((:mpfr_get_exp, :libmpfr), Clong, (Ptr{BigFloat},), &x) - 1
+end
+
+function significand(x::BigFloat)
+    z = BigFloat()
+    c = Clong[0]
+    ccall((:mpfr_frexp, :libmpfr), Int32, (Ptr{Clong}, Ptr{BigFloat}, Ptr{BigFloat}, Cint), c, &z, &x, ROUNDING_MODE[end])
+    # Double the significand to make it work as Base.significand
+    ccall((:mpfr_mul_si, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Clong, Int32), &z, &z, 2, ROUNDING_MODE[end])
+    return z
 end
 
 function isinteger(x::BigFloat)
