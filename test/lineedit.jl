@@ -45,6 +45,27 @@ run_test(test3_func,IOBuffer("aab"))
 @test a_bar == 2
 @test b_bar == 1
 
+## edit_move{left,right} ##
+buf = IOBuffer("a\na\na\n")
+seek(buf, 0)
+for i = 1:6
+    LineEdit.edit_move_right(buf)
+    @test position(buf) == i
+end
+@test eof(buf)
+for i = 5:0
+    LineEdit.edit_move_left(buf)
+    @test position(buf) == i
+end
+
+# skip unicode combining characters
+buf = IOBuffer("ŷ")
+seek(buf, 0)
+LineEdit.edit_move_right(buf)
+@test eof(buf)
+LineEdit.edit_move_left(buf)
+@test position(buf) == 0
+
 ## edit_move_{up,down} ##
 
 buf = IOBuffer("type X\n    a::Int\nend")
