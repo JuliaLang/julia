@@ -599,6 +599,10 @@ print(io::IOBuffer, s::SubString) = write(io, s)
 
 sizeof{T<:ByteString}(s::SubString{T}) = s.endof==0 ? 0 : next(s,s.endof)[2]-1
 
+# TODO: length(s::SubString) = ??
+# default implementation will work but it's slow
+# can this be delegated efficiently somehow?
+# that may require additional string interfaces
 length{T<:DirectIndexString}(s::SubString{T}) = endof(s)
 
 function next(s::SubString, i::Int)
@@ -617,10 +621,11 @@ function getindex(s::SubString, i::Int)
 end
 
 endof(s::SubString) = s.endof
-# TODO: length(s::SubString) = ??
-# default implementation will work but it's slow
-# can this be delegated efficiently somehow?
-# that may require additional string interfaces
+
+isvalid{T<:DirectIndexString}(s::SubString{T}, i::Integer) = (start(s) <= i <= endof(s))
+
+ind2chr{T<:DirectIndexString}(s::SubString{T}, i::Integer) = begin checkbounds(s,i); i end
+chr2ind{T<:DirectIndexString}(s::SubString{T}, i::Integer) = begin checkbounds(s,i); i end
 
 nextind(s::SubString, i::Integer) = nextind(s.string, i+s.offset)-s.offset
 prevind(s::SubString, i::Integer) = prevind(s.string, i+s.offset)-s.offset
