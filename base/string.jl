@@ -139,9 +139,13 @@ function nextind(s::String, i::Integer)
     next(s,e)[2] # out of range
 end
 
-# access s[i] to throw an error if i is invalid
-ind2chr(s::DirectIndexString, i::Integer) = begin s[i]; i end
-chr2ind(s::DirectIndexString, i::Integer) = begin s[i]; i end
+checkbounds(s::String, i::Integer) = start(s) <= i <= endof(s) || throw(BoundsError())
+checkbounds(s::String, i::Real) = checkbounds(s, to_index(i))
+checkbounds{T<:Integer}(s::String, r::Range{T}) = isempty(r) || (minimum(r) >= start(s) && maximum(r) <= endof(s)) || throw(BoundsError())
+checkbounds{T<:Real}(s::String, I::AbstractArray{T}) = all(i -> checkbounds(s, i), I)
+
+ind2chr(s::DirectIndexString, i::Integer) = begin checkbounds(s,i); i end
+chr2ind(s::DirectIndexString, i::Integer) = begin checkbounds(s,i); i end
 
 function ind2chr(s::String, i::Integer)
     s[i] # throws error if invalid
@@ -158,7 +162,7 @@ function ind2chr(s::String, i::Integer)
 end
 
 function chr2ind(s::String, i::Integer)
-    i < 1 && throw(BoundsError())
+    i < start(s) && throw(BoundsError())
     j = 1
     k = start(s)
     while true
