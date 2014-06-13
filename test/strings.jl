@@ -811,18 +811,18 @@ s = "   p"
       \t""" == ""
 @test """
       foo
-      \tbar""" == "foo\n\tbar"
+      \tbar""" == "foo$(nl)\tbar"
 @test """
       foo
       \tbar
-      """ == "foo\n\tbar\n"
+      """ == "foo$(nl)\tbar$(nl)"
 @test """
       foo
-      bar\t""" == "foo\nbar\t"
+      bar\t""" == "foo$(nl)bar\t"
 @test """
       foo
       \tbar
-       """ == "foo\n       bar\n"
+       """ == "foo$(nl)       bar$(nl)"
 
 # bytes2hex and hex2bytes
 hex_str = "d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592"
