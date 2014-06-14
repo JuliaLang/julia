@@ -234,6 +234,8 @@ extern char *jl_sysimage_name;
 
 bool jl_is_sysimg(const char *path)
 {
+    if (!jl_sysimage_name)
+        return 0;
     const char *filename = strrchr(path,'/');
     if (filename == NULL)
         filename = path;
@@ -256,7 +258,7 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
     if (fbase != 0) {
 #else
     Dl_info dlinfo;
-    if (dladdr((void*)pointer, &dlinfo) != 0) {
+    if ((dladdr((void*)pointer, &dlinfo) != 0) && dlinfo.dli_fname) {
         if (skipC && !jl_is_sysimg(dlinfo.dli_fname))
             return;
         uint64_t fbase = (uint64_t)dlinfo.dli_fbase;
