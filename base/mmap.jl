@@ -135,17 +135,17 @@ function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::IO, offset::File
         error("file is too large to memory-map on this platform")
     end
     # Set the offset to a page boundary
-    offset_page::FileOffset = ifloor(offset/granularity)*granularity
-    szarray = convert(Csize_t, len)
-    szfile = szarray + convert(Csize_t, offset-offset_page)
+    offset_page::FileOffset = div(offset, granularity)*granularity
+    szfile = convert(Csize_t, len + offset)
+    szarray = szfile - convert(Csize_t, offset_page)    
     mmaphandle = ccall(:CreateFileMappingW, stdcall, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Cint, Cint, Cint, Ptr{Uint16}),
-        shandle.handle, C_NULL, flprotect, szfile>>32, szfile&0xffffffff, C_NULL)
+        shandle.handle, C_NULL, flprotect, szfile>>32, szfile&typemax(Uint32), C_NULL)
     if mmaphandle == C_NULL
         error("could not create file mapping")
     end
     access = ro ? 4 : 2
     viewhandle = ccall(:MapViewOfFile, stdcall, Ptr{Void}, (Ptr{Void}, Cint, Cint, Cint, Csize_t),
-        mmaphandle, access, offset_page>>32, offset_page&0xffffffff, szarray)
+        mmaphandle, access, offset_page>>32, offset_page&typemax(Uint32), szarray)
     if viewhandle == C_NULL
         error("could not create mapping view")
     end
