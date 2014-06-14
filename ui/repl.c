@@ -54,29 +54,29 @@ char *image_file = NULL;
 
 static const char *usage = "julia [options] [program] [args...]\n";
 static const char *opts =
-    " -v --version             Display version information\n"
-    " -h --help                Print this message\n"
-    " -q --quiet               Quiet startup without banner\n"
-    " -H --home <dir>          Set location of julia executable\n\n"
+    " -v, --version            Display version information\n"
+    " -h, --help               Print this message\n"
+    " -q, --quiet              Quiet startup without banner\n"
+    " -H, --home <dir>         Set location of julia executable\n\n"
 
-    " -e --eval <expr>         Evaluate <expr>\n"
-    " -E --print <expr>        Evaluate and show <expr>\n"
-    " -P --post-boot <expr>    Evaluate <expr> right after boot\n"
-    " -L --load file           Load <file> right after boot on all processors\n"
-    " -J --sysimage file       Start up with the given system image file\n\n"
+    " -e, --eval <expr>        Evaluate <expr>\n"
+    " -E, --print <expr>       Evaluate and show <expr>\n"
+    " -P, --post-boot <expr>   Evaluate <expr> right after boot\n"
+    " -L, --load <file>        Load <file> right after boot on all processors\n"
+    " -J, --sysimage <file>    Start up with the given system image file\n\n"
 
-    " -p n                     Run n local processes\n"
-    " --machinefile file       Run processes on hosts listed in file\n\n"
+    " -p <n>                   Run n local processes\n"
+    " --machinefile <file>     Run processes on hosts listed in <file>\n\n"
 
     " -i                       Force isinteractive() to be true\n"
     " --no-history-file        Don't load or save history\n"
-    " -f --no-startup          Don't load ~/.juliarc.jl\n"
+    " -f, --no-startup         Don't load ~/.juliarc.jl\n"
     " -F                       Load ~/.juliarc.jl, then handle remaining inputs\n"
-    " --color=yes|no           Enable or disable color text\n\n"
+    " --color={yes|no}         Enable or disable color text\n\n"
 
     " --code-coverage          Count executions of source lines\n"
-    " --check-bounds=yes|no    Emit bounds checks always or never (ignoring declarations)\n"
-    " --int-literals=32|64     Select integer literal size independent of platform\n";
+    " --check-bounds={yes|no}  Emit bounds checks always or never (ignoring declarations)\n"
+    " --int-literals={32|64}   Select integer literal size independent of platform\n";
 
 void parse_opts(int *argcp, char ***argvp)
 {
