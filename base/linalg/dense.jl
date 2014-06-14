@@ -122,6 +122,43 @@ end
 
 diagm(x::Number) = (X = Array(typeof(x),1,1); X[1,1] = x; X)
 
+blkdiag() = []
+
+function blkdiag{T}(as::Matrix{T}...)
+    nrs = ncs = 0
+    for a in as
+        nr, nc = size(a)
+        nrs += nr
+        ncs += nc
+    end
+    b = zeros(nrs, ncs)
+    nrs = ncs = 0
+    for a in as
+        nr, nc = size(a)
+        b[nrs+(1:nr), ncs+(1:nc)] = a
+        nrs += nr
+        ncs += nc
+    end
+    b
+end
+
+function blkdiag{T}(as::Vector{T}...)
+    nrs = 0
+    for a in as
+        nr = length(a)
+        nrs += nr
+    end
+    b = zeros(nrs, length(as))
+    nrs = ncs = 0
+    for a in as
+        nr = length(a)
+        b[nrs+(1:nr), ncs+1] = a
+        nrs += nr
+        ncs += 1
+    end
+    b
+end
+
 function trace{T}(A::Matrix{T})
     n = chksquare(A)
     t = zero(T)
