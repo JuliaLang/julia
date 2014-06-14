@@ -64,8 +64,6 @@ jl_module_t *jl_new_main_module(void)
 }
 
 extern void jl_get_system_hooks(void);
-extern void jl_get_uv_hooks(int);
-extern int base_module_conflict;
 jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
 {
     static arraylist_t module_stack;
@@ -93,13 +91,18 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     jl_module_t *newm = jl_new_module(name);
     newm->parent = parent_module;
     b->value = (jl_value_t*)newm;
-    int newbase = 0;
     if (parent_module == jl_main_module && name == jl_symbol("Base")) {
-        base_module_conflict = (jl_base_module != NULL);
-        jl_old_base_module = jl_base_module;
         // pick up Base module during bootstrap
+        jl_old_base_module = jl_base_module;
         jl_base_module = newm;
-        newbase = base_module_conflict;
+        // reinitialize global variables
+        // to pick up new types from Base
+        jl_errorexception_type = NULL;
+        jl_typeerror_type = NULL;
+        jl_methoderror_type = NULL;
+        jl_loaderror_type = NULL;
+        jl_weakref_type = NULL;
+        jl_current_task->tls = jl_nothing;
     }
     // export all modules from Main
     if (parent_module == jl_main_module)
@@ -132,15 +135,6 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     JL_GC_POP();
     jl_current_module = last_module;
     jl_current_task->current_module = task_last_m;
-
-    if (newbase) {
-        // reinitialize global variables
-        // to pick up new types from Base
-        jl_errorexception_type = NULL;
-        jl_get_system_hooks();
-        jl_get_uv_hooks(1);
-        jl_current_task->tls = jl_nothing;
-    }
 
 #if 0
     // some optional post-processing steps

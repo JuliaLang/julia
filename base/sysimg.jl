@@ -106,8 +106,7 @@ importall .FS
 include("process.jl")
 include("multimedia.jl")
 importall .Multimedia
-# TODO: should put this in _init, but need to handle its boolean argument correctly
-ccall(:jl_get_uv_hooks, Void, (Cint,), 0)
+ccall(:jl_get_uv_hooks, Void, ()) # TODO: should put this in _init
 include("grisu.jl")
 import .Grisu.print_shortest
 include("file.jl")
