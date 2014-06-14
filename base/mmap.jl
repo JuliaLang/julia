@@ -122,7 +122,7 @@ end
 function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::IO, offset::FileOffset)
     shandle = _get_osfhandle(RawFD(fd(s)))
     if int(shandle.handle) == -1
-        error("could not get handle for file to map")
+        error("could not get handle for file to map: $(FormatMessage())")
     end
     ro = isreadonly(s)
     flprotect = ro ? 0x02 : 0x04
@@ -141,13 +141,13 @@ function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::IO, offset::File
     mmaphandle = ccall(:CreateFileMappingW, stdcall, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Cint, Cint, Cint, Ptr{Uint16}),
         shandle.handle, C_NULL, flprotect, szfile>>32, szfile&typemax(Uint32), C_NULL)
     if mmaphandle == C_NULL
-        error("could not create file mapping")
+        error("could not create file mapping: $(FormatMessage())")
     end
     access = ro ? 4 : 2
     viewhandle = ccall(:MapViewOfFile, stdcall, Ptr{Void}, (Ptr{Void}, Cint, Cint, Cint, Csize_t),
         mmaphandle, access, offset_page>>32, offset_page&typemax(Uint32), szarray)
     if viewhandle == C_NULL
-        error("could not create mapping view")
+        error("could not create mapping view: $(FormatMessage())")
     end
     A = pointer_to_array(pointer(T, viewhandle+offset-offset_page), dims)
     finalizer(A, x->munmap(viewhandle, mmaphandle))
@@ -158,14 +158,14 @@ function munmap(viewhandle::Ptr, mmaphandle::Ptr)
     status = bool(ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Void},), viewhandle))
     status |= bool(ccall(:CloseHandle, stdcall, Cint, (Ptr{Void},), mmaphandle))
     if !status
-        error("could not unmap view")
+        error("could not unmap view: $(FormatMessage())")
     end
 end
 
 function msync(p::Ptr, len::Integer)
     status = bool(ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Void}, Csize_t), p, len))
     if !status
-        error("could not msync")
+        error("could not msync: $(FormatMessage())")
     end
 end
 
