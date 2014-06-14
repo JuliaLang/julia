@@ -213,8 +213,10 @@ A2 = mmap_array(Int, (m,n), s)
 seek(s, 0)
 A3 = mmap_array(Int, (m,n), s, convert(FileOffset,2*sizeof(Int)))
 @test A == A3
+A4 = mmap_array(Int, (m,150), s, convert(FileOffset,(2+150*m)*sizeof(Int)))
+@test A[:, 151:end] == A4
 close(s)
-A2=nothing; A3=nothing; gc(); gc(); # cause munmap finalizer to run & free resources
+A2=nothing; A3=nothing; A4=nothing; gc(); gc(); # cause munmap finalizer to run & free resources
 rm(fname)
 
 #######################################################################
