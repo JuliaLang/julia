@@ -6,7 +6,7 @@ Hi! Thanks for checking out Julia. If you have questions or problems, the [Julia
 
 * Create a [GitHub account](https://github.com/signup/free).
 
-* [Fork Julia](https://github.com/JuliaLang/julia/fork_select).
+* [Fork Julia](https://github.com/JuliaLang/julia/fork).
 
 * Build the software and libraries (the first time takes a while, but it's fast after that). Detailed build instructions are in the [README](https://github.com/JuliaLang/julia/tree/master/README.md). Julia depends on several external packages; most are automatically downloaded and installed, but are less frequently updated than Julia itself.
 
