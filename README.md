@@ -71,14 +71,16 @@ If you need to build Julia in an environment that does not allow access to the o
 
 **Note:** the build process will not work if any of the build directory's parent directories have spaces in their names (this is due to a limitation in GNU make).
 
-Once it is built, you can run the `julia` executable using its full path in the directory created above (the `julia` directory), or, to run it from anywhere,
+Once it is built, you can run the `julia` executable using its full path in the directory created above (the `julia` directory), or, to run it from anywhere, either
 
-1. add a soft link to the `julia` executable in the `julia` directory to `/usr/local/bin` (or any suitable directory already in your path), or
+- add a soft link to the `julia` executable in the `julia` directory to `/usr/local/bin` (or any suitable directory already in your path), or
 
-2. add the `julia` directory to your executable path for this shell session (in bash: `export PATH="$(pwd):$PATH"` ; in csh or tcsh:
+- add the `julia` directory to your executable path for this shell session (in bash: `export PATH="$(pwd):$PATH"` ; in csh or tcsh:
 `set path= ( $path $cwd )` ), or
 
-3. add the `julia` directory to your executable path permanently (e.g. in `.bash_profile`).
+- add the `julia` directory to your executable path permanently (e.g. in `.bash_profile`), or
+
+- write `prefix=/path/to/install/folder` into `Make.user` and then run `make install`.
 
 Now you should be able to run Julia like this:
 
