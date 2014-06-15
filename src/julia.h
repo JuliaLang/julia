@@ -813,6 +813,7 @@ DLLEXPORT int32_t jl_stat(const char *path, char *statbuf);
 DLLEXPORT void NORETURN jl_exit(int status);
 DLLEXPORT int jl_cpu_cores(void);
 DLLEXPORT long jl_getpagesize(void);
+DLLEXPORT long jl_getallocationgranularity(void);
 DLLEXPORT int jl_is_debugbuild(void);
 
 // environment entries
