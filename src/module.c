@@ -87,6 +87,15 @@ jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var)
     return *bp;
 }
 
+// return module of binding
+DLLEXPORT jl_module_t *jl_get_module_of_binding(jl_module_t *m, jl_sym_t *var)
+{
+    jl_binding_t *b = jl_get_binding(m, var);
+    if (b == NULL)
+        jl_errorf("Error: symbol :%s is not bound.", var->name);
+    return b->owner;
+}
+
 // get binding for adding a method
 // like jl_get_binding_wr, but uses existing imports instead of warning
 // and overwriting.
