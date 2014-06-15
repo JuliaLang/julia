@@ -115,8 +115,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
       Return type      ``eltype(A)``     ``pivot``  Relationship between ``F`` and ``A``
       ---------------- ----------------- --------- -------------------------------------
       ``QR``           not ``BlasFloat`` either     ``A==F[:Q]*F[:R]``
-      ``QRCompactWY``  ``BlasFloat``     ``true``   ``A==F[:Q]*F[:R]``
-      ``QRPivoted``    ``BlasFloat``     ``false``  ``A[:,F[:p]]==F[:Q]*F[:R]``
+      ``QRCompactWY``  ``BlasFloat``     ``false``  ``A==F[:Q]*F[:R]``
+      ``QRPivoted``    ``BlasFloat``     ``true``   ``A[:,F[:p]]==F[:Q]*F[:R]``
       ================ ================= ========= =====================================
 
    ``BlasFloat`` refers to any of: ``Float32``, ``Float64``, ``Complex64`` or ``Complex128``.
