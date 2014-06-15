@@ -106,10 +106,18 @@ Getting Around
    If ``types`` is an abstract type, then the method that would be called by ``invoke``
    is returned.
 
+.. function:: which(symbol)
+
+   Return the module in which the binding for the variable referenced
+   by ``symbol`` was created.
+
 .. function:: @which
 
-   Evaluates the arguments to the specified function call, and returns the ``Method`` object
-   for the method that would be called for those arguments.
+   Applied to a function call, it evaluates the arguments to the
+   specified function call, and returns the ``Method`` object for the
+   method that would be called for those arguments.  Applied to a
+   variable, it returns the module in which the variable was bound. It
+   calls out to the ``which`` function.
 
 .. function:: methods(f, [types])
 
