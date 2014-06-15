@@ -74,7 +74,11 @@ public:
         *(DWORD*)&UnwindData[8] = (DWORD)(catchjmp-(intptr_t)Code);
         DWORD mod_size = (DWORD)(size_t)(&UnwindData[8]-(uint8_t*)Code);
         if (!SymLoadModuleEx(GetCurrentProcess(), NULL, NULL, NULL, (DWORD64)Code, mod_size, NULL, SLMFLAG_VIRTUAL)) {
-            JL_PRINTF(JL_STDERR, "WARNING: failed to insert function info for backtrace\n");
+            static int warned = 0;
+            if (!warned) {
+                JL_PRINTF(JL_STDERR, "WARNING: failed to insert function info for backtrace\n");
+                warned = 1;
+            }
         }
         else {
             if (!SymAddSymbol(GetCurrentProcess(), (ULONG64)Code, F.getName().data(), (DWORD64)Code, mod_size, 0)) {
