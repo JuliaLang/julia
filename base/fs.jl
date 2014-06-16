@@ -157,7 +157,7 @@ end
     err = ccall(:jl_fs_symlink, Int32, (Ptr{Uint8}, Ptr{Uint8}, Cint), 
                 bytestring(p), bytestring(np), flags)
     @windows_only if err < 0
-        warn_once("Note: on Windows, creating file symlinks requires Administrator privileges.")
+        Base.warn_once("Note: on Windows, creating file symlinks requires Administrator privileges.")
     end
     uv_error("symlink",err)
 end
