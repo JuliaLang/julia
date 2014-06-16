@@ -1620,11 +1620,9 @@ function repo_clone(url::String, path::String, opts=nothing)
     gpayload = Dict()
     gopts    = parse_clone_options(opts, gpayload)
     repo_ptr = Array(Ptr{Void}, 1)
-    println("Before ccall")
     err = ccall((:git_clone, api.libgit2), Cint,
                 (Ptr{Ptr{Void}}, Ptr{Cchar}, Ptr{Cchar}, Ptr{api.GitCloneOpts}),
                  repo_ptr, bytestring(url), bytestring(path), C_NULL)
-    println("After ccall")
     if err != api.GIT_OK
         throw(LibGitError(err))
     end
