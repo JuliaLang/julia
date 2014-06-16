@@ -150,12 +150,15 @@ function sendfile(src::String, dst::String)
     end
 end
 
-@windows_only const UV_FS_SYMLINK_DIR = 0x0001
+@windows_only const UV_FS_SYMLINK_JUNCTION = 0x0002
 @non_windowsxp_only function symlink(p::String, np::String)
     flags = 0
-    @windows_only if isdir(p); flags |= UV_FS_SYMLINK_DIR; end
+    @windows_only if isdir(p); flags |= UV_FS_SYMLINK_JUNCTION; p = abspath(p); end
     err = ccall(:jl_fs_symlink, Int32, (Ptr{Uint8}, Ptr{Uint8}, Cint), 
                 bytestring(p), bytestring(np), flags)
+    @windows_only if err < 0
+        warn_once("Note: on Windows, creating file symlinks requires Administrator privileges.")
+    end
     uv_error("symlink",err)
 end
 @windowsxp_only symlink(p::String, np::String) = 
