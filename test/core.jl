@@ -395,8 +395,17 @@ end
 @test a[2](10) == 12
 @test a[3](10) == 13
 
-# syntax
+# ? syntax
 @test (true ? 1 : false ? 2 : 3) == 1
+
+# issue #7252
+begin
+    local a
+    1 > 0 ? a=2 : a=3
+    @test a == 2
+    1 < 0 ? a=2 : a=3
+    @test a == 3
+end
 
 # tricky space sensitive syntax cases
 @test [-1 ~1] == [(-1) (~1)]
