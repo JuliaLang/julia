@@ -1,5 +1,7 @@
 ## basic task functions and TLS
 
+wait(f::Callable) = f()
+
 show(io::IO, t::Task) = print(io, "Task ($(t.state)) @0x$(hex(unsigned(pointer_from_objref(t)), WORD_SIZE>>2))")
 
 macro task(ex)
@@ -213,6 +215,85 @@ notify1(c::Condition, arg=nothing) = notify(c, arg, all=false)
 
 notify_error(c::Condition, err) = notify(c, err, error=true)
 notify1_error(c::Condition, err) = notify(c, err, error=true, all=false)
+
+waitq(c, killq) = waitq(()->wait(c), killq)
+function waitq(c::Callable, killq)
+    t = schedule(Task(c))
+    push!(killq, t)
+    return waitq(t, killq)
+end
+waitq(c::Condition, killq) = c
+function waitq(t::Task, killq)
+    if istaskdone(t)
+        if t.state == :failed
+            throw(t.exception)
+        end
+    end
+    if is(t.donenotify, nothing)
+        t.donenotify = Condition()
+    end
+    return t.donenotify
+end
+
+waitresult(c) = (false, nothing)
+function waitresult(t::Task)
+    if istaskdone(t)
+        if t.state == :failed
+            throw(t.exception)
+        end
+        return (true, t.result)
+    end
+    return (false, nothing)
+end
+
+waitcleanup(c,ct::Task) = nothing
+waitcleanup(c::Condition,ct::Task) = (filter!(x->x!==ct, c.waitq); nothing)
+waitcleanup(t::Task, ct::Task) = waitcleanup(t.donenotify, ct)
+
+waitkill(c,ct::Task) = nothing
+function waitkill(t::Task,ct::Task)
+    waitcleanup(t,ct)
+    if !istaskdone(t)
+        filter!(x->x!==t, Workqueue)
+        istaskstarted(t) && schedule(t, EOFError(), error=true)
+    end
+    nothing
+end
+
+function wait(cs...)
+    ct = current_task()
+    ct.state = :waiting
+
+    killq = Any[]
+    for c in cs
+        c = waitq(c, killq)::Condition
+        push!(c.waitq, ct)
+    end
+
+    try
+        result = wait()
+        for c in cs
+            hasresult, res = waitresult(c)
+            if hasresult
+                result = res
+            end
+        end
+        return result
+    catch e
+        if ct.state == :waiting
+            ct.state = :runnable
+        end
+        rethrow(e)
+    finally
+        filter!(x->x!==ct, Workqueue) # in case we got more that one trigger
+        for c in cs
+            waitcleanup(c,ct)
+        end
+        for c in killq
+            waitkill(c,ct)
+        end
+    end
+end
 
 
 ## scheduler and work queue

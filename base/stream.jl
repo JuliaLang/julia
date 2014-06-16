@@ -404,6 +404,7 @@ function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::
        (nb_available(stream.buffer) == stream.buffer.maxsize)
         stop_reading(stream)
     end
+    nothing
  end
 ##########################################
 # Async Workers
@@ -454,6 +455,7 @@ function _uv_hook_close(uv::Union(AsyncStream,UVServer))
     notify(uv.closenotify)
     try notify(uv.readnotify) end
     try notify(uv.connectnotify) end
+    nothing
 end
 _uv_hook_close(uv::AsyncWork) = (uv.handle = C_NULL; nothing)
 
@@ -490,11 +492,9 @@ function stop_timer(timer::Timer)
     unpreserve_handle(timer)
 end
 
-function sleep(sec::Real)
+function wait(sec::Real)
     w = Condition()
-    timer = Timer(function (tmr)
-        notify(w)
-    end)
+    timer = Timer( tmr->notify(w) )
     start_timer(timer, float(sec), 0)
     try
         stream_wait(timer,w)
@@ -503,6 +503,15 @@ function sleep(sec::Real)
     end
     nothing
 end
+sleep(sec::Real) = wait(sec)
+function waitq(sec::Real, killq)
+    c = Condition()
+    t = Timer( (tmr)->notify(c) )
+    start_timer(t, float(sec), 0)
+    push!(killq, t)
+    return c
+end
+waitkill(t::Timer,ct::Task) = (stop_timer(t); nothing)
 
 ## event loop ##
 eventloop() = global uv_eventloop::Ptr{Void}
@@ -793,6 +802,7 @@ function _uv_hook_writecb_task(s::AsyncStream,req::Ptr{Void},status::Int32)
     elseif d != C_NULL
         schedule(unsafe_pointer_to_objref(d)::Task)
     end
+    nothing
 end
 
 ## Libuv error handling ##
