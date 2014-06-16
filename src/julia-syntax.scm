@@ -763,22 +763,20 @@
 
 (define (rewrite-ctor ctor Tname params field-names field-types mutabl iname)
   (define (ctor-body body)
-    (prepend-stmt
-     `(global ,Tname)
-     (pattern-replace (pattern-set
-		       (pattern-lambda
-			(call (-/ new) . args)
-			(new-call (if (null? params)
-				      ;; be careful to avoid possible conflicts
-				      ;; with local & arg names
-				      `(|.| ,(current-julia-module) ',Tname)
-				      `(curly (|.| ,(current-julia-module) ',Tname)
-					      ,@params))
-				  args
-				  field-names
-				  field-types
-				  mutabl)))
-		      body)))
+    (pattern-replace (pattern-set
+		      (pattern-lambda
+		       (call (-/ new) . args)
+		       (new-call (if (null? params)
+				     ;; be careful to avoid possible conflicts
+				     ;; with local & arg names
+				     `(|.| ,(current-julia-module) ',Tname)
+				     `(curly (|.| ,(current-julia-module) ',Tname)
+					     ,@params))
+				 args
+				 field-names
+				 field-types
+				 mutabl)))
+		     body))
   (let ((ctor2
 	 (pattern-replace
 	  (pattern-set
@@ -2617,6 +2615,10 @@ So far only the second case can actually occur.
 		    (body (if (null? lineno)
 			      body
 			      `(,(car body) ,@(cddr body)))))
+	       (for-each (lambda (v)
+			   (if (memq v vars)
+			       (error (string "variable \"" v "\" declared both local and global"))))
+			 glob)
 	       `(scope-block ,@lineno
 			     ;; place local decls after initial line node
 			     ,.(map (lambda (v) `(local ,v))

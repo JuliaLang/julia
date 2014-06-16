@@ -353,6 +353,12 @@ glotest()
 @test glob_x == 88
 @test loc_x == 10
 
+# issue #7272
+@test expand(parse("let
+              global x = 2
+              local x = 1
+              end")) == Expr(:error, "variable \"x\" declared both local and global")
+
 # let - new variables, including undefinedness
 function let_undef()
     first = true
