@@ -256,6 +256,9 @@ importall .QuadGK
 # deprecated functions
 include("deprecated.jl")
 
+# LibGit2 for the package manager
+include("libgit2.jl")
+
 # package manager
 include("pkg.jl")
 const Git = Pkg.Git

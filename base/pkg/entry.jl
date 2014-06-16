@@ -48,11 +48,19 @@ function add(pkg::String, vers::VersionSet)
             info("Nothing to be done")
         end
         branch = Pkg.META_BRANCH
+
         if Git.branch(dir="METADATA") == branch
-            if !Git.success(`diff --quiet origin/$branch`, dir="METADATA")
+            repo = Git.get_repo("METADATA")
+            #if !Git.success(`diff --quiet origin/$branch`, dir="METADATA")
+            if length(Base.LibGit2.diff(repo, "origin/$branch", Base.LibGit2.repo_index(repo))) > 0
                 outdated = :yes
             else
                 try
+                    # for remote in remotes(repo)
+                    #     Base.LibGit2.remote_fetch(remote)
+                    # end
+                    # outdated = length(Base.LibGit2.diff(repo, "origin/$branch", Base.LibGit2.repo_index(repo))) == 0 ?
+                    #   (:no) : (:yes)
                     run(Git.cmd(`fetch -q --all`, dir="METADATA") |>DevNull .>DevNull)
                     outdated = Git.success(`diff --quiet origin/$branch`, dir="METADATA") ?
                         (:no) : (:yes)
