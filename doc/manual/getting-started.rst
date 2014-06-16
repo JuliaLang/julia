@@ -14,13 +14,13 @@ interactive session (also known as a read-eval-print loop or "repl")::
 
     $ julia
                    _
-       _       _ _(_)_     |  A fresh approach to technical computing.
+       _       _ _(_)_     |  A fresh approach to technical computing
       (_)     | (_) (_)    |  Documentation: http://docs.julialang.org
        _ _   _| |_  __ _   |  Type "help()" to list help topics
       | | | | | | |/ _` |  |
-      | | |_| | | | (_| |  |  Version 0 (pre-release)
-     _/ |\__'_|_|_|\__'_|  |  Commit 61847c5aa7 (2011-08-20 06:11:31)*
-    |__/                   |
+      | | |_| | | | (_| |  |  Version 0.3.0-prerelease+3690 (2014-06-16 05:11 UTC)
+     _/ |\__'_|_|_|\__'_|  |  Commit 1b73f04* (0 days old master)
+    |__/                   |  x86_64-apple-darwin13.1.0
 
     julia> 1 + 2
     3
