@@ -43,7 +43,7 @@ current scope are as follows:
 -  A function's arguments are introduced as new local variables into the
    function's body scope.
 -  An assignment ``x = y`` introduces a new local variable ``x`` only if
-   ``x`` is neither declared global nor explicitly introduced as local
+   ``x`` is neither declared global nor introduced as local
    by any enclosing scope before *or after* the current line of code.
 
 In the following example, there is only one ``x`` assigned both inside
