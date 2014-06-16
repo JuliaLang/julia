@@ -534,7 +534,7 @@
 		  (let ((then (without-range-colon (parse-eq* s))))
 		    (if (not (eq? (take-token s) ':))
 			(error "colon expected in \"?\" expression")
-			(list 'if ex then (parse-cond s))))))
+			(list 'if ex then (parse-eq* s))))))
 	  #;((string? ex)
 	   (let loop ((args (list ex)))
 	     (let ((next (peek-token s)))
