@@ -5,7 +5,7 @@ dir = mktempdir()
 file = joinpath(dir, "afile.txt")
 close(open(file,"w")) # like touch, but lets the operating system update the timestamp for greater precision on some platforms (windows)
 
-@non_windowsxp_only begin
+@unix_only begin
     link = joinpath(dir, "afilelink.txt")
     symlink(file, link)
 end
@@ -36,17 +36,13 @@ run(`chmod +w $file`)
 @test filesize(file) == 0
 # On windows the filesize of a folder is the accumulation of all the contained
 # files and is thus zero in this case.
-@windows_only begin
-    @test filesize(dir) == 0
-end
-@unix_only begin
-    @test filesize(dir) > 0
-end
+@windows_only @test filesize(dir) == 0
+@unix_only @test filesize(dir) > 0
 @test int(time()) >= int(mtime(file)) >= int(mtime(dir)) >= 0 # 1 second accuracy should be sufficient
 
 # test links
+@unix_only @test islink(link) == true
 @non_windowsxp_only begin
-    @test islink(link) == true
     @test islink(dirlink) == true
     @test isdir(dirlink) == true
 end
@@ -280,10 +276,9 @@ close(f)
 ############
 # Clean up #
 ############
-@non_windowsxp_only begin
-    rm(link)
-    rm(dirlink)
-end
+@unix_only rm(link)
+@non_windowsxp_only rm(dirlink)
+
 rm(file)
 rmdir(subdir)
 rmdir(dir)
