@@ -63,28 +63,49 @@ jl_module_t *jl_new_main_module(void)
     return old_main;
 }
 
+int jl_module_reqs_met(jl_expr_t *reqs, jl_module_t *newm)
+{
+    int reeval = !newm;
+    size_t i, tlen = jl_array_len(reqs->args);
+    for (i = 0; i < tlen; i++) {
+        jl_expr_t *req = (jl_expr_t*)jl_exprarg(reqs, i);
+        if (!jl_is_expr(req) || req->head != tuple_sym) {
+            jl_error("syntax: malformed module-requires statement");
+        }
+        size_t j, rlen = jl_array_len(req->args);
+        jl_module_t *m = jl_main_module;
+        for (j = 0; j < rlen; j++) {
+            jl_sym_t *s = (jl_sym_t*)jl_exprarg(req, j);
+            if (!jl_is_symbol(s)) {
+                jl_error("syntax: malformed module-requires statement");
+            }
+            m = (jl_module_t*)jl_get_global(m, s);
+            if (!m || !jl_is_module(m)) {
+                return 0;
+            }
+        }
+        reeval |= (m == newm);
+    }
+    return reeval;
+}
+
 extern void jl_get_system_hooks(void);
 extern void jl_get_uv_hooks(int);
 extern int base_module_conflict;
-jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
-{
+jl_array_t *jl_late_modules;
+jl_value_t *jl_eval_module_expr_(jl_expr_t *ex, jl_module_t *parent_module) {
     static arraylist_t module_stack;
     static int initialized=0;
     if (!initialized) {
         arraylist_new(&module_stack, 0);
         initialized = 1;
     }
-    assert(ex->head == module_sym);
     jl_module_t *last_module = jl_current_module;
-    if (jl_array_len(ex->args) != 3 || !jl_is_expr(jl_exprarg(ex,2))) {
-        jl_error("syntax: malformed module expression");
-    }
     int std_imports = (jl_exprarg(ex,0)==jl_true);
     jl_sym_t *name = (jl_sym_t*)jl_exprarg(ex, 1);
     if (!jl_is_symbol(name)) {
         jl_type_error("module", (jl_value_t*)jl_sym_type, (jl_value_t*)name);
     }
-    jl_module_t *parent_module = jl_current_module;
     jl_binding_t *b = jl_get_binding_wr(parent_module, name);
     jl_declare_constant(b);
     if (b->value != NULL) {
@@ -170,7 +191,63 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
         }
     }
 
+    if (jl_late_modules) {
+        size_t i, len = jl_array_len(jl_late_modules);
+        for (i = 0; i < len; i++) {
+            jl_tuple_t *late_m = (jl_tuple_t*)jl_arrayref(jl_late_modules, i);
+            jl_expr_t *ex2 = (jl_expr_t*)jl_tupleref(late_m, 0);
+            if (jl_module_reqs_met((jl_expr_t*)jl_exprarg(ex2, 3), newm)) {
+                JL_TRY {
+                    (void)jl_eval_module_expr_(ex2, (jl_module_t*)jl_tupleref(late_m, 1));
+                }
+                JL_CATCH {
+                    JL_PRINTF(JL_STDERR, "Warning: error initializing module %s:\n", ((jl_sym_t*)jl_exprarg(ex2, 1))->name);
+                    jl_static_show(JL_STDERR, jl_exception_in_transit);
+                    JL_PRINTF(JL_STDERR, "\n");
+                }
+            }
+        }
+    }
     return jl_nothing;
+}
+jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
+{
+    assert(ex->head == module_sym);
+    assert(jl_array_len(ex->args) > 2 && jl_is_expr(jl_exprarg(ex,2)) && jl_is_symbol(jl_exprarg(ex,1)));
+    if (jl_array_len(ex->args) == 4) {
+        jl_expr_t *reqs = (jl_expr_t*)jl_exprarg(ex,3);
+        if (!jl_is_null(reqs)) {
+            if (!jl_is_expr(reqs) || reqs->head != tuple_sym) {
+                jl_error("syntax: malformed module-requires statement");
+            }
+            if (jl_array_len(reqs->args)) {
+                if (!jl_late_modules) {
+                    jl_late_modules = jl_alloc_cell_1d(0);
+                }
+                int met = jl_module_reqs_met(reqs, NULL); // note: might throw instead of return, if reqs is invalid
+                size_t i, len = jl_array_len(jl_late_modules);
+                jl_value_t* late_info = (jl_value_t*)jl_tuple2(ex, jl_current_module);
+                for (i = 0; i < len; i++) {
+                    jl_tuple_t *late_m = (jl_tuple_t*)jl_arrayref(jl_late_modules, i);
+                    if (jl_exprarg(jl_tupleref(late_m, 0), 1) == jl_exprarg(ex, 1) &&
+                            jl_tupleref(late_m, 1) == (jl_value_t*)jl_current_module) {
+                        jl_cellset(jl_late_modules, i, late_info);
+                        break;
+                    }
+                }
+                if (i == len) {
+                    jl_cell_1d_push(jl_late_modules, late_info);
+                }
+                if (!met) {
+                    return jl_nothing;
+                }
+            }
+        }
+    }
+    else if (jl_array_len(ex->args) != 3) {
+        jl_error("syntax: malformed module expression");
+    }
+    return jl_eval_module_expr_(ex, jl_current_module);
 }
 
 static int is_intrinsic(jl_module_t *m, jl_sym_t *s)

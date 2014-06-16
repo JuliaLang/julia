@@ -1166,6 +1166,9 @@
 	   `(const ,assgn))))
     ((module baremodule)
      (let* ((name (parse-atom s))
+        (parametrics (if (eqv? (peek-token s) 'requires)
+          (begin (take-token s) (cons 'tuple (parse-comma-separated s parse-module-path)))
+          '()))
 	    (body (parse-block s)))
        (expect-end s)
        (list 'module (eq? word 'module) name
@@ -1178,7 +1181,7 @@
 			`(= (call eval m x)
 			    (call (|.| (top Core) 'eval) m x))
 			(cdr body))
-		 body))))
+		 body) parametrics)))
     ((export)
      (let ((es (map macrocall-to-atsym
 		    (parse-comma-separated s parse-atom))))
@@ -1266,8 +1269,15 @@
 	   (cons (macrocall-to-atsym (parse-atom s)) l)))))
 
 (define (parse-import s word)
-  (let loop ((path (parse-import-dots s)))
-    (if (not (symbol? (car path)))
+  (parse-dotted-path s #t word word))
+
+(define (parse-module-path s)
+  (parse-dotted-path s #f 'module 'tuple))
+
+(define (parse-dotted-path s allow-leading-dots-and-macrosym? word head)
+  (let ((macrocall-to-atsym (if allow-leading-dots-and-macrosym? macrocall-to-atsym (lambda (x) x))))
+  (let loop ((path (if allow-leading-dots-and-macrosym? (parse-import-dots s) (cons (parse-atom s) '()))))
+    (if (and allow-leading-dots-and-macrosym? (not (symbol? (car path))))
 	(error (string "invalid \"" word "\" statement: expected identifier")))
     (let ((nxt (peek-token s)))
       (cond
@@ -1276,13 +1286,13 @@
 	(loop (cons (macrocall-to-atsym (parse-atom s)) path)))
        ((or (memv nxt '(#\newline #\; #\, :))
 	    (eof-object? nxt))
-	`(,word ,@(reverse path)))
+	`(,head ,@(reverse path)))
        ((eqv? (string.sub (string nxt) 0 1) ".")
 	(take-token s)
 	(loop (cons (symbol (string.sub (string nxt) 1))
 		    path)))
        (else
-	(error (string "invalid \"" word "\" statement")))))))
+	(error (string "invalid \"" word "\" statement"))))))))
 
 ; parse comma-separated assignments, like "i=1:n,j=1:m,..."
 (define (parse-comma-separated s what)
