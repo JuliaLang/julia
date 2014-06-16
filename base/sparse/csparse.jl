@@ -139,7 +139,7 @@ end
 
 # NOTE: When calling transpose!(S,T), the indptr in the result matrix T must be set up
 # by counting the nonzeros in every row of S.
-function transpose!{Tv,Ti,Ts}(S::CompressedSparseMatrix{Tv,Ti,Ts}, T::CompressedSparseMatrix{Tv,Ti,Ts})
+function transpose!{Tc<:CompressedSparseMatrix}(S::Tc, T::Tc)
     indptr_T = getindptr(T)
     indval_T = getindval(T)
     nzval_T = T.nzval
@@ -158,10 +158,10 @@ function transpose!{Tv,Ti,Ts}(S::CompressedSparseMatrix{Tv,Ti,Ts}, T::Compressed
         nzval_T[q] = nzval_S[p]
     end
 
-    return sparse(size(T,1), size(T,2), CompressedSparseStore(indptr_T, indval_T, nzval_T), format=Ts)
+    return sparse(size(T,1), size(T,2), CompressedSparseStore(indptr_T, indval_T, nzval_T), format=sptype(S))
 end
 
-function transpose{Tv,Ti,Ts}(S::CompressedSparseMatrix{Tv,Ti,Ts})
+function transpose{Tv,Ti}(S::CompressedSparseMatrix{Tv,Ti})
     nnzS = nnz(S)    
     indval_S = getindval(S)
 
@@ -175,13 +175,13 @@ function transpose{Tv,Ti,Ts}(S::CompressedSparseMatrix{Tv,Ti,Ts})
     end
     indptr_T = cumsum(indptr_T)
 
-    T = sparse(size(S,2), size(S,1), CompressedSparseStore(indptr_T, indval_T, nzval_T), format=Ts)
+    T = sparse(size(S,2), size(S,1), CompressedSparseStore(indptr_T, indval_T, nzval_T), format=sptype(S))
     return transpose!(S, T)
 end
 
 # NOTE: When calling ctranspose!(S,T), the indptr in the result matrix T must be set up
 # by counting the nonzeros in every row of S.
-function ctranspose!{Tv,Ti,Ts}(S::CompressedSparseMatrix{Tv,Ti,Ts}, T::CompressedSparseMatrix{Tv,Ti,Ts})
+function ctranspose!{Tc<:CompressedSparseMatrix}(S::Tc, T::Tc)
     indptr_T = getindptr(T)
     indval_T = getindval(T)
     nzval_T = T.nzval
@@ -199,10 +199,10 @@ function ctranspose!{Tv,Ti,Ts}(S::CompressedSparseMatrix{Tv,Ti,Ts}, T::Compresse
         indval_T[q] = j
         nzval_T[q] = conj(nzval_S[p])
     end
-    return sparse(size(T,1), size(T,2), CompressedSparseStore(indptr_T, indval_T, nzval_T), format=Ts)
+    return sparse(size(T,1), size(T,2), CompressedSparseStore(indptr_T, indval_T, nzval_T), format=sptype(S))
 end
 
-function ctranspose{Tv,Ti,Ts}(S::CompressedSparseMatrix{Tv,Ti,Ts}) 
+function ctranspose{Tv,Ti}(S::CompressedSparseMatrix{Tv,Ti}) 
     nnzS = nnz(S)
     indval_S = getindval(S)
     
@@ -216,7 +216,7 @@ function ctranspose{Tv,Ti,Ts}(S::CompressedSparseMatrix{Tv,Ti,Ts})
     end
     indptr_T = cumsum(indptr_T)
 
-    T = sparse(size(S,2), size(S,1), CompressedSparseStore(indptr_T, indval_T, nzval_T), format=Ts)
+    T = sparse(size(S,2), size(S,1), CompressedSparseStore(indptr_T, indval_T, nzval_T), format=sptype(S))
     return ctranspose!(S, T)
 end
 
