@@ -514,7 +514,13 @@ function builtin_tfunction(f::ANY, args::ANY, argtypes::ANY)
         return Any
     end
     tf = tf::(Real, Real, Function)
-    if !(tf[1] <= length(argtypes) <= tf[2]) && !isva
+    if isva
+        # only some t-funcs can handle varargs
+        if is(f,apply_type) || is(f,typeof)
+        else
+            return Any
+        end
+    elseif !(tf[1] <= length(argtypes) <= tf[2])
         # wrong # of args
         return None
     end
