@@ -366,7 +366,7 @@ end
 # hcat, vcat, hvcat test
 for Ts in [CSC, CSR]
     (m,n) = (3,2)
-    spm = Base.CompressedSparseMatrix[]
+    spm = {}
     for i in 1:m
         push!(spm, sprand(4, 2, 0.5, format=Ts))
     end

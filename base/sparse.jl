@@ -3,9 +3,9 @@ include("sparse/abstractsparse.jl")
 module SparseMatrix
 
 importall Base
-import Base.NonTupleType, Base.float, Base.Order, Base.Sort.Forward, Base.showarray, Base.dims2string, Base.with_output_limit, Base.CompressedSparseMatrix
+import Base.NonTupleType, Base.float, Base.Order, Base.Sort.Forward, Base.showarray, Base.dims2string, Base.with_output_limit
 
-export SparseMatrixCSC, SparseMatrixCSR,
+export SparseMatrixCSC, SparseMatrixCSR, CompressedSparseMatrix,
        blkdiag, dense, diag, diagm, droptol!, dropzeros!, etree, full, 
        getindex, ishermitian, issparse, issym, istril, istriu, nnz,
        setindex!, sparse, sparsevec, spdiagm, speye, spones, 
