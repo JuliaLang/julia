@@ -1030,3 +1030,36 @@ end
 @test checkbounds("hello", 2)
 @test checkbounds("hello", 1:5)
 @test checkbounds("hello", [1:5])
+
+
+# isvalid(), chr2ind() and ind2chr() for SubString{DirectIndexString}
+let s="lorem ipsum",
+    sdict=[SubString(s,1,11)=>s, 
+        SubString(s,1,6)=>"lorem ",
+        SubString(s,1,0)=>"", 
+        SubString(s,2,4)=>"ore", 
+        SubString(s,2,16)=>"orem ipsum", 
+        SubString(s,12,14)=>""
+    ]
+    for (ss,s) in sdict
+        for i in -1:12
+            @test isvalid(ss,i)==isvalid(s,i)
+        end
+    end
+    for (ss,s) in sdict
+        for i in 1:length(ss)
+            @test ind2chr(ss,i)==ind2chr(s,i)
+        end
+    end
+    for (ss,s) in sdict
+        for i in 1:length(ss)
+            @test chr2ind(ss,i)==chr2ind(s,i)
+        end
+    end
+end #let
+
+ss=SubString("hello",1,5)
+@test_throws BoundsError ind2chr(ss, -1)
+@test_throws BoundsError chr2ind(ss, -1)
+@test_throws BoundsError chr2ind(ss, 10)
+@test_throws BoundsError ind2chr(ss, 10)
