@@ -39,6 +39,7 @@ export
     axpy!,
     bkfact,
     bkfact!,
+    blkdiag,
     chol,
     cholfact,
     cholfact!,

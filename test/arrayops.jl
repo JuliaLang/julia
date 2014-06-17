@@ -871,3 +871,7 @@ end
 
 # map with promotion (issue #6541)
 @test map(join, ["z", "я"]) == ["z", "я"]
+
+# dense block diagonal
+@test [1 2 0 0 0; 0 0 3 4 5] == blkdiag([1 2], [3 4 5])
+@test [1 0; 2 0; 0 3; 0 4; 0 5] == blkdiag([1; 2], [3; 4; 5])

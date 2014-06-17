@@ -440,7 +440,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: blkdiag(A...)
 
-   Concatenate matrices block-diagonally. Currently only implemented for sparse matrices.
+   Concatenate matrices or vectors block-diagonally.
 
 .. function:: linreg(x, y) -> [a; b]
 
