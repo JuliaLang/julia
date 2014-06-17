@@ -67,7 +67,7 @@ function task_done_hook(t::Task)
     #isa(q,Condition) && notify(q, result, error=err)
     if isa(q,Task)
         nexttask = q
-        nexttask.state = :runnable
+        !istaskdone(nexttask) && nexttask.state = :runnable
     elseif isa(q,Condition) && !isempty(q.waitq)
         notify(q, result, error=err)
     end
@@ -273,12 +273,14 @@ function wait(cs...)
     end
 
     try
+        for c in cs
+            hasresult, res = waitresult(c)
+            hasresult && return res
+        end
         result = wait()
         for c in cs
             hasresult, res = waitresult(c)
-            if hasresult
-                result = res
-            end
+            hasresult && return res
         end
         return result
     catch e
@@ -301,7 +303,9 @@ global const Workqueue = Any[]
 function enq_work(t::Task)
     ccall(:uv_stop,Void,(Ptr{Void},),eventloop())
     ct = current_task()
-    filter!(x->x!==ct, Workqueue)
+    if t.state == :queued
+        filter!(x->x!==ct, Workqueue)
+    end
     push!(Workqueue, t)
     t.state = :queued
     t
