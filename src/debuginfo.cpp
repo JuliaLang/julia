@@ -163,7 +163,7 @@ JuliaJITEventListener *jl_jit_events;
 
 extern "C" void jl_getFunctionInfo(const char **name, int *line, const char **filename, uintptr_t pointer, int skipC);
 
-void lookup_pointer(DIContext *context, const char **name, int *line, const char **filename, size_t pointer)
+void lookup_pointer(DIContext *context, const char **name, int *line, const char **filename, size_t pointer, int demangle)
 {
     if (context == NULL) return;
     #ifdef LLVM35
@@ -178,7 +178,10 @@ void lookup_pointer(DIContext *context, const char **name, int *line, const char
 
     #ifndef LLVM35 // LLVM <= 3.4
     if (strcmp(info.getFunctionName(), "<invalid>") == 0) return;
-    *name = jl_demangle(info.getFunctionName());
+    if (demangle)
+	*name = jl_demangle(info.getFunctionName());
+    else
+	*name = strdup(info.getFunctionName());
     *line = info.getLine();
     *filename = strdup(info.getFileName());
     #else
@@ -379,7 +382,7 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
             slide = it->second.slide;
         }
 
-        lookup_pointer(context, name, line, filename, pointer+slide);
+        lookup_pointer(context, name, line, filename, pointer+slide, jl_is_sysimg(dlinfo.dli_fname));
     }
     return;
 }
@@ -401,7 +404,7 @@ void jl_getFunctionInfo(const char **name, int *line, const char **filename, siz
     if ((pointer - it->first) > it->second.size) return jl_getDylibFunctionInfo(name,line,filename,pointer,skipC);
 
     DIContext *context = DIContext::getDWARFContext(it->second.object);
-    lookup_pointer(context, name, line, filename, pointer);
+    lookup_pointer(context, name, line, filename, pointer, 1);
 
 #else // !USE_MCJIT
 
