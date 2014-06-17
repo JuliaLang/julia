@@ -103,7 +103,7 @@ end
 function diagind(m::Integer, n::Integer, k::Integer=0)
     if 0 < k < n
         return range(k*m+1, m+1, min(m, n-k))
-    elseif 0 <= -k <= m
+    elseif 0 <= -k < m
         return range(1-k, m+1, min(m+k,n))
     end
     throw(BoundsError())
