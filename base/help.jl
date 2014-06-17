@@ -1,7 +1,7 @@
 module Help
 
 export help, apropos, doc, @help, @doc
-
+import Base.WeakObjectIdDict
 # TODO:
 # - switch off when not running interactively (but what about tests?)
 # - make @doc work for methods
@@ -11,27 +11,20 @@ typealias HelpDict Dict{Symbol,Any}
 # keys
 # :desc : help text
 # :mod  : module which contains this object/concept/keyword (if applicable)
-function makeHelpDict() 
-    hd = HelpDict()
-    hd[:desc] = ""
-    hd[:mod] = nothing
-    return hd
-end
 
 # internal data
-NONOBJ_DICT = Dict{String, HelpDict}()   # To keep documentation for non-object entities, like keywords, ccall, &&, ||, ", ', etc.  
+NOOBJ_DICT = Dict{String, HelpDict}()   # To keep documentation for non-object entities, like keywords, ccall, &&, ||, ", ', etc.  
                                          # And also for macros as they cannot be used as dict-keys directly.
-APROPOS_DICT = ObjectIdDict()   # this is used in apropos search. Maps objects to their help text [:desc]
-APROPOS_DICT[NONOBJ_DICT] = Dict{String, String}() # to hold the apropos for stuff in NONOBJ_DICT
+APROPOS_DICT = ObjectIdDict()        # this is used in apropos search. Maps objects to their help text [:desc]
+APROPOS_DICT[NOOBJ_DICT] = Dict{String, String}() # to hold the apropos for stuff in NOOBJ_DICT
 INIT_OLD_HELP = true # flag
 
 # low level functions
 ##
 function hasdoc(obj)
-    metadata = getmeta(obj, nothing)
-    if metadata!=nothing && haskey(metadata, :doc)
+    if hasmeta(obj, :doc)
         true
-    elseif haskey(NONOBJ_DICT, obj)
+    elseif haskey(NOOBJ_DICT, obj)
         true
     else
         false
@@ -39,11 +32,11 @@ function hasdoc(obj)
 end
 
 function getdoc(obj, default)
-    metadata = getmeta(obj, nothing)
-    if metadata!=nothing && haskey(metadata, :doc)
-        metadata[:doc]
-    elseif haskey(NONOBJ_DICT, obj)
-        NONOBJ_DICT[obj]
+    doc = getmeta(obj, :doc, nothing)
+    if doc!=nothing
+        doc[:doc]
+    elseif haskey(NOOBJ_DICT, obj)
+        NOOBJ_DICT[obj]
     else
         default
     end
@@ -55,14 +48,13 @@ end
 
 function setdoc!(obj, doc::HelpDict; string_into_meta=false)
     # If string_into_meta==true then add the doc to the metadata of the
-    # string-object, otherwise is goes into the NONOBJ_DICT (default).
+    # string-object, otherwise is goes into the NOOBJ_DICT (default).
     if !isa(obj, String) || string_into_meta
-        metadata =  getmeta!(obj)
-        metadata[:doc] = doc
+        setmeta!(obj, :doc, doc)
         APROPOS_DICT[obj] = doc[:desc]
     else
-        NONOBJ_DICT[obj] = doc
-        APROPOS_DICT[NONOBJ_DICT][obj] = doc[:desc]
+        NOOBJ_DICT[obj] = doc
+        APROPOS_DICT[NOOBJ_DICT][obj] = doc[:desc]
     end
 end
 
@@ -90,9 +82,9 @@ function init_help()
         println("Loading help data...")
         helpdb = evalfile(helpdb_filename())
         for hd in helpdb
-            mod,obj,desc = hd
+            mod_,obj,desc = hd
             # split objects up between what goes into META and what
-            # goes into NONOBJ_DICT
+            # goes into NOOBJ_DICT
             if obj[1]=='@' # a macro
                 obj = obj # keep as string
             else # These try-catch blocks are slow but I don't know
@@ -101,24 +93,24 @@ function init_help()
                     try
                         obj = eval(parse(obj))
                     catch
-                        obj = eval(parse(mod * "." * obj))
+                        obj = eval(parse(mod_ * "." * obj))
                     end
                 catch
                     obj = obj # keep as string
                 end
             end
             try
-                mod = eval(parse(mod))
+                mod_ = eval(parse(mod_))
             catch
-                mod = mod # keep as string
+                mod_ = mod_ # keep as string
             end
             if !hasdoc(obj) # do not overwrite existing doc
                 hd = HelpDict() 
-                hd[:desc]= desc; hd[:mod]=mod; 
+                hd[:desc]= desc; hd[:mod]=mod_; 
                 setdoc!(obj, hd)
             else # append to it
                 hd = getdoc(obj)
-                hd[:desc] *= "\n$string(mod).$desc"
+                hd[:desc] *= "\n$(string(mod_)).$desc"
             end
         end
     end
@@ -128,7 +120,7 @@ end
 ##
 function doc(obj, docstr::String; mod=nothing, string_into_meta=false)
     # the module cannot be set automatically with this function, use the macro instead
-    hd = makeHelpDict()
+    hd = HelpDict()
     hd[:desc] = docstr
     hd[:mod] = mod
     setdoc!(obj, hd; string_into_meta=string_into_meta)
@@ -266,14 +258,15 @@ help(args...) = help(STDOUT, args...)
 
 apropos(s::String) = apropos(STDOUT, s)
 function apropos(io::IO, txt::String)
+    # This could be done better.
     init_help()
     n = 0
     r = Regex("\\Q$txt", Base.PCRE.CASELESS)
     for (obj, desc) in APROPOS_DICT
-        if isequal(obj,NONOBJ_DICT)
+        if isequal(obj,NOOBJ_DICT)
             for (objj, desc) in obj
                 if ismatch(r, string(obj)) || ismatch(r, desc)
-                    println(io, "Object: \"$obj\"")
+                    println(io, "Object: \"$objj\"")
                     n = 1
                 end
             end

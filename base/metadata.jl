@@ -1,6 +1,7 @@
 # This provides the possibility to associate metadata with (most)
 # objects within Julia.  Probably the main purpose is to allow user
-# documentation.
+# documentation.  The interface follows that of Dict as much as
+# possible.
 #
 # See https://github.com/JuliaLang/julia/issues/3988
 #
@@ -15,42 +16,37 @@ typealias MetaData Dict{Any,Any}
 
 #typealias MetaDict WeakKeyDict{Any, MetaData} # Problem: does not work for immutables
 #typealias MetaDict Dict{Any, MetaData} # Problem: if a mutable changes the hash changes
-typealias MetaDict ObjectIdDict
+#typealias MetaDict ObjectIdDict
+typealias MetaDict WeakObjectIdDict{Any, MetaData}
+
+const secret_default = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5903__
 
 _META = MetaDict() # this holds all the metadata
 
 getmeta(obj) = _META[obj]
-getmeta(obj, default) = get(_META, obj, default)
+getmeta(obj, key) = _META[obj][key]
+function getmeta(obj, key, default)
+    out = get(_META, obj, secret_default)
+    out==secret_default ? default : out
+end
 
-getmeta!(obj) = haskey(_META, obj) ? _META[obj] : (_META[obj] = MetaData())
-getmeta!(obj, md::MetaData) = haskey(_META, obj) ? _META[obj] : (_META[obj] = md)
+getmeta!(obj) = get!(_META, obj, MetaData())
+function getmeta!(obj, key, default) 
+    md = getmeta!(obj)
+    return get!(md, key, default)
+end
 
-setmeta!(obj, md::MetaData) = _META[obj] = md
+setmeta!(obj, md::MetaData) = ( _META[obj] = md )
+function setmeta!(obj, key, value) 
+    md = getmeta!(obj)
+    md[key] = value
+end
 
 hasmeta(obj) = haskey(_META, obj)
+hasmeta(obj, key) = hasmeta(obj) && haskey(getmeta(obj), key)
 
-# note: this only clears the central Base._META dict:
-empty_META!() = (global _META = MetaDict(); nothing)
+# note: this only clears the central Base._META dict, meta-storage in
+# used-defined types will not be affected:
+emptymeta!() = (global _META = MetaDict(); nothing)
 deletemeta!(obj) = (delete!(_META, obj); nothing)
-
-# #####
-# # some functions which may or may not be needed:
-
-# For some immutables metadata is automatically associated again, for
-# others like strings it is not:
-function copywithmeta(obj)
-    cop = copy(obj)
-    if hasmeta(obj)
-        setmeta!(cop, getmeta(obj))
-    end
-    return cop
-end
-# function deepcopywithmeta(obj)
-#     error("not implemented")
-# end
-
-# function sizeofwithmeta(obj)
-#     sizeof(obj) + sizeof(getmeta(obj))
-# end
-
-
+deletemeta!(obj, key) = (delete!(_META[obj], key); nothing)

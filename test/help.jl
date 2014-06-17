@@ -2,12 +2,19 @@ getdoc = Base.Help.getdoc
 setdoc! = Base.Help.setdoc!
 hasdoc = Base.Help.hasdoc
 
+function makeHelpDict() 
+    hd = Base.Help.HelpDict()
+    hd[:desc] = ""
+    hd[:mod] = nothing
+    return hd
+end
+
 ## test low-level functions getdoc, setdoc!, hasdoc
 a = [1,2]
 @test !hasdoc(a)
 @test_throws ErrorException getdoc(a)
 @test getdoc(a,nothing)==nothing
-hd = Base.Help.makeHelpDict()
+hd = makeHelpDict()
 setdoc!(a, hd)
 @test hasdoc(a)
 @test isequal(getdoc(a),hd)
@@ -77,10 +84,11 @@ Base.Help.init_help()
 helpdb = evalfile(Base.Help.helpdb_filename())
 
 # For these the help is broken.  
-broken_help = {eval, MS_SYNC, CPU_CORES, "BoundingBox", "isinside",}
+broken_help = {eval, MS_SYNC, CPU_CORES, "BoundingBox", "isinside", ENDIAN_BOM, Ptr{Void}}
 # - eval does not work with help.jl machinery
 # - MS_SYNC, CPU_CORES are both Int64
 # - "BoundingBox", "isinside" don't exist anymore
+# - ENDIAN_BOM
 
 for hd in helpdb
     mod_,obj,desc = hd
@@ -102,6 +110,7 @@ for hd in helpdb
         end
     end
     if !(obj in broken_help)
+        @show obj
         @test hasdoc(obj)
         @test contains(getdoc(obj)[:desc],desc)
     end

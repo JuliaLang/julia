@@ -2,12 +2,11 @@
 
 # SETUP
 ##
-Base.empty_META!()
+Base.emptymeta!()
 
 function fillmeta(objs)
     for (i,te) in enumerate(objs)
-        md = getmeta!(te)
-        md[i] = -i
+        setmeta!(te, i, -i)
     end
 end
 
@@ -19,21 +18,28 @@ module amod7586
 a = 5
 end
 # user-defined metadata storage:
-import Base: getmeta, getmeta!, hasmeta, setmeta!
+import Base: getmeta, getmeta!, hasmeta, setmeta!, deletemeta!
 type MyType6498
     val::Int
     _metadata::MetaData
     MyType6498(a) = new(a, MetaData())
 end
 hasmeta(obj::MyType6498) = !isempty(obj._metadata)
-getmeta(obj::MyType6498) = isempty(obj._metadata) ? throw(KeyError(obj)) : obj._metadata
-getmeta(obj::MyType6498, default) = hasmeta(obj) ? obj._metadata : default
-getmeta!(obj::MyType6498) = hasmeta(obj) ? obj._metadata : (obj._metadata = MetaData())
-getmeta!(obj::MyType6498, md::MetaData) = hasmeta(obj) ? obj._metadata : (obj._metadata = md)
+hasmeta(obj::MyType6498, key) = hasmeta(obj) && haskey(obj._metadata, key)
 
-setmeta!(obj::MyType6498, md::MetaData) = obj._metadata = md
+getmeta(obj::MyType6498) = hasmeta(obj) ?  obj._metadata : throw(KeyError(obj))
+getmeta(obj::MyType6498, key) = haskey(obj._metadata, key) ?  obj._metadata[key] : throw(KeyError(key))
+getmeta(obj::MyType6498, key, default) = haskey(obj._metadata, key) ? obj._metadata[key] : default
 
-Base.deletemeta!(obj::MyType6498) = (obj._metadata = MetaData(); nothing)
+getmeta!(obj::MyType6498) = obj._metadata
+getmeta!(obj::MyType6498, key, default) =  haskey(obj._metadata, key) ? obj._metadata[key] : (obj._metadata[key] = default)
+
+setmeta!(obj::MyType6498, md::MetaData) = obj._metadata = md 
+setmeta!(obj::MyType6498, key, value) = (obj._metadata[key]=value)
+
+deletemeta!(obj::MyType6498) = (obj._metadata = MetaData(); nothing)
+deletemeta!(obj::MyType6498, key) = (delete!(obj._metadata, key); nothing)
+
 
 # other objects
 fn12(x) = x+1
@@ -67,18 +73,20 @@ totest = {
 
 # TESTS
 ## empty:
+testkey = 5
 for te in totest
     @test_throws KeyError getmeta(te)
-    @test isequal(getmeta(te, nothing), nothing)
+    @test isequal(getmeta(te, testkey, nothing), nothing)
 end
+
 # test clearing
 fillmeta(totest)
-Base.empty_META!()
+Base.emptymeta!()
 for te in totest
     if !isa(te,MyType6498)
         @test_throws KeyError getmeta(te)
     else
-        # user-defined metadata is not cleared with Base.empty_META!()
+        # user-defined metadata is not cleared with Base.emptymeta!()
         getmeta(te) 
     end
 end
@@ -140,7 +148,7 @@ setmeta!(numb, md)
 @test isequal(getmeta(5),md)
 
 # These tests only pass for isa(META, ObjectIdDict):
-@test_throws KeyError isequal(getmeta("asdf"),md)
+@test_throws KeyError getmeta("asdf")
 di = {"a"=>5}
 setmeta!(di, md)
 di["b"] = 5
