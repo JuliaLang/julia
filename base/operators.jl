@@ -130,6 +130,11 @@ mod1{T<:Real}(x::T, y::T) = y-mod(y-x,y)
 rem1{T<:Real}(x::T, y::T) = rem(x-1,y)+1
 fld1{T<:Real}(x::T, y::T) = fld(x-1,y)+1
 
+# transpose
+transpose(x) = x
+ctranspose(x) = conj(transpose(x))
+conj(x) = x
+
 # transposed multiply
 Ac_mul_B (a,b) = ctranspose(a)*b
 A_mul_Bc (a,b) = a*ctranspose(b)

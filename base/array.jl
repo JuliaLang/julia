@@ -1235,7 +1235,7 @@ function transpose!(B::StridedMatrix,A::StridedMatrix)
         @inbounds begin
             for j = 1:n
                 for i = 1:m
-                    B[j,i] = A[i,j]
+                    B[j,i] = transpose(A[i,j])
                 end
             end
         end
@@ -1249,7 +1249,7 @@ function transposeblock!(B::StridedMatrix,A::StridedMatrix,m::Int,n::Int,offseti
         @inbounds begin
             for j = offsetj+(1:n)
                 for i = offseti+(1:m)
-                    B[j,i] = A[i,j]
+                    B[j,i] = transpose(A[i,j])
                 end
             end
         end
@@ -1272,7 +1272,7 @@ function ctranspose!(B::StridedMatrix,A::StridedMatrix)
         @inbounds begin
             for j = 1:n
                 for i = 1:m
-                    B[j,i] = conj(A[i,j])
+                    B[j,i] = ctranspose(A[i,j])
                 end
             end
         end
@@ -1286,7 +1286,7 @@ function ctransposeblock!(B::StridedMatrix,A::StridedMatrix,m::Int,n::Int,offset
         @inbounds begin
             for j = offsetj+(1:n)
                 for i = offseti+(1:m)
-                    B[j,i] = conj(A[i,j])
+                    B[j,i] = ctranspose(A[i,j])
                 end
             end
         end
@@ -1312,8 +1312,8 @@ function ctranspose(A::StridedMatrix)
 end
 ctranspose{T<:Real}(A::StridedVecOrMat{T}) = transpose(A)
 
-transpose(x::StridedVector) = [ x[j] for i=1, j=1:size(x,1) ]
-ctranspose{T}(x::StridedVector{T}) = T[ conj(x[j]) for i=1, j=1:size(x,1) ]
+transpose(x::StridedVector) = [ transpose(x[j]) for i=1, j=1:size(x,1) ]
+ctranspose{T}(x::StridedVector{T}) = T[ ctranspose(x[j]) for i=1, j=1:size(x,1) ]
 
 # set-like operators for vectors
 # These are moderately efficient, preserve order, and remove dupes.
