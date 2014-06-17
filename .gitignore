@@ -15,3 +15,4 @@
 *.o
 *.dylib
 *.dSYM
+*.nupkg
