@@ -2975,6 +2975,8 @@ function replace_tupleref!(ast, e::ANY, tupname, vals, sv, i0)
     end
 end
 
+# Return the type-inferred AST for the methods of a function that match the
+# given type signature.
 function code_typed(f::Callable, types::(Type...))
     asts = {}
     for x in _methods(f,types,-1)
@@ -2987,6 +2989,22 @@ function code_typed(f::Callable, types::(Type...))
         end
     end
     asts
+end
+
+# Return the type-inferred AST for each method of a generic Function.
+function Base.code_typed(f::Function)
+  Expr[code_typed(m) for m in f.env]
+end
+
+# Return the type-inferred AST for one Method (of a generic Function).
+function Base.code_typed(m::Method)
+ linfo = m.func.code
+ (tree,ty) = Base.typeinf(linfo,m.sig,())
+ if !isa(tree,Expr)
+     ccall(:jl_uncompress_ast, Any, (Any,Any), linfo, tree)
+ else
+    tree
+ end
 end
 
 function return_types(f::Callable, types)
