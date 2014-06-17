@@ -871,3 +871,9 @@ end
 
 # map with promotion (issue #6541)
 @test map(join, ["z", "я"]) == ["z", "я"]
+
+# Handle block matrices
+A = [randn(2,2) for i = 1:2, j = 1:2]
+@test issym(A.'A)
+A = [complex(randn(2,2), randn(2,2)) for i = 1:2, j = 1:2]
+@test ishermitian(A'A)
