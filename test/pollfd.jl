@@ -69,7 +69,7 @@ for (i, intvl) in enumerate(intvls)
         ready = 0
         # tickle only the odd ones, but test for writablity for everyone
         for idx in 1:n
-            evt = poll_fd(RawFD(pipe_fds[idx][2]), 0.001; readable=true, writable=true)
+            evt = wait(RawFD(pipe_fds[idx][2]); readable=true, writable=true)
             @test !evt.timedout
             @test !evt.readable
             @test evt.writable

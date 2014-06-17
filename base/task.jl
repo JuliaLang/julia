@@ -111,6 +111,7 @@ function produce(v)
         wait()
     end
 
+    istaskdone(t) && error("assertion failure: consumer unexpectedly gone for produce")
     t.state = :runnable
     if empty
         if isempty(Workqueue)
@@ -270,6 +271,9 @@ function wait(cs...)
 
     try
         result = wait()
+        if !isempty(Workqueue) && length(cs) > 1
+            yield() # run through the Workqueue once more, to ensure all our conditions got a chance to run
+        end
         for c in cs
             hasresult, res = waitresult(c)
             if hasresult
@@ -349,13 +353,15 @@ function wait()
             end
         else
             t = shift!(Workqueue)
-            arg = t.result
-            t.result = nothing
-            t.state = :runnable
-            result = yieldto(t, arg)
-            process_events(false)
-            # return when we come out of the queue
-            return result
+            if !istaskdone(t)
+                arg = t.result
+                t.result = nothing
+                t.state = :runnable
+                result = yieldto(t, arg)
+                process_events(false)
+                # return when we come out of the queue
+                return result
+            end
         end
     end
     assert(false)
