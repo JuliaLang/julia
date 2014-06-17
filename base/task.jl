@@ -246,16 +246,13 @@ function waitresult(t::Task)
     return (false, nothing)
 end
 
-waitcleanup(c,ct::Task) = nothing
-waitcleanup(c::Condition,ct::Task) = (filter!(x->x!==ct, c.waitq); nothing)
-waitcleanup(t::Task, ct::Task) = waitcleanup(t.donenotify, ct)
-
+immutable TaskKillException <: Exception end
 waitkill(c,ct::Task) = nothing
+waitkill(c::Condition,ct::Task) = (filter!(x->x!==ct, c.waitq); nothing)
 function waitkill(t::Task,ct::Task)
-    waitcleanup(t,ct)
     if !istaskdone(t)
         filter!(x->x!==t, Workqueue)
-        istaskstarted(t) && schedule(t, EOFError(), error=true)
+        istaskstarted(t) && schedule(t, TaskKillException(), error=true)
     end
     nothing
 end
@@ -264,10 +261,11 @@ function wait(cs...)
     ct = current_task()
     ct.state = :waiting
 
-    killq = Any[]
+    killq = Array(Any, 2*length(cs)); resize!(killq,0)
     for c in cs
         c = waitq(c, killq)::Condition
         push!(c.waitq, ct)
+        push!(killq, c)
     end
 
     try
@@ -286,9 +284,6 @@ function wait(cs...)
         rethrow(e)
     finally
         filter!(x->x!==ct, Workqueue) # in case we got more that one trigger
-        for c in cs
-            waitcleanup(c,ct)
-        end
         for c in killq
             waitkill(c,ct)
         end
