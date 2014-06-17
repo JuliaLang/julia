@@ -266,13 +266,12 @@ function wait(cs...)
     ct.state = :waiting
 
     killq = Array(Any, 2*length(cs)); resize!(killq,0)
-    for c in cs
-        c = waitq(c, killq)::Condition
-        push!(c.waitq, ct)
-        push!(killq, c)
-    end
-
     try
+        for c in cs
+            c = waitq(c, killq)::Condition
+            push!(c.waitq, ct)
+            push!(killq, c)
+        end
         for c in cs
             hasresult, res = waitresult(c)
             hasresult && return res
