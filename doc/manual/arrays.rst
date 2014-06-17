@@ -89,6 +89,56 @@ Function                              Description
 
 .. [#] *iid*, independently and identically distributed.
 
+Concatenation
+-------------
+
+Arrays can be constructed and also concatenated using the following
+functions::
+
+================ ======================================================
+Function         Description
+================ ======================================================
+``cat(k, A...)`` concatenate input n-d arrays along the dimension ``k``
+``vcat(A...)``   shorthand for ``cat(1, A...)``
+``hcat(A...)``   shorthand for ``cat(2, A...)``
+================ ======================================================
+
+Scalar values passed to these functions are treated as 1-element arrays.
+
+The concatenation functions are used so often that they have special syntax::
+
+=================== =========
+Expression          Calls
+=================== =========
+``[A B C ...]``     ``hcat``
+``[A, B, C, ...]``  ``vcat``
+``[A B; C D; ...]`` ``hvcat``
+=================== =========
+
+``hvcat`` concatenates in both dimension 1 (with semicolons) and dimension 2
+(with spaces).
+
+Typed array initializers
+------------------------
+
+An array with a specific element type can be constructed using the syntax
+``T[A, B, C, ...]``. This will construct a 1-d array with element type
+``T``, initialized to contain elements ``A``, ``B``, ``C``, etc.
+
+Special syntax is available for constructing arrays with element type
+``Any``::
+
+=================== =========
+Expression          Yields
+=================== =========
+``{A B C ...}``     A 1xN ``Any`` array
+``{A, B, C, ...}``  A 1-d ``Any`` array (vector)
+``{A B; C D; ...}`` A 2-d ``Any`` array
+=================== =========
+
+Note that this form does not do any concatenation; each argument becomes
+an element of the resulting array.
+
 Comprehensions
 --------------
 
@@ -246,31 +296,6 @@ Example:
      1  -1  -1
      2  -1  -1
      3   6   9
-
-Concatenation
--------------
-
-Arrays can be concatenated along any dimension using the following
-functions:
-
-================ ======================================================
-Function         Description
-================ ======================================================
-``cat(k, A...)`` concatenate input n-d arrays along the dimension ``k``
-``vcat(A...)``   shorthand for ``cat(1, A...)``
-``hcat(A...)``   shorthand for ``cat(2, A...)``
-``hvcat(A...)``
-================ ======================================================
-
-Concatenation operators may also be used for concatenating arrays:
-
-=================== =========
-Expression          Calls
-=================== =========
-``[A B C ...]``     ``hcat``
-``[A, B, C, ...]``  ``vcat``
-``[A B; C D; ...]`` ``hvcat``
-=================== =========
 
 Vectorized Operators and Functions
 ----------------------------------
