@@ -601,11 +601,15 @@ for (op, restype) in ( (:+, Nothing), (:-, Nothing), (:.*, Nothing),
     end # quote
 end # macro
 
-(+)(A::SparseMatrixCSC, B::Union(Array,Number)) = (+)(full(A), B)
-(+)(A::Union(Array,Number), B::SparseMatrixCSC) = (+)(A, full(B))
+(.+)(A::SparseMatrixCSC, B::Number) = full(A) .+ B
+( +)(A::SparseMatrixCSC, B::Array ) = full(A)  + B
+(.+)(A::Number, B::SparseMatrixCSC) = A .+ full(B)
+( +)(A::Array , B::SparseMatrixCSC) = A  + full(B)
 
-(-)(A::SparseMatrixCSC, B::Union(Array,Number)) = (-)(full(A), B)
-(-)(A::Union(Array,Number), B::SparseMatrixCSC) = (-)(A, full(B))
+(.-)(A::SparseMatrixCSC, B::Number) = full(A) .- B
+( -)(A::SparseMatrixCSC, B::Array ) = full(A)  - B
+(.-)(A::Number, B::SparseMatrixCSC) = A .- full(B)
+( -)(A::Array , B::SparseMatrixCSC) = A  - full(B)
 
 (.*)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval .* B)
 (.*)(A::Number, B::SparseMatrixCSC) = SparseMatrixCSC(B.m, B.n, copy(B.colptr), copy(B.rowval), A .* B.nzval)
