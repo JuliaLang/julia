@@ -184,5 +184,15 @@ end
 
 ## misc environment-related functionality ##
 
-tty_cols() = parseint(Int32, get(ENV,"COLUMNS","80"), 10)
-tty_rows() = parseint(Int32, get(ENV,"LINES","25"), 10)
+function tty_size()
+    if isdefined(Base, :active_repl)
+        os = REPL.outstream(Base.active_repl)
+        if isa(os, Terminals.TTYTerminal)
+            try
+                sz = size(os)
+                return (sz.height, sz.width)
+            end
+        end
+    end
+    return (25, 80)
+end
