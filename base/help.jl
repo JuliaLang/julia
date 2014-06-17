@@ -6,6 +6,7 @@ import Base.WeakObjectIdDict
 # - switch off when not running interactively (but what about tests?)
 # - make @doc work for methods
 # - make @doc work for modules
+# - make APROPOS_DICT = WeakObjectIdDict(), currently this make julia very unstable
 
 typealias HelpDict Dict{Symbol,Any}
 # keys
@@ -15,7 +16,7 @@ typealias HelpDict Dict{Symbol,Any}
 # internal data
 NOOBJ_DICT = Dict{String, HelpDict}()   # To keep documentation for non-object entities, like keywords, ccall, &&, ||, ", ', etc.  
                                          # And also for macros as they cannot be used as dict-keys directly.
-APROPOS_DICT = ObjectIdDict()        # this is used in apropos search. Maps objects to their help text [:desc]
+APROPOS_DICT = ObjectIdDict()        # this is used in apropos search. Maps objects to their help text [:desc]. 
 APROPOS_DICT[NOOBJ_DICT] = Dict{String, String}() # to hold the apropos for stuff in NOOBJ_DICT
 INIT_OLD_HELP = true # flag
 
@@ -105,12 +106,12 @@ function init_help()
                 mod_ = mod_ # keep as string
             end
             if !hasdoc(obj) # do not overwrite existing doc
-                hd = HelpDict() 
-                hd[:desc]= desc; hd[:mod]=mod_; 
-                setdoc!(obj, hd)
+                hdnew = HelpDict() 
+                hdnew[:desc]= desc; hdnew[:mod]=mod_; 
+                setdoc!(obj, hdnew)
             else # append to it
-                hd = getdoc(obj)
-                hd[:desc] *= "\n$(string(mod_)).$desc"
+                hdnew = getdoc(obj)
+                hdnew[:desc] *= "\n$(string(mod_)).$desc"
             end
         end
     end
