@@ -20,7 +20,7 @@ countnz(S::SparseMatrixCSC) = countnz(S.nzval)
 
 function Base.showarray(io::IO, S::SparseMatrixCSC;
                         header::Bool=true, limit::Bool=Base._limit_output,
-                        rows = Base.tty_rows(), repr=false)
+                        rows = Base.tty_size()[1], repr=false)
     # TODO: repr?
 
     if header

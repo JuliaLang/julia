@@ -827,8 +827,7 @@ function print_matrix_vdots(io::IO,
 end
 
 function print_matrix(io::IO, X::AbstractVecOrMat,
-                      rows::Integer = tty_rows()-4,
-                      cols::Integer = tty_cols(),
+                      sz::(Integer, Integer) = (s = tty_size(); (s[1]-4, s[2])),
                       pre::String = " ",
                       sep::String = "  ",
                       post::String = "",
@@ -836,6 +835,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                       vdots::String = "\u22ee",
                       ddots::String = "  \u22f1  ",
                       hmod::Integer = 5, vmod::Integer = 5)
+    rows, cols = sz
     cols -= length(pre) + length(post)
     presp = repeat(" ", length(pre))
     postsp = ""
@@ -1001,7 +1001,8 @@ end
 showarray(X::AbstractArray; kw...) = showarray(STDOUT, X; kw...)
 function showarray(io::IO, X::AbstractArray;
                    header::Bool=true, limit::Bool=_limit_output,
-                   rows = tty_rows()-4, cols = tty_cols(), repr=false)
+                   sz = (s = tty_size(); (s[1]-4, s[2])), repr=false)
+    rows, cols = sz
     header && print(io, summary(X))
     if !isempty(X)
         header && println(io, ":")
@@ -1024,10 +1025,10 @@ function showarray(io::IO, X::AbstractArray;
         else
             punct = (" ", "  ", "")
             if ndims(X)<=2
-                print_matrix(io, X, rows, cols, punct...)
+                print_matrix(io, X, sz, punct...)
             else
                 show_nd(io, X, limit,
-                        (io,slice)->print_matrix(io,slice,rows,cols,punct...),
+                        (io,slice)->print_matrix(io,slice,sz,punct...),
                         !repr)
             end
         end
