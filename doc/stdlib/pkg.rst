@@ -129,7 +129,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
 .. function:: publish()
 
-   For each new package version tagged in ``METADATA`` not already published, make sure that the tagged package commits have been pushed to the repo at the registered URL for the package and if they all have, push ``METADATA``.
+   For each new package version tagged in ``METADATA`` not already published, make sure that the tagged package commits have been pushed to the repo at the registered URL for the package and if they all have, open a pull request to ``METADATA``.
 
 .. function:: test()
 

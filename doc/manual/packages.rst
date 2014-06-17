@@ -382,10 +382,10 @@ This creates a commit in the ``~/.julia/v0.3/METADATA`` repo::
     @@ -0,0 +1 @@
     +git://github.com/StefanKarpinski/FooBar.jl.git
 
-This commit is only locally visible, however.
-In order to make it visible to the world, you need to merge your local ``METADATA`` upstream into the official repo.
-If you have push access to that repository (which we give to all package maintainers), then you can do so easily with the ``Pkg.publish()`` command, which publishes your local metadata changes.
-If you don't have push access to ``METADATA``, you'll have to make a pull request on GitHub, which is `not difficult <https://help.github.com/articles/creating-a-pull-request>`_.
+This commit is only locally visible, however.  In order to make it visible to
+the world, you need to merge your local ``METADATA`` upstream into the official
+repo.  The ``Pkg.publish()`` command will fork the ``METADATA`` repository on
+GitHub, push your changes to your fork, and open a pull request.
 
 Once the package URL for ``FooBar`` is registered in the official ``METADATA`` repo, people know where to clone the package from, but there still aren't any registered versions available.
 This means that ``Pkg.add("FooBar")`` won't work yet since it only installs official versions.
@@ -424,9 +424,10 @@ It also creates a new version entry in your local ``METADATA`` repo for ``FooBar
 The ``Pkg.tag`` command takes an optional second argument that is either an explicit version number object like ``v"0.0.1"`` or one of the symbols ``:patch``, ``:minor`` or ``:major``.
 These increment the patch, minor or major version number of your package intelligently.
 
-These changes to ``METADATA`` aren't available to anyone else until they've been included upstream.
-If you have push access to the official ``METADATA`` repo, you can use the ``Pkg.publish()`` command, which first makes sure that individual package repos have been tagged, pushes them if they haven't already been, and then pushes ``METADATA`` to the origin.
-If you don't have push access to ``METADATA``, you'll have to open a pull request for the last bit, although we're planning on automatically opening pull requests for you in the future.
+These changes to ``METADATA`` aren't available to anyone else until they've
+been included upstream.  You can use the ``Pkg.publish()`` command, which first
+makes sure that individual package repos have been tagged, pushes them if they
+haven't already been, and then opens a pull request to ``METADATA``.
 
 If there is a ``REQUIRE`` file in your package repo, it will be copied into the appropriate spot in ``METADATA`` when you tag a version.
 Package developers should make sure that the ``REQUIRE`` file in their package correctly reflects the requirements of their package, which will automatically flow into the official metadata if you're using ``Pkg.tag``.
