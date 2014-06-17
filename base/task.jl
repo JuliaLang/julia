@@ -67,7 +67,7 @@ function task_done_hook(t::Task)
     #isa(q,Condition) && notify(q, result, error=err)
     if isa(q,Task)
         nexttask = q
-        !istaskdone(nexttask) && nexttask.state = :runnable
+        !istaskdone(nexttask) && (nexttask.state = :runnable)
     elseif isa(q,Condition) && !isempty(q.waitq)
         notify(q, result, error=err)
     end
