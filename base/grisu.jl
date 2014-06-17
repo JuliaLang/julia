@@ -1,7 +1,7 @@
 module Grisu
 
 export print_shortest
-export DIGITS
+export DIGITS, grisu
 
 const SHORTEST = 1
 const FIXED = 2
