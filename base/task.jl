@@ -252,8 +252,11 @@ waitkill(c,ct::Task) = nothing
 waitkill(c::Condition,ct::Task) = (filter!(x->x!==ct, c.waitq); nothing)
 function waitkill(t::Task,ct::Task)
     if !istaskdone(t)
-        filter!(x->x!==t, Workqueue)
-        istaskstarted(t) && schedule(t, TaskKillException(), error=true)
+        if istaskstarted(t)
+            schedule(t, TaskKillException(), error=true)
+        else
+            filter!(x->x!==t, Workqueue)
+        end
     end
     nothing
 end
@@ -271,9 +274,6 @@ function wait(cs...)
 
     try
         result = wait()
-        if !isempty(Workqueue) && length(cs) > 1
-            yield() # run through the Workqueue once more, to ensure all our conditions got a chance to run
-        end
         for c in cs
             hasresult, res = waitresult(c)
             if hasresult
@@ -287,7 +287,6 @@ function wait(cs...)
         end
         rethrow(e)
     finally
-        filter!(x->x!==ct, Workqueue) # in case we got more that one trigger
         for c in killq
             waitkill(c,ct)
         end
@@ -301,6 +300,8 @@ global const Workqueue = Any[]
 
 function enq_work(t::Task)
     ccall(:uv_stop,Void,(Ptr{Void},),eventloop())
+    ct = current_task()
+    filter!(x->x!==ct, Workqueue)
     push!(Workqueue, t)
     t.state = :queued
     t

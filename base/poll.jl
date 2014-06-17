@@ -274,18 +274,18 @@ end
 _uv_hook_close(uv::FileMonitor) = (uv.handle = 0; nothing)
 _uv_hook_close(uv::UVPollingWatcher) = (uv.handle = 0; nothing)
 function poll_fd(s, seconds::Real; readable=false, writable=false)
-   t1 = () -> wait(s; readable=readable, writable=writable)
-   t2 = () -> (sleep(seconds); fdtimeout())
-   wait(t2, t1)
+   result = wait(() -> wait(s; readable=readable, writable=writable), seconds)
+   if !isa(result, FDEvent)
+       return fdtimeout()
+   end
+   return result::FDEvent
 end
 
 function poll_file(s, interval_seconds::Real, seconds::Real)
     pfw = PollingFileWatcher(s)
-    t1 = () -> (wait(pfw;interval=interval_seconds); return :poll)
-    t2 = () -> (sleep(seconds); return :timeout)
-    result = wait(t2, t1)
-    result == :timeout && stop_watching(pfw)
-    return result == :poll
+    result = wait(() -> (wait(pfw;interval=interval_seconds); return :poll), seconds)
+    result !== :poll && stop_watching(pfw)
+    return result === :poll
 end
 
 watch_file(s; poll=false) = watch_file(false, s, poll=poll)
