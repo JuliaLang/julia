@@ -30,8 +30,8 @@ extern "C" volatile int jl_in_stackwalk;
 #endif
 
 struct revcomp {
-  bool operator() (const size_t& lhs, const size_t& rhs) const
-  {return lhs>rhs;}
+    bool operator() (const size_t& lhs, const size_t& rhs) const
+    { return lhs>rhs; }
 };
 
 class JuliaJITEventListener: public JITEventListener
@@ -143,7 +143,8 @@ public:
 };
 
 extern "C"
-const char *jl_demangle(const char *name) {
+const char *jl_demangle(const char *name)
+{
     const char *start = name;
     const char *end = start;
     char *ret;
@@ -155,8 +156,8 @@ const char *jl_demangle(const char *name) {
     memcpy(ret,start,end-start-1);
     ret[end-start-1] = '\0';
     return ret;
-    done:
-        return strdup(name);
+ done:
+    return strdup(name);
 }
 
 JuliaJITEventListener *jl_jit_events;
@@ -168,11 +169,11 @@ void lookup_pointer(DIContext *context, const char **name, int *line, const char
     if (context == NULL) return;
     #ifdef LLVM35
     DILineInfoSpecifier infoSpec(DILineInfoSpecifier::FileLineInfoKind::AbsoluteFilePath,
-                             DILineInfoSpecifier::FunctionNameKind::ShortName);
+                                 DILineInfoSpecifier::FunctionNameKind::ShortName);
     #else
     int infoSpec = DILineInfoSpecifier::FileLineInfo |
-                    DILineInfoSpecifier::AbsoluteFilePath |
-                    DILineInfoSpecifier::FunctionName;
+                   DILineInfoSpecifier::AbsoluteFilePath |
+                   DILineInfoSpecifier::FunctionName;
     #endif
     DILineInfo info = context->getLineInfoForAddress(pointer, infoSpec);
 
@@ -193,7 +194,7 @@ void lookup_pointer(DIContext *context, const char **name, int *line, const char
 }
 
 #ifdef _OS_DARWIN_
-    #include <mach-o/dyld.h>
+#include <mach-o/dyld.h>
 #endif
 #ifndef _OS_WINDOWS_
 #include <dlfcn.h>
@@ -216,21 +217,20 @@ bool getObjUUID(llvm::object::MachOObjectFile *obj, uint8_t uuid[16])
 #endif
     llvm::object::MachOObjectFile::LoadCommandInfo Load = obj->getFirstLoadCommandInfo();
     for (unsigned I = 0; ; ++I) {
+        if (
 #ifdef LLVM35
-        if (Load.C.cmd == LC_UUID)
+            Load.C.cmd == LC_UUID
 #else
-        if (Load.C.Type == LC_UUID)
+            Load.C.Type == LC_UUID
 #endif
-        {
+            ) {
             memcpy(uuid,((MachO::uuid_command*)Load.Ptr)->uuid,16);
             return true;
         }
-        else if (I == LoadCommandCount - 1)
-        {
+        else if (I == LoadCommandCount - 1) {
             return false;
         }
-        else
-        {
+        else {
             Load = obj->getNextLoadCommandInfo(Load);
         }
     }
@@ -255,7 +255,7 @@ bool jl_is_sysimg(const char *path)
 #if defined(_OS_WINDOWS_) && !defined(USE_MCJIT)
 void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename, size_t pointer, int skipC)
 {
-return;
+    return;
 }
 #else
 void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename, size_t pointer, int skipC)
@@ -338,15 +338,14 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
 #endif
 #endif
 #ifdef LLVM35
-            if(errorobj) {
+            if (errorobj) {
                 obj = errorobj.get();
 #else
-            if(errorobj != NULL) {
+            if (errorobj != NULL) {
                 obj = errorobj;
 #endif
 #ifdef _OS_DARWIN_
-                if (getObjUUID(morigobj,uuid2) && memcmp(uuid,uuid2,sizeof(uuid)) == 0)
-                {
+                if (getObjUUID(morigobj,uuid2) && memcmp(uuid,uuid2,sizeof(uuid)) == 0) {
 #endif
                     context = DIContext::getDWARFContext(obj);
                     slide = -(uint64_t)fbase;
@@ -358,27 +357,27 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
                 llvm::object::COFFObjectFile *coffobj = (llvm::object::COFFObjectFile *)obj;
                 const llvm::object::pe32plus_header *pe32plus;
                 coffobj->getPE32PlusHeader(pe32plus);
-                if (pe32plus != NULL)
-                {
+                if (pe32plus != NULL) {
                     slide = pe32plus->ImageBase-fbase;
-                } 
-                else
-                {
+                }
+                else {
                     const llvm::object::pe32_header *pe32;
                     coffobj->getPE32Header(pe32); 
                     if (pe32 == NULL) {
                         obj = NULL;
                         context = NULL;
                     }
-                    else
+                    else {
                         slide = pe32->ImageBase-fbase;
+                    }
                 }
 #endif
 
             }
             objfileentry_t entry = {obj,context,slide};
             objfilemap[fbase] = entry;
-        } else {
+        }
+        else {
             obj = it->second.obj;
             context = it->second.ctx;
             slide = it->second.slide;
@@ -402,8 +401,10 @@ void jl_getFunctionInfo(const char **name, int *line, const char **filename, siz
     std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(pointer);
     llvm::object::ObjectFile *Obj = it->second.object;
 
-    if (it == objmap.end()) return jl_getDylibFunctionInfo(name,line,filename,pointer,skipC);
-    if ((pointer - it->first) > it->second.size) return jl_getDylibFunctionInfo(name,line,filename,pointer,skipC);
+    if (it == objmap.end())
+        return jl_getDylibFunctionInfo(name,line,filename,pointer,skipC);
+    if ((pointer - it->first) > it->second.size)
+        return jl_getDylibFunctionInfo(name,line,filename,pointer,skipC);
 
     DIContext *context = DIContext::getDWARFContext(it->second.object);
     lookup_pointer(context, name, line, filename, pointer, 1);
@@ -424,7 +425,8 @@ void jl_getFunctionInfo(const char **name, int *line, const char **filename, siz
         //*name = (((*(*it).second.func).getName()).data());
 #endif
 #endif
-        std::vector<JITEvent_EmittedFunctionDetails::LineStart>::iterator vit = (*it).second.lines.begin();
+        std::vector<JITEvent_EmittedFunctionDetails::LineStart>::iterator vit =
+            (*it).second.lines.begin();
         JITEvent_EmittedFunctionDetails::LineStart prev = *vit;
 
         if ((*it).second.func) {
@@ -434,7 +436,8 @@ void jl_getFunctionInfo(const char **name, int *line, const char **filename, siz
             // the DISubprogram has the un-mangled name, so use that if
             // available.
             *name = debugscope.getName().data();
-        } else {
+        }
+        else {
             *name = (*it).second.name.c_str();
             *filename = (*it).second.filename.c_str();
         }
@@ -452,12 +455,12 @@ void jl_getFunctionInfo(const char **name, int *line, const char **filename, siz
         if (*line == -1) {
             *line = prev.Loc.getLine();
         }
-    } else {
+    }
+    else {
         jl_getDylibFunctionInfo(name,line,filename,pointer,skipC);
     }
 #endif // USE_MCJIT
 }
-
 
 
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
