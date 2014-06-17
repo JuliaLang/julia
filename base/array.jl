@@ -767,16 +767,15 @@ for f in (:.+, :.-, :.*, :./, :.\, :.%, :div, :mod, :rem, :&, :|, :$)
     end
 end
 
-# convenient and familiar aliases for broadcasting operations
-# of array ± scalar:
-(+)(A::StridedArray{Bool},x::Bool) = A .+ x
-(+)(x::Bool,A::StridedArray{Bool}) = x .+ A 
-(-)(A::StridedArray{Bool},x::Bool) = A .- x
-(-)(x::Bool,A::StridedArray{Bool}) = x .- A
-(+)(A::StridedArray,x::Number) = A .+ x
-(+)(x::Number,A::StridedArray) = x .+ A
-(-)(A::StridedArray,x::Number) = A .- x
-(-)(x::Number,A::StridedArray) = x .- A
+# familiar aliases for broadcasting operations of array ± scalar (#7226):
+(+)(A::AbstractArray{Bool},x::Bool) = A .+ x
+(+)(x::Bool,A::AbstractArray{Bool}) = x .+ A 
+(-)(A::AbstractArray{Bool},x::Bool) = A .- x
+(-)(x::Bool,A::AbstractArray{Bool}) = x .- A
+(+)(A::AbstractArray,x::Number) = A .+ x
+(+)(x::Number,A::AbstractArray) = x .+ A
+(-)(A::AbstractArray,x::Number) = A .- x
+(-)(x::Number,A::AbstractArray) = x .- A
 
 # functions that should give an Int result for Bool arrays
 for f in (:.+, :.-)
