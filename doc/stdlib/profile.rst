@@ -32,9 +32,9 @@ this design has important strengths:
 
 - You do not have to make any modifications to your code to take
   timing measurements (in contrast to the alternative `instrumenting
-  profiler <https://github.com/timholy/Profile.jl>`_)
+  profiler <https://github.com/timholy/Profile.jl>`_).
 - It can profile into Julia's core code and even (optionally) into C
-  and Fortran libraries
+  and Fortran libraries.
 - By running "infrequently" there is very little performance overhead;
   while profiling, your code will run at nearly native speed.
 
