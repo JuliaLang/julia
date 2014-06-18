@@ -190,7 +190,8 @@ function precompile(f, args::Tuple)
     end
 end
 
-esc(e::ANY) = Expr(:escape, e)
+# Neuter esc but for convenience don't remove it yet - it's deprecated
+esc(e::ANY) = e
 
 macro boundscheck(yesno,blk)
     # hack: use this syntax since it avoids introducing line numbers

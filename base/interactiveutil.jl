@@ -203,53 +203,62 @@ end
 
 typesof(args...) = map(a->(isa(a,Type) ? Type{a} : typeof(a)), args)
 
-function gen_call_with_extracted_types(fcn, ex0)
+@hygienic function gen_call_with_extracted_types(fcn, ex0)
+    # Make calls to fcn hygienic
+    hfcn = Expr(:hygienic, fcn)
     if isa(ex0, Expr) &&
         any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args)
         # keyword args not used in dispatch, so just remove them
         args = filter(a->!(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args)
-        return Expr(:call, fcn, esc(args[1]),
-                    Expr(:call, :typesof, map(esc, args[2:end])...))
+        return quote ($hfcn)($(args[1]), typesof($(args[2:end]...))) end
     end
     if isa(ex0, Expr) && ex0.head == :call
-        return Expr(:call, fcn, esc(ex0.args[1]),
-                    Expr(:call, :typesof, map(esc, ex0.args[2:end])...))
+        return quote ($hfcn)($(ex0.args[1]), typesof($(ex0.args[2:end]...))) end
+    end
+    # "@which a[i]=x" works but "@which(a[i]=x)" is misparsed as a keyword arg
+    if isa(ex0, Expr) && ex0.head == :kw && length(ex0.args) == 2
+      ex0 = Expr(:(=), ex0.args...)
     end
     ex = expand(ex0)
-    exret = Expr(:call, :error, "expression is not a function call")
+    exret = quote error("expression is not a function call") end
     if !isa(ex, Expr)
         # do nothing -> error
     elseif ex.head == :call
         if any(e->(isa(e, Expr) && e.head==:(...)), ex0.args) &&
             isa(ex.args[1], TopNode) && ex.args[1].name == :apply
-            exret = Expr(:call, ex.args[1], fcn,
-                         Expr(:tuple, esc(ex.args[2])),
-                         Expr(:call, :typesof, map(esc, ex.args[3:end])...))
+            exret = quote ($(ex.args[1]))($hfcn,
+                                          $(Expr(:tuple, ex.args[2])),
+                                          typesof($(ex.args[3:end]...)))
+                    end
         else
-            exret = Expr(:call, fcn, esc(ex.args[1]),
-                         Expr(:call, :typesof, map(esc, ex.args[2:end])...))
+            exret = quote ($hfcn)($(ex.args[1]), typesof($(ex.args[2:end]...)))
+                    end
         end
     elseif ex.head == :body
         a1 = ex.args[1]
         if isa(a1, Expr) && a1.head == :call
             a11 = a1.args[1]
             if a11 == :setindex!
-                exret = Expr(:call, fcn, a11,
-                             Expr(:call, :typesof, map(esc, a1.args[2:end])...))
+                exret = quote ($hfcn)($a11, typesof($(a1.args[2:end]...))) end
             end
         end
     elseif ex.head == :thunk
-        exret = Expr(:call, :error, "expression is not a function call, "
-                                  * "or is too complex for @which to analyze; "
-                                  * "break it down to simpler parts if possible")
+        msg = "expression is not a function call, " *
+              "or is too complex for @$fcn to analyze; " *
+              "break it down to simpler parts if possible"
+	exret = quote error($msg) end
     end
     exret
 end
 
 for fname in [:which, :less, :edit, :code_typed, :code_lowered, :code_llvm, :code_native]
+    # Pass the symbol :which etc, not the value of the variable which, to gen...
+    # Unfortunately there isn't any way to do this with quote because putting
+    # quote $fname end inside the macro evaluates fname at the wrong time
+    qfname = Expr(:quote, fname)
     @eval begin
         macro ($fname)(ex0)
-            gen_call_with_extracted_types($(Expr(:quote,fname)), ex0)
+            gen_call_with_extracted_types($qfname, ex0)
         end
     end
 end

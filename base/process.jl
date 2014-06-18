@@ -291,50 +291,54 @@ function spawn(pc::ProcessChainOrNot,cmds::ErrOrCmds,stdios::StdIOSet,exitcb::Ca
 end
 
 
+# Generates non-hygienic bindings of in, out, err
+# and close_in, close_out, close_err
 macro setup_stdio()
     esc(
     quote
-        close_in,close_out,close_err = false,false,false
-        in,out,err = stdios
+        $:close_in, $:close_out, $:close_err = false, false, false
+        $:in, $:out, $:err = stdios
         if isa(stdios[1],Pipe) 
             if stdios[1].handle==C_NULL
                 error("pipes passed to spawn must be initialized")
             end
         elseif isa(stdios[1],FileRedirect)
-            in = FS.open(stdios[1].filename,JL_O_RDONLY)
-            close_in = true
+            $:in = FS.open(stdios[1].filename,JL_O_RDONLY)
+            $:close_in = true
         elseif isa(stdios[1],IOStream)
-            in = FS.File(RawFD(fd(stdios[1])))
+            $:in = FS.File(RawFD(fd(stdios[1])))
         end
         if isa(stdios[2],Pipe)
             if stdios[2].handle==C_NULL
                 error("pipes passed to spawn must be initialized")
             end
         elseif isa(stdios[2],FileRedirect)
-            out = FS.open(stdios[2].filename,JL_O_WRONLY|JL_O_CREAT|(stdios[2].append?JL_O_APPEND:JL_O_TRUNC),S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
-            close_out = true
+            $:out = FS.open(stdios[2].filename,JL_O_WRONLY|JL_O_CREAT|(stdios[2].append?JL_O_APPEND:JL_O_TRUNC),S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
+            $:close_out = true
         elseif isa(stdios[2],IOStream)
-            out = FS.File(RawFD(fd(stdios[2])))
+            $:out = FS.File(RawFD(fd(stdios[2])))
         end
         if isa(stdios[3],Pipe)
             if stdios[3].handle==C_NULL
                 error("pipes passed to spawn must be initialized")
             end
         elseif isa(stdios[3],FileRedirect)
-            err = FS.open(stdios[3].filename,JL_O_WRONLY|JL_O_CREAT|(stdios[3].append?JL_O_APPEND:JL_O_TRUNC),S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
-            close_err = true
+            $:err = FS.open(stdios[3].filename,JL_O_WRONLY|JL_O_CREAT|(stdios[3].append?JL_O_APPEND:JL_O_TRUNC),S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
+            $:close_err = true
         elseif isa(stdios[3],IOStream)
-            err = FS.File(RawFD(fd(stdios[3])))
+            $:err = FS.File(RawFD(fd(stdios[3])))
         end
     end)
 end
 
+# Depends on non-hygienic bindings of in, out, err
+# and close_in, close_out, close_err
 macro cleanup_stdio()
     esc(
     quote
-        close_in && close(in)
-        close_out && close(out)
-        close_err && close(err)
+        $:close_in && close($:in)
+        $:close_out && close($:out)
+        $:close_err && close($:err)
     end)
 end
 

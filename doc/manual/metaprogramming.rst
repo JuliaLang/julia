@@ -143,8 +143,8 @@ a character or string as its argument:
     julia> symbol("'")
     :'
 
-``eval`` and Interpolation
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+``eval``
+~~~~~~~~
 
 Given an expression object, one can cause Julia to evaluate (execute) it
 at the *top level* scope — i.e. in effect like loading from a file or
@@ -223,6 +223,11 @@ the important distinction between the way ``a`` and ``b`` are used:
    the symbol ``:b`` is resolved by looking up the value of the variable
    ``b``.
 
+.. _man-quote:
+
+``quote`` and Interpolation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 Constructing ``Expr`` objects like this is powerful, but somewhat
 tedious and ugly. Since the Julia parser is already excellent at
 producing expression objects, Julia allows "splicing" or interpolation
@@ -244,6 +249,45 @@ interpolation is intentionally reminiscent of
 :ref:`command interpolation <man-command-interpolation>`.
 Expression interpolation allows convenient, readable programmatic construction
 of complex Julia expressions.
+
+Expression interpolation can also be used with the long form of
+``quote`` instead of ``:``.  For example:
+
+.. doctest::
+
+    julia> ex = quote $a + b end
+    :(begin  # none, line 1:
+	    1 + b
+	end)
+
+Expression interpolation supports "splatting" to interpolate a
+sequence of expression objects into a quote expression.  For example:
+
+.. doctest::
+
+    julia> args = {:arg1, :arg2, :arg3}
+    3-element Array{Any,1}:
+     :arg1
+     :arg2
+     :arg3
+
+    julia> quote fcn($(args...)) end
+    :(begin  # none, line 1:
+	    fcn(arg1,arg2,arg3)
+	end)
+
+Note that the parentheses after the dollar sign are mandatory.  Without them:
+
+.. doctest::
+
+    julia> quote fcn($args...) end
+    :(begin  # none, line 1:
+	    fcn({:arg1,:arg2,:arg3}...)
+	end)
+
+which is splatting at run time, not splatting while constructing the
+quoted expression.
+
 
 Code Generation
 ~~~~~~~~~~~~~~~
@@ -480,17 +524,21 @@ its own ``time`` variable. We might get errors, or mysteriously incorrect
 behavior.
 
 Julia's macro expander solves these problems in the following way. First,
-variables within a macro result are classified as either local or global.
+variables within a macro result can either be *hygienic* or *transparent*.
+Variables that appear directly in a ``quote`` expression in the macro
+definition are hygienic.  Variables interpolated from arguments to the
+macro are transparent.  (More details about this distinction are discussed
+below.)  Next, hygienic variables are classified as either local or global.
 A variable is considered local if it is assigned to (and not declared
 global), declared local, or used as a function argument name. Otherwise,
-it is considered global. Local variables are then renamed to be unique
-(using the ``gensym`` function, which generates new symbols), and global
+it is considered global. Local hygienic variables are then renamed to be unique
+(using the ``gensym`` function, which generates new symbols), and global hygienic
 variables are resolved within the macro definition environment. Therefore
-both of the above concerns are handled; the macro's locals will not conflict
-with any user variables, and ``time`` and ``println`` will refer to the
-standard library definitions.
+both of the above concerns are handled; the macro's locals are hygienic
+and will not conflict with any user variables (which are transparent),
+and ``time`` and ``println`` will refer to the standard library definitions.
 
-One problem remains however. Consider the following use of this macro::
+Consider the following use of this macro::
 
     module MyModule
     import Base.@time
@@ -502,26 +550,56 @@ One problem remains however. Consider the following use of this macro::
 
 Here the user expression ``ex`` is a call to ``time``, but not the same
 ``time`` function that the macro uses. It clearly refers to ``MyModule.time``.
-Therefore we must arrange for the code in ``ex`` to be resolved in the
-macro call environment. This is done by "escaping" the expression with
-the ``esc`` function::
+Therefore we must arrange for the code in ``@time``\ 's argument ``ex``
+to be resolved in the macro call environment.  This is accomplished
+automatically because all variables in ``ex`` are transparent when
+interpolated into the macro's result.
 
-    macro time(ex)
-        ...
-        local val = $(esc(ex))
-        ...
-    end
+Julia's automatic hygiene works by interpreting transparent variables
+in the macro *call* environment, but interpreting hygienic variables in
+the macro *definition* environment.
 
-An expression wrapped in this manner is left alone by the macro expander
-and simply pasted into the output verbatim. Therefore it will be
-resolved in the macro call environment.
+Note that if a macro constructs its result using explicit calls to ``Expr``
+instead of using ``quote`` or its abbreviation ``:`` the macro will not
+get automatic hygiene.
 
-This escaping mechanism can be used to "violate" hygiene when necessary,
-in order to introduce or manipulate user variables. For example, the
-following macro sets ``x`` to zero in the call environment::
+Hygienic or not?
+~~~~~~~~~~~~~~~~
+
+As a special exception, even inside a macro definition ``:``\ *symbol*
+produces a quoted symbol object, rather than a hygienic variable named
+by *symbol*.  ``:(``\ *symbol*\ ``)`` behaves the same.  A symbol
+object is the same as a transparent variable.  In contrast,
+``quote`` *symbol* ``end`` will produce a ``begin`` block containing a
+quoted hygienic variable.  Except for this exception, ``:`` and
+``quote`` have identical hygienic behavior.
+
+By default, ``quote`` and ``:`` produce hygienic variables when used
+inside a macro definition, but produce transparent variables when used
+elsewhere.  This is primarily because ``eval`` does not recognize
+hygienic variables.
+
+It is possible to override the default behavior that ``quote`` and
+``:`` are non-hygienic outside of a macro definition.  The
+``@hygienic`` macro takes one expression and causes any
+quotations inside that expression to behave hygienically, as if they
+were in a macro definition.  This is useful for complex macros that
+call helper functions to construct parts of the macro result.  The
+helper functions can put ``@hygienic`` in front of their ``quote``
+expressions, or even around the whole function definition.
+
+Anaphora
+~~~~~~~~
+
+*Anaphoric* macros "violate" hygiene, in order to introduce or
+manipulate user variables.  Part of the macro's documentation should
+be the names of variables that it visibly defines or references.
+
+For example, the following macro sets ``x`` to zero in the call
+environment::
 
     macro zerox()
-      return esc(:(x = 0))
+      return :($:x = 0)
     end
 
     function foo()
@@ -530,7 +608,13 @@ following macro sets ``x`` to zero in the call environment::
       x  # is zero
     end
 
-This kind of manipulation of variables should be used judiciously, but
+The ``$:`` in front of ``x`` causes the symbol ``x`` to be inserted
+into the quotation as a transparent variable.  If the ``zerox`` macro
+had been written as ``return :(x = 0)`` the macro expansion would have
+zeroed the global variable ``x`` in the module where the macro was
+defined.
+
+This anaphoric manipulation of variables should be used judiciously, but
 is occasionally quite handy.
 
 .. _man-non-standard-string-literals2:

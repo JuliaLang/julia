@@ -706,12 +706,13 @@ end
 #end
 
 macro uv_write(n,call)
+    # binding of uvw is supposed to be non-hygienic, visible to caller
     esc(quote
         check_open(s)
-        uvw = c_malloc(_sizeof_uv_write+$(n))
+        $:uvw = c_malloc(_sizeof_uv_write+$(n))
         err = $call
         if err < 0
-            c_free(uvw)
+            c_free($:uvw)
             uv_error("write", err)
         end
     end)

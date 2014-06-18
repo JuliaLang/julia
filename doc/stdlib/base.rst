@@ -437,8 +437,7 @@ Syntax
 
 .. function:: esc(e::ANY)
 
-   Only valid in the context of an Expr returned from a macro. Prevents the macro hygine pass from turning embedded variables into gensym variables. See the :ref:`man-macros`
-   section of the Metaprogramming chapter of the manual for more details and examples.
+   Deprecated.  Does nothing and returns its argument.
 
 .. function:: gensym([tag])
 
@@ -447,6 +446,13 @@ Syntax
 .. function:: @gensym
 
    Generates a gensym symbol for a variable. For example, `@gensym x y` is transformed into `x = gensym("x"); y = gensym("y")`.
+
+.. function:: @hygienic
+
+   Causes any ``quote`` expressions inside the following expression to
+   be treated as hygienic.  Use this in functions that are used as helpers
+   to macros.  See the :ref:`man-macros` section of the Metaprogramming
+   chapter of the manual for more details and examples.
 
 .. function:: parse(str, start; greedy=true, raise=true)
 

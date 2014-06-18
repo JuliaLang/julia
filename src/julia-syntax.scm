@@ -68,6 +68,10 @@
 (define (bad-formal-argument v)
   (error (string #\" (deparse v) #\" " is not a valid function argument name")))
 
+(define (hygienic-symbol? s)
+  (or (symbol? s)
+      (and (pair? s) (eq (car s) 'hygienic))))
+
 (define (arg-name v)
   (cond ((and (symbol? v) (not (eq? v 'true)) (not (eq? v 'false)))
 	 v)
@@ -77,9 +81,10 @@
 	 (case (car v)
 	   ((... kw)      (decl-var (cadr v)))
 	   ((|::|)
-	    (if (not (symbol? (cadr v)))
+	    (if (not (hygienic-symbol? (cadr v)))
 		(bad-formal-argument (cadr v)))
 	    (decl-var v))
+	   ((hygienic) v)
 	   (else (bad-formal-argument v))))))
 
 ; convert a lambda list into a list of just symbols
@@ -396,11 +401,11 @@
 	(map (lambda (x ub) `(call (top TypeVar) ',x ,ub ,@bnd)) sl upperbounds))))
 
 (define (sparam-name sp)
-  (cond ((symbol? sp)
+  (cond ((hygienic-symbol? sp)
 	 sp)
 	((and (length= sp 3)
 	      (eq? (car sp) '|<:|)
-	      (symbol? (cadr sp)))
+	      (hygienic-symbol? (cadr sp)))
 	 (cadr sp))
 	(else (error "malformed type parameter list"))))
 
@@ -1254,7 +1259,8 @@
 		     (if (null? binds)
 			 (cons 'varlist vars)
 			 (cond
-			  ((or (symbol? (car binds)) (decl? (car binds)))
+			  ((or (hygienic-symbol? (car binds))
+			       (decl? (car binds)))
 			   ;; just symbol -> add local
 			   (loop (cdr binds)
 				 (cons (decl-var (car binds)) vars)))
@@ -1262,7 +1268,7 @@
 				(eq? (caar binds) '=))
 			   ;; some kind of assignment
 			   (cond
-			    ((or (symbol? (cadar binds))
+			    ((or (hygienic-symbol? (cadar binds))
 				 (decl?   (cadar binds)))
 			     ;; a=b -> add argument
 			     (loop (cdr binds)
@@ -3067,30 +3073,50 @@ So far only the second case can actually occur.
        (length= (cadr e) 2)   (eq? (caadr e) 'tuple)
        (vararg? (cadadr e))))
 
-(define (expand-backquote e)
+#;(define *trace-expand-backquote* #f)
+
+;; To turn on tracing, evaluate quote trace_expand_backquote($x) end
+#;(define (expand-backquote e hygienic)
+  (if (eq? e 'trace_expand_backquote)
+      (set! *trace-expand-backquote* #t))
+  (cond (*trace-expand-backquote*
+	 (print `(enter expand-backquote ,e ,hygienic)) (newline)
+	 (let ((ans (expand-backquote-TRACED e hygienic)))
+	   (print `(leave expand-backquote ,ans)) (newline)
+	   ans))
+	(else (expand-backquote-TRACED e hygienic))))
+
+(define (expand-backquote e hygienic)
   (cond ((or (eq? e 'true) (eq? e 'false))  e)
-	((symbol? e)          `(quote ,e))
+	((symbol? e)
+	 (if hygienic
+	     `(call (top Expr) (quote hygienic) (quote ,e))
+	     `(quote ,e)))
 	((not (pair? e))      e)
 	((eq? (car e) '$)     (cadr e))
 	((eq? (car e) 'inert) e)
 	((and (eq? (car e) 'quote) (pair? (cadr e)))
-	 (expand-backquote (expand-backquote (cadr e))))
-	((not (contains (lambda (e) (and (pair? e) (eq? (car e) '$))) e))
+	 ;; Double expansion of nested backquote is needed by @ngenerate
+	 (expand-backquote (expand-backquote (cadr e) hygienic) hygienic))
+	((and (not (contains (lambda (e) (and (pair? e) (eq? (car e) '$))) e))
+	      (or (not hygienic) (eq? (car e) 'quote) (eq? (car e) 'line)))
 	 `(copyast (inert ,e)))
 	((not (any splice-expr? e))
-	 `(call (top Expr) ,.(map expand-backquote e)))
+	 `(call (top Expr) (quote ,(car e))
+		           ,.(map (lambda (se) (expand-backquote se hygienic))
+				  (cdr e))))
 	(else
 	 (let loop ((p (cdr e)) (q '()))
 	   (if (null? p)
 	       (let ((forms (reverse q)))
-		 `(call (top splicedexpr) ,(expand-backquote (car e))
+		 `(call (top splicedexpr) (quote ,(car e))
 			(call (top append_any) ,@forms)))
 	       ;; look for splice inside backquote, e.g. (a,$(x...),b)
 	       (if (splice-expr? (car p))
 		   (loop (cdr p)
 			 (cons (cadr (cadadr (car p))) q))
 		   (loop (cdr p)
-			 (cons `(cell1d ,(expand-backquote (car p)))
+			 (cons `(cell1d ,(expand-backquote (car p) hygienic))
 			       q))))))))
 
 (define (inert->quote e)
@@ -3100,13 +3126,14 @@ So far only the second case can actually occur.
 	(else  (map inert->quote e))))
 
 (define (julia-expand-macros e)
-  (inert->quote (julia-expand-macros- e)))
+  (inert->quote (julia-expand-macros- e #f)))
 
-(define (julia-expand-macros- e)
+(define (julia-expand-macros- e with-hygiene)
   (cond ((not (pair? e))     e)
 	((and (eq? (car e) 'quote) (pair? (cadr e)))
 	 ;; backquote is essentially a built-in macro at the moment
-	 (julia-expand-macros- (expand-backquote (cadr e))))
+	 (julia-expand-macros- (expand-backquote (cadr e) with-hygiene)
+			       with-hygiene))
 	((eq? (car e) 'inert)
 	 e)
 	((eq? (car e) 'macrocall)
@@ -3120,34 +3147,46 @@ So far only the second case can actually occur.
 	   (let ((form (car form))
 		 (m    (cdr form)))
 	     ;; m is the macro's def module, or #f if def env === use env
-	     (julia-expand-macros-
-	      (resolve-expansion-vars form m)))))
+	     (julia-expand-macros- (resolve-expansion-vars form m)
+				   with-hygiene))))
+	((eq? (car e) 'macro)
+	 (map (lambda (se) (julia-expand-macros- se #t)) e))
+	((eq? (car e) 'with_hygiene)
+	 (julia-expand-macros- (cadr e) #t))
 	(else
-	 (map julia-expand-macros- e))))
+	 (map (lambda (se) (julia-expand-macros- se with-hygiene)) e))))
 
 (define (pair-with-gensyms v)
   (map (lambda (s)
-	 (if (pair? s)
-	     s
-	     (cons s (named-gensy s))))
+	 (cond ((not (pair? s))
+		(cons s (named-gensy s)))
+	       ((eq? (car s) 'hygienic)
+		(cons s (named-gensy (cadr s))))
+	       (else s)))
        v))
 
+;TODO: Remove this after all uses of Expr(:escape ... have been eliminated
 (define (unescape e)
   (if (and (pair? e) (eq? (car e) 'escape))
       (cadr e)
       e))
 
+(define (strip-hygiene e)
+  (if (and (pair? e) (eq? (car e) 'hygienic))
+      (cadr e)
+      e))
+
 (define (typevar-expr-name e)
-  (if (symbol? e) e
+  (if (hygienic-symbol? e) e
       (cadr e)))
 
 (define (new-expansion-env-for x env)
   (append!
    (filter (lambda (v)
-	     (not (assq (car v) env)))
+	     (not (assoc (car v) env)))
 	   (append!
 	    (pair-with-gensyms (vars-introduced-by x))
-	    (map (lambda (v) (cons v v))
+	    (map (lambda (v) (cons v (strip-hygiene v)))
 		 (keywords-introduced-by x))))
    env))
 
@@ -3164,15 +3203,19 @@ So far only the second case can actually occur.
 (define (resolve-expansion-vars- e env m inarg)
   (cond ((or (eq? e 'true) (eq? e 'false) (eq? e 'end))
 	 e)
-	((symbol? e)
-	 (let ((a (assq e env)))
-	   (if a (cdr a)
-	       (if m `(|.| ,m (quote ,e))
-		   e))))
 	((or (not (pair? e)) (quoted? e))
 	 e)
 	(else
 	 (case (car e)
+	   ((hygienic)
+	    ;; Have to use assoc instead of assq because schema to julia
+	    ;; conversion defeats any attempt to make (hygienic <var>)
+	    ;; objects.  env is small enough that it shouldn't matter.
+	    (let ((a (assoc e env)))
+	      (if a (cdr a)
+		  (if m `(|.| ,m (quote ,(cadr e)))
+		      (cadr e)))))
+	   ;TODO: Remove this after all uses of Expr(:escape ... have been eliminated
 	   ((escape) (cadr e))
 	   ((using import importall export) (map unescape e))
 	   ((macrocall)
@@ -3217,12 +3260,12 @@ So far only the second case can actually occur.
 		      ,(if inarg
 			   (resolve-expansion-vars- (cadr (cadr e)) env m inarg)
 			   ;; in keyword arg A=B, don't transform "A"
-			   (cadr (cadr e)))
+			   (strip-hygiene (cadr (cadr e))))
 		      ,(resolve-expansion-vars- (caddr (cadr e)) env m inarg))
 		     ,(resolve-expansion-vars- (caddr e) env m inarg))
 		`(kw ,(if inarg
 			  (resolve-expansion-vars- (cadr e) env m inarg)
-			  (cadr e))
+			  (strip-hygiene (cadr e)))
 		     ,(resolve-expansion-vars- (caddr e) env m inarg))))
 
 	   ((let)
@@ -3273,7 +3316,7 @@ So far only the second case can actually occur.
 	((escape)  '())
 	((= function)
 	 (append! (filter
-		   symbol?
+		   (lambda (x) (and (pair? x) (eq? (car x) 'hygienic)))
 		   (if (and (pair? (cadr e)) (eq? (car (cadr e)) 'tuple))
 		       (map decl-var* (cdr (cadr e)))
 		       (list (decl-var* (cadr e)))))
@@ -3295,13 +3338,14 @@ So far only the second case can actually occur.
 
 (define (env-for-expansion e)
   (let ((globals (find-declared-vars-in-expansion e 'global)))
-    (let ((v (diff (delete-duplicates
-		    (append! (find-declared-vars-in-expansion e 'local)
-			     (find-assigned-vars-in-expansion e)
-			     (map (lambda (x)
-				    (if (pair? x) (car x) x))
-				  (vars-introduced-by e))))
-		   globals)))
+    (let ((v (difference (delete-duplicates
+			   (append! (find-declared-vars-in-expansion e 'local)
+				    (find-assigned-vars-in-expansion e)
+				    (map (lambda (x)
+					   (if (hygienic-symbol? x) x
+					       (car x)))
+					 (vars-introduced-by e))))
+			 globals)))
       (append!
        (pair-with-gensyms v)
        (map (lambda (s) (cons s s))

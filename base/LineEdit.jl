@@ -825,12 +825,13 @@ end
 macro keymap(keymaps)
     dict = keymap_unify(keymap_prepare(keymaps))
     body = keymap_gen_body(dict, dict)
-    esc(quote
-        (s, data) -> begin
+    # Bindings of s and data are non-hygienic, visible to body
+    quote
+        ($:s, $:data) -> begin
             $body
             return :ok
         end
-    end)
+    end
 end
 
 const escape_defaults = merge!(

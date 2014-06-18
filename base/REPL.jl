@@ -614,7 +614,8 @@ function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[]
         # and pass into Base.repl_cmd for processing (handles `ls` and `cd`
         # special)
         on_done = respond(repl, julia_prompt) do line
-            Expr(:call, :(Base.repl_cmd), macroexpand(Expr(:macrocall, symbol("@cmd"),line)))
+            cmdmac = Expr(:., :Base, Expr(:quote, symbol("@cmd")))
+            Expr(:call, :(Base.repl_cmd), macroexpand(Expr(:macrocall, cmdmac, line)))
         end)
 
     ################################# Stage II #############################
