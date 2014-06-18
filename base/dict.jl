@@ -63,7 +63,8 @@ end
 
 showdict(t::Associative; kw...) = showdict(STDOUT, t; kw...)
 function showdict{K,V}(io::IO, t::Associative{K,V}; limit::Bool = false,
-                       rows = tty_rows()-3, cols = tty_cols())
+                       sz=(s = tty_size(); (s[1]-3, s[2])))
+    rows, cols = sz
     print(io, summary(t))
     isempty(t) && return
     print(io, ":")
@@ -118,7 +119,8 @@ show(io::IO, iter::Union(KeyIterator,ValueIterator)) = show(io, collect(iter))
 
 showkv(iter::Union(KeyIterator,ValueIterator); kw...) = showkv(STDOUT, iter; kw...)
 function showkv{T<:Union(KeyIterator,ValueIterator)}(io::IO, iter::T; limit::Bool = false,
-                                                     rows = tty_rows()-3, cols = tty_cols())
+                                                     sz=(s = tty_size(); (s[1]-3, s[2])))
+    rows, cols = sz
     print(io, summary(iter))
     isempty(iter) && return
     print(io, ". ", T<:KeyIterator ? "Keys" : "Values", ":")
