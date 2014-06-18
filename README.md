@@ -214,7 +214,6 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[PCRE]**                — Perl-compatible regular expressions library.
 - **[GMP]**                 — the GNU multiple precision arithmetic library, needed for bigint support.
 - **[MPFR]**                — the GNU multiple precision floating point library, needed for arbitrary precision floating point support.
-- **[double-conversion]**   — efficient number-to-text conversion.
 
 
 [GNU make]:     http://www.gnu.org/software/make/
