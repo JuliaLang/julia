@@ -93,7 +93,7 @@ Concatenation
 -------------
 
 Arrays can be constructed and also concatenated using the following
-functions::
+functions:
 
 ================ ======================================================
 Function         Description
@@ -105,7 +105,7 @@ Function         Description
 
 Scalar values passed to these functions are treated as 1-element arrays.
 
-The concatenation functions are used so often that they have special syntax::
+The concatenation functions are used so often that they have special syntax:
 
 =================== =========
 Expression          Calls
@@ -126,7 +126,7 @@ An array with a specific element type can be constructed using the syntax
 ``T``, initialized to contain elements ``A``, ``B``, ``C``, etc.
 
 Special syntax is available for constructing arrays with element type
-``Any``::
+``Any``:
 
 =================== =========
 Expression          Yields

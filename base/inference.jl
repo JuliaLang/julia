@@ -1176,14 +1176,12 @@ function stchanged(new::Union(StateUpdate,VarTable), old, vars)
     return false
 end
 
-function findlabel(body, l)
-    for i=1:length(body)
-        b = body[i]
-        if isa(b,LabelNode) && b.label==l
-            return i
-        end
+function findlabel(labels, l)
+    i = l+1 > length(labels) ? 0 : labels[l+1]
+    if i == 0
+        error("label ",l," not found")
     end
-    error("label ",l," not found")
+    return i
 end
 
 function label_counter(body)
@@ -1301,6 +1299,22 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     body = (ast.args[3].args)::Array{Any,1}
     n = length(body)
 
+    maxlabel = 0
+    for i=1:length(body)
+        b = body[i]
+        if isa(b,LabelNode)
+            maxlabel = max(maxlabel, b.label+1)
+        end
+    end
+    labels = zeros(Int, maxlabel)
+
+    for i=1:length(body)
+        b = body[i]
+        if isa(b,LabelNode)
+            labels[b.label+1] = i
+        end
+    end
+
     # our stack frame
     frame = CallStack(ast0, linfo.module, atypes, inference_stack)
     inference_stack = frame
@@ -1400,12 +1414,12 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
             end
             pc´ = pc+1
             if isa(stmt,GotoNode)
-                pc´ = findlabel(body,stmt.label)
+                pc´ = findlabel(labels,stmt.label)
             elseif isa(stmt,Expr)
                 hd = stmt.head
                 if is(hd,:gotoifnot)
                     condexpr = stmt.args[1]
-                    l = findlabel(body,stmt.args[2])
+                    l = findlabel(labels,stmt.args[2])
                     # constant conditions
                     if is(condexpr,true)
                     elseif is(condexpr,false)
@@ -1419,7 +1433,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                         end
                     end
                 elseif is(hd,:type_goto)
-                    l = findlabel(body,stmt.args[1])
+                    l = findlabel(labels,stmt.args[1])
                     for i = 2:length(stmt.args)
                         var = stmt.args[i]
                         if isa(var,SymbolNode)
@@ -1474,7 +1488,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                         end
                     end
                 elseif is(hd,:enter)
-                    l = findlabel(body,stmt.args[1]::Int)
+                    l = findlabel(labels,stmt.args[1]::Int)
                     cur_hand = (l,cur_hand)
                     handler_at[l] = cur_hand
                 elseif is(hd,:leave)
