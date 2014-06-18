@@ -626,10 +626,10 @@ write_prompt(terminal, s::PromptState) = write_prompt(terminal, s, s.p.prompt)
 function write_prompt(terminal, s::PromptState, prompt)
     prefix = isa(s.p.prompt_prefix,Function) ? s.p.prompt_prefix() : s.p.prompt_prefix
     suffix = isa(s.p.prompt_suffix,Function) ? s.p.prompt_suffix() : s.p.prompt_suffix
-    write(terminal, prefix)
+    Base.have_color && write(terminal, prefix)
     write(terminal, prompt)
     write(terminal, Base.text_colors[:normal])
-    write(terminal, suffix)
+    Base.have_color && write(terminal, suffix)
 end
 write_prompt(terminal, s::ASCIIString) = write(terminal, s)
 
