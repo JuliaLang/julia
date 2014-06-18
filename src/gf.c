@@ -1309,6 +1309,7 @@ jl_function_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t na
 }
 
 void jl_add_constructors(jl_datatype_t *t);
+jl_value_t *jl_matching_methods(jl_function_t *gf, jl_value_t *type, int lim);
 
 // compile-time method lookup
 jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types)
@@ -1318,6 +1319,22 @@ jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types)
     if (f->fptr == jl_f_ctor_trampoline)
         jl_add_constructors((jl_datatype_t*)f);
     assert(jl_is_gf(f));
+
+    // make sure exactly 1 method matches (issue #7302).
+    int i;
+    for(i=0; i < jl_tuple_len(types); i++) {
+        jl_value_t *ti = jl_tupleref(types, i);
+        // if one argument type is DataType, multiple Type{} definitions
+        // might match. also be conservative with tuples rather than trying
+        // to analyze them in detail.
+        if (ti == (jl_value_t*)jl_datatype_type || jl_is_tuple(ti)) {
+            jl_value_t *matches = jl_matching_methods(f, (jl_value_t*)types, 1);
+            if (matches == jl_false)
+                return NULL;
+            break;
+        }
+    }
+
     jl_methtable_t *mt = jl_gf_mtable(f);
     jl_function_t *sf = jl_method_lookup_by_type(mt, types, 1, 1);
     if (sf == jl_bottom_func) {
