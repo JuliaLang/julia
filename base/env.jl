@@ -188,9 +188,7 @@ function tty_size()
     if isdefined(Base, :active_repl)
         os = REPL.outstream(Base.active_repl)
         if isa(os, Terminals.TTYTerminal)
-            try
-                return size(os)
-            end
+            return size(os)
         end
     end
     return (24, 80)
