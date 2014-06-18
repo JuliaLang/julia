@@ -113,7 +113,7 @@ end
 
 function display(d::REPLDisplay, ::MIME"text/plain", x)
     io = outstream(d.repl)
-    write(io, answer_color(d.repl))
+    Base.have_color && write(io, answer_color(d.repl))
     writemime(io, MIME("text/plain"), x)
     println(io)
 end
@@ -526,8 +526,6 @@ function send_to_backend(ast, req, rep)
     val, bt = take!(rep)
 end
 
-have_color(s) = true
-
 function respond(f, repl, main)
     (s,buf,ok)->begin
         if !ok
@@ -538,7 +536,7 @@ function respond(f, repl, main)
             reset(repl)
             val, bt = send_to_backend(f(line), backend(repl))
             if !ends_with_semicolon(line) || bt !== nothing
-                print_response(repl, val, bt, true, have_color(s))
+                print_response(repl, val, bt, true, Base.have_color)
             end
         end
         println(repl.t)
@@ -814,7 +812,7 @@ function ends_with_semicolon(line)
 end
 
 function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
-    have_color = true
+    have_color = Base.have_color
     banner(repl.stream, have_color)
     d = REPLDisplay(repl)
     dopushdisplay = !in(d,Base.Multimedia.displays)
