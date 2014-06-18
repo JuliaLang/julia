@@ -17,7 +17,21 @@ Base.link_pipe(stdin_read,true,stdin_write,true)
 Base.link_pipe(stdout_read,true,stdout_write,true)
 Base.link_pipe(stderr_read,true,stderr_write,true)
 
-repl = Base.REPL.LineEditREPL(Base.Terminals.FakeTerminal(stdin_read, stdout_write, stderr_write))
+type FakeTerminal <: Base.Terminals.UnixTerminal
+    in_stream::Base.IO
+    out_stream::Base.IO
+    err_stream::Base.IO
+    hascolor::Bool
+    raw::Bool
+    FakeTerminal(stdin,stdout,stderr,hascolor=true) =
+        new(stdin,stdout,stderr,hascolor,false)
+end
+
+Base.Terminals.hascolor(t::FakeTerminal) = t.hascolor
+Base.Terminals.raw!(t::FakeTerminal, raw::Bool) = t.raw = raw
+Base.Terminals.size(t::FakeTerminal) = (24, 80)
+
+repl = Base.REPL.LineEditREPL(FakeTerminal(stdin_read, stdout_write, stderr_write))
 # In the future if we want we can add a test that the right object
 # gets displayed by intercepting the display
 repl.specialdisplay = Base.REPL.REPLDisplay(repl)
