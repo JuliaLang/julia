@@ -299,8 +299,9 @@ end
 bool(x::AbstractArray{Bool}) = x
 bool(x::AbstractArray) = copy!(similar(x,Bool), x)
 
-convert{T,N}(::Type{AbstractArray{T,N}}, A::AbstractArray{T,N}) = A
+convert{T,N  }(::Type{AbstractArray{T,N}}, A::AbstractArray{T,N}) = A
 convert{T,S,N}(::Type{AbstractArray{T,N}}, A::AbstractArray{S,N}) = copy!(similar(A,T), A)
+convert{T,S,N}(::Type{AbstractArray{T  }}, A::AbstractArray{S,N}) = convert(AbstractArray{T,N}, A)
 
 convert{T,N}(::Type{Array}, A::AbstractArray{T,N}) = convert(Array{T,N}, A)
 
@@ -314,6 +315,10 @@ end
 
 float{T<:FloatingPoint}(x::AbstractArray{T}) = x
 complex{T<:Complex}(x::AbstractArray{T}) = x
+
+float{T<:Integer64}(x::AbstractArray{T}) = convert(AbstractArray{typeof(float(zero(T)))}, x)
+complex{T<:Union(Integer64,Float64,Float32,Float16)}(x::AbstractArray{T}) =
+    convert(AbstractArray{typeof(complex(zero(T)))}, x)
 
 function float(A::AbstractArray) 
     cnv(x) = convert(FloatingPoint,x)
