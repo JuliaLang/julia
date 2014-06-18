@@ -43,9 +43,6 @@ static jl_value_t *jl_idtable_type=NULL;
 // queue of types to cache
 static jl_array_t *datatype_list=NULL;
 
-// queue of modules to initialize
-static arraylist_t modules_to_init;
-
 #define write_uint8(s, n) ios_putc((n), (s))
 #define read_uint8(s) ((uint8_t)ios_getc(s))
 #define write_int8(s, n) write_uint8(s, n)
@@ -866,8 +863,6 @@ static jl_value_t *jl_deserialize_value_internal(ios_t *s)
             arraylist_push(&m->usings, jl_deserialize_value(s));
         }
         m->constant_table = (jl_array_t*)jl_deserialize_value(s);
-        if (jl_module_has_initializer(m))
-            arraylist_push(&modules_to_init, m);
         return (jl_value_t*)m;
     }
     else if (vtag == (jl_value_t*)SmallInt64_tag) {
@@ -964,6 +959,8 @@ static jl_value_t* jl_deserialize_value(ios_t *s)
 
 // --- entry points ---
 
+extern jl_array_t *jl_module_init_order;
+
 DLLEXPORT
 void jl_save_system_image(char *fname)
 {
@@ -1010,6 +1007,17 @@ void jl_save_system_image(char *fname)
     jl_serialize_globalvals(&f);
     jl_serialize_gv_syms(&f, jl_get_root_symbol()); // serialize symbols with GlobalValue references
     jl_serialize_value(&f, NULL); // signal the end of the symbols list
+
+    // save module initialization order
+    if (jl_module_init_order != NULL) {
+        for(i=0; i < jl_array_len(jl_module_init_order); i++) {
+            // NULL out any modules that weren't saved
+            jl_value_t *mod = jl_cellref(jl_module_init_order, i);
+            if (ptrhash_get(&backref_table, mod) == HT_NOTFOUND)
+                jl_cellset(jl_module_init_order, i, NULL);
+        }
+    }
+    jl_serialize_value(&f, jl_module_init_order);
 
     write_int32(&f, jl_get_t_uid_ctr());
     write_int32(&f, jl_get_gs_ctr());
@@ -1076,6 +1084,8 @@ void jl_restore_system_image(char *fname)
     jl_deserialize_globalvals(&f);
     jl_deserialize_gv_syms(&f);
 
+    jl_module_init_order = (jl_array_t*)jl_deserialize_value(&f);
+
     // cache builtin parametric types
     for(int i=0; i < jl_array_len(datatype_list); i++) {
         jl_value_t *v = jl_cellref(datatype_list, i);
@@ -1110,8 +1120,17 @@ void jl_restore_system_image(char *fname)
 
 void jl_init_restored_modules()
 {
-    while (modules_to_init.len > 0) {
-        jl_module_run_initializer((jl_module_t *) arraylist_pop(&modules_to_init));
+    if (jl_module_init_order != NULL) {
+        jl_array_t *temp = jl_module_init_order;
+        jl_module_init_order = NULL;
+        JL_GC_PUSH1(&temp);
+        int i;
+        for(i=0; i < jl_array_len(temp); i++) {
+            jl_value_t *mod = jl_cellref(temp, i);
+            jl_module_run_initializer((jl_module_t*)mod);
+        }
+        jl_module_init_order = NULL;
+        JL_GC_POP();
     }
 }
 
@@ -1195,7 +1214,6 @@ void jl_init_serializer(void)
     htable_new(&fptr_to_id, 0);
     htable_new(&id_to_fptr, 0);
     htable_new(&backref_table, 50000);
-    arraylist_new(&modules_to_init, 0);
 
     void *tags[] = { jl_symbol_type, jl_datatype_type,
                      jl_function_type, jl_tuple_type, jl_array_type,
