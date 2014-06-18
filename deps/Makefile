@@ -19,12 +19,12 @@ CONFIGURE_COMMON += F77="$(FC)" CC="$(CC)" CXX="$(CXX)"
 MAKE_COMMON = DESTDIR="" prefix=$(build_prefix) bindir=$(build_bindir) libdir=$(build_libdir) libexecdir=$(build_libexecdir) datarootdir=$(build_datarootdir) includedir=$(build_includedir) sysconfdir=$(build_sysconfdir)
 
 #autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf uv
-#custom Makefile rules: openlibm Rmath double-conversion random suitesparse-wrapper suitesparse lapack openblas utf8proc
+#custom Makefile rules: openlibm Rmath random suitesparse-wrapper suitesparse lapack openblas utf8proc
 
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-STAGE1_DEPS = random double-conversion
+STAGE1_DEPS = random
 STAGE2_DEPS = Rmath
 STAGE3_DEPS = suitesparse-wrapper
 
@@ -140,7 +140,7 @@ install: $(addprefix install-, $(LIBS))
 cleanall: $(addprefix clean-, $(LIBS))
 distcleanall: $(addprefix distclean-, $(LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-uv get-pcre get-double-conversion get-openlibm get-openspecfun get-random get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf get-utf8proc
+getall: get-llvm get-uv get-pcre get-openlibm get-openspecfun get-random get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf get-utf8proc
 
 ## PATHS ##
 # sort is used to remove potential duplicates
@@ -507,53 +507,6 @@ configure-pcre: pcre-$(PCRE_VER)/config.status
 compile-pcre: $(PCRE_SRC_TARGET)
 check-pcre: pcre-$(PCRE_VER)/checked
 install-pcre: $(PCRE_OBJ_TARGET)
-
-
-## Grisu floating-point printing library ##
-
-GRISU_OPTS = $(CXXFLAGS) -O3 -fvisibility=hidden $(fPIC)
-GRISU_OBJ_TARGET = $(build_shlibdir)/libgrisu.$(SHLIB_EXT)
-
-double-conversion-$(GRISU_VER).tar.gz:
-	$(JLDOWNLOAD) $@ http://double-conversion.googlecode.com/files/$@
-	touch -c $@
-double-conversion-$(GRISU_VER)/Makefile: double-conversion-$(GRISU_VER).tar.gz
-	$(JLCHECKSUM) $<
-	mkdir -p double-conversion-$(GRISU_VER) && \
-	$(TAR) -C double-conversion-$(GRISU_VER) --strip-components 1 -xf double-conversion-$(GRISU_VER).tar.gz
-	touch -c $@
-
-ifeq ($(USE_SYSTEM_GRISU), 0)
-$(GRISU_OBJ_TARGET): double-conversion-$(GRISU_VER)/Makefile
-	cd double-conversion-$(GRISU_VER) && \
-	$(CXX) -c $(GRISU_OPTS) -o src/bignum.o -Isrc src/bignum.cc && \
-	$(CXX) -c $(GRISU_OPTS) -o src/bignum-dtoa.o -Isrc src/bignum-dtoa.cc && \
-	$(CXX) -c $(GRISU_OPTS) -o src/cached-powers.o -Isrc src/cached-powers.cc && \
-	$(CXX) -c $(GRISU_OPTS) -o src/diy-fp.o -Isrc src/diy-fp.cc && \
-	$(CXX) -c $(GRISU_OPTS) -o src/double-conversion.o -Isrc src/double-conversion.cc && \
-	$(CXX) -c $(GRISU_OPTS) -o src/fast-dtoa.o -Isrc src/fast-dtoa.cc && \
-	$(CXX) -c $(GRISU_OPTS) -o src/fixed-dtoa.o -Isrc src/fixed-dtoa.cc && \
-	$(CXX) -c $(GRISU_OPTS) -o src/strtod.o -Isrc src/strtod.cc && \
-	$(CXX) -c $(GRISU_OPTS) -o src/libdouble-conversion.o -I.. -Isrc ../double_conversion_wrapper.cpp && \
-	$(CXX) $(GRISU_OPTS) src/*.o $(LDFLAGS) -shared -dead_strip -o $@ && \
-	$(INSTALL_NAME_CMD)libgrisu.$(SHLIB_EXT) $@
-else
-$(GRISU_OBJ_TARGET):
-	$(CXX) $(GRISU_OPTS) -I/usr/include/double-conversion double_conversion_wrapper.cpp -shared $(LDFLAGS) -o $@ -ldouble-conversion && \
-	$(INSTALL_NAME_CMD)libgrisu.$(SHLIB_EXT) $@
-endif
-
-clean-double-conversion:
-	-rm -f double-conversion-$(GRISU_VER)/src/*.o
-	-rm -f $(GRISU_OBJ_TARGET)
-distclean-double-conversion:
-	-rm -rf double-conversion-$(GRISU_VER).tar.gz double-conversion-$(GRISU_VER) $(GRISU_OBJ_TARGET)
-
-get-double-conversion: double-conversion-$(GRISU_VER).tar.gz
-configure-double-conversion: get-double-conversion
-compile-double-conversion: double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
-check-double-conversion: compile-double-conversion
-install-double-conversion: $(build_shlibdir)/libgrisu.$(SHLIB_EXT)
 
 
 ## openlibm ##

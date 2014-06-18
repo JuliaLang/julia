@@ -31,7 +31,6 @@ External libraries, if used, include their own licenses:
 - [ARPACK](http://www.caam.rice.edu/software/ARPACK/RiceBSD.txt#LICENSE)
 - [ATLAS](http://math-atlas.sourceforge.net/faq.html#license)
 - [D3](https://github.com/mbostock/d3/raw/master/LICENSE)
-- [DOUBLE-CONVERSION](https://code.google.com/p/double-conversion/)
 - [DSFMT](http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/LICENSE.txt)
 - [OPENLIBM](https://github.com/JuliaLang/openlibm/blob/master/LICENSE.md)
 - [FADDEEVA](http://ab-initio.mit.edu/Faddeeva)

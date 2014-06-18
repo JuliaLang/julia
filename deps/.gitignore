@@ -4,14 +4,11 @@
 /Clp-*
 /clp-*
 /compiler-rt-*
-/double-conversion-*
 /dsfmt-*
 /fftw-*
 !fftw-config-nopthreads.patch
 /git-*
 /gmp-*
-/grisu-*
-/libgrisu.so
 /lapack-*
 /libunwind-*
 /libosxunwind-*
