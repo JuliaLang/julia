@@ -315,8 +315,15 @@ end
 float{T<:FloatingPoint}(x::AbstractArray{T}) = x
 complex{T<:Complex}(x::AbstractArray{T}) = x
 
-float(A::AbstractArray)   = map_promote(x->convert(FloatingPoint,x), A)
-complex(A::AbstractArray) = map_promote(x->convert(Complex,x), A)
+function float(A::AbstractArray) 
+    cnv(x) = convert(FloatingPoint,x)
+    map_promote(cnv, A)
+end
+
+function complex(A::AbstractArray) 
+    cnv(x) = convert(Complex,x)
+    map_promote(cnv, A)
+end
 
 full(x::AbstractArray) = x
 
