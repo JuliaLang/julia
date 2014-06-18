@@ -1738,3 +1738,10 @@ f7062{t,n}(::Type{Array{t}}  , ::Array{t,n}) = (t,n,1)
 f7062{t,n}(::Type{Array{t,n}}, ::Array{t,n}) = (t,n,2)
 @test f7062(Array{Int,1}, [1,2,3]) === (Int,1,2)
 @test f7062(Array{Int}  , [1,2,3]) === (Int,1,1)
+
+# issue #7302
+function test7302()
+    t = [Uint64][1]
+    convert(t, "5")
+end
+@test_throws MethodError test7302()
