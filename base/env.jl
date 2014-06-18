@@ -189,10 +189,9 @@ function tty_size()
         os = REPL.outstream(Base.active_repl)
         if isa(os, Terminals.TTYTerminal)
             try
-                sz = size(os)
-                return (sz.height, sz.width)
+                return size(os)
             end
         end
     end
-    return (25, 80)
+    return (24, 80)
 end
