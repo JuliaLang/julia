@@ -596,11 +596,12 @@ function check_metadata()
 end
 
 function warnbanner(msg...; label="[ WARNING ]", prefix="")
-    warn(prefix="", Base.cpad(label,Base.tty_cols(),"="))
+    cols = Base.tty_size()[2]
+    warn(prefix="", Base.cpad(label,cols,"="))
     println(STDERR)
     warn(prefix=prefix, msg...)
     println(STDERR)
-    warn(prefix="", "="^Base.tty_cols())
+    warn(prefix="", "="^cols)
 end
 
 function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
