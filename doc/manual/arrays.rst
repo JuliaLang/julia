@@ -566,7 +566,7 @@ element of a sparse matrix.
 Sparse matrix constructors
 --------------------------
 
-The simplest way to create sparse matrices are using functions
+The simplest way to create sparse matrices is to use functions
 equivalent to the ``zeros`` and ``eye`` functions that Julia provides
 for working with dense matrices. To produce sparse matrices instead,
 you can use the same names with an ``sp`` prefix:
