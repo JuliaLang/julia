@@ -31,7 +31,9 @@ function prefetch{S<:String}(pkg::String, url::String, sha1s::Vector{S})
     cache = path(pkg)
     if !isdir(cache)
         info("Cloning cache of $pkg from $url")
-        try Git.run(`clone -q --mirror $url $cache`)
+        try 
+            mkdir(cache)
+            Base.LibGit2.repo_mirror(url, cache)
         catch
             rm(cache, recursive=true)
             rethrow()
@@ -40,7 +42,8 @@ function prefetch{S<:String}(pkg::String, url::String, sha1s::Vector{S})
     Git.set_remote_url(url, dir=cache)
     if !all(sha1->Git.iscommit(sha1, dir=cache), sha1s)
         info("Updating cache of $pkg...")
-	    Git.success(`remote update`, dir=cache) ||
+	    #Git.success(`remote update`, dir=cache) ||
+        Git.@libgit2_success(Base.LibGit2.remote_fetch(Base.LibGit2.remotes(Git.get_repo(dir))[1])) ||
             error("couldn't update $cache using `git remote update`")
 	end
     filter(sha1->!Git.iscommit(sha1, dir=cache), sha1s)

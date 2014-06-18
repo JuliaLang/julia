@@ -11,7 +11,7 @@ export repo_isbare, repo_isempty, repo_workdir, repo_path, path,
        branch_names, lookup_branch, create_branch, lookup_remote, iter_branches,
        remote_names, remote_add!, checkout_tree!, checkout_head!, checkout!, 
        ishead_detached, GitCredential, CredDefault, CredPlainText, CredSSHKey, 
-       repo_clone
+       repo_clone, repo_mirror
 
 Repository(path::String; alternates=nothing) = begin
     bpath = bytestring(path)
@@ -214,6 +214,20 @@ function repo_init(path::String; bare::Bool=false)
     return Repository(repo_ptr[1])
 end
 
+repo_mirror(url::String, path::String; name::String="origin") = begin
+    # Init the repo
+    r = repo_init(path; bare=true)
+    @assert r.ptr != C_NULL
+    check_valid_url(url)
+    remote_ptr = Array(Ptr{Void}, 1)
+    # Create the mirror remote
+    @check api.git_remote_create_with_fetchspec(remote_ptr, r.ptr, bytestring(name), bytestring(url), bytestring("+refs/*:refs/*"))
+    remote = GitRemote(remote_ptr[1])
+    # Set remote.origin.mirror to true
+    c = config(r)
+    c["remote.origin.mirror"] = "true"
+    @check api.git_clone_into(r.ptr, remote.ptr, C_NULL, C_NULL)
+end
 
 function set_namespace!(r::Repository, ns)
     if ns == nothing || isempty(ns)
@@ -849,7 +863,7 @@ function lookup_ref(r::Repository, refname::String)
     if err == api.ENOTFOUND
         return nothing
     elseif err != api.GIT_OK
-        return LibGitError(err)
+        throw(LibGitError(err))
     end
     return GitReference(ref_ptr[1])
 end

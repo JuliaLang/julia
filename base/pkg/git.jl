@@ -40,11 +40,15 @@ end
 
 macro libgit2_success(args)
     quote
-        try
-            $args
-            return true
-        except
-            return false
+        begin
+            success = false
+            try
+                $args
+                success = true
+            catch
+                success = false
+            end
+            success
         end
     end
 end
@@ -56,7 +60,7 @@ different(verA::String, verB::String, path::String; dir="") =
 #dirty(; dir="") = !success(`diff-index --quiet HEAD`, dir=dir)
 function dirty(; dir="")
     repo = get_repo(dir)
-    return length(Base.LibGit2.diff(repo, repo_index(repo))) > 0
+    return length(Base.LibGit2.diff(repo, Base.LibGit2.repo_index(repo))) > 0
 end
 staged(; dir="") = !success(`diff-index --quiet --cached HEAD`, dir=dir)
 #unstaged(; dir="") = !success(`diff-files --quiet`, dir=dir)
@@ -69,8 +73,15 @@ staged(paths; dir="") = !success(`diff-index --quiet --cached HEAD -- $paths`, d
 unstaged(paths; dir="") = !success(`diff-files --quiet -- $paths`, dir=dir)
 
 #iscommit(name; dir="") = success(`cat-file commit $name`, dir=dir)
-iscommit(name; dir="") = @libgit2_success Base.LibGit2.lookup(get_repo(dir), Base.LibGit2.Oid(name)) &&
-                            @libgit2_success Base.LibGit2.lookup_ref(get_repo(dir), name)
+iscommit(name; dir="") = @libgit2_success(Base.LibGit2.lookup(get_repo(dir), Base.LibGit2.Oid(name))) ||
+    @libgit2_success(Base.LibGit2.lookup_ref(get_repo(dir), name))
+# function iscommit(name; dir="")
+#     ret = @libgit2_success(Base.LibGit2.lookup(get_repo(dir), Base.LibGit2.Oid(name)))
+#     println(ret)
+#     ret |= @libgit2_success(Base.LibGit2.lookup_ref(get_repo(dir), name))
+#     println(ret)
+#     return ret
+# end
 #attached(; dir="") = success(`symbolic-ref -q HEAD`, dir=dir)
 attached(; dir="") = @libgit2_success Base.LibGit2.name(Base.LibGit2.head(get_repo(dir)))
 #branch(; dir="") = readchomp(`rev-parse --symbolic-full-name --abbrev-ref HEAD`, dir=dir)
