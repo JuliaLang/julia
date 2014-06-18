@@ -1357,4 +1357,6 @@ export
     @deprecate,
     @boundscheck,
     @inbounds,
-    @simd
+    @simd,
+    @label,
+    @goto
