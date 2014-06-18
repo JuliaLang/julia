@@ -455,6 +455,15 @@ Set{T<:Number}(xs::T...) = Set{T}(xs)
 @deprecate readsfrom(cmd, args...)      open(cmd, "r", args...)
 @deprecate writesto(cmd, args...)      open(cmd, "w", args...)
 
+function tty_rows()
+    depwarn("tty_rows() is deprecated, use tty_size() instead", :tty_rows)
+    tty_size()[1]
+end
+function tty_cols()
+    depwarn("tty_cols() is deprecated, use tty_size() instead", :tty_cols)
+    tty_size()[2]
+end
+
 # 0.3 discontinued functions
 
 scale!{T<:Base.LinAlg.BlasReal}(X::Array{T}, s::Complex) = error("scale!: Cannot scale a real array by a complex value in-place.  Use scale(X::Array{Real}, s::Complex) instead.")
