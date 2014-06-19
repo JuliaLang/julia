@@ -11,42 +11,46 @@
 # Each metadata entry is just a dict Any=>Any:
 typealias MetaData Dict{Any,Any}
 
-# The Dict for _META: ideally this would be a typed, weak-key
-# ObjectIdDict.  --> make one...
-
+# The Dict for META:
+typealias MetaDict WeakObjectIdDict{Any, MetaData}
 #typealias MetaDict WeakKeyDict{Any, MetaData} # Problem: does not work for immutables
 #typealias MetaDict Dict{Any, MetaData} # Problem: if a mutable changes the hash changes
-#typealias MetaDict ObjectIdDict
-typealias MetaDict WeakObjectIdDict{Any, MetaData}
+#typealias MetaDict ObjectIdDict  # Problem: does not free references
 
-const secret_default = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5903__
+META = MetaDict() # this holds all the metadata
 
-_META = MetaDict() # this holds all the metadata
+## metadata interface:
+# (If defining type which also holds metadata, implement the "#*"
+# methods for it)
 
-getmeta(obj) = _META[obj]
-getmeta(obj, key) = _META[obj][key]
+hasmeta(obj) = haskey(META, obj) #*
+hasmeta(obj, key) = hasmeta(obj) && haskey(getmeta(obj), key)
+
+getmeta(obj) = META[obj] #*
+getmeta(obj, key) = getmeta(obj)[key]
 function getmeta(obj, key, default)
-    out = get(_META, obj, secret_default)
-    out==secret_default ? default : out
+    if hasmeta(obj)
+        return get!(getmeta(obj), key, default)
+    else
+        default
+    end
 end
 
-getmeta!(obj) = get!(_META, obj, MetaData())
+getmeta!(obj) = get!(META, obj, MetaData()) #*
 function getmeta!(obj, key, default) 
     md = getmeta!(obj)
     return get!(md, key, default)
 end
 
-setmeta!(obj, md::MetaData) = ( _META[obj] = md )
+setmeta!(obj, md::MetaData) = ( META[obj] = md ) #*
 function setmeta!(obj, key, value) 
     md = getmeta!(obj)
     md[key] = value
 end
 
-hasmeta(obj) = haskey(_META, obj)
-hasmeta(obj, key) = hasmeta(obj) && haskey(getmeta(obj), key)
-
-# note: this only clears the central Base._META dict, meta-storage in
+# This only clears the central Base.META dict, meta-storage in
 # used-defined types will not be affected:
-emptymeta!() = (global _META = MetaDict(); nothing)
-deletemeta!(obj) = (delete!(_META, obj); nothing)
-deletemeta!(obj, key) = (delete!(_META[obj], key); nothing)
+emptymeta!() = (global META = MetaDict(); nothing)
+
+deletemeta!(obj) = (delete!(META, obj); nothing) #*
+deletemeta!(obj, key) = (delete!(getmeta(obj), key); nothing) 

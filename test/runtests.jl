@@ -1,7 +1,7 @@
-# linalg tests take the longest - start them off first
-# help test only works reliably if it is near the front of the list!
+# - linalg tests take the longest - start them off first
+# - metadata needs to be finished before help-test runs
 testnames = [
-    "linalg", "core", "help", "keywordargs", "numbers", "strings", "dates",
+    "linalg", "core", "keywordargs", "numbers", "strings", "dates", "metadata",
     "collections", "hashing", "remote", "iobuffer", "arrayops", "reduce", "reducedim",
     "simdloop", "blas", "fft", "dsp", "sparse", "bitarray", "random", "math",
     "functional", "bigint", "sorting", "statistics", "spawn",
@@ -10,7 +10,7 @@ testnames = [
     "floatapprox", "readdlm", "reflection", "regex", "float16", "combinatorics",
     "sysinfo", "rounding", "ranges", "mod2pi", "euler", "show",
     "lineedit", "replcompletions", "repl", "test", "goto",
-    "llvmcall", "grisu", "nullable", "meta", "staged", "metadata"
+    "llvmcall", "grisu", "nullable", "meta", "staged", "help"
 ]
 
 if isdir(joinpath(dirname(@__FILE__), "..", "examples"))

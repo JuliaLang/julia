@@ -6,57 +6,69 @@ import Base.WeakObjectIdDict
 # - switch off when not running interactively (but what about tests?)
 # - make @doc work for methods
 # - make @doc work for modules
-# - make APROPOS_DICT = WeakObjectIdDict(), currently this make julia very unstable
+# - make an APROPOS_DICT mapping keywords to objects
 
-typealias HelpDict Dict{Symbol,Any}
-# keys
-# :desc : help text
+
 # :mod  : module which contains this object/concept/keyword (if applicable)
+type HelpEntry
+    desc::String                       # description
+    mod::Union(Module,String,Nothing)  # module of entry. This is useful for type instances
+                                       # for which figuring out the defining module is hard.
+    HelpEntry() = new("", nothing)
+    HelpEntry(desc) = new(desc, nothing)
+    HelpEntry(desc, mod) = new(desc, mod)
+end
 
 # internal data
-NOOBJ_DICT = Dict{String, HelpDict}()   # To keep documentation for non-object entities, like keywords, ccall, &&, ||, ", ', etc.  
+NOOBJ_DICT = Dict{String, HelpEntry}()   # To keep documentation for non-object entities, like keywords, ccall, &&, ||, ", ', etc.  
                                          # And also for macros as they cannot be used as dict-keys directly.
-APROPOS_DICT = ObjectIdDict()        # this is used in apropos search. Maps objects to their help text [:desc]. 
-APROPOS_DICT[NOOBJ_DICT] = Dict{String, String}() # to hold the apropos for stuff in NOOBJ_DICT
 INIT_OLD_HELP = true # flag
 
 # low level functions
 ##
 function hasdoc(obj)
-    if hasmeta(obj, :doc)
-        true
-    elseif haskey(NOOBJ_DICT, obj)
+    if hasmeta(obj, :doc) || haskey(NOOBJ_DICT, obj)
         true
     else
         false
     end
 end
 
+function getdoc(obj)
+    doc = getdoc(obj, nothing)
+    doc==nothing ? error("No documentation associated with $obj") : doc
+end
 function getdoc(obj, default)
-    doc = getmeta(obj, :doc, nothing)
-    if doc!=nothing
-        doc[:doc]
+    if hasmeta(obj, :doc)
+        getmeta(obj, :doc)
     elseif haskey(NOOBJ_DICT, obj)
         NOOBJ_DICT[obj]
     else
         default
     end
 end
-function getdoc(obj)
-    doc = getdoc(obj, nothing)
-    doc==nothing ? error("No documentation associated with $obj") : doc
+function getdoc!(obj; string_into_meta=false)
+    # If string_into_meta==true then add the doc to the metadata of the
+    # string-object, otherwise is goes into the NOOBJ_DICT (default).
+    if hasdoc(obj)
+        return getdoc(obj)
+    else
+        he = HelpEntry()
+        setdoc!(obj, he; string_into_meta=string_into_meta)
+        return he
+    end
 end
 
-function setdoc!(obj, doc::HelpDict; string_into_meta=false)
+
+function setdoc!(obj, doc::HelpEntry; string_into_meta=false)
     # If string_into_meta==true then add the doc to the metadata of the
     # string-object, otherwise is goes into the NOOBJ_DICT (default).
     if !isa(obj, String) || string_into_meta
         setmeta!(obj, :doc, doc)
-        APROPOS_DICT[obj] = doc[:desc]
     else
         NOOBJ_DICT[obj] = doc
-        APROPOS_DICT[NOOBJ_DICT][obj] = doc[:desc]
     end
+    nothing
 end
 
 # making docs from helpdb.jl
@@ -82,8 +94,8 @@ function init_help()
         INIT_OLD_HELP = false
         println("Loading help data...")
         helpdb = evalfile(helpdb_filename())
-        for hd in helpdb
-            mod_,obj,desc = hd
+        for he in helpdb
+            mod_,obj,desc = he
             # split objects up between what goes into META and what
             # goes into NOOBJ_DICT
             if obj[1]=='@' # a macro
@@ -105,14 +117,9 @@ function init_help()
             catch
                 mod_ = mod_ # keep as string
             end
-            if !hasdoc(obj) # do not overwrite existing doc
-                hdnew = HelpDict() 
-                hdnew[:desc]= desc; hdnew[:mod]=mod_; 
-                setdoc!(obj, hdnew)
-            else # append to it
-                hdnew = getdoc(obj)
-                hdnew[:desc] *= "\n$(string(mod_)).$desc"
-            end
+            henew = getdoc!(obj)
+            henew.desc *= desc
+            henew.mod = mod_
         end
     end
 end
@@ -121,10 +128,7 @@ end
 ##
 function doc(obj, docstr::String; mod=nothing, string_into_meta=false)
     # the module cannot be set automatically with this function, use the macro instead
-    hd = HelpDict()
-    hd[:desc] = docstr
-    hd[:mod] = mod
-    setdoc!(obj, hd; string_into_meta=string_into_meta)
+    setdoc!(obj, HelpEntry(docstr, mod); string_into_meta=string_into_meta)
 end
 
 macro doc(args...)
@@ -133,8 +137,6 @@ macro doc(args...)
               - doc-string, Julia-object
              """
     if length(args)==2
-        docstr, obj = args
-    elseif length(args)==3
         docstr, obj = args
     else
         error(errmsg)
@@ -223,9 +225,9 @@ end
 
 function help(io::IO, obj)
     init_help()
-    docdict = getdoc(obj, nothing)
-    if docdict!=nothing
-        out = _decor_help_desc(obj, docdict[:mod], docdict[:desc])
+    if hasdoc(obj)
+        he = getdoc(obj)
+        out = _decor_help_desc(obj, he.mod, he.desc)
         print(io, out)
     else 
         if isa(obj, DataType) # try to print something generic:
@@ -259,27 +261,28 @@ help(args...) = help(STDOUT, args...)
 
 apropos(s::String) = apropos(STDOUT, s)
 function apropos(io::IO, txt::String)
-    # This could be done better.
     init_help()
     n = 0
     r = Regex("\\Q$txt", Base.PCRE.CASELESS)
-    for (obj, desc) in APROPOS_DICT
-        if isequal(obj,NOOBJ_DICT)
-            for (objj, desc) in obj
-                if ismatch(r, string(obj)) || ismatch(r, desc)
-                    println(io, "Object: \"$objj\"")
-                    n = 1
-                end
-            end
-        else
+    println(io, "The string '$txt' appears in the documentation of following objects:")
+    for (obj, cont) in Base._META
+        if hasdoc(obj)
+            desc = getdoc(obj).desc
             if ismatch(r, string(obj)) || ismatch(r, desc)
-                println(io, "Object: \"$obj\"")
-                n = 1
+                println(io, string(obj))
             end
         end
+        n+=1
+    end
+    for (obj, cont) in NOOBJ_DICT
+        desc = cont.desc
+        if ismatch(r, obj) || ismatch(r, desc)
+            println(io, obj)
+        end
+        n+=1
     end
     if n == 0
-        println(io, "No help information found.")
+        println(io, "Non occurrence found.")
     end
 end
 

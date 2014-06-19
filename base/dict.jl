@@ -763,15 +763,6 @@ length(t::WeakKeyDict) = length(t.ht)
 # TODO:
 #  - take care of hash collisions when tidying up WeakRef(nothing)
 
-const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
-
-import Base: KeyIterator, ValueIterator, haskey, get, getkey, delete!,
-             pop!, empty!, filter!, setindex!, getindex, similar,
-             sizehint, length, filter, isempty, start, next, done,
-             keys, values, _tablesz, skip_deleted, serialize, deserialize, serialize_type, 
-             convert
-
-
 type WeakObjectIdDict{K,V} <: Associative{K,V}
     slots::Array{Uint8,1}
     keys::Array{WeakRef,1}
@@ -851,9 +842,15 @@ function deserialize{K,V}(s, T::Type{WeakObjectIdDict{K,V}})
     return t
 end
 
-# have two hashindex.  For setindex:
-hashindex(::WeakObjectIdDict, key::WeakRef, sz) =  error("asdf") #(int(hash(object_id(key.value))) & (sz-1)) + 1
-# For getindex:
+# use these functions to access the h.keys array.  Does conversion to
+# and from WeakRef.
+gkey(h::WeakObjectIdDict, ind) = h.keys[ind].value
+
+skey!(h::WeakObjectIdDict, val, ind) = (h.keys[ind] = WeakRef(val))
+skey!(ar::Array{WeakRef,1}, val, ind) = (ar[ind] = WeakRef(val))
+
+numslots(h::WeakObjectIdDict) = length(h.slots)
+
 hashindex(::WeakObjectIdDict, key, sz) = (int(hash(object_id(key))) & (sz-1)) + 1
 
 isslotempty(h::WeakObjectIdDict, i::Int) = h.slots[i] == 0x0
@@ -889,7 +886,7 @@ function rehash{K,V}(h::WeakObjectIdDict{K,V}, newsz)
 
     for i = 1:sz
         if olds[i] == 0x1
-            k = getkey(h, i)
+            k = gkey(h, i)
             if k==wnothing #&& i!=indexnothing_old # TODO: do something about hash collisions!
                 # a gc'ed immutable was here
                 continue
@@ -900,7 +897,7 @@ function rehash{K,V}(h::WeakObjectIdDict{K,V}, newsz)
                 index = (index & (newsz-1)) + 1
             end
             slots[index] = 0x1
-            setkey!(keys, k, index)
+            skey!(keys, k, index)
             vals[index] = v
             count += 1
 
@@ -942,16 +939,6 @@ function empty!{K,V}(h::WeakObjectIdDict{K,V})
     return h
 end
 
-# use these functions to access the h.keys array.  Does conversion to
-# and from WeakRef.
-getkey(h::WeakObjectIdDict, ind) = h.keys[ind].value
-getkey(ar::Array{WeakRef,1}, val, ind) = ar[ind].value
-
-setkey!(h::WeakObjectIdDict, val, ind) = (h.keys[ind] = WeakRef(val))
-setkey!(ar::Array{WeakRef,1}, val, ind) = (ar[ind] = WeakRef(val))
-
-numslots(h::WeakObjectIdDict) = length(h.slots)
-
 # get the index where a key is stored, or -1 if not present
 function ht_keyindex{K,V}(h::WeakObjectIdDict{K,V}, key)
     sz = numslots(h)
@@ -963,7 +950,7 @@ function ht_keyindex{K,V}(h::WeakObjectIdDict{K,V}, key)
         if isslotempty(h,index)
             break
         end
-        if !isslotmissing(h,index) && isequal(key, getkey(h, index))
+        if !isslotmissing(h,index) && isequal(key, gkey(h, index))
             return index
         end
 
@@ -998,7 +985,7 @@ function ht_keyindex2{K,V}(h::WeakObjectIdDict{K,V}, key)
                 # in case "key" already exists in a later collided slot.
                 avail = -index
             end
-        elseif isequal(key, getkey(h, index))
+        elseif isequal(key, gkey(h, index))
             return index
         end
 
@@ -1016,7 +1003,7 @@ end
 
 function _setindex!(h::WeakObjectIdDict, v, key, index)
     h.slots[index] = 0x1
-    setkey!(h, key, index)
+    skey!(h, key, index)
     h.vals[index] = v
     h.count += 1
 
@@ -1030,7 +1017,7 @@ end
 
 function weak_key_delete!(t::WeakObjectIdDict, k)
     # when a weak key is finalized, remove from dictionary if it is still there
-    wk = getkey(t, k, secret_table_token) # getkey returns the WeakRef.value
+    wk = getkey(t, k, secret_table_token) # gkey returns the WeakRef.value
     if !is(wk,secret_table_token) && is(wk, k)
         delete!(t, k)
     end
@@ -1050,7 +1037,7 @@ function setindex!{K,V}(h::WeakObjectIdDict{K,V}, v0, key0)
     index = ht_keyindex2(h, key0)
 
     if index > 0
-        setkey!(h, key0, index)
+        skey!(h, key0, index)
         h.vals[index] = v
     else
         _setindex!(h, v, key0, -index)

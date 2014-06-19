@@ -25,21 +25,11 @@ type MyType6498
     MyType6498(a) = new(a, MetaData())
 end
 hasmeta(obj::MyType6498) = !isempty(obj._metadata)
-hasmeta(obj::MyType6498, key) = hasmeta(obj) && haskey(obj._metadata, key)
-
 getmeta(obj::MyType6498) = hasmeta(obj) ?  obj._metadata : throw(KeyError(obj))
-getmeta(obj::MyType6498, key) = haskey(obj._metadata, key) ?  obj._metadata[key] : throw(KeyError(key))
-getmeta(obj::MyType6498, key, default) = haskey(obj._metadata, key) ? obj._metadata[key] : default
-
 getmeta!(obj::MyType6498) = obj._metadata
-getmeta!(obj::MyType6498, key, default) =  haskey(obj._metadata, key) ? obj._metadata[key] : (obj._metadata[key] = default)
-
-setmeta!(obj::MyType6498, md::MetaData) = obj._metadata = md 
-setmeta!(obj::MyType6498, key, value) = (obj._metadata[key]=value)
+setmeta!(obj::MyType6498, md::MetaData) = obj._metadata = md
 
 deletemeta!(obj::MyType6498) = (obj._metadata = MetaData(); nothing)
-deletemeta!(obj::MyType6498, key) = (delete!(obj._metadata, key); nothing)
-
 
 # other objects
 fn12(x) = x+1
@@ -147,7 +137,7 @@ setmeta!(numb, md)
 # this works
 @test isequal(getmeta(5),md)
 
-# These tests only pass for isa(META, ObjectIdDict):
+# These tests only pass for isa(META, (Weak)ObjectIdDict):
 @test_throws KeyError getmeta("asdf")
 di = {"a"=>5}
 setmeta!(di, md)
