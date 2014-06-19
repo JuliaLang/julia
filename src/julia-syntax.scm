@@ -2499,7 +2499,11 @@
 	       (cons (car ex)
 		     (append fu (cdr ex))))
 	     (map-to-lff e dest tail)))
-	
+
+    ((symbolicgoto)
+     (cons (if tail '(return (null)) '(null))
+           (map-to-lff e #f #f)))
+
 	(else
 	 (map-to-lff e dest tail)))))
 
