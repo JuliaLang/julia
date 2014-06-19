@@ -16,7 +16,7 @@ ALLSPHINXOPTS   = -d $(BUILDDIR)/doctrees $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) .
 I18NSPHINXOPTS  = $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) .
 
 .PHONY: help clean cleanall html dirhtml singlehtml pickle json htmlhelp qthelp devhelp \
-	epub latex latexpdf text man changes linkcheck doctest gettext listpkg
+	epub latex latexpdf text man changes linkcheck doctest gettext
 
 help:
 	@echo "Please use \`make <target>' where <target> is one of"
@@ -40,7 +40,6 @@ help:
 	@echo "  changes    to make an overview of all changed/added/deprecated items"
 	@echo "  linkcheck  to check all external links for integrity"
 	@echo "  doctest    to run all doctests embedded in the documentation (if enabled)"
-	@echo "  listpkg    to recreate the list of available packages"
 
 clean:
 	-rm -rf $(BUILDDIR)/*
@@ -162,6 +161,3 @@ doctest: juliadoc-pkg
 helpdb.jl: stdlib/*.rst juliadoc-pkg
 	$(SPHINXBUILD) -b jlhelp $(ALLSPHINXOPTS) $(BUILDDIR)/jlhelp
 	mv $(BUILDDIR)/jlhelp/jlhelp.jl helpdb.jl
-
-listpkg: 
-	$(JULIA) listpkg.jl
