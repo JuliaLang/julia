@@ -69,3 +69,22 @@ end
         end
     end)
 
+
+function goto_test6()
+    @goto a
+    @label a
+end
+
+@test goto_test6() == nothing
+
+
+function goto_test7(x)
+    @label a
+    if x
+        @goto a
+    end
+end
+
+@test goto_test7(false) == nothing
+
+
