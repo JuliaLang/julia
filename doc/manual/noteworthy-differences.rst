@@ -95,7 +95,9 @@ One of Julia's goals is to provide an effective language for data analysis and s
 - Julia is careful to distinguish scalars, vectors and matrices. In R, ``1`` and ``c(1)`` are the same. In Julia, they can not be used interchangeably. One potentially confusing result of this is that ``x' * y`` for vectors ``x`` and ``y`` is a 1-element vector, not a scalar. To get a scalar, use ``dot(x, y)``.
 - Julia's ``diag()`` and ``diagm()`` are not like R's.
 - Julia cannot assign to the results of function calls on the left-hand of an assignment operation: you cannot write ``diag(M) = ones(n)``.
-- Julia discourages populating the main namespace with functions. Most statistical functionality for Julia is found in `packages <http://docs.julialang.org/en/latest/packages/packagelist/>`_ like the DataFrames and Distributions packages:
+- Julia discourages populating the main namespace with functions. Most statistical
+  functionality for Julia is found in `packages <http://pkg.julialang.org/>`_ like the
+  DataFrames and Distributions packages:
 	- Distributions functions are found in the `Distributions package <https://github.com/JuliaStats/Distributions.jl>`_
 	- The `DataFrames package <https://github.com/HarlanH/DataFrames.jl>`_ provides data frames.
 	- Formulas for GLM's must be escaped: use ``:(y ~ x)`` instead of ``y ~ x``.
