@@ -367,8 +367,8 @@ ifeq ($(USE_SYSTEM_LLVM), 1)
 LLVM_CONFIG ?= llvm-config$(EXE)
 LLVM_LLC ?= llc$(EXE)
 else
-LLVM_CONFIG=$(LLVMROOT)/bin/llvm-config$(EXE)
-LLVM_LLC=$(LLVMROOT)/bin/llc$(EXE)
+LLVM_CONFIG=$(build_bindir)/llvm-config$(EXE)
+LLVM_LLC=$(build_bindir)/llc$(EXE)
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 1)
