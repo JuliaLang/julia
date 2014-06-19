@@ -184,12 +184,29 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
     dopushdisplay = !in(d,Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
     repl_channel, response_channel = backend.repl_channel, backend.response_channel
+    hit_eof = false
     while true
         write(repl.terminal, "julia> ")
         line = ""
         ast = nothing
         while true
-            line *= readline(repl.terminal)
+            try
+                line *= readline(repl.terminal)
+            catch e
+                if isa(e,InterruptException)
+                    try # raise the debugger if present
+                        ccall(:jl_raise_debugger, Int, ())
+                    end
+                    line = ""
+                    write(repl.terminal, "^C\n")
+                    break
+                elseif isa(e,EOFError)
+                    hit_eof = true
+                    break
+                else
+                    rethrow()
+                end
+            end
             ast = Base.parse_input_line(line)
             (isa(ast,Expr) && ast.head == :incomplete) || break
         end
@@ -201,6 +218,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
             end
         end
         write(repl.terminal, '\n')
+        hit_eof && break
     end
     # terminate backend
     put!(repl_channel, (nothing, -1))
