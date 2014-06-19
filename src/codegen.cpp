@@ -4312,7 +4312,7 @@ static void init_julia_llvm_env(Module *m)
     FPM->add(createLoopUnrollPass());           // Unroll small loops
     //FPM->add(createLoopStrengthReducePass());   // (jwb added)
     
-#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3
+#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3 && !defined(INSTCOMBINE_BUG)
     FPM->add(createLoopVectorizePass());        // Vectorize loops
 #endif
 #ifndef INSTCOMBINE_BUG
