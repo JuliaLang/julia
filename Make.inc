@@ -366,6 +366,7 @@ endif
 ifeq ($(USE_SYSTEM_LLVM), 1)
 LLVM_CONFIG ?= llvm-config$(EXE)
 LLVM_LLC ?= llc$(EXE)
+JCPPFLAGS+=-DSYSTEM_LLVM
 else
 LLVM_CONFIG=$(LLVMROOT)/bin/llvm-config$(EXE)
 LLVM_LLC=$(LLVMROOT)/bin/llc$(EXE)
