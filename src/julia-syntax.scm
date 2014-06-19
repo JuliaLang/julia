@@ -979,6 +979,25 @@
 		 (break ,bb)))
 	(else (map (lambda (x) (replace-return x bb ret retval)) e))))
 
+(define (process-const e)
+  (case (car e)
+    ((global local)
+     (expand-binding-forms
+      (qualified-const-expr (cdr e) `(const ,e))))
+    ((=)
+     (let ((lhs (cadr e))
+	   (rhs (caddr e)))
+       (let ((vars (if (and (pair? lhs) (eq? (car lhs) 'tuple))
+		       (cdr lhs)
+		       (list lhs))))
+	 `(block
+	   ,.(map (lambda (v)
+		    `(const ,(const-check-symbol (decl-var v))))
+		  vars)
+	   ,(expand-binding-forms `(= ,lhs ,rhs))))))
+    (else
+     (error "assertion failure"))))
+
 (define (expand-binding-forms e)
   (cond
    ((atom? e) e)
@@ -1167,25 +1186,14 @@
 	   (map expand-binding-forms e)))
 
       ((const)
-       (if (atom? (cadr e))
-	   e
-	   (case (car (cadr e))
-	     ((global local)
-	      (expand-binding-forms
-	       (qualified-const-expr (cdr (cadr e)) e)))
-	     ((=)
-	      (let ((lhs (cadr (cadr e)))
-		    (rhs (caddr (cadr e))))
-		(let ((vars (if (and (pair? lhs) (eq? (car lhs) 'tuple))
-				(cdr lhs)
-				(list lhs))))
-		  `(block
-		    ,.(map (lambda (v)
-			     `(const ,(const-check-symbol (decl-var v))))
-			   vars)
-		    ,(expand-binding-forms `(= ,lhs ,rhs))))))
+       (cond ((and (length= e 2)
+		   (or (atom? (cadr e))
+		       (not (memq (car (cadr e)) '(global local =)))))
+	      e)
+	     ((length= e 2)
+	      (process-const (cadr e)))
 	     (else
-	      e))))
+	      `(block ,@(map process-const (cdr e))))))
 
       ((local global)
        (if (and (symbol? (cadr e)) (length= e 2))
