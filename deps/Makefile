@@ -365,6 +365,7 @@ ifeq ($(BUILD_LLDB), 1)
 endif
 ifeq ($(LLVM_VER),3.3)
 	patch -p0 < llvm-3.3.patch
+	patch -p0 < instcombine-llvm-3.3.patch
 ifeq ($(OS),WINNT)
 ifeq ($(ARCH),x86_64)
 	patch -p0 < win64-int128.llvm-3.3.patch
