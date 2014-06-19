@@ -1153,8 +1153,29 @@ function findmin(a)
     return (m, mi)
 end
 
-indmax(a) = findmax(a)[2]
-indmin(a) = findmin(a)[2]
+function findminmax(a)
+    if isempty(a)
+        error("array must be non-empty")
+    end
+    vmin = vmax = a[1]
+    imin = imax = 1
+    for i = 2:length(a)
+        ai = a[i]
+        if ai < vmin || vmin!=vmin
+            vmin = ai
+            imin = i
+        end
+        if ai > vmax || vmax!=vmax
+            vmax = ai
+            imax = i
+        end
+    end
+    return ((vmin,imin), (vmax,imax))
+end
+
+argmax(a) = findmax(a)[2]
+argmin(a) = findmin(a)[2]
+argminmax(a) = (x = findminmax(a); (x[1][2], x[2][2]))
 
 # similar to Matlab's ismember
 # returns a vector containing the highest index in b for each value in a that is a member of b

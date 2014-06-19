@@ -486,6 +486,9 @@ export
     zeta,
 
 # arrays
+    argmax,
+    argmin,
+    argminmax,
     bitbroadcast,
     broadcast!,
     broadcast!_function,
@@ -516,6 +519,7 @@ export
     findin,
     findmax,
     findmin,
+    findminmax,
     findn,
     findnext,
     findnz,
@@ -528,8 +532,6 @@ export
     hvcat,
     ind2sub,
     indexin,
-    indmax,
-    indmin,
     invperm,
     ipermute!,
     ipermutedims,

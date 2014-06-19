@@ -661,31 +661,55 @@ Iterable Collections
     Compute both the minimum and maximum element in a single pass, and
     return them as a 2-tuple.
 
-.. function:: indmax(itr) -> Integer
+.. function:: argmax(itr) -> Integer
 
    Returns the index of the maximum element in a collection.
 
-.. function:: indmin(itr) -> Integer
+   See also: :func:`maximum`, :func:`findmax`
+
+.. function:: argmin(itr) -> Integer
 
    Returns the index of the minimum element in a collection.
+
+   See also: :func:`minimum`, :func:`findmin`
+
+.. function:: argminmax(itr) -> (Integer, Integer)
+
+   Returns the index of the minimum and maximum elements in a collection.
+
+   See also: :func:`minimum`, :func:`findmin`
 
 .. function:: findmax(itr) -> (x, index)
 
    Returns the maximum element and its index.
+
+   See also: :func:`maximum`, :func:`argmax`
 
 .. function:: findmax(A, dims) -> (maxval, index)
 
    For an array input, returns the value and index of the maximum over
    the given dimensions.
 
+   See also: :func:`maximum`, :func:`argmax`
+
 .. function:: findmin(itr) -> (x, index)
 
    Returns the minimum element and its index.
+
+   See also: :func:`minimum`, :func:`argmin`
 
 .. function:: findmin(A, dims) -> (minval, index)
 
    For an array input, returns the value and index of the minimum over
    the given dimensions.
+
+   See also: :func:`minimum`, :func:`argmin`
+
+.. function:: findminmax(itr) -> ((x, index),(y,index))
+
+   Returns the minimum and maximum elements and their indices.
+
+   See also: :func:`extrema`, :func:`argminmax`
 
 .. function:: maxabs(itr)
 

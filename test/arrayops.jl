@@ -298,14 +298,18 @@ end
 @test isequal(a,findn(z))
 
 #argmin argmax
-@test indmax([10,12,9,11]) == 2
-@test indmin([10,12,9,11]) == 3
+@test argmax([10,12,9,11]) == 2
+@test argmin([10,12,9,11]) == 3
+@test argminmax([10,12,9,11]) == (3,2)
 @test findmin([NaN,3.2,1.8]) == (1.8,3)
 @test findmax([NaN,3.2,1.8]) == (3.2,2)
+@test findminmax([NaN,3.2,1.8]) == ((1.8,3),(3.2,2))
 @test findmin([NaN,3.2,1.8,NaN]) == (1.8,3)
 @test findmax([NaN,3.2,1.8,NaN]) == (3.2,2)
+@test findminmax([NaN,3.2,1.8,NaN]) == ((1.8,3),(3.2,2))
 @test findmin([3.2,1.8,NaN,2.0]) == (1.8,2)
 @test findmax([3.2,1.8,NaN,2.0]) == (3.2,1)
+@test findminmax([3.2,1.8,NaN,2.0]) == ((1.8,2),(3.2,1))
 
 ## permutedims ##
 
