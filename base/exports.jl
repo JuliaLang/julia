@@ -1255,7 +1255,6 @@ export
     operm,
     pwd,
     rm,
-    rmdir,
     stat,
     symlink,
     tempdir,
