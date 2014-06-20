@@ -911,6 +911,7 @@ export
     mean,
     median!,
     median,
+    middle,
     midpoints,
     quantile!,
     quantile,
