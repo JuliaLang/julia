@@ -462,7 +462,7 @@ function median!{T<:Real}(v::AbstractVector{T}; checknan::Bool=true)
     end
     n = length(v)
     if isodd(n)
-        return select!(v,div(n+1,2))
+        return float(select!(v,div(n+1,2)))
     else
         m = select!(v, div(n,2):div(n,2)+1)
         return (m[1] + m[2])/2
