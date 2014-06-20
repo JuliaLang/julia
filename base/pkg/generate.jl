@@ -76,7 +76,7 @@ function package(
             end
         end
     catch
-        isnew && run(`rm -rf $pkg`)
+        isnew && rm(pkg, recursive=true)
         rethrow()
     end
 end

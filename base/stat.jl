@@ -107,6 +107,7 @@ end
 
 islink(path...) = islink(lstat(path...))
 
+
 # some convenience functions
 
 filemode(path...) = stat(path...).mode

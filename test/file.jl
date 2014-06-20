@@ -70,7 +70,22 @@ mv(a_tmpdir, b_tmpdir)
 b_stat = stat(b_tmpdir)
 @test Base.samefile(a_stat, b_stat)
 
-rmdir(b_tmpdir)
+rm(b_tmpdir)
+
+# rm recursive TODO add links
+c_tmpdir = mktempdir()
+c_subdir = joinpath(c_tmpdir, "c_subdir")
+mkdir(c_subdir)
+c_file = joinpath(c_tmpdir, "cfile.txt")
+cp(newfile, c_file)
+
+@test isdir(c_subdir)
+@test isfile(c_file)
+@test_throws SystemError rm(c_tmpdir)
+
+rm(c_tmpdir, recursive=true)
+@test !isdir(c_tmpdir)
+
 
 #######################################################################
 # This section tests file watchers.                                   #
@@ -280,8 +295,8 @@ close(f)
 @non_windowsxp_only rm(dirlink)
 
 rm(file)
-rmdir(subdir)
-rmdir(dir)
+rm(subdir)
+rm(dir)
 
 @test !ispath(file)
 @test !ispath(dir)
