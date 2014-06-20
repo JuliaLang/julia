@@ -116,7 +116,7 @@ requires_dict(pkg::String, avail::Dict=available(pkg)) =
 
 function installed(avail::Dict=available())
     pkgs = Dict{ByteString,(VersionNumber,Bool)}()
-    for pkg in readdir()
+    for pkg in keys(avail)
         isinstalled(pkg) || continue
         ap = get(avail,pkg,Dict{VersionNumber,Available}())
         pkgs[pkg] = (installed_version(pkg,ap),isfixed(pkg,ap))

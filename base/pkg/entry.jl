@@ -230,7 +230,7 @@ function pin(pkg::String, ver::VersionNumber)
     pin(pkg,avail[ver].sha1)
 end
 
-function update(branch::String)
+function update_metadata(branch::String)
     info("Updating METADATA...")
     cd("METADATA") do
         if Git.branch() != branch
@@ -246,7 +246,10 @@ function update(branch::String)
             Git.run(`pull -q`, out=DevNull)
         end
     end
-    avail = Read.available()
+end
+
+function update(branch::String, avail::Dict=Read.available())
+    update_metadata(branch)
     # this has to happen before computing free/fixed
     @sync for pkg in filter!(Read.isinstalled,[keys(avail)...])
         @async Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
@@ -273,10 +276,19 @@ function update(branch::String)
         end
     end
     info("Computing changes...")
-    resolve(Reqs.parse("REQUIRE"), avail, instd, fixed, free)
+    resolve()
     # Don't use instd here since it may have changed
-    updatehook(sort!([keys(installed())...]))
+    updatehook(sort!([keys(Read.installed(avail))...]))
 end
+
+function update(branch::String, pkg::String)
+    if pkg == "METADATA"
+        update_metadata(branch)
+    else
+        update(branch, [pkg])
+    end
+end
+update(branch::String, pkgs::Vector) = update(branch, Read.available(pkgs))
 
 function pull_request(dir::String, commit::String="", url::String="")
     commit = isempty(commit) ? Git.head(dir=dir) :

@@ -39,6 +39,9 @@ pin(pkg::String) = cd(Entry.pin,pkg)
 pin(pkg::String, ver::VersionNumber) = cd(Entry.pin,pkg,ver)
 
 update() = cd(Entry.update,META_BRANCH)
+update(pkg::String) = cd(Entry.update,META_BRANCH,pkg)
+update(pkgs::String...) = cd(Entry.update,META_BRANCH,collect(pkgs))
+update(pkgs::Vector) = cd(Entry.update,META_BRANCH,pkgs)
 resolve() = cd(Entry.resolve)
 
 register(pkg::String) = cd(Entry.register,pkg)
