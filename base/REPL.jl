@@ -238,14 +238,13 @@ type LineEditREPL <: AbstractREPL
     in_shell::Bool
     in_help::Bool
     envcolors::Bool
-    consecutive_returns::Int
     waserror::Bool
     specialdisplay
     interface
     backendref::REPLBackendRef
     LineEditREPL(t,prompt_color,input_color,answer_color,shell_color,help_color,no_history_file,in_shell,in_help,envcolors) =
         new(t,prompt_color,input_color,answer_color,shell_color,help_color,no_history_file,in_shell,
-            in_help,envcolors,0,false,nothing)
+            in_help,envcolors,false,nothing)
 end
 outstream(r::LineEditREPL) = r.t
 specialdisplay(r::LineEditREPL) = r.specialdisplay
@@ -510,15 +509,9 @@ LineEdit.reset_state(hist::REPLHistoryProvider) = history_reset_state(hist)
 
 const julia_green = "\033[1m\033[32m"
 
-function return_callback(repl, s)
-    if position(s.input_buffer) != 0 && eof(s.input_buffer) &&
-        (seek(s.input_buffer, position(s.input_buffer)-1); read(s.input_buffer, Uint8) == '\n')
-        repl.consecutive_returns += 1
-    else
-        repl.consecutive_returns = 0
-    end
-    ast = parse_input_line(bytestring(s.input_buffer))
-    if repl.consecutive_returns > 1 || !isa(ast, Expr) || (ast.head != :continue && ast.head != :incomplete)
+function return_callback(s)
+    ast = parse_input_line(bytestring(LineEdit.buffer(s)))
+    if  !isa(ast, Expr) || (ast.head != :continue && ast.head != :incomplete)
         return true
     else
         return false
@@ -605,7 +598,7 @@ function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[]
         prompt_suffix = repl.envcolors ? Base.input_color() : repl.input_color,
         keymap_func_data = repl,
         complete = replc,
-        on_enter = s->return_callback(repl, s))
+        on_enter = return_callback)
 
     julia_prompt.on_done = respond(Base.parse_input_line, repl, julia_prompt)
 

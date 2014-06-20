@@ -182,3 +182,45 @@ let buf = IOBuffer()
     LineEdit.edit_transpose(buf)
     @test bytestring(buf.data[1:buf.size]) == "βγαδε"
 end
+
+let
+    term = Base.Terminals.FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
+    s = LineEdit.init_state(term, Base.REPL.ModalInterface([Base.REPL.Prompt("test> ")]))
+    buf = LineEdit.buffer(s)
+
+    LineEdit.edit_insert(s,"first line\nsecond line\nthird line")
+    @test bytestring(buf.data[1:buf.size]) == "first line\nsecond line\nthird line"
+
+    ## edit_move_line_start/end ##
+    seek(buf, 0)
+    LineEdit.move_line_end(s)
+    @test position(buf) == sizeof("first line")
+    LineEdit.move_line_end(s) # Only move to input end on repeated keypresses
+    @test position(buf) == sizeof("first line")
+    s.key_repeats = 1 # Manually flag a repeated keypress
+    LineEdit.move_line_end(s)
+    s.key_repeats = 0
+    @test eof(buf)
+
+    seekend(buf)
+    LineEdit.move_line_start(s)
+    @test position(buf) == sizeof("first line\nsecond line\n")
+    LineEdit.move_line_start(s)
+    @test position(buf) == sizeof("first line\nsecond line\n")
+    s.key_repeats = 1 # Manually flag a repeated keypress
+    LineEdit.move_line_start(s)
+    s.key_repeats = 0
+    @test position(buf) == 0
+
+    ## edit_kill_line, edit_yank ##
+    seek(buf, 0)
+    LineEdit.edit_kill_line(s)
+    s.key_repeats = 1 # Manually flag a repeated keypress
+    LineEdit.edit_kill_line(s)
+    s.key_repeats = 0
+    @test bytestring(buf.data[1:buf.size]) == "second line\nthird line"
+    LineEdit.move_line_end(s)
+    LineEdit.edit_move_right(s)
+    LineEdit.edit_yank(s)
+    @test bytestring(buf.data[1:buf.size]) == "second line\nfirst line\nthird line"
+end
