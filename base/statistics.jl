@@ -453,7 +453,10 @@ end
 
 ##### median & quantiles #####
 
-middle(x::Real) = float(x)
+middle(x::Union(Bool,Int8,Int16,Int32,Int64,Int128,Uint8,Uint16,Uint32,Uint64,Uint128)) = float64(x)
+middle(x::FloatingPoint) = x
+middle(x::Float16) = float32(x)
+middle(x::Real) = (x + zero(x)) / 1
 middle(x::Real, y::Real) = (x + y) / 2
 middle(a::Range) = middle(a[1], a[end])
 middle(a::AbstractArray) = ((v1, v2) = extrema(a); middle(v1, v2))
