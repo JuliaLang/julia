@@ -1,3 +1,17 @@
+# middle
+
+@test middle(3) === 3.0
+@test middle(2, 3) === 2.5
+@test middle(1:8) === 4.5
+@test middle([1:8]) === 4.5
+
+# ensure type-correctness
+for T in [Bool,Int8,Int16,Int32,Int64,Int128,Uint8,Uint16,Uint32,Uint64,Uint128,Float16,Float32,Float64]
+    @test middle(one(T)) === middle(one(T), one(T))
+end
+
+
+# median
 @test median([1.]) === 1.
 @test median([1.,3]) === 2.
 @test median([1.,3,2]) === 2.
