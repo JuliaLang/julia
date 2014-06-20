@@ -35,6 +35,7 @@ repl = Base.REPL.LineEditREPL(FakeTerminal(stdin_read, stdout_write, stderr_writ
 # In the future if we want we can add a test that the right object
 # gets displayed by intercepting the display
 repl.specialdisplay = Base.REPL.REPLDisplay(repl)
+repl.no_history_file = true
 
 repltask = @async begin
     Base.REPL.run_repl(repl)
