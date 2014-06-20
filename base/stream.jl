@@ -275,7 +275,7 @@ end
 
 flush(::AsyncStream) = nothing
 
-function isopen(x::AsyncStream)
+function isopen(x::Union(AsyncStream,UVServer))
     if !(x.status != StatusUninit && x.status != StatusInit)
         error("I/O object not initialized")
     end
