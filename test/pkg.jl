@@ -9,7 +9,7 @@ function temp_pkg_dir(fn::Function)
 
     fn()
   finally
-    run(`rm -rf $tmpdir`)
+    rmdir(tmpdir, true)
   end
 end
 

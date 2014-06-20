@@ -33,6 +33,10 @@ Filesystem
 
    Returns ``true`` if ``path`` is a symbolic link, ``false`` otherwise.
 
+.. function:: isfileorlink(path) -> Bool
+
+   Returns ``true`` if ``path`` is a regular file or a symbolic link, ``false`` otherwise.
+
 .. function:: ispath(path) -> Bool
 
    Returns ``true`` if ``path`` is a valid filesystem path, ``false`` otherwise.

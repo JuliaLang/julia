@@ -91,7 +91,7 @@ function git_setup(h::Dict, i::Dict, w::Dict, parents::String...)
     # clear the repo
     for line in eachline(`ls -A`)
         name = chomp(line)
-        name == ".git" || run(`rm -rf $name`)
+        name == ".git" || rmdir(name, true)
     end
 
     # create the head commit
