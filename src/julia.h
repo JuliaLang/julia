@@ -624,6 +624,8 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
                                           jl_tuple_t **penv, jl_tuple_t *tvars);
 DLLEXPORT jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b);
 int jl_args_morespecific(jl_value_t *a, jl_value_t *b);
+DLLEXPORT const char *jl_typename_str(jl_value_t *v);
+DLLEXPORT const char *jl_typeof_str(jl_value_t *v);
 
 // type constructors
 DLLEXPORT jl_typename_t *jl_new_typename(jl_sym_t *name);
@@ -718,11 +720,13 @@ DLLEXPORT void *jl_unbox_voidpointer(jl_value_t *v);
 #endif
 
 // structs
-DLLEXPORT int jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err);
+DLLEXPORT int         jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err);
 DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i);
 DLLEXPORT jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i);
 DLLEXPORT void        jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs);
 DLLEXPORT int         jl_field_isdefined(jl_value_t *v, size_t i);
+DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, char *fld);
+DLLEXPORT void       *jl_value_ptr(jl_value_t *a);
 
 // arrays
 #ifdef STORE_ARRAY_LEN
@@ -761,15 +765,21 @@ DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i);  // 0-indexed
 DLLEXPORT void jl_arrayset(jl_array_t *a, jl_value_t *v, size_t i);  // 0-indexed
 DLLEXPORT void jl_arrayunset(jl_array_t *a, size_t i);  // 0-indexed
 int jl_array_isdefined(jl_value_t **args, int nargs);
-DLLEXPORT void *jl_array_ptr(jl_array_t *a);
 DLLEXPORT void jl_array_grow_end(jl_array_t *a, size_t inc);
 DLLEXPORT void jl_array_del_end(jl_array_t *a, size_t dec);
 DLLEXPORT void jl_array_grow_beg(jl_array_t *a, size_t inc);
 DLLEXPORT void jl_array_del_beg(jl_array_t *a, size_t dec);
 DLLEXPORT void jl_array_sizehint(jl_array_t *a, size_t sz);
-DLLEXPORT void *jl_value_ptr(jl_value_t *a);
 DLLEXPORT void jl_cell_1d_push(jl_array_t *a, jl_value_t *item);
 DLLEXPORT jl_value_t *jl_apply_array_type(jl_datatype_t *type, size_t dim);
+// property access
+DLLEXPORT void *jl_array_ptr(jl_array_t *a);
+DLLEXPORT void *jl_array_eltype(jl_value_t *a);
+DLLEXPORT int jl_array_rank(jl_value_t *a);
+DLLEXPORT size_t jl_array_size(jl_value_t *a, int d);
+
+// strings
+DLLEXPORT const char *jl_bytestring_ptr(jl_value_t *s);
 
 // modules and global variables
 extern DLLEXPORT jl_module_t *jl_main_module;
@@ -1095,6 +1105,8 @@ DLLEXPORT extern volatile sig_atomic_t jl_defer_signal;
 
 DLLEXPORT void restore_signals(void);
 DLLEXPORT void jl_install_sigint_handler();
+DLLEXPORT void jl_sigatomic_begin(void);
+DLLEXPORT void jl_sigatomic_end(void);
 
 
 // tasks and exceptions -------------------------------------------------------
