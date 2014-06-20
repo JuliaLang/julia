@@ -186,6 +186,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
     repl_channel, response_channel = backend.repl_channel, backend.response_channel
     hit_eof = false
     while true
+        Base.reseteof(repl.terminal)
         write(repl.terminal, "julia> ")
         line = ""
         ast = nothing
@@ -218,7 +219,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
             end
         end
         write(repl.terminal, '\n')
-        hit_eof && break
+        (isempty(line) || hit_eof) && break
     end
     # terminate backend
     put!(repl_channel, (nothing, -1))
