@@ -23,11 +23,9 @@ end
 @test isdir(dir)
 @test !isfile(dir)
 @test !islink(dir)
-@test !isfileorlink(dir)
 @test !isdir(file)
 @test isfile(file)
 @test !islink(file)
-@test isfileorlink(file)
 @test isreadable(file)
 @test iswritable(file)
 # Here's something else that might be UNIX-specific?
@@ -54,7 +52,6 @@ newfile = joinpath(dir, "bfile.txt")
 mv(file, newfile)
 @test !ispath(file)
 @test isfile(newfile)
-@test isfileorlink(newfile)
 file = newfile
 
 # Test renaming directories
@@ -73,9 +70,9 @@ mv(a_tmpdir, b_tmpdir)
 b_stat = stat(b_tmpdir)
 @test Base.samefile(a_stat, b_stat)
 
-rmdir(b_tmpdir)
+rm(b_tmpdir)
 
-# rmdir recursive TODO add links
+# rm recursive TODO add links
 c_tmpdir = mktempdir()
 c_subdir = joinpath(c_tmpdir, "c_subdir")
 mkdir(c_subdir)
@@ -84,9 +81,9 @@ cp(newfile, c_file)
 
 @test isdir(c_subdir)
 @test isfile(c_file)
-@test_throws rmdir(c_tmpdir)
+@test_throws SystemError rm(c_tmpdir)
 
-rmdir(c_tmpdir, true)
+rm(c_tmpdir, recursive=true)
 @test !isdir(c_tmpdir)
 
 
@@ -298,8 +295,8 @@ close(f)
 @non_windowsxp_only rm(dirlink)
 
 rm(file)
-rmdir(subdir)
-rmdir(dir)
+rm(subdir)
+rm(dir)
 
 @test !ispath(file)
 @test !ispath(dir)

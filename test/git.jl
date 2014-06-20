@@ -30,4 +30,4 @@ try cd(dir) do
     end
     git_verify(states[1:3]...)
 
-end finally rmdir(dir, true) end
+end finally rm(dir, recursive=true) end
