@@ -1,4 +1,5 @@
 using Base.LineEdit
+using TestHelpers
 
 a_foo = 0
 
@@ -184,7 +185,7 @@ let buf = IOBuffer()
 end
 
 let
-    term = Base.Terminals.FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
+    term = TestHelpers.FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
     s = LineEdit.init_state(term, Base.REPL.ModalInterface([Base.REPL.Prompt("test> ")]))
     buf = LineEdit.buffer(s)
 
