@@ -543,6 +543,22 @@ begin
     @test glo == 18
 end
 
+# issue #7307
+function test7307(a, ret)
+    try
+        try
+            ret && return a
+        finally
+            push!(a, "inner")
+        end
+    finally
+        push!(a, "outer")
+    end
+    return a
+end
+@test test7307({}, true) == {"inner","outer"}
+@test test7307({}, false) == {"inner","outer"}
+
 # chained and multiple assignment behavior (issue #2913)
 begin
     local x, a, b, c, d, e

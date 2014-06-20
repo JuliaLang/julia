@@ -1105,7 +1105,11 @@
 
       ((try)
        (if (length= e 5)
-	   (let ((tryb (cadr e))
+	   (let (;; expand inner try blocks first, so their return statements
+		 ;; will have been moved for `finally`, causing correct
+		 ;; chaining behavior when the current (outer) try block is
+		 ;; expanded.
+		 (tryb (expand-binding-forms (cadr e)))
 		 (var  (caddr e))
 		 (catchb (cadddr e))
 		 (finalb (cadddr (cdr e))))
