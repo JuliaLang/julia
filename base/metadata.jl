@@ -12,10 +12,14 @@
 typealias MetaData Dict{Any,Any}
 
 # The Dict for META:
-typealias MetaDict WeakObjectIdDict{Any, MetaData}
+
+#typealias MetaDict WeakObjectIdDict{Any, MetaData}  # not in base but see PR https://github.com/JuliaLang/julia/pull/7348
 #typealias MetaDict WeakKeyDict{Any, MetaData} # Problem: does not work for immutables
 #typealias MetaDict Dict{Any, MetaData} # Problem: if a mutable changes the hash changes
-#typealias MetaDict ObjectIdDict  # Problem: does not free references
+typealias MetaDict ObjectIdDict  # Problem: does not free references
+
+## when using ObjectIdDict add a get! method to ObjectIdDict
+get!(od::ObjectIdDict, key, default) = haskey(od,key) ? od[key] : od[key] = default
 
 META = MetaDict() # this holds all the metadata
 

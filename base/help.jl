@@ -12,10 +12,10 @@ import Base.WeakObjectIdDict
 # :mod  : module which contains this object/concept/keyword (if applicable)
 type HelpEntry
     desc::String                       # description
-    mod::Union(Module,String,Nothing)  # module of entry. This is useful for type instances
+    mod::Union(Module,String)  # module of entry. This is useful for type instances
                                        # for which figuring out the defining module is hard.
-    HelpEntry() = new("", nothing)
-    HelpEntry(desc) = new(desc, nothing)
+    HelpEntry() = new("", "")
+    HelpEntry(desc) = new(desc, "")
     HelpEntry(desc, mod) = new(desc, mod)
 end
 
@@ -126,7 +126,7 @@ end
 
 # user-created help
 ##
-function doc(obj, docstr::String; mod=nothing, string_into_meta=false)
+function doc(obj, docstr::String; mod="", string_into_meta=false)
     # the module cannot be set automatically with this function, use the macro instead
     setdoc!(obj, HelpEntry(docstr, mod); string_into_meta=string_into_meta)
 end
@@ -206,7 +206,7 @@ end
 function _decor_help_desc(obj, mod, desc::String)
     # adds information about module, signature and such.  Probably needs updating.
     func = string(obj)
-    if !isequal(mod,nothing)
+    if !isequal(mod,"")
         mfunc = string(mod) * "." * func
     else
         mfunc = string(obj)

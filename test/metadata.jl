@@ -65,6 +65,8 @@ totest = {
 ## empty:
 testkey = 5
 for te in totest
+    # @show te
+    # @show getmeta(te)
     @test_throws KeyError getmeta(te)
     @test isequal(getmeta(te, testkey, nothing), nothing)
 end

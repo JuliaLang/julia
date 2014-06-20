@@ -87,7 +87,7 @@ b = Dict()
 st = randstring(5); st2 = randstring(5)
 doc(b, st)
 @test getdoc(b).desc==st
-@test getdoc(b).mod==nothing
+@test getdoc(b).mod==""
 @test hasmeta(b)
 doc(b, st; mod=Base)
 @test getdoc(b).desc==st
