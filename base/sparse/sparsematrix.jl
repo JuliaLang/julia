@@ -1,7 +1,7 @@
 # Compressed sparse columns data structure
 # Assumes that no zeros are stored in the data structure
-# Assumes that row values in rowval for each colum are sorted 
-#      issorted(rowval[colptr[i]]:rowval[colptr[i+1]]-1) == true
+# Assumes that row values in rowval for each column are sorted
+#      issorted(rowval[colptr[i]:(colptr[i+1]-1)]) == true
 
 type SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
     m::Int                  # Number of rows
