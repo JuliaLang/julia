@@ -5152,9 +5152,9 @@ System
    Create all directories in the given ``path``, with permissions ``mode``.
    ``mode`` defaults to 0o777, modified by the current file creation mask.
 
-.. function:: rmdir(path)
+.. function:: rmdir(path, [recursive=false])
 
-   Remove the directory named ``path``.
+   Remove the directory named ``path``. To remove a non-empty directory you must pass recursive true.
 
 .. function:: getpid() -> Int32
 

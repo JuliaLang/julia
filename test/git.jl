@@ -30,4 +30,4 @@ try cd(dir) do
     end
     git_verify(states[1:3]...)
 
-end finally run(`rm -rf $dir`) end
+end finally rmdir(dir, true) end
