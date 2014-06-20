@@ -38,7 +38,13 @@ run(`chmod +w $file`)
 # files and is thus zero in this case.
 @windows_only @test filesize(dir) == 0
 @unix_only @test filesize(dir) > 0
-@test int(time()) >= int(mtime(file)) >= int(mtime(dir)) >= 0 # 1 second accuracy should be sufficient
+let skew = 0.1  # allow 100ms skew
+    now   = time()
+    mfile = mtime(file)
+    mdir  = mtime(dir)
+    @test now >= mfile-skew  &&  now >= mdir-skew  &&  mfile >= mdir-skew
+end
+#@test int(time()) >= int(mtime(file)) >= int(mtime(dir)) >= 0 # 1 second accuracy should be sufficient
 
 # test links
 @unix_only @test islink(link) == true
