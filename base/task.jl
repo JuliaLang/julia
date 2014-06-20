@@ -1,5 +1,7 @@
 ## basic task functions and TLS
 
+wait(f::Callable) = f()
+
 show(io::IO, t::Task) = print(io, "Task ($(t.state)) @0x$(hex(unsigned(pointer_from_objref(t)), WORD_SIZE>>2))")
 
 macro task(ex)
@@ -65,7 +67,7 @@ function task_done_hook(t::Task)
     #isa(q,Condition) && notify(q, result, error=err)
     if isa(q,Task)
         nexttask = q
-        nexttask.state = :runnable
+        !istaskdone(nexttask) && (nexttask.state = :runnable)
     elseif isa(q,Condition) && !isempty(q.waitq)
         notify(q, result, error=err)
     end
@@ -109,6 +111,7 @@ function produce(v)
         wait()
     end
 
+    istaskdone(t) && error("assertion failure: consumer unexpectedly gone for produce")
     t.state = :runnable
     if empty
         if isempty(Workqueue)
@@ -214,6 +217,83 @@ notify1(c::Condition, arg=nothing) = notify(c, arg, all=false)
 notify_error(c::Condition, err) = notify(c, err, error=true)
 notify1_error(c::Condition, err) = notify(c, err, error=true, all=false)
 
+waitq(c, killq) = waitq(()->wait(c), killq)
+function waitq(c::Callable, killq)
+    t = schedule(Task(c))
+    push!(killq, t)
+    return waitq(t, killq)
+end
+waitq(c::Condition, killq) = c
+function waitq(t::Task, killq)
+    if istaskdone(t)
+        if t.state == :failed
+            throw(t.exception)
+        end
+    end
+    if is(t.donenotify, nothing)
+        t.donenotify = Condition()
+    end
+    return t.donenotify
+end
+
+waitresult(c) = (false, nothing)
+function waitresult(t::Task)
+    if istaskdone(t)
+        if t.state == :failed
+            throw(t.exception)
+        end
+        return (true, t.result)
+    end
+    return (false, nothing)
+end
+
+immutable TaskKillException <: Exception end
+waitkill(c,ct::Task) = nothing
+waitkill(c::Condition,ct::Task) = (filter!(x->x!==ct, c.waitq); nothing)
+function waitkill(t::Task,ct::Task)
+    if !istaskdone(t)
+        if istaskstarted(t)
+            schedule(t, TaskKillException(), error=true)
+        else
+            filter!(x->x!==t, Workqueue)
+        end
+    end
+    nothing
+end
+
+function wait(cs...)
+    ct = current_task()
+    ct.state = :waiting
+
+    killq = Array(Any, 2*length(cs)); resize!(killq,0)
+    try
+        for c in cs
+            c = waitq(c, killq)::Condition
+            push!(c.waitq, ct)
+            push!(killq, c)
+        end
+        for c in cs
+            hasresult, res = waitresult(c)
+            hasresult && return res
+        end
+        result = wait()
+        for c in cs
+            hasresult, res = waitresult(c)
+            hasresult && return res
+        end
+        return result
+    catch e
+        if ct.state == :waiting
+            ct.state = :runnable
+        end
+        rethrow(e)
+    finally
+        for c in killq
+            waitkill(c,ct)
+        end
+    end
+end
+
 
 ## scheduler and work queue
 
@@ -221,6 +301,10 @@ global const Workqueue = Any[]
 
 function enq_work(t::Task)
     ccall(:uv_stop,Void,(Ptr{Void},),eventloop())
+    ct = current_task()
+    if t.state == :queued
+        filter!(x->x!==ct, Workqueue)
+    end
     push!(Workqueue, t)
     t.state = :queued
     t
@@ -273,13 +357,15 @@ function wait()
             end
         else
             t = shift!(Workqueue)
-            arg = t.result
-            t.result = nothing
-            t.state = :runnable
-            result = yieldto(t, arg)
-            process_events(false)
-            # return when we come out of the queue
-            return result
+            if !istaskdone(t)
+                arg = t.result
+                t.result = nothing
+                t.state = :runnable
+                result = yieldto(t, arg)
+                process_events(false)
+                # return when we come out of the queue
+                return result
+            end
         end
     end
     assert(false)

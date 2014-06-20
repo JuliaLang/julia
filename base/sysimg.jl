@@ -267,7 +267,6 @@ function __init__()
     # Base library init
     reinit_stdio()
     Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
-    fdwatcher_init()
 end
 
 include("precompile.jl")
