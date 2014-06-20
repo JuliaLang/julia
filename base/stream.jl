@@ -59,6 +59,7 @@ const StatusOpen        = 3 # handle is usable
 const StatusActive      = 4 # handle is listening for read/write/connect events
 const StatusClosing     = 5 # handle is closing / being closed
 const StatusClosed      = 6 # handle is closed
+const StatusEOF         = 7 # handle is a TTY that has seen an EOF event
 function uv_status_string(x)
     s = x.status
     if x.handle == C_NULL
@@ -82,6 +83,8 @@ function uv_status_string(x)
         return "closing"
     elseif s == StatusClosed
         return "closed"
+    elseif s == StatusEOF
+        return "eof"
     end
     return "invalid status"
 end
@@ -272,11 +275,11 @@ end
 
 flush(::AsyncStream) = nothing
 
-function isopen(x)
+function isopen(x::AsyncStream)
     if !(x.status != StatusUninit && x.status != StatusInit)
         error("I/O object not initialized")
     end
-    x.status != StatusClosed
+    x.status != StatusClosed && x.status != StatusEOF
 end
 
 function check_open(x)
@@ -385,11 +388,11 @@ function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::
             notify_error(stream.readnotify, UVError("readcb",nread))
         else
             if isa(stream,TTY)
-                notify_error(stream.readnotify, EOFError())
+                stream.status = StatusEOF
             else
                 close(stream)
-                notify(stream.readnotify)
             end
+            notify(stream.readnotify)
         end
     else
         notify_filled(stream.buffer, nread, base, len)
@@ -404,7 +407,16 @@ function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::
        (nb_available(stream.buffer) == stream.buffer.maxsize)
         stop_reading(stream)
     end
- end
+end
+
+reseteof(x::IO) = nothing
+function reseteof(x::TTY)
+    if x.status == StatusEOF
+        x.status = StatusOpen
+    end
+    nothing
+end
+
 ##########################################
 # Async Workers
 ##########################################

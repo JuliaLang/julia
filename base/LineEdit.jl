@@ -1359,6 +1359,7 @@ keymap(ms::MIState, m::ModalInterface) = keymap(ms.mode_state[ms.current_mode], 
 keymap_data(ms::MIState, m::ModalInterface) = keymap_data(ms.mode_state[ms.current_mode], ms.current_mode)
 
 function prompt!(terminal, prompt, s = init_state(terminal, prompt))
+    Base.reseteof(terminal)
     raw!(terminal, true)
     enable_bracketed_paste(terminal)
     try
