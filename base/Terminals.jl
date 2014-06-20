@@ -31,7 +31,8 @@ import Base:
     start_reading,
     stop_reading,
     write,
-    writemime
+    writemime,
+    reseteof
 
 ## TextTerminal ##
 
@@ -44,6 +45,7 @@ cmove(t::TextTerminal, x, y) = error("Unimplemented")
 getX(t::TextTerminal) = error("Unimplemented")
 getY(t::TextTerminal) = error("Unimplemented")
 pos(t::TextTerminal) = (getX(t), getY(t))
+reseteof(t::TextTerminal) = nothing
 
 # Relative moves (Absolute position fallbacks)
 cmove_up(t::TextTerminal, n) = cmove(getX(t), max(1, getY(t)-n))
@@ -112,6 +114,8 @@ type TTYTerminal <: UnixTerminal
     out_stream::Base.TTY
     err_stream::Base.TTY
 end
+
+reseteof(t::TTYTerminal) = reseteof(t.in_stream)
 
 const CSI = "\x1b["
 
