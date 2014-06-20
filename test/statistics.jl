@@ -1,3 +1,7 @@
+@test median([1]) == 1.
+@test median([1,3]) == 2.
+@test median([1,3,2]) == 2.
+
 @test median([1.]) == 1.
 @test median([1.,3]) == 2.
 @test median([1.,3,2]) == 2.
