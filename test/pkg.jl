@@ -9,7 +9,7 @@ function temp_pkg_dir(fn::Function)
 
     fn()
   finally
-    rmdir(tmpdir, true)
+    rm(tmpdir, recursive=true)
   end
 end
 

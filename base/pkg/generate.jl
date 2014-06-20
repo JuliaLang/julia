@@ -76,7 +76,7 @@ function package(
             end
         end
     catch
-        isnew && rmdir(pkg, true)
+        isnew && rm(pkg, recursive=true)
         rethrow()
     end
 end

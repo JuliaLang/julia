@@ -1778,9 +1778,10 @@ I/O
 
    Move a file from `src` to `dst`.
 
-.. function:: rm(path::String)
+.. function:: rm(path::String; recursive=false)
 
-   Delete the file at the given path. Note that this does not work on directories.
+   Delete the file, link, or empty directory at the given path. If ``recursive=true`` is
+   passed and the path is a directory, then all contents are removed recursively.
 
 .. function:: touch(path::String)
 
@@ -5151,10 +5152,6 @@ System
 
    Create all directories in the given ``path``, with permissions ``mode``.
    ``mode`` defaults to 0o777, modified by the current file creation mask.
-
-.. function:: rmdir(path, [recursive=false])
-
-   Remove the directory named ``path``. To remove a non-empty directory you must pass recursive true.
 
 .. function:: getpid() -> Int32
 
