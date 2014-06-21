@@ -48,7 +48,7 @@ can be used instead::
     true
 
 More generally, you can use ``open`` to read from or write to an external
-command.  For example:
+command.  For example::
 
     julia> open(`less`, "w", STDOUT) do io
                for i = 1:1000
