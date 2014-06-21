@@ -13,16 +13,16 @@ yes = `perl -le 'while (1) {print STDOUT "y"}'`
 
 #### Examples used in the manual ####
 
-@test readall(`echo hello | sort`) == "hello | sort\n"
-@test readall(`echo hello` |> `sort`) == "hello\n"
-@test length(spawn(`echo hello` |> `sort`).processes) == 2
+@test readall(`env echo hello | sort`) == "hello | sort\n"
+@test readall(`env echo hello` |> `sort`) == "hello\n"
+@test length(spawn(`env echo hello` |> `sort`).processes) == 2
 
-out = readall(`echo hello` & `echo world`)
+out = readall(`env echo hello` & `env echo world`)
 @test search(out,"world") != (0,0)
 @test search(out,"hello") != (0,0)
-@test readall((`echo hello` & `echo world`) |> `sort`)=="hello\nworld\n"
+@test readall((`env echo hello` & `env echo world`) |> `sort`)=="hello\nworld\n"
 
-@test (run(`printf "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
+@test (run(`env printf "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
 
 # Test for SIGPIPE being treated as normal termination (throws an error if broken)
 @unix_only @test (run(yes|>`head`|>DevNull); true)
@@ -63,9 +63,15 @@ end
 
 # STDIN Redirection
 file = tempname()
-run(`echo hello world` |> file)
-@test readall(file |> `cat`) == "hello world\n"
-@test open(readall, file |> `cat`, "r") == "hello world\n"
+nl = "\n"
+@windows_only begin
+    run(`env echo` |> file)
+    nl = readall(file)
+    @test nl == "\n" || nl == "\r\n"
+end
+run(`env echo hello world` |> file)
+@test readall(file |> `cat`) == "hello world$nl"
+@test open(readall, file |> `cat`, "r") == "hello world$nl"
 rm(file)
 
 # Stream Redirection
@@ -127,7 +133,7 @@ exename=joinpath(JULIA_HOME,(ccall(:jl_is_debugbuild,Cint,())==0?"julia":"julia-
 @test readall(`$exename -f -e 'println(STDERR,"Hello World")'` .> `cat`) == "Hello World\n"
 
 # issue #6310
-@test readall(`echo "2+2"` |> `$exename -f`) == "4\n"
+@test readall(`env echo "2+2"` |> `$exename -f`) == "4\n"
 
 # issue #5904
 @test run(ignorestatus(`false`) |> `true`) === nothing
