@@ -51,9 +51,9 @@ and can be passed around like any value:
     julia> g(2,3)
     5
 
-There are two other ways that functions can be applied: using special
+There are three other ways that functions can be applied: using special
 operator syntax for certain function names (see `Operators Are
-Functions <#operators-are-functions>`_ below), or with the ``apply``
+Functions <#operators-are-functions>`_ below), using the ``|>`` operator, or with the ``apply``
 function:
 
 .. doctest::
