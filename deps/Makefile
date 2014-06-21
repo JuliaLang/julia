@@ -1159,7 +1159,9 @@ get-fftw: get-fftw-single get-fftw-double
 configure-fftw: configure-fftw-single configure-fftw-double
 compile-fftw: compile-fftw-single compile-fftw-double
 check-fftw: check-fftw-single check-fftw-double
-install-fftw: install-fftw-single install-fftw-double
+install-fftw: check-fftw-single check-fftw-double
+	$(MAKE) install-fftw-single
+	$(MAKE) install-fftw-double
 
 get-fftw-single: fftw-$(FFTW_VER).tar.gz
 configure-fftw-single: fftw-$(FFTW_VER)-single/config.status
