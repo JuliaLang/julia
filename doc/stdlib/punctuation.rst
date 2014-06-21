@@ -41,5 +41,6 @@ Extended documentation for mathematical symbols & functions is :ref:`here <mathe
    ``:``       index an entire dimension (1:end)
    ``::``      type annotation, depending on context
    ``:( )``    quoted expression
+   ``|>``      allows for function chaining
    =========   ================================================
 
