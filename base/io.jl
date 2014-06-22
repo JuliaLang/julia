@@ -231,7 +231,7 @@ function done(itr::EachLine, nada)
     true
 end
 next(itr::EachLine, nada) = (readline(itr.stream), nothing)
-eltype(itr::EachLine) = ByteString
+eltype(itr::EachLine) = String
 
 readlines(s=STDIN) = collect(eachline(s))
 
