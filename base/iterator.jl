@@ -54,9 +54,9 @@ zip(a, b) = Zip2(a, b)
 length(z::Zip2) = min(length(z.a), length(z.b))
 start(z::Zip2) = (start(z.a), start(z.b))
 function next(z::Zip2, st) 
-  n1 = next(z.a,st[1])
-  n2 = next(z.b,st[2])
-  return ((n1[1], n2[1]), (n1[2], n2[2]))
+    n1 = next(z.a,st[1])
+    n2 = next(z.b,st[2])
+    return ((n1[1], n2[1]), (n1[2], n2[2]))
 end
 done(z::Zip2, st) = done(z.a,st[1]) | done(z.b,st[2])
 
