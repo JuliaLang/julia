@@ -134,6 +134,40 @@ end
 
 eval(ngenerate(:N, nothing, :(setindex!{T}(s::SubArray{T,N}, v, ind::Integer)), gen_setindex!_body, 2:5, false))
 
+ cumsum(A::AbstractArray, axis::Integer) =  cumsum!(similar(A, Base._cumsum_type(A)), A, axis)
+cumprod(A::AbstractArray, axis::Integer) = cumprod!(similar(A), A, axis)
+
+for (f, op) in ((:cumsum!, :+),
+                (:cumprod!, :*))
+    @eval begin
+        @ngenerate N typeof(B) function ($f){T,N}(B, A::AbstractArray{T,N}, axis::Integer)
+            if size(B, axis) < 1
+                return B
+            end
+            size(B) == size(A) || throw(DimensionMismatch("Size of B must match A"))
+            if axis == 1
+                # We can accumulate to a temporary variable, which allows register usage and will be slightly faster
+                @inbounds @nloops N i d->(d > 1 ? (1:size(A,d)) : (1:1)) begin
+                    tmp = convert(eltype(B), @nref(N, A, i))
+                    @nref(N, B, i) = tmp
+                    for i_1 = 2:size(A,1)
+                        tmp = ($op)(tmp, @nref(N, A, i))
+                        @nref(N, B, i) = tmp
+                    end
+                end
+            else
+                @nexprs N d->(isaxis_d = axis == d)
+                # Copy the initial element in each 1d vector along dimension `axis`
+                @inbounds @nloops N i d->(d == axis ? (1:1) : (1:size(A,d))) @nref(N, B, i) = @nref(N, A, i)
+                # Accumulate
+                @inbounds @nloops N i d->((1+isaxis_d):size(A, d)) d->(j_d = i_d - isaxis_d) begin
+                    @nref(N, B, i) = ($op)(@nref(N, B, j), @nref(N, A, i))
+                end
+            end
+            B
+        end
+    end
+end
 
 ### from abstractarray.jl
 
