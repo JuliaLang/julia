@@ -1408,33 +1408,6 @@ for (f, fp, op) = ((:cumsum, :cumsum_pairwise, :+),
         return c
     end
 
-    @eval function ($f)(A::StridedArray, axis::Integer)
-        dimsA = size(A)
-        ndimsA = ndims(A)
-        axis_size = dimsA[axis]
-        axis_stride = 1
-        for i = 1:(axis-1)
-            axis_stride *= size(A,i)
-        end
-
-        B = $(op===:+ ? (:(similar(A,_cumsum_type(A)))) :
-                        (:(similar(A))))
-
-        if axis_size < 1
-            return B
-        end
-
-        for i = 1:length(A)
-            if div(i-1, axis_stride) % axis_size == 0
-               B[i] = A[i]
-            else
-               B[i] = ($op)(B[i-axis_stride], A[i])
-            end
-        end
-
-        return B
-    end
-
     @eval ($f)(A::AbstractArray) = ($f)(A, 1)
 end
 
