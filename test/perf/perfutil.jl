@@ -74,16 +74,6 @@ macro timeit(ex,name,desc,group...)
     end
 end
 
-macro timeit1(ex,name,desc,group...)
-    quote
-        t = 0.0
-        for i=0:1
-            t = 1000*(@elapsed $(esc(ex)))
-        end
-        @output_timings [t] $name $desc $group
-    end
-end
-
 macro timeit_init(ex,init,name,desc,group...)
     quote
         t = zeros(ntrials)
