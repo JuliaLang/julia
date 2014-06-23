@@ -537,16 +537,11 @@ function shift!(a::Vector)
 end
 
 function insert!{T}(a::Array{T,1}, i::Integer, item)
-    if i < 1
-        throw(BoundsError())
-    end
+    1 <= i <= length(a)+1 || throw(BoundsError())
+    i == length(a)+1 && return push!(a, item)
+
     item = convert(T, item)
-    n = length(a)
-    if i > n
-        ccall(:jl_array_grow_end, Void, (Any, Uint), a, i-n)
-    else
-        _growat!(a, i, 1)
-    end
+    _growat!(a, i, 1)
     a[i] = item
     return a
 end
