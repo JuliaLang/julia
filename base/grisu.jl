@@ -14,10 +14,6 @@ include("grisu/fastdtoa.jl")
 include("grisu/fastfixedtoa.jl")
 include("grisu/bignum-dtoa.jl")
 
-#TODO
- #remove double-conversion from makefiles
- #what to do with tests? everything but mega files?
-
 function grisu(v::FloatingPoint,mode,requested_digits,buffer=DIGITS)
     if signbit(v)
         neg = true
