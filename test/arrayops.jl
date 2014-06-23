@@ -230,6 +230,15 @@ v = shift!(l)
 @test v == 4
 @test length(l)==4
 
+v = [3, 7, 6]
+@test_throws BoundsError insert!(v, 0, 5)
+for i = 1:4
+    vc = copy(v)
+    @test insert!(vc, i, 5) === vc
+    @test vc == [v[1:(i-1)], 5, v[i:end]]
+end
+@test_throws BoundsError insert!(v, 5, 5)
+
 # concatenation
 @test isequal([ones(2,2)  2*ones(2,1)], [1. 1 2; 1 1 2])
 @test isequal([ones(2,2), 2*ones(1,2)], [1. 1; 1 1; 2 2])
