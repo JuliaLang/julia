@@ -9,7 +9,15 @@ end
 
 function fetch(pkg::String, sha1::String)
     refspec = "+refs/*:refs/remotes/cache/*"
-    Git.run(`fetch -q $(Cache.path(pkg)) $refspec`, dir=pkg)
+    # Git.run(`fetch -q $(Cache.path(pkg)) $refspec`, dir=pkg)
+    repo = Git.get_repo(pkg)
+    # Add a new remote with the given refspec and fetch from it
+    remote = if "cache" in Base.LibGit2.remote_names(repo)
+        Base.LibGit2.lookup_remote(repo, "cache")
+    else
+        Base.LibGit2.remote_add!(repo, "cache", Cache.path(pkg), refspec)
+    end
+    Base.LibGit2.remote_fetch(remote)
     Git.iscommit(sha1, dir=pkg) && return
     f = Git.iscommit(sha1, dir=Cache.path(pkg)) ? "fetch" : "prefetch"
     error("$pkg: $f failed to get commit $(sha1[1:10]), please file a bug")
