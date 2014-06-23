@@ -328,6 +328,9 @@ end
 @libgit(git_repository_config, Cint, (Ptr{Ptr{Void}}, Ptr{Void}))
 @libgit(git_repository_head, Cint, (Ptr{Ptr{Void}}, Ptr{Void}))
 @libgit(git_repository_set_head, Cint, (Ptr{Void}, Ptr{Cchar}))
+@libgit(git_repository_set_head_detached, Cint, (Ptr{Void}, Ptr{Uint8}, Ptr{Void}, Ptr{Void}))
+# TODO: Implement it
+@libgit(git_repository_detach_head, Cint, (Ptr{Void}, Ptr{Void}, Ptr{Cchar}))
 @libgit(git_repository_set_namespace, Cint, (Ptr{Void}, Ptr{Cchar}))
 @libgit(git_repository_get_namespace, Ptr{Cchar}, (Ptr{Void},))
 
@@ -668,7 +671,8 @@ end
 @libgit(git_remote_add_fetch, Cint, (Ptr{Void}, Ptr{Cchar}))
 @libgit(git_remote_clear_refspecs, Void, (Ptr{Void},))
 @libgit(git_remote_save, Cint, (Ptr{Void},))
-@libgit(git_remote_fetch, Cint, (Ptr{Void},))
+@libgit(git_remote_delete, Cint, (Ptr{Void},))
+@libgit(git_remote_fetch, Cint, (Ptr{Void}, Ptr{Void}, Ptr{Cchar}))
 @libgit(git_remote_download, Cint, (Ptr{Void},))
 @libgit(git_remote_update_tips, Cint, (Ptr{Void},))
 
@@ -1064,7 +1068,7 @@ type GitCloneOpts
     end
 end
 
-@libgit(git_clone_into, Cint, (Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Cchar}))
+@libgit(git_clone_into, Cint, (Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Cchar}, Ptr{Void}))
 
 # ------ libgit config  ------
 type GitConfigEntry

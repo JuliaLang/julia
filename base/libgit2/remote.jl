@@ -77,7 +77,7 @@ end
 
 function remote_fetch(r::GitRemote)
     @assert r.ptr != C_NULL
-    @check api.git_remote_fetch(r.ptr)
+    @check api.git_remote_fetch(r.ptr, C_NULL, C_NULL)
     return
 end
 

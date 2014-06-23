@@ -226,7 +226,7 @@ repo_mirror(url::String, path::String; name::String="origin") = begin
     # Set remote.origin.mirror to true
     c = config(r)
     c["remote.origin.mirror"] = "true"
-    @check api.git_clone_into(r.ptr, remote.ptr, C_NULL, C_NULL)
+    @check api.git_clone_into(r.ptr, remote.ptr, C_NULL, C_NULL, C_NULL)
 end
 
 function set_namespace!(r::Repository, ns)
@@ -290,6 +290,15 @@ function set_head!(r::Repository, ref::String; sig=nothing, logmsg=nothing)
     return r
 end
 
+function set_head_detached!(r::Repository, oid::Oid; sig=nothing, logmsg=nothing)
+    @assert r.ptr != C_NULL
+    @check api.git_repository_set_head_detached(r.ptr, oid.oid, C_NULL, C_NULL)
+    return r
+end
+function set_head_detached!(r::Repository, oid::String; sig=nothing, logmsg=nothing)
+    set_head_detached!(r, rev_parse_oid(r, oid); sig=sig, logmsg=logmsg)
+end
+
 function commits(r::Repository)
     return nothing 
 end
@@ -342,6 +351,19 @@ function remote_add!(r::Repository, name::String, url::String)
     remote_ptr = Array(Ptr{Void}, 1)
     @check api.git_remote_create(remote_ptr, r.ptr, bytestring(name), bytestring(url))
     return GitRemote(remote_ptr[1])
+end
+
+function remote_add!(r::Repository, name::String, url::String, fetchspec::String)
+    @assert r.ptr != C_NULL
+    check_valid_url(url)
+    remote_ptr = Array(Ptr{Void}, 1)
+    @check api.git_remote_create_with_fetchspec(remote_ptr, r.ptr, bytestring(name), bytestring(url), bytestring(fetchspec))
+    return GitRemote(remote_ptr[1])
+end
+
+function remote_delete!(r::GitRemote)
+    @assert r.ptr != C_NULL
+    @check api.git_remote_delete(r.ptr)
 end
 
 function cb_push_status(ref_ptr::Ptr{Cchar}, msg_ptr::Ptr{Cchar}, payload::Ptr{Void})
@@ -726,6 +748,7 @@ function write!{T<:GitObject}(::Type{T}, r::Repository, buf::ByteString)
     return out
 end
 
+# git_reference_list
 function references(r::Repository)
     return nothing
 end
@@ -752,6 +775,18 @@ end
 
 function rev_parse(r::Repository, rev::Oid)
     return rev_parse(r, string(rev))
+end
+
+function merge_base(r::Repository, o1::Oid, o2::Oid)
+    @assert r.ptr != C_NULL
+    id = Oid()
+    err = api.git_merge_base(id.oid, r.ptr, o1.oid, o2.oid)
+    if err == api.ENOTFOUND
+        return nothing
+    elseif err != api.GIT_OK
+        throw(LibGitError(err))
+    end
+    return id
 end
 
 function merge_base(r::Repository, args...)
