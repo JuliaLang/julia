@@ -130,7 +130,7 @@ function writemime(io::IO, mime::MIME"text/html", mt::MethodTable)
     name = mt.name
     n = length(mt)
     meths = n==1 ? "method" : "methods"
-    print(io, "<div class=\"julia base method-table\">$n $meths for generic function <b>$name</b>:<ul>")
+    print(io, "<div class=\"julia Base MethodTable\">$n $meths for generic function <b>$name</b>:<ul>")
     d = mt.defs
     while !is(d,())
         print(io, "<li> ")
