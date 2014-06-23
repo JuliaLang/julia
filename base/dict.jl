@@ -413,10 +413,23 @@ typealias Ordered Int
 
 ## Common internal and external interface of HashDictionary which may
 ## need re-definition for special types of HashDictionary's.
+
+## Internals:
 numslots(h::HashDictionary) = length(h.slots)
 
 # Transforms a key into an index.  sz has to be a power of 2.
 hashindex(::HashDictionary, key, sz) = (int(hash(key)) & (sz-1)) + 1
+
+# Key checking & converting as a key is stored (setindex!, get!,
+# etc. but not get).  
+# Note this conversion has to match with the hash-function in
+# hashindex, i.e. the converted key needs the same hashindex as the
+# unconverted one.
+function keyconvert{K,V}(h::HashDictionary{K,V}, key0)
+    key = convert(K, key0)
+    !isequal(key, key0) ? error(key0, " is not a valid key for type ", K) : key
+end
+
 
 isslotempty(h::HashDictionary, i::Int) = h.slots[i] == EMPTY
 isslotfilled(h::HashDictionary, i::Int) = h.slots[i] == FILLED
@@ -435,15 +448,6 @@ gval(h::HashDictionary, ind) = h.vals[ind]
 # transform val back before setting it:
 sval!(h::HashDictionary, val, ind) = (h.vals[ind] = val)
 sval!(::HashDictionary, ar::Vector, val, ind) = (ar[ind] = val)
-
-# key checking & converting as it comes in 
-function keyconvert{K,V}(h::HashDictionary{K,V}, key0)
-    key = convert(K,key0)
-    if !isequal(key, key0)
-        error(key0, " is not a valid key for type ", K)
-    end
-    key
-end
 
 # Entries which should be purged during calls of rehash and
 # ht_keyindex.  For instance for weak-key dicts the reference may have
@@ -483,6 +487,7 @@ function rehash{K,V}(h::HashDictionary{K,V}, newsz)
     count0 = h.count
     count = 0
 
+    # TODO: @inbounds
     for i = 1:sz
         if h.slots[i] == FILLED
             k = gkey(h,i)
@@ -532,7 +537,7 @@ function _compact_order!(h::HashDictionary)
 
     j = i+1
     while h.order[j] == 0; j += 1; end
-
+    # TODO: @inbounds
     for k = j:length(h.order)
         idx = h.order[k]
         if idx > 0
@@ -546,39 +551,13 @@ function _compact_order!(h::HashDictionary)
     nothing
 end
 
-function sizehint(h::HashDictionary, newsz)
-    oldsz = numslots(h)
-    if newsz <= oldsz
-        # todo: shrink
-        # be careful: rehash() assumes everything fits. it was only designed
-        # for growing.
-        return h
-    end
-    # grow at least 25%
-    newsz = max(newsz, (oldsz*5)>>2)
-    rehash(h, newsz)
-end
-
-function empty!{K,V}(h::HashDictionary{K,V})
-    fill!(h.slots, EMPTY)
-    sz = numslots(h)
-    h.keys = Array(eltype(h.keys), sz)
-    h.vals = Array(eltype(h.vals), sz)
-    h.idxs = Array(eltype(h.idxs), sz)
-    h.order = Array(eltype(h.idxs), 0)
-    h.ndel = 0
-    h.count = 0
-    return h
-end
-
-
 # get the index where a key is stored, or -1 if not present
 function ht_keyindex{K,V}(h::HashDictionary{K,V}, key)
     sz = numslots(h)
     iter = 0
     maxprobe = max(16, sz>>6)
     index = hashindex(h, key, sz)
-
+    # TODO: @inbounds
     while true
         if isslotempty(h,index)
             break
@@ -605,13 +584,12 @@ function ht_keyindex!{K,V}(h::HashDictionary{K,V}, key)
     maxprobe = max(16, sz>>6)
     index = hashindex(h, key, sz)
     avail = 0
-
+    # TODO: @inbounds
     while true
         if isslotempty(h,index)
             avail < 0 && return avail
             return -index
         end
-
         if isslotmissing(h,index)
             if avail == 0
                 # found an available slot, but need to keep scanning
@@ -659,6 +637,8 @@ function _setindex!(h::HashDictionary, val, key, index)
     end
 end
 
+## External interface methods
+
 function setindex!{K,V}(h::HashDictionary{K,V}, v0, key)
     key = keyconvert(h, key)
     v = convert(V,  v0)
@@ -701,7 +681,7 @@ macro get!(h, key, default)
             v = convert(V, $(esc(default)))
             _setindex!($(esc(h)), v, key, index)
         else
-            @inbounds v = gval($(esc(h)),index)
+            v = gval($(esc(h)),index)
         end
         v
     end
@@ -722,12 +702,12 @@ function get{K,V}(deflt::Function, h::HashDictionary{K,V}, key)
     return (index<0) ? deflt() : gval(h, index)::V
 end
 
-haskey(h::HashDictionary, key) = (ht_keyindex(h, key) >= 0)
+haskey(h::HashDictionary, key) = (ht_keyindex(h, key) > 0)
 in{T<:HashDictionary}(key, v::KeyIterator{T}) = haskey(v.dict, key)
 
 function getkey{K,V}(h::HashDictionary{K,V}, key, deflt)
     index = ht_keyindex(h, key)
-    return (index<0) ? deflt : gkey(h, index)::K
+    return (index<0) ? deflt : gkey(h, index)
 end
 
 function _pop!(h::HashDictionary, index)
@@ -748,7 +728,7 @@ end
 
 function _delete!(h::HashDictionary, index)
     h.slots[index] = MISSING
-    ccall(:jl_arrayunset, Void, (Any, Uint), h.keys, index-1) # don't use gkey here!
+    ccall(:jl_arrayunset, Void, (Any, Uint), h.keys, index-1)
     ccall(:jl_arrayunset, Void, (Any, Uint), h.vals, index-1)
     if isordered(h)
         h.order[h.idxs[index]] = 0
@@ -776,11 +756,36 @@ start(h::HashDictionary) = skip_deleted(h, 1)
 done(h::HashDictionary, i) = done(h.vals, i)
 next(h::HashDictionary, i) = ((gkey(h, i), gval(h, i)), skip_deleted(h, i+1))
 
+next{T<:HashDictionary}(v::KeyIterator{T}, i) = (gkey(v.dict, i), skip_deleted(v.dict,i+1))
+next{T<:HashDictionary}(v::ValueIterator{T}, i) = (gval(v.dict, i), skip_deleted(v.dict,i+1))
+
 isempty(h::HashDictionary) = (h.count == 0)
 length(h::HashDictionary) = h.count
 
-next{T<:HashDictionary}(v::KeyIterator{T}, i) = (gkey(v.dict, i), skip_deleted(v.dict,i+1))
-next{T<:HashDictionary}(v::ValueIterator{T}, i) = (gval(v.dict, i), skip_deleted(v.dict,i+1))
+function sizehint(h::HashDictionary, newsz)
+    oldsz = numslots(h)
+    if newsz <= oldsz
+        # todo: shrink
+        # be careful: rehash() assumes everything fits. it was only designed
+        # for growing.
+        return h
+    end
+    # grow at least 25%
+    newsz = max(newsz, (oldsz*5)>>2)
+    rehash(h, newsz)
+end
+
+function empty!{K,V}(h::HashDictionary{K,V})
+    fill!(h.slots, EMPTY)
+    sz = numslots(h)
+    h.keys = Array(eltype(h.keys), sz)
+    h.vals = Array(eltype(h.vals), sz)
+    h.idxs = Array(eltype(h.idxs), sz)
+    h.order = Array(eltype(h.idxs), 0)
+    h.ndel = 0
+    h.count = 0
+    return h
+end
 
 ## macro to make a subtype of a HashDictionary:
 macro makeHashDictionary(TName, K, KK, V, VV, Order)
@@ -858,11 +863,15 @@ end
 ## ObjectID
 typealias OIdDicts{K,V} Union(ObjectIdDict2{K,V}, WeakObjectIdDict{K,V})
 hashindex(::OIdDicts, key, sz) = (int(object_id(key)) & (sz-1)) + 1 # object_id is a hash already
+function keyconvert{K,V}(h::OIdDicts{K,V}, key0) # no conversion as that can create a new object.
+    !isa(key0, K) ? error(key0, " is not a valid Object-Id-Dict key for type ", K) : key0
+end
 
 ## Weak keys
 # TODO: Constructors working on arrays will not add finalizers!
 typealias WeakDicts{K,V} Union(WeakKeyDict{K,V}, WeakObjectIdDict{K,V})
 
+# TODO: add @inbounds
 # transforms key at index ind:
 gkey(h::WeakDicts, ind) = h.keys[ind].value
 # transform key back before setting it:

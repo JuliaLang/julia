@@ -1,7 +1,8 @@
 ## Sparse matrix performance
 include("../perfutil.jl")
+ntrials = 5
 
-# TODO: remove the two macros
+# TODO: remove the two macros 
 macro output_timings(t,name,desc,group)
     quote
         # If we weren't given anything for the test group, infer off of file path!
@@ -28,6 +29,7 @@ macro timeit(ex,name,desc,group...)
         @output_timings t $name $desc $group
     end
 end
+# TODO: end remove
 
 macro gc_disable(ex)
     quote
@@ -37,16 +39,16 @@ macro gc_disable(ex)
     end
 end
 
-# TODO: update 
+# TODO: update:
 DictsToTest = [Dict, ObjectIdDict] #, WeakKeyDict, Base.ObjectIdDict2, Base.WeakObjectIdDict, Base.OrderedDict]
 srand(1)
 obidtest = true  # if set to false test for ObjectIdDict will error
 
 function dict_unittests(DictToTest)
-    # dict unittests from ../../collections.jl with bits commented which do not pass in v0.2.1
+    # dict unittests from ../../collections.jl with bits commented
+    # which do not pass in v0.2.1
 
     gc_disable()  # needed to work with Weak-dicts
-
     # dict
     h = DictToTest()
     for i=1:10000
@@ -270,37 +272,34 @@ end
 n = 10^5
 strs = [randstring(10) for i = 1:n]
 nums = rand(Int, n)
+nums2 = rand(Int, n)
 
 randp = randperm(n)
 randvec = rand(1:n, 10^5)
 
 # performance tests
-function dict_insertion_test(d::Associative)
-    #empty!(d)
+function dict_insertion_test(d::Associative, keys)
     for i = randp
-        d[strs[i]] = nums[i]
+        d[keys[i]] = nums[i]
     end
     d
 end
 
-function dict_deletion_test(d::Associative)
-    #dict_insertion_test(d)
+function dict_deletion_test(d::Associative, keys)
     for i in randvec
-        pop!(d, strs[i], 0)
+        pop!(d, keys[i], 0)
     end
     d
 end
 
-function dict_ins_del_test(d::Associative)
-    #dict_insertion_test(d)
+function dict_ins_del_test(d::Associative, keys)
     for i in randvec
-        randbool()? pop!(d, strs[i], 0) : (d[strs[i]] = nums[i])
+        randbool()? pop!(d, keys[i], 0) : (d[keys[i]] = nums[i])
     end
     d
 end    
 
 function dict_iterator(d::Associative)
-    #dict_insertion_test(d)
     acc = 0
     for (k,v) in d
         acc += length(k) + v
@@ -309,43 +308,42 @@ function dict_iterator(d::Associative)
 end    
 
 ## runners
-function test_insert(T::Type)
-    d = (T==ObjectIdDict) ? T() : T{ASCIIString,Int}()
-    t = 0.0
-    @gc_disable @timeit dict_insertion_test(d) "$T\_ins" "$T: insertion tests"
+function test_insert(T::Type, keys)
+    d = (T==ObjectIdDict) ? T() : T{eltype(keys),Int}()
+    @gc_disable @timeit dict_insertion_test(d, keys) "$T\_ins" "$T: insertion tests"
 end
 
-function test_delelete(T::Type)
-    d = (T==ObjectIdDict) ? T() : T{ASCIIString,Int}()
-    t = 0.0
-    dict_insertion_test(d) # fill d
-    @gc_disable @timeit dict_deletion_test(d) "$T\_del" "$T: deletion tests"
+function test_delete(T::Type, keys)
+    d = (T==ObjectIdDict) ? T() : T{eltype(keys),Int}()
+    dict_insertion_test(d, keys) # fill d
+    @gc_disable @timeit dict_deletion_test(d,keys) "$T\_del" "$T: deletion tests"
 end
 
-function test_insert_delete(T::Type)
-    d = (T==ObjectIdDict) ? T() : T{ASCIIString,Int}()
-    t = 0.0
-    dict_insertion_test(d) # fill d
-    @gc_disable @timeit dict_ins_del_test(d) "$T\_ins_del" "$T: insertion and deletion tests"
+function test_insert_delete(T::Type, keys)
+    d = (T==ObjectIdDict) ? T() : T{eltype(keys),Int}()
+    dict_insertion_test(d, keys) # fill d
+    @gc_disable @timeit dict_ins_del_test(d,keys) "$T\_ins_del" "$T: insertion and deletion tests"
 end
 
-function test_iterations(T::Type)
-    d = (T==ObjectIdDict) ? T() : T{ASCIIString,Int}()
-    t = 0.0
-    dict_insertion_test(d) # fill d
+function test_iterations(T::Type, keys)
+    d = (T==ObjectIdDict) ? T() : T{eltype(keys),Int}()
+    dict_insertion_test(d, keys) # fill d
     @gc_disable @timeit dict_iterator(d)  "$T\_iter" "$T: iteration tests"
 end
 
 function run(T)
-    for test in [test_insert, test_delelete, test_insert_delete, test_iterations]
-        times = test(T)
+    for (keys,desc) in {(strs,"str"), (nums2,"Int")}
+        println(desc) # TODO remove
+        for test in [test_insert, test_delete, test_insert_delete, test_iterations]
+            times = test(T, keys)
+        end
     end
 end
 
-# TODO: remove
-@printf "min   , max    , mean   , std    , name\n"
+@printf "min   , max    , mean   , std    , name\n" # TODO: remove 
 for DictToTest in DictsToTest
-    println(" ")
+    println(" ") # TODO: remove 
     @timeit dict_unittests(DictToTest) "$DictToTest\_unitt" "$DictToTest: dict-unit tests"
     run(DictToTest)
 end
+
