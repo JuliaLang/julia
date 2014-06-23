@@ -464,6 +464,9 @@ function tty_cols()
     tty_size()[2]
 end
 
+@deprecate pointer{T}(::Type{T}, x::Uint) convert(Ptr{T}, x)
+@deprecate pointer{T}(::Type{T}, x::Ptr) convert(Ptr{T}, x)
+
 # 0.3 discontinued functions
 
 scale!{T<:Base.LinAlg.BlasReal}(X::Array{T}, s::Complex) = error("scale!: Cannot scale a real array by a complex value in-place.  Use scale(X::Array{Real}, s::Complex) instead.")

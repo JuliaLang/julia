@@ -109,7 +109,7 @@ function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::IO, offset::File
     else
         pmap, delta = mmap(len, prot, flags, fd(s), offset)
     end
-    A = pointer_to_array(pointer(T, uint(pmap)+delta), dims)
+    A = pointer_to_array(convert(Ptr{T}, uint(pmap)+delta), dims)
     finalizer(A,x->munmap(pmap,len+delta))
     return A
 end
@@ -149,7 +149,7 @@ function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::IO, offset::File
     if viewhandle == C_NULL
         error("could not create mapping view: $(FormatMessage())")
     end
-    A = pointer_to_array(pointer(T, viewhandle+offset-offset_page), dims)
+    A = pointer_to_array(convert(Ptr{T}, viewhandle+offset-offset_page), dims)
     finalizer(A, x->munmap(viewhandle, mmaphandle))
     return A
 end
