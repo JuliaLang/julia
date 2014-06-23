@@ -245,7 +245,9 @@ function update(branch::String)
             Git.dirty(dir=pwd()) && error("METADATA is dirty and not on $branch, bailing")
             Git.attached(dir=pwd()) || error("METADATA is detached not on $branch, bailing")
             #Git.run(`fetch -q --all`)
-            Base.LibGit2.remote_fetch(Base.LibGit2.remotes(Git.get_repo(dir))[1])
+            for remote in Base.LibGit2.remotes(Git.get_repo(dir))
+                Base.LibGit2.remote_fetch(remote)
+            end
             #Git.run(`checkout -q HEAD^0`)
             Base.LibGit2.checkout_head!(Git.get_repo(dir), {:strategy => :safe})
             Git.run(`branch -f $branch refs/remotes/origin/$branch`)
@@ -274,7 +276,9 @@ function update(branch::String)
                 info("Updating $pkg...")
                 @recover begin
                     #Git.run(`fetch -q --all`, dir=pkg)
-                    Base.LibGit2.remote_fetch(Base.LibGit2.remotes(Git.get_repo(dir))[1])
+                    for remote in Base.LibGit2.remotes(Git.get_repo(dir))
+                        Base.LibGit2.remote_fetch(remote)
+                    end
                     Git.success(`pull -q --ff-only`, dir=pkg) # suppress output
                 end
             end
@@ -510,9 +514,11 @@ function register(pkg::String, url::String)
 end
 
 function register(pkg::String)
-    Git.success(`config remote.origin.url`, dir=pkg) ||
+    conf = Base.LibGit2.config(Git.get_repo(pkg))
+    if conf["config remote.origin.url"] == nothing
         error("$pkg: no URL configured")
-    url = Git.readchomp(`config remote.origin.url`, dir=pkg)
+    end
+    url = conf["remote.origin.url"]
     register(pkg,Git.normalize_url(url))
 end
 

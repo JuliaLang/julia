@@ -9,7 +9,9 @@ const AUTH_DATA = {
 }
 
 function user()
-    if !success(`git config --global github.user`)
+    conf = Base.LibGit2.global_config()
+    if conf["github.user"] == nothing
+    #if !success(`git config --global github.user`)
         error("""
         no GitHub user name configured; please configure it with:
 
@@ -18,7 +20,8 @@ function user()
         where USERNAME is replaced with your GitHub user name.
         """)
     end
-    readchomp(`git config --global github.user`)
+    conf["github.user"]
+    #readchomp(`git config --global github.user`)
 end
 
 function json()
