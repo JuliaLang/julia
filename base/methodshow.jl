@@ -137,7 +137,7 @@ function writemime(io::IO, mime::MIME"text/html", mt::MethodTable)
         writemime(io, mime, d)
         d = d.next
     end
-    print(io, "</div></ul>")
+    print(io, "</ul></div>")
 end
 
 # pretty-printing of Vector{Method} for output of methodswith:
