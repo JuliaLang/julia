@@ -57,9 +57,13 @@ function isfixed(pkg::String, avail::Dict=available(pkg))
     isinstalled(pkg) || error("$pkg is not an installed package.")
     isfile("METADATA", pkg, "url") || return true
     ispath(pkg, ".git") || return true
+    repo = Git.get_repo(pkg)
     Git.dirty(dir=pkg) && return true
     Git.attached(dir=pkg) && return true
-    !Git.success(`cat-file -e HEAD:REQUIRE`, dir=pkg) && isfile(pkg,"REQUIRE") && return true
+    #!Git.success(`cat-file -e HEAD:REQUIRE`, dir=pkg) && isfile(pkg,"REQUIRE") && return true
+    if !Git.file_exists("HEAD:REQUIRE"; dir=pkg) && isfile(pkg, "REQUIRE")
+        return true
+    end
     head = Git.head(dir=pkg)
     for (ver,info) in avail
         head == info.sha1 && return false
@@ -90,9 +94,11 @@ function installed_version(pkg::String, avail::Dict=available(pkg))
     for (ver,info) in avail
         sha1 = info.sha1
         base = if cache_has_head && Git.iscommit(sha1, dir=cache)
-            Git.readchomp(`merge-base $head $sha1`, dir=cache)
+            #Git.readchomp(`merge-base $head $sha1`, dir=cache)
+            Git.merge_base(head, sha1, dir=cache)
         elseif Git.iscommit(sha1, dir=pkg)
-            Git.readchomp(`merge-base $head $sha1`, dir=pkg)
+            #Git.readchomp(`merge-base $head $sha1`, dir=pkg)
+            Git.merge_base(head, sha1, dir=pkg)
         else
             Base.warn_once("unknown $pkg commit $(sha1[1:8]), metadata may be ahead of package cache")
             continue
@@ -117,7 +123,8 @@ function requires_path(pkg::String, avail::Dict=available(pkg))
     pkgreq = joinpath(pkg,"REQUIRE")
     ispath(pkg,".git") || return pkgreq
     Git.dirty("REQUIRE", dir=pkg) && return pkgreq
-    !Git.success(`cat-file -e HEAD:REQUIRE`, dir=pkg) && isfile(pkgreq) && return pkgreq
+    #!Git.success(`cat-file -e HEAD:REQUIRE`, dir=pkg) && isfile(pkgreq) && return pkgreq
+    !Git.file_exists("HEAD:REQUIRE", dir=pkg) && isfile(pkgreq) && return pkgreq
     head = Git.head(dir=pkg)
     for (ver,info) in avail
         if head == info.sha1

@@ -17,7 +17,8 @@ end
 
 function checkout(pkg::String, sha1::String)
     Git.set_remote_url(Read.url(pkg), dir=pkg)
-    Git.run(`checkout -q $sha1`, dir=pkg)
+    Git.checkout(sha1, dir=pkg)
+    # Git.run(`checkout -q $sha1`, dir=pkg)
 end
 
 function install(pkg::String, sha1::String)
@@ -25,7 +26,8 @@ function install(pkg::String, sha1::String)
     if isdir(".trash/$pkg")
         mv(".trash/$pkg", "./$pkg")
     else
-        Git.run(`clone -q $(Cache.path(pkg)) $pkg`)
+        # Git.run(`clone -q $(Cache.path(pkg)) $pkg`)
+        Git.clone(Cache.path(pkg), pkg)
     end
     fetch(pkg, sha1)
     checkout(pkg, sha1)
