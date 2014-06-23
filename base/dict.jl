@@ -1,6 +1,4 @@
 # generic operations on associative collections
-
-# generic operations on associative collections
 abstract Associative{K,V} # TODO: change to Dictionary
 
 ## Interface
@@ -17,7 +15,7 @@ abstract Associative{K,V} # TODO: change to Dictionary
 #* getindex
 #* in
 #
-# To implement by the types:
+# To implement by the specific types:
 # get(!)
 # getkey
 # pop!
@@ -377,9 +375,9 @@ abstract HashDictionary{K,V} <: Associative{K,V}
 # or have the same internal structure.
 
 # constants
-const ISEMPTY = 0x0
-const ISFILLED = 0x1
-const ISMISSING = 0x2
+const EMPTY = 0x0
+const FILLED = 0x1
+const MISSING = 0x2
 
 ## helper types
 immutable Unordered end
@@ -399,9 +397,9 @@ numslots(h::HashDictionary) = length(h.slots)
 # Transforms a key into an index.  sz has to be a power of 2.
 hashindex(::HashDictionary, key, sz) = (int(hash(key)) & (sz-1)) + 1
 
-isslotempty(h::HashDictionary, i::Int) = h.slots[i] == ISEMPTY
-isslotfilled(h::HashDictionary, i::Int) = h.slots[i] == ISFILLED
-isslotmissing(h::HashDictionary, i::Int) = h.slots[i] == ISMISSING
+isslotempty(h::HashDictionary, i::Int) = h.slots[i] == EMPTY
+isslotfilled(h::HashDictionary, i::Int) = h.slots[i] == FILLED
+isslotmissing(h::HashDictionary, i::Int) = h.slots[i] == MISSING
 
 # These functions to access the h.keys and h.vals array, in case a transformation
 # of the key is needed before setting/getting it:
@@ -441,7 +439,7 @@ function rehash{K,V}(h::HashDictionary{K,V}, newsz)
     newsz = _tablesz(newsz)
     if h.count == 0
         resize!(h.slots, newsz)
-        fill!(h.slots, ISEMPTY)
+        fill!(h.slots, EMPTY)
         resize!(h.keys, newsz)
         resize!(h.vals, newsz)
         resize!(h.idxs, newsz)
@@ -455,7 +453,7 @@ function rehash{K,V}(h::HashDictionary{K,V}, newsz)
         _compact_order!(h)
     end
 
-    slots = zeros(Uint8,newsz) # zero==ISEMPTY
+    slots = zeros(Uint8,newsz) # zero==EMPTY
     keys = Array(eltype(h.keys), newsz)
     vals = Array(eltype(h.vals), newsz)
     idxs = Array(eltype(h.idxs), newsz)
@@ -465,7 +463,7 @@ function rehash{K,V}(h::HashDictionary{K,V}, newsz)
     count = 0
 
     for i = 1:sz
-        if h.slots[i] == ISFILLED
+        if h.slots[i] == FILLED
             k = gkey(h,i)
             if topurge(h,k)
                 continue
@@ -476,7 +474,7 @@ function rehash{K,V}(h::HashDictionary{K,V}, newsz)
                 # adds one to index, wrapping around at newsz
                 index = (index & (newsz-1)) + 1
             end
-            slots[index] = ISFILLED
+            slots[index] = FILLED
             skey!(h, keys, k, index)
             sval!(h, vals, v, index)
             if ordered
@@ -541,7 +539,7 @@ function sizehint(h::HashDictionary, newsz)
 end
 
 function empty!{K,V}(h::HashDictionary{K,V})
-    fill!(h.slots, ISEMPTY)
+    fill!(h.slots, EMPTY)
     sz = numslots(h)
     h.keys = Array(eltype(h.keys), sz)
     h.vals = Array(eltype(h.vals), sz)
@@ -622,7 +620,7 @@ function _setindex!(h::HashDictionary, val, key, index)
         sval!(h, val, index)
     else # occupy new slot
         index = - index
-        h.slots[index] = ISFILLED
+        h.slots[index] = FILLED
         skey!(h, key, index)
         sval!(h, val, index)
         if isordered(h)
@@ -728,7 +726,7 @@ function pop!(h::HashDictionary, key, default)
 end
 
 function _delete!(h::HashDictionary, index)
-    h.slots[index] = ISMISSING
+    h.slots[index] = MISSING
     ccall(:jl_arrayunset, Void, (Any, Uint), h.keys, index-1) # don't use gkey here!
     ccall(:jl_arrayunset, Void, (Any, Uint), h.vals, index-1)
     if isordered(h)
@@ -877,7 +875,7 @@ function _setindex!(h::WeakDicts, val, key, index)
         sval!(h, val, index)
     else # occupy new slot
         index = - index
-        h.slots[index] = ISFILLED
+        h.slots[index] = FILLED
         skey!(h, key, index)
         sval!(h, val, index)
         h.count += 1
