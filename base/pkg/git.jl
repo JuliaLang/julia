@@ -127,9 +127,32 @@ function transact(f::Function; dir="")
     end
 end
 
+function merge_base(a::String, b::String; dir="")
+    repo = Git.get_repo(dir)
+    o1 = Base.LibGit2.rev_parse_oid(repo, a)
+    o2 = Base.LibGit2.rev_parse_oid(repo, b)
+    return Base.LibGit2.merge_base(repo, o1, o2)
+end
+
+function file_exists(file::String; dir="")
+    repo = Git.get_repo(dir)
+    @libgit2_success(Base.LibGit2.rev_parse(repo, file))
+end
+
+
 function is_ancestor_of(a::String, b::String; dir="")
-    A = readchomp(`rev-parse $a`, dir=dir)
-    readchomp(`merge-base $A $b`, dir=dir) == A
+    return merge_base(a, b; dir=dir) != nothing
+end
+
+function checkout(sha1::String; dir="", opts={:strategy => :force})
+    repo = Git.get_repo(dir)
+    Base.LibGit2.checkout!(repo, sha1, opts)
+    Base.LibGit2.set_head_detached!(repo, sha1)
+end
+
+function clone(url::String, path::String; opts={:strategy => :safe_create})
+    repo = Base.LibGit2.repo_clone(url, path)
+    Base.LibGit2.checkout_head!(repo, opts)
 end
 
 const GITHUB_REGEX =
