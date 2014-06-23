@@ -1,10 +1,11 @@
 ## Sparse matrix performance
 include("../perfutil.jl")
 
+# TODO: remove the two macros
 macro output_timings(t,name,desc,group)
     quote
         # If we weren't given anything for the test group, infer off of file path!
-        test_group = length($group) == 0 ? basename(dirname(Base.source_path())) : $group[1]
+        # test_group = length($group) == 0 ? basename(dirname(Base.source_path())) : $group[1]
         if codespeed
             submit_to_codespeed( $t, $name, $desc, "seconds", test_group )
         elseif print_output

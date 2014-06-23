@@ -249,9 +249,28 @@ function ==(l::Associative, r::Associative)
     true
 end
 
-# conversion between Dict types
-function convert{K,V}(T::Type{Associative{K,V}},d::Associative)
-    h = T{K,V}()
+function convert{A<:Associative}(T::Type{A}, d::Associative)
+    if typeof(d)==T
+        return d
+    end
+    if T.abstract
+        throw(TypeError)
+
+        # TODO: what to do about something like:
+        # convert(Associative{Int, Float64}, SomeDict{Int, Int}())
+        # 
+        # Probably the right thing would be to return a SomeDict{Int,
+        # Float64}, followings array's lead.  But SomeDict could only
+        # have one, zero, or more type parameters...
+        #
+        # # TODO: but how to do it cleanly?
+        # K = isa(T.parameters[1], TypeVar) ? typeof(d).parameters[1] : T.parameters[1]
+        # V = isa(T.parameters[2], TypeVar) ? typeof(d).parameters[2] : T.parameters[2]
+        # h = eval(typeof(d).env.name){K,V}()  
+    else
+        h = T()
+    end
+    (K,V) = eltype(h)
     for (k,v) in d
         ck = convert(K,k)
         if !haskey(h,ck)
@@ -262,7 +281,7 @@ function convert{K,V}(T::Type{Associative{K,V}},d::Associative)
     end
     return h
 end
-convert{K,V}(T::Type{Associative{K,V}},d::Associative{K,V}) = d
+convert{K,V}(T::Type{Associative{K,V}}, d::Associative{K,V}) = d
 
 # serialisation
 function serialize(s, t::Associative)
@@ -274,7 +293,7 @@ function serialize(s, t::Associative)
     end
 end
 
-function deserialize{K,V}(s, T::Type{Associative{K,V}})
+function deserialize{A<:Associative}(s, T::Type{A})
     n = read(s, Int32)
     t = T(); sizehint(t, n)
     for i = 1:n
@@ -373,6 +392,8 @@ copy(o::ObjectIdDict) = ObjectIdDict(o)
 abstract HashDictionary{K,V} <: Associative{K,V}
 # it is assumed that the concrete types are constructed with @makeHashDictionary
 # or have the same internal structure.
+
+convert{K,V}(T::Type{HashDictionary{K,V}}, d::HashDictionary{K,V}) = d
 
 # constants
 const EMPTY = 0x0
