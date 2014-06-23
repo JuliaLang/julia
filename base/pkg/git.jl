@@ -83,7 +83,7 @@ iscommit(name; dir="") = @libgit2_success(Base.LibGit2.lookup(get_repo(dir), Bas
 #     return ret
 # end
 #attached(; dir="") = success(`symbolic-ref -q HEAD`, dir=dir)
-attached(; dir="") = @libgit2_success Base.LibGit2.name(Base.LibGit2.head(get_repo(dir)))
+attached(; dir="") = !Base.LibGit2.ishead_detached(get_repo(dir))
 #branch(; dir="") = readchomp(`rev-parse --symbolic-full-name --abbrev-ref HEAD`, dir=dir)
 branch(; dir="") = Base.LibGit2.shorthand(Base.LibGit2.head(get_repo(dir)))
 #head(; dir="") = readchomp(`rev-parse HEAD`, dir=dir)
