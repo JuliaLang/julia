@@ -94,7 +94,7 @@ LIBGIT2_OPTS = -DTHREADSAFE=ON -DCMAKE_BUILD_TYPE=Release
 endif
 ifeq ($(BUILD_OS),WINNT)
 ifeq ($(OS),WINNT)
-LIBGIT2_OPTS = -DBUILD_CLAR=OFF -DWIN32=ON -DMINGW=ON -DUSE_SSH=OFF
+LIBGIT2_OPTS = -DBUILD_CLAR=OFF -DWIN32=ON -DMINGW=ON -DUSE_SSH=OFF -G"MSYS Makefiles"
 endif
 endif
 
@@ -1750,16 +1750,16 @@ install-git: $(GIT_TARGET)
 
 ## libgit2
 
-LIBGIT2_SOURCE = libgit2-$(LIBGIT2_VER)/build/libgit2.$(LIBGIT2_VER).$(SHLIB_EXT)
+LIBGIT2_SOURCE = libgit2-$(LIBGIT2_VER)/build/libgit2.$(SHLIB_EXT)
 LIBGIT2_TARGET = $(build_shlibdir)/libgit2.$(SHLIB_EXT)
 
 libgit2-$(LIBGIT2_VER).tar.gz:
 	$(JLDOWNLOAD) $@ https://github.com/libgit2/libgit2/archive/v$(LIBGIT2_VER).tar.gz
-libgit2-$(LIBGIT2_VER)/CMakelists.txt: libgit2-$(LIBGIT2_VER).tar.gz
+libgit2-$(LIBGIT2_VER)/CMakeLists.txt: libgit2-$(LIBGIT2_VER).tar.gz
 	$(JLCHECKSUM) $<
 	$(TAR) zxf $<
 	touch -c $@
-libgit2-$(LIBGIT2_VER)/build/Makefile: libgit2-$(LIBGIT2_VER)/CMakelists.txt
+libgit2-$(LIBGIT2_VER)/build/Makefile: libgit2-$(LIBGIT2_VER)/CMakeLists.txt
 	mkdir -p libgit2-$(LIBGIT2_VER)/build
 	cd libgit2-$(LIBGIT2_VER)/build/ && \
 	cmake .. $(LIBGIT2_OPTS)

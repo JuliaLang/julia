@@ -1,11 +1,6 @@
 module api
 
-@unix_only begin
-    const libgit2 = "libgit2"
-end
-@windows_only begin
-    const libgit2 = "git2"
-end
+const libgit2 = "libgit2"
 
 macro libgit(func, ret_type, arg_types)
   local args_in = Symbol[symbol("arg$i::$T")

@@ -37,6 +37,7 @@ function init(meta::String=DEFAULT_META, branch::String=META_BRANCH)
         return
     end
     try
+        mkpath(joinpath(dir, "METADATA"))
         Base.cd(dir) do
             info("Cloning METADATA from $meta")
             # repo = Base.LibGit2.repo_clone(meta, joinpath(dir, "METADATA"))
