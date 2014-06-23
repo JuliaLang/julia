@@ -141,8 +141,9 @@ end
 # Note. For QRCompactWY factorization without pivoting, the WY representation based method introduced in LAPACK 3.4
 immutable QRCompactWY{S} <: Factorization{S}
     factors::Matrix{S}
-    T::Matrix{S}
+    T::Triangular{S}
 end
+QRCompactWY{S}(factors::Matrix{S}, T::Matrix{S})=QRCompactWY{S}(factors, Triangular(T, :U))
 
 immutable QRPivoted{T} <: Factorization{T}
     factors::Matrix{T}
