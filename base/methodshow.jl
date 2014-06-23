@@ -130,14 +130,14 @@ function writemime(io::IO, mime::MIME"text/html", mt::MethodTable)
     name = mt.name
     n = length(mt)
     meths = n==1 ? "method" : "methods"
-    print(io, "$n $meths for generic function <b>$name</b>:<ul>")
+    print(io, "<div class=\"method-table\">$n $meths for generic function <b>$name</b>:<ul>")
     d = mt.defs
     while !is(d,())
         print(io, "<li> ")
         writemime(io, mime, d)
         d = d.next
     end
-    print(io, "</ul>")
+    print(io, "</div></ul>")
 end
 
 # pretty-printing of Vector{Method} for output of methodswith:
