@@ -70,16 +70,17 @@ end
 # Takes the name of a result file, and a list of input file names.
 # Combines the contents of all files, then performs a parallel_wordcount
 # on the resulting string. Writes the results to result_file.
-function wordcount_files(result_file,input_file_names...)
-    text=""
-    for f in input_file_names
-        fh=open(f)
-        text=join( {text,readall(fh)}, "\n" )
-        close(fh)
+function wordcount_files(result_file,inputs...)
+    text = ""
+    for file in inputs
+        open(file) do f
+            text *= readall(f)
+        end
     end
-    wc=parallel_wordcount(text)
-    fo=open(result_file,"w")
-    for (k,v) in wc
-        println(fo,k,"=",v)
+    wc = parallel_wordcount(readall(f))
+    open(result_file,"w") do f
+        for (k,v) in wc
+            println(fo,k,"=",v)
+        end
     end
 end
