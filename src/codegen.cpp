@@ -44,7 +44,6 @@
 #include "llvm/IR/DIBuilder.h"
 #include "llvm/AsmParser/Parser.h"
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/ADT/OwningPtr.h"
 #else
 #include "llvm/Analysis/Verifier.h"
 #endif
@@ -120,7 +119,9 @@
 #include "llvm/MC/MCInstPrinter.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCContext.h"
+#ifndef LLVM35
 #include "llvm/ADT/OwningPtr.h"
+#endif
 #include "llvm/ADT/Triple.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/MemoryObject.h"
@@ -128,7 +129,9 @@
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/Host.h"
 #include "llvm/Support/raw_ostream.h"
+#ifndef LLVM35
 #include "llvm/Support/system_error.h"
+#endif
 
 #if defined(_OS_WINDOWS_) && !defined(NOMINMAX)
 #define NOMINMAX
@@ -388,7 +391,11 @@ void jl_dump_objfile(char* fname, int jit_model)
 #if defined(_OS_WINDOWS_) && defined(USE_MCJIT)
     TheTriple.setObjectFormat(Triple::COFF);
 #endif
+#ifdef LLVM35
+    std::unique_ptr<TargetMachine>
+#else
     OwningPtr<TargetMachine>
+#endif
     TM(jl_TargetMachine->getTarget().createTargetMachine(
         TheTriple.getTriple(),
         jl_TargetMachine->getTargetCPU(),
