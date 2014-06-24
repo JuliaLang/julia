@@ -1,7 +1,7 @@
 # Compressed sparse columns data structure
 # Assumes that no zeros are stored in the data structure
-# Assumes that row values in rowval for each colum are sorted 
-#      issorted(rowval[colptr[i]]:rowval[colptr[i+1]]-1) == true
+# Assumes that row values in rowval for each column are sorted
+#      issorted(rowval[colptr[i]:(colptr[i+1]-1)]) == true
 
 type SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
     m::Int                  # Number of rows
@@ -20,7 +20,7 @@ countnz(S::SparseMatrixCSC) = countnz(S.nzval)
 
 function Base.showarray(io::IO, S::SparseMatrixCSC;
                         header::Bool=true, limit::Bool=Base._limit_output,
-                        rows = Base.tty_rows(), repr=false)
+                        rows = Base.tty_size()[1], repr=false)
     # TODO: repr?
 
     if header
@@ -196,7 +196,7 @@ function sparsevec(I::AbstractVector, V, m::Integer, combine::Function)
     I = I[p]
     m >= I[end] || throw(DimensionMismatch("indices cannot be larger than length of vector"))
     V = V[p]
-    sparse_IJ_sorted!(I, ones(Int, nI), V, m, 1, combine)
+    sparse_IJ_sorted!(I, ones(eltype(I), nI), V, m, 1, combine)
 end
 
 function sparsevec(a::Vector)
@@ -601,11 +601,15 @@ for (op, restype) in ( (:+, Nothing), (:-, Nothing), (:.*, Nothing),
     end # quote
 end # macro
 
-(+)(A::SparseMatrixCSC, B::Union(Array,Number)) = (+)(full(A), B)
-(+)(A::Union(Array,Number), B::SparseMatrixCSC) = (+)(A, full(B))
+(.+)(A::SparseMatrixCSC, B::Number) = full(A) .+ B
+( +)(A::SparseMatrixCSC, B::Array ) = full(A)  + B
+(.+)(A::Number, B::SparseMatrixCSC) = A .+ full(B)
+( +)(A::Array , B::SparseMatrixCSC) = A  + full(B)
 
-(-)(A::SparseMatrixCSC, B::Union(Array,Number)) = (-)(full(A), B)
-(-)(A::Union(Array,Number), B::SparseMatrixCSC) = (-)(A, full(B))
+(.-)(A::SparseMatrixCSC, B::Number) = full(A) .- B
+( -)(A::SparseMatrixCSC, B::Array ) = full(A)  - B
+(.-)(A::Number, B::SparseMatrixCSC) = A .- full(B)
+( -)(A::Array , B::SparseMatrixCSC) = A  - full(B)
 
 (.*)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval .* B)
 (.*)(A::Number, B::SparseMatrixCSC) = SparseMatrixCSC(B.m, B.n, copy(B.colptr), copy(B.rowval), A .* B.nzval)

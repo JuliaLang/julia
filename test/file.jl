@@ -38,7 +38,13 @@ run(`chmod +w $file`)
 # files and is thus zero in this case.
 @windows_only @test filesize(dir) == 0
 @unix_only @test filesize(dir) > 0
-@test int(time()) >= int(mtime(file)) >= int(mtime(dir)) >= 0 # 1 second accuracy should be sufficient
+let skew = 0.1  # allow 100ms skew
+    now   = time()
+    mfile = mtime(file)
+    mdir  = mtime(dir)
+    @test now >= mfile-skew  &&  now >= mdir-skew  &&  mfile >= mdir-skew
+end
+#@test int(time()) >= int(mtime(file)) >= int(mtime(dir)) >= 0 # 1 second accuracy should be sufficient
 
 # test links
 @unix_only @test islink(link) == true
@@ -70,7 +76,22 @@ mv(a_tmpdir, b_tmpdir)
 b_stat = stat(b_tmpdir)
 @test Base.samefile(a_stat, b_stat)
 
-rmdir(b_tmpdir)
+rm(b_tmpdir)
+
+# rm recursive TODO add links
+c_tmpdir = mktempdir()
+c_subdir = joinpath(c_tmpdir, "c_subdir")
+mkdir(c_subdir)
+c_file = joinpath(c_tmpdir, "cfile.txt")
+cp(newfile, c_file)
+
+@test isdir(c_subdir)
+@test isfile(c_file)
+@test_throws SystemError rm(c_tmpdir)
+
+rm(c_tmpdir, recursive=true)
+@test !isdir(c_tmpdir)
+
 
 #######################################################################
 # This section tests file watchers.                                   #
@@ -280,8 +301,8 @@ close(f)
 @non_windowsxp_only rm(dirlink)
 
 rm(file)
-rmdir(subdir)
-rmdir(dir)
+rm(subdir)
+rm(dir)
 
 @test !ispath(file)
 @test !ispath(dir)

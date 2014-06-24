@@ -20,7 +20,7 @@ This is the GitHub repository of Julia source code, including instructions for c
 - **Homepage:** <http://julialang.org>
 - **Binaries:** <http://julialang.org/downloads/>
 - **Documentation:** <http://docs.julialang.org/>
-- **Packages:** <http://docs.julialang.org/en/latest/packages/packagelist/>
+- **Packages:** <http://pkg.julialang.org/>
 - **Source code:** <https://github.com/JuliaLang/julia>
 - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
 - **Mailing lists:** <http://julialang.org/community/>

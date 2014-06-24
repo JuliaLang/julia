@@ -25,7 +25,7 @@ All Julia streams expose at least a `read` and a `write` method, taking the stre
 
 Note that I pressed enter again so that Julia would read the newline. Now, as you can see from this example, the
 `write` method takes the data to write as its second argument, while the read method takes the type of the
-data to be read as the second argument. For example, to read a simply byte array, we could do::
+data to be read as the second argument. For example, to read a simple byte array, we could do::
 
     julia> x = zeros(Uint8,4)
     4-element Array{Uint8,1}:
@@ -134,7 +134,7 @@ function on the fly::
 A simple TCP example
 --------------------
 
-Let's jump right in with a simple example involving Tcp Sockets. To do, let's first create a simple server:: 
+Let's jump right in with a simple example involving Tcp Sockets. Let's first create a simple server:: 
 
     julia> @async begin
              server = listen(2000)
@@ -147,7 +147,7 @@ Let's jump right in with a simple example involving Tcp Sockets. To do, let's fi
 
     julia>
 
-Those familiar with the Unix socket API, the method names will feel familiar, 
+To those familiar with the Unix socket API, the method names will feel familiar, 
 though their usage is somewhat simpler than the raw Unix socket API. The first
 call to `listen` will create a server waiting for incoming connections on the 
 specified port (2000) in this case. The same function may also be used to 
@@ -174,10 +174,10 @@ create various other kinds of servers::
 Note that the return type of the last invocation is different. This is because 
 this server does not listen on TCP, but rather on a Named Pipe (Windows 
 terminology) - also called a Domain Socket (UNIX Terminology). The difference 
-is subtle but, has to do with the `accept` and `connect` methods. The `accept`
+is subtle and has to do with the `accept` and `connect` methods. The `accept`
 method retrieves a connection to the client that is connecting on the server we
 just created, while the `connect` function connects to a server using the 
-specified method. The `connect` function takes the same arguments as the 
+specified method. The `connect` function takes the same arguments as 
 `listen`, so, assuming the environment (i.e. host, cwd, etc.) is the same you 
 should be able to pass the same arguments to `connect` as you did to listen to 
 establish the connection. So let's try that out (after having created the server above)::

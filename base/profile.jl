@@ -34,7 +34,7 @@ __init__() = init(1_000_000, 0.001)
 
 clear() = ccall(:jl_profile_clear_data, Void, ())
 
-function print{T<:Unsigned}(io::IO, data::Vector{T} = fetch(), lidict::Dict = getdict(data); format = :tree, C = false, combine = true, cols = Base.tty_cols())
+function print{T<:Unsigned}(io::IO, data::Vector{T} = fetch(), lidict::Dict = getdict(data); format = :tree, C = false, combine = true, cols = Base.tty_size()[2])
     if format == :tree
         tree(io, data, lidict, C, combine, cols)
     elseif format == :flat

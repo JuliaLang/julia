@@ -979,7 +979,7 @@ int ios_getutf8(ios_t *s, uint32_t *pwc)
         *pwc = (uint32_t)(unsigned char)c0;
         return 1;
     }
-    sz = u8_seqlen(&c0)-1;
+    sz = u8_seqlen(&c0);
     if (ios_ungetc(c, s) == IOS_EOF)
         return IOS_EOF;
     if (ios_readprep(s, sz) < sz)
@@ -987,7 +987,7 @@ int ios_getutf8(ios_t *s, uint32_t *pwc)
         return IOS_EOF;
     size_t i = s->bpos;
     *pwc = u8_nextchar(s->buf, &i);
-    ios_read(s, buf, sz+1);
+    ios_read(s, buf, sz);
     return 1;
 }
 
@@ -1005,7 +1005,7 @@ int ios_peekutf8(ios_t *s, uint32_t *pwc)
         *pwc = (uint32_t)(unsigned char)c0;
         return 1;
     }
-    sz = u8_seqlen(&c0)-1;
+    sz = u8_seqlen(&c0);
     if (ios_readprep(s, sz) < sz)
         return IOS_EOF;
     size_t i = s->bpos;

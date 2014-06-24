@@ -75,7 +75,9 @@ Getting Around
 
 .. function:: require(file::String...)
 
-   Load source files once, in the context of the ``Main`` module, on every active node, searching the system-wide ``LOAD_PATH`` for files. ``require`` is considered a top-level operation, so it sets the current ``include`` path but does not use it to search for files (see help for ``include``). This function is typically used to load library code, and is implicitly called by ``using`` to load packages.
+   Load source files once, in the context of the ``Main`` module, on every active node, searching standard locations for files. ``require`` is considered a top-level operation, so it sets the current ``include`` path but does not use it to search for files (see help for ``include``). This function is typically used to load library code, and is implicitly called by ``using`` to load packages.
+
+   When searching for files, ``require`` first looks in the current working directory, then looks for package code under ``Pkg.dir()``, then tries paths in the global array ``LOAD_PATH``.
 
 .. function:: reload(file::String)
 
@@ -1778,9 +1780,10 @@ I/O
 
    Move a file from `src` to `dst`.
 
-.. function:: rm(path::String)
+.. function:: rm(path::String; recursive=false)
 
-   Delete the file at the given path. Note that this does not work on directories.
+   Delete the file, link, or empty directory at the given path. If ``recursive=true`` is
+   passed and the path is a directory, then all contents are removed recursively.
 
 .. function:: touch(path::String)
 
@@ -4037,9 +4040,17 @@ Array functions
 
    Cumulative product along a dimension.
 
+.. function:: cumprod!(B, A, [dim])
+
+   Cumulative product of ``A`` along a dimension, storing the result in ``B``.
+
 .. function:: cumsum(A, [dim])
 
    Cumulative sum along a dimension.
+
+.. function:: cumsum!(B, A, [dim])
+
+   Cumulative sum of ``A`` along a dimension, storing the result in ``B``.
 
 .. function:: cumsum_kbn(A, [dim])
 
@@ -5151,10 +5162,6 @@ System
 
    Create all directories in the given ``path``, with permissions ``mode``.
    ``mode`` defaults to 0o777, modified by the current file creation mask.
-
-.. function:: rmdir(path)
-
-   Remove the directory named ``path``.
 
 .. function:: getpid() -> Int32
 

@@ -90,8 +90,8 @@ c,r = test_latexcomplete(s)
 #    @test "CompletionFoo2" in c
 #    @test s[r] == "Completion"
 #
-#    rmdir(Pkg.dir("MyAwesomePackage"))
-#    rmdir(Pkg.dir("CompletionFooPackage"))
+#    rm(Pkg.dir("MyAwesomePackage"))
+#    rm(Pkg.dir("CompletionFooPackage"))
 #end
 
 @unix_only begin

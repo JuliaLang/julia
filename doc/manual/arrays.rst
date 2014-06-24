@@ -93,7 +93,7 @@ Concatenation
 -------------
 
 Arrays can be constructed and also concatenated using the following
-functions::
+functions:
 
 ================ ======================================================
 Function         Description
@@ -105,7 +105,7 @@ Function         Description
 
 Scalar values passed to these functions are treated as 1-element arrays.
 
-The concatenation functions are used so often that they have special syntax::
+The concatenation functions are used so often that they have special syntax:
 
 =================== =========
 Expression          Calls
@@ -126,7 +126,7 @@ An array with a specific element type can be constructed using the syntax
 ``T``, initialized to contain elements ``A``, ``B``, ``C``, etc.
 
 Special syntax is available for constructing arrays with element type
-``Any``::
+``Any``:
 
 =================== =========
 Expression          Yields
@@ -566,7 +566,7 @@ element of a sparse matrix.
 Sparse matrix constructors
 --------------------------
 
-The simplest way to create sparse matrices are using functions
+The simplest way to create sparse matrices is to use functions
 equivalent to the ``zeros`` and ``eye`` functions that Julia provides
 for working with dense matrices. To produce sparse matrices instead,
 you can use the same names with an ``sp`` prefix:

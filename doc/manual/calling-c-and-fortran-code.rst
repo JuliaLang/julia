@@ -166,7 +166,7 @@ a real address operator, it may be used with any syntax, such as
 Note that no C header files are used anywhere in the process. Currently,
 it is not possible to pass structs and other non-primitive types from
 Julia to C libraries. However, C functions that generate and use opaque
-structs types by passing around pointers to them can return such values
+struct types by passing pointers to them can return such values
 to Julia as ``Ptr{Void}``, which can then be passed to other C functions
 as ``Ptr{Void}``. Memory allocation and deallocation of such objects
 must be handled by calls to the appropriate cleanup routines in the

@@ -187,7 +187,7 @@ for (sz,s1,s2) in sizes # size of the matrix
                 # make a logical array of the right size
                 ind = sprandbool(size(m)..., 1e-5)
                 c = counters[sz]
-                @timeit1 one_arg_indexing(m, ind) "sparse_getindex_$s1$c" "$s2 with $ms, linear indexing with $indstr"
+                @timeit one_arg_indexing(m, ind) "sparse_getindex_$s1$c" "$s2 with $ms, linear indexing with $indstr"
                 counters[sz] += 1
             else
                 c = counters[sz]
