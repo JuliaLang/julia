@@ -40,7 +40,10 @@ macro gc_disable(ex)
 end
 
 # TODO: update:
-DictsToTest = [Dict, ObjectIdDict] #, WeakKeyDict, Base.ObjectIdDict2, Base.WeakObjectIdDict, Base.OrderedDict]
+DictsToTest = [Dict, ObjectIdDict]
+if isdefined(Base, :ObjectIdDict2)
+    append!(DictsToTest, [WeakKeyDict, Base.ObjectIdDict2, Base.WeakObjectIdDict, Base.OrderedDict])
+end
 srand(1)
 obidtest = true  # if set to false test for ObjectIdDict will error
 

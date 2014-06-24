@@ -419,6 +419,8 @@ numslots(h::HashDictionary) = length(h.slots)
 
 # Transforms a key into an index.  sz has to be a power of 2.
 hashindex(::HashDictionary, key, sz) = (int(hash(key)) & (sz-1)) + 1
+# Equality test to use
+isequalkey(::HashDictionary, key1, key2) = isequal(key1, key2)
 
 # Key checking & converting as a key is stored (setindex!, get!,
 # etc. but not get).  
@@ -427,7 +429,7 @@ hashindex(::HashDictionary, key, sz) = (int(hash(key)) & (sz-1)) + 1
 # unconverted one.
 function keyconvert{K,V}(h::HashDictionary{K,V}, key0)
     key = convert(K, key0)
-    !isequal(key, key0) ? error(key0, " is not a valid key for type ", K) : key
+    !isequalkey(h, key, key0) ? error(key0, " is not a valid key for type ", K) : key
 end
 
 
@@ -562,7 +564,7 @@ function ht_keyindex{K,V}(h::HashDictionary{K,V}, key)
         if isslotempty(h,index)
             break
         end
-        if !isslotmissing(h,index) && isequal(key, gkey(h, index))
+        if !isslotmissing(h,index) && isequalkey(h, key, gkey(h, index))
             return index
         end
         topurge(h,key) && _delete!(h, index)
@@ -596,7 +598,7 @@ function ht_keyindex!{K,V}(h::HashDictionary{K,V}, key)
                 # in case "key" already exists in a later collided slot.
                 avail = -index
             end
-        elseif isequal(key, gkey(h, index))
+        elseif isequalkey(h, key, gkey(h, index))
             return index
         end
         topurge(h,key) && _delete!(h, index)
@@ -866,6 +868,7 @@ hashindex(::OIdDicts, key, sz) = (int(object_id(key)) & (sz-1)) + 1 # object_id 
 function keyconvert{K,V}(h::OIdDicts{K,V}, key0) # no conversion as that can create a new object.
     !isa(key0, K) ? error(key0, " is not a valid Object-Id-Dict key for type ", K) : key0
 end
+isequalkey(::OIdDicts, key1, key2) = key1===key2
 
 ## Weak keys
 # TODO: Constructors working on arrays will not add finalizers!
