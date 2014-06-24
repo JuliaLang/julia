@@ -51,8 +51,8 @@ performance test functions with the `@timeit` macro.  For example:
 ```
 with arguments: test function call, name of the test, description,
 and, optionally, a group (only used for codespeed).  `@timeit` will do
-a warm-up and then 5 timings.  Alternatively `@timeit1` does one
-warm-up and one test run.
+a warm-up and then 5 timings, calculating min, max, average and standard
+deviation of the timings.
 
 If possible aim for the tests to take about 10-100 microseconds.
 

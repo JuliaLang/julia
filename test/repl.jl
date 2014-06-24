@@ -1,4 +1,5 @@
 # REPL tests
+using TestHelpers
 
 # Writing ^C to the repl will cause sigint, so let's not die on that
 ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
@@ -17,10 +18,11 @@ Base.link_pipe(stdin_read,true,stdin_write,true)
 Base.link_pipe(stdout_read,true,stdout_write,true)
 Base.link_pipe(stderr_read,true,stderr_write,true)
 
-repl = Base.REPL.LineEditREPL(Base.Terminals.FakeTerminal(stdin_read, stdout_write, stderr_write))
+repl = Base.REPL.LineEditREPL(TestHelpers.FakeTerminal(stdin_read, stdout_write, stderr_write))
 # In the future if we want we can add a test that the right object
 # gets displayed by intercepting the display
 repl.specialdisplay = Base.REPL.REPLDisplay(repl)
+repl.no_history_file = true
 
 repltask = @async begin
     Base.REPL.run_repl(repl)

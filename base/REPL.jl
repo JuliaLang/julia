@@ -113,7 +113,7 @@ end
 
 function display(d::REPLDisplay, ::MIME"text/plain", x)
     io = outstream(d.repl)
-    write(io, answer_color(d.repl))
+    Base.have_color && write(io, answer_color(d.repl))
     writemime(io, MIME("text/plain"), x)
     println(io)
 end
@@ -184,12 +184,30 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
     dopushdisplay = !in(d,Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
     repl_channel, response_channel = backend.repl_channel, backend.response_channel
+    hit_eof = false
     while true
+        Base.reseteof(repl.terminal)
         write(repl.terminal, "julia> ")
         line = ""
         ast = nothing
         while true
-            line *= readline(repl.terminal)
+            try
+                line *= readline(repl.terminal)
+            catch e
+                if isa(e,InterruptException)
+                    try # raise the debugger if present
+                        ccall(:jl_raise_debugger, Int, ())
+                    end
+                    line = ""
+                    write(repl.terminal, "^C\n")
+                    break
+                elseif isa(e,EOFError)
+                    hit_eof = true
+                    break
+                else
+                    rethrow()
+                end
+            end
             ast = Base.parse_input_line(line)
             (isa(ast,Expr) && ast.head == :incomplete) || break
         end
@@ -201,6 +219,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
             end
         end
         write(repl.terminal, '\n')
+        (isempty(line) || hit_eof) && break
     end
     # terminate backend
     put!(repl_channel, (nothing, -1))
@@ -220,14 +239,13 @@ type LineEditREPL <: AbstractREPL
     in_shell::Bool
     in_help::Bool
     envcolors::Bool
-    consecutive_returns::Int
     waserror::Bool
     specialdisplay
     interface
     backendref::REPLBackendRef
     LineEditREPL(t,prompt_color,input_color,answer_color,shell_color,help_color,no_history_file,in_shell,in_help,envcolors) =
         new(t,prompt_color,input_color,answer_color,shell_color,help_color,no_history_file,in_shell,
-            in_help,envcolors,0,false,nothing)
+            in_help,envcolors,false,nothing)
 end
 outstream(r::LineEditREPL) = r.t
 specialdisplay(r::LineEditREPL) = r.specialdisplay
@@ -492,15 +510,9 @@ LineEdit.reset_state(hist::REPLHistoryProvider) = history_reset_state(hist)
 
 const julia_green = "\033[1m\033[32m"
 
-function return_callback(repl, s)
-    if position(s.input_buffer) != 0 && eof(s.input_buffer) &&
-        (seek(s.input_buffer, position(s.input_buffer)-1); read(s.input_buffer, Uint8) == '\n')
-        repl.consecutive_returns += 1
-    else
-        repl.consecutive_returns = 0
-    end
-    ast = parse_input_line(bytestring(s.input_buffer))
-    if repl.consecutive_returns > 1 || !isa(ast, Expr) || (ast.head != :continue && ast.head != :incomplete)
+function return_callback(s)
+    ast = parse_input_line(bytestring(LineEdit.buffer(s)))
+    if  !isa(ast, Expr) || (ast.head != :continue && ast.head != :incomplete)
         return true
     else
         return false
@@ -526,8 +538,6 @@ function send_to_backend(ast, req, rep)
     val, bt = take!(rep)
 end
 
-have_color(s) = true
-
 function respond(f, repl, main)
     (s,buf,ok)->begin
         if !ok
@@ -538,7 +548,7 @@ function respond(f, repl, main)
             reset(repl)
             val, bt = send_to_backend(f(line), backend(repl))
             if !ends_with_semicolon(line) || bt !== nothing
-                print_response(repl, val, bt, true, have_color(s))
+                print_response(repl, val, bt, true, Base.have_color)
             end
         end
         println(repl.t)
@@ -589,7 +599,7 @@ function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[]
         prompt_suffix = repl.envcolors ? Base.input_color() : repl.input_color,
         keymap_func_data = repl,
         complete = replc,
-        on_enter = s->return_callback(repl, s))
+        on_enter = return_callback)
 
     julia_prompt.on_done = respond(Base.parse_input_line, repl, julia_prompt)
 
@@ -814,7 +824,7 @@ function ends_with_semicolon(line)
 end
 
 function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
-    have_color = true
+    have_color = Base.have_color
     banner(repl.stream, have_color)
     d = REPLDisplay(repl)
     dopushdisplay = !in(d,Base.Multimedia.displays)

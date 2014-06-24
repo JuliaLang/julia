@@ -453,22 +453,31 @@ end
 
 ##### median & quantiles #####
 
-function median!{T<:Real}(v::AbstractVector{T}; checknan::Bool=true)
+middle(x::Union(Bool,Int8,Int16,Int32,Int64,Int128,Uint8,Uint16,Uint32,Uint64,Uint128)) = float64(x)
+middle(x::FloatingPoint) = x
+middle(x::Float16) = float32(x)
+middle(x::Real) = (x + zero(x)) / 1
+middle(x::Real, y::Real) = (x + y) / 2
+middle(a::Range) = middle(a[1], a[end])
+middle(a::AbstractArray) = ((v1, v2) = extrema(a); middle(v1, v2))
+
+function median!{T}(v::AbstractVector{T}; checknan::Bool=true)
     isempty(v) && error("median of an empty array is undefined")
-    if checknan
+    if checknan && T<:FloatingPoint
         for x in v
             isnan(x) && return x
         end
     end
     n = length(v)
     if isodd(n)
-        return select!(v,div(n+1,2))
+        return middle(select!(v,div(n+1,2)))
     else
         m = select!(v, div(n,2):div(n,2)+1)
-        return (m[1] + m[2])/2
+        return middle(m[1], m[2])
     end
 end
-median{T<:Real}(v::AbstractArray{T}; checknan::Bool=true) =
+
+median{T}(v::AbstractArray{T}; checknan::Bool=true) =
     median!(vec(copy(v)), checknan=checknan)
 median{T}(v::AbstractArray{T}, region; checknan::Bool=true) = 
     mapslices( x->median(x; checknan=checknan), v, region )

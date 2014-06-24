@@ -39,6 +39,7 @@ function submit_to_codespeed(vals,name,desc,unit,test_group,lessisbetter=true)
 
     println( "$name: $(mean(vals))" )
     ret = post( "http://$codespeed_host/result/add/json/", {"json" => json([csdata])} )
+    println( json([csdata]) )
     if ret.http_code != 200 && ret.http_code != 202
         error("Error submitting $name [HTTP code $(ret.http_code)], dumping headers and text: $(ret.headers)\n$(bytestring(ret.body))\n\n")
         return false
@@ -70,16 +71,6 @@ macro timeit(ex,name,desc,group...)
             end
         end
         @output_timings t $name $desc $group
-    end
-end
-
-macro timeit1(ex,name,desc,group...)
-    quote
-        t = 0.0
-        for i=0:1
-            t = 1000*(@elapsed $(esc(ex)))
-        end
-        @output_timings [t] $name $desc $group
     end
 end
 

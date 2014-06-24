@@ -393,7 +393,7 @@ People can, however, clone the package with just ``Pkg.clone("FooBar")`` without
 Moreover, when they run ``Pkg.update()``, they will get the latest version of ``FooBar`` that you've pushed to the repo.
 This is a good way to have people test out your packages as you work on them, before they're ready for an official release.
 
-Once you are ready to make an official version your package, you can tag and register it with the ``Pkg.tag`` command::
+Once you are ready to make an official version of your package, you can tag and register it with the ``Pkg.tag`` command::
 
     julia> Pkg.tag("FooBar")
     INFO: Tagging FooBar v0.0.0

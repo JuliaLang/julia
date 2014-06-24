@@ -179,7 +179,7 @@ for d in (["\n" => "\n", "1" => "\n", "\n" => "2"],
     for cols in (12, 40, 80), rows in (2, 10, 24)
         # Ensure output is limited as requested
         s = IOBuffer()
-        Base.showdict(s, d, limit=true, rows=rows, cols=cols)
+        Base.showdict(s, d, limit=true, sz=(rows, cols))
         out = split(takebuf_string(s),'\n')
         for line in out[2:end]
             @test strwidth(line) <= cols
@@ -188,7 +188,7 @@ for d in (["\n" => "\n", "1" => "\n", "\n" => "2"],
 
         for f in (keys, values)
             s = IOBuffer()
-            Base.showkv(s, f(d), limit=true, rows=rows, cols=cols)
+            Base.showkv(s, f(d), limit=true, sz=(rows, cols))
             out = split(takebuf_string(s),'\n')
             for line in out[2:end]
                 @test strwidth(line) <= cols

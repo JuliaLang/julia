@@ -12,7 +12,7 @@ RequestExecutionLevel user
 !define MUI_ICON "contrib\windows\julia.ico"
 
 # Variable definitions used in installer pages
-InstallDir "$LOCALAPPDATA\Julia ${Version}"
+InstallDir "$LOCALAPPDATA\Julia-${Version}"
 !define StartMenuFolder "Julia ${Version}" 
 
 # Page settings

@@ -10,7 +10,7 @@ export SparseMatrixCSC,
        getindex, ishermitian, issparse, issym, istril, istriu, nnz,
        setindex!, sparse, sparsevec, spdiagm, speye, spones, 
        sprand, sprandbool, sprandn, spzeros, symperm, trace, tril, tril!, 
-       triu, triu!
+       triu, triu!, nonzeros
 
 include("sparse/sparsematrix.jl")
 include("sparse/csparse.jl")

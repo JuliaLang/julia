@@ -365,6 +365,7 @@ ifeq ($(BUILD_LLDB), 1)
 endif
 ifeq ($(LLVM_VER),3.3)
 	patch -p0 < llvm-3.3.patch
+	patch -p0 < instcombine-llvm-3.3.patch
 ifeq ($(OS),WINNT)
 ifeq ($(ARCH),x86_64)
 	patch -p0 < win64-int128.llvm-3.3.patch
@@ -398,7 +399,7 @@ $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
 	# LLVM has weird install prefixes (see llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/Makefile.config for the full list)
 	# We map them here to the "normal" ones, which means just prefixing "PROJ_" to the variable name.
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
-	$(MAKE) -C llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE) install $(MAKE_COMMON) PROJ_libdir=$(build_libdir) PROJ_bindir=$(build_bindir)
+	$(MAKE) -C llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE) install $(MAKE_COMMON) PROJ_libdir=$(build_libdir) PROJ_bindir=$(build_bindir) PROJ_includedir=$(build_includedir)
 	touch -c $@
 
 clean-llvm:
@@ -479,7 +480,7 @@ pcre-$(PCRE_VER)/configure: pcre-$(PCRE_VER).tar.bz2
 	touch -c $@
 pcre-$(PCRE_VER)/config.status: pcre-$(PCRE_VER)/configure
 	cd pcre-$(PCRE_VER) && \
-	./configure $(CONFIGURE_COMMON) --enable-utf --enable-unicode-properties --enable-jit
+	./configure $(CONFIGURE_COMMON) --enable-utf --enable-unicode-properties --enable-jit --includedir=$(build_includedir)
 	touch -c $@
 $(PCRE_SRC_TARGET): pcre-$(PCRE_VER)/config.status
 	$(MAKE) -C pcre-$(PCRE_VER) $(LIBTOOL_CCLD)
@@ -748,11 +749,16 @@ endif
 openblas-$(OPENBLAS_VER).tar.gz:
 	$(JLDOWNLOAD) $@ https://github.com/xianyi/OpenBLAS/tarball/$(OPENBLAS_VER) 
 openblas-$(OPENBLAS_VER)/config.status: openblas-$(OPENBLAS_VER).tar.gz
+ifneq ($(OPENBLAS_VER),develop)
 	$(JLCHECKSUM) $<
+endif
 	mkdir -p openblas-$(OPENBLAS_VER) && \
 	$(TAR) -C openblas-$(OPENBLAS_VER) --strip-components 1 -xf $<
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' openblas-$(OPENBLAS_VER)/Makefile.system
+ifneq ($(OPENBLAS_VER),develop)
 	patch openblas-$(OPENBLAS_VER)/exports/Makefile < openblas-exports-makefile.patch
+endif
+	cd openblas-$(OPENBLAS_VER) && patch -p1 < ../openblas-dllinit-safe.patch
 	echo 1 > $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/config.status
 	$(MAKE) -C openblas-$(OPENBLAS_VER) $(OPENBLAS_BUILD_OPTS) || (echo "*** Clean the OpenBLAS build with 'make -C deps clean-openblas'. Rebuild with 'make OPENBLAS_USE_THREAD=0 if OpenBLAS had trouble linking libpthread.so, and with 'make OPENBLAS_TARGET_ARCH=NEHALEM' if there were errors building SandyBridge support. Both these options can also be used simultaneously. ***" && false)
@@ -1107,7 +1113,9 @@ get-fftw: get-fftw-single get-fftw-double
 configure-fftw: configure-fftw-single configure-fftw-double
 compile-fftw: compile-fftw-single compile-fftw-double
 check-fftw: check-fftw-single check-fftw-double
-install-fftw: install-fftw-single install-fftw-double
+install-fftw: check-fftw-single check-fftw-double
+	$(MAKE) install-fftw-single
+	$(MAKE) install-fftw-double
 
 get-fftw-single: fftw-$(FFTW_VER).tar.gz
 configure-fftw-single: fftw-$(FFTW_VER)-single/config.status
@@ -1358,6 +1366,8 @@ gmp-$(GMP_VER)/configure: gmp-$(GMP_VER).tar.bz2
 	touch -c $@
 gmp-$(GMP_VER)/config.status: gmp-$(GMP_VER)/configure
 	cd gmp-$(GMP_VER) && \
+	sed -ibackup 's|includeexecdir = $$(exec_prefix)/include|includeexecdir = $$(includedir)|g' Makefile.in && \
+	sed -ibackup 's|includeexecdir = $$(exec_prefix)/include|includeexecdir = $$(includedir)|g' Makefile.am && \
 	./configure $(CONFIGURE_COMMON) F77= --enable-shared --disable-static
 	touch -c $@
 $(GMP_SRC_TARGET): gmp-$(GMP_VER)/config.status
