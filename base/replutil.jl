@@ -110,15 +110,15 @@ showerror(io::IO, e::InterruptException) = print(io, "interrupt")
 function showerror(io::IO, e::MethodError)
     name = isgeneric(e.f) ? e.f.env.name : :anonymous
     if isa(e.f, DataType)
-        print(io, "no method $(e.f)(")
+        print(io, "constructor `$(e.f)` has no method matching signature $(e.f)(")
     else
-        print(io, "no method $(name)(")
+        print(io, "function `$(name)` has no method matching signature $(name)(")
     end
     for (i, arg) in enumerate(e.args)
         if isa(arg,Type) && arg != typeof(arg)
             print(io, "Type{$(arg)}")
         else
-            print(io, typeof(arg))
+            print(io, "::$(typeof(arg))")
         end
         i == length(e.args) || print(io,", ")
     end
