@@ -1,8 +1,10 @@
-$downloadUrl32bit = 'http://s3.amazonaws.com/julianightlies/bin/winnt/x86/0.3/julia-VERSIONVERSION-win32.exe'
-$downloadUrl64bit = 'http://s3.amazonaws.com/julianightlies/bin/winnt/x64/0.3/julia-VERSIONVERSION-win64.exe'
+$downloadUrl32bit = 'http://sourceforge.net/projects/juliachocolateybins/files/julia-JULIAVERSIONJULIAVERSION-COMMITCOMMIT-x86.7z/download'
+$downloadUrl64bit = 'http://sourceforge.net/projects/juliachocolateybins/files/julia-JULIAVERSIONJULIAVERSION-COMMITCOMMIT-x86_64.7z/download'
+
+
 
 $juliapath = (Join-Path (Get-BinRoot) "julia")
+$juliaexepath = (Join-Path (Join-Path $juliapath "bin") "julia.exe")
 
-$silentArgs = "/S /D=$juliapath"
-
-Install-ChocolateyPackage 'julia' 'exe' $silentArgs $downloadUrl32bit $downloadUrl64bit
+Install-ChocolateyZipPackage 'julia' $downloadUrl32bit $juliapath $downloadUrl64bit
+Generate-BinFile 'julia' $juliaexepath

@@ -1,7 +1,5 @@
 $juliapath = (Join-Path (Get-BinRoot) "julia")
+$juliaexepath = (Join-Path (Join-Path $juliapath "bin") "julia.exe")
 
-$uninstallerpath = (Join-Path $juliapath 'Uninstall.exe')
-
-$silentArgs = '/S'
-
-Uninstall-ChocolateyPackage 'julia' 'exe' $silentArgs $uninstallerpath
+Remove-BinFile 'julia' $juliaexepath
+Remove-Item $juliapath -Force -Recurse
