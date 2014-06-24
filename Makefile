@@ -278,9 +278,7 @@ ifeq ($(OS), WINNT)
 	$(call spawn,./dist-extras/nsis/makensis.exe) -NOCD -DVersion=$(JULIA_VERSION) -DArch=$(ARCH) -DCommit=$(JULIA_COMMIT) ./contrib/windows/build-installer.nsi
 	./dist-extras/7z a -mx9 "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" julia-installer.exe
 	cat ./contrib/windows/7zS.sfx ./contrib/windows/7zSFX-config.txt "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" > "julia-${JULIA_VERSION}-${ARCH}.exe"
-	touch ./julia-$(JULIA_COMMIT)/bin/7z.exe.ignore
-	./dist-extras/7z a -mx9 julia-chocolatey-$(JULIA_COMMIT)-$(ARCH).7z ./julia-$(JULIA_COMMIT)/*
-	rm -f ./julia-$(JULIA_COMMIT)/bin/7z.exe.ignore
+	./dist-extras/7z a -mx9 julia-$(JULIA_VERSION)-$(JULIA_COMMIT)-$(ARCH).7z ./julia-$(JULIA_COMMIT)/*
 	-rm -f julia-installer.exe
 else
 	$(TAR) zcvf julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz julia-$(JULIA_COMMIT)
