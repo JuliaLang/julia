@@ -592,34 +592,30 @@ function shift!(B::BitVector)
 end
 
 function insert!(B::BitVector, i::Integer, item)
-    i < 1 && throw(BoundsError())
+    n = length(B)
+    1 <= i <= n+1 || throw(BoundsError())
     item = convert(Bool, item)
 
-    n = length(B)
-    if i > n
-        x = falses(i - n)
-        append!(B, x)
-    else
-        Bc = B.chunks
+    Bc = B.chunks
 
-        k, j = get_chunks_id(i)
+    k, j = get_chunks_id(i)
 
-        l = @_mod64 length(B)
-        if l == 0
-            ccall(:jl_array_grow_end, Void, (Any, Uint), Bc, 1)
-            Bc[end] = uint64(0)
-        end
-        B.len += 1
-
-        for t = length(Bc) : -1 : k + 1
-            Bc[t] = (Bc[t] << 1) | (Bc[t - 1] >>> 63)
-        end
-
-        msk_aft = (_msk64 << j)
-        msk_bef = ~msk_aft
-        Bc[k] = (msk_bef & Bc[k]) | ((msk_aft & Bc[k]) << 1)
+    l = @_mod64 length(B)
+    if l == 0
+        ccall(:jl_array_grow_end, Void, (Any, Uint), Bc, 1)
+        Bc[end] = uint64(0)
     end
+    B.len += 1
+
+    for t = length(Bc) : -1 : k + 1
+        Bc[t] = (Bc[t] << 1) | (Bc[t - 1] >>> 63)
+    end
+
+    msk_aft = (_msk64 << j)
+    msk_bef = ~msk_aft
+    Bc[k] = (msk_bef & Bc[k]) | ((msk_aft & Bc[k]) << 1)
     B[i] = item
+    B
 end
 
 function _deleteat!(B::BitVector, i::Integer)

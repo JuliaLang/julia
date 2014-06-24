@@ -43,3 +43,13 @@ let b = IOBuffer("1\n2\n3\n"), a = {}
     end
     @test a == {(1,"1\n"),(2,"2\n"),(3,"3\n")}
 end
+
+# zip eachline (issue #XXXX)
+let zeb     = IOBuffer("1\n2\n3\n4\n5\n"), 
+    letters = ['a', 'b', 'c', 'd', 'e'],
+    res     = {}
+    for (number, letter) in zip(eachline(zeb), letters)
+        push!(res, (int(strip(number)), letter))
+    end
+    @test res == {(1, 'a'), (2, 'b'), (3, 'c'), (4, 'd'), (5, 'e')}
+end

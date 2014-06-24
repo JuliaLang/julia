@@ -88,7 +88,7 @@ end
 function getindex(lru::LRU, key)
     item = lru.ht[key]
     idx = locate(lru.q, item)
-    delete!(lru.q, idx)
+    splice!(lru.q, idx)
     unshift!(lru.q, item)
     item.v
 end
@@ -98,7 +98,7 @@ function setindex!(lru::LRU, v, key)
         item = lru.ht[key]
         idx = locate(lru.q, item)
         item.v = v
-        delete!(lru.q, idx)
+        splice!(lru.q, idx)
     else
         item = CacheItem(key, v)
         lru.ht[key] = item

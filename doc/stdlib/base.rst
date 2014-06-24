@@ -4040,9 +4040,17 @@ Array functions
 
    Cumulative product along a dimension.
 
+.. function:: cumprod!(B, A, [dim])
+
+   Cumulative product of ``A`` along a dimension, storing the result in ``B``.
+
 .. function:: cumsum(A, [dim])
 
    Cumulative sum along a dimension.
+
+.. function:: cumsum!(B, A, [dim])
+
+   Cumulative sum of ``A`` along a dimension, storing the result in ``B``.
 
 .. function:: cumsum_kbn(A, [dim])
 

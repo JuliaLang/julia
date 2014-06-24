@@ -158,4 +158,4 @@ const tests1 = [ "access"=> "acess", "accessing"=> "accesing", "accommodation"=>
 "voluntary"=> "volantry", "voting"=> "voteing", "wanted"=> "wantid wonted",
 "whether"=> "wether", "wrote"=> "rote wote"]
 
-@timeit1(spelltest(tests1), "spell", "Peter Norvig's spell corrector")
+@timeit(spelltest(tests1), "spell", "Peter Norvig's spell corrector")
