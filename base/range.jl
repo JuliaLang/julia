@@ -157,7 +157,7 @@ range(a::FloatingPoint, st::FloatingPoint, len::Integer) = FloatRange(a,st,len,o
 range(a::Real, st::FloatingPoint, len::Integer) = FloatRange(float(a), st, len, one(st))
 range(a::FloatingPoint, st::Real, len::Integer) = FloatRange(a, float(st), len, one(a))
 
-linrange(a::Real,b::Real,len::Integer) = range(a, (b-a)/(len-1),len)
+linrange(a::Real,b::Real,len::Integer) = len >= 2 ? range(a, (b-a)/(len-1),len) : len == 1 && a == b ? range(a, zero(a), 1) : error("invalid range length")
 
 ## interface implementations
 
