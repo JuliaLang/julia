@@ -666,7 +666,7 @@ function updatehook(pkgs::Vector)
     """)
 end
 
-function test!(pkg::String, errs::Vector{String}, notests::Vector{String})
+function test!(pkg::String, errs::Vector{String}, notests::Vector{String},coverage::Bool=false)
     const reqs_path = abspath(pkg,"test","REQUIRE")
     if isfile(reqs_path)
         const tests_require = Reqs.parse(reqs_path)
@@ -680,7 +680,7 @@ function test!(pkg::String, errs::Vector{String}, notests::Vector{String})
         info("Testing $pkg")
         cd(dirname(test_path)) do
             try
-                run(`$JULIA_HOME/julia $test_path`)
+                run(`$JULIA_HOME/julia $(coverage?"--code-coverage":"") $test_path`)
                 info("$pkg tests passed")
             catch err
                 warnbanner(err, label="[ ERROR: $pkg ]")
@@ -693,7 +693,7 @@ function test!(pkg::String, errs::Vector{String}, notests::Vector{String})
     resolve()
 end
 
-function test(pkgs::Vector{String})
+function test(pkgs::Vector{String},coverage::Bool=false)
     errs = String[]
     notests = String[]
     for pkg in pkgs
@@ -707,6 +707,6 @@ function test(pkgs::Vector{String})
     end
 end
 
-test() = test(sort!(String[keys(installed())...]))
+test(coverage::Bool=false) = test(sort!(String[keys(installed())...]),coverage)
 
 end # module
