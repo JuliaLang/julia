@@ -382,11 +382,13 @@ end
 @test length(b1) == 0
 
 b1 = BitArray(0)
+@test_throws BoundsError insert!(b1, 2, false)
+@test_throws BoundsError insert!(b1, 0, false)
 i1 = bitunpack(b1)
 for m = 1 : v1
     j = rand(1:m)
     x = randbool()
-    insert!(b1, j, x)
+    @test insert!(b1, j, x) === b1
     insert!(i1, j, x)
     @test isequal(bitunpack(b1), i1)
 end
@@ -395,7 +397,7 @@ b1 = randbool(v1)
 i1 = bitunpack(b1)
 for j in [63, 64, 65, 127, 128, 129, 191, 192, 193]
     x = rand(0:1)
-    insert!(b1, j, x)
+    @test insert!(b1, j, x) === b1
     insert!(i1, j, x)
     @test isequal(bitunpack(b1), i1)
 end

@@ -367,6 +367,9 @@ Deprecated or removed
 
   * `readsfrom` and `writesto` are replaced by `open` ([#6948]).
 
+  * `insert!` now throws a `BoundsError` if
+    `index > length(collection)+1` ([#7373]).
+
 [#4042]: https://github.com/JuliaLang/julia/issues/4042
 [#5164]: https://github.com/JuliaLang/julia/issues/5164
 [#4026]: https://github.com/JuliaLang/julia/issues/4026
@@ -452,6 +455,7 @@ Deprecated or removed
 [#6624]: https://github.com/JuliaLang/julia/pull/6624
 [#5936]: https://github.com/JuliaLang/julia/issues/5936
 [#6179]: https://github.com/JuliaLang/julia/issues/6179
+[#7373]: https://github.com/JuliaLang/julia/issues/7373
 
 Julia v0.2.0 Release Notes
 ==========================
