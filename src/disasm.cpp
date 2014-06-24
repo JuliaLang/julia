@@ -107,7 +107,7 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
     MCContext Ctx(MAI.get(), MRI.get(), MOFI.get(), &SrcMgr);
 #else
     MCContext Ctx(*MAI, *MRI, MOFI.get(), &SrcMgr);
-#endif    
+#endif
     MOFI->InitMCObjectFileInfo(TripleName, Reloc::Default, CodeModel::Default, Ctx);
 
     // Set up Subtarget and Disassembler
