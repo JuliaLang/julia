@@ -192,7 +192,7 @@ end
 
 function redisplay(x)
     for i = length(displays):-1:1
-        applicable(redisplay, displays[i], x) &&
+        xdisplayable(displays[i], x) &&
             @try_display return redisplay(displays[i], x)
     end
     throw(MethodError(redisplay, (x,)))
@@ -200,7 +200,7 @@ end
 
 function redisplay(m::Union(MIME,String), x)
     for i = length(displays):-1:1
-        applicable(redisplay, displays[i], m, x) &&
+        xdisplayable(displays[i], m, x) &&
             @try_display return redisplay(displays[i], m, x)
     end
     throw(MethodError(redisplay, (m, x)))

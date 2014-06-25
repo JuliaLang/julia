@@ -479,7 +479,7 @@ function deserialize(s, ::Type{DataType})
     deserialize(s, t)
 end
 
-deserialize{T}(s, ::Type{Ptr{T}}) = pointer(T, 0)
+deserialize{T}(s, ::Type{Ptr{T}}) = convert(Ptr{T}, 0)
 
 function deserialize(s, ::Type{Task})
     t = Task(deserialize(s))

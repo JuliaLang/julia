@@ -136,12 +136,13 @@ mapreduce_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int) =
 
 # handling empty arrays
 mr_empty(f, op, T) = error("Reducing over an empty array is not allowed.")
-mr_empty(::IdFun, op::AddFun, T) = r_promote(op, zero(T))
-mr_empty(::AbsFun, op::AddFun, T) = r_promote(op, abs(zero(T)))
-mr_empty(::Abs2Fun, op::AddFun, T) = r_promote(op, abs2(zero(T)))
-mr_empty(::IdFun, op::MulFun, T) = r_promote(op, one(T))
-mr_empty(::AbsFun, op::MaxFun, T) = abs(zero(T))
-mr_empty(::Abs2Fun, op::MaxFun, T) = abs2(zero(T))
+# use zero(T)::T to improve type information when zero(T) is not defined
+mr_empty(::IdFun, op::AddFun, T) = r_promote(op, zero(T)::T)
+mr_empty(::AbsFun, op::AddFun, T) = r_promote(op, abs(zero(T)::T))
+mr_empty(::Abs2Fun, op::AddFun, T) = r_promote(op, abs2(zero(T)::T))
+mr_empty(::IdFun, op::MulFun, T) = r_promote(op, one(T)::T)
+mr_empty(::AbsFun, op::MaxFun, T) = abs(zero(T)::T)
+mr_empty(::Abs2Fun, op::MaxFun, T) = abs2(zero(T)::T)
 mr_empty(f, op::AndFun, T) = true
 mr_empty(f, op::OrFun, T) = false
 
