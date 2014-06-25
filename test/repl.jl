@@ -90,11 +90,10 @@ write(master,"1\nquit()\n")
 
 wait(p)
 
-output = readavailable(master)
-@test output == "julia> 1\r\nquit()\r\n1\r\n\r\njulia> "
-
-close(master)
 ccall(:close,Cint,(Cint,),fds)
+output = readall(master)
+@test output == "julia> 1\r\nquit()\r\n1\r\n\r\njulia> "
+close(master)
 
 end
 

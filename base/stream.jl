@@ -391,10 +391,10 @@ function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::
         else
             if isa(stream,TTY)
                 stream.status = StatusEOF
+                notify(stream.closenotify)
             else
                 close(stream)
             end
-            notify(stream.readnotify)
         end
     else
         notify_filled(stream.buffer, nread, base, len)
@@ -696,13 +696,6 @@ end
 readline(this::AsyncStream) = readuntil(this, '\n')
 
 readline() = readline(STDIN)
-
-function readavailable(this::AsyncStream)
-    buf = this.buffer
-    @assert buf.seekable == false
-    wait_readnb(this,1)
-    takebuf_string(buf)
-end
 
 function readuntil(this::AsyncStream,c::Uint8)
     buf = this.buffer
