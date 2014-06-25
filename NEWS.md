@@ -171,6 +171,9 @@ Library improvements
     * `polygamma`, `digamma`, and `trigamma` now accept complex
       arguments, and `zeta(s, z)` now provides the Hurwitz zeta ([#7125]).
 
+    * Narrow integer types (< 32 bits) are promoted to `Float64` rather
+      than to `Float32` by `float(x)` ([#7390]).
+
   * `String` improvements
 
     * Triple-quoted regex strings, `r"""..."""` ([#4934]).
