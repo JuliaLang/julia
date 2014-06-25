@@ -13,4 +13,8 @@
     <summary>TODO</summary>
     <tags>TODO</tags>
   </metadata>
+  <files>
+    <file src="chocolateyInstall.ps1" target="tools" />
+    <file src="chocolateyUnInstall.ps1" target="tools" />
+  </files>
 </package>
