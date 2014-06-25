@@ -295,7 +295,7 @@ dist-chocolatey: dist-chocolatey-clean
 ifeq (, $(findstring prerelease,$(JULIA_VERSION)))
 	sed -i 's/VERSIONVERSION/$(JULIA_VERSION_NUMERIC_PART).$(BUILDNUMBER)/g' $(CHOCOLATEY_BUILD_DIR)/julia.nuspec
 else
-	sed -i 's/VERSIONVERSION/$(JULIA_VERSION_NUMERIC_PART).$(BUILDNUMBER)-prerelease$(JULIA_COMMIT)/g' $(CHOCOLATEY_BUILD_DIR)/julia.nuspec
+	sed -i 's/VERSIONVERSION/$(JULIA_VERSION_NUMERIC_PART).$(BUILDNUMBER)-pre-$(JULIA_COMMIT)/g' $(CHOCOLATEY_BUILD_DIR)/julia.nuspec
 endif
 	cd $(CHOCOLATEY_BUILD_DIR) && \
 	sed -i 's/COMMITCOMMIT/$(JULIA_COMMIT)/g' chocolateyInstall.ps1 && \
