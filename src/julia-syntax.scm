@@ -1793,6 +1793,13 @@
 			    (break-block loop-cont
 					 ,(expand-forms (caddr e)))))))
 
+   'inner-while
+   (lambda (e)
+     `(scope-block
+        (_while ,(expand-forms (cadr e))
+                (break-block loop-cont
+                             ,(expand-forms (caddr e))))))
+
    'break
    (lambda (e)
      (if (pair? (cdr e))
@@ -1801,11 +1808,15 @@
 
    'continue (lambda (e) '(break loop-cont))
 
-   'for
+   'for       (lambda (e) (expand-forms `(_for ,@(cdr e) while)))
+   'inner-for (lambda (e) (expand-forms `(_for ,@(cdr e) inner-while)))
+
+   '_for
    (lambda (e)
      (let ((X (caddr (cadr e)))
 	   (lhs (cadr (cadr e)))
-	   (body (caddr e)))
+	   (body (caddr e))
+           (while (cadddr e)))
        ;; (for (= lhs X) body)
        (let ((coll  (gensy))
 	     (state (gensy)))
@@ -1813,7 +1824,7 @@
 	   (block (= ,coll ,(expand-forms X))
 		  (= ,state (call (top start) ,coll))
 		  ,(expand-forms
-		    `(while
+		    `(,while
 		      (call (top !) (call (top done) ,coll ,state))
 		      (scope-block
 		       (block
