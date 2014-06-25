@@ -3325,18 +3325,19 @@ So far only the second case can actually occur.
 
 	   ((let)
 	    (let* ((newenv (new-expansion-env-for e env))
-		   (body   (resolve-expansion-vars- (cadr e) newenv m inarg))
-		   ;; expand initial values in old env
-		   (rhss (map (lambda (a)
-				(resolve-expansion-vars- (caddr a) env m inarg))
-			      (cddr e)))
-		   ;; expand binds in old env with dummy RHS
-		   (lhss (map (lambda (a)
-				(cadr
-				 (resolve-expansion-vars- (make-assignment (cadr a) 0)
-							  newenv m inarg)))
-			      (cddr e))))
-	      `(let ,body ,@(map make-assignment lhss rhss))))
+		   (body   (resolve-expansion-vars- (cadr e) newenv m inarg)))
+	      `(let ,body
+		 ,@(map
+		    (lambda (bind)
+		      (if (assignment? bind)
+			  (make-assignment
+			   ;; expand binds in old env with dummy RHS
+			   (cadr (resolve-expansion-vars- (make-assignment (cadr bind) 0)
+							  newenv m inarg))
+			   ;; expand initial values in old env
+			   (resolve-expansion-vars- (caddr bind) env m inarg))
+			  bind))
+		    (cddr e)))))
 
 	   ;; todo: trycatch
 	   (else
