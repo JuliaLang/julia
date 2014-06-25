@@ -222,8 +222,7 @@ Macros for creating functions
 
         @nsplat N 2:3 absgetindex(A, I::NTuple{N,Real}...) = abs(getindex(A, I...))
 
-    generates
-::
+    generates::
 
         absgetindex(A, I_1::Real, I_2::Real) = abs(getindex(A, I_1, I_2))
         absgetindex(A, I_1::Real, I_2::Real, I_3::Real) = abs(getindex(A, I_1, I_2, I_3))
@@ -293,8 +292,7 @@ Macros for function bodies
 
         @nif 3 d->(i_d >= size(A,d)) d->(error("Dimension ", d, " too big")) d->println("All OK")
 
-    would generate
-::
+    would generate::
 
         if i_1 > size(A, 1)
 	    error("Dimension ", 1, " too big")
