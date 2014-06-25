@@ -285,6 +285,30 @@ else
 endif
 	rm -fr $(prefix)
 
+dist-chocolatey-clean:
+	rm -fr $(CHOCOLATEY_BUILD_DIR)
+
+dist-chocolatey: dist-chocolatey-clean
+	mkdir $(CHOCOLATEY_BUILD_DIR)
+	cd contrib/windows/chocolatey && \
+	cp *.ps1 julia.nuspec $(CHOCOLATEY_BUILD_DIR)
+ifeq (, $(findstring prerelease,$(JULIA_VERSION)))
+	sed -i 's/VERSIONVERSION/$(JULIA_VERSION_NUMERIC_PART).$(BUILDNUMBER)/g' $(CHOCOLATEY_BUILD_DIR)/julia.nuspec
+else
+	sed -i 's/VERSIONVERSION/$(JULIA_VERSION_NUMERIC_PART).$(BUILDNUMBER)-prerelease$(JULIA_COMMIT)/g' $(CHOCOLATEY_BUILD_DIR)/julia.nuspec
+endif
+	cd $(CHOCOLATEY_BUILD_DIR) && \
+	sed -i 's/COMMITCOMMIT/$(JULIA_COMMIT)/g' chocolateyInstall.ps1 && \
+	sed -i 's/JULIAVERSIONJULIAVERSION/$(JULIA_VERSION)/g' chocolateyInstall.ps1
+ifeq (, $(findstring WINNT,$(BUILD_OS)))
+	cd $(CHOCOLATEY_BUILD_DIR) && \
+	mono ../dist-extras/nuget.exe pack -NoPackageAnalysis
+else
+	cd $(CHOCOLATEY_BUILD_DIR) && \
+	../dist-extras/nuget.exe pack -NoPackageAnalysis
+endif
+	cp $(CHOCOLATEY_BUILD_DIR)/*.nupkg .
+	rm -fr $(CHOCOLATEY_BUILD_DIR)
 
 source-dist: git-submodules
 	# Save git information
@@ -398,4 +422,6 @@ endif
 	7z e -y mingw-libexpat.cpio && \
 	7z x -y mingw-zlib.rpm -so > mingw-zlib.cpio && \
 	7z e -y mingw-zlib.cpio && \
-	$(JLDOWNLOAD) PortableGit.7z http://msysgit.googlecode.com/files/PortableGit-1.8.3-preview20130601.7z
+	$(JLDOWNLOAD) PortableGit.7z http://msysgit.googlecode.com/files/PortableGit-1.8.3-preview20130601.7z && \
+	$(JLDOWNLOAD) http://nuget.org/nuget.exe && \
+	chmod a+x nuget.exe

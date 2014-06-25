@@ -61,11 +61,13 @@ NO_GIT = 1
 endif
 
 JULIA_VERSION = $(shell cat $(JULIAHOME)/VERSION)
+JULIA_VERSION_NUMERIC_PART = $(subst -prerelease,,$(JULIA_VERSION))
 ifneq ($(NO_GIT), 1)
 JULIA_COMMIT = $(shell git rev-parse --short=10 HEAD)
 else
 JULIA_COMMIT = $(JULIA_VERSION)
 endif
+BUILDNUMBER = $(shell date +%s)
 
 # Directories where said libraries get installed to
 bindir = $(prefix)/bin
@@ -86,6 +88,7 @@ build_datarootdir = $(build_prefix)/share
 build_includedir = $(build_prefix)/include
 build_sysconfdir = $(build_prefix)/etc
 
+CHOCOLATEY_BUILD_DIR = $(JULIAHOME)/chocolatey_build
 
 # This used for debian packaging, to conform to library layout guidelines
 ifeq ($(MULTIARCH_INSTALL), 1)
