@@ -3511,11 +3511,11 @@ Numbers
 
 .. function:: inf(f)
 
-   Returns infinity in the same floating point type as ``f`` (or ``f`` can by the type itself)
+   Returns positive infinity of the floating point type ``f`` or of the same floating point type as ``f``
 
 .. function:: nan(f)
 
-   Returns NaN in the same floating point type as ``f`` (or ``f`` can by the type itself)
+   Returns NaN (not-a-number) of the floating point type ``f`` or of the same floating point type as ``f``
 
 .. function:: nextfloat(f)
 
