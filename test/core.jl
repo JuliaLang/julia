@@ -1761,3 +1761,14 @@ function test7302()
     convert(t, "5")
 end
 @test_throws MethodError test7302()
+
+macro let_with_uninit()
+    quote
+        let x
+            x = 1
+            x+1
+        end
+    end
+end
+
+@test @let_with_uninit() == 2
