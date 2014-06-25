@@ -635,9 +635,16 @@ function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[]
                                            :shell => shell_mode,
                                            :help  => help_mode])
     if !repl.no_history_file
-        f = open(find_hist_file(), true, true, true, false, false)
-        finalizer(replc, replc->close(f))
-        hist_from_file(hp, f)
+        try
+            f = open(find_hist_file(), true, true, true, false, false)
+            finalizer(replc, replc->close(f))
+            hist_from_file(hp, f)
+        catch e
+            print_response(repl, e, catch_backtrace(), true, Base.have_color)
+            println(outstream(repl))
+            info("Disabling history file for this session.")
+            repl.no_history_file = true
+        end
     end
     history_reset_state(hp)
     julia_prompt.hist = hp
