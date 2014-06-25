@@ -1994,6 +1994,13 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
             return (e.args[3],())
         end
     end
+    if is(f, typeassert) && length(atypes)==2
+        # typeassert(x::S, T) => x, when S<:T
+        if isType(atypes[2]) && isleaftype(atypes[2]) &&
+            atypes[1] <: atypes[2].parameters[1]
+            return (e.args[2],())
+        end
+    end
     if length(atypes)==2 && is(f,unbox) && isa(atypes[2],DataType) && !atypes[2].mutable && atypes[2].pointerfree
         # remove redundant unbox
         return (e.args[3],())

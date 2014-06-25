@@ -171,6 +171,9 @@ Library improvements
     * `polygamma`, `digamma`, and `trigamma` now accept complex
       arguments, and `zeta(s, z)` now provides the Hurwitz zeta ([#7125]).
 
+    * Narrow integer types (< 32 bits) are promoted to `Float64` rather
+      than to `Float32` by `float(x)` ([#7390]).
+
   * `String` improvements
 
     * Triple-quoted regex strings, `r"""..."""` ([#4934]).
@@ -369,93 +372,6 @@ Deprecated or removed
 
   * `insert!` now throws a `BoundsError` if
     `index > length(collection)+1` ([#7373]).
-
-[#4042]: https://github.com/JuliaLang/julia/issues/4042
-[#5164]: https://github.com/JuliaLang/julia/issues/5164
-[#4026]: https://github.com/JuliaLang/julia/issues/4026
-[#7071]: https://github.com/JuliaLang/julia/issues/7071
-[#4799]: https://github.com/JuliaLang/julia/issues/4799
-[#4862]: https://github.com/JuliaLang/julia/issues/4862
-[#4048]: https://github.com/JuliaLang/julia/issues/4048
-[#4383]: https://github.com/JuliaLang/julia/issues/4383
-[#4775]: https://github.com/JuliaLang/julia/issues/4775
-[#4870]: https://github.com/JuliaLang/julia/issues/4870
-[#4874]: https://github.com/JuliaLang/julia/issues/4874
-[#4766]: https://github.com/JuliaLang/julia/issues/4766
-[#4782]: https://github.com/JuliaLang/julia/issues/4782
-[#4759]: https://github.com/JuliaLang/julia/issues/4759
-[#4819]: https://github.com/JuliaLang/julia/issues/4819
-[#4670]: https://github.com/JuliaLang/julia/issues/4670
-[#5007]: https://github.com/JuliaLang/julia/issues/5007
-[#5076]: https://github.com/JuliaLang/julia/issues/5076
-[#5255]: https://github.com/JuliaLang/julia/issues/5255
-[#5263]: https://github.com/JuliaLang/julia/issues/5263
-[#4934]: https://github.com/JuliaLang/julia/issues/4934
-[#4930]: https://github.com/JuliaLang/julia/issues/4930
-[#4943]: https://github.com/JuliaLang/julia/issues/4943
-[#4958]: https://github.com/JuliaLang/julia/issues/4958
-[#5059]: https://github.com/JuliaLang/julia/issues/5059
-[#5196]: https://github.com/JuliaLang/julia/issues/5196
-[#5275]: https://github.com/JuliaLang/julia/issues/5275
-[#5277]: https://github.com/JuliaLang/julia/issues/5277
-[#987]: https://github.com/JuliaLang/julia/issues/987
-[#2345]: https://github.com/JuliaLang/julia/issues/2345
-[#5330]: https://github.com/JuliaLang/julia/issues/5330
-[#4882]: https://github.com/JuliaLang/julia/issues/4882
-[#4806]: https://github.com/JuliaLang/julia/issues/4806
-[#5358]: https://github.com/JuliaLang/julia/pull/5358
-[#5381]: https://github.com/JuliaLang/julia/pull/5381
-[#5430]: https://github.com/JuliaLang/julia/pull/5430
-[a448e080]: https://github.com/JuliaLang/julia/commit/a448e080dc736c7fb326426dfcb2528be36973d3
-[5e3f074b]: https://github.com/JuliaLang/julia/commit/5e3f074b9173044a0a4219f9b285879ff7cec041
-[#4967]: https://github.com/JuliaLang/julia/pull/4967
-[#5428]: https://github.com/JuliaLang/julia/pull/5428
-[#5468]: https://github.com/JuliaLang/julia/pull/5468
-[#5025]: https://github.com/JuliaLang/julia/pull/5025
-[#4888]: https://github.com/JuliaLang/julia/pull/4888
-[#5475]: https://github.com/JuliaLang/julia/pull/5475
-[#5526]: https://github.com/JuliaLang/julia/pull/5526
-[#6769]: https://github.com/JuliaLang/julia/pull/6769
-[#5726]: https://github.com/JuliaLang/julia/pull/5726
-[#5811]: https://github.com/JuliaLang/julia/pull/5811
-[#5462]: https://github.com/JuliaLang/julia/pull/5462
-[#5403]: https://github.com/JuliaLang/julia/pull/5403
-[#5464]: https://github.com/JuliaLang/julia/pull/5464
-[#5827]: https://github.com/JuliaLang/julia/pull/5827
-[#5576]: https://github.com/JuliaLang/julia/pull/5576
-[#5703]: https://github.com/JuliaLang/julia/pull/5703
-[#5427]: https://github.com/JuliaLang/julia/pull/5427
-[#5748]: https://github.com/JuliaLang/julia/issues/5748
-[#5511]: https://github.com/JuliaLang/julia/issues/5511
-[#5776]: https://github.com/JuliaLang/julia/issues/5776
-[#5819]: https://github.com/JuliaLang/julia/issues/5819
-[#4871]: https://github.com/JuliaLang/julia/issues/4871
-[#4996]: https://github.com/JuliaLang/julia/issues/4996
-[#2333]: https://github.com/JuliaLang/julia/issues/2333
-[#5636]: https://github.com/JuliaLang/julia/issues/5636
-[#1268]: https://github.com/JuliaLang/julia/issues/1268
-[#5677]: https://github.com/JuliaLang/julia/issues/5677
-[#5545]: https://github.com/JuliaLang/julia/issues/5545
-[#6057]: https://github.com/JuliaLang/julia/issues/6057
-[#6056]: https://github.com/JuliaLang/julia/issues/6056
-[#3344]: https://github.com/JuliaLang/julia/issues/3344
-[#5737]: https://github.com/JuliaLang/julia/issues/5737
-[#6073]: https://github.com/JuliaLang/julia/issues/6073
-[#5778]: https://github.com/JuliaLang/julia/issues/5778
-[#6169]: https://github.com/JuliaLang/julia/issues/6169
-[#5970]: https://github.com/JuliaLang/julia/issues/5970
-[#6197]: https://github.com/JuliaLang/julia/pull/6197
-[#5387]: https://github.com/JuliaLang/julia/pull/5387
-[#5671]: https://github.com/JuliaLang/julia/pull/5671
-[#5380]: https://github.com/JuliaLang/julia/pull/5380
-[#5585]: https://github.com/JuliaLang/julia/issues/5585
-[#6273]: https://github.com/JuliaLang/julia/pull/6273
-[#552]: https://github.com/JuliaLang/julia/issues/552
-[#6582]: https://github.com/JuliaLang/julia/pull/6582
-[#6624]: https://github.com/JuliaLang/julia/pull/6624
-[#5936]: https://github.com/JuliaLang/julia/issues/5936
-[#6179]: https://github.com/JuliaLang/julia/issues/6179
-[#7373]: https://github.com/JuliaLang/julia/issues/7373
 
 Julia v0.2.0 Release Notes
 ==========================
@@ -761,12 +677,21 @@ Bugfixes and performance updates
 
 Too numerous to mention.
 
+[packages chapter]: http://docs.julialang.org/en/latest/manual/packages/
+[sorting functions]: http://docs.julialang.org/en/latest/stdlib/sort/
+[pairwise summation]: https://en.wikipedia.org/wiki/Pairwise_summation
+[a448e080]: https://github.com/JuliaLang/julia/commit/a448e080dc736c7fb326426dfcb2528be36973d3
+[5e3f074b]: https://github.com/JuliaLang/julia/commit/5e3f074b9173044a0a4219f9b285879ff7cec041
+<!--- generated by NEWS-update.jl: -->
 [#13]: https://github.com/JuliaLang/julia/issues/13
+[#69]: https://github.com/JuliaLang/julia/issues/69
 [#70]: https://github.com/JuliaLang/julia/issues/70
 [#485]: https://github.com/JuliaLang/julia/issues/485
+[#552]: https://github.com/JuliaLang/julia/issues/552
 [#907]: https://github.com/JuliaLang/julia/issues/907
+[#987]: https://github.com/JuliaLang/julia/issues/987
+[#1268]: https://github.com/JuliaLang/julia/issues/1268
 [#1484]: https://github.com/JuliaLang/julia/issues/1484
-[#1539]: https://github.com/JuliaLang/julia/issues/1539
 [#1539]: https://github.com/JuliaLang/julia/issues/1539
 [#1571]: https://github.com/JuliaLang/julia/issues/1571
 [#1815]: https://github.com/JuliaLang/julia/issues/1815
@@ -774,6 +699,8 @@ Too numerous to mention.
 [#2204]: https://github.com/JuliaLang/julia/issues/2204
 [#2212]: https://github.com/JuliaLang/julia/issues/2212
 [#2265]: https://github.com/JuliaLang/julia/issues/2265
+[#2333]: https://github.com/JuliaLang/julia/issues/2333
+[#2345]: https://github.com/JuliaLang/julia/issues/2345
 [#2370]: https://github.com/JuliaLang/julia/issues/2370
 [#2375]: https://github.com/JuliaLang/julia/issues/2375
 [#2380]: https://github.com/JuliaLang/julia/issues/2380
@@ -789,11 +716,8 @@ Too numerous to mention.
 [#2678]: https://github.com/JuliaLang/julia/issues/2678
 [#2703]: https://github.com/JuliaLang/julia/issues/2703
 [#2713]: https://github.com/JuliaLang/julia/issues/2713
-[#2714]: https://github.com/JuliaLang/julia/issues/2714
 [#2720]: https://github.com/JuliaLang/julia/issues/2720
 [#2725]: https://github.com/JuliaLang/julia/issues/2725
-[#2769]: https://github.com/JuliaLang/julia/issues/2769
-[#2791]: https://github.com/JuliaLang/julia/issues/2791
 [#2807]: https://github.com/JuliaLang/julia/issues/2807
 [#2814]: https://github.com/JuliaLang/julia/issues/2814
 [#2844]: https://github.com/JuliaLang/julia/issues/2844
@@ -807,15 +731,19 @@ Too numerous to mention.
 [#3102]: https://github.com/JuliaLang/julia/issues/3102
 [#3105]: https://github.com/JuliaLang/julia/issues/3105
 [#3140]: https://github.com/JuliaLang/julia/issues/3140
+[#3141]: https://github.com/JuliaLang/julia/issues/3141
 [#3148]: https://github.com/JuliaLang/julia/issues/3148
 [#3149]: https://github.com/JuliaLang/julia/issues/3149
+[#3233]: https://github.com/JuliaLang/julia/issues/3233
 [#3272]: https://github.com/JuliaLang/julia/issues/3272
+[#3344]: https://github.com/JuliaLang/julia/issues/3344
 [#3350]: https://github.com/JuliaLang/julia/issues/3350
 [#3439]: https://github.com/JuliaLang/julia/issues/3439
 [#3467]: https://github.com/JuliaLang/julia/issues/3467
 [#3468]: https://github.com/JuliaLang/julia/issues/3468
 [#3483]: https://github.com/JuliaLang/julia/issues/3483
 [#3523]: https://github.com/JuliaLang/julia/issues/3523
+[#3605]: https://github.com/JuliaLang/julia/issues/3605
 [#3649]: https://github.com/JuliaLang/julia/issues/3649
 [#3665]: https://github.com/JuliaLang/julia/issues/3665
 [#3697]: https://github.com/JuliaLang/julia/issues/3697
@@ -829,27 +757,113 @@ Too numerous to mention.
 [#3949]: https://github.com/JuliaLang/julia/issues/3949
 [#3989]: https://github.com/JuliaLang/julia/issues/3989
 [#4014]: https://github.com/JuliaLang/julia/issues/4014
+[#4026]: https://github.com/JuliaLang/julia/issues/4026
 [#4039]: https://github.com/JuliaLang/julia/issues/4039
+[#4042]: https://github.com/JuliaLang/julia/issues/4042
 [#4044]: https://github.com/JuliaLang/julia/issues/4044
+[#4048]: https://github.com/JuliaLang/julia/issues/4048
 [#4055]: https://github.com/JuliaLang/julia/issues/4055
 [#4112]: https://github.com/JuliaLang/julia/issues/4112
 [#4130]: https://github.com/JuliaLang/julia/issues/4130
 [#4177]: https://github.com/JuliaLang/julia/issues/4177
 [#4235]: https://github.com/JuliaLang/julia/issues/4235
 [#4284]: https://github.com/JuliaLang/julia/issues/4284
+[#4383]: https://github.com/JuliaLang/julia/issues/4383
 [#4412]: https://github.com/JuliaLang/julia/issues/4412
+[#4670]: https://github.com/JuliaLang/julia/issues/4670
+[#4759]: https://github.com/JuliaLang/julia/issues/4759
+[#4766]: https://github.com/JuliaLang/julia/issues/4766
+[#4775]: https://github.com/JuliaLang/julia/issues/4775
+[#4782]: https://github.com/JuliaLang/julia/issues/4782
+[#4799]: https://github.com/JuliaLang/julia/issues/4799
+[#4806]: https://github.com/JuliaLang/julia/issues/4806
+[#4811]: https://github.com/JuliaLang/julia/issues/4811
+[#4819]: https://github.com/JuliaLang/julia/issues/4819
+[#4862]: https://github.com/JuliaLang/julia/issues/4862
+[#4870]: https://github.com/JuliaLang/julia/issues/4870
+[#4871]: https://github.com/JuliaLang/julia/issues/4871
+[#4874]: https://github.com/JuliaLang/julia/issues/4874
+[#4882]: https://github.com/JuliaLang/julia/issues/4882
+[#4888]: https://github.com/JuliaLang/julia/issues/4888
+[#4930]: https://github.com/JuliaLang/julia/issues/4930
+[#4934]: https://github.com/JuliaLang/julia/issues/4934
+[#4943]: https://github.com/JuliaLang/julia/issues/4943
+[#4958]: https://github.com/JuliaLang/julia/issues/4958
+[#4967]: https://github.com/JuliaLang/julia/issues/4967
+[#4996]: https://github.com/JuliaLang/julia/issues/4996
+[#5007]: https://github.com/JuliaLang/julia/issues/5007
+[#5025]: https://github.com/JuliaLang/julia/issues/5025
+[#5059]: https://github.com/JuliaLang/julia/issues/5059
+[#5076]: https://github.com/JuliaLang/julia/issues/5076
+[#5164]: https://github.com/JuliaLang/julia/issues/5164
+[#5196]: https://github.com/JuliaLang/julia/issues/5196
 [#5214]: https://github.com/JuliaLang/julia/issues/5214
-[#3605]: https://github.com/JuliaLang/julia/pull/3605
-[#3233]: https://github.com/JuliaLang/julia/pull/3233
-[#4811]: https://github.com/JuliaLang/julia/pull/4811
-[#5832]: https://github.com/JuliaLang/julia/pull/5832
-[#6116]: https://github.com/JuliaLang/julia/pull/6116
-[#7035]: https://github.com/JuliaLang/julia/pull/7035
-[#7061]: https://github.com/JuliaLang/julia/pull/7061
-[#7106]: https://github.com/JuliaLang/julia/pull/7106
-[#7047]: https://github.com/JuliaLang/julia/pull/7047
-[#7131]: https://github.com/JuliaLang/julia/pull/7131
-
-[packages chapter]: http://docs.julialang.org/en/latest/manual/packages/
-[sorting functions]: http://docs.julialang.org/en/latest/stdlib/sort/
-[pairwise summation]: https://en.wikipedia.org/wiki/Pairwise_summation
+[#5255]: https://github.com/JuliaLang/julia/issues/5255
+[#5263]: https://github.com/JuliaLang/julia/issues/5263
+[#5275]: https://github.com/JuliaLang/julia/issues/5275
+[#5277]: https://github.com/JuliaLang/julia/issues/5277
+[#5330]: https://github.com/JuliaLang/julia/issues/5330
+[#5358]: https://github.com/JuliaLang/julia/issues/5358
+[#5380]: https://github.com/JuliaLang/julia/issues/5380
+[#5381]: https://github.com/JuliaLang/julia/issues/5381
+[#5387]: https://github.com/JuliaLang/julia/issues/5387
+[#5403]: https://github.com/JuliaLang/julia/issues/5403
+[#5427]: https://github.com/JuliaLang/julia/issues/5427
+[#5428]: https://github.com/JuliaLang/julia/issues/5428
+[#5430]: https://github.com/JuliaLang/julia/issues/5430
+[#5462]: https://github.com/JuliaLang/julia/issues/5462
+[#5464]: https://github.com/JuliaLang/julia/issues/5464
+[#5468]: https://github.com/JuliaLang/julia/issues/5468
+[#5475]: https://github.com/JuliaLang/julia/issues/5475
+[#5511]: https://github.com/JuliaLang/julia/issues/5511
+[#5526]: https://github.com/JuliaLang/julia/issues/5526
+[#5545]: https://github.com/JuliaLang/julia/issues/5545
+[#5576]: https://github.com/JuliaLang/julia/issues/5576
+[#5585]: https://github.com/JuliaLang/julia/issues/5585
+[#5636]: https://github.com/JuliaLang/julia/issues/5636
+[#5671]: https://github.com/JuliaLang/julia/issues/5671
+[#5677]: https://github.com/JuliaLang/julia/issues/5677
+[#5703]: https://github.com/JuliaLang/julia/issues/5703
+[#5726]: https://github.com/JuliaLang/julia/issues/5726
+[#5737]: https://github.com/JuliaLang/julia/issues/5737
+[#5748]: https://github.com/JuliaLang/julia/issues/5748
+[#5776]: https://github.com/JuliaLang/julia/issues/5776
+[#5778]: https://github.com/JuliaLang/julia/issues/5778
+[#5811]: https://github.com/JuliaLang/julia/issues/5811
+[#5819]: https://github.com/JuliaLang/julia/issues/5819
+[#5827]: https://github.com/JuliaLang/julia/issues/5827
+[#5832]: https://github.com/JuliaLang/julia/issues/5832
+[#5936]: https://github.com/JuliaLang/julia/issues/5936
+[#5970]: https://github.com/JuliaLang/julia/issues/5970
+[#6056]: https://github.com/JuliaLang/julia/issues/6056
+[#6057]: https://github.com/JuliaLang/julia/issues/6057
+[#6073]: https://github.com/JuliaLang/julia/issues/6073
+[#6116]: https://github.com/JuliaLang/julia/issues/6116
+[#6128]: https://github.com/JuliaLang/julia/issues/6128
+[#6169]: https://github.com/JuliaLang/julia/issues/6169
+[#6179]: https://github.com/JuliaLang/julia/issues/6179
+[#6197]: https://github.com/JuliaLang/julia/issues/6197
+[#6212]: https://github.com/JuliaLang/julia/issues/6212
+[#6270]: https://github.com/JuliaLang/julia/issues/6270
+[#6273]: https://github.com/JuliaLang/julia/issues/6273
+[#6582]: https://github.com/JuliaLang/julia/issues/6582
+[#6624]: https://github.com/JuliaLang/julia/issues/6624
+[#6726]: https://github.com/JuliaLang/julia/issues/6726
+[#6769]: https://github.com/JuliaLang/julia/issues/6769
+[#6773]: https://github.com/JuliaLang/julia/issues/6773
+[#6911]: https://github.com/JuliaLang/julia/issues/6911
+[#6920]: https://github.com/JuliaLang/julia/issues/6920
+[#6929]: https://github.com/JuliaLang/julia/issues/6929
+[#6948]: https://github.com/JuliaLang/julia/issues/6948
+[#7016]: https://github.com/JuliaLang/julia/issues/7016
+[#7035]: https://github.com/JuliaLang/julia/issues/7035
+[#7047]: https://github.com/JuliaLang/julia/issues/7047
+[#7061]: https://github.com/JuliaLang/julia/issues/7061
+[#7064]: https://github.com/JuliaLang/julia/issues/7064
+[#7071]: https://github.com/JuliaLang/julia/issues/7071
+[#7094]: https://github.com/JuliaLang/julia/issues/7094
+[#7106]: https://github.com/JuliaLang/julia/issues/7106
+[#7125]: https://github.com/JuliaLang/julia/issues/7125
+[#7131]: https://github.com/JuliaLang/julia/issues/7131
+[#7146]: https://github.com/JuliaLang/julia/issues/7146
+[#7373]: https://github.com/JuliaLang/julia/issues/7373

@@ -123,6 +123,7 @@ void fpe_handler(int arg)
 }
 #endif
 
+#ifndef _OS_WINDOWS_
 static int is_addr_on_stack(void *addr)
 {
 #ifdef COPY_STACKS
@@ -133,6 +134,7 @@ static int is_addr_on_stack(void *addr)
             (char*)addr < (char*)jl_current_task->stack+jl_current_task->ssize);
 #endif
 }
+#endif
 
 #if defined(__linux__) || defined(__FreeBSD__)
 extern int in_jl_;
