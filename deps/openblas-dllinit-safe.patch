@@ -20,8 +20,8 @@
    }
  
    if (reason == DLL_PROCESS_DETACH) {
---- xianyi-OpenBLAS-347dded/driver/others/memory.c  2014-06-10 09:55:47.000000000 -0400
-+++ openblas-v0.2.9/driver/others/memory.c  2014-06-21 23:12:11.851946992 -0400
+--- xianyi-OpenBLAS-347dded/driver/others/memory.c	2014-06-10 09:55:47.000000000 -0400
++++ openblas-v0.2.9/driver/others/memory.c	2014-06-26 19:35:51.665009918 -0400
 @@ -136,7 +136,11 @@
  
  #define BITMASK(a, b, c) ((((a) >> (b)) & (c)))
@@ -34,3 +34,34 @@
  #define DESTRUCTOR	__attribute__ ((destructor)) 
  
  #ifdef DYNAMIC_ARCH
+@@ -769,16 +773,17 @@
+   tp.PrivilegeCount = 1;
+   tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+   
+-  if (LookupPrivilegeValue(NULL, SE_LOCK_MEMORY_NAME, &tp.Privileges[0].Luid) != TRUE) return (void *) -1;
++  if (LookupPrivilegeValue(NULL, SE_LOCK_MEMORY_NAME, &tp.Privileges[0].Luid) != TRUE) goto fail;
+ 
+-  if (AdjustTokenPrivileges(hToken, FALSE, (PTOKEN_PRIVILEGES)&tp, 0, NULL, NULL) != TRUE) return (void *) -1;
++  if (AdjustTokenPrivileges(hToken, FALSE, &tp, 0, NULL, NULL) != TRUE) goto fail;
+ 
+   map_address  = (void *)VirtualAlloc(address,
+ 				      BUFFER_SIZE,
+ 				      MEM_LARGE_PAGES | MEM_RESERVE | MEM_COMMIT,
+ 				      PAGE_READWRITE);
+ 
+-  AdjustTokenPrivileges(hToken, TRUE, &tp, 0, (PTOKEN_PRIVILEGES)NULL, NULL);
++  tp.Privileges[0].Attributes = 0;
++  AdjustTokenPrivileges(hToken, FALSE, &tp, 0, NULL, NULL);
+ 
+   if (map_address == (void *)NULL) map_address = (void *)-1;
+   
+@@ -791,6 +796,10 @@
+   }
+ 
+   return map_address;
++
++fail:
++  CloseHandle(hToken);
++  return -1;
+ }
+ #endif
