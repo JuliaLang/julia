@@ -7,7 +7,7 @@
 Introduction
 ------------
 
-The Julia standard library contains a range of functions and macros appropriate for performing scientific and numerical computing, but is also as broad as those of many general purpose programming languages.  Additional functionality is available from a growing collection of :ref:`available-packages`. Functions are grouped by topic below.  
+The Julia standard library contains a range of functions and macros appropriate for performing scientific and numerical computing, but is also as broad as those of many general purpose programming languages.  Additional functionality is available from a growing collection of available packages. Functions are grouped by topic below.  
 
 Some general notes:
 
@@ -1753,7 +1753,7 @@ I/O
     04   Read Permission
    ==== =====================
 
-   For allowed arguments, see the stat method.
+   For allowed arguments, see ``stat``.
 
 .. function:: gperm(file)
 
@@ -3511,11 +3511,11 @@ Numbers
 
 .. function:: inf(f)
 
-   Returns infinity in the same floating point type as ``f`` (or ``f`` can by the type itself)
+   Returns positive infinity of the floating point type ``f`` or of the same floating point type as ``f``
 
 .. function:: nan(f)
 
-   Returns NaN in the same floating point type as ``f`` (or ``f`` can by the type itself)
+   Returns NaN (not-a-number) of the floating point type ``f`` or of the same floating point type as ``f``
 
 .. function:: nextfloat(f)
 

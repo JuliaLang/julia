@@ -492,17 +492,10 @@ static Type *NoopType;
 
 // --- utilities ---
 
+#define XSTR(x) #x
+#define MSTR(x) XSTR(x)
 extern "C" {
-#if defined(JULIA_TARGET_CORE2)
-const char *jl_cpu_string = "core2";
-#elif defined(JULIA_TARGET_I386)
-const char *jl_cpu_string = "i386";
-#elif defined(JULIA_TARGET_NATIVE)
-const char *jl_cpu_string = "native";
-#else
-#error "Must select julia cpu target"
-#endif
-
+    const char *jl_cpu_string = MSTR(JULIA_TARGET_ARCH);
     int globalUnique = 0;
 }
 
@@ -4419,11 +4412,7 @@ extern "C" void jl_init_codegen(void)
         .setJITMemoryManager(new JITMemoryManagerWin())
 #endif
         .setTargetOptions(options)
-#if defined(JULIA_TARGET_NATIVE)
-        .setMCPU("")
-#else
-        .setMCPU(jl_cpu_string)
-#endif
+        .setMCPU(strcmp(jl_cpu_string,"native") ? jl_cpu_string : "")
 #ifdef USE_MCJIT
         .setUseMCJIT(true)
         .setMAttrs(attrvec);
@@ -4437,11 +4426,11 @@ extern "C" void jl_init_codegen(void)
     SmallVector<std::string, 4> MAttrs;
     MAttrs.clear();
     MAttrs.append(attrvec.begin(), attrvec.end());
-#if defined(JULIA_TARGET_NATIVE)
-    jl_TargetMachine = eb.selectTarget(TheTriple,"","",MAttrs);
-#else 
-    jl_TargetMachine = eb.selectTarget(TheTriple,"",jl_cpu_string,MAttrs);
-#endif
+    jl_TargetMachine = eb.selectTarget(
+            TheTriple,
+            "",
+            strcmp(jl_cpu_string,"native") ? jl_cpu_string : "",
+            MAttrs);
     assert(jl_TargetMachine);
     jl_ExecutionEngine = eb.create(jl_TargetMachine);
 #endif // LLVM VERSION
