@@ -270,7 +270,7 @@ end
 
 function getindex(r::FloatRange, s::OrdinalRange)
     0 < last(s) <= length(r) || throw(BoundsError())
-    FloatRange(r[first(s)],step(r)*step(s),length(s),r.divisor)
+    FloatRange(r[first(s)], r.step*step(s),length(s),r.divisor)
 end
 
 function show(io::IO, r::Range)
