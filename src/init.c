@@ -65,10 +65,12 @@ extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 #endif
 
 char *julia_home = NULL;
-jl_compileropts_t jl_compileropts = { NULL, // build_path
-                                      0,    // code_coverage
+jl_compileropts_t jl_compileropts = { NULL,     // build_path
+                                      NULL,     // cpu_target ("native", "core2", etc...)
+                                      0,        // code_coverage
                                       JL_COMPILEROPT_CHECK_BOUNDS_DEFAULT,
-                                      0     // int32_literals
+                                      0,        // int32_literals
+                                      
 };
 
 int jl_boot_file_loaded = 0;
@@ -728,6 +730,14 @@ void julia_init(char *imageFile)
     jl_init_frontend();
     jl_init_types();
     jl_init_tasks(jl_stack_lo, jl_stack_hi-jl_stack_lo);
+
+    // If we are able to load the imageFile and get a cpu_target, use that unless user has overridden
+    if (jl_compileropts.cpu_target == NULL) {
+        const char * sysimg_cpu_target = jl_get_system_image_cpu_target(imageFile);
+
+        // If we can't load anything from the sysimg, default to native
+        jl_compileropts.cpu_target = sysimg_cpu_target ? (char *)sysimg_cpu_target : "native";
+    }
     jl_init_codegen();
     jl_an_empty_cell = (jl_value_t*)jl_alloc_cell_1d(0);
 
