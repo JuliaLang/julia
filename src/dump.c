@@ -116,7 +116,7 @@ static void jl_load_sysimg_so(char *fname)
         const char *cpu_target = (const char*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_target");
         if (strcmp(cpu_target,jl_cpu_string) != 0)
             jl_error("Julia and the system image were compiled for different architectures.\n"
-                     "Please delete or regenerate sys.{so,dll,dylib}.");
+                     "Please delete or regenerate sys.{so,dll,dylib}.\n");
         uint32_t info[4];
         jl_cpuid((int32_t*)info, 1);
         if (strcmp(cpu_target, "native") == 0) {
@@ -129,10 +129,6 @@ static void jl_load_sysimg_so(char *fname)
             if (!HasSSSE3)
                 jl_error("The current host does not support SSSE3, but the system image was compiled for Core2.\n"
                          "Please delete or regenerate sys.{so,dll,dylib}.");
-        }
-        else if (strcmp(cpu_target,"i386") != 0) {
-            jl_error("System image has unknown target cpu architecture.\n"
-                     "Please delete or regenerate sys.{so,dll,dylib}.");
         }
         jl_sysimage_name = strdup(fname);
     }
