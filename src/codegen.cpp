@@ -4431,7 +4431,7 @@ extern "C" void jl_init_codegen(void)
 #if defined(JULIA_TARGET_NATIVE)
     jl_TargetMachine = eb.selectTarget(TheTriple,"","",MAttrs);
 #else 
-    jl_TargetMachine = eb.selectTarget(TheTriple,"",jl_cpu_string,MAttrs);
+    jl_TargetMachine = eb.selectTarget(TheTriple,"",cpu_target,MAttrs);
 #endif
     assert(jl_TargetMachine);
     jl_ExecutionEngine = eb.create(jl_TargetMachine);
