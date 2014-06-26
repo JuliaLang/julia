@@ -552,9 +552,9 @@ distclean-double-conversion:
 
 get-double-conversion: double-conversion-$(GRISU_VER).tar.gz
 configure-double-conversion: get-double-conversion
-compile-double-conversion: double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
+compile-double-conversion: get-double-conversion
 check-double-conversion: compile-double-conversion
-install-double-conversion: $(build_shlibdir)/libgrisu.$(SHLIB_EXT)
+install-double-conversion: $(GRISU_OBJ_TARGET)
 
 
 ## openlibm ##
@@ -723,7 +723,7 @@ install-Rmath: $(RMATH_OBJ_TARGET)
 OPENBLAS_OBJ_SOURCE = openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT)
 OPENBLAS_OBJ_TARGET = $(build_shlibdir)/libopenblas.$(SHLIB_EXT)
 
-OPENBLAS_BUILD_OPTS = CC="$(CC)" FC="$(FC)" RANLIB="$(RANLIB)" FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(OPENBLAS_TARGET_ARCH)
+OPENBLAS_BUILD_OPTS = CC="$(CC)" FC="$(FC)" RANLIB="$(RANLIB)" FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(OPENBLAS_TARGET_ARCH) BINARY=$(BINARY)
 
 # Thread support
 ifeq ($(OPENBLAS_USE_THREAD), 1)
@@ -764,21 +764,6 @@ endif
 # Decide whether to build for 32-bit or 64-bit arch
 ifneq ($(BUILD_OS),$(OS))
 OPENBLAS_BUILD_OPTS += OSNAME=$(OS) CROSS=1 HOSTCC=$(HOSTCC)
-endif
-ifeq ($(ARCH),i386)
-OPENBLAS_BUILD_OPTS += BINARY=32
-else ifeq ($(ARCH),i387)
-OPENBLAS_BUILD_OPTS += BINARY=32
-else ifeq ($(ARCH),i486)
-OPENBLAS_BUILD_OPTS += BINARY=32
-else ifeq ($(ARCH),i586)
-OPENBLAS_BUILD_OPTS += BINARY=32
-else ifeq ($(ARCH),i686)
-OPENBLAS_BUILD_OPTS += BINARY=32
-else ifeq ($(ARCH),x86_64)
-OPENBLAS_BUILD_OPTS += BINARY=64
-else
-$(error "unknown arch for openblas cross-compile: $(ARCH)")
 endif
 
 ifeq ($(OS),WINNT)

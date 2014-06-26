@@ -41,10 +41,6 @@ USE_INTEL_JITEVENTS = 0
 # libc++ is standard on OS X 10.9, but not for earlier releases
 USE_LIBCPP = 0
 
-# Select the cpu architecture to target
-# Current available options are "native", "core2" and "i386"
-JULIA_CPU_TARGET = native
-
 # we include twice to pickup user definitions better
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
@@ -266,16 +262,6 @@ LD := link
 endif
 RANLIB := $(CROSS_COMPILE)ranlib
 
-ifeq ($(JULIA_CPU_TARGET),native)
-  JCPPFLAGS += -DJULIA_TARGET_NATIVE
-else ifeq ($(JULIA_CPU_TARGET),core2)
-  JCPPFLAGS += -DJULIA_TARGET_CORE2
-else ifeq ($(JULIA_CPU_TARGET),i386)
-  JCPPFLAGS += -DJULIA_TARGET_I386
-else
-  $(error Unknown cpu target architecture)
-endif
-
 
 # Calculate relative paths to libdir and private_libdir
 build_libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(build_bindir) $(build_libdir))
@@ -315,6 +301,7 @@ endif
 # ===========================================================================
 
 BUILD_MACHINE := $(shell $(HOSTCC) -dumpmachine)
+ifeq ($(ARCH),)
 ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
 ifeq ($(ARCH),mingw32)
 $(error "the mingw32 compiler you are using fails the openblas testsuite. please see the README.windows document for a replacement")
@@ -334,11 +321,43 @@ endif
 BUILD_MACHINE := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
 endif
 endif
+else
+XC_HOST := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
+MARCH = $(ARCH)
+endif
+
+ifneq ($(MARCH),)
+CC += -march=$(MARCH)
+CXX += -march=$(MARCH)
+FC += -march=$(MARCH)
+JULIA_CPU_TARGET ?= $(MARCH)
+endif
+JULIA_CPU_TARGET ?= native
+JCPPFLAGS += -DJULIA_TARGET_ARCH=$(JULIA_CPU_TARGET)
 
 # We map amd64 to x86_64 for compatibility with systems that identify 64-bit systems as such
 ifeq ($(ARCH),amd64)
-ARCH = x86_64
+override ARCH = x86_64
 endif
+
+ifeq ($(ARCH),i386)
+BINARY=32
+else ifeq ($(ARCH),i387)
+BINARY=32
+else ifeq ($(ARCH),i486)
+BINARY=32
+else ifeq ($(ARCH),i586)
+BINARY=32
+else ifeq ($(ARCH),i686)
+BINARY=32
+else ifeq ($(ARCH),x86_64)
+BINARY=64
+else
+$(error "unknown word-size for arch: $(ARCH)")
+endif
+CC += -m$(BINARY)
+CXX += -m$(BINARY)
+FC += -m$(BINARY)
 
 ifeq ($(USEGCC),1)
 ifneq ($(ARCH), ppc64)
