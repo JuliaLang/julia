@@ -192,7 +192,7 @@ Note that this is not a general caution against static parameters, just
 against uses where they are not needed.
 
 Note also that container types, specifically may need type parameters in
-function calls. See the FAQ on `container type fields <faq.html#man-abstract-container-type>`_
+function calls. See the FAQ :ref:`man-abstract-container-type`
 for more information.
 
 Avoid confusion about whether something is an instance or a type

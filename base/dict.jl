@@ -288,11 +288,11 @@ end
 
 empty!(t::ObjectIdDict) = (t.ht = cell(length(t.ht)); t)
 
-start(t::ObjectIdDict) = 0
-done(t::ObjectIdDict, i) = is(next(t,i),())
-next(t::ObjectIdDict, i) = ccall(:jl_eqtable_next, Any, (Any, Uint32), t.ht, i)
+_oidd_nextind(a, i) = int(ccall(:jl_eqtable_nextind, Csize_t, (Any, Csize_t), a, i))
 
-isempty(t::ObjectIdDict) = is(next(t,0),())
+start(t::ObjectIdDict) = _oidd_nextind(t.ht, 0)
+done(t::ObjectIdDict, i) = (i == -1)
+next(t::ObjectIdDict, i) = ((t.ht[i+1],t.ht[i+2]), _oidd_nextind(t.ht, i+2))
 
 function length(d::ObjectIdDict)
     n = 0

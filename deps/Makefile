@@ -510,6 +510,56 @@ check-pcre: pcre-$(PCRE_VER)/checked
 install-pcre: $(PCRE_OBJ_TARGET)
 
 
+<<<<<<< HEAD
+=======
+## Grisu floating-point printing library ##
+
+GRISU_OPTS = $(CXXFLAGS) -O3 -fvisibility=hidden $(fPIC)
+GRISU_OBJ_TARGET = $(build_shlibdir)/libgrisu.$(SHLIB_EXT)
+
+double-conversion-$(GRISU_VER).tar.gz:
+	$(JLDOWNLOAD) $@ http://double-conversion.googlecode.com/files/$@
+	touch -c $@
+double-conversion-$(GRISU_VER)/Makefile: double-conversion-$(GRISU_VER).tar.gz
+	$(JLCHECKSUM) $<
+	mkdir -p double-conversion-$(GRISU_VER) && \
+	$(TAR) -C double-conversion-$(GRISU_VER) --strip-components 1 -xf double-conversion-$(GRISU_VER).tar.gz
+	touch -c $@
+
+ifeq ($(USE_SYSTEM_GRISU), 0)
+$(GRISU_OBJ_TARGET): double-conversion-$(GRISU_VER)/Makefile
+	cd double-conversion-$(GRISU_VER) && \
+	$(CXX) -c $(GRISU_OPTS) -o src/bignum.o -Isrc src/bignum.cc && \
+	$(CXX) -c $(GRISU_OPTS) -o src/bignum-dtoa.o -Isrc src/bignum-dtoa.cc && \
+	$(CXX) -c $(GRISU_OPTS) -o src/cached-powers.o -Isrc src/cached-powers.cc && \
+	$(CXX) -c $(GRISU_OPTS) -o src/diy-fp.o -Isrc src/diy-fp.cc && \
+	$(CXX) -c $(GRISU_OPTS) -o src/double-conversion.o -Isrc src/double-conversion.cc && \
+	$(CXX) -c $(GRISU_OPTS) -o src/fast-dtoa.o -Isrc src/fast-dtoa.cc && \
+	$(CXX) -c $(GRISU_OPTS) -o src/fixed-dtoa.o -Isrc src/fixed-dtoa.cc && \
+	$(CXX) -c $(GRISU_OPTS) -o src/strtod.o -Isrc src/strtod.cc && \
+	$(CXX) -c $(GRISU_OPTS) -o src/libdouble-conversion.o -I.. -Isrc ../double_conversion_wrapper.cpp && \
+	$(CXX) $(GRISU_OPTS) src/*.o $(LDFLAGS) -shared -dead_strip -o $@ && \
+	$(INSTALL_NAME_CMD)libgrisu.$(SHLIB_EXT) $@
+else
+$(GRISU_OBJ_TARGET):
+	$(CXX) $(GRISU_OPTS) -I/usr/include/double-conversion double_conversion_wrapper.cpp -shared $(LDFLAGS) -o $@ -ldouble-conversion && \
+	$(INSTALL_NAME_CMD)libgrisu.$(SHLIB_EXT) $@
+endif
+
+clean-double-conversion:
+	-rm -f double-conversion-$(GRISU_VER)/src/*.o
+	-rm -f $(GRISU_OBJ_TARGET)
+distclean-double-conversion:
+	-rm -rf double-conversion-$(GRISU_VER).tar.gz double-conversion-$(GRISU_VER) $(GRISU_OBJ_TARGET)
+
+get-double-conversion: double-conversion-$(GRISU_VER).tar.gz
+configure-double-conversion: get-double-conversion
+compile-double-conversion: get-double-conversion
+check-double-conversion: compile-double-conversion
+install-double-conversion: $(GRISU_OBJ_TARGET)
+
+
+>>>>>>> ac807db181d27b355a01974648119362a1be76ff
 ## openlibm ##
 
 OPENLIBM_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
@@ -676,7 +726,7 @@ install-Rmath: $(RMATH_OBJ_TARGET)
 OPENBLAS_OBJ_SOURCE = openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT)
 OPENBLAS_OBJ_TARGET = $(build_shlibdir)/libopenblas.$(SHLIB_EXT)
 
-OPENBLAS_BUILD_OPTS = CC="$(CC)" FC="$(FC)" RANLIB="$(RANLIB)" FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(OPENBLAS_TARGET_ARCH)
+OPENBLAS_BUILD_OPTS = CC="$(CC)" FC="$(FC)" RANLIB="$(RANLIB)" FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(OPENBLAS_TARGET_ARCH) BINARY=$(BINARY)
 
 # Thread support
 ifeq ($(OPENBLAS_USE_THREAD), 1)
@@ -717,21 +767,6 @@ endif
 # Decide whether to build for 32-bit or 64-bit arch
 ifneq ($(BUILD_OS),$(OS))
 OPENBLAS_BUILD_OPTS += OSNAME=$(OS) CROSS=1 HOSTCC=$(HOSTCC)
-endif
-ifeq ($(ARCH),i386)
-OPENBLAS_BUILD_OPTS += BINARY=32
-else ifeq ($(ARCH),i387)
-OPENBLAS_BUILD_OPTS += BINARY=32
-else ifeq ($(ARCH),i486)
-OPENBLAS_BUILD_OPTS += BINARY=32
-else ifeq ($(ARCH),i586)
-OPENBLAS_BUILD_OPTS += BINARY=32
-else ifeq ($(ARCH),i686)
-OPENBLAS_BUILD_OPTS += BINARY=32
-else ifeq ($(ARCH),x86_64)
-OPENBLAS_BUILD_OPTS += BINARY=64
-else
-$(error "unknown arch for openblas cross-compile: $(ARCH)")
 endif
 
 ifeq ($(OS),WINNT)

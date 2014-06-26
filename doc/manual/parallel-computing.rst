@@ -562,8 +562,10 @@ array can be retrieved from a ``SharedArray`` by calling ``sdata(S)``.
 For other ``AbstractArray`` types, ``sdata`` just returns the object
 itself, so it's safe to use ``sdata`` on any Array-type object.
 
-The constructor for a shared array is of the form 
-  ``SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])``
+The constructor for a shared array is of the form::
+
+  SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
+
 which creates a shared array of a bitstype ``T`` and size ``dims``
 across the processes specified by ``pids``.  Unlike distributed
 arrays, a shared array is accessible only from those participating

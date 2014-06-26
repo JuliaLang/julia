@@ -44,8 +44,8 @@ let b = IOBuffer("1\n2\n3\n"), a = {}
     @test a == {(1,"1\n"),(2,"2\n"),(3,"3\n")}
 end
 
-# zip eachline (issue #XXXX)
-let zeb     = IOBuffer("1\n2\n3\n4\n5\n"), 
+# zip eachline (issue #7369)
+let zeb     = IOBuffer("1\n2\n3\n4\n5\n"),
     letters = ['a', 'b', 'c', 'd', 'e'],
     res     = {}
     for (number, letter) in zip(eachline(zeb), letters)
