@@ -58,16 +58,35 @@ InstallDir "$LOCALAPPDATA\Julia-${Version}"
 
 !insertmacro MUI_LANGUAGE "English"
 
+# Add/Remove Programs entry
+!define ARP "Software\Microsoft\Windows\CurrentVersion\Uninstall\Julia ${Version}"
+
 Section "Dummy Section" SecDummy
     SetOutPath $INSTDIR
     File /a /r "julia-${Commit}\*"
     WriteUninstaller "$INSTDIR\Uninstall.exe"
     CreateShortcut "$INSTDIR\julia.lnk" "$INSTDIR\bin\julia.exe"
+
+    # ARP entries
+    WriteRegStr HKLM "${ARP}" \
+                 "DisplayName" "Julia Language ${Version}"
+    WriteRegStr HKLM "${ARP}" \
+                 "Publisher" "The Julia Project"
+    WriteRegStr HKLM "${ARP}" \
+                 "DisplayIcon" "$INSTDIR\bin\julia.exe"
+    WriteRegStr HKLM "${ARP}" \
+                 "UninstallString" "$\"$INSTDIR\uninstall.exe$\""
+    WriteRegStr HKLM "${ARP}" \
+                 "QuietUninstallString" "$\"$INSTDIR\uninstall.exe$\" /S"
+    WriteRegDWORD HKLM "${ARP}" "EstimatedSize" "300"
+    WriteRegDWORD HKLM "${ARP}" "NoModify" "1"
+    WriteRegDWORD HKLM "${ARP}" "NoRepair" "1"
 SectionEnd
  
 Section "uninstall"
     Delete "$INSTDIR/uninstall.exe"
     Delete "$DESKTOP\Julia.lnk"
+    DeleteRegKey HKLM "${ARP}"
     RMDir /r "$SMPROGRAMS\${StartMenuFolder}"
     RMDir /r "$INSTDIR/"
 SectionEnd
