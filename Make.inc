@@ -300,6 +300,15 @@ endif
 
 # ===========================================================================
 
+# Select the cpu architecture to target, or automatically detects the user's compiler
+# ARCH is the first element of the triple, and gives the CPU class (e.g. x86_64)
+# MARCH is the CPU type, and accepts anything that can be passed to the gcc -march flag
+#    it is set equal to ARCH (for cases where the two are the same, such as i686)
+#    it can be set to native to optimize all code for the user's machine (not just the JIT code)
+#    if MARCH is set newer than the native processor, be forewarned that the compile might fail
+# JULIA_CPU_TARGET is the JIT-only complement to MARCH. Setting it explicitly is not generally necessary,
+#    since it is set equal to MARCH by default
+
 BUILD_MACHINE := $(shell $(HOSTCC) -dumpmachine)
 ifeq ($(ARCH),)
 ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
