@@ -2,7 +2,7 @@ debug = false
 
 import Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted
 
-n     = 10
+n = 10
 srand(1234321)
 
 a = rand(n,n)
@@ -17,16 +17,20 @@ end
 
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
+a2real = randn(n,n)/2
+a2img  = randn(n,n)/2
 breal = randn(n,2)/2
 bimg  = randn(n,2)/2
-for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
-    for eltyb in (Float32, Float64, Complex64, Complex128, Int)
-        a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(areal, aimg) : areal)
-        b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex(breal, bimg) : breal)
-        asym = a'+a                  # symmetric indefinite
-        apd  = a'*a                 # symmetric positive-definite
 
-        εa = eps(abs(float(one(eltya))))
+for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
+    a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(areal, aimg) : areal)
+    a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(a2real, a2img) : a2real)
+    asym = a'+a                  # symmetric indefinite
+    apd  = a'*a                 # symmetric positive-definite
+    ε = εa = eps(abs(float(one(eltya))))
+    
+    for eltyb in (Float32, Float64, Complex64, Complex128, Int)
+        b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex(breal, bimg) : breal)
         εb = eps(abs(float(one(eltyb))))
         ε = max(εa,εb)
 
@@ -249,8 +253,12 @@ debug && println("Test null")
         @test size(null(b), 2) == 0
     end
 
+    end # for eltyb
+
+debug && println("\ntype of a: ", eltya, "\n")
+
 debug && println("Test pinv")
-    if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
+    if eltya != BigFloat # Revisit when implemented in julia
         pinva15 = pinv(a[:,1:5])
         @test_approx_eq a[:,1:5]*pinva15*a[:,1:5] a[:,1:5]
         @test_approx_eq pinva15*a[:,1:5]*pinva15 pinva15
@@ -258,14 +266,23 @@ debug && println("Test pinv")
 
     # if isreal(a)
 debug && println("Matrix square root")
-    if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
+    if eltya != BigFloat # Revisit when implemented in julia
         asq = sqrtm(a)
         @test_approx_eq asq*asq a
         asymsq = sqrtm(asym)
         @test_approx_eq asymsq*asymsq asym
     end
-end
-end
+
+debug && println("Lyapunov/Sylvester")
+    if eltya != BigFloat
+        let 
+            x = lyap(a, a2)
+            @test_approx_eq -a2 a*x + x*a'
+            x2 = sylvester(a[1:3, 1:3], a[4:n, 4:n], a2[1:3,4:n])
+            @test_approx_eq -a2[1:3, 4:n] a[1:3, 1:3]*x2 + x2*a[4:n, 4:n]
+        end
+    end
+end # for eltya
 
 #6941
 #@test (ones(10^7,4)*ones(4))[3] == 4.0
