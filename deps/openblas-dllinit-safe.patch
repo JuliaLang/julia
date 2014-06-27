@@ -55,13 +55,15 @@
  
    if (map_address == (void *)NULL) map_address = (void *)-1;
    
-@@ -791,6 +796,10 @@
+@@ -791,6 +796,12 @@
    }
  
    return map_address;
 +
++#ifdef OS_WINDOWS
 +fail:
 +  CloseHandle(hToken);
 +  return -1;
++#endif
  }
  #endif
