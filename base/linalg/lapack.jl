@@ -3666,12 +3666,12 @@ for (fn, elty) in ((:dtrttf_, :Float64),
 end
 
 # Solves the real Sylvester matrix equation: op(A)*X +- X*op(B) = scale*C and A and B are both upper quasi triangular.
-for (fn, elty) in ((:dtrsyl_, :Float64),
-                   (:strsyl_, :Float32),
-                   (:ztrsyl_, :Complex128),
-                   (:ctrsyl_, :Complex64))
+for (fn, elty, relty) in ((:dtrsyl_, :Float64, :Float64),
+                   (:strsyl_, :Float32, :Float32),
+                   (:ztrsyl_, :Complex128, :Float64),
+                   (:ctrsyl_, :Complex64, :Float32))
     @eval begin
-        function trsyl!(transa::BlasChar, transb::BlasChar, A::StridedMatrix{$elty}, B::StridedMatrix{$elty}, C::StridedMatrix{$elty}, isgn::BlasInt=1)
+        function trsyl!(transa::BlasChar, transb::BlasChar, A::StridedMatrix{$elty}, B::StridedMatrix{$elty}, C::StridedMatrix{$elty}, isgn::Int=1)
             chkstride1(A)
             chkstride1(B)
             chkstride1(C)
@@ -3685,13 +3685,13 @@ for (fn, elty) in ((:dtrsyl_, :Float64),
             if m != m1 || n != n1 throw(DimensionMismatch("")) end
             ldc = max(1, stride(C, 2))
 
-            scale = Array($elty, 1)
+            scale = Array($relty, 1)
             info = Array(BlasInt, 1)
             
             ccall(($(string(fn)), liblapack), Void, 
                 (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-                 Ptr{$elty}, Ptr{BlasInt}),
+                 Ptr{$relty}, Ptr{BlasInt}),
                 &transa, &transb, &isgn, &m, &n,
                 A, &lda, B, &ldb, C, &ldc,
                 scale, info)
