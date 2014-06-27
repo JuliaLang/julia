@@ -128,7 +128,6 @@ end
 function check_blas()
     blas = blas_vendor()
     if blas == :openblas
-        @windows_only ccall((:gotoblas_init, Base.libblas_name), Void, ())
         openblas_config = openblas_get_config()
         openblas64 = ismatch(r".*USE64BITINT.*", openblas_config)
         if Base.USE_BLAS64 != openblas64
