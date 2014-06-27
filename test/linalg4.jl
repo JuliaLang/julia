@@ -66,7 +66,7 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         #Binary operations
         B = convert(Matrix{elty}, randn(n, n))
         for (M2, TM2) in ((triu(B), Triangular(B, :U)), (tril(B), Triangular(B, :L)))
-            for op in (*,) #+, - not implemented
+            for op in (*, +, -)
                 @test_approx_eq full(op(TM, TM2)) op(M, M2)
                 @test_approx_eq full(op(TM, M2)) op(M, M2)
                 @test_approx_eq full(op(M, TM2)) op(M, M2)
