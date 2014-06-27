@@ -52,7 +52,7 @@ function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
         (wid >= width || c in chars) && break
     end
 
-    str[lastidx] in chars && (lastidx = prevind(str, lastidx))
+    lastidx != 0 && str[lastidx] in chars && (lastidx = prevind(str, lastidx))
     truncidx == 0 && (truncidx = lastidx)
     if lastidx < sizeof(str)
         return bytestring(SubString(str, 1, truncidx) * truncmark)
