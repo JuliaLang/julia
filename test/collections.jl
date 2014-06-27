@@ -175,7 +175,8 @@ end
 for d in (["\n" => "\n", "1" => "\n", "\n" => "2"],
           [string(i) => i for i = 1:30],
           [reshape(1:i^2,i,i) => reshape(1:i^2,i,i) for i = 1:24],
-          [utf8(Char['α':'α'+i]) => utf8(Char['α':'α'+i]) for i = (1:10)*10])
+          [utf8(Char['α':'α'+i]) => utf8(Char['α':'α'+i]) for i = (1:10)*10],
+          ["key" => zeros(0, 0)])
     for cols in (12, 40, 80), rows in (2, 10, 24)
         # Ensure output is limited as requested
         s = IOBuffer()
