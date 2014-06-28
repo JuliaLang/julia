@@ -62,6 +62,12 @@ int str2int(char *str, size_t len, int64_t *res, uint32_t base)
 }
 */
 
+int jl_isspace(int c)
+{
+    return ((c == ' ')  || (c == '\t') || (c == '\n') ||
+            (c == '\v') || (c == '\f') || (c == '\r'));
+}
+
 #ifdef __cplusplus
 }
 #endif
