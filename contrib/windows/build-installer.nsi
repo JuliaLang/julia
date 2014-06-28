@@ -68,25 +68,25 @@ Section "Dummy Section" SecDummy
     CreateShortcut "$INSTDIR\julia.lnk" "$INSTDIR\bin\julia.exe"
 
     # ARP entries
-    WriteRegStr HKLM "${ARP}" \
+    WriteRegStr HKCU "${ARP}" \
                  "DisplayName" "Julia Language ${Version}"
-    WriteRegStr HKLM "${ARP}" \
+    WriteRegStr HKCU "${ARP}" \
                  "Publisher" "The Julia Project"
-    WriteRegStr HKLM "${ARP}" \
+    WriteRegStr HKCU "${ARP}" \
                  "DisplayIcon" "$INSTDIR\bin\julia.exe"
-    WriteRegStr HKLM "${ARP}" \
+    WriteRegStr HKCU "${ARP}" \
                  "UninstallString" "$\"$INSTDIR\uninstall.exe$\""
-    WriteRegStr HKLM "${ARP}" \
+    WriteRegStr HKCU "${ARP}" \
                  "QuietUninstallString" "$\"$INSTDIR\uninstall.exe$\" /S"
-    WriteRegDWORD HKLM "${ARP}" "EstimatedSize" "300"
-    WriteRegDWORD HKLM "${ARP}" "NoModify" "1"
-    WriteRegDWORD HKLM "${ARP}" "NoRepair" "1"
+    WriteRegDWORD HKCU "${ARP}" "EstimatedSize" "300"
+    WriteRegDWORD HKCU "${ARP}" "NoModify" "1"
+    WriteRegDWORD HKCU "${ARP}" "NoRepair" "1"
 SectionEnd
  
 Section "uninstall"
     Delete "$INSTDIR/uninstall.exe"
     Delete "$DESKTOP\Julia.lnk"
-    DeleteRegKey HKLM "${ARP}"
+    DeleteRegKey HKCU "${ARP}"
     RMDir /r "$SMPROGRAMS\${StartMenuFolder}"
     RMDir /r "$INSTDIR/"
 SectionEnd
