@@ -538,6 +538,7 @@ export
     isperm,
     issorted,
     last,
+    linrange,
     linspace,
     logspace,
     mapslices,
