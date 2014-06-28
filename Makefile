@@ -207,7 +207,7 @@ endif
 	# Copy in all .jl sources as well
 	cp -R -L $(build_datarootdir)/julia $(DESTDIR)$(datarootdir)/
 	# Remove git repository of juliadoc
-	-rm -r $(DESTDIR)$(datarootdir)/julia/doc/juliadoc/.git
+	-rm -rf $(DESTDIR)$(datarootdir)/julia/doc/juliadoc/.git
 	-rm $(DESTDIR)$(datarootdir)/julia/doc/juliadoc/.gitignore
 	# Copy in beautiful new man page!
 	$(INSTALL_F) $(build_datarootdir)/man/man1/julia.1 $(DESTDIR)$(datarootdir)/man/man1/
@@ -260,8 +260,6 @@ endif
 	# If you want to make a distribution with a hardcoded path, you take care of installation
 ifeq ($(OS), Darwin)
 	-cat ./contrib/mac/juliarc.jl >> $(DESTDIR)$(prefix)/etc/julia/juliarc.jl
-else ifeq ($(OS), WINNT)
-	-cat ./contrib/windows/juliarc.jl >> $(DESTDIR)$(prefix)/etc/julia/juliarc.jl
 endif
 
 	# purge sys.{dll,so,dylib} as that file is not relocatable across processor architectures

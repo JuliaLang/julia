@@ -301,3 +301,12 @@ r = -0.004532318104333742:1.2597349521122731e-5:0.008065031416788989
 @test_approx_eq r[5:-2:1][2] r[3]
 @test_throws BoundsError r[0:10]
 @test_throws BoundsError r[1:10000]
+
+r = linrange(1/3,5/7,6)
+@test length(r) == 6
+@test r[1] == 1/3
+@test abs(r[end] - 5/7) <= eps(5/7)
+r = linrange(0.25,0.25,1)
+@test length(r) == 1
+@test_throws Exception linrange(0.25,0.5,1)
+
