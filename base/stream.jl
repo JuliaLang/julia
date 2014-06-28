@@ -179,13 +179,18 @@ type TTY <: AsyncStream
     readnotify::Condition
     closecb::Callback
     closenotify::Condition
-    TTY(handle) = new(
-        handle,
-        StatusUninit,
-        true,
-        PipeBuffer(),
-        false,Condition(),
-        false,Condition())
+    @windows_only ispty::Bool
+    function TTY(handle)
+        self = new(
+            handle,
+            StatusUninit,
+            true,
+            PipeBuffer(),
+            false,Condition(),
+            false,Condition())
+        @windows_only self.ispty = false
+        self
+    end
 end
 
 function TTY(fd::RawFD; readable::Bool = false)
@@ -200,6 +205,9 @@ function TTY(fd::RawFD; readable::Bool = false)
     ret.line_buffered = false
     ret
 end
+
+@windows_only ispty(s::TTY) = s.ispty
+@windows_only ispty(s) = false
 
 # note that uv_is_readable/writable work for any subtype of
 # uv_stream_t, including uv_tty_t and uv_pipe_t
@@ -238,7 +246,12 @@ function init_stdio(handle)
         elseif t == UV_TCP
             ret = TcpSocket(handle)
         elseif t == UV_NAMED_PIPE
-            ret = Pipe(handle)
+            @windows ? (if bool(ccall(:jl_ispty, Cint, (Ptr{Void},), handle))
+                ret = TTY(handle)
+                ret.ispty = true
+            else
+                ret = Pipe(handle)
+            end) : (ret = Pipe(handle))
         else
             error("FATAL: stdio type ($t) invalid")
         end

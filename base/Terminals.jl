@@ -127,11 +127,10 @@ cmove_line_up(t::UnixTerminal, n) = (cmove_up(t, n); cmove_col(t, 0))
 cmove_line_down(t::UnixTerminal, n) = (cmove_down(t, n); cmove_col(t, 0))
 cmove_col(t::UnixTerminal, n) = write(t.out_stream, "$(CSI)$(n)G")
     
-@windows ? begin 
-    ispty(s::Base.AsyncStream) = bool(ccall(:jl_ispty, Cint, (Ptr{Void},), s))
-    ispty(s) = false
+@windows ? begin
+    import Base.ispty
     function raw!(t::TTYTerminal,raw::Bool)
-        if ispty(t.in_stream) || ispty(t.out_stream) || ispty(t.err_stream)
+        if ispty(t.in_stream)
             run(if raw
                     `stty raw -echo onlcr -ocrnl opost`
                 else
