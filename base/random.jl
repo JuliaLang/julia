@@ -1,6 +1,6 @@
 module Random
 
-using Base.LibRandom
+using Base.dSFMT
 
 export srand,
        rand, rand!,
