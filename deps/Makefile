@@ -80,7 +80,7 @@ STAGE1_DEPS += openblas
 endif
 
 ifeq ($(USE_SYSTEM_FFTW), 0)
-STAGE1_DEPS += fftw
+STAGE1_DEPS += fftw-single fftw-double
 endif
 
 ifeq ($(USE_SYSTEM_GMP), 0)
@@ -1148,8 +1148,11 @@ clean-fftw-single:
 clean-fftw-double:
 	-$(MAKE) -C fftw-$(FFTW_VER)-double clean
 	-rm -f $(FFTW_DOUBLE_OBJ_TARGET)
-distclean-fftw:
-	-rm -rf fftw-$(FFTW_VER).tar.gz fftw-$(FFTW_VER)-single fftw-$(FFTW_VER)-double
+distclean-fftw: distclean-fftw-single distclean-fftw-double
+distclean-fftw-single:
+	-rm -rf fftw-$(FFTW_VER).tar.gz fftw-$(FFTW_VER)-single
+distclean-fftw-double:
+	-rm -rf fftw-$(FFTW_VER).tar.gz fftw-$(FFTW_VER)-double
 
 get-fftw: get-fftw-single get-fftw-double
 configure-fftw: configure-fftw-single configure-fftw-double
