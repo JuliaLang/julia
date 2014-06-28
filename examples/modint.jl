@@ -1,3 +1,5 @@
+module ModInts
+
 importall Base
 
 immutable ModInt{n} <: Integer
@@ -15,3 +17,5 @@ promote_rule{n}(::Type{ModInt{n}}, ::Type{Int}) = ModInt{n}
 
 show{n}(io::IO, k::ModInt{n}) = print(io, "$(k.k) mod $n")
 showcompact(io::IO, k::ModInt) = print(io, k.k)
+
+end # module

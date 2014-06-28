@@ -58,7 +58,7 @@ function panel_factor_seq(A, I, col_dep)
     
     ## Factorize a panel
     K = I[1]:n
-    (A[K,I], panel_p) = lu!(A[K,I]) # Economy mode
+    panel_p = lufact!(sub(A, K, I))[:p] # Economy mode
     
     ## Panel permutation 
     panel_p = K[panel_p]
@@ -197,7 +197,7 @@ function panel_factor_par(A_KI, col_dep)
     @assert col_dep
     
     ## Factorize a panel
-    (A_KI, panel_p) = lu!(A_KI) # Economy mode
+    panel_p = lufact!(A_KI)[:p] # Economy mode
     
     return (A_KI, panel_p)
     

@@ -232,7 +232,16 @@ for T = (Float32, Float64,),# BigFloat),
     start = convert(T,a)/den
     step  = convert(T,s)/den
     stop  = convert(T,(a+(n-1)*s))/den
-    @test [start:step:stop] == T[a:s:a+(n-1)*s]./den
+    r = start:step:stop
+    @test [r] == T[a:s:a+(n-1)*s]./den
+    # issue #7420
+    n = length(r)
+    @test [r[1:n]] == [r]
+    @test [r[2:n]] == [r][2:end]
+    @test [r[1:3:n]] == [r][1:3:n]
+    @test [r[2:2:n]] == [r][2:2:n]
+    @test [r[n:-1:2]] == [r][n:-1:2]
+    @test [r[n:-2:1]] == [r][n:-2:1]
 end
 
 # near-equal ranges
