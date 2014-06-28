@@ -828,7 +828,12 @@ ios_t *ios_file(ios_t *s, char *fname, int rd, int wr, int create, int trunc)
 #if defined(_OS_WINDOWS_)
     fd = open(fname, flags | O_BINARY, _S_IREAD | _S_IWRITE);
 #else
-    fd = open(fname, flags, S_IRUSR | S_IWUSR /* 0600 */ | S_IRGRP | S_IROTH /* 0644 */);
+    size_t len = strlen(fname)+1;
+    size_t wlen = MultiByteToWideChar(CP_UTF8, 0, fname, len, NULL, 0);
+    if (!wlen) goto open_file_err;
+    wchar_t *fname_w = (wchar_t*)alloca(wlen*sizeof(wchar_t));
+    if (!MultiByteToWideChar(CP_UTF8, 0, fname, len, fname_w, wlen)) goto open_file_err;
+    fd = _wopen(fname_w, flags, S_IRUSR | S_IWUSR /* 0600 */ | S_IRGRP | S_IROTH /* 0644 */);
 #endif
     s = ios_fd(s, fd, 1, 1);
     if (fd == -1)
