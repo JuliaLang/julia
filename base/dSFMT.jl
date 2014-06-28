@@ -1,4 +1,4 @@
-module LibRandom
+module dSFMT
 
 export DSFMT_state, dsfmt_get_min_array_size, dsfmt_get_idstring,
        dsfmt_init_gen_rand, dsfmt_gv_init_gen_rand, 
@@ -9,22 +9,20 @@ export DSFMT_state, dsfmt_get_min_array_size, dsfmt_get_idstring,
        randmtzig_randn, randmtzig_exprnd,
        win32_SystemFunction036!
 
-## DSFMT
-
 type DSFMT_state
     val::Vector{Int32}
     DSFMT_state() = new(Array(Int32, 770))
 end
 
 function dsfmt_get_idstring()
-    idstring = ccall((:dsfmt_get_idstring,:librandom),
+    idstring = ccall((:dsfmt_get_idstring,:libdSFMT),
                      Ptr{Uint8},
                      ())
     return bytestring(idstring)
 end
 
 function dsfmt_get_min_array_size()
-    min_array_size = ccall((:dsfmt_get_min_array_size,:librandom), 
+    min_array_size = ccall((:dsfmt_get_min_array_size,:libdSFMT),
                            Int32, 
                            ())
 end
@@ -32,68 +30,68 @@ end
 const dsfmt_min_array_size = dsfmt_get_min_array_size()
 
 function dsfmt_init_gen_rand(s::DSFMT_state, seed::Uint32)
-    ccall((:dsfmt_init_gen_rand,:librandom),
+    ccall((:dsfmt_init_gen_rand,:libdSFMT),
           Void, 
           (Ptr{Void}, Uint32,), 
           s.val, seed)
 end
 
 function dsfmt_gv_init_gen_rand(seed::Uint32)
-    ccall((:dsfmt_gv_init_gen_rand,:librandom),
+    ccall((:dsfmt_gv_init_gen_rand,:libdSFMT),
           Void,
           (Uint32,),
           seed)
 end
 
 function dsfmt_init_by_array(s::DSFMT_state, seed::Vector{Uint32})
-    ccall((:dsfmt_init_by_array,:librandom),
+    ccall((:dsfmt_init_by_array,:libdSFMT),
           Void, 
           (Ptr{Void}, Ptr{Uint32}, Int32), 
           s.val, seed, length(seed))
 end
 
 function dsfmt_gv_init_by_array(seed::Vector{Uint32})
-    ccall((:dsfmt_gv_init_by_array,:librandom),
+    ccall((:dsfmt_gv_init_by_array,:libdSFMT),
         Void, 
         (Ptr{Uint32}, Int32), 
         seed, length(seed))
 end
 
 function dsfmt_genrand_close_open(s::DSFMT_state)
-    ccall((:dsfmt_genrand_close_open, :librandom),
+    ccall((:dsfmt_genrand_close_open, :libdSFMT),
     Float64,
     (Ptr{Void},),
     s.val)
 end
 
 function dsfmt_gv_genrand_close_open()
-    ccall((:dsfmt_gv_genrand_close_open, :librandom),
+    ccall((:dsfmt_gv_genrand_close_open, :libdSFMT),
     Float64,
     ())
 end
 
 function dsfmt_genrand_close1_open2(s::DSFMT_state)
-    ccall((:dsfmt_genrand_close1_open2, :librandom),
+    ccall((:dsfmt_genrand_close1_open2, :libdSFMT),
     Float64,
     (Ptr{Void},),
     s.val)
 end
 
 function dsfmt_gv_genrand_close1_open2()
-    ccall((:dsfmt_gv_genrand_close1_open2, :librandom),
+    ccall((:dsfmt_gv_genrand_close1_open2, :libdSFMT),
     Float64,
     ())
 end
 
 function dsfmt_genrand_uint32(s::DSFMT_state)
-    ccall((:dsfmt_genrand_uint32,:librandom), 
+    ccall((:dsfmt_genrand_uint32,:libdSFMT),
           Uint32,
           (Ptr{Void},),
           s.val)
 end
 
 function dsfmt_gv_genrand_uint32()
-    ccall((:dsfmt_gv_genrand_uint32,:librandom), 
+    ccall((:dsfmt_gv_genrand_uint32,:libdSFMT),
           Uint32,
           ())
 end

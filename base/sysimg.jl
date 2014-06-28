@@ -180,7 +180,7 @@ big(z::Complex) = complex(big(real(z)),big(imag(z)))
 include("hashing2.jl")
 
 # random number generation
-include("librandom.jl")
+include("dSFMT.jl")
 include("random.jl")
 importall .Random
 

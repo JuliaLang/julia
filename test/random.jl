@@ -122,12 +122,12 @@ function randmtzig_fill_ziggurat_tables() # Operates on the global arrays
     return nothing
 end
 randmtzig_fill_ziggurat_tables()
-@test all(ki == Base.LibRandom.ki)
-@test all(wi == Base.LibRandom.wi)
-@test all(fi == Base.LibRandom.fi)
-@test all(ke == Base.LibRandom.ke)
-@test all(we == Base.LibRandom.we)
-@test all(fe == Base.LibRandom.fe)
+@test all(ki == Base.dSFMT.ki)
+@test all(wi == Base.dSFMT.wi)
+@test all(fi == Base.dSFMT.fi)
+@test all(ke == Base.dSFMT.ke)
+@test all(we == Base.dSFMT.we)
+@test all(fe == Base.dSFMT.fe)
 
 #same random numbers on for small ranges on all systems
 
