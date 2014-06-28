@@ -103,7 +103,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
 .. function:: build()
 
-   Run the build script for all installed packages in depth-first recursive order.
+   Run the build scripts for all installed packages in depth-first recursive order.
 
 .. function:: build(pkgs...)
 
