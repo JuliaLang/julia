@@ -51,3 +51,4 @@ External libraries, if used, include their own licenses:
 - [RMATH](http://www.r-project.org/Licenses/)
 - [SUITESPARSE](http://www.cise.ufl.edu/research/sparse/SuiteSparse/current/SuiteSparse/)
 - [ZLIB](http://zlib.net/zlib_license.html)
+- [BUSYBOX](https://github.com/rmyorston/busybox-w32/blob/master/LICENSE)
