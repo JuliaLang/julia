@@ -70,7 +70,7 @@ we'll use the text-based display that comes with the standard library::
                23 client.jl; eval_user_input; line: 91
                   23 profile.jl; anonymous; line: 14
                      8  none; myfunc; line: 2
-                      8 librandom.jl; dsfmt_gv_fill_array_close_open!; line: 128
+                      8 dSFMT.jl; dsfmt_gv_fill_array_close_open!; line: 128
                      15 none; myfunc; line: 3
                       2  reduce.jl; max; line: 35
                       2  reduce.jl; max; line: 36
@@ -113,7 +113,7 @@ rather than putting it in a file; if we had used a file, this would
 show the file name. Line 2 of ``myfunc()`` contains the call to
 ``rand``, and there were 8 (out of 23) backtraces that occurred at
 this line. Below that, you can see a call to
-``dsfmt_gv_fill_array_close_open!`` inside ``librandom.jl``. You might be surprised not to see the
+``dsfmt_gv_fill_array_close_open!`` inside ``dSFMT.jl``. You might be surprised not to see the
 ``rand`` function listed explicitly: that's because ``rand`` is *inlined*,
 and hence doesn't appear in the backtraces.
 
@@ -140,7 +140,7 @@ more samples::
                3121 client.jl; eval_user_input; line: 91
                   3121 profile.jl; anonymous; line: 1
                      848  none; myfunc; line: 2
-                      842 librandom.jl; dsfmt_gv_fill_array_close_open!; line: 128
+                      842 dSFMT.jl; dsfmt_gv_fill_array_close_open!; line: 128
                      1510 none; myfunc; line: 3
                       74   reduce.jl; max; line: 35
                       122  reduce.jl; max; line: 36
@@ -163,7 +163,7 @@ dump, which accumulates counts independent of their nesting::
       3121 client.jl    _start                            373
       3121 client.jl    eval_user_input                    91
       3121 client.jl    run_repl                          166
-       842 librandom.jl dsfmt_gv_fill_array_close_open!   128
+       842 dSFMT.jl     dsfmt_gv_fill_array_close_open!   128
        848 none         myfunc                              2
       1510 none         myfunc                              3
       3121 profile.jl   anonymous                           1
