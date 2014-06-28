@@ -324,7 +324,7 @@ jl_function_t *jl_reinstantiate_method(jl_function_t *f, jl_lambda_info_t *li)
 static
 jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
                                      jl_function_t *method, jl_tuple_t *tvars,
-                                     int check_amb);
+                                     int check_amb, int8_t isstaged);
 
 static
 jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tuple_t *type,
@@ -357,7 +357,7 @@ jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tuple_t *type,
         }
     }
  ml_do_insert:
-    return jl_method_list_insert(pml, type, method, jl_null, 0)->func;
+    return jl_method_list_insert(pml, type, method, jl_null, 0, 0)->func;
 }
 
 extern jl_function_t *jl_typeinf_func;
@@ -942,17 +942,38 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
         m = m->next;
     }
 
+    jl_function_t *func = NULL;
     if (ti == (jl_value_t*)jl_bottom_type) {
         JL_GC_POP();
         if (m != JL_NULL) {
+            func = m->func;
+            jl_lambda_info_t *newlinfo = NULL;
+            jl_value_t *code = NULL;
+            JL_GC_PUSH3(&code, &func, &newlinfo)
+            if (m->isstaged)
+            {
+                code = jl_apply(m->func, tt->data, jl_tuple_len(tt));
+                newlinfo = jl_new_lambda_info(code, jl_null);
+                func = jl_new_closure(NULL, (jl_value_t*)jl_null, newlinfo);
+            }
+            JL_GC_POP();
             if (!cache)
-                return m->func;
-            return cache_method(mt, tt, m->func, (jl_tuple_t*)m->sig, jl_null);
+                return func;
+            return cache_method(mt, tt, func, (jl_tuple_t*)m->sig, jl_null);
         }
         return jl_bottom_func;
     }
 
     assert(jl_is_tuple(env));
+    func = m->func;
+
+    if (m->isstaged)
+    {
+        jl_value_t *code = jl_apply(m->func, tt->data, jl_tuple_len(tt));
+        jl_lambda_info_t *newlinfo = jl_new_lambda_info(code, env);
+        func = jl_new_closure(NULL, (jl_value_t*)jl_null, newlinfo);
+    }
+
     // don't bother computing this if no arguments are tuples
     for(i=0; i < jl_tuple_len(tt); i++) {
         if (jl_is_tuple(jl_tupleref(tt,i)))
@@ -969,9 +990,9 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
     assert(jl_is_tuple(newsig));
     jl_function_t *nf;
     if (!cache)
-        nf = m->func;
+        nf = func;
     else
-        nf = cache_method(mt, tt, m->func, newsig, env);
+        nf = cache_method(mt, tt, func, newsig, env);
     JL_GC_POP();
     return nf;
 }
@@ -1108,7 +1129,7 @@ static int has_unions(jl_tuple_t *type)
 static
 jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
                                      jl_function_t *method, jl_tuple_t *tvars,
-                                     int check_amb)
+                                     int check_amb, int8_t isstaged)
 {
     jl_methlist_t *l, **pl;
 
@@ -1140,6 +1161,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
             l->va = (jl_tuple_len(type) > 0 &&
                      jl_is_vararg_type(jl_tupleref(type,jl_tuple_len(type)-1))) ?
                 1 : 0;
+            l->isstaged = isstaged;
             l->invokes = (struct _jl_methtable_t *)JL_NULL;
             l->func = method;
             JL_SIGATOMIC_END();
@@ -1167,6 +1189,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
     newrec->va = (jl_tuple_len(type) > 0 &&
                   jl_is_vararg_type(jl_tupleref(type,jl_tuple_len(type)-1))) ?
         1 : 0;
+    newrec->isstaged = isstaged;
     newrec->func = method;
     newrec->invokes = (struct _jl_methtable_t*)JL_NULL;
     newrec->next = l;
@@ -1219,12 +1242,13 @@ static void remove_conflicting(jl_methlist_t **pl, jl_value_t *type)
 }
 
 jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tuple_t *type,
-                                      jl_function_t *method, jl_tuple_t *tvars)
+                                      jl_function_t *method, jl_tuple_t *tvars,
+                                      int8_t isstaged)
 {
     if (jl_tuple_len(tvars) == 1)
         tvars = (jl_tuple_t*)jl_t0(tvars);
     JL_SIGATOMIC_BEGIN();
-    jl_methlist_t *ml = jl_method_list_insert(&mt->defs,type,method,tvars,1);
+    jl_methlist_t *ml = jl_method_list_insert(&mt->defs,type,method,tvars,1,isstaged);
     // invalidate cached methods that overlap this definition
     remove_conflicting(&mt->cache, (jl_value_t*)type);
     if (mt->cache_arg1 != JL_NULL) {
@@ -1496,7 +1520,7 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
         if (m->invokes == JL_NULL) {
             m->invokes = new_method_table(mt->name);
             // this private method table has just this one definition
-            jl_method_list_insert(&m->invokes->defs,m->sig,m->func,m->tvars,0);
+            jl_method_list_insert(&m->invokes->defs,m->sig,m->func,m->tvars,0,0);
         }
 
         tt = arg_type_tuple(args, nargs);
@@ -1557,7 +1581,7 @@ DLLEXPORT jl_function_t *jl_new_gf_internal(jl_value_t *env)
 }
 
 void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth,
-                   jl_tuple_t *tvars)
+                   jl_tuple_t *tvars, int8_t isstaged)
 {
     assert(jl_is_function(gf));
     assert(jl_is_tuple(types));
@@ -1565,7 +1589,7 @@ void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth,
     assert(jl_is_mtable(jl_gf_mtable(gf)));
     if (meth->linfo != NULL)
         meth->linfo->name = jl_gf_name(gf);
-    (void)jl_method_table_insert(jl_gf_mtable(gf), types, meth, tvars);
+    (void)jl_method_table_insert(jl_gf_mtable(gf), types, meth, tvars, isstaged);
 }
 
 DLLEXPORT jl_tuple_t *jl_match_method(jl_value_t *type, jl_value_t *sig,

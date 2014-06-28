@@ -79,7 +79,7 @@
 (define operator? (Set operators))
 
 (define reserved-words '(begin while if for try return break continue
-			 function macro quote let local global const
+			 stagedfunction function macro quote let local global const
 			 abstract typealias type bitstype immutable ccall do
 			 module baremodule using import export importall))
 
@@ -1064,7 +1064,7 @@
        (if const
 	   `(const ,expr)
 	   expr)))
-    ((function macro)
+    ((stagedfunction function macro)
      (let* ((paren (eqv? (require-token s) #\())
 	    (sig   (parse-call s))
 	    (def   (if (or (symbol? sig)

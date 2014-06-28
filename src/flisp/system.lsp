@@ -173,6 +173,7 @@
 (define (cddadr x) (cdr (cdr (car (cdr x)))))
 (define (cdddar x) (cdr (cdr (cdr (car x)))))
 (define (cddddr x) (cdr (cdr (cdr (cdr x)))))
+(define (caddddr x) (car (cdr (cdr (cdr (cdr x))))))
 
 (let ((*values* (list '*values*)))
   (set! values
