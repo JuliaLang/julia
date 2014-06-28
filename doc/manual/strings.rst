@@ -421,7 +421,7 @@ sessions:
      3
 
     julia> "v: $v"
-    "v: 1\n2\n3\n"
+    "v: [1,2,3]"
 
 The ``string`` function is the identity for ``String`` and ``Char``
 values, so these are interpolated into strings as themselves, unquoted
