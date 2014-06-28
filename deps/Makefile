@@ -24,7 +24,7 @@ MAKE_COMMON = DESTDIR="" prefix=$(build_prefix) bindir=$(build_bindir) libdir=$(
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-STAGE1_DEPS = random double-conversion
+STAGE1_DEPS = double-conversion
 STAGE2_DEPS = Rmath
 STAGE3_DEPS = suitesparse-wrapper
 
@@ -61,6 +61,10 @@ endif
 
 ifeq ($(USE_SYSTEM_OPENSPECFUN), 0)
 STAGE1_DEPS += openspecfun
+endif
+
+ifeq ($(USE_SYSTEM_DSFMT), 0)
+STAGE1_DEPS += random
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 0)
@@ -635,20 +639,24 @@ compile-openspecfun: $(OPENSPECFUN_OBJ_SOURCE)
 check-openspecfun: compile-openspecfun
 install-openspecfun: $(OPENSPECFUN_OBJ_TARGET) 
 
-## LIBRANDOM ##
+## DSFMT ##
 
-LIBRANDOM_OBJ_TARGET = $(build_shlibdir)/librandom.$(SHLIB_EXT)
-LIBRANDOM_OBJ_SOURCE = librandom.$(SHLIB_EXT)
+ifeq ($(USE_SYSTEM_DSFMT),0)
+DSFMT_FAKE_TARGET = $(DSFMT_OBJ_TARGET)
+endif
 
-LIBRANDOM_CFLAGS = $(CFLAGS) -DNDEBUG -DDSFMT_MEXP=19937 $(fPIC) -DDSFMT_DO_NOT_USE_OLD_NAMES
+DSFMT_OBJ_TARGET = $(build_shlibdir)/libdSFMT.$(SHLIB_EXT)
+DSFMT_OBJ_SOURCE = libdSFMT.$(SHLIB_EXT)
+
+DSFMT_CFLAGS = $(CFLAGS) -DNDEBUG -DDSFMT_MEXP=19937 $(fPIC) -DDSFMT_DO_NOT_USE_OLD_NAMES
 ifneq ($(USEMSVC), 1)
-LIBRANDOM_CFLAGS += -O3 -finline-functions -fomit-frame-pointer -fno-strict-aliasing \
+DSFMT_CFLAGS += -O3 -finline-functions -fomit-frame-pointer -fno-strict-aliasing \
 		--param max-inline-insns-single=1800 -Wmissing-prototypes -Wall  -std=c99 -shared
 else
-LIBRANDOM_CFLAGS += -Wl,-dll
+DSFMT_CFLAGS += -Wl,-dll
 endif
 ifeq ($(ARCH), x86_64)
-LIBRANDOM_CFLAGS += -msse2 -DHAVE_SSE2
+DSFMT_CFLAGS += -msse2 -DHAVE_SSE2
 endif
 
 dsfmt-$(DSFMT_VER).tar.gz:
@@ -660,22 +668,22 @@ dsfmt-$(DSFMT_VER)/config.status: dsfmt-$(DSFMT_VER).tar.gz
 	$(TAR) -C dsfmt-$(DSFMT_VER) --strip-components 1 -xf dsfmt-$(DSFMT_VER).tar.gz && \
 	cd dsfmt-$(DSFMT_VER) && patch < ../dSFMT.h.patch && patch < ../dSFMT.c.patch
 	echo 1 > $@
-$(LIBRANDOM_OBJ_SOURCE): dsfmt-$(DSFMT_VER)/config.status
-	$(CC) $(CPPFLAGS) $(LIBRANDOM_CFLAGS) $(LDFLAGS) dsfmt-$(DSFMT_VER)/dSFMT.c -o librandom.$(SHLIB_EXT) && \
-	$(INSTALL_NAME_CMD)librandom.$(SHLIB_EXT) librandom.$(SHLIB_EXT)
-$(LIBRANDOM_OBJ_TARGET): $(LIBRANDOM_OBJ_SOURCE)
+$(DSFMT_OBJ_SOURCE): dsfmt-$(DSFMT_VER)/config.status
+	$(CC) $(CPPFLAGS) $(DSFMT_CFLAGS) $(LDFLAGS) dsfmt-$(DSFMT_VER)/dSFMT.c -o libdSFMT.$(SHLIB_EXT) && \
+	$(INSTALL_NAME_CMD)libdSFMT.$(SHLIB_EXT) libdSFMT.$(SHLIB_EXT)
+$(DSFMT_OBJ_TARGET): $(DSFMT_OBJ_SOURCE)
 	cp $< $@
 
 clean-random:
-	-rm -f librandom.$(SHLIB_EXT)
+	-rm -f libdSFMT.$(SHLIB_EXT)
 distclean-random: clean-random
 	-rm -rf *.tar.gz dsfmt-$(DSFMT_VER)
 
 get-random: dsfmt-$(DSFMT_VER).tar.gz
 configure-random: dsfmt-$(DSFMT_VER)/config.status
-compile-random: $(LIBRANDOM_OBJ_SOURCE)
+compile-random: $(DSFMT_OBJ_SOURCE)
 check-random: compile-random
-install-random: $(LIBRANDOM_OBJ_TARGET)
+install-random: $(DSFMT_OBJ_TARGET)
 
 
 ## Rmath ##
@@ -685,8 +693,8 @@ RMATH_OBJ_SOURCE = Rmath/src/libRmath-julia.$(SHLIB_EXT)
 
 RMATH_FLAGS += CC="$(CC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) \
 			   OS="$(OS)" ARCH="$(ARCH)" \
-			   USE_LIBRANDOM=1 LIBRANDOM_PATH="$(build_shlibdir)" \
-			   DSFMT_PATH=$(JULIAHOME)/deps/dsfmt-$(DSFMT_VER)
+			   USE_DSFMT=1 DSFMT_libdir="$(build_shlibdir)" \
+			   DSFMT_includedir="$(build_shlibdir)"
 
 Rmath/Make.inc:
 	(cd .. && git submodule init && git submodule update)
@@ -696,7 +704,7 @@ endif
 ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/Rmath ] && echo exists ))
 $(RMATH_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/Rmath/HEAD
 endif
-$(RMATH_OBJ_SOURCE): Rmath/Make.inc $(LIBRANDOM_OBJ_TARGET)
+$(RMATH_OBJ_SOURCE): Rmath/Make.inc $(DSFMT_OBJ_TARGET)
 	$(MAKE) -C Rmath/src $(RMATH_FLAGS) $(MAKE_COMMON)
 	touch -c $@
 $(RMATH_OBJ_TARGET): $(RMATH_OBJ_SOURCE) | $(build_shlibdir)
