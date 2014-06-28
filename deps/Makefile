@@ -642,12 +642,8 @@ install-openspecfun: $(OPENSPECFUN_OBJ_TARGET)
 
 ## DSFMT ##
 
-ifeq ($(USE_SYSTEM_DSFMT),0)
-DSFMT_FAKE_TARGET = $(DSFMT_OBJ_TARGET)
-endif
-
 DSFMT_OBJ_TARGET = $(build_shlibdir)/libdSFMT.$(SHLIB_EXT)
-DSFMT_OBJ_SOURCE = libdSFMT.$(SHLIB_EXT)
+DSFMT_OBJ_SOURCE = dsfmt-$(DSFMT_VER)/libdSFMT.$(SHLIB_EXT)
 
 DSFMT_CFLAGS = $(CFLAGS) -DNDEBUG -DDSFMT_MEXP=19937 $(fPIC) -DDSFMT_DO_NOT_USE_OLD_NAMES
 ifneq ($(USEMSVC), 1)
@@ -670,16 +666,17 @@ dsfmt-$(DSFMT_VER)/config.status: dsfmt-$(DSFMT_VER).tar.gz
 	cd dsfmt-$(DSFMT_VER) && patch < ../dSFMT.h.patch && patch < ../dSFMT.c.patch
 	echo 1 > $@
 $(DSFMT_OBJ_SOURCE): dsfmt-$(DSFMT_VER)/config.status
-	$(CC) $(CPPFLAGS) $(DSFMT_CFLAGS) $(LDFLAGS) dsfmt-$(DSFMT_VER)/dSFMT.c -o libdSFMT.$(SHLIB_EXT) && \
-	$(INSTALL_NAME_CMD)libdSFMT.$(SHLIB_EXT) libdSFMT.$(SHLIB_EXT) && \
-	cp dsfmt-$(DSFMT_VER)/dSFMT.h $(JULIAHOME)/usr/include
+	cd dsfmt-$(DSFMT_VER) && \
+	$(CC) $(CPPFLAGS) $(DSFMT_CFLAGS) $(LDFLAGS) dSFMT.c -o libdSFMT.$(SHLIB_EXT) && \
+	$(INSTALL_NAME_CMD)libdSFMT.$(SHLIB_EXT) $(DSFMT_OBJ_TARGET) && \
+	cp dSFMT.h $(build_includedir)
 $(DSFMT_OBJ_TARGET): $(DSFMT_OBJ_SOURCE)
 	cp $< $@
 
 clean-dsfmt:
 	-rm -f libdSFMT.$(SHLIB_EXT)
 distclean-dsfmt: clean-dsfmt
-	-rm -rf *.tar.gz dsfmt-$(DSFMT_VER)
+	-rm -rf dsfmt*.tar.gz dsfmt-$(DSFMT_VER)
 
 get-dsfmt: dsfmt-$(DSFMT_VER).tar.gz
 configure-dsfmt: dsfmt-$(DSFMT_VER)/config.status
@@ -689,6 +686,10 @@ install-dsfmt: $(DSFMT_OBJ_TARGET)
 
 
 ## Rmath ##
+
+ifeq ($(USE_SYSTEM_DSFMT),0)
+DSFMT_FAKE_TARGET = $(DSFMT_OBJ_TARGET)
+endif
 
 RMATH_OBJ_TARGET = $(build_shlibdir)/libRmath-julia.$(SHLIB_EXT)
 RMATH_OBJ_SOURCE = Rmath/src/libRmath-julia.$(SHLIB_EXT)
@@ -706,7 +707,7 @@ endif
 ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/Rmath ] && echo exists ))
 $(RMATH_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/Rmath/HEAD
 endif
-$(RMATH_OBJ_SOURCE): Rmath/Make.inc $(DSFMT_OBJ_TARGET)
+$(RMATH_OBJ_SOURCE): Rmath/Make.inc $(DSFMT_FAKE_TARGET)
 	$(MAKE) -C Rmath/src $(RMATH_FLAGS) $(MAKE_COMMON)
 	touch -c $@
 $(RMATH_OBJ_TARGET): $(RMATH_OBJ_SOURCE) | $(build_shlibdir)
