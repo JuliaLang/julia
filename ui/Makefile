@@ -20,6 +20,10 @@ JLDFLAGS += $(WHOLE_ARCHIVE) $(build_libdir)/libopenlibm.a $(NO_WHOLE_ARCHIVE)
 endif
 endif
 
+ifeq ($(OS),WINNT)
+JLDFLAGS += -municode
+endif
+
 release debug:
 	$(MAKE) julia-$@
 
