@@ -19,7 +19,7 @@ CONFIGURE_COMMON += F77="$(FC)" CC="$(CC)" CXX="$(CXX)"
 MAKE_COMMON = DESTDIR="" prefix=$(build_prefix) bindir=$(build_bindir) libdir=$(build_libdir) libexecdir=$(build_libexecdir) datarootdir=$(build_datarootdir) includedir=$(build_includedir) sysconfdir=$(build_sysconfdir)
 
 #autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf uv
-#custom Makefile rules: openlibm Rmath double-conversion random suitesparse-wrapper suitesparse lapack openblas utf8proc
+#custom Makefile rules: openlibm Rmath double-conversion dsfmt suitesparse-wrapper suitesparse lapack openblas utf8proc
 
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
@@ -64,7 +64,7 @@ STAGE1_DEPS += openspecfun
 endif
 
 ifeq ($(USE_SYSTEM_DSFMT), 0)
-STAGE1_DEPS += random
+STAGE1_DEPS += dsfmt
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 0)
@@ -144,7 +144,7 @@ install: $(addprefix install-, $(LIBS))
 cleanall: $(addprefix clean-, $(LIBS))
 distcleanall: $(addprefix distclean-, $(LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-uv get-pcre get-double-conversion get-openlibm get-openspecfun get-random get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf get-utf8proc
+getall: get-llvm get-uv get-pcre get-double-conversion get-openlibm get-openspecfun get-dsfmt get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf get-utf8proc
 
 ## PATHS ##
 # sort is used to remove potential duplicates
@@ -671,20 +671,21 @@ dsfmt-$(DSFMT_VER)/config.status: dsfmt-$(DSFMT_VER).tar.gz
 	echo 1 > $@
 $(DSFMT_OBJ_SOURCE): dsfmt-$(DSFMT_VER)/config.status
 	$(CC) $(CPPFLAGS) $(DSFMT_CFLAGS) $(LDFLAGS) dsfmt-$(DSFMT_VER)/dSFMT.c -o libdSFMT.$(SHLIB_EXT) && \
-	$(INSTALL_NAME_CMD)libdSFMT.$(SHLIB_EXT) libdSFMT.$(SHLIB_EXT)
+	$(INSTALL_NAME_CMD)libdSFMT.$(SHLIB_EXT) libdSFMT.$(SHLIB_EXT) && \
+	cp dsfmt-$(DSFMT_VER)/dSFMT.h $(JULIAHOME)/usr/include
 $(DSFMT_OBJ_TARGET): $(DSFMT_OBJ_SOURCE)
 	cp $< $@
 
-clean-random:
+clean-dsfmt:
 	-rm -f libdSFMT.$(SHLIB_EXT)
-distclean-random: clean-random
+distclean-dsfmt: clean-dsfmt
 	-rm -rf *.tar.gz dsfmt-$(DSFMT_VER)
 
-get-random: dsfmt-$(DSFMT_VER).tar.gz
-configure-random: dsfmt-$(DSFMT_VER)/config.status
-compile-random: $(DSFMT_OBJ_SOURCE)
-check-random: compile-random
-install-random: $(DSFMT_OBJ_TARGET)
+get-dsfmt: dsfmt-$(DSFMT_VER).tar.gz
+configure-dsfmt: dsfmt-$(DSFMT_VER)/config.status
+compile-dsfmt: $(DSFMT_OBJ_SOURCE)
+check-dsfmt: compile-dsfmt
+install-dsfmt: $(DSFMT_OBJ_TARGET)
 
 
 ## Rmath ##
@@ -695,7 +696,7 @@ RMATH_OBJ_SOURCE = Rmath/src/libRmath-julia.$(SHLIB_EXT)
 RMATH_FLAGS += CC="$(CC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) \
 			   OS="$(OS)" ARCH="$(ARCH)" \
 			   USE_DSFMT=1 DSFMT_libdir="$(build_shlibdir)" \
-			   DSFMT_includedir="$(build_shlibdir)"
+			   DSFMT_includedir="$(build_includedir)"
 
 Rmath/Make.inc:
 	(cd .. && git submodule init && git submodule update)
