@@ -194,7 +194,6 @@ include("version.jl")
 include("datafmt.jl")
 importall .DataFmt
 include("deepcopy.jl")
-include("util.jl")
 include("interactiveutil.jl")
 include("replutil.jl")
 include("test.jl")
@@ -216,6 +215,13 @@ include("REPLCompletions.jl")
 include("REPL.jl")
 include("client.jl")
 
+# (s)printf macros
+include("printf.jl")
+importall .Printf
+
+# misc useful functions & macros
+include("util.jl")
+
 # sparse matrices and linear algebra
 include("sparse.jl")
 importall .SparseMatrix
@@ -233,10 +239,6 @@ include("statistics.jl")
 include("fftw.jl")
 include("dsp.jl")
 importall .DSP
-
-# (s)printf macros
-include("printf.jl")
-importall .Printf
 
 # system information
 include("sysinfo.jl")
