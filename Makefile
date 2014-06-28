@@ -271,7 +271,9 @@ ifeq ($(OS), WINNT)
 	[ ! -d dist-extras ] || ( cd dist-extras && \
 		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll $(bindir) && \
 	    mkdir $(DESTDIR)$(prefix)/Git && \
-	    7z x PortableGit.7z -o"$(DESTDIR)$(prefix)/Git" )
+	    7z x PortableGit.7z -o"$(DESTDIR)$(prefix)/Git" && \
+	    cp busybox.exe $(DESTDIR)$(prefix)/Git/bin/echo.exe && \
+	    cp busybox.exe $(DESTDIR)$(prefix)/Git/bin/printf.exe )
 	cd $(DESTDIR)$(bindir) && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
 	$(call spawn,./dist-extras/nsis/makensis.exe) -NOCD -DVersion=$(JULIA_VERSION) -DArch=$(ARCH) -DCommit=$(JULIA_COMMIT) ./contrib/windows/build-installer.nsi
 	./dist-extras/7z a -mx9 "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" julia-installer.exe
@@ -387,10 +389,12 @@ endif
 	cd dist-extras && \
 	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z920_extra.7z && \
 	$(JLDOWNLOAD) https://unsis.googlecode.com/files/nsis-2.46.5-Unicode-setup.exe && \
+	$(JLDOWNLOAD) ftp://ftp.tigress.co.uk/public/gpl/6.0.0/busybox/busybox.exe && \
 	chmod a+x 7z.exe && \
 	chmod a+x 7z.dll && \
 	$(call spawn,./7z.exe) x -y -onsis nsis-2.46.5-Unicode-setup.exe && \
 	chmod a+x ./nsis/makensis.exe && \
+	chmod a+x busybox.exe && \
 	7z x -y mingw-libexpat.rpm -so > mingw-libexpat.cpio && \
 	7z e -y mingw-libexpat.cpio && \
 	7z x -y mingw-zlib.rpm -so > mingw-zlib.cpio && \
