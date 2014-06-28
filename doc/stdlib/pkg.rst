@@ -103,11 +103,11 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
 .. function:: build()
 
-   Run the build scripts for all installed packages in depth-first recursive order.
+   Run the build script for all installed packages in depth-first recursive order.
 
 .. function:: build(pkgs...)
 
-   Run the build scripts for each package in ``pkgs`` and all of their dependencies in depth-first recursive order.
+   Run the build script in "deps/build.jl" for each package in ``pkgs`` and all of their dependencies in depth-first recursive order.
    This is called automatically by ``Pkg.resolve()`` on all installed or updated packages.
 
 .. function:: generate(pkg,license)
