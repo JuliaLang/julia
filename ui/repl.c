@@ -300,16 +300,31 @@ int true_main(int argc, char *argv[])
     return iserr;
 }
 
+#ifndef _OS_WINDOWS_
 int main(int argc, char *argv[])
 {
+#else
+int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
+{
+    int i;
+    for (i=0; i<argc; i++) { // write the command line to UTF8
+        wchar_t *warg = argv[i];
+        size_t wlen = wcslen(warg)+1;
+        size_t len = WideCharToMultiByte(CP_UTF8, 0, warg, wlen, NULL, 0, NULL, NULL);
+        if (!len) return 1;
+        char *arg = (char*)alloca(len);
+        if (!WideCharToMultiByte(CP_UTF8, 0, warg, wlen, arg, len, NULL, NULL)) return 1;
+        argv[i] = (wchar_t*)arg;
+    }
+#endif
     libsupport_init();
-    parse_opts(&argc, &argv);
+    parse_opts(&argc, (char***)&argv);
     if (lisp_prompt) {
         jl_lisp_prompt();
         return 0;
     }
     julia_init(lisp_prompt ? NULL : image_file);
-    return julia_trampoline(argc, argv, true_main);
+    return julia_trampoline(argc, (char**)argv, true_main);
 }
 
 #ifdef __cplusplus
