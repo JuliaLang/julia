@@ -668,10 +668,10 @@ dsfmt-$(DSFMT_VER)/config.status: dsfmt-$(DSFMT_VER).tar.gz
 $(DSFMT_OBJ_SOURCE): dsfmt-$(DSFMT_VER)/config.status
 	cd dsfmt-$(DSFMT_VER) && \
 	$(CC) $(CPPFLAGS) $(DSFMT_CFLAGS) $(LDFLAGS) dSFMT.c -o libdSFMT.$(SHLIB_EXT) && \
-	$(INSTALL_NAME_CMD)libdSFMT.$(SHLIB_EXT) $(DSFMT_OBJ_TARGET) && \
 	cp dSFMT.h $(build_includedir)
 $(DSFMT_OBJ_TARGET): $(DSFMT_OBJ_SOURCE)
-	cp $< $@
+	cp $< $@ && \
+	$(INSTALL_NAME_CMD)libdSFMT.$(SHLIB_EXT) $(DSFMT_OBJ_TARGET)
 
 clean-dsfmt:
 	-rm -f libdSFMT.$(SHLIB_EXT)
