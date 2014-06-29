@@ -7,3 +7,7 @@ issparse(A::AbstractArray) = false
 issparse(S::AbstractSparseArray) = true
 
 indtype{Tv,Ti}(S::AbstractSparseArray{Tv,Ti}) = Ti
+
+const CSR = :csr
+const CSC = :csc
+

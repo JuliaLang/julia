@@ -1,5 +1,6 @@
 # check sparse matrix construction
-@test isequal(full(sparse(complex(ones(5,5),ones(5,5)))), complex(ones(5,5),ones(5,5)))
+@test isequal(full(sparse(complex(ones(5,5),ones(5,5)), format=CSC)), complex(ones(5,5),ones(5,5)))
+@test isequal(full(sparse(complex(ones(5,5),ones(5,5)), format=CSR)), complex(ones(5,5),ones(5,5)))
 
 # check matrix operations
 se33 = speye(3)
@@ -332,29 +333,48 @@ let A = spzeros(Int, 10, 20)
     @test A[4:8,8:16] == 15 * ones(Int, 5, 9)
 end
 
-let ASZ = 1000, TSZ = 800 
-    A = sprand(ASZ, 2*ASZ, 0.0001)
-    B = copy(A)
-    nA = countnz(A)
-    x = A[1:TSZ, 1:(2*TSZ)]
-    nx = countnz(x)
-    A[1:TSZ, 1:(2*TSZ)] = 0
-    nB = countnz(A)
-    @test nB == (nA - nx)
-    A[1:TSZ, 1:(2*TSZ)] = x
-    @test countnz(A) == nA
-    @test A == B
-    A[1:TSZ, 1:(2*TSZ)] = 10
-    @test countnz(A) == nB + 2*TSZ*TSZ
-    A[1:TSZ, 1:(2*TSZ)] = x
-    @test countnz(A) == nA
-    @test A == B
+for Ts in [CSC, CSR]
+    let ASZ = 1000, TSZ = 800 
+        A = sprand(ASZ, 2*ASZ, 0.0001, format=Ts)
+        B = copy(A)
+        nA = countnz(A)
+        x = A[1:TSZ, 1:(2*TSZ)]
+        nx = countnz(x)
+        A[1:TSZ, 1:(2*TSZ)] = 0
+        nB = countnz(A)
+        @test nB == (nA - nx)
+        A[1:TSZ, 1:(2*TSZ)] = x
+        @test countnz(A) == nA
+        @test A == B
+        A[1:TSZ, 1:(2*TSZ)] = 10
+        @test countnz(A) == nB + 2*TSZ*TSZ
+        A[1:TSZ, 1:(2*TSZ)] = x
+        @test countnz(A) == nA
+        @test A == B
+    end
 end
 
-let A = speye(Int, 5), I=[1:10], X=reshape([trues(10), falses(15)],5,5)
+for Ts in [CSC, CSR]
+    A = speye(Int, 5, format=Ts)
+    I = [1:10]
+    X = reshape([trues(10), falses(15)],5,5)
     @test A[I] == A[X] == reshape([1,0,0,0,0,0,1,0,0,0], 10, 1)
     A[I] = [1:10]
     @test A[I] == A[X] == reshape([1:10], 10, 1)
+end
+
+# hcat, vcat, hvcat test
+for Ts in [CSC, CSR]
+    (m,n) = (3,2)
+    spm = {}
+    for i in 1:m
+        push!(spm, sprand(4, 2, 0.5, format=Ts))
+    end
+    for i in 1:n
+        push!(spm, sprand(2, 3, 0.5, format=Ts))
+    end
+
+    @test vcat(hcat(spm[1:m]...), hcat(spm[(m+1):(m+n)]...)) == hvcat((m,n), spm...)
 end
 
 let S = sprand(50, 30, 0.5, x->int(rand(x)*100)), I = sprandbool(50, 30, 0.2)
