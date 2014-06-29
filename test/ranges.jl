@@ -319,3 +319,5 @@ r = linrange(0.25,0.25,1)
 @test length(r) == 1
 @test_throws Exception linrange(0.25,0.5,1)
 
+# issue #7426
+@test [typemax(Int):1:typemax(Int)] == [typemax(Int)]

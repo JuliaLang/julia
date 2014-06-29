@@ -166,7 +166,7 @@ similar(r::Range, T::Type, dims::Dims) = Array(T, dims)
 size(r::Range) = (length(r),)
 
 isempty(r::StepRange) =
-    (r.start != r.stop) && ((r.step > zero(r.step)) != (r.stop > r.start))
+    (r.start != r.stop) & ((r.step > zero(r.step)) != (r.stop > r.start))
 isempty(r::UnitRange) = r.start > r.stop
 isempty(r::FloatRange) = length(r)==0
 
@@ -224,7 +224,8 @@ done(r::FloatRange, i) = (length(r) <= i)
 # lifted domain (e.g. Int8+Int8 => Int); use that for iterating.
 start(r::StepRange) = convert(typeof(r.start+r.step), r.start)
 next{T}(r::StepRange{T}, i) = (oftype(T,i), i+r.step)
-done{T,S}(r::StepRange{T,S}, i) = (i!=r.stop) & ((r.step>zero(S))==(i>r.stop))
+done{T,S}(r::StepRange{T,S}, i) = isempty(r) | (i < min(r.start, r.stop)) | (i > max(r.start, r.stop))
+done{T,S}(r::StepRange{T,S}, i::Integer) = isempty(r) | (i == r.stop+r.step)
 
 start(r::UnitRange) = oftype(r.start+1, r.start)
 next{T}(r::UnitRange{T}, i) = (oftype(T,i), i+1)
