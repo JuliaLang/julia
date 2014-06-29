@@ -799,6 +799,7 @@ endif
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' openblas-$(OPENBLAS_VER)/Makefile.system
 ifneq ($(OPENBLAS_VER),develop)
 	patch openblas-$(OPENBLAS_VER)/exports/Makefile < openblas-exports-makefile.patch
+	cd openblas-$(OPENBLAS_VER) && patch -p1 < ../openblas-dynamic.patch
 endif
 	cd openblas-$(OPENBLAS_VER) && patch -p1 < ../openblas-dllinit-safe.patch
 	echo 1 > $@
