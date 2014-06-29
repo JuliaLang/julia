@@ -80,7 +80,7 @@ STAGE1_DEPS += openblas
 endif
 
 ifeq ($(USE_SYSTEM_FFTW), 0)
-STAGE1_DEPS += fftw-single fftw-double
+STAGE1_DEPS += fftw
 endif
 
 ifeq ($(USE_SYSTEM_GMP), 0)
