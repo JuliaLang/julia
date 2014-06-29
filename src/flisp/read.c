@@ -149,7 +149,7 @@ static char nextchar(void)
             } while ((char)ch != '\n');
             c = (char)ch;
         }
-    } while (c==' ' || isspace(c));
+    } while (c==' ' || isspace((unsigned char)c));
     return c;
 }
 
