@@ -302,6 +302,16 @@ end
 # Edit functionality
 is_non_word_char(c) = c in " \t\n\"\\'`@\$><=:;|&{}()[].,+-*/?%^~"
 
+function reset_key_repeats(f::Function, s::MIState)
+    key_repeats_sav = s.key_repeats
+    try
+        s.key_repeats = 0
+        f()
+    finally
+        s.key_repeats = key_repeats_sav
+    end
+end
+
 char_move_left(s::PromptState) = char_move_left(s.input_buffer)
 function char_move_left(buf::IOBuffer)
     while position(buf) > 0
