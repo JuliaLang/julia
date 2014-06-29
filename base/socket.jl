@@ -244,17 +244,22 @@ type TcpSocket <: Socket
     status::Int
     line_buffered::Bool
     buffer::IOBuffer
+    sendbuf::IOBuffer
+    buffer_writes::Bool      # If true, write's are collected. Written when there are 
+                             # enough bytes or on an explicit flush
     readcb::Callback
     readnotify::Condition
     ccb::Callback
     connectnotify::Condition
     closecb::Callback
     closenotify::Condition
+    write_lock
     TcpSocket(handle) = new(
         handle,
         StatusUninit,
         true,
         PipeBuffer(),
+        PipeBuffer(), false,
         false,Condition(),
         false,Condition(),
         false,Condition())

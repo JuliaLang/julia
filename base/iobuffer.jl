@@ -252,8 +252,22 @@ function readbytes!(io::IOBuffer, b::Array{Uint8}, nb=length(b))
     read_sub(io, b, 1, nr)
     return nr
 end
-readbytes(io::IOBuffer) = read!(io, Array(Uint8, nb_available(io)))
-readbytes(io::IOBuffer, nb) = read!(io, Array(Uint8, min(nb, nb_available(io))))
+function readbytes(io::IOBuffer, nb=nb_available(io)) 
+    nbavail = nb_available(io)
+    nb = min(nb, nbavail)
+    if !io.seekable && io.readable && (nb == nbavail)
+        (io.ptr != 1) && compact(io)
+        data = io.data
+        maxsize = (io.maxsize == typemax(Int) ? 0 : io.maxsize)
+        io.data = Array(Uint8,maxsize)
+        io.ptr = 1
+        io.size = 0
+        resize!(data, nb)
+        return data
+    else
+        read!(io, Array(Uint8, nb))
+    end
+end
 
 function search(buf::IOBuffer, delim)
     p = pointer(buf.data, buf.ptr)

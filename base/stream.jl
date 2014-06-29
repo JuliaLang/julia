@@ -99,17 +99,20 @@ type Pipe <: AsyncStream
     status::Int
     buffer::IOBuffer
     line_buffered::Bool
+    sendbuf::IOBuffer
+    buffer_writes::Bool
     readcb::Callback
     readnotify::Condition
     ccb::Callback
     connectnotify::Condition
     closecb::Callback
     closenotify::Condition
+    write_lock
     Pipe(handle) = new(
         handle,
         StatusUninit,
-        PipeBuffer(),
-        true,
+        PipeBuffer(), true,
+        PipeBuffer(), false,
         false,Condition(),
         false,Condition(),
         false,Condition())
@@ -175,15 +178,19 @@ type TTY <: AsyncStream
     status::Int
     line_buffered::Bool
     buffer::IOBuffer
+    sendbuf::IOBuffer
+    buffer_writes::Bool
     readcb::Callback
     readnotify::Condition
     closecb::Callback
     closenotify::Condition
+    write_lock
     TTY(handle) = new(
         handle,
         StatusUninit,
         true,
         PipeBuffer(),
+        PipeBuffer(), false,
         false,Condition(),
         false,Condition())
 end
@@ -754,43 +761,92 @@ function _uv_hook_writecb(s::AsyncStream, req::Ptr{Void}, status::Int32)
     nothing
 end
 
+const SENDBUF_SZ=1048576
+function buffer_send(s::AsyncStream, nb) 
+    if !s.buffer_writes
+        return (false, false)
+    else 
+        totb = nb_available(s.sendbuf) + nb
+        if totb < SENDBUF_SZ
+            return (true, false)
+        elseif nb > SENDBUF_SZ
+            flush(s)
+            return (false, false)
+        else
+            return (true, true)
+        end
+    end
+end    
+
+
 function write(s::AsyncStream, b::Uint8)
-    @uv_write 1 ccall(:jl_putc_copy, Int32, (Uint8, Ptr{Void}, Ptr{Void}, Ptr{Void}), b, handle(s), uvw, uv_jl_writecb_task::Ptr{Void})
-    ct = current_task()
-    uv_req_set_data(uvw,ct)
-    ct.state = :waiting
-    stream_wait(ct)
+    (do_buffering, do_flushing) = buffer_send(s, 1)
+    if do_buffering
+        write(s.sendbuf, b)
+        do_flushing && flush(s)
+    else
+        @uv_write 1 ccall(:jl_putc_copy, Int32, (Uint8, Ptr{Void}, Ptr{Void}, Ptr{Void}), b, handle(s), uvw, uv_jl_writecb_task::Ptr{Void})
+        ct = current_task()
+        uv_req_set_data(uvw,ct)
+        ct.state = :waiting
+        stream_wait(ct)
+    end
     return 1
 end
 function write(s::AsyncStream, c::Char)
-    @uv_write utf8sizeof(c) ccall(:jl_pututf8_copy, Int32, (Ptr{Void},Uint32, Ptr{Void}, Ptr{Void}), handle(s), c, uvw, uv_jl_writecb_task::Ptr{Void})
-    ct = current_task()
-    uv_req_set_data(uvw,ct)
-    ct.state = :waiting
-    stream_wait(ct)
+    (do_buffering, do_flushing) = buffer_send(s, utf8sizeof(c))
+    if do_buffering
+        write(s.sendbuf, c)
+        do_flushing && flush(s)
+    else
+        @uv_write utf8sizeof(c) ccall(:jl_pututf8_copy, Int32, (Ptr{Void},Uint32, Ptr{Void}, Ptr{Void}), handle(s), c, uvw, uv_jl_writecb_task::Ptr{Void})
+        ct = current_task()
+        uv_req_set_data(uvw,ct)
+        ct.state = :waiting
+        stream_wait(ct)
+    end
     return utf8sizeof(c)
 end
 function write{T}(s::AsyncStream, a::Array{T})
     if isbits(T)
         n = uint(length(a)*sizeof(T))
-        @uv_write n ccall(:jl_write_no_copy, Int32, (Ptr{Void}, Ptr{Void}, Uint, Ptr{Void}, Ptr{Void}), handle(s), a, n, uvw, uv_jl_writecb_task::Ptr{Void})
-        ct = current_task()
-        uv_req_set_data(uvw,ct)
-        ct.state = :waiting
-        stream_wait(ct)
-        return int(length(a)*sizeof(T))
+        (do_buffering, do_flushing) = buffer_send(s, n)
+        if do_buffering
+            write(s.sendbuf, a)
+            do_flushing && flush(s)
+        else
+            write_array(s, pointer(a), n)
+        end
+        return int(n)
     else
         check_open(s)
         invoke(write,(IO,Array),s,a)
     end
 end
 function write(s::AsyncStream, p::Ptr, nb::Integer)
+    (do_buffering, do_flushing) = buffer_send(s, nb)
+    if do_buffering
+        write(s.sendbuf, p, nb)
+        do_flushing && flush(s)
+    else
+        write_array(s, p, nb)
+    end
+    return nb
+end
+function write_array(s::AsyncStream, p::Ptr, nb::Integer)
     @uv_write nb ccall(:jl_write_no_copy, Int32, (Ptr{Void}, Ptr{Void}, Uint, Ptr{Void}, Ptr{Void}), handle(s), p, nb, uvw, uv_jl_writecb_task::Ptr{Void})
     ct = current_task()
     uv_req_set_data(uvw,ct)
     ct.state = :waiting
     stream_wait(ct)
-    return int(nb)
+end
+
+function flush(s::AsyncStream) 
+    nb = nb_available(s.sendbuf)
+    if nb > 0
+        a = readbytes(s.sendbuf, nb)
+        write_array(s, pointer(a), nb)
+    end
 end
 
 function _uv_hook_writecb_task(s::AsyncStream,req::Ptr{Void},status::Int32) 
@@ -944,3 +1000,45 @@ for (x,writable,unix_fd,c_symbol) in ((:STDIN,false,0,:jl_uv_stdin),(:STDOUT,tru
         end
     end
 end
+
+set_buffer_writes(s::AsyncStream, on::Bool) = (oldf = s.buffer_writes; s.buffer_writes = on; oldf)
+
+# recursive locking is OK
+# returns bool stating if a corresponding unlock is required or not based on kw arg track_recursive
+function lock_w(s::AsyncStream; track_recursive=true)
+    tid = object_id(current_task())
+    if isready(s.write_lock) 
+        (ltid, cnt) = fetch(s.write_lock)
+        if ltid != tid
+            put!(s.write_lock, (tid, 1))
+            return true
+        else
+            if track_recursive
+                take!(s.write_lock)
+                put!(s.write_lock, (tid, cnt+1))
+                return true
+            else
+                return false
+            end
+        end
+    else
+        put!(s.write_lock, (tid, 1))
+        return true
+    end
+end
+
+function unlock_w(s::AsyncStream; test_lock=false)
+    if test_lock && !isready(s.write_lock) 
+        error("No lock present to be unlocked")
+    end
+
+    (ltid, cnt) = take!(s.write_lock)
+    tid = object_id(current_task())
+    if ltid != tid
+        error("Current task doesn't own the lock.")
+    elseif cnt > 1
+        put!(s.write_lock, (tid, cnt-1))
+    end
+end
+
+make_lockable(s::AsyncStream) = (s.write_lock = RemoteRef())
