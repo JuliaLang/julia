@@ -1072,6 +1072,7 @@ export
     gc_disable,
     gc_enable,
     precompile,
+    clear_malloc_data,
 
 # misc
     atexit,

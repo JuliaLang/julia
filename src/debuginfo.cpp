@@ -541,14 +541,14 @@ void* CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserC
 
 // Code coverage
 
-typedef std::map<std::string,std::vector<GlobalVariable*> > coveragedata_t;
-static coveragedata_t coverageData;
+typedef std::map<std::string,std::vector<GlobalVariable*> > logdata_t;
+static logdata_t coverageData;
 
 static void coverageVisitLine(std::string filename, int line)
 {
     if (filename == "" || filename == "none" || filename == "no file")
         return;
-    coveragedata_t::iterator it = coverageData.find(filename);
+    logdata_t::iterator it = coverageData.find(filename);
     if (it == coverageData.end()) {
         coverageData[filename] = std::vector<GlobalVariable*>(0);
     }
@@ -564,39 +564,43 @@ static void coverageVisitLine(std::string filename, int line)
                         v);
 }
 
-extern "C" void jl_write_coverage_data(void)
+void write_log_data(logdata_t logData, const char* extension)
 {
-    coveragedata_t::iterator it = coverageData.begin();
-    for (; it != coverageData.end(); it++) {
+    std::string base = std::string(julia_home);
+    base = base + "/../share/julia/base/";
+    logdata_t::iterator it = logData.begin();
+    for (; it != logData.end(); it++) {
         std::string filename = (*it).first;
-        std::string outfile = filename + ".cov";
-        std::vector<GlobalVariable*> &counts = (*it).second;
-        if (counts.size() > 1) {
+        std::vector<GlobalVariable*> &values = (*it).second;
+        if (values.size() > 1) {
+	    if (filename[0] != '/')
+		filename = base + filename;
             std::ifstream inf(filename.c_str());
             if (inf.is_open()) {
+		std::string outfile = filename + extension;
                 std::ofstream outf(outfile.c_str(), std::ofstream::trunc | std::ofstream::out);
                 char line[1024];
                 int l = 1;
                 while (!inf.eof()) {
                     inf.getline(line, sizeof(line));
 		    if (inf.fail() && !inf.bad()) {
-			// Read through lines longer than 1024
+			// Read through lines longer than sizeof(line)
 			inf.clear();
 			inf.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 		    }
-                    int count = -1;
-                    if ((size_t)l < counts.size()) {
-                        GlobalVariable *gv = counts[l];
+                    int value = -1;
+                    if ((size_t)l < values.size()) {
+                        GlobalVariable *gv = values[l];
                         if (gv) {
                             int *p = (int*)jl_ExecutionEngine->getPointerToGlobal(gv);
-                            count = *p;
+                            value = *p;
                         }
                     }
                     outf.width(9);
-                    if (count == -1)
+                    if (value == -1)
                         outf<<'-';
                     else
-                        outf<<count;
+                        outf<<value;
                     outf.width(0);
                     outf<<" "<<line<<std::endl;
                     l++;
@@ -606,4 +610,64 @@ extern "C" void jl_write_coverage_data(void)
             }
         }
     }
+}
+
+extern "C" void jl_write_coverage_data(void)
+{
+    write_log_data(coverageData, ".cov");
+}
+
+// Memory allocation log (malloc_log)
+
+static logdata_t mallocData;
+
+static void mallocVisitLine(std::string filename, int line)
+{
+    if (filename == "" || filename == "none" || filename == "no file") {
+	sync_gc_total_bytes();
+        return;
+    }
+    logdata_t::iterator it = mallocData.find(filename);
+    if (it == mallocData.end()) {
+        mallocData[filename] = std::vector<GlobalVariable*>(0);
+    }
+    std::vector<GlobalVariable*> &vec = mallocData[filename];
+    if (vec.size() <= (size_t)line)
+        vec.resize(line+1, NULL);
+    if (vec[line] == NULL)
+        vec[line] = new GlobalVariable(*jl_Module, T_int64, false,
+				       GlobalVariable::InternalLinkage,
+                                       ConstantInt::get(T_int64,0), "bytecnt");
+    GlobalVariable *v = vec[line];
+    builder.CreateStore(builder.CreateAdd(builder.CreateLoad(v, true),
+                                          builder.CreateCall(prepare_call(diff_gc_total_bytes_func))),
+                        v, true);
+}
+
+// Resets the malloc counts. Needed to avoid including memory usage
+// from JITting.
+extern "C" DLLEXPORT void jl_clear_malloc_data(void)
+{
+    logdata_t::iterator it = mallocData.begin();
+    for (; it != mallocData.end(); it++) {
+        std::vector<GlobalVariable*> &bytes = (*it).second;
+	std::vector<GlobalVariable*>::iterator itb;
+	for (itb = bytes.begin(); itb != bytes.end(); itb++) {
+	    if (*itb) {
+		int64_t *p = (int64_t*) jl_ExecutionEngine->getPointerToGlobal(*itb);
+		*p = 0;
+	    }
+	}
+    }
+    sync_gc_total_bytes();
+}
+
+extern "C" void jl_write_malloc_log(void)
+{
+    write_log_data(mallocData, ".mlc");
+}
+
+void show_execution_point(char *filename, int lno)
+{
+    jl_printf(JL_STDOUT, "executing file %s, line %d\n", filename, lno);
 }
