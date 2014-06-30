@@ -623,7 +623,7 @@ static int type_contains(jl_value_t *ty, jl_value_t *x)
 void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li);
 
 DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
-                                    jl_tuple_t *argtypes, jl_function_t *f, int8_t isstaged)
+                                    jl_tuple_t *argtypes, jl_function_t *f, jl_value_t *isstaged)
 {
     // argtypes is a tuple ((types...), (typevars...))
     jl_tuple_t *t = (jl_tuple_t*)jl_t1(argtypes);
@@ -683,7 +683,7 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_
     assert(jl_is_tuple(argtypes));
     assert(jl_is_tuple(t));
 
-    jl_add_method((jl_function_t*)gf, argtypes, f, t, isstaged);
+    jl_add_method((jl_function_t*)gf, argtypes, f, t, isstaged == jl_true);
     if (jl_boot_file_loaded &&
         f->linfo && f->linfo->ast && jl_is_expr(f->linfo->ast)) {
         jl_lambda_info_t *li = f->linfo;
