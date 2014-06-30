@@ -674,7 +674,7 @@ $(DSFMT_OBJ_TARGET): $(DSFMT_OBJ_SOURCE)
 	$(INSTALL_NAME_CMD)libdSFMT.$(SHLIB_EXT) $(DSFMT_OBJ_TARGET)
 
 clean-dsfmt:
-	-rm -f libdSFMT.$(SHLIB_EXT)
+	-rm -f dsfmt-$(DSFMT_VER)/libdSFMT.$(SHLIB_EXT)
 distclean-dsfmt: clean-dsfmt
 	-rm -rf dsfmt*.tar.gz dsfmt-$(DSFMT_VER)
 
