@@ -85,6 +85,10 @@ include("regex.jl")
 include("base64.jl")
 importall .Base64
 
+# Core I/O
+include("io.jl")
+include("iostream.jl")
+
 # system & environment
 include("libc.jl")
 include("env.jl")
@@ -96,7 +100,6 @@ include("intfuncs.jl")
 
 # I/O
 include("task.jl")
-include("io.jl")
 include("show.jl")
 include("stream.jl")
 include("socket.jl")

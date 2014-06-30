@@ -121,6 +121,33 @@ yield()
 put!(r,11)
 yield()
 
+# Test marking of AsyncStream
+
+@async begin
+    server = listen(2327)
+    client = accept(server)
+    write(client, "Hello, world!\n")
+    write(client, "Goodbye, world...\n")
+    close(server)
+end
+sleep(0.1)
+sock = connect(2327)
+mark(sock)
+@test ismarked(sock)
+@test readline(sock) == "Hello, world!\n"
+@test readline(sock) == "Goodbye, world...\n"
+@test reset(sock) == 0
+@test !ismarked(sock)
+mark(sock)
+@test ismarked(sock)
+@test readline(sock) == "Hello, world!\n"
+unmark(sock)
+@test !ismarked(sock)
+@test_throws ErrorException reset(sock)
+@test !unmark(sock)
+@test readline(sock) == "Goodbye, world...\n"
+#@test eof(sock) ## doesn't work...
+close(sock)
 
 # issue #4535
 exename=joinpath(JULIA_HOME,(ccall(:jl_is_debugbuild,Cint,())==0?"julia":"julia-debug"))
