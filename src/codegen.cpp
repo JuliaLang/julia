@@ -322,6 +322,8 @@ static Function *jlgetnthfieldchecked_func;
 #ifdef _OS_WINDOWS_
 static Function *resetstkoflw_func;
 #endif
+static Function *diff_gc_total_bytes_func;
+static Function *show_execution_point_func;
 
 // --- code generation ---
 
@@ -3367,8 +3369,9 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     ctx.f = f;
 
     // step 5. set up debug info context and create first basic block
-    bool do_coverage =
-        jl_compileropts.code_coverage && lam->module != jl_base_module && lam->module != jl_core_module;
+    bool in_user_code = lam->module != jl_base_module && lam->module != jl_core_module;
+    bool do_coverage = jl_compileropts.code_coverage == JL_LOG_ALL || (jl_compileropts.code_coverage == JL_LOG_USER && in_user_code);
+    bool do_malloc_log = jl_compileropts.malloc_log  == JL_LOG_ALL || (jl_compileropts.malloc_log    == JL_LOG_USER && in_user_code);
     jl_value_t *stmt = jl_cellref(stmts,0);
     std::string filename = "no file";
     char *dbgFuncName = lam->name->name;
@@ -3414,6 +3417,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         builder.SetCurrentDebugLocation(noDbg);
         debug_enabled = false;
         do_coverage = false;
+        do_malloc_log = false;
     }
     else {
         // TODO: Fix when moving to new LLVM version
@@ -3716,10 +3720,12 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
 
     // step 15. compile body statements
     bool prevlabel = false;
+    lno = -1;
+    int prevlno = -1;
     for(i=0; i < stmtslen; i++) {
         jl_value_t *stmt = jl_cellref(stmts,i);
         if (jl_is_linenode(stmt)) {
-            int lno = jl_linenode_line(stmt);
+            lno = jl_linenode_line(stmt);
             if (debug_enabled)
                 builder.SetCurrentDebugLocation(DebugLoc::get(lno, 1, (MDNode*)SP, NULL));
             if (do_coverage)
@@ -3727,7 +3733,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             ctx.lineno = lno;
         }
         else if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym) {
-            int lno = jl_unbox_long(jl_exprarg(stmt, 0));
+            lno = jl_unbox_long(jl_exprarg(stmt, 0));
             if (debug_enabled)
                 builder.SetCurrentDebugLocation(DebugLoc::get(lno, 1, (MDNode*)SP, NULL));
             if (do_coverage)
@@ -3741,6 +3747,12 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         else {
             prevlabel = false;
         }
+	if (do_malloc_log && lno != prevlno) {
+	    // Check memory allocation only after finishing a line
+	    if (prevlno != -1)
+		mallocVisitLine(filename, prevlno);
+	    prevlno = lno;
+	}
         if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == return_sym) {
             jl_expr_t *ex = (jl_expr_t*)stmt;
             Value *retval;
@@ -3761,6 +3773,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             builder.CreateStore(builder.CreateBitCast(builder.CreateLoad(gcpop, false), jl_ppvalue_llvmt),
                                 prepare_global(jlpgcstack_var));
 #endif
+	    if (do_malloc_log && lno != -1)
+		mallocVisitLine(filename, lno);
             if (builder.GetInsertBlock()->getTerminator() == NULL) {
                 if (retty == T_void)
                     builder.CreateRetVoid();
@@ -4253,6 +4267,21 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage,
                          "jl_get_nth_field_checked", m);
     add_named_global(jlgetnthfieldchecked_func, (void*)*jl_get_nth_field_checked);
+
+    diff_gc_total_bytes_func =
+	Function::Create(FunctionType::get(T_int64, false),
+			 Function::ExternalLinkage,
+			 "diff_gc_total_bytes", m);
+    add_named_global(diff_gc_total_bytes_func, (void*)*diff_gc_total_bytes);
+
+    std::vector<Type *> execpoint_args(0);
+    execpoint_args.push_back(T_pint8);
+    execpoint_args.push_back(T_int32);
+    show_execution_point_func =
+        Function::Create(FunctionType::get(T_void, execpoint_args, false),
+                         Function::ExternalLinkage,
+                         "show_execution_point", m);
+    add_named_global(show_execution_point_func, (void*)*show_execution_point);
 
     // set up optimization passes
     FPM = new FunctionPassManager(m);
