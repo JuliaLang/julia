@@ -70,33 +70,28 @@ iround{T<:Integer}(::Type{T}, x::FloatingPoint) = convert(T,round(x))
 
 ## fast specific type conversions ##
 
-if WORD_SIZE == 64
-    iround(x::Float32) = iround(float64(x))
-    itrunc(x::Float32) = box(Int64,fptosi(Int64,unbox(Float32,x)))
-    iround(x::Float64) = box(Int64,fpsiround(unbox(Float64,x)))
-    itrunc(x::Float64) = box(Int64,fptosi(unbox(Float64,x)))
-else
-    iround(x::Float32) = box(Int32,fpsiround(unbox(Float32,x)))
-    itrunc(x::Float32) = box(Int32,fptosi(unbox(Float32,x)))
-    iround(x::Float64) = int32(box(Int64,fpsiround(unbox(Float64,x))))
-    itrunc(x::Float64) = int32(box(Int64,fptosi(unbox(Float64,x))))
-end
+iround(x::Float32) = iround(Int, x)
+iround(x::Float64) = iround(Int, x)
+itrunc(x::Float32) = itrunc(Int, x)
+itrunc(x::Float64) = itrunc(Int, x)
 
-for to in (Int8, Uint8, Int16, Uint16)
+for to in (Int8, Int16, Int32, Int64)
     @eval begin
-        iround(::Type{$to}, x::Float32) = box($to,trunc_int($to,fpsiround(unbox(Float32,x))))
-        iround(::Type{$to}, x::Float64) = box($to,trunc_int($to,fpsiround(unbox(Float64,x))))
+        iround(::Type{$to}, x::Float32) = box($to,fpsiround($to,unbox(Float32,x)))
+        iround(::Type{$to}, x::Float64) = box($to,fpsiround($to,unbox(Float64,x)))
+        itrunc(::Type{$to}, x::Float32) = box($to,fptosi($to,unbox(Float32,x)))
+        itrunc(::Type{$to}, x::Float64) = box($to,fptosi($to,unbox(Float64,x)))
     end
 end
 
-iround(::Type{Int32}, x::Float32) = box(Int32,fpsiround(unbox(Float32,x)))
-iround(::Type{Int32}, x::Float64) = box(Int32,trunc_int(Int32,fpsiround(unbox(Float64,x))))
-iround(::Type{Uint32}, x::Float32) = box(Uint32,fpuiround(unbox(Float32,x)))
-iround(::Type{Uint32}, x::Float64) = box(Uint32,trunc_int(Uint32,fpuiround(unbox(Float64,x))))
-iround(::Type{Int64}, x::Float32) = box(Int64,fpsiround(float64(x)))
-iround(::Type{Int64}, x::Float64) = box(Int64,fpsiround(unbox(Float64,x)))
-iround(::Type{Uint64}, x::Float32) = box(Uint64,fpuiround(float64(x)))
-iround(::Type{Uint64}, x::Float64) = box(Uint64,fpuiround(unbox(Float64,x)))
+for to in (Uint8, Uint16, Uint32, Uint64)
+    @eval begin
+        iround(::Type{$to}, x::Float32) = box($to,fpuiround($to,unbox(Float32,x)))
+        iround(::Type{$to}, x::Float64) = box($to,fpuiround($to,unbox(Float64,x)))
+        itrunc(::Type{$to}, x::Float32) = box($to,fptoui($to,unbox(Float32,x)))
+        itrunc(::Type{$to}, x::Float64) = box($to,fptoui($to,unbox(Float64,x)))
+    end
+end
 
 iround(::Type{Int128}, x::Float32) = convert(Int128,round(x))
 iround(::Type{Int128}, x::Float64) = convert(Int128,round(x))

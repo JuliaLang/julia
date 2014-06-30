@@ -551,13 +551,14 @@ static Value *emit_checked_fptoui(jl_value_t *targ, Value *x, jl_codectx_t *ctx)
     return emit_checked_fptoui(staticeval_bitstype(targ, "checked_fptoui", ctx), x, ctx);
 }
 
-static Value *emit_iround(Value *x, bool issigned, jl_codectx_t *ctx)
+static Value *emit_iround(Type *to, Value *x, bool issigned, jl_codectx_t *ctx)
 {
     int nmantissa, expoffs, expbits;
     int64_t topbit;
     Type *intt, *floatt;
     Value *bits = JL_INT(x);
     Value *max, *min;
+    int tobits = to->getPrimitiveSizeInBits();
 
     if (bits->getType()->getPrimitiveSizeInBits() == 32) {
         nmantissa = 23;
@@ -566,11 +567,28 @@ static Value *emit_iround(Value *x, bool issigned, jl_codectx_t *ctx)
         topbit = BIT31;
         intt = T_int32; floatt = T_float32;
         if (issigned) {
-            max = ConstantFP::get(floatt,  2.1474835e9);
-            min = ConstantFP::get(floatt, -2.1474836e9);
+            switch (tobits) {
+            case 8:  max = ConstantFP::get(floatt,  127.99999);
+                     min = ConstantFP::get(floatt, -128.99998); break;
+            case 16: max = ConstantFP::get(floatt,  32767.998);
+                     min = ConstantFP::get(floatt, -32768.996); break;
+            case 32: max = ConstantFP::get(floatt,  2.1474835e9);
+                     min = ConstantFP::get(floatt, -2.1474836e9); break;
+            case 64: max = ConstantFP::get(floatt,  9.2233715e18);
+                     min = ConstantFP::get(floatt, -9.223372e18); break;
+            default:
+                jl_error("unsupported type in fpsiround");
+            }
         }
         else {
-            max = ConstantFP::get(floatt, 4.294967e9);
+            switch (tobits) {
+            case 8:  max = ConstantFP::get(floatt, 255.99998); break;
+            case 16: max = ConstantFP::get(floatt, 65535.996); break;
+            case 32: max = ConstantFP::get(floatt, 4.294967e9); break;
+            case 64: max = ConstantFP::get(floatt, 1.8446743e19); break;
+            default:
+                jl_error("unsupported type in fpuiround");
+            }
             // most negative number that truncates to zero
             min = ConstantFP::get(floatt, -0.99999994);
         }
@@ -582,11 +600,28 @@ static Value *emit_iround(Value *x, bool issigned, jl_codectx_t *ctx)
         topbit = BIT63;
         intt = T_int64; floatt = T_float64;
         if (issigned) {
-            max = ConstantFP::get(floatt,  9.223372036854775e18);
-            min = ConstantFP::get(floatt, -9.223372036854776e18);
+            switch (tobits) {
+            case 8:  max = ConstantFP::get(floatt,  127.99999999999999);
+                     min = ConstantFP::get(floatt, -128.99999999999997); break;
+            case 16: max = ConstantFP::get(floatt,  32767.999999999996);
+                     min = ConstantFP::get(floatt, -32768.99999999999); break;
+            case 32: max = ConstantFP::get(floatt,  2.1474836479999998e9);
+                     min = ConstantFP::get(floatt, -2.1474836489999995e9); break;
+            case 64: max = ConstantFP::get(floatt,  9.223372036854775e18);
+                     min = ConstantFP::get(floatt, -9.223372036854776e18); break;
+            default:
+                jl_error("unsupported type in fpsiround");
+            }
         }
         else {
-            max = ConstantFP::get(floatt, 1.844674407370955e19);
+            switch (tobits) {
+            case 8:  max = ConstantFP::get(floatt, 255.99999999999997); break;
+            case 16: max = ConstantFP::get(floatt, 65535.99999999999); break;
+            case 32: max = ConstantFP::get(floatt, 4.2949672959999995e9); break;
+            case 64: max = ConstantFP::get(floatt, 1.844674407370955e19); break;
+            default:
+                jl_error("unsupported type in fpuiround");
+            }
             min = ConstantFP::get(floatt, -0.9999999999999999);
         }
     }
@@ -620,9 +655,9 @@ static Value *emit_iround(Value *x, bool issigned, jl_codectx_t *ctx)
                                              builder.CreateFCmpOGE(src, min)),
                            prepare_global(jlinexacterr_var), ctx);
     if (issigned)
-        return builder.CreateFPToSI(src, intt);
+        return builder.CreateFPToSI(src, to);
     else
-        return builder.CreateFPToUI(src, intt);
+        return builder.CreateFPToUI(src, to);
 }
 
 static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
@@ -824,6 +859,20 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         }
         else {
             jl_error("fptosi: wrong number of arguments");
+        }
+
+    case fpsiround:
+    case fpuiround:
+        if (nargs == 1) {
+            Value *x = FP(auto_unbox(args[1], ctx));
+            return emit_iround(JL_INTT(x->getType()), x, f == fpsiround, ctx);
+        }
+        else if (nargs == 2) {
+            return emit_iround(Type::getIntNTy(jl_LLVMContext, try_to_determine_bitstype_nbits(args[1],ctx)),
+                               FP(auto_unbox(args[2],ctx)), f == fpsiround, ctx);
+        }
+        else {
+            jl_errorf("%s: wrong number of arguments", f == fpsiround ? "fpsiround" : "fpuiround");
         }
 
     HANDLE(fptrunc,2) return builder.CreateFPTrunc(FP(auto_unbox(args[2],ctx)), FTnbits(try_to_determine_bitstype_nbits(args[1],ctx)));
@@ -1205,11 +1254,6 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     }
 #endif
 
-    HANDLE(fpsiround,1)
-    HANDLE(fpuiround,1)
-    {
-        return emit_iround(x, f == fpsiround, ctx);
-    }
     HANDLE(nan_dom_err,2) {
         // nan_dom_err(f, x) throw DomainError if isnan(f)&&!isnan(x)
         Value *f = FP(x); x = FP(y);

@@ -503,14 +503,11 @@ widen(::Type{Uint64}) = Uint128
 
 # requires int arithmetic defined, for the loops to work
 
-for f in (:int, :int8, :int16, :int32, :signed, :integer)
-    @eval ($f)(x::FloatingPoint) = ($f)(iround(x))
-end
-
-for (f,t) in ((:uint8,:Uint8), (:uint16,:Uint16), (:uint32,:Uint32),
-              (:int64,:Int64), (:uint64,:Uint64),
+for (f,t) in ((:uint8,:Uint8), (:uint16,:Uint16), (:uint32,:Uint32), (:uint64,:Uint64),
+              (:int8,:Int8),   (:int16,:Int16),   (:int32,:Int32),   (:int64,:Int64),
               (:int128,:Int128), (:uint128,:Uint128),
-              (:unsigned,:Uint), (:uint,:Uint))
+              (:signed,:Int), (:unsigned,:Uint), (:integer,:Int),
+              (:int,:Int), (:uint,:Uint))
     @eval ($f)(x::FloatingPoint) = iround($t,x)
 end
 
