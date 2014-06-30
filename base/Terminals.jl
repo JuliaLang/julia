@@ -31,12 +31,8 @@ import Base:
     start_reading,
     stop_reading,
     write,
-    writemime
-
-immutable Size
-    width
-    height
-end
+    writemime,
+    reseteof
 
 ## TextTerminal ##
 
@@ -49,6 +45,7 @@ cmove(t::TextTerminal, x, y) = error("Unimplemented")
 getX(t::TextTerminal) = error("Unimplemented")
 getY(t::TextTerminal) = error("Unimplemented")
 pos(t::TextTerminal) = (getX(t), getY(t))
+reseteof(t::TextTerminal) = nothing
 
 # Relative moves (Absolute position fallbacks)
 cmove_up(t::TextTerminal, n) = cmove(getX(t), max(1, getY(t)-n))
@@ -87,8 +84,8 @@ function writepos(t::TextTerminal, x, y, args...)
     cmove(t, x, y)
     write(t, args...)
 end
-width(t::TextTerminal) = size(t).width
-height(t::TextTerminal) = size(t).height
+width(t::TextTerminal) = size(t)[2]
+height(t::TextTerminal) = size(t)[1]
 
 # For terminals with buffers
 flush(t::TextTerminal) = nothing
@@ -118,6 +115,8 @@ type TTYTerminal <: UnixTerminal
     err_stream::Base.TTY
 end
 
+reseteof(t::TTYTerminal) = reseteof(t.in_stream)
+
 const CSI = "\x1b["
 
 cmove_up(t::UnixTerminal, n) = write(t.out_stream, "$(CSI)$(n)A")
@@ -127,24 +126,44 @@ cmove_left(t::UnixTerminal, n) = write(t.out_stream, "$(CSI)$(n)D")
 cmove_line_up(t::UnixTerminal, n) = (cmove_up(t, n); cmove_col(t, 0))
 cmove_line_down(t::UnixTerminal, n) = (cmove_down(t, n); cmove_col(t, 0))
 cmove_col(t::UnixTerminal, n) = write(t.out_stream, "$(CSI)$(n)G")
-
-raw!(t::TTYTerminal, raw::Bool) = ccall((@windows ? :jl_tty_set_mode : :uv_tty_set_mode),
+    
+@windows ? begin 
+    ispty(s::Base.AsyncStream) = bool(ccall(:jl_ispty, Cint, (Ptr{Void},), s))
+    ispty(s) = false
+    function raw!(t::TTYTerminal,raw::Bool)
+        if ispty(t.in_stream) || ispty(t.out_stream) || ispty(t.err_stream)
+            run(if raw
+                    `stty raw -echo onlcr -ocrnl opost`
+                else
+                    `stty sane`
+                end,t.in_stream,t.out_stream,t.err_stream)
+            true
+        else
+            ccall(:jl_tty_set_mode,
+                 Int32, (Ptr{Void},Int32),
+                 t.in_stream.handle, int32(raw)) != -1
+        end
+    end
+end : begin
+    raw!(t::TTYTerminal, raw::Bool) = ccall(:uv_tty_set_mode,
                                          Int32, (Ptr{Void},Int32),
-                                         t.in_stream.handle, raw ? 1 : 0) != -1
+                                         t.in_stream.handle, int32(raw)) != -1
+end
 enable_bracketed_paste(t::UnixTerminal) = write(t.out_stream, "$(CSI)?2004h")
 disable_bracketed_paste(t::UnixTerminal) = write(t.out_stream, "$(CSI)?2004l")
 end_keypad_transmit_mode(t::UnixTerminal) = # tput rmkx
     write(t.out_stream, "$(CSI)?1l\x1b>")
 
-function size(t::TTYTerminal)
-    s = zeros(Int32, 2)
-    Base.uv_error("size (TTY)", ccall((@windows ? :jl_tty_get_winsize : :uv_tty_get_winsize),
-                                      Int32, (Ptr{Void}, Ptr{Int32}, Ptr{Int32}),
-                                      t.out_stream.handle, pointer(s,1), pointer(s,2)) != 0)
-    w,h = s[1],s[2]
-    w > 0 || (w = 80)
-    h > 0 || (h = 24)
-    Size(w,h)
+let s = zeros(Int32, 2)
+    function Base.size(t::TTYTerminal)
+        Base.uv_error("size (TTY)", ccall((@windows ? :jl_tty_get_winsize : :uv_tty_get_winsize),
+                                          Int32, (Ptr{Void}, Ptr{Int32}, Ptr{Int32}),
+                                          t.out_stream.handle, pointer(s,1), pointer(s,2)) != 0)
+        w,h = s[1],s[2]
+        w > 0 || (w = 80)
+        h > 0 || (h = 24)
+        (int(h),int(w))
+    end
 end
 
 clear(t::UnixTerminal) = write(t.out_stream, "\x1b[H\x1b[2J")

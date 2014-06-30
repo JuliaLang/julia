@@ -23,7 +23,7 @@ typemax(::Type{Bool}) = true
 (|)(x::Bool, y::Bool) = box(Bool,or_int(unbox(Bool,x),unbox(Bool,y)))
 ($)(x::Bool, y::Bool) = (x!=y)
 
-signbit(x::Bool) = 0
+signbit(x::Bool) = false
 sign(x::Bool) = x
 abs(x::Bool) = x
 abs2(x::Bool) = x
@@ -50,7 +50,10 @@ end
 
 function *{T<:Number}(x::Bool, y::T)
     ifelse(x, convert(promote_type(Bool,T),y),
-           ifelse(signbit(y)==0, zero(promote_type(Bool,T)), -zero(promote_type(Bool,T))))
+           ifelse(signbit(y), -zero(promote_type(Bool,T)), zero(promote_type(Bool,T))))
+end
+function *{T<:Unsigned}(x::Bool, y::T)
+    ifelse(x, convert(promote_type(Bool,T),y), zero(promote_type(Bool,T)))
 end
 *(y::Number, x::Bool) = x * y
 

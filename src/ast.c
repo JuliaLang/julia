@@ -30,6 +30,11 @@ static uint8_t flisp_system_image[] = {
 extern fltype_t *iostreamtype;
 static fltype_t *jvtype=NULL;
 
+static value_t true_sym;
+static value_t false_sym;
+static value_t fl_error_sym;
+static value_t fl_null_sym;
+
 static jl_value_t *scm_to_julia(value_t e, int expronly);
 static value_t julia_to_scm(jl_value_t *v);
 
@@ -75,7 +80,7 @@ value_t fl_invoke_julia_macro(value_t *args, uint32_t nargs)
         JL_GC_POP();
         value_t opaque = cvalue(jvtype, sizeof(void*));
         *(jl_value_t**)cv_data((cvalue_t*)ptr(opaque)) = jl_exception_in_transit;
-        return fl_list2(symbol("error"), opaque);
+        return fl_list2(fl_error_sym, opaque);
     }
     // protect result from GC, otherwise it could be freed during future
     // macro expansions, since it will be referenced only from scheme and
@@ -109,9 +114,6 @@ static builtinspec_t julia_flisp_ast_ext[] = {
     { NULL, NULL }
 };
 
-static value_t true_sym;
-static value_t false_sym;
-
 DLLEXPORT void jl_init_frontend(void)
 {
     fl_init(2*512*1024);
@@ -132,6 +134,8 @@ DLLEXPORT void jl_init_frontend(void)
     assign_global_builtins(julia_flisp_ast_ext);
     true_sym = symbol("true");
     false_sym = symbol("false");
+    fl_error_sym = symbol("error");
+    fl_null_sym = symbol("null");
 }
 
 DLLEXPORT void jl_lisp_prompt(void)
@@ -364,32 +368,45 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
     return (jl_value_t*)jl_null;
 }
 
-static value_t array_to_list(jl_array_t *a)
+static value_t julia_to_scm_(jl_value_t *v);
+
+static value_t julia_to_scm(jl_value_t *v)
+{
+    value_t temp;
+    // need try/catch to reset GC handle stack in case of error
+    FL_TRY_EXTERN {
+        temp = julia_to_scm_(v);
+    }
+    FL_CATCH_EXTERN {
+        temp = fl_list2(fl_error_sym, cvalue_static_cstring("expression too large"));
+    }
+    return temp;
+}
+
+static void array_to_list(jl_array_t *a, value_t *pv)
 {
     if (jl_array_len(a) > 300000)
-        jl_error("expression too large");
-    value_t lst=FL_NIL, temp=FL_NIL;
-    fl_gc_handle(&lst);
-    fl_gc_handle(&temp);
+        lerror(MemoryError, "expression too large");
+    value_t temp;
     for(long i=jl_array_len(a)-1; i >= 0; i--) {
-        temp = julia_to_scm(jl_cellref(a,i));
-        lst = fl_cons(temp, lst);
+        *pv = fl_cons(FL_NIL, *pv);
+        temp = julia_to_scm_(jl_cellref(a,i));
+        // note: must be separate statement
+        car_(*pv) = temp;
     }
-    fl_free_gc_handles(2);
-    return lst;
 }
 
 static value_t julia_to_list2(jl_value_t *a, jl_value_t *b)
 {
-    value_t sa = julia_to_scm(a);
+    value_t sa = julia_to_scm_(a);
     fl_gc_handle(&sa);
-    value_t sb = julia_to_scm(b);
+    value_t sb = julia_to_scm_(b);
     value_t l = fl_list2(sa, sb);
     fl_free_gc_handles(1);
     return l;
 }
 
-static value_t julia_to_scm(jl_value_t *v)
+static value_t julia_to_scm_(jl_value_t *v)
 {
     if (jl_is_symbol(v)) {
         return symbol(((jl_sym_t*)v)->name);
@@ -401,13 +418,14 @@ static value_t julia_to_scm(jl_value_t *v)
         return FL_F;
     }
     if (v == jl_nothing) {
-        return fl_cons(symbol("null"), FL_NIL);
+        return fl_cons(fl_null_sym, FL_NIL);
     }
     if (jl_is_expr(v)) {
         jl_expr_t *ex = (jl_expr_t*)v;
-        value_t args = array_to_list(ex->args);
+        value_t args = FL_NIL;
         fl_gc_handle(&args);
-        value_t hd = julia_to_scm((jl_value_t*)ex->head);
+        array_to_list(ex->args, &args);
+        value_t hd = julia_to_scm_((jl_value_t*)ex->head);
         value_t scmv = fl_cons(hd, args);
         fl_free_gc_handles(1);
         return scmv;
@@ -500,9 +518,12 @@ jl_value_t *jl_parse_next(void)
         if (isfixnum(a)) {
             jl_lineno = numval(a);
             //jl_printf(JL_STDERR, "  on line %d\n", jl_lineno);
-            return scm_to_julia(cdr_(c),0);
+            c = cdr_(c);
         }
     }
+    // for error, get most recent line number
+    if (iscons(c) && car_(c) == fl_error_sym)
+        jl_lineno = numval(fl_applyn(0, symbol_value(symbol("jl-parser-current-lineno"))));
     return scm_to_julia(c,0);
 }
 

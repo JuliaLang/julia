@@ -9,10 +9,18 @@
 #include "julia.h"
 #include "julia_internal.h"
 
+// use mmap instead of malloc to allocate pages. default = off.
+// #define USE_MMAP
+
+// free pages as soon as they are empty. if not defined, then we
+// will wait for the next GC, to allow the space to be reused more
+// efficiently. default = on.
+#define FREE_PAGES_EAGER
+
 #ifdef _P64
-#define GC_PAGE_SZ (1536*sizeof(void*))//bytes
+#define GC_PAGE_SZ 12288//bytes
 #else
-#define GC_PAGE_SZ (2048*sizeof(void*))//bytes
+#define GC_PAGE_SZ  8192//bytes
 #endif
 
 #ifdef __cplusplus
@@ -65,13 +73,15 @@ typedef struct _bigval_t {
 static size_t allocd_bytes = 0;
 static int64_t total_allocd_bytes = 0;
 static size_t freed_bytes = 0;
-#define default_collect_interval (3200*1024*sizeof(void*))
-static size_t collect_interval = default_collect_interval;
+static uint64_t total_gc_time=0;
 #ifdef _P64
+#define default_collect_interval (5600*1024*sizeof(void*))
 static size_t max_collect_interval = 1250000000UL;
 #else
-static size_t max_collect_interval = 500000000UL;
+#define default_collect_interval (3200*1024*sizeof(void*))
+static size_t max_collect_interval =  500000000UL;
 #endif
+static size_t collect_interval = default_collect_interval;
 int jl_in_gc; // referenced from switchto task.c
 
 #ifdef OBJPROFILE
@@ -79,7 +89,6 @@ static htable_t obj_counts;
 #endif
 
 #ifdef GC_FINAL_STATS
-static double total_gc_time=0;
 static size_t total_freed_bytes=0;
 #endif
 
@@ -275,7 +284,7 @@ static void run_finalizer(jl_value_t *o, jl_value_t *ff)
         }
         JL_CATCH {
             JL_PRINTF(JL_STDERR, "error in running finalizer: ");
-            jl_show(jl_stderr_obj(), jl_exception_in_transit);
+            jl_static_show(JL_STDERR, jl_exception_in_transit);
             JL_PUTC('\n',JL_STDERR);
         }
         ff = jl_t1(ff);
@@ -287,7 +296,7 @@ static void run_finalizer(jl_value_t *o, jl_value_t *ff)
     }
     JL_CATCH {
         JL_PRINTF(JL_STDERR, "error in running finalizer: ");
-        jl_show(jl_stderr_obj(), jl_exception_in_transit);
+        jl_static_show(JL_STDERR, jl_exception_in_transit);
         JL_PUTC('\n',JL_STDERR);
     }
 }
@@ -451,7 +460,12 @@ static pool_t *pools = &norm_pools[0];
 
 static void add_page(pool_t *p)
 {
+#ifdef USE_MMAP
+    gcpage_t *pg = (gcpage_t*)mmap(NULL, sizeof(gcpage_t), PROT_READ|PROT_WRITE,
+                                   MAP_ANONYMOUS|MAP_PRIVATE, -1, 0);
+#else
     gcpage_t *pg = (gcpage_t*)malloc_a16(sizeof(gcpage_t));
+#endif
     if (pg == NULL)
         jl_throw(jl_memory_exception);
     gcval_t *v = (gcval_t*)&pg->data[0];
@@ -504,8 +518,11 @@ static int szclass(size_t sz)
 
 static void sweep_pool(pool_t *p)
 {
-    //int empty;
+#ifdef FREE_PAGES_EAGER
     int freedall;
+#else
+    int empty;
+#endif
     gcval_t **prev_pfl;
     gcval_t *v;
     gcpage_t *pg = p->pages;
@@ -524,18 +541,30 @@ static void sweep_pool(pool_t *p)
     while (pg != NULL) {
         v = (gcval_t*)&pg->data[0];
         char *lim = (char*)v + GC_PAGE_SZ - osize;
-        //empty = 1;
+#ifdef FREE_PAGES_EAGER
         freedall = 1;
+#else
+        empty = 1;
+#endif
         prev_pfl = pfl;
         while ((char*)v <= lim) {
             if (!v->marked) {
+#ifndef FREE_PAGES_EAGER
+                if (v->next != (char*)v + osize && v->next != NULL &&
+                    (char*)v+osize <= lim)
+                    empty = 0;
+#endif
                 *pfl = v;
                 pfl = &v->next;
                 nfreed++;
             }
             else {
                 v->marked = 0;
+#ifdef FREE_PAGES_EAGER
                 freedall = 0;
+#else
+                empty = 0;
+#endif
             }
             v = (gcval_t*)((char*)v + osize);
         }
@@ -543,13 +572,23 @@ static void sweep_pool(pool_t *p)
         // lazy version: (empty) if the whole page was already unused, free it
         // eager version: (freedall) free page as soon as possible
         // the eager one uses less memory.
-        if (freedall) {
+        if (
+#ifdef FREE_PAGES_EAGER
+            freedall
+#else
+            empty
+#endif
+            ) {
             pfl = prev_pfl;
             *ppg = nextpg;
 #ifdef MEMDEBUG
             memset(pg, 0xbb, sizeof(gcpage_t));
 #endif
+#ifdef USE_MMAP
+            munmap(pg, sizeof(gcpage_t));
+#else
             free_a16(pg);
+#endif
             //freed_bytes += GC_PAGE_SZ;
         }
         else {
@@ -785,6 +824,7 @@ double clock_now(void);
 
 extern jl_module_t *jl_old_base_module;
 extern jl_array_t *typeToTypeId;
+extern jl_array_t *jl_module_init_order;
 
 static void gc_mark(void)
 {
@@ -809,6 +849,8 @@ static void gc_mark(void)
     gc_push_root(jl_typetype_type, 0);
     gc_push_root(jl_tupletype_type, 0);
     gc_push_root(typeToTypeId, 0);
+    if (jl_module_init_order != NULL)
+        gc_push_root(jl_module_init_order, 0);
 
     // constants
     gc_push_root(jl_null, 0);
@@ -863,6 +905,7 @@ DLLEXPORT void jl_gc_disable(void)   { is_gc_enabled = 0; }
 DLLEXPORT int jl_gc_is_enabled(void) { return is_gc_enabled; }
 
 DLLEXPORT int64_t jl_gc_total_bytes(void) { return total_allocd_bytes + allocd_bytes; }
+DLLEXPORT uint64_t jl_gc_total_hrtime(void) { return total_gc_time; }
 
 void jl_gc_ephemeral_on(void)  { pools = &ephe_pools[0]; }
 void jl_gc_ephemeral_off(void) { pools = &norm_pools[0]; }
@@ -893,31 +936,29 @@ void jl_gc_collect(void)
     if (is_gc_enabled) {
         JL_SIGATOMIC_BEGIN();
         jl_in_gc = 1;
-#if defined(GCTIME) || defined(GC_FINAL_STATS)
-        double t0 = clock_now();
-#endif
+        uint64_t t0 = jl_hrtime();
         gc_mark();
 #ifdef GCTIME
-        JL_PRINTF(JL_STDERR, "mark time %.3f ms\n", (clock_now()-t0)*1000);
+        JL_PRINTF(JL_STDERR, "mark time %.3f ms\n", (jl_hrtime()-t0)*1.0e6);
 #endif
 #if defined(MEMPROFILE)
         all_pool_stats();
         big_obj_stats();
 #endif
 #ifdef GCTIME
-        t0 = clock_now();
+        uint64_t t1 = jl_hrtime();
 #endif
         sweep_weak_refs();
         gc_sweep();
 #ifdef GCTIME
-        JL_PRINTF(JL_STDERR, "sweep time %.3f ms\n", (clock_now()-t0)*1000);
+        JL_PRINTF(JL_STDERR, "sweep time %.3f ms\n", (jl_hrtime()-t1)*1.0e6);
 #endif
         int nfinal = to_finalize.len;
         run_finalizers();
         jl_in_gc = 0;
         JL_SIGATOMIC_END();
+        total_gc_time += (jl_hrtime()-t0);
 #if defined(GC_FINAL_STATS)
-        total_gc_time += (clock_now()-t0);
         total_freed_bytes += freed_bytes;
 #endif
 #ifdef OBJPROFILE
@@ -1016,16 +1057,15 @@ static double process_t0;
 #include <malloc.h>
 void jl_print_gc_stats(JL_STREAM *s)
 {
+    double gct = total_gc_time/1e9;
     malloc_stats();
     double ptime = clock_now()-process_t0;
     jl_printf(s, "exec time\t%.5f sec\n", ptime);
-    jl_printf(s, "gc time  \t%.5f sec (%2.1f%%)\n", total_gc_time,
-              (total_gc_time/ptime)*100);
+    jl_printf(s, "gc time  \t%.5f sec (%2.1f%%)\n", gct, (gct/ptime)*100);
     struct mallinfo mi = mallinfo();
     jl_printf(s, "malloc size\t%d MB\n", mi.uordblks/1024/1024);
     jl_printf(s, "total freed\t%llu b\n", total_freed_bytes);
-    jl_printf(s, "free rate\t%.1f MB/sec\n",
-              (total_freed_bytes/total_gc_time)/1024/1024);
+    jl_printf(s, "free rate\t%.1f MB/sec\n", (total_freed_bytes/gct)/1024/1024);
 }
 #endif
 

@@ -253,6 +253,8 @@ function process_options(args::Vector{UTF8String})
             # load juliarc now before processing any more options
             load_juliarc()
             startup = false
+        elseif args[i] == "-i"
+            global is_interactive = true
         elseif beginswith(args[i], "--color")
             if args[i] == "--color"
                 color_set = true
@@ -279,6 +281,7 @@ function process_options(args::Vector{UTF8String})
             repl = false
             # remove julia's arguments
             splice!(ARGS, 1:length(ARGS), args[i+1:end])
+            ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
             include(args[i])
             break
         else
@@ -351,14 +354,25 @@ function _start()
         (quiet,repl,startup,color_set,no_history_file) = process_options(copy(ARGS))
 
         local term
+        global active_repl
         if repl
             if !isa(STDIN,TTY)
-                global is_interactive = !isa(STDIN,Union(File,IOStream))
+                global is_interactive |= !isa(STDIN,Union(File,IOStream))
                 color_set || (global have_color = false)
             else
                 term = Terminals.TTYTerminal(get(ENV,"TERM",@windows? "" : "dumb"),STDIN,STDOUT,STDERR)
                 global is_interactive = true
                 color_set || (global have_color = Terminals.hascolor(term))
+                quiet || REPL.banner(term,term)
+                if term.term_type == "dumb"
+                    active_repl = REPL.BasicREPL(term)
+                else
+                    active_repl = REPL.LineEditREPL(term, true)
+                    active_repl.no_history_file = no_history_file
+                end
+                # Make sure any displays pushed in .juliarc.jl ends up above the
+                # REPLDisplay
+                pushdisplay(REPL.REPLDisplay(active_repl))
             end
         end
 
@@ -381,16 +395,7 @@ function _start()
                 end
                 quit()
             end
-            quiet || REPL.banner(term,term)
-            ccall(:jl_install_sigint_handler, Void, ())
-            local repl
-            if term.term_type == "dumb"
-                repl = REPL.BasicREPL(term)
-            else
-                repl = REPL.LineEditREPL(term)
-                repl.no_history_file = no_history_file
-            end
-            REPL.run_repl(repl)
+            REPL.run_repl(active_repl)
         end
     catch err
         display_error(err,catch_backtrace())

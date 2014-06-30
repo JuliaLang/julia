@@ -53,8 +53,11 @@ zip(a, b) = Zip2(a, b)
 
 length(z::Zip2) = min(length(z.a), length(z.b))
 start(z::Zip2) = (start(z.a), start(z.b))
-next(z::Zip2, st) = ((next(z.a,st[1])[1], next(z.b,st[2])[1]),
-                     (next(z.a,st[1])[2], next(z.b,st[2])[2]))
+function next(z::Zip2, st) 
+    n1 = next(z.a,st[1])
+    n2 = next(z.b,st[2])
+    return ((n1[1], n2[1]), (n1[2], n2[2]))
+end
 done(z::Zip2, st) = done(z.a,st[1]) | done(z.b,st[2])
 
 eltype(z::Zip2) = (eltype(z.a), eltype(z.b))
@@ -73,27 +76,27 @@ function start_filter(pred, itr)
     while !done(itr,s)
         v,t = next(itr,s)
         if pred(v)
-            break
+            return (false, v, t)
         end
         s=t
     end
-    s
+    (true,)
 end
 
 next(f::Filter, s) = advance_filter(f.flt, f.itr, s)
-function advance_filter(pred, itr, s)
-    v,s = next(itr,s)
+function advance_filter(pred, itr, st)
+    _, v, s = st
     while !done(itr,s)
         w,t = next(itr,s)
         if pred(w)
-            break
+            return v, (false, w, t)
         end
         s=t
     end
-    v,s
+    v, (true,)
 end
 
-done(f::Filter, s) = done(f.itr,s)
+done(f::Filter, s) = s[1]
 
 eltype(f::Filter) = eltype(f.itr)
 

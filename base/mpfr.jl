@@ -13,11 +13,12 @@ import
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
         nextfloat, prevfloat, promote_rule, rad2deg, rem, round, show,
         showcompact, sum, sqrt, string, print, trunc, precision, exp10, expm1,
-        gamma, lgamma, digamma, erf, erfc, zeta, log1p, airyai, iceil, ifloor,
+        gamma, lgamma, digamma, erf, erfc, zeta, eta, log1p, airyai, iceil, ifloor,
         itrunc, eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
-        serialize, deserialize, inf, nan, hash, cbrt, typemax, typemin,
-        realmin, realmax, get_rounding, set_rounding, maxintfloat, widen
+        serialize, deserialize, inf, nan, cbrt, typemax, typemin,
+        realmin, realmax, get_rounding, set_rounding, maxintfloat, widen,
+        significand
 
 import Base.GMP: ClongMax, CulongMax
 
@@ -400,6 +401,19 @@ for f in (:exp, :exp2, :exp10, :expm1, :digamma, :erf, :erfc, :zeta,
     end
 end
 
+# return log(2)
+function big_ln2()
+    c = BigFloat()
+    ccall((:mpfr_const_log2, :libmpfr), Cint, (Ptr{BigFloat}, Int32),
+          &c, MPFR.ROUNDING_MODE[end])
+    return c
+end
+
+function eta(x::BigFloat)
+    x == 1 && return big_ln2()
+    return -zeta(x) * expm1(big_ln2()*(1-x))
+end
+
 function airyai(x::BigFloat)
     z = BigFloat()
     ccall((:mpfr_ai, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
@@ -580,8 +594,26 @@ end
 <(x::BigFloat, y::BigFloat) = ccall((:mpfr_less_p, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &x, &y) != 0
 >(x::BigFloat, y::BigFloat) = ccall((:mpfr_greater_p, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &x, &y) != 0
 
-signbit(x::BigFloat) =
-    int(ccall((:mpfr_signbit, :libmpfr), Int32, (Ptr{BigFloat},), &x)!=0)
+function ==(i::BigInt, f::BigFloat)
+    !isnan(f) && ccall((:mpfr_cmp_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigInt}), &f, &i) == 0
+end
+
+==(f::BigFloat, i::BigInt) = i == f
+
+function <(i::BigInt, f::BigFloat)
+    # note: mpfr_cmp_z returns 0 if isnan(f)
+    ccall((:mpfr_cmp_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigInt}), &f, &i) > 0
+end
+
+function <(f::BigFloat, i::BigInt)
+    # note: mpfr_cmp_z returns 0 if isnan(f)
+    ccall((:mpfr_cmp_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigInt}), &f, &i) < 0
+end
+
+<=(i::BigInt, f::BigFloat) = !isnan(f) && !(f < i)
+<=(f::BigFloat, i::BigInt) = !isnan(f) && !(i < f)
+
+signbit(x::BigFloat) = ccall((:mpfr_signbit, :libmpfr), Int32, (Ptr{BigFloat},), &x) != 0
 
 function precision(x::BigFloat)
     return ccall((:mpfr_get_prec, :libmpfr), Clong, (Ptr{BigFloat},), &x)
@@ -628,6 +660,15 @@ function exponent(x::BigFloat)
     end
     # The '- 1' is to make it work as Base.exponent
     return ccall((:mpfr_get_exp, :libmpfr), Clong, (Ptr{BigFloat},), &x) - 1
+end
+
+function significand(x::BigFloat)
+    z = BigFloat()
+    c = Clong[0]
+    ccall((:mpfr_frexp, :libmpfr), Int32, (Ptr{Clong}, Ptr{BigFloat}, Ptr{BigFloat}, Cint), c, &z, &x, ROUNDING_MODE[end])
+    # Double the significand to make it work as Base.significand
+    ccall((:mpfr_mul_si, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Clong, Int32), &z, &z, 2, ROUNDING_MODE[end])
+    return z
 end
 
 function isinteger(x::BigFloat)
@@ -713,25 +754,5 @@ end
 print(io::IO, b::BigFloat) = print(io, string(b))
 show(io::IO, b::BigFloat) = print(io, string(b), " with $(precision(b)) bits of precision")
 showcompact(io::IO, b::BigFloat) = print(io, string(b))
-
-function hash(x::BigFloat)
-    if isnan(x)
-        return hash(NaN)
-    end
-    if isinf(x)
-        return hash(float64(x))
-    end
-    n = ceil(precision(x)/53)
-    e = exponent(x)
-    h::Uint = signbit(x)
-    h = h<<30 + e
-    x = ldexp(x, -e)
-    for i=1:n
-        f64 = float64(x)
-        h = bitmix(h, hash(f64)$11111)
-        x -= f64
-    end
-    h
-end
 
 end #module

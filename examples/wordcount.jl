@@ -6,13 +6,13 @@
 #
 # To run in parallel on a string stored in variable `text`:
 #  julia -p <N> 
-#  julia> @everywhere load("<julia_dir>/examples/wordcount.j")
+#  julia> require("<julia_dir>/examples/wordcount.jl")
 #  julia> ...(define text)...
 #  julia> counts=parallel_wordcount(text)
 #
 # Or to run on a group of files, writing results to an output file:
 #  julia -p <N>
-#  julia> @everywhere load("<julia_dir/examples/wordcount.j")
+#  julia> require("<julia_dir>/examples/wordcount.jl")
 #  julia> wordcount_files("/tmp/output.txt", "/tmp/input1.txt","/tmp/input2.txt",...) 
 
 # "Map" function.
@@ -33,10 +33,8 @@ end
 # have their totals added together.
 function wcreduce(wcs)
     counts=Dict()
-    for c = wcs
-        for (k,v)=c
-            counts[k] = get(counts,k,0)+v
-        end
+    for c in wcs, (k,v) in c
+        counts[k] = get(counts,k,0)+v
     end
     return counts
 end
@@ -58,11 +56,11 @@ function parallel_wordcount(text)
             last=length(lines)
         end
         subtext=join(lines[int(first):int(last)],"\n")
-        push(rrefs, @spawn wordcount( subtext ) )
+        push!(rrefs, @spawn wordcount( subtext ) )
     end
     # fetch results
     while length(rrefs)>0
-        push(wcounts,fetch(pop(rrefs)))
+        push!(wcounts,fetch(pop!(rrefs)))
     end
     # reduce
     count=wcreduce(wcounts)
@@ -72,16 +70,17 @@ end
 # Takes the name of a result file, and a list of input file names.
 # Combines the contents of all files, then performs a parallel_wordcount
 # on the resulting string. Writes the results to result_file.
-function wordcount_files(result_file,input_file_names...)
-    text=""
-    for f = input_file_names
-        fh=open(f)
-        text=join( {text,readall(fh)}, "\n" )
-        close(fh)
+function wordcount_files(result_file,inputs...)
+    text = ""
+    for file in inputs
+        open(file) do f
+            text *= readall(f)
+        end
     end
-    wc=parallel_wordcount(text)
-    fo=open(result_file,"w")
-    for (k,v) = wc
-        println(fo,k,"=",v)
+    wc = parallel_wordcount(readall(f))
+    open(result_file,"w") do f
+        for (k,v) in wc
+            println(fo,k,"=",v)
+        end
     end
 end

@@ -62,6 +62,8 @@ end
 @test_repr "x^-f(y+z)"
 @test_repr "+(w-x)^-f(y+z)"
 @test_repr "w = (x = y) = z"
+@test_repr "a & b && c"
+@test_repr "a & (b && c)"
 
 # precedence tie resolution
 @test_repr "(a * b) * (c * d)"

@@ -72,6 +72,7 @@ jl_compileropts_t jl_compileropts = { NULL, // build_path
 };
 
 int jl_boot_file_loaded = 0;
+int exit_on_sigint = 0;
 
 char *jl_stack_lo;
 char *jl_stack_hi;
@@ -122,6 +123,7 @@ void fpe_handler(int arg)
 }
 #endif
 
+#ifndef _OS_WINDOWS_
 static int is_addr_on_stack(void *addr)
 {
 #ifdef COPY_STACKS
@@ -132,6 +134,7 @@ static int is_addr_on_stack(void *addr)
             (char*)addr < (char*)jl_current_task->stack+jl_current_task->ssize);
 #endif
 }
+#endif
 
 #if defined(__linux__) || defined(__FreeBSD__)
 extern int in_jl_;
@@ -191,6 +194,7 @@ DLLEXPORT void gdblookup(ptrint_t ip);
 
 static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {
+    if (exit_on_sigint) jl_exit(0);
     int sig;
     //windows signals use different numbers from unix
     switch(wsig) {
@@ -339,6 +343,7 @@ void restore_signals(void)
 
 void sigint_handler(int sig, siginfo_t *info, void *context)
 {
+    if (exit_on_sigint) jl_exit(0);
     if (jl_defer_signal) {
         jl_signal_pending = sig;
     }
@@ -547,6 +552,16 @@ void init_stdio()
     JL_STDIN = (uv_stream_t*)init_stdio_handle(0,1);
 }
 
+#ifdef JL_USE_INTEL_JITEVENTS
+char jl_using_intel_jitevents; // Non-zero if running under Intel VTune Amplifier
+#endif
+
+#if defined(JL_USE_INTEL_JITEVENTS) && defined(__linux__)
+unsigned sig_stack_size = SIGSTKSZ; 
+#else
+#define sig_stack_size SIGSTKSZ
+#endif
+
 #ifndef _OS_WINDOWS_
 static void *signal_stack;
 #endif
@@ -614,7 +629,7 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
         old_state = state;
         // memset(&state,0,sizeof(x86_thread_state64_t));
         // Setup libunwind information
-        state.__rsp = (uint64_t)signal_stack + SIGSTKSZ;
+        state.__rsp = (uint64_t)signal_stack + sig_stack_size;
         state.__rsp -= sizeof(unw_context_t);
         state.__rsp &= -16;
         unw_context_t *uc = (unw_context_t*)state.__rsp;
@@ -681,6 +696,18 @@ void julia_init(char *imageFile)
         hSymRefreshModuleList = 0;
 #endif
     init_stdio();
+
+#if defined(JL_USE_INTEL_JITEVENTS)
+    const char* jit_profiling = getenv("ENABLE_JITPROFILING");
+    if (jit_profiling && atoi(jit_profiling)) {
+        jl_using_intel_jitevents = 1;
+#if defined(__linux__)
+        // Intel VTune Amplifier needs at least 64k for alternate stack.
+        if (SIGSTKSZ < 1<<16) 
+            sig_stack_size = 1<<16; 
+#endif
+    }
+#endif
 
 #if defined(__linux__)
     int ncores = jl_cpu_cores();
@@ -765,7 +792,7 @@ void julia_init(char *imageFile)
 
 
 #ifndef _OS_WINDOWS_
-    signal_stack = malloc(SIGSTKSZ);
+    signal_stack = malloc(sig_stack_size);
     struct sigaction actf;
     memset(&actf, 0, sizeof(struct sigaction));
     sigemptyset(&actf.sa_mask);
@@ -801,12 +828,12 @@ void julia_init(char *imageFile)
     }     
     pthread_attr_destroy(&attr);
 
-    ret = task_set_exception_ports(self,EXC_MASK_BAD_ACCESS,segv_port,EXCEPTION_DEFAULT,MACHINE_THREAD_STATE);
-    HANDLE_MACH_ERROR("task_set_exception_ports",ret);
+    ret = thread_set_exception_ports(mach_thread_self(),EXC_MASK_BAD_ACCESS,segv_port,EXCEPTION_DEFAULT,MACHINE_THREAD_STATE);
+    HANDLE_MACH_ERROR("thread_set_exception_ports",ret);
 #else // defined(_OS_DARWIN_)
     stack_t ss;
     ss.ss_flags = 0;
-    ss.ss_size = SIGSTKSZ;
+    ss.ss_size = sig_stack_size;
     ss.ss_sp = signal_stack;
     if (sigaltstack(&ss, NULL) < 0) {
         JL_PRINTF(JL_STDERR, "sigaltstack: %s\n", strerror(errno));
@@ -836,6 +863,8 @@ void julia_init(char *imageFile)
 
     if (imageFile)
         jl_init_restored_modules();
+
+    jl_install_sigint_handler();
 }
 
 DLLEXPORT void jl_install_sigint_handler()
@@ -882,9 +911,6 @@ DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *
             free(build_ji);
             char *build_o;
             if (asprintf(&build_o, "%s.o",build_path) > 0) {
-#ifndef _OS_WINDOWS_
-                jl_dump_linedebug_info();
-#endif
                 jl_dump_objfile(build_o,0);
                 free(build_o);
             }
@@ -983,6 +1009,8 @@ DLLEXPORT void jl_get_system_hooks(void)
     jl_loaderror_type = (jl_datatype_t*)basemod("LoadError");
     jl_weakref_type = (jl_datatype_t*)basemod("WeakRef");
 }
+
+DLLEXPORT void jl_exit_on_sigint(int on) {exit_on_sigint = on;}
 
 #ifdef __cplusplus
 }

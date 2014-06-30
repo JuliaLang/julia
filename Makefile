@@ -73,6 +73,11 @@ $(build_private_libdir)/sys%$(SHLIB_EXT): $(build_private_libdir)/sys%o
 	$(CXX) -shared -fPIC -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ $< \
 		$$([ $(OS) = Darwin ] && echo -Wl,-undefined,dynamic_lookup || echo -Wl,--unresolved-symbols,ignore-all ) \
 		$$([ $(OS) = WINNT ] && echo -ljulia -lssp)
+ifeq ($(OS), Darwin)
+ifeq ($(shell test `dsymutil -v | cut -d\- -f2 | cut -d. -f1` -gt 102 && echo yes), yes)
+	dsymutil $@
+endif
+endif
 
 $(build_private_libdir)/sys0.o:
 	@$(QUIET_JULIA) cd base && \
@@ -99,7 +104,7 @@ $(build_bindir)/stringpatch: $(build_bindir) contrib/stringpatch.c
 JL_LIBS = julia julia-debug
 
 # private libraries, that are installed in $(prefix)/lib/julia
-JL_PRIVATE_LIBS = random suitesparse_wrapper grisu Rmath
+JL_PRIVATE_LIBS = suitesparse_wrapper grisu Rmath
 ifeq ($(USE_SYSTEM_FFTW),0)
 JL_PRIVATE_LIBS += fftw3 fftw3f fftw3_threads fftw3f_threads
 endif
@@ -113,6 +118,9 @@ endif
 endif
 ifeq ($(USE_SYSTEM_OPENSPECFUN),0)
 JL_PRIVATE_LIBS += openspecfun
+endif
+ifeq ($(USE_SYSTEM_DSFMT),0)
+JL_PRIVATE_LIBS += dSFMT
 endif
 ifeq ($(USE_SYSTEM_BLAS),0)
 JL_PRIVATE_LIBS += openblas
@@ -202,7 +210,7 @@ endif
 	# Copy in all .jl sources as well
 	cp -R -L $(build_datarootdir)/julia $(DESTDIR)$(datarootdir)/
 	# Remove git repository of juliadoc
-	-rm -r $(DESTDIR)$(datarootdir)/julia/doc/juliadoc/.git
+	-rm -rf $(DESTDIR)$(datarootdir)/julia/doc/juliadoc/.git
 	-rm $(DESTDIR)$(datarootdir)/julia/doc/juliadoc/.gitignore
 	# Copy in beautiful new man page!
 	$(INSTALL_F) $(build_datarootdir)/man/man1/julia.1 $(DESTDIR)$(datarootdir)/man/man1/
@@ -255,12 +263,12 @@ endif
 	# If you want to make a distribution with a hardcoded path, you take care of installation
 ifeq ($(OS), Darwin)
 	-cat ./contrib/mac/juliarc.jl >> $(DESTDIR)$(prefix)/etc/julia/juliarc.jl
-else ifeq ($(OS), WINNT)
-	-cat ./contrib/windows/juliarc.jl >> $(DESTDIR)$(prefix)/etc/julia/juliarc.jl
 endif
 
 	# purge sys.{dll,so,dylib} as that file is not relocatable across processor architectures
+ifeq ($(JULIA_CPU_TARGET), native)
 	-rm -f $(DESTDIR)$(private_libdir)/sys.$(SHLIB_EXT)
+endif
 
 ifeq ($(OS), WINNT)
 	[ ! -d dist-extras ] || ( cd dist-extras && \
@@ -268,7 +276,7 @@ ifeq ($(OS), WINNT)
 	    mkdir $(DESTDIR)$(prefix)/Git && \
 	    7z x PortableGit.7z -o"$(DESTDIR)$(prefix)/Git" )
 	cd $(DESTDIR)$(bindir) && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
-	$(call spawn,./dist-extras/nsis/makensis.exe) /NOCD /DVersion=$(JULIA_VERSION) /DArch=$(ARCH) /DCommit=$(JULIA_COMMIT) ./contrib/windows/build-installer.nsi
+	$(call spawn,./dist-extras/nsis/makensis.exe) -NOCD -DVersion=$(JULIA_VERSION) -DArch=$(ARCH) -DCommit=$(JULIA_COMMIT) ./contrib/windows/build-installer.nsi
 	./dist-extras/7z a -mx9 "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" julia-installer.exe
 	cat ./contrib/windows/7zS.sfx ./contrib/windows/7zSFX-config.txt "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" > "julia-${JULIA_VERSION}-${ARCH}.exe"
 	-rm -f julia-installer.exe
@@ -284,10 +292,10 @@ source-dist: git-submodules
 	# Get all the dependencies downloaded
 	@$(MAKE) -C deps getall
 
-	# Create file source-dist.tmp to hold all the filenames that goes into the tarball
+	# Create file source-dist.tmp to hold all the filenames that go into the tarball
 	echo "base/version_git.jl" > source-dist.tmp
 	git ls-files >> source-dist.tmp
-	ls deps/*.tar.gz deps/*.tar.bz2 deps/*.tgz deps/random/*.tar.gz >> source-dist.tmp
+	ls deps/*.tar.gz deps/*.tar.bz2 deps/*.tgz >> source-dist.tmp
 	git submodule --quiet foreach 'git ls-files | sed "s&^&$$path/&"' >> source-dist.tmp
 
 	# Remove unwanted files

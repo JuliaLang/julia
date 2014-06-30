@@ -429,11 +429,19 @@ int jl_module_has_initializer(jl_module_t *m)
     return jl_get_global(m, jl_symbol("__init__")) != NULL;
 }
 
+jl_array_t *jl_module_init_order = NULL;
+
 void jl_module_run_initializer(jl_module_t *m)
 {
     jl_value_t *f = jl_get_global(m, jl_symbol("__init__"));
     if (f == NULL || !jl_is_function(f))
         return;
+    int build_mode = (jl_compileropts.build_path != NULL);
+    if (build_mode) {
+        if (jl_module_init_order == NULL)
+            jl_module_init_order = jl_alloc_cell_1d(0);
+        jl_cell_1d_push(jl_module_init_order, (jl_value_t*)m);
+    }
     JL_TRY {
         jl_apply((jl_function_t*)f, NULL, 0);
     }

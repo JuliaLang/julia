@@ -27,19 +27,16 @@ function compile(x)
     var,range = parse_iteration_space(x.args[1])
     r = gensym("r") # Range value
     n = gensym("n") # Trip count
-    s = gensym("s") # Step
-    i = gensym("i") # Index variable
+    i = gensym("i") # Trip index
     quote
         # Evaluate range value once, to enhance type and data flow analysis by optimizers.
         let $r = $range, $n = length($r)
             if zero($n) < $n
-                let $var = first($r)
-                    # LLVM vectorizer needs to compute a trip count, so make it obvious.
-                    local $s = step($r)
-                    local $i = zero($n)
+                # Lower loop in way that seems to work best for LLVM 3.3 vectorizer.
+                let $i = zero($n)
                     while $i < $n
-                        $(x.args[2])
-                        $var += $s
+                        local $var = first($r) + $i*step($r)
+                        $(x.args[2])        # Body of loop
                         $i += 1
                         $(Expr(:simdloop))  # Mark loop as SIMD loop
                     end

@@ -1,27 +1,46 @@
 
 show(x) = show(STDOUT::IO, x)
 
-function print(io::IO, s::Symbol)
-    pname = convert(Ptr{Uint8}, s)
-    write(io, pname, int(ccall(:strlen, Csize_t, (Ptr{Uint8},), pname)))
-end
+print(io::IO, s::Symbol) = (write(io,s);nothing)
 
 function show(io::IO, x::ANY)
     t = typeof(x)::DataType
     show(io, t)
     print(io, '(')
     if t.names !== () || t.size==0
-        n = length(t.names)
-        for i=1:n
-            f = t.names[i]
-            if !isdefined(x, f)
-                print(io, undef_ref_str)
+        recorded = false
+        oid = object_id(x)
+        shown_set = get(task_local_storage(), :SHOWNSET, nothing)
+        if shown_set == nothing 
+            shown_set = Set()
+            task_local_storage(:SHOWNSET, shown_set) 
+        end
+        
+        try
+            if oid in shown_set
+                print(io, "#= circular reference =#")
             else
-                show(io, x.(i))
+                push!(shown_set, oid)
+                recorded = true
+            
+                n = length(t.names)
+                for i=1:n
+                    f = t.names[i]
+                    if !isdefined(x, f)
+                        print(io, undef_ref_str)
+                    else
+                        show(io, x.(f))
+                    end
+                    if i < n
+                        print(io, ',')
+                    end
+                end
             end
-            if i < n
-                print(io, ',')
-            end
+        catch e
+            rethrow(e)
+        
+        finally
+            if recorded delete!(shown_set, oid) end
         end
     else
         nb = t.size
@@ -246,7 +265,7 @@ const expr_infix_wide = Set([:(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(&=),
 const expr_infix = Set([:(:), :(<:), :(->), :(=>), symbol("::")])
 const expr_calls  = [:call =>('(',')'), :ref =>('[',']'), :curly =>('{','}')]
 const expr_parens = [:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>('{','}'),
-                      :hcat =>('[',']'), :row =>('[',']')]
+                     :hcat =>('[',']'), :row =>('[',']')]
 
 ## AST decoding helpers ##
 
@@ -362,7 +381,12 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     elseif (head in expr_infix && nargs==2) || (is(head,:(:)) && nargs==3)
         show_list(io, args, head, indent)
     elseif head in expr_infix_wide && nargs == 2
-        show_list(io, args, " $head ", indent)
+        func_prec = get(bin_op_precs, head, 0)
+        if func_prec < prec
+            show_enclosed_list(io, '(', args, " $head ", ')', indent, func_prec)
+        else
+            show_list(io, args, " $head ", indent, func_prec)
+        end
 
     # list (i.e. "(1,2,3)" or "[1,2,3]")
     elseif haskey(expr_parens, head)               # :tuple/:vcat/:cell1d
@@ -478,10 +502,13 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_block(io, "if",   args[1], args[2], indent)
         show_block(io, "else", args[3], indent)
         print(io, "end")
-    elseif is(head, :try) && nargs == 3
+    elseif is(head, :try) && 3 <= nargs <= 4
         show_block(io, "try", args[1], indent)
-        if !(is(args[2], false) && is_expr(args[3], :block, 0))
-            show_block(io, "catch", args[2], args[3], indent)
+        if is_expr(args[3], :block)
+            show_block(io, "catch", is(args[2], false) ? [] : args[2], args[3], indent)
+        end
+        if nargs >= 4 && is_expr(args[4], :block)
+            show_block(io, "finally", [], args[4], indent)
         end
         print(io, "end")
     elseif is(head, :let) && nargs >= 1
@@ -800,8 +827,7 @@ function print_matrix_vdots(io::IO,
 end
 
 function print_matrix(io::IO, X::AbstractVecOrMat,
-                      rows::Integer = tty_rows()-4,
-                      cols::Integer = tty_cols(),
+                      sz::(Integer, Integer) = (s = tty_size(); (s[1]-4, s[2])),
                       pre::String = " ",
                       sep::String = "  ",
                       post::String = "",
@@ -809,6 +835,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                       vdots::String = "\u22ee",
                       ddots::String = "  \u22f1  ",
                       hmod::Integer = 5, vmod::Integer = 5)
+    rows, cols = sz
     cols -= length(pre) + length(post)
     presp = repeat(" ", length(pre))
     postsp = ""
@@ -974,7 +1001,8 @@ end
 showarray(X::AbstractArray; kw...) = showarray(STDOUT, X; kw...)
 function showarray(io::IO, X::AbstractArray;
                    header::Bool=true, limit::Bool=_limit_output,
-                   rows = tty_rows()-4, cols = tty_cols(), repr=false)
+                   sz = (s = tty_size(); (s[1]-4, s[2])), repr=false)
+    rows, cols = sz
     header && print(io, summary(X))
     if !isempty(X)
         header && println(io, ":")
@@ -997,10 +1025,10 @@ function showarray(io::IO, X::AbstractArray;
         else
             punct = (" ", "  ", "")
             if ndims(X)<=2
-                print_matrix(io, X, rows, cols, punct...)
+                print_matrix(io, X, sz, punct...)
             else
                 show_nd(io, X, limit,
-                        (io,slice)->print_matrix(io,slice,rows,cols,punct...),
+                        (io,slice)->print_matrix(io,slice,sz,punct...),
                         !repr)
             end
         end

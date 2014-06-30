@@ -195,7 +195,7 @@ end
 type LocalProcess
     id::Int
     bind_addr::IpAddr
-    LocalProcess() = new()
+    LocalProcess() = new(1)
 end
 
 const LPROC = LocalProcess()
@@ -448,8 +448,8 @@ type RemoteRef
     next_id() = (id=(myid(),REQ_ID); REQ_ID+=1; id)
 end
 
-hash(r::RemoteRef) = hash(r.whence)+3*hash(r.id)
-isequal(r::RemoteRef, s::RemoteRef) = (r.whence==s.whence && r.id==s.id)
+hash(r::RemoteRef, h::Uint) = hash(r.whence, hash(r.id, h))
+==(r::RemoteRef, s::RemoteRef) = (r.whence==s.whence && r.id==s.id)
 
 rr2id(r::RemoteRef) = (r.whence, r.id)
 
@@ -969,8 +969,6 @@ function start_worker(out::IO)
     #close(STDIN)
 
     disable_threaded_libs()
-
-    ccall(:jl_install_sigint_handler, Void, ())
     disable_nagle(sock)
 
     try
@@ -1120,7 +1118,7 @@ function launch_local_workers(cman::LocalManager, np::Integer, config::Dict)
 
     # start the processes first...
     for i in 1:np
-        io, pobj = readsfrom(detach(`$(dir)/$(exename) --bind-to $(LPROC.bind_addr) $exeflags`))
+        io, pobj = open(detach(`$(dir)/$(exename) --bind-to $(LPROC.bind_addr) $exeflags`), "r")
         io_objs[i] = io
         configs[i] = merge(config, {:process => pobj})
     end
@@ -1177,7 +1175,7 @@ function launch_ssh_workers(cman::SSHManager, np::Integer, config::Dict)
         cmd = `sh -l -c $(shell_escape(cmd))`                   # shell to launch under
         cmd = `ssh -n $sshflags $host $(shell_escape(cmd))`     # use ssh to remote launch
         
-        io, pobj = readsfrom(detach(cmd))
+        io, pobj = open(detach(cmd), "r")
         io_objs[i] = io
         configs[i] = merge(config, {:machine => cman.machines[i]})
     end
@@ -1520,14 +1518,12 @@ end
 function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
     start = time()
     done = RemoteRef()
-    timercb(aw, status) = begin
+    timercb(aw) = begin
         try
             if testcb()
                 put!(done, :ok)
             elseif (time() - start) > secs
                 put!(done, :timed_out)
-            elseif status != 0
-                put!(done, :error)
             end
         catch e
             put!(done, :error)

@@ -115,8 +115,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
       Return type      ``eltype(A)``     ``pivot``  Relationship between ``F`` and ``A``
       ---------------- ----------------- --------- -------------------------------------
       ``QR``           not ``BlasFloat`` either     ``A==F[:Q]*F[:R]``
-      ``QRCompactWY``  ``BlasFloat``     ``true``   ``A==F[:Q]*F[:R]``
-      ``QRPivoted``    ``BlasFloat``     ``false``  ``A[:,F[:p]]==F[:Q]*F[:R]``
+      ``QRCompactWY``  ``BlasFloat``     ``false``  ``A==F[:Q]*F[:R]``
+      ``QRPivoted``    ``BlasFloat``     ``true``   ``A[:,F[:p]]==F[:Q]*F[:R]``
       ================ ================= ========= =====================================
 
    ``BlasFloat`` refers to any of: ``Float32``, ``Float64``, ``Complex64`` or ``Complex128``.
@@ -181,15 +181,28 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: eig(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> D, V
 
-   Wrapper around ``eigfact`` extracting all parts the factorization to a tuple. Direct use of ``eigfact`` is therefore generally more efficient. Computes eigenvalues and eigenvectors of ``A``. See :func:`eigfact` for details on adiitional arguments.
+   Compute eigenvalues and eigenvectors of ``A``. See :func:`eigfact` for details on the ``balance`` keyword argument.
+   
+   **Example**::
+   
+    julia> eig(a = [1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
+    ([1.0,3.0,18.0],
+    3x3 Array{Float64,2}:
+     1.0  0.0  0.0
+     0.0  1.0  0.0
+     0.0  0.0  1.0)
+   
+   ``eig`` is a wrapper around :func:`eigfact`, extracting all parts of the factorization to a tuple; where possible, using :func:`eigfact` is recommended.
 
 .. function:: eig(A, B) -> D, V
 
-   Wrapper around ``eigfact`` extracting all parts the factorization to a tuple. Direct use of ``eigfact`` is therefore generally more efficient. Computes generalized eigenvalues and vectors of ``A`` with respect to ``B``.
+   Computes generalized eigenvalues and vectors of ``A`` with respect to ``B``.
+    
+   ``eig`` is a wrapper around :func:`eigfact`, extracting all parts of the factorization to a tuple; where possible, using :func:`eigfact` is recommended.
 
 .. function:: eigvals(A,[irange,][vl,][vu])
 
-   Returns the eigenvalues of ``A``. If ``A`` is ``Symmetric``, ``Hermitian`` or ``SymTridiagonal``, it is possible to calculate only a subset of the eigenvalues by specifying either a `UnitRange`` ``irange`` covering indices of the sorted eigenvalues or a pair ``vl`` and ``vu`` for the lower and upper boundaries of the eigenvalues.
+   Returns the eigenvalues of ``A``. If ``A`` is :func:`Symmetric`, :func:`Hermitian` or :func:`SymTridiagonal`, it is possible to calculate only a subset of the eigenvalues by specifying either a :func:`UnitRange` ``irange`` covering indices of the sorted eigenvalues, or a pair ``vl`` and ``vu`` for the lower and upper boundaries of the eigenvalues.
 
    For general non-symmetric matrices it is possible to specify how the matrix is balanced before the eigenvector calculation. The option ``permute=true`` permutes the matrix to become closer to upper triangular, and ``scale=true`` scales the matrix by its diagonal elements to make rows and columns more equal in norm. The default is ``true`` for both options.
 
@@ -206,7 +219,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    Returns the eigenvectors of ``A``.
    The ``permute`` and ``scale`` keywords are the same as for :func:`eigfact`.
 
-   For ``SymTridiagonal`` matrices, if the optional vector of eigenvalues ``eigvals`` is specified, returns the specific corresponding eigenvectors.
+   For :func:`SymTridiagonal` matrices, if the optional vector of eigenvalues ``eigvals`` is specified, returns the specific corresponding eigenvectors.
 
 .. function:: eigfact(A,[il,][iu,][vl,][vu,][permute=true,][scale=true])
 
@@ -312,7 +325,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Construct a diagonal matrix and place ``v`` on the ``k``-th diagonal.
 
-.. function:: scale(A, b), scale(b, A)
+.. function:: scale(A, b)
+.. function:: scale(b, A)
 
    Scale an array ``A`` by a scalar ``b``, returning a new array.
 
@@ -324,7 +338,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    Note: for large ``A``, ``scale`` can be much faster than ``A .* b`` or
    ``b .* A``, due to the use of BLAS.
 
-.. function:: scale!(A, b), scale!(b, A)
+.. function:: scale!(A, b)
+.. function:: scale!(b, A)
 
    Scale an array ``A`` by a scalar ``b``, similar to :func:`scale` but
    overwriting ``A`` in-place.
@@ -362,7 +377,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    For vectors, ``p`` can assume any numeric value (even though not all values produce a mathematically valid vector norm). In particular, ``norm(A, Inf)`` returns the largest value in ``abs(A)``, whereas ``norm(A, -Inf)`` returns the smallest.
 
-   For matrices, valid values of ``p`` are ``1``, ``2``, or ``Inf``. Use :func:`vecnorm` to compute the Frobenius norm.
+   For matrices, valid values of ``p`` are ``1``, ``2``, or ``Inf``. (Note that for sparse matrices, ``p=2`` is currently not implemented.) Use :func:`vecnorm` to compute the Frobenius norm.
 
 .. function:: vecnorm(A, [p])
 
@@ -427,9 +442,18 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Concatenate matrices block-diagonally. Currently only implemented for sparse matrices.
 
-.. function:: linreg(x, y)
+.. function:: linreg(x, y) -> [a; b]
 
-   Determine parameters ``[a, b]`` that minimize the squared error between ``y`` and ``a+b*x``.
+   Linear Regression. Returns ``a`` and ``b`` such that ``a+b*x`` is the closest line to the given points ``(x,y)``. In other words, this function determines parameters ``[a, b]`` that minimize the squared error between ``y`` and ``a+b*x``. 
+
+   **Example**::
+
+      using PyPlot;
+      x = float([1:12])
+      y = [5.5; 6.3; 7.6; 8.8; 10.9; 11.79; 13.48; 15.02; 17.77; 20.81; 22.0; 22.99]
+      a, b = linreg(x,y) # Linear regression
+      plot(x, y, "o") # Plot (x,y) points
+      plot(x, [a+b*i for i in x]) # Plot the line determined by the linear regression
 
 .. function:: linreg(x, y, w)
 
@@ -439,27 +463,27 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Matrix exponential.
 
-.. function:: issym(A)
+.. function:: issym(A) -> Bool
 
    Test whether a matrix is symmetric.
 
-.. function:: isposdef(A)
+.. function:: isposdef(A) -> Bool
 
    Test whether a matrix is positive definite.
 
-.. function:: isposdef!(A)
+.. function:: isposdef!(A) -> Bool
 
    Test whether a matrix is positive definite, overwriting ``A`` in the processes.
 
-.. function:: istril(A)
+.. function:: istril(A) -> Bool
 
    Test whether a matrix is lower triangular.
 
-.. function:: istriu(A)
+.. function:: istriu(A) -> Bool
 
    Test whether a matrix is upper triangular.
 
-.. function:: ishermitian(A)
+.. function:: ishermitian(A) -> Bool
 
    Test whether a matrix is Hermitian.
 
@@ -471,9 +495,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    The conjugate transposition operator (``'``).
 
-.. function:: eigs(A; nev=6, which="LM", tol=0.0, maxiter=1000, sigma=nothing, ritzvec=true, op_part=:real,v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
+.. function:: eigs(A, [B,]; nev=6, which="LM", tol=0.0, maxiter=1000, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
 
-   ``eigs`` computes eigenvalues ``d`` of ``A`` using Lanczos or Arnoldi iterations for real symmetric or general nonsymmetric matrices respectively. The following keyword arguments are supported:
+   ``eigs`` computes eigenvalues ``d`` of ``A`` using Lanczos or Arnoldi iterations for real symmetric or general nonsymmetric matrices respectively. If ``B`` is provided, the generalized eigen-problem is solved.  The following keyword arguments are supported:
     * ``nev``: Number of eigenvalues
     * ``which``: type of eigenvalues to compute. See the note below.
 
@@ -495,7 +519,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
     * ``maxiter``: Maximum number of iterations
     * ``sigma``: Specifies the level shift used in inverse iteration. If ``nothing`` (default), defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to ``sigma`` using shift and invert iterations.
     * ``ritzvec``: Returns the Ritz vectors ``v`` (eigenvectors) if ``true``
-    * ``op_part``: which part of linear operator to use for real ``A`` (``:real``, ``:imag``)
     * ``v0``: starting vector from which to start the iterations
 
    ``eigs`` returns the ``nev`` requested eigenvalues in ``d``, the corresponding Ritz vectors ``v`` (only if ``ritzvec=true``), the number of converged eigenvalues ``nconv``, the number of iterations ``niter`` and the number of matrix vector multiplications ``nmult``, as well as the final residual vector ``resid``.

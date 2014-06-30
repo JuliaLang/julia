@@ -11,25 +11,22 @@ end
 
 scale{R<:Real}(s::Complex, X::AbstractArray{R}) = scale(X, s)
 
-function scale!(X::AbstractArray, s::Number)
-    for i in 1:length(X)
+function generic_scale!(X::AbstractArray, s::Number)
+    for i = 1:length(X)
         @inbounds X[i] *= s
     end
     X
 end
-scale!(s::Number, X::AbstractArray) = scale!(X, s)
+scale!(X::AbstractArray, s::Number) = generic_scale!(X, s)
+scale!(s::Number, X::AbstractArray) = generic_scale!(X, s)
 
 cross(a::AbstractVector, b::AbstractVector) = [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
 
-triu(M::AbstractMatrix) = triu(M,0)
-tril(M::AbstractMatrix) = tril(M,0)
-#triu{T}(M::AbstractMatrix{T}, k::Integer)
-#tril{T}(M::AbstractMatrix{T}, k::Integer)
+triu(M::AbstractMatrix) = triu!(copy(M))
+tril(M::AbstractMatrix) = tril!(copy(M))
 triu!(M::AbstractMatrix) = triu!(M,0)
 tril!(M::AbstractMatrix) = tril!(M,0)
 
-#diff(a::AbstractVector)
-#diff(a::AbstractMatrix, dim::Integer)
 diff(a::AbstractMatrix) = diff(a, 1)
 diff(a::AbstractVector) = [ a[i+1] - a[i] for i=1:length(a)-1 ]
 
@@ -44,15 +41,13 @@ end
 
 gradient(F::AbstractVector) = gradient(F, [1:length(F)])
 gradient(F::AbstractVector, h::Real) = gradient(F, [h*(1:length(F))])
-#gradient(F::AbstractVector, h::AbstractVector)
 
 diag(A::AbstractVector) = error("use diagm instead of diag to construct a diagonal matrix")
-#diag(A::AbstractMatrix)
 
 #diagm{T}(v::AbstractVecOrMat{T})
 
 # special cases of vecnorm; note that they don't need to handle isempty(x)
-function vecnormMinusInf(x)
+function generic_vecnormMinusInf(x)
     s = start(x)
     (v, s) = next(x, s)
     minabs = abs(v)
@@ -62,7 +57,8 @@ function vecnormMinusInf(x)
     end
     return float(minabs)
 end
-function vecnormInf(x)
+
+function generic_vecnormInf(x)
     s = start(x)
     (v, s) = next(x, s)
     maxabs = abs(v)
@@ -72,7 +68,8 @@ function vecnormInf(x)
     end
     return float(maxabs)
 end
-function vecnorm1(x)
+
+function generic_vecnorm1(x)
     s = start(x)
     (v, s) = next(x, s)
     av = float(abs(v))
@@ -84,7 +81,8 @@ function vecnorm1(x)
     end
     return convert(T, sum)
 end
-function vecnorm2(x)
+
+function generic_vecnorm2(x)
     maxabs = vecnormInf(x)
     maxabs == 0 && return maxabs
     s = start(x)
@@ -100,7 +98,8 @@ function vecnorm2(x)
     end
     return convert(T, maxabs * sqrt(sum))
 end
-function vecnormp(x, p)
+
+function generic_vecnormp(x, p)
     if p > 1 || p < 0 # need to rescale to avoid overflow/underflow
         maxabs = vecnormInf(x)
         maxabs == 0 && return maxabs
@@ -129,6 +128,13 @@ function vecnormp(x, p)
         return convert(T, sum^inv(pp))
     end
 end
+
+vecnormMinusInf(x) = generic_vecnormMinusInf(x)
+vecnormInf(x) = generic_vecnormInf(x)
+vecnorm1(x) = generic_vecnorm1(x)
+vecnorm2(x) = generic_vecnorm2(x)
+vecnormp(x, p) = generic_vecnormp(x, p)
+
 function vecnorm(itr, p::Real=2)
     isempty(itr) && return float(real(zero(eltype(itr))))
     p == 2 && return vecnorm2(itr)
@@ -144,7 +150,7 @@ vecnorm(x::Number, p::Real=2) = p == 0 ? real(x==0 ? zero(x) : one(x)) : abs(x)
 norm(x::AbstractVector, p::Real=2) = vecnorm(x, p)
 
 function norm1{T}(A::AbstractMatrix{T})
-    m,n = size(A)
+    m, n = size(A)
     Tnorm = typeof(float(real(zero(T))))
     Tsum = promote_type(Float64,Tnorm)
     nrm::Tsum = 0
@@ -161,6 +167,7 @@ function norm1{T}(A::AbstractMatrix{T})
 end
 function norm2{T}(A::AbstractMatrix{T})
     m,n = size(A)
+    if m == 1 || n == 1 return vecnorm2(A) end
     Tnorm = typeof(float(real(zero(T))))
     (m == 0 || n == 0) ? zero(Tnorm) : convert(Tnorm, svdvals(A)[1])
 end
@@ -211,7 +218,10 @@ trace(x::Number) = x
 #det(a::AbstractMatrix)
 
 inv(a::AbstractVector) = error("argument must be a square matrix")
-inv{T}(A::AbstractMatrix{T}) = A_ldiv_B!(A,eye(T, chksquare(A)))
+function inv{T}(A::AbstractMatrix{T})
+    S = typeof(one(T)/one(T))
+    A_ldiv_B!(convert(AbstractMatrix{S}, A), eye(S, chksquare(A)))
+end
 
 function \{TA,TB,N}(A::AbstractMatrix{TA}, B::AbstractArray{TB,N})
     TC = typeof(one(TA)/one(TB))
@@ -235,7 +245,7 @@ function issym(A::AbstractMatrix)
     m, n = size(A)
     m==n || return false
     for i = 1:(n-1), j = (i+1):n
-        if A[i,j] != A[j,i]
+        if A[i,j] != transpose(A[j,i])
             return false
         end
     end
@@ -248,7 +258,7 @@ function ishermitian(A::AbstractMatrix)
     m, n = size(A)
     m==n || return false
     for i = 1:n, j = i:n
-        if A[i,j] != conj(A[j,i])
+        if A[i,j] != ctranspose(A[j,i])
             return false
         end
     end

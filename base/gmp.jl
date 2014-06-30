@@ -407,7 +407,6 @@ end
 binomial(n::BigInt, k::Integer) = k < 0 ? throw(DomainError()) : binomial(n, uint(k))
 
 ==(x::BigInt, y::BigInt) = cmp(x,y) == 0
-isequal(x::BigInt, y::BigInt) = cmp(x,y) == 0
 <=(x::BigInt, y::BigInt) = cmp(x,y) <= 0
 >=(x::BigInt, y::BigInt) = cmp(x,y) >= 0
 <(x::BigInt, y::BigInt) = cmp(x,y) < 0

@@ -201,3 +201,14 @@ Ai = int(ceil(Ar*100))
 
 # issue #6450
 @test dot({1.0,2.0},{3.5,4.5}) === 12.5
+
+# Issue 7181
+A = reshape([1:9], (3, 3))
+@test_throws BoundsError diag(A, 3)
+@test [7] == diag(A, 2)
+@test [4, 8] == diag(A, 1)
+@test [1,5,9] == diag(A, 0)
+@test [2,6] == diag(A, -1)
+@test [3] == diag(A, -2)
+@test_throws BoundsError diag(A, -3)
+

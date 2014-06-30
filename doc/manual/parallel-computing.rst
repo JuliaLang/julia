@@ -55,7 +55,7 @@ equal the number of CPU cores on the machine.
      0.60401   0.501111
      0.174572  0.157411
 
-    julia> s = @spawnat 2 1+fetch(r)
+    julia> s = @spawnat 2 1 .+ fetch(r)
     RemoteRef(2,1,7)
 
     julia> fetch(s)
@@ -98,14 +98,14 @@ a function, and picks where to do the operation for you::
     julia> r = @spawn rand(2,2)
     RemoteRef(1,1,0)
 
-    julia> s = @spawn 1+fetch(r)
+    julia> s = @spawn 1 .+ fetch(r)
     RemoteRef(1,1,1)
 
     julia> fetch(s)
     1.10824216411304866 1.13798233877923116
     1.12376292706355074 1.18750497916607167
 
-Note that we used ``1+fetch(r)`` instead of ``1+r``. This is because we
+Note that we used ``1 .+ fetch(r)`` instead of ``1 .+ r``. This is because we
 do not know where the code will run, so in general a ``fetch`` might be
 required to move ``r`` to the process doing the addition. In this
 case, ``@spawn`` is smart enough to perform the computation on the
@@ -166,11 +166,11 @@ The base Julia installation has in-built support for two types of clusters:
 
     - A local cluster specified with the ``-p`` option as shown above.  
     
-    - And a cluster spanning machines using the ``--machinefile`` option. This uses a passwordless 
+    - A cluster spanning machines using the ``--machinefile`` option. This uses a passwordless 
       ``ssh`` login to start julia worker processes (from the same path as the current host)
       on the specified machines.
     
-Functions ``addprocs``, ``rmprocs``, ``workers`` and others, are available as a programmatic means of 
+Functions ``addprocs``, ``rmprocs``, ``workers``, and others are available as a programmatic means of 
 adding, removing and querying the processes in a cluster.
 
 Other types of clusters can be supported by writing your own custom ClusterManager. See section on 
@@ -249,7 +249,7 @@ results::
     b = @spawn count_heads(100000000)
     fetch(a)+fetch(b)
 
-This example, as simple as it is, demonstrates a powerful and often-used
+This example demonstrates a powerful and often-used
 parallel programming pattern. Many iterations run independently over
 several processes, and then their results are combined using some
 function. The combination process is called a *reduction*, since it is
@@ -533,9 +533,7 @@ is ``DArray``\ -specific, but we list it here for completeness::
                 nc = +(old[i-1,j-1], old[i-1,j], old[i-1,j+1],
                        old[i  ,j-1],             old[i  ,j+1],
                        old[i+1,j-1], old[i+1,j], old[i+1,j+1])
-                new[i-1,j-1] = (nc == 3 ? 1 :
-                                nc == 2 ? old[i,j] :
-                                0)
+                new[i-1,j-1] = (nc == 3 || nc == 2 && old[i,j])
             end
         end
         new
@@ -564,8 +562,10 @@ array can be retrieved from a ``SharedArray`` by calling ``sdata(S)``.
 For other ``AbstractArray`` types, ``sdata`` just returns the object
 itself, so it's safe to use ``sdata`` on any Array-type object.
 
-The constructor for a shared array is of the form 
-  ``SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])``
+The constructor for a shared array is of the form::
+
+  SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
+
 which creates a shared array of a bitstype ``T`` and size ``dims``
 across the processes specified by ``pids``.  Unlike distributed
 arrays, a shared array is accessible only from those participating

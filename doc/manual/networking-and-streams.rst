@@ -25,7 +25,7 @@ All Julia streams expose at least a `read` and a `write` method, taking the stre
 
 Note that I pressed enter again so that Julia would read the newline. Now, as you can see from this example, the
 `write` method takes the data to write as its second argument, while the read method takes the type of the
-data to be read as the second argument. For example, to read a simply byte array, we could do::
+data to be read as the second argument. For example, to read a simple byte array, we could do::
 
     julia> x = zeros(Uint8,4)
     4-element Array{Uint8,1}:
@@ -76,12 +76,65 @@ the difference between the two)::
 
     julia> print(STDOUT,0x61)
     97
+    
+Working with Files
+------------------
+
+Like many other environments, Julia has an `open` function, which takes a filename and returns an `IOStream` object
+that you can use to read and write things from the file. For example if we have a file, `hello.txt`, whose contents
+are "Hello, World!"::
+
+    julia> f = open("hello.txt")
+    IOStream(<file hello.txt>)
+
+    julia> readlines(f)
+    1-element Array{Union(ASCIIString,UTF8String),1}:
+     "Hello, World!\n"
+    
+If you want to write to a file, you can open it with the write (`"w"`) flag::
+
+    julia> f = open("hello.txt","w")
+    IOStream(<file hello.txt>)
+    
+    julia> write(f,"Hello again.")
+    12
+    
+If you examine the contents of `hello.txt` at this point, you will notice that it is empty; nothing has actually
+been written to disk yet. This is because the IOStream must be closed before the write is actually flushed to disk::
+
+    julia> close(f)
+    
+Examining hello.txt again will show it's contents have been changed.
+
+Opening a file, doing something to it's contents, and closing it again is a very common pattern.
+To make this easier, there exists another invocation of `open` which takes a function
+as it's first argument and filename as it's second, opens the file, calls the function with the file as
+an argument, and then closes it again. For example, given a function::
+
+    function read_and_capitalize(f::IOStream)
+        return uppercase(readall(f))
+    end
+    
+You can call::
+
+    julia> open(read_and_capitalize, "hello.txt")
+    "HELLO AGAIN."
+    
+to open `hello.txt`, call `read_and_capitalize on it`, close `hello.txt`. and return the capitalized contents.
+
+To avoid even having to define a named function, you can use the `do` syntax, which creates an anonymous
+function on the fly::
+
+    julia> open("hello.txt") do f
+              uppercase(readall(f))
+           end
+    "HELLO AGAIN."
 
 
 A simple TCP example
 --------------------
 
-Let's jump right in with a simple example involving Tcp Sockets. To do, let's first create a simple server:: 
+Let's jump right in with a simple example involving Tcp Sockets. Let's first create a simple server:: 
 
     julia> @async begin
              server = listen(2000)
@@ -94,7 +147,7 @@ Let's jump right in with a simple example involving Tcp Sockets. To do, let's fi
 
     julia>
 
-Those familiar with the Unix socket API, the method names will feel familiar, 
+To those familiar with the Unix socket API, the method names will feel familiar, 
 though their usage is somewhat simpler than the raw Unix socket API. The first
 call to `listen` will create a server waiting for incoming connections on the 
 specified port (2000) in this case. The same function may also be used to 
@@ -121,10 +174,10 @@ create various other kinds of servers::
 Note that the return type of the last invocation is different. This is because 
 this server does not listen on TCP, but rather on a Named Pipe (Windows 
 terminology) - also called a Domain Socket (UNIX Terminology). The difference 
-is subtle but, has to do with the `accept` and `connect` methods. The `accept`
+is subtle and has to do with the `accept` and `connect` methods. The `accept`
 method retrieves a connection to the client that is connecting on the server we
 just created, while the `connect` function connects to a server using the 
-specified method. The `connect` function takes the same arguments as the 
+specified method. The `connect` function takes the same arguments as 
 `listen`, so, assuming the environment (i.e. host, cwd, etc.) is the same you 
 should be able to pass the same arguments to `connect` as you did to listen to 
 establish the connection. So let's try that out (after having created the server above)::

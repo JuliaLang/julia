@@ -17,6 +17,7 @@ USE_SYSTEM_LIBM=0
 USE_SYSTEM_OPENLIBM=0
 UNTRUSTED_SYSTEM_LIBM=0
 USE_SYSTEM_OPENSPECFUN=0
+USE_SYSTEM_DSFMT=0
 USE_SYSTEM_BLAS=0
 USE_SYSTEM_LAPACK=0
 USE_SYSTEM_FFTW=0
@@ -40,10 +41,6 @@ USE_INTEL_JITEVENTS = 0
 
 # libc++ is standard on OS X 10.9, but not for earlier releases
 USE_LIBCPP = 0
-
-# Select the cpu architecture to target
-# Current available options are "native" and "core2"
-JULIA_CPU_TARGET = native
 
 # we include twice to pickup user definitions better
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
@@ -134,6 +131,7 @@ endif
 endif
 
 JLDOWNLOAD = $(JULIAHOME)/deps/jldownload
+JLCHECKSUM = $(JULIAHOME)/deps/jlchecksum
 
 # Figure out OS and architecture
 OS := $(BUILD_OS)
@@ -217,7 +215,7 @@ CXX = $(CROSS_COMPILE)g++
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
-DEBUGFLAGS = -O0 -ggdb3 -DDEBUG -fstack-protector-all
+DEBUGFLAGS = -O0 -ggdb3 -DJL_DEBUG_BUILD -fstack-protector-all
 SHIPFLAGS = -O3 -falign-functions
 endif
 
@@ -227,7 +225,7 @@ CXX = $(CROSS_COMPILE)clang++
 JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
-DEBUGFLAGS = -O0 -g -DDEBUG -fstack-protector-all
+DEBUGFLAGS = -O0 -g -DJL_DEBUG_BUILD -fstack-protector-all
 SHIPFLAGS = -O3
 ifeq ($(OS), Darwin)
 ifeq ($(USE_LIBCPP), 1)
@@ -240,6 +238,10 @@ CXX += $(STDLIBCPP_FLAG) -mmacosx-version-min=10.6
 endif
 JCPPFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
+endif
+
+ifeq ($(LLVM_VER),svn)
+JCXXFLAGS += -std=c++11
 endif
 
 JFFLAGS = -O2 $(fPIC)
@@ -260,14 +262,6 @@ endif
 LD := link
 endif
 RANLIB := $(CROSS_COMPILE)ranlib
-
-ifeq ($(JULIA_CPU_TARGET),native)
-  JCPPFLAGS += -DJULIA_TARGET_NATIVE
-else ifeq ($(JULIA_CPU_TARGET),core2)
-  JCPPFLAGS += -DJULIA_TARGET_CORE2
-else
-  $(error Unknown cpu target architecture)
-endif
 
 
 # Calculate relative paths to libdir and private_libdir
@@ -307,7 +301,17 @@ endif
 
 # ===========================================================================
 
+# Select the cpu architecture to target, or automatically detects the user's compiler
+# ARCH is the first element of the triple, and gives the CPU class (e.g. x86_64)
+# MARCH is the CPU type, and accepts anything that can be passed to the gcc -march flag
+#    it is set equal to ARCH (for cases where the two are the same, such as i686)
+#    it can be set to native to optimize all code for the user's machine (not just the JIT code)
+#    if MARCH is set newer than the native processor, be forewarned that the compile might fail
+# JULIA_CPU_TARGET is the JIT-only complement to MARCH. Setting it explicitly is not generally necessary,
+#    since it is set equal to MARCH by default
+
 BUILD_MACHINE := $(shell $(HOSTCC) -dumpmachine)
+ifeq ($(ARCH),)
 ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
 ifeq ($(ARCH),mingw32)
 $(error "the mingw32 compiler you are using fails the openblas testsuite. please see the README.windows document for a replacement")
@@ -327,11 +331,43 @@ endif
 BUILD_MACHINE := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
 endif
 endif
+else
+XC_HOST := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
+MARCH = $(ARCH)
+endif
+
+ifneq ($(MARCH),)
+CC += -march=$(MARCH)
+CXX += -march=$(MARCH)
+FC += -march=$(MARCH)
+JULIA_CPU_TARGET ?= $(MARCH)
+endif
+JULIA_CPU_TARGET ?= native
+JCPPFLAGS += -DJULIA_TARGET_ARCH=$(JULIA_CPU_TARGET)
 
 # We map amd64 to x86_64 for compatibility with systems that identify 64-bit systems as such
 ifeq ($(ARCH),amd64)
-ARCH = x86_64
+override ARCH = x86_64
 endif
+
+ifeq ($(ARCH),i386)
+BINARY=32
+else ifeq ($(ARCH),i387)
+BINARY=32
+else ifeq ($(ARCH),i486)
+BINARY=32
+else ifeq ($(ARCH),i586)
+BINARY=32
+else ifeq ($(ARCH),i686)
+BINARY=32
+else ifeq ($(ARCH),x86_64)
+BINARY=64
+else
+$(error "unknown word-size for arch: $(ARCH)")
+endif
+CC += -m$(BINARY)
+CXX += -m$(BINARY)
+FC += -m$(BINARY)
 
 ifeq ($(USEGCC),1)
 ifneq ($(ARCH), ppc64)
@@ -359,9 +395,10 @@ endif
 ifeq ($(USE_SYSTEM_LLVM), 1)
 LLVM_CONFIG ?= llvm-config$(EXE)
 LLVM_LLC ?= llc$(EXE)
+JCPPFLAGS+=-DSYSTEM_LLVM
 else
-LLVM_CONFIG=$(LLVMROOT)/bin/llvm-config$(EXE)
-LLVM_LLC=$(LLVMROOT)/bin/llc$(EXE)
+LLVM_CONFIG=$(build_bindir)/llvm-config$(EXE)
+LLVM_LLC=$(build_bindir)/llc$(EXE)
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 1)
@@ -508,6 +545,11 @@ JLDFLAGS =
 endif
 JCPPFLAGS += -D_WIN32_WINNT=0x0600
 UNTRUSTED_SYSTEM_LIBM = 1
+endif
+
+# Intel VTune Amplifier
+ifeq ($(USE_INTEL_JITEVENTS), 1)
+JCPPFLAGS += -DJL_USE_INTEL_JITEVENTS
 endif
 
 # Intel libraries

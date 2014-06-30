@@ -48,12 +48,20 @@ convert{T}(::Type{Factorization{T}}, C::Cholesky) = convert(Cholesky{T}, C)
 convert{T}(::Type{CholeskyPivoted{T}},C::CholeskyPivoted) = CholeskyPivoted(convert(AbstractMatrix{T},C.UL),C.uplo,C.piv,C.rank,C.tol,C.info)
 convert{T}(::Type{Factorization{T}}, C::CholeskyPivoted) = convert(CholeskyPivoted{T}, C)
 
+function full{T<:BlasFloat}(C::Cholesky{T})
+    if C.uplo == 'U'
+        BLAS.trmm!('R', C.uplo, 'N', 'N', one(T), C.UL, tril!(C.UL'))
+    else
+        BLAS.trmm!('L', C.uplo, 'N', 'N', one(T), C.UL, triu!(C.UL'))
+    end
+end
+
 size(C::Union(Cholesky, CholeskyPivoted)) = size(C.UL)
 size(C::Union(Cholesky, CholeskyPivoted), d::Integer) = size(C.UL,d)
 
 function getindex(C::Cholesky, d::Symbol)
-    d == :U && return triu!(symbol(C.uplo) == d ? C.UL : C.UL')
-    d == :L && return tril!(symbol(C.uplo) == d ? C.UL : C.UL')
+    d == :U && return Triangular(triu!(symbol(C.uplo) == d ? C.UL : C.UL'),:U)
+    d == :L && return Triangular(tril!(symbol(C.uplo) == d ? C.UL : C.UL'),:L)
     d == :UL && return Triangular(C.UL, symbol(C.uplo))
     throw(KeyError(d))
 end
@@ -183,17 +191,20 @@ convert{T}(::Type{QRPivoted{T}},A::QRPivoted) = QRPivoted(convert(AbstractMatrix
 convert{T}(::Type{Factorization{T}}, A::QRPivoted) = convert(QRPivoted{T}, A)
 
 function getindex(A::QR, d::Symbol)
-    d == :R && return triu(A.factors[1:minimum(size(A)),:])
+    m, n = size(A)
+    d == :R && return triu!(A.factors[1:min(m,n), 1:n])
     d == :Q && return QRPackedQ(A.factors,A.τ)
     throw(KeyError(d))
 end
 function getindex(A::QRCompactWY, d::Symbol)
-    d == :R && return triu(A.factors[1:minimum(size(A)),:])
+    m, n = size(A)
+    d == :R && return triu!(A.factors[1:min(m,n), 1:n])
     d == :Q && return QRCompactWYQ(A.factors,A.T)
     throw(KeyError(d))
 end
 function getindex{T}(A::QRPivoted{T}, d::Symbol)
-    d == :R && return triu(A.factors[1:minimum(size(A)),:])
+    m, n = size(A)
+    d == :R && return triu!(A.factors[1:min(m,n), 1:n])
     d == :Q && return QRPackedQ(A.factors,A.τ)
     d == :p && return A.jpvt
     if d == :P
@@ -356,7 +367,7 @@ function A_mul_Bc!{T}(A::AbstractMatrix{T},Q::QRPackedQ{T})
 end
 function A_mul_Bc{TA,TB,N}(A::AbstractArray{TA,N}, B::Union(QRCompactWYQ{TB},QRPackedQ{TB}))
     TAB = promote_type(TA,TB)
-    A_mul_Bc!(size(A,2)==size(B.factors,1) ? (TA == TAB ? copy(A) : convert(AbstractMatrix{TAB,N}, A)) : (size(A,2)==size(B.factors,2) ? [A zeros(T, size(A, 1), size(B.factors, 1) - size(B.factors, 2))] : throw(DimensionMismatch(""))),convert(AbstractMatrix{TAB}, B))
+    A_mul_Bc!(size(A,2)==size(B.factors,1) ? (TA == TAB ? copy(A) : convert(AbstractMatrix{TAB,N}, A)) : (size(A,2)==size(B.factors,2) ? [A zeros(TAB, size(A, 1), size(B.factors, 1) - size(B.factors, 2))] : throw(DimensionMismatch(""))),convert(AbstractMatrix{TAB}, B))
 end
 
 # Julia implementation similarly to xgelsy
@@ -486,7 +497,7 @@ end
 full(A::HessenbergQ) = LAPACK.orghr!(1, size(A.factors, 1), copy(A.factors), A.τ)
 
 # Also printing of QRQs
-print_matrix(io::IO, A::Union(QRPackedQ,QRCompactWYQ,HessenbergQ), rows::Integer, cols::Integer, punct...) = print_matrix(io, full(A), rows, cols, punct...)
+print_matrix(io::IO, A::Union(QRPackedQ,QRCompactWYQ,HessenbergQ), sz::(Integer, Integer), punct...) = print_matrix(io, full(A), sz, punct...)
 
 
 #######################
@@ -563,7 +574,7 @@ function eigvals!{T<:BlasComplex}(A::StridedMatrix{T}; permute::Bool=true, scale
     ishermitian(A) && return eigvals(Hermitian(A))
     return LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)[2]
 end
-eigvals{T}(A::AbstractMatrix{T}; kwargs...) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); S != T ? eigvals!(convert(AbstractMatrix{S}, A); kwargs...) : eigvals!(copy(A); kwargs...))
+eigvals{T}(A::AbstractMatrix{T}, args...; kwargs...) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); S != T ? eigvals!(convert(AbstractMatrix{S}, A), args...; kwargs...) : eigvals!(copy(A), args...; kwargs...))
 eigvals{T<:Number}(x::T; kwargs...) = (val = convert(promote_type(Float32,typeof(one(T)/norm(one(T)))),x); imag(val) == 0 ? [real(val)] : [val])
 
 #Computes maximum and minimum eigenvalue
@@ -581,7 +592,7 @@ det(A::Eigen) = prod(A.values)
 
 # Generalized eigenproblem
 function eigfact!{T<:BlasReal}(A::StridedMatrix{T}, B::StridedMatrix{T})
-    issym(A) && issym(B) && return eigfact!(Symmetric(A), Symmetric(B))
+    issym(A) && isposdef(B) && return eigfact!(Symmetric(A), Symmetric(B))
     n = size(A, 1)
     alphar, alphai, beta, _, vr = LAPACK.ggev!('N', 'V', A, B)
     all(alphai .== 0) && return GeneralizedEigen(alphar ./ beta, vr)
@@ -602,19 +613,19 @@ function eigfact!{T<:BlasReal}(A::StridedMatrix{T}, B::StridedMatrix{T})
 end
 
 function eigfact!{T<:BlasComplex}(A::StridedMatrix{T}, B::StridedMatrix{T})
-    ishermitian(A) && ishermitian(B) && return eigfact!(Hermitian(A), Hermitian(B))
+    ishermitian(A) && isposdef(B) && return eigfact!(Hermitian(A), Hermitian(B))
     alpha, beta, _, vr = LAPACK.ggev!('N', 'V', A, B)
     return GeneralizedEigen(alpha./beta, vr)
 end
 eigfact{TA,TB}(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) = (S = promote_type(Float32,typeof(one(TA)/norm(one(TA))),TB); eigfact!(S != TA ? convert(AbstractMatrix{S},A) : copy(A), S != TB ? convert(AbstractMatrix{S},B) : copy(B)))
 
 function eigvals!{T<:BlasReal}(A::StridedMatrix{T}, B::StridedMatrix{T})
-    issym(A) && issym(B) && return eigvals!(Symmetric(A), Symmetric(B))
+    issym(A) && isposdef(B) && return eigvals!(Symmetric(A), Symmetric(B))
     alphar, alphai, beta, vl, vr = LAPACK.ggev!('N', 'N', A, B)
     (all(alphai .== 0) ? alphar : complex(alphar, alphai))./beta
 end
 function eigvals!{T<:BlasComplex}(A::StridedMatrix{T}, B::StridedMatrix{T})
-    ishermitian(A) && ishermitian(B) && return eigvals!(Hermitian(A), Hermitian(B))
+    ishermitian(A) && isposdef(B) && return eigvals!(Hermitian(A), Hermitian(B))
     alpha, beta, vl, vr = LAPACK.ggev!('N', 'N', A, B)
     alpha./beta
 end

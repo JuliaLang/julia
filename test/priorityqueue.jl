@@ -21,6 +21,13 @@ pq = PriorityQueue(priorities)
 test_issorted!(pq, priorities)
 
 
+# building from two lists
+ks, vs = 1:n, rand(1:pmax, n)
+pq = PriorityQueue(ks, vs)
+priorities = Dict(ks, vs)
+test_issorted!(pq, priorities)
+
+
 # enqueing via enqueue!
 pq = PriorityQueue()
 for (k, v) in priorities

@@ -48,6 +48,43 @@ while developing you might use a workflow something like this::
     obj3 = MyModule.someotherfunction(obj2, c)
     ...
 
+Functions
+---------
+
+I passed an argument ``x`` to a function, modified it inside that function, but on the outside, the variable ``x`` is still unchanged. Why?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Suppose you call a function like this::
+
+	julia> x = 10
+	julia> function change_value!(y) # Create a new function
+	           y = 17
+	       end
+	julia> change_value!(x)
+	julia> x # x is unchanged!
+	10
+
+In Julia, any function (including ``change_value!()``) can't change the binding of a local variable. If ``x`` (in the calling scope) is bound to a immutable object (like a real number), you can't modify the object; likewise, if x is bound in the calling scope to a Dict, you can't change it to be bound to an ASCIIString. 
+
+But here is a thing you should pay attention to: suppose ``x`` is bound to an Array (or any other mutable type). You cannot "unbind" ``x`` from this Array. But, since an Array is a *mutable* type, you can change its content. For example::
+
+	julia> x = [1,2,3]
+	3-element Array{Int64,1}:
+	1
+	2
+	3
+
+	julia> function change_array!(A) # Create a new function
+	           A[1] = 5
+	       end
+	julia> change_array!(x)
+	julia> x
+	3-element Array{Int64,1}:
+	5
+	2
+	3
+
+Here we created a function ``change_array!()``, that assigns ``5`` to the first element of the Array. We passed ``x`` (which was previously bound to an Array) to the function. Notice that, after the function call, ``x`` is still bound to the same Array, but the content of that Array changed.
 
 Types, type declarations, and constructors
 ------------------------------------------
@@ -74,6 +111,41 @@ It returns either an ``Int`` or a ``Float64`` depending on the value of its
 argument. Since Julia can't predict the return type of this function at
 compile-time, any computation that uses it will have to guard against both
 types possibly occurring, making generation of fast machine code difficult.
+
+Why does Julia give a ``DomainError`` for perfectly-sensible operations?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Certain operations make perfect mathematical sense but result in
+errors::
+
+    julia> sqrt(-2.0)
+    ERROR: DomainError
+     in sqrt at math.jl:128
+
+    julia> 2^-5
+    ERROR: DomainError
+     in power_by_squaring at intfuncs.jl:70
+     in ^ at intfuncs.jl:84
+
+This behavior is an inconvenient consequence of the requirement for
+type-stability.  In the case of ``sqrt``, most users want
+``sqrt(2.0)`` to give a real number, and would be unhappy if it
+produced the complex number ``1.4142135623730951 + 0.0im``.  One could
+write the ``sqrt`` function to switch to a complex-valued output only
+when passed a negative number (which is what ``sqrt`` does in some
+other languages), but then the result would not be `type-stable
+<#man-type-stable>`_ and the ``sqrt`` function would have poor
+performance.
+
+In these and other cases, you can get the result you want by choosing
+an *input type* that conveys your willingness to accept an *output type* in
+which the result can be represented::
+
+    julia> sqrt(-2.0+0im)
+    0.0 + 1.4142135623730951im
+
+    julia> 2.0^-5
+    0.03125
 
 
 Why does Julia use native machine integer arithmetic?
@@ -419,6 +491,9 @@ For reasons of length the results are not shown here, but you may wish
 to try this yourself. Because the type is fully-specified in the first
 case, the compiler doesn't need to generate any code to resolve the
 type at run-time.  This results in shorter and faster code.
+
+
+.. _man-abstract-container-type:
 
 How should I declare "abstract container type" fields?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

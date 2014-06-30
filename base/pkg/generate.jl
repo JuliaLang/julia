@@ -76,7 +76,7 @@ function package(
             end
         end
     catch
-        isnew && run(`rm -rf $pkg`)
+        isnew && rm(pkg, recursive=true)
         rethrow()
     end
 end
@@ -89,6 +89,7 @@ function init(pkg::String, url::String="")
     end
     isempty(url) && return
     info("Origin: $url")
+    Git.run(`remote add origin $url`,dir=pkg)
     Git.set_remote_url(url,dir=pkg)
 end
 
@@ -110,7 +111,7 @@ function readme(pkg::String, user::String=""; force::Bool=false)
         println(io, "# $pkg")
         isempty(user) && return
         url = "https://travis-ci.org/$user/$pkg.jl"
-        println(io, "\n[![Build Status]($url.svg)]($url)")
+        println(io, "\n[![Build Status]($url.svg?branch=master)]($url)")
     end
 end
 
@@ -143,6 +144,7 @@ function travis(pkg::String; force::Bool=false)
           - sudo add-apt-repository ppa:staticfloat/\${JULIAVERSION} -y
           - sudo apt-get update -qq -y
           - sudo apt-get install libpcre3-dev julia -y
+          - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
         script:
           - julia -e 'Pkg.init(); Pkg.clone(pwd()); Pkg.test("$pkg")'
         """)

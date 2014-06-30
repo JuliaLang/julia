@@ -36,6 +36,12 @@ function writemime(io::IO, ::MIME"text/plain", v::DataType)
     end
 end
 
+writemime(io::IO, ::MIME"text/plain", t::Associative) = 
+    showdict(io, t, limit=true)
+writemime(io::IO, ::MIME"text/plain", t::Union(KeyIterator,ValueIterator)) = 
+    showkv(io, t, limit=true)
+
+
 # showing exception objects as descriptive error messages
 
 showerror(io::IO, e) = show(io, e)
@@ -78,7 +84,7 @@ end
 function showerror(io::IO, e::DomainError, bt)
     print(io, "DomainError")
     for b in bt
-        code = ccall(:jl_lookup_code_address, Any, (Ptr{Void},), b)
+        code = ccall(:jl_lookup_code_address, Any, (Ptr{Void},Cint), b, true)
         if length(code) == 4
             if code[1] in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
                 print(io, "\n", code[1],
@@ -159,7 +165,7 @@ function show_backtrace(io::IO, top_function::Symbol, t, set)
     local fname, file, line
     count = 0
     for i = 1:length(t)
-        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void},), t[i])
+        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void},Cint), t[i], true)
         if lkup === ()
             continue
         end

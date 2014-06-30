@@ -473,26 +473,40 @@ static Value *generic_zext(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     return builder.CreateZExt(JL_INT(auto_unbox(x,ctx)), to);
 }
 
-static Value *emit_eqfsi64(Value *x, Value *y)
+static Value *emit_eqfsi(Value *x, Value *y)
 {
     x = FP(x);
     Value *fy = JL_INT(y);
+
+    // using all 64-bit is slightly faster than using mixed sizes
+    Value *xx = x, *vv = fy;
+    if (x->getType() == T_float32)
+        xx = builder.CreateFPExt(xx, T_float64);
+    if (vv->getType()->getPrimitiveSizeInBits() < 64)
+        vv = builder.CreateSExt(vv, T_int64);
+
+    Value *back = builder.CreateSIToFP(vv, xx->getType());
     return builder.CreateAnd
-        (builder.CreateFCmpOEQ(x, builder.CreateSIToFP(fy, T_float64)),
-         builder.CreateICmpEQ(fy, builder.CreateFPToSI
-                              (builder.CreateSIToFP(fy, T_float64),
-                               T_int64)));
+        (builder.CreateFCmpOEQ(xx, back),
+         builder.CreateICmpEQ(vv, builder.CreateFPToSI(back, vv->getType())));
 }
 
-static Value *emit_eqfui64(Value *x, Value *y)
+static Value *emit_eqfui(Value *x, Value *y)
 {
     x = FP(x);
     Value *fy = JL_INT(y);
+
+    // using all 64-bit is slightly faster than using mixed sizes
+    Value *xx = x, *vv = fy;
+    if (x->getType() == T_float32)
+        xx = builder.CreateFPExt(xx, T_float64);
+    if (vv->getType()->getPrimitiveSizeInBits() < 64)
+        vv = builder.CreateZExt(vv, T_int64);
+
+    Value *back = builder.CreateUIToFP(vv, xx->getType());
     return builder.CreateAnd
-        (builder.CreateFCmpOEQ(x, builder.CreateUIToFP(fy, T_float64)),
-         builder.CreateICmpEQ(fy, builder.CreateFPToUI
-                              (builder.CreateUIToFP(fy, T_float64),
-                               T_int64)));
+        (builder.CreateFCmpOEQ(xx, back),
+         builder.CreateICmpEQ(vv, builder.CreateFPToUI(back, vv->getType())));
 }
 
 static Value *emit_checked_fptosi(Type *to, Value *x, jl_codectx_t *ctx)
@@ -506,12 +520,7 @@ static Value *emit_checked_fptosi(Type *to, Value *x, jl_codectx_t *ctx)
              prepare_global(jlinexacterr_var), ctx);
     }
     else {
-        Value *xx = x, *vv = v;
-        if (x->getType() == T_float32)
-            xx = builder.CreateFPExt(x, T_float64);
-        if (to->getPrimitiveSizeInBits() < 64)
-            vv = builder.CreateSExt(v, T_int64);
-        raise_exception_unless(emit_eqfsi64(xx, vv), prepare_global(jlinexacterr_var), ctx);
+        raise_exception_unless(emit_eqfsi(x, v), prepare_global(jlinexacterr_var), ctx);
     }
     return v;
 }
@@ -532,12 +541,7 @@ static Value *emit_checked_fptoui(Type *to, Value *x, jl_codectx_t *ctx)
              prepare_global(jlinexacterr_var), ctx);
     }
     else {
-        Value *xx = x, *vv = v;
-        if (x->getType() == T_float32)
-            xx = builder.CreateFPExt(x, T_float64);
-        if (to->getPrimitiveSizeInBits() < 64)
-            vv = builder.CreateZExt(v, T_int64);
-        raise_exception_unless(emit_eqfui64(xx, vv), prepare_global(jlinexacterr_var), ctx);
+        raise_exception_unless(emit_eqfui(x, v), prepare_global(jlinexacterr_var), ctx);
     }
     return v;
 }
@@ -796,6 +800,32 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     }
     HANDLE(uitofp,2) return builder.CreateUIToFP(JL_INT(auto_unbox(args[2],ctx)), FTnbits(try_to_determine_bitstype_nbits(args[1],ctx)));
     HANDLE(sitofp,2) return builder.CreateSIToFP(JL_INT(auto_unbox(args[2],ctx)), FTnbits(try_to_determine_bitstype_nbits(args[1],ctx)));
+
+    case fptoui:
+        if (nargs == 1) {
+            Value *x = FP(auto_unbox(args[1], ctx));
+            return builder.CreateFPToUI(FP(x), JL_INTT(x->getType()));
+        }
+        else if (nargs == 2) {
+            return builder.CreateFPToUI(FP(auto_unbox(args[2],ctx)),
+                                        Type::getIntNTy(jl_LLVMContext, try_to_determine_bitstype_nbits(args[1],ctx)));
+        }
+        else {
+            jl_error("fptoui: wrong number of arguments");
+        }
+    case fptosi:
+        if (nargs == 1) {
+            Value *x = FP(auto_unbox(args[1], ctx));
+            return builder.CreateFPToSI(FP(x), JL_INTT(x->getType()));
+        }
+        else if (nargs == 2) {
+            return builder.CreateFPToSI(FP(auto_unbox(args[2],ctx)),
+                                        Type::getIntNTy(jl_LLVMContext, try_to_determine_bitstype_nbits(args[1],ctx)));
+        }
+        else {
+            jl_error("fptosi: wrong number of arguments");
+        }
+
     HANDLE(fptrunc,2) return builder.CreateFPTrunc(FP(auto_unbox(args[2],ctx)), FTnbits(try_to_determine_bitstype_nbits(args[1],ctx)));
     HANDLE(fpext,2) {
         // when extending a float32 to a float64, we need to force
@@ -946,8 +976,8 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(lt_float,2) return builder.CreateFCmpOLT(FP(x), FP(y));
     HANDLE(le_float,2) return builder.CreateFCmpOLE(FP(x), FP(y));
 
-    HANDLE(eqfsi64,2) return emit_eqfsi64(x, y);
-    HANDLE(eqfui64,2) return emit_eqfui64(x, y);
+    HANDLE(eqfsi64,2) return emit_eqfsi(x, y);
+    HANDLE(eqfui64,2) return emit_eqfui(x, y);
     HANDLE(ltfsi64,2) {
         x = FP(x);
         fy = JL_INT(y);
@@ -1175,8 +1205,6 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     }
 #endif
 
-    HANDLE(fptoui,1) return builder.CreateFPToUI(FP(x), JL_INTT(x->getType()));
-    HANDLE(fptosi,1) return builder.CreateFPToSI(FP(x), JL_INTT(x->getType()));
     HANDLE(fpsiround,1)
     HANDLE(fpuiround,1)
     {
@@ -1253,10 +1281,14 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(powi_llvm,2) {
         x = FP(x);
         y = JL_INT(y);
-        Type *ts[1] = { x->getType() };
-        return builder.CreateCall2(Intrinsic::getDeclaration(jl_Module, Intrinsic::powi,
-                                                             ArrayRef<Type*>(ts)),
-                                   x, y);
+        Type *tx = x->getType();
+        // TODO: use powi when LLVM is fixed. issue #6506
+        // http://llvm.org/bugs/show_bug.cgi?id=19530
+        Type *ts[2] = { tx, tx };
+        return builder.
+            CreateCall2(jl_Module->getOrInsertFunction(tx==T_float64 ? "pow" : "powf",
+                                                       FunctionType::get(tx, ts, false)),
+                        x, builder.CreateSIToFP(y, tx));
     }
     default:
         assert(false);

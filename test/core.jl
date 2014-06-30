@@ -102,6 +102,13 @@ end
 @test typeintersect(Type{(Int...)}, Type{(Bool...)}) === None
 @test typeintersect((Bool,Int...), (Bool...)) === (Bool,)
 
+let T = TypeVar(:T,Union(Float32,Float64))
+    @test typeintersect(AbstractArray, Matrix{T}) == Matrix{T}
+end
+let T = TypeVar(:T,Union(Float32,Float64),true)
+    @test typeintersect(AbstractArray, Matrix{T}) == Matrix{T}
+end
+
 @test isa(Int,Type{TypeVar(:T,Number)})
 @test !isa(DataType,Type{TypeVar(:T,Number)})
 @test DataType <: Type{TypeVar(:T,Type)}
@@ -346,6 +353,12 @@ glotest()
 @test glob_x == 88
 @test loc_x == 10
 
+# issue #7272
+@test expand(parse("let
+              global x = 2
+              local x = 1
+              end")) == Expr(:error, "variable \"x\" declared both local and global")
+
 # let - new variables, including undefinedness
 function let_undef()
     first = true
@@ -382,8 +395,17 @@ end
 @test a[2](10) == 12
 @test a[3](10) == 13
 
-# syntax
+# ? syntax
 @test (true ? 1 : false ? 2 : 3) == 1
+
+# issue #7252
+begin
+    local a
+    1 > 0 ? a=2 : a=3
+    @test a == 2
+    1 < 0 ? a=2 : a=3
+    @test a == 3
+end
 
 # tricky space sensitive syntax cases
 @test [-1 ~1] == [(-1) (~1)]
@@ -521,6 +543,22 @@ begin
     @test glo == 18
 end
 
+# issue #7307
+function test7307(a, ret)
+    try
+        try
+            ret && return a
+        finally
+            push!(a, "inner")
+        end
+    finally
+        push!(a, "outer")
+    end
+    return a
+end
+@test test7307({}, true) == {"inner","outer"}
+@test test7307({}, false) == {"inner","outer"}
+
 # chained and multiple assignment behavior (issue #2913)
 begin
     local x, a, b, c, d, e
@@ -654,6 +692,20 @@ end
 @test unsafe_pointer_to_objref(ccall(:jl_call1, Ptr{Void}, (Any,Any),
                                      x -> x+1, 314158)) == 314159
 @test unsafe_pointer_to_objref(pointer_from_objref(e+pi)) == e+pi
+
+begin
+    local a, aa
+    a = [1,2,3]
+    aa = pointer_to_array(pointer(a), length(a))
+    @test aa == a
+    aa = pointer_to_array(pointer(a), (length(a),))
+    @test aa == a
+    aa = pointer_to_array(pointer(a), uint(length(a)))
+    @test aa == a
+    aa = pointer_to_array(pointer(a), uint16(length(a)))
+    @test aa == a
+    @test_throws ErrorException pointer_to_array(pointer(a), -3)
+end
 
 immutable FooBar
     foo::Int
@@ -1207,8 +1259,8 @@ end # module
 abstract IT4805{N, T}
 
 let
-    T = TypeVar(:T,Int)
-    N = TypeVar(:N)
+    T = TypeVar(:T,Int,true)
+    N = TypeVar(:N,true)
     @test typeintersect(Type{IT4805{1,T}}, Type{TypeVar(:_,IT4805{N,Int})}) != None
 end
 
@@ -1602,7 +1654,121 @@ end
 end
 
 let
-    z = A5876.@x()
+    local z = A5876.@x()
     @test z == 42
     @test f5876(Int) === Int
 end
+
+# issue #6387
+bitstype 64 Date6387{C}
+
+type DateRange6387{C} <: Range{Date6387{C}}
+end
+
+type ObjMember
+    member::DateRange6387
+end
+
+obj = ObjMember(DateRange6387{Int64}())
+
+function v6387{T}(r::Range{T})
+    a = Array(T,1)
+    a[1] = Intrinsics.box(Date6387{Int64}, Intrinsics.unbox(Int64,int64(1)))
+    a
+end
+
+function day_in(obj::ObjMember)
+    x = v6387(obj.member)
+    @test isa(x, Vector{Date6387{Int64}})
+    @test isa(x[1], Date6387{Int64})
+end
+day_in(obj)
+
+# issue #6784
+@test ndims(Array(Array{Float64},3,5)) == 2
+@test ndims(Array(Array,3,5)) == 2
+
+# issue #6793
+function segfault6793(;gamma=1)
+    A = 1
+    B = 1
+    print()
+    return
+    -gamma
+    nothing
+end
+@test segfault6793() === nothing
+
+# issue #6896
+g6896(x) = x::Int=x
+@test g6896(5.0) === 5.0
+f6896(x) = y::Int=x
+@test f6896(5.0) === 5.0
+
+# issue #6938
+module M6938
+macro mac()
+    quote
+        let
+            y = 0
+            y
+        end
+    end
+end
+end
+@test @M6938.mac() == 0
+
+# issue #7012
+let x = zeros(2)
+    x[1]::Float64 = 1
+    @test x == [1.0, 0.0]
+    @test_throws TypeError (x[1]::Int = 1)
+
+    x[1]::Float64 += 1
+    @test x == [2.0, 0.0]
+    @test_throws TypeError (x[1]::Int += 1)
+end
+
+# issue #6980
+abstract A6980
+type B6980 <: A6980 end
+f6980(::Union(Int, Float64), ::A6980) = false
+f6980(::Union(Int, Float64), ::B6980) = true
+@test f6980(1, B6980())
+
+# issue #7049
+typealias Maybe7049{T} Union(T,Nothing)
+function ttt7049(;init::Maybe7049{Union(String,(Int,Char))} = nothing)
+    string("init=", init)
+end
+@test ttt7049(init="a") == "init=a"
+
+# issue #7074
+let z{T<:Union(Float64,Complex{Float64},Float32,Complex{Float32})}(A::StridedMatrix{T}) = T,
+    S = zeros(Complex,2,2)
+    @test_throws MethodError z(S)
+end
+
+# issue #7062
+f7062{t,n}(::Type{Array{t}}  , ::Array{t,n}) = (t,n,1)
+f7062{t,n}(::Type{Array{t,n}}, ::Array{t,n}) = (t,n,2)
+@test f7062(Array{Int,1}, [1,2,3]) === (Int,1,2)
+@test f7062(Array{Int}  , [1,2,3]) === (Int,1,1)
+
+# issue #7302
+function test7302()
+    t = [Uint64][1]
+    convert(t, "5")
+end
+@test_throws MethodError test7302()
+
+macro let_with_uninit()
+    quote
+        let x
+            x = 1
+            x+1
+        end
+    end
+end
+
+@test @let_with_uninit() == 2

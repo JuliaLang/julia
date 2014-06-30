@@ -6,6 +6,9 @@ time() = ccall(:clock_now, Float64, ())
 # high-resolution relative time, in nanoseconds
 time_ns() = ccall(:jl_hrtime, Uint64, ())
 
+# total time spend in garbage collection, in nanoseconds
+gc_time_ns() = ccall(:jl_gc_total_hrtime, Uint64, ())
+
 # total number of bytes allocated so far
 gc_bytes() = ccall(:jl_gc_total_bytes, Int64, ())
 
@@ -33,14 +36,25 @@ function toc()
 end
 
 # print elapsed time, return expression value
+
+function time_print(t, b, g)
+    if 0 < g
+        @printf("elapsed time: %s seconds (%d bytes allocated, %.2f%% gc time)\n", t/1e9, b, 100*g/t)
+    else
+        @printf("elapsed time: %s seconds (%d bytes allocated)\n", t/1e9, b)
+    end
+end
+
 macro time(ex)
     quote
         local b0 = gc_bytes()
         local t0 = time_ns()
+        local g0 = gc_time_ns()
         local val = $(esc(ex))
+        local g1 = gc_time_ns()
         local t1 = time_ns()
         local b1 = gc_bytes()
-        println("elapsed time: ", (t1-t0)/1e9, " seconds (", b1-b0, " bytes allocated)")
+        time_print(t1-t0, b1-b0, g1-g0)
         val
     end
 end
@@ -70,15 +84,17 @@ macro allocated(ex)
     end
 end
 
-# print nothing, return value, elapsed time & bytes allocated
+# print nothing, return value, elapsed time, bytes allocated & gc time
 macro timed(ex)
     quote
         local b0 = gc_bytes()
         local t0 = time_ns()
+        local g0 = gc_time_ns()
         local val = $(esc(ex))
+        local g1 = gc_time_ns()
         local t1 = time_ns()
         local b1 = gc_bytes()
-        val, (t1-t0)/1e9, b1-b0
+        val, (t1-t0)/1e9, b1-b0, (g1-g0)/1e9
     end
 end
 

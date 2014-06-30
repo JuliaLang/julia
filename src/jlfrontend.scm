@@ -51,14 +51,18 @@
 
 ;; find variables that should be forced to be global in a toplevel expr
 (define (toplevel-expr-globals e)
-  (delete-duplicates
+  (diff
+   (delete-duplicates
+    (append
+     ;; vars assigned at the outer level
+     (filter (lambda (x) (not (some-gensym? x))) (find-assigned-vars e '()))
+     ;; vars declared const outside any scope block
+     (find-decls 'const e '())
+     ;; vars assigned anywhere, if they have been defined as global
+     (filter defined-julia-global (find-possible-globals e))))
    (append
-    ;; vars assigned at the outer level
-    (filter (lambda (x) (not (some-gensym? x))) (find-assigned-vars e '()))
-    ;; vars declared const outside any scope block
-    (find-decls 'const e '())
-    ;; vars assigned anywhere, if they have been defined as global
-    (filter defined-julia-global (find-possible-globals e)))))
+    (find-decls 'local  e '())
+    (find-decls 'local! e '()))))
 
 ;; return a lambda expression representing a thunk for a top-level expression
 ;; note: expansion of stuff inside module is delayed, so the contents obey
@@ -197,6 +201,9 @@
 					      (eq? (car e) 'continue)))
 			   e
 			   (expand-toplevel-expr e))))))))))
+
+(define (jl-parser-current-lineno)
+  (input-port-line (ts:port current-token-stream)))
 
 ; expand a piece of raw surface syntax to an executable thunk
 (define (jl-expand-to-thunk expr)

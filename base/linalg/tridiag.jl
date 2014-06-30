@@ -22,6 +22,7 @@ full{T}(M::SymTridiagonal{T}) = convert(Matrix{T}, M)
 convert{T}(::Type{SymTridiagonal{T}}, S::SymTridiagonal) = SymTridiagonal(convert(Vector{T}, S.dv), convert(Vector{T}, S.ev))
 convert{T}(::Type{AbstractMatrix{T}}, S::SymTridiagonal) = SymTridiagonal(convert(Vector{T}, S.dv), convert(Vector{T}, S.ev))
 convert{T}(::Type{Matrix{T}}, M::SymTridiagonal{T})=diagm(M.dv)+diagm(M.ev,-1)+conj(diagm(M.ev,1))
+convert{T}(::Type{Matrix}, M::SymTridiagonal{T}) = convert(Matrix{T}, M)
 
 size(m::SymTridiagonal) = (length(m.dv), length(m.dv))
 size(m::SymTridiagonal, d::Integer) = d<1 ? error("dimension out of range") : (d<=2 ? length(m.dv) : 1)
@@ -172,6 +173,7 @@ function convert{T}(::Type{Matrix{T}}, M::Tridiagonal{T})
     end
     A
 end
+convert{T}(::Type{Matrix}, M::Tridiagonal{T}) = convert(Matrix{T}, M)
 function similar(M::Tridiagonal, T, dims::Dims)
     if length(dims) != 2 || dims[1] != dims[2]
         throw(DimensionMismatch("Tridiagonal matrices must be square"))
@@ -203,7 +205,7 @@ end
 ###################
 
 +(A::Tridiagonal, B::Tridiagonal) = Tridiagonal(A.dl+B.dl, A.d+B.d, A.du+B.du)
--(A::Tridiagonal, B::Tridiagonal) = Tridiagonal(A.dl-B.dl, A.d-B.d, A.du+B.du)
+-(A::Tridiagonal, B::Tridiagonal) = Tridiagonal(A.dl-B.dl, A.d-B.d, A.du-B.du)
 *(A::Tridiagonal, B::Number) = Tridiagonal(A.dl*B, A.d*B, A.du*B)
 *(B::Number, A::Tridiagonal) = A*B
 /(A::Tridiagonal, B::Number) = Tridiagonal(A.dl/B, A.d/B, A.du/B)

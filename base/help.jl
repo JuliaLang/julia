@@ -91,7 +91,7 @@ function help(io::IO, fname::String, obj=0)
     init_help()
     found = false
     if haskey(FUNCTION_DICT, fname)
-        print_help_entries(FUNCTION_DICT[fname])
+        print_help_entries(io, FUNCTION_DICT[fname])
         found = true
     elseif haskey(MODULE_DICT, fname)
         allmods = MODULE_DICT[fname]

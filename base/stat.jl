@@ -96,7 +96,6 @@ for f in {
     :issetgid
     :issticky
     :isreadable
-    :iswritable
     :isexecutable
     :uperm
     :gperm
@@ -106,6 +105,9 @@ for f in {
 end
 
 islink(path...) = islink(lstat(path...))
+
+@windows_only iswritable(path...) = ccall(:_waccess, Cint, (Ptr{Uint16}, Cint), utf16(joinpath(path...)), 2) == 0
+@unix_only    iswritable(path...) = ccall(:access, Cint, (Ptr{Uint8}, Cint), joinpath(path...), 2) == 0
 
 # some convenience functions
 

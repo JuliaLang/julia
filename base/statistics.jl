@@ -1,3 +1,5 @@
+##### mean #####
+
 function mean(iterable)
     state = start(iterable)
     if done(iterable, state)
@@ -12,106 +14,29 @@ function mean(iterable)
     end
     return total/count
 end
-mean(v::AbstractArray) = sum(v) / length(v)
+mean(A::AbstractArray) = sum(A) / length(A)
 
-function mean!{T}(r::AbstractArray{T}, v::AbstractArray)
-    sum!(r, v; init=true)
-    rs = convert(T, length(v) / length(r))
+function mean!{T}(R::AbstractArray{T}, A::AbstractArray)
+    sum!(R, A; init=true)
+    lenR = length(R)
+    rs = convert(T, length(A) / lenR)
     if rs != 1
-        for i = 1:length(r)
-            @inbounds r[i] /= rs
+        for i = 1:lenR
+            @inbounds R[i] /= rs
         end
     end
-    return r
+    return R
 end
 
-meantype{T}(::Type{T}) = typeof((zero(T) + zero(T)) / 2)
-mean{T}(v::AbstractArray{T}, region) = 
-    mean!(Array(meantype(T), reduced_dims(size(v), region)), v)
+momenttype{T}(::Type{T}) = typeof((zero(T) + zero(T)) / 2)
+momenttype(::Type{Float32}) = Float32
+momenttype{T<:Union(Float64,Int32,Int64,Uint32,Uint64)}(::Type{T}) = Float64
 
-function median!{T<:Real}(v::AbstractVector{T}; checknan::Bool=true)
-    isempty(v) && error("median of an empty array is undefined")
-    checknan && any(isnan,v) && error("median of an array with NaNs is undefined")
-    n = length(v)
-    if isodd(n)
-        return select!(v,div(n+1,2))
-    else
-        m = select!(v, div(n,2):div(n,2)+1)
-        return (m[1] + m[2])/2
-    end
-end
-median{T<:Real}(v::AbstractArray{T}; checknan::Bool=true) =
-    median!(vec(copy(v)), checknan=checknan)
-median{T}(v::AbstractArray{T}, region; checknan::Bool=true) = 
-    mapslices( x->median(x; checknan=checknan), v, region )
+mean{T}(A::AbstractArray{T}, region) = 
+    mean!(Array(momenttype(T), reduced_dims(size(A), region)), A)
 
 
-## variances
-
-function varzm_pairwise(A::AbstractArray, i1::Int, n::Int)
-    if n < 256
-        @inbounds s = abs2(A[i1])
-        for i=i1+1:i1+n-1
-            @inbounds s += abs2(A[i])
-        end
-        return s
-    else
-        n2 = div(n,2)
-        return varzm_pairwise(A, i1, n2) + varzm_pairwise(A, i1+n2, n-n2)
-    end
-end
-
-function varm_pairwise(A::AbstractArray, m::Number, i1::Int, n::Int) # see sum_pairwise
-    if n < 256
-        @inbounds s = abs2(A[i1] - m)
-        for i = i1+1:i1+n-1
-            @inbounds s += abs2(A[i] - m)
-        end
-        return s
-    else
-        n2 = div(n,2)
-        return varm_pairwise(A, m, i1, n2) + varm_pairwise(A, m, i1+n2, n-n2)
-    end
-end
-
-sumabs2(v::AbstractArray) = varzm_pairwise(v, 1, length(v))
-sumabs2(v::AbstractArray, region) = sum(abs2(v), region)
-
-function varzm(v::AbstractArray; corrected::Bool=true)
-    n = length(v)
-    n == 0 && return NaN
-    return sumabs2(v) / (n - int(corrected))
-end
-
-function varzm(v::AbstractArray, region; corrected::Bool=true)
-    cn = regionsize(v, region) - int(corrected)
-    sumabs2(v, region) / cn    
-end
-
-function varm(v::AbstractArray, m::Number; corrected::Bool=true)
-    n = length(v)
-    n == 0 && return NaN
-    return varm_pairwise(v, m, 1, n) / (n - int(corrected))
-end
-
-function varm(v::AbstractArray, m::AbstractArray, region; corrected::Bool=true)
-    cn = regionsize(v, region) - int(corrected)
-    sumabs2(v .- m, region) / cn
-end
-
-function var(v::AbstractArray; corrected::Bool=true, mean=nothing)
-    mean == 0 ? varzm(v; corrected=corrected) :
-    mean == nothing ? varm(v, Base.mean(v); corrected=corrected) :
-    isa(mean, Number) ? varm(v, mean; corrected=corrected) :
-    error("Invalid value of mean.")
-end
-
-function var(v::AbstractArray, region; corrected::Bool=true, mean=nothing)
-    mean == 0 ? varzm(v, region; corrected=corrected) :
-    mean == nothing ? varm(v, Base.mean(v, region), region; corrected=corrected) :
-    isa(mean, AbstractArray) ? varm(v, mean, region; corrected=corrected) :
-    error("Invalid value of mean.")
-end
+##### variances #####
 
 function var(iterable; corrected::Bool=true, mean=nothing)
     state = start(iterable)
@@ -149,6 +74,110 @@ function var(iterable; corrected::Bool=true, mean=nothing)
     end
 end
 
+function varzm{T}(A::AbstractArray{T}; corrected::Bool=true)
+    n = length(A)
+    n == 0 && return convert(momenttype(T), NaN)
+    return sumabs2(A) / (n - int(corrected))
+end
+
+function varzm!{S}(R::AbstractArray{S}, A::AbstractArray; corrected::Bool=true)
+    if isempty(A)
+        fill!(R, convert(S, NaN))
+    else
+        rn = div(length(A), length(r)) - int(corrected)
+        scale!(sumabs2!(R, A; init=true), convert(S, 1/rn))
+    end
+    return R
+end
+
+varzm{T}(A::AbstractArray{T}, region; corrected::Bool=true) = 
+    varzm!(Array(momenttype(T), reduced_dims(A, region)), A; corrected=corrected)
+
+function centralize_sumabs2(A::AbstractArray, m::Number, i::Int, ilast::Int) 
+    # caller should ensure (i + 1 >= ilast, i.e. length >= 2)
+    if i + 512 > ilast
+        @inbounds s = abs2(A[i] - m) + abs2(A[i+1] - m)
+        i += 1
+        while i < ilast
+            @inbounds s += abs2(A[i+=1] - m)
+        end
+        return s
+    else
+        imid = (i + ilast) >>> 1
+        return centralize_sumabs2(A, m, i, imid) + centralize_sumabs2(A, m, imid+1, ilast)
+    end
+end
+
+@ngenerate N typeof(R) function centralize_sumabs2!{S,T,N}(R::AbstractArray{S}, A::AbstractArray{T,N}, means::AbstractArray)
+    # following the implementation of _mapreducedim! at base/reducedim.jl
+    lsiz = check_reducdims(R, A)
+    isempty(R) || fill!(R, zero(S))
+    isempty(A) && return R
+    @nextract N sizeR d->size(R,d)
+    sizA1 = size(A, 1)
+
+    if has_fast_linear_indexing(A) && lsiz > 16
+        # use centralize_sumabs2, which is probably better tuned to achieve higher performance
+        nslices = div(length(A), lsiz)
+        ibase = 0
+        for i = 1:nslices
+            @inbounds R[i] = centralize_sumabs2(A, means[i], ibase+1, ibase+lsiz)
+            ibase += lsiz
+        end
+    elseif size(R, 1) == 1 && sizA1 > 1
+        # keep the accumulator as a local variable when reducing along the first dimension
+        @nloops N i d->(d>1? (1:size(A,d)) : (1:1)) d->(j_d = sizeR_d==1 ? 1 : i_d) begin
+            @inbounds r = (@nref N R j)
+            @inbounds m = (@nref N means j) 
+            for i_1 = 1:sizA1
+                @inbounds r += abs2((@nref N A i) - m)
+            end
+            @inbounds (@nref N R j) = r
+        end 
+    else
+        # general implementation
+        @nloops N i A d->(j_d = sizeR_d==1 ? 1 : i_d) begin
+            @inbounds (@nref N R j) += abs2((@nref N A i) - (@nref N means j))
+        end
+    end
+    return R   
+
+end
+
+function varm{T}(A::AbstractArray{T}, m::Number; corrected::Bool=true)
+    n = length(A)
+    n == 0 && return convert(momenttype(T), NaN)
+    return centralize_sumabs2(A, m, 1, n) / (n - int(corrected))
+end
+
+function varm!{S}(R::AbstractArray{S}, A::AbstractArray, m::AbstractArray; corrected::Bool=true)
+    if isempty(A)
+        fill!(R, convert(S, NaN))
+    else
+        rn = div(length(A), length(R)) - int(corrected)
+        scale!(centralize_sumabs2!(R, A, m), convert(S, 1/rn))
+    end
+    return R
+end
+
+varm{T}(A::AbstractArray{T}, m::AbstractArray, region; corrected::Bool=true) = 
+    varm!(Array(momenttype(T), reduced_dims(size(A), region)), A, m; corrected=corrected)
+
+
+function var(A::AbstractArray; corrected::Bool=true, mean=nothing)
+    mean == 0 ? varzm(A; corrected=corrected) :
+    mean == nothing ? varm(A, Base.mean(A); corrected=corrected) :
+    isa(mean, Number) ? varm(A, mean; corrected=corrected) :
+    error("Invalid value of mean.")
+end
+
+function var(A::AbstractArray, region; corrected::Bool=true, mean=nothing)
+    mean == 0 ? varzm(A, region; corrected=corrected) :
+    mean == nothing ? varm(A, Base.mean(A, region), region; corrected=corrected) :
+    isa(mean, AbstractArray) ? varm(A, mean, region; corrected=corrected) :
+    error("Invalid value of mean.")
+end
+
 varm(iterable, m::Number; corrected::Bool=true) =
     var(iterable, corrected=corrected, mean=m)
 
@@ -165,23 +194,24 @@ function var(v::Range)
     return abs2(s) * (l + 1) * l / 12
 end
 
-## standard deviation
 
-function sqrt!(v::AbstractArray) 
-    for i = 1:length(v)
-        v[i] = sqrt(v[i])
+##### standard deviation #####
+
+function sqrt!(A::AbstractArray) 
+    for i = 1:length(A)
+        @inbounds A[i] = sqrt(A[i])
     end
-    v
+    A
 end
 
-stdm(v::AbstractArray, m::Number; corrected::Bool=true) = 
-    sqrt(varm(v, m; corrected=corrected))
+stdm(A::AbstractArray, m::Number; corrected::Bool=true) = 
+    sqrt(varm(A, m; corrected=corrected))
 
-std(v::AbstractArray; corrected::Bool=true, mean=nothing) = 
-    sqrt(var(v; corrected=corrected, mean=mean))
+std(A::AbstractArray; corrected::Bool=true, mean=nothing) = 
+    sqrt(var(A; corrected=corrected, mean=mean))
 
-std(v::AbstractArray, region; corrected::Bool=true, mean=nothing) = 
-    sqrt!(var(v, region; corrected=corrected, mean=mean))
+std(A::AbstractArray, region; corrected::Bool=true, mean=nothing) = 
+    sqrt!(var(A, region; corrected=corrected, mean=mean))
 
 std(iterable; corrected::Bool=true, mean=nothing) =
     sqrt(var(iterable, corrected=corrected, mean=mean))
@@ -189,7 +219,8 @@ std(iterable; corrected::Bool=true, mean=nothing) =
 stdm(iterable, m::Number; corrected::Bool=true) =
     std(iterable, corrected=corrected, mean=m)
 
-## pearson covariance functions ##
+
+###### covariance ######
 
 # auxiliary functions
 
@@ -207,7 +238,6 @@ end
 
 _vmean(x::AbstractVector, vardim::Int) = mean(x)
 _vmean(x::AbstractMatrix, vardim::Int) = mean(x, vardim)
-
 
 # core functions
 
@@ -284,6 +314,9 @@ function cov(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, corrected:
     end
 end
 
+
+##### correlation #####
+
 # cov2cor!
 
 function cov2cor!{T}(C::AbstractMatrix{T}, xsd::AbstractArray)
@@ -335,8 +368,7 @@ function cov2cor!(C::AbstractMatrix, xsd::AbstractArray, ysd::AbstractArray)
     return C
 end
 
-
-# # corzm (non-exported, with centered data)
+# corzm (non-exported, with centered data)
 
 corzm{T}(x::AbstractVector{T}) = float(one(T) * one(T))
 
@@ -417,6 +449,78 @@ function cor(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, mean=nothi
         error("Invalid value of mean.")
     end
 end
+
+
+##### median & quantiles #####
+
+middle(x::Union(Bool,Int8,Int16,Int32,Int64,Int128,Uint8,Uint16,Uint32,Uint64,Uint128)) = float64(x)
+middle(x::FloatingPoint) = x
+middle(x::Float16) = float32(x)
+middle(x::Real) = (x + zero(x)) / 1
+middle(x::Real, y::Real) = (x + y) / 2
+middle(a::Range) = middle(a[1], a[end])
+middle(a::AbstractArray) = ((v1, v2) = extrema(a); middle(v1, v2))
+
+function median!{T}(v::AbstractVector{T}; checknan::Bool=true)
+    isempty(v) && error("median of an empty array is undefined")
+    if checknan && T<:FloatingPoint
+        for x in v
+            isnan(x) && return x
+        end
+    end
+    n = length(v)
+    if isodd(n)
+        return middle(select!(v,div(n+1,2)))
+    else
+        m = select!(v, div(n,2):div(n,2)+1)
+        return middle(m[1], m[2])
+    end
+end
+
+median{T}(v::AbstractArray{T}; checknan::Bool=true) =
+    median!(vec(copy(v)), checknan=checknan)
+median{T}(v::AbstractArray{T}, region; checknan::Bool=true) = 
+    mapslices( x->median(x; checknan=checknan), v, region )
+
+# for now, use the R/S definition of quantile; may want variants later
+# see ?quantile in R -- this is type 7
+# TODO: need faster implementation (use select!?)
+#
+function quantile!(v::AbstractVector, q::AbstractVector)
+    isempty(v) && error("empty data array")
+    isempty(q) && error("empty quantile array")
+
+    # make sure the quantiles are in [0,1]
+    q = bound_quantiles(q)
+
+    lv = length(v)
+    lq = length(q)
+
+    index = 1 .+ (lv-1)*q
+    lo = ifloor(index)
+    hi = iceil(index)
+    sort!(v)
+    isnan(v[end]) && error("quantiles are undefined in presence of NaNs")
+    i = find(index .> lo)
+    r = float(v[lo])
+    h = (index.-lo)[i]
+    r[i] = (1.-h).*r[i] + h.*v[hi[i]]
+    return r
+end
+quantile(v::AbstractVector, q::AbstractVector) = quantile!(copy(v),q)
+quantile(v::AbstractVector, q::Number) = quantile(v,[q])[1]
+
+function bound_quantiles(qs::AbstractVector)
+    epsilon = 100*eps()
+    if (any(qs .< -epsilon) || any(qs .> 1+epsilon))
+        error("quantiles out of [0,1] range")
+    end
+    [min(1,max(0,q)) for q = qs]
+end
+
+
+
+##### histogram #####
 
 ## nice-valued ranges for histograms
 
@@ -546,39 +650,3 @@ hist2d(v::AbstractMatrix, n1::Integer, n2::Integer) =
 hist2d(v::AbstractMatrix, n::Integer) = hist2d(v, n, n)
 hist2d(v::AbstractMatrix) = hist2d(v, sturges(size(v,1)))
 
-
-## quantiles ##
-
-# for now, use the R/S definition of quantile; may want variants later
-# see ?quantile in R -- this is type 7
-function quantile!(v::AbstractVector, q::AbstractVector)
-    isempty(v) && error("empty data array")
-    isempty(q) && error("empty quantile array")
-
-    # make sure the quantiles are in [0,1]
-    q = bound_quantiles(q)
-
-    lv = length(v)
-    lq = length(q)
-
-    index = 1 .+ (lv-1)*q
-    lo = ifloor(index)
-    hi = iceil(index)
-    sort!(v)
-    isnan(v[end]) && error("quantiles are undefined in presence of NaNs")
-    i = find(index .> lo)
-    r = float(v[lo])
-    h = (index.-lo)[i]
-    r[i] = (1.-h).*r[i] + h.*v[hi[i]]
-    return r
-end
-quantile(v::AbstractVector, q::AbstractVector) = quantile!(copy(v),q)
-quantile(v::AbstractVector, q::Number) = quantile(v,[q])[1]
-
-function bound_quantiles(qs::AbstractVector)
-    epsilon = 100*eps()
-    if (any(qs .< -epsilon) || any(qs .> 1+epsilon))
-        error("quantiles out of [0,1] range")
-    end
-    [min(1,max(0,q)) for q = qs]
-end

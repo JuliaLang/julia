@@ -3,6 +3,7 @@ include $(JULIAHOME)/Make.inc
 
 override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
+override CPPFLAGS += $(JCPPFLAGS)
 
 OBJS = hashing.o timefuncs.o ptrhash.o operators.o \
 	utf8.o ios.o htable.o bitvector.o \

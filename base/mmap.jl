@@ -1,15 +1,15 @@
 ### Generic interface ###
 
 # Arrays
-mmap_array{T,N}(::Type{T}, dims::NTuple{N,Int}, s::IO) = mmap_array(T, dims, s, position(s))
+mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::IO) = mmap_array(T, dims, s, position(s))
 
 msync{T}(A::Array{T}) = msync(pointer(A), length(A)*sizeof(T))
 
 # BitArrays
-mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Int}, s::IOStream, offset::FileOffset) =
+mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Integer}, s::IOStream, offset::FileOffset) =
     mmap_bitarray(dims, s, offset)
-mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Int}, s::IOStream) = mmap_bitarray(dims, s, position(s))
-mmap_bitarray{N}(dims::NTuple{N,Int}, s::IOStream) = mmap_bitarray(dims, s, position(s))
+mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Integer}, s::IOStream) = mmap_bitarray(dims, s, position(s))
+mmap_bitarray{N}(dims::NTuple{N,Integer}, s::IOStream) = mmap_bitarray(dims, s, position(s))
 
 msync(B::BitArray) = msync(pointer(B.chunks), length(B.chunks)*sizeof(Uint64))
 
@@ -18,9 +18,12 @@ msync(B::BitArray) = msync(pointer(B.chunks), length(B.chunks)*sizeof(Uint64))
 @unix_only begin
 # Low-level routines
 # These are needed for things like MAP_ANONYMOUS
-function mmap(len::Integer, prot::Integer, flags::Integer, fd::Integer, offset::FileOffset)
+function mmap(len::Integer, prot::Integer, flags::Integer, fd, offset::Integer)
     const pagesize::Int = ccall(:jl_getpagesize, Clong, ())
     # Check that none of the computations will overflow
+    if len < 0
+        error("requested size is negative")
+    end
     if len > typemax(Int)-pagesize
         error("requested size is too large")
     end
@@ -95,7 +98,7 @@ function mmap_stream_settings(s::IO)
 end
 
 # Mmapped-array constructor
-function mmap_array{T,N,TInt<:Integer}(::Type{T}, dims::NTuple{N,TInt}, s::IO, offset::FileOffset; grow::Bool=true)
+function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::IO, offset::FileOffset; grow::Bool=true)
     prot, flags, iswrite = mmap_stream_settings(s)
     len = prod(dims)*sizeof(T)
     if len > typemax(Int)
@@ -106,7 +109,7 @@ function mmap_array{T,N,TInt<:Integer}(::Type{T}, dims::NTuple{N,TInt}, s::IO, o
     else
         pmap, delta = mmap(len, prot, flags, fd(s), offset)
     end
-    A = pointer_to_array(pointer(T, uint(pmap)+delta), dims)
+    A = pointer_to_array(convert(Ptr{T}, uint(pmap)+delta), dims)
     finalizer(A,x->munmap(pmap,len+delta))
     return A
 end
@@ -116,29 +119,37 @@ end
 ### Windows implementation ###
 @windows_only begin
 # Mmapped-array constructor
-function mmap_array{T,N,TInt<:Integer}(::Type{T}, dims::NTuple{N,TInt}, s::IO, offset::FileOffset)
+function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::IO, offset::FileOffset)
     shandle = _get_osfhandle(RawFD(fd(s)))
     if int(shandle.handle) == -1
-        error("could not get handle for file to map")
+        error("could not get handle for file to map: $(FormatMessage())")
     end
     ro = isreadonly(s)
     flprotect = ro ? 0x02 : 0x04
     len = prod(dims)*sizeof(T)
-    if len > typemax(Int)
+    const granularity::Int = ccall(:jl_getallocationgranularity, Clong, ())
+    if len < 0
+        error("requested size is negative")
+    end
+    if len > typemax(Int)-granularity
         error("file is too large to memory-map on this platform")
     end
-    szarray = convert(Csize_t, len)
-    szfile = szarray + convert(Csize_t, offset)
-    mmaphandle = ccall(:CreateFileMappingA, stdcall, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Cint, Cint, Cint, Ptr{Void}), shandle.handle, C_NULL, flprotect, szfile>>32, szfile&0xffffffff, C_NULL)
+    # Set the offset to a page boundary
+    offset_page::FileOffset = div(offset, granularity)*granularity
+    szfile = convert(Csize_t, len + offset)
+    szarray = szfile - convert(Csize_t, offset_page)    
+    mmaphandle = ccall(:CreateFileMappingW, stdcall, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Cint, Cint, Cint, Ptr{Uint16}),
+        shandle.handle, C_NULL, flprotect, szfile>>32, szfile&typemax(Uint32), C_NULL)
     if mmaphandle == C_NULL
-        error("could not create file mapping")
+        error("could not create file mapping: $(FormatMessage())")
     end
     access = ro ? 4 : 2
-    viewhandle = ccall(:MapViewOfFile, stdcall, Ptr{Void}, (Ptr{Void}, Cint, Cint, Cint, Csize_t), mmaphandle, access, offset>>32, offset&0xffffffff, szarray)
+    viewhandle = ccall(:MapViewOfFile, stdcall, Ptr{Void}, (Ptr{Void}, Cint, Cint, Cint, Csize_t),
+        mmaphandle, access, offset_page>>32, offset_page&typemax(Uint32), szarray)
     if viewhandle == C_NULL
-        error("could not create mapping view")
+        error("could not create mapping view: $(FormatMessage())")
     end
-    A = pointer_to_array(pointer(T, viewhandle), dims)
+    A = pointer_to_array(convert(Ptr{T}, viewhandle+offset-offset_page), dims)
     finalizer(A, x->munmap(viewhandle, mmaphandle))
     return A
 end
@@ -147,21 +158,21 @@ function munmap(viewhandle::Ptr, mmaphandle::Ptr)
     status = bool(ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Void},), viewhandle))
     status |= bool(ccall(:CloseHandle, stdcall, Cint, (Ptr{Void},), mmaphandle))
     if !status
-        error("could not unmap view")
+        error("could not unmap view: $(FormatMessage())")
     end
 end
 
 function msync(p::Ptr, len::Integer)
     status = bool(ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Void}, Csize_t), p, len))
     if !status
-        error("could not msync")
+        error("could not msync: $(FormatMessage())")
     end
 end
 
 end
 
 # Mmapped-bitarray constructor
-function mmap_bitarray{N,TInt<:Integer}(dims::NTuple{N,TInt}, s::IOStream, offset::FileOffset)
+function mmap_bitarray{N}(dims::NTuple{N,Integer}, s::IOStream, offset::FileOffset)
     iswrite = !isreadonly(s)
     n = 1
     for d in dims

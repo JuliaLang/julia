@@ -128,7 +128,7 @@ function transpose!{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, T::SparseMatrixCSC{Tv,Ti})
     rowval_T = T.rowval
     nzval_T = T.nzval
 
-    nnzS = nfilled(S)
+    nnzS = nnz(S)
     colptr_S = S.colptr
     rowval_S = S.rowval
     nzval_S = S.nzval
@@ -147,7 +147,7 @@ end
 
 function transpose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     (nT, mT) = size(S)
-    nnzS = nfilled(S)    
+    nnzS = nnz(S)    
     rowval_S = S.rowval
 
     rowval_T = Array(Ti, nnzS)
@@ -155,7 +155,7 @@ function transpose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
 
     colptr_T = zeros(Ti, nT+1)
     colptr_T[1] = 1
-    @inbounds for i=1:nfilled(S)
+    @inbounds for i=1:nnz(S)
         colptr_T[rowval_S[i]+1] += 1
     end
     colptr_T = cumsum(colptr_T)
@@ -172,7 +172,7 @@ function ctranspose!{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, T::SparseMatrixCSC{Tv,Ti}
     rowval_T = T.rowval
     nzval_T = T.nzval
 
-    nnzS = nfilled(S)
+    nnzS = nnz(S)
     colptr_S = S.colptr
     rowval_S = S.rowval
     nzval_S = S.nzval
@@ -191,7 +191,7 @@ end
 
 function ctranspose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}) 
     (nT, mT) = size(S)
-    nnzS = nfilled(S)
+    nnzS = nnz(S)
     rowval_S = S.rowval
     
     rowval_T = Array(Ti, nnzS)
@@ -199,7 +199,7 @@ function ctranspose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
 
     colptr_T = zeros(Ti, nT+1)
     colptr_T[1] = 1
-    @inbounds for i=1:nfilled(S)
+    @inbounds for i=1:nnz(S)
         colptr_T[rowval_S[i]+1] += 1
     end
     colptr_T = cumsum(colptr_T)
@@ -335,7 +335,7 @@ end
 # Section 2.7: Removing entries from a matrix
 # http://www.cise.ufl.edu/research/sparse/CSparse/
 function fkeep!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f, other)
-    nzorig = nfilled(A)
+    nzorig = nnz(A)
     nz = 1
     for j = 1:A.n
         p = A.colptr[j]                 # record current position

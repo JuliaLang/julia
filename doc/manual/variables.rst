@@ -3,6 +3,26 @@
  Variables
 ***********
 
+A variable, in Julia, is a name associated (or bound) to a value. It's useful when you want to store a value (that you obtained after some math, for example) for later use. For example:
+
+.. doctest::
+
+    # Assign the value 10 to the variable x
+    julia> x = 10 
+    10
+    
+    # Doing math with x's value
+    julia> x + 1
+    11
+    
+    # Reassign x's value
+    julia> x = 1 + 1 
+    2
+    
+    # You can assign values of other types, like strings of text
+    julia> x = "Hello World!"
+    "Hello World!"
+
 Julia provides an extremely flexible system for naming variables.
 Variable names are case-sensitive, and have no semantic meaning (that is,
 the language will not treat variables differently based on their names).
@@ -13,7 +33,7 @@ the language will not treat variables differently based on their names).
 
 .. doctest::
 
-    julia> ix = 1.0
+    julia> x = 1.0
     1.0
 
     julia> y = -3
@@ -63,6 +83,9 @@ Julia will even let you redefine built-in constants and functions if needed:
     
     julia> pi
     3
+    
+    julia> sqrt(100)
+    10.0
     
     julia> sqrt = 4
     4

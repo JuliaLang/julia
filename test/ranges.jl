@@ -232,7 +232,16 @@ for T = (Float32, Float64,),# BigFloat),
     start = convert(T,a)/den
     step  = convert(T,s)/den
     stop  = convert(T,(a+(n-1)*s))/den
-    @test [start:step:stop] == T[a:s:a+(n-1)*s]./den
+    r = start:step:stop
+    @test [r] == T[a:s:a+(n-1)*s]./den
+    # issue #7420
+    n = length(r)
+    @test [r[1:n]] == [r]
+    @test [r[2:n]] == [r][2:end]
+    @test [r[1:3:n]] == [r][1:3:n]
+    @test [r[2:2:n]] == [r][2:2:n]
+    @test [r[n:-1:2]] == [r][n:-1:2]
+    @test [r[n:-2:1]] == [r][n:-2:1]
 end
 
 # near-equal ranges
@@ -245,12 +254,10 @@ let
     for r in Rs
         ar = collect(r)
         @test r != ar
-        @test !isequal(r, ar)
+        @test !isequal(r,ar)
         for s in Rs
             as = collect(s)
-
-            @test !isequal(r, s) || hash(r)==hash(s)
-
+            @test !isequal(r,s) || hash(r)==hash(s)
             @test (r==s) == (ar==as)
         end
     end
@@ -285,3 +292,32 @@ end
 
 # issue #6364
 @test length((1:64)*(pi/5)) == 64
+
+# issue #6973
+let r1 = 1.0:0.1:2.0, r2 = 1.0f0:0.2f0:3.0f0, r3 = 1:2:21
+    @test r1 + r1 == 2*r1
+    @test r1 + r2 == 2.0:0.3:5.0
+    @test (r1 + r2) - r2 == r1
+    @test r1 + r3 == convert(FloatRange{Float64}, r3) + r1
+    @test r3 + r3 == 2 * r3
+end
+
+# issue #7114
+r = -0.004532318104333742:1.2597349521122731e-5:0.008065031416788989
+@test length(r[1:end-1]) == length(r) - 1
+@test isa(r[1:2:end],Range) && length(r[1:2:end]) == div(length(r)+1, 2)
+@test_approx_eq r[3:5][2] r[4]
+@test_approx_eq r[5:-2:1][2] r[3]
+@test_throws BoundsError r[0:10]
+@test_throws BoundsError r[1:10000]
+
+r = linrange(1/3,5/7,6)
+@test length(r) == 6
+@test r[1] == 1/3
+@test abs(r[end] - 5/7) <= eps(5/7)
+r = linrange(0.25,0.25,1)
+@test length(r) == 1
+@test_throws Exception linrange(0.25,0.5,1)
+
+# issue #7426
+@test [typemax(Int):1:typemax(Int)] == [typemax(Int)]

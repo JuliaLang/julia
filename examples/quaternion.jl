@@ -1,3 +1,5 @@
+module Quaternions
+
 import Base: convert, promote_rule, show, real, imag, conj, abs, abs2, inv, +, -, /, *
 
 immutable Quaternion{T<:Real} <: Number
@@ -16,6 +18,7 @@ convert{T}(::Type{Quaternion{T}}, z::Complex) =
 convert{T}(::Type{Quaternion{T}}, z::Quaternion) =
     Quaternion(convert(T,z.q0), convert(T,z.q1), convert(T,z.q2), convert(T,z.q3))
 
+promote_rule{s,S}(::Type{MathConst{s}}, ::Type{Quaternion{S}}) = Quaternion{S}
 promote_rule{T,S}(::Type{Complex{T}}, ::Type{Quaternion{S}}) = Quaternion{promote_type(T,S)}
 promote_rule{S}(::Type{Bool}, ::Type{Quaternion{S}}) = Quaternion{S}
 promote_rule{T<:Real,S}(::Type{T}, ::Type{Quaternion{S}}) = Quaternion{promote_type(T,S)}
@@ -48,9 +51,4 @@ inv(z::Quaternion) = conj(z)/abs2(z)
                                                z.q0*w.q3 + z.q1*w.q2 - z.q2*w.q1 + z.q3*w.q0)
 (/)(z::Quaternion, w::Quaternion) = z*inv(w)
 
-q = Quaternion(1,0,0,0)
-x = Quaternion(0,1,1,1)
-
-println("q = $q")
-println("q*2.0+2 = $(q*2.0+2)")
-println("abs((-q+x*2)/4) = ", abs((-q+x*2)/4))
+end # module

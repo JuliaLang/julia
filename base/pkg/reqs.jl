@@ -46,7 +46,7 @@ immutable Requirement <: Line
 end
 
 # TODO: shouldn't be neccessary #4648
-Base.isequal(a::Line, b::Line) = (a.content == b.content)
+==(a::Line, b::Line) = a.content == b.content
 
 # general machinery for parsing REQUIRE files
 

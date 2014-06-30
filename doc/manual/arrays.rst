@@ -89,6 +89,56 @@ Function                              Description
 
 .. [#] *iid*, independently and identically distributed.
 
+Concatenation
+-------------
+
+Arrays can be constructed and also concatenated using the following
+functions:
+
+================ ======================================================
+Function         Description
+================ ======================================================
+``cat(k, A...)`` concatenate input n-d arrays along the dimension ``k``
+``vcat(A...)``   shorthand for ``cat(1, A...)``
+``hcat(A...)``   shorthand for ``cat(2, A...)``
+================ ======================================================
+
+Scalar values passed to these functions are treated as 1-element arrays.
+
+The concatenation functions are used so often that they have special syntax:
+
+=================== =========
+Expression          Calls
+=================== =========
+``[A B C ...]``     ``hcat``
+``[A, B, C, ...]``  ``vcat``
+``[A B; C D; ...]`` ``hvcat``
+=================== =========
+
+``hvcat`` concatenates in both dimension 1 (with semicolons) and dimension 2
+(with spaces).
+
+Typed array initializers
+------------------------
+
+An array with a specific element type can be constructed using the syntax
+``T[A, B, C, ...]``. This will construct a 1-d array with element type
+``T``, initialized to contain elements ``A``, ``B``, ``C``, etc.
+
+Special syntax is available for constructing arrays with element type
+``Any``:
+
+=================== =========
+Expression          Yields
+=================== =========
+``{A B C ...}``     A 1xN ``Any`` array
+``{A, B, C, ...}``  A 1-d ``Any`` array (vector)
+``{A B; C D; ...}`` A 2-d ``Any`` array
+=================== =========
+
+Note that this form does not do any concatenation; each argument becomes
+an element of the resulting array.
+
 Comprehensions
 --------------
 
@@ -246,31 +296,6 @@ Example:
      1  -1  -1
      2  -1  -1
      3   6   9
-
-Concatenation
--------------
-
-Arrays can be concatenated along any dimension using the following
-functions:
-
-================ ======================================================
-Function         Description
-================ ======================================================
-``cat(k, A...)`` concatenate input n-d arrays along the dimension ``k``
-``vcat(A...)``   shorthand for ``cat(1, A...)``
-``hcat(A...)``   shorthand for ``cat(2, A...)``
-``hvcat(A...)``
-================ ======================================================
-
-Concatenation operators may also be used for concatenating arrays:
-
-=================== =========
-Expression          Calls
-=================== =========
-``[A B C ...]``     ``hcat``
-``[A, B, C, ...]``  ``vcat``
-``[A B; C D; ...]`` ``hvcat``
-=================== =========
 
 Vectorized Operators and Functions
 ----------------------------------
@@ -528,17 +553,20 @@ The row indices in every column need to be sorted. If your `SparseMatrixCSC`
 object contains unsorted row indices, one quick way to sort them is by
 doing a double transpose.
 
-In some applications, it is convenient to store explicit zero values in 
-a `SparseMatrixCSC`. These *are* accepted by functions in ``Base`` (but
-there is no guarantee that they will be preserved in mutating operations).
-Because of this, ``countnz`` is not a constant-time operation; instead,
-``nfilled`` should be used to obtain the number of elements in a sparse
-matrix.
+In some applications, it is convenient to store explicit zero values
+in a `SparseMatrixCSC`. These *are* accepted by functions in ``Base``
+(but there is no guarantee that they will be preserved in mutating
+operations).  Such explicitly stored zeros are treated as structural
+nonzeros by many routines.  The ``nnz`` function returns the number of
+elements explicitly stored in the sparse data structure,
+including structural nonzeros. In order to count the exact number of actual
+values that are nonzero, use ``countnz``, which inspects every stored
+element of a sparse matrix.
 
 Sparse matrix constructors
 --------------------------
 
-The simplest way to create sparse matrices are using functions
+The simplest way to create sparse matrices is to use functions
 equivalent to the ``zeros`` and ``eye`` functions that Julia provides
 for working with dense matrices. To produce sparse matrices instead,
 you can use the same names with an ``sp`` prefix:

@@ -1,6 +1,6 @@
 module REPLCompletions
 
-export completions, shell_completions
+export completions, shell_completions, latex_completions
 
 using Base.Meta
 
@@ -138,8 +138,11 @@ function complete_methods(input::String)
     UTF8String[string(m) for m in methods(fn)]
 end
 
-const non_identifier_chars = [" \t\n\"\\'`\$><=:;|&{}()[],+-*/?%^~"...]
-const non_filename_chars = [" \t\n\"\\'`@\$><=;|&{("...]
+include("latex_symbols.jl")
+
+const non_identifier_chars = [" \t\n\r\"\\'`\$><=:;|&{}()[],+-*/?%^~"...]
+const non_filename_chars = [" \t\n\r\"\\'`@\$><=;|&{("...]
+const whitespace_chars = [" \t\n\r"...]
 
 # Aux function to detect whether we're right after a
 # using or import keyword
@@ -154,6 +157,24 @@ function afterusing(string::ByteString, startpos::Int)
     return ismatch(r"^\b(using|import)\s*(\w+\s*,\s*)*\w*$", str[fr:end])
 end
 
+function latex_completions(string, pos)
+    slashpos = rsearch(string, '\\', pos)
+    if rsearch(string, whitespace_chars, pos) < slashpos
+        # latex symbol substitution
+        s = string[slashpos:pos]
+        latex = get(latex_symbols, s, "")
+        if !isempty(latex) # complete an exact match
+            return (true, ([latex], slashpos:pos, true))
+        else
+            # return possible matches; these cannot be mixed with regular
+            # Julian completions as only latex symbols contain the leading \
+            latex_names = filter(k -> beginswith(k, s), keys(latex_symbols))
+            return (true, (sort!(collect(latex_names)), slashpos:pos, true))
+        end
+    end
+    return (false, (UTF8String[], 0:-1, false))
+end
+
 function completions(string, pos)
     inc_tag = Base.incomplete_tag(parse(string[1:pos], raise=false))
     if inc_tag in [:cmd, :string]
@@ -164,7 +185,12 @@ function completions(string, pos)
             paths[1] *= "\""
         end
         return sort(paths), r, true
-    elseif inc_tag == :other && string[pos] == '('
+    end
+
+    ok, ret = latex_completions(string,pos)
+    ok && return ret
+
+    if inc_tag == :other && string[pos] == '('
         endpos = prevind(string, pos)
         startpos = nextind(string, rsearch(string, non_identifier_chars, endpos))
         return complete_methods(string[startpos:endpos]), startpos:endpos, false

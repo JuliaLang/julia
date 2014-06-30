@@ -30,7 +30,7 @@ function edit(file::String, line::Integer)
     elseif edname == "textmate" || edname == "mate"
         spawn(`$edpath $file -l $line`)
     elseif beginswith(edname, "subl")
-        spawn(`$edpath $file:$line`)
+        spawn(`$(shell_split(edpath)) $file:$line`)
     elseif OS_NAME == :Windows && (edname == "start" || edname == "open")
         spawn(`start /b $file`)
     elseif OS_NAME == :Darwin && (edname == "start" || edname == "open")
@@ -66,10 +66,9 @@ end
 
 @osx_only begin
     function clipboard(x)
-        w,p = writesto(`pbcopy`)
-        print(w,x)
-        close(w)
-        wait(p)
+        open(`pbcopy`, "w") do io
+            print(io, x)
+        end
     end
     clipboard() = readall(`pbpaste`)
 end
@@ -89,10 +88,9 @@ end
         cmd = c == :xsel  ? `xsel --nodetach --input --clipboard` :
               c == :xclip ? `xclip -quiet -in -selection clipboard` :
             error("unexpected clipboard command: $c")
-        w,p = writesto(cmd)
-        print(w,x)
-        close(w)
-        wait(p)
+        open(cmd, "w") do io
+            print(io, x)
+        end
     end
     function clipboard()
         c = clipboardcmd()
@@ -103,25 +101,33 @@ end
     end
 end
 
-@windows_only begin
+@windows_only begin # TODO: these functions leak memory and memory locks if they throw an error
     function clipboard(x::String)
-        ccall((:OpenClipboard, "user32"), stdcall, Bool, (Ptr{Void},), C_NULL)
-        ccall((:EmptyClipboard, "user32"), stdcall, Bool, ())
-        p = ccall((:GlobalAlloc, "kernel32"), stdcall, Ptr{Void}, (Uint16,Int32), 2, length(x)+1)
-        p = ccall((:GlobalLock, "kernel32"), stdcall, Ptr{Void}, (Ptr{Void},), p)
-        # write data to locked, allocated space
-        ccall(:memcpy, Ptr{Void}, (Ptr{Void},Ptr{Uint8},Int32), p, x, length(x)+1)
-        ccall((:GlobalUnlock, "kernel32"), stdcall, Void, (Ptr{Void},), p)
-        # set clipboard data type to 13 for Unicode text/string
-        p = ccall((:SetClipboardData, "user32"), stdcall, Ptr{Void}, (Uint32, Ptr{Void}), 1, p)
+        systemerror(:OpenClipboard, 0==ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Void},), C_NULL))
+        systemerror(:EmptyClipboard, 0==ccall((:EmptyClipboard, "user32"), stdcall, Cint, ()))
+        x_u16 = utf16(x)
+        # copy data to locked, allocated space
+        p = ccall((:GlobalAlloc, "kernel32"), stdcall, Ptr{Uint16}, (Uint16, Int32), 2, sizeof(x_u16)+2)
+        systemerror(:GlobalAlloc, p==C_NULL)
+        plock = ccall((:GlobalLock, "kernel32"), stdcall, Ptr{Uint16}, (Ptr{Uint16},), p)
+        systemerror(:GlobalLock, plock==C_NULL)
+        ccall(:memcpy, Ptr{Uint16}, (Ptr{Uint16},Ptr{Uint16},Int), plock, x_u16, sizeof(x_u16)+2)
+        systemerror(:GlobalUnlock, 0==ccall((:GlobalUnlock, "kernel32"), stdcall, Cint, (Ptr{Void},), plock))
+        pdata = ccall((:SetClipboardData, "user32"), stdcall, Ptr{Uint16}, (Uint32, Ptr{Uint16}), 13, p)
+        systemerror(:SetClipboardData, pdata!=p)
         ccall((:CloseClipboard, "user32"), stdcall, Void, ())
     end
     clipboard(x) = clipboard(sprint(io->print(io,x))::ByteString)
 
     function clipboard()
-        ccall((:OpenClipboard, "user32"), stdcall, Bool, (Ptr{Void},), C_NULL)
-        s = bytestring(ccall((:GetClipboardData, "user32"), stdcall, Ptr{Uint8}, (Uint32,), 1))
-        ccall((:CloseClipboard, "user32"), stdcall, Void, ())
+        systemerror(:OpenClipboard, 0==ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Void},), C_NULL))
+        pdata = ccall((:GetClipboardData, "user32"), stdcall, Ptr{Uint16}, (Uint32,), 13)
+        systemerror(:SetClipboardData, pdata==C_NULL)
+        systemerror(:CloseClipboard, 0==ccall((:CloseClipboard, "user32"), stdcall, Cint, ()))
+        plock = ccall((:GlobalLock, "kernel32"), stdcall, Ptr{Uint16}, (Ptr{Uint16},), pdata)
+        systemerror(:GlobalLock, plock==C_NULL)
+        s = utf8(utf16(plock))
+        systemerror(:GlobalUnlock, 0==ccall((:GlobalUnlock, "kernel32"), stdcall, Cint, (Ptr{Uint16},), plock))
         return s
     end
 end
@@ -312,13 +318,12 @@ downloadcmd = nothing
 end
 
 @windows_only function download(url::String, filename::String)
-    b_dest = bytestring(filename)
-    b_url = bytestring(url)
-    res = ccall((:URLDownloadToFileA,:urlmon),stdcall,Cuint,
-                (Ptr{Void},Ptr{Uint8},Ptr{Uint8},Cint,Ptr{Void}),0,b_url,b_dest,0,0)
+    res = ccall((:URLDownloadToFileW,:urlmon),stdcall,Cuint,
+                (Ptr{Void},Ptr{Uint16},Ptr{Uint16},Cint,Ptr{Void}),0,utf16(url),utf16(filename),0,0)
     if res != 0
         error("automatic download failed (error: $res): $url")
     end
+    filename
 end
 
 function download(url::String)

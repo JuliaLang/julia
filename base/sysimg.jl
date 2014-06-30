@@ -33,7 +33,6 @@ include("c.jl")
 include("promotion.jl")
 include("tuple.jl")
 include("range.jl")
-include("cell.jl")
 include("expr.jl")
 include("error.jl")
 
@@ -58,6 +57,7 @@ include("bitarray.jl")
 include("intset.jl")
 include("dict.jl")
 include("set.jl")
+include("hashing.jl")
 include("iterator.jl")
 
 # compiler
@@ -76,6 +76,7 @@ include("char.jl")
 include("ascii.jl")
 include("utf8.jl")
 include("utf16.jl")
+include("utf32.jl")
 include("iobuffer.jl")
 include("string.jl")
 include("utf8proc.jl")
@@ -105,8 +106,7 @@ importall .FS
 include("process.jl")
 include("multimedia.jl")
 importall .Multimedia
-# TODO: should put this in _init, but need to handle its boolean argument correctly
-ccall(:jl_get_uv_hooks, Void, (Cint,), 0)
+ccall(:jl_get_uv_hooks, Void, ()) # TODO: should put this in _init
 include("grisu.jl")
 import .Grisu.print_shortest
 include("file.jl")
@@ -116,6 +116,8 @@ include("methodshow.jl")
 include("floatfuncs.jl")
 include("math.jl")
 importall .Math
+const (√)=sqrt
+const (∛)=cbrt
 include("float16.jl")
 
 # multidimensional arrays
@@ -174,9 +176,11 @@ big(q::Rational) = big(num(q))//big(den(q))
 big(z::Complex) = complex(big(real(z)),big(imag(z)))
 @vectorize_1arg Number big
 
-# random number generation and statistics
-include("statistics.jl")
-include("librandom.jl")
+# more hashing definitions
+include("hashing2.jl")
+
+# random number generation
+include("dSFMT.jl")
 include("random.jl")
 importall .Random
 
@@ -188,8 +192,8 @@ include("sharedarray.jl")
 # utilities - version, timing, help, edit, metaprogramming
 include("version.jl")
 include("datafmt.jl")
+importall .DataFmt
 include("deepcopy.jl")
-include("util.jl")
 include("interactiveutil.jl")
 include("replutil.jl")
 include("test.jl")
@@ -211,22 +215,30 @@ include("REPLCompletions.jl")
 include("REPL.jl")
 include("client.jl")
 
+# (s)printf macros
+include("printf.jl")
+importall .Printf
+
+# misc useful functions & macros
+include("util.jl")
+
 # sparse matrices and linear algebra
 include("sparse.jl")
 importall .SparseMatrix
 include("linalg.jl")
 importall .LinAlg
+const ⋅ = dot
+const × = cross
 include("broadcast.jl")
 importall .Broadcast
+
+# statistics
+include("statistics.jl")
 
 # signal processing
 include("fftw.jl")
 include("dsp.jl")
 importall .DSP
-
-# (s)printf macros
-include("printf.jl")
-importall .Printf
 
 # system information
 include("sysinfo.jl")

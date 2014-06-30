@@ -376,12 +376,6 @@ jl_value_t *jl_environ(int i)
     char *env = environ[i];
     return env ? jl_pchar_to_string(env, strlen(env)) : jl_nothing;
 }
-#ifdef _OS_WINDOWS_
-jl_value_t *jl_env_done(char *pos)
-{
-    return (*pos==0)?jl_true:jl_false;
-}
-#endif
 
 // -- child process status --
 
@@ -531,6 +525,24 @@ long jl_getpagesize(void)
 }
 #endif
 
+#ifdef _OS_WINDOWS_
+static long cachedAllocationGranularity = 0;
+long jl_getallocationgranularity(void)
+{
+    if (!cachedAllocationGranularity) {
+        SYSTEM_INFO systemInfo;
+        GetSystemInfo (&systemInfo);
+        cachedAllocationGranularity = systemInfo.dwAllocationGranularity;
+    }
+    return cachedAllocationGranularity;
+}
+#else
+long jl_getallocationgranularity(void)
+{
+    return jl_getpagesize();
+}
+#endif
+
 DLLEXPORT long jl_SC_CLK_TCK(void)
 {
 #ifndef _OS_WINDOWS_
@@ -628,10 +640,26 @@ DLLEXPORT const char *jl_pathname_for_handle(uv_lib_t *uv_lib)
 #endif
 
 #ifdef _OS_WINDOWS_
-    char tclfile[260];
-    int len = GetModuleFileNameA(handle,tclfile,sizeof(tclfile));
-    if (len)
-        return strdup(tclfile);
+    wchar_t *pth16 = (wchar_t*)malloc(32768); // max long path length
+    DWORD n16 = GetModuleFileNameW(handle,pth16,32768);
+    if (n16 <= 0) {
+        free(pth16);
+        return NULL;
+    }
+    pth16[n16] = L'\0';
+    DWORD n8 = WideCharToMultiByte(CP_UTF8, 0, pth16, -1, NULL, 0, NULL, NULL);
+    if (n8 == 0) {
+        free(pth16);
+        return NULL;
+    }
+    char *filepath = (char*)malloc(++n8);
+    if (!WideCharToMultiByte(CP_UTF8, 0, pth16, -1, filepath, n8, NULL, NULL)) {
+        free(pth16);
+        free(filepath);
+        return NULL;
+    }
+    free(pth16);
+    return filepath;
 #endif
     return NULL;
 }
@@ -660,41 +688,12 @@ DLLEXPORT int jl_dllist(jl_array_t *list)
 
 DLLEXPORT void jl_raise_debugger(void)
 {
-    size_t debugger = 0;
-#if defined(__APPLE__)
-    // Code derived from:
-    // https://developer.apple.com/library/mac/samplecode/sc2195/Listings/PublicUtility_CADebugger_cpp.html
-    int                 junk;
-    int                 mib[4];
-    struct kinfo_proc   info;
-    size_t              size;
-
-    info.kp_proc.p_flag = 0;
-
-    mib[0] = CTL_KERN;
-    mib[1] = KERN_PROC;
-    mib[2] = KERN_PROC_PID;
-    mib[3] = getpid();
-
-    size = sizeof(info);
-    junk = sysctl(mib, sizeof(mib) / sizeof(*mib), &info, &size, NULL, 0);
-    assert(junk == 0);
-
-    debugger = ( (info.kp_proc.p_flag & P_TRACED) != 0 ) ? 1 : 0;
-    // end of derivative code
-#elif defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
-    debugger = ( ptrace(PTRACE_TRACEME, 0, 0, 0) < 0 ) ? 1 : 0;
-#elif defined(_OS_WINDOWS_)
-    debugger = (IsDebuggerPresent() == 1) ? 1 : 0;
-#endif // #ifdef __APPLE__
-
-    if (debugger == 1) {
-#ifdef _OS_WINDOWS_
+#if defined(_OS_WINDOWS_)
+    if (IsDebuggerPresent() == 1)
         DebugBreak();
 #else
-        raise(SIGINT);
+    raise(SIGINT);
 #endif // _OS_WINDOWS_
-    }
 }
 
 #ifdef __cplusplus

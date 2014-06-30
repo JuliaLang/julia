@@ -43,7 +43,6 @@ extern "C" {
 DLLEXPORT char * dirname(char *);
 #endif
 
-extern int tab_width;
 extern DLLEXPORT char *julia_home;
 
 char system_image[256] = JL_SYSTEM_IMAGE_PATH;
@@ -52,33 +51,32 @@ static int lisp_prompt = 0;
 static int codecov=0;
 static char *program = NULL;
 char *image_file = NULL;
-int tab_width = 2;
 
 static const char *usage = "julia [options] [program] [args...]\n";
 static const char *opts =
-    " -v --version             Display version information\n"
-    " -h --help                Print this message\n"
-    " -q --quiet               Quiet startup without banner\n"
-    " -H --home <dir>          Set location of julia executable\n"
-    " -T --tab <size>          Set REPL tab width to <size>\n\n"
+    " -v, --version            Display version information\n"
+    " -h, --help               Print this message\n"
+    " -q, --quiet              Quiet startup without banner\n"
+    " -H, --home <dir>         Set location of julia executable\n\n"
 
-    " -e --eval <expr>         Evaluate <expr>\n"
-    " -E --print <expr>        Evaluate and show <expr>\n"
-    " -P --post-boot <expr>    Evaluate <expr> right after boot\n"
-    " -L --load file           Load <file> right after boot on all processors\n"
-    " -J --sysimage file       Start up with the given system image file\n\n"
+    " -e, --eval <expr>        Evaluate <expr>\n"
+    " -E, --print <expr>       Evaluate and show <expr>\n"
+    " -P, --post-boot <expr>   Evaluate <expr> right after boot\n"
+    " -L, --load <file>        Load <file> right after boot on all processors\n"
+    " -J, --sysimage <file>    Start up with the given system image file\n\n"
 
-    " -p n                     Run n local processes\n"
-    " --machinefile file       Run processes on hosts listed in file\n\n"
+    " -p <n>                   Run n local processes\n"
+    " --machinefile <file>     Run processes on hosts listed in <file>\n\n"
 
+    " -i                       Force isinteractive() to be true\n"
     " --no-history-file        Don't load or save history\n"
-    " -f --no-startup          Don't load ~/.juliarc.jl\n"
+    " -f, --no-startup         Don't load ~/.juliarc.jl\n"
     " -F                       Load ~/.juliarc.jl, then handle remaining inputs\n"
-    " --color=yes|no           Enable or disable color text\n\n"
+    " --color={yes|no}         Enable or disable color text\n\n"
 
     " --code-coverage          Count executions of source lines\n"
-    " --check-bounds=yes|no    Emit bounds checks always or never (ignoring declarations)\n"
-    " --int-literals=32|64     Select integer literal size independent of platform\n";
+    " --check-bounds={yes|no}  Emit bounds checks always or never (ignoring declarations)\n"
+    " --int-literals={32|64}   Select integer literal size independent of platform\n";
 
 void parse_opts(int *argcp, char ***argvp)
 {
@@ -111,10 +109,6 @@ void parse_opts(int *argcp, char ***argvp)
             break;
         case 'H':
             julia_home = strdup(optarg);
-            break;
-        case 'T':
-            // TODO: more robust error checking.
-            tab_width = atoi(optarg);
             break;
         case 'b':
             jl_compileropts.build_path = strdup(optarg);
@@ -267,7 +261,7 @@ int true_main(int argc, char *argv[])
             jl_arrayset(args, s, i);
         }
     }
-    
+
     // run program if specified, otherwise enter REPL
     if (program) {
         int ret = exec_program();
@@ -306,16 +300,31 @@ int true_main(int argc, char *argv[])
     return iserr;
 }
 
+#ifndef _OS_WINDOWS_
 int main(int argc, char *argv[])
 {
+#else
+int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
+{
+    int i;
+    for (i=0; i<argc; i++) { // write the command line to UTF8
+        wchar_t *warg = argv[i];
+        size_t wlen = wcslen(warg)+1;
+        size_t len = WideCharToMultiByte(CP_UTF8, 0, warg, wlen, NULL, 0, NULL, NULL);
+        if (!len) return 1;
+        char *arg = (char*)alloca(len);
+        if (!WideCharToMultiByte(CP_UTF8, 0, warg, wlen, arg, len, NULL, NULL)) return 1;
+        argv[i] = (wchar_t*)arg;
+    }
+#endif
     libsupport_init();
-    parse_opts(&argc, &argv);
+    parse_opts(&argc, (char***)&argv);
     if (lisp_prompt) {
         jl_lisp_prompt();
         return 0;
     }
     julia_init(lisp_prompt ? NULL : image_file);
-    return julia_trampoline(argc, argv, true_main);
+    return julia_trampoline(argc, (char**)argv, true_main);
 }
 
 #ifdef __cplusplus

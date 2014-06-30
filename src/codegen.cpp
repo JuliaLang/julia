@@ -1,10 +1,3 @@
-#include "platform.h"
-#if defined(_OS_WINDOWS_)
-#define NOMINMAX
-#endif
-#include "julia.h"
-#include "julia_internal.h"
-
 /*
  * We include <mathimf.h> here, because somewhere below <math.h> is included also.
  * As a result, Intel C++ Composer generates an error. To prevent this error, we
@@ -23,6 +16,8 @@
 #endif
 #endif
 
+#include "platform.h"
+
 #ifndef __STDC_LIMIT_MACROS
 #define __STDC_LIMIT_MACROS
 #define __STDC_CONSTANT_MACROS
@@ -36,6 +31,12 @@
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Analysis/Passes.h"
 #include "llvm/Bitcode/ReaderWriter.h"
+#ifdef _OS_DARWIN_
+#include "llvm/Object/MachO.h"
+#endif
+#ifdef _OS_WINDOWS_
+#include "llvm/Object/COFF.h"
+#endif
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 5
 #define LLVM35 1
 #include "llvm/IR/Verifier.h"
@@ -43,16 +44,18 @@
 #include "llvm/IR/DIBuilder.h"
 #include "llvm/AsmParser/Parser.h"
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/ADT/OwningPtr.h"
 #else
 #include "llvm/Analysis/Verifier.h"
 #endif
+#include "llvm/DebugInfo/DIContext.h"
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 4
 #define LLVM34 1
 #define USE_MCJIT 1
 #include "llvm/ExecutionEngine/MCJIT.h"
 #include "llvm/ExecutionEngine/SectionMemoryManager.h"
+#include "llvm/ExecutionEngine/ObjectImage.h"
 #include "llvm/ADT/DenseMapInfo.h"
+#include "llvm/Object/ObjectFile.h"
 #endif
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3
 #include "llvm/IR/DerivedTypes.h"
@@ -97,10 +100,46 @@
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/DynamicLibrary.h"
 #include "llvm/Config/llvm-config.h"
-#ifdef DEBUG
+#ifdef JL_DEBUG_BUILD
 #include "llvm/Support/CommandLine.h"
 #endif
 #include "llvm/Transforms/Utils/Cloning.h"
+ // For disasm
+#include "llvm/Support/MachO.h"
+#include "llvm/Support/COFF.h"
+#include "llvm/MC/MCDisassembler.h"
+#include "llvm/MC/MCInst.h"
+#include "llvm/MC/MCStreamer.h"
+#include "llvm/MC/MCSubtargetInfo.h"
+#include "llvm/MC/MCObjectFileInfo.h"
+#include "llvm/MC/MCRegisterInfo.h"
+#include "llvm/MC/MCAsmInfo.h"
+#include "llvm/MC/MCAsmBackend.h"
+#include "llvm/MC/MCCodeEmitter.h"
+#include "llvm/MC/MCInstPrinter.h"
+#include "llvm/MC/MCInstrInfo.h"
+#include "llvm/MC/MCContext.h"
+#ifndef LLVM35
+#include "llvm/ADT/OwningPtr.h"
+#endif
+#include "llvm/ADT/Triple.h"
+#include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/MemoryObject.h"
+#include "llvm/Support/SourceMgr.h"
+#include "llvm/Support/TargetRegistry.h"
+#include "llvm/Support/Host.h"
+#include "llvm/Support/raw_ostream.h"
+#ifndef LLVM35
+#include "llvm/Support/system_error.h"
+#endif
+
+#if defined(_OS_WINDOWS_) && !defined(NOMINMAX)
+#define NOMINMAX
+#endif
+
+#include "julia.h"
+#include "julia_internal.h"
+
 #include <setjmp.h>
 
 #include <string>
@@ -348,9 +387,17 @@ void jl_dump_objfile(char* fname, int jit_model)
     // We don't want to use MCJIT's target machine because
     // it uses the large code model and we may potentially
     // want less optimizations there.
+    Triple TheTriple = Triple(jl_TargetMachine->getTargetTriple());
+#if defined(_OS_WINDOWS_) && defined(USE_MCJIT)
+    TheTriple.setObjectFormat(Triple::COFF);
+#endif
+#ifdef LLVM35
+    std::unique_ptr<TargetMachine>
+#else
     OwningPtr<TargetMachine>
+#endif
     TM(jl_TargetMachine->getTarget().createTargetMachine(
-        jl_TargetMachine->getTargetTriple(),
+        TheTriple.getTriple(),
         jl_TargetMachine->getTargetCPU(),
         jl_TargetMachine->getTargetFeatureString(),
         jl_TargetMachine->Options,
@@ -445,15 +492,10 @@ static Type *NoopType;
 
 // --- utilities ---
 
+#define XSTR(x) #x
+#define MSTR(x) XSTR(x)
 extern "C" {
-#if defined(JULIA_TARGET_CORE2)
-const char *jl_cpu_string = "core2";
-#elif defined(JULIA_TARGET_NATIVE)
-const char *jl_cpu_string = "native";
-#else
-#error "Must select julia cpu target"
-#endif
-
+    const char *jl_cpu_string = MSTR(JULIA_TARGET_ARCH);
     int globalUnique = 0;
 }
 
@@ -507,7 +549,7 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
     }
     assert(f != NULL);
     nested_compile = last_n_c;
-#ifdef DEBUG
+#ifdef JL_DEBUG_BUILD
 #ifdef LLVM35
     llvm::raw_fd_ostream out(1,false);
 #endif
@@ -677,7 +719,12 @@ void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
 {
     Function *llvmf = jl_cfunction_object(f, rt, argt);
     if (llvmf) {
+        #ifndef LLVM35
         new GlobalAlias(llvmf->getType(), GlobalValue::ExternalLinkage, name, llvmf, llvmf->getParent());
+        #else
+        GlobalAlias::create(llvmf->getType()->getElementType(), llvmf->getType()->getAddressSpace(),
+                            GlobalValue::ExternalLinkage, name, llvmf, llvmf->getParent());
+        #endif
     }
 }
 
@@ -698,6 +745,7 @@ const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
     else {
         size_t fptr = (size_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
         assert(fptr != 0);
+#ifndef USE_MCJIT
         std::map<size_t, FuncInfo, revcomp> &fmap = jl_jit_events->getMap();
         std::map<size_t, FuncInfo>::iterator fit = fmap.find(fptr);
 
@@ -705,7 +753,44 @@ const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
             JL_PRINTF(JL_STDERR, "Warning: Unable to find function pointer\n");
             return jl_cstr_to_string(const_cast<char*>(""));
         }
+        
         jl_dump_function_asm((void*)fptr, fit->second.lengthAdr, fit->second.lines, fstream);
+#else // MCJIT version
+        std::map<size_t, ObjectInfo, revcomp> objmap = jl_jit_events->getObjectMap();
+        std::map<size_t, ObjectInfo, revcomp>::iterator fit = objmap.find(fptr);
+        
+        if (fit == objmap.end()) {
+            JL_PRINTF(JL_STDERR, "Warning: Unable to find ObjectFile for function\n");
+            return jl_cstr_to_string(const_cast<char*>(""));
+        }
+        
+        object::SymbolRef::Type symtype;
+        uint64_t symsize;
+        uint64_t symaddr;
+
+        #ifdef LLVM35
+        for (const object::SymbolRef &sym_iter : fit->second.object->symbols()) {
+            sym_iter.getType(symtype);
+            sym_iter.getAddress(symaddr);
+            if (symtype != object::SymbolRef::ST_Function || symaddr != fptr)
+                continue;
+            sym_iter.getSize(symsize);
+            jl_dump_function_asm((void*)fptr, symsize, fit->second.object, fstream);
+        }
+        #else
+        error_code itererr;
+        object::symbol_iterator sym_iter = fit->second.object->begin_symbols();
+        object::symbol_iterator sym_end = fit->second.object->end_symbols();
+        for (; sym_iter != sym_end; sym_iter.increment(itererr)) {
+            sym_iter->getType(symtype);
+            sym_iter->getAddress(symaddr);
+            if (symtype != object::SymbolRef::ST_Function || symaddr != fptr)
+                continue;
+            sym_iter->getSize(symsize);
+            jl_dump_function_asm((void*)fptr, symsize, fit->second.object, fstream);
+        }
+        #endif // LLVM35
+#endif 
         fstream.flush();
     }
     return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
@@ -1261,6 +1346,10 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
     if (jl_is_quotenode(expr) && jl_is_module(jl_fieldref(expr,0)))
         expr = jl_fieldref(expr,0);
 
+    jl_value_t *static_val = static_eval(expr, ctx, true, false);
+    if (static_val != NULL && jl_is_module(static_val))
+        expr = static_val;
+
     if (jl_is_module(expr)) {
         Value *bp =
             global_binding_pointer((jl_module_t*)expr, name, NULL, false);
@@ -1551,23 +1640,39 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     else if (f->fptr == &jl_f_isa && nargs==2) {
         jl_value_t *arg = expr_type(args[1], ctx); rt1 = arg;
         jl_value_t *ty  = expr_type(args[2], ctx); rt2 = ty;
-        if (jl_is_type_type(ty) && !jl_is_typevar(jl_tparam0(ty))) {
+        if (arg == jl_bottom_type) {
+            JL_GC_POP();
+            emit_expr(args[1], ctx);
+            return UndefValue::get(T_int1);
+        }
+        if (jl_is_type_type(ty) && !jl_has_typevars(jl_tparam0(ty))) {
             jl_value_t *tp0 = jl_tparam0(ty);
-            if (arg != jl_bottom_type && jl_subtype(arg, tp0, 0)) {
+            if (jl_subtype(arg, tp0, 0)) {
                 JL_GC_POP();
                 return ConstantInt::get(T_int1,1);
             }
-            if (!jl_is_tuple(tp0) && jl_is_leaf_type(tp0) &&
-                !jl_is_type_type(tp0)) {
+            if (!jl_is_tuple(tp0) && !jl_is_type_type(tp0)) {
                 if (jl_is_leaf_type(arg)) {
                     JL_GC_POP();
                     return ConstantInt::get(T_int1,0);
                 }
-                Value *arg1 = emit_expr(args[1], ctx);
-                JL_GC_POP();
-                return builder.CreateICmpEQ(emit_typeof(arg1),
-                                            literal_pointer_val(tp0));
+                if (jl_is_leaf_type(tp0)) {
+                    Value *arg1 = emit_expr(args[1], ctx);
+                    JL_GC_POP();
+                    return builder.CreateICmpEQ(emit_typeof(arg1),
+                                                literal_pointer_val(tp0));
+                }
             }
+        }
+    }
+    else if (f->fptr == &jl_f_subtype && nargs == 2) {
+        rt1 = expr_type(args[1], ctx);
+        rt2 = expr_type(args[2], ctx);
+        if (jl_is_type_type(rt1) && !jl_is_typevar(jl_tparam0(rt1)) &&
+            jl_is_type_type(rt2) && !jl_is_typevar(jl_tparam0(rt2))) {
+            int issub = jl_subtype(jl_tparam0(rt1), jl_tparam0(rt2), 0);
+            JL_GC_POP();
+            return ConstantInt::get(T_int1, issub);
         }
     }
     else if (f->fptr == &jl_f_tuplelen && nargs==1) {
@@ -1996,6 +2101,10 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                                               &jl_tupleref(ctx->sp,0),
                                               jl_tuple_len(ctx->sp)/2);
             if (jl_is_leaf_type(ty)) {
+                if (jl_has_typevars(ty)) {
+                    // add root for types not cached. issue #7065
+                    jl_add_linfo_root(ctx->linfo, ty);
+                }
                 JL_GC_POP();
                 return literal_pointer_val(ty);
             }
@@ -2102,7 +2211,8 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
                 assert(dyn_cast<UndefValue>(argvals[idx]) == 0);
                 // TODO: there should be a function emit_rooted that handles this, leaving
                 // the value rooted if it was already, to avoid redundant stores.
-                if (origval->getType() != jl_pvalue_llvmt || might_need_root(args[i+1])) {
+                if (origval->getType() != jl_pvalue_llvmt ||
+                    (might_need_root(args[i+1]) && !is_stable_expr(args[i+1], ctx))) {
                     make_gcroot(argvals[idx], ctx);
                 }
             }
@@ -2834,8 +2944,10 @@ static void maybe_alloc_arrayvar(jl_sym_t *s, jl_codectx_t *ctx)
         // passed to an external function (ideally only impure functions)
         jl_arrayvar_t av;
         int ndims = jl_unbox_long(jl_tparam1(jt));
-        av.dataptr =
-            builder.CreateAlloca(PointerType::get(julia_type_to_llvm(jl_tparam0(jt)),0));
+        Type *elt = julia_type_to_llvm(jl_tparam0(jt));
+        if (elt == T_void)
+            return;
+        av.dataptr = builder.CreateAlloca(PointerType::get(elt,0));
         av.len = builder.CreateAlloca(T_size);
         for(int i=0; i < ndims-1; i++)
             av.sizes.push_back(builder.CreateAlloca(T_size));
@@ -3185,10 +3297,13 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     else {
         m = shadow_module;
     }
+#ifndef LLVM35
+    funcName << ";";
+#endif
 #else
     m = jl_Module;
+    funcName << ";";
 #endif
-
     funcName << globalUnique++;
 
     if (specsig) {
@@ -3241,7 +3356,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             AttributeSet::FunctionIndex,*attr));
 #endif
 #endif
-#ifdef DEBUG
+#ifdef JL_DEBUG_BUILD
 #if LLVM32 && !LLVM33
     f->addFnAttr(Attributes::StackProtectReq);
 #else
@@ -3690,7 +3805,11 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
 static MDNode* tbaa_make_child( const char* name, MDNode* parent, bool isConstant=false )
 {
     MDNode* n = mbuilder->createTBAANode(name,parent,isConstant);
+#ifdef LLVM35
+    n->setValueName( ValueName::Create(name));
+#else
     n->setValueName( ValueName::Create(name, name+strlen(name)));
+#endif
     return n;
 }
 
@@ -3764,6 +3883,10 @@ extern "C" DLLEXPORT jl_value_t *jl_new_box(jl_value_t *v)
     ((jl_value_t**)box)[1] = v;
     return box;
 }
+
+#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 3 && SYSTEM_LLVM
+#define INSTCOMBINE_BUG
+#endif
 
 static void init_julia_llvm_env(Module *m)
 {
@@ -4150,14 +4273,22 @@ static void init_julia_llvm_env(Module *m)
     FPM->add(createCFGSimplificationPass()); // Clean up disgusting code
     FPM->add(createPromoteMemoryToRegisterPass());// Kill useless allocas
     
+#ifndef INSTCOMBINE_BUG
     FPM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
+#endif
     FPM->add(createScalarReplAggregatesPass()); // Break up aggregate allocas
+#ifndef INSTCOMBINE_BUG
     FPM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
+#endif
     FPM->add(createJumpThreadingPass());        // Thread jumps.
-    FPM->add(createCFGSimplificationPass());    // Merge & remove BBs
+    // NOTE: CFG simp passes after this point seem to hurt native codegen.
+    // See issue #6112. Should be re-evaluated when we switch to MCJIT.
+    //FPM->add(createCFGSimplificationPass());    // Merge & remove BBs
+#ifndef INSTCOMBINE_BUG
     FPM->add(createInstructionCombiningPass()); // Combine silly seq's
+#endif
     
-    FPM->add(createCFGSimplificationPass());    // Merge & remove BBs
+    //FPM->add(createCFGSimplificationPass());    // Merge & remove BBs
     FPM->add(createReassociatePass());          // Reassociate expressions
 
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 1
@@ -4173,16 +4304,20 @@ static void init_julia_llvm_env(Module *m)
     FPM->add(createLICMPass());                 // Hoist loop invariants
     FPM->add(createLoopUnswitchPass());         // Unswitch loops.
     // Subsequent passes not stripping metadata from terminator
-    FPM->add(createInstructionCombiningPass()); 
+#ifndef INSTCOMBINE_BUG
+    FPM->add(createInstructionCombiningPass());
+#endif
     FPM->add(createIndVarSimplifyPass());       // Canonicalize indvars
     FPM->add(createLoopDeletionPass());         // Delete dead loops
     FPM->add(createLoopUnrollPass());           // Unroll small loops
     //FPM->add(createLoopStrengthReducePass());   // (jwb added)
     
-#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3
+#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3 && !defined(INSTCOMBINE_BUG)
     FPM->add(createLoopVectorizePass());        // Vectorize loops
 #endif
+#ifndef INSTCOMBINE_BUG
     FPM->add(createInstructionCombiningPass()); // Clean up after the unroller
+#endif
     FPM->add(createGVNPass());                  // Remove redundancies
     //FPM->add(createMemCpyOptPass());            // Remove memcpy / form memset  
     FPM->add(createSCCPPass());                 // Constant prop with SCCP
@@ -4191,19 +4326,21 @@ static void init_julia_llvm_env(Module *m)
     // opened up by them.
     FPM->add(createSinkingPass()); ////////////// ****
     FPM->add(createInstructionSimplifierPass());///////// ****
+#ifndef INSTCOMBINE_BUG
     FPM->add(createInstructionCombiningPass());
+#endif
     FPM->add(createJumpThreadingPass());         // Thread jumps
     FPM->add(createDeadStoreEliminationPass());  // Delete dead stores
 
     FPM->add(createAggressiveDCEPass());         // Delete dead instructions
-    FPM->add(createCFGSimplificationPass());     // Merge & remove BBs
+    //FPM->add(createCFGSimplificationPass());     // Merge & remove BBs
 
     FPM->doInitialization();
 }
 
 extern "C" void jl_init_codegen(void)
 {
-#ifdef DEBUG
+#ifdef JL_DEBUG_BUILD
     cl::ParseEnvironmentOptions("Julia", "JULIA_LLVM_ARGS");
 #endif
     imaging_mode = jl_compileropts.build_path != NULL;
@@ -4232,7 +4369,7 @@ extern "C" void jl_init_codegen(void)
 
 #if !defined(LLVM_VERSION_MAJOR) || (LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 0)
     jl_ExecutionEngine = EngineBuilder(m).setEngineKind(EngineKind::JIT).create();
-#ifdef DEBUG
+#ifdef JL_DEBUG_BUILD
     llvm::JITEmitDebugInfo = true;
 #endif
     //llvm::JITEmitDebugInfoToDisk = true;
@@ -4244,7 +4381,7 @@ extern "C" void jl_init_codegen(void)
 #elif LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 1
     TargetOptions options = TargetOptions();
     //options.PrintMachineCode = true; //Print machine code produced during JIT compiling
-#ifdef DEBUG
+#ifdef JL_DEBUG_BUILD
     options.JITEmitDebugInfo = true;
 #endif 
     options.NoFramePointerElim = true;
@@ -4271,22 +4408,30 @@ extern "C" void jl_init_codegen(void)
 #endif
     EngineBuilder eb = EngineBuilder(engine_module)
         .setEngineKind(EngineKind::JIT)
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_) && !defined(USE_MCJIT)
         .setJITMemoryManager(new JITMemoryManagerWin())
 #endif
         .setTargetOptions(options)
-#if defined(JULIA_TARGET_NATIVE)
-        .setMCPU("")
-#else
-        .setMCPU(jl_cpu_string)
-#endif
+        .setMCPU(strcmp(jl_cpu_string,"native") ? jl_cpu_string : "")
 #ifdef USE_MCJIT
         .setUseMCJIT(true)
         .setMAttrs(attrvec);
 #else
         .setMAttrs(attrvec);
 #endif
-    jl_TargetMachine = eb.selectTarget();
+    Triple TheTriple(sys::getProcessTriple());
+#if defined(_OS_WINDOWS_) && defined(USE_MCJIT)
+    TheTriple.setObjectFormat(Triple::ELF);
+#endif
+    SmallVector<std::string, 4> MAttrs;
+    MAttrs.clear();
+    MAttrs.append(attrvec.begin(), attrvec.end());
+    jl_TargetMachine = eb.selectTarget(
+            TheTriple,
+            "",
+            strcmp(jl_cpu_string,"native") ? jl_cpu_string : "",
+            MAttrs);
+    assert(jl_TargetMachine);
     jl_ExecutionEngine = eb.create(jl_TargetMachine);
 #endif // LLVM VERSION
     jl_ExecutionEngine->DisableLazyCompilation();
@@ -4296,12 +4441,11 @@ extern "C" void jl_init_codegen(void)
 
     jl_jit_events = new JuliaJITEventListener();
     jl_ExecutionEngine->RegisterJITEventListener(jl_jit_events);
-#if LLVM_USE_INTEL_JITEVENTS
-    if (const char* jit_profiling = std::getenv("ENABLE_JITPROFILING"))
-        if (std::atoi(jit_profiling))
-            jl_ExecutionEngine->RegisterJITEventListener(
-                JITEventListener::createIntelJITEventListener());
-#endif // LLVM_USE_INTEL_JITEVENTS
+#ifdef JL_USE_INTEL_JITEVENTS
+    if (jl_using_intel_jitevents) 
+        jl_ExecutionEngine->RegisterJITEventListener(
+            JITEventListener::createIntelJITEventListener());
+#endif // JL_USE_INTEL_JITEVENTS
 
     BOX_F(int8,int32);  BOX_F(uint8,uint32);
     BOX_F(int16,int16); BOX_F(uint16,uint16);
