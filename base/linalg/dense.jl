@@ -101,12 +101,8 @@ function gradient(F::Vector, h::Vector)
 end
 
 function diagind(m::Integer, n::Integer, k::Integer=0)
-    if 0 < k < n
-        return range(k*m+1, m+1, min(m, n-k))
-    elseif 0 <= -k < m
-        return range(1-k, m+1, min(m+k,n))
-    end
-    throw(BoundsError())
+    -m <= k <= n || throw(BoundsError())
+    k <= 0 ? range(1-k, m+1, min(m+k, n)) : range(k*m+1, m+1, min(m, n-k))
 end
 
 diagind(A::AbstractMatrix, k::Integer=0) = diagind(size(A,1), size(A,2), k)
