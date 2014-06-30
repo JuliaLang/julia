@@ -67,6 +67,7 @@ extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 char *julia_home = NULL;
 jl_compileropts_t jl_compileropts = { NULL, // build_path
                                       0,    // code_coverage
+				      0,    // malloc_log
                                       JL_COMPILEROPT_CHECK_BOUNDS_DEFAULT,
                                       0     // int32_literals
 };
@@ -378,6 +379,7 @@ static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg)
 }
 
 void jl_write_coverage_data(void);
+void jl_write_malloc_log(void);
 
 DLLEXPORT void uv_atexit_hook()
 {
@@ -386,6 +388,8 @@ DLLEXPORT void uv_atexit_hook()
 #endif
     if (jl_compileropts.code_coverage)
         jl_write_coverage_data();
+    if (jl_compileropts.malloc_log)
+        jl_write_malloc_log();
     if (jl_base_module) {
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
         if (f!=NULL && jl_is_function(f)) {

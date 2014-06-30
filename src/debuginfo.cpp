@@ -602,3 +602,94 @@ extern "C" void jl_write_coverage_data(void)
         }
     }
 }
+
+// Memory allocation log (malloc_log)
+
+typedef std::map<std::string,std::vector<GlobalVariable*> > mallocdata_t;
+static mallocdata_t mallocData;
+
+static void mallocVisitLine(std::string filename, int line)
+{
+    if (filename == "" || filename == "none" || filename == "no file") {
+	sync_gc_total_bytes();
+        return;
+    }
+    mallocdata_t::iterator it = mallocData.find(filename);
+    if (it == mallocData.end()) {
+        mallocData[filename] = std::vector<GlobalVariable*>(0);
+    }
+    std::vector<GlobalVariable*> &vec = mallocData[filename];
+    if (vec.size() <= (size_t)line)
+        vec.resize(line+1, NULL);
+    if (vec[line] == NULL)
+        vec[line] = new GlobalVariable(*jl_Module, T_int64, false,
+				       GlobalVariable::InternalLinkage,
+                                       ConstantInt::get(T_int64,0), "bytecnt");
+    GlobalVariable *v = vec[line];
+    //builder.CreateCall2(prepare_call(show_execution_point_func), builder.CreateGlobalStringPtr(filename), ConstantInt::get(T_int32, line));
+    builder.CreateStore(builder.CreateAdd(builder.CreateLoad(v),
+                                          builder.CreateCall(prepare_call(diff_gc_total_bytes_func))),
+                        v);
+}
+
+// Resets the malloc counts. Needed to avoid including memory usage
+// from JITting.
+extern "C" DLLEXPORT void jl_clear_malloc_data(void)
+{
+    mallocdata_t::iterator it = mallocData.begin();
+    for (; it != mallocData.end(); it++) {
+        std::vector<GlobalVariable*> &bytes = (*it).second;
+	std::vector<GlobalVariable*>::iterator itb;
+	for (itb = bytes.begin(); itb != bytes.end(); itb++) {
+	    if (*itb) {
+		int64_t *p = (int64_t*) jl_ExecutionEngine->getPointerToGlobal(*itb);
+		*p = 0;
+	    }
+	}
+    }
+    sync_gc_total_bytes();
+}
+
+extern "C" void jl_write_malloc_log(void)
+{
+    mallocdata_t::iterator it = mallocData.begin();
+    for (; it != mallocData.end(); it++) {
+        std::string filename = (*it).first;
+        std::string outfile = filename + ".mlc";
+        std::vector<GlobalVariable*> &bytes = (*it).second;
+        if (bytes.size() > 1) {
+            std::ifstream inf(filename.c_str());
+            if (inf.is_open()) {
+                std::ofstream outf(outfile.c_str(), std::ofstream::trunc | std::ofstream::out);
+                char line[1024];
+                int l = 1;
+                while (!inf.eof()) {
+                    inf.getline(line, sizeof(line));
+                    int nbytes = -1;
+                    if ((size_t)l < bytes.size()) {
+                        GlobalVariable *gv = bytes[l];
+                        if (gv) {
+                            int *p = (int*)jl_ExecutionEngine->getPointerToGlobal(gv);
+                            nbytes = *p;
+                        }
+                    }
+                    outf.width(9);
+                    if (nbytes == -1)
+                        outf<<'-';
+                    else
+                        outf<<nbytes;
+                    outf.width(0);
+                    outf<<" "<<line<<std::endl;
+                    l++;
+                }
+                outf.close();
+                inf.close();
+            }
+        }
+    }
+}
+
+void show_execution_point(char *filename, int lno)
+{
+    jl_printf(JL_STDOUT, "executing file %s, line %d\n", filename, lno);
+}
