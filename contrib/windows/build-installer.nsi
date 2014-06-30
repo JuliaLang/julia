@@ -37,22 +37,34 @@ Function createDesktopLink
     ${EndIf}
 FunctionEnd
 
-# Registry related
 # Adds the entries that create the icon in the uninstall section of the control panel.
 Function addUninstallRegEntriesHKCU
-    WriteRegStr HKCU "${REG_UNINSTALL}" "DisplayName" "$(^Name)"
-    WriteRegStr HKCU "${REG_UNINSTALL}" "DisplayIcon" "$\"$INSTDIR\${EXE_FILE}$\""
-    WriteRegStr HKCU "${REG_UNINSTALL}" "Publisher" "${DOMAIN}"
-    WriteRegStr HKCU "${REG_UNINSTALL}" "DisplayVersion" "${Version}"
-    WriteRegDWord HKCU "${REG_UNINSTALL}" "EstimatedSize" 383590 ;KB
-    WriteRegStr HKCU "${REG_UNINSTALL}" "HelpLink" "${WEBSITE_LINK}"
-    WriteRegStr HKCU "${REG_UNINSTALL}" "URLInfoAbout" "${WEBSITE_LINK}"
-    WriteRegStr HKCU "${REG_UNINSTALL}" "InstallLocation" "$\"$INSTDIR$\""
-    WriteRegStr HKCU "${REG_UNINSTALL}" "InstallSource" "$\"$EXEDIR$\""
-    WriteRegDWord HKCU "${REG_UNINSTALL}" "NoModify" 1
-    WriteRegDWord HKCU "${REG_UNINSTALL}" "NoRepair" 1
-    WriteRegStr HKCU "${REG_UNINSTALL}" "UninstallString" "$\"$INSTDIR\${UNINSTALLER_NAME}$\""
-    WriteRegStr HKCU "${REG_UNINSTALL}" "Comments" "Uninstalls $(^Name)"
+    WriteRegStr HKCU "${REG_UNINSTALL}" \
+                "DisplayName" "$(^Name)"
+    WriteRegStr HKCU "${REG_UNINSTALL}" \
+                "DisplayIcon" "$\"$INSTDIR\${EXE_FILE}$\""
+    WriteRegStr HKCU "${REG_UNINSTALL}" \
+                "Publisher" "${DOMAIN}"
+    WriteRegStr HKCU "${REG_UNINSTALL}" \
+                "DisplayVersion" "${Version}"
+    WriteRegDWord HKCU "${REG_UNINSTALL}" \
+                  "EstimatedSize" 383590 ;KB
+    WriteRegStr HKCU "${REG_UNINSTALL}" \
+                "HelpLink" "${WEBSITE_LINK}"
+    WriteRegStr HKCU "${REG_UNINSTALL}" \
+                "URLInfoAbout" "${WEBSITE_LINK}"
+    WriteRegStr HKCU "${REG_UNINSTALL}" \
+                "InstallLocation" "$\"$INSTDIR$\""
+    WriteRegStr HKCU "${REG_UNINSTALL}" \
+                "InstallSource" "$\"$EXEDIR$\""
+    WriteRegDWord HKCU "${REG_UNINSTALL}" \
+                  "NoModify" 1
+    WriteRegDWord HKCU "${REG_UNINSTALL}" \
+                  "NoRepair" 1
+    WriteRegStr HKCU "${REG_UNINSTALL}" \
+                "UninstallString" "$\"$INSTDIR\${UNINSTALLER_NAME}$\""
+    WriteRegStr HKCU "${REG_UNINSTALL}" \
+                "Comments" "Uninstalls $(^Name)"
 FunctionEnd
 
 # Adds ARP related entries to HKLM
@@ -99,7 +111,8 @@ InstallDir "$LOCALAPPDATA\Julia-${Version}"
 
 !insertmacro MUI_LANGUAGE "English"
 
-Section "Dummy Section" SecDummy
+# Main section
+Section "MainSection" SEC01
     SetOutPath $INSTDIR
     File /a /r "julia-${Commit}\*"
     WriteUninstaller "$INSTDIR\${UNINSTALLER_NAME}"
@@ -110,9 +123,9 @@ Section "Dummy Section" SecDummy
     
     # Add uninstall icon in the control panel
     Call addUninstallRegEntriesHKCU
-    
 SectionEnd
 
+# Uninstall section
 Section "uninstall"
     Delete "$INSTDIR\${UNINSTALLER_NAME}"
     Delete "$DESKTOP\Julia.lnk"
