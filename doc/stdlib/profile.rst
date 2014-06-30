@@ -272,9 +272,11 @@ backtraces will be filled. If that happens, the backtraces stop but
 your computation continues. As a consequence, you may miss some
 important profiling data (you will get a warning when that happens).
 
-You can configure the relevant parameters this way::
+You can obtain and configure the relevant parameters this way::
 
+  Profile.init()            # returns the current settings
   Profile.init(n, delay)
+  Profile.init(delay = 0.01)
 
 ``n`` is the total number of instruction pointers you can store, with
 a default value of ``10^6``. If your typical backtrace is 20
@@ -325,13 +327,15 @@ Function reference
    Supply the vector ``data`` of backtraces and a dictionary
    ``lidict`` of line information.
 
-.. function:: init(n::Integer, delay::Float64)
+.. function:: init(; n::Integer, delay::Float64)
 
    Configure the ``delay`` between backtraces (measured in seconds),
    and the number ``n`` of instruction pointers that may be
    stored. Each instruction pointer corresponds to a single line of
    code; backtraces generally consist of a long list of instruction
-   pointers. Default settings are ``n=10^6`` and ``delay=0.001``.
+   pointers. Default settings can be obtained by calling this function
+   with no arguments, and each can be set independently using keywords
+   or in the order ``(n, delay)``.
 
 .. function:: fetch() -> data
 
