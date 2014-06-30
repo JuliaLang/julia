@@ -974,35 +974,52 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
 
     jl_function_t *func = NULL;
     if (ti == (jl_value_t*)jl_bottom_type) {
-        JL_GC_POP();
         if (m != JL_NULL) {
             func = m->func;
             jl_lambda_info_t *newlinfo = NULL;
             jl_value_t *code = NULL;
-            JL_GC_PUSH3(&code, &func, &newlinfo)
+            jl_expr_t *ex = NULL;
+            jl_expr_t *oldast = NULL;
+            JL_GC_PUSH4(&code, &newlinfo, &ex, &oldast);
             if (m->isstaged)
             {
-                code = jl_apply(m->func, tt->data, jl_tuple_len(tt));
+                if (jl_is_expr(m->func->linfo->ast))
+                    oldast = (jl_expr_t*)m->func->linfo;
+                else
+                    oldast = (jl_expr_t*)jl_uncompress_ast(m->func->linfo, m->func->linfo->ast);
+                assert(oldast->head == lambda_sym);
+                ex = jl_exprn(arrow_sym, 2);
+                jl_expr_t *argnames = jl_exprn(tuple_sym, jl_tuple_len(tt));
+                jl_cellset(ex->args, 0, argnames);
+                jl_array_t *oldargnames = (jl_array_t*)jl_cellref(oldast->args,0);
+                for (size_t i = 0; i < jl_tuple_len(tt); ++i) {
+                    jl_cellset(argnames->args,i,jl_cellref(oldargnames,i));
+                }
+                jl_cellset(ex->args, 1, jl_apply(m->func, tt->data, jl_tuple_len(tt)));
+                code = jl_expand((jl_value_t*)ex);
                 newlinfo = jl_new_lambda_info(code, jl_null);
                 func = jl_new_closure(NULL, (jl_value_t*)jl_null, newlinfo);
             }
+            JL_GC_POP();
             JL_GC_POP();
             if (!cache)
                 return func;
             return cache_method(mt, tt, func, (jl_tuple_t*)m->sig, jl_null);
         }
+        JL_GC_POP();
         return jl_bottom_func;
     }
 
     assert(jl_is_tuple(env));
     func = m->func;
 
+    /*
     if (m->isstaged)
     {
         jl_value_t *code = jl_apply(m->func, tt->data, jl_tuple_len(tt));
         jl_lambda_info_t *newlinfo = jl_new_lambda_info(code, env);
         func = jl_new_closure(NULL, (jl_value_t*)jl_null, newlinfo);
-    }
+    }*/
 
     // don't bother computing this if no arguments are tuples
     for(i=0; i < jl_tuple_len(tt); i++) {
