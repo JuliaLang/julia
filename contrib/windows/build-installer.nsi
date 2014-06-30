@@ -69,19 +69,19 @@ FunctionEnd
 
 # Adds ARP related entries to HKLM
 Function addArpHKCU
-    WriteRegStr HKCU "${ARP}" \
+    WriteRegStr HKLM "${ARP}" \
                  "DisplayName" "Julia Language ${Version}"
-    WriteRegStr HKCU "${ARP}" \
+    WriteRegStr HKLM "${ARP}" \
                  "Publisher" "The Julia Project"
-    WriteRegStr HKCU "${ARP}" \
+    WriteRegStr HKLM "${ARP}" \
                  "DisplayIcon" "$INSTDIR\${EXE_FILE}"
-    WriteRegStr HKCU "${ARP}" \
+    WriteRegStr HKLM "${ARP}" \
                  "UninstallString" "$\"$INSTDIR\${UNINSTALLER_NAME}$\""
-    WriteRegStr HKCU "${ARP}" \
+    WriteRegStr HKLM "${ARP}" \
                  "QuietUninstallString" "$\"$INSTDIR\${UNINSTALLER_NAME}$\" /S"
-    WriteRegDWORD HKCU "${ARP}" "EstimatedSize" "300"
-    WriteRegDWORD HKCU "${ARP}" "NoModify" "1"
-    WriteRegDWORD HKCU "${ARP}" "NoRepair" "1"
+    WriteRegDWORD HKLM "${ARP}" "EstimatedSize" "300"
+    WriteRegDWORD HKLM "${ARP}" "NoModify" "1"
+    WriteRegDWORD HKLM "${ARP}" "NoRepair" "1"
 FunctionEnd
 
 # Icon settings
