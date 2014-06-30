@@ -930,6 +930,32 @@ static jl_value_t *lookup_match(jl_value_t *a, jl_value_t *b, jl_tuple_t **penv,
     return ti;
 }
 
+DLLEXPORT jl_function_t *jl_instantiate_staged(jl_methlist_t *m, jl_tuple_t *tt)
+{
+    jl_lambda_info_t *newlinfo = NULL;
+    jl_value_t *code = NULL;
+    jl_expr_t *ex = NULL;
+    jl_expr_t *oldast = NULL;
+    jl_function_t *func = NULL;
+    JL_GC_PUSH4(&code, &newlinfo, &ex, &oldast);
+    if (jl_is_expr(m->func->linfo->ast))
+        oldast = (jl_expr_t*)m->func->linfo;
+    else
+        oldast = (jl_expr_t*)jl_uncompress_ast(m->func->linfo, m->func->linfo->ast);
+    assert(oldast->head == lambda_sym);
+    ex = jl_exprn(arrow_sym, 2);
+    jl_expr_t *argnames = jl_exprn(tuple_sym, jl_tuple_len(tt));
+    jl_cellset(ex->args, 0, argnames);
+    jl_array_t *oldargnames = (jl_array_t*)jl_cellref(oldast->args,0);
+    for (size_t i = 0; i < jl_tuple_len(tt); ++i) {
+        jl_cellset(argnames->args,i,jl_cellref(oldargnames,i));
+    }
+    jl_cellset(ex->args, 1, jl_apply(m->func, tt->data, jl_tuple_len(tt)));
+    func = (jl_function_t*)jl_toplevel_eval(jl_expand((jl_value_t*)ex));
+    JL_GC_POP();
+    return func;
+}
+
 static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, int cache, int inexact)
 {
     jl_methlist_t *m = mt->defs;
@@ -976,31 +1002,8 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
     if (ti == (jl_value_t*)jl_bottom_type) {
         if (m != JL_NULL) {
             func = m->func;
-            jl_lambda_info_t *newlinfo = NULL;
-            jl_value_t *code = NULL;
-            jl_expr_t *ex = NULL;
-            jl_expr_t *oldast = NULL;
-            JL_GC_PUSH4(&code, &newlinfo, &ex, &oldast);
             if (m->isstaged)
-            {
-                if (jl_is_expr(m->func->linfo->ast))
-                    oldast = (jl_expr_t*)m->func->linfo;
-                else
-                    oldast = (jl_expr_t*)jl_uncompress_ast(m->func->linfo, m->func->linfo->ast);
-                assert(oldast->head == lambda_sym);
-                ex = jl_exprn(arrow_sym, 2);
-                jl_expr_t *argnames = jl_exprn(tuple_sym, jl_tuple_len(tt));
-                jl_cellset(ex->args, 0, argnames);
-                jl_array_t *oldargnames = (jl_array_t*)jl_cellref(oldast->args,0);
-                for (size_t i = 0; i < jl_tuple_len(tt); ++i) {
-                    jl_cellset(argnames->args,i,jl_cellref(oldargnames,i));
-                }
-                jl_cellset(ex->args, 1, jl_apply(m->func, tt->data, jl_tuple_len(tt)));
-                code = jl_expand((jl_value_t*)ex);
-                newlinfo = jl_new_lambda_info(code, jl_null);
-                func = jl_new_closure(NULL, (jl_value_t*)jl_null, newlinfo);
-            }
-            JL_GC_POP();
+                func = jl_instantiate_staged(m,tt);
             JL_GC_POP();
             if (!cache)
                 return func;
@@ -1013,13 +1016,8 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
     assert(jl_is_tuple(env));
     func = m->func;
 
-    /*
     if (m->isstaged)
-    {
-        jl_value_t *code = jl_apply(m->func, tt->data, jl_tuple_len(tt));
-        jl_lambda_info_t *newlinfo = jl_new_lambda_info(code, env);
-        func = jl_new_closure(NULL, (jl_value_t*)jl_null, newlinfo);
-    }*/
+        func = jl_instantiate_staged(m,tt);
 
     // don't bother computing this if no arguments are tuples
     for(i=0; i < jl_tuple_len(tt); i++) {
