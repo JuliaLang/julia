@@ -8,7 +8,7 @@ TESTS = all core keywordargs numbers strings unicode collections hashing	\
 	suitesparse complex version pollfd mpfr	broadcast socket floatapprox	\
 	priorityqueue readdlm reflection regex float16 combinatorics dates	\
 	sysinfo rounding ranges mod2pi euler show lineedit replcompletions	\
-	backtrace repl test examples goto llvmcall grisu
+	backtrace repl test examples goto llvmcall grisu staged
 
 default: all
 

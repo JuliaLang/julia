@@ -675,7 +675,7 @@ jl_function_t *jl_new_generic_function(jl_sym_t *name);
 void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth,
                    jl_tuple_t *tvars, int8_t isstaged);
 DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
-                                    jl_tuple_t *argtypes, jl_function_t *f, int8_t isstaged);
+                                    jl_tuple_t *argtypes, jl_function_t *f, jl_value_t *isstaged);
 DLLEXPORT jl_value_t *jl_box_bool(int8_t x);
 DLLEXPORT jl_value_t *jl_box_int8(int32_t x);
 DLLEXPORT jl_value_t *jl_box_uint8(uint32_t x);

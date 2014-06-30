@@ -633,6 +633,13 @@ const limit_tuple_type_n = function (t::Tuple, lim::Int)
     return t
 end
 
+function func_for_method(m::Method, tt)
+    if !m.isstaged
+        return m.func.code
+    end
+    (ccall(:jl_instantiate_staged,Any,(Any,Any),m,tt)).code
+end
+
 function abstract_call_gf(f, fargs, argtypes, e)
     if length(argtypes)>1 && (argtypes[1] <: Tuple) && argtypes[2]===Int
         # allow tuple indexing functions to take advantage of constant
@@ -704,7 +711,7 @@ function abstract_call_gf(f, fargs, argtypes, e)
         end
     end
     for (m::Tuple) in x
-        linfo = m[3].func.code
+        linfo = func_for_method(m[3],argtypes)
         sig = m[1]
         lsig = length(m[3].sig)
         # limit argument type tuple based on size of definition signature.
@@ -749,7 +756,7 @@ function invoke_tfunc(f, types, argtypes)
         return Any
     end
     for (m::Tuple) in applicable
-        linfo = m[3].func.code
+        linfo = func_for_method(m[3],types)
         if typeseq(m[1],types)
             tvars = m[2][1:2:end]
             (ti, env) = ccall(:jl_match_method, Any, (Any,Any,Any),
@@ -2072,7 +2079,8 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
         return NF
     end
     meth = meth[1]::Tuple
-    linfo = meth[3].func.code
+
+    linfo = func_for_method(meth[3],atypes)
 
     ## This code tries to limit the argument list length only when it is
     ## growing due to recursion.
@@ -3037,7 +3045,7 @@ end
 function code_typed(f::Callable, types::(Type...))
     asts = {}
     for x in _methods(f,types,-1)
-        linfo = x[3].func.code
+        linfo = func_for_method(x[3],types)
         (tree, ty) = typeinf(linfo, x[1], x[2])
         if !isa(tree,Expr)
             push!(asts, ccall(:jl_uncompress_ast, Any, (Any,Any), linfo, tree))
@@ -3051,7 +3059,7 @@ end
 function return_types(f::Callable, types)
     rt = {}
     for x in _methods(f,types,-1)
-        linfo = x[3].func.code
+        linfo = func_for_method(x[3],types)
         (tree, ty) = typeinf(linfo, x[1], x[2])
         push!(rt, ty)
     end
