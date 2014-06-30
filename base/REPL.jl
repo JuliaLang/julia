@@ -411,7 +411,9 @@ function history_prev(s::LineEdit.MIState, hist::REPLHistoryProvider)
     hist.last_idx = -1
     if history_move(s, hist, hist.cur_idx-1)
         LineEdit.move_input_start(s)
-        LineEdit.move_line_end(s)
+        LineEdit.reset_key_repeats(s) do
+            LineEdit.move_line_end(s)
+        end
         LineEdit.refresh_line(s)
     else
         Terminals.beep(LineEdit.terminal(s))
