@@ -3672,15 +3672,10 @@ for (fn, elty, relty) in ((:dtrsyl_, :Float64, :Float64),
                    (:ctrsyl_, :Complex64, :Float32))
     @eval begin
         function trsyl!(transa::BlasChar, transb::BlasChar, A::StridedMatrix{$elty}, B::StridedMatrix{$elty}, C::StridedMatrix{$elty}, isgn::Int=1)
-            chkstride1(A)
-            chkstride1(B)
-            chkstride1(C)
-            m = size(A, 1)
-            n = size(B, 1)
+            chkstride1(A, B, C)
+            m, n = chksquare(A, B)
             lda = max(1, stride(A, 2))
             ldb = max(1, stride(B, 2))
-            if lda < m throw(DimensionMismatch("")) end
-            if ldb < n throw(DimensionMismatch("")) end
             m1, n1 = size(C)
             if m != m1 || n != n1 throw(DimensionMismatch("")) end
             ldc = max(1, stride(C, 2))

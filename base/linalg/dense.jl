@@ -473,7 +473,6 @@ sylvester{T<:Integer}(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T
 
 # AX + XA' + C = 0
 function lyap{T<:BlasFloat}(A::StridedMatrix{T},C::StridedMatrix{T})
-    chksquare(A, C)
     R, Q = schur(A)
 
     D = -Ac_mul_B(Q,C*Q)
