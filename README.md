@@ -329,6 +329,6 @@ The following distributions include julia, but the versions may be out of date d
 <a name="Editor-Terminal-Setup"/>
 ## Editor and Terminal Setup
 
-Currently, Julia editing mode support is available for Emacs, Vim, Textmate, Sublime Text, Notepad++, and Kate, in `contrib/`.
+Currently, Julia editing mode support is available for Emacs, Vim, Textmate, Sublime Text, Notepad++, and Kate, in `contrib/`. There is early support for IDEs such as [Lighttable](https://github.com/one-more-minute/Jewel), [QTCreator based JuliaStudio](http://forio.com/labs/julia-studio/), and [Eclipse (LiClipse)](http://brainwy.github.io/liclipse/). A notebook interface is available through [IJulia](https://github.com/JuliaLang/IJulia.jl), which adds Julia support to the iPython notebook.
 
 In the terminal, Julia makes great use of both control-key and meta-key bindings. To make the meta-key bindings more accessible, many terminal emulator programs (e.g., `Terminal`, `iTerm`, `xterm`, etc) allow you to use the alt or option key as meta.  See the section in the manual on [interacting with Julia](http://docs.julialang.org/en/latest/manual/interacting-with-julia/) for more details.
