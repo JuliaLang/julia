@@ -21,6 +21,17 @@ end
 ####
 #### User-level functions
 ####
+function init(; n::Union(Nothing,Integer) = nothing, delay::Union(Nothing,Float64) = nothing)
+    n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
+    delay_cur = ccall(:jl_profile_delay_nsec, Uint64, ())/10^9
+    if n == nothing && delay == nothing
+        return int(n_cur), delay_cur
+    end
+    nnew = (n == nothing) ? n_cur : n
+    delaynew = (delay == nothing) ? delay_cur : delay
+    init(nnew, delaynew)
+end
+
 function init(n::Integer, delay::Float64)
     status = ccall(:jl_profile_init, Cint, (Csize_t, Uint64), n, iround(10^9*delay))
     if status == -1
@@ -108,7 +119,7 @@ function fetch()
     len = len_data()
     maxlen = maxlen_data()
     if (len == maxlen)
-        warn("The profile data buffer is full; profiling probably terminated\nbefore your program finished. To profile for longer runs, call Profile.init()\nwith a larger buffer and/or larger delay.")
+        warn("The profile data buffer is full; profiling probably terminated\nbefore your program finished. To profile for longer runs, call Profile.init\nwith a larger buffer and/or larger delay.")
     end
     pointer_to_array(get_data_pointer(), (len,))
 end
