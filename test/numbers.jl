@@ -1782,3 +1782,12 @@ end
 @test [1,2,3] .// [4,5,6] == [1//4, 2//5, 3//6]
 @test [1+2im,3+4im] .// [5,6] == [(1+2im)//5,(3+4im)//6]
 @test [1//3+2im,3+4im] .// [5,6] == [(1//3+2im)//5,(3+4im)//6]
+
+# issue #7441
+@test_throws InexactError int32(2.0^50)
+
+@test_throws InexactError iround(Uint8, 255.5)
+@test iround(Uint8, 255.4) === 0xff
+
+@test_throws InexactError iround(Int16, -32768.7)
+@test iround(Int16, -32768.1) === int16(-32768)
