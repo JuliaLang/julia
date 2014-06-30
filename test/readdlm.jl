@@ -68,6 +68,12 @@ end
 
 @test isequaldlm(readcsv(IOBuffer("\n1,2,3\n4,5,6\n\n\n")), reshape({"",1.0,4.0,"","","",2.0,5.0,"","","",3.0,6.0,"",""}, 5, 3), Any)
 
+let x = randbool(5, 10), io = IOBuffer()
+    writedlm(io, x)
+    seek(io, 0)
+    @test readdlm(io, Bool) == x
+end
+
 let x = [1,2,3], y = [4,5,6], io = IOBuffer()
     writedlm(io, zip(x,y), ",  ")
     seek(io, 0)
