@@ -1145,6 +1145,7 @@ function findmin(a)
     return (m, mi)
 end
 
+
 indmax(a) = findmax(a)[2]
 indmin(a) = findmin(a)[2]
 
@@ -1178,6 +1179,26 @@ function findin(a, b)
     end
     ind
 end
+
+
+function findInterval{T<:Number}(x::T,vec::Array{T})
+
+    out = zeros(Int,length(x))
+    vec = unique(vec)
+    sort!(vec)
+
+    for j in 1:length(x)
+        if x[j] < vec[1]
+            out[1] = 0
+        elseif x[j] > vec[end]
+            out[end] = 0
+        else
+            out[j] = searchsortedfirst(vec,x[j])-1 
+        end
+    end
+    return out
+end
+
 
 # Copying subregions
 function indcopy(sz::Dims, I::Vector)

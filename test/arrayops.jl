@@ -893,3 +893,20 @@ function i7197()
     ind2sub(size(S), 5)
 end
 @test i7197() == (2,2)
+
+# findInterval
+x = 3.4
+vec = linspace(1.0,10.0,10)
+@test Base.findInterval(x,vec) == 3
+
+x = 19
+vec = [-1,2,5,30,1000,-2,5,18,21]
+@test Base.findInterval(x,vex) == 5
+
+@test Base.findInterval(-5,vec) == 0
+@test Base.findInterval(1001,vec) == 0
+
+x = rand()
+vec = [-1.0,rand(10),1.1]
+@test Base.findInterval(x,vec) == findfirst(vec .> x)-1
+
