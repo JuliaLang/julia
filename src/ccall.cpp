@@ -17,9 +17,9 @@ extern "C" DLLEXPORT void jl_read_sonames(void)
         ssize_t n = getline(&line, &sz, ldc);
         if (n == -1)
             break;
-        if (n > 2 && isspace(line[0])) {
+        if (n > 2 && jl_isspace(line[0])) {
             int i=0;
-            while (isspace(line[++i])) ;
+            while (jl_isspace(line[++i])) ;
             char *name = &line[i];
             char *dot = strstr(name, ".so");
             i=0;
@@ -28,10 +28,10 @@ extern "C" DLLEXPORT void jl_read_sonames(void)
                 continue;
 
             // Detect if this entry is for the current architecture
-            while (!isspace(dot[++i])) ;
-            while (isspace(dot[++i])) ;
+            while (!jl_isspace(dot[++i])) ;
+            while (jl_isspace(dot[++i])) ;
             int j = i;
-            while (!isspace(dot[++j])) ;
+            while (!jl_isspace(dot[++j])) ;
             char *arch = strstr(dot+i,"x86-64");
             if (arch != NULL && arch < dot + j) {
 #ifdef _P32
