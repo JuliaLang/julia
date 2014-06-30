@@ -38,7 +38,7 @@ Function createDesktopLink
 FunctionEnd
 
 # Adds the entries that create the icon in the uninstall section of the control panel.
-Function addUninstallRegEntriesHKCU
+Function addArpHKCU
     WriteRegStr HKCU "${REG_UNINSTALL}" \
                 "DisplayName" "$(^Name)"
     WriteRegStr HKCU "${REG_UNINSTALL}" \
@@ -63,25 +63,10 @@ Function addUninstallRegEntriesHKCU
                   "NoRepair" 1
     WriteRegStr HKCU "${REG_UNINSTALL}" \
                 "UninstallString" "$\"$INSTDIR\${UNINSTALLER_NAME}$\""
-    WriteRegStr HKCU "${REG_UNINSTALL}" \
-                "Comments" "Uninstalls $(^Name)"
-FunctionEnd
-
-# Adds ARP related entries to HKLM
-Function addArpHKCU
-    WriteRegStr HKLM "${ARP}" \
-                 "DisplayName" "Julia Language ${Version}"
-    WriteRegStr HKLM "${ARP}" \
-                 "Publisher" "The Julia Project"
-    WriteRegStr HKLM "${ARP}" \
-                 "DisplayIcon" "$INSTDIR\${EXE_FILE}"
-    WriteRegStr HKLM "${ARP}" \
-                 "UninstallString" "$\"$INSTDIR\${UNINSTALLER_NAME}$\""
     WriteRegStr HKLM "${ARP}" \
                  "QuietUninstallString" "$\"$INSTDIR\${UNINSTALLER_NAME}$\" /S"
-    WriteRegDWORD HKLM "${ARP}" "EstimatedSize" "300"
-    WriteRegDWORD HKLM "${ARP}" "NoModify" "1"
-    WriteRegDWORD HKLM "${ARP}" "NoRepair" "1"
+    WriteRegStr HKCU "${REG_UNINSTALL}" \
+                "Comments" "Uninstalls $(^Name)"
 FunctionEnd
 
 # Icon settings
@@ -120,9 +105,6 @@ Section "MainSection" SEC01
 
     # ARP entries
     Call addArpHKCU
-    
-    # Add uninstall icon in the control panel
-    Call addUninstallRegEntriesHKCU
 SectionEnd
 
 # Uninstall section
