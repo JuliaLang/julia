@@ -457,3 +457,28 @@ function cond(A::StridedMatrix, p::Real=2)
     end
     throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2 or Inf"))
 end
+
+## Lyapunov and Sylvester equation
+
+# AX + XB + C = 0
+function sylvester{T<:BlasFloat}(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T})
+    RA, QA = schur(A)
+    RB, QB = schur(B)
+
+    D = -Ac_mul_B(QA,C*QB)
+    Y, scale = LAPACK.trsyl!('N','N', RA, RB, D)
+    scale!(QA*A_mul_Bc(Y,QB), inv(scale))
+end
+sylvester{T<:Integer}(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T}) = sylvester(float(A), float(B), float(C))
+
+# AX + XA' + C = 0
+function lyap{T<:BlasFloat}(A::StridedMatrix{T},C::StridedMatrix{T})
+    R, Q = schur(A)
+
+    D = -Ac_mul_B(Q,C*Q)
+    Y, scale = LAPACK.trsyl!('N', T <: Complex ? 'C' : 'T', R, R, D)
+    scale!(Q*A_mul_Bc(Y,Q), inv(scale))
+end
+lyap{T<:Integer}(A::StridedMatrix{T},C::StridedMatrix{T}) = lyap(float(A), float(C))
+lyap{T<:Number}(a::T, c::T) = -c/(2a)
+                                    
