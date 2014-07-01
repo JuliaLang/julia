@@ -247,7 +247,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             chkstride1(A)
             m, n  = size(A)
             if length(tau) != min(m,n) || length(jpvt) != n throw(DimensionMismatch("geqp3!")) end
-            lda   = max(1,stride(A,2))
+            lda   = stride(A,2)
             if lda == 0 return A, tau, jpvt end # Early exit
             work  = Array($elty, 1)
             lwork = blas_int(-1)
