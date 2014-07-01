@@ -1059,6 +1059,7 @@ export
     versioninfo,
     which,
     whos,
+    clear,
 
 # loading source files
     evalfile,
