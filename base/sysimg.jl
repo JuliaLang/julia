@@ -222,8 +222,11 @@ include("client.jl")
 include("printf.jl")
 importall .Printf
 
-# misc useful functions & macros
+# misc useful functions & macros and system information
 include("util.jl")
+include("sysinfo.jl")
+import .Sys.CPU_CORES
+
 
 # sparse matrices and linear algebra
 include("sparse.jl")
@@ -242,10 +245,6 @@ include("statistics.jl")
 include("fftw.jl")
 include("dsp.jl")
 importall .DSP
-
-# system information
-include("sysinfo.jl")
-import .Sys.CPU_CORES
 
 # mathematical constants
 include("constants.jl")
