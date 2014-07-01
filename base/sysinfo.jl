@@ -217,4 +217,9 @@ function dlpath( libname::String )
     return path
 end
 
+function check_dllist()
+    dll = map(dllist()) do
+    end
+end
+
 end

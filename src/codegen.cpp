@@ -44,7 +44,9 @@
 #include "llvm/IR/DIBuilder.h"
 #include "llvm/AsmParser/Parser.h"
 #include "llvm/Target/TargetMachine.h"
+#include "llvm/IR/Mangler.h"
 #else
+#include "llvm/Target/Mangler.h"
 #include "llvm/Analysis/Verifier.h"
 #endif
 #include "llvm/DebugInfo/DIContext.h"
@@ -197,6 +199,7 @@ static DataLayout *jl_data_layout;
 #else
 static TargetData *jl_data_layout;
 #endif
+static Mangler *jl_mang;
 
 // for image reloading
 static bool imaging_mode = false;
@@ -737,7 +740,6 @@ const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
 {
     std::string code;
     llvm::raw_string_ostream stream(code);
-    llvm::formatted_raw_ostream fstream(stream);
     Function *llvmf = (Function*)f;
     if (dumpasm == false) {
         llvmf->print(stream);
@@ -754,7 +756,7 @@ const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
             return jl_cstr_to_string(const_cast<char*>(""));
         }
         
-        jl_dump_function_asm((void*)fptr, fit->second.lengthAdr, fit->second.lines, fstream);
+        jl_dump_function_asm((void*)fptr, fit->second.lengthAdr, fit->second.lines, stream);
 #else // MCJIT version
         std::map<size_t, ObjectInfo, revcomp> objmap = jl_jit_events->getObjectMap();
         std::map<size_t, ObjectInfo, revcomp>::iterator fit = objmap.find(fptr);
@@ -775,7 +777,7 @@ const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
             if (symtype != object::SymbolRef::ST_Function || symaddr != fptr)
                 continue;
             sym_iter.getSize(symsize);
-            jl_dump_function_asm((void*)fptr, symsize, fit->second.object, fstream);
+            jl_dump_function_asm((void*)fptr, symsize, fit->second.object, stream);
         }
         #else
         error_code itererr;
@@ -787,11 +789,10 @@ const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
             if (symtype != object::SymbolRef::ST_Function || symaddr != fptr)
                 continue;
             sym_iter->getSize(symsize);
-            jl_dump_function_asm((void*)fptr, symsize, fit->second.object, fstream);
+            jl_dump_function_asm((void*)fptr, symsize, fit->second.object, stream);
         }
         #endif // LLVM35
 #endif 
-        fstream.flush();
     }
     return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
 }
@@ -4258,10 +4259,15 @@ static void init_julia_llvm_env(Module *m)
     
 #ifdef LLVM35
     jl_data_layout = new llvm::DataLayoutPass(*jl_ExecutionEngine->getDataLayout());
+    jl_mang = new Mangler(*jl_ExecutionEngine->getDataLayout());
+#elif defined(LLVM34)
+    jl_data_layout = new DataLayout(*jl_ExecutionEngine->getDataLayout());
+    jl_mang = new Mangler(jl_TargetMachine);
 #elif defined(LLVM32)
     jl_data_layout = new DataLayout(*jl_ExecutionEngine->getDataLayout());
-#else 
-    jl_data_layout = new TargetData(*jl_ExecutionEngine->getTargetData());
+    jl_mang = new Mangler(*jl_Ctx, *jl_data_layout);
+#else
+#error "Julia is missing a specification for this version of LLVM"
 #endif
     FPM->add(jl_data_layout);
 
@@ -4345,9 +4351,12 @@ extern "C" void jl_init_codegen(void)
 #endif
     imaging_mode = jl_compileropts.build_path != NULL;
 
+    // Initialize targets and assembly printers/parsers.
+    // Avoids hard-coded targets - will generally be only host CPU anyway.
     InitializeNativeTarget();
     InitializeNativeTargetAsmPrinter();
     InitializeNativeTargetAsmParser();
+    InitializeNativeTargetDisassembler();
 
     Module *m, *engine_module;
 
@@ -4437,6 +4446,7 @@ extern "C" void jl_init_codegen(void)
     jl_ExecutionEngine->DisableLazyCompilation();
     mbuilder = new MDBuilder(getGlobalContext());
 
+    jl_init_mcctx();
     init_julia_llvm_env(m);
 
     jl_jit_events = new JuliaJITEventListener();
