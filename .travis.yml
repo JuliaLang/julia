@@ -2,7 +2,6 @@ language: cpp
 os:
     - linux
 compiler: 
-    - clang
     - gcc
 notifications:
     email: false
@@ -26,6 +25,8 @@ before_install:
 script:
     - make $BUILDOPTS prefix=/tmp/julia install
     - cd .. && mv julia julia2
-    - cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia-debug runtests.jl all
+    - cd /tmp/julia/share/julia/test && JULIA_CPU_CORES=1 /tmp/julia/bin/julia-debug --code-coverage=all runtests.jl all
     - cd - && mv julia2 julia
+    - cd /tmp/julia/share/julia
+    - /tmp/julia/bin/julia-debug -e 'Pkg.add("JSON"); Pkg.clone("git://github.com/timholy/Coverage.jl.git"); using Coverage; Coveralls.submit(Coveralls.process_folder("base"))'
     - echo "Ready for packaging..."

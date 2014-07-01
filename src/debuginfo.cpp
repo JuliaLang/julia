@@ -579,6 +579,7 @@ extern "C" void jl_write_coverage_data(void)
             std::ifstream inf(filename.c_str());
             if (inf.is_open()) {
 		std::string outfile = filename + ".cov";
+		JL_PRINTF(JL_STDOUT, "Writing %s\n", outfile.c_str());
                 std::ofstream outf(outfile.c_str(), std::ofstream::trunc | std::ofstream::out);
                 char line[1024];
                 int l = 1;
