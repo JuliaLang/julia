@@ -341,5 +341,5 @@ function clear()
          Expr(:toplevel,
               :(const Base = $(Expr(:quote, b))),
               :(const LastMain = $(Expr(:quote, last)))))
-    m
+    nothing
 end
