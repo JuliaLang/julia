@@ -93,20 +93,12 @@ end
 varzm{T}(A::AbstractArray{T}, region; corrected::Bool=true) = 
     varzm!(Array(momenttype(T), reduced_dims(A, region)), A; corrected=corrected)
 
-function centralize_sumabs2(A::AbstractArray, m::Number, i::Int, ilast::Int) 
-    # caller should ensure (i + 1 >= ilast, i.e. length >= 2)
-    if i + 512 > ilast
-        @inbounds s = abs2(A[i] - m) + abs2(A[i+1] - m)
-        i += 1
-        while i < ilast
-            @inbounds s += abs2(A[i+=1] - m)
-        end
-        return s
-    else
-        imid = (i + ilast) >>> 1
-        return centralize_sumabs2(A, m, i, imid) + centralize_sumabs2(A, m, imid+1, ilast)
-    end
+immutable CentralizedAbs2Fun{T<:Number} <: Func{1}
+    m::T
 end
+evaluate(f::CentralizedAbs2Fun, x) = abs2(x - f.m)
+centralize_sumabs2(A::AbstractArray, m::Number, ifirst::Int, ilast::Int) =
+    mapreduce_impl(CentralizedAbs2Fun(m), AddFun(), A, ifirst, ilast)
 
 @ngenerate N typeof(R) function centralize_sumabs2!{S,T,N}(R::AbstractArray{S}, A::AbstractArray{T,N}, means::AbstractArray)
     # following the implementation of _mapreducedim! at base/reducedim.jl
@@ -140,13 +132,13 @@ end
             @inbounds (@nref N R j) += abs2((@nref N A i) - (@nref N means j))
         end
     end
-    return R   
-
+    return R
 end
 
 function varm{T}(A::AbstractArray{T}, m::Number; corrected::Bool=true)
     n = length(A)
     n == 0 && return convert(momenttype(T), NaN)
+    n == 1 && return corrected ? convert(momenttype(T), NaN) : zero(momenttype(T))
     return centralize_sumabs2(A, m, 1, n) / (n - int(corrected))
 end
 
