@@ -325,7 +325,7 @@ ifneq ($(LLVM_CLANG_TAR),)
 	$(TAR) -C llvm-$(LLVM_VER)/tools/clang --strip-components 1 -xf $(LLVM_CLANG_TAR)
 endif
 else
-ifneq ($(BUILD_LLVM_CLANG),)
+ifeq ($(BUILD_LLVM_CLANG),1)
 	([ ! -d llvm-$(LLVM_VER)/tools/clang ] && \
 		git clone http://llvm.org/git/clang.git llvm-$(LLVM_VER)/tools/clang  ) || \
 		(cd llvm-$(LLVM_VER)/tools/clang  && \
@@ -342,7 +342,7 @@ ifneq ($(LLVM_LIBCXX_TAR),)
 	$(TAR) -C llvm-$(LLVM_VER)/projects/libcxx --strip-components 1 -xf $(LLVM_LIBCXX_TAR)
 endif
 else
-ifneq ($(BUILD_LLVM_CLANG),)
+ifeq ($(BUILD_LLVM_CLANG),1)
 	([ ! -d llvm-$(LLVM_VER)/tools/clang ] && \
 		git clone http://llvm.org/git/clang.git llvm-$(LLVM_VER)/tools/clang  ) || \
 		(cd llvm-$(LLVM_VER)/tools/clang  && \
