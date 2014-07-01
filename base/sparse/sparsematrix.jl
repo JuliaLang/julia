@@ -1742,13 +1742,18 @@ function ishermitian(A::SparseMatrixCSC)
 end
 
 function istriu{Tv}(A::SparseMatrixCSC{Tv})
-    for col = 1:min(A.n,A.m-1)
-        l1 = A.colptr[col+1]-1
-        for i = 0 : (l1 - A.colptr[col])
-            if A.rowval[l1-i] <= col
+    m, n = size(A)
+    colptr = A.colptr
+    rowval = A.rowval
+    nzval  = A.nzval
+
+    for col = 1:min(n, m-1)
+        l1 = colptr[col+1]-1
+        for i = 0 : (l1 - colptr[col])
+            if rowval[l1-i] <= col
                 break
             end
-            if A.nzval[l1-i] != 0
+            if nzval[l1-i] != 0
                 return false
             end
         end
@@ -1757,12 +1762,17 @@ function istriu{Tv}(A::SparseMatrixCSC{Tv})
 end
 
 function istril{Tv}(A::SparseMatrixCSC{Tv})
-    for col = 2:A.n
-        for i = A.colptr[col] : (A.colptr[col+1]-1)
-            if A.rowval[i] >= col
+    m, n = size(A)
+    colptr = A.colptr
+    rowval = A.rowval
+    nzval  = A.nzval
+
+    for col = 2:n
+        for i = colptr[col] : (colptr[col+1]-1)
+            if rowval[i] >= col
                 break
             end
-            if A.nzval[i] != 0
+            if nzval[i] != 0
                 return false
             end
         end
