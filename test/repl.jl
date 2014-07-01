@@ -1,5 +1,21 @@
 # REPL tests
 using TestHelpers
+import Base: REPL, LineEdit
+
+function fake_repl()
+    # Use pipes so we can easily do blocking reads
+    # In the future if we want we can add a test that the right object
+    # gets displayed by intercepting the display
+    stdin_read,stdin_write = (Base.Pipe(C_NULL), Base.Pipe(C_NULL))
+    stdout_read,stdout_write = (Base.Pipe(C_NULL), Base.Pipe(C_NULL))
+    stderr_read,stderr_write = (Base.Pipe(C_NULL), Base.Pipe(C_NULL))
+    Base.link_pipe(stdin_read,true,stdin_write,true)
+    Base.link_pipe(stdout_read,true,stdout_write,true)
+    Base.link_pipe(stderr_read,true,stderr_write,true)
+
+    repl = Base.REPL.LineEditREPL(TestHelpers.FakeTerminal(stdin_read, stdout_write, stderr_write))
+    stdin_write, stdout_read, stdout_read, repl
+end
 
 # Writing ^C to the repl will cause sigint, so let's not die on that
 ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
@@ -10,17 +26,8 @@ ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
 # this should make sure nothing crashes without depending on how exactly the control
 # characters are being used.
 begin
-# Use pipes so we can easily do blocking reads
-stdin_read,stdin_write = (Base.Pipe(C_NULL), Base.Pipe(C_NULL))
-stdout_read,stdout_write = (Base.Pipe(C_NULL), Base.Pipe(C_NULL))
-stderr_read,stderr_write = (Base.Pipe(C_NULL), Base.Pipe(C_NULL))
-Base.link_pipe(stdin_read,true,stdin_write,true)
-Base.link_pipe(stdout_read,true,stdout_write,true)
-Base.link_pipe(stderr_read,true,stderr_write,true)
+stdin_write, stdout_read, stdout_read, repl = fake_repl()
 
-repl = Base.REPL.LineEditREPL(TestHelpers.FakeTerminal(stdin_read, stdout_write, stderr_write))
-# In the future if we want we can add a test that the right object
-# gets displayed by intercepting the display
 repl.specialdisplay = Base.REPL.REPLDisplay(repl)
 repl.no_history_file = true
 
@@ -56,6 +63,104 @@ write(stdin_write, '\x03')
 # Close REPL ^D
 write(stdin_write, '\x04')
 wait(repltask)
+end
+
+function buffercontents(buf::IOBuffer)
+    p = position(buf)
+    seek(buf,0)
+    c = readall(buf)
+    seek(buf,p)
+    c
+end
+
+# Test various history related issues
+begin
+    stdin_write, stdout_read, stdout_read, repl = fake_repl()
+    # In the future if we want we can add a test that the right object
+    # gets displayed by intercepting the display
+    repl.specialdisplay = Base.REPL.REPLDisplay(repl)
+
+    interface = REPL.setup_interface(repl)
+    repl_mode = interface.modes[1]
+    shell_mode = interface.modes[2]
+    help_mode = interface.modes[3]
+    histp = interface.modes[4]
+
+    hp = REPL.REPLHistoryProvider((Symbol=>Any)[:julia => repl_mode,
+                                           :shell => shell_mode,
+                                           :help  => help_mode])
+    fakehistory =
+    """
+    # time: 2014-06-30 17:32:49 EDT
+    # mode: julia
+    \tshell
+    # time: 2014-06-30 17:32:59 EDT
+    # mode: shell
+    \tll
+    # time: 2014-06-30 17:32:49 EDT
+    # mode: julia
+    \t1 + 1
+    # time: 2014-06-30 17:35:39 EDT
+    # mode: foobar
+    \tbarfoo
+    # time: 2014-06-30 18:44:29 EDT
+    # mode: shell
+    \tls
+    # time: 2014-06-30 19:44:29 EDT
+    # mode: foobar
+    \tls
+    # time: 2014-06-30 20:44:29 EDT
+    # mode: julia
+    \t2 + 2"""
+
+    REPL.hist_from_file(hp, IOBuffer(fakehistory))
+    REPL.history_reset_state(hp)
+
+    histp.hp = repl_mode.hist = shell_mode.hist = help_mode.hist = hp
+
+    # Some manual setup
+    s = LineEdit.init_state(repl.t, interface)
+
+    # Test that navigating history skips invalid modes
+    # (in both directions)
+    LineEdit.history_prev(s, hp)
+    @test LineEdit.mode(s) == repl_mode
+    @test buffercontents(LineEdit.buffer(s)) == "2 + 2"
+    LineEdit.history_prev(s, hp)
+    @test LineEdit.mode(s) == shell_mode
+    @test buffercontents(LineEdit.buffer(s)) == "ls"
+    LineEdit.history_prev(s, hp)
+    @test LineEdit.mode(s) == repl_mode
+    @test buffercontents(LineEdit.buffer(s)) == "1 + 1"
+    LineEdit.history_next(s, hp)
+    @test LineEdit.mode(s) == shell_mode
+    @test buffercontents(LineEdit.buffer(s)) == "ls"
+    LineEdit.history_next(s, hp)
+    @test LineEdit.mode(s) == repl_mode
+    @test buffercontents(LineEdit.buffer(s)) == "2 + 2"
+    LineEdit.history_next(s, hp)
+
+    # Test that searching backwards puts you into the correct mode and
+    # skips invalid modes.
+    LineEdit.enter_search(s, histp, true)
+    ss = LineEdit.state(s, histp)
+    write(ss.query_buffer, "l")
+    LineEdit.update_display_buffer(ss, ss)
+    LineEdit.accept_result(s, histp)
+    @test LineEdit.mode(s) == shell_mode
+    @test buffercontents(LineEdit.buffer(s)) == "ls"
+
+    # Test that searching for `ll` actually matches `ll` after
+    # both letters are types rather than jumping to `shell`
+    LineEdit.history_prev(s, hp)
+    LineEdit.enter_search(s, histp, true)
+    write(ss.query_buffer, "l")
+    LineEdit.update_display_buffer(ss, ss)
+    write(ss.query_buffer, "l")
+    LineEdit.update_display_buffer(ss, ss)
+    LineEdit.accept_result(s, histp)
+    @test LineEdit.mode(s) == shell_mode
+    @test buffercontents(LineEdit.buffer(s)) == "ll"
 end
 
 ccall(:jl_exit_on_sigint, Void, (Cint,), 1)

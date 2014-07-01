@@ -642,10 +642,10 @@ write_prompt(terminal, s::PromptState) = write_prompt(terminal, s, s.p.prompt)
 function write_prompt(terminal, s::PromptState, prompt)
     prefix = isa(s.p.prompt_prefix,Function) ? s.p.prompt_prefix() : s.p.prompt_prefix
     suffix = isa(s.p.prompt_suffix,Function) ? s.p.prompt_suffix() : s.p.prompt_suffix
-    Base.have_color && write(terminal, prefix)
+    write(terminal, prefix)
     write(terminal, prompt)
     write(terminal, Base.text_colors[:normal])
-    Base.have_color && write(terminal, suffix)
+    write(terminal, suffix)
 end
 write_prompt(terminal, s::ASCIIString) = write(terminal, s)
 
@@ -966,13 +966,14 @@ function reset_state(s::SearchState)
     reset_state(s.histprompt.hp)
 end
 
-type HistoryPrompt <: TextInterface
-    hp::HistoryProvider
+type HistoryPrompt{T<:HistoryProvider} <: TextInterface
+    hp::T
     complete
     keymap_func::Function
     HistoryPrompt(hp) = new(hp, EmptyCompletionProvider())
 end
 
+HistoryPrompt{T<:HistoryProvider}(hp::T) = HistoryPrompt{T}(hp)
 init_state(terminal, p::HistoryPrompt) = SearchState(terminal, p, true, IOBuffer(), IOBuffer())
 
 state(s::MIState, p) = s.mode_state[p]
