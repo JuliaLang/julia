@@ -566,14 +566,19 @@ static void coverageVisitLine(std::string filename, int line)
 
 extern "C" void jl_write_coverage_data(void)
 {
+    std::string base = std::string(julia_home);
+    base.erase(base.end()-7, base.end());
+    base = base + "base/";
     coveragedata_t::iterator it = coverageData.begin();
     for (; it != coverageData.end(); it++) {
         std::string filename = (*it).first;
-        std::string outfile = filename + ".cov";
         std::vector<GlobalVariable*> &counts = (*it).second;
         if (counts.size() > 1) {
+	    if (filename[0] != '/')
+		filename = base + filename;
             std::ifstream inf(filename.c_str());
             if (inf.is_open()) {
+		std::string outfile = filename + ".cov";
                 std::ofstream outf(outfile.c_str(), std::ofstream::trunc | std::ofstream::out);
                 char line[1024];
                 int l = 1;
