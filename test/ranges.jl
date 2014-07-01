@@ -321,3 +321,7 @@ r = linrange(0.25,0.25,1)
 
 # issue #7426
 @test [typemax(Int):1:typemax(Int)] == [typemax(Int)]
+
+#issue #7484
+r7484 = 0.1:0.1:1
+@test [reverse(r7484)] == reverse([r7484])
