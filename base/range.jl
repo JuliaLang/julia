@@ -495,7 +495,7 @@ function vcat{T}(rs::Range{T}...)
 end
 
 reverse(r::OrdinalRange) = range(last(r), -step(r), length(r))
-reverse(r::FloatRange)   = FloatRange(last(r), -r.step, r.len, r.divisor)
+reverse(r::FloatRange)   = FloatRange(r.start + (r.len-1)*r.step, -r.step, r.len, r.divisor)
 
 ## sorting ##
 
