@@ -25,7 +25,8 @@ import ..LineEdit:
     history_next_prefix,
     history_prev,
     history_prev_prefix,
-    history_search
+    history_search,
+    accept_result
 
 abstract AbstractREPL
 
@@ -230,6 +231,7 @@ end
 
 type LineEditREPL <: AbstractREPL
     t::TextTerminal
+    hascolor::Bool
     prompt_color::String
     input_color::String
     answer_color::String
@@ -243,15 +245,17 @@ type LineEditREPL <: AbstractREPL
     specialdisplay
     interface
     backendref::REPLBackendRef
-    LineEditREPL(t,prompt_color,input_color,answer_color,shell_color,help_color,no_history_file,in_shell,in_help,envcolors) =
-        new(t,prompt_color,input_color,answer_color,shell_color,help_color,no_history_file,in_shell,
+    LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,no_history_file,in_shell,in_help,envcolors) =
+        new(t,true,prompt_color,input_color,answer_color,shell_color,help_color,no_history_file,in_shell,
             in_help,envcolors,false,nothing)
 end
 outstream(r::LineEditREPL) = r.t
 specialdisplay(r::LineEditREPL) = r.specialdisplay
 specialdisplay(r::AbstractREPL) = nothing
 
-LineEditREPL(t::TextTerminal, envcolors = false) =  LineEditREPL(t, julia_green,
+LineEditREPL(t::TextTerminal, envcolors = false) =  LineEditREPL(t,
+                                              true,
+                                              julia_green,
                                               Base.input_color(),
                                               Base.answer_color(),
                                               Base.text_colors[:red],
@@ -377,19 +381,19 @@ function add_history(hist::REPLHistoryProvider, s)
     flush(hist.history_file)
 end
 
-function history_move(s::LineEdit.MIState, hist::REPLHistoryProvider, idx::Int)
+function history_move(s::LineEdit.MIState, hist::REPLHistoryProvider, idx::Int, save_idx::Int = hist.cur_idx)
     max_idx = length(hist.history) + 1
     @assert 1 <= hist.cur_idx <= max_idx
-    (1 <= idx <= max_idx) || return false
-    idx != hist.cur_idx || return false
+    (1 <= idx <= max_idx) || return :none
+    idx != hist.cur_idx || return :none
 
     # save the current line
-    if hist.cur_idx == max_idx
+    if save_idx == max_idx
         hist.last_mode = LineEdit.mode(s)
         hist.last_buffer = copy(LineEdit.buffer(s))
     else
-        hist.history[hist.cur_idx] = LineEdit.input_string(s)
-        hist.modes[hist.cur_idx] = mode_idx(hist, LineEdit.mode(s))
+        hist.history[save_idx] = LineEdit.input_string(s)
+        hist.modes[save_idx] = mode_idx(hist, LineEdit.mode(s))
     end
 
     # load the saved line
@@ -399,37 +403,60 @@ function history_move(s::LineEdit.MIState, hist::REPLHistoryProvider, idx::Int)
         hist.last_mode = nothing
         hist.last_buffer = IOBuffer()
     else
-        LineEdit.transition(s, hist.mode_mapping[hist.modes[idx]])
-        LineEdit.replace_line(s, hist.history[idx])
+        if haskey(hist.mode_mapping, hist.modes[idx])
+            LineEdit.transition(s, hist.mode_mapping[hist.modes[idx]])
+            LineEdit.replace_line(s, hist.history[idx])
+        else
+            return :skip
+        end
     end
-
     hist.cur_idx = idx
-    true
+
+    return :ok
 end
 
-function history_prev(s::LineEdit.MIState, hist::REPLHistoryProvider)
+# Modified version of accept_result that also transitions modes
+function LineEdit.accept_result(s, p::LineEdit.HistoryPrompt{REPLHistoryProvider})
+    parent = LineEdit.state(s, p).parent
+    hist = p.hp
+    m = hist.mode_mapping[hist.modes[hist.cur_idx]]
+    LineEdit.replace_line(LineEdit.state(s, m), LineEdit.state(s, p).response_buffer)
+    LineEdit.transition(s, m)
+end
+
+function history_prev(s::LineEdit.MIState, hist::REPLHistoryProvider,
+        save_idx::Int = hist.cur_idx)
     hist.last_idx = -1
-    if history_move(s, hist, hist.cur_idx-1)
+    m = history_move(s, hist, hist.cur_idx-1, save_idx)
+    if m == :ok
         LineEdit.move_input_start(s)
         LineEdit.reset_key_repeats(s) do
             LineEdit.move_line_end(s)
         end
         LineEdit.refresh_line(s)
+    elseif m == :skip
+        hist.cur_idx -= 1
+        history_prev(s, hist, save_idx)
     else
         Terminals.beep(LineEdit.terminal(s))
     end
 end
 
-function history_next(s::LineEdit.MIState, hist::REPLHistoryProvider)
+function history_next(s::LineEdit.MIState, hist::REPLHistoryProvider,
+        save_idx::Int = hist.cur_idx)
     cur_idx = hist.cur_idx
     if 0 < hist.last_idx
         # issue #6312
         cur_idx = hist.last_idx
         hist.last_idx = -1
     end
-    if history_move(s, hist, cur_idx+1)
+    m = history_move(s, hist, cur_idx+1, save_idx)
+    if m == :ok
         LineEdit.move_input_end(s)
         LineEdit.refresh_line(s)
+    elseif m == :skip
+        hist.cur_idx += 1
+        history_next(s, hist, save_idx)
     else
         Terminals.beep(LineEdit.terminal(s))
     end
@@ -475,7 +502,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
         return true
     end
 
-    searchfunc,delta = backwards ? (rsearch,-1) : (search,1)
+    searchfunc,delta = backwards ? (rsearch,0) : (search,1)
 
     # Start searching
     # First the current response buffer
@@ -492,7 +519,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     for idx in idxs
         h = hist.history[idx]
         match = searchfunc(h, searchdata)
-        if match != 0:-1 && h != response_str
+        if match != 0:-1 && h != response_str && haskey(hist.mode_mapping, hist.modes[idx])
             truncate(response_buffer, 0)
             write(response_buffer, h)
             seek(response_buffer, first(match)-1)
@@ -564,7 +591,7 @@ function reset(repl::LineEditREPL)
     print(repl.t,Base.text_colors[:normal])
 end
 
-function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[])
+function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_repl_keymap = Dict{Any,Any}[])
     ###
     #
     # This function returns the main interface that describes the REPL
@@ -597,8 +624,9 @@ function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[]
     # Set up the main Julia prompt
     julia_prompt = Prompt("julia> ";
         # Copy colors from the prompt object
-        prompt_prefix = repl.prompt_color,
-        prompt_suffix = repl.envcolors ? Base.input_color() : repl.input_color,
+        prompt_prefix = hascolor ? repl.prompt_color : "",
+        prompt_suffix = hascolor ?
+            (repl.envcolors ? Base.input_color : repl.input_color) : "",
         keymap_func_data = repl,
         complete = replc,
         on_enter = return_callback)
@@ -607,8 +635,9 @@ function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[]
 
     # Setup help mode
     help_mode = Prompt("help?> ",
-        prompt_prefix = repl.help_color,
-        prompt_suffix = repl.envcolors ? Base.input_color() : repl.input_color,
+        prompt_prefix = hascolor ? repl.help_color : "",
+        prompt_suffix = hascolor ?
+            (repl.envcolors ? Base.input_color : repl.input_color) : "",
         keymap_func_data = repl,
         complete = replc,
         # When we're done transform the entered line into a call to help("$line")
@@ -618,8 +647,9 @@ function setup_interface(repl::LineEditREPL; extra_repl_keymap = Dict{Any,Any}[]
 
     # Set up shell mode
     shell_mode = Prompt("shell> ";
-        prompt_prefix = repl.shell_color,
-        prompt_suffix = repl.envcolors ? Base.input_color() : repl.input_color,
+        prompt_prefix = hascolor ? repl.shell_color : "",
+        prompt_suffix = hascolor ?
+            (repl.envcolors ? Base.input_color : repl.input_color) : "",
         keymap_func_data = repl,
         complete = ShellCompletionProvider(repl),
         # Transform "foo bar baz" into `foo bar baz` (shell quoting)
