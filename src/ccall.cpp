@@ -905,7 +905,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             jl_mang->getNameWithPrefix(f_name_mangled, fn, false);
             //printf("%s -> %s\n", f_name, (char*)f_name_mangled.c_str());
             f_name = (char*)f_name_mangled.c_str();
-            f_name++; // strip leading _
+            f_name += strlen(jl_Ctx->getAsmInfo().getGlobalPrefix()); // strip leading '_', etc.
             delete fn;
         }
         
