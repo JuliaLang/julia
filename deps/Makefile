@@ -788,6 +788,11 @@ ifeq ($(OPENBLAS_DEBUG), 1)
 OPENBLAS_BUILD_OPTS += DEBUG=1
 endif
 
+# Allow disabling AVX for older binutils
+ifeq ($(OPENBLAS_NO_AVX), 1)
+OPENBLAS_BUILD_OPTS += NO_AVX=1
+endif
+
 openblas-$(OPENBLAS_VER).tar.gz:
 	$(JLDOWNLOAD) $@ https://github.com/xianyi/OpenBLAS/tarball/$(OPENBLAS_VER) 
 openblas-$(OPENBLAS_VER)/config.status: openblas-$(OPENBLAS_VER).tar.gz
