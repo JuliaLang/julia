@@ -35,7 +35,7 @@ end
 n = 1
 if net_on 
     n = min(8, CPU_CORES, length(tests))
-    n > 1  && addprocs(n)
+    n > 1  && addprocs(n; exeflags=`--check-bounds=yes`)
     blas_set_num_threads(1)
 else
     filter!(x -> !(x in net_required_for), tests)
