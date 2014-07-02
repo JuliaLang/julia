@@ -419,16 +419,15 @@ end
 flipud(A::AbstractArray) = flipdim(A, 1)
 fliplr(A::AbstractArray) = flipdim(A, 2)
 
-circshift(a, shiftamt::Real) = circshift(a, [integer(shiftamt)])
-function circshift(a, shiftamts)
-    n = ndims(a)
-    I = cell(n)
-    for i=1:n
+circshift(a::AbstractArray, shiftamt::Real) = circshift(a, [integer(shiftamt)])
+function circshift{T,N}(a::AbstractArray{T,N}, shiftamts)
+    I = ()
+    for i=1:N
         s = size(a,i)
         d = i<=length(shiftamts) ? shiftamts[i] : 0
-        I[i] = d==0 ? (1:s) : mod([-d:s-1-d], s).+1
+        I = tuple(I..., d==0 ? [1:s] : mod([-d:s-1-d], s).+1)
     end
-    a[I...]::typeof(a)
+    a[(I::NTuple{N,Vector{Int}})...]
 end
 
 ## Indexing: setindex! ##
