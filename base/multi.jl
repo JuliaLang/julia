@@ -1118,7 +1118,7 @@ function launch_local_workers(cman::LocalManager, np::Integer, config::Dict)
 
     # start the processes first...
     for i in 1:np
-        io, pobj = open(detach(`$(dir)/$(exename) --bind-to $(LPROC.bind_addr) $exeflags`), "r")
+        io, pobj = open(detach(`$(dir)/$(exename) $exeflags --bind-to $(LPROC.bind_addr)`), "r")
         io_objs[i] = io
         configs[i] = merge(config, {:process => pobj})
     end
