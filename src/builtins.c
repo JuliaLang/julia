@@ -609,7 +609,7 @@ DLLEXPORT int jl_substrtod(char *str, size_t offset, int len, double *out)
     char *bstr = str+offset;
     char *pend = bstr+len;
     int err = 0;
-    if (!(*pend == '\0' || isspace(*pend) || *pend == ',')) {
+    if (!(*pend == '\0' || isspace((unsigned char)*pend) || *pend == ',')) {
         // confusing data outside substring. must copy.
         char *newstr = malloc(len+1);
         memcpy(newstr, bstr, len);
@@ -635,7 +635,7 @@ DLLEXPORT int jl_strtod(char *str, double *out)
         (errno==ERANGE && (*out==0 || *out==HUGE_VAL || *out==-HUGE_VAL)))
         return 1;
     while (*p != '\0') {
-        if (!isspace(*p))
+        if (!isspace((unsigned char)*p))
             return 1;
         p++;
     }
@@ -654,7 +654,7 @@ DLLEXPORT int jl_substrtof(char *str, int offset, int len, float *out)
     char *bstr = str+offset;
     char *pend = bstr+len;
     int err = 0;
-    if (!(*pend == '\0' || isspace(*pend) || *pend == ',')) {
+    if (!(*pend == '\0' || isspace((unsigned char)*pend) || *pend == ',')) {
         // confusing data outside substring. must copy.
         char *newstr = malloc(len+1);
         memcpy(newstr, bstr, len);
@@ -689,7 +689,7 @@ DLLEXPORT int jl_strtof(char *str, float *out)
         (errno==ERANGE && (*out==0 || *out==HUGE_VALF || *out==-HUGE_VALF)))
         return 1;
     while (*p != '\0') {
-        if (!isspace(*p))
+        if (!isspace((unsigned char)*p))
             return 1;
         p++;
     }

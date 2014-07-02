@@ -1379,9 +1379,8 @@ JL_CALLABLE(jl_apply_generic)
     mt->ncalls++;
 #endif
 #ifdef JL_TRACE
-    if (trace_en) {
+    if (trace_en)
         show_call(F, args, nargs);
-    }
 #endif
     /*
       search order:
@@ -1393,6 +1392,7 @@ JL_CALLABLE(jl_apply_generic)
       otherwise instantiate the generic method and use it
     */
     jl_function_t *mfunc = jl_method_table_assoc_exact(mt, args, nargs);
+
     if (mfunc != jl_bottom_func) {
         if (mfunc->linfo != NULL && 
             (mfunc->linfo->inInference || mfunc->linfo->inCompile)) {
@@ -1403,26 +1403,31 @@ JL_CALLABLE(jl_apply_generic)
                 li->unspecialized = jl_instantiate_method(mfunc, li->sparams);
             }
             mfunc = li->unspecialized;
+            assert(mfunc != jl_bottom_func);
         }
+        assert(!mfunc->linfo || !mfunc->linfo->inInference);
+        return jl_apply(mfunc, args, nargs);
     }
-    else {
-        jl_tuple_t *tt = arg_type_tuple(args, nargs);
-        JL_GC_PUSH1(&tt);
-        mfunc = jl_mt_assoc_by_type(mt, tt, 1, 0);
-        JL_GC_POP();
-    }
+
+    // cache miss case
+    jl_tuple_t *tt = arg_type_tuple(args, nargs);
+    // if running inference overwrites this particular method, it becomes
+    // unreachable from the method table, so root mfunc.
+    JL_GC_PUSH2(&tt, &mfunc);
+    mfunc = jl_mt_assoc_by_type(mt, tt, 1, 0);
 
     if (mfunc == jl_bottom_func) {
 #ifdef JL_TRACE
-        if (error_en) {
+        if (error_en)
             show_call(F, args, nargs);
-        }
 #endif
+        JL_GC_POP();
         return jl_no_method_error((jl_function_t*)F, args, nargs);
     }
     assert(!mfunc->linfo || !mfunc->linfo->inInference);
-
-    return jl_apply(mfunc, args, nargs);
+    jl_value_t* res = jl_apply(mfunc, args, nargs);
+    JL_GC_POP();
+    return res;
 }
 
 // invoke()

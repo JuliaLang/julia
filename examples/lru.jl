@@ -1,3 +1,4 @@
+module LRUExample
 # An LRU (Least Recently Used) cache is an associative data structure which
 # maintains its contents in an order such that the most recently used item
 # is at the beginning of the structure, and the least recently used at the end.
@@ -124,3 +125,5 @@ function delete!(lru::LRU, key)
     delete!(lru.ht, key)
     delete!(lru.q, idx)
 end
+
+end # module
