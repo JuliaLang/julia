@@ -27,7 +27,8 @@ namespace JL_I {
         fptoui, fptosi, uitofp, sitofp,
         fptrunc, fpext,
         // checked conversion
-        fpsiround, fpuiround, checked_fptoui, checked_fptosi,
+        fpsiround, fpuiround, checked_fptosi, checked_fptoui,
+        checked_trunc_sint, checked_trunc_uint,
         // checked arithmetic
         checked_sadd, checked_uadd, checked_ssub, checked_usub,
         checked_smul, checked_umul,
@@ -455,10 +456,19 @@ static Type *staticeval_bitstype(jl_value_t *targ, const char *fname, jl_codectx
     return to;
 }
 
-static Value *generic_trunc(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
+// NOTE: signd (signed) only relevant if check == true
+static Value *generic_trunc(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx, bool check, bool signd)
 {
     Type *to = staticeval_bitstype(targ, "trunc_int", ctx);
-    return builder.CreateTrunc(JL_INT(auto_unbox(x,ctx)), to);
+    Value *ix = JL_INT(auto_unbox(x,ctx));
+    Value *ans = builder.CreateTrunc(ix, to);
+    if (check) {
+        Value *back = signd ? builder.CreateSExt(ans, ix->getType()) :
+            builder.CreateZExt(ans, ix->getType());
+        raise_exception_unless(builder.CreateICmpEQ(back, ix),
+                               prepare_global(jlinexacterr_var), ctx);
+    }
+    return ans;
 }
 
 static Value *generic_sext(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
@@ -778,7 +788,11 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
 
     HANDLE(box,2)         return generic_box(args[1], args[2], ctx);
     HANDLE(unbox,2)       return generic_unbox(args[1], args[2], ctx);
-    HANDLE(trunc_int,2)   return generic_trunc(args[1], args[2], ctx);
+    HANDLE(trunc_int,2)   return generic_trunc(args[1], args[2], ctx, false, false);
+    HANDLE(checked_trunc_sint,2)
+        return generic_trunc(args[1], args[2], ctx, true, true);
+    HANDLE(checked_trunc_uint,2)
+        return generic_trunc(args[1], args[2], ctx, true, false);
     HANDLE(sext_int,2)    return generic_sext(args[1], args[2], ctx);
     HANDLE(zext_int,2)    return generic_zext(args[1], args[2], ctx);
     HANDLE(pointerref,2)  return emit_pointerref(args[1], args[2], ctx);
@@ -1375,6 +1389,8 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(checked_ssub); ADD_I(checked_usub);
     ADD_I(checked_smul); ADD_I(checked_umul);
     ADD_I(checked_fptosi); ADD_I(checked_fptoui);
+    ADD_I(checked_trunc_sint);
+    ADD_I(checked_trunc_uint);
     ADD_I(nan_dom_err);
     ADD_I(ccall); ADD_I(cglobal);
     ADD_I(jl_alloca);
