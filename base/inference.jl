@@ -711,7 +711,13 @@ function abstract_call_gf(f, fargs, argtypes, e)
         end
     end
     for (m::Tuple) in x
-        linfo = func_for_method(m[3],argtypes)
+        local linfo
+        try
+            linfo = func_for_method(m[3],argtypes)
+        catch
+            rettype = Any
+            break
+        end
         sig = m[1]
         lsig = length(m[3].sig)
         # limit argument type tuple based on size of definition signature.
@@ -756,7 +762,12 @@ function invoke_tfunc(f, types, argtypes)
         return Any
     end
     for (m::Tuple) in applicable
-        linfo = func_for_method(m[3],types)
+        local linfo
+        try
+            linfo = func_for_method(m[3],types)
+        catch
+            return Any
+        end
         if typeseq(m[1],types)
             tvars = m[2][1:2:end]
             (ti, env) = ccall(:jl_match_method, Any, (Any,Any,Any),
@@ -2080,7 +2091,12 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
     end
     meth = meth[1]::Tuple
 
-    linfo = func_for_method(meth[3],atypes)
+    local linfo
+    try
+        linfo = func_for_method(meth[3],atypes)
+    catch
+        return NF
+    end
 
     ## This code tries to limit the argument list length only when it is
     ## growing due to recursion.
