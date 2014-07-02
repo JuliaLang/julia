@@ -463,6 +463,14 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Matrix exponential.
 
+.. function:: lyap(A, C)
+
+   Computes the solution ``X`` to the continuous Lyapunov equation ``AX + XA' + C = 0``, where no eigenvalue of ``A`` has a zero real part and no two eigenvalues are negative complex conjugates of each other. 
+
+.. function:: sylvester(A, B, C)
+
+   Computes the solution ``X`` to the Sylvester equation ``AX + XB + C = 0``, where ``A``, ``B`` and ``C`` have compatible dimensions and ``A`` and ``-B`` have no eigenvalues with equal real part.
+
 .. function:: issym(A) -> Bool
 
    Test whether a matrix is symmetric.

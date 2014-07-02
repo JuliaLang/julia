@@ -267,6 +267,8 @@ Library improvements
 
       * parametrize Triangular on matrix type ([#7064])
 
+      * Lyapunov / Sylvester solver ([#7435])
+
     * Dense linear algebra for generic matrix element types
 
       * LU factorization ([#5381] and [#5430])
@@ -867,3 +869,4 @@ Too numerous to mention.
 [#7131]: https://github.com/JuliaLang/julia/issues/7131
 [#7146]: https://github.com/JuliaLang/julia/issues/7146
 [#7373]: https://github.com/JuliaLang/julia/issues/7373
+[#7435]: https://github.com/JuliaLang/julia/issues/7435

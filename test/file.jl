@@ -236,6 +236,34 @@ close(s)
 A2=nothing; A3=nothing; A4=nothing; gc(); gc(); # cause munmap finalizer to run & free resources
 rm(fname)
 
+##############
+# mark/reset #
+##############
+
+s = open(file, "w")
+write(s, "Marked!\n")
+write(s, "Hello world!\n")
+write(s, "Goodbye world!\n")
+close(s)
+s = open(file)
+mark(s)
+str = readline(s)
+@test beginswith(str, "Marked!")
+@test ismarked(s)
+reset(s)
+@test !ismarked(s)
+str = readline(s)
+@test beginswith(str, "Marked!")
+mark(s)
+@test readline(s) == "Hello world!\n"
+@test ismarked(s)
+unmark(s)
+@test !ismarked(s)
+@test_throws ErrorException reset(s)
+@test !unmark(s)
+@test !ismarked(s)
+close(s)
+
 #######################################################################
 # This section tests temporary file and directory creation.           #
 #######################################################################
@@ -304,5 +332,6 @@ rm(file)
 rm(subdir)
 rm(dir)
 
-@test !ispath(file)
-@test !ispath(dir)
+# The following fail on Windows with "stat: operation not permitted (EPERM)"
+@unix_only @test !ispath(file)
+@unix_only @test !ispath(dir)
