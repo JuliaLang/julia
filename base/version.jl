@@ -37,6 +37,7 @@ end
 VersionNumber(x::Integer, y::Integer, z::Integer) = VersionNumber(x, y, z, (), ())
 VersionNumber(x::Integer, y::Integer)             = VersionNumber(x, y, 0, (), ())
 VersionNumber(x::Integer)                         = VersionNumber(x, 0, 0, (), ())
+VersionNumber(s::String)                          = convert(VersionNumber, s)
 
 function print(io::IO, v::VersionNumber)
     v == typemax(VersionNumber) && return print(io, "∞")
