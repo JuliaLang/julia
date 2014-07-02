@@ -1,4 +1,4 @@
-# wordcount.j
+# wordcount.jl
 #   
 # Implementation of parallelized "word-count" of a text, inspired by the 
 # Hadoop WordCount example. Uses @spawn and fetch() to parallelize 
@@ -77,10 +77,10 @@ function wordcount_files(result_file,inputs...)
             text *= readall(f)
         end
     end
-    wc = parallel_wordcount(readall(f))
+    wc = parallel_wordcount(text)
     open(result_file,"w") do f
         for (k,v) in wc
-            println(fo,k,"=",v)
+            println(f, k,"=",v)
         end
     end
 end
