@@ -92,6 +92,7 @@ jl_sym_t *global_sym; jl_sym_t *tuple_sym;
 jl_sym_t *dot_sym;    jl_sym_t *newvar_sym;
 jl_sym_t *boundscheck_sym; jl_sym_t *copyast_sym;
 jl_sym_t *simdloop_sym; jl_sym_t *arrow_sym;
+jl_sym_t *ldots_sym;
 
 typedef struct {
     int64_t a;

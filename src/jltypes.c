@@ -3262,6 +3262,7 @@ void jl_init_types(void)
     copyast_sym = jl_symbol("copyast");
     simdloop_sym = jl_symbol("simdloop");
     arrow_sym = jl_symbol("->");
+    ldots_sym = jl_symbol("...");
 }
 
 #ifdef __cplusplus
