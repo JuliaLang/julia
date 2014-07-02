@@ -488,7 +488,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, "...")
 
     elseif (nargs == 1 && head in (:return, :abstract, :const)) ||
-                          head in (:local,  :global)
+                          head in (:local,  :global, :export, :import)
         print(io, head, ' ')
         show_list(io, args, ", ", indent)
     elseif is(head, :macrocall) && nargs >= 1
@@ -545,7 +545,24 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     elseif is(head, :&) && length(args) == 1
         print(io, '&')
         show_unquoted(io, args[1])
-
+    elseif is(head, symbol('\'')) && length(args) == 1
+        show_unquoted(io, args[1])
+        print(io, "'")
+    elseif is(head, symbol(".'")) && length(args) == 1
+        show_unquoted(io, args[1])
+        print(io, ".'")
+    elseif is(head, :comprehension) && length(args) >= 2
+        print(io, "[")
+        show_unquoted(io, args[1], indent+indent_width)
+        print(io, " for ")
+        show_list(io, args[2:end], ", ", indent)
+        print(io, "]")
+    elseif is(head, :typed_comprehension) && length(args) >= 3
+        print(io, args[1])
+        show_unquoted(io, Expr(:comprehension, args[2:end]...), indent+indent_width)
+    elseif is(head, :module) && length(args) == 3
+        show_block(io, args[1] ? "module $(args[2])" : "baremodule $(args[2])", args[3], indent)
+        print(io, "end")
     # print anything else as "Expr(head, args...)"
     else
         print(io, "\$(Expr(")
