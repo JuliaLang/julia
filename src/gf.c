@@ -914,11 +914,22 @@ DLLEXPORT jl_function_t *jl_instantiate_staged(jl_methlist_t *m, jl_tuple_t *tt)
         oldast = (jl_expr_t*)jl_uncompress_ast(m->func->linfo, m->func->linfo->ast);
     assert(oldast->head == lambda_sym);
     ex = jl_exprn(arrow_sym, 2);
-    jl_expr_t *argnames = jl_exprn(tuple_sym, jl_tuple_len(tt));
-    jl_cellset(ex->args, 0, argnames);
     jl_array_t *oldargnames = (jl_array_t*)jl_cellref(oldast->args,0);
-    for (size_t i = 0; i < jl_tuple_len(tt); ++i) {
-        jl_cellset(argnames->args,i,jl_cellref(oldargnames,i));
+    jl_expr_t *argnames = jl_exprn(tuple_sym, jl_array_len(oldargnames));
+    jl_cellset(ex->args, 0, argnames);
+    for (size_t i = 0; i < jl_array_len(oldargnames); ++i) {
+        jl_value_t *arg = jl_cellref(oldargnames,i);
+        if (jl_is_expr(arg)) {
+            assert(((jl_expr_t*)arg)->head == colons_sym);
+            arg = jl_cellref(((jl_expr_t*)arg)->args,0);
+            assert(jl_is_symbol(arg));
+            jl_expr_t *dd_expr = jl_exprn(ldots_sym,1);
+            jl_cellset(dd_expr->args,0,arg);
+            jl_cellset(argnames->args,i,dd_expr);
+        } else {
+            assert(jl_is_symbol(arg));
+            jl_cellset(argnames->args,i,arg);
+        }
     }
     jl_cellset(ex->args, 1, jl_apply(m->func, tt->data, jl_tuple_len(tt)));
     func = (jl_function_t*)jl_toplevel_eval(jl_expand((jl_value_t*)ex));
