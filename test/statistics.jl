@@ -41,10 +41,40 @@ end
 
 # test var & std
 
-@test var(Int[]) === NaN
-@test var(Int[]; corrected=false) === NaN
-@test var([1]) === NaN
+# edge case: empty vector
+# iterable; this has to throw for type stability
+@test_throws ErrorException var(())
+@test_throws ErrorException var((); corrected=false)
+@test_throws ErrorException var((); mean=2)
+@test_throws ErrorException var((); mean=2, corrected=false)
+# reduction
+@test isnan(var(Int[]))
+@test isnan(var(Int[]; corrected=false))
+@test isnan(var(Int[]; mean=2))
+@test isnan(var(Int[]; mean=2, corrected=false))
+# reduction across dimensions
+@test_approx_eq var(Int[], 1) [NaN]
+@test_approx_eq var(Int[], 1; corrected=false) [NaN]
+@test_approx_eq var(Int[], 1; mean=[2]) [NaN]
+@test_approx_eq var(Int[], 1; mean=[2], corrected=false) [NaN]
+
+# edge case: one-element vector
+# iterable
+@test isnan(var((1,)))
+@test var((1,); corrected=false) === 0.0
+@test var((1,); mean=2) === Inf
+@test var((1,); mean=2, corrected=false) === 1.0
+# reduction
+@test isnan(var([1]))
 @test var([1]; corrected=false) === 0.0
+@test var([1]; mean=2) === Inf
+@test var([1]; mean=2, corrected=false) === 1.0
+# reduction across dimensions
+@test_approx_eq var([1], 1) [NaN]
+@test_approx_eq var([1], 1; corrected=false) [0.0]
+@test_approx_eq var([1], 1; mean=[2]) [Inf]
+@test_approx_eq var([1], 1; mean=[2], corrected=false) [1.0]
+
 @test var(1:8) == 6.
 
 @test_approx_eq varm([1,2,3], 2) 1.
