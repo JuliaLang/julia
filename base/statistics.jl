@@ -138,7 +138,7 @@ end
 function varm{T}(A::AbstractArray{T}, m::Number; corrected::Bool=true)
     n = length(A)
     n == 0 && return convert(momenttype(T), NaN)
-    n == 1 && return corrected ? convert(momenttype(T), NaN) : zero(momenttype(T))
+    n == 1 && return convert(momenttype(T), abs2(A[1] - m)/(1 - int(corrected)))
     return centralize_sumabs2(A, m, 1, n) / (n - int(corrected))
 end
 
