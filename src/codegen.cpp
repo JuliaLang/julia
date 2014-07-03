@@ -3719,9 +3719,10 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
 
     // step 15. compile body statements
     bool prevlabel = false;
+    lno = -1;
+    int prevlno = -1;
     for(i=0; i < stmtslen; i++) {
         jl_value_t *stmt = jl_cellref(stmts,i);
-	int lno = -1;
         if (jl_is_linenode(stmt)) {
             lno = jl_linenode_line(stmt);
             if (debug_enabled)
@@ -3745,6 +3746,12 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         else {
             prevlabel = false;
         }
+	if (do_malloc_log && lno != prevlno) {
+	    // Check memory allocation only after finishing a line
+	    if (prevlno != -1)
+		mallocVisitLine(filename, prevlno);
+	    prevlno = lno;
+	}
         if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == return_sym) {
             jl_expr_t *ex = (jl_expr_t*)stmt;
             Value *retval;
@@ -3765,6 +3772,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             builder.CreateStore(builder.CreateBitCast(builder.CreateLoad(gcpop, false), jl_ppvalue_llvmt),
                                 prepare_global(jlpgcstack_var));
 #endif
+	    if (do_malloc_log && lno != -1)
+		mallocVisitLine(filename, lno);
             if (builder.GetInsertBlock()->getTerminator() == NULL) {
                 if (retty == T_void)
                     builder.CreateRetVoid();
@@ -3780,8 +3789,6 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         else {
             (void)emit_expr(stmt, &ctx, false, false);
         }
-	if (do_malloc_log && lno != -1)
-	    mallocVisitLine(filename, lno);
     }
     // sometimes we have dangling labels after the end
     if (builder.GetInsertBlock()->getTerminator() == NULL) {

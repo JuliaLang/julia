@@ -633,9 +633,9 @@ static void mallocVisitLine(std::string filename, int line)
                                        ConstantInt::get(T_int64,0), "bytecnt");
     GlobalVariable *v = vec[line];
     //builder.CreateCall2(prepare_call(show_execution_point_func), builder.CreateGlobalStringPtr(filename), ConstantInt::get(T_int32, line));
-    builder.CreateStore(builder.CreateAdd(builder.CreateLoad(v),
+    builder.CreateStore(builder.CreateAdd(builder.CreateLoad(v, true),
                                           builder.CreateCall(prepare_call(diff_gc_total_bytes_func))),
-                        v);
+                        v, true);
 }
 
 // Resets the malloc counts. Needed to avoid including memory usage
