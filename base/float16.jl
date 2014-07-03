@@ -96,7 +96,14 @@ function convert(::Type{Float16}, val::Float32)
     reinterpret(Float16, h)
 end
 
-convert(::Type{Integer}, x::Float16) = convert(Int,float32(x))
+convert(::Type{Bool},    x::Float16) = (x!=0)
+convert(::Type{Int128},  x::Float16) = convert(Int128, float32(x))
+convert(::Type{Uint128}, x::Float16) = convert(Uint128, float32(x))
+
+convert{T<:Integer}(::Type{T}, x::Float16) = convert(T, float32(x))
+
+iround{T<:Integer}(::Type{T}, x::Float16) = iround(T, float32(x))
+itrunc{T<:Integer}(::Type{T}, x::Float16) = itrunc(T, float32(x))
 
 round(x::Float16) = float16(round(float32(x)))
 trunc(x::Float16) = float16(trunc(float32(x)))

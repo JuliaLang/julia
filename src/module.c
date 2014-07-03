@@ -17,6 +17,7 @@ jl_module_t *jl_current_module=NULL;
 jl_module_t *jl_new_module(jl_sym_t *name)
 {
     jl_module_t *m = (jl_module_t*)allocobj(sizeof(jl_module_t));
+    JL_GC_PUSH1(&m);
     m->type = (jl_value_t*)jl_module_type;
     assert(jl_is_symbol(name));
     m->name = name;
@@ -29,6 +30,7 @@ jl_module_t *jl_new_module(jl_sym_t *name)
     // export own name, so "using Foo" makes "Foo" itself visible
     jl_set_const(m, name, (jl_value_t*)m);
     jl_module_export(m, name);
+    JL_GC_POP();
     return m;
 }
 

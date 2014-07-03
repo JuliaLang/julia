@@ -360,7 +360,6 @@ function At_ldiv_B!{Tlu<:Real,Tb<:Complex}(lu::UmfpackLU{Tlu}, b::Vector{Tb})
     i = solve(lu, [convert(Float64,imag(be)) for be in b], UMFPACK_Aat)
     Tb[r[k]+im*i[k] for k = 1:length(r)]
 end
-At_ldiv_B!{Tlu<:UMFVTypes,Tb<:Number}(lu::UmfpackLU{Tlu}, b::StridedVecOrMat{Tb}) = At_ldiv_B!(lu, convert(Array{Tlu}, b))
 At_ldiv_B!{Tlu<:UMFVTypes,Tb<:Number}(lu::UmfpackLU{Tlu}, b::AbstractVecOrMat{Tb}) = At_ldiv_B!(lu, convert(Array{Tlu}, b))
 
 function getindex(lu::UmfpackLU, d::Symbol)

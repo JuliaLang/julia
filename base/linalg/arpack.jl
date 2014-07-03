@@ -87,7 +87,11 @@ function aupd_wrapper(T, matvecA::Function, matvecB::Function, solveSI::Function
                     workd[store_idx] = solveSI(matvecA(x))
                 end
             elseif mode == 3
-                workd[store_idx] = solveSI(workd[ipntr[3]+zernm1])
+                if bmat == "I"
+                    workd[store_idx] = solveSI(x)
+                else
+                    workd[store_idx] = solveSI(workd[ipntr[3]+zernm1])
+                end
             end
         elseif ido[1] == 2
             workd[store_idx] = matvecB(x)
@@ -145,7 +149,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
         evec = complex(zeros(T, n, nev+1), zeros(T, n, nev+1))
         j = 1
         while j <= nev
-            if di[j] == 0.0
+            if di[j] == 0
                 evec[:,j] = v[:,j]
             else
                 evec[:,j]   = v[:,j] + im*v[:,j+1]
