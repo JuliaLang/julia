@@ -15,7 +15,7 @@ filt{T<:Number}(b::Union(AbstractVector{T}, T), a::Union(AbstractVector{T}, T), 
 
 # in-place filtering; both the input and filter state are modified in-place
 function filt!{T<:Number}(b::Union(AbstractVector{T}, T), a::Union(AbstractVector{T}, T),
-                          x::AbstractVector{T}, si::AbstractVector{T}=zeros(T, max(length(a), length(b))-1))
+                          x::AbstractVector{T}, si::Union(AbstractVector{T}, Nothing)=nothing)
     if isempty(b); error("b must be non-empty"); end
     if isempty(a); error("a must be non-empty"); end
     if a[1]==0; error("a[1] must be nonzero"); end
@@ -23,38 +23,31 @@ function filt!{T<:Number}(b::Union(AbstractVector{T}, T), a::Union(AbstractVecto
     as = length(a)
     bs = length(b)
     sz = max(as, bs)
-
-    if sz == 1
-        # Simple scaling without memory; quick exit
-        return scale!(x, b[1]/a[1])
-    end
-
-    if bs<sz
-        # Ensure b has at least as many elements as a
-        newb = zeros(T,sz)
-        newb[1:bs] = b
-        b = newb
-    end
-
     xs = size(x,1)
-    silen = sz-1
-    size(si) == (silen,) || error("the vector of initial conditions must have exactly max(length(a),length(b))-1 elements")
+
+    # Quick exits
+    sz == 1 && return scale!(x, b[1]/a[1]) # Simple scaling; no filter state
+    xs == 0 && return x # No data; return the same empty array
+
+    has_denominator = (as > 1)
+    # Make the filter coefficients the same length
+    a = copy!(zeros(T, sz), a)
+    b = copy!(zeros(T, sz), b)
 
     if a[1] != 1
         # Normalize the coefficients such that a[1] == 1
-        norml = a[1]
-        a ./= norml
-        b ./= norml
+        norml = one(T) ./ a[1]
+        scale!(a, norml)
+        scale!(b, norml)
     end
 
-    if as > 1
-        if as<sz
-            # Pad a to be the same length as b
-            newa = zeros(T,sz)
-            newa[1:as] = a
-            a = newa
-        end
+    silen = sz-1
+    if si == nothing
+        si = scale!(filt_stepstate(b, a), x[1])
+    end
+    size(si) == (silen,) || error("the vector of initial conditions must have exactly max(length(a),length(b))-1 elements")
 
+    if has_denominator
         @inbounds begin
             for i=1:xs
                 val = si[1] + b[1]*x[i]
@@ -78,6 +71,24 @@ function filt!{T<:Number}(b::Union(AbstractVector{T}, T), a::Union(AbstractVecto
         end
     end
     return x
+end
+
+# Compute an initial state for filt with coefficients (b,a) such that its
+# response to a step function is steady state.
+function filt_stepstate{T<:Number}(b::Union(AbstractVector{T}, T), a::Union(AbstractVector{T}, T))
+    sz = length(a)
+    sz == length(b) || error("a and b must be the same length")
+    sz > 0 || error("a and b must have at least one element each")
+    a[1] == 1 || error("a and b must be normalized such that a[1] == 1")
+
+    sz == 1 && return T[]
+
+    # construct the companion matrix A and vector B:
+    A = [-a[2:end] [eye(T, sz-2); zeros(T, 1, sz-2)]]
+    B = b[2:end] - a[2:end] * b[1]
+    # Solve si = A*si + B
+    # (I - A)*si = B
+    return (I - A) \ B
 end
 
 function deconv{T}(b::StridedVector{T}, a::StridedVector{T})
