@@ -790,6 +790,9 @@ end
 
 ## string map, filter, has ##
 
+map_result(s::String, a::Vector{Uint8}) = UTF8String(a)
+map_result(s::Union(ASCIIString,SubString{ASCIIString}), a::Vector{Uint8}) = bytestring(a)
+
 function map(f::Function, s::String)
     out = IOBuffer(Array(Uint8,endof(s)),true,true)
     truncate(out,0)
@@ -800,7 +803,7 @@ function map(f::Function, s::String)
         end
         write(out, c2::Char)
     end
-    takebuf_string(out)
+    map_result(s, takebuf_array(out))
 end
 
 function filter(f::Function, s::String)

@@ -41,6 +41,10 @@ end
 
 # test var & std
 
+@test var(Int[]) === NaN
+@test var(Int[]; corrected=false) === NaN
+@test var([1]) === NaN
+@test var([1]; corrected=false) === 0.0
 @test var(1:8) == 6.
 
 @test_approx_eq varm([1,2,3], 2) 1.

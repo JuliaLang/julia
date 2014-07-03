@@ -36,6 +36,15 @@ function toc()
 end
 
 # print elapsed time, return expression value
+
+function time_print(t, b, g)
+    if 0 < g
+        @printf("elapsed time: %s seconds (%d bytes allocated, %.2f%% gc time)\n", t/1e9, b, 100*g/t)
+    else
+        @printf("elapsed time: %s seconds (%d bytes allocated)\n", t/1e9, b)
+    end
+end
+
 macro time(ex)
     quote
         local b0 = gc_bytes()
@@ -45,13 +54,7 @@ macro time(ex)
         local g1 = gc_time_ns()
         local t1 = time_ns()
         local b1 = gc_bytes()
-        if g1 > g0
-            @printf("elapsed time: %s seconds (%d bytes allocated, %.2f%% gc time)\n",
-                    (t1-t0)/1e9, b1-b0, 100*(g1-g0)/(t1-t0))
-        else
-            @printf("elapsed time: %s seconds (%d bytes allocated)\n",
-                    (t1-t0)/1e9, b1-b0)
-        end        
+        time_print(t1-t0, b1-b0, g1-g0)
         val
     end
 end
@@ -128,7 +131,6 @@ end
 function check_blas()
     blas = blas_vendor()
     if blas == :openblas
-        @windows_only ccall((:gotoblas_init, Base.libblas_name), Void, ())
         openblas_config = openblas_get_config()
         openblas64 = ismatch(r".*USE64BITINT.*", openblas_config)
         if Base.USE_BLAS64 != openblas64

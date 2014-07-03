@@ -1956,11 +1956,11 @@
 
    'comprehension
    (lambda (e)
-     (expand-forms (lower-comprehension (cadr e) (cddr e))))
+     (expand-forms (lower-comprehension #f       (cadr e) (cddr e))))
 
    'typed_comprehension
    (lambda (e)
-     (expand-forms (lower-typed-comprehension (cadr e) (caddr e) (cdddr e))))
+     (expand-forms (lower-comprehension (cadr e) (caddr e) (cdddr e))))
 
    'dict_comprehension
    (lambda (e)
@@ -2010,109 +2010,65 @@
 	      `(for ,(car ranges)
 		    ,(construct-loops (cdr ranges) iters oneresult-dim) ))))
 
-    (define (get-eltype)
-      (if (null? atype)
-	  `((call (top eltype) ,oneresult))
-	  `(,atype)))
-
     ;; Evaluate the comprehension
     `(scope-block
       (block
        (= ,oneresult (tuple))
        ,(evaluate-one ranges)
-       (= ,result (call (top Array) ,@(get-eltype)
+       (= ,result (call (top Array) ,(if atype atype `(call (top eltype) ,oneresult))
 			,@(compute-dims ranges 1)))
        (= ,ri 1)
        ,(construct-loops (reverse ranges) (list) 1)
        ,result ))))
 
-(define (lower-comprehension expr ranges)
-  (if (any (lambda (x) (eq? x ':)) ranges)
-      (lower-nd-comprehension '() expr ranges)
-  (let ((result    (gensy))
-	(ri        (gensy))
-	(initlabl  (gensy))
-	(oneresult (gensy))
-	(rv        (map (lambda (x) (gensy)) ranges)))
-
-    ;; compute the dimensions of the result
-    (define (compute-dims ranges)
-      (map (lambda (r) `(call (top length) ,(caddr r)))
-	   ranges))
-
-    ;; construct loops to cycle over all dimensions of an n-d comprehension
-    (define (construct-loops ranges)
-      (if (null? ranges)
-	  `(block (= ,oneresult ,expr)
-		  (type_goto ,initlabl ,oneresult)
-		  (boundscheck false)
-		  (call (top setindex!) ,result ,oneresult ,ri)
-		  (boundscheck pop)
-		  (= ,ri (call (top +) ,ri 1)))
-	  `(for ,(car ranges)
-		(block
-		 ;; *** either this or force all for loop vars local
-		 ,.(map (lambda (r) `(local ,r))
-			(lhs-vars (cadr (car ranges))))
-		 ,(construct-loops (cdr ranges))))))
-
-    ;; Evaluate the comprehension
-    (let ((loopranges
-	   (map (lambda (r v) `(= ,(cadr r) ,v)) ranges rv)))
-      `(block
-	,.(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
-	(scope-block
-	 (block
-	  (local ,oneresult)
-	  #;,@(map (lambda (r) `(local ,r))
-	  (apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
-	  (label ,initlabl)
-	  (= ,result (call (top Array)
-			   (static_typeof ,oneresult)
-			   ,@(compute-dims loopranges)))
-	  (= ,ri 1)
-	  ,(construct-loops (reverse loopranges))
-	  ,result)))))))
-
-(define (lower-typed-comprehension atype expr ranges)
+(define (lower-comprehension atype expr ranges)
   (if (any (lambda (x) (eq? x ':)) ranges)
       (lower-nd-comprehension atype expr ranges)
   (let ((result    (gensy))
+	(ri        (gensy))
+	(initlabl  (if atype #f (gensy)))
 	(oneresult (gensy))
-	(ri (gensy))
-	(rs (map (lambda (x) (gensy)) ranges)) )
-
-    ;; compute the dimensions of the result
-    (define (compute-dims ranges)
-      (map (lambda (r) `(call (top length) ,r))
-	   ranges))
+	(lengths   (map (lambda (x) (gensy)) ranges))
+	(states    (map (lambda (x) (gensy)) ranges))
+	(is        (map (lambda (x) (gensy)) ranges))
+	(rv        (map (lambda (x) (gensy)) ranges)))
 
     ;; construct loops to cycle over all dimensions of an n-d comprehension
-    (define (construct-loops ranges rs)
+    (define (construct-loops ranges rv is states lengths)
       (if (null? ranges)
 	  `(block (= ,oneresult ,expr)
+		  ,@(if atype '() `((type_goto ,initlabl ,oneresult)))
 		  (boundscheck false)
 		  (call (top setindex!) ,result ,oneresult ,ri)
 		  (boundscheck pop)
 		  (= ,ri (call (top +) ,ri 1)))
-	  `(for (= ,(cadr (car ranges)) ,(car rs))
-		(block
-		 ;; *** either this or force all for loop vars local
-		 ,.(map (lambda (r) `(local ,r))
-			(lhs-vars (cadr (car ranges))))
-		 ,(construct-loops (cdr ranges) (cdr rs))))))
+	  `(block
+	    (= ,(car states) (call (top start) ,(car rv)))
+	    (local (:: ,(car is) (call (top typeof) ,(car lengths))))
+	    (= ,(car is) 0)
+	    (while (call (top !=) ,(car is) ,(car lengths))
+		   (block
+		    (= ,(car is) (call (top +) ,(car is) 1))
+		    (= (tuple ,(cadr (car ranges)) ,(car states))
+		       (call (top next) ,(car rv) ,(car states)))
+		    ;; *** either this or force all for loop vars local
+		    ,.(map (lambda (r) `(local ,r))
+			   (lhs-vars (cadr (car ranges))))
+		    ,(construct-loops (cdr ranges) (cdr rv) (cdr is) (cdr states) (cdr lengths)))))))
 
     ;; Evaluate the comprehension
     `(block
-      ,.(map make-assignment rs (map caddr ranges))
-      (local ,result)
-      (= ,result (call (top Array) ,atype ,@(compute-dims rs)))
+      ,.(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
+      ,.(map (lambda (v r) `(= ,v (call (top length) ,r))) lengths rv)
       (scope-block
        (block
-	#;,@(map (lambda (r) `(local ,r))
-	(apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
+	(local ,oneresult)
+	,@(if atype '() `((label ,initlabl)))
+	(= ,result (call (top Array)
+			 ,(if atype atype `(static_typeof ,oneresult))
+			 ,@lengths))
 	(= ,ri 1)
-	,(construct-loops (reverse ranges) (reverse rs))
+	,(construct-loops (reverse ranges) (reverse rv) is states (reverse lengths))
 	,result))))))
 
 (define (lower-dict-comprehension expr ranges)

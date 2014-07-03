@@ -150,6 +150,7 @@ export
     #ccall, cglobal, abs_float, add_float, add_int, and_int, ashr_int,
     #box, bswap_int, checked_fptosi, checked_fptoui, checked_sadd,
     #checked_smul, checked_ssub, checked_uadd, checked_umul, checked_usub,
+    #checked_trunc_sint, checked_trunc_uint,
     #nan_dom_err, copysign_float, ctlz_int, ctpop_int, cttz_int,
     #div_float, eq_float, eq_int, eqfsi64, eqfui64, flipsign_int, select_value,
     #sqrt_llvm, powi_llvm,

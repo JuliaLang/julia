@@ -73,7 +73,9 @@ end
 
 function mapfoldl(f, op, itr)
     i = start(itr)
-    done(itr, i) && error("Argument is empty.")
+    if done(itr, i)
+        return Base.mr_empty(f, op, eltype(itr))
+    end
     (x, i) = next(itr, i)
     v0 = evaluate(f, x)
     mapfoldl_impl(f, op, v0, itr, i)

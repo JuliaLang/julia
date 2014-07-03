@@ -391,3 +391,6 @@ let S = sprand(50, 30, 0.5, x->int(rand(x)*100))
     @test sum(S) == (sumS1 - sumS2 + sum(J))
 end
 
+#Issue 7507
+@test (i7507=sparsevec(Dict{Int64, Float64}(), 10))==spzeros(10,1)
+

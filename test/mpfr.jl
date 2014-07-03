@@ -158,6 +158,12 @@ x = BigFloat(Inf)
 x = BigFloat(15.674)
 @test exponent(x) == exponent(15.674)
 
+# frexp
+for i in [big(0.2), big(1.2), big(1220.0), big(23414.123)]
+    mantissa, ex = frexp(i)
+    @test i == mantissa * 2. ^ ex
+end
+
 # significand
 for i in [big(0.2), big(1.2), big(1220.0), big(23414.123)]
     @test i == significand(i) * 2. ^ exponent(i)

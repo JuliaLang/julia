@@ -104,7 +104,7 @@ $(build_bindir)/stringpatch: $(build_bindir) contrib/stringpatch.c
 JL_LIBS = julia julia-debug
 
 # private libraries, that are installed in $(prefix)/lib/julia
-JL_PRIVATE_LIBS = random suitesparse_wrapper grisu Rmath
+JL_PRIVATE_LIBS = suitesparse_wrapper grisu Rmath
 ifeq ($(USE_SYSTEM_FFTW),0)
 JL_PRIVATE_LIBS += fftw3 fftw3f fftw3_threads fftw3f_threads
 endif
@@ -118,6 +118,9 @@ endif
 endif
 ifeq ($(USE_SYSTEM_OPENSPECFUN),0)
 JL_PRIVATE_LIBS += openspecfun
+endif
+ifeq ($(USE_SYSTEM_DSFMT),0)
+JL_PRIVATE_LIBS += dSFMT
 endif
 ifeq ($(USE_SYSTEM_BLAS),0)
 JL_PRIVATE_LIBS += openblas
@@ -260,8 +263,6 @@ endif
 	# If you want to make a distribution with a hardcoded path, you take care of installation
 ifeq ($(OS), Darwin)
 	-cat ./contrib/mac/juliarc.jl >> $(DESTDIR)$(prefix)/etc/julia/juliarc.jl
-else ifeq ($(OS), WINNT)
-	-cat ./contrib/windows/juliarc.jl >> $(DESTDIR)$(prefix)/etc/julia/juliarc.jl
 endif
 
 	# purge sys.{dll,so,dylib} as that file is not relocatable across processor architectures

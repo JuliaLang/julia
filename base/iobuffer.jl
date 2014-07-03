@@ -10,8 +10,10 @@ type IOBuffer <: IO
     size::Int
     maxsize::Int # pre-allocated, fixed array size
     ptr::Int # read (and maybe write) pointer
+    mark::Int
+
     IOBuffer(data::Vector{Uint8},readable::Bool,writable::Bool,seekable::Bool,append::Bool,maxsize::Int) = 
-        new(data,readable,writable,seekable,append,length(data),maxsize,1)
+        new(data,readable,writable,seekable,append,length(data),maxsize,1,-1)
 end
 
 function copy(b::IOBuffer) 
@@ -21,6 +23,16 @@ function copy(b::IOBuffer)
     ret.ptr  = b.ptr
     ret
 end
+
+show(io::IO, b::IOBuffer) = print(io, "IOBuffer(data=Uint8[...], ",
+                                      "readable=", b.readable, ", ",
+                                      "writable=", b.writable, ", ",
+                                      "seekable=", b.seekable, ", ",
+                                      "append=",   b.append, ", ",
+                                      "size=",     b.size, ", ",
+                                      "maxsize=",  b.maxsize == typemax(Int) ? "Inf" : b.maxsize, ", ",
+                                      "ptr=",      b.ptr, ", ",
+                                      "mark=",     b.mark, ")")
 
 # PipeBuffers behave like Unix Pipes. They are readable and writable, the act appendable, and not seekable.
 PipeBuffer(data::Vector{Uint8},maxsize::Int) = IOBuffer(data,true,true,false,true,maxsize)
@@ -99,15 +111,18 @@ function skip(io::IOBuffer, n::Integer)
     io.ptr = min(io.ptr + n, io.size+1)
     return io
 end
+
 function seek(io::IOBuffer, n::Integer)
-    if !io.seekable error("seek failed") end
+    !io.seekable && (!ismarked(io) || n!=io.mark) && error("seek failed")
     io.ptr = min(n+1, io.size+1)
     return io
 end
+
 function seekend(io::IOBuffer)
     io.ptr = io.size+1
     return io
 end
+
 function truncate(io::IOBuffer, n::Integer)
     if !io.writable error("truncate failed") end
     if !io.seekable error("truncate failed") end #because absolute offsets are meaningless
@@ -118,30 +133,46 @@ function truncate(io::IOBuffer, n::Integer)
     io.data[io.size+1:n] = 0
     io.size = n
     io.ptr = min(io.ptr, n+1)
+    ismarked(io) && io.mark > n && unmark(io)
     return io
 end
+
 function compact(io::IOBuffer)
     if !io.writable error("compact failed") end
     if io.seekable error("compact failed") end
-    ccall(:memmove, Ptr{Void}, (Ptr{Void},Ptr{Void},Uint),
-          io.data, pointer(io.data,io.ptr), nb_available(io))
-    io.size -= io.ptr - 1
-    io.ptr = 1
+    local ptr::Int, bytes_to_move::Int
+    if ismarked(io) && io.mark < io.ptr
+        if io.mark == 0; return; end
+        ptr = io.mark
+        bytes_to_move = nb_available(io) + (io.ptr-io.mark)
+    else
+        ptr = io.ptr
+        bytes_to_move = nb_available(io)
+    end
+    ccall(:memmove, Ptr{Void}, (Ptr{Void},Ptr{Void},Uint), 
+          io.data, pointer(io.data,ptr), bytes_to_move)
+    io.size -= ptr - 1
+    io.ptr -= ptr - 1
+    io.mark -= ptr - 1
     return io
 end
+
 function ensureroom(io::IOBuffer, nshort::Int)
     if !io.writable error("ensureroom failed") end
     if !io.seekable
         if nshort < 0 error("ensureroom failed") end
-        if io.ptr > 1 && io.size <= io.ptr - 1
+        if !ismarked(io) && io.ptr > 1 && io.size <= io.ptr - 1
             io.ptr = 1
             io.size = 0
-        elseif (io.size+nshort > io.maxsize) ||
-                (io.ptr > io.size - io.ptr > 4096) ||
-                (io.ptr > 262144)
-            # apply somewhat arbitrary heuristics to decide when to destroy 
-            # old, read data to make more room for new data
-            compact(io)
+        else
+            datastart = ismarked(io) ? io.mark : io.ptr
+            if (io.size+nshort > io.maxsize) ||
+                (datastart > 4096 && datastart > io.size - io.ptr) ||
+                (datastart > 262144)
+                # apply somewhat arbitrary heuristics to decide when to destroy
+                # old, read data to make more room for new data
+                compact(io)
+            end
         end
     end
     n = min(nshort + (io.append ? io.size : io.ptr-1), io.maxsize)
@@ -163,6 +194,7 @@ function close(io::IOBuffer)
     io.size = 0
     io.maxsize = 0
     io.ptr = 1
+    io.mark = -1
     nothing
 end
 isopen(io::IOBuffer) = io.readable || io.writable || io.seekable || nb_available(io) > 0
@@ -172,6 +204,7 @@ function bytestring(io::IOBuffer)
     bytestring(pointer(io.data), io.size)
 end
 function takebuf_array(io::IOBuffer)
+    ismarked(io) && unmark(io)
     if io.seekable
         data = io.data
         if io.writable
@@ -284,3 +317,4 @@ function readuntil(io::IOBuffer, delim::Uint8)
     end
     A
 end
+

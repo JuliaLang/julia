@@ -9,6 +9,14 @@
 #include "julia.h"
 #include "julia_internal.h"
 
+// use mmap instead of malloc to allocate pages. default = off.
+// #define USE_MMAP
+
+// free pages as soon as they are empty. if not defined, then we
+// will wait for the next GC, to allow the space to be reused more
+// efficiently. default = on.
+#define FREE_PAGES_EAGER
+
 #ifdef _P64
 #define GC_PAGE_SZ 12288//bytes
 #else
@@ -452,7 +460,12 @@ static pool_t *pools = &norm_pools[0];
 
 static void add_page(pool_t *p)
 {
+#ifdef USE_MMAP
+    gcpage_t *pg = (gcpage_t*)mmap(NULL, sizeof(gcpage_t), PROT_READ|PROT_WRITE,
+                                   MAP_ANONYMOUS|MAP_PRIVATE, -1, 0);
+#else
     gcpage_t *pg = (gcpage_t*)malloc_a16(sizeof(gcpage_t));
+#endif
     if (pg == NULL)
         jl_throw(jl_memory_exception);
     gcval_t *v = (gcval_t*)&pg->data[0];
@@ -505,8 +518,11 @@ static int szclass(size_t sz)
 
 static void sweep_pool(pool_t *p)
 {
-    //int empty;
+#ifdef FREE_PAGES_EAGER
     int freedall;
+#else
+    int empty;
+#endif
     gcval_t **prev_pfl;
     gcval_t *v;
     gcpage_t *pg = p->pages;
@@ -525,18 +541,30 @@ static void sweep_pool(pool_t *p)
     while (pg != NULL) {
         v = (gcval_t*)&pg->data[0];
         char *lim = (char*)v + GC_PAGE_SZ - osize;
-        //empty = 1;
+#ifdef FREE_PAGES_EAGER
         freedall = 1;
+#else
+        empty = 1;
+#endif
         prev_pfl = pfl;
         while ((char*)v <= lim) {
             if (!v->marked) {
+#ifndef FREE_PAGES_EAGER
+                if (v->next != (char*)v + osize && v->next != NULL &&
+                    (char*)v+osize <= lim)
+                    empty = 0;
+#endif
                 *pfl = v;
                 pfl = &v->next;
                 nfreed++;
             }
             else {
                 v->marked = 0;
+#ifdef FREE_PAGES_EAGER
                 freedall = 0;
+#else
+                empty = 0;
+#endif
             }
             v = (gcval_t*)((char*)v + osize);
         }
@@ -544,13 +572,23 @@ static void sweep_pool(pool_t *p)
         // lazy version: (empty) if the whole page was already unused, free it
         // eager version: (freedall) free page as soon as possible
         // the eager one uses less memory.
-        if (freedall) {
+        if (
+#ifdef FREE_PAGES_EAGER
+            freedall
+#else
+            empty
+#endif
+            ) {
             pfl = prev_pfl;
             *ppg = nextpg;
 #ifdef MEMDEBUG
             memset(pg, 0xbb, sizeof(gcpage_t));
 #endif
+#ifdef USE_MMAP
+            munmap(pg, sizeof(gcpage_t));
+#else
             free_a16(pg);
+#endif
             //freed_bytes += GC_PAGE_SZ;
         }
         else {
@@ -1019,16 +1057,15 @@ static double process_t0;
 #include <malloc.h>
 void jl_print_gc_stats(JL_STREAM *s)
 {
+    double gct = total_gc_time/1e9;
     malloc_stats();
     double ptime = clock_now()-process_t0;
     jl_printf(s, "exec time\t%.5f sec\n", ptime);
-    jl_printf(s, "gc time  \t%.5f sec (%2.1f%%)\n", total_gc_time,
-              (total_gc_time/ptime)*100);
+    jl_printf(s, "gc time  \t%.5f sec (%2.1f%%)\n", gct, (gct/ptime)*100);
     struct mallinfo mi = mallinfo();
     jl_printf(s, "malloc size\t%d MB\n", mi.uordblks/1024/1024);
     jl_printf(s, "total freed\t%llu b\n", total_freed_bytes);
-    jl_printf(s, "free rate\t%.1f MB/sec\n",
-              (total_freed_bytes/total_gc_time)/1024/1024);
+    jl_printf(s, "free rate\t%.1f MB/sec\n", (total_freed_bytes/gct)/1024/1024);
 }
 #endif
 
