@@ -60,17 +60,17 @@ end
 
 # edge case: one-element vector
 # iterable
-@test isnan(var((1,)))
+@test isnan(@inferred(var((1,))))
 @test var((1,); corrected=false) === 0.0
 @test var((1,); mean=2) === Inf
 @test var((1,); mean=2, corrected=false) === 1.0
 # reduction
-@test isnan(var([1]))
+@test isnan(@inferred(var([1])))
 @test var([1]; corrected=false) === 0.0
 @test var([1]; mean=2) === Inf
 @test var([1]; mean=2, corrected=false) === 1.0
 # reduction across dimensions
-@test_approx_eq var([1], 1) [NaN]
+@test_approx_eq @inferred(var([1], 1)) [NaN]
 @test_approx_eq var([1], 1; corrected=false) [0.0]
 @test_approx_eq var([1], 1; mean=[2]) [Inf]
 @test_approx_eq var([1], 1; mean=[2], corrected=false) [1.0]
