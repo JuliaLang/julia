@@ -55,6 +55,8 @@ New language features
     
   * Improved reporting of syntax errors ([#6179])
 
+  * `break` inside a `for` loop with multiple ranges now exits the entire loop nest ([#5154])
+
 REPL improvements
 -----------------
 
