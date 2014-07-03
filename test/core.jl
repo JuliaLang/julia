@@ -1772,3 +1772,13 @@ macro let_with_uninit()
 end
 
 @test @let_with_uninit() == 2
+
+# issue #5154
+let
+    v = {}
+    for i=1:3, j=1:3
+        push!(v, (i, j))
+        i == 1 && j == 2 && break
+    end
+    @test v == {(1,1), (1,2)}
+end
