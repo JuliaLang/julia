@@ -1494,6 +1494,24 @@
     (cadr e)
     (caddr e))))
 
+(define (expand-for while lhs X body)
+  ;; (for (= lhs X) body)
+  (let ((coll  (gensy))
+	(state (gensy)))
+    `(scope-block
+      (block (= ,coll ,(expand-forms X))
+	     (= ,state (call (top start) ,coll))
+	     ,(expand-forms
+	       `(,while
+		 (call (top !) (call (top done) ,coll ,state))
+		 (scope-block
+		  (block
+		   ;; NOTE: enable this to force loop-local var
+		   #;,@(map (lambda (v) `(local ,v)) (lhs-vars lhs))
+		   ,(lower-tuple-assignment (list lhs state)
+					    `(call (top next) ,coll ,state))
+		   ,body))))))))
+
 (define (map-expand-forms e) (map expand-forms e))
 
 (define (expand-forms e)
@@ -1793,6 +1811,13 @@
 			    (break-block loop-cont
 					 ,(expand-forms (caddr e)))))))
 
+   'inner-while
+   (lambda (e)
+     `(scope-block
+        (_while ,(expand-forms (cadr e))
+                (break-block loop-cont
+                             ,(expand-forms (caddr e))))))
+
    'break
    (lambda (e)
      (if (pair? (cdr e))
@@ -1803,25 +1828,16 @@
 
    'for
    (lambda (e)
-     (let ((X (caddr (cadr e)))
-	   (lhs (cadr (cadr e)))
-	   (body (caddr e)))
-       ;; (for (= lhs X) body)
-       (let ((coll  (gensy))
-	     (state (gensy)))
-	 `(scope-block
-	   (block (= ,coll ,(expand-forms X))
-		  (= ,state (call (top start) ,coll))
-		  ,(expand-forms
-		    `(while
-		      (call (top !) (call (top done) ,coll ,state))
-		      (scope-block
-		       (block
-			;; NOTE: enable this to force loop-local var
-			#;,@(map (lambda (v) `(local ,v)) (lhs-vars lhs))
-			,(lower-tuple-assignment (list lhs state)
-						 `(call (top next) ,coll ,state))
-			,body)))))))))
+     (let nest ((ranges (if (eq? (car (cadr e)) 'block)
+			    (cdr (cadr e))
+			    (list (cadr e))))
+		(first  #t))
+       (expand-for (if first 'while 'inner-while)
+		   (cadr (car ranges))
+		   (caddr (car ranges))
+		   (if (null? (cdr ranges))
+		       (caddr e)  ;; body
+		       (nest (cdr ranges) #f)))))
 
    '+=     lower-update-op
    '-=     lower-update-op

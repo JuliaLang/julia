@@ -1016,10 +1016,9 @@
      (let* ((ranges (parse-comma-separated-iters s))
 	    (body   (parse-block s)))
        (expect-end s)
-       (let nest ((r ranges))
-	 (if (null? r)
-	     body
-	     `(for ,(car r) ,(nest (cdr r)))))))
+       `(for ,(if (length= ranges 1) (car ranges) (cons 'block ranges))
+	     ,body)))
+
     ((if)
      (let* ((test (parse-cond s))
 	    (then (if (memq (require-token s) '(else elseif))
