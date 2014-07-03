@@ -3,14 +3,19 @@ module DSP
 importall Base.FFTW
 import Base.FFTW.normalization
 
-export FFTW, filt, deconv, conv, conv2, xcorr, fftshift, ifftshift,
+export FFTW, filt, filt!, deconv, conv, conv2, xcorr, fftshift, ifftshift,
        dct, idct, dct!, idct!, plan_dct, plan_idct, plan_dct!, plan_idct!,
        # the rest are defined imported from FFTW:
        fft, bfft, ifft, rfft, brfft, irfft,
        plan_fft, plan_bfft, plan_ifft, plan_rfft, plan_brfft, plan_irfft,
        fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!
 
-function filt{T<:Number}(b::Union(AbstractVector{T}, T),a::Union(AbstractVector{T}, T),x::AbstractVector{T})
+filt{T<:Number}(b::Union(AbstractVector{T}, T), a::Union(AbstractVector{T}, T), x::AbstractVector{T}) = filt!(b, a, copy(x))
+filt{T<:Number}(b::Union(AbstractVector{T}, T), a::Union(AbstractVector{T}, T), x::AbstractVector{T}, si::AbstractVector{T}) = filt!(b, a, copy(x), copy(si))
+
+# in-place filtering; both the input and filter state are modified in-place
+function filt!{T<:Number}(b::Union(AbstractVector{T}, T), a::Union(AbstractVector{T}, T),
+                          x::AbstractVector{T}, si::AbstractVector{T}=zeros(T, max(length(a), length(b))-1))
     if isempty(b); error("b must be non-empty"); end
     if isempty(a); error("a must be non-empty"); end
     if a[1]==0; error("a[1] must be nonzero"); end
@@ -20,21 +25,23 @@ function filt{T<:Number}(b::Union(AbstractVector{T}, T),a::Union(AbstractVector{
     sz = max(as, bs)
 
     if sz == 1
-        return (b[1]/a[1]).*x
+        # Simple scaling without memory; quick exit
+        return scale!(x, b[1]/a[1])
     end
 
     if bs<sz
+        # Ensure b has at least as many elements as a
         newb = zeros(T,sz)
         newb[1:bs] = b
         b = newb
     end
 
     xs = size(x,1)
-    y = Array(T, xs)
     silen = sz-1
-    si = zeros(T, silen)
+    size(si) == (silen,) || error("the vector of initial conditions must have exactly max(length(a),length(b))-1 elements")
 
     if a[1] != 1
+        # Normalize the coefficients such that a[1] == 1
         norml = a[1]
         a ./= norml
         b ./= norml
@@ -42,6 +49,7 @@ function filt{T<:Number}(b::Union(AbstractVector{T}, T),a::Union(AbstractVector{
 
     if as > 1
         if as<sz
+            # Pad a to be the same length as b
             newa = zeros(T,sz)
             newa[1:as] = a
             a = newa
@@ -49,25 +57,27 @@ function filt{T<:Number}(b::Union(AbstractVector{T}, T),a::Union(AbstractVector{
 
         @inbounds begin
             for i=1:xs
-                y[i] = si[1] + b[1]*x[i]
+                val = si[1] + b[1]*x[i]
                 for j=1:(silen-1)
-                    si[j] = si[j+1] + b[j+1]*x[i] - a[j+1]*y[i]
+                    si[j] = si[j+1] + b[j+1]*x[i] - a[j+1]*val
                 end
-                si[silen] = b[silen+1]*x[i] - a[silen+1]*y[i]
+                si[silen] = b[silen+1]*x[i] - a[silen+1]*val
+                x[i] = val
             end
         end
     else
         @inbounds begin
             for i=1:xs
-                y[i] = si[1] + b[1]*x[i]
+                val = si[1] + b[1]*x[i]
                 for j=1:(silen-1)
                     si[j] = si[j+1] + b[j+1]*x[i]
                 end
                 si[silen] = b[silen+1]*x[i]
+                x[i] = val
             end
         end
     end
-    return y
+    return x
 end
 
 function deconv{T}(b::StridedVector{T}, a::StridedVector{T})
