@@ -1,22 +1,29 @@
 # General Information for Windows
 
-This file describes how to install or build and use Julia on Windows.
-For more information about Julia, please see the [main README](https://github.com/JuliaLang/julia/blob/master/README.md)
+This file describes how to install, or build, and use Julia on Windows.
+For more general information about Julia, please see the [main README](https://github.com/JuliaLang/julia/blob/master/README.md) or the [documentation](http://docs.julialang.org/).
 
 # Unicode font support
 
-The built-in Windows fonts have rather poor coverage of the Unicode character space. The free `DejaVu Sans Mono` font can be used as a replacement font in the Windows console. Since Windows 2000, simply downloading the font and installing it is insufficient, since Windows keeps a list of approved fonts in the registry.
+The built-in Windows fonts have rather poor coverage of the Unicode character space.
+The free [`DejaVu Sans Mono`](http://dejavu-fonts.org/) font can be used as a replacement font in the Windows console.
+Since Windows 2000, simply downloading the font and installing it is insufficient, since Windows keeps a list of approved fonts in the registry.
 
 Instructions for adding fonts to the terminal are available at:
 [http://support.microsoft.com/default.aspx?scid=kb;EN-US;Q247815](http://support.microsoft.com/default.aspx?scid=kb;EN-US;Q247815)
 
 
-Additionally, rather than sticking with the default command prompt, you may want to use a different terminal emulator program, such as [`Conemu`](https://code.google.com/p/conemu-maximus5/) or [`Mintty`](https://code.google.com/p/mintty/) (note that running Julia on Mintty needs a copy of `stty.exe` in your `%PATH%` to work properly). Alternatively, you may prefer the features of a more full-function IDE, such as [`LightTable`](https://github.com/one-more-minute/Jupiter-LT), [`Sublime-IJulia`](https://github.com/quinnj/Sublime-IJulia), or [`IJulia`](https://github.com/JuliaLang/IJulia.jl).
+Additionally, rather than sticking with the default command prompt, you may want to use a different terminal emulator program, such as [`Conemu`](https://code.google.com/p/conemu-maximus5/) or [`Mintty`](https://code.google.com/p/mintty/)
+(note that running Julia on Mintty needs a copy of `stty.exe` in your `%PATH%` to work properly).
+Alternatively, you may prefer the features of a more full-function IDE, such as [`LightTable`](https://github.com/one-more-minute/Jupiter-LT), [`Sublime-IJulia`](https://github.com/quinnj/Sublime-IJulia), [`IJulia`](https://github.com/JuliaLang/IJulia.jl), or [`Julia Studio`](http://forio.com/labs/julia-studio/).
 
 
 # Binary distribution
 
-Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and Windows 8). Both the 32-bit and 64-bit versions are supported. The 32-bit i686 binary will run on either 32-bit and 64-bit operating systems. The 64-bit x86_64 binary will only run on 64-bit Windows.
+Julia runs on Windows XP-SP2 and later (including Windows Vista, Windows 7, and Windows 8).
+Both the 32-bit and 64-bit versions are supported.
+The 32-bit (i686) binary will run on either a 32-bit and 64-bit operating system.
+The 64-bit (x86_64) binary will only run on 64-bit Windows and will otherwise refuse to launch.
 
 1. Download and install [7-Zip](http://www.7-zip.org/download.html). Install the full program, not just the command line version.
 
@@ -28,14 +35,14 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
 
 ## Supported build platforms
 
-- Windows 8: supported
+- Windows 8: supported (32 and 64 bits)
 - Windows 7: supported (32 and 64 bits)
 - Windows Vista: unknown
-- Windows XP: not supported
+- Windows XP: not supported (however, there have been some reports of success following the msys2 steps)
 
 ## Compiling with MinGW/MSYS2
 
-### MSYS2 provides a robust MSYS experience. 
+### MSYS2 provides a robust MSYS experience.
 ### The instructions in this section were tested with the latest versions of all packages specified as of 2014-02-28.
 
 1. Install [7-Zip](http://www.7-zip.org/download.html).
@@ -43,12 +50,12 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
 2. Install [Python 2.x](http://www.python.org/download/releases). Do **not** install Python 3.
 
 3. Install [MinGW-builds](http://sourceforge.net/projects/mingwbuilds/), a Windows port of GCC, as follows. Do **not** use the regular MinGW distribution.
-  1. Download the [MinGW-builds installer](http://downloads.sourceforge.net/project/mingwbuilds/mingw-builds-install/mingw-builds-install.exe). 
+  1. Download the [MinGW-builds installer](http://downloads.sourceforge.net/project/mingwbuilds/mingw-builds-install/mingw-builds-install.exe).
   2. Run the installer. When prompted, choose:
     - Version: the most recent version (these instructions were tested with 4.8.1)
-    - Architecture: x32 or x64 as appropriate and desired.
-    - Threads: win32 (not posix)
-    - Exception: sjlj (for x32) or seh (for x64). Do not choose dwarf2.
+    - Architecture: `x32` or `x64` as appropriate and desired.
+    - Threads: `win32` (not posix)
+    - Exception: `sjlj` (for x32) or `seh` (for x64). Do not choose dwarf2.
     - Build revision: most recent available (tested with 5)
   3. Do **not** install to a directory with spaces in the name. You will have to change the default installation path, for example,
     - `C:\mingw-builds\x64-4.8.1-win32-seh-rev5` for 64 bits
@@ -58,7 +65,7 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
 
   1. Download the latest base [32-bit](http://sourceforge.net/projects/msys2/files/Base/i686/) or [64-bit](http://sourceforge.net/projects/msys2/files/Base/x86_64/) distribution, consistent with the architecture you chose for MinGW-builds. The archive will have a name like `msys2-base-x86_64-yyyymmdd.tar.xz` and these instructions were tested with `msys2-base-x86_64-20140216.tar.xz`.
 
-  2. Using [7-Zip](http://www.7-zip.org/download.html), extract the archive to any convenient directory. 
+  2. Using [7-Zip](http://www.7-zip.org/download.html), extract the archive to any convenient directory.
     - *N.B.* Some versions of this archive contain zero-byte files that clash with existing files. If prompted, choose **not** to overwrite existing files.
     - You may need to extract the tarball in a separate step. This will create an `msys32` or `msys64` directory, according to the architecture you chose.
     - Move the `msys32` or `msys64` directory into your MinGW-builds directory, which is `C:\mingw-builds` if you followed the suggestions in step 3. We will omit the "32" or "64" in the steps below and refer to this as "the msys directory".
@@ -88,8 +95,8 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
 ```
 
      *N.B.* The `export` clobbers whatever `$PATH` is already defined. This is suggested to avoid path-masking. If you use MSYS2 for purposes other than building Julia, you may prefer to append rather than clobber.
-      
-     *N.B.* All of the path-separators in the mount commands are unix-style. 
+
+     *N.B.* All of the path-separators in the mount commands are unix-style.
 
 
   6. Configuration of the toolchain is complete. Now `exit` the MSYS2 shell.
@@ -110,8 +117,11 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
     make -j 4   # Adjust the number of cores (4) to match your build environment.
 ```
 
-  3. The Julia build can (as of 2014-02-28) fail after building OpenBLAS.  This appears (?) to be a result of the OpenBLAS build trying to run the Microsoft Visual C++ `lib.exe` tool  -- which we don't need to do -- without checking for its existence. This uncaught error kills the Julia build. If this happens, follow the instructions in the helpful error message and continue the build, *viz.*
-    ```
+  3. The Julia build can (as of 2014-02-28) fail after building OpenBLAS.
+  This appears (?) to be a result of the OpenBLAS build trying to run the Microsoft Visual C++ `lib.exe` tool  -- which we don't need to do -- without checking for its existence.
+    This uncaught error kills the Julia buil
+.   If this happens, follow the instructions in the helpful error message and continue the build, *viz.*
+        ```
     cd deps/openblas-v0.2.9.rc1   # This path will depend on the version of OpenBLAS.
     make install
     cd ../..
@@ -120,13 +130,15 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
 
   4. Some versions of PCRE (*e.g.* 8.31) will compile correctly but fail a test.
   This will cause the Julia build to fail. To circumvent testing for PCRE and allow the rest
-  of the build to continue, 
+  of the build to continue,
     ```
     touch deps/pcre-8.31/checked  # This path will depend on the version of PCRE.
     make -j 4   # Adjust the number of cores (4) to match your build environment.
 ```
 6. Setup Package Development Environment
-  1. The `Pkg` module in Base provides many convenient tools for [developing and publishing packages](http://docs.julialang.org/en/latest/manual/packages/). One of the packages added through pacman above was `openssh`, which will allow secure access to GitHub APIs. Follow GitHub's [guide](https://help.github.com/articles/generating-ssh-keys) to setting up SSH keys to ensure your local machine can communicate with GitHub effectively.
+  1. The `Pkg` module in Base provides many convenient tools for [developing and publishing packages](http://docs.julialang.org/en/latest/manual/packages/).
+  One of the packages added through pacman above was `openssh`, which will allow secure access to GitHub APIs.
+  Follow GitHub's [guide](https://help.github.com/articles/generating-ssh-keys) to setting up SSH keys to ensure your local machine can communicate with GitHub effectively.
 
   5. In case of the issues with building packages (i.e. ICU fails to build with the following error message ```error compiling xp_parse: error compiling xp_make_parser: could not load module libexpat-1: %```) run ```make win-extras``` and then copy everything from the ```dist-extras``` folder into ```usr/bin```.
 
@@ -139,7 +151,7 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
 2. Install [Python 2.x](http://www.python.org/download/releases). Do **not** install Python 3.
 
 3. Install [MinGW-builds](http://sourceforge.net/projects/mingwbuilds/), a Windows port of GCC. as follows. Do **not** use the regular MinGW distribution.
-  1. Download the [MinGW-builds installer](http://downloads.sourceforge.net/project/mingwbuilds/mingw-builds-install/mingw-builds-install.exe). 
+  1. Download the [MinGW-builds installer](http://downloads.sourceforge.net/project/mingwbuilds/mingw-builds-install/mingw-builds-install.exe).
   2. Run the installer. When prompted, choose:
     - Version: the most recent version (these instructions were tested with 4.8.1)
     - Architecture: x32 or x64 as appropriate and desired.
@@ -168,7 +180,7 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
     cd julia
     make
    ```
-   *Tips:* 
+   *Tips:*
   - The MSYS build of `make` is fragile and will occasionally corrupt the build process. You can minimize the changes of this occurring by only running `make` in serial, i.e. avoid the `-j` argument.
   - When the build process fails for no apparent reason, try running `make` again.
   - Sometimes, `make` will appear to hang, consuming 100% cpu but without apparent progress. If this happens, kill `make` from the Task Manager and try again.
@@ -196,12 +208,12 @@ If you prefer to cross-compile, the following steps should get you started.
 First, you will need to ensure your system has the required dependencies. We need wine (>=1.7.5),
 a system compiler, and some downloaders.
 
-On Ubuntu: 
-    
+On Ubuntu:
+
     apt-add-repository ppa:ubuntu-wine/ppa
     apt-get upate
     apt-get install wine1.7 subversion cvs gcc wget p7zip-full
-    
+
 
 On Mac: Install XCode, XCode command line tools, X11 (now [XQuartz](http://xquartz.macosforge.org/)),
 and [MacPorts](http://www.macports.org/install.php) or [Homebrew](http://mxcl.github.io/homebrew/).
@@ -210,10 +222,10 @@ Then run ```port install wine wget``` or ```brew install wine wget```, as approp
 On Both:
 
 Unfortunately, the version of gcc installed by Ubuntu is currently 4.6, which does not compile OpenBLAS correctly.
-On Mac, the situation is the same: the version in MacPorts is very old and Homebrew does not have it. So first we need to get
-a cross-compile version of gcc. Most binary packages appear to not include gfortran, so we will need to compile it
-from source (or ask @vtjnash to send you a tgz of my build). This is typically quite a bit of work, so we will use
-[this script](https://code.google.com/p/mingw-w64-dgn/) to make it easy. 
+On Mac, the situation is the same: the version in MacPorts is very old and Homebrew does not have it.
+So first we need to get a cross-compile version of gcc.
+Most binary packages appear to not include gfortran, so we will need to compile it from source (or ask @vtjnash to send you a tgz of his build).
+This is typically quite a bit of work, so we will use [this script](https://code.google.com/p/mingw-w64-dgn/) to make it easy.
 
 1. `svn checkout http://mingw-w64-dgn.googlecode.com/svn/trunk/ mingw-w64-dgn`
 2. `cd mingw-w64-dgn`
