@@ -482,6 +482,7 @@ pcre-$(PCRE_VER)/configure: pcre-$(PCRE_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	$(TAR) jxf $<
 	touch -c $@
+	cd pcre-$(PCRE_VER) && patch -p1 < ../pcre-gcc49-compile.patch
 pcre-$(PCRE_VER)/config.status: pcre-$(PCRE_VER)/configure
 	cd pcre-$(PCRE_VER) && \
 	./configure $(CONFIGURE_COMMON) --enable-utf --enable-unicode-properties --enable-jit --includedir=$(build_includedir)
