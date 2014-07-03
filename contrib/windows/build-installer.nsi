@@ -4,12 +4,16 @@
 
 Name "The Julia Language"
 OutFile "julia-installer.exe"
-SetCompress off
 CRCCheck on
 SetDataBlockOptimize on
 ShowInstDetails show
 RequestExecutionLevel user
 BrandingText "Julia ${Version}"
+
+# Compression related
+SetCompressor /SOLID lzma
+SetCompressorDictSize 48
+SetDatablockOptimize on
 
 # User interface changes
 var Checkbox
@@ -34,7 +38,9 @@ FunctionEnd
 
 # Variable definitions used in installer pages
 InstallDir "$LOCALAPPDATA\Julia-${Version}"
-!define StartMenuFolder "Julia ${Version}" 
+!define StartMenuFolder "Julia ${Version}"
+!define DOMAIN "julialang.org"
+!define WEBSITE_LINK "http://${DOMAIN}"
 
 # Page settings
 # Note that we repurpose the checkboxes on the FinishPage
@@ -74,15 +80,19 @@ Section "Dummy Section" SecDummy
                  "Publisher" "The Julia Project"
     WriteRegStr HKCU "${ARP}" \
                  "DisplayIcon" "$INSTDIR\bin\julia.exe"
+    WriteRegStr HKCU "${REG_UNINSTALL}" \
+                "DisplayVersion" "${Version}"
     WriteRegStr HKCU "${ARP}" \
                  "UninstallString" "$\"$INSTDIR\uninstall.exe$\""
+    WriteRegStr HKCU "${REG_UNINSTALL}" \
+                "HelpLink" "${WEBSITE_LINK}"
     WriteRegStr HKCU "${ARP}" \
                  "QuietUninstallString" "$\"$INSTDIR\uninstall.exe$\" /S"
-    WriteRegDWORD HKCU "${ARP}" "EstimatedSize" "300"
+    WriteRegDWORD HKCU "${ARP}" "EstimatedSize" "383590" ;Kb
     WriteRegDWORD HKCU "${ARP}" "NoModify" "1"
     WriteRegDWORD HKCU "${ARP}" "NoRepair" "1"
 SectionEnd
- 
+
 Section "uninstall"
     Delete "$INSTDIR/uninstall.exe"
     Delete "$DESKTOP\Julia.lnk"
@@ -96,11 +106,9 @@ Function AddToStartMenu
     CreateDirectory "$SMPROGRAMS\${StartMenuFolder}"
     CreateShortcut "$SMPROGRAMS\${StartMenuFolder}\julia.lnk" "$INSTDIR\julia.lnk" "" "" "" "" "" "The Julia Language"
     CreateShortcut "$SMPROGRAMS\${StartMenuFolder}\Uninstall.lnk" "$instdir\Uninstall.exe"
-FunctionEnd 
+FunctionEnd
 
 # Opens the installation folder
 Function ShowInstallFolder
     ExecShell "open" $INSTDIR
 FunctionEnd
-
-
