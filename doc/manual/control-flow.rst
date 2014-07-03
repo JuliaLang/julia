@@ -514,6 +514,9 @@ forming the cartesian product of its iterables:
     (2,3)
     (2,4)
 
+A ``break`` statement inside such a loop exits the entire nest of loops,
+not just the inner one.
+
 .. _man-exception-handling:
 
 Exception Handling
