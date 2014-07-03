@@ -235,7 +235,7 @@ end
 
 # read up to nb bytes from s, returning a Vector{Uint8} of bytes read.
 function readbytes(s::IO, nb=typemax(Int))
-    b = Array(Uint8, min(nb, 65536))
+    b = Array(Uint8, nb == typemax(Int) ? 1024 : nb)
     nr = readbytes!(s, b, nb)
     resize!(b, nr)
 end
