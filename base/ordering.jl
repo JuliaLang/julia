@@ -48,8 +48,9 @@ lt(o::Lt,                    a, b) = o.lt(a,b)
 lt(o::LexicographicOrdering, a, b) = lexcmp(a,b) < 0
 
 function lt(p::Perm, a::Int, b::Int)
-    lt(p.order, p.data[a], p.data[b]) ? true :
-    lt(p.order, p.data[b], p.data[a]) ? false : a < b
+    da = p.data[a]
+    db = p.data[b]
+    lt(p.order, da, db) | (!lt(p.order, db, da) & (a < b))
 end
 function lt(p::Perm{LexicographicOrdering}, a::Int, b::Int)
     c = lexcmp(p.data[a], p.data[b])
