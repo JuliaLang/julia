@@ -25,6 +25,7 @@ IOStream(name::String) = IOStream(name, true)
 convert(T::Type{Ptr{Void}}, s::IOStream) = convert(T, s.ios)
 show(io::IO, s::IOStream) = print(io, "IOStream(", s.name, ")")
 fd(s::IOStream) = int(ccall(:jl_ios_fd, Clong, (Ptr{Void},), s.ios))
+stat(s::IOStream) = stat(fd(s))
 close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
 isopen(s::IOStream) = bool(ccall(:ios_isopen, Cint, (Ptr{Void},), s.ios))
 function flush(s::IOStream)
@@ -254,6 +255,8 @@ function readbytes!(s::IOStream, b::Array{Uint8}, nb=length(b))
     end
     return nr
 end
+
+readbytes(s::IOStream) = readbytes(s, filesize(s))
 
 ## Character streams ##
 const _chtmp = Array(Char, 1)
