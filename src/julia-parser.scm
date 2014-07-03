@@ -1016,11 +1016,8 @@
      (let* ((ranges (parse-comma-separated-iters s))
 	    (body   (parse-block s)))
        (expect-end s)
-       `(for ,(car ranges)
-             ,(let nest ((r (cdr ranges)))
-                (if (null? r)
-                    body
-                    `(inner-for ,(car r) ,(nest (cdr r))))))))
+       `(for ,(if (length= ranges 1) (car ranges) (cons 'block ranges))
+	     ,body)))
 
     ((if)
      (let* ((test (parse-cond s))
