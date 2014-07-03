@@ -3,22 +3,30 @@
   . non-moving, precise mark and sweep collector
   . pool-allocates small objects, keeps big objects on a simple list
 */
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
-#include "julia.h"
-#include "julia_internal.h"
-
 // use mmap instead of malloc to allocate pages. default = off.
-// #define USE_MMAP
+//#define USE_MMAP
 
 // free pages as soon as they are empty. if not defined, then we
 // will wait for the next GC, to allow the space to be reused more
 // efficiently. default = on.
 #define FREE_PAGES_EAGER
 
+#include <stdlib.h>
+#include <string.h>
+#include <assert.h>
+#ifdef USE_MMAP
+# include <sys/mman.h>
+# include <malloc.h>
+#endif
+#include "julia.h"
+#include "julia_internal.h"
+
 #ifdef _P64
-#define GC_PAGE_SZ 12288//bytes
+# ifdef USE_MMAP
+#  define GC_PAGE_SZ 16384//bytes
+# else
+#  define GC_PAGE_SZ 12288//bytes
+# endif
 #else
 #define GC_PAGE_SZ  8192//bytes
 #endif
@@ -550,7 +558,9 @@ static void sweep_pool(pool_t *p)
         while ((char*)v <= lim) {
             if (!v->marked) {
 #ifndef FREE_PAGES_EAGER
-                if (v->next != (char*)v + osize && v->next != NULL &&
+                // check that all but last object points to its next object,
+                // which is a heuristic check for being on the freelist.
+                if ((char*)v->next != (char*)v + osize && v->next != NULL &&
                     (char*)v+osize <= lim)
                     empty = 0;
 #endif
