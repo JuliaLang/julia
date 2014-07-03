@@ -936,6 +936,7 @@ export
     fft,
     fftshift,
     filt,
+    filt!,
     idct!,
     idct,
     ifft!,
