@@ -1,7 +1,18 @@
 # General Information for Windows
 
-This file describes how to install or build Julia on Windows.
+This file describes how to install or build and use Julia on Windows.
 For more information about Julia, please see the [main README](https://github.com/JuliaLang/julia/blob/master/README.md)
+
+# Unicode font support
+
+The built-in Windows fonts have rather poor coverage of the Unicode character space. The free `DejaVu Sans Mono` font can be used as a replacement font in the Windows console. Since Windows 2000, simply downloading the font and installing it is insufficient, since Windows keeps a list of approved fonts in the registry.
+
+Instructions for adding fonts to the terminal are available at:
+[http://support.microsoft.com/default.aspx?scid=kb;EN-US;Q247815](http://support.microsoft.com/default.aspx?scid=kb;EN-US;Q247815)
+
+
+Additionally, rather than sticking with the default command prompt, you may want to use a different terminal emulator program, such as [`Conemu`](https://code.google.com/p/conemu-maximus5/) or [`Mintty`](https://code.google.com/p/mintty/) (note that running Julia on Mintty needs a copy of `stty.exe` in your `%PATH%` to work properly). Alternatively, you may prefer the features of a more full-function IDE, such as [`LightTable`](https://github.com/one-more-minute/Jupiter-LT), [`Sublime-IJulia`](https://github.com/quinnj/Sublime-IJulia), or [`IJulia`](https://github.com/JuliaLang/IJulia.jl).
+
 
 # Binary distribution
 
