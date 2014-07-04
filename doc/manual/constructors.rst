@@ -12,8 +12,8 @@ This much was already mentioned briefly when composite types were
 introduced. For example::
 
     type Foo
-      bar
-      baz
+      bar::Int
+      baz::Int
     end
 
     julia> foo = Foo(1,2)
@@ -78,7 +78,7 @@ two-argument constructor method. For reasons that will become clear very
 shortly, additional constructor methods declared as normal methods like
 this are called *outer* constructor methods. Outer constructor methods
 can only ever create a new instance by calling another constructor
-method, such as the automatically provided default one.
+method, such as the automatically provided default constructors.
 
 Inner Constructor Methods
 -------------------------
@@ -138,18 +138,19 @@ constructor-provided invariants are fully enforced. This is an important
 consideration when deciding whether a type should be immutable.
 
 If any inner constructor method is defined, no default constructor
-method is provided: it is presumed that you have supplied yourself with
-all the inner constructors you need. The default constructor is
-equivalent to writing your own inner constructor method that takes all
-of the object's fields as parameters (constrained to be of the correct
-type, if the corresponding field has a type), and passes them to
-``new``, returning the resulting object::
+methods are provided: it is presumed that you have supplied yourself with
+all the inner constructors you need. Two constructors are provided by default: one
+matching exactly the object fields' types, the other an additional fallback constructor
+which takes arguments of ``Any`` type and generates calls to ``convert`` for each field's type. 
+Thus, in the following example::
 
     type Foo
-      bar
-      baz
+      bar::Int
+      baz::Int
 
-      Foo(bar,baz) = new(bar,baz)
+      # Two default inner constructors
+      Foo(bar::Int,baz::Int) = new(bar,baz)
+      Foo(bar,baz) = new(convert(Int,bar),convert(Int,baz))
     end
 
 This declaration has the same effect as the earlier definition of the
@@ -164,6 +165,7 @@ with an explicit constructor::
     type T2
       x::Int64
       T2(x::Int64) = new(x)
+      T2(x) = new(convert(Int64,x))
     end
 
     julia> T1(1)
@@ -172,11 +174,14 @@ with an explicit constructor::
     julia> T2(1)
     T2(1)
 
-    julia> T1(1.0)
-    no method T1(Float64,)
+    julia> T1(1.0) # defaults to fallback constructor and `convert` succeeds
+    T1(1)
+
+    julia> T1(1.2) # defaults to fallback constructor and `convert` fails
+    ERROR: InexactError()
 
     julia> T2(1.0)
-    no method T2(Float64,)
+    T2(1)
 
 It is considered good form to provide as few inner constructor methods
 as possible: only those taking all arguments explicitly and enforcing

@@ -641,10 +641,10 @@ unlimited number of types: ``Point{Float64}``, ``Point{String}``,
 .. doctest::
 
     julia> Point{Float64}
-    Point{Float64} (constructor with 1 method)
+    Point{Float64} (constructor with 2 methods)
 
     julia> Point{String}
-    Point{String} (constructor with 1 method)
+    Point{String} (constructor with 2 methods)
 
 The type ``Point{Float64}`` is a point whose coordinates are 64-bit
 floating-point values, while the type ``Point{String}`` is a "point"
@@ -737,7 +737,7 @@ as a constructor accordingly:
     Point{Float64}(1.0,2.0)
 
     julia> typeof(ans)
-    Point{Float64} (constructor with 1 method)
+    Point{Float64} (constructor with 2 methods)
 
 For the default constructor, exactly one argument must be supplied for
 each field:
@@ -750,7 +750,7 @@ each field:
     julia> Point{Float64}(1.0,2.0,3.0)
     ERROR: no method Point{Float64}(Float64, Float64, Float64)
 
-The provided arguments need to match the field types exactly, in this
+The provided arguments need to match or be convertible to the field types exactly, in this
 case ``(Float64,Float64)``, as with all composite type default
 constructors.
 
@@ -766,13 +766,13 @@ implied value of the parameter type ``T`` is unambiguous:
     Point{Float64}(1.0,2.0)
 
     julia> typeof(ans)
-    Point{Float64} (constructor with 1 method)
+    Point{Float64} (constructor with 2 methods)
 
     julia> Point(1,2)
     Point{Int64}(1,2)
 
     julia> typeof(ans)
-    Point{Int64} (constructor with 1 method)
+    Point{Int64} (constructor with 2 methods)
 
 In the case of ``Point``, the type of ``T`` is unambiguously implied if
 and only if the two arguments to ``Point`` have the same type. When this
