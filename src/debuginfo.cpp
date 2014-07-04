@@ -579,6 +579,11 @@ extern "C" void jl_write_coverage_data(void)
                 int l = 1;
                 while (!inf.eof()) {
                     inf.getline(line, sizeof(line));
+		    if (inf.fail() && !inf.bad()) {
+			// Read through lines longer than 1024
+			inf.clear();
+			inf.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+		    }
                     int count = -1;
                     if ((size_t)l < counts.size()) {
                         GlobalVariable *gv = counts[l];
