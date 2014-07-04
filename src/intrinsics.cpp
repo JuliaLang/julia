@@ -245,7 +245,7 @@ static Value *emit_unbox(Type *to, Value *x, jl_value_t *jt)
             // this can happen when a branch yielding a different type ends
             // up being dead code, and type inference knows that the other
             // branch's type is the only one that matters.
-            assert(ty == T_void);
+            // assert(ty == T_void);
             return UndefValue::get(to);
         }
         return x;
