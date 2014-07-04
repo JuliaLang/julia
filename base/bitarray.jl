@@ -1711,3 +1711,11 @@ function cat(catdim::Integer, X::Union(BitArray, Integer)...)
 end
 
 # hvcat -> use fallbacks in abstractarray.jl
+
+
+# BitArray I/O
+
+write(s::IO, B::BitArray) = write(s, B.chunks)
+read!(s::IO, B::BitArray) = read!(s, B.chunks)
+
+sizeof(B::BitArray) = sizeof(B.chunks)
