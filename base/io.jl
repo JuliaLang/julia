@@ -294,8 +294,3 @@ function reset(io::IO)
 end
 
 ismarked(io::IO) = io.mark >= 0
-
-# BitArray I/O
-
-write(s::IO, B::BitArray) = write(s, B.chunks)
-read!(s::IO, B::BitArray) = read!(s, B.chunks)
