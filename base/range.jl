@@ -195,6 +195,16 @@ end
 length{T<:Union(Int,Uint,Int64,Uint64)}(r::UnitRange{T}) =
     checked_add(checked_sub(r.stop, r.start), one(T))
 
+# some special cases to favor default Int type
+if Int === Int64
+function length(r::StepRange{Uint32})
+    isempty(r) && return int64(0)
+    div(int64(r.stop+r.step - r.start), int64(r.step))
+end
+
+length(r::UnitRange{Uint32}) = int64(r.stop - r.start + 1)
+end
+
 first{T}(r::OrdinalRange{T}) = oftype(T, r.start)
 first(r::FloatRange) = r.start/r.divisor
 
