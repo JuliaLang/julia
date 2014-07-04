@@ -38,7 +38,7 @@ end
 
 writemime(io::IO, ::MIME"text/plain", t::Associative) = 
     showdict(io, t, limit=true)
-writemime(io::IO, ::MIME"text/plain", t::Union(KeyIterator,ValueIterator)) = 
+writemime(io::IO, ::MIME"text/plain", t::Union(KeyIterator, ValueIterator)) = 
     showkv(io, t, limit=true)
 
 
@@ -52,7 +52,7 @@ function showerror(io::IO, e::TypeError)
         print(io, "type: non-boolean ($(typeof(e.got))) ",
                   "used in boolean context")
     else
-        if isa(e.got,Type)
+        if isa(e.got, Type)
             tstr = "Type{$(e.got)}"
         else
             tstr = string(typeof(e.got))
@@ -60,7 +60,7 @@ function showerror(io::IO, e::TypeError)
         print(io, "type: $(e.func): ",
                   "$(ctx)expected $(e.expected), ",
                   "got $tstr")
-        if e.func === :apply && e.expected <: Function && isa(e.got,AbstractArray)
+        if e.func === :apply && e.expected <: Function && isa(e.got, AbstractArray)
             println(io)
             print(io, "Use square brackets [] for indexing.")
         end
@@ -84,7 +84,7 @@ end
 function showerror(io::IO, e::DomainError, bt)
     print(io, "DomainError")
     for b in bt
-        code = ccall(:jl_lookup_code_address, Any, (Ptr{Void},Cint), b, true)
+        code = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), b, true)
         if length(code) == 4
             if code[1] in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
                 print(io, "\n", code[1],
@@ -110,22 +110,22 @@ showerror(io::IO, e::InterruptException) = print(io, "interrupt")
 function showerror(io::IO, e::MethodError)
     name = isgeneric(e.f) ? e.f.env.name : :anonymous
     if isa(e.f, DataType)
-        print(io, "no method $(e.f)(")
+        print(io, "constructor `$(e.f)` has no method matching signature $(e.f)(")
     else
-        print(io, "no method $(name)(")
+        print(io, "function `$(name)` has no method matching signature $(name)(")
     end
     for (i, arg) in enumerate(e.args)
-        if isa(arg,Type) && arg != typeof(arg)
+        if isa(arg, Type) && arg != typeof(arg)
             print(io, "Type{$(arg)}")
         else
-            print(io, typeof(arg))
+            print(io, "::$(typeof(arg))")
         end
-        i == length(e.args) || print(io,", ")
+        i == length(e.args) || print(io, ", ")
     end
     print(io, ")")
-    if isdefined(Base,name)
-        f = eval(Base,name)
-        if f !== e.f && isgeneric(f) && applicable(f,e.args...)
+    if isdefined(Base, name)
+        f = eval(Base, name)
+        if f !== e.f && isgeneric(f) && applicable(f, e.args...)
             println(io)
             print(io, "you may have intended to import Base.$(name)")
         end
@@ -165,7 +165,7 @@ function show_backtrace(io::IO, top_function::Symbol, t, set)
     local fname, file, line
     count = 0
     for i = 1:length(t)
-        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void},Cint), t[i], true)
+        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), t[i], true)
         if lkup === ()
             continue
         end
