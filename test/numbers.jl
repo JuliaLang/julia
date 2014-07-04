@@ -1791,3 +1791,6 @@ end
 
 @test_throws InexactError iround(Int16, -32768.7)
 @test iround(Int16, -32768.1) === int16(-32768)
+
+# issue #7508
+@test_throws ErrorException reinterpret(Int, 0x01)

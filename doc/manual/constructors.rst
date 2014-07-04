@@ -78,7 +78,7 @@ two-argument constructor method. For reasons that will become clear very
 shortly, additional constructor methods declared as normal methods like
 this are called *outer* constructor methods. Outer constructor methods
 can only ever create a new instance by calling another constructor
-method, such as the automatically provided default one.
+method, such as the automatically provided default ones.
 
 Inner Constructor Methods
 -------------------------
