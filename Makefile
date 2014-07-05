@@ -370,9 +370,9 @@ ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 	cd dist-extras && \
 	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z920.exe && \
 	7z x -y 7z920.exe 7z.exe 7z.dll && \
-	$(JLDOWNLOAD) http://download.opensuse.org/repositories/windows:/mingw:/win32/SLE_11_SP3/noarch/mingw32-libexpat-2.0.1-6.6.noarch.rpm && \
+	$(JLDOWNLOAD) http://download.opensuse.org/repositories/windows:/mingw:/win32/openSUSE_13.1/noarch/mingw32-libexpat-2.0.1-7.6.noarch.rpm && \
 	mv mingw32-libexpat-*.rpm mingw-libexpat.rpm && \
-	$(JLDOWNLOAD) http://download.opensuse.org/repositories/windows:/mingw:/win32/SLE_11_SP3/noarch/mingw32-zlib-1.2.8-2.4.noarch.rpm && \
+	$(JLDOWNLOAD) http://download.opensuse.org/repositories/windows:/mingw:/win32/openSUSE_13.1/noarch/mingw32-zlib-1.2.8-3.11.noarch.rpm && \
 	mv mingw32-zlib-*.rpm mingw-zlib.rpm
 else ifeq ($(ARCH),x86_64)
 	cd dist-extras && \
@@ -380,9 +380,9 @@ else ifeq ($(ARCH),x86_64)
 	7z x -y 7z920-x64.msi _7z.exe _7z.dll && \
 	mv _7z.dll 7z.dll && \
 	mv _7z.exe 7z.exe && \
-	$(JLDOWNLOAD) http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP3/noarch/mingw64-libexpat-2.0.1-5.8.noarch.rpm && \
+	$(JLDOWNLOAD) http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_13.1/noarch/mingw64-libexpat-2.0.1-6.13.noarch.rpm && \
 	mv mingw64-libexpat-*.rpm mingw-libexpat.rpm && \
-	$(JLDOWNLOAD) http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP3/noarch/mingw64-zlib-1.2.8-2.1.noarch.rpm && \
+	$(JLDOWNLOAD) http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_13.1/noarch/mingw64-zlib-1.2.8-3.1.noarch.rpm && \
 	mv mingw64-zlib-*.rpm mingw-zlib.rpm
 else
 	$(error no win-extras target for ARCH=$(ARCH))
@@ -398,4 +398,4 @@ endif
 	7z e -y mingw-libexpat.cpio && \
 	7z x -y mingw-zlib.rpm -so > mingw-zlib.cpio && \
 	7z e -y mingw-zlib.cpio && \
-	$(JLDOWNLOAD) PortableGit.7z http://msysgit.googlecode.com/files/PortableGit-1.8.3-preview20130601.7z
+	$(JLDOWNLOAD) PortableGit.7z https://github.com/msysgit/msysgit/releases/download/Git-1.9.4-preview20140611/PortableGit-1.9.4-preview20140611.7z
