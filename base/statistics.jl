@@ -58,19 +58,21 @@ function var(iterable; corrected::Bool=true, mean=nothing)
             M = new_M
         end
         return S / (count - int(corrected))
-    else # mean provided
+    elseif isa(mean, Number) # mean provided
         # Cannot use a compensated version, e.g. the one from
         # "Updating Formulae and a Pairwise Algorithm for Computing Sample Variances."
         # by Chan, Golub, and LeVeque, Technical Report STAN-CS-79-773, 
         # Department of Computer Science, Stanford University,
         # because user can provide mean value that is different to mean(iterable)
-        sum2 = (value - mean)^2
+        sum2 = (value - mean::Number)^2
         while !done(iterable, state)
             value, state = next(iterable, state)
             count += 1
             sum2 += (value - mean)^2
         end
         return sum2 / (count - int(corrected))
+    else
+        error("invalid value of mean")
     end
 end
 
@@ -138,7 +140,7 @@ end
 function varm{T}(A::AbstractArray{T}, m::Number; corrected::Bool=true)
     n = length(A)
     n == 0 && return convert(momenttype(T), NaN)
-    n == 1 && return corrected ? convert(momenttype(T), NaN) : zero(momenttype(T))
+    n == 1 && return convert(momenttype(T), abs2(A[1] - m)/(1 - int(corrected)))
     return centralize_sumabs2(A, m, 1, n) / (n - int(corrected))
 end
 
@@ -156,18 +158,18 @@ varm{T}(A::AbstractArray{T}, m::AbstractArray, region; corrected::Bool=true) =
     varm!(Array(momenttype(T), reduced_dims(size(A), region)), A, m; corrected=corrected)
 
 
-function var(A::AbstractArray; corrected::Bool=true, mean=nothing)
-    mean == 0 ? varzm(A; corrected=corrected) :
-    mean == nothing ? varm(A, Base.mean(A); corrected=corrected) :
-    isa(mean, Number) ? varm(A, mean; corrected=corrected) :
-    error("Invalid value of mean.")
+function var{T}(A::AbstractArray{T}; corrected::Bool=true, mean=nothing)
+    convert(momenttype(T), mean == 0 ? varzm(A; corrected=corrected) :
+                           mean == nothing ? varm(A, Base.mean(A); corrected=corrected) :
+                           isa(mean, Number) ? varm(A, mean::Number; corrected=corrected) :
+                           error("invalid value of mean"))::momenttype(T)
 end
 
 function var(A::AbstractArray, region; corrected::Bool=true, mean=nothing)
     mean == 0 ? varzm(A, region; corrected=corrected) :
     mean == nothing ? varm(A, Base.mean(A, region), region; corrected=corrected) :
-    isa(mean, AbstractArray) ? varm(A, mean, region; corrected=corrected) :
-    error("Invalid value of mean.")
+    isa(mean, AbstractArray) ? varm(A, mean::AbstractArray, region; corrected=corrected) :
+    error("invalid value of mean")
 end
 
 varm(iterable, m::Number; corrected::Bool=true) =
