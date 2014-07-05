@@ -3251,7 +3251,7 @@ Mathematical Functions
 
    Modified Bessel function of the second kind of order ``nu``, :math:`K_\nu(x)`.
 
-.. function:: besselk(nu, x)
+.. function:: besselkx(nu, x)
 
    Scaled modified Bessel function of the second kind of order ``nu``, :math:`K_\nu(x) e^x`.
 
