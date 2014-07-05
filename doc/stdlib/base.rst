@@ -2409,9 +2409,10 @@ Mathematical Operators
 
    Rational division
 
-.. function:: rationalize([Type,] x)
+.. function:: rationalize([Type=Int,] x; tol=eps(x))
 
-   Approximate the number x as a rational fraction
+   Approximate floating point number ``x`` as a Rational number with components of the given
+   integer type. The result will differ from ``x`` by no more than ``tol``.
 
 .. function:: num(x)
 
