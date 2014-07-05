@@ -1468,6 +1468,22 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 # issue 3412
 @test convert(Rational{Int32},0.5) === int32(1)//int32(2)
 
+# issue 6712
+@test convert(Rational{BigInt},float64(pi)) == float64(pi)
+@test convert(Rational{BigInt},big(pi)) == big(pi)
+
+@test convert(Rational,0.0) == 0
+@test convert(Rational,-0.0) == 0
+@test convert(Rational,zero(BigFloat)) == 0
+@test convert(Rational,-zero(BigFloat)) == 0
+@test convert(Rational{BigInt},0.0) == 0
+@test convert(Rational{BigInt},-0.0) == 0
+@test convert(Rational{BigInt},zero(BigFloat)) == 0
+@test convert(Rational{BigInt},-zero(BigFloat)) == 0
+@test convert(Rational{BigInt},5e-324) == 5e-324
+@test convert(Rational{BigInt},realmin(Float64)) == realmin(Float64)
+@test convert(Rational{BigInt},realmax(Float64)) == realmax(Float64)
+
 @test isa(convert(Float64, big(1)//2), Float64)
 
 # primes

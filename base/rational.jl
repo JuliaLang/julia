@@ -56,7 +56,7 @@ end
 
 function convert{T<:Integer}(::Type{Rational{T}}, x::FloatingPoint)
     r = rationalize(T, x, tol=0)
-    x === convert(typeof(x), r) || throw(InexactError())
+    x == convert(typeof(x), r) || throw(InexactError())
     r
 end
 convert(::Type{Rational}, x::Float64) = convert(Rational{Int64}, x)
