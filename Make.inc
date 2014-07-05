@@ -42,6 +42,9 @@ USE_INTEL_JITEVENTS = 0
 # libc++ is standard on OS X 10.9, but not for earlier releases
 USE_LIBCPP = 0
 
+# Prevent picking up $ARCH from the environment variables
+ARCH=
+
 # we include twice to pickup user definitions better
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
@@ -312,7 +315,7 @@ endif
 
 BUILD_MACHINE := $(shell $(HOSTCC) -dumpmachine)
 ifeq ($(ARCH),)
-ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
+override ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
 ifeq ($(ARCH),mingw32)
 $(error "the mingw32 compiler you are using fails the openblas testsuite. please see the README.windows document for a replacement")
 endif
@@ -320,13 +323,13 @@ ifeq ($(BUILD_OS),Darwin)
 ## Mac is a rather amazing 64-bit user-space on 32-bit kernel architecture, so to determine arch we detect
 ## the capabilities of the hardware, rather than the compiler or kernel, and make a substitution
 ifeq ($(ARCH),x86_64)
-ARCH = i686
+override ARCH = i686
 else ifeq ($(ARCH),i386)
-ARCH = i686
+override ARCH = i686
 endif
 ifeq ($(ARCH),i686)
 ifeq ($(shell sysctl -n hw.cpu64bit_capable),1)
-ARCH = x86_64
+override ARCH = x86_64
 endif
 BUILD_MACHINE := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
 endif
@@ -408,7 +411,7 @@ PCRE_CONFIG = $(build_bindir)/pcre-config
 endif
 
 # Use 64-bit libraries by default on 64-bit architectures
-ifeq ($(ARCH), x86_64)
+ifeq ($(BINARY), 64)
 USE_BLAS64 ?= 1
 endif
 
