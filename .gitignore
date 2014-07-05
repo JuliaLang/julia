@@ -1,5 +1,6 @@
 /*.tar.gz
 /tmp
+/chocolatey_build
 /dist
 /dist-extras
 /julia
@@ -15,3 +16,4 @@
 *.o
 *.dylib
 *.dSYM
+*.nupkg
