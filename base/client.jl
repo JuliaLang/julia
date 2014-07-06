@@ -237,7 +237,8 @@ function process_options(args::Vector{UTF8String})
         elseif args[i]=="--machinefile"
             i+=1
             machines = split(readall(args[i]), '\n', false)
-            addprocs(machines)
+            exename=(ccall(:jl_is_debugbuild,Cint,())==0?"./julia":"./julia-debug")
+            addprocs(machines; dir=pwd(), exename=joinpath(JULIA_HOME, exename))
         elseif args[i]=="-v" || args[i]=="--version"
             println("julia version ", VERSION)
             exit(0)
