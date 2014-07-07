@@ -158,3 +158,8 @@ end"""
 
     return
 end"""
+
+# issue #7188
+@test sprint(show, :foo) == ":foo"
+@test sprint(show, symbol("foo bar")) == "symbol(\"foo bar\")"
+@test sprint(show, symbol("foo \"bar")) == "symbol(\"foo \\\"bar\")"
