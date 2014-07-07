@@ -269,6 +269,16 @@ const expr_parens = [:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>('{','}'),
 
 ## AST decoding helpers ##
 
+is_id_start_char(c::Char) = ccall(:jl_id_start_char, Cint, (Uint32,), c) != 0
+is_id_char(c::Char) = ccall(:jl_id_char, Cint, (Uint32,), c) != 0
+function isidentifier(s::String)
+    (isempty(s) || !is_id_start_char(first(s))) && return false
+    for c in s
+        is_id_char(c) || return false
+    end
+    return true
+end
+
 is_expr(ex, head::Symbol)         = (isa(ex, Expr) && (ex.head == head))
 is_expr(ex, head::Symbol, n::Int) = is_expr(ex, head) && length(ex.args) == n
 
@@ -352,8 +362,13 @@ show_unquoted(io::IO, ex::QuoteNode, indent::Int, prec::Int) =
 
 function show_unquoted_quote_expr(io::IO, value, indent::Int, prec::Int)
     if isa(value, Symbol) && !(value in quoted_syms)
-        print(io, ":")
-        print(io, value)
+        s = string(value)
+        if isidentifier(s)
+            print(io, ":")
+            print(io, value)
+        else
+            print(io, "symbol(\"", escape_string(s), "\")")
+        end
     else
         print(io, ":(")
         show_unquoted(io, value, indent+indent_width, 0)
