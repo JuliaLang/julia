@@ -240,7 +240,7 @@ $(copyright(years,authors))
 > OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-asl(pkg::String, years::String, authors::Union(String,Array)) =
+apl(pkg::String, years::String, authors::Union(String,Array)) =
 """
 The $pkg.jl package is licensed under version 2.0 of the Apache License:
 
