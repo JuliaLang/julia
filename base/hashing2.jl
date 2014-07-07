@@ -181,6 +181,18 @@ function hash(s::Set, h::Uint)
     return h
 end
 
+function hash(s::IntSet, h::Uint)
+    h += uint(0x88989f1fc7dea67d)
+    h += hash(s.fill1s)
+    filln = s.fill1s ? uint32(-1) : uint32(0)
+    for x in s.bits
+        if x != filln
+            h = hash(x, h)
+        end
+    end
+    return h
+end
+
 # hashing ranges by component at worst leads to collisions for very similar ranges
 function hash(r::Range, h::Uint)
     h += uint(0x80707b6821b70087)
