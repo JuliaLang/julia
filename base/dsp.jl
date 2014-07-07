@@ -10,8 +10,12 @@ export FFTW, filt, filt!, deconv, conv, conv2, xcorr, fftshift, ifftshift,
        plan_fft, plan_bfft, plan_ifft, plan_rfft, plan_brfft, plan_irfft,
        fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!
 
-filt{T<:Number}(b::Union(AbstractVector{T}, T), a::Union(AbstractVector{T}, T), x::AbstractVector{T}) = filt!(b, a, copy(x))
-filt{T<:Number}(b::Union(AbstractVector{T}, T), a::Union(AbstractVector{T}, T), x::AbstractVector{T}, si::AbstractVector{T}) = filt!(b, a, copy(x), copy(si))
+function filt{T<:Number}(b::Union(AbstractVector{T}, T), a::Union(AbstractVector{T}, T), x::AbstractVector{T})
+    filt!(b, a, copy!(Array(T, size(x)), x))
+end
+function filt{T<:Number}(b::Union(AbstractVector{T}, T), a::Union(AbstractVector{T}, T), x::AbstractVector{T}, si::AbstractVector{T})
+    filt!(b, a, copy!(Array(T, size(x)), x), copy!(Array(T, size(si)), si))
+end
 
 # in-place filtering; both the input and filter state are modified in-place
 function filt!{T<:Number}(b::Union(AbstractVector{T}, T), a::Union(AbstractVector{T}, T),
