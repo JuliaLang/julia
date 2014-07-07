@@ -469,6 +469,11 @@ s = IntSet(0,1,10,20,200,300,1000,10000,10002)
 @test in(10000,s)
 @test_throws ErrorException first(IntSet())
 @test_throws ErrorException last(IntSet())
+t = copy(s)
+sizehint(t, 20000) #check that hash does not depend on size of internal Array{Uint32, 1}
+@test hash(s) == hash(t)
+@test hash(complement(s)) == hash(complement(t))
+
 
 # Ranges
 
