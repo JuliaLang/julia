@@ -282,6 +282,8 @@ function isidentifier(s::String)
     end
     return true
 end
+isoperator(s::ByteString) = ccall(:jl_is_operator, Cint, (Ptr{Uint8},), s) != 0
+isoperator(s::String) = isoperator(bytestring(s))
 
 is_expr(ex, head::Symbol)         = (isa(ex, Expr) && (ex.head == head))
 is_expr(ex, head::Symbol, n::Int) = is_expr(ex, head) && length(ex.args) == n
@@ -367,7 +369,7 @@ show_unquoted(io::IO, ex::QuoteNode, indent::Int, prec::Int) =
 function show_unquoted_quote_expr(io::IO, value, indent::Int, prec::Int)
     if isa(value, Symbol) && !(value in quoted_syms)
         s = string(value)
-        if isidentifier(s)
+        if (isidentifier(s) || isoperator(s)) && s != "end"
             print(io, ":")
             print(io, value)
         else
