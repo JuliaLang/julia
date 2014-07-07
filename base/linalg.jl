@@ -23,7 +23,6 @@ export
     GeneralizedSchur,
     Hessenberg,
     LU,
-    LUTridiagonal,
     LDLt,
     QR,
     QRPivoted,

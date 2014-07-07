@@ -6,6 +6,9 @@ symbol(s::UTF8String) = symbol(s.data)
 symbol(a::Array{Uint8,1}) =
     ccall(:jl_symbol_n, Any, (Ptr{Uint8}, Int32), a, length(a))::Symbol
 symbol(x::Char) = symbol(string(x))
+macro symbol_str(s)
+    QuoteNode(symbol(unescape_string(s)))
+end
 
 gensym() = ccall(:jl_gensym, Any, ())::Symbol
 

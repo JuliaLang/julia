@@ -1344,6 +1344,7 @@ export
     @windowsxp_only,
     @non_windowsxp_only,
     @schedule,
+    @symbol_str,
     @sync,
     @async,
     @spawn,
