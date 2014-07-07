@@ -272,8 +272,12 @@ const expr_parens = [:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>('{','}'),
 is_id_start_char(c::Char) = ccall(:jl_id_start_char, Cint, (Uint32,), c) != 0
 is_id_char(c::Char) = ccall(:jl_id_char, Cint, (Uint32,), c) != 0
 function isidentifier(s::String)
-    (isempty(s) || !is_id_start_char(first(s))) && return false
-    for c in s
+    i = start(s)
+    done(s, i) && return false
+    (c, i) = next(s, i)
+    is_id_start_char(c) || return false
+    while !done(s, i)
+        (c, i) = next(s, i)
         is_id_char(c) || return false
     end
     return true
