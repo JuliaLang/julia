@@ -31,13 +31,19 @@ USE_SYSTEM_RMATH=0
 USE_SYSTEM_LIBUV=0
 USE_SYSTEM_UTF8PROC=0
 
-USE_MKL = 0
-
 # Link to the LLVM shared library
 USE_LLVM_SHLIB = 0
 
+## Settings for various Intel tools
+# Set to 1 to use MKL
+USE_MKL = 0
+# Set to 1 to use Intel LIBM
+USE_INTEL_LIBM = 0
 # Set to 1 to enable profiling with Intel VTune Amplifier
 USE_INTEL_JITEVENTS = 0
+# Set to 1 to use Intel C, C++, and FORTRAN compilers
+USEICC  = 0
+USEIFC  = 0
 
 # libc++ is standard on OS X 10.9, but not for earlier releases
 USE_LIBCPP = 0
@@ -171,14 +177,33 @@ USE_COPY_STACKS = 1
 ifeq ($(USEMSVC), 1)
 USEGCC = 0
 USECLANG = 0
+USEICC = 0
 else
-ifeq ($(CC), clang)
-USEGCC ?= 0
-USECLANG ?= 1
+ifeq ($(USECLANG), 1)
+USEGCC = 0
+USEICC = 0
 else
-USEGCC ?= 1
-USECLANG ?= 0
+ifeq ($(USEICC), 1)
+USEGCC = 0
+USECLANG = 0
+else  # default to gcc
+USEGCC = 1
+USECLANG = 0
+USEICC = 0
 endif
+endif
+endif
+
+ifeq ($(USEIFC), 1)
+FC = ifort
+else
+FC = $(CROSS_COMPILE)gfortran
+endif
+
+ifeq ($(USEIFC), 1)
+FC = ifort
+else
+FC = $(CROSS_COMPILE)gfortran
 endif
 
 STDLIBCPP_FLAG = 
@@ -203,8 +228,6 @@ USEGCC = 0
 USECLANG = 1
 endif
 endif
-
-FC = $(CROSS_COMPILE)gfortran
 
 ifeq ($(USEGCC),1)
 ifeq ($(USE_LIBCPP),1)
@@ -241,6 +264,22 @@ CXX += $(STDLIBCPP_FLAG) -mmacosx-version-min=10.6
 endif
 JCPPFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
+endif
+
+ifeq ($(USEICC),1)
+ifeq ($(USE_LIBCPP),1)
+$(error USE_LIBCPP only supported with clang. Try setting USE_LIBCPP=0)
+endif
+ifeq ($(SANITIZE),1)
+$(error Address Sanitizer only supported with clang. Try setting SANITIZE=0)
+endif
+CC  = icc
+CXX = icpc
+JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -fp-model precise -fp-model except -no-ftz
+JCPPFLAGS =
+JCXXFLAGS = -pipe $(fPIC) -fno-rtti
+DEBUGFLAGS = -O0 -ggdb3 -DJL_DEBUG_BUILD -fstack-protector-all
+SHIPFLAGS = -O3 -falign-functions
 endif
 
 ifeq ($(LLVM_VER),svn)
@@ -445,6 +484,14 @@ LIBLAPACKNAME = liblapack
 endif
 endif
 
+ifeq ($(OS), WINNT)
+LIBFFTWNAME = libfftw3
+LIBFFTWFNAME = libfftw3f
+else
+LIBFFTWNAME = libfftw3_threads
+LIBFFTWFNAME = libfftw3f_threads
+endif
+
 ifeq ($(USE_SYSTEM_LIBM), 1)
 LIBM = -lm
 LIBMNAME = libm
@@ -584,6 +631,9 @@ ifneq ($(strip $(MKLLIB)),)
 endif
 LIBBLAS   = $(MKL_LDFLAGS)
 LIBLAPACK = $(MKL_LDFLAGS)
+USE_SYSTEM_FFTW=1
+LIBFFTWNAME = libmkl_rt
+LIBFFTWFNAME = libmkl_rt
 endif
 
 # ATLAS
