@@ -43,6 +43,7 @@ type Prompt <: TextInterface
     on_enter
     on_done
     hist
+    sticky::Bool
 end
 
 show(io::IO, x::Prompt) = show(io, string("Prompt(\"", x.prompt, "\",...)"))
@@ -1345,10 +1346,11 @@ function Prompt(prompt;
     complete = EmptyCompletionProvider(),
     on_enter = default_enter_cb,
     on_done = ()->nothing,
-    hist = EmptyHistoryProvider())
+    hist = EmptyHistoryProvider(),
+    sticky = false)
 
     Prompt(prompt, first_prompt, prompt_prefix, prompt_suffix, keymap_func, keymap_func_data,
-        complete, on_enter, on_done, hist)
+        complete, on_enter, on_done, hist, sticky)
 end
 
 run_interface(::Prompt) = nothing

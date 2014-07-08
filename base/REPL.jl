@@ -582,7 +582,7 @@ function respond(f, repl, main)
         end
         println(repl.t)
         reset_state(s)
-        transition(s, main)
+        s.current_mode.sticky || transition(s, main)
     end
 end
 
