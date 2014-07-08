@@ -5196,6 +5196,11 @@ System
    Create all directories in the given ``path``, with permissions ``mode``.
    ``mode`` defaults to 0o777, modified by the current file creation mask.
 
+.. function:: symlink(target, link)
+
+   Creates a symbolic link to ``target`` with the name ``link``. 
+   Note that Windows XP does not support soft symbolic links.
+
 .. function:: getpid() -> Int32
 
    Get julia's process ID.
