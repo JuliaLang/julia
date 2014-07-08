@@ -13,15 +13,8 @@ export fft, bfft, ifft, rfft, brfft, irfft,
 
 ## FFT: Implement fft by calling fftw.
 
-@unix_only begin
-const libfftw = "libfftw3_threads"
-const libfftwf = "libfftw3f_threads"
-end
-
-@windows_only begin
-const libfftw = "libfftw3"
-const libfftwf = "libfftw3f"
-end
+const libfftw = Base.libfftw_name
+const libfftwf = Base.libfftwf_name
 
 ## Direction of FFT
 
@@ -201,11 +194,23 @@ set_timelimit(precision::fftwTypeSingle,seconds) =
 #   Use the undocumented routine fftw_alignment_of to determine the 
 #   alignment of a given pointer modulo whatever FFTW needs.
 
-alignment_of{T<:fftwDouble}(A::StridedArray{T}) = 
-   ccall((:fftw_alignment_of, libfftw), Int32, (Ptr{T},), A)
+if Base.libfftw_name == "libmkl_rt"
 
-alignment_of{T<:fftwSingle}(A::StridedArray{T}) = 
-   ccall((:fftwf_alignment_of, libfftwf), Int32, (Ptr{T},), A)
+    alignment_of{T<:fftwDouble}(A::StridedArray{T}) =
+        convert(Int32, convert(Int64, pointer(A)) % 16)
+
+    alignment_of{T<:fftwSingle}(A::StridedArray{T}) =
+        convert(Int32, convert(Int64, pointer(A)) % 16)
+
+else
+
+    alignment_of{T<:fftwDouble}(A::StridedArray{T}) =
+        ccall((:fftw_alignment_of, libfftw), Int32, (Ptr{T},), A)
+
+    alignment_of{T<:fftwSingle}(A::StridedArray{T}) =
+        ccall((:fftwf_alignment_of, libfftwf), Int32, (Ptr{T},), A)
+
+end
 
 # Plan (low-level)
 
