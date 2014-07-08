@@ -10,78 +10,63 @@ export FFTW, filt, filt!, deconv, conv, conv2, xcorr, fftshift, ifftshift,
        plan_fft, plan_bfft, plan_ifft, plan_rfft, plan_brfft, plan_irfft,
        fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!
 
-function filt{T<:Number}(b::Union(AbstractVector{T}, T), a::Union(AbstractVector{T}, T), x::AbstractVector{T})
-    filt!(b, a, copy!(Array(T, size(x)), x))
-end
-function filt{T<:Number}(b::Union(AbstractVector{T}, T), a::Union(AbstractVector{T}, T), x::AbstractVector{T}, si::AbstractVector{T})
-    filt!(b, a, copy!(Array(T, size(x)), x), copy!(Array(T, size(si)), si))
+function filt{T<:Number}(b::Union(AbstractVector{T}, T), a::Union(AbstractVector{T}, T),
+                         x::AbstractVector{T}, si::AbstractVector{T}=zeros(T, max(length(a), length(b))-1))
+    filt!(b, a, x, si, Array(T, size(x)))
 end
 
-# in-place filtering; both the input and filter state are modified in-place
+# in-place filtering: returns results in the out argument, which may shadow x
+# (and does so by default)
 function filt!{T<:Number}(b::Union(AbstractVector{T}, T), a::Union(AbstractVector{T}, T),
-                          x::AbstractVector{T}, si::AbstractVector{T}=zeros(T, max(length(a), length(b))-1))
-    if isempty(b); error("b must be non-empty"); end
-    if isempty(a); error("a must be non-empty"); end
-    if a[1]==0; error("a[1] must be nonzero"); end
+                          x::AbstractVector{T}, si::AbstractVector{T}=zeros(T, max(length(a), length(b))-1),
+                          out::AbstractVector{T}=x)
+    isempty(b) && error("b must be non-empty")
+    isempty(a) && error("a must be non-empty")
+    a[1] == 0  && error("a[1] must be nonzero")
+    size(x) != size(out) && error("out size must match x")
 
     as = length(a)
     bs = length(b)
     sz = max(as, bs)
-
-    if sz == 1
-        # Simple scaling without memory; quick exit
-        return scale!(x, b[1]/a[1])
-    end
-
-    if bs<sz
-        # Ensure b has at least as many elements as a
-        newb = zeros(T,sz)
-        newb[1:bs] = b
-        b = newb
-    end
-
+    silen = sz - 1
     xs = size(x,1)
-    silen = sz-1
-    size(si) == (silen,) || error("the vector of initial conditions must have exactly max(length(a),length(b))-1 elements")
 
+    xs == 0 && return out
+    sz == 1 && return scale!(out, x, b[1]/a[1]) # Simple scaling without memory
+
+    # Filter coefficient normalization
     if a[1] != 1
-        # Normalize the coefficients such that a[1] == 1
         norml = a[1]
         a ./= norml
         b ./= norml
     end
+    # Pad the coefficients with zeros if needed
+    bs<sz   && (b = copy!(zeros(T,sz), b))
+    1<as<sz && (a = copy!(zeros(T,sz), a))
 
+    si = copy!(Array(T, silen), si)
     if as > 1
-        if as<sz
-            # Pad a to be the same length as b
-            newa = zeros(T,sz)
-            newa[1:as] = a
-            a = newa
-        end
-
-        @inbounds begin
-            for i=1:xs
-                val = si[1] + b[1]*x[i]
-                for j=1:(silen-1)
-                    si[j] = si[j+1] + b[j+1]*x[i] - a[j+1]*val
-                end
-                si[silen] = b[silen+1]*x[i] - a[silen+1]*val
-                x[i] = val
+        @inbounds for i=1:xs
+            xi = x[i]
+            val = si[1] + b[1]*xi
+            for j=1:(silen-1)
+                si[j] = si[j+1] + b[j+1]*xi - a[j+1]*val
             end
+            si[silen] = b[silen+1]*xi - a[silen+1]*val
+            out[i] = val
         end
     else
-        @inbounds begin
-            for i=1:xs
-                val = si[1] + b[1]*x[i]
-                for j=1:(silen-1)
-                    si[j] = si[j+1] + b[j+1]*x[i]
-                end
-                si[silen] = b[silen+1]*x[i]
-                x[i] = val
+        @inbounds for i=1:xs
+            xi = x[i]
+            val = si[1] + b[1]*xi
+            for j=1:(silen-1)
+                si[j] = si[j+1] + b[j+1]*xi
             end
+            si[silen] = b[silen+1]*xi
+            out[i] = val
         end
     end
-    return x
+    return out
 end
 
 function deconv{T}(b::StridedVector{T}, a::StridedVector{T})

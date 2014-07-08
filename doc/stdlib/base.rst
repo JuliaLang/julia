@@ -4668,10 +4668,10 @@ calling functions from `FFTW <http://www.fftw.org>`_.
    Apply filter described by vectors ``a`` and ``b`` to vector ``x``, with an
    optional initial filter ``state`` (defaults to zeros).
 
-.. function:: filt!(b, a, x, [state])
+.. function:: filt!(b, a, x, [state], [output])
 
-   Same as :func:`filt`, but operates in-place on ``x`` and the optional
-   ``state``.
+   Same as :func:`filt`, but stores the result in the ``output`` array argument,
+   which may alias the input ``x`` to modify it in-place (it does so by default).
 
 .. function:: deconv(b,a)
 
