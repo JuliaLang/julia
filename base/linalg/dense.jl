@@ -310,14 +310,6 @@ end
 sqrtm(a::Number) = (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b)
 sqrtm(a::Complex) = sqrt(a)
 
-function det(A::Matrix)
-    (istriu(A) || istril(A)) && return det(Triangular(A, :U, false))
-    return det(lufact(A))
-end
-det(x::Number) = x
-
-logdet(A::Matrix) = logdet(lufact(A))
-
 function inv{S}(A::StridedMatrix{S})
     T = typeof(one(S)/one(S))
     Ac = convert(AbstractMatrix{T}, A)

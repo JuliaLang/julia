@@ -88,8 +88,8 @@ end
 
 size(A::Triangular, args...) = size(A.data, args...)
 
-convert{T,S,UpLo,IsUnit}(::Type{Triangular{T,S,UpLo,IsUnit}}, A::Triangular{T,S,UpLo,IsUnit}) = A
-convert{T,S,UpLo,IsUnit}(::Type{Triangular{T,S,UpLo,IsUnit}}, A::Triangular) = Triangular{T,S,UpLo,IsUnit}(convert(AbstractMatrix{T}, A.data))
+convert{T,S<:AbstractMatrix,UpLo,IsUnit}(::Type{Triangular{T,S,UpLo,IsUnit}}, A::Triangular{T,S,UpLo,IsUnit}) = A
+convert{T,S<:AbstractMatrix,UpLo,IsUnit}(::Type{Triangular{T,S,UpLo,IsUnit}}, A::Triangular) = Triangular{T,S,UpLo,IsUnit}(convert(AbstractMatrix{T}, A.data))
 function convert{T,TA,S,UpLo,IsUnit}(::Type{AbstractMatrix{T}}, A::Triangular{TA,S,UpLo,IsUnit})
     M = convert(AbstractMatrix{T}, A.data)
     Triangular{T,typeof(M),UpLo,IsUnit}(M)
