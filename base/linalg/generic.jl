@@ -11,14 +11,18 @@ end
 
 scale{R<:Real}(s::Complex, X::AbstractArray{R}) = scale(X, s)
 
-function generic_scale!(X::AbstractArray, s::Number)
+generic_scale!(X::AbstractArray, s::Number) = generic_scale!(X, X, s)
+function generic_scale!(C::AbstractArray, X::AbstractArray, s::Number)
+    length(C) == length(X) || error("C must be the same length as X")
     for i = 1:length(X)
-        @inbounds X[i] *= s
+        @inbounds C[i] = X[i]*s
     end
-    X
+    C
 end
-scale!(X::AbstractArray, s::Number) = generic_scale!(X, s)
-scale!(s::Number, X::AbstractArray) = generic_scale!(X, s)
+scale!(C::AbstractArray, s::Number, X::AbstractArray) = generic_scale!(C, X, s)
+scale!(C::AbstractArray, X::AbstractArray, s::Number) = generic_scale!(C, X, s)
+scale!(X::AbstractArray, s::Number) = generic_scale!(X, X, s)
+scale!(s::Number, X::AbstractArray) = generic_scale!(X, X, s)
 
 cross(a::AbstractVector, b::AbstractVector) = [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
 
