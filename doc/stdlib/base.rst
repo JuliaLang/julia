@@ -5199,7 +5199,11 @@ System
 .. function:: symlink(target, link)
 
    Creates a symbolic link to ``target`` with the name ``link``. 
-   Note that Windows XP does not support soft symbolic links.
+   
+   .. note::
+   
+      This function raises an error under operating systems that do not support
+      soft symbolic links, such as Windows XP.
 
 .. function:: getpid() -> Int32
 
