@@ -211,6 +211,31 @@ void fl_init_julia_extensions(void)
     assign_global_builtins(julia_flisp_func_info);
 }
 
+// returns true if a symbol could be quoted simply (e.g. :x),
+// rather than writing it as symbol("x")
+DLLEXPORT int jl_is_quotable_symbol(char *sym) {
+    size_t i = 0;
+    wchar_t c;
+
+    if (!strcmp(sym,"end")) return 0;
+
+    // Operator?
+    value_t fl_sym = symbol(sym);
+    value_t e = fl_applyn(1, symbol_value(symbol("operator?")), fl_sym);
+    if (e == FL_T) return 1;
+
+    // Identifier?
+    c = u8_nextchar(sym, &i);
+    if (c == 0) return 0;
+    if (!jl_id_start_char(c)) return 0;
+    c = u8_nextchar(sym, &i);
+    while (c != 0) {
+        if (!jl_id_char(c)) return 0;
+        c = u8_nextchar(sym, &i);
+    }
+    return 1;
+}
+
 #ifdef __cplusplus
 }
 #endif

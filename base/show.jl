@@ -336,7 +336,17 @@ end
 
 ## AST printing ##
 
-show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)        = print(io, sym)
+is_direct_input_symbol(s::Symbol) = ccall(:jl_is_quotable_symbol, Cint, (Ptr{Uint8},), s) != 0
+
+function show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)
+    if is_direct_input_symbol(sym)
+        print(io, sym)
+    else
+        print(io, "@symbol(\"")
+        print_escaped(io, string(sym), "\"\$")
+        print(io, "\")")
+    end
+end
 show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex.line)
 show_unquoted(io::IO, ex::LabelNode, ::Int, ::Int)      = print(io, ex.label, ": ")
 show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto ", ex.label)
@@ -350,15 +360,22 @@ end
 show_unquoted(io::IO, ex::QuoteNode, indent::Int, prec::Int) =
     show_unquoted_quote_expr(io, ex.value, indent, prec)
 
-function show_unquoted_quote_expr(io::IO, value, indent::Int, prec::Int)
-    if isa(value, Symbol) && !(value in quoted_syms)
+function show_unquoted_quote_expr(io::IO, value::Symbol, indent::Int, prec::Int)
+    if value in quoted_syms
+        print(io, ":(", value, ")")
+    elseif is_direct_input_symbol(value)
         print(io, ":")
         print(io, value)
     else
-        print(io, ":(")
-        show_unquoted(io, value, indent+indent_width, 0)
-        print(io, ")")
+        print(io, "symbol\"")
+        print_escaped(io, string(value), "\"")
+        print(io, "\"")
     end
+end
+function show_unquoted_quote_expr(io::IO, value, indent::Int, prec::Int)
+    print(io, ":(")
+    show_unquoted(io, value, indent+indent_width, 0)
+    print(io, ")")
 end
 
 # TODO: implement interpolated strings
@@ -529,19 +546,21 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, '=')
         show_unquoted(io, args[2], indent+indent_width)
     elseif is(head, :string)
-        a = map(args) do x
+        print(io, '"')
+        for x = args
             if !isa(x,String)
-                if isa(x,Symbol) && !(x in quoted_syms)
-                    string("\$", x)
+                if isa(x,Symbol) && !(x in quoted_syms) && is_direct_input_symbol(x)
+                    print(io, '$', x)
                 else
-                    string("\$(", sprint(show_unquoted,x), ")")
+                    print(io, "\$(")
+                    show_unquoted(io, x)
+                    print(io, ")")
                 end
             else
-                sprint(print_escaped, x, "\"\$")
+                print_escaped(io, x, "\"\$")
             end
         end
-        print(io, '"', a..., '"')
-
+        print(io, '"')
     elseif is(head, :&) && length(args) == 1
         print(io, '&')
         show_unquoted(io, args[1])

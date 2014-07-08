@@ -5,7 +5,8 @@ module Meta
 
 export quot, 
        isexpr, 
-       show_sexpr
+       show_sexpr,
+       @symbol
 
 quot(ex) = Expr(:quote, ex)
 
@@ -42,6 +43,10 @@ function show_sexpr(io::IO, ex::Expr, indent::Int)
     if length(ex.args) == 0; print(io, ",)")
     else print(io, (ex.head === :block ? "\n"*" "^indent : ""), ')')
     end
+end
+
+macro symbol(s)
+    symbol(unescape_string(s))
 end
 
 end # module
