@@ -4663,14 +4663,14 @@ calling functions from `FFTW <http://www.fftw.org>`_.
 
    Undoes the effect of ``fftshift``.
 
-.. function:: filt(b, a, x, [state])
+.. function:: filt(b, a, x; si=zeros(max(length(a),length(b))-1))
 
    Apply filter described by vectors ``a`` and ``b`` to vector ``x``, with an
-   optional initial filter ``state`` (defaults to zeros).
+   optional initial filter state keyword argument ``si`` (defaults to zeros).
 
-.. function:: filt!(b, a, x, [state], [output])
+.. function:: filt!(b, a, x; si=zeros(max(length(a),length(b))-1), out=x)
 
-   Same as :func:`filt`, but stores the result in the ``output`` array argument,
+   Same as :func:`filt`, but stores the result in the ``out`` keyword argument,
    which may alias the input ``x`` to modify it in-place (it does so by default).
 
 .. function:: deconv(b,a)
