@@ -155,11 +155,11 @@ $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(build_prefix): $(DIRS)
 
 ## LLVM ##
-LLVM_GIT_URL_BASE = http://llvm.org/git
-LLVM_GIT_URL_LLVM = $(LLVM_GIT_URL_BASE)/llvm.git
-LLVM_GIT_URL_CLANG= $(LLVM_GIT_URL_BASE)/clang.git
-LLVM_GIT_URL_COMPILER_RT = $(LLVM_GIT_URL_BASE)/compiler-rt.git
-LLVM_GIT_URL_LLDB = $(LLVM_GIT_URL_BASE)/lldb.git
+LLVM_GIT_URL_BASE ?= http://llvm.org/git
+LLVM_GIT_URL_LLVM ?= $(LLVM_GIT_URL_BASE)/llvm.git
+LLVM_GIT_URL_CLANG ?= $(LLVM_GIT_URL_BASE)/clang.git
+LLVM_GIT_URL_COMPILER_RT ?= $(LLVM_GIT_URL_BASE)/compiler-rt.git
+LLVM_GIT_URL_LLDB ?= $(LLVM_GIT_URL_BASE)/lldb.git
 
 ifeq ($(BUILD_LLDB), 1)
 BUILD_LLVM_CLANG = 1
