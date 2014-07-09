@@ -240,7 +240,7 @@ $(copyright(years,authors))
 > OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-apl(pkg::String, years::String, authors::Union(String,Array)) =
+asl(pkg::String, years::String, authors::Union(String,Array)) =
 """
 The $pkg.jl package is licensed under version 2.0 of the Apache License:
 
@@ -422,6 +422,6 @@ $(copyright(years,authors))
 >      of your accepting any such warranty or additional liability.
 """
 
-const LICENSES = [ "MIT" => mit, "BSD" => bsd, "APL" => apl ]
+const LICENSES = [ "MIT" => mit, "BSD" => bsd, "ASL" => asl ]
 
 end # module
