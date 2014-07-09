@@ -23,6 +23,8 @@ end
 
 @test searchsorted([1:10], 1, by=(x -> x >= 5)) == 1:4
 @test searchsorted([1:10], 10, by=(x -> x >= 5)) == 5:10
+@test searchsorted([1:5, 1:5, 1:5], 1, 6, 10, Base.Order.Forward) == 6:6
+@test searchsorted(ones(15), 1, 6, 10, Base.Order.Forward) == 6:10
 
 for (rg,I) in {(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)}
     rg_r = reverse(rg)
