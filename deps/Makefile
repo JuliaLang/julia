@@ -1,7 +1,7 @@
 ## high-level setup ##
 JULIAHOME = $(abspath ..)
-include $(JULIAHOME)/Make.inc
 include Versions.make
+include $(JULIAHOME)/Make.inc
 
 CONFIGURE_COMMON = --prefix=$(abspath $(build_prefix)) --build=$(BUILD_MACHINE) --libdir=$(abspath $(build_libdir))
 ifneq ($(XC_HOST),)
