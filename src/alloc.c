@@ -159,6 +159,19 @@ jl_value_t *jl_new_bits(jl_value_t *bt, void *data)
     return jl_new_bits_internal(bt, data, &len);
 }
 
+// run time version of pointerref intrinsic
+DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i)
+{
+    JL_TYPECHK(pointerref, pointer, p);
+    JL_TYPECHK(pointerref, long, i);
+    jl_value_t *ety = jl_tparam0(jl_typeof(p));
+    if (!jl_is_datatype(ety))
+        jl_error("pointerref: invalid pointer");
+    size_t nb = jl_datatype_size(ety);
+    char *pp = (char*)jl_unbox_long(p) + (jl_unbox_long(i)-1)*nb;
+    return jl_new_bits(ety, pp);
+}
+
 void jl_assign_bits(void *dest, jl_value_t *bits)
 {
     size_t nb = jl_datatype_size(jl_typeof(bits));
@@ -170,6 +183,21 @@ void jl_assign_bits(void *dest, jl_value_t *bits)
     case 16: *(bits128_t*)dest = *(bits128_t*)jl_data_ptr(bits); break;
     default: memcpy(dest, jl_data_ptr(bits), nb);
     }
+}
+
+// run time version of pointerset intrinsic
+DLLEXPORT void jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *i)
+{
+    JL_TYPECHK(pointerset, pointer, p);
+    JL_TYPECHK(pointerset, long, i);
+    jl_value_t *ety = jl_tparam0(jl_typeof(p));
+    if (!jl_is_datatype(ety))
+        jl_error("pointerset: invalid pointer");
+    size_t nb = jl_datatype_size(ety);
+    char *pp = (char*)jl_unbox_long(p) + (jl_unbox_long(i)-1)*nb;
+    if (jl_typeof(x) != ety)
+        jl_error("pointerset: type mismatch in assign");
+    jl_assign_bits(pp, x);
 }
 
 int jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err)
