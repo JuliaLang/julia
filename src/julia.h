@@ -1054,6 +1054,8 @@ DLLEXPORT void jl_gc_disable(void);
 DLLEXPORT int jl_gc_is_enabled(void);
 DLLEXPORT int64_t jl_gc_total_bytes(void);
 DLLEXPORT uint64_t jl_gc_total_hrtime(void);
+int64_t diff_gc_total_bytes(void);
+void sync_gc_total_bytes(void);
 void jl_gc_ephemeral_on(void);
 void jl_gc_ephemeral_off(void);
 DLLEXPORT void jl_gc_collect(void);
@@ -1072,6 +1074,8 @@ DLLEXPORT void *alloc_3w(void);
 DLLEXPORT void *alloc_4w(void);
 void *allocb(size_t sz);
 DLLEXPORT void *allocobj(size_t sz);
+
+DLLEXPORT void jl_clear_malloc_data(void);
 
 #else
 
@@ -1308,16 +1312,25 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v);
 void jl_print_gc_stats(JL_STREAM *s);
 #endif
 
+// debugging
+void show_execution_point(char *filename, int lno);
+
 // compiler options -----------------------------------------------------------
 
 typedef struct {
     char *build_path;
     int8_t code_coverage;
+    int8_t malloc_log;
     int8_t check_bounds;
     int int_literals;
 } jl_compileropts_t;
 
 extern DLLEXPORT jl_compileropts_t jl_compileropts;
+
+// Settings for code_coverage and mallog_log
+#define JL_LOG_NONE 0
+#define JL_LOG_USER 1
+#define JL_LOG_ALL  2
 
 #define JL_COMPILEROPT_CHECK_BOUNDS_DEFAULT 0
 #define JL_COMPILEROPT_CHECK_BOUNDS_ON 1

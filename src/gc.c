@@ -80,6 +80,7 @@ typedef struct _bigval_t {
 // GC knobs and self-measurement variables
 static size_t allocd_bytes = 0;
 static int64_t total_allocd_bytes = 0;
+static int64_t last_gc_total_bytes = 0;
 static size_t freed_bytes = 0;
 static uint64_t total_gc_time=0;
 #ifdef _P64
@@ -916,6 +917,15 @@ DLLEXPORT int jl_gc_is_enabled(void) { return is_gc_enabled; }
 
 DLLEXPORT int64_t jl_gc_total_bytes(void) { return total_allocd_bytes + allocd_bytes; }
 DLLEXPORT uint64_t jl_gc_total_hrtime(void) { return total_gc_time; }
+
+int64_t diff_gc_total_bytes(void)
+{
+    int64_t oldtb = last_gc_total_bytes;
+    int64_t newtb = jl_gc_total_bytes();
+    last_gc_total_bytes = newtb;
+    return newtb - oldtb;
+}
+void sync_gc_total_bytes(void) {last_gc_total_bytes = jl_gc_total_bytes();}
 
 void jl_gc_ephemeral_on(void)  { pools = &ephe_pools[0]; }
 void jl_gc_ephemeral_off(void) { pools = &norm_pools[0]; }
