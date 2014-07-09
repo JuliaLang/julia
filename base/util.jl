@@ -111,7 +111,7 @@ function blas_vendor()
     return :unknown
 end
 
-openblas_get_config() = chop(bytestring( ccall((:openblas_get_config, Base.libblas_name), Ptr{Uint8}, () )))
+openblas_get_config() = strip(bytestring( ccall((:openblas_get_config, Base.libblas_name), Ptr{Uint8}, () )))
 
 function blas_set_num_threads(n::Integer)
     blas = blas_vendor()
