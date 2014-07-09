@@ -155,6 +155,12 @@ $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(build_prefix): $(DIRS)
 
 ## LLVM ##
+LLVM_GIT_URL_BASE = http://llvm.org/git
+LLVM_GIT_URL_LLVM = $(LLVM_GIT_URL_BASE)/llvm.git
+LLVM_GIT_URL_CLANG= $(LLVM_GIT_URL_BASE)/clang.git
+LLVM_GIT_URL_COMPILER_RT = $(LLVM_GIT_URL_BASE)/compiler-rt.git
+LLVM_GIT_URL_LLDB = $(LLVM_GIT_URL_BASE)/lldb.git
+
 ifeq ($(BUILD_LLDB), 1)
 BUILD_LLVM_CLANG = 1
 # because it's a build requirement
@@ -311,7 +317,7 @@ ifneq ($(LLVM_VER),svn)
 	$(TAR) -C llvm-$(LLVM_VER) --strip-components 1 -xf $(LLVM_TAR)
 else
 	([ ! -d llvm-$(LLVM_VER) ] && \
-		git clone http://llvm.org/git/llvm.git llvm-$(LLVM_VER) ) || \
+		git clone $(LLVM_GIT_URL_LLVM) llvm-$(LLVM_VER) ) || \
 		(cd llvm-$(LLVM_VER) && \
 		git pull --ff-only)
 ifneq ($(LLVM_GIT_VER),)
@@ -327,7 +333,7 @@ endif
 else
 ifeq ($(BUILD_LLVM_CLANG),1)
 	([ ! -d llvm-$(LLVM_VER)/tools/clang ] && \
-		git clone http://llvm.org/git/clang.git llvm-$(LLVM_VER)/tools/clang  ) || \
+		git clone $(LLVM_GIT_URL_CLANG) llvm-$(LLVM_VER)/tools/clang  ) || \
 		(cd llvm-$(LLVM_VER)/tools/clang  && \
 		git pull --ff-only)	
 endif
@@ -344,11 +350,11 @@ endif
 else
 ifeq ($(BUILD_LLVM_CLANG),1)
 	([ ! -d llvm-$(LLVM_VER)/tools/clang ] && \
-		git clone http://llvm.org/git/clang.git llvm-$(LLVM_VER)/tools/clang  ) || \
+		git clone $(LLVM_GIT_URL_CLANG) llvm-$(LLVM_VER)/tools/clang  ) || \
 		(cd llvm-$(LLVM_VER)/tools/clang  && \
 		git pull --ff-only)
 	([ ! -d llvm-$(LLVM_VER)/projects/compiler-rt ] && \
-		git clone http://llvm.org/git/compiler-rt.git llvm-$(LLVM_VER)/projects/compiler-rt  ) || \
+		git clone $(LLVM_GIT_URL_COMPILER_RT) llvm-$(LLVM_VER)/projects/compiler-rt  ) || \
 		(cd llvm-$(LLVM_VER)/projects/compiler-rt  && \
 		git pull --ff-only)		
 ifneq ($(LLVM_CLANG_VER),)
@@ -358,10 +364,10 @@ endif
 endif
 endif
 
-ifeq ($(BUILD_LLDB), 1)
+ifeq ($(BUILD_LLDB),1)
 	([ ! -d llvm-$(LLVM_VER)/tools/lldb ] && \
 		(cd llvm-$(LLVM_VER)/tools && \
-		git clone http://llvm.org/git/lldb.git)) || \
+		git clone $(LLVM_GIT_URL_LLDB))) || \
 	([ -d llvm-$(LLVM_VER)/tools/lldb ] && \
 		(cd llvm-$(LLVM_VER)/tools/lldb && \
 		git fetch))
