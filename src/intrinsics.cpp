@@ -670,17 +670,32 @@ static Value *emit_iround(Type *to, Value *x, bool issigned, jl_codectx_t *ctx)
         return builder.CreateFPToUI(src, to);
 }
 
+static Value *emit_runtime_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
+{
+    Value *preffunc =
+        jl_Module->getOrInsertFunction("jl_pointerref",
+                                       FunctionType::get(jl_pvalue_llvmt, two_pvalue_llvmt, false));
+    int ldepth = ctx->argDepth;
+    Value *parg = emit_boxed_rooted(e, ctx);
+    Value *iarg = boxed(emit_expr(i, ctx), ctx);
+    Value *ret = builder.CreateCall2(prepare_call(preffunc), parg, iarg);
+    ctx->argDepth = ldepth;
+    return ret;
+}
+
 static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
 {
     jl_value_t *aty = expr_type(e, ctx);
     if (!jl_is_cpointer_type(aty))
-        jl_error("pointerref: expected pointer type as first argument");
+        return emit_runtime_pointerref(e, i, ctx);
+        //jl_error("pointerref: expected pointer type as first argument");
     jl_value_t *ety = jl_tparam0(aty);
     if (jl_is_typevar(ety))
-        jl_error("pointerref: invalid pointer");
-    if (expr_type(i, ctx) != (jl_value_t*)jl_long_type) {
-        jl_error("pointerref: invalid index type");
-    }
+        return emit_runtime_pointerref(e, i, ctx);
+        //jl_error("pointerref: invalid pointer");
+    if (expr_type(i, ctx) != (jl_value_t*)jl_long_type)
+        return emit_runtime_pointerref(e, i, ctx);
+        //jl_error("pointerref: invalid index type");
     Value *thePtr = auto_unbox(e,ctx);
     Value *idx = emit_unbox(T_size, emit_unboxed(i, ctx), (jl_value_t*)jl_long_type);
     Value *im1 = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
@@ -710,15 +725,31 @@ static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
     return typed_load(thePtr, im1, ety, ctx);
 }
 
+static Value *emit_runtime_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_codectx_t *ctx)
+{
+    Value *psetfunc =
+        jl_Module->getOrInsertFunction("jl_pointerset",
+                                       FunctionType::get(T_void, three_pvalue_llvmt, false));
+    int ldepth = ctx->argDepth;
+    Value *parg = emit_boxed_rooted(e, ctx);
+    Value *iarg = emit_boxed_rooted(i, ctx);
+    Value *xarg = boxed(emit_expr(x, ctx), ctx);
+    builder.CreateCall3(prepare_call(psetfunc), parg, xarg, iarg);
+    ctx->argDepth = ldepth;
+    return parg;
+}
+
 // e[i] = x
 static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_codectx_t *ctx)
 {
     jl_value_t *aty = expr_type(e, ctx);
     if (!jl_is_cpointer_type(aty))
-        jl_error("pointerset: expected pointer type as first argument");
+        return emit_runtime_pointerset(e, x, i, ctx);
+        //jl_error("pointerset: expected pointer type as first argument");
     jl_value_t *ety = jl_tparam0(aty);
     if (jl_is_typevar(ety))
-        jl_error("pointerset: invalid pointer");
+        return emit_runtime_pointerset(e, x, i, ctx);
+        //jl_error("pointerset: invalid pointer");
     jl_value_t *xty = expr_type(x, ctx);
     Value *val=NULL;
     if (!jl_subtype(xty, ety, 0)) {
@@ -726,7 +757,8 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
         emit_typecheck(val, ety, "pointerset: type mismatch in assign", ctx);
     }
     if (expr_type(i, ctx) != (jl_value_t*)jl_long_type)
-        jl_error("pointerset: invalid index type");
+        return emit_runtime_pointerset(e, x, i, ctx);
+        //jl_error("pointerset: invalid index type");
     Value *idx = emit_unbox(T_size, emit_unboxed(i, ctx),(jl_value_t*)jl_long_type);
     Value *im1 = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
     Value *thePtr = auto_unbox(e,ctx);
