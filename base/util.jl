@@ -12,6 +12,9 @@ gc_time_ns() = ccall(:jl_gc_total_hrtime, Uint64, ())
 # total number of bytes allocated so far
 gc_bytes() = ccall(:jl_gc_total_bytes, Int64, ())
 
+# reset the malloc log. Used to avoid counting memory allocated during compilation.
+clear_malloc_data() = ccall(:jl_clear_malloc_data, Void, ())
+
 function tic()
     t0 = time_ns()
     task_local_storage(:TIMERS, (t0, get(task_local_storage(), :TIMERS, ())))

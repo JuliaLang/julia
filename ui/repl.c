@@ -48,7 +48,8 @@ extern DLLEXPORT char *julia_home;
 char system_image[256] = JL_SYSTEM_IMAGE_PATH;
 
 static int lisp_prompt = 0;
-static int codecov=0;
+static int codecov  = JL_LOG_NONE;
+static int malloclog= JL_LOG_NONE;
 static char *program = NULL;
 char *image_file = NULL;
 
@@ -74,7 +75,10 @@ static const char *opts =
     " -F                       Load ~/.juliarc.jl, then handle remaining inputs\n"
     " --color={yes|no}         Enable or disable color text\n\n"
 
-    " --code-coverage          Count executions of source lines\n"
+    " --code-coverage={none|user|all}, --code-coverage\n"
+    "                          Count executions of source lines (omitting setting is equivalent to 'user')\n"
+    " --track-allocation={none|user|all}\n"
+    "                          Count bytes allocated by each source line\n"
     " --check-bounds={yes|no}  Emit bounds checks always or never (ignoring declarations)\n"
     " --int-literals={32|64}   Select integer literal size independent of platform\n";
 
@@ -88,7 +92,8 @@ void parse_opts(int *argcp, char ***argvp)
         { "lisp",          no_argument,       &lisp_prompt, 1 },
         { "help",          no_argument,       0, 'h' },
         { "sysimage",      required_argument, 0, 'J' },
-        { "code-coverage", no_argument,       &codecov, 1 },
+        { "code-coverage", optional_argument, 0, 'c' },
+        { "track-allocation",required_argument, 0, 'm' },
         { "check-bounds",  required_argument, 0, 300 },
         { "int-literals",  required_argument, 0, 301 },
         { 0, 0, 0, 0 }
@@ -122,6 +127,29 @@ void parse_opts(int *argcp, char ***argvp)
         case 'h':
             printf("%s%s", usage, opts);
             exit(0);
+	case 'c':
+	    if (optarg != NULL) {
+		if (!strcmp(optarg,"user"))
+		    codecov = JL_LOG_USER;
+		else if (!strcmp(optarg,"all"))
+		    codecov = JL_LOG_ALL;
+		else if (!strcmp(optarg,"none"))
+		    codecov = JL_LOG_NONE;
+	        break;
+	    }
+	    else
+		codecov = JL_LOG_USER;
+	    break;
+	case 'm':
+	    if (optarg != NULL) {
+		if (!strcmp(optarg,"user"))
+		    malloclog = JL_LOG_USER;
+		else if (!strcmp(optarg,"all"))
+		    malloclog = JL_LOG_ALL;
+		else if (!strcmp(optarg,"none"))
+		    malloclog = JL_LOG_NONE;
+	        break;
+	    }
         case 300:
             if (!strcmp(optarg,"yes"))
                 jl_compileropts.check_bounds = JL_COMPILEROPT_CHECK_BOUNDS_ON;
@@ -145,6 +173,7 @@ void parse_opts(int *argcp, char ***argvp)
         }
     }
     jl_compileropts.code_coverage = codecov;
+    jl_compileropts.malloc_log    = malloclog;
     if (!julia_home) {
         julia_home = getenv("JULIA_HOME");
         if (julia_home) {
