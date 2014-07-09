@@ -11,15 +11,18 @@ export FFTW, filt, filt!, deconv, conv, conv2, xcorr, fftshift, ifftshift,
        fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!
 
 function filt{T<:Number}(b::Union(AbstractVector{T}, T), a::Union(AbstractVector{T}, T),
-                         x::AbstractVector{T}, si::AbstractVector{T}=zeros(T, max(length(a), length(b))-1))
-    filt!(b, a, x, si, Array(T, size(x)))
+                         x::AbstractVector{T}; si::AbstractVector{T}=zeros(T, max(length(a), length(b))-1))
+    filt!(Array(T, size(x)), b, a, x, si)
 end
 
 # in-place filtering: returns results in the out argument, which may shadow x
 # (and does so by default)
-function filt!{T<:Number}(b::Union(AbstractVector{T}, T), a::Union(AbstractVector{T}, T),
-                          x::AbstractVector{T}, si::AbstractVector{T}=zeros(T, max(length(a), length(b))-1),
-                          out::AbstractVector{T}=x)
+function filt!{T<:Number}(b::Union(AbstractVector{T}, T), a::Union(AbstractVector{T}, T), x::AbstractVector{T};
+                          si::AbstractVector{T}=zeros(T, max(length(a), length(b))-1), out::AbstractVector{T}=x)
+    filt!(out, b, a, x, si)
+end
+function filt!{T<:Number}(out::AbstractVector{T}, b::Union(AbstractVector{T}, T), a::Union(AbstractVector{T}, T),
+                          x::AbstractVector{T}, si::AbstractVector{T})
     isempty(b) && error("b must be non-empty")
     isempty(a) && error("a must be non-empty")
     a[1] == 0  && error("a[1] must be nonzero")
