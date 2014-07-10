@@ -171,6 +171,15 @@ function check_blas()
 
 end
 
+function fftw_vendor()
+    if Base.libfftw_name == "libmkl_rt"
+        return :mkl
+    else
+        return :fftw
+    end
+end
+
+
 ## printing with color ##
 
 function with_output_color(f::Function, color::Symbol, io::IO, args...)

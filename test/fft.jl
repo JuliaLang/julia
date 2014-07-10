@@ -98,47 +98,53 @@ plan_ifft!(psfft!n_m4)(psfft!n_m4)
 @test norm(sfft!n_m4 - m4) < 1e-8
 @test norm(psfft!n_m4 - m4) < 1e-8
 
-m3d = float32(reshape(1:5*3*2, 5, 3, 2))
-ifft3_fft3_m3d = ifft(fft(m3d))
+# The following capabilities are FFTW only.
+# They are not available in MKL, and hence do not test them.
+if Base.fftw_vendor() != :mkl
 
-fftd3_m3d = fft(m3d,3)
-ifftd3_fftd3_m3d = ifft(fftd3_m3d,3)
+    m3d = float32(reshape(1:5*3*2, 5, 3, 2))
+    ifft3_fft3_m3d = ifft(fft(m3d))
 
-fft!d3_m3d = complex(m3d); fft!(fft!d3_m3d,3)
-ifft!d3_fftd3_m3d = copy(fft!d3_m3d); ifft!(ifft!d3_fftd3_m3d,3)
+    fftd3_m3d = fft(m3d,3)
+    ifftd3_fftd3_m3d = ifft(fftd3_m3d,3)
 
-pfftd3_m3d = plan_fft(m3d,3)(m3d)
-pifftd3_fftd3_m3d = plan_ifft(fftd3_m3d,3)(fftd3_m3d)
+    fft!d3_m3d = complex(m3d); fft!(fft!d3_m3d,3)
+    ifft!d3_fftd3_m3d = copy(fft!d3_m3d); ifft!(ifft!d3_fftd3_m3d,3)
 
-pfft!d3_m3d = complex(m3d); plan_fft!(pfft!d3_m3d,3)(pfft!d3_m3d)
-pifft!d3_fftd3_m3d = copy(fft!d3_m3d); plan_ifft!(pifft!d3_fftd3_m3d,3)(pifft!d3_fftd3_m3d)
+    pfftd3_m3d = plan_fft(m3d,3)(m3d)
+    pifftd3_fftd3_m3d = plan_ifft(fftd3_m3d,3)(fftd3_m3d)
 
-@test isa(fftd3_m3d, Array{Complex64,3})
-@test isa(ifftd3_fftd3_m3d, Array{Complex64,3})
-@test isa(fft!d3_m3d, Array{Complex64,3})
-@test isa(ifft!d3_fftd3_m3d, Array{Complex64,3})
-@test isa(pfftd3_m3d, Array{Complex64,3})
-@test isa(pifftd3_fftd3_m3d, Array{Complex64,3})
-@test isa(pfft!d3_m3d, Array{Complex64,3})
-@test isa(pifft!d3_fftd3_m3d, Array{Complex64,3})
+    pfft!d3_m3d = complex(m3d); plan_fft!(pfft!d3_m3d,3)(pfft!d3_m3d)
+    pifft!d3_fftd3_m3d = copy(fft!d3_m3d); plan_ifft!(pifft!d3_fftd3_m3d,3)(pifft!d3_fftd3_m3d)
 
-true_fftd3_m3d = Array(Float32, 5, 3, 2)
-true_fftd3_m3d[:,:,1] = 17:2:45
-true_fftd3_m3d[:,:,2] = -15
+    @test isa(fftd3_m3d, Array{Complex64,3})
+    @test isa(ifftd3_fftd3_m3d, Array{Complex64,3})
+    @test isa(fft!d3_m3d, Array{Complex64,3})
+    @test isa(ifft!d3_fftd3_m3d, Array{Complex64,3})
+    @test isa(pfftd3_m3d, Array{Complex64,3})
+    @test isa(pifftd3_fftd3_m3d, Array{Complex64,3})
+    @test isa(pfft!d3_m3d, Array{Complex64,3})
+    @test isa(pifft!d3_fftd3_m3d, Array{Complex64,3})
 
-for i = 1:length(m3d)
-    @test_approx_eq fftd3_m3d[i] true_fftd3_m3d[i]
-    @test_approx_eq ifftd3_fftd3_m3d[i] m3d[i]
-    @test_approx_eq ifft3_fft3_m3d[i] m3d[i]
+    true_fftd3_m3d = Array(Float32, 5, 3, 2)
+    true_fftd3_m3d[:,:,1] = 17:2:45
+    true_fftd3_m3d[:,:,2] = -15
 
-    @test_approx_eq fft!d3_m3d[i] true_fftd3_m3d[i]
-    @test_approx_eq ifft!d3_fftd3_m3d[i] m3d[i]
+    for i = 1:length(m3d)
+        @test_approx_eq fftd3_m3d[i] true_fftd3_m3d[i]
+        @test_approx_eq ifftd3_fftd3_m3d[i] m3d[i]
+        @test_approx_eq ifft3_fft3_m3d[i] m3d[i]
 
-    @test_approx_eq pfftd3_m3d[i] true_fftd3_m3d[i]
-    @test_approx_eq pifftd3_fftd3_m3d[i] m3d[i]
-    @test_approx_eq pfft!d3_m3d[i] true_fftd3_m3d[i]
-    @test_approx_eq pifft!d3_fftd3_m3d[i] m3d[i]
-end
+        @test_approx_eq fft!d3_m3d[i] true_fftd3_m3d[i]
+        @test_approx_eq ifft!d3_fftd3_m3d[i] m3d[i]
+
+        @test_approx_eq pfftd3_m3d[i] true_fftd3_m3d[i]
+        @test_approx_eq pifftd3_fftd3_m3d[i] m3d[i]
+        @test_approx_eq pfft!d3_m3d[i] true_fftd3_m3d[i]
+        @test_approx_eq pifft!d3_fftd3_m3d[i] m3d[i]
+    end
+
+end  # if fftw_vendor() != :mkl ...
 
 # rfft/rfftn
 
@@ -184,21 +190,25 @@ for i = 1:length(m4)
     @test_approx_eq pirfftn_rfftn_m4[i] m4[i]
 end
 
-rfftn_m3d = rfft(m3d)
-rfftd3_m3d = rfft(m3d,3)
-@test size(rfftd3_m3d) == size(fftd3_m3d)
-irfft_rfftd3_m3d = irfft(rfftd3_m3d,size(m3d,3),3)
-irfftn_rfftn_m3d = irfft(rfftn_m3d,size(m3d,1))
-for i = 1:length(m3d)
-    @test_approx_eq rfftd3_m3d[i] true_fftd3_m3d[i]
-    @test_approx_eq irfft_rfftd3_m3d[i] m3d[i]
-    @test_approx_eq irfftn_rfftn_m3d[i] m3d[i]
-end
+if Base.fftw_vendor() != :mkl
 
-fftn_m3d = fft(m3d)
-@test size(fftn_m3d) == (5,3,2)
-rfftn_m3d = rfft(m3d)
-@test size(rfftn_m3d) == (3,3,2)
-for i = 1:3, j = 1:3, k = 1:2
-    @test_approx_eq rfftn_m3d[i,j,k] fftn_m3d[i,j,k]
-end
+    rfftn_m3d = rfft(m3d)
+    rfftd3_m3d = rfft(m3d,3)
+    @test size(rfftd3_m3d) == size(fftd3_m3d)
+    irfft_rfftd3_m3d = irfft(rfftd3_m3d,size(m3d,3),3)
+    irfftn_rfftn_m3d = irfft(rfftn_m3d,size(m3d,1))
+    for i = 1:length(m3d)
+        @test_approx_eq rfftd3_m3d[i] true_fftd3_m3d[i]
+        @test_approx_eq irfft_rfftd3_m3d[i] m3d[i]
+        @test_approx_eq irfftn_rfftn_m3d[i] m3d[i]
+    end
+
+    fftn_m3d = fft(m3d)
+    @test size(fftn_m3d) == (5,3,2)
+    rfftn_m3d = rfft(m3d)
+    @test size(rfftn_m3d) == (3,3,2)
+    for i = 1:3, j = 1:3, k = 1:2
+        @test_approx_eq rfftn_m3d[i,j,k] fftn_m3d[i,j,k]
+    end
+
+end # if fftw_vendor() != :mkl ...
