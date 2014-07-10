@@ -592,34 +592,30 @@ function shift!(B::BitVector)
 end
 
 function insert!(B::BitVector, i::Integer, item)
-    i < 1 && throw(BoundsError())
+    n = length(B)
+    1 <= i <= n+1 || throw(BoundsError())
     item = convert(Bool, item)
 
-    n = length(B)
-    if i > n
-        x = falses(i - n)
-        append!(B, x)
-    else
-        Bc = B.chunks
+    Bc = B.chunks
 
-        k, j = get_chunks_id(i)
+    k, j = get_chunks_id(i)
 
-        l = @_mod64 length(B)
-        if l == 0
-            ccall(:jl_array_grow_end, Void, (Any, Uint), Bc, 1)
-            Bc[end] = uint64(0)
-        end
-        B.len += 1
-
-        for t = length(Bc) : -1 : k + 1
-            Bc[t] = (Bc[t] << 1) | (Bc[t - 1] >>> 63)
-        end
-
-        msk_aft = (_msk64 << j)
-        msk_bef = ~msk_aft
-        Bc[k] = (msk_bef & Bc[k]) | ((msk_aft & Bc[k]) << 1)
+    l = @_mod64 length(B)
+    if l == 0
+        ccall(:jl_array_grow_end, Void, (Any, Uint), Bc, 1)
+        Bc[end] = uint64(0)
     end
+    B.len += 1
+
+    for t = length(Bc) : -1 : k + 1
+        Bc[t] = (Bc[t] << 1) | (Bc[t - 1] >>> 63)
+    end
+
+    msk_aft = (_msk64 << j)
+    msk_bef = ~msk_aft
+    Bc[k] = (msk_bef & Bc[k]) | ((msk_aft & Bc[k]) << 1)
     B[i] = item
+    B
 end
 
 function _deleteat!(B::BitVector, i::Integer)
@@ -732,12 +728,10 @@ function splice!(B::BitVector, i::Integer)
     _deleteat!(B, i)
     return v
 end
-splice!(B::BitVector, i::Integer, ins::BitVector) = splice!(B, int(i):int(i), ins)
-splice!(B::BitVector, i::Integer, ins::AbstractVector{Bool}) = splice!(B, i, bitpack(ins))
 
 const _default_bit_splice = BitVector(0)
 
-function splice!(B::BitVector, r::UnitRange{Int}, ins::BitVector = _default_bit_splice)
+function splice!(B::BitVector, r::Union(UnitRange{Int}, Integer), ins::BitVector = _default_bit_splice)
     n = length(B)
     i_f = first(r)
     i_l = last(r)
@@ -775,7 +769,7 @@ function splice!(B::BitVector, r::UnitRange{Int}, ins::BitVector = _default_bit_
 
     return v
 end
-splice!(B::BitVector, r::UnitRange{Int}, ins::AbstractVector{Bool}) = splice!(B, r, bitpack(ins))
+splice!(B::BitVector, r::Union(UnitRange{Int}, Integer), ins::AbstractVector{Bool}) = splice!(B, r, bitpack(ins))
 
 function empty!(B::BitVector)
     ccall(:jl_array_del_end, Void, (Any, Uint), B.chunks, length(B.chunks))
@@ -1385,12 +1379,9 @@ function findnz(B::BitMatrix)
     return I, J, trues(length(I))
 end
 
-nonzeros(B::BitArray) = trues(countnz(B))
-
 ## Reductions ##
 
-sum(A::BitArray, region) = reducedim(+, A, region, 0, Array(Int,reduced_dims(A,region)))
-
+sum(A::BitArray, region) = reducedim(AddFun(), A, region)
 sum(B::BitArray) = countnz(B)
 
 function all(B::BitArray)
@@ -1720,3 +1711,11 @@ function cat(catdim::Integer, X::Union(BitArray, Integer)...)
 end
 
 # hvcat -> use fallbacks in abstractarray.jl
+
+
+# BitArray I/O
+
+write(s::IO, B::BitArray) = write(s, B.chunks)
+read!(s::IO, B::BitArray) = read!(s, B.chunks)
+
+sizeof(B::BitArray) = sizeof(B.chunks)

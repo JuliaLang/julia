@@ -115,8 +115,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
       Return type      ``eltype(A)``     ``pivot``  Relationship between ``F`` and ``A``
       ---------------- ----------------- --------- -------------------------------------
       ``QR``           not ``BlasFloat`` either     ``A==F[:Q]*F[:R]``
-      ``QRCompactWY``  ``BlasFloat``     ``true``   ``A==F[:Q]*F[:R]``
-      ``QRPivoted``    ``BlasFloat``     ``false``  ``A[:,F[:p]]==F[:Q]*F[:R]``
+      ``QRCompactWY``  ``BlasFloat``     ``false``  ``A==F[:Q]*F[:R]``
+      ``QRPivoted``    ``BlasFloat``     ``true``   ``A[:,F[:p]]==F[:Q]*F[:R]``
       ================ ================= ========= =====================================
 
    ``BlasFloat`` refers to any of: ``Float32``, ``Float64``, ``Complex64`` or ``Complex128``.
@@ -377,7 +377,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    For vectors, ``p`` can assume any numeric value (even though not all values produce a mathematically valid vector norm). In particular, ``norm(A, Inf)`` returns the largest value in ``abs(A)``, whereas ``norm(A, -Inf)`` returns the smallest.
 
-   For matrices, valid values of ``p`` are ``1``, ``2``, or ``Inf``. Use :func:`vecnorm` to compute the Frobenius norm.
+   For matrices, valid values of ``p`` are ``1``, ``2``, or ``Inf``. (Note that for sparse matrices, ``p=2`` is currently not implemented.) Use :func:`vecnorm` to compute the Frobenius norm.
 
 .. function:: vecnorm(A, [p])
 
@@ -445,8 +445,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: linreg(x, y) -> [a; b]
 
    Linear Regression. Returns ``a`` and ``b`` such that ``a+b*x`` is the closest line to the given points ``(x,y)``. In other words, this function determines parameters ``[a, b]`` that minimize the squared error between ``y`` and ``a+b*x``. 
-   
+
    **Example**::
+
       using PyPlot;
       x = float([1:12])
       y = [5.5; 6.3; 7.6; 8.8; 10.9; 11.79; 13.48; 15.02; 17.77; 20.81; 22.0; 22.99]
@@ -461,6 +462,14 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: expm(A)
 
    Matrix exponential.
+
+.. function:: lyap(A, C)
+
+   Computes the solution ``X`` to the continuous Lyapunov equation ``AX + XA' + C = 0``, where no eigenvalue of ``A`` has a zero real part and no two eigenvalues are negative complex conjugates of each other. 
+
+.. function:: sylvester(A, B, C)
+
+   Computes the solution ``X`` to the Sylvester equation ``AX + XB + C = 0``, where ``A``, ``B`` and ``C`` have compatible dimensions and ``A`` and ``-B`` have no eigenvalues with equal real part.
 
 .. function:: issym(A) -> Bool
 

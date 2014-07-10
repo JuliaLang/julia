@@ -3,71 +3,73 @@ module DSP
 importall Base.FFTW
 import Base.FFTW.normalization
 
-export FFTW, filt, deconv, conv, conv2, xcorr, fftshift, ifftshift,
+export FFTW, filt, filt!, deconv, conv, conv2, xcorr, fftshift, ifftshift,
        dct, idct, dct!, idct!, plan_dct, plan_idct, plan_dct!, plan_idct!,
        # the rest are defined imported from FFTW:
        fft, bfft, ifft, rfft, brfft, irfft,
        plan_fft, plan_bfft, plan_ifft, plan_rfft, plan_brfft, plan_irfft,
        fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!
 
-function filt{T<:Number}(b::Union(AbstractVector{T}, T),a::Union(AbstractVector{T}, T),x::AbstractVector{T})
-    if isempty(b); error("b must be non-empty"); end
-    if isempty(a); error("a must be non-empty"); end
-    if a[1]==0; error("a[1] must be nonzero"); end
+function filt{T<:Number}(b::Union(AbstractVector{T}, T), a::Union(AbstractVector{T}, T),
+                         x::AbstractVector{T}; si::AbstractVector{T}=zeros(T, max(length(a), length(b))-1))
+    filt!(Array(T, size(x)), b, a, x, si)
+end
+
+# in-place filtering: returns results in the out argument, which may shadow x
+# (and does so by default)
+function filt!{T<:Number}(b::Union(AbstractVector{T}, T), a::Union(AbstractVector{T}, T), x::AbstractVector{T};
+                          si::AbstractVector{T}=zeros(T, max(length(a), length(b))-1), out::AbstractVector{T}=x)
+    filt!(out, b, a, x, si)
+end
+function filt!{T<:Number}(out::AbstractVector{T}, b::Union(AbstractVector{T}, T), a::Union(AbstractVector{T}, T),
+                          x::AbstractVector{T}, si::AbstractVector{T})
+    isempty(b) && error("b must be non-empty")
+    isempty(a) && error("a must be non-empty")
+    a[1] == 0  && error("a[1] must be nonzero")
+    size(x) != size(out) && error("out size must match x")
 
     as = length(a)
     bs = length(b)
     sz = max(as, bs)
-
-    if sz == 1
-        return (b[1]/a[1]).*x
-    end
-
-    if bs<sz
-        newb = zeros(T,sz)
-        newb[1:bs] = b
-        b = newb
-    end
-
+    silen = sz - 1
     xs = size(x,1)
-    y = Array(T, xs)
-    silen = sz-1
-    si = zeros(T, silen)
 
+    xs == 0 && return out
+    sz == 1 && return scale!(out, x, b[1]/a[1]) # Simple scaling without memory
+
+    # Filter coefficient normalization
     if a[1] != 1
         norml = a[1]
         a ./= norml
         b ./= norml
     end
+    # Pad the coefficients with zeros if needed
+    bs<sz   && (b = copy!(zeros(T,sz), b))
+    1<as<sz && (a = copy!(zeros(T,sz), a))
 
+    si = copy!(Array(T, silen), si)
     if as > 1
-        if as<sz
-            newa = zeros(T,sz)
-            newa[1:as] = a
-            a = newa
-        end
-
-        @inbounds begin
-            for i=1:xs
-                y[i] = si[1] + b[1]*x[i]
-                for j=1:(silen-1)
-                    si[j] = si[j+1] + b[j+1]*x[i] - a[j+1]*y[i]
-                end
-                si[silen] = b[silen+1]*x[i] - a[silen+1]*y[i]
+        @inbounds for i=1:xs
+            xi = x[i]
+            val = si[1] + b[1]*xi
+            for j=1:(silen-1)
+                si[j] = si[j+1] + b[j+1]*xi - a[j+1]*val
             end
+            si[silen] = b[silen+1]*xi - a[silen+1]*val
+            out[i] = val
         end
     else
-        @inbounds begin
-            for i=1:xs
-                y[i] = si[1] + b[1]*x[i]
-                for j=1:(silen-1)
-                    si[j] = si[j+1] + b[j+1]*x[i]
-                end
-                si[silen] = b[silen+1]*x[i]
+        @inbounds for i=1:xs
+            xi = x[i]
+            val = si[1] + b[1]*xi
+            for j=1:(silen-1)
+                si[j] = si[j+1] + b[j+1]*xi
             end
+            si[silen] = b[silen+1]*xi
+            out[i] = val
         end
     end
-    return y
+    return out
 end
 
 function deconv{T}(b::StridedVector{T}, a::StridedVector{T})

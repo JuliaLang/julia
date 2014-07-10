@@ -68,6 +68,12 @@ end
 
 @test isequaldlm(readcsv(IOBuffer("\n1,2,3\n4,5,6\n\n\n")), reshape({"",1.0,4.0,"","","",2.0,5.0,"","","",3.0,6.0,"",""}, 5, 3), Any)
 
+let x = randbool(5, 10), io = IOBuffer()
+    writedlm(io, x)
+    seek(io, 0)
+    @test readdlm(io, Bool) == x
+end
+
 let x = [1,2,3], y = [4,5,6], io = IOBuffer()
     writedlm(io, zip(x,y), ",  ")
     seek(io, 0)
@@ -101,6 +107,30 @@ end
 @test isequaldlm(readcsv(IOBuffer("1#,2,3\n4,5,6")), [1. "" "";4. 5. 6.], Any)
 @test isequaldlm(readcsv(IOBuffer("1,2,\"#3\"\n4,5,6")), [1. 2. "#3";4. 5. 6.], Any)
 @test isequaldlm(readcsv(IOBuffer("1,2,3\n #with leading whitespace\n4,5,6")), [1. 2. 3.;" " "" "";4. 5. 6.], Any)
+
+# test skipstart
+let x = ["a" "b" "c"; "d" "e" "f"; "g" "h" "i"; "A" "B" "C"; 1 2 3; 4 5 6; 7 8 9], io = IOBuffer()
+    writedlm(io, x, quotes=false)
+    seek(io, 0)
+    (data, hdr) = readdlm(io, header=true, skipstart=3)
+    @test data == [1 2 3; 4 5 6; 7 8 9]
+    @test hdr == ["A" "B" "C"]
+end
+let x = ["a" "b" "\nc"; "d" "\ne" "f"; "g" "h" "i\n"; "A" "B" "C"; 1 2 3; 4 5 6; 7 8 9]
+    io = IOBuffer()
+    writedlm(io, x, quotes=true)
+    seek(io, 0)
+    (data, hdr) = readdlm(io, header=true, skipstart=6)
+    @test data == [1 2 3; 4 5 6; 7 8 9]
+    @test hdr == ["A" "B" "C"]
+
+    io = IOBuffer()
+    writedlm(io, x, quotes=false)
+    seek(io, 0)
+    (data, hdr) = readdlm(io, header=true, skipstart=6)
+    @test data == [1 2 3; 4 5 6; 7 8 9]
+    @test hdr == ["A" "B" "C"]
+end
 
 # source: http://www.i18nguy.com/unicode/unicode-example-utf8.zip
 let i18n_data = ["Origin (English)", "Name (English)", "Origin (Native)", "Name (Native)", 
@@ -161,4 +191,9 @@ let i18n_data = ["Origin (English)", "Name (English)", "Origin (Native)", "Name 
     i18n_buff = PipeBuffer()
     writedlm(i18n_buff, i18n_arr, ',')
     @test i18n_arr == readcsv(i18n_buff)
+
+    hdr = i18n_arr[1, :]
+    data = i18n_arr[2:end, :]
+    writedlm(i18n_buff, i18n_arr, ',')
+    @test (data, hdr) == readcsv(i18n_buff, header=true)
 end

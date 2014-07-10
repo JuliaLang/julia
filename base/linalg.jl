@@ -85,6 +85,7 @@ export
     lu,
     lufact,
     lufact!,
+    lyap,
     norm,
     null,
     peakflops,
@@ -108,6 +109,7 @@ export
     svdfact,
     svdvals!,
     svdvals,
+    sylvester,
     trace,
     transpose,
     tril,
@@ -172,6 +174,12 @@ function chkstride1(A::StridedVecOrMat...)
 end
 
 #Check that matrix is square
+function chksquare(A::AbstractMatrix)
+    m,n = size(A)
+    m == n || throw(DimensionMismatch("Matrix is not square"))
+    m
+end
+
 function chksquare(A...)
     sizes=Int[]
     for a in A 

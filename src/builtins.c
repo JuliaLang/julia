@@ -617,7 +617,7 @@ DLLEXPORT int jl_substrtod(char *str, size_t offset, int len, double *out)
     char *bstr = str+offset;
     char *pend = bstr+len;
     int err = 0;
-    if (!(*pend == '\0' || isspace(*pend) || *pend == ',')) {
+    if (!(*pend == '\0' || isspace((unsigned char)*pend) || *pend == ',')) {
         // confusing data outside substring. must copy.
         char *newstr = malloc(len+1);
         memcpy(newstr, bstr, len);
@@ -643,7 +643,7 @@ DLLEXPORT int jl_strtod(char *str, double *out)
         (errno==ERANGE && (*out==0 || *out==HUGE_VAL || *out==-HUGE_VAL)))
         return 1;
     while (*p != '\0') {
-        if (!isspace(*p))
+        if (!isspace((unsigned char)*p))
             return 1;
         p++;
     }
@@ -662,7 +662,7 @@ DLLEXPORT int jl_substrtof(char *str, int offset, int len, float *out)
     char *bstr = str+offset;
     char *pend = bstr+len;
     int err = 0;
-    if (!(*pend == '\0' || isspace(*pend) || *pend == ',')) {
+    if (!(*pend == '\0' || isspace((unsigned char)*pend) || *pend == ',')) {
         // confusing data outside substring. must copy.
         char *newstr = malloc(len+1);
         memcpy(newstr, bstr, len);
@@ -697,7 +697,7 @@ DLLEXPORT int jl_strtof(char *str, float *out)
         (errno==ERANGE && (*out==0 || *out==HUGE_VALF || *out==-HUGE_VALF)))
         return 1;
     while (*p != '\0') {
-        if (!isspace(*p))
+        if (!isspace((unsigned char)*p))
             return 1;
         p++;
     }
@@ -808,9 +808,9 @@ JL_CALLABLE(jl_f_new_type_constructor)
 JL_CALLABLE(jl_f_typevar)
 {
     if (nargs < 1 || nargs > 3) {
-        JL_NARGS(typevar, 1, 1);
+        JL_NARGS(TypeVar, 1, 1);
     }
-    JL_TYPECHK(typevar, symbol, args[0]);
+    JL_TYPECHK(TypeVar, symbol, args[0]);
     jl_value_t *lb = (jl_value_t*)jl_bottom_type;
     jl_value_t *ub = (jl_value_t*)jl_any_type;
     int b = 0;
@@ -819,9 +819,9 @@ JL_CALLABLE(jl_f_typevar)
         nargs--;
     }
     if (nargs > 1) {
-        JL_TYPECHK(typevar, type, args[1]);
+        JL_TYPECHK(TypeVar, type, args[1]);
         if (nargs > 2) {
-            JL_TYPECHK(typevar, type, args[2]);
+            JL_TYPECHK(TypeVar, type, args[2]);
             lb = args[1];
             ub = args[2];
         }
@@ -1199,7 +1199,9 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
         n += jl_static_show(out, ((jl_typector_t*)v)->body);
     }
     else if (jl_is_typevar(v)) {
-        n += JL_PRINTF(out, "%s", ((jl_tvar_t*)v)->name->name);
+        n += jl_static_show(out, ((jl_tvar_t*)v)->lb);
+        n += JL_PRINTF(out, "<:%s<:", ((jl_tvar_t*)v)->name->name);
+        n += jl_static_show(out, ((jl_tvar_t*)v)->ub);
     }
     else if (jl_is_module(v)) {
         jl_module_t *m = (jl_module_t*)v;

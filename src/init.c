@@ -67,6 +67,7 @@ extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 char *julia_home = NULL;
 jl_compileropts_t jl_compileropts = { NULL, // build_path
                                       0,    // code_coverage
+				      0,    // malloc_log
                                       JL_COMPILEROPT_CHECK_BOUNDS_DEFAULT,
                                       0     // int32_literals
 };
@@ -123,6 +124,7 @@ void fpe_handler(int arg)
 }
 #endif
 
+#ifndef _OS_WINDOWS_
 static int is_addr_on_stack(void *addr)
 {
 #ifdef COPY_STACKS
@@ -133,6 +135,7 @@ static int is_addr_on_stack(void *addr)
             (char*)addr < (char*)jl_current_task->stack+jl_current_task->ssize);
 #endif
 }
+#endif
 
 #if defined(__linux__) || defined(__FreeBSD__)
 extern int in_jl_;
@@ -376,6 +379,7 @@ static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg)
 }
 
 void jl_write_coverage_data(void);
+void jl_write_malloc_log(void);
 
 DLLEXPORT void uv_atexit_hook()
 {
@@ -384,6 +388,8 @@ DLLEXPORT void uv_atexit_hook()
 #endif
     if (jl_compileropts.code_coverage)
         jl_write_coverage_data();
+    if (jl_compileropts.malloc_log)
+        jl_write_malloc_log();
     if (jl_base_module) {
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
         if (f!=NULL && jl_is_function(f)) {
@@ -827,8 +833,8 @@ void julia_init(char *imageFile)
     }     
     pthread_attr_destroy(&attr);
 
-    ret = task_set_exception_ports(self,EXC_MASK_BAD_ACCESS,segv_port,EXCEPTION_DEFAULT,MACHINE_THREAD_STATE);
-    HANDLE_MACH_ERROR("task_set_exception_ports",ret);
+    ret = thread_set_exception_ports(mach_thread_self(),EXC_MASK_BAD_ACCESS,segv_port,EXCEPTION_DEFAULT,MACHINE_THREAD_STATE);
+    HANDLE_MACH_ERROR("thread_set_exception_ports",ret);
 #else // defined(_OS_DARWIN_)
     stack_t ss;
     ss.ss_flags = 0;
@@ -910,9 +916,6 @@ DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *
             free(build_ji);
             char *build_o;
             if (asprintf(&build_o, "%s.o",build_path) > 0) {
-#ifndef _OS_WINDOWS_
-                jl_dump_linedebug_info();
-#endif
                 jl_dump_objfile(build_o,0);
                 free(build_o);
             }

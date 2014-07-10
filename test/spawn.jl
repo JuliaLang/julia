@@ -65,6 +65,7 @@ end
 file = tempname()
 run(`echo hello world` |> file)
 @test readall(file |> `cat`) == "hello world\n"
+@test open(readall, file |> `cat`, "r") == "hello world\n"
 rm(file)
 
 # Stream Redirection
@@ -99,9 +100,9 @@ str2 = readall(stdout)
 
 # This test hangs if the end of run walk across uv streams calls shutdown on a stream that is shutting down.
 file = tempname()
-stdin, proc = writesto(`cat -` |> file)
-write(stdin, str)
-close(stdin)
+open(`cat -` |> file, "w") do io
+    write(io, str)
+end
 rm(file)
 
 # issue #3373
@@ -120,6 +121,33 @@ yield()
 put!(r,11)
 yield()
 
+# Test marking of AsyncStream
+
+@async begin
+    server = listen(2327)
+    client = accept(server)
+    write(client, "Hello, world!\n")
+    write(client, "Goodbye, world...\n")
+    close(server)
+end
+sleep(0.1)
+sock = connect(2327)
+mark(sock)
+@test ismarked(sock)
+@test readline(sock) == "Hello, world!\n"
+@test readline(sock) == "Goodbye, world...\n"
+@test reset(sock) == 0
+@test !ismarked(sock)
+mark(sock)
+@test ismarked(sock)
+@test readline(sock) == "Hello, world!\n"
+unmark(sock)
+@test !ismarked(sock)
+@test_throws ErrorException reset(sock)
+@test !unmark(sock)
+@test readline(sock) == "Goodbye, world...\n"
+#@test eof(sock) ## doesn't work...
+close(sock)
 
 # issue #4535
 exename=joinpath(JULIA_HOME,(ccall(:jl_is_debugbuild,Cint,())==0?"julia":"julia-debug"))

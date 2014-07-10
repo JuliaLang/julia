@@ -9,8 +9,9 @@ New language features
   * `Tuple`s (of `Integer`s, `Symbol`s, or `Bool`s) can now be used as type
     parameters ([#5164]).
 
-  * Default "inner" constructors now accept any arguments. Constructors that
-    look like `MyType(a, b) = new(a, b)` can and should be removed ([#4026]).
+  * An additional default "inner" constructor accepting any arguments is now
+    generated. Constructors that look like `MyType(a, b) = new(a, b)` do not
+    need to be added manually ([#4026], [#7071]).
 
   * Expanded array type hierarchy to include an abstract ``DenseArray`` for
     in-memory arrays with standard strided storage ([#987], [#2345],
@@ -40,16 +41,30 @@ New language features
     characters, and operator symbols are not allowed in identifiers.
     Number-like characters cannot begin identifiers ([#5936]).
 
-  * Support for a limited number of infix Unicode operators ([#552], [#6582]):
+  * Define a limited number of infix Unicode operators ([#552], [#6582]):
 
     | Precedence class | Operators (with synonyms, if any)
     | ---------------- | ---------------------------------
-    |   ==             |  ≥ (>=) ≤ (<=) ≡ (===) ≠ (!=) ≢ (!==) .≥ (.>=) .≤ (.<=) .!= (.≠) ∈ (`in`) ∉ (`(x,y)->!in(x, y)`) ∋ (`(x,y)->in(y, x)`) ∌ (`(x,y)->!in(y, x)`) ⊆ (`issubset`) ⊈ (`(x,y)->!issubset(x, y)`) ⊊ (`(x,y)->x⊆y && x!=y`) ⊂ ⊄ |
-    |   +              | ⊕ ⊖ ⊞ ⊟ ∪ (`union`) ∨ ⊔ |
-    |   *              | ÷ (`div`) ⋅ (`dot`) ∘ × (`cross`) ∩ (`intersect`) ∧ ⊓ ⊗ ⊘ ⊙ ⊚ ⊛ ⊠ ⊡ |
-    |   unary          | √ |
+    |   ==             |  ≥ (>=) ≤ (<=) ≡ (===) ≠ (!=) ≢ (!==) .≥ (.>=) .≤ (.<=) .!= (.≠) ∈ (`in`) ∉ (`(x,y)->!in(x, y)`) ∋ (`(x,y)->in(y, x)`) ∌ (`(x,y)->!in(y, x)`) ⊆ (`issubset`) ⊈ (`(x,y)->!issubset(x, y)`) ⊊ (`(x,y)->x⊆y && x!=y`) |
+    |   +              | ∪ (`union`) |
+    |   *              | ÷ (`div`) ⋅ (`dot`) × (`cross`) ∩ (`intersect`) |
+    |   unary          | √ ∛ |
+
+    In addition to these, many of the Unicode operator symbols are parsed
+    as infix operators and are available for user-defined methods ([#6929]).
     
   * Improved reporting of syntax errors ([#6179])
+
+  * `break` inside a `for` loop with multiple ranges now exits the entire loop nest ([#5154])
+
+REPL improvements
+-----------------
+
+  * New native-Julia REPL implementation, eliminating many problems
+    stemming from the old GNU Readline-based REPL ([#6270]).
+
+  * Tab-substitution of LaTeX math symbols (e.g. `\alpha` by `α`) ([#6911]).
+    This also works in IJulia and in Emacs ([#6920]).
 
 Library improvements
 --------------------
@@ -144,13 +159,41 @@ Library improvements
 
     * `rand` now supports arbitrary `Ranges` arguments ([#5059]).
 
+    * `expm1` and `log1p` now support complex arguments ([#3141]).
+
+    * Broadcasting `.//` is now included ([#7094]).
+
+    * `prevfloat` and `nextfloat` now saturate at -Inf and Inf,
+      respectively, and have otherwise been fixed to follow the IEEE-754
+      standard functions `nextDown` and `nextUp` ([#5025]).
+
+    * New function `widen` for widening numeric types and values, and `widemul`
+      for multiplying to a larger type ([#6169]).
+
+    * `polygamma`, `digamma`, and `trigamma` now accept complex
+      arguments, and `zeta(s, z)` now provides the Hurwitz zeta ([#7125]).
+
+    * Narrow integer types (< 32 bits) are promoted to `Float64` rather
+      than to `Float32` by `float(x)` ([#7390]).
+
   * `String` improvements
 
     * Triple-quoted regex strings, `r"""..."""` ([#4934]).
 
-    * New string type, `UTF16String` ([#4930]).
+    * New string type, `UTF16String` ([#4930]), constructed by
+      `utf16(s)` from another string, a `Uint16` array or pointer, or
+      a byte array (possibly prefixed by a byte-order marker to
+      indicate endian-ness).  Its data is internally `NULL`-terminated
+      for passing to C ([#7016]).
 
-    * `CharString` is renamed to `UTF32String` ([#4943]).
+    * `CharString` is renamed to `UTF32String` ([#4943]), and its data
+      is now internally `NULL`-terminated for passing to C ([#7016]).
+      `CharString(c::Char...)` is deprecated in favor of `utf32(c...)`,
+      and `utf32(s)` otherwise has functionality similar to `utf16(s)`.
+
+    * New `WString` and `wstring` synonyms for either `UTF16String`
+      and `utf16` or `UTF32String` and `utf32`, respectively, depending
+      on the width of `Cwchar_t` ([#7016]).
 
     * `normalize_string` function to perform Unicode normalization,
       case-folding, and other transformations ([#5576]).
@@ -161,7 +204,7 @@ Library improvements
     * `bytestring` is automatically called on `String` arguments for
       conversion to `Ptr{Uint8}` in `ccall` ([#5677]).
 
-  * `LinAlg` (linear algebra) improvements
+  * Linear Algebra improvements
 
       * Balancing options for eigenvector calculations for general matrices ([#5428]).
 
@@ -178,14 +221,16 @@ Library improvements
         the same length.  This generalizes and replaces `normfro` ([#6057]),
         and `norm` is now type-stable ([#6056]).
 
-      * `+` and `-` now require the sizes of the arrays to be the
-        same: the operations no longer do broadcasting. New
-        `UniformScaling` matrix type and identity `I` constant (#5810).
+      * New `UniformScaling` matrix type and identity `I` constant (#5810).
 
       * None of the concrete matrix factorization types are exported from Base
         by default anymore.
 
     * Sparse linear algebra
+
+      * 1-d sparse getindex has been implemented ([#7047])
+
+      * Faster sparse getindex ([#7131]).
 
       * Faster sparse `kron` ([#4958]).
 
@@ -222,6 +267,10 @@ Library improvements
       * new LAPACK wrappers
         - condition number estimate `cond(A::Triangular)` ([#5255])
 
+      * parametrize Triangular on matrix type ([#7064])
+
+      * Lyapunov / Sylvester solver ([#7435])
+
     * Dense linear algebra for generic matrix element types
 
       * LU factorization ([#5381] and [#5430])
@@ -231,10 +280,6 @@ Library improvements
   * New function `deleteat!` deletes a specified index or indices and
     returns the updated collection
 
-  * `prevfloat` and `nextfloat` now saturate at -Inf and Inf, respectively, and
-    have otherwise been fixed to follow the IEEE-754 standard functions `nextDown`
-    and `nextUp` ([#5025]).
-
   * The `setenv` function for external processes now accepts a `dir` keyword
     argument for specifying the directory to start the child process in ([#4888]).
 
@@ -243,9 +288,6 @@ Library improvements
 
   * Ranges and arrays with the same elements are now unequal. This allows hashing
     and comparing ranges to be faster. ([#5778])
-
-  * New function `widen` for widening numeric types and values, and `widemul`
-    for multiplying to a larger type ([#6169])
 
   * Broadcasting now works on arbitrary `AbstractArrays` ([#5387])
 
@@ -270,11 +312,14 @@ Library improvements
     * Very large ranges (e.g. `0:typemax(Int)`) can now be constructed, but some
       operations (e.g. `length`) will raise an `OverflowError`.
 
-  * Extended API for ``cov`` and ``cor``, which accept keyword arguments ``vardim``,
-    ``corrected``, and ``mean`` ([#6273])
+  * Extended API for `cov` and `cor`, which accept keyword arguments `vardim`,
+    `corrected`, and `mean` ([#6273])
 
   * New functions `randsubseq` and `randsubseq!` to create a random subsequence of an array ([#6726])
 
+  * New macro `@evalpoly` for efficient inline evaluation of polynomials ([#7146]).
+
+  * The signal filtering function `filt` now accepts an optional initial filter state vector. A new in-place function `filt!` is also exported. ([#7513])
 
 Build improvements
 ------------------
@@ -301,7 +346,7 @@ Deprecated or removed
     behaviour and `[get/set/with]_bigfloat_rounding` functions are deprecated ([#5007])
 
   * `cholpfact` and `qrpfact` are deprecated in favor of keyword arguments in
-    `cholfact(...,pivot=true)` and `qrfact(...,pivot=true)` ([#5330])
+    `cholfact(..., pivot=true)` and `qrfact(..., pivot=true)` ([#5330])
 
   * `symmetrize!` is deprecated in favor of `Base.LinAlg.copytri!` ([#5427])
 
@@ -309,7 +354,7 @@ Deprecated or removed
 
   * `factorize!` is deprecated in favor of `factorize`. ([#5526])
 
-  * `nnz` is removed. Use `countnz` or `nfilled` instead ([#5538])
+  * `nnz` counts the number of structural nonzeros in a sparse matrix. Use `countnz` for the actual number of nonzeros. ([#6769])
 
   * `setfield` is renamed `setfield!` ([#5748])
 
@@ -328,89 +373,10 @@ Deprecated or removed
 
   * `bitmix` is replaced by a 2-argument form of `hash`.
 
-[#4042]: https://github.com/JuliaLang/julia/issues/4042
-[#5164]: https://github.com/JuliaLang/julia/issues/5164
-[#4026]: https://github.com/JuliaLang/julia/issues/4026
-[#4799]: https://github.com/JuliaLang/julia/issues/4799
-[#4862]: https://github.com/JuliaLang/julia/issues/4862
-[#4048]: https://github.com/JuliaLang/julia/issues/4048
-[#4383]: https://github.com/JuliaLang/julia/issues/4383
-[#4775]: https://github.com/JuliaLang/julia/issues/4775
-[#4870]: https://github.com/JuliaLang/julia/issues/4870
-[#4874]: https://github.com/JuliaLang/julia/issues/4874
-[#4766]: https://github.com/JuliaLang/julia/issues/4766
-[#4782]: https://github.com/JuliaLang/julia/issues/4782
-[#4759]: https://github.com/JuliaLang/julia/issues/4759
-[#4819]: https://github.com/JuliaLang/julia/issues/4819
-[#4670]: https://github.com/JuliaLang/julia/issues/4670
-[#5007]: https://github.com/JuliaLang/julia/issues/5007
-[#5076]: https://github.com/JuliaLang/julia/issues/5076
-[#5255]: https://github.com/JuliaLang/julia/issues/5255
-[#5263]: https://github.com/JuliaLang/julia/issues/5263
-[#4934]: https://github.com/JuliaLang/julia/issues/4934
-[#4930]: https://github.com/JuliaLang/julia/issues/4930
-[#4943]: https://github.com/JuliaLang/julia/issues/4943
-[#4958]: https://github.com/JuliaLang/julia/issues/4958
-[#5059]: https://github.com/JuliaLang/julia/issues/5059
-[#5196]: https://github.com/JuliaLang/julia/issues/5196
-[#5275]: https://github.com/JuliaLang/julia/issues/5275
-[#5277]: https://github.com/JuliaLang/julia/issues/5277
-[#987]: https://github.com/JuliaLang/julia/issues/987
-[#2345]: https://github.com/JuliaLang/julia/issues/2345
-[#5330]: https://github.com/JuliaLang/julia/issues/5330
-[#4882]: https://github.com/JuliaLang/julia/issues/4882
-[#4806]: https://github.com/JuliaLang/julia/issues/4806
-[#5358]: https://github.com/JuliaLang/julia/pull/5358
-[#5381]: https://github.com/JuliaLang/julia/pull/5381
-[#5430]: https://github.com/JuliaLang/julia/pull/5430
-[a448e080]: https://github.com/JuliaLang/julia/commit/a448e080dc736c7fb326426dfcb2528be36973d3
-[5e3f074b]: https://github.com/JuliaLang/julia/commit/5e3f074b9173044a0a4219f9b285879ff7cec041
-[#4967]: https://github.com/JuliaLang/julia/pull/4967
-[#5428]: https://github.com/JuliaLang/julia/pull/5428
-[#5468]: https://github.com/JuliaLang/julia/pull/5468
-[#5025]: https://github.com/JuliaLang/julia/pull/5025
-[#4888]: https://github.com/JuliaLang/julia/pull/4888
-[#5475]: https://github.com/JuliaLang/julia/pull/5475
-[#5526]: https://github.com/JuliaLang/julia/pull/5526
-[#5538]: https://github.com/JuliaLang/julia/pull/5538
-[#5726]: https://github.com/JuliaLang/julia/pull/5726
-[#5811]: https://github.com/JuliaLang/julia/pull/5811
-[#5462]: https://github.com/JuliaLang/julia/pull/5462
-[#5403]: https://github.com/JuliaLang/julia/pull/5403
-[#5464]: https://github.com/JuliaLang/julia/pull/5464
-[#5827]: https://github.com/JuliaLang/julia/pull/5827
-[#5576]: https://github.com/JuliaLang/julia/pull/5576
-[#5703]: https://github.com/JuliaLang/julia/pull/5703
-[#5427]: https://github.com/JuliaLang/julia/pull/5427
-[#5748]: https://github.com/JuliaLang/julia/issues/5748
-[#5511]: https://github.com/JuliaLang/julia/issues/5511
-[#5776]: https://github.com/JuliaLang/julia/issues/5776
-[#5819]: https://github.com/JuliaLang/julia/issues/5819
-[#4871]: https://github.com/JuliaLang/julia/issues/4871
-[#4996]: https://github.com/JuliaLang/julia/issues/4996
-[#2333]: https://github.com/JuliaLang/julia/issues/2333
-[#5636]: https://github.com/JuliaLang/julia/issues/5636
-[#1268]: https://github.com/JuliaLang/julia/issues/1268
-[#5677]: https://github.com/JuliaLang/julia/issues/5677
-[#5545]: https://github.com/JuliaLang/julia/issues/5545
-[#6057]: https://github.com/JuliaLang/julia/issues/6057
-[#6056]: https://github.com/JuliaLang/julia/issues/6056
-[#3344]: https://github.com/JuliaLang/julia/issues/3344
-[#5737]: https://github.com/JuliaLang/julia/issues/5737
-[#6073]: https://github.com/JuliaLang/julia/issues/6073
-[#5778]: https://github.com/JuliaLang/julia/issues/5778
-[#6169]: https://github.com/JuliaLang/julia/issues/6169
-[#5970]: https://github.com/JuliaLang/julia/issues/5970
-[#6197]: https://github.com/JuliaLang/julia/pull/6197
-[#5387]: https://github.com/JuliaLang/julia/pull/5387
-[#5671]: https://github.com/JuliaLang/julia/pull/5671
-[#5380]: https://github.com/JuliaLang/julia/pull/5380
-[#5585]: https://github.com/JuliaLang/julia/issues/5585
-[#6273]: https://github.com/JuliaLang/julia/pull/6273
-[#552]: https://github.com/JuliaLang/julia/issues/552
-[#6582]: https://github.com/JuliaLang/julia/pull/6582
-[#6624]: https://github.com/JuliaLang/julia/pull/6624
-[#5936]: https://github.com/JuliaLang/julia/issues/5936
+  * `readsfrom` and `writesto` are replaced by `open` ([#6948]).
+
+  * `insert!` now throws a `BoundsError` if
+    `index > length(collection)+1` ([#7373]).
 
 Julia v0.2.0 Release Notes
 ==========================
@@ -620,6 +586,10 @@ Library improvements
 
   * Improved backtraces on Windows and OS X.
 
+  * Implementation of reduction functions (including `reduce`, `mapreduce`, `sum`, `prod`, 
+    `maximum`, `minimum`, `all`, and `any`) are refactored, with improved type stability, 
+    efficiency, and consistency. ([#6116], [#7035], [#7061], [#7106])
+
 Deprecated or removed
 ---------------------
 
@@ -712,12 +682,21 @@ Bugfixes and performance updates
 
 Too numerous to mention.
 
+[packages chapter]: http://docs.julialang.org/en/latest/manual/packages/
+[sorting functions]: http://docs.julialang.org/en/latest/stdlib/sort/
+[pairwise summation]: https://en.wikipedia.org/wiki/Pairwise_summation
+[a448e080]: https://github.com/JuliaLang/julia/commit/a448e080dc736c7fb326426dfcb2528be36973d3
+[5e3f074b]: https://github.com/JuliaLang/julia/commit/5e3f074b9173044a0a4219f9b285879ff7cec041
+<!--- generated by NEWS-update.jl: -->
 [#13]: https://github.com/JuliaLang/julia/issues/13
+[#69]: https://github.com/JuliaLang/julia/issues/69
 [#70]: https://github.com/JuliaLang/julia/issues/70
 [#485]: https://github.com/JuliaLang/julia/issues/485
+[#552]: https://github.com/JuliaLang/julia/issues/552
 [#907]: https://github.com/JuliaLang/julia/issues/907
+[#987]: https://github.com/JuliaLang/julia/issues/987
+[#1268]: https://github.com/JuliaLang/julia/issues/1268
 [#1484]: https://github.com/JuliaLang/julia/issues/1484
-[#1539]: https://github.com/JuliaLang/julia/issues/1539
 [#1539]: https://github.com/JuliaLang/julia/issues/1539
 [#1571]: https://github.com/JuliaLang/julia/issues/1571
 [#1815]: https://github.com/JuliaLang/julia/issues/1815
@@ -725,6 +704,8 @@ Too numerous to mention.
 [#2204]: https://github.com/JuliaLang/julia/issues/2204
 [#2212]: https://github.com/JuliaLang/julia/issues/2212
 [#2265]: https://github.com/JuliaLang/julia/issues/2265
+[#2333]: https://github.com/JuliaLang/julia/issues/2333
+[#2345]: https://github.com/JuliaLang/julia/issues/2345
 [#2370]: https://github.com/JuliaLang/julia/issues/2370
 [#2375]: https://github.com/JuliaLang/julia/issues/2375
 [#2380]: https://github.com/JuliaLang/julia/issues/2380
@@ -740,11 +721,8 @@ Too numerous to mention.
 [#2678]: https://github.com/JuliaLang/julia/issues/2678
 [#2703]: https://github.com/JuliaLang/julia/issues/2703
 [#2713]: https://github.com/JuliaLang/julia/issues/2713
-[#2714]: https://github.com/JuliaLang/julia/issues/2714
 [#2720]: https://github.com/JuliaLang/julia/issues/2720
 [#2725]: https://github.com/JuliaLang/julia/issues/2725
-[#2769]: https://github.com/JuliaLang/julia/issues/2769
-[#2791]: https://github.com/JuliaLang/julia/issues/2791
 [#2807]: https://github.com/JuliaLang/julia/issues/2807
 [#2814]: https://github.com/JuliaLang/julia/issues/2814
 [#2844]: https://github.com/JuliaLang/julia/issues/2844
@@ -758,15 +736,19 @@ Too numerous to mention.
 [#3102]: https://github.com/JuliaLang/julia/issues/3102
 [#3105]: https://github.com/JuliaLang/julia/issues/3105
 [#3140]: https://github.com/JuliaLang/julia/issues/3140
+[#3141]: https://github.com/JuliaLang/julia/issues/3141
 [#3148]: https://github.com/JuliaLang/julia/issues/3148
 [#3149]: https://github.com/JuliaLang/julia/issues/3149
+[#3233]: https://github.com/JuliaLang/julia/issues/3233
 [#3272]: https://github.com/JuliaLang/julia/issues/3272
+[#3344]: https://github.com/JuliaLang/julia/issues/3344
 [#3350]: https://github.com/JuliaLang/julia/issues/3350
 [#3439]: https://github.com/JuliaLang/julia/issues/3439
 [#3467]: https://github.com/JuliaLang/julia/issues/3467
 [#3468]: https://github.com/JuliaLang/julia/issues/3468
 [#3483]: https://github.com/JuliaLang/julia/issues/3483
 [#3523]: https://github.com/JuliaLang/julia/issues/3523
+[#3605]: https://github.com/JuliaLang/julia/issues/3605
 [#3649]: https://github.com/JuliaLang/julia/issues/3649
 [#3665]: https://github.com/JuliaLang/julia/issues/3665
 [#3697]: https://github.com/JuliaLang/julia/issues/3697
@@ -780,21 +762,115 @@ Too numerous to mention.
 [#3949]: https://github.com/JuliaLang/julia/issues/3949
 [#3989]: https://github.com/JuliaLang/julia/issues/3989
 [#4014]: https://github.com/JuliaLang/julia/issues/4014
+[#4026]: https://github.com/JuliaLang/julia/issues/4026
 [#4039]: https://github.com/JuliaLang/julia/issues/4039
+[#4042]: https://github.com/JuliaLang/julia/issues/4042
 [#4044]: https://github.com/JuliaLang/julia/issues/4044
+[#4048]: https://github.com/JuliaLang/julia/issues/4048
 [#4055]: https://github.com/JuliaLang/julia/issues/4055
 [#4112]: https://github.com/JuliaLang/julia/issues/4112
 [#4130]: https://github.com/JuliaLang/julia/issues/4130
 [#4177]: https://github.com/JuliaLang/julia/issues/4177
 [#4235]: https://github.com/JuliaLang/julia/issues/4235
 [#4284]: https://github.com/JuliaLang/julia/issues/4284
+[#4383]: https://github.com/JuliaLang/julia/issues/4383
 [#4412]: https://github.com/JuliaLang/julia/issues/4412
+[#4670]: https://github.com/JuliaLang/julia/issues/4670
+[#4759]: https://github.com/JuliaLang/julia/issues/4759
+[#4766]: https://github.com/JuliaLang/julia/issues/4766
+[#4775]: https://github.com/JuliaLang/julia/issues/4775
+[#4782]: https://github.com/JuliaLang/julia/issues/4782
+[#4799]: https://github.com/JuliaLang/julia/issues/4799
+[#4806]: https://github.com/JuliaLang/julia/issues/4806
+[#4811]: https://github.com/JuliaLang/julia/issues/4811
+[#4819]: https://github.com/JuliaLang/julia/issues/4819
+[#4862]: https://github.com/JuliaLang/julia/issues/4862
+[#4870]: https://github.com/JuliaLang/julia/issues/4870
+[#4871]: https://github.com/JuliaLang/julia/issues/4871
+[#4874]: https://github.com/JuliaLang/julia/issues/4874
+[#4882]: https://github.com/JuliaLang/julia/issues/4882
+[#4888]: https://github.com/JuliaLang/julia/issues/4888
+[#4930]: https://github.com/JuliaLang/julia/issues/4930
+[#4934]: https://github.com/JuliaLang/julia/issues/4934
+[#4943]: https://github.com/JuliaLang/julia/issues/4943
+[#4958]: https://github.com/JuliaLang/julia/issues/4958
+[#4967]: https://github.com/JuliaLang/julia/issues/4967
+[#4996]: https://github.com/JuliaLang/julia/issues/4996
+[#5007]: https://github.com/JuliaLang/julia/issues/5007
+[#5025]: https://github.com/JuliaLang/julia/issues/5025
+[#5059]: https://github.com/JuliaLang/julia/issues/5059
+[#5076]: https://github.com/JuliaLang/julia/issues/5076
+[#5164]: https://github.com/JuliaLang/julia/issues/5164
+[#5196]: https://github.com/JuliaLang/julia/issues/5196
 [#5214]: https://github.com/JuliaLang/julia/issues/5214
-[#3605]: https://github.com/JuliaLang/julia/pull/3605
-[#3233]: https://github.com/JuliaLang/julia/pull/3233
-[#4811]: https://github.com/JuliaLang/julia/pull/4811
-[#5832]: https://github.com/JuliaLang/julia/pull/5832
-
-[packages chapter]: http://docs.julialang.org/en/latest/manual/packages/
-[sorting functions]: http://docs.julialang.org/en/latest/stdlib/sort/
-[pairwise summation]: https://en.wikipedia.org/wiki/Pairwise_summation
+[#5255]: https://github.com/JuliaLang/julia/issues/5255
+[#5263]: https://github.com/JuliaLang/julia/issues/5263
+[#5275]: https://github.com/JuliaLang/julia/issues/5275
+[#5277]: https://github.com/JuliaLang/julia/issues/5277
+[#5330]: https://github.com/JuliaLang/julia/issues/5330
+[#5358]: https://github.com/JuliaLang/julia/issues/5358
+[#5380]: https://github.com/JuliaLang/julia/issues/5380
+[#5381]: https://github.com/JuliaLang/julia/issues/5381
+[#5387]: https://github.com/JuliaLang/julia/issues/5387
+[#5403]: https://github.com/JuliaLang/julia/issues/5403
+[#5427]: https://github.com/JuliaLang/julia/issues/5427
+[#5428]: https://github.com/JuliaLang/julia/issues/5428
+[#5430]: https://github.com/JuliaLang/julia/issues/5430
+[#5462]: https://github.com/JuliaLang/julia/issues/5462
+[#5464]: https://github.com/JuliaLang/julia/issues/5464
+[#5468]: https://github.com/JuliaLang/julia/issues/5468
+[#5475]: https://github.com/JuliaLang/julia/issues/5475
+[#5511]: https://github.com/JuliaLang/julia/issues/5511
+[#5526]: https://github.com/JuliaLang/julia/issues/5526
+[#5545]: https://github.com/JuliaLang/julia/issues/5545
+[#5576]: https://github.com/JuliaLang/julia/issues/5576
+[#5585]: https://github.com/JuliaLang/julia/issues/5585
+[#5636]: https://github.com/JuliaLang/julia/issues/5636
+[#5671]: https://github.com/JuliaLang/julia/issues/5671
+[#5677]: https://github.com/JuliaLang/julia/issues/5677
+[#5703]: https://github.com/JuliaLang/julia/issues/5703
+[#5726]: https://github.com/JuliaLang/julia/issues/5726
+[#5737]: https://github.com/JuliaLang/julia/issues/5737
+[#5748]: https://github.com/JuliaLang/julia/issues/5748
+[#5776]: https://github.com/JuliaLang/julia/issues/5776
+[#5778]: https://github.com/JuliaLang/julia/issues/5778
+[#5811]: https://github.com/JuliaLang/julia/issues/5811
+[#5819]: https://github.com/JuliaLang/julia/issues/5819
+[#5827]: https://github.com/JuliaLang/julia/issues/5827
+[#5832]: https://github.com/JuliaLang/julia/issues/5832
+[#5936]: https://github.com/JuliaLang/julia/issues/5936
+[#5970]: https://github.com/JuliaLang/julia/issues/5970
+[#6056]: https://github.com/JuliaLang/julia/issues/6056
+[#6057]: https://github.com/JuliaLang/julia/issues/6057
+[#6073]: https://github.com/JuliaLang/julia/issues/6073
+[#6116]: https://github.com/JuliaLang/julia/issues/6116
+[#6128]: https://github.com/JuliaLang/julia/issues/6128
+[#6169]: https://github.com/JuliaLang/julia/issues/6169
+[#6179]: https://github.com/JuliaLang/julia/issues/6179
+[#6197]: https://github.com/JuliaLang/julia/issues/6197
+[#6212]: https://github.com/JuliaLang/julia/issues/6212
+[#6270]: https://github.com/JuliaLang/julia/issues/6270
+[#6273]: https://github.com/JuliaLang/julia/issues/6273
+[#6582]: https://github.com/JuliaLang/julia/issues/6582
+[#6624]: https://github.com/JuliaLang/julia/issues/6624
+[#6726]: https://github.com/JuliaLang/julia/issues/6726
+[#6769]: https://github.com/JuliaLang/julia/issues/6769
+[#6773]: https://github.com/JuliaLang/julia/issues/6773
+[#6911]: https://github.com/JuliaLang/julia/issues/6911
+[#6920]: https://github.com/JuliaLang/julia/issues/6920
+[#6929]: https://github.com/JuliaLang/julia/issues/6929
+[#6948]: https://github.com/JuliaLang/julia/issues/6948
+[#7016]: https://github.com/JuliaLang/julia/issues/7016
+[#7035]: https://github.com/JuliaLang/julia/issues/7035
+[#7047]: https://github.com/JuliaLang/julia/issues/7047
+[#7061]: https://github.com/JuliaLang/julia/issues/7061
+[#7064]: https://github.com/JuliaLang/julia/issues/7064
+[#7071]: https://github.com/JuliaLang/julia/issues/7071
+[#7094]: https://github.com/JuliaLang/julia/issues/7094
+[#7106]: https://github.com/JuliaLang/julia/issues/7106
+[#7125]: https://github.com/JuliaLang/julia/issues/7125
+[#7131]: https://github.com/JuliaLang/julia/issues/7131
+[#7146]: https://github.com/JuliaLang/julia/issues/7146
+[#7373]: https://github.com/JuliaLang/julia/issues/7373
+[#7435]: https://github.com/JuliaLang/julia/issues/7435
+[#7513]: https://github.com/JuliaLang/julia/issues/7513

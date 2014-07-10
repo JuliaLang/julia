@@ -22,13 +22,11 @@ convert(::Type{Ptr{Int8}}, s::ByteString) = convert(Ptr{Int8}, s.data)
 convert{T}(::Type{Ptr{T}}, a::Array{T}) = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
 convert(::Type{Ptr{None}}, a::Array) = ccall(:jl_array_ptr, Ptr{None}, (Any,), a)
 
-pointer{T}(::Type{T}, x::Uint) = convert(Ptr{T}, x)
-pointer{T}(::Type{T}, x::Ptr) = convert(Ptr{T}, x)
 # note: these definitions don't mean any AbstractArray is convertible to
 # pointer. they just map the array element type to the pointer type for
 # convenience in cases that work.
 pointer{T}(x::AbstractArray{T}) = convert(Ptr{T},x)
-pointer{T}(x::AbstractArray{T}, i::Integer) = convert(Ptr{T},x)+(i-1)*sizeof(T)
+pointer{T}(x::AbstractArray{T}, i::Integer) = convert(Ptr{T},x) + (i-1)*elsize(x)
 
 # unsafe pointer to array conversions
 pointer_to_array(p, d::Integer, own=false) = pointer_to_array(p, (d,), own)

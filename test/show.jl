@@ -62,6 +62,8 @@ end
 @test_repr "x^-f(y+z)"
 @test_repr "+(w-x)^-f(y+z)"
 @test_repr "w = (x = y) = z"
+@test_repr "a & b && c"
+@test_repr "a & (b && c)"
 
 # precedence tie resolution
 @test_repr "(a * b) * (c * d)"
@@ -156,3 +158,10 @@ end"""
 
     return
 end"""
+
+# issue #7188
+@test sprint(show, :foo) == ":foo"
+@test sprint(show, symbol("foo bar")) == "symbol(\"foo bar\")"
+@test sprint(show, symbol("foo \"bar")) == "symbol(\"foo \\\"bar\")"
+@test sprint(show, :+) == ":+"
+@test sprint(show, symbol("end")) == "symbol(\"end\")"

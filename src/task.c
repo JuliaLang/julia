@@ -458,14 +458,14 @@ static void init_task(jl_task_t *t)
 ptrint_t bt_data[MAX_BT_SIZE+1];
 size_t bt_size = 0;
 
-void jl_getFunctionInfo(const char **name, int *line, const char **filename, size_t pointer);
+void jl_getFunctionInfo(const char **name, int *line, const char **filename, size_t pointer, int skipC);
 
 static const char* name_unknown = "???";
-static int frame_info_from_ip(const char **func_name, int *line_num, const char **file_name, size_t ip)
+static int frame_info_from_ip(const char **func_name, int *line_num, const char **file_name, size_t ip, int skipC)
 {
     int fromC = 0;
 
-    jl_getFunctionInfo(func_name, line_num, file_name, ip);
+    jl_getFunctionInfo(func_name, line_num, file_name, ip, skipC);
     if (*func_name == NULL) {
         fromC = 1;
 #if defined(_OS_WINDOWS_)
@@ -514,24 +514,9 @@ static int frame_info_from_ip(const char **func_name, int *line_num, const char 
             jl_in_stackwalk = 0;
         }
 #else
-        Dl_info dlinfo;
-        if (dladdr((void*)ip, &dlinfo) != 0) {
-            *file_name = (dlinfo.dli_fname != NULL) ? dlinfo.dli_fname : name_unknown;
-            if (dlinfo.dli_sname != NULL) {
-                *func_name = dlinfo.dli_sname;
-                // line number in C looks tricky. addr2line and libbfd seem promising. For now, punt and just return address offset.
-                *line_num = ip-(size_t)dlinfo.dli_saddr;
-            }
-            else {
-                *func_name = name_unknown;
-                *line_num = 0;
-            }
-        }
-        else {
-            *func_name = name_unknown;
-            *file_name = name_unknown;
-            *line_num = ip;
-        }
+        *func_name = name_unknown;
+        *file_name = name_unknown;
+        *line_num = ip;
 #endif
     }
     return fromC;
@@ -662,12 +647,12 @@ DLLEXPORT jl_value_t *jl_backtrace_from_here(void)
     return (jl_value_t*)bt;
 }
 
-DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip)
+DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
 {
     const char *func_name;
     int line_num;
     const char *file_name;
-    int fromC = frame_info_from_ip(&func_name, &line_num, &file_name, (size_t)ip);
+    int fromC = frame_info_from_ip(&func_name, &line_num, &file_name, (size_t)ip, skipC);
     if (func_name != NULL) {
         jl_value_t *r = (jl_value_t*)jl_alloc_tuple(4);
         JL_GC_PUSH1(&r);
@@ -702,12 +687,13 @@ DLLEXPORT void gdblookup(ptrint_t ip)
     const char *func_name;
     int line_num;
     const char *file_name;
-    int fromC = frame_info_from_ip(&func_name, &line_num, &file_name, ip);
+#ifdef _OS_WINDOWS_
+    int fromC = frame_info_from_ip(&func_name, &line_num, &file_name, ip, 0);
+#else
+    frame_info_from_ip(&func_name, &line_num, &file_name, ip, 0);
+#endif
     if (func_name != NULL) {
-        if (fromC)
-            ios_printf(ios_stderr, "%s at %s: offset %x\n", func_name, file_name, line_num);
-        else
-            ios_printf(ios_stderr, "%s at %s:%d\n", func_name, file_name, line_num);
+        ios_printf(ios_stderr, "%s at %s:%d\n", func_name, file_name, line_num);
 #ifdef _OS_WINDOWS_
         if (fromC && func_name != name_unknown) free((void*)func_name);
         if (fromC && file_name != name_unknown) free((void*)file_name);

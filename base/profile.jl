@@ -21,6 +21,17 @@ end
 ####
 #### User-level functions
 ####
+function init(; n::Union(Nothing,Integer) = nothing, delay::Union(Nothing,Float64) = nothing)
+    n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
+    delay_cur = ccall(:jl_profile_delay_nsec, Uint64, ())/10^9
+    if n == nothing && delay == nothing
+        return int(n_cur), delay_cur
+    end
+    nnew = (n == nothing) ? n_cur : n
+    delaynew = (delay == nothing) ? delay_cur : delay
+    init(nnew, delaynew)
+end
+
 function init(n::Integer, delay::Float64)
     status = ccall(:jl_profile_init, Cint, (Csize_t, Uint64), n, iround(10^9*delay))
     if status == -1
@@ -34,7 +45,7 @@ __init__() = init(1_000_000, 0.001)
 
 clear() = ccall(:jl_profile_clear_data, Void, ())
 
-function print{T<:Unsigned}(io::IO, data::Vector{T} = fetch(), lidict::Dict = getdict(data); format = :tree, C = false, combine = true, cols = Base.tty_cols())
+function print{T<:Unsigned}(io::IO, data::Vector{T} = fetch(), lidict::Dict = getdict(data); format = :tree, C = false, combine = true, cols = Base.tty_size()[2])
     if format == :tree
         tree(io, data, lidict, C, combine, cols)
     elseif format == :flat
@@ -90,7 +101,7 @@ len_data() = convert(Int, ccall(:jl_profile_len_data, Csize_t, ()))
 maxlen_data() = convert(Int, ccall(:jl_profile_maxlen_data, Csize_t, ()))
 
 function lookup(ip::Uint)
-    info = ccall(:jl_lookup_code_address, Any, (Ptr{Void},), ip)
+    info = ccall(:jl_lookup_code_address, Any, (Ptr{Void},Cint), ip, false)
     if length(info) == 4
         return LineInfo(string(info[1]), string(info[2]), int(info[3]), info[4])
     else
@@ -101,13 +112,14 @@ end
 error_codes = (Int=>ASCIIString)[
     -1=>"cannot specify signal action for profiling",
     -2=>"cannot create the timer for profiling",
-    -3=>"cannot start the timer for profiling"]
+    -3=>"cannot start the timer for profiling",
+    -4=>"cannot unblock SIGUSR1"]
 
 function fetch()
     len = len_data()
     maxlen = maxlen_data()
     if (len == maxlen)
-        warn("The profile data buffer is full; profiling probably terminated\nbefore your program finished. To profile for longer runs, call Profile.init()\nwith a larger buffer and/or larger delay.")
+        warn("The profile data buffer is full; profiling probably terminated\nbefore your program finished. To profile for longer runs, call Profile.init\nwith a larger buffer and/or larger delay.")
     end
     pointer_to_array(get_data_pointer(), (len,))
 end

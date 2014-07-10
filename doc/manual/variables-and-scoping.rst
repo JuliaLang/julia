@@ -43,7 +43,7 @@ current scope are as follows:
 -  A function's arguments are introduced as new local variables into the
    function's body scope.
 -  An assignment ``x = y`` introduces a new local variable ``x`` only if
-   ``x`` is neither declared global nor explicitly introduced as local
+   ``x`` is neither declared global nor introduced as local
    by any enclosing scope before *or after* the current line of code.
 
 In the following example, there is only one ``x`` assigned both inside
@@ -166,6 +166,24 @@ block with the global scope, it is not necessary to declare ``global y``
 inside the loop. However, in code not entered into the interactive
 prompt this declaration would be necessary in order to modify a global
 variable.
+
+Multiple variables can be declared global using the following syntax::
+
+    function foo()
+        global x=1, y="bar", z=3
+    end
+    
+    julia> foo()
+    3
+    
+    julia> x
+    1
+    
+    julia> y
+    "bar"
+    
+    julia> z
+    3
 
 The ``let`` statement provides a different way to introduce variables.
 Unlike assignments to local variables, ``let`` statements allocate new

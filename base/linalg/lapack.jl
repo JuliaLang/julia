@@ -247,7 +247,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             chkstride1(A)
             m, n  = size(A)
             if length(tau) != min(m,n) || length(jpvt) != n throw(DimensionMismatch("geqp3!")) end
-            lda   = max(1,stride(A,2))
+            lda   = stride(A,2)
             if lda == 0 return A, tau, jpvt end # Early exit
             work  = Array($elty, 1)
             lwork = blas_int(-1)
@@ -2909,7 +2909,7 @@ for (syev, syevr, sygvd, elty) in
                 end
             end
             @assertargsok
-            @assertnonsingular
+            @assertposdef
             w, A, B
         end
     end
@@ -3058,7 +3058,7 @@ for (syev, syevr, sygvd, elty, relty) in
                 end
             end
             @assertargsok
-            @assertnonsingular
+            @assertposdef
             w, A, B
         end
     end
@@ -3664,5 +3664,37 @@ for (fn, elty) in ((:dtrttf_, :Float64),
         end
     end
 end
+
+# Solves the real Sylvester matrix equation: op(A)*X +- X*op(B) = scale*C and A and B are both upper quasi triangular.
+for (fn, elty, relty) in ((:dtrsyl_, :Float64, :Float64),
+                   (:strsyl_, :Float32, :Float32),
+                   (:ztrsyl_, :Complex128, :Float64),
+                   (:ctrsyl_, :Complex64, :Float32))
+    @eval begin
+        function trsyl!(transa::BlasChar, transb::BlasChar, A::StridedMatrix{$elty}, B::StridedMatrix{$elty}, C::StridedMatrix{$elty}, isgn::Int=1)
+            chkstride1(A, B, C)
+            m, n = chksquare(A, B)
+            lda = max(1, stride(A, 2))
+            ldb = max(1, stride(B, 2))
+            m1, n1 = size(C)
+            if m != m1 || n != n1 throw(DimensionMismatch("")) end
+            ldc = max(1, stride(C, 2))
+
+            scale = Array($relty, 1)
+            info = Array(BlasInt, 1)
+            
+            ccall(($(string(fn)), liblapack), Void, 
+                (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
+                 Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                 Ptr{$relty}, Ptr{BlasInt}),
+                &transa, &transb, &isgn, &m, &n,
+                A, &lda, B, &ldb, C, &ldc,
+                scale, info)
+            @lapackerror 
+            C, scale[1]
+        end
+    end
+end
+
 
 end # module

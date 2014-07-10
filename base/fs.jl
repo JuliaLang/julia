@@ -22,6 +22,7 @@ export File,
        unlink,
        rename,
        sendfile,
+       symlink,
        JL_O_WRONLY,
        JL_O_RDONLY,
        JL_O_RDWR,
@@ -33,6 +34,7 @@ export File,
        JL_O_SHORT_LIVED,
        JL_O_SEQUENTIAL,
        JL_O_RANDOM,
+       JL_O_NOCTTY,
        S_IRUSR, S_IWUSR, S_IXUSR, S_IRWXU,
        S_IRGRP, S_IWGRP, S_IXGRP, S_IRWXG,
        S_IROTH, S_IWOTH, S_IXOTH, S_IRWXO
@@ -147,6 +149,20 @@ function sendfile(src::String, dst::String)
         close(dst_file)
     end
 end
+
+@windows_only const UV_FS_SYMLINK_JUNCTION = 0x0002
+@non_windowsxp_only function symlink(p::String, np::String)
+    flags = 0
+    @windows_only if isdir(p); flags |= UV_FS_SYMLINK_JUNCTION; p = abspath(p); end
+    err = ccall(:jl_fs_symlink, Int32, (Ptr{Uint8}, Ptr{Uint8}, Cint), 
+                bytestring(p), bytestring(np), flags)
+    @windows_only if err < 0
+        Base.warn_once("Note: on Windows, creating file symlinks requires Administrator privileges.")
+    end
+    uv_error("symlink",err)
+end
+@windowsxp_only symlink(p::String, np::String) = 
+    error("WindowsXP does not support soft symlinks")
 
 function write(f::File, buf::Ptr{Uint8}, len::Integer, offset::Integer=-1)
     if !f.open

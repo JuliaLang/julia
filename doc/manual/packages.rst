@@ -6,7 +6,7 @@
 
 Julia has a built-in package manager for installing add-on functionality written in Julia.
 It can also install external libraries using your operating system's standard system for doing so, or by compiling from source.
-The list of registered Julia packages can be found at :ref:`available-packages`.
+The list of registered Julia packages can be found at `<http://pkg.julialang.org>`_.
 All package manager commands are found in the ``Pkg`` module, included in Julia's Base install.
 
 Package Status
@@ -331,8 +331,8 @@ This creates the directory ``~/.julia/v0.3/FooBar``, initializes it as a git rep
      src/FooBar.jl |  5 +++++
      4 files changed, 44 insertions(+)
 
-At the moment, the package manager knows about the MIT "Expat" License, indicated by ``"MIT"``, and the Simplified BSD License, indicated by ``"BSD"``.
-If you want to use a different license, you can ask us to add it to the package generator, or just pick one of these two and then modify the ``~/.julia/v0.3/PACKAGE/LICENSE.md`` file after it has been generated.
+At the moment, the package manager knows about the MIT "Expat" License, indicated by ``"MIT"``, the Simplified BSD License, indicated by ``"BSD"``, and version 2.0 of the Apache Software License, indicated by ``"ASL"``.
+If you want to use a different license, you can ask us to add it to the package generator, or just pick one of these three and then modify the ``~/.julia/v0.3/PACKAGE/LICENSE.md`` file after it has been generated.
 
 If you created a GitHub account and configured git to know about it, ``Pkg.generate`` will set an appropriate origin URL for you.
 It will also automatically generate a ``.travis.yml`` file for using the `Travis <https://travis-ci.org>`_ automated testing service.
@@ -382,10 +382,10 @@ This creates a commit in the ``~/.julia/v0.3/METADATA`` repo::
     @@ -0,0 +1 @@
     +git://github.com/StefanKarpinski/FooBar.jl.git
 
-This commit is only locally visible, however.
-In order to make it visible to the world, you need to merge your local ``METADATA`` upstream into the official repo.
-If you have push access to that repository (which we give to all package maintainers), then you can do so easily with the ``Pkg.publish()`` command, which publishes your local metadata changes.
-If you don't have push access to ``METADATA``, you'll have to make a pull request on GitHub, which is `not difficult <https://help.github.com/articles/creating-a-pull-request>`_.
+This commit is only locally visible, however.  In order to make it visible to
+the world, you need to merge your local ``METADATA`` upstream into the official
+repo.  The ``Pkg.publish()`` command will fork the ``METADATA`` repository on
+GitHub, push your changes to your fork, and open a pull request.
 
 Once the package URL for ``FooBar`` is registered in the official ``METADATA`` repo, people know where to clone the package from, but there still aren't any registered versions available.
 This means that ``Pkg.add("FooBar")`` won't work yet since it only installs official versions.
@@ -393,7 +393,7 @@ People can, however, clone the package with just ``Pkg.clone("FooBar")`` without
 Moreover, when they run ``Pkg.update()``, they will get the latest version of ``FooBar`` that you've pushed to the repo.
 This is a good way to have people test out your packages as you work on them, before they're ready for an official release.
 
-Once you are ready to make an official version your package, you can tag and register it with the ``Pkg.tag`` command::
+Once you are ready to make an official version of your package, you can tag and register it with the ``Pkg.tag`` command::
 
     julia> Pkg.tag("FooBar")
     INFO: Tagging FooBar v0.0.0
@@ -424,9 +424,10 @@ It also creates a new version entry in your local ``METADATA`` repo for ``FooBar
 The ``Pkg.tag`` command takes an optional second argument that is either an explicit version number object like ``v"0.0.1"`` or one of the symbols ``:patch``, ``:minor`` or ``:major``.
 These increment the patch, minor or major version number of your package intelligently.
 
-These changes to ``METADATA`` aren't available to anyone else until they've been included upstream.
-If you have push access to the official ``METADATA`` repo, you can use the ``Pkg.publish()`` command, which first makes sure that individual package repos have been tagged, pushes them if they haven't already been, and then pushes ``METADATA`` to the origin.
-If you don't have push access to ``METADATA``, you'll have to open a pull request for the last bit, although we're planning on automatically opening pull requests for you in the future.
+These changes to ``METADATA`` aren't available to anyone else until they've
+been included upstream.  You can use the ``Pkg.publish()`` command, which first
+makes sure that individual package repos have been tagged, pushes them if they
+haven't already been, and then opens a pull request to ``METADATA``.
 
 If there is a ``REQUIRE`` file in your package repo, it will be copied into the appropriate spot in ``METADATA`` when you tag a version.
 Package developers should make sure that the ``REQUIRE`` file in their package correctly reflects the requirements of their package, which will automatically flow into the official metadata if you're using ``Pkg.tag``.
@@ -464,7 +465,7 @@ This requirement entry::
     Distributions 0.1 0.2.5
 
 is satisfied by versions from ``0.1.0`` up to, but not including ``0.2.5``.
-If you want to indicate that any ``1.x`` version will do, you will want to write::
+If you want to indicate that any ``0.1.x`` version will do, you will want to write::
 
     Distributions 0.1 0.2-
 

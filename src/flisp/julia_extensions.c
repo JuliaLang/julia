@@ -48,39 +48,52 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_propval_t cat)
             cat == UTF8PROC_CATEGORY_SC ||  // allow currency symbols
             cat == UTF8PROC_CATEGORY_SO ||  // other symbols
 
-            // math symbol whitelist
+            // math symbol (category Sm) whitelist
             (wc >= 0x2140 && wc <= 0x2a1c &&
-             (wc == 0x2140 || wc == 0x22be ||
+             ((wc >= 0x2140 && wc <= 0x2144) || // ⅀, ⅁, ⅂, ⅃, ⅄
+              wc == 0x223f || wc == 0x22be || wc == 0x22bf || // ∿, ⊾, ⊿
+              wc == 0x22a4 || wc == 0x22a5 ||   // ⊤ ⊥
+              (wc >= 0x22ee && wc <= 0x22f1) || // ⋮, ⋯, ⋰, ⋱
 
               (wc >= 0x2202 && wc <= 0x2233 &&
-               (wc == 0x2202 || wc == 0x2206 ||
-                wc == 0x2207 || wc == 0x220f ||
-                wc == 0x2210 || wc == 0x2211 ||
-                wc == 0x221e || wc == 0x221f ||
-                wc >= 0x222b)) ||
+               (wc == 0x2202 || wc == 0x2205 || wc == 0x2206 || // ∂, ∅, ∆
+                wc == 0x2207 || wc == 0x220e || wc == 0x220f || // ∇, ∎, ∏
+                wc == 0x2210 || wc == 0x2211 || // ∐, ∑
+                wc == 0x221e || wc == 0x221f || // ∞, ∟
+                wc >= 0x222b)) || // ∫, ∬, ∭, ∮, ∯, ∰, ∱, ∲, ∳
+
+              (wc >= 0x22c0 && wc <= 0x22c3) ||  // N-ary big ops: ⋀, ⋁, ⋂, ⋃
+              (wc >= 0x25F8 && wc <= 0x25ff) ||  // ◸, ◹, ◺, ◻, ◼, ◽, ◾, ◿
 
               (wc >= 0x266f &&
-               (wc == 0x266f ||
-                (wc >= 0x29b0 && wc <= 0x29b4) ||
-                (wc >= 0x2a0a && wc <= 0x2a16) ||
-                wc == 0x2a1b || wc == 0x2a1c)))) ||
+               (wc == 0x266f || wc == 0x27d8 || wc == 0x27d9 || // ♯, ⟘, ⟙
+                (wc >= 0x27c0 && wc <= 0x27c2) ||  // ⟀, ⟁, ⟂
+                (wc >= 0x29b0 && wc <= 0x29b4) ||  // ⦰, ⦱, ⦲, ⦳, ⦴
+                (wc >= 0x2a00 && wc <= 0x2a06) ||  // ⨀, ⨁, ⨂, ⨃, ⨄, ⨅, ⨆
+                (wc >= 0x2a09 && wc <= 0x2a16) ||  // ⨉, ⨊, ⨋, ⨌, ⨍, ⨎, ⨏, ⨐, ⨑, ⨒, ⨓, ⨔, ⨕, ⨖
+                wc == 0x2a1b || wc == 0x2a1c)))) || // ⨛, ⨜
 
-            (wc >= 0x1d6c1 &&
+            (wc >= 0x1d6c1 && // variants of \nabla and \partial
              (wc == 0x1d6c1 || wc == 0x1d6db ||
               wc == 0x1d6fb || wc == 0x1d715 ||
               wc == 0x1d735 || wc == 0x1d74f ||
               wc == 0x1d76f || wc == 0x1d789 ||
               wc == 0x1d7a9 || wc == 0x1d7c3)) ||
 
+            // super- and subscript +-=()
+            (wc >= 0x207a && wc <= 0x207e) ||
+            (wc >= 0x208a && wc <= 0x208e) ||
+
             // angle symbols
-            (wc >= 0x2220 && wc <= 0x2222) ||
-            (wc >= 0x299b && wc <= 0x29af) ||
+            (wc >= 0x2220 && wc <= 0x2222) || // ∠, ∡, ∢
+            (wc >= 0x299b && wc <= 0x29af) || // ⦛, ⦜, ⦝, ⦞, ⦟, ⦠, ⦡, ⦢, ⦣, ⦤, ⦥, ⦦, ⦧, ⦨, ⦩, ⦪, ⦫, ⦬, ⦭, ⦮, ⦯
 
             // Other_ID_Start
-            wc == 0x2118 || wc == 0x212E || (wc >= 0x309B && wc <= 0x309C));
+            wc == 0x2118 || wc == 0x212E || // ℘, ℮
+            (wc >= 0x309B && wc <= 0x309C)); // katakana-hiragana sound marks
 }
 
-static int jl_id_start_char(uint32_t wc)
+DLLEXPORT int jl_id_start_char(uint32_t wc)
 {
     if ((wc >= 'A' && wc <= 'Z') || (wc >= 'a' && wc <= 'z') || wc == '_')
         return 1;
@@ -90,7 +103,7 @@ static int jl_id_start_char(uint32_t wc)
     return is_wc_cat_id_start(wc, prop->category);
 }
 
-static int jl_id_char(uint32_t wc)
+DLLEXPORT int jl_id_char(uint32_t wc)
 {
     if ((wc >= 'A' && wc <= 'Z') || (wc >= 'a' && wc <= 'z') || wc == '_' ||
         (wc >= '0' && wc <= '9') || wc == '!')

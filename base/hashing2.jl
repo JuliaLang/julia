@@ -154,16 +154,6 @@ end
 
 hash(x::Float16, h::Uint) = hash(float64(x), h)
 
-## hashing strings ##
-
-const memhash = Uint == Uint64 ? :memhash_seed : :memhash32_seed
-
-function hash{T<:ByteString}(s::Union(T,SubString{T}), h::Uint)
-    h += uint(0x71e729fd56419c81)
-    ccall(memhash, Uint, (Ptr{Uint8}, Csize_t, Uint32), pointer(s), sizeof(s), h) + h
-end
-hash(s::String, h::Uint) = hash(bytestring(s), h)
-
 ## hashing collections ##
 
 function hash(a::AbstractArray, h::Uint)
@@ -191,23 +181,22 @@ function hash(s::Set, h::Uint)
     return h
 end
 
-hash(::(), h::Uint) = h + uint(0x77cfa1eef01bca90)
-hash(x::(Any,), h::Uint)    = hash(x[1], hash((), h))
-hash(x::(Any,Any), h::Uint) = hash(x[1], hash(x[2], hash((), h)))
-hash(x::Tuple, h::Uint)     = hash(x[1], hash(x[2], hash(tupletail(x), h)))
-
-hash(r::Range{Bool}, h::Uint) = invoke(hash, (Range, Uint), r, h)
-hash(B::BitArray, h::Uint) = hash((size(B),B.chunks), h)
-hash(a::AbstractArray{Bool}, h::Uint) = hash(bitpack(a), h)
+function hash(s::IntSet, h::Uint)
+    h += uint(0x88989f1fc7dea67d)
+    h += hash(s.fill1s)
+    filln = s.fill1s ? uint32(-1) : uint32(0)
+    for x in s.bits
+        if x != filln
+            h = hash(x, h)
+        end
+    end
+    return h
+end
 
 # hashing ranges by component at worst leads to collisions for very similar ranges
-function hash{T<:Range}(r::T, h::Uint)
+function hash(r::Range, h::Uint)
     h += uint(0x80707b6821b70087)
     h = hash(first(r), h)
     h = hash(step(r), h)
     h = hash(last(r), h)
 end
-
-## hashing general objects ##
-
-hash(x::ANY,  h::Uint) = hash(object_id(x), h)

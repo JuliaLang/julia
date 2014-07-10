@@ -15,7 +15,7 @@ macro staged(fdef)
         error("@staged: expected method definition")
     end
     fname = fdef.args[1].args[1]
-    argspec = fdef.args[1].args[2:]
+    argspec = fdef.args[1].args[2:end]
     argnames = map(x->(isa(x,Expr) ? x.args[1] : x), argspec)
     qargnames = map(x->Expr(:quote,x), argnames)
     fbody = fdef.args[2]

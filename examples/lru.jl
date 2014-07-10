@@ -1,3 +1,4 @@
+module LRUExample
 # An LRU (Least Recently Used) cache is an associative data structure which
 # maintains its contents in an order such that the most recently used item
 # is at the beginning of the structure, and the least recently used at the end.
@@ -88,7 +89,7 @@ end
 function getindex(lru::LRU, key)
     item = lru.ht[key]
     idx = locate(lru.q, item)
-    delete!(lru.q, idx)
+    splice!(lru.q, idx)
     unshift!(lru.q, item)
     item.v
 end
@@ -98,7 +99,7 @@ function setindex!(lru::LRU, v, key)
         item = lru.ht[key]
         idx = locate(lru.q, item)
         item.v = v
-        delete!(lru.q, idx)
+        splice!(lru.q, idx)
     else
         item = CacheItem(key, v)
         lru.ht[key] = item
@@ -124,3 +125,5 @@ function delete!(lru::LRU, key)
     delete!(lru.ht, key)
     delete!(lru.q, idx)
 end
+
+end # module

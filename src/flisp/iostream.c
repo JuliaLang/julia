@@ -31,11 +31,8 @@ void relocate_iostream(value_t oldv, value_t newv)
 {
     ios_t *olds = value2c(ios_t*, oldv);
     ios_t *news = value2c(ios_t*, newv);
-    cvalue_t *cv = (cvalue_t*)ptr(oldv);
-    if (isinlined(cv)) {
-        if (olds->buf == &olds->local[0]) {
-            news->buf = &news->local[0];
-        }
+    if (news->buf == &olds->local[0]) {
+        news->buf = &news->local[0];
     }
 }
 

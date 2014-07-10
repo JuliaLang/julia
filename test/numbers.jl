@@ -1468,6 +1468,24 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 # issue 3412
 @test convert(Rational{Int32},0.5) === int32(1)//int32(2)
 
+# issue 6712
+@test convert(Rational{BigInt},float64(pi)) == float64(pi)
+@test convert(Rational{BigInt},big(pi)) == big(pi)
+
+@test convert(Rational,0.0) == 0
+@test convert(Rational,-0.0) == 0
+@test convert(Rational,zero(BigFloat)) == 0
+@test convert(Rational,-zero(BigFloat)) == 0
+@test convert(Rational{BigInt},0.0) == 0
+@test convert(Rational{BigInt},-0.0) == 0
+@test convert(Rational{BigInt},zero(BigFloat)) == 0
+@test convert(Rational{BigInt},-zero(BigFloat)) == 0
+@test convert(Rational{BigInt},5e-324) == 5e-324
+@test convert(Rational{BigInt},realmin(Float64)) == realmin(Float64)
+@test convert(Rational{BigInt},realmax(Float64)) == realmax(Float64)
+
+@test isa(convert(Float64, big(1)//2), Float64)
+
 # primes
 
 @test Base.primes(10000) == [
@@ -1774,3 +1792,21 @@ end
 @test widen(BigInt) === BigInt
 
 @test widemul(typemax(Int64),typemax(Int64)) == 85070591730234615847396907784232501249
+
+# .//
+@test [1,2,3] // 4 == [1//4, 2//4, 3//4]
+@test [1,2,3] .// [4,5,6] == [1//4, 2//5, 3//6]
+@test [1+2im,3+4im] .// [5,6] == [(1+2im)//5,(3+4im)//6]
+@test [1//3+2im,3+4im] .// [5,6] == [(1//3+2im)//5,(3+4im)//6]
+
+# issue #7441
+@test_throws InexactError int32(2.0^50)
+
+@test_throws InexactError iround(Uint8, 255.5)
+@test iround(Uint8, 255.4) === 0xff
+
+@test_throws InexactError iround(Int16, -32768.7)
+@test iround(Int16, -32768.1) === int16(-32768)
+
+# issue #7508
+@test_throws ErrorException reinterpret(Int, 0x01)

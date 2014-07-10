@@ -54,23 +54,27 @@ const ∪ = union
 
 intersect(s::Set) = copy(s)
 function intersect(s::Set, sets::Set...)
-    i = copy(s)
+    i = similar(s)
     for x in s
+        inall = true
         for t in sets
             if !in(x,t)
-                delete!(i,x)
+                inall = false
                 break
             end
         end
+        inall && push!(i, x)
     end
     return i
 end
 const ∩ = intersect
 
 function setdiff(a::Set, b::Set)
-    d = copy(a)
-    for x in b
-        delete!(d, x)
+    d = similar(a)
+    for x in a
+        if !(x in b)
+            push!(d, x)
+        end
     end
     d
 end
@@ -111,4 +115,12 @@ function filter!(f::Function, s::Set)
     end
     return s
 end
-filter(f::Function, s::Set) = filter!(f, copy(s))
+function filter(f::Function, s::Set)
+    u = similar(s)
+    for x in s
+        if f(x)
+            push!(u, x)
+        end
+    end
+    return u
+end

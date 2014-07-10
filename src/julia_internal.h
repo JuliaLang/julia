@@ -126,10 +126,12 @@ size_t rec_backtrace_ctx_dwarf(ptrint_t *data, size_t maxsize, bt_context_t ctx)
 #endif
 
 #ifndef _OS_WINDOWS_
-DLLEXPORT void jl_dump_linedebug_info(void);
-DLLEXPORT void jl_restore_linedebug_info(uv_lib_t* handle);
 DLLEXPORT void jl_raise_debugger(void);
 #endif
+
+// timers
+// Returns time in nanosec
+DLLEXPORT uint64_t jl_hrtime(void);
 
 #ifdef __cplusplus
 }

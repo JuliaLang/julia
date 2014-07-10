@@ -1,4 +1,5 @@
 using Base.LineEdit
+using TestHelpers
 
 a_foo = 0
 
@@ -44,6 +45,27 @@ test3_func = @eval @LineEdit.keymap $([bar_keymap, foo_keymap])
 run_test(test3_func,IOBuffer("aab"))
 @test a_bar == 2
 @test b_bar == 1
+
+## edit_move{left,right} ##
+buf = IOBuffer("a\na\na\n")
+seek(buf, 0)
+for i = 1:6
+    LineEdit.edit_move_right(buf)
+    @test position(buf) == i
+end
+@test eof(buf)
+for i = 5:0
+    LineEdit.edit_move_left(buf)
+    @test position(buf) == i
+end
+
+# skip unicode combining characters
+buf = IOBuffer("ŷ")
+seek(buf, 0)
+LineEdit.edit_move_right(buf)
+@test eof(buf)
+LineEdit.edit_move_left(buf)
+@test position(buf) == 0
 
 ## edit_move_{up,down} ##
 
@@ -116,6 +138,17 @@ LineEdit.char_move_word_left(buf)
 @test LineEdit.edit_delete_prev_word(buf)
 @test bytestring(buf.data[1:buf.size]) == "x = arg3)"
 
+# Unicode combining characters
+let buf = IOBuffer()
+    LineEdit.edit_insert(buf, "â")
+    LineEdit.edit_move_left(buf)
+    @test position(buf) == 0
+    LineEdit.edit_move_right(buf)
+    @test nb_available(buf) == 0
+    LineEdit.edit_backspace(buf)
+    @test bytestring(buf.data[1:buf.size]) == "a"
+end
+
 ## edit_transpose ##
 let buf = IOBuffer()
     LineEdit.edit_insert(buf, "abcde")
@@ -149,4 +182,46 @@ let buf = IOBuffer()
     @test bytestring(buf.data[1:buf.size]) == "βγαεδ"
     LineEdit.edit_transpose(buf)
     @test bytestring(buf.data[1:buf.size]) == "βγαδε"
+end
+
+let
+    term = TestHelpers.FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
+    s = LineEdit.init_state(term, Base.REPL.ModalInterface([Base.REPL.Prompt("test> ")]))
+    buf = LineEdit.buffer(s)
+
+    LineEdit.edit_insert(s,"first line\nsecond line\nthird line")
+    @test bytestring(buf.data[1:buf.size]) == "first line\nsecond line\nthird line"
+
+    ## edit_move_line_start/end ##
+    seek(buf, 0)
+    LineEdit.move_line_end(s)
+    @test position(buf) == sizeof("first line")
+    LineEdit.move_line_end(s) # Only move to input end on repeated keypresses
+    @test position(buf) == sizeof("first line")
+    s.key_repeats = 1 # Manually flag a repeated keypress
+    LineEdit.move_line_end(s)
+    s.key_repeats = 0
+    @test eof(buf)
+
+    seekend(buf)
+    LineEdit.move_line_start(s)
+    @test position(buf) == sizeof("first line\nsecond line\n")
+    LineEdit.move_line_start(s)
+    @test position(buf) == sizeof("first line\nsecond line\n")
+    s.key_repeats = 1 # Manually flag a repeated keypress
+    LineEdit.move_line_start(s)
+    s.key_repeats = 0
+    @test position(buf) == 0
+
+    ## edit_kill_line, edit_yank ##
+    seek(buf, 0)
+    LineEdit.edit_kill_line(s)
+    s.key_repeats = 1 # Manually flag a repeated keypress
+    LineEdit.edit_kill_line(s)
+    s.key_repeats = 0
+    @test bytestring(buf.data[1:buf.size]) == "second line\nthird line"
+    LineEdit.move_line_end(s)
+    LineEdit.edit_move_right(s)
+    LineEdit.edit_yank(s)
+    @test bytestring(buf.data[1:buf.size]) == "second line\nfirst line\nthird line"
 end

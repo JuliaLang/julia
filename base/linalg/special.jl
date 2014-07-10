@@ -4,7 +4,8 @@
 convert{T}(::Type{Bidiagonal}, A::Diagonal{T})=Bidiagonal(A.diag, zeros(T, size(A.diag,1)-1), true)
 convert{T}(::Type{SymTridiagonal}, A::Diagonal{T})=SymTridiagonal(A.diag, zeros(T, size(A.diag,1)-1))
 convert{T}(::Type{Tridiagonal}, A::Diagonal{T})=Tridiagonal(zeros(T, size(A.diag,1)-1), A.diag, zeros(T, size(A.diag,1)-1))
-convert(::Type{Triangular}, A::Union(Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal))=Triangular(full(A))
+convert(::Type{Triangular}, A::Diagonal) = Triangular(full(A), :L)
+convert(::Type{Triangular}, A::Bidiagonal) = Triangular(full(A), A.isupper ? :U : :L)
 convert(::Type{Matrix}, D::Diagonal) = diagm(D.diag)
 
 function convert(::Type{Diagonal}, A::Union(Bidiagonal, SymTridiagonal))

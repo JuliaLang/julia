@@ -36,7 +36,7 @@ copy(n::GetfieldNode) = GetfieldNode(n.value, n.name, n.typ)
 
 # copy parts of an AST that the compiler mutates
 astcopy(x::Union(SymbolNode,GetfieldNode,Expr)) = copy(x)
-astcopy(x::Array{Any,1}) = map(astcopy, x)
+astcopy(x::Array{Any,1}) = Any[astcopy(a) for a in x]
 astcopy(x) = x
 
 ==(x::Expr, y::Expr) = x.head === y.head && x.args == y.args

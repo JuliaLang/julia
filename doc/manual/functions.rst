@@ -93,7 +93,7 @@ returned::
       x + y
     end
 
-Since functions definitions can be entered into interactive sessions, it
+Since function definitions can be entered into interactive sessions, it
 is easy to compare these definitions::
 
     f(x,y) = x + y

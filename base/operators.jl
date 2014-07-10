@@ -130,6 +130,11 @@ mod1{T<:Real}(x::T, y::T) = y-mod(y-x,y)
 rem1{T<:Real}(x::T, y::T) = rem(x-1,y)+1
 fld1{T<:Real}(x::T, y::T) = fld(x-1,y)+1
 
+# transpose
+transpose(x) = x
+ctranspose(x) = conj(transpose(x))
+conj(x) = x
+
 # transposed multiply
 Ac_mul_B (a,b) = ctranspose(a)*b
 A_mul_Bc (a,b) = a*ctranspose(b)
@@ -170,7 +175,7 @@ copy(x::Union(Symbol,Number,String,Function,Tuple,LambdaStaticData,
               TopNode,QuoteNode,DataType,UnionType)) = x
 
 # function pipelining
-|>(x, f::Function) = f(x)
+|>(x, f::Callable) = f(x)
 
 # array shape rules
 
@@ -313,6 +318,39 @@ to_index(I::(Any,Any,Any,Any)) = (to_index(I[1]), to_index(I[2]), to_index(I[3])
 to_index(I::Tuple) = map(to_index, I)
 to_index(i) = error("invalid index: $i")
 
+# Addition/subtraction of ranges
+for f in (:+, :-)
+    @eval begin
+        function $f(r1::OrdinalRange, r2::OrdinalRange)
+            r1l = length(r1)
+            r1l == length(r2) || error("argument dimensions must match")
+            range($f(r1.start,r2.start), $f(step(r1),step(r2)), r1l)
+        end
+
+        function $f{T<:FloatingPoint}(r1::FloatRange{T}, r2::FloatRange{T})
+            len = r1.len
+            len == r2.len || error("argument dimensions must match")
+            divisor1, divisor2 = r1.divisor, r2.divisor
+            if divisor1 == divisor2
+                FloatRange{T}($f(r1.start,r2.start), $f(r1.step,r2.step),
+                              len, divisor1)
+            else
+                d1 = int(divisor1)
+                d2 = int(divisor2)
+                d = lcm(d1,d2)
+                s1 = div(d,d1)
+                s2 = div(d,d2)
+                FloatRange{T}($f(r1.start*s1, r2.start*s2),
+                              $f(r1.step*s1, r2.step*s2),  len, d)
+            end
+        end
+
+        $f(r1::FloatRange, r2::FloatRange) = $f(promote(r1,r2)...)
+        $f(r1::FloatRange, r2::OrdinalRange) = $f(promote(r1,r2)...)
+        $f(r1::OrdinalRange, r2::FloatRange) = $f(promote(r1,r2)...)
+    end
+end
+
 # vectorization
 
 macro vectorize_1arg(S,f)
@@ -363,7 +401,7 @@ function ifelse(c::AbstractArray{Bool}, x, y::AbstractArray)
 end
 
 # some operators not defined yet
-global //, .>>, .<<, >:, <|, |>, hcat, hvcat, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √
+global //, .>>, .<<, >:, <|, |>, hcat, hvcat, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
 
 module Operators
 
@@ -429,6 +467,7 @@ export
     ∩,
     ∪,
     √,
+    ∛,
     colon,
     hcat,
     vcat,
@@ -442,6 +481,6 @@ import Base: !, !=, $, %, .%, &, *, +, -, .!=, .+, .-, .*, ./, .<, .<=, .==, .>,
     .>=, .\, .^, /, //, <, <:, <<, <=, ==, >, >=, >>, .>>, .<<, >>>,
     <|, |>, \, ^, |, ~, !==, >:, colon, hcat, vcat, hvcat, getindex, setindex!,
     transpose, ctranspose,
-    ≥, ≤, ≠, .≥, .≤, .≠, ÷, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √
+    ≥, ≤, ≠, .≥, .≤, .≠, ÷, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
 
 end

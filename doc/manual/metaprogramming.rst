@@ -552,7 +552,7 @@ Perhaps surprisingly, these behaviors are not hard-coded into the Julia
 parser or compiler. Instead, they are custom behaviors provided by a
 general mechanism that anyone can use: prefixed string literals are
 parsed as calls to specially-named macros. For example, the regular
-expression macros is just the following::
+expression macro is just the following::
 
     macro r_str(p)
       Regex(p)
@@ -634,15 +634,15 @@ In addition to the syntax-level introspection utilized in metaprogramming,
 Julia provides several other runtime reflection capabilities.
 
 **Type fields** The names of data type fields (or module members) may be interrogated
-using the `names` command. For example, given the following type::
+using the ``names`` function. For example, given the following type::
 
 	type Point
-		x::FloatingPoint
-		y
+	  x::FloatingPoint
+	  y
 	end
 
-`names(Point)` will return the array: `Any[ :x :y ]`. Note that the type of
-each field in a `Point` is stored in the `types` field of the Point object::
+``names(Point)`` will return the array ``Any[:x, :y]``. The type of
+each field in a ``Point`` is stored in the ``types`` field of the Point object::
 
 	julia> typeof(Point)
 	DataType
@@ -650,11 +650,11 @@ each field in a `Point` is stored in the `types` field of the Point object::
 	(FloatingPoint,Any)
 
 **Subtypes** The *direct* subtypes of any DataType may be listed using
-``subtypes(t::DataType)``. For example, the abstract DataType `FloatingPoint`
+``subtypes(t::DataType)``. For example, the abstract DataType ``FloatingPoint``
 has four (concrete) subtypes::
 	
 	julia> subtypes(FloatingPoint)
-	5-element Array{Any,1}:
+	4-element Array{Any,1}:
 	 BigFloat
 	 Float16
 	 Float32

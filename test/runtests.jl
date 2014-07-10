@@ -1,14 +1,15 @@
 # linalg tests take the longest - start them off first
 testnames = [
     "linalg", "core", "keywordargs", "numbers", "strings",
-    "collections", "hashing", "remote", "iobuffer", "arrayops", "simdloop",
-    "blas", "fft", "dsp", "sparse", "bitarray", "random", "math",
+    "collections", "hashing", "remote", "iobuffer", "arrayops", "reduce", "reducedim",
+    "simdloop", "blas", "fft", "dsp", "sparse", "bitarray", "random", "math",
     "functional", "bigint", "sorting", "statistics", "spawn",
     "backtrace", "priorityqueue", "arpack", "file", "suitesparse", "version",
     "resolve", "pollfd", "mpfr", "broadcast", "complex", "socket",
     "floatapprox", "readdlm", "regex", "float16", "combinatorics",
     "sysinfo", "rounding", "ranges", "mod2pi", "euler", "show",
-    "lineedit", "replcompletions", "threading"
+    "lineedit", "replcompletions", "repl", "test", "examples", "goto",
+    "threading"
 ]
 @unix_only push!(testnames, "unicode")
 
@@ -20,7 +21,7 @@ tests = ARGS==["all"] ? testnames : ARGS
 if "linalg" in tests
     # specifically selected case
     filter!(x -> x != "linalg", tests)
-    prepend!(tests, ["linalg1", "linalg2", "linalg3"])
+    prepend!(tests, ["linalg1", "linalg2", "linalg3", "linalg4"])
 end
 
 net_required_for = ["socket", "parallel"]
@@ -35,7 +36,7 @@ end
 n = 1
 if net_on 
     n = min(8, CPU_CORES, length(tests))
-    n > 1 && addprocs(n)
+    n > 1  && addprocs(n; exeflags=`--check-bounds=yes`)
     blas_set_num_threads(1)
 else
     filter!(x -> !(x in net_required_for), tests)

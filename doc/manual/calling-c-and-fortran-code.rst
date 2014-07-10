@@ -166,7 +166,7 @@ a real address operator, it may be used with any syntax, such as
 Note that no C header files are used anywhere in the process. Currently,
 it is not possible to pass structs and other non-primitive types from
 Julia to C libraries. However, C functions that generate and use opaque
-structs types by passing around pointers to them can return such values
+struct types by passing pointers to them can return such values
 to Julia as ``Ptr{Void}``, which can then be passed to other C functions
 as ``Ptr{Void}``. Memory allocation and deallocation of such objects
 must be handled by calls to the appropriate cleanup routines in the
@@ -192,17 +192,18 @@ When a scalar value is passed with ``&`` as an argument of type
 Array conversions
 ~~~~~~~~~~~~~~~~~
 
-When an ``Array{T}`` is passed to C as a ``Ptr{T}`` or ``Ptr{Void}``
-argument, it is "converted" simply by taking the address of the first
-element. This is done in order to avoid copying arrays unnecessarily.
+When an array is passed to C as a ``Ptr{T}`` argument, it is
+never converted: Julia simply checks that the element type of the
+array matches ``T``, and the address of the first element is passed.
+This is done in order to avoid copying arrays unnecessarily.
 
 Therefore, if an ``Array`` contains data in the wrong format, it will
 have to be explicitly converted using a call such as ``int32(a)``.
 
 To pass an array ``A`` as a pointer of a different type *without*
-converting the data (for example, to pass a ``Float64`` array to a
-function that operates on uninterpreted bytes), you can either declare
-the argument as ``Ptr{Void}`` or you can explicitly call
+converting the data beforehand (for example, to pass a ``Float64`` array
+to a function that operates on uninterpreted bytes), you can either
+declare the argument as ``Ptr{Void}`` or you can explicitly call
 ``convert(Ptr{T}, pointer(A))``.
 
 
@@ -299,6 +300,13 @@ can be called via the following Julia code::
     argv = [ "a.out", "arg1", "arg2" ]
     ccall(:main, Int32, (Int32, Ptr{Ptr{Uint8}}), length(argv), argv)
 
+For ``wchar_t*`` arguments, the Julia type should be ``Ptr{Wchar_t}``,
+and data can be converted to/from ordinary Julia strings by the
+``wstring(s)`` function (equivalent to either ``utf16(s)`` or ``utf32(s)``
+depending upon the width of ``Cwchar_t``.    Note also that ASCII, UTF-8,
+UTF-16, and UTF-32 string data in Julia is internally NUL-terminated, so
+it can be passed to C functions expecting NUL-terminated data without making
+a copy.
 
 Accessing Data through a Pointer
 --------------------------------
@@ -503,15 +511,14 @@ Some C libraries execute their callbacks from a different thread, and
 since Julia isn't thread-safe you'll need to take some extra
 precautions. In particular, you'll need to set up a two-layered
 system: the C callback should only *schedule* (via Julia's event loop)
-the execution of your "real" callback. Your callback
-needs to be written to take two inputs (which you'll most likely just
-discard) and then wrapped by ``SingleAsyncWork``::
+the execution of your "real" callback. To do this, you pass a function
+of one argument (the ``AsyncWork`` object for which the event was
+triggered, which you'll probably just ignore) to ``SingleAsyncWork``::
 
-  cb_from_event_loop = (data, status) -> my_real_callback(args)
-  cb_packaged = Base.SingleAsyncWork(cb_from_event_loop)
+  cb = Base.SingleAsyncWork(data -> my_real_callback(args))
 
 The callback you pass to C should only execute a ``ccall`` to
-``:uv_async_send``, passing ``cb_packaged.handle`` as the argument.
+``:uv_async_send``, passing ``cb.handle`` as the argument.
 
 More About Callbacks
 ~~~~~~~~~~~~~~~~~~~~

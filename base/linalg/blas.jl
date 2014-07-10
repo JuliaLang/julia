@@ -6,6 +6,8 @@ export
     asum,
     axpy!,
     dot,
+    dotc,
+    dotu,
     scal!,
     scal,
     nrm2,
@@ -258,6 +260,8 @@ for (fname, elty) in ((:dgemv_,:Float64),
              #*     .. Array Arguments ..
              #      DOUBLE PRECISION A(LDA,*),X(*),Y(*)
         function gemv!(trans::BlasChar, alpha::($elty), A::StridedMatrix{$elty}, X::StridedVector{$elty}, beta::($elty), Y::StridedVector{$elty})
+            m,n = size(A)
+            length(X) == (trans == 'N' ? n : m) && length(Y) == (trans == 'N' ? m : n) || throw(DimensionMismatch(""))
             ccall(($(string(fname)),libblas), Void,
                 (Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, 
                  Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
@@ -400,7 +404,7 @@ for (fname, elty) in ((:dtrmv_,:Float64),
                 (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                  &uplo, &trans, &diag, &n, 
-                 A, &max(1,stride(A,2)), x, &1)
+                 A, &max(1,stride(A,2)), x, &max(1,stride(x, 1)))
             x
         end
         function trmv(uplo::Char, trans::Char, diag::Char, A::StridedMatrix{$elty}, x::StridedVector{$elty})

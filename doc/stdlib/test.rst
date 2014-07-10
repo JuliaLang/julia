@@ -14,6 +14,8 @@ ________
 To use the default handler, the macro :func:`@test` can be used directly::
 
   # Julia code
+  julia> using Base.Test
+  
   julia> @test 1 == 1
 
   julia> @test 1 == 0
@@ -31,20 +33,25 @@ To use the default handler, the macro :func:`@test` can be used directly::
 As seen in the examples above, failures or errors will print the abstract
 syntax tree of the expression in question.
 
-Another macro is provided to check if the given expression throws an error,
+Another macro is provided to check if the given expression throws an exception of type ``extype``,
 :func:`@test_throws`::
 
-  julia> @test_throws error("An error")
+  julia> @test_throws ErrorException error("An error")
 
-  julia> @test_throws 1 == 1
-  ERROR: test failed: :((1==1))
-   in default_handler at test.jl:20
-   in do_test_throws at test.jl:46
+  julia> @test_throws BoundsError error("An error")
+  ERROR: test failed: error("An error")
+   in error at error.jl:21
+   in default_handler at test.jl:19
+   in do_test_throws at test.jl:55
 
-  julia> @test_throws 1 != 1
-  ERROR: test failed: :((1!=1))
-   in default_handler at test.jl:20
-   in do_test_throws at test.jl:46
+  julia> @test_throws DomainError throw(DomainError())
+
+  julia> @test_throws DomainError throw(EOFError())
+  ERROR: test failed: throw(EOFError())
+   in error at error.jl:21
+   in default_handler at test.jl:19
+   in do_test_throws at test.jl:55
+
 
 As floating point comparisons can be imprecise, two additional macros exist taking in account small numerical errors::
 
@@ -110,12 +117,9 @@ ______
 
    Test the expression ``ex`` and calls the current handler to handle the result.
 
-.. function:: @test_throws(ex)
+.. function:: @test_throws(extype, ex)
 
-   Test the expression ``ex`` and calls the current handler to handle the result in the following manner:
-
-   * If the test doesn't throw an error, the ``Failure`` case is called.
-   * If the test throws an error, the ``Success`` case is called.
+   Test that the expression ``ex`` throws an exception of type ``extype`` and calls the current handler to handle the result.
 
 .. function:: @test_approx_eq(a, b)
 

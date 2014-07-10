@@ -1,6 +1,6 @@
 module Random
 
-using Base.LibRandom
+using Base.dSFMT
 
 export srand,
        rand, rand!,
@@ -198,7 +198,7 @@ function rand{T<:Integer, U<:Unsigned}(g::RandIntGen{T,U})
 end
 
 rand{T<:Union(Signed,Unsigned,Bool,Char)}(r::UnitRange{T}) = rand(RandIntGen(r))
-rand{T<:Real}(r::Range{T}) = convert(T, first(r) + rand(0:(length(r)-1)) * step(r))
+rand{T}(r::Range{T}) = convert(T, first(r) + rand(0:(length(r)-1)) * step(r))
 
 function rand!(g::RandIntGen, A::AbstractArray)
     for i = 1 : length(A)
@@ -209,7 +209,7 @@ end
 
 rand!{T<:Union(Signed,Unsigned,Bool,Char)}(r::UnitRange{T}, A::AbstractArray) = rand!(RandIntGen(r), A)
 
-function rand!{T<:Real}(r::Range{T}, A::AbstractArray)
+function rand!{T}(r::Range{T}, A::AbstractArray)
     g = RandIntGen(0:(length(r)-1))
     f = first(r)
     s = step(r)
@@ -225,7 +225,7 @@ function rand!{T<:Real}(r::Range{T}, A::AbstractArray)
     return A
 end
 
-rand{T<:Real}(r::Range{T}, dims::Dims) = rand!(r, Array(T, dims))
+rand{T}(r::Range{T}, dims::Dims) = rand!(r, Array(T, dims))
 rand(r::Range, dims::Int...) = rand(r, dims)
 
 
@@ -256,6 +256,7 @@ randn(dims::Int...) = randn!(Array(Float64, dims...))
 immutable UUID
     value::Uint128
 end
+UUID(u::String) = convert(UUID, u)
 
 function uuid4()
     u = rand(Uint128)
@@ -264,7 +265,23 @@ function uuid4()
     UUID(u)
 end
 
-function Base.convert(::Type{Vector{Uint8}}, u::UUID)
+function Base.convert(::Type{UUID}, s::String)
+    s = lowercase(s)
+
+    if !ismatch(r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$", s)
+        error(ArgumentError("Malformed UUID string"))
+    end
+
+    u = uint128(0)
+    for i in [1:8, 10:13, 15:18, 20:23, 25:36]
+        u <<= 4
+        d = s[i]-'0'
+        u |= 0xf & (d-39*(d>9))
+    end
+    return UUID(u)
+end
+
+function Base.repr(u::UUID)
     u = u.value
     a = Array(Uint8,36)
     for i = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
@@ -273,10 +290,10 @@ function Base.convert(::Type{Vector{Uint8}}, u::UUID)
         u >>= 4
     end
     a[[24,19,14,9]] = '-'
-    return a
+
+    return ASCIIString(a)
 end
 
-Base.show(io::IO, u::UUID) = write(io,convert(Vector{Uint8},u))
-Base.repr(u::UUID) = ASCIIString(convert(Vector{Uint8},u))
+Base.show(io::IO, u::UUID) = write(io, Base.repr(u))
 
 end # module

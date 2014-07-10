@@ -1,3 +1,4 @@
+module TypeTrees
 ##
 # Generate a text graphic of Julia modules type tree
 ##
@@ -112,9 +113,10 @@ end
 # TODO: option to list subtrees of type tree, or other symbol types
 const types_tree = Dict{String, TTNode}()
 
-for m = [Base, Core, Main]
+for m in (Base, Core, Main)
     store_all_from(m)
 end
 
-print_tree(types_tree)
+# print_tree(types_tree)
 
+end # module

@@ -31,12 +31,8 @@ import Base:
     start_reading,
     stop_reading,
     write,
-    writemime
-
-immutable Size
-    width
-    height
-end
+    writemime,
+    reseteof
 
 ## TextTerminal ##
 
@@ -49,6 +45,7 @@ cmove(t::TextTerminal, x, y) = error("Unimplemented")
 getX(t::TextTerminal) = error("Unimplemented")
 getY(t::TextTerminal) = error("Unimplemented")
 pos(t::TextTerminal) = (getX(t), getY(t))
+reseteof(t::TextTerminal) = nothing
 
 # Relative moves (Absolute position fallbacks)
 cmove_up(t::TextTerminal, n) = cmove(getX(t), max(1, getY(t)-n))
@@ -87,8 +84,8 @@ function writepos(t::TextTerminal, x, y, args...)
     cmove(t, x, y)
     write(t, args...)
 end
-width(t::TextTerminal) = size(t).width
-height(t::TextTerminal) = size(t).height
+width(t::TextTerminal) = size(t)[2]
+height(t::TextTerminal) = size(t)[1]
 
 # For terminals with buffers
 flush(t::TextTerminal) = nothing
@@ -117,6 +114,8 @@ type TTYTerminal <: UnixTerminal
     out_stream::Base.TTY
     err_stream::Base.TTY
 end
+
+reseteof(t::TTYTerminal) = reseteof(t.in_stream)
 
 const CSI = "\x1b["
 
@@ -155,15 +154,16 @@ disable_bracketed_paste(t::UnixTerminal) = write(t.out_stream, "$(CSI)?2004l")
 end_keypad_transmit_mode(t::UnixTerminal) = # tput rmkx
     write(t.out_stream, "$(CSI)?1l\x1b>")
 
-function size(t::TTYTerminal)
-    s = zeros(Int32, 2)
-    Base.uv_error("size (TTY)", ccall((@windows ? :jl_tty_get_winsize : :uv_tty_get_winsize),
-                                      Int32, (Ptr{Void}, Ptr{Int32}, Ptr{Int32}),
-                                      t.out_stream.handle, pointer(s,1), pointer(s,2)) != 0)
-    w,h = s[1],s[2]
-    w > 0 || (w = 80)
-    h > 0 || (h = 24)
-    Size(w,h)
+let s = zeros(Int32, 2)
+    function Base.size(t::TTYTerminal)
+        Base.uv_error("size (TTY)", ccall((@windows ? :jl_tty_get_winsize : :uv_tty_get_winsize),
+                                          Int32, (Ptr{Void}, Ptr{Int32}, Ptr{Int32}),
+                                          t.out_stream.handle, pointer(s,1), pointer(s,2)) != 0)
+        w,h = s[1],s[2]
+        w > 0 || (w = 80)
+        h > 0 || (h = 24)
+        (int(h),int(w))
+    end
 end
 
 clear(t::UnixTerminal) = write(t.out_stream, "\x1b[H\x1b[2J")

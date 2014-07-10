@@ -311,12 +311,12 @@ such an invalid byte index, an error is thrown:
 In this case, the character ``∀`` is a three-byte character, so the
 indices 2 and 3 are invalid and the next character's index is 4.
 
-Because of variable-length encodings, the number of character in a
+Because of variable-length encodings, the number of characters in a
 string (given by ``length(s)``) is not always the same as the last index.
 If you iterate through the indices 1 through ``endof(s)`` and index
-into ``s``, the sequence of characters returned, when errors aren't
-thrown, is the sequence of characters comprising the string ``s``.
-Thus, we do have the identity that ``length(s) <= endof(s)`` since each
+into ``s``, the sequence of characters returned when errors aren't
+thrown is the sequence of characters comprising the string ``s``.
+Thus we have the identity that ``length(s) <= endof(s)``, since each
 character in a string must have its own index. The following is an
 inefficient and verbose way to iterate through the characters of ``s``:
 
@@ -356,9 +356,14 @@ exception handling required:
     y
 
 UTF-8 is not the only encoding that Julia supports, and adding support
-for new encodings is quite easy, but discussion of other encodings and
-how to implement support for them is beyond the scope of this document
-for the time being. For further discussion of UTF-8 encoding issues, see
+for new encodings is quite easy.  In particular, Julia also provides
+``UTF16String`` and ``UTF32String`` types, constructed by the
+``utf16(s)`` and ``utf32(s)`` functions respectively, for UTF-16 and
+UTF-32 encodings.  It also provides aliases ``WString`` and
+``wstring(s)`` for either UTF-16 or UTF-32 strings, depending on the
+size of ``Cwchar_t``. Additional discussion of other encodings and how to
+implement support for them is beyond the scope of this document for
+the time being. For further discussion of UTF-8 encoding issues, see
 the section below on `byte array literals <#Byte+Array+Literals>`_,
 which goes into some greater detail.
 
@@ -416,7 +421,7 @@ sessions:
      3
 
     julia> "v: $v"
-    "v: 1\n2\n3\n"
+    "v: [1,2,3]"
 
 The ``string`` function is the identity for ``String`` and ``Char``
 values, so these are interpolated into strings as themselves, unquoted
@@ -594,6 +599,20 @@ text after the comment character. We could do the following:
 
     julia> m = match(r"^\s*(?:#\s*(.*?)\s*$|$)", "# a comment ")
     RegexMatch("# a comment ", 1="a comment")
+
+When calling ``match``, you have the option to specify an index at
+which to start the search. For example:
+
+.. doctest::
+
+   julia> m = match(r"[0-9]","aaaa1aaaa2aaaa3",1)
+   RegexMatch("1")
+
+   julia> m = match(r"[0-9]","aaaa1aaaa2aaaa3",6)
+   RegexMatch("2")
+
+   julia> m = match(r"[0-9]","aaaa1aaaa2aaaa3",11)
+   RegexMatch("3")
 
 You can extract the following info from a ``RegexMatch`` object:
 
@@ -812,7 +831,7 @@ pre-release/build annotations), ``v"2"`` is equivalent to ``v"2.0.0"``, and so
 on.
 
 ``VersionNumber`` objects are mostly useful to easily and correctly compare two
-(or more) versions. For example, the constant ``VERSION`` holds Julia verison
+(or more) versions. For example, the constant ``VERSION`` holds Julia version
 number as a ``VersionNumber`` object, and therefore one can define some
 version-specific behaviour using simple statements as::
 

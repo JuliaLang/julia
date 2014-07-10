@@ -352,6 +352,13 @@ DLLEXPORT int jl_profile_start_timer(void)
 {
     struct sigevent sigprof;
     struct sigaction sa;
+    sigset_t ss;
+
+    // Make sure SIGUSR1 is unblocked
+    sigemptyset(&ss);
+    sigaddset(&ss, SIGUSR1);
+    if (sigprocmask(SIG_UNBLOCK, &ss, NULL) == -1)
+        return -4;
 
     // Establish the signal handler
     memset(&sa, 0, sizeof(struct sigaction));
@@ -420,6 +427,11 @@ DLLEXPORT size_t jl_profile_len_data(void)
 DLLEXPORT size_t jl_profile_maxlen_data(void)
 {
     return bt_size_max;
+}
+
+DLLEXPORT u_int64_t jl_profile_delay_nsec(void)
+{
+    return nsecprof;
 }
 
 DLLEXPORT void jl_profile_clear_data(void)

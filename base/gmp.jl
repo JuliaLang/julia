@@ -111,6 +111,7 @@ function BigInt(x::Integer)
 end
 
 convert(::Type{BigInt}, x::Integer) = BigInt(x)
+convert(::Type{BigInt}, x::Float16) = BigInt(x)
 convert(::Type{BigInt}, x::FloatingPoint) = BigInt(x)
 
 function convert(::Type{Int64}, x::BigInt)
