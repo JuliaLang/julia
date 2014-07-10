@@ -161,6 +161,16 @@ begin
     LineEdit.accept_result(s, histp)
     @test LineEdit.mode(s) == shell_mode
     @test buffercontents(LineEdit.buffer(s)) == "ll"
+    
+    # Issue #7551
+    # Enter search mode and try accepting an empty result
+    REPL.history_reset_state(hp)
+    LineEdit.edit_clear(s)
+    cur_mode = LineEdit.mode(s)
+    LineEdit.enter_search(s, histp, true)
+    LineEdit.accept_result(s, histp)
+    @test LineEdit.mode(s) == cur_mode
+    @test buffercontents(LineEdit.buffer(s)) == ""
 end
 
 ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
