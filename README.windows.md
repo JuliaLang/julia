@@ -119,9 +119,9 @@ The 64-bit (x86_64) binary will only run on 64-bit Windows and will otherwise re
 
   3. The Julia build can (as of 2014-02-28) fail after building OpenBLAS.
   This appears (?) to be a result of the OpenBLAS build trying to run the Microsoft Visual C++ `lib.exe` tool  -- which we don't need to do -- without checking for its existence.
-    This uncaught error kills the Julia buil
-.   If this happens, follow the instructions in the helpful error message and continue the build, *viz.*
-        ```
+    This uncaught error kills the Julia build. If this happens, follow the instructions in the helpful error message and continue the build, *viz.*
+
+     ```
     cd deps/openblas-v0.2.9.rc1   # This path will depend on the version of OpenBLAS.
     make install
     cd ../..
