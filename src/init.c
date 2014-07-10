@@ -909,6 +909,7 @@ DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *
     int ret = pmain(argc, argv);
     char *build_path = jl_compileropts.build_path;
     if (build_path) {
+        jl_compile_all();
         char *build_ji;
         if (asprintf(&build_ji, "%s.ji",build_path) > 0) {
             jl_save_system_image(build_ji);

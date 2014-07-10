@@ -598,7 +598,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                                                 jl_tuple_len(ctx->sp)/2);
         }
         JL_CATCH {
-            jl_rethrow_with_add("error interpreting ccall return type");
+            //jl_rethrow_with_add("error interpreting ccall return type");
+            rt = (jl_value_t*)jl_any_type;
         }
     }
     if (jl_is_tuple(rt)) {
@@ -609,6 +610,14 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     if (rt == (jl_value_t*)jl_pointer_type)
         jl_error("ccall: return type Ptr should have an element type, Ptr{T}");
 
+    JL_TYPECHK(ccall, type, rt);
+    Type *lrt = julia_struct_to_llvm(rt);
+    if (lrt == NULL) {
+        JL_GC_POP();
+        emit_error("ccall: return type doesn't correspond to a C type", ctx);
+        return literal_pointer_val(jl_nothing);
+    }
+
     {
         JL_TRY {
             at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
@@ -616,19 +625,15 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                                                 jl_tuple_len(ctx->sp)/2);
         }
         JL_CATCH {
-            jl_rethrow_with_add("error interpreting ccall argument tuple");
+            //jl_rethrow_with_add("error interpreting ccall argument tuple");
+            emit_error("error interpreting ccall argument tuple", ctx);
+            JL_GC_POP();
+            return UndefValue::get(lrt);
         }
     }
 
-    JL_TYPECHK(ccall, type, rt);
     JL_TYPECHK(ccall, tuple, at);
     JL_TYPECHK(ccall, type, at);
-    Type *lrt = julia_struct_to_llvm(rt);
-    if (lrt == NULL) {
-        JL_GC_POP();
-        emit_error("ccall: return type doesn't correspond to a C type", ctx);
-        return literal_pointer_val(jl_nothing);
-    }
     jl_tuple_t *tt = (jl_tuple_t*)at;
     std::vector<Type *> fargt(0);
     std::vector<Type *> fargt_sig(0);

@@ -36,8 +36,7 @@ static jl_methtable_t *new_method_table(jl_sym_t *name)
     return mt;
 }
 
-static int cache_match_by_type(jl_value_t **types, size_t n, jl_tuple_t *sig,
-                               int va)
+static int cache_match_by_type(jl_value_t **types, size_t n, jl_tuple_t *sig, int va)
 {
     if (!va && n > jl_tuple_len(sig))
         return 0;
@@ -799,7 +798,32 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         return newmeth;
     }
     else {
-        newmeth = jl_instantiate_method(method, sparams);
+        if (0 /* no jit mode */) {
+            if (method->linfo->unspecialized == NULL) {
+                // not yet handled
+                JL_PRINTF(JL_STDERR,"code missing for %s", method->linfo->name->name);
+                jl_static_show(JL_STDERR, (jl_value_t*)type);
+                JL_PRINTF(JL_STDERR, "\n");
+                exit(1);
+            }
+            newmeth = method->linfo->unspecialized;
+
+            if (sparams != jl_null) {
+                temp = (jl_value_t*)jl_alloc_tuple(jl_tuple_len(sparams)/2);
+                for(i=0; i < jl_tuple_len(temp); i++) {
+                    jl_tupleset(temp, i, jl_tupleref(sparams,i*2+1));
+                }
+                temp = (jl_value_t*)jl_tuple_append((jl_tuple_t*)newmeth->env, (jl_tuple_t*)temp);
+                newmeth = jl_new_closure(newmeth->fptr, temp, newmeth->linfo);
+            }
+
+            (void)jl_method_cache_insert(mt, type, newmeth);
+            JL_GC_POP();
+            return newmeth;
+        }
+        else {
+            newmeth = jl_instantiate_method(method, sparams);
+        }
     }
     /*
       if "method" itself can ever be compiled, for example for use as
@@ -1350,6 +1374,91 @@ jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types)
         jl_compile(sf);
     }
     return sf;
+}
+
+void jl_trampoline_compile_function(jl_function_t *f, int always_infer, jl_tuple_t *sig);
+
+void jl_compile_all_defs(jl_function_t *gf)
+{
+    assert(jl_is_gf(gf));
+    jl_methtable_t *mt = jl_gf_mtable(gf);
+    if (mt->kwsorter != NULL)
+        jl_compile_all_defs(mt->kwsorter);
+    jl_methlist_t *m = mt->defs;
+    while (m != JL_NULL) {
+        if (jl_is_leaf_type((jl_value_t*)m->sig)) {
+            jl_get_specialization(gf, m->sig);
+        }
+        else if (m->func->linfo->unspecialized == NULL) {
+            jl_function_t *func = jl_instantiate_method(m->func, jl_null);
+            m->func->linfo->unspecialized = func;
+            func->linfo->specTypes = m->sig;
+            if (m->tvars != jl_null) {
+                // add static parameter names to end of closure env; compile
+                // assuming they are there. method cache will fill them in when
+                // it constructs closures for new "specializations".
+                func->linfo->ast = jl_prepare_ast(func->linfo, jl_null);
+                jl_array_t *closed = jl_lam_capt((jl_expr_t*)func->linfo->ast);
+                jl_value_t **tvs;
+                int tvarslen;
+                if (jl_is_typevar(m->tvars)) {
+                    tvs = (jl_value_t**)&m->tvars;
+                    tvarslen = 1;
+                }
+                else {
+                    tvs = &jl_t0(m->tvars);
+                    tvarslen = jl_tuple_len(m->tvars);
+                }
+                size_t i;
+                for(i=0; i < tvarslen; i++) {
+                    jl_array_t *vi = jl_alloc_cell_1d(3);
+                    jl_cellset(vi, 0, ((jl_tvar_t*)tvs[i])->name);
+                    jl_cellset(vi, 1, jl_any_type);
+                    jl_cellset(vi, 2, jl_box_long(1));
+                    jl_cell_1d_push(closed, (jl_value_t*)vi);
+                }
+            }
+            jl_trampoline_compile_function(func, 1, m->sig);
+        }
+        m = m->next;
+    }
+}
+
+static void _compile_all(jl_module_t *m, htable_t *h)
+{
+    size_t i;
+    size_t sz = m->bindings.size;
+    void **table = malloc(sz * sizeof(void*));
+    memcpy(table, m->bindings.table, sz*sizeof(void*));
+    ptrhash_put(h, m, m);
+    for(i=1; i < sz; i+=2) {
+        if (table[i] != HT_NOTFOUND) {
+            jl_binding_t *b = (jl_binding_t*)table[i];
+            if (b->value != NULL) {
+                jl_value_t *v = b->value;
+                if (jl_is_gf(v)) {
+                    jl_compile_all_defs((jl_function_t*)v);
+                }
+                else if (jl_is_datatype(v) && ((jl_function_t*)v)->fptr == jl_f_ctor_trampoline) {
+                    jl_add_constructors((jl_datatype_t*)v);
+                    jl_compile_all_defs((jl_function_t*)v);
+                }
+                else if (jl_is_module(v)) {
+                    if (!ptrhash_has(h, v)) {
+                        _compile_all((jl_module_t*)v, h);
+                    }
+                }
+            }
+        }
+    }
+    free(table);
+}
+
+void jl_compile_all()
+{
+    htable_t h;
+    htable_new(&h, 0);
+    _compile_all(jl_main_module, &h);
 }
 
 DLLEXPORT void jl_compile_hint(jl_function_t *f, jl_tuple_t *types)

@@ -523,6 +523,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)li->roots);
         jl_serialize_value(s, (jl_value_t*)li->def);
         jl_serialize_value(s, (jl_value_t*)li->capt);
+        jl_serialize_value(s, (jl_value_t*)li->unspecialized);
         // save functionObject pointers
         write_int32(s, li->functionID);
         write_int32(s, li->cFunctionID);
@@ -825,7 +826,7 @@ static jl_value_t *jl_deserialize_value_internal(ios_t *s)
         li->cFunctionObject = NULL;
         li->inInference = 0;
         li->inCompile = 0;
-        li->unspecialized = NULL;
+        li->unspecialized = (jl_function_t*)jl_deserialize_value(s);
         li->functionID = 0;
         li->cFunctionID = 0;
         int32_t cfunc_llvm, func_llvm;

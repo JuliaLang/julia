@@ -743,10 +743,8 @@ extern int jl_in_inference;
 extern int jl_boot_file_loaded;
 int jl_eval_with_compiler_p(jl_expr_t *expr, int compileloops);
 
-JL_CALLABLE(jl_trampoline)
+void jl_trampoline_compile_function(jl_function_t *f, int always_infer, jl_tuple_t *sig)
 {
-    assert(jl_is_func(F));
-    jl_function_t *f = (jl_function_t*)F;
     assert(f->linfo != NULL);
     // to run inference on all thunks. slows down loading files.
     // NOTE: if this call to inference is removed, type_annotate in inference.jl
@@ -756,8 +754,8 @@ JL_CALLABLE(jl_trampoline)
             if (!jl_is_expr(f->linfo->ast)) {
                 f->linfo->ast = jl_uncompress_ast(f->linfo, f->linfo->ast);
             }
-            if (jl_eval_with_compiler_p(jl_lam_body((jl_expr_t*)f->linfo->ast),1)) {
-                jl_type_infer(f->linfo, jl_tuple_type, f->linfo);
+            if (always_infer || jl_eval_with_compiler_p(jl_lam_body((jl_expr_t*)f->linfo->ast),1)) {
+                jl_type_infer(f->linfo, sig, f->linfo);
             }
         }
     }
@@ -769,6 +767,13 @@ JL_CALLABLE(jl_trampoline)
     if (jl_boot_file_loaded && jl_is_expr(f->linfo->ast)) {
         f->linfo->ast = jl_compress_ast(f->linfo, f->linfo->ast);
     }
+}
+
+JL_CALLABLE(jl_trampoline)
+{
+    assert(jl_is_func(F));
+    jl_function_t *f = (jl_function_t*)F;
+    jl_trampoline_compile_function(f, 0, jl_tuple_type);
     return jl_apply(f, args, nargs);
 }
 
