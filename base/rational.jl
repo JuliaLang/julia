@@ -3,10 +3,8 @@ immutable Rational{T<:Integer} <: Real
     den::T
 
     function Rational(num::T, den::T)
-        if num == 0 && den == 0
-            error("invalid rational: 0//0")
-        end
-        g = den < 0 ? -gcd(den,num) : gcd(den, num)
+        num == den == 0 && error("invalid rational: 0//0")
+        g = den < 0 ? -gcd(den, num) : gcd(den, num)
         new(div(num, g), div(den, g))
     end
 end
@@ -32,11 +30,9 @@ end
 .//(y::Number, X::AbstractArray) = reshape([ y // x for x in X ], size(X))
 
 function show(io::IO, x::Rational)
-    if isinf(x)
-        print(io, x.num > 0 ? "Inf" : "-Inf")
-    else
-        show(io, num(x)); print(io, "//"); show(io, den(x))
-    end
+    show(io, num(x))
+    print(io, "//")
+    show(io, den(x))
 end
 
 convert{T<:Integer}(::Type{Rational{T}}, x::Rational) = Rational(convert(T,x.num),convert(T,x.den))
