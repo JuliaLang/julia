@@ -564,26 +564,20 @@ LIBMNAME = libimf
 endif
 
 ifeq ($(USE_MKL), 1)
-ifeq ($(USE_BLAS64), 1)
-export MKL_INTERFACE_LAYER := ILP64
-MKLLIB = $(MKLROOT)/lib/intel64
-else
-MKLLIB = $(MKLROOT)/lib/ia32
-endif
 USE_SYSTEM_BLAS=1
 USE_SYSTEM_LAPACK=1
-LIBBLASNAME = libmkl_rt
-LIBLAPACKNAME = libmkl_rt
-MKL_LDFLAGS = -L$(MKLLIB) -lmkl_rt
-ifneq ($(strip $(MKLLIB)),)
-  ifeq ($(OS), Linux)
-    RPATH_MKL = -Wl,-rpath,$(MKLLIB)
-    RPATH     += $(RPATH_MKL)
-    MKL_LDFLAGS += $(RPATH_MKL)
-  endif
+MKLLIB = $(MKLROOT)/lib/intel64
+MKLCOMMON = -lmkl_core -lmkl_sequential -lpthread -lm
+ifeq ($(USE_BLAS64), 1)
+LIBBLASNAME = libmkl_gf_ilp64
+LIBBLAS     = -lmkl_gf_ilp64 $(MKLCOMMON)
+else
+LIBBLASNAME = libmkl_gf_lp64
+LIBBLAS     = -lmkl_gf_lp64  $(MKLCOMMON)
 endif
-LIBBLAS   = $(MKL_LDFLAGS)
-LIBLAPACK = $(MKL_LDFLAGS)
+LIBLAPACKNAME = $(LIBBLASNAME)
+LIBLAPACK     = $(LIBBLAS)
+RPATH += -Wl,-rpath,$(MKLLIB)
 endif
 
 # ATLAS
