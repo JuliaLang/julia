@@ -36,14 +36,21 @@ USE_LLVM_SHLIB = 0
 
 ## Settings for various Intel tools
 # Set to 1 to use MKL
-USE_MKL = 0
+USE_INTEL_MKL ?= 0
+# Set to 1 to use MKL FFT
+USE_INTEL_MKL_FFT ?= 0
 # Set to 1 to use Intel LIBM
-USE_INTEL_LIBM = 0
+USE_INTEL_LIBM ?= 0
 # Set to 1 to enable profiling with Intel VTune Amplifier
-USE_INTEL_JITEVENTS = 0
+USE_INTEL_JITEVENTS ?= 0
 # Set to 1 to use Intel C, C++, and FORTRAN compilers
-USEICC  = 0
-USEIFC  = 0
+USEICC  ?= 0
+USEIFC  ?= 0
+
+ifeq ($(USE_MKL), 1)
+$(warning "The julia make variable USE_MKL has been renamed to USE_INTEL_MKL")
+USE_INTEL_MKL = 1
+endif
 
 # libc++ is standard on OS X 10.9, but not for earlier releases
 USE_LIBCPP = 0
@@ -610,7 +617,7 @@ LIBM = -L$(MKLROOT)/../compiler/lib/intel64 -limf
 LIBMNAME = libimf
 endif
 
-ifeq ($(USE_MKL), 1)
+ifeq ($(USE_INTEL_MKL), 1)
 ifeq ($(USE_BLAS64), 1)
 export MKL_INTERFACE_LAYER := ILP64
 MKLLIB = $(MKLROOT)/lib/intel64
@@ -631,7 +638,10 @@ ifneq ($(strip $(MKLLIB)),)
 endif
 LIBBLAS   = $(MKL_LDFLAGS)
 LIBLAPACK = $(MKL_LDFLAGS)
-USE_SYSTEM_FFTW=1
+endif
+
+ifeq ($(USE_INTEL_MKL_FFT), 1)
+USE_SYSTEM_FFTW = 1
 LIBFFTWNAME = libmkl_rt
 LIBFFTWFNAME = libmkl_rt
 endif
