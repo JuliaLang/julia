@@ -734,13 +734,13 @@ for Ti in (:Int32,:Int64)
             CholmodSparse(ccall((@chm_nm "speye" $Ti
                                  , :libcholmod), Ptr{c_CholmodSparse{Tv,$Ti}},
                                 (Int, Int, Cint, Ptr{Uint8}),
-                                m, n, xtyp{Tv}, cmn($Ti)))
+                                m, n, xtyp(Tv), cmn($Ti)))
         end
         function chm_spzeros{Tv<:Union(Float64,Complex128)}(m::$Ti, n::$Ti, nzmax::$Ti, x::Tv)
             CholmodSparse(ccall((@chm_nm "spzeros" $Ti
                          , :libcholmod), Ptr{c_CholmodSparse{Tv,$Ti}},
-                                (Int, Int, Int, Ptr{Uint8}),
-                                m, n, nzmax, xtyp{Tv}, cmn($Ti)))
+                                (Int, Int, Int, Cint, Ptr{Uint8}),
+                                m, n, nzmax, xtyp(Tv), cmn($Ti)))
         end
 ## add chm_xtype and chm_pack
         function copy{Tv<:CHMVTypes}(L::CholmodFactor{Tv,$Ti})
