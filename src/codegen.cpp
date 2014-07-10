@@ -500,10 +500,13 @@ static Type *NoopType;
 extern "C" {
     const char *jl_cpu_string = MSTR(JULIA_TARGET_ARCH);
     int globalUnique = 0;
-    DLLEXPORT const char *jl_get_cpu_name(void)
-    {
-        return llvm::sys::getHostCPUName().data();
-    }
+}
+
+extern "C" DLLEXPORT
+jl_value_t *jl_get_cpu_name(void)
+{
+    StringRef HostCPUName = llvm::sys::getHostCPUName();
+    return jl_pchar_to_string(HostCPUName.data(), HostCPUName.size());
 }
 
 #include "cgutils.cpp"

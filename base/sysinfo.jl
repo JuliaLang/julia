@@ -6,6 +6,7 @@ export  CPU_CORES,
         ARCH,
         MACHINE,
         cpu_info,
+        cpu_name,
         cpu_summary,
         uptime,
         loadavg,
@@ -121,6 +122,8 @@ function cpu_info()
     ccall(:uv_free_cpu_info, Void, (Ptr{UV_cpu_info_t}, Int32), UVcpus[1], count[1])
     cpus
 end
+
+const cpu_name = ccall(:jl_get_cpu_name, ByteString, ())
 
 function uptime()
     uptime_ = Array(Float64,1)
