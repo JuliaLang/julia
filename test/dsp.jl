@@ -6,6 +6,14 @@ x = [1., 1., 0., 1., 1., 0., 0., 0.]
 # With ranges
 @test filt(b, 1., 1.0:10.0) == [1., 4., 10., 20., 30., 40., 50., 60., 70., 80.]
 @test filt(1.:4., 1., 1.0:10.0) == [1., 4., 10., 20., 30., 40., 50., 60., 70., 80.]
+# Across an array is the same as channel-by-channel
+@test filt(b, 1., [x 1.0:8.0]) == [filt(b, 1., x) filt(b, 1., 1.0:8.0)]
+@test filt(b, [1., -0.5], [x 1.0:8.0]) == [filt(b, [1., -0.5], x) filt(b, [1., -0.5], 1.0:8.0)]
+si = zeros(3)
+@test filt(b, 1., [x 1.0:8.0], si=si) == [filt(b, 1., x, si=si) filt(b, 1., 1.0:8.0, si=si)]
+@test si == zeros(3) # Will likely fail if/when arrayviews are implemented
+si = [zeros(3) ones(3)]
+@test filt(b, 1., [x 1.0:8.0], si=si) == [filt(b, 1., x, si=zeros(3)) filt(b, 1., 1.0:8.0, si=ones(3))]
 # With initial conditions: a lowpass 5-pole butterworth filter with W_n = 0.25,
 # and a stable initial filter condition matched to the initial value
 b = [0.003279216306360201,0.016396081531801006,0.03279216306360201,0.03279216306360201,0.016396081531801006,0.003279216306360201]
