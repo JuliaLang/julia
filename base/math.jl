@@ -292,10 +292,10 @@ function ieee754_rem_pio2(x::Float64)
     # (in other words, n might be off by a multiple of 4, or a multiple of 100)
 
     # this is just wrapping up 
-    # https://github.com/JuliaLang/openlibm/blob/master/src/e_rem_pio2.c
+    # https://github.com/JuliaLang/openspecfun/blob/master/rem_pio2/e_rem_pio2.c
 
     y = [0.0,0.0]
-    n = ccall((:__ieee754_rem_pio2, libm), Cint, (Float64,Ptr{Float64}), x, y)
+    n = ccall((:__ieee754_rem_pio2, openspecfun), Cint, (Float64,Ptr{Float64}), x, y)
     return (n,y)
 end
 

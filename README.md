@@ -271,9 +271,9 @@ To use the Intel [MKL] BLAS and LAPACK libraries, make sure that MKL version 10.
     source /path/to/mkl/bin/mklvars.sh intel64 ilp64
     export MKL_INTERFACE_LAYER=ILP64
 
-When building julia, pass the `USE_MKL=1` option to `make` or add the following line to `Make.user`.
+When building julia, pass the `USE_INTEL_MKL=1` option to `make` or add the following line to `Make.user`.
 
-    USE_MKL = 1
+    USE_INTEL_MKL = 1
 
 To rebuild a pre-built Julia source install with MKL support, delete the OpenBLAS, ARPACK, and SuiteSparse dependencies from `deps`, and run `make cleanall testall`.
 

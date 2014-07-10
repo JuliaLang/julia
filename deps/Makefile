@@ -977,7 +977,11 @@ install-lapack: $(LAPACK_OBJ_TARGET)
 ARPACK_FFLAGS = $(GFORTBLAS_FFLAGS)
 
 ifeq ($(USE_BLAS64), 1)
+ifeq ($(USEIFC),1)
+ARPACK_FFLAGS += -i8
+else
 ARPACK_FFLAGS += -fdefault-integer-8
+endif
 endif
 
 ifeq ($(OS),WINNT)
@@ -1097,7 +1101,8 @@ $(FFTW_SINGLE_SRC_TARGET): fftw-$(FFTW_VER)-single/config.status
 	$(MAKE) -C fftw-$(FFTW_VER)-single
 fftw-$(FFTW_VER)-single/checked: $(FFTW_SINGLE_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
-	$(MAKE) -C fftw-$(FFTW_VER)-single check
+#	$(MAKE) -C fftw-$(FFTW_VER)-single check
+	$(MAKE) -C fftw-$(FFTW_VER)-single
 endif
 	echo 1 > $@
 $(FFTW_SINGLE_OBJ_TARGET): $(FFTW_SINGLE_SRC_TARGET) fftw-$(FFTW_VER)-single/checked
@@ -1136,7 +1141,8 @@ $(FFTW_DOUBLE_SRC_TARGET): fftw-$(FFTW_VER)-double/config.status
 	touch -c $@
 fftw-$(FFTW_VER)-double/checked: $(FFTW_DOUBLE_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
-	$(MAKE) -C fftw-$(FFTW_VER)-double check
+#	$(MAKE) -C fftw-$(FFTW_VER)-double check
+	$(MAKE) -C fftw-$(FFTW_VER)-double
 endif
 	echo 1 > $@
 $(FFTW_DOUBLE_OBJ_TARGET): $(FFTW_DOUBLE_SRC_TARGET) fftw-$(FFTW_VER)-double/checked
