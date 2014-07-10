@@ -356,8 +356,11 @@ static Value *generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
         }
         JL_CATCH {
         }
-        if (bt == NULL || !jl_is_bitstype(bt))
-            jl_error("unbox: could not determine argument size");
+        if (bt == NULL || !jl_is_bitstype(bt)) {
+            //jl_error("unbox: could not determine argument size");
+            emit_error("unbox: could not determine argument size", ctx);
+            return UndefValue::get(T_void);
+        }
         nb = (bt==(jl_value_t*)jl_bool_type) ? 1 : jl_datatype_size(bt)*8;
     }
     Type *to = IntegerType::get(jl_LLVMContext, nb);
@@ -401,8 +404,11 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
             nb = (bt==(jl_value_t*)jl_bool_type) ? 1 : jl_datatype_size(bt)*8;
     }
 
-    if (nb == -1)
-        jl_error("box: could not determine argument size");
+    if (nb == -1) {
+        emit_error("box: could not determine argument size", ctx);
+        return UndefValue::get(jl_pvalue_llvmt);
+        //jl_error("box: could not determine argument size");
+    }
 
     if (llvmt == NULL)
         llvmt = IntegerType::get(jl_LLVMContext, nb);
