@@ -967,10 +967,6 @@ DLLEXPORT int jl_ispty(uv_pipe_t *pipe)
  
 DLLEXPORT uv_handle_type jl_uv_handle_type(uv_handle_t *handle)
 {
-#ifdef _OS_WINDOWS_
-    if (jl_ispty((uv_pipe_t*)handle))
-        return UV_TTY;
-#endif
     return handle->type;
 }
 
