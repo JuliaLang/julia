@@ -1445,7 +1445,11 @@ static jl_value_t *static_void_instance(jl_value_t *jt)
         jl_datatype_t *jb = (jl_datatype_t*)jt;
         if (jb->instance == NULL)
             jl_new_struct_uninit(jb);
-        assert(jb->instance != NULL);
+        if (jb->instance == NULL)
+            // if we can't get an instance then this was an UndefValue due
+            // to throwing an error.
+            return (jl_value_t*)jl_nothing;
+        //assert(jb->instance != NULL);
         return (jl_value_t*)jb->instance;
     }
     else if (jt == jl_typeof(jl_nothing) || jt == jl_bottom_type) {
