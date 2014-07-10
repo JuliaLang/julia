@@ -11,19 +11,21 @@ export FFTW, filt, filt!, deconv, conv, conv2, xcorr, fftshift, ifftshift,
        plan_fft, plan_bfft, plan_ifft, plan_rfft, plan_brfft, plan_irfft,
        fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!
 
-function filt{T<:Number}(b::Union(AbstractVector{T}, T), a::Union(AbstractVector{T}, T),
-                         x::AbstractArray{T}; si::AbstractArray{T}=zeros(T, max(length(a), length(b))-1))
-    filt!(Array(T, size(x)), b, a, x, si)
+_zerosi(b,a,T) = zeros(promote_type(eltype(b), eltype(a), T), max(length(a), length(b))-1)
+
+function filt{T,S}(b::Union(AbstractVector, Number), a::Union(AbstractVector, Number),
+                   x::AbstractArray{T}; si::AbstractArray{S}=_zerosi(b,a,T))
+    filt!(Array(promote_type(eltype(b), eltype(a), T, S), size(x)), b, a, x, si)
 end
 
 # in-place filtering: returns results in the out argument, which may shadow x
 # (and does so by default)
-function filt!{T<:Number}(b::Union(AbstractVector{T}, T), a::Union(AbstractVector{T}, T), x::AbstractArray{T};
-                          si::AbstractArray{T}=zeros(T, max(length(a), length(b))-1), out::AbstractArray{T}=x)
+function filt!{T}(b::Union(AbstractVector, Number), a::Union(AbstractVector, Number), x::AbstractArray{T};
+                  si::AbstractArray=_zerosi(b,a,T), out::AbstractArray=x)
     filt!(out, b, a, x, si)
 end
-function filt!{T<:Number,N}(out::AbstractArray{T}, b::Union(AbstractVector{T}, T), a::Union(AbstractVector{T}, T),
-                          x::AbstractArray{T}, si::AbstractArray{T,N})
+function filt!{S,N}(out::AbstractArray, b::Union(AbstractVector, Number), a::Union(AbstractVector, Number),
+                    x::AbstractArray, si::AbstractArray{S,N})
     isempty(b) && error("b must be non-empty")
     isempty(a) && error("a must be non-empty")
     a[1] == 0  && error("a[1] must be nonzero")
@@ -49,8 +51,8 @@ function filt!{T<:Number,N}(out::AbstractArray{T}, b::Union(AbstractVector{T}, T
         b ./= norml
     end
     # Pad the coefficients with zeros if needed
-    bs<sz   && (b = copy!(zeros(T,sz), b))
-    1<as<sz && (a = copy!(zeros(T,sz), a))
+    bs<sz   && (b = copy!(zeros(eltype(b), sz), b))
+    1<as<sz && (a = copy!(zeros(eltype(a), sz), a))
 
     initial_si = si
     for col = 1:ncols
