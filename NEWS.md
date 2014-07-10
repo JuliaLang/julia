@@ -319,6 +319,7 @@ Library improvements
 
   * New macro `@evalpoly` for efficient inline evaluation of polynomials ([#7146]).
 
+  * The signal filtering function `filt` now accepts an optional initial filter state vector. A new in-place function `filt!` is also exported. ([#7513])
 
 Build improvements
 ------------------
@@ -872,3 +873,4 @@ Too numerous to mention.
 [#7146]: https://github.com/JuliaLang/julia/issues/7146
 [#7373]: https://github.com/JuliaLang/julia/issues/7373
 [#7435]: https://github.com/JuliaLang/julia/issues/7435
+[#7513]: https://github.com/JuliaLang/julia/issues/7513
