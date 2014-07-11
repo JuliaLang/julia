@@ -566,11 +566,13 @@ DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, int32_t len)
 
 jl_typename_t *jl_new_typename(jl_sym_t *name)
 {
-    jl_typename_t *tn=(jl_typename_t*)newobj((jl_value_t*)jl_typename_type, 4);
+    jl_typename_t *tn=(jl_typename_t*)newobj((jl_value_t*)jl_typename_type, 6);
     tn->name = name;
     tn->module = jl_current_module;
     tn->primary = NULL;
     tn->cache = (jl_value_t*)jl_null;
+    tn->ctor_factory = (jl_value_t*)jl_null;
+    tn->static_ctor_factory = NULL;
     return tn;
 }
 
@@ -593,36 +595,47 @@ void jl_add_constructors(jl_datatype_t *t)
 
     jl_initialize_generic_function((jl_function_t*)t, t->name->name);
 
-    if (t->ctor_factory == (jl_value_t*)jl_nothing ||
-        t->ctor_factory == (jl_value_t*)jl_null) {
+    if (t->name->ctor_factory == (jl_value_t*)jl_nothing ||
+        t->name->ctor_factory == (jl_value_t*)jl_null) {
     }
     else {
         assert(jl_tuple_len(t->parameters) > 0);
-        if (t != (jl_datatype_t*)t->name->primary) {
+        if (t == (jl_datatype_t*)t->name->primary)
+            return;
+        jl_function_t *cfactory = NULL;
+        jl_tuple_t *env = NULL;
+        JL_GC_PUSH2(&cfactory, &env);
+        if (jl_compileropts.compile_enabled) {
             // instantiating
-            assert(jl_is_function(t->ctor_factory));
-            
+            assert(jl_is_function(t->name->ctor_factory));
             // add type's static parameters to the ctor factory
             size_t np = jl_tuple_len(t->parameters);
-            jl_tuple_t *sparams = jl_alloc_tuple_uninit(np*2);
-            jl_function_t *cfactory = NULL;
-            JL_GC_PUSH2(&sparams, &cfactory);
+            env = jl_alloc_tuple_uninit(np*2);
             for(size_t i=0; i < np; i++) {
-                jl_tupleset(sparams, i*2+0,
+                jl_tupleset(env, i*2+0,
                             jl_tupleref(((jl_datatype_t*)t->name->primary)->parameters, i));
-                jl_tupleset(sparams, i*2+1,
+                jl_tupleset(env, i*2+1,
                             jl_tupleref(t->parameters, i));
             }
-            cfactory = jl_instantiate_method((jl_function_t*)t->ctor_factory,
-                                             sparams);
+            cfactory = jl_instantiate_method((jl_function_t*)t->name->ctor_factory, env);
             cfactory->linfo->ast = jl_prepare_ast(cfactory->linfo,
                                                   cfactory->linfo->sparams);
-            
-            // call user-defined constructor factory on (type,)
-            jl_value_t *cfargs[1] = { (jl_value_t*)t };
-            jl_apply(cfactory, cfargs, 1);
-            JL_GC_POP();
         }
+        else {
+            cfactory = ((jl_datatype_t*)t)->name->static_ctor_factory;
+            if (cfactory == NULL) {
+                JL_PRINTF(JL_STDERR,"code missing for type %s\n", t->name->name);
+                exit(1);
+            }
+            // in generically-compiled case, pass static parameters via closure
+            // environment.
+            env = jl_tuple_append((jl_tuple_t*)cfactory->env, t->parameters);
+            cfactory = jl_new_closure(cfactory->fptr, (jl_value_t*)env, cfactory->linfo);
+        }
+        // call user-defined constructor factory on (type,)
+        jl_value_t *cfargs[1] = { (jl_value_t*)t };
+        jl_apply(cfactory, cfargs, 1);
+        JL_GC_POP();
     }
 }
 
@@ -713,7 +726,6 @@ jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
     t->fptr = jl_f_no_function;
     t->env = (jl_value_t*)t;
     t->linfo = NULL;
-    t->ctor_factory = (jl_value_t*)jl_null;
     t->instance = NULL;
     t->struct_decl = NULL;
     t->size = 0;
