@@ -235,6 +235,10 @@ const × = cross
 include("broadcast.jl")
 importall .Broadcast
 
+# fixed arrays
+include("fixedarrays.jl")
+using .FixedArrays
+
 # statistics
 include("statistics.jl")
 
