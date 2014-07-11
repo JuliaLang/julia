@@ -300,7 +300,6 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
     jl_serialize_value(s, dt->parameters);
     jl_serialize_value(s, dt->name);
     jl_serialize_value(s, dt->super);
-    jl_serialize_value(s, dt->ctor_factory);
     jl_serialize_value(s, dt->env);
     jl_serialize_value(s, dt->linfo);
     if (has_instance)
@@ -646,7 +645,6 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
     dt->parameters = (jl_tuple_t*)jl_deserialize_value(s);
     dt->name = (jl_typename_t*)jl_deserialize_value(s);
     dt->super = (jl_datatype_t*)jl_deserialize_value(s);
-    dt->ctor_factory = jl_deserialize_value(s);
     dt->env = jl_deserialize_value(s);
     dt->linfo = (jl_lambda_info_t*)jl_deserialize_value(s);
     if (has_instance) {
