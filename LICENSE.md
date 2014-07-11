@@ -26,7 +26,6 @@ Julia is licensed under the MIT License:
 
 External libraries, if used, include their own licenses:
 
-- [7-Zip](http://www.7-zip.org/license.txt)
 - [AMOS](http://www.netlib.org/slatec/guide)
 - [ARPACK](http://www.caam.rice.edu/software/ARPACK/RiceBSD.txt#LICENSE)
 - [ATLAS](http://math-atlas.sourceforge.net/faq.html#license)
@@ -37,7 +36,6 @@ External libraries, if used, include their own licenses:
 - [FADDEEVA](http://ab-initio.mit.edu/Faddeeva)
 - [FEMTOLISP](https://github.com/JeffBezanson/femtolisp)
 - [FFTW](http://fftw.org/doc/License-and-Copyright.html)
-- [GIT](http://git-scm.com/about/free-and-open-source)
 - [GMP](http://gmplib.org/manual/Copying.html#Copying)
 - [LAPACK](http://netlib.org/lapack/LICENSE.txt)
 - [LIBEXPAT](http://expat.cvs.sourceforge.net/viewvc/expat/expat/README)
@@ -51,3 +49,9 @@ External libraries, if used, include their own licenses:
 - [RMATH](http://www.r-project.org/Licenses/)
 - [SUITESPARSE](http://www.cise.ufl.edu/research/sparse/SuiteSparse/current/SuiteSparse/)
 - [ZLIB](http://zlib.net/zlib_license.html)
+
+Julia bundles the following as external executables on some platforms:
+
+- [7-Zip](http://www.7-zip.org/license.txt)
+- [BUSYBOX](https://github.com/rmyorston/busybox-w32/blob/master/LICENSE)
+- [GIT](http://git-scm.com/about/free-and-open-source)
