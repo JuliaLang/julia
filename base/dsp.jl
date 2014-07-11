@@ -14,18 +14,14 @@ export FFTW, filt, filt!, deconv, conv, conv2, xcorr, fftshift, ifftshift,
 _zerosi(b,a,T) = zeros(promote_type(eltype(b), eltype(a), T), max(length(a), length(b))-1)
 
 function filt{T,S}(b::Union(AbstractVector, Number), a::Union(AbstractVector, Number),
-                   x::AbstractArray{T}; si::AbstractArray{S}=_zerosi(b,a,T))
+                   x::AbstractArray{T}, si::AbstractArray{S}=_zerosi(b,a,T))
     filt!(Array(promote_type(eltype(b), eltype(a), T, S), size(x)), b, a, x, si)
 end
 
 # in-place filtering: returns results in the out argument, which may shadow x
 # (and does so by default)
-function filt!{T}(b::Union(AbstractVector, Number), a::Union(AbstractVector, Number), x::AbstractArray{T};
-                  si::AbstractArray=_zerosi(b,a,T), out::AbstractArray=x)
-    filt!(out, b, a, x, si)
-end
-function filt!{S,N}(out::AbstractArray, b::Union(AbstractVector, Number), a::Union(AbstractVector, Number),
-                    x::AbstractArray, si::AbstractArray{S,N})
+function filt!{T,S,N}(out::AbstractArray, b::Union(AbstractVector, Number), a::Union(AbstractVector, Number),
+                      x::AbstractArray{T}, si::AbstractArray{S,N}=_zerosi(b,a,T))
     isempty(b) && error("b must be non-empty")
     isempty(a) && error("a must be non-empty")
     a[1] == 0  && error("a[1] must be nonzero")
