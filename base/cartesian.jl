@@ -417,8 +417,13 @@ end
 function lreplace!(ex::Expr, sym::Symbol, val, r)
     # Curly-brace notation, which acts like parentheses
     if ex.head == :curly && length(ex.args) == 2 && isa(ex.args[1], Symbol) && endswith(string(ex.args[1]), "_")
-        excurly = lreplace!(ex.args[2], sym, val, r)
-        return symbol(string(ex.args[1])*string(exprresolve(excurly)))
+        excurly = exprresolve(lreplace!(ex.args[2], sym, val, r))
+        if isa(excurly, Number)
+            return symbol(string(ex.args[1])*string(excurly))
+        else
+            ex.args[2] = excurly
+            return ex
+        end
     end
     for i in 1:length(ex.args)
         ex.args[i] = lreplace!(ex.args[i], sym, val, r)
