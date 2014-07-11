@@ -439,7 +439,6 @@ Tweaks
 
 These are some minor points that might help in tight inner loops.
 
--  Use ``size(A,n)`` when possible instead of ``size(A)`` or ``size(A)[n]``.
 -  Avoid unnecessary arrays. For example, instead of ``sum([x,y,z])``
    use ``x+y+z``.
 -  Use ``*`` instead of raising to small integer powers, for example
