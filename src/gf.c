@@ -798,15 +798,18 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         return newmeth;
     }
     else {
-        if (0 /* no jit mode */) {
+        if (jl_compileropts.compile_enabled == 0) {
             if (method->linfo->unspecialized == NULL) {
-                // not yet handled
                 JL_PRINTF(JL_STDERR,"code missing for %s", method->linfo->name->name);
                 jl_static_show(JL_STDERR, (jl_value_t*)type);
                 JL_PRINTF(JL_STDERR, "\n");
                 exit(1);
             }
-            newmeth = method->linfo->unspecialized;
+            jl_function_t *unspec = method->linfo->unspecialized;
+            if (method->env == (jl_value_t*)jl_null)
+                newmeth = unspec;
+            else
+                newmeth = jl_new_closure(unspec->fptr, method->env, unspec->linfo);
 
             if (sparams != jl_null) {
                 temp = (jl_value_t*)jl_alloc_tuple(jl_tuple_len(sparams)/2);
@@ -1378,6 +1381,60 @@ jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types)
 
 void jl_trampoline_compile_function(jl_function_t *f, int always_infer, jl_tuple_t *sig);
 
+static void parameters_to_closureenv(jl_value_t *ast, jl_tuple_t *tvars)
+{
+    jl_array_t *closed = jl_lam_capt((jl_expr_t*)ast);
+    jl_value_t **tvs;
+    int tvarslen;
+    if (jl_is_typevar(tvars)) {
+        tvs = (jl_value_t**)&tvars;
+        tvarslen = 1;
+    }
+    else {
+        tvs = &jl_t0(tvars);
+        tvarslen = jl_tuple_len(tvars);
+    }
+    size_t i;
+    jl_array_t *vi=NULL;
+    JL_GC_PUSH1(&vi);
+    for(i=0; i < tvarslen; i++) {
+        vi = jl_alloc_cell_1d(3);
+        jl_cellset(vi, 0, ((jl_tvar_t*)tvs[i])->name);
+        jl_cellset(vi, 1, jl_any_type);
+        jl_cellset(vi, 2, jl_box_long(1));
+        jl_cell_1d_push(closed, (jl_value_t*)vi);
+    }
+    JL_GC_POP();
+}
+
+static void all_p2c(jl_value_t *ast, jl_tuple_t *tvars)
+{
+    if (jl_is_lambda_info(ast)) {
+        jl_lambda_info_t *li = (jl_lambda_info_t*)ast;
+        li->ast = jl_prepare_ast(li, jl_null);
+        parameters_to_closureenv(li->ast, tvars);
+    }
+    else if (jl_is_expr(ast)) {
+        jl_expr_t *e = (jl_expr_t*)ast;
+        for(size_t i=0; i < jl_array_len(e->args); i++)
+            all_p2c(jl_exprarg(e,i), tvars);
+    }
+}
+
+static void precompile_unspecialized(jl_function_t *func, jl_tuple_t *sig, jl_tuple_t *tvars)
+{
+    func->linfo->specTypes = sig;
+    if (tvars != jl_null) {
+        // add static parameter names to end of closure env; compile
+        // assuming they are there. method cache will fill them in when
+        // it constructs closures for new "specializations".
+        func->linfo->ast = jl_prepare_ast(func->linfo, jl_null);
+        parameters_to_closureenv(func->linfo->ast, tvars);
+        all_p2c(func->linfo->ast, tvars);
+    }
+    jl_trampoline_compile_function(func, 1, sig ? sig : jl_tuple_type);
+}
+
 void jl_compile_all_defs(jl_function_t *gf)
 {
     assert(jl_is_gf(gf));
@@ -1392,33 +1449,7 @@ void jl_compile_all_defs(jl_function_t *gf)
         else if (m->func->linfo->unspecialized == NULL) {
             jl_function_t *func = jl_instantiate_method(m->func, jl_null);
             m->func->linfo->unspecialized = func;
-            func->linfo->specTypes = m->sig;
-            if (m->tvars != jl_null) {
-                // add static parameter names to end of closure env; compile
-                // assuming they are there. method cache will fill them in when
-                // it constructs closures for new "specializations".
-                func->linfo->ast = jl_prepare_ast(func->linfo, jl_null);
-                jl_array_t *closed = jl_lam_capt((jl_expr_t*)func->linfo->ast);
-                jl_value_t **tvs;
-                int tvarslen;
-                if (jl_is_typevar(m->tvars)) {
-                    tvs = (jl_value_t**)&m->tvars;
-                    tvarslen = 1;
-                }
-                else {
-                    tvs = &jl_t0(m->tvars);
-                    tvarslen = jl_tuple_len(m->tvars);
-                }
-                size_t i;
-                for(i=0; i < tvarslen; i++) {
-                    jl_array_t *vi = jl_alloc_cell_1d(3);
-                    jl_cellset(vi, 0, ((jl_tvar_t*)tvs[i])->name);
-                    jl_cellset(vi, 1, jl_any_type);
-                    jl_cellset(vi, 2, jl_box_long(1));
-                    jl_cell_1d_push(closed, (jl_value_t*)vi);
-                }
-            }
-            jl_trampoline_compile_function(func, 1, m->sig);
+            precompile_unspecialized(func, m->sig, m->tvars);
         }
         m = m->next;
     }
@@ -1436,11 +1467,20 @@ static void _compile_all(jl_module_t *m, htable_t *h)
             jl_binding_t *b = (jl_binding_t*)table[i];
             if (b->value != NULL) {
                 jl_value_t *v = b->value;
-                if (jl_is_gf(v)) {
-                    jl_compile_all_defs((jl_function_t*)v);
+                if (jl_is_datatype(v)) {
+                    jl_datatype_t *dt = (jl_datatype_t*)v;
+                    if (dt->fptr == jl_f_ctor_trampoline) {
+                        jl_add_constructors(dt);
+                        jl_compile_all_defs((jl_function_t*)dt);
+                    }
+                    if (v == dt->name->primary && dt->parameters != jl_null &&
+                        jl_is_function(dt->name->ctor_factory) &&
+                        dt->name->static_ctor_factory == NULL) {
+                        dt->name->static_ctor_factory = jl_instantiate_method((jl_function_t*)dt->name->ctor_factory, jl_null);
+                        precompile_unspecialized(dt->name->static_ctor_factory, NULL, dt->parameters);
+                    }
                 }
-                else if (jl_is_datatype(v) && ((jl_function_t*)v)->fptr == jl_f_ctor_trampoline) {
-                    jl_add_constructors((jl_datatype_t*)v);
+                if (jl_is_gf(v)) {
                     jl_compile_all_defs((jl_function_t*)v);
                 }
                 else if (jl_is_module(v)) {
@@ -1452,9 +1492,21 @@ static void _compile_all(jl_module_t *m, htable_t *h)
         }
     }
     free(table);
+
+    if (m->constant_table != NULL) {
+        for(i=0; i < jl_array_len(m->constant_table); i++) {
+            jl_value_t *el = jl_cellref(m->constant_table,i);
+            if (jl_is_lambda_info(el)) {
+                jl_lambda_info_t *li = (jl_lambda_info_t*)el;
+                jl_function_t *func = jl_new_closure(li->fptr, (jl_value_t*)jl_null, li);
+                li->unspecialized = func;
+                precompile_unspecialized(func, NULL, jl_null);
+            }
+        }
+    }
 }
 
-void jl_compile_all()
+void jl_compile_all(void)
 {
     htable_t h;
     htable_new(&h, 0);

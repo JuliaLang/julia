@@ -188,6 +188,9 @@ typedef struct {
     // not the original.
     jl_value_t *primary;
     jl_value_t *cache;
+    // to create a set of constructors for this sort of type
+    jl_value_t *ctor_factory;
+    jl_function_t *static_ctor_factory;
 } jl_typename_t;
 
 typedef struct {
@@ -209,8 +212,6 @@ typedef struct _jl_datatype_t {
     jl_tuple_t *parameters;
     jl_tuple_t *names;
     jl_tuple_t *types;
-    // to create a set of constructors for this sort of type
-    jl_value_t *ctor_factory;
     jl_value_t *instance;  // for singletons
     int32_t size;
     uint8_t abstract;
@@ -1323,6 +1324,7 @@ typedef struct {
     int8_t malloc_log;
     int8_t check_bounds;
     int int_literals;
+    int8_t compile_enabled;
 } jl_compileropts_t;
 
 extern DLLEXPORT jl_compileropts_t jl_compileropts;
@@ -1335,6 +1337,10 @@ extern DLLEXPORT jl_compileropts_t jl_compileropts;
 #define JL_COMPILEROPT_CHECK_BOUNDS_DEFAULT 0
 #define JL_COMPILEROPT_CHECK_BOUNDS_ON 1
 #define JL_COMPILEROPT_CHECK_BOUNDS_OFF 2
+#define JL_COMPILEROPT_COMPILE_DEFAULT 1
+#define JL_COMPILEROPT_COMPILE_OFF 0
+#define JL_COMPILEROPT_COMPILE_ON  1
+#define JL_COMPILEROPT_COMPILE_ALL 2
 
 #ifdef __cplusplus
 }

@@ -2107,11 +2107,8 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 break;
         }
         if (i > nargs) {
-            jl_value_t *ty =
-                jl_interpret_toplevel_expr_in(ctx->module, expr,
-                                              &jl_tupleref(ctx->sp,0),
-                                              jl_tuple_len(ctx->sp)/2);
-            if (jl_is_leaf_type(ty)) {
+            jl_value_t *ty = static_eval(expr, ctx, true, true);
+            if (ty!=NULL && jl_is_leaf_type(ty)) {
                 if (jl_has_typevars(ty)) {
                     // add root for types not cached. issue #7065
                     jl_add_linfo_root(ctx->linfo, ty);
