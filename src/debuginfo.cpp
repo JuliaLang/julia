@@ -664,7 +664,7 @@ extern "C" DLLEXPORT void jl_clear_malloc_data(void)
 
 extern "C" void jl_write_malloc_log(void)
 {
-    write_log_data(mallocData, ".mlc");
+    write_log_data(mallocData, ".mem");
 }
 
 void show_execution_point(char *filename, int lno)
