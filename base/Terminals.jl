@@ -128,7 +128,7 @@ cmove_line_down(t::UnixTerminal, n) = (cmove_down(t, n); cmove_col(t, 0))
 cmove_col(t::UnixTerminal, n) = write(t.out_stream, "$(CSI)$(n)G")
 
 @windows_only begin
-    ispty(s::TTY) = s.ispty
+    ispty(s::Base.TTY) = s.ispty
     ispty(s) = false
 end
 @windows ? begin
