@@ -58,9 +58,11 @@ First, acquire the source code by cloning the git repository:
 
     git clone git://github.com/JuliaLang/julia.git
 
-If you are behind a firewall and you need to use the https protocol instead of the git protocol:
+(If you are behind a firewall, you may need to use the `https` protocol instead of the `git` protocol:
 
     git config --global url."https://".insteadOf git://
+
+Be sure to also configure your system to use the appropriate proxy settings, e.g. by setting the `https_proxy` and `http_proxy` variables.)
 
 Next, enter the `julia/` directory and run `make` to build the `julia` executable. To perform a parallel build, use `make -j N` and supply the maximum number of concurrent processes.
 When compiled the first time, it will automatically download and build its [external dependencies](#Required-Build-Tools-External-Libraries).
