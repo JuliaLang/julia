@@ -3428,21 +3428,28 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         assert(CU.Verify());
         #endif
 
+        DICompositeType subrty = dbuilder.createSubroutineType(fil,EltTypeArray);
+
         fil = dbuilder.createFile(filename, ".");
         #ifndef LLVM34
         SP = dbuilder.createFunction((DIDescriptor)dbuilder.getCU(),
         #else 
         SP = dbuilder.createFunction(CU,
         #endif
-                                      dbgFuncName, f->getName(),
-                                      fil,
-                                      0,
-                                      dbuilder.createSubroutineType(fil,EltTypeArray),
-                                      false, true,
-                                      0, true, f);
+                                    dbgFuncName,  // Name
+                                    f->getName(), // LinkageName
+                                    fil,          // File
+                                    0,            // LineNo
+                                    subrty,       // Ty
+                                    false,        // isLocalToUnit
+                                    true,         // isDefinition
+                                    0,            // ScopeLine
+                                    0,            // Flags
+                                    true,         // isOptimized
+                                    f);           // Fn
         // set initial line number
         builder.SetCurrentDebugLocation(DebugLoc::get(lno, 0, (MDNode*)SP, NULL));
-        assert(SP.Verify() && SP.describes(f));
+        assert(SP.Verify() && SP.describes(f) && SP.getFunction() == f);
     }
 
     Value *fArg=NULL, *argArray=NULL, *argCount=NULL;
@@ -4463,6 +4470,9 @@ extern "C" void jl_init_codegen(void)
             MAttrs);
     assert(jl_TargetMachine);
     jl_ExecutionEngine = eb.create(jl_TargetMachine);
+#ifdef LLVM35
+    jl_ExecutionEngine->setProcessAllSections(true);
+#endif
 #endif // LLVM VERSION
     jl_ExecutionEngine->DisableLazyCompilation();
     mbuilder = new MDBuilder(getGlobalContext());
