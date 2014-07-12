@@ -980,20 +980,6 @@ DLLEXPORT int jl_tty_set_mode(uv_tty_t *handle, int mode)
     return uv_tty_set_mode(handle, mode);
 }
 
-DLLEXPORT int jl_tty_get_winsize(uv_tty_t* handle, int* width, int* height)
-{
-#ifdef _OS_WINDOWS_
-    if (jl_ispty((uv_pipe_t*)handle)) {
-        //TODO: query for size: `\e[18` returns `\e[4;height;width;t`
-        *width=80;
-        *height=24;
-        return 0;
-    }
-#endif
-    if (handle->type != UV_TTY) return UV_ENOTSUP;
-    return uv_tty_get_winsize(handle, width, height);
-}
-
 DLLEXPORT uv_file jl_uv_file_handle(jl_uv_file_t *f)
 {
     return f->file;

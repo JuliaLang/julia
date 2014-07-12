@@ -181,13 +181,18 @@ type TTY <: AsyncStream
     readnotify::Condition
     closecb::Callback
     closenotify::Condition
-    TTY(handle) = new(
-        handle,
-        StatusUninit,
-        true,
-        PipeBuffer(),
-        false,Condition(),
-        false,Condition())
+    @windows_only ispty::Bool
+    function TTY(handle)
+        tty = new(
+            handle,
+            StatusUninit,
+            true,
+            PipeBuffer(),
+            false,Condition(),
+            false,Condition())
+        @windows_only tty.ispty = bool(ccall(:jl_ispty, Cint, (Ptr{Void},), handle))
+        tty
+    end
 end
 
 function TTY(fd::RawFD; readable::Bool = false)
