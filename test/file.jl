@@ -28,10 +28,9 @@ end
 @test !islink(file)
 @test isreadable(file)
 @test iswritable(file)
-# Here's something else that might be UNIX-specific?
-run(`chmod -w $file`)
+chmod(file, filemode(file) & 0o7555)
 @test !iswritable(file)
-run(`chmod +w $file`)
+chmod(file, filemode(file) | 0o222)
 @test !isexecutable(file)
 @test filesize(file) == 0
 # On windows the filesize of a folder is the accumulation of all the contained
