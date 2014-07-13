@@ -825,6 +825,9 @@ for N = int_types, D = int_types
     @test typeof(convert(N,2)//convert(D,3)) <: Rational{T}
 end
 
+# issue #7564
+@test typeof(convert(Rational{Integer},1)) === Rational{Integer}
+
 # check type of constructed complexes
 real_types = {Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Float32, Float64,
               Rational{Int8}, Rational{Uint8}, Rational{Int16}, Rational{Uint16},
