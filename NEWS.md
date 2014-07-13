@@ -321,6 +321,8 @@ Library improvements
 
   * The signal filtering function `filt` now accepts an optional initial filter state vector. A new in-place function `filt!` is also exported. ([#7513])
 
+  * Significantly faster `cumsum` and `cumprod`. ([#7359])
+
 Build improvements
 ------------------
 
@@ -354,7 +356,8 @@ Deprecated or removed
 
   * `factorize!` is deprecated in favor of `factorize`. ([#5526])
 
-  * `nnz` counts the number of structural nonzeros in a sparse matrix. Use `countnz` for the actual number of nonzeros. ([#6769])
+  * `nnz` counts the number of structural nonzeros in a sparse
+    matrix. Use `countnz` for the actual number of nonzeros. ([#6769])
 
   * `setfield` is renamed `setfield!` ([#5748])
 
@@ -873,6 +876,7 @@ Too numerous to mention.
 [#7125]: https://github.com/JuliaLang/julia/issues/7125
 [#7131]: https://github.com/JuliaLang/julia/issues/7131
 [#7146]: https://github.com/JuliaLang/julia/issues/7146
+[#7359]: https://github.com/JuliaLang/julia/issues/7359
 [#7373]: https://github.com/JuliaLang/julia/issues/7373
 [#7390]: https://github.com/JuliaLang/julia/issues/7390
 [#7435]: https://github.com/JuliaLang/julia/issues/7435
