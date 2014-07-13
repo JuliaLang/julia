@@ -834,14 +834,17 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
       to some slow compiled code instead of jl_trampoline, meaning our
       type-inferred code would never get compiled. this can be fixed with
       the commented-out snippet below.
+
+      NOTE: this is now needed when we start with a system image compiled
+      with --compile=all.
     */
+    /*
     assert(!(newmeth->linfo && newmeth->linfo->ast) ||
            newmeth->fptr == &jl_trampoline);
-    /*
+    */
     if (newmeth->linfo&&newmeth->linfo->ast&&newmeth->fptr!=&jl_trampoline) {
         newmeth->fptr = &jl_trampoline;
     }
-    */
 
     (void)jl_method_cache_insert(mt, type, newmeth);
 
