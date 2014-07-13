@@ -682,9 +682,10 @@
 ("Base","esc","esc(e::ANY)
 
    Only valid in the context of an Expr returned from a macro.
-   Prevents the macro hygine pass from turning embedded variables into
-   gensym variables. See the *Macros* section of the Metaprogramming
-   chapter of the manual for more details and examples.
+   Prevents the macro hygiene pass from turning embedded variables
+   into gensym variables. See the *Macros* section of the
+   Metaprogramming chapter of the manual for more details and
+   examples.
 
 "),
 
@@ -2337,6 +2338,42 @@
 
 "),
 
+("Base","mark","mark(s)
+
+   Add a mark at the current position of stream \"s\".  Returns the
+   marked position.
+
+   See also \"unmark()\", \"reset()\", \"ismarked()\"
+
+"),
+
+("Base","unmark","unmark(s)
+
+   Remove a mark from stream \"s\". Returns \"true\" if the stream was
+   marked, \"false\" otherwise.
+
+   See also \"mark()\", \"reset()\", \"ismarked()\"
+
+"),
+
+("Base","reset","reset(s)
+
+   Reset a stream \"s\" to a previously marked position, and remove
+   the mark. Returns the previously marked position. Throws an error
+   if the stream is not marked.
+
+   See also \"mark()\", \"unmark()\", \"ismarked()\"
+
+"),
+
+("Base","ismarked","ismarked(s)
+
+   Returns true if stream \"s\" is marked.
+
+   See also \"mark()\", \"unmark()\", \"reset()\"
+
+"),
+
 ("Base","eof","eof(stream) -> Bool
 
    Tests whether an I/O stream is at end-of-file. If the stream is not
@@ -2626,7 +2663,7 @@
    | 04   | Read Permission       |
    +------+-----------------------+
 
-   For allowed arguments, see the stat method.
+   For allowed arguments, see \"stat\".
 
 "),
 
@@ -3462,9 +3499,11 @@ popdisplay(d::Display)
 
 "),
 
-("Base","rationalize","rationalize([Type], x)
+("Base","rationalize","rationalize([Type=Int], x; tol=eps(x))
 
-   Approximate the number x as a rational fraction
+   Approximate floating point number \"x\" as a Rational number with
+   components of the given integer type. The result will differ from
+   \"x\" by no more than \"tol\".
 
 "),
 
@@ -3517,6 +3556,12 @@ popdisplay(d::Display)
 
    Construct a range by length, given a starting value and optional
    step (defaults to 1).
+
+"),
+
+("Base","linrange","linrange(start, end, length)
+
+   Construct a range by length, given a starting and ending value.
 
 "),
 
@@ -4724,7 +4769,7 @@ popdisplay(d::Display)
 
 "),
 
-("Base","besselk","besselk(nu, x)
+("Base","besselkx","besselkx(nu, x)
 
    Scaled modified Bessel function of the second kind of order \"nu\",
    K_\\nu(x) e^x.
@@ -5185,15 +5230,15 @@ popdisplay(d::Display)
 
 ("Base","inf","inf(f)
 
-   Returns infinity in the same floating point type as \"f\" (or \"f\"
-   can by the type itself)
+   Returns positive infinity of the floating point type \"f\" or of
+   the same floating point type as \"f\"
 
 "),
 
 ("Base","nan","nan(f)
 
-   Returns NaN in the same floating point type as \"f\" (or \"f\" can
-   by the type itself)
+   Returns NaN (not-a-number) of the floating point type \"f\" or of
+   the same floating point type as \"f\"
 
 "),
 
@@ -5665,7 +5710,8 @@ popdisplay(d::Display)
 ("Base","linspace","linspace(start, stop, n)
 
    Construct a vector of \"n\" linearly-spaced elements from \"start\"
-   to \"stop\".
+   to \"stop\". See also: \"linrange()\" that constructs a range
+   object.
 
 "),
 
@@ -6753,9 +6799,18 @@ popdisplay(d::Display)
 
 "),
 
-("Base","filt","filt(b, a, x)
+("Base","filt","filt(b, a, x[, si])
 
-   Apply filter described by vectors \"a\" and \"b\" to vector \"x\".
+   Apply filter described by vectors \"a\" and \"b\" to vector \"x\",
+   with an optional initial filter state vector \"si\" (defaults to
+   zeros).
+
+"),
+
+("Base","filt!","filt!(out, b, a, x[, si])
+
+   Same as \"filt()\" but writes the result into the \"out\" argument,
+   which may alias the input \"x\" to modify it in-place.
 
 "),
 
@@ -7463,6 +7518,15 @@ popdisplay(d::Display)
    Create all directories in the given \"path\", with permissions
    \"mode\". \"mode\" defaults to 0o777, modified by the current file
    creation mask.
+
+"),
+
+("Base","symlink","symlink(target, link)
+
+   Creates a symbolic link to \"target\" with the name \"link\".
+
+   Note: This function raises an error under operating systems that do not
+     support soft symbolic links, such as Windows XP.
 
 "),
 
@@ -9780,6 +9844,23 @@ popdisplay(d::Display)
 
 "),
 
+("Base","lyap","lyap(A, C)
+
+   Computes the solution \"X\" to the continuous Lyapunov equation
+   \"AX + XA' + C = 0\", where no eigenvalue of \"A\" has a zero real
+   part and no two eigenvalues are negative complex conjugates of each
+   other.
+
+"),
+
+("Base","sylvester","sylvester(A, B, C)
+
+   Computes the solution \"X\" to the Sylvester equation \"AX + XB + C
+   = 0\", where \"A\", \"B\" and \"C\" have compatible dimensions and
+   \"A\" and \"-B\" have no eigenvalues with equal real part.
+
+"),
+
 ("Base","issym","issym(A) -> Bool
 
    Test whether a matrix is symmetric.
@@ -10397,10 +10478,10 @@ popdisplay(d::Display)
 
 ("Base.Pkg","build","build(pkgs...)
 
-   Run the build scripts for each package in \"pkgs\" and all of their
-   dependencies in depth-first recursive order. This is called
-   automatically by \"Pkg.resolve()\" on all installed or updated
-   packages.
+   Run the build script in \"deps/build.jl\" for each package in
+   \"pkgs\" and all of their dependencies in depth-first recursive
+   order. This is called automatically by \"Pkg.resolve()\" on all
+   installed or updated packages.
 
 "),
 
@@ -10494,13 +10575,15 @@ popdisplay(d::Display)
 
 "),
 
-("Base.Profile","init","init(n::Integer, delay::Float64)
+("Base.Profile","init","init(; n::Integer, delay::Float64)
 
    Configure the \"delay\" between backtraces (measured in seconds),
    and the number \"n\" of instruction pointers that may be stored.
    Each instruction pointer corresponds to a single line of code;
    backtraces generally consist of a long list of instruction
-   pointers. Default settings are \"n=10^6\" and \"delay=0.001\".
+   pointers. Default settings can be obtained by calling this function
+   with no arguments, and each can be set independently using keywords
+   or in the order \"(n, delay)\".
 
 "),
 
