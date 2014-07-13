@@ -5563,7 +5563,8 @@ popdisplay(d::Display)
 
    Counts the number of nonzero values in array A (dense or sparse).
    Note that this is not a constant-time operation. For sparse
-   matrices, one should usually use \"nfilled\" instead.
+   matrices, one should usually use \"nnz\", which returns the number
+   of stored values.
 
 "),
 
@@ -10780,10 +10781,9 @@ popdisplay(d::Display)
 
 "),
 
-("Base","nfilled","nfilled(A)
+("Base","nnz","nnz(A)
 
    Returns the number of stored (filled) elements in a sparse matrix.
-   For dense arrays, this returns the length of the array.
 
 "),
 
