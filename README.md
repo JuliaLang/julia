@@ -268,10 +268,20 @@ SuiteSparse is a special case, since it is typically only installed as a static 
 
 ### Intel Math Kernel Libraries
 
-To use the Intel [MKL] BLAS and LAPACK libraries, make sure that MKL version 10.3.6 or higher is installed. For a 64-bit architecture, the MKL environment should be set up as:
+To use the Intel [MKL] BLAS and LAPACK libraries, make sure that MKL version 10.3.6 or higher is installed. Setting environment variables is required for proper function.  Depending on what shell your operating system uses, (BASH/DASH/CSH/TCSH) different syntax may be required for setting up the proper MKL environment. In a UNIX environment, the following commands can be placed in the `.profile`, `.bashrc` or `.bash_profile` files in your home folder. An exception to the terminal window guidelines is Mac OS X’s Terminal.app, which runs a login shell by default for each new terminal window, calling `.bash_profile`. If you do not know what shell type you are using, you can type "echo $SHELL" at the prompt.
 
-    source /path/to/mkl/bin/mklvars.sh intel64 ilp64
+For a 64-bit architecture, using BASH, the MKL environment should be set up as follows:
+1) open the appropriate shell environment initialization file
+2) paste the following and then save
+
+    MKLPATH=path/to/your/mkl/folder *usually '/opt/intel/mkl'
+    source ${MKLPATH}/bin/mklvars.sh intel64 ilp64
     export MKL_INTERFACE_LAYER=ILP64
+    
+source is a bash shell built-in command that executes the content of the file passed as argument.
+export is a bash shell built-in command that allows variables to be available to other programs.
+
+3) open your terminal window and the environment should be set.
 
 When building julia, pass the `USE_INTEL_MKL=1` option to `make` or add the following line to `Make.user`.
 
