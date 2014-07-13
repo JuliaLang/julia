@@ -317,7 +317,7 @@ static Value *auto_unbox(jl_value_t *x, jl_codectx_t *ctx)
 }
 
 // figure out how many bits a bitstype has at compile time, or -1
-static int try_to_determine_bitstype_nbits(jl_value_t *targ, jl_codectx_t *ctx)
+int try_to_determine_bitstype_nbits(jl_value_t *targ, jl_codectx_t *ctx)
 {
     jl_value_t *et = expr_type(targ, ctx);
     if (jl_is_type_type(et)) {
