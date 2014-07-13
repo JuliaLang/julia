@@ -563,8 +563,8 @@ for Ti in (:Int32,:Int64)
         end
         function CholmodSparse{Tv<:CHMVTypes}(D::CholmodDense{Tv},i::$Ti)
             CholmodSparse(ccall((@chm_nm "dense_to_sparse" $Ti
-                                 ,:libcholmod), Ptr{c_CholmodSparse{Tv,Ti}},
-                                (Ptr{c_CholmodDense{Tv,Ti}},Ptr{Uint8}),
+                                 ,:libcholmod), Ptr{c_CholmodSparse{Tv,$Ti}},
+                                (Ptr{c_CholmodDense{Tv,$Ti}},Ptr{Uint8}),
                                 &D.c,cmn($Ti)))
         end
         function CholmodSparse{Tv<:CHMVTypes}(L::CholmodFactor{Tv,$Ti})
