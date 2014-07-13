@@ -38,6 +38,13 @@ debug release: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/ju
 	@export private_libdir=$(private_libdir) && \
 	$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(build_libdir):$(LD_LIBRARY_PATH) JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$@)" $(build_private_libdir)/sys.$(SHLIB_EXT)
 
+release-candidate-checklist:
+	julia doc/NEWS-update.jl #Add missing cross-references to NEWS.md
+	make -C doc helpdb.jl #Rebuild Julia online documentation for help(), apropos(), etc...
+	@echo 1. Check that helpdb.jl doesn't have lots of extra newlines
+	@echo 2. Remove deprecations
+	@echo 3. Bump VERSION
+
 julia-debug-symlink:
 	@ln -sf $(build_bindir)/julia-debug julia
 
