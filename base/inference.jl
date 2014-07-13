@@ -155,6 +155,7 @@ t_func[pointerref] = (2,2,(a,i)->(isa(a,DataType) && a<:Ptr ? a.parameters[1] : 
 t_func[pointerset] = (3, 3, (a,v,i)->a)
 
 const convert_default_tfunc = function (to, from, f)
+    to === () && return to
     !isType(to) && return Any
     to = to.parameters[1]
 

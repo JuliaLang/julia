@@ -778,8 +778,16 @@ static void emit_type_error(Value *x, jl_value_t *type, const std::string &msg,
 static void emit_typecheck(Value *x, jl_value_t *type, const std::string &msg,
                            jl_codectx_t *ctx)
 {
-    Value *istype =
-        builder.CreateICmpEQ(emit_typeof(x), literal_pointer_val(type));
+    Value *istype;
+    if (jl_is_tuple(type) && type != (jl_value_t*)jl_tuple_type) {
+        istype = builder.
+            CreateICmpNE(builder.CreateCall3(jlsubtype_func, x, literal_pointer_val(type),
+                                             ConstantInt::get(T_int32,1)),
+                         ConstantInt::get(T_int32,0));
+    }
+    else {
+        istype = builder.CreateICmpEQ(emit_typeof(x), literal_pointer_val(type));
+    }
     BasicBlock *failBB = BasicBlock::Create(getGlobalContext(),"fail",ctx->f);
     BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
     builder.CreateCondBr(istype, passBB, failBB);
@@ -922,6 +930,8 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
 {
     if (jl_is_expr(e))
         return ((jl_expr_t*)e)->etype;
+    if (e == (jl_value_t*)jl_null)
+        return e;
     if (jl_is_symbolnode(e))
         return jl_symbolnode_type(e);
     if (jl_is_quotenode(e)) {

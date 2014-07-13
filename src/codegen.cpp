@@ -297,6 +297,7 @@ static Function *jlallocobj_func;
 static Function *jlalloc2w_func;
 static Function *jlalloc3w_func;
 static Function *jl_alloc_tuple_func;
+static Function *jlsubtype_func;
 static Function *setjmp_func;
 static Function *box_int8_func;
 static Function *box_uint8_func;
@@ -2704,8 +2705,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     else if (head == new_sym) {
         jl_value_t *ty = expr_type(args[0], ctx);
         size_t nargs = jl_array_len(ex->args);
-        if (jl_is_type_type(ty) &&
-            jl_is_datatype(jl_tparam0(ty)) &&
+        if (jl_is_type_type(ty) && jl_is_datatype(jl_tparam0(ty)) &&
             jl_is_leaf_type(jl_tparam0(ty))) {
             ty = jl_tparam0(ty);
             jl_datatype_t *sty = (jl_datatype_t*)ty;
@@ -2756,6 +2756,8 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                 builder.CreateStore(literal_pointer_val((jl_value_t*)ty),
                                     emit_nthptr_addr(strct, (size_t)0));
                 if (f1) {
+                    if (!jl_subtype(expr_type(args[1],ctx), jl_t0(sty->types), 0))
+                        emit_typecheck(f1, jl_t0(sty->types), "new", ctx);
                     emit_setfield(sty, strct, 0, f1, ctx, false);
                     ctx->argDepth = fieldStart;
                     if (nf > 1 && needroots)
@@ -2777,6 +2779,10 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                         // the struct, root it now.
                         make_gcroot(strct, ctx);
                         needroots = true;
+                    }
+                    if (rhs->getType() == jl_pvalue_llvmt) {
+                        if (!jl_subtype(expr_type(args[i],ctx), jl_tupleref(sty->types,i-1), 0))
+                            emit_typecheck(rhs, jl_tupleref(sty->types,i-1), "new", ctx);
                     }
                     emit_setfield(sty, strct, i-1, rhs, ctx, false);
                 }
@@ -4208,6 +4214,16 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage,
                          "jl_egal", m);
     add_named_global(jlegal_func, (void*)&jl_egal);
+
+    std::vector<Type *> subt_args(0);
+    subt_args.push_back(jl_pvalue_llvmt);
+    subt_args.push_back(jl_pvalue_llvmt);
+    subt_args.push_back(T_int32);
+    jlsubtype_func =
+        Function::Create(FunctionType::get(T_int32, subt_args, false),
+                         Function::ExternalLinkage,
+                         "jl_subtype", m);
+    add_named_global(jlsubtype_func, (void*)&jl_subtype);
 
     std::vector<Type*> aoargs(0);
     aoargs.push_back(T_size);
