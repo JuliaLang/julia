@@ -221,9 +221,9 @@ Library improvements
         the same length.  This generalizes and replaces `normfro` ([#6057]),
         and `norm` is now type-stable ([#6056]).
 
-      * New `UniformScaling` matrix type and identity `I` constant (#5810).
+      * New `UniformScaling` matrix type and identity `I` constant ([#5810]).
 
-      * None of the concrete matrix factorization types are exported from Base
+      * None of the concrete matrix factorization types are exported from `Base`
         by default anymore.
 
     * Sparse linear algebra
@@ -800,6 +800,7 @@ Too numerous to mention.
 [#5025]: https://github.com/JuliaLang/julia/issues/5025
 [#5059]: https://github.com/JuliaLang/julia/issues/5059
 [#5076]: https://github.com/JuliaLang/julia/issues/5076
+[#5154]: https://github.com/JuliaLang/julia/issues/5154
 [#5164]: https://github.com/JuliaLang/julia/issues/5164
 [#5196]: https://github.com/JuliaLang/julia/issues/5196
 [#5214]: https://github.com/JuliaLang/julia/issues/5214
@@ -834,6 +835,7 @@ Too numerous to mention.
 [#5748]: https://github.com/JuliaLang/julia/issues/5748
 [#5776]: https://github.com/JuliaLang/julia/issues/5776
 [#5778]: https://github.com/JuliaLang/julia/issues/5778
+[#5810]: https://github.com/JuliaLang/julia/issues/5810
 [#5811]: https://github.com/JuliaLang/julia/issues/5811
 [#5819]: https://github.com/JuliaLang/julia/issues/5819
 [#5827]: https://github.com/JuliaLang/julia/issues/5827
@@ -872,5 +874,6 @@ Too numerous to mention.
 [#7131]: https://github.com/JuliaLang/julia/issues/7131
 [#7146]: https://github.com/JuliaLang/julia/issues/7146
 [#7373]: https://github.com/JuliaLang/julia/issues/7373
+[#7390]: https://github.com/JuliaLang/julia/issues/7390
 [#7435]: https://github.com/JuliaLang/julia/issues/7435
 [#7513]: https://github.com/JuliaLang/julia/issues/7513
