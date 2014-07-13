@@ -1,6 +1,5 @@
 module ModInts
-
-importall Base
+export ModInt
 
 immutable ModInt{n} <: Integer
     k::Int
@@ -12,10 +11,10 @@ end
 -{n}(a::ModInt{n}, b::ModInt{n}) = ModInt{n}(a.k-b.k)
 *{n}(a::ModInt{n}, b::ModInt{n}) = ModInt{n}(a.k*b.k)
 
-convert{n}(::Type{ModInt{n}}, i::Int) = ModInt{n}(i)
-promote_rule{n}(::Type{ModInt{n}}, ::Type{Int}) = ModInt{n}
+Base.convert{n}(::Type{ModInt{n}}, i::Int) = ModInt{n}(i)
+Base.promote_rule{n}(::Type{ModInt{n}}, ::Type{Int}) = ModInt{n}
 
-show{n}(io::IO, k::ModInt{n}) = print(io, "$(k.k) mod $n")
-showcompact(io::IO, k::ModInt) = print(io, k.k)
+Base.show{n}(io::IO, k::ModInt{n}) = print(io, "$(k.k) mod $n")
+Base.showcompact(io::IO, k::ModInt) = print(io, k.k)
 
 end # module

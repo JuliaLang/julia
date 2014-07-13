@@ -126,12 +126,14 @@ cmove_left(t::UnixTerminal, n) = write(t.out_stream, "$(CSI)$(n)D")
 cmove_line_up(t::UnixTerminal, n) = (cmove_up(t, n); cmove_col(t, 0))
 cmove_line_down(t::UnixTerminal, n) = (cmove_down(t, n); cmove_col(t, 0))
 cmove_col(t::UnixTerminal, n) = write(t.out_stream, "$(CSI)$(n)G")
-    
-@windows ? begin 
-    ispty(s::Base.AsyncStream) = bool(ccall(:jl_ispty, Cint, (Ptr{Void},), s))
+
+@windows_only begin
+    ispty(s::Base.TTY) = s.ispty
     ispty(s) = false
+end
+@windows ? begin
     function raw!(t::TTYTerminal,raw::Bool)
-        if ispty(t.in_stream) || ispty(t.out_stream) || ispty(t.err_stream)
+        if ispty(t.in_stream)
             run(if raw
                     `stty raw -echo onlcr -ocrnl opost`
                 else
@@ -156,7 +158,11 @@ end_keypad_transmit_mode(t::UnixTerminal) = # tput rmkx
 
 let s = zeros(Int32, 2)
     function Base.size(t::TTYTerminal)
-        Base.uv_error("size (TTY)", ccall((@windows ? :jl_tty_get_winsize : :uv_tty_get_winsize),
+        @windows_only if ispty(t)
+            #TODO: query for size: `\e[18` returns `\e[4;height;width;t`
+            return 24,80
+        end
+        Base.uv_error("size (TTY)", ccall(:uv_tty_get_winsize,
                                           Int32, (Ptr{Void}, Ptr{Int32}, Ptr{Int32}),
                                           t.out_stream.handle, pointer(s,1), pointer(s,2)) != 0)
         w,h = s[1],s[2]

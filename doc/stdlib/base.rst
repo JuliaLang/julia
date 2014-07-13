@@ -439,7 +439,7 @@ Syntax
 
 .. function:: esc(e::ANY)
 
-   Only valid in the context of an Expr returned from a macro. Prevents the macro hygine pass from turning embedded variables into gensym variables. See the :ref:`man-macros`
+   Only valid in the context of an Expr returned from a macro. Prevents the macro hygiene pass from turning embedded variables into gensym variables. See the :ref:`man-macros`
    section of the Metaprogramming chapter of the manual for more details and examples.
 
 .. function:: gensym([tag])
@@ -4664,15 +4664,15 @@ calling functions from `FFTW <http://www.fftw.org>`_.
 
    Undoes the effect of ``fftshift``.
 
-.. function:: filt(b, a, x; si=zeros(max(length(a),length(b))-1))
+.. function:: filt(b, a, x, [si])
 
    Apply filter described by vectors ``a`` and ``b`` to vector ``x``, with an
-   optional initial filter state keyword argument ``si`` (defaults to zeros).
+   optional initial filter state vector ``si`` (defaults to zeros).
 
-.. function:: filt!(b, a, x; si=zeros(max(length(a),length(b))-1), out=x)
+.. function:: filt!(out, b, a, x, [si])
 
-   Same as :func:`filt`, but stores the result in the ``out`` keyword argument,
-   which may alias the input ``x`` to modify it in-place (it does so by default).
+   Same as :func:`filt` but writes the result into the ``out`` argument,
+   which may alias the input ``x`` to modify it in-place.
 
 .. function:: deconv(b,a)
 
