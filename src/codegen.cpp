@@ -714,7 +714,11 @@ void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
 {
     Function *llvmf = jl_cfunction_object(f, rt, argt);
     assert(llvmf);
+#ifdef USE_MCJIT
+    return (void*)jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
+#else
     return jl_ExecutionEngine->getPointerToFunction(llvmf);
+#endif
 }
 
 // export a C-callable entry point for a function, with a given name
@@ -747,7 +751,11 @@ const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
         llvmf->print(stream);
     }
     else {
+#ifdef USE_MCJIT
+        size_t fptr = (size_t)jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
+#else
         size_t fptr = (size_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
+#endif
         assert(fptr != 0);
 #ifndef USE_MCJIT
         std::map<size_t, FuncInfo, revcomp> &fmap = jl_jit_events->getMap();
