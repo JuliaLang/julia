@@ -698,10 +698,12 @@ Too numerous to mention.
 [#13]: https://github.com/JuliaLang/julia/issues/13
 [#69]: https://github.com/JuliaLang/julia/issues/69
 [#70]: https://github.com/JuliaLang/julia/issues/70
+[#101]: https://github.com/JuliaLang/julia/issues/101
 [#485]: https://github.com/JuliaLang/julia/issues/485
 [#552]: https://github.com/JuliaLang/julia/issues/552
 [#907]: https://github.com/JuliaLang/julia/issues/907
 [#987]: https://github.com/JuliaLang/julia/issues/987
+[#1195]: https://github.com/JuliaLang/julia/issues/1195
 [#1268]: https://github.com/JuliaLang/julia/issues/1268
 [#1484]: https://github.com/JuliaLang/julia/issues/1484
 [#1539]: https://github.com/JuliaLang/julia/issues/1539
