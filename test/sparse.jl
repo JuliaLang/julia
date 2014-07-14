@@ -199,12 +199,16 @@ K,J,V = findnz(SparseMatrixCSC(2,1,[1,3],[1,2],[1.0,0.0]))
 # issue #5985
 @test sprandbool(4, 5, 0.0) == sparse(zeros(Bool, 4, 5))
 @test sprandbool(4, 5, 1.00) == sparse(ones(Bool, 4, 5))
-sprb45 = sprandbool(4, 5, 0.5)
-@test length(sprb45) == 20
-@test 4 <= sum(sprb45)[1] <= 16
+sprb45nnzs = zeros(5)
+for i=1:5
+    sprb45 = sprandbool(4, 5, 0.5)
+    @test length(sprb45) == 20
+    sprb45nnzs[i] = sum(sprb45)[1]
+end
+@test 4 <= mean(sprb45nnzs) <= 16
 
 # issue #5853, sparse diff
-for i=1:2, a={[1 2 3], [1 2 3]', speye(3)}
+for i=1:2, a={[1 2 3], [1 2 3]', eye(3)}
     @test all(diff(sparse(a),i) == diff(a,i))
 end
 
