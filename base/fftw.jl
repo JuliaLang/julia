@@ -71,18 +71,16 @@ typealias fftwTypeSingle Union(Type{Float32},Type{Complex64})
 # FFTW's api/import-wisdom-from-file.c file].
 
 function export_wisdom(fname::String)
-    f = ccall(:fopen, Ptr{Void}, (Ptr{Uint8},Ptr{Uint8}),
-              bytestring(fname), bytestring("w"))
+    f = ccall(:fopen, Ptr{Void}, (Ptr{Uint8},Ptr{Uint8}), fname, "w")
     systemerror("could not open wisdom file $fname for writing", f == C_NULL)
     ccall((:fftw_export_wisdom_to_file,libfftw), Void, (Ptr{Void},), f)
-    ccall(:fputs, Int32, (Ptr{Uint8},Ptr{Void}), bytestring(" "^256), f)
+    ccall(:fputs, Int32, (Ptr{Uint8},Ptr{Void}), " "^256, f)
     ccall((:fftwf_export_wisdom_to_file,libfftwf), Void, (Ptr{Void},), f)
     ccall(:fclose, Void, (Ptr{Void},), f)
 end
 
 function import_wisdom(fname::String)
-    f = ccall(:fopen, Ptr{Void}, (Ptr{Uint8},Ptr{Uint8}),
-              bytestring(fname), bytestring("r"))
+    f = ccall(:fopen, Ptr{Void}, (Ptr{Uint8},Ptr{Uint8}), fname, "r")
     systemerror("could not open wisdom file $fname for reading", f == C_NULL)
     if ccall((:fftw_import_wisdom_from_file,libfftw),Int32,(Ptr{Void},),f)==0||
        ccall((:fftwf_import_wisdom_from_file,libfftwf),Int32,(Ptr{Void},),f)==0
