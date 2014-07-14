@@ -298,7 +298,7 @@ Since packages are git repositories, before doing any package development you sh
 
 where ``FULL NAME`` is your actual full name (spaces are allowed between the double quotes) and ``EMAIL`` is your actual email address.
 Although it isn't necessary to use `GitHub <https://github.com/>`_ to create or publish Julia packages, most Julia packages as of writing this are hosted on GitHub and the package manager knows how to format origin URLs correctly and otherwise work with the service smoothly.
-We recommend that you create a `free account <https://github.com/signup/free>`_ on GitHub and then do::
+We recommend that you create a `free account <https://github.com/join>`_ on GitHub and then do::
 
     $ git config --global github.user "USERNAME"
 
