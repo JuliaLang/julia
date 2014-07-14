@@ -1,6 +1,6 @@
 JULIAHOME = $(abspath ..)
-include $(JULIAHOME)/Make.inc
 include $(JULIAHOME)/deps/Versions.make
+include $(JULIAHOME)/Make.inc
 
 override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
