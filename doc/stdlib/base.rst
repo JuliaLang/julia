@@ -704,6 +704,36 @@ Iterable Collections
 
    Sum the results of calling function ``f`` on each element of ``itr``.
 
+.. function:: sumabs(itr)
+
+   Sum absolute values of all elements in a collection. This is
+   equivalent to `sum(abs(itr))` but faster.
+
+.. function:: sumabs(A, dims)
+
+   Sum absolute values of elements of an array over the given
+   dimensions.
+
+.. function:: sumabs!(r, A)
+
+   Sum absolute values of elements of ``A`` over the singleton
+   dimensions of ``r``, and write results to ``r``.
+
+.. function:: sumabs2(itr)
+
+   Sum squared absolute values of all elements in a collection. This
+   is equivalent to `sum(abs2(itr))` but faster.
+
+.. function:: sumabs2(A, dims)
+
+   Sum squared absolute values of elements of an array over the given
+   dimensions.
+
+.. function:: sumabs2!(r, A)
+
+   Sum squared absolute values of elements of ``A`` over the singleton
+   dimensions of ``r``, and write results to ``r``.
+
 .. function:: prod(itr)
 
    Returns the product of all elements of a collection.
