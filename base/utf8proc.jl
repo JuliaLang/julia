@@ -63,7 +63,7 @@ let
     function utf8proc_map(s::String, flags::Integer)
         result = ccall(:utf8proc_map, Cssize_t,
                        (Ptr{Uint8}, Cssize_t, Ptr{Ptr{Uint8}}, Cint),
-                       bytestring(s), 0, p, flags | UTF8PROC_NULLTERM)
+                       s, 0, p, flags | UTF8PROC_NULLTERM)
         result < 0 && error(bytestring(ccall(:utf8proc_errmsg, Ptr{Uint8},
                                              (Cssize_t,), result)))
         a = ccall(:jl_ptr_to_array_1d, Vector{Uint8}, 

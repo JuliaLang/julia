@@ -69,7 +69,7 @@ _uv_fs_result(req) = ccall(:jl_uv_fs_result,Int32,(Ptr{Void},),req)
 function open(f::File,flags::Integer,mode::Integer)
     req = c_malloc(_sizeof_uv_fs)
     ret = ccall(:uv_fs_open,Int32,(Ptr{Void},Ptr{Void},Ptr{Uint8},Int32,Int32,Ptr{Void}),
-                eventloop(),req,bytestring(f.path),flags,mode,C_NULL)
+                eventloop(), req, f.path, flags,mode, C_NULL)
     f.handle = _uv_fs_result(req)
     ccall(:uv_fs_req_cleanup,Void,(Ptr{Void},),req)
     c_free(req)
@@ -92,7 +92,7 @@ function close(f::File)
 end
 
 function unlink(p::String)
-    err = ccall(:jl_fs_unlink, Int32, (Ptr{Uint8},), bytestring(p))
+    err = ccall(:jl_fs_unlink, Int32, (Ptr{Uint8},), p)
     uv_error("unlink",err)
 end
 function unlink(f::File)
@@ -108,8 +108,7 @@ end
 
 # For move command
 function rename(src::String, dst::String)
-    err = ccall(:jl_fs_rename, Int32, (Ptr{Uint8}, Ptr{Uint8}), bytestring(src),
-                bytestring(dst))
+    err = ccall(:jl_fs_rename, Int32, (Ptr{Uint8}, Ptr{Uint8}), src, dst)
 
     # on error, default to cp && rm
     if err < 0
@@ -154,8 +153,7 @@ end
 @non_windowsxp_only function symlink(p::String, np::String)
     flags = 0
     @windows_only if isdir(p); flags |= UV_FS_SYMLINK_JUNCTION; p = abspath(p); end
-    err = ccall(:jl_fs_symlink, Int32, (Ptr{Uint8}, Ptr{Uint8}, Cint), 
-                bytestring(p), bytestring(np), flags)
+    err = ccall(:jl_fs_symlink, Int32, (Ptr{Uint8}, Ptr{Uint8}, Cint), p, np, flags)
     @windows_only if err < 0
         Base.warn_once("Note: on Windows, creating file symlinks requires Administrator privileges.")
     end
