@@ -25,7 +25,7 @@ ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
 # in the mix. If verification needs to be done, keep it to the bare minimum. Basically
 # this should make sure nothing crashes without depending on how exactly the control
 # characters are being used.
-begin
+@unix_only begin # TODO: fix this on Windows
 stdin_write, stdout_read, stdout_read, repl = fake_repl()
 
 repl.specialdisplay = Base.REPL.REPLDisplay(repl)
@@ -74,7 +74,7 @@ function buffercontents(buf::IOBuffer)
 end
 
 # Test various history related issues
-begin
+@unix_only begin # TODO: fix this on Windows
     stdin_write, stdout_read, stdout_read, repl = fake_repl()
     # In the future if we want we can add a test that the right object
     # gets displayed by intercepting the display
