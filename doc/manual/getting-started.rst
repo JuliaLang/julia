@@ -130,5 +130,5 @@ help new users get started with julia:
 - `Tutorial for Homer Reid's numerical analysis class <http://homerreid.dyndns.org/teaching/18.330/JuliaProgramming.shtml>`_
 - `An introductory presentation <https://github.com/ViralBShah/julia-presentations/raw/master/Fifth-Elephant-2013/Fifth-Elephant-2013.pdf>`_
 - `Videos from the Julia tutorial at MIT <http://julialang.org/blog/2013/03/julia-tutorial-MIT/>`_
-- `Forio Julia Tutorials <http://forio.com/julia/tutorials-list>`_
+- `Forio Julia Tutorials <http://forio.com/labs/julia-studio/tutorials>`_
 
