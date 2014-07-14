@@ -38,7 +38,7 @@ run(`chmod +w $file`)
 # files and is thus zero in this case.
 @windows_only @test filesize(dir) == 0
 @unix_only @test filesize(dir) > 0
-let skew = 0.1  # allow 100ms skew
+let skew = 0.25  # allow 250ms skew
     now   = time()
     mfile = mtime(file)
     mdir  = mtime(dir)
