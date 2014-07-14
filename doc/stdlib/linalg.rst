@@ -507,6 +507,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ``eigs`` computes eigenvalues ``d`` of ``A`` using Lanczos or Arnoldi iterations for real symmetric or general nonsymmetric matrices respectively. If ``B`` is provided, the generalized eigen-problem is solved.  The following keyword arguments are supported:
     * ``nev``: Number of eigenvalues
+    * ``ncv``: Number of Krylov vectors used in the computation; should satisfy ``nev+1 <= ncv <= n`` for real symmetric problems and ``nev+2 <= ncv <= n`` for other problems; default is ``ncv = max(20,2*nev+1)``.
     * ``which``: type of eigenvalues to compute. See the note below.
 
       ========= ======================================================================================================================
