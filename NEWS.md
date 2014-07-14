@@ -52,10 +52,12 @@ New language features
 
     In addition to these, many of the Unicode operator symbols are parsed
     as infix operators and are available for user-defined methods ([#6929]).
-    
+
   * Improved reporting of syntax errors ([#6179])
 
   * `break` inside a `for` loop with multiple ranges now exits the entire loop nest ([#5154])
+
+  * Local goto statements using the `@goto` and `@label` macros. ([#101])
 
 REPL improvements
 -----------------
