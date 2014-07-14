@@ -66,7 +66,7 @@ REPL improvements
   * Tab-substitution of LaTeX math symbols (e.g. `\alpha` by `α`) ([#6911]).
     This also works in IJulia and in Emacs ([#6920]).
 
-  * `clear` function for obtaining a fresh workspace ([#1195]).
+  * `workspace()` function for obtaining a fresh workspace ([#1195]).
 
 Library improvements
 --------------------

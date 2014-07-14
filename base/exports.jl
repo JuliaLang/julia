@@ -1059,7 +1059,7 @@ export
     versioninfo,
     which,
     whos,
-    clear,
+    workspace,
 
 # loading source files
     evalfile,
