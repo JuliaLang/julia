@@ -419,9 +419,13 @@ end
 function LineEdit.accept_result(s, p::LineEdit.HistoryPrompt{REPLHistoryProvider})
     parent = LineEdit.state(s, p).parent
     hist = p.hp
-    m = hist.mode_mapping[hist.modes[hist.cur_idx]]
-    LineEdit.replace_line(LineEdit.state(s, m), LineEdit.state(s, p).response_buffer)
-    LineEdit.transition(s, m)
+    if 1 <= hist.cur_idx <= length(hist.modes)
+        m = hist.mode_mapping[hist.modes[hist.cur_idx]]
+        LineEdit.replace_line(LineEdit.state(s, m), LineEdit.state(s, p).response_buffer)
+        LineEdit.transition(s, m)
+    else
+        LineEdit.transition(s, parent)
+    end
 end
 
 function history_prev(s::LineEdit.MIState, hist::REPLHistoryProvider,
