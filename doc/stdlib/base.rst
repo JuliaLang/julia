@@ -128,7 +128,7 @@ Getting Around
    Print information about the version of Julia in use. If the ``verbose`` argument
    is true, detailed system information is shown as well.
 
-.. function:: clear()
+.. function:: workspace()
 
    Replace the top-level module (``Main``) with a new one, providing a clean workspace.
    The previous ``Main`` module is made available as ``LastMain``. A previously-loaded

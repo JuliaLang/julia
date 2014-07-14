@@ -331,7 +331,7 @@ function download(url::String)
     download(url, filename)
 end
 
-function clear()
+function workspace()
     last = Core.Main
     b = last.Base
     ccall(:jl_new_main_module, Any, ())
