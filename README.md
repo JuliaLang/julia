@@ -273,7 +273,7 @@ To use the Intel [MKL] BLAS and LAPACK libraries, make sure that MKL version 10.
     source /path/to/mkl/bin/mklvars.sh intel64 ilp64
     export MKL_INTERFACE_LAYER=ILP64
 
-Julia can be built with the Intel compilers and MKL using the following flags. It is highly recommended that Intel compilers be used to build julia if using MKL. 
+Julia can be built with the Intel compilers and MKL using the following flags.
 
     USEICC = 1
     USEIFC = 1
@@ -281,7 +281,7 @@ Julia can be built with the Intel compilers and MKL using the following flags. I
     USE_INTEL_MKL_FFT = 1
     USE_INTEL_LIBM = 1
 
-To rebuild a pre-built Julia source install with MKL support, delete the OpenBLAS, ARPACK, and SuiteSparse dependencies from `deps`, and run `make cleanall testall`.
+It is highly recommended to use a fresh clone of the Julia repository. Also, it is recommended that Intel compilers be used to build julia when using MKL.
 
 <a name="Source-Code-Organization"/>
 ## Source Code Organization

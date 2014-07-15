@@ -5,11 +5,15 @@ using .ARPACK
 eigs(A; args...) = eigs(A, I; args...)
 
 function eigs(A, B;
-              nev::Integer=6, ncv::Integer=max(20,2*nev+1), which::ASCIIString="LM",
+              nev::Integer=6, ncv::Integer=max(20,2*nev+1), which_sym::Symbol=:LM,
               tol=0.0, maxiter::Integer=1000, sigma=nothing, v0::Vector=zeros((0,)),
               ritzvec::Bool=true)
 
     n = chksquare(A)
+
+    if      which_sym==:LM  which="LM"
+    elseif  which_sym==:SM  which="SM" 
+
 
     T = eltype(A)
     iscmplx = T <: Complex
@@ -31,6 +35,7 @@ function eigs(A, B;
     bmat = isgeneral ? "G" : "I"
     isshift = sigma !== nothing
     sigma = isshift ? sigma : zero(T)
+    if which == 
 
     if !isempty(v0)
         length(v0)==n || throw(DimensionMismatch(""))
