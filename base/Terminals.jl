@@ -160,7 +160,7 @@ let s = zeros(Int32, 2)
     function Base.size(t::TTYTerminal)
         @windows_only if ispty(t.out_stream)
             try
-                h,w = int32(split(readall(open(`stty size`, "r", t.out_stream)[1])))
+                h,w = int(split(readall(open(`stty size`, "r", t.out_stream)[1])))
                 w > 0 || (w = 80)
                 h > 0 || (h = 24)
                 return h,w
