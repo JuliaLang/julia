@@ -1,4 +1,4 @@
-o.. module:: Base.Profile
+.. module:: Base.Profile
 
 .. _stdlib-profiling:
 
