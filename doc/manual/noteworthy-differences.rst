@@ -100,7 +100,7 @@ One of Julia's goals is to provide an effective language for data analysis and s
   DataFrames and Distributions packages:
 
 	- Distributions functions are found in the `Distributions package <https://github.com/JuliaStats/Distributions.jl>`_
-	- The `DataFrames package <https://github.com/HarlanH/DataFrames.jl>`_ provides data frames.
+	- The `DataFrames package <https://github.com/JuliaStats/DataFrames.jl>`_ provides data frames.
 	- Formulas for GLM's must be escaped: use ``:(y ~ x)`` instead of ``y ~ x``.
 
 - Julia provides tuples and real hash tables, but not R's lists. When returning multiple items, you should typically use a tuple: instead of ``list(a = 1, b = 2)``, use ``(1, 2)``.

@@ -529,7 +529,7 @@ For more details on how to pass callbacks to C libraries, see this
 C++
 ---
 
-Limited support for C++ is provided by the `Cpp <http://github.com/timholy/Cpp.jl>`_ 
+Limited support for C++ is provided by the `Cpp <https://github.com/timholy/Cpp.jl>`_ 
 and `Clang <https://github.com/ihnorton/Clang.jl>`_ packages.
 
 Handling Platform Variations
