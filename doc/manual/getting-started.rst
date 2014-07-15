@@ -65,14 +65,15 @@ Or you could put that code into a script and run it::
     foo
     bar
 
-Julia can be started in parallel mode with either the ``-p`` or the 
-``--machinefile`` options. ``-p n`` will launch an additional ``n`` 
-worker processes, while ``--machinefile file`` will launch a worker 
-for each line in file ``file``. The machines defined in ``file`` must be 
-accessible via a passwordless ``ssh`` login, with Julia installed at the
-same location as the current host. Each machine definition takes the form 
-``[user@]host[:port] [bind_addr]`` . ``user`` defaults to current user, 
-``port`` to the standard ssh port. Optionally, in case of multi-homed hosts, 
+Julia can be started in parallel mode with either the ``-p`` or the
+``--machinefile`` options. ``-p n`` will launch an additional ``n`` worker
+processes, while ``--machinefile file`` will launch a worker for each line in
+file ``file``. The machines defined in ``file`` must be accessible via a
+passwordless ``ssh`` login, with Julia installed at the same location as the
+current host. Each machine definition takes the form
+``[user@]host[:port][*count] [bind_addr]`` . ``user`` defaults to current user,
+``port`` to the standard ssh port. ``count`` is the number of workers to spawn
+on the node, and defaults to 1. Optionally, in case of multi-homed hosts,
 ``bind_addr`` may be used to explicitly specify an interface.
     
     
