@@ -10,3 +10,5 @@ pmap(identity, [randn(n,n)])
 
 @time expMs_ser = map(expm, Ms)
 @time expMs_par = pmap(expm, Ms)
+
+@assert expMs_ser == expMs_par
