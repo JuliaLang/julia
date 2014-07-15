@@ -158,10 +158,8 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
             end
             j += 1
         end
-#        d = complex(dr[1:nev],di[1:nev])
-        d = complex(dr,di)
-#        return ritzvec ? (d, evec[1:n, 1:nev],iparam[5],iparam[3],iparam[9],resid) : (d,iparam[5],iparam[3],iparam[9],resid)
-        return ritzvec ? (d, evec[1:n, 1:nev+1],iparam[5],iparam[3],iparam[9],resid) : (d,iparam[5],iparam[3],iparam[9],resid)
+        d = complex(dr[1:nev],di[1:nev])
+        return ritzvec ? (d, evec[1:n, 1:nev],iparam[5],iparam[3],iparam[9],resid) : (d,iparam[5],iparam[3],iparam[9],resid)
     end
     
 end
