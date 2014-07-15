@@ -63,8 +63,8 @@ generate(pkg::String, license::String; force::Bool=false) =
 	cd(Generate.package,pkg,license,force=force)
 
 
-test() = cd(Entry.test)
-test(pkgs::String...) = cd(Entry.test,String[pkgs...])
+test(coverage=false) = cd(Entry.test,coverage)
+test(pkgs::Vector{String},coverage=false) = cd(Entry.test,pkgs)
 
 @deprecate release free
 @deprecate fixup build
