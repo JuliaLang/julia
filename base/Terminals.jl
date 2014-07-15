@@ -158,9 +158,15 @@ end_keypad_transmit_mode(t::UnixTerminal) = # tput rmkx
 
 let s = zeros(Int32, 2)
     function Base.size(t::TTYTerminal)
-        @windows_only if ispty(t)
-            #TODO: query for size: `\e[18` returns `\e[4;height;width;t`
-            return 24,80
+        @windows_only if ispty(t.out_stream)
+            try
+                h,w = int32(split(readall(open(`stty size`, "r", t.out_stream)[1])))
+                w > 0 || (w = 80)
+                h > 0 || (h = 24)
+                return h,w
+            catch
+                return 24,80
+            end
         end
         Base.uv_error("size (TTY)", ccall(:uv_tty_get_winsize,
                                           Int32, (Ptr{Void}, Ptr{Int32}, Ptr{Int32}),
