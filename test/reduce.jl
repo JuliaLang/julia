@@ -127,13 +127,13 @@ prod2(itr) = invoke(prod, (Any,), itr)
 @test minimum([4., 3., NaN, 5., 2.]) == 2.
 @test extrema([4., 3., NaN, 5., 2.]) == (2., 5.)
 
-@test Base.maxabs(Int[]) == 0
+@test maxabs(Int[]) == 0
 @test_throws ErrorException Base.minabs(Int[])
 
-@test Base.maxabs(-2) == 2
-@test Base.minabs(-2) == 2
-@test Base.maxabs([1, -2, 3, -4]) == 4
-@test Base.minabs([-1, 2, -3, 4]) == 1
+@test maxabs(-2) == 2
+@test minabs(-2) == 2
+@test maxabs([1, -2, 3, -4]) == 4
+@test minabs([-1, 2, -3, 4]) == 1
 
 @test maximum(x->abs2(x), 3:7) == 49
 @test minimum(x->abs2(x), 3:7) == 9
