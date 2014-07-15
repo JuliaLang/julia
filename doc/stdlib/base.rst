@@ -687,6 +687,32 @@ Iterable Collections
    For an array input, returns the value and index of the minimum over
    the given dimensions.
 
+.. function:: maxabs(itr)
+
+   Compute the maximum absolute value of a collection of values.
+
+.. function:: maxabs(A, dims)
+
+   Compute the maximum absolute values over given dimensions.
+
+.. function:: maxabs!(r, A)
+
+   Compute the maximum absolute values over the singleton dimensions of ``r``,
+   and write values to ``r``.
+
+.. function:: minabs(itr)
+
+   Compute the minimum absolute value of a collection of values.
+
+.. function:: minabs(A, dims)
+
+   Compute the minimum absolute values over given dimensions.
+
+.. function:: minabs!(r, A)
+
+   Compute the minimum absolute values over the singleton dimensions of ``r``,
+   and write values to ``r``.
+
 .. function:: sum(itr)
 
    Returns the sum of all elements in a collection.
