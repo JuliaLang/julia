@@ -330,13 +330,11 @@ end
 function load_machine_file(path::String)
     machines = String[]
     for line in split(readall(path),'\n',false)
-        m = match(r"^([^\s*]+)\*(\d+)(.*)",line)
-        if m == nothing
-            push!(machines,line)
+        s = split(line,'*',false)
+        if length(s) > 1
+            append!(machines,fill(s[2],int(s[1])))
         else
-            (host, count, rest) = m.captures
-            count = (count != nothing) ? int(count) : 1
-            append!(machines,fill(string(host,rest),count))
+            push!(machines,line)
         end
     end
     return machines
