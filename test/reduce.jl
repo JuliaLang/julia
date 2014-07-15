@@ -46,15 +46,15 @@ fz = float(z)
 
 z = [-4, -3, 2, 5]
 fz = float(z)
-@test Base.sumabs(Float64[]) === 0.0
-@test Base.sumabs([int8(-2)]) === 2
-@test Base.sumabs(z) === 14
-@test Base.sumabs(fz) === 14.0
+@test sumabs(Float64[]) === 0.0
+@test sumabs([int8(-2)]) === 2
+@test sumabs(z) === 14
+@test sumabs(fz) === 14.0
 
-@test Base.sumabs2(Float64[]) === 0.0
-@test Base.sumabs2([int8(-2)]) === 4
-@test Base.sumabs2(z) === 54
-@test Base.sumabs2(fz) === 54.0
+@test sumabs2(Float64[]) === 0.0
+@test sumabs2([int8(-2)]) === 4
+@test sumabs2(z) === 54
+@test sumabs2(fz) === 54.0
 
 # check variants of summation for type-stability and other issues (#6069)
 sum2(itr) = invoke(sum, (Any,), itr)
