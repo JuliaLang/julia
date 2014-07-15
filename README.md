@@ -266,16 +266,20 @@ Please be aware that this procedure is not officially supported, as it introduce
 
 SuiteSparse is a special case, since it is typically only installed as a static library, while `USE_SYSTEM_SUITESPARSE=1` requires that it is a shared library. Running the script `contrib/repackage_system_suitesparse4.make` will copy your static system SuiteSparse installation into the shared library format required by Julia. `make USE_SYSTEM_SUITESPARSE=1` will then use the SuiteSparse that has been copied into Julia's directory, but will not build a new SuiteSparse library from scratch.
 
-### Intel Math Kernel Libraries
+### Intel compilers and Math Kernel Libraries
 
-To use the Intel [MKL] BLAS and LAPACK libraries, make sure that MKL version 10.3.6 or higher is installed. For a 64-bit architecture, the MKL environment should be set up as:
+To use the Intel [MKL] BLAS and LAPACK libraries, make sure that MKL version 10.3.6 or higher is installed. For a 64-bit architecture, the MKL environment should be set up as follows:
 
     source /path/to/mkl/bin/mklvars.sh intel64 ilp64
     export MKL_INTERFACE_LAYER=ILP64
 
-When building julia, pass the `USE_INTEL_MKL=1` option to `make` or add the following line to `Make.user`.
+Julia can be built with the Intel compilers and MKL using the following flags. It is highly recommended that Intel compilers be used to build julia if using MKL. 
 
+    USEICC = 1
+    USEIFC = 1
     USE_INTEL_MKL = 1
+    USE_INTEL_MKL_FFT = 1
+    USE_INTEL_LIBM = 1
 
 To rebuild a pre-built Julia source install with MKL support, delete the OpenBLAS, ARPACK, and SuiteSparse dependencies from `deps`, and run `make cleanall testall`.
 
