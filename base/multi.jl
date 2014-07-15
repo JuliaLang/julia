@@ -1086,7 +1086,7 @@ tunnel_port = 9201
 function ssh_tunnel(user, host, bind_addr, port, sshflags)
     global tunnel_port
     localp = tunnel_port::Int
-    while !success(detach(`ssh -T -a -f -o ExitOnForwardFailure=yes $sshflags $(user)@$host -L $localp:$bind_addr:$(int(port)) sleep 60`)) && localp < 10000
+    while !success(detach(`ssh -T -a -x -o ClearAllForwardings=yes -o ExitOnForwardFailure=yes -f $sshflags $(user)@$host -L $localp:$bind_addr:$(int(port)) sleep 60`)) && localp < 10000
         localp += 1
     end
     
@@ -1171,9 +1171,9 @@ function launch_ssh_workers(cman::SSHManager, np::Integer, config::Dict)
         host = cman.machines[i] = machine_def[1]
         
         # Build up the ssh command
-        cmd = `cd $dir && $exename $exeflags`                     # launch julia
-        cmd = `sh -l -c $(shell_escape(cmd))`                     # shell to launch under
-        cmd = `ssh -T -a -n $sshflags $host $(shell_escape(cmd))` # use ssh to remote launch
+        cmd = `cd $dir && $exename $exeflags` # launch julia
+        cmd = `sh -l -c $(shell_escape(cmd))` # shell to launch under
+        cmd = `ssh -T -a -x -o ClearAllForwardings=yes -n $sshflags $host $(shell_escape(cmd))` # use ssh to remote launch
         
         io, pobj = open(detach(cmd), "r")
         io_objs[i] = io
@@ -1190,7 +1190,7 @@ function manage_ssh_worker(id::Integer, config::Dict, op::Symbol)
     if op == :interrupt
         if haskey(config, :ospid)
             machine = config[:machine]
-            if !success(`ssh -T -a -n $(config[:sshflags]) $machine "kill -2 $(config[:ospid])"`)
+            if !success(`ssh -T -a -x -o ClearAllForwardings=yes -n $(config[:sshflags]) $machine "kill -2 $(config[:ospid])"`)
                 println("Error sending a Ctrl-C to julia worker $id on $machine")
             end
         else
