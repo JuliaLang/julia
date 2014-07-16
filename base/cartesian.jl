@@ -19,6 +19,7 @@ const CARTESIAN_DIMS = 4
 #
 # Special syntax for function prototypes:
 #   @ngenerate N returntype function myfunction(A::AbstractArray, I::NTuple{N, Int}...)
+#   @ngenerate (N1,N2) returntype function myfunction(A::AbstractArray, I::NTuple{N1, Int}...)
 # for N = 3 translates to
 #   function myfunction(A::AbstractArray, I_1::Int, I_2::Int, I_3::Int)
 # and for the generic (cached) case as
@@ -29,9 +30,29 @@ const CARTESIAN_DIMS = 4
 # To avoid ambiguity, it would be preferable to have some specific syntax for this, such as
 #   myfunction(A::AbstractArray, I::Int...N)
 # where N can be an integer or symbol. Currently T...N generates a parser error.
-macro ngenerate(itersym, returntypeexpr, funcexpr)
+macro ngenerate(itersyms, returntypeexpr, args...)
+    if length(args) == 1
+        funcexpr = args[1]
+    elseif length(args) == 2
+        funcexpr = args[2]
+    else
+        error("Incorrect number of arguments")
+    end
     isfuncexpr(funcexpr) || error("Requires a function expression")
-    esc(ngenerate(itersym, returntypeexpr, funcexpr.args[1], N->sreplace!(copy(funcexpr.args[2]), itersym, N)))
+    
+    if isa(itersyms, Symbol)
+        dims = length(args) == 1 ? [1:CARTESIAN_DIMS] : eval(args[1])
+    elseif isa(itersyms, Expr) && itersyms.head == :tuple && all(x->isa(x, Symbol), itersyms.args)
+        itersyms=tuple(itersyms.args...)
+        nsym = length(itersyms)
+        dims = length(args) == 1 ? [] : eval(args[1])
+    else
+        error("Requires a symbol or tuple of symbols")
+    end 
+    prototype = funcexpr.args[1]
+    bodyfunc = N->exprresolve(sreplace!(copy(funcexpr.args[2]), itersyms, N))
+    
+    esc(ngenerate(itersyms, returntypeexpr, prototype, bodyfunc, dims))
 end
 
 # @nsplat takes an expression like
@@ -70,11 +91,13 @@ macro nsplat(itersym, args...)
     esc(Expr(:block, explicit..., splat))
 end
 
-generate1(itersym, prototype, bodyfunc, N::Int, varname, T) =
+generate1(itersym::Symbol, prototype, bodyfunc, N::Int, varname, T) =
     Expr(:function, spliceint!(sreplace!(resolvesplat!(copy(prototype), varname, T, N), itersym, N)),
          resolvesplats!(bodyfunc(N), varname, N))
+generate1{K}(itersyms::NTuple{K,Symbol}, prototype, bodyfunc, itervals::NTuple{K,Int}) =
+     Expr(:function, spliceint!(sreplace!(copy(prototype), itersyms, itervals)), bodyfunc(itervals))
 
-function ngenerate(itersym, returntypeexpr, prototype, bodyfunc, dims=1:CARTESIAN_DIMS, makecached::Bool = true)
+function ngenerate(itersym::Symbol, returntypeexpr, prototype, bodyfunc, dims, makecached::Bool = true)
     varname, T = get_splatinfo(prototype, itersym)
     # Generate versions for specific dimensions
     fdim = [generate1(itersym, prototype, bodyfunc, N, varname, T) for N in dims]
@@ -99,7 +122,7 @@ function ngenerate(itersym, returntypeexpr, prototype, bodyfunc, dims=1:CARTESIA
     F = Expr(:function, resolvesplat!(prototype, varname, T), quote
              $setitersym
              if !haskey($dictname, $itersym)
-                 gen1 = Base.Cartesian.generate1($(symbol(itersym)), $(Expr(:quote, flocal)), $bodyfunc, $itersym, $varname, $T)
+                 gen1 = Base.Cartesian.generate1($(Expr(:quote,itersym)), $(Expr(:quote, flocal)), $bodyfunc, $itersym, $varname, $T)
                  $(dictname)[$itersym] = eval(quote
                      local _F_
                      $gen1
@@ -114,19 +137,55 @@ function ngenerate(itersym, returntypeexpr, prototype, bodyfunc, dims=1:CARTESIA
             end
         end)
 end
+function ngenerate(itersyms::(Symbol...), returntypeexpr, prototype, bodyfunc, dims, makecached::Bool = true)
+    # Generate versions for specific dimensions
+    fdim = [generate1(itersyms, prototype, bodyfunc, itervals) for itervals in dims]
+    if !makecached
+        return Expr(:block, fdim...)
+    end
+    # Generate the generic cache-based version
+    fsym = funcsym(prototype)
+    dictname = symbol(string(fsym)*"_cache")
+    fargs = funcargs(prototype)
+
+    flocal = funcrename(copy(prototype), :_F_)
+    itervals = Expr(:tuple,itersyms...)
+    F = Expr(:function, prototype, quote
+             if !haskey($dictname, $itervals)
+                 gen1 = Base.Cartesian.generate1($itersyms, $(Expr(:quote, flocal)), $bodyfunc, $itervals)
+                 $(dictname)[$itervals] = eval(quote
+                     local _F_
+                     $gen1
+                     _F_
+                 end)
+             end
+             ($(dictname)[$itervals]($(fargs...)))::$returntypeexpr
+         end)
+    Expr(:block, fdim..., quote
+            let $dictname = Dict{NTuple{$(length(itersyms)),Int},Function}()
+            $F
+            end
+        end)
+end
 
 isfuncexpr(ex::Expr) =
     ex.head == :function || (ex.head == :(=) && typeof(ex.args[1]) == Expr && ex.args[1].head == :call)
 isfuncexpr(arg) = false
 
-sreplace!(arg, sym, val) = arg
-function sreplace!(ex::Expr, sym, val)
+sreplace!(arg, syms, vals) = arg
+function sreplace!(ex::Expr, syms, vals)
     for i = 1:length(ex.args)
-        ex.args[i] = sreplace!(ex.args[i], sym, val)
+        ex.args[i] = sreplace!(ex.args[i], syms, vals)
     end
     ex
 end
-sreplace!(s::Symbol, sym, val) = s == sym ? val : s
+sreplace!(s::Symbol, sym::Symbol, val) = s == sym ? val : s
+function sreplace!(s::Symbol, syms::(Symbol...), vals)
+    for i = 1:length(syms)
+        s = sreplace!(s,syms[i],vals[i])
+    end
+    s
+end
 
 # If using the syntax that will need "desplatting",
 #     myfunction(A::AbstractArray, I::NTuple{N, Int}...)
@@ -449,7 +508,7 @@ function exprresolve(ex::Expr)
         ex.args[i] = exprresolve(ex.args[i])
     end
     # Handle simple arithmetic
-    if ex.head == :call && in(ex.args[1], (:+, :-, :*, :/)) && all([isa(ex.args[i], Number) for i = 2:length(ex.args)])
+    if ex.head == :call && in(ex.args[1], (:+, :-, :*, :/, :div)) && all([isa(ex.args[i], Number) for i = 2:length(ex.args)])
         return eval(ex)
     elseif ex.head == :call && (ex.args[1] == :+ || ex.args[1] == :-) && length(ex.args) == 3 && ex.args[3] == 0
         # simplify x+0 and x-0
