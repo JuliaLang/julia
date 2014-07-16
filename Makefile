@@ -382,7 +382,7 @@ else ifeq ($(ARCH),x86_64)
 	7z x -y 7z920-x64.msi _7z.exe _7z.dll && \
 	mv _7z.dll 7z.dll && \
 	mv _7z.exe 7z.exe && \
-	$(JLDOWNLOAD) http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_13.1/noarch/mingw64-libexpat-2.0.1-6.13.noarch.rpm && \
+	$(JLDOWNLOAD) http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_13.1/noarch/mingw64-libexpat-2.0.1-6.14.noarch.rpm && \
 	mv mingw64-libexpat-*.rpm mingw-libexpat.rpm && \
 	$(JLDOWNLOAD) http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_13.1/noarch/mingw64-zlib-1.2.8-3.1.noarch.rpm && \
 	mv mingw64-zlib-*.rpm mingw-zlib.rpm
