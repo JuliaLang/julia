@@ -49,6 +49,22 @@ r = fill(NaN, Base.reduced_dims(size(Breduc), 1))
 @test_approx_eq sumabs(Breduc, 1) safe_sumabs(Breduc, 1)
 @test_approx_eq sumabs2(Breduc, 1) safe_sumabs2(Breduc, 1)
 
+# Small integers
+@test @inferred(sum(Int8[1], 1)) == [1]
+@test @inferred(sum(Uint8[1], 1)) == [1]
+
+# Complex types
+@test typeof(@inferred(sum([1.0+1.0im], 1))) == Vector{Complex128}
+@test typeof(@inferred(Base.sumabs([1.0+1.0im], 1))) == Vector{Float64}
+@test typeof(@inferred(Base.sumabs2([1.0+1.0im], 1))) == Vector{Float64}
+@test typeof(@inferred(prod([1.0+1.0im], 1))) == Vector{Complex128}
+@test typeof(@inferred(Base.prod(Base.AbsFun(), [1.0+1.0im], 1))) == Vector{Float64}
+@test typeof(@inferred(Base.prod(Base.Abs2Fun(), [1.0+1.0im], 1))) == Vector{Float64}
+
+# Heterogeneously typed arrays
+@test sum(Union(Float32, Float64)[1.0], 1) == [1.0]
+@test prod(Union(Float32, Float64)[1.0], 1) == [1.0]
+
 @test reducedim((a,b) -> a|b, [true false; false false], 1, false) == [true false]
 R = reducedim((a,b) -> a+b, [1 2; 3 4], 2, 0.0)
 @test eltype(R) == Float64
