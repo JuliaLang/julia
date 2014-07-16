@@ -45,7 +45,7 @@
 	    (eval `(define ,(symbol (string "is-" name "?")) (Set ,name))))
 	  prec-names)
 
-(define unary-ops '(+ - ! ~ |<:| |>:| √ ∛ ∜))
+(define unary-ops '(+ - ! ¬ ~ |<:| |>:| √ ∛ ∜))
 
 ; operators that are both unary and binary
 (define unary-and-binary-ops '(+ - $ & ~))
@@ -63,7 +63,7 @@
 (define ctrans-op (string->symbol "'"))
 (define vararg-op (string->symbol "..."))
 
-(define operators (list* '~ '! '-> '√ '∛ '∜ ctrans-op trans-op vararg-op
+(define operators (list* '~ '! '¬ '-> '√ '∛ '∜ ctrans-op trans-op vararg-op
 			 (delete-duplicates
 			  (apply append (map eval prec-names)))))
 

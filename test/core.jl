@@ -1782,3 +1782,7 @@ let
     end
     @test v == {(1,1), (1,2)}
 end
+
+# addition of ¬ (\neg) parsing
+const (¬) = !
+@test ¬false
