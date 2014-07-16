@@ -603,14 +603,13 @@ constant over all loops, certain optimizations might not be possible,
 making this version still less efficient than the more convenient
 literal form above. Of course, there are still situations where the
 non-literal form is more convenient: if one needs to interpolate a
-variable into the regular expression, has to take this more verbose
+variable into the regular expression, one must take this more verbose
 approach; in cases where the regular expression pattern itself is
 dynamic, potentially changing upon each loop iteration, a new regular
-expression object must be constructed on each iteration. The vast
-majority of use cases, however, one does not construct regular
-expressions dynamically, depending on run-time data. In this majority of
+expression object must be constructed on each iteration. In the vast
+majority of use cases, however, regular expressions are not constructed based on run-time data. In this majority of
 cases, the ability to write regular expressions as compile-time values
-is, well, invaluable.
+is invaluable.
 
 The mechanism for user-defined string literals is deeply, profoundly
 powerful. Not only are Julia's non-standard literals implemented using
