@@ -203,7 +203,7 @@ Building Julia requires that the following software be installed:
 - **[gfortran][gcc]**           — compiling and linking fortran libraries
 - **[git]**                     — version control and package management.
 - **[perl]**                    — preprocessing of header files of libraries.
-- **[wget]**, **[curl]**, or **fetch** (FreeBSD) — to automatically download external libraries.
+- **[wget]**, **[curl]**, or **[fetch]** (FreeBSD) — to automatically download external libraries.
 - **[m4]**                      — needed to build GMP.
 - **[patch]**                   — for modifying source code.
 
@@ -235,6 +235,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 [gcc]:          http://gcc.gnu.org/
 [clang]:        http://clang.llvm.org/
 [curl]:         http://curl.haxx.se/
+[fetch]:        http://www.freebsd.org/cgi/man.cgi?fetch(1)
 [git]:          http://git-scm.com/
 [perl]:         http://www.perl.org/
 [OpenLibm]:     https://github.com/JuliaLang/openlibm
