@@ -43,7 +43,7 @@ endif
 endif
 
 ifeq ($(OS), Linux)
-ifneq ($(shell patchelf --version 2>/dev/null), patchelf 0.6)
+ifeq ($(which patchelf),)
 STAGE1_DEPS += patchelf
 PATCHELF=$(build_bindir)/patchelf
 else
