@@ -130,6 +130,14 @@ function rand!{T}(A::Array{T})
     end
     A
 end
+
+function rand!(r::AbstractRNG, A::AbstractArray)
+    for i=1:length(A)
+        @inbounds A[i] = rand(r)
+    end
+    A
+end
+
 rand(T::Type, dims::Dims) = rand!(Array(T, dims))
 rand{T<:Number}(::Type{T}) = error("no random number generator for type $T; try a more specific type")
 rand{T<:Number}(::Type{T}, dims::Int...) = rand(T, dims)
