@@ -43,7 +43,7 @@ endif
 endif
 
 ifeq ($(OS), Linux)
-ifeq ($(which patchelf),)
+ifeq ($(shell which patchelf),)
 STAGE1_DEPS += patchelf
 PATCHELF=$(build_bindir)/patchelf
 else
@@ -1573,14 +1573,15 @@ PATCHELF_TARGET = $(build_bindir)/patchelf
 compile-patchelf: install-patchelf
 install-patchelf: $(PATCHELF_TARGET)
 
-patchelf-$(PATCHELF_VER).tar.bz2:
-	$(JLDOWNLOAD) $@ http://hydra.nixos.org/build/1524660/download/2/$@
-patchelf-$(PATCHELF_VER)/configure: patchelf-$(PATCHELF_VER).tar.bz2
+patchelf-$(PATCHELF_VER).tar.gz:
+	$(JLDOWNLOAD) $@ https://ia601003.us.archive.org/29/items/julialang/mirror/patchelf-$(PATCHELF_VER).tar.gz
+patchelf-$(PATCHELF_VER)/configure: patchelf-$(PATCHELF_VER).tar.gz
 	$(JLCHECKSUM) $<
-	$(TAR) jxf $<
+	$(TAR) zxf $<
 	touch -c $@
 patchelf-$(PATCHELF_VER)/config.status: patchelf-$(PATCHELF_VER)/configure
 	cd patchelf-$(PATCHELF_VER) && \
+	./bootstrap.sh && \
 	./configure $(CONFIGURE_COMMON)
 	touch -c $@
 $(PATCHELF_SOURCE): patchelf-$(PATCHELF_VER)/config.status
@@ -1600,9 +1601,9 @@ clean-patchelf:
 	-$(MAKE) -C patchelf-$(PATCHELF_VER) clean
 	-rm -f $(PATCHELF_OBJ_TARGET)
 distclean-patchelf:
-	-rm -rf patchelf-$(PATCHELF_VER).tar.bz2 patchelf-$(PATCHELF_VER)
+	-rm -rf patchelf-$(PATCHELF_VER).tar.gz patchelf-$(PATCHELF_VER)
 
-get-patchelf: patchelf-$(PATCHELF_VER).tar.bz2
+get-patchelf: patchelf-$(PATCHELF_VER).tar.gz
 configure-patchelf: patchelf-$(PATCHELF_VER)/config.status
 compile-patchelf: $(PATCHELF_SOURCE)
 check-patchelf: patchelf-$(PATCHELF_VER)/checked
