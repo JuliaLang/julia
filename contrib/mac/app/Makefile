@@ -28,7 +28,7 @@ dmg:
 	-cp -f Julia.icns dmg/.VolumeIcon.icns
 	-ln -fs /Applications ./dmg/Applications
 	-chmod 775 ./dmg/Julia-$(VERSION_SUFFIX).app/Contents/MacOS/Julia
-	hdiutil create Julia-$(VERSION_SUFFIX).dmg -ov -volname "Julia" -imagekey zlib-level=9 -srcfolder dmg
+	hdiutil create Julia-$(VERSION_SUFFIX).dmg -size 200m -ov -volname "Julia" -imagekey zlib-level=9 -srcfolder dmg
 
 
 clean:
