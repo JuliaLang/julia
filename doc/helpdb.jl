@@ -195,6 +195,17 @@
 
 "),
 
+("Base","workspace","workspace()
+
+   Replace the top-level module (\"Main\") with a new one, providing a
+   clean workspace. The previous \"Main\" module is made available as
+   \"LastMain\". A previously-loaded package can be accessed using a
+   statement such as \"using LastMain.Package\".
+
+   This function should only be used interactively.
+
+"),
+
 ("Base","is","is(x, y) -> Bool
 
    Determine whether \"x\" and \"y\" are identical, in the sense that
@@ -994,6 +1005,44 @@
 
 "),
 
+("Base","maxabs","maxabs(itr)
+
+   Compute the maximum absolute value of a collection of values.
+
+"),
+
+("Base","maxabs","maxabs(A, dims)
+
+   Compute the maximum absolute values over given dimensions.
+
+"),
+
+("Base","maxabs!","maxabs!(r, A)
+
+   Compute the maximum absolute values over the singleton dimensions
+   of \"r\", and write values to \"r\".
+
+"),
+
+("Base","minabs","minabs(itr)
+
+   Compute the minimum absolute value of a collection of values.
+
+"),
+
+("Base","minabs","minabs(A, dims)
+
+   Compute the minimum absolute values over given dimensions.
+
+"),
+
+("Base","minabs!","minabs!(r, A)
+
+   Compute the minimum absolute values over the singleton dimensions
+   of \"r\", and write values to \"r\".
+
+"),
+
 ("Base","sum","sum(itr)
 
    Returns the sum of all elements in a collection.
@@ -1017,6 +1066,48 @@
 
    Sum the results of calling function \"f\" on each element of
    \"itr\".
+
+"),
+
+("Base","sumabs","sumabs(itr)
+
+   Sum absolute values of all elements in a collection. This is
+   equivalent to *sum(abs(itr))* but faster.
+
+"),
+
+("Base","sumabs","sumabs(A, dims)
+
+   Sum absolute values of elements of an array over the given
+   dimensions.
+
+"),
+
+("Base","sumabs!","sumabs!(r, A)
+
+   Sum absolute values of elements of \"A\" over the singleton
+   dimensions of \"r\", and write results to \"r\".
+
+"),
+
+("Base","sumabs2","sumabs2(itr)
+
+   Sum squared absolute values of all elements in a collection. This
+   is equivalent to *sum(abs2(itr))* but faster.
+
+"),
+
+("Base","sumabs2","sumabs2(A, dims)
+
+   Sum squared absolute values of elements of an array over the given
+   dimensions.
+
+"),
+
+("Base","sumabs2!","sumabs2!(r, A)
+
+   Sum squared absolute values of elements of \"A\" over the singleton
+   dimensions of \"r\", and write results to \"r\".
 
 "),
 
@@ -1491,6 +1582,9 @@
    specified, replacement values from an ordered collection will be
    spliced in place of the removed item.
 
+   To insert *replacement* before an index *n* without removing any
+   items, use \"splice(collection, n-1:n, replacement)\".
+
 "),
 
 ("Base","splice!","splice!(collection, range[, replacement]) -> items
@@ -1499,6 +1593,9 @@
    containing the removed items. Subsequent items are shifted down to
    fill the resulting gap. If specified, replacement values from an
    ordered collection will be spliced in place of the removed items.
+
+   To insert *replacement* before an index *n* without removing any
+   items, use \"splice(collection, n-1:n, replacement)\".
 
 "),
 
@@ -7110,7 +7207,7 @@ popdisplay(d::Display)
 
    Store a value to a remote reference. Implements \"shared queue of
    length 1\" semantics: if a value is already present, blocks until
-   the value is removed with \"take\". Returns its first argument.
+   the value is removed with \"take!\". Returns its first argument.
 
 "),
 
@@ -9918,6 +10015,11 @@ popdisplay(d::Display)
    matrices respectively. If \"B\" is provided, the generalized eigen-
    problem is solved.  The following keyword arguments are supported:
       * \"nev\": Number of eigenvalues
+
+      * \"ncv\": Number of Krylov vectors used in the computation;
+        should satisfy \"nev+1 <= ncv <= n\" for real symmetric
+        problems and \"nev+2 <= ncv <= n\" for other problems; default
+        is \"ncv = max(20,2*nev+1)\".
 
       * \"which\": type of eigenvalues to compute. See the note below.
 
