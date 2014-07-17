@@ -15,7 +15,7 @@ function Particle{T<:Real}(x::Vector{T}, p::Vector{T}, q::T)
 end
 
 function initrand!(n::Integer)
-    #Initialize
+    #Initialize particles with random initial positions, velocities, accelerations, and charges
     particles = Particle{Float64}[]
     for i=1:n
         push!(particles,Particle(randn(3), randn(3), randn(3), randn()))
@@ -42,7 +42,7 @@ function update!{T<:Real}(particles::Vector{Particle{T}}, dt::T, ::Type{velocity
     end
 end
 
-rendernone(args...)=nothing
+rendernone(args...) = nothing
 function renderparticles{T}(eventname::String, particles::Vector{Particle{T}})
     if eventname == "finalize"
         #Use ImageMagick to convert SVG to PNG
@@ -54,31 +54,29 @@ function renderparticles{T}(eventname::String, particles::Vector{Particle{T}})
     else #Render current particle positions
 	draw(
             SVG(string(eventname,".svg"), 4inch, 4inch),
-	    compose(context(units=UnitBox(-5,-5,10,10)),
+	    compose(context(units=UnitBox(-5, -5, 10, 10)),
 	        [compose(context(), circle(p.x[1], p.x[2], 0.01),
-	         fill(p.q>0? RGB(p.q,0,0) : RGB(0,0,-p.q))) for p in particles]...
+	         fill(p.q>0 ? RGB(p.q, 0 , 0) : RGB(0, 0, -p.q))) for p in particles]...
     ))
     end
 end
 
 function rundynamics{T<:Real}(particles::Vector{Particle{T}}, tend::T=0.1, dt::T=0.001;
 	render::Function=rendernone)
-    n=length(particles)
-    forces = Array(T, 3, n)
     for (i,t) in enumerate(0:dt:tend)
-	#println("Timestep: %i (time = %t)")
+	isdefined(:DEBUG) && DEBUG && println("Timestep: %i (time = %t)")
         update!(particles, dt, velocityverlet)
 	render("traj-$i", particles)
     end
     render("finalize", particles)
 end
 
-renderer=rendernone #Uncomment the line below to generate a movie
-renderer=renderparticles
+renderer = rendernone #Uncomment the line below to generate a movie
+#renderer = renderparticles
 renderer==rendernone || using Color, Compose
 
-particles=initrand!(1000)
-rundynamics(particles,1.e-10,1.e-10)
+particles = initrand!(1000)
+rundynamics(particles, 1.e-10, 1.e-10)
 
-@profile rundynamics(particles;render=renderer)
+@profile rundynamics(particles; render=renderer)
 
