@@ -46,15 +46,21 @@ fz = float(z)
 
 z = [-4, -3, 2, 5]
 fz = float(z)
+a = randn(32) # need >16 elements to trigger BLAS code path
+b = complex(randn(32), randn(32))
 @test sumabs(Float64[]) === 0.0
 @test sumabs([int8(-2)]) === 2
 @test sumabs(z) === 14
 @test sumabs(fz) === 14.0
+@test_approx_eq sumabs(a) sum(abs(a))
+@test_approx_eq sumabs(b) sum(abs(b))
 
 @test sumabs2(Float64[]) === 0.0
 @test sumabs2([int8(-2)]) === 4
 @test sumabs2(z) === 54
 @test sumabs2(fz) === 54.0
+@test_approx_eq sumabs2(a) sum(abs2(a))
+@test_approx_eq sumabs2(b) sum(abs2(b))
 
 # check variants of summation for type-stability and other issues (#6069)
 sum2(itr) = invoke(sum, (Any,), itr)
