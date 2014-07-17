@@ -1,4 +1,5 @@
 #Molecular dynamics of gas of randomly charged particles
+#Extremely simplistic microcanonical (NVE) dynamics
 
 type Particle{T<:Real}
     x :: Vector{T} #position
@@ -35,6 +36,7 @@ end
 
 abstract integrator <: Base.Algorithm
 immutable velocityverlet <: integrator end
+
 function update!{T<:Real}(particles::Vector{Particle{T}}, dt::T, ::Type{velocityverlet})
     for p in particles
         p.p += p.a * dt/2
@@ -44,24 +46,42 @@ function update!{T<:Real}(particles::Vector{Particle{T}}, dt::T, ::Type{velocity
     end
 end
 
-function run{T<:Real}(particles::Vector{Particle{T}}, tend::T=10.0, dt::T=0.01)
+rendernone(args...)=nothing
+function renderparticles{T}(eventname::String, particles::Vector{Particle{T}})
+    if eventname == "finalize"
+        #Use ImageMagick to convert SVG to PNG
+	run(`sh -c "for a in traj-*.svg; do convert \$a -depth 8 -resize 1024x1024 \${a%svg}png; done"`)
+	#Use ffmpeg to generate video
+        run(`ffmpeg -i traj-%d.png -r 1/4 -c:v libx264 -r 30 -pix_fmt yuv420p -y traj.mp4`)
+	#Cleanup all the intermediate frames
+	run(`sh -c "rm -f traj-*.svg traj-*.png"`)
+    else #Render current particle positions
+	draw(
+            SVG(string(eventname,".svg"), 4inch, 4inch),
+	    compose(context(units=UnitBox(-5,-5,10,10)),
+	        [compose(context(), circle(p.x[1], p.x[2], 0.01),
+	         fill(p.q>0? RGB(p.q,0,0) : RGB(0,0,-p.q))) for p in particles]...
+    ))
+    end
+end
+
+function rundynamics{T<:Real}(particles::Vector{Particle{T}}, tend::T=1.0, dt::T=0.001;
+	render::Function=rendernone)
     n=length(particles)
     forces = Array(T, 3, n)
     for (i,t) in enumerate(0:dt:tend)
 	#println("Timestep: %i (time = %t)")
         update!(particles, dt, velocityverlet)
-	draw(SVG("traj-$i.svg", 4inch, 4inch), compose(
-	    context(units=UnitBox(-5,-5,10,10)),
-	    [compose(context(), circle(p.x[1], p.x[2], 0.01),
-	        fill(p.q>0? RGB(p.q,0,0) : RGB(0,0,-p.q))) for p in particles]...
-	    ))
+	render("traj-$i", particles)
     end
+    render("finalize", particles)
 end
 
-using Color, Compose
-particles=initrand!(1000)
-run(particles,1.e-10,1.e-10)
-@time run(particles)
+renderer=renderparticles
+renderer==rendernone || using Color, Compose
 
-cmd(`for a in *.svg; do convert \$a -depth 8 \${a%svg}png; done`)
-cmd(`ffmpeg -i traj-%d.png -r 1/4 -c:v libx264 -r 30 -pix_fmt yuv420p -y traj.mp4`)
+particles=initrand!(10)
+rundynamics(particles,1.e-10,1.e-10)
+
+@time rundynamics(particles;render=renderer)
+
