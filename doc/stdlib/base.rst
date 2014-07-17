@@ -1104,12 +1104,16 @@ Dequeues
    are shifted down to fill the resulting gap. If specified, replacement values from
    an ordered collection will be spliced in place of the removed item.
 
+   To insert `replacement` before an index `n` without removing any items, use ``splice(collection, n-1:n, replacement)``.
+
 .. function:: splice!(collection, range, [replacement]) -> items
 
    Remove items in the specified index range, and return a collection containing the
    removed items. Subsequent items are shifted down to fill the resulting gap.
    If specified, replacement values from an ordered collection will be spliced in place
    of the removed items.
+
+   To insert `replacement` before an index `n` without removing any items, use ``splice(collection, n-1:n, replacement)``.
 
 .. function:: resize!(collection, n) -> collection
 
