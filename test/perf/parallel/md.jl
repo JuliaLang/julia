@@ -1,5 +1,6 @@
 #Molecular dynamics of gas of randomly charged particles
 #Extremely simplistic microcanonical (NVE) dynamics
+#Uses naive pairwise potential computations
 
 type Particle{T<:Real}
     x :: Vector{T} #position
@@ -24,14 +25,9 @@ end
 
 #Compute potential at a point using naive computation
 function potential{T<:Real}(r::Vector{T}, particles::Vector{Particle{T}})
-    n=length(particles)
-    F=zeros(T,3)
-    for i=1:n
-	p1=particles[i]
-	r==p1.x && continue
-	F-=p1.q/(norm(p1.x-r)^3)*(p1.x-r)
+    F=-@parallel (+) for p in particles
+	ifelse(r==p.x, 0.0, p.q/(norm(p.x-r)^3)*(p.x-r))
     end
-    F
 end
 
 abstract integrator <: Base.Algorithm
@@ -65,7 +61,7 @@ function renderparticles{T}(eventname::String, particles::Vector{Particle{T}})
     end
 end
 
-function rundynamics{T<:Real}(particles::Vector{Particle{T}}, tend::T=1.0, dt::T=0.001;
+function rundynamics{T<:Real}(particles::Vector{Particle{T}}, tend::T=0.1, dt::T=0.001;
 	render::Function=rendernone)
     n=length(particles)
     forces = Array(T, 3, n)
@@ -77,11 +73,12 @@ function rundynamics{T<:Real}(particles::Vector{Particle{T}}, tend::T=1.0, dt::T
     render("finalize", particles)
 end
 
+renderer=rendernone #Uncomment the line below to generate a movie
 renderer=renderparticles
 renderer==rendernone || using Color, Compose
 
-particles=initrand!(10)
+particles=initrand!(1000)
 rundynamics(particles,1.e-10,1.e-10)
 
-@time rundynamics(particles;render=renderer)
+@profile rundynamics(particles;render=renderer)
 
