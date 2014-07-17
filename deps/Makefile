@@ -1581,7 +1581,6 @@ patchelf-$(PATCHELF_VER)/configure: patchelf-$(PATCHELF_VER).tar.gz
 	touch -c $@
 patchelf-$(PATCHELF_VER)/config.status: patchelf-$(PATCHELF_VER)/configure
 	cd patchelf-$(PATCHELF_VER) && \
-	./bootstrap.sh && \
 	./configure $(CONFIGURE_COMMON)
 	touch -c $@
 $(PATCHELF_SOURCE): patchelf-$(PATCHELF_VER)/config.status
