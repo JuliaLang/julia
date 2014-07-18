@@ -571,6 +571,7 @@ static Value *emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 // llvmcall(ir, (rettypes...), (argtypes...), args...)
 static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 {
+
     JL_NARGSV(llvmcall, 3)
     jl_value_t *rt = NULL, *at = NULL, *ir = NULL;
     JL_GC_PUSH3(&ir, &rt, &at);
@@ -706,7 +707,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         rettype->print(rtypename);
 
         ir_stream << "; Number of arguments: " << nargt << "\n"
-        << "define "<<rtypename.str()<<" @" << ir_name << "("<<argstream.str()<<") {\n"
+        << "define "<<rtypename.str()<<" @\"" << ir_name << "\"("<<argstream.str()<<") {\n"
         << jl_string_data(ir) << "\n}";
         SMDiagnostic Err = SMDiagnostic();
         std::string ir_string = ir_stream.str();
@@ -728,11 +729,13 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             it != argtypes.end(); ++it, ++i)
             assert(*it == f->getFunctionType()->getParamType(i));
 
+#ifdef USE_MCJIT
         if (f->getParent() != jl_Module)
         {
             FunctionMover mover(jl_Module,f->getParent());
             f = (llvm::Function*)MapValue(f,mover.VMap,RF_None,NULL,&mover);
         }
+#endif
 
         //f->dump();
         #ifndef LLVM35

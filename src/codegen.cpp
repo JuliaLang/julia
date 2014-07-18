@@ -45,6 +45,7 @@
 #include "llvm/Target/TargetMachine.h"
 #else
 #include "llvm/Analysis/Verifier.h"
+#include "llvm/Assembly/Parser.h"
 #endif
 #include "llvm/DebugInfo/DIContext.h"
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 4
