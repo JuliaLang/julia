@@ -1,4 +1,5 @@
 JULIAHOME = ..
+include ../deps/Versions.make
 include ../Make.inc
 
 PCRE_CONST = 0x[0-9a-fA-F]+|[-+]?\s*[0-9]+
@@ -51,6 +52,7 @@ else
 endif
 	@echo "const libfftw_name = \"$(LIBFFTWNAME)\"" >> $@
 	@echo "const libfftwf_name = \"$(LIBFFTWFNAME)\"" >> $@
+	@echo "const libllvm_version = \"$(LLVM_VER)\"" >> $@
 	@echo "const VERSION_STRING = \"$(JULIA_VERSION)\"" >> $@
 	@echo "const TAGGED_RELEASE_BANNER = \"$(TAGGED_RELEASE_BANNER)\"" >> $@
 	@echo "const SYSCONFDIR = \"$(sysconfdir)\"" >> $@
