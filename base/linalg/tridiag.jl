@@ -66,8 +66,8 @@ eigvals!{T<:BlasFloat}(m::SymTridiagonal{T}, irange::UnitRange) = LAPACK.stegr!(
 eigvals!{T<:BlasFloat}(m::SymTridiagonal{T}, vl::Real, vu::Real) = LAPACK.stegr!('N', 'V', m.dv, m.ev, vl, vu, 0, 0)[1]
 
 #Computes largest and smallest eigenvalue
-eigmax(m::SymTridiagonal) = eigvals(m, size(m, 1), size(m, 1))[1]
-eigmin(m::SymTridiagonal) = eigvals(m, 1, 1)[1]
+eigmax(m::SymTridiagonal) = eigvals(m, size(m, 1):size(m, 1))[1]
+eigmin(m::SymTridiagonal) = eigvals(m, 1:1)[1]
 
 #Compute selected eigenvectors only corresponding to particular eigenvalues
 eigvecs(m::SymTridiagonal) = eigfact(m)[:vectors]
