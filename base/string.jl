@@ -95,6 +95,8 @@ end
 
 isvalid(s::DirectIndexString, i::Integer) = (start(s) <= i <= endof(s))
 function isvalid(s::String, i::Integer)
+    i < 1 && return false
+    done(s,i) && return false
     try
         next(s,i)
         true

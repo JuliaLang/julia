@@ -1058,6 +1058,14 @@ let s="lorem ipsum",
     end
 end #let
 
+#for isvalid(SubString{UTF8String})
+let s = utf8("Σx + βz - 2")
+  for i in -1:length(s)+2
+      ss=SubString(s,1,i)
+      @test isvalid(ss,i)==isvalid(s,i)
+  end
+end
+
 ss=SubString("hello",1,5)
 @test_throws BoundsError ind2chr(ss, -1)
 @test_throws BoundsError chr2ind(ss, -1)
