@@ -60,7 +60,9 @@ function reinterpret{T,Tv,Ti}(::Type{T}, a::SparseMatrixCSC{Tv,Ti})
 end
 
 function sparse_compute_reshaped_colptr_and_rowval{Ti}(colptrS::Vector{Ti}, rowvalS::Vector{Ti}, mS::Int, nS::Int, colptrA::Vector{Ti}, rowvalA::Vector{Ti}, mA::Int, nA::Int)
-    ((length(colptrA) == (nA+1)) && (maximum(colptrA) <= (length(rowvalA)+1)) && (maximum(rowvalA) <= mA)) || throw(BoundsError())
+    lrowvalA = length(rowvalA)
+    maxrowvalA = (lrowvalA > 0) ? maximum(rowvalA) : zero(Ti)
+    ((length(colptrA) == (nA+1)) && (maximum(colptrA) <= (lrowvalA+1)) && (maxrowvalA <= mA)) || throw(BoundsError())
 
     colptrS[1] = 1
     colA = 1
