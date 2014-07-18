@@ -372,8 +372,8 @@ ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 	cd dist-extras && \
 	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z920.exe && \
 	7z x -y 7z920.exe 7z.exe 7z.dll && \
-	$(JLDOWNLOAD) ${OPENSUSE_MIRROR}/repositories/windows:/mingw:/win32/openSUSE_13.1/noarch/mingw32-libexpat-2.0.1-8.1.noarch.rpm && \
-	mv mingw32-libexpat-*.rpm mingw-libexpat.rpm && \
+	$(JLDOWNLOAD) ${OPENSUSE_MIRROR}/repositories/windows:/mingw:/win32/openSUSE_13.1/noarch/mingw32-libexpat1-2.0.1-8.1.noarch.rpm && \
+	mv mingw32-libexpat1-*.rpm mingw-libexpat.rpm && \
 	$(JLDOWNLOAD) ${OPENSUSE_MIRROR}/repositories/windows:/mingw:/win32/openSUSE_13.1/noarch/mingw32-zlib-1.2.8-3.12.noarch.rpm && \
 	mv mingw32-zlib-*.rpm mingw-zlib.rpm
 else ifeq ($(ARCH),x86_64)
@@ -382,8 +382,8 @@ else ifeq ($(ARCH),x86_64)
 	7z x -y 7z920-x64.msi _7z.exe _7z.dll && \
 	mv _7z.dll 7z.dll && \
 	mv _7z.exe 7z.exe && \
-	$(JLDOWNLOAD) ${OPENSUSE_MIRROR}/repositories/windows:/mingw:/win64/openSUSE_13.1/noarch/mingw64-libexpat-2.0.1-7.1.noarch.rpm && \
-	mv mingw64-libexpat-*.rpm mingw-libexpat.rpm && \
+	$(JLDOWNLOAD) ${OPENSUSE_MIRROR}/repositories/windows:/mingw:/win64/openSUSE_13.1/noarch/mingw64-libexpat1-2.0.1-7.1.noarch.rpm && \
+	mv mingw64-libexpat1-*.rpm mingw-libexpat.rpm && \
 	$(JLDOWNLOAD) ${OPENSUSE_MIRROR}/repositories/windows:/mingw:/win64/openSUSE_13.1/noarch/mingw64-zlib-1.2.8-3.1.noarch.rpm && \
 	mv mingw64-zlib-*.rpm mingw-zlib.rpm
 else
