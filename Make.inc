@@ -80,6 +80,9 @@ else
 JULIA_COMMIT = $(JULIA_VERSION)
 endif
 
+# OpenSUSE mirror
+OPENSUSE_MIRROR = "http://download.opensuse.org/"
+
 # Directories where said libraries get installed to
 bindir = $(prefix)/bin
 libdir = $(prefix)/lib
