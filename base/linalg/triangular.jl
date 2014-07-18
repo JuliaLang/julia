@@ -7,6 +7,11 @@ function Triangular{T}(A::AbstractMatrix{T}, uplo::Symbol, isunit::Bool=false)
     return Triangular{T,typeof(A),uplo,isunit}(A)
 end
 
++{T, MT, uplo}(A::Triangular{T, MT, uplo}, B::Triangular{T, MT, uplo}) = Triangular(A.data + B.data, uplo)
++{T, MT, uplo1, uplo2}(A::Triangular{T, MT, uplo1}, B::Triangular{T, MT, uplo2}) = full(A) + full(B)
+-{T, MT, uplo}(A::Triangular{T, MT, uplo}, B::Triangular{T, MT, uplo}) = Triangular(A.data - B.data, uplo)
+-{T, MT, uplo1, uplo2}(A::Triangular{T, MT, uplo1}, B::Triangular{T, MT, uplo2}) = full(A) - full(B)
+
 ######################
 # BlasFloat routines #
 ######################
