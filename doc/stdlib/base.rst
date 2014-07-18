@@ -3123,7 +3123,7 @@ Mathematical Functions
 
 .. function:: cis(z)
 
-   Return ``cos(z) + i*sin(z)`` if z is real. Return ``(cos(real(z)) + i*sin(real(z)))/exp(imag(z))`` if ``z`` is complex
+   Return :math:`\exp(iz)`.
 
 .. function:: binomial(n,k)
 

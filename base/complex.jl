@@ -273,11 +273,13 @@ sqrt(z::Complex) = sqrt(float(z))
 #     return Complex(abs(iz)/r/2, copysign(r,iz))
 # end
 
+# compute exp(im*theta)
 cis(theta::Real) = Complex(cos(theta),sin(theta))
 function cis(z::Complex)
-    v = 1/exp(imag(z))
+    v = inv(exp(imag(z)))
     Complex(v*cos(real(z)), v*sin(real(z)))
 end
+@vectorize_1arg Number cis
 
 angle(z::Complex) = atan2(imag(z), real(z))
 
