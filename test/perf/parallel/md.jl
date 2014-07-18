@@ -75,8 +75,10 @@ renderer = rendernone #Uncomment the line below to generate a movie
 #renderer = renderparticles
 renderer==rendernone || using Color, Compose
 
+#Initialize N particles
 particles = initrand!(1000)
+
+#Precompile
 rundynamics(particles, 1.e-10, 1.e-10)
 
-@profile rundynamics(particles; render=renderer)
-
+rundynamics(particles; render=renderer)
