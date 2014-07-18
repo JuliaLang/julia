@@ -426,15 +426,21 @@ else ifeq ($(ARCH),i686)
 BINARY=32
 else ifeq ($(ARCH),x86_64)
 BINARY=64
+else ifeq ($(ARCH),arm)
+BINARY=32
 else
 $(error "unknown word-size for arch: $(ARCH)")
 endif
+
+ifneq ($(ARCH),arm)
 CC += -m$(BINARY)
 CXX += -m$(BINARY)
 FC += -m$(BINARY)
+endif
 
 ifeq ($(USEGCC),1)
-ifneq ($(ARCH), ppc64)
+ifeq ($(ARCH), arm)
+else ifneq ($(ARCH), ppc64)
   SHIPFLAGS += -momit-leaf-frame-pointer
 endif
 endif
