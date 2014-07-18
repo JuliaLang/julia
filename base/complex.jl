@@ -276,7 +276,7 @@ sqrt(z::Complex) = sqrt(float(z))
 # compute exp(im*theta)
 cis(theta::Real) = Complex(cos(theta),sin(theta))
 function cis(z::Complex)
-    v = inv(exp(imag(z)))
+    v = exp(-imag(z))
     Complex(v*cos(real(z)), v*sin(real(z)))
 end
 @vectorize_1arg Number cis
