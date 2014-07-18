@@ -1,6 +1,6 @@
 #Molecular dynamics of gas of randomly charged particles
 #Extremely simplistic microcanonical (NVE) dynamics
-#Uses naive pairwise potential computations
+#Uses naive pairwise force computations
 
 type Particle{T<:Real}
     x :: Vector{T} #position
@@ -23,8 +23,8 @@ function initrand!(n::Integer)
     particles
 end
 
-#Compute potential at a point using naive computation
-function potential{T<:Real}(r::Vector{T}, particles::Vector{Particle{T}})
+#Compute force at a point using naive computation
+function force{T<:Real}(r::Vector{T}, particles::Vector{Particle{T}})
     F=-@parallel (+) for p in particles
 	ifelse(r==p.x, 0.0, p.q/(norm(p.x-r)^3)*(p.x-r))
     end
@@ -37,7 +37,7 @@ function update!{T<:Real}(particles::Vector{Particle{T}}, dt::T, ::Type{velocity
     for p in particles
         p.p += p.a * dt/2
         p.x += p.p * dt
-	p.a  = p.q * potential(p.x, particles)
+	p.a  = p.q * force(p.x, particles)
         p.p += p.a * dt/2
     end
 end
