@@ -170,6 +170,15 @@ for relty in (Float32, Float64), elty in (relty, )#XXX Complex{relty}) doesn't w
     end
 end
 
+#Issue #7647: test xsyevr, xheevr, xstevr drivers
+for Mi7647 in {Symmetric(diagm([1.0:3.0])), Hermitian(diagm([1.0:3.0])),
+          Hermitian(diagm(complex([1.0:3.0]))), SymTridiagonal([1.0:3.0], zeros(2))}
+    debug && println("Eigenvalues in interval for $(typeof(Mi7647))")
+    @test eigmin(Mi7647)  == eigvals(Mi7647, 0.5, 1.5)[1] == 1.0
+    @test eigmax(Mi7647)  == eigvals(Mi7647, 2.5, 3.5)[1] == 3.0
+    @test eigvals(Mi7647) == eigvals(Mi7647, 0.5, 3.5) == [1.0:3.0]
+end
+
 debug && println("Bidiagonal matrices")
 for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     debug && println("elty is $(elty), relty is $(relty)")
@@ -321,5 +330,4 @@ A=Triangular(full(Diagonal(a)), :L) #morally Diagonal
 for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Triangular, Matrix]
     @test full(convert(newtype, A)) == full(A)
 end
-
 
