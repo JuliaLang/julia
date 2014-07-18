@@ -398,3 +398,8 @@ end
 #Issue 7507
 @test (i7507=sparsevec(Dict{Int64, Float64}(), 10))==spzeros(10,1)
 
+#Issue 7650
+let S = spzeros(3, 3)
+    @test size(reshape(S, 9, 1)) == (9,1)
+end
+
