@@ -208,7 +208,7 @@ Library improvements
     * `bytestring` is automatically called on `String` arguments for
       conversion to `Ptr{Uint8}` in `ccall` ([#5677]).
 
-  * Linear Algebra improvements
+  * Linear algebra improvements
 
       * Balancing options for eigenvector calculations for general matrices ([#5428]).
 
@@ -251,7 +251,7 @@ Library improvements
         for matrices which are representable in both source and destination types. ([5e3f074b])
 
       * Allow for addition and subtraction over mixed matrix types, automatically promoting
-        the result to the denser matrix type ([a448e080])
+        the result to the denser matrix type ([a448e080], [#5927])
 
       * new algorithms for linear solvers and eigensystems of `Bidiagonal`
         matrices of generic element types ([#5277])
@@ -274,6 +274,11 @@ Library improvements
       * parametrize Triangular on matrix type ([#7064])
 
       * Lyapunov / Sylvester solver ([#7435])
+
+      * `eigvals` for `Symmetric`, `Tridiagonal` and `Hermitian` matrices now
+        support additional method signatures: ([#3688], [#6652], [#6678], [#7647])
+        - `eigvals(M, el, eu)` finds all eigenvalues in the interval `(el, eu]`
+        - `eigvals(M, il:iu)` finds the `il`th through the `iu`th eigenvalues (in ascending order)
 
     * Dense linear algebra for generic matrix element types
 
@@ -760,6 +765,7 @@ Too numerous to mention.
 [#3605]: https://github.com/JuliaLang/julia/issues/3605
 [#3649]: https://github.com/JuliaLang/julia/issues/3649
 [#3665]: https://github.com/JuliaLang/julia/issues/3665
+[#3688]: https://github.com/JuliaLang/julia/issues/3688
 [#3697]: https://github.com/JuliaLang/julia/issues/3697
 [#3719]: https://github.com/JuliaLang/julia/issues/3719
 [#3790]: https://github.com/JuliaLang/julia/issues/3790
@@ -849,6 +855,7 @@ Too numerous to mention.
 [#5819]: https://github.com/JuliaLang/julia/issues/5819
 [#5827]: https://github.com/JuliaLang/julia/issues/5827
 [#5832]: https://github.com/JuliaLang/julia/issues/5832
+[#5927]: https://github.com/JuliaLang/julia/issues/5927
 [#5936]: https://github.com/JuliaLang/julia/issues/5936
 [#5970]: https://github.com/JuliaLang/julia/issues/5970
 [#6056]: https://github.com/JuliaLang/julia/issues/6056
@@ -864,6 +871,8 @@ Too numerous to mention.
 [#6273]: https://github.com/JuliaLang/julia/issues/6273
 [#6582]: https://github.com/JuliaLang/julia/issues/6582
 [#6624]: https://github.com/JuliaLang/julia/issues/6624
+[#6652]: https://github.com/JuliaLang/julia/issues/6652
+[#6678]: https://github.com/JuliaLang/julia/issues/6678
 [#6726]: https://github.com/JuliaLang/julia/issues/6726
 [#6769]: https://github.com/JuliaLang/julia/issues/6769
 [#6773]: https://github.com/JuliaLang/julia/issues/6773
@@ -887,3 +896,4 @@ Too numerous to mention.
 [#7390]: https://github.com/JuliaLang/julia/issues/7390
 [#7435]: https://github.com/JuliaLang/julia/issues/7435
 [#7513]: https://github.com/JuliaLang/julia/issues/7513
+[#7647]: https://github.com/JuliaLang/julia/issues/7647
