@@ -185,6 +185,17 @@ complex(A::SparseMatrixCSC, B::SparseMatrixCSC) = A + im*B
 
 # Construct a sparse vector
 
+function vec{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
+    colptr = Array(Ti,2)
+    rowval = similar(S.rowval)
+    lS = length(S)
+    sparse_compute_reshaped_colptr_and_rowval(colptr, rowval, lS, 1, S.colptr, S.rowval, S.m, S.n)
+    SparseMatrixCSC{Tv,Ti}(lS, 1, colptr, rowval, copy(S.nzval))
+end
+
+sparsevec(A::AbstractMatrix) = reshape(sparse(A), (length(A),1))
+sparsevec(S::SparseMatrixCSC) = vec(S)
+
 sparsevec{K<:Integer,V}(d::Dict{K,V}, len::Int) = sparsevec(collect(keys(d)), collect(values(d)), len)
 
 sparsevec{K<:Integer,V}(d::Dict{K,V}) = sparsevec(collect(keys(d)), collect(values(d)))
