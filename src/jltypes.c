@@ -128,6 +128,7 @@ static int jl_has_typevars__(jl_value_t *v, int incl_wildcard, jl_tuple_t *p)
 
 static int jl_has_typevars_(jl_value_t *v, int incl_wildcard)
 {
+    if (jl_is_typevar(v)) return 1;
     return jl_has_typevars__(v, incl_wildcard, NULL);
 }
 
@@ -140,6 +141,7 @@ static int jl_has_typevars_from(jl_value_t *v, jl_tuple_t *p)
 
 int jl_has_typevars(jl_value_t *v)
 {
+    if (jl_is_typevar(v)) return 1;
     return jl_has_typevars__(v, 0, NULL);
 }
 
@@ -507,8 +509,10 @@ static jl_value_t *intersect_tag(jl_datatype_t *a, jl_datatype_t *b,
             jl_value_t *bp = jl_tupleref(b->parameters,i);
             if (jl_is_typevar(ap)) {
                 if (var==invariant && jl_is_typevar(bp)) {
-                    if (((jl_tvar_t*)ap)->bound != ((jl_tvar_t*)bp)->bound)
+                    if (((jl_tvar_t*)ap)->bound != ((jl_tvar_t*)bp)->bound) {
+                        JL_GC_POP();
                         return (jl_value_t*)jl_bottom_type;
+                    }
                     if ((is_unspec(a) && is_bnd((jl_tvar_t*)bp,penv)) ||
                         (is_bnd((jl_tvar_t*)ap,penv) && is_unspec(b))) {
                         // Foo{T} and Foo can never be equal since the former

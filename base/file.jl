@@ -8,7 +8,7 @@ function pwd()
 end
 
 function cd(dir::String) 
-    uv_error("chdir $dir", ccall(:uv_chdir, Cint, (Ptr{Uint8},), bytestring(dir)))
+    uv_error("chdir $dir", ccall(:uv_chdir, Cint, (Ptr{Uint8},), dir))
 end
 cd() = cd(homedir())
 
@@ -35,7 +35,7 @@ end
 cd(f::Function) = cd(f, homedir())
 
 function mkdir(path::String, mode::Unsigned=0o777)
-    @unix_only ret = ccall(:mkdir, Int32, (Ptr{Uint8},Uint32), bytestring(path), mode)
+    @unix_only ret = ccall(:mkdir, Int32, (Ptr{Uint8},Uint32), path, mode)
     @windows_only ret = ccall(:_wmkdir, Int32, (Ptr{Uint16},), utf16(path))
     systemerror(:mkdir, ret != 0)
 end
@@ -51,16 +51,24 @@ end
 mkdir(path::String, mode::Signed) = error("mode must be an unsigned integer; try 0o$mode")
 mkpath(path::String, mode::Signed) = error("mode must be an unsigned integer; try 0o$mode")
 
-function rmdir(path::String)
-    @unix_only ret = ccall(:rmdir, Int32, (Ptr{Uint8},), bytestring(path))
-    @windows_only ret = ccall(:_wrmdir, Int32, (Ptr{Uint16},), utf16(path))
-    systemerror(:rmdir, ret != 0)
+function rm(path::String; recursive::Bool=false)
+    if islink(path) || !isdir(path)
+        FS.unlink(path)
+    else
+        if recursive
+            for p in readdir(path)
+                rm(joinpath(path, p), recursive=true)
+            end
+        end
+        @unix_only ret = ccall(:rmdir, Int32, (Ptr{Uint8},), path)
+        @windows_only ret = ccall(:_wrmdir, Int32, (Ptr{Uint16},), utf16(path))
+        systemerror(:rmdir, ret != 0)
+    end
 end
 
 
 # The following use Unix command line facilites
 
-rm(path::String) = FS.unlink(path)
 cp(src::String, dst::String) = FS.sendfile(src, dst)
 mv(src::String, dst::String) = FS.rename(src, dst)
 touch(path::String) = run(`touch $path`)
@@ -143,7 +151,7 @@ function readdir(path::String)
 
     # defined in sys.c, to call uv_fs_readdir, which sets errno on error.
     file_count = ccall(:jl_readdir, Int32, (Ptr{Uint8}, Ptr{Uint8}),
-                       bytestring(path), uv_readdir_req)
+                        path, uv_readdir_req)
     systemerror("unable to read directory $path", file_count < 0)
 
     # The list of dir entries is returned as a contiguous sequence of null-terminated

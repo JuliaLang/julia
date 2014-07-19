@@ -47,6 +47,8 @@ for r in uv_req_types
 @eval const $(symbol("_sizeof_"*lowercase(string(r)))) = uv_sizeof_req($r)
 end
 
+nb_available(s::AsyncStream) = nb_available(s.buffer)
+
 function eof(s::AsyncStream)
     wait_readnb(s,1)
     !isopen(s) && nb_available(s.buffer)<=0
@@ -59,6 +61,7 @@ const StatusOpen        = 3 # handle is usable
 const StatusActive      = 4 # handle is listening for read/write/connect events
 const StatusClosing     = 5 # handle is closing / being closed
 const StatusClosed      = 6 # handle is closed
+const StatusEOF         = 7 # handle is a TTY that has seen an EOF event
 function uv_status_string(x)
     s = x.status
     if x.handle == C_NULL
@@ -82,6 +85,8 @@ function uv_status_string(x)
         return "closing"
     elseif s == StatusClosed
         return "closed"
+    elseif s == StatusEOF
+        return "eof"
     end
     return "invalid status"
 end
@@ -176,13 +181,18 @@ type TTY <: AsyncStream
     readnotify::Condition
     closecb::Callback
     closenotify::Condition
-    TTY(handle) = new(
-        handle,
-        StatusUninit,
-        true,
-        PipeBuffer(),
-        false,Condition(),
-        false,Condition())
+    @windows_only ispty::Bool
+    function TTY(handle)
+        tty = new(
+            handle,
+            StatusUninit,
+            true,
+            PipeBuffer(),
+            false,Condition(),
+            false,Condition())
+        @windows_only tty.ispty = bool(ccall(:jl_ispty, Cint, (Ptr{Void},), handle))
+        tty
+    end
 end
 
 function TTY(fd::RawFD; readable::Bool = false)
@@ -272,11 +282,11 @@ end
 
 flush(::AsyncStream) = nothing
 
-function isopen(x)
+function isopen(x::Union(AsyncStream,UVServer))
     if !(x.status != StatusUninit && x.status != StatusInit)
         error("I/O object not initialized")
     end
-    x.status != StatusClosed
+    x.status != StatusClosed && x.status != StatusEOF
 end
 
 function check_open(x)
@@ -385,10 +395,10 @@ function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::
             notify_error(stream.readnotify, UVError("readcb",nread))
         else
             if isa(stream,TTY)
-                notify_error(stream.readnotify, EOFError())
+                stream.status = StatusEOF
+                notify(stream.closenotify)
             else
                 close(stream)
-                notify(stream.readnotify)
             end
         end
     else
@@ -404,7 +414,16 @@ function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::
        (nb_available(stream.buffer) == stream.buffer.maxsize)
         stop_reading(stream)
     end
- end
+end
+
+reseteof(x::IO) = nothing
+function reseteof(x::TTY)
+    if x.status == StatusEOF
+        x.status = StatusOpen
+    end
+    nothing
+end
+
 ##########################################
 # Async Workers
 ##########################################
@@ -932,3 +951,8 @@ for (x,writable,unix_fd,c_symbol) in ((:STDIN,false,0,:jl_uv_stdin),(:STDOUT,tru
         end
     end
 end
+
+mark(x::AsyncStream)     = mark(x.buffer)
+unmark(x::AsyncStream)   = unmark(x.buffer)
+reset(x::AsyncStream)    = reset(x.buffer)
+ismarked(x::AsyncStream) = ismarked(x.buffer)

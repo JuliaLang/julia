@@ -45,7 +45,7 @@
 	    (eval `(define ,(symbol (string "is-" name "?")) (Set ,name))))
 	  prec-names)
 
-(define unary-ops '(+ - ! ~ |<:| |>:| √ ∛ ∜))
+(define unary-ops '(+ - ! ¬ ~ |<:| |>:| √ ∛ ∜))
 
 ; operators that are both unary and binary
 (define unary-and-binary-ops '(+ - $ & ~))
@@ -63,7 +63,7 @@
 (define ctrans-op (string->symbol "'"))
 (define vararg-op (string->symbol "..."))
 
-(define operators (list* '~ '! '-> '√ '∛ '∜ ctrans-op trans-op vararg-op
+(define operators (list* '~ '! '¬ '-> '√ '∛ '∜ ctrans-op trans-op vararg-op
 			 (delete-duplicates
 			  (apply append (map eval prec-names)))))
 
@@ -534,7 +534,7 @@
 		  (let ((then (without-range-colon (parse-eq* s))))
 		    (if (not (eq? (take-token s) ':))
 			(error "colon expected in \"?\" expression")
-			(list 'if ex then (parse-cond s))))))
+			(list 'if ex then (parse-eq* s))))))
 	  #;((string? ex)
 	   (let loop ((args (list ex)))
 	     (let ((next (peek-token s)))
@@ -1016,10 +1016,9 @@
      (let* ((ranges (parse-comma-separated-iters s))
 	    (body   (parse-block s)))
        (expect-end s)
-       (let nest ((r ranges))
-	 (if (null? r)
-	     body
-	     `(for ,(car r) ,(nest (cdr r)))))))
+       `(for ,(if (length= ranges 1) (car ranges) (cons 'block ranges))
+	     ,body)))
+
     ((if)
      (let* ((test (parse-cond s))
 	    (then (if (memq (require-token s) '(else elseif))

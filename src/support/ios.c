@@ -826,7 +826,12 @@ ios_t *ios_file(ios_t *s, char *fname, int rd, int wr, int create, int trunc)
     if (create) flags |= O_CREAT;
     if (trunc)  flags |= O_TRUNC;
 #if defined(_OS_WINDOWS_)
-    fd = open(fname, flags | O_BINARY, _S_IREAD | _S_IWRITE);
+    size_t len = strlen(fname)+1;
+    size_t wlen = MultiByteToWideChar(CP_UTF8, 0, fname, len, NULL, 0);
+    if (!wlen) goto open_file_err;
+    wchar_t *fname_w = (wchar_t*)alloca(wlen*sizeof(wchar_t));
+    if (!MultiByteToWideChar(CP_UTF8, 0, fname, len, fname_w, wlen)) goto open_file_err;
+    fd = _wopen(fname_w, flags | O_BINARY, _S_IREAD | _S_IWRITE);
 #else
     fd = open(fname, flags, S_IRUSR | S_IWUSR /* 0600 */ | S_IRGRP | S_IROTH /* 0644 */);
 #endif
@@ -979,7 +984,7 @@ int ios_getutf8(ios_t *s, uint32_t *pwc)
         *pwc = (uint32_t)(unsigned char)c0;
         return 1;
     }
-    sz = u8_seqlen(&c0)-1;
+    sz = u8_seqlen(&c0);
     if (ios_ungetc(c, s) == IOS_EOF)
         return IOS_EOF;
     if (ios_readprep(s, sz) < sz)
@@ -987,7 +992,7 @@ int ios_getutf8(ios_t *s, uint32_t *pwc)
         return IOS_EOF;
     size_t i = s->bpos;
     *pwc = u8_nextchar(s->buf, &i);
-    ios_read(s, buf, sz+1);
+    ios_read(s, buf, sz);
     return 1;
 }
 
@@ -1005,7 +1010,7 @@ int ios_peekutf8(ios_t *s, uint32_t *pwc)
         *pwc = (uint32_t)(unsigned char)c0;
         return 1;
     }
-    sz = u8_seqlen(&c0)-1;
+    sz = u8_seqlen(&c0);
     if (ios_readprep(s, sz) < sz)
         return IOS_EOF;
     size_t i = s->bpos;

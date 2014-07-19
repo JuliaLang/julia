@@ -7,7 +7,7 @@
 Introduction
 ------------
 
-The Julia standard library contains a range of functions and macros appropriate for performing scientific and numerical computing, but is also as broad as those of many general purpose programming languages.  Additional functionality is available from a growing collection of :ref:`available-packages`. Functions are grouped by topic below.  
+The Julia standard library contains a range of functions and macros appropriate for performing scientific and numerical computing, but is also as broad as those of many general purpose programming languages.  Additional functionality is available from a growing collection of available packages. Functions are grouped by topic below.  
 
 Some general notes:
 
@@ -75,7 +75,9 @@ Getting Around
 
 .. function:: require(file::String...)
 
-   Load source files once, in the context of the ``Main`` module, on every active node, searching the system-wide ``LOAD_PATH`` for files. ``require`` is considered a top-level operation, so it sets the current ``include`` path but does not use it to search for files (see help for ``include``). This function is typically used to load library code, and is implicitly called by ``using`` to load packages.
+   Load source files once, in the context of the ``Main`` module, on every active node, searching standard locations for files. ``require`` is considered a top-level operation, so it sets the current ``include`` path but does not use it to search for files (see help for ``include``). This function is typically used to load library code, and is implicitly called by ``using`` to load packages.
+
+   When searching for files, ``require`` first looks in the current working directory, then looks for package code under ``Pkg.dir()``, then tries paths in the global array ``LOAD_PATH``.
 
 .. function:: reload(file::String)
 
@@ -125,6 +127,14 @@ Getting Around
 
    Print information about the version of Julia in use. If the ``verbose`` argument
    is true, detailed system information is shown as well.
+
+.. function:: workspace()
+
+   Replace the top-level module (``Main``) with a new one, providing a clean workspace.
+   The previous ``Main`` module is made available as ``LastMain``. A previously-loaded
+   package can be accessed using a statement such as ``using LastMain.Package``.
+
+   This function should only be used interactively.
 
 All Objects
 -----------
@@ -437,7 +447,7 @@ Syntax
 
 .. function:: esc(e::ANY)
 
-   Only valid in the context of an Expr returned from a macro. Prevents the macro hygine pass from turning embedded variables into gensym variables. See the :ref:`man-macros`
+   Only valid in the context of an Expr returned from a macro. Prevents the macro hygiene pass from turning embedded variables into gensym variables. See the :ref:`man-macros`
    section of the Metaprogramming chapter of the manual for more details and examples.
 
 .. function:: gensym([tag])
@@ -677,6 +687,32 @@ Iterable Collections
    For an array input, returns the value and index of the minimum over
    the given dimensions.
 
+.. function:: maxabs(itr)
+
+   Compute the maximum absolute value of a collection of values.
+
+.. function:: maxabs(A, dims)
+
+   Compute the maximum absolute values over given dimensions.
+
+.. function:: maxabs!(r, A)
+
+   Compute the maximum absolute values over the singleton dimensions of ``r``,
+   and write values to ``r``.
+
+.. function:: minabs(itr)
+
+   Compute the minimum absolute value of a collection of values.
+
+.. function:: minabs(A, dims)
+
+   Compute the minimum absolute values over given dimensions.
+
+.. function:: minabs!(r, A)
+
+   Compute the minimum absolute values over the singleton dimensions of ``r``,
+   and write values to ``r``.
+
 .. function:: sum(itr)
 
    Returns the sum of all elements in a collection.
@@ -693,6 +729,36 @@ Iterable Collections
 .. function:: sum(f, itr)
 
    Sum the results of calling function ``f`` on each element of ``itr``.
+
+.. function:: sumabs(itr)
+
+   Sum absolute values of all elements in a collection. This is
+   equivalent to `sum(abs(itr))` but faster.
+
+.. function:: sumabs(A, dims)
+
+   Sum absolute values of elements of an array over the given
+   dimensions.
+
+.. function:: sumabs!(r, A)
+
+   Sum absolute values of elements of ``A`` over the singleton
+   dimensions of ``r``, and write results to ``r``.
+
+.. function:: sumabs2(itr)
+
+   Sum squared absolute values of all elements in a collection. This
+   is equivalent to `sum(abs2(itr))` but faster.
+
+.. function:: sumabs2(A, dims)
+
+   Sum squared absolute values of elements of an array over the given
+   dimensions.
+
+.. function:: sumabs2!(r, A)
+
+   Sum squared absolute values of elements of ``A`` over the singleton
+   dimensions of ``r``, and write results to ``r``.
 
 .. function:: prod(itr)
 
@@ -1038,12 +1104,16 @@ Dequeues
    are shifted down to fill the resulting gap. If specified, replacement values from
    an ordered collection will be spliced in place of the removed item.
 
+   To insert `replacement` before an index `n` without removing any items, use ``splice(collection, n-1:n, replacement)``.
+
 .. function:: splice!(collection, range, [replacement]) -> items
 
    Remove items in the specified index range, and return a collection containing the
    removed items. Subsequent items are shifted down to fill the resulting gap.
    If specified, replacement values from an ordered collection will be spliced in place
    of the removed items.
+
+   To insert `replacement` before an index `n` without removing any items, use ``splice(collection, n-1:n, replacement)``.
 
 .. function:: resize!(collection, n) -> collection
 
@@ -1570,6 +1640,33 @@ I/O
 
    Seek a stream relative to the current position.
 
+.. function:: mark(s)
+
+   Add a mark at the current position of stream ``s``.  Returns the marked position.
+
+   See also :func:`unmark`, :func:`reset`, :func:`ismarked`
+
+.. function:: unmark(s)
+
+   Remove a mark from stream ``s``. 
+   Returns ``true`` if the stream was marked, ``false`` otherwise.
+
+   See also :func:`mark`, :func:`reset`, :func:`ismarked`
+
+.. function:: reset(s)
+
+   Reset a stream ``s`` to a previously marked position, and remove the mark.  
+   Returns the previously marked position.
+   Throws an error if the stream is not marked.
+
+   See also :func:`mark`, :func:`unmark`, :func:`ismarked`
+
+.. function:: ismarked(s)
+
+   Returns true if stream ``s`` is marked.
+
+   See also :func:`mark`, :func:`unmark`, :func:`reset`
+
 .. function:: eof(stream) -> Bool
 
    Tests whether an I/O stream is at end-of-file. If the stream is not yet
@@ -1751,7 +1848,7 @@ I/O
     04   Read Permission
    ==== =====================
 
-   For allowed arguments, see the stat method.
+   For allowed arguments, see ``stat``.
 
 .. function:: gperm(file)
 
@@ -1778,9 +1875,10 @@ I/O
 
    Move a file from `src` to `dst`.
 
-.. function:: rm(path::String)
+.. function:: rm(path::String; recursive=false)
 
-   Delete the file at the given path. Note that this does not work on directories.
+   Delete the file, link, or empty directory at the given path. If ``recursive=true`` is
+   passed and the path is a directory, then all contents are removed recursively.
 
 .. function:: touch(path::String)
 
@@ -2379,9 +2477,10 @@ Mathematical Operators
 
    Rational division
 
-.. function:: rationalize([Type,] x)
+.. function:: rationalize([Type=Int,] x; tol=eps(x))
 
-   Approximate the number x as a rational fraction
+   Approximate floating point number ``x`` as a Rational number with components of the given
+   integer type. The result will differ from ``x`` by no more than ``tol``.
 
 .. function:: num(x)
 
@@ -2421,6 +2520,10 @@ Mathematical Operators
 .. function:: range(start, [step], length)
 
    Construct a range by length, given a starting value and optional step (defaults to 1).
+
+.. function:: linrange(start, end, length)
+
+   Construct a range by length, given a starting and ending value.
 
 .. _==:
 .. function:: ==(x, y)
@@ -3020,7 +3123,7 @@ Mathematical Functions
 
 .. function:: cis(z)
 
-   Return ``cos(z) + i*sin(z)`` if z is real. Return ``(cos(real(z)) + i*sin(real(z)))/exp(imag(z))`` if ``z`` is complex
+   Return :math:`\exp(iz)`.
 
 .. function:: binomial(n,k)
 
@@ -3147,6 +3250,10 @@ Mathematical Functions
 
    Airy function derivative :math:`\operatorname{Bi}'(x)`.
 
+.. function:: airyx(k,x)
+
+   scaled kth derivative of the Airy function, return :math:`\operatorname{Ai}(x) e^{\frac{2}{3} x \sqrt{x}}` for ``k == 0 || k == 1``, and :math:`\operatorname{Ai}(x) e^{- \left| \operatorname{Re} \left( \frac{2}{3} x \sqrt{x} \right) \right|}` for ``k == 2 || k == 3``.
+
 .. function:: besselj0(x)
 
    Bessel function of the first kind of order 0, :math:`J_0(x)`.
@@ -3158,6 +3265,10 @@ Mathematical Functions
 .. function:: besselj(nu, x)
 
    Bessel function of the first kind of order ``nu``, :math:`J_\nu(x)`.
+
+.. function:: besseljx(nu, x)
+
+   Scaled Bessel function of the first kind of order ``nu``, :math:`J_\nu(x) e^{- | \operatorname{Im}(x) |}`.
 
 .. function:: bessely0(x)
 
@@ -3171,13 +3282,25 @@ Mathematical Functions
 
    Bessel function of the second kind of order ``nu``, :math:`Y_\nu(x)`.
 
+.. function:: besselyx(nu, x)
+
+   Scaled Bessel function of the second kind of order ``nu``, :math:`Y_\nu(x) e^{- | \operatorname{Im}(x) |}`.
+
 .. function:: hankelh1(nu, x)
 
    Bessel function of the third kind of order ``nu``, :math:`H^{(1)}_\nu(x)`.
 
+.. function:: hankelh1x(nu, x)
+
+   Scaled Bessel function of the third kind of order ``nu``, :math:`H^{(1)}_\nu(x) e^{-x i}`.
+
 .. function:: hankelh2(nu, x)
 
    Bessel function of the third kind of order ``nu``, :math:`H^{(2)}_\nu(x)`.
+
+.. function:: hankelh2x(nu, x)
+
+   Scaled Bessel function of the third kind of order ``nu``, :math:`H^{(2)}_\nu(x) e^{x i}`.
 
 .. function:: besselh(nu, k, x)
 
@@ -3188,9 +3311,17 @@ Mathematical Functions
 
    Modified Bessel function of the first kind of order ``nu``, :math:`I_\nu(x)`.
 
+.. function:: besselix(nu, x)
+
+   Scaled modified Bessel function of the first kind of order ``nu``, :math:`I_\nu(x) e^{- | \operatorname{Re}(x) |}`.
+
 .. function:: besselk(nu, x)
 
    Modified Bessel function of the second kind of order ``nu``, :math:`K_\nu(x)`.
+
+.. function:: besselkx(nu, x)
+
+   Scaled modified Bessel function of the second kind of order ``nu``, :math:`K_\nu(x) e^x`.
 
 .. function:: beta(x, y)
 
@@ -3220,6 +3351,14 @@ Mathematical Functions
 .. function:: widemul(x, y)
 
    Multiply ``x`` and ``y``, giving the result as a larger type.
+
+.. function:: @evalpoly(z, c...)
+
+   Evaluate the polynomial :math:`\sum_k c[k] z^{k-1}` for the
+   coefficients ``c[1]``, ``c[2]``, ...; that is, the coefficients are
+   given in ascending order by power of ``z``.  This macro expands to
+   efficient inline code that uses either Horner's method or, for
+   complex ``z``, a more efficient Goertzel-like algorithm.
 
 Data Formats
 ------------
@@ -3472,11 +3611,11 @@ Numbers
 
 .. function:: inf(f)
 
-   Returns infinity in the same floating point type as ``f`` (or ``f`` can by the type itself)
+   Returns positive infinity of the floating point type ``f`` or of the same floating point type as ``f``
 
 .. function:: nan(f)
 
-   Returns NaN in the same floating point type as ``f`` (or ``f`` can by the type itself)
+   Returns NaN (not-a-number) of the floating point type ``f`` or of the same floating point type as ``f``
 
 .. function:: nextfloat(f)
 
@@ -3710,7 +3849,7 @@ Basic functions
 
 .. function:: countnz(A)
 
-   Counts the number of nonzero values in array A (dense or sparse). Note that this is not a constant-time operation. For sparse matrices, one should usually use ``nfilled`` instead.
+   Counts the number of nonzero values in array A (dense or sparse). Note that this is not a constant-time operation. For sparse matrices, one should usually use ``nnz``, which returns the number of stored values.
 
 .. function:: conj!(A)
 
@@ -3799,6 +3938,7 @@ Constructors
 .. function:: linspace(start, stop, n)
 
    Construct a vector of ``n`` linearly-spaced elements from ``start`` to ``stop``.
+   See also: :func:`linrange` that constructs a range object.
 
 .. function:: logspace(start, stop, n)
 
@@ -4001,9 +4141,17 @@ Array functions
 
    Cumulative product along a dimension.
 
+.. function:: cumprod!(B, A, [dim])
+
+   Cumulative product of ``A`` along a dimension, storing the result in ``B``.
+
 .. function:: cumsum(A, [dim])
 
    Cumulative sum along a dimension.
+
+.. function:: cumsum!(B, A, [dim])
+
+   Cumulative sum of ``A`` along a dimension, storing the result in ``B``.
 
 .. function:: cumsum_kbn(A, [dim])
 
@@ -4584,9 +4732,15 @@ calling functions from `FFTW <http://www.fftw.org>`_.
 
    Undoes the effect of ``fftshift``.
 
-.. function:: filt(b,a,x)
+.. function:: filt(b, a, x, [si])
 
-   Apply filter described by vectors ``a`` and ``b`` to vector ``x``.
+   Apply filter described by vectors ``a`` and ``b`` to vector ``x``, with an
+   optional initial filter state vector ``si`` (defaults to zeros).
+
+.. function:: filt!(out, b, a, x, [si])
+
+   Same as :func:`filt` but writes the result into the ``out`` argument,
+   which may alias the input ``x`` to modify it in-place.
 
 .. function:: deconv(b,a)
 
@@ -4827,7 +4981,7 @@ Parallel Computing
 
 .. function:: put!(RemoteRef, value)
 
-   Store a value to a remote reference. Implements "shared queue of length 1" semantics: if a value is already present, blocks until the value is removed with ``take``. Returns its first argument.
+   Store a value to a remote reference. Implements "shared queue of length 1" semantics: if a value is already present, blocks until the value is removed with ``take!``. Returns its first argument.
 
 .. function:: take!(RemoteRef)
 
@@ -5116,9 +5270,14 @@ System
    Create all directories in the given ``path``, with permissions ``mode``.
    ``mode`` defaults to 0o777, modified by the current file creation mask.
 
-.. function:: rmdir(path)
+.. function:: symlink(target, link)
 
-   Remove the directory named ``path``.
+   Creates a symbolic link to ``target`` with the name ``link``. 
+   
+   .. note::
+   
+      This function raises an error under operating systems that do not support
+      soft symbolic links, such as Windows XP.
 
 .. function:: getpid() -> Int32
 

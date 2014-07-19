@@ -17,28 +17,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/MC/MCDisassembler.h"
-#include "llvm/MC/MCInst.h"
-#include "llvm/MC/MCStreamer.h"
-#include "llvm/MC/MCSubtargetInfo.h"
-#include "llvm/MC/MCObjectFileInfo.h"
-#include "llvm/MC/MCRegisterInfo.h"
-#include "llvm/MC/MCAsmInfo.h"
-#include "llvm/MC/MCAsmBackend.h"
-#include "llvm/MC/MCCodeEmitter.h"
-#include "llvm/MC/MCInstPrinter.h"
-#include "llvm/MC/MCInstrInfo.h"
-#include "llvm/MC/MCContext.h"
-#include "llvm/ADT/OwningPtr.h"
-#include "llvm/ADT/Triple.h"
-#include "llvm/Support/MemoryBuffer.h"
-#include "llvm/Support/MemoryObject.h"
-#include "llvm/Support/SourceMgr.h"
-#include "llvm/Support/TargetRegistry.h"
-#include "llvm/Support/Host.h"
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/system_error.h"
-
 #include <string>
 #include <iostream>
 
@@ -97,33 +75,49 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
     const Target* TheTarget = TargetRegistry::lookupTarget(TripleName, err);
 
     // Set up required helpers and streamer 
+#ifdef LLVM35
+    std::unique_ptr<MCStreamer> Streamer;
+#else
     OwningPtr<MCStreamer> Streamer;
+#endif
     SourceMgr SrcMgr;
 
-#ifdef LLVM34
+#ifdef LLVM35
+    std::unique_ptr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TripleName),TripleName));
+#elif defined(LLVM34)
     llvm::OwningPtr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TripleName),TripleName));
 #else
     llvm::OwningPtr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(TripleName));
 #endif
     assert(MAI && "Unable to create target asm info!");
 
+#ifdef LLVM35
+    std::unique_ptr<MCRegisterInfo> MRI(TheTarget->createMCRegInfo(TripleName));
+#else
     llvm::OwningPtr<MCRegisterInfo> MRI(TheTarget->createMCRegInfo(TripleName));
+#endif
     assert(MRI && "Unable to create target register info!");
 
+#ifdef LLVM35
+    std::unique_ptr<MCObjectFileInfo> MOFI(new MCObjectFileInfo());
+#else
     OwningPtr<MCObjectFileInfo> MOFI(new MCObjectFileInfo());
+#endif
 #ifdef LLVM34
     MCContext Ctx(MAI.get(), MRI.get(), MOFI.get(), &SrcMgr);
 #else
     MCContext Ctx(*MAI, *MRI, MOFI.get(), &SrcMgr);
-#endif    
+#endif
     MOFI->InitMCObjectFileInfo(TripleName, Reloc::Default, CodeModel::Default, Ctx);
 
     // Set up Subtarget and Disassembler
+#ifdef LLVM35
+    std::unique_ptr<MCSubtargetInfo>
+        STI(TheTarget->createMCSubtargetInfo(TripleName, MCPU, Features.getString()));
+    std::unique_ptr<const MCDisassembler> DisAsm(TheTarget->createMCDisassembler(*STI, Ctx));
+#else
     OwningPtr<MCSubtargetInfo>
         STI(TheTarget->createMCSubtargetInfo(TripleName, MCPU, Features.getString()));
-#ifdef LLVM35
-    OwningPtr<const MCDisassembler> DisAsm(TheTarget->createMCDisassembler(*STI, Ctx));
-#else
     OwningPtr<const MCDisassembler> DisAsm(TheTarget->createMCDisassembler(*STI));
 #endif
     if (!DisAsm) {
@@ -135,7 +129,11 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
     bool ShowEncoding = false;
     bool ShowInst = false;
 
+#ifdef LLVM35
+    std::unique_ptr<MCInstrInfo> MCII(TheTarget->createMCInstrInfo());
+#else
     OwningPtr<MCInstrInfo> MCII(TheTarget->createMCInstrInfo());
+#endif
     MCInstPrinter* IP =
         TheTarget->createMCInstPrinter(OutputAsmVariant, *MAI, *MCII, *MRI, *STI);
     MCCodeEmitter *CE = 0;
@@ -178,7 +176,7 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
         nextLineAddr = (*lineIter).Address;
         debugscope = DISubprogram((*lineIter).Loc.getScope(jl_LLVMContext));
 
-        stream << "Filename: " << debugscope.getFilename().data() << "\n";
+        stream << "Filename: " << debugscope.getFilename() << "\n";
         stream << "Source line: " << (*lineIter).Loc.getLine() << "\n";
     }
     

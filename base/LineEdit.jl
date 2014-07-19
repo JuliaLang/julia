@@ -21,7 +21,10 @@ type MIState
     aborted::Bool
     mode_state
     kill_buffer::ByteString
+    previous_key::Array{Char,1}
+    key_repeats::Int
 end
+MIState(i, c, a, m) = MIState(i, c, a, m, "", Char[], 0)
 
 type Mode <: TextInterface
 end
@@ -40,6 +43,7 @@ type Prompt <: TextInterface
     on_enter
     on_done
     hist
+    sticky::Bool
 end
 
 show(io::IO, x::Prompt) = show(io, string("Prompt(\"", x.prompt, "\",...)"))
@@ -84,7 +88,7 @@ terminal(s::IO) = s
 terminal(s::PromptState) = s.terminal
 
 for f in [:terminal, :edit_insert, :on_enter, :add_history, :buffer, :edit_backspace, :(Base.isempty),
-        :replace_line, :refresh_multi_line, :input_string, :complete_line, :edit_move_left, :edit_move_right,
+        :replace_line, :refresh_multi_line, :input_string, :edit_move_left, :edit_move_right,
         :edit_move_word_left, :edit_move_word_right, :update_display_buffer]
     @eval ($f)(s::MIState, args...) = $(f)(s.mode_state[s.current_mode], args...)
 end
@@ -131,7 +135,9 @@ function show_completions(s::PromptState, completions)
     end
 end
 
-function complete_line(s::PromptState)
+# Prompt Completions
+complete_line(s::MIState) = complete_line(s.mode_state[s.current_mode], s.key_repeats)
+function complete_line(s::PromptState, repeats)
     completions, partial, should_complete = complete_line(s.p.complete, s)
     if length(completions) == 0
         beep(terminal(s))
@@ -152,7 +158,7 @@ function complete_line(s::PromptState)
             prev_pos = position(s.input_buffer)
             seek(s.input_buffer, prev_pos-sizeof(partial))
             edit_replace(s, position(s.input_buffer), prev_pos, p)
-        else
+        elseif repeats > 0
             show_completions(s, completions)
         end
     end
@@ -182,7 +188,7 @@ prompt_string(s::String) = s
 refresh_multi_line(termbuf::TerminalBuffer, s::PromptState) = s.ias =
     refresh_multi_line(termbuf, terminal(s), buffer(s), s.ias, s, indent = s.indent)
 
-function refresh_multi_line(termbuf::TerminalBuffer, terminal::TTYTerminal, buf, state::InputAreaState, prompt = ""; indent = 0)
+function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf, state::InputAreaState, prompt = ""; indent = 0)
     cols = width(terminal)
 
     _clear_input_area(termbuf, state)
@@ -203,7 +209,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::TTYTerminal, buf,
 
     l = ""
 
-    plength = length(prompt)
+    plength = strwidth(prompt)
     pslength = length(prompt.data)
     # Now go through the buffer line by line
     while cur_row == 0 || (!isempty(l) && l[end] == '\n')
@@ -211,11 +217,11 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::TTYTerminal, buf,
         hasnl = !isempty(l) && l[end] == '\n'
         cur_row += 1
         # We need to deal with UTF8 characters. Since the IOBuffer is a bytearray, we just count bytes
-        llength = length(l)
+        llength = strwidth(l)
         slength = length(l.data)
         if cur_row == 1 # First line
             if line_pos < slength
-                num_chars = length(l[1:line_pos])
+                num_chars = strwidth(l[1:line_pos])
                 curs_row = div(plength+num_chars-1, cols) + 1
                 curs_pos = (plength+num_chars-1) % cols + 1
             end
@@ -229,7 +235,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::TTYTerminal, buf,
             # the '\n' at the end of the previous line)
             if curs_row == -1
                 if line_pos < slength
-                    num_chars = length(l[1:line_pos])
+                    num_chars = strwidth(l[1:line_pos])
                     curs_row = cur_row + div(indent+num_chars-1, cols)
                     curs_pos = (indent+num_chars-1) % cols + 1
                 end
@@ -297,6 +303,16 @@ end
 # Edit functionality
 is_non_word_char(c) = c in " \t\n\"\\'`@\$><=:;|&{}()[].,+-*/?%^~"
 
+function reset_key_repeats(f::Function, s::MIState)
+    key_repeats_sav = s.key_repeats
+    try
+        s.key_repeats = 0
+        f()
+    finally
+        s.key_repeats = key_repeats_sav
+    end
+end
+
 char_move_left(s::PromptState) = char_move_left(s.input_buffer)
 function char_move_left(buf::IOBuffer)
     while position(buf) > 0
@@ -310,13 +326,20 @@ function char_move_left(buf::IOBuffer)
     c
 end
 
-function edit_move_left(s::PromptState)
-    if position(s.input_buffer) > 0
-        #move to the next UTF8 character to the left
-        char_move_left(s.input_buffer)
-        refresh_line(s)
+function edit_move_left(buf::IOBuffer)
+    if position(buf) > 0
+        #move to the next base UTF8 character to the left
+        while true
+            c = char_move_left(buf)
+            if charwidth(c) != 0 || c == '\n' || position(buf) == 0
+                break
+            end
+        end
+        return true
     end
+    return false
 end
+edit_move_left(s::PromptState) = edit_move_left(s.input_buffer) && refresh_line(s)
 
 function edit_move_word_left(s)
     if position(s.input_buffer) > 0
@@ -357,13 +380,22 @@ end
 char_move_word_right(s) = char_move_word_right(buffer(s))
 char_move_word_left(s) = char_move_word_left(buffer(s))
 
-function edit_move_right(s)
-    if !eof(s.input_buffer)
-        # move to the next UTF8 character to the right
-        char_move_right(s)
-        refresh_line(s)
+function edit_move_right(buf::IOBuffer)
+    if !eof(buf)
+        # move to the next base UTF8 character to the right
+        while true
+            c = char_move_right(buf)
+            eof(buf) && break
+            pos = position(buf)
+            nextc = read(buf,Char)
+            seek(buf,pos)
+            (charwidth(nextc) != 0 || nextc == '\n') && break
+        end
+        return true
     end
+    return false
 end
+edit_move_right(s::PromptState) = edit_move_right(s.input_buffer) && refresh_line(s)
 
 function edit_move_word_right(s)
     if !eof(s.input_buffer)
@@ -532,11 +564,13 @@ end
 function edit_kill_line(s::MIState)
     buf = buffer(s)
     pos = position(buf)
-    s.kill_buffer = readline(buf)
-    if length(s.kill_buffer) > 1 && s.kill_buffer[end] == '\n'
-        s.kill_buffer = s.kill_buffer[1:end-1]
+    killbuf = readline(buf)
+    if length(killbuf) > 1 && killbuf[end] == '\n'
+        killbuf = killbuf[1:end-1]
         char_move_left(buf)
     end
+    s.kill_buffer = s.key_repeats > 0 ? s.kill_buffer * killbuf : killbuf
+
     splice_buffer!(buf, pos:position(buf)-1)
     refresh_line(s)
 end
@@ -713,22 +747,34 @@ function keymap_gen_body(dict, subdict::Dict, level)
     bc = symbol("c" * string(level))
     push!(block.args, :($bc = read(LineEdit.terminal(s), Char)))
 
-    if haskey(subdict, '\0')
-        last_if = keymap_gen_body(dict, subdict['\0'], level+1)
-    else
-        last_if = nothing
-    end
+    last_if = Expr(:block)
+    haskey(subdict, '\0') && push!(last_if.args, keymap_gen_body(dict, subdict['\0'], level+1))
+    level == 1 && push!(last_if.args, :(LineEdit.update_key_repeats(s, [$bc])))
 
     for c in keys(subdict)
         c == '\0' && continue
         cblock = Expr(:if, :($bc == $c))
-        push!(cblock.args, keymap_gen_body(dict, subdict[c], level+1))
+        cthen = Expr(:block)
+        if !isa(subdict[c], Dict)
+            cs = [symbol("c" * string(i)) for i=1:level]
+            push!(cthen.args, :(LineEdit.update_key_repeats(s, [$(cs...)])))
+        end
+        push!(cthen.args, keymap_gen_body(dict, subdict[c], level+1))
+
+        push!(cblock.args, cthen)
         push!(cblock.args, last_if)
         last_if = cblock
     end
 
     push!(block.args, last_if)
     return block
+end
+
+update_key_repeats(s, keystroke) = nothing
+function update_key_repeats(s::MIState, keystroke)
+    s.key_repeats  = s.previous_key == keystroke ? s.key_repeats + 1 : 0
+    s.previous_key = keystroke
+    return
 end
 
 export @keymap
@@ -899,7 +945,7 @@ function refresh_multi_line(s::Union(SearchState,PromptState))
     refresh_multi_line(terminal(s), s)
 end
 
-function refresh_multi_line(terminal::TTYTerminal, args...; kwargs...)
+function refresh_multi_line(terminal::UnixTerminal, args...; kwargs...)
     outbuf = IOBuffer()
     termbuf = TerminalBuffer(outbuf)
     ret = refresh_multi_line(termbuf, terminal, args...;kwargs...)
@@ -921,12 +967,14 @@ function reset_state(s::SearchState)
     reset_state(s.histprompt.hp)
 end
 
-type HistoryPrompt <: TextInterface
-    hp::HistoryProvider
+type HistoryPrompt{T<:HistoryProvider} <: TextInterface
+    hp::T
+    complete
     keymap_func::Function
-    HistoryPrompt(hp) = new(hp)
+    HistoryPrompt(hp) = new(hp, EmptyCompletionProvider())
 end
 
+HistoryPrompt{T<:HistoryProvider}(hp::T) = HistoryPrompt{T}(hp)
 init_state(terminal, p::HistoryPrompt) = SearchState(terminal, p, true, IOBuffer(), IOBuffer())
 
 state(s::MIState, p) = s.mode_state[p]
@@ -934,6 +982,17 @@ state(s::PromptState, p) = (@assert s.p == p; s)
 mode(s::MIState) = s.current_mode
 mode(s::PromptState) = s.p
 mode(s::SearchState) = @assert false
+
+# Search Mode completions
+function complete_line(s::SearchState, repeats)
+    completions, partial, should_complete = complete_line(s.histprompt.complete, s)
+    # For now only allow exact completions in search mode
+    if length(completions) == 1
+        prev_pos = position(s.query_buffer)
+        seek(s.query_buffer, prev_pos-sizeof(partial))
+        edit_replace(s, position(s.query_buffer), prev_pos, completions[1])
+    end
+end
 
 function accept_result(s, p)
     parent = state(s, p).parent
@@ -970,7 +1029,8 @@ function setup_search_keymap(hp)
         "^S"      => :(LineEdit.history_set_backward(data, false); LineEdit.history_next_result(s, data)),
         '\r'      => s->accept_result(s, p),
         '\n'      => '\r',
-        '\t'      => nothing, #TODO: Maybe allow tab completion in R-Search?
+        # Limited form of tab completions
+        '\t'      => :(LineEdit.complete_line(s); LineEdit.update_display_buffer(s, data)),
         "^L"      => :(Terminals.clear(LineEdit.terminal(s)); LineEdit.update_display_buffer(s, data)),
 
         # Backspace/^H
@@ -1033,6 +1093,12 @@ function setup_search_keymap(hp)
         # Use ^N and ^P to change search directions and iterate through results
         "^N"      => :(LineEdit.history_set_backward(data, false); LineEdit.history_next_result(s, data)),
         "^P"      => :(LineEdit.history_set_backward(data, true); LineEdit.history_next_result(s, data)),
+        # Bracketed paste mode
+        "\e[200~" => quote
+            ps = LineEdit.state(s, LineEdit.mode(s))
+            input = readuntil(ps.terminal, "\e[201~")[1:(end-6)]
+            LineEdit.edit_insert(data.query_buffer, input); LineEdit.update_display_buffer(s, data)
+        end,
         "*"       => :(LineEdit.edit_insert(data.query_buffer, c1); LineEdit.update_display_buffer(s, data))
     }
     p.keymap_func = @eval @LineEdit.keymap $([pkeymap, escape_defaults])
@@ -1052,27 +1118,24 @@ on_enter(s::PromptState) = s.p.on_enter(s)
 
 move_input_start(s) = (seek(buffer(s), 0))
 move_input_end(s) = (seekend(buffer(s)))
-function move_line_start(s)
+function move_line_start(s::MIState)
     buf = buffer(s)
     curpos = position(buf)
     curpos == 0 && return
-    if buf.data[curpos] == '\n'
+    if s.key_repeats > 0
         move_input_start(s)
     else
-        seek(buf, rsearch(buf.data, '\n', curpos-1))
+        seek(buf, rsearch(buf.data, '\n', curpos))
     end
 end
-function move_line_end(s)
+function move_line_end(s::MIState)
     buf = buffer(s)
-    curpos = position(buf)
     eof(buf) && return
-    c = read(buf, Char)
-    if c == '\n'
+    if s.key_repeats > 0
         move_input_end(s)
         return
     end
-    seek(buf, curpos)
-    pos = search(buffer(s).data, '\n', curpos+1)
+    pos = search(buffer(s).data, '\n', position(buf)+1)
     if pos == 0
         move_input_end(s)
         return
@@ -1114,7 +1177,7 @@ const default_keymap =
     end,
     # Enter
     '\r' => quote
-        if LineEdit.on_enter(s)
+        if LineEdit.on_enter(s) || (eof(LineEdit.buffer(s)) && s.key_repeats > 1)
             LineEdit.commit_line(s)
             return :done
         else
@@ -1283,10 +1346,11 @@ function Prompt(prompt;
     complete = EmptyCompletionProvider(),
     on_enter = default_enter_cb,
     on_done = ()->nothing,
-    hist = EmptyHistoryProvider())
+    hist = EmptyHistoryProvider(),
+    sticky = false)
 
     Prompt(prompt, first_prompt, prompt_prefix, prompt_suffix, keymap_func, keymap_func_data,
-        complete, on_enter, on_done, hist)
+        complete, on_enter, on_done, hist, sticky)
 end
 
 run_interface(::Prompt) = nothing
@@ -1294,7 +1358,7 @@ run_interface(::Prompt) = nothing
 init_state(terminal, prompt::Prompt) = PromptState(terminal, prompt, IOBuffer(), InputAreaState(1, 1), length(prompt.prompt))
 
 function init_state(terminal, m::ModalInterface)
-    s = MIState(m, m.modes[1], false, Dict{Any,Any}(), "")
+    s = MIState(m, m.modes[1], false, Dict{Any,Any}())
     for mode in m.modes
         s.mode_state[mode] = init_state(terminal, mode)
     end
@@ -1323,6 +1387,7 @@ keymap(ms::MIState, m::ModalInterface) = keymap(ms.mode_state[ms.current_mode], 
 keymap_data(ms::MIState, m::ModalInterface) = keymap_data(ms.mode_state[ms.current_mode], ms.current_mode)
 
 function prompt!(terminal, prompt, s = init_state(terminal, prompt))
+    Base.reseteof(terminal)
     raw!(terminal, true)
     enable_bracketed_paste(terminal)
     try

@@ -13,6 +13,7 @@ end
 
 test_complete(s) = completions(s,endof(s))
 test_scomplete(s) = shell_completions(s,endof(s))
+test_latexcomplete(s) = latex_completions(s,endof(s))[2]
 
 s = ""
 c,r = test_complete(s)
@@ -60,6 +61,13 @@ c,r = test_complete(s)
 @test r == 19:23
 @test s[r] == "getin"
 
+# test latex symbol completions
+s = "\\alpha"
+c,r = test_latexcomplete(s)
+@test c[1] == "α"
+@test r == 1:length(s)
+@test length(c) == 1
+
 ## Test completion of packages
 #mkp(p) = ((@assert !isdir(p)); mkdir(p))
 #temp_pkg_dir() do
@@ -82,8 +90,8 @@ c,r = test_complete(s)
 #    @test "CompletionFoo2" in c
 #    @test s[r] == "Completion"
 #
-#    rmdir(Pkg.dir("MyAwesomePackage"))
-#    rmdir(Pkg.dir("CompletionFooPackage"))
+#    rm(Pkg.dir("MyAwesomePackage"))
+#    rm(Pkg.dir("CompletionFooPackage"))
 #end
 
 @unix_only begin

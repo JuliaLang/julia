@@ -304,13 +304,13 @@ size_t u8_strwidth(const char *s)
 uint32_t u8_nextchar(const char *s, size_t *i)
 {
     uint32_t ch = 0;
-    size_t sz = 0;
+    size_t sz, j;
 
-    do {
+    sz = u8_seqlen(&s[*i]);
+    for (j = sz; j > 0; j--) {
         ch <<= 6;
-        ch += (unsigned char)s[(*i)];
-        sz++;
-    } while (s[*i] && (++(*i)) && !isutf(s[*i]));
+        ch += (unsigned char)s[(*i)++];
+    }
     ch -= offsetsFromUTF8[sz-1];
 
     return ch;
@@ -319,17 +319,7 @@ uint32_t u8_nextchar(const char *s, size_t *i)
 /* next character without NUL character terminator */
 uint32_t u8_nextmemchar(const char *s, size_t *i)
 {
-    uint32_t ch = 0;
-    size_t sz = 0;
-
-    do {
-        ch <<= 6;
-        ch += (unsigned char)s[(*i)++];
-        sz++;
-    } while (!isutf(s[*i]));
-    ch -= offsetsFromUTF8[sz-1];
-
-    return ch;
+    return u8_nextchar(s,i);
 }
 
 void u8_inc(const char *s, size_t *i)

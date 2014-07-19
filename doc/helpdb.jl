@@ -96,12 +96,16 @@
 ("Base","require","require(file::String...)
 
    Load source files once, in the context of the \"Main\" module, on
-   every active node, searching the system-wide \"LOAD_PATH\" for
-   files. \"require\" is considered a top-level operation, so it sets
-   the current \"include\" path but does not use it to search for
-   files (see help for \"include\"). This function is typically used
-   to load library code, and is implicitly called by \"using\" to load
+   every active node, searching standard locations for files.
+   \"require\" is considered a top-level operation, so it sets the
+   current \"include\" path but does not use it to search for files
+   (see help for \"include\"). This function is typically used to load
+   library code, and is implicitly called by \"using\" to load
    packages.
+
+   When searching for files, \"require\" first looks in the current
+   working directory, then looks for package code under \"Pkg.dir()\",
+   then tries paths in the global array \"LOAD_PATH\".
 
 "),
 
@@ -188,6 +192,17 @@
    Print information about the version of Julia in use. If the
    \"verbose\" argument is true, detailed system information is shown
    as well.
+
+"),
+
+("Base","workspace","workspace()
+
+   Replace the top-level module (\"Main\") with a new one, providing a
+   clean workspace. The previous \"Main\" module is made available as
+   \"LastMain\". A previously-loaded package can be accessed using a
+   statement such as \"using LastMain.Package\".
+
+   This function should only be used interactively.
 
 "),
 
@@ -678,9 +693,10 @@
 ("Base","esc","esc(e::ANY)
 
    Only valid in the context of an Expr returned from a macro.
-   Prevents the macro hygine pass from turning embedded variables into
-   gensym variables. See the *Macros* section of the Metaprogramming
-   chapter of the manual for more details and examples.
+   Prevents the macro hygiene pass from turning embedded variables
+   into gensym variables. See the *Macros* section of the
+   Metaprogramming chapter of the manual for more details and
+   examples.
 
 "),
 
@@ -989,6 +1005,44 @@
 
 "),
 
+("Base","maxabs","maxabs(itr)
+
+   Compute the maximum absolute value of a collection of values.
+
+"),
+
+("Base","maxabs","maxabs(A, dims)
+
+   Compute the maximum absolute values over given dimensions.
+
+"),
+
+("Base","maxabs!","maxabs!(r, A)
+
+   Compute the maximum absolute values over the singleton dimensions
+   of \"r\", and write values to \"r\".
+
+"),
+
+("Base","minabs","minabs(itr)
+
+   Compute the minimum absolute value of a collection of values.
+
+"),
+
+("Base","minabs","minabs(A, dims)
+
+   Compute the minimum absolute values over given dimensions.
+
+"),
+
+("Base","minabs!","minabs!(r, A)
+
+   Compute the minimum absolute values over the singleton dimensions
+   of \"r\", and write values to \"r\".
+
+"),
+
 ("Base","sum","sum(itr)
 
    Returns the sum of all elements in a collection.
@@ -1012,6 +1066,48 @@
 
    Sum the results of calling function \"f\" on each element of
    \"itr\".
+
+"),
+
+("Base","sumabs","sumabs(itr)
+
+   Sum absolute values of all elements in a collection. This is
+   equivalent to *sum(abs(itr))* but faster.
+
+"),
+
+("Base","sumabs","sumabs(A, dims)
+
+   Sum absolute values of elements of an array over the given
+   dimensions.
+
+"),
+
+("Base","sumabs!","sumabs!(r, A)
+
+   Sum absolute values of elements of \"A\" over the singleton
+   dimensions of \"r\", and write results to \"r\".
+
+"),
+
+("Base","sumabs2","sumabs2(itr)
+
+   Sum squared absolute values of all elements in a collection. This
+   is equivalent to *sum(abs2(itr))* but faster.
+
+"),
+
+("Base","sumabs2","sumabs2(A, dims)
+
+   Sum squared absolute values of elements of an array over the given
+   dimensions.
+
+"),
+
+("Base","sumabs2!","sumabs2!(r, A)
+
+   Sum squared absolute values of elements of \"A\" over the singleton
+   dimensions of \"r\", and write results to \"r\".
 
 "),
 
@@ -1486,6 +1582,9 @@
    specified, replacement values from an ordered collection will be
    spliced in place of the removed item.
 
+   To insert *replacement* before an index *n* without removing any
+   items, use \"splice(collection, n-1:n, replacement)\".
+
 "),
 
 ("Base","splice!","splice!(collection, range[, replacement]) -> items
@@ -1494,6 +1593,9 @@
    containing the removed items. Subsequent items are shifted down to
    fill the resulting gap. If specified, replacement values from an
    ordered collection will be spliced in place of the removed items.
+
+   To insert *replacement* before an index *n* without removing any
+   items, use \"splice(collection, n-1:n, replacement)\".
 
 "),
 
@@ -1574,12 +1676,11 @@
 
 "),
 
-("Base","bytestring","bytestring(s::String)
+("Base","bytestring","bytestring(s)
 
    Convert a string to a contiguous byte array representation
    appropriate for passing it to C functions. The string will be
-   encoded as either ASCII or UTF-8, and its underlying representation
-   will be null-terminated.
+   encoded as either ASCII or UTF-8.
 
 "),
 
@@ -1703,7 +1804,8 @@
    and return a RegexMatch object containing the match, or nothing if
    the match failed. The matching substring can be retrieved by
    accessing \"m.match\" and the captured sequences can be retrieved
-   by accessing \"m.captures\"
+   by accessing \"m.captures\" The optional \"idx\" argument specifies
+   an index at which to start the search.
 
 "),
 
@@ -2066,11 +2168,67 @@
    byte arrays check for a byte-order marker in the first two bytes,
    and do not include it in the resulting string.)
 
+   Note that the resulting \"UTF16String\" data is terminated by the
+   NUL codepoint (16-bit zero), which is not treated as a character in
+   the string (so that it is mostly invisible in Julia); this allows
+   the string to be passed directly to external functions requiring
+   NUL-terminated data.  This NUL is appended automatically by the
+   *utf16(s)* conversion function.  If you have a \"Uint16\" array
+   \"A\" that is already NUL-terminated valid UTF-16 data, then you
+   can instead use *UTF16String(A)`* to construct the string without
+   making a copy of the data and treating the NUL as a terminator
+   rather than as part of the string.
+
+"),
+
+("Base","utf16","utf16(::Union(Ptr{Uint16}, Ptr{Int16})[, length])
+
+   Create a string from the address of a NUL-terminated UTF-16 string.
+   A copy is made; the pointer can be safely freed. If \"length\" is
+   specified, the string does not have to be NUL-terminated.
+
 "),
 
 ("Base","is_valid_utf16","is_valid_utf16(s) -> Bool
 
    Returns true if the string or \"Uint16\" array is valid UTF-16.
+
+"),
+
+("Base","utf32","utf32(s)
+
+   Create a UTF-32 string from a byte array, array of \"Uint32\", or
+   any other string type.  (Conversions of byte arrays check for a
+   byte-order marker in the first four bytes, and do not include it in
+   the resulting string.)
+
+   Note that the resulting \"UTF32String\" data is terminated by the
+   NUL codepoint (32-bit zero), which is not treated as a character in
+   the string (so that it is mostly invisible in Julia); this allows
+   the string to be passed directly to external functions requiring
+   NUL-terminated data.  This NUL is appended automatically by the
+   *utf32(s)* conversion function.  If you have a \"Uint32\" array
+   \"A\" that is already NUL-terminated UTF-32 data, then you can
+   instead use *UTF32String(A)`* to construct the string without
+   making a copy of the data and treating the NUL as a terminator
+   rather than as part of the string.
+
+"),
+
+("Base","utf32","utf32(::Union(Ptr{Char}, Ptr{Uint32}, Ptr{Int32})[, length])
+
+   Create a string from the address of a NUL-terminated UTF-32 string.
+   A copy is made; the pointer can be safely freed. If \"length\" is
+   specified, the string does not have to be NUL-terminated.
+
+"),
+
+("Base","wstring","wstring(s)
+
+   This is a synonym for either \"utf32(s)\" or \"utf16(s)\",
+   depending on whether \"Cwchar_t\" is 32 or 16 bits, respectively.
+   The synonym \"WString\" for \"UTF32String\" or \"UTF16String\" is
+   also provided.
 
 "),
 
@@ -2274,6 +2432,42 @@
 ("Base","skip","skip(s, offset)
 
    Seek a stream relative to the current position.
+
+"),
+
+("Base","mark","mark(s)
+
+   Add a mark at the current position of stream \"s\".  Returns the
+   marked position.
+
+   See also \"unmark()\", \"reset()\", \"ismarked()\"
+
+"),
+
+("Base","unmark","unmark(s)
+
+   Remove a mark from stream \"s\". Returns \"true\" if the stream was
+   marked, \"false\" otherwise.
+
+   See also \"mark()\", \"reset()\", \"ismarked()\"
+
+"),
+
+("Base","reset","reset(s)
+
+   Reset a stream \"s\" to a previously marked position, and remove
+   the mark. Returns the previously marked position. Throws an error
+   if the stream is not marked.
+
+   See also \"mark()\", \"unmark()\", \"ismarked()\"
+
+"),
+
+("Base","ismarked","ismarked(s)
+
+   Returns true if stream \"s\" is marked.
+
+   See also \"mark()\", \"unmark()\", \"reset()\"
 
 "),
 
@@ -2566,7 +2760,7 @@
    | 04   | Read Permission       |
    +------+-----------------------+
 
-   For allowed arguments, see the stat method.
+   For allowed arguments, see \"stat\".
 
 "),
 
@@ -2606,10 +2800,11 @@
 
 "),
 
-("Base","rm","rm(path::String)
+("Base","rm","rm(path::String; recursive=false)
 
-   Delete the file at the given path. Note that this does not work on
-   directories.
+   Delete the file, link, or empty directory at the given path. If
+   \"recursive=true\" is passed and the path is a directory, then all
+   contents are removed recursively.
 
 "),
 
@@ -2877,12 +3072,12 @@
    or zero. Other useful values of \"T\" include \"ASCIIString\",
    \"String\", and \"Any\".
 
-   If \"header\" is \"true\", the first row of data will be read
-   as header and the tuple \"(data_cells, header_cells)\" is returned
+   If \"header\" is \"true\", the first row of data will be read as
+   header and the tuple \"(data_cells, header_cells)\" is returned
    instead of only \"data_cells\".
 
-   Specifying \"skipstart\" will ignore the corresponding number
-   of initial lines from the input.
+   Specifying \"skipstart\" will ignore the corresponding number of
+   initial lines from the input.
 
    If \"use_mmap\" is \"true\", the file specified by \"source\" is
    memory mapped for potential speedups. Default is \"true\" except on
@@ -3401,9 +3596,11 @@ popdisplay(d::Display)
 
 "),
 
-("Base","rationalize","rationalize([Type], x)
+("Base","rationalize","rationalize([Type=Int], x; tol=eps(x))
 
-   Approximate the number x as a rational fraction
+   Approximate floating point number \"x\" as a Rational number with
+   components of the given integer type. The result will differ from
+   \"x\" by no more than \"tol\".
 
 "),
 
@@ -3456,6 +3653,12 @@ popdisplay(d::Display)
 
    Construct a range by length, given a starting value and optional
    step (defaults to 1).
+
+"),
+
+("Base","linrange","linrange(start, end, length)
+
+   Construct a range by length, given a starting and ending value.
 
 "),
 
@@ -4548,6 +4751,16 @@ popdisplay(d::Display)
 
 "),
 
+("Base","airyx","airyx(k, x)
+
+   scaled kth derivative of the Airy function, return
+   \\operatorname{Ai}(x) e^{\\frac{2}{3} x \\sqrt{x}} for \"k == 0 ||
+   k == 1\", and \\operatorname{Ai}(x) e^{- \\left| \\operatorname{Re}
+   \\left( \\frac{2}{3} x \\sqrt{x} \\right) \\right|} for \"k == 2 ||
+   k == 3\".
+
+"),
+
 ("Base","besselj0","besselj0(x)
 
    Bessel function of the first kind of order 0, J_0(x).
@@ -4563,6 +4776,13 @@ popdisplay(d::Display)
 ("Base","besselj","besselj(nu, x)
 
    Bessel function of the first kind of order \"nu\", J_\\nu(x).
+
+"),
+
+("Base","besseljx","besseljx(nu, x)
+
+   Scaled Bessel function of the first kind of order \"nu\", J_\\nu(x)
+   e^{- | \\operatorname{Im}(x) |}.
 
 "),
 
@@ -4584,15 +4804,36 @@ popdisplay(d::Display)
 
 "),
 
+("Base","besselyx","besselyx(nu, x)
+
+   Scaled Bessel function of the second kind of order \"nu\",
+   Y_\\nu(x) e^{- | \\operatorname{Im}(x) |}.
+
+"),
+
 ("Base","hankelh1","hankelh1(nu, x)
 
    Bessel function of the third kind of order \"nu\", H^{(1)}_\\nu(x).
 
 "),
 
+("Base","hankelh1x","hankelh1x(nu, x)
+
+   Scaled Bessel function of the third kind of order \"nu\",
+   H^{(1)}_\\nu(x) e^{-x i}.
+
+"),
+
 ("Base","hankelh2","hankelh2(nu, x)
 
    Bessel function of the third kind of order \"nu\", H^{(2)}_\\nu(x).
+
+"),
+
+("Base","hankelh2x","hankelh2x(nu, x)
+
+   Scaled Bessel function of the third kind of order \"nu\",
+   H^{(2)}_\\nu(x) e^{x i}.
 
 "),
 
@@ -4611,10 +4852,24 @@ popdisplay(d::Display)
 
 "),
 
+("Base","besselix","besselix(nu, x)
+
+   Scaled modified Bessel function of the first kind of order \"nu\",
+   I_\\nu(x) e^{- | \\operatorname{Re}(x) |}.
+
+"),
+
 ("Base","besselk","besselk(nu, x)
 
    Modified Bessel function of the second kind of order \"nu\",
    K_\\nu(x).
+
+"),
+
+("Base","besselkx","besselkx(nu, x)
+
+   Scaled modified Bessel function of the second kind of order \"nu\",
+   K_\\nu(x) e^x.
 
 "),
 
@@ -4639,9 +4894,16 @@ popdisplay(d::Display)
 
 "),
 
-("Base","zeta","zeta(x)
+("Base","zeta","zeta(s)
 
    Riemann zeta function \\zeta(s).
+
+"),
+
+("Base","zeta","zeta(s, z)
+
+   Hurwitz zeta function \\zeta(s, z).  (This is equivalent to the
+   Riemann zeta function \\zeta(s) for the case of \"z=1\".)
 
 "),
 
@@ -4654,6 +4916,16 @@ popdisplay(d::Display)
 ("Base","widemul","widemul(x, y)
 
    Multiply \"x\" and \"y\", giving the result as a larger type.
+
+"),
+
+("Base","@evalpoly","@evalpoly(z, c...)
+
+   Evaluate the polynomial \\sum_k c[k] z^{k-1} for the coefficients
+   \"c[1]\", \"c[2]\", ...; that is, the coefficients are given in
+   ascending order by power of \"z\".  This macro expands to efficient
+   inline code that uses either Horner's method or, for complex \"z\",
+   a more efficient Goertzel-like algorithm.
 
 "),
 
@@ -4871,7 +5143,10 @@ popdisplay(d::Display)
 
    Convert a number, array, or string to a \"FloatingPoint\" data
    type. For numeric data, the smallest suitable \"FloatingPoint\"
-   type is used. For strings, it converts to \"Float64\".
+   type is used. Converts strings to \"Float64\".
+
+   This function is not recommended for arrays. It is better to use a
+   more specific function such as \"float32\" or \"float64\".
 
 "),
 
@@ -4891,27 +5166,29 @@ popdisplay(d::Display)
 
 "),
 
-("Base","complex64","complex64(r, i)
+("Base","complex64","complex64(r[, i])
 
-   Convert to \"r+i*im\" represented as a \"Complex64\" data type
+   Convert to \"r + i*im\" represented as a \"Complex64\" data type.
+   \"i\" defaults to zero.
 
 "),
 
-("Base","complex128","complex128(r, i)
+("Base","complex128","complex128(r[, i])
 
-   Convert to \"r+i*im\" represented as a \"Complex128\" data type
+   Convert to \"r + i*im\" represented as a \"Complex128\" data type.
+   \"i\" defaults to zero.
+
+"),
+
+("Base","complex","complex(r[, i])
+
+   Convert real numbers or arrays to complex. \"i\" defaults to zero.
 
 "),
 
 ("Base","char","char(x)
 
    Convert a number or array to \"Char\" data type
-
-"),
-
-("Base","complex","complex(r, i)
-
-   Convert real numbers or arrays to complex
 
 "),
 
@@ -5050,15 +5327,15 @@ popdisplay(d::Display)
 
 ("Base","inf","inf(f)
 
-   Returns infinity in the same floating point type as \"f\" (or \"f\"
-   can by the type itself)
+   Returns positive infinity of the floating point type \"f\" or of
+   the same floating point type as \"f\"
 
 "),
 
 ("Base","nan","nan(f)
 
-   Returns NaN in the same floating point type as \"f\" (or \"f\" can
-   by the type itself)
+   Returns NaN (not-a-number) of the floating point type \"f\" or of
+   the same floating point type as \"f\"
 
 "),
 
@@ -5383,7 +5660,8 @@ popdisplay(d::Display)
 
    Counts the number of nonzero values in array A (dense or sparse).
    Note that this is not a constant-time operation. For sparse
-   matrices, one should usually use \"nfilled\" instead.
+   matrices, one should usually use \"nnz\", which returns the number
+   of stored values.
 
 "),
 
@@ -5530,7 +5808,8 @@ popdisplay(d::Display)
 ("Base","linspace","linspace(start, stop, n)
 
    Construct a vector of \"n\" linearly-spaced elements from \"start\"
-   to \"stop\".
+   to \"stop\". See also: \"linrange()\" that constructs a range
+   object.
 
 "),
 
@@ -5840,9 +6119,23 @@ popdisplay(d::Display)
 
 "),
 
+("Base","cumprod!","cumprod!(B, A[, dim])
+
+   Cumulative product of \"A\" along a dimension, storing the result
+   in \"B\".
+
+"),
+
 ("Base","cumsum","cumsum(A[, dim])
 
    Cumulative sum along a dimension.
+
+"),
+
+("Base","cumsum!","cumsum!(B, A[, dim])
+
+   Cumulative sum of \"A\" along a dimension, storing the result in
+   \"B\".
 
 "),
 
@@ -6604,9 +6897,18 @@ popdisplay(d::Display)
 
 "),
 
-("Base","filt","filt(b, a, x)
+("Base","filt","filt(b, a, x[, si])
 
-   Apply filter described by vectors \"a\" and \"b\" to vector \"x\".
+   Apply filter described by vectors \"a\" and \"b\" to vector \"x\",
+   with an optional initial filter state vector \"si\" (defaults to
+   zeros).
+
+"),
+
+("Base","filt!","filt!(out, b, a, x[, si])
+
+   Same as \"filt()\" but writes the result into the \"out\" argument,
+   which may alias the input \"x\" to modify it in-place.
 
 "),
 
@@ -6905,7 +7207,7 @@ popdisplay(d::Display)
 
    Store a value to a remote reference. Implements \"shared queue of
    length 1\" semantics: if a value is already present, blocks until
-   the value is removed with \"take\". Returns its first argument.
+   the value is removed with \"take!\". Returns its first argument.
 
 "),
 
@@ -6916,13 +7218,22 @@ popdisplay(d::Display)
 
 "),
 
-("Base","isready","isready(RemoteRef)
+("Base","isready","isready(r::RemoteRef)
 
    Determine whether a \"RemoteRef\" has a value stored to it. Note
-   that this function can easily cause race conditions, since by the
-   time you receive its result it may no longer be true. It is
-   recommended that this function only be used on a \"RemoteRef\" that
-   is assigned once.
+   that this function can cause race conditions, since by the time you
+   receive its result it may no longer be true. It is recommended that
+   this function only be used on a \"RemoteRef\" that is assigned
+   once.
+
+   If the argument \"RemoteRef\" is owned by a different node, this
+   call will block to wait for the answer. It is recommended to wait
+   for \"r\" in a separate task instead, or to use a local
+   \"RemoteRef\" as a proxy:
+
+      rr = RemoteRef()
+      @async put!(rr, remotecall_fetch(p, long_computation))
+      isready(rr)  # will not block
 
 "),
 
@@ -7177,19 +7488,24 @@ popdisplay(d::Display)
 
 "),
 
-("Base","readsfrom","readsfrom(command)
+("Base","open","open(command, mode::String=\"r\", stdio=DevNull)
 
-   Starts running a command asynchronously, and returns a tuple
-   (stream,process). The first value is a stream reading from the
-   process' standard output.
+   Start running \"command\" asynchronously, and return a tuple
+   \"(stream,process)\".  If \"mode\" is \"\"r\"\", then \"stream\"
+   reads from the process's standard output and \"stdio\" optionally
+   specifies the process's standard input stream.  If \"mode\" is
+   \"\"w\"\", then \"stream\" writes to the process's standard input
+   and \"stdio\" optionally specifies the process's standard output
+   stream.
 
 "),
 
-("Base","writesto","writesto(command)
+("Base","open","open(f::Function, command, mode::String=\"r\", stdio=DevNull)
 
-   Starts running a command asynchronously, and returns a tuple
-   (stream,process). The first value is a stream writing to the
-   process' standard input.
+   Similar to \"open(command, mode, stdio)\", but calls \"f(stream)\"
+   on the resulting read or write stream, then closes the stream and
+   waits for the process to complete.  Returns the value returned by
+   \"f\".
 
 "),
 
@@ -7303,9 +7619,12 @@ popdisplay(d::Display)
 
 "),
 
-("Base","rmdir","rmdir(path)
+("Base","symlink","symlink(target, link)
 
-   Remove the directory named \"path\".
+   Creates a symbolic link to \"target\" with the name \"link\".
+
+   Note: This function raises an error under operating systems that do not
+     support soft symbolic links, such as Windows XP.
 
 "),
 
@@ -8129,9 +8448,8 @@ popdisplay(d::Display)
 ("Base","Timer","Timer(f::Function)
 
    Create a timer to call the given callback function. The callback is
-   passed two arguments: the timer object itself, and a status code,
-   which will be 0 unless an error occurs. The timer can be started
-   and stopped with \"start_timer\" and \"stop_timer\".
+   passed one argument, the timer object itself. The timer can be
+   started and stopped with \"start_timer\" and \"stop_timer\".
 
 "),
 
@@ -8551,6 +8869,14 @@ popdisplay(d::Display)
 ("Base","basename","basename(path::String) -> String
 
    Get the file name part of a path.
+
+"),
+
+("Base","@__FILE__","@__FILE__() -> String
+
+   \"@__FILE__\" expands to a string with the absolute path and file
+   name of the script being run. Returns \"nothing\" if run from a
+   REPL or an empty string if evaluated by \"julia -e <expr>\".
 
 "),
 
@@ -8992,9 +9318,9 @@ popdisplay(d::Display)
       +------------------+-------------------+-----------+---------------------------------------+
       | \\\"QR\\\"           | not \\\"BlasFloat\\\" | either    | \\\"A==F[:Q]*F[:R]\\\"                    |
       +------------------+-------------------+-----------+---------------------------------------+
-      | \\\"QRCompactWY\\\"  | \\\"BlasFloat\\\"     | \\\"true\\\"  | \\\"A==F[:Q]*F[:R]\\\"                    |
+      | \\\"QRCompactWY\\\"  | \\\"BlasFloat\\\"     | \\\"false\\\" | \\\"A==F[:Q]*F[:R]\\\"                    |
       +------------------+-------------------+-----------+---------------------------------------+
-      | \\\"QRPivoted\\\"    | \\\"BlasFloat\\\"     | \\\"false\\\" | \\\"A[:,F[:p]]==F[:Q]*F[:R]\\\"           |
+      | \\\"QRPivoted\\\"    | \\\"BlasFloat\\\"     | \\\"true\\\"  | \\\"A[:,F[:p]]==F[:Q]*F[:R]\\\"           |
       +------------------+-------------------+-----------+---------------------------------------+
 
    \"BlasFloat\" refers to any of: \"Float32\", \"Float64\",
@@ -9616,6 +9942,23 @@ popdisplay(d::Display)
 
 "),
 
+("Base","lyap","lyap(A, C)
+
+   Computes the solution \"X\" to the continuous Lyapunov equation
+   \"AX + XA' + C = 0\", where no eigenvalue of \"A\" has a zero real
+   part and no two eigenvalues are negative complex conjugates of each
+   other.
+
+"),
+
+("Base","sylvester","sylvester(A, B, C)
+
+   Computes the solution \"X\" to the Sylvester equation \"AX + XB + C
+   = 0\", where \"A\", \"B\" and \"C\" have compatible dimensions and
+   \"A\" and \"-B\" have no eigenvalues with equal real part.
+
+"),
+
 ("Base","issym","issym(A) -> Bool
 
    Test whether a matrix is symmetric.
@@ -9672,6 +10015,11 @@ popdisplay(d::Display)
    matrices respectively. If \"B\" is provided, the generalized eigen-
    problem is solved.  The following keyword arguments are supported:
       * \"nev\": Number of eigenvalues
+
+      * \"ncv\": Number of Krylov vectors used in the computation;
+        should satisfy \"nev+1 <= ncv <= n\" for real symmetric
+        problems and \"nev+2 <= ncv <= n\" for other problems; default
+        is \"ncv = max(20,2*nev+1)\".
 
       * \"which\": type of eigenvalues to compute. See the note below.
 
@@ -10233,10 +10581,10 @@ popdisplay(d::Display)
 
 ("Base.Pkg","build","build(pkgs...)
 
-   Run the build scripts for each package in \"pkgs\" and all of their
-   dependencies in depth-first recursive order. This is called
-   automatically by \"Pkg.resolve()\" on all installed or updated
-   packages.
+   Run the build script in \"deps/build.jl\" for each package in
+   \"pkgs\" and all of their dependencies in depth-first recursive
+   order. This is called automatically by \"Pkg.resolve()\" on all
+   installed or updated packages.
 
 "),
 
@@ -10274,7 +10622,7 @@ popdisplay(d::Display)
    For each new package version tagged in \"METADATA\" not already
    published, make sure that the tagged package commits have been
    pushed to the repo at the registered URL for the package and if
-   they all have, push \"METADATA\".
+   they all have, open a pull request to \"METADATA\".
 
 "),
 
@@ -10330,13 +10678,15 @@ popdisplay(d::Display)
 
 "),
 
-("Base.Profile","init","init(n::Integer, delay::Float64)
+("Base.Profile","init","init(; n::Integer, delay::Float64)
 
    Configure the \"delay\" between backtraces (measured in seconds),
    and the number \"n\" of instruction pointers that may be stored.
    Each instruction pointer corresponds to a single line of code;
    backtraces generally consist of a long list of instruction
-   pointers. Default settings are \"n=10^6\" and \"delay=0.001\".
+   pointers. Default settings can be obtained by calling this function
+   with no arguments, and each can be set independently using keywords
+   or in the order \"(n, delay)\".
 
 "),
 
@@ -10364,7 +10714,7 @@ popdisplay(d::Display)
 "),
 
 
-("Base","sort!","sort!(v, [dim,] [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+("Base","sort!","sort!(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Sort the vector \"v\" in place. \"QuickSort\" is used by default
    for numeric arrays while \"MergeSort\" is used for other arrays.
@@ -10533,10 +10883,9 @@ popdisplay(d::Display)
 
 "),
 
-("Base","nfilled","nfilled(A)
+("Base","nnz","nnz(A)
 
    Returns the number of stored (filled) elements in a sparse matrix.
-   For dense arrays, this returns the length of the array.
 
 "),
 
@@ -10634,15 +10983,10 @@ popdisplay(d::Display)
 
 "),
 
-("Base.Test","@test_throws","@test_throws(ex)
+("Base.Test","@test_throws","@test_throws(extype, ex)
 
-   Test the expression \"ex\" and calls the current handler to handle
-   the result in the following manner:
-
-   * If the test doesn't throw an error, the \"Failure\" case is
-     called.
-
-   * If the test throws an error, the \"Success\" case is called.
+   Test that the expression \"ex\" throws an exception of type
+   \"extype\" and calls the current handler to handle the result.
 
 "),
 

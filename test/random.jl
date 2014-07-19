@@ -19,6 +19,13 @@ srand(0); rand(); x = rand(384);
 # Try a seed larger than 2^32
 @test rand(MersenneTwister(5294967296)) == 0.3498809918210497
 
+# Test array filling, Issue #7643
+@test rand(MersenneTwister(0), 1) == [0.8236475079774124]
+A = zeros(2, 2)
+rand!(MersenneTwister(0), A)
+@test A == [0.8236475079774124  0.16456579813368521;
+            0.9103565379264364  0.17732884646626457]
+
 # randn
 @test randn(MersenneTwister(42)) == -0.5560268761463861
 A = zeros(2, 2)
@@ -122,12 +129,12 @@ function randmtzig_fill_ziggurat_tables() # Operates on the global arrays
     return nothing
 end
 randmtzig_fill_ziggurat_tables()
-@test all(ki == Base.LibRandom.ki)
-@test all(wi == Base.LibRandom.wi)
-@test all(fi == Base.LibRandom.fi)
-@test all(ke == Base.LibRandom.ke)
-@test all(we == Base.LibRandom.we)
-@test all(fe == Base.LibRandom.fe)
+@test all(ki == Base.dSFMT.ki)
+@test all(wi == Base.dSFMT.wi)
+@test all(fi == Base.dSFMT.fi)
+@test all(ke == Base.dSFMT.ke)
+@test all(we == Base.dSFMT.we)
+@test all(fe == Base.dSFMT.fe)
 
 #same random numbers on for small ranges on all systems
 
@@ -144,3 +151,12 @@ srand(seed)
 
 @test all([div(0x000100000000,k)*k - 1 == Base.Random.RandIntGen(uint64(1:k)).u for k in 13 .+ int64(2).^(1:30)])
 @test all([div(0x000100000000,k)*k - 1 == Base.Random.RandIntGen(int64(1:k)).u for k in 13 .+ int64(2).^(1:30)])
+
+import Base.Random: uuid4, UUID
+
+# UUID
+a = uuid4()
+@test a == UUID(string(a)) == UUID(utf16(string(a))) == UUID(utf32(string(a)))
+@test_throws ArgumentError UUID("550e8400e29b-41d4-a716-446655440000")
+@test_throws ArgumentError UUID("550e8400e29b-41d4-a716-44665544000098")
+@test_throws ArgumentError UUID("z50e8400-e29b-41d4-a716-446655440000")

@@ -8,12 +8,12 @@ TESTS = all core keywordargs numbers strings unicode collections hashing	\
 	git pkg resolve suitesparse complex version pollfd mpfr	broadcast       \
 	socket floatapprox priorityqueue readdlm regex float16 combinatorics    \
 	sysinfo rounding ranges mod2pi euler show lineedit      \
-	replcompletions backtrace repl test
+	replcompletions backtrace repl test goto
 
 default: all
 
 $(TESTS) ::
-	@$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) -f ./runtests.jl $@)
+	@$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --check-bounds=yes -f ./runtests.jl $@)
 
 perf:
 	@$(MAKE) -C perf all

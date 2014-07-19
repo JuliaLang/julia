@@ -3,10 +3,8 @@ immutable Rational{T<:Integer} <: Real
     den::T
 
     function Rational(num::T, den::T)
-        if num == 0 && den == 0
-            error("invalid rational: 0//0")
-        end
-        g = den < 0 ? -gcd(den,num) : gcd(den, num)
+        num == den == 0 && error("invalid rational: 0//0")
+        g = den < 0 ? -gcd(den, num) : gcd(den, num)
         new(div(num, g), div(den, g))
     end
 end
@@ -32,15 +30,13 @@ end
 .//(y::Number, X::AbstractArray) = reshape([ y // x for x in X ], size(X))
 
 function show(io::IO, x::Rational)
-    if isinf(x)
-        print(io, x.num > 0 ? "Inf" : "-Inf")
-    else
-        show(io, num(x)); print(io, "//"); show(io, den(x))
-    end
+    show(io, num(x))
+    print(io, "//")
+    show(io, den(x))
 end
 
-convert{T<:Integer}(::Type{Rational{T}}, x::Rational) = Rational(convert(T,x.num),convert(T,x.den))
-convert{T<:Integer}(::Type{Rational{T}}, x::Integer) = Rational(convert(T,x), convert(T,1))
+convert{T<:Integer}(::Type{Rational{T}}, x::Rational) = Rational{T}(convert(T,x.num),convert(T,x.den))
+convert{T<:Integer}(::Type{Rational{T}}, x::Integer) = Rational{T}(convert(T,x), convert(T,1))
 
 convert(::Type{Rational}, x::Rational) = x
 convert(::Type{Rational}, x::Integer) = convert(Rational{typeof(x)},x)
@@ -56,7 +52,7 @@ end
 
 function convert{T<:Integer}(::Type{Rational{T}}, x::FloatingPoint)
     r = rationalize(T, x, tol=0)
-    x === convert(typeof(x), r) || throw(InexactError())
+    x == convert(typeof(x), r) || throw(InexactError())
     r
 end
 convert(::Type{Rational}, x::Float64) = convert(Rational{Int64}, x)

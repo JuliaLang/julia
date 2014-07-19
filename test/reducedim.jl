@@ -10,6 +10,8 @@ safe_maximum{T}(A::Array{T}, region) = safe_mapslices(maximum, A, region)
 safe_minimum{T}(A::Array{T}, region) = safe_mapslices(minimum, A, region)
 safe_sumabs{T}(A::Array{T}, region) = safe_mapslices(sum, abs(A), region)
 safe_sumabs2{T}(A::Array{T}, region) = safe_mapslices(sum, abs2(A), region)
+safe_maxabs{T}(A::Array{T}, region) = safe_mapslices(maximum, abs(A), region)
+safe_minabs{T}(A::Array{T}, region) = safe_mapslices(minimum, abs(A), region)
 
 Areduc = rand(3, 4, 5, 6)
 for region in {
@@ -21,15 +23,19 @@ for region in {
     @test_approx_eq prod!(r, Areduc) safe_prod(Areduc, region)
     @test_approx_eq maximum!(r, Areduc) safe_maximum(Areduc, region)
     @test_approx_eq minimum!(r, Areduc) safe_minimum(Areduc, region)
-    @test_approx_eq Base.sumabs!(r, Areduc) safe_sumabs(Areduc, region)
-    @test_approx_eq Base.sumabs2!(r, Areduc) safe_sumabs2(Areduc, region)
+    @test_approx_eq sumabs!(r, Areduc) safe_sumabs(Areduc, region)
+    @test_approx_eq sumabs2!(r, Areduc) safe_sumabs2(Areduc, region)
+    @test_approx_eq maxabs!(r, Areduc) safe_maxabs(Areduc, region)
+    @test_approx_eq minabs!(r, Areduc) safe_minabs(Areduc, region)
 
     @test_approx_eq sum(Areduc, region) safe_sum(Areduc, region)
     @test_approx_eq prod(Areduc, region) safe_prod(Areduc, region)
     @test_approx_eq maximum(Areduc, region) safe_maximum(Areduc, region)
     @test_approx_eq minimum(Areduc, region) safe_minimum(Areduc, region)
-    @test_approx_eq Base.sumabs(Areduc, region) safe_sumabs(Areduc, region)
-    @test_approx_eq Base.sumabs2(Areduc, region) safe_sumabs2(Areduc, region)
+    @test_approx_eq sumabs(Areduc, region) safe_sumabs(Areduc, region)
+    @test_approx_eq sumabs2(Areduc, region) safe_sumabs2(Areduc, region)
+    @test_approx_eq maxabs(Areduc, region) safe_maxabs(Areduc, region)
+    @test_approx_eq minabs(Areduc, region) safe_minabs(Areduc, region)
 end
 
 # Test reduction along first dimension; this is special-cased for
@@ -37,11 +43,27 @@ end
 Breduc = rand(64, 3)
 r = fill(NaN, Base.reduced_dims(size(Breduc), 1))
 @test_approx_eq sum!(r, Breduc) safe_sum(Breduc, 1)
-@test_approx_eq Base.sumabs!(r, Breduc) safe_sumabs(Breduc, 1)
-@test_approx_eq Base.sumabs2!(r, Breduc) safe_sumabs2(Breduc, 1)
+@test_approx_eq sumabs!(r, Breduc) safe_sumabs(Breduc, 1)
+@test_approx_eq sumabs2!(r, Breduc) safe_sumabs2(Breduc, 1)
 @test_approx_eq sum(Breduc, 1) safe_sum(Breduc, 1)
-@test_approx_eq Base.sumabs(Breduc, 1) safe_sumabs(Breduc, 1)
-@test_approx_eq Base.sumabs2(Breduc, 1) safe_sumabs2(Breduc, 1)
+@test_approx_eq sumabs(Breduc, 1) safe_sumabs(Breduc, 1)
+@test_approx_eq sumabs2(Breduc, 1) safe_sumabs2(Breduc, 1)
+
+# Small integers
+@test @inferred(sum(Int8[1], 1)) == [1]
+@test @inferred(sum(Uint8[1], 1)) == [1]
+
+# Complex types
+@test typeof(@inferred(sum([1.0+1.0im], 1))) == Vector{Complex128}
+@test typeof(@inferred(Base.sumabs([1.0+1.0im], 1))) == Vector{Float64}
+@test typeof(@inferred(Base.sumabs2([1.0+1.0im], 1))) == Vector{Float64}
+@test typeof(@inferred(prod([1.0+1.0im], 1))) == Vector{Complex128}
+@test typeof(@inferred(Base.prod(Base.AbsFun(), [1.0+1.0im], 1))) == Vector{Float64}
+@test typeof(@inferred(Base.prod(Base.Abs2Fun(), [1.0+1.0im], 1))) == Vector{Float64}
+
+# Heterogeneously typed arrays
+@test sum(Union(Float32, Float64)[1.0], 1) == [1.0]
+@test prod(Union(Float32, Float64)[1.0], 1) == [1.0]
 
 @test reducedim((a,b) -> a|b, [true false; false false], 1, false) == [true false]
 R = reducedim((a,b) -> a+b, [1 2; 3 4], 2, 0.0)

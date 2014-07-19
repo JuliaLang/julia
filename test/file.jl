@@ -5,6 +5,18 @@ dir = mktempdir()
 file = joinpath(dir, "afile.txt")
 close(open(file,"w")) # like touch, but lets the operating system update the timestamp for greater precision on some platforms (windows)
 
+@unix_only begin
+    link = joinpath(dir, "afilelink.txt")
+    symlink(file, link)
+end
+
+subdir = joinpath(dir, "adir")
+mkdir(subdir)
+@non_windowsxp_only begin
+    dirlink = joinpath(dir, "dirlink")
+    symlink(subdir, dirlink)
+end
+
 #######################################################################
 # This section tests some of the features of the stat-based file info #
 #######################################################################
@@ -24,13 +36,22 @@ run(`chmod +w $file`)
 @test filesize(file) == 0
 # On windows the filesize of a folder is the accumulation of all the contained
 # files and is thus zero in this case.
-@windows_only begin
-    @test filesize(dir) == 0
+@windows_only @test filesize(dir) == 0
+@unix_only @test filesize(dir) > 0
+let skew = 0.25  # allow 250ms skew
+    now   = time()
+    mfile = mtime(file)
+    mdir  = mtime(dir)
+    @test now >= mfile-skew  &&  now >= mdir-skew  &&  mfile >= mdir-skew
 end
-@unix_only begin
-    @test filesize(dir) > 0
+#@test int(time()) >= int(mtime(file)) >= int(mtime(dir)) >= 0 # 1 second accuracy should be sufficient
+
+# test links
+@unix_only @test islink(link) == true
+@non_windowsxp_only begin
+    @test islink(dirlink) == true
+    @test isdir(dirlink) == true
 end
-@test int(time()) >= int(mtime(file)) >= int(mtime(dir)) >= 0 # 1 second accuracy should be sufficient
 
 # rename file
 newfile = joinpath(dir, "bfile.txt")
@@ -55,7 +76,22 @@ mv(a_tmpdir, b_tmpdir)
 b_stat = stat(b_tmpdir)
 @test Base.samefile(a_stat, b_stat)
 
-rmdir(b_tmpdir)
+rm(b_tmpdir)
+
+# rm recursive TODO add links
+c_tmpdir = mktempdir()
+c_subdir = joinpath(c_tmpdir, "c_subdir")
+mkdir(c_subdir)
+c_file = joinpath(c_tmpdir, "cfile.txt")
+cp(newfile, c_file)
+
+@test isdir(c_subdir)
+@test isfile(c_file)
+@test_throws SystemError rm(c_tmpdir)
+
+rm(c_tmpdir, recursive=true)
+@test !isdir(c_tmpdir)
+
 
 #######################################################################
 # This section tests file watchers.                                   #
@@ -178,6 +214,56 @@ b = mmap_bitarray((17,19), s)
 close(s)
 b=nothing; b0=nothing; gc(); gc(); # cause munmap finalizer to run & free resources
 
+# mmap with an offset
+A = rand(1:20, 500, 300)
+fname = tempname()
+s = open(fname, "w+")
+write(s, size(A,1))
+write(s, size(A,2))
+write(s, A)
+close(s)
+s = open(fname)
+m = read(s, Int)
+n = read(s, Int)
+A2 = mmap_array(Int, (m,n), s)
+@test A == A2
+seek(s, 0)
+A3 = mmap_array(Int, (m,n), s, convert(FileOffset,2*sizeof(Int)))
+@test A == A3
+A4 = mmap_array(Int, (m,150), s, convert(FileOffset,(2+150*m)*sizeof(Int)))
+@test A[:, 151:end] == A4
+close(s)
+A2=nothing; A3=nothing; A4=nothing; gc(); gc(); # cause munmap finalizer to run & free resources
+rm(fname)
+
+##############
+# mark/reset #
+##############
+
+s = open(file, "w")
+write(s, "Marked!\n")
+write(s, "Hello world!\n")
+write(s, "Goodbye world!\n")
+close(s)
+s = open(file)
+mark(s)
+str = readline(s)
+@test beginswith(str, "Marked!")
+@test ismarked(s)
+reset(s)
+@test !ismarked(s)
+str = readline(s)
+@test beginswith(str, "Marked!")
+mark(s)
+@test readline(s) == "Hello world!\n"
+@test ismarked(s)
+unmark(s)
+@test !ismarked(s)
+@test_throws ErrorException reset(s)
+@test !unmark(s)
+@test !ismarked(s)
+close(s)
+
 #######################################################################
 # This section tests temporary file and directory creation.           #
 #######################################################################
@@ -239,7 +325,13 @@ close(f)
 ############
 # Clean up #
 ############
+@unix_only rm(link)
+@non_windowsxp_only rm(dirlink)
+
 rm(file)
-rmdir(dir)
-@test !ispath(file)
-@test !ispath(dir)
+rm(subdir)
+rm(dir)
+
+# The following fail on Windows with "stat: operation not permitted (EPERM)"
+@unix_only @test !ispath(file)
+@unix_only @test !ispath(dir)

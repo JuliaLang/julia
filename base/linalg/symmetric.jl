@@ -45,8 +45,8 @@ eigfact!{T<:BlasReal}(A::RealHermSymComplexHerm{T}, vl::Real, vh::Real) = Eigen(
 eigvals!{T<:BlasReal}(A::RealHermSymComplexHerm{T}) = LAPACK.syevr!('N', 'A', A.uplo, A.S, 0.0, 0.0, 0, 0, -1.0)[1]
 eigvals!{T<:BlasReal}(A::RealHermSymComplexHerm{T}, irange::UnitRange) = LAPACK.syevr!('N', 'I', A.uplo, A.S, 0.0, 0.0, irange.start, irange.stop, -1.0)[1]
 eigvals!{T<:BlasReal}(A::RealHermSymComplexHerm{T}, vl::Real, vh::Real) = LAPACK.syevr!('N', 'V', A.uplo, A.S, convert(T, vl), convert(T, vh), 0, 0, -1.0)[1]
-eigmax{T<:Real}(A::RealHermSymComplexHerm{T}) = eigvals(A, size(A, 1), size(A, 1))[1]
-eigmin{T<:Real}(A::RealHermSymComplexHerm{T}) = eigvals(A, 1, 1)[1]
+eigmax{T<:Real}(A::RealHermSymComplexHerm{T}) = eigvals(A, size(A, 1):size(A, 1))[1]
+eigmin{T<:Real}(A::RealHermSymComplexHerm{T}) = eigvals(A, 1:1)[1]
 
 function eigfact!{T<:BlasReal}(A::HermOrSym{T}, B::HermOrSym{T})
     vals, vecs, _ = LAPACK.sygvd!(1, 'V', A.uplo, A.S, B.uplo == A.uplo ? B.S : B.S')

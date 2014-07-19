@@ -394,8 +394,7 @@ function inlineanonymous(ex::Expr, val)
     ex = ex.args[2]
     exout = lreplace(ex, sym, val)
     exout = poplinenum(exout)
-    exout = poparithmetic(exout)
-    popconditionals(exout)
+    exprresolve(exout)
 end
 
 # Given :i and 3, this generates :i_3
@@ -418,8 +417,13 @@ end
 function lreplace!(ex::Expr, sym::Symbol, val, r)
     # Curly-brace notation, which acts like parentheses
     if ex.head == :curly && length(ex.args) == 2 && isa(ex.args[1], Symbol) && endswith(string(ex.args[1]), "_")
-        excurly = lreplace!(ex.args[2], sym, val, r)
-        return symbol(string(ex.args[1])*string(poparithmetic(excurly)))
+        excurly = exprresolve(lreplace!(ex.args[2], sym, val, r))
+        if isa(excurly, Number)
+            return symbol(string(ex.args[1])*string(excurly))
+        else
+            ex.args[2] = excurly
+            return ex
+        end
     end
     for i in 1:length(ex.args)
         ex.args[i] = lreplace!(ex.args[i], sym, val, r)
@@ -439,36 +443,33 @@ function poplinenum(ex::Expr)
     ex
 end
 
-# Handle very simple arithmetic at the expression level
-poparithmetic(ex) = ex
-function poparithmetic(ex::Expr)
+exprresolve(arg) = arg
+function exprresolve(ex::Expr)
     for i = 1:length(ex.args)
-        ex.args[i] = poparithmetic(ex.args[i])
+        ex.args[i] = exprresolve(ex.args[i])
     end
+    # Handle simple arithmetic
     if ex.head == :call && in(ex.args[1], (:+, :-, :*, :/)) && all([isa(ex.args[i], Number) for i = 2:length(ex.args)])
         return eval(ex)
     elseif ex.head == :call && (ex.args[1] == :+ || ex.args[1] == :-) && length(ex.args) == 3 && ex.args[3] == 0
         # simplify x+0 and x-0
         return ex.args[2]
     end
-    ex
-end
-
-# Resolve if/else and ternary expressions that can be evaluated at parsing time
-popconditionals(arg) = arg
-function popconditionals(ex::Expr)
-    if isa(ex, Expr) && ex.head == :if
+    # Resolve array references
+    if ex.head == :ref && isa(ex.args[1], Array)
         for i = 2:length(ex.args)
-            ex.args[i] = popconditionals(ex.args[i])
+            if !isa(ex.args[i], Real)
+                return ex
+            end
         end
+        return ex.args[1][ex.args[2:end]...]
+    end
+    # Resolve conditionals
+    if ex.head == :if
         try
             tf = eval(ex.args[1])
             ex = tf?ex.args[2]:ex.args[3]
         catch
-        end
-    else
-        for i = 1:length(ex.args)
-            ex.args[i] = popconditionals(ex.args[i])
         end
     end
     ex

@@ -1,6 +1,6 @@
 module Random
 
-using Base.LibRandom
+using Base.dSFMT
 
 export srand,
        rand, rand!,
@@ -130,6 +130,14 @@ function rand!{T}(A::Array{T})
     end
     A
 end
+
+function rand!(r::AbstractRNG, A::AbstractArray)
+    for i=1:length(A)
+        @inbounds A[i] = rand(r)
+    end
+    A
+end
+
 rand(T::Type, dims::Dims) = rand!(Array(T, dims))
 rand{T<:Number}(::Type{T}) = error("no random number generator for type $T; try a more specific type")
 rand{T<:Number}(::Type{T}, dims::Int...) = rand(T, dims)
@@ -256,6 +264,7 @@ randn(dims::Int...) = randn!(Array(Float64, dims...))
 immutable UUID
     value::Uint128
 end
+UUID(u::String) = convert(UUID, u)
 
 function uuid4()
     u = rand(Uint128)
@@ -264,7 +273,23 @@ function uuid4()
     UUID(u)
 end
 
-function Base.convert(::Type{Vector{Uint8}}, u::UUID)
+function Base.convert(::Type{UUID}, s::String)
+    s = lowercase(s)
+
+    if !ismatch(r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$", s)
+        error(ArgumentError("Malformed UUID string"))
+    end
+
+    u = uint128(0)
+    for i in [1:8, 10:13, 15:18, 20:23, 25:36]
+        u <<= 4
+        d = s[i]-'0'
+        u |= 0xf & (d-39*(d>9))
+    end
+    return UUID(u)
+end
+
+function Base.repr(u::UUID)
     u = u.value
     a = Array(Uint8,36)
     for i = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
@@ -273,10 +298,10 @@ function Base.convert(::Type{Vector{Uint8}}, u::UUID)
         u >>= 4
     end
     a[[24,19,14,9]] = '-'
-    return a
+
+    return ASCIIString(a)
 end
 
-Base.show(io::IO, u::UUID) = write(io,convert(Vector{Uint8},u))
-Base.repr(u::UUID) = ASCIIString(convert(Vector{Uint8},u))
+Base.show(io::IO, u::UUID) = write(io, Base.repr(u))
 
 end # module

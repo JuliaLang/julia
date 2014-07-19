@@ -31,7 +31,7 @@ isassigned(a::Array, i::Int...) = isdefined(a, i...)
 ## copy ##
 
 function unsafe_copy!{T}(dest::Ptr{T}, src::Ptr{T}, N)
-    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint),
+    ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint),
           dest, src, N*sizeof(T))
     return dest
 end
@@ -537,16 +537,11 @@ function shift!(a::Vector)
 end
 
 function insert!{T}(a::Array{T,1}, i::Integer, item)
-    if i < 1
-        throw(BoundsError())
-    end
+    1 <= i <= length(a)+1 || throw(BoundsError())
+    i == length(a)+1 && return push!(a, item)
+
     item = convert(T, item)
-    n = length(a)
-    if i > n
-        ccall(:jl_array_grow_end, Void, (Any, Uint), a, i-n)
-    else
-        _growat!(a, i, 1)
-    end
+    _growat!(a, i, 1)
     a[i] = item
     return a
 end
@@ -766,6 +761,16 @@ for f in (:.+, :.-, :.*, :./, :.\, :.%, :div, :mod, :rem, :&, :|, :$)
         end
     end
 end
+
+# familiar aliases for broadcasting operations of array ± scalar (#7226):
+(+)(A::AbstractArray{Bool},x::Bool) = A .+ x
+(+)(x::Bool,A::AbstractArray{Bool}) = x .+ A 
+(-)(A::AbstractArray{Bool},x::Bool) = A .- x
+(-)(x::Bool,A::AbstractArray{Bool}) = x .- A
+(+)(A::AbstractArray,x::Number) = A .+ x
+(+)(x::Number,A::AbstractArray) = x .+ A
+(-)(A::AbstractArray,x::Number) = A .- x
+(-)(x::Number,A::AbstractArray) = x .- A
 
 # functions that should give an Int result for Bool arrays
 for f in (:.+, :.-)
@@ -1235,7 +1240,7 @@ function transpose!(B::StridedMatrix,A::StridedMatrix)
         @inbounds begin
             for j = 1:n
                 for i = 1:m
-                    B[j,i] = A[i,j]
+                    B[j,i] = transpose(A[i,j])
                 end
             end
         end
@@ -1249,7 +1254,7 @@ function transposeblock!(B::StridedMatrix,A::StridedMatrix,m::Int,n::Int,offseti
         @inbounds begin
             for j = offsetj+(1:n)
                 for i = offseti+(1:m)
-                    B[j,i] = A[i,j]
+                    B[j,i] = transpose(A[i,j])
                 end
             end
         end
@@ -1272,7 +1277,7 @@ function ctranspose!(B::StridedMatrix,A::StridedMatrix)
         @inbounds begin
             for j = 1:n
                 for i = 1:m
-                    B[j,i] = conj(A[i,j])
+                    B[j,i] = ctranspose(A[i,j])
                 end
             end
         end
@@ -1286,7 +1291,7 @@ function ctransposeblock!(B::StridedMatrix,A::StridedMatrix,m::Int,n::Int,offset
         @inbounds begin
             for j = offsetj+(1:n)
                 for i = offseti+(1:m)
-                    B[j,i] = conj(A[i,j])
+                    B[j,i] = ctranspose(A[i,j])
                 end
             end
         end
@@ -1312,8 +1317,8 @@ function ctranspose(A::StridedMatrix)
 end
 ctranspose{T<:Real}(A::StridedVecOrMat{T}) = transpose(A)
 
-transpose(x::StridedVector) = [ x[j] for i=1, j=1:size(x,1) ]
-ctranspose{T}(x::StridedVector{T}) = T[ conj(x[j]) for i=1, j=1:size(x,1) ]
+transpose(x::StridedVector) = [ transpose(x[j]) for i=1, j=1:size(x,1) ]
+ctranspose{T}(x::StridedVector{T}) = T[ ctranspose(x[j]) for i=1, j=1:size(x,1) ]
 
 # set-like operators for vectors
 # These are moderately efficient, preserve order, and remove dupes.
@@ -1396,33 +1401,6 @@ for (f, fp, op) = ((:cumsum, :cumsum_pairwise, :+),
         if n == 0; return c; end
         ($fp)(v, c, $(op==:+ ? :(zero(v[1])) : :(one(v[1]))), 1, n)
         return c
-    end
-
-    @eval function ($f)(A::StridedArray, axis::Integer)
-        dimsA = size(A)
-        ndimsA = ndims(A)
-        axis_size = dimsA[axis]
-        axis_stride = 1
-        for i = 1:(axis-1)
-            axis_stride *= size(A,i)
-        end
-
-        B = $(op===:+ ? (:(similar(A,_cumsum_type(A)))) :
-                        (:(similar(A))))
-
-        if axis_size < 1
-            return B
-        end
-
-        for i = 1:length(A)
-            if div(i-1, axis_stride) % axis_size == 0
-               B[i] = A[i]
-            else
-               B[i] = ($op)(B[i-axis_stride], A[i])
-            end
-        end
-
-        return B
     end
 
     @eval ($f)(A::AbstractArray) = ($f)(A, 1)

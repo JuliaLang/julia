@@ -107,7 +107,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
 .. function:: build(pkgs...)
 
-   Run the build scripts for each package in ``pkgs`` and all of their dependencies in depth-first recursive order.
+   Run the build script in "deps/build.jl" for each package in ``pkgs`` and all of their dependencies in depth-first recursive order.
    This is called automatically by ``Pkg.resolve()`` on all installed or updated packages.
 
 .. function:: generate(pkg,license)
@@ -129,7 +129,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
 .. function:: publish()
 
-   For each new package version tagged in ``METADATA`` not already published, make sure that the tagged package commits have been pushed to the repo at the registered URL for the package and if they all have, push ``METADATA``.
+   For each new package version tagged in ``METADATA`` not already published, make sure that the tagged package commits have been pushed to the repo at the registered URL for the package and if they all have, open a pull request to ``METADATA``.
 
 .. function:: test()
 

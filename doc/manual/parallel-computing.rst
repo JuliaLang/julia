@@ -166,11 +166,11 @@ The base Julia installation has in-built support for two types of clusters:
 
     - A local cluster specified with the ``-p`` option as shown above.  
     
-    - And a cluster spanning machines using the ``--machinefile`` option. This uses a passwordless 
+    - A cluster spanning machines using the ``--machinefile`` option. This uses a passwordless 
       ``ssh`` login to start julia worker processes (from the same path as the current host)
       on the specified machines.
     
-Functions ``addprocs``, ``rmprocs``, ``workers`` and others, are available as a programmatic means of 
+Functions ``addprocs``, ``rmprocs``, ``workers``, and others are available as a programmatic means of 
 adding, removing and querying the processes in a cluster.
 
 Other types of clusters can be supported by writing your own custom ClusterManager. See section on 
@@ -249,7 +249,7 @@ results::
     b = @spawn count_heads(100000000)
     fetch(a)+fetch(b)
 
-This example, as simple as it is, demonstrates a powerful and often-used
+This example demonstrates a powerful and often-used
 parallel programming pattern. Many iterations run independently over
 several processes, and then their results are combined using some
 function. The combination process is called a *reduction*, since it is
@@ -562,8 +562,10 @@ array can be retrieved from a ``SharedArray`` by calling ``sdata(S)``.
 For other ``AbstractArray`` types, ``sdata`` just returns the object
 itself, so it's safe to use ``sdata`` on any Array-type object.
 
-The constructor for a shared array is of the form 
-  ``SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])``
+The constructor for a shared array is of the form::
+
+  SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
+
 which creates a shared array of a bitstype ``T`` and size ``dims``
 across the processes specified by ``pids``.  Unlike distributed
 arrays, a shared array is accessible only from those participating

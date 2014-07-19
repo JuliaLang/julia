@@ -7,7 +7,7 @@ Linear Algebra
 
 .. currentmodule:: Base
 
-Linear algebra functions in Julia are largely implemented by calling functions from `LAPACK <http://www.netlib.org/lapack/>`_.  Sparse factorizations call functions from `SuiteSparse <http://www.suitesparse.com/>`_.
+Linear algebra functions in Julia are largely implemented by calling functions from `LAPACK <http://www.netlib.org/lapack/>`_.  Sparse factorizations call functions from `SuiteSparse <http://www.cise.ufl.edu/research/sparse>`_.
 
 .. function:: *(A, B)
    :noindex:
@@ -115,8 +115,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
       Return type      ``eltype(A)``     ``pivot``  Relationship between ``F`` and ``A``
       ---------------- ----------------- --------- -------------------------------------
       ``QR``           not ``BlasFloat`` either     ``A==F[:Q]*F[:R]``
-      ``QRCompactWY``  ``BlasFloat``     ``true``   ``A==F[:Q]*F[:R]``
-      ``QRPivoted``    ``BlasFloat``     ``false``  ``A[:,F[:p]]==F[:Q]*F[:R]``
+      ``QRCompactWY``  ``BlasFloat``     ``false``  ``A==F[:Q]*F[:R]``
+      ``QRPivoted``    ``BlasFloat``     ``true``   ``A[:,F[:p]]==F[:Q]*F[:R]``
       ================ ================= ========= =====================================
 
    ``BlasFloat`` refers to any of: ``Float32``, ``Float64``, ``Complex64`` or ``Complex128``.
@@ -463,6 +463,14 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Matrix exponential.
 
+.. function:: lyap(A, C)
+
+   Computes the solution ``X`` to the continuous Lyapunov equation ``AX + XA' + C = 0``, where no eigenvalue of ``A`` has a zero real part and no two eigenvalues are negative complex conjugates of each other. 
+
+.. function:: sylvester(A, B, C)
+
+   Computes the solution ``X`` to the Sylvester equation ``AX + XB + C = 0``, where ``A``, ``B`` and ``C`` have compatible dimensions and ``A`` and ``-B`` have no eigenvalues with equal real part.
+
 .. function:: issym(A) -> Bool
 
    Test whether a matrix is symmetric.
@@ -499,6 +507,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ``eigs`` computes eigenvalues ``d`` of ``A`` using Lanczos or Arnoldi iterations for real symmetric or general nonsymmetric matrices respectively. If ``B`` is provided, the generalized eigen-problem is solved.  The following keyword arguments are supported:
     * ``nev``: Number of eigenvalues
+    * ``ncv``: Number of Krylov vectors used in the computation; should satisfy ``nev+1 <= ncv <= n`` for real symmetric problems and ``nev+2 <= ncv <= n`` for other problems; default is ``ncv = max(20,2*nev+1)``.
     * ``which``: type of eigenvalues to compute. See the note below.
 
       ========= ======================================================================================================================

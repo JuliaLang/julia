@@ -12,11 +12,13 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        ceil, floor, trunc, round, significand, 
        lgamma, hypot, gamma, lfact, max, min, minmax, ldexp, frexp,
        clamp, modf, ^, mod2pi,
-       airy, airyai, airyprime, airyaiprime, airybi, airybiprime,
-       besselj0, besselj1, besselj, bessely0, bessely1, bessely,
-       hankelh1, hankelh2, besseli, besselk, besselh,
+       airy, airyai, airyprime, airyaiprime, airybi, airybiprime, airyx,
+       besselj0, besselj1, besselj, besseljx,
+       bessely0, bessely1, bessely, besselyx,
+       hankelh1, hankelh2, hankelh1x, hankelh2x,
+       besseli, besselix, besselk, besselkx, besselh,
        beta, lbeta, eta, zeta, polygamma, invdigamma, digamma, trigamma,
-       erfinv, erfcinv
+       erfinv, erfcinv, @evalpoly
 
 import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
@@ -43,16 +45,16 @@ clamp{T}(x::AbstractArray{T}, lo, hi) =
 macro horner(x, p...)
     ex = esc(p[end])
     for i = length(p)-1:-1:1
-        ex = :($(esc(p[i])) + $(esc(x)) * $ex)
+        ex = :($(esc(p[i])) + t * $ex)
     end
-    ex
+    Expr(:block, :(t = $(esc(x))), ex)
 end
 
-# Evaluate p[1] + z*p[2] + z^2*p[3] + ... + z^(n-1)*p[n], assuming
-# the p[k] are *real* coefficients.   This uses Horner's method if z
-# is real, but for complex z it uses a more efficient algorithm described
-# in Knuth, TAOCP vol. 2, section 4.6.4, equation (3).
-macro chorner(z, p...)
+# Evaluate p[1] + z*p[2] + z^2*p[3] + ... + z^(n-1)*p[n].  This uses
+# Horner's method if z is real, but for complex z it uses a more
+# efficient algorithm described in Knuth, TAOCP vol. 2, section 4.6.4,
+# equation (3).
+macro evalpoly(z, p...)
     a = :($(esc(p[end])))
     b = :($(esc(p[end-1])))
     as = {}
@@ -65,14 +67,15 @@ macro chorner(z, p...)
     ai = :a0
     push!(as, :($ai = $a))
     C = Expr(:block,
-             :(x = real($(esc(z)))),
-             :(y = imag($(esc(z)))),
+             :(t = $(esc(z))),
+             :(x = real(t)),
+             :(y = imag(t)),
              :(r = x + x),
              :(s = x*x + y*y),
              as...,
-             :($ai * $(esc(z)) + $b))
+             :($ai * t + $b))
     R = Expr(:macrocall, symbol("@horner"), esc(z), p...)
-    :(isa($(esc(z)), Real) ? $R : $C)
+    :(isa($(esc(z)), Complex) ? $C : $R)
 end
 
 rad2deg(z::Real) = oftype(z, 57.29577951308232*z)
@@ -289,10 +292,10 @@ function ieee754_rem_pio2(x::Float64)
     # (in other words, n might be off by a multiple of 4, or a multiple of 100)
 
     # this is just wrapping up 
-    # https://github.com/JuliaLang/openlibm/blob/master/src/e_rem_pio2.c
+    # https://github.com/JuliaLang/openspecfun/blob/master/rem_pio2/e_rem_pio2.c
 
     y = [0.0,0.0]
-    n = ccall((:__ieee754_rem_pio2, libm), Cint, (Float64,Ptr{Float64}), x, y)
+    n = ccall((:__ieee754_rem_pio2, openspecfun), Cint, (Float64,Ptr{Float64}), x, y)
     return (n,y)
 end
 

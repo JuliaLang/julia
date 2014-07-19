@@ -199,12 +199,16 @@ K,J,V = findnz(SparseMatrixCSC(2,1,[1,3],[1,2],[1.0,0.0]))
 # issue #5985
 @test sprandbool(4, 5, 0.0) == sparse(zeros(Bool, 4, 5))
 @test sprandbool(4, 5, 1.00) == sparse(ones(Bool, 4, 5))
-sprb45 = sprandbool(4, 5, 0.5)
-@test length(sprb45) == 20
-@test 4 <= sum(sprb45)[1] <= 16
+sprb45nnzs = zeros(5)
+for i=1:5
+    sprb45 = sprandbool(4, 5, 0.5)
+    @test length(sprb45) == 20
+    sprb45nnzs[i] = sum(sprb45)[1]
+end
+@test 4 <= mean(sprb45nnzs) <= 16
 
 # issue #5853, sparse diff
-for i=1:2, a={[1 2 3], [1 2 3]', speye(3)}
+for i=1:2, a={[1 2 3], [1 2 3]', eye(3)}
     @test all(diff(sparse(a),i) == diff(a,i))
 end
 
@@ -288,6 +292,17 @@ for (aa116, ss116) in [(a116, s116), (ad116, sd116)]
     @test full(ss116[:,lj]) == aa116[:,lj]
     @test full(ss116[li,lj]) == aa116[li,lj]
 end
+
+# workaround issue #7197: comment out let-block
+#let S = SparseMatrixCSC(3, 3, Uint8[1,1,1,1], Uint8[], Int64[])
+S1290 = SparseMatrixCSC(3, 3, Uint8[1,1,1,1], Uint8[], Int64[])
+    S1290[1,1] = 1
+    S1290[5] = 2
+    S1290[end] = 3
+    @test S1290[end] == (S1290[1] + S1290[2,2])
+    @test 6 == sum(diag(S1290))
+    @test (full(S1290)[[3,1],1])'' == full(S1290[[3,1],1])
+# end
 
 
 # setindex tests
@@ -378,5 +393,13 @@ let S = sprand(50, 30, 0.5, x->int(rand(x)*100))
     @test sum(S) == (sumS1 - sumS2)
     S[I] = J
     @test sum(S) == (sumS1 - sumS2 + sum(J))
+end
+
+#Issue 7507
+@test (i7507=sparsevec(Dict{Int64, Float64}(), 10))==spzeros(10,1)
+
+#Issue 7650
+let S = spzeros(3, 3)
+    @test size(reshape(S, 9, 1)) == (9,1)
 end
 

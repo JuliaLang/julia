@@ -806,6 +806,23 @@ s = "   p"
 @test """
        $s
       """ == " $s$(nl)"
+@test """\t""" == "\t"
+@test """
+      \t""" == ""
+@test """
+      foo
+      \tbar""" == "foo$(nl)\tbar"
+@test """
+      foo
+      \tbar
+      """ == "foo$(nl)\tbar$(nl)"
+@test """
+      foo
+      bar\t""" == "foo$(nl)bar\t"
+@test """
+      foo
+      \tbar
+       """ == "foo$(nl)       bar$(nl)"
 
 # bytes2hex and hex2bytes
 hex_str = "d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592"
@@ -994,3 +1011,55 @@ let f =IOBuffer(),
     @test invoke(write, (IO, AbstractArray), f, x) == 3
     @test takebuf_string(f) == "123"
 end
+
+# issue #7248
+@test_throws BoundsError ind2chr("hello", -1)
+@test_throws BoundsError chr2ind("hello", -1)
+@test_throws BoundsError ind2chr("hellø", -1)
+@test_throws BoundsError chr2ind("hellø", -1)
+@test_throws BoundsError ind2chr("hello", 10)
+@test_throws BoundsError chr2ind("hello", 10)
+@test_throws BoundsError ind2chr("hellø", 10)
+@test_throws BoundsError chr2ind("hellø", 10)
+@test_throws BoundsError checkbounds("hello", 0)
+@test_throws BoundsError checkbounds("hello", 6)
+@test_throws BoundsError checkbounds("hello", 0:3)
+@test_throws BoundsError checkbounds("hello", 4:6)
+@test_throws BoundsError checkbounds("hello", [0:3])
+@test_throws BoundsError checkbounds("hello", [4:6])
+@test checkbounds("hello", 2)
+@test checkbounds("hello", 1:5)
+@test checkbounds("hello", [1:5])
+
+
+# isvalid(), chr2ind() and ind2chr() for SubString{DirectIndexString}
+let s="lorem ipsum",
+    sdict=[SubString(s,1,11)=>s, 
+        SubString(s,1,6)=>"lorem ",
+        SubString(s,1,0)=>"", 
+        SubString(s,2,4)=>"ore", 
+        SubString(s,2,16)=>"orem ipsum", 
+        SubString(s,12,14)=>""
+    ]
+    for (ss,s) in sdict
+        for i in -1:12
+            @test isvalid(ss,i)==isvalid(s,i)
+        end
+    end
+    for (ss,s) in sdict
+        for i in 1:length(ss)
+            @test ind2chr(ss,i)==ind2chr(s,i)
+        end
+    end
+    for (ss,s) in sdict
+        for i in 1:length(ss)
+            @test chr2ind(ss,i)==chr2ind(s,i)
+        end
+    end
+end #let
+
+ss=SubString("hello",1,5)
+@test_throws BoundsError ind2chr(ss, -1)
+@test_throws BoundsError chr2ind(ss, -1)
+@test_throws BoundsError chr2ind(ss, 10)
+@test_throws BoundsError ind2chr(ss, 10)

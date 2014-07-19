@@ -176,10 +176,11 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     end
     println(io,             "  LAPACK: ",liblapack_name)
     println(io,             "  LIBM: ",libm_name)
+    println(io,             "  LLVM: libLLVM-",libllvm_version)
     if verbose
         println(io,         "Environment:")
         for (k,v) in ENV
-            if !is(match(r"JULIA|PATH|FLAG|^TERM$|HOME",bytestring(k)), nothing)
+            if !is(match(r"JULIA|PATH|FLAG|^TERM$|HOME", bytestring(k)), nothing)
                 println(io, "  $(k) = $(v)")
             end
         end
@@ -329,4 +330,17 @@ end
 function download(url::String)
     filename = tempname()
     download(url, filename)
+end
+
+function workspace()
+    last = Core.Main
+    b = last.Base
+    ccall(:jl_new_main_module, Any, ())
+    m = Core.Main
+    ccall(:jl_add_standard_imports, Void, (Any,), m)
+    eval(m,
+         Expr(:toplevel,
+              :(const Base = $(Expr(:quote, b))),
+              :(const LastMain = $(Expr(:quote, last)))))
+    nothing
 end

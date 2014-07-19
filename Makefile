@@ -73,6 +73,11 @@ $(build_private_libdir)/sys%$(SHLIB_EXT): $(build_private_libdir)/sys%o
 	$(CXX) -shared -fPIC -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ $< \
 		$$([ $(OS) = Darwin ] && echo -Wl,-undefined,dynamic_lookup || echo -Wl,--unresolved-symbols,ignore-all ) \
 		$$([ $(OS) = WINNT ] && echo -ljulia -lssp)
+ifeq ($(OS), Darwin)
+ifeq ($(shell test `dsymutil -v | cut -d\- -f2 | cut -d. -f1` -gt 102 && echo yes), yes)
+	dsymutil $@
+endif
+endif
 
 $(build_private_libdir)/sys0.o:
 	@$(QUIET_JULIA) cd base && \
@@ -99,7 +104,7 @@ $(build_bindir)/stringpatch: $(build_bindir) contrib/stringpatch.c
 JL_LIBS = julia julia-debug
 
 # private libraries, that are installed in $(prefix)/lib/julia
-JL_PRIVATE_LIBS = random suitesparse_wrapper grisu Rmath
+JL_PRIVATE_LIBS = suitesparse_wrapper grisu Rmath
 ifeq ($(USE_SYSTEM_FFTW),0)
 JL_PRIVATE_LIBS += fftw3 fftw3f fftw3_threads fftw3f_threads
 endif
@@ -113,6 +118,9 @@ endif
 endif
 ifeq ($(USE_SYSTEM_OPENSPECFUN),0)
 JL_PRIVATE_LIBS += openspecfun
+endif
+ifeq ($(USE_SYSTEM_DSFMT),0)
+JL_PRIVATE_LIBS += dSFMT
 endif
 ifeq ($(USE_SYSTEM_BLAS),0)
 JL_PRIVATE_LIBS += openblas
@@ -202,7 +210,7 @@ endif
 	# Copy in all .jl sources as well
 	cp -R -L $(build_datarootdir)/julia $(DESTDIR)$(datarootdir)/
 	# Remove git repository of juliadoc
-	-rm -r $(DESTDIR)$(datarootdir)/julia/doc/juliadoc/.git
+	-rm -rf $(DESTDIR)$(datarootdir)/julia/doc/juliadoc/.git
 	-rm $(DESTDIR)$(datarootdir)/julia/doc/juliadoc/.gitignore
 	# Copy in beautiful new man page!
 	$(INSTALL_F) $(build_datarootdir)/man/man1/julia.1 $(DESTDIR)$(datarootdir)/man/man1/
@@ -255,8 +263,6 @@ endif
 	# If you want to make a distribution with a hardcoded path, you take care of installation
 ifeq ($(OS), Darwin)
 	-cat ./contrib/mac/juliarc.jl >> $(DESTDIR)$(prefix)/etc/julia/juliarc.jl
-else ifeq ($(OS), WINNT)
-	-cat ./contrib/windows/juliarc.jl >> $(DESTDIR)$(prefix)/etc/julia/juliarc.jl
 endif
 
 	# purge sys.{dll,so,dylib} as that file is not relocatable across processor architectures
@@ -268,9 +274,11 @@ ifeq ($(OS), WINNT)
 	[ ! -d dist-extras ] || ( cd dist-extras && \
 		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll $(bindir) && \
 	    mkdir $(DESTDIR)$(prefix)/Git && \
-	    7z x PortableGit.7z -o"$(DESTDIR)$(prefix)/Git" )
+	    7z x PortableGit.7z -o"$(DESTDIR)$(prefix)/Git" && \
+	    cp busybox.exe $(DESTDIR)$(prefix)/Git/bin/echo.exe && \
+	    cp busybox.exe $(DESTDIR)$(prefix)/Git/bin/printf.exe )
 	cd $(DESTDIR)$(bindir) && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
-	$(call spawn,./dist-extras/nsis/makensis.exe) /NOCD /DVersion=$(JULIA_VERSION) /DArch=$(ARCH) /DCommit=$(JULIA_COMMIT) ./contrib/windows/build-installer.nsi
+	$(call spawn,./dist-extras/nsis/makensis.exe) -NOCD -DVersion=$(JULIA_VERSION) -DArch=$(ARCH) -DCommit=$(JULIA_COMMIT) ./contrib/windows/build-installer.nsi
 	./dist-extras/7z a -mx9 "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" julia-installer.exe
 	cat ./contrib/windows/7zS.sfx ./contrib/windows/7zSFX-config.txt "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" > "julia-${JULIA_VERSION}-${ARCH}.exe"
 	-rm -f julia-installer.exe
@@ -364,9 +372,9 @@ ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 	cd dist-extras && \
 	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z920.exe && \
 	7z x -y 7z920.exe 7z.exe 7z.dll && \
-	$(JLDOWNLOAD) http://download.opensuse.org/repositories/windows:/mingw:/win32/SLE_11_SP3/noarch/mingw32-libexpat-2.0.1-6.6.noarch.rpm && \
-	mv mingw32-libexpat-*.rpm mingw-libexpat.rpm && \
-	$(JLDOWNLOAD) http://download.opensuse.org/repositories/windows:/mingw:/win32/SLE_11_SP3/noarch/mingw32-zlib-1.2.8-2.4.noarch.rpm && \
+	$(JLDOWNLOAD) http://download.opensuse.org/repositories/windows:/mingw:/win32/openSUSE_13.1/noarch/mingw32-libexpat1-2.0.1-8.1.noarch.rpm && \
+	mv mingw32-libexpat1-*.rpm mingw-libexpat.rpm && \
+	$(JLDOWNLOAD) http://download.opensuse.org/repositories/windows:/mingw:/win32/openSUSE_13.1/noarch/mingw32-zlib-1.2.8-3.12.noarch.rpm && \
 	mv mingw32-zlib-*.rpm mingw-zlib.rpm
 else ifeq ($(ARCH),x86_64)
 	cd dist-extras && \
@@ -374,9 +382,9 @@ else ifeq ($(ARCH),x86_64)
 	7z x -y 7z920-x64.msi _7z.exe _7z.dll && \
 	mv _7z.dll 7z.dll && \
 	mv _7z.exe 7z.exe && \
-	$(JLDOWNLOAD) http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP3/noarch/mingw64-libexpat-2.0.1-5.8.noarch.rpm && \
-	mv mingw64-libexpat-*.rpm mingw-libexpat.rpm && \
-	$(JLDOWNLOAD) http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP3/noarch/mingw64-zlib-1.2.8-2.1.noarch.rpm && \
+	$(JLDOWNLOAD) http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_13.1/noarch/mingw64-libexpat1-2.0.1-7.1.noarch.rpm && \
+	mv mingw64-libexpat1-*.rpm mingw-libexpat.rpm && \
+	$(JLDOWNLOAD) http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_13.1/noarch/mingw64-zlib-1.2.8-3.1.noarch.rpm && \
 	mv mingw64-zlib-*.rpm mingw-zlib.rpm
 else
 	$(error no win-extras target for ARCH=$(ARCH))
@@ -384,12 +392,14 @@ endif
 	cd dist-extras && \
 	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z920_extra.7z && \
 	$(JLDOWNLOAD) https://unsis.googlecode.com/files/nsis-2.46.5-Unicode-setup.exe && \
+	$(JLDOWNLOAD) ftp://ftp.tigress.co.uk/public/gpl/6.0.0/busybox/busybox.exe && \
 	chmod a+x 7z.exe && \
 	chmod a+x 7z.dll && \
 	$(call spawn,./7z.exe) x -y -onsis nsis-2.46.5-Unicode-setup.exe && \
 	chmod a+x ./nsis/makensis.exe && \
+	chmod a+x busybox.exe && \
 	7z x -y mingw-libexpat.rpm -so > mingw-libexpat.cpio && \
 	7z e -y mingw-libexpat.cpio && \
 	7z x -y mingw-zlib.rpm -so > mingw-zlib.cpio && \
 	7z e -y mingw-zlib.cpio && \
-	$(JLDOWNLOAD) PortableGit.7z http://msysgit.googlecode.com/files/PortableGit-1.8.3-preview20130601.7z
+	$(JLDOWNLOAD) PortableGit.7z https://github.com/msysgit/msysgit/releases/download/Git-1.9.4-preview20140611/PortableGit-1.9.4-preview20140611.7z

@@ -1309,6 +1309,7 @@ jl_function_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t na
 }
 
 void jl_add_constructors(jl_datatype_t *t);
+jl_value_t *jl_matching_methods(jl_function_t *gf, jl_value_t *type, int lim);
 
 // compile-time method lookup
 jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types)
@@ -1318,6 +1319,22 @@ jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types)
     if (f->fptr == jl_f_ctor_trampoline)
         jl_add_constructors((jl_datatype_t*)f);
     assert(jl_is_gf(f));
+
+    // make sure exactly 1 method matches (issue #7302).
+    int i;
+    for(i=0; i < jl_tuple_len(types); i++) {
+        jl_value_t *ti = jl_tupleref(types, i);
+        // if one argument type is DataType, multiple Type{} definitions
+        // might match. also be conservative with tuples rather than trying
+        // to analyze them in detail.
+        if (ti == (jl_value_t*)jl_datatype_type || jl_is_tuple(ti)) {
+            jl_value_t *matches = jl_matching_methods(f, (jl_value_t*)types, 1);
+            if (matches == jl_false)
+                return NULL;
+            break;
+        }
+    }
+
     jl_methtable_t *mt = jl_gf_mtable(f);
     jl_function_t *sf = jl_method_lookup_by_type(mt, types, 1, 1);
     if (sf == jl_bottom_func) {
@@ -1362,9 +1379,8 @@ JL_CALLABLE(jl_apply_generic)
     mt->ncalls++;
 #endif
 #ifdef JL_TRACE
-    if (trace_en) {
+    if (trace_en)
         show_call(F, args, nargs);
-    }
 #endif
     /*
       search order:
@@ -1376,6 +1392,7 @@ JL_CALLABLE(jl_apply_generic)
       otherwise instantiate the generic method and use it
     */
     jl_function_t *mfunc = jl_method_table_assoc_exact(mt, args, nargs);
+
     if (mfunc != jl_bottom_func) {
         if (mfunc->linfo != NULL && 
             (mfunc->linfo->inInference || mfunc->linfo->inCompile)) {
@@ -1386,26 +1403,31 @@ JL_CALLABLE(jl_apply_generic)
                 li->unspecialized = jl_instantiate_method(mfunc, li->sparams);
             }
             mfunc = li->unspecialized;
+            assert(mfunc != jl_bottom_func);
         }
+        assert(!mfunc->linfo || !mfunc->linfo->inInference);
+        return jl_apply(mfunc, args, nargs);
     }
-    else {
-        jl_tuple_t *tt = arg_type_tuple(args, nargs);
-        JL_GC_PUSH1(&tt);
-        mfunc = jl_mt_assoc_by_type(mt, tt, 1, 0);
-        JL_GC_POP();
-    }
+
+    // cache miss case
+    jl_tuple_t *tt = arg_type_tuple(args, nargs);
+    // if running inference overwrites this particular method, it becomes
+    // unreachable from the method table, so root mfunc.
+    JL_GC_PUSH2(&tt, &mfunc);
+    mfunc = jl_mt_assoc_by_type(mt, tt, 1, 0);
 
     if (mfunc == jl_bottom_func) {
 #ifdef JL_TRACE
-        if (error_en) {
+        if (error_en)
             show_call(F, args, nargs);
-        }
 #endif
+        JL_GC_POP();
         return jl_no_method_error((jl_function_t*)F, args, nargs);
     }
     assert(!mfunc->linfo || !mfunc->linfo->inInference);
-
-    return jl_apply(mfunc, args, nargs);
+    jl_value_t* res = jl_apply(mfunc, args, nargs);
+    JL_GC_POP();
+    return res;
 }
 
 // invoke()

@@ -20,7 +20,7 @@ This is the GitHub repository of Julia source code, including instructions for c
 - **Homepage:** <http://julialang.org>
 - **Binaries:** <http://julialang.org/downloads/>
 - **Documentation:** <http://docs.julialang.org/>
-- **Packages:** <http://docs.julialang.org/en/latest/packages/packagelist/>
+- **Packages:** <http://pkg.julialang.org/>
 - **Source code:** <https://github.com/JuliaLang/julia>
 - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
 - **Mailing lists:** <http://julialang.org/community/>
@@ -58,9 +58,11 @@ First, acquire the source code by cloning the git repository:
 
     git clone git://github.com/JuliaLang/julia.git
 
-If you are behind a firewall and you need to use the https protocol instead of the git protocol:
+(If you are behind a firewall, you may need to use the `https` protocol instead of the `git` protocol:
 
     git config --global url."https://".insteadOf git://
+
+Be sure to also configure your system to use the appropriate proxy settings, e.g. by setting the `https_proxy` and `http_proxy` variables.)
 
 Next, enter the `julia/` directory and run `make` to build the `julia` executable. To perform a parallel build, use `make -j N` and supply the maximum number of concurrent processes.
 When compiled the first time, it will automatically download and build its [external dependencies](#Required-Build-Tools-External-Libraries).
@@ -71,14 +73,16 @@ If you need to build Julia in an environment that does not allow access to the o
 
 **Note:** the build process will not work if any of the build directory's parent directories have spaces in their names (this is due to a limitation in GNU make).
 
-Once it is built, you can run the `julia` executable using its full path in the directory created above (the `julia` directory), or, to run it from anywhere,
+Once it is built, you can run the `julia` executable using its full path in the directory created above (the `julia` directory), or, to run it from anywhere, either
 
-1. add a soft link to the `julia` executable in the `julia` directory to `/usr/local/bin` (or any suitable directory already in your path), or
+- add a soft link to the `julia` executable in the `julia` directory to `/usr/local/bin` (or any suitable directory already in your path), or
 
-2. add the `julia` directory to your executable path for this shell session (in bash: `export PATH="$(pwd):$PATH"` ; in csh or tcsh:
+- add the `julia` directory to your executable path for this shell session (in bash: `export PATH="$(pwd):$PATH"` ; in csh or tcsh:
 `set path= ( $path $cwd )` ), or
 
-3. add the `julia` directory to your executable path permanently (e.g. in `.bash_profile`).
+- add the `julia` directory to your executable path permanently (e.g. in `.bash_profile`), or
+
+- write `prefix=/path/to/install/folder` into `Make.user` and then run `make install`.
 
 Now you should be able to run Julia like this:
 
@@ -114,6 +118,15 @@ Julia does not install anything outside the directory it was cloned into. Julia 
 * To use external shared libraries not in the system library search path, set `USE_SYSTEM_XXX=1` and `LDFLAGS=-Wl,-rpath /path/to/dir/contains/libXXX.so` in `Make.user`.
   * Instead of setting `LDFLAGS`, putting the library directory into the environment variable `LD_LIBRARY_PATH` (at both compile and run time) also works.
 * See also the [external dependencies](#Required-Build-Tools-External-Libraries).
+
+#### Architecture Customization
+
+Julia can be built for a non-generic architecture by configuring the `ARCH` Makefile variable. See the appropriate section of `Make.inc` for additional customization options, such as `MARCH` and `JULIA_CPU_TARGET`.
+
+For example, to build for i486, set `ARCH=i486` and install the necessary system libraries for linking. On Ubuntu, these may include lib32gfortran3 (also manually call `ln -s /usr/lib32/libgfortran3.so.0 /usr/lib32/libgfortran3.so`) and lib32gcc1, lib32stdc++6, among others.
+
+You can also set `MARCH=native` for a maximum-performance build customized for the current machine CPU.
+
 
 #### Ubuntu
 
@@ -152,7 +165,7 @@ Now you should be able to build using the generic Linux instructions. These inst
 
  Problem              | Possible Solution
 ------------------------|---------------------
- OpenBLAS build failure | Set one of the following build options in `Make.user` and build again: <ul><li> `OPENBLAS_TARGET_ARCH=BARCELONA` (AMD CPUs) or `OPENBLAS_TARGET_ARCH=NEHALEM` (Intel CPUs)<ul>Set `OPENBLAS_DYNAMIC_ARCH = 0` to disable compiling multiple architectures in a single binary.</ul></li><li> `USE_SYSTEM_BLAS=1` uses the system provided `libblas` <ul><li>Set `LIBBLAS=-lopenblas` and `LIBBLASNAME=libopenblas` to force the use of the system provided OpenBLAS when multiple BLAS versions are installed </li></ul></li></ul>
+ OpenBLAS build failure | Set one of the following build options in `Make.user` and build again: <ul><li> `OPENBLAS_TARGET_ARCH=BARCELONA` (AMD CPUs) or `OPENBLAS_TARGET_ARCH=NEHALEM` (Intel CPUs)<ul>Set `OPENBLAS_DYNAMIC_ARCH = 0` to disable compiling multiple architectures in a single binary.</ul></li><li> `OPENBLAS_NO_AVX = 1` disables AVX instructions, allowing OpenBLAS to compile with `OPENBLAS_DYNAMIC_ARCH = 1` using old versions of binutils </li><li> `USE_SYSTEM_BLAS=1` uses the system provided `libblas` <ul><li>Set `LIBBLAS=-lopenblas` and `LIBBLASNAME=libopenblas` to force the use of the system provided OpenBLAS when multiple BLAS versions are installed </li></ul></li></ul>
  Illegal Instruction error | Check if your CPU supports AVX while your OS does not (e.g. through virtualization, as described in [this issue](https://github.com/JuliaLang/julia/issues/3263)), and try installing LLVM 3.3 instead of LLVM 3.2.
 
 ### OS X
@@ -190,7 +203,7 @@ Building Julia requires that the following software be installed:
 - **[gfortran][gcc]**           — compiling and linking fortran libraries
 - **[git]**                     — version control and package management.
 - **[perl]**                    — preprocessing of header files of libraries.
-- **[wget]**, **[curl]**, or **fetch** (FreeBSD) — to automatically download external libraries.
+- **[wget]**, **[curl]**, or **[fetch]** (FreeBSD) — to automatically download external libraries.
 - **[m4]**                      — needed to build GMP.
 - **[patch]**                   — for modifying source code.
 
@@ -222,6 +235,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 [gcc]:          http://gcc.gnu.org/
 [clang]:        http://clang.llvm.org/
 [curl]:         http://curl.haxx.se/
+[fetch]:        http://www.freebsd.org/cgi/man.cgi?fetch(1)
 [git]:          http://git-scm.com/
 [perl]:         http://www.perl.org/
 [OpenLibm]:     https://github.com/JuliaLang/openlibm
@@ -253,18 +267,22 @@ Please be aware that this procedure is not officially supported, as it introduce
 
 SuiteSparse is a special case, since it is typically only installed as a static library, while `USE_SYSTEM_SUITESPARSE=1` requires that it is a shared library. Running the script `contrib/repackage_system_suitesparse4.make` will copy your static system SuiteSparse installation into the shared library format required by Julia. `make USE_SYSTEM_SUITESPARSE=1` will then use the SuiteSparse that has been copied into Julia's directory, but will not build a new SuiteSparse library from scratch.
 
-### Intel Math Kernel Libraries
+### Intel compilers and Math Kernel Libraries
 
-To use the Intel [MKL] BLAS and LAPACK libraries, make sure that MKL version 10.3.6 or higher is installed. For a 64-bit architecture, the MKL environment should be set up as:
+To use the Intel [MKL] BLAS and LAPACK libraries, make sure that MKL version 10.3.6 or higher is installed. For a 64-bit architecture, the MKL environment should be set up as follows:
 
     source /path/to/mkl/bin/mklvars.sh intel64 ilp64
     export MKL_INTERFACE_LAYER=ILP64
 
-When building julia, pass the `USE_MKL=1` option to `make` or add the following line to `Make.user`.
+Julia can be built with the Intel compilers and MKL using the following flags.
 
-    USE_MKL = 1
+    USEICC = 1
+    USEIFC = 1
+    USE_INTEL_MKL = 1
+    USE_INTEL_MKL_FFT = 1
+    USE_INTEL_LIBM = 1
 
-To rebuild a pre-built Julia source install with MKL support, delete the OpenBLAS, ARPACK, and SuiteSparse dependencies from `deps`, and run `make cleanall testall`.
+It is highly recommended to use a fresh clone of the Julia repository. Also, it is recommended that Intel compilers be used to build julia when using MKL.
 
 <a name="Source-Code-Organization"/>
 ## Source Code Organization
@@ -307,6 +325,9 @@ The following distributions include julia, but the versions may be out of date d
 * [Debian GNU/Linux](http://packages.debian.org/sid/julia)
 * [Gentoo Linux](https://packages.gentoo.org/package/dev-lang/julia)
   * Git Package in the [Science overlay](https://wiki.gentoo.org/wiki/Project:Science/Overlay)
+* [openSUSE Linux](https://build.opensuse.org/package/show/home:Ronis_BR/julia)
+  * Git Package for openSUSE 13.1 - [1 Click Install](http://software.opensuse.org/ymp/home:Ronis_BR/openSUSE_13.1/julia.ymp?base=openSUSE%3A13.1&query=julia)
+  * Git Package for openSUSE Tumbleweed - [1 Click Install](http://software.opensuse.org/ymp/home:Ronis_BR/openSUSE_Tumbleweed/julia.ymp?base=openSUSE%3A13.1&query=julia)
 * Ubuntu
   * [Ubuntu 13.04 (Raring Ringtail)](http://packages.ubuntu.com/raring/julia)
   * [Nightly builds PPA](https://launchpad.net/~staticfloat/+archive/julianightlies) (depends on the [julia-deps PPA](https://launchpad.net/~staticfloat/+archive/julia-deps/))
@@ -315,6 +336,6 @@ The following distributions include julia, but the versions may be out of date d
 <a name="Editor-Terminal-Setup"/>
 ## Editor and Terminal Setup
 
-Currently, Julia editing mode support is available for Emacs, Vim, Textmate, Sublime Text, Notepad++, and Kate, in `contrib/`.
+Currently, Julia editing mode support is available for Emacs, Vim, Textmate, Sublime Text, Notepad++, and Kate, in `contrib/`. There is early support for IDEs such as [Lighttable](https://github.com/one-more-minute/Jewel), [QTCreator based JuliaStudio](http://forio.com/labs/julia-studio/), and [Eclipse (LiClipse)](http://brainwy.github.io/liclipse/). A notebook interface is available through [IJulia](https://github.com/JuliaLang/IJulia.jl), which adds Julia support to the iPython notebook.
 
 In the terminal, Julia makes great use of both control-key and meta-key bindings. To make the meta-key bindings more accessible, many terminal emulator programs (e.g., `Terminal`, `iTerm`, `xterm`, etc) allow you to use the alt or option key as meta.  See the section in the manual on [interacting with Julia](http://docs.julialang.org/en/latest/manual/interacting-with-julia/) for more details.

@@ -89,5 +89,5 @@ else
     for encoding in ["UTF-32BE", "UTF-32LE", "UTF-16BE", "UTF-16LE", "UTF-8"]
         rm(joinpath(unicodedir,encoding*".unicode"))
     end
-    rmdir(unicodedir)
+    rm(unicodedir)
 end

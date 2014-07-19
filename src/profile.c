@@ -429,6 +429,11 @@ DLLEXPORT size_t jl_profile_maxlen_data(void)
     return bt_size_max;
 }
 
+DLLEXPORT u_int64_t jl_profile_delay_nsec(void)
+{
+    return nsecprof;
+}
+
 DLLEXPORT void jl_profile_clear_data(void)
 {
     bt_size_cur = 0;

@@ -134,7 +134,7 @@ written as multiple definitions::
 
     function norm(A)
         if isa(A, Vector)
-            return sqrt(real(dot(x,x)))
+            return sqrt(real(dot(A,A)))
         elseif isa(A, Matrix)
             return max(svd(A)[2])
         else
@@ -144,7 +144,7 @@ written as multiple definitions::
 
 This can be written more concisely and efficiently as::
 
-    norm(A::Vector) = sqrt(real(dot(x,x)))
+    norm(x::Vector) = sqrt(real(dot(x,x)))
     norm(A::Matrix) = max(svd(A)[2])
 
 Write "type-stable" functions
@@ -439,7 +439,6 @@ Tweaks
 
 These are some minor points that might help in tight inner loops.
 
--  Use ``size(A,n)`` when possible instead of ``size(A)`` or ``size(A)[n]``.
 -  Avoid unnecessary arrays. For example, instead of ``sum([x,y,z])``
    use ``x+y+z``.
 -  Use ``*`` instead of raising to small integer powers, for example

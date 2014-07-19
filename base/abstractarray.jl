@@ -299,8 +299,9 @@ end
 bool(x::AbstractArray{Bool}) = x
 bool(x::AbstractArray) = copy!(similar(x,Bool), x)
 
-convert{T,N}(::Type{AbstractArray{T,N}}, A::AbstractArray{T,N}) = A
+convert{T,N  }(::Type{AbstractArray{T,N}}, A::AbstractArray{T,N}) = A
 convert{T,S,N}(::Type{AbstractArray{T,N}}, A::AbstractArray{S,N}) = copy!(similar(A,T), A)
+convert{T,S,N}(::Type{AbstractArray{T  }}, A::AbstractArray{S,N}) = convert(AbstractArray{T,N}, A)
 
 convert{T,N}(::Type{Array}, A::AbstractArray{T,N}) = convert(Array{T,N}, A)
 
@@ -315,8 +316,19 @@ end
 float{T<:FloatingPoint}(x::AbstractArray{T}) = x
 complex{T<:Complex}(x::AbstractArray{T}) = x
 
-float(A::AbstractArray)   = map_promote(x->convert(FloatingPoint,x), A)
-complex(A::AbstractArray) = map_promote(x->convert(Complex,x), A)
+float{T<:Integer64}(x::AbstractArray{T}) = convert(AbstractArray{typeof(float(zero(T)))}, x)
+complex{T<:Union(Integer64,Float64,Float32,Float16)}(x::AbstractArray{T}) =
+    convert(AbstractArray{typeof(complex(zero(T)))}, x)
+
+function float(A::AbstractArray) 
+    cnv(x) = convert(FloatingPoint,x)
+    map_promote(cnv, A)
+end
+
+function complex(A::AbstractArray) 
+    cnv(x) = convert(Complex,x)
+    map_promote(cnv, A)
+end
 
 full(x::AbstractArray) = x
 
@@ -407,16 +419,15 @@ end
 flipud(A::AbstractArray) = flipdim(A, 1)
 fliplr(A::AbstractArray) = flipdim(A, 2)
 
-circshift(a, shiftamt::Real) = circshift(a, [integer(shiftamt)])
-function circshift(a, shiftamts)
-    n = ndims(a)
-    I = cell(n)
-    for i=1:n
+circshift(a::AbstractArray, shiftamt::Real) = circshift(a, [integer(shiftamt)])
+function circshift{T,N}(a::AbstractArray{T,N}, shiftamts)
+    I = ()
+    for i=1:N
         s = size(a,i)
         d = i<=length(shiftamts) ? shiftamts[i] : 0
-        I[i] = d==0 ? (1:s) : mod([-d:s-1-d], s).+1
+        I = tuple(I..., d==0 ? [1:s] : mod([-d:s-1-d], s).+1)
     end
-    a[I...]::typeof(a)
+    a[(I::NTuple{N,Vector{Int}})...]
 end
 
 ## Indexing: setindex! ##

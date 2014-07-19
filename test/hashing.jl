@@ -6,13 +6,13 @@ types = {
 }
 vals = [
     typemin(Int64),
-    -integer(maxintfloat(Float64))+(-4:1),
+    -int64(maxintfloat(Float64))+Int64[-4:1],
     typemin(Int32),
     -integer(maxintfloat(Float32))+(-4:1),
     -2:2,
     integer(maxintfloat(Float32))+(-1:4),
     typemax(Int32),
-    integer(maxintfloat(Float64))+(-1:4),
+    int64(maxintfloat(Float64))+Int64[-1:4],
     typemax(Int64),
 ]
 

@@ -150,7 +150,7 @@ function clone(url::String, pkg::String)
         Git.run(`clone -q $url $pkg`)
         Git.set_remote_url(url, dir=pkg)
     catch
-        run(`rm -rf $pkg`)
+        Base.rm(pkg, recursive=true)
         rethrow()
     end
     isempty(Reqs.parse("$pkg/REQUIRE")) && return
@@ -173,10 +173,10 @@ function clone(url_or_pkg::String)
     clone(url,pkg)
 end
 
-function _checkout(pkg::String, what::String, merge::Bool=false, pull::Bool=false)
+function _checkout(pkg::String, what::String, merge::Bool=false, pull::Bool=false, branch::Bool=false)
     Git.transact(dir=pkg) do
         Git.dirty(dir=pkg) && error("$pkg is dirty, bailing")
-        Git.run(`checkout -q -t $what`, dir=pkg)
+        branch ? Git.run(`checkout -q -B $what -t origin/$what`, dir=pkg) : Git.run(`checkout -q $what`, dir=pkg)
         merge && Git.run(`merge -q --ff-only $what`, dir=pkg)
         if pull
             info("Pulling $pkg latest $what...")
@@ -189,7 +189,7 @@ end
 function checkout(pkg::String, branch::String, merge::Bool, pull::Bool)
     ispath(pkg,".git") || error("$pkg is not a git repo")
     info("Checking out $pkg $branch...")
-    _checkout(pkg,branch,merge,pull)
+    _checkout(pkg,branch,merge,pull,true)
 end
 
 function free(pkg::String)
@@ -596,11 +596,12 @@ function check_metadata()
 end
 
 function warnbanner(msg...; label="[ WARNING ]", prefix="")
-    warn(prefix="", Base.cpad(label,Base.tty_cols(),"="))
+    cols = Base.tty_size()[2]
+    warn(prefix="", Base.cpad(label,cols,"="))
     println(STDERR)
     warn(prefix=prefix, msg...)
     println(STDERR)
-    warn(prefix="", "="^Base.tty_cols())
+    warn(prefix="", "="^cols)
 end
 
 function build!(pkgs::Vector, errs::Dict, seen::Set=Set())

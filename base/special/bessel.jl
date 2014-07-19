@@ -19,6 +19,7 @@ for jy in ("j","y"), nu in (0,1)
         @vectorize_1arg Number $bjynu
     end
 end
+
         
 type AmosException <: Exception
     info::Int32
@@ -27,28 +28,27 @@ end
 let
     const ai::Array{Float64,1} = Array(Float64,2)
     const ae::Array{Int32,1} = Array(Int32,2)
-global airy
-function airy(k::Int, z::Complex128)
-    id = int32(k==1 || k==3)
-    if k == 0 || k == 1
+    global _airy, _biry
+    function _airy(z::Complex128, id::Int32, kode::Int32)
         ccall((:zairy_,openspecfun), Void,
               (Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
               &real(z), &imag(z),
-              &id, &1,
+              &id, &kode,
               pointer(ai,1), pointer(ai,2),
               pointer(ae,1), pointer(ae,2))
         if ae[2] == 0 || ae[2] == 3 
             return complex(ai[1],ai[2])
         else
             throw(AmosException(ae[2]))
-        end
-    elseif k == 2 || k == 3
+        end        
+    end
+    function _biry(z::Complex128, id::Int32, kode::Int32)
         ccall((:zbiry_,openspecfun), Void,
               (Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Float64}, Ptr{Int32}),
               &real(z), &imag(z),
-              &id, &1,
+              &id, &kode,
               pointer(ai,1), pointer(ai,2),
               pointer(ae,1))
         if ae[1] == 0 || ae[1] == 3  # ignore underflow
@@ -56,10 +56,18 @@ function airy(k::Int, z::Complex128)
         else
             throw(AmosException(ae[2]))
         end
+    end
+end
+
+function airy(k::Int, z::Complex128)
+    id = int32(k==1 || k==3)
+    if k == 0 || k == 1
+        return _airy(z, id, int32(1))
+    elseif k == 2 || k == 3
+        return _biry(z, id, int32(1))
     else
         error("invalid argument")
     end
-end
 end
 
 airy(z) = airy(0,z)
@@ -81,15 +89,35 @@ airy(k::Number, z::Complex64) = complex64(airy(k, complex128(z)))
 airy(k::Number, z::Complex) = airy(convert(Int,k), complex128(z))
 @vectorize_2arg Number airy
 
+function airyx(k::Int, z::Complex128)
+    id = int32(k==1 || k==3)
+    if k == 0 || k == 1
+        return _airy(z, id, int32(2))
+    elseif k == 2 || k == 3
+        return _biry(z, id, int32(2))
+    else
+        error("invalid argument")
+    end
+end
+
+airyx(z) = airyx(0,z)
+@vectorize_1arg Number airyx
+
+airyx(k::Number, x::FloatingPoint) = oftype(x, real(airyx(k, complex(x))))
+airyx(k::Number, x::Real) = airyx(k, float(x))
+airyx(k::Number, z::Complex64) = complex64(airyx(k, complex128(z)))
+airyx(k::Number, z::Complex) = airyx(convert(Int,k), complex128(z))
+@vectorize_2arg Number airyx
+
 const cy = Array(Float64,2)
 const ae = Array(Int32,2)
 const wrk = Array(Float64,2)
 
-function _besselh(nu::Float64, k::Integer, z::Complex128)
+function _besselh(nu::Float64, k::Int32, z::Complex128, kode::Int32)
     ccall((:zbesh_,openspecfun), Void,
           (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
            Ptr{Int32}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
-          &real(z), &imag(z), &nu, &1, &k, &1,
+          &real(z), &imag(z), &nu, &kode, &k, &1,
           pointer(cy,1), pointer(cy,2),
           pointer(ae,1), pointer(ae,2))
     if ae[2] == 0 || ae[2] == 3 
@@ -99,11 +127,11 @@ function _besselh(nu::Float64, k::Integer, z::Complex128)
     end
 end
 
-function _besseli(nu::Float64, z::Complex128)
+function _besseli(nu::Float64, z::Complex128, kode::Int32)
     ccall((:zbesi_,openspecfun), Void,
           (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
            Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
-          &real(z), &imag(z), &nu, &1, &1,
+          &real(z), &imag(z), &nu, &kode, &1,
           pointer(cy,1), pointer(cy,2),
           pointer(ae,1), pointer(ae,2))
     if ae[2] == 0 || ae[2] == 3 
@@ -113,11 +141,11 @@ function _besseli(nu::Float64, z::Complex128)
     end
 end
 
-function _besselj(nu::Float64, z::Complex128)
+function _besselj(nu::Float64, z::Complex128, kode::Int32)
     ccall((:zbesj_,openspecfun), Void,
           (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
            Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
-          &real(z), &imag(z), &nu, &1, &1,
+          &real(z), &imag(z), &nu, &kode, &1,
           pointer(cy,1), pointer(cy,2),
           pointer(ae,1), pointer(ae,2))
     if ae[2] == 0 || ae[2] == 3 
@@ -127,11 +155,11 @@ function _besselj(nu::Float64, z::Complex128)
     end
 end
 
-function _besselk(nu::Float64, z::Complex128)
+function _besselk(nu::Float64, z::Complex128, kode::Int32)
     ccall((:zbesk_,openspecfun), Void,
           (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
            Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
-          &real(z), &imag(z), &nu, &1, &1,
+          &real(z), &imag(z), &nu, &kode, &1,
           pointer(cy,1), pointer(cy,2),
           pointer(ae,1), pointer(ae,2))
     if ae[2] == 0 || ae[2] == 3 
@@ -141,12 +169,12 @@ function _besselk(nu::Float64, z::Complex128)
     end
 end
 
-function _bessely(nu::Float64, z::Complex128)
+function _bessely(nu::Float64, z::Complex128, kode::Int32)
     ccall((:zbesy_,openspecfun), Void,
           (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32},
            Ptr{Int32}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32},
            Ptr{Float64}, Ptr{Float64}, Ptr{Int32}),
-          &real(z), &imag(z), &nu, &1, &1,
+          &real(z), &imag(z), &nu, &kode, &1,
           pointer(cy,1), pointer(cy,2),
           pointer(ae,1), pointer(wrk,1),
           pointer(wrk,2), pointer(ae,2))
@@ -160,24 +188,40 @@ end
 function besselh(nu::Float64, k::Integer, z::Complex128)
     if nu < 0
         s = (k == 1) ? 1 : -1
-        return _besselh(-nu, k, z) * complex(cospi(nu),-s*sinpi(nu))
+        return _besselh(-nu,int32(k),z,int32(1)) * complex(cospi(nu),-s*sinpi(nu))
     end
-    return _besselh(nu, k, z)
+    return _besselh(nu,int32(k),z,int32(1))
+end
+
+function besselhx(nu::Float64, k::Integer, z::Complex128)
+    if nu < 0
+        s = (k == 1) ? 1 : -1
+        return _besselh(-nu,int32(k),z,int32(2)) * complex(cospi(nu),-s*sinpi(nu))
+    end
+    return _besselh(nu,int32(k),z,int32(2))
 end
 
 function besseli(nu::Float64, z::Complex128)
     if nu < 0
-        return _besseli(-nu,z) - 2_besselk(-nu,z)*sinpi(nu)/pi
+        return _besseli(-nu,z,int32(1)) - 2_besselk(-nu,z,int32(1))*sinpi(nu)/pi
     else
-        return _besseli(nu, z)
+        return _besseli(nu,z,int32(1))
+    end
+end
+
+function besselix(nu::Float64, z::Complex128)
+    if nu < 0
+        return _besseli(-nu,z,int32(2)) - 2_besselk(-nu,z,int32(2))*exp(-abs(real(z))-z)*sinpi(nu)/pi
+    else
+        return _besseli(nu,z,int32(2))
     end
 end
 
 function besselj(nu::Float64, z::Complex128)
     if nu < 0
-        return _besselj(-nu,z)cos(pi*nu) + _bessely(-nu,z)*sinpi(nu)
+        return _besselj(-nu,z,int32(1))*cospi(nu) + _bessely(-nu,z,int32(1))*sinpi(nu)
     else
-        return _besselj(nu, z)
+        return _besselj(nu,z,int32(1))
     end
 end
 
@@ -189,13 +233,31 @@ besselj(nu::Integer, x::Float32) = typemin(Int32) <= nu <= typemax(Int32) ?
     ccall((:jnf, libm), Float32, (Cint, Float32), nu, x) :
     besselj(float64(nu), x)
 
-besselk(nu::Float64, z::Complex128) = _besselk(abs(nu), z)
+function besseljx(nu::Float64, z::Complex128)
+    if nu < 0
+        return _besselj(-nu,z,int32(2))*cospi(nu) + _bessely(-nu,z,int32(2))*sinpi(nu)
+    else
+        return _besselj(nu,z,int32(2))
+    end
+end
+
+besselk(nu::Float64, z::Complex128) = _besselk(abs(nu), z, int32(1))
+
+besselkx(nu::Float64, z::Complex128) = _besselk(abs(nu), z, int32(2))
 
 function bessely(nu::Float64, z::Complex128)
     if nu < 0
-        return _bessely(-nu,z)*cospi(nu) - _besselj(-nu,z)*sinpi(nu)
+        return _bessely(-nu,z,int32(1))*cospi(nu) - _besselj(-nu,z,int32(1))*sinpi(nu)
     else
-        return _bessely(nu, z)
+        return _bessely(nu,z,int32(1))
+    end
+end
+
+function besselyx(nu::Float64, z::Complex128)
+    if nu < 0
+        return _bessely(-nu,z,int32(2))*cospi(nu) - _besselj(-nu,z,int32(2))*sinpi(nu) 
+    else
+        return _bessely(nu,z,int32(2))
     end
 end
 
@@ -205,16 +267,35 @@ besselh(nu::Real, k::Integer, z::Complex) = besselh(float64(nu), k, complex128(z
 besselh(nu::Real, k::Integer, x::Real) = besselh(float64(nu), k, complex128(x))
 @vectorize_2arg Number besselh
 
-besseli(nu::Real, z::Complex64) = complex64(besseli(float64(nu), complex128(z)))
-besseli(nu::Real, z::Complex) = besseli(float64(nu), complex128(z))
-besseli(nu::Real, x::Integer) = besseli(nu, float64(x))
+hankelh1(nu, z) = besselh(nu, 1, z)
+@vectorize_2arg Number hankelh1
+
+hankelh2(nu, z) = besselh(nu, 2, z)
+@vectorize_2arg Number hankelh2
+
+besselhx(nu::Real, k::Integer, z::Complex64) = complex64(besselhx(float64(nu), k, complex128(z)))
+besselhx(nu::Real, k::Integer, z::Complex) = besselhx(float64(nu), k, complex128(z))
+besselhx(nu::Real, k::Integer, x::Real) = besselhx(float64(nu), k, complex128(x))
+
+hankelh1x(nu, z) = besselhx(nu, 1, z)
+@vectorize_2arg Number hankelh1x
+
+hankelh2x(nu, z) = besselhx(nu, 2, z)
+@vectorize_2arg Number hankelh2x
+
 function besseli(nu::Real, x::FloatingPoint)
     if x < 0 && !isinteger(nu)
         throw(DomainError())
     end
     oftype(x, real(besseli(float64(nu), complex128(x))))
 end
-@vectorize_2arg Number besseli
+
+function besselix(nu::Real, x::FloatingPoint)
+    if x < 0 && !isinteger(nu)
+        throw(DomainError())
+    end
+    oftype(x, real(besselix(float64(nu), complex128(x))))
+end
 
 function besselj(nu::FloatingPoint, x::FloatingPoint)
     if isinteger(nu)
@@ -227,14 +308,13 @@ function besselj(nu::FloatingPoint, x::FloatingPoint)
     oftype(x, real(besselj(float64(nu), complex128(x))))
 end
 
-besselj(nu::Real, z::Complex64) = complex64(besselj(float64(nu), complex128(z)))
-besselj(nu::Real, z::Complex) = besselj(float64(nu), complex128(z))
-besselj(nu::Real, x::Integer) = besselj(nu, float(x))
-@vectorize_2arg Number besselj
+function besseljx(nu::Real, x::FloatingPoint)
+    if x < 0 && !isinteger(nu)
+        throw(DomainError())
+    end
+    oftype(x, real(besseljx(float64(nu), complex128(x))))
+end
 
-besselk(nu::Real, z::Complex64) = complex64(besselk(float64(nu), complex128(z)))
-besselk(nu::Real, z::Complex) = besselk(float64(nu), complex128(z))
-besselk(nu::Real, x::Integer) = besselk(nu, float64(x))
 function besselk(nu::Real, x::FloatingPoint)
     if x < 0
         throw(DomainError())
@@ -244,11 +324,17 @@ function besselk(nu::Real, x::FloatingPoint)
     end
     oftype(x, real(besselk(float64(nu), complex128(x))))
 end
-@vectorize_2arg Number besselk
 
-bessely(nu::Real, z::Complex64) = complex64(bessely(float64(nu), complex128(z)))
-bessely(nu::Real, z::Complex) = bessely(float64(nu), complex128(z))
-bessely(nu::Real, x::Integer) = bessely(nu, float64(x))
+function besselkx(nu::Real, x::FloatingPoint)
+    if x < 0
+        throw(DomainError())
+    end
+    if x == 0
+        return oftype(x, Inf)
+    end
+    oftype(x, real(besselkx(float64(nu), complex128(x))))
+end
+
 function bessely(nu::Real, x::FloatingPoint)
     if x < 0
         throw(DomainError())
@@ -270,11 +356,20 @@ function bessely(nu::Integer, x::Float32)
     end
     return ccall((:ynf, libm), Float32, (Cint, Float32), nu, x)
 end
-@vectorize_2arg Number bessely
 
-hankelh1(nu, z) = besselh(nu, 1, z)
-@vectorize_2arg Number hankelh1
+function besselyx(nu::Real, x::FloatingPoint)
+    if x < 0
+        throw(DomainError())
+    end
+    oftype(x, real(besselyx(float64(nu), complex128(x))))
+end
 
-hankelh2(nu, z) = besselh(nu, 2, z)
-@vectorize_2arg Number hankelh2
-
+for f in ("i", "ix", "j", "jx", "k", "kx", "y", "yx")
+    bfn = symbol(string("bessel", f))
+    @eval begin
+        $bfn(nu::Real, z::Complex64) = complex64($bfn(float64(nu), complex128(z)))
+        $bfn(nu::Real, z::Complex) = $bfn(float64(nu), complex128(z))
+        $bfn(nu::Real, x::Integer) = $bfn(nu, float64(x))
+        @vectorize_2arg Number $bfn
+    end
+end

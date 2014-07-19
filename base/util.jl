@@ -12,6 +12,9 @@ gc_time_ns() = ccall(:jl_gc_total_hrtime, Uint64, ())
 # total number of bytes allocated so far
 gc_bytes() = ccall(:jl_gc_total_bytes, Int64, ())
 
+# reset the malloc log. Used to avoid counting memory allocated during compilation.
+clear_malloc_data() = ccall(:jl_clear_malloc_data, Void, ())
+
 function tic()
     t0 = time_ns()
     task_local_storage(:TIMERS, (t0, get(task_local_storage(), :TIMERS, ())))
@@ -36,6 +39,15 @@ function toc()
 end
 
 # print elapsed time, return expression value
+
+function time_print(t, b, g)
+    if 0 < g
+        @printf("elapsed time: %s seconds (%d bytes allocated, %.2f%% gc time)\n", t/1e9, b, 100*g/t)
+    else
+        @printf("elapsed time: %s seconds (%d bytes allocated)\n", t/1e9, b)
+    end
+end
+
 macro time(ex)
     quote
         local b0 = gc_bytes()
@@ -45,13 +57,7 @@ macro time(ex)
         local g1 = gc_time_ns()
         local t1 = time_ns()
         local b1 = gc_bytes()
-        if g1 > g0
-            @printf("elapsed time: %s seconds (%d bytes allocated, %.2f%% gc time)\n",
-                    (t1-t0)/1e9, b1-b0, 100*(g1-g0)/(t1-t0))
-        else
-            @printf("elapsed time: %s seconds (%d bytes allocated)\n",
-                    (t1-t0)/1e9, b1-b0)
-        end        
+        time_print(t1-t0, b1-b0, g1-g0)
         val
     end
 end
@@ -108,7 +114,7 @@ function blas_vendor()
     return :unknown
 end
 
-openblas_get_config() = chop(bytestring( ccall((:openblas_get_config, Base.libblas_name), Ptr{Uint8}, () )))
+openblas_get_config() = strip(bytestring( ccall((:openblas_get_config, Base.libblas_name), Ptr{Uint8}, () )))
 
 function blas_set_num_threads(n::Integer)
     blas = blas_vendor()
@@ -164,6 +170,15 @@ function check_blas()
     end
 
 end
+
+function fftw_vendor()
+    if Base.libfftw_name == "libmkl_rt"
+        return :mkl
+    else
+        return :fftw
+    end
+end
+
 
 ## printing with color ##
 

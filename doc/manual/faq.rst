@@ -52,7 +52,7 @@ Functions
 ---------
 
 I passed an argument ``x`` to a function, modified it inside that function, but on the outside, the variable ``x`` is still unchanged. Why?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Suppose you call a function like this::
 
@@ -85,6 +85,43 @@ But here is a thing you should pay attention to: suppose ``x`` is bound to an Ar
 	3
 
 Here we created a function ``change_array!()``, that assigns ``5`` to the first element of the Array. We passed ``x`` (which was previously bound to an Array) to the function. Notice that, after the function call, ``x`` is still bound to the same Array, but the content of that Array changed.
+
+
+Can I use ``using`` or ``import`` inside a function?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+No, you are not allowed to have a ``using`` or ``import`` statement inside
+a function.  If you want to import a module but only use its symbols
+inside a specific function or set of functions, you have two options:
+
+1.  Use ``import``::
+
+        import Foo
+        function bar(...)
+            ... refer to Foo symbols via Foo.baz ...
+        end
+
+
+    This loads the module Foo and defines a variable ``Foo`` that refers
+    to the module, but does not import any of the other symbols from the
+    module into the current namespace.  You refer to the ``Foo`` symbols by
+    their qualified names ``Foo.bar`` etc.
+
+
+2.  Wrap your function in a module::
+
+        module Bar
+        export bar
+        using Foo
+        function bar(...)
+            ... refer to Foo.baz as simply baz ....
+        end
+        end
+        using Bar
+
+    This imports all the symbols from Foo, but only inside the module Bar.
+
+
 
 Types, type declarations, and constructors
 ------------------------------------------

@@ -13,11 +13,12 @@ import
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
         nextfloat, prevfloat, promote_rule, rad2deg, rem, round, show,
         showcompact, sum, sqrt, string, print, trunc, precision, exp10, expm1,
-        gamma, lgamma, digamma, erf, erfc, zeta, log1p, airyai, iceil, ifloor,
+        gamma, lgamma, digamma, erf, erfc, zeta, eta, log1p, airyai, iceil, ifloor,
         itrunc, eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
         serialize, deserialize, inf, nan, cbrt, typemax, typemin,
-        realmin, realmax, get_rounding, set_rounding, maxintfloat, widen
+        realmin, realmax, get_rounding, set_rounding, maxintfloat, widen,
+        significand, frexp
 
 import Base.GMP: ClongMax, CulongMax
 
@@ -123,7 +124,13 @@ promote_rule{T<:Real}(::Type{BigFloat}, ::Type{T}) = BigFloat
 promote_rule{T<:FloatingPoint}(::Type{BigInt},::Type{T}) = BigFloat
 promote_rule{T<:FloatingPoint}(::Type{BigFloat},::Type{T}) = BigFloat
 
-rationalize(x::BigFloat; tol::Real=eps(x)) = rationalize(BigInt, x, tol=tol)
+function convert(::Type{Rational{BigInt}}, x::FloatingPoint)
+    if isnan(x); return zero(BigInt)//zero(BigInt); end
+    if isinf(x); return copysign(one(BigInt),x)//zero(BigInt); end
+    if x == 0;   return zero(BigInt) // one(BigInt); end
+    s = max(precision(x) - exponent(x), 0)
+    BigInt(ldexp(x,s)) // (BigInt(1) << s)
+end
 
 # serialization
 
@@ -400,6 +407,19 @@ for f in (:exp, :exp2, :exp10, :expm1, :digamma, :erf, :erfc, :zeta,
     end
 end
 
+# return log(2)
+function big_ln2()
+    c = BigFloat()
+    ccall((:mpfr_const_log2, :libmpfr), Cint, (Ptr{BigFloat}, Int32),
+          &c, MPFR.ROUNDING_MODE[end])
+    return c
+end
+
+function eta(x::BigFloat)
+    x == 1 && return big_ln2()
+    return -zeta(x) * expm1(big_ln2()*(1-x))
+end
+
 function airyai(x::BigFloat)
     z = BigFloat()
     ccall((:mpfr_ai, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
@@ -646,6 +666,22 @@ function exponent(x::BigFloat)
     end
     # The '- 1' is to make it work as Base.exponent
     return ccall((:mpfr_get_exp, :libmpfr), Clong, (Ptr{BigFloat},), &x) - 1
+end
+
+function frexp(x::BigFloat)
+    z = BigFloat()
+    c = Clong[0]
+    ccall((:mpfr_frexp, :libmpfr), Int32, (Ptr{Clong}, Ptr{BigFloat}, Ptr{BigFloat}, Cint), c, &z, &x, ROUNDING_MODE[end])
+    return (z, c[1])
+end
+
+function significand(x::BigFloat)
+    z = BigFloat()
+    c = Clong[0]
+    ccall((:mpfr_frexp, :libmpfr), Int32, (Ptr{Clong}, Ptr{BigFloat}, Ptr{BigFloat}, Cint), c, &z, &x, ROUNDING_MODE[end])
+    # Double the significand to make it work as Base.significand
+    ccall((:mpfr_mul_si, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Clong, Int32), &z, &z, 2, ROUNDING_MODE[end])
+    return z
 end
 
 function isinteger(x::BigFloat)
