@@ -121,27 +121,3 @@ macro implement(decl, body)
     end
     esc(final_block)
 end
-
-@interface mathy(A, B) begin
-    plus(A, B)
-    minus(A, B)
-end
-
-immutable MyInt
-    x::Int
-end
-
-@implement mathy(MyInt, MyInt) begin
-    plus(a, b) = MyInt(a.x + b.x)
-    minus(a, b) = MyInt(a.x - b.x)
-end
-
-@interface stack(A, B) begin
-    stack_push!(A, B)
-    stack_pop!(A)
-end
-
-@implement stack{T <: Integer}(Vector{T}, T) begin
-    stack_push!(vec, x) = push!(vec, x)
-    stack_pop!(vec) = pop!(vec)
-end
