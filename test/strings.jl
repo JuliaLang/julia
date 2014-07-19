@@ -1063,3 +1063,11 @@ ss=SubString("hello",1,5)
 @test_throws BoundsError chr2ind(ss, -1)
 @test_throws BoundsError chr2ind(ss, 10)
 @test_throws BoundsError ind2chr(ss, 10)
+
+
+# length(SubString{UTF8String}) performance specialization
+s="|f(x)-f(y)| < ε"
+@test length(SubString(s,1,0))==length(s[1:0])
+@test length(SubString(s,4,4))==length(s[4:4])
+@test length(SubString(s,1,7))==length(s[1:7])
+@test length(SubString(s,3,11))==length(s[3:11])

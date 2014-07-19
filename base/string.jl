@@ -603,7 +603,13 @@ sizeof{T<:ByteString}(s::SubString{T}) = s.endof==0 ? 0 : next(s,s.endof)[2]-1
 # default implementation will work but it's slow
 # can this be delegated efficiently somehow?
 # that may require additional string interfaces
+
 length{T<:DirectIndexString}(s::SubString{T}) = endof(s)
+
+function length(s::SubString{UTF8String}) 
+    ssget=s.string[1+s.offset:s.offset+s.endof]
+    return  int(ccall(:u8_strlen, Csize_t, (Ptr{Uint8},), ssget.data))
+end
 
 function next(s::SubString, i::Int)
     if i < 1 || i > s.endof
