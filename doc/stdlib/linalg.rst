@@ -513,19 +513,17 @@ Linear algebra functions in Julia are largely implemented by calling functions f
       ========= ======================================================================================================================
       ``which`` type of eigenvalues
       --------- ----------------------------------------------------------------------------------------------------------------------
-      ``"LM"``  eigenvalues of largest magnitude
-      ``"SM"``  eigenvalues of smallest magnitude
-      ``"LA"``  largest algebraic eigenvalues (real symmetric ``A`` only)
-      ``"SA"``  smallest algebraic eigenvalues (real symmetric ``A`` only)
-      ``"BE"``  compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (symmetric ``A`` only)
-      ``"LR"``  eigenvalues of largest real part (nonsymmetric ``A`` only)
-      ``"SR"``  eigenvalues of smallest real part (nonsymmetric ``A`` only)
-      ``"LI"``  eigenvalues of largest imaginary part (nonsymmetric ``A`` only)
-      ``"SI"``  eigenvalues of smallest imaginary part (nonsymmetric ``A`` only)
+      ``:LM``  eigenvalues of largest magnitude (default)
+      ``:SM``  eigenvalues of smallest magnitude
+      ``:LR``  eigenvalues of largest real part
+      ``:SR``  eigenvalues of smallest real part
+      ``:LI``  eigenvalues of largest imaginary part (nonsymmetric or complex ``A`` only)
+      ``:SI``  eigenvalues of smallest imaginary part (nonsymmetric or complex ``A`` only)
+      ``:BE``  compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric ``A`` only)
       ========= ======================================================================================================================
 
     * ``tol``: tolerance (:math:`tol \le 0.0` defaults to ``DLAMCH('EPS')``)
-    * ``maxiter``: Maximum number of iterations
+    * ``maxiter``: Maximum number of iterations (default = 300)
     * ``sigma``: Specifies the level shift used in inverse iteration. If ``nothing`` (default), defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to ``sigma`` using shift and invert iterations.
     * ``ritzvec``: Returns the Ritz vectors ``v`` (eigenvectors) if ``true``
     * ``v0``: starting vector from which to start the iterations

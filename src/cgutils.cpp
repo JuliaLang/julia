@@ -782,7 +782,7 @@ static void emit_typecheck(Value *x, jl_value_t *type, const std::string &msg,
     if ((jl_is_tuple(type) && type != (jl_value_t*)jl_tuple_type) ||
         !jl_is_leaf_type(type)) {
         istype = builder.
-            CreateICmpNE(builder.CreateCall3(jlsubtype_func, x, literal_pointer_val(type),
+            CreateICmpNE(builder.CreateCall3(prepare_call(jlsubtype_func), x, literal_pointer_val(type),
                                              ConstantInt::get(T_int32,1)),
                          ConstantInt::get(T_int32,0));
     }
