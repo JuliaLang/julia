@@ -371,7 +371,7 @@ ifeq ($(BUILD_LLDB),1)
 	([ -d llvm-$(LLVM_VER)/tools/lldb ] && \
 		(cd llvm-$(LLVM_VER)/tools/lldb && \
 		git fetch))
-	cd llvm-$(LLVM_VER)/tools/lldb && git checkout origin/release_32
+	cd llvm-$(LLVM_VER)/tools/lldb && git checkout $(LLDB_VER)
 endif
 ifeq ($(LLVM_VER),3.3)
 	patch -p0 < llvm-3.3.patch
