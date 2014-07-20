@@ -898,6 +898,17 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         assert(f_name != NULL);
 
         PointerType *funcptype = PointerType::get(functype,0);
+        
+        SmallString<20> f_name_mangled;
+        if (1) {
+            const Function *fn = Function::Create(functype, GlobalValue::ExternalLinkage, f_name, NULL);
+            jl_mang->getNameWithPrefix(f_name_mangled, fn, false);
+            //printf("%s -> %s\n", f_name, (char*)f_name_mangled.c_str());
+            f_name = (char*)f_name_mangled.c_str();
+            f_name += strlen(jl_Ctx->getAsmInfo().getGlobalPrefix()); // strip leading '_', etc.
+            delete fn;
+        }
+        
         if (imaging_mode) {
             llvmf = runtime_sym_lookup(funcptype, f_lib, f_name, ctx);
         }

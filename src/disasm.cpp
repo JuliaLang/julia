@@ -34,7 +34,7 @@ public:
 
     uint64_t getBase() const { return 0; }
     uint64_t getExtent() const { return Fsize; }
-    
+
     int readByte(uint64_t Addr, uint8_t *Byte) const {
         if (Addr >= getExtent())
             return -1;
@@ -44,23 +44,22 @@ public:
 };
 }
 
-#ifndef USE_MCJIT
-extern "C"
-void jl_dump_function_asm(void *Fptr, size_t Fsize,
-                          std::vector<JITEvent_EmittedFunctionDetails::LineStart> lineinfo,
-                          formatted_raw_ostream &stream) {
-#else
-extern "C"
-void jl_dump_function_asm(void *Fptr, size_t Fsize,
-                          object::ObjectFile *objectfile,
-                          formatted_raw_ostream &stream) {
-#endif
+static MCInstPrinter *jl_IP;
+static MCCodeEmitter *jl_CE;
+static MCAsmBackend *jl_MAB;
+static const Target *jl_TheTarget;
+static MCContext *jl_Ctx;
+static SourceMgr *jl_SrcMgr;
+static MCDisassembler *jl_DisAsm;
+static MCStreamer *jl_Streamer;
+static llvm::raw_null_ostream jl_null_ostream;
+static llvm::formatted_raw_ostream jl_fstream(jl_null_ostream);
 
-    // Initialize targets and assembly printers/parsers.
-    // Avoids hard-coded targets - will generally be only host CPU anyway.
-    llvm::InitializeNativeTargetAsmParser();
-    llvm::InitializeNativeTargetDisassembler();
-  
+void jl_init_mcctx() {
+    const unsigned OutputAsmVariant = 1;
+    const bool ShowEncoding = false;
+    const bool ShowInst = false;
+
     // Get the host information
     std::string TripleName;
     if (TripleName.empty())
@@ -72,92 +71,81 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
     Features.getDefaultSubtargetFeatures(TheTriple);
 
     std::string err;
-    const Target* TheTarget = TargetRegistry::lookupTarget(TripleName, err);
+    jl_TheTarget = TargetRegistry::lookupTarget(TripleName, err);
 
-    // Set up required helpers and streamer 
-#ifdef LLVM35
-    std::unique_ptr<MCStreamer> Streamer;
-#else
-    OwningPtr<MCStreamer> Streamer;
-#endif
-    SourceMgr SrcMgr;
+    // Set up required helpers
+    jl_SrcMgr = new SourceMgr();
 
-#ifdef LLVM35
-    std::unique_ptr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TripleName),TripleName));
-#elif defined(LLVM34)
-    llvm::OwningPtr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TripleName),TripleName));
+#if defined(LLVM34)
+    MCAsmInfo *MAI = jl_TheTarget->createMCAsmInfo(*jl_TheTarget->createMCRegInfo(TripleName),TripleName);
 #else
-    llvm::OwningPtr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(TripleName));
+    MCAsmInfo *MAI = jl_TheTarget->createMCAsmInfo(TripleName);
 #endif
     assert(MAI && "Unable to create target asm info!");
 
-#ifdef LLVM35
-    std::unique_ptr<MCRegisterInfo> MRI(TheTarget->createMCRegInfo(TripleName));
-#else
-    llvm::OwningPtr<MCRegisterInfo> MRI(TheTarget->createMCRegInfo(TripleName));
-#endif
+    MCRegisterInfo *MRI = jl_TheTarget->createMCRegInfo(TripleName);
     assert(MRI && "Unable to create target register info!");
 
-#ifdef LLVM35
-    std::unique_ptr<MCObjectFileInfo> MOFI(new MCObjectFileInfo());
-#else
-    OwningPtr<MCObjectFileInfo> MOFI(new MCObjectFileInfo());
-#endif
+    MCObjectFileInfo *MOFI = new MCObjectFileInfo();
 #ifdef LLVM34
-    MCContext Ctx(MAI.get(), MRI.get(), MOFI.get(), &SrcMgr);
+    jl_Ctx = new MCContext(MAI, MRI, MOFI, jl_SrcMgr);
 #else
-    MCContext Ctx(*MAI, *MRI, MOFI.get(), &SrcMgr);
+    jl_Ctx = new MCContext(*MAI, *MRI, MOFI, jl_SrcMgr);
 #endif
-    MOFI->InitMCObjectFileInfo(TripleName, Reloc::Default, CodeModel::Default, Ctx);
+    MOFI->InitMCObjectFileInfo(TripleName, Reloc::Default, CodeModel::Default, *jl_Ctx);
 
     // Set up Subtarget and Disassembler
+    MCSubtargetInfo *STI = jl_TheTarget->createMCSubtargetInfo(TripleName, MCPU, Features.getString());
 #ifdef LLVM35
-    std::unique_ptr<MCSubtargetInfo>
-        STI(TheTarget->createMCSubtargetInfo(TripleName, MCPU, Features.getString()));
-    std::unique_ptr<const MCDisassembler> DisAsm(TheTarget->createMCDisassembler(*STI, Ctx));
+    jl_DisAsm = jl_TheTarget->createMCDisassembler(*STI, *jl_Ctx);
 #else
-    OwningPtr<MCSubtargetInfo>
-        STI(TheTarget->createMCSubtargetInfo(TripleName, MCPU, Features.getString()));
-    OwningPtr<const MCDisassembler> DisAsm(TheTarget->createMCDisassembler(*STI));
+    jl_DisAsm = jl_TheTarget->createMCDisassembler(*STI);
 #endif
-    if (!DisAsm) {
-        JL_PRINTF(JL_STDERR, "error: no disassembler for target", TripleName.c_str(), "\n");
+    if (!jl_DisAsm) {
+        JL_PRINTF(JL_STDERR, "warning: no disassembler for target", TripleName.c_str(), ". code_native functionality disabled.\n");
         return;
     }
-
-    unsigned OutputAsmVariant = 1;
-    bool ShowEncoding = false;
-    bool ShowInst = false;
-
-#ifdef LLVM35
-    std::unique_ptr<MCInstrInfo> MCII(TheTarget->createMCInstrInfo());
-#else
-    OwningPtr<MCInstrInfo> MCII(TheTarget->createMCInstrInfo());
-#endif
-    MCInstPrinter* IP =
-        TheTarget->createMCInstPrinter(OutputAsmVariant, *MAI, *MCII, *MRI, *STI);
-    MCCodeEmitter *CE = 0;
-    MCAsmBackend *MAB = 0;
+    MCInstrInfo *MCII = jl_TheTarget->createMCInstrInfo();
+    jl_IP = jl_TheTarget->createMCInstPrinter(OutputAsmVariant, *MAI, *MCII, *MRI, *STI);
     if (ShowEncoding) {
-        CE = TheTarget->createMCCodeEmitter(*MCII, *MRI, *STI, Ctx);
+        jl_CE = jl_TheTarget->createMCCodeEmitter(*MCII, *MRI, *STI, *jl_Ctx);
 #ifdef LLVM34
-        MAB = TheTarget->createMCAsmBackend(*MRI, TripleName, MCPU);
+        jl_MAB = jl_TheTarget->createMCAsmBackend(*MRI, TripleName, MCPU);
 #else
-        MAB = TheTarget->createMCAsmBackend(TripleName, MCPU);
+        jl_MAB = jl_TheTarget->createMCAsmBackend(TripleName, MCPU);
 #endif
     }
 
-    Streamer.reset(TheTarget->createAsmStreamer(Ctx, stream, /*asmverbose*/true,
+    jl_Streamer = jl_TheTarget->createAsmStreamer(*jl_Ctx, jl_fstream, /*asmverbose*/true,
 #ifndef LLVM35
                                            /*useLoc*/ true,
                                            /*useCFI*/ true,
 #endif
                                            /*useDwarfDirectory*/ true,
-                                           IP, CE, MAB, ShowInst));
-    Streamer->InitSections();
+                                           jl_IP, jl_CE, jl_MAB, ShowInst);
+}
 
 #ifndef USE_MCJIT
-// LLVM33 version
+extern "C"
+void jl_dump_function_asm(void *Fptr, size_t Fsize,
+                          std::vector<JITEvent_EmittedFunctionDetails::LineStart> lineinfo,
+                          raw_string_ostream &stream) {
+#else
+extern "C"
+void jl_dump_function_asm(void *Fptr, size_t Fsize,
+                          object::ObjectFile *objectfile,
+                          raw_string_ostream &stream) {
+#endif
+    if (!jl_DisAsm) {
+        JL_PRINTF(JL_STDERR, "error: no disassembler for target\n");
+        return;
+    }
+
+#ifndef USE_MCJIT
+// LLVM33- version
+    jl_fstream.setStream(stream);
+    jl_Streamer->InitSections();
+
     // Make the MemoryObject wrapper
     FuncMCView memoryObject(Fptr, Fsize);
 
@@ -176,27 +164,27 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
         nextLineAddr = (*lineIter).Address;
         debugscope = DISubprogram((*lineIter).Loc.getScope(jl_LLVMContext));
 
-        stream << "Filename: " << debugscope.getFilename() << "\n";
-        stream << "Source line: " << (*lineIter).Loc.getLine() << "\n";
+        jl_fstream << "Filename: " << debugscope.getFilename() << "\n";
+        jl_fstream << "Source line: " << (*lineIter).Loc.getLine() << "\n";
     }
-    
+
     // Do the disassembly
     for (Index = 0, absAddr = (uint64_t)Fptr;
          Index < memoryObject.getExtent(); Index += Size, absAddr += Size) {
-        
+
         if (nextLineAddr != (uint64_t)-1 && absAddr == nextLineAddr) {
-            stream << "Source line: " << (*lineIter).Loc.getLine() << "\n";
+            jl_fstream << "Source line: " << (*lineIter).Loc.getLine() << "\n";
             nextLineAddr = (*++lineIter).Address;
         }
 
         MCInst Inst;
 
         MCDisassembler::DecodeStatus S;
-        S = DisAsm->getInstruction(Inst, Size, memoryObject, Index,
+        S = jl_DisAsm->getInstruction(Inst, Size, memoryObject, Index,
                                   /*REMOVE*/ nulls(), nulls());
         switch (S) {
         case MCDisassembler::Fail:
-        SrcMgr.PrintMessage(SMLoc::getFromPointer(memoryObject[Index]),
+        jl_SrcMgr->PrintMessage(SMLoc::getFromPointer(memoryObject[Index]),
                             SourceMgr::DK_Warning,
                             "invalid instruction encoding");
         if (Size == 0)
@@ -204,16 +192,16 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
         break;
 
         case MCDisassembler::SoftFail:
-        SrcMgr.PrintMessage(SMLoc::getFromPointer(memoryObject[Index]),
+        jl_SrcMgr->PrintMessage(SMLoc::getFromPointer(memoryObject[Index]),
                             SourceMgr::DK_Warning,
                             "potentially undefined instruction encoding");
         // Fall through
 
         case MCDisassembler::Success:
         #ifdef LLVM35
-            Streamer->EmitInstruction(Inst, *STI);
+            jl_Streamer->EmitInstruction(Inst, *STI);
         #else
-            Streamer->EmitInstruction(Inst);
+            jl_Streamer->EmitInstruction(Inst);
         #endif
         break;
         }
@@ -225,6 +213,9 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
     DIContext *di_ctx = DIContext::getDWARFContext(objectfile);
     if (di_ctx == NULL) return;
     DILineInfoTable lineinfo = di_ctx->getLineInfoForAddressRange((size_t)Fptr, Fsize);
+    
+    jl_fstream.setStream(stream);
+    jl_Streamer->InitSections();
 
     // Set up the line info
     DILineInfoTable::iterator lines_iter = lineinfo.begin();
@@ -235,36 +226,36 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
     if (lines_iter != lineinfo.end()) {
         nextLineAddr = lines_iter->first;
         #ifdef LLVM35
-        stream << "Filename: " << lines_iter->second.FileName << "\n";
+        jl_fstream << "Filename: " << lines_iter->second.FileName << "\n";
         #else
-        stream << "Filename: " << lines_iter->second.getFileName() << "\n";
+        jl_fstream << "Filename: " << lines_iter->second.getFileName() << "\n";
         #endif
     }
 
     uint64_t Index = 0;
     uint64_t absAddr = 0;
-    uint64_t insSize = 0; 
+    uint64_t insSize = 0;
 
     // Do the disassembly
     for (Index = 0, absAddr = (uint64_t)Fptr;
          Index < memoryObject.getExtent(); Index += insSize, absAddr += insSize) {
-        
+
         if (nextLineAddr != (uint64_t)-1 && absAddr == nextLineAddr) {
             #ifdef LLVM35
-            stream << "Source line: " << lines_iter->second.Line << "\n";
+            jl_fstream << "Source line: " << lines_iter->second.Line << "\n";
             #else
-            stream << "Source line: " << lines_iter->second.getLine() << "\n";
+            jl_fstream << "Source line: " << lines_iter->second.getLine() << "\n";
             #endif
             nextLineAddr = (++lines_iter)->first;
         }
 
         MCInst Inst;
         MCDisassembler::DecodeStatus S;
-        S = DisAsm->getInstruction(Inst, insSize, memoryObject, Index,
+        S = jl_DisAsm->getInstruction(Inst, insSize, memoryObject, Index,
                                   /*REMOVE*/ nulls(), nulls());
         switch (S) {
         case MCDisassembler::Fail:
-        SrcMgr.PrintMessage(SMLoc::getFromPointer(memoryObject[Index]),
+        jl_SrcMgr.PrintMessage(SMLoc::getFromPointer(memoryObject[Index]),
                             SourceMgr::DK_Warning,
                             "invalid instruction encoding");
         if (insSize == 0)
@@ -272,19 +263,21 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
         break;
 
         case MCDisassembler::SoftFail:
-        SrcMgr.PrintMessage(SMLoc::getFromPointer(memoryObject[Index]),
+        jl_SrcMgr.PrintMessage(SMLoc::getFromPointer(memoryObject[Index]),
                             SourceMgr::DK_Warning,
                             "potentially undefined instruction encoding");
         // Fall through
         case MCDisassembler::Success:
         #ifdef LLVM35
-            Streamer->EmitInstruction(Inst, *STI);
+            jl_Streamer->EmitInstruction(Inst, *STI);
         #else
-            Streamer->EmitInstruction(Inst);
+            jl_Streamer->EmitInstruction(Inst);
         #endif
         break;
         }
     }
-
 #endif
+    jl_Streamer->Finish();
+    jl_fstream.flush();
+    jl_fstream.setStream(jl_null_ostream); // release the stream
 }
