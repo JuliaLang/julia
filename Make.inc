@@ -340,6 +340,11 @@ ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
 endif
 
+# ARM specific configuration
+ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.inc.arm ] && echo exists ))
+include $(JULIAHOME)/Make.inc.arm
+endif
+
 ifeq ($(SANITIZE),1)
 JCXXFLAGS += -fsanitize=address -mllvm -asan-stack=0
 JCFLAGS += -fsanitize=address -mllvm -asan-stack=0
