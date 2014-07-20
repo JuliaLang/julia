@@ -1082,7 +1082,9 @@ function ind2sub!{T<:Integer}(sub::Array{T}, dims::Array{T}, ind::T)
 end
 
 # Generalized repmat
-function repeat{T}(A::Array{T}, inner::Array{Int} = ones(Int, ndims(A)), outer::Array{Int} = ones(Int, ndims(A)))
+function repeat{T}(A::Array{T};
+                   inner::Array{Int} = ones(Int, ndims(A)),
+                   outer::Array{Int} = ones(Int, ndims(A)))
     ndims_in = ndims(A)
     length_inner = length(inner)
     length_outer = length(outer)
