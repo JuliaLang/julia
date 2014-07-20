@@ -399,7 +399,6 @@ void jl_getFunctionInfo(const char **name, int *line, const char **filename, siz
 // With MCJIT we can get function information directly from the ObjectFile
     std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
     std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(pointer);
-    llvm::object::ObjectFile *Obj = it->second.object;
 
     if (it == objmap.end())
         return jl_getDylibFunctionInfo(name,line,filename,pointer,skipC);
