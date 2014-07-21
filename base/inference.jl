@@ -383,12 +383,6 @@ end
 t_func[getfield] = (2, 2, getfield_tfunc)
 t_func[setfield!] = (3, 3, (o, f, v)->v)
 const fieldtype_tfunc = function (A, s, name)
-    if isType(s)
-        # fieldtype of a type only depends on its kind
-        # i.e. fieldtype(SomeDataType, :types) === (Any...,)
-        # rather than a specific type tuple
-        s = typeof(s.parameters[1])
-    end
     if !isa(s,DataType)
         return Type
     end
@@ -396,7 +390,7 @@ const fieldtype_tfunc = function (A, s, name)
     if is(t,None)
         return t
     end
-    Type{isleaftype(t) ? t : TypeVar(:_, t)}
+    Type{t}
 end
 t_func[fieldtype] = (2, 2, fieldtype_tfunc)
 t_func[Box] = (1, 1, (a,)->Box)
