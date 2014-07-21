@@ -768,6 +768,22 @@ assumes ``x`` is a real number and returns its square root:
      in sqrt at math.jl:284
      in sqrt_second at none:7
 
+Note that the symbol following ``catch`` will always be interpreted as a
+name for the exception, so care is needed when writing ``try/catch`` expressions
+on a single line. The following code will *not* work to return the value of ``x``
+in case of an error:
+
+    try bad() catch x end
+
+Instead, use a semicolon or insert a line break after ``catch``:
+
+    try bad() catch; x end
+
+    try bad()
+    catch
+      x
+    end
+
 The power of the ``try/catch`` construct lies in the ability to unwind a deeply
 nested computation immediately to a much higher level in the stack of calling
 functions. There are situations where no error has occurred, but the ability to
