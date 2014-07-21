@@ -123,12 +123,23 @@ function showerror(io::IO, e::MethodError)
         i == length(e.args) || print(io, ", ")
     end
     print(io, ")")
+    # Check for local functions that shaddow methods in Base
     if isdefined(Base, name)
         f = eval(Base, name)
         if f !== e.f && isgeneric(f) && applicable(f, e.args...)
             println(io)
             print(io, "you may have intended to import Base.$(name)")
         end
+    end
+    # Check for row vectors used where a column vector is intended.
+    vec_args = {}
+    for arg in e.args
+        push!(vec_args, typeof(arg) <: AbstractArray && size(arg,2) == 1 ? vec(arg) : arg)
+    end
+    if applicable(e.f, vec_args)
+        print(io, "\n\nYou might have used a 2d row vector where a 1d column vector was required.")
+        print(io, "\nNote the difference between 1d column vector [1,2,3] and 2d row vector [1 2 3]")
+        print(io, "\nYou can convert to a column vector with the vec() function")
     end
 end
 
