@@ -85,7 +85,7 @@ uint_mapping(o::Lt,   x     ) = error("uint_mapping does not work with general L
 ordtype(o::ReverseOrdering, vs::AbstractArray) = ordtype(o.fwd, vs)
 ordtype(o::Perm,            vs::AbstractArray) = ordtype(o.order, o.data)
 # TODO: here, we really want the return type of o.by, without calling it
-ordtype(o::By,              vs::AbstractArray) = try typeof(o.by(vs[1])) catch Any end
+ordtype(o::By,              vs::AbstractArray) = try typeof(o.by(vs[1])) catch; Any end
 ordtype(o::Ordering,        vs::AbstractArray) = eltype(vs)
 
 function ord(lt::Function, by::Function, rev::Bool, order::Ordering=Forward)
