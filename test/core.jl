@@ -1796,3 +1796,6 @@ f7652() = issubtype(fieldtype(a7652, :a), Int)
 @test f7652() == issubtype(fieldtype(a7652, :a), Int) == true
 g7652() = fieldtype(A7652, :types)
 @test g7652() == fieldtype(A7652, :types) == Tuple
+
+# issue #7679
+@test map(f->f(), { ()->i for i=1:3 }) == {1,2,3}
