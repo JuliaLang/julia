@@ -119,7 +119,7 @@ function reshape{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti}, dims::NTuple{2,Int})
     numnz = nnz(a)
     colptr = Array(Ti, nS+1)
     rowval = similar(a.rowval)
-    nzval = a.nzval
+    nzval = copy(a.nzval)
 
     sparse_compute_reshaped_colptr_and_rowval(colptr, rowval, mS, nS, a.colptr, a.rowval, mA, nA)
 
