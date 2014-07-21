@@ -1220,9 +1220,10 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
         n += JL_PRINTF(out, "goto %d", jl_gotonode_label(v));
     }
     else if (jl_is_quotenode(v)) {
-        n += JL_PRINTF(out, "quote ");
-        n += jl_static_show(out, jl_fieldref(v,0));
-        n += JL_PRINTF(out, " end");
+        jl_value_t *qv = jl_fieldref(v,0);
+        if (!jl_is_symbol(qv)) { n += JL_PRINTF(out, "quote "); }
+        n += jl_static_show(out, qv);
+        if (!jl_is_symbol(qv)) { n += JL_PRINTF(out, " end"); }
     }
     else if (jl_is_topnode(v)) {
         n += JL_PRINTF(out, "top(");

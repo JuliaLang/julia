@@ -2927,6 +2927,8 @@ So far only the second case can actually occur.
 	   (if vi
 	       (begin
 		 (vinfo:set-asgn! vi #t)
+		 ;; note: method defs require a memory loc. (issue #7658)
+		 (vinfo:set-sa! vi #f)
 		 (if (assq (car vi) captvars)
 		     (vinfo:set-iasg! vi #t)))))
 	 `(method ,(cadr e)
