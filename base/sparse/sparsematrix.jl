@@ -102,7 +102,7 @@ function reinterpret{T,Tv,Ti,N}(::Type{T}, a::SparseMatrixCSC{Tv,Ti}, dims::NTup
     mA,nA = size(a)
     numnz = nnz(a)
     colptr = Array(Ti, nS+1)
-    rowval = copy(a.rowval)
+    rowval = similar(a.rowval)
     nzval = reinterpret(T, a.nzval)
 
     sparse_compute_reshaped_colptr_and_rowval(colptr, rowval, mS, nS, a.colptr, a.rowval, mA, nA)
@@ -118,7 +118,7 @@ function reshape{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti}, dims::NTuple{2,Int})
     mA,nA = size(a)
     numnz = nnz(a)
     colptr = Array(Ti, nS+1)
-    rowval = copy(a.rowval)
+    rowval = similar(a.rowval)
     nzval = a.nzval
 
     sparse_compute_reshaped_colptr_and_rowval(colptr, rowval, mS, nS, a.colptr, a.rowval, mA, nA)
