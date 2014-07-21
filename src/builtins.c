@@ -558,16 +558,14 @@ JL_CALLABLE(jl_f_field_type)
         jl_type_error("fieldtype", (jl_value_t*)jl_datatype_type, v);
     jl_datatype_t *st = (jl_datatype_t*)vt;
     int field_index;
-    if (jl_is_symbol(args[1])) {
-        field_index = jl_field_index(st, (jl_sym_t*)args[1], 1);
-    }
-    else if (jl_is_long(args[1])) {
+    if (jl_is_long(args[1])) {
         field_index = jl_unbox_long(args[1]) - 1;
         if (field_index < 0 || field_index >= jl_tuple_len(st->names))
             jl_throw(jl_bounds_exception);
     }
     else {
-        jl_type_error("fieldtype", (jl_value_t*)jl_symbol_type, args[1]);
+        JL_TYPECHK(fieldtype, symbol, args[1]);
+        field_index = jl_field_index(st, (jl_sym_t*)args[1], 1);
     }
     return jl_tupleref(st->types, field_index);
 }
