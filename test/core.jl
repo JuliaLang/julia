@@ -1786,3 +1786,13 @@ end
 # addition of ¬ (\neg) parsing
 const (¬) = !
 @test ¬false
+
+# issue #7652
+type A7652
+    a :: Int
+end
+a7652 = A7652(0)
+f7652() = issubtype(fieldtype(a7652, :a), Int)
+@test f7652() == issubtype(fieldtype(a7652, :a), Int) == true
+g7652() = fieldtype(A7652, :types)
+@test g7652() == fieldtype(A7652, :types) == Tuple
