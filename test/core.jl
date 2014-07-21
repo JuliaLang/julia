@@ -1787,7 +1787,6 @@ end
 const (¬) = !
 @test ¬false
 
-if false
 # issue #7652
 type A7652
     a :: Int
@@ -1797,7 +1796,14 @@ f7652() = issubtype(fieldtype(a7652, :a), Int)
 @test f7652() == issubtype(fieldtype(a7652, :a), Int) == true
 g7652() = fieldtype(A7652, :types)
 @test g7652() == fieldtype(A7652, :types) == Tuple
-end
+@test fieldtype(a7652, 1) == Int
+h7652() = a7652.(1) = 2
+h7652()
+@test a7652.a == 2
+i7652() = a7652.(1) = 3.0
+i7652()
+@test a7652.a == 3
+
 
 # issue #7679
 @test map(f->f(), { ()->i for i=1:3 }) == {1,2,3}
