@@ -607,6 +607,11 @@ sizeof{T<:ByteString}(s::SubString{T}) = s.endof==0 ? 0 : next(s,s.endof)[2]-1
 # that may require additional string interfaces
 length{T<:DirectIndexString}(s::SubString{T}) = endof(s)
 
+function length(s::SubString{UTF8String})
+    return s.endof==0 ? 0 : int(ccall(:u8_charnum, Csize_t, (Ptr{Uint8}, Csize_t),
+                                      pointer(s), next(s,s.endof)[2]-1))
+end
+
 function next(s::SubString, i::Int)
     if i < 1 || i > s.endof
         error(BoundsError)
