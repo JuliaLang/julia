@@ -85,7 +85,7 @@ function showerror(io::IO, e::DomainError, bt)
     print(io, "DomainError")
     for b in bt
         code = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), b, true)
-        if length(code) == 4
+        if length(code) == 4 && !code[4]  # code[4] == fromC
             if code[1] in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
                 print(io, "\n", code[1],
                       " will only return a complex result if called with a complex argument.",
