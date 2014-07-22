@@ -226,8 +226,8 @@ Julia language. Core operations typically have dozens of methods:
     +(x::Bool,y::Bool) at bool.jl:39
     +(y::FloatingPoint,x::Bool) at bool.jl:49
     +(A::BitArray{N},B::BitArray{N}) at bitarray.jl:848
-    +(A::Union(DenseArray{Bool,N},SubArray{Bool,N,A<:DenseArray{T,N},I<:(Union(Int64,Range{Int64})...,)}),B::Union(DenseArray{Bool,N},SubArray{Bool,N,A<:DenseArray{T,N},I<:(Union(Int64,Range{Int64})...,)})) at array.jl:797
-    +{S,T}(A::Union(SubArray{S,N,A<:DenseArray{T,N},I<:(Union(Int64,Range{Int64})...,)},DenseArray{S,N}),B::Union(SubArray{T,N,A<:DenseArray{T,N},I<:(Union(Int64,Range{Int64})...,)},DenseArray{T,N})) at array.jl:719
+    +(A::Union(DenseArray{Bool,N},SubArray{Bool,N,A<:DenseArray{T,N},I<:(Union(Range{Int64},Int64)...,)}),B::Union(DenseArray{Bool,N},SubArray{Bool,N,A<:DenseArray{T,N},I<:(Union(Range{Int64},Int64)...,)})) at array.jl:797
+    +{S,T}(A::Union(SubArray{S,N,A<:DenseArray{T,N},I<:(Union(Range{Int64},Int64)...,)},DenseArray{S,N}),B::Union(SubArray{T,N,A<:DenseArray{T,N},I<:(Union(Range{Int64},Int64)...,)},DenseArray{T,N})) at array.jl:719
     +{T<:Union(Int16,Int32,Int8)}(x::T<:Union(Int16,Int32,Int8),y::T<:Union(Int16,Int32,Int8)) at int.jl:16
     +{T<:Union(Uint32,Uint16,Uint8)}(x::T<:Union(Uint32,Uint16,Uint8),y::T<:Union(Uint32,Uint16,Uint8)) at int.jl:20
     +(x::Int64,y::Int64) at int.jl:33
@@ -252,16 +252,16 @@ Julia language. Core operations typically have dozens of methods:
     +(c::Uint64,x::BigInt) at gmp.jl:246
     +(c::Union(Uint32,Uint16,Uint8,Uint64),x::BigInt) at gmp.jl:247
     +(x::BigInt,c::Union(Uint32,Uint16,Uint8,Uint64)) at gmp.jl:248
-    +(x::BigInt,c::Union(Int16,Int32,Int8,Int64)) at gmp.jl:249
-    +(c::Union(Int16,Int32,Int8,Int64),x::BigInt) at gmp.jl:250
+    +(x::BigInt,c::Union(Int64,Int16,Int32,Int8)) at gmp.jl:249
+    +(c::Union(Int64,Int16,Int32,Int8),x::BigInt) at gmp.jl:250
     +(x::BigFloat,c::Uint64) at mpfr.jl:147
     +(c::Uint64,x::BigFloat) at mpfr.jl:151
     +(c::Union(Uint32,Uint16,Uint8,Uint64),x::BigFloat) at mpfr.jl:152
     +(x::BigFloat,c::Union(Uint32,Uint16,Uint8,Uint64)) at mpfr.jl:153
     +(x::BigFloat,c::Int64) at mpfr.jl:157
     +(c::Int64,x::BigFloat) at mpfr.jl:161
-    +(x::BigFloat,c::Union(Int16,Int32,Int8,Int64)) at mpfr.jl:162
-    +(c::Union(Int16,Int32,Int8,Int64),x::BigFloat) at mpfr.jl:163
+    +(x::BigFloat,c::Union(Int64,Int16,Int32,Int8)) at mpfr.jl:162
+    +(c::Union(Int64,Int16,Int32,Int8),x::BigFloat) at mpfr.jl:163
     +(x::BigFloat,c::Float64) at mpfr.jl:167
     +(c::Float64,x::BigFloat) at mpfr.jl:171
     +(c::Float32,x::BigFloat) at mpfr.jl:172
@@ -285,8 +285,8 @@ Julia language. Core operations typically have dozens of methods:
     +(r1::FloatRange{T<:FloatingPoint},r2::OrdinalRange{T,S}) at operators.jl:349
     +(r1::OrdinalRange{T,S},r2::FloatRange{T<:FloatingPoint}) at operators.jl:350
     +(x::Ptr{T},y::Integer) at pointer.jl:66
-    +{S,T<:Real}(A::Union(SubArray{S,N,A<:DenseArray{T,N},I<:(Union(Int64,Range{Int64})...,)},DenseArray{S,N}),B::Range{T<:Real}) at array.jl:727
-    +{S<:Real,T}(A::Range{S<:Real},B::Union(SubArray{T,N,A<:DenseArray{T,N},I<:(Union(Int64,Range{Int64})...,)},DenseArray{T,N})) at array.jl:736
+    +{S,T<:Real}(A::Union(SubArray{S,N,A<:DenseArray{T,N},I<:(Union(Range{Int64},Int64)...,)},DenseArray{S,N}),B::Range{T<:Real}) at array.jl:727
+    +{S<:Real,T}(A::Range{S<:Real},B::Union(SubArray{T,N,A<:DenseArray{T,N},I<:(Union(Range{Int64},Int64)...,)},DenseArray{T,N})) at array.jl:736
     +(A::AbstractArray{Bool,N},x::Bool) at array.jl:766
     +{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti},B::SparseMatrixCSC{Tv,Ti}) at sparse/sparsematrix.jl:530
     +{TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA},B::SparseMatrixCSC{TvB,TiB}) at sparse/sparsematrix.jl:522

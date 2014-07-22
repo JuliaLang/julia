@@ -558,7 +558,7 @@ instances of any of its argument types, constructed using the special
 .. doctest::
 
     julia> IntOrString = Union(Int,String)
-    Union(Int64,String)
+    Union(String,Int64)
 
     julia> 1 :: IntOrString
     1
@@ -567,7 +567,7 @@ instances of any of its argument types, constructed using the special
     "Hello!"
 
     julia> 1.0 :: IntOrString
-    ERROR: type: typeassert: expected Union(Int64,String), got Float64
+    ERROR: type: typeassert: expected Union(String,Int64), got Float64
 
 The compilers for many languages have an internal union construct for
 reasoning about types; Julia simply exposes it to the programmer. The
