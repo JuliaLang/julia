@@ -25,7 +25,7 @@ git-submodules:
 ifneq ($(NO_GIT), 1)
 	@-git submodule update --init
 else
-       $(warn "Submodules could not be updated because git is unavailible")
+       $(warn "Submodules could not be updated because git is unavailable")
 endif
 
 debug release: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test $(build_datarootdir)/julia/doc $(build_datarootdir)/julia/examples $(build_sysconfdir)/julia/juliarc.jl
