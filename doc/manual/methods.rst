@@ -94,16 +94,16 @@ error:
 .. doctest::
 
     julia> f(2.0, 3)
-    ERROR: no method f(Float64, Int64)
+    ERROR: `f` has no method matching f(::Float64, ::Int64)
 
     julia> f(float32(2.0), 3.0)
-    ERROR: no method f(Float32, Float64)
+    ERROR: `f` has no method matching f(::Float32, ::Float64)
 
     julia> f(2.0, "3.0")
-    ERROR: no method f(Float64, ASCIIString)
+    ERROR: `f` has no method matching f(::Float64, ::ASCIIString)
 
     julia> f("2.0", "3.0")
-    ERROR: no method f(ASCIIString, ASCIIString)
+    ERROR: `f` has no method matching f(::ASCIIString, ::ASCIIString)
 
 As you can see, the arguments must be precisely of type ``Float64``.
 Other numeric types, such as integers or 32-bit floating-point values,
@@ -168,10 +168,10 @@ function ``f`` remains undefined, and applying it will still result in a
 .. doctest::
 
     julia> f("foo", 3)
-    ERROR: no method f(ASCIIString, Int64)
+    ERROR: `f` has no method matching f(::ASCIIString, ::Int64)
 
     julia> f()
-    ERROR: no method f()
+    ERROR: `f` has no method matching f()
 
 You can easily see which methods exist for a function by entering the
 function object itself in an interactive session:
@@ -221,99 +221,132 @@ Julia language. Core operations typically have dozens of methods:
 .. doctest::
 
     julia> methods(+)
-    # 92 methods for generic function "+":
-    +(x::Bool) at bool.jl:35
-    +(x::Bool,y::Bool) at bool.jl:38
-    +(x::Union(SubArray{Bool,N,A<:Array{T,N},I<:(Union(Range{Int64},Int64,Range1{Int64})...,)},Array{Bool,N}),y::Union(SubArray{Bool,N,A<:Array{T,N},I<:(Union(Range{Int64},Int64,Range1{Int64})...,)},Array{Bool,N})) at array.jl:992
-    +{S,T}(A::Union(SubArray{S,N,A<:Array{T,N},I<:(Union(Range{Int64},Int64,Range1{Int64})...,)},Array{S,N}),B::Union(SubArray{T,N,A<:Array{T,N},I<:(Union(Range{Int64},Int64,Range1{Int64})...,)},Array{T,N})) at array.jl:936
-    +{T<:Union(Int32,Int8,Int16)}(x::T<:Union(Int32,Int8,Int16),y::T<:Union(Int32,Int8,Int16)) at int.jl:16
-    +{T<:Union(Uint8,Uint32,Uint16)}(x::T<:Union(Uint8,Uint32,Uint16),y::T<:Union(Uint8,Uint32,Uint16)) at int.jl:20
-    +(x::Int64,y::Int64) at int.jl:41
-    +(x::Uint64,y::Uint64) at int.jl:42
-    +(x::Int128,y::Int128) at int.jl:43
-    +(x::Uint128,y::Uint128) at int.jl:44
-    +(a::Float16,b::Float16) at float.jl:129
-    +(x::Float32,y::Float32) at float.jl:131
-    +(x::Float64,y::Float64) at float.jl:132
-    +(z::Complex{T<:Real},w::Complex{T<:Real}) at complex.jl:133
-    +(x::Real,z::Complex{T<:Real}) at complex.jl:141
-    +(z::Complex{T<:Real},x::Real) at complex.jl:142
+    # 125 methods for generic function "+":
+    +(x::Bool) at bool.jl:36
+    +(x::Bool,y::Bool) at bool.jl:39
+    +(y::FloatingPoint,x::Bool) at bool.jl:49
+    +(A::BitArray{N},B::BitArray{N}) at bitarray.jl:848
+    +(A::Union(DenseArray{Bool,N},SubArray{Bool,N,A<:DenseArray{T,N},I<:(Union(Int64,Range{Int64})...,)}),B::Union(DenseArray{Bool,N},SubArray{Bool,N,A<:DenseArray{T,N},I<:(Union(Int64,Range{Int64})...,)})) at array.jl:797
+    +{S,T}(A::Union(SubArray{S,N,A<:DenseArray{T,N},I<:(Union(Int64,Range{Int64})...,)},DenseArray{S,N}),B::Union(SubArray{T,N,A<:DenseArray{T,N},I<:(Union(Int64,Range{Int64})...,)},DenseArray{T,N})) at array.jl:719
+    +{T<:Union(Int16,Int32,Int8)}(x::T<:Union(Int16,Int32,Int8),y::T<:Union(Int16,Int32,Int8)) at int.jl:16
+    +{T<:Union(Uint32,Uint16,Uint8)}(x::T<:Union(Uint32,Uint16,Uint8),y::T<:Union(Uint32,Uint16,Uint8)) at int.jl:20
+    +(x::Int64,y::Int64) at int.jl:33
+    +(x::Uint64,y::Uint64) at int.jl:34
+    +(x::Int128,y::Int128) at int.jl:35
+    +(x::Uint128,y::Uint128) at int.jl:36
+    +(x::Float32,y::Float32) at float.jl:119
+    +(x::Float64,y::Float64) at float.jl:120
+    +(z::Complex{T<:Real},w::Complex{T<:Real}) at complex.jl:110
+    +(x::Real,z::Complex{T<:Real}) at complex.jl:120
+    +(z::Complex{T<:Real},x::Real) at complex.jl:121
     +(x::Rational{T<:Integer},y::Rational{T<:Integer}) at rational.jl:113
-    +(x::Bool,y::Union(SubArray{Bool,N,A<:Array{T,N},I<:(Union(Range{Int64},Int64,Range1{Int64})...,)},Array{Bool,N})) at array.jl:986
-    +(x::Union(SubArray{Bool,N,A<:Array{T,N},I<:(Union(Range{Int64},Int64,Range1{Int64})...,)},Array{Bool,N}),y::Bool) at array.jl:989
-    +(x::Char,y::Char) at char.jl:25
-    +(x::Char,y::Integer) at char.jl:30
-    +(x::Integer,y::Char) at char.jl:31
-    +(x::BigInt,y::BigInt) at gmp.jl:160
-    +(a::BigInt,b::BigInt,c::BigInt) at gmp.jl:183
-    +(a::BigInt,b::BigInt,c::BigInt,d::BigInt) at gmp.jl:189
-    +(a::BigInt,b::BigInt,c::BigInt,d::BigInt,e::BigInt) at gmp.jl:196
-    +(x::BigInt,c::Uint64) at gmp.jl:208
-    +(c::Uint64,x::BigInt) at gmp.jl:212
-    +(c::Unsigned,x::BigInt) at gmp.jl:213
-    +(x::BigInt,c::Unsigned) at gmp.jl:214
-    +(x::BigInt,c::Signed) at gmp.jl:215
-    +(c::Signed,x::BigInt) at gmp.jl:216
-    +(x::BigFloat,c::Uint64) at mpfr.jl:141
-    +(c::Uint64,x::BigFloat) at mpfr.jl:145
-    +(c::Unsigned,x::BigFloat) at mpfr.jl:146
-    +(x::BigFloat,c::Unsigned) at mpfr.jl:147
-    +(x::BigFloat,c::Int64) at mpfr.jl:151
-    +(c::Int64,x::BigFloat) at mpfr.jl:155
-    +(x::BigFloat,c::Signed) at mpfr.jl:156
-    +(c::Signed,x::BigFloat) at mpfr.jl:157
-    +(x::BigFloat,c::Float64) at mpfr.jl:161
-    +(c::Float64,x::BigFloat) at mpfr.jl:165
-    +(c::Float32,x::BigFloat) at mpfr.jl:166
-    +(x::BigFloat,c::Float32) at mpfr.jl:167
-    +(x::BigFloat,c::BigInt) at mpfr.jl:171
-    +(c::BigInt,x::BigFloat) at mpfr.jl:175
-    +(x::BigFloat,y::BigFloat) at mpfr.jl:322
-    +(a::BigFloat,b::BigFloat,c::BigFloat) at mpfr.jl:333
-    +(a::BigFloat,b::BigFloat,c::BigFloat,d::BigFloat) at mpfr.jl:339
-    +(a::BigFloat,b::BigFloat,c::BigFloat,d::BigFloat,e::BigFloat) at mpfr.jl:346
-    +(x::MathConst{sym},y::MathConst{sym}) at constants.jl:28
-    +{T<:Number}(x::T<:Number,y::T<:Number) at promotion.jl:179
-    +(x::Number,y::Number) at promotion.jl:149
-    +(x::Real,r::Range{T<:Real}) at range.jl:285
-    +(x::Real,r::Range1{T<:Real}) at range.jl:286
-    +(r::Ranges{T},x::Real) at range.jl:287
-    +(r1::Ranges{T},r2::Ranges{T}) at range.jl:299
-    +() at operators.jl:50
-    +(x::Integer,y::Ptr{T}) at pointer.jl:61
-    +(x::Bool,B::BitArray{N}) at bitarray.jl:1226
-    +(x::Number) at operators.jl:56
-    +(x::Ptr{T},y::Integer) at pointer.jl:59
-    +(A::BitArray{N},B::BitArray{N}) at bitarray.jl:1215
-    +(B::BitArray{N},x::Bool) at bitarray.jl:1219
-    +(B::BitArray{N},x::Number) at bitarray.jl:1222
-    +(A::BitArray{N},B::AbstractArray{T,N}) at bitarray.jl:1467
-    +(A::SparseMatrixCSC{Tv,Ti<:Integer},B::Union(Number,Array{T,N})) at sparse/sparsematrix.jl:503
-    +(A::Union(Number,Array{T,N}),B::SparseMatrixCSC{Tv,Ti<:Integer}) at sparse/sparsematrix.jl:504
-    +(A::SymTridiagonal{T<:Union(Float32,Complex{Float32},Complex{Float64},Float64)},B::SymTridiagonal{T<:Union(Float32,Complex{Float32},Complex{Float64},Float64)}) at linalg/tridiag.jl:50
-    +(A::Tridiagonal{T},B::Tridiagonal{T}) at linalg/tridiag.jl:151
-    +(A::Tridiagonal{T},B::SymTridiagonal{T<:Union(Float32,Complex{Float32},Complex{Float64},Float64)}) at linalg/tridiag.jl:164
-    +(A::SymTridiagonal{T<:Union(Float32,Complex{Float32},Complex{Float64},Float64)},B::Tridiagonal{T}) at linalg/tridiag.jl:165
-    +(A::Bidiagonal{T},B::Bidiagonal{T}) at linalg/bidiag.jl:76
-    +(Da::Diagonal{T},Db::Diagonal{T}) at linalg/diagonal.jl:28
-    +{T<:Number}(x::AbstractArray{T<:Number,N}) at abstractarray.jl:325
-    +{T}(A::Number,B::Union(SubArray{T,N,A<:Array{T,N},I<:(Union(Range{Int64},Int64,Range1{Int64})...,)},Array{T,N})) at array.jl:947
-    +{T}(A::Union(SubArray{T,N,A<:Array{T,N},I<:(Union(Range{Int64},Int64,Range1{Int64})...,)},Array{T,N}),B::Number) at array.jl:954
-    +{S,T<:Real}(A::Union(SubArray{S,N,A<:Array{T,N},I<:(Union(Range{Int64},Int64,Range1{Int64})...,)},Array{S,N}),B::Ranges{T<:Real}) at array.jl:962
-    +{S<:Real,T}(A::Ranges{S<:Real},B::Union(SubArray{T,N,A<:Array{T,N},I<:(Union(Range{Int64},Int64,Range1{Int64})...,)},Array{T,N})) at array.jl:971
-    +(x::Number,B::BitArray{N}) at bitarray.jl:1229
-    +(A::AbstractArray{T,N},B::BitArray{N}) at bitarray.jl:1468
-    +{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti},B::SparseMatrixCSC{Tv,Ti}) at sparse/sparsematrix.jl:409
-    +{TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA},B::SparseMatrixCSC{TvB,TiB}) at sparse/sparsematrix.jl:401
+    +(x::Char,y::Char) at char.jl:23
+    +(x::Char,y::Integer) at char.jl:26
+    +(x::Integer,y::Char) at char.jl:27
+    +(a::Float16,b::Float16) at float16.jl:132
+    +(x::BigInt,y::BigInt) at gmp.jl:194
+    +(a::BigInt,b::BigInt,c::BigInt) at gmp.jl:217
+    +(a::BigInt,b::BigInt,c::BigInt,d::BigInt) at gmp.jl:223
+    +(a::BigInt,b::BigInt,c::BigInt,d::BigInt,e::BigInt) at gmp.jl:230
+    +(x::BigInt,c::Uint64) at gmp.jl:242
+    +(c::Uint64,x::BigInt) at gmp.jl:246
+    +(c::Union(Uint32,Uint16,Uint8,Uint64),x::BigInt) at gmp.jl:247
+    +(x::BigInt,c::Union(Uint32,Uint16,Uint8,Uint64)) at gmp.jl:248
+    +(x::BigInt,c::Union(Int16,Int32,Int8,Int64)) at gmp.jl:249
+    +(c::Union(Int16,Int32,Int8,Int64),x::BigInt) at gmp.jl:250
+    +(x::BigFloat,c::Uint64) at mpfr.jl:147
+    +(c::Uint64,x::BigFloat) at mpfr.jl:151
+    +(c::Union(Uint32,Uint16,Uint8,Uint64),x::BigFloat) at mpfr.jl:152
+    +(x::BigFloat,c::Union(Uint32,Uint16,Uint8,Uint64)) at mpfr.jl:153
+    +(x::BigFloat,c::Int64) at mpfr.jl:157
+    +(c::Int64,x::BigFloat) at mpfr.jl:161
+    +(x::BigFloat,c::Union(Int16,Int32,Int8,Int64)) at mpfr.jl:162
+    +(c::Union(Int16,Int32,Int8,Int64),x::BigFloat) at mpfr.jl:163
+    +(x::BigFloat,c::Float64) at mpfr.jl:167
+    +(c::Float64,x::BigFloat) at mpfr.jl:171
+    +(c::Float32,x::BigFloat) at mpfr.jl:172
+    +(x::BigFloat,c::Float32) at mpfr.jl:173
+    +(x::BigFloat,c::BigInt) at mpfr.jl:177
+    +(c::BigInt,x::BigFloat) at mpfr.jl:181
+    +(x::BigFloat,y::BigFloat) at mpfr.jl:328
+    +(a::BigFloat,b::BigFloat,c::BigFloat) at mpfr.jl:339
+    +(a::BigFloat,b::BigFloat,c::BigFloat,d::BigFloat) at mpfr.jl:345
+    +(a::BigFloat,b::BigFloat,c::BigFloat,d::BigFloat,e::BigFloat) at mpfr.jl:352
+    +(x::MathConst{sym},y::MathConst{sym}) at constants.jl:23
+    +{T<:Number}(x::T<:Number,y::T<:Number) at promotion.jl:188
+    +{T<:FloatingPoint}(x::Bool,y::T<:FloatingPoint) at bool.jl:46
+    +(x::Number,y::Number) at promotion.jl:158
+    +(x::Integer,y::Ptr{T}) at pointer.jl:68
+    +(x::Bool,A::AbstractArray{Bool,N}) at array.jl:767
+    +(x::Number) at operators.jl:71
+    +(r1::OrdinalRange{T,S},r2::OrdinalRange{T,S}) at operators.jl:325
+    +{T<:FloatingPoint}(r1::FloatRange{T<:FloatingPoint},r2::FloatRange{T<:FloatingPoint}) at operators.jl:331
+    +(r1::FloatRange{T<:FloatingPoint},r2::FloatRange{T<:FloatingPoint}) at operators.jl:348
+    +(r1::FloatRange{T<:FloatingPoint},r2::OrdinalRange{T,S}) at operators.jl:349
+    +(r1::OrdinalRange{T,S},r2::FloatRange{T<:FloatingPoint}) at operators.jl:350
+    +(x::Ptr{T},y::Integer) at pointer.jl:66
+    +{S,T<:Real}(A::Union(SubArray{S,N,A<:DenseArray{T,N},I<:(Union(Int64,Range{Int64})...,)},DenseArray{S,N}),B::Range{T<:Real}) at array.jl:727
+    +{S<:Real,T}(A::Range{S<:Real},B::Union(SubArray{T,N,A<:DenseArray{T,N},I<:(Union(Int64,Range{Int64})...,)},DenseArray{T,N})) at array.jl:736
+    +(A::AbstractArray{Bool,N},x::Bool) at array.jl:766
+    +{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti},B::SparseMatrixCSC{Tv,Ti}) at sparse/sparsematrix.jl:530
+    +{TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA},B::SparseMatrixCSC{TvB,TiB}) at sparse/sparsematrix.jl:522
+    +(A::SparseMatrixCSC{Tv,Ti<:Integer},B::Array{T,N}) at sparse/sparsematrix.jl:621
+    +(A::Array{T,N},B::SparseMatrixCSC{Tv,Ti<:Integer}) at sparse/sparsematrix.jl:623
+    +(A::SymTridiagonal{T},B::SymTridiagonal{T}) at linalg/tridiag.jl:45
+    +(A::Tridiagonal{T},B::Tridiagonal{T}) at linalg/tridiag.jl:207
+    +(A::Tridiagonal{T},B::SymTridiagonal{T}) at linalg/special.jl:99
+    +(A::SymTridiagonal{T},B::Tridiagonal{T}) at linalg/special.jl:98
+    +{T,MT,uplo}(A::Triangular{T,MT,uplo,IsUnit},B::Triangular{T,MT,uplo,IsUnit}) at linalg/triangular.jl:10
+    +{T,MT,uplo1,uplo2}(A::Triangular{T,MT,uplo1,IsUnit},B::Triangular{T,MT,uplo2,IsUnit}) at linalg/triangular.jl:11
+    +(Da::Diagonal{T},Db::Diagonal{T}) at linalg/diagonal.jl:44
+    +(A::Bidiagonal{T},B::Bidiagonal{T}) at linalg/bidiag.jl:92
+    +{T}(B::BitArray{2},J::UniformScaling{T}) at linalg/uniformscaling.jl:26
+    +(A::Diagonal{T},B::Bidiagonal{T}) at linalg/special.jl:89
+    +(A::Bidiagonal{T},B::Diagonal{T}) at linalg/special.jl:90
+    +(A::Diagonal{T},B::Tridiagonal{T}) at linalg/special.jl:89
+    +(A::Tridiagonal{T},B::Diagonal{T}) at linalg/special.jl:90
+    +(A::Diagonal{T},B::Triangular{T,S<:AbstractArray{T,2},UpLo,IsUnit}) at linalg/special.jl:89
+    +(A::Triangular{T,S<:AbstractArray{T,2},UpLo,IsUnit},B::Diagonal{T}) at linalg/special.jl:90
+    +(A::Diagonal{T},B::Array{T,2}) at linalg/special.jl:89
+    +(A::Array{T,2},B::Diagonal{T}) at linalg/special.jl:90
+    +(A::Bidiagonal{T},B::Tridiagonal{T}) at linalg/special.jl:89
+    +(A::Tridiagonal{T},B::Bidiagonal{T}) at linalg/special.jl:90
+    +(A::Bidiagonal{T},B::Triangular{T,S<:AbstractArray{T,2},UpLo,IsUnit}) at linalg/special.jl:89
+    +(A::Triangular{T,S<:AbstractArray{T,2},UpLo,IsUnit},B::Bidiagonal{T}) at linalg/special.jl:90
+    +(A::Bidiagonal{T},B::Array{T,2}) at linalg/special.jl:89
+    +(A::Array{T,2},B::Bidiagonal{T}) at linalg/special.jl:90
+    +(A::Tridiagonal{T},B::Triangular{T,S<:AbstractArray{T,2},UpLo,IsUnit}) at linalg/special.jl:89
+    +(A::Triangular{T,S<:AbstractArray{T,2},UpLo,IsUnit},B::Tridiagonal{T}) at linalg/special.jl:90
+    +(A::Tridiagonal{T},B::Array{T,2}) at linalg/special.jl:89
+    +(A::Array{T,2},B::Tridiagonal{T}) at linalg/special.jl:90
+    +(A::Triangular{T,S<:AbstractArray{T,2},UpLo,IsUnit},B::Array{T,2}) at linalg/special.jl:89
+    +(A::Array{T,2},B::Triangular{T,S<:AbstractArray{T,2},UpLo,IsUnit}) at linalg/special.jl:90
+    +(A::SymTridiagonal{T},B::Triangular{T,S<:AbstractArray{T,2},UpLo,IsUnit}) at linalg/special.jl:98
+    +(A::Triangular{T,S<:AbstractArray{T,2},UpLo,IsUnit},B::SymTridiagonal{T}) at linalg/special.jl:99
+    +(A::SymTridiagonal{T},B::Array{T,2}) at linalg/special.jl:98
+    +(A::Array{T,2},B::SymTridiagonal{T}) at linalg/special.jl:99
+    +(A::Diagonal{T},B::SymTridiagonal{T}) at linalg/special.jl:107
+    +(A::SymTridiagonal{T},B::Diagonal{T}) at linalg/special.jl:108
+    +(A::Bidiagonal{T},B::SymTridiagonal{T}) at linalg/special.jl:107
+    +(A::SymTridiagonal{T},B::Bidiagonal{T}) at linalg/special.jl:108
+    +{T<:Number}(x::AbstractArray{T<:Number,N}) at abstractarray.jl:358
+    +(A::AbstractArray{T,N},x::Number) at array.jl:770
+    +(x::Number,A::AbstractArray{T,N}) at array.jl:771
+    +(J1::UniformScaling{T<:Number},J2::UniformScaling{T<:Number}) at linalg/uniformscaling.jl:25
+    +(J::UniformScaling{T<:Number},B::BitArray{2}) at linalg/uniformscaling.jl:27
+    +(J::UniformScaling{T<:Number},A::AbstractArray{T,2}) at linalg/uniformscaling.jl:28
+    +(J::UniformScaling{T<:Number},x::Number) at linalg/uniformscaling.jl:29
+    +(x::Number,J::UniformScaling{T<:Number}) at linalg/uniformscaling.jl:30
+    +{TA,TJ}(A::AbstractArray{TA,2},J::UniformScaling{TJ}) at linalg/uniformscaling.jl:33
     +{T}(a::HierarchicalValue{T},b::HierarchicalValue{T}) at pkg/resolve/versionweight.jl:19
     +(a::VWPreBuildItem,b::VWPreBuildItem) at pkg/resolve/versionweight.jl:82
     +(a::VWPreBuild,b::VWPreBuild) at pkg/resolve/versionweight.jl:120
     +(a::VersionWeight,b::VersionWeight) at pkg/resolve/versionweight.jl:164
     +(a::FieldValue,b::FieldValue) at pkg/resolve/fieldvalue.jl:41
-    +(a::Vec2,b::Vec2) at graphics.jl:62
-    +(bb1::BoundingBox,bb2::BoundingBox) at graphics.jl:128
-    +(a,b,c) at operators.jl:67
-    +(a,b,c,xs...) at operators.jl:68
+    +(a::Vec2,b::Vec2) at graphics.jl:60
+    +(bb1::BoundingBox,bb2::BoundingBox) at graphics.jl:123
+    +(a,b,c) at operators.jl:82
+    +(a,b,c,xs...) at operators.jl:83
 
 Multiple dispatch together with the flexible parametric type system give
 Julia its ability to abstractly express high-level algorithms decoupled
@@ -438,7 +471,7 @@ signature:
      4
 
     julia> myappend([1,2,3],2.5)
-    ERROR: no method myappend(Array{Int64,1}, Float64)
+    ERROR: `myappend` has no method matching myappend(::Array{Int64,1}, ::Float64)
 
     julia> myappend([1.0,2.0,3.0],4.0)
     4-element Array{Float64,1}:
@@ -448,7 +481,7 @@ signature:
      4.0
 
     julia> myappend([1.0,2.0,3.0],4)
-    ERROR: no method myappend(Array{Float64,1}, Int64)
+    ERROR: `myappend` has no method matching myappend(::Array{Float64,1}, ::Int64)
 
 As you can see, the type of the appended element must match the element
 type of the vector it is appended to, or a "no method" error is raised.

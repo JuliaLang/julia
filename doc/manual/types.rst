@@ -366,13 +366,14 @@ However, the value for ``baz`` must be convertible to ``Int``:
 
     julia> Foo((), 23.5, 1)
     ERROR: InexactError()
+     in Foo at no file
 
 You may find a list of field names using the ``names`` function.
 
 .. doctest::
 
     julia> names(foo)
-    3-element Array{Any,1}:
+    3-element Array{Symbol,1}:
      :bar
      :baz
      :qux
@@ -566,7 +567,7 @@ instances of any of its argument types, constructed using the special
     "Hello!"
 
     julia> 1.0 :: IntOrString
-    ERROR: type: typeassert: expected Union(String,Int64), got Float64
+    ERROR: type: typeassert: expected Union(Int64,String), got Float64
 
 The compilers for many languages have an internal union construct for
 reasoning about types; Julia simply exposes it to the programmer. The
@@ -750,10 +751,10 @@ each field:
 .. doctest::
 
     julia> Point{Float64}(1.0)
-    ERROR: no method Point{Float64}(Float64)
+    ERROR: `Point{Float64}` has no method matching Point{Float64}(::Float64)
 
     julia> Point{Float64}(1.0,2.0,3.0)
-    ERROR: no method Point{Float64}(Float64, Float64, Float64)
+    ERROR: `Point{Float64}` has no method matching Point{Float64}(::Float64, ::Float64, ::Float64)
 
 Only one default constructor is generated for parametric types, since
 overriding it is not possible. This constructor accepts any arguments
@@ -786,7 +787,7 @@ isn't the case, the constructor will fail with a no method error:
 .. doctest::
 
     julia> Point(1,2.5)
-    ERROR: no method Point{T}(Int64, Float64)
+    ERROR: `Point{T}` has no method matching Point{T}(::Int64, ::Float64)
 
 Constructor methods to appropriately handle such mixed cases can be
 defined, but that will not be discussed until later on in
@@ -894,10 +895,10 @@ subtypes of ``Real``:
     Pointy{Real}
 
     julia> Pointy{String}
-    ERROR: type: Pointy: in T, expected Real, got Type{String}
+    ERROR: type: Pointy: in T, expected T<:Real, got Type{String}
 
     julia> Pointy{1}
-    ERROR: type: Pointy: in T, expected Real, got Int64
+    ERROR: type: Pointy: in T, expected T<:Real, got Int64
 
 Type parameters for parametric composite types can be restricted in the
 same manner::
@@ -1170,10 +1171,10 @@ If you apply ``super`` to other type objects (or non-type objects), a
 .. doctest::
 
     julia> super(Union(Float64,Int64))
-    ERROR: no method super(Type{Union(Float64,Int64)})
+    ERROR: `super` has no method matching super(::Type{Union(Float64,Int64)})
 
     julia> super(None)
-    ERROR: no method super(Type{None})
+    ERROR: `super` has no method matching super(::Type{None})
 
     julia> super((Float64,Int64))
-    ERROR: no method super(Type{(Float64,Int64)})
+    ERROR: `super` has no method matching super(::Type{(Float64,Int64)})

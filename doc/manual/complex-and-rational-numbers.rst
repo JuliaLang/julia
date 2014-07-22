@@ -51,7 +51,7 @@ numbers:
     -3 - 4im
 
     julia> (-1 + 2im)^2.5
-    2.729624464784009 - 6.9606644595719im
+    2.7296244647840084 - 6.960664459571898im
 
     julia> (-1 + 2im)^(1 + 1im)
     -0.27910381075826657 + 0.08708053414102428im
@@ -63,7 +63,7 @@ numbers:
     -63 - 60im
 
     julia> 3(2 - 5im)^-1.0
-    0.20689655172413793 + 0.5172413793103449im
+    0.20689655172413796 + 0.5172413793103449im
 
 The promotion mechanism ensures that combinations of operands of
 different types just work:
@@ -139,13 +139,13 @@ for complex numbers:
     1.272019649514069 + 0.7861513777574233im
 
     julia> cos(1 + 2im)
-    2.0327230070196656 - 3.0518977991517997im
+    2.0327230070196656 - 3.0518977991518im
 
     julia> exp(1 + 2im)
-    -1.1312043837568138 + 2.471726672004819im
+    -1.1312043837568135 + 2.4717266720048188im
 
     julia> sinh(1 + 2im)
-    -0.48905625904129374 + 1.4031192506220407im
+    -0.4890562590412937 + 1.4031192506220405im
 
 Note that mathematical functions typically return real values when applied
 to real numbers and complex values when applied to complex numbers.
@@ -156,9 +156,7 @@ versus ``-1 + 0im`` even though ``-1 == -1 + 0im``:
 
     julia> sqrt(-1)
     ERROR: DomainError
-    sqrt will only return a complex result if called with a complex argument.
-    try sqrt(complex(x))
-     in sqrt at math.jl:284
+     in sqrt at math.jl:131
 
     julia> sqrt(-1 + 0im)
     0.0 + 1.0im
@@ -189,11 +187,10 @@ and imaginary parts of a complex number as described in the
 .. doctest::
 
     julia> 1 + Inf*im
-    complex(1.0,Inf)
+    1.0 + Inf*im
 
     julia> 1 + NaN*im
-    complex(1.0,NaN)
-
+    1.0 + NaN*im
 
 .. _man-rational-numbers:
 
@@ -289,10 +286,10 @@ Constructing infinite rational values is acceptable:
 .. doctest::
 
     julia> 5//0
-    Inf
+    1//0
 
     julia> -3//0
-    -Inf
+    -1//0
 
     julia> typeof(ans)
     Rational{Int64} (constructor with 1 method)
@@ -303,8 +300,8 @@ Trying to construct a ``NaN`` rational value, however, is not:
 
     julia> 0//0
     ERROR: invalid rational: 0//0
-     in Rational at rational.jl:7
-     in // at rational.jl:17
+     in Rational at rational.jl:6
+     in // at rational.jl:15
 
 As usual, the promotion system makes interactions with other numeric
 types effortless:
@@ -318,19 +315,19 @@ types effortless:
     0.09999999999999998
 
     julia> 2//7 * (1 + 2im)
-    2//7 + 4//7im
+    2//7 + 4//7*im
 
     julia> 2//7 * (1.5 + 2im)
     0.42857142857142855 + 0.5714285714285714im
 
     julia> 3//2 / (1 + 2im)
-    3//10 - 3//5im
+    3//10 - 3//5*im
 
     julia> 1//2 + 2im
-    1//2 + 2//1im
+    1//2 + 2//1*im
 
     julia> 1 + 2//3im
-    1//1 - 2//3im
+    1//1 - 2//3*im
 
     julia> 0.5 == 1//2
     true
