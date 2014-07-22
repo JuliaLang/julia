@@ -225,8 +225,8 @@ immutable QRPackedQ{T} <: AbstractMatrix{T}
     τ::Vector{T}
 end
 immutable QRCompactWYQ{S} <: AbstractMatrix{S} 
-    factors::Matrix{S}                      
-    T::Matrix{S}                       
+    factors::Matrix{S}
+    T::Matrix{S}
 end
 
 convert{T}(::Type{QRPackedQ{T}}, Q::QRPackedQ) = QRPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
@@ -366,9 +366,14 @@ function A_mul_Bc!{T}(A::AbstractMatrix{T},Q::QRPackedQ{T})
     end
     A
 end
-function A_mul_Bc{TA,TB,N}(A::AbstractArray{TA,N}, B::Union(QRCompactWYQ{TB},QRPackedQ{TB}))
+A_mul_Bc(A::Triangular, B::Union(QRCompactWYQ,QRPackedQ)) = A_mul_Bc(full(A), B)
+function A_mul_Bc{TA,TB}(A::AbstractArray{TA}, B::Union(QRCompactWYQ{TB},QRPackedQ{TB}))
     TAB = promote_type(TA,TB)
-    A_mul_Bc!(size(A,2)==size(B.factors,1) ? (TA == TAB ? copy(A) : convert(AbstractMatrix{TAB}, A)) : (size(A,2)==size(B.factors,2) ? [A zeros(TAB, size(A, 1), size(B.factors, 1) - size(B.factors, 2))] : throw(DimensionMismatch(""))),convert(AbstractMatrix{TAB}, B))
+    A_mul_Bc!(size(A,2)==size(B.factors,1) ? (TA == TAB ? copy(A) : convert(AbstractMatrix{TAB}, A)) :
+              size(A,2)==size(B.factors,2) ? [A zeros(TAB, size(A, 1), size(B.factors, 1) - size(B.factors, 2))] :
+              throw(DimensionMismatch("")),
+
+              convert(AbstractMatrix{TAB}, B))
 end
 
 # Julia implementation similarly to xgelsy
