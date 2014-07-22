@@ -771,11 +771,11 @@ assumes ``x`` is a real number and returns its square root:
 Note that the symbol following ``catch`` will always be interpreted as a
 name for the exception, so care is needed when writing ``try/catch`` expressions
 on a single line. The following code will *not* work to return the value of ``x``
-in case of an error:
+in case of an error::
 
     try bad() catch x end
 
-Instead, use a semicolon or insert a line break after ``catch``:
+Instead, use a semicolon or insert a line break after ``catch``::
 
     try bad() catch; x end
 
