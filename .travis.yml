@@ -26,6 +26,7 @@ before_install:
 script:
     - make $BUILDOPTS prefix=/tmp/julia install
     - cd .. && mv julia julia2
-    - cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia-debug --check-bounds=yes runtests.jl all
+    - git config --global user.name "Travis CI"
+    - cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia-debug --check-bounds=yes runtests.jl all && /tmp/julia/bin/julia-debug --check-bounds=yes runtests.jl pkg
     - cd - && mv julia2 julia
     - echo "Ready for packaging..."
