@@ -396,7 +396,7 @@ const fieldtype_tfunc = function (A, s, name)
     if is(t,None)
         return t
     end
-    Type{isleaftype(t) ? t : TypeVar(:_, t)}
+    Type{isleaftype(t) || isa(t,TypeVar) ? t : TypeVar(:_, t)}
 end
 t_func[fieldtype] = (2, 2, fieldtype_tfunc)
 t_func[Box] = (1, 1, (a,)->Box)
