@@ -891,16 +891,18 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
 
     HANDLE(fptrunc,2) return builder.CreateFPTrunc(FP(auto_unbox(args[2],ctx)), FTnbits(try_to_determine_bitstype_nbits(args[1],ctx)));
     HANDLE(fpext,2) {
-        // when extending a float32 to a float64, we need to force
-        // rounding to single precision first. the reason is that it's
+        Value *x = auto_unbox(args[2],ctx);
+#if JL_NEED_FLOATTEMP_VAR
+        // Target platform might carry extra precision.  
+        // Force rounding to single precision first. The reason is that it's
         // fine to keep working in extended precision as long as it's
         // understood that everything is implicitly rounded to 23 bits,
         // but if we start looking at more bits we need to actually do the
         // rounding first instead of carrying around incorrect low bits.
-        Value *x = auto_unbox(args[2],ctx);
         builder.CreateStore(FP(x), builder.CreateBitCast(prepare_global(jlfloattemp_var),FT(x->getType())->getPointerTo()), true);
-        return builder.CreateFPExt(builder.CreateLoad(builder.CreateBitCast(prepare_global(jlfloattemp_var),FT(x->getType())->getPointerTo()), true),
-                                   FTnbits(try_to_determine_bitstype_nbits(args[1],ctx)));
+        x  = builder.CreateLoad(builder.CreateBitCast(prepare_global(jlfloattemp_var),FT(x->getType())->getPointerTo()), true);
+#endif
+        return builder.CreateFPExt(x, FTnbits(try_to_determine_bitstype_nbits(args[1],ctx)));
     }
     HANDLE(select_value,3) {
         Value *isfalse = emit_condition(args[1], "select_value", ctx);

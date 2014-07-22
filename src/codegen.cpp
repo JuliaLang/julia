@@ -255,7 +255,12 @@ static Value *V_null;
 static GlobalVariable *jltrue_var;
 static GlobalVariable *jlfalse_var;
 static GlobalVariable *jlnull_var;
+#if defined(_CPU_X86_)
+#define JL_NEED_FLOATTEMP_VAR 1
+#endif
+#if JL_NEED_FLOATTEMP_VAR
 static GlobalVariable *jlfloattemp_var;
+#endif
 #ifdef JL_GC_MARKSWEEP
 static GlobalVariable *jlpgcstack_var;
 #endif
@@ -4043,14 +4048,14 @@ static void init_julia_llvm_env(Module *m)
                            NULL, "jl_dl_handle");
     add_named_global(jldll_var, (void*)&jl_dl_handle);
 #endif
-
+#if JL_NEED_FLOATTEMP_VAR
     // Has to be big enough for the biggest LLVM-supported float type
     jlfloattemp_var =
         new GlobalVariable(*m, IntegerType::get(jl_LLVMContext,128),
                            false, GlobalVariable::ExternalLinkage, 
                            ConstantInt::get(IntegerType::get(jl_LLVMContext,128),0),
                            "jl_float_temp");
-
+#endif
 
     std::vector<Type*> args1(0);
     args1.push_back(T_pint8);
