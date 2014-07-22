@@ -342,5 +342,7 @@ function workspace()
          Expr(:toplevel,
               :(const Base = $(Expr(:quote, b))),
               :(const LastMain = $(Expr(:quote, last)))))
+    empty!(package_list)
+    empty!(package_locks)
     nothing
 end
