@@ -1813,3 +1813,7 @@ end
 
 # issue #7508
 @test_throws ErrorException reinterpret(Int, 0x01)
+
+# issue #41
+ndigf(n) = float64(log(float32(n)))
+@test float64(log(float32(256))) == ndigf(256) == 5.545177459716797
