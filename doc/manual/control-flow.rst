@@ -337,12 +337,16 @@ except for the last entry in a conditional chain is an error:
 On the other hand, any type of expression can be used at the end of a conditional chain.  
 It will be evaluated and returned depending on the preceding conditionals:
 
+.. testsetup::
+
+    srand(123)
+
 .. doctest::
 
     julia> true && (x = rand(2,2))
     2x2 Array{Float64,2}:
-      0.104159  0.402732
-      0.377173  0.163156
+     0.768448  0.673959
+     0.940515  0.395453
 
     julia> false && (x = rand(2,2))
     false
@@ -580,9 +584,7 @@ negative real value:
 
     julia> sqrt(-1)
     ERROR: DomainError
-    sqrt will only return a complex result if called with a complex argument.
-    try sqrt(complex(x))
-     in sqrt at math.jl:284
+     in sqrt at math.jl:131
 
 You may define your own exceptions in the following way:
 
@@ -633,10 +635,10 @@ the way ``UndefVarError`` is written:
 
 .. doctest::
 
-    julia> type UndefVarError <: Exception
+    julia> type MyUndefVarError <: Exception
                var::Symbol
            end
-    julia> showerror(io::IO, e::UndefVarError) = print(io, e.var, " not defined")
+    julia> Base.showerror(io::IO, e::MyUndefVarError) = print(io, e.var, " not defined");
 
 Errors
 ~~~~~~
@@ -683,7 +685,7 @@ session:
     julia> verbose_fussy_sqrt(-1)
     before fussy_sqrt
     ERROR: negative x not allowed
-     in fussy_sqrt at none:1
+     in verbose_fussy_sqrt at none:3
 
 Warnings and informational messages
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -763,9 +765,6 @@ assumes ``x`` is a real number and returns its square root:
     
     julia> sqrt_second(-9)
     ERROR: DomainError
-    sqrt will only return a complex result if called with a complex argument.
-    try sqrt(complex(x))
-     in sqrt at math.jl:284
      in sqrt_second at none:7
 
 Note that the symbol following ``catch`` will always be interpreted as a
@@ -863,13 +862,12 @@ value it needs to produce:
              produce("stop")
            end;
 
-To consume values, first the producer is wrapped in a ``Task``, then
-``consume`` is called repeatedly on that object:
+To consume values, first the producer is wrapped in a ``Task``,
+then ``consume`` is called repeatedly on that object:
 
 .. doctest::
 
-    julia> p = Task(producer)
-    Task
+    julia> p = Task(producer);
 
     julia> consume(p)
     "start"

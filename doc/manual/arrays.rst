@@ -373,9 +373,9 @@ the name of the function to vectorize. Here is a simple example:
 
     julia> methods(square)
     # 4 methods for generic function "square":
-    square{T<:Number}(x::AbstractArray{T<:Number,1}) at operators.jl:248
-    square{T<:Number}(x::AbstractArray{T<:Number,2}) at operators.jl:249
-    square{T<:Number}(x::AbstractArray{T<:Number,N}) at operators.jl:251
+    square{T<:Number}(::AbstractArray{T<:Number,1}) at operators.jl:359
+    square{T<:Number}(::AbstractArray{T<:Number,2}) at operators.jl:360
+    square{T<:Number}(::AbstractArray{T<:Number,N}) at operators.jl:362
     square(x) at none:1
 
     julia> square([1 2 4; 5 6 7])
@@ -396,9 +396,9 @@ vector to the size of the matrix:
     julia> a = rand(2,1); A = rand(2,3);
 
     julia> repmat(a,1,3)+A
-    2x3 Float64 Array:
-     0.848333  1.66714  1.3262
-     1.26743   1.77988  1.13859
+    2x3 Array{Float64,2}:
+     1.20813  1.82068  1.25387
+     1.56851  1.86401  1.67846
 
 This is wasteful when dimensions get large, so Julia offers
 ``broadcast``, which expands singleton dimensions in
@@ -409,18 +409,18 @@ function elementwise:
 .. doctest::
 
     julia> broadcast(+, a, A)
-    2x3 Float64 Array:
-     0.848333  1.66714  1.3262
-     1.26743   1.77988  1.13859
+    2x3 Array{Float64,2}:
+     1.20813  1.82068  1.25387
+     1.56851  1.86401  1.67846
 
     julia> b = rand(1,2)
-    1x2 Float64 Array:
-     0.629799  0.754948
+    1x2 Array{Float64,2}:
+     0.867535  0.00457906
 
     julia> broadcast(+, a, b)
-    2x2 Float64 Array:
-     1.31849  1.44364
-     1.56107  1.68622
+    2x2 Array{Float64,2}:
+     1.71056  0.847604
+     1.73659  0.873631
 
 Elementwise operators such as ``.+`` and ``.*`` perform broadcasting if necessary. There is also a ``broadcast!`` function to specify an explicit destination, and ``broadcast_getindex`` and ``broadcast_setindex!`` that broadcast the indices before indexing.
 
@@ -488,38 +488,38 @@ stride parameters.
 .. doctest::
 
     julia> a = rand(10,10)
-    10x10 Float64 Array:
-     0.763921  0.884854   0.818783   0.519682   …  0.860332  0.882295   0.420202
-     0.190079  0.235315   0.0669517  0.020172      0.902405  0.0024219  0.24984
-     0.823817  0.0285394  0.390379   0.202234      0.516727  0.247442   0.308572
-     0.566851  0.622764   0.0683611  0.372167      0.280587  0.227102   0.145647
-     0.151173  0.179177   0.0510514  0.615746      0.322073  0.245435   0.976068
-     0.534307  0.493124   0.796481   0.0314695  …  0.843201  0.53461    0.910584
-     0.885078  0.891022   0.691548   0.547         0.727538  0.0218296  0.174351
-     0.123628  0.833214   0.0224507  0.806369      0.80163   0.457005   0.226993
-     0.362621  0.389317   0.702764   0.385856      0.155392  0.497805   0.430512
-     0.504046  0.532631   0.477461   0.225632      0.919701  0.0453513  0.505329
+    10x10 Array{Float64,2}:
+     0.561255   0.226678   0.203391  0.308912   …  0.750307  0.235023   0.217964
+     0.718915   0.537192   0.556946  0.996234      0.666232  0.509423   0.660788
+     0.493501   0.0565622  0.118392  0.493498      0.262048  0.940693   0.252965
+     0.0470779  0.736979   0.264822  0.228787      0.161441  0.897023   0.567641
+     0.343935   0.32327    0.795673  0.452242      0.468819  0.628507   0.511528
+     0.935597   0.991511   0.571297  0.74485    …  0.84589   0.178834   0.284413
+     0.160706   0.672252   0.133158  0.65554       0.371826  0.770628   0.0531208
+     0.306617   0.836126   0.301198  0.0224702     0.39344   0.0370205  0.536062
+     0.890947   0.168877   0.32002   0.486136      0.096078  0.172048   0.77672
+     0.507762   0.573567   0.220124  0.165816      0.211049  0.433277   0.539476
 
     julia> b = sub(a, 2:2:8,2:2:4)
-    4x2 SubArray of 10x10 Float64 Array:
-     0.235315  0.020172
-     0.622764  0.372167
-     0.493124  0.0314695
-     0.833214  0.806369
+    4x2 SubArray{Float64,2,Array{Float64,2},(StepRange{Int64,Int64},StepRange{Int64,Int64})}:
+     0.537192  0.996234
+     0.736979  0.228787
+     0.991511  0.74485
+     0.836126  0.0224702
 
     julia> (q,r) = qr(b);
 
     julia> q
-    4x2 Float64 Array:
-     -0.200268   0.331205
-     -0.530012   0.107555
-     -0.41968    0.720129
-     -0.709119  -0.600124
+    4x2 Array{Float64,2}:
+     -0.338809   0.78934
+     -0.464815  -0.230274
+     -0.625349   0.194538
+     -0.527347  -0.534856
 
     julia> r
-    2x2 Float64 Array:
-     -1.175  -0.786311
-      0.0    -0.414549
+    2x2 Array{Float64,2}:
+     -1.58553  -0.921517
+      0.0       0.866567
 
 Sparse Matrices
 ===============
