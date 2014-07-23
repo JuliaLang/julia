@@ -151,11 +151,10 @@ types possibly occurring, making generation of fast machine code difficult.
 
 .. _man-domain-error:
 
-Why does Julia give a ``DomainError`` for perfectly-sensible operations?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Why does Julia give a ``DomainError`` for certain seemingly-sensible operations?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Certain operations make perfect mathematical sense but result in
-errors::
+Certain operations make mathematical sense but result in errors::
 
     julia> sqrt(-2.0)
     ERROR: DomainError

@@ -31,6 +31,12 @@ ptr_arg_convert(::Type{Ptr{Void}}, x) = x
 
 # conversion used by ccall
 cconvert(T, x) = convert(T, x)
+cconvert{T}(::Type{Ptr{T}}, x::Array{T}) = convert(Ptr{T}, x)
+cconvert(::Type{Ptr{None}}, x::Array) = convert(Ptr{None}, x)
+function cconvert{T}(::Type{Ptr{T}}, x::Array)
+    depwarn("ccall Ptr argument types must now match exactly, or be Ptr{Void}.", :cconvert)
+    convert(Ptr{T}, pointer(x))
+end
 # use the code in ccall.cpp to safely allocate temporary pointer arrays
 cconvert{T}(::Type{Ptr{Ptr{T}}}, a::Array) = a
 # convert strings to ByteString to pass as pointers
