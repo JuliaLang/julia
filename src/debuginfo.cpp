@@ -279,17 +279,18 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
             // First find the uuid of the object file (we'll use this to make sure we find the
             // correct debug symbol file).
             uint8_t uuid[16], uuid2[16];
+
+            MemoryBuffer *membuf = MemoryBuffer::getMemBuffer(
+                StringRef((const char *)fbase, (size_t)(((uint64_t)-1)-fbase)),"",false);
+
 #ifdef LLVM35
+            std::unique_ptr<MemoryBuffer> buf(membuf);
             ErrorOr<llvm::object::ObjectFile*> origerrorobj = llvm::object::ObjectFile::createObjectFile(
+                buf, sys::fs::file_magic::unknown);
 #else
             llvm::object::ObjectFile *origerrorobj = llvm::object::ObjectFile::createObjectFile(
+                membuf);
 #endif
-                    MemoryBuffer::getMemBuffer(
-                    StringRef((const char *)fbase, (size_t)(((uint64_t)-1)-fbase)),"",false)
-#ifdef LLVM35
-                    ,false, sys::fs::file_magic::unknown
-#endif
-            );
             if (!origerrorobj) {
                 objfileentry_t entry = {obj,context,slide};
                 objfilemap[fbase] = entry;
