@@ -149,6 +149,8 @@ argument. Since Julia can't predict the return type of this function at
 compile-time, any computation that uses it will have to guard against both
 types possibly occurring, making generation of fast machine code difficult.
 
+.. _man-domain-error:
+
 Why does Julia give a ``DomainError`` for perfectly-sensible operations?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
