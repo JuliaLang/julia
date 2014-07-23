@@ -908,6 +908,8 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                 
             end # end of while
         catch e
+            display_error(e, catch_backtrace())
+
             iderr = worker_id_from_socket(sock)
             # If error occured talking to pid 1, commit harakiri
             if iderr == 1
