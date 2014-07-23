@@ -875,6 +875,7 @@ static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams,
         if (b == NULL) return NULL;
         if (b->constp)
             return b->value;
+        return NULL;
     }
     if (jl_is_quotenode(ex))
         return jl_fieldref(ex,0);
