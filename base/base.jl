@@ -31,6 +31,7 @@ ptr_arg_convert(::Type{Ptr{Void}}, x) = x
 
 # conversion used by ccall
 cconvert(T, x) = convert(T, x)
+# the following 3 definitions implement a 0.3 deprecation
 cconvert{T}(::Type{Ptr{T}}, x::Array{T}) = convert(Ptr{T}, x)
 cconvert(::Type{Ptr{None}}, x::Array) = convert(Ptr{None}, x)
 function cconvert{T}(::Type{Ptr{T}}, x::Array)
