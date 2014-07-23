@@ -624,9 +624,7 @@ You can extract the following info from a ``RegexMatch`` object:
 For when a capture doesn't match, instead of a substring, ``m.captures``
 contains ``nothing`` in that position, and ``m.offsets`` has a zero
 offset (recall that indices in Julia are 1-based, so a zero offset into
-a string is invalid). Here's is a pair of somewhat contrived examples:
-
-.. doctest::
+a string is invalid). Here's is a pair of somewhat contrived examples::
 
     julia> m = match(r"(a|b)(c)?(d)", "acd")
     RegexMatch("acd", 1="a", 2="c", 3="d")
@@ -671,9 +669,7 @@ a string is invalid). Here's is a pair of somewhat contrived examples:
      2
 
 It is convenient to have captures returned as a tuple so that one can
-use tuple destructuring syntax to bind them to local variables:
-
-.. doctest::
+use tuple destructuring syntax to bind them to local variables::
 
     julia> first, second, third = m.captures; first
     "a"

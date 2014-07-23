@@ -553,9 +553,7 @@ Type Unions
 
 A type union is a special abstract type which includes as objects all
 instances of any of its argument types, constructed using the special
-``Union`` function:
-
-.. doctest::
+``Union`` function::
 
     julia> IntOrString = Union(Int,String)
     Union(String,Int64)
@@ -1166,9 +1164,7 @@ Only declared types (``DataType``) have unambiguous supertypes:
     Any
 
 If you apply ``super`` to other type objects (or non-type objects), a
-"no method" error is raised:
-
-.. doctest::
+"no method" error is raised::
 
     julia> super(Union(Float64,Int64))
     ERROR: `super` has no method matching super(::Type{Union(Float64,Int64)})
