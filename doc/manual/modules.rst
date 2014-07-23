@@ -63,6 +63,31 @@ Method definitions are a bit special: they do not search modules named in
 elsewhere. For example, in ``MyModule`` above we wanted to add a method
 to the standard ``show`` function, so we had to write ``import Base.show``.
 
+Summary of module usage
+-----------------------
+
+To load a module, two main keywords can be used: ``using`` and ``import``. To understand their differences, consider the following example::
+
+    module MyModule
+    
+    export x, y
+
+    x() = "x"
+    y() = "y"
+    p() = "p"
+    
+    end
+
+In this module we export the ``x`` and ``y`` functions (with the keyword ``export``), and also have the non-exported function ``p``. There are several different ways to load the Module and it's inner functions into the current workspace:
+
+- ``using MyModule`` brings all the **exported** names from ``MyModule`` into the current workspace. In this case, ``x`` and ``y`` functions are brought in. Functions loaded this way are not available for method extension, that is, you cannot add more methods to these functions after they are loaded. On the other hand, all names inside the module can be accessed with the ``Module.name`` syntax after this statement. In this example, the functions ``MyModule.x``, ``MyModule.y`` and ``MyModule.p`` are also loaded into the workspace. Functions loaded this way are, this time, available for method extension.
+- ``using MyModule.x, MyModule.p`` brings ``x`` and ``p`` into the current workspace, and they are not available for method extension. This command also brings in the functions ``MyModule.x``, ``MyModule.y`` and ``MyModule.p``, which are available for method extension. 
+- ``using MyModule: x, p`` is the same as ``using MyModule.x, MyModule.p``
+- ``import MyModule`` brings ``MyModule.x``, ``MyModule.y`` and ``MyModule.p`` into the workspace, all of them available for method extension. 
+- ``import MyModule.x, MyModule.p`` brings ``x``, ``p``, ``MyModule.x``, ``MyModule.y`` and ``MyModule.p`` into the workspace, all of them available for method extension.
+- ``import MyModule: x, p`` same as ``import MyModule.x, MyModule.p``
+- ``importall MyModule`` brings ``x``, ``y``, ``p``, ``MyModule.x``, ``MyModule.y`` and ``MyModule.p`` into the workspace, all of them available for method extension.
+
 Module paths
 ------------
 
