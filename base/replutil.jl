@@ -141,6 +141,53 @@ function showerror(io::IO, e::MethodError)
         print(io, "\nNote the difference between 1d column vector [1,2,3] and 2d row vector [1 2 3].")
         print(io, "\nYou can convert to a column vector with the vec() function.")
     end
+
+    # Display up to three closest candidates
+    lines = Array((IOBuffer, Int), 0)
+    for method in methods(e.f)
+        n = length(e.args)
+        if n != length(method.sig)
+            continue
+        end
+        buf = IOBuffer()
+        print(buf, "  $(e.f.env.name)(")
+        first = true
+        right_matches = 0
+        for (arg, sigtype) in zip(e.args, method.sig)
+            if first
+                first = false
+            else
+                print(buf, ", ")
+            end
+            if typeof(arg) <: sigtype
+                right_matches += 1
+                print(buf, "::$(sigtype)")
+            else
+                Base.with_output_color(:red, buf) do buf
+                    print(buf, "::$(sigtype)")
+                end
+            end
+        end
+        if right_matches > 0
+            print(buf, ")")
+            push!(lines, (buf, right_matches))
+        end
+    end
+    if length(lines) != 0
+        Base.with_output_color(:normal, io) do io
+            println(io, "\nClosest candidates are:")
+            sort!(lines, by = x -> -x[2])
+            i = 0
+            for line in lines
+                if i >= 3
+                    println(io, "  ...")
+                    break
+                end
+                i += 1
+                println(io, takebuf_string(line[1]))
+            end
+        end
+    end
 end
 
 function show_trace_entry(io, fname, file, line, n)
