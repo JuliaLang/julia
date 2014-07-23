@@ -216,9 +216,7 @@ pairs of arguments to which no other method definition applies.
 
 Although it seems a simple concept, multiple dispatch on the types of
 values is perhaps the single most powerful and central feature of the
-Julia language. Core operations typically have dozens of methods:
-
-.. doctest::
+Julia language. Core operations typically have dozens of methods::
 
     julia> methods(+)
     # 125 methods for generic function "+":
