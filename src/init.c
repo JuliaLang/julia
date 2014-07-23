@@ -140,6 +140,10 @@ static int is_addr_on_stack(void *addr)
 #endif
 }
 
+#ifndef SIGINFO
+#define SIGINFO SIGUSR1
+#endif
+
 void sigdie_handler(int sig, siginfo_t *info, void *context) {
     if (sig != SIGINFO) {
         sigset_t sset;
@@ -876,7 +880,7 @@ void julia_init(char *imageFile)
     struct sigaction act;
     memset(&act, 0, sizeof(struct sigaction));
     sigemptyset(&act.sa_mask);
-    act.sa_sigaction = sigdie_handler;
+    act.sa_sigaction = segv_handler;
     act.sa_flags = SA_ONSTACK | SA_SIGINFO;
     if (sigaction(SIGSEGV, &act, NULL) < 0) {
         JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
@@ -913,6 +917,10 @@ void julia_init(char *imageFile)
         jl_exit(1);
     }
     if (sigaction(SIGSYS, &act_die, NULL) < 0) {
+        JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
+        jl_exit(1);
+    }
+    if (sigaction(SIGPIPE, &act_die, NULL) < 0) {
         JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
         jl_exit(1);
     }
