@@ -1216,7 +1216,7 @@ function filter!(f::Function, a::Vector)
             insrt += 1
         end
     end
-    splice!(a, insrt:length(a))
+    deleteat!(a, insrt:length(a))
     return a
 end
 
