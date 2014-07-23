@@ -241,10 +241,12 @@ function add_workers(pg::ProcessGroup, ws::Array{Any,1})
     # NOTE: currently only node 1 can add new nodes, since nobody else
     # has the full list of address:port
     assert(LPROC.id == 1)
-    for w in ws
+    rr_join = similar(ws, RemoteRef)
+    for (i, w) in enumerate(ws)
         w.id = get_next_pid()
         register_worker(w)
-        create_message_handler_loop(w.socket) 
+        rr_join[i] = RemoteRef()
+        create_message_handler_loop(w.socket; ntfy_join_complete=rr_join[i]) 
     end
 
     all_locs = map(x -> isa(x, Worker) ? (string(x.bind_addr), x.port, x.id, x.manage == manage_local_worker) : ("", 0, x.id, true), pg.workers)
@@ -257,6 +259,12 @@ function add_workers(pg::ProcessGroup, ws::Array{Any,1})
             w.manage(w.id, w.config, :register)
         end
     end 
+    
+    # Wait till the all nodes have connected to each other
+    for rr in rr_join
+        wait(rr)
+    end
+    
     [w.id for w in ws]
 end
 
@@ -816,7 +824,7 @@ function accept_handler(server::TcpServer, status::Int32)
     create_message_handler_loop(client)
 end
 
-function create_message_handler_loop(sock::AsyncStream) #returns immediately
+function create_message_handler_loop(sock::AsyncStream; ntfy_join_complete=nothing) #returns immediately
     schedule(@task begin
         global PGRP
         #println("message_handler_loop")
@@ -881,7 +889,8 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                     #print("\nLocation: ",locs,"\nId:",myid(),"\n")
                     # joining existing process group
                     
-                    register_worker(Worker("", 0, sock, 1))
+                    controller = Worker("", 0, sock, 1)
+                    register_worker(controller)
                     register_worker(LPROC)
                     
                     for (rhost, rport, rpid, r_is_local) in locs
@@ -904,6 +913,12 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                             continue
                         end
                     end
+                    
+                    send_msg_now(controller, :join_complete)
+                    
+                elseif is(msg, :join_complete)
+                    put!(ntfy_join_complete, :join_complete)
+                    ntfy_join_complete = nothing    # so that it gets gc'ed
                 end
                 
             end # end of while
