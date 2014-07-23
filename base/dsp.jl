@@ -31,13 +31,12 @@ function filt!{T,S,N}(out::AbstractArray, b::Union(AbstractVector, Number), a::U
     bs = length(b)
     sz = max(as, bs)
     silen = sz - 1
-    xs = size(x,1)
     ncols = trailingsize(x,2)
 
     size(si, 1) != silen && error("si must have max(length(a),length(b))-1 rows")
     N > 1 && trailingsize(si,2) != ncols && error("si must either be a vector or have the same number of columns as x")
 
-    xs == 0 && return out
+    size(x,1) == 0 && return out
     sz == 1 && return scale!(out, x, b[1]/a[1]) # Simple scaling without memory
 
     # Filter coefficient normalization
@@ -55,28 +54,38 @@ function filt!{T,S,N}(out::AbstractArray, b::Union(AbstractVector, Number), a::U
         # Reset the filter state
         si = initial_si[:, N > 1 ? col : 1]
         if as > 1
-            @inbounds for i=1:xs
-                xi = x[i,col]
-                val = si[1] + b[1]*xi
-                for j=1:(silen-1)
-                    si[j] = si[j+1] + b[j+1]*xi - a[j+1]*val
-                end
-                si[silen] = b[silen+1]*xi - a[silen+1]*val
-                out[i,col] = val
-            end
+            _filt_iir!(out, b, a, x, si, col)
         else
-            @inbounds for i=1:xs
-                xi = x[i,col]
-                val = si[1] + b[1]*xi
-                for j=1:(silen-1)
-                    si[j] = si[j+1] + b[j+1]*xi
-                end
-                si[silen] = b[silen+1]*xi
-                out[i,col] = val
-            end
+            _filt_fir!(out, b, x, si, col)
         end
     end
     return out
+end
+
+function _filt_iir!(out, b, a, x, si, col)
+    silen = length(si)
+    @inbounds for i=1:size(x, 1)
+        xi = x[i,col]
+        val = si[1] + b[1]*xi
+        for j=1:(silen-1)
+            si[j] = si[j+1] + b[j+1]*xi - a[j+1]*val
+        end
+        si[silen] = b[silen+1]*xi - a[silen+1]*val
+        out[i,col] = val
+    end
+end
+
+function _filt_fir!(out, b, x, si, col)
+    silen = length(si)
+    @inbounds for i=1:size(x, 1)
+        xi = x[i,col]
+        val = si[1] + b[1]*xi
+        for j=1:(silen-1)
+            si[j] = si[j+1] + b[j+1]*xi
+        end
+        si[silen] = b[silen+1]*xi
+        out[i,col] = val
+    end
 end
 
 function deconv{T}(b::StridedVector{T}, a::StridedVector{T})
