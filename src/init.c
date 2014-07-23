@@ -143,11 +143,17 @@ void segv_handler(int sig, siginfo_t *info, void *context)
 {
     sigset_t sset;
 
-    if (in_jl_ || is_addr_on_stack(info->si_addr)) {
+    if (in_jl_ || is_addr_on_stack(info->si_addr)) {  // stack overflow
         sigemptyset(&sset);
         sigaddset(&sset, SIGSEGV);
         sigprocmask(SIG_UNBLOCK, &sset, NULL);
         jl_throw(jl_stackovf_exception);
+    }
+    else if (info->si_code == SEGV_ACCERR) {  // writing to read-only memory (e.g., mmap)
+        sigemptyset(&sset);
+        sigaddset(&sset, SIGSEGV);
+        sigprocmask(SIG_UNBLOCK, &sset, NULL);
+        jl_throw(jl_memory_exception);
     }
     else {
         uv_tty_reset_mode();
