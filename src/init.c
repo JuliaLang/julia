@@ -64,10 +64,14 @@ extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 #include <sched.h>   // for setting CPU affinity
 #endif
 
+DLLEXPORT void jlbacktrace();
+DLLEXPORT void gdbbacktrace();
+DLLEXPORT void gdblookup(ptrint_t ip);
+
 char *julia_home = NULL;
 jl_compileropts_t jl_compileropts = { NULL, // build_path
                                       0,    // code_coverage
-				      0,    // malloc_log
+                                      0,    // malloc_log
                                       JL_COMPILEROPT_CHECK_BOUNDS_DEFAULT,
                                       0     // int32_literals
 };
@@ -135,29 +139,48 @@ static int is_addr_on_stack(void *addr)
             (char*)addr < (char*)jl_current_task->stack+jl_current_task->ssize);
 #endif
 }
+
+#ifndef SIGINFO
+#define SIGINFO SIGUSR1
+#endif
+
+void sigdie_handler(int sig, siginfo_t *info, void *context) {
+    if (sig != SIGINFO) {
+        sigset_t sset;
+        uv_tty_reset_mode();
+        sigfillset(&sset);
+        sigprocmask(SIG_UNBLOCK, &sset, NULL);
+        signal(sig, SIG_DFL);
+    }
+    ios_printf(ios_stderr,"\nsignal (%d): %s\n", sig, strsignal(sig));
+#ifdef __APPLE__
+    gdbbacktrace();
+#else
+    bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, (ucontext_t*)context);
+    jlbacktrace();
+#endif
+    if (sig != SIGSEGV &&
+        sig != SIGBUS &&
+        sig != SIGILL &&
+        sig != SIGINFO) {
+        raise(sig);
+    }
+}
 #endif
 
 #if defined(__linux__) || defined(__FreeBSD__)
 extern int in_jl_;
 void segv_handler(int sig, siginfo_t *info, void *context)
 {
-    sigset_t sset;
-
-    if (in_jl_ || is_addr_on_stack(info->si_addr)) {
+    if (sig == SIGSEGV && (in_jl_ || is_addr_on_stack(info->si_addr))) {
+        sigset_t sset;
         sigemptyset(&sset);
         sigaddset(&sset, SIGSEGV);
         sigprocmask(SIG_UNBLOCK, &sset, NULL);
         jl_throw(jl_stackovf_exception);
     }
     else {
-        uv_tty_reset_mode();
-        sigfillset(&sset);
-        sigprocmask(SIG_UNBLOCK, &sset, NULL);
-        signal(sig, SIG_DFL);
-        if (sig != SIGSEGV &&
-            sig != SIGBUS &&
-            sig != SIGILL)
-            raise(sig);
+        sigdie_handler(sig, info, context);
     }
 }
 #endif
@@ -190,8 +213,6 @@ void jl_throw_in_ctx(jl_value_t *excpt, CONTEXT *ctxThread, int bt)
 }
 
 volatile HANDLE hMainThread = NULL;
-DLLEXPORT void jlbacktrace();
-DLLEXPORT void gdblookup(ptrint_t ip);
 
 static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {
@@ -251,7 +272,7 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
                 jl_throw_in_ctx(jl_stackovf_exception, ExceptionInfo->ContextRecord,0);
                 return EXCEPTION_CONTINUE_EXECUTION;
         }
-        ios_puts("Please submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\nException: ", ios_stderr);
+        ios_puts("\nPlease submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\nException: ", ios_stderr);
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
             case EXCEPTION_ACCESS_VIOLATION:
                 ios_puts("EXCEPTION_ACCESS_VIOLATION", ios_stderr); break;
@@ -656,6 +677,11 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
         return KERN_SUCCESS;
     }
     else {
+        ret = thread_get_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,&count);
+        HANDLE_MACH_ERROR("thread_get_state(3)",ret);
+        ios_printf(ios_stderr,"\nsignal (%d): %s\n", SIGSEGV, strsignal(SIGSEGV));
+        bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, (unw_context_t*)&state);
+        jlbacktrace();
         return KERN_INVALID_ARGUMENT;
     }
 }
@@ -847,13 +873,46 @@ void julia_init(char *imageFile)
     struct sigaction act;
     memset(&act, 0, sizeof(struct sigaction));
     sigemptyset(&act.sa_mask);
-    act.sa_sigaction = segv_handler;
+    act.sa_sigaction = sigdie_handler;
     act.sa_flags = SA_ONSTACK | SA_SIGINFO;
     if (sigaction(SIGSEGV, &act, NULL) < 0) {
         JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
         jl_exit(1);
     }
 #endif // defined(_OS_DARWIN_)
+    struct sigaction act_die;
+    memset(&act_die, 0, sizeof(struct sigaction));
+    sigemptyset(&act_die.sa_mask);
+    act_die.sa_sigaction = sigdie_handler;
+    act_die.sa_flags = SA_SIGINFO;
+    if (sigaction(SIGINFO, &act_die, NULL) < 0) {
+        JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
+        jl_exit(1);
+    }
+    if (sigaction(SIGBUS, &act_die, NULL) < 0) {
+        JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
+        jl_exit(1);
+    }
+    if (sigaction(SIGILL, &act_die, NULL) < 0) {
+        JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
+        jl_exit(1);
+    }
+    if (sigaction(SIGTERM, &act_die, NULL) < 0) {
+        JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
+        jl_exit(1);
+    }
+    if (sigaction(SIGABRT, &act_die, NULL) < 0) {
+        JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
+        jl_exit(1);
+    }
+    if (sigaction(SIGQUIT, &act_die, NULL) < 0) {
+        JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
+        jl_exit(1);
+    }
+    if (sigaction(SIGSYS, &act_die, NULL) < 0) {
+        JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
+        jl_exit(1);
+    }
 #else // defined(_OS_WINDOWS_)
     if (signal(SIGFPE, (void (__cdecl *)(int))fpe_handler) == SIG_ERR) {
         JL_PRINTF(JL_STDERR, "Couldn't set SIGFPE\n");
@@ -919,11 +978,11 @@ DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *
                 free(build_o);
             }
             else {
-                ios_printf(ios_stderr,"FATAL: failed to create string for .o build path");
+                ios_printf(ios_stderr,"\nFATAL: failed to create string for .o build path\n");
             }
         }
         else {
-            ios_printf(ios_stderr,"FATAL: failed to create string for .ji build path");
+            ios_printf(ios_stderr,"\nFATAL: failed to create string for .ji build path\n");
         }
     }
     p[sizeof(__stack_chk_guard)-1] = a;
