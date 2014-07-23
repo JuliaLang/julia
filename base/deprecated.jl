@@ -159,3 +159,12 @@ scale!{T<:Base.LinAlg.BlasReal}(X::Array{T}, s::Complex) = error("scale!: Cannot
 
 @deprecate which(f::Callable, args...) @which f(args...)
 @deprecate rmdir rm
+
+function readavailable(this::AsyncStream)
+    depwarn("readavailable() is discontinued. please choose from the alternative I/O functions, such as readall(), readbytes(), nb_available(), and !eof(), depending on your intended usage", :readavailable)
+    buf = this.buffer
+    @assert buf.seekable == false
+    wait_readnb(this,1)
+    takebuf_string(buf)
+end
+

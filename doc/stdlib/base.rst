@@ -1795,10 +1795,6 @@ I/O
 
    Create a PipeBuffer to operate on a data vector, optionally specifying a size beyond which the underlying Array may not be grown.
 
-.. function:: readavailable(stream)
-
-   Read all available data on the stream, blocking the task only if no data is available. 
-
 .. function:: stat(file)
 
    Returns a structure whose fields contain information about the file. The fields of the structure are:
