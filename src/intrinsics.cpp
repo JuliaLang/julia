@@ -392,6 +392,11 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     }
     else {
         llvmt = julia_type_to_llvm(bt);
+        if (llvmt == jl_pvalue_llvmt) {
+            // this happens if !jl_is_leaf_type(bt)
+            llvmt = NULL;
+            bt = NULL;
+        }
         if (nb == -1)
             nb = (bt==(jl_value_t*)jl_bool_type) ? 1 : jl_datatype_size(bt)*8;
     }
@@ -411,24 +416,30 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     if (vxt != llvmt) {
         if (vxt == T_void)
             return vx;
-        if (vxt->isPointerTy() && !llvmt->isPointerTy()) {
-            vx = builder.CreatePtrToInt(vx, llvmt);
-        }
-        else if (!vxt->isPointerTy() && llvmt->isPointerTy()) {
-            vx = builder.CreateIntToPtr(vx, llvmt);
-        }
-        else if (llvmt == T_int1) {
+        if (llvmt == T_int1) {
             vx = builder.CreateTrunc(vx, llvmt);
         }
         else if (vxt == T_int1 && llvmt == T_int8) {
             vx = builder.CreateZExt(vx, llvmt);
         }
         else {
-            if (vxt->getPrimitiveSizeInBits() != llvmt->getPrimitiveSizeInBits()) {
+            // getPrimitiveSizeInBits() == 0 for pointers
+            if (vxt->getPrimitiveSizeInBits() != llvmt->getPrimitiveSizeInBits() &&
+                !(vxt->isPointerTy() && llvmt->getPrimitiveSizeInBits() == sizeof(void*)*8) &&
+                !(llvmt->isPointerTy() && vxt->getPrimitiveSizeInBits() == sizeof(void*)*8)) {
                 emit_error("box: argument is of incorrect size", ctx);
                 return vx;
             }
-            vx = builder.CreateBitCast(vx, llvmt);
+            // PtrToInt and IntToPtr ignore size differences
+            if (vxt->isPointerTy() && !llvmt->isPointerTy()) {
+                vx = builder.CreatePtrToInt(vx, llvmt);
+            }
+            else if (!vxt->isPointerTy() && llvmt->isPointerTy()) {
+                vx = builder.CreateIntToPtr(vx, llvmt);
+            }
+            else {
+                vx = builder.CreateBitCast(vx, llvmt);
+            }
         }
     }
 
