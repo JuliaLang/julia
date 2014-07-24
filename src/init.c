@@ -144,7 +144,8 @@ static int is_addr_on_stack(void *addr)
 #define SIGINFO SIGUSR1
 #endif
 
-void sigdie_handler(int sig, siginfo_t *info, void *context) {
+void sigdie_handler(int sig, siginfo_t *info, void *context)
+{
     if (sig != SIGINFO) {
         sigset_t sset;
         uv_tty_reset_mode();
@@ -1043,25 +1044,16 @@ void jl_get_builtin_hooks(void)
     jl_floatingpoint_type = (jl_datatype_t*)core("FloatingPoint");
     jl_number_type = (jl_datatype_t*)core("Number");
 
-    jl_stackovf_exception =
-        jl_apply((jl_function_t*)core("StackOverflowError"), NULL, 0);
-    jl_diverror_exception =
-        jl_apply((jl_function_t*)core("DivideError"), NULL, 0);
-    jl_domain_exception =
-        jl_apply((jl_function_t*)core("DomainError"), NULL, 0);
-    jl_overflow_exception =
-        jl_apply((jl_function_t*)core("OverflowError"), NULL, 0);
-    jl_inexact_exception =
-        jl_apply((jl_function_t*)core("InexactError"), NULL, 0);
-    jl_undefref_exception =
-        jl_apply((jl_function_t*)core("UndefRefError"),NULL,0);
-    jl_undefvarerror_type = (jl_datatype_t*)core("UndefVarError");
-    jl_interrupt_exception =
-        jl_apply((jl_function_t*)core("InterruptException"),NULL,0);
-    jl_bounds_exception =
-        jl_apply((jl_function_t*)core("BoundsError"),NULL,0);
-    jl_memory_exception =
-        jl_apply((jl_function_t*)core("MemoryError"),NULL,0);
+    jl_stackovf_exception  = jl_new_struct((jl_datatype_t*)core("StackOverflowError"));
+    jl_diverror_exception  = jl_new_struct((jl_datatype_t*)core("DivideError"));
+    jl_domain_exception    = jl_new_struct((jl_datatype_t*)core("DomainError"));
+    jl_overflow_exception  = jl_new_struct((jl_datatype_t*)core("OverflowError"));
+    jl_inexact_exception   = jl_new_struct((jl_datatype_t*)core("InexactError"));
+    jl_undefref_exception  = jl_new_struct((jl_datatype_t*)core("UndefRefError"));
+    jl_undefvarerror_type  = (jl_datatype_t*)core("UndefVarError");
+    jl_interrupt_exception = jl_new_struct((jl_datatype_t*)core("InterruptException"));
+    jl_bounds_exception    = jl_new_struct((jl_datatype_t*)core("BoundsError"));
+    jl_memory_exception    = jl_new_struct((jl_datatype_t*)core("MemoryError"));
 
     jl_ascii_string_type = (jl_datatype_t*)core("ASCIIString");
     jl_utf8_string_type = (jl_datatype_t*)core("UTF8String");
