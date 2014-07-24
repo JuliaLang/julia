@@ -128,6 +128,7 @@
 #include "llvm/Support/MemoryObject.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetRegistry.h"
+#include "llvm/Support/PrettyStackTrace.h"
 #include "llvm/Support/Host.h"
 #include "llvm/Support/raw_ostream.h"
 #ifndef LLVM35
@@ -4406,6 +4407,9 @@ extern "C" void jl_init_codegen(void)
     cl::ParseEnvironmentOptions("Julia", "JULIA_LLVM_ARGS");
 #endif
     imaging_mode = jl_compileropts.build_path != NULL;
+
+    // this option disables LLVM's signal handlers
+    llvm::DisablePrettyStackTrace = true;
 
     InitializeNativeTarget();
     InitializeNativeTargetAsmPrinter();
