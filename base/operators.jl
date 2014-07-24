@@ -94,8 +94,8 @@ end
 .\(x::Number,y::Number) = y./x
 .*(x::Number,y::Number) = x*y
 .^(x::Number,y::Number) = x^y
-.+(x,y) = x+y
-.-(x,y) = x-y
+.+(x::Number,y::Number) = x+y
+.-(x::Number,y::Number) = x-y
 
 .==(x::Number,y::Number) = x == y
 .!=(x::Number,y::Number) = x != y
