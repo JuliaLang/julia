@@ -575,7 +575,7 @@ function get!{K,V}(h::Dict{K,V}, key0, default)
     return v
 end
 
-function get!{K,V}(default::Function, h::Dict{K,V}, key0)
+function get!{K,V}(default::Callable, h::Dict{K,V}, key0)
     key = convert(K,key0)
     if !isequal(key,key0)
         error(key0, " is not a valid key for type ", K)
@@ -615,22 +615,22 @@ function getindex{K,V}(h::Dict{K,V}, key)
     return (index<0) ? throw(KeyError(key)) : h.vals[index]::V
 end
 
-function get{K,V}(h::Dict{K,V}, key, deflt)
+function get{K,V}(h::Dict{K,V}, key, default)
     index = ht_keyindex(h, key)
-    return (index<0) ? deflt : h.vals[index]::V
+    return (index<0) ? default : h.vals[index]::V
 end
 
-function get{K,V}(deflt::Function, h::Dict{K,V}, key)
+function get{K,V}(default::Callable, h::Dict{K,V}, key)
     index = ht_keyindex(h, key)
-    return (index<0) ? deflt() : h.vals[index]::V
+    return (index<0) ? default() : h.vals[index]::V
 end
 
 haskey(h::Dict, key) = (ht_keyindex(h, key) >= 0)
 in{T<:Dict}(key, v::KeyIterator{T}) = (ht_keyindex(v.dict, key) >= 0)
 
-function getkey{K,V}(h::Dict{K,V}, key, deflt)
+function getkey{K,V}(h::Dict{K,V}, key, default)
     index = ht_keyindex(h, key)
-    return (index<0) ? deflt : h.keys[index]::K
+    return (index<0) ? default : h.keys[index]::K
 end
 
 function _pop!(h::Dict, index)
@@ -727,20 +727,20 @@ WeakKeyDict() = WeakKeyDict{Any,Any}()
 
 setindex!{K}(wkh::WeakKeyDict{K}, v, key) = add_weak_key(wkh.ht, convert(K,key), v)
 
-function getkey{K}(wkh::WeakKeyDict{K}, kk, deflt)
+function getkey{K}(wkh::WeakKeyDict{K}, kk, default)
     k = getkey(wkh.ht, kk, secret_table_token)
     if is(k, secret_table_token)
-        return deflt
+        return default
     end
     return k.value::K
 end
 
-get{K}(wkh::WeakKeyDict{K}, key, def) = get(wkh.ht, key, def)
-get{K}(def::Function, wkh::WeakKeyDict{K}, key) = get(def, wkh.ht, key)
-get!{K}(wkh::WeakKeyDict{K}, key, def) = get!(wkh.ht, key, def)
-get!{K}(def::Function, wkh::WeakKeyDict{K}, key) = get!(def, wkh.ht, key)
+get{K}(wkh::WeakKeyDict{K}, key, default) = get(wkh.ht, key, default)
+get{K}(default::Callable, wkh::WeakKeyDict{K}, key) = get(default, wkh.ht, key)
+get!{K}(wkh::WeakKeyDict{K}, key, default) = get!(wkh.ht, key, default)
+get!{K}(default::Callable, wkh::WeakKeyDict{K}, key) = get!(default, wkh.ht, key)
 pop!{K}(wkh::WeakKeyDict{K}, key) = pop!(wkh.ht, key)
-pop!{K}(wkh::WeakKeyDict{K}, key, def) = pop!(wkh.ht, key, def)
+pop!{K}(wkh::WeakKeyDict{K}, key, default) = pop!(wkh.ht, key, default)
 delete!{K}(wkh::WeakKeyDict{K}, key) = delete!(wkh.ht, key)
 empty!(wkh::WeakKeyDict)  = (empty!(wkh.ht); wkh)
 haskey{K}(wkh::WeakKeyDict{K}, key) = haskey(wkh.ht, key)
