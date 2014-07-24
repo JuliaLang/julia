@@ -4408,8 +4408,10 @@ extern "C" void jl_init_codegen(void)
 #endif
     imaging_mode = jl_compileropts.build_path != NULL;
 
+#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR <= 3
     // this option disables LLVM's signal handlers
     llvm::DisablePrettyStackTrace = true;
+#endif
 
     InitializeNativeTarget();
     InitializeNativeTargetAsmPrinter();
