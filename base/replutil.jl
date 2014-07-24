@@ -134,12 +134,12 @@ function showerror(io::IO, e::MethodError)
     # Check for row vectors used where a column vector is intended.
     vec_args = {}
     for arg in e.args
-        push!(vec_args, typeof(arg) <: AbstractArray && size(arg,2) == 1 ? vec(arg) : arg)
+        push!(vec_args, isa(arg,AbstractArray) && ndims(arg)==2 && size(arg,1)==1 ? vec(arg) : arg)
     end
-    if applicable(e.f, vec_args)
+    if applicable(e.f, vec_args...)
         print(io, "\n\nYou might have used a 2d row vector where a 1d column vector was required.")
-        print(io, "\nNote the difference between 1d column vector [1,2,3] and 2d row vector [1 2 3]")
-        print(io, "\nYou can convert to a column vector with the vec() function")
+        print(io, "\nNote the difference between 1d column vector [1,2,3] and 2d row vector [1 2 3].")
+        print(io, "\nYou can convert to a column vector with the vec() function.")
     end
 end
 
