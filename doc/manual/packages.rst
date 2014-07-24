@@ -445,7 +445,7 @@ The ``~/.julia/v0.3/REQUIRE`` file and ``REQUIRE`` files inside of packages use 
 Here's how these files are parsed and interpreted.
 Everything after a ``#`` mark is stripped from each line as a comment.
 If nothing but whitespace is left, the line is ignored;
-if there are non-whitespace characters remaining, the line is a requirement and the is split on whitespace into words.
+if there are non-whitespace characters remaining, the line is a requirement and is split on whitespace into words.
 The simplest possible requirement is just the name of a package name on a line by itself::
 
     Distributions
