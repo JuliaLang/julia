@@ -210,11 +210,12 @@ LLVM_LIBCXX_TAR=
 endif
 endif
 
+LLVM_CXXFLAGS =
 LLVM_TARGET_FLAGS= --enable-targets=host
 LLVM_FLAGS += --disable-profiling --enable-shared --enable-static $(LLVM_TARGET_FLAGS) --disable-bindings --disable-docs
 LLVM_MFLAGS =
 ifeq ($(LLVM_ASSERTIONS), 1)
-LLVM_FLAGS += --enable-assertions 
+LLVM_FLAGS += --enable-assertions
 ifeq ($(OS), WINNT)
 LLVM_FLAGS += --disable-embed-stdcxx
 endif
@@ -246,21 +247,29 @@ ifeq ($(BUILD_LLDB),1)
 ifeq ($(USECLANG),1)
 LLVM_FLAGS += --enable-cxx11
 else
-LLVM_MFLAGS += CXXFLAGS=-std=c++0x
+LLVM_CXXFLAGS += -std=c++0x
+endif
+ifeq ($(LLDB_DISABLE_PYTHON),1)
+LLVM_CXXFLAGS += -DLLDB_DISABLE_PYTHON
 endif
 endif
 
 ifeq ($(ARCH), ppc64)
-  LLVM_FLAGS += CXXFLAGS=-mminimal-toc
-  LLVM_MFLAGS += CXXFLAGS=-mminimal-toc
+LLVM_CXXFLAGS += -mminimal-toc
 endif
 
 
 ifeq ($(LLVM_SANITIZE),1)
-LLVM_CC = CXXFLAGS="-fsanitize=address" CFLAGS="-fsanitize=address" LDFLAGS="-fsanitize=address"
+LLVM_CC = CFLAGS="-fsanitize=address" LDFLAGS="-fsanitize=address"
+LLVM_CXXFLAGS += -fsanitize=address
 LLVM_MFLAGS += TOOL_NO_EXPORTS= HAVE_LINK_VERSION_SCRIPT=0
 else
 LLVM_CC =
+endif
+
+ifneq ($(LLVM_CXXFLAGS),)
+LLVM_FLAGS += CXXFLAGS="$(LLVM_CXXFLAGS)"
+LLVM_MFLAGS += CXXFLAGS="$(LLVM_CXXFLAGS)"
 endif
 
 ifneq ($(LLVM_CLANG_TAR),)
