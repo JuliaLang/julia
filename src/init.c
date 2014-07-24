@@ -1021,7 +1021,7 @@ static jl_value_t *basemod(char *name)
 }
 
 // fetch references to things defined in boot.jl
-void jl_get_builtin_hooks_0(void)
+void jl_get_builtin_hooks(void)
 {
     jl_nothing = core("nothing");
     jl_root_task->tls = jl_nothing;
@@ -1043,14 +1043,6 @@ void jl_get_builtin_hooks_0(void)
     jl_floatingpoint_type = (jl_datatype_t*)core("FloatingPoint");
     jl_number_type = (jl_datatype_t*)core("Number");
 
-    jl_ascii_string_type = (jl_datatype_t*)core("ASCIIString");
-    jl_utf8_string_type = (jl_datatype_t*)core("UTF8String");
-    jl_symbolnode_type = (jl_datatype_t*)core("SymbolNode");
-    jl_getfieldnode_type = (jl_datatype_t*)core("GetfieldNode");
-}
-
-void jl_get_builtin_hooks_1(void)
-{
     jl_stackovf_exception =
         jl_apply((jl_function_t*)core("StackOverflowError"), NULL, 0);
     jl_diverror_exception =
@@ -1071,15 +1063,14 @@ void jl_get_builtin_hooks_1(void)
     jl_memory_exception =
         jl_apply((jl_function_t*)core("MemoryError"),NULL,0);
 
+    jl_ascii_string_type = (jl_datatype_t*)core("ASCIIString");
+    jl_utf8_string_type = (jl_datatype_t*)core("UTF8String");
+    jl_symbolnode_type = (jl_datatype_t*)core("SymbolNode");
+    jl_getfieldnode_type = (jl_datatype_t*)core("GetfieldNode");
+
     jl_array_uint8_type = jl_apply_type((jl_value_t*)jl_array_type,
                                         jl_tuple2(jl_uint8_type,
                                                   jl_box_long(1)));
-}
-
-void jl_get_builtin_hooks(void)
-{
-    jl_get_builtin_hooks_0();
-    jl_get_builtin_hooks_1();
 }
 
 DLLEXPORT void jl_get_system_hooks(void)
