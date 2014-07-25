@@ -813,6 +813,9 @@ endif
 ifeq ($(OPENBLAS_NO_AVX), 1)
 OPENBLAS_BUILD_OPTS += NO_AVX=1
 endif
+ifeq ($(OPENBLAS_NO_AVX2), 1)
+OPENBLAS_BUILD_OPTS += NO_AVX2=1
+endif
 
 openblas-$(OPENBLAS_VER).tar.gz:
 	$(JLDOWNLOAD) $@ https://github.com/xianyi/OpenBLAS/tarball/$(OPENBLAS_VER) 
