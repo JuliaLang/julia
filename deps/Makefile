@@ -811,9 +811,9 @@ endif
 
 # Allow disabling AVX for older binutils
 ifeq ($(OPENBLAS_NO_AVX), 1)
-OPENBLAS_BUILD_OPTS += NO_AVX=1
+OPENBLAS_BUILD_OPTS += NO_AVX=1 NO_AVX2=1
 endif
-ifeq ($(OPENBLAS_NO_AVX2), 1)
+else ifeq ($(OPENBLAS_NO_AVX2), 1)
 OPENBLAS_BUILD_OPTS += NO_AVX2=1
 endif
 
