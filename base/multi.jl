@@ -1345,7 +1345,6 @@ function pmap(f, lsts...; err_retry=true, err_stop=false)
             for idx in 1:len; states[idx] = nxts[idx][2]; end
             nxtvals = [x[1] for x in nxts]
             return (getnextidx(), nxtvals)
-            
         elseif !isempty(retryqueue)
             return shift!(retryqueue)
         else    
