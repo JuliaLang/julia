@@ -166,7 +166,7 @@ cell(dims::(Integer...)) = Array(Any, convert((Int...), dims))
 
 for (fname, felt) in ((:zeros,:zero), (:ones,:one))
     @eval begin
-        ($fname){T}(::Type{T}, dims...)  = fill!(Array(T, dims...), ($felt)(T))
+        ($fname)(T::Type, dims...)       = fill!(Array(T, dims...), ($felt)(T))
         ($fname)(dims...)                = fill!(Array(Float64, dims...), ($felt)(Float64))
         ($fname){T}(A::AbstractArray{T}) = fill!(similar(A), ($felt)(T))
     end
