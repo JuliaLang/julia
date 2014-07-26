@@ -396,6 +396,7 @@ function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::
         else
             if isa(stream,TTY)
                 stream.status = StatusEOF
+                notify(stream.readnotify)
                 notify(stream.closenotify)
             else
                 close(stream)
