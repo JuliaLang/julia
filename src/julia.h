@@ -247,12 +247,6 @@ typedef struct {
     unsigned imported:1;
 } jl_binding_t;
 
-typedef struct _jl_callback_t {
-    JL_DATA_TYPE
-    jl_function_t *function;
-    jl_tuple_t *types;
-} jl_callback_t;
-
 typedef struct _jl_module_t {
     JL_DATA_TYPE
     jl_sym_t *name;
