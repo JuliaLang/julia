@@ -53,6 +53,7 @@ mkpath(path::String, mode::Signed) = error("mode must be an unsigned integer; tr
 
 function rm(path::String; recursive::Bool=false)
     if islink(path) || !isdir(path)
+        @windows_only if !iswritable(path); chmod(path, 0o777); end
         FS.unlink(path)
     else
         if recursive
