@@ -19,7 +19,11 @@ not meant to be run, but is shown for illustrative purposes::
     module MyModule
     using Lib
     
-    import BigLib: bar, baz
+    using BigLib: thing1, thing2
+
+    import Base.show
+
+    importall OtherLib
     
     export MyType, foo
     
@@ -30,7 +34,6 @@ not meant to be run, but is shown for illustrative purposes::
     bar(x) = 2x
     foo(a::MyType) = bar(a.x) + 1
     
-    import Base.show
     show(io, a::MyType) = print(io, "MyType $(a.x)")
     end
 
@@ -45,36 +48,31 @@ importing into other modules.  Function ``bar`` is private to
 The statement ``using Lib`` means that a module called ``Lib`` will be
 available for resolving names as needed. When a global variable is
 encountered that has no definition in the current module, the system
-will search for it in ``Lib`` and import it if it is found there.
+will search for it among variables exported by ``Lib`` and import it if
+it is found there.
 This means that all uses of that global within the current module will
 resolve to the definition of that variable in ``Lib``.
 
-The statement ``import BigLib: bar, baz`` means that the names `bar` and `baz`
-from the `BigLib` module will be available as needed (but no other names).
+The statement ``using BigLib: thing1, thing2`` is a syntactic shortcut for
+``using BigLib.thing1, BigLib.thing2``.
 
-Once a variable is imported this way (or, equivalently, with the ``import``
-keyword), a module may not create its own variable with the same name.
+The ``import`` keyword supports all the same syntax as ``using``, but only
+operates on a single name at a time. It does not add modules to be searched
+the way ``using`` does. ``import`` also differs from ``using`` in that
+functions must be imported using ``import`` to be extended with new methods.
+
+In ``MyModule`` above we wanted to add a method to the standard ``show``
+function, so we had to write ``import Base.show``.
+Functions whose names are only visible via ``using`` cannot be extended.
+
+The keyword ``importall`` explicitly imports all names exported by the
+specified module, as if ``import`` were individually used on all of them.
+
+Once a variable is made visible via ``using`` or ``import``, a module may
+not create its own variable with the same name.
 Imported variables are read-only; assigning to a global variable always
 affects a variable owned by the current module, or else raises an error.
 
-Method definitions are a bit special: they do not search modules named in
-``using`` statements. The definition ``function foo()`` creates a new
-``foo`` in the current module, unless ``foo`` has already been imported from
-elsewhere. For example, in ``MyModule`` above we wanted to add a method
-to the standard ``show`` function, so we had to write ``import Base.show``.
-
-Module paths
-------------
-
-The Julia variable LOAD_PATH contains the directories Julia searches for 
-modules. It can be extended using the ``push!`` method::
-
-    push!(LOAD_PATH, "/Path/To/My/Module/")
-
-Putting this statement to the ``~\.juliarc.jl`` file will extend LOAD_PATH 
-on every Julia startup. Alternatively, the Julia module load path can be
-extended by defining the environoment variable JULIA_LOAD_PATH and putting
-directories to it.
 
 Modules and files
 -----------------
@@ -150,7 +148,7 @@ keyword ``baremodule`` instead. In terms of ``baremodule``, a standard
     end
 
 
-Relative and Absolute Module Paths
+Relative and absolute module paths
 ----------------------------------
 
 Given the statement ``using Foo``, the system looks for ``Foo``
@@ -182,6 +180,19 @@ done by starting the ``using`` path with a period. Adding more leading
 periods moves up additional levels in the module hierarchy. For example
 ``using ..Utils`` would look for ``Utils`` in ``Parent``'s enclosing
 module rather than in ``Parent`` itself.
+
+
+Module file paths
+-----------------
+
+The global variable LOAD_PATH contains the directories Julia searches for
+modules when calling ``require``. It can be extended using ``push!``::
+
+    push!(LOAD_PATH, "/Path/To/My/Module/")
+
+Putting this statement in the file ``~/.juliarc.jl`` will extend LOAD_PATH
+on every Julia startup. Alternatively, the module load path can be
+extended by defining the environment variable JULIA_LOAD_PATH.
 
 
 Miscellaneous details
