@@ -80,7 +80,7 @@ endif
 endif
 
 $(EXENAME): $(OBJS) $(LIBFILES) $(LIBTARGET).a flmain.o
-	@$(call PRINT_LINK, $(CCLD) $(SHIPFLAGS) $(OBJS) flmain.o $(LDFLAGS) -o $(EXENAME) $(LIBTARGET).a $(LIBS) $(OSLIBS))
+	@$(call PRINT_LINK, $(CCLD) $(SHIPFLAGS) $(OBJS) flmain.o -o $(EXENAME) $(LIBTARGET).a $(LIBS) $(OSLIBS))
 ifneq ($(USEMSVC), 1)
 	$(call spawn,./$(EXENAME)) unittest.lsp
 endif
