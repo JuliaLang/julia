@@ -4377,7 +4377,11 @@ static void init_julia_llvm_env(Module *m)
 #endif
     FPM->add(createIndVarSimplifyPass());       // Canonicalize indvars
     FPM->add(createLoopDeletionPass());         // Delete dead loops
+#if LLVM35
+    FPM->add(createSimpleLoopUnrollPass());     // Unroll small loops
+#else
     FPM->add(createLoopUnrollPass());           // Unroll small loops
+#endif
     //FPM->add(createLoopStrengthReducePass());   // (jwb added)
     
 #if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3 && !defined(INSTCOMBINE_BUG)
@@ -4473,11 +4477,11 @@ extern "C" void jl_init_codegen(void)
 #endif
 #ifdef USE_MCJIT
     jl_mcjmm = new SectionMemoryManager();
-    std::vector<std::string> attrvec;
+    SmallVector<std::string, 4> MAttrs;
 #else
     // Temporarily disable Haswell BMI2 features due to LLVM bug.
     const char *mattr[] = {"-bmi2", "-avx2"};
-    std::vector<std::string> attrvec (mattr, mattr+2);
+    SmallVector<std::string, 4> MAttrs(mattr, mattr+2);
 #endif
     EngineBuilder eb = EngineBuilder(engine_module)
         .setEngineKind(EngineKind::JIT)
@@ -4485,24 +4489,22 @@ extern "C" void jl_init_codegen(void)
         .setJITMemoryManager(new JITMemoryManagerWin())
 #endif
         .setTargetOptions(options)
-        .setMCPU(strcmp(jl_cpu_string,"native") ? jl_cpu_string : "")
 #ifdef USE_MCJIT
         .setUseMCJIT(true)
-        .setMAttrs(attrvec);
-#else
-        .setMAttrs(attrvec);
 #endif
+    ;
     Triple TheTriple(sys::getProcessTriple());
 #if defined(_OS_WINDOWS_) && defined(USE_MCJIT)
     TheTriple.setObjectFormat(Triple::ELF);
 #endif
-    SmallVector<std::string, 4> MAttrs;
-    MAttrs.clear();
-    MAttrs.append(attrvec.begin(), attrvec.end());
     jl_TargetMachine = eb.selectTarget(
             TheTriple,
             "",
+#if LLVM35
+            strcmp(jl_cpu_string,"native") ? jl_cpu_string : sys::getHostCPUName().data(),
+#else
             strcmp(jl_cpu_string,"native") ? jl_cpu_string : "",
+#endif
             MAttrs);
     assert(jl_TargetMachine);
     jl_ExecutionEngine = eb.create(jl_TargetMachine);
