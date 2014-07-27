@@ -139,6 +139,8 @@ function help(io::IO, fname::String, obj=0)
     end
 end
 
+apropos() = help()
+
 apropos(s::String) = apropos(STDOUT, s)
 function apropos(io::IO, txt::String)
     init_help()
