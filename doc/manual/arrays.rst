@@ -336,7 +336,7 @@ elementwise::
     airy airyai airyaiprime airybi airybiprime airyprime
     acos acosh asin asinh atan atan2 atanh
     acsc acsch asec asech acot acoth
-    cos  cosh  sin  sinh  tan  tanh  sinc  cosc
+    cos  cospi cosh  sin  sinpi sinh  tan  tanh  sinc  cosc
     csc  csch  sec  sech  cot  coth
     acosd asind atand asecd acscd acotd
     cosd  sind  tand  secd  cscd  cotd
