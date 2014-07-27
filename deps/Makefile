@@ -160,6 +160,8 @@ LLVM_GIT_URL_LLVM ?= $(LLVM_GIT_URL_BASE)/llvm.git
 LLVM_GIT_URL_CLANG ?= $(LLVM_GIT_URL_BASE)/clang.git
 LLVM_GIT_URL_COMPILER_RT ?= $(LLVM_GIT_URL_BASE)/compiler-rt.git
 LLVM_GIT_URL_LLDB ?= $(LLVM_GIT_URL_BASE)/lldb.git
+LLVM_GIT_URL_LIBCXX ?= $(LLVM_GIT_URL_BASE)/libcxx.git
+LLVM_GIT_URL_LIBCXXABI ?= $(LLVM_GIT_URL_BASE)/libcxxabi.git
 
 ifeq ($(BUILD_LLDB), 1)
 BUILD_LLVM_CLANG = 1
@@ -197,11 +199,9 @@ LLVM_COMPILER_RT_TAR=
 else ifeq ($(LLVM_VER), 3.3)
 LLVM_CLANG_TAR=cfe-$(LLVM_VER).src.tar.gz
 LLVM_COMPILER_RT_TAR=compiler-rt-$(LLVM_VER).src.tar.gz
-LLVM_LIBCXX_TAR=libcxx-$(LLVM_VER).src.tar.gz
 else
 LLVM_CLANG_TAR=clang-$(LLVM_VER).src.tar.gz
 LLVM_COMPILER_RT_TAR=compiler-rt-$(LLVM_VER).src.tar.gz
-LLVM_LIBCXX_TAR=libcxx-$(LLVM_VER).src.tar.gz
 endif
 else
 LLVM_CLANG_TAR=
@@ -210,7 +210,15 @@ LLVM_LIBCXX_TAR=
 endif
 endif
 
-LLVM_CXXFLAGS =
+ifeq ($(BUILD_CUSTOM_LIBCXX),1)
+ifneq ($(LLVM_VER),svn)
+LLVM_LIBCXX_TAR=libcxx-$(LLVM_VER).src.tar.gz
+endif
+endif
+
+LLVM_CXXFLAGS = $(CXXFLAGS)
+LLVM_CPPFLAGS =
+LLVM_LDFLAGS = $(LDFLAGS)
 LLVM_TARGET_FLAGS= --enable-targets=host
 LLVM_FLAGS += --disable-profiling --enable-shared --enable-static $(LLVM_TARGET_FLAGS) --disable-bindings --disable-docs
 LLVM_MFLAGS =
@@ -232,7 +240,7 @@ LLVM_FLAGS += --enable-libcpp
 endif
 ifeq ($(OS), WINNT)
 LLVM_FLAGS += --with-extra-ld-options="-Wl,--stack,8388608" LDFLAGS="" --disable-shared
-LLVM_MFLAGS += CPPFLAGS="-D__USING_SJLJ_EXCEPTIONS__ -D__CRT__NO_INLINE"
+LLVM_CPPFLAGS += -D__USING_SJLJ_EXCEPTIONS__ -D__CRT__NO_INLINE
 endif
 ifeq ($(USE_INTEL_JITEVENTS), 1)
 LLVM_FLAGS += --with-intel-jitevents
@@ -260,7 +268,8 @@ endif
 
 
 ifeq ($(LLVM_SANITIZE),1)
-LLVM_CC = CFLAGS="-fsanitize=address" LDFLAGS="-fsanitize=address"
+LLVM_CC = CFLAGS="-fsanitize=address"
+LLVM_LDFLAGS += -fsanitize=address
 LLVM_CXXFLAGS += -fsanitize=address
 LLVM_MFLAGS += TOOL_NO_EXPORTS= HAVE_LINK_VERSION_SCRIPT=0
 else
@@ -272,6 +281,13 @@ LLVM_FLAGS += CXXFLAGS="$(LLVM_CXXFLAGS)"
 LLVM_MFLAGS += CXXFLAGS="$(LLVM_CXXFLAGS)"
 endif
 LLVM_MFLAGS += $(LLVM_CC)
+
+ifeq ($(BUILD_CUSTOM_LIBCXX),1)
+LLVM_LDFLAGS += -Wl,-R$(build_libdir)
+endif
+
+LLVM_FLAGS += CPPFLAGS="$(CPPFLAGS) $(LLVM_CPPFLAGS)" LDFLAGS="$(LLVM_LDFLAGS)"
+LLVM_MFLAGS += CPPFLAGS="$(CPPFLAGS) $(LLVM_CPPFLAGS)" LDFLAGS="$(LLVM_LDFLAGS)"
 
 ifneq ($(LLVM_CLANG_TAR),)
 $(LLVM_CLANG_TAR):
@@ -308,14 +324,47 @@ else
   LLVM_FLAGS += --with-python="$(shell ./find_python_for_llvm)"
 endif
 
-llvm-$(LLVM_VER)/configure: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR)
+ifeq ($(BUILD_CUSTOM_LIBCXX),1)
+llvm-$(LLVM_VER)/projects/libcxx: $(LLVM_LIBCXX_TAR)
+	([ ! -d llvm-$(LLVM_VER)/projects/libcxx ] && \
+	git clone $(LLVM_GIT_URL_LIBCXX) llvm-$(LLVM_VER)/projects/libcxx  ) || \
+	(cd llvm-$(LLVM_VER)/projects/libcxx  && \
+	git pull --ff-only)
+llvm-$(LLVM_VER)/projects/libcxxabi: $(LLVM_LIBCXXABI_TAR)
+	([ ! -d llvm-$(LLVM_VER)/projects/libcxxabi ] && \
+	git clone $(LLVM_GIT_URL_LIBCXXABI) llvm-$(LLVM_VER)/projects/libcxxabi  ) || \
+	(cd llvm-$(LLVM_VER)/projects/libcxxabi  && \
+	git pull --ff-only)
+libcxx-build:
+	mkdir -p libcxx-build
+libcxx-build/Makefile: llvm-$(LLVM_VER)/projects/libcxx llvm-$(LLVM_VER)/projects/libcxxabi libcxx-build
+	cd libcxx-build && \
+		cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS="../llvm-$(LLVM_VER)/projects/libcxxabi/include" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(build_prefix) ../llvm-$(LLVM_VER)/projects/libcxx -DCMAKE_C_COMPILER="$(CC)" -DCMAKE_CXX_COMPILER="$(CXX)"  -DCMAKE_SHARED_LINKER_FLAGS="-L$(build_libdir)"
+$(build_libdir)/libc++abi.so: llvm-$(LLVM_VER)/projects/libcxxabi
+	cd llvm-$(LLVM_VER)/projects/libcxxabi/lib && \
+	OPTIONS=-I../../libcxx/include ./buildit
+	cp llvm-$(LLVM_VER)/projects/libcxxabi/lib/libc++abi.so.1.0 $(build_libdir)
+	ln -s $(build_libdir)/libc++abi.so.1.0 $(build_libdir)/libc++abi.so
+	ln -s $(build_libdir)/libc++abi.so.1.0 $(build_libdir)/libc++abi.so.1
+install-libcxxabi: $(build_libdir)/libc++abi.so
+libcxx-build/lib/libc++.so: install-libcxxabi
+	cd libcxx-build && $(MAKE)
+$(build_libdir)/libc++.so: libcxx-build/lib/libc++.so
+	cd libcxx-build && $(MAKE) install
+install-libcxx: $(build_libdir)/libc++.so
+endif
+
+ifeq ($(BUILD_CUSTOM_LIBCXX),1)
+	LIBCXX_DEPENDENCY = install-libcxx
+endif
+
+llvm-$(LLVM_VER)/configure: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LIBCXX_DEPENDENCY)
 ifneq ($(LLVM_CLANG_TAR),)
 	$(JLCHECKSUM) $(LLVM_CLANG_TAR)
 endif
 ifneq ($(LLVM_COMPILER_RT_TAR),)
 	$(JLCHECKSUM) $(LLVM_COMPILER_RT_TAR)
 endif
-
 ifneq ($(LLVM_LIBCXX_TAR),)
 	$(JLCHECKSUM) $(LLVM_LIBCXX_TAR)
 endif
@@ -345,19 +394,10 @@ ifeq ($(BUILD_LLVM_CLANG),1)
 	([ ! -d llvm-$(LLVM_VER)/tools/clang ] && \
 		git clone $(LLVM_GIT_URL_CLANG) llvm-$(LLVM_VER)/tools/clang  ) || \
 		(cd llvm-$(LLVM_VER)/tools/clang  && \
-		git pull --ff-only)	
+		git pull --ff-only)
 endif
 endif
-ifneq ($(LLVM_VER),svn)
-ifneq ($(LLVM_COMPILER_RT_TAR),)
-	mkdir -p llvm-$(LLVM_VER)/projects/compiler-rt && \
-	$(TAR) -C llvm-$(LLVM_VER)/projects/compiler-rt --strip-components 1 -xf $(LLVM_COMPILER_RT_TAR)
-endif
-ifneq ($(LLVM_LIBCXX_TAR),)
-	mkdir -p llvm-$(LLVM_VER)/projects/libcxx && \
-	$(TAR) -C llvm-$(LLVM_VER)/projects/libcxx --strip-components 1 -xf $(LLVM_LIBCXX_TAR)
-endif
-else
+ifeq ($(LLVM_VER),svn)
 ifeq ($(BUILD_LLVM_CLANG),1)
 	([ ! -d llvm-$(LLVM_VER)/tools/clang ] && \
 		git clone $(LLVM_GIT_URL_CLANG) llvm-$(LLVM_VER)/tools/clang  ) || \
