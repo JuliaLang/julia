@@ -101,8 +101,8 @@ run-julia:
 run:
 	@$(call spawn,$(cmd))
 
-$(build_bindir)/stringpatch: $(build_bindir) contrib/stringpatch.c
-	@$(call PRINT_CC, $(CC) -o $(build_bindir)/stringpatch contrib/stringpatch.c)
+$(build_bindir)/stringreplace: $(build_bindir) contrib/stringreplace.c
+	@$(call PRINT_CC, $(CC) -o $(build_bindir)/stringreplace contrib/stringreplace.c)
 
 
 # public libraries, that are installed in $(prefix)/lib
@@ -178,7 +178,7 @@ $(eval $(call std_dll,ssp-0))
 endif
 
 prefix ?= $(abspath julia-$(JULIA_COMMIT))
-install: $(build_bindir)/stringpatch
+install: $(build_bindir)/stringreplace
 	@$(MAKE) $(QUIET_MAKE) release
 	@$(MAKE) $(QUIET_MAKE) debug
 	@for subdir in $(bindir) $(libexecdir) $(datarootdir)/julia/site/$(VERSDIR) $(datarootdir)/man/man1 $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir); do \
@@ -236,7 +236,7 @@ endif
 
 	# Overwrite JL_SYSTEM_IMAGE_PATH in julia binaries:
 	for julia in $(DESTDIR)$(bindir)/julia* ; do \
-		$(build_bindir)/stringpatch $$(strings -t x - $$julia | grep "sys.ji$$" | awk '{print $$1;}' ) "$(private_libdir_rel)/sys.ji" 256 $(call cygpath_w,$$julia); \
+		$(build_bindir)/stringreplace $$(strings -t x - $$julia | grep "sys.ji$$" | awk '{print $$1;}' ) "$(private_libdir_rel)/sys.ji" 256 $(call cygpath_w,$$julia); \
 	done
 
 	mkdir -p $(DESTDIR)$(sysconfdir)
@@ -323,7 +323,7 @@ clean: | $(CLEAN_TARGETS)
 	done
 	@rm -f julia
 	@rm -f *~ *# *.tar.gz
-	@rm -f $(build_bindir)/stringpatch source-dist.tmp source-dist.tmp1
+	@rm -f $(build_bindir)/stringreplace source-dist.tmp source-dist.tmp1
 	@rm -fr $(build_private_libdir)
 # Temporarily add this line to the Makefile to remove extras
 	@rm -fr $(build_datarootdir)/julia/extras
