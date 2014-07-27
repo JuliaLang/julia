@@ -352,10 +352,13 @@ libcxx-build/lib/libc++.so: install-libcxxabi
 $(build_libdir)/libc++.so: libcxx-build/lib/libc++.so
 	cd libcxx-build && $(MAKE) install
 install-libcxx: $(build_libdir)/libc++.so
+get-libcxx: llvm-$(LLVM_VER)/projects/libcxx
+get-libcxxabi: llvm-$(LLVM_VER)/projects/libcxxabi
 endif
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
-	LIBCXX_DEPENDENCY = install-libcxx
+LIBCXX_DEPENDENCY = install-libcxx
+LIBCXX_GET_DEPENDENCY = get-libcxx get-libcxxabi
 endif
 
 llvm-$(LLVM_VER)/configure: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LIBCXX_DEPENDENCY)
@@ -474,7 +477,11 @@ clean-llvm:
 distclean-llvm:
 	-rm -rf llvm-$(LLVM_VER).tar.gz llvm-$(LLVM_VER).src.tar.gz clang-$(LLVM_VER).src.tar.gz clang-$(LLVM_VER).tar.gz libcxx-$(LLVM_VER).src.tar.gz compiler-rt-$(LLVM_VER).src.tar.gz llvm-$(LLVM_VER)
 
+ifneq ($(LLVM_VER),svn)
 get-llvm: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR)
+else
+get-llvm: llvm-$(LLVM_VER)/configure $(LIBCXX_GET_DEPENDENCY)
+endif
 configure-llvm: llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/config.status
 compile-llvm: $(LLVM_OBJ_SOURCE)
 check-llvm: llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/checked
