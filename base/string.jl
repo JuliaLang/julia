@@ -631,6 +631,10 @@ endof(s::SubString) = s.endof
 
 isvalid{T<:DirectIndexString}(s::SubString{T}, i::Integer) = (start(s) <= i <= endof(s))
 
+function isvalid(s::SubString{UTF8String}, i::Integer) 
+  return (1 <= i <= endof(s)) &&  is_utf8_start(s.string.data[s.offset+i])
+end
+
 ind2chr{T<:DirectIndexString}(s::SubString{T}, i::Integer) = begin checkbounds(s,i); i end
 chr2ind{T<:DirectIndexString}(s::SubString{T}, i::Integer) = begin checkbounds(s,i); i end
 
