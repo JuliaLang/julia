@@ -78,24 +78,24 @@ To load a module, two main keywords can be used: ``using`` and ``import``. To un
     
     end
 
-In this module we export the ``x`` and ``y`` functions (with the keyword ``export``), and also have the non-exported function ``p``. There are several different ways to load the Module and it's inner functions into the current workspace:
+In this module we export the ``x`` and ``y`` functions (with the keyword ``export``), and also have the non-exported function ``p``. There are several different ways to load the Module and its inner functions into the current workspace:
 
 +------------------------------------+----------------------------------------------------------------------------------------------+------------------------------------------------------------------------+
 |Import Command                      | What is brought into scope                                                                   | Available for method extension                                         |
 +====================================+==============================================================================================+========================================================================+
 | ``using MyModule``                 | All ``export`` ed names (``x`` and ``y``), ``MyModule.x``, ``MyModule.y`` and ``MyModule.p`` | ``MyModule.x``, ``MyModule.y`` and ``MyModule.p``                      |
 +------------------------------------+----------------------------------------------------------------------------------------------+------------------------------------------------------------------------+
-| ``using MyModule.x, MyModule.p``   | ``x``, ``p``, ``MyModule.x``, ``MyModule.y`` and ``MyModule.p``                              | ``MyModule.x``, ``MyModule.y`` and ``MyModule.p``                      |
+| ``using MyModule.x, MyModule.p``   | ``x``, ``p``,                                                                                |                                                                        |
 +------------------------------------+----------------------------------------------------------------------------------------------+------------------------------------------------------------------------+
-| ``using MyModule: x, p``           | ``x``, ``p``, ``MyModule.x``, ``MyModule.y`` and ``MyModule.p``                              | ``MyModule.x``, ``MyModule.y`` and ``MyModule.p``                      |
+| ``using MyModule: x, p``           | ``x``, ``p``                                                                                 |                                                                        |
 +------------------------------------+----------------------------------------------------------------------------------------------+------------------------------------------------------------------------+
 | ``import MyModule``                | ``MyModule.x``, ``MyModule.y`` and ``MyModule.p``                                            | ``MyModule.x``, ``MyModule.y`` and ``MyModule.p``                      |
 +------------------------------------+----------------------------------------------------------------------------------------------+------------------------------------------------------------------------+
-| ``import MyModule.x, MyModule.p``  | ``x``, ``p``, ``MyModule.x``, ``MyModule.y`` and ``MyModule.p``                              | ``x``, ``p``, ``MyModule.x``, ``MyModule.y`` and ``MyModule.p``        |
+| ``import MyModule.x, MyModule.p``  | ``x``, ``p``                                                                                 | ``x``, ``p``                                                           |
 +------------------------------------+----------------------------------------------------------------------------------------------+------------------------------------------------------------------------+
-| ``import MyModule: x, p``          | ``x``, ``p``, ``MyModule.x``, ``MyModule.y`` and ``MyModule.p``                              | ``x``, ``p``, ``MyModule.x``, ``MyModule.y`` and ``MyModule.p``        |
+| ``import MyModule: x, p``          | ``x``, ``p``                                                                                 | ``x``, ``p``                                                           |
 +------------------------------------+----------------------------------------------------------------------------------------------+------------------------------------------------------------------------+
-| ``importall MyModule``             | ``x``, ``y``, ``p``, ``MyModule.x``, ``MyModule.y`` and ``MyModule.p``                       | ``x``, ``y``, ``p``, ``MyModule.x``, ``MyModule.y`` and ``MyModule.p`` |
+| ``importall MyModule``             |  All ``export`` ed names (``x`` and ``y``)                                                   | ``x``, ``y``                                                           |
 +------------------------------------+----------------------------------------------------------------------------------------------+------------------------------------------------------------------------+
 
 Module paths
