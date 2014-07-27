@@ -125,7 +125,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
     
     if cmplx
 
-        d = Array(T, nev+1)
+        d = zeros(T, nev+1)
         sigmar = ones(T, 1)*sigma
         workev = Array(T, 2ncv)
         neupd(ritzvec, howmny, select, d, v, ldv, sigmar, workev,
@@ -138,7 +138,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
 
     elseif sym
 
-        d = Array(T, nev)
+        d = zeros(T, nev)
         sigmar = ones(T, 1)*sigma
         seupd(ritzvec, howmny, select, d, v, ldv, sigmar,
               bmat, n, which, nev, TOL, resid, ncv, v, ldv,
@@ -150,8 +150,8 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
 
     else
 
-        dr     = Array(T, nev+1)
-        di     = Array(T, nev+1)
+        dr     = zeros(T, nev+1)
+        di     = zeros(T, nev+1)
         sigmar = ones(T, 1)*real(sigma)
         sigmai = ones(T, 1)*imag(sigma)
         workev = Array(T, 3*ncv)
@@ -174,6 +174,8 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
                     evec[:,j]   = v[:,j] + im*v[:,j+1]
                     evec[:,j+1] = v[:,j] - im*v[:,j+1]
                     j += 1
+                else
+                    error("Complex eigenvalues must occur in conjugate pairs")
                 end
             end
             j += 1
