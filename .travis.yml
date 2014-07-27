@@ -1,9 +1,10 @@
 language: cpp
 os:
     - linux
-compiler: 
-    - clang
-    - gcc
+env:
+  matrix:
+    - USEGCC=1
+    - USECLANG=1
 notifications:
     email: false
     irc:
