@@ -4116,13 +4116,13 @@ static void init_julia_llvm_env(Module *m)
     te_args.push_back(T_pint8);
     te_args.push_back(jl_pvalue_llvmt);
     te_args.push_back(jl_pvalue_llvmt);
+    te_args.push_back(T_int32);
     jltypeerror_func =
         Function::Create(FunctionType::get(T_void, te_args, false),
                          Function::ExternalLinkage,
-                         "jl_type_error_rt", m);
+                         "jl_type_error_rt_line", m);
     jltypeerror_func->setDoesNotReturn();
-    add_named_global(jltypeerror_func,
-                                         (void*)&jl_type_error_rt);
+    add_named_global(jltypeerror_func, (void*)&jl_type_error_rt_line);
 
     std::vector<Type *> args_2ptrs(0);
     args_2ptrs.push_back(jl_pvalue_llvmt);

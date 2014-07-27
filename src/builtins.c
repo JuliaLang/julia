@@ -84,6 +84,12 @@ void jl_type_error_rt(const char *fname, const char *context,
     jl_throw(ex);
 }
 
+void jl_type_error_rt_line(const char *fname, const char *context,
+                           jl_value_t *ty, jl_value_t *got, int line)
+{
+    jl_type_error_rt(fname, context, ty, got);
+}
+
 void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got)
 {
     jl_type_error_rt(fname, "", expected, got);
