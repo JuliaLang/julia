@@ -164,12 +164,13 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
         j = 1
         indfake = 0
         while j <= nev+1
-            if abs(complex(dr[j],di[j])) < sqrt(eps(T))*sqrt(nextfloat(zero(T))) # is this a good criterion for really small?
+            # Perhaps there is a better criterion for really small?
+            if abs(complex(dr[j],di[j])) < sqrt(eps(T))*sqrt(nextfloat(zero(T)))
                 indfake = j
             else
                 if di[j] == 0
                     evec[:,j] = v[:,j]
-                else
+                elseif j < nev+1 # For complex conjugate pairs
                     evec[:,j]   = v[:,j] + im*v[:,j+1]
                     evec[:,j+1] = v[:,j] - im*v[:,j+1]
                     j += 1
