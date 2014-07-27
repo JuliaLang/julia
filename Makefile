@@ -12,6 +12,11 @@ VERSDIR = v`cut -d. -f1-2 < VERSION`
 INSTALL_F = install -pm644
 INSTALL_M = install -pm755
 
+#file name of make dist result
+ifeq ($(JULIA_DIST_TARNAME),)
+	JULIA_DIST_TARNAME = julia-$(JULIA_COMMIT)-$(OS)-$(ARCH)
+endif
+
 all: default
 default: release
 
@@ -283,7 +288,7 @@ ifeq ($(OS), WINNT)
 	cat ./contrib/windows/7zS.sfx ./contrib/windows/7zSFX-config.txt "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" > "julia-${JULIA_VERSION}-${ARCH}.exe"
 	-rm -f julia-installer.exe
 else
-	$(TAR) zcvf julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz julia-$(JULIA_COMMIT)
+	$(TAR) zcvf $(JULIA_DIST_TARNAME).tar.gz julia-$(JULIA_COMMIT)
 endif
 	rm -fr $(prefix)
 
