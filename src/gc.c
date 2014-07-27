@@ -35,6 +35,9 @@
 extern "C" {
 #endif
 
+JL_DEFINE_MUTEX_EXT(gc)
+extern uv_mutex_t gc_pool_mutex[N_GC_THREADS];
+
 typedef struct _gcpage_t {
     char data[GC_PAGE_SZ];
     union {
@@ -78,11 +81,12 @@ typedef struct _bigval_t {
 } bigval_t;
 
 // GC knobs and self-measurement variables
-static size_t allocd_bytes = 0;
-static int64_t total_allocd_bytes = 0;
+static volatile size_t allocd_bytes = 0;
+static volatile int64_t total_allocd_bytes = 0;
 static int64_t last_gc_total_bytes = 0;
 static size_t freed_bytes = 0;
 static uint64_t total_gc_time=0;
+
 #ifdef _P64
 #define default_collect_interval (5600*1024*sizeof(void*))
 static size_t max_collect_interval = 1250000000UL;
@@ -138,7 +142,7 @@ DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 {
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
-    allocd_bytes += sz;
+    JL_ATOMIC_FETCH_AND_ADD(allocd_bytes,sz);
     void *b = malloc(sz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
@@ -148,14 +152,14 @@ DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 DLLEXPORT void jl_gc_counted_free(void *p, size_t sz)
 {
     free(p);
-    freed_bytes += sz;
+    JL_ATOMIC_FETCH_AND_ADD(freed_bytes,sz);
 }
 
 DLLEXPORT void *jl_gc_counted_realloc(void *p, size_t sz)
 {
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
-    allocd_bytes += ((sz+1)/2);  // NOTE: wild guess at growth amount
+    JL_ATOMIC_FETCH_AND_ADD(allocd_bytes,((sz+1)/2)); // NOTE: wild guess at growth amount
     void *b = realloc(p, sz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
@@ -167,7 +171,7 @@ DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t 
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
     if (sz > old)
-        allocd_bytes += (sz-old);
+        JL_ATOMIC_FETCH_AND_ADD(allocd_bytes,sz-old);
     void *b = realloc(p, sz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
@@ -181,8 +185,10 @@ void *jl_gc_managed_malloc(size_t sz)
     sz = (sz+15) & -16;
     void *b = malloc_a16(sz);
     if (b == NULL)
+    {
         jl_throw(jl_memory_exception);
-    allocd_bytes += sz;
+    }
+    JL_ATOMIC_FETCH_AND_ADD(allocd_bytes,sz);    
     return b;
 }
 
@@ -210,8 +216,10 @@ void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned)
     }
 #endif
     if (b == NULL)
+    {
         jl_throw(jl_memory_exception);
-    allocd_bytes += sz;
+    }
+    JL_ATOMIC_FETCH_AND_ADD(allocd_bytes,sz);    
     return b;
 }
 
@@ -226,12 +234,16 @@ int jl_gc_n_preserved_values(void)
 
 void jl_gc_preserve(jl_value_t *v)
 {
+    JL_LOCK(gc) 
     arraylist_push(&preserved_values, (void*)v);
+    JL_UNLOCK(gc)
 }
 
 void jl_gc_unpreserve(void)
 {
+    JL_LOCK(gc) 
     (void)arraylist_pop(&preserved_values);
+    JL_UNLOCK(gc)
 }
 
 // weak references
@@ -243,7 +255,9 @@ DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value)
     jl_weakref_t *wr = (jl_weakref_t*)alloc_2w();
     wr->type = (jl_value_t*)jl_weakref_type;
     wr->value = value;
+    JL_LOCK(gc)
     arraylist_push(&weak_refs, wr);
+    JL_UNLOCK(gc)
     return wr;
 }
 
@@ -338,6 +352,7 @@ void jl_gc_run_all_finalizers(void)
 
 void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
 {
+    JL_LOCK(gc)
     jl_value_t **bp = (jl_value_t**)ptrhash_bp(&finalizer_table, v);
     if (*bp == HT_NOTFOUND) {
         *bp = (jl_value_t*)f;
@@ -345,6 +360,7 @@ void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
     else {
         *bp = (jl_value_t*)jl_tuple2((jl_value_t*)f, *bp);
     }
+    JL_UNLOCK(gc)
 }
 
 // big value list
@@ -360,16 +376,20 @@ static void *alloc_big(size_t sz)
         jl_throw(jl_memory_exception);
     size_t allocsz = (sz+offs+15) & -16;
     bigval_t *v = (bigval_t*)malloc_a16(allocsz);
-    allocd_bytes += allocsz;
+    JL_ATOMIC_FETCH_AND_ADD(allocd_bytes,allocsz);  
     if (v == NULL)
+    {
         jl_throw(jl_memory_exception);
+    }
 #ifdef MEMDEBUG
     //memset(v, 0xee, allocsz);
 #endif
     v->sz = sz;
     v->flags = 0;
+    JL_LOCK(gc)
     v->next = big_objects;
     big_objects = v;
+    JL_UNLOCK(gc)
     return &v->_data[0];
 }
 
@@ -407,6 +427,7 @@ static mallocarray_t *mafreelist = NULL;
 
 void jl_gc_track_malloced_array(jl_array_t *a)
 {
+    JL_LOCK(gc)
     mallocarray_t *ma;
     if (mafreelist == NULL) {
         ma = (mallocarray_t*)malloc(sizeof(mallocarray_t));
@@ -418,6 +439,7 @@ void jl_gc_track_malloced_array(jl_array_t *a)
     ma->a = a;
     ma->next = mallocarrays;
     mallocarrays = ma;
+    JL_UNLOCK(gc)
 }
 
 static size_t array_nbytes(jl_array_t *a)
@@ -463,9 +485,9 @@ static void sweep_malloced_arrays()
 // pool allocation
 
 #define N_POOLS 42
-static pool_t norm_pools[N_POOLS];
-static pool_t ephe_pools[N_POOLS];
-static pool_t *pools = &norm_pools[0];
+static pool_t norm_pools[N_GC_THREADS][N_POOLS];
+static pool_t ephe_pools[N_GC_THREADS][N_POOLS];
+static pool_t *pools= &norm_pools[0][0];
 
 static void add_page(pool_t *p)
 {
@@ -498,7 +520,7 @@ static inline void *pool_alloc(pool_t *p)
 {
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
-    allocd_bytes += p->osize;
+    JL_ATOMIC_FETCH_AND_ADD(allocd_bytes,p->osize);
     if (p->freelist == NULL) {
         add_page(p);
     }
@@ -619,10 +641,12 @@ static void gc_sweep(void)
 {
     sweep_malloced_arrays();
     sweep_big();
-    int i;
-    for(i=0; i < N_POOLS; i++) {
-        sweep_pool(&norm_pools[i]);
-        sweep_pool(&ephe_pools[i]);
+    int i,j;
+    for(j=0; j < N_GC_THREADS; j++) {
+        for(i=0; i < N_POOLS; i++) {
+            sweep_pool(&norm_pools[j][i]);
+            sweep_pool(&ephe_pools[j][i]);
+        }
     }
     jl_unmark_symbols();
 }
@@ -927,8 +951,8 @@ int64_t diff_gc_total_bytes(void)
 }
 void sync_gc_total_bytes(void) {last_gc_total_bytes = jl_gc_total_bytes();}
 
-void jl_gc_ephemeral_on(void)  { pools = &ephe_pools[0]; }
-void jl_gc_ephemeral_off(void) { pools = &norm_pools[0]; }
+void jl_gc_ephemeral_on(void)  { pools = &ephe_pools[0][0]; }
+void jl_gc_ephemeral_off(void) { pools = &norm_pools[0][0]; }
 
 #if defined(MEMPROFILE)
 static void all_pool_stats(void);
@@ -1009,6 +1033,30 @@ void jl_gc_collect(void)
 
 // allocator entry points
 
+static inline void* thread_safe_pool_alloc(size_t szclass_)
+{
+    void* a;
+
+    if(jl_main_thread_id == uv_thread_self() )
+        return pool_alloc(&pools[szclass_]);
+
+    for(int n=1; n<N_GC_THREADS; n++)
+    {
+        if(uv_mutex_trylock(gc_pool_mutex+n) == 0)
+        {
+            a = pool_alloc(&pools[N_POOLS*n+szclass_]);
+            uv_mutex_unlock(gc_pool_mutex+n);
+            return a;
+        }
+    }
+
+    // all pools are locked
+    uv_mutex_lock(gc_pool_mutex+1);
+    a = pool_alloc(&pools[N_POOLS+szclass_]);
+    uv_mutex_unlock(gc_pool_mutex+1);
+    return a;
+}
+
 void *allocb(size_t sz)
 {
     void *b;
@@ -1020,7 +1068,7 @@ void *allocb(size_t sz)
         b = alloc_big(sz);
     }
     else {
-        b = pool_alloc(&pools[szclass(sz)]);
+        b = thread_safe_pool_alloc(szclass(sz));
     }
 #endif
     return (void*)((void**)b + 1);
@@ -1028,48 +1076,64 @@ void *allocb(size_t sz)
 
 DLLEXPORT void *allocobj(size_t sz)
 {
+    void* a;
 #ifdef MEMDEBUG
-    return alloc_big(sz);
+    a = alloc_big(sz);
+    return a;
 #endif
     if (sz > 2048)
-        return alloc_big(sz);
-    return pool_alloc(&pools[szclass(sz)]);
+    {
+        a = alloc_big(sz);
+        return a;
+    }
+ 
+    a = thread_safe_pool_alloc(szclass(sz));
+    return a;
 }
 
 DLLEXPORT void *alloc_2w(void)
 {
+    void* b;
 #ifdef MEMDEBUG
-    return alloc_big(2*sizeof(void*));
+    b = alloc_big(2*sizeof(void*));
+    return b;
 #endif
 #ifdef _P64
-    return pool_alloc(&pools[2]);
+    b = thread_safe_pool_alloc(2);
 #else
-    return pool_alloc(&pools[0]);
+    b = thread_safe_pool_alloc(0);
 #endif
+    return b;
 }
 
 DLLEXPORT void *alloc_3w(void)
 {
+    void* b;
 #ifdef MEMDEBUG
-    return alloc_big(3*sizeof(void*));
+    b = alloc_big(3*sizeof(void*));
+    return b;
 #endif
 #ifdef _P64
-    return pool_alloc(&pools[4]);
+    b = thread_safe_pool_alloc(4);
 #else
-    return pool_alloc(&pools[1]);
+    b = thread_safe_pool_alloc(1);
 #endif
+    return b;
 }
 
 DLLEXPORT void *alloc_4w(void)
 {
+    void* b;
 #ifdef MEMDEBUG
-    return alloc_big(4*sizeof(void*));
+    b = alloc_big(4*sizeof(void*));
+    return b;
 #endif
 #ifdef _P64
-    return pool_alloc(&pools[6]);
+    b = thread_safe_pool_alloc(6);
 #else
-    return pool_alloc(&pools[2]);
+    b = thread_safe_pool_alloc(2);
 #endif
+    return b;
 }
 
 #ifdef GC_FINAL_STATS
@@ -1103,15 +1167,17 @@ void jl_gc_init(void)
                          640, 768, 896, 1024,
 
                          1536, 2048 };
-    int i;
-    for(i=0; i < N_POOLS; i++) {
-        norm_pools[i].osize = szc[i];
-        norm_pools[i].pages = NULL;
-        norm_pools[i].freelist = NULL;
+    int i,j;
+    for(j=0; j < N_GC_THREADS; j++) {
+        for(i=0; i < N_POOLS; i++) {
+            norm_pools[j][i].osize = szc[i];
+            norm_pools[j][i].pages = NULL;
+            norm_pools[j][i].freelist = NULL;
 
-        ephe_pools[i].osize = szc[i];
-        ephe_pools[i].pages = NULL;
-        ephe_pools[i].freelist = NULL;
+            ephe_pools[j][i].osize = szc[i];
+            ephe_pools[j][i].pages = NULL;
+            ephe_pools[j][i].freelist = NULL;
+        }
     }
 
     htable_new(&finalizer_table, 0);
@@ -1174,18 +1240,20 @@ static size_t pool_stats(pool_t *p, size_t *pwaste)
 
 static void all_pool_stats(void)
 {
-    int i;
+    int i,j;
     size_t nb=0, w, tw=0, no=0, b;
-    for(i=0; i < N_POOLS; i++) {
-        b = pool_stats(&norm_pools[i], &w);
-        nb += b;
-        no += (b/norm_pools[i].osize);
-        tw += w;
+    for(j=0; j < N_GC_THREADS; j++) {
+        for(i=0; i < N_POOLS; i++) {
+            b = pool_stats(&norm_pools[j][i], &w);
+            nb += b;
+            no += (b/norm_pools[j][i].osize);
+            tw += w;
 
-        b = pool_stats(&ephe_pools[i], &w);
-        nb += b;
-        no += (b/ephe_pools[i].osize);
-        tw += w;
+            b = pool_stats(&ephe_pools[j][i], &w);
+            nb += b;
+            no += (b/ephe_pools[j][i].osize);
+            tw += w;
+        }
     }
     JL_PRINTF(JL_STDOUT,
                "%d objects, %d total allocated, %d total fragments\n",

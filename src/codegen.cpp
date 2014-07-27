@@ -528,12 +528,15 @@ static void jl_rethrow_with_add(const char *fmt, ...)
     jl_rethrow();
 }
 
+JL_DEFINE_MUTEX_EXT(codegen)
+
 // --- entry point ---
 //static int n_emit=0;
 static Function *emit_function(jl_lambda_info_t *lam, bool cstyle);
 //static int n_compile=0;
 static Function *to_function(jl_lambda_info_t *li, bool cstyle)
 {
+    JL_LOCK(codegen)
     JL_SIGATOMIC_BEGIN();
     assert(!li->inInference);
     BasicBlock *old = nested_compile ? builder.GetInsertBlock() : NULL;
@@ -555,6 +558,7 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
             builder.SetCurrentDebugLocation(olddl);
         }
         JL_SIGATOMIC_END();
+        JL_UNLOCK(codegen)
         jl_rethrow_with_add("error compiling %s", li->name->name);
     }
     assert(f != NULL);
@@ -588,6 +592,7 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
         builder.SetCurrentDebugLocation(olddl);
     }
     JL_SIGATOMIC_END();
+    JL_UNLOCK(codegen)
     return f;
 }
 
@@ -606,6 +611,7 @@ static void jl_setup_module(Module *m, bool add)
 
 extern "C" void jl_generate_fptr(jl_function_t *f)
 {
+    JL_LOCK(codegen)
     // objective: assign li->fptr
     jl_lambda_info_t *li = f->linfo;
     assert(li->functionObject);
@@ -624,7 +630,7 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
         #endif
 
         Function *llvmf = (Function*)li->functionObject;
-        
+       
 #ifdef USE_MCJIT
         li->fptr = (jl_fptr_t)jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
 #else
@@ -646,6 +652,7 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
         }
     }
     f->fptr = li->fptr;
+    JL_UNLOCK(codegen)
 }
 
 extern "C" void jl_compile(jl_function_t *f)

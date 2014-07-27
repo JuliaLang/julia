@@ -759,6 +759,7 @@ void julia_init(char *imageFile)
     }
 #endif
 
+    jl_init_threading();
 #ifdef JL_GC_MARKSWEEP
     jl_gc_init();
     jl_gc_disable();

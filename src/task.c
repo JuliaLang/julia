@@ -155,7 +155,6 @@ jl_gcframe_t *jl_pgcstack = NULL;
 #endif
 
 static void start_task(jl_task_t *t);
-
 #ifdef COPY_STACKS
 jl_jmp_buf * volatile jl_jmp_target;
 
@@ -273,6 +272,9 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
 extern int jl_in_gc;
 static jl_value_t *switchto(jl_task_t *t)
 {
+    // prevent threads to switch tasks
+    if( jl_main_thread_id != uv_thread_self())
+        return jl_nothing;
     if (t->state == done_sym || t->state == failed_sym) {
         jl_task_arg_in_transit = (jl_value_t*)jl_null;
         if (t->exception != jl_nothing)
@@ -715,6 +717,16 @@ DLLEXPORT void gdbbacktrace()
 void NORETURN throw_internal(jl_value_t *e)
 {
     assert(e != NULL);
+    
+    // Threads use a special exit here to tell the main thread that
+    // an exception occurred. This means that try/catch should not be
+    // used in threads currently.
+    if(jl_main_thread_id != uv_thread_self())
+    {
+        jl_thread_exception_in_transit = e;
+        jl_longjmp(jl_thread_eh,1);
+    }
+
     jl_exception_in_transit = e;
     if (jl_current_task->eh != NULL) {
         jl_longjmp(jl_current_task->eh->eh_ctx, 1);
@@ -737,6 +749,14 @@ void NORETURN throw_internal(jl_value_t *e)
 DLLEXPORT void jl_throw(jl_value_t *e)
 {
     assert(e != NULL);
+    // Threads use a special exit here to tell the main thread that
+    // an exception occurred. This means that try/catch should not be
+    // used in threads currently.
+    if(jl_main_thread_id != uv_thread_self())
+    {
+        jl_thread_exception_in_transit = e;
+        jl_longjmp(jl_thread_eh,1);
+    } 
     record_backtrace();
     throw_internal(e);
 }
