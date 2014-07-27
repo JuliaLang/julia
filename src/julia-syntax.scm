@@ -41,6 +41,12 @@
 	 (string (deparse (cadr e)) (car e)))
 	((syntactic-op? (car e))
 	 (string (deparse (cadr e)) (car e) (deparse (caddr e))))
+	((memq (car e) '($ &))
+	 (string (car e) (deparse (cadr e))))
+	((eq? (car e) '|::|)
+	 (if (length> e 2)
+	     (string (deparse (cadr e)) (car e) (deparse (caddr e)))
+	     (string (car e) (deparse (cadr e)))))
 	(else (case (car e)
 		((tuple)
 		 (string #\( (deparse-arglist (cdr e))
@@ -1429,7 +1435,12 @@
     (if (pair? invalid)
 	(if (and (pair? (car invalid)) (eq? 'parameters (caar invalid)))
 	    (error "more than one semicolon in argument list")
-	    (error (string "invalid keyword argument \"" (deparse (car invalid)) "\""))))))
+	    (cond ((symbol? (car invalid))
+		   (error (string "keyword argument \"" (car invalid) "\" needs a default value")))
+		  (else
+		   (error (string "invalid keyword argument syntax \""
+				  (deparse (car invalid))
+				  "\" (expected assignment)"))))))))
 
 (define (lower-kw-call f kw pa)
   (check-kw-args kw)
