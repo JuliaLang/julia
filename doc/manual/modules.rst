@@ -201,9 +201,9 @@ Miscellaneous details
 If a name is qualified (e.g. ``Base.sin``), then it can be accessed even if
 it is not exported. This is often useful when debugging.
 
-Macros must be exported if they are intended to be used outside their
-defining module.  Macro names are written with ``@`` in import and
-export statements, e.g.  ``import Mod.@mac``.
+Macro names are written with ``@`` in import and export statements, e.g.
+``import Mod.@mac``. Macros in other modules can be invoked as ``Mod.@mac``
+or ``@Mod.mac``.
 
 The syntax ``M.x = y`` does not work to assign a global in another module;
 global assignment is always module-local.
