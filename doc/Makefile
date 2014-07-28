@@ -164,4 +164,5 @@ doctest: juliadoc-pkg
 
 helpdb.jl: stdlib/*.rst juliadoc-pkg
 	$(SPHINXBUILD) -b jlhelp $(ALLSPHINXOPTS) $(BUILDDIR)/jlhelp
+	@awk 'BEGIN{n=0} {if(/^$$/) {n++} else {n=0}} (n>1){print "**********************************************************************\nERROR: Your sphinx-build created a helpdb.jl with extraneous newlines.\nInspect $(BUILDDIR)/jlhelp/jlhelp.jl for your current build.\n helpdb.jl NOT updated\n**********************************************************************"; exit(255)}' $(BUILDDIR)/jlhelp/jlhelp.jl
 	mv $(BUILDDIR)/jlhelp/jlhelp.jl helpdb.jl
