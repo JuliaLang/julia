@@ -687,7 +687,7 @@ function next(s::RepString, i::Int)
     if i < 1 || i > endof(s)
         error(BoundsError)
     end
-    j = mod1(i,length(s.string))
+    j = mod1(i,sizeof(s.string))
     c, k = next(s.string, j)
     c, k-j+i
 end
