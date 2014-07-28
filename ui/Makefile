@@ -6,11 +6,18 @@ override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
 override CPPFLAGS += $(JCPPFLAGS)
 
+SRCS = repl
+ifeq ($(USEMSVC), 1)
+SRCS += getopt
+endif
+
 FLAGS = -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir)
 ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer
 endif
 
+OBJS = $(SRCS:%=%.o)
+DOBJS = $(SRCS:%=%.do)
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
 ifeq ($(USE_LLVM_SHLIB),1)
@@ -64,9 +71,9 @@ else
 CXXLD = $(LD)
 endif
 
-$(build_bindir)/julia$(EXE): repl.o
+$(build_bindir)/julia$(EXE): $(OBJS)
 	@$(call PRINT_LINK, $(CXXLD) $(CXXLDFLAGS) $(LINK_FLAGS) $(SHIPFLAGS) $^ -o $@ -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -ljulia $(JLDFLAGS) $(CXXLDFLAGS))
-$(build_bindir)/julia-debug$(EXE): repl.do
+$(build_bindir)/julia-debug$(EXE): $(DOBJS)
 	@$(call PRINT_LINK, $(CXXLD) $(CXXLDFLAGS) $(LINK_FLAGS) $(DEBUGFLAGS) $^ -o $@ -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -ljulia-debug $(JLDFLAGS) $(CXXLDFLAGS))
 
 clean: | $(CLEAN_TARGETS)
