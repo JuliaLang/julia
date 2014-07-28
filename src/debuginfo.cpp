@@ -262,9 +262,11 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
 {
 #ifdef _OS_WINDOWS_
     DWORD fbase = SymGetModuleBase64(GetCurrentProcess(),(DWORD)pointer);
+    char *fname = 0;
     if (fbase != 0) {
 #else
     Dl_info dlinfo;
+    const char* fname = 0;
     if ((dladdr((void*)pointer, &dlinfo) != 0) && dlinfo.dli_fname) {
         if (skipC && !jl_is_sysimg(dlinfo.dli_fname))
             return;
@@ -322,12 +324,12 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
 #endif
 #else
 #ifndef _OS_WINDOWS_
-            const char *fname = dlinfo.dli_fname;
+            fname = dlinfo.dli_fname;
 #else
             IMAGEHLP_MODULE64 ModuleInfo;
             ModuleInfo.SizeOfStruct = sizeof(IMAGEHLP_MODULE64);
             SymGetModuleInfo64(GetCurrentProcess(), (DWORD64)pointer, &ModuleInfo);
-            char *fname = ModuleInfo.LoadedImageName;
+            fname = ModuleInfo.LoadedImageName;
             JL_PRINTF(JL_STDOUT,fname);
 #endif
             // On non OS X systems we need to mmap another copy because of the permissions on the mmaped
@@ -383,8 +385,7 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
             context = it->second.ctx;
             slide = it->second.slide;
         }
-
-        lookup_pointer(context, name, line, filename, pointer+slide, jl_is_sysimg(dlinfo.dli_fname));
+        lookup_pointer(context, name, line, filename, pointer+slide, jl_is_sysimg(fname));
     }
     return;
 }
