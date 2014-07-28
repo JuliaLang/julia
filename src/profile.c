@@ -325,9 +325,9 @@ DLLEXPORT int jl_profile_start_timer(void)
         return -1;
 
     timerprof.it_interval.tv_sec = nsecprof/GIGA;
-    timerprof.it_interval.tv_usec = (nsecprof/1000)%1000;
+    timerprof.it_interval.tv_usec = (nsecprof%GIGA)/1000;
     timerprof.it_value.tv_sec = nsecprof/GIGA;
-    timerprof.it_value.tv_usec = (nsecprof/1000)%1000;
+    timerprof.it_value.tv_usec = (nsecprof%GIGA)/1000;
     if (setitimer(ITIMER_PROF, &timerprof, 0) == -1)
         return -3;
 
