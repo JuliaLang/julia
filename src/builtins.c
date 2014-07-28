@@ -654,7 +654,7 @@ DLLEXPORT int jl_substrtod(char *str, size_t offset, int len, double *out)
     int err = 0;
     if (!(*pend == '\0' || isspace((unsigned char)*pend) || *pend == ',')) {
         // confusing data outside substring. must copy.
-        char *newstr = malloc(len+1);
+        char *newstr = (char*)malloc(len+1);
         memcpy(newstr, bstr, len);
         newstr[len] = 0;
         bstr = newstr;
@@ -699,7 +699,7 @@ DLLEXPORT int jl_substrtof(char *str, int offset, int len, float *out)
     int err = 0;
     if (!(*pend == '\0' || isspace((unsigned char)*pend) || *pend == ',')) {
         // confusing data outside substring. must copy.
-        char *newstr = malloc(len+1);
+        char *newstr = (char*)malloc(len+1);
         memcpy(newstr, bstr, len);
         newstr[len] = 0;
         bstr = newstr;
