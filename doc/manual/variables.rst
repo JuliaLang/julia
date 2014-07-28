@@ -88,6 +88,7 @@ Julia will even let you redefine built-in constants and functions if needed:
     10.0
     
     julia> sqrt = 4
+    Warning: imported binding for sqrt overwritten in module Main
     4
     
 However, this is obviously not recommended to avoid potential confusion.

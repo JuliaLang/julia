@@ -321,7 +321,7 @@ types of the arguments given to the constructor. Here are some examples:
     Point{Float64}(1.0,2.5)
 
     julia> Point(1,2.5)
-    ERROR: no method Point{T<:Real}(Int64, Float64)
+    ERROR: `Point{T<:Real}` has no method matching Point{T<:Real}(::Int64, ::Float64)
 
     ## explicit T ##
 
@@ -330,6 +330,7 @@ types of the arguments given to the constructor. Here are some examples:
 
     julia> Point{Int64}(1.0,2.5)
     ERROR: InexactError()
+     in Point at no file
 
     julia> Point{Float64}(1.0,2.5)
     Point{Float64}(1.0,2.5)
@@ -414,7 +415,7 @@ However, other similar calls still don't work:
 .. doctest::
 
     julia> Point(1.5,2)
-    ERROR: no method Point{T<:Real}(Float64, Int64)
+    ERROR: `Point{T<:Real}` has no method matching Point{T<:Real}(::Float64, ::Int64)
 
 For a much more general way of making all such calls work sensibly, see
 :ref:`man-conversion-and-promotion`. At the risk
@@ -534,7 +535,7 @@ whose real and imaginary parts are rationals:
 .. doctest::
 
     julia> (1 + 2im)//(1 - 2im)
-    -3//5 + 4//5im
+    -3//5 + 4//5*im
 
     julia> typeof(ans)
     Complex{Rational{Int64}} (constructor with 1 method)
