@@ -517,6 +517,7 @@ install-llvm: $(LLVM_OBJ_TARGET)
 
 UV_SRC_TARGET = libuv/.libs/libuv.a
 UV_OBJ_TARGET = $(build_libdir)/libuv.a
+
 UV_CFLAGS = 
 ifeq ($(USEMSVC), 1)
 UV_CFLAGS += -DBUILDING_UV_SHARED
@@ -525,9 +526,14 @@ ifeq ($(USEICC), 1)
 UV_CFLAGS += -static-intel
 endif
 
-UV_OPTS += LDFLAGS="$(LDFLAGS) $(CLDFLAGS) -v"
+UV_MFLAGS += LDFLAGS="$(LDFLAGS) $(CLDFLAGS) -v"
 ifneq ($(UV_CFLAGS),)
-UV_OPTS += CFLAGS="$(UV_CFLAGS)"
+UV_MFLAGS += CFLAGS="$(UV_CFLAGS)"
+endif
+ifneq ($(USEMSVC), 1)
+UV_FLAGS = $(UV_MFLAGS)
+else
+UV_FLAGS = --disable-shared $(UV_MFLAGS)
 endif
 
 libuv/configure:
@@ -540,14 +546,14 @@ libuv/config.status: $(JULIAHOME)/.git/modules/deps/libuv/HEAD
 endif
 libuv/config.status: libuv/configure
 	cd libuv && \
-	./configure --with-pic $(CONFIGURE_COMMON) $(UV_OPTS)
+	./configure --with-pic $(CONFIGURE_COMMON) $(UV_FLAGS)
 	touch -c $@
 $(UV_SRC_TARGET): libuv/config.status
 	touch -c libuv/aclocal.m4
 	touch -c libuv/Makefile.in
 	touch -c libuv/configure
 	touch -c libuv/config.status
-	$(MAKE) -C libuv $(UV_OPTS)
+	$(MAKE) -C libuv $(UV_MFLAGS)
 	touch -c $@
 libuv/checked: $(UV_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
