@@ -13,6 +13,7 @@ static volatile size_t bt_size_max = 0;
 static volatile size_t bt_size_cur = 0;
 static volatile u_int64_t nsecprof = 0;
 static volatile int running = 0;
+static const    u_int64_t GIGA = 1000000000ULL;
 /////////////////////////////////////////
 // Timers to take samples at intervals //
 /////////////////////////////////////////
@@ -34,7 +35,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
     }
     while (1) {
         if (running && bt_size_cur < bt_size_max) {
-            DWORD timeout = nsecprof/1000000;
+            DWORD timeout = nsecprof/GIGA;
             timeout = min(max(timeout,tc.wPeriodMin*2),tc.wPeriodMax/2);
             Sleep(timeout);
             if ((DWORD)-1 == SuspendThread(hMainThread)) {
@@ -266,8 +267,8 @@ DLLEXPORT int jl_profile_start_timer(void)
         profile_started = 1;
     }
 
-    timerprof.tv_sec = nsecprof/1000000;
-    timerprof.tv_nsec = nsecprof%1000000;
+    timerprof.tv_sec = nsecprof/GIGA;
+    timerprof.tv_nsec = nsecprof%GIGA;
 
     running = 1;
     ret = clock_alarm(clk, TIME_RELATIVE, timerprof, profile_port);
@@ -323,9 +324,9 @@ DLLEXPORT int jl_profile_start_timer(void)
     if (sigaction(SIGPROF, &sa, NULL) == -1)
         return -1;
 
-    timerprof.it_interval.tv_sec = nsecprof/1000000;
+    timerprof.it_interval.tv_sec = nsecprof/GIGA;
     timerprof.it_interval.tv_usec = (nsecprof/1000)%1000;
-    timerprof.it_value.tv_sec = nsecprof/1000000;
+    timerprof.it_value.tv_sec = nsecprof/GIGA;
     timerprof.it_value.tv_usec = (nsecprof/1000)%1000;
     if (setitimer(ITIMER_PROF, &timerprof, 0) == -1)
         return -3;
@@ -399,10 +400,10 @@ DLLEXPORT int jl_profile_start_timer(void)
         return -2;
 
     // Start the timer
-    itsprof.it_interval.tv_sec = nsecprof/1000000;
-    itsprof.it_interval.tv_nsec = nsecprof%1000000;
-    itsprof.it_value.tv_sec = nsecprof/1000000;
-    itsprof.it_value.tv_nsec = nsecprof%1000000;
+    itsprof.it_interval.tv_sec = nsecprof/GIGA;
+    itsprof.it_interval.tv_nsec = nsecprof%GIGA;
+    itsprof.it_value.tv_sec = nsecprof/GIGA;
+    itsprof.it_value.tv_nsec = nsecprof%GIGA;
     if (timer_settime(timerprof, 0, &itsprof, NULL) == -1)
         return -3;
 
