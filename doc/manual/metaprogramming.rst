@@ -51,7 +51,7 @@ is an example of the short form used to quote an arithmetic expression:
 .. doctest::
 
     julia> ex = :(a+b*c+1)
-    :(+(a,*(b,c),1))
+    :(a + b * c + 1)
 
     julia> typeof(ex)
     Expr
@@ -64,10 +64,10 @@ is an example of the short form used to quote an arithmetic expression:
 
     julia> ex.args
     4-element Array{Any,1}:
-      :+       
-      :a       
-      :(*(b,c))
-     1         
+      :+
+      :a
+      :(b * c)
+     1
 
     julia> typeof(ex.args[1])
     Symbol
@@ -96,11 +96,11 @@ quoting form:
              y = 2
              x + y
            end
-    quote  # none, line 2:
-        x = 1 # line 3:
-        y = 2 # line 4:
-        +(x,y)
-    end
+    :(begin  # none, line 2:
+            x = 1 # line 3:
+            y = 2 # line 4:
+            x + y
+        end)
 
 Symbols
 ~~~~~~~
@@ -153,13 +153,13 @@ typing at the interactive prompt — using the ``eval`` function:
 .. doctest::
 
     julia> :(1 + 2)
-    :(+(1,2))
+    :(1 + 2)
 
     julia> eval(ans)
     3
 
     julia> ex = :(a + b)
-    :(+(a,b))
+    :(a + b)
 
     julia> eval(ex)
     ERROR: a not defined
@@ -200,7 +200,7 @@ dynamically generate arbitrary code which can then be run using
     julia> a = 1;
 
     julia> ex = Expr(:call, :+,a,:b)
-    :(+(1,b))
+    :(1 + b)
 
     julia> a = 0; b = 2;
 
@@ -235,7 +235,7 @@ clearly and concisely using interpolation:
     julia> a = 1;
 
     julia> ex = :($a + b)
-    :(+(1,b))
+    :(1 + b)
 
 This syntax is automatically rewritten to the form above where we
 explicitly called ``Expr``. The use of ``$`` for expression
@@ -341,8 +341,8 @@ This macro can be used like this:
     julia> @assert 1==1.0
 
     julia> @assert 1==0
-    ERROR: Assertion failed: 1 == 0
-     in error at error.jl:22
+    ERROR: assertion failed: 1 == 0
+     in error at error.jl:21
 
 In place of the written syntax, the macro call is expanded at parse time to
 its returned result. This is equivalent to writing::
@@ -387,14 +387,14 @@ function:
     :(if a == b
             nothing
         else
-            error("assertion failed: a == b")
+            Base.error("assertion failed: a == b")
         end)
 
     julia> macroexpand(:(@assert a==b "a should equal b!"))
     :(if a == b
             nothing
         else
-            error("assertion failed: a should equal b!")
+            Base.error("assertion failed: a should equal b!")
         end)
 
 There is yet another case that the actual ``@assert`` macro handles: what
@@ -409,7 +409,7 @@ Compare:
 .. doctest::
 
     julia> typeof(:("a should equal b"))
-    ASCIIString (constructor with 1 method)
+    ASCIIString (constructor with 2 methods)
 
     julia> typeof(:("a ($a) should equal b ($b)!"))
     Expr
