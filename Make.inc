@@ -634,7 +634,7 @@ JLDFLAGS += -Wl,--large-address-aware
 endif
 else
 OSLIBS += kernel32.lib ws2_32.lib psapi.lib advapi32.lib iphlpapi.lib shell32.lib winmm.lib
-JLDFLAGS =
+JLDFLAGS = -stack:8388608
 endif
 JCPPFLAGS += -D_WIN32_WINNT=0x0600
 UNTRUSTED_SYSTEM_LIBM = 1
