@@ -284,6 +284,9 @@ LLVM_MFLAGS += $(LLVM_CC)
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
 LLVM_LDFLAGS += -Wl,-R$(build_libdir)
+ifeq ($(USEICC),1)
+LLVM_LDFLAGS += -no_cpprt -lc++ -lc++abi
+endif
 endif
 
 LLVM_FLAGS += CPPFLAGS="$(CPPFLAGS) $(LLVM_CPPFLAGS)" LDFLAGS="$(LLVM_LDFLAGS)"
@@ -339,25 +342,25 @@ libcxx-build:
 	mkdir -p libcxx-build
 libcxx-build/Makefile: llvm-$(LLVM_VER)/projects/libcxx llvm-$(LLVM_VER)/projects/libcxxabi libcxx-build
 	cd libcxx-build && \
-		cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS="../llvm-$(LLVM_VER)/projects/libcxxabi/include" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(build_prefix) ../llvm-$(LLVM_VER)/projects/libcxx -DCMAKE_C_COMPILER="$(CC)" -DCMAKE_CXX_COMPILER="$(CXX)"  -DCMAKE_SHARED_LINKER_FLAGS="-L$(build_libdir)"
-$(build_libdir)/libc++abi.so: llvm-$(LLVM_VER)/projects/libcxxabi
+		cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS="../llvm-$(LLVM_VER)/projects/libcxxabi/include" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(build_prefix) ../llvm-$(LLVM_VER)/projects/libcxx -DCMAKE_C_COMPILER="$(CC)" -DCMAKE_CXX_COMPILER="$(CXX)"  -DCMAKE_SHARED_LINKER_FLAGS="-L$(build_libdir) -Bstatic -lirc -Bdynamic" -DCMAKE_CXX_FLAGS="$(CXXFLAGS)"
+$(build_libdir)/libc++abi.so.1.0: llvm-$(LLVM_VER)/projects/libcxxabi
 	cd llvm-$(LLVM_VER)/projects/libcxxabi/lib && \
-	OPTIONS=-I../../libcxx/include ./buildit
+	OPTIONS="-I../../libcxx/include $(CXXFLAGS) $(LDFLAGS)" CC="$(CC) -static-intel" EXTRA_LIBS="-Bstatic -lirc" CXX=$(CXX) ./buildit
 	cp llvm-$(LLVM_VER)/projects/libcxxabi/lib/libc++abi.so.1.0 $(build_libdir)
 	ln -s $(build_libdir)/libc++abi.so.1.0 $(build_libdir)/libc++abi.so
 	ln -s $(build_libdir)/libc++abi.so.1.0 $(build_libdir)/libc++abi.so.1
 install-libcxxabi: $(build_libdir)/libc++abi.so
-libcxx-build/lib/libc++.so: install-libcxxabi
+libcxx-build/lib/libc++.so.1.0: $(build_libdir)/libc++abi.so libcxx-build/Makefile
 	cd libcxx-build && $(MAKE)
-$(build_libdir)/libc++.so: libcxx-build/lib/libc++.so
+$(build_libdir)/libc++.so.1.0: libcxx-build/lib/libc++.so.1.0
 	cd libcxx-build && $(MAKE) install
-install-libcxx: $(build_libdir)/libc++.so
+install-libcxx: $(build_libdir)/libc++.so.1.0
 get-libcxx: llvm-$(LLVM_VER)/projects/libcxx
 get-libcxxabi: llvm-$(LLVM_VER)/projects/libcxxabi
 endif
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
-LIBCXX_DEPENDENCY = install-libcxx
+LIBCXX_DEPENDENCY = $(build_libdir)/libc++abi.so 
 LIBCXX_GET_DEPENDENCY = get-libcxx get-libcxxabi
 endif
 
@@ -498,6 +501,7 @@ UV_OPTS =
 else
 UV_OPTS = CFLAGS=-DBUILDING_UV_SHARED
 endif
+UV_OPTS += LDFLAGS="$(CLDFLAGS) -v" CFLAGS="-static-intel"
 
 libuv/configure:
 	(cd .. && git submodule init && git submodule update)
@@ -516,7 +520,7 @@ $(UV_SRC_TARGET): libuv/config.status
 	touch -c libuv/Makefile.in
 	touch -c libuv/configure
 	touch -c libuv/config.status
-	$(MAKE) -C libuv
+	$(MAKE) -C libuv $(UV_OPTS)
 	touch -c $@
 libuv/checked: $(UV_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
@@ -589,7 +593,7 @@ install-pcre: $(PCRE_OBJ_TARGET)
 GRISU_OPTS = $(CXXFLAGS) -O3 -fvisibility=hidden $(fPIC)
 GRISU_OBJ_TARGET = $(build_shlibdir)/libgrisu.$(SHLIB_EXT)
 
-double-conversion-$(GRISU_VER).tar.gz:
+double-conversion-$(GRISU_VER).tar.gz: $(LIBCXX_DEPENDENCY)
 	$(JLDOWNLOAD) $@ http://double-conversion.googlecode.com/files/$@
 	touch -c $@
 double-conversion-$(GRISU_VER)/Makefile: double-conversion-$(GRISU_VER).tar.gz

@@ -698,8 +698,13 @@ endif
 # Custom libcxx
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
 LDFLAGS += -L$(build_libdir) -lc++abi
-CXXLDFLAGS += -L$(build_libdir) -lc++abi -stdlib=libc++
+CXXLDFLAGS += -L$(build_libdir) -lc++abi -stdlib=libc++ -lc++
 CPPFLAGS += -I$(build_includedir)/c++/v1
+ifeq ($(USEICC),1)
+CXXFLAGS += -cxxlib-nostd -static-intel
+CLDFLAGS += -static-intel
+LDFLAGS += -cxxlib-nostd -static-intel
+endif
 endif
 
 # Make tricks

@@ -65,9 +65,9 @@ CXXLD = $(LD)
 endif
 
 $(build_bindir)/julia$(EXE): repl.o
-	@$(call PRINT_LINK, $(CXXLD) $(CXXLDFLAGS) $(LINK_FLAGS) $(SHIPFLAGS) $^ -o $@ -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -ljulia $(JLDFLAGS))
+	@$(call PRINT_LINK, $(CXXLD) $(CXXLDFLAGS) $(LINK_FLAGS) $(SHIPFLAGS) $^ -o $@ -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -ljulia $(JLDFLAGS) $(CXXLDFLAGS))
 $(build_bindir)/julia-debug$(EXE): repl.do
-	@$(call PRINT_LINK, $(CXXLD) $(CXXLDFLAGS) $(LINK_FLAGS) $(DEBUGFLAGS) $^ -o $@ -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -ljulia-debug $(JLDFLAGS))
+	@$(call PRINT_LINK, $(CXXLD) $(CXXLDFLAGS) $(LINK_FLAGS) $(DEBUGFLAGS) $^ -o $@ -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -ljulia-debug $(JLDFLAGS) $(CXXLDFLAGS))
 
 clean: | $(CLEAN_TARGETS)
 	rm -f *.o *.do
