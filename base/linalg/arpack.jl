@@ -165,7 +165,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
         
         j = 1
         while j <= nev
-            if di[j] == zero(T)
+            if di[j] == 0
                 evec[:,j] = v[:,j]
             else # For complex conjugate pairs
                 evec[:,j]   = v[:,j] + im*v[:,j+1]
@@ -174,8 +174,8 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
             end
             j += 1
         end
-        if j == nev+1 && di[j] !== NaN
-            if di[j] == zero(T)
+        if j == nev+1 && !isnan(di[j])
+            if di[j] == 0
                 evec[:,j] = v[:,j]
                 j += 1
             else
