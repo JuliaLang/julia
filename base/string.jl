@@ -629,6 +629,10 @@ end
 
 endof(s::SubString) = s.endof
 
+function isvalid(s::SubString, i::Integer)
+    return (start(s) <= i <= endof(s)) &&  isvalid(s.string, s.offset+i)
+end
+
 isvalid{T<:DirectIndexString}(s::SubString{T}, i::Integer) = (start(s) <= i <= endof(s))
 
 ind2chr{T<:DirectIndexString}(s::SubString{T}, i::Integer) = begin checkbounds(s,i); i end
