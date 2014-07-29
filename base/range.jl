@@ -397,9 +397,9 @@ function intersect{T1<:Integer, T2<:Integer}(r::StepRange{T1}, s::StepRange{T2})
     m:a:n
 end
 
-function intersect(r::Range, s::Range...)
-    i = r
-    for t in s
+function intersect(r1::Range, r2::Range, r3::Range, r::Range...)
+    i = intersect(intersect(r1, r2), r3)
+    for t in r
         i = intersect(i, t)
     end
     i
