@@ -29,7 +29,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
 {
     TIMECAPS tc;
     if (MMSYSERR_NOERROR!=timeGetDevCaps(&tc, sizeof(tc))) {
-        fputs("failed to get get timer resolution",stderr);
+        fputs("failed to get timer resolution",stderr);
         hBtThread = 0;
         return 0;
     }
