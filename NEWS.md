@@ -332,6 +332,19 @@ Library improvements
 
   * Significantly faster `cumsum` and `cumprod`. ([#7359])
 
+  * Implement `findmin` and `findmax` over specified array dimensions. ([#6716])
+
+  * Support memory-mapping of files with offsets on Windows. ([#7242])
+
+  * Catch writes to protect memory, such as when trying to modify a mmapped file opened in read-only mode. ([#3434])
+
+Environment improvements
+------------------------
+
+  * New --code-coverage and --track-allocation startup features allow one to measure the number of executions or the amount of memory allocated, respectively, at each line of code. ([#5423],[#7464])
+
+  * Profile.init now accepts keyword arguments, and returns the current settings when no arguments are supplied. ([#7365])
+
 Build improvements
 ------------------
 
@@ -897,3 +910,9 @@ Too numerous to mention.
 [#7435]: https://github.com/JuliaLang/julia/issues/7435
 [#7513]: https://github.com/JuliaLang/julia/issues/7513
 [#7647]: https://github.com/JuliaLang/julia/issues/7647
+[#7242]: https://github.com/JuliaLang/julia/issues/7242
+[#3434]: https://github.com/JuliaLang/julia/issues/3434
+[#5423]: https://github.com/JuliaLang/julia/issues/5423
+[#7464]: https://github.com/JuliaLang/julia/issues/7464
+[#7365]: https://github.com/JuliaLang/julia/issues/7365
+[#6716]: https://github.com/JuliaLang/julia/issues/6716
