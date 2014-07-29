@@ -376,9 +376,14 @@ function show_unquoted_quote_expr(io::IO, value, indent::Int, prec::Int)
             print(io, "symbol(\"", escape_string(s), "\")")
         end
     else
-        print(io, ":(")
-        show_unquoted(io, value, indent+indent_width, 0)
-        print(io, ")")
+        if isa(value,Expr) && value.head === :block
+            show_block(io, "quote", value, indent)
+            print(io, "end")
+        else
+            print(io, ":(")
+            show_unquoted(io, value, indent+indent_width, 0)
+            print(io, ")")
+        end
     end
 end
 

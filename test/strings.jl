@@ -1080,10 +1080,20 @@ let s = "|η(α)-ϕ(κ)| < ε"
     @test length(SubString(s,4,11))==length(s[4:11])
 end
 
-# next(RepString,i) bugfix
-let s2 = "ΣβΣβ", srep = RepString("Σβ",2)
-    @test next(s2,1) == next(srep,1)
-    @test next(s2,3) == next(srep,3)
-    @test next(s2,5) == next(srep,5)
-    #@test next(s2,7) == next(srep,7)
+# issue #7764
+let
+    srep = RepString("Σβ",2)
+    s="Σβ"
+    ss=SubString(s,1,endof(s))
+
+    @test ss^2 == "ΣβΣβ"
+    @test RepString(ss,2) == "ΣβΣβ"
+
+    @test endof(srep) == 7
+
+    @test next(srep, 3) == ('β',5)
+    @test next(srep, 7) == ('β',9)
+
+    @test srep[7] == 'β'
+    @test_throws BoundsError srep[8]
 end

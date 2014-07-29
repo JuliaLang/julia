@@ -458,7 +458,7 @@ the wrapper object.  For example:
     MyType{Float64} (constructor with 1 method)
 
     julia> typeof(t)
-    MyStillAmbiguousType (constructor with 1 method)
+    MyStillAmbiguousType (constructor with 2 methods)
 
 The type of field ``a`` can be readily determined from the type of
 ``m``, but not from the type of ``t``.  Indeed, in ``t`` it's possible
@@ -556,7 +556,7 @@ For example:
     julia> c = MySimpleContainer(1:3);
 
     julia> typeof(c)
-    MySimpleContainer{Range1{Int64}} (constructor with 1 method)
+    MySimpleContainer{UnitRange{Int64}} (constructor with 1 method)
 
     julia> c = MySimpleContainer([1:3]);
 
