@@ -245,11 +245,16 @@ function shell_completions(string,pos)
     if isa(arg,String)
         # Treat this as a path (perhaps give a list of comands in the future as well?)
         dir,name = splitdir(arg)
-        if isempty(dir)
-            files = readdir()
-        else
-            isdir(dir) || return UTF8String[], 0:-1, false
-            files = readdir(dir)
+        local files
+        try
+            if isempty(dir)
+                files = readdir()
+            else
+                isdir(dir) || return UTF8String[], 0:-1, false
+                files = readdir(dir)
+            end
+        catch
+            return UTF8String[], 0:-1, false
         end
         # Filter out files and directories that do not begin with the partial name we were
         # completing and append "/" to directories to simplify further completion
