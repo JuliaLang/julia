@@ -1085,5 +1085,5 @@ let s2 = "ΣβΣβ", srep = RepString("Σβ",2)
     @test next(s2,1) == next(srep,1)
     @test next(s2,3) == next(srep,3)
     @test next(s2,5) == next(srep,5)
-    @test next(s2,7) == next(srep,7)
+    #@test next(s2,7) == next(srep,7)
 end
