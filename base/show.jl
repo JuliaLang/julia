@@ -332,7 +332,13 @@ function show_block(io::IO, head, args::Vector, body, indent::Int)
     print(io, '\n', " "^indent)
 end
 show_block(io::IO,head,    block,i::Int) = show_block(io,head,{},   block,i)
-show_block(io::IO,head,arg,block,i::Int) = show_block(io,head,{arg},block,i)
+function show_block(io::IO, head, arg, block, i::Int)
+    if is_expr(arg, :block)
+        show_block(io, head, arg.args, block, i)
+    else
+        show_block(io, head, {arg}, block, i)
+    end
+end
 
 # show an indented list
 function show_list(io::IO, items, sep, indent::Int, prec::Int=0)
