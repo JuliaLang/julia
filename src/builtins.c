@@ -1146,6 +1146,9 @@ size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, int depth)
     if (v == NULL) {
         n += JL_PRINTF(out, "#<null>");
     }
+    else if((uintptr_t)v <= 0x10) {
+        n += JL_PRINTF(out, "#<err:0x%x>", v);
+    }
     else if(jl_typeof(v) == NULL) {
         n += JL_PRINTF(out, "<nulltype>");
     }

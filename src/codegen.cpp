@@ -1364,6 +1364,7 @@ static void emit_write_barrier(jl_codectx_t* ctx, Value *parent, Value *ptr)
     #ifdef GC_INC
     /*    builder.CreateCall2(wbfunc, builder.CreateBitCast(parent, jl_pvalue_llvmt), builder.CreateBitCast(ptr, jl_pvalue_llvmt));
           return;*/
+    ptr = NULL;
     parent = builder.CreateBitCast(parent, T_psize);
     Value* parent_type = builder.CreateLoad(parent);
     Value* parent_mark_bits = builder.CreateAnd(parent_type, 3);
@@ -1423,7 +1424,9 @@ static void jl_add_linfo_root(jl_lambda_info_t *li, jl_value_t *val)
 {
     li = li->def;
     if (li->roots == NULL) {
+        JL_GC_PUSH1(&val);
         li->roots = jl_alloc_cell_1d(1);
+        JL_GC_POP();
         gc_wb(li, li->roots);
         jl_cellset(li->roots, 0, val);
     }

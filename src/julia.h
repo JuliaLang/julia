@@ -1374,10 +1374,10 @@ extern DLLEXPORT jl_compileropts_t jl_compileropts;
 #define JL_COMPILEROPT_DUMPBITCODE_OFF 2
 
 DLLEXPORT void gc_queue_root(void *root);
-void gc_setmark_buf(void *buf);
+void gc_setmark_buf(void *buf, int);
 DLLEXPORT void gc_wb_slow(void* parent, void* ptr);
 
-static inline void gc_wb(void* parent, void* ptr)
+static inline void gc_wb_fwd(void* parent, void* ptr)
 {
     #ifdef GC_INC
     // if parent is marked and ptr is clean
@@ -1387,12 +1387,14 @@ static inline void gc_wb(void* parent, void* ptr)
     #endif
 }
 
+#define gc_wb(a,b) gc_wb_back(a)
+
 static inline void gc_wb_buf(void *parent, void *bufptr)
 {
     #ifdef GC_INC
     // if parent is marked
     if((*((uintptr_t*)parent) & 3) == 1)
-        gc_setmark_buf(bufptr);
+        gc_setmark_buf(bufptr, *(uintptr_t*)parent & 3);
     #endif
 }
 

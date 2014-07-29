@@ -576,8 +576,8 @@ static void array_resize_buffer(jl_array_t *a, size_t newlen, size_t oldlen, siz
     a->isshared = 0;
     if (a->ptrarray || es==1)
         memset(newdata+offsnb+oldnbytes, 0, nbytes-oldnbytes-offsnb);
-    if(a->how == 1)
-        gc_wb_buf(a, newdata); // to protect data : if a is already marked we wont mark newdata (in cases how = 1) on the next collection
+    if (a->how == 1)
+        gc_wb_buf(a, newdata);
     a->maxsize = newlen;
 }
 

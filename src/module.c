@@ -374,7 +374,7 @@ DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
             JL_PRINTF(JL_STDERR,"Warning: redefining constant %s\n",b->name->name);
         }
     }
-    gc_wb(((void**)b)-1, rhs);
+    gc_wb_fwd(((void**)b)-1, rhs);
     b->value = rhs;
 }
 

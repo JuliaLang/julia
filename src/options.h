@@ -35,6 +35,8 @@
 // catch invalid accesses.
 //#define MEMDEBUG
 
+//#define GC_VERIFY
+
 // profiling options
 
 // GC_FINAL_STATS prints total GC stats at exit
@@ -44,7 +46,7 @@
 //#define MEMPROFILE
 
 // GCTIME prints time taken by each phase of GC
-//#define GCTIME
+#define GC_TIME
 
 // OBJPROFILE counts objects by type
 //#define OBJPROFILE
