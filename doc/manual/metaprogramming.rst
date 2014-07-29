@@ -96,11 +96,11 @@ quoting form:
              y = 2
              x + y
            end
-    :(begin  # none, line 2:
-            x = 1 # line 3:
-            y = 2 # line 4:
-            x + y
-        end)
+    quote  # none, line 2:
+        x = 1 # line 3:
+        y = 2 # line 4:
+        x + y
+    end
 
 Symbols
 ~~~~~~~
