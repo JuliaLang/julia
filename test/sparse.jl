@@ -424,3 +424,29 @@ let A = sprand(5,5,0.5,(n)->rand(Float64,n)), ACPY = copy(A)
     D = reinterpret(Int64, B)
     @test C == D
 end
+
+# indmax, indmin, findmax, findmin
+let S = sprand(100,80, 0.5), A = full(S)
+    @test indmax(S) == indmax(A)
+    @test indmin(S) == indmin(A)
+    @test findmin(S) == findmin(A)
+    @test findmax(S) == findmax(A)
+    for region in [(1,), (2,), (1,2)], m in [findmax, findmin]
+        @test m(S, region) == m(A, region)
+    end
+end
+
+let S = spzeros(10,8), A = full(S)
+    @test indmax(S) == indmax(A) == 1
+    @test indmin(S) == indmin(A) == 1
+end
+
+let A = Array(Int,0,0), S = sparse(A)
+    iA = try indmax(A) end
+    iS = try indmax(S) end
+    @test iA == iS == false
+    iA = try indmin(A) end
+    iS = try indmin(S) end
+    @test iA == iS == false
+end
+
