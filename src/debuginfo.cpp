@@ -276,6 +276,15 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
         llvm::object::ObjectFile *obj = NULL;
         DIContext *context = NULL;
         int64_t slide = 0;
+#ifndef _OS_WINDOWS_
+        fname = dlinfo.dli_fname;
+#else
+        IMAGEHLP_MODULE64 ModuleInfo;
+        ModuleInfo.SizeOfStruct = sizeof(IMAGEHLP_MODULE64);
+        SymGetModuleInfo64(GetCurrentProcess(), (DWORD64)pointer, &ModuleInfo);
+        fname = ModuleInfo.LoadedImageName;
+        JL_PRINTF(JL_STDOUT,fname);
+#endif
         if (it == objfilemap.end()) {
 #ifdef _OS_DARWIN_
             // First find the uuid of the object file (we'll use this to make sure we find the
@@ -323,15 +332,6 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
             llvm::object::ObjectFile *errorobj = llvm::object::ObjectFile::createObjectFile(dsympath);
 #endif
 #else
-#ifndef _OS_WINDOWS_
-            fname = dlinfo.dli_fname;
-#else
-            IMAGEHLP_MODULE64 ModuleInfo;
-            ModuleInfo.SizeOfStruct = sizeof(IMAGEHLP_MODULE64);
-            SymGetModuleInfo64(GetCurrentProcess(), (DWORD64)pointer, &ModuleInfo);
-            fname = ModuleInfo.LoadedImageName;
-            JL_PRINTF(JL_STDOUT,fname);
-#endif
             // On non OS X systems we need to mmap another copy because of the permissions on the mmaped
             // shared library.
 #ifdef LLVM35
