@@ -396,7 +396,7 @@ DLLEXPORT int jl_profile_start_timer(void)
     sigprof.sigev_notify = SIGEV_SIGNAL;
     sigprof.sigev_signo = SIGUSR2;
     sigprof.sigev_value.sival_ptr = &timerprof;
-    if (timer_create(CLOCK_PROCESS_CPUTIME_ID, &sigprof, &timerprof) == -1)
+    if (timer_create(CLOCK_REALTIME, &sigprof, &timerprof) == -1)
         return -2;
 
     // Start the timer
