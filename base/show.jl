@@ -546,7 +546,15 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     elseif is(head, :let) && nargs >= 1
         show_block(io, "let", args[2:end], args[1], indent); print(io, "end")
     elseif is(head, :block) || is(head, :body)
-        show_block(io, "begin", ex, indent); print(io, "end")
+        if !isempty(ex.args) && isa(ex.args[1], Expr) && (ex.args[1]::Expr).head == :boundscheck && (ex.args[1]::Expr).args[1] == false
+            exblock = copy(ex.args[2])
+            pop!(exblock.args)  # remove the Expr(:boundscheck, :(Base.pop))
+            print(io, "@inbounds ")
+            show_block(io, "begin", exblock, indent)
+            print(io, "end")
+        else
+            show_block(io, "begin", ex, indent); print(io, "end")
+        end
     elseif is(head, :quote) && nargs == 1
         show_unquoted_quote_expr(io, args[1], indent, 0)
     elseif is(head, :gotoifnot) && nargs == 2
