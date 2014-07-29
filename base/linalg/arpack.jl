@@ -125,7 +125,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
     
     if cmplx
 
-        d = zeros(T, nev+1)
+        d = Array(T, nev+1)
         sigmar = ones(T, 1)*sigma
         workev = Array(T, 2ncv)
         neupd(ritzvec, howmny, select, d, v, ldv, sigmar, workev,
@@ -138,7 +138,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
 
     elseif sym
 
-        d = zeros(T, nev)
+        d = Array(T, nev)
         sigmar = ones(T, 1)*sigma
         seupd(ritzvec, howmny, select, d, v, ldv, sigmar,
               bmat, n, which, nev, TOL, resid, ncv, v, ldv,
@@ -150,8 +150,10 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
 
     else
 
-        dr     = zeros(T, nev+1)
-        di     = zeros(T, nev+1)
+        dr     = Array(T, nev+1)
+        di     = Array(T, nev+1)
+        fill!(dr,NaN)
+        fill!(di,NaN)
         sigmar = ones(T, 1)*real(sigma)
         sigmai = ones(T, 1)*imag(sigma)
         workev = Array(T, 3*ncv)
@@ -159,34 +161,35 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
               workev, bmat, n, which, nev, TOL, resid, ncv, v, ldv,
               iparam, ipntr, workd, workl, lworkl, info)
         if info[1] != 0; throw(ARPACKException(info[1])); end
-        evec = complex(zeros(T, n, nev+1), zeros(T, n, nev+1))
+        evec = complex(Array(T, n, nev+1), Array(T, n, nev+1))
         
         j = 1
-        indfake = 0
-        while j <= nev+1
-            # Perhaps there is a better criterion for really small?
-            if abs(complex(dr[j],di[j])) < sqrt(eps(T))*sqrt(nextfloat(zero(T)))
-                indfake = j
-            else
-                if di[j] == 0
-                    evec[:,j] = v[:,j]
-                elseif j < nev+1 # For complex conjugate pairs
-                    evec[:,j]   = v[:,j] + im*v[:,j+1]
-                    evec[:,j+1] = v[:,j] - im*v[:,j+1]
-                    j += 1
-                else
-                    error("Complex eigenvalues must occur in conjugate pairs")
-                end
+        while j <= nev
+            if di[j] == zero(T)
+                evec[:,j] = v[:,j]
+            else # For complex conjugate pairs
+                evec[:,j]   = v[:,j] + im*v[:,j+1]
+                evec[:,j+1] = v[:,j] - im*v[:,j+1]
+                j += 1
             end
             j += 1
         end
-        d = complex(dr,di)
-        p = sortperm(dmap(d), rev=true)
+        if j == nev+1 && di[j] !== NaN
+            if di[j] == zero(T)
+                evec[:,j] = v[:,j]
+                j += 1
+            else
+                error("Arpack unexpected behavior")
+            end
+        end
         
-        if indfake == 0
-            p = p[1:nev]
+        d = complex(dr,di)
+        
+        if j == nev+1
+            p = sortperm(dmap(d[1:nev]), rev=true)
         else
-            p = setdiff(p, indfake)
+            p = sortperm(dmap(d), rev=true)
+            p = p[1:nev]
         end
         
         return ritzvec ? (d[p], evec[1:n, p],iparam[5],iparam[3],iparam[9],resid) : (d[p],iparam[5],iparam[3],iparam[9],resid)
