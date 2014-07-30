@@ -144,22 +144,17 @@ apropos() = help()
 apropos(s::String) = apropos(STDOUT, s)
 function apropos(io::IO, txt::String)
     init_help()
-    n = 0
+    found = false
     r = Regex("\\Q$txt", Base.PCRE.CASELESS)
     for (func, entries) in FUNCTION_DICT
         if ismatch(r, func) || any(e->ismatch(r,e), entries)
+            found = true
             for desc in entries
-                nl = search(desc,'\n')
-                if nl != 0
-                    println(io, desc[1:(nl-1)])
-                else
-                    println(io, desc)
-                end
+                println(io, desc)
             end
-            n+=1
         end
     end
-    if n == 0
+    if !found
         println(io, "No help information found.")
     end
 end
