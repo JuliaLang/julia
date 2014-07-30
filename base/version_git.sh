@@ -39,11 +39,18 @@ branch=$(git branch | sed -n '/\* /s///p')
 build_number=$(git rev-list HEAD ^$last_tag | wc -l | sed -e 's/[^[:digit:]]//g')
 
 date_string=$git_time
-if [ "$(uname)" = "Darwin" ] || [ "$(uname)" = "FreeBSD" ]; then
+case $(uname) in
+  Darwin | FreeBSD)
     date_string="$(/bin/date -jr $git_time -u '+%Y-%m-%d %H:%M %Z')"
-else
+    ;;
+  MINGW*)
+    git_time=$(git log -1 --pretty=format:%ci)
+    date_string="$(/bin/date --date="$git_time" -u '+%Y-%m-%d %H:%M %Z')"
+    ;;
+  *)
     date_string="$(/bin/date --date="@$git_time" -u '+%Y-%m-%d %H:%M %Z')"
-fi
+    ;;
+esac
 if [ $(git describe --tags --exact-match 2> /dev/null) ]; then
     tagged_commit="true"
 else
