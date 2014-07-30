@@ -41,13 +41,13 @@ debug release: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/ju
 release-candidate-checklist: release test source-dist
 	@#Check documentation
 	./julia doc/NEWS-update.jl #Add missing cross-references to NEWS.md
-	make -C doc html  SPHINXOPTS="-W" #Rebuild Julia HTML docs pedantically
-	make -C doc latex SPHINXOPTS="-W" #Rebuild Julia PDF docs pedantically
-	make -C doc doctest #Run Julia doctests
-	make -C doc linkcheck #Check all links
-	make -C doc helpdb.jl #Rebuild Julia online documentation for help(), apropos(), etc...
+	@$(MAKE) -C doc html  SPHINXOPTS="-W" #Rebuild Julia HTML docs pedantically
+	@$(MAKE) -C doc latex SPHINXOPTS="-W" #Rebuild Julia PDF docs pedantically
+	@$(MAKE) -C doc doctest #Run Julia doctests
+	@$(MAKE) -C doc linkcheck #Check all links
+	@$(MAKE) -C doc helpdb.jl #Rebuild Julia online documentation for help(), apropos(), etc...
 	@#Check that benchmarks work
-	make -C test/perf
+	@$(MAKE) -C test/perf
 	@#Check that netload tests work
 	#for test in test/netload/*.jl; do julia $$test; if [ $$? -ne 0 ]; then exit 1; fi; done
 	@echo
