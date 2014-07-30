@@ -4,7 +4,6 @@ os:
     - osx
 env:
   matrix:
-    - USEGCC=1
     - USECLANG=1
 notifications:
     email: false
