@@ -3427,7 +3427,11 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", f);
     builder.SetInsertPoint(b0);
 
+#ifdef LLVM35
+    llvm::DITypeArray EltTypeArray = dbuilder.getOrCreateTypeArray(None);
+#else
     llvm::DIArray EltTypeArray = dbuilder.getOrCreateArray(ArrayRef<Value*>());
+#endif
     //ios_printf(ios_stderr, "\n*** compiling %s at %s:%d\n\n",
     //           lam->name->name, filename.c_str(), lno);
 
@@ -3449,12 +3453,16 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         assert(CU.Verify());
         #endif
 
+#ifdef LLVM35
+        DISubroutineType subrty = dbuilder.createSubroutineType(fil,EltTypeArray);
+#else
         DICompositeType subrty = dbuilder.createSubroutineType(fil,EltTypeArray);
+#endif
 
         fil = dbuilder.createFile(filename, ".");
         #ifndef LLVM34
         SP = dbuilder.createFunction((DIDescriptor)dbuilder.getCU(),
-        #else 
+        #else
         SP = dbuilder.createFunction(CU,
         #endif
                                     dbgFuncName,  // Name
