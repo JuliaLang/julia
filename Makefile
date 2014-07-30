@@ -38,7 +38,7 @@ debug release: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/ju
 	@export private_libdir=$(private_libdir) && \
 	$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(build_libdir):$(LD_LIBRARY_PATH) JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$@)" $(build_private_libdir)/sys.$(SHLIB_EXT)
 
-release-candidate-checklist: release test
+release-candidate-checklist: release test source-dist
 	@#Check documentation
 	julia doc/NEWS-update.jl #Add missing cross-references to NEWS.md
 	make -C doc html  SPHINXOPTS="-W" #Rebuild Julia HTML docs pedantically
@@ -53,12 +53,12 @@ release-candidate-checklist: release test
 	make -C test/perf
 	@#Check that netload tests work
 	#for test in test/netload/*.jl; do julia $$test; if [ $$? -ne 0 ]; then exit 1; fi; done
-
 	@echo
 	@echo To complete the release candidate checklist:
 	@echo
 	@echo 1. Remove deprecations in base/deprecated.jl
 	@echo 2. Bump VERSION
+	@echo 3. Replace github tarballs with generated ones
 	@echo
 
 julia-debug-symlink:
