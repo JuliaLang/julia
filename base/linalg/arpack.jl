@@ -152,6 +152,8 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
 
         dr     = Array(T, nev+1)
         di     = Array(T, nev+1)
+        fill!(dr,NaN)
+        fill!(di,NaN)
         sigmar = ones(T, 1)*real(sigma)
         sigmai = ones(T, 1)*imag(sigma)
         workev = Array(T, 3*ncv)
@@ -159,31 +161,35 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
               workev, bmat, n, which, nev, TOL, resid, ncv, v, ldv,
               iparam, ipntr, workd, workl, lworkl, info)
         if info[1] != 0; throw(ARPACKException(info[1])); end
-        evec = complex(zeros(T, n, nev+1), zeros(T, n, nev+1))
+        evec = complex(Array(T, n, nev+1), Array(T, n, nev+1))
         
         j = 1
-        indfake = 0
-        while j <= nev+1
-            if abs(complex(dr[j],di[j])) < sqrt(eps(T))*sqrt(nextfloat(zero(T))) # is this a good criterion for really small?
-                indfake = j
-            else
-                if di[j] == 0
-                    evec[:,j] = v[:,j]
-                else
-                    evec[:,j]   = v[:,j] + im*v[:,j+1]
-                    evec[:,j+1] = v[:,j] - im*v[:,j+1]
-                    j += 1
-                end
+        while j <= nev
+            if di[j] == 0
+                evec[:,j] = v[:,j]
+            else # For complex conjugate pairs
+                evec[:,j]   = v[:,j] + im*v[:,j+1]
+                evec[:,j+1] = v[:,j] - im*v[:,j+1]
+                j += 1
             end
             j += 1
         end
-        d = complex(dr,di)
-        p = sortperm(dmap(d), rev=true)
+        if j == nev+1 && !isnan(di[j])
+            if di[j] == 0
+                evec[:,j] = v[:,j]
+                j += 1
+            else
+                error("Arpack unexpected behavior")
+            end
+        end
         
-        if indfake == 0
-            p = p[1:nev]
+        d = complex(dr,di)
+        
+        if j == nev+1
+            p = sortperm(dmap(d[1:nev]), rev=true)
         else
-            p = setdiff(p, indfake)
+            p = sortperm(dmap(d), rev=true)
+            p = p[1:nev]
         end
         
         return ritzvec ? (d[p], evec[1:n, p],iparam[5],iparam[3],iparam[9],resid) : (d[p],iparam[5],iparam[3],iparam[9],resid)
