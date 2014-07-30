@@ -40,7 +40,7 @@ debug release: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/ju
 
 release-candidate-checklist: release test source-dist
 	@#Check documentation
-	julia doc/NEWS-update.jl #Add missing cross-references to NEWS.md
+	./julia doc/NEWS-update.jl #Add missing cross-references to NEWS.md
 	make -C doc html  SPHINXOPTS="-W" #Rebuild Julia HTML docs pedantically
 	make -C doc latex SPHINXOPTS="-W" #Rebuild Julia PDF docs pedantically
 	make -C doc doctest #Run Julia doctests
@@ -55,7 +55,7 @@ release-candidate-checklist: release test source-dist
 	@echo
 	@echo 1. Remove deprecations in base/deprecated.jl
 	@echo 2. Bump VERSION
-	@echo 3. Replace github tarballs with generated ones
+	@echo 3. Replace github tarballs with julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz
 	@echo
 
 julia-debug-symlink:
