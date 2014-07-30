@@ -226,7 +226,7 @@ immutable QRPackedQ{T} <: AbstractMatrix{T}
 end
 immutable QRCompactWYQ{S} <: AbstractMatrix{S} 
     factors::Matrix{S}
-    T::Matrix{S}
+    T::Triangular{S}
 end
 
 convert{T}(::Type{QRPackedQ{T}}, Q::QRPackedQ) = QRPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
