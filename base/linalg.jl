@@ -196,11 +196,11 @@ include("linalg/lapack.jl")
 
 include("linalg/dense.jl")
 include("linalg/tridiag.jl")
+include("linalg/triangular.jl")
 include("linalg/factorization.jl")
 include("linalg/lu.jl")
 
 include("linalg/bunchkaufman.jl")
-include("linalg/triangular.jl")
 include("linalg/symmetric.jl")
 include("linalg/woodbury.jl")
 include("linalg/diagonal.jl")
