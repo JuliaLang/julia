@@ -1169,6 +1169,8 @@ function launch_ssh_workers(cman::SSHManager, np::Integer, config::Dict)
     # start the processes first...
 
     for i in 1:np
+        thisconfig = copy(config) # config for this worker
+
         # machine could be of the format [user@]host[:port] bind_addr
         machine_bind = split(cman.machines[i])
         if length(machine_bind) > 1
@@ -1180,9 +1182,9 @@ function launch_ssh_workers(cman::SSHManager, np::Integer, config::Dict)
         
         machine_def = split(machine_def, ':')
         portopt = length(machine_def) == 2 ? ` -p $(machine_def[2]) ` : ``
-        config[:sshflags] = `$(config[:sshflags]) $portopt`
+        sshflags = `$(config[:sshflags]) $portopt`
+        thisconfig[:sshflags] = sshflags
         
-        sshflags = config[:sshflags]
         host = cman.machines[i] = machine_def[1]
         
         # Build up the ssh command
@@ -1192,7 +1194,8 @@ function launch_ssh_workers(cman::SSHManager, np::Integer, config::Dict)
         
         io, pobj = open(detach(cmd), "r")
         io_objs[i] = io
-        configs[i] = merge(config, {:machine => cman.machines[i]})
+        thisconfig[:machine] = cman.machines[i]
+        configs[i] = thisconfig
     end
 
     # ...and then read the host:port info. This optimizes overall start times.
