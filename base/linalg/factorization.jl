@@ -431,7 +431,7 @@ function A_ldiv_B!{T}(A::QR{T},B::StridedMatrix{T})
                 B[i,k] /= R[i,i]
             end
         end
-        if n > m # Apply elemenary transformation to solution
+        if n > m # Apply elementary transformation to solution
             B[m+1:mB,1:nB] = zero(T)
             for j = 1:nB
                 for k = 1:m
@@ -456,13 +456,13 @@ A_ldiv_B!(A::QRPivoted, B::StridedMatrix) = A_ldiv_B!(QR(A.factors,A.τ),B)[invp
 function \{TA,Tb}(A::Union(QR{TA},QRCompactWY{TA},QRPivoted{TA}),b::StridedVector{Tb})
     S = promote_type(TA,Tb)
     m,n = size(A)
-    m == length(b) || throw(DimensionMismatch("left hand side has $(m) rows, but right hand side has length $(length(b))"))
+    m == length(b) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has length $(length(b))"))
     n > m ? A_ldiv_B!(convert(Factorization{S},A),[b,zeros(S,n-m)]) : A_ldiv_B!(convert(Factorization{S},A), S == Tb ? copy(b) : convert(AbstractVector{S}, b))
 end
 function \{TA,TB}(A::Union(QR{TA},QRCompactWY{TA},QRPivoted{TA}),B::StridedMatrix{TB})
     S = promote_type(TA,TB)
     m,n = size(A)
-    m == size(B,1) || throw(DimensionMismatch("left hand side has $(m) rows, but right hand side has $(size(B,1)) rows"))
+    m == size(B,1) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has $(size(B,1)) rows"))
     n > m ? A_ldiv_B!(convert(Factorization{S},A),[B;zeros(S,n-m,size(B,2))]) : A_ldiv_B!(convert(Factorization{S},A), S == TB ? copy(B) : convert(AbstractMatrix{S}, B))
 end
 
