@@ -38,7 +38,8 @@ debug release: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/ju
 	@export private_libdir=$(private_libdir) && \
 	$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(build_libdir):$(LD_LIBRARY_PATH) JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$@)" $(build_private_libdir)/sys.$(SHLIB_EXT)
 
-release-candidate-checklist: release
+release-candidate-checklist: release test
+	@#Check documentation
 	julia doc/NEWS-update.jl #Add missing cross-references to NEWS.md
 	make -C doc html  SPHINXOPTS="-W" #Rebuild Julia HTML docs pedantically
 	make -C doc latex SPHINXOPTS="-W" #Rebuild Julia PDF docs pedantically
