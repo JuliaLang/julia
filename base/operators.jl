@@ -51,7 +51,7 @@ lexcmp(x,y) = cmp(x,y)
 lexless(x,y) = lexcmp(x,y)<0
 
 # cmp returns -1, 0, +1 indicating ordering
-cmp(x::Real, y::Real) = int(sign(x-y))
+cmp(x::Integer, y::Integer) = ifelse(isless(x,y), -1, ifelse(isless(y,x), 1, 0))
 
 max(x,y) = ifelse(y < x, x, y)
 min(x,y) = ifelse(x < y, x, y)
@@ -94,8 +94,8 @@ end
 .\(x::Number,y::Number) = y./x
 .*(x::Number,y::Number) = x*y
 .^(x::Number,y::Number) = x^y
-.+(x,y) = x+y
-.-(x,y) = x-y
+.+(x::Number,y::Number) = x+y
+.-(x::Number,y::Number) = x-y
 
 .==(x::Number,y::Number) = x == y
 .!=(x::Number,y::Number) = x != y

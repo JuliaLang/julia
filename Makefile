@@ -12,6 +12,11 @@ VERSDIR = v`cut -d. -f1-2 < VERSION`
 INSTALL_F = install -pm644
 INSTALL_M = install -pm755
 
+#file name of make dist result
+ifeq ($(JULIA_DIST_TARNAME),)
+	JULIA_DIST_TARNAME = julia-$(JULIA_COMMIT)-$(OS)-$(ARCH)
+endif
+
 all: default
 default: release
 
@@ -25,7 +30,7 @@ git-submodules:
 ifneq ($(NO_GIT), 1)
 	@-git submodule update --init
 else
-       $(warn "Submodules could not be updated because git is unavailible")
+       $(warn "Submodules could not be updated because git is unavailable")
 endif
 
 debug release: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test $(build_datarootdir)/julia/doc $(build_datarootdir)/julia/examples $(build_sysconfdir)/julia/juliarc.jl
@@ -96,8 +101,8 @@ run-julia:
 run:
 	@$(call spawn,$(cmd))
 
-$(build_bindir)/stringpatch: $(build_bindir) contrib/stringpatch.c
-	@$(call PRINT_CC, $(CC) -o $(build_bindir)/stringpatch contrib/stringpatch.c)
+$(build_bindir)/stringreplace: $(build_bindir) contrib/stringreplace.c
+	@$(call PRINT_CC, $(CC) -o $(build_bindir)/stringreplace contrib/stringreplace.c)
 
 
 # public libraries, that are installed in $(prefix)/lib
@@ -173,7 +178,7 @@ $(eval $(call std_dll,ssp-0))
 endif
 
 prefix ?= $(abspath julia-$(JULIA_COMMIT))
-install: $(build_bindir)/stringpatch
+install: $(build_bindir)/stringreplace
 	@$(MAKE) $(QUIET_MAKE) release
 	@$(MAKE) $(QUIET_MAKE) debug
 	@for subdir in $(bindir) $(libexecdir) $(datarootdir)/julia/site/$(VERSDIR) $(datarootdir)/man/man1 $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir); do \
@@ -231,7 +236,7 @@ endif
 
 	# Overwrite JL_SYSTEM_IMAGE_PATH in julia binaries:
 	for julia in $(DESTDIR)$(bindir)/julia* ; do \
-		$(build_bindir)/stringpatch $$(strings -t x - $$julia | grep "sys.ji$$" | awk '{print $$1;}' ) "$(private_libdir_rel)/sys.ji" 256 $(call cygpath_w,$$julia); \
+		$(build_bindir)/stringreplace $$(strings -t x - $$julia | grep "sys.ji$$" | awk '{print $$1;}' ) "$(private_libdir_rel)/sys.ji" 256 $(call cygpath_w,$$julia); \
 	done
 
 	mkdir -p $(DESTDIR)$(sysconfdir)
@@ -283,7 +288,7 @@ ifeq ($(OS), WINNT)
 	cat ./contrib/windows/7zS.sfx ./contrib/windows/7zSFX-config.txt "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" > "julia-${JULIA_VERSION}-${ARCH}.exe"
 	-rm -f julia-installer.exe
 else
-	$(TAR) zcvf julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz julia-$(JULIA_COMMIT)
+	$(TAR) zcvf $(JULIA_DIST_TARNAME).tar.gz julia-$(JULIA_COMMIT)
 endif
 	rm -fr $(prefix)
 
@@ -318,7 +323,7 @@ clean: | $(CLEAN_TARGETS)
 	done
 	@rm -f julia
 	@rm -f *~ *# *.tar.gz
-	@rm -f $(build_bindir)/stringpatch source-dist.tmp source-dist.tmp1
+	@rm -f $(build_bindir)/stringreplace source-dist.tmp source-dist.tmp1
 	@rm -fr $(build_private_libdir)
 # Temporarily add this line to the Makefile to remove extras
 	@rm -fr $(build_datarootdir)/julia/extras

@@ -262,9 +262,11 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
 {
 #ifdef _OS_WINDOWS_
     DWORD fbase = SymGetModuleBase64(GetCurrentProcess(),(DWORD)pointer);
+    char *fname = 0;
     if (fbase != 0) {
 #else
     Dl_info dlinfo;
+    const char* fname = 0;
     if ((dladdr((void*)pointer, &dlinfo) != 0) && dlinfo.dli_fname) {
         if (skipC && !jl_is_sysimg(dlinfo.dli_fname))
             return;
@@ -274,22 +276,32 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
         llvm::object::ObjectFile *obj = NULL;
         DIContext *context = NULL;
         int64_t slide = 0;
+#ifndef _OS_WINDOWS_
+        fname = dlinfo.dli_fname;
+#else
+        IMAGEHLP_MODULE64 ModuleInfo;
+        ModuleInfo.SizeOfStruct = sizeof(IMAGEHLP_MODULE64);
+        SymGetModuleInfo64(GetCurrentProcess(), (DWORD64)pointer, &ModuleInfo);
+        fname = ModuleInfo.LoadedImageName;
+        JL_PRINTF(JL_STDOUT,fname);
+#endif
         if (it == objfilemap.end()) {
 #ifdef _OS_DARWIN_
             // First find the uuid of the object file (we'll use this to make sure we find the
             // correct debug symbol file).
             uint8_t uuid[16], uuid2[16];
+
+            MemoryBuffer *membuf = MemoryBuffer::getMemBuffer(
+                StringRef((const char *)fbase, (size_t)(((uint64_t)-1)-fbase)),"",false);
+
 #ifdef LLVM35
+            std::unique_ptr<MemoryBuffer> buf(membuf);
             ErrorOr<llvm::object::ObjectFile*> origerrorobj = llvm::object::ObjectFile::createObjectFile(
+                buf, sys::fs::file_magic::unknown);
 #else
             llvm::object::ObjectFile *origerrorobj = llvm::object::ObjectFile::createObjectFile(
+                membuf);
 #endif
-                    MemoryBuffer::getMemBuffer(
-                    StringRef((const char *)fbase, (size_t)(((uint64_t)-1)-fbase)),"",false)
-#ifdef LLVM35
-                    ,false, sys::fs::file_magic::unknown
-#endif
-            );
             if (!origerrorobj) {
                 objfileentry_t entry = {obj,context,slide};
                 objfilemap[fbase] = entry;
@@ -320,15 +332,6 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
             llvm::object::ObjectFile *errorobj = llvm::object::ObjectFile::createObjectFile(dsympath);
 #endif
 #else
-#ifndef _OS_WINDOWS_
-            const char *fname = dlinfo.dli_fname;
-#else
-            IMAGEHLP_MODULE64 ModuleInfo;
-            ModuleInfo.SizeOfStruct = sizeof(IMAGEHLP_MODULE64);
-            SymGetModuleInfo64(GetCurrentProcess(), (DWORD64)pointer, &ModuleInfo);
-            char *fname = ModuleInfo.LoadedImageName;
-            JL_PRINTF(JL_STDOUT,fname);
-#endif
             // On non OS X systems we need to mmap another copy because of the permissions on the mmaped
             // shared library.
 #ifdef LLVM35
@@ -382,8 +385,7 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
             context = it->second.ctx;
             slide = it->second.slide;
         }
-
-        lookup_pointer(context, name, line, filename, pointer+slide, jl_is_sysimg(dlinfo.dli_fname));
+        lookup_pointer(context, name, line, filename, pointer+slide, jl_is_sysimg(fname));
     }
     return;
 }

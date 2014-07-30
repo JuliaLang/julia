@@ -5215,11 +5215,14 @@ System
    allowing it to outlive the julia process, and not have Ctrl-C interrupts
    passed to it.
 
-.. function:: setenv(command, env)
+.. function:: setenv(command, env; dir=working_dir)
 
    Set environment variables to use when running the given command. ``env`` is either
    a dictionary mapping strings to strings, or an array of strings of the form
    ``"var=val"``.
+
+   The ``dir`` keyword argument can be used to specify a working directory for the
+   command.
 
 .. function:: |>(command, command)
               |>(command, filename)
@@ -5254,7 +5257,7 @@ System
 
 .. function:: cd(dir::String)
 
-   Set the current working directory. Returns the new current directory.
+   Set the current working directory.
 
 .. function:: cd(f, [dir])
 

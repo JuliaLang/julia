@@ -513,13 +513,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
       ========= ======================================================================================================================
       ``which`` type of eigenvalues
       --------- ----------------------------------------------------------------------------------------------------------------------
-      ``:LM``  eigenvalues of largest magnitude (default)
-      ``:SM``  eigenvalues of smallest magnitude
-      ``:LR``  eigenvalues of largest real part
-      ``:SR``  eigenvalues of smallest real part
-      ``:LI``  eigenvalues of largest imaginary part (nonsymmetric or complex ``A`` only)
-      ``:SI``  eigenvalues of smallest imaginary part (nonsymmetric or complex ``A`` only)
-      ``:BE``  compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric ``A`` only)
+      ``:LM``   eigenvalues of largest magnitude (default)
+      ``:SM``   eigenvalues of smallest magnitude
+      ``:LR``   eigenvalues of largest real part
+      ``:SR``   eigenvalues of smallest real part
+      ``:LI``   eigenvalues of largest imaginary part (nonsymmetric or complex ``A`` only)
+      ``:SI``   eigenvalues of smallest imaginary part (nonsymmetric or complex ``A`` only)
+      ``:BE``   compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric ``A`` only)
       ========= ======================================================================================================================
 
     * ``tol``: tolerance (:math:`tol \le 0.0` defaults to ``DLAMCH('EPS')``)

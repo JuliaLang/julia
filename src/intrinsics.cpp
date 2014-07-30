@@ -392,6 +392,11 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     }
     else {
         llvmt = julia_type_to_llvm(bt);
+        if (llvmt == jl_pvalue_llvmt) {
+            // this happens if !jl_is_leaf_type(bt)
+            llvmt = NULL;
+            bt = NULL;
+        }
         if (nb == -1)
             nb = (bt==(jl_value_t*)jl_bool_type) ? 1 : jl_datatype_size(bt)*8;
     }
@@ -411,24 +416,30 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     if (vxt != llvmt) {
         if (vxt == T_void)
             return vx;
-        if (vxt->isPointerTy() && !llvmt->isPointerTy()) {
-            vx = builder.CreatePtrToInt(vx, llvmt);
-        }
-        else if (!vxt->isPointerTy() && llvmt->isPointerTy()) {
-            vx = builder.CreateIntToPtr(vx, llvmt);
-        }
-        else if (llvmt == T_int1) {
+        if (llvmt == T_int1) {
             vx = builder.CreateTrunc(vx, llvmt);
         }
         else if (vxt == T_int1 && llvmt == T_int8) {
             vx = builder.CreateZExt(vx, llvmt);
         }
         else {
-            if (vxt->getPrimitiveSizeInBits() != llvmt->getPrimitiveSizeInBits()) {
+            // getPrimitiveSizeInBits() == 0 for pointers
+            if (vxt->getPrimitiveSizeInBits() != llvmt->getPrimitiveSizeInBits() &&
+                !(vxt->isPointerTy() && llvmt->getPrimitiveSizeInBits() == sizeof(void*)*8) &&
+                !(llvmt->isPointerTy() && vxt->getPrimitiveSizeInBits() == sizeof(void*)*8)) {
                 emit_error("box: argument is of incorrect size", ctx);
                 return vx;
             }
-            vx = builder.CreateBitCast(vx, llvmt);
+            // PtrToInt and IntToPtr ignore size differences
+            if (vxt->isPointerTy() && !llvmt->isPointerTy()) {
+                vx = builder.CreatePtrToInt(vx, llvmt);
+            }
+            else if (!vxt->isPointerTy() && llvmt->isPointerTy()) {
+                vx = builder.CreateIntToPtr(vx, llvmt);
+            }
+            else {
+                vx = builder.CreateBitCast(vx, llvmt);
+            }
         }
     }
 
@@ -891,16 +902,18 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
 
     HANDLE(fptrunc,2) return builder.CreateFPTrunc(FP(auto_unbox(args[2],ctx)), FTnbits(try_to_determine_bitstype_nbits(args[1],ctx)));
     HANDLE(fpext,2) {
-        // when extending a float32 to a float64, we need to force
-        // rounding to single precision first. the reason is that it's
+        Value *x = auto_unbox(args[2],ctx);
+#if JL_NEED_FLOATTEMP_VAR
+        // Target platform might carry extra precision.  
+        // Force rounding to single precision first. The reason is that it's
         // fine to keep working in extended precision as long as it's
         // understood that everything is implicitly rounded to 23 bits,
         // but if we start looking at more bits we need to actually do the
         // rounding first instead of carrying around incorrect low bits.
-        Value *x = auto_unbox(args[2],ctx);
         builder.CreateStore(FP(x), builder.CreateBitCast(prepare_global(jlfloattemp_var),FT(x->getType())->getPointerTo()), true);
-        return builder.CreateFPExt(builder.CreateLoad(builder.CreateBitCast(prepare_global(jlfloattemp_var),FT(x->getType())->getPointerTo()), true),
-                                   FTnbits(try_to_determine_bitstype_nbits(args[1],ctx)));
+        x  = builder.CreateLoad(builder.CreateBitCast(prepare_global(jlfloattemp_var),FT(x->getType())->getPointerTo()), true);
+#endif
+        return builder.CreateFPExt(x, FTnbits(try_to_determine_bitstype_nbits(args[1],ctx)));
     }
     HANDLE(select_value,3) {
         Value *isfalse = emit_condition(args[1], "select_value", ctx);

@@ -124,6 +124,11 @@ double pisum() {
 
 struct double_pair { double s1, s2; };
 
+static void randmtzig_fill_randn(dsfmt_t *dsfmt, double *a, int size) {
+    for (int i=0; i<size; ++i)
+        a[i] = randmtzig_randn(dsfmt);
+}
+
 struct double_pair randmatstat(int t) {
     dsfmt_t dsfmt;
     dsfmt_init_gen_rand(&dsfmt, 1234);

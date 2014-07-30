@@ -97,8 +97,8 @@ requested conversion:
 .. doctest::
 
     julia> convert(FloatingPoint, "foo")
-    ERROR: no method convert(Type{FloatingPoint}, ASCIIString)
-     in convert at base.jl:11
+    ERROR: `convert` has no method matching convert(::Type{FloatingPoint}, ::ASCIIString)
+     in convert at base.jl:13
 
 Some languages consider parsing strings as numbers or formatting
 numbers as strings to be conversions (many dynamic languages will even
@@ -132,7 +132,7 @@ to zero:
 
     julia> convert(Bool, 1im)
     ERROR: InexactError()
-     in convert at complex.jl:27
+     in convert at complex.jl:18
 
     julia> convert(Bool, 0im)
     false
@@ -239,7 +239,7 @@ promotion is to convert numeric arguments to a common type:
     (1.5 + 0.0im,0.0 + 1.0im)
 
     julia> promote(1 + 2im, 3//4)
-    (1//1 + 2//1im,3//4 + 0//1im)
+    (1//1 + 2//1*im,3//4 + 0//1*im)
 
 Floating-point values are promoted to the largest of the floating-point
 argument types. Integer values are promoted to the larger of either the
