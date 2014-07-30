@@ -175,13 +175,10 @@ A_mul_B!{T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, B::Triangular{T,S,UpLo
 A_mul_B!(A::Tridiagonal, B::Triangular) = A*full!(B)
 A_mul_B!(C::AbstractVecOrMat, A::Triangular, B::AbstractVecOrMat) = A_mul_B!(A, copy!(C, B))
 
-A_mul_Bc!(A::Triangular, B::QRCompactWYQ) = A_mul_Bc!(full!(A),B)
-A_mul_Bc!(A::Triangular, B::QRPackedQ) = A_mul_Bc!(full!(A),B)
 A_mul_Bc!(C::AbstractVecOrMat, A::Triangular, B::AbstractVecOrMat) = A_mul_Bc!(A, copy!(C, B))
 
 #Generic multiplication
 *(A::Tridiagonal, B::Triangular) = A_mul_B!(full(A), B)
-A_mul_Bc(A::Triangular, B::Union(QRCompactWYQ,QRPackedQ)) = A_mul_Bc(full(A), B)
 for func in (:*, :Ac_mul_B, :A_mul_Bc, :/, :A_rdiv_Bc)
     @eval begin
         ($func){TA,TB,SA<:AbstractMatrix,SB<:AbstractMatrix,UpLoA,UpLoB,IsUnitA,IsUnitB}(A::Triangular{TA,SA,UpLoA,IsUnitA}, B::Triangular{TB,SB,UpLoB,IsUnitB}) = ($func)(A, full(B))

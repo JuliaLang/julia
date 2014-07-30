@@ -216,8 +216,9 @@ endif
 STDLIBCPP_FLAG = 
 
 ifeq ($(OS), Darwin)
-DARWINVER = $(shell uname -r | cut -b 1-2)
-OSXVER = $(shell sw_vers -productVersion | cut -b 1-4)
+DARWINVER := $(shell uname -r | cut -b 1-2)
+DARWINVER_GTE13 := $(shell expr `uname -r | cut -b 1-2` \>= 13)
+OSXVER := $(shell sw_vers -productVersion | cut -b 1-4)
 ifeq ($(DARWINVER), 10) # Snow Leopard specific configuration
 USEGCC = 1
 USECLANG = 0
@@ -225,7 +226,7 @@ OPENBLAS_TARGET_ARCH=NEHALEM
 OPENBLAS_DYNAMIC_ARCH=0
 USE_SYSTEM_LIBUNWIND=1
 else
-ifeq ($(DARWINVER),13)
+ifeq ($(DARWINVER_GTE13),1)
 USE_LIBCPP = 1
 STDLIBCPP_FLAG = -stdlib=libstdc++
 else 
@@ -706,6 +707,8 @@ $$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(2)/$(1))): $$(abspath $(2)/$(1)
 $$(abspath $(2)/$(1)): | $$(abspath $(2))
 ifeq ($(BUILD_OS), WINNT)
 	@cmd //C mklink //J $$(call mingw_to_dos,$(2)/$(1),cd $(2) &&) $$(call mingw_to_dos,$(1),)
+else ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
+	@cmd /C mklink /J $$(call cygpath_w,$(2)/$(1)) $$(call cygpath_w,$(1))
 else ifdef JULIA_VAGRANT_BUILD
 	@cp -R $$(abspath $(1)) $$@
 else

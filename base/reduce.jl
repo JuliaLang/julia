@@ -404,11 +404,6 @@ const ∈ = in
 ∋(itr, x)= ∈(x, itr)
 ∌(itr, x)=!∋(itr, x)
 
-function contains(itr, x)
-    depwarn("contains(collection, item) is deprecated, use in(item, collection) instead", :contains)
-    in(x, itr)
-end
-
 function contains(eq::Function, itr, x)
     for y in itr
         if eq(y, x)

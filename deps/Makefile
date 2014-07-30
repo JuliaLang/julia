@@ -210,11 +210,12 @@ LLVM_LIBCXX_TAR=
 endif
 endif
 
+LLVM_CXXFLAGS =
 LLVM_TARGET_FLAGS= --enable-targets=host
 LLVM_FLAGS += --disable-profiling --enable-shared --enable-static $(LLVM_TARGET_FLAGS) --disable-bindings --disable-docs
 LLVM_MFLAGS =
 ifeq ($(LLVM_ASSERTIONS), 1)
-LLVM_FLAGS += --enable-assertions 
+LLVM_FLAGS += --enable-assertions
 ifeq ($(OS), WINNT)
 LLVM_FLAGS += --disable-embed-stdcxx
 endif
@@ -246,21 +247,29 @@ ifeq ($(BUILD_LLDB),1)
 ifeq ($(USECLANG),1)
 LLVM_FLAGS += --enable-cxx11
 else
-LLVM_MFLAGS += CXXFLAGS=-std=c++0x
+LLVM_CXXFLAGS += -std=c++0x
+endif
+ifeq ($(LLDB_DISABLE_PYTHON),1)
+LLVM_CXXFLAGS += -DLLDB_DISABLE_PYTHON
 endif
 endif
 
 ifeq ($(ARCH), ppc64)
-  LLVM_FLAGS += CXXFLAGS=-mminimal-toc
-  LLVM_MFLAGS += CXXFLAGS=-mminimal-toc
+LLVM_CXXFLAGS += -mminimal-toc
 endif
 
 
 ifeq ($(LLVM_SANITIZE),1)
-LLVM_CC = CXXFLAGS="-fsanitize=address" CFLAGS="-fsanitize=address" LDFLAGS="-fsanitize=address"
+LLVM_CC = CFLAGS="-fsanitize=address" LDFLAGS="-fsanitize=address"
+LLVM_CXXFLAGS += -fsanitize=address
 LLVM_MFLAGS += TOOL_NO_EXPORTS= HAVE_LINK_VERSION_SCRIPT=0
 else
 LLVM_CC =
+endif
+
+ifneq ($(LLVM_CXXFLAGS),)
+LLVM_FLAGS += CXXFLAGS="$(LLVM_CXXFLAGS)"
+LLVM_MFLAGS += CXXFLAGS="$(LLVM_CXXFLAGS)"
 endif
 
 ifneq ($(LLVM_CLANG_TAR),)
@@ -376,6 +385,7 @@ endif
 ifeq ($(LLVM_VER),3.3)
 	patch -p0 < llvm-3.3.patch
 	patch -p0 < instcombine-llvm-3.3.patch
+	(cd llvm-$(LLVM_VER) && patch < ../osx-10.10.llvm-3.3.patch)
 ifeq ($(OS),WINNT)
 ifeq ($(ARCH),x86_64)
 	patch -p0 < win64-int128.llvm-3.3.patch
@@ -802,7 +812,9 @@ endif
 
 # Allow disabling AVX for older binutils
 ifeq ($(OPENBLAS_NO_AVX), 1)
-OPENBLAS_BUILD_OPTS += NO_AVX=1
+OPENBLAS_BUILD_OPTS += NO_AVX=1 NO_AVX2=1
+else ifeq ($(OPENBLAS_NO_AVX2), 1)
+OPENBLAS_BUILD_OPTS += NO_AVX2=1
 endif
 
 openblas-$(OPENBLAS_VER).tar.gz:
@@ -1573,11 +1585,11 @@ PATCHELF_TARGET = $(build_bindir)/patchelf
 compile-patchelf: install-patchelf
 install-patchelf: $(PATCHELF_TARGET)
 
-patchelf-$(PATCHELF_VER).tar.bz2:
-	$(JLDOWNLOAD) $@ http://hydra.nixos.org/build/1524660/download/2/$@
-patchelf-$(PATCHELF_VER)/configure: patchelf-$(PATCHELF_VER).tar.bz2
+patchelf-$(PATCHELF_VER).tar.gz:
+	$(JLDOWNLOAD) $@ https://ia601003.us.archive.org/29/items/julialang/mirror/patchelf-$(PATCHELF_VER).tar.gz
+patchelf-$(PATCHELF_VER)/configure: patchelf-$(PATCHELF_VER).tar.gz
 	$(JLCHECKSUM) $<
-	$(TAR) jxf $<
+	$(TAR) zxf $<
 	touch -c $@
 patchelf-$(PATCHELF_VER)/config.status: patchelf-$(PATCHELF_VER)/configure
 	cd patchelf-$(PATCHELF_VER) && \
@@ -1600,9 +1612,9 @@ clean-patchelf:
 	-$(MAKE) -C patchelf-$(PATCHELF_VER) clean
 	-rm -f $(PATCHELF_OBJ_TARGET)
 distclean-patchelf:
-	-rm -rf patchelf-$(PATCHELF_VER).tar.bz2 patchelf-$(PATCHELF_VER)
+	-rm -rf patchelf-$(PATCHELF_VER).tar.gz patchelf-$(PATCHELF_VER)
 
-get-patchelf: patchelf-$(PATCHELF_VER).tar.bz2
+get-patchelf: patchelf-$(PATCHELF_VER).tar.gz
 configure-patchelf: patchelf-$(PATCHELF_VER)/config.status
 compile-patchelf: $(PATCHELF_SOURCE)
 check-patchelf: patchelf-$(PATCHELF_VER)/checked

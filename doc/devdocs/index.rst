@@ -1,3 +1,4 @@
+:orphan:
 
 .. _devdocs-index:
 

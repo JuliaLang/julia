@@ -247,12 +247,6 @@ typedef struct {
     unsigned imported:1;
 } jl_binding_t;
 
-typedef struct _jl_callback_t {
-    JL_DATA_TYPE
-    jl_function_t *function;
-    jl_tuple_t *types;
-} jl_callback_t;
-
 typedef struct _jl_module_t {
     JL_DATA_TYPE
     jl_sym_t *name;
@@ -841,6 +835,8 @@ DLLEXPORT void jl_too_many_args(const char *fname, int max);
 DLLEXPORT void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got);
 DLLEXPORT void jl_type_error_rt(const char *fname, const char *context,
                                 jl_value_t *ty, jl_value_t *got);
+DLLEXPORT void jl_type_error_rt_line(const char *fname, const char *context,
+                                     jl_value_t *ty, jl_value_t *got, int line);
 jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na);
 DLLEXPORT void jl_undefined_var_error(jl_sym_t *var);
 void jl_check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx);

@@ -770,9 +770,10 @@ static void emit_type_error(Value *x, jl_value_t *type, const std::string &msg,
                                          ArrayRef<Value*>(zeros));
     Value *msg_val = builder.CreateGEP(stringConst(msg),
                                        ArrayRef<Value*>(zeros));
-    builder.CreateCall4(prepare_call(jltypeerror_func),
+    builder.CreateCall5(prepare_call(jltypeerror_func),
                         fname_val, msg_val,
-                        literal_pointer_val(type), boxed(x,ctx));
+                        literal_pointer_val(type), boxed(x,ctx),
+                        ConstantInt::get(T_int32, ctx->lineno));
 }
 
 static void emit_typecheck(Value *x, jl_value_t *type, const std::string &msg,

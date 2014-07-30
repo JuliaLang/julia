@@ -383,6 +383,12 @@ end
 t_func[getfield] = (2, 2, getfield_tfunc)
 t_func[setfield!] = (3, 3, (o, f, v)->v)
 const fieldtype_tfunc = function (A, s, name)
+    if isType(s)
+        # fieldtype of a type only depends on its kind
+        # i.e. fieldtype(SomeDataType, :types) === (Any...,)
+        # rather than a specific type tuple
+        s = typeof(s.parameters[1])
+    end
     if !isa(s,DataType)
         return Type
     end
@@ -390,7 +396,7 @@ const fieldtype_tfunc = function (A, s, name)
     if is(t,None)
         return t
     end
-    Type{t}
+    Type{isleaftype(t) || isa(t,TypeVar) ? t : TypeVar(:_, t)}
 end
 t_func[fieldtype] = (2, 2, fieldtype_tfunc)
 t_func[Box] = (1, 1, (a,)->Box)
@@ -2944,7 +2950,7 @@ function tuple_elim_pass(ast::Expr)
                 continue
             end
 
-            splice!(body, i)  # remove tuple allocation
+            deleteat!(body, i)  # remove tuple allocation
             # convert tuple allocation to a series of local var assignments
             vals = cell(nv)
             n_ins = 0

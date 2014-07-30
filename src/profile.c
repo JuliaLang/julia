@@ -13,9 +13,13 @@ static volatile size_t bt_size_max = 0;
 static volatile size_t bt_size_cur = 0;
 static volatile u_int64_t nsecprof = 0;
 static volatile int running = 0;
+static const    u_int64_t GIGA = 1000000000ULL;
 /////////////////////////////////////////
 // Timers to take samples at intervals //
 /////////////////////////////////////////
+DLLEXPORT void jl_profile_stop_timer(void);
+DLLEXPORT int jl_profile_start_timer(void);
+
 #if defined(_WIN32)
 //
 // Windows
@@ -25,13 +29,13 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
 {
     TIMECAPS tc;
     if (MMSYSERR_NOERROR!=timeGetDevCaps(&tc, sizeof(tc))) {
-        fputs("failed to get get timer resulution",stderr);
+        fputs("failed to get timer resolution",stderr);
         hBtThread = 0;
         return 0;
     }
     while (1) {
         if (running && bt_size_cur < bt_size_max) {
-            DWORD timeout = nsecprof/1000000;
+            DWORD timeout = nsecprof/GIGA;
             timeout = min(max(timeout,tc.wPeriodMin*2),tc.wPeriodMax/2);
             Sleep(timeout);
             if ((DWORD)-1 == SuspendThread(hMainThread)) {
@@ -263,8 +267,8 @@ DLLEXPORT int jl_profile_start_timer(void)
         profile_started = 1;
     }
 
-    timerprof.tv_sec = 0;
-    timerprof.tv_nsec = nsecprof;
+    timerprof.tv_sec = nsecprof/GIGA;
+    timerprof.tv_nsec = nsecprof%GIGA;
 
     running = 1;
     ret = clock_alarm(clk, TIME_RELATIVE, timerprof, profile_port);
@@ -286,38 +290,58 @@ DLLEXPORT void jl_profile_stop_timer(void)
 struct itimerval timerprof;
 
 // The handler function, called whenever the profiling timer elapses
-static void profile_bt(int dummy)
+static void profile_bt(int sig)
 {
-    // Get backtrace data
-    bt_size_cur += rec_backtrace((ptrint_t*)bt_data_prof+bt_size_cur, bt_size_max-bt_size_cur-1);
-    // Mark the end of this block with 0
-    bt_data_prof[bt_size_cur] = 0;
-    bt_size_cur++;
-    // Re-arm the  timer
     if (running && bt_size_cur < bt_size_max) {
-        timerprof.it_value.tv_usec = nsecprof/1000;
-        setitimer(ITIMER_REAL, &timerprof, 0);
-        signal(SIGALRM, profile_bt);
+        // Get backtrace data
+        bt_size_cur += rec_backtrace((ptrint_t*)bt_data_prof+bt_size_cur, bt_size_max-bt_size_cur-1);
+        // Mark the end of this block with 0
+        bt_data_prof[bt_size_cur] = 0;
+        bt_size_cur++;
+    }
+    if (bt_size_cur >= bt_size_max) {
+        // Buffer full: Delete the  timer
+        jl_profile_stop_timer();
     }
 }
 
 DLLEXPORT int jl_profile_start_timer(void)
 {
-    timerprof.it_interval.tv_sec = 0;
-    timerprof.it_interval.tv_usec = 0;
-    timerprof.it_value.tv_sec = 0;
-    timerprof.it_value.tv_usec = nsecprof/1000;
-    if (setitimer(ITIMER_REAL, &timerprof, 0) == -1)
+    struct sigevent sigprof;
+    struct sigaction sa;
+    sigset_t ss;
+
+    // Make sure SIGPROF is unblocked
+    sigemptyset(&ss);
+    sigaddset(&ss, SIGPROF);
+    if (sigprocmask(SIG_UNBLOCK, &ss, NULL) == -1)
+        return -4;
+
+    // Establish the signal handler
+    memset(&sa, 0, sizeof(struct sigaction));
+    sa.sa_handler = profile_bt;
+    sigemptyset(&sa.sa_mask);
+    if (sigaction(SIGPROF, &sa, NULL) == -1)
+        return -1;
+
+    timerprof.it_interval.tv_sec = nsecprof/GIGA;
+    timerprof.it_interval.tv_usec = (nsecprof%GIGA)/1000;
+    timerprof.it_value.tv_sec = nsecprof/GIGA;
+    timerprof.it_value.tv_usec = (nsecprof%GIGA)/1000;
+    if (setitimer(ITIMER_PROF, &timerprof, 0) == -1)
         return -3;
 
     running = 1;
-    signal(SIGALRM, profile_bt);
 
     return 0;
 }
 
 DLLEXPORT void jl_profile_stop_timer(void)
 {
+    if (running) {
+        memset(&timerprof, 0, sizeof(timerprof));
+        setitimer(ITIMER_PROF, &timerprof, 0);
+    }
     running = 0;
 }
 #else
@@ -334,17 +358,16 @@ static struct itimerspec itsprof;
 // The handler function, called whenever the profiling timer elapses
 static void profile_bt(int signal, siginfo_t *si, void *uc)
 {
-    if (si->si_value.sival_ptr == &timerprof && bt_size_cur < bt_size_max) {
+    if (running && si->si_value.sival_ptr == &timerprof && bt_size_cur < bt_size_max) {
         // Get backtrace data
         bt_size_cur += rec_backtrace((ptrint_t*)bt_data_prof+bt_size_cur, bt_size_max-bt_size_cur-1);
         // Mark the end of this block with 0
         bt_data_prof[bt_size_cur] = 0;
         bt_size_cur++;
-        // Re-arm the  timer
-        if (bt_size_cur < bt_size_max) {
-            itsprof.it_value.tv_nsec = nsecprof;
-            timer_settime(timerprof, 0, &itsprof, NULL);
-        }
+    }
+    if (bt_size_cur >= bt_size_max) {
+        // Buffer full: Delete the  timer
+        jl_profile_stop_timer();
     }
 }
 
@@ -354,9 +377,9 @@ DLLEXPORT int jl_profile_start_timer(void)
     struct sigaction sa;
     sigset_t ss;
 
-    // Make sure SIGUSR1 is unblocked
+    // Make sure SIGUSR2 is unblocked
     sigemptyset(&ss);
-    sigaddset(&ss, SIGUSR1);
+    sigaddset(&ss, SIGUSR2);
     if (sigprocmask(SIG_UNBLOCK, &ss, NULL) == -1)
         return -4;
 
@@ -365,22 +388,22 @@ DLLEXPORT int jl_profile_start_timer(void)
     sa.sa_flags = SA_SIGINFO;
     sa.sa_sigaction = profile_bt;
     sigemptyset(&sa.sa_mask);
-    if (sigaction(SIGUSR1, &sa, NULL) == -1)
+    if (sigaction(SIGUSR2, &sa, NULL) == -1)
         return -1;
 
     // Establish the signal event
     memset(&sigprof, 0, sizeof(struct sigevent));
     sigprof.sigev_notify = SIGEV_SIGNAL;
-    sigprof.sigev_signo = SIGUSR1;
+    sigprof.sigev_signo = SIGUSR2;
     sigprof.sigev_value.sival_ptr = &timerprof;
     if (timer_create(CLOCK_REALTIME, &sigprof, &timerprof) == -1)
         return -2;
 
     // Start the timer
-    itsprof.it_value.tv_sec = 0;
-    itsprof.it_interval.tv_sec = 0;       // make it fire once
-    itsprof.it_interval.tv_nsec = 0;
-    itsprof.it_value.tv_nsec = nsecprof;
+    itsprof.it_interval.tv_sec = nsecprof/GIGA;
+    itsprof.it_interval.tv_nsec = nsecprof%GIGA;
+    itsprof.it_value.tv_sec = nsecprof/GIGA;
+    itsprof.it_value.tv_nsec = nsecprof%GIGA;
     if (timer_settime(timerprof, 0, &itsprof, NULL) == -1)
         return -3;
 

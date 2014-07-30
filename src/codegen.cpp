@@ -128,6 +128,7 @@
 #include "llvm/Support/MemoryObject.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetRegistry.h"
+#include "llvm/Support/PrettyStackTrace.h"
 #include "llvm/Support/Host.h"
 #include "llvm/Support/raw_ostream.h"
 #ifndef LLVM35
@@ -254,7 +255,12 @@ static Value *V_null;
 static GlobalVariable *jltrue_var;
 static GlobalVariable *jlfalse_var;
 static GlobalVariable *jlnull_var;
+#if defined(_CPU_X86_)
+#define JL_NEED_FLOATTEMP_VAR 1
+#endif
+#if JL_NEED_FLOATTEMP_VAR
 static GlobalVariable *jlfloattemp_var;
+#endif
 #ifdef JL_GC_MARKSWEEP
 static GlobalVariable *jlpgcstack_var;
 #endif
@@ -875,6 +881,7 @@ static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams,
         if (b == NULL) return NULL;
         if (b->constp)
             return b->value;
+        return NULL;
     }
     if (jl_is_quotenode(ex))
         return jl_fieldref(ex,0);
@@ -4041,14 +4048,14 @@ static void init_julia_llvm_env(Module *m)
                            NULL, "jl_dl_handle");
     add_named_global(jldll_var, (void*)&jl_dl_handle);
 #endif
-
+#if JL_NEED_FLOATTEMP_VAR
     // Has to be big enough for the biggest LLVM-supported float type
     jlfloattemp_var =
         new GlobalVariable(*m, IntegerType::get(jl_LLVMContext,128),
                            false, GlobalVariable::ExternalLinkage, 
                            ConstantInt::get(IntegerType::get(jl_LLVMContext,128),0),
                            "jl_float_temp");
-
+#endif
 
     std::vector<Type*> args1(0);
     args1.push_back(T_pint8);
@@ -4109,13 +4116,13 @@ static void init_julia_llvm_env(Module *m)
     te_args.push_back(T_pint8);
     te_args.push_back(jl_pvalue_llvmt);
     te_args.push_back(jl_pvalue_llvmt);
+    te_args.push_back(T_int32);
     jltypeerror_func =
         Function::Create(FunctionType::get(T_void, te_args, false),
                          Function::ExternalLinkage,
-                         "jl_type_error_rt", m);
+                         "jl_type_error_rt_line", m);
     jltypeerror_func->setDoesNotReturn();
-    add_named_global(jltypeerror_func,
-                                         (void*)&jl_type_error_rt);
+    add_named_global(jltypeerror_func, (void*)&jl_type_error_rt_line);
 
     std::vector<Type *> args_2ptrs(0);
     args_2ptrs.push_back(jl_pvalue_llvmt);
@@ -4370,7 +4377,11 @@ static void init_julia_llvm_env(Module *m)
 #endif
     FPM->add(createIndVarSimplifyPass());       // Canonicalize indvars
     FPM->add(createLoopDeletionPass());         // Delete dead loops
+#if LLVM35
+    FPM->add(createSimpleLoopUnrollPass());     // Unroll small loops
+#else
     FPM->add(createLoopUnrollPass());           // Unroll small loops
+#endif
     //FPM->add(createLoopStrengthReducePass());   // (jwb added)
     
 #if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3 && !defined(INSTCOMBINE_BUG)
@@ -4405,6 +4416,11 @@ extern "C" void jl_init_codegen(void)
     cl::ParseEnvironmentOptions("Julia", "JULIA_LLVM_ARGS");
 #endif
     imaging_mode = jl_compileropts.build_path != NULL;
+
+#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR <= 3
+    // this option disables LLVM's signal handlers
+    llvm::DisablePrettyStackTrace = true;
+#endif
 
     InitializeNativeTarget();
     InitializeNativeTargetAsmPrinter();
@@ -4461,11 +4477,11 @@ extern "C" void jl_init_codegen(void)
 #endif
 #ifdef USE_MCJIT
     jl_mcjmm = new SectionMemoryManager();
-    std::vector<std::string> attrvec;
+    SmallVector<std::string, 4> MAttrs;
 #else
     // Temporarily disable Haswell BMI2 features due to LLVM bug.
     const char *mattr[] = {"-bmi2", "-avx2"};
-    std::vector<std::string> attrvec (mattr, mattr+2);
+    SmallVector<std::string, 4> MAttrs(mattr, mattr+2);
 #endif
     EngineBuilder eb = EngineBuilder(engine_module)
         .setEngineKind(EngineKind::JIT)
@@ -4473,24 +4489,22 @@ extern "C" void jl_init_codegen(void)
         .setJITMemoryManager(new JITMemoryManagerWin())
 #endif
         .setTargetOptions(options)
-        .setMCPU(strcmp(jl_cpu_string,"native") ? jl_cpu_string : "")
 #ifdef USE_MCJIT
         .setUseMCJIT(true)
-        .setMAttrs(attrvec);
-#else
-        .setMAttrs(attrvec);
 #endif
+    ;
     Triple TheTriple(sys::getProcessTriple());
 #if defined(_OS_WINDOWS_) && defined(USE_MCJIT)
     TheTriple.setObjectFormat(Triple::ELF);
 #endif
-    SmallVector<std::string, 4> MAttrs;
-    MAttrs.clear();
-    MAttrs.append(attrvec.begin(), attrvec.end());
     jl_TargetMachine = eb.selectTarget(
             TheTriple,
             "",
+#if LLVM35
+            strcmp(jl_cpu_string,"native") ? jl_cpu_string : sys::getHostCPUName().data(),
+#else
             strcmp(jl_cpu_string,"native") ? jl_cpu_string : "",
+#endif
             MAttrs);
     assert(jl_TargetMachine);
     jl_ExecutionEngine = eb.create(jl_TargetMachine);

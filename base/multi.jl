@@ -241,10 +241,12 @@ function add_workers(pg::ProcessGroup, ws::Array{Any,1})
     # NOTE: currently only node 1 can add new nodes, since nobody else
     # has the full list of address:port
     assert(LPROC.id == 1)
-    for w in ws
+    rr_join = similar(ws, RemoteRef)
+    for (i, w) in enumerate(ws)
         w.id = get_next_pid()
         register_worker(w)
-        create_message_handler_loop(w.socket) 
+        rr_join[i] = RemoteRef()
+        create_message_handler_loop(w.socket; ntfy_join_complete=rr_join[i]) 
     end
 
     all_locs = map(x -> isa(x, Worker) ? (string(x.bind_addr), x.port, x.id, x.manage == manage_local_worker) : ("", 0, x.id, true), pg.workers)
@@ -257,6 +259,12 @@ function add_workers(pg::ProcessGroup, ws::Array{Any,1})
             w.manage(w.id, w.config, :register)
         end
     end 
+    
+    # Wait till the all nodes have connected to each other
+    for rr in rr_join
+        wait(rr)
+    end
+    
     [w.id for w in ws]
 end
 
@@ -816,7 +824,7 @@ function accept_handler(server::TcpServer, status::Int32)
     create_message_handler_loop(client)
 end
 
-function create_message_handler_loop(sock::AsyncStream) #returns immediately
+function create_message_handler_loop(sock::AsyncStream; ntfy_join_complete=nothing) #returns immediately
     schedule(@task begin
         global PGRP
         #println("message_handler_loop")
@@ -881,7 +889,8 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                     #print("\nLocation: ",locs,"\nId:",myid(),"\n")
                     # joining existing process group
                     
-                    register_worker(Worker("", 0, sock, 1))
+                    controller = Worker("", 0, sock, 1)
+                    register_worker(controller)
                     register_worker(LPROC)
                     
                     for (rhost, rport, rpid, r_is_local) in locs
@@ -904,6 +913,12 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                             continue
                         end
                     end
+                    
+                    send_msg_now(controller, :join_complete)
+                    
+                elseif is(msg, :join_complete)
+                    put!(ntfy_join_complete, :join_complete)
+                    ntfy_join_complete = nothing    # so that it gets gc'ed
                 end
                 
             end # end of while
@@ -1086,7 +1101,7 @@ tunnel_port = 9201
 function ssh_tunnel(user, host, bind_addr, port, sshflags)
     global tunnel_port
     localp = tunnel_port::Int
-    while !success(detach(`ssh -f -o ExitOnForwardFailure=yes $sshflags $(user)@$host -L $localp:$bind_addr:$(int(port)) sleep 60`)) && localp < 10000
+    while !success(detach(`ssh -T -a -x -o ClearAllForwardings=yes -o ExitOnForwardFailure=yes -f $sshflags $(user)@$host -L $localp:$bind_addr:$(int(port)) sleep 60`)) && localp < 10000
         localp += 1
     end
     
@@ -1171,9 +1186,9 @@ function launch_ssh_workers(cman::SSHManager, np::Integer, config::Dict)
         host = cman.machines[i] = machine_def[1]
         
         # Build up the ssh command
-        cmd = `cd $dir && $exename $exeflags`          # launch julia
-        cmd = `sh -l -c $(shell_escape(cmd))`                   # shell to launch under
-        cmd = `ssh -n $sshflags $host $(shell_escape(cmd))`     # use ssh to remote launch
+        cmd = `cd $dir && $exename $exeflags` # launch julia
+        cmd = `sh -l -c $(shell_escape(cmd))` # shell to launch under
+        cmd = `ssh -T -a -x -o ClearAllForwardings=yes -n $sshflags $host $(shell_escape(cmd))` # use ssh to remote launch
         
         io, pobj = open(detach(cmd), "r")
         io_objs[i] = io
@@ -1190,7 +1205,7 @@ function manage_ssh_worker(id::Integer, config::Dict, op::Symbol)
     if op == :interrupt
         if haskey(config, :ospid)
             machine = config[:machine]
-            if !success(`ssh -n $(config[:sshflags]) $machine "kill -2 $(config[:ospid])"`)
+            if !success(`ssh -T -a -x -o ClearAllForwardings=yes -n $(config[:sshflags]) $machine "kill -2 $(config[:ospid])"`)
                 println("Error sending a Ctrl-C to julia worker $id on $machine")
             end
         else
@@ -1330,7 +1345,6 @@ function pmap(f, lsts...; err_retry=true, err_stop=false)
             for idx in 1:len; states[idx] = nxts[idx][2]; end
             nxtvals = [x[1] for x in nxts]
             return (getnextidx(), nxtvals)
-            
         elseif !isempty(retryqueue)
             return shift!(retryqueue)
         else    

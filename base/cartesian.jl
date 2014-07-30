@@ -205,7 +205,7 @@ function spliceint!(ex::Expr)
         args = ex.args[1].args
         for i = length(args):-1:1
             if isa(args[i], Int)
-                splice!(args, i)
+                deleteat!(args, i)
             end
         end
     end

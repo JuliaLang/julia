@@ -85,7 +85,7 @@ function showerror(io::IO, e::DomainError, bt)
     print(io, "DomainError")
     for b in bt
         code = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), b, true)
-        if length(code) == 4
+        if length(code) == 4 && !code[4]  # code[4] == fromC
             if code[1] in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
                 print(io, "\n", code[1],
                       " will only return a complex result if called with a complex argument.",
@@ -123,12 +123,26 @@ function showerror(io::IO, e::MethodError)
         i == length(e.args) || print(io, ", ")
     end
     print(io, ")")
+    # Check for local functions that shaddow methods in Base
     if isdefined(Base, name)
         f = eval(Base, name)
         if f !== e.f && isgeneric(f) && applicable(f, e.args...)
             println(io)
             print(io, "you may have intended to import Base.$(name)")
         end
+    end
+    # Check for row vectors used where a column vector is intended.
+    vec_args = {}
+    hasrows = false
+    for arg in e.args
+        isrow = isa(arg,AbstractArray) && ndims(arg)==2 && size(arg,1)==1
+        hasrows |= isrow
+        push!(vec_args, isrow ? vec(arg) : arg)
+    end
+    if hasrows && applicable(e.f, vec_args...)
+        print(io, "\n\nYou might have used a 2d row vector where a 1d column vector was required.")
+        print(io, "\nNote the difference between 1d column vector [1,2,3] and 2d row vector [1 2 3].")
+        print(io, "\nYou can convert to a column vector with the vec() function.")
     end
 end
 
