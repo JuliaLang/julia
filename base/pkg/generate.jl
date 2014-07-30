@@ -31,18 +31,20 @@ function package(
     pkg::String,
     license::String;
     force::Bool = false,
-    authors::String = "",
+    authors::Union(String,Array) = "",
     years::Union(Int,String) = copyright_year(),
     user::String = github_user(),
+    config::Dict = {},
 )
     isnew = !ispath(pkg)
     try
         if isnew
             url = isempty(user) ? "" : "git://github.com/$user/$pkg.jl.git"
-            Generate.init(pkg,url)
+            Generate.init(pkg,url,config=config)
         else
             Git.dirty(dir=pkg) && error("$pkg is dirty – commit or stash your changes")
         end
+
         Git.transact(dir=pkg) do
             if isempty(authors)
                 authors = isnew ? copyright_name() : git_contributors(pkg,5)
@@ -81,10 +83,14 @@ function package(
     end
 end
 
-function init(pkg::String, url::String="")
+function init(pkg::String, url::String=""; config::Dict={})
     if !ispath(pkg)
         info("Initializing $pkg repo: $(abspath(pkg))")
         Git.run(`init -q $pkg`)
+
+        for (key,val) in config
+            Git.run(`config $key $val`, dir=pkg)
+        end
         Git.run(`commit -q --allow-empty -m "initial empty commit"`, dir=pkg)
     end
     isempty(url) && return
