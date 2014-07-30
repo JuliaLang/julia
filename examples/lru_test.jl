@@ -1,4 +1,3 @@
-include("lru.jl")
 using LRUExample
 
 TestLRU = LRUExample.UnboundedLRU{ASCIIString, ASCIIString}()
