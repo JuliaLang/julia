@@ -38,10 +38,18 @@ debug release: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/ju
 	@export private_libdir=$(private_libdir) && \
 	$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(build_libdir):$(LD_LIBRARY_PATH) JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$@)" $(build_private_libdir)/sys.$(SHLIB_EXT)
 
-release-candidate-checklist:
+release-candidate-checklist: release
 	julia doc/NEWS-update.jl #Add missing cross-references to NEWS.md
+	make -C doc html  SPHINXOPTS="-W" #Rebuild Julia HTML docs pedantically
+	make -C doc latex SPHINXOPTS="-W" #Rebuild Julia PDF docs pedantically
+	make -C doc doctest #Run Julia doctests
+	make -C doc linkcheck #Check all links
 	make -C doc helpdb.jl #Rebuild Julia online documentation for help(), apropos(), etc...
 	@echo 1. Check that helpdb.jl doesn't have lots of extra newlines
+	make -C doc html  SPHINXOPTS="-W -n" #Rebuild Julia HTML docs pedantically
+	make -C doc latex SPHINXOPTS="-W -n" #Rebuild Julia PDF docs pedanctically
+	make -C doc doctest #Run Julia doctests
+	make -C doc linkcheck #Check all links
 	@echo 2. Remove deprecations
 	@echo 3. Bump VERSION
 
