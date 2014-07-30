@@ -53,6 +53,7 @@ release-candidate-checklist: release test source-dist
 	@echo
 	@echo To complete the release candidate checklist:
 	@echo
+	@if [ -n "$(git status --porcelain)" ]; then echo 0. Verify changes to the repository and commit any necessary changes.; fi
 	@echo 1. Remove deprecations in base/deprecated.jl
 	@echo 2. Bump VERSION
 	@echo 3. Replace github tarballs with julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz
