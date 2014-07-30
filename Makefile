@@ -46,6 +46,14 @@ release-candidate-checklist: release test
 	make -C doc doctest #Run Julia doctests
 	make -C doc linkcheck #Check all links
 	make -C doc helpdb.jl #Rebuild Julia online documentation for help(), apropos(), etc...
+	@#Check that examples work
+	make -C examples
+	for test in examples/*.jl; do julia $$test; if [ $$? -ne 0 ]; then exit 1; fi; done
+	@#Check that benchmarks work
+	make -C test/perf
+	@#Check that netload tests work
+	#for test in test/netload/*.jl; do julia $$test; if [ $$? -ne 0 ]; then exit 1; fi; done
+
 	@echo
 	@echo To complete the release candidate checklist:
 	@echo
