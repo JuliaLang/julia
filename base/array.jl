@@ -467,22 +467,20 @@ function push!(a::Array{Any,1}, item::ANY)
 end
 
 function append!{T}(a::Array{T,1}, items::AbstractVector{T})
-    if is(T,None)
-        error(_grow_none_errmsg)
-    end
     n = length(items)
     ccall(:jl_array_grow_end, Void, (Any, Uint), a, n)
     copy!(a, length(a)-n+1, items, 1, n)
     return a
 end
 
-append!{T}(a::Array{T,1}, items::AbstractVector) = 
-    append!(a, convert(Array{T,1}, items))
-
-function prepend!{T}(a::Array{T,1}, items::AbstractVector{T})
+function append!{T}(a::Array{T,1}, items::AbstractVector)
     if is(T,None)
         error(_grow_none_errmsg)
     end
+    append!(a, convert(Array{T,1}, items))
+end
+
+function prepend!{T}(a::Array{T,1}, items::AbstractVector{T})
     n = length(items)
     ccall(:jl_array_grow_beg, Void, (Any, Uint), a, n)
     if a === items
@@ -493,8 +491,12 @@ function prepend!{T}(a::Array{T,1}, items::AbstractVector{T})
     return a
 end
 
-prepend!{T}(a::Array{T,1}, items::AbstractVector) = 
+function prepend!{T}(a::Array{T,1}, items::AbstractVector)
+    if is(T,None)
+        error(_grow_none_errmsg)
+    end
     prepend!(a, convert(Array{T,1}, items))
+end
 
 function resize!(a::Vector, nl::Integer)
     l = length(a)
