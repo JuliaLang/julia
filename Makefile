@@ -57,6 +57,9 @@ release-candidate-checklist: release test source-dist
 	@echo 1. Remove deprecations in base/deprecated.jl
 	@echo 2. Bump VERSION
 	@echo 3. Replace github tarballs with julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz
+	@echo 4. Follow packaging instructions in DISTRIBUTING.md to create binary packages for all platforms
+	@echo 5. Upload to AWS, update http://julialang.org/downloads links
+	@echo 6. Announce on mailing lists
 	@echo
 
 julia-debug-symlink:
