@@ -2,6 +2,7 @@
 #Extremely simplistic microcanonical (NVE) dynamics
 #Uses naive pairwise force computations
 
+@everywhere begin
 type Particle{T<:Real}
     x :: Vector{T} #position
     p :: Vector{T} #momentum
@@ -12,6 +13,7 @@ end
 function Particle{T<:Real}(x::Vector{T}, p::Vector{T}, q::T)
     @assert length(x)==length(p)==3
     Particle{T}(x,p,q)
+end
 end
 
 function initrand!(n::Integer)
@@ -61,7 +63,7 @@ function renderparticles{T}(eventname::String, particles::Vector{Particle{T}})
     end
 end
 
-function rundynamics{T<:Real}(particles::Vector{Particle{T}}, tend::T=0.1, dt::T=0.001;
+function rundynamics{T<:Real}(particles::Vector{Particle{T}}, tend::T=10.0, dt::T=0.001;
 	render::Function=rendernone)
     for (i,t) in enumerate(0:dt:tend)
 	isdefined(:DEBUG) && DEBUG && println("Timestep: %i (time = %t)")
@@ -72,11 +74,11 @@ function rundynamics{T<:Real}(particles::Vector{Particle{T}}, tend::T=0.1, dt::T
 end
 
 renderer = rendernone #Uncomment the line below to generate a movie
-#renderer = renderparticles
+renderer = renderparticles
 renderer==rendernone || using Color, Compose
 
 #Initialize N particles
-particles = initrand!(1000)
+particles = initrand!(100)
 
 #Precompile
 rundynamics(particles, 1.e-10, 1.e-10)
