@@ -816,13 +816,47 @@ is_str_expr(ex) =
 function _printf(macroname, io, fmt, args)
     isa(fmt, String) || error("$macroname: format must be a plain static string (no interpolation or prefix)")
     sym_args, blk = gen(fmt)
-    if length(sym_args) != length(args)
-        error("$macroname: wrong number of arguments")
+  
+    has_splatting = false
+    for arg in args 
+       if typeof(arg) == Expr && arg.head == :... 
+          has_splatting = true
+          break
+       end
     end
-    for i = length(args):-1:1
+
+    #
+    #  Immediately check for corresponding arguments if there is no splatting
+    #  
+    if !has_splatting && length(sym_args) != length(args)
+       error("$macroname: wrong number of arguments ($(length(args))) should be ($(length(sym_args)))")
+    end
+
+    for i = length(sym_args):-1:1
         var = sym_args[i].args[1]
-        unshift!(blk.args, :($var = $(esc(args[i]))))
+        if has_splatting
+           unshift!(blk.args, :($var = G[$i]))
+        else
+           unshift!(blk.args, :($var = $(esc(args[i]))))
+        end
     end
+
+    #
+    #  Delay generation of argument list and check until evaluation time instead of macro
+    #  expansion time if there is splatting.
+    #
+    if has_splatting
+       x = Expr(:call,:tuple,args...)
+       unshift!(blk.args,
+          quote
+             G = $(esc(x))
+             if length(G) != $(length(sym_args))
+                error($macroname,": wrong number of arguments (",length(G),") should be (",$(length(sym_args)),")")
+             end
+          end
+       )
+    end
+
     unshift!(blk.args, :(out = $io))
     blk
 end
