@@ -2,9 +2,6 @@ language: cpp
 os:
     - linux
     - osx
-env:
-  matrix:
-    - USECLANG=1
 notifications:
     email: false
     irc:
@@ -19,7 +16,7 @@ notifications:
           - http://julia.mit.edu:8000/travis-hook
 before_install:
     - if [ `uname` = "Linux" ]; then
-        BUILDOPTS="LLVM_CONFIG=llvm-config-3.3 LLVM_LLC=llc-3.3 VERBOSE=1 USE_BLAS64=0";
+        BUILDOPTS="USEGCC=1 LLVM_CONFIG=llvm-config-3.3 LLVM_LLC=llc-3.3 VERBOSE=1 USE_BLAS64=0";
         for lib in LLVM ZLIB SUITESPARSE ARPACK BLAS FFTW LAPACK GMP MPFR PCRE LIBUNWIND GRISU OPENLIBM RMATH; do
             export BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";
         done;
@@ -29,7 +26,7 @@ before_install:
         sudo apt-get update -qq -y;
         sudo apt-get install patchelf gfortran llvm-3.3-dev libsuitesparse-dev libopenblas-dev liblapack-dev libarpack2-dev libfftw3-dev libgmp-dev libpcre3-dev libunwind7-dev libdouble-conversion-dev libopenlibm-dev librmath-dev libmpfr-dev -y;
       elif [ `uname` = "Darwin" ]; then
-        BUILDOPTS="LLVM_CONFIG=llvm-config-3.3 LLVM_LLC=llc-3.3 VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC='-I/usr/local/include'";
+        BUILDOPTS="USECLANG=1 LLVM_CONFIG=llvm-config-3.3 LLVM_LLC=llc-3.3 VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC='-I/usr/local/include'";
         BUILDOPTS="$BUILDOPTS LIBBLAS=-lopenblas LIBBLASNAME=libopenblas LIBLAPACK=-lopenblas LIBLAPACKNAME=libopenblas";
         for lib in LLVM ZLIB SUITESPARSE ARPACK BLAS FFTW LAPACK GMP MPFR PCRE LIBUNWIND; do
             export BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";
