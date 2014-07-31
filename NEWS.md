@@ -770,6 +770,7 @@ Too numerous to mention.
 [#3272]: https://github.com/JuliaLang/julia/issues/3272
 [#3344]: https://github.com/JuliaLang/julia/issues/3344
 [#3350]: https://github.com/JuliaLang/julia/issues/3350
+[#3434]: https://github.com/JuliaLang/julia/issues/3434
 [#3439]: https://github.com/JuliaLang/julia/issues/3439
 [#3467]: https://github.com/JuliaLang/julia/issues/3467
 [#3468]: https://github.com/JuliaLang/julia/issues/3468
@@ -842,6 +843,7 @@ Too numerous to mention.
 [#5381]: https://github.com/JuliaLang/julia/issues/5381
 [#5387]: https://github.com/JuliaLang/julia/issues/5387
 [#5403]: https://github.com/JuliaLang/julia/issues/5403
+[#5423]: https://github.com/JuliaLang/julia/issues/5423
 [#5427]: https://github.com/JuliaLang/julia/issues/5427
 [#5428]: https://github.com/JuliaLang/julia/issues/5428
 [#5430]: https://github.com/JuliaLang/julia/issues/5430
@@ -886,6 +888,7 @@ Too numerous to mention.
 [#6624]: https://github.com/JuliaLang/julia/issues/6624
 [#6652]: https://github.com/JuliaLang/julia/issues/6652
 [#6678]: https://github.com/JuliaLang/julia/issues/6678
+[#6716]: https://github.com/JuliaLang/julia/issues/6716
 [#6726]: https://github.com/JuliaLang/julia/issues/6726
 [#6769]: https://github.com/JuliaLang/julia/issues/6769
 [#6773]: https://github.com/JuliaLang/julia/issues/6773
@@ -904,15 +907,12 @@ Too numerous to mention.
 [#7125]: https://github.com/JuliaLang/julia/issues/7125
 [#7131]: https://github.com/JuliaLang/julia/issues/7131
 [#7146]: https://github.com/JuliaLang/julia/issues/7146
+[#7242]: https://github.com/JuliaLang/julia/issues/7242
 [#7359]: https://github.com/JuliaLang/julia/issues/7359
+[#7365]: https://github.com/JuliaLang/julia/issues/7365
 [#7373]: https://github.com/JuliaLang/julia/issues/7373
 [#7390]: https://github.com/JuliaLang/julia/issues/7390
 [#7435]: https://github.com/JuliaLang/julia/issues/7435
+[#7464]: https://github.com/JuliaLang/julia/issues/7464
 [#7513]: https://github.com/JuliaLang/julia/issues/7513
 [#7647]: https://github.com/JuliaLang/julia/issues/7647
-[#7242]: https://github.com/JuliaLang/julia/issues/7242
-[#3434]: https://github.com/JuliaLang/julia/issues/3434
-[#5423]: https://github.com/JuliaLang/julia/issues/5423
-[#7464]: https://github.com/JuliaLang/julia/issues/7464
-[#7365]: https://github.com/JuliaLang/julia/issues/7365
-[#6716]: https://github.com/JuliaLang/julia/issues/6716

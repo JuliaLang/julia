@@ -4549,8 +4549,7 @@ popdisplay(d::Display)
 
 ("Base","cis","cis(z)
 
-   Return \"cos(z) + i*sin(z)\" if z is real. Return \"(cos(real(z)) +
-   i*sin(real(z)))/exp(imag(z))\" if \"z\" is complex
+   Return \\exp(iz).
 
 "),
 
@@ -7532,11 +7531,14 @@ popdisplay(d::Display)
 
 "),
 
-("Base","setenv","setenv(command, env)
+("Base","setenv","setenv(command, env; dir=working_dir)
 
    Set environment variables to use when running the given command.
    \"env\" is either a dictionary mapping strings to strings, or an
    array of strings of the form \"\"var=val\"\".
+
+   The \"dir\" keyword argument can be used to specify a working
+   directory for the command.
 
 "),
 
@@ -7591,8 +7593,7 @@ popdisplay(d::Display)
 
 ("Base","cd","cd(dir::String)
 
-   Set the current working directory. Returns the new current
-   directory.
+   Set the current working directory.
 
 "),
 
@@ -8441,7 +8442,8 @@ popdisplay(d::Display)
 
 ("Base","sleep","sleep(seconds)
 
-   Block the current task for a specified number of seconds.
+   Block the current task for a specified number of seconds. The
+   minimum sleep time is 1 millisecond or input of \"0.001\".
 
 "),
 
@@ -10023,32 +10025,28 @@ popdisplay(d::Display)
 
       * \"which\": type of eigenvalues to compute. See the note below.
 
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"which\\\" | type of eigenvalues                                                                                                    |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"\\\"LM\\\"\\ | eigenvalues of largest magnitude                                                                                       |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"\\\"SM\\\"\\ | eigenvalues of smallest magnitude                                                                                      |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"\\\"LA\\\"\\ | largest algebraic eigenvalues (real symmetric \\\"A\\\" only)                                                              |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"\\\"SA\\\"\\ | smallest algebraic eigenvalues (real symmetric \\\"A\\\" only)                                                             |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"\\\"BE\\\"\\ | compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (symmetric \\\"A\\\" only) |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"\\\"LR\\\"\\ | eigenvalues of largest real part (nonsymmetric \\\"A\\\" only)                                                             |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"\\\"SR\\\"\\ | eigenvalues of smallest real part (nonsymmetric \\\"A\\\" only)                                                            |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"\\\"LI\\\"\\ | eigenvalues of largest imaginary part (nonsymmetric \\\"A\\\" only)                                                        |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"\\\"SI\\\"\\ | eigenvalues of smallest imaginary part (nonsymmetric \\\"A\\\" only)                                                       |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\"which\\\" | type of eigenvalues                                                                                                         |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\":LM\\\"   | eigenvalues of largest magnitude (default)                                                                                  |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\":SM\\\"   | eigenvalues of smallest magnitude                                                                                           |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\":LR\\\"   | eigenvalues of largest real part                                                                                            |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\":SR\\\"   | eigenvalues of smallest real part                                                                                           |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\":LI\\\"   | eigenvalues of largest imaginary part (nonsymmetric or complex \\\"A\\\" only)                                                  |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\":SI\\\"   | eigenvalues of smallest imaginary part (nonsymmetric or complex \\\"A\\\" only)                                                 |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\":BE\\\"   | compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric \\\"A\\\" only) |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
 
       * \"tol\": tolerance (tol \\le 0.0 defaults to
         \"DLAMCH('EPS')\")
 
-      * \"maxiter\": Maximum number of iterations
+      * \"maxiter\": Maximum number of iterations (default = 300)
 
       * \"sigma\": Specifies the level shift used in inverse
         iteration. If \"nothing\" (default), defaults to ordinary
