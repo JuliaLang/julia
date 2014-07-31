@@ -270,7 +270,7 @@ Macros for function bodies
     either be an iteration-symbol prefix, or an anonymous-function
     expression.
 
-.. function:: @nexpr N expr
+.. function:: @nexprs N expr
 
     Generate ``N`` expressions. ``expr`` should be an
     anonymous-function expression.
