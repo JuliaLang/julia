@@ -466,7 +466,7 @@ function push!(a::Array{Any,1}, item::ANY)
     return a
 end
 
-function append!{T}(a::Array{T,1}, items::AbstractVector)
+function append!{T}(a::Array{T,1}, items::AbstractVector{T})
     if is(T,None)
         error(_grow_none_errmsg)
     end
@@ -476,7 +476,10 @@ function append!{T}(a::Array{T,1}, items::AbstractVector)
     return a
 end
 
-function prepend!{T}(a::Array{T,1}, items::AbstractVector)
+append!{T}(a::Array{T,1}, items::AbstractVector) = 
+    append!(a, convert(Array{T,1}, items))
+
+function prepend!{T}(a::Array{T,1}, items::AbstractVector{T})
     if is(T,None)
         error(_grow_none_errmsg)
     end
@@ -489,6 +492,9 @@ function prepend!{T}(a::Array{T,1}, items::AbstractVector)
     end
     return a
 end
+
+prepend!{T}(a::Array{T,1}, items::AbstractVector) = 
+    prepend!(a, convert(Array{T,1}, items))
 
 function resize!(a::Vector, nl::Integer)
     l = length(a)
@@ -589,9 +595,7 @@ function deleteat!(a::Vector, inds)
     return a
 end
 
-const _default_splice = []
-
-function splice!(a::Vector, i::Integer, ins::AbstractArray=_default_splice)
+function splice!{T}(a::Array{T,1}, i::Integer, ins::AbstractVector{T}=T[])
     v = a[i]
     m = length(ins)
     if m == 0
@@ -607,7 +611,10 @@ function splice!(a::Vector, i::Integer, ins::AbstractArray=_default_splice)
     return v
 end
 
-function splice!{T<:Integer}(a::Vector, r::UnitRange{T}, ins::AbstractArray=_default_splice)
+splice!{T}(a::Array{T,1}, i::Integer, ins::AbstractVector) = 
+    splice!(a, i, convert(Array{T,1}, ins))
+
+function splice!{T,N<:Integer}(a::Array{T,1}, r::UnitRange{N}, ins::AbstractVector{T}=T[])
     v = a[r]
     m = length(ins)
     if m == 0
@@ -641,6 +648,9 @@ function splice!{T<:Integer}(a::Vector, r::UnitRange{T}, ins::AbstractArray=_def
     end
     return v
 end
+
+splice!{T,N<:Integer}(a::Array{T,1}, r::UnitRange{N}, ins::AbstractVector) = 
+    splice!(a, r, convert(Array{T,1}, ins))
 
 function empty!(a::Vector)
     ccall(:jl_array_del_end, Void, (Any, Uint), a, length(a))
