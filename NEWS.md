@@ -232,9 +232,9 @@ Library improvements
 
     * Sparse linear algebra
 
-      * 1-d sparse getindex has been implemented ([#7047])
+      * 1-d sparse `getindex` has been implemented ([#7047])
 
-      * Faster sparse getindex ([#7131]).
+      * Faster sparse `getindex` ([#7131]).
 
       * Faster sparse `kron` ([#4958]).
 
@@ -271,7 +271,7 @@ Library improvements
       * new LAPACK wrappers
         - condition number estimate `cond(A::Triangular)` ([#5255])
 
-      * parametrize Triangular on matrix type ([#7064])
+      * parametrize `Triangular` on matrix type ([#7064])
 
       * Lyapunov / Sylvester solver ([#7435])
 
@@ -341,9 +341,9 @@ Library improvements
 Environment improvements
 ------------------------
 
-  * New --code-coverage and --track-allocation startup features allow one to measure the number of executions or the amount of memory allocated, respectively, at each line of code. ([#5423],[#7464])
+  * New `--code-coverage` and `--track-allocation` startup features allow one to measure the number of executions or the amount of memory allocated, respectively, at each line of code. ([#5423],[#7464])
 
-  * Profile.init now accepts keyword arguments, and returns the current settings when no arguments are supplied. ([#7365])
+  * `Profile.init` now accepts keyword arguments, and returns the current settings when no arguments are supplied. ([#7365])
 
 Build improvements
 ------------------
