@@ -147,8 +147,7 @@ a character or string as its argument:
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Given an expression object, one can cause Julia to evaluate (execute) it
-at the *top level* scope — i.e. in effect like loading from a file or
-typing at the interactive prompt — using the ``eval`` function:
+at global scope using the ``eval`` function:
 
 .. doctest::
 
@@ -169,9 +168,11 @@ typing at the interactive prompt — using the ``eval`` function:
     julia> eval(ex)
     3
 
+Every :ref:`module <man-modules>` has its own ``eval`` function that
+evaluates expressions in its global scope.
 Expressions passed to ``eval`` are not limited to returning values
-— they can also have side-effects that alter the state of the top-level
-evaluation environment:
+— they can also have side-effects that alter the state of the enclosing
+module's environment:
 
 .. doctest::
 
@@ -188,7 +189,7 @@ evaluation environment:
     1
 
 Here, the evaluation of an expression object causes a value to be
-assigned to the top-level variable ``x``.
+assigned to the global variable ``x``.
 
 Since expressions are just ``Expr`` objects which can be constructed
 programmatically and then evaluated, one can, from within Julia code,
