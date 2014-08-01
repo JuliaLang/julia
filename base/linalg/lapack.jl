@@ -1529,8 +1529,11 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
         #       INTEGER            INFO, K, LDA, LWORK, M, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
-        function orglq!(A::StridedMatrix{$elty}, tau::Vector{$elty}, k::Integer)
+        function orglq!(A::StridedMatrix{$elty}, tau::Vector{$elty}, k::Integer = length(tau))
             chkstride1(A)
+            n = size(A, 2)
+            m = min(n, size(A, 1))
+            if k > m throw(DimensionMismatch("invalid number of reflectors")) end
             work  = Array($elty, 1)
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
@@ -1538,25 +1541,28 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
                 ccall(($(string(orglq)),liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                      &size(A,1), &size(A,2), &k, A, &max(1,stride(A,2)), tau, work, &lwork, info)
+                      &m, &n, &k, A, &max(1,stride(A,2)), tau, work, &lwork, info)
                 @lapackerror
                 if lwork < 0 
                     lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
-            A
+            if m<size(A,1)
+                A[1:m,:]
+            else
+                A
+            end
         end
         # SUBROUTINE DORGQR( M, N, K, A, LDA, TAU, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..
         #       INTEGER            INFO, K, LDA, LWORK, M, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
-        function orgqr!(A::StridedMatrix{$elty}, tau::Vector{$elty})
+        function orgqr!(A::StridedMatrix{$elty}, tau::Vector{$elty}, k::Integer = length(tau))
             chkstride1(A)
             m = size(A, 1)
             n = min(m, size(A, 2))
-            k = length(tau)
             if k > n throw(DimensionMismatch("invalid number of reflectors")) end
             work  = Array($elty, 1)
             lwork = blas_int(-1)
@@ -1574,7 +1580,11 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
                     work = Array($elty, lwork)
                 end
             end
-            A[:,1:n]
+            if n<size(A,2)
+                A[:,1:n]
+            else
+                A
+            end
         end
         #      SUBROUTINE DORMLQ( SIDE, TRANS, M, N, K, A, LDA, TAU, C, LDC,
         #                         WORK, LWORK, INFO )
@@ -1584,9 +1594,14 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
         #      .. Array Arguments ..
         #      DOUBLE PRECISION   A( LDA, * ), C( LDC, * ), TAU( * ), WORK( * )
         function ormlq!(side::BlasChar, trans::BlasChar, A::StridedMatrix{$elty},
-                        k::Integer, tau::Vector{$elty}, C::StridedVecOrMat{$elty})
+                        tau::Vector{$elty}, C::StridedVecOrMat{$elty})
             chkstride1(A, C)
             m, n = ndims(C)==2 ? size(C) : (size(C, 1), 1)
+            nA    = size(A, 2)
+            k     = length(tau)
+            if side == 'L' && m != nA throw(DimensionMismatch("")) end
+            if side == 'R' && n != nA throw(DimensionMismatch("")) end            
+            if (side == 'L' && k > m) || (side == 'R' && k > n) throw(DimensionMismatch("invalid number of reflectors")) end
             work  = Array($elty, 1)
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
