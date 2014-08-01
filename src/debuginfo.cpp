@@ -296,7 +296,7 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
 
 #ifdef LLVM35
             std::unique_ptr<MemoryBuffer> buf(membuf);
-            ErrorOr<llvm::object::ObjectFile*> origerrorobj = llvm::object::ObjectFile::createObjectFile(
+            auto origerrorobj = llvm::object::ObjectFile::createObjectFile(
                 buf, sys::fs::file_magic::unknown);
 #else
             llvm::object::ObjectFile *origerrorobj = llvm::object::ObjectFile::createObjectFile(
@@ -307,7 +307,9 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
                 objfilemap[fbase] = entry;
                 return;
             }
-#ifdef LLVM35
+#ifdef LLVM36
+            llvm::object::MachOObjectFile *morigobj = (llvm::object::MachOObjectFile *)origerrorobj.get().release();
+#elif LLVM35
             llvm::object::MachOObjectFile *morigobj = (llvm::object::MachOObjectFile *)origerrorobj.get();
 #else
             llvm::object::MachOObjectFile *morigobj = (llvm::object::MachOObjectFile *)origerrorobj;
@@ -327,7 +329,7 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
             strlcat(dsympath, ".dSYM/Contents/Resources/DWARF/", sizeof(dsympath));
             strlcat(dsympath, strrchr(dlinfo.dli_fname,'/')+1, sizeof(dsympath));
 #ifdef LLVM35
-            ErrorOr<llvm::object::ObjectFile*> errorobj = llvm::object::ObjectFile::createObjectFile(dsympath);
+            auto errorobj = llvm::object::ObjectFile::createObjectFile(dsympath);
 #else
             llvm::object::ObjectFile *errorobj = llvm::object::ObjectFile::createObjectFile(dsympath);
 #endif
@@ -335,12 +337,15 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
             // On non OS X systems we need to mmap another copy because of the permissions on the mmaped
             // shared library.
 #ifdef LLVM35
-            ErrorOr<llvm::object::ObjectFile*> errorobj = llvm::object::ObjectFile::createObjectFile(fname);
+            auto errorobj = llvm::object::ObjectFile::createObjectFile(fname);
 #else
             llvm::object::ObjectFile *errorobj = llvm::object::ObjectFile::createObjectFile(fname);
 #endif
 #endif
-#ifdef LLVM35
+#ifdef LLVM36
+            if (errorobj) {
+                obj = errorobj.get().release();
+#elif LLVM35
             if (errorobj) {
                 obj = errorobj.get();
 #else
@@ -350,7 +355,11 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
 #ifdef _OS_DARWIN_
                 if (getObjUUID(morigobj,uuid2) && memcmp(uuid,uuid2,sizeof(uuid)) == 0) {
 #endif
+#ifdef LLVM36
+                    context = DIContext::getDWARFContext(*obj);
+#else
                     context = DIContext::getDWARFContext(obj);
+#endif
                     slide = -(uint64_t)fbase;
 #ifdef _OS_DARWIN_
                 }
@@ -407,7 +416,11 @@ void jl_getFunctionInfo(const char **name, int *line, const char **filename, siz
     if ((pointer - it->first) > it->second.size)
         return jl_getDylibFunctionInfo(name,line,filename,pointer,skipC);
 
+#ifdef LLVM36
+    DIContext *context = DIContext::getDWARFContext(*it->second.object);
+#else
     DIContext *context = DIContext::getDWARFContext(it->second.object);
+#endif
     lookup_pointer(context, name, line, filename, pointer, 1);
 
 #else // !USE_MCJIT
