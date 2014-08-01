@@ -366,7 +366,7 @@ struct jl_varinfo_t {
 static void jl_gen_llvm_gv_array();
 
 extern "C"
-void jl_dump_bitcode(char* fname)
+void jl_dump_bitcode(char *fname)
 {
     std::string err;
 #ifdef LLVM35
@@ -383,7 +383,7 @@ void jl_dump_bitcode(char* fname)
 }
 
 extern "C"
-void jl_dump_objfile(char* fname, int jit_model)
+void jl_dump_objfile(char *fname, int jit_model)
 {
     std::string err;
 #ifdef LLVM35
@@ -3853,9 +3853,9 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
 
 // --- initialization ---
 
-static MDNode* tbaa_make_child( const char* name, MDNode* parent, bool isConstant=false )
+static MDNode *tbaa_make_child( const char *name, MDNode *parent, bool isConstant=false )
 {
-    MDNode* n = mbuilder->createTBAANode(name,parent,isConstant);
+    MDNode *n = mbuilder->createTBAANode(name,parent,isConstant);
 #ifdef LLVM35
     n->setValueName( ValueName::Create(name));
 #else

@@ -25,12 +25,12 @@ using namespace llvm;
 namespace {
 class FuncMCView : public MemoryObject {
 private:
-    const char* Fptr;
+    const char *Fptr;
     size_t Fsize;
 public:
-    FuncMCView(const void* fptr, size_t size) : Fptr((const char*)fptr), Fsize(size) {}
+    FuncMCView(const void *fptr, size_t size) : Fptr((const char*)fptr), Fsize(size) {}
 
-    const char* operator[] (const size_t idx) { return (Fptr+idx); }
+    const char *operator[] (const size_t idx) { return (Fptr+idx); }
 
     uint64_t getBase() const { return 0; }
     uint64_t getExtent() const { return Fsize; }

@@ -1425,7 +1425,7 @@ JL_CALLABLE(jl_apply_generic)
         return jl_no_method_error((jl_function_t*)F, args, nargs);
     }
     assert(!mfunc->linfo || !mfunc->linfo->inInference);
-    jl_value_t* res = jl_apply(mfunc, args, nargs);
+    jl_value_t *res = jl_apply(mfunc, args, nargs);
     JL_GC_POP();
     return res;
 }

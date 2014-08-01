@@ -391,7 +391,7 @@ void sigint_handler(int sig, siginfo_t *info, void *context)
 struct uv_shutdown_queue_item { uv_handle_t *h; struct uv_shutdown_queue_item *next; };
 struct uv_shutdown_queue { struct uv_shutdown_queue_item *first; struct uv_shutdown_queue_item *last; };
 
-static void jl_uv_exitcleanup_add(uv_handle_t* handle, struct uv_shutdown_queue *queue)
+static void jl_uv_exitcleanup_add(uv_handle_t *handle, struct uv_shutdown_queue *queue)
 {
     struct uv_shutdown_queue_item *item = (struct uv_shutdown_queue_item*)malloc(sizeof(struct uv_shutdown_queue_item));
     item->h = handle;
@@ -401,7 +401,7 @@ static void jl_uv_exitcleanup_add(uv_handle_t* handle, struct uv_shutdown_queue 
     queue->last = item;
 }
 
-static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg)
+static void jl_uv_exitcleanup_walk(uv_handle_t *handle, void *arg)
 {
     if (handle != (uv_handle_t*)jl_uv_stdout && handle != (uv_handle_t*)jl_uv_stderr)
         jl_uv_exitcleanup_add(handle, (struct uv_shutdown_queue*)arg);
@@ -434,7 +434,7 @@ DLLEXPORT void uv_atexit_hook()
 
     jl_gc_run_all_finalizers();
 
-    uv_loop_t* loop = jl_global_event_loop();
+    uv_loop_t *loop = jl_global_event_loop();
     struct uv_shutdown_queue queue = {NULL, NULL};
     uv_walk(loop, jl_uv_exitcleanup_walk, &queue);
     // close stdout and stderr last, since we like being
@@ -736,7 +736,7 @@ void julia_init(char *imageFile)
     init_stdio();
 
 #if defined(JL_USE_INTEL_JITEVENTS)
-    const char* jit_profiling = getenv("ENABLE_JITPROFILING");
+    const char *jit_profiling = getenv("ENABLE_JITPROFILING");
     if (jit_profiling && atoi(jit_profiling)) {
         jl_using_intel_jitevents = 1;
 #if defined(__linux__)
@@ -961,7 +961,7 @@ DLLEXPORT void jl_install_sigint_handler()
 }
 
 extern int asprintf(char **str, const char *fmt, ...);
-extern void * __stack_chk_guard;
+extern void *__stack_chk_guard;
 
 DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *av[]))
 {

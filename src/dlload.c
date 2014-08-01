@@ -42,7 +42,7 @@ char *jl_lookup_soname(char *pfx, size_t n);
 
 #define JL_RTLD(flags, FLAG) (flags & JL_RTLD_ ## FLAG ? RTLD_ ## FLAG : 0)
 
-static int jl_uv_dlopen(const char* filename, uv_lib_t* lib, unsigned flags)
+static int jl_uv_dlopen(const char *filename, uv_lib_t *lib, unsigned flags)
 {
 #if defined(_OS_WINDOWS_)
     needsSymRefreshModuleList = 1;
@@ -107,7 +107,7 @@ static uv_lib_t *jl_load_dynamic_library_(char *modname, unsigned flags, int thr
         if (!error) goto done;
     }
     else if (jl_base_module != NULL) {
-        jl_array_t* DL_LOAD_PATH = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol("DL_LOAD_PATH"));
+        jl_array_t *DL_LOAD_PATH = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol("DL_LOAD_PATH"));
         if (DL_LOAD_PATH != NULL) {
             size_t j;
             for (j = 0; j < jl_array_len(DL_LOAD_PATH); j++) {
