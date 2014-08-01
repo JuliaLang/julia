@@ -4341,6 +4341,9 @@ static void init_julia_llvm_env(Module *m)
 #endif
     FPM->add(jl_data_layout);
 
+#if __has_feature(address_sanitizer)
+    FPM->add(createAddressSanitizerFunctionPass());
+#endif
 #if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3
     jl_TargetMachine->addAnalysisPasses(*FPM);
 #endif
