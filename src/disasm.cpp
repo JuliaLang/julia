@@ -222,7 +222,11 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
     FuncMCView memoryObject(Fptr, Fsize); // MemoryObject wrapper
 
     if (!objectfile) return;
+#ifdef LLVM36
+    DIContext *di_ctx = DIContext::getDWARFContext(*objectfile);
+#else
     DIContext *di_ctx = DIContext::getDWARFContext(objectfile);
+#endif
     if (di_ctx == NULL) return;
     DILineInfoTable lineinfo = di_ctx->getLineInfoForAddressRange((size_t)Fptr, Fsize);
 
