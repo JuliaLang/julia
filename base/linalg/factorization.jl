@@ -179,9 +179,13 @@ qrfact{T<:BlasFloat}(A::StridedMatrix{T}; pivot=false) = qrfact!(copy(A),pivot=p
 qrfact{T}(A::StridedMatrix{T}; pivot=false) = (S = typeof(one(T)/norm(one(T)));S != T ? qrfact!(convert(AbstractMatrix{S},A), pivot=pivot) : qrfact!(copy(A),pivot=pivot))
 qrfact(x::Number) = qrfact(fill(x,1,1))
 
-function qr(A::Union(Number, AbstractMatrix); pivot=false, thin::Bool=true)
+function qr(A::Union(Number, AbstractMatrix); pivot::Bool=false, thin::Bool=true)
     F = qrfact(A, pivot=pivot)
-    full(F[:Q], thin=thin), F[:R]
+    if pivot
+        full(F[:Q], thin=thin), F[:R], F[:p]
+    else
+        full(F[:Q], thin=thin), F[:R]
+    end
 end
 
 convert{T}(::Type{QR{T}},A::QR) = QR(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ))
