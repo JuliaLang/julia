@@ -1057,11 +1057,6 @@ function (==)(A::BitArray, B::BitArray)
     return A.chunks == B.chunks
 end
 
-function (!=)(A::BitArray, B::BitArray)
-    size(A) != size(B) && return true
-    return A.chunks != B.chunks
-end
-
 
 ## Data movement ##
 
