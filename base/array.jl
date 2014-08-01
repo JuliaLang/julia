@@ -466,20 +466,21 @@ function push!(a::Array{Any,1}, item::ANY)
     return a
 end
 
-function append!{T}(a::Array{T,1}, items::AbstractVector)
-    if is(T,None)
-        error(_grow_none_errmsg)
-    end
+function append!{T}(a::Array{T,1}, items::AbstractVector{T})
     n = length(items)
     ccall(:jl_array_grow_end, Void, (Any, Uint), a, n)
     copy!(a, length(a)-n+1, items, 1, n)
     return a
 end
 
-function prepend!{T}(a::Array{T,1}, items::AbstractVector)
+function append!{T}(a::Array{T,1}, items::AbstractVector)
     if is(T,None)
         error(_grow_none_errmsg)
     end
+    append!(a, convert(Array{T,1}, items))
+end
+
+function prepend!{T}(a::Array{T,1}, items::AbstractVector{T})
     n = length(items)
     ccall(:jl_array_grow_beg, Void, (Any, Uint), a, n)
     if a === items
@@ -488,6 +489,13 @@ function prepend!{T}(a::Array{T,1}, items::AbstractVector)
         copy!(a, 1, items, 1, n)
     end
     return a
+end
+
+function prepend!{T}(a::Array{T,1}, items::AbstractVector)
+    if is(T,None)
+        error(_grow_none_errmsg)
+    end
+    prepend!(a, convert(Array{T,1}, items))
 end
 
 function resize!(a::Vector, nl::Integer)
@@ -589,9 +597,7 @@ function deleteat!(a::Vector, inds)
     return a
 end
 
-const _default_splice = []
-
-function splice!(a::Vector, i::Integer, ins::AbstractArray=_default_splice)
+function splice!{T}(a::Array{T,1}, i::Integer, ins::AbstractVector{T}=T[])
     v = a[i]
     m = length(ins)
     if m == 0
@@ -607,7 +613,10 @@ function splice!(a::Vector, i::Integer, ins::AbstractArray=_default_splice)
     return v
 end
 
-function splice!{T<:Integer}(a::Vector, r::UnitRange{T}, ins::AbstractArray=_default_splice)
+splice!{T}(a::Array{T,1}, i::Integer, ins::AbstractVector) = 
+    splice!(a, i, convert(Array{T,1}, ins))
+
+function splice!{T,N<:Integer}(a::Array{T,1}, r::UnitRange{N}, ins::AbstractVector{T}=T[])
     v = a[r]
     m = length(ins)
     if m == 0
@@ -641,6 +650,9 @@ function splice!{T<:Integer}(a::Vector, r::UnitRange{T}, ins::AbstractArray=_def
     end
     return v
 end
+
+splice!{T,N<:Integer}(a::Array{T,1}, r::UnitRange{N}, ins::AbstractVector) = 
+    splice!(a, r, convert(Array{T,1}, ins))
 
 function empty!(a::Vector)
     ccall(:jl_array_del_end, Void, (Any, Uint), a, length(a))
