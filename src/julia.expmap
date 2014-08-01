@@ -1,5 +1,6 @@
 {
   global:
+    __asan*;
     alloc_*w;
     allocobj;
     asprintf;
