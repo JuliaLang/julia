@@ -340,17 +340,18 @@ llvm-$(LLVM_VER)/projects/libcxxabi: $(LLVM_LIBCXXABI_TAR)
 	git pull --ff-only)
 libcxx-build:
 	mkdir -p libcxx-build
-libcxx-build/Makefile: llvm-$(LLVM_VER)/projects/libcxx llvm-$(LLVM_VER)/projects/libcxxabi libcxx-build
+libcxx-build/Makefile: llvm-$(LLVM_VER)/projects/libcxx | llvm-$(LLVM_VER)/projects/libcxxabi libcxx-build
 	cd libcxx-build && \
 		cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS="../llvm-$(LLVM_VER)/projects/libcxxabi/include" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(build_prefix) ../llvm-$(LLVM_VER)/projects/libcxx -DCMAKE_C_COMPILER="$(CC)" -DCMAKE_CXX_COMPILER="$(CXX)"  -DCMAKE_SHARED_LINKER_FLAGS="-L$(build_libdir) -Bstatic -lirc -Bdynamic" -DCMAKE_CXX_FLAGS="$(CXXFLAGS)"
-$(build_libdir)/libc++abi.so.1.0: llvm-$(LLVM_VER)/projects/libcxxabi
+llvm-$(LLVM_VER)/projects/libcxxabi/libc++abi.so.1.0: llvm-$(LLVM_VER)/projects/libcxxabi
 	cd llvm-$(LLVM_VER)/projects/libcxxabi/lib && \
 	OPTIONS="-I../../libcxx/include $(CXXFLAGS) $(LDFLAGS)" CC="$(CC) -static-intel" EXTRA_LIBS="-Bstatic -lirc" CXX=$(CXX) ./buildit
+$(build_libdir)/libc++abi.so.1.0: llvm-$(LLVM_VER)/projects/libcxxabi/libc++abi.so.1.0
 	cp llvm-$(LLVM_VER)/projects/libcxxabi/lib/libc++abi.so.1.0 $(build_libdir)
 	ln -s $(build_libdir)/libc++abi.so.1.0 $(build_libdir)/libc++abi.so
 	ln -s $(build_libdir)/libc++abi.so.1.0 $(build_libdir)/libc++abi.so.1
 install-libcxxabi: $(build_libdir)/libc++abi.so
-libcxx-build/lib/libc++.so.1.0: $(build_libdir)/libc++abi.so libcxx-build/Makefile
+libcxx-build/lib/libc++.so.1.0: | $(build_libdir)/libc++abi.so.1.0 libcxx-build/Makefile
 	cd libcxx-build && $(MAKE)
 $(build_libdir)/libc++.so.1.0: libcxx-build/lib/libc++.so.1.0
 	cd libcxx-build && $(MAKE) install
@@ -360,7 +361,7 @@ get-libcxxabi: llvm-$(LLVM_VER)/projects/libcxxabi
 endif
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
-LIBCXX_DEPENDENCY = $(build_libdir)/libc++abi.so 
+LIBCXX_DEPENDENCY = $(build_libdir)/libc++abi.so.1.0 $(build_libdir)/libc++.so.1.0
 LIBCXX_GET_DEPENDENCY = get-libcxx get-libcxxabi
 endif
 
@@ -593,7 +594,7 @@ install-pcre: $(PCRE_OBJ_TARGET)
 GRISU_OPTS = $(CXXFLAGS) -O3 -fvisibility=hidden $(fPIC)
 GRISU_OBJ_TARGET = $(build_shlibdir)/libgrisu.$(SHLIB_EXT)
 
-double-conversion-$(GRISU_VER).tar.gz: $(LIBCXX_DEPENDENCY)
+double-conversion-$(GRISU_VER).tar.gz: 
 	$(JLDOWNLOAD) $@ http://double-conversion.googlecode.com/files/$@
 	touch -c $@
 double-conversion-$(GRISU_VER)/Makefile: double-conversion-$(GRISU_VER).tar.gz
@@ -603,7 +604,7 @@ double-conversion-$(GRISU_VER)/Makefile: double-conversion-$(GRISU_VER).tar.gz
 	touch -c $@
 
 ifeq ($(USE_SYSTEM_GRISU), 0)
-$(GRISU_OBJ_TARGET): double-conversion-$(GRISU_VER)/Makefile
+$(GRISU_OBJ_TARGET): double-conversion-$(GRISU_VER)/Makefile $(LIBCXX_DEPENDENCY)
 	cd double-conversion-$(GRISU_VER) && \
 	$(CXX) -c $(GRISU_OPTS) -o src/bignum.o -Isrc src/bignum.cc && \
 	$(CXX) -c $(GRISU_OPTS) -o src/bignum-dtoa.o -Isrc src/bignum-dtoa.cc && \
