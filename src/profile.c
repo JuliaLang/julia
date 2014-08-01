@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-static volatile ptrint_t* bt_data_prof = NULL;
+static volatile ptrint_t *bt_data_prof = NULL;
 static volatile size_t bt_size_max = 0;
 static volatile size_t bt_size_cur = 0;
 static volatile u_int64_t nsecprof = 0;
@@ -437,7 +437,7 @@ DLLEXPORT int jl_profile_init(size_t maxsize, u_int64_t delay_nsec)
     return 0;
 }
 
-DLLEXPORT u_int8_t* jl_profile_get_data(void)
+DLLEXPORT u_int8_t *jl_profile_get_data(void)
 {
     return (u_int8_t*) bt_data_prof;
 }

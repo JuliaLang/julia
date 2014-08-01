@@ -1261,10 +1261,10 @@ DLLEXPORT int jl_puts(char *str, uv_stream_t *stream);
 DLLEXPORT int jl_pututf8(uv_stream_t *s, uint32_t wchar);
 
 DLLEXPORT uv_timer_t *jl_make_timer(uv_loop_t *loop, jl_value_t *julia_struct);
-DLLEXPORT int jl_timer_stop(uv_timer_t* timer);
+DLLEXPORT int jl_timer_stop(uv_timer_t *timer);
 
 DLLEXPORT uv_tcp_t *jl_tcp_init(uv_loop_t *loop);
-DLLEXPORT int jl_tcp_bind(uv_tcp_t* handle, uint16_t port, uint32_t host, unsigned int flags);
+DLLEXPORT int jl_tcp_bind(uv_tcp_t *handle, uint16_t port, uint32_t host, unsigned int flags);
 
 DLLEXPORT int jl_sizeof_ios_t(void);
 

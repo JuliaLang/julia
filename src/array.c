@@ -330,7 +330,7 @@ jl_array_t *jl_pchar_to_array(const char *str, size_t len)
 jl_value_t *jl_array_to_string(jl_array_t *a)
 {
     // TODO: check type of array?
-    jl_datatype_t* string_type = u8_isvalid((char*)a->data, jl_array_len(a)) == 1 ? // ASCII
+    jl_datatype_t *string_type = u8_isvalid((char*)a->data, jl_array_len(a)) == 1 ? // ASCII
         jl_ascii_string_type : jl_utf8_string_type;
     jl_value_t *s = (jl_value_t*)alloc_2w();
     s->type = (jl_value_t*)string_type;

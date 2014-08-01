@@ -266,7 +266,7 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
     if (fbase != 0) {
 #else
     Dl_info dlinfo;
-    const char* fname = 0;
+    const char *fname = 0;
     if ((dladdr((void*)pointer, &dlinfo) != 0) && dlinfo.dli_fname) {
         if (skipC && !jl_is_sysimg(dlinfo.dli_fname))
             return;
@@ -465,10 +465,10 @@ void jl_getFunctionInfo(const char **name, int *line, const char **filename, siz
 
 
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
-extern "C" void* CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserContext);
+extern "C" void *CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserContext);
 #ifndef USE_MCJIT
 
-void* CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserContext)
+void *CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserContext)
 {
     std::map<size_t, FuncInfo, revcomp> &info = jl_jit_events->getMap();
     std::map<size_t, FuncInfo, revcomp>::iterator it = info.lower_bound(AddrBase);
@@ -502,10 +502,10 @@ public:
   virtual uint8_t *allocateSpace(intptr_t Size, unsigned Alignment) { return JMM->allocateSpace(Size,Alignment); }
   virtual uint8_t *allocateGlobal(uintptr_t Size, unsigned Alignment) { return JMM->allocateGlobal(Size,Alignment); }
   virtual void deallocateFunctionBody(void *Body) { return JMM->deallocateFunctionBody(Body); }
-  virtual uint8_t* startExceptionTable(const Function* F,
+  virtual uint8_t *startExceptionTable(const Function* F,
                                        uintptr_t &ActualSize) { return JMM->startExceptionTable(F,ActualSize); }
   virtual void endExceptionTable(const Function *F, uint8_t *TableStart,
-                                 uint8_t *TableEnd, uint8_t* FrameRegister) { return JMM->endExceptionTable(F,TableStart,TableEnd,FrameRegister); }
+                                 uint8_t *TableEnd, uint8_t *FrameRegister) { return JMM->endExceptionTable(F,TableStart,TableEnd,FrameRegister); }
   virtual void deallocateExceptionTable(void *ET) { return JMM->deallocateExceptionTable(ET); }
   virtual bool CheckInvariants(std::string &str) { return JMM->CheckInvariants(str); }
   virtual size_t GetDefaultCodeSlabSize() { return JMM->GetDefaultCodeSlabSize(); }
@@ -533,7 +533,7 @@ public:
 };
 
 #else 
-void* CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserContext)
+void *CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserContext)
 {
     return NULL;
 }
@@ -565,7 +565,7 @@ static void coverageVisitLine(std::string filename, int line)
                         v);
 }
 
-void write_log_data(logdata_t logData, const char* extension)
+void write_log_data(logdata_t logData, const char *extension)
 {
     std::string base = std::string(julia_home);
     base = base + "/../share/julia/base/";

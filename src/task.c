@@ -184,7 +184,7 @@ void __declspec(noinline) restore_stack(jl_task_t *t, jl_jmp_buf *where, char *p
 void __attribute__((noinline)) restore_stack(jl_task_t *t, jl_jmp_buf *where, char *p)
 #endif
 {
-    char* _x = (char*)t->stackbase - t->ssize;
+    char *_x = (char*)t->stackbase - t->ssize;
     if (!p) {
         p = _x;
         if ((char*)&_x > _x) {
@@ -458,7 +458,7 @@ size_t bt_size = 0;
 
 void jl_getFunctionInfo(const char **name, int *line, const char **filename, size_t pointer, int skipC);
 
-static const char* name_unknown = "???";
+static const char *name_unknown = "???";
 static int frame_info_from_ip(const char **func_name, int *line_num, const char **file_name, size_t ip, int skipC)
 {
     int fromC = 0;

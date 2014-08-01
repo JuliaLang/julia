@@ -340,12 +340,12 @@ static Value *literal_pointer_val(jl_value_t *p)
     if (!imaging_mode)
         return literal_static_pointer_val(p, jl_pvalue_llvmt);
     if (jl_is_datatype(p)) {
-        jl_datatype_t* addr = (jl_datatype_t*)p;
+        jl_datatype_t *addr = (jl_datatype_t*)p;
         // DataTypes are prefixed with a +
         return julia_gv("+", addr->name->name, addr->name->module, p);
     }
     if (jl_is_func(p)) {
-        jl_lambda_info_t* linfo = ((jl_function_t*)p)->linfo;
+        jl_lambda_info_t *linfo = ((jl_function_t*)p)->linfo;
         // Functions are prefixed with a -
         if (linfo != NULL)
             return julia_gv("-", linfo->name, linfo->module, p);
@@ -353,12 +353,12 @@ static Value *literal_pointer_val(jl_value_t *p)
         return julia_gv("jl_method#", p);
     }
     if (jl_is_lambda_info(p)) {
-        jl_lambda_info_t* linfo = (jl_lambda_info_t*)p;
+        jl_lambda_info_t *linfo = (jl_lambda_info_t*)p;
         // Type-inferred functions are prefixed with a -
         return julia_gv("-", linfo->name, linfo->module, p);
     }
     if (jl_is_symbol(p)) {
-        jl_sym_t* addr = (jl_sym_t*)p;
+        jl_sym_t *addr = (jl_sym_t*)p;
         // Symbols are prefixed with jl_sym#
         return julia_gv("jl_sym#", addr, NULL, p);
     }

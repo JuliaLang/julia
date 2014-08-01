@@ -1348,7 +1348,7 @@ DLLEXPORT void jl_(void *jl_value)
     in_jl_--;
 }
 
-DLLEXPORT void jl_breakpoint(jl_value_t* v)
+DLLEXPORT void jl_breakpoint(jl_value_t *v)
 {
     // put a breakpoint in you debugger here
 }
