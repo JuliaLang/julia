@@ -373,6 +373,85 @@ end
 ##       Add rcond methods for Cholesky, LU, QR and QRP types
 ## Lower priority: Add LQ, QL and RQ factorizations
 
+####################
+# LQ Factorization #
+####################
+
+immutable LQ{T} <: Factorization{T}
+    factors::Matrix{T}
+    τ::Vector{T}
+end
+
+lqfact!{T<:BlasFloat}(A::StridedMatrix{T}) = LQ(LAPACK.gelqf!(A)...)
+lqfact{T<:BlasFloat}(A::StridedMatrix{T}) = lqfact!(copy(A))
+
+function lq(A::Union(Number, AbstractMatrix); thin::Bool=true)
+    F = lqfact(A)
+    F[:L], full(F[:Q], thin=thin)
+end
+
+convert{T}(::Type{LQ{T}},A::LQ) = LQ(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ))
+convert{T}(::Type{Factorization{T}}, A::LQ) = convert(LQ{T}, A)
+
+function getindex(A::LQ, d::Symbol)
+    m, n = size(A)
+    d == :L && return tril!(A.factors[1:m, 1:min(m,n)])
+    d == :Q && return LQPackedQ(A.factors,A.τ)
+    throw(KeyError(d))
+end
+
+immutable LQPackedQ{T} <: AbstractMatrix{T}
+    factors::Matrix{T}
+    τ::Vector{T}
+end
+
+convert{T}(::Type{LQPackedQ{T}}, Q::LQPackedQ) = LQPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
+convert{T}(::Type{AbstractMatrix{T}}, Q::LQPackedQ) = convert(LQPackedQ{T}, Q)
+
+size(A::LQ, dim::Integer) = size(A.factors, dim)
+size(A::LQ) = size(A.factors)
+size(A::LQPackedQ, dim::Integer) = 0 < dim ? (dim <= 2 ? size(A.factors, 1) : 1) : throw(BoundsError())
+size(A::LQPackedQ) = size(A, 1), size(A, 2)
+
+full{T}(A::LQPackedQ{T}; thin::Bool=true) = A_mul_B!(thin ? eye(T, minimum(size(A.factors)), size(A.factors,2)) : eye(T, size(A.factors,2)), A)
+
+## Multiplication by Q
+### QB
+A_mul_B!{T<:BlasFloat}(A::LQPackedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormlq!('L','N',A.factors,A.τ,B)
+function *{TA,TB}(A::LQPackedQ{TA},B::StridedVecOrMat{TB})
+    TAB = promote_type(TA, TB)
+    A_mul_B!(convert(AbstractMatrix{TAB}, A), TB==TAB ? copy(B) : convert(AbstractArray{TAB,N}, B))
+end
+
+### QcB
+Ac_mul_B!{T<:BlasReal}(A::LQPackedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormlq!('L','T',A.factors,A.τ,B)
+Ac_mul_B!{T<:BlasComplex}(A::LQPackedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormlq!('L','C',A.factors,A.τ,B)
+function Ac_mul_B{TA,TB}(A::LQPackedQ{TA}, B::StridedVecOrMat{TB})
+    TAB = promote_type(TA,TB)
+    Ac_mul_B!(convert(AbstractMatrix{TAB}, A),
+              size(B,1)==size(A.factors,2) ? (TB == TAB ? copy(B) : convert(AbstractMatrix{TAB}, B)) :
+              size(B,1)==size(A.factors,1) ? [B; zeros(TAB, size(A.factors, 2) - size(A.factors, 1), size(B, 2))] :
+              throw(DimensionMismatch("")))
+end
+
+### AQ
+A_mul_B!{T<:BlasFloat}(A::StridedMatrix{T}, B::LQPackedQ{T}) = LAPACK.ormlq!('R', 'N', B.factors, B.τ, A)
+function *{TA,TB}(A::StridedMatrix{TA},B::LQPackedQ{TB})
+    TAB = promote_type(TA,TB)
+    A_mul_B!(size(B.factors,2) == size(A,2) ? (TA == TAB ? copy(A) : convert(AbstractMatrix{TAB}, A)) :
+             size(B.factors,1) == size(A,2) ? [A zeros(TAB, size(A,1), size(B.factors,2)-size(B.factors,1))] :
+             throw(DimensionMismatch("")),
+             convert(AbstractMatrix{TAB},B))
+end
+
+### AQc
+A_mul_Bc!{T<:BlasReal}(A::StridedMatrix{T}, B::LQPackedQ{T}) = LAPACK.ormlq!('R','T',B.factors,B.τ,A)
+A_mul_Bc!{T<:BlasComplex}(A::StridedMatrix{T}, B::LQPackedQ{T}) = LAPACK.ormlq!('R','C',B.factors,B.τ,A)
+function A_mul_Bc{TA<:Number,TB<:Number}( A::StridedVecOrMat{TA}, B::LQPackedQ{TB})
+    TAB = promote_type(TA,TB)
+    A_mul_Bc!(TA == TAB ? copy(A) : convert(AbstractArray{TAB,N}, A), convert(AbstractMatrix{TAB},B))
+end
+
 # FIXME! Should add balancing option through xgebal
 immutable Hessenberg{T} <: Factorization{T}
     factors::Matrix{T}
@@ -400,7 +479,7 @@ end
 full(A::HessenbergQ) = LAPACK.orghr!(1, size(A.factors, 1), copy(A.factors), A.τ)
 
 # Also printing of QRQs
-print_matrix(io::IO, A::Union(QRPackedQ,QRCompactWYQ,HessenbergQ), sz::(Integer, Integer), punct...) = print_matrix(io, full(A), sz, punct...)
+print_matrix(io::IO, A::Union(QRPackedQ,LQPackedQ,QRCompactWYQ,HessenbergQ), sz::(Integer, Integer), punct...) = print_matrix(io, full(A), sz, punct...)
 
 
 #######################
