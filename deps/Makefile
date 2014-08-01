@@ -343,7 +343,7 @@ libcxx-build:
 libcxx-build/Makefile: llvm-$(LLVM_VER)/projects/libcxx | llvm-$(LLVM_VER)/projects/libcxxabi libcxx-build
 	cd libcxx-build && \
 		cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS="../llvm-$(LLVM_VER)/projects/libcxxabi/include" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(build_prefix) ../llvm-$(LLVM_VER)/projects/libcxx -DCMAKE_C_COMPILER="$(CC)" -DCMAKE_CXX_COMPILER="$(CXX)"  -DCMAKE_SHARED_LINKER_FLAGS="-L$(build_libdir) -Bstatic -lirc -Bdynamic" -DCMAKE_CXX_FLAGS="$(CXXFLAGS)"
-llvm-$(LLVM_VER)/projects/libcxxabi/libc++abi.so.1.0: llvm-$(LLVM_VER)/projects/libcxxabi
+llvm-$(LLVM_VER)/projects/libcxxabi/libc++abi.so.1.0: llvm-$(LLVM_VER)/projects/libcxxabi | llvm-$(LLVM_VER)/projects/libcxx
 	cd llvm-$(LLVM_VER)/projects/libcxxabi/lib && \
 	OPTIONS="-I../../libcxx/include $(CXXFLAGS) $(LDFLAGS)" CC="$(CC) -static-intel" EXTRA_LIBS="-Bstatic -lirc" CXX="$(CXX)" ./buildit
 $(build_libdir)/libc++abi.so.1.0: llvm-$(LLVM_VER)/projects/libcxxabi/libc++abi.so.1.0
