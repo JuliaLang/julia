@@ -36,6 +36,9 @@
 #ifdef _OS_WINDOWS_
 #include "llvm/Object/COFF.h"
 #endif
+#if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 6
+#define LLVM36 1
+#endif
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 5
 #define LLVM35 1
 #include "llvm/IR/Verifier.h"
@@ -3427,7 +3430,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", f);
     builder.SetInsertPoint(b0);
 
-#ifdef LLVM35
+#ifdef LLVM36
     llvm::DITypeArray EltTypeArray = dbuilder.getOrCreateTypeArray(None);
 #else
     llvm::DIArray EltTypeArray = dbuilder.getOrCreateArray(ArrayRef<Value*>());
@@ -3453,7 +3456,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         assert(CU.Verify());
         #endif
 
-#ifdef LLVM35
+#ifdef LLVM36
         DISubroutineType subrty = dbuilder.createSubroutineType(fil,EltTypeArray);
 #else
         DICompositeType subrty = dbuilder.createSubroutineType(fil,EltTypeArray);
@@ -4341,8 +4344,10 @@ static void init_julia_llvm_env(Module *m)
 #endif
     FPM->add(jl_data_layout);
 
-#if __has_feature(address_sanitizer)
+#ifdef __has_feature
+#   if __has_feature(address_sanitizer)
     FPM->add(createAddressSanitizerFunctionPass());
+#   endif
 #endif
 #if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3
     jl_TargetMachine->addAnalysisPasses(*FPM);
