@@ -824,20 +824,18 @@ static jl_value_t *dont_copy_ast(jl_value_t *expr, jl_tuple_t *sp, int do_sp)
 }
 
 // TODO: eval decl types for arguments of non-generic functions
-static void eval_decl_types(jl_array_t *vi, jl_tuple_t *spenv)
+static void eval_decl_types(jl_array_t *vi, jl_value_t *ast, jl_tuple_t *spenv)
 {
-    size_t i;
-    for(i=0; i < jl_array_len(vi); i++) {
+    size_t i, l = jl_array_len(vi);
+    for(i=0; i < l; i++) {
         jl_array_t *v = (jl_array_t*)jl_cellref(vi, i);
         assert(jl_array_len(v) > 1);
-        JL_TRY {
-            jl_value_t *ty =
-                jl_interpret_toplevel_expr_with(jl_cellref(v,1),
-                                                &jl_tupleref(spenv,0),
-                                                jl_tuple_len(spenv)/2);
+        jl_value_t *ty = jl_static_eval(jl_cellref(v,1), NULL, jl_current_module,
+                                        (jl_value_t*)spenv, (jl_expr_t*)ast, 1, 1);
+        if (ty != NULL && (jl_is_type(ty) || jl_is_typevar(ty))) {
             jl_cellref(v, 1) = ty;
         }
-        JL_CATCH {
+        else {
             jl_cellref(v, 1) = (jl_value_t*)jl_any_type;
         }
     }
@@ -878,8 +876,8 @@ jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_tuple_t *sparams)
     jl_module_t *last_m = jl_current_module;
     JL_TRY {
         jl_current_module = li->module;
-        eval_decl_types(jl_lam_vinfo((jl_expr_t*)ast), spenv);
-        eval_decl_types(jl_lam_capt((jl_expr_t*)ast), spenv);
+        eval_decl_types(jl_lam_vinfo((jl_expr_t*)ast), ast, spenv);
+        eval_decl_types(jl_lam_capt((jl_expr_t*)ast), ast, spenv);
     }
     JL_CATCH {
         jl_current_module = last_m;

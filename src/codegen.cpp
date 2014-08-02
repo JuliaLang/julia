@@ -855,31 +855,50 @@ const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types, bool dum
 
 // --- constant determination ---
 
-// try to statically evaluate, NULL if not possible
-static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams,
-                               bool allow_alloc)
+static bool in_vinfo(jl_sym_t *s, jl_array_t *vi)
 {
+    size_t i, l = jl_array_len(vi);
+    for(i=0; i < l; i++) {
+        if (s == (jl_sym_t*)jl_cellref(jl_cellref(vi, i), 0))
+            return true;
+    }
+    return false;
+}
+
+// try to statically evaluate, NULL if not possible
+extern "C"
+jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
+                           jl_value_t *sp, jl_expr_t *ast, int sparams, int allow_alloc)
+{
+    jl_codectx_t *ctx = (jl_codectx_t*)ctx_;
     if (jl_is_symbolnode(ex))
         ex = (jl_value_t*)jl_symbolnode_sym(ex);
     if (jl_is_symbol(ex)) {
         jl_sym_t *sym = (jl_sym_t*)ex;
-        if (is_global(sym, ctx)) {
+        bool isglob;
+        if (ctx) {
+            isglob = is_global(sym, ctx);
+        }
+        else {
+            isglob = !in_vinfo(sym, jl_lam_vinfo(ast)) && !in_vinfo(sym, jl_lam_capt(ast));
+        }
+        if (isglob) {
             size_t i;
             if (sparams) {
-                for(i=0; i < jl_tuple_len(ctx->sp); i+=2) {
-                    if (sym == (jl_sym_t*)jl_tupleref(ctx->sp, i)) {
+                for(i=0; i < jl_tuple_len(sp); i+=2) {
+                    if (sym == (jl_sym_t*)jl_tupleref(sp, i)) {
                         // static parameter
-                        return jl_tupleref(ctx->sp, i+1);
+                        return jl_tupleref(sp, i+1);
                     }
                 }
             }
-            if (jl_is_const(ctx->module, sym))
-                return jl_get_global(ctx->module, sym);
+            if (jl_is_const(mod, sym))
+                return jl_get_global(mod, sym);
         }
         return NULL;
     }
     if (jl_is_topnode(ex)) {
-        jl_binding_t *b = jl_get_binding(topmod(ctx),
+        jl_binding_t *b = jl_get_binding(jl_base_relative_to(mod),
                                          (jl_sym_t*)jl_fieldref(ex,0));
         if (b == NULL) return NULL;
         if (b->constp)
@@ -893,7 +912,7 @@ static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams,
     jl_module_t *m = NULL;
     jl_sym_t *s = NULL;
     if (jl_is_getfieldnode(ex)) {
-        m = (jl_module_t*)static_eval(jl_fieldref(ex,0),ctx,sparams,allow_alloc);
+        m = (jl_module_t*)jl_static_eval(jl_fieldref(ex,0),ctx,mod,sp,ast,sparams,allow_alloc);
         s = (jl_sym_t*)jl_fieldref(ex,1);
         if (m && jl_is_module(m) && s && jl_is_symbol(s)) {
             jl_binding_t *b = jl_get_binding(m, s);
@@ -905,7 +924,7 @@ static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams,
     if (jl_is_expr(ex)) {
         jl_expr_t *e = (jl_expr_t*)ex;
         if (e->head == call_sym || e->head == call1_sym) {
-            jl_value_t *f = static_eval(jl_exprarg(e,0),ctx,sparams,allow_alloc);
+            jl_value_t *f = jl_static_eval(jl_exprarg(e,0),ctx,mod,sp,ast,sparams,allow_alloc);
             if (f && jl_is_function(f)) {
                 jl_fptr_t fptr = ((jl_function_t*)f)->fptr;
                 if (fptr == &jl_apply_generic) {
@@ -918,7 +937,7 @@ static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams,
                         memset(v, 0, n*sizeof(jl_value_t*));
                         v[0] = f;
                         for (i = 1; i < n; i++) {
-                            v[i] = static_eval(jl_exprarg(e,i),ctx,sparams,allow_alloc);
+                            v[i] = jl_static_eval(jl_exprarg(e,i),ctx,mod,sp,ast,sparams,allow_alloc);
                             if (v[i] == NULL) {
                                 JL_GC_POP();
                                 return NULL;
@@ -930,8 +949,8 @@ static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams,
                     }
                 }
                 else if (jl_array_dim0(e->args) == 3 && fptr == &jl_f_get_field) {
-                    m = (jl_module_t*)static_eval(jl_exprarg(e,1),ctx,sparams,allow_alloc);
-                    s = (jl_sym_t*)static_eval(jl_exprarg(e,2),ctx,sparams,allow_alloc);
+                    m = (jl_module_t*)jl_static_eval(jl_exprarg(e,1),ctx,mod,sp,ast,sparams,allow_alloc);
+                    s = (jl_sym_t*)jl_static_eval(jl_exprarg(e,2),ctx,mod,sp,ast,sparams,allow_alloc);
                     if (m && jl_is_module(m) && s && jl_is_symbol(s)) {
                         jl_binding_t *b = jl_get_binding(m, s);
                         if (b && b->constp)
@@ -948,7 +967,7 @@ static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams,
                     JL_GC_PUSHARGS(v, n);
                     memset(v, 0, n*sizeof(jl_value_t*));
                     for (i = 0; i < n; i++) {
-                        v[i] = static_eval(jl_exprarg(e,i+1),ctx,sparams,allow_alloc);
+                        v[i] = jl_static_eval(jl_exprarg(e,i+1),ctx,mod,sp,ast,sparams,allow_alloc);
                         if (v[i] == NULL) {
                             JL_GC_POP();
                             return NULL;
@@ -966,13 +985,20 @@ static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams,
         //} else if (e->head == tuple_sym) {
         //  size_t i;
         //  for (i = 0; i < jl_array_dim0(e->args); i++) 
-        //        if (static_eval(jl_exprarg(e,i), ctx, sparams, allow_alloc) == NULL)
+        //        if (jl_static_eval(jl_exprarg(e,i),ctx,mod,sp,ast,sparams,allow_alloc) == NULL)
         //          return NULL;
         //  return ex;
         }
         return NULL;
     }
     return ex;
+}
+
+static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams,
+                               bool allow_alloc)
+{
+    return jl_static_eval(ex, ctx, ctx->module, (jl_value_t*)ctx->sp, ctx->ast,
+                          sparams, allow_alloc);
 }
 
 static bool is_constant(jl_value_t *ex, jl_codectx_t *ctx, bool sparams=true)
