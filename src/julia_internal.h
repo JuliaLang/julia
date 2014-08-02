@@ -42,6 +42,7 @@ JL_CALLABLE(jl_f_default_ctor_1);
 JL_CALLABLE(jl_f_default_ctor_2);
 extern jl_function_t *jl_unprotect_stack_func;
 extern jl_function_t *jl_bottom_func;
+extern DLLEXPORT jl_function_t *jl_typeinf_func;
 
 
 extern jl_datatype_t *jl_box_type;

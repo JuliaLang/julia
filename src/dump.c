@@ -1023,7 +1023,6 @@ void jl_save_system_image(char *fname)
     if (en) jl_gc_enable();
 }
 
-extern jl_function_t *jl_typeinf_func;
 extern int jl_boot_file_loaded;
 extern void jl_get_builtin_hooks(void);
 extern void jl_get_system_hooks(void);
