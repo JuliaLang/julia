@@ -131,7 +131,7 @@ macro inferred(ex)
     ex.head == :call || error("@inferred requires a call expression")
     quote
         vals = ($([esc(ex.args[i]) for i = 2:length(ex.args)]...),)
-        inftypes = Base.return_types($(ex.args[1]), ($([:(typeof(vals[$i])) for i = 1:length(ex.args)-1]...),))
+        inftypes = Base.return_types($(esc(ex.args[1])), ($([:(typeof(vals[$i])) for i = 1:length(ex.args)-1]...),))
         @assert length(inftypes) == 1
         result = $(esc(ex.args[1]))(vals...)
         rettype = typeof(result)
