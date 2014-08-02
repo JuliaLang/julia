@@ -268,11 +268,20 @@ function getindex(r::UnitRange, s::UnitRange{Int})
         if !(1 <= last(s) <= length(r))
             throw(BoundsError())
         end
-        st = r[s.start]
-    else
-        st = oftype(r.start, r.start + s.start-1)
     end
+    st = oftype(r.start, r.start + s.start-1)
     range(st, sl)
+end
+
+function getindex(r::UnitRange, s::StepRange{Int})
+    sl = length(s)
+    if sl > 0
+        if !(1 <= first(s) <= length(r) && 1 <= last(s) <= length(r))
+            throw(BoundsError())
+        end
+    end
+    st = oftype(r.start, r.start + s.start-1)
+    range(st, step(s), sl)
 end
 
 function getindex(r::StepRange, s::Range{Int})
