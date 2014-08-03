@@ -5,34 +5,41 @@ function test_connect_disconnect(exp)
     print("Testing 10^$exp connect/disconnects:\n")
 
     (port, server) = listenany(8000)
+    server_started = RemoteRef()
     server_exited = RemoteRef()
+    client_exited = RemoteRef()
 
-    @spawnat(1, begin
+    @async begin
         clients_served = 0
-        print("\t[SERVER] Started on port $(port), with PID $(getpid())\n")
-        put!(server_exited, false)
+        print("\t\t\t[SERVER] Started on port $(port), with PID $(getpid())\n")
+        put!(server_started, false)
         while (clients_served < 10^exp)
             close(accept(server))
             clients_served += 1
         end
         put!(server_exited, true)
-    end)
+        print("\t\t\t[SERVER] Finished serving $(clients_served) clients\n")
+    end
 
     # Wait for the server
-    take!(server_exited)
-    print("\t[CLIENT] Connecting repeatedly to port $(port)\n")
-    for i in 1:10^exp
-        close(connect("localhost", port))
-    end
-    print("\t[CLIENT] Finished with 10^$exp connections\n")
+    @spawnat(2, begin
+        take!(server_started)
+        print("[CLIENT] Connecting repeatedly to port $(port)\n")
+        for i in 1:10^exp
+            close(connect("localhost", port))
+        end
+        print("[CLIENT] Finished with 10^$exp connections\n")
+        put!(client_exited,true)
+    end)
 
+    fetch(client_exited)
     close(server)
     fetch(server_exited)
     print("OK\n")
 end
 
 # Perform first test
-test_connect_disconnect(4)
+test_connect_disconnect(3)
 
 
 
@@ -46,12 +53,13 @@ function test_send(exp)
 
     print("Testing open, send of 10^$exp bytes and closing:\n")
 
-    rr_rcvd = RemoteRef()
+    server_started = RemoteRef()
+    server_exited = RemoteRef()
+    client_exited = RemoteRef()
 
-    @spawnat(1, begin
-        print("\t[SERVER] Started on port $(port)\n")
-        
-        put!(rr_rcvd, false)
+    @async begin
+        print("\t\t\t[SERVER] Started on port $(port)\n")
+        put!(server_started, false)
         serv_sock = accept(server)
         bread = 0
         while bread < size
@@ -60,24 +68,28 @@ function test_send(exp)
             bread += block
         end
         close(serv_sock)
-        put!(rr_rcvd, bread)
-        print("\t[SERVER] Received $(bread) of $(size) bytes\n")
+        print("\t\t\t[SERVER] Received 10^$(log10(bread))B of 10^$(exp)B\n")
+        put!(server_exited, bread)
+    end
+
+    @spawnat(2, begin
+        # wait for the server
+        take!(server_started)
+        print("[CLIENT] Connecting to port $(port)\n")
+        cli_sock = connect("localhost", port)
+        data = fill!(zeros(Uint8, block), int8(65))
+        cli_bsent = 0
+        while cli_bsent < size
+            write(cli_sock, data)
+            cli_bsent += block
+        end
+        close(cli_sock)
+        print("[CLIENT] Transmitted 10^$(log10(cli_bsent))B of 10^$(exp)B\n")
+        put!(client_exited, cli_bsent)
     end)
 
-    # wait for the server
-    take!(rr_rcvd)
-    print("\t[CLIENT] Connecting to port $(port)\n")
-    cli_sock = connect("localhost", port)
-    data = fill!(zeros(Uint8, block), int8(65))
-    bsent = 0
-    while bsent < size
-        write(cli_sock, data)
-        bsent += block
-    end
-    close(cli_sock)
-    print("\t[CLIENT] Transmitted $(bsent) bytes\n")
-
-    brcvd = fetch(rr_rcvd)
+    brcvd = take!(server_exited)
+    bsent = take!(client_exited)
     close(server)
 
     if brcvd != bsent
@@ -94,7 +106,7 @@ test_send(9)
 
 # Utility function for test_bidirectional() that simultaneously transmits and
 # receives 10^exp bits of data over s
-function xfer(s, exp)
+@everywhere function xfer(s, exp)
     @assert exp > 4
     xfer_size = 10^exp
     xfer_block = 10^(exp - 4)
@@ -134,31 +146,36 @@ function test_bidirectional(exp)
     (port, server) = listenany(8000)
 
     # For both the server and the client, we will transfer/receive 10^exp bytes
-    rr_server = RemoteRef()
+    server_started = RemoteRef()
+    server_exited = RemoteRef()
+    client_exited = RemoteRef()
 
-    @spawnat(1, begin
-        local bsent, bread
-        print("\t[SERVER] Started on port $(port)\n")
-        put!(rr_server, true)
-        serv_sock = accept(server)
-        (bsent, bread) = xfer(serv_sock, exp)
-        close(serv_sock)
-        put!(rr_server, (bsent, bread))
-        print("\t[SERVER] Transmitted $(bsent) and received $(bread) bytes\n")
+    @async begin
+        print("\t\t\t[SERVER] Started on port $(port)\n")
+        put!(server_started, true)
+        server_sock = accept(server)
+        (bsent, bread) = xfer(server_sock, exp)
+        close(server_sock)
+        print("\t\t\t[SERVER] Transmitted 10^$(log10(bsent))B and received 10^$(log10(bread))B\n")
+        put!(server_exited, (bsent, bread))
+    end
+
+    @spawnat(2, begin
+        # Wait for the server
+        take!(server_started)
+        print("[CLIENT] Connecting to port $(port)\n")
+        client_sock = connect("localhost", port)
+        (bsent, bread) = xfer(client_sock, exp)
+        close(client_sock)
+        print("[CLIENT] Transmitted 10^$(log10(bsent))B and received 10^$(log10(bread))B\n")
+        put!(client_exited, (bsent,bread))
     end)
 
-    # Wait for the server
-    take!(rr_server)
-    print("\t[CLIENT] Connecting to port $(port)\n")
-    cli_sock = connect("localhost", port)
-    (bsent, bread) = xfer(cli_sock, exp)
-    print("\t[SERVER] Transmitted $(bsent) and received $(bread) bytes\n")
-    close(cli_sock)
-
-    (serv_bsent, serv_bread) = take!(rr_server)
+    (serv_bsent, serv_bread) = take!(server_exited)
+    (cli_bsent, cli_bread) = take!(client_exited)
     close(server)
 
-    if serv_bsent != bread || serv_bread != bsent
+    if serv_bsent != cli_bread || serv_bread != cli_bsent
         print("\t[ERROR] Data was not faithfully transmitted!")
     else
         print("OK\n")
