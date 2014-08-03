@@ -548,7 +548,7 @@ ifeq ($(OS), Darwin)
 ifeq ($(shell test `dsymutil -v | cut -d\- -f2 | cut -d. -f1` -gt 102 && echo yes), yes)
   DSYMUTIL = dsymutil
 else
-  true -ignore
+  DSYMUTIL = true -ignore
 endif
 else
   INSTALL_NAME_ID_DIR =
