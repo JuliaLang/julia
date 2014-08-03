@@ -274,7 +274,8 @@ function tree_format(lilist::Vector{LineInfo}, counts::Vector{Int}, level::Int, 
                           "; ",
                           truncto(string(li.func), widthfunc),
                           "; ")
-            strs[i] = string(base, "line: ", li.line)
+            strs[i] = li.line == -1 ? string(base,"(unknown line)") :
+                string(base, "line: ", li.line)
         else
             strs[i] = ""
         end

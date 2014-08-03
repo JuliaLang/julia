@@ -268,6 +268,10 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
     Dl_info dlinfo;
     const char *fname = 0;
     if ((dladdr((void*)pointer, &dlinfo) != 0) && dlinfo.dli_fname) {
+        // In case we fail with the debug info lookup, we at least still
+        // have the function name, even if we don't have line numbers
+        *name = dlinfo.dli_sname;
+        *filename = dlinfo.dli_fname;
         if (skipC && !jl_is_sysimg(dlinfo.dli_fname))
             return;
         uint64_t fbase = (uint64_t)dlinfo.dli_fbase;

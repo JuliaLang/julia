@@ -250,7 +250,7 @@ JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -O0 -ggdb3 -DJL_DEBUG_BUILD -fstack-protector-all
-SHIPFLAGS = -O3 -falign-functions
+SHIPFLAGS = -O3 -ggdb3 -falign-functions
 endif
 
 ifeq ($(USECLANG),1)
@@ -260,7 +260,7 @@ JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -O0 -g -DJL_DEBUG_BUILD -fstack-protector-all
-SHIPFLAGS = -O3
+SHIPFLAGS = -O3 -g
 ifeq ($(OS), Darwin)
 ifeq ($(USE_LIBCPP), 1)
 CC += -stdlib=libc++ -mmacosx-version-min=10.7
@@ -287,7 +287,7 @@ JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -
 JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -O0 -ggdb3 -DJL_DEBUG_BUILD -fstack-protector-all
-SHIPFLAGS = -O3 -falign-functions
+SHIPFLAGS = -O3 -g -falign-functions
 endif
 
 ifeq ($(LLVM_VER),svn)
@@ -545,10 +545,16 @@ ifeq ($(OS), Darwin)
   INSTALL_NAME_ID_DIR = @rpath/
   INSTALL_NAME_CMD = install_name_tool -id $(INSTALL_NAME_ID_DIR)
   INSTALL_NAME_CHANGE_CMD = install_name_tool -change
+ifeq ($(shell test `dsymutil -v | cut -d\- -f2 | cut -d. -f1` -gt 102 && echo yes), yes)
+  DSYMUTIL = dsymutil
+else
+  true -ignore
+endif
 else
   INSTALL_NAME_ID_DIR =
   INSTALL_NAME_CMD = true -ignore
   INSTALL_NAME_CHANGE_CMD = true -ignore
+  DSYMUTIL = true -ignore
 endif
 
 # shared library runtime paths
