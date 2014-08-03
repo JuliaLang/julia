@@ -17,6 +17,11 @@
 #include <unistd.h>
 #endif
 
+#if defined(__APPLE__)
+#define __need_ucontext64_t
+#include <machine/_structs.h>
+#endif
+
 #include <errno.h>
 #include <signal.h>
 
@@ -144,7 +149,7 @@ static int is_addr_on_stack(void *addr)
 #define SIGINFO SIGUSR1
 #endif
 
-void sigdie_handler(int sig, siginfo_t *info, void *context)
+void sigdie_handler(int sig, siginfo_t *info, ucontext64_t *context)
 {
     if (sig != SIGINFO) {
         sigset_t sset;
@@ -155,11 +160,11 @@ void sigdie_handler(int sig, siginfo_t *info, void *context)
     }
     ios_printf(ios_stderr,"\nsignal (%d): %s\n", sig, strsignal(sig));
 #ifdef __APPLE__
-    gdbbacktrace();
+    bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, (bt_context_t)&((ucontext64_t*)context)->uc_mcontext64->__ss);
 #else
     bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, (ucontext_t*)context);
-    jlbacktrace();
 #endif
+    jlbacktrace();
     if (sig != SIGSEGV &&
         sig != SIGBUS &&
         sig != SIGILL &&
