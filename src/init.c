@@ -149,7 +149,7 @@ static int is_addr_on_stack(void *addr)
 #define SIGINFO SIGUSR1
 #endif
 
-void sigdie_handler(int sig, siginfo_t *info, ucontext64_t *context)
+void sigdie_handler(int sig, siginfo_t *info, void *context)
 {
     if (sig != SIGINFO) {
         sigset_t sset;
