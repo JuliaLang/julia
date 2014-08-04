@@ -162,10 +162,12 @@ const char *jl_demangle(const char *name)
 
 JuliaJITEventListener *jl_jit_events;
 
-extern "C" void jl_getFunctionInfo(const char **name, int *line, const char **filename, uintptr_t pointer, int skipC);
+extern "C" void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, uintptr_t pointer, int skipC);
 
-void lookup_pointer(DIContext *context, const char **name, int *line, const char **filename, size_t pointer, int demangle)
+void lookup_pointer(DIContext *context, const char **name, size_t *line, const char **filename, size_t pointer, int demangle)
 {
+    if (demangle && name != NULL)
+        *name = jl_demangle(*name);
     if (context == NULL) return;
     #ifdef LLVM35
     DILineInfoSpecifier infoSpec(DILineInfoSpecifier::FileLineInfoKind::AbsoluteFilePath,
@@ -176,7 +178,6 @@ void lookup_pointer(DIContext *context, const char **name, int *line, const char
                    DILineInfoSpecifier::FunctionName;
     #endif
     DILineInfo info = context->getLineInfoForAddress(pointer, infoSpec);
-
     #ifndef LLVM35 // LLVM <= 3.4
     if (strcmp(info.getFunctionName(), "<invalid>") == 0) return;
     if (demangle)
@@ -258,7 +259,7 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
     return;
 }
 #else
-void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename, size_t pointer, int skipC)
+void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filename, size_t pointer, int skipC)
 {
 #ifdef _OS_WINDOWS_
     DWORD fbase = SymGetModuleBase64(GetCurrentProcess(),(DWORD)pointer);
@@ -404,7 +405,7 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
 }
 #endif
 
-void jl_getFunctionInfo(const char **name, int *line, const char **filename, size_t pointer, int skipC)
+void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, size_t pointer, int skipC)
 {
     *name = NULL;
     *line = -1;
