@@ -92,9 +92,9 @@ public:
 
         FuncInfo tmp = {&F, Size, std::string(), std::string(), tbl, Details.LineStarts};
 #else
-        FuncInfo tmp = {&F, Size, std::string(), std::string(), Details.LineStarts};
+        FuncInfo tmp = {&F, Size, std::string(F.getName().data()), std::string(), Details.LineStarts};
 #endif
-        if (tmp.lines.size() != 0) info[(size_t)(Code)] = tmp;
+        info[(size_t)(Code)] = tmp;
     }
 
     std::map<size_t, FuncInfo, revcomp>& getMap()
@@ -268,12 +268,12 @@ void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename
     Dl_info dlinfo;
     const char *fname = 0;
     if ((dladdr((void*)pointer, &dlinfo) != 0) && dlinfo.dli_fname) {
+        if (skipC && !jl_is_sysimg(dlinfo.dli_fname))
+            return;
         // In case we fail with the debug info lookup, we at least still
         // have the function name, even if we don't have line numbers
         *name = dlinfo.dli_sname;
         *filename = dlinfo.dli_fname;
-        if (skipC && !jl_is_sysimg(dlinfo.dli_fname))
-            return;
         uint64_t fbase = (uint64_t)dlinfo.dli_fbase;
 #endif
         obfiletype::iterator it = objfilemap.find(fbase);
@@ -433,16 +433,17 @@ void jl_getFunctionInfo(const char **name, int *line, const char **filename, siz
     std::map<size_t, FuncInfo, revcomp> &info = jl_jit_events->getMap();
     std::map<size_t, FuncInfo, revcomp>::iterator it = info.lower_bound(pointer);
     if (it != info.end() && (size_t)(*it).first + (*it).second.lengthAdr >= pointer) {
-        // commenting these lines out skips functions that don't
-        // have explicit debug info. this is useful for hiding
-        // the jlcall wrapper functions we generate.
-#if LLVM_VERSION_MAJOR == 3
-#if LLVM_VERSION_MINOR == 0
-        //*name = &(*(*it).second.func).getNameStr()[0];
-#elif LLVM_VERSION_MINOR >= 1
-        //*name = (((*(*it).second.func).getName()).data());
-#endif
-#endif
+        // We do this to hide the jlcall wrappers when getting julia, but
+        // it is still good to have them for regular lookup of C frames.
+        if (skipC && (*it).second.lines.empty())
+            return;
+
+        *name = (*it).second.name.c_str();
+        *filename = (*it).second.filename.c_str();
+
+        if ((*it).second.lines.empty())
+            return;
+
         std::vector<JITEvent_EmittedFunctionDetails::LineStart>::iterator vit =
             (*it).second.lines.begin();
         JITEvent_EmittedFunctionDetails::LineStart prev = *vit;
@@ -454,10 +455,6 @@ void jl_getFunctionInfo(const char **name, int *line, const char **filename, siz
             // the DISubprogram has the un-mangled name, so use that if
             // available.
             *name = debugscope.getName().data();
-        }
-        else {
-            *name = (*it).second.name.c_str();
-            *filename = (*it).second.filename.c_str();
         }
 
         vit++;
