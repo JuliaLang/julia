@@ -40,7 +40,9 @@ debug release: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/ju
 
 release-candidate-checklist: release test source-dist
 	@#Check documentation
-	./julia doc/NEWS-update.jl #Add missing cross-references to NEWS.md
+	@./julia doc/NEWS-update.jl #Add missing cross-references to NEWS.md
+	@./julia doc/DocCheck.jl > doc/UNDOCUMENTED.rst 2>&1 #Check for undocumented items
+	@if [ -n "$(cat doc/UNDOCUMENTED.rst)" ]; then rm doc/UNDOCUMENTED.rst; else echo -1. Write documentation for the items in doc/UNDOCUMENTED.rst; exit 1 fi
 	@$(MAKE) -C doc html  SPHINXOPTS="-W" #Rebuild Julia HTML docs pedantically
 	@$(MAKE) -C doc latex SPHINXOPTS="-W" #Rebuild Julia PDF docs pedantically
 	@$(MAKE) -C doc doctest #Run Julia doctests
