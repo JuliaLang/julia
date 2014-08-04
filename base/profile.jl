@@ -74,10 +74,16 @@ immutable LineInfo
     file::ByteString
     line::Int
     fromC::Bool
+    ip::Int
 end
 
-const UNKNOWN = LineInfo("?", "?", -1, true)
+const UNKNOWN = LineInfo("?", "?", -1, true, 0)
 
+#
+# If the LineInfo has function and line information, we consider two of them the same
+# if they share the same function/line information. For unknown functions, line==ip
+# so we never actually need to consider the .ip field.
+#
 ==(a::LineInfo, b::LineInfo) = a.line == b.line && a.fromC == b.fromC && a.func == b.func && a.file == b.file
 
 function hash(li::LineInfo, h::Uint)
@@ -102,8 +108,8 @@ maxlen_data() = convert(Int, ccall(:jl_profile_maxlen_data, Csize_t, ()))
 
 function lookup(ip::Uint)
     info = ccall(:jl_lookup_code_address, Any, (Ptr{Void},Cint), ip, false)
-    if length(info) == 4
-        return LineInfo(string(info[1]), string(info[2]), int(info[3]), info[4])
+    if length(info) == 5
+        return LineInfo(string(info[1]), string(info[2]), int(info[3]), info[4], int(info[5]))
     else
         return UNKNOWN
     end
@@ -267,15 +273,25 @@ function tree_format(lilist::Vector{LineInfo}, counts::Vector{Int}, level::Int, 
             if showextra
                 base = string(base, "+", nextra, " ")
             end
-            base = string(base,
+            if li.line == li.ip
+                strs[i] = string(base,
                           rpad(string(counts[i]), ndigcounts, " "),
-                          " ",
-                          truncto(string(li.file), widthfile),
-                          "; ",
-                          truncto(string(li.func), widthfunc),
-                          "; ")
-            strs[i] = li.line == -1 ? string(base,"(unknown line)") :
-                string(base, "line: ", li.line)
+                          " ","unkown function (ip: 0x",hex(li.ip,2*sizeof(Ptr{Void})),
+                          ")")
+            else
+                base = string(base,
+                              rpad(string(counts[i]), ndigcounts, " "),
+                              " ",
+                              truncto(string(li.file), widthfile),
+                              "; ",
+                              truncto(string(li.func), widthfunc),
+                              "; ")
+                if li.line == -1
+                    strs[i] = string(base, "(unknown line)")
+                else
+                    strs[i] = string(base, "line: ", li.line)
+                end
+            end
         else
             strs[i] = ""
         end

@@ -652,12 +652,13 @@ DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
     const char *file_name;
     int fromC = frame_info_from_ip(&func_name, &line_num, &file_name, (size_t)ip, skipC);
     if (func_name != NULL) {
-        jl_value_t *r = (jl_value_t*)jl_alloc_tuple(4);
+        jl_value_t *r = (jl_value_t*)jl_alloc_tuple(5);
         JL_GC_PUSH1(&r);
         jl_tupleset(r, 0, jl_symbol(func_name));
         jl_tupleset(r, 1, jl_symbol(file_name));
         jl_tupleset(r, 2, jl_box_long(line_num));
         jl_tupleset(r, 3, jl_box_bool(fromC));
+        jl_tupleset(r, 4, jl_box_long((int64_t)ip));
 #if defined(_OS_WINDOWS_) && !defined(LLVM34)
         if (fromC && func_name != name_unknown) free((void*)func_name);
         if (fromC && file_name != name_unknown) free((void*)file_name);
@@ -690,7 +691,12 @@ DLLEXPORT void gdblookup(ptrint_t ip)
     (void)fromC; // fromC not used on unix
 #endif
     if (func_name != NULL) {
-        ios_printf(ios_stderr, "%s at %s:%d\n", func_name, file_name, line_num);
+        if (line_num == ip)
+            ios_printf(ios_stderr, "unkown function (ip: %d)\n", line_num);
+        else if (line_num == -1)
+            ios_printf(ios_stderr, "%s at %s (unknown line)", func_name, file_name, line_num);
+        else
+            ios_printf(ios_stderr, "%s at %s:%d\n", func_name, file_name, line_num);
 #ifdef _OS_WINDOWS_
         if (fromC && func_name != name_unknown) free((void*)func_name);
         if (fromC && file_name != name_unknown) free((void*)file_name);
