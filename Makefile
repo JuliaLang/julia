@@ -38,7 +38,7 @@ debug release: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/ju
 	@export private_libdir=$(private_libdir) && \
 	$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(build_libdir):$(LD_LIBRARY_PATH) JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$@)" $(build_private_libdir)/sys.$(SHLIB_EXT)
 
-release-candidate-checklist: release test source-dist
+release-candidate: release test source-dist
 	@#Check documentation
 	@./julia doc/NEWS-update.jl #Add missing cross-references to NEWS.md
 	@./julia doc/DocCheck.jl > doc/UNDOCUMENTED.rst 2>&1 #Check for undocumented items
