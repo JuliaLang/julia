@@ -3839,6 +3839,14 @@ Basic functions
 
    Returns a tuple containing the dimensions of A
 
+.. function:: rows(A)
+
+   Returns the number of rows of A. Equivalent to size(A,1)
+
+.. function:: cols(A)
+
+   Returns the number of columns of A. Equivalent to size(A,2)
+
 .. function:: iseltype(A,T)
 
    Tests whether A or its elements are of type T

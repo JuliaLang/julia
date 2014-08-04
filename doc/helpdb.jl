@@ -5643,6 +5643,18 @@ popdisplay(d::Display)
 
 "),
 
+("Base","rows","rows(A)
+
+   Returns the number of rows of A. Equivalent to size(A,1).
+
+"),
+
+("Base","cols","cols(A)
+
+   Returns the number of columns of A. Equivalent to size(A,2).
+
+"),
+
 ("Base","iseltype","iseltype(A, T)
 
    Tests whether A or its elements are of type T
