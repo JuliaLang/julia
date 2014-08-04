@@ -166,7 +166,7 @@ extern "C" void jl_getFunctionInfo(const char **name, size_t *line, const char *
 
 void lookup_pointer(DIContext *context, const char **name, size_t *line, const char **filename, size_t pointer, int demangle)
 {
-    if (demangle && name != NULL)
+    if (demangle && *name != NULL)
         *name = jl_demangle(*name);
     if (context == NULL) return;
     #ifdef LLVM35
