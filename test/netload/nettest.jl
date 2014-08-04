@@ -39,7 +39,7 @@ function test_connect_disconnect(exp)
 end
 
 # Perform first test
-test_connect_disconnect(3)
+test_connect_disconnect(5)
 
 
 
