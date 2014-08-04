@@ -254,7 +254,7 @@ bool jl_is_sysimg(const char *path)
 }
 
 #if defined(_OS_WINDOWS_) && !defined(USE_MCJIT)
-void jl_getDylibFunctionInfo(const char **name, int *line, const char **filename, size_t pointer, int skipC)
+void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filename, size_t pointer, int skipC)
 {
     return;
 }
