@@ -456,10 +456,10 @@ static void init_task(jl_task_t *t)
 ptrint_t bt_data[MAX_BT_SIZE+1];
 size_t bt_size = 0;
 
-void jl_getFunctionInfo(const char **name, int *line, const char **filename, size_t pointer, int skipC);
+void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, size_t pointer, int skipC);
 
 static const char *name_unknown = "???";
-static int frame_info_from_ip(const char **func_name, int *line_num, const char **file_name, size_t ip, int skipC)
+static int frame_info_from_ip(const char **func_name, size_t *line_num, const char **file_name, size_t ip, int skipC)
 {
     int fromC = 0;
 
@@ -648,7 +648,7 @@ DLLEXPORT jl_value_t *jl_backtrace_from_here(void)
 DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
 {
     const char *func_name;
-    int line_num;
+    size_t line_num;
     const char *file_name;
     int fromC = frame_info_from_ip(&func_name, &line_num, &file_name, (size_t)ip, skipC);
     if (func_name != NULL) {
@@ -684,7 +684,7 @@ DLLEXPORT jl_value_t *jl_get_backtrace(void)
 DLLEXPORT void gdblookup(ptrint_t ip)
 {
     const char *func_name;
-    int line_num;
+    size_t line_num;
     const char *file_name;
     int fromC = frame_info_from_ip(&func_name, &line_num, &file_name, ip, 0);
 #ifndef _OS_WINDOWS_
