@@ -187,11 +187,24 @@ ifeq ($(OS),WINNT)
 else
 	-cp -a $(build_libexecdir) $(DESTDIR)$(prefix)
 
+	# Copy over .dSYM directories directly
+ifeq ($(OS),Darwin)
+	-cp -a $(build_libdir)/*.dSYM $(DESTDIR)$(private_libdir)
+endif
+
 	for suffix in $(JL_LIBS) ; do \
-		$(INSTALL_M) $(build_libdir)/lib$${suffix}*.$(SHLIB_EXT)* $(DESTDIR)$(private_libdir) ; \
+		for lib in $(build_libdir)/lib$${suffix}*.$(SHLIB_EXT)*; do \
+			if [[ "$${lib##*.}" != "dSYM" ]]; then \
+				$(INSTALL_M) $$lib $(DESTDIR)$(private_libdir) ; \
+			fi \
+		done \
 	done
 	for suffix in $(JL_PRIVATE_LIBS) ; do \
-		$(INSTALL_M) $(build_libdir)/lib$${suffix}*.$(SHLIB_EXT)* $(DESTDIR)$(private_libdir) ; \
+		for lib in $(build_libdir)/lib$${suffix}*.$(SHLIB_EXT)*; do \
+			if [[ "$${lib##*.}" != "dSYM" ]]; then \
+				$(INSTALL_M) $$lib $(DESTDIR)$(private_libdir) ; \
+			fi \
+		done \
 	done
 endif
 
