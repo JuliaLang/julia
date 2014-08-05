@@ -36,13 +36,9 @@ static char *extensions[] = { ".so", "" };
 
 extern char *julia_home;
 
-#if defined(__linux__)
-char *jl_lookup_soname(char *pfx, size_t n);
-#endif
-
 #define JL_RTLD(flags, FLAG) (flags & JL_RTLD_ ## FLAG ? RTLD_ ## FLAG : 0)
 
-static int jl_uv_dlopen(const char *filename, uv_lib_t *lib, unsigned flags)
+DLLEXPORT int jl_uv_dlopen(const char *filename, uv_lib_t *lib, unsigned flags)
 {
 #if defined(_OS_WINDOWS_)
     needsSymRefreshModuleList = 1;
