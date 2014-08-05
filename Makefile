@@ -63,7 +63,7 @@ release-candidate: release test
 	@#Check that benchmarks work
 	@$(MAKE) -C test/perf
 	@#Check that netload tests work
-	#for test in test/netload/*.jl; do julia $$test; if [ $$? -ne 0 ]; then exit 1; fi; done
+	@#for test in test/netload/*.jl; do julia $$test; if [ $$? -ne 0 ]; then exit 1; fi; done
 	@echo
 	@echo To complete the release candidate checklist:
 	@echo
