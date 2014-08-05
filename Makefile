@@ -38,7 +38,7 @@ debug release: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/ju
 	@export private_libdir=$(private_libdir) && \
 	$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(build_libdir):$(LD_LIBRARY_PATH) JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$@)" $(build_private_libdir)/sys.$(SHLIB_EXT)
 
-release-candidate: release test source-dist
+release-candidate: release test
 	@#Check documentation
 	@./julia doc/NEWS-update.jl #Add missing cross-references to NEWS.md
 	@./julia doc/DocCheck.jl > doc/UNDOCUMENTED.rst 2>&1 #Check for undocumented items
@@ -59,7 +59,7 @@ release-candidate: release test source-dist
 	@echo 1. Remove deprecations in base/deprecated.jl
 	@echo 2. Bump VERSION
 	@echo 3. Create tag, push to github "(git tag v`cat VERSION` && git push --tags)"
-	@echo 4. Replace github tarballs with output of make source-dist: julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz
+	@echo 4. Replace github release tarball with tarball created from make source-dist
 	@echo 5. Follow packaging instructions in DISTRIBUTING.md to create binary packages for all platforms
 	@echo 6. Upload to AWS, update http://julialang.org/downloads links
 	@echo 7. Announce on mailing lists
