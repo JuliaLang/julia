@@ -70,7 +70,7 @@ release-candidate: release test
 	
 	@echo 1. Remove deprecations in base/deprecated.jl
 	@echo 2. Bump VERSION
-	@echo 3. Create tag, push to github "\(git tag v\`cat VERSION]` && git push --tags\)"
+	@echo 3. Create tag, push to github "\(git tag v\`cat VERSION]\` && git push --tags\)"
 	@echo 4. Replace github release tarball with tarball created from make source-dist
 	@echo 5. Follow packaging instructions in DISTRIBUTING.md to create binary packages for all platforms
 	@echo 6. Upload to AWS, update http://julialang.org/downloads links
