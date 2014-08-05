@@ -42,7 +42,7 @@ release-candidate: release test
 	@#Check documentation
 	@./julia doc/NEWS-update.jl #Add missing cross-references to NEWS.md
 	@./julia doc/DocCheck.jl > doc/UNDOCUMENTED.rst 2>&1 #Check for undocumented items
-	@if [ -n "$(cat doc/UNDOCUMENTED.rst)" ]; then \
+	@if [ -z "$(cat doc/UNDOCUMENTED.rst)" ]; then \
 		rm doc/UNDOCUMENTED.rst; \
 	else \
 		echo "Undocumented functions found in doc/UNDOCUMENTED.rst; document them, then retry"; \
@@ -54,7 +54,7 @@ release-candidate: release test
 	@$(MAKE) -C doc linkcheck #Check all links
 	@$(MAKE) -C doc helpdb.jl #Rebuild Julia online documentation for help(), apropos(), etc...
 
-	# Check to see if the above make invocations changed anything important
+	@# Check to see if the above make invocations changed anything important
 	@if [ -n "$(git status --porcelain)" ]; then \
 		echo "Git repository dirty; Verify and commit changes to the repository, then retry"; \
 		exit 1; \
