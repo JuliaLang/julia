@@ -194,14 +194,14 @@ endif
 
 	for suffix in $(JL_LIBS) ; do \
 		for lib in $(build_libdir)/lib$${suffix}*.$(SHLIB_EXT)*; do \
-			if [[ "$${lib##*.}" != "dSYM" ]]; then \
+			if [ "$${lib##*.}" != "dSYM" ]; then \
 				$(INSTALL_M) $$lib $(DESTDIR)$(private_libdir) ; \
 			fi \
 		done \
 	done
 	for suffix in $(JL_PRIVATE_LIBS) ; do \
 		for lib in $(build_libdir)/lib$${suffix}*.$(SHLIB_EXT)*; do \
-			if [[ "$${lib##*.}" != "dSYM" ]]; then \
+			if [ "$${lib##*.}" != "dSYM" ]; then \
 				$(INSTALL_M) $$lib $(DESTDIR)$(private_libdir) ; \
 			fi \
 		done \
