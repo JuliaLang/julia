@@ -407,7 +407,9 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
             context = it->second.ctx;
             slide = it->second.slide;
         }
+#ifdef _OS_DARWIN_
     lookup:
+#endif
         lookup_pointer(context, name, line, filename, pointer+slide, jl_is_sysimg(fname), fromC);
         return;
     }
