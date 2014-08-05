@@ -239,9 +239,11 @@ Using an index less than 1 or greater than ``end`` raises an error:
 
     julia> str[0]
     ERROR: BoundsError()
+     in getindex at /Users/sabae/src/julia/usr/lib/julia/sys.dylib (repeats 2 times)
 
     julia> str[end+1]
     ERROR: BoundsError()
+     in getindex at /Users/sabae/src/julia/usr/lib/julia/sys.dylib (repeats 2 times)
 
 You can also extract a substring using range indexing:
 
