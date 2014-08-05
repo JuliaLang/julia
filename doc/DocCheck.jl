@@ -13,7 +13,7 @@
 
 module DocCheck
 
-import Base.Help: init_help, FUNCTION_DICT, MODULE_DICT, CATEGORY_DICT
+import Base.Help: init_help, FUNCTION_DICT, MODULE_DICT
 import Base: argtype_decl_string, uncompressed_ast
 
 export isdeprecated, isdocumented, undefined_exports, undocumented, undocumented_by_file, undocumented_rst,
@@ -102,7 +102,7 @@ function _undocumented_rst()
             else
                s = symbol(line) # for submodules: string(:Sort) == "Base.Sort"
                if !isdefined(s) continue end
-               if haskey(FUNCTION_DICT, line) || haskey(MODULE_DICT, line) || haskey(CATEGORY_DICT, string(s))
+               if haskey(FUNCTION_DICT, line) || haskey(MODULE_DICT, line)
                   m = eval(symbol(getkey(MODULE_DICT, line, "Base")))
                   isdeprecated(m,s) && continue
                   havecount+=1; total+=1; continue
@@ -157,7 +157,7 @@ function gen_undocumented_template(outfile = "$JULIA_HOME/../../doc/UNDOCUMENTED
             else
                 s = symbol(line) # for submodules: string(:Sort) == "Base.Sort"
                 if !isdefined(s) continue end
-                if haskey(FUNCTION_DICT, line) || haskey(MODULE_DICT, line) || haskey(CATEGORY_DICT, string(s))
+                if haskey(FUNCTION_DICT, line) || haskey(MODULE_DICT, line)
                     continue
                 end
                 if line[1]=='@'; line = line[2:end] end
