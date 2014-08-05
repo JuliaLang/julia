@@ -468,7 +468,7 @@ void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, 
             prev = *vit;
             vit++;
         }
-        if (*line == -1) {
+        if (*line == (size_t) -1) {
             *line = prev.Loc.getLine();
         }
     }
