@@ -456,17 +456,17 @@ static void init_task(jl_task_t *t)
 ptrint_t bt_data[MAX_BT_SIZE+1];
 size_t bt_size = 0;
 
-void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, size_t pointer, int skipC);
+void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, size_t pointer, int *fromC, int skipC);
 
 static const char *name_unknown = "???";
 static int frame_info_from_ip(const char **func_name, size_t *line_num, const char **file_name, size_t ip, int skipC)
 {
     int fromC = 0;
 
-    jl_getFunctionInfo(func_name, line_num, file_name, ip, skipC);
+    jl_getFunctionInfo(func_name, line_num, file_name, ip, &fromC, skipC);
     if (*func_name == NULL) {
-        fromC = 1;
 #if defined(_OS_WINDOWS_)
+        fromC = 1;
         if (jl_in_stackwalk) {
             *func_name = name_unknown;
             *file_name = name_unknown;
@@ -692,7 +692,7 @@ DLLEXPORT void gdblookup(ptrint_t ip)
 #endif
     if (func_name != NULL) {
         if (line_num == ip)
-            ios_printf(ios_stderr, "unkown function (ip: %d)\n", line_num);
+            ios_printf(ios_stderr, "unknown function (ip: %d)\n", line_num);
         else if (line_num == -1)
             ios_printf(ios_stderr, "%s at %s (unknown line)\n", func_name, file_name, line_num);
         else

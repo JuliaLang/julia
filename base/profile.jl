@@ -276,7 +276,7 @@ function tree_format(lilist::Vector{LineInfo}, counts::Vector{Int}, level::Int, 
             if li.line == li.ip
                 strs[i] = string(base,
                           rpad(string(counts[i]), ndigcounts, " "),
-                          " ","unkown function (ip: 0x",hex(li.ip,2*sizeof(Ptr{Void})),
+                          " ","unknown function (ip: 0x",hex(li.ip,2*sizeof(Ptr{Void})),
                           ")")
             else
                 base = string(base,
