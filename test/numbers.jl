@@ -770,6 +770,8 @@ end
 @test 0.5 == 1//2
 @test 0.1 != 1//10
 @test 0.1 == 3602879701896397//36028797018963968
+@test Inf == 1//0 == 2//0 == typemax(Int)//0
+@test -Inf == -1//0 == -2//0 == -typemax(Int)//0
 @test realmin() != 1//(BigInt(2)^1022+1)
 @test realmin() == 1//(BigInt(2)^1022)
 @test realmin() != 1//(BigInt(2)^1022-1)
