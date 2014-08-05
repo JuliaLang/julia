@@ -692,7 +692,7 @@ DLLEXPORT void gdblookup(ptrint_t ip)
 #endif
     if (func_name != NULL) {
         if (line_num == ip)
-            ios_printf(ios_stderr, "unkown function (ip: %d)\n", line_num);
+            ios_printf(ios_stderr, "unknown function (ip: %d)\n", line_num);
         else if (line_num == -1)
             ios_printf(ios_stderr, "%s at %s (unknown line)\n", func_name, file_name, line_num);
         else
