@@ -38,6 +38,45 @@ debug release: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/ju
 	@export private_libdir=$(private_libdir) && \
 	$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(build_libdir):$(LD_LIBRARY_PATH) JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$@)" $(build_private_libdir)/sys.$(SHLIB_EXT)
 
+release-candidate: release test
+	@#Check documentation
+	@./julia doc/NEWS-update.jl #Add missing cross-references to NEWS.md
+	@./julia doc/DocCheck.jl > doc/UNDOCUMENTED.rst 2>&1 #Check for undocumented items
+	@if [ -z "$(cat doc/UNDOCUMENTED.rst)" ]; then \
+		rm doc/UNDOCUMENTED.rst; \
+	else \
+		echo "Undocumented functions found in doc/UNDOCUMENTED.rst; document them, then retry"; \
+		exit 1; \
+	fi
+	@$(MAKE) -C doc html  SPHINXOPTS="-W" #Rebuild Julia HTML docs pedantically
+	@$(MAKE) -C doc latex SPHINXOPTS="-W" #Rebuild Julia PDF docs pedantically
+	@$(MAKE) -C doc doctest #Run Julia doctests
+	@$(MAKE) -C doc linkcheck #Check all links
+	@$(MAKE) -C doc helpdb.jl #Rebuild Julia online documentation for help(), apropos(), etc...
+
+	@# Check to see if the above make invocations changed anything important
+	@if [ -n "$(git status --porcelain)" ]; then \
+		echo "Git repository dirty; Verify and commit changes to the repository, then retry"; \
+		exit 1; \
+	fi
+
+	@#Check that benchmarks work
+	@$(MAKE) -C test/perf
+	@#Check that netload tests work
+	@#for test in test/netload/*.jl; do julia $$test; if [ $$? -ne 0 ]; then exit 1; fi; done
+	@echo
+	@echo To complete the release candidate checklist:
+	@echo
+	
+	@echo 1. Remove deprecations in base/deprecated.jl
+	@echo 2. Bump VERSION
+	@echo 3. Create tag, push to github "\(git tag v\`cat VERSION\` && git push --tags\)"
+	@echo 4. Replace github release tarball with tarball created from make source-dist
+	@echo 5. Follow packaging instructions in DISTRIBUTING.md to create binary packages for all platforms
+	@echo 6. Upload to AWS, update http://julialang.org/downloads links
+	@echo 7. Announce on mailing lists
+	@echo
+
 julia-debug-symlink:
 	@ln -sf $(build_bindir)/julia-debug julia
 
@@ -194,14 +233,14 @@ endif
 
 	for suffix in $(JL_LIBS) ; do \
 		for lib in $(build_libdir)/lib$${suffix}*.$(SHLIB_EXT)*; do \
-			if [[ "$${lib##*.}" != "dSYM" ]]; then \
+			if [ "$${lib##*.}" != "dSYM" ]; then \
 				$(INSTALL_M) $$lib $(DESTDIR)$(private_libdir) ; \
 			fi \
 		done \
 	done
 	for suffix in $(JL_PRIVATE_LIBS) ; do \
 		for lib in $(build_libdir)/lib$${suffix}*.$(SHLIB_EXT)*; do \
-			if [[ "$${lib##*.}" != "dSYM" ]]; then \
+			if [ "$${lib##*.}" != "dSYM" ]; then \
 				$(INSTALL_M) $$lib $(DESTDIR)$(private_libdir) ; \
 			fi \
 		done \

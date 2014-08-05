@@ -2362,15 +2362,20 @@ static Value *var_binding_pointer(jl_sym_t *s, jl_binding_t **pbnd,
 static Value *emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx)
 {
     Value *v = tpropagate(bp, builder.CreateLoad(bp, false));
-    Value *ok = builder.CreateICmpNE(v, V_null);
-    BasicBlock *err = BasicBlock::Create(getGlobalContext(), "err", ctx->f);
-    BasicBlock *ifok = BasicBlock::Create(getGlobalContext(), "ok");
-    builder.CreateCondBr(ok, ifok, err);
-    builder.SetInsertPoint(err);
-    builder.CreateCall(prepare_call(jlundefvarerror_func), literal_pointer_val((jl_value_t*)name));
-    builder.CreateBr(ifok);
-    ctx->f->getBasicBlockList().push_back(ifok);
-    builder.SetInsertPoint(ifok);
+    // in unreachable code, there might be a poorly-typed instance of a variable
+    // that has a concrete type everywhere it's actually used. tolerate this
+    // situation by just skipping the NULL check if it wouldn't be valid. (issue #7836)
+    if (v->getType() == jl_pvalue_llvmt) {
+        Value *ok = builder.CreateICmpNE(v, V_null);
+        BasicBlock *err = BasicBlock::Create(getGlobalContext(), "err", ctx->f);
+        BasicBlock *ifok = BasicBlock::Create(getGlobalContext(), "ok");
+        builder.CreateCondBr(ok, ifok, err);
+        builder.SetInsertPoint(err);
+        builder.CreateCall(prepare_call(jlundefvarerror_func), literal_pointer_val((jl_value_t*)name));
+        builder.CreateBr(ifok);
+        ctx->f->getBasicBlockList().push_back(ifok);
+        builder.SetInsertPoint(ifok);
+    }
     return v;
 }
 
