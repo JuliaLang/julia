@@ -1681,7 +1681,10 @@ function type_annotate(ast::Expr, states::Array{Any,1}, sv::ANY, rettype::ANY,
     body = ast.args[3].args::Array{Any,1}
     for i=1:length(body)
         st_i = states[i]
-        body[i] = eval_annotate(body[i], (st_i === () ? emptydict : st_i), sv, decls, closures)
+        if st_i !== ()
+            # st_i === ()  =>  unreached statement  (see issue #7836)
+            body[i] = eval_annotate(body[i], st_i, sv, decls, closures)
+        end
     end
     ast.args[3].typ = rettype
 
