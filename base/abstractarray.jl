@@ -296,6 +296,10 @@ for (f,t) in ((:integer, Integer),
     end
 end
 
+big{T<:FloatingPoint,N}(x::AbstractArray{T,N}) = convert(AbstractArray{BigFloat,N}, x)
+big{T<:FloatingPoint,N}(x::AbstractArray{Complex{T},N}) = convert(AbstractArray{Complex{BigFloat},N}, x)
+big{T<:Integer,N}(x::AbstractArray{T,N}) = convert(AbstractArray{BigInt,N}, x)
+
 bool(x::AbstractArray{Bool}) = x
 bool(x::AbstractArray) = copy!(similar(x,Bool), x)
 
