@@ -24,7 +24,7 @@ end
 
 # testing a package with test dependencies causes them to be installed for the duration of the test
 temp_pkg_dir() do
-  Pkg.generate("PackageWithTestDependencies", "MIT", config=["user.name"=>"Julia Test", "user.email"=>"test@julialang.org"])
+  Pkg.generate("PackageWithTestDependencies", "MIT", authors="Julia Test", config=["user.name"=>"Julia Test", "user.email"=>"test@julialang.org"])
   @test [keys(Pkg.installed())...] == ["PackageWithTestDependencies"]
 
   isdir(Pkg.dir("PackageWithTestDependencies","test")) || mkdir(Pkg.dir("PackageWithTestDependencies","test"))
@@ -47,7 +47,7 @@ end
 
 # testing a package with no runtests.jl errors
 temp_pkg_dir() do
-  Pkg.generate("PackageWithNoTests", "MIT", config=["user.name"=>"Julia Test", "user.email"=>"test@julialang.org"])
+  Pkg.generate("PackageWithNoTests", "MIT", authors="Julia Test", config=["user.name"=>"Julia Test", "user.email"=>"test@julialang.org"])
 
   if isfile(Pkg.dir("PackageWithNoTests", "test", "runtests.jl"))
     rm(Pkg.dir("PackageWithNoTests", "test", "runtests.jl"))
@@ -62,7 +62,7 @@ end
 
 # testing a package with failing tests errors
 temp_pkg_dir() do
-  Pkg.generate("PackageWithFailingTests", "MIT", config=["user.name"=>"Julia Test", "user.email"=>"test@julialang.org"])
+  Pkg.generate("PackageWithFailingTests", "MIT", authors="Julia Test", config=["user.name"=>"Julia Test", "user.email"=>"test@julialang.org"])
 
   isdir(Pkg.dir("PackageWithFailingTests","test")) || mkdir(Pkg.dir("PackageWithFailingTests","test"))
   open(Pkg.dir("PackageWithFailingTests", "test", "runtests.jl"),"w") do f

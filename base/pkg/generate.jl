@@ -3,7 +3,7 @@ module Generate
 import ..Git, ..Read
 
 copyright_year() = readchomp(`date +%Y`)
-copyright_name(dir::String) = readchomp(Git.cmd(`config --get user.name`, dir=dir))
+copyright_name() = readchomp(`git config --global --get user.name`)
 github_user() = readchomp(ignorestatus(`git config --global --get github.user`))
 
 function git_contributors(dir::String, n::Int=typemax(Int))
@@ -47,7 +47,7 @@ function package(
 
         Git.transact(dir=pkg) do
             if isempty(authors)
-                authors = isnew ? copyright_name(pkg) : git_contributors(pkg,5)
+                authors = isnew ? copyright_name() : git_contributors(pkg,5)
             end
             Generate.license(pkg,license,years,authors,force=force)
             Generate.readme(pkg,user,force=force)
