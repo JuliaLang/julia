@@ -14,7 +14,7 @@ endif
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
 ifeq ($(USE_LLVM_SHLIB),1)
-LLVMLINK = $(call exec,$(LLVM_CONFIG) --ldflags) -lLLVM-$(LLVM_VER)
+LLVMLINK = $(call exec,$(LLVM_CONFIG) --ldflags) -lLLVM-$(call exec,$(LLVM_CONFIG) --version)
 else
 LLVMLINK =
 endif
