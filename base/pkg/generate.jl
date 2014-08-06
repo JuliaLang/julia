@@ -83,7 +83,7 @@ function package(
     end
 end
 
-function init(pkg::String, url::String=""; config::Dict={})
+function init(pkg::String, url::String=""; config::Dict=Dict())
     if !ispath(pkg)
         info("Initializing $pkg repo: $(abspath(pkg))")
         Git.run(`init -q $pkg`)
