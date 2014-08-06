@@ -59,7 +59,7 @@ publish() = cd(Entry.publish,META_BRANCH)
 build() = cd(Entry.build)
 build(pkgs::String...) = cd(Entry.build,[pkgs...])
 
-generate(pkg::String, license::String; force::Bool=false, authors::Union(String,Array) = [], config::Dict={}) =
+generate(pkg::String, license::String; force::Bool=false, authors::Union(String,Array) = [], config::Dict=Dict()) =
 	cd(Generate.package,pkg,license,force=force,authors=authors,config=config)
 
 

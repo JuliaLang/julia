@@ -22,6 +22,11 @@ temp_pkg_dir() do
   @test isempty(Pkg.installed())
 end
 
+temp_pkg_dir() do
+  Pkg.generate("PackageWithDefaultConfig", "MIT")
+  @test [keys(Pkg.installed())...] == ["PackageWithDefaultConfig"]
+end
+
 # testing a package with test dependencies causes them to be installed for the duration of the test
 temp_pkg_dir() do
   Pkg.generate("PackageWithTestDependencies", "MIT", config=["user.name"=>"Julia Test", "user.email"=>"test@julialang.org"])
