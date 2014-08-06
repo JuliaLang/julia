@@ -129,6 +129,7 @@ end
 gc() = ccall(:jl_gc_collect, Void, ())
 gc_enable() = ccall(:jl_gc_enable, Void, ())
 gc_disable() = ccall(:jl_gc_disable, Void, ())
+gc_is_enabled() = bool(ccall(:jl_gc_is_enabled, Cint, ()))
 
 bytestring(str::ByteString) = str
 

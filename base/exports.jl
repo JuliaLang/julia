@@ -1074,6 +1074,7 @@ export
     gc,
     gc_disable,
     gc_enable,
+    gc_is_enabled,
     precompile,
     clear_malloc_data,
 
