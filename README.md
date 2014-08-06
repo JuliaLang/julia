@@ -323,9 +323,9 @@ The following distributions include julia, but the versions may be out of date d
 * [Debian GNU/Linux](http://packages.debian.org/sid/julia)
 * [Gentoo Linux](https://packages.gentoo.org/package/dev-lang/julia)
   * Git Package in the [Science overlay](https://wiki.gentoo.org/wiki/Project:Science/Overlay)
-* [openSUSE Linux](https://build.opensuse.org/package/show/home:Ronis_BR/julia)
-  * Git Package for openSUSE 13.1 - [1 Click Install](http://software.opensuse.org/ymp/home:Ronis_BR/openSUSE_13.1/julia.ymp?base=openSUSE%3A13.1&query=julia)
-  * Git Package for openSUSE Tumbleweed - [1 Click Install](http://software.opensuse.org/ymp/home:Ronis_BR/openSUSE_Tumbleweed/julia.ymp?base=openSUSE%3A13.1&query=julia)
+* openSUSE
+  * Stable package for openSUSE: [OBS page](https://build.opensuse.org/package/show/science/julia), [1 Click Install](http://software.opensuse.org/download.html?project=science&package=julia)
+  * Git package for openSUSE: [OBS page](https://build.opensuse.org/package/show/science/julia-unstable), [1 Click Install](http://software.opensuse.org/download.html?project=science&package=julia-unstable)
 * Ubuntu
   * [Ubuntu 13.04 (Raring Ringtail)](http://packages.ubuntu.com/raring/julia)
   * [Nightly builds PPA](https://launchpad.net/~staticfloat/+archive/julianightlies) (depends on the [julia-deps PPA](https://launchpad.net/~staticfloat/+archive/julia-deps/))
