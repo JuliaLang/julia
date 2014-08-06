@@ -58,7 +58,7 @@ extern "C" DLLEXPORT void jl_read_sonames(void)
     pclose(ldc);
 }
 
-extern "C" const char *jl_lookup_soname(char *pfx, size_t n)
+extern "C" DLLEXPORT const char *jl_lookup_soname(char *pfx, size_t n)
 {
     if (!got_sonames) {
         jl_read_sonames();
