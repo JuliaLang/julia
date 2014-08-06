@@ -355,6 +355,10 @@ setdiff!(s2, IntSet(2, 4, 5, 6))
 
 @test s2 == IntSet(1, 3)
 
+# issue #7851
+@test_throws ArgumentError IntSet(-1)
+@test !(-1 in IntSet(0:10))
+
 # union!
 s = Set(1,3,5,7)
 union!(s,(2,3,4,5))
