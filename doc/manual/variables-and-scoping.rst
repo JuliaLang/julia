@@ -291,7 +291,7 @@ loops with ``let`` blocks inside::
     end
     i  # here equal to 3
 
-However, comprehensions do not do this, and always freshly allocate their
+However, comprehensions (see p. ???) do not do this, and always freshly allocate their
 iteration variables::
 
     x = 0
