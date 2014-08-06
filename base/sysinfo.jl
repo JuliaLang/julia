@@ -139,11 +139,14 @@ total_memory() = ccall(:uv_get_total_memory, Uint64, ())
 
 if OS_NAME === :Darwin
     const dlext = "dylib"
+    const dlpattern = r"^([^.]+).*\.dylib$"
 elseif OS_NAME === :Windows
     const dlext = "dll"
+    const dlpattern = r"^(.+)\.dll$"
 else
     #assume OS_NAME === :Linux, or similar
     const dlext = "so"
+    const dlpattern = r"^(.+?)\.so(?:\..*)?$"
 end
 
 # This is deprecated!  use dlext instead!
@@ -215,6 +218,26 @@ function dlpath( libname::String )
     path = dlpath( handle )
     dlclose(handle)
     return path
+end
+
+function check_dllist()
+    fullpaths = dllist()
+    dlls = [begin
+            x = basename(x)
+            m = match(dlpattern, x)
+            if m !== nothing
+                x = m.captures[1]
+            end
+            x
+        end for x in fullpaths]
+    (isdefined(Base, :STDERR) && isopen(Base.STDERR)) || return dlls
+    for (i,dl) in enumerate(dlls)
+        for j in i+1:length(dlls)
+            if dl == dlls[j]
+                warn("detected possible duplicate library loaded: $dl. this may lead to unexpected behavior.\n  $(fullpaths[i])\n  $(fullpaths[j])", once=true)
+            end
+        end
+    end
 end
 
 end
