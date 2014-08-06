@@ -24,7 +24,7 @@ differences that may trip up Julia users accustomed to MATLAB:
    function which grows ``Vectors`` much more efficiently than Matlab's
    ``a(end+1) = val``.
 -  The imaginary unit ``sqrt(-1)`` is represented in julia with ``im``.
--  Literal numbers without a decimal point (such as ``42``) create integers 
+-  Literal numbers without a decimal point (such as ``42``) create integers
    instead of floating point numbers. Arbitrarily large integer
    literals are supported. But this means that some operations such as
    ``2^-1`` will throw a domain error as the result is not an integer (see
@@ -88,44 +88,120 @@ differences that may trip up Julia users accustomed to MATLAB:
 Noteworthy differences from R
 -----------------------------
 
-One of Julia's goals is to provide an effective language for data analysis and statistical programming. For users coming to Julia from R, these are some noteworthy differences:
+One of Julia's goals is to provide an effective language for data analysis
+and statistical programming. For users coming to Julia from R, these are some
+noteworthy differences:
 
-- Julia uses ``=`` for assignment. Julia does not provide any operator like ``<-`` or ``<<-``.
-- Julia constructs vectors using brackets. Julia's ``[1, 2, 3]`` is the equivalent of R's ``c(1, 2, 3)``.
-- Julia's matrix operations are more like traditional mathematical notation than R's. If ``A`` and ``B`` are matrices, then ``A * B`` defines a matrix multiplication in Julia equivalent to R's ``A %*% B``. In R, this same notation would perform an elementwise Hadamard product. To get the elementwise multiplication operation, you need to write ``A .* B`` in Julia.
-- Julia performs matrix transposition using the ``'`` operator. Julia's ``A'`` is therefore equivalent to R's ``t(A)``.
-- Julia does not require parentheses when writing ``if`` statements or ``for`` loops: use ``for i in [1, 2, 3]`` instead of ``for (i in c(1, 2, 3))`` and ``if i == 1`` instead of ``if (i == 1)``.
-- Julia does not treat the numbers ``0`` and ``1`` as Booleans. You cannot write ``if (1)`` in Julia, because ``if`` statements accept only booleans. Instead, you can write ``if true``.
-- Julia does not provide ``nrow`` and ``ncol``. Instead, use ``size(M, 1)`` for ``nrow(M)`` and ``size(M, 2)`` for ``ncol(M)``.
-- Julia's SVD is not thinned by default, unlike R. To get results like R's, you will often want to call ``svd(X, true)`` on a matrix ``X``.
-- Julia is careful to distinguish scalars, vectors and matrices. In R, ``1`` and ``c(1)`` are the same. In Julia, they can not be used interchangeably. One potentially confusing result of this is that ``x' * y`` for vectors ``x`` and ``y`` is a 1-element vector, not a scalar. To get a scalar, use ``dot(x, y)``.
+- Julia's single quotes are for characters, not strings.
+- Strings are indexable in Julia. In R, they need to be converted.
+- Strings can be created with triple quotes """ ... """ like Python.
+- Varargs in Julia are named like f(a,b,x...), unlike R which ... needs to
+  be casted to use.
+- Modulus in Julia is %, not %%.
+- Most data structures don't take a logical (boolean) vector to select off
+  elements like R.
+- Like normal languages, Julia does not operator on non-equal vectors that
+  share a common factor in length unlike R. ``c(1,2,3,4) + c(1,2)`` will execute
+  in R.
+- Julia's apply is what you imagine it to be, function and then the args, not
+  ``lapply(<structure>, function, arg2, ...)`` in R.
+- Julia uses ``end`` to denote the end of conditional blocks, like ``if``,
+  loop blocks, like ``while``/``for``, and functions. This makes
+  ``if ( cond ) statement`` impossible to do.
+- Julia does not provide any assignment operator like ``<-``, ``<<-`` or ``->``.
+- Julia's ``->`` creates an anonymous function, like Python.
+- Julia constructs vectors using brackets. Julia's ``[1, 2, 3]`` is the
+  equivalent of R's ``c(1, 2, 3)``.
+- Julia's matrix operations are more like traditional mathematical notation
+  than R's. If ``A`` and ``B`` are matrices, then ``A * B`` defines a matrix
+  multiplication in Julia equivalent to R's ``A %*% B``. In R, this same
+  notation would perform an elementwise Hadamard product. To get the
+  elementwise multiplication operation, you need to write ``A .* B`` in Julia.
+- Julia performs matrix transposition using the ``'`` operator. Julia's ``A'``
+  is therefore equivalent to R's ``t(A)``.
+- Julia does not require parentheses when writing ``if`` statements or
+  ``for``/``while`` loops: use ``for i in [1, 2, 3]`` instead of
+  ``for (i in c(1, 2, 3))`` and ``if i == 1`` instead of ``if (i == 1)``.
+- Julia does not treat the numbers ``0`` and ``1`` as Booleans.
+  You cannot write ``if (1)`` in Julia, because ``if`` statements accept only
+  booleans. Instead, you can write ``if true`` or ``if 1==1``.
+- Julia does not provide ``nrow`` and ``ncol``. Instead, use ``size(M, 1)``
+  for ``nrow(M)`` and ``size(M, 2)`` for ``ncol(M)``.
+- Julia's SVD is not thinned by default, unlike R. To get results like R's,
+  you will often want to call ``svd(X, true)`` on a matrix ``X``.
+- Julia is careful to distinguish scalars, vectors and matrices.  In R,
+  ``1`` and ``c(1)`` are the same. In Julia, they can not be used
+  interchangeably. One potentially confusing result of this is that
+  ``x' * y`` for vectors ``x`` and ``y`` is a 1-element vector, not a scalar.
+  To get a scalar, use ``dot(x, y)``.
 - Julia's ``diag()`` and ``diagm()`` are not like R's.
-- Julia cannot assign to the results of function calls on the left-hand of an assignment operation: you cannot write ``diag(M) = ones(n)``.
-- Julia discourages populating the main namespace with functions. Most statistical
-  functionality for Julia is found in `packages <http://pkg.julialang.org/>`_ like the
-  DataFrames and Distributions packages:
+- Julia cannot assign to the results of function calls on the left-hand of an
+  assignment operation: you cannot write ``diag(M) = ones(n)``.
+- Julia discourages populating the main namespace with functions. Most
+  statistical functionality for Julia is found in
+  `packages <http://docs.julialang.org/en/latest/packages/packagelist/>`_
+  like the DataFrames and Distributions packages:
 
-	- Distributions functions are found in the `Distributions package <https://github.com/JuliaStats/Distributions.jl>`_
-	- The `DataFrames package <https://github.com/JuliaStats/DataFrames.jl>`_ provides data frames.
+	- Distributions functions are found in the
+	  `Distributions package <https://github.com/JuliaStats/Distributions.jl>`_
+	- The `DataFrames package <https://github.com/HarlanH/DataFrames.jl>`_
+	  provides data frames.
 	- Formulas for GLM's must be escaped: use ``:(y ~ x)`` instead of ``y ~ x``.
+	  This applies to 0.2 only.
 
-- Julia provides tuples and real hash tables, but not R's lists. When returning multiple items, you should typically use a tuple: instead of ``list(a = 1, b = 2)``, use ``(1, 2)``.
-- Julia encourages all users to write their own types. Julia's types are much easier to use than S3 or S4 objects in R. Julia's multiple dispatch system means that ``table(x::TypeA)`` and ``table(x::TypeB)`` act like R's ``table.TypeA(x)`` and ``table.TypeB(x)``.
-- In Julia, values are passed and assigned by reference. If a function modifies an array, the changes will be visible in the caller. This is very different from R and allows new functions to operate on large data structures much more efficiently.
-- Concatenation of vectors and matrices is done using ``hcat`` and ``vcat``, not ``c``, ``rbind`` and ``cbind``.
-- A Julia range object like ``a:b`` is not shorthand for a vector like in R, but is a specialized type of object that is used for iteration without high memory overhead. To convert a range into a vector, you need to wrap the range with brackets ``[a:b]``.
-- ``max``, ``min`` are the equivalent of ``pmax`` and ``pmin`` in R, but both arguments need to have the same dimensions.  While ``maximum``, ``minimum`` replace ``max`` and ``min`` in R, there are important differences.
-- The functions ``sum``, ``prod``, ``maximum``, ``minimum`` are different from their counterparts in R. They all accept one or two arguments. The first argument is an iterable collection such as an array.  If there is a second argument, then this argument indicates the dimensions, over which the operation is carried out.  For instance, let ``A=[[1 2],[3,4]]`` in Julia and ``B=rbind(c(1,2),c(3,4))`` be the same matrix in R.  Then ``sum(A)`` gives the same result as ``sum(B)``, but ``sum(A,1)`` is a row vector containing the sum over each column and ``sum(A,2)`` is a column vector containing the sum over each row.  This contrasts to the behavior of R, where ``sum(B,1)=11`` and ``sum(B,2)=12``.  If the second argument is a vector, then it specifies all the dimensions over which the sum is performed, e.g., ``sum(A,[1,2])=10``.  It should be noted that there is no error checking regarding the second argument. 
-- Julia has several functions that can mutate their arguments. For example, it has ``sort(v)`` and ``sort!(v)``.
+- Julia provides tuples and real hash tables, but not R's lists. When
+  returning multiple items, you should typically use a tuple: instead of
+  ``list(a = 1, b = 2)``, use ``(1, 2)``.
+- Julia encourages all users to write their own types. Julia's types are much
+  easier to use than S3 or S4 objects in R. Julia's multiple dispatch system
+  means that ``table(x::TypeA)`` and ``table(x::TypeB)`` act like R's
+  ``table.TypeA(x)`` and ``table.TypeB(x)``.
+- In Julia, values are passed and assigned by reference. If a function
+  modifies an array, the changes will be visible in the caller. This is very
+  different from R and allows new functions to operate on large data structures
+  much more efficiently.
+- Concatenation of vectors and matrices is done using ``hcat`` and ``vcat``,
+  not ``c``, ``rbind`` and ``cbind``.
+- A Julia range object like ``a:b`` is not shorthand for a vector like in R,
+  but is a specialized type of object that is used for iteration without high
+  memory overhead. To convert a range into a vector, you need to wrap the
+  range with brackets ``[a:b]``.
+- ``max``, ``min`` are the equivalent of ``pmax`` and ``pmin`` in R, but both
+  arguments need to have the same dimensions.  While ``maximum``, ``minimum``
+  replace ``max`` and ``min`` in R, there are important differences.
+- The functions ``sum``, ``prod``, ``maximum``, ``minimum`` are different from
+  their counterparts in R.  They all accept one or two arguments. The first
+  argument is an iterable collection such as an array. If there is a second
+  argument, then this argument indicates the dimensions, over which the
+  operation is carried out.  For instance, let ``A=[[1 2],[3,4]]`` in Julia and
+  ``B=rbind(c(1,2),c(3,4))`` be the same matrix in R. Then ``sum(A)`` gives
+  the same result as ``sum(B)``, but ``sum(A,1)`` is a row vector containing
+  the sum over each column and ``sum(A,2)`` is a column vector containing the
+  sum over each row.  This contrasts to the behavior of R, where
+  ``sum(B,1)=11`` and ``sum(B,2)=12``.  If the second argument is a vector,
+  then it specifies all the dimensions over which the sum is performed, e.g.,
+  ``sum(A,[1,2])=10``.  It should be noted that there is no error checking regarding the second argument.
+- Julia has several functions that can mutate their arguments. For example,
+  it has ``sort(v)`` and ``sort!(v)``.
 - ``colMeans()`` and ``rowMeans()``, ``size(m, 1)`` and ``size(m, 2)``
-- In R, performance requires vectorization. In Julia, almost the opposite is true: the best performing code is often achieved by using devectorized loops.
-- Unlike R, there is no delayed evaluation in Julia. For most users, this means that there are very few unquoted expressions or column names.
+- In R, performance requires vectorization. In Julia, almost the opposite is
+  true: the best performing code is often achieved by using devectorized loops.
+- Unlike R, there is no delayed evaluation in Julia. For most users, this
+  means that there are very few unquoted expressions or column names.
 - Julia does not support the ``NULL`` type.
 - There is no equivalent of R's ``assign`` or ``get`` in Julia.
+- Return does not require parenthesis in Julia.
+
 
 Noteworthy differences from Python
 ----------------------------------
 
+- Like R, a vector of a vector is a vector in Julia, unlike a list of lists in
+  Python which is a 2d list.
+- Since Julia requires ``end`` to end a block, it doesn't need ``pass`` in
+  Python.
+- Python indexing does NOT include the last element, unlike Julia. So
+  ``a[2:3]`` in Julia is ``a[1:3]`` in Python.
 - Indexing of arrays, strings, etc. in Julia is 1-based not 0-based.
 - The last element of a list or array is indexed with ``end`` in Julia,
   not -1 as in Python.
