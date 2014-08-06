@@ -22,6 +22,12 @@ temp_pkg_dir() do
   @test isempty(Pkg.installed())
 end
 
+# test package generation with default args
+temp_pkg_dir() do
+  Pkg.generate("PackageWithNothing", "MIT")
+  @test [keys(Pkg.installed())...] == ["PackageWithNothing"]
+end
+
 # testing a package with test dependencies causes them to be installed for the duration of the test
 temp_pkg_dir() do
   Pkg.generate("PackageWithTestDependencies", "MIT")
