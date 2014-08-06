@@ -360,7 +360,7 @@ find the smallest and largest values within an array.
 Julia provides the ``@vectorize_1arg`` and ``@vectorize_2arg``
 macros to automatically vectorize any function of one or two arguments
 respectively.  Each of these takes two arguments, namely the ``Type`` of
-argument (which is usually chosen to be to be the most general possible) and
+argument (which is usually chosen to be the most general possible) and
 the name of the function to vectorize. Here is a simple example:
 
 .. doctest::
