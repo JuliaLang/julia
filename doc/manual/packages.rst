@@ -460,6 +460,12 @@ For example, the line::
     Distributions 0.1
 
 is satisfied by any version of ``Distributions`` greater than or equal to ``0.1.0``.
+Suffixing a version with `-` allows any pre-release versions as well. For example::
+
+    Distributions 0.1-
+
+is satisfied by pre-release versions such as ``0.1-dev`` or ``0.1-rc1``, or by any version greater than or equal to ``0.1.0``.
+
 This requirement entry::
 
     Distributions 0.1 0.2.5
@@ -469,7 +475,6 @@ If you want to indicate that any ``0.1.x`` version will do, you will want to wri
 
     Distributions 0.1 0.2-
 
-The ``0.2-`` "pseudo-version" is less than all real version numbers that start with ``0.2``.
 If you want to start accepting versions after ``0.2.7``, you can write::
 
     Distributions 0.1 0.2- 0.2.7
