@@ -765,7 +765,7 @@ for (gelsd, gelsy, elty) in
             newB = [B; zeros($elty, max(0, n - size(B, 1)), size(B, 2))]
             lda = max(1, m)
             ldb = max(1, m, n)
-            jpvt = similar(A, BlasInt, n)
+            jpvt = zeros(BlasInt, n)
             rcond = convert($elty, rcond)
             rnk = Array(BlasInt, 1)
             work = Array($elty, 1)
@@ -855,7 +855,7 @@ for (gelsd, gelsy, elty, relty) in
             newB = [B; zeros($elty, max(0, n - size(B, 1)), size(B, 2))]
             lda = max(1, m)
             ldb = max(1, m, n)
-            jpvt = similar(A, BlasInt, n)
+            jpvt = zeros(BlasInt, n)
             rcond = convert($relty, rcond)
             rnk = Array(BlasInt, 1)
             work = Array($elty, 1)
