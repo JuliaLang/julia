@@ -3262,9 +3262,10 @@ So far only the second case can actually occur.
 	   ((escape) (cadr e))
 	   ((using import importall export) (map unescape e))
 	   ((macrocall)
+        (if (or (eq? (cadr e) '@label) (eq? (cadr e) '@goto)) e
 	    `(macrocall ,.(map (lambda (x)
 				 (resolve-expansion-vars- x env m inarg))
-			       (cdr e))))
+			       (cdr e)))))
 	   ((symboliclabel) e)
 	   ((symbolicgoto) e)
 	   ((type)
