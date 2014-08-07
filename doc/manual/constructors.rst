@@ -458,7 +458,7 @@ methods. To that end, here is beginning of
 `rational.jl <https://github.com/JuliaLang/julia/blob/master/base/rational.jl>`_,
 which implements Julia's :ref:`man-rational-numbers`::
 
-    type Rational{T<:Integer} <: Real
+    immutable Rational{T<:Integer} <: Real
         num::T
         den::T
 
