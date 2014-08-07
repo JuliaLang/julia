@@ -118,9 +118,15 @@ number to a boolean is simply this::
 The type of the first argument of this method is a :ref:`singleton
 type <man-singleton-types>`, ``Type{Bool}``, the only instance of
 which is ``Bool``. Thus, this method is only invoked when the first
-argument is the type value ``Bool``. When invoked, the method determines
+argument is the type value ``Bool``. Notice the syntax used for the first
+argument: the argument name is omitted prior to the ``::`` symbol, and only
+the type is given.  This is the syntax in Julia for a function argument whose type is
+specified but whose value is never used in the function body.  In this example,
+since the type is a singleton, there would never be any reason to use its value
+within the body.
+When invoked, the method determines
 whether a numeric value is true or false as a boolean, by comparing it
-to zero:
+to zero.
 
 .. doctest::
 
