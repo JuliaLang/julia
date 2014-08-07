@@ -459,6 +459,29 @@ would be considered identical, or if they might need to change independently
 over time. If they would be considered identical, the type should probably
 be immutable.
 
+To recap, two essential properties define immutability
+in Julia:
+
+* An object with an immutable type is passed around (both in assignment
+  statements and in function calls) by copying, whereas a mutable type is
+  passed around by reference.
+
+* It is not permitted to modify the fields of a composite immutable
+  type.
+
+It is instructive, particularly for readers whose background is C/C++, to consider
+why these two properties go hand in hand.  If they were separated,
+i.e., if the fields of objects passed around by copying could be modified,
+then it would become more difficult to reason about certain instances of generic code.  For example,
+suppose ``x`` is a function argument of an abstract type, and suppose that the function
+changes a field: ``x.isprocessed = true``.  Depending on whether ``x`` is passed by copying
+or by reference, this statement may or may not alter the actual argument in the 
+calling routine.  Julia
+sidesteps the possibility of creating functions with unknown effects in this
+scenario by forbidding modification of fields
+of objects passed around by copying.
+
+
 Declared Types
 --------------
 
