@@ -1005,7 +1005,15 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(smod_int,2)
         return emit_smod(JL_INT(x), JL_INT(y), ctx);
 
+// Implements IEEE negate. Unfortunately there is no compliant way
+// to implement this in LLVM 3.4, though there are two different idioms
+// that do the correct thing on LLVM <= 3.3 and >= 3.5 respectively.
+// See issue #7868
+#ifdef LLVM35
+    HANDLE(neg_float,1) return builder.CreateFSub(ConstantFP::get(FT(t), -0.0), FP(x));
+#else
     HANDLE(neg_float,1) return builder.CreateFMul(ConstantFP::get(FT(t), -1.0), FP(x));
+#endif
     HANDLE(add_float,2) return builder.CreateFAdd(FP(x), FP(y));
     HANDLE(sub_float,2) return builder.CreateFSub(FP(x), FP(y));
     HANDLE(mul_float,2) return builder.CreateFMul(FP(x), FP(y));
