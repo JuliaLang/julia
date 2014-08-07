@@ -45,6 +45,10 @@ end
 # tags >= this just represent themselves, their whole representation is 1 byte
 const VALUE_TAGS = ser_tag[()]
 
+const EMPTY_TUPLE_TAG = ser_tag[()]
+const ZERO_TAG = ser_tag[0]
+const INT_TAG = ser_tag[Int]
+
 writetag(s, x) = write(s, uint8(ser_tag[x]))
 
 function write_as_tag(s, x)
@@ -59,7 +63,7 @@ serialize(s, x::Bool) = write_as_tag(s, x)
 
 serialize(s, ::Ptr) = error("cannot serialize a pointer")
 
-serialize(s, ::()) = write_as_tag(s, ())
+serialize(s, ::()) = write(s, uint8(EMPTY_TUPLE_TAG)) # write_as_tag(s, ())
 
 function serialize(s, t::Tuple)
     l = length(t)
@@ -161,9 +165,18 @@ function serialize(s, e::Expr)
     end
 end
 
+function serialize_mod_names(s, m::Module)
+    if m !== Main
+        serialize_mod_names(s, module_parent(m))
+        serialize(s, module_name(m))
+    end
+end
+
 function serialize(s, m::Module)
     writetag(s, Module)
-    serialize(s, fullname(m))
+    serialize_mod_names(s, m)
+    serialize(s, ())
+    nothing
 end
 
 function serialize(s, f::Function)
@@ -284,6 +297,16 @@ function serialize_type(s, t::DataType)
     end
 end
 
+function serialize(s, n::Int)
+    if 0 <= n <= 32
+        write(s, uint8(ZERO_TAG+n))
+        return
+    end
+    write(s, uint8(INT_TAG))
+    write(s, n)
+    nothing
+end
+
 function serialize(s, x)
     if haskey(ser_tag,x)
         return write_as_tag(s, x)
@@ -335,11 +358,23 @@ deserialize(s, ::Type{LongSymbol}) = symbol(read(s, Uint8, read(s, Int32)))
 function deserialize(s, ::Type{Module})
     path = deserialize(s)
     m = Main
-    for mname in path
-        if !isdefined(m,mname)
-            warn("Module $mname not defined on process $(myid())")  # an error seemingly fails
+    if isa(path,Tuple) && path !== ()
+        # old version
+        for mname in path
+            if !isdefined(m,mname)
+                warn("Module $mname not defined on process $(myid())")  # an error seemingly fails
+            end
+            m = eval(m,mname)::Module
         end
-        m = eval(m,mname)::Module
+    else
+        mname = path
+        while mname !== ()
+            if !isdefined(m,mname)
+                warn("Module $mname not defined on process $(myid())")  # an error seemingly fails
+            end
+            m = eval(m,mname)::Module
+            mname = deserialize(s)
+        end
     end
     m
 end
