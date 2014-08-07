@@ -293,7 +293,7 @@ For example, the following code will not work as intended::
 
 Notice that the reduction operator can be omitted if it is not needed.
 However, this code will not initialize all of ``a``, since each
-process will have a separate copy if it. Parallel for loops like these
+process will have a separate copy of it. Parallel for loops like these
 must be avoided. Fortunately, distributed arrays can be used to get
 around this limitation, as we will see in the next section.
 
