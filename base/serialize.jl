@@ -403,6 +403,9 @@ function deserialize(s, ::Type{Array})
         elty = Uint8
     end
     if isa(d1,Integer)
+        if elty !== Bool && isbits(elty)
+            return read!(s, Array(elty, d1))
+        end
         dims = (int(d1),)
     else
         dims = convert(Dims, d1)::Dims
