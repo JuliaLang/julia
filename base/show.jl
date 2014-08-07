@@ -476,10 +476,16 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
                 show_enclosed_list(io, op, func_args, ",", cl, indent)
             end
 
-        # normal function (i.e. "f(x,y)")
+        # normal function (i.e. "f(x,y)" or "A[x,y]")
         else
             op, cl = expr_calls[head]
-            show_unquoted(io, func, indent)
+            if isa(func, Symbol) || (isa(func, Expr) && func.head == :.)
+                show_unquoted(io, func, indent)
+            else
+                print(io, '(')
+                show_unquoted(io, func, indent)
+                print(io, ')')
+            end
             show_enclosed_list(io, op, func_args, ",", cl, indent)
         end
     elseif is(head, :ccall)
