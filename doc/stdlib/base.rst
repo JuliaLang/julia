@@ -885,6 +885,8 @@ Iterable Collections
    For associative collections, the function is passed two arguments (key and value).
 
 
+Fully implemented by... partly implemented by...
+
 Indexable Collections
 ---------------------
 
