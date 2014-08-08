@@ -1,24 +1,16 @@
 # Date functions
 
-### Core date functions
+### Core query functions
 
 # Monday = 1....Sunday = 7
 dayofweek(days) = mod1(days,7)
 
-# If the year is divisible by 4, except for every 100 years, except for every 400 years
-isleap(y) = ((y % 4 == 0) && (y % 100 != 0)) || (y % 400 == 0)
-
-# Number of days in month
-const DAYSINMONTH = [31,28,31,30,31,30,31,31,30,31,30,31]
-daysinmonth(y,m) = DAYSINMONTH[m] + (m == 2 && isleap(y))
-
 # Number of days in year
-daysinyear(y) = 365 + isleap(y)
+daysinyear(y) = 365 + isleapyear(y)
 
 # Day of the year
-const MONTHDAYS2 = [0,31,59,90,120,151,181,212,243,273,304,334]
-dayofyear(y,m,d) = MONTHDAYS2[m] + d + (m > 2 && isleap(y))
-
+const MONTHDAYS = [0,31,59,90,120,151,181,212,243,273,304,334]
+dayofyear(y,m,d) = MONTHDAYS[m] + d + (m > 2 && isleapyear(y))
 
 ### Days of the Week
 const Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday = 1,2,3,4,5,6,7
@@ -88,13 +80,13 @@ daysinmonth(dt::TimeType) = daysinmonth(yearmonth(dt)...)
 @vectorize_1arg TimeType daysinmonth
 
 ### Years
-isleap(dt::TimeType) = isleap(year(dt))
+isleapyear(dt::TimeType) = isleapyear(year(dt))
 
 dayofyear(dt::TimeType) = dayofyear(yearmonthday(dt)...)
 
-daysinyear(dt::TimeType) = 365 + isleap(dt)
+daysinyear(dt::TimeType) = 365 + isleapyear(dt)
 
-@vectorize_1arg TimeType isleap
+@vectorize_1arg TimeType isleapyear
 @vectorize_1arg TimeType dayofyear
 @vectorize_1arg TimeType daysinyear
 
@@ -109,7 +101,7 @@ dayofquarter(dt::TimeType) = dayofyear(dt) - QUARTERDAYS[quarterofyear(dt)]
 @vectorize_1arg TimeType quarterofyear
 @vectorize_1arg TimeType dayofquarter
 
-export dayofweek, isleap, daysinmonth, daysinyear, dayofyear, dayname, dayabbr,
+export dayofweek, isleapyear, daysinmonth, daysinyear, dayofyear, dayname, dayabbr,
         ismonday, istuesday, iswednesday, isthursday, isfriday, issaturday, issunday,
         dayofweekofmonth, daysofweekinmonth, monthname, monthabbr,
         quarterofyear, dayofquarter,
