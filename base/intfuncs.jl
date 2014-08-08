@@ -209,21 +209,29 @@ function oct(x::Unsigned, pad::Int, neg::Bool)
     ASCIIString(a)
 end
 
-function dec(x::Unsigned, pad::Int, neg::Bool)
-    i = neg + max(pad,ndigits0z(x))
-    a = Array(Uint8,i)
+_declength(x::Unsigned, pad::Int, neg::Bool) = neg + max(pad,ndigits0z(x))
+function _dec!(a::Vector{Uint8}, x::Unsigned, pad::Int, neg::Bool)
+    n = _declength(x, pad, neg)
+    i = n
     while i > neg
         a[i] = '0'+rem(x,10)
         x = oftype(x,div(x,10))
         i -= 1
     end
     if neg; a[1]='-'; end
+    n
+end
+function dec(x::Unsigned, pad::Int, neg::Bool)
+    a = Array(Uint8, _declength(x, pad, neg))
+    _dec!(a, x, pad, neg)
     ASCIIString(a)
 end
 
-function hex(x::Unsigned, pad::Int, neg::Bool)
-    i = neg + max(pad,(sizeof(x)<<1)-(leading_zeros(x)>>2))
-    a = Array(Uint8,i)
+_hexlength(x::Unsigned, pad::Int, neg::Bool) =
+    neg + max(pad,(sizeof(x)<<1)-(leading_zeros(x)>>2))
+function _hex!(a::Vector{Uint8}, x::Unsigned, pad::Int, neg::Bool)
+    n = _hexlength(x, pad, neg)
+    i = n
     while i > neg
         d = x & 0xf
         a[i] = '0'+d+39*(d>9)
@@ -231,6 +239,11 @@ function hex(x::Unsigned, pad::Int, neg::Bool)
         i -= 1
     end
     if neg; a[1]='-'; end
+    n
+end
+function hex(x::Unsigned, pad::Int, neg::Bool)
+    a = Array(Uint8, _hexlength(x, pad, neg))
+    _hex!(a, x, pad, neg)
     ASCIIString(a)
 end
 
