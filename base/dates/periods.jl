@@ -125,12 +125,27 @@ function (+)(x::TimeType,y::CompoundPeriod)
 end
 (+)(x::CompoundPeriod,y::TimeType) = y + x
 
-# Periods from TimeTypes
-Year(x::TimeType) = Year(year(x))
-Month(x::TimeType) = Month(month(x))
-Week(x::TimeType) = Week(week(x))
-Day(x::TimeType) = Day(day(x))
-Hour(x::TimeType) = Hour(hour(x))
-Minute(x::TimeType) = Minute(minute(x))
-Second(x::TimeType) = Second(second(x))
-Millisecond(x::TimeType) = Millisecond(millisecond(x))
+# Convert fixed value Periods to # of milliseconds
+typealias FixedPeriod Union(Week,Day,Hour,Minute,Second,Millisecond)
+
+toms(c::Millisecond) = value(c)
+toms(c::Second)      = 1000*value(c)
+toms(c::Minute)      = 60000*value(c)
+toms(c::Hour)        = 3600000*value(c)
+toms(c::Day)         = 86400000*value(c)
+toms(c::Week)        = 604800000*value(c)
+toms(c::Month)       = 86400000.0*30.436875*value(c)
+toms(c::Year)        = 86400000.0*365.2425*value(c)
+
+Millisecond{T<:FixedPeriod}(c::T) = Millisecond(toms(c))
+
+days(c::Millisecond) = div(value(c),86400000)
+days(c::Second)      = div(value(c),86400)
+days(c::Minute)      = div(value(c),1440)
+days(c::Hour)        = div(value(c),24)
+days(c::Day)         = value(c)
+days(c::Week)        = 7*value(c)
+days(c::Year)        = 365.2425*value(c)
+days(c::Month)       = 30.436875*value(c)
+
+Day{T<:FixedPeriod}(c::T) = Day(days(c))
