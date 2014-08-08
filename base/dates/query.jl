@@ -13,6 +13,8 @@ const MONTHDAYS = [0,31,59,90,120,151,181,212,243,273,304,334]
 dayofyear(y,m,d) = MONTHDAYS[m] + d + (m > 2 && isleapyear(y))
 
 ### Days of the Week
+dayofweek(dt::TimeType) = dayofweek(days(dt))
+
 const Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday = 1,2,3,4,5,6,7
 const Mon,Tue,Wed,Thu,Fri,Sat,Sun = 1,2,3,4,5,6,7
 const english_daysofweek = [1=>"Monday",2=>"Tuesday",3=>"Wednesday",
@@ -23,8 +25,6 @@ const english_daysofweekabbr = [1=>"Mon",2=>"Tue",3=>"Wed",
 const VALUETODAYOFWEEKABBR = (UTF8String=>Dict{Int,UTF8String})["english"=>english_daysofweekabbr]
 dayname(dt::TimeType;locale::String="english") = VALUETODAYOFWEEK[locale][dayofweek(dt)]
 dayabbr(dt::TimeType;locale::String="english") = VALUETODAYOFWEEKABBR[locale][dayofweek(dt)]
-
-dayofweek(dt::TimeType) = dayofweek(days(dt))
 
 # Convenience methods for each day
 ismonday(dt::TimeType) = dayofweek(dt) == Mon
@@ -73,7 +73,7 @@ const VALUETOMONTHABBR = (UTF8String=>Dict{Int,UTF8String})["english"=>englishab
 monthname(dt::TimeType;locale::String="english") = VALUETOMONTH[locale][month(dt)]
 monthabbr(dt::TimeType;locale::String="english") = VALUETOMONTHABBR[locale][month(dt)]
 
-daysinmonth(dt::TimeType) = daysinmonth(yearmonth(dt)...)
+daysinmonth(dt::TimeType) = ((y,m) = yearmonth(dt); return daysinmonth(y,m))
 
 @vectorize_1arg TimeType monthname
 @vectorize_1arg TimeType monthabbr
@@ -82,7 +82,7 @@ daysinmonth(dt::TimeType) = daysinmonth(yearmonth(dt)...)
 ### Years
 isleapyear(dt::TimeType) = isleapyear(year(dt))
 
-dayofyear(dt::TimeType) = dayofyear(yearmonthday(dt)...)
+dayofyear(dt::TimeType) = ((y,m,d) = yearmonthday(dt); return dayofyear(y,m,d))
 
 daysinyear(dt::TimeType) = 365 + isleapyear(dt)
 
