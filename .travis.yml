@@ -43,7 +43,6 @@ script:
         for name in spqr umfpack colamd cholmod amd suitesparse_wrapper; do
             install -pm755 usr/lib/lib${name}*.dylib* /tmp/julia/lib/julia/;
         done;
-        otool -L /tmp/julia/lib/julia/*;
       fi
     - cd .. && mv julia julia2
     - cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia-debug --check-bounds=yes runtests.jl all && /tmp/julia/bin/julia-debug --check-bounds=yes runtests.jl pkg
