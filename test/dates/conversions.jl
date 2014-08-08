@@ -26,17 +26,20 @@
 @test string(Dates.unix2datetime(915148801.00)) == string("1999-01-01T00:00:01")
 @test string(Dates.unix2datetime(915148801.25)) == string("1999-01-01T00:00:01.25")
 
-@test Date(Dates.rata2datetime(734869)) == Date(2013,1,1)
+@test Date(Dates.rata2datetime(734869)) == Dates.Date(2013,1,1)
 @test Dates.datetime2rata(Dates.rata2datetime(734869)) == 734869
 
 # Tests from here: http://mysite.verizon.net/aesir_research/date/back.htm#JDN
-@test Dates.julian2datetime(1721119.5) == DateTime(0,3,1)
-@test Dates.julian2datetime(1721424.5) == DateTime(0,12,31)
-@test Dates.julian2datetime(1721425.5) == DateTime(1,1,1)
-@test Dates.julian2datetime(2299149.5) == DateTime(1582,10,4)
-@test Dates.julian2datetime(2415020.5) == DateTime(1900,1,1)
-@test Dates.julian2datetime(2415385.5) == DateTime(1901,1,1)
-@test Dates.julian2datetime(2440587.5) == DateTime(1970,1,1)
-@test Dates.julian2datetime(2444239.5) == DateTime(1980,1,1)
-@test Dates.julian2datetime(2452695.625) == DateTime(2003,2,25,3)
-@test Dates.datetime2julian(DateTime(2013,12,3,21)) == 2456630.375
+@test Dates.julian2datetime(1721119.5) == Dates.DateTime(0,3,1)
+@test Dates.julian2datetime(1721424.5) == Dates.DateTime(0,12,31)
+@test Dates.julian2datetime(1721425.5) == Dates.DateTime(1,1,1)
+@test Dates.julian2datetime(2299149.5) == Dates.DateTime(1582,10,4)
+@test Dates.julian2datetime(2415020.5) == Dates.DateTime(1900,1,1)
+@test Dates.julian2datetime(2415385.5) == Dates.DateTime(1901,1,1)
+@test Dates.julian2datetime(2440587.5) == Dates.DateTime(1970,1,1)
+@test Dates.julian2datetime(2444239.5) == Dates.DateTime(1980,1,1)
+@test Dates.julian2datetime(2452695.625) == Dates.DateTime(2003,2,25,3)
+@test Dates.datetime2julian(Dates.DateTime(2013,12,3,21)) == 2456630.375
+
+@test typeof(Dates.now()) <: Dates.DateTime
+@test typeof(Dates.today()) <: Dates.Date

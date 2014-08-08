@@ -52,7 +52,7 @@ function test_dates(from,to)
         end
     end
 end
-test_dates(-2000,2000)
+test_dates(-1000,3000)
 
 # Test year, month, day, hour, minute
 function test_dates()

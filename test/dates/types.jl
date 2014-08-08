@@ -8,6 +8,30 @@
 @test Dates.totaldays(1,1,2) == 2
 @test Dates.totaldays(2013,1,1) == 734869
 
+@test Dates.daysinmonth(2000,1) == 31
+@test Dates.daysinmonth(2000,2) == 29
+@test Dates.daysinmonth(2000,3) == 31
+@test Dates.daysinmonth(2000,4) == 30
+@test Dates.daysinmonth(2000,5) == 31
+@test Dates.daysinmonth(2000,6) == 30
+@test Dates.daysinmonth(2000,7) == 31
+@test Dates.daysinmonth(2000,8) == 31
+@test Dates.daysinmonth(2000,9) == 30
+@test Dates.daysinmonth(2000,10) == 31
+@test Dates.daysinmonth(2000,11) == 30
+@test Dates.daysinmonth(2000,12) == 31
+@test Dates.daysinmonth(2001,2) == 28
+
+@test Dates.isleapyear(1900) == false
+@test Dates.isleapyear(2000) == true
+@test Dates.isleapyear(2004) == true
+@test Dates.isleapyear(2008) == true
+@test Dates.isleapyear(0) == true
+@test Dates.isleapyear(1) == false
+@test Dates.isleapyear(-1) == false
+@test Dates.isleapyear(4) == true
+@test Dates.isleapyear(-4) == true
+
 # Create "test" check manually
 test = Dates.DateTime(Dates.UTM(63492681600000))
 # Test DateTime construction by parts
@@ -35,9 +59,9 @@ test = Date(1,1,1)
 @test Date(int64(1),int64(1),int64(1)) == test
 @test Date('\x01','\x01','\x01') == test
 @test Date(true,true,true) == test
-@test Date(false,true,false) == test - Dates.Year(1) - Dates.Day(1)
+@test_throws ArgumentError Date(false,true,false)
 @test Date(false,true,true) == test - Dates.Year(1)
-@test Date(true,true,false) == test - Dates.Day(1)
+@test_throws ArgumentError Date(true,true,false)
 @test Date(uint64(1),uint64(1),uint64(1)) == test
 @test Date(0xffffffffffffffff,uint64(1),uint64(1)) == test - Dates.Year(2)
 @test Date(int128(1),int128(1),int128(1)) == test
@@ -57,27 +81,32 @@ test = Date(1,1,1)
 @test_throws InexactError Date(1.2,1.0,1.0)
 @test_throws InexactError Date(1.2f0,1.f0,1.f0)
 @test_throws InexactError Date(3//4,Rational(1),Rational(1)) == test
-# Currently no method for convert(Int64,::Float16)
 
-# Months must be in range
+# Months, days, hours, minutes, seconds, and milliseconds must be in range
+@test_throws ArgumentError Dates.Date(2013,0,1)
+@test_throws ArgumentError Dates.Date(2013,13,1)
+@test_throws ArgumentError Dates.Date(2013,1,0)
+@test_throws ArgumentError Dates.Date(2013,1,32)
 @test_throws ArgumentError Dates.DateTime(2013,0,1)
 @test_throws ArgumentError Dates.DateTime(2013,13,1)
-
-# Days/Hours/Minutes/Seconds/Milliseconds roll back/forward
-@test Dates.DateTime(2013,1,0) == Dates.DateTime(2012,12,31)
-@test Dates.DateTime(2013,1,32) == Dates.DateTime(2013,2,1)
-@test Dates.DateTime(2013,1,1,24) == Dates.DateTime(2013,1,2)
-@test Dates.DateTime(2013,1,1,-1) == Dates.DateTime(2012,12,31,23)
-@test Dates.Date(2013,1,0) == Dates.Date(2012,12,31)
-@test Dates.Date(2013,1,32) == Dates.Date(2013,2,1)
+@test_throws ArgumentError Dates.DateTime(2013,1,0)
+@test_throws ArgumentError Dates.DateTime(2013,1,32)
+@test_throws ArgumentError Dates.DateTime(2013,1,1,24)
+@test_throws ArgumentError Dates.DateTime(2013,1,1,-1)
+@test_throws ArgumentError Dates.DateTime(2013,1,1,0,-1)
+@test_throws ArgumentError Dates.DateTime(2013,1,1,0,60)
+@test_throws ArgumentError Dates.DateTime(2013,1,1,0,0,-1)
+@test_throws ArgumentError Dates.DateTime(2013,1,1,0,0,60)
+@test_throws ArgumentError Dates.DateTime(2013,1,1,0,0,0,-1)
+@test_throws ArgumentError Dates.DateTime(2013,1,1,0,0,0,1000)
 
 # Test DateTime traits
 a = Dates.DateTime(2000)
 b = Dates.Date(2000)
 @test Dates.calendar(a) == Dates.ISOCalendar
 @test Dates.calendar(b) == Dates.ISOCalendar
-@test Dates.precision(a) == Dates.UTInstant{Dates.Millisecond}
-@test Dates.precision(b) == Dates.UTInstant{Dates.Day}
+@test Dates.precision(a) == Dates.Millisecond
+@test Dates.precision(b) == Dates.Day
 @test string(typemax(Dates.DateTime)) == "146138512-12-31T23:59:59"
 @test string(typemin(Dates.DateTime)) == "-146138511-01-01T00:00:00"
 @test typemax(Dates.DateTime) - typemin(Dates.DateTime) == Dates.Millisecond(9223372017043199000)

@@ -52,23 +52,23 @@ ms = Dates.Millisecond(1)
 @test typeof(float16(y)) <: Float16
 @test typeof(float32(y)) <: Float32
 @test typeof(float64(y)) <: Float64
-@test convert(Dates.Year,convert(Int8,1)) == y
-@test convert(Dates.Year,convert(Uint8,1)) == y
-@test convert(Dates.Year,convert(Int16,1)) == y
-@test convert(Dates.Year,convert(Uint16,1)) == y
-@test convert(Dates.Year,convert(Int32,1)) == y
-@test convert(Dates.Year,convert(Uint32,1)) == y
-@test convert(Dates.Year,convert(Int64,1)) == y
-@test convert(Dates.Year,convert(Uint64,1)) == y
-@test convert(Dates.Year,convert(Int128,1)) == y
-@test convert(Dates.Year,convert(Uint128,1)) == y
-@test convert(Dates.Year,convert(BigInt,1)) == y
-@test convert(Dates.Year,convert(BigFloat,1)) == y
-@test convert(Dates.Year,convert(Complex,1)) == y
-@test convert(Dates.Year,convert(Rational,1)) == y
-#@test convert(Dates.Year,convert(Float16,1)) == y
-@test convert(Dates.Year,convert(Float32,1)) == y
-@test convert(Dates.Year,convert(Float64,1)) == y
+@test Dates.Year(convert(Int8,1)) == y
+@test Dates.Year(convert(Uint8,1)) == y
+@test Dates.Year(convert(Int16,1)) == y
+@test Dates.Year(convert(Uint16,1)) == y
+@test Dates.Year(convert(Int32,1)) == y
+@test Dates.Year(convert(Uint32,1)) == y
+@test Dates.Year(convert(Int64,1)) == y
+@test Dates.Year(convert(Uint64,1)) == y
+@test Dates.Year(convert(Int128,1)) == y
+@test Dates.Year(convert(Uint128,1)) == y
+@test Dates.Year(convert(BigInt,1)) == y
+@test Dates.Year(convert(BigFloat,1)) == y
+@test Dates.Year(convert(Complex,1)) == y
+@test Dates.Year(convert(Rational,1)) == y
+@test Dates.Year(convert(Float16,1)) == y
+@test Dates.Year(convert(Float32,1)) == y
+@test Dates.Year(convert(Float64,1)) == y
 @test y == y
 @test m == m
 @test w == w
@@ -162,9 +162,9 @@ y2 = Dates.Year(2)
 @test div(y,y) == Dates.Year(1)
 @test y*10 % 5 == Dates.Year(0)
 @test 5 % y*10 == Dates.Year(0)
-@test_throws ArgumentError y > 3
-@test_throws ArgumentError 4 < y
-@test_throws ArgumentError 1 == y
+@test (y > 3) == false
+@test (4 < y) == false
+@test 1 == y
 t = [y,y,y,y,y]
 @test t .+ Dates.Year(2) == [Dates.Year(3),Dates.Year(3),Dates.Year(3),Dates.Year(3),Dates.Year(3)]
 dt = Dates.DateTime(2012,12,21)
@@ -219,52 +219,52 @@ test = ((((((((dt + y) - m) + w) - d) + h) - mi) + s) - ms)
 @test Dates.Year(-1) < Dates.Year(1)
 @test !(Dates.Year(-1) > Dates.Year(1))
 @test Dates.Year(1) == Dates.Year(1)
-@test_throws ArgumentError Dates.Year(1) == 1
-@test_throws ArgumentError 1 == Dates.Year(1)
-@test_throws ArgumentError Dates.Year(1) < 1
-@test_throws ArgumentError 1 < Dates.Year(1)
+@test Dates.Year(1) == 1
+@test 1 == Dates.Year(1)
+@test (Dates.Year(1) < 1) == false
+@test (1 < Dates.Year(1)) == false
 @test Dates.Month(-1) < Dates.Month(1)
 @test !(Dates.Month(-1) > Dates.Month(1))
 @test Dates.Month(1) == Dates.Month(1)
-@test_throws ArgumentError Dates.Month(1) == 1
-@test_throws ArgumentError 1 == Dates.Month(1)
-@test_throws ArgumentError Dates.Month(1) < 1
-@test_throws ArgumentError 1 < Dates.Month(1)
+@test Dates.Month(1) == 1
+@test 1 == Dates.Month(1)
+@test (Dates.Month(1) < 1) == false
+@test (1 < Dates.Month(1)) == false
 @test Dates.Day(-1) < Dates.Day(1)
 @test !(Dates.Day(-1) > Dates.Day(1))
 @test Dates.Day(1) == Dates.Day(1)
-@test_throws ArgumentError Dates.Day(1) == 1
-@test_throws ArgumentError 1 == Dates.Day(1)
-@test_throws ArgumentError Dates.Day(1) < 1
-@test_throws ArgumentError 1 < Dates.Day(1)
+@test Dates.Day(1) == 1
+@test 1 == Dates.Day(1)
+@test (Dates.Day(1) < 1) == false
+@test (1 < Dates.Day(1)) == false
 @test Dates.Hour(-1) < Dates.Hour(1)
 @test !(Dates.Hour(-1) > Dates.Hour(1))
 @test Dates.Hour(1) == Dates.Hour(1)
-@test_throws ArgumentError Dates.Hour(1) == 1
-@test_throws ArgumentError 1 == Dates.Hour(1)
-@test_throws ArgumentError Dates.Hour(1) < 1
-@test_throws ArgumentError 1 < Dates.Hour(1)
+@test Dates.Hour(1) == 1
+@test 1 == Dates.Hour(1)
+@test (Dates.Hour(1) < 1) == false
+@test (1 < Dates.Hour(1)) == false
 @test Dates.Minute(-1) < Dates.Minute(1)
 @test !(Dates.Minute(-1) > Dates.Minute(1))
 @test Dates.Minute(1) == Dates.Minute(1)
-@test_throws ArgumentError Dates.Minute(1) == 1
-@test_throws ArgumentError 1 == Dates.Minute(1)
-@test_throws ArgumentError Dates.Minute(1) < 1
-@test_throws ArgumentError 1 < Dates.Minute(1)
+@test Dates.Minute(1) == 1
+@test 1 == Dates.Minute(1)
+@test (Dates.Minute(1) < 1) == false
+@test (1 < Dates.Minute(1)) == false
 @test Dates.Second(-1) < Dates.Second(1)
 @test !(Dates.Second(-1) > Dates.Second(1))
 @test Dates.Second(1) == Dates.Second(1)
-@test_throws ArgumentError Dates.Second(1) == 1
-@test_throws ArgumentError 1 == Dates.Second(1)
-@test_throws ArgumentError Dates.Second(1) < 1
-@test_throws ArgumentError 1 < Dates.Second(1)
+@test Dates.Second(1) == 1
+@test 1 == Dates.Second(1)
+@test (Dates.Second(1) < 1) == false
+@test (1 < Dates.Second(1)) == false
 @test Dates.Millisecond(-1) < Dates.Millisecond(1)
 @test !(Dates.Millisecond(-1) > Dates.Millisecond(1))
 @test Dates.Millisecond(1) == Dates.Millisecond(1)
-@test_throws ArgumentError Dates.Millisecond(1) == 1
-@test_throws ArgumentError 1 == Dates.Millisecond(1)
-@test_throws ArgumentError Dates.Millisecond(1) < 1
-@test_throws ArgumentError 1 < Dates.Millisecond(1)
+@test Dates.Millisecond(1) == 1
+@test 1 == Dates.Millisecond(1)
+@test (Dates.Millisecond(1) < 1) == false
+@test (1 < Dates.Millisecond(1)) == false
 @test_throws ArgumentError Dates.Year(1) < Dates.Millisecond(1)
 @test_throws ArgumentError Dates.Year(1) == Dates.Millisecond(1)
 
@@ -277,6 +277,7 @@ test = ((((((((dt + y) - m) + w) - d) + h) - mi) + s) - ms)
 @test Dates.Second("1") == s
 @test Dates.Millisecond("1") == ms
 @test_throws ErrorException Dates.Year("1.0")
+@test Dates.Year(parsefloat("1.0")) == y
 
 dt = Dates.DateTime(2014)
 @test typeof(Dates.Year(dt)) <: Dates.Year
@@ -297,3 +298,19 @@ dt = Dates.DateTime(2014)
 @test Dates.default(Dates.Minute) == zero(Dates.Minute)
 @test Dates.default(Dates.Second) == zero(Dates.Second)
 @test Dates.default(Dates.Millisecond) == zero(Dates.Millisecond)
+
+# Conversions
+@test Dates.toms(ms) == Dates.value(Dates.Millisecond(ms)) == 1
+@test Dates.toms(s)  == Dates.value(Dates.Millisecond(s)) == 1000
+@test Dates.toms(mi) == Dates.value(Dates.Millisecond(mi)) == 60000
+@test Dates.toms(h)  == Dates.value(Dates.Millisecond(h)) == 3600000
+@test Dates.toms(d)  == Dates.value(Dates.Millisecond(d)) == 86400000
+@test Dates.toms(w)  == Dates.value(Dates.Millisecond(w)) == 604800000
+
+@test Dates.days(ms) == Dates.days(s) == Dates.days(mi) == Dates.days(h) == 0
+@test Dates.days(Dates.Millisecond(86400000)) == 1
+@test Dates.days(Dates.Second(86400)) == 1
+@test Dates.days(Dates.Minute(1440)) == 1
+@test Dates.days(Dates.Hour(24)) == 1
+@test Dates.days(d) == 1
+@test Dates.days(w) == 7
