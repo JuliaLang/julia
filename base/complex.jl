@@ -284,10 +284,9 @@ end
 angle(z::Complex) = atan2(imag(z), real(z))
 
 function log{T<:FloatingPoint}(z::Complex{T})
-    const T0::T  = 0.7071067811865475
     const T1::T  = 1.25
     const T2::T  = 3
-    const ln2::T = 0.6931471805599453
+    const ln2::T = log(oftype(T,2))  #0.6931471805599453
     x, y = reim(z)
     ρ, k = ssqs(x,y)
     ax = abs(x)
@@ -297,7 +296,7 @@ function log{T<:FloatingPoint}(z::Complex{T})
     else
         θ, β = ay, ax
     end
-    if k==0 && T0 < β && (β <= T1 || ρ < T2)
+    if k==0 && (0.5 < β*β) && (β <= T1 || ρ < T2)
         ρρ = log1p((β-1)*(β+1)+θ*θ)/2
     else
         ρρ = log(ρ)/2 + k*ln2
@@ -327,11 +326,11 @@ log(z::Complex) = log(float(z))
 
 function log10(z::Complex)
     a = log(z)
-    a/oftype(real(a),2.302585092994046)
+    a/log(oftype(real(a),10))
 end
 function log2(z::Complex)
     a = log(z)
-    a/oftype(real(a),0.6931471805599453)
+    a/log(oftype(real(a),2))
 end
 
 function exp(z::Complex)
@@ -550,12 +549,12 @@ end
 function asin(z::Complex)
     zr, zi = reim(z)
     if isinf(zr) && isinf(zi)
-        return Complex(copysign(oftype(zr, pi/4), zr),zi)
+        return Complex(copysign(oftype(zr,pi)/4, zr),zi)
     elseif isnan(zi) && isinf(zr)
         return Complex(zi, oftype(zr, Inf))
     end
     ξ = zr == 0       ? zr :
-        !isfinite(zr) ? oftype(zr, pi/2)*sign(zr) :
+        !isfinite(zr) ? oftype(zr,pi)/2 * sign(zr) :
         atan2(zr, real(sqrt(1-z)*sqrt(1+z)))
     η = asinh(copysign(imag(sqrt(conj(1-z))*sqrt(1+z)), imag(z)))
     Complex(ξ,η)
@@ -568,18 +567,18 @@ function acos{T<:FloatingPoint}(z::Complex{T})
         else         return Complex(zr, zr) end
     elseif isnan(zi)
         if isinf(zr) return Complex(zi, abs(zr))
-        elseif zr==0 return Complex(oftype(zr, pi/2), zi)
+        elseif zr==0 return Complex(oftype(zr,pi)/2, zi)
         else         return Complex(zi, zi) end
     elseif zr==zi==0
-        return Complex(oftype(zr, pi/2), -zi)
+        return Complex(oftype(zr,pi)/2, -zi)
     elseif zr==Inf && zi===0.0
         return Complex(zi, -zr)
     elseif zr==-Inf && zi===-0.0
-        return Complex(oftype(zi, pi), -zr)
+        return Complex(oftype(zi,pi), -zr)
     end
     ξ = 2*atan2(real(sqrt(1-z)), real(sqrt(1+z)))
     η = asinh(imag(sqrt(conj(1+z))*sqrt(1-z)))
-    if isinf(zr) && isinf(zi) ξ -= oftype(η, pi/4) * sign(zr) end
+    if isinf(zr) && isinf(zi) ξ -= oftype(η,pi)/4 * sign(zr) end
     Complex(ξ,η)
 end
 acos(z::Complex) = acos(float(z))
@@ -642,7 +641,7 @@ function acosh(z::Complex)
     ξ = asinh(real(sqrt(conj(z-1))*sqrt(z+1)))
     η = 2atan2(imag(sqrt(z-1)),real(sqrt(z+1)))
     if isinf(zr) && isinf(zi)
-        η -= oftype(η, pi/4) * sign(zi) * sign(zr)
+        η -= oftype(η,pi)/4 * sign(zi) * sign(zr)
     end
     Complex(ξ, η)
 end
@@ -663,9 +662,9 @@ function atanh{T<:FloatingPoint}(z::Complex{T})
             end
         end
         if isinf(y)
-            return Complex(copysign(zero(x),x), copysign(oftype(y, pi/2), y))
+            return Complex(copysign(zero(x),x), copysign(oftype(y,pi)/2, y))
         end
-        return Complex(real(1/z), copysign(oftype(y, pi/2), y))
+        return Complex(real(1/z), copysign(oftype(y,pi)/2, y))
     elseif ax==1
         if y == 0
             ξ = copysign(oftype(x,Inf),x)
@@ -673,7 +672,7 @@ function atanh{T<:FloatingPoint}(z::Complex{T})
         else
             ym = ay+ρ
             ξ = log(sqrt(sqrt(4+y*y))/sqrt(ym))
-            η = copysign(oftype(y, pi/2)+atan(ym/2), y)/2
+            η = copysign(oftype(y,pi)/2 + atan(ym/2), y)/2
         end
     else #Normal case
         ysq = (ay+ρ)^2
