@@ -16,19 +16,19 @@ The following `arithmetic operators
 <http://en.wikipedia.org/wiki/Arithmetic#Arithmetic_operations>`_
 are supported on all primitive numeric types:
 
-==========  ============== ======================================
-Expression  Name           Description
-==========  ============== ======================================
-``+x``      unary plus     the identity operation
-``-x``      unary minus    maps values to their additive inverses
-``x + y``   binary plus    performs addition
-``x - y``   binary minus   performs subtraction
-``x * y``   times          performs multiplication
-``x / y``   divide         performs division
-``x \ y``   inverse divide equivalent to ``y / x``
-``x ^ y``   power          raises ``x`` to the ``y``\ th power
-``x % y``   remainder      equivalent to ``rem(x,y)``
-==========  ============== ======================================
+===================  ============== ======================================
+Expression           Name           Description
+===================  ============== ======================================
+``+x``               unary plus     the identity operation
+``-x``               unary minus    maps values to their additive inverses
+``x + y``            binary plus    performs addition
+``x - y``            binary minus   performs subtraction
+``x * y``            times          performs multiplication
+``x / y`` ``x ÷ y``  divide         performs division
+``x \ y``            inverse divide equivalent to ``y / x``
+``x ^ y``            power          raises ``x`` to the ``y``\ th power
+``x % y``            remainder      equivalent to ``rem(x,y)``
+===================  ============== ======================================
 
 as well as the negation on ``Bool`` types:
 
@@ -130,16 +130,16 @@ Numeric Comparisons
 Standard comparison operations are defined for all the primitive numeric
 types:
 
-======== ========================
-Operator Name
-======== ========================
-``==``   equality
-``!=``   inequality
-``<``    less than
-``<=``   less than or equal to
-``>``    greater than
-``>=``   greater than or equal to
-======== ========================
+============= ========================
+Operator      Name
+============= ========================
+``==``        equality
+``!=`` ``≠``  inequality
+``<``         less than
+``<=`` ``≤``  less than or equal to
+``>``         greater than
+``>=`` ``≥``  greater than or equal to
+============= ========================
 
 Here are some simple examples:
 
@@ -377,8 +377,8 @@ Powers, logs and roots
 =================== ==============================================================================
 Function            Description
 =================== ==============================================================================
-``sqrt(x)``         the square root of ``x``
-``cbrt(x)``         the cube root of ``x``
+``sqrt(x)`` ``√x``  the square root of ``x``
+``cbrt(x)`` ``∛``   the cube root of ``x``
 ``hypot(x,y)``      hypotenuse of right-angled triangle with other sides of length ``x`` and ``y``
 ``exp(x)``          the natural exponential function at ``x``
 ``expm1(x)``        accurate ``exp(x)-1`` for ``x`` near zero
