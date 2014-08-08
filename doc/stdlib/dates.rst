@@ -1,8 +1,8 @@
 Dates Functions
 ---------------
 
-All Dates functions are defined in the ``Dates`` module; note that only the ``Date`` and ``DateTime`` functions are exported;
-to use all other ``Dates`` functions, you'll need to prefix each function call with an explicit ``Dates.``, e.g. ``Dates.dayofweek(dt)`` or ``Dates.now()``;
+All Dates functions are defined in the ``Dates`` module; note that only the ``Date``, ``DateTime``, and ``now`` functions are exported;
+to use all other ``Dates`` functions, you'll need to prefix each function call with an explicit ``Dates.``, e.g. ``Dates.dayofweek(dt)``;
 alternatively, you could call ``using Base.Dates`` to bring all exported functions into ``Main`` to be used without the ``Dates.`` prefix.
 
 .. currentmodule:: Base
@@ -23,7 +23,7 @@ alternatively, you could call ``using Base.Dates`` to bring all exported functio
     provided ``y, m, d...`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in
     adjusting can be provided manually through the ``step`` keyword. If ``negate=true``, then the adjusting
     will stop when ``f::Function`` returns false instead of true. ``limit`` provides a limit to
-    the max number of iterations the adjustment API will pursue before throwing an error (given that ``f::Function``
+    the max number of iterations the adjustment API will pursue before throwing an error (in the case that ``f::Function``
     is never satisfied).
 
 .. function:: ``DateTime(dt::Date) -> DateTime``
@@ -33,7 +33,7 @@ alternatively, you could call ``using Base.Dates`` to bring all exported functio
 
 .. function:: ``DateTime(dt::String, format::String; locale="english") -> DateTime``
 
-   Construct a DateTime type by parsing a ``dt`` date string following the pattern given in
+   Construct a DateTime type by parsing the ``dt`` date string following the pattern given in
    the ``format`` string. The following codes can be used for constructing format strings:
 
    | Code            |  Matches   | Comment
@@ -48,6 +48,10 @@ alternatively, you could call ``using Base.Dates`` to bring all exported functio
    | ``S``           |  00        | Matches seconds
    | ``s``           |  .500      | Matches milliseconds
    | ``yyyymmdd``    |  19960101  | Matches fixed-width year, month, and day
+
+   All characters not listed above are treated as delimiters between date and time slots.
+   So a ``dt`` string of "1996-01-15T00:00:00.0" would have a ``format`` string
+   like "y-m-dTH:M:S.s".
 
 .. function:: ``Date(y, [m, d]) -> Date``
 
@@ -78,6 +82,11 @@ alternatively, you could call ``using Base.Dates`` to bring all exported functio
    Construct a Date type by parsing a ``dt`` date string following the pattern given in
    the ``format`` string. Follows the same convention as ``DateTime`` above.
 
+.. function:: ``now() -> DateTime``
+
+   Returns a DateTime type corresponding to the user's system
+   time.
+   
 Accessor Functions
 ~~~~~~~~~~~~~~~~~~
 
@@ -146,7 +155,7 @@ Query Functions
 
     For the day of week of ``dt``, returns which number it is in ``dt``'s month.
     So if the day of the week of ``dt`` is Monday, then ``1 = First Monday of the month,
-    2 = Second Monday of the month, etc.`` Lies in the range 1:5.
+    2 = Second Monday of the month, etc.`` In the range 1:5.
 
 .. function:: ``daysofweekinmonth(dt::TimeType) -> Int``
 
@@ -167,7 +176,7 @@ Query Functions
 
     Returns the number of days in the month of ``dt``. Value will be 28, 29, 30, or 31.
 
-.. function:: ``isleap(dt::TimeType) -> Bool``    
+.. function:: ``isleapyear(dt::TimeType) -> Bool``    
 
     Returns true if the year of ``dt`` is a leap year.
 
@@ -193,8 +202,7 @@ Adjuster Functions
 .. function:: ``trunc(dt::TimeType, ::Type{Period}) -> TimeType``
 
     Truncates the value of ``dt`` according to the provided ``Period`` type.
-    E.g. if ``dt`` is ``1996-01-01T12:30:00`` and ``trunc(dt,Day)``, 
-    ``1996-01-01T00:00:00`` will be returned, truncating up to the ``Day``.
+    E.g. if ``dt`` is ``1996-01-01T12:30:00``, then ``trunc(dt,Day) == 1996-01-01T00:00:00``.
 
 .. function:: ``firstdayofweek(dt::TimeType) -> TimeType``
 
@@ -254,21 +262,22 @@ Adjuster Functions
 
     Adjusts ``dt`` by iterating at most ``limit`` iterations by ``step`` increments until
     ``func`` returns true. ``func`` must take a single ``TimeType`` argument and return a ``Bool``.
-    ``same`` allows ``dt`` to be considered as satisfying ``func``. ``negate`` will make the adjustment
+    ``same`` allows ``dt`` to be considered in satisfying ``func``. ``negate`` will make the adjustment
     process terminate when ``func`` returns false instead of true.
 
 .. function:: ``toprev(func::Function,dt::TimeType;step=Day(-1),negate=false,limit=10000,same=false) -> TimeType``
 
     Adjusts ``dt`` by iterating at most ``limit`` iterations by ``step`` increments until
     ``func`` returns true. ``func`` must take a single ``TimeType`` argument and return a ``Bool``.
-    ``same`` allows ``dt`` to be considered as satisfying ``func``. ``negate`` will make the adjustment
+    ``same`` allows ``dt`` to be considered in satisfying ``func``. ``negate`` will make the adjustment
     process terminate when ``func`` returns false instead of true.
 
 .. function:: ``recur{T<:TimeType}(func::Function,dr::StepRange{T};negate=false,limit=10000) -> Array{T,1}``
 
     ``func`` takes a single TimeType argument and returns a ``Bool`` indicating whether the input
-    should be "included" in the final set. ``recur`` applies ``func`` over the range of ``dr`` to 
-    generate an Array from dates/moments for which ``func`` returns true (unless ``negate=true``).
+    should be "included" in the final set. ``recur`` applies ``func`` over each element in the 
+    range of ``dr``, including those elements for which ``func`` returns ``true`` in the resulting
+    Array, unless ``negate=true``, then only elements where ``func`` returns ``false`` are included.
 
 
 Periods
@@ -323,14 +332,9 @@ Periods
 Conversion Functions
 ~~~~~~~~~~~~~~~~~~~~
 
-.. function:: ``now() -> DateTime``
-
-   Returns a DateTime type corresponding to the user's system
-   time. Corresponds to the UTC/GMT timezone.
-
 .. function:: ``today() -> Date``
 
-    Converts the output of ``now()`` to a Date.
+    Returns the date portion of ``now()``.
 
 .. function:: ``unix2datetime(x) -> DateTime``
 
