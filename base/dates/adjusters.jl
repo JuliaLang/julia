@@ -60,9 +60,13 @@ lastdayofquarter(dt::DateTime) = DateTime(lastdayofquarter(Date(dt)))
 immutable DateFunction
     f::Function
     # validate boolean, single-arg inner constructor
-    function DateFunction(f::Function,negate::Bool,dt::Dates.TimeType)
-        f(dt) in (true,false) || throw(ArgumentError("Provided function must take a single TimeType argument and return true or false"))
-        n = !negate ? identity : (!)
+    function DateFunction(f::Function,negate::Bool,dt::TimeType)
+        try
+            f(dt) in (true,false) || throw(ArgumentError("Provided function must take a single TimeType argument and return true or false"))
+        catch e
+            throw(ArgumentError("Provided function must take a single TimeType argument"))
+        end
+        n = negate ? (!) : identity
         return new(@eval x->$n($f(x)))
     end
 end
