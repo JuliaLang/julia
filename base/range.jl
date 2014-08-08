@@ -30,9 +30,9 @@ immutable StepRange{T,S} <: OrdinalRange{T,S}
                 # start - step, which leads to a range that looks very large instead
                 # of empty.
                 if step > z
-                    last = start - one(step)
+                    last = start - one(stop-start)
                 else
-                    last = start + one(step)
+                    last = start + one(stop-start)
                 end
             else
                 diff = stop - start
