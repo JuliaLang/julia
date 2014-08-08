@@ -20,3 +20,5 @@ The SHA.jl package is licensed under the MIT "Expat" License:
 > CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 > TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 > SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+This package was inspired by the SHA2 [source code from Minix](https://github.com/minix3/minix/blob/b6cbf7203b080219de306404f8022a65b7884f33/common/lib/libc/hash/sha2/sha2.c), itself released under the BSD license.
