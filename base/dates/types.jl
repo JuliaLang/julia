@@ -67,14 +67,21 @@ end
 # Convert y,m,d to # of Rata Die days
 # Works by shifting the beginning of the year to March 1,
 # so a leap day is the very last day of the year
-const MONTHDAYS = Int64[306,337,0,31,61,92,122,153,184,214,245,275]
+const SHIFTEDMONTHDAYS = [306,337,0,31,61,92,122,153,184,214,245,275]
 function totaldays(y,m,d)
     # If we're in Jan/Feb, shift the given year back one
     z = m < 3 ? y - 1 : y
-    mdays = MONTHDAYS[m]::Int64
+    mdays = SHIFTEDMONTHDAYS[m]
     # days + month_days + year_days
     return d + mdays + 365z + fld(z,4) - fld(z,100) + fld(z,400) - 306
 end
+
+# If the year is divisible by 4, except for every 100 years, except for every 400 years
+isleapyear(y) = ((y % 4 == 0) && (y % 100 != 0)) || (y % 400 == 0)
+
+# Number of days in month
+const DAYSINMONTH = [31,28,31,30,31,30,31,31,30,31,30,31]
+daysinmonth(y,m) = DAYSINMONTH[m] + (m == 2 && isleapyear(y))
 
 ### CONSTRUCTORS ###
 # Core constructors
