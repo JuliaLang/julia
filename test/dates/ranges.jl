@@ -219,7 +219,7 @@ function test_all_combos()
         end
     end
 end
-@time test_all_combos()
+test_all_combos()
 
 # All the range representations we want to test
 # Date ranges
