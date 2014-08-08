@@ -5,16 +5,17 @@ end
 (+)(x::Instant) = x
 (-){T<:Instant}(x::T,y::T) = x.periods - y.periods
 
-# DateTime arithmetic
+# TimeType arithmetic
 for op in (:+,:*,:%,:/)
     @eval ($op)(x::TimeType,y::TimeType) = throw(ArgumentError("Operation not defined for TimeTypes"))
 end
 (+)(x::TimeType) = x
 (-){T<:TimeType}(x::T,y::T) = x.instant - y.instant
 
+# TimeType-Year arithmetic
 function (+)(dt::DateTime,y::Year)
     oy,m,d = yearmonthday(dt); ny = oy+value(y); ld = daysinmonth(ny,m)
-    return DateTime(ny,m,d <= ld ? d : ld,hour(dt),minute(dt),second(dt))
+    return DateTime(ny,m,d <= ld ? d : ld,hour(dt),minute(dt),second(dt),millisecond(dt))
 end
 function (+)(dt::Date,y::Year)
     oy,m,d = yearmonthday(dt); ny = oy+value(y); ld = daysinmonth(ny,m)
@@ -22,14 +23,14 @@ function (+)(dt::Date,y::Year)
 end
 function (-)(dt::DateTime,y::Year)
     oy,m,d = yearmonthday(dt); ny = oy-value(y); ld = daysinmonth(ny,m)
-    return DateTime(ny,m,d <= ld ? d : ld,hour(dt),minute(dt),second(dt))
+    return DateTime(ny,m,d <= ld ? d : ld,hour(dt),minute(dt),second(dt),millisecond(dt))
 end
 function (-)(dt::Date,y::Year)
     oy,m,d = yearmonthday(dt); ny = oy-value(y); ld = daysinmonth(ny,m)
     return Date(ny,m,d <= ld ? d : ld)
 end
 
-# Date/DateTime-Month arithmetic
+# TimeType-Month arithmetic
 # monthwrap adds two months with wraparound behavior (i.e. 12 + 1 == 1)
 monthwrap(m1,m2) = (v = mod1(m1+m2,12); return v < 0 ? 12 + v : v)
 # yearwrap takes a starting year/month and a month to add and returns
@@ -40,7 +41,7 @@ function (+)(dt::DateTime,z::Month)
     y,m,d = yearmonthday(dt)
     ny = yearwrap(y,m,value(z))
     mm = monthwrap(m,value(z)); ld = daysinmonth(ny,mm)
-    return DateTime(ny,mm,d <= ld ? d : ld,hour(dt),minute(dt),second(dt))
+    return DateTime(ny,mm,d <= ld ? d : ld,hour(dt),minute(dt),second(dt),millisecond(dt))
 end
 function (+)(dt::Date,z::Month) 
     y,m,d = yearmonthday(dt)
@@ -52,7 +53,7 @@ function (-)(dt::DateTime,z::Month)
     y,m,d = yearmonthday(dt)
     ny = yearwrap(y,m,-value(z))
     mm = monthwrap(m,-value(z)); ld = daysinmonth(ny,mm)
-    return DateTime(ny,mm,d <= ld ? d : ld,hour(dt),minute(dt),second(dt))
+    return DateTime(ny,mm,d <= ld ? d : ld,hour(dt),minute(dt),second(dt),millisecond(dt))
 end
 function (-)(dt::Date,z::Month) 
     y,m,d = yearmonthday(dt)
