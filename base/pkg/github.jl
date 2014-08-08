@@ -34,7 +34,7 @@ function curl(url::String, opts::Cmd=``)
     success(`curl --version`) || error("using the GitHub API requires having `curl` installed")
     out, proc = open(`curl -i -s -S $opts $url`,"r")
     head = readline(out)
-    status = int(split(head,r"\s+",3)[2])
+    status = int(split(head,r"\s+";limit=3)[2])
     for line in eachline(out)
         ismatch(r"^\s*$",line) || continue
         wait(proc); return status, readall(out)
