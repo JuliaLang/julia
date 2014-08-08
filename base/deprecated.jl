@@ -141,6 +141,10 @@ Set{T<:Number}(xs::T...) = Set{T}(xs)
 @deprecate readsfrom(cmd, args...)      open(cmd, "r", args...)
 @deprecate writesto(cmd, args...)      open(cmd, "w", args...)
 
+@deprecate split(x,y,l::Integer,k::Bool) split(x,y;limit=l,keep=k)
+@deprecate split(x,y,l::Integer) split(x,y;limit=l)
+@deprecate split(x,y,k::Bool) split(x,y;keep=k)
+
 function tty_rows()
     depwarn("tty_rows() is deprecated, use tty_size() instead", :tty_rows)
     tty_size()[1]
