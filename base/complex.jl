@@ -325,8 +325,14 @@ log(z::Complex) = log(float(z))
 #     Complex(re, angle(z))
 # end
 
-log10(z::Complex) = log(z)/oftype(real(z),2.302585092994046)
-log2(z::Complex) = log(z)/oftype(real(z),0.6931471805599453)
+function log10(z::Complex)
+    a = log(z)
+    a/oftype(real(a),2.302585092994046)
+end
+function log2(z::Complex)
+    a = log(z)
+    a/oftype(real(a),0.6931471805599453)
+end
 
 function exp(z::Complex)
     zr, zi = reim(z)
