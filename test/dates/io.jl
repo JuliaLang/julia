@@ -239,8 +239,8 @@ f = "y m d"
 @test Dates.Date("1 1 1",f) == Dates.Date(1)
 @test Dates.Date("10000000000 1 1",f) == Dates.Date(10000000000)
 @test_throws ArgumentError Dates.Date("1 13 1",f)
-@test Dates.Date("1 1 32",f) == Dates.Date(1,2,1)
-@test Dates.Date(" 1 1 32",f) == Dates.Date(1,2,1)
+@test_throws ArgumentError Dates.Date("1 1 32",f)
+@test_throws ArgumentError Dates.Date(" 1 1 32",f)
 @test_throws ArgumentError Dates.Date("# 1 1 32",f)
 # can't find 1st space delimiter,s o fails
 @test_throws ArgumentError Dates.Date("1",f)
@@ -252,3 +252,26 @@ f = "y m d"
 
 @test Dates.Date(string(Dates.Date(dt))) == Dates.Date(dt)
 @test Dates.DateTime(string(dt)) == dt
+
+# Vectorized
+dr = ["2000-01-01","2000-01-02","2000-01-03","2000-01-04","2000-01-05"
+     ,"2000-01-06","2000-01-07","2000-01-08","2000-01-09","2000-01-10"]
+dr2 = [Dates.Date(2000):Dates.Date(2000,1,10)]
+@test Dates.Date(dr) == dr2
+@test Dates.Date(dr,"yyyy-mm-dd") == dr2
+@test Dates.DateTime(dr) == Dates.DateTime(dr2)
+@test Dates.DateTime(dr,"yyyy-mm-dd") == Dates.DateTime(dr2)
+
+@test Dates.format(dr2) == dr
+@test Dates.format(dr2,"yyyy-mm-dd") == dr
+
+@test typeof(Dates.Date(dr)) == Array{Date,1}
+
+# Issue 13
+t = Dates.DateTime(1,1,1,14,51,0,118)
+@test Dates.DateTime("[14:51:00.118]","[HH:MM:SS.sss]") == t
+@test Dates.DateTime("14:51:00.118", "HH:MM:SS.sss") == t
+@test Dates.DateTime("[14:51:00.118?", "[HH:MM:SS.sss?") == t
+@test Dates.DateTime("?14:51:00.118?", "?HH:MM:SS.sss?") == t
+@test Dates.DateTime("x14:51:00.118", "xHH:MM:SS.sss") == t
+@test Dates.DateTime("14:51:00.118]", "HH:MM:SS.sss]") == t

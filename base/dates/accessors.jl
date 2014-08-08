@@ -55,7 +55,6 @@ dayofmonth(dt::TimeType) = day(dt)
 yearmonth(dt::TimeType) = yearmonth(days(dt))
 monthday(dt::TimeType) = monthday(days(dt))
 yearmonthday(dt::TimeType) = yearmonthday(days(dt))
-#TODO: add hourminute, minutesecond, hourminutesecond
 
 @vectorize_1arg TimeType year
 @vectorize_1arg TimeType month
