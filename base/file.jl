@@ -45,7 +45,7 @@ function mkpath(path::String, mode::Unsigned=0o777)
     dir = dirname(path)
     (path == dir || isdir(path)) && return
     mkpath(dir, mode)
-    mkdir(path)
+    mkdir(path, mode)
 end
 
 mkdir(path::String, mode::Signed) = error("mode must be an unsigned integer; try 0o$mode")

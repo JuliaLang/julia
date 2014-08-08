@@ -20,10 +20,10 @@ size_t u8_toutf8(char *dest, size_t sz, const uint32_t *src, size_t srcsz);
 size_t u8_wc_toutf8(char *dest, uint32_t ch);
 
 /* character number to byte offset */
-size_t u8_offset(const char *str, size_t charnum);
+DLLEXPORT size_t u8_offset(const char *str, size_t charnum);
 
 /* byte offset to character number */
-size_t u8_charnum(const char *s, size_t offset);
+DLLEXPORT size_t u8_charnum(const char *s, size_t offset);
 
 /* return next character, updating an index variable */
 uint32_t u8_nextchar(const char *s, size_t *i);

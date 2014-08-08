@@ -235,7 +235,7 @@ Function          Tests if
     true
     
     julia> isequal(NaN,NaN32)
-    false
+    true
 
 ``isequal`` can also be used to distinguish signed zeros:
 

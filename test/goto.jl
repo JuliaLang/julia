@@ -87,4 +87,16 @@ end
 
 @test goto_test7(false) == nothing
 
+module GotoMacroTest
+    macro goto_test8_macro()
+        quote
+            function $(esc(:goto_test8))()
+                @label a
+                @goto a
+            end
+        end
+    end
+end
+
+GotoMacroTest.@goto_test8_macro
 

@@ -216,8 +216,9 @@ endif
 STDLIBCPP_FLAG = 
 
 ifeq ($(OS), Darwin)
-DARWINVER = $(shell uname -r | cut -b 1-2)
-OSXVER = $(shell sw_vers -productVersion | cut -b 1-4)
+DARWINVER := $(shell uname -r | cut -b 1-2)
+DARWINVER_GTE13 := $(shell expr `uname -r | cut -b 1-2` \>= 13)
+OSXVER := $(shell sw_vers -productVersion | cut -b 1-4)
 ifeq ($(DARWINVER), 10) # Snow Leopard specific configuration
 USEGCC = 1
 USECLANG = 0
@@ -225,7 +226,7 @@ OPENBLAS_TARGET_ARCH=NEHALEM
 OPENBLAS_DYNAMIC_ARCH=0
 USE_SYSTEM_LIBUNWIND=1
 else
-ifeq ($(DARWINVER),13)
+ifeq ($(DARWINVER_GTE13),1)
 USE_LIBCPP = 1
 STDLIBCPP_FLAG = -stdlib=libstdc++
 else 
@@ -249,7 +250,7 @@ JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -O0 -ggdb3 -DJL_DEBUG_BUILD -fstack-protector-all
-SHIPFLAGS = -O3 -falign-functions
+SHIPFLAGS = -O3 -ggdb3 -falign-functions
 endif
 
 ifeq ($(USECLANG),1)
@@ -259,7 +260,7 @@ JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -O0 -g -DJL_DEBUG_BUILD -fstack-protector-all
-SHIPFLAGS = -O3
+SHIPFLAGS = -O3 -g
 ifeq ($(OS), Darwin)
 ifeq ($(USE_LIBCPP), 1)
 CC += -stdlib=libc++ -mmacosx-version-min=10.7
@@ -286,7 +287,7 @@ JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -
 JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -O0 -ggdb3 -DJL_DEBUG_BUILD -fstack-protector-all
-SHIPFLAGS = -O3 -falign-functions
+SHIPFLAGS = -O3 -g -falign-functions
 endif
 
 ifeq ($(LLVM_VER),svn)
@@ -544,10 +545,16 @@ ifeq ($(OS), Darwin)
   INSTALL_NAME_ID_DIR = @rpath/
   INSTALL_NAME_CMD = install_name_tool -id $(INSTALL_NAME_ID_DIR)
   INSTALL_NAME_CHANGE_CMD = install_name_tool -change
+ifeq ($(shell test `dsymutil -v | cut -d\- -f2 | cut -d. -f1` -gt 102 && echo yes), yes)
+  DSYMUTIL = dsymutil
+else
+  DSYMUTIL = true -ignore
+endif
 else
   INSTALL_NAME_ID_DIR =
   INSTALL_NAME_CMD = true -ignore
   INSTALL_NAME_CHANGE_CMD = true -ignore
+  DSYMUTIL = true -ignore
 endif
 
 # shared library runtime paths
@@ -706,6 +713,8 @@ $$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(2)/$(1))): $$(abspath $(2)/$(1)
 $$(abspath $(2)/$(1)): | $$(abspath $(2))
 ifeq ($(BUILD_OS), WINNT)
 	@cmd //C mklink //J $$(call mingw_to_dos,$(2)/$(1),cd $(2) &&) $$(call mingw_to_dos,$(1),)
+else ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
+	@cmd /C mklink /J $$(call cygpath_w,$(2)/$(1)) $$(call cygpath_w,$(1))
 else ifdef JULIA_VAGRANT_BUILD
 	@cp -R $$(abspath $(1)) $$@
 else

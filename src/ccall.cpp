@@ -58,7 +58,7 @@ extern "C" DLLEXPORT void jl_read_sonames(void)
     pclose(ldc);
 }
 
-extern "C" const char *jl_lookup_soname(char *pfx, size_t n)
+extern "C" DLLEXPORT const char *jl_lookup_soname(char *pfx, size_t n)
 {
     if (!got_sonames) {
         jl_read_sonames();
@@ -755,7 +755,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     if (fptr == (void *) &jl_is_leaf_type ||
         (f_lib==NULL && f_name && !strcmp(f_name, "jl_is_leaf_type"))) {
         jl_value_t *arg = args[4];
-        jl_value_t* ty = expr_type(arg, ctx);
+        jl_value_t *ty = expr_type(arg, ctx);
         if (jl_is_type_type(ty) && !jl_is_typevar(jl_tparam0(ty))) {
             int isleaf = jl_is_leaf_type(jl_tparam0(ty));
             JL_GC_POP();

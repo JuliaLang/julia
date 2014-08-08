@@ -157,20 +157,18 @@ These notes apply to the Debian 7 image currently available on Google Compute En
   apt-get install bzip2 gcc gfortran git g++ make m4 ncurses-dev
   ```
 
-2. Now clone `JuliaLang:master` and edit `deps/Versions.make` to select `OPENBLAS_VER = v0.2.9.rc2`. This picks up changes to support the Sandybridge cores used by Google Compute Engine. (Alternatively, you could fall back to the Nehelem architecture via a `make` option, but that would entail performance penalties.)
-
-Now you should be able to build using the generic Linux instructions. These instructions were tested on a `g1-small` instance on 2014-03-28. Other resources include [information on Google Compute Engine](https://cloud.google.com/products/compute-engine/) and a series of [tutorials by Julia Ferraioli](http://www.blog.juliaferraioli.com/2013/12/julia-on-google-compute-engine.html).
+2. Now clone `JuliaLang:master`; you should be able to build using the generic Linux instructions. These instructions were tested on a `g1-small` instance on 2014-03-28. Other resources include [information on Google Compute Engine](https://cloud.google.com/products/compute-engine/) and a series of [tutorials by Julia Ferraioli](http://www.blog.juliaferraioli.com/2013/12/julia-on-google-compute-engine.html).
 
 #### Linux Build Troubleshooting
 
  Problem              | Possible Solution
 ------------------------|---------------------
- OpenBLAS build failure | Set one of the following build options in `Make.user` and build again: <ul><li> `OPENBLAS_TARGET_ARCH=BARCELONA` (AMD CPUs) or `OPENBLAS_TARGET_ARCH=NEHALEM` (Intel CPUs)<ul>Set `OPENBLAS_DYNAMIC_ARCH = 0` to disable compiling multiple architectures in a single binary.</ul></li><li> `OPENBLAS_NO_AVX = 1` disables AVX instructions, allowing OpenBLAS to compile with `OPENBLAS_DYNAMIC_ARCH = 1` using old versions of binutils </li><li> `USE_SYSTEM_BLAS=1` uses the system provided `libblas` <ul><li>Set `LIBBLAS=-lopenblas` and `LIBBLASNAME=libopenblas` to force the use of the system provided OpenBLAS when multiple BLAS versions are installed </li></ul></li></ul>
+ OpenBLAS build failure | Set one of the following build options in `Make.user` and build again: <ul><li> `OPENBLAS_TARGET_ARCH=BARCELONA` (AMD CPUs) or `OPENBLAS_TARGET_ARCH=NEHALEM` (Intel CPUs)<ul>Set `OPENBLAS_DYNAMIC_ARCH = 0` to disable compiling multiple architectures in a single binary.</ul></li><li> `OPENBLAS_NO_AVX2 = 1` disables AVX2 instructions, allowing OpenBLAS to compile with `OPENBLAS_DYNAMIC_ARCH = 1` using old versions of binutils </li><li> `USE_SYSTEM_BLAS=1` uses the system provided `libblas` <ul><li>Set `LIBBLAS=-lopenblas` and `LIBBLASNAME=libopenblas` to force the use of the system provided OpenBLAS when multiple BLAS versions are installed </li></ul></li></ul>
  Illegal Instruction error | Check if your CPU supports AVX while your OS does not (e.g. through virtualization, as described in [this issue](https://github.com/JuliaLang/julia/issues/3263)), and try installing LLVM 3.3 instead of LLVM 3.2.
 
 ### OS X
 
-It is essential to use a 64-bit gfortran to compile Julia dependencies. The gfortran-4.7 (and newer) compilers in brew and MacPorts work for building Julia. If you do not use brew or MacPorts, you can download and install [gfortran and gcc from hpc.sf.net](http://hpc.sf.net/). The HPC gfortran requires HPC gcc to be installed to function properly. 
+It is essential to use a 64-bit gfortran to compile Julia dependencies. The gfortran-4.7 (and newer) compilers in brew and MacPorts work for building Julia.
 Clang is now used by default to build Julia on OS X (10.7 and above). It is recommended that you upgrade to the latest version of Xcode (at least 4.3.3.). You need to have the Xcode command line utilities installed (and updated): run `xcode-select --install` in the terminal (in Xcode prior to v5.0, you can alternatively go to Preferences -> Downloads and select the Command Line Utilities). This will ensure that clang v3.1 is installed, which is the minimum version of `clang` required to build Julia. On OS X 10.6, the Julia build will automatically use `gcc`.
 
 If you have set `LD_LIBRARY_PATH` or `DYLD_LIBRARY_PATH` in your `.bashrc` or equivalent, Julia may be unable to find various libraries that come bundled with it. These environment variables need to be unset for Julia to work.
@@ -321,13 +319,13 @@ You can read about [getting started](http://julialang.org/manual/getting-started
 
 The following distributions include julia, but the versions may be out of date due to rapid development:
 
-* [Arch Linux package](https://aur.archlinux.org/packages.php?ID=56877)
+* [Arch Linux](https://www.archlinux.org/packages/community/i686/julia/)
 * [Debian GNU/Linux](http://packages.debian.org/sid/julia)
 * [Gentoo Linux](https://packages.gentoo.org/package/dev-lang/julia)
   * Git Package in the [Science overlay](https://wiki.gentoo.org/wiki/Project:Science/Overlay)
-* [openSUSE Linux](https://build.opensuse.org/package/show/home:Ronis_BR/julia)
-  * Git Package for openSUSE 13.1 - [1 Click Install](http://software.opensuse.org/ymp/home:Ronis_BR/openSUSE_13.1/julia.ymp?base=openSUSE%3A13.1&query=julia)
-  * Git Package for openSUSE Tumbleweed - [1 Click Install](http://software.opensuse.org/ymp/home:Ronis_BR/openSUSE_Tumbleweed/julia.ymp?base=openSUSE%3A13.1&query=julia)
+* openSUSE
+  * Stable package for openSUSE: [OBS page](https://build.opensuse.org/package/show/science/julia), [1 Click Install](http://software.opensuse.org/download.html?project=science&package=julia)
+  * Git package for openSUSE: [OBS page](https://build.opensuse.org/package/show/science/julia-unstable), [1 Click Install](http://software.opensuse.org/download.html?project=science&package=julia-unstable)
 * Ubuntu
   * [Ubuntu 13.04 (Raring Ringtail)](http://packages.ubuntu.com/raring/julia)
   * [Nightly builds PPA](https://launchpad.net/~staticfloat/+archive/julianightlies) (depends on the [julia-deps PPA](https://launchpad.net/~staticfloat/+archive/julia-deps/))

@@ -23,7 +23,6 @@ export
     GeneralizedSchur,
     Hessenberg,
     LU,
-    LUTridiagonal,
     LDLt,
     QR,
     QRPivoted,
@@ -42,8 +41,6 @@ export
     chol,
     cholfact,
     cholfact!,
-    cholpfact,
-    cholpfact!,
     cond,
     condskeel,
     copy!,
@@ -93,9 +90,6 @@ export
     qr,
     qrfact!,
     qrfact,
-    qrp,
-    qrpfact!,
-    qrpfact,
     rank,
     rref,
     scale,
@@ -103,7 +97,6 @@ export
     schur,
     schurfact!,
     schurfact,
-    solve,
     svd,
     svdfact!,
     svdfact,
@@ -124,7 +117,6 @@ export
     A_ldiv_B!,
     A_ldiv_Bc,
     A_ldiv_Bt,
-    A_mul_B,
     A_mul_B!,
     A_mul_Bc,
     A_mul_Bc!,
@@ -134,7 +126,6 @@ export
     A_rdiv_Bt,
     Ac_ldiv_B,
     Ac_ldiv_Bc,
-    Ac_mul_b_RFP,
     Ac_mul_B,
     Ac_mul_B!,
     Ac_mul_Bc,
@@ -205,11 +196,11 @@ include("linalg/lapack.jl")
 
 include("linalg/dense.jl")
 include("linalg/tridiag.jl")
+include("linalg/triangular.jl")
 include("linalg/factorization.jl")
 include("linalg/lu.jl")
 
 include("linalg/bunchkaufman.jl")
-include("linalg/triangular.jl")
 include("linalg/symmetric.jl")
 include("linalg/woodbury.jl")
 include("linalg/diagonal.jl")

@@ -5,7 +5,7 @@ addprocs(1)
 exp=5
 print("Testing repeated 10^$exp connect/disconnects....")
 
-(port, server) = open_any_tcp_port(8000)
+(port, server) = listenany(8000)
 
 @spawnat(1, 
     begin
@@ -28,7 +28,7 @@ close(server)
 println(" : OK")
 
 
-(port, server) = open_any_tcp_port(8000)
+(port, server) = listenany(8000)
 
 exp=9
 size = 10^exp
@@ -83,7 +83,7 @@ xfer_exp = 9
 print("Testing 10^$(xfer_exp) bytes of concurrent bidirectional transfers over a single socket connection...")
 
 
-(port, server) = open_any_tcp_port(8000)
+(port, server) = listenany(8000)
 
 rr_server = RemoteRef()
 rr_client = RemoteRef()

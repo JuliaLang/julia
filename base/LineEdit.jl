@@ -256,7 +256,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
                     cmove_col(termbuf, 1)
                 end
             else
-                cur_row += div(llength+indent-1, cols)
+                cur_row += div(max(indent+(llength-hasnl)-1,0), cols)
                 cmove_col(termbuf, indent+1)
                 write(termbuf, l)
             end

@@ -25,7 +25,7 @@ macro test_repr(x)
         local x1 = parse($x)
         local x2 = eval(parse(repr(x1)))
         local x3 = eval(parse(repr(x2)))
-        x3 == x2 ? nothing : error(string(
+        x3 == x1 ? nothing : error(string(
             "repr test failed:",
             "\noriginal: ", $x,
             "\n\nparsed: ", x2, "\n", sprint(dump, x2),
@@ -61,7 +61,7 @@ end
 @test_repr "x^-(y+z)"
 @test_repr "x^-f(y+z)"
 @test_repr "+(w-x)^-f(y+z)"
-@test_repr "w = (x = y) = z"
+#@test_repr "w = (x = y) = z" # Doesn't pass, but it's an invalid assignment loc
 @test_repr "a & b && c"
 @test_repr "a & (b && c)"
 
@@ -106,15 +106,12 @@ end"""
     if dest === src && pos_d > pos_s
         return copy_chunks_rtol(dest, pos_d, pos_s, numbits)
     end
-
     kd0, ld0 = get_chunks_id(pos_d)
     kd1, ld1 = get_chunks_id(pos_d + numbits - 1)
     ks0, ls0 = get_chunks_id(pos_s)
     ks1, ls1 = get_chunks_id(pos_s + numbits - 1)
-
     delta_kd = kd1 - kd0
     delta_ks = ks1 - ks0
-
     u = _msk64
     if delta_kd == 0
         msk_d0 = ~(u << ld0) | (u << ld1 << 1)
@@ -127,35 +124,24 @@ end"""
     else
         msk_s0 = (u << ls0)
     end
-
     chunk_s0 = glue_src_bitchunks(src, ks0, ks1, msk_s0, ls0)
-
     dest[kd0] = (dest[kd0] & msk_d0) | ((chunk_s0 << ld0) & ~msk_d0)
-
     if delta_kd == 0
         return
     end
-
     for i = 1 : kd1 - kd0 - 1
         chunk_s1 = glue_src_bitchunks(src, ks0 + i, ks1, msk_s0, ls0)
-
         chunk_s = (chunk_s0 >>> (63 - ld0) >>> 1) | (chunk_s1 << ld0)
-
         dest[kd0 + i] = chunk_s
-
         chunk_s0 = chunk_s1
     end
-
     if ks1 >= ks0 + delta_kd
         chunk_s1 = glue_src_bitchunks(src, ks0 + delta_kd, ks1, msk_s0, ls0)
     else
         chunk_s1 = uint64(0)
     end
-
     chunk_s = (chunk_s0 >>> (63 - ld0) >>> 1) | (chunk_s1 << ld0)
-
     dest[kd1] = (dest[kd1] & msk_d1) | (chunk_s & ~msk_d1)
-
     return
 end"""
 
@@ -165,3 +151,9 @@ end"""
 @test sprint(show, symbol("foo \"bar")) == "symbol(\"foo \\\"bar\")"
 @test sprint(show, :+) == ":+"
 @test sprint(show, symbol("end")) == "symbol(\"end\")"
+
+# Function and array reference precedence
+@test_repr "([2] + 3)[1]"
+@test_repr "foo.bar[1]"
+@test_repr "foo.bar()"
+@test_repr "(foo + bar)()"

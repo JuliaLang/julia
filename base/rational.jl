@@ -127,8 +127,8 @@ end
 ==(z::Complex , x::Rational) = isreal(z) & (real(z) == x)
 ==(x::Rational, z::Complex ) = isreal(z) & (real(z) == x)
 
-==(x::FloatingPoint, q::Rational) = ispow2(q.den) & (x == q.num/q.den) & (x*q.den == q.num)
-==(q::Rational, x::FloatingPoint) = ispow2(q.den) & (x == q.num/q.den) & (x*q.den == q.num)
+==(x::FloatingPoint, q::Rational) = count_ones(q.den) <= 1 & (x == q.num/q.den) & (x*q.den == q.num)
+==(q::Rational, x::FloatingPoint) = count_ones(q.den) <= 1 & (x == q.num/q.den) & (x*q.den == q.num)
 
 # TODO: fix inequalities to be in line with equality check
 < (x::Rational, y::Rational) = x.den == y.den ? x.num < y.num :

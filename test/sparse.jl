@@ -398,3 +398,29 @@ end
 #Issue 7507
 @test (i7507=sparsevec(Dict{Int64, Float64}(), 10))==spzeros(10,1)
 
+#Issue 7650
+let S = spzeros(3, 3)
+    @test size(reshape(S, 9, 1)) == (9,1)
+end
+
+let X = eye(5), M = rand(5,4), C = spzeros(3,3)
+    SX = sparse(X); SM = sparse(M)
+    VX = vec(X); VSX = vec(SX)
+    VM = vec(M); VSM1 = vec(SM); VSM2 = sparsevec(M)
+    VC = vec(C)
+    @test reshape(VX, (25,1)) == VSX
+    @test reshape(VM, (20,1)) == VSM1 == VSM2
+    @test size(VC) == (9,1)
+    @test nnz(VC) == 0
+    @test nnz(VSX) == 5
+end
+
+#Issue 7677
+let A = sprand(5,5,0.5,(n)->rand(Float64,n)), ACPY = copy(A)
+    B = reshape(A,25,1)
+    @test A == ACPY
+    C = reinterpret(Int64, A, (25, 1))
+    @test A == ACPY
+    D = reinterpret(Int64, B)
+    @test C == D
+end

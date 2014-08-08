@@ -256,8 +256,6 @@ function readbytes!(s::IOStream, b::Array{Uint8}, nb=length(b))
     return nr
 end
 
-readbytes(s::IOStream) = readbytes(s, filesize(s))
-
 ## Character streams ##
 const _chtmp = Array(Char, 1)
 function peekchar(s::IOStream)

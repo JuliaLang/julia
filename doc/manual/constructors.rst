@@ -321,7 +321,7 @@ types of the arguments given to the constructor. Here are some examples:
     Point{Float64}(1.0,2.5)
 
     julia> Point(1,2.5)
-    ERROR: no method Point{T<:Real}(Int64, Float64)
+    ERROR: `Point{T<:Real}` has no method matching Point{T<:Real}(::Int64, ::Float64)
 
     ## explicit T ##
 
@@ -330,6 +330,7 @@ types of the arguments given to the constructor. Here are some examples:
 
     julia> Point{Int64}(1.0,2.5)
     ERROR: InexactError()
+     in Point at no file
 
     julia> Point{Float64}(1.0,2.5)
     Point{Float64}(1.0,2.5)
@@ -414,7 +415,7 @@ However, other similar calls still don't work:
 .. doctest::
 
     julia> Point(1.5,2)
-    ERROR: no method Point{T<:Real}(Float64, Int64)
+    ERROR: `Point{T<:Real}` has no method matching Point{T<:Real}(::Float64, ::Int64)
 
 For a much more general way of making all such calls work sensibly, see
 :ref:`man-conversion-and-promotion`. At the risk
@@ -457,7 +458,7 @@ methods. To that end, here is beginning of
 `rational.jl <https://github.com/JuliaLang/julia/blob/master/base/rational.jl>`_,
 which implements Julia's :ref:`man-rational-numbers`::
 
-    type Rational{T<:Integer} <: Real
+    immutable Rational{T<:Integer} <: Real
         num::T
         den::T
 
@@ -487,7 +488,7 @@ which implements Julia's :ref:`man-rational-numbers`::
         complex(real(xy)//yy, imag(xy)//yy)
     end
 
-The first line — ``type Rational{T<:Int} <: Real`` — declares that
+The first line — ``immutable Rational{T<:Int} <: Real`` — declares that
 ``Rational`` takes one type parameter of an integer type, and is itself
 a real type. The field declarations ``num::T`` and ``den::T`` indicate
 that the data held in a ``Rational{T}`` object are a pair of integers of
@@ -534,7 +535,7 @@ whose real and imaginary parts are rationals:
 .. doctest::
 
     julia> (1 + 2im)//(1 - 2im)
-    -3//5 + 4//5im
+    -3//5 + 4//5*im
 
     julia> typeof(ans)
     Complex{Rational{Int64}} (constructor with 1 method)

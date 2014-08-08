@@ -41,6 +41,12 @@
 	 (string (deparse (cadr e)) (car e)))
 	((syntactic-op? (car e))
 	 (string (deparse (cadr e)) (car e) (deparse (caddr e))))
+	((memq (car e) '($ &))
+	 (string (car e) (deparse (cadr e))))
+	((eq? (car e) '|::|)
+	 (if (length> e 2)
+	     (string (deparse (cadr e)) (car e) (deparse (caddr e)))
+	     (string (car e) (deparse (cadr e)))))
 	(else (case (car e)
 		((tuple)
 		 (string #\( (deparse-arglist (cdr e))
@@ -1429,7 +1435,12 @@
     (if (pair? invalid)
 	(if (and (pair? (car invalid)) (eq? 'parameters (caar invalid)))
 	    (error "more than one semicolon in argument list")
-	    (error (string "invalid keyword argument \"" (deparse (car invalid)) "\""))))))
+	    (cond ((symbol? (car invalid))
+		   (error (string "keyword argument \"" (car invalid) "\" needs a default value")))
+		  (else
+		   (error (string "invalid keyword argument syntax \""
+				  (deparse (car invalid))
+				  "\" (expected assignment)"))))))))
 
 (define (lower-kw-call f kw pa)
   (check-kw-args kw)
@@ -2051,6 +2062,7 @@
 	    (local (:: ,(car is) (call (top typeof) ,(car lengths))))
 	    (= ,(car is) 0)
 	    (while (call (top !=) ,(car is) ,(car lengths))
+		   (scope-block
 		   (block
 		    (= ,(car is) (call (top +) ,(car is) 1))
 		    (= (tuple ,(cadr (car ranges)) ,(car states))
@@ -2058,7 +2070,7 @@
 		    ;; *** either this or force all for loop vars local
 		    ,.(map (lambda (r) `(local ,r))
 			   (lhs-vars (cadr (car ranges))))
-		    ,(construct-loops (cdr ranges) (cdr rv) (cdr is) (cdr states) (cdr lengths)))))))
+		    ,(construct-loops (cdr ranges) (cdr rv) (cdr is) (cdr states) (cdr lengths))))))))
 
     ;; Evaluate the comprehension
     `(block
@@ -2926,6 +2938,8 @@ So far only the second case can actually occur.
 	   (if vi
 	       (begin
 		 (vinfo:set-asgn! vi #t)
+		 ;; note: method defs require a memory loc. (issue #7658)
+		 (vinfo:set-sa! vi #f)
 		 (if (assq (car vi) captvars)
 		     (vinfo:set-iasg! vi #t)))))
 	 `(method ,(cadr e)
@@ -3248,9 +3262,10 @@ So far only the second case can actually occur.
 	   ((escape) (cadr e))
 	   ((using import importall export) (map unescape e))
 	   ((macrocall)
+        (if (or (eq? (cadr e) '@label) (eq? (cadr e) '@goto)) e
 	    `(macrocall ,.(map (lambda (x)
 				 (resolve-expansion-vars- x env m inarg))
-			       (cdr e))))
+			       (cdr e)))))
 	   ((symboliclabel) e)
 	   ((symbolicgoto) e)
 	   ((type)

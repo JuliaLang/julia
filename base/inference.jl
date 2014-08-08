@@ -63,7 +63,9 @@ function _iisconst(s::Symbol)
     isdefined(m,s) && (ccall(:jl_is_const, Int32, (Any, Any), m, s) != 0)
 end
 
-_ieval(x::ANY) = eval((inference_stack::CallStack).mod, x)
+_ieval(x::ANY) =
+    ccall(:jl_interpret_toplevel_expr_in, Any, (Any, Any, Ptr{Void}, Csize_t),
+          (inference_stack::CallStack).mod, x, C_NULL, 0)
 _iisdefined(x::ANY) = isdefined((inference_stack::CallStack).mod, x)
 
 _iisconst(s::SymbolNode) = _iisconst(s.name)
@@ -383,6 +385,12 @@ end
 t_func[getfield] = (2, 2, getfield_tfunc)
 t_func[setfield!] = (3, 3, (o, f, v)->v)
 const fieldtype_tfunc = function (A, s, name)
+    if isType(s)
+        # fieldtype of a type only depends on its kind
+        # i.e. fieldtype(SomeDataType, :types) === (Any...,)
+        # rather than a specific type tuple
+        s = typeof(s.parameters[1])
+    end
     if !isa(s,DataType)
         return Type
     end
@@ -390,7 +398,7 @@ const fieldtype_tfunc = function (A, s, name)
     if is(t,None)
         return t
     end
-    Type{t}
+    Type{isleaftype(t) || isa(t,TypeVar) ? t : TypeVar(:_, t)}
 end
 t_func[fieldtype] = (2, 2, fieldtype_tfunc)
 t_func[Box] = (1, 1, (a,)->Box)
@@ -1325,10 +1333,6 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     toprec = false
 
     s = { () for i=1:n }
-    recpts = IntSet()  # statements that depend recursively on our value
-    W = IntSet()
-    # initial set of pc
-    push!(W,1)
     # initial types
     s[1] = ObjectIdDict()
     for v in vars
@@ -1378,9 +1382,18 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     sv = StaticVarInfo(sparams, cenv, vars, label_counter(body))
     frame.sv = sv
 
+    recpts = IntSet()  # statements that depend recursively on our value
+    W = IntSet()
+
+    @label typeinf_top
+
+    old_s1 = nothing
+
     # exception handlers
     cur_hand = ()
     handler_at = { () for i=1:n }
+
+    push!(W,1)  # initial set of pc
 
     while !isempty(W)
         pc = first(W)
@@ -1434,26 +1447,24 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                         end
                     end
                 elseif is(hd,:type_goto)
-                    l = findlabel(labels,stmt.args[1])
                     for i = 2:length(stmt.args)
                         var = stmt.args[i]
                         if isa(var,SymbolNode)
                             var = var.name
                         end
-                        # type_goto provides a special update rule for the
-                        # listed vars: it feeds types directly to the
-                        # target statement as long as they are *different*,
-                        # not !issubtype like usual. this is because we want
-                        # the specific type inferred at the point of the
-                        # type_goto, not just any type containing it.
-                        # Otherwise "None" doesn't work; see issue #3821
+                        # Store types that need to be fed back via type_goto
+                        # in position s[1]. After finishing inference, if any
+                        # of these types changed, start over with the fed-back
+                        # types known from the beginning.
+                        # See issue #3821 (using !typeseq instead of !subtype),
+                        # and issue #7810.
                         vt = changes[var]
-                        ot = get(s[l],var,NF)
-                        if ot === NF || !typeseq(vt,ot)
-                            # l+1 is the statement after the label, where the
-                            # static_typeof occurs.
-                            push!(W, l+1)
-                            s[l+1][var] = vt
+                        ot = s[1][var]
+                        if !typeseq(vt,ot)
+                            if old_s1 === nothing
+                                old_s1 = copy(s[1])
+                            end
+                            s[1][var] = vt
                         end
                     end
                 elseif is(hd,:return)
@@ -1507,6 +1518,20 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
             end
         end
     end
+
+    if old_s1 !== nothing
+        # if any type_gotos changed, clear state and restart.
+        for (v_,t_) in s[1]
+            if !typeseq(t_, old_s1[v_])
+                for ll = 2:length(s)
+                    s[ll] = ()
+                end
+                empty!(W)
+                @goto typeinf_top
+            end
+        end
+    end
+
     #print("\n",ast,"\n")
     #if dbg print("==> ", frame.result,"\n") end
     if (toprec && typeseq(curtype, frame.result)) || !isa(frame.prev,CallStack)
@@ -1656,7 +1681,10 @@ function type_annotate(ast::Expr, states::Array{Any,1}, sv::ANY, rettype::ANY,
     body = ast.args[3].args::Array{Any,1}
     for i=1:length(body)
         st_i = states[i]
-        body[i] = eval_annotate(body[i], (st_i === () ? emptydict : st_i), sv, decls, closures)
+        if st_i !== ()
+            # st_i === ()  =>  unreached statement  (see issue #7836)
+            body[i] = eval_annotate(body[i], st_i, sv, decls, closures)
+        end
     end
     ast.args[3].typ = rettype
 
@@ -2944,7 +2972,7 @@ function tuple_elim_pass(ast::Expr)
                 continue
             end
 
-            splice!(body, i)  # remove tuple allocation
+            deleteat!(body, i)  # remove tuple allocation
             # convert tuple allocation to a series of local var assignments
             vals = cell(nv)
             n_ins = 0

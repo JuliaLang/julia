@@ -13,7 +13,7 @@ const foo2_keymap = {
     'b' => :( global b_foo; b_foo += 1)
 }
 
-a_bar = 0 
+a_bar = 0
 b_bar = 0
 
 const bar_keymap = {
@@ -225,3 +225,21 @@ let
     LineEdit.edit_yank(s)
     @test bytestring(buf.data[1:buf.size]) == "second line\nfirst line\nthird line"
 end
+
+# Issue 7845
+# First construct a problematic string:
+# julia> is 6 characters + 1 character for space,
+# so the rest of the terminal is 73 characters
+#########################################################################
+buf = IOBuffer(
+"""
+begin
+print("A very very very very very very very very very very very very ve")
+end""")
+seek(buf,4)
+outbuf = IOBuffer()
+termbuf = Base.Terminals.TerminalBuffer(outbuf)
+term = TestHelpers.FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
+s = LineEdit.refresh_multi_line(termbuf, term, buf,
+    Base.LineEdit.InputAreaState(0,0), "julia> ", indent = 7)
+@test s == Base.LineEdit.InputAreaState(3,1)

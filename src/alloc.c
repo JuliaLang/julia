@@ -467,7 +467,7 @@ static jl_sym_t **symtab_lookup(jl_sym_t **ptree, const char *str)
     uptrint_t h = hash_symbol(str, strlen(str));
 
     // Tree nodes sorted by major key of (int(hash)) and minor key o (str).
-    while(*ptree != NULL) {
+    while (*ptree != NULL) {
         x = (int)(h-(*ptree)->hash);
         if (x == 0) {
             x = strcmp(str, (*ptree)->name);
@@ -521,7 +521,7 @@ DLLEXPORT jl_sym_t *jl_gensym(void)
     return jl_symbol(n);
 }
 
-DLLEXPORT jl_sym_t *jl_tagged_gensym(const char* str, int32_t len)
+DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, int32_t len)
 {
     static char gs_name[14];
     char *name = (char*)alloca(sizeof(gs_name)+len+3);
