@@ -1,17 +1,31 @@
-language: cpp
+language: cpp # make a branch where you change this to objective-c if you want to test on Mac before having multi-OS support enabled
+os:
+  - linux
+  - osx
 compiler:
-  - clang
+  - gcc
 notifications:
   email: false
 env:
   matrix:
-    - JULIAVERSION="juliareleases"
-    - JULIAVERSION="julianightlies"
+    - JULIAVERSION="releases"
+    - JULIAVERSION="nightlies"
 before_install:
-  - sudo add-apt-repository ppa:staticfloat/julia-deps -y
-  - sudo add-apt-repository ppa:staticfloat/${JULIAVERSION} -y
-  - sudo apt-get update -qq -y
-  - sudo apt-get install libpcre3-dev julia -y
+  - if [ `uname` = "Linux" ]; then
+      sudo add-apt-repository ppa:staticfloat/julia-deps -y;
+      sudo add-apt-repository ppa:staticfloat/julia${JULIAVERSION} -y;
+      sudo apt-get update -qq -y;
+      sudo apt-get install libpcre3-dev julia -y;
+    elif [ `uname` = "Darwin" ]; then
+      if [ "$JULIAVERSION" = "nightlies" ]; then
+        wget -O julia.dmg "http://status.julialang.org/download/osx10.7+";
+      else
+        wget -O julia.dmg "http://status.julialang.org/stable/osx10.7+";
+      fi;
+      hdiutil mount julia.dmg;
+      cp -Ra /Volumes/Julia/*.app/Contents/Resources/julia ~;
+      export PATH="$PATH:$(echo ~)/julia/bin";
+    fi
   - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
 script:
   - julia -e 'Pkg.init(); Pkg.clone(pwd()); include(Pkg.dir("SHA","test","runtests.jl"))'
