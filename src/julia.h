@@ -247,12 +247,6 @@ typedef struct {
     unsigned imported:1;
 } jl_binding_t;
 
-typedef struct _jl_callback_t {
-    JL_DATA_TYPE
-    jl_function_t *function;
-    jl_tuple_t *types;
-} jl_callback_t;
-
 typedef struct _jl_module_t {
     JL_DATA_TYPE
     jl_sym_t *name;
@@ -841,6 +835,8 @@ DLLEXPORT void jl_too_many_args(const char *fname, int max);
 DLLEXPORT void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got);
 DLLEXPORT void jl_type_error_rt(const char *fname, const char *context,
                                 jl_value_t *ty, jl_value_t *got);
+DLLEXPORT void jl_type_error_rt_line(const char *fname, const char *context,
+                                     jl_value_t *ty, jl_value_t *got, int line);
 jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na);
 DLLEXPORT void jl_undefined_var_error(jl_sym_t *var);
 void jl_check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx);
@@ -900,9 +896,14 @@ DLLEXPORT uv_lib_t *jl_load_dynamic_library(char *fname, unsigned flags);
 DLLEXPORT uv_lib_t *jl_load_dynamic_library_e(char *fname, unsigned flags);
 DLLEXPORT void *jl_dlsym_e(uv_lib_t *handle, char *symbol);
 DLLEXPORT void *jl_dlsym(uv_lib_t *handle, char *symbol);
+DLLEXPORT int jl_uv_dlopen(const char *filename, uv_lib_t *lib, unsigned flags);
 DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle);
 char *jl_dlfind_win32(char *name);
 DLLEXPORT int add_library_mapping(char *lib, void *hnd);
+
+#if defined(__linux__)
+DLLEXPORT const char *jl_lookup_soname(char *pfx, size_t n);
+#endif
 
 // compiler
 void jl_compile(jl_function_t *f);
@@ -916,8 +917,10 @@ jl_value_t *jl_interpret_toplevel_thunk_with(jl_lambda_info_t *lam,
 jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e);
 jl_value_t *jl_interpret_toplevel_expr_with(jl_value_t *e,
                                             jl_value_t **locals, size_t nl);
-jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
-                                          jl_value_t **locals, size_t nl);
+DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
+                                                    jl_value_t **locals, size_t nl);
+jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
+                           jl_value_t *sp, jl_expr_t *ast, int sparams, int allow_alloc);
 int jl_is_toplevel_only_expr(jl_value_t *e);
 jl_module_t *jl_base_relative_to(jl_module_t *m);
 void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
@@ -1265,10 +1268,10 @@ DLLEXPORT int jl_puts(char *str, uv_stream_t *stream);
 DLLEXPORT int jl_pututf8(uv_stream_t *s, uint32_t wchar);
 
 DLLEXPORT uv_timer_t *jl_make_timer(uv_loop_t *loop, jl_value_t *julia_struct);
-DLLEXPORT int jl_timer_stop(uv_timer_t* timer);
+DLLEXPORT int jl_timer_stop(uv_timer_t *timer);
 
 DLLEXPORT uv_tcp_t *jl_tcp_init(uv_loop_t *loop);
-DLLEXPORT int jl_tcp_bind(uv_tcp_t* handle, uint16_t port, uint32_t host, unsigned int flags);
+DLLEXPORT int jl_tcp_bind(uv_tcp_t *handle, uint16_t port, uint32_t host, unsigned int flags);
 
 DLLEXPORT int jl_sizeof_ios_t(void);
 

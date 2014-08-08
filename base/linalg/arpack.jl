@@ -47,58 +47,54 @@ function aupd_wrapper(T, matvecA::Function, matvecB::Function, solveSI::Function
             naupd(ido, bmat, n, which, nev, TOL, resid, ncv, v, n,
                   iparam, ipntr, workd, workl, lworkl, info)
         end
-
-        # Check for warnings and errors
-        # Refer to ex-*.doc files in ARPACK/DOCUMENTS for calling sequence
-        if info[1] == 3; warn("try eigs/svds with a larger value for ncv"); end
-        if info[1] == 1; warn("maximum number of iterations reached; check nconv for number of converged eigenvalues"); end
-        if info[1] < 0; throw(ARPACKException(info[1])); end
-
+        
         load_idx = ipntr[1]+zernm1
         store_idx = ipntr[2]+zernm1
         x = workd[load_idx]
-        if ido[1] == -1
-            if mode == 1
+        if mode == 1  # corresponds to dsdrv1, dndrv1 or zndrv1
+            if ido[1] == 1
                 workd[store_idx] = matvecA(x)
-            elseif mode == 2
-                if sym
-                    temp = matvecA(x)
-                    workd[load_idx] = temp    # overwrite as per Remark 5 in dsaupd.f
-                    workd[store_idx] = solveSI(temp)
-                else
-                    workd[store_idx] = solveSI(matvecA(x))
-                end
-            elseif mode == 3
-                if bmat == "I"
-                    workd[store_idx] = solveSI(x)
-                elseif bmat == "G"
-                    workd[store_idx] = solveSI(matvecB(x))
-                end
+            elseif ido[1] == 99
+                break
+            else
+                error("Internal ARPACK error")
             end
-        elseif ido[1] == 1
-            if mode == 1
-                workd[store_idx] = matvecA(x)
-            elseif mode == 2
-                if sym
-                    temp = matvecA(x)
-                    workd[load_idx] = temp
-                    workd[store_idx] = solveSI(temp)
-                else
-                    workd[store_idx] = solveSI(matvecA(x))
-                end
-            elseif mode == 3
-                if bmat == "I"
-                    workd[store_idx] = solveSI(x)
-                else
-                    workd[store_idx] = solveSI(workd[ipntr[3]+zernm1])
-                end
+        elseif mode == 3 && bmat == "I" # corresponds to dsdrv2, dndrv2 or zndrv2
+            if ido[1] == -1 || ido[1] == 1
+                workd[store_idx] = solveSI(x)
+            elseif ido[1] == 99
+                break
+            else
+                error("Internal ARPACK error")
             end
-        elseif ido[1] == 2
-            workd[store_idx] = matvecB(x)
-        elseif ido[1] == 99
-            break
+        elseif mode == 2 # corresponds to dsdrv3, dndrv3 or zndrv3
+            if ido[1] == -1 || ido[1] == 1
+                tmp = matvecA(x)
+                if sym
+                    workd[load_idx] = tmp    # overwrite as per Remark 5 in dsaupd.f
+                end
+                workd[store_idx] = solveSI(tmp)
+            elseif ido[1] == 2
+                workd[store_idx] = matvecB(x)
+            elseif ido[1] == 99
+                break
+            else
+                error("Internal ARPACK error")
+            end
+        elseif mode == 3 && bmat == "G" # corresponds to dsdrv4, dndrv4 or zndrv4
+            if ido[1] == -1
+                workd[store_idx] = solveSI(matvecB(x))
+            elseif  ido[1] == 1
+                workd[store_idx] = solveSI(workd[ipntr[3]+zernm1])
+            elseif ido[1] == 2
+                workd[store_idx] = matvecB(x)
+            elseif ido[1] == 99
+                break
+            else
+                error("Internal ARPACK error")
+            end
         else
-            error("Internal ARPACK error")
+            error("ARPACK mode not yet supported")
         end
     end
     
@@ -114,31 +110,50 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
     select = Array(BlasInt, ncv)
     info   = zeros(BlasInt, 1)
     
+    dmap = x->abs(x)
+    if iparam[7] == 3 # shift-and-invert
+        dmap = x->abs(1./(x-sigma))
+    elseif which == "LR" || which == "LA" || which == "BE"
+        dmap = x->real(x)
+    elseif which == "SR" || which == "SA"
+        dmap = x->-real(x)
+    elseif which == "LI"
+        dmap = x->imag(x)
+    elseif which == "SI"
+        dmap = x->-imag(x)
+    end
+    
     if cmplx
 
         d = Array(T, nev+1)
-        sigma = ones(T, 1)*sigma
+        sigmar = ones(T, 1)*sigma
         workev = Array(T, 2ncv)
-        neupd(ritzvec, howmny, select, d, v, ldv, sigma, workev,
+        neupd(ritzvec, howmny, select, d, v, ldv, sigmar, workev,
               bmat, n, which, nev, TOL, resid, ncv, v, ldv,
               iparam, ipntr, workd, workl, lworkl, rwork, info)
         if info[1] != 0; throw(ARPACKException(info[1])); end
-        return ritzvec ? (d[1:nev], v[1:n, 1:nev],iparam[5],iparam[3],iparam[9],resid) : (d[1:nev],iparam[5],iparam[3],iparam[9],resid)
+        
+        p = sortperm(dmap(d[1:nev]), rev=true)
+        return ritzvec ? (d[p], v[1:n, p],iparam[5],iparam[3],iparam[9],resid) : (d[p],iparam[5],iparam[3],iparam[9],resid)
 
     elseif sym
 
         d = Array(T, nev)
-        sigma = ones(T, 1)*sigma
-        seupd(ritzvec, howmny, select, d, v, ldv, sigma,
+        sigmar = ones(T, 1)*sigma
+        seupd(ritzvec, howmny, select, d, v, ldv, sigmar,
               bmat, n, which, nev, TOL, resid, ncv, v, ldv,
               iparam, ipntr, workd, workl, lworkl, info) 
         if info[1] != 0; throw(ARPACKException(info[1])); end
-        return ritzvec ? (d, v[1:n, 1:nev],iparam[5],iparam[3],iparam[9],resid) : (d,iparam[5],iparam[3],iparam[9],resid)
+            
+        p = sortperm(dmap(d), rev=true)
+        return ritzvec ? (d[p], v[1:n, p],iparam[5],iparam[3],iparam[9],resid) : (d,iparam[5],iparam[3],iparam[9],resid)
 
     else
 
         dr     = Array(T, nev+1)
         di     = Array(T, nev+1)
+        fill!(dr,NaN)
+        fill!(di,NaN)
         sigmar = ones(T, 1)*real(sigma)
         sigmai = ones(T, 1)*imag(sigma)
         workev = Array(T, 3*ncv)
@@ -146,20 +161,38 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
               workev, bmat, n, which, nev, TOL, resid, ncv, v, ldv,
               iparam, ipntr, workd, workl, lworkl, info)
         if info[1] != 0; throw(ARPACKException(info[1])); end
-        evec = complex(zeros(T, n, nev+1), zeros(T, n, nev+1))
+        evec = complex(Array(T, n, nev+1), Array(T, n, nev+1))
+        
         j = 1
         while j <= nev
             if di[j] == 0
                 evec[:,j] = v[:,j]
-            else
+            else # For complex conjugate pairs
                 evec[:,j]   = v[:,j] + im*v[:,j+1]
                 evec[:,j+1] = v[:,j] - im*v[:,j+1]
                 j += 1
             end
             j += 1
         end
-        d = complex(dr[1:nev],di[1:nev])
-        return ritzvec ? (d, evec[1:n, 1:nev],iparam[5],iparam[3],iparam[9],resid) : (d,iparam[5],iparam[3],iparam[9],resid)
+        if j == nev+1 && !isnan(di[j])
+            if di[j] == 0
+                evec[:,j] = v[:,j]
+                j += 1
+            else
+                error("Arpack unexpected behavior")
+            end
+        end
+        
+        d = complex(dr,di)
+        
+        if j == nev+1
+            p = sortperm(dmap(d[1:nev]), rev=true)
+        else
+            p = sortperm(dmap(d), rev=true)
+            p = p[1:nev]
+        end
+        
+        return ritzvec ? (d[p], evec[1:n, p],iparam[5],iparam[3],iparam[9],resid) : (d[p],iparam[5],iparam[3],iparam[9],resid)
     end
     
 end

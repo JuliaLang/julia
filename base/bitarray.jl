@@ -520,7 +520,7 @@ function resize!(B::BitVector, n::Integer)
     n == n0 && return B
     n >= 0 || throw(BoundsError())
     if n < n0
-        splice!(B, n+1:n0)
+        deleteat!(B, n+1:n0)
         return B
     end
     Bc = B.chunks
@@ -1055,11 +1055,6 @@ end
 function (==)(A::BitArray, B::BitArray)
     size(A) != size(B) && return false
     return A.chunks == B.chunks
-end
-
-function (!=)(A::BitArray, B::BitArray)
-    size(A) != size(B) && return true
-    return A.chunks != B.chunks
 end
 
 

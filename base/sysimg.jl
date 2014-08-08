@@ -177,7 +177,6 @@ big(n::Integer) = convert(BigInt,n)
 big(x::FloatingPoint) = convert(BigFloat,x)
 big(q::Rational) = big(num(q))//big(den(q))
 big(z::Complex) = complex(big(real(z)),big(imag(z)))
-@vectorize_1arg Number big
 
 # more hashing definitions
 include("hashing2.jl")

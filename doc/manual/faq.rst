@@ -149,11 +149,12 @@ argument. Since Julia can't predict the return type of this function at
 compile-time, any computation that uses it will have to guard against both
 types possibly occurring, making generation of fast machine code difficult.
 
-Why does Julia give a ``DomainError`` for perfectly-sensible operations?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. _man-domain-error:
 
-Certain operations make perfect mathematical sense but result in
-errors::
+Why does Julia give a ``DomainError`` for certain seemingly-sensible operations?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Certain operations make mathematical sense but result in errors::
 
     julia> sqrt(-2.0)
     ERROR: DomainError
@@ -219,7 +220,7 @@ generation of efficient code. If you can't count on the results of integer
 operations being integers, it's impossible to generate fast, simple code the
 way C and Fortran compilers do.
 
-A variation on this approach, which avoids the appearance of type instabilty is to merge the ``Int`` and ``BigInt`` types into a single hybrid integer type, that internally changes representation when a result no longer fits into the size of a machine integer. While this superficially avoids type-instability at the level of Julia code, it just sweeps the problem under the rug by foisting all of the same difficulties onto the C code implementing this hybrid integer type. This approach *can* be made to work and can even be made quite fast in many cases, but has several drawbacks. One problem is that the in-memory representation of integers and arrays of integers no longer match the natural representation used by C, Fortran and other languages with native machine integers. Thus, to interoperate with those languages, we would ultimately need to introduce native integer types anyway. Any unbounded representation of integers cannot have a fixed number of bits, and thus cannot be stored inline in an array with fixed-size slots – large integer values will always require separate heap-allcoated storage. And of course, no matter how clever a hybrid integer implementation one uses, there are always performance traps – situations where performance degrades unexpectedly. Complex representation, lack of interoperability with C and Fortran, the inability to represent integer arrays without additional heap storage, and unpredictable performance characteristics make even the cleverest hybrid integer implementations a poor choice for high-performance numerical work.
+A variation on this approach, which avoids the appearance of type instabilty is to merge the ``Int`` and ``BigInt`` types into a single hybrid integer type, that internally changes representation when a result no longer fits into the size of a machine integer. While this superficially avoids type-instability at the level of Julia code, it just sweeps the problem under the rug by foisting all of the same difficulties onto the C code implementing this hybrid integer type. This approach *can* be made to work and can even be made quite fast in many cases, but has several drawbacks. One problem is that the in-memory representation of integers and arrays of integers no longer match the natural representation used by C, Fortran and other languages with native machine integers. Thus, to interoperate with those languages, we would ultimately need to introduce native integer types anyway. Any unbounded representation of integers cannot have a fixed number of bits, and thus cannot be stored inline in an array with fixed-size slots – large integer values will always require separate heap-allocated storage. And of course, no matter how clever a hybrid integer implementation one uses, there are always performance traps – situations where performance degrades unexpectedly. Complex representation, lack of interoperability with C and Fortran, the inability to represent integer arrays without additional heap storage, and unpredictable performance characteristics make even the cleverest hybrid integer implementations a poor choice for high-performance numerical work.
 
 An alternative to using hybrid integers or promoting to BigInts is to use
 saturating integer arithmetic, where adding to the largest integer value
@@ -250,7 +251,7 @@ value. This is precisely what Matlab™ does::
 
      -9223372036854775808
 
-At first blush, this seems reasonable enough since 9223372036854775807 is much closer to 9223372036854775808 than -9223372036854775808 is and integers are still represented with a fixed size in a natural way that is compatible with C and Fortran. Saturated integer arithmetic, however, is deeply problematic. The first and most obvious issue is that this is not the way machine integer arithmetic works, so implementing saturated operations requires emiting instructions after each machine integer operation to check for underflow or overflow and replace the result with ``typemin(Int)`` or ``typemax(Int)`` as appropriate. This alone expands each integer operation from a single, fast instruction into half a dozen instructions, probably including branches. Ouch. But it gets worse – saturating integer arithmetic isn't associative.Consider this Matlab computation::
+At first blush, this seems reasonable enough since 9223372036854775807 is much closer to 9223372036854775808 than -9223372036854775808 is and integers are still represented with a fixed size in a natural way that is compatible with C and Fortran. Saturated integer arithmetic, however, is deeply problematic. The first and most obvious issue is that this is not the way machine integer arithmetic works, so implementing saturated operations requires emiting instructions after each machine integer operation to check for underflow or overflow and replace the result with ``typemin(Int)`` or ``typemax(Int)`` as appropriate. This alone expands each integer operation from a single, fast instruction into half a dozen instructions, probably including branches. Ouch. But it gets worse – saturating integer arithmetic isn't associative. Consider this Matlab computation::
 
     >> n = int64(2)^62
     4611686018427387904
@@ -457,7 +458,7 @@ the wrapper object.  For example:
     MyType{Float64} (constructor with 1 method)
 
     julia> typeof(t)
-    MyStillAmbiguousType (constructor with 1 method)
+    MyStillAmbiguousType (constructor with 2 methods)
 
 The type of field ``a`` can be readily determined from the type of
 ``m``, but not from the type of ``t``.  Indeed, in ``t`` it's possible
@@ -555,7 +556,7 @@ For example:
     julia> c = MySimpleContainer(1:3);
 
     julia> typeof(c)
-    MySimpleContainer{Range1{Int64}} (constructor with 1 method)
+    MySimpleContainer{UnitRange{Int64}} (constructor with 1 method)
 
     julia> c = MySimpleContainer([1:3]);
 

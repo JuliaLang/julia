@@ -3,7 +3,7 @@ module Generate
 import ..Git, ..Read
 
 copyright_year() = readchomp(`date +%Y`)
-copyright_name() = readchomp(`git config --global --get user.name`)
+copyright_name(dir::String) = readchomp(Git.cmd(`config --get user.name`, dir=dir))
 github_user() = readchomp(ignorestatus(`git config --global --get github.user`))
 
 function git_contributors(dir::String, n::Int=typemax(Int))
@@ -31,21 +31,23 @@ function package(
     pkg::String,
     license::String;
     force::Bool = false,
-    authors::String = "",
+    authors::Union(String,Array) = "",
     years::Union(Int,String) = copyright_year(),
     user::String = github_user(),
+    config::Dict = {},
 )
     isnew = !ispath(pkg)
     try
         if isnew
             url = isempty(user) ? "" : "git://github.com/$user/$pkg.jl.git"
-            Generate.init(pkg,url)
+            Generate.init(pkg,url,config=config)
         else
             Git.dirty(dir=pkg) && error("$pkg is dirty – commit or stash your changes")
         end
+
         Git.transact(dir=pkg) do
             if isempty(authors)
-                authors = isnew ? copyright_name() : git_contributors(pkg,5)
+                authors = isnew ? copyright_name(pkg) : git_contributors(pkg,5)
             end
             Generate.license(pkg,license,years,authors,force=force)
             Generate.readme(pkg,user,force=force)
@@ -81,10 +83,14 @@ function package(
     end
 end
 
-function init(pkg::String, url::String="")
+function init(pkg::String, url::String=""; config::Dict=Dict())
     if !ispath(pkg)
         info("Initializing $pkg repo: $(abspath(pkg))")
         Git.run(`init -q $pkg`)
+
+        for (key,val) in config
+            Git.run(`config $key $val`, dir=pkg)
+        end
         Git.run(`commit -q --allow-empty -m "initial empty commit"`, dir=pkg)
     end
     isempty(url) && return

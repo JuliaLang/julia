@@ -107,14 +107,15 @@ function normalize_string(s::String, nf::Symbol)
                     throw(ArgumentError(":$nf is not one of :NFC, :NFD, :NFKC, :NFKD")))
 end
     
-# returns UTF8PROC_CATEGORY code in 0..30 giving Unicode category
+# returns UTF8PROC_CATEGORY code in 1:30 giving Unicode category
 function category_code(c)
-    # note: utf8proc returns 0, not UTF8PROC_CATEGORY_CN, for unassigned c
     c > 0x10FFFF && return 0x0000 # see utf8proc_get_property docs
-    unsafe_load(ccall(:utf8proc_get_property, Ptr{Uint16}, (Int32,), c))
+    cat = unsafe_load(ccall(:utf8proc_get_property, Ptr{Uint16}, (Int32,), c))
+    # note: utf8proc returns 0, not UTF8PROC_CATEGORY_CN, for unassigned c
+    cat == 0 ? UTF8PROC_CATEGORY_CN : cat
 end
 
-is_assigned_char(c) = category_code(c) != 0
+is_assigned_char(c) = category_code(c) != UTF8PROC_CATEGORY_CN
 
 # TODO: use UTF8PROC_CHARBOUND to extract graphemes from a string, e.g. to iterate over graphemes?
 

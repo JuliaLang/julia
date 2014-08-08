@@ -770,6 +770,8 @@ end
 @test 0.5 == 1//2
 @test 0.1 != 1//10
 @test 0.1 == 3602879701896397//36028797018963968
+@test Inf == 1//0 == 2//0 == typemax(Int)//0
+@test -Inf == -1//0 == -2//0 == -typemax(Int)//0
 @test realmin() != 1//(BigInt(2)^1022+1)
 @test realmin() == 1//(BigInt(2)^1022)
 @test realmin() != 1//(BigInt(2)^1022-1)
@@ -1813,3 +1815,11 @@ end
 
 # issue #7508
 @test_throws ErrorException reinterpret(Int, 0x01)
+
+# issue #41
+ndigf(n) = float64(log(float32(n)))
+@test float64(log(float32(256))) == ndigf(256) == 5.545177459716797
+
+# cmp on unsigned integers (see commit 24b236321e03c6d9b8cb91a450f567256a793196)
+@test cmp(0x77777777,0x88888888) == -1
+@test cmp(0x3959dcc5d7fd177b67df4e10bc350850, 0xd63d5b1183221b0a9e38c6809b33cdec) == -1

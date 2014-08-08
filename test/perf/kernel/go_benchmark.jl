@@ -1,7 +1,7 @@
 # Benchmark implementing the board logic for the game of go and
 # exercising it by playing random games. Derived from
 # http://www.lysator.liu.se/~gunnar/gtp/brown-1.0.tar.gz
-import Base.ref
+import Base.getindex
 
 const EMPTY = 0
 const WHITE = 1
@@ -79,8 +79,8 @@ function init(board::Board, n::Int, seed::Uint32)
   board
 end
 
-ref(board::Board, pos::Int) = board.board[pos]
-ref(board::Board, i::Int, j::Int) = board.board[i, j]
+getindex(board::Board, pos::Int) = board.board[pos]
+getindex(board::Board, i::Int, j::Int) = board.board[i, j]
 
 # Functions to convert between 1D and 2D coordinates. The 2D coordinate
 # (i, j) points to row i and column j, starting with (1,1) in the

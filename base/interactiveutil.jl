@@ -161,7 +161,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
         end
         println(io,         "  uname: ",readchomp(`uname -mprsv`))
         println(io,         "Memory: $(Sys.total_memory()/2^30) GB ($(Sys.free_memory()/2^20) MB free)")
-        try println(io,     "Uptime: $(Sys.uptime()) sec") catch end
+        try println(io,     "Uptime: $(Sys.uptime()) sec") end
         print(io,           "Load Avg: ")
         print_matrix(io,    Sys.loadavg()')
         println(io          )
@@ -176,6 +176,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     end
     println(io,             "  LAPACK: ",liblapack_name)
     println(io,             "  LIBM: ",libm_name)
+    println(io,             "  LLVM: libLLVM-",libllvm_version)
     if verbose
         println(io,         "Environment:")
         for (k,v) in ENV
@@ -341,5 +342,7 @@ function workspace()
          Expr(:toplevel,
               :(const Base = $(Expr(:quote, b))),
               :(const LastMain = $(Expr(:quote, last)))))
+    empty!(package_list)
+    empty!(package_locks)
     nothing
 end

@@ -30,9 +30,9 @@ immutable StepRange{T,S} <: OrdinalRange{T,S}
                 # start - step, which leads to a range that looks very large instead
                 # of empty.
                 if step > z
-                    last = start - one(step)
+                    last = start - one(stop-start)
                 else
-                    last = start + one(step)
+                    last = start + one(stop-start)
                 end
             else
                 diff = stop - start
@@ -199,13 +199,17 @@ length{T<:Union(Int,Uint,Int64,Uint64)}(r::UnitRange{T}) =
     checked_add(checked_sub(r.stop, r.start), one(T))
 
 # some special cases to favor default Int type
-if Int === Int64
-function length(r::StepRange{Uint32})
-    isempty(r) && return int64(0)
-    div(int64(r.stop+r.step - r.start), int64(r.step))
-end
+let smallint = (Int === Int64 ?
+                Union(Int8,Uint8,Int16,Uint16,Int32,Uint32) :
+                Union(Int8,Uint8,Int16,Uint16))
+    global length
 
-length(r::UnitRange{Uint32}) = int64(r.stop - r.start + 1)
+    function length{T <: smallint}(r::StepRange{T})
+        isempty(r) && return int(0)
+        div(int(r.stop+r.step - r.start), int(r.step))
+    end
+
+    length{T <: smallint}(r::UnitRange{T}) = int(r.stop - r.start + 1)
 end
 
 first{T}(r::OrdinalRange{T}) = oftype(T, r.start)
@@ -264,11 +268,20 @@ function getindex(r::UnitRange, s::UnitRange{Int})
         if !(1 <= last(s) <= length(r))
             throw(BoundsError())
         end
-        st = r[s.start]
-    else
-        st = oftype(r.start, r.start + s.start-1)
     end
+    st = oftype(r.start, r.start + s.start-1)
     range(st, sl)
+end
+
+function getindex(r::UnitRange, s::StepRange{Int})
+    sl = length(s)
+    if sl > 0
+        if !(1 <= first(s) <= length(r) && 1 <= last(s) <= length(r))
+            throw(BoundsError())
+        end
+    end
+    st = oftype(r.start, r.start + s.start-1)
+    range(st, step(s), sl)
 end
 
 function getindex(r::StepRange, s::Range{Int})
@@ -393,9 +406,9 @@ function intersect{T1<:Integer, T2<:Integer}(r::StepRange{T1}, s::StepRange{T2})
     m:a:n
 end
 
-function intersect(r::Range, s::Range...)
-    i = r
-    for t in s
+function intersect(r1::Range, r2::Range, r3::Range, r::Range...)
+    i = intersect(intersect(r1, r2), r3)
+    for t in r
         i = intersect(i, t)
     end
     i

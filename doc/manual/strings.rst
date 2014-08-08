@@ -227,11 +227,11 @@ a normal value:
 
     julia> str[end/3]
     ERROR: InexactError()
-     in getindex at string.jl:58
+     in getindex at string.jl:59
 
     julia> str[end/4]
     ERROR: InexactError()
-     in getindex at string.jl:58
+     in getindex at string.jl:59
 
 Using an index less than 1 or greater than ``end`` raises an error:
 
@@ -239,11 +239,11 @@ Using an index less than 1 or greater than ``end`` raises an error:
 
     julia> str[0]
     ERROR: BoundsError()
-     in getindex at ascii.jl:11
+     in getindex at /Users/sabae/src/julia/usr/lib/julia/sys.dylib (repeats 2 times)
 
     julia> str[end+1]
     ERROR: BoundsError()
-     in getindex at ascii.jl:11
+     in getindex at /Users/sabae/src/julia/usr/lib/julia/sys.dylib (repeats 2 times)
 
 You can also extract a substring using range indexing:
 
@@ -299,11 +299,13 @@ such an invalid byte index, an error is thrown:
 
     julia> s[2]
     ERROR: invalid UTF-8 character index
-     in getindex at utf8.jl:63
+     in next at ./utf8.jl:68
+     in getindex at string.jl:57
 
     julia> s[3]
     ERROR: invalid UTF-8 character index
-     in getindex at utf8.jl:63
+     in next at ./utf8.jl:68
+     in getindex at string.jl:57
 
     julia> s[4]
     ' '
@@ -624,9 +626,7 @@ You can extract the following info from a ``RegexMatch`` object:
 For when a capture doesn't match, instead of a substring, ``m.captures``
 contains ``nothing`` in that position, and ``m.offsets`` has a zero
 offset (recall that indices in Julia are 1-based, so a zero offset into
-a string is invalid). Here's is a pair of somewhat contrived examples:
-
-.. doctest::
+a string is invalid). Here's is a pair of somewhat contrived examples::
 
     julia> m = match(r"(a|b)(c)?(d)", "acd")
     RegexMatch("acd", 1="a", 2="c", 3="d")
@@ -635,7 +635,7 @@ a string is invalid). Here's is a pair of somewhat contrived examples:
     "acd"
 
     julia> m.captures
-    3-element Array{Union(Nothing,SubString{UTF8String}),1}:
+    3-element Array{Union(SubString{UTF8String},Nothing),1}:
      "a"
      "c"
      "d"
@@ -656,7 +656,7 @@ a string is invalid). Here's is a pair of somewhat contrived examples:
     "ad"
 
     julia> m.captures
-    3-element Array{Union(Nothing,SubString{UTF8String}),1}:
+    3-element Array{Union(SubString{UTF8String},Nothing),1}:
      "a"
      nothing
      "d"
@@ -671,9 +671,7 @@ a string is invalid). Here's is a pair of somewhat contrived examples:
      2
 
 It is convenient to have captures returned as a tuple so that one can
-use tuple destructuring syntax to bind them to local variables:
-
-.. doctest::
+use tuple destructuring syntax to bind them to local variables::
 
     julia> first, second, third = m.captures; first
     "a"

@@ -946,7 +946,7 @@ static jl_value_t *jl_deserialize_value_internal(ios_t *s)
     return NULL;
 }
 
-static jl_value_t* jl_deserialize_value(ios_t *s)
+static jl_value_t *jl_deserialize_value(ios_t *s)
 {
     jl_value_t *v = jl_deserialize_value_internal(s);
     assert(v != DTINSTANCE_PLACEHOLDER);
@@ -1025,8 +1025,7 @@ void jl_save_system_image(char *fname)
 
 extern jl_function_t *jl_typeinf_func;
 extern int jl_boot_file_loaded;
-extern void jl_get_builtin_hooks_0(void);
-extern void jl_get_builtin_hooks_1(void);
+extern void jl_get_builtin_hooks(void);
 extern void jl_get_system_hooks(void);
 extern void jl_get_uv_hooks();
 
@@ -1091,12 +1090,8 @@ void jl_restore_system_image(char *fname)
         ((jl_datatype_t*)v)->uid = uid;
     }
 
-    jl_get_builtin_hooks_0();
+    jl_get_builtin_hooks();
     jl_get_system_hooks();
-
-    jl_update_all_fptrs();
-
-    jl_get_builtin_hooks_1();
     jl_get_uv_hooks();
     jl_boot_file_loaded = 1;
     jl_typeinf_func = (jl_function_t*)jl_get_global(jl_base_module,
@@ -1116,6 +1111,7 @@ void jl_restore_system_image(char *fname)
     // restore the value of our "magic" JULIA_HOME variable/constant
     jl_get_binding_wr(jl_core_module, jl_symbol("JULIA_HOME"))->value =
         jl_cstr_to_string(julia_home);
+    jl_update_all_fptrs();
 }
 
 void jl_init_restored_modules()

@@ -332,7 +332,13 @@ function show_block(io::IO, head, args::Vector, body, indent::Int)
     print(io, '\n', " "^indent)
 end
 show_block(io::IO,head,    block,i::Int) = show_block(io,head,{},   block,i)
-show_block(io::IO,head,arg,block,i::Int) = show_block(io,head,{arg},block,i)
+function show_block(io::IO, head, arg, block, i::Int)
+    if is_expr(arg, :block)
+        show_block(io, head, arg.args, block, i)
+    else
+        show_block(io, head, {arg}, block, i)
+    end
+end
 
 # show an indented list
 function show_list(io::IO, items, sep, indent::Int, prec::Int=0)
@@ -376,9 +382,14 @@ function show_unquoted_quote_expr(io::IO, value, indent::Int, prec::Int)
             print(io, "symbol(\"", escape_string(s), "\")")
         end
     else
-        print(io, ":(")
-        show_unquoted(io, value, indent+indent_width, 0)
-        print(io, ")")
+        if isa(value,Expr) && value.head === :block
+            show_block(io, "quote", value, indent)
+            print(io, "end")
+        else
+            print(io, ":(")
+            show_unquoted(io, value, indent+indent_width, 0)
+            print(io, ")")
+        end
     end
 end
 
@@ -465,10 +476,16 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
                 show_enclosed_list(io, op, func_args, ",", cl, indent)
             end
 
-        # normal function (i.e. "f(x,y)")
+        # normal function (i.e. "f(x,y)" or "A[x,y]")
         else
             op, cl = expr_calls[head]
-            show_unquoted(io, func, indent)
+            if isa(func, Symbol) || (isa(func, Expr) && func.head == :.)
+                show_unquoted(io, func, indent)
+            else
+                print(io, '(')
+                show_unquoted(io, func, indent)
+                print(io, ')')
+            end
             show_enclosed_list(io, op, func_args, ",", cl, indent)
         end
     elseif is(head, :ccall)

@@ -12,6 +12,11 @@ VERSDIR = v`cut -d. -f1-2 < VERSION`
 INSTALL_F = install -pm644
 INSTALL_M = install -pm755
 
+#file name of make dist result
+ifeq ($(JULIA_DIST_TARNAME),)
+	JULIA_DIST_TARNAME = julia-$(JULIA_COMMIT)-$(OS)-$(ARCH)
+endif
+
 all: default
 default: release
 
@@ -25,13 +30,52 @@ git-submodules:
 ifneq ($(NO_GIT), 1)
 	@-git submodule update --init
 else
-       $(warn "Submodules could not be updated because git is unavailible")
+       $(warn "Submodules could not be updated because git is unavailable")
 endif
 
 debug release: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test $(build_datarootdir)/julia/doc $(build_datarootdir)/julia/examples $(build_sysconfdir)/julia/juliarc.jl
 	@$(MAKE) $(QUIET_MAKE) julia-$@
 	@export private_libdir=$(private_libdir) && \
 	$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(build_libdir):$(LD_LIBRARY_PATH) JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$@)" $(build_private_libdir)/sys.$(SHLIB_EXT)
+
+release-candidate: release test
+	@#Check documentation
+	@./julia doc/NEWS-update.jl #Add missing cross-references to NEWS.md
+	@./julia doc/DocCheck.jl > doc/UNDOCUMENTED.rst 2>&1 #Check for undocumented items
+	@if [ -z "$(cat doc/UNDOCUMENTED.rst)" ]; then \
+		rm doc/UNDOCUMENTED.rst; \
+	else \
+		echo "Undocumented functions found in doc/UNDOCUMENTED.rst; document them, then retry"; \
+		exit 1; \
+	fi
+	@$(MAKE) -C doc html  SPHINXOPTS="-W" #Rebuild Julia HTML docs pedantically
+	@$(MAKE) -C doc latex SPHINXOPTS="-W" #Rebuild Julia PDF docs pedantically
+	@$(MAKE) -C doc doctest #Run Julia doctests
+	@$(MAKE) -C doc linkcheck #Check all links
+	@$(MAKE) -C doc helpdb.jl #Rebuild Julia online documentation for help(), apropos(), etc...
+
+	@# Check to see if the above make invocations changed anything important
+	@if [ -n "$(git status --porcelain)" ]; then \
+		echo "Git repository dirty; Verify and commit changes to the repository, then retry"; \
+		exit 1; \
+	fi
+
+	@#Check that benchmarks work
+	@$(MAKE) -C test/perf
+	@#Check that netload tests work
+	@#for test in test/netload/*.jl; do julia $$test; if [ $$? -ne 0 ]; then exit 1; fi; done
+	@echo
+	@echo To complete the release candidate checklist:
+	@echo
+	
+	@echo 1. Remove deprecations in base/deprecated.jl
+	@echo 2. Bump VERSION
+	@echo 3. Create tag, push to github "\(git tag v\`cat VERSION\` && git push --tags\)"
+	@echo 4. Replace github release tarball with tarball created from make source-dist
+	@echo 5. Follow packaging instructions in DISTRIBUTING.md to create binary packages for all platforms
+	@echo 6. Upload to AWS, update http://julialang.org/downloads links
+	@echo 7. Announce on mailing lists
+	@echo
 
 julia-debug-symlink:
 	@ln -sf $(build_bindir)/julia-debug julia
@@ -73,11 +117,7 @@ $(build_private_libdir)/sys%$(SHLIB_EXT): $(build_private_libdir)/sys%o
 	$(CXX) -shared -fPIC -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ $< \
 		$$([ $(OS) = Darwin ] && echo -Wl,-undefined,dynamic_lookup || echo -Wl,--unresolved-symbols,ignore-all ) \
 		$$([ $(OS) = WINNT ] && echo -ljulia -lssp)
-ifeq ($(OS), Darwin)
-ifeq ($(shell test `dsymutil -v | cut -d\- -f2 | cut -d. -f1` -gt 102 && echo yes), yes)
-	dsymutil $@
-endif
-endif
+	$(DSYMUTIL) $@
 
 $(build_private_libdir)/sys0.o:
 	@$(QUIET_JULIA) cd base && \
@@ -96,8 +136,8 @@ run-julia:
 run:
 	@$(call spawn,$(cmd))
 
-$(build_bindir)/stringpatch: $(build_bindir) contrib/stringpatch.c
-	@$(call PRINT_CC, $(CC) -o $(build_bindir)/stringpatch contrib/stringpatch.c)
+$(build_bindir)/stringreplace: $(build_bindir) contrib/stringreplace.c
+	@$(call PRINT_CC, $(CC) -o $(build_bindir)/stringreplace contrib/stringreplace.c)
 
 
 # public libraries, that are installed in $(prefix)/lib
@@ -173,7 +213,7 @@ $(eval $(call std_dll,ssp-0))
 endif
 
 prefix ?= $(abspath julia-$(JULIA_COMMIT))
-install: $(build_bindir)/stringpatch
+install: $(build_bindir)/stringreplace
 	@$(MAKE) $(QUIET_MAKE) release
 	@$(MAKE) $(QUIET_MAKE) debug
 	@for subdir in $(bindir) $(libexecdir) $(datarootdir)/julia/site/$(VERSDIR) $(datarootdir)/man/man1 $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir); do \
@@ -186,11 +226,24 @@ ifeq ($(OS),WINNT)
 else
 	-cp -a $(build_libexecdir) $(DESTDIR)$(prefix)
 
+	# Copy over .dSYM directories directly
+ifeq ($(OS),Darwin)
+	-cp -a $(build_libdir)/*.dSYM $(DESTDIR)$(private_libdir)
+endif
+
 	for suffix in $(JL_LIBS) ; do \
-		$(INSTALL_M) $(build_libdir)/lib$${suffix}*.$(SHLIB_EXT)* $(DESTDIR)$(private_libdir) ; \
+		for lib in $(build_libdir)/lib$${suffix}*.$(SHLIB_EXT)*; do \
+			if [ "$${lib##*.}" != "dSYM" ]; then \
+				$(INSTALL_M) $$lib $(DESTDIR)$(private_libdir) ; \
+			fi \
+		done \
 	done
 	for suffix in $(JL_PRIVATE_LIBS) ; do \
-		$(INSTALL_M) $(build_libdir)/lib$${suffix}*.$(SHLIB_EXT)* $(DESTDIR)$(private_libdir) ; \
+		for lib in $(build_libdir)/lib$${suffix}*.$(SHLIB_EXT)*; do \
+			if [ "$${lib##*.}" != "dSYM" ]; then \
+				$(INSTALL_M) $$lib $(DESTDIR)$(private_libdir) ; \
+			fi \
+		done \
 	done
 endif
 
@@ -231,7 +284,7 @@ endif
 
 	# Overwrite JL_SYSTEM_IMAGE_PATH in julia binaries:
 	for julia in $(DESTDIR)$(bindir)/julia* ; do \
-		$(build_bindir)/stringpatch $$(strings -t x - $$julia | grep "sys.ji$$" | awk '{print $$1;}' ) "$(private_libdir_rel)/sys.ji" 256 $(call cygpath_w,$$julia); \
+		$(build_bindir)/stringreplace $$(strings -t x - $$julia | grep "sys.ji$$" | awk '{print $$1;}' ) "$(private_libdir_rel)/sys.ji" 256 $(call cygpath_w,$$julia); \
 	done
 
 	mkdir -p $(DESTDIR)$(sysconfdir)
@@ -283,7 +336,7 @@ ifeq ($(OS), WINNT)
 	cat ./contrib/windows/7zS.sfx ./contrib/windows/7zSFX-config.txt "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" > "julia-${JULIA_VERSION}-${ARCH}.exe"
 	-rm -f julia-installer.exe
 else
-	$(TAR) zcvf julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz julia-$(JULIA_COMMIT)
+	$(TAR) zcvf $(JULIA_DIST_TARNAME).tar.gz julia-$(JULIA_COMMIT)
 endif
 	rm -fr $(prefix)
 
@@ -318,7 +371,7 @@ clean: | $(CLEAN_TARGETS)
 	done
 	@rm -f julia
 	@rm -f *~ *# *.tar.gz
-	@rm -f $(build_bindir)/stringpatch source-dist.tmp source-dist.tmp1
+	@rm -f $(build_bindir)/stringreplace source-dist.tmp source-dist.tmp1
 	@rm -fr $(build_private_libdir)
 # Temporarily add this line to the Makefile to remove extras
 	@rm -fr $(build_datarootdir)/julia/extras
@@ -372,8 +425,8 @@ ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 	cd dist-extras && \
 	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z920.exe && \
 	7z x -y 7z920.exe 7z.exe 7z.dll && \
-	$(JLDOWNLOAD) http://download.opensuse.org/repositories/windows:/mingw:/win32/openSUSE_13.1/noarch/mingw32-libexpat-2.0.1-7.7.noarch.rpm && \
-	mv mingw32-libexpat-*.rpm mingw-libexpat.rpm && \
+	$(JLDOWNLOAD) http://download.opensuse.org/repositories/windows:/mingw:/win32/openSUSE_13.1/noarch/mingw32-libexpat1-2.0.1-8.1.noarch.rpm && \
+	mv mingw32-libexpat1-*.rpm mingw-libexpat.rpm && \
 	$(JLDOWNLOAD) http://download.opensuse.org/repositories/windows:/mingw:/win32/openSUSE_13.1/noarch/mingw32-zlib-1.2.8-3.12.noarch.rpm && \
 	mv mingw32-zlib-*.rpm mingw-zlib.rpm
 else ifeq ($(ARCH),x86_64)
@@ -382,8 +435,8 @@ else ifeq ($(ARCH),x86_64)
 	7z x -y 7z920-x64.msi _7z.exe _7z.dll && \
 	mv _7z.dll 7z.dll && \
 	mv _7z.exe 7z.exe && \
-	$(JLDOWNLOAD) http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_13.1/noarch/mingw64-libexpat-2.0.1-6.14.noarch.rpm && \
-	mv mingw64-libexpat-*.rpm mingw-libexpat.rpm && \
+	$(JLDOWNLOAD) http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_13.1/noarch/mingw64-libexpat1-2.0.1-7.1.noarch.rpm && \
+	mv mingw64-libexpat1-*.rpm mingw-libexpat.rpm && \
 	$(JLDOWNLOAD) http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_13.1/noarch/mingw64-zlib-1.2.8-3.1.noarch.rpm && \
 	mv mingw64-zlib-*.rpm mingw-zlib.rpm
 else

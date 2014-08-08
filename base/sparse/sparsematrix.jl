@@ -60,7 +60,9 @@ function reinterpret{T,Tv,Ti}(::Type{T}, a::SparseMatrixCSC{Tv,Ti})
 end
 
 function sparse_compute_reshaped_colptr_and_rowval{Ti}(colptrS::Vector{Ti}, rowvalS::Vector{Ti}, mS::Int, nS::Int, colptrA::Vector{Ti}, rowvalA::Vector{Ti}, mA::Int, nA::Int)
-    ((length(colptrA) == (nA+1)) && (maximum(colptrA) <= (length(rowvalA)+1)) && (maximum(rowvalA) <= mA)) || throw(BoundsError())
+    lrowvalA = length(rowvalA)
+    maxrowvalA = (lrowvalA > 0) ? maximum(rowvalA) : zero(Ti)
+    ((length(colptrA) == (nA+1)) && (maximum(colptrA) <= (lrowvalA+1)) && (maxrowvalA <= mA)) || throw(BoundsError())
 
     colptrS[1] = 1
     colA = 1
@@ -100,7 +102,7 @@ function reinterpret{T,Tv,Ti,N}(::Type{T}, a::SparseMatrixCSC{Tv,Ti}, dims::NTup
     mA,nA = size(a)
     numnz = nnz(a)
     colptr = Array(Ti, nS+1)
-    rowval = a.rowval
+    rowval = similar(a.rowval)
     nzval = reinterpret(T, a.nzval)
 
     sparse_compute_reshaped_colptr_and_rowval(colptr, rowval, mS, nS, a.colptr, a.rowval, mA, nA)
@@ -116,8 +118,8 @@ function reshape{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti}, dims::NTuple{2,Int})
     mA,nA = size(a)
     numnz = nnz(a)
     colptr = Array(Ti, nS+1)
-    rowval = a.rowval
-    nzval = a.nzval
+    rowval = similar(a.rowval)
+    nzval = copy(a.nzval)
 
     sparse_compute_reshaped_colptr_and_rowval(colptr, rowval, mS, nS, a.colptr, a.rowval, mA, nA)
 
@@ -182,6 +184,17 @@ complex(S::SparseMatrixCSC) = SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.r
 complex(A::SparseMatrixCSC, B::SparseMatrixCSC) = A + im*B
 
 # Construct a sparse vector
+
+function vec{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
+    colptr = Array(Ti,2)
+    rowval = similar(S.rowval)
+    lS = length(S)
+    sparse_compute_reshaped_colptr_and_rowval(colptr, rowval, lS, 1, S.colptr, S.rowval, S.m, S.n)
+    SparseMatrixCSC{Tv,Ti}(lS, 1, colptr, rowval, copy(S.nzval))
+end
+
+sparsevec(A::AbstractMatrix) = reshape(sparse(A), (length(A),1))
+sparsevec(S::SparseMatrixCSC) = vec(S)
 
 sparsevec{K<:Integer,V}(d::Dict{K,V}, len::Int) = sparsevec(collect(keys(d)), collect(values(d)), len)
 

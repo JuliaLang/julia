@@ -584,11 +584,11 @@ int u8_is_locale_utf8(const char *locale)
     if (locale == NULL) return 0;
 
     /* this code based on libutf8 */
-    const char* cp = locale;
+    const char *cp = locale;
 
     for (; *cp != '\0' && *cp != '@' && *cp != '+' && *cp != ',' && *cp != ';'; cp++) {
         if (*cp == '.') {
-            const char* encoding = ++cp;
+            const char *encoding = ++cp;
             for (; *cp != '\0' && *cp != '@' && *cp != '+' && *cp != ',' && *cp != ';'; cp++)
                 ;
             if ((cp-encoding == 5 && !strncmp(encoding, "UTF-8", 5))

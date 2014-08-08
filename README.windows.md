@@ -279,3 +279,21 @@ Finally, the build and install process for Julia:
 6. move the julia-* directory / zip file to the target machine
 
 If you are building for 64-bit windows, the steps are essentially the same. Just replace i686 in XC_HOST with x86_64. (note: on Mac, wine only runs in 32-bit mode)
+
+## Windows Build Debugging
+
+### Build process is slow/eats memory/hangs my computer
+
+- Disable the Windows [Superfetch](http://en.wikipedia.org/wiki/Windows_Vista_I/O_technologies#SuperFetch) and 
+  [Program Compatibility Assistant](http://blogs.msdn.com/b/cjacks/archive/2011/11/22/managing-the-windows-7-program-compatibility-assistant-pca.aspx) services, as they are known to have
+  [spurious interactions]((https://cygwin.com/ml/cygwin/2011-12/msg00058.html)) with MinGW/Cygwin.
+
+  As mentioned in the link above: excessive memory use by `svchost` specifically may be investigated in the Task
+  Manager by clicking on the high-memory `svchost.exe` process and selecting `Go to Services`. Disable child services
+  one-by-one until a culprit is found.
+
+- Beware of [BLODA](https://cygwin.com/faq/faq.html#faq.using.bloda)
+
+  The [vmmap](http://technet.microsoft.com/en-us/sysinternals/dd535533.aspx) tool is indispensable for identifying
+  such software conflicts. Use vmmap to inspect the list of loaded DLLs for bash, mintty, or another persistent
+  process used to drive the build. Essentially *any* DLL outside of the Windows System directory is potential BLODA.

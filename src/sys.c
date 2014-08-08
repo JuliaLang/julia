@@ -99,25 +99,25 @@ DLLEXPORT int jl_ios_eof(ios_t *s)
 // --- dir/file stuff ---
 
 DLLEXPORT int jl_sizeof_uv_fs_t(void) { return sizeof(uv_fs_t); }
-DLLEXPORT void jl_uv_fs_req_cleanup(uv_fs_t* req)
+DLLEXPORT void jl_uv_fs_req_cleanup(uv_fs_t *req)
 {
     uv_fs_req_cleanup(req);
 }
 
-DLLEXPORT int jl_readdir(const char* path, uv_fs_t* readdir_req)
+DLLEXPORT int jl_readdir(const char *path, uv_fs_t *readdir_req)
 {
     // Note that the flags field is mostly ignored by libuv
     return uv_fs_readdir(uv_default_loop(), readdir_req, path, 0 /*flags*/, NULL);
 }
 
-DLLEXPORT char* jl_uv_fs_t_ptr(uv_fs_t* req) { return (char*)req->ptr; }
-DLLEXPORT char* jl_uv_fs_t_ptr_offset(uv_fs_t* req, int offset) { return (char*)req->ptr + offset; }
+DLLEXPORT char *jl_uv_fs_t_ptr(uv_fs_t *req) { return (char*)req->ptr; }
+DLLEXPORT char *jl_uv_fs_t_ptr_offset(uv_fs_t *req, int offset) { return (char*)req->ptr + offset; }
 DLLEXPORT int jl_uv_fs_result(uv_fs_t *f) { return f->result; }
 
 // --- stat ---
 DLLEXPORT int jl_sizeof_stat(void) { return sizeof(uv_stat_t); }
 
-DLLEXPORT int32_t jl_stat(const char* path, char* statbuf)
+DLLEXPORT int32_t jl_stat(const char *path, char *statbuf)
 {
     uv_fs_t req;
     int ret;
@@ -131,7 +131,7 @@ DLLEXPORT int32_t jl_stat(const char* path, char* statbuf)
     return ret;
 }
 
-DLLEXPORT int32_t jl_lstat(const char* path, char* statbuf)
+DLLEXPORT int32_t jl_lstat(const char *path, char *statbuf)
 {
     uv_fs_t req;
     int ret;
@@ -480,7 +480,8 @@ DLLEXPORT uint8_t jl_zero_subnormals(uint8_t isZero)
 
 // -- processor native alignment information --
 
-DLLEXPORT void jl_native_alignment(uint_t* int8align, uint_t* int16align, uint_t* int32align, uint_t* int64align, uint_t* float32align, uint_t* float64align)
+DLLEXPORT void jl_native_alignment(uint_t *int8align, uint_t *int16align, uint_t *int32align,
+                                   uint_t *int64align, uint_t *float32align, uint_t *float64align)
 {
     LLVMTargetDataRef tgtdata = LLVMCreateTargetData("");
     *int8align = LLVMPreferredAlignmentOfType(tgtdata, LLVMInt8Type());

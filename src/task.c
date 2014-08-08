@@ -184,7 +184,7 @@ void __declspec(noinline) restore_stack(jl_task_t *t, jl_jmp_buf *where, char *p
 void __attribute__((noinline)) restore_stack(jl_task_t *t, jl_jmp_buf *where, char *p)
 #endif
 {
-    char* _x = (char*)t->stackbase - t->ssize;
+    char *_x = (char*)t->stackbase - t->ssize;
     if (!p) {
         p = _x;
         if ((char*)&_x > _x) {
@@ -456,17 +456,17 @@ static void init_task(jl_task_t *t)
 ptrint_t bt_data[MAX_BT_SIZE+1];
 size_t bt_size = 0;
 
-void jl_getFunctionInfo(const char **name, int *line, const char **filename, size_t pointer, int skipC);
+void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, size_t pointer, int *fromC, int skipC);
 
-static const char* name_unknown = "???";
-static int frame_info_from_ip(const char **func_name, int *line_num, const char **file_name, size_t ip, int skipC)
+static const char *name_unknown = "???";
+static int frame_info_from_ip(const char **func_name, size_t *line_num, const char **file_name, size_t ip, int skipC)
 {
     int fromC = 0;
 
-    jl_getFunctionInfo(func_name, line_num, file_name, ip, skipC);
+    jl_getFunctionInfo(func_name, line_num, file_name, ip, &fromC, skipC);
     if (*func_name == NULL) {
-        fromC = 1;
 #if defined(_OS_WINDOWS_)
+        fromC = 1;
         if (jl_in_stackwalk) {
             *func_name = name_unknown;
             *file_name = name_unknown;
@@ -648,16 +648,17 @@ DLLEXPORT jl_value_t *jl_backtrace_from_here(void)
 DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
 {
     const char *func_name;
-    int line_num;
+    size_t line_num;
     const char *file_name;
     int fromC = frame_info_from_ip(&func_name, &line_num, &file_name, (size_t)ip, skipC);
     if (func_name != NULL) {
-        jl_value_t *r = (jl_value_t*)jl_alloc_tuple(4);
+        jl_value_t *r = (jl_value_t*)jl_alloc_tuple(5);
         JL_GC_PUSH1(&r);
         jl_tupleset(r, 0, jl_symbol(func_name));
         jl_tupleset(r, 1, jl_symbol(file_name));
         jl_tupleset(r, 2, jl_box_long(line_num));
         jl_tupleset(r, 3, jl_box_bool(fromC));
+        jl_tupleset(r, 4, jl_box_long((int64_t)ip));
 #if defined(_OS_WINDOWS_) && !defined(LLVM34)
         if (fromC && func_name != name_unknown) free((void*)func_name);
         if (fromC && file_name != name_unknown) free((void*)file_name);
@@ -683,15 +684,19 @@ DLLEXPORT jl_value_t *jl_get_backtrace(void)
 DLLEXPORT void gdblookup(ptrint_t ip)
 {
     const char *func_name;
-    int line_num;
+    size_t line_num;
     const char *file_name;
-#ifdef _OS_WINDOWS_
     int fromC = frame_info_from_ip(&func_name, &line_num, &file_name, ip, 0);
-#else
-    frame_info_from_ip(&func_name, &line_num, &file_name, ip, 0);
+#ifndef _OS_WINDOWS_
+    (void)fromC; // fromC not used on unix
 #endif
     if (func_name != NULL) {
-        ios_printf(ios_stderr, "%s at %s:%d\n", func_name, file_name, line_num);
+        if (line_num == ip)
+            ios_printf(ios_stderr, "unknown function (ip: %d)\n", line_num);
+        else if (line_num == -1)
+            ios_printf(ios_stderr, "%s at %s (unknown line)\n", func_name, file_name, line_num);
+        else
+            ios_printf(ios_stderr, "%s at %s:%d\n", func_name, file_name, line_num);
 #ifdef _OS_WINDOWS_
         if (fromC && func_name != name_unknown) free((void*)func_name);
         if (fromC && file_name != name_unknown) free((void*)file_name);
