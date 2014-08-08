@@ -12,7 +12,7 @@ function test_all_combos()
                 @test length(dr) == 0
                 @test isempty(dr)
                 @test first(dr) == f1
-                @test last(dr) == f1-one(pos_step) #pending #7900
+                @test last(dr) == f1-one(l1 - f1)
                 @test length([i for i in dr]) == 0
                 @test_throws ErrorException minimum(dr)
                 @test_throws ErrorException maximum(dr)
@@ -21,7 +21,7 @@ function test_all_combos()
                 @test [dr] == T[]
                 @test isempty(reverse(dr))
                 @test length(reverse(dr)) == 0
-                @test first(reverse(dr)) == f1-one(pos_step) #pending #7900
+                @test first(reverse(dr)) == f1-one(l1 - f1)
                 @test last(reverse(dr)) == f1
                 @test issorted(dr)
                 @test sortperm(dr) == 1:1:0
@@ -45,9 +45,9 @@ function test_all_combos()
                     @test next(dr,start(dr)) == (first(dr),1)
 
                     if len < 10000
-                        dr1 = [i for i in dr] #expensive
+                        dr1 = [i for i in dr]
                         @test length(dr1) == len
-                        @test findin(dr,dr) == [1:len] #exp
+                        @test findin(dr,dr) == [1:len]
                         @test length([dr]) == len
                     end
                     @test !isempty(reverse(dr))
@@ -64,7 +64,7 @@ function test_all_combos()
                 @test length(dr) == 0
                 @test isempty(dr)
                 @test first(dr) == l1
-                @test last(dr) == l1+one(neg_step) #pending #7900
+                @test last(dr) == l1+one(l1 - f1)
                 @test length([i for i in dr]) == 0
                 @test_throws ErrorException minimum(dr)
                 @test_throws ErrorException maximum(dr)
@@ -73,7 +73,7 @@ function test_all_combos()
                 @test [dr] == T[]
                 @test isempty(reverse(dr))
                 @test length(reverse(dr)) == 0
-                @test first(reverse(dr)) == l1+one(neg_step) #pending #7900
+                @test first(reverse(dr)) == l1+one(l1 - f1)
                 @test last(reverse(dr)) == l1
                 @test !issorted(dr)
                 @test sortperm(dr) == 0:-1:1
@@ -117,7 +117,7 @@ function test_all_combos()
                     @test length(dr) == 0
                     @test isempty(dr)
                     @test first(dr) == f1
-                    @test last(dr) == f1-one(pos_step) #pending #7900
+                    @test last(dr) == f1-one(l1 - f1)
                     @test length([i for i in dr]) == 0
                     @test_throws ErrorException minimum(dr)
                     @test_throws ErrorException maximum(dr)
@@ -126,7 +126,7 @@ function test_all_combos()
                     @test [dr] == T[]
                     @test isempty(reverse(dr))
                     @test length(reverse(dr)) == 0
-                    @test first(reverse(dr)) == f1-one(pos_step) #pending #7900
+                    @test first(reverse(dr)) == f1-one(l1 - f1)
                     @test last(reverse(dr)) == f1
                     @test issorted(dr)
                     @test sortperm(dr) == 1:1:0
@@ -169,7 +169,7 @@ function test_all_combos()
                     @test length(dr) == 0
                     @test isempty(dr)
                     @test first(dr) == l1
-                    @test last(dr) == l1+one(neg_step) #pending #7900
+                    @test last(dr) == l1+one(l1 - f1)
                     @test length([i for i in dr]) == 0
                     @test_throws ErrorException minimum(dr)
                     @test_throws ErrorException maximum(dr)
@@ -178,7 +178,7 @@ function test_all_combos()
                     @test [dr] == T[]
                     @test isempty(reverse(dr))
                     @test length(reverse(dr)) == 0
-                    @test first(reverse(dr)) == l1+one(neg_step) #pending #7900
+                    @test first(reverse(dr)) == l1+one(l1 - f1)
                     @test last(reverse(dr)) <= l1
                     @test !issorted(dr)
                     @test sortperm(dr) == 0:-1:1
