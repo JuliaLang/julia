@@ -143,21 +143,22 @@ DateTime(y,m=1,d=1,h=0,mi=0,s=0,ms=0) = DateTime(_c(y),_c(m),_c(d),_c(h),_c(mi),
 Date(y,m=1,d=1) = Date(_c(y),_c(m),_c(d))
 
 # Traits, Equality
-Base.isfinite{T<:TimeType}(::Union(TimeType,T)) = true
+Base.isfinite{T<:TimeType}(::Union(Type{T},T)) = true
 calendar(dt::DateTime) = ISOCalendar
 calendar(dt::Date) = ISOCalendar
-Base.precision(dt::DateTime) = UTInstant{Millisecond}
-Base.precision(dt::Date) = UTInstant{Day}
+Base.precision(dt::DateTime) = Millisecond
+Base.precision(dt::Date) = Day
 Base.typemax(::Union(DateTime,Type{DateTime})) = DateTime(146138512,12,31,23,59,59)
 Base.typemin(::Union(DateTime,Type{DateTime})) = DateTime(-146138511,1,1,0,0,0)
 Base.typemax(::Union(Date,Type{Date})) = Date(252522163911149,12,31)
 Base.typemin(::Union(Date,Type{Date})) = Date(-252522163911150,1,1)
 # Date-DateTime promotion, isless, ==
-Base.promote_rule(::Type{Date},x::Type{DateTime}) = x
+Base.promote_rule(::Type{Date},x::Type{DateTime}) = DateTime
 Base.isless(x::Date,y::Date) = isless(value(x),value(y))
 Base.isless(x::DateTime,y::DateTime) = isless(value(x),value(y))
 Base.isless(x::TimeType,y::TimeType) = isless(promote(x,y)...)
 ==(x::TimeType,y::TimeType) = ===(promote(x,y)...)
 
-export Period, Year, Month, Week, Day, Hour, Minute, Second, Millisecond,
+export Period, DatePeriod, TimePeriod,
+       Year, Month, Week, Day, Hour, Minute, Second, Millisecond,
        TimeType, DateTime, Date
