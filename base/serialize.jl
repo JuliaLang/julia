@@ -6,7 +6,7 @@ abstract LongTuple
 abstract LongExpr
 abstract UndefRefTag
 
-const ser_version = 1 # do not make changes without bumping the version #!
+const ser_version = 2 # do not make changes without bumping the version #!
 const ser_tag = ObjectIdDict()
 const deser_tag = ObjectIdDict()
 let i = 2
@@ -18,7 +18,7 @@ let i = 2
              LineNumberNode, SymbolNode, LabelNode, GotoNode,
              QuoteNode, TopNode, TypeVar, Box, LambdaStaticData,
              Module, UndefRefTag, Task, ASCIIString, UTF8String,
-             :reserved6, :reserved7, :reserved8,
+             UTF16String, UTF32String, Float16,
              :reserved9, :reserved10, :reserved11, :reserved12,
              
              (), Bool, Any, :Any, None, Top, Undef, Type,
@@ -45,6 +45,10 @@ end
 # tags >= this just represent themselves, their whole representation is 1 byte
 const VALUE_TAGS = ser_tag[()]
 
+const EMPTY_TUPLE_TAG = ser_tag[()]
+const ZERO_TAG = ser_tag[0]
+const INT_TAG = ser_tag[Int]
+
 writetag(s, x) = write(s, uint8(ser_tag[x]))
 
 function write_as_tag(s, x)
@@ -59,7 +63,7 @@ serialize(s, x::Bool) = write_as_tag(s, x)
 
 serialize(s, ::Ptr) = error("cannot serialize a pointer")
 
-serialize(s, ::()) = write_as_tag(s, ())
+serialize(s, ::()) = write(s, uint8(EMPTY_TUPLE_TAG)) # write_as_tag(s, ())
 
 function serialize(s, t::Tuple)
     l = length(t)
@@ -161,9 +165,18 @@ function serialize(s, e::Expr)
     end
 end
 
+function serialize_mod_names(s, m::Module)
+    if m !== Main
+        serialize_mod_names(s, module_parent(m))
+        serialize(s, module_name(m))
+    end
+end
+
 function serialize(s, m::Module)
     writetag(s, Module)
-    serialize(s, fullname(m))
+    serialize_mod_names(s, m)
+    serialize(s, ())
+    nothing
 end
 
 function serialize(s, f::Function)
@@ -257,10 +270,12 @@ function serialize_type_data(s, t)
     serialize(s, tname)
     mod = t.name.module
     serialize(s, mod)
-    if isdefined(mod,tname) && is(t,eval(mod,tname))
-        serialize(s, ())
-    else
-        serialize(s, t.parameters)
+    if t.parameters !== ()
+        if isdefined(mod,tname) && is(t,eval(mod,tname))
+            serialize(s, ())
+        else
+            serialize(s, t.parameters)
+        end
     end
 end
 
@@ -284,6 +299,16 @@ function serialize_type(s, t::DataType)
     end
 end
 
+function serialize(s, n::Int)
+    if 0 <= n <= 32
+        write(s, uint8(ZERO_TAG+n))
+        return
+    end
+    write(s, uint8(INT_TAG))
+    write(s, n)
+    nothing
+end
+
 function serialize(s, x)
     if haskey(ser_tag,x)
         return write_as_tag(s, x)
@@ -293,7 +318,6 @@ function serialize(s, x)
     if length(t.names)==0 && t.size>0
         write(s, x)
     else
-        serialize(s, length(t.names))
         for i in 1:length(t.names)
             if isdefined(x, i)
                 serialize(s, getfield(x, i))
@@ -335,11 +359,23 @@ deserialize(s, ::Type{LongSymbol}) = symbol(read(s, Uint8, read(s, Int32)))
 function deserialize(s, ::Type{Module})
     path = deserialize(s)
     m = Main
-    for mname in path
-        if !isdefined(m,mname)
-            warn("Module $mname not defined on process $(myid())")  # an error seemingly fails
+    if isa(path,Tuple) && path !== ()
+        # old version
+        for mname in path
+            if !isdefined(m,mname)
+                warn("Module $mname not defined on process $(myid())")  # an error seemingly fails
+            end
+            m = eval(m,mname)::Module
         end
-        m = eval(m,mname)::Module
+    else
+        mname = path
+        while mname !== ()
+            if !isdefined(m,mname)
+                warn("Module $mname not defined on process $(myid())")  # an error seemingly fails
+            end
+            m = eval(m,mname)::Module
+            mname = deserialize(s)
+        end
     end
     m
 end
@@ -452,7 +488,6 @@ function deserialize_expr(s, len)
 end
 
 function deserialize(s, ::Type{TypeVar})
-    nf_expected = deserialize(s)
     name = deserialize(s)
     lb = deserialize(s)
     ub = deserialize(s)
@@ -460,7 +495,6 @@ function deserialize(s, ::Type{TypeVar})
 end
 
 function deserialize(s, ::Type{UnionType})
-    nf_expected = deserialize(s)
     types = deserialize(s)
     Union(types...)
 end
@@ -469,9 +503,13 @@ function deserialize(s, ::Type{DataType})
     form = read(s, Uint8)
     name = deserialize(s)::Symbol
     mod = deserialize(s)::Module
-    params = deserialize(s)
     ty = eval(mod,name)
-    if is(params,())
+    if ty.parameters === ()
+        params = ()
+    else
+        params = deserialize(s)
+    end
+    if params === ()
         t = ty
     else
         t = apply_type(ty, params...)
@@ -499,7 +537,6 @@ function deserialize(s, t::DataType)
         # bits type
         return read(s, t)
     end
-    nf_expected = deserialize(s)
     nf = length(t.names)
     if nf == 0
         return ccall(:jl_new_struct, Any, (Any,Any...), t)

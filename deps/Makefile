@@ -386,6 +386,7 @@ endif
 ifeq ($(LLVM_VER),3.3)
 	patch -p0 < llvm-3.3.patch
 	patch -p0 < instcombine-llvm-3.3.patch
+	patch -p0 < int128-vector.llvm-3.3.patch
 	(cd llvm-$(LLVM_VER) && patch < ../osx-10.10.llvm-3.3.patch)
 ifeq ($(OS),WINNT)
 ifeq ($(ARCH),x86_64)

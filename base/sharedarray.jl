@@ -184,7 +184,6 @@ end
 # pidx, which is relevant to the current process only
 function serialize(s, S::SharedArray)
     serialize_type(s, typeof(S))
-    serialize(s, length(SharedArray.names))
     for n in SharedArray.names
         if n in [:s, :pidx, :loc_subarr_1d]
             writetag(s, UndefRefTag)
