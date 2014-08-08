@@ -31,7 +31,11 @@ sigma0_512(x) =   (S64( 1, uint64(x)) $ S64( 8, uint64(x)) $ R( 7,   uint64(x)))
 sigma1_512(x) =   (S64(19, uint64(x)) $ S64(61, uint64(x)) $ R( 6,   uint64(x)))
 
 # Let's be able to bswap arrays of these types as well
-import Base.bswap
-function bswap{T <: Union(Uint32, Uint64, Uint128)}(x::Array{T,1})
+bswap!(x::Vector{Uint32})  = map!(bswap, x)
+bswap!(x::Vector{Uint64})  = map!(bswap, x)
+bswap!(x::Vector{Uint128}) = map!(bswap, x)
+
+Base.bswap{T <: Union(Uint32, Uint64, Uint128)}(x::Array{T,1}) = begin
+    error()
     return [bswap(z) for z in x]
 end

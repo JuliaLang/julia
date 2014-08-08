@@ -1,9 +1,9 @@
 # A mod function which maps [0..N-1] to [1..N]
-mod1(i,N) = mod(i-1,N) + 1
+mod1(i, N) = mod(i-1, N) + 1
 
 function transform!{T<:SHA_CTX_SMALL}(context::T, data::Array{Uint32,1}, startidx = 0)
     W256 = context.buffer
-
+    
     # Initialize registers with the prev. intermediate value
     a = context.state[1]
     b = context.state[2]
@@ -15,39 +15,43 @@ function transform!{T<:SHA_CTX_SMALL}(context::T, data::Array{Uint32,1}, startid
     h = context.state[8]
 
     for j = 1:16
-        W256[j] = bswap(data[startidx + j])
+        @inbounds begin
+            W256[j] = bswap(data[startidx + j])
 
-        # Apply the SHA-256 compression function to update a..h
-        T1 = h + Sigma1_256(e) + Ch(e, f, g) + K256[j] + W256[j];
-        T2 = Sigma0_256(a) + Maj(a, b, c);
-        h = g;
-        g = f;
-        f = e;
-        e = uint32(d + T1);
-        d = c;
-        c = b;
-        b = a;
-        a = uint32(T1 + T2);
+            # Apply the SHA-256 compression function to update a..h
+            T1 = h + Sigma1_256(e) + Ch(e, f, g) + K256[j] + W256[j];
+            T2 = Sigma0_256(a) + Maj(a, b, c);
+            h = g;
+            g = f;
+            f = e;
+            e = uint32(d + T1);
+            d = c;
+            c = b;
+            b = a;
+            a = uint32(T1 + T2);
+        end
     end
 
     for j = 17:64
-        # Part of the message block expansion:
-        s0 = W256[mod1(j + 1, 16)];
-        s0 = sigma0_256(s0);
-        s1 = W256[mod1(j+14, 16)];
-        s1 = sigma1_256(s1);
-
-        # Apply the SHA-256 compression function to update a..h
-        T1 = h + Sigma1_256(e) + Ch(e, f, g) + K256[j] + (W256[mod1(j,16)] += s1 + W256[mod1(j+9,16)] + s0);
-        T2 = Sigma0_256(a) + Maj(a, b, c);
-        h = g;
-        g = f;
-        f = e;
-        e = uint32(d + T1);
-        d = c;
-        c = b;
-        b = a;
-        a = uint32(T1 + T2);
+        @inbounds begin
+            # Part of the message block expansion:
+            s0 = W256[mod1(j + 1, 16)];
+            s0 = sigma0_256(s0);
+            s1 = W256[mod1(j + 14, 16)];
+            s1 = sigma1_256(s1);
+            
+            # Apply the SHA-256 compression function to update a..h
+            T1 = h + Sigma1_256(e) + Ch(e, f, g) + K256[j] + (W256[mod1(j, 16)] += s1 + W256[mod1(j + 9,16)] + s0);
+            T2 = Sigma0_256(a) + Maj(a, b, c);
+            h = g;
+            g = f;
+            f = e;
+            e = uint32(d + T1);
+            d = c;
+            c = b;
+            b = a;
+            a = uint32(T1 + T2);
+        end
     end
 
     # Compute the current intermediate hash value
@@ -76,39 +80,43 @@ function transform!(context::SHA_CTX_BIG, data::Array{Uint64,1}, startidx = 0)
     h = context.state[8]
 
     for j = 1:16
-        W512[j] = bswap(data[startidx + j])
+        @inbounds begin
+            W512[j] = bswap(data[startidx + j])
 
-        # Apply the SHA-512 compression function to update a..h
-        T1 = h + Sigma1_512(e) + Ch(e, f, g) + K512[j] + W512[j];
-        T2 = Sigma0_512(a) + Maj(a, b, c);
-        h = g;
-        g = f;
-        f = e;
-        e = d + T1;
-        d = c;
-        c = b;
-        b = a;
-        a = T1 + T2;
+            # Apply the SHA-512 compression function to update a..h
+            T1 = h + Sigma1_512(e) + Ch(e, f, g) + K512[j] + W512[j];
+            T2 = Sigma0_512(a) + Maj(a, b, c);
+            h = g;
+            g = f;
+            f = e;
+            e = d + T1;
+            d = c;
+            c = b;
+            b = a;
+            a = T1 + T2;
+        end
     end
 
     for j = 17:80
-        # Part of the message block expansion:
-        s0 = W512[mod1(j + 1, 16)];
-        s0 = sigma0_512(s0);
-        s1 = W512[mod1(j+14, 16)];
-        s1 = sigma1_512(s1);
+        @inbounds begin
+            # Part of the message block expansion:
+            s0 = W512[mod1(j + 1, 16)];
+            s0 = sigma0_512(s0);
+            s1 = W512[mod1(j+14, 16)];
+            s1 = sigma1_512(s1);
 
-        # Apply the SHA-512 compression function to update a..h
-        T1 = h + Sigma1_512(e) + Ch(e, f, g) + K512[j] + (W512[mod1(j,16)] += s1 + W512[mod1(j+9,16)] + s0);
-        T2 = Sigma0_512(a) + Maj(a, b, c);
-        h = g;
-        g = f;
-        f = e;
-        e = d + T1;
-        d = c;
-        c = b;
-        b = a;
-        a = T1 + T2;
+            # Apply the SHA-512 compression function to update a..h
+            T1 = h + Sigma1_512(e) + Ch(e, f, g) + K512[j] + (W512[mod1(j, 16)] += s1 + W512[mod1(j+9, 16)] + s0);
+            T2 = Sigma0_512(a) + Maj(a, b, c);
+            h = g;
+            g = f;
+            f = e;
+            e = d + T1;
+            d = c;
+            c = b;
+            b = a;
+            a = T1 + T2;
+        end
     end
 
     # Compute the current intermediate hash value
@@ -123,7 +131,7 @@ function transform!(context::SHA_CTX_BIG, data::Array{Uint64,1}, startidx = 0)
 end
 
 
-function update!(context::SHA_CTX, data::Array{Uint8,1})
+function update!(context::SHA_CTX, data::Array{Uint8,1}) 
     if length(data) == 0
         return
     end
@@ -181,15 +189,15 @@ end
 # add in a convenience method for strings
 update!(context::SHA_CTX, str::ASCIIString) = update!(context, str.data)
 
-function digest!(context::SHA_CTX)
+function digest!(context::SHA_CTX) 
     usedspace = div(context.bitcount, 8) % context.blocklen;
     context.bitcount = bswap(context.bitcount)
     buffer = reinterpret(Uint8, context.buffer)
+    
     if usedspace > 0
         # Begin padding with a 1 bit:
         buffer[usedspace+1] = 0x80
         usedspace += 1
-
         if usedspace <= context.short_blocklen
             # Set-up for the last transform:
             for i = 1:(context.short_blocklen - usedspace)
@@ -201,7 +209,6 @@ function digest!(context::SHA_CTX)
             end
             # Do second-to-last transform:
             transform!(context, context.buffer)
-
             # And set-up for the last transform:
             for i = 1:context.short_blocklen
                 buffer[i] = 0x0
@@ -212,10 +219,10 @@ function digest!(context::SHA_CTX)
         for i = 1:context.short_blocklen
             buffer[i] = 0x0
         end
-
         # Begin padding with a 1 bit:
         buffer[1] = 0x80
     end
+
     # Store the length of the input data (in bits)
     bitcount_buffer = reinterpret(typeof(context.bitcount), context.buffer)
     bitcount_idx = div(context.short_blocklen, sizeof(context.bitcount))+1
@@ -225,5 +232,5 @@ function digest!(context::SHA_CTX)
     transform!(context, context.buffer)
 
     # Return the digest
-    return reinterpret(Uint8, bswap(context.state))[1:context.digest_len]
+    return reinterpret(Uint8, bswap!(context.state))[1:context.digest_len]
 end
