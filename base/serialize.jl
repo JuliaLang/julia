@@ -6,7 +6,7 @@ abstract LongTuple
 abstract LongExpr
 abstract UndefRefTag
 
-const ser_version = 1 # do not make changes without bumping the version #!
+const ser_version = 2 # do not make changes without bumping the version #!
 const ser_tag = ObjectIdDict()
 const deser_tag = ObjectIdDict()
 let i = 2
@@ -18,7 +18,7 @@ let i = 2
              LineNumberNode, SymbolNode, LabelNode, GotoNode,
              QuoteNode, TopNode, TypeVar, Box, LambdaStaticData,
              Module, UndefRefTag, Task, ASCIIString, UTF8String,
-             :reserved6, :reserved7, :reserved8,
+             UTF16String, UTF32String, Float16,
              :reserved9, :reserved10, :reserved11, :reserved12,
              
              (), Bool, Any, :Any, None, Top, Undef, Type,
@@ -270,10 +270,12 @@ function serialize_type_data(s, t)
     serialize(s, tname)
     mod = t.name.module
     serialize(s, mod)
-    if isdefined(mod,tname) && is(t,eval(mod,tname))
-        serialize(s, ())
-    else
-        serialize(s, t.parameters)
+    if t.parameters !== ()
+        if isdefined(mod,tname) && is(t,eval(mod,tname))
+            serialize(s, ())
+        else
+            serialize(s, t.parameters)
+        end
     end
 end
 
@@ -316,7 +318,6 @@ function serialize(s, x)
     if length(t.names)==0 && t.size>0
         write(s, x)
     else
-        serialize(s, length(t.names))
         for i in 1:length(t.names)
             if isdefined(x, i)
                 serialize(s, getfield(x, i))
@@ -487,7 +488,6 @@ function deserialize_expr(s, len)
 end
 
 function deserialize(s, ::Type{TypeVar})
-    nf_expected = deserialize(s)
     name = deserialize(s)
     lb = deserialize(s)
     ub = deserialize(s)
@@ -495,7 +495,6 @@ function deserialize(s, ::Type{TypeVar})
 end
 
 function deserialize(s, ::Type{UnionType})
-    nf_expected = deserialize(s)
     types = deserialize(s)
     Union(types...)
 end
@@ -504,9 +503,13 @@ function deserialize(s, ::Type{DataType})
     form = read(s, Uint8)
     name = deserialize(s)::Symbol
     mod = deserialize(s)::Module
-    params = deserialize(s)
     ty = eval(mod,name)
-    if is(params,())
+    if ty.parameters === ()
+        params = ()
+    else
+        params = deserialize(s)
+    end
+    if params === ()
         t = ty
     else
         t = apply_type(ty, params...)
@@ -534,7 +537,6 @@ function deserialize(s, t::DataType)
         # bits type
         return read(s, t)
     end
-    nf_expected = deserialize(s)
     nf = length(t.names)
     if nf == 0
         return ccall(:jl_new_struct, Any, (Any,Any...), t)
