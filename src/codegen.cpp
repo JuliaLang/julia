@@ -3971,6 +3971,7 @@ extern "C" DLLEXPORT jl_value_t *jl_new_box(jl_value_t *v)
 
 #if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 3 && SYSTEM_LLVM
 #define INSTCOMBINE_BUG
+#define V128_BUG
 #endif
 
 static void init_julia_llvm_env(Module *m)
@@ -4527,7 +4528,11 @@ extern "C" void jl_init_codegen(void)
     SmallVector<std::string, 4> MAttrs;
 #else
     // Temporarily disable Haswell BMI2 features due to LLVM bug.
-    const char *mattr[] = {"-bmi2", "-avx2"};
+    const char *mattr[] = {"-bmi2", "-avx2"
+#ifdef V128_BUG
+        ,"-avx"
+#endif
+    };
     SmallVector<std::string, 4> MAttrs(mattr, mattr+2);
 #endif
     EngineBuilder eb = EngineBuilder(engine_module)
