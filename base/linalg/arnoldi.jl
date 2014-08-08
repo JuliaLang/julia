@@ -73,7 +73,11 @@ function eigs(A, B;
     end
 
     # Refer to ex-*.doc files in ARPACK/DOCUMENTS for calling sequence
-    matvecA(x) = A * x
+    if method_exists(Base.A_mul_B!,(Vector{T},typeof(A),Vector{T}))
+        matvecA(y,x) = A_mul_B!(y,A,x)
+    else
+        matvecA(y,x) = copy!(y,A*x)
+    end
     if !isgeneral           # Standard problem
         matvecB(x) = x
         if !isshift         #    Regular mode

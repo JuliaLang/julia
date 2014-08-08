@@ -34,7 +34,7 @@ function aupd_wrapper(T, matvecA::Function, matvecB::Function, solveSI::Function
     iparam[3] = blas_int(maxiter) # maxiter
     iparam[7] = blas_int(mode)    # mode
 
-    zernm1 = 0:(n-1)
+#    zernm1 = 0:(n-1)
 
     while true
         if cmplx
@@ -48,12 +48,13 @@ function aupd_wrapper(T, matvecA::Function, matvecB::Function, solveSI::Function
                   iparam, ipntr, workd, workl, lworkl, info)
         end
         
-        load_idx = ipntr[1]+zernm1
-        store_idx = ipntr[2]+zernm1
-        x = workd[load_idx]
+        # load_idx = ipntr[1]+zernm1
+        # store_idx = ipntr[2]+zernm1
+        x = pointer_to_array(pointer(workd,ipntr[1]),n)
+        y = pointer_to_array(pointer(workd,ipntr[2]),n)
         if mode == 1  # corresponds to dsdrv1, dndrv1 or zndrv1
             if ido[1] == 1
-                workd[store_idx] = matvecA(x)
+                matvecA(y,x)
             elseif ido[1] == 99
                 break
             else
