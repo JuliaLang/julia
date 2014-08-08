@@ -140,14 +140,15 @@ function tolast(dt::TimeType,dow::Int;of::Union(Type{Year},Type{Month})=Month)
 end
 
 function recur{T<:TimeType}(fun::Function,start::T,stop::T;step::Period=Day(1),negate::Bool=false,limit::Int=10000)
+    ((start != stop) & ((step > zero(step)) != (stop > start))) && return T[]
     a = T[]
-    #sizehint(a,)
-    df = DateFunction(fun,negate,start)
+    check = start <= stop ? 1 : -1
+    df = Dates.DateFunction(fun,negate,start)
     while true
         next = Dates.adjust(df,start,step,limit)
-        next > stop && break
+        cmp(next,stop) == check && break
         push!(a,next)
-        start = start == next ? start+step : next+step
+        start = next + step
     end
     return a
 end
