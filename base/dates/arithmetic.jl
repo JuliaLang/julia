@@ -65,22 +65,12 @@ end
 (-)(x::Date,y::Week) = return Date(UTD(value(x) - 7*value(y)))
 (+)(x::Date,y::Day)  = return Date(UTD(value(x) + y))
 (-)(x::Date,y::Day)  = return Date(UTD(value(x) - y))
-(+)(x::DateTime,y::Week)   = return DateTime(UTM(value(x)+604800000*value(y)))
-(-)(x::DateTime,y::Week)   = return DateTime(UTM(value(x)-604800000*value(y)))
-(+)(x::DateTime,y::Day)    = return DateTime(UTM(value(x)+86400000 *value(y)))
-(-)(x::DateTime,y::Day)    = return DateTime(UTM(value(x)-86400000 *value(y)))
-(+)(x::DateTime,y::Hour)   = return DateTime(UTM(value(x)+3600000  *value(y)))
-(-)(x::DateTime,y::Hour)   = return DateTime(UTM(value(x)-3600000  *value(y)))
-(+)(x::DateTime,y::Minute) = return DateTime(UTM(value(x)+60000    *value(y)))
-(-)(x::DateTime,y::Minute) = return DateTime(UTM(value(x)-60000    *value(y)))
-(+)(x::DateTime,y::Second)      = return DateTime(UTM(value(x)+1000*value(y)))
-(-)(x::DateTime,y::Second)      = return DateTime(UTM(value(x)-1000*value(y)))
-(+)(x::DateTime,y::Millisecond) = return DateTime(UTM(value(x)+value(y)))
-(-)(x::DateTime,y::Millisecond) = return DateTime(UTM(value(x)-value(y)))
+(+)(x::DateTime,y::Period)   = return DateTime(UTM(value(x)+toms(y)))
+(-)(x::DateTime,y::Period)   = return DateTime(UTM(value(x)-toms(y)))
 (+)(y::Period,x::TimeType) = x + y
 (-)(y::Period,x::TimeType) = x - y
 
-(.+){T<:TimeType}(x::AbstractArray{T}, y::Period) = reshape([i + y for i in x], size(x))
-(.-){T<:TimeType}(x::AbstractArray{T}, y::Period) = reshape([i - y for i in x], size(x))
+(.+){T<:TimeType}(x::AbstractArray{T}, y::Period) = reshape(T[i + y for i in x], size(x))
+(.-){T<:TimeType}(x::AbstractArray{T}, y::Period) = reshape(T[i - y for i in x], size(x))
 (.+){T<:TimeType}(y::Period, x::AbstractArray{T}) = x .+ y
 (.-){T<:TimeType}(y::Period, x::AbstractArray{T}) = x .- y
