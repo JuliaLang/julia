@@ -131,7 +131,7 @@ function transform!(context::SHA_CTX_BIG, data::Array{Uint64,1}, startidx = 0)
 end
 
 
-function update!(context::SHA_CTX, data::Array{Uint8,1}) 
+function update!(context::SHA_CTX, data::Array{Uint8,1})
     if length(data) == 0
         return
     end
@@ -189,7 +189,7 @@ end
 # add in a convenience method for strings
 update!(context::SHA_CTX, str::ASCIIString) = update!(context, str.data)
 
-function digest!(context::SHA_CTX) 
+function digest!(context::SHA_CTX)
     usedspace = div(context.bitcount, 8) % context.blocklen;
     context.bitcount = bswap(context.bitcount)
     buffer = reinterpret(Uint8, context.buffer)

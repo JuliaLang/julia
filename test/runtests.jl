@@ -45,15 +45,3 @@ for idx in 1:length(data)
         end
     end
 end
-
-# test performance
-test_perf() = begin
-    @time begin 
-    fh = open(@__FILE__, "r")
-    bytes = readbytes(fh)
-    end
-    ctx = SHA512_CTX()
-    update!(ctx, bytes)
-    hash = bytes2hex(digest!(ctx))
-end
-@time test_perf()
