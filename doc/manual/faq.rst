@@ -792,7 +792,7 @@ Now:
 Within emacs
 ^^^^^^^^^^^^
 
-- ``M-x gdb``, then enter ``julia-debug`` (this is the easiest from
+- ``M-x gdb``, then enter ``julia-debug`` (this is easiest from
   within julia/usr/bin, or you can specify the full path)
 
 - ``(gdb) run``

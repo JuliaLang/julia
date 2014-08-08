@@ -1813,3 +1813,16 @@ type Foo7810{T<:AbstractVector}
 end
 bar7810() = [Foo7810([(a,b) for a in 1:2]) for b in 3:4]
 @test Base.return_types(bar7810,())[1] == Array{Foo7810{Array{(Int,Int),1}},1}
+
+# issue 7897
+function issue7897!(data, arr)
+    data = reinterpret(Uint32, data)
+    a = arr[1]
+end
+
+a = ones(Uint8, 10)
+sa = sub(a,4:6)
+# This can throw an error, but shouldn't segfault
+try
+    issue7897!(sa, zeros(10))
+end

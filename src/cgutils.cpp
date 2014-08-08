@@ -1520,8 +1520,14 @@ static Value *boxed(Value *v, jl_codectx_t *ctx, jl_value_t *jt)
         if (jl_subtype(jt2, jt, 0))
             jt = jt2;
     }
-
-    if (jt == jl_bottom_type || v == NULL || dyn_cast<UndefValue>(v) != 0 || t == NoopType) {
+    UndefValue *uv = NULL;
+    if (jt == jl_bottom_type || v == NULL || (uv = dyn_cast<UndefValue>(v)) != 0 || t == NoopType) {
+        if (uv != NULL && jl_is_datatype(jt)) {
+            jl_datatype_t *jb = (jl_datatype_t*)jt;
+            // We have an undef value on a hopefully dead branch
+            if (jl_isbits(jb) && jb->size != 0)
+                return UndefValue::get(jl_pvalue_llvmt);
+        }
         jl_value_t *s = static_void_instance(jt);
         if (jl_is_tuple(jt) && jl_tuple_len(jt) > 0)
             jl_add_linfo_root(ctx->linfo, s);
