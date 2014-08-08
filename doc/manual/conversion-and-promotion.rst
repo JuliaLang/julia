@@ -126,7 +126,7 @@ since the type is a singleton, there would never be any reason to use its value
 within the body.
 When invoked, the method determines
 whether a numeric value is true or false as a boolean, by comparing it
-to zero.
+to zero:
 
 .. doctest::
 
