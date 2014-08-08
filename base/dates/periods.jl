@@ -15,12 +15,13 @@ for p in (:Year,:Month,:Week,:Day,:Hour,:Minute,:Second,:Millisecond)
     @eval periodisless(x::$p,y::$p) = value(x) < value(y)
     # String parsing (mainly for IO code)
     @eval $p(x::String) = $p(parseint(x))
+    # Period accessors
+    @eval $p(x::TimeType) = $p($(symbol(lowercase(string(p))))(x))
 end
 # Now we're safe to define Period-Number conversions
 # Anything an Int64 can convert to, a Period can convert to
 Base.convert{T<:Number}(::Type{T},x::Period) = convert(T,value(x))
-# Error quickly if x can't convert losslessly to Int64
-Base.convert{P<:Period}(::Type{P},x::Number) = P(convert(Int64,x))
+Base.convert{T<:Period}(::Type{T},x::Real) = T(int64(x))
 
 #Print/show/traits
 Base.string{P<:Period}(x::P) = string(value(x),_units(x))
@@ -36,25 +37,22 @@ default{T<:TimePeriod}(p::Union(T,Type{T})) = zero(p)
 
 (-){P<:Period}(x::P) = P(-value(x))
 Base.isless{P<:Period}(x::P,y::P) = isless(value(x),value(y))
+Base.isless{R<:Real}(x::Period,y::R) = isless(int64(y),value(x))
+Base.isless{R<:Real}(y::R,x::Period) = isless(int64(y),value(x))
 =={P<:Period}(x::P,y::P) = ===(value(x),value(y))
-Base.isless{R<:Real}(x::Period,y::R) = throw(ArgumentError("Can't compare Period-$R"))
-=={R<:Real}(x::Period,y::R) = throw(ArgumentError("Can't compare Period-$R"))
-Base.isless{R<:Real}(y::R,x::Period) = throw(ArgumentError("Can't compare Period-$R"))
-=={R<:Real}(y::R,x::Period) = throw(ArgumentError("Can't compare Period-$R"))
+=={R<:Real}(x::Period,y::R) = ==(int64(y),value(x))
+=={R<:Real}(y::R,x::Period) = ==(int64(y),value(x))
 
 Base.isless(x::Period,y::Period) = throw(ArgumentError("Can't compare $(typeof(x)) and $(typeof(y))"))
 ==(x::Period,y::Period) = throw(ArgumentError("Can't compare $(typeof(x)) and $(typeof(y))"))
 
 #Period Arithmetic:
-import Base.div
+import Base.div, Base.mod, Base.gcd, Base.lcm
 let vec_ops = [:.+,:.-,:.*,:.%,:div]
-    for op in [:+,:-,:*,:%,vec_ops]
+    for op in [:+,:-,:*,:%,:mod,:gcd,:lcm,vec_ops]
         @eval begin
         #Period-Period
         ($op){P<:Period}(x::P,y::P) = P(($op)(value(x),value(y)))
-        #Period-Integer
-        ($op){P<:Period}(x::P,y::Integer) = P(($op)(value(x),int64(y)))
-        ($op){P<:Period}(x::Integer,y::P) = P(($op)(int64(x),value(y)))
         #Period-Real
         ($op){P<:Period}(x::P,y::Real) = P(($op)(value(x),convert(Int64,y)))
         ($op){P<:Period}(x::Real,y::P) = P(($op)(convert(Int64,x),value(y)))
@@ -68,6 +66,10 @@ let vec_ops = [:.+,:.-,:.*,:.%,:div]
         end
     end
 end
+
+# intfuncs
+Base.gcdx{T<:Period}(a::T,b::T) = ((g,x,y)=gcdx(Dates.value(a),Dates.value(b)); return T(g),x,y)
+Base.abs{T<:Period}(a::T) = T(abs(value(a)))
 
 periodisless(::Period,::Year)        = true
 periodisless(::Period,::Month)       = true
@@ -110,7 +112,6 @@ Base.show(io::IO,x::CompoundPeriod) = print(io,string(x))
 (-)(x::CompoundPeriod,y::Period) = (sort!(push!(x.periods,-y),rev=true,lt=periodisless); return x)
 
 # Capture TimeType+-Period methods
-typealias TTP Union(TimeType,Period)
 (+)(a::TimeType,b::Period,c::Period) = (+)(a,b+c)
 (-)(a::TimeType,b::Period,c::Period) = (-)(a,b-c)
 (+)(a::TimeType,b::Period,c::Period,d::Period...) = (+)((+)(a,b+c),d...)
