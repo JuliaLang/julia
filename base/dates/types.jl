@@ -42,30 +42,26 @@ end
 UTM(x) = UTInstant(Millisecond(x))
 UTD(x) = UTInstant(Day(x))
 
-# Calendar types provide dispatch rules for interpretating instant 
-# timelines in human-readable form. Calendar types are used as
-# type tags in the Timestamp type for dispatching to methods
-# implementing the Instant=>Human-Form conversion rules.
+# Calendar types provide rules for interpretating instant 
+# timelines in human-readable form.
 abstract Calendar <: AbstractTime
 
 # ISOCalendar implements the ISO 8601 standard (en.wikipedia.org/wiki/ISO_8601)
 # Notably based on the proleptic Gregorian calendar
-# ISOCalendar provides interpretation rules for UTInstants to UT
+# ISOCalendar provides interpretation rules for UTInstants to civil date and time parts
 immutable ISOCalendar <: Calendar end
 
 # TimeTypes wrap Instants to provide human representations of time
 abstract TimeType <: AbstractTime
 
-# DateTime is a millisecond precision UTInstant interpreted thru ISOCalendar
+# DateTime is a millisecond precision UTInstant interpreted by ISOCalendar
 immutable DateTime <: TimeType
     instant::UTInstant{Millisecond}
-    DateTime(x::UTInstant{Millisecond}) = new(x)
 end 
 
-# DateTime is a day precision UTInstant interpreted thru ISOCalendar
+# DateTime is a day precision UTInstant interpreted by ISOCalendar
 immutable Date <: TimeType
     instant::UTInstant{Day}
-    Date(x::UTInstant{Day}) = new(x)
 end
 
 # Convert y,m,d to # of Rata Die days
