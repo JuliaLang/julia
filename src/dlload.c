@@ -135,7 +135,7 @@ static uv_lib_t *jl_load_dynamic_library_(char *modname, unsigned flags, int thr
         if (!error) goto done;
     }
 #if defined(__linux__)
-    char *soname = jl_lookup_soname(modname, strlen(modname));
+    const char *soname = jl_lookup_soname(modname, strlen(modname));
     error = (soname==NULL) || jl_uv_dlopen(soname, handle, flags);
     if (!error) goto done;
 #endif
