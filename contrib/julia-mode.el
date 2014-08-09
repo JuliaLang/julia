@@ -1,14 +1,14 @@
-;
-; Emacs mode for Julia
-;
+;;; julia-mode.el --- julia-mode.el --- Major mode for editing Julia source code
 
-; USAGE
-; =====
+;;; Usage:
+;; Put the following code in your .emacs, site-load.el, or other relevant file
+;; (add-to-list 'load-path "path-to-julia-mode")
+;; (require 'julia-mode)
 
-; Put the following code in your .emacs, site-load.el, or other relevant file
-; (add-to-list 'load-path "path-to-julia-mode")
-; (require 'julia-mode)
+;;; Commentary:
+;; This is the official Emacs mode for editing Julia programs.
 
+;;; Code:
 
 (defvar julia-mode-hook nil)
 
@@ -1162,3 +1162,5 @@ Do not move back beyond MIN."
 (puthash "\\underbrace" "︸" latexsubs)
 
 (provide 'julia-mode)
+
+;;; julia-mode.el ends here
