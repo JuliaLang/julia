@@ -117,9 +117,6 @@
   (list "if" "while" "for" "begin" "try" "function" "type" "let" "macro"
 	"quote" "do" "immutable"))
 
-(defconst julia-block-other-keywords
-  (list "else" "elseif"))
-
 (defconst julia-block-end-keywords
   (list "end" "else" "elseif" "catch" "finally"))
 
