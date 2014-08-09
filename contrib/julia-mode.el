@@ -14,6 +14,7 @@
 
 (defvar julia-basic-offset)
 
+;;;###autoload
 (add-to-list 'auto-mode-alist '("\\.jl\\'" . julia-mode))
 
 ;; define ignore-errors macro if it isn't present
