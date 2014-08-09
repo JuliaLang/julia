@@ -85,21 +85,27 @@
 (defconst julia-type-regex
   (rx symbol-start "type" (1+ space) (group (1+ (or word ?_)))))
 
+(defconst julia-macro-regex
+  "@\\w+")
+
+(defconst julia-keyword-regex
+  (regexp-opt
+   '("if" "else" "elseif" "while" "for" "begin" "end" "quote"
+     "try" "catch" "return" "local" "abstract" "function" "macro" "ccall"
+     "finally" "typealias" "break" "continue" "type" "global"
+     "module" "using" "import" "export" "const" "let" "bitstype" "do"
+     "baremodule" "importall" "immutable")))
+
 (defconst julia-font-lock-keywords
-  (list '("\\<\\(\\|Uint\\(8\\|16\\|32\\|64\\|128\\)\\|Int\\(8\\|16\\|32\\|64\\|128\\)\\|BigInt\\|Integer\\|BigFloat\\|FloatingPoint\\|Float16\\|Float32\\|Float64\\|Complex128\\|Complex64\\|ComplexPair\\|Bool\\|Char\\|DataType\\|Number\\|Real\\|Int\\|Uint\\|Array\\|DArray\\|AbstractArray\\|AbstractVector\\|AbstractMatrix\\|AbstractSparseMatrix\\|SubArray\\|StridedArray\\|StridedVector\\|StridedMatrix\\|VecOrMat\\|StridedVecOrMat\\|DenseArray\\|Range\\|OrdinalRange\\|StepRange\\|UnitRange\\|FloatRange\\|SparseMatrixCSC\\|Tuple\\|NTuple\\|Symbol\\|Function\\|Vector\\|Matrix\\|Union\\|Type\\|Any\\|Complex\\|None\\|String\\|Ptr\\|Void\\|Exception\\|Task\\|Signed\\|Unsigned\\|Associative\\|Dict\\|IO\\|IOStream\\|Rational\\|Regex\\|RegexMatch\\|Set\\|IntSet\\|ASCIIString\\|UTF8String\\|ByteString\\|Expr\\|WeakRef\\|Nothing\\|ObjectIdDict\\|SubString\\)\\>" .
-      font-lock-type-face)
+  (list
+   '("\\<\\(\\|Uint\\(8\\|16\\|32\\|64\\|128\\)\\|Int\\(8\\|16\\|32\\|64\\|128\\)\\|BigInt\\|Integer\\|BigFloat\\|FloatingPoint\\|Float16\\|Float32\\|Float64\\|Complex128\\|Complex64\\|ComplexPair\\|Bool\\|Char\\|DataType\\|Number\\|Real\\|Int\\|Uint\\|Array\\|DArray\\|AbstractArray\\|AbstractVector\\|AbstractMatrix\\|AbstractSparseMatrix\\|SubArray\\|StridedArray\\|StridedVector\\|StridedMatrix\\|VecOrMat\\|StridedVecOrMat\\|DenseArray\\|Range\\|OrdinalRange\\|StepRange\\|UnitRange\\|FloatRange\\|SparseMatrixCSC\\|Tuple\\|NTuple\\|Symbol\\|Function\\|Vector\\|Matrix\\|Union\\|Type\\|Any\\|Complex\\|None\\|String\\|Ptr\\|Void\\|Exception\\|Task\\|Signed\\|Unsigned\\|Associative\\|Dict\\|IO\\|IOStream\\|Rational\\|Regex\\|RegexMatch\\|Set\\|IntSet\\|ASCIIString\\|UTF8String\\|ByteString\\|Expr\\|WeakRef\\|Nothing\\|ObjectIdDict\\|SubString\\)\\>" .
+     font-lock-type-face)
+    (cons julia-keyword-regex 'font-lock-keyword-face)
+    (cons julia-macro-regex 'font-lock-keyword-face)
     (cons
-     (concat "\\<\\("
-         (mapconcat
-          'identity
-          '("if" "else" "elseif" "while" "for" "begin" "end" "quote"
-            "try" "catch" "return" "local" "abstract" "function" "macro" "ccall"
-	    "finally" "typealias" "break" "continue" "type" "global" "@\\w+"
-	    "module" "using" "import" "export" "const" "let" "bitstype" "do"
-	    "baremodule" "importall" "immutable")
-          "\\|") "\\)\\>")
-     'font-lock-keyword-face)
-    '("\\<\\(true\\|false\\|C_NULL\\|Inf\\|NaN\\|Inf32\\|NaN32\\|nothing\\)\\>" . font-lock-constant-face)
+     (regexp-opt
+      '("true" "false" "C_NULL" "Inf" "NaN" "Inf32" "NaN32" "nothing"))
+     'font-lock-constant-face)
     (list julia-unquote-regex 2 'font-lock-constant-face)
     (list julia-char-regex 2 'font-lock-string-face)
     (list julia-forloop-in-regex 1 'font-lock-keyword-face)
