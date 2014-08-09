@@ -98,12 +98,10 @@ parse(x) = parse(read(x))
 
 function dependents(packagename::String)
     pkgs = String[]
-    for pkg in Pkg.available()
-        for r in read(Pkg.dir(pkg, "REQUIRE"))
-            isa(r, Requirement) || continue
-            if r.package == packagename
+    cd(Pkg.dir()) do
+        for (pkg,latest) in Pkg.Read.latest()
+            if haskey(latest.requires, packagename)
                 push!(pkgs, pkg)
-                break
             end
         end
     end
