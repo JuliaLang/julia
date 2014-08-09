@@ -660,7 +660,7 @@ function read!{T}(s::AsyncStream, a::Array{T})
     return a
 end
 
-function read!{Uint8}(s::AsyncStream, a::Vector{Uint8})
+function read!(s::AsyncStream, a::Vector{Uint8})
     nb = length(a)
     sbuf = s.buffer
     @assert sbuf.seekable == false
