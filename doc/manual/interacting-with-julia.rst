@@ -161,3 +161,20 @@ The Julia REPL makes great use of key bindings.  Several control-key bindings we
 +------------------------+----------------------------------------------------+
 | Delete, ``^D``         | Forward delete one character (when buffer has text)|
 +------------------------+----------------------------------------------------+
+
+Tab completion
+--------------
+
+In both the Julian and help modes of the REPL, one can enter the first few characters of a function or type and then press the tab key to get a list all matches::
+
+    julia> stri
+    stride     strides     string      stringmime  strip
+
+    julia> Stri
+    StridedArray    StridedVecOrMat  String
+    StridedMatrix   StridedVector
+
+The tab key is also used to substitute LaTeX math symbols with their unicode equivalents::
+
+    julia> \alpha[TAB]
+    julia> α
