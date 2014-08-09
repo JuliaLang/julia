@@ -157,3 +157,6 @@ end"""
 @test_repr "foo.bar[1]"
 @test_repr "foo.bar()"
 @test_repr "(foo + bar)()"
+
+# issue #7921
+@test replace(sprint(show, Expr(:function, :(==(a, b)), Expr(:block,:(return a == b)))), r"\s+", " ") == ":(function ==(a,b) return a == b end)"
