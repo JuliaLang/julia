@@ -1166,4 +1166,7 @@ Do not move back beyond MIN."
 
 (provide 'julia-mode)
 
+;; Local Variables:
+;; coding: utf-8
+;; End:
 ;;; julia-mode.el ends here
