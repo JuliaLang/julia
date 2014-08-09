@@ -275,8 +275,7 @@ static jl_function_t *jl_method_table_assoc_exact(jl_methtable_t *mt,
  mt_assoc_lkup:
     while (ml != JL_NULL) {
         size_t lensig = jl_tuple_len(ml->sig);
-        if ((lensig == n || ml->va) &&
-            !(lensig > n && n != lensig-1)) {
+        if (lensig == n || (ml->va && lensig <= n+1)) {
             if (cache_match(args, n, (jl_tuple_t*)ml->sig, ml->va, lensig)) {
                 return ml->func;
             }
