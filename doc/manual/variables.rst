@@ -66,6 +66,12 @@ Unicode names (in UTF-8 encoding) are allowed:
     julia> 안녕하세요 = "Hello" 
     "Hello"
 
+In the Julia REPL and several other Julia editing environments, you
+can type many Unicode math symbols by typing the backslashed LaTeX symbol
+name followed by tab.  For example, the variable name ``δ`` can be
+entered by typing ``\delta``-*tab*, or even ``α₂̂`` by
+``\alpha``-*tab*-``\hat``-*tab*-``\_2``-*tab*.
+
 .. raw:: latex
 
     \end{CJK*}
