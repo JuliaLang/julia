@@ -96,18 +96,18 @@ function parse(lines::Vector{Line})
 end
 parse(x) = parse(read(x))
 
-function whorequires(packagename::String)
-    pkgrequires = String[]
+function dependents(packagename::String)
+    pkgs = String[]
     for pkg in Pkg.available()
         for r in read(Pkg.dir(pkg, "REQUIRE"))
             isa(r, Requirement) || continue
             if r.package == packagename
-                push!(pkgrequires, pkg)
+                push!(pkgs, pkg)
                 break
             end
         end
     end
-    pkgrequires
+    pkgs
 end
 
 # add & rm – edit the content a requires file
