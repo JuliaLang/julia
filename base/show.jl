@@ -240,26 +240,7 @@ show_unquoted(io::IO, ex, ::Int,::Int) = show(io, ex)
 
 const indent_width = 4
 const quoted_syms = Set{Symbol}([:(:),:(::),:(:=),:(=),:(==),:(===),:(=>)])
-const uni_ops = Set{Symbol}([:(+), :(-), :(!), :(~), :(<:), :(>:)])
-const bin_ops_by_prec = [
-    "= := += -= *= /= //= .//= .*= ./= \\= .\\= ^= .^= %= .%= |= &= \$= => <<= >>= >>>= ~ .+= .-=",
-    "?",
-    "||",
-    "&&",
-    "-- -->",
-    "> < >= <= == === != !== .> .< .>= .<= .== .!= .= .! <: >:",
-    "|> <|",
-    ": ..",
-    "+ - .+ .- | \$",
-    "<< >> >>> .<< .>> .>>>",
-    "* / ./ % .% & .* \\ .\\",
-    "// .//",
-    "^ .^",
-    "::",
-    "."
-]
-const bin_op_precs = Dict{Symbol,Int}(merge([{symbol(op)=>i for op=split(bin_ops_by_prec[i])} for i=1:length(bin_ops_by_prec)]...))
-const bin_ops = Set{Symbol}(keys(bin_op_precs))
+const uni_ops = Set{Symbol}([:(+), :(-), :(!), :(¬), :(~), :(<:), :(>:), :(√), :(∛), :(∜)])
 const expr_infix_wide = Set([:(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(&=),
     :(|=), :($=), :(>>>=), :(>>=), :(<<=), :(&&), :(||)])
 const expr_infix = Set([:(:), :(<:), :(->), :(=>), symbol("::")])
@@ -282,8 +263,12 @@ function isidentifier(s::String)
     end
     return true
 end
-isoperator(s::ByteString) = ccall(:jl_is_operator, Cint, (Ptr{Uint8},), s) != 0
-isoperator(s::String) = isoperator(bytestring(s))
+
+isoperator(s::Symbol) = ccall(:jl_is_operator, Cint, (Ptr{Uint8},), s) != 0
+operator_precedence(s::Symbol) = int(ccall(:jl_operator_precedence,
+                                           Cint, (Ptr{Uint8},), s))
+operator_precedence(x::Any) = 0 # fallback for generic expression nodes
+const prec_power = operator_precedence(:(^))
 
 is_expr(ex, head::Symbol)         = (isa(ex, Expr) && (ex.head == head))
 is_expr(ex, head::Symbol, n::Int) = is_expr(ex, head) && length(ex.args) == n
@@ -375,7 +360,7 @@ show_unquoted(io::IO, ex::QuoteNode, indent::Int, prec::Int) =
 function show_unquoted_quote_expr(io::IO, value, indent::Int, prec::Int)
     if isa(value, Symbol) && !(value in quoted_syms)
         s = string(value)
-        if (isidentifier(s) || isoperator(s)) && s != "end"
+        if (isidentifier(s) || isoperator(value)) && s != "end"
             print(io, ":")
             print(io, value)
         else
@@ -413,7 +398,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     elseif (head in expr_infix && nargs==2) || (is(head,:(:)) && nargs==3)
         show_list(io, args, head, indent)
     elseif head in expr_infix_wide && nargs == 2
-        func_prec = get(bin_op_precs, head, 0)
+        func_prec = operator_precedence(head)
         if func_prec < prec
             show_enclosed_list(io, '(', args, " $head ", ')', indent, func_prec)
         else
@@ -438,7 +423,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     # function call
     elseif haskey(expr_calls, head) && nargs >= 1  # :call/:ref/:curly
         func = args[1]
-        func_prec = get(bin_op_precs, func, 0)
+        func_prec = operator_precedence(func)
         func_args = args[2:end]
 
         # scalar multiplication (i.e. "100x")
@@ -459,9 +444,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             end
 
         # binary operator (i.e. "x + y")
-        elseif func in bin_ops
+        elseif func_prec > 0 # is a binary operator
             if length(func_args) > 1
-                sep = func_prec >= bin_op_precs[:(^)] ? "$func" : " $func "
+                sep = func_prec >= prec_power ? "$func" : " $func "
                 if func_prec <= prec
                     show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec)
                 else
@@ -494,7 +479,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 
     # comparison (i.e. "x < y < z")
     elseif is(head, :comparison) && nargs >= 3 && (nargs&1==1)
-        comp_prec = minimum([get(bin_op_precs, comp, 0) for comp=args[2:2:end]])
+        comp_prec = minimum(operator_precedence, args[2:2:end])
         if comp_prec <= prec
             show_enclosed_list(io, '(', args, " ", ')', indent, comp_prec)
         else

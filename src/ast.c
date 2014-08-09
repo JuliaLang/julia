@@ -893,6 +893,11 @@ DLLEXPORT int jl_is_operator(char *sym) {
              == FL_T;
 }
 
+DLLEXPORT int jl_operator_precedence(char *sym) {
+     return numval(fl_applyn(1, symbol_value(symbol("operator-precedence")),
+                             symbol(sym)));
+}
+
 #ifdef __cplusplus
 }
 #endif
