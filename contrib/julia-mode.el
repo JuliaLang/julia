@@ -79,6 +79,12 @@
   "for +.*[^
 ].* \\(in\\)\\(\\s-\\|$\\)+")
 
+(defconst julia-function-regex
+  (rx symbol-start "function" (1+ space) (group (1+ (or word ?_ ?!)))))
+
+(defconst julia-type-regex
+  (rx symbol-start "type" (1+ space) (group (1+ (or word ?_)))))
+
 (defconst julia-font-lock-keywords
   (list '("\\<\\(\\|Uint\\(8\\|16\\|32\\|64\\|128\\)\\|Int\\(8\\|16\\|32\\|64\\|128\\)\\|BigInt\\|Integer\\|BigFloat\\|FloatingPoint\\|Float16\\|Float32\\|Float64\\|Complex128\\|Complex64\\|ComplexPair\\|Bool\\|Char\\|DataType\\|Number\\|Real\\|Int\\|Uint\\|Array\\|DArray\\|AbstractArray\\|AbstractVector\\|AbstractMatrix\\|AbstractSparseMatrix\\|SubArray\\|StridedArray\\|StridedVector\\|StridedMatrix\\|VecOrMat\\|StridedVecOrMat\\|DenseArray\\|Range\\|OrdinalRange\\|StepRange\\|UnitRange\\|FloatRange\\|SparseMatrixCSC\\|Tuple\\|NTuple\\|Symbol\\|Function\\|Vector\\|Matrix\\|Union\\|Type\\|Any\\|Complex\\|None\\|String\\|Ptr\\|Void\\|Exception\\|Task\\|Signed\\|Unsigned\\|Associative\\|Dict\\|IO\\|IOStream\\|Rational\\|Regex\\|RegexMatch\\|Set\\|IntSet\\|ASCIIString\\|UTF8String\\|ByteString\\|Expr\\|WeakRef\\|Nothing\\|ObjectIdDict\\|SubString\\)\\>" .
       font-lock-type-face)
@@ -97,7 +103,8 @@
     (list julia-unquote-regex 2 'font-lock-constant-face)
     (list julia-char-regex 2 'font-lock-string-face)
     (list julia-forloop-in-regex 1 'font-lock-keyword-face)
-    ;(list julia-string-regex 0 'font-lock-string-face)
+    (list julia-function-regex 1 'font-lock-function-name-face)
+    (list julia-type-regex 1 'font-lock-type-face)
 ))
 
 (defconst julia-block-start-keywords
