@@ -328,6 +328,8 @@ ifeq ($(OS), WINNT)
 		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll $(bindir) && \
 	    mkdir $(DESTDIR)$(prefix)/Git && \
 	    7z x PortableGit.7z -o"$(DESTDIR)$(prefix)/Git" && \
+	    echo "[core] eol = lf" >> "$(DESTDIR)$(prefix)/Git/etc/gitconfig" && \
+	    sed -i "s/\bautocrlf = true$$/autocrlf = input/" "$(DESTDIR)$(prefix)/Git/etc/gitconfig" && \
 	    cp busybox.exe $(DESTDIR)$(prefix)/Git/bin/echo.exe && \
 	    cp busybox.exe $(DESTDIR)$(prefix)/Git/bin/printf.exe )
 	cd $(DESTDIR)$(bindir) && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
