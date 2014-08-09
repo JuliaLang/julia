@@ -232,10 +232,7 @@ end
 # so the rest of the terminal is 73 characters
 #########################################################################
 buf = IOBuffer(
-"""
-begin
-print("A very very very very very very very very very very very very ve")
-end""")
+"begin\nprint(\"A very very very very very very very very very very very very ve\")\nend")
 seek(buf,4)
 outbuf = IOBuffer()
 termbuf = Base.Terminals.TerminalBuffer(outbuf)
