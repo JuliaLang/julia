@@ -490,15 +490,6 @@ JL_CALLABLE(jl_f_isdefined)
     return jl_boundp(m, s) ? jl_true : jl_false;
 }
 
-/*jl_value_t* jl_tupleset(void* t, int i, void* x) {
-    if(x != 0) gc_wb(t, x);
-    return ((((jl_value_t**)(t))[2+(i)])=(jl_value_t*)(x));
-    }*/
-/*jl_value_t* jl_cellset(void* a, int i, void* x) {
-    if(x != 0) gc_wb_back(a);
-    return ((((jl_value_t**)((jl_array_t*)a)->data)[(i)])=((jl_value_t*)(x)));
-    }*/
-
 // tuples ---------------------------------------------------------------------
 
 JL_CALLABLE(jl_f_tuple)

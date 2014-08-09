@@ -1364,7 +1364,6 @@ static void emit_write_barrier(jl_codectx_t* ctx, Value *parent, Value *ptr)
     #ifdef GC_INC
     /*    builder.CreateCall2(wbfunc, builder.CreateBitCast(parent, jl_pvalue_llvmt), builder.CreateBitCast(ptr, jl_pvalue_llvmt));
           return;*/
-    ptr = NULL;
     parent = builder.CreateBitCast(parent, T_psize);
     Value* parent_type = builder.CreateLoad(parent);
     Value* parent_mark_bits = builder.CreateAnd(parent_type, 3);
@@ -1374,23 +1373,16 @@ static void emit_write_barrier(jl_codectx_t* ctx, Value *parent, Value *ptr)
     Value* parent_marked = builder.CreateICmpEQ(parent_mark_bits, ConstantInt::get(T_size, 1));
 
     BasicBlock* cont = BasicBlock::Create(getGlobalContext(), "cont");
-    BasicBlock* barrier_may_trigger;
-    if (ptr) barrier_may_trigger = BasicBlock::Create(getGlobalContext(), "wb_may_trigger", ctx->f);
+    BasicBlock* barrier_may_trigger = BasicBlock::Create(getGlobalContext(), "wb_may_trigger", ctx->f);
     BasicBlock* barrier_trigger = BasicBlock::Create(getGlobalContext(), "wb_trigger", ctx->f);
-    builder.CreateCondBr(parent_marked, ptr ? barrier_may_trigger : barrier_trigger, cont);
-
-    if (ptr) {
-        builder.SetInsertPoint(barrier_may_trigger);
-        Value* ptr_mark_bits = builder.CreateAnd(builder.CreateLoad(builder.CreateBitCast(ptr, T_psize)), 3);
-        Value* ptr_not_marked = builder.CreateICmpEQ(ptr_mark_bits, ConstantInt::get(T_size, 0));
-        //        builder.CreateCall2(expect_func, ptr_not_marked, ConstantInt::get(T_int1, 0));
-        builder.CreateCondBr(ptr_not_marked, barrier_trigger, cont);
-    }
+    builder.CreateCondBr(parent_marked, barrier_may_trigger, cont);
+    
+    builder.SetInsertPoint(barrier_may_trigger);
+    Value* ptr_mark_bits = builder.CreateAnd(builder.CreateLoad(builder.CreateBitCast(ptr, T_psize)), 3);
+    Value* ptr_not_marked = builder.CreateICmpEQ(ptr_mark_bits, ConstantInt::get(T_size, 0));
+    builder.CreateCondBr(ptr_not_marked, barrier_trigger, cont);
     builder.SetInsertPoint(barrier_trigger);
-    if (!ptr) { // clear the mark
-        builder.CreateStore(builder.CreateAnd(parent_type, ~(uintptr_t)3), parent);
-    }
-    builder.CreateCall(queuerootfun, ptr ? ptr : builder.CreateBitCast(parent, jl_pvalue_llvmt));
+    builder.CreateCall(prepare_call(queuerootfun), builder.CreateBitCast(parent, jl_pvalue_llvmt));
     builder.CreateBr(cont);
     ctx->f->getBasicBlockList().push_back(cont);
     builder.SetInsertPoint(cont);
@@ -1401,19 +1393,15 @@ static void emit_checked_write_barrier(jl_codectx_t *ctx, Value *parent, Value *
 {
 #ifdef GC_INC
     BasicBlock *cont;
-    if (ptr) {
-        Value *not_null = builder.CreateICmpNE(ptr, V_null);
-        BasicBlock *if_not_null = BasicBlock::Create(getGlobalContext(), "wb_not_null", ctx->f);
-        cont = BasicBlock::Create(getGlobalContext(), "cont");
-        builder.CreateCondBr(not_null, if_not_null, cont);
-        builder.SetInsertPoint(if_not_null);
-    }
+    Value *not_null = builder.CreateICmpNE(ptr, V_null);
+    BasicBlock *if_not_null = BasicBlock::Create(getGlobalContext(), "wb_not_null", ctx->f);
+    cont = BasicBlock::Create(getGlobalContext(), "cont");
+    builder.CreateCondBr(not_null, if_not_null, cont);
+    builder.SetInsertPoint(if_not_null);
     emit_write_barrier(ctx, parent, ptr);
-    if (ptr) {
-        builder.CreateBr(cont);
-        ctx->f->getBasicBlockList().push_back(cont);
-        builder.SetInsertPoint(cont);
-    }
+    builder.CreateBr(cont);
+    ctx->f->getBasicBlockList().push_back(cont);
+    builder.SetInsertPoint(cont);
 #endif
 }
 
@@ -2174,10 +2162,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                         Value* v = ety==(jl_value_t*)jl_any_type ? emit_expr(args[2],ctx) : emit_unboxed(args[2],ctx);
                         typed_store(emit_arrayptr(ary,args[1],ctx), idx,
                                     v,
-                                    ety, ctx, /*ety == (jl_value_t*)jl_any_type ? ary : */NULL);
-                        if (ety == (jl_value_t*)jl_any_type) {
-                            emit_write_barrier(ctx, ary, NULL);
-                        }
+                                    ety, ctx, ety == (jl_value_t*)jl_any_type ? ary : NULL);
                     }
                     JL_GC_POP();
                     return ary;
@@ -2879,12 +2864,13 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         int last_depth = ctx->argDepth;
         Value *name = literal_pointer_val(mn);
         jl_binding_t *bnd = NULL;
-        Value *bp;
+        Value *bp, *bp_owner = V_null;
         if (iskw) {
             // fenv = theF->env
             Value *fenv = emit_nthptr(theF, 2, tbaa_func);
             // bp = &((jl_methtable_t*)fenv)->kwsorter
             bp = emit_nthptr_addr(fenv, 7);
+            bp_owner = fenv;
         }
         else if (theF != NULL) {
             bp = make_gcroot(theF, ctx);
@@ -2893,6 +2879,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
             if (is_global((jl_sym_t*)mn, ctx)) {
                 bnd = jl_get_binding_for_method_def(ctx->module, (jl_sym_t*)mn);
                 bp = julia_binding_gv(bnd);
+                bp_owner = literal_pointer_val((jl_value_t*)ctx->module);
             }
             else {
                 bp = var_binding_pointer((jl_sym_t*)mn, &bnd, false, ctx);
@@ -2902,7 +2889,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         make_gcroot(a1, ctx);
         Value *a2 = boxed(emit_expr(args[2], ctx),ctx);
         make_gcroot(a2, ctx);
-        Value *mdargs[6] = { name, bp, literal_pointer_val(bnd), a1, a2, literal_pointer_val(args[3]) };
+        Value *mdargs[6] = { name, bp, bp_owner, literal_pointer_val(bnd), a1, a2, literal_pointer_val(args[3]) };
         ctx->argDepth = last_depth;
         return builder.CreateCall(prepare_call(jlmethod_func), ArrayRef<Value*>(&mdargs[0], 6));
     }
@@ -4431,11 +4418,11 @@ static void init_julia_llvm_env(Module *m)
     queuerootfun = Function::Create(FunctionType::get(T_void, args_1ptr, false),
                                     Function::ExternalLinkage,
                                     "gc_queue_root", m);
-    jl_ExecutionEngine->addGlobalMapping(queuerootfun, (void*)&gc_queue_root);
+    add_named_global(queuerootfun, (void*)&gc_queue_root);
     wbfunc = Function::Create(FunctionType::get(T_void, wbargs, false),
                               Function::ExternalLinkage,
                               "gc_wb_slow", m);
-    jl_ExecutionEngine->addGlobalMapping(wbfunc, (void*)&gc_wb_slow);
+    add_named_global(wbfunc, (void*)&gc_wb_slow);
     
     std::vector<Type *> exp_args(0);
     exp_args.push_back(T_int1);

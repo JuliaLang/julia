@@ -910,7 +910,7 @@ static Value *typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
 
 static Value *emit_unbox(Type *to, Value *x, jl_value_t *jt);
 
-static Value *typed_store(Value *ptr, Value *idx_0based, Value *rhs,
+static void typed_store(Value *ptr, Value *idx_0based, Value *rhs,
                           jl_value_t *jltype, jl_codectx_t *ctx, Value* parent) // for the write barrier, NULL if no barrier needed
 {
     Type *elty = julia_type_to_llvm(jltype);

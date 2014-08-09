@@ -230,6 +230,7 @@ jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data, size_t nel,
     if (own_buffer) {
         a->how = 2;
         jl_gc_track_malloced_array(a);
+        jl_gc_count_allocd(nel*elsz + (elsz == 1 ? 1 : 0));
     }
     else {
         a->how = 0;
@@ -281,6 +282,7 @@ jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data, jl_tuple_t *dims,
     if (own_buffer) {
         a->how = 2;
         jl_gc_track_malloced_array(a);
+        jl_gc_count_allocd(nel*elsz + (elsz == 1 ? 1 : 0));
     }
     else {
         a->how = 0;

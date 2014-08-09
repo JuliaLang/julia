@@ -463,7 +463,7 @@ extern jl_sym_t *arrow_sym; extern jl_sym_t *ldots_sym;
 #define jl_cellref(a,i) (((jl_value_t**)((jl_array_t*)a)->data)[(i)])
 #define jl_cellset(a,i,x) do {                                    \
         jl_value_t *xx = (jl_value_t*)(x);                        \
-        if (xx) gc_wb_back(a);                                    \
+        if (xx) gc_wb(a, xx);                                     \
         (((jl_value_t**)((jl_array_t*)a)->data)[(i)])=xx;         \
     } while(0);
 
@@ -692,8 +692,9 @@ jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 jl_function_t *jl_new_generic_function(jl_sym_t *name);
 void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth,
                    jl_tuple_t *tvars, int8_t isstaged);
-DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
-                                    jl_tuple_t *argtypes, jl_function_t *f, jl_value_t *isstaged);
+DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t *bp_owner,
+                                    jl_binding_t *bnd, jl_tuple_t *argtypes,
+                                    jl_function_t *f, jl_value_t *isstaged);
 DLLEXPORT jl_value_t *jl_box_bool(int8_t x);
 DLLEXPORT jl_value_t *jl_box_int8(int32_t x);
 DLLEXPORT jl_value_t *jl_box_uint8(uint32_t x);
@@ -1098,11 +1099,13 @@ void *jl_gc_managed_malloc(size_t sz);
 void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned);
 void jl_gc_free_array(jl_array_t *a);
 void jl_gc_track_malloced_array(jl_array_t *a);
+void jl_gc_count_allocd(size_t sz);
 void jl_gc_run_all_finalizers(void);
 DLLEXPORT void *alloc_2w(void);
 DLLEXPORT void *alloc_3w(void);
 DLLEXPORT void *alloc_4w(void);
 void *allocb(size_t sz);
+void *reallocb(void*, size_t);
 DLLEXPORT void *allocobj(size_t sz);
 
 DLLEXPORT void jl_clear_malloc_data(void);
@@ -1382,19 +1385,25 @@ static inline void gc_wb_fwd(void* parent, void* ptr)
     #ifdef GC_INC
     // if parent is marked and ptr is clean
     if(__unlikely((*((uintptr_t*)parent) & 3) == 1 && (*((uintptr_t*)ptr) & 3) == 0)) {
-        gc_queue_root(ptr);
+        gc_queue_root((void*)((uintptr_t)ptr | 1));
     }
     #endif
 }
 
-#define gc_wb(a,b) gc_wb_back(a)
+static inline void gc_wb(void *parent, void *ptr)
+{
+    if (__unlikely((*((uintptr_t*)parent) & 3) == 1 &&
+                   (*((uintptr_t*)ptr) & 3) == 0))
+        gc_queue_root(parent);
+}
 
 static inline void gc_wb_buf(void *parent, void *bufptr)
 {
     #ifdef GC_INC
-    // if parent is marked
-    if((*((uintptr_t*)parent) & 3) == 1)
-        gc_setmark_buf(bufptr, *(uintptr_t*)parent & 3);
+    // if parent is marked and buf is not
+    if (__unlikely((*((uintptr_t*)parent) & 3) == 1))
+                   //                   (*((uintptr_t*)bufptr) & 3) != 1))
+          gc_setmark_buf(bufptr, *(uintptr_t*)parent & 3);
     #endif
 }
 
@@ -1402,8 +1411,8 @@ static inline void gc_wb_back(void *ptr)
 {
     #ifdef GC_INC
     // if ptr is marked
-    if((*((uintptr_t*)ptr) & 3) == 1) {
-        *((uintptr_t*)ptr) &= ~(uintptr_t)3; // clear the mark
+    if(__unlikely((*((uintptr_t*)ptr) & 3) == 1)) {
+        //        *((uintptr_t*)ptr) &= ~(uintptr_t)3; // clear the mark
         gc_queue_root(ptr);
     }
     #endif

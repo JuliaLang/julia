@@ -650,8 +650,10 @@ static int type_contains(jl_value_t *ty, jl_value_t *x)
 
 void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li);
 
-DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
-                                    jl_tuple_t *argtypes, jl_function_t *f, jl_value_t *isstaged)
+DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp,
+                                    jl_value_t *bp_owner, jl_binding_t *bnd,
+                                    jl_tuple_t *argtypes, jl_function_t *f,
+                                    jl_value_t *isstaged)
 {
     // argtypes is a tuple ((types...), (typevars...))
     jl_tuple_t *t = (jl_tuple_t*)jl_t1(argtypes);
@@ -705,11 +707,7 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_
     if (*bp == NULL) {
         gf = (jl_value_t*)jl_new_generic_function(name);
         *bp = gf;
-        #ifdef GC_INC
-        // this would be better as gc_wb(whatever_jlvalue_bp_points_into, *bp); but this function is used in several places so this will do for now
-        // (in case changing the sig of this function do not forget methodfunc in codegen)
-        gc_queue_root(gf);
-        #endif
+        if (bp_owner) gc_wb(bp_owner, gf);
     }
     JL_GC_PUSH1(&gf);
     assert(jl_is_function(f));

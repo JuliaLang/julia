@@ -112,7 +112,7 @@ typedef CONTEXT *bt_context_t;
 #include <libunwind.h>
 typedef unw_context_t *bt_context_t;
 #endif
-#define MAX_BT_SIZE 80000
+#define MAX_BT_SIZE 80
 extern ptrint_t bt_data[MAX_BT_SIZE+1];
 extern size_t bt_size;
 DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize);

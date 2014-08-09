@@ -11,7 +11,7 @@ end
 function main()
     baseline = readperf(open(ARGS[1]))
     torun = length(ARGS) > 1 ? ARGS[2] : "all"
-    io,p = readsfrom(`make -s $torun`)
+    io,p = open(`make -s $torun`, "r")
     newp = readperf(io)
     
     names = sort(intersect(keys(baseline),keys(newp)))
