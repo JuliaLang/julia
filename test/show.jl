@@ -157,3 +157,7 @@ end"""
 @test_repr "foo.bar[1]"
 @test_repr "foo.bar()"
 @test_repr "(foo + bar)()"
+
+# unicode operator printing
+@test sprint(show, :(1 ⊕ (2 ⊗ 3))) == ":(1 ⊕ 2 ⊗ 3)"
+@test sprint(show, :((1 ⊕ 2) ⊗ 3)) == ":((1 ⊕ 2) ⊗ 3)"
