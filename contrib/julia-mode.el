@@ -12,6 +12,8 @@
 
 (defvar julia-mode-hook nil)
 
+(defvar julia-basic-offset)
+
 (add-to-list 'auto-mode-alist '("\\.jl\\'" . julia-mode))
 
 ;; define ignore-errors macro if it isn't present
@@ -239,6 +241,26 @@ Do not move back beyond MIN."
       'prog-mode
     'fundamental-mode))
 
+;;; IMENU
+(defvar julia-imenu-generic-expression
+  ;; don't use syntax classes, screws egrep
+  '(("Function (_)" "[ \t]*function[ \t]+\\(_[^ \t\n]*\\)" 1)
+    ("Function" "^[ \t]*function[ \t]+\\([^_][^\t\n]*\\)" 1)
+    ("Const" "[ \t]*const \\([^ \t\n]*\\)" 1)
+    ("Type"  "^[ \t]*[a-zA-Z0-9_]*type[a-zA-Z0-9_]* \\([^ \t\n]*\\)" 1)
+    ("Require"      " *\\(\\brequire\\)(\\([^ \t\n)]*\\)" 2)
+    ("Include"      " *\\(\\binclude\\)(\\([^ \t\n)]*\\)" 2)
+    ;; ("Classes" "^.*setClass(\\(.*\\)," 1)
+    ;; ("Coercions" "^.*setAs(\\([^,]+,[^,]*\\)," 1) ; show from and to
+    ;; ("Generics" "^.*setGeneric(\\([^,]*\\)," 1)
+    ;; ("Methods" "^.*set\\(Group\\|Replace\\)?Method(\"\\(.+\\)\"," 2)
+    ;; ;;[ ]*\\(signature=\\)?(\\(.*,?\\)*\\)," 1)
+    ;; ;;
+    ;; ;;("Other" "^\\(.+\\)\\s-*<-[ \t\n]*[^\\(function\\|read\\|.*data\.frame\\)]" 1)
+    ;; ("Package" "^.*\\(library\\|require\\)(\\(.*\\)," 2)
+    ;; ("Data" "^\\(.+\\)\\s-*<-[ \t\n]*\\(read\\|.*data\.frame\\).*(" 1)))
+    ))
+
 ;;;###autoload
 (define-derived-mode julia-mode julia-mode-prog-mode "Julia"
   "Major mode for editing julia code."
@@ -262,27 +284,8 @@ Do not move back beyond MIN."
   (setq imenu-generic-expression julia-imenu-generic-expression)
   (imenu-add-to-menubar "Imenu"))
 
-;;; IMENU
-(defvar julia-imenu-generic-expression
-  ;; don't use syntax classes, screws egrep
-  '(("Function (_)" "[ \t]*function[ \t]+\\(_[^ \t\n]*\\)" 1)
-    ("Function" "^[ \t]*function[ \t]+\\([^_][^\t\n]*\\)" 1)
-    ("Const" "[ \t]*const \\([^ \t\n]*\\)" 1)
-    ("Type"  "^[ \t]*[a-zA-Z0-9_]*type[a-zA-Z0-9_]* \\([^ \t\n]*\\)" 1)
-    ("Require"      " *\\(\\brequire\\)(\\([^ \t\n)]*\\)" 2)
-    ("Include"      " *\\(\\binclude\\)(\\([^ \t\n)]*\\)" 2)
-    ;; ("Classes" "^.*setClass(\\(.*\\)," 1)
-    ;; ("Coercions" "^.*setAs(\\([^,]+,[^,]*\\)," 1) ; show from and to
-    ;; ("Generics" "^.*setGeneric(\\([^,]*\\)," 1)
-    ;; ("Methods" "^.*set\\(Group\\|Replace\\)?Method(\"\\(.+\\)\"," 2)
-    ;; ;;[ ]*\\(signature=\\)?(\\(.*,?\\)*\\)," 1)
-    ;; ;;
-    ;; ;;("Other" "^\\(.+\\)\\s-*<-[ \t\n]*[^\\(function\\|read\\|.*data\.frame\\)]" 1)
-    ;; ("Package" "^.*\\(library\\|require\\)(\\(.*\\)," 2)
-    ;; ("Data" "^\\(.+\\)\\s-*<-[ \t\n]*\\(read\\|.*data\.frame\\).*(" 1)))
-    ))
+(defvar latexsubs (make-hash-table :test 'equal))
 
-(setq latexsubs (make-hash-table :test 'equal))
 (defun latexsub (arg)
   "Perform a LaTeX-like Unicode symbol substitution."
   (interactive "*i")
