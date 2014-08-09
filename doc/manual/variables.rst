@@ -69,7 +69,7 @@ Unicode names (in UTF-8 encoding) are allowed:
 In the Julia REPL and several other Julia editing environments, you
 can type many Unicode math symbols by typing the backslashed LaTeX symbol
 name followed by tab.  For example, the variable name ``δ`` can be
-entered by typing ``\delta``-*tab*, or even ``α₂̂`` by
+entered by typing ``\delta``-*tab*, or even ``α̂₂`` by
 ``\alpha``-*tab*-``\hat``-*tab*-``\_2``-*tab*.
 
 .. raw:: latex
