@@ -20,7 +20,7 @@
 #if defined(__APPLE__)
 #include <AvailabilityMacros.h>
 #define __need_ucontext64_t
-#if defined(MAC_OS_X_VERSION_10_10) && MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_10
+#ifdef MAC_OS_X_VERSION_10_10
 #include <sys/_types/_ucontext64.h>
 #else
 #include <machine/_structs.h>
