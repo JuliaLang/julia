@@ -38,11 +38,11 @@ run(`chmod +w $file`)
 # files and is thus zero in this case.
 @windows_only @test filesize(dir) == 0
 @unix_only @test filesize(dir) > 0
-let skew = 0.25  # allow 250ms skew
+let skew = 2  # allow 2s skew
     now   = time()
     mfile = mtime(file)
     mdir  = mtime(dir)
-    @test now >= mfile-skew  &&  now >= mdir-skew  &&  mfile >= mdir-skew
+    @test abs(now - mfile) <= skew && abs(now - mdir) <= skew && abs(mfile - mdir) <= skew
 end
 #@test int(time()) >= int(mtime(file)) >= int(mtime(dir)) >= 0 # 1 second accuracy should be sufficient
 
