@@ -346,3 +346,7 @@ function workspace()
     empty!(package_locks)
     nothing
 end
+
+function runtests()
+    run(`$JULIA_HOME/julia $(joinpath(JULIA_HOME,"..","share","julia","test","runtests.jl"))`)
+end
