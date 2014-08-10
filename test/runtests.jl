@@ -36,7 +36,6 @@ cd(dirname(@__FILE__)) do
     n = 1
     if net_on 
         n = min(8, CPU_CORES, length(tests))
-        isempty(ARGS) && (n = min(n, iceil(CPU_CORES/2)))
         n > 1 && addprocs(n; exeflags=`--check-bounds=yes`)
         blas_set_num_threads(1)
     else

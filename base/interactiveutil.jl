@@ -347,6 +347,9 @@ function workspace()
     nothing
 end
 
-function runtests()
-    run(`$JULIA_HOME/julia $(joinpath(JULIA_HOME,"..","share","julia","test","runtests.jl"))`)
+function runtests(tests = ["all"], numcores = iceil(CPU_CORES/2))
+    ENV2 = copy(ENV)
+    ENV2["JULIA_CPU_CORES"] = "$numcores"
+    run(setenv(`$JULIA_HOME/julia $(joinpath(JULIA_HOME,"..","share","julia",
+        "test","runtests.jl")) $tests`, ENV2))
 end
