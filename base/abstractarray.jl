@@ -533,14 +533,6 @@ function hcat(X::Number...)
     hvcat_fill(Array(T,1,length(X)), X)
 end
 
-function hcat{T}(V::AbstractVector{T}...)
-    height = length(V[1])
-    for j = 2:length(V)
-        if length(V[j]) != height; error("vector must have same lengths"); end
-    end
-    [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
-end
-
 function vcat{T}(V::AbstractVector{T}...)
     n = 0
     for Vk in V
@@ -550,10 +542,9 @@ function vcat{T}(V::AbstractVector{T}...)
     pos = 1
     for k=1:length(V)
         Vk = V[k]
-        for i=1:length(Vk)
-            a[pos] = Vk[i]
-            pos += 1
-        end
+        p1 = pos+length(Vk)-1
+        a[pos:p1] = Vk
+        pos = p1+1
     end
     a
 end
