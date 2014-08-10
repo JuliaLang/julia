@@ -101,8 +101,10 @@ $(build_datarootdir)/man/man1/julia.1: doc/man/julia.1 | $(build_datarootdir)/ju
 	@mkdir -p $(build_datarootdir)/man/man1
 	@cp $< $@
 
-$(build_sysconfdir)/julia/juliarc.jl: etc/juliarc.jl | $(build_sysconfdir)/julia
+$(build_sysconfdir)/julia/juliarc.jl: etc/juliarc.jl contrib/testbanner.jl | $(build_sysconfdir)/julia
 	@cp $< $@
+	# Copy in testing banner julia snippet to juliarc.jl
+	-cat ./contrib/testbanner.jl >> $(build_sysconfdir)/julia/juliarc.jl
 ifeq ($(OS), WINNT)
 	@cat ./contrib/windows/juliarc.jl >> $(build_sysconfdir)/julia/juliarc.jl
 $(build_sysconfdir)/julia/juliarc.jl: contrib/windows/juliarc.jl

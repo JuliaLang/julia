@@ -346,3 +346,35 @@ function workspace()
     empty!(package_locks)
     nothing
 end
+
+function runtests(test_names...)
+    if length(test_names) == 0
+        test_names = ["all"]
+    else
+        test_names = [z for z in test_names]
+    end
+    ARGS = test_names
+    cd(joinpath(JULIA_HOME,"../share/julia/test/")) do
+        include("runtests.jl")
+    end
+
+    # Once we've run this for this version, silence it from happening again
+    if test_names == ["all"]
+        silence_test_banner()
+    end
+end
+
+function get_firstboot_version()
+    firstboot = joinpath(Pkg.Dir._pkgroot(),".firstboot")
+
+    try
+        return convert(VersionNumber,readchomp(open(firstboot)))
+    end
+    return nothing
+end
+
+function silence_test_banner()
+    firstboot = joinpath(Pkg.Dir._pkgroot(),".firstboot")
+    write(open(firstboot, "w"), string(Base.VERSION))
+    return
+end

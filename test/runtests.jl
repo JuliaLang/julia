@@ -15,7 +15,7 @@ testnames = [
 # parallel tests depend on other workers - do them last
 push!(testnames, "parallel")
 
-tests = ARGS==["all"] ? testnames : ARGS
+tests = (ARGS == ["all"] || isempty(ARGS)) ? testnames : ARGS
 
 if "linalg" in tests
     # specifically selected case
