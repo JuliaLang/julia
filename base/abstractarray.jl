@@ -360,7 +360,7 @@ real{T<:Real}(x::AbstractArray{T}) = x
 imag{T<:Real}(x::AbstractArray{T}) = zero(x)
 
 +{T<:Number}(x::AbstractArray{T}) = x
-*{T<:Number}(x::AbstractArray{T}) = x
+*{T<:Number}(x::AbstractArray{T,2}) = x
 
 ## Binary arithmetic operators ##
 
