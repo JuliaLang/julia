@@ -348,6 +348,9 @@ function workspace()
 end
 
 function runtests(tests = ["all"], numcores = iceil(CPU_CORES/2))
+    if isa(tests,String)
+        tests = split(tests)
+    end
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_CORES"] = "$numcores"
     run(setenv(`$JULIA_HOME/julia $(joinpath(JULIA_HOME,"..","share","julia",
