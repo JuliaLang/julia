@@ -766,14 +766,19 @@ function to_tuple_of_Types(t::ANY)
     return t
 end
 
+function const_func_or_constructor(f, ftype, sv)
+    if isType(ftype) && isleaftype(ftype.parameters[1])
+        af = ftype.parameters[1]
+        _methods(af,(),0)
+    else
+        af = isconstantfunc(f, sv)
+    end
+    af
+end
+
 function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
     if is(f,apply) && length(fargs)>0
-        if isType(argtypes[1]) && isleaftype(argtypes[1].parameters[1])
-            af = argtypes[1].parameters[1]
-            _methods(af,(),0)
-        else
-            af = isconstantfunc(fargs[1], sv)
-        end
+        af = const_func_or_constructor(fargs[1], argtypes[1], sv)
         if !is(af,false)
             aargtypes = map(to_tuple_of_Types, argtypes[2:end])
             if all(x->isa(x,Tuple), aargtypes) &&
@@ -813,6 +818,14 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
             end
             # apply known function with unknown args => f(Any...)
             return abstract_call(af, (), Tuple, vtypes, sv, ())
+        end
+    end
+    if isdefined(Main.Base,:return_type) && f === Main.Base.return_type &&
+       length(fargs) == 2 && argtypes[2] <: Tuple && isleaftype(argtypes[2])
+        af = const_func_or_constructor(fargs[1], argtypes[1], sv)
+        if !is(af,false)
+            e.head = :call1
+            return Type{return_type(_ieval(af), map(x->x.parameters[1], argtypes[2]))}
         end
     end
     if isgeneric(f)
@@ -2047,6 +2060,9 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
                 isleaftype(e.typ.parameters[1])
             return (e.typ.parameters[1],())
         end
+        if isdefined(Main.Base,:return_type) && is(f,Main.Base.return_type)
+            return (e.typ.parameters[1],())
+        end
         if is(f,Union)
             union = e.typ.parameters[1]
             if isa(union,UnionType) && all(isleaftype, (union::UnionType).types)
@@ -3037,6 +3053,19 @@ function code_typed(f::Callable, types::(Type...))
         end
     end
     asts
+end
+
+function return_type(f::Callable, types::Tuple)
+    if isdefined(f, :code)
+        typeinf(f.code, types, f.code.sparams, f.code, true)[2]
+    else
+        fargs = ntuple(x->gensym(), length(types))
+        if isgeneric(f)
+            abstract_call_gf(f, fargs, types, Expr(:call, f.env.name, fargs...))
+        else
+            builtin_tfunction(f, fargs, types)
+        end
+    end
 end
 
 function return_types(f::Callable, types)
