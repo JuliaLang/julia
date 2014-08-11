@@ -93,7 +93,7 @@
    '("if" "else" "elseif" "while" "for" "begin" "end" "quote"
      "try" "catch" "return" "local" "abstract" "function" "macro" "ccall"
      "finally" "typealias" "break" "continue" "type" "global"
-     "module" "using" "import" "export" "const" "let" "bitstype" "do"
+     "module" "using" "import" "export" "const" "let" "bitstype" "do" "in"
      "baremodule" "importall" "immutable")
    'symbols))
 
