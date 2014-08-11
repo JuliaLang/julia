@@ -66,6 +66,23 @@ function getdict(data::Vector{Uint})
     Dict(uip, [lookup(ip) for ip in uip])
 end
 
+function callers(funcname::ByteString, bt::Vector{Uint}, lidict; filename = nothing, linerange = nothing)
+    if filename == nothing && linerange == nothing
+        return callersf(li -> li.func == funcname, bt, lidict)
+    end
+    filename == nothing && error("If supplying linerange, you must also supply the filename")
+    if linerange == nothing
+        return callersf(li -> li.func == funcname && li.file == filename, bt, lidict)
+    else
+        return callersf(li -> li.func == funcname && li.file == filename && in(li.line, linerange), bt, lidict)
+    end
+end
+
+callers(funcname::ByteString; kwargs...) = callers(funcname, retrieve()...; kwargs...)
+callers(func::Function, bt::Vector{Uint}, lidict; kwargs...) = callers(string(func), bt, lidict; kwargs...)
+callers(func::Function; kwargs...) = callers(string(func), retrieve()...; kwargs...)
+
+
 ####
 #### Internal interface
 ####
@@ -372,6 +389,30 @@ function tree{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict, C::Bool, combi
     len = Int[length(x) for x in bt]
     keep = len .> 0
     tree(io, bt[keep], counts[keep], lidict, level, combine, cols)
+end
+
+function callersf(matchfunc::Function, bt::Vector{Uint}, lidict)
+    counts = Dict{LineInfo, Int}()
+    lastmatched = false
+    for id in bt
+        if id == 0
+            lastmatched = false
+            continue
+        end
+        li = lidict[id]
+        if lastmatched
+            if haskey(counts, li)
+                counts[li] += 1
+            else
+                counts[li] = 1
+            end
+        end
+        lastmatched = matchfunc(li)
+    end
+    k = collect(keys(counts))
+    v = collect(values(counts))
+    p = sortperm(v, rev=true)
+    [(v[i], k[i]) for i in p]
 end
 
 # Utilities
