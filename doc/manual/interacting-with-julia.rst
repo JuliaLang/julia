@@ -174,7 +174,25 @@ In both the Julian and help modes of the REPL, one can enter the first few chara
     StridedArray    StridedVecOrMat  String
     StridedMatrix   StridedVector
 
-The tab key is also used to substitute LaTeX math symbols with their unicode equivalents::
+The tab key can also be used to substitute LaTeX math symbols with their unicode equivalents,
+and get a list of LaTeX matches as well::
 
-    julia> \alpha[TAB]
-    julia> α
+    julia> \pi[TAB]
+    julia> π
+    π = 3.1415926535897...
+
+    julia> \sqrt[TAB]\pi[TAB]     # √ is equivalent to the sqrt() function
+    julia> √π
+    1.7724538509055159
+
+    julia> \pi[TAB]\^2[TAB]       # but note that π⁷ is not defined unless you π⁷ = π^7
+    julia> π²
+    9.869604401089358
+
+    julia> \hbar[TAB](h) = h / 2\pi[TAB]
+    julia> ħ(h) = h / 2π
+    ħ (generic function with 1 method)
+
+    julia> \h[TAB]
+    \hat              \heartsuit         \hksearow          \hookleftarrow     \hslash
+    \hbar             \hermitconjmatrix  \hkswarow          \hookrightarrow    \hspace
