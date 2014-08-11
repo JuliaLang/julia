@@ -989,7 +989,7 @@ function reverse!(v::StridedVector, s=1, n=length(v))
     v
 end
 
-function vcat{T}(arrays::Array{T,1}...)
+function vcat{T}(arrays::Vector{T}...)
     n = 0
     for a in arrays
         n += length(a)
@@ -1009,6 +1009,14 @@ function vcat{T}(arrays::Array{T,1}...)
         offset += nba
     end
     return arr
+end
+
+function hcat{T}(V::Vector{T}...)
+    height = length(V[1])
+    for j = 2:length(V)
+        if length(V[j]) != height; error("vector must have same lengths"); end
+    end
+    [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
 end
 
 ## find ##
