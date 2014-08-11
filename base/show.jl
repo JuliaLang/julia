@@ -373,7 +373,7 @@ show_unquoted(io::IO, ex::QuoteNode, indent::Int, prec::Int) =
 function show_unquoted_quote_expr(io::IO, value, indent::Int, prec::Int)
     if isa(value, Symbol) && !(value in quoted_syms)
         s = string(value)
-        if (isidentifier(s) || isoperator(value)) && s != "end"
+        if isidentifier(s) || isoperator(value)
             print(io, ":")
             print(io, value)
         else

@@ -1689,9 +1689,12 @@
 	  ;; symbol/expression quote
 	  ((eq? t ':)
 	   (take-token s)
-	   (if (closing-token? (peek-token s))
-	       ':
-	       (list 'quote (parse-atom- s))))
+	   (let ((nxt (peek-token s)))
+	     (if (and (closing-token? nxt)
+		      (or (not (symbol? nxt))
+			  (ts:space? s)))
+		 ':
+		 (list 'quote (parse-atom- s)))))
 
 	  ;; misplaced =
 	  ((eq? t '=) (error "unexpected \"=\""))
