@@ -355,3 +355,14 @@ Function reference
    values that store the file name, function name, and line
    number. This function allows you to save profiling results for
    future analysis.
+
+.. function::callers(funcname, [data, lidict], [filename=<filename>], [linerange=<start:stop>]) -> Vector{(count, linfo)}
+
+   Given a previous profiling run, determine who called a particular
+   function. Supplying the filename (and optionally, range of line
+   numbers over which the function is defined) allows you to
+   disambiguate an overloaded method. The returned value is a vector
+   containing a count of the number of calls and line information
+   about the caller.  One can optionally supply backtrace data
+   obtained from ``retrieve``; otherwise, the current internal profile
+   buffer is used.
