@@ -18,7 +18,7 @@ endif
 OBJS = $(SRCS:%.c=%.o)
 DOBJS = $(SRCS:%.c=%.do)
 LLTDIR = ../support
-LLT = $(LLTDIR)/libsupport.a $(LIBUV) $(LIBUTF8PROC)
+LLT = $(LLTDIR)/libsupport.a $(LIBUV) $(LIBMOJIBAKE)
 
 FLAGS = -I$(LLTDIR) $(CFLAGS) $(HFILEDIRS:%=-I%) \
         -I$(LIBUV_INC) -I$(build_includedir) $(LIBDIRS:%=-L%) \

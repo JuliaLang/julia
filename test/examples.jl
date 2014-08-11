@@ -24,12 +24,6 @@ r3, r4 = meshgrid(1:10,1:10)
 @test r3 == r'
 @test r4 == r
 
-include("../examples/quaternion.jl")
-q = Quaternions.Quaternion(1,0,0,0)
-x = Quaternions.Quaternion(0,1,1,1)
-@test q*2.0+2 == Quaternions.Quaternion(4,0,0,0)
-@test abs((-q+x*2)/4) == 0.9013878188659973
-
 include("../examples/queens.jl")
 @test solve(8, 8, 1) == Array{Int,1}[[1,1]]
 @test solve(8, 8, 7) == Array{Int,1}[[1,1],[2,3],[3,5],[4,2],[5,8],[7,4],[8,7]]

@@ -1823,3 +1823,7 @@ ndigf(n) = float64(log(float32(n)))
 # cmp on unsigned integers (see commit 24b236321e03c6d9b8cb91a450f567256a793196)
 @test cmp(0x77777777,0x88888888) == -1
 @test cmp(0x3959dcc5d7fd177b67df4e10bc350850, 0xd63d5b1183221b0a9e38c6809b33cdec) == -1
+
+# issue #7911
+@test sum([int128(1) int128(2)]) == int128(3)
+
