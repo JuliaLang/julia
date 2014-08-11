@@ -181,13 +181,20 @@ and get a list of LaTeX matches as well::
     julia> π
     π = 3.1415926535897...
 
-    julia> \sqrt[TAB]\pi[TAB]     # √ is equivalent to the sqrt() function
-    julia> √π
-    1.7724538509055159
+    julia> e\_1[TAB] = [1,0]
+    julia> e₁ = [1,0]
+    2-element Array{Int64,1}:
+     1
+     0
 
-    julia> \pi[TAB]\^2[TAB] = pi^2
-    julia> π² = pi^2
-    9.869604401089358
+    julia> e\^1[TAB] = [1 0]
+    julia> e¹ = [1 0]
+    1x2 Array{Int64,2}:
+     1  0
+
+    julia> \sqrt[TAB]2     # √ is equivalent to the sqrt() function
+    julia> √2
+    1.4142135623730951
 
     julia> \hbar[TAB](h) = h / 2\pi[TAB]
     julia> ħ(h) = h / 2π
