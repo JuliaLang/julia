@@ -85,6 +85,9 @@
 (defconst julia-type-regex
   (rx symbol-start "type" (1+ space) (group (1+ (or word ?_)))))
 
+(defconst julia-type-annotation-regex
+  (rx "::" (group (1+ (or word ?_)))))
+
 (defconst julia-macro-regex
   "@\\w+")
 
@@ -112,6 +115,7 @@
     (list julia-forloop-in-regex 1 'font-lock-keyword-face)
     (list julia-function-regex 1 'font-lock-function-name-face)
     (list julia-type-regex 1 'font-lock-type-face)
+    (list julia-type-annotation-regex 1 'font-lock-type-face)
 ))
 
 (defconst julia-block-start-keywords
