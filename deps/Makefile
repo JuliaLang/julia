@@ -19,7 +19,7 @@ CONFIGURE_COMMON += F77="$(FC)" CC="$(CC)" CXX="$(CXX)"
 MAKE_COMMON = DESTDIR="" prefix=$(build_prefix) bindir=$(build_bindir) libdir=$(build_libdir) libexecdir=$(build_libexecdir) datarootdir=$(build_datarootdir) includedir=$(build_includedir) sysconfdir=$(build_sysconfdir)
 
 #autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf uv
-#custom Makefile rules: openlibm Rmath double-conversion dsfmt suitesparse-wrapper suitesparse lapack openblas utf8proc
+#custom Makefile rules: openlibm Rmath double-conversion dsfmt suitesparse-wrapper suitesparse lapack openblas mojibake
 
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
@@ -111,8 +111,8 @@ ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 STAGE2_DEPS += suitesparse
 endif
 
-ifeq ($(USE_SYSTEM_UTF8PROC), 0)
-STAGE2_DEPS += utf8proc
+ifeq ($(USE_SYSTEM_MOJIBAKE), 0)
+STAGE2_DEPS += mojibake
 endif
 
 # Only compile standalone LAPACK if we are not using OpenBLAS.
@@ -144,7 +144,7 @@ install: $(addprefix install-, $(LIBS))
 cleanall: $(addprefix clean-, $(LIBS))
 distcleanall: $(addprefix distclean-, $(LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-uv get-pcre get-double-conversion get-openlibm get-openspecfun get-dsfmt get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf get-utf8proc
+getall: get-llvm get-uv get-pcre get-double-conversion get-openlibm get-openspecfun get-dsfmt get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf get-mojibake
 
 ## PATHS ##
 # sort is used to remove potential duplicates
@@ -386,6 +386,7 @@ endif
 ifeq ($(LLVM_VER),3.3)
 	patch -p0 < llvm-3.3.patch
 	patch -p0 < instcombine-llvm-3.3.patch
+	patch -p0 < int128-vector.llvm-3.3.patch
 	(cd llvm-$(LLVM_VER) && patch < ../osx-10.10.llvm-3.3.patch)
 ifeq ($(OS),WINNT)
 ifeq ($(ARCH),x86_64)
@@ -1203,42 +1204,47 @@ compile-fftw-double: $(FFTW_DOUBLE_OBJ_TARGET)
 check-fftw-double: fftw-$(FFTW_VER)-double/checked
 install-fftw-double: $(FFTW_DOUBLE_OBJ_TARGET)
 
-## UTF8PROC ##
+## MOJIBAKE ##
 
-UTF8PROC_OBJ_SOURCE = utf8proc-v$(UTF8PROC_VER)/libutf8proc.a
-UTF8PROC_OBJ_LIB = $(build_libdir)/libutf8proc.a
-UTF8PROC_OBJ_HEADER = $(build_includedir)/utf8proc.h
-UTF8PROC_OBJ_TARGET = $(UTF8PROC_OBJ_LIB) $(UTF8PROC_OBJ_HEADER)
+MOJIBAKE_SRC_TARGET = libmojibake/libmojibake.a
+MOJIBAKE_OBJ_LIB    = $(build_libdir)/libmojibake.a
+MOJIBAKE_OBJ_HEADER = $(build_includedir)/mojibake.h
+MOJIBAKE_OBJ_TARGET = $(MOJIBAKE_OBJ_LIB) $(MOJIBAKE_OBJ_HEADER)
 
-utf8proc-v$(UTF8PROC_VER).tar.gz:
-	$(JLDOWNLOAD) $@ http://www.public-software-group.org/pub/projects/utf8proc/v$(UTF8PROC_VER)/$@
 
-utf8proc-v$(UTF8PROC_VER)/Makefile: utf8proc-v$(UTF8PROC_VER).tar.gz
-	$(JLCHECKSUM) $<
-	$(TAR) -xzf $<
-	patch $@ < utf8proc_Makefile.patch
-	cd utf8proc-v$(UTF8PROC_VER) && patch < ../utf8proc_msvc.patch
+libmojibake/Makefile:
+	(cd .. && git submodule init && git submodule update)
+ifeq (exists, $(shell [ -d libmojibake/.git ] && echo exists ))
+$(MOJIBAKE_SRC_TARGET): libmojibake/.git/HEAD
+endif
+ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/libmojibake ] && echo exists ))
+$(MOJIBAKE_SRC_TARGET): $(JULIAHOME)/.git/modules/deps/libmojibake/HEAD
+endif
+$(MOJIBAKE_SRC_TARGET): libmojibake/Makefile
+	$(MAKE) -C libmojibake cc="$(CC) -O2 -std=c99 $(fPIC)" AR="$(AR)" libmojibake.a
 	touch -c $@
+libmojibake/checked: $(MOJIBAKE_SRC_TARGET)
+ifeq ($(OS),$(BUILD_OS))
+	-$(MAKE) -C libmojibake check
+endif
+	echo 1 > $@
 
-$(UTF8PROC_OBJ_SOURCE): utf8proc-v$(UTF8PROC_VER)/Makefile
-	$(MAKE) -C utf8proc-v$(UTF8PROC_VER) cc="$(CC) -O2 -std=c99 $(fPIC)" AR="$(AR)" libutf8proc.a
-
-$(UTF8PROC_OBJ_LIB): $(UTF8PROC_OBJ_SOURCE)
+$(MOJIBAKE_OBJ_LIB): $(MOJIBAKE_SRC_TARGET)
 	cp -f $< $@
 
-$(UTF8PROC_OBJ_HEADER): utf8proc-v$(UTF8PROC_VER)/Makefile
-	cp -f utf8proc-v$(UTF8PROC_VER)/utf8proc.h $@
+$(MOJIBAKE_OBJ_HEADER): libmojibake/Makefile
+	cp -f libmojibake/mojibake.h $@
 
-clean-utf8proc:
-	-$(MAKE) -C utf8proc-v$(UTF8PROC_VER) clean
-distclean-utf8proc: clean-utf8proc
-	-rm -rf utf8proc-v$(UTF8PROC_VER).tar.gz utf8proc-v$(UTF8PROC_VER)
+clean-mojibake:
+	-$(MAKE) -C libmojibake clean
+	-rm -rf $(build_libdir)/libmojibake.a $(build_includedir)/mojibake.h
+distclean-mojibake: clean-mojibake
 
-get-utf8proc: utf8proc-v$(UTF8PROC_VER).tar.gz
-configure-utf8proc: get-utf8proc
-compile-utf8proc: $(UTF8PROC_OBJ_SOURCE)
-check-utf8proc: 
-install-utf8proc: $(UTF8PROC_OBJ_TARGET)
+get-mojibake: libmojibake/Makefile
+configure-mojibake: get-mojibake
+compile-mojibake: $(MOJIBAKE_SRC_TARGET)
+check-mojibake: libmojibake/checked
+install-mojibake: $(MOJIBAKE_OBJ_TARGET)
 
 ## SUITESPARSE ##
 

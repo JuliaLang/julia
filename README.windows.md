@@ -31,6 +31,19 @@ The 64-bit (x86_64) binary will only run on 64-bit Windows and will otherwise re
 
 3. Double-click the file `julia.bat` to launch Julia.
 
+# Line endings
+
+Julia uses binary-mode files exclusively. Unlike many other Window's programs, if you write '\n' to a file, you get a '\n' in the file, not some other bit pattern. This matches the behavior exhibited by other operating systems. If you have installed msysGit, it is suggested, but not required, that you configure your system msysGit to use the same convention:
+
+    git config --global core.eol = lf
+    git config --global core.autocrlf = input
+    
+or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
+    
+    [core] eol = lf
+           autocrlf = input
+
+
 # Source distribution
 
 ## Supported build platforms

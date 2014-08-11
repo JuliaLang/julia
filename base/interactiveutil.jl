@@ -346,3 +346,20 @@ function workspace()
     empty!(package_locks)
     nothing
 end
+
+function runtests(tests = ["all"], numcores = iceil(CPU_CORES/2))
+    if isa(tests,String)
+        tests = split(tests)
+    end
+    ENV2 = copy(ENV)
+    ENV2["JULIA_CPU_CORES"] = "$numcores"
+    try
+        run(setenv(`$(joinpath(JULIA_HOME, "julia")) $(joinpath(JULIA_HOME, "..",
+            "share", "julia", "test", "runtests.jl")) $tests`, ENV2))
+    catch
+        buf = PipeBuffer()
+        versioninfo(buf)
+        error("A test has failed. Please submit a bug report including error messages\n" *
+            "above and the output of versioninfo():\n$(readall(buf))")
+    end
+end
