@@ -204,18 +204,19 @@ show(io::IO, n::Signed) = (write(io, dec(n)); nothing)
 show(io::IO, n::Unsigned) = print(io, "0x", hex(n,sizeof(n)<<1))
 print(io::IO, n::Unsigned) = print(io, dec(n))
 
-let tmpbuf = Array(Uint8, length(dec(typemin(Int128))))
-    function show(io::IO, n::Union(Int8,Int16,Int32,Int64,Int128))
-        write(io, pointer(tmpbuf), _dec!(tmpbuf,unsigned(abs(n)),1,n<0))
+module ShowInteger
+    const tmpbuf = Array(Uint8, length(dec(typemin(Int128))))
+    function Base.show(io::IO, n::Union(Int8,Int16,Int32,Int64,Int128))
+        write(io, pointer(tmpbuf), Base._dec!(tmpbuf,unsigned(abs(n)),1,n<0))
         nothing
     end
-    function show(io::IO, n::Union(Uint8,Uint16,Uint32,Uint64,Uint128))
+    function Base.show(io::IO, n::Union(Uint8,Uint16,Uint32,Uint64,Uint128))
         print(io, "0x")
-        write(io, pointer(tmpbuf), _hex!(tmpbuf,n,sizeof(n)<<1,false))
+        write(io, pointer(tmpbuf), Base._hex!(tmpbuf,n,sizeof(n)<<1,false))
         nothing
     end
-    function print(io::IO, n::Union(Uint8,Uint16,Uint32,Uint64,Uint128))
-        write(io, pointer(tmpbuf), _dec!(tmpbuf,n,1,false))
+    function Base.print(io::IO, n::Union(Uint8,Uint16,Uint32,Uint64,Uint128))
+        write(io, pointer(tmpbuf), Base._dec!(tmpbuf,n,1,false))
         nothing
     end
 end
