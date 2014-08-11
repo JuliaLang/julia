@@ -94,7 +94,8 @@
      "try" "catch" "return" "local" "abstract" "function" "macro" "ccall"
      "finally" "typealias" "break" "continue" "type" "global"
      "module" "using" "import" "export" "const" "let" "bitstype" "do"
-     "baremodule" "importall" "immutable")))
+     "baremodule" "importall" "immutable")
+   'symbols))
 
 (defconst julia-font-lock-keywords
   (list
