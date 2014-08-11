@@ -30,6 +30,7 @@ USE_SYSTEM_GRISU=0
 USE_SYSTEM_RMATH=0
 USE_SYSTEM_LIBUV=0
 USE_SYSTEM_UTF8PROC=0
+USE_SYSTEM_MOJIBAKE=0
 
 # Link to the LLVM shared library
 USE_LLVM_SHLIB = 0
@@ -531,10 +532,14 @@ else
   LIBUV_INC = $(JULIAHOME)/deps/libuv/include
 endif
 
-ifeq ($(USE_SYSTEM_UTF8PROC), 1)
-  LIBUTF8PROC = -lutf8proc
+ifeq ($(USE_SYSTEM_MOJIBAKE), 1)
+  LIBMOJIBAKE = -lmojibake
 else
-  LIBUTF8PROC = $(build_libdir)/libutf8proc.a
+  ifeq ($(USE_SYSTEM_UTF8PROC), 1)
+    LIBMOJIBAKE = -lutf8proc
+  else
+    LIBMOJIBAKE = $(build_libdir)/libmojibake.a
+  endif
 endif
 
 # OS specific stuff

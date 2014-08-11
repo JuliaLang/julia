@@ -96,6 +96,18 @@ function parse(lines::Vector{Line})
 end
 parse(x) = parse(read(x))
 
+function dependents(packagename::String)
+    pkgs = String[]
+    cd(Pkg.dir()) do
+        for (pkg,latest) in Pkg.Read.latest()
+            if haskey(latest.requires, packagename)
+                push!(pkgs, pkg)
+            end
+        end
+    end
+    pkgs
+end
+
 # add & rm – edit the content a requires file
 
 function add(lines::Vector{Line}, pkg::String, versions::VersionSet=VersionSet())

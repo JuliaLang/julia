@@ -66,6 +66,8 @@ generate(pkg::String, license::String; force::Bool=false, authors::Union(String,
 test(;coverage::Bool=false) = cd(Entry.test; coverage=coverage)
 test(pkgs::String...; coverage::Bool=false) = cd(Entry.test,String[pkgs...]; coverage=coverage)
 
+dependents(packagename::String) = Reqs.dependents(packagename)
+
 @deprecate release free
 @deprecate fixup build
 @deprecate fix pin
