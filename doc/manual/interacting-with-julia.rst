@@ -185,8 +185,8 @@ and get a list of LaTeX matches as well::
     julia> √π
     1.7724538509055159
 
-    julia> \pi[TAB]\^2[TAB]       # but note that π⁷ is not defined unless you π⁷ = π^7
-    julia> π²
+    julia> \pi[TAB]\^2[TAB] = pi^2
+    julia> π² = pi^2
     9.869604401089358
 
     julia> \hbar[TAB](h) = h / 2\pi[TAB]
