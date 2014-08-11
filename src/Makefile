@@ -25,7 +25,7 @@ ifeq ($(USE_LLVM_SHLIB),1)
 LLVMLINK = $(call exec,$(LLVM_CONFIG) --ldflags) -lLLVM-$(call exec,$(LLVM_CONFIG) --version)
 endif
 
-COMMON_LIBS = -L$(build_shlibdir) -L$(build_libdir) $(LIBUV) $(LIBUTF8PROC) $(NO_WHOLE_ARCHIVE) $(LLVMLINK) $(OSLIBS)
+COMMON_LIBS = -L$(build_shlibdir) -L$(build_libdir) $(LIBUV) $(LIBMOJIBAKE) $(NO_WHOLE_ARCHIVE) $(LLVMLINK) $(OSLIBS)
 DEBUG_LIBS = $(WHOLE_ARCHIVE) $(JULIAHOME)/src/flisp/libflisp-debug.a $(WHOLE_ARCHIVE) $(JULIAHOME)/src/support/libsupport-debug.a $(COMMON_LIBS)
 RELEASE_LIBS = $(WHOLE_ARCHIVE) $(JULIAHOME)/src/flisp/libflisp.a $(WHOLE_ARCHIVE) $(JULIAHOME)/src/support/libsupport.a $(COMMON_LIBS)
 

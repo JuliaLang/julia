@@ -1826,3 +1826,6 @@ sa = sub(a,4:6)
 try
     issue7897!(sa, zeros(10))
 end
+
+# issue #7582
+aₜ = "a variable using Unicode 6"
