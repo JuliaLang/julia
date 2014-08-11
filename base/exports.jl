@@ -1237,6 +1237,7 @@ export
 
 # filesystem operations
     cd,
+    chmod,
     cp,
     ctime,
     download,
