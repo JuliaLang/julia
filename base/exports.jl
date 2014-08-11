@@ -803,6 +803,7 @@ export
     chr2ind,
     dec,
     digits,
+    digits!,
     dump,
     eachmatch,
     endswith,
