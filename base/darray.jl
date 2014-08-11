@@ -141,8 +141,8 @@ function localindexes(d::DArray)
 end
 
 # find which piece holds index (I...)
-function locate(d::DArray, I::Int...)
-    ntuple(ndims(d), i->searchsortedlast(d.cuts[i], I[i]))
+function locate(d::DArray, I::Integer...)
+    ntuple(ndims(d), i->searchsortedlast(d.cuts[i], int(I[i])))
 end
 
 chunk{T,N,A}(d::DArray{T,N,A}, i...) = fetch(d.chunks[i...])::A
@@ -150,15 +150,15 @@ chunk{T,N,A}(d::DArray{T,N,A}, i...) = fetch(d.chunks[i...])::A
 ## convenience constructors ##
 
 dzeros(args...) = DArray(I->zeros(map(length,I)), args...)
-dzeros(d::Int...) = dzeros(d)
+dzeros(d::Integer...) = dzeros(convert(Dims, d))
 dones(args...) = DArray(I->ones(map(length,I)), args...)
-dones(d::Int...) = dones(d)
+dones(d::Integer...) = dones(convert(Dims, d))
 dfill(v, args...) = DArray(I->fill(v, map(length,I)), args...)
-dfill(v, d::Int...) = dfill(v, d)
+dfill(v, d::Integer...) = dfill(v, convert(Dims, d))
 drand(args...)  = DArray(I->rand(map(length,I)), args...)
-drand(d::Int...) = drand(d)
+drand(d::Integer...) = drand(convert(Dims, d))
 drandn(args...) = DArray(I->randn(map(length,I)), args...)
-drandn(d::Int...) = drandn(d)
+drandn(d::Integer...) = drandn(convert(Dims, d))
 
 ## conversions ##
 
@@ -231,10 +231,10 @@ function getindex(r::RemoteRef, args...)
     end
 end
 
-getindex(d::DArray, i::Int) = getindex_tuple(d, ind2sub(size(d), i))
-getindex(d::DArray, i::Int...) = getindex_tuple(d, i)
+getindex(d::DArray, i::Integer) = getindex_tuple(d, ind2sub(size(d), int(i)))
+getindex(d::DArray, i::Integer...) = getindex_tuple(d, convert(Dims, i))
 
-function getindex_tuple{T}(d::DArray{T}, I::(Int...))
+function getindex_tuple{T}(d::DArray{T}, I::Dims)
     chidx = locate(d, I...)
     chunk = d.chunks[chidx...]
     idxs = d.indexes[chidx...]

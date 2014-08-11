@@ -116,13 +116,12 @@ rand(::Type{Int128})  = int128(rand(Uint128))
 # Arrays of random numbers
 
 rand(::Type{Float64}, dims::Dims) = rand!(Array(Float64, dims))
-rand(::Type{Float64}, dims::Int...) = rand(Float64, dims)
 
 rand(dims::Dims) = rand(Float64, dims)
-rand(dims::Int...) = rand(Float64, dims)
+rand(dims::Integer...) = rand(Float64, convert(Dims, dims))
 
 rand(r::AbstractRNG, dims::Dims) = rand!(r, Array(Float64, dims))
-rand(r::AbstractRNG, dims::Int...) = rand(r, dims)
+rand(r::AbstractRNG, dims::Integer...) = rand(r, dims)
 
 function rand!{T}(A::Array{T})
     for i=1:length(A)
@@ -140,8 +139,7 @@ end
 
 rand(T::Type, dims::Dims) = rand!(Array(T, dims))
 rand{T<:Number}(::Type{T}) = error("no random number generator for type $T; try a more specific type")
-rand{T<:Number}(::Type{T}, dims::Int...) = rand(T, dims)
-
+rand{T<:Number}(::Type{T}, dims::Integer...) = rand(T, convert(Dims, dims))
 
 ## Generate random integer within a range
 
@@ -234,7 +232,7 @@ function rand!{T}(r::Range{T}, A::AbstractArray)
 end
 
 rand{T}(r::Range{T}, dims::Dims) = rand!(r, Array(T, dims))
-rand(r::Range, dims::Int...) = rand(r, dims)
+rand(r::Range, dims::Integer...) = rand(r, convert(Dims, dims))
 
 
 ## random Bools
@@ -242,7 +240,7 @@ rand(r::Range, dims::Int...) = rand(r, dims)
 rand!(B::BitArray) = Base.bitarray_rand_fill!(B)
 
 randbool(dims::Dims) = rand!(BitArray(dims))
-randbool(dims::Int...) = rand!(BitArray(dims))
+randbool(dims::Integer...) = rand!(BitArray(convert(Dims, dims)))
 
 randbool() = ((dsfmt_randui32() & 1) == 1)
 randbool!(B::BitArray) = rand!(B)
@@ -257,7 +255,7 @@ randn(rng::MersenneTwister) = randmtzig_randn(rng.state)
 randn!(A::Array{Float64}) = (for i = 1:length(A);A[i] = randmtzig_randn();end;A)
 randn!(rng::MersenneTwister, A::Array{Float64}) = (for i = 1:length(A);A[i] = randmtzig_randn(rng.state);end;A)
 randn(dims::Dims) = randn!(Array(Float64, dims))
-randn(dims::Int...) = randn!(Array(Float64, dims...))
+randn(dims::Integer...) = randn!(Array(Float64, convert(Dims, dims)))
 
 ## random UUID generation
 

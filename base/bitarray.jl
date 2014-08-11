@@ -15,24 +15,24 @@ type BitArray{N} <: DenseArray{Bool, N}
     chunks::Vector{Uint64}
     len::Int
     dims::NTuple{N,Int}
-    function BitArray(dims::Int...)
+    function BitArray(dims::Integer...)
         length(dims) == N || error("number of dimensions must be $N (got $(length(dims)))")
         n = 1
         for d in dims
             d >= 0 || error("dimension size must be nonnegative (got $d)")
-            n *= d
+            n *= int(d)
         end
         nc = num_bit_chunks(n)
         chunks = Array(Uint64, nc)
         nc > 0 && (chunks[end] = uint64(0))
         b = new(chunks, n)
-        N != 1 && (b.dims = dims)
+        N != 1 && (b.dims = convert(Dims, dims))
         return b
     end
 end
 
 BitArray{N}(dims::NTuple{N,Int}) = BitArray{N}(dims...)
-BitArray(dims::Int...) = BitArray(dims)
+BitArray(dims::Integer...) = BitArray(convert(Dims, dims))
 
 typealias BitVector BitArray{1}
 typealias BitMatrix BitArray{2}
@@ -46,7 +46,7 @@ size(B::BitArray) = B.dims
 size(B::BitVector, d) = (d==1 ? B.len : d>1 ? 1 : error("dimensions should be positive (got $d)"))
 size{N}(B::BitArray{N}, d) = (d>N ? 1 : B.dims[d])
 
-isassigned{N}(B::BitArray{N}, i::Int) = 1 <= i <= length(B)
+isassigned{N}(B::BitArray{N}, i::Integer) = 1 <= i <= length(B)
 
 ## Aux functions ##
 
@@ -203,7 +203,7 @@ done(B::BitArray, i::Int) = i >= length(B)
 ## similar, fill!, copy! etc ##
 
 similar(B::BitArray) = BitArray(size(B))
-similar(B::BitArray, dims::Int...) = BitArray(dims)
+similar(B::BitArray, dims::Integer...) = BitArray(convert(Dims, dims))
 similar(B::BitArray, dims::Dims) = BitArray(dims...)
 
 similar(B::BitArray, T::Type{Bool}, dims::Dims) = BitArray(dims)
@@ -1684,7 +1684,7 @@ function cat(catdim::Integer, X::Union(BitArray, Integer)...)
     end
 
     ndimsC = max(catdim, d_max)
-    dimsC = ntuple(ndimsC, compute_dims)::(Int...)
+    dimsC = ntuple(ndimsC, compute_dims)::Dims
     typeC = promote_type(map(x->isa(x,BitArray) ? eltype(x) : typeof(x), X)...)
     if !has_integer || typeC == Bool
         C = BitArray(dimsC)

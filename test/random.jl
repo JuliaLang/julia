@@ -160,3 +160,6 @@ a = uuid4()
 @test_throws ArgumentError UUID("550e8400e29b-41d4-a716-446655440000")
 @test_throws ArgumentError UUID("550e8400e29b-41d4-a716-44665544000098")
 @test_throws ArgumentError UUID("z50e8400-e29b-41d4-a716-446655440000")
+
+# #7956
+@test size(rand(int32(3), int8(4))) == (3,4)

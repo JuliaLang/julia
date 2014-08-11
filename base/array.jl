@@ -27,6 +27,7 @@ strides{T}(a::Array{T,2}) = (1, size(a,1))
 strides{T}(a::Array{T,3}) = (1, size(a,1), size(a,1)*size(a,2))
 
 isassigned(a::Array, i::Int...) = isdefined(a, i...)
+isassigned(a::Array, i::Integer...) = isassigned(a, convert(Dims, i)...)
 
 ## copy ##
 
@@ -162,7 +163,7 @@ fill(v, dims::Dims)       = fill!(Array(typeof(v), dims), v)
 fill(v, dims::Integer...) = fill!(Array(typeof(v), dims...), v)
 
 cell(dims::Integer...)   = Array(Any, dims...)
-cell(dims::(Integer...)) = Array(Any, convert((Int...), dims))
+cell(dims::(Integer...)) = Array(Any, convert(Dims, dims))
 
 for (fname, felt) in ((:zeros,:zero), (:ones,:one))
     @eval begin

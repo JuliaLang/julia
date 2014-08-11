@@ -39,7 +39,7 @@ end
 
 strides(a::AbstractArray) = ntuple(ndims(a), i->stride(a,i))::Dims
 
-function isassigned(a::AbstractArray, i::Int...)
+function isassigned(a::AbstractArray, i::Integer...)
     # TODO
     try
         a[i...]
@@ -97,7 +97,7 @@ end
 
 ## Bounds-checking without errors ##
 in_bounds(l::Int, i::Integer) = 1 <= i <= l
-function in_bounds(sz::Dims, I::Int...)
+function in_bounds(sz::Dims, I::Integer...)
     n = length(I)
     for dim = 1:(n-1)
         1 <= I[dim] <= sz[dim] || return false
@@ -115,8 +115,8 @@ end
 similar{T}(a::AbstractArray{T})               = similar(a, T, size(a))
 similar   (a::AbstractArray, T)               = similar(a, T, size(a))
 similar{T}(a::AbstractArray{T}, dims::Dims)   = similar(a, T, dims)
-similar{T}(a::AbstractArray{T}, dims::Int...) = similar(a, T, dims)
-similar   (a::AbstractArray, T, dims::Int...) = similar(a, T, dims)
+similar{T}(a::AbstractArray{T}, dims::Integer...) = similar(a, T, convert(Dims, dims))
+similar   (a::AbstractArray, T, dims::Integer...) = similar(a, T, convert(Dims, dims))
 
 function reshape(a::AbstractArray, dims::Dims)
     if prod(dims) != length(a)
@@ -124,7 +124,7 @@ function reshape(a::AbstractArray, dims::Dims)
     end
     copy!(similar(a, dims), a)
 end
-reshape(a::AbstractArray, dims::Int...) = reshape(a, dims)
+reshape(a::AbstractArray, dims::Integer...) = reshape(a, convert(Dims, dims))
 
 vec(a::AbstractArray) = reshape(a,length(a))
 vec(a::AbstractVector) = a
@@ -644,7 +644,7 @@ function cat(catdim::Integer, X...)
     end
 
     ndimsC = max(catdim, d_max)
-    dimsC = ntuple(ndimsC, compute_dims)::(Int...)
+    dimsC = ntuple(ndimsC, compute_dims)::Dims
     typeC = promote_type(map(x->isa(x,AbstractArray) ? eltype(x) : typeof(x), X)...)
     C = similar(isa(X[1],AbstractArray) ? full(X[1]) : [X[1]], typeC, dimsC)
 
@@ -711,7 +711,7 @@ function cat_t(catdim::Integer, typeC, A::AbstractArray...)
     end
 
     ndimsC = max(catdim, d_max)
-    dimsC = ntuple(ndimsC, compute_dims)::(Int...)
+    dimsC = ntuple(ndimsC, compute_dims)::Dims
     C = similar(full(A[1]), typeC, dimsC)
 
     range = 1
@@ -739,7 +739,7 @@ function hvcat(nbc::Integer, as...)
     hvcat(ntuple(nbr, i->nbc), as...)
 end
 
-function hvcat{T}(rows::(Int...), as::AbstractMatrix{T}...)
+function hvcat{T}(rows::Dims, as::AbstractMatrix{T}...)
     nbr = length(rows)  # number of block rows
 
     nc = 0
@@ -782,9 +782,9 @@ function hvcat{T}(rows::(Int...), as::AbstractMatrix{T}...)
     out
 end
 
-hvcat(rows::(Int...)) = []
+hvcat(rows::Dims) = []
 
-function hvcat{T<:Number}(rows::(Int...), xs::T...)
+function hvcat{T<:Number}(rows::Dims, xs::T...)
     nr = length(rows)
     nc = rows[1]
 
@@ -817,7 +817,7 @@ function hvcat_fill(a, xs)
     a
 end
 
-function hvcat(rows::(Int...), xs::Number...)
+function hvcat(rows::Dims, xs::Number...)
     nr = length(rows)
     nc = rows[1]
     #error check
@@ -949,7 +949,7 @@ end
 ## Other array functions ##
 
 # fallback definition of hvcat in terms of hcat and vcat
-function hvcat(rows::(Int...), as...)
+function hvcat(rows::Dims, as...)
     nbr = length(rows)  # number of block rows
     rs = cell(nbr)
     a = 1
@@ -1131,7 +1131,7 @@ end
 ## iteration utilities ##
 
 # slow, but useful
-function cartesianmap(body, t::(Int...), it...)
+function cartesianmap(body, t::Dims, it...)
     idx = length(t)-length(it)
     if idx == 1
         for i = 1:t[1]
