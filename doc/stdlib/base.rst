@@ -5314,6 +5314,11 @@ System
       This function raises an error under operating systems that do not support
       soft symbolic links, such as Windows XP.
 
+.. function:: chmod(path, mode)
+
+   Change the permissions mode of ``path`` to ``mode``. Only integer ``mode``s
+   (e.g. 0o777) are currently supported.
+
 .. function:: getpid() -> Int32
 
    Get julia's process ID.
