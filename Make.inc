@@ -29,6 +29,7 @@ USE_SYSTEM_ZLIB=0
 USE_SYSTEM_GRISU=0
 USE_SYSTEM_RMATH=0
 USE_SYSTEM_LIBUV=0
+USE_SYSTEM_UTF8PROC=0
 USE_SYSTEM_MOJIBAKE=0
 
 # Link to the LLVM shared library
@@ -534,7 +535,11 @@ endif
 ifeq ($(USE_SYSTEM_MOJIBAKE), 1)
   LIBMOJIBAKE = -lmojibake
 else
-  LIBMOJIBAKE = $(build_libdir)/libmojibake.a
+  ifeq ($(USE_SYSTEM_UTF8PROC), 1)
+    LIBMOJIBAKE = -lutf8proc
+  else
+    LIBMOJIBAKE = $(build_libdir)/libmojibake.a
+  endif
 endif
 
 # OS specific stuff

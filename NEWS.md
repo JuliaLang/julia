@@ -39,7 +39,8 @@ New language features
   * The set of characters permitted in identifiers has been restricted based
     on Unicode categories. Generally, punctuation, formatting and control
     characters, and operator symbols are not allowed in identifiers.
-    Number-like characters cannot begin identifiers ([#5936]).
+    Number-like characters cannot begin identifiers ([#5936]).  Unicode
+    version 7 is supported ([#7917]).
 
   * Define a limited number of infix Unicode operators ([#552], [#6582]):
 
