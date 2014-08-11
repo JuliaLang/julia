@@ -1,3 +1,14 @@
+Julia v0.4.0 Release Notes
+==========================
+
+New language features
+---------------------
+
+  * Unicode version 7 is now supported for identifiers etcetera ([#7917]).
+
+Library improvements
+--------------------
+
 Julia v0.3.0 Release Notes
 ==========================
 

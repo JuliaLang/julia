@@ -23,6 +23,7 @@ export File,
        rename,
        sendfile,
        symlink,
+       chmod,
        JL_O_WRONLY,
        JL_O_RDONLY,
        JL_O_RDWR,
@@ -161,6 +162,11 @@ end
 end
 @windowsxp_only symlink(p::String, np::String) = 
     error("WindowsXP does not support soft symlinks")
+
+function chmod(p::String, mode::Integer)
+    err = ccall(:jl_fs_chmod, Int32, (Ptr{Uint8}, Cint), p, mode)
+    uv_error("chmod",err)
+end
 
 function write(f::File, buf::Ptr{Uint8}, len::Integer, offset::Integer=-1)
     if !f.open
