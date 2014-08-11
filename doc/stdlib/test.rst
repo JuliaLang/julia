@@ -137,3 +137,19 @@ _________
 .. function:: with_handler(f, handler)
 
    Run the function ``f`` using the ``handler`` as the handler.
+
+
+Testing Base Julia
+==================
+
+Julia is under rapid development and has an extensive test suite to
+verify functionality across multiple platforms. If you build Julia
+from source, you can run this test suite with ``make test``. In a
+binary install, you can run the test suite using ``Base.runtests()``.
+
+.. currentmodule:: Base
+
+.. function:: runtests([tests=["all"] [, numcores=iceil(CPU_CORES/2) ]])
+
+   Run the Julia unit tests listed in ``tests``, which can be either a
+   string or an array of strings, using ``numcores`` processors.
