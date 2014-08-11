@@ -150,7 +150,7 @@ end"""
 @test sprint(show, symbol("foo bar")) == "symbol(\"foo bar\")"
 @test sprint(show, symbol("foo \"bar")) == "symbol(\"foo \\\"bar\")"
 @test sprint(show, :+) == ":+"
-@test sprint(show, symbol("end")) == "symbol(\"end\")"
+@test sprint(show, :end) == ":end"
 
 # Function and array reference precedence
 @test_repr "([2] + 3)[1]"
