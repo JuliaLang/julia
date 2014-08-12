@@ -3393,6 +3393,12 @@ Data Formats
    zeros to a specified size. More significant digits are at higher indexes, such
    that ``n == sum([digits[k]*base^(k-1) for k=1:length(digits)])``.
 
+.. function:: digits!(array, n, [base])
+
+    Fills an array of the digits of ``n`` in the given base. More significant digits are at higher indexes.
+    If the array length is insufficient, the least significant digits are filled up to the array length.
+    If the array length is excessive, the excess portion is filled with zeros.
+
 .. function:: bits(n)
 
    A string giving the literal bit representation of a number.
