@@ -3730,10 +3730,10 @@ Integers
    **Examples**::
    
    	julia> isodd(9)
-   	false
+   	true
    
    	julia> isodd(10)
-   	true
+   	false
 
 .. function:: iseven(x::Integer) -> Bool
 
@@ -3742,10 +3742,10 @@ Integers
    **Examples**::
    
    	julia> iseven(10)
-   	false
+   	true
    
    	julia> iseven(9)
-   	true
+   	false
 
 BigFloats
 ---------
