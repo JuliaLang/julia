@@ -667,15 +667,15 @@ function updatehook(pkgs::Vector)
 end
 
 function test!(pkg::String, errs::Vector{String}, notests::Vector{String}; coverage::Bool=false)
-    const reqs_path = abspath(pkg,"test","REQUIRE")
+    reqs_path = abspath(pkg,"test","REQUIRE")
     if isfile(reqs_path)
-        const tests_require = Reqs.parse(reqs_path)
+        tests_require = Reqs.parse(reqs_path)
         if (!isempty(tests_require))
             info("Computing test dependencies for $pkg...")
-            resolve(tests_require)
+            resolve(merge(Reqs.parse("REQUIRE"), tests_require))
         end
     end
-    const test_path = abspath(pkg,"test","runtests.jl")
+    test_path = abspath(pkg,"test","runtests.jl")
     if isfile(test_path)
         info("Testing $pkg")
         cd(dirname(test_path)) do
