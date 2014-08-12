@@ -245,4 +245,3 @@ typealias ByteString Union(ASCIIString,UTF8String)
 include(fname::ByteString) = ccall(:jl_load_, Any, (Any,), fname)
 
 call(f::Function, args...; kws...) = f(args...; kws...)
-call{T}(::Type{T}, x) = convert(T, x)
