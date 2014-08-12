@@ -2371,76 +2371,80 @@ Mathematical Operators
    Unary minus operator.
 
 .. _+:
-.. function:: +(x, y)
+.. function:: +(x, y...)
 
-   Binary addition operator.
+   Addition operator. ``x+y+z+...`` calls this function with all arguments, i.e.
+   ``+(x, y, z, ...)``.
 
 .. _-:
 .. function:: -(x, y)
 
-   Binary subtraction operator.
+   Subtraction operator.
 
 .. _*:
-.. function:: *(x, y)
+.. function:: *(x, y...)
 
-   Binary multiplication operator.
+   Multiplication operator. ``x*y*z*...`` calls this function with all arguments, i.e.
+   ``*(x, y, z, ...)``.
 
 .. _/:
 .. function:: /(x, y)
 
-   Binary left-division operator.
+   Right division operator: multiplication of ``x`` by the inverse of ``y`` on the right.
+   Gives floating-point results for integer arguments.
 
 .. _\\:
 .. function:: \\(x, y)
 
-   Binary right-division operator.
+   Left division operator: multiplication of ``y`` by the inverse of ``x`` on the left.
+   Gives floating-point results for integer arguments.
 
 .. _^:
 .. function:: ^(x, y)
 
-   Binary exponentiation operator.
+   Exponentiation operator.
 
 .. _.+:
 .. function:: .+(x, y)
 
-   Element-wise binary addition operator.
+   Element-wise addition operator.
 
 .. _.-:
 .. function:: .-(x, y)
 
-   Element-wise binary subtraction operator.
+   Element-wise subtraction operator.
 
 .. _.*:
 .. function:: .*(x, y)
 
-   Element-wise binary multiplication operator.
+   Element-wise multiplication operator.
 
 .. _./:
 .. function:: ./(x, y)
 
-   Element-wise binary left division operator.
+   Element-wise right division operator.
 
 .. _.\\:
 .. function:: .\\(x, y)
 
-   Element-wise binary right division operator.
+   Element-wise left division operator.
 
 .. _.^:
 .. function:: .^(x, y)
 
-   Element-wise binary exponentiation operator.
+   Element-wise exponentiation operator.
 
 .. function:: div(a,b)
 
-   Compute a/b, truncating to an integer
+   Compute a/b, truncating to an integer.
 
 .. function:: fld(a,b)
 
-   Largest integer less than or equal to a/b
+   Largest integer less than or equal to a/b.
 
 .. function:: mod(x,m)
 
-   Modulus after division, returning in the range [0,m)
+   Modulus after division, returning in the range [0,m).
 
 .. function:: mod2pi(x)
 
@@ -2453,11 +2457,11 @@ Mathematical Operators
 
 .. function:: rem(x, m)
 
-   Remainder after division
+   Remainder after division.
 
 .. function:: divrem(x, y)
 
-   Compute ``x/y`` and ``x%y`` at the same time
+   Returns ``(x/y, x%y)``.
 
 .. _%:
 .. function:: %(x, m)
@@ -2475,7 +2479,7 @@ Mathematical Operators
 .. _//:
 .. function:: //(num, den)
 
-   Rational division
+   Divide two integers or rational numbers, giving a ``Rational`` result.
 
 .. function:: rationalize([Type=Int,] x; tol=eps(x))
 
@@ -2493,17 +2497,17 @@ Mathematical Operators
 .. _<<:
 .. function:: <<(x, n)
 
-   Left shift operator.
+   Left bit shift operator.
 
 .. _>>:
 .. function:: >>(x, n)
 
-   Right shift operator.
+   Right bit shift operator, preserving the sign of ``x``.
 
 .. _>>>:
 .. function:: >>>(x, n)
 
-   Unsigned right shift operator.
+   Unsigned right bit shift operator.
 
 .. _\::
 .. function:: \:(start, [step], stop)
