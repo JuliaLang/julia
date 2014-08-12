@@ -1827,3 +1827,18 @@ ndigf(n) = float64(log(float32(n)))
 # issue #7911
 @test sum([int128(1) int128(2)]) == int128(3)
 
+# digits and digits!
+@test digits(24, 2) == [0, 0, 0, 1, 1]
+@test digits(24, 2, 3) == [0, 0, 0, 1, 1]
+@test digits(24, 2, 7) == [0, 0, 0, 1, 1, 0, 0]
+@test digits(100) == [0, 0, 1]
+@test digits(BigInt(2)^128, 2) == [zeros(128), 1]
+let a = zeros(Int, 3)
+    digits!(a, 50)
+    @test a == [0, 5, 0]
+    digits!(a, 9, 2)
+    @test a == [1, 0, 0]
+    digits!(a, 7, 2)
+    @test a == [1, 1, 1]
+end
+
