@@ -100,7 +100,7 @@ public:
         ValueMaterializer(), VMap(), destModule(dest), srcModule(src)
     {
 
-    } 
+    }
     ValueToValueMapTy VMap;
     llvm::Module *destModule;
     llvm::Module *srcModule;
@@ -118,12 +118,15 @@ public:
                     // Check whether we already emitted it once
                     uint64_t addr = jl_mcjmm->getSymbolAddress(F->getName());
                     if (addr == 0) {
+                        Function *oldF = destModule->getFunction(F->getName());
+                        if (oldF)
+                            return oldF;
                         return clone_llvm_function(shadow,this);
-                    } 
+                    }
                     else {
                         return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
                     }
-                } 
+                }
                 else if (!F->isDeclaration()) {
                     return clone_llvm_function(F,this);
                 }
@@ -133,10 +136,13 @@ public:
                 // Create forward declaration in current module
                 return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
             }
-        } 
+        }
         else if (isa<GlobalVariable>(V)) {
             GlobalVariable *GV = cast<GlobalVariable>(V);
             assert(GV != NULL);
+            GlobalVariable *oldGV = destModule->getGlobalVariable(GV->getName());
+            if (oldGV != NULL)
+                return oldGV;
             GlobalVariable *newGV = new GlobalVariable(*destModule,
                 GV->getType()->getElementType(),
                 GV->isConstant(),
@@ -156,7 +162,7 @@ public:
             if (it != llvm_to_jl_value.end()) {
                 newGV->setInitializer(Constant::getIntegerValue(GV->getType()->getElementType(),APInt(sizeof(void*)*8,(ptrint_t)it->second)));
                 newGV->setConstant(true);
-            } 
+            }
             else if (GV->hasInitializer()) {
                 Value *C = MapValue(GV->getInitializer(),VMap,RF_None,NULL,this);
                 newGV->setInitializer(cast<Constant>(C));
