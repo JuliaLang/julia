@@ -563,7 +563,7 @@ ifeq ($(OS), WINNT)
   RPATH_ORIGIN =
 else ifeq ($(OS), Darwin)
   RPATH = -Wl,-rpath,'@executable_path/$(build_private_libdir_rel)' -Wl,-rpath,'@executable_path/$(build_libdir_rel)'
-  RPATH_ORIGIN =
+  RPATH_ORIGIN = -Wl,-rpath,'@loader_path/'
 else
   RPATH = -Wl,-rpath,'$$ORIGIN/$(build_private_libdir_rel)' -Wl,-rpath,'$$ORIGIN/$(build_libdir_rel)' -Wl,-z,origin
   RPATH_ORIGIN = -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
