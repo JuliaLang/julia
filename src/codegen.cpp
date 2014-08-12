@@ -513,6 +513,13 @@ extern "C" {
     int globalUnique = 0;
 }
 
+extern "C" DLLEXPORT
+jl_value_t *jl_get_cpu_name(void)
+{
+    StringRef HostCPUName = llvm::sys::getHostCPUName();
+    return jl_pchar_to_string(HostCPUName.data(), HostCPUName.size());
+}
+
 #include "cgutils.cpp"
 
 static void jl_rethrow_with_add(const char *fmt, ...)
