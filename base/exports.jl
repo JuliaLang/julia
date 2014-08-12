@@ -1372,4 +1372,6 @@ export
     @inbounds,
     @simd,
     @label,
-    @goto
+    @goto,
+    @interface,
+    @implement
