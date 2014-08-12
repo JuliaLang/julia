@@ -270,7 +270,7 @@ Macros for function bodies
     either be an iteration-symbol prefix, or an anonymous-function
     expression.
 
-.. function:: @nexpr N expr
+.. function:: @nexprs N expr
 
     Generate ``N`` expressions. ``expr`` should be an
     anonymous-function expression.
@@ -301,3 +301,13 @@ Macros for function bodies
         else
 	    println("All OK")
 	end
+
+
+Frequently asked questions
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+I got an error ``ERROR: N not defined`` when using ``@ngenerate``. Why?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Most likely you forgot to define your function with ``N`` as a type parameter, e.g., ``@ngenerate N returntype myfunc{N}(...)``.

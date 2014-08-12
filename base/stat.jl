@@ -33,10 +33,10 @@ show(io::IO, st::StatStruct) = print("StatStruct(mode=$(oct(st.mode,6)), size=$(
 # stat & lstat functions
 
 const stat_buf = Array(Uint8, ccall(:jl_sizeof_stat, Int32, ()))
-macro stat_call(sym,arg1type,arg)
+macro stat_call(sym, arg1type, arg)
     quote
         fill!(stat_buf,0)
-        r = ccall($(Expr(:quote,sym)), Int32, ($arg1type,Ptr{Uint8}), $(esc(arg)), stat_buf)
+        r = ccall($(Expr(:quote,sym)), Int32, ($arg1type, Ptr{Uint8}), $(esc(arg)), stat_buf)
         r==0 || r==UV_ENOENT || r==UV_ENOTDIR || throw(UVError("stat",r))
         st = StatStruct(stat_buf)
         if ispath(st) != (r==0)
@@ -48,10 +48,8 @@ end
 
 stat(fd::RawFD)     = @stat_call jl_fstat Int32 fd.fd
 stat(fd::Integer)   = @stat_call jl_fstat Int32 fd
-stat(path::ByteString)  = @stat_call jl_stat  Ptr{Uint8} path
-stat(path::String) = stat(bytestring(path))
-lstat(path::ByteString) = @stat_call jl_lstat Ptr{Uint8} path
-lstat(path::String) = lstat(bytestring(path))
+stat(path::String)  = @stat_call jl_stat  Ptr{Uint8} path
+lstat(path::String) = @stat_call jl_lstat Ptr{Uint8} path
 
 stat(path...) = stat(joinpath(path...))
 lstat(path...) = lstat(joinpath(path...))
@@ -96,6 +94,7 @@ for f in {
     :issetgid
     :issticky
     :isreadable
+    :iswritable
     :isexecutable
     :uperm
     :gperm
@@ -106,8 +105,6 @@ end
 
 islink(path...) = islink(lstat(path...))
 
-@windows_only iswritable(path...) = ccall(:_waccess, Cint, (Ptr{Uint16}, Cint), utf16(joinpath(path...)), 2) == 0
-@unix_only    iswritable(path...) = ccall(:access, Cint, (Ptr{Uint8}, Cint), joinpath(path...), 2) == 0
 
 # some convenience functions
 

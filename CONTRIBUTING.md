@@ -34,7 +34,7 @@ A useful bug report filed as a Github issue provides information about how to re
   - A minimal working example, i.e. the smallest chunk of code that triggers the error. Ideally, this should be code that can be pasted into a REPL or run from a source file. If the code is larger than (say) 50 lines, consider putting it in a [gist](https://gist.github.com).
   - The version of Julia you are using as provided by the `versioninfo()` command. Occasionally, the longer output produced by `versioninfo(true)` may be useful also, especially if the issue is related to a specific package.
 
-4. When pasting code or output, put triple backquotes (```) around the code block and output block so that Github will format it nicely. 
+4. When pasting code blocks or output, put triple backquotes (\`\`\`) around the text so Github will format it nicely. You can format code statements by surrounding it in single backquotes (\`). Be aware that the `@` sign tags users on GitHub, so references to macros should always be in single backquotes. See [GitHub's guide on Markdown](https://guides.github.com/features/mastering-markdown/) for more formatting tricks.
 
 ## Submitting your contributions
 

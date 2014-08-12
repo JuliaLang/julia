@@ -80,7 +80,7 @@ function getindex{T<:BlasFloat}(C::CholeskyPivoted{T}, d::Symbol)
     throw(KeyError(d))
 end
 
-show(io::IO, C::Cholesky) = (println("$(typeof(C)) with factor:");show(io,C[symbol(C.uplo)]))
+show(io::IO, C::Cholesky) = (println(io,"$(typeof(C)) with factor:");show(io,C[symbol(C.uplo)]))
 
 A_ldiv_B!{T<:BlasFloat}(C::Cholesky{T}, B::StridedVecOrMat{T}) = LAPACK.potrs!(C.uplo, C.UL, B)
 A_ldiv_B!(C::Cholesky, B::StridedVecOrMat) = C.uplo=='L' ? Ac_ldiv_B!(Triangular(C.UL,C.uplo,'N'), A_ldiv_B!(Triangular(C.UL,C.uplo,'N'), B)) : A_ldiv_B!(Triangular(C.UL,C.uplo,'N'), Ac_ldiv_B!(Triangular(C.UL,C.uplo,'N'), B))
@@ -141,8 +141,9 @@ end
 # Note. For QRCompactWY factorization without pivoting, the WY representation based method introduced in LAPACK 3.4
 immutable QRCompactWY{S} <: Factorization{S}
     factors::Matrix{S}
-    T::Matrix{S}
+    T::Triangular{S}
 end
+QRCompactWY{S}(factors::Matrix{S}, T::Matrix{S})=QRCompactWY{S}(factors, Triangular(T, :U))
 
 immutable QRPivoted{T} <: Factorization{T}
     factors::Matrix{T}
@@ -178,9 +179,13 @@ qrfact{T<:BlasFloat}(A::StridedMatrix{T}; pivot=false) = qrfact!(copy(A),pivot=p
 qrfact{T}(A::StridedMatrix{T}; pivot=false) = (S = typeof(one(T)/norm(one(T)));S != T ? qrfact!(convert(AbstractMatrix{S},A), pivot=pivot) : qrfact!(copy(A),pivot=pivot))
 qrfact(x::Number) = qrfact(fill(x,1,1))
 
-function qr(A::Union(Number, AbstractMatrix); pivot=false, thin::Bool=true)
+function qr(A::Union(Number, AbstractMatrix); pivot::Bool=false, thin::Bool=true)
     F = qrfact(A, pivot=pivot)
-    full(F[:Q], thin=thin), F[:R]
+    if pivot
+        full(F[:Q], thin=thin), F[:R], F[:p]
+    else
+        full(F[:Q], thin=thin), F[:R]
+    end
 end
 
 convert{T}(::Type{QR{T}},A::QR) = QR(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ))
@@ -218,14 +223,17 @@ function getindex{T}(A::QRPivoted{T}, d::Symbol)
     end
     throw(KeyError(d))
 end
+# Type-stable interface to get Q
+getq(A::QRCompactWY) = QRCompactWYQ(A.factors,A.T)
+getq(A::QRPivoted) = QRPackedQ(A.factors,A.τ)
 
 immutable QRPackedQ{T} <: AbstractMatrix{T}
     factors::Matrix{T}
     τ::Vector{T}
 end
 immutable QRCompactWYQ{S} <: AbstractMatrix{S} 
-    factors::Matrix{S}                      
-    T::Matrix{S}                       
+    factors::Matrix{S}
+    T::Triangular{S}
 end
 
 convert{T}(::Type{QRPackedQ{T}}, Q::QRPackedQ) = QRPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
@@ -242,7 +250,7 @@ full{T}(A::Union(QRPackedQ{T},QRCompactWYQ{T}); thin::Bool=true) = A_mul_B!(A, t
 
 ## Multiplication by Q
 ### QB
-A_mul_B!{T<:BlasFloat}(A::QRCompactWYQ{T}, B::StridedVecOrMat{T}) = LAPACK.gemqrt!('L','N',A.factors,A.T,B)
+A_mul_B!{T<:BlasFloat}(A::QRCompactWYQ{T}, B::StridedVecOrMat{T}) = LAPACK.gemqrt!('L','N',A.factors,A.T.data,B)
 A_mul_B!{T<:BlasFloat}(A::QRPackedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormqr!('L','N',A.factors,A.τ,B)
 function A_mul_B!{T}(A::QRPackedQ{T}, B::AbstractVecOrMat{T})
     mA, nA = size(A.factors)
@@ -279,8 +287,8 @@ function *{TA,TB}(A::Union(QRPackedQ{TA},QRCompactWYQ{TA}), B::StridedMatrix{TB}
     A_mul_B!(Anew,Bnew)
 end
 ### QcB
-Ac_mul_B!{T<:BlasReal}(A::QRCompactWYQ{T}, B::StridedVecOrMat{T}) = LAPACK.gemqrt!('L','T',A.factors,A.T,B)
-Ac_mul_B!{T<:BlasComplex}(A::QRCompactWYQ{T}, B::StridedVecOrMat{T}) = LAPACK.gemqrt!('L','C',A.factors,A.T,B)
+Ac_mul_B!{T<:BlasReal}(A::QRCompactWYQ{T}, B::StridedVecOrMat{T}) = LAPACK.gemqrt!('L','T',A.factors,A.T.data,B)
+Ac_mul_B!{T<:BlasComplex}(A::QRCompactWYQ{T}, B::StridedVecOrMat{T}) = LAPACK.gemqrt!('L','C',A.factors,A.T.data,B)
 Ac_mul_B!{T<:BlasReal}(A::QRPackedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormqr!('L','T',A.factors,A.τ,B)
 Ac_mul_B!{T<:BlasComplex}(A::QRPackedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormqr!('L','C',A.factors,A.τ,B)
 function Ac_mul_B!{T}(A::QRPackedQ{T}, B::AbstractVecOrMat{T})
@@ -310,7 +318,7 @@ function Ac_mul_B{TQ<:Number,TB<:Number,N}(Q::Union(QRPackedQ{TQ},QRCompactWYQ{T
     Ac_mul_B!(convert(AbstractMatrix{TQB}, Q), TB == TQB ? copy(B) : convert(AbstractArray{TQB,N}, B))
 end
 ### AQ
-A_mul_B!{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRCompactWYQ{T}) = LAPACK.gemqrt!('R','N', B.factors, B.T, A)
+A_mul_B!{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRCompactWYQ{T}) = LAPACK.gemqrt!('R','N', B.factors, B.T.data, A)
 A_mul_B!(A::StridedVecOrMat, B::QRPackedQ) = LAPACK.ormqr!('R', 'N', B.factors, B.τ, A)
 function A_mul_B!{T}(A::StridedMatrix{T},Q::QRPackedQ{T})
     mQ, nQ = size(Q.factors)
@@ -339,8 +347,8 @@ function *{TA,TQ,N}(A::StridedArray{TA,N}, Q::Union(QRPackedQ{TQ},QRCompactWYQ{T
     A_mul_B!(TA==TAQ ? copy(A) : convert(AbstractArray{TAQ,N}, A), convert(AbstractMatrix{TAQ}, Q))
 end
 ### AQc
-A_mul_Bc!{T<:BlasReal}(A::StridedVecOrMat{T}, B::QRCompactWYQ{T}) = LAPACK.gemqrt!('R','T',B.factors,B.T,A)
-A_mul_Bc!{T<:BlasComplex}(A::StridedVecOrMat{T}, B::QRCompactWYQ{T}) = LAPACK.gemqrt!('R','C',B.factors,B.T,A)
+A_mul_Bc!{T<:BlasReal}(A::StridedVecOrMat{T}, B::QRCompactWYQ{T}) = LAPACK.gemqrt!('R','T',B.factors,B.T.data,A)
+A_mul_Bc!{T<:BlasComplex}(A::StridedVecOrMat{T}, B::QRCompactWYQ{T}) = LAPACK.gemqrt!('R','C',B.factors,B.T.data,A)
 A_mul_Bc!{T<:BlasReal}(A::StridedVecOrMat{T}, B::QRPackedQ{T}) = LAPACK.ormqr!('R','T',B.factors,B.τ,A)
 A_mul_Bc!{T<:BlasComplex}(A::StridedVecOrMat{T}, B::QRPackedQ{T}) = LAPACK.ormqr!('R','C',B.factors,B.τ,A)
 function A_mul_Bc!{T}(A::AbstractMatrix{T},Q::QRPackedQ{T})
@@ -365,9 +373,14 @@ function A_mul_Bc!{T}(A::AbstractMatrix{T},Q::QRPackedQ{T})
     end
     A
 end
-function A_mul_Bc{TA,TB,N}(A::AbstractArray{TA,N}, B::Union(QRCompactWYQ{TB},QRPackedQ{TB}))
+A_mul_Bc(A::Triangular, B::Union(QRCompactWYQ,QRPackedQ)) = A_mul_Bc(full(A), B)
+function A_mul_Bc{TA,TB}(A::AbstractArray{TA}, B::Union(QRCompactWYQ{TB},QRPackedQ{TB}))
     TAB = promote_type(TA,TB)
-    A_mul_Bc!(size(A,2)==size(B.factors,1) ? (TA == TAB ? copy(A) : convert(AbstractMatrix{TAB,N}, A)) : (size(A,2)==size(B.factors,2) ? [A zeros(TAB, size(A, 1), size(B.factors, 1) - size(B.factors, 2))] : throw(DimensionMismatch(""))),convert(AbstractMatrix{TAB}, B))
+    A_mul_Bc!(size(A,2)==size(B.factors,1) ? (TA == TAB ? copy(A) : convert(AbstractMatrix{TAB}, A)) :
+              size(A,2)==size(B.factors,2) ? [A zeros(TAB, size(A, 1), size(B.factors, 1) - size(B.factors, 2))] :
+              throw(DimensionMismatch("")),
+
+              convert(AbstractMatrix{TAB}, B))
 end
 
 # Julia implementation similarly to xgelsy
@@ -379,25 +392,29 @@ function A_ldiv_B!{T<:BlasFloat}(A::Union(QRCompactWY{T},QRPivoted{T}), B::Strid
     ar = abs(A.factors[1])
     if ar == 0 return zeros(nr, nrhs), 0 end
     rnk = 1
-    xmin = ones(T, nr)
-    xmax = ones(T, nr)
+    xmin = ones(T, 1)
+    xmax = ones(T, 1)
     tmin = tmax = ar
     while rnk < nr
-        tmin, smin, cmin = LAPACK.laic1!(2, sub(xmin, 1:rnk), tmin, sub(A.factors, 1:rnk, rnk + 1), A.factors[rnk + 1, rnk + 1])
-        tmax, smax, cmax = LAPACK.laic1!(1, sub(xmax, 1:rnk), tmax, sub(A.factors, 1:rnk, rnk + 1), A.factors[rnk + 1, rnk + 1])
+        tmin, smin, cmin = LAPACK.laic1!(2, xmin, tmin, sub(A.factors, 1:rnk, rnk + 1), A.factors[rnk + 1, rnk + 1])
+        tmax, smax, cmax = LAPACK.laic1!(1, xmax, tmax, sub(A.factors, 1:rnk, rnk + 1), A.factors[rnk + 1, rnk + 1])
         tmax*rcond > tmin && break
-        xmin[1:rnk + 1] = [smin*sub(xmin, 1:rnk), cmin]
-        xmax[1:rnk + 1] = [smax*sub(xmin, 1:rnk), cmax]
+        push!(xmin, cmin)
+        push!(xmax, cmax)
+        for i = 1:rnk
+            xmin[i] *= smin
+            xmax[i] = smax*xmin[i]
+        end
         rnk += 1
         # if cond(r[1:rnk, 1:rnk])*rcond < 1 break end
     end
     C, τ = LAPACK.tzrzf!(A.factors[1:rnk,:])
-    A_ldiv_B!(Triangular(C[1:rnk,1:rnk],:U),sub(Ac_mul_B!(A[:Q],sub(B, 1:mA, 1:nrhs)),1:rnk,1:nrhs))
+    A_ldiv_B!(Triangular(C[1:rnk,1:rnk],:U),sub(Ac_mul_B!(getq(A),sub(B, 1:mA, 1:nrhs)),1:rnk,1:nrhs))
     B[rnk+1:end,:] = zero(T)
     LAPACK.ormrz!('L', iseltype(B, Complex) ? 'C' : 'T', C, τ, sub(B,1:nA,1:nrhs))
-    return isa(A,QRPivoted) ? B[invperm(A[:p]),:] : B[1:nA,:], rnk
+    return isa(A,QRPivoted) ? B[invperm(A[:p]::Vector{BlasInt}),:] : B[1:nA,:], rnk
 end
-A_ldiv_B!{T<:BlasFloat}(A::Union(QRCompactWY{T},QRPivoted{T}), B::StridedVector{T}) = A_ldiv_B!(A,reshape(B,length(B),1))[:]
+A_ldiv_B!{T<:BlasFloat}(A::Union(QRCompactWY{T},QRPivoted{T}), B::StridedVector{T}) = vec(A_ldiv_B!(A,reshape(B,length(B),1)))
 A_ldiv_B!{T<:BlasFloat}(A::Union(QRCompactWY{T},QRPivoted{T}), B::StridedVecOrMat{T}) = A_ldiv_B!(A, B, sqrt(eps(real(float(one(eltype(B)))))))[1]
 function A_ldiv_B!{T}(A::QR{T},B::StridedMatrix{T})
     m, n = size(A)
@@ -431,7 +448,7 @@ function A_ldiv_B!{T}(A::QR{T},B::StridedMatrix{T})
                 B[i,k] /= R[i,i]
             end
         end
-        if n > m # Apply elemenary transformation to solution
+        if n > m # Apply elementary transformation to solution
             B[m+1:mB,1:nB] = zero(T)
             for j = 1:nB
                 for k = 1:m
@@ -456,13 +473,13 @@ A_ldiv_B!(A::QRPivoted, B::StridedMatrix) = A_ldiv_B!(QR(A.factors,A.τ),B)[invp
 function \{TA,Tb}(A::Union(QR{TA},QRCompactWY{TA},QRPivoted{TA}),b::StridedVector{Tb})
     S = promote_type(TA,Tb)
     m,n = size(A)
-    m == length(b) || throw(DimensionMismatch("left hand side has $(m) rows, but right hand side has length $(length(b))"))
+    m == length(b) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has length $(length(b))"))
     n > m ? A_ldiv_B!(convert(Factorization{S},A),[b,zeros(S,n-m)]) : A_ldiv_B!(convert(Factorization{S},A), S == Tb ? copy(b) : convert(AbstractVector{S}, b))
 end
 function \{TA,TB}(A::Union(QR{TA},QRCompactWY{TA},QRPivoted{TA}),B::StridedMatrix{TB})
     S = promote_type(TA,TB)
     m,n = size(A)
-    m == size(B,1) || throw(DimensionMismatch("left hand side has $(m) rows, but right hand side has $(size(B,1)) rows"))
+    m == size(B,1) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has $(size(B,1)) rows"))
     n > m ? A_ldiv_B!(convert(Factorization{S},A),[B;zeros(S,n-m,size(B,2))]) : A_ldiv_B!(convert(Factorization{S},A), S == TB ? copy(B) : convert(AbstractMatrix{S}, B))
 end
 

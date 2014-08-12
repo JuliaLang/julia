@@ -1772,3 +1772,60 @@ macro let_with_uninit()
 end
 
 @test @let_with_uninit() == 2
+
+# issue #5154
+let
+    v = {}
+    for i=1:3, j=1:3
+        push!(v, (i, j))
+        i == 1 && j == 2 && break
+    end
+    @test v == {(1,1), (1,2)}
+end
+
+# addition of ¬ (\neg) parsing
+const (¬) = !
+@test ¬false
+
+# issue #7652
+type A7652
+    a :: Int
+end
+a7652 = A7652(0)
+f7652() = issubtype(fieldtype(a7652, :a), Int)
+@test f7652() == issubtype(fieldtype(a7652, :a), Int) == true
+g7652() = fieldtype(A7652, :types)
+@test g7652() == fieldtype(A7652, :types) == Tuple
+@test fieldtype(a7652, 1) == Int
+h7652() = a7652.(1) = 2
+h7652()
+@test a7652.a == 2
+i7652() = a7652.(1) = 3.0
+i7652()
+@test a7652.a == 3
+
+# issue #7679
+@test map(f->f(), { ()->i for i=1:3 }) == {1,2,3}
+
+# issue #7810
+type Foo7810{T<:AbstractVector}
+    v::T
+end
+bar7810() = [Foo7810([(a,b) for a in 1:2]) for b in 3:4]
+@test Base.return_types(bar7810,())[1] == Array{Foo7810{Array{(Int,Int),1}},1}
+
+# issue 7897
+function issue7897!(data, arr)
+    data = reinterpret(Uint32, data)
+    a = arr[1]
+end
+
+a = ones(Uint8, 10)
+sa = sub(a,4:6)
+# This can throw an error, but shouldn't segfault
+try
+    issue7897!(sa, zeros(10))
+end
+
+# issue #7582
+aₜ = "a variable using Unicode 6"

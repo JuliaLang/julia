@@ -73,7 +73,9 @@ end
 
 function mapfoldl(f, op, itr)
     i = start(itr)
-    done(itr, i) && error("Argument is empty.")
+    if done(itr, i)
+        return Base.mr_empty(f, op, eltype(itr))
+    end
     (x, i) = next(itr, i)
     v0 = evaluate(f, x)
     mapfoldl_impl(f, op, v0, itr, i)
@@ -228,7 +230,7 @@ sum_pairwise_blocksize(::Abs2Fun) = 4096
 mapreduce_impl(f, op::AddFun, A::AbstractArray, ifirst::Int, ilast::Int) = 
     mapreduce_pairwise_impl(f, op, A, ifirst, ilast, sum_pairwise_blocksize(f))
 
-sum(f::Union(Function,Func{1}), a) = mapreduce(f, AddFun(), a)
+sum(f::Union(Callable,Func{1}), a) = mapreduce(f, AddFun(), a)
 sum(a) = mapreduce(IdFun(), AddFun(), a)
 sum(a::AbstractArray{Bool}) = countnz(a)
 sumabs(a) = mapreduce(AbsFun(), AddFun(), a)
@@ -259,7 +261,7 @@ end
 
 ## prod
 
-prod(f::Union(Function,Func{1}), a) = mapreduce(f, MulFun(), a)
+prod(f::Union(Callable,Func{1}), a) = mapreduce(f, MulFun(), a)
 prod(a) = mapreduce(IdFun(), MulFun(), a)
 
 prod(A::AbstractArray{Bool}) =
@@ -303,8 +305,8 @@ function mapreduce_impl(f, op::MinFun, A::AbstractArray, first::Int, last::Int)
     v
 end
 
-maximum(f::Union(Function,Func{1}), a) = mapreduce(f, MaxFun(), a)
-minimum(f::Union(Function,Func{1}), a) = mapreduce(f, MinFun(), a)
+maximum(f::Union(Callable,Func{1}), a) = mapreduce(f, MaxFun(), a)
+minimum(f::Union(Callable,Func{1}), a) = mapreduce(f, MinFun(), a)
 
 maximum(a) = mapreduce(IdFun(), MaxFun(), a)
 minimum(a) = mapreduce(IdFun(), MinFun(), a)
@@ -383,8 +385,8 @@ end
 all(a) = mapreduce(IdFun(), AndFun(), a)
 any(a) = mapreduce(IdFun(), OrFun(), a)
 
-all(pred::Union(Function,Func{1}), a) = mapreduce(pred, AndFun(), a)
-any(pred::Union(Function,Func{1}), a) = mapreduce(pred, OrFun(), a)
+all(pred::Union(Callable,Func{1}), a) = mapreduce(pred, AndFun(), a)
+any(pred::Union(Callable,Func{1}), a) = mapreduce(pred, OrFun(), a)
 
 
 ## in & contains
@@ -401,11 +403,6 @@ const ∈ = in
 ∉(x, itr)=!∈(x, itr)
 ∋(itr, x)= ∈(x, itr)
 ∌(itr, x)=!∋(itr, x)
-
-function contains(itr, x)
-    depwarn("contains(collection, item) is deprecated, use in(item, collection) instead", :contains)
-    in(x, itr)
-end
 
 function contains(eq::Function, itr, x)
     for y in itr

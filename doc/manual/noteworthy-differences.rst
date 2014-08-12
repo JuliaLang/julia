@@ -24,6 +24,11 @@ differences that may trip up Julia users accustomed to MATLAB:
    function which grows ``Vectors`` much more efficiently than Matlab's
    ``a(end+1) = val``.
 -  The imaginary unit ``sqrt(-1)`` is represented in julia with ``im``.
+-  Literal numbers without a decimal point (such as ``42``) create integers 
+   instead of floating point numbers. Arbitrarily large integer
+   literals are supported. But this means that some operations such as
+   ``2^-1`` will throw a domain error as the result is not an integer (see
+   :ref:`the FAQ entry on domain errors <man-domain-error>` for details).
 -  Multiple values are returned and assigned with parentheses,
    ``return (a, b)`` and ``(a, b) = f(x)``.
 -  Julia has 1-dimensional arrays. Column vectors are of size ``N``, not
@@ -68,7 +73,8 @@ differences that may trip up Julia users accustomed to MATLAB:
    using ``...``, as in ``xs=[1,2]; f(xs...)``.
 -  Julia's ``svd`` returns singular values as a vector instead of as a
    full diagonal matrix.
--  In Julia, ``...`` is not used to continue lines of code.
+-  In Julia, ``...`` is not used to continue lines of code. Instead, incomplete
+   expressions automatically continue onto the next line.
 -  The variable ``ans`` is set to the value of the last expression issued
    in an interactive session, but not set when Julia code is run in other
    ways.
@@ -100,7 +106,7 @@ One of Julia's goals is to provide an effective language for data analysis and s
   DataFrames and Distributions packages:
 
 	- Distributions functions are found in the `Distributions package <https://github.com/JuliaStats/Distributions.jl>`_
-	- The `DataFrames package <https://github.com/HarlanH/DataFrames.jl>`_ provides data frames.
+	- The `DataFrames package <https://github.com/JuliaStats/DataFrames.jl>`_ provides data frames.
 	- Formulas for GLM's must be escaped: use ``:(y ~ x)`` instead of ``y ~ x``.
 
 - Julia provides tuples and real hash tables, but not R's lists. When returning multiple items, you should typically use a tuple: instead of ``list(a = 1, b = 2)``, use ``(1, 2)``.

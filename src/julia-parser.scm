@@ -45,7 +45,18 @@
 	    (eval `(define ,(symbol (string "is-" name "?")) (Set ,name))))
 	  prec-names)
 
-(define unary-ops '(+ - ! ~ |<:| |>:| √ ∛ ∜))
+;; hash table of binary operators -> precedence
+(define prec-table (let ((t (table)))
+                     (define (pushprec L prec)
+                       (if (not (null? L))
+                           (begin
+                             (for-each (lambda (x) (put! t x prec)) (car L))
+                             (pushprec (cdr L) (+ prec 1)))))
+                     (pushprec (map eval prec-names) 1)
+                     t))
+(define (operator-precedence op) (get prec-table op 0))
+
+(define unary-ops '(+ - ! ¬ ~ |<:| |>:| √ ∛ ∜))
 
 ; operators that are both unary and binary
 (define unary-and-binary-ops '(+ - $ & ~))
@@ -63,7 +74,7 @@
 (define ctrans-op (string->symbol "'"))
 (define vararg-op (string->symbol "..."))
 
-(define operators (list* '~ '! '-> '√ '∛ '∜ ctrans-op trans-op vararg-op
+(define operators (list* '~ '! '¬ '-> '√ '∛ '∜ ctrans-op trans-op vararg-op
 			 (delete-duplicates
 			  (apply append (map eval prec-names)))))
 
@@ -1016,10 +1027,9 @@
      (let* ((ranges (parse-comma-separated-iters s))
 	    (body   (parse-block s)))
        (expect-end s)
-       (let nest ((r ranges))
-	 (if (null? r)
-	     body
-	     `(for ,(car r) ,(nest (cdr r)))))))
+       `(for ,(if (length= ranges 1) (car ranges) (cons 'block ranges))
+	     ,body)))
+
     ((if)
      (let* ((test (parse-cond s))
 	    (then (if (memq (require-token s) '(else elseif))
@@ -1124,7 +1134,9 @@
 						   '())))
 	  ((and (eq? nxt 'catch)
 		(not catchb))
-	   (let ((nl (eqv? (peek-token s) #\newline)))
+	   (let ((nl (memv (peek-token s) '(#\newline #\;))))
+	     (if (eqv? (peek-token s) #\;)
+		 (take-token s))
 	     (if (memq (require-token s) '(end finally))
 		 (loop (require-token s)
 		       '(block)
@@ -1677,9 +1689,12 @@
 	  ;; symbol/expression quote
 	  ((eq? t ':)
 	   (take-token s)
-	   (if (closing-token? (peek-token s))
-	       ':
-	       (list 'quote (parse-atom- s))))
+	   (let ((nxt (peek-token s)))
+	     (if (and (closing-token? nxt)
+		      (or (not (symbol? nxt))
+			  (ts:space? s)))
+		 ':
+		 (list 'quote (parse-atom- s)))))
 
 	  ;; misplaced =
 	  ((eq? t '=) (error "unexpected \"=\""))

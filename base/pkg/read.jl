@@ -28,6 +28,28 @@ function available(names=readdir("METADATA"))
 end
 available(pkg::String) = get(available([pkg]),pkg,Dict{VersionNumber,Available}())
 
+function latest(names=readdir("METADATA"))
+    pkgs = Dict{ByteString,Available}()
+    for pkg in names
+        isfile("METADATA", pkg, "url") || continue
+        versdir = joinpath("METADATA", pkg, "versions")
+        isdir(versdir) || continue
+        pkgversions = VersionNumber[]
+        for ver in readdir(versdir)
+            ismatch(Base.VERSION_REGEX, ver) || continue
+            isfile(versdir, ver, "sha1") || continue
+            push!(pkgversions, convert(VersionNumber,ver))
+        end
+        isempty(pkgversions) && continue
+        ver = string(maximum(pkgversions))
+        pkgs[pkg] = Available(
+                readchomp(joinpath(versdir,ver,"sha1")),
+                Reqs.parse(joinpath(versdir,ver,"requires"))
+            )
+    end
+    return pkgs
+end
+
 isinstalled(pkg::String) =
     pkg != "METADATA" && pkg != "REQUIRE" && pkg[1] != '.' && isdir(pkg)
 

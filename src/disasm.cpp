@@ -25,12 +25,12 @@ using namespace llvm;
 namespace {
 class FuncMCView : public MemoryObject {
 private:
-    const char* Fptr;
+    const char *Fptr;
     size_t Fsize;
 public:
-    FuncMCView(const void* fptr, size_t size) : Fptr((const char*)fptr), Fsize(size) {}
+    FuncMCView(const void *fptr, size_t size) : Fptr((const char*)fptr), Fsize(size) {}
 
-    const char* operator[] (const size_t idx) { return (Fptr+idx); }
+    const char *operator[] (const size_t idx) { return (Fptr+idx); }
 
     uint64_t getBase() const { return 0; }
     uint64_t getExtent() const { return Fsize; }
@@ -222,7 +222,11 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
     FuncMCView memoryObject(Fptr, Fsize); // MemoryObject wrapper
 
     if (!objectfile) return;
+#ifdef LLVM36
+    DIContext *di_ctx = DIContext::getDWARFContext(*objectfile);
+#else
     DIContext *di_ctx = DIContext::getDWARFContext(objectfile);
+#endif
     if (di_ctx == NULL) return;
     DILineInfoTable lineinfo = di_ctx->getLineInfoForAddressRange((size_t)Fptr, Fsize);
 

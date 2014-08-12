@@ -21,6 +21,17 @@ end
 ####
 #### User-level functions
 ####
+function init(; n::Union(Nothing,Integer) = nothing, delay::Union(Nothing,Float64) = nothing)
+    n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
+    delay_cur = ccall(:jl_profile_delay_nsec, Uint64, ())/10^9
+    if n == nothing && delay == nothing
+        return int(n_cur), delay_cur
+    end
+    nnew = (n == nothing) ? n_cur : n
+    delaynew = (delay == nothing) ? delay_cur : delay
+    init(nnew, delaynew)
+end
+
 function init(n::Integer, delay::Float64)
     status = ccall(:jl_profile_init, Cint, (Csize_t, Uint64), n, iround(10^9*delay))
     if status == -1
@@ -55,6 +66,23 @@ function getdict(data::Vector{Uint})
     Dict(uip, [lookup(ip) for ip in uip])
 end
 
+function callers(funcname::ByteString, bt::Vector{Uint}, lidict; filename = nothing, linerange = nothing)
+    if filename == nothing && linerange == nothing
+        return callersf(li -> li.func == funcname, bt, lidict)
+    end
+    filename == nothing && error("If supplying linerange, you must also supply the filename")
+    if linerange == nothing
+        return callersf(li -> li.func == funcname && li.file == filename, bt, lidict)
+    else
+        return callersf(li -> li.func == funcname && li.file == filename && in(li.line, linerange), bt, lidict)
+    end
+end
+
+callers(funcname::ByteString; kwargs...) = callers(funcname, retrieve()...; kwargs...)
+callers(func::Function, bt::Vector{Uint}, lidict; kwargs...) = callers(string(func), bt, lidict; kwargs...)
+callers(func::Function; kwargs...) = callers(string(func), retrieve()...; kwargs...)
+
+
 ####
 #### Internal interface
 ####
@@ -63,10 +91,16 @@ immutable LineInfo
     file::ByteString
     line::Int
     fromC::Bool
+    ip::Int
 end
 
-const UNKNOWN = LineInfo("?", "?", -1, true)
+const UNKNOWN = LineInfo("?", "?", -1, true, 0)
 
+#
+# If the LineInfo has function and line information, we consider two of them the same
+# if they share the same function/line information. For unknown functions, line==ip
+# so we never actually need to consider the .ip field.
+#
 ==(a::LineInfo, b::LineInfo) = a.line == b.line && a.fromC == b.fromC && a.func == b.func && a.file == b.file
 
 function hash(li::LineInfo, h::Uint)
@@ -91,8 +125,8 @@ maxlen_data() = convert(Int, ccall(:jl_profile_maxlen_data, Csize_t, ()))
 
 function lookup(ip::Uint)
     info = ccall(:jl_lookup_code_address, Any, (Ptr{Void},Cint), ip, false)
-    if length(info) == 4
-        return LineInfo(string(info[1]), string(info[2]), int(info[3]), info[4])
+    if length(info) == 5
+        return LineInfo(string(info[1]), string(info[2]), int(info[3]), info[4], int(info[5]))
     else
         return UNKNOWN
     end
@@ -108,7 +142,7 @@ function fetch()
     len = len_data()
     maxlen = maxlen_data()
     if (len == maxlen)
-        warn("The profile data buffer is full; profiling probably terminated\nbefore your program finished. To profile for longer runs, call Profile.init()\nwith a larger buffer and/or larger delay.")
+        warn("The profile data buffer is full; profiling probably terminated\nbefore your program finished. To profile for longer runs, call Profile.init\nwith a larger buffer and/or larger delay.")
     end
     pointer_to_array(get_data_pointer(), (len,))
 end
@@ -256,14 +290,25 @@ function tree_format(lilist::Vector{LineInfo}, counts::Vector{Int}, level::Int, 
             if showextra
                 base = string(base, "+", nextra, " ")
             end
-            base = string(base,
+            if li.line == li.ip
+                strs[i] = string(base,
                           rpad(string(counts[i]), ndigcounts, " "),
-                          " ",
-                          truncto(string(li.file), widthfile),
-                          "; ",
-                          truncto(string(li.func), widthfunc),
-                          "; ")
-            strs[i] = string(base, "line: ", li.line)
+                          " ","unknown function (ip: 0x",hex(li.ip,2*sizeof(Ptr{Void})),
+                          ")")
+            else
+                base = string(base,
+                              rpad(string(counts[i]), ndigcounts, " "),
+                              " ",
+                              truncto(string(li.file), widthfile),
+                              "; ",
+                              truncto(string(li.func), widthfunc),
+                              "; ")
+                if li.line == -1
+                    strs[i] = string(base, "(unknown line)")
+                else
+                    strs[i] = string(base, "line: ", li.line)
+                end
+            end
         else
             strs[i] = ""
         end
@@ -361,6 +406,30 @@ function tree{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict, C::Bool, combi
     len = Int[length(x) for x in bt]
     keep = len .> 0
     tree(io, bt[keep], counts[keep], lidict, level, combine, cols)
+end
+
+function callersf(matchfunc::Function, bt::Vector{Uint}, lidict)
+    counts = Dict{LineInfo, Int}()
+    lastmatched = false
+    for id in bt
+        if id == 0
+            lastmatched = false
+            continue
+        end
+        li = lidict[id]
+        if lastmatched
+            if haskey(counts, li)
+                counts[li] += 1
+            else
+                counts[li] = 1
+            end
+        end
+        lastmatched = matchfunc(li)
+    end
+    k = collect(keys(counts))
+    v = collect(values(counts))
+    p = sortperm(v, rev=true)
+    [(v[i], k[i]) for i in p]
 end
 
 # Utilities

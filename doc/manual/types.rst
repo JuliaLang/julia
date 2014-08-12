@@ -349,25 +349,31 @@ New objects of composite type ``Foo`` are created by applying the
     Foo("Hello, world.",23,1.5)
 
     julia> typeof(foo)
-    Foo (constructor with 1 method)
+    Foo (constructor with 2 methods)
 
-Since the ``bar`` field is unconstrained in type, any value will do; the
-value for ``baz`` must be an ``Int`` and ``qux`` must be a ``Float64``.
-The signature of the default constructor is taken directly from the
-field type declarations ``(Any,Int,Float64)``, so arguments must match
-this implied type signature:
+When a type is applied like a function it is called a *constructor*.
+Two constructors are generated automatically (these are called *default
+constructors*). One accepts any arguments and calls ``convert`` to convert
+them to the types of the fields, and the other accepts arguments that
+match the field types exactly. The reason both of these are generated is
+that this makes it easier to add new definitions without inadvertently
+replacing a default constructor.
+
+Since the ``bar`` field is unconstrained in type, any value will do.
+However, the value for ``baz`` must be convertible to ``Int``:
 
 .. doctest::
 
     julia> Foo((), 23.5, 1)
-    ERROR: no method Foo((), Float64, Int64)
+    ERROR: InexactError()
+     in Foo at no file
 
 You may find a list of field names using the ``names`` function.
 
 .. doctest::
 
     julia> names(foo)
-    3-element Array{Any,1}:
+    3-element Array{Symbol,1}:
      :bar
      :baz
      :qux
@@ -547,12 +553,10 @@ Type Unions
 
 A type union is a special abstract type which includes as objects all
 instances of any of its argument types, constructed using the special
-``Union`` function:
-
-.. doctest::
+``Union`` function::
 
     julia> IntOrString = Union(Int,String)
-    Union(Int64,String)
+    Union(String,Int64)
 
     julia> 1 :: IntOrString
     1
@@ -745,14 +749,14 @@ each field:
 .. doctest::
 
     julia> Point{Float64}(1.0)
-    ERROR: no method Point{Float64}(Float64)
+    ERROR: `Point{Float64}` has no method matching Point{Float64}(::Float64)
 
     julia> Point{Float64}(1.0,2.0,3.0)
-    ERROR: no method Point{Float64}(Float64, Float64, Float64)
+    ERROR: `Point{Float64}` has no method matching Point{Float64}(::Float64, ::Float64, ::Float64)
 
-The provided arguments need to match the field types exactly, in this
-case ``(Float64,Float64)``, as with all composite type default
-constructors.
+Only one default constructor is generated for parametric types, since
+overriding it is not possible. This constructor accepts any arguments
+and converts them to the field types.
 
 In many cases, it is redundant to provide the type of ``Point`` object
 one wants to construct, since the types of arguments to the constructor
@@ -781,7 +785,7 @@ isn't the case, the constructor will fail with a no method error:
 .. doctest::
 
     julia> Point(1,2.5)
-    ERROR: no method Point{T}(Int64, Float64)
+    ERROR: `Point{T}` has no method matching Point{T}(::Int64, ::Float64)
 
 Constructor methods to appropriately handle such mixed cases can be
 defined, but that will not be discussed until later on in
@@ -889,10 +893,10 @@ subtypes of ``Real``:
     Pointy{Real}
 
     julia> Pointy{String}
-    ERROR: type: Pointy: in T, expected Real, got Type{String}
+    ERROR: type: Pointy: in T, expected T<:Real, got Type{String}
 
     julia> Pointy{1}
-    ERROR: type: Pointy: in T, expected Real, got Int64
+    ERROR: type: Pointy: in T, expected T<:Real, got Int64
 
 Type parameters for parametric composite types can be restricted in the
 same manner::
@@ -1160,15 +1164,13 @@ Only declared types (``DataType``) have unambiguous supertypes:
     Any
 
 If you apply ``super`` to other type objects (or non-type objects), a
-"no method" error is raised:
-
-.. doctest::
+"no method" error is raised::
 
     julia> super(Union(Float64,Int64))
-    ERROR: no method super(Type{Union(Float64,Int64)})
+    ERROR: `super` has no method matching super(::Type{Union(Float64,Int64)})
 
     julia> super(None)
-    ERROR: no method super(Type{None})
+    ERROR: `super` has no method matching super(::Type{None})
 
     julia> super((Float64,Int64))
-    ERROR: no method super(Type{(Float64,Int64)})
+    ERROR: `super` has no method matching super(::Type{(Float64,Int64)})

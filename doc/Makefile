@@ -19,7 +19,7 @@ I18NSPHINXOPTS  = $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) .
 	epub latex latexpdf text man changes linkcheck doctest gettext
 
 help:
-	@echo "Please use \`make <target>' where <target> is one of"
+	@echo "Please use 'make <target>' where <target> is one of"
 	@echo "  helpdb.jl  to make the REPL help db"
 	@echo "  html       to make standalone HTML files"
 	@echo "  dirhtml    to make HTML files named index.html in directories"
@@ -43,6 +43,10 @@ help:
 
 clean:
 	-rm -rf $(BUILDDIR)/*
+	# We also need to remove .pyc files
+	-find . -name *.pyc | xargs rm
+
+cleanall: clean
 
 juliadoc-pkg: juliadoc/juliadoc/__init__.py
 	@-cd .. && git submodule update doc/juliadoc
@@ -105,8 +109,8 @@ latex: juliadoc-pkg
 	$(SPHINXBUILD) -b latex $(ALLSPHINXOPTS) $(BUILDDIR)/latex
 	@echo
 	@echo "Build finished; the LaTeX files are in $(BUILDDIR)/latex."
-	@echo "Run \`make' in that directory to run these through (pdf)latex" \
-	      "(use \`make latexpdf' here to do that automatically)."
+	@echo "Run 'make' in that directory to run these through (pdf)latex" \
+	      "(use 'make latexpdf' here to do that automatically)."
 
 latexpdf: juliadoc-pkg
 	$(SPHINXBUILD) -b latex $(ALLSPHINXOPTS) $(BUILDDIR)/latex
@@ -128,8 +132,8 @@ texinfo: juliadoc-pkg
 	$(SPHINXBUILD) -b texinfo $(ALLSPHINXOPTS) $(BUILDDIR)/texinfo
 	@echo
 	@echo "Build finished. The Texinfo files are in $(BUILDDIR)/texinfo."
-	@echo "Run \`make' in that directory to run these through makeinfo" \
-	      "(use \`make info' here to do that automatically)."
+	@echo "Run 'make' in that directory to run these through makeinfo" \
+	      "(use 'make info' here to do that automatically)."
 
 info: juliadoc-pkg
 	$(SPHINXBUILD) -b texinfo $(ALLSPHINXOPTS) $(BUILDDIR)/texinfo

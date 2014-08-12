@@ -421,12 +421,28 @@ static uptrint_t hash_symbol(const char *str, size_t len)
     return memhash(str, len) ^ ~(uptrint_t)0/3*2;
 }
 
+#define SYM_POOL_SIZE 524288
+
 static jl_sym_t *mk_symbol(const char *str)
 {
+#ifndef MEMDEBUG
+    static char *sym_pool = NULL;
+    static char *pool_ptr = NULL;
+#endif
     jl_sym_t *sym;
     size_t len = strlen(str);
+    size_t nb = (sizeof(jl_sym_t)+len+1+7)&-8;
 
-    sym = (jl_sym_t*)malloc((sizeof(jl_sym_t)+len+1+7)&-8);
+#ifdef MEMDEBUG
+    sym = (jl_sym_t*)malloc(nb);
+#else
+    if (sym_pool == NULL || pool_ptr+nb > sym_pool+SYM_POOL_SIZE) {
+        sym_pool = malloc(SYM_POOL_SIZE);
+        pool_ptr = sym_pool;
+    }
+    sym = (jl_sym_t*)pool_ptr;
+    pool_ptr += nb;
+#endif
     sym->type = (jl_value_t*)jl_sym_type;
     sym->left = sym->right = NULL;
     sym->hash = hash_symbol(str, len);
@@ -451,7 +467,7 @@ static jl_sym_t **symtab_lookup(jl_sym_t **ptree, const char *str)
     uptrint_t h = hash_symbol(str, strlen(str));
 
     // Tree nodes sorted by major key of (int(hash)) and minor key o (str).
-    while(*ptree != NULL) {
+    while (*ptree != NULL) {
         x = (int)(h-(*ptree)->hash);
         if (x == 0) {
             x = strcmp(str, (*ptree)->name);
@@ -505,7 +521,7 @@ DLLEXPORT jl_sym_t *jl_gensym(void)
     return jl_symbol(n);
 }
 
-DLLEXPORT jl_sym_t *jl_tagged_gensym(const char* str, int32_t len)
+DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, int32_t len)
 {
     static char gs_name[14];
     char *name = (char*)alloca(sizeof(gs_name)+len+3);

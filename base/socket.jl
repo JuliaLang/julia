@@ -302,18 +302,8 @@ function TcpServer()
     this
 end
 
-# Internal version of close that doesn't error when called on an unitialized socket, as well as disassociating the socket immidiately
-# This is fine because if we're calling this from a finalizer, nobody can be possibly waiting for the close to go through
 function uvfinalize(uv)
     close(uv)
-    disassociate_julia_struct(uv)
-    uv.handle = 0
-end
-
-function uvfinalize(uv::Union(TTY,Pipe,PipeServer,TcpServer,TcpSocket))
-    if (uv.status != StatusUninit && uv.status != StatusInit)
-        close(uv)
-    end
     disassociate_julia_struct(uv)
     uv.handle = 0
 end
@@ -364,6 +354,7 @@ function UdpSocket()
     associate_julia_struct(this.handle, this)
     err = ccall(:uv_udp_init,Cint,(Ptr{Void},Ptr{Void}),
                   eventloop(),this.handle)
+    finalizer(this, uvfinalize)
     if err != 0 
         c_free(this.handle)
         this.handle = C_NULL
@@ -371,6 +362,14 @@ function UdpSocket()
     end
     this.status = StatusInit
     this
+end
+
+function uvfinalize(uv::Union(TTY,Pipe,PipeServer,TcpServer,TcpSocket,UdpSocket))
+    if (uv.status != StatusUninit && uv.status != StatusInit)
+        close(uv)
+    end
+    disassociate_julia_struct(uv)
+    uv.handle = 0
 end
 
 function _uv_hook_close(sock::UdpSocket)

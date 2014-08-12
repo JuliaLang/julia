@@ -63,7 +63,10 @@ reducedim_initarray0{T}(A::AbstractArray, region, v0::T) = reducedim_initarray0(
 #
 # The current scheme is basically following Steven G. Johnson's original implementation
 #
-function reducedim_init{T}(f, op::AddFun, A::AbstractArray{T}, region)
+promote_union(T::UnionType) = promote_type(T.types...)
+promote_union(T) = T
+function reducedim_init{S}(f, op::AddFun, A::AbstractArray{S}, region)
+    T = promote_union(S)
     if method_exists(zero, (Type{T},))
         x = evaluate(f, zero(T))
         z = zero(x) + zero(x)
@@ -75,7 +78,8 @@ function reducedim_init{T}(f, op::AddFun, A::AbstractArray{T}, region)
     return reducedim_initarray(A, region, z, Tr)
 end
 
-function reducedim_init{T}(f, op::MulFun, A::AbstractArray{T}, region)
+function reducedim_init{S}(f, op::MulFun, A::AbstractArray{S}, region)
+    T = promote_union(S)
     if method_exists(zero, (Type{T},))
         x = evaluate(f, zero(T))
         z = one(x) * one(x)
@@ -97,17 +101,22 @@ reducedim_init(f, op::OrFun, A::AbstractArray, region) = reducedim_initarray(A, 
 
 # specialize to make initialization more efficient for common cases
 
-typealias CommonReduceResult Union(Uint64,Uint128,Int64,Int128,Float32,Float64,Complex64,Complex128)
+typealias CommonReduceResult Union(Uint64,Uint128,Int64,Int128,Float32,Float64)
 
-for (IT, RT) in ((:CommonReduceResult, :T), (:SmallSigned, :Int), (:SmallUnsigned, :Uint))
+for (IT, RT) in ((CommonReduceResult, :(eltype(A))), (SmallSigned, :Int), (SmallUnsigned, :Uint))
+    T = Union([AbstractArray{t} for t in IT.types]..., [AbstractArray{Complex{t}} for t in IT.types]...)
     @eval begin
-        reducedim_init{T<:$IT}(f::Union(IdFun,AbsFun,Abs2Fun), op::AddFun, A::AbstractArray{T}, region) = 
+        reducedim_init(f::IdFun, op::AddFun, A::$T, region) =
             reducedim_initarray(A, region, zero($RT))
-        reducedim_init{T<:$IT}(f::Union(IdFun,AbsFun,Abs2Fun), op::MulFun, A::AbstractArray{T}, region) = 
+        reducedim_init(f::IdFun, op::MulFun, A::$T, region) =
             reducedim_initarray(A, region, one($RT))
+        reducedim_init(f::Union(AbsFun,Abs2Fun), op::AddFun, A::$T, region) =
+            reducedim_initarray(A, region, real(zero($RT)))
+        reducedim_init(f::Union(AbsFun,Abs2Fun), op::MulFun, A::$T, region) =
+            reducedim_initarray(A, region, real(one($RT)))
     end    
 end
-reducedim_init(f::Union(IdFun,AbsFun,Abs2Fun), op::AddFun, A::AbstractArray{Bool}, region) = 
+reducedim_init(f::Union(IdFun,AbsFun,Abs2Fun), op::AddFun, A::AbstractArray{Bool}, region) =
     reducedim_initarray(A, region, 0)
 
 

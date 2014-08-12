@@ -369,6 +369,7 @@ function _start()
                 else
                     active_repl = REPL.LineEditREPL(term, true)
                     active_repl.no_history_file = no_history_file
+                    active_repl.hascolor = have_color
                 end
                 # Make sure any displays pushed in .juliarc.jl ends up above the
                 # REPLDisplay

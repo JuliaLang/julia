@@ -18,7 +18,7 @@ import
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
         serialize, deserialize, inf, nan, cbrt, typemax, typemin,
         realmin, realmax, get_rounding, set_rounding, maxintfloat, widen,
-        significand
+        significand, frexp
 
 import Base.GMP: ClongMax, CulongMax
 
@@ -124,7 +124,13 @@ promote_rule{T<:Real}(::Type{BigFloat}, ::Type{T}) = BigFloat
 promote_rule{T<:FloatingPoint}(::Type{BigInt},::Type{T}) = BigFloat
 promote_rule{T<:FloatingPoint}(::Type{BigFloat},::Type{T}) = BigFloat
 
-rationalize(x::BigFloat; tol::Real=eps(x)) = rationalize(BigInt, x, tol=tol)
+function convert(::Type{Rational{BigInt}}, x::FloatingPoint)
+    if isnan(x); return zero(BigInt)//zero(BigInt); end
+    if isinf(x); return copysign(one(BigInt),x)//zero(BigInt); end
+    if x == 0;   return zero(BigInt) // one(BigInt); end
+    s = max(precision(x) - exponent(x), 0)
+    BigInt(ldexp(x,s)) // (BigInt(1) << s)
+end
 
 # serialization
 
@@ -660,6 +666,13 @@ function exponent(x::BigFloat)
     end
     # The '- 1' is to make it work as Base.exponent
     return ccall((:mpfr_get_exp, :libmpfr), Clong, (Ptr{BigFloat},), &x) - 1
+end
+
+function frexp(x::BigFloat)
+    z = BigFloat()
+    c = Clong[0]
+    ccall((:mpfr_frexp, :libmpfr), Int32, (Ptr{Clong}, Ptr{BigFloat}, Ptr{BigFloat}, Cint), c, &z, &x, ROUNDING_MODE[end])
+    return (z, c[1])
 end
 
 function significand(x::BigFloat)

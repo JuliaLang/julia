@@ -946,7 +946,7 @@ static jl_value_t *jl_deserialize_value_internal(ios_t *s)
     return NULL;
 }
 
-static jl_value_t* jl_deserialize_value(ios_t *s)
+static jl_value_t *jl_deserialize_value(ios_t *s)
 {
     jl_value_t *v = jl_deserialize_value_internal(s);
     assert(v != DTINSTANCE_PLACEHOLDER);

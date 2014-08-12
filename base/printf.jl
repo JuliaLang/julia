@@ -62,7 +62,7 @@ function parse(s::String)
                 end
                 list[i] *= list[j]
             end
-            splice!(list,i+1:j)
+            deleteat!(list,i+1:j)
         end
         i += 1
     end

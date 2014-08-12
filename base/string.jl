@@ -95,6 +95,8 @@ end
 
 isvalid(s::DirectIndexString, i::Integer) = (start(s) <= i <= endof(s))
 function isvalid(s::String, i::Integer)
+    i < 1 && return false
+    done(s,i) && return false
     try
         next(s,i)
         true
@@ -605,6 +607,11 @@ sizeof{T<:ByteString}(s::SubString{T}) = s.endof==0 ? 0 : next(s,s.endof)[2]-1
 # that may require additional string interfaces
 length{T<:DirectIndexString}(s::SubString{T}) = endof(s)
 
+function length(s::SubString{UTF8String})
+    return s.endof==0 ? 0 : int(ccall(:u8_charnum, Csize_t, (Ptr{Uint8}, Csize_t),
+                                      pointer(s), next(s,s.endof)[2]-1))
+end
+
 function next(s::SubString, i::Int)
     if i < 1 || i > s.endof
         error(BoundsError)
@@ -621,6 +628,10 @@ function getindex(s::SubString, i::Int)
 end
 
 endof(s::SubString) = s.endof
+
+function isvalid(s::SubString, i::Integer)
+    return (start(s) <= i <= endof(s)) &&  isvalid(s.string, s.offset+i)
+end
 
 isvalid{T<:DirectIndexString}(s::SubString{T}, i::Integer) = (start(s) <= i <= endof(s))
 
@@ -672,15 +683,27 @@ immutable RepString <: String
     repeat::Integer
 end
 
-endof(s::RepString)  = endof(s.string)*s.repeat
+function endof(s::RepString)
+    e = endof(s.string)
+    (next(s.string,e)[2]-1) * (s.repeat-1) + e
+end
 length(s::RepString) = length(s.string)*s.repeat
 sizeof(s::RepString) = sizeof(s.string)*s.repeat
 
 function next(s::RepString, i::Int)
-    if i < 1 || i > endof(s)
-        error(BoundsError)
+    if i < 1
+        throw(BoundsError())
     end
-    j = mod1(i,length(s.string))
+    e = endof(s.string)
+    sz = next(s.string,e)[2]-1
+
+    r, j = divrem(i-1, sz)
+    j += 1
+
+    if r >= s.repeat || j > e
+        throw(BoundsError())
+    end
+
     c, k = next(s.string, j)
     c, k-j+i
 end
@@ -790,6 +813,9 @@ end
 
 ## string map, filter, has ##
 
+map_result(s::String, a::Vector{Uint8}) = UTF8String(a)
+map_result(s::Union(ASCIIString,SubString{ASCIIString}), a::Vector{Uint8}) = bytestring(a)
+
 function map(f::Function, s::String)
     out = IOBuffer(Array(Uint8,endof(s)),true,true)
     truncate(out,0)
@@ -800,7 +826,7 @@ function map(f::Function, s::String)
         end
         write(out, c2::Char)
     end
-    takebuf_string(out)
+    map_result(s, takebuf_array(out))
 end
 
 function filter(f::Function, s::String)

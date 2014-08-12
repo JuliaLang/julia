@@ -23,7 +23,6 @@ export
     GeneralizedSchur,
     Hessenberg,
     LU,
-    LUTridiagonal,
     LDLt,
     QR,
     QRPivoted,
@@ -42,8 +41,6 @@ export
     chol,
     cholfact,
     cholfact!,
-    cholpfact,
-    cholpfact!,
     cond,
     condskeel,
     copy!,
@@ -85,6 +82,7 @@ export
     lu,
     lufact,
     lufact!,
+    lyap,
     norm,
     null,
     peakflops,
@@ -92,9 +90,6 @@ export
     qr,
     qrfact!,
     qrfact,
-    qrp,
-    qrpfact!,
-    qrpfact,
     rank,
     rref,
     scale,
@@ -102,12 +97,12 @@ export
     schur,
     schurfact!,
     schurfact,
-    solve,
     svd,
     svdfact!,
     svdfact,
     svdvals!,
     svdvals,
+    sylvester,
     trace,
     transpose,
     tril,
@@ -122,7 +117,6 @@ export
     A_ldiv_B!,
     A_ldiv_Bc,
     A_ldiv_Bt,
-    A_mul_B,
     A_mul_B!,
     A_mul_Bc,
     A_mul_Bc!,
@@ -132,7 +126,6 @@ export
     A_rdiv_Bt,
     Ac_ldiv_B,
     Ac_ldiv_Bc,
-    Ac_mul_b_RFP,
     Ac_mul_B,
     Ac_mul_B!,
     Ac_mul_Bc,
@@ -172,6 +165,12 @@ function chkstride1(A::StridedVecOrMat...)
 end
 
 #Check that matrix is square
+function chksquare(A::AbstractMatrix)
+    m,n = size(A)
+    m == n || throw(DimensionMismatch("Matrix is not square"))
+    m
+end
+
 function chksquare(A...)
     sizes=Int[]
     for a in A 
@@ -197,11 +196,11 @@ include("linalg/lapack.jl")
 
 include("linalg/dense.jl")
 include("linalg/tridiag.jl")
+include("linalg/triangular.jl")
 include("linalg/factorization.jl")
 include("linalg/lu.jl")
 
 include("linalg/bunchkaufman.jl")
-include("linalg/triangular.jl")
 include("linalg/symmetric.jl")
 include("linalg/woodbury.jl")
 include("linalg/diagonal.jl")
