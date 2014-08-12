@@ -638,7 +638,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     size_t nargt = jl_tuple_len(tt);
     Value *argvals[nargt];
     std::vector<llvm::Type*> argtypes;
-    /* 
+    /*
      * Semantics for arguments are as follows:
      * If the argument type is immutable (including bitstype), we pass the loaded llvm value
      * type. Otherwise we pass a pointer to a jl_value_t.
@@ -688,7 +688,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             std::stringstream name;
             name << (ctx->f->getName().str()) << i++;
             ir_name = name.str();
-            if(jl_Module->getFunction(ir_name) == NULL) 
+            if(jl_Module->getFunction(ir_name) == NULL)
                 break;
         }
 
@@ -721,7 +721,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         f = m->getFunction(ir_name);
     } else {
         assert(isPtr);
-        // Create Function sceleton
+        // Create Function skeleton
         f = (llvm::Function*)jl_unbox_voidpointer(ir);
         assert(f->getReturnType() == rettype);
         int i = 0;
