@@ -129,6 +129,8 @@ DLLEXPORT void jl_raise_debugger(void);
 // Returns time in nanosec
 DLLEXPORT uint64_t jl_hrtime(void);
 
+extern DLLEXPORT jl_function_t *jl_call_func;
+
 #ifdef __cplusplus
 }
 #endif

@@ -53,15 +53,22 @@ DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *
 }
 
 static jl_value_t *do_call(jl_function_t *f, jl_value_t **args, size_t nargs,
-                           jl_value_t **locals, size_t nl)
+                           jl_value_t *eval0, jl_value_t **locals, size_t nl)
 {
     jl_value_t **argv;
     JL_GC_PUSHARGS(argv, nargs+1);
     size_t i;
     argv[0] = (jl_value_t*)f;
     for(i=1; i < nargs+1; i++) argv[i] = NULL;
-    for(i=0; i < nargs; i++)
-        argv[i+1] = eval(args[i], locals, nl);
+    if (eval0) { /* 0-th argument has already been evaluated */
+        argv[1] = eval0;
+        for(i=1; i < nargs; i++)
+            argv[i+1] = eval(args[i], locals, nl);
+    }
+    else {
+        for(i=0; i < nargs; i++)
+            argv[i+1] = eval(args[i], locals, nl);
+    }
     jl_value_t *result = jl_apply(f, &argv[1], nargs);
     JL_GC_POP();
     return result;
@@ -201,10 +208,11 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             }
         }
         jl_function_t *f = (jl_function_t*)eval(args[0], locals, nl);
-        if (!jl_is_func(f))
-            jl_type_error("apply", (jl_value_t*)jl_function_type,
-                          (jl_value_t*)f);
-        return do_call(f, &args[1], nargs-1, locals, nl);
+        if (jl_is_func(f))
+            return do_call(f, &args[1], nargs-1, NULL, locals, nl);
+        else
+            return do_call(jl_call_func, args, nargs, (jl_value_t*)f,
+                           locals, nl);
     }
     else if (ex->head == assign_sym) {
         jl_value_t *sym = args[0];

@@ -2214,25 +2214,30 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
         Value *theFunc = emit_expr(args[0], ctx);
         if (theFunc->getType() != jl_pvalue_llvmt || jl_is_tuple(hdtype)) {
             // we know it's not a function
-            emit_type_error(theFunc, (jl_value_t*)jl_function_type, "apply", ctx);
-            ctx->argDepth = last_depth;
-            return V_null;
+            headIsGlobal = true;
+            Value *result = emit_known_call((jl_value_t*)jl_call_func,
+                                            --args, ++nargs, ctx,
+                                            &theFptr, &f, expr);
+            if (result != NULL) return result;
+            theF = literal_pointer_val((jl_value_t*)f);
         }
+        else {
 #ifdef JL_GC_MARKSWEEP
-        if (!headIsGlobal && (jl_is_expr(a0) || jl_is_lambda_info(a0))) {
+          if (!headIsGlobal && (jl_is_expr(a0) || jl_is_lambda_info(a0))) {
             make_gcroot(boxed(theFunc,ctx), ctx);
-        }
+          }
 #endif
-        if (hdtype!=(jl_value_t*)jl_function_type &&
-            hdtype!=(jl_value_t*)jl_datatype_type &&
-            !(jl_is_type_type(hdtype) &&
-              jl_is_datatype(jl_tparam0(hdtype)))) {
+          if (hdtype!=(jl_value_t*)jl_function_type &&
+              hdtype!=(jl_value_t*)jl_datatype_type &&
+              !(jl_is_type_type(hdtype) &&
+                jl_is_datatype(jl_tparam0(hdtype)))) {
             emit_func_check(theFunc, ctx);
+          }
+          // extract pieces of the function object
+          // TODO: try extractvalue instead
+          theFptr = builder.CreateBitCast(emit_nthptr(theFunc, 1, tbaa_func), jl_fptr_llvmt);
+          theF = theFunc;
         }
-        // extract pieces of the function object
-        // TODO: try extractvalue instead
-        theFptr = builder.CreateBitCast(emit_nthptr(theFunc, 1, tbaa_func), jl_fptr_llvmt);
-        theF = theFunc;
     }
     else {
         theF = literal_pointer_val((jl_value_t*)f);
