@@ -3516,6 +3516,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         assert(SP.Verify() && SP.describes(f) && SP.getFunction() == f);
     }
 
+    std::map<jl_sym_t *, MDNode *> filescopes;
+
     Value *fArg=NULL, *argArray=NULL, *argCount=NULL;
     if (!specsig) {
         Function::arg_iterator AI = f->arg_begin();
@@ -3805,8 +3807,24 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         }
         else if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym) {
             lno = jl_unbox_long(jl_exprarg(stmt, 0));
+            MDNode *scope = (MDNode*)SP;
+            if (jl_array_dim0(((jl_expr_t*)stmt)->args) > 1) {
+                jl_value_t *a1 = jl_exprarg(stmt,1);
+                if (jl_is_symbol(a1)) {
+                    jl_sym_t *file = (jl_sym_t*)a1;
+                    // If the string is not empty
+                    if(*file->name != '\0') {
+                        std::map<jl_sym_t *, MDNode *>::iterator it = filescopes.find(file);
+                        if (it != filescopes.end()) {
+                            scope = it->second;
+                        } else {
+                            scope = filescopes[file] = dbuilder.createFile(file->name, ".");
+                        }
+                    }
+                }
+            }
             if (debug_enabled)
-                builder.SetCurrentDebugLocation(DebugLoc::get(lno, 1, (MDNode*)SP, NULL));
+                builder.SetCurrentDebugLocation(DebugLoc::get(lno, 1, scope, NULL));
             if (do_coverage)
                 coverageVisitLine(filename, lno);
             ctx.lineno = lno;
