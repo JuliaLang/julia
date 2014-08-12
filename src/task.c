@@ -658,7 +658,7 @@ DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
         jl_tupleset(r, 1, jl_symbol(file_name));
         jl_tupleset(r, 2, jl_box_long(line_num));
         jl_tupleset(r, 3, jl_box_bool(fromC));
-        jl_tupleset(r, 4, jl_box_long((int64_t)ip));
+        jl_tupleset(r, 4, jl_box_long((intptr_t)ip));
 #if defined(_OS_WINDOWS_) && !defined(LLVM34)
         if (fromC && func_name != name_unknown) free((void*)func_name);
         if (fromC && file_name != name_unknown) free((void*)file_name);
