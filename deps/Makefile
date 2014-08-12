@@ -328,6 +328,12 @@ else
 endif
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
+
+LIBCXX_OPTIONS = OPTIONS="-I../../libcxx/include $(CXXFLAGS) $(LDFLAGS)" CC="$(CC) $(CFLAGS)" CXX="$(CXX)"
+ifeq ($(USEICC),1)
+LIBCXX_OPTIONS += EXTRA_LIBS="-Bstatic -lirc"
+endif
+
 llvm-$(LLVM_VER)/projects/libcxx: $(LLVM_LIBCXX_TAR)
 	([ ! -d llvm-$(LLVM_VER)/projects/libcxx ] && \
 	git clone $(LLVM_GIT_URL_LIBCXX) llvm-$(LLVM_VER)/projects/libcxx  ) || \
@@ -345,7 +351,7 @@ libcxx-build/Makefile: llvm-$(LLVM_VER)/projects/libcxx | llvm-$(LLVM_VER)/proje
 		cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS="../llvm-$(LLVM_VER)/projects/libcxxabi/include" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(build_prefix) ../llvm-$(LLVM_VER)/projects/libcxx -DCMAKE_C_COMPILER="$(CC)" -DCMAKE_CXX_COMPILER="$(CXX)"  -DCMAKE_SHARED_LINKER_FLAGS="-L$(build_libdir) -Bstatic -lirc -Bdynamic" -DCMAKE_CXX_FLAGS="$(CXXFLAGS)"
 llvm-$(LLVM_VER)/projects/libcxxabi/libc++abi.so.1.0: llvm-$(LLVM_VER)/projects/libcxxabi | llvm-$(LLVM_VER)/projects/libcxx
 	cd llvm-$(LLVM_VER)/projects/libcxxabi/lib && \
-	OPTIONS="-I../../libcxx/include $(CXXFLAGS) $(LDFLAGS)" CC="$(CC) -static-intel" EXTRA_LIBS="-Bstatic -lirc" CXX="$(CXX)" ./buildit
+	$(LIBCXX_OPTIONS) ./buildit
 $(build_libdir)/libc++abi.so.1.0: llvm-$(LLVM_VER)/projects/libcxxabi/libc++abi.so.1.0
 	cp llvm-$(LLVM_VER)/projects/libcxxabi/lib/libc++abi.so.1.0 $(build_libdir)
 	ln -s $(build_libdir)/libc++abi.so.1.0 $(build_libdir)/libc++abi.so
@@ -365,7 +371,7 @@ LIBCXX_DEPENDENCY = $(build_libdir)/libc++abi.so.1.0 $(build_libdir)/libc++.so.1
 LIBCXX_GET_DEPENDENCY = get-libcxx get-libcxxabi
 endif
 
-llvm-$(LLVM_VER)/configure: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LIBCXX_DEPENDENCY)
+llvm-$(LLVM_VER)/configure: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) | $(LIBCXX_DEPENDENCY)
 ifneq ($(LLVM_CLANG_TAR),)
 	$(JLCHECKSUM) $(LLVM_CLANG_TAR)
 endif
@@ -497,12 +503,18 @@ install-llvm: $(LLVM_OBJ_TARGET)
 
 UV_SRC_TARGET = libuv/.libs/libuv.a
 UV_OBJ_TARGET = $(build_libdir)/libuv.a
-ifneq ($(USEMSVC), 1)
-UV_OPTS =
-else
-UV_OPTS = CFLAGS=-DBUILDING_UV_SHARED
+UV_CFLAGS = 
+ifeq ($(USEMSVC), 1)
+UV_CFLAGS += -DBUILDING_UV_SHARED
 endif
-UV_OPTS += LDFLAGS="$(CLDFLAGS) -v" CFLAGS="-static-intel"
+ifeq ($(USEICC), 1)
+UV_CFLAGS += -static-intel
+endif
+
+UV_OPTS += LDFLAGS="$(CLDFLAGS) -v"
+ifneq ($(UV_CFLAGS),)
+UV_OPTS += CFLAGS="$(UV_CFLAGS)"
+endif
 
 libuv/configure:
 	(cd .. && git submodule init && git submodule update)
