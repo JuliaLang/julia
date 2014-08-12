@@ -1924,6 +1924,7 @@ function is_pure_builtin(f)
         if !(f === Intrinsics.pointerref || # this one is volatile
              f === Intrinsics.pointerset || # this one is never effect-free
              f === Intrinsics.ccall ||      # this one is never effect-free
+             f === Intrinsics.llvmcall ||   # this one is never effect-free
              f === Intrinsics.jl_alloca ||  # this one is volatile, TODO: possibly also effect-free?
              f === Intrinsics.pointertoref) # this one is volatile
             return true
@@ -2564,6 +2565,9 @@ function inlining_pass(e::Expr, sv, ast)
         if is_known_call(e, Core.Intrinsics.ccall, sv)
             i0 = 5
             isccall = true
+        elseif is_known_call(e, Core.Intrinsics.llvmcall, sv)
+            i0 = 5
+            isccall = false
         else
             i0 = 1
             isccall = false
