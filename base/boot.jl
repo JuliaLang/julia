@@ -135,7 +135,7 @@ export
     Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode, SymbolNode, TopNode,
     GetfieldNode, NewvarNode,
     # object model functions
-    apply, fieldtype, getfield, setfield!, yieldto, throw, tuple, is, ===, isdefined,
+    apply, fieldtype, getfield, setfield!, yieldto, throw, tuple, is, ===, isdefined, call,
     # arraylen, arrayref, arrayset, arraysize, tuplelen, tupleref, convert_default,
     # kwcall,
     # type reflection
@@ -243,3 +243,6 @@ end
 typealias ByteString Union(ASCIIString,UTF8String)
 
 include(fname::ByteString) = ccall(:jl_load_, Any, (Any,), fname)
+
+call(f::Function, args...) = f(args...)
+call{T}(::Type{T}, x) = convert(T, x)
