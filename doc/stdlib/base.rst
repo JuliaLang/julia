@@ -5294,7 +5294,7 @@ System
 
 .. function:: chmod(path, mode)
 
-   Change the permissions mode of ``path`` to ``mode``. Only integer ``mode``s
+   Change the permissions mode of ``path`` to ``mode``. Only integer ``mode``\ s
    (e.g. 0o777) are currently supported.
 
 .. function:: getpid() -> Int32
