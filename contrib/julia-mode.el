@@ -114,7 +114,8 @@
     (cons julia-macro-regex 'font-lock-keyword-face)
     (cons
      (regexp-opt
-      '("true" "false" "C_NULL" "Inf" "NaN" "Inf32" "NaN32" "nothing"))
+      '("true" "false" "C_NULL" "Inf" "NaN" "Inf32" "NaN32" "nothing")
+      'symbols)
      'font-lock-constant-face)
     (list julia-unquote-regex 2 'font-lock-constant-face)
     (list julia-char-regex 2 'font-lock-string-face)
