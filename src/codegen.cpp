@@ -336,6 +336,9 @@ static Function *resetstkoflw_func;
 static Function *diff_gc_total_bytes_func;
 static Function *show_execution_point_func;
 
+static std::vector<Type *> two_pvalue_llvmt;
+static std::vector<Type *> three_pvalue_llvmt;
+
 // --- code generation ---
 
 // per-local-variable information
@@ -495,6 +498,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool boxed=true,
 static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx);
 static int is_global(jl_sym_t *s, jl_codectx_t *ctx);
 static Value *make_gcroot(Value *v, jl_codectx_t *ctx);
+static Value *emit_boxed_rooted(jl_value_t *e, jl_codectx_t *ctx);
 static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
                                      jl_binding_t **pbnd, bool assign);
 static Value *emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx);
@@ -1288,6 +1292,19 @@ static bool might_need_root(jl_value_t *ex)
             !jl_is_bool(ex) && !jl_is_quotenode(ex) && !jl_is_byte_string(ex));
 }
 
+static Value *emit_boxed_rooted(jl_value_t *e, jl_codectx_t *ctx)
+{
+    Value *v = emit_expr(e, ctx);
+    if (v->getType() != jl_pvalue_llvmt) {
+        v = boxed(v, ctx);
+        make_gcroot(v, ctx);
+    }
+    else if (might_need_root(e)) {
+        make_gcroot(v, ctx);
+    }
+    return v;
+}
+
 // --- lambda ---
 
 static void jl_add_linfo_root(jl_lambda_info_t *li, jl_value_t *val)
@@ -1673,20 +1690,10 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             }
         }
         if (jl_subtype(ty, (jl_value_t*)jl_type_type, 0)) {
-            std::vector<Type *> fargt(0);
-            fargt.push_back(jl_pvalue_llvmt);
-            fargt.push_back(jl_pvalue_llvmt);
-            FunctionType *ft = FunctionType::get(T_void, fargt, false);
+            FunctionType *ft = FunctionType::get(T_void, two_pvalue_llvmt, false);
             Value *typeassert = jl_Module->getOrInsertFunction("jl_typeassert", ft);
-            Value *arg1 = emit_expr(args[1], ctx);
             int ldepth = ctx->argDepth;
-            if (arg1->getType() != jl_pvalue_llvmt) {
-                arg1 = boxed(arg1,ctx);
-                make_gcroot(arg1, ctx);
-            }
-            else if (might_need_root(args[1])) {
-                make_gcroot(arg1, ctx);
-            }
+            Value *arg1 = emit_boxed_rooted(args[1], ctx);
             builder.CreateCall2(prepare_call(typeassert), arg1, boxed(emit_expr(args[2], ctx),ctx));
             ctx->argDepth = ldepth;
             JL_GC_POP();
@@ -2152,11 +2159,8 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 break;
         }
         if (i > nargs) {
-            jl_value_t *ty =
-                jl_interpret_toplevel_expr_in(ctx->module, expr,
-                                              &jl_tupleref(ctx->sp,0),
-                                              jl_tuple_len(ctx->sp)/2);
-            if (jl_is_leaf_type(ty)) {
+            jl_value_t *ty = static_eval(expr, ctx, true, true);
+            if (ty!=NULL && jl_is_leaf_type(ty)) {
                 if (jl_has_typevars(ty)) {
                     // add root for types not cached. issue #7065
                     jl_add_linfo_root(ctx->linfo, ty);
@@ -4052,6 +4056,11 @@ static void init_julia_llvm_env(Module *m)
 
     jl_pvalue_llvmt = PointerType::get(jl_value_llvmt, 0);
     jl_ppvalue_llvmt = PointerType::get(jl_pvalue_llvmt, 0);
+    two_pvalue_llvmt.push_back(jl_pvalue_llvmt);
+    two_pvalue_llvmt.push_back(jl_pvalue_llvmt);
+    three_pvalue_llvmt.push_back(jl_pvalue_llvmt);
+    three_pvalue_llvmt.push_back(jl_pvalue_llvmt);
+    three_pvalue_llvmt.push_back(jl_pvalue_llvmt);
     V_null = Constant::getNullValue(jl_pvalue_llvmt);
     std::vector<Type*> ftargs(0);
     ftargs.push_back(jl_pvalue_llvmt);

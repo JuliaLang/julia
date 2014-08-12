@@ -300,7 +300,6 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
     jl_serialize_value(s, dt->parameters);
     jl_serialize_value(s, dt->name);
     jl_serialize_value(s, dt->super);
-    jl_serialize_value(s, dt->ctor_factory);
     jl_serialize_value(s, dt->env);
     jl_serialize_value(s, dt->linfo);
     if (has_instance)
@@ -523,6 +522,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)li->roots);
         jl_serialize_value(s, (jl_value_t*)li->def);
         jl_serialize_value(s, (jl_value_t*)li->capt);
+        jl_serialize_value(s, (jl_value_t*)li->unspecialized);
         // save functionObject pointers
         write_int32(s, li->functionID);
         write_int32(s, li->cFunctionID);
@@ -645,7 +645,6 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
     dt->parameters = (jl_tuple_t*)jl_deserialize_value(s);
     dt->name = (jl_typename_t*)jl_deserialize_value(s);
     dt->super = (jl_datatype_t*)jl_deserialize_value(s);
-    dt->ctor_factory = jl_deserialize_value(s);
     dt->env = jl_deserialize_value(s);
     dt->linfo = (jl_lambda_info_t*)jl_deserialize_value(s);
     if (has_instance) {
@@ -825,7 +824,7 @@ static jl_value_t *jl_deserialize_value_internal(ios_t *s)
         li->cFunctionObject = NULL;
         li->inInference = 0;
         li->inCompile = 0;
-        li->unspecialized = NULL;
+        li->unspecialized = (jl_function_t*)jl_deserialize_value(s);
         li->functionID = 0;
         li->cFunctionID = 0;
         int32_t cfunc_llvm, func_llvm;

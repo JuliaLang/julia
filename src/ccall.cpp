@@ -263,7 +263,7 @@ static void *alloc_temp_arg_copy(void *obj, uint32_t sz)
 // this is a run-time function
 // warning: cannot allocate memory except using alloc_temp_arg_space
 extern "C" DLLEXPORT void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn,
-                                     int addressof)
+                                               int addressof)
 {
     jl_value_t *jvt = (jl_value_t*)jl_typeof(v);
     if (addressof) {
@@ -776,6 +776,21 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
 // --- code generator for ccall itself ---
 
+int try_to_determine_bitstype_nbits(jl_value_t *targ, jl_codectx_t *ctx);
+
+static Value *mark_or_box_ccall_result(Value *result, jl_value_t *rt_expr, jl_value_t *rt, bool static_rt, jl_codectx_t *ctx)
+{
+    if (!static_rt && rt != (jl_value_t*)jl_any_type) {
+        // box if type was not statically known
+        int nbits = try_to_determine_bitstype_nbits(rt_expr, ctx);
+        return allocate_box_dynamic(emit_expr(rt_expr, ctx),
+                                    ConstantInt::get(T_size, nbits/8),
+                                    result);
+    }
+
+    return mark_julia_type(result, rt);
+}
+
 // ccall(pointer, rettype, (argtypes...), args...)
 static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 {
@@ -797,14 +812,34 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         return literal_pointer_val(jl_nothing);
     }
 
-    {
+    jl_value_t *rtt_ = expr_type(args[2], ctx);
+    bool static_rt = true;  // is return type fully statically known?
+    if (jl_is_type_type(rtt_) && jl_is_leaf_type(jl_tparam0(rtt_))) {
+        rt = jl_tparam0(rtt_);
+    }
+    else {
         JL_TRY {
             rt  = jl_interpret_toplevel_expr_in(ctx->module, args[2],
                                                 &jl_tupleref(ctx->sp,0),
                                                 jl_tuple_len(ctx->sp)/2);
         }
         JL_CATCH {
-            jl_rethrow_with_add("error interpreting ccall return type");
+            static_rt = false;
+            if (jl_is_type_type(rtt_)) {
+                if (jl_subtype(jl_tparam0(rtt_), (jl_value_t*)jl_pointer_type, 0)) {
+                    // substitute Ptr{Void} for statically-unknown pointer type
+                    rt = (jl_value_t*)jl_voidpointer_type;
+                }
+                else if (jl_subtype(jl_tparam0(rtt_), (jl_value_t*)jl_array_type, 0)) {
+                    // `Array` used as return type just returns a julia object reference
+                    rt = (jl_value_t*)jl_any_type;
+                }
+            }
+            if (rt == NULL) {
+                emit_error("error interpreting ccall return type", ctx);
+                JL_GC_POP();
+                return UndefValue::get(T_void);
+            }
         }
     }
     if (jl_is_tuple(rt)) {
@@ -815,6 +850,14 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     if (rt == (jl_value_t*)jl_pointer_type)
         jl_error("ccall: return type Ptr should have an element type, Ptr{T}");
 
+    JL_TYPECHK(ccall, type, rt);
+    Type *lrt = julia_struct_to_llvm(rt);
+    if (lrt == NULL) {
+        JL_GC_POP();
+        emit_error("ccall: return type doesn't correspond to a C type", ctx);
+        return literal_pointer_val(jl_nothing);
+    }
+
     {
         JL_TRY {
             at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
@@ -822,19 +865,15 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                                                 jl_tuple_len(ctx->sp)/2);
         }
         JL_CATCH {
-            jl_rethrow_with_add("error interpreting ccall argument tuple");
+            //jl_rethrow_with_add("error interpreting ccall argument tuple");
+            emit_error("error interpreting ccall argument tuple", ctx);
+            JL_GC_POP();
+            return UndefValue::get(lrt);
         }
     }
 
-    JL_TYPECHK(ccall, type, rt);
     JL_TYPECHK(ccall, tuple, at);
     JL_TYPECHK(ccall, type, at);
-    Type *lrt = julia_struct_to_llvm(rt);
-    if (lrt == NULL) {
-        JL_GC_POP();
-        emit_error("ccall: return type doesn't correspond to a C type", ctx);
-        return literal_pointer_val(jl_nothing);
-    }
     jl_tuple_t *tt = (jl_tuple_t*)at;
     std::vector<Type *> fargt(0);
     std::vector<Type *> fargt_sig(0);
@@ -941,7 +980,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         assert(lrt->isPointerTy());
         Value *ary = emit_expr(args[4], ctx);
         JL_GC_POP();
-        return mark_julia_type(builder.CreateBitCast(emit_arrayptr(ary),lrt), rt);
+        return mark_or_box_ccall_result(builder.CreateBitCast(emit_arrayptr(ary),lrt),
+                                        args[2], rt, static_rt, ctx);
     }
     if (fptr == (void *) &jl_value_ptr ||
         (f_lib==NULL && f_name && !strcmp(f_name,"jl_value_ptr"))) {
@@ -954,9 +994,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         }
         Value *ary = boxed(emit_expr(argi, ctx),ctx);
         JL_GC_POP();
-        return mark_julia_type(
-                builder.CreateBitCast(emit_nthptr_addr(ary, addressOf?1:0), lrt),
-                rt);
+        return mark_or_box_ccall_result(builder.CreateBitCast(emit_nthptr_addr(ary, addressOf?1:0), lrt),
+                                        args[2], rt, static_rt, ctx);
     }
     if (fptr == (void *) &jl_is_leaf_type ||
         (f_lib==NULL && f_name && !strcmp(f_name, "jl_is_leaf_type"))) {
@@ -1150,9 +1189,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
 
     // the actual call
-    Value *ret = builder.CreateCall(
-            prepare_call(llvmf),
-            ArrayRef<Value*>(&argvals[0],(nargs-3)/2+sret));
+    Value *ret = builder.CreateCall(prepare_call(llvmf),
+                                    ArrayRef<Value*>(&argvals[0],(nargs-3)/2+sret));
 
     attr_type attributes;
 #ifdef LLVM33
@@ -1207,10 +1245,10 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         builder.CreateStore(literal_pointer_val((jl_value_t*)rt),
                             emit_nthptr_addr(strct, (size_t)0));
         builder.CreateStore(result,
-                            builder.CreateBitCast(
-                                emit_nthptr_addr(strct, (size_t)1),
-                                PointerType::get(lrt,0)));
+                            builder.CreateBitCast(emit_nthptr_addr(strct, (size_t)1),
+                                                  PointerType::get(lrt,0)));
         return mark_julia_type(strct, rt);
     }
-    return mark_julia_type(result, rt);
+
+    return mark_or_box_ccall_result(result, args[2], rt, static_rt, ctx);
 }

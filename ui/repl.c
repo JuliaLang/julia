@@ -75,6 +75,8 @@ static const char *opts =
     " -F                       Load ~/.juliarc.jl, then handle remaining inputs\n"
     " --color={yes|no}         Enable or disable color text\n\n"
 
+    " --compile={yes|no|all}   Enable or disable compiler, or request exhaustive compilation\n\n"
+
     " --code-coverage={none|user|all}, --code-coverage\n"
     "                          Count executions of source lines (omitting setting is equivalent to 'user')\n"
     " --track-allocation={none|user|all}\n"
@@ -96,6 +98,7 @@ void parse_opts(int *argcp, char ***argvp)
         { "track-allocation",required_argument, 0, 'm' },
         { "check-bounds",  required_argument, 0, 300 },
         { "int-literals",  required_argument, 0, 301 },
+        { "compile",       required_argument, 0, 302 },
         { 0, 0, 0, 0 }
     };
     int c;
@@ -163,6 +166,18 @@ void parse_opts(int *argcp, char ***argvp)
                 jl_compileropts.int_literals = 64;
             else {
                 ios_printf(ios_stderr, "julia: invalid integer literal size (%s)\n", optarg);
+                exit(1);
+            }
+            break;
+        case 302:
+            if (!strcmp(optarg,"yes"))
+                jl_compileropts.compile_enabled = 1;
+            else if (!strcmp(optarg,"no"))
+                jl_compileropts.compile_enabled = 0;
+            else if (!strcmp(optarg,"all"))
+                jl_compileropts.compile_enabled = 2;
+            else {
+                ios_printf(ios_stderr, "julia: invalid argument to --compile (%s)\n", optarg);
                 exit(1);
             }
             break;
