@@ -2201,9 +2201,16 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
 
     jl_function_t *f = (jl_function_t*)static_eval(a0, ctx, true);
     if (f != NULL) {
+        Value *result;
         headIsGlobal = true;
-        Value *result = emit_known_call((jl_value_t*)f, args, nargs, ctx,
-                                        &theFptr, &f, expr);
+        if (f->fptr != jl_f_no_function) {
+          result = emit_known_call((jl_value_t*)f, args, nargs, ctx,
+                                   &theFptr, &f, expr);
+        }
+        else {
+          result = emit_known_call((jl_value_t*)jl_call_func,
+                                   --args, ++nargs, ctx, &theFptr, &f, expr);
+        }
         if (result != NULL) return result;
     }
     bool specialized = true;

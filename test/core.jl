@@ -1829,3 +1829,21 @@ end
 
 # issue #7582
 aₜ = "a variable using Unicode 6"
+
+# call and constructor overloading (#1470, #2403)
+typealias FooInt32 Int32
+@test isa(FooInt32(3), FooInt32)
+Base.call(x::Int, y::Int) = x + 3y
+issue2403func(f) = f(7)
+let x = 10
+    @test x(3) == 19
+    @test issue2403func(x) == 31
+end
+type Issue2403
+    x
+end
+Base.call(i::Issue2403, y) = i.x + 2y
+let x = Issue2403(20)
+    @test x(3) == 26
+    # @test issue2403func(x) == 34    -- FIXME
+end

@@ -4,7 +4,7 @@ using Core: Intrinsics, arraylen, arrayref, arrayset, arraysize,
             tuplelen, tupleref, convert_default, kwcall,
             typeassert, apply_type
 
-import Core.Array  # to add methods
+import Core: Array, call  # to add methods
 
 const NonTupleType = Union(DataType,UnionType,TypeConstructor)
 
@@ -14,6 +14,9 @@ convert(T, x) = convert_default(T, x, convert)
 
 convert(::(), ::()) = ()
 convert(::Type{Tuple}, x::Tuple) = x
+
+# allow convert to be called as if it were a single-argument constructor
+call{T}(::Type{T}, x) = convert(T, x)
 
 argtail(x, rest...) = rest
 tupletail(x::Tuple) = argtail(x...)
