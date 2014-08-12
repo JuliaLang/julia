@@ -183,14 +183,14 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute eigenvalues and eigenvectors of ``A``. See :func:`eigfact` for details on the ``balance`` keyword argument.
    
-   **Example**::
-   
-    julia> eig(a = [1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
-    ([1.0,3.0,18.0],
-    3x3 Array{Float64,2}:
-     1.0  0.0  0.0
-     0.0  1.0  0.0
-     0.0  0.0  1.0)
+   .. doctest::
+
+      julia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
+      ([1.0,3.0,18.0],
+      3x3 Array{Float64,2}:
+       1.0  0.0  0.0
+       0.0  1.0  0.0
+       0.0  0.0  1.0)
    
    ``eig`` is a wrapper around :func:`eigfact`, extracting all parts of the factorization to a tuple; where possible, using :func:`eigfact` is recommended.
 

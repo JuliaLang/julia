@@ -7,91 +7,108 @@ Sorting and Related Functions
 Julia has an extensive, flexible API for sorting and interacting with
 already-sorted arrays of values. For many users, sorting in standard
 ascending order, letting Julia pick reasonable default algorithms
-will be sufficient::
+will be sufficient:
 
-  julia> sort([2,3,1])
-  3-element Int64 Array:
-   1
-   2
-   3
+.. doctest::
 
-You can easily sort in reverse order as well::
+   julia> sort([2,3,1])
+   3-element Array{Int64,1}:
+    1
+    2
+    3
 
-  julia> sort([2,3,1], rev=true)
-  3-element Int64 Array:
-   3
-   2
-   1
+You can easily sort in reverse order as well:
 
-To sort an array in-place, use the "bang" version of the sort function::
+.. doctest::
 
-  julia> a = [2,3,1];
+   julia> sort([2,3,1], rev=true)
+   3-element Array{Int64,1}:
+    3
+    2
+    1
 
-  julia> sort!(a);
+To sort an array in-place, use the "bang" version of the sort function:
 
-  julia> a
-  3-element Int64 Array:
-   1
-   2
-   3
+.. doctest::
 
-Instead of directly sorting an array, you can compute a permutation of the array's indices that puts the array into sorted order::
+   julia> a = [2,3,1];
 
-  julia> v = randn(5)
-  5-element Float64 Array:
-    0.587746
-   -0.870797
-   -0.111843
-    1.08793
-   -1.25061
+   julia> sort!(a);
 
-  julia> p = sortperm(v)
-  5-element Int64 Array:
-   5
-   2
-   3
-   1
-   4
+   julia> a
+   3-element Array{Int64,1}:
+    1
+    2
+    3
 
-  julia> v[p]
-  5-element Float64 Array:
-   -1.25061
-   -0.870797
-   -0.111843
-    0.587746
-    1.08793
+Instead of directly sorting an array, you can compute a permutation of the array's indices that puts the array into sorted order:
 
-Arrays can easily be sorted acording to an arbitrary transformation of their values::
+.. testsetup::
 
-  julia> sort(v, by=abs)
-  5-element Float64 Array:
-   -0.111843
-    0.587746
-   -0.870797
-    1.08793
-   -1.25061
+   srand(1)
 
-Or in reverse order by a transformation::
+.. doctest::
 
-  julia> sort(v, by=abs, rev=true)
-  5-element Float64 Array:
-   -1.25061
-    1.08793
-   -0.870797
-    0.587746
-   -0.111843
+   julia> v = randn(5)
+   5-element Array{Float64,1}:
+     0.297288 
+     0.382396 
+    -0.597634 
+    -0.0104452
+    -0.839027 
+
+   julia> p = sortperm(v)
+   5-element Array{Int64,1}:
+    5
+    3
+    4
+    1
+    2
+
+   julia> v[p]
+   5-element Array{Float64,1}:
+    -0.839027 
+    -0.597634 
+    -0.0104452
+     0.297288 
+     0.382396 
+
+Arrays can easily be sorted acording to an arbitrary transformation of their values:
+
+.. doctest::
+
+   julia> sort(v, by=abs)
+   5-element Array{Float64,1}:
+    -0.0104452
+     0.297288 
+     0.382396 
+    -0.597634 
+    -0.839027 
+
+Or in reverse order by a transformation:
+
+.. doctest::
+
+   julia> sort(v, by=abs, rev=true)
+   5-element Array{Float64,1}:
+    -0.839027 
+    -0.597634 
+     0.382396 
+     0.297288 
+    -0.0104452
 
 Reasonable sorting algorithms are used by default, but you can choose
-other algorithms as well::
+other algorithms as well:
 
-  julia> sort(v, alg=InsertionSort)
-  5-element Float64 Array:
-   -1.25061
-   -0.870797
-   -0.111843
-    0.587746
-    1.08793
+.. doctest::
 
+   julia> sort(v, alg=InsertionSort)
+   5-element Array{Float64,1}:
+    -0.839027 
+    -0.597634 
+    -0.0104452
+     0.297288 
+     0.382396 
 
 Sorting Functions
 -----------------
