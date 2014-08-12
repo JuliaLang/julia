@@ -1,17 +1,20 @@
-;
-; Emacs mode for Julia
-;
+;;; julia-mode.el --- julia-mode.el --- Major mode for editing Julia source code
 
-; USAGE
-; =====
+;;; Usage:
+;; Put the following code in your .emacs, site-load.el, or other relevant file
+;; (add-to-list 'load-path "path-to-julia-mode")
+;; (require 'julia-mode)
 
-; Put the following code in your .emacs, site-load.el, or other relevant file
-; (add-to-list 'load-path "path-to-julia-mode")
-; (require 'julia-mode)
+;;; Commentary:
+;; This is the official Emacs mode for editing Julia programs.
 
+;;; Code:
 
 (defvar julia-mode-hook nil)
 
+(defvar julia-basic-offset)
+
+;;;###autoload
 (add-to-list 'auto-mode-alist '("\\.jl\\'" . julia-mode))
 
 ;; define ignore-errors macro if it isn't present
@@ -76,33 +79,43 @@
   "for +.*[^
 ].* \\(in\\)\\(\\s-\\|$\\)+")
 
+(defconst julia-function-regex
+  (rx symbol-start "function" (1+ space) (group (1+ (or word ?_ ?!)))))
+
+(defconst julia-type-regex
+  (rx symbol-start "type" (1+ space) (group (1+ (or word ?_)))))
+
+(defconst julia-macro-regex
+  "@\\w+")
+
+(defconst julia-keyword-regex
+  (regexp-opt
+   '("if" "else" "elseif" "while" "for" "begin" "end" "quote"
+     "try" "catch" "return" "local" "abstract" "function" "macro" "ccall"
+     "finally" "typealias" "break" "continue" "type" "global"
+     "module" "using" "import" "export" "const" "let" "bitstype" "do"
+     "baremodule" "importall" "immutable")))
+
 (defconst julia-font-lock-keywords
-  (list '("\\<\\(\\|Uint\\(8\\|16\\|32\\|64\\|128\\)\\|Int\\(8\\|16\\|32\\|64\\|128\\)\\|BigInt\\|Integer\\|BigFloat\\|FloatingPoint\\|Float16\\|Float32\\|Float64\\|Complex128\\|Complex64\\|ComplexPair\\|Bool\\|Char\\|DataType\\|Number\\|Real\\|Int\\|Uint\\|Array\\|DArray\\|AbstractArray\\|AbstractVector\\|AbstractMatrix\\|AbstractSparseMatrix\\|SubArray\\|StridedArray\\|StridedVector\\|StridedMatrix\\|VecOrMat\\|StridedVecOrMat\\|DenseArray\\|Range\\|OrdinalRange\\|StepRange\\|UnitRange\\|FloatRange\\|SparseMatrixCSC\\|Tuple\\|NTuple\\|Symbol\\|Function\\|Vector\\|Matrix\\|Union\\|Type\\|Any\\|Complex\\|None\\|String\\|Ptr\\|Void\\|Exception\\|Task\\|Signed\\|Unsigned\\|Associative\\|Dict\\|IO\\|IOStream\\|Rational\\|Regex\\|RegexMatch\\|Set\\|IntSet\\|ASCIIString\\|UTF8String\\|ByteString\\|Expr\\|WeakRef\\|Nothing\\|ObjectIdDict\\|SubString\\)\\>" .
-      font-lock-type-face)
+  (list
+   '("\\<\\(\\|Uint\\(8\\|16\\|32\\|64\\|128\\)\\|Int\\(8\\|16\\|32\\|64\\|128\\)\\|BigInt\\|Integer\\|BigFloat\\|FloatingPoint\\|Float16\\|Float32\\|Float64\\|Complex128\\|Complex64\\|ComplexPair\\|Bool\\|Char\\|DataType\\|Number\\|Real\\|Int\\|Uint\\|Array\\|DArray\\|AbstractArray\\|AbstractVector\\|AbstractMatrix\\|AbstractSparseMatrix\\|SubArray\\|StridedArray\\|StridedVector\\|StridedMatrix\\|VecOrMat\\|StridedVecOrMat\\|DenseArray\\|Range\\|OrdinalRange\\|StepRange\\|UnitRange\\|FloatRange\\|SparseMatrixCSC\\|Tuple\\|NTuple\\|Symbol\\|Function\\|Vector\\|Matrix\\|Union\\|Type\\|Any\\|Complex\\|None\\|String\\|Ptr\\|Void\\|Exception\\|Task\\|Signed\\|Unsigned\\|Associative\\|Dict\\|IO\\|IOStream\\|Rational\\|Regex\\|RegexMatch\\|Set\\|IntSet\\|ASCIIString\\|UTF8String\\|ByteString\\|Expr\\|WeakRef\\|Nothing\\|ObjectIdDict\\|SubString\\)\\>" .
+     font-lock-type-face)
+    (cons julia-keyword-regex 'font-lock-keyword-face)
+    (cons julia-macro-regex 'font-lock-keyword-face)
     (cons
-     (concat "\\<\\("
-         (mapconcat
-          'identity
-          '("if" "else" "elseif" "while" "for" "begin" "end" "quote"
-            "try" "catch" "return" "local" "abstract" "function" "macro" "ccall"
-	    "finally" "typealias" "break" "continue" "type" "global" "@\\w+"
-	    "module" "using" "import" "export" "const" "let" "bitstype" "do"
-	    "baremodule" "importall" "immutable")
-          "\\|") "\\)\\>")
-     'font-lock-keyword-face)
-    '("\\<\\(true\\|false\\|C_NULL\\|Inf\\|NaN\\|Inf32\\|NaN32\\|nothing\\)\\>" . font-lock-constant-face)
+     (regexp-opt
+      '("true" "false" "C_NULL" "Inf" "NaN" "Inf32" "NaN32" "nothing"))
+     'font-lock-constant-face)
     (list julia-unquote-regex 2 'font-lock-constant-face)
     (list julia-char-regex 2 'font-lock-string-face)
     (list julia-forloop-in-regex 1 'font-lock-keyword-face)
-    ;(list julia-string-regex 0 'font-lock-string-face)
+    (list julia-function-regex 1 'font-lock-function-name-face)
+    (list julia-type-regex 1 'font-lock-type-face)
 ))
 
 (defconst julia-block-start-keywords
   (list "if" "while" "for" "begin" "try" "function" "type" "let" "macro"
 	"quote" "do" "immutable"))
-
-(defconst julia-block-other-keywords
-  (list "else" "elseif"))
 
 (defconst julia-block-end-keywords
   (list "end" "else" "elseif" "catch" "finally"))
@@ -239,6 +252,26 @@ Do not move back beyond MIN."
       'prog-mode
     'fundamental-mode))
 
+;;; IMENU
+(defvar julia-imenu-generic-expression
+  ;; don't use syntax classes, screws egrep
+  '(("Function (_)" "[ \t]*function[ \t]+\\(_[^ \t\n]*\\)" 1)
+    ("Function" "^[ \t]*function[ \t]+\\([^_][^\t\n]*\\)" 1)
+    ("Const" "[ \t]*const \\([^ \t\n]*\\)" 1)
+    ("Type"  "^[ \t]*[a-zA-Z0-9_]*type[a-zA-Z0-9_]* \\([^ \t\n]*\\)" 1)
+    ("Require"      " *\\(\\brequire\\)(\\([^ \t\n)]*\\)" 2)
+    ("Include"      " *\\(\\binclude\\)(\\([^ \t\n)]*\\)" 2)
+    ;; ("Classes" "^.*setClass(\\(.*\\)," 1)
+    ;; ("Coercions" "^.*setAs(\\([^,]+,[^,]*\\)," 1) ; show from and to
+    ;; ("Generics" "^.*setGeneric(\\([^,]*\\)," 1)
+    ;; ("Methods" "^.*set\\(Group\\|Replace\\)?Method(\"\\(.+\\)\"," 2)
+    ;; ;;[ ]*\\(signature=\\)?(\\(.*,?\\)*\\)," 1)
+    ;; ;;
+    ;; ;;("Other" "^\\(.+\\)\\s-*<-[ \t\n]*[^\\(function\\|read\\|.*data\.frame\\)]" 1)
+    ;; ("Package" "^.*\\(library\\|require\\)(\\(.*\\)," 2)
+    ;; ("Data" "^\\(.+\\)\\s-*<-[ \t\n]*\\(read\\|.*data\.frame\\).*(" 1)))
+    ))
+
 ;;;###autoload
 (define-derived-mode julia-mode julia-mode-prog-mode "Julia"
   "Major mode for editing julia code."
@@ -262,27 +295,8 @@ Do not move back beyond MIN."
   (setq imenu-generic-expression julia-imenu-generic-expression)
   (imenu-add-to-menubar "Imenu"))
 
-;;; IMENU
-(defvar julia-imenu-generic-expression
-  ;; don't use syntax classes, screws egrep
-  '(("Function (_)" "[ \t]*function[ \t]+\\(_[^ \t\n]*\\)" 1)
-    ("Function" "^[ \t]*function[ \t]+\\([^_][^\t\n]*\\)" 1)
-    ("Const" "[ \t]*const \\([^ \t\n]*\\)" 1)
-    ("Type"  "^[ \t]*[a-zA-Z0-9_]*type[a-zA-Z0-9_]* \\([^ \t\n]*\\)" 1)
-    ("Require"      " *\\(\\brequire\\)(\\([^ \t\n)]*\\)" 2)
-    ("Include"      " *\\(\\binclude\\)(\\([^ \t\n)]*\\)" 2)
-    ;; ("Classes" "^.*setClass(\\(.*\\)," 1)
-    ;; ("Coercions" "^.*setAs(\\([^,]+,[^,]*\\)," 1) ; show from and to
-    ;; ("Generics" "^.*setGeneric(\\([^,]*\\)," 1)
-    ;; ("Methods" "^.*set\\(Group\\|Replace\\)?Method(\"\\(.+\\)\"," 2)
-    ;; ;;[ ]*\\(signature=\\)?(\\(.*,?\\)*\\)," 1)
-    ;; ;;
-    ;; ;;("Other" "^\\(.+\\)\\s-*<-[ \t\n]*[^\\(function\\|read\\|.*data\.frame\\)]" 1)
-    ;; ("Package" "^.*\\(library\\|require\\)(\\(.*\\)," 2)
-    ;; ("Data" "^\\(.+\\)\\s-*<-[ \t\n]*\\(read\\|.*data\.frame\\).*(" 1)))
-    ))
+(defvar latexsubs (make-hash-table :test 'equal))
 
-(setq latexsubs (make-hash-table :test 'equal))
 (defun latexsub (arg)
   "Perform a LaTeX-like Unicode symbol substitution."
   (interactive "*i")
@@ -1162,3 +1176,8 @@ Do not move back beyond MIN."
 (puthash "\\underbrace" "︸" latexsubs)
 
 (provide 'julia-mode)
+
+;; Local Variables:
+;; coding: utf-8
+;; End:
+;;; julia-mode.el ends here

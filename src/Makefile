@@ -1,6 +1,6 @@
 JULIAHOME = $(abspath ..)
-include $(JULIAHOME)/Make.inc
 include $(JULIAHOME)/deps/Versions.make
+include $(JULIAHOME)/Make.inc
 
 override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
@@ -18,12 +18,14 @@ ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -fvisibility=hidden -fno-common
 endif
 
-LLVMLINK = $(call exec,$(LLVM_CONFIG) --libs) $(call exec,$(LLVM_CONFIG) --system-libs 2> /dev/null)
+# In LLVM < 3.4, --ldflags includes both options and libraries, so use it both before and after --libs
+# In LLVM >= 3.4, --ldflags has only options, and --system-libs has the libraries.
+LLVMLINK = $(call exec,$(LLVM_CONFIG) --ldflags) $(call exec,$(LLVM_CONFIG) --libs) $(call exec,$(LLVM_CONFIG) --ldflags) $(call exec,$(LLVM_CONFIG) --system-libs 2> /dev/null)
 ifeq ($(USE_LLVM_SHLIB),1)
-LLVMLINK = -lLLVM-$(LLVM_VER)
+LLVMLINK = $(call exec,$(LLVM_CONFIG) --ldflags) -lLLVM-$(call exec,$(LLVM_CONFIG) --version)
 endif
 
-COMMON_LIBS = -L$(build_shlibdir) -L$(build_libdir) $(LIBUV) $(LIBUTF8PROC) $(NO_WHOLE_ARCHIVE) $(call exec,$(LLVM_CONFIG) --ldflags) $(LLVMLINK) $(OSLIBS)
+COMMON_LIBS = -L$(build_shlibdir) -L$(build_libdir) $(LIBUV) $(LIBMOJIBAKE) $(NO_WHOLE_ARCHIVE) $(LLVMLINK) $(OSLIBS)
 DEBUG_LIBS = $(WHOLE_ARCHIVE) $(JULIAHOME)/src/flisp/libflisp-debug.a $(WHOLE_ARCHIVE) $(JULIAHOME)/src/support/libsupport-debug.a $(COMMON_LIBS)
 RELEASE_LIBS = $(WHOLE_ARCHIVE) $(JULIAHOME)/src/flisp/libflisp.a $(WHOLE_ARCHIVE) $(JULIAHOME)/src/support/libsupport.a $(COMMON_LIBS)
 
@@ -88,6 +90,7 @@ endif
 $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT): julia.expmap $(DOBJS) flisp/libflisp-debug.a support/libsupport-debug.a $(LIBUV)
 	@$(call PRINT_LINK, $(CXXLD) $(DEBUGFLAGS) $(DOBJS) $(RPATH_ORIGIN) -o $@ $(LDFLAGS) $(DEBUG_LIBS))
 	$(INSTALL_NAME_CMD)libjulia-debug.$(SHLIB_EXT) $@
+	$(DSYMUTIL) $@
 libjulia-debug.a: julia.expmap $(DOBJS) flisp/libflisp-debug.a support/libsupport-debug.a
 	rm -f $@
 	@$(call PRINT_LINK, ar -rcs $@ $(DOBJS))
@@ -102,6 +105,7 @@ endif
 $(build_shlibdir)/libjulia.$(SHLIB_EXT): julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a $(LIBUV)
 	@$(call PRINT_LINK, $(CXXLD) $(SHIPFLAGS) $(OBJS) $(RPATH_ORIGIN) -o $@ $(LDFLAGS) $(RELEASE_LIBS) $(SONAME))
 	$(INSTALL_NAME_CMD)libjulia.$(SHLIB_EXT) $@
+	$(DSYMUTIL) $@
 libjulia.a: julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
 	rm -f $@
 	@$(call PRINT_LINK, ar -rcs $@ $(OBJS))

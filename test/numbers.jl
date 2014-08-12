@@ -770,6 +770,8 @@ end
 @test 0.5 == 1//2
 @test 0.1 != 1//10
 @test 0.1 == 3602879701896397//36028797018963968
+@test Inf == 1//0 == 2//0 == typemax(Int)//0
+@test -Inf == -1//0 == -2//0 == -typemax(Int)//0
 @test realmin() != 1//(BigInt(2)^1022+1)
 @test realmin() == 1//(BigInt(2)^1022)
 @test realmin() != 1//(BigInt(2)^1022-1)
@@ -824,6 +826,9 @@ for N = int_types, D = int_types
     T = promote_type(N,D)
     @test typeof(convert(N,2)//convert(D,3)) <: Rational{T}
 end
+
+# issue #7564
+@test typeof(convert(Rational{Integer},1)) === Rational{Integer}
 
 # check type of constructed complexes
 real_types = {Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Float32, Float64,
@@ -1468,6 +1473,22 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 # issue 3412
 @test convert(Rational{Int32},0.5) === int32(1)//int32(2)
 
+# issue 6712
+@test convert(Rational{BigInt},float64(pi)) == float64(pi)
+@test convert(Rational{BigInt},big(pi)) == big(pi)
+
+@test convert(Rational,0.0) == 0
+@test convert(Rational,-0.0) == 0
+@test convert(Rational,zero(BigFloat)) == 0
+@test convert(Rational,-zero(BigFloat)) == 0
+@test convert(Rational{BigInt},0.0) == 0
+@test convert(Rational{BigInt},-0.0) == 0
+@test convert(Rational{BigInt},zero(BigFloat)) == 0
+@test convert(Rational{BigInt},-zero(BigFloat)) == 0
+@test convert(Rational{BigInt},5e-324) == 5e-324
+@test convert(Rational{BigInt},realmin(Float64)) == realmin(Float64)
+@test convert(Rational{BigInt},realmax(Float64)) == realmax(Float64)
+
 @test isa(convert(Float64, big(1)//2), Float64)
 
 # primes
@@ -1782,3 +1803,42 @@ end
 @test [1,2,3] .// [4,5,6] == [1//4, 2//5, 3//6]
 @test [1+2im,3+4im] .// [5,6] == [(1+2im)//5,(3+4im)//6]
 @test [1//3+2im,3+4im] .// [5,6] == [(1//3+2im)//5,(3+4im)//6]
+
+# issue #7441
+@test_throws InexactError int32(2.0^50)
+
+@test_throws InexactError iround(Uint8, 255.5)
+@test iround(Uint8, 255.4) === 0xff
+
+@test_throws InexactError iround(Int16, -32768.7)
+@test iround(Int16, -32768.1) === int16(-32768)
+
+# issue #7508
+@test_throws ErrorException reinterpret(Int, 0x01)
+
+# issue #41
+ndigf(n) = float64(log(float32(n)))
+@test float64(log(float32(256))) == ndigf(256) == 5.545177459716797
+
+# cmp on unsigned integers (see commit 24b236321e03c6d9b8cb91a450f567256a793196)
+@test cmp(0x77777777,0x88888888) == -1
+@test cmp(0x3959dcc5d7fd177b67df4e10bc350850, 0xd63d5b1183221b0a9e38c6809b33cdec) == -1
+
+# issue #7911
+@test sum([int128(1) int128(2)]) == int128(3)
+
+# digits and digits!
+@test digits(24, 2) == [0, 0, 0, 1, 1]
+@test digits(24, 2, 3) == [0, 0, 0, 1, 1]
+@test digits(24, 2, 7) == [0, 0, 0, 1, 1, 0, 0]
+@test digits(100) == [0, 0, 1]
+@test digits(BigInt(2)^128, 2) == [zeros(128), 1]
+let a = zeros(Int, 3)
+    digits!(a, 50)
+    @test a == [0, 5, 0]
+    digits!(a, 9, 2)
+    @test a == [1, 0, 0]
+    digits!(a, 7, 2)
+    @test a == [1, 1, 1]
+end
+

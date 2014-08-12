@@ -120,6 +120,10 @@ Once again, this is equivalent to editing the ``REQUIRE`` file to remove the lin
 While ``Pkg.add`` and ``Pkg.rm`` are convenient for adding and removing requirements for a single package, when you want to add or remove multiple packages, you can call ``Pkg.edit()`` to manually change the contents of ``REQUIRE`` and then update your packages accordingly.
 ``Pkg.edit()`` does not roll back the contents of ``REQUIRE`` if ``Pkg.resolve()`` fails – rather, you have to run ``Pkg.edit()`` again to fix the files contents yourself.
 
+Because the package manager uses git internally to manage the package git repositories, users may run into protocol issues (if behind a firewall, for example), when running ``Pkg.add``. The following command can be run from the command line to tell git to use 'https' instead of the 'git' protocol when cloning repositories::
+
+    git config --global url."https://".insteadOf git://
+
 Installing Unregistered Packages
 --------------------------------
 
@@ -286,7 +290,7 @@ Since packages are git repositories, before doing any package development you sh
 
 where ``FULL NAME`` is your actual full name (spaces are allowed between the double quotes) and ``EMAIL`` is your actual email address.
 Although it isn't necessary to use `GitHub <https://github.com/>`_ to create or publish Julia packages, most Julia packages as of writing this are hosted on GitHub and the package manager knows how to format origin URLs correctly and otherwise work with the service smoothly.
-We recommend that you create a `free account <https://github.com/signup/free>`_ on GitHub and then do::
+We recommend that you create a `free account <https://github.com/join>`_ on GitHub and then do::
 
     $ git config --global github.user "USERNAME"
 
@@ -331,8 +335,8 @@ This creates the directory ``~/.julia/v0.3/FooBar``, initializes it as a git rep
      src/FooBar.jl |  5 +++++
      4 files changed, 44 insertions(+)
 
-At the moment, the package manager knows about the MIT "Expat" License, indicated by ``"MIT"``, and the Simplified BSD License, indicated by ``"BSD"``.
-If you want to use a different license, you can ask us to add it to the package generator, or just pick one of these two and then modify the ``~/.julia/v0.3/PACKAGE/LICENSE.md`` file after it has been generated.
+At the moment, the package manager knows about the MIT "Expat" License, indicated by ``"MIT"``, the Simplified BSD License, indicated by ``"BSD"``, and version 2.0 of the Apache Software License, indicated by ``"ASL"``.
+If you want to use a different license, you can ask us to add it to the package generator, or just pick one of these three and then modify the ``~/.julia/v0.3/PACKAGE/LICENSE.md`` file after it has been generated.
 
 If you created a GitHub account and configured git to know about it, ``Pkg.generate`` will set an appropriate origin URL for you.
 It will also automatically generate a ``.travis.yml`` file for using the `Travis <https://travis-ci.org>`_ automated testing service.
@@ -445,7 +449,7 @@ The ``~/.julia/v0.3/REQUIRE`` file and ``REQUIRE`` files inside of packages use 
 Here's how these files are parsed and interpreted.
 Everything after a ``#`` mark is stripped from each line as a comment.
 If nothing but whitespace is left, the line is ignored;
-if there are non-whitespace characters remaining, the line is a requirement and the is split on whitespace into words.
+if there are non-whitespace characters remaining, the line is a requirement and is split on whitespace into words.
 The simplest possible requirement is just the name of a package name on a line by itself::
 
     Distributions
@@ -460,6 +464,12 @@ For example, the line::
     Distributions 0.1
 
 is satisfied by any version of ``Distributions`` greater than or equal to ``0.1.0``.
+Suffixing a version with `-` allows any pre-release versions as well. For example::
+
+    Distributions 0.1-
+
+is satisfied by pre-release versions such as ``0.1-dev`` or ``0.1-rc1``, or by any version greater than or equal to ``0.1.0``.
+
 This requirement entry::
 
     Distributions 0.1 0.2.5
@@ -469,7 +479,6 @@ If you want to indicate that any ``0.1.x`` version will do, you will want to wri
 
     Distributions 0.1 0.2-
 
-The ``0.2-`` "pseudo-version" is less than all real version numbers that start with ``0.2``.
 If you want to start accepting versions after ``0.2.7``, you can write::
 
     Distributions 0.1 0.2- 0.2.7

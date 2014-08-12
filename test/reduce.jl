@@ -46,15 +46,21 @@ fz = float(z)
 
 z = [-4, -3, 2, 5]
 fz = float(z)
-@test Base.sumabs(Float64[]) === 0.0
-@test Base.sumabs([int8(-2)]) === 2
-@test Base.sumabs(z) === 14
-@test Base.sumabs(fz) === 14.0
+a = randn(32) # need >16 elements to trigger BLAS code path
+b = complex(randn(32), randn(32))
+@test sumabs(Float64[]) === 0.0
+@test sumabs([int8(-2)]) === 2
+@test sumabs(z) === 14
+@test sumabs(fz) === 14.0
+@test_approx_eq sumabs(a) sum(abs(a))
+@test_approx_eq sumabs(b) sum(abs(b))
 
-@test Base.sumabs2(Float64[]) === 0.0
-@test Base.sumabs2([int8(-2)]) === 4
-@test Base.sumabs2(z) === 54
-@test Base.sumabs2(fz) === 54.0
+@test sumabs2(Float64[]) === 0.0
+@test sumabs2([int8(-2)]) === 4
+@test sumabs2(z) === 54
+@test sumabs2(fz) === 54.0
+@test_approx_eq sumabs2(a) sum(abs2(a))
+@test_approx_eq sumabs2(b) sum(abs2(b))
 
 # check variants of summation for type-stability and other issues (#6069)
 sum2(itr) = invoke(sum, (Any,), itr)
@@ -127,13 +133,13 @@ prod2(itr) = invoke(prod, (Any,), itr)
 @test minimum([4., 3., NaN, 5., 2.]) == 2.
 @test extrema([4., 3., NaN, 5., 2.]) == (2., 5.)
 
-@test Base.maxabs(Int[]) == 0
+@test maxabs(Int[]) == 0
 @test_throws ErrorException Base.minabs(Int[])
 
-@test Base.maxabs(-2) == 2
-@test Base.minabs(-2) == 2
-@test Base.maxabs([1, -2, 3, -4]) == 4
-@test Base.minabs([-1, 2, -3, 4]) == 1
+@test maxabs(-2) == 2
+@test minabs(-2) == 2
+@test maxabs([1, -2, 3, -4]) == 4
+@test minabs([-1, 2, -3, 4]) == 1
 
 @test maximum(x->abs2(x), 3:7) == 49
 @test minimum(x->abs2(x), 3:7) == 9

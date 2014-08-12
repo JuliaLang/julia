@@ -31,7 +31,7 @@ isassigned(a::Array, i::Int...) = isdefined(a, i...)
 ## copy ##
 
 function unsafe_copy!{T}(dest::Ptr{T}, src::Ptr{T}, N)
-    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint),
+    ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint),
           dest, src, N*sizeof(T))
     return dest
 end
@@ -58,6 +58,7 @@ copy!{T}(dest::Array{T}, src::Array{T}) = copy!(dest, 1, src, 1, length(src))
 
 function reinterpret{T,S}(::Type{T}, a::Array{S,1})
     nel = int(div(length(a)*sizeof(S),sizeof(T)))
+    # TODO: maybe check that remainder is zero?
     return reinterpret(T, a, (nel,))
 end
 
@@ -81,7 +82,6 @@ function reinterpret{T,S,N}(::Type{T}, a::Array{S}, dims::NTuple{N,Int})
     end
     ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
 end
-reinterpret(t::Type,x) = reinterpret(t,[x])[1]
 
 # reshaping to same # of dimensions
 function reshape{T,N}(a::Array{T,N}, dims::NTuple{N,Int})
@@ -166,7 +166,7 @@ cell(dims::(Integer...)) = Array(Any, convert((Int...), dims))
 
 for (fname, felt) in ((:zeros,:zero), (:ones,:one))
     @eval begin
-        ($fname){T}(::Type{T}, dims...)  = fill!(Array(T, dims...), ($felt)(T))
+        ($fname)(T::Type, dims...)       = fill!(Array(T, dims...), ($felt)(T))
         ($fname)(dims...)                = fill!(Array(Float64, dims...), ($felt)(Float64))
         ($fname){T}(A::AbstractArray{T}) = fill!(similar(A), ($felt)(T))
     end
@@ -989,7 +989,7 @@ function reverse!(v::StridedVector, s=1, n=length(v))
     v
 end
 
-function vcat{T}(arrays::Array{T,1}...)
+function vcat{T}(arrays::Vector{T}...)
     n = 0
     for a in arrays
         n += length(a)
@@ -1009,6 +1009,14 @@ function vcat{T}(arrays::Array{T,1}...)
         offset += nba
     end
     return arr
+end
+
+function hcat{T}(V::Vector{T}...)
+    height = length(V[1])
+    for j = 2:length(V)
+        if length(V[j]) != height; error("vector must have same lengths"); end
+    end
+    [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
 end
 
 ## find ##
@@ -1216,7 +1224,7 @@ function filter!(f::Function, a::Vector)
             insrt += 1
         end
     end
-    splice!(a, insrt:length(a))
+    deleteat!(a, insrt:length(a))
     return a
 end
 

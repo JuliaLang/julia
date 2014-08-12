@@ -97,8 +97,8 @@ requested conversion:
 .. doctest::
 
     julia> convert(FloatingPoint, "foo")
-    ERROR: no method convert(Type{FloatingPoint}, ASCIIString)
-     in convert at base.jl:11
+    ERROR: `convert` has no method matching convert(::Type{FloatingPoint}, ::ASCIIString)
+     in convert at base.jl:13
 
 Some languages consider parsing strings as numbers or formatting
 numbers as strings to be conversions (many dynamic languages will even
@@ -118,7 +118,13 @@ number to a boolean is simply this::
 The type of the first argument of this method is a :ref:`singleton
 type <man-singleton-types>`, ``Type{Bool}``, the only instance of
 which is ``Bool``. Thus, this method is only invoked when the first
-argument is the type value ``Bool``. When invoked, the method determines
+argument is the type value ``Bool``. Notice the syntax used for the first
+argument: the argument name is omitted prior to the ``::`` symbol, and only
+the type is given.  This is the syntax in Julia for a function argument whose type is
+specified but whose value is never used in the function body.  In this example,
+since the type is a singleton, there would never be any reason to use its value
+within the body.
+When invoked, the method determines
 whether a numeric value is true or false as a boolean, by comparing it
 to zero:
 
@@ -132,7 +138,7 @@ to zero:
 
     julia> convert(Bool, 1im)
     ERROR: InexactError()
-     in convert at complex.jl:27
+     in convert at complex.jl:18
 
     julia> convert(Bool, 0im)
     false
@@ -239,7 +245,7 @@ promotion is to convert numeric arguments to a common type:
     (1.5 + 0.0im,0.0 + 1.0im)
 
     julia> promote(1 + 2im, 3//4)
-    (1//1 + 2//1im,3//4 + 0//1im)
+    (1//1 + 2//1*im,3//4 + 0//1*im)
 
 Floating-point values are promoted to the largest of the floating-point
 argument types. Integer values are promoted to the larger of either the

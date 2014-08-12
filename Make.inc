@@ -17,6 +17,7 @@ USE_SYSTEM_LIBM=0
 USE_SYSTEM_OPENLIBM=0
 UNTRUSTED_SYSTEM_LIBM=0
 USE_SYSTEM_OPENSPECFUN=0
+USE_SYSTEM_DSFMT=0
 USE_SYSTEM_BLAS=0
 USE_SYSTEM_LAPACK=0
 USE_SYSTEM_FFTW=0
@@ -29,17 +30,34 @@ USE_SYSTEM_GRISU=0
 USE_SYSTEM_RMATH=0
 USE_SYSTEM_LIBUV=0
 USE_SYSTEM_UTF8PROC=0
-
-USE_MKL = 0
+USE_SYSTEM_MOJIBAKE=0
 
 # Link to the LLVM shared library
 USE_LLVM_SHLIB = 0
 
+## Settings for various Intel tools
+# Set to 1 to use MKL
+USE_INTEL_MKL ?= 0
+# Set to 1 to use MKL FFT
+USE_INTEL_MKL_FFT ?= 0
+# Set to 1 to use Intel LIBM
+USE_INTEL_LIBM ?= 0
 # Set to 1 to enable profiling with Intel VTune Amplifier
-USE_INTEL_JITEVENTS = 0
+USE_INTEL_JITEVENTS ?= 0
+# Set to 1 to use Intel C, C++, and FORTRAN compilers
+USEICC  ?= 0
+USEIFC  ?= 0
+
+ifeq ($(USE_MKL), 1)
+$(warning "The julia make variable USE_MKL has been renamed to USE_INTEL_MKL")
+USE_INTEL_MKL = 1
+endif
 
 # libc++ is standard on OS X 10.9, but not for earlier releases
 USE_LIBCPP = 0
+
+# Prevent picking up $ARCH from the environment variables
+ARCH=
 
 # we include twice to pickup user definitions better
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
@@ -167,21 +185,41 @@ USE_COPY_STACKS = 1
 ifeq ($(USEMSVC), 1)
 USEGCC = 0
 USECLANG = 0
+USEICC = 0
 else
-ifeq ($(CC), clang)
-USEGCC ?= 0
-USECLANG ?= 1
+ifeq ($(USECLANG), 1)
+USEGCC = 0
+USEICC = 0
 else
-USEGCC ?= 1
-USECLANG ?= 0
+ifeq ($(USEICC), 1)
+USEGCC = 0
+USECLANG = 0
+else  # default to gcc
+USEGCC = 1
+USECLANG = 0
+USEICC = 0
 endif
+endif
+endif
+
+ifeq ($(USEIFC), 1)
+FC = ifort
+else
+FC = $(CROSS_COMPILE)gfortran
+endif
+
+ifeq ($(USEIFC), 1)
+FC = ifort
+else
+FC = $(CROSS_COMPILE)gfortran
 endif
 
 STDLIBCPP_FLAG = 
 
 ifeq ($(OS), Darwin)
-DARWINVER = $(shell uname -r | cut -b 1-2)
-OSXVER = $(shell sw_vers -productVersion | cut -b 1-4)
+DARWINVER := $(shell uname -r | cut -b 1-2)
+DARWINVER_GTE13 := $(shell expr `uname -r | cut -b 1-2` \>= 13)
+OSXVER := $(shell sw_vers -productVersion | cut -b 1-4)
 ifeq ($(DARWINVER), 10) # Snow Leopard specific configuration
 USEGCC = 1
 USECLANG = 0
@@ -189,7 +227,7 @@ OPENBLAS_TARGET_ARCH=NEHALEM
 OPENBLAS_DYNAMIC_ARCH=0
 USE_SYSTEM_LIBUNWIND=1
 else
-ifeq ($(DARWINVER),13)
+ifeq ($(DARWINVER_GTE13),1)
 USE_LIBCPP = 1
 STDLIBCPP_FLAG = -stdlib=libstdc++
 else 
@@ -199,8 +237,6 @@ USEGCC = 0
 USECLANG = 1
 endif
 endif
-
-FC = $(CROSS_COMPILE)gfortran
 
 ifeq ($(USEGCC),1)
 ifeq ($(USE_LIBCPP),1)
@@ -215,7 +251,7 @@ JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -O0 -ggdb3 -DJL_DEBUG_BUILD -fstack-protector-all
-SHIPFLAGS = -O3 -falign-functions
+SHIPFLAGS = -O3 -ggdb3 -falign-functions
 endif
 
 ifeq ($(USECLANG),1)
@@ -225,7 +261,7 @@ JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -O0 -g -DJL_DEBUG_BUILD -fstack-protector-all
-SHIPFLAGS = -O3
+SHIPFLAGS = -O3 -g
 ifeq ($(OS), Darwin)
 ifeq ($(USE_LIBCPP), 1)
 CC += -stdlib=libc++ -mmacosx-version-min=10.7
@@ -237,6 +273,22 @@ CXX += $(STDLIBCPP_FLAG) -mmacosx-version-min=10.6
 endif
 JCPPFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
+endif
+
+ifeq ($(USEICC),1)
+ifeq ($(USE_LIBCPP),1)
+$(error USE_LIBCPP only supported with clang. Try setting USE_LIBCPP=0)
+endif
+ifeq ($(SANITIZE),1)
+$(error Address Sanitizer only supported with clang. Try setting SANITIZE=0)
+endif
+CC  = icc
+CXX = icpc
+JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -fp-model precise -fp-model except -no-ftz
+JCPPFLAGS =
+JCXXFLAGS = -pipe $(fPIC) -fno-rtti
+DEBUGFLAGS = -O0 -ggdb3 -DJL_DEBUG_BUILD -fstack-protector-all
+SHIPFLAGS = -O3 -g -falign-functions
 endif
 
 ifeq ($(LLVM_VER),svn)
@@ -311,7 +363,7 @@ endif
 
 BUILD_MACHINE := $(shell $(HOSTCC) -dumpmachine)
 ifeq ($(ARCH),)
-ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
+override ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
 ifeq ($(ARCH),mingw32)
 $(error "the mingw32 compiler you are using fails the openblas testsuite. please see the README.windows document for a replacement")
 endif
@@ -319,13 +371,13 @@ ifeq ($(BUILD_OS),Darwin)
 ## Mac is a rather amazing 64-bit user-space on 32-bit kernel architecture, so to determine arch we detect
 ## the capabilities of the hardware, rather than the compiler or kernel, and make a substitution
 ifeq ($(ARCH),x86_64)
-ARCH = i686
+override ARCH = i686
 else ifeq ($(ARCH),i386)
-ARCH = i686
+override ARCH = i686
 endif
 ifeq ($(ARCH),i686)
 ifeq ($(shell sysctl -n hw.cpu64bit_capable),1)
-ARCH = x86_64
+override ARCH = x86_64
 endif
 BUILD_MACHINE := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
 endif
@@ -340,7 +392,22 @@ CC += -march=$(MARCH)
 CXX += -march=$(MARCH)
 FC += -march=$(MARCH)
 JULIA_CPU_TARGET ?= $(MARCH)
+ifeq ($(OS),Darwin)
+# on Darwin, the standalone `as` program doesn't know
+# how to handle AVX instructions, but it does know how
+# to dispatch to the clang assembler (if we ask it to)
+ifeq ($(USECLANG),1)
+CC += -integrated-as
+CXX += -integrated-as
+else
+CC += -Wa,-q
+CXX += -Wa,-q
 endif
+FC += -Wa,-q
+AS += -q
+endif
+endif
+
 JULIA_CPU_TARGET ?= native
 JCPPFLAGS += -DJULIA_TARGET_ARCH=$(JULIA_CPU_TARGET)
 
@@ -407,7 +474,7 @@ PCRE_CONFIG = $(build_bindir)/pcre-config
 endif
 
 # Use 64-bit libraries by default on 64-bit architectures
-ifeq ($(ARCH), x86_64)
+ifeq ($(BINARY), 64)
 USE_BLAS64 ?= 1
 endif
 
@@ -441,6 +508,14 @@ LIBLAPACKNAME = liblapack
 endif
 endif
 
+ifeq ($(OS), WINNT)
+LIBFFTWNAME = libfftw3
+LIBFFTWFNAME = libfftw3f
+else
+LIBFFTWNAME = libfftw3_threads
+LIBFFTWFNAME = libfftw3f_threads
+endif
+
 ifeq ($(USE_SYSTEM_LIBM), 1)
 LIBM = -lm
 LIBMNAME = libm
@@ -457,10 +532,14 @@ else
   LIBUV_INC = $(JULIAHOME)/deps/libuv/include
 endif
 
-ifeq ($(USE_SYSTEM_UTF8PROC), 1)
-  LIBUTF8PROC = -lutf8proc
+ifeq ($(USE_SYSTEM_MOJIBAKE), 1)
+  LIBMOJIBAKE = -lmojibake
 else
-  LIBUTF8PROC = $(build_libdir)/libutf8proc.a
+  ifeq ($(USE_SYSTEM_UTF8PROC), 1)
+    LIBMOJIBAKE = -lutf8proc
+  else
+    LIBMOJIBAKE = $(build_libdir)/libmojibake.a
+  endif
 endif
 
 # OS specific stuff
@@ -471,10 +550,16 @@ ifeq ($(OS), Darwin)
   INSTALL_NAME_ID_DIR = @rpath/
   INSTALL_NAME_CMD = install_name_tool -id $(INSTALL_NAME_ID_DIR)
   INSTALL_NAME_CHANGE_CMD = install_name_tool -change
+ifeq ($(shell test `dsymutil -v | cut -d\- -f2 | cut -d. -f1` -gt 102 && echo yes), yes)
+  DSYMUTIL = dsymutil
+else
+  DSYMUTIL = true -ignore
+endif
 else
   INSTALL_NAME_ID_DIR =
   INSTALL_NAME_CMD = true -ignore
   INSTALL_NAME_CHANGE_CMD = true -ignore
+  DSYMUTIL = true -ignore
 endif
 
 # shared library runtime paths
@@ -559,7 +644,7 @@ LIBM = -L$(MKLROOT)/../compiler/lib/intel64 -limf
 LIBMNAME = libimf
 endif
 
-ifeq ($(USE_MKL), 1)
+ifeq ($(USE_INTEL_MKL), 1)
 ifeq ($(USE_BLAS64), 1)
 export MKL_INTERFACE_LAYER := ILP64
 MKLLIB = $(MKLROOT)/lib/intel64
@@ -580,6 +665,12 @@ ifneq ($(strip $(MKLLIB)),)
 endif
 LIBBLAS   = $(MKL_LDFLAGS)
 LIBLAPACK = $(MKL_LDFLAGS)
+endif
+
+ifeq ($(USE_INTEL_MKL_FFT), 1)
+USE_SYSTEM_FFTW = 1
+LIBFFTWNAME = libmkl_rt
+LIBFFTWFNAME = libmkl_rt
 endif
 
 # ATLAS
@@ -627,6 +718,8 @@ $$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(2)/$(1))): $$(abspath $(2)/$(1)
 $$(abspath $(2)/$(1)): | $$(abspath $(2))
 ifeq ($(BUILD_OS), WINNT)
 	@cmd //C mklink //J $$(call mingw_to_dos,$(2)/$(1),cd $(2) &&) $$(call mingw_to_dos,$(1),)
+else ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
+	@cmd /C mklink /J $$(call cygpath_w,$(2)/$(1)) $$(call cygpath_w,$(1))
 else ifdef JULIA_VAGRANT_BUILD
 	@cp -R $$(abspath $(1)) $$@
 else

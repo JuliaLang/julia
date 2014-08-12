@@ -43,6 +43,7 @@ type Prompt <: TextInterface
     on_enter
     on_done
     hist
+    sticky::Bool
 end
 
 show(io::IO, x::Prompt) = show(io, string("Prompt(\"", x.prompt, "\",...)"))
@@ -255,7 +256,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
                     cmove_col(termbuf, 1)
                 end
             else
-                cur_row += div(llength+indent-1, cols)
+                cur_row += div(max(indent+(llength-hasnl)-1,0), cols)
                 cmove_col(termbuf, indent+1)
                 write(termbuf, l)
             end
@@ -301,6 +302,16 @@ end
 
 # Edit functionality
 is_non_word_char(c) = c in " \t\n\"\\'`@\$><=:;|&{}()[].,+-*/?%^~"
+
+function reset_key_repeats(f::Function, s::MIState)
+    key_repeats_sav = s.key_repeats
+    try
+        s.key_repeats = 0
+        f()
+    finally
+        s.key_repeats = key_repeats_sav
+    end
+end
 
 char_move_left(s::PromptState) = char_move_left(s.input_buffer)
 function char_move_left(buf::IOBuffer)
@@ -632,10 +643,10 @@ write_prompt(terminal, s::PromptState) = write_prompt(terminal, s, s.p.prompt)
 function write_prompt(terminal, s::PromptState, prompt)
     prefix = isa(s.p.prompt_prefix,Function) ? s.p.prompt_prefix() : s.p.prompt_prefix
     suffix = isa(s.p.prompt_suffix,Function) ? s.p.prompt_suffix() : s.p.prompt_suffix
-    Base.have_color && write(terminal, prefix)
+    write(terminal, prefix)
     write(terminal, prompt)
     write(terminal, Base.text_colors[:normal])
-    Base.have_color && write(terminal, suffix)
+    write(terminal, suffix)
 end
 write_prompt(terminal, s::ASCIIString) = write(terminal, s)
 
@@ -956,13 +967,14 @@ function reset_state(s::SearchState)
     reset_state(s.histprompt.hp)
 end
 
-type HistoryPrompt <: TextInterface
-    hp::HistoryProvider
+type HistoryPrompt{T<:HistoryProvider} <: TextInterface
+    hp::T
     complete
     keymap_func::Function
     HistoryPrompt(hp) = new(hp, EmptyCompletionProvider())
 end
 
+HistoryPrompt{T<:HistoryProvider}(hp::T) = HistoryPrompt{T}(hp)
 init_state(terminal, p::HistoryPrompt) = SearchState(terminal, p, true, IOBuffer(), IOBuffer())
 
 state(s::MIState, p) = s.mode_state[p]
@@ -1334,10 +1346,11 @@ function Prompt(prompt;
     complete = EmptyCompletionProvider(),
     on_enter = default_enter_cb,
     on_done = ()->nothing,
-    hist = EmptyHistoryProvider())
+    hist = EmptyHistoryProvider(),
+    sticky = false)
 
     Prompt(prompt, first_prompt, prompt_prefix, prompt_suffix, keymap_func, keymap_func_data,
-        complete, on_enter, on_done, hist)
+        complete, on_enter, on_done, hist, sticky)
 end
 
 run_interface(::Prompt) = nothing

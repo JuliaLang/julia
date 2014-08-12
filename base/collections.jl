@@ -258,7 +258,7 @@ end
 
 function dequeue!(pq::PriorityQueue, key)
     idx = pop!(pq.index, key)  # throws key error if missing
-    splice!(pq.xs, idx)
+    deleteat!(pq.xs, idx)
     for (k,v) in pq.index
         (v >= idx) && (pq.index[k] = (v-1))
     end

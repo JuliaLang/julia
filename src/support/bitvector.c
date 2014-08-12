@@ -58,7 +58,7 @@ u_int32_t bitvector_get(u_int32_t *b, u_int64_t n)
 #define lomask(n) (u_int32_t)((((u_int32_t)1)<<(n))-1)
 #define ONES32 ((u_int32_t)0xffffffff)
 
-#ifdef __INTEL_COMPILER
+#if defined(__INTEL_COMPILER) && !defined(__clang__)
 #define count_bits(b) _popcnt32(b)
 #else
 STATIC_INLINE u_int32_t count_bits(u_int32_t b)

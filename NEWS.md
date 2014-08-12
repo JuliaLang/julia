@@ -1,3 +1,14 @@
+Julia v0.4.0 Release Notes
+==========================
+
+New language features
+---------------------
+
+  * Unicode version 7 is now supported for identifiers etcetera ([#7917]).
+
+Library improvements
+--------------------
+
 Julia v0.3.0 Release Notes
 ==========================
 
@@ -52,8 +63,12 @@ New language features
 
     In addition to these, many of the Unicode operator symbols are parsed
     as infix operators and are available for user-defined methods ([#6929]).
-    
+
   * Improved reporting of syntax errors ([#6179])
+
+  * `break` inside a `for` loop with multiple ranges now exits the entire loop nest ([#5154])
+
+  * Local goto statements using the `@goto` and `@label` macros. ([#101])
 
 REPL improvements
 -----------------
@@ -63,6 +78,8 @@ REPL improvements
 
   * Tab-substitution of LaTeX math symbols (e.g. `\alpha` by `α`) ([#6911]).
     This also works in IJulia and in Emacs ([#6920]).
+
+  * `workspace()` function for obtaining a fresh workspace ([#1195]).
 
 Library improvements
 --------------------
@@ -202,7 +219,7 @@ Library improvements
     * `bytestring` is automatically called on `String` arguments for
       conversion to `Ptr{Uint8}` in `ccall` ([#5677]).
 
-  * Linear Algebra improvements
+  * Linear algebra improvements
 
       * Balancing options for eigenvector calculations for general matrices ([#5428]).
 
@@ -219,16 +236,16 @@ Library improvements
         the same length.  This generalizes and replaces `normfro` ([#6057]),
         and `norm` is now type-stable ([#6056]).
 
-      * New `UniformScaling` matrix type and identity `I` constant (#5810).
+      * New `UniformScaling` matrix type and identity `I` constant ([#5810]).
 
-      * None of the concrete matrix factorization types are exported from Base
+      * None of the concrete matrix factorization types are exported from `Base`
         by default anymore.
 
     * Sparse linear algebra
 
-      * 1-d sparse getindex has been implemented ([#7047])
+      * 1-d sparse `getindex` has been implemented ([#7047])
 
-      * Faster sparse getindex ([#7131]).
+      * Faster sparse `getindex` ([#7131]).
 
       * Faster sparse `kron` ([#4958]).
 
@@ -245,7 +262,7 @@ Library improvements
         for matrices which are representable in both source and destination types. ([5e3f074b])
 
       * Allow for addition and subtraction over mixed matrix types, automatically promoting
-        the result to the denser matrix type ([a448e080])
+        the result to the denser matrix type ([a448e080], [#5927])
 
       * new algorithms for linear solvers and eigensystems of `Bidiagonal`
         matrices of generic element types ([#5277])
@@ -265,7 +282,14 @@ Library improvements
       * new LAPACK wrappers
         - condition number estimate `cond(A::Triangular)` ([#5255])
 
-      * parametrize Triangular on matrix type ([#7064])
+      * parametrize `Triangular` on matrix type ([#7064])
+
+      * Lyapunov / Sylvester solver ([#7435])
+
+      * `eigvals` for `Symmetric`, `Tridiagonal` and `Hermitian` matrices now
+        support additional method signatures: ([#3688], [#6652], [#6678], [#7647])
+        - `eigvals(M, el, eu)` finds all eigenvalues in the interval `(el, eu]`
+        - `eigvals(M, il:iu)` finds the `il`th through the `iu`th eigenvalues (in ascending order)
 
     * Dense linear algebra for generic matrix element types
 
@@ -315,6 +339,22 @@ Library improvements
 
   * New macro `@evalpoly` for efficient inline evaluation of polynomials ([#7146]).
 
+  * The signal filtering function `filt` now accepts an optional initial filter state vector. A new in-place function `filt!` is also exported. ([#7513])
+
+  * Significantly faster `cumsum` and `cumprod`. ([#7359])
+
+  * Implement `findmin` and `findmax` over specified array dimensions. ([#6716])
+
+  * Support memory-mapping of files with offsets on Windows. ([#7242])
+
+  * Catch writes to protect memory, such as when trying to modify a mmapped file opened in read-only mode. ([#3434])
+
+Environment improvements
+------------------------
+
+  * New `--code-coverage` and `--track-allocation` startup features allow one to measure the number of executions or the amount of memory allocated, respectively, at each line of code. ([#5423],[#7464])
+
+  * `Profile.init` now accepts keyword arguments, and returns the current settings when no arguments are supplied. ([#7365])
 
 Build improvements
 ------------------
@@ -349,7 +389,8 @@ Deprecated or removed
 
   * `factorize!` is deprecated in favor of `factorize`. ([#5526])
 
-  * `nnz` counts the number of structural nonzeros in a sparse matrix. Use `countnz` for the actual number of nonzeros. ([#6769])
+  * `nnz` counts the number of structural nonzeros in a sparse
+    matrix. Use `countnz` for the actual number of nonzeros. ([#6769])
 
   * `setfield` is renamed `setfield!` ([#5748])
 
@@ -686,10 +727,12 @@ Too numerous to mention.
 [#13]: https://github.com/JuliaLang/julia/issues/13
 [#69]: https://github.com/JuliaLang/julia/issues/69
 [#70]: https://github.com/JuliaLang/julia/issues/70
+[#101]: https://github.com/JuliaLang/julia/issues/101
 [#485]: https://github.com/JuliaLang/julia/issues/485
 [#552]: https://github.com/JuliaLang/julia/issues/552
 [#907]: https://github.com/JuliaLang/julia/issues/907
 [#987]: https://github.com/JuliaLang/julia/issues/987
+[#1195]: https://github.com/JuliaLang/julia/issues/1195
 [#1268]: https://github.com/JuliaLang/julia/issues/1268
 [#1484]: https://github.com/JuliaLang/julia/issues/1484
 [#1539]: https://github.com/JuliaLang/julia/issues/1539
@@ -738,6 +781,7 @@ Too numerous to mention.
 [#3272]: https://github.com/JuliaLang/julia/issues/3272
 [#3344]: https://github.com/JuliaLang/julia/issues/3344
 [#3350]: https://github.com/JuliaLang/julia/issues/3350
+[#3434]: https://github.com/JuliaLang/julia/issues/3434
 [#3439]: https://github.com/JuliaLang/julia/issues/3439
 [#3467]: https://github.com/JuliaLang/julia/issues/3467
 [#3468]: https://github.com/JuliaLang/julia/issues/3468
@@ -746,6 +790,7 @@ Too numerous to mention.
 [#3605]: https://github.com/JuliaLang/julia/issues/3605
 [#3649]: https://github.com/JuliaLang/julia/issues/3649
 [#3665]: https://github.com/JuliaLang/julia/issues/3665
+[#3688]: https://github.com/JuliaLang/julia/issues/3688
 [#3697]: https://github.com/JuliaLang/julia/issues/3697
 [#3719]: https://github.com/JuliaLang/julia/issues/3719
 [#3790]: https://github.com/JuliaLang/julia/issues/3790
@@ -795,6 +840,7 @@ Too numerous to mention.
 [#5025]: https://github.com/JuliaLang/julia/issues/5025
 [#5059]: https://github.com/JuliaLang/julia/issues/5059
 [#5076]: https://github.com/JuliaLang/julia/issues/5076
+[#5154]: https://github.com/JuliaLang/julia/issues/5154
 [#5164]: https://github.com/JuliaLang/julia/issues/5164
 [#5196]: https://github.com/JuliaLang/julia/issues/5196
 [#5214]: https://github.com/JuliaLang/julia/issues/5214
@@ -808,6 +854,7 @@ Too numerous to mention.
 [#5381]: https://github.com/JuliaLang/julia/issues/5381
 [#5387]: https://github.com/JuliaLang/julia/issues/5387
 [#5403]: https://github.com/JuliaLang/julia/issues/5403
+[#5423]: https://github.com/JuliaLang/julia/issues/5423
 [#5427]: https://github.com/JuliaLang/julia/issues/5427
 [#5428]: https://github.com/JuliaLang/julia/issues/5428
 [#5430]: https://github.com/JuliaLang/julia/issues/5430
@@ -829,10 +876,12 @@ Too numerous to mention.
 [#5748]: https://github.com/JuliaLang/julia/issues/5748
 [#5776]: https://github.com/JuliaLang/julia/issues/5776
 [#5778]: https://github.com/JuliaLang/julia/issues/5778
+[#5810]: https://github.com/JuliaLang/julia/issues/5810
 [#5811]: https://github.com/JuliaLang/julia/issues/5811
 [#5819]: https://github.com/JuliaLang/julia/issues/5819
 [#5827]: https://github.com/JuliaLang/julia/issues/5827
 [#5832]: https://github.com/JuliaLang/julia/issues/5832
+[#5927]: https://github.com/JuliaLang/julia/issues/5927
 [#5936]: https://github.com/JuliaLang/julia/issues/5936
 [#5970]: https://github.com/JuliaLang/julia/issues/5970
 [#6056]: https://github.com/JuliaLang/julia/issues/6056
@@ -848,6 +897,9 @@ Too numerous to mention.
 [#6273]: https://github.com/JuliaLang/julia/issues/6273
 [#6582]: https://github.com/JuliaLang/julia/issues/6582
 [#6624]: https://github.com/JuliaLang/julia/issues/6624
+[#6652]: https://github.com/JuliaLang/julia/issues/6652
+[#6678]: https://github.com/JuliaLang/julia/issues/6678
+[#6716]: https://github.com/JuliaLang/julia/issues/6716
 [#6726]: https://github.com/JuliaLang/julia/issues/6726
 [#6769]: https://github.com/JuliaLang/julia/issues/6769
 [#6773]: https://github.com/JuliaLang/julia/issues/6773
@@ -866,4 +918,12 @@ Too numerous to mention.
 [#7125]: https://github.com/JuliaLang/julia/issues/7125
 [#7131]: https://github.com/JuliaLang/julia/issues/7131
 [#7146]: https://github.com/JuliaLang/julia/issues/7146
+[#7242]: https://github.com/JuliaLang/julia/issues/7242
+[#7359]: https://github.com/JuliaLang/julia/issues/7359
+[#7365]: https://github.com/JuliaLang/julia/issues/7365
 [#7373]: https://github.com/JuliaLang/julia/issues/7373
+[#7390]: https://github.com/JuliaLang/julia/issues/7390
+[#7435]: https://github.com/JuliaLang/julia/issues/7435
+[#7464]: https://github.com/JuliaLang/julia/issues/7464
+[#7513]: https://github.com/JuliaLang/julia/issues/7513
+[#7647]: https://github.com/JuliaLang/julia/issues/7647

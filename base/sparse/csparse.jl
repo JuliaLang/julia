@@ -17,6 +17,8 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
                                 nrow::Integer, ncol::Integer, combine::Function)
 
     if length(I) == 0; return spzeros(eltype(V),nrow,ncol); end
+    N = length(I)
+    ((N == length(J)) && (N == length(V))) || throw(BoundsError())
 
     # Work array
     Wj = Array(Ti, max(nrow,ncol)+1)
@@ -26,7 +28,7 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
     Rnz = zeros(Ti, nrow+1)
     Rnz[1] = 1
     nz = 0
-    for k=1:length(I)
+    for k=1:N
         if V[k] != 0
             Rnz[I[k]+1] += 1
             nz += 1
@@ -39,9 +41,9 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
     # Construct row form
     # place triplet (i,j,x) in column i of R
     # Use work array for temporary row pointers
-    for i=1:nrow; Wj[i] = Rp[i]; end
+    @simd for i=1:nrow; @inbounds Wj[i] = Rp[i]; end
 
-    for k=1:length(I)
+    @inbounds for k=1:N
         ind = I[k]
         p = Wj[ind]
         Vk = V[k]
@@ -53,11 +55,11 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
     end
 
     # Reset work array for use in counting duplicates
-    for j=1:ncol; Wj[j] = 0; end
+    @simd for j=1:ncol; @inbounds Wj[j] = 0; end
 
     # Sum up duplicates and squeeze
     anz = 0
-    for i=1:nrow
+    @inbounds for i=1:nrow
         p1 = Rp[i]
         p2 = Rp[i+1] - 1
         pdest = p1
@@ -87,8 +89,8 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
 
     # Reset work array to build the final colptr
     Wj[1] = 1
-    for i=2:(ncol+1); Wj[i] = 0; end
-    for j = 1:nrow
+    @simd for i=2:(ncol+1); @inbounds Wj[i] = 0; end
+    @inbounds for j = 1:nrow
         p1 = Rp[j]
         p2 = p1 + Rnz[j] - 1        
         for p = p1:p2
@@ -97,9 +99,9 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
     end
     RpT = cumsum(Wj[1:(ncol+1)])
 
-    # Transpose 
-    for i=1:length(RpT); Wj[i] = RpT[i]; end
-    for j = 1:nrow
+    # Transpose
+    @simd for i=1:length(RpT); @inbounds Wj[i] = RpT[i]; end
+    @inbounds for j = 1:nrow
         p1 = Rp[j]
         p2 = p1 + Rnz[j] - 1
         for p = p1:p2
@@ -155,8 +157,8 @@ function transpose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
 
     colptr_T = zeros(Ti, nT+1)
     colptr_T[1] = 1
-    @inbounds for i=1:nnz(S)
-        colptr_T[rowval_S[i]+1] += 1
+    @simd for i=1:nnz(S)
+        @inbounds colptr_T[rowval_S[i]+1] += 1
     end
     colptr_T = cumsum(colptr_T)
 

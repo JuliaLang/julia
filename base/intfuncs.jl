@@ -275,9 +275,15 @@ function digits{T<:Integer}(n::Integer, base::T=10, pad::Int=1)
     2 <= base || error("invalid base: $base")
     m = max(pad,ndigits0z(n,base))
     a = zeros(T,m)
-    for i = 1:m
-        a[i] = rem(n,base)
-        n = div(n,base)
+    digits!(a, n, base)
+    return a
+end
+
+function digits!{T<:Integer}(a::Array{T,1}, n::Integer, base::T=10)
+    2 <= base || error("invalid base: $base")
+    for i = 1:length(a)
+        a[i] = rem(n, base)
+        n = div(n, base)
     end
     return a
 end

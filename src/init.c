@@ -17,6 +17,16 @@
 #include <unistd.h>
 #endif
 
+#if defined(__APPLE__)
+#include <AvailabilityMacros.h>
+#define __need_ucontext64_t
+#ifdef MAC_OS_X_VERSION_10_10
+#include <sys/_types/_ucontext64.h>
+#else
+#include <machine/_structs.h>
+#endif
+#endif
+
 #include <errno.h>
 #include <signal.h>
 
@@ -64,9 +74,14 @@ extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 #include <sched.h>   // for setting CPU affinity
 #endif
 
+DLLEXPORT void jlbacktrace();
+DLLEXPORT void gdbbacktrace();
+DLLEXPORT void gdblookup(ptrint_t ip);
+
 char *julia_home = NULL;
 jl_compileropts_t jl_compileropts = { NULL, // build_path
                                       0,    // code_coverage
+                                      0,    // malloc_log
                                       JL_COMPILEROPT_CHECK_BOUNDS_DEFAULT,
                                       0     // int32_literals
 };
@@ -134,6 +149,34 @@ static int is_addr_on_stack(void *addr)
             (char*)addr < (char*)jl_current_task->stack+jl_current_task->ssize);
 #endif
 }
+
+#ifndef SIGINFO
+#define SIGINFO SIGUSR1
+#endif
+
+void sigdie_handler(int sig, siginfo_t *info, void *context)
+{
+    if (sig != SIGINFO) {
+        sigset_t sset;
+        uv_tty_reset_mode();
+        sigfillset(&sset);
+        sigprocmask(SIG_UNBLOCK, &sset, NULL);
+        signal(sig, SIG_DFL);
+    }
+    ios_printf(ios_stderr,"\nsignal (%d): %s\n", sig, strsignal(sig));
+#ifdef __APPLE__
+    bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, (bt_context_t)&((ucontext64_t*)context)->uc_mcontext64->__ss);
+#else
+    bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, (ucontext_t*)context);
+#endif
+    jlbacktrace();
+    if (sig != SIGSEGV &&
+        sig != SIGBUS &&
+        sig != SIGILL &&
+        sig != SIGINFO) {
+        raise(sig);
+    }
+}
 #endif
 
 #if defined(__linux__) || defined(__FreeBSD__)
@@ -142,21 +185,20 @@ void segv_handler(int sig, siginfo_t *info, void *context)
 {
     sigset_t sset;
 
-    if (in_jl_ || is_addr_on_stack(info->si_addr)) {
+    if (sig == SIGSEGV && (in_jl_ || is_addr_on_stack(info->si_addr))) { // stack overflow
         sigemptyset(&sset);
         sigaddset(&sset, SIGSEGV);
         sigprocmask(SIG_UNBLOCK, &sset, NULL);
         jl_throw(jl_stackovf_exception);
     }
-    else {
-        uv_tty_reset_mode();
-        sigfillset(&sset);
+    else if (info->si_code == SEGV_ACCERR) {  // writing to read-only memory (e.g., mmap)
+        sigemptyset(&sset);
+        sigaddset(&sset, SIGSEGV);
         sigprocmask(SIG_UNBLOCK, &sset, NULL);
-        signal(sig, SIG_DFL);
-        if (sig != SIGSEGV &&
-            sig != SIGBUS &&
-            sig != SIGILL)
-            raise(sig);
+        jl_throw(jl_memory_exception);
+    }
+    else {
+        sigdie_handler(sig, info, context);
     }
 }
 #endif
@@ -189,8 +231,6 @@ void jl_throw_in_ctx(jl_value_t *excpt, CONTEXT *ctxThread, int bt)
 }
 
 volatile HANDLE hMainThread = NULL;
-DLLEXPORT void jlbacktrace();
-DLLEXPORT void gdblookup(ptrint_t ip);
 
 static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {
@@ -250,7 +290,7 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
                 jl_throw_in_ctx(jl_stackovf_exception, ExceptionInfo->ContextRecord,0);
                 return EXCEPTION_CONTINUE_EXECUTION;
         }
-        ios_puts("Please submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\nException: ", ios_stderr);
+        ios_puts("\nPlease submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\nException: ", ios_stderr);
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
             case EXCEPTION_ACCESS_VIOLATION:
                 ios_puts("EXCEPTION_ACCESS_VIOLATION", ios_stderr); break;
@@ -361,7 +401,7 @@ void sigint_handler(int sig, siginfo_t *info, void *context)
 struct uv_shutdown_queue_item { uv_handle_t *h; struct uv_shutdown_queue_item *next; };
 struct uv_shutdown_queue { struct uv_shutdown_queue_item *first; struct uv_shutdown_queue_item *last; };
 
-static void jl_uv_exitcleanup_add(uv_handle_t* handle, struct uv_shutdown_queue *queue)
+static void jl_uv_exitcleanup_add(uv_handle_t *handle, struct uv_shutdown_queue *queue)
 {
     struct uv_shutdown_queue_item *item = (struct uv_shutdown_queue_item*)malloc(sizeof(struct uv_shutdown_queue_item));
     item->h = handle;
@@ -371,13 +411,14 @@ static void jl_uv_exitcleanup_add(uv_handle_t* handle, struct uv_shutdown_queue 
     queue->last = item;
 }
 
-static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg)
+static void jl_uv_exitcleanup_walk(uv_handle_t *handle, void *arg)
 {
     if (handle != (uv_handle_t*)jl_uv_stdout && handle != (uv_handle_t*)jl_uv_stderr)
         jl_uv_exitcleanup_add(handle, (struct uv_shutdown_queue*)arg);
 }
 
 void jl_write_coverage_data(void);
+void jl_write_malloc_log(void);
 
 DLLEXPORT void uv_atexit_hook()
 {
@@ -386,6 +427,8 @@ DLLEXPORT void uv_atexit_hook()
 #endif
     if (jl_compileropts.code_coverage)
         jl_write_coverage_data();
+    if (jl_compileropts.malloc_log)
+        jl_write_malloc_log();
     if (jl_base_module) {
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
         if (f!=NULL && jl_is_function(f)) {
@@ -401,7 +444,7 @@ DLLEXPORT void uv_atexit_hook()
 
     jl_gc_run_all_finalizers();
 
-    uv_loop_t* loop = jl_global_event_loop();
+    uv_loop_t *loop = jl_global_event_loop();
     struct uv_shutdown_queue queue = {NULL, NULL};
     uv_walk(loop, jl_uv_exitcleanup_walk, &queue);
     // close stdout and stderr last, since we like being
@@ -591,6 +634,13 @@ void darwin_stack_overflow_handler(unw_context_t *uc)
     jl_rethrow();
 }
 
+void darwin_accerr_handler(unw_context_t *uc)
+{
+    bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, uc);
+    jl_exception_in_transit = jl_memory_exception;
+    jl_rethrow();
+}
+
 #define HANDLE_MACH_ERROR(msg, retval) \
     if (retval!=KERN_SUCCESS) { mach_error(msg ":", (retval)); jl_exit(1); }
 
@@ -598,6 +648,12 @@ void darwin_stack_overflow_handler(unw_context_t *uc)
 extern kern_return_t profiler_segv_handler(mach_port_t,mach_port_t,mach_port_t,exception_type_t,exception_data_t,mach_msg_type_number_t);
 extern volatile mach_port_t mach_profiler_thread;
 #endif
+
+enum x86_trap_flags {
+    USER_MODE = 0x4,
+    WRITE_FAULT = 0x2,
+    PAGE_PRESENT = 0x1
+};
 
 //exc_server uses dlsym to find symbol
 DLLEXPORT
@@ -623,7 +679,8 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
     ret = thread_get_state(thread,x86_EXCEPTION_STATE64,(thread_state_t)&exc_state,&exc_count);
     HANDLE_MACH_ERROR("thread_get_state(1)",ret);
     uint64_t fault_addr = exc_state.__faultvaddr;
-    if (is_addr_on_stack((void*)fault_addr)) {
+    if (is_addr_on_stack((void*)fault_addr) ||
+        ((exc_state.__err & PAGE_PRESENT) == PAGE_PRESENT)) {
         ret = thread_get_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,&count);
         HANDLE_MACH_ERROR("thread_get_state(2)",ret);
         old_state = state;
@@ -644,7 +701,10 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
         memset(uc,0,sizeof(unw_context_t));
         memcpy(uc,&old_state,sizeof(x86_thread_state64_t));
         state.__rdi = (uint64_t)uc;
-        state.__rip = (uint64_t)darwin_stack_overflow_handler;
+        if ((exc_state.__err & PAGE_PRESENT) == PAGE_PRESENT)
+            state.__rip = (uint64_t)darwin_accerr_handler;
+        else
+            state.__rip = (uint64_t)darwin_stack_overflow_handler;
 
         state.__rbp = state.__rsp;
         ret = thread_set_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,count);
@@ -652,6 +712,11 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
         return KERN_SUCCESS;
     }
     else {
+        ret = thread_get_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,&count);
+        HANDLE_MACH_ERROR("thread_get_state(3)",ret);
+        ios_printf(ios_stderr,"\nsignal (%d): %s\n", SIGSEGV, strsignal(SIGSEGV));
+        bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, (unw_context_t*)&state);
+        jlbacktrace();
         return KERN_INVALID_ARGUMENT;
     }
 }
@@ -698,7 +763,7 @@ void julia_init(char *imageFile)
     init_stdio();
 
 #if defined(JL_USE_INTEL_JITEVENTS)
-    const char* jit_profiling = getenv("ENABLE_JITPROFILING");
+    const char *jit_profiling = getenv("ENABLE_JITPROFILING");
     if (jit_profiling && atoi(jit_profiling)) {
         jl_using_intel_jitevents = 1;
 #if defined(__linux__)
@@ -850,6 +915,43 @@ void julia_init(char *imageFile)
         jl_exit(1);
     }
 #endif // defined(_OS_DARWIN_)
+    struct sigaction act_die;
+    memset(&act_die, 0, sizeof(struct sigaction));
+    sigemptyset(&act_die.sa_mask);
+    act_die.sa_sigaction = sigdie_handler;
+    act_die.sa_flags = SA_SIGINFO;
+    if (sigaction(SIGINFO, &act_die, NULL) < 0) {
+        JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
+        jl_exit(1);
+    }
+    if (sigaction(SIGBUS, &act_die, NULL) < 0) {
+        JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
+        jl_exit(1);
+    }
+    if (sigaction(SIGILL, &act_die, NULL) < 0) {
+        JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
+        jl_exit(1);
+    }
+    if (sigaction(SIGTERM, &act_die, NULL) < 0) {
+        JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
+        jl_exit(1);
+    }
+    if (sigaction(SIGABRT, &act_die, NULL) < 0) {
+        JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
+        jl_exit(1);
+    }
+    if (sigaction(SIGQUIT, &act_die, NULL) < 0) {
+        JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
+        jl_exit(1);
+    }
+    if (sigaction(SIGSYS, &act_die, NULL) < 0) {
+        JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
+        jl_exit(1);
+    }
+    if (sigaction(SIGPIPE, &act_die, NULL) < 0) {
+        JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
+        jl_exit(1);
+    }
 #else // defined(_OS_WINDOWS_)
     if (signal(SIGFPE, (void (__cdecl *)(int))fpe_handler) == SIG_ERR) {
         JL_PRINTF(JL_STDERR, "Couldn't set SIGFPE\n");
@@ -886,7 +988,7 @@ DLLEXPORT void jl_install_sigint_handler()
 }
 
 extern int asprintf(char **str, const char *fmt, ...);
-extern void * __stack_chk_guard;
+extern void *__stack_chk_guard;
 
 DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *av[]))
 {
@@ -915,11 +1017,11 @@ DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *
                 free(build_o);
             }
             else {
-                ios_printf(ios_stderr,"FATAL: failed to create string for .o build path");
+                ios_printf(ios_stderr,"\nFATAL: failed to create string for .o build path\n");
             }
         }
         else {
-            ios_printf(ios_stderr,"FATAL: failed to create string for .ji build path");
+            ios_printf(ios_stderr,"\nFATAL: failed to create string for .ji build path\n");
         }
     }
     p[sizeof(__stack_chk_guard)-1] = a;
@@ -969,25 +1071,16 @@ void jl_get_builtin_hooks(void)
     jl_floatingpoint_type = (jl_datatype_t*)core("FloatingPoint");
     jl_number_type = (jl_datatype_t*)core("Number");
 
-    jl_stackovf_exception =
-        jl_apply((jl_function_t*)core("StackOverflowError"), NULL, 0);
-    jl_diverror_exception =
-        jl_apply((jl_function_t*)core("DivideError"), NULL, 0);
-    jl_domain_exception =
-        jl_apply((jl_function_t*)core("DomainError"), NULL, 0);
-    jl_overflow_exception =
-        jl_apply((jl_function_t*)core("OverflowError"), NULL, 0);
-    jl_inexact_exception =
-        jl_apply((jl_function_t*)core("InexactError"), NULL, 0);
-    jl_undefref_exception =
-        jl_apply((jl_function_t*)core("UndefRefError"),NULL,0);
-    jl_undefvarerror_type = (jl_datatype_t*)core("UndefVarError");
-    jl_interrupt_exception =
-        jl_apply((jl_function_t*)core("InterruptException"),NULL,0);
-    jl_bounds_exception =
-        jl_apply((jl_function_t*)core("BoundsError"),NULL,0);
-    jl_memory_exception =
-        jl_apply((jl_function_t*)core("MemoryError"),NULL,0);
+    jl_stackovf_exception  = jl_new_struct((jl_datatype_t*)core("StackOverflowError"));
+    jl_diverror_exception  = jl_new_struct((jl_datatype_t*)core("DivideError"));
+    jl_domain_exception    = jl_new_struct((jl_datatype_t*)core("DomainError"));
+    jl_overflow_exception  = jl_new_struct((jl_datatype_t*)core("OverflowError"));
+    jl_inexact_exception   = jl_new_struct((jl_datatype_t*)core("InexactError"));
+    jl_undefref_exception  = jl_new_struct((jl_datatype_t*)core("UndefRefError"));
+    jl_undefvarerror_type  = (jl_datatype_t*)core("UndefVarError");
+    jl_interrupt_exception = jl_new_struct((jl_datatype_t*)core("InterruptException"));
+    jl_bounds_exception    = jl_new_struct((jl_datatype_t*)core("BoundsError"));
+    jl_memory_exception    = jl_new_struct((jl_datatype_t*)core("MemoryError"));
 
     jl_ascii_string_type = (jl_datatype_t*)core("ASCIIString");
     jl_utf8_string_type = (jl_datatype_t*)core("UTF8String");

@@ -33,7 +33,7 @@ int cmp_eq(void *a, numerictype_t atag, void *b, numerictype_t btag,
 #  define LEGACY_REGS "=q"
 #endif
 
-#if !defined(__INTEL_COMPILER) && (defined(__i386__) || defined(__x86_64__))
+#if (!defined(__INTEL_COMPILER) || defined(__clang__)) && (defined(__i386__) || defined(__x86_64__))
 STATIC_INLINE u_int16_t ByteSwap16(u_int16_t x)
 {
   __asm("xchgb %b0,%h0" :
@@ -75,7 +75,7 @@ STATIC_INLINE u_int64_t ByteSwap64(u_int64_t x)
 
 #define bswap_16(x) (((x) & 0x00ff) << 8 | ((x) & 0xff00) >> 8)
 
-#ifdef __INTEL_COMPILER
+#if defined(__INTEL_COMPILER) && !defined(__clang__)
 #define bswap_32(x) _bswap(x)
 #else
 #define bswap_32(x) \

@@ -85,6 +85,10 @@ include("regex.jl")
 include("base64.jl")
 importall .Base64
 
+# Core I/O
+include("io.jl")
+include("iostream.jl")
+
 # system & environment
 include("libc.jl")
 include("env.jl")
@@ -96,7 +100,6 @@ include("intfuncs.jl")
 
 # I/O
 include("task.jl")
-include("io.jl")
 include("show.jl")
 include("stream.jl")
 include("socket.jl")
@@ -174,13 +177,12 @@ big(n::Integer) = convert(BigInt,n)
 big(x::FloatingPoint) = convert(BigFloat,x)
 big(q::Rational) = big(num(q))//big(den(q))
 big(z::Complex) = complex(big(real(z)),big(imag(z)))
-@vectorize_1arg Number big
 
 # more hashing definitions
 include("hashing2.jl")
 
 # random number generation
-include("librandom.jl")
+include("dSFMT.jl")
 include("random.jl")
 importall .Random
 
@@ -194,7 +196,6 @@ include("version.jl")
 include("datafmt.jl")
 importall .DataFmt
 include("deepcopy.jl")
-include("util.jl")
 include("interactiveutil.jl")
 include("replutil.jl")
 include("test.jl")
@@ -216,6 +217,13 @@ include("REPLCompletions.jl")
 include("REPL.jl")
 include("client.jl")
 
+# (s)printf macros
+include("printf.jl")
+importall .Printf
+
+# misc useful functions & macros
+include("util.jl")
+
 # sparse matrices and linear algebra
 include("sparse.jl")
 importall .SparseMatrix
@@ -233,10 +241,6 @@ include("statistics.jl")
 include("fftw.jl")
 include("dsp.jl")
 importall .DSP
-
-# (s)printf macros
-include("printf.jl")
-importall .Printf
 
 # system information
 include("sysinfo.jl")

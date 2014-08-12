@@ -47,6 +47,8 @@ for r in uv_req_types
 @eval const $(symbol("_sizeof_"*lowercase(string(r)))) = uv_sizeof_req($r)
 end
 
+nb_available(s::AsyncStream) = nb_available(s.buffer)
+
 function eof(s::AsyncStream)
     wait_readnb(s,1)
     !isopen(s) && nb_available(s.buffer)<=0
@@ -179,13 +181,18 @@ type TTY <: AsyncStream
     readnotify::Condition
     closecb::Callback
     closenotify::Condition
-    TTY(handle) = new(
-        handle,
-        StatusUninit,
-        true,
-        PipeBuffer(),
-        false,Condition(),
-        false,Condition())
+    @windows_only ispty::Bool
+    function TTY(handle)
+        tty = new(
+            handle,
+            StatusUninit,
+            true,
+            PipeBuffer(),
+            false,Condition(),
+            false,Condition())
+        @windows_only tty.ispty = bool(ccall(:jl_ispty, Cint, (Ptr{Void},), handle))
+        tty
+    end
 end
 
 function TTY(fd::RawFD; readable::Bool = false)
@@ -389,10 +396,11 @@ function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::
         else
             if isa(stream,TTY)
                 stream.status = StatusEOF
+                notify(stream.readnotify)
+                notify(stream.closenotify)
             else
                 close(stream)
             end
-            notify(stream.readnotify)
         end
     else
         notify_filled(stream.buffer, nread, base, len)
@@ -652,7 +660,7 @@ function read!{T}(s::AsyncStream, a::Array{T})
     return a
 end
 
-function read!{Uint8}(s::AsyncStream, a::Vector{Uint8})
+function read!(s::AsyncStream, a::Vector{Uint8})
     nb = length(a)
     sbuf = s.buffer
     @assert sbuf.seekable == false
@@ -843,7 +851,7 @@ end
 
 function accept(server::UVServer, client::AsyncStream)
     if server.status != StatusActive 
-        error("server not connected; make sure \"listen\" has been called")
+        throw(ArgumentError("server not connected; make sure \"listen\" has been called"))
     end
     while isopen(server)
         err = accept_nonblock(server,client)
@@ -854,7 +862,7 @@ function accept(server::UVServer, client::AsyncStream)
         end
         stream_wait(server,server.connectnotify)
     end
-    error("server was closed while attempting to accept a client")
+    uv_error("accept", UV_ECONNABORTED)
 end
 
 const BACKLOG_DEFAULT = 511
@@ -944,3 +952,8 @@ for (x,writable,unix_fd,c_symbol) in ((:STDIN,false,0,:jl_uv_stdin),(:STDOUT,tru
         end
     end
 end
+
+mark(x::AsyncStream)     = mark(x.buffer)
+unmark(x::AsyncStream)   = unmark(x.buffer)
+reset(x::AsyncStream)    = reset(x.buffer)
+ismarked(x::AsyncStream) = ismarked(x.buffer)

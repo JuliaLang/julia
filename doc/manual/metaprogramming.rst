@@ -51,7 +51,7 @@ is an example of the short form used to quote an arithmetic expression:
 .. doctest::
 
     julia> ex = :(a+b*c+1)
-    :(+(a,*(b,c),1))
+    :(a + b * c + 1)
 
     julia> typeof(ex)
     Expr
@@ -64,10 +64,10 @@ is an example of the short form used to quote an arithmetic expression:
 
     julia> ex.args
     4-element Array{Any,1}:
-      :+       
-      :a       
-      :(*(b,c))
-     1         
+      :+
+      :a
+      :(b * c)
+     1
 
     julia> typeof(ex.args[1])
     Symbol
@@ -99,7 +99,7 @@ quoting form:
     quote  # none, line 2:
         x = 1 # line 3:
         y = 2 # line 4:
-        +(x,y)
+        x + y
     end
 
 Symbols
@@ -147,19 +147,18 @@ a character or string as its argument:
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Given an expression object, one can cause Julia to evaluate (execute) it
-at the *top level* scope — i.e. in effect like loading from a file or
-typing at the interactive prompt — using the ``eval`` function:
+at global scope using the ``eval`` function:
 
 .. doctest::
 
     julia> :(1 + 2)
-    :(+(1,2))
+    :(1 + 2)
 
     julia> eval(ans)
     3
 
     julia> ex = :(a + b)
-    :(+(a,b))
+    :(a + b)
 
     julia> eval(ex)
     ERROR: a not defined
@@ -169,9 +168,11 @@ typing at the interactive prompt — using the ``eval`` function:
     julia> eval(ex)
     3
 
+Every :ref:`module <man-modules>` has its own ``eval`` function that
+evaluates expressions in its global scope.
 Expressions passed to ``eval`` are not limited to returning values
-— they can also have side-effects that alter the state of the top-level
-evaluation environment:
+— they can also have side-effects that alter the state of the enclosing
+module's environment:
 
 .. doctest::
 
@@ -188,7 +189,7 @@ evaluation environment:
     1
 
 Here, the evaluation of an expression object causes a value to be
-assigned to the top-level variable ``x``.
+assigned to the global variable ``x``.
 
 Since expressions are just ``Expr`` objects which can be constructed
 programmatically and then evaluated, one can, from within Julia code,
@@ -200,7 +201,7 @@ dynamically generate arbitrary code which can then be run using
     julia> a = 1;
 
     julia> ex = Expr(:call, :+,a,:b)
-    :(+(1,b))
+    :(1 + b)
 
     julia> a = 0; b = 2;
 
@@ -235,7 +236,7 @@ clearly and concisely using interpolation:
     julia> a = 1;
 
     julia> ex = :($a + b)
-    :(+(1,b))
+    :(1 + b)
 
 This syntax is automatically rewritten to the form above where we
 explicitly called ``Expr``. The use of ``$`` for expression
@@ -341,8 +342,8 @@ This macro can be used like this:
     julia> @assert 1==1.0
 
     julia> @assert 1==0
-    ERROR: Assertion failed: 1 == 0
-     in error at error.jl:22
+    ERROR: assertion failed: 1 == 0
+     in error at error.jl:21
 
 In place of the written syntax, the macro call is expanded at parse time to
 its returned result. This is equivalent to writing::
@@ -387,14 +388,14 @@ function:
     :(if a == b
             nothing
         else
-            error("assertion failed: a == b")
+            Base.error("assertion failed: a == b")
         end)
 
     julia> macroexpand(:(@assert a==b "a should equal b!"))
     :(if a == b
             nothing
         else
-            error("assertion failed: a should equal b!")
+            Base.error("assertion failed: a should equal b!")
         end)
 
 There is yet another case that the actual ``@assert`` macro handles: what
@@ -409,7 +410,7 @@ Compare:
 .. doctest::
 
     julia> typeof(:("a should equal b"))
-    ASCIIString (constructor with 1 method)
+    ASCIIString (constructor with 2 methods)
 
     julia> typeof(:("a ($a) should equal b ($b)!"))
     Expr
@@ -603,14 +604,13 @@ constant over all loops, certain optimizations might not be possible,
 making this version still less efficient than the more convenient
 literal form above. Of course, there are still situations where the
 non-literal form is more convenient: if one needs to interpolate a
-variable into the regular expression, has to take this more verbose
+variable into the regular expression, one must take this more verbose
 approach; in cases where the regular expression pattern itself is
 dynamic, potentially changing upon each loop iteration, a new regular
-expression object must be constructed on each iteration. The vast
-majority of use cases, however, one does not construct regular
-expressions dynamically, depending on run-time data. In this majority of
+expression object must be constructed on each iteration. In the vast
+majority of use cases, however, regular expressions are not constructed based on run-time data. In this majority of
 cases, the ability to write regular expressions as compile-time values
-is, well, invaluable.
+is invaluable.
 
 The mechanism for user-defined string literals is deeply, profoundly
 powerful. Not only are Julia's non-standard literals implemented using

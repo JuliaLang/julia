@@ -66,6 +66,12 @@ Unicode names (in UTF-8 encoding) are allowed:
     julia> 안녕하세요 = "Hello" 
     "Hello"
 
+In the Julia REPL and several other Julia editing environments, you
+can type many Unicode math symbols by typing the backslashed LaTeX symbol
+name followed by tab.  For example, the variable name ``δ`` can be
+entered by typing ``\delta``-*tab*, or even ``α̂₂`` by
+``\alpha``-*tab*-``\hat``-*tab*-``\_2``-*tab*.
+
 .. raw:: latex
 
     \end{CJK*}
@@ -88,6 +94,7 @@ Julia will even let you redefine built-in constants and functions if needed:
     10.0
     
     julia> sqrt = 4
+    Warning: imported binding for sqrt overwritten in module Main
     4
     
 However, this is obviously not recommended to avoid potential confusion.
@@ -95,13 +102,24 @@ However, this is obviously not recommended to avoid potential confusion.
 Allowed Variable Names
 ======================
 
-Variable names must begin with a letter (A-Z or a-z), underscore, or Unicode
-character with code point greater than 00A0. Subsequent characters may also include
-! and digits (0-9).
+Variable names must begin with a letter (A-Z or a-z), underscore, or a
+subset of Unicode code points greater than 00A0; in particular, `Unicode character categories`_ Lu/Ll/Lt/Lm/Lo/Nl (letters), Sc/So (currency and
+other symbols), and a few other letter-like characters (e.g. a subset
+of the Sm math symbols) are allowed. Subsequent characters may also
+include ! and digits (0-9 and other characters in categories Nd/No),
+as well as other Unicode code points: diacritics and other modifying
+marks (categories Mn/Mc/Me/Sk), some punctuation connectors (category
+Pc), primes, and a few other characters.
 
-All operators are also valid identifiers, but are parsed specially. In some
-contexts operators can be used just like variables; for example ``(+)`` refers
-to the addition function, and ``(+) = f`` will reassign it.
+.. _Unicode character categories: http://www.fileformat.info/info/unicode/category/index.htm
+
+Operators like ``+`` are also valid identifiers, but are parsed specially. In
+some contexts, operators can be used just like variables; for example
+``(+)`` refers to the addition function, and ``(+) = f`` will reassign
+it.  Most of the Unicode infix operators (in category Sm),
+such as ``⊕``, are parsed as infix operators and are available for
+user-defined methods (e.g. you can use ``const ⊗ = kron`` to define
+``⊗`` as an infix Kronecker product).
 
 The only explicitly disallowed names for variables are the names of built-in
 statements:

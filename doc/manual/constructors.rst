@@ -78,7 +78,7 @@ two-argument constructor method. For reasons that will become clear very
 shortly, additional constructor methods declared as normal methods like
 this are called *outer* constructor methods. Outer constructor methods
 can only ever create a new instance by calling another constructor
-method, such as the automatically provided default one.
+method, such as the automatically provided default ones.
 
 Inner Constructor Methods
 -------------------------
@@ -163,7 +163,7 @@ with an explicit constructor::
 
     type T2
       x::Int64
-      T2(x::Int64) = new(x)
+      T2(x) = new(x)
     end
 
     julia> T1(1)
@@ -173,10 +173,10 @@ with an explicit constructor::
     T2(1)
 
     julia> T1(1.0)
-    no method T1(Float64,)
+    T1(1)
 
     julia> T2(1.0)
-    no method T2(Float64,)
+    T2(1)
 
 It is considered good form to provide as few inner constructor methods
 as possible: only those taking all arguments explicitly and enforcing
@@ -321,7 +321,7 @@ types of the arguments given to the constructor. Here are some examples:
     Point{Float64}(1.0,2.5)
 
     julia> Point(1,2.5)
-    ERROR: no method Point{T<:Real}(Int64, Float64)
+    ERROR: `Point{T<:Real}` has no method matching Point{T<:Real}(::Int64, ::Float64)
 
     ## explicit T ##
 
@@ -329,17 +329,20 @@ types of the arguments given to the constructor. Here are some examples:
     Point{Int64}(1,2)
 
     julia> Point{Int64}(1.0,2.5)
-    ERROR: no method Point{Int64}(Float64, Float64)
+    ERROR: InexactError()
+     in Point at no file
 
     julia> Point{Float64}(1.0,2.5)
     Point{Float64}(1.0,2.5)
 
     julia> Point{Float64}(1,2)
-    ERROR: no method Point{Float64}(Int64, Int64)
+    Point{Float64}(1.0,2.0)
 
 As you can see, for constructor calls with explicit type parameters, the
-arguments must match that specific type: ``Point{Int64}(1,2)`` works,
-but ``Point{Int64}(1.0,2.5)`` does not. When the type is implied by the
+arguments are converted to the implied field types: ``Point{Int64}(1,2)``
+works, but ``Point{Int64}(1.0,2.5)`` raises an
+``InexactError`` when converting ``2.5`` to ``Int64``.
+When the type is implied by the
 arguments to the constructor call, as in ``Point(1,2)``, then the types
 of the arguments must agree — otherwise the ``T`` cannot be determined —
 but any pair of real arguments with matching type may be given to the
@@ -361,7 +364,7 @@ declaration::
       x::T
       y::T
 
-      Point(x::T, y::T) = new(x,y)
+      Point(x,y) = new(x,y)
     end
 
     Point{T<:Real}(x::T, y::T) = Point{T}(x,y)
@@ -371,8 +374,8 @@ comment. First, inner constructor declarations always define methods of
 ``Point{T}`` rather than methods of the general ``Point`` constructor
 function. Since ``Point`` is not a concrete type, it makes no sense for
 it to even have inner constructor methods at all. Thus, the inner method
-declaration ``Point(x::T, y::T) = new(x,y)`` provides an inner
-constructor method for each value of ``T``. It is thus this method
+declaration ``Point(x,y) = new(x,y)`` provides an inner
+constructor method for each value of ``T``. It is this method
 declaration that defines the behavior of constructor calls with explicit
 type parameters like ``Point{Int64}(1,2)`` and
 ``Point{Float64}(1.0,2.0)``. The outer constructor declaration, on the
@@ -412,7 +415,7 @@ However, other similar calls still don't work:
 .. doctest::
 
     julia> Point(1.5,2)
-    ERROR: no method Point{T<:Real}(Float64, Int64)
+    ERROR: `Point{T<:Real}` has no method matching Point{T<:Real}(::Float64, ::Int64)
 
 For a much more general way of making all such calls work sensibly, see
 :ref:`man-conversion-and-promotion`. At the risk
@@ -455,7 +458,7 @@ methods. To that end, here is beginning of
 `rational.jl <https://github.com/JuliaLang/julia/blob/master/base/rational.jl>`_,
 which implements Julia's :ref:`man-rational-numbers`::
 
-    type Rational{T<:Integer} <: Real
+    immutable Rational{T<:Integer} <: Real
         num::T
         den::T
 
@@ -485,7 +488,7 @@ which implements Julia's :ref:`man-rational-numbers`::
         complex(real(xy)//yy, imag(xy)//yy)
     end
 
-The first line — ``type Rational{T<:Int} <: Real`` — declares that
+The first line — ``immutable Rational{T<:Int} <: Real`` — declares that
 ``Rational`` takes one type parameter of an integer type, and is itself
 a real type. The field declarations ``num::T`` and ``den::T`` indicate
 that the data held in a ``Rational{T}`` object are a pair of integers of
@@ -532,7 +535,7 @@ whose real and imaginary parts are rationals:
 .. doctest::
 
     julia> (1 + 2im)//(1 - 2im)
-    -3//5 + 4//5im
+    -3//5 + 4//5*im
 
     julia> typeof(ans)
     Complex{Rational{Int64}} (constructor with 1 method)

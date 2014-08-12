@@ -140,7 +140,7 @@ jl_value_t *jl_callback_call(jl_function_t *f,jl_value_t *val,int count,...)
     return v;
 }
 
-DLLEXPORT void jl_uv_closeHandle(uv_handle_t* handle)
+DLLEXPORT void jl_uv_closeHandle(uv_handle_t *handle)
 {
     if (handle->data) {
         JULIA_CB(close,handle->data,0);
@@ -148,7 +148,7 @@ DLLEXPORT void jl_uv_closeHandle(uv_handle_t* handle)
     free(handle);
 }
 
-DLLEXPORT void jl_uv_shutdownCallback(uv_shutdown_t* req, int status)
+DLLEXPORT void jl_uv_shutdownCallback(uv_shutdown_t *req, int status)
 {
     /*
      * This happens if the remote machine closes the connecition while we're
@@ -166,12 +166,12 @@ DLLEXPORT void jl_uv_return_spawn(uv_process_t *p, int64_t exit_status, int term
     JULIA_CB(return_spawn,p->data,2,CB_INT64,exit_status,CB_INT32,term_signal);
 }
 
-DLLEXPORT void jl_uv_readcb(uv_stream_t *handle, ssize_t nread, const uv_buf_t* buf)
+DLLEXPORT void jl_uv_readcb(uv_stream_t *handle, ssize_t nread, const uv_buf_t *buf)
 {
     JULIA_CB(readcb,handle->data,3,CB_INT,nread,CB_PTR,(buf->base),CB_UINT,buf->len);
 }
 
-DLLEXPORT void jl_uv_alloc_buf(uv_handle_t *handle, size_t suggested_size, uv_buf_t* buf)
+DLLEXPORT void jl_uv_alloc_buf(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
 {
     if (handle->data) {
         jl_value_t *ret = JULIA_CB(alloc_buf,handle->data,1,CB_UINT,suggested_size);
@@ -216,23 +216,23 @@ DLLEXPORT void jl_uv_pollcb(uv_poll_t *handle, int status, int events)
     JULIA_CB(pollcb,handle->data,2,CB_INT32,status,CB_INT32,events);
 }
 
-DLLEXPORT void jl_uv_fspollcb(uv_fs_poll_t* handle, int status, const uv_stat_t* prev, const uv_stat_t* curr)
+DLLEXPORT void jl_uv_fspollcb(uv_fs_poll_t *handle, int status, const uv_stat_t *prev, const uv_stat_t *curr)
 {
     JULIA_CB(fspollcb,handle->data,3,CB_INT32,status,CB_PTR,prev,CB_PTR,curr);
 }
 
 
-DLLEXPORT void jl_uv_fseventscb(uv_fs_event_t* handle, const char* filename, int events, int status)
+DLLEXPORT void jl_uv_fseventscb(uv_fs_event_t *handle, const char *filename, int events, int status)
 {
     JULIA_CB(fseventscb,handle->data,3,CB_PTR,filename,CB_INT32,events,CB_INT32,status);
 }
 
-DLLEXPORT void jl_uv_recvcb(uv_udp_t* handle, ssize_t nread, const uv_buf_t *buf, struct sockaddr* addr, unsigned flags)
+DLLEXPORT void jl_uv_recvcb(uv_udp_t *handle, ssize_t nread, const uv_buf_t *buf, struct sockaddr* addr, unsigned flags)
 {
     JULIA_CB(recv,handle->data,5,CB_INT,nread,CB_PTR,(buf->base),CB_UINT,buf->len,CB_PTR,addr,CB_INT32,flags);
 }
 
-DLLEXPORT void jl_uv_sendcb(uv_udp_send_t* handle, int status)
+DLLEXPORT void jl_uv_sendcb(uv_udp_send_t *handle, int status)
 {
     JULIA_CB(send,handle->data,1,CB_INT32,status);
     free(handle);
@@ -325,7 +325,7 @@ DLLEXPORT void jl_uv_disassociate_julia_struct(uv_handle_t *handle)
     handle->data = NULL;
 }
 
-DLLEXPORT int jl_listen(uv_stream_t* stream, int backlog)
+DLLEXPORT int jl_listen(uv_stream_t *stream, int backlog)
 {
     return uv_listen(stream,backlog,&jl_uv_connectioncb);
 }
@@ -385,18 +385,18 @@ DLLEXPORT uv_loop_t *jl_global_event_loop(void)
     return jl_io_loop;
 }
 
-DLLEXPORT int jl_poll_start(uv_poll_t* handle, int32_t events)
+DLLEXPORT int jl_poll_start(uv_poll_t *handle, int32_t events)
 {
     return uv_poll_start(handle, events, &jl_uv_pollcb);
 }
 
-DLLEXPORT int jl_fs_poll_start(uv_fs_poll_t* handle, char *file, uint32_t interval)
+DLLEXPORT int jl_fs_poll_start(uv_fs_poll_t *handle, char *file, uint32_t interval)
 {
     return uv_fs_poll_start(handle,&jl_uv_fspollcb,file,interval);
 }
 
-DLLEXPORT int jl_fs_event_init(uv_loop_t* loop, uv_fs_event_t* handle,
-    const char* filename, int flags)
+DLLEXPORT int jl_fs_event_init(uv_loop_t *loop, uv_fs_event_t *handle,
+                               const char *filename, int flags)
 {
     uv_fs_event_init(loop,handle); 
     return uv_fs_event_start(handle,&jl_uv_fseventscb,filename,flags);
@@ -438,6 +438,14 @@ DLLEXPORT int jl_fs_symlink(char *path, char *new_path, int flags)
 {
     uv_fs_t req;
     int ret = uv_fs_symlink(jl_io_loop, &req, path, new_path, flags, NULL);
+    uv_fs_req_cleanup(&req);
+    return ret;
+}
+
+DLLEXPORT int jl_fs_chmod(char *path, int mode)
+{
+    uv_fs_t req;
+    int ret = uv_fs_chmod(jl_io_loop, &req, path, mode, NULL);
     uv_fs_req_cleanup(&req);
     return ret;
 }
@@ -504,7 +512,7 @@ DLLEXPORT int jl_puts(char *str, uv_stream_t *stream)
     return jl_write(stream,str,strlen(str));
 }
 
-DLLEXPORT void jl_uv_writecb(uv_write_t* req, int status)
+DLLEXPORT void jl_uv_writecb(uv_write_t *req, int status)
 {
     if (req->data) {
         JULIA_CB(writecb, req->data, 2, CB_PTR, req, CB_INT32, status);
@@ -512,7 +520,7 @@ DLLEXPORT void jl_uv_writecb(uv_write_t* req, int status)
     free(req);
 }
 
-DLLEXPORT void jl_uv_writecb_task(uv_write_t* req, int status)
+DLLEXPORT void jl_uv_writecb_task(uv_write_t *req, int status)
 {
     JULIA_CB(writecb_task, req->handle->data, 2, CB_PTR, req, CB_INT32, status);
     free(req);
@@ -697,7 +705,7 @@ DLLEXPORT int jl_getpid()
 }
 
 //NOTE: These function expects port/host to be in network byte-order (Big Endian)
-DLLEXPORT int jl_tcp_bind(uv_tcp_t* handle, uint16_t port, uint32_t host, unsigned int flags)
+DLLEXPORT int jl_tcp_bind(uv_tcp_t *handle, uint16_t port, uint32_t host, unsigned int flags)
 {
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(struct sockaddr_in));
@@ -706,7 +714,7 @@ DLLEXPORT int jl_tcp_bind(uv_tcp_t* handle, uint16_t port, uint32_t host, unsign
     addr.sin_family = AF_INET;
     return uv_tcp_bind(handle, (struct sockaddr*)&addr, flags);
 }
-DLLEXPORT int jl_tcp_bind6(uv_tcp_t* handle, uint16_t port, void *host, unsigned int flags)
+DLLEXPORT int jl_tcp_bind6(uv_tcp_t *handle, uint16_t port, void *host, unsigned int flags)
 {
     struct sockaddr_in6 addr;
     memset(&addr, 0, sizeof(struct sockaddr_in6));
@@ -716,7 +724,7 @@ DLLEXPORT int jl_tcp_bind6(uv_tcp_t* handle, uint16_t port, void *host, unsigned
     return uv_tcp_bind(handle, (struct sockaddr*)&addr, flags);
 }
 
-DLLEXPORT int jl_udp_bind(uv_udp_t* handle, uint16_t port, uint32_t host, uint32_t flags)
+DLLEXPORT int jl_udp_bind(uv_udp_t *handle, uint16_t port, uint32_t host, uint32_t flags)
 {
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(struct sockaddr_in));
@@ -725,7 +733,7 @@ DLLEXPORT int jl_udp_bind(uv_udp_t* handle, uint16_t port, uint32_t host, uint32
     addr.sin_family = AF_INET;
     return uv_udp_bind(handle, (struct sockaddr*)&addr, flags);
 }
-DLLEXPORT int jl_udp_bind6(uv_udp_t* handle, uint16_t port, void *host, uint32_t flags)
+DLLEXPORT int jl_udp_bind6(uv_udp_t *handle, uint16_t port, void *host, uint32_t flags)
 {
     struct sockaddr_in6 addr;
     memset(&addr, 0, sizeof(struct sockaddr_in6));
@@ -735,7 +743,7 @@ DLLEXPORT int jl_udp_bind6(uv_udp_t* handle, uint16_t port, void *host, uint32_t
     return uv_udp_bind(handle, (struct sockaddr*)&addr, flags);
 }
 
-DLLEXPORT int jl_udp_send(uv_udp_t* handle, uint16_t port, uint32_t host, void *data, uint32_t size)
+DLLEXPORT int jl_udp_send(uv_udp_t *handle, uint16_t port, uint32_t host, void *data, uint32_t size)
 {
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(struct sockaddr_in));
@@ -745,12 +753,12 @@ DLLEXPORT int jl_udp_send(uv_udp_t* handle, uint16_t port, uint32_t host, void *
     uv_buf_t buf[1];
     buf[0].base = (char *) data;
     buf[0].len = size;
-    uv_udp_send_t *req = (uv_udp_send_t *) malloc(sizeof(uv_udp_send_t));
+    uv_udp_send_t *req = (uv_udp_send_t*)malloc(sizeof(uv_udp_send_t));
     req->data = handle->data;
     return uv_udp_send(req, handle, buf, 1, (struct sockaddr*)&addr, &jl_uv_sendcb);
 }
 
-DLLEXPORT int jl_udp_send6(uv_udp_t* handle, uint16_t port, void *host, void *data, uint32_t size)
+DLLEXPORT int jl_udp_send6(uv_udp_t *handle, uint16_t port, void *host, void *data, uint32_t size)
 {
     struct sockaddr_in6 addr;
     memset(&addr, 0, sizeof(struct sockaddr_in6));
@@ -980,20 +988,6 @@ DLLEXPORT int jl_tty_set_mode(uv_tty_t *handle, int mode)
     return uv_tty_set_mode(handle, mode);
 }
 
-DLLEXPORT int jl_tty_get_winsize(uv_tty_t* handle, int* width, int* height)
-{
-#ifdef _OS_WINDOWS_
-    if (jl_ispty((uv_pipe_t*)handle)) {
-        //TODO: query for size: `\e[18` returns `\e[4;height;width;t`
-        *width=80;
-        *height=24;
-        return 0;
-    }
-#endif
-    if (handle->type != UV_TTY) return UV_ENOTSUP;
-    return uv_tty_get_winsize(handle, width, height);
-}
-
 DLLEXPORT uv_file jl_uv_file_handle(jl_uv_file_t *f)
 {
     return f->file;
@@ -1017,7 +1011,7 @@ DLLEXPORT void *jl_uv_handle_data(uv_handle_t *handle)
 
 #ifndef _OS_WINDOWS_
 #if defined(__APPLE__)
-int uv___stream_fd(uv_stream_t* handle);
+int uv___stream_fd(uv_stream_t *handle);
 #define uv__stream_fd(handle) (uv___stream_fd((uv_stream_t*)(handle)))
 #else
 #define uv__stream_fd(handle) ((handle)->io_watcher.fd)

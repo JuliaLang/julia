@@ -3,8 +3,26 @@ module_name(m::Module) = ccall(:jl_module_name, Any, (Any,), m)::Symbol
 module_parent(m::Module) = ccall(:jl_module_parent, Any, (Any,), m)::Module
 current_module() = ccall(:jl_get_current_module, Any, ())::Module
 
-fullname(m::Module) = m===Main ? () : tuple(fullname(module_parent(m))...,
-                                            module_name(m))
+function fullname(m::Module)
+    if m === Main
+        ()
+    elseif module_parent(m) === m
+        # not Main, but is its own parent, means a prior Main module
+        n = ()
+        this = Main
+        while this !== m
+            if isdefined(this, :LastMain)
+                n = tuple(n..., :LastMain)
+                this = this.LastMain
+            else
+                error("no reference to module ", module_name(m))
+            end
+        end
+        return n
+    else
+        tuple(fullname(module_parent(m))..., module_name(m))
+    end
+end
 
 names(m::Module, all::Bool, imported::Bool) = ccall(:jl_module_names, Array{Symbol,1}, (Any,Int32,Int32), m, all, imported)
 names(m::Module, all::Bool) = names(m, all, false)
@@ -53,8 +71,9 @@ function _subtypes(m::Module, x::DataType, sts=Set(), visited=Set())
     for s in names(m,true)
         if isdefined(m,s)
             t = eval(m,s)
-            if isa(t, DataType) && super(t).name == x.name
-                push!(sts, t)
+            if isa(t, DataType) && t.name.name == s && super(t).name == x.name
+                ti = typeintersect(t, x)
+                ti != None && push!(sts, ti)
             elseif isa(t, Module) && !in(t, visited)
                 _subtypes(t, x, sts, visited)
             end
@@ -72,7 +91,7 @@ isgeneric(f::ANY) = (isa(f,Function)||isa(f,DataType)) && isa(f.env,MethodTable)
 
 function_name(f::Function) = isgeneric(f) ? f.env.name : (:anonymous)
 
-code_lowered(f::Function,t::(Type...)) = map(m->uncompressed_ast(m.func.code), methods(f,t))
+code_lowered(f::Callable,t::(Type...)) = map(m->uncompressed_ast(m.func.code), methods(f,t))
 methods(f::ANY,t::ANY) = Any[m[3] for m in _methods(f,t,-1)]
 _methods(f::ANY,t::ANY,lim) = _methods(f,{(t::Tuple)...},length(t::Tuple),lim,{})
 function _methods(f::ANY,t::Array,i,lim::Integer,matching::Array{Any,1})

@@ -97,7 +97,7 @@ in
 
     function getenv(var::String)
       val = ccall( (:getenv, "libc"),
-                  Ptr{Uint8}, (Ptr{Uint8},), bytestring(var))
+                  Ptr{Uint8}, (Ptr{Uint8},), var)
       if val == C_NULL
         error("getenv: undefined variable: ", var)
       end
@@ -529,7 +529,7 @@ For more details on how to pass callbacks to C libraries, see this
 C++
 ---
 
-Limited support for C++ is provided by the `Cpp <http://github.com/timholy/Cpp.jl>`_ 
+Limited support for C++ is provided by the `Cpp <https://github.com/timholy/Cpp.jl>`_ 
 and `Clang <https://github.com/ihnorton/Clang.jl>`_ packages.
 
 Handling Platform Variations

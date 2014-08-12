@@ -19,6 +19,7 @@
 /openblas-*
 /patchelf-*
 /pcre-*
+!pcre-gcc49-compile.patch
 /root
 /SuiteSparse-*
 /zlib-*

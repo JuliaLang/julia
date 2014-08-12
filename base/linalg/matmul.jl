@@ -212,8 +212,8 @@ function gemv!{T<:BlasFloat}(y::StridedVector{T}, tA::Char, A::StridedMatrix{T},
     end
     nA==length(x) || throw(DimensionMismatch(""))
     mA==length(y) || throw(DimensionMismatch(""))
-    mA == 0 && return zeros(T, 0)
-    nA == 0 && return zeros(T, mA)
+    mA == 0 && return y
+    nA == 0 && return fill!(y,0)
     return BLAS.gemv!(tA, one(T), A, x, zero(T), y)
 end
 
@@ -258,8 +258,8 @@ function herk_wrapper!{T<:BlasFloat}(C::StridedMatrix{T}, tA::Char, A::StridedMa
 end
 
 function gemm_wrapper{T<:BlasFloat}(tA::Char, tB::Char,
-                             A::StridedVecOrMat{T},
-                             B::StridedMatrix{T})
+                                    A::StridedVecOrMat{T},
+                                    B::StridedMatrix{T})
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
     C = similar(B, T, mA, nB)
@@ -267,14 +267,17 @@ function gemm_wrapper{T<:BlasFloat}(tA::Char, tB::Char,
 end
 
 function gemm_wrapper!{T<:BlasFloat}(C::StridedVecOrMat{T}, tA::Char, tB::Char,
-                             A::StridedVecOrMat{T},
-                             B::StridedMatrix{T})
+                                     A::StridedVecOrMat{T},
+                                     B::StridedMatrix{T})
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
 
     nA==mB || throw(DimensionMismatch("*"))
 
-    if mA == 0 || nA == 0 || nB == 0; return zeros(T, mA, nB); end
+    if mA == 0 || nA == 0 || nB == 0
+        size(C) == (mA, nB) || throw(DimensionMismatch(""))
+        return fill!(C,0)
+    end
     if mA == 2 && nA == 2 && nB == 2; return matmul2x2!(C,tA,tB,A,B); end
     if mA == 3 && nA == 3 && nB == 3; return matmul3x3!(C,tA,tB,A,B); end
 

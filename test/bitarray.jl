@@ -990,3 +990,7 @@ b2 = randbool(s3, s4)
 #@check_bit_operation diff(b1) Vector{Int}
 
 timesofar("linalg")
+
+# issue #7515
+@test sizeof(BitArray(64)) == 8
+@test sizeof(BitArray(65)) == 16

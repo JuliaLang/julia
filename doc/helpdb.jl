@@ -195,6 +195,17 @@
 
 "),
 
+("Base","workspace","workspace()
+
+   Replace the top-level module (\"Main\") with a new one, providing a
+   clean workspace. The previous \"Main\" module is made available as
+   \"LastMain\". A previously-loaded package can be accessed using a
+   statement such as \"using LastMain.Package\".
+
+   This function should only be used interactively.
+
+"),
+
 ("Base","is","is(x, y) -> Bool
 
    Determine whether \"x\" and \"y\" are identical, in the sense that
@@ -682,9 +693,10 @@
 ("Base","esc","esc(e::ANY)
 
    Only valid in the context of an Expr returned from a macro.
-   Prevents the macro hygine pass from turning embedded variables into
-   gensym variables. See the *Macros* section of the Metaprogramming
-   chapter of the manual for more details and examples.
+   Prevents the macro hygiene pass from turning embedded variables
+   into gensym variables. See the *Macros* section of the
+   Metaprogramming chapter of the manual for more details and
+   examples.
 
 "),
 
@@ -993,6 +1005,44 @@
 
 "),
 
+("Base","maxabs","maxabs(itr)
+
+   Compute the maximum absolute value of a collection of values.
+
+"),
+
+("Base","maxabs","maxabs(A, dims)
+
+   Compute the maximum absolute values over given dimensions.
+
+"),
+
+("Base","maxabs!","maxabs!(r, A)
+
+   Compute the maximum absolute values over the singleton dimensions
+   of \"r\", and write values to \"r\".
+
+"),
+
+("Base","minabs","minabs(itr)
+
+   Compute the minimum absolute value of a collection of values.
+
+"),
+
+("Base","minabs","minabs(A, dims)
+
+   Compute the minimum absolute values over given dimensions.
+
+"),
+
+("Base","minabs!","minabs!(r, A)
+
+   Compute the minimum absolute values over the singleton dimensions
+   of \"r\", and write values to \"r\".
+
+"),
+
 ("Base","sum","sum(itr)
 
    Returns the sum of all elements in a collection.
@@ -1016,6 +1066,48 @@
 
    Sum the results of calling function \"f\" on each element of
    \"itr\".
+
+"),
+
+("Base","sumabs","sumabs(itr)
+
+   Sum absolute values of all elements in a collection. This is
+   equivalent to *sum(abs(itr))* but faster.
+
+"),
+
+("Base","sumabs","sumabs(A, dims)
+
+   Sum absolute values of elements of an array over the given
+   dimensions.
+
+"),
+
+("Base","sumabs!","sumabs!(r, A)
+
+   Sum absolute values of elements of \"A\" over the singleton
+   dimensions of \"r\", and write results to \"r\".
+
+"),
+
+("Base","sumabs2","sumabs2(itr)
+
+   Sum squared absolute values of all elements in a collection. This
+   is equivalent to *sum(abs2(itr))* but faster.
+
+"),
+
+("Base","sumabs2","sumabs2(A, dims)
+
+   Sum squared absolute values of elements of an array over the given
+   dimensions.
+
+"),
+
+("Base","sumabs2!","sumabs2!(r, A)
+
+   Sum squared absolute values of elements of \"A\" over the singleton
+   dimensions of \"r\", and write results to \"r\".
 
 "),
 
@@ -1490,6 +1582,9 @@
    specified, replacement values from an ordered collection will be
    spliced in place of the removed item.
 
+   To insert *replacement* before an index *n* without removing any
+   items, use \"splice(collection, n-1:n, replacement)\".
+
 "),
 
 ("Base","splice!","splice!(collection, range[, replacement]) -> items
@@ -1498,6 +1593,9 @@
    containing the removed items. Subsequent items are shifted down to
    fill the resulting gap. If specified, replacement values from an
    ordered collection will be spliced in place of the removed items.
+
+   To insert *replacement* before an index *n* without removing any
+   items, use \"splice(collection, n-1:n, replacement)\".
 
 "),
 
@@ -2337,6 +2435,42 @@
 
 "),
 
+("Base","mark","mark(s)
+
+   Add a mark at the current position of stream \"s\".  Returns the
+   marked position.
+
+   See also \"unmark()\", \"reset()\", \"ismarked()\"
+
+"),
+
+("Base","unmark","unmark(s)
+
+   Remove a mark from stream \"s\". Returns \"true\" if the stream was
+   marked, \"false\" otherwise.
+
+   See also \"mark()\", \"reset()\", \"ismarked()\"
+
+"),
+
+("Base","reset","reset(s)
+
+   Reset a stream \"s\" to a previously marked position, and remove
+   the mark. Returns the previously marked position. Throws an error
+   if the stream is not marked.
+
+   See also \"mark()\", \"unmark()\", \"ismarked()\"
+
+"),
+
+("Base","ismarked","ismarked(s)
+
+   Returns true if stream \"s\" is marked.
+
+   See also \"mark()\", \"unmark()\", \"reset()\"
+
+"),
+
 ("Base","eof","eof(stream) -> Bool
 
    Tests whether an I/O stream is at end-of-file. If the stream is not
@@ -2626,7 +2760,7 @@
    | 04   | Read Permission       |
    +------+-----------------------+
 
-   For allowed arguments, see the stat method.
+   For allowed arguments, see \"stat\".
 
 "),
 
@@ -3462,9 +3596,11 @@ popdisplay(d::Display)
 
 "),
 
-("Base","rationalize","rationalize([Type], x)
+("Base","rationalize","rationalize([Type=Int], x; tol=eps(x))
 
-   Approximate the number x as a rational fraction
+   Approximate floating point number \"x\" as a Rational number with
+   components of the given integer type. The result will differ from
+   \"x\" by no more than \"tol\".
 
 "),
 
@@ -3517,6 +3653,12 @@ popdisplay(d::Display)
 
    Construct a range by length, given a starting value and optional
    step (defaults to 1).
+
+"),
+
+("Base","linrange","linrange(start, end, length)
+
+   Construct a range by length, given a starting and ending value.
 
 "),
 
@@ -4407,8 +4549,7 @@ popdisplay(d::Display)
 
 ("Base","cis","cis(z)
 
-   Return \"cos(z) + i*sin(z)\" if z is real. Return \"(cos(real(z)) +
-   i*sin(real(z)))/exp(imag(z))\" if \"z\" is complex
+   Return \\exp(iz).
 
 "),
 
@@ -4724,7 +4865,7 @@ popdisplay(d::Display)
 
 "),
 
-("Base","besselk","besselk(nu, x)
+("Base","besselkx","besselkx(nu, x)
 
    Scaled modified Bessel function of the second kind of order \"nu\",
    K_\\nu(x) e^x.
@@ -5185,15 +5326,15 @@ popdisplay(d::Display)
 
 ("Base","inf","inf(f)
 
-   Returns infinity in the same floating point type as \"f\" (or \"f\"
-   can by the type itself)
+   Returns positive infinity of the floating point type \"f\" or of
+   the same floating point type as \"f\"
 
 "),
 
 ("Base","nan","nan(f)
 
-   Returns NaN in the same floating point type as \"f\" (or \"f\" can
-   by the type itself)
+   Returns NaN (not-a-number) of the floating point type \"f\" or of
+   the same floating point type as \"f\"
 
 "),
 
@@ -5518,7 +5659,8 @@ popdisplay(d::Display)
 
    Counts the number of nonzero values in array A (dense or sparse).
    Note that this is not a constant-time operation. For sparse
-   matrices, one should usually use \"nfilled\" instead.
+   matrices, one should usually use \"nnz\", which returns the number
+   of stored values.
 
 "),
 
@@ -5665,7 +5807,8 @@ popdisplay(d::Display)
 ("Base","linspace","linspace(start, stop, n)
 
    Construct a vector of \"n\" linearly-spaced elements from \"start\"
-   to \"stop\".
+   to \"stop\". See also: \"linrange()\" that constructs a range
+   object.
 
 "),
 
@@ -6753,9 +6896,18 @@ popdisplay(d::Display)
 
 "),
 
-("Base","filt","filt(b, a, x)
+("Base","filt","filt(b, a, x[, si])
 
-   Apply filter described by vectors \"a\" and \"b\" to vector \"x\".
+   Apply filter described by vectors \"a\" and \"b\" to vector \"x\",
+   with an optional initial filter state vector \"si\" (defaults to
+   zeros).
+
+"),
+
+("Base","filt!","filt!(out, b, a, x[, si])
+
+   Same as \"filt()\" but writes the result into the \"out\" argument,
+   which may alias the input \"x\" to modify it in-place.
 
 "),
 
@@ -7054,7 +7206,7 @@ popdisplay(d::Display)
 
    Store a value to a remote reference. Implements \"shared queue of
    length 1\" semantics: if a value is already present, blocks until
-   the value is removed with \"take\". Returns its first argument.
+   the value is removed with \"take!\". Returns its first argument.
 
 "),
 
@@ -7379,11 +7531,14 @@ popdisplay(d::Display)
 
 "),
 
-("Base","setenv","setenv(command, env)
+("Base","setenv","setenv(command, env; dir=working_dir)
 
    Set environment variables to use when running the given command.
    \"env\" is either a dictionary mapping strings to strings, or an
    array of strings of the form \"\"var=val\"\".
+
+   The \"dir\" keyword argument can be used to specify a working
+   directory for the command.
 
 "),
 
@@ -7438,8 +7593,7 @@ popdisplay(d::Display)
 
 ("Base","cd","cd(dir::String)
 
-   Set the current working directory. Returns the new current
-   directory.
+   Set the current working directory.
 
 "),
 
@@ -7463,6 +7617,15 @@ popdisplay(d::Display)
    Create all directories in the given \"path\", with permissions
    \"mode\". \"mode\" defaults to 0o777, modified by the current file
    creation mask.
+
+"),
+
+("Base","symlink","symlink(target, link)
+
+   Creates a symbolic link to \"target\" with the name \"link\".
+
+   Note: This function raises an error under operating systems that do not
+     support soft symbolic links, such as Windows XP.
 
 "),
 
@@ -8279,7 +8442,8 @@ popdisplay(d::Display)
 
 ("Base","sleep","sleep(seconds)
 
-   Block the current task for a specified number of seconds.
+   Block the current task for a specified number of seconds. The
+   minimum sleep time is 1 millisecond or input of \"0.001\".
 
 "),
 
@@ -9780,6 +9944,23 @@ popdisplay(d::Display)
 
 "),
 
+("Base","lyap","lyap(A, C)
+
+   Computes the solution \"X\" to the continuous Lyapunov equation
+   \"AX + XA' + C = 0\", where no eigenvalue of \"A\" has a zero real
+   part and no two eigenvalues are negative complex conjugates of each
+   other.
+
+"),
+
+("Base","sylvester","sylvester(A, B, C)
+
+   Computes the solution \"X\" to the Sylvester equation \"AX + XB + C
+   = 0\", where \"A\", \"B\" and \"C\" have compatible dimensions and
+   \"A\" and \"-B\" have no eigenvalues with equal real part.
+
+"),
+
 ("Base","issym","issym(A) -> Bool
 
    Test whether a matrix is symmetric.
@@ -9837,34 +10018,35 @@ popdisplay(d::Display)
    problem is solved.  The following keyword arguments are supported:
       * \"nev\": Number of eigenvalues
 
+      * \"ncv\": Number of Krylov vectors used in the computation;
+        should satisfy \"nev+1 <= ncv <= n\" for real symmetric
+        problems and \"nev+2 <= ncv <= n\" for other problems; default
+        is \"ncv = max(20,2*nev+1)\".
+
       * \"which\": type of eigenvalues to compute. See the note below.
 
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"which\\\" | type of eigenvalues                                                                                                    |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"\\\"LM\\\"\\ | eigenvalues of largest magnitude                                                                                       |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"\\\"SM\\\"\\ | eigenvalues of smallest magnitude                                                                                      |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"\\\"LA\\\"\\ | largest algebraic eigenvalues (real symmetric \\\"A\\\" only)                                                              |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"\\\"SA\\\"\\ | smallest algebraic eigenvalues (real symmetric \\\"A\\\" only)                                                             |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"\\\"BE\\\"\\ | compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (symmetric \\\"A\\\" only) |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"\\\"LR\\\"\\ | eigenvalues of largest real part (nonsymmetric \\\"A\\\" only)                                                             |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"\\\"SR\\\"\\ | eigenvalues of smallest real part (nonsymmetric \\\"A\\\" only)                                                            |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"\\\"LI\\\"\\ | eigenvalues of largest imaginary part (nonsymmetric \\\"A\\\" only)                                                        |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"\\\"SI\\\"\\ | eigenvalues of smallest imaginary part (nonsymmetric \\\"A\\\" only)                                                       |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\"which\\\" | type of eigenvalues                                                                                                         |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\":LM\\\"   | eigenvalues of largest magnitude (default)                                                                                  |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\":SM\\\"   | eigenvalues of smallest magnitude                                                                                           |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\":LR\\\"   | eigenvalues of largest real part                                                                                            |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\":SR\\\"   | eigenvalues of smallest real part                                                                                           |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\":LI\\\"   | eigenvalues of largest imaginary part (nonsymmetric or complex \\\"A\\\" only)                                                  |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\":SI\\\"   | eigenvalues of smallest imaginary part (nonsymmetric or complex \\\"A\\\" only)                                                 |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\":BE\\\"   | compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric \\\"A\\\" only) |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
 
       * \"tol\": tolerance (tol \\le 0.0 defaults to
         \"DLAMCH('EPS')\")
 
-      * \"maxiter\": Maximum number of iterations
+      * \"maxiter\": Maximum number of iterations (default = 300)
 
       * \"sigma\": Specifies the level shift used in inverse
         iteration. If \"nothing\" (default), defaults to ordinary
@@ -10397,10 +10579,10 @@ popdisplay(d::Display)
 
 ("Base.Pkg","build","build(pkgs...)
 
-   Run the build scripts for each package in \"pkgs\" and all of their
-   dependencies in depth-first recursive order. This is called
-   automatically by \"Pkg.resolve()\" on all installed or updated
-   packages.
+   Run the build script in \"deps/build.jl\" for each package in
+   \"pkgs\" and all of their dependencies in depth-first recursive
+   order. This is called automatically by \"Pkg.resolve()\" on all
+   installed or updated packages.
 
 "),
 
@@ -10494,13 +10676,15 @@ popdisplay(d::Display)
 
 "),
 
-("Base.Profile","init","init(n::Integer, delay::Float64)
+("Base.Profile","init","init(; n::Integer, delay::Float64)
 
    Configure the \"delay\" between backtraces (measured in seconds),
    and the number \"n\" of instruction pointers that may be stored.
    Each instruction pointer corresponds to a single line of code;
    backtraces generally consist of a long list of instruction
-   pointers. Default settings are \"n=10^6\" and \"delay=0.001\".
+   pointers. Default settings can be obtained by calling this function
+   with no arguments, and each can be set independently using keywords
+   or in the order \"(n, delay)\".
 
 "),
 
@@ -10697,10 +10881,9 @@ popdisplay(d::Display)
 
 "),
 
-("Base","nfilled","nfilled(A)
+("Base","nnz","nnz(A)
 
    Returns the number of stored (filled) elements in a sparse matrix.
-   For dense arrays, this returns the length of the array.
 
 "),
 

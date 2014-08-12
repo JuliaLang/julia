@@ -199,12 +199,16 @@ K,J,V = findnz(SparseMatrixCSC(2,1,[1,3],[1,2],[1.0,0.0]))
 # issue #5985
 @test sprandbool(4, 5, 0.0) == sparse(zeros(Bool, 4, 5))
 @test sprandbool(4, 5, 1.00) == sparse(ones(Bool, 4, 5))
-sprb45 = sprandbool(4, 5, 0.5)
-@test length(sprb45) == 20
-@test 4 <= sum(sprb45)[1] <= 16
+sprb45nnzs = zeros(5)
+for i=1:5
+    sprb45 = sprandbool(4, 5, 0.5)
+    @test length(sprb45) == 20
+    sprb45nnzs[i] = sum(sprb45)[1]
+end
+@test 4 <= mean(sprb45nnzs) <= 16
 
 # issue #5853, sparse diff
-for i=1:2, a={[1 2 3], [1 2 3]', speye(3)}
+for i=1:2, a={[1 2 3], [1 2 3]', eye(3)}
     @test all(diff(sparse(a),i) == diff(a,i))
 end
 
@@ -389,5 +393,60 @@ let S = sprand(50, 30, 0.5, x->int(rand(x)*100))
     @test sum(S) == (sumS1 - sumS2)
     S[I] = J
     @test sum(S) == (sumS1 - sumS2 + sum(J))
+end
+
+#Issue 7507
+@test (i7507=sparsevec(Dict{Int64, Float64}(), 10))==spzeros(10,1)
+
+#Issue 7650
+let S = spzeros(3, 3)
+    @test size(reshape(S, 9, 1)) == (9,1)
+end
+
+let X = eye(5), M = rand(5,4), C = spzeros(3,3)
+    SX = sparse(X); SM = sparse(M)
+    VX = vec(X); VSX = vec(SX)
+    VM = vec(M); VSM1 = vec(SM); VSM2 = sparsevec(M)
+    VC = vec(C)
+    @test reshape(VX, (25,1)) == VSX
+    @test reshape(VM, (20,1)) == VSM1 == VSM2
+    @test size(VC) == (9,1)
+    @test nnz(VC) == 0
+    @test nnz(VSX) == 5
+end
+
+#Issue 7677
+let A = sprand(5,5,0.5,(n)->rand(Float64,n)), ACPY = copy(A)
+    B = reshape(A,25,1)
+    @test A == ACPY
+    C = reinterpret(Int64, A, (25, 1))
+    @test A == ACPY
+    D = reinterpret(Int64, B)
+    @test C == D
+end
+
+# indmax, indmin, findmax, findmin
+let S = sprand(100,80, 0.5), A = full(S)
+    @test indmax(S) == indmax(A)
+    @test indmin(S) == indmin(A)
+    @test findmin(S) == findmin(A)
+    @test findmax(S) == findmax(A)
+    for region in [(1,), (2,), (1,2)], m in [findmax, findmin]
+        @test m(S, region) == m(A, region)
+    end
+end
+
+let S = spzeros(10,8), A = full(S)
+    @test indmax(S) == indmax(A) == 1
+    @test indmin(S) == indmin(A) == 1
+end
+
+let A = Array(Int,0,0), S = sparse(A)
+    iA = try indmax(A) end
+    iS = try indmax(S) end
+    @test iA == iS == false
+    iA = try indmin(A) end
+    iS = try indmin(S) end
+    @test iA == iS == false
 end
 

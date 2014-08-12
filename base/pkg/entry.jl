@@ -666,21 +666,26 @@ function updatehook(pkgs::Vector)
     """)
 end
 
-function test!(pkg::String, errs::Vector{String}, notests::Vector{String})
-    const reqs_path = abspath(pkg,"test","REQUIRE")
+function test!(pkg::String, errs::Vector{String}, notests::Vector{String}; coverage::Bool=false)
+    reqs_path = abspath(pkg,"test","REQUIRE")
     if isfile(reqs_path)
-        const tests_require = Reqs.parse(reqs_path)
+        tests_require = Reqs.parse(reqs_path)
         if (!isempty(tests_require))
             info("Computing test dependencies for $pkg...")
-            resolve(tests_require)
+            resolve(merge(Reqs.parse("REQUIRE"), tests_require))
         end
     end
-    const test_path = abspath(pkg,"test","runtests.jl")
+    test_path = abspath(pkg,"test","runtests.jl")
     if isfile(test_path)
         info("Testing $pkg")
         cd(dirname(test_path)) do
             try
-                run(`$JULIA_HOME/julia $test_path`)
+                if coverage
+                    cmd = `$JULIA_HOME/julia --code-coverage $test_path`
+                else
+                    cmd = `$JULIA_HOME/julia $test_path`
+                end
+                run(cmd)
                 info("$pkg tests passed")
             catch err
                 warnbanner(err, label="[ ERROR: $pkg ]")
@@ -693,11 +698,11 @@ function test!(pkg::String, errs::Vector{String}, notests::Vector{String})
     resolve()
 end
 
-function test(pkgs::Vector{String})
+function test(pkgs::Vector{String}; coverage::Bool=false)
     errs = String[]
     notests = String[]
     for pkg in pkgs
-        test!(pkg,errs,notests)
+        test!(pkg,errs,notests; coverage=coverage)
     end
     if !isempty(errs) || !isempty(notests)
         messages = String[]
@@ -707,6 +712,6 @@ function test(pkgs::Vector{String})
     end
 end
 
-test() = test(sort!(String[keys(installed())...]))
+test(;coverage::Bool=false) = test(sort!(String[keys(installed())...]); coverage=coverage)
 
 end # module

@@ -7,7 +7,7 @@ Linear Algebra
 
 .. currentmodule:: Base
 
-Linear algebra functions in Julia are largely implemented by calling functions from `LAPACK <http://www.netlib.org/lapack/>`_.  Sparse factorizations call functions from `SuiteSparse <http://www.suitesparse.com/>`_.
+Linear algebra functions in Julia are largely implemented by calling functions from `LAPACK <http://www.netlib.org/lapack/>`_.  Sparse factorizations call functions from `SuiteSparse <http://www.cise.ufl.edu/research/sparse>`_.
 
 .. function:: *(A, B)
    :noindex:
@@ -463,6 +463,14 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Matrix exponential.
 
+.. function:: lyap(A, C)
+
+   Computes the solution ``X`` to the continuous Lyapunov equation ``AX + XA' + C = 0``, where no eigenvalue of ``A`` has a zero real part and no two eigenvalues are negative complex conjugates of each other. 
+
+.. function:: sylvester(A, B, C)
+
+   Computes the solution ``X`` to the Sylvester equation ``AX + XB + C = 0``, where ``A``, ``B`` and ``C`` have compatible dimensions and ``A`` and ``-B`` have no eigenvalues with equal real part.
+
 .. function:: issym(A) -> Bool
 
    Test whether a matrix is symmetric.
@@ -499,24 +507,23 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ``eigs`` computes eigenvalues ``d`` of ``A`` using Lanczos or Arnoldi iterations for real symmetric or general nonsymmetric matrices respectively. If ``B`` is provided, the generalized eigen-problem is solved.  The following keyword arguments are supported:
     * ``nev``: Number of eigenvalues
+    * ``ncv``: Number of Krylov vectors used in the computation; should satisfy ``nev+1 <= ncv <= n`` for real symmetric problems and ``nev+2 <= ncv <= n`` for other problems; default is ``ncv = max(20,2*nev+1)``.
     * ``which``: type of eigenvalues to compute. See the note below.
 
       ========= ======================================================================================================================
       ``which`` type of eigenvalues
       --------- ----------------------------------------------------------------------------------------------------------------------
-      ``"LM"``  eigenvalues of largest magnitude
-      ``"SM"``  eigenvalues of smallest magnitude
-      ``"LA"``  largest algebraic eigenvalues (real symmetric ``A`` only)
-      ``"SA"``  smallest algebraic eigenvalues (real symmetric ``A`` only)
-      ``"BE"``  compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (symmetric ``A`` only)
-      ``"LR"``  eigenvalues of largest real part (nonsymmetric ``A`` only)
-      ``"SR"``  eigenvalues of smallest real part (nonsymmetric ``A`` only)
-      ``"LI"``  eigenvalues of largest imaginary part (nonsymmetric ``A`` only)
-      ``"SI"``  eigenvalues of smallest imaginary part (nonsymmetric ``A`` only)
+      ``:LM``   eigenvalues of largest magnitude (default)
+      ``:SM``   eigenvalues of smallest magnitude
+      ``:LR``   eigenvalues of largest real part
+      ``:SR``   eigenvalues of smallest real part
+      ``:LI``   eigenvalues of largest imaginary part (nonsymmetric or complex ``A`` only)
+      ``:SI``   eigenvalues of smallest imaginary part (nonsymmetric or complex ``A`` only)
+      ``:BE``   compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric ``A`` only)
       ========= ======================================================================================================================
 
     * ``tol``: tolerance (:math:`tol \le 0.0` defaults to ``DLAMCH('EPS')``)
-    * ``maxiter``: Maximum number of iterations
+    * ``maxiter``: Maximum number of iterations (default = 300)
     * ``sigma``: Specifies the level shift used in inverse iteration. If ``nothing`` (default), defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to ``sigma`` using shift and invert iterations.
     * ``ritzvec``: Returns the Ritz vectors ``v`` (eigenvectors) if ``true``
     * ``v0``: starting vector from which to start the iterations

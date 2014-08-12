@@ -41,6 +41,12 @@
 	 (string (deparse (cadr e)) (car e)))
 	((syntactic-op? (car e))
 	 (string (deparse (cadr e)) (car e) (deparse (caddr e))))
+	((memq (car e) '($ &))
+	 (string (car e) (deparse (cadr e))))
+	((eq? (car e) '|::|)
+	 (if (length> e 2)
+	     (string (deparse (cadr e)) (car e) (deparse (caddr e)))
+	     (string (car e) (deparse (cadr e)))))
 	(else (case (car e)
 		((tuple)
 		 (string #\( (deparse-arglist (cdr e))
@@ -715,18 +721,22 @@
       (map (lambda (x) (gensy)) field-names)
       field-names))
 
-(define (default-inner-ctors name field-names field-types)
-  (let ((field-names (safe-field-names field-names field-types)))
-    (list
-     ;; definition with field types for all arguments
-     `(function (call ,name
-		      ,@(map make-decl field-names field-types))
-		(block
-		 (call new ,@field-names)))
-     ;; definition with Any for all arguments
-     `(function (call ,name ,@field-names)
-		(block
-		 (call new ,@field-names))))))
+(define (default-inner-ctors name field-names field-types gen-specific?)
+  (let* ((field-names (safe-field-names field-names field-types))
+	 (any-ctor
+	  ;; definition with Any for all arguments
+	  `(function (call ,name ,@field-names)
+		     (block
+		      (call new ,@field-names)))))
+    (if gen-specific?
+	(list
+	 ;; definition with field types for all arguments
+	 `(function (call ,name
+			  ,@(map make-decl field-names field-types))
+		    (block
+		     (call new ,@field-names)))
+	 any-ctor)
+	(list any-ctor))))
 
 (define (default-outer-ctor name field-names field-types params bounds)
   (let ((field-names (safe-field-names field-names field-types)))
@@ -815,7 +825,7 @@
 	  (field-names (map decl-var fields))
 	  (field-types (map decl-type fields))
 	  (defs2 (if (null? defs)
-		     (default-inner-ctors name field-names field-types)
+		     (default-inner-ctors name field-names field-types (null? params))
 		     defs)))
      (for-each (lambda (v)
 		 (if (not (symbol? v))
@@ -1425,7 +1435,12 @@
     (if (pair? invalid)
 	(if (and (pair? (car invalid)) (eq? 'parameters (caar invalid)))
 	    (error "more than one semicolon in argument list")
-	    (error (string "invalid keyword argument \"" (deparse (car invalid)) "\""))))))
+	    (cond ((symbol? (car invalid))
+		   (error (string "keyword argument \"" (car invalid) "\" needs a default value")))
+		  (else
+		   (error (string "invalid keyword argument syntax \""
+				  (deparse (car invalid))
+				  "\" (expected assignment)"))))))))
 
 (define (lower-kw-call f kw pa)
   (check-kw-args kw)
@@ -1493,6 +1508,24 @@
       (symbol (string.sub str 0 (- (length str) 1))))
     (cadr e)
     (caddr e))))
+
+(define (expand-for while lhs X body)
+  ;; (for (= lhs X) body)
+  (let ((coll  (gensy))
+	(state (gensy)))
+    `(scope-block
+      (block (= ,coll ,(expand-forms X))
+	     (= ,state (call (top start) ,coll))
+	     ,(expand-forms
+	       `(,while
+		 (call (top !) (call (top done) ,coll ,state))
+		 (scope-block
+		  (block
+		   ;; NOTE: enable this to force loop-local var
+		   #;,@(map (lambda (v) `(local ,v)) (lhs-vars lhs))
+		   ,(lower-tuple-assignment (list lhs state)
+					    `(call (top next) ,coll ,state))
+		   ,body))))))))
 
 (define (map-expand-forms e) (map expand-forms e))
 
@@ -1793,6 +1826,13 @@
 			    (break-block loop-cont
 					 ,(expand-forms (caddr e)))))))
 
+   'inner-while
+   (lambda (e)
+     `(scope-block
+        (_while ,(expand-forms (cadr e))
+                (break-block loop-cont
+                             ,(expand-forms (caddr e))))))
+
    'break
    (lambda (e)
      (if (pair? (cdr e))
@@ -1803,25 +1843,16 @@
 
    'for
    (lambda (e)
-     (let ((X (caddr (cadr e)))
-	   (lhs (cadr (cadr e)))
-	   (body (caddr e)))
-       ;; (for (= lhs X) body)
-       (let ((coll  (gensy))
-	     (state (gensy)))
-	 `(scope-block
-	   (block (= ,coll ,(expand-forms X))
-		  (= ,state (call (top start) ,coll))
-		  ,(expand-forms
-		    `(while
-		      (call (top !) (call (top done) ,coll ,state))
-		      (scope-block
-		       (block
-			;; NOTE: enable this to force loop-local var
-			#;,@(map (lambda (v) `(local ,v)) (lhs-vars lhs))
-			,(lower-tuple-assignment (list lhs state)
-						 `(call (top next) ,coll ,state))
-			,body)))))))))
+     (let nest ((ranges (if (eq? (car (cadr e)) 'block)
+			    (cdr (cadr e))
+			    (list (cadr e))))
+		(first  #t))
+       (expand-for (if first 'while 'inner-while)
+		   (cadr (car ranges))
+		   (caddr (car ranges))
+		   (if (null? (cdr ranges))
+		       (caddr e)  ;; body
+		       (nest (cdr ranges) #f)))))
 
    '+=     lower-update-op
    '-=     lower-update-op
@@ -1940,11 +1971,11 @@
 
    'comprehension
    (lambda (e)
-     (expand-forms (lower-comprehension (cadr e) (cddr e))))
+     (expand-forms (lower-comprehension #f       (cadr e) (cddr e))))
 
    'typed_comprehension
    (lambda (e)
-     (expand-forms (lower-typed-comprehension (cadr e) (caddr e) (cdddr e))))
+     (expand-forms (lower-comprehension (cadr e) (caddr e) (cdddr e))))
 
    'dict_comprehension
    (lambda (e)
@@ -1994,109 +2025,66 @@
 	      `(for ,(car ranges)
 		    ,(construct-loops (cdr ranges) iters oneresult-dim) ))))
 
-    (define (get-eltype)
-      (if (null? atype)
-	  `((call (top eltype) ,oneresult))
-	  `(,atype)))
-
     ;; Evaluate the comprehension
     `(scope-block
       (block
        (= ,oneresult (tuple))
        ,(evaluate-one ranges)
-       (= ,result (call (top Array) ,@(get-eltype)
+       (= ,result (call (top Array) ,(if atype atype `(call (top eltype) ,oneresult))
 			,@(compute-dims ranges 1)))
        (= ,ri 1)
        ,(construct-loops (reverse ranges) (list) 1)
        ,result ))))
 
-(define (lower-comprehension expr ranges)
-  (if (any (lambda (x) (eq? x ':)) ranges)
-      (lower-nd-comprehension '() expr ranges)
-  (let ((result    (gensy))
-	(ri        (gensy))
-	(initlabl  (gensy))
-	(oneresult (gensy))
-	(rv        (map (lambda (x) (gensy)) ranges)))
-
-    ;; compute the dimensions of the result
-    (define (compute-dims ranges)
-      (map (lambda (r) `(call (top length) ,(caddr r)))
-	   ranges))
-
-    ;; construct loops to cycle over all dimensions of an n-d comprehension
-    (define (construct-loops ranges)
-      (if (null? ranges)
-	  `(block (= ,oneresult ,expr)
-		  (type_goto ,initlabl ,oneresult)
-		  (boundscheck false)
-		  (call (top setindex!) ,result ,oneresult ,ri)
-		  (boundscheck pop)
-		  (= ,ri (call (top +) ,ri 1)))
-	  `(for ,(car ranges)
-		(block
-		 ;; *** either this or force all for loop vars local
-		 ,.(map (lambda (r) `(local ,r))
-			(lhs-vars (cadr (car ranges))))
-		 ,(construct-loops (cdr ranges))))))
-
-    ;; Evaluate the comprehension
-    (let ((loopranges
-	   (map (lambda (r v) `(= ,(cadr r) ,v)) ranges rv)))
-      `(block
-	,.(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
-	(scope-block
-	 (block
-	  (local ,oneresult)
-	  #;,@(map (lambda (r) `(local ,r))
-	  (apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
-	  (label ,initlabl)
-	  (= ,result (call (top Array)
-			   (static_typeof ,oneresult)
-			   ,@(compute-dims loopranges)))
-	  (= ,ri 1)
-	  ,(construct-loops (reverse loopranges))
-	  ,result)))))))
-
-(define (lower-typed-comprehension atype expr ranges)
+(define (lower-comprehension atype expr ranges)
   (if (any (lambda (x) (eq? x ':)) ranges)
       (lower-nd-comprehension atype expr ranges)
   (let ((result    (gensy))
+	(ri        (gensy))
+	(initlabl  (if atype #f (gensy)))
 	(oneresult (gensy))
-	(ri (gensy))
-	(rs (map (lambda (x) (gensy)) ranges)) )
-
-    ;; compute the dimensions of the result
-    (define (compute-dims ranges)
-      (map (lambda (r) `(call (top length) ,r))
-	   ranges))
+	(lengths   (map (lambda (x) (gensy)) ranges))
+	(states    (map (lambda (x) (gensy)) ranges))
+	(is        (map (lambda (x) (gensy)) ranges))
+	(rv        (map (lambda (x) (gensy)) ranges)))
 
     ;; construct loops to cycle over all dimensions of an n-d comprehension
-    (define (construct-loops ranges rs)
+    (define (construct-loops ranges rv is states lengths)
       (if (null? ranges)
 	  `(block (= ,oneresult ,expr)
+		  ,@(if atype '() `((type_goto ,initlabl ,oneresult)))
 		  (boundscheck false)
 		  (call (top setindex!) ,result ,oneresult ,ri)
 		  (boundscheck pop)
 		  (= ,ri (call (top +) ,ri 1)))
-	  `(for (= ,(cadr (car ranges)) ,(car rs))
-		(block
-		 ;; *** either this or force all for loop vars local
-		 ,.(map (lambda (r) `(local ,r))
-			(lhs-vars (cadr (car ranges))))
-		 ,(construct-loops (cdr ranges) (cdr rs))))))
+	  `(block
+	    (= ,(car states) (call (top start) ,(car rv)))
+	    (local (:: ,(car is) (call (top typeof) ,(car lengths))))
+	    (= ,(car is) 0)
+	    (while (call (top !=) ,(car is) ,(car lengths))
+		   (scope-block
+		   (block
+		    (= ,(car is) (call (top +) ,(car is) 1))
+		    (= (tuple ,(cadr (car ranges)) ,(car states))
+		       (call (top next) ,(car rv) ,(car states)))
+		    ;; *** either this or force all for loop vars local
+		    ,.(map (lambda (r) `(local ,r))
+			   (lhs-vars (cadr (car ranges))))
+		    ,(construct-loops (cdr ranges) (cdr rv) (cdr is) (cdr states) (cdr lengths))))))))
 
     ;; Evaluate the comprehension
     `(block
-      ,.(map make-assignment rs (map caddr ranges))
-      (local ,result)
-      (= ,result (call (top Array) ,atype ,@(compute-dims rs)))
+      ,.(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
+      ,.(map (lambda (v r) `(= ,v (call (top length) ,r))) lengths rv)
       (scope-block
        (block
-	#;,@(map (lambda (r) `(local ,r))
-	(apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
+	(local ,oneresult)
+	,@(if atype '() `((label ,initlabl)))
+	(= ,result (call (top Array)
+			 ,(if atype atype `(static_typeof ,oneresult))
+			 ,@lengths))
 	(= ,ri 1)
-	,(construct-loops (reverse ranges) (reverse rs))
+	,(construct-loops (reverse ranges) (reverse rv) is states (reverse lengths))
 	,result))))))
 
 (define (lower-dict-comprehension expr ranges)
@@ -2950,6 +2938,8 @@ So far only the second case can actually occur.
 	   (if vi
 	       (begin
 		 (vinfo:set-asgn! vi #t)
+		 ;; note: method defs require a memory loc. (issue #7658)
+		 (vinfo:set-sa! vi #f)
 		 (if (assq (car vi) captvars)
 		     (vinfo:set-iasg! vi #t)))))
 	 `(method ,(cadr e)
@@ -3272,9 +3262,10 @@ So far only the second case can actually occur.
 	   ((escape) (cadr e))
 	   ((using import importall export) (map unescape e))
 	   ((macrocall)
+        (if (or (eq? (cadr e) '@label) (eq? (cadr e) '@goto)) e
 	    `(macrocall ,.(map (lambda (x)
 				 (resolve-expansion-vars- x env m inarg))
-			       (cdr e))))
+			       (cdr e)))))
 	   ((symboliclabel) e)
 	   ((symbolicgoto) e)
 	   ((type)

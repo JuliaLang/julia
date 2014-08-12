@@ -296,6 +296,10 @@ for (f,t) in ((:integer, Integer),
     end
 end
 
+big{T<:FloatingPoint,N}(x::AbstractArray{T,N}) = convert(AbstractArray{BigFloat,N}, x)
+big{T<:FloatingPoint,N}(x::AbstractArray{Complex{T},N}) = convert(AbstractArray{Complex{BigFloat},N}, x)
+big{T<:Integer,N}(x::AbstractArray{T,N}) = convert(AbstractArray{BigInt,N}, x)
+
 bool(x::AbstractArray{Bool}) = x
 bool(x::AbstractArray) = copy!(similar(x,Bool), x)
 
@@ -356,7 +360,7 @@ real{T<:Real}(x::AbstractArray{T}) = x
 imag{T<:Real}(x::AbstractArray{T}) = zero(x)
 
 +{T<:Number}(x::AbstractArray{T}) = x
-*{T<:Number}(x::AbstractArray{T}) = x
+*{T<:Number}(x::AbstractArray{T,2}) = x
 
 ## Binary arithmetic operators ##
 
@@ -419,16 +423,15 @@ end
 flipud(A::AbstractArray) = flipdim(A, 1)
 fliplr(A::AbstractArray) = flipdim(A, 2)
 
-circshift(a, shiftamt::Real) = circshift(a, [integer(shiftamt)])
-function circshift(a, shiftamts)
-    n = ndims(a)
-    I = cell(n)
-    for i=1:n
+circshift(a::AbstractArray, shiftamt::Real) = circshift(a, [integer(shiftamt)])
+function circshift{T,N}(a::AbstractArray{T,N}, shiftamts)
+    I = ()
+    for i=1:N
         s = size(a,i)
         d = i<=length(shiftamts) ? shiftamts[i] : 0
-        I[i] = d==0 ? (1:s) : mod([-d:s-1-d], s).+1
+        I = tuple(I..., d==0 ? [1:s] : mod([-d:s-1-d], s).+1)
     end
-    a[I...]::typeof(a)
+    a[(I::NTuple{N,Vector{Int}})...]
 end
 
 ## Indexing: setindex! ##
@@ -530,14 +533,6 @@ function hcat(X::Number...)
     hvcat_fill(Array(T,1,length(X)), X)
 end
 
-function hcat{T}(V::AbstractVector{T}...)
-    height = length(V[1])
-    for j = 2:length(V)
-        if length(V[j]) != height; error("vector must have same lengths"); end
-    end
-    [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
-end
-
 function vcat{T}(V::AbstractVector{T}...)
     n = 0
     for Vk in V
@@ -547,10 +542,9 @@ function vcat{T}(V::AbstractVector{T}...)
     pos = 1
     for k=1:length(V)
         Vk = V[k]
-        for i=1:length(Vk)
-            a[pos] = Vk[i]
-            pos += 1
-        end
+        p1 = pos+length(Vk)-1
+        a[pos:p1] = Vk
+        pos = p1+1
     end
     a
 end

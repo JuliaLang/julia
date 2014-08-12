@@ -1058,8 +1058,42 @@ let s="lorem ipsum",
     end
 end #let
 
+#for isvalid(SubString{UTF8String})
+let s = utf8("Σx + βz - 2")
+  for i in -1:length(s)+2
+      ss=SubString(s,1,i)
+      @test isvalid(ss,i)==isvalid(s,i)
+  end
+end
+
 ss=SubString("hello",1,5)
 @test_throws BoundsError ind2chr(ss, -1)
 @test_throws BoundsError chr2ind(ss, -1)
 @test_throws BoundsError chr2ind(ss, 10)
 @test_throws BoundsError ind2chr(ss, 10)
+
+# length(SubString{UTF8String}) performance specialization
+let s = "|η(α)-ϕ(κ)| < ε"
+    @test length(SubString(s,1,0))==length(s[1:0])
+    @test length(SubString(s,4,4))==length(s[4:4])
+    @test length(SubString(s,1,7))==length(s[1:7])
+    @test length(SubString(s,4,11))==length(s[4:11])
+end
+
+# issue #7764
+let
+    srep = RepString("Σβ",2)
+    s="Σβ"
+    ss=SubString(s,1,endof(s))
+
+    @test ss^2 == "ΣβΣβ"
+    @test RepString(ss,2) == "ΣβΣβ"
+
+    @test endof(srep) == 7
+
+    @test next(srep, 3) == ('β',5)
+    @test next(srep, 7) == ('β',9)
+
+    @test srep[7] == 'β'
+    @test_throws BoundsError srep[8]
+end

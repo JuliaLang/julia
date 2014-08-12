@@ -1,7 +1,7 @@
 ## high-level setup ##
 JULIAHOME = $(abspath ..)
-include $(JULIAHOME)/Make.inc
 include Versions.make
+include $(JULIAHOME)/Make.inc
 
 CONFIGURE_COMMON = --prefix=$(abspath $(build_prefix)) --build=$(BUILD_MACHINE) --libdir=$(abspath $(build_libdir))
 ifneq ($(XC_HOST),)
@@ -19,12 +19,11 @@ CONFIGURE_COMMON += F77="$(FC)" CC="$(CC)" CXX="$(CXX)"
 MAKE_COMMON = DESTDIR="" prefix=$(build_prefix) bindir=$(build_bindir) libdir=$(build_libdir) libexecdir=$(build_libexecdir) datarootdir=$(build_datarootdir) includedir=$(build_includedir) sysconfdir=$(build_sysconfdir)
 
 #autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf uv
-#custom Makefile rules: openlibm Rmath random suitesparse-wrapper suitesparse lapack openblas utf8proc
+#custom Makefile rules: openlibm Rmath dsfmt suitesparse-wrapper suitesparse lapack openblas mojibake
 
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-STAGE1_DEPS = random
 STAGE2_DEPS = Rmath
 STAGE3_DEPS = suitesparse-wrapper
 
@@ -43,7 +42,7 @@ endif
 endif
 
 ifeq ($(OS), Linux)
-ifneq ($(shell patchelf --version 2>/dev/null), patchelf 0.6)
+ifeq ($(shell which patchelf),)
 STAGE1_DEPS += patchelf
 PATCHELF=$(build_bindir)/patchelf
 else
@@ -61,6 +60,10 @@ endif
 
 ifeq ($(USE_SYSTEM_OPENSPECFUN), 0)
 STAGE1_DEPS += openspecfun
+endif
+
+ifeq ($(USE_SYSTEM_DSFMT), 0)
+STAGE1_DEPS += dsfmt
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 0)
@@ -107,8 +110,8 @@ ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 STAGE2_DEPS += suitesparse
 endif
 
-ifeq ($(USE_SYSTEM_UTF8PROC), 0)
-STAGE2_DEPS += utf8proc
+ifeq ($(USE_SYSTEM_MOJIBAKE), 0)
+STAGE2_DEPS += mojibake
 endif
 
 # Only compile standalone LAPACK if we are not using OpenBLAS.
@@ -140,7 +143,7 @@ install: $(addprefix install-, $(LIBS))
 cleanall: $(addprefix clean-, $(LIBS))
 distcleanall: $(addprefix distclean-, $(LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-uv get-pcre get-openlibm get-openspecfun get-random get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf get-utf8proc
+getall: get-llvm get-uv get-pcre get-openlibm get-openspecfun get-dsfmt get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf get-mojibake
 
 ## PATHS ##
 # sort is used to remove potential duplicates
@@ -151,6 +154,12 @@ $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(build_prefix): $(DIRS)
 
 ## LLVM ##
+LLVM_GIT_URL_BASE ?= http://llvm.org/git
+LLVM_GIT_URL_LLVM ?= $(LLVM_GIT_URL_BASE)/llvm.git
+LLVM_GIT_URL_CLANG ?= $(LLVM_GIT_URL_BASE)/clang.git
+LLVM_GIT_URL_COMPILER_RT ?= $(LLVM_GIT_URL_BASE)/compiler-rt.git
+LLVM_GIT_URL_LLDB ?= $(LLVM_GIT_URL_BASE)/lldb.git
+
 ifeq ($(BUILD_LLDB), 1)
 BUILD_LLVM_CLANG = 1
 # because it's a build requirement
@@ -200,11 +209,12 @@ LLVM_LIBCXX_TAR=
 endif
 endif
 
+LLVM_CXXFLAGS =
 LLVM_TARGET_FLAGS= --enable-targets=host
 LLVM_FLAGS += --disable-profiling --enable-shared --enable-static $(LLVM_TARGET_FLAGS) --disable-bindings --disable-docs
 LLVM_MFLAGS =
 ifeq ($(LLVM_ASSERTIONS), 1)
-LLVM_FLAGS += --enable-assertions 
+LLVM_FLAGS += --enable-assertions
 ifeq ($(OS), WINNT)
 LLVM_FLAGS += --disable-embed-stdcxx
 endif
@@ -236,22 +246,31 @@ ifeq ($(BUILD_LLDB),1)
 ifeq ($(USECLANG),1)
 LLVM_FLAGS += --enable-cxx11
 else
-LLVM_MFLAGS += CXXFLAGS=-std=c++0x
+LLVM_CXXFLAGS += -std=c++0x
+endif
+ifeq ($(LLDB_DISABLE_PYTHON),1)
+LLVM_CXXFLAGS += -DLLDB_DISABLE_PYTHON
 endif
 endif
 
 ifeq ($(ARCH), ppc64)
-  LLVM_FLAGS += CXXFLAGS=-mminimal-toc
-  LLVM_MFLAGS += CXXFLAGS=-mminimal-toc
+LLVM_CXXFLAGS += -mminimal-toc
 endif
 
 
 ifeq ($(LLVM_SANITIZE),1)
-LLVM_CC = CXXFLAGS="-fsanitize=address" CFLAGS="-fsanitize=address" LDFLAGS="-fsanitize=address"
+LLVM_CC = CFLAGS="-fsanitize=address" LDFLAGS="-fsanitize=address"
+LLVM_CXXFLAGS += -fsanitize=address
 LLVM_MFLAGS += TOOL_NO_EXPORTS= HAVE_LINK_VERSION_SCRIPT=0
 else
 LLVM_CC =
 endif
+
+ifneq ($(LLVM_CXXFLAGS),)
+LLVM_FLAGS += CXXFLAGS="$(LLVM_CXXFLAGS)"
+LLVM_MFLAGS += CXXFLAGS="$(LLVM_CXXFLAGS)"
+endif
+LLVM_MFLAGS += $(LLVM_CC)
 
 ifneq ($(LLVM_CLANG_TAR),)
 $(LLVM_CLANG_TAR):
@@ -307,7 +326,7 @@ ifneq ($(LLVM_VER),svn)
 	$(TAR) -C llvm-$(LLVM_VER) --strip-components 1 -xf $(LLVM_TAR)
 else
 	([ ! -d llvm-$(LLVM_VER) ] && \
-		git clone http://llvm.org/git/llvm.git llvm-$(LLVM_VER) ) || \
+		git clone $(LLVM_GIT_URL_LLVM) llvm-$(LLVM_VER) ) || \
 		(cd llvm-$(LLVM_VER) && \
 		git pull --ff-only)
 ifneq ($(LLVM_GIT_VER),)
@@ -321,9 +340,9 @@ ifneq ($(LLVM_CLANG_TAR),)
 	$(TAR) -C llvm-$(LLVM_VER)/tools/clang --strip-components 1 -xf $(LLVM_CLANG_TAR)
 endif
 else
-ifneq ($(BUILD_LLVM_CLANG),)
+ifeq ($(BUILD_LLVM_CLANG),1)
 	([ ! -d llvm-$(LLVM_VER)/tools/clang ] && \
-		git clone http://llvm.org/git/clang.git llvm-$(LLVM_VER)/tools/clang  ) || \
+		git clone $(LLVM_GIT_URL_CLANG) llvm-$(LLVM_VER)/tools/clang  ) || \
 		(cd llvm-$(LLVM_VER)/tools/clang  && \
 		git pull --ff-only)	
 endif
@@ -338,13 +357,13 @@ ifneq ($(LLVM_LIBCXX_TAR),)
 	$(TAR) -C llvm-$(LLVM_VER)/projects/libcxx --strip-components 1 -xf $(LLVM_LIBCXX_TAR)
 endif
 else
-ifneq ($(BUILD_LLVM_CLANG),)
+ifeq ($(BUILD_LLVM_CLANG),1)
 	([ ! -d llvm-$(LLVM_VER)/tools/clang ] && \
-		git clone http://llvm.org/git/clang.git llvm-$(LLVM_VER)/tools/clang  ) || \
+		git clone $(LLVM_GIT_URL_CLANG) llvm-$(LLVM_VER)/tools/clang  ) || \
 		(cd llvm-$(LLVM_VER)/tools/clang  && \
 		git pull --ff-only)
 	([ ! -d llvm-$(LLVM_VER)/projects/compiler-rt ] && \
-		git clone http://llvm.org/git/compiler-rt.git llvm-$(LLVM_VER)/projects/compiler-rt  ) || \
+		git clone $(LLVM_GIT_URL_COMPILER_RT) llvm-$(LLVM_VER)/projects/compiler-rt  ) || \
 		(cd llvm-$(LLVM_VER)/projects/compiler-rt  && \
 		git pull --ff-only)		
 ifneq ($(LLVM_CLANG_VER),)
@@ -354,18 +373,20 @@ endif
 endif
 endif
 
-ifeq ($(BUILD_LLDB), 1)
+ifeq ($(BUILD_LLDB),1)
 	([ ! -d llvm-$(LLVM_VER)/tools/lldb ] && \
 		(cd llvm-$(LLVM_VER)/tools && \
-		git clone http://llvm.org/git/lldb.git)) || \
+		git clone $(LLVM_GIT_URL_LLDB))) || \
 	([ -d llvm-$(LLVM_VER)/tools/lldb ] && \
 		(cd llvm-$(LLVM_VER)/tools/lldb && \
 		git fetch))
-	cd llvm-$(LLVM_VER)/tools/lldb && git checkout origin/release_32
+	cd llvm-$(LLVM_VER)/tools/lldb && git checkout $(LLDB_VER)
 endif
 ifeq ($(LLVM_VER),3.3)
 	patch -p0 < llvm-3.3.patch
 	patch -p0 < instcombine-llvm-3.3.patch
+	patch -p0 < int128-vector.llvm-3.3.patch
+	(cd llvm-$(LLVM_VER) && patch < ../osx-10.10.llvm-3.3.patch)
 ifeq ($(OS),WINNT)
 ifeq ($(ARCH),x86_64)
 	patch -p0 < win64-int128.llvm-3.3.patch
@@ -399,8 +420,12 @@ $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
 	# LLVM has weird install prefixes (see llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/Makefile.config for the full list)
 	# We map them here to the "normal" ones, which means just prefixing "PROJ_" to the variable name.
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
-	$(MAKE) -C llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE) install $(MAKE_COMMON) PROJ_libdir=$(build_libdir) PROJ_bindir=$(build_bindir) PROJ_includedir=$(build_includedir)
+	$(MAKE) -C llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE) install $(LLVM_MFLAGS) $(MAKE_COMMON) PROJ_libdir=$(build_libdir) PROJ_bindir=$(build_bindir) PROJ_includedir=$(build_includedir)
 	touch -c $@
+
+reinstall-llvm:
+	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
+	$(MAKE) -C llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE) install $(LLVM_MFLAGS) $(MAKE_COMMON) PROJ_libdir=$(build_libdir) PROJ_bindir=$(build_bindir)
 
 clean-llvm:
 	-$(MAKE) -C llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE) clean
@@ -474,9 +499,10 @@ PCRE_OBJ_TARGET = $(build_shlibdir)/libpcre.$(SHLIB_EXT)
 
 pcre-$(PCRE_VER).tar.bz2:
 	$(JLDOWNLOAD) $@ http://sourceforge.net/projects/pcre/files/pcre/$(PCRE_VER)/$@/download
-pcre-$(PCRE_VER)/configure: pcre-$(PCRE_VER).tar.bz2
+pcre-$(PCRE_VER)/configure: pcre-$(PCRE_VER).tar.bz2 pcre-gcc49-compile.patch
 	$(JLCHECKSUM) $<
 	$(TAR) jxf $<
+	cd pcre-$(PCRE_VER) && patch -p1 < ../pcre-gcc49-compile.patch
 	touch -c $@
 pcre-$(PCRE_VER)/config.status: pcre-$(PCRE_VER)/configure
 	cd pcre-$(PCRE_VER) && \
@@ -510,56 +536,6 @@ check-pcre: pcre-$(PCRE_VER)/checked
 install-pcre: $(PCRE_OBJ_TARGET)
 
 
-<<<<<<< HEAD
-=======
-## Grisu floating-point printing library ##
-
-GRISU_OPTS = $(CXXFLAGS) -O3 -fvisibility=hidden $(fPIC)
-GRISU_OBJ_TARGET = $(build_shlibdir)/libgrisu.$(SHLIB_EXT)
-
-double-conversion-$(GRISU_VER).tar.gz:
-	$(JLDOWNLOAD) $@ http://double-conversion.googlecode.com/files/$@
-	touch -c $@
-double-conversion-$(GRISU_VER)/Makefile: double-conversion-$(GRISU_VER).tar.gz
-	$(JLCHECKSUM) $<
-	mkdir -p double-conversion-$(GRISU_VER) && \
-	$(TAR) -C double-conversion-$(GRISU_VER) --strip-components 1 -xf double-conversion-$(GRISU_VER).tar.gz
-	touch -c $@
-
-ifeq ($(USE_SYSTEM_GRISU), 0)
-$(GRISU_OBJ_TARGET): double-conversion-$(GRISU_VER)/Makefile
-	cd double-conversion-$(GRISU_VER) && \
-	$(CXX) -c $(GRISU_OPTS) -o src/bignum.o -Isrc src/bignum.cc && \
-	$(CXX) -c $(GRISU_OPTS) -o src/bignum-dtoa.o -Isrc src/bignum-dtoa.cc && \
-	$(CXX) -c $(GRISU_OPTS) -o src/cached-powers.o -Isrc src/cached-powers.cc && \
-	$(CXX) -c $(GRISU_OPTS) -o src/diy-fp.o -Isrc src/diy-fp.cc && \
-	$(CXX) -c $(GRISU_OPTS) -o src/double-conversion.o -Isrc src/double-conversion.cc && \
-	$(CXX) -c $(GRISU_OPTS) -o src/fast-dtoa.o -Isrc src/fast-dtoa.cc && \
-	$(CXX) -c $(GRISU_OPTS) -o src/fixed-dtoa.o -Isrc src/fixed-dtoa.cc && \
-	$(CXX) -c $(GRISU_OPTS) -o src/strtod.o -Isrc src/strtod.cc && \
-	$(CXX) -c $(GRISU_OPTS) -o src/libdouble-conversion.o -I.. -Isrc ../double_conversion_wrapper.cpp && \
-	$(CXX) $(GRISU_OPTS) src/*.o $(LDFLAGS) -shared -dead_strip -o $@ && \
-	$(INSTALL_NAME_CMD)libgrisu.$(SHLIB_EXT) $@
-else
-$(GRISU_OBJ_TARGET):
-	$(CXX) $(GRISU_OPTS) -I/usr/include/double-conversion double_conversion_wrapper.cpp -shared $(LDFLAGS) -o $@ -ldouble-conversion && \
-	$(INSTALL_NAME_CMD)libgrisu.$(SHLIB_EXT) $@
-endif
-
-clean-double-conversion:
-	-rm -f double-conversion-$(GRISU_VER)/src/*.o
-	-rm -f $(GRISU_OBJ_TARGET)
-distclean-double-conversion:
-	-rm -rf double-conversion-$(GRISU_VER).tar.gz double-conversion-$(GRISU_VER) $(GRISU_OBJ_TARGET)
-
-get-double-conversion: double-conversion-$(GRISU_VER).tar.gz
-configure-double-conversion: get-double-conversion
-compile-double-conversion: get-double-conversion
-check-double-conversion: compile-double-conversion
-install-double-conversion: $(GRISU_OBJ_TARGET)
-
-
->>>>>>> ac807db181d27b355a01974648119362a1be76ff
 ## openlibm ##
 
 OPENLIBM_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
@@ -639,20 +615,20 @@ compile-openspecfun: $(OPENSPECFUN_OBJ_SOURCE)
 check-openspecfun: compile-openspecfun
 install-openspecfun: $(OPENSPECFUN_OBJ_TARGET) 
 
-## LIBRANDOM ##
+## DSFMT ##
 
-LIBRANDOM_OBJ_TARGET = $(build_shlibdir)/librandom.$(SHLIB_EXT)
-LIBRANDOM_OBJ_SOURCE = librandom.$(SHLIB_EXT)
+DSFMT_OBJ_TARGET = $(build_shlibdir)/libdSFMT.$(SHLIB_EXT)
+DSFMT_OBJ_SOURCE = dsfmt-$(DSFMT_VER)/libdSFMT.$(SHLIB_EXT)
 
-LIBRANDOM_CFLAGS = $(CFLAGS) -DNDEBUG -DDSFMT_MEXP=19937 $(fPIC) -DDSFMT_DO_NOT_USE_OLD_NAMES
+DSFMT_CFLAGS = $(CFLAGS) -DNDEBUG -DDSFMT_MEXP=19937 $(fPIC) -DDSFMT_DO_NOT_USE_OLD_NAMES
 ifneq ($(USEMSVC), 1)
-LIBRANDOM_CFLAGS += -O3 -finline-functions -fomit-frame-pointer -fno-strict-aliasing \
+DSFMT_CFLAGS += -O3 -finline-functions -fomit-frame-pointer -fno-strict-aliasing \
 		--param max-inline-insns-single=1800 -Wmissing-prototypes -Wall  -std=c99 -shared
 else
-LIBRANDOM_CFLAGS += -Wl,-dll
+DSFMT_CFLAGS += -Wl,-dll
 endif
 ifeq ($(ARCH), x86_64)
-LIBRANDOM_CFLAGS += -msse2 -DHAVE_SSE2
+DSFMT_CFLAGS += -msse2 -DHAVE_SSE2
 endif
 
 dsfmt-$(DSFMT_VER).tar.gz:
@@ -664,33 +640,39 @@ dsfmt-$(DSFMT_VER)/config.status: dsfmt-$(DSFMT_VER).tar.gz
 	$(TAR) -C dsfmt-$(DSFMT_VER) --strip-components 1 -xf dsfmt-$(DSFMT_VER).tar.gz && \
 	cd dsfmt-$(DSFMT_VER) && patch < ../dSFMT.h.patch && patch < ../dSFMT.c.patch
 	echo 1 > $@
-$(LIBRANDOM_OBJ_SOURCE): dsfmt-$(DSFMT_VER)/config.status
-	$(CC) $(CPPFLAGS) $(LIBRANDOM_CFLAGS) $(LDFLAGS) dsfmt-$(DSFMT_VER)/dSFMT.c -o librandom.$(SHLIB_EXT) && \
-	$(INSTALL_NAME_CMD)librandom.$(SHLIB_EXT) librandom.$(SHLIB_EXT)
-$(LIBRANDOM_OBJ_TARGET): $(LIBRANDOM_OBJ_SOURCE)
-	cp $< $@
+$(DSFMT_OBJ_SOURCE): dsfmt-$(DSFMT_VER)/config.status
+	cd dsfmt-$(DSFMT_VER) && \
+	$(CC) $(CPPFLAGS) $(DSFMT_CFLAGS) $(LDFLAGS) dSFMT.c -o libdSFMT.$(SHLIB_EXT) && \
+	cp dSFMT.h $(build_includedir)
+$(DSFMT_OBJ_TARGET): $(DSFMT_OBJ_SOURCE)
+	cp $< $@ && \
+	$(INSTALL_NAME_CMD)libdSFMT.$(SHLIB_EXT) $(DSFMT_OBJ_TARGET)
 
-clean-random:
-	-rm -f librandom.$(SHLIB_EXT)
-distclean-random: clean-random
-	-rm -rf *.tar.gz dsfmt-$(DSFMT_VER)
+clean-dsfmt:
+	-rm -f dsfmt-$(DSFMT_VER)/libdSFMT.$(SHLIB_EXT)
+distclean-dsfmt: clean-dsfmt
+	-rm -rf dsfmt*.tar.gz dsfmt-$(DSFMT_VER)
 
-get-random: dsfmt-$(DSFMT_VER).tar.gz
-configure-random: dsfmt-$(DSFMT_VER)/config.status
-compile-random: $(LIBRANDOM_OBJ_SOURCE)
-check-random: compile-random
-install-random: $(LIBRANDOM_OBJ_TARGET)
+get-dsfmt: dsfmt-$(DSFMT_VER).tar.gz
+configure-dsfmt: dsfmt-$(DSFMT_VER)/config.status
+compile-dsfmt: $(DSFMT_OBJ_SOURCE)
+check-dsfmt: compile-dsfmt
+install-dsfmt: $(DSFMT_OBJ_TARGET)
 
 
 ## Rmath ##
+
+ifeq ($(USE_SYSTEM_DSFMT),0)
+DSFMT_FAKE_TARGET = $(DSFMT_OBJ_TARGET)
+endif
 
 RMATH_OBJ_TARGET = $(build_shlibdir)/libRmath-julia.$(SHLIB_EXT)
 RMATH_OBJ_SOURCE = Rmath/src/libRmath-julia.$(SHLIB_EXT)
 
 RMATH_FLAGS += CC="$(CC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) \
 			   OS="$(OS)" ARCH="$(ARCH)" \
-			   USE_LIBRANDOM=1 LIBRANDOM_PATH="$(build_shlibdir)" \
-			   DSFMT_PATH=$(JULIAHOME)/deps/dsfmt-$(DSFMT_VER)
+			   USE_DSFMT=1 DSFMT_libdir="$(build_shlibdir)" \
+			   DSFMT_includedir="$(build_includedir)"
 
 Rmath/Make.inc:
 	(cd .. && git submodule init && git submodule update)
@@ -700,7 +682,7 @@ endif
 ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/Rmath ] && echo exists ))
 $(RMATH_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/Rmath/HEAD
 endif
-$(RMATH_OBJ_SOURCE): Rmath/Make.inc $(LIBRANDOM_OBJ_TARGET)
+$(RMATH_OBJ_SOURCE): Rmath/Make.inc $(DSFMT_FAKE_TARGET)
 	$(MAKE) -C Rmath/src $(RMATH_FLAGS) $(MAKE_COMMON)
 	touch -c $@
 $(RMATH_OBJ_TARGET): $(RMATH_OBJ_SOURCE) | $(build_shlibdir)
@@ -781,6 +763,13 @@ ifeq ($(OPENBLAS_DEBUG), 1)
 OPENBLAS_BUILD_OPTS += DEBUG=1
 endif
 
+# Allow disabling AVX for older binutils
+ifeq ($(OPENBLAS_NO_AVX), 1)
+OPENBLAS_BUILD_OPTS += NO_AVX=1 NO_AVX2=1
+else ifeq ($(OPENBLAS_NO_AVX2), 1)
+OPENBLAS_BUILD_OPTS += NO_AVX2=1
+endif
+
 openblas-$(OPENBLAS_VER).tar.gz:
 	$(JLDOWNLOAD) $@ https://github.com/xianyi/OpenBLAS/tarball/$(OPENBLAS_VER) 
 openblas-$(OPENBLAS_VER)/config.status: openblas-$(OPENBLAS_VER).tar.gz
@@ -790,10 +779,6 @@ endif
 	mkdir -p openblas-$(OPENBLAS_VER) && \
 	$(TAR) -C openblas-$(OPENBLAS_VER) --strip-components 1 -xf $<
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' openblas-$(OPENBLAS_VER)/Makefile.system
-ifneq ($(OPENBLAS_VER),develop)
-	patch openblas-$(OPENBLAS_VER)/exports/Makefile < openblas-exports-makefile.patch
-endif
-	cd openblas-$(OPENBLAS_VER) && patch -p1 < ../openblas-dllinit-safe.patch
 	echo 1 > $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/config.status
 	$(MAKE) -C openblas-$(OPENBLAS_VER) $(OPENBLAS_BUILD_OPTS) || (echo "*** Clean the OpenBLAS build with 'make -C deps clean-openblas'. Rebuild with 'make OPENBLAS_USE_THREAD=0 if OpenBLAS had trouble linking libpthread.so, and with 'make OPENBLAS_TARGET_ARCH=NEHALEM' if there were errors building SandyBridge support. Both these options can also be used simultaneously. ***" && false)
@@ -811,7 +796,7 @@ distclean-openblas:
 	-rm -rf openblas-$(OPENBLAS_VER).tar.gz openblas-$(OPENBLAS_VER)
 
 get-openblas: openblas-$(OPENBLAS_VER).tar.gz
-configure-openblas: get-openblas
+configure-openblas: openblas-$(OPENBLAS_VER)/config.status
 compile-openblas: $(OPENBLAS_OBJ_SOURCE)
 check-openblas: compile-openblas
 install-openblas: $(OPENBLAS_OBJ_TARGET)
@@ -957,7 +942,11 @@ install-lapack: $(LAPACK_OBJ_TARGET)
 ARPACK_FFLAGS = $(GFORTBLAS_FFLAGS)
 
 ifeq ($(USE_BLAS64), 1)
+ifeq ($(USEIFC),1)
+ARPACK_FFLAGS += -i8
+else
 ARPACK_FFLAGS += -fdefault-integer-8
+endif
 endif
 
 ifeq ($(OS),WINNT)
@@ -1141,16 +1130,19 @@ clean-fftw-single:
 clean-fftw-double:
 	-$(MAKE) -C fftw-$(FFTW_VER)-double clean
 	-rm -f $(FFTW_DOUBLE_OBJ_TARGET)
-distclean-fftw:
-	-rm -rf fftw-$(FFTW_VER).tar.gz fftw-$(FFTW_VER)-single fftw-$(FFTW_VER)-double
+distclean-fftw: distclean-fftw-single distclean-fftw-double
+distclean-fftw-single:
+	-rm -rf fftw-$(FFTW_VER).tar.gz fftw-$(FFTW_VER)-single
+distclean-fftw-double:
+	-rm -rf fftw-$(FFTW_VER).tar.gz fftw-$(FFTW_VER)-double
 
 get-fftw: get-fftw-single get-fftw-double
 configure-fftw: configure-fftw-single configure-fftw-double
 compile-fftw: compile-fftw-single compile-fftw-double
 check-fftw: check-fftw-single check-fftw-double
 install-fftw: check-fftw-single check-fftw-double
-	$(MAKE) install-fftw-single
-	$(MAKE) install-fftw-double
+	@$(MAKE) -s install-fftw-single
+	@$(MAKE) -s install-fftw-double
 
 get-fftw-single: fftw-$(FFTW_VER).tar.gz
 configure-fftw-single: fftw-$(FFTW_VER)-single/config.status
@@ -1164,42 +1156,47 @@ compile-fftw-double: $(FFTW_DOUBLE_OBJ_TARGET)
 check-fftw-double: fftw-$(FFTW_VER)-double/checked
 install-fftw-double: $(FFTW_DOUBLE_OBJ_TARGET)
 
-## UTF8PROC ##
+## MOJIBAKE ##
 
-UTF8PROC_OBJ_SOURCE = utf8proc-v$(UTF8PROC_VER)/libutf8proc.a
-UTF8PROC_OBJ_LIB = $(build_libdir)/libutf8proc.a
-UTF8PROC_OBJ_HEADER = $(build_includedir)/utf8proc.h
-UTF8PROC_OBJ_TARGET = $(UTF8PROC_OBJ_LIB) $(UTF8PROC_OBJ_HEADER)
+MOJIBAKE_SRC_TARGET = libmojibake/libmojibake.a
+MOJIBAKE_OBJ_LIB    = $(build_libdir)/libmojibake.a
+MOJIBAKE_OBJ_HEADER = $(build_includedir)/mojibake.h
+MOJIBAKE_OBJ_TARGET = $(MOJIBAKE_OBJ_LIB) $(MOJIBAKE_OBJ_HEADER)
 
-utf8proc-v$(UTF8PROC_VER).tar.gz:
-	$(JLDOWNLOAD) $@ http://www.public-software-group.org/pub/projects/utf8proc/v$(UTF8PROC_VER)/$@
 
-utf8proc-v$(UTF8PROC_VER)/Makefile: utf8proc-v$(UTF8PROC_VER).tar.gz
-	$(JLCHECKSUM) $<
-	$(TAR) -xzf $<
-	patch $@ < utf8proc_Makefile.patch
-	cd utf8proc-v$(UTF8PROC_VER) && patch < ../utf8proc_msvc.patch
+libmojibake/Makefile:
+	(cd .. && git submodule init && git submodule update)
+ifeq (exists, $(shell [ -d libmojibake/.git ] && echo exists ))
+$(MOJIBAKE_SRC_TARGET): libmojibake/.git/HEAD
+endif
+ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/libmojibake ] && echo exists ))
+$(MOJIBAKE_SRC_TARGET): $(JULIAHOME)/.git/modules/deps/libmojibake/HEAD
+endif
+$(MOJIBAKE_SRC_TARGET): libmojibake/Makefile
+	$(MAKE) -C libmojibake cc="$(CC) -O2 -std=c99 $(fPIC)" AR="$(AR)" libmojibake.a
 	touch -c $@
+libmojibake/checked: $(MOJIBAKE_SRC_TARGET)
+ifeq ($(OS),$(BUILD_OS))
+	-$(MAKE) -C libmojibake check
+endif
+	echo 1 > $@
 
-$(UTF8PROC_OBJ_SOURCE): utf8proc-v$(UTF8PROC_VER)/Makefile
-	$(MAKE) -C utf8proc-v$(UTF8PROC_VER) cc="$(CC) -O2 -std=c99 $(fPIC)" AR="$(AR)" libutf8proc.a
-
-$(UTF8PROC_OBJ_LIB): $(UTF8PROC_OBJ_SOURCE)
+$(MOJIBAKE_OBJ_LIB): $(MOJIBAKE_SRC_TARGET)
 	cp -f $< $@
 
-$(UTF8PROC_OBJ_HEADER): utf8proc-v$(UTF8PROC_VER)/Makefile
-	cp -f utf8proc-v$(UTF8PROC_VER)/utf8proc.h $@
+$(MOJIBAKE_OBJ_HEADER): libmojibake/Makefile
+	cp -f libmojibake/mojibake.h $@
 
-clean-utf8proc:
-	-$(MAKE) -C utf8proc-v$(UTF8PROC_VER) clean
-distclean-utf8proc: clean-utf8proc
-	-rm -rf utf8proc-v$(UTF8PROC_VER).tar.gz utf8proc-v$(UTF8PROC_VER)
+clean-mojibake:
+	-$(MAKE) -C libmojibake clean
+	-rm -rf $(build_libdir)/libmojibake.a $(build_includedir)/mojibake.h
+distclean-mojibake: clean-mojibake
 
-get-utf8proc: utf8proc-v$(UTF8PROC_VER).tar.gz
-configure-utf8proc: get-utf8proc
-compile-utf8proc: $(UTF8PROC_OBJ_SOURCE)
-check-utf8proc: 
-install-utf8proc: $(UTF8PROC_OBJ_TARGET)
+get-mojibake: libmojibake/Makefile
+configure-mojibake: get-mojibake
+compile-mojibake: $(MOJIBAKE_SRC_TARGET)
+check-mojibake: libmojibake/checked
+install-mojibake: $(MOJIBAKE_OBJ_TARGET)
 
 ## SUITESPARSE ##
 
@@ -1546,11 +1543,11 @@ PATCHELF_TARGET = $(build_bindir)/patchelf
 compile-patchelf: install-patchelf
 install-patchelf: $(PATCHELF_TARGET)
 
-patchelf-$(PATCHELF_VER).tar.bz2:
-	$(JLDOWNLOAD) $@ http://hydra.nixos.org/build/1524660/download/2/$@
-patchelf-$(PATCHELF_VER)/configure: patchelf-$(PATCHELF_VER).tar.bz2
+patchelf-$(PATCHELF_VER).tar.gz:
+	$(JLDOWNLOAD) $@ https://ia601003.us.archive.org/29/items/julialang/mirror/patchelf-$(PATCHELF_VER).tar.gz
+patchelf-$(PATCHELF_VER)/configure: patchelf-$(PATCHELF_VER).tar.gz
 	$(JLCHECKSUM) $<
-	$(TAR) jxf $<
+	$(TAR) zxf $<
 	touch -c $@
 patchelf-$(PATCHELF_VER)/config.status: patchelf-$(PATCHELF_VER)/configure
 	cd patchelf-$(PATCHELF_VER) && \
@@ -1573,9 +1570,9 @@ clean-patchelf:
 	-$(MAKE) -C patchelf-$(PATCHELF_VER) clean
 	-rm -f $(PATCHELF_OBJ_TARGET)
 distclean-patchelf:
-	-rm -rf patchelf-$(PATCHELF_VER).tar.bz2 patchelf-$(PATCHELF_VER)
+	-rm -rf patchelf-$(PATCHELF_VER).tar.gz patchelf-$(PATCHELF_VER)
 
-get-patchelf: patchelf-$(PATCHELF_VER).tar.bz2
+get-patchelf: patchelf-$(PATCHELF_VER).tar.gz
 configure-patchelf: patchelf-$(PATCHELF_VER)/config.status
 compile-patchelf: $(PATCHELF_SOURCE)
 check-patchelf: patchelf-$(PATCHELF_VER)/checked
@@ -1621,4 +1618,4 @@ install-git: $(GIT_TARGET)
 
 .PHONY: default compile install cleanall distcleanall \
 	get-* configure-* compile-* check-* install-* \
-	clean-* distclean-*
+	clean-* distclean-* reinstall-*
