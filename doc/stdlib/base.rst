@@ -3160,7 +3160,21 @@ Mathematical Functions
 
 .. function:: gcdx(x,y)
 
-   Greatest common (positive) divisor, also returning integer coefficients ``u`` and ``v`` that solve ``ux+vy == gcd(x,y)``
+   Computes the greatest common (positive) divisor of ``x`` and ``y`` and their Bézout coefficients, i.e. the integer coefficients ``u`` and ``v`` that satisfy :math:`ux+vy = d = gcd(x,y)`.
+
+   .. doctest::
+
+      julia> gcdx(12, 42)
+      (6,-3,1)
+
+   .. doctest::
+
+      julia> gcdx(240, 46)
+      (2,-9,47)
+
+   .. note::
+
+      Bézout coefficients are *not* uniquely defined. ``gcdx`` returns the minimal Bézout coefficients that are computed by the extended Euclid algorithm. (Ref: D. Knuth, TAoCP, 2/e, p. 325, Algorithm X.) These coefficients ``u`` and ``v`` are minimal in the sense that :math:`|u| < |\frac y d` and :math:`|v| < |\frac x d`. Furthermore, the signs of ``u`` and ``v`` are chosen so that ``d`` is positive.
 
 .. function:: ispow2(n) -> Bool
 
