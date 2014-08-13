@@ -257,6 +257,12 @@ end
 
 # `methodswith` -- shows a list of methods using the type given
 
+function type_close_enough(x::ANY, t::ANY)
+    x == t && return true
+    return (isa(x,DataType) && isa(t,DataType) && x.name === t.name &&
+            !isleaftype(t) && x <: t)
+end
+
 function methodswith(t::Type, m::Module, showparents::Bool=false)
     meths = Method[]
     for nm in names(m)
@@ -264,11 +270,11 @@ function methodswith(t::Type, m::Module, showparents::Bool=false)
            mt = eval(m, nm)
            d = mt.env.defs
            while !is(d,())
-               if any(map(x -> begin
-                                   x == t || (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
-                                                            (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
-                                   x != Any && x != ANY
-                               end, d.sig))
+               if any(x -> (type_close_enough(x, t) ||
+                            (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
+                             (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
+                            x != Any && x != ANY),
+                      d.sig)
                    push!(meths, d)
                end
                d = d.next
@@ -286,7 +292,7 @@ function methodswith(t::Type, showparents::Bool=false)
         if isdefined(mainmod,nm)
             mod = eval(mainmod, nm)
             if isa(mod, Module)
-                meths = [meths, methodswith(t, mod, showparents)]
+                append!(meths, methodswith(t, mod, showparents))
             end
         end
     end
