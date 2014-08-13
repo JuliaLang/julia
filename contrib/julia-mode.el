@@ -272,9 +272,7 @@ Do not move back beyond MIN."
     ;; Point is now at the beginning of indentation, restore it
     ;; to its original position (relative to indentation).
     (when (>= point-offset 0)
-      (move-to-column (+ (current-indentation) point-offset)))
-    (when (julia-at-keyword julia-block-end-keywords)
-      (forward-word 1))))
+      (move-to-column (+ (current-indentation) point-offset)))))
 
 (defalias 'julia-mode-prog-mode
   (if (fboundp 'prog-mode)
