@@ -239,7 +239,7 @@
 	  ((pair? p)
 	   (if (eq? (car p) '-/)
 	       '()
-	       (unique (apply append (map patargs- (to-proper (cdr p)))))))
+	       (delete-duplicates (apply append (map patargs- (to-proper (cdr p)))))))
 	  
 	  (else '())))
   (define (patargs p)
