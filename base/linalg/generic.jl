@@ -151,6 +151,8 @@ function vecnorm(itr, p::Real=2)
 end
 vecnorm(x::Number, p::Real=2) = p == 0 ? real(x==0 ? zero(x) : one(x)) : abs(x)
 
+normfro(x::AbstractMatrix) = vecnorm(x)
+
 norm(x::AbstractVector, p::Real=2) = vecnorm(x, p)
 
 function norm1{T}(A::AbstractMatrix{T})

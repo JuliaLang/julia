@@ -233,7 +233,7 @@ Library improvements
 
       * New `vecnorm(itr, p=2)` function that computes the norm of
         any iterable collection of numbers as if it were a vector of
-        the same length.  This generalizes and replaces `normfro` ([#6057]),
+        the same length.  This generalizes `normfro` ([#6057]),
         and `norm` is now type-stable ([#6056]).
 
       * New `UniformScaling` matrix type and identity `I` constant ([#5810]).
