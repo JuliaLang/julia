@@ -3814,7 +3814,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         }
         else if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym) {
             lno = jl_unbox_long(jl_exprarg(stmt, 0));
-            MDNode *scope = (MDNode*)SP;
+            MDNode *dfil = NULL;
             if (jl_array_dim0(((jl_expr_t*)stmt)->args) > 1) {
                 jl_value_t *a1 = jl_exprarg(stmt,1);
                 if (jl_is_symbol(a1)) {
@@ -3823,15 +3823,21 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
                     if(*file->name != '\0') {
                         std::map<jl_sym_t *, MDNode *>::iterator it = filescopes.find(file);
                         if (it != filescopes.end()) {
-                            scope = it->second;
+                            dfil = it->second;
                         } else {
-                            scope = filescopes[file] = dbuilder.createFile(file->name, ".");
+                            dfil = filescopes[file] = (MDNode*)dbuilder.createFile(file->name, ".");
                         }
                     }
                 }
             }
-            if (debug_enabled)
+            if (debug_enabled) {
+                MDNode *scope;
+                if (dfil == NULL)
+                    scope = SP;
+                else
+                    scope = (MDNode*)dbuilder.createLexicalBlockFile(SP,DIFile(dfil));
                 builder.SetCurrentDebugLocation(DebugLoc::get(lno, 1, scope, NULL));
+            }
             if (do_coverage)
                 coverageVisitLine(filename, lno);
             ctx.lineno = lno;
