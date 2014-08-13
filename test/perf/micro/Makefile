@@ -106,7 +106,7 @@ benchmarks/lua.csv: perf.lua
 	for t in 1 2 3 4 5; do gsl-shell $<; done >$@
 
 benchmarks/java.csv: java/src/main/java/PerfBLAS.java
-	for t in 1 2 3 4 5; do cd java; mvn -q exec:java; done >$@
+	cd java; sh setup.sh; for t in 1 2 3 4 5; do mvn -q exec:java; done >../$@
 
 BENCHMARKS = \
 	benchmarks/c.csv \
