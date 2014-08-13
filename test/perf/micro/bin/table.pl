@@ -33,7 +33,7 @@ our $stata_ver = `stata -q -b version && grep version stata.log | cut -f2 -d" " 
 our $java_ver = `java -version 2>&1 |grep "version" | cut -f 3 -d " " | cut -c 2-9`;
 
 our %systems = (
-  "fortran"    => ["Fortran"     , "GCC $fortran_ver" ],
+  "fortran"    => ["Fortran"     , "gcc $fortran_ver" ],
   "julia"      => ["Julia"       , $julia_ver  ],
   "python"     => ["Python"      , $python_ver ],
   "matlab"     => ["Matlab"      , "R$matlab_ver" ],
