@@ -217,7 +217,7 @@ endif
 endif
 
 LLVM_CXXFLAGS = $(CXXFLAGS)
-LLVM_CPPFLAGS =
+LLVM_CPPFLAGS = $(CPPFLAGS)
 LLVM_LDFLAGS = $(LDFLAGS)
 LLVM_TARGET_FLAGS= --enable-targets=host
 LLVM_FLAGS += --disable-profiling --enable-shared --enable-static $(LLVM_TARGET_FLAGS) --disable-bindings --disable-docs
@@ -289,8 +289,14 @@ LLVM_LDFLAGS += -no_cpprt -lc++ -lc++abi
 endif
 endif
 
-LLVM_FLAGS += CPPFLAGS="$(CPPFLAGS) $(LLVM_CPPFLAGS)" LDFLAGS="$(LLVM_LDFLAGS)"
-LLVM_MFLAGS += CPPFLAGS="$(CPPFLAGS) $(LLVM_CPPFLAGS)" LDFLAGS="$(LLVM_LDFLAGS)"
+ifneq ($(LLVM_CPPFLAGS),)
+LLVM_FLAGS += CPPFLAGS="$(LLVM_CPPFLAGS)"
+LLVM_MFLAGS += CPPFLAGS="$(LLVM_CPPFLAGS)"
+endif
+ifneq ($(LLVM_LDFLAGS),)
+LLVM_FLAGS += LDFLAGS="$(LLVM_LDFLAGS)"
+LLVM_MFLAGS += LDFLAGS="$(LLVM_LDFLAGS)"
+endif
 
 ifneq ($(LLVM_CLANG_TAR),)
 $(LLVM_CLANG_TAR):
