@@ -236,7 +236,7 @@ function process_options(args::Vector{UTF8String})
             addprocs(np)
         elseif args[i]=="--machinefile"
             i+=1
-            machines = split(readall(args[i]), '\n', false)
+            machines = split(readall(args[i]), '\n'; keep=false)
             addprocs(machines)
         elseif args[i]=="-v" || args[i]=="--version"
             println("julia version ", VERSION)
