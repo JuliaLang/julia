@@ -1,8 +1,9 @@
+(define (quoted? e) (memq (car e) '(quote top line break inert)))
+
 ;; for debugging, display x and return it
 (define (prn x)
-  (with-output-to *stderr*
-		  (display x) (newline))
-  x)
+  (display x (current-error-port))
+  (newline))
 
 ;; return the mapping for `elt` in `alst`, or `default` if not found
 (define (lookup elt alst default)
@@ -45,7 +46,7 @@
 		(cdr expr)))))
 
 ;; find all subexprs satisfying `p`, applying `key` to each one
-(define (expr-find-all p expr (key: identity))
+(define (expr-find-all p expr key)
   (let ((found (if (p expr)
 		   (list (key expr))
 		   '())))
@@ -53,7 +54,7 @@
 	found
 	(apply nconc
 	       found
-	       (map (lambda (x) (expr-find-all p x key: key))
+	       (map (lambda (x) (expr-find-all p x key))
 		    (cdr expr))))))
 
 (define (butlast lst)
@@ -61,24 +62,19 @@
       '()
       (cons (car lst) (butlast (cdr lst)))))
 
-(define (last lst)
-  (if (null? (cdr lst))
-      (car lst)
-      (last (cdr lst))))
-
 (define *gensyms* '())
 (define *current-gensyms* '())
 (define *gensy-counter* 1)
 (define (gensy)
   (if (null? *current-gensyms*)
-      (let ((g (symbol (string "#s" *gensy-counter*))))
+      (let ((g (symbol (str "#s" *gensy-counter*))))
 	(set! *gensy-counter* (+ *gensy-counter* 1))
 	(set! *gensyms* (cons g *gensyms*))
 	g)
       (begin0 (car *current-gensyms*)
 	      (set! *current-gensyms* (cdr *current-gensyms*)))))
 (define (named-gensy name)
-  (let ((g (symbol (string "#" *gensy-counter* "#" name))))
+  (let ((g (symbol (str "#" *gensy-counter* "#" name))))
     (set! *gensy-counter* (+ *gensy-counter* 1))
     g))
 (define (reset-gensyms)

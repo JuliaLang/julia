@@ -1,5 +1,3 @@
-(define (quoted? e) (memq (car e) '(quote top line break inert)))
-
 (define (lam:args x) (cadr x))
 (define (lam:vars x) (llist-vars (lam:args x)))
 (define (lam:vinfo x) (caddr x))
@@ -19,60 +17,61 @@
 	     (fill-missing-argname a)))
        l))
 
-(define (deparse-arglist l (sep ",")) (string.join (map deparse l) sep))
+(define (deparse-arglist l . sep)
+  (string-join (map deparse l) (if (pair? sep) (car sep) ",")))
 
 (define (deparse e)
-  (cond ((or (symbol? e) (number? e)) (string e))
+  (cond ((or (symbol? e) (number? e)) (str e))
 	((eq? e #t) "true")
 	((eq? e #f) "false")
 	((eq? (typeof e) 'julia_value)
-	 (let ((s (string e)))
-	   (if (string.find s "#<julia: ")
+	 (let ((s (str e)))
+	   (if (string-contains s "#<julia: ")
 	       ;; successfully printed as a julia value
 	       (string.sub s 9 (string.dec s (length s)))
 	       s)))
-	((atom? e) (string e))
+	((atom? e) (str e))
 	((eq? (car e) '|.|)
-	 (string (deparse (cadr e)) '|.|
-		 (if (and (pair? (caddr e)) (eq? (caaddr e) 'quote))
-		     (deparse (cadr (caddr e)))
-		     (string #\( (deparse (caddr e)) #\)))))
+	 (str (deparse (cadr e)) '|.|
+	      (if (and (pair? (caddr e)) (eq? (caaddr e) 'quote))
+		  (deparse (cadr (caddr e)))
+		  (str #\( (deparse (caddr e)) #\)))))
 	((memq (car e) '(... |'| |.'|))
-	 (string (deparse (cadr e)) (car e)))
+	 (str (deparse (cadr e)) (car e)))
 	((syntactic-op? (car e))
-	 (string (deparse (cadr e)) (car e) (deparse (caddr e))))
+	 (str (deparse (cadr e)) (car e) (deparse (caddr e))))
 	((memq (car e) '($ &))
-	 (string (car e) (deparse (cadr e))))
+	 (str (car e) (deparse (cadr e))))
 	((eq? (car e) '|::|)
 	 (if (length> e 2)
-	     (string (deparse (cadr e)) (car e) (deparse (caddr e)))
-	     (string (car e) (deparse (cadr e)))))
+	     (str (deparse (cadr e)) (car e) (deparse (caddr e)))
+	     (str (car e) (deparse (cadr e)))))
 	(else (case (car e)
 		((tuple)
-		 (string #\( (deparse-arglist (cdr e))
-			 (if (length= e 2) #\, "")
-			 #\)))
-		((cell1d) (string #\{ (deparse-arglist (cdr e)) #\}))
-		((call)   (string (deparse (cadr e)) #\( (deparse-arglist (cddr e)) #\)))
-		((ref)    (string (deparse (cadr e)) #\[ (deparse-arglist (cddr e)) #\]))
-		((curly)  (string (deparse (cadr e)) #\{ (deparse-arglist (cddr e)) #\}))
-		((quote)  (string ":(" (deparse (cadr e)) ")"))
-		((vcat)   (string #\[ (deparse-arglist (cdr e)) #\]))
-		((hcat)   (string #\[ (deparse-arglist (cdr e) " ") #\]))
+		 (str #\( (deparse-arglist (cdr e))
+		      (if (length= e 2) #\, "")
+		      #\)))
+		((cell1d) (str #\{ (deparse-arglist (cdr e)) #\}))
+		((call)   (str (deparse (cadr e)) #\( (deparse-arglist (cddr e)) #\)))
+		((ref)    (str (deparse (cadr e)) #\[ (deparse-arglist (cddr e)) #\]))
+		((curly)  (str (deparse (cadr e)) #\{ (deparse-arglist (cddr e)) #\}))
+		((quote)  (str ":(" (deparse (cadr e)) ")"))
+		((vcat)   (str #\[ (deparse-arglist (cdr e)) #\]))
+		((hcat)   (str #\[ (deparse-arglist (cdr e) " ") #\]))
 		((global local const)
-		 (string (car e) " " (deparse (cadr e))))
+		 (str (car e) " " (deparse (cadr e))))
 		((:)
-		 (string (deparse (cadr e)) ': (deparse (caddr e))
-			 (if (length> e 3)
-			     (string ': (deparse (cadddr e)))
-			     "")))
+		 (str (deparse (cadr e)) ': (deparse (caddr e))
+		      (if (length> e 3)
+			  (str ': (deparse (cadddr e)))
+			  "")))
 		((comparison) (apply string (map deparse (cdr e))))
-		((in) (string (deparse (cadr e)) " in " (deparse (caddr e))))
+		((in) (str (deparse (cadr e)) " in " (deparse (caddr e))))
 		(else
-		 (string e))))))
+		 (str e))))))
 
 (define (bad-formal-argument v)
-  (error (string #\" (deparse v) #\" " is not a valid function argument name")))
+  (error (str #\" (deparse v) #\" " is not a valid function argument name")))
 
 (define (arg-name v)
   (cond ((and (symbol? v) (not (eq? v 'true)) (not (eq? v 'false)))
@@ -199,7 +198,7 @@
 	(else
 	 (expand-update-operator- op lhs rhs declT))))
 
-(define (dotop? o) (and (symbol? o) (eqv? (string.char (string o) 0) #\.)))
+(define (dotop? o) (and (symbol? o) (eqv? (string-ref (str o) 0) #\.)))
 
 (define (partially-expand-ref e)
   (let ((a    (cadr e))
@@ -451,7 +450,7 @@
      (if (not (or (sym-ref? name)
 		  (and (pair? name) (eq? (car name) 'kw)
 		       (sym-ref? (cadr name)))))
-	 (error (string "invalid method name \"" (deparse name) "\"")))
+	 (error (str "invalid method name \"" (deparse name) "\"")))
      (let* ((types (llist-types argl))
 	    (body  (method-lambda-expr argl body)))
        (if (null? sparams)
@@ -516,11 +515,11 @@
 	 (keyword-sparam-names
 	  (map (lambda (s) (if (symbol? s) s (cadr s))) keyword-sparams)))
     (let ((kw (gensy)) (i (gensy)) (ii (gensy)) (elt (gensy)) (rkw (gensy))
-	  (mangled (symbol (string "__"
-				   (undot-name name)
-				   "#"
-				   (string.sub (string (gensym)) 1)
-				   "__")))
+	  (mangled (symbol (str "__"
+				(undot-name name)
+				"#"
+				(string.sub (str (gensym)) 1)
+				"__")))
 	  (flags (map (lambda (x) (gensy)) vals)))
       `(block
 	;; call with keyword args pre-sorted - original method code goes here
@@ -829,7 +828,7 @@
 		     defs)))
      (for-each (lambda (v)
 		 (if (not (symbol? v))
-		     (error (string "field name \"" (deparse v) "\" is not a symbol"))))
+		     (error (str "field name \"" (deparse v) "\" is not a symbol"))))
 	       field-names)
      (if (null? params)
 	 `(block
@@ -1096,7 +1095,7 @@
        (cond ((and (pair? (cadr e))
 		   (eq? (car (cadr e)) 'call)
 		   (symbol? (cadr (cadr e))))
-	      `(macro ,(symbol (string #\@ (cadr (cadr e))))
+	      `(macro ,(symbol (str #\@ (cadr (cadr e))))
 		 ,(expand-binding-forms
 		   `(-> (tuple ,@(cddr (cadr e)))
 			,(caddr e)))))
@@ -1337,7 +1336,7 @@
 ; local x, y=2, z => local x;local y;local z;y = 2
 (define (expand-decls what binds)
   (if (not (list? binds))
-      (error (string "invalid \"" what "\" declaration")))
+      (error (str "invalid \"" what "\" declaration")))
   (let loop ((b       binds)
 	     (vars    '())
 	     (assigns '()))
@@ -1361,7 +1360,7 @@
 		((symbol? x)
 		 (loop (cdr b) (cons x vars) assigns))
 		(else
-		 (error (string "invalid syntax in \"" what "\" declaration"))))))))
+		 (error (str "invalid syntax in \"" what "\" declaration"))))))))
 
 (define (make-assignment l r) `(= ,l ,r))
 (define (assignment? e) (and (pair? e) (eq? (car e) '=)))
@@ -1436,11 +1435,11 @@
 	(if (and (pair? (car invalid)) (eq? 'parameters (caar invalid)))
 	    (error "more than one semicolon in argument list")
 	    (cond ((symbol? (car invalid))
-		   (error (string "keyword argument \"" (car invalid) "\" needs a default value")))
+		   (error (str "keyword argument \"" (car invalid) "\" needs a default value")))
 		  (else
-		   (error (string "invalid keyword argument syntax \""
-				  (deparse (car invalid))
-				  "\" (expected assignment)"))))))))
+		   (error (str "invalid keyword argument syntax \""
+			       (deparse (car invalid))
+			       "\" (expected assignment)"))))))))
 
 (define (lower-kw-call f kw pa)
   (check-kw-args kw)
@@ -1449,7 +1448,7 @@
    (let ((keyargs (apply append
 			 (map (lambda (a)
 				(if (not (symbol? (cadr a)))
-				    (error (string "keyword argument is not a symbol: \""
+				    (error (str "keyword argument is not a symbol: \""
 						   (deparse (cadr a)) "\"")))
 				(if (vararg? (caddr a))
 				    (error "splicing with \"...\" cannot be used for a keyword argument value"))
@@ -1504,8 +1503,8 @@
 (define (lower-update-op e)
   (expand-forms
    (expand-update-operator
-    (let ((str (string (car e))))
-      (symbol (string.sub str 0 (- (length str) 1))))
+    (let ((st (str (car e))))
+      (symbol (string.sub st 0 (- (length st) 1))))
     (cadr e)
     (caddr e))))
 
@@ -1769,7 +1768,7 @@
 			,.(map (lambda (x) (expand-forms (cadr  x))) args))
 		  (call (top tuple)
 			,.(map (lambda (x) (expand-forms (caddr x))) args)))
-	   (error (string "invalid \"typed_dict\" syntax " (deparse atypes))))))
+	   (error (str "invalid \"typed_dict\" syntax " (deparse atypes))))))
 
    'cell1d
    (lambda (e)
@@ -2238,11 +2237,11 @@
 (define *lff-line* 0)
 (define (to-LFF e)
   (set! *lff-line* 0)
-  (with-exception-catcher
+  (with-exception-handler
    (lambda (e)
      (if (and (> *lff-line* 0) (pair? e) (eq? (car e) 'error))
 	 (let ((msg (cadr e)))
-	   (raise `(error ,(string msg " at line " *lff-line*))))
+	   (raise `(error ,(str msg " at line " *lff-line*))))
 	 (raise e)))
    (lambda () (to-blk (to-lff e #t #t)))))
 
@@ -2294,7 +2293,7 @@
 	 (let ((assigned
 		;; vars assigned in each arg
 		;; start with cddr since each arg only considers subsequent ones
-		(map (lambda (x) (expr-find-all assignment-like? x key: cadr))
+		(map (lambda (x) (expr-find-all assignment-like? x cadr))
 		     (cddr e))))
 	   (if (every null? assigned)
 	       ;; no assignments
@@ -2329,7 +2328,7 @@
 	 (if (or (not (symbol? (cadr e)))
 		 (eq? (cadr e) 'true)
 		 (eq? (cadr e) 'false))
-	     (error (string "invalid assignment location \"" (deparse (cadr e)) "\"")))
+	     (error (str "invalid assignment location \"" (deparse (cadr e)) "\"")))
 	 (let ((LHS (cadr e))
 	       (RHS (caddr e)))
 	   (cond ((not dest)
@@ -2467,7 +2466,7 @@
 	
 	((local global)
 	 (if dest
-	     (error (string "misplaced \"" (car e) "\" declaration")))
+	     (error (str "misplaced \"" (car e) "\" declaration")))
 	 (cons (to-blk (to-lff '(null) dest tail))
 	       (list e)))
 	
@@ -2529,7 +2528,7 @@ So far only the second case can actually occur.
 (define (check-dups locals)
   (if (and (pair? locals) (pair? (cdr locals)))
       (or (and (memq (car locals) (cdr locals))
-	       (error (string "local \"" (car locals) "\" declared twice")))
+	       (error (str "local \"" (car locals) "\" declared twice")))
 	  (check-dups (cdr locals))))
   locals)
 
@@ -2615,7 +2614,7 @@ So far only the second case can actually occur.
 			      `(,(car body) ,@(cddr body)))))
 	       (for-each (lambda (v)
 			   (if (memq v vars)
-			       (error (string "variable \"" v "\" declared both local and global"))))
+			       (error (str "variable \"" v "\" declared both local and global"))))
 			 glob)
 	       `(scope-block ,@lineno
 			     ;; place local decls after initial line node
@@ -2718,7 +2717,7 @@ So far only the second case can actually occur.
 		(r-s-b     (remove-scope-blocks body2 body2 argnames)))
 	   (for-each (lambda (v)
 		       (if (memq v argnames)
-			   (error (string "local \"" v "\" conflicts with argument"))))
+			   (error (str "local \"" v "\" conflicts with argument"))))
 		     (declared-local-vars body))
 	   `(lambda ,(cadr e)
 	      (locals ,@scope-block-vars)
@@ -2877,11 +2876,11 @@ So far only the second case can actually occur.
 	 (let ((vi (var-info-for (cadr e) env)))
 	   (if vi
 	       (begin (if (not (eq? (vinfo:type vi) 'Any))
-			  (error (string "multiple type declarations for \""
-					 (cadr e) "\"")))
+			  (error (str "multiple type declarations for \""
+				      (cadr e) "\"")))
 		      (if (assq (cadr e) captvars)
-			  (error (string "type of \"" (cadr e)
-					 "\" declared in inner scope")))
+			  (error (str "type of \"" (cadr e)
+				      "\" declared in inner scope")))
 		      (vinfo:set-type! vi (caddr e))
 		      '(null))
 	       `(call (top typeassert) ,(cadr e) ,(caddr e)))))
@@ -3067,7 +3066,7 @@ So far only the second case can actually occur.
 	    ((symboliclabel) (let ((m (get label-map (cadr e) #f)))
 			       (if m
 				   (if (get label-decl (cadr e) #f)
-				       (error (string "label \"" (cadr e) "\" defined multiple times"))
+				       (error (str "label \"" (cadr e) "\" defined multiple times"))
 				       (emit `(label ,m)))
 				   (let ((l (make&mark-label)))
 				     (put! label-map (cadr e) l)))
@@ -3076,9 +3075,9 @@ So far only the second case can actually occur.
 				  (target-level (get label-level (cadr e) #f)))
 			      (cond
 			       ((not target-level)
-				(error (string "label \"" (cadr e) "\" referenced but not defined")))
+				(error (str "label \"" (cadr e) "\" referenced but not defined")))
 			       ((> target-level handler-level)
-				(error (string "cannot goto label \"" (cadr e) "\" inside try/catch block")))
+				(error (str "cannot goto label \"" (cadr e) "\" inside try/catch block")))
 			       ((< target-level handler-level)
 				(emit `(leave ,(- handler-level target-level)))))
 			      (if m
@@ -3203,7 +3202,7 @@ So far only the second case can actually occur.
 	 (let ((form
                (apply invoke-julia-macro (cadr e) (cddr e))))
 	   (if (not form)
-	       (error (string "macro \"" (cadr e) "\" not defined")))
+	       (error (str "macro \"" (cadr e) "\" not defined")))
 	   (if (and (pair? form) (eq? (car form) 'error))
 	       (error (cadr form)))
 	   (let ((form (car form))

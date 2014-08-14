@@ -17,8 +17,16 @@
 
 (define string-append string)
 (define string-length string.count)
+(define string-index string.find)
+(define string-map string.map)
+(define (string-drop s n) (string.tail s n))
+(define string-ref string.char)
+(define (string-contains s1 s2) (string.find s1 s2))
 (define string->symbol symbol)
-(define (symbol->string s) (string s))
+(define symbol->string string)
+(define str string)
+(define char->integer fixnum)
+(define string-join string.join)
 
 (define (list->string l) (apply string l))
 (define (string->list s)
@@ -30,7 +38,9 @@
 (define (substring s start end)
   (string.sub s (string.inc s 0 start) (string.inc s 0 end)))
 
-(define (port? x) (iostream? x))
+(define port? iostream?)
+(define input-port? iostream?)
+(define output-port? iostream?)
 (define (read-char (s *input-stream*)) (io.getc s))
 (define (peek-char (s *input-stream*)) (io.peekc s))
 (define (write-char c (s *output-stream*)) (io.putc s c))
@@ -42,35 +52,41 @@
     (io.seek b 0)
     b))
 (define (open-output-string) (buffer))
-(define (open-string-output-port)
-  (let ((b (buffer)))
-    (values b (lambda () (io.tostring! b)))))
 
-(define (get-output-string b)
-  (let ((p (io.pos b)))
-    (io.seek b 0)
-    (let ((s (io.readall b)))
-      (io.seek b p)
-      (if (eof-object? s) "" s))))
+(define get-output-string io.tostring!)
 
 (define (open-input-file name) (file name :read))
 (define (open-output-file name) (file name :write :create))
+
+(define (call-with-output-string proc)
+  (let ((b (buffer)))
+    (proc b)
+    (io.tostring! b)))
 
 (define (current-input-port (p *input-stream*))
   (set! *input-stream* p))
 (define (current-output-port (p *output-stream*))
   (set! *output-stream* p))
+(define (current-error-port) *stderr*)
 
 (define (display x (port *output-stream*))
   (with-output-to port (princ x))
   #t)
 
-; --- gambit
-
-(define (with-exception-catcher hand thk)
+(define (with-exception-handler hand thk)
   (trycatch (thk)
 	    (lambda (e) (hand e))))
 
-(define make-table table)
-(define table-ref get)
-(define table-set! put!)
+(define make-hash-table table)
+(define hash-table-ref get)
+(define hash-table-set! put!)
+(define hash-table-exists? has?)
+(define hash-table-ref/default get)
+
+(define compare-strs compare)
+(define compare-nums compare)
+
+(define (last lst)
+  (if (null? (cdr lst))
+      (car lst)
+      (last (cdr lst))))

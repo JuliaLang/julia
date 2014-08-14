@@ -7,7 +7,7 @@
 ;; exception handler for parser. turns known errors into special expressions,
 ;; and prevents throwing an exception past a C caller.
 (define (parser-wrap thk)
-  (with-exception-catcher
+  (with-exception-handler
    (lambda (e)
      (if (and (pair? e) (eq? (car e) 'error))
 	 (let ((msg (cadr e))

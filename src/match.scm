@@ -138,7 +138,7 @@
 (define (apply-patterns plist expr)
   (cond ((vector? plist)
 	 (if (pair? expr)
-	     (let* ((relevant (table-ref (vector-ref plist 1) (car expr) '()))
+	     (let* ((relevant (hash-table-ref/default (vector-ref plist 1) (car expr) '()))
 		    (enew     (apply-patterns relevant expr)))
 	       (if (eq? enew expr)
 		   (apply-patterns (vector-ref plist 2) expr)
@@ -202,9 +202,9 @@
 		 expr)
 	    enew))))
 
-(define-macro (pattern-set . pats)
-  ; (pattern-lambda (x ...) ...) => x
-  (define (pl-head p) (car (cadr p)))
+(define (pl-head p) (car (cadr p)))
+
+(define (pattern-set-impl pats)
   (receive
    (pls others) (separate (lambda (x)
 			    (and (pair? x) (length= x 3)
@@ -213,14 +213,18 @@
 			  pats)
    (let ((heads (delete-duplicates (map pl-head pls)))
 	 (ht    (gensym)))
-     `(let ((,ht (make-table)))
+     `(let ((,ht (make-hash-table)))
 	,@(map (lambda (h)
-		 `(table-set! ,ht ',h (list
-				       ,@(filter (lambda (p)
-						   (eq? (pl-head p) h))
-						 pls))))
+		 `(hash-table-set! ,ht ',h (list
+					    ,@(filter (lambda (p)
+							(eq? (pl-head p) h))
+						      pls))))
 	       heads)
 	(vector 'pattern-set ,ht (list ,@others))))))
+
+(define-macro (pattern-set . pats)
+  ;; (pattern-lambda (x ...) ...) => x
+  (pattern-set-impl pats))
 
 (define (plambda-expansion pat expr expander args)
   (let ((m (match pat expr)))
@@ -229,21 +233,23 @@
 			     args))
 	#f)))
 
+(define (patargs- p)
+  (cond ((and (symbol? p)
+	      (not (memq p '(_ ...))))
+	 (list p))
+
+	((pair? p)
+	 (if (eq? (car p) '-/)
+	     '()
+	     (delete-duplicates (apply append (map patargs- (to-proper (cdr p)))))))
+
+	(else '())))
+
+(define (patargs p)
+  (cons '__ (patargs- p)))
+
 (define-macro (pattern-lambda pat body)
   ; given a pattern p, return the list of capturing variables it uses
-  (define (patargs- p)
-    (cond ((and (symbol? p)
-		(not (memq p '(_ ...))))
-	   (list p))
-	  
-	  ((pair? p)
-	   (if (eq? (car p) '-/)
-	       '()
-	       (delete-duplicates (apply append (map patargs- (to-proper (cdr p)))))))
-	  
-	  (else '())))
-  (define (patargs p)
-    (cons '__ (patargs- p)))
   (let* ((args (patargs pat))
 	 (expander `(lambda ,args ,body)))
     `(lambda (__ex__)
