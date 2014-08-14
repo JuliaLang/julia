@@ -130,16 +130,16 @@ Numeric Comparisons
 Standard comparison operations are defined for all the primitive numeric
 types:
 
-======== ========================
-Operator Name
-======== ========================
-``==``   equality
-``!=``   inequality
-``<``    less than
-``<=``   less than or equal to
-``>``    greater than
-``>=``   greater than or equal to
-======== ========================
+============= ========================
+Operator      Name
+============= ========================
+``==``        equality
+``!=`` ``≠``  inequality
+``<``         less than
+``<=`` ``≤``  less than or equal to
+``>``         greater than
+``>=`` ``≥``  greater than or equal to
+============= ========================
 
 Here are some simple examples:
 
@@ -377,8 +377,8 @@ Powers, logs and roots
 =================== ==============================================================================
 Function            Description
 =================== ==============================================================================
-``sqrt(x)``         the square root of ``x``
-``cbrt(x)``         the cube root of ``x``
+``sqrt(x)`` ``√x``  the square root of ``x``
+``cbrt(x)`` ``∛x``   the cube root of ``x``
 ``hypot(x,y)``      hypotenuse of right-angled triangle with other sides of length ``x`` and ``y``
 ``exp(x)``          the natural exponential function at ``x``
 ``expm1(x)``        accurate ``exp(x)-1`` for ``x`` near zero
