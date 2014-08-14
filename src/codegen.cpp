@@ -180,10 +180,10 @@ void __attribute__(()) __stack_chk_fail()
 #define DISABLE_FLOAT16
 
 // llvm state
-static LLVMContext &jl_LLVMContext = getGlobalContext();
+DLLEXPORT LLVMContext &jl_LLVMContext = getGlobalContext();
 static IRBuilder<> builder(getGlobalContext());
 static bool nested_compile=false;
-static ExecutionEngine *jl_ExecutionEngine;
+DLLEXPORT ExecutionEngine *jl_ExecutionEngine;
 static TargetMachine *jl_TargetMachine;
 #ifdef USE_MCJIT
 static Module *shadow_module;
