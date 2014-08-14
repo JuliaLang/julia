@@ -159,3 +159,9 @@ scale!{T<:Base.LinAlg.BlasReal}(X::Array{T}, s::Complex) = error("scale!: Cannot
 
 @deprecate which(f::Callable, args...) @which f(args...)
 @deprecate rmdir rm
+
+# 0.4 deprecations
+
+@deprecate split(x,y,l::Integer,k::Bool) split(x,y;limit=l,keep=k)
+@deprecate split(x,y,l::Integer) split(x,y;limit=l)
+@deprecate split(x,y,k::Bool) split(x,y;keep=k)
