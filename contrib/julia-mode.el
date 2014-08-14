@@ -245,7 +245,7 @@ Do not move back beyond MIN."
 (defun julia-indent-line ()
   "Indent current line of julia code."
   (interactive)
-;  (save-excursion
+  (let* ((point-offset (- (current-column) (current-indentation))))
     (end-of-line)
     (indent-line-to
      (or (save-excursion (ignore-errors (julia-paren-indent)))
@@ -255,22 +255,24 @@ Do not move back beyond MIN."
                            (forward-to-indentation 0)
                            (julia-at-keyword julia-block-end-keywords))))
              (ignore-errors (+ (julia-last-open-block (point-min))
-                           (if endtok (- julia-basic-offset) 0)))))
-	 ;; previous line ends in =
-	 (save-excursion
-	   (if (and (not (equal (point-min) (line-beginning-position)))
-		    (progn
-		      (forward-line -1)
-		      (end-of-line) (backward-char 1)
-		      (equal (char-after (point)) ?=)))
-	       (+ julia-basic-offset (current-indentation))
-	     nil))
-	 ;; take same indentation as previous line
-	 (save-excursion (forward-line -1)
-			 (current-indentation))
+                               (if endtok (- julia-basic-offset) 0)))))
+         ;; previous line ends in =
+         (save-excursion
+           (if (and (not (equal (point-min) (line-beginning-position)))
+                    (progn
+                      (forward-line -1)
+                      (end-of-line) (backward-char 1)
+                      (equal (char-after (point)) ?=)))
+               (+ julia-basic-offset (current-indentation))
+             nil))
+         ;; take same indentation as previous line
+         (save-excursion (forward-line -1)
+                         (current-indentation))
          0))
-    (when (julia-at-keyword julia-block-end-keywords)
-      (forward-word 1)))
+    ;; Point is now at the beginning of indentation, restore it
+    ;; to its original position (relative to indentation).
+    (when (>= point-offset 0)
+      (move-to-column (+ (current-indentation) point-offset)))))
 
 (defalias 'julia-mode-prog-mode
   (if (fboundp 'prog-mode)
