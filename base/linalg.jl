@@ -198,6 +198,7 @@ include("linalg/dense.jl")
 include("linalg/tridiag.jl")
 include("linalg/triangular.jl")
 include("linalg/factorization.jl")
+include("linalg/cholesky.jl")
 include("linalg/lu.jl")
 
 include("linalg/bunchkaufman.jl")
