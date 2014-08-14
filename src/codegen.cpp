@@ -826,18 +826,18 @@ const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
 }
 
 extern "C" DLLEXPORT
-const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types, bool dumpasm, bool dumpwrapper)
+void *jl_get_llvmf(jl_function_t *f, jl_tuple_t *types, bool getwrapper)
 {
     jl_function_t *sf = f;
     if (types != NULL) {
         if (!jl_is_function(f) || !jl_is_gf(f))
-            return jl_cstr_to_string(const_cast<char*>(""));
+            return NULL;
         sf = jl_get_specialization(f, types);
     }
     if (sf == NULL || sf->linfo == NULL) {
         sf = jl_method_lookup_by_type(jl_gf_mtable(f), types, 0, 0);
         if (sf == jl_bottom_func)
-            return jl_cstr_to_string(const_cast<char*>(""));
+            return NULL;
         JL_PRINTF(JL_STDERR,
                   "Warning: Returned code may not match what actually runs.\n");
     }
@@ -846,7 +846,7 @@ const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types, bool dum
         jl_compile(sf);
     }
     if (sf->fptr == &jl_trampoline) {
-        if (!dumpwrapper && sf->linfo->cFunctionObject != NULL)
+        if (!getwrapper && sf->linfo->cFunctionObject != NULL)
             llvmf = (Function*)sf->linfo->cFunctionObject;
         else
             llvmf = (Function*)sf->linfo->functionObject;
@@ -854,6 +854,15 @@ const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types, bool dum
     else {
         llvmf = to_function(sf->linfo, false);
     }
+    return llvmf;
+}
+
+extern "C" DLLEXPORT
+const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types, bool dumpasm, bool dumpwrapper)
+{
+    void *llvmf = jl_get_llvmf(f,types,dumpwrapper);
+    if (llvmf == NULL)
+        return jl_cstr_to_string(const_cast<char*>(""));
     return jl_dump_llvmf(llvmf,dumpasm);
 }
 
