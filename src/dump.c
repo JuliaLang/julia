@@ -125,7 +125,7 @@ static void jl_load_sysimg_so(char *fname)
                 jl_error("Target architecture mismatch. Please delete or regenerate sys.{so,dll,dylib}.");
         }
         else if (strcmp(cpu_target,"core2") == 0) {
-            int HasSSSE3 = (info[3] & 1<<9);
+            int HasSSSE3 = (info[2] & 1<<9);
             if (!HasSSSE3)
                 jl_error("The current host does not support SSSE3, but the system image was compiled for Core2.\n"
                          "Please delete or regenerate sys.{so,dll,dylib}.");
