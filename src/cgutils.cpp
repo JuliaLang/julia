@@ -824,29 +824,6 @@ static Value *emit_bounds_check(Value *i, Value *len, jl_codectx_t *ctx)
     return im1;
 }
 
-static void emit_func_check(Value *x, jl_codectx_t *ctx)
-{
-    Value *xty = emit_typeof(x);
-    Value *isfunc =
-        builder.
-        CreateOr(builder.
-                 CreateICmpEQ(xty,
-                              literal_pointer_val((jl_value_t*)jl_function_type)),
-                 builder.
-                 CreateICmpEQ(xty,
-                              literal_pointer_val((jl_value_t*)jl_datatype_type)));
-    BasicBlock *elseBB1 = BasicBlock::Create(getGlobalContext(),"notf", ctx->f);
-    BasicBlock *mergeBB1 = BasicBlock::Create(getGlobalContext(),"isf");
-    builder.CreateCondBr(isfunc, mergeBB1, elseBB1);
-
-    builder.SetInsertPoint(elseBB1);
-    emit_type_error(x, (jl_value_t*)jl_function_type, "apply", ctx);
-
-    builder.CreateBr(mergeBB1);
-    ctx->f->getBasicBlockList().push_back(mergeBB1);
-    builder.SetInsertPoint(mergeBB1);
-}
-
 // --- loading and storing ---
 
 static Value *emit_nthptr_addr(Value *v, size_t n)
