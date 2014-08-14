@@ -1837,6 +1837,7 @@ Base.call(x::Int, y::Int) = x + 3y
 issue2403func(f) = f(7)
 let x = 10
     @test x(3) == 19
+    @test apply(x, (3,)) == 19
     @test issue2403func(x) == 31
 end
 type Issue2403

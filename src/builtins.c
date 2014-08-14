@@ -256,9 +256,15 @@ extern size_t jl_page_size;
 JL_CALLABLE(jl_f_apply)
 {
     JL_NARGSV(apply, 1);
-    JL_TYPECHK(apply, function, args[0]);
+    jl_function_t *f;
+    if (jl_is_function(args[0]))
+        f = (jl_function_t*)args[0];
+    else { /* do generic call(args...) instead */
+        f = jl_call_func;
+        ++nargs; --args; /* args[0] becomes args[1] */
+    }
     if (nargs == 2) {
-        if (((jl_function_t*)args[0])->fptr == &jl_f_tuple) {
+        if (f->fptr == &jl_f_tuple) {
             if (jl_is_tuple(args[1]))
                 return args[1];
             if (jl_is_array(args[1])) {
@@ -273,7 +279,7 @@ JL_CALLABLE(jl_f_apply)
             }
         }
         if (jl_is_tuple(args[1])) {
-            return jl_apply((jl_function_t*)args[0], &jl_tupleref(args[1],0),
+            return jl_apply(f, &jl_tupleref(args[1],0),
                             jl_tuple_len(args[1]));
         }
     }
@@ -301,7 +307,7 @@ JL_CALLABLE(jl_f_apply)
             }
             argarr = jl_apply(jl_append_any_func, &args[1], nargs-1);
             assert(jl_typeis(argarr, jl_array_any_type));
-            result = jl_apply((jl_function_t*)args[0], jl_cell_data(argarr), jl_array_len(argarr));
+            result = jl_apply(f, jl_cell_data(argarr), jl_array_len(argarr));
             JL_GC_POP();
             return result;
         }
@@ -328,7 +334,7 @@ JL_CALLABLE(jl_f_apply)
                 newargs[n++] = jl_cellref(args[i], j);
         }
     }
-    result = jl_apply((jl_function_t*)args[0], newargs, n);
+    result = jl_apply(f, newargs, n);
     JL_GC_POP();
     return result;
 }
@@ -339,8 +345,16 @@ JL_CALLABLE(jl_f_kwcall)
 {
     if (nargs < 3)
         jl_error("internal error: malformed keyword argument call");
-    JL_TYPECHK(apply, function, args[0]);
-    jl_function_t *f = (jl_function_t*)args[0];
+    jl_function_t *f;
+    jl_value_t *args0;
+    if (jl_is_function(args[0])) {
+        f = (jl_function_t*)args[0];
+        args0 = NULL;
+    }
+    else { /* do generic call(args...; kws...) instead */
+        f = jl_call_func;
+        args0 = args[0];
+    }
     if (f->fptr == jl_f_ctor_trampoline)
         jl_add_constructors((jl_datatype_t*)f);
     if (!jl_is_gf(f))
@@ -360,13 +374,24 @@ JL_CALLABLE(jl_f_kwcall)
         jl_cellset(container, i+1, args[2+i+1]);
     }
 
-    assert(jl_is_gf(sorter));
-    jl_function_t *m = jl_method_lookup((jl_methtable_t*)sorter->env, &args[pa-1], nargs-(pa-1), 1);
-    if (m == jl_bottom_func) {
-        return jl_no_method_error(f, &args[pa], nargs-pa);
+    args += pa-1;
+    nargs -= pa-1;
+    if (args0) {
+         jl_value_t **newargs = (jl_value_t**)alloca((nargs+1) * sizeof(jl_value_t*));
+         newargs[0] = args[0];
+         newargs[1] = args0; /* original 0th argument = "function" */
+         memcpy(newargs+2, args+1, sizeof(jl_value_t*) * (nargs-1));
+         args = newargs;
+         nargs += 1;
     }
 
-    return jl_apply(m, &args[pa-1], nargs-(pa-1));
+    assert(jl_is_gf(sorter));
+    jl_function_t *m = jl_method_lookup((jl_methtable_t*)sorter->env, args, nargs, 1);
+    if (m == jl_bottom_func) {
+        return jl_no_method_error(f, args+1, nargs-1);
+    }
+
+    return jl_apply(m, args, nargs);
 }
 
 // eval -----------------------------------------------------------------------
