@@ -2219,8 +2219,12 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
     if (theFptr == NULL) {
         specialized = false;
         Value *theFunc = emit_expr(args[0], ctx);
-        if (theFunc->getType() != jl_pvalue_llvmt || jl_is_tuple(hdtype)) {
-            // we know it's not a function
+        if ((hdtype!=(jl_value_t*)jl_function_type &&
+             hdtype!=(jl_value_t*)jl_datatype_type &&
+             !(jl_is_type_type(hdtype) &&
+               jl_is_datatype(jl_tparam0(hdtype)))) ||
+            jl_is_tuple(hdtype) || theFunc->getType() != jl_pvalue_llvmt) {
+            // it may not be a function, use call(f, ...) instead
             headIsGlobal = true;
             Value *result = emit_known_call((jl_value_t*)jl_call_func,
                                             --args, ++nargs, ctx,
@@ -2234,12 +2238,6 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
             make_gcroot(boxed(theFunc,ctx), ctx);
           }
 #endif
-          if (hdtype!=(jl_value_t*)jl_function_type &&
-              hdtype!=(jl_value_t*)jl_datatype_type &&
-              !(jl_is_type_type(hdtype) &&
-                jl_is_datatype(jl_tparam0(hdtype)))) {
-            emit_func_check(theFunc, ctx);
-          }
           // extract pieces of the function object
           // TODO: try extractvalue instead
           theFptr = builder.CreateBitCast(emit_nthptr(theFunc, 1, tbaa_func), jl_fptr_llvmt);
