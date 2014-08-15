@@ -61,6 +61,7 @@ convert(::Type{VersionNumber}, v::Tuple) = VersionNumber(v...)
 
 const VERSION_REGEX = r"^
     v?                                      # prefix        (optional)
+    (?:[0-9]+\:)?                           # epoch         (optional, skipped)
     (\d+)                                   # major         (required)
     (?:\.(\d+))?                            # minor         (optional)
     (?:\.(\d+))?                            # patch         (optional)
