@@ -41,6 +41,3 @@ datetime2julian(dt::DateTime) = (value(dt) - JULIANEPOCH)/86400000.0
 @vectorize_1arg DateTime datetime2rata
 @vectorize_1arg Real julian2datetime
 @vectorize_1arg DateTime datetime2julian
-
-export unix2datetime, datetime2unix, now, today, 
-       rata2datetime, datetime2rata, julian2datetime, datetime2julian

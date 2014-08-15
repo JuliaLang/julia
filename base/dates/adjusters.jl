@@ -155,9 +155,3 @@ end
 function recur{T<:TimeType}(fun::Function,dr::StepRange{T};negate::Bool=false,limit::Int=10000)
     return recur(fun,first(dr),last(dr);step=step(dr),negate=negate,limit=limit)
 end
-
-export firstdayofweek, lastdayofweek,
-       firstdayofmonth, lastdayofmonth,
-       firstdayofyear, lastdayofyear,
-       firstdayofquarter, lastdayofquarter,
-       adjust, tonext, toprev, tofirst, tolast, recur
