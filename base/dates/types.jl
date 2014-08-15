@@ -158,7 +158,3 @@ Base.isless(x::Date,y::Date) = isless(value(x),value(y))
 Base.isless(x::DateTime,y::DateTime) = isless(value(x),value(y))
 Base.isless(x::TimeType,y::TimeType) = isless(promote(x,y)...)
 ==(x::TimeType,y::TimeType) = ===(promote(x,y)...)
-
-export Period, DatePeriod, TimePeriod,
-       Year, Month, Week, Day, Hour, Minute, Second, Millisecond,
-       TimeType, DateTime, Date

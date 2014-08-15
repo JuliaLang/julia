@@ -69,6 +69,3 @@ yearmonthday(dt::TimeType) = yearmonthday(days(dt))
 @vectorize_1arg TimeType yearmonth
 @vectorize_1arg TimeType monthday
 @vectorize_1arg TimeType yearmonthday
-
-export yearmonthday, yearmonth, monthday, year, month, week, day,
-       hour, minute, second, millisecond, dayofmonth

@@ -171,5 +171,3 @@ end
 function format(y::AbstractArray{DateTime},df::DateFormat=ISODateTimeFormat)
     return reshape([Dates.format(y[i],df) for i in 1:length(y)], size(y))
 end
-
-export ISODateTimeFormat, ISODateFormat, DateFormat
