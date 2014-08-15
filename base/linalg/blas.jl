@@ -15,10 +15,18 @@ export
 # Level 2
     gbmv!,
     gbmv,
+    gemv!,
+    gemv,
+    hemv!,
+    hemv,
     sbmv!,
     sbmv,
     symv!,
     symv,
+    trsv!,
+    trsv,
+    trmv!,
+    trmv,
     ger!,
     syr!,
     her!,
@@ -34,7 +42,11 @@ export
     syrk!,
     syrk,
     syr2k!,
-    syr2k
+    syr2k,
+    trmm!,
+    trmm,
+    trsm!,
+    trsm
 
 
 const libblas = Base.libblas_name
@@ -346,6 +358,35 @@ for (fname, elty) in ((:dsymv_,:Float64),
         end
         function symv(uplo::BlasChar, A::StridedMatrix{$elty}, x::StridedVector{$elty})
             symv(uplo, one($elty), A, x)
+        end
+    end
+end
+
+### hemv
+for (fname, elty) in ((:zhemv_,:Complex128),
+                      (:cgemv_,:Complex64))
+    @eval begin
+        function hemv!(uplo::Char, α::$elty, A::StridedMatrix{$elty}, x::StridedVector{$elty}, β::$elty, y::StridedVector{$elty})
+            n = size(A, 2)
+            n == length(x) || throw(DimensionMismatch(""))
+            size(A, 1) == length(y) || throw(DimensionMismatch(""))
+            lda = max(1, stride(A, 2))
+            incx = stride(x, 1)
+            incy = stride(y, 1)
+            ccall(($fname, libblas), Void,
+                (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
+                 Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                 Ptr{$elty}, Ptr{BlasInt}),
+                &uplo, &n, &α, A,
+                &lda, x, &incx, &β,
+                y, &incy)
+            y
+        end
+        function hemv(uplo::BlasChar, α::($elty), A::StridedMatrix{$elty}, x::StridedVector{$elty})
+            hemv!(uplo, α, A, x, zero($elty), similar(x))
+        end
+        function hemv(uplo::BlasChar, A::StridedMatrix{$elty}, x::StridedVector{$elty})
+            hemv(uplo, one($elty), A, x)
         end
     end
 end
@@ -720,73 +761,6 @@ for (fname, elty1, elty2) in ((:zher2k_,:Complex128,:Float64), (:cher2k_,:Comple
            her2k!(uplo, trans, alpha, A, B, zero($elty2), similar(A, $elty1, (n,n)))
        end
        her2k(uplo::BlasChar, trans::BlasChar, A::StridedVecOrMat{$elty1}, B::StridedVecOrMat{$elty1}) = her2k(uplo, trans, one($elty1), A, B)
-   end
-end
-
-# (GB) general banded matrix-vector multiplication
-for (fname, elty) in ((:dgbmv_,:Float64), (:sgbmv_,:Float32),
-                      (:zgbmv_,:Complex128), (:cgbmv_,:Complex64))
-   @eval begin
-       # SUBROUTINE DGBMV(TRANS,M,N,KL,KU,ALPHA,A,LDA,X,INCX,BETA,Y,INCY)
-       # *     .. Scalar Arguments ..
-       #       DOUBLE PRECISION ALPHA,BETA
-       #       INTEGER INCX,INCY,KL,KU,LDA,M,N
-       #       CHARACTER TRANS
-       # *     .. Array Arguments ..
-       #       DOUBLE PRECISION A(LDA,*),X(*),Y(*)
-       function gbmv!(trans::BlasChar, m::Integer, kl::Integer, ku::Integer,
-                      alpha::($elty), A::StridedMatrix{$elty}, x::StridedVector{$elty},
-                      beta::($elty), y::StridedVector{$elty})
-           ccall(($(string(fname)),libblas), Void,
-                 (Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
-                  Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-                  Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}),
-                 &trans, &m, &size(A,2), &kl, &ku, 
-                 &alpha, A, &max(1,stride(A,2)), x, &stride(x,1), 
-                 &beta, y, &stride(y,1))
-           y
-       end
-       function gbmv(trans::BlasChar, m::Integer, kl::Integer, ku::Integer,
-                     alpha::($elty), A::StridedMatrix{$elty}, x::StridedVector{$elty})
-           n = stride(A,2)
-           gbmv!(trans, m, kl, ku, alpha, A, x, zero($elty), similar(x, $elty, n))
-       end
-       function gbmv(trans::BlasChar, m::Integer, kl::Integer, ku::Integer,
-                     A::StridedMatrix{$elty}, x::StridedVector{$elty})
-           gbmv(trans, m, kl, ku, one($elty), A, x)
-       end
-   end
-end
-
-# (SB) symmetric banded matrix-vector multiplication
-for (fname, elty) in ((:dsbmv_,:Float64), (:ssbmv_,:Float32),
-                      (:zsbmv_,:Complex128), (:csbmv_,:Complex64))
-   @eval begin
-       #       SUBROUTINE DSBMV(UPLO,N,K,ALPHA,A,LDA,X,INCX,BETA,Y,INCY)
-       # *     .. Scalar Arguments ..
-       #       DOUBLE PRECISION ALPHA,BETA
-       #       INTEGER INCX,INCY,K,LDA,N
-       #       CHARACTER UPLO
-       # *     .. Array Arguments ..
-       #       DOUBLE PRECISION A(LDA,*),X(*),Y(*)
-       function sbmv!(uplo::BlasChar, k::Integer,
-                      alpha::($elty), A::StridedMatrix{$elty}, x::StridedVector{$elty}, 
-                      beta::($elty), y::StridedVector{$elty})
-           ccall(($(string(fname)),libblas), Void,
-                 (Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
-                 Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}),
-                 &uplo, &size(A,2), &k, &alpha, A, &max(1,stride(A,2)), x, &stride(x,1),
-                 &beta, y, &stride(y,1))
-           y
-       end
-       function sbmv(uplo::BlasChar, k::Integer, alpha::($elty), A::StridedMatrix{$elty},
-                     x::StridedVector{$elty})
-           n = size(A,2)
-           sbmv!(uplo, k, alpha, A, x, zero($elty), similar(x, $elty, n))
-       end
-       function sbmv(uplo::BlasChar, k::Integer, A::StridedMatrix{$elty}, x::StridedVector{$elty})
-           sbmv(uplo, k, one($elty), A, x)
-       end
    end
 end
 

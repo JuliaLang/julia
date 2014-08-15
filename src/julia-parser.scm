@@ -45,6 +45,17 @@
 	    (eval `(define ,(symbol (string "is-" name "?")) (Set ,name))))
 	  prec-names)
 
+;; hash table of binary operators -> precedence
+(define prec-table (let ((t (table)))
+                     (define (pushprec L prec)
+                       (if (not (null? L))
+                           (begin
+                             (for-each (lambda (x) (put! t x prec)) (car L))
+                             (pushprec (cdr L) (+ prec 1)))))
+                     (pushprec (map eval prec-names) 1)
+                     t))
+(define (operator-precedence op) (get prec-table op 0))
+
 (define unary-ops '(+ - ! ¬ ~ |<:| |>:| √ ∛ ∜))
 
 ; operators that are both unary and binary
@@ -1678,9 +1689,12 @@
 	  ;; symbol/expression quote
 	  ((eq? t ':)
 	   (take-token s)
-	   (if (closing-token? (peek-token s))
-	       ':
-	       (list 'quote (parse-atom- s))))
+	   (let ((nxt (peek-token s)))
+	     (if (and (closing-token? nxt)
+		      (or (not (symbol? nxt))
+			  (ts:space? s)))
+		 ':
+		 (list 'quote (parse-atom- s)))))
 
 	  ;; misplaced =
 	  ((eq? t '=) (error "unexpected \"=\""))

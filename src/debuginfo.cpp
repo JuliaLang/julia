@@ -23,10 +23,12 @@ struct ObjectInfo {
 };
 #endif
 
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+#if defined(_OS_WINDOWS_)
 #include <dbghelp.h>
+#if defined(_CPU_X86_64_)
 extern "C" EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord,void *EstablisherFrame, PCONTEXT ContextRecord, void *DispatcherContext);
 extern "C" volatile int jl_in_stackwalk;
+#endif
 #endif
 
 struct revcomp {
@@ -474,8 +476,12 @@ void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, 
                 DISubprogram(prev.Loc.getScope((*it).second.func->getContext()));
             *filename = debugscope.getFilename().data();
             // the DISubprogram has the un-mangled name, so use that if
-            // available.
-            *name = debugscope.getName().data();
+            // available. However, if the scope need not be the current
+            // subprogram.
+            if (debugscope.getName().data() != NULL)
+                *name = debugscope.getName().data();
+            else
+                *name = jl_demangle(*name);
         }
 
         vit++;

@@ -3,7 +3,7 @@
 #include <string.h>
 #include <assert.h>
 #include "flisp.h"
-#include "utf8proc.h"
+#include "mojibake.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -117,8 +117,8 @@ DLLEXPORT int jl_id_char(uint32_t wc)
         cat == UTF8PROC_CATEGORY_ND || cat == UTF8PROC_CATEGORY_PC ||
         cat == UTF8PROC_CATEGORY_SK || cat == UTF8PROC_CATEGORY_ME ||
         cat == UTF8PROC_CATEGORY_NO ||
-        // primes
-        (wc >= 0x2032 && wc <= 0x2034) ||
+        // primes (single, double, triple, their reverses, and quadruple)
+        (wc >= 0x2032 && wc <= 0x2037) || (wc == 0x2057) ||
         // Other_ID_Continue
         wc == 0x0387 || wc == 0x19da || (wc >= 0x1369 && wc <= 0x1371))
         return 1;

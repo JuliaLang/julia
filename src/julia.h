@@ -951,6 +951,7 @@ DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast);
 DLLEXPORT jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data);
 
 DLLEXPORT int jl_is_operator(char *sym);
+DLLEXPORT int jl_operator_precedence(char *sym);
 
 STATIC_INLINE int jl_vinfo_capt(jl_array_t *vi)
 {
@@ -1325,6 +1326,7 @@ typedef struct {
     int8_t code_coverage;
     int8_t malloc_log;
     int8_t check_bounds;
+    int8_t dumpbitcode;
     int int_literals;
 } jl_compileropts_t;
 
@@ -1338,6 +1340,9 @@ extern DLLEXPORT jl_compileropts_t jl_compileropts;
 #define JL_COMPILEROPT_CHECK_BOUNDS_DEFAULT 0
 #define JL_COMPILEROPT_CHECK_BOUNDS_ON 1
 #define JL_COMPILEROPT_CHECK_BOUNDS_OFF 2
+
+#define JL_COMPILEROPT_DUMPBITCODE_ON 1
+#define JL_COMPILEROPT_DUMPBITCODE_OFF 2
 
 #ifdef __cplusplus
 }

@@ -48,6 +48,7 @@
 #include "llvm/Target/TargetMachine.h"
 #else
 #include "llvm/Analysis/Verifier.h"
+#include "llvm/Assembly/Parser.h"
 #endif
 #include "llvm/DebugInfo/DIContext.h"
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 4
@@ -179,10 +180,10 @@ void __attribute__(()) __stack_chk_fail()
 #define DISABLE_FLOAT16
 
 // llvm state
-static LLVMContext &jl_LLVMContext = getGlobalContext();
+DLLEXPORT LLVMContext &jl_LLVMContext = getGlobalContext();
 static IRBuilder<> builder(getGlobalContext());
 static bool nested_compile=false;
-static ExecutionEngine *jl_ExecutionEngine;
+DLLEXPORT ExecutionEngine *jl_ExecutionEngine;
 static TargetMachine *jl_TargetMachine;
 #ifdef USE_MCJIT
 static Module *shadow_module;
@@ -512,6 +513,13 @@ extern "C" {
     int globalUnique = 0;
 }
 
+extern "C" DLLEXPORT
+jl_value_t *jl_get_cpu_name(void)
+{
+    StringRef HostCPUName = llvm::sys::getHostCPUName();
+    return jl_pchar_to_string(HostCPUName.data(), HostCPUName.size());
+}
+
 #include "cgutils.cpp"
 
 static void jl_rethrow_with_add(const char *fmt, ...)
@@ -818,18 +826,18 @@ const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
 }
 
 extern "C" DLLEXPORT
-const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types, bool dumpasm, bool dumpwrapper)
+void *jl_get_llvmf(jl_function_t *f, jl_tuple_t *types, bool getwrapper)
 {
     jl_function_t *sf = f;
     if (types != NULL) {
         if (!jl_is_function(f) || !jl_is_gf(f))
-            return jl_cstr_to_string(const_cast<char*>(""));
+            return NULL;
         sf = jl_get_specialization(f, types);
     }
     if (sf == NULL || sf->linfo == NULL) {
         sf = jl_method_lookup_by_type(jl_gf_mtable(f), types, 0, 0);
         if (sf == jl_bottom_func)
-            return jl_cstr_to_string(const_cast<char*>(""));
+            return NULL;
         JL_PRINTF(JL_STDERR,
                   "Warning: Returned code may not match what actually runs.\n");
     }
@@ -838,7 +846,7 @@ const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types, bool dum
         jl_compile(sf);
     }
     if (sf->fptr == &jl_trampoline) {
-        if (!dumpwrapper && sf->linfo->cFunctionObject != NULL)
+        if (!getwrapper && sf->linfo->cFunctionObject != NULL)
             llvmf = (Function*)sf->linfo->cFunctionObject;
         else
             llvmf = (Function*)sf->linfo->functionObject;
@@ -846,6 +854,15 @@ const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types, bool dum
     else {
         llvmf = to_function(sf->linfo, false);
     }
+    return llvmf;
+}
+
+extern "C" DLLEXPORT
+const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types, bool dumpasm, bool dumpwrapper)
+{
+    void *llvmf = jl_get_llvmf(f,types,dumpwrapper);
+    if (llvmf == NULL)
+        return jl_cstr_to_string(const_cast<char*>(""));
     return jl_dump_llvmf(llvmf,dumpasm);
 }
 
@@ -3515,6 +3532,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         assert(SP.Verify() && SP.describes(f) && SP.getFunction() == f);
     }
 
+    std::map<jl_sym_t *, MDNode *> filescopes;
+
     Value *fArg=NULL, *argArray=NULL, *argCount=NULL;
     if (!specsig) {
         Function::arg_iterator AI = f->arg_begin();
@@ -3804,8 +3823,30 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         }
         else if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym) {
             lno = jl_unbox_long(jl_exprarg(stmt, 0));
-            if (debug_enabled)
-                builder.SetCurrentDebugLocation(DebugLoc::get(lno, 1, (MDNode*)SP, NULL));
+            MDNode *dfil = NULL;
+            if (jl_array_dim0(((jl_expr_t*)stmt)->args) > 1) {
+                jl_value_t *a1 = jl_exprarg(stmt,1);
+                if (jl_is_symbol(a1)) {
+                    jl_sym_t *file = (jl_sym_t*)a1;
+                    // If the string is not empty
+                    if(*file->name != '\0') {
+                        std::map<jl_sym_t *, MDNode *>::iterator it = filescopes.find(file);
+                        if (it != filescopes.end()) {
+                            dfil = it->second;
+                        } else {
+                            dfil = filescopes[file] = (MDNode*)dbuilder.createFile(file->name, ".");
+                        }
+                    }
+                }
+            }
+            if (debug_enabled) {
+                MDNode *scope;
+                if (dfil == NULL)
+                    scope = SP;
+                else
+                    scope = (MDNode*)dbuilder.createLexicalBlockFile(SP,DIFile(dfil));
+                builder.SetCurrentDebugLocation(DebugLoc::get(lno, 1, scope, NULL));
+            }
             if (do_coverage)
                 coverageVisitLine(filename, lno);
             ctx.lineno = lno;
@@ -3971,6 +4012,7 @@ extern "C" DLLEXPORT jl_value_t *jl_new_box(jl_value_t *v)
 
 #if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 3 && SYSTEM_LLVM
 #define INSTCOMBINE_BUG
+#define V128_BUG
 #endif
 
 static void init_julia_llvm_env(Module *m)
@@ -4527,7 +4569,11 @@ extern "C" void jl_init_codegen(void)
     SmallVector<std::string, 4> MAttrs;
 #else
     // Temporarily disable Haswell BMI2 features due to LLVM bug.
-    const char *mattr[] = {"-bmi2", "-avx2"};
+    const char *mattr[] = {"-bmi2", "-avx2"
+#ifdef V128_BUG
+        ,"-avx"
+#endif
+    };
     SmallVector<std::string, 4> MAttrs(mattr, mattr+2);
 #endif
     EngineBuilder eb = EngineBuilder(engine_module)

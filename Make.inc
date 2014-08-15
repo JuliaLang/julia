@@ -30,6 +30,7 @@ USE_SYSTEM_GRISU=0
 USE_SYSTEM_RMATH=0
 USE_SYSTEM_LIBUV=0
 USE_SYSTEM_UTF8PROC=0
+USE_SYSTEM_MOJIBAKE=0
 
 # Link to the LLVM shared library
 USE_LLVM_SHLIB = 0
@@ -290,6 +291,12 @@ DEBUGFLAGS = -O0 -ggdb3 -DJL_DEBUG_BUILD -fstack-protector-all
 SHIPFLAGS = -O3 -g -falign-functions
 endif
 
+ifneq ($(USEICC),1)
+JCFLAGS += -m$(BINARY)
+JCXXFLAGS += -m$(BINARY)
+JFFLAGS += -m$(BINARY)
+endif
+
 ifeq ($(LLVM_VER),svn)
 JCXXFLAGS += -std=c++11
 endif
@@ -430,9 +437,6 @@ BINARY=64
 else
 $(error "unknown word-size for arch: $(ARCH)")
 endif
-CC += -m$(BINARY)
-CXX += -m$(BINARY)
-FC += -m$(BINARY)
 
 ifeq ($(USEGCC),1)
 ifneq ($(ARCH), ppc64)
@@ -531,10 +535,14 @@ else
   LIBUV_INC = $(JULIAHOME)/deps/libuv/include
 endif
 
-ifeq ($(USE_SYSTEM_UTF8PROC), 1)
-  LIBUTF8PROC = -lutf8proc
+ifeq ($(USE_SYSTEM_MOJIBAKE), 1)
+  LIBMOJIBAKE = -lmojibake
 else
-  LIBUTF8PROC = $(build_libdir)/libutf8proc.a
+  ifeq ($(USE_SYSTEM_UTF8PROC), 1)
+    LIBMOJIBAKE = -lutf8proc
+  else
+    LIBMOJIBAKE = $(build_libdir)/libmojibake.a
+  endif
 endif
 
 # OS specific stuff
@@ -563,7 +571,7 @@ ifeq ($(OS), WINNT)
   RPATH_ORIGIN =
 else ifeq ($(OS), Darwin)
   RPATH = -Wl,-rpath,'@executable_path/$(build_private_libdir_rel)' -Wl,-rpath,'@executable_path/$(build_libdir_rel)'
-  RPATH_ORIGIN =
+  RPATH_ORIGIN = -Wl,-rpath,'@loader_path/'
 else
   RPATH = -Wl,-rpath,'$$ORIGIN/$(build_private_libdir_rel)' -Wl,-rpath,'$$ORIGIN/$(build_libdir_rel)' -Wl,-z,origin
   RPATH_ORIGIN = -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
@@ -685,6 +693,18 @@ LIBBLAS = -L$(ATLAS_LIBDIR) -lsatlas
 LIBLAPACK = $(LIBBLAS)
 LIBBLASNAME = libsatlas
 LIBLAPACKNAME = $(LIBBLASNAME)
+endif
+
+# Custom libcxx
+ifeq ($(BUILD_CUSTOM_LIBCXX),1)
+LDFLAGS += -L$(build_libdir) -lc++abi
+CXXLDFLAGS += -L$(build_libdir) -lc++abi -stdlib=libc++ -lc++
+CPPFLAGS += -I$(build_includedir)/c++/v1
+ifeq ($(USEICC),1)
+CXXFLAGS += -cxxlib-nostd -static-intel
+CLDFLAGS += -static-intel
+LDFLAGS += -cxxlib-nostd -static-intel
+endif
 endif
 
 # Make tricks

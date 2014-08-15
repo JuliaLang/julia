@@ -3,7 +3,7 @@
 Package Manager Functions
 -------------------------
 
-All Package manager functions are defined in the ``Pkg`` module; note that none of the ``Pkg`` module's functions are exported;
+All package manager functions are defined in the ``Pkg`` module. None of the ``Pkg`` module's functions are exported;
 to use them, you'll need to prefix each function call with an explicit ``Pkg.``, e.g. ``Pkg.status()`` or ``Pkg.dir()``.
 
 .. function:: dir() -> String

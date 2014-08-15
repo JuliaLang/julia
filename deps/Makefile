@@ -19,7 +19,7 @@ CONFIGURE_COMMON += F77="$(FC)" CC="$(CC)" CXX="$(CXX)"
 MAKE_COMMON = DESTDIR="" prefix=$(build_prefix) bindir=$(build_bindir) libdir=$(build_libdir) libexecdir=$(build_libexecdir) datarootdir=$(build_datarootdir) includedir=$(build_includedir) sysconfdir=$(build_sysconfdir)
 
 #autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf uv
-#custom Makefile rules: openlibm Rmath double-conversion dsfmt suitesparse-wrapper suitesparse lapack openblas utf8proc
+#custom Makefile rules: openlibm Rmath double-conversion dsfmt suitesparse-wrapper suitesparse lapack openblas mojibake
 
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
@@ -111,8 +111,8 @@ ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 STAGE2_DEPS += suitesparse
 endif
 
-ifeq ($(USE_SYSTEM_UTF8PROC), 0)
-STAGE2_DEPS += utf8proc
+ifeq ($(USE_SYSTEM_MOJIBAKE), 0)
+STAGE2_DEPS += mojibake
 endif
 
 # Only compile standalone LAPACK if we are not using OpenBLAS.
@@ -144,7 +144,7 @@ install: $(addprefix install-, $(LIBS))
 cleanall: $(addprefix clean-, $(LIBS))
 distcleanall: $(addprefix distclean-, $(LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-uv get-pcre get-double-conversion get-openlibm get-openspecfun get-dsfmt get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf get-utf8proc
+getall: get-llvm get-uv get-pcre get-double-conversion get-openlibm get-openspecfun get-dsfmt get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf get-mojibake
 
 ## PATHS ##
 # sort is used to remove potential duplicates
@@ -160,6 +160,8 @@ LLVM_GIT_URL_LLVM ?= $(LLVM_GIT_URL_BASE)/llvm.git
 LLVM_GIT_URL_CLANG ?= $(LLVM_GIT_URL_BASE)/clang.git
 LLVM_GIT_URL_COMPILER_RT ?= $(LLVM_GIT_URL_BASE)/compiler-rt.git
 LLVM_GIT_URL_LLDB ?= $(LLVM_GIT_URL_BASE)/lldb.git
+LLVM_GIT_URL_LIBCXX ?= $(LLVM_GIT_URL_BASE)/libcxx.git
+LLVM_GIT_URL_LIBCXXABI ?= $(LLVM_GIT_URL_BASE)/libcxxabi.git
 
 ifeq ($(BUILD_LLDB), 1)
 BUILD_LLVM_CLANG = 1
@@ -197,11 +199,9 @@ LLVM_COMPILER_RT_TAR=
 else ifeq ($(LLVM_VER), 3.3)
 LLVM_CLANG_TAR=cfe-$(LLVM_VER).src.tar.gz
 LLVM_COMPILER_RT_TAR=compiler-rt-$(LLVM_VER).src.tar.gz
-LLVM_LIBCXX_TAR=libcxx-$(LLVM_VER).src.tar.gz
 else
 LLVM_CLANG_TAR=clang-$(LLVM_VER).src.tar.gz
 LLVM_COMPILER_RT_TAR=compiler-rt-$(LLVM_VER).src.tar.gz
-LLVM_LIBCXX_TAR=libcxx-$(LLVM_VER).src.tar.gz
 endif
 else
 LLVM_CLANG_TAR=
@@ -210,7 +210,15 @@ LLVM_LIBCXX_TAR=
 endif
 endif
 
-LLVM_CXXFLAGS =
+ifeq ($(BUILD_CUSTOM_LIBCXX),1)
+ifneq ($(LLVM_VER),svn)
+LLVM_LIBCXX_TAR=libcxx-$(LLVM_VER).src.tar.gz
+endif
+endif
+
+LLVM_CXXFLAGS = $(CXXFLAGS)
+LLVM_CPPFLAGS = $(CPPFLAGS)
+LLVM_LDFLAGS = $(LDFLAGS)
 LLVM_TARGET_FLAGS= --enable-targets=host
 LLVM_FLAGS += --disable-profiling --enable-shared --enable-static $(LLVM_TARGET_FLAGS) --disable-bindings --disable-docs
 LLVM_MFLAGS =
@@ -232,7 +240,7 @@ LLVM_FLAGS += --enable-libcpp
 endif
 ifeq ($(OS), WINNT)
 LLVM_FLAGS += --with-extra-ld-options="-Wl,--stack,8388608" LDFLAGS="" --disable-shared
-LLVM_MFLAGS += CPPFLAGS="-D__USING_SJLJ_EXCEPTIONS__ -D__CRT__NO_INLINE"
+LLVM_CPPFLAGS += -D__USING_SJLJ_EXCEPTIONS__ -D__CRT__NO_INLINE
 endif
 ifeq ($(USE_INTEL_JITEVENTS), 1)
 LLVM_FLAGS += --with-intel-jitevents
@@ -260,7 +268,8 @@ endif
 
 
 ifeq ($(LLVM_SANITIZE),1)
-LLVM_CC = CFLAGS="-fsanitize=address" LDFLAGS="-fsanitize=address"
+LLVM_CC = CFLAGS="-fsanitize=address"
+LLVM_LDFLAGS += -fsanitize=address
 LLVM_CXXFLAGS += -fsanitize=address
 LLVM_MFLAGS += TOOL_NO_EXPORTS= HAVE_LINK_VERSION_SCRIPT=0
 else
@@ -272,6 +281,22 @@ LLVM_FLAGS += CXXFLAGS="$(LLVM_CXXFLAGS)"
 LLVM_MFLAGS += CXXFLAGS="$(LLVM_CXXFLAGS)"
 endif
 LLVM_MFLAGS += $(LLVM_CC)
+
+ifeq ($(BUILD_CUSTOM_LIBCXX),1)
+LLVM_LDFLAGS += -Wl,-R$(build_libdir)
+ifeq ($(USEICC),1)
+LLVM_LDFLAGS += -no_cpprt -lc++ -lc++abi
+endif
+endif
+
+ifneq ($(LLVM_CPPFLAGS),)
+LLVM_FLAGS += CPPFLAGS="$(LLVM_CPPFLAGS)"
+LLVM_MFLAGS += CPPFLAGS="$(LLVM_CPPFLAGS)"
+endif
+ifneq ($(LLVM_LDFLAGS),)
+LLVM_FLAGS += LDFLAGS="$(LLVM_LDFLAGS)"
+LLVM_MFLAGS += LDFLAGS="$(LLVM_LDFLAGS)"
+endif
 
 ifneq ($(LLVM_CLANG_TAR),)
 $(LLVM_CLANG_TAR):
@@ -308,14 +333,57 @@ else
   LLVM_FLAGS += --with-python="$(shell ./find_python_for_llvm)"
 endif
 
-llvm-$(LLVM_VER)/configure: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR)
+ifeq ($(BUILD_CUSTOM_LIBCXX),1)
+
+LIBCXX_OPTIONS = OPTIONS="-I../../libcxx/include $(CXXFLAGS) $(LDFLAGS)" CC="$(CC) $(CFLAGS)" CXX="$(CXX)"
+ifeq ($(USEICC),1)
+LIBCXX_OPTIONS += EXTRA_LIBS="-Bstatic -lirc"
+endif
+
+llvm-$(LLVM_VER)/projects/libcxx: $(LLVM_LIBCXX_TAR)
+	([ ! -d llvm-$(LLVM_VER)/projects/libcxx ] && \
+	git clone $(LLVM_GIT_URL_LIBCXX) llvm-$(LLVM_VER)/projects/libcxx  ) || \
+	(cd llvm-$(LLVM_VER)/projects/libcxx  && \
+	git pull --ff-only)
+llvm-$(LLVM_VER)/projects/libcxxabi: $(LLVM_LIBCXXABI_TAR)
+	([ ! -d llvm-$(LLVM_VER)/projects/libcxxabi ] && \
+	git clone $(LLVM_GIT_URL_LIBCXXABI) llvm-$(LLVM_VER)/projects/libcxxabi  ) || \
+	(cd llvm-$(LLVM_VER)/projects/libcxxabi  && \
+	git pull --ff-only)
+libcxx-build:
+	mkdir -p libcxx-build
+libcxx-build/Makefile: llvm-$(LLVM_VER)/projects/libcxx | llvm-$(LLVM_VER)/projects/libcxxabi libcxx-build
+	cd libcxx-build && \
+		cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS="../llvm-$(LLVM_VER)/projects/libcxxabi/include" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(build_prefix) ../llvm-$(LLVM_VER)/projects/libcxx -DCMAKE_C_COMPILER="$(CC)" -DCMAKE_CXX_COMPILER="$(CXX)"  -DCMAKE_SHARED_LINKER_FLAGS="-L$(build_libdir) -Bstatic -lirc -Bdynamic" -DCMAKE_CXX_FLAGS="$(CXXFLAGS)"
+llvm-$(LLVM_VER)/projects/libcxxabi/libc++abi.so.1.0: llvm-$(LLVM_VER)/projects/libcxxabi | llvm-$(LLVM_VER)/projects/libcxx
+	cd llvm-$(LLVM_VER)/projects/libcxxabi/lib && \
+	$(LIBCXX_OPTIONS) ./buildit
+$(build_libdir)/libc++abi.so.1.0: llvm-$(LLVM_VER)/projects/libcxxabi/libc++abi.so.1.0
+	cp llvm-$(LLVM_VER)/projects/libcxxabi/lib/libc++abi.so.1.0 $(build_libdir)
+	ln -s $(build_libdir)/libc++abi.so.1.0 $(build_libdir)/libc++abi.so
+	ln -s $(build_libdir)/libc++abi.so.1.0 $(build_libdir)/libc++abi.so.1
+install-libcxxabi: $(build_libdir)/libc++abi.so
+libcxx-build/lib/libc++.so.1.0: | $(build_libdir)/libc++abi.so.1.0 libcxx-build/Makefile
+	cd libcxx-build && $(MAKE)
+$(build_libdir)/libc++.so.1.0: libcxx-build/lib/libc++.so.1.0
+	cd libcxx-build && $(MAKE) install
+install-libcxx: $(build_libdir)/libc++.so.1.0
+get-libcxx: llvm-$(LLVM_VER)/projects/libcxx
+get-libcxxabi: llvm-$(LLVM_VER)/projects/libcxxabi
+endif
+
+ifeq ($(BUILD_CUSTOM_LIBCXX),1)
+LIBCXX_DEPENDENCY = $(build_libdir)/libc++abi.so.1.0 $(build_libdir)/libc++.so.1.0
+LIBCXX_GET_DEPENDENCY = get-libcxx get-libcxxabi
+endif
+
+llvm-$(LLVM_VER)/configure: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) | $(LIBCXX_DEPENDENCY)
 ifneq ($(LLVM_CLANG_TAR),)
 	$(JLCHECKSUM) $(LLVM_CLANG_TAR)
 endif
 ifneq ($(LLVM_COMPILER_RT_TAR),)
 	$(JLCHECKSUM) $(LLVM_COMPILER_RT_TAR)
 endif
-
 ifneq ($(LLVM_LIBCXX_TAR),)
 	$(JLCHECKSUM) $(LLVM_LIBCXX_TAR)
 endif
@@ -340,24 +408,19 @@ ifneq ($(LLVM_CLANG_TAR),)
 	mkdir -p llvm-$(LLVM_VER)/tools/clang && \
 	$(TAR) -C llvm-$(LLVM_VER)/tools/clang --strip-components 1 -xf $(LLVM_CLANG_TAR)
 endif
+ifneq ($(LLVM_COMPILER_RT_TAR),)
+	mkdir -p llvm-$(LLVM_VER)/projects/compiler-rt && \
+	$(TAR) -C llvm-$(LLVM_VER)/projects/compiler-rt --strip-components 1 -xf $(LLVM_COMPILER_RT_TAR)
+endif
 else
 ifeq ($(BUILD_LLVM_CLANG),1)
 	([ ! -d llvm-$(LLVM_VER)/tools/clang ] && \
 		git clone $(LLVM_GIT_URL_CLANG) llvm-$(LLVM_VER)/tools/clang  ) || \
 		(cd llvm-$(LLVM_VER)/tools/clang  && \
-		git pull --ff-only)	
+		git pull --ff-only)
 endif
 endif
-ifneq ($(LLVM_VER),svn)
-ifneq ($(LLVM_COMPILER_RT_TAR),)
-	mkdir -p llvm-$(LLVM_VER)/projects/compiler-rt && \
-	$(TAR) -C llvm-$(LLVM_VER)/projects/compiler-rt --strip-components 1 -xf $(LLVM_COMPILER_RT_TAR)
-endif
-ifneq ($(LLVM_LIBCXX_TAR),)
-	mkdir -p llvm-$(LLVM_VER)/projects/libcxx && \
-	$(TAR) -C llvm-$(LLVM_VER)/projects/libcxx --strip-components 1 -xf $(LLVM_LIBCXX_TAR)
-endif
-else
+ifeq ($(LLVM_VER),svn)
 ifeq ($(BUILD_LLVM_CLANG),1)
 	([ ! -d llvm-$(LLVM_VER)/tools/clang ] && \
 		git clone $(LLVM_GIT_URL_CLANG) llvm-$(LLVM_VER)/tools/clang  ) || \
@@ -386,6 +449,7 @@ endif
 ifeq ($(LLVM_VER),3.3)
 	patch -p0 < llvm-3.3.patch
 	patch -p0 < instcombine-llvm-3.3.patch
+	patch -p0 < int128-vector.llvm-3.3.patch
 	(cd llvm-$(LLVM_VER) && patch < ../osx-10.10.llvm-3.3.patch)
 ifeq ($(OS),WINNT)
 ifeq ($(ARCH),x86_64)
@@ -424,6 +488,7 @@ $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
 	touch -c $@
 
 reinstall-llvm:
+	-rm $(build_bindir)/llvm-config
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
 	$(MAKE) -C llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE) install $(LLVM_MFLAGS) $(MAKE_COMMON) PROJ_libdir=$(build_libdir) PROJ_bindir=$(build_bindir)
 
@@ -433,7 +498,11 @@ clean-llvm:
 distclean-llvm:
 	-rm -rf llvm-$(LLVM_VER).tar.gz llvm-$(LLVM_VER).src.tar.gz clang-$(LLVM_VER).src.tar.gz clang-$(LLVM_VER).tar.gz libcxx-$(LLVM_VER).src.tar.gz compiler-rt-$(LLVM_VER).src.tar.gz llvm-$(LLVM_VER)
 
+ifneq ($(LLVM_VER),svn)
 get-llvm: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR)
+else
+get-llvm: llvm-$(LLVM_VER)/configure $(LIBCXX_GET_DEPENDENCY)
+endif
 configure-llvm: llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/config.status
 compile-llvm: $(LLVM_OBJ_SOURCE)
 check-llvm: llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/checked
@@ -445,10 +514,17 @@ install-llvm: $(LLVM_OBJ_TARGET)
 
 UV_SRC_TARGET = libuv/.libs/libuv.a
 UV_OBJ_TARGET = $(build_libdir)/libuv.a
-ifneq ($(USEMSVC), 1)
-UV_OPTS =
-else
-UV_OPTS = CFLAGS=-DBUILDING_UV_SHARED
+UV_CFLAGS = 
+ifeq ($(USEMSVC), 1)
+UV_CFLAGS += -DBUILDING_UV_SHARED
+endif
+ifeq ($(USEICC), 1)
+UV_CFLAGS += -static-intel
+endif
+
+UV_OPTS += LDFLAGS="$(CLDFLAGS) -v"
+ifneq ($(UV_CFLAGS),)
+UV_OPTS += CFLAGS="$(UV_CFLAGS)"
 endif
 
 libuv/configure:
@@ -468,7 +544,7 @@ $(UV_SRC_TARGET): libuv/config.status
 	touch -c libuv/Makefile.in
 	touch -c libuv/configure
 	touch -c libuv/config.status
-	$(MAKE) -C libuv
+	$(MAKE) -C libuv $(UV_OPTS)
 	touch -c $@
 libuv/checked: $(UV_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
@@ -541,7 +617,7 @@ install-pcre: $(PCRE_OBJ_TARGET)
 GRISU_OPTS = $(CXXFLAGS) -O3 -fvisibility=hidden $(fPIC)
 GRISU_OBJ_TARGET = $(build_shlibdir)/libgrisu.$(SHLIB_EXT)
 
-double-conversion-$(GRISU_VER).tar.gz:
+double-conversion-$(GRISU_VER).tar.gz: 
 	$(JLDOWNLOAD) $@ http://double-conversion.googlecode.com/files/$@
 	touch -c $@
 double-conversion-$(GRISU_VER)/Makefile: double-conversion-$(GRISU_VER).tar.gz
@@ -551,7 +627,7 @@ double-conversion-$(GRISU_VER)/Makefile: double-conversion-$(GRISU_VER).tar.gz
 	touch -c $@
 
 ifeq ($(USE_SYSTEM_GRISU), 0)
-$(GRISU_OBJ_TARGET): double-conversion-$(GRISU_VER)/Makefile
+$(GRISU_OBJ_TARGET): double-conversion-$(GRISU_VER)/Makefile $(LIBCXX_DEPENDENCY)
 	cd double-conversion-$(GRISU_VER) && \
 	$(CXX) -c $(GRISU_OPTS) -o src/bignum.o -Isrc src/bignum.cc && \
 	$(CXX) -c $(GRISU_OPTS) -o src/bignum-dtoa.o -Isrc src/bignum-dtoa.cc && \
@@ -1203,42 +1279,47 @@ compile-fftw-double: $(FFTW_DOUBLE_OBJ_TARGET)
 check-fftw-double: fftw-$(FFTW_VER)-double/checked
 install-fftw-double: $(FFTW_DOUBLE_OBJ_TARGET)
 
-## UTF8PROC ##
+## MOJIBAKE ##
 
-UTF8PROC_OBJ_SOURCE = utf8proc-v$(UTF8PROC_VER)/libutf8proc.a
-UTF8PROC_OBJ_LIB = $(build_libdir)/libutf8proc.a
-UTF8PROC_OBJ_HEADER = $(build_includedir)/utf8proc.h
-UTF8PROC_OBJ_TARGET = $(UTF8PROC_OBJ_LIB) $(UTF8PROC_OBJ_HEADER)
+MOJIBAKE_SRC_TARGET = libmojibake/libmojibake.a
+MOJIBAKE_OBJ_LIB    = $(build_libdir)/libmojibake.a
+MOJIBAKE_OBJ_HEADER = $(build_includedir)/mojibake.h
+MOJIBAKE_OBJ_TARGET = $(MOJIBAKE_OBJ_LIB) $(MOJIBAKE_OBJ_HEADER)
 
-utf8proc-v$(UTF8PROC_VER).tar.gz:
-	$(JLDOWNLOAD) $@ http://www.public-software-group.org/pub/projects/utf8proc/v$(UTF8PROC_VER)/$@
 
-utf8proc-v$(UTF8PROC_VER)/Makefile: utf8proc-v$(UTF8PROC_VER).tar.gz
-	$(JLCHECKSUM) $<
-	$(TAR) -xzf $<
-	patch $@ < utf8proc_Makefile.patch
-	cd utf8proc-v$(UTF8PROC_VER) && patch < ../utf8proc_msvc.patch
+libmojibake/Makefile:
+	(cd .. && git submodule init && git submodule update)
+ifeq (exists, $(shell [ -d libmojibake/.git ] && echo exists ))
+$(MOJIBAKE_SRC_TARGET): libmojibake/.git/HEAD
+endif
+ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/libmojibake ] && echo exists ))
+$(MOJIBAKE_SRC_TARGET): $(JULIAHOME)/.git/modules/deps/libmojibake/HEAD
+endif
+$(MOJIBAKE_SRC_TARGET): libmojibake/Makefile
+	$(MAKE) -C libmojibake cc="$(CC) -O2 -std=c99 $(fPIC)" AR="$(AR)" libmojibake.a
 	touch -c $@
+libmojibake/checked: $(MOJIBAKE_SRC_TARGET)
+ifeq ($(OS),$(BUILD_OS))
+	-$(MAKE) -C libmojibake check
+endif
+	echo 1 > $@
 
-$(UTF8PROC_OBJ_SOURCE): utf8proc-v$(UTF8PROC_VER)/Makefile
-	$(MAKE) -C utf8proc-v$(UTF8PROC_VER) cc="$(CC) -O2 -std=c99 $(fPIC)" AR="$(AR)" libutf8proc.a
-
-$(UTF8PROC_OBJ_LIB): $(UTF8PROC_OBJ_SOURCE)
+$(MOJIBAKE_OBJ_LIB): $(MOJIBAKE_SRC_TARGET)
 	cp -f $< $@
 
-$(UTF8PROC_OBJ_HEADER): utf8proc-v$(UTF8PROC_VER)/Makefile
-	cp -f utf8proc-v$(UTF8PROC_VER)/utf8proc.h $@
+$(MOJIBAKE_OBJ_HEADER): libmojibake/Makefile
+	cp -f libmojibake/mojibake.h $@
 
-clean-utf8proc:
-	-$(MAKE) -C utf8proc-v$(UTF8PROC_VER) clean
-distclean-utf8proc: clean-utf8proc
-	-rm -rf utf8proc-v$(UTF8PROC_VER).tar.gz utf8proc-v$(UTF8PROC_VER)
+clean-mojibake:
+	-$(MAKE) -C libmojibake clean
+	-rm -rf $(build_libdir)/libmojibake.a $(build_includedir)/mojibake.h
+distclean-mojibake: clean-mojibake
 
-get-utf8proc: utf8proc-v$(UTF8PROC_VER).tar.gz
-configure-utf8proc: get-utf8proc
-compile-utf8proc: $(UTF8PROC_OBJ_SOURCE)
-check-utf8proc: 
-install-utf8proc: $(UTF8PROC_OBJ_TARGET)
+get-mojibake: libmojibake/Makefile
+configure-mojibake: get-mojibake
+compile-mojibake: $(MOJIBAKE_SRC_TARGET)
+check-mojibake: libmojibake/checked
+install-mojibake: $(MOJIBAKE_OBJ_TARGET)
 
 ## SUITESPARSE ##
 

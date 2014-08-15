@@ -15,8 +15,6 @@
 	((memq (car s1) s2) (diff (cdr s1) s2))
 	(else               (cons (car s1) (diff (cdr s1) s2)))))
 
-(define (unique lst) (delete-duplicates lst))
-
 (define (has-dups lst)
   (if (null? lst)
       #f

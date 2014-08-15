@@ -28,21 +28,20 @@ end
 @test !islink(file)
 @test isreadable(file)
 @test iswritable(file)
-# Here's something else that might be UNIX-specific?
-run(`chmod -w $file`)
+chmod(file, filemode(file) & 0o7555)
 @test !iswritable(file)
-run(`chmod +w $file`)
+chmod(file, filemode(file) | 0o222)
 @test !isexecutable(file)
 @test filesize(file) == 0
 # On windows the filesize of a folder is the accumulation of all the contained
 # files and is thus zero in this case.
 @windows_only @test filesize(dir) == 0
 @unix_only @test filesize(dir) > 0
-let skew = 0.25  # allow 250ms skew
+let skew = 10  # allow 10s skew
     now   = time()
     mfile = mtime(file)
     mdir  = mtime(dir)
-    @test now >= mfile-skew  &&  now >= mdir-skew  &&  mfile >= mdir-skew
+    @test abs(now - mfile) <= skew && abs(now - mdir) <= skew && abs(mfile - mdir) <= skew
 end
 #@test int(time()) >= int(mtime(file)) >= int(mtime(dir)) >= 0 # 1 second accuracy should be sufficient
 

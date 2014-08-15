@@ -233,9 +233,7 @@ a normal value:
     ERROR: InexactError()
      in getindex at string.jl:59
 
-Using an index less than 1 or greater than ``end`` raises an error:
-
-.. doctest::
+Using an index less than 1 or greater than ``end`` raises an error::
 
     julia> str[0]
     ERROR: BoundsError()

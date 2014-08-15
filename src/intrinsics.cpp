@@ -39,7 +39,7 @@ namespace JL_I {
         // pointer access
         pointerref, pointerset, pointertoref,
         // c interface
-        ccall, cglobal, jl_alloca
+        ccall, cglobal, jl_alloca, llvmcall
     };
 };
 
@@ -831,6 +831,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     switch (f) {
     case ccall: return emit_ccall(args, nargs, ctx);
     case cglobal: return emit_cglobal(args, nargs, ctx);
+    case llvmcall: return emit_llvmcall(args, nargs, ctx);
 
     HANDLE(box,2)         return generic_box(args[1], args[2], ctx);
     HANDLE(unbox,2)       return generic_unbox(args[1], args[2], ctx);
@@ -1459,4 +1460,5 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(nan_dom_err);
     ADD_I(ccall); ADD_I(cglobal);
     ADD_I(jl_alloca);
+    ADD_I(llvmcall);
 }
