@@ -240,30 +240,11 @@ show_unquoted(io::IO, ex, ::Int,::Int) = show(io, ex)
 
 const indent_width = 4
 const quoted_syms = Set{Symbol}([:(:),:(::),:(:=),:(=),:(==),:(===),:(=>)])
-const uni_ops = Set{Symbol}([:(+), :(-), :(!), :(~), :(<:), :(>:)])
-const bin_ops_by_prec = [
-    "= := += -= *= /= //= .//= .*= ./= \\= .\\= ^= .^= %= .%= |= &= \$= => <<= >>= >>>= ~ .+= .-=",
-    "?",
-    "||",
-    "&&",
-    "-- -->",
-    "> < >= <= == === != !== .> .< .>= .<= .== .!= .= .! <: >:",
-    "|> <|",
-    ": ..",
-    "+ - .+ .- | \$",
-    "<< >> >>> .<< .>> .>>>",
-    "* / ./ % .% & .* \\ .\\",
-    "// .//",
-    "^ .^",
-    "::",
-    "."
-]
-const bin_op_precs = Dict{Symbol,Int}(merge([{symbol(op)=>i for op=split(bin_ops_by_prec[i])} for i=1:length(bin_ops_by_prec)]...))
-const bin_ops = Set{Symbol}(keys(bin_op_precs))
+const uni_ops = Set{Symbol}([:(+), :(-), :(!), :(¬), :(~), :(<:), :(>:), :(√), :(∛), :(∜)])
 const expr_infix_wide = Set([:(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(&=),
     :(|=), :($=), :(>>>=), :(>>=), :(<<=), :(&&), :(||)])
 const expr_infix = Set([:(:), :(<:), :(->), :(=>), symbol("::")])
-const expr_calls  = [:call =>('(',')'), :ref =>('[',']'), :curly =>('{','}')]
+const expr_calls  = [:call =>('(',')'), :calldecl =>('(',')'), :ref =>('[',']'), :curly =>('{','}')]
 const expr_parens = [:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>('{','}'),
                      :hcat =>('[',']'), :row =>('[',']')]
 
@@ -282,8 +263,12 @@ function isidentifier(s::String)
     end
     return true
 end
-isoperator(s::ByteString) = ccall(:jl_is_operator, Cint, (Ptr{Uint8},), s) != 0
-isoperator(s::String) = isoperator(bytestring(s))
+
+isoperator(s::Symbol) = ccall(:jl_is_operator, Cint, (Ptr{Uint8},), s) != 0
+operator_precedence(s::Symbol) = int(ccall(:jl_operator_precedence,
+                                           Cint, (Ptr{Uint8},), s))
+operator_precedence(x::Any) = 0 # fallback for generic expression nodes
+const prec_power = operator_precedence(:(^))
 
 is_expr(ex, head::Symbol)         = (isa(ex, Expr) && (ex.head == head))
 is_expr(ex, head::Symbol, n::Int) = is_expr(ex, head) && length(ex.args) == n
@@ -356,6 +341,19 @@ function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0)
     print(io, op); show_list(io, items, sep, indent, prec); print(io, cl)
 end
 
+# show a normal (non-operator) function call, e.g. f(x,y) or A[z]
+function show_call(io::IO, head, func, func_args, indent)
+    op, cl = expr_calls[head]
+    if isa(func, Symbol) || (isa(func, Expr) && func.head == :.)
+        show_unquoted(io, func, indent)
+    else
+        print(io, '(')
+        show_unquoted(io, func, indent)
+        print(io, ')')
+    end
+    show_enclosed_list(io, op, func_args, ",", cl, indent)
+end
+
 ## AST printing ##
 
 show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)        = print(io, sym)
@@ -375,7 +373,7 @@ show_unquoted(io::IO, ex::QuoteNode, indent::Int, prec::Int) =
 function show_unquoted_quote_expr(io::IO, value, indent::Int, prec::Int)
     if isa(value, Symbol) && !(value in quoted_syms)
         s = string(value)
-        if (isidentifier(s) || isoperator(s)) && s != "end"
+        if isidentifier(s) || isoperator(value)
             print(io, ":")
             print(io, value)
         else
@@ -413,7 +411,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     elseif (head in expr_infix && nargs==2) || (is(head,:(:)) && nargs==3)
         show_list(io, args, head, indent)
     elseif head in expr_infix_wide && nargs == 2
-        func_prec = get(bin_op_precs, head, 0)
+        func_prec = operator_precedence(head)
         if func_prec < prec
             show_enclosed_list(io, '(', args, " $head ", ')', indent, func_prec)
         else
@@ -435,10 +433,15 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         if is(head, :tuple) && nargs == 1; print(io, ','); end
         head !== :row && print(io, cl)
 
+    # function declaration (like :call but always printed with parens)
+    # (:calldecl is a "fake" expr node created when we find a :function expr)
+    elseif head == :calldecl && nargs >= 1
+        show_call(io, head, args[1], args[2:end], indent)
+        
     # function call
     elseif haskey(expr_calls, head) && nargs >= 1  # :call/:ref/:curly
         func = args[1]
-        func_prec = get(bin_op_precs, func, 0)
+        func_prec = operator_precedence(func)
         func_args = args[2:end]
 
         # scalar multiplication (i.e. "100x")
@@ -459,9 +462,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             end
 
         # binary operator (i.e. "x + y")
-        elseif func in bin_ops
+        elseif func_prec > 0 # is a binary operator
             if length(func_args) > 1
-                sep = func_prec >= bin_op_precs[:(^)] ? "$func" : " $func "
+                sep = func_prec >= prec_power ? "$func" : " $func "
                 if func_prec <= prec
                     show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec)
                 else
@@ -478,15 +481,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 
         # normal function (i.e. "f(x,y)" or "A[x,y]")
         else
-            op, cl = expr_calls[head]
-            if isa(func, Symbol) || (isa(func, Expr) && func.head == :.)
-                show_unquoted(io, func, indent)
-            else
-                print(io, '(')
-                show_unquoted(io, func, indent)
-                print(io, ')')
-            end
-            show_enclosed_list(io, op, func_args, ",", cl, indent)
+            show_call(io, head, func, func_args, indent)
         end
     elseif is(head, :ccall)
         show_unquoted(io, :ccall, indent)
@@ -494,12 +489,18 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 
     # comparison (i.e. "x < y < z")
     elseif is(head, :comparison) && nargs >= 3 && (nargs&1==1)
-        comp_prec = minimum([get(bin_op_precs, comp, 0) for comp=args[2:2:end]])
+        comp_prec = minimum(operator_precedence, args[2:2:end])
         if comp_prec <= prec
             show_enclosed_list(io, '(', args, " ", ')', indent, comp_prec)
         else
             show_list(io, args, " ", indent, comp_prec)
         end
+
+    # function calls need to transform the function from :call to :calldecl
+    # so that operators are printed correctly
+    elseif head == :function && nargs==2 && is_expr(args[1], :call)
+        show_block(io, head, Expr(:calldecl, args[1].args...), args[2], indent)
+        print(io, "end")
 
     # block with argument
     elseif head in (:for,:while,:function,:if,:module) && nargs==2

@@ -18,7 +18,7 @@ endif
 OBJS = $(SRCS:%.c=%.o)
 DOBJS = $(SRCS:%.c=%.do)
 LLTDIR = ../support
-LLT = $(LLTDIR)/libsupport.a $(LIBUV) $(LIBUTF8PROC)
+LLT = $(LLTDIR)/libsupport.a $(LIBUV) $(LIBMOJIBAKE)
 
 FLAGS = -I$(LLTDIR) $(CFLAGS) $(HFILEDIRS:%=-I%) \
         -I$(LIBUV_INC) -I$(build_includedir) $(LIBDIRS:%=-L%) \
@@ -80,7 +80,7 @@ endif
 endif
 
 $(EXENAME): $(OBJS) $(LIBFILES) $(LIBTARGET).a flmain.o
-	@$(call PRINT_LINK, $(CCLD) $(SHIPFLAGS) $(OBJS) flmain.o $(LDFLAGS) -o $(EXENAME) $(LIBTARGET).a $(LIBS) $(OSLIBS))
+	@$(call PRINT_LINK, $(CCLD) $(SHIPFLAGS) $(OBJS) flmain.o -o $(EXENAME) $(LIBTARGET).a $(LIBS) $(OSLIBS))
 ifneq ($(USEMSVC), 1)
 	$(call spawn,./$(EXENAME)) unittest.lsp
 endif

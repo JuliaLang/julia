@@ -130,7 +130,7 @@ Resources
 In addition to this manual, there are various other resources that may
 help new users get started with julia:
 
-- `Julia and IJulia cheatsheet <http://math.mit.edu/%7Estevenj/Julia-cheatsheet.pdf>`_
+- `Julia and IJulia cheatsheet <http://math.mit.edu/~stevenj/Julia-cheatsheet.pdf>`_
 - `Learn Julia in a few minutes <http://learnxinyminutes.com/docs/julia/>`_
 - `Tutorial for Homer Reid's numerical analysis class <http://homerreid.dyndns.org/teaching/18.330/JuliaProgramming.shtml>`_
 - `An introductory presentation <https://raw.githubusercontent.com/ViralBShah/julia-presentations/master/Fifth-Elephant-2013/Fifth-Elephant-2013.pdf>`_

@@ -47,6 +47,11 @@ const latex_symbols = [
     "\\cbrt" => "\u221B",
     "\\female" => "♀",
     "\\mars" => "♂",
+    "\\pprime" => "″",
+    "\\ppprime" => "‴",
+    "\\pppprime" => "⁗",
+    "\\backpprime" => "‶",
+    "\\backppprime" => "‷",
 
     # Superscripts
     "\\^0" => "⁰",

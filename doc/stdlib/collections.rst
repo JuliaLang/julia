@@ -16,9 +16,9 @@ the priority of existing keys can be changed efficiently.
 
 .. function:: PriorityQueue{K,V}([ord])
 
-   Construct a new PriorityQueue, with keys of type K and values/priorites of
-   type V. If an order is not given, the priority queue is min-ordered using
-   the default comparison for V.
+   Construct a new PriorityQueue, with keys of type ``K`` and values/priorites of
+   type ``V``. If an order is not given, the priority queue is min-ordered using
+   the default comparison for ``V``.
 
 .. function:: enqueue!(pq, k, v)
 
@@ -36,7 +36,7 @@ the priority of existing keys can be changed efficiently.
 inserted and priorities accessed or changed using indexing notation::
 
   # Julia code
-  pq = PriorityQueue()
+  pq = Collections.PriorityQueue()
 
   # Insert keys with associated priorities
   pq["a"] = 10

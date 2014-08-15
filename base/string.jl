@@ -1032,7 +1032,7 @@ function triplequoted(args...)
     sx = { isa(arg,ByteString) ? arg : esc(arg) for arg in args }
 
     indent = 0
-    rlines = split(RevString(sx[end]), '\n', 2)
+    rlines = split(RevString(sx[end]), '\n'; limit=2)
     last_line = rlines[1]
     if length(rlines) > 1 && lstrip(last_line) == ""
         indent,_ = indentation(last_line)
@@ -1287,8 +1287,8 @@ cpad(s, n::Integer, p=" ") = rpad(lpad(s,div(n+strwidth(s),2),p),n,p)
 
 # splitter can be a Char, Vector{Char}, String, Regex, ...
 # any splitter that provides search(s::String, splitter)
-split{T<:SubString}(str::T, splitter, limit::Integer, keep_empty::Bool) = _split(str, splitter, limit, keep_empty, T[])
-split{T<:String}(str::T, splitter, limit::Integer, keep_empty::Bool) = _split(str, splitter, limit, keep_empty, SubString{T}[])
+split{T<:SubString}(str::T, splitter; limit::Integer=0, keep::Bool=true) = _split(str, splitter, limit, keep, T[])
+split{T<:String}(str::T, splitter; limit::Integer=0, keep::Bool=true) = _split(str, splitter, limit, keep, SubString{T}[])
 function _split{T<:String,U<:Array}(str::T, splitter, limit::Integer, keep_empty::Bool, strs::U)
     i = start(str)
     n = endof(str)
@@ -1310,17 +1310,13 @@ function _split{T<:String,U<:Array}(str::T, splitter, limit::Integer, keep_empty
     end
     return strs
 end
-split(s::String, spl, n::Integer) = split(s, spl, n, true)
-split(s::String, spl, keep::Bool) = split(s, spl, 0, keep)
-split(s::String, spl)             = split(s, spl, 0, true)
 
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
 const _default_delims = [' ','\t','\n','\v','\f','\r']
-split(str::String)                = split(str, _default_delims, 0, false)
+split(str::String) = split(str, _default_delims; limit=0, keep=false)
 
-
-rsplit{T<:SubString}(str::T, splitter, limit::Integer, keep_empty::Bool) = _rsplit(str, splitter, limit, keep_empty, T[])
-rsplit{T<:String}(str::T, splitter, limit::Integer, keep_empty::Bool) = _rsplit(str, splitter, limit, keep_empty, SubString{T}[])
+rsplit{T<:SubString}(str::T, splitter; limit::Integer=0, keep::Bool=true) = _rsplit(str, splitter, limit, keep, T[])
+rsplit{T<:String}(str::T, splitter   ; limit::Integer=0, keep::Bool=true) = _rsplit(str, splitter, limit, keep, SubString{T}[])
 function _rsplit{T<:String,U<:Array}(str::T, splitter, limit::Integer, keep_empty::Bool, strs::U)
     i = start(str)
     n = endof(str)
@@ -1340,9 +1336,6 @@ function _rsplit{T<:String,U<:Array}(str::T, splitter, limit::Integer, keep_empt
     (keep_empty || (n > 0)) && unshift!(strs, SubString(str,1,n))
     return strs
 end
-rsplit(s::String, spl, n::Integer) = rsplit(s, spl, n, true)
-rsplit(s::String, spl, keep::Bool) = rsplit(s, spl, 0, keep)
-rsplit(s::String, spl)             = rsplit(s, spl, 0, true)
 #rsplit(str::String) = rsplit(str, _default_delims, 0, false)
 
 function replace(str::ByteString, pattern, repl::Function, limit::Integer)

@@ -13,22 +13,22 @@ ________
 
 To use the default handler, the macro :func:`@test` can be used directly::
 
-  # Julia code
   julia> using Base.Test
   
   julia> @test 1 == 1
 
   julia> @test 1 == 0
-  ERROR: test failed: :((1==0))
-   in default_handler at test.jl:20
-   in do_test at test.jl:37
+  ERROR: test failed: 1 == 0
+   in error at error.jl:21
+   in default_handler at test.jl:19
+   in do_test at test.jl:39
 
   julia> @test error("This is what happens when a test fails")
-  ERROR: test error during :(error("This is what happens when a test fails"))
+  ERROR: test error during error("This is what happens when a test fails")
   This is what happens when a test fails
    in error at error.jl:21
    in anonymous at test.jl:62
-   in do_test at test.jl:35
+   in do_test at test.jl:37
 
 As seen in the examples above, failures or errors will print the abstract
 syntax tree of the expression in question.
@@ -137,3 +137,19 @@ _________
 .. function:: with_handler(f, handler)
 
    Run the function ``f`` using the ``handler`` as the handler.
+
+
+Testing Base Julia
+==================
+
+Julia is under rapid development and has an extensive test suite to
+verify functionality across multiple platforms. If you build Julia
+from source, you can run this test suite with ``make test``. In a
+binary install, you can run the test suite using ``Base.runtests()``.
+
+.. currentmodule:: Base
+
+.. function:: runtests([tests=["all"] [, numcores=iceil(CPU_CORES/2) ]])
+
+   Run the Julia unit tests listed in ``tests``, which can be either a
+   string or an array of strings, using ``numcores`` processors.

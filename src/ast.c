@@ -116,7 +116,7 @@ static builtinspec_t julia_flisp_ast_ext[] = {
 
 DLLEXPORT void jl_init_frontend(void)
 {
-    fl_init(2*512*1024);
+    fl_init(2048*1024);
     value_t img = cvalue(iostreamtype, sizeof(ios_t));
     ios_t *pi = value2c(ios_t*, img);
     ios_static_buffer(pi, (char*)flisp_system_image, sizeof(flisp_system_image));
@@ -891,6 +891,11 @@ jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_tuple_t *sparams)
 DLLEXPORT int jl_is_operator(char *sym) {
      return fl_applyn(1, symbol_value(symbol("operator?")), symbol(sym))
              == FL_T;
+}
+
+DLLEXPORT int jl_operator_precedence(char *sym) {
+     return numval(fl_applyn(1, symbol_value(symbol("operator-precedence")),
+                             symbol(sym)));
 }
 
 #ifdef __cplusplus

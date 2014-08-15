@@ -117,6 +117,10 @@ t_func[nan_dom_err] = (2, 2, (a, b)->a)
 t_func[eval(Core.Intrinsics,:ccall)] =
     (3, Inf, (fptr, rt, at, a...)->(is(rt,Type{Void}) ? Nothing :
                                     isType(rt) ? rt.parameters[1] : Any))
+t_func[eval(Core.Intrinsics,:llvmcall)] =
+    (3, Inf, (fptr, rt, at, a...)->(is(rt,Type{Void}) ? Nothing :
+                                    isType(rt) ? rt.parameters[1] : 
+                                    isa(rt,Tuple) ? map(x->x.parameters[1],rt) : Any))
 t_func[eval(Core.Intrinsics,:cglobal)] =
     (1, 2, (fptr, t...)->(isempty(t) ? Ptr{Void} :
                           isType(t[1]) ? Ptr{t[1].parameters[1]} : Ptr))
@@ -1920,6 +1924,7 @@ function is_pure_builtin(f)
         if !(f === Intrinsics.pointerref || # this one is volatile
              f === Intrinsics.pointerset || # this one is never effect-free
              f === Intrinsics.ccall ||      # this one is never effect-free
+             f === Intrinsics.llvmcall ||   # this one is never effect-free
              f === Intrinsics.jl_alloca ||  # this one is volatile, TODO: possibly also effect-free?
              f === Intrinsics.pointertoref) # this one is volatile
             return true
@@ -2560,6 +2565,9 @@ function inlining_pass(e::Expr, sv, ast)
         if is_known_call(e, Core.Intrinsics.ccall, sv)
             i0 = 5
             isccall = true
+        elseif is_known_call(e, Core.Intrinsics.llvmcall, sv)
+            i0 = 5
+            isccall = false
         else
             i0 = 1
             isccall = false
