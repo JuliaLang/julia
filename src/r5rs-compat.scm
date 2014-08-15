@@ -5,19 +5,23 @@
 (use srfi-13)
 (use srfi-12)
 (use srfi-69)
+(use srfi-60)
 
-(require-library bindings)
-(import-for-syntax (only bindings macro-rules)
-                   (only macro-helpers once-only))
-(import bindings bindings macro-helpers)
-
+(define-syntax define-mac
+  (syntax-rules ()
+    [(define-mac (id expr) body ...)
+     (define-syntax id (lambda (expr id-rename id=) body ...))]
+    [(define-mac id xform)
+     (define-mac (id expr) (xform expr))]))
 
 (define (to-string x)
   (cond ((string? x) x)
 	((char? x) (string x))
 	((symbol? x) (symbol->string x))
+	((number? x) (number->string x))
 	(else
-	 (with-output-to-string (lambda () (display x))))))
+	 (call-with-output-string
+	  (lambda (p) (display x p))))))
 
 (define (str . xs)
   (apply string-append (map to-string xs)))
@@ -55,34 +59,39 @@
 
 (define raise signal)
 
-(define-macro (begin0 expr . body)
+(define-mac (begin0 form) ;expr . body)
   (let ((v (gensym)))
-    `(let ((,v ,expr))
-       ,@body
+    `(let ((,v ,(cadr form)))
+       ,@(cddr form)
        ,v)))
 
-(define-macro (unwind-protect expr finally)
+(define-mac (unwind-protect form) ;expr finally)
   (let ((e   (gensym))
 	(thk (gensym)))
-    `(let ((,thk (lambda () ,finally)))
+    `(let ((,thk (lambda () ,(caddr form))))
        (begin0 (with-exception-handler
 		(lambda (,e) (begin (,thk) (raise ,e)))
-		(lambda () ,expr))
+		(lambda () ,(cadr form)))
 	       (,thk)))))
 
-(define-macro (with-bindings binds . body)
-  (let ((vars (map car binds))
-	(vals (map cadr binds))
-	(olds (map (lambda (x) (gensym)) binds)))
-    `(let ,(map list olds vars)
-       ,@(map (lambda (v val) `(set! ,v ,val)) vars vals)
-       (unwind-protect
-	(begin ,@body)
-	(begin ,@(map (lambda (v old) `(set! ,v ,old)) vars olds))))))
+(define-mac (with-bindings form) ;binds . body)
+  (let ((binds (cadr form))
+	(body  (cddr form)))
+    (let ((vars (map car binds))
+	  (vals (map cadr binds))
+	  (olds (map (lambda (x) (gensym)) binds)))
+      `(let ,(map list olds vars)
+	 ,@(map (lambda (v val) `(set! ,v ,val)) vars vals)
+	 (unwind-protect
+	  (begin ,@body)
+	  (begin ,@(map (lambda (v old) `(set! ,v ,old)) vars olds)))))))
 
-(define-macro (receive formals expr . body)
-  `(call-with-values (lambda () ,expr)
-     (lambda ,formals ,@body)))
+(define-mac (receive form) ;formals expr . body)
+  (let ((formals (cadr form))
+	(expr (caddr form))
+	(body (cdddr form)))
+    `(call-with-values (lambda () ,expr)
+       (lambda ,formals ,@body))))
 
 (define (separate pred lst)
   (let loop ((lst lst)  (yes '())  (no '()))
@@ -123,7 +132,35 @@
 
 (define (eof-object) '#!eof)
 
-(load "utils.scm")
-(load "match.scm")
-(load "julia-parser.scm")
-#;(load "julia-syntax.scm")
+(define (table . kv)
+  (let ((h (make-hash-table)))
+    (let loop ((kv kv))
+      (if (null? kv)
+	  h
+	  (begin (hash-table-set! h (car kv) (cadr kv))
+		 (loop (cddr kv)))))))
+
+(define list-head take)
+
+(define (nreconc l1 l2) (append! (reverse! l1) l2))
+
+(define (jl-parse-file f)
+  (let ((inp  (make-token-stream (open-input-file f))))
+    ;; parse all exprs into a (toplevel ...) form
+    (let loop ((exprs '()))
+      ;; delay expansion so macros run in the Task executing
+      ;; the input, not the task parsing it (issue #2378)
+      ;; used to be (expand-toplevel-expr expr)
+      (let ((expr (julia-parse inp)))
+	(if (eof-object? expr)
+	    (cond ((null? exprs)     expr)
+		  ((length= exprs 1) (car exprs))
+		  (else (cons 'toplevel (reverse! exprs))))
+	    (if (and (pair? expr) (eq? (car expr) 'toplevel))
+		(loop (nreconc (cdr expr) exprs))
+		(loop (cons expr exprs))))))))
+
+(include "utils.scm")
+(include "match.scm")
+(include "julia-parser.scm")
+(include "julia-syntax.scm")

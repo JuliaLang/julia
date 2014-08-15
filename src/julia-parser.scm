@@ -26,14 +26,22 @@
 		     prec-pipe prec-colon prec-plus prec-bitshift prec-times prec-rational
 		     prec-power prec-decl prec-dot))
 
+(define prec-vals (list prec-assignment
+			prec-conditional prec-lazy-or prec-lazy-and prec-arrow prec-comparison
+			prec-pipe prec-colon prec-plus prec-bitshift prec-times prec-rational
+			prec-power prec-decl prec-dot))
+
 (define (Set l)
   ;; construct a length-specialized membership tester
   (cond ((length= l 1)
-	 (eval `(lambda (x)
-		  (,(if (symbol? (car l)) 'eq? 'eqv?) x (quote ,(car l))))))
+	 (let ((cl (car l)))
+	   (if (symbol? cl)
+	       (lambda (x) (eq? x cl))
+	       (lambda (x) (eqv? x cl)))))
 	((not (length> l 8))
-	 (eval `(lambda (x)
-		  (not (not (,(if (every symbol? l) 'memq 'memv) x (quote ,l)))))))
+	 (if (every symbol? l)
+	     (lambda (x) (memq x l))
+	     (lambda (x) (memv x l))))
 	(else
 	 (let ((t (make-hash-table)))
 	   (for-each (lambda (x) (hash-table-set! t x #t)) l)
@@ -41,9 +49,24 @@
 	     (hash-table-exists? t x))))))
 
 ;; for each prec-x generate an is-prec-x? procedure
-(for-each (lambda (name)
+#;(for-each (lambda (name)
 	    (eval `(define ,(symbol (str "is-" name "?")) (Set ,name))))
 	  prec-names)
+(define is-prec-assignment?  (Set prec-assignment))
+(define is-prec-conditional? (Set prec-conditional))
+(define is-prec-lazy-or?     (Set prec-lazy-or))
+(define is-prec-lazy-and?    (Set prec-lazy-and))
+(define is-prec-arrow?       (Set prec-arrow))
+(define is-prec-comparison?  (Set prec-comparison))
+(define is-prec-pipe?        (Set prec-pipe))
+(define is-prec-colon?       (Set prec-colon))
+(define is-prec-plus?        (Set prec-plus))
+(define is-prec-bitshift?    (Set prec-bitshift))
+(define is-prec-times?       (Set prec-times))
+(define is-prec-rational?    (Set prec-rational))
+(define is-prec-power?       (Set prec-power))
+(define is-prec-decl?        (Set prec-decl))
+(define is-prec-dot?         (Set prec-dot))
 
 ;; hash table of binary operators -> precedence
 (define prec-table (let ((t (make-hash-table)))
@@ -52,7 +75,7 @@
                            (begin
                              (for-each (lambda (x) (hash-table-set! t x prec)) (car L))
                              (pushprec (cdr L) (+ prec 1)))))
-                     (pushprec (map eval prec-names) 1)
+                     (pushprec prec-vals 1)
                      t))
 (define (operator-precedence op) (hash-table-ref/default prec-table op 0))
 
@@ -76,7 +99,7 @@
 
 (define operators (list* '~ '! '¬ '-> '√ '∛ '∜ ctrans-op trans-op vararg-op
 			 (delete-duplicates
-			  (apply append (map eval prec-names)))))
+			  (apply append prec-vals))))
 
 (define op-chars
   (delete-duplicates
@@ -108,37 +131,37 @@
 
 (define current-filename 'none)
 
-(define-macro (with-normal-ops . body)
+(define-mac (with-normal-ops body)
   `(with-bindings ((range-colon-enabled #t)
 		   (space-sensitive #f))
-		  ,@body))
+		  ,@(cdr body)))
 
-(define-macro (without-range-colon . body)
+(define-mac (without-range-colon body)
   `(with-bindings ((range-colon-enabled #f))
-		  ,@body))
+		  ,@(cdr body)))
 
-(define-macro (with-space-sensitive . body)
+(define-mac (with-space-sensitive body)
   `(with-bindings ((space-sensitive #t)
 		   (whitespace-newline #f))
-		  ,@body))
+		  ,@(cdr body)))
 
-(define-macro (with-inside-vec . body)
+(define-mac (with-inside-vec body)
   `(with-bindings ((space-sensitive #t)
 		   (inside-vec #t)
 		   (whitespace-newline #f))
-		  ,@body))
+		  ,@(cdr body)))
 
-(define-macro (with-end-symbol . body)
+(define-mac (with-end-symbol body)
   `(with-bindings ((end-symbol #t))
-		  ,@body))
+		  ,@(cdr body)))
 
-(define-macro (with-whitespace-newline . body)
+(define-mac (with-whitespace-newline body)
   `(with-bindings ((whitespace-newline #t))
-		  ,@body))
+		  ,@(cdr body)))
 
-(define-macro (without-whitespace-newline . body)
+(define-mac (without-whitespace-newline body)
   `(with-bindings ((whitespace-newline #f))
-		  ,@body))
+		  ,@(cdr body)))
 
 (define (assignment? e)
   (and (pair? e) (eq? (car e) '=)))
@@ -331,7 +354,7 @@
 
 (define (sized-uint-literal n s b)
   (let* ((i (if (eqv? (string-ref s 0) #\-) 3 2))
-	 (l (* (- (length s) i) b)))
+	 (l (* (- (string-length s) i) b)))
     (cond ((<= l 8)   (uint8  n))
 	  ((<= l 16)  (uint16 n))
 	  ((<= l 32)  (uint32 n))
@@ -465,11 +488,11 @@
 ;; --- token stream ---
 
 (define (make-token-stream s) (vector #f s #t #f))
-(define-macro (ts:port s)       `(vector-ref ,s 1))
-(define-macro (ts:last-tok s)   `(vector-ref ,s 0))
-(define-macro (ts:set-tok! s t) `(vector-set! ,s 0 ,t))
-(define-macro (ts:space? s)     `(vector-ref ,s 2))
-(define-macro (ts:pbtok s)      `(vector-ref ,s 3))
+(define-mac (ts:port s)     `(vector-ref ,(cadr s) 1))
+(define-mac (ts:last-tok s) `(vector-ref ,(cadr s) 0))
+(define-mac (ts:set-tok! s) `(vector-set! ,(cadr s) 0 ,(caddr s)))
+(define-mac (ts:space? s)   `(vector-ref ,(cadr s) 2))
+(define-mac (ts:pbtok s)    `(vector-ref ,(cadr s) 3))
 (define (ts:put-back! s t)
   (if (ts:pbtok s)
       (error "too many pushed-back tokens (internal error)")
@@ -502,7 +525,10 @@
 
 ; parse left-to-right binary operator
 ; produces structures like (+ (+ (+ 2 3) 4) 5)
-(define-macro (parse-LtoR s down ops)
+(define-mac (parse-LtoR form) ;s down ops)
+  (let ((s (cadr form))
+	(down (caddr form))
+	(ops (cadddr form)))
   `(let loop ((ex (,down ,s))
 	      (t  (peek-token ,s)))
      (if (not (,ops t))
@@ -510,7 +536,7 @@
 	 (begin (take-token ,s)
 		(if (or (syntactic-op? t) (eq? t 'in) (eq? t '|::|))
 		    (loop (list t ex (,down ,s)) (peek-token ,s))
-		    (loop (list 'call t ex (,down ,s)) (peek-token ,s)))))))
+		    (loop (list 'call t ex (,down ,s)) (peek-token ,s))))))))
 
 ; parse right-to-left binary operator
 ; produces structures like (= a (= b (= c d)))
@@ -1812,7 +1838,7 @@
                  (if (interpolate-string-literal? ps)
                      `(string ,@(filter (lambda (s)
 					  (not (and (string? s)
-						    (= (length s) 0))))
+						    (= (string-length s) 0))))
 					(cdr ps)))
 		     (cadr ps)))))
 

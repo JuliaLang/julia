@@ -82,6 +82,8 @@
 (define hash-table-set! put!)
 (define hash-table-exists? has?)
 (define hash-table-ref/default get)
+(define hash-table-keys table.keys)
+(define (hash-table-fold h f i) (table.foldl f i h))
 
 (define compare-strs compare)
 (define compare-nums compare)
@@ -90,3 +92,10 @@
   (if (null? (cdr lst))
       (car lst)
       (last (cdr lst))))
+
+(define-macro (define-mac form . body)
+  (let ((v (gensym)))
+    `(set-syntax! ',(car form)
+		  (lambda ,v
+		    (let ((,(cadr form) (cons ',(car form) ,v)))
+		      ,@body)))))
