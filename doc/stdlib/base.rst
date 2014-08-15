@@ -113,11 +113,14 @@ Getting Around
 
    If ``types`` is specified, an array of methods whose types match is returned.
 
-.. function:: methodswith(typ[, showparents])
+.. function:: methodswith(typ[, module or function][, showparents])
 
    Return an array of methods with an argument of type ``typ``. If optional
    ``showparents`` is ``true``, also return arguments with a parent type
    of ``typ``, excluding type ``Any``.
+
+   The optional second argument restricts the search to a particular module
+   or function.
 
 .. function:: @show
 
