@@ -685,8 +685,12 @@ void gc(int mustgrow)
 #ifdef MEMDEBUG
     LLT_FREE(tospace);
 #endif
-    if (curheap > lim)  // all data was live
+    if ((value_t*)curheap > ((value_t*)lim)-2) {
+        // all data was live; gc again and grow heap.
+        // but also always leave at least 4 words available, so a closure
+        // can be allocated without an extra check.
         gc(0);
+    }
 #endif
 }
 
@@ -1872,7 +1876,7 @@ static value_t apply_cl(uint32_t nargs)
 #ifdef MEMDEBUG2
             pv = alloc_words(4);
 #else
-            if (curheap > lim-2)
+            if ((value_t*)curheap > ((value_t*)lim)-2)
                 gc(0);
             pv = (value_t*)curheap;
             curheap += (4*sizeof(value_t));
