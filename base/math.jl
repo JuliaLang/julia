@@ -34,14 +34,10 @@ function clamp{X,L,H}(x::X, lo::L, hi::H)
     if lo > hi
         throw(DomainError())
     end
-    if x > hi
-        return convert(promote_type(X,L,H), hi)
-    elseif x < lo
-        return convert(promote_type(X,L,H), lo)
-    else
-        return convert(promote_type(X,L,H), x)
-    end
-end                  
+    ifelse(x > hi, convert(promote_type(X,L,H), hi),
+        ifelse(x < lo, convert(promote_type(X,L,H), lo),
+            convert(promote_type(X,L,H), x)))
+end
 
 clamp{T}(x::AbstractArray{T,1}, lo, hi) = [clamp(xx, lo, hi) for xx in x]
 clamp{T}(x::AbstractArray{T,2}, lo, hi) =
