@@ -131,7 +131,7 @@ function slotformat(slot::Slot{Month},dt)
         return VALUETOMONTH[slot.locale][month(dt)]
     end
 end
-slotformat(slot::Slot{Millisecond},dt) = millisecond(dt) == 0 ? ".0"^slot.width : string(millisecond(dt)/1000.0)[3:end]
+slotformat(slot::Slot{Millisecond},dt) = rpad(string(millisecond(dt)/1000.0)[3:end], slot.width, "0")
 
 function format(dt::TimeType,df::DateFormat)
     f = ""
