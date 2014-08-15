@@ -26,9 +26,9 @@ for (i,dt) in enumerate([jan,feb,mar,apr,may,jun,jul,aug,sep,oct,nov,dec])
     @test Dates.monthabbr(i) == monthnames[i][1:3]
     @test Dates.dayofweek(dt) == daysofweek[i]
     @test Dates.dayname(dt) == dows[i]
-    @test Dates.dayname(dayofweek(dt)) == dows[i]
+    @test Dates.dayname(Dates.dayofweek(dt)) == dows[i]
     @test Dates.dayabbr(dt) == dows[i][1:3]
-    @test Dates.dayabbr(dayofweek(dt)) == dows[i][1:3]
+    @test Dates.dayabbr(Dates.dayofweek(dt)) == dows[i][1:3]
 end
 
 # Customizing locale
