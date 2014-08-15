@@ -263,22 +263,35 @@ function type_close_enough(x::ANY, t::ANY)
             !isleaftype(t) && x <: t)
 end
 
+function methodswith(t::Type, f::Callable, showparents::Bool=false, meths = Method[])
+    if isa(f,DataType)
+        methods(f) # force constructor creation
+    end
+    if !isa(f.env, MethodTable)
+        return meths
+    end
+    d = f.env.defs
+    while !is(d,())
+        if any(x -> (type_close_enough(x, t) ||
+                     (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
+                      (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
+                     x != Any && x != ANY),
+               d.sig)
+            push!(meths, d)
+        end
+        d = d.next
+    end
+    return meths
+end
+
 function methodswith(t::Type, m::Module, showparents::Bool=false)
     meths = Method[]
     for nm in names(m)
-        try
-           mt = eval(m, nm)
-           d = mt.env.defs
-           while !is(d,())
-               if any(x -> (type_close_enough(x, t) ||
-                            (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
-                             (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
-                            x != Any && x != ANY),
-                      d.sig)
-                   push!(meths, d)
-               end
-               d = d.next
-           end
+        if isdefined(m, nm)
+            f = eval(m, nm)
+            if isa(f, Callable)
+                methodswith(t, f, showparents, meths)
+            end
         end
     end
     return unique(meths)
@@ -296,7 +309,7 @@ function methodswith(t::Type, showparents::Bool=false)
             end
         end
     end
-    return meths
+    return unique(meths)
 end
 
 ## file downloading ##
