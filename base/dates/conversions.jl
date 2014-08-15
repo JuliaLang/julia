@@ -35,11 +35,11 @@ end
 # Returns # of julian days since -4713-11-24T12:00:00
 datetime2julian(dt::DateTime) = (value(dt) - JULIANEPOCH)/86400000.0
 
-@vectorize_1arg Any unix2datetime
+@vectorize_1arg Real unix2datetime
 @vectorize_1arg DateTime datetime2unix
-@vectorize_1arg Any rata2datetime
+@vectorize_1arg Real rata2datetime
 @vectorize_1arg DateTime datetime2rata
-@vectorize_1arg Any julian2datetime
+@vectorize_1arg Real julian2datetime
 @vectorize_1arg DateTime datetime2julian
 
 export unix2datetime, datetime2unix, now, today, 
