@@ -179,7 +179,7 @@ PriorityQueue{K,V}(a::AbstractArray{(K,V)}, o::Ordering=Forward) = PriorityQueue
 length(pq::PriorityQueue) = length(pq.xs)
 isempty(pq::PriorityQueue) = isempty(pq.xs)
 haskey(pq::PriorityQueue, key) = haskey(pq.index, key)
-peek(pq::PriorityQueue) = pq.xs[1]
+peek(pq::PriorityQueue) = (kv = pq.xs[1]; (kv.a, kv.b))
 
 
 function percolate_down!(pq::PriorityQueue, i::Integer)
