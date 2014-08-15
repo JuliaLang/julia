@@ -254,6 +254,7 @@ function setindex!{K,V}(pq::PriorityQueue{K, V}, value, key)
     else
         enqueue!(pq, key, value)
     end
+    value
 end
 
 
