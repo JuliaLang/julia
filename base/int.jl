@@ -1,49 +1,46 @@
 ## type aliases ##
 
-if Int === Int32
-typealias SmallSigned Union(Int8,Int16)
-typealias SmallUnsigned Union(Uint8,Uint16)
-else
-typealias SmallSigned Union(Int8,Int16,Int32)
-typealias SmallUnsigned Union(Uint8,Uint16,Uint32)
-end
-
 ## integer arithmetic ##
 
--(x::SmallSigned) = -int(x)
--(x::SmallUnsigned) = -uint(x)
-
-+{T<:SmallSigned}(x::T, y::T) = int(x) + int(y)
--{T<:SmallSigned}(x::T, y::T) = int(x) - int(y)
-*{T<:SmallSigned}(x::T, y::T) = int(x) * int(y)
-
-+{T<:SmallUnsigned}(x::T, y::T) = uint(x) + uint(y)
--{T<:SmallUnsigned}(x::T, y::T) = uint(x) - uint(y)
-*{T<:SmallUnsigned}(x::T, y::T) = uint(x) * uint(y)
-
--(x::Int)     = box(Int,neg_int(unbox(Int,x)))
--(x::Uint)    = box(Uint,neg_int(unbox(Uint,x)))
+-(x::Int8)    = box(Int8,neg_int(unbox(Int8,x)))
+-(x::Uint8)   = box(Uint8,neg_int(unbox(Uint8,x)))
+-(x::Int16)   = box(Int16,neg_int(unbox(Int16,x)))
+-(x::Uint16)  = box(Uint16,neg_int(unbox(Uint16,x)))
+-(x::Int32)   = box(Int32,neg_int(unbox(Int32,x)))
+-(x::Uint32)  = box(Uint32,neg_int(unbox(Uint32,x)))
 -(x::Int64)   = box(Int64,neg_int(unbox(Int64,x)))
 -(x::Uint64)  = box(Uint64,neg_int(unbox(Uint64,x)))
 -(x::Int128)  = box(Int128,neg_int(unbox(Int128,x)))
 -(x::Uint128) = box(Uint128,neg_int(unbox(Uint128,x)))
 
-+(x::Int,     y::Int)     = box(Int,add_int(unbox(Int,x),unbox(Int,y)))
-+(x::Uint,    y::Uint)    = box(Uint,add_int(unbox(Uint,x),unbox(Uint,y)))
++(x::Int8,    y::Int8)    = box(Int8,add_int(unbox(Int8,x),unbox(Int8,y)))
++(x::Uint8,   y::Uint8)   = box(Uint8,add_int(unbox(Uint8,x),unbox(Uint8,y)))
++(x::Int16,   y::Int16)   = box(Int16,add_int(unbox(Int16,x),unbox(Int16,y)))
++(x::Uint16,  y::Uint16)  = box(Uint16,add_int(unbox(Uint16,x),unbox(Uint16,y)))
++(x::Int32,   y::Int32)   = box(Int32,add_int(unbox(Int,x),unbox(Int32,y)))
++(x::Uint32,  y::Uint32)  = box(Uint32,add_int(unbox(Uint,x),unbox(Uint32,y)))
 +(x::Int64,   y::Int64)   = box(Int64,add_int(unbox(Int64,x),unbox(Int64,y)))
 +(x::Uint64,  y::Uint64)  = box(Uint64,add_int(unbox(Uint64,x),unbox(Uint64,y)))
 +(x::Int128,  y::Int128)  = box(Int128,add_int(unbox(Int128,x),unbox(Int128,y)))
 +(x::Uint128, y::Uint128) = box(Uint128,add_int(unbox(Uint128,x),unbox(Uint128,y)))
 
--(x::Int,     y::Int)     = box(Int,sub_int(unbox(Int,x),unbox(Int,y)))
--(x::Uint,    y::Uint)    = box(Uint,sub_int(unbox(Uint,x),unbox(Uint,y)))
+-(x::Int8,    y::Int8)    = box(Int8,sub_int(unbox(Int8,x),unbox(Int8,y)))
+-(x::Uint8,   y::Uint8)   = box(Uint8,sub_int(unbox(Uint8,x),unbox(Uint8,y)))
+-(x::Int16,   y::Int16)   = box(Int16,sub_int(unbox(Int16,x),unbox(Int16,y)))
+-(x::Uint16,  y::Uint16)  = box(Uint16,sub_int(unbox(Uint16,x),unbox(Uint16,y)))
+-(x::Int32,   y::Int32)   = box(Int32,sub_int(unbox(Int,x),unbox(Int32,y)))
+-(x::Uint32,  y::Uint32)  = box(Uint32,sub_int(unbox(Uint,x),unbox(Uint32,y)))
 -(x::Int64,   y::Int64)   = box(Int64,sub_int(unbox(Int64,x),unbox(Int64,y)))
 -(x::Uint64,  y::Uint64)  = box(Uint64,sub_int(unbox(Uint64,x),unbox(Uint64,y)))
 -(x::Int128,  y::Int128)  = box(Int128,sub_int(unbox(Int128,x),unbox(Int128,y)))
 -(x::Uint128, y::Uint128) = box(Uint128,sub_int(unbox(Uint128,x),unbox(Uint128,y)))
 
-*(x::Int,     y::Int)     = box(Int,mul_int(unbox(Int,x),unbox(Int,y)))
-*(x::Uint,    y::Uint)    = box(Uint,mul_int(unbox(Uint,x),unbox(Uint,y)))
+*(x::Int8,    y::Int8)    = box(Int8,mul_int(unbox(Int8,x),unbox(Int8,y)))
+*(x::Uint8,   y::Uint8)   = box(Uint8,mul_int(unbox(Uint8,x),unbox(Uint8,y)))
+*(x::Int16,   y::Int16)   = box(Int16,mul_int(unbox(Int16,x),unbox(Int16,y)))
+*(x::Uint16,  y::Uint16)  = box(Uint16,mul_int(unbox(Uint16,x),unbox(Uint16,y)))
+*(x::Int32,   y::Int32)   = box(Int32,mul_int(unbox(Int,x),unbox(Int32,y)))
+*(x::Uint32,  y::Uint32)  = box(Uint32,mul_int(unbox(Uint,x),unbox(Uint32,y)))
 *(x::Int64,   y::Int64)   = box(Int64,mul_int(unbox(Int64,x),unbox(Int64,y)))
 *(x::Uint64,  y::Uint64)  = box(Uint64,mul_int(unbox(Uint64,x),unbox(Uint64,y)))
 
@@ -56,7 +53,9 @@ iseven(n::Integer) = !isodd(n)
 signbit(x::Integer) = x < 0
 signbit(x::Unsigned) = false
 
-flipsign(x::Int,    y::Int)    = box(Int,flipsign_int(unbox(Int,x),unbox(Int,y)))
+flipsign(x::Int8,   y::Int8)   = box(Int8,flipsign_int(unbox(Int8,x),unbox(Int8,y)))
+flipsign(x::Int16,  y::Int16)  = box(Int16,flipsign_int(unbox(Int16,x),unbox(Int16,y)))
+flipsign(x::Int32,  y::Int32)  = box(Int32,flipsign_int(unbox(Int32,x),unbox(Int32,y)))
 flipsign(x::Int64,  y::Int64)  = box(Int64,flipsign_int(unbox(Int64,x),unbox(Int64,y)))
 flipsign(x::Int128, y::Int128) = box(Int128,flipsign_int(unbox(Int128,x),unbox(Int128,y)))
 
@@ -328,18 +327,18 @@ convert(::Type{Uint128}, x::Float32) = convert(Uint128, float64(x))
 convert(::Type{Char}, x::Float32) = char(convert(Int, x))
 convert(::Type{Char}, x::Float64) = char(convert(Int, x))
 
-convert(::Type{Signed}, x::Uint8  ) = convert(Int,x)
-convert(::Type{Signed}, x::Uint16 ) = convert(Int,x)
-convert(::Type{Signed}, x::Uint32 ) = convert(Int,x)
+convert(::Type{Signed}, x::Uint8  ) = convert(Int8,x)
+convert(::Type{Signed}, x::Uint16 ) = convert(Int16,x)
+convert(::Type{Signed}, x::Uint32 ) = convert(Int32,x)
 convert(::Type{Signed}, x::Uint64 ) = convert(Int64,x)
 convert(::Type{Signed}, x::Uint128) = convert(Int128,x)
 convert(::Type{Signed}, x::Float32) = convert(Int,x)
 convert(::Type{Signed}, x::Float64) = convert(Int,x)
 convert(::Type{Signed}, x::Char)    = convert(Int,x)
 
-convert(::Type{Unsigned}, x::Int8   ) = convert(Uint,x)
-convert(::Type{Unsigned}, x::Int16  ) = convert(Uint,x)
-convert(::Type{Unsigned}, x::Int32  ) = convert(Uint,x)
+convert(::Type{Unsigned}, x::Int8   ) = convert(Uint8,x)
+convert(::Type{Unsigned}, x::Int16  ) = convert(Uint16,x)
+convert(::Type{Unsigned}, x::Int32  ) = convert(Uint32,x)
 convert(::Type{Unsigned}, x::Int64  ) = convert(Uint64,x)
 convert(::Type{Unsigned}, x::Int128 ) = convert(Uint128,x)
 convert(::Type{Unsigned}, x::Float32) = convert(Uint,x)
@@ -396,9 +395,9 @@ const WORD_SIZE = int(Int.size)*8
 
 ## integer promotions ##
 
-promote_rule(::Type{Int16},  ::Type{Int8} ) = Int
-promote_rule(::Type{Int32},  ::Type{Int8} ) = Int
-promote_rule(::Type{Int32},  ::Type{Int16}) = Int
+promote_rule(::Type{Int16},  ::Type{Int8} ) = Int16
+promote_rule(::Type{Int32},  ::Type{Int8} ) = Int32
+promote_rule(::Type{Int32},  ::Type{Int16}) = Int32
 promote_rule(::Type{Int64},  ::Type{Int8} ) = Int64
 promote_rule(::Type{Int64},  ::Type{Int16}) = Int64
 promote_rule(::Type{Int64},  ::Type{Int32}) = Int64
@@ -407,9 +406,9 @@ promote_rule(::Type{Int128}, ::Type{Int16}) = Int128
 promote_rule(::Type{Int128}, ::Type{Int32}) = Int128
 promote_rule(::Type{Int128}, ::Type{Int64}) = Int128
 
-promote_rule(::Type{Uint16},  ::Type{Uint8} ) = Uint
-promote_rule(::Type{Uint32},  ::Type{Uint8} ) = Uint
-promote_rule(::Type{Uint32},  ::Type{Uint16}) = Uint
+promote_rule(::Type{Uint16},  ::Type{Uint8} ) = Uint16
+promote_rule(::Type{Uint32},  ::Type{Uint8} ) = Uint32
+promote_rule(::Type{Uint32},  ::Type{Uint16}) = Uint32
 promote_rule(::Type{Uint64},  ::Type{Uint8} ) = Uint64
 promote_rule(::Type{Uint64},  ::Type{Uint16}) = Uint64
 promote_rule(::Type{Uint64},  ::Type{Uint32}) = Uint64
@@ -418,15 +417,15 @@ promote_rule(::Type{Uint128}, ::Type{Uint16}) = Uint128
 promote_rule(::Type{Uint128}, ::Type{Uint32}) = Uint128
 promote_rule(::Type{Uint128}, ::Type{Uint64}) = Uint128
 
-promote_rule(::Type{Uint8}, ::Type{Int8}  ) = Int
-promote_rule(::Type{Uint8}, ::Type{Int16} ) = Int
-promote_rule(::Type{Uint8}, ::Type{Int32} ) = Int
+promote_rule(::Type{Uint8}, ::Type{Int8}  ) = Int8
+promote_rule(::Type{Uint8}, ::Type{Int16} ) = Int16
+promote_rule(::Type{Uint8}, ::Type{Int32} ) = Int32
 promote_rule(::Type{Uint8}, ::Type{Int64} ) = Int64
 promote_rule(::Type{Uint8}, ::Type{Int128}) = Int128
 
-promote_rule(::Type{Uint16}, ::Type{Int8}  ) = Int
-promote_rule(::Type{Uint16}, ::Type{Int16} ) = Int
-promote_rule(::Type{Uint16}, ::Type{Int32} ) = Int
+promote_rule(::Type{Uint16}, ::Type{Int8}  ) = Int16
+promote_rule(::Type{Uint16}, ::Type{Int16} ) = Int16
+promote_rule(::Type{Uint16}, ::Type{Int32} ) = Int32
 promote_rule(::Type{Uint16}, ::Type{Int64} ) = Int64
 promote_rule(::Type{Uint16}, ::Type{Int128}) = Int128
 

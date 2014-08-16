@@ -22,7 +22,7 @@
 
 # sum
 
-@test sum(Int8[]) === 0
+@test sum(Int8[]) === int8(0)
 @test sum(Int[]) === 0
 @test sum(Float64[]) === 0.0
 
@@ -30,7 +30,7 @@
 @test sum(3) === 3
 @test sum(3.0) === 3.0
 
-@test sum([int8(3)]) === 3
+@test sum([int8(3)]) === int8(3)
 @test sum([3]) === 3
 @test sum([3.0]) === 3.0
 
@@ -49,14 +49,14 @@ fz = float(z)
 a = randn(32) # need >16 elements to trigger BLAS code path
 b = complex(randn(32), randn(32))
 @test sumabs(Float64[]) === 0.0
-@test sumabs([int8(-2)]) === 2
+@test sumabs([int8(-2)]) === int8(2)
 @test sumabs(z) === 14
 @test sumabs(fz) === 14.0
 @test_approx_eq sumabs(a) sum(abs(a))
 @test_approx_eq sumabs(b) sum(abs(b))
 
 @test sumabs2(Float64[]) === 0.0
-@test sumabs2([int8(-2)]) === 4
+@test sumabs2([int8(-2)]) === int8(4)
 @test sumabs2(z) === 54
 @test sumabs2(fz) === 54.0
 @test_approx_eq sumabs2(a) sum(abs2(a))
@@ -91,11 +91,11 @@ end
 # prod
 
 prod(Int[]) === 0
-prod(Int8[]) === 0
+prod(Int8[]) === int8(0)
 prod(Float64[]) === 0.0
 
 prod([3]) === 0
-prod([int8(3)]) === 0
+prod([int8(3)]) === int8(0)
 prod([3.0]) === 0.0
 
 prod(z) === 120
@@ -105,8 +105,8 @@ prod(fz) === 120.0
 prod2(itr) = invoke(prod, (Any,), itr)
 @test prod(Int[]) === prod2(Int[]) === 1
 @test prod(Int[7]) === prod2(Int[7]) === 7
-@test typeof(prod(Int8[])) == typeof(prod(Int8[1])) == typeof(prod(Int8[1, 7])) == Int 
-@test typeof(prod2(Int8[])) == typeof(prod2(Int8[1])) == typeof(prod2(Int8[1 7])) == Int
+@test typeof(prod(Int8[])) == typeof(prod(Int8[1])) == typeof(prod(Int8[1, 7])) == Int8 
+@test typeof(prod2(Int8[])) == typeof(prod2(Int8[1])) == typeof(prod2(Int8[1 7])) == Int8
 
 # maximum & minimum & extrema
 
