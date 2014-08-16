@@ -539,8 +539,8 @@
 	       (error "compile error: invalid formal argument " l
 		      " in list " o)))))
   (check-formals l l #f #f)
-  (map! (lambda (s) (if (pair? s) (keyword->symbol (car s)) s))
-	(to-proper l)))
+  (map (lambda (s) (if (pair? s) (keyword->symbol (car s)) s))
+       (to-proper l)))
 
 (define (emit-optional-arg-inits g env opta vars i)
   ; i is the lexical var index of the opt arg to process next
