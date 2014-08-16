@@ -90,12 +90,6 @@ endif
 
 ifeq ($(USE_SYSTEM_LIBGIT2), 0)
 STAGE1_DEPS += libgit2
-LIBGIT2_OPTS = -DTHREADSAFE=ON -DCMAKE_BUILD_TYPE=Release
-endif
-ifeq ($(BUILD_OS),WINNT)
-ifeq ($(OS),WINNT)
-LIBGIT2_OPTS = -DBUILD_CLAR=OFF -DWIN32=ON -DMINGW=ON -DUSE_SSH=OFF -G"MSYS Makefiles"
-endif
 endif
 
 #ifeq ($(USE_SYSTEM_ZLIB), 0)
@@ -1712,81 +1706,67 @@ compile-patchelf: $(PATCHELF_SOURCE)
 check-patchelf: patchelf-$(PATCHELF_VER)/checked
 install-patchelf: $(PATCHELF_TARGET)
 
-## Git
-
-GIT_SOURCE = git-$(GIT_VER)/src/git
-GIT_TARGET = $(build_prefix)/git
-
-git-$(GIT_VER).tar.gz:
-	$(JLDOWNLOAD) $@ http://git-core.googlecode.com/files/$@
-git-$(GIT_VER)/configure: git-$(GIT_VER).tar.gz
-	$(JLCHECKSUM) $<
-	$(TAR) zxf $<
-	touch -c $@
-git-$(GIT_VER)/config.status: git-$(GIT_VER)/configure
-	cd git-$(GIT_VER) && \
-	./configure $(CONFIGURE_COMMON) --bindir="$(build_libexecdir)"
-	touch -c $@
-$(GIT_SOURCE): git-$(GIT_VER)/config.status
-	$(MAKE) -C git-$(GIT_VER)
-	touch -c $@
-git-$(GIT_VER)/checked: $(GIT_SOURCE)
-	echo 1 > $@
-$(GIT_TARGET): $(GIT_SOURCE) git-$(GIT_VER)/checked
-	$(MAKE) -C git-$(GIT_VER) install NO_INSTALL_HARDLINKS=1 $(MAKE_COMMON)
-	touch -c $@
-
-clean-git:
-	-$(MAKE) -C git-$(GIT_VER) clean
-	-rm -f $(GIT_OBJ_TARGET)
-distclean-git:
-	-rm -rf git-$(GIT_VER).tar.gz git-$(GIT_VER)
-
-get-git: git-$(GIT_VER).tar.gz
-configure-git: git-$(GIT_VER)/config.status
-compile-git: $(GIT_SOURCE)
-check-git: git-$(GIT_VER)/checked
-install-git: $(GIT_TARGET)
-
 ## libgit2
 
-LIBGIT2_SOURCE = libgit2-$(LIBGIT2_VER)/build/libgit2.$(SHLIB_EXT)
-LIBGIT2_TARGET = $(build_shlibdir)/libgit2.$(SHLIB_EXT)
+LIBGIT2_OBJ_SOURCE = libgit2-$(LIBGIT2_VER)/build/libgit2.$(SHLIB_EXT)
+LIBGIT2_OBJ_TARGET = $(build_shlibdir)/libgit2.$(SHLIB_EXT)
+
+LIBGIT2_OPTS = -DTHREADSAFE=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=$(CC)
+ifeq ($(OS),WINNT)
+LIBGIT2_OPTS += -DBUILD_CLAR=OFF -DWIN32=ON -DMINGW=ON -DUSE_SSH=OFF -DCMAKE_SYSTEM_NAME=Windows
+ifeq ($(BUILD_OS),WINNT)
+LIBGIT2_OPTS += -G"MSYS Makefiles"
+else
+LIBGIT2_OPTS += -DCMAKE_RC_COMPILER=`which $(CROSS_COMPILE)windres`
+LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST) -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
+endif
+endif
 
 libgit2-$(LIBGIT2_VER).tar.gz:
 	$(JLDOWNLOAD) $@ https://github.com/libgit2/libgit2/archive/v$(LIBGIT2_VER).tar.gz
+libgit2-$(LIBGIT2_VER).zip:
+	$(JLDOWNLOAD) $@ https://github.com/libgit2/libgit2/archive/v$(LIBGIT2_VER).zip
+ifeq ($(BUILD_OS),WINNT) # repo has symlinks, tar fails to extract in MSYS2
+libgit2-$(LIBGIT2_VER)/CMakeLists.txt: libgit2-$(LIBGIT2_VER).zip
+	$(JLCHECKSUM) $<
+	unzip -qu $<
+else
 libgit2-$(LIBGIT2_VER)/CMakeLists.txt: libgit2-$(LIBGIT2_VER).tar.gz
 	$(JLCHECKSUM) $<
 	$(TAR) zxf $<
+endif
 	touch -c $@
 libgit2-$(LIBGIT2_VER)/build/Makefile: libgit2-$(LIBGIT2_VER)/CMakeLists.txt
 	mkdir -p libgit2-$(LIBGIT2_VER)/build
 	cd libgit2-$(LIBGIT2_VER)/build/ && \
-	cmake .. $(LIBGIT2_OPTS)
+	$(CMAKE) .. $(LIBGIT2_OPTS)
 	touch -c $@
-$(LIBGIT2_SOURCE): libgit2-$(LIBGIT2_VER)/build/Makefile
+$(LIBGIT2_OBJ_SOURCE): libgit2-$(LIBGIT2_VER)/build/Makefile
 	cd libgit2-$(LIBGIT2_VER)/build/ && \
-	cmake --build .
+	$(CMAKE) --build .
 	touch -c $@
-libgit2-$(LIBGIT2_VER)/build/checked: $(LIBGIT2_SOURCE)
+libgit2-$(LIBGIT2_VER)/build/checked: $(LIBGIT2_OBJ_SOURCE)
 	#cd libgit2-$(LIBGIT2_VER)/build/ && \
 	#ctest
 	echo 1 > $@
-$(LIBGIT2_TARGET): $(LIBGIT2_SOURCE) | $(build_shlibdir)
+$(LIBGIT2_OBJ_TARGET): $(LIBGIT2_OBJ_SOURCE) | $(build_shlibdir)
 	cp $< $@
-	# Should the includes get included?
-	#cp -R libgit2-$(LIBGIT2_VER)/include/* $(build_includedir)
 
 clean-libgit2:
 	-rm -rf libgit2-$(LIBGIT2_VER)/build/
 	-rm -f $(LIBGIT2_OBJ_TARGET)
-distclean-libgit2: clean-libgit2
+distclean-libgit2:
+	-rm -rf libgit2-$(LIBGIT2_VER).tar.gz libgit2-$(LIBGIT2_VER).zip libgit2-$(LIBGIT2_VER)
 
+ifeq ($(BUILD_OS),WINNT)
+get-libgit2: libgit2-$(LIBGIT2_VER).zip
+else
 get-libgit2: libgit2-$(LIBGIT2_VER).tar.gz
+endif
 configure-libgit2: libgit2-$(LIBGIT2_VER)/Makefile
-compile-libgit2: $(LIBGIT2_SOURCE)
+compile-libgit2: $(LIBGIT2_OBJ_SOURCE)
 check-libgit2: compile-libgit2
-install-libgit2: $(LIBGIT2_TARGET)
+install-libgit2: $(LIBGIT2_OBJ_TARGET)
 
 ## phony targets ##
 

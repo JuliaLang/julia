@@ -126,6 +126,9 @@ BUILD_LLDB = 0
 #XC_HOST = i686-w64-mingw32
 #XC_HOST = x86_64-w64-mingw32
 
+# Path to cmake (override in Make.user if needed)
+CMAKE = cmake
+
 # Figure out OS and architecture
 BUILD_OS := $(shell uname)
 
