@@ -3958,42 +3958,48 @@ static Function *jlcall_func_to_llvm(const std::string &cname, void *addr, Modul
 
 extern "C" void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
 {
-    // this assigns a function pointer (from loading the system image), to the function object
-    std::string funcName = lam->name->name;
-    funcName = "julia_" + funcName;
-    if (specsig) {
-        jl_value_t *jlrettype = jl_ast_rettype(lam, (jl_value_t*)lam->ast);
-        std::vector<Type*> fsig(0);
-        for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
-            Type *ty = julia_type_to_llvm(jl_tupleref(lam->specTypes,i));
-            if (ty != T_void && !ty->isEmptyTy())
-                fsig.push_back(ty);
+    if (imaging_mode) {
+        if (!specsig) {
+            lam->fptr = (jl_fptr_t)fptr; // in imaging mode, it's fine to use the fptr, but we don't want it in the shadow_module
         }
-        Type *rt = (jlrettype == (jl_value_t*)jl_nothing->type ? T_void : julia_type_to_llvm(jlrettype));
-        Function *f = Function::Create(FunctionType::get(rt, fsig, false),
+    } else {
+        // this assigns a function pointer (from loading the system image), to the function object
+        std::string funcName = lam->name->name;
+        funcName = "julia_" + funcName;
+        if (specsig) {
+            jl_value_t *jlrettype = jl_ast_rettype(lam, (jl_value_t*)lam->ast);
+            std::vector<Type*> fsig(0);
+            for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
+                Type *ty = julia_type_to_llvm(jl_tupleref(lam->specTypes,i));
+                if (ty != T_void && !ty->isEmptyTy())
+                    fsig.push_back(ty);
+            }
+            Type *rt = (jlrettype == (jl_value_t*)jl_nothing->type ? T_void : julia_type_to_llvm(jlrettype));
+            Function *f = Function::Create(FunctionType::get(rt, fsig, false),
 #ifdef USE_MCJIT
-                                       Function::ExternalLinkage, funcName, shadow_module);
+                                           Function::ExternalLinkage, funcName, shadow_module);
 #else
-                                       Function::ExternalLinkage, funcName, jl_Module);
+                                           Function::ExternalLinkage, funcName, jl_Module);
 #endif
 
-        if (lam->cFunctionObject == NULL) {
-            lam->cFunctionObject = (void*)f;
-            lam->cFunctionID = jl_assign_functionID(f);
+            if (lam->cFunctionObject == NULL) {
+                lam->cFunctionObject = (void*)f;
+                lam->cFunctionID = jl_assign_functionID(f);
+            }
+            add_named_global(f, (void*)fptr);
         }
-        add_named_global(f, (void*)fptr);
-    }
-    else {
+        else {
 #ifdef USE_MCJIT
-        Function *f = jlcall_func_to_llvm(funcName, fptr, shadow_module);
+            Function *f = jlcall_func_to_llvm(funcName, fptr, shadow_module);
 #else
-        Function *f = jlcall_func_to_llvm(funcName, fptr, jl_Module);
+            Function *f = jlcall_func_to_llvm(funcName, fptr, jl_Module);
 #endif
-        if (lam->functionObject == NULL) {
-            lam->functionObject = (void*)f;
-            lam->functionID = jl_assign_functionID(f);
-            assert(lam->fptr == &jl_trampoline);
-            lam->fptr = (jl_fptr_t)fptr;
+            if (lam->functionObject == NULL) {
+                lam->functionObject = (void*)f;
+                lam->functionID = jl_assign_functionID(f);
+                assert(lam->fptr == &jl_trampoline);
+                lam->fptr = (jl_fptr_t)fptr;
+            }
         }
     }
 }
