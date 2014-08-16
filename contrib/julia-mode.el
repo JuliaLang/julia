@@ -6,9 +6,20 @@
 ;; Keywords: languages
 
 ;;; Usage:
-;; Put the following code in your .emacs, site-load.el, or other relevant file
+
+;; Put the following code in your .emacs, site-load.el, or other
+;; relevant file:
+;;
 ;; (add-to-list 'load-path "path-to-julia-mode")
 ;; (require 'julia-mode)
+;;
+;; or:
+;;
+;; (add-to-list 'load-path "path/to/julia-mode.el")
+;; (autoload 'julia-mode "julia-mode" "Julia mode" t)
+;; (add-to-list 'auto-mode-alist '("\\.jl\\'" . julia-mode))
+;;
+;; The second version will load julia-mode.el only on demand.
 
 ;;; Commentary:
 ;; This is the official Emacs mode for editing Julia programs.
@@ -39,8 +50,8 @@
 
 (defvar julia-basic-offset)
 
-;;;###autoload
-(add-to-list 'auto-mode-alist '("\\.jl\\'" . julia-mode))
+(unless (member 'julia-mode (mapcar #'cdr auto-mode-alist))
+  (add-to-list 'auto-mode-alist '("\\.jl\\'" . julia-mode)))
 
 ;; define ignore-errors macro if it isn't present
 ;; (necessary for emacs 22 compatibility)
@@ -51,7 +62,8 @@
   (let ((table (make-syntax-table)))
     (modify-syntax-entry ?_ "w" table)   ; underscores in words
     (modify-syntax-entry ?@ "w" table)
-    (modify-syntax-entry ?. "_" table)
+    (modify-syntax-entry ?. "w" table)
+    (modify-syntax-entry ?! "w" table)
     (modify-syntax-entry ?# "< 14" table)  ; # single-line and multiline start
     (modify-syntax-entry ?= ". 23bn" table)
     (modify-syntax-entry ?\n ">" table)  ; \n single-line comment end
@@ -100,18 +112,21 @@
 (defconst julia-unquote-regex
   "\\(\\s(\\|\\s-\\|-\\|[,%=<>\\+*/?&|!\\^~\\\\;:]\\|^\\)\\($[a-zA-Z0-9_]+\\)")
 
-(defconst julia-forloop-in-regex
-  "for +.*[^
-].* \\(in\\)\\(\\s-\\|$\\)+")
+(defconst julia-for-loop-regex
+  "for\\s-+\\(\\sw+\\)\\s-+\\(in\\)\\(\\s-\\|$\\)+")
 
 (defconst julia-function-regex
-  (rx symbol-start "function" (1+ space) (group (1+ (or word ?_ ?!)))))
+  (rx symbol-start "function" (1+ space) (group (1+ word))))
 
 (defconst julia-type-regex
-  (rx symbol-start "type" (1+ space) (group (1+ (or word ?_)))))
+  (rx symbol-start "type" (1+ space) (group (1+ word))))
 
 (defconst julia-macro-regex
   "@\\w+")
+
+(defconst julia-constants-regex
+  (regexp-opt
+   '("true" "false" "C_NULL" "Inf" "NaN" "Inf32" "NaN32" "nothing")))
 
 (defconst julia-keyword-regex
   (regexp-opt
@@ -121,22 +136,41 @@
      "module" "using" "import" "export" "const" "let" "bitstype" "do"
      "baremodule" "importall" "immutable")))
 
+(defconst julia-builtin-types-regex
+  (regexp-opt
+   '("Number" "Real" "BigInt" "Integer"
+     "Uint" "Uint8" "Uint16" "Uint32" "Uint64" "Uint128"
+     "Int" "Int8" "Int16" "Int32" "Int64" "Int128"
+     "BigFloat" "FloatingPoint" "Float16" "Float32" "Float64"
+     "Complex128" "Complex64" "ComplexPair"
+     "Bool"
+     "Char" "ASCIIString" "UTF8String" "ByteString" "SubString"
+     "Array" "DArray" "AbstractArray" "AbstractVector" "AbstractMatrix" "AbstractSparseMatrix" "SubArray" "StridedArray" "StridedVector" "StridedMatrix" "VecOrMat" "StridedVecOrMat" "DenseArray" "SparseMatrixCSC"
+     "Range" "Range1" "OrdinalRange" "StepRange" "UnitRange" "FloatRange"
+     "Tuple" "NTuple"
+     "DataType" "Symbol" "Function" "Vector" "Matrix" "Union" "Type" "Any" "Complex" "None" "String" "Ptr" "Void" "Exception" "Task" "Signed" "Unsigned" "Associative" "Dict" "IO" "IOStream" "Ranges" "Rational" "Regex" "RegexMatch" "Set" "IntSet" "Expr" "WeakRef" "Nothing" "ObjectIdDict")))
+
 (defconst julia-font-lock-keywords
   (list
-   '("\\<\\(\\|Uint\\(8\\|16\\|32\\|64\\|128\\)\\|Int\\(8\\|16\\|32\\|64\\|128\\)\\|BigInt\\|Integer\\|BigFloat\\|FloatingPoint\\|Float16\\|Float32\\|Float64\\|Complex128\\|Complex64\\|ComplexPair\\|Bool\\|Char\\|DataType\\|Number\\|Real\\|Int\\|Uint\\|Array\\|DArray\\|AbstractArray\\|AbstractVector\\|AbstractMatrix\\|AbstractSparseMatrix\\|SubArray\\|StridedArray\\|StridedVector\\|StridedMatrix\\|VecOrMat\\|StridedVecOrMat\\|DenseArray\\|Range\\|OrdinalRange\\|StepRange\\|UnitRange\\|FloatRange\\|SparseMatrixCSC\\|Tuple\\|NTuple\\|Symbol\\|Function\\|Vector\\|Matrix\\|Union\\|Type\\|Any\\|Complex\\|None\\|String\\|Ptr\\|Void\\|Exception\\|Task\\|Signed\\|Unsigned\\|Associative\\|Dict\\|IO\\|IOStream\\|Rational\\|Regex\\|RegexMatch\\|Set\\|IntSet\\|ASCIIString\\|UTF8String\\|ByteString\\|Expr\\|WeakRef\\|Nothing\\|ObjectIdDict\\|SubString\\)\\>" .
-     font-lock-type-face)
-    (cons julia-keyword-regex 'font-lock-keyword-face)
-    (cons julia-macro-regex 'font-lock-keyword-face)
-    (cons
-     (regexp-opt
-      '("true" "false" "C_NULL" "Inf" "NaN" "Inf32" "NaN32" "nothing"))
-     'font-lock-constant-face)
-    (list julia-unquote-regex 2 'font-lock-constant-face)
-    (list julia-char-regex 2 'font-lock-string-face)
-    (list julia-forloop-in-regex 1 'font-lock-keyword-face)
-    (list julia-function-regex 1 'font-lock-function-name-face)
-    (list julia-type-regex 1 'font-lock-type-face)
-))
+   (cons julia-builtin-types-regex 'font-lock-type-face)
+   (list julia-type-regex 1 'font-lock-type-face)
+   (list "::\\(\\sw+\\)" 1 'font-lock-type-face)
+   (cons julia-keyword-regex 'font-lock-keyword-face)
+   (cons julia-macro-regex 'font-lock-function-name-face)
+   (list julia-function-regex 1 'font-lock-function-name-face)
+   (cons julia-constants-regex 'font-lock-constant-face)
+   (list julia-unquote-regex 2 'font-lock-constant-face)
+   (list julia-char-regex 2 'font-lock-string-face)
+   (list julia-for-loop-regex 1 'font-lock-variable-name-face 2 'font-lock-keyword-face)
+   (list "\\(\\sw+\\)\\s-*(" 1 'font-lock-function-name-face)
+   (list "const\\s-+\\(\\sw+\\)" 1 'font-lock-constant-face) ; const takes only one argument
+   ;; Is there a more elegant way?  How can we take care of the case
+   ;; when the variables are on multiple lines?
+   (list "\\(global\\|let\\|local\\)\\s-+\\(\\sw+\\)" 2 'font-lock-variable-name-face)
+   (list "\\(global\\|let\\|local\\)\\s-+\\(.*?,\\)\\{1\\}\\s-+\\(\\sw+\\)" 3 'font-lock-variable-name-face)
+   (list "\\(global\\|let\\|local\\)\\s-+\\(.*?,\\)\\{2\\}\\s-+\\(\\sw+\\)" 3 'font-lock-variable-name-face)
+   (list "\\(global\\|let\\|local\\)\\s-+\\(.*?,\\)\\{3\\}\\s-+\\(\\sw+\\)" 3 'font-lock-variable-name-face)
+   (list "\\(global\\|let\\|local\\)\\s-+\\(.*?,\\)\\{4\\}\\s-+\\(\\sw+\\)" 3 'font-lock-variable-name-face)))
 
 (defconst julia-block-start-keywords
   (list "if" "while" "for" "begin" "try" "function" "type" "let" "macro"
@@ -279,7 +313,35 @@ Do not move back beyond MIN."
       'prog-mode
     'fundamental-mode))
 
-;;; IMENU
+
+;; The following two functions are based on ESS's Julia mode.
+(defvar julia-manual-topics nil)
+
+(defun julia-retrieve-topics (url)
+  (require 'url)
+  (with-current-buffer (url-retrieve-synchronously url)
+    (goto-char (point-min))
+    (let ((out '()))
+      (while (re-search-forward "toctree.*href=\"\\(.+\\)\">\\(.+\\)</a" nil t)
+        (push (propertize (match-string 2)
+                          :manual (concat url (match-string 1)))
+              out))
+      (kill-buffer)
+      (nreverse out))))
+
+(defun julia-documentation ()
+  "Look up topics at http://docs.julialang.org/en/latest/manual/"
+  (interactive)
+  (when (null julia-manual-topics)
+    (setq julia-manual-topics
+          (julia-retrieve-topics "http://docs.julialang.org/en/latest/manual/")))
+  (let* ((completion-ignore-case t)
+         (page (completing-read "Lookup: " julia-manual-topics nil t)))
+    (browse-url (get-text-property 0 :manual
+                                   (find page julia-manual-topics :test #'string=)))))
+
+;;; Imenu
+
 (defvar julia-imenu-generic-expression
   ;; don't use syntax classes, screws egrep
   '(("Function (_)" "[ \t]*function[ \t]+\\(_[^ \t\n]*\\)" 1)
@@ -305,22 +367,118 @@ Do not move back beyond MIN."
   (set-syntax-table julia-mode-syntax-table)
   (set (make-local-variable 'comment-start) "# ")
   (set (make-local-variable 'comment-start-skip) "#+\\s-*")
+  (set (make-local-variable 'comment-add) 1)
   (set (make-local-variable 'font-lock-defaults) '(julia-font-lock-keywords))
   (set (make-local-variable 'font-lock-syntactic-keywords)
        (list
 	(list "\\(\\\\\\)\\s-*\".*?\"" 1 julia-mode-char-syntax-table)))
   (set (make-local-variable 'font-lock-syntactic-keywords)
         (list
- 	(list julia-char-regex 2
- 	      julia-mode-char-syntax-table)
-        (list julia-string-regex 0
-              julia-mode-string-syntax-table)
-	))
+         (list julia-char-regex 2
+               julia-mode-char-syntax-table)
+         (list julia-string-regex 0
+               julia-mode-string-syntax-table)))
   (set (make-local-variable 'indent-line-function) 'julia-indent-line)
   (set (make-local-variable 'julia-basic-offset) 4)
   (setq indent-tabs-mode nil)
   (setq imenu-generic-expression julia-imenu-generic-expression)
   (imenu-add-to-menubar "Imenu"))
+
+;;; Define keys
+
+(define-key julia-mode-map (kbd "TAB") 'julia-latexsub-or-indent)
+(define-key julia-mode-map "\C-cd" 'julia-documentation)
+(define-key julia-mode-map "\C-c!" 'julia-execute-buffer-as-script)
+(define-key julia-mode-map "\C-c;" 'comment-or-uncomment-region)
+
+(when (eq system-type 'darwin)
+  (define-key julia-mode-map "\C-ca" 'julia-apropos)
+  (define-key julia-mode-map "\C-ce" 'julia-eval)
+  (define-key julia-mode-map "\C-ch" 'julia-help)
+  (define-key julia-mode-map "\C-cl" 'julia-load)
+  (define-key julia-mode-map "\C-cm" 'julia-methods)
+  (define-key julia-mode-map "\C-cq" 'julia-quit)
+  (define-key julia-mode-map "\C-cs" 'julia-shell)
+  (define-key julia-mode-map "\C-cw" 'julia-whos))
+
+
+;;; How to call Julia (most functionality on Mac OS X)
+
+(defvar julia-program-name "julia")
+
+(defun julia-execute-buffer-as-script ()
+  (interactive)
+  (shell-command (format "%s --no-history-file --quiet --load \"%s\"" julia-program-name (buffer-file-name))))
+
+(defun julia-escape-double-quotes (string)
+  "Return STRING with every double quote escaped by a backslash."
+  (save-match-data
+    (replace-regexp-in-string "\"" "\\\\\"" string)))
+
+(defun julia-send (string)
+  "Execute Julia code in STRING in a Terminal.app process running
+Julia, starting a Julia process if necessary."
+  (do-applescript
+   (concat "tell application \"Terminal\"
+              set found to false
+              repeat with w in (get windows)
+                repeat with t in (get tabs of w)
+                  if (not found) and (processes of t contains \"julia\") then
+                    set found to true
+                    set win to w
+                    set selected of t to true
+                  end if
+                end repeat
+              end repeat
+
+              if (not found) then
+                set win to front window
+                do script \"cd \\\"" (file-name-directory (buffer-file-name)) "\\\" && " julia-program-name "\" in win
+              end if
+
+              do script \"" (julia-escape-double-quotes string) "\" in win
+            end tell")))
+
+(defun julia-apropos (string)
+  (interactive "sApropos: ")
+  (julia-send (concat "apropos(\"" string "\")")))
+
+(defun julia-eval (string)
+  (interactive "sEvaluate: ")
+  (julia-send string))
+
+(defun julia-help (string)
+  (interactive (list (read-string "help?> " (current-word))))
+  (julia-send (concat "?" string)))
+
+(defvar julia-load-prefix ""
+  "Prefix used when loading/including Julia files.  For example,
+\"@time \" will show how long it took to load/include a file.")
+
+(defun julia-load ()
+  (interactive)
+  (save-buffer)
+  (save-some-buffers)
+  (julia-eval (concat julia-load-prefix "include(\"" (buffer-file-name) "\")")))
+
+(defun julia-methods (string)
+  (interactive (list (read-string "Show methods of: " (current-word))))
+  (julia-send (concat "methods(" string ")")))
+
+(defun julia-quit ()
+  (interactive)
+  (julia-send "quit()"))
+
+(defun julia-shell (string)
+  (interactive "sshell> ")
+  (julia-send (concat ";" string)))
+
+(defun julia-whos ()
+  (interactive)
+  (julia-send "whos()"))
+
+
+;;; LaTeX-like symbol substitution
 
 (defvar julia-latexsubs (make-hash-table :test 'equal))
 
@@ -349,7 +507,6 @@ Do not move back beyond MIN."
   (interactive "*i")
   (if (latexsub arg)
       (indent-according-to-mode)))
-(define-key julia-mode-map (kbd "TAB") 'julia-latexsub-or-indent)
 
 (defalias 'latexsub-or-indent 'julia-latexsub-or-indent)
 
