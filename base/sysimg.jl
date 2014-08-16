@@ -267,6 +267,9 @@ include("graphics.jl")
 include("profile.jl")
 importall .Profile
 
+# dates
+include("Dates.jl")
+
 function __init__()
     # Base library init
     reinit_stdio()
