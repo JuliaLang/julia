@@ -1038,7 +1038,7 @@ void jl_restore_system_image(char *fname)
         JL_PRINTF(JL_STDERR, "System image file \"%s\" not found\n", fname);
         exit(1);
     }
-    int build_mode = (jl_compileropts.build_path != NULL);
+    int build_mode = 0;
 #ifdef _OS_WINDOWS_
     //XXX: the windows linker forces our system image to be
     //     linked against only one dll, I picked libjulia-release
