@@ -1,9 +1,9 @@
 
 .. _stdlib-index:
 
-############################
- The Julia Standard Library
-############################
+##################
+ Standard Library
+##################
 
 .. toctree::
    :maxdepth: 1

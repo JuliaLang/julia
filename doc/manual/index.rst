@@ -1,9 +1,9 @@
 
 .. _manual-index:
 
-##################
- The Julia Manual
-##################
+########
+ Manual
+########
 
 .. toctree::
    :maxdepth: 1

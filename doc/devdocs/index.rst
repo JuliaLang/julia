@@ -2,9 +2,9 @@
 
 .. _devdocs-index:
 
-####################################
- Documentation of Julia's Internals
-####################################
+###########
+ Internals
+###########
 
 .. toctree::
    :maxdepth: 1
