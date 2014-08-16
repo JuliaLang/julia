@@ -2294,7 +2294,7 @@
 	 (let ((assigned
 		;; vars assigned in each arg
 		;; start with cddr since each arg only considers subsequent ones
-		(map (lambda (x) (expr-find-all assignment-like? x key: cadr))
+		(map (lambda (x) (expr-find-all assignment-like? x cadr))
 		     (cddr e))))
 	   (if (every null? assigned)
 	       ;; no assignments
