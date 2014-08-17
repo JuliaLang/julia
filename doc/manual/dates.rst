@@ -58,7 +58,7 @@ Fixed-width slots are specified by repeating the period character the number of 
 
 Support for text-form month parsing is also supported through the ``u`` and ``U`` characters, for abbreviated and full-length month names, respectively. By default, only English month names are supported, so ``u`` corresponds to "Jan", "Feb", "Mar", etc. And ``U`` corresponds to "January", "February", "March", etc. Just like the query functions ``dayname`` and ``monthname``, however, custom locales can be loaded in a similar fashion by passing in the ``locale=>Dict{UTF8String,Int}`` mapping to the ``Dates.MONTHTOVALUEABBR`` and ``Dates.MONTHTOVALUE`` dicts for abbreviated and full-name month names, respectively.
 
-A full suite of parsing and formatting tests and examples is available `here <https://github.com/quinnj/Dates.jl/blob/master/test/io.jl>`_.
+A full suite of parsing and formatting tests and examples is available in ``tests/dates``.
 
 Durations/Comparisons
 ---------------------
@@ -361,4 +361,4 @@ Periods are a human view of discrete, sometimes irregular durations of time. Con
   3 years
 
 
-Function API reference for the Dates module is available `here <http://docs.julialang.org/en/latest/stdlib/dates/>`_. 
+See also the API reference for the :mod:`Dates` module.
