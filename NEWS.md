@@ -9,6 +9,12 @@ New language features
 Library improvements
 --------------------
 
+  * Added generic Cholesky factorization
+
+  * Cholesky factorization is now parametrized on matrix type
+
+  * Symmetric and Hermitian immutables are now parametrized on matrix type
+
 Julia v0.3.0 Release Notes
 ==========================
 
