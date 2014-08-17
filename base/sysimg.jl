@@ -269,6 +269,7 @@ importall .Profile
 
 # dates
 include("Dates.jl")
+import .Dates: Date, DateTime, now
 
 function __init__()
     # Base library init
