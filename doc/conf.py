@@ -211,28 +211,29 @@ latex_elements = {
         \DeclareUnicodeCharacter{2295}{\ensuremath{\oplus}}
         \DeclareUnicodeCharacter{2297}{\ensuremath{\otimes}}
         \DeclareUnicodeCharacter{2211}{\ensuremath{\sum}}
-        \DeclareUnicodeCharacter{03c0}{\ensuremath{\pi}}
+        \DeclareUnicodeCharacter{03C0}{\ensuremath{\pi}}
         \DeclareUnicodeCharacter{2081}{\ensuremath{_{1}}}
-        \DeclareUnicodeCharacter{00b9}{\ensuremath{^{1}}}
+        \DeclareUnicodeCharacter{00B9}{\ensuremath{^{1}}}
         \DeclareUnicodeCharacter{0127}{\ensuremath{\hbar}}
         \DeclareUnicodeCharacter{2260}{\ensuremath{\ne}}
         \DeclareUnicodeCharacter{2264}{\ensuremath{\le}}
         \DeclareUnicodeCharacter{2265}{\ensuremath{\ge}}
         \DeclareUnicodeCharacter{2261}{\ensuremath{\equiv}}
+        \DeclareUnicodeCharacter{2262}{\ensuremath{\not\equiv}}
         \DeclareUnicodeCharacter{2208}{\ensuremath{\in}}
-        \DeclareUnicodeCharacter{220b}{\ensuremath{\ni}}
+        \DeclareUnicodeCharacter{220B}{\ensuremath{\ni}}
         \DeclareUnicodeCharacter{2209}{\ensuremath{\notin}}
-        \DeclareUnicodeCharacter{220c}{\ensuremath{\not\ni}}
+        \DeclareUnicodeCharacter{220C}{\ensuremath{\not\ni}}
         \DeclareUnicodeCharacter{2286}{\ensuremath{\subseteq}}
         \DeclareUnicodeCharacter{2288}{\ensuremath{\nsubseteq}}
-        \DeclareUnicodeCharacter{228a}{\ensuremath{\subsetneq}}
-        \DeclareUnicodeCharacter{222a}{\ensuremath{\cup}}
+        \DeclareUnicodeCharacter{228A}{\ensuremath{\subsetneq}}
+        \DeclareUnicodeCharacter{222A}{\ensuremath{\cup}}
         \DeclareUnicodeCharacter{2229}{\ensuremath{\cap}}
-        \DeclareUnicodeCharacter{00f7}{\ensuremath{\div}}
-        \DeclareUnicodeCharacter{03b3}{\ensuremath{\gamma}}
-        \DeclareUnicodeCharacter{03c6}{\ensuremath{\varphi}}
-        \DeclareUnicodeCharacter{22c5}{\ensuremath{\cdot}}
-        \DeclareUnicodeCharacter{00d7}{\ensuremath{\times}}
+        \DeclareUnicodeCharacter{00F7}{\ensuremath{\div}}
+        \DeclareUnicodeCharacter{03B3}{\ensuremath{\gamma}}
+        \DeclareUnicodeCharacter{03C6}{\ensuremath{\varphi}}
+        \DeclareUnicodeCharacter{22C5}{\ensuremath{\cdot}}
+        \DeclareUnicodeCharacter{00D7}{\ensuremath{\times}}
     ''',
 }
 
