@@ -4,11 +4,15 @@ typealias Signed64 Union(Int8,Int16,Int32,Int64)
 typealias Unsigned64 Union(Uint8,Uint16,Uint32,Uint64)
 typealias Integer64 Union(Signed64,Unsigned64)
 
+typealias Signed128 Union(Signed64,Int128)
+typealias Unsigned128 Union(Unsigned64,Uint128)
+typealias Integer128 Union(Signed128,Unsigned128)
+
 ## integer arithmetic ##
 
--{T<:Integer}(x::T) = box(T,neg_int(unbox(T,x)))
-+{T<:Integer}(x::T, y::T) = box(T,add_int(unbox(T,x),unbox(T,y)))
--{T<:Integer}(x::T, y::T) = box(T,sub_int(unbox(T,x),unbox(T,y)))
+-{T<:Integer128}(x::T) = box(T,neg_int(unbox(T,x)))
++{T<:Integer128}(x::T, y::T) = box(T,add_int(unbox(T,x),unbox(T,y)))
+-{T<:Integer128}(x::T, y::T) = box(T,sub_int(unbox(T,x),unbox(T,y)))
 *{T<:Integer64}(x::T, y::T) = box(T,mul_int(unbox(T,x),unbox(T,y)))
 
 /(x::Integer, y::Integer) = float(x)/float(y)
@@ -20,7 +24,7 @@ iseven(n::Integer) = !isodd(n)
 signbit(x::Integer) = x < 0
 signbit(x::Unsigned) = false
 
-flipsign{T<:Signed}(x::T, y::T) = box(T,flipsign_int(unbox(T,x),unbox(T,y)))
+flipsign{T<:Signed128}(x::T, y::T) = box(T,flipsign_int(unbox(T,x),unbox(T,y)))
 
 flipsign(x::Signed, y::Signed)  = flipsign(promote(x,y)...)
 flipsign(x::Signed, y::Float32) = flipsign(x, reinterpret(Int32,y))
@@ -65,30 +69,24 @@ fld{T<:Integer }(x::T, y::T) = div(x,y)-(signbit(x$y)&(rem(x,y)!=0))
 
 ## integer bitwise operations ##
 
-~{T<:Integer}(x::T) = box(T,not_int(unbox(T,x)))
-(&){T<:Integer}(x::T, y::T) = box(T,and_int(unbox(T,x),unbox(T,y)))
-(|){T<:Integer}(x::T, y::T) = box(T,or_int(unbox(T,x),unbox(T,y)))
-($){T<:Integer}(x::T, y::T) = box(T,xor_int(unbox(T,x),unbox(T,y)))
+~{T<:Integer128}(x::T) = box(T,not_int(unbox(T,x)))
+(&){T<:Integer128}(x::T, y::T) = box(T,and_int(unbox(T,x),unbox(T,y)))
+(|){T<:Integer128}(x::T, y::T) = box(T,or_int(unbox(T,x),unbox(T,y)))
+($){T<:Integer128}(x::T, y::T) = box(T,xor_int(unbox(T,x),unbox(T,y)))
 
-<<{T<:Integer}(x::T, y::Int32) = box(T,shl_int(unbox(T,x),unbox(Int32,y)))
->>{T<:Signed}(x::T, y::Int32) = box(T,ashr_int(unbox(T,x),unbox(Int32,y)))
->>{T<:Unsigned}(x::T, y::Int32) = box(T,lshr_int(unbox(T,x),unbox(Int32,y)))
->>>{T<:Integer} (x::T, y::Int32) = box(T,lshr_int(unbox(T,x),unbox(Int32,y)))
+<<{T<:Integer128}(x::T, y::Int32) = box(T,shl_int(unbox(T,x),unbox(Int32,y)))
+>>{T<:Signed128}(x::T, y::Int32) = box(T,ashr_int(unbox(T,x),unbox(Int32,y)))
+>>{T<:Unsigned128}(x::T, y::Int32) = box(T,lshr_int(unbox(T,x),unbox(Int32,y)))
+>>>{T<:Integer128} (x::T, y::Int32) = box(T,lshr_int(unbox(T,x),unbox(Int32,y)))
 
 bswap(x::Int8)    = x
 bswap(x::Uint8)   = x
-bswap(x::Int16)   = box(Int16,bswap_int(unbox(Int16,x)))
-bswap(x::Uint16)  = box(Uint16,bswap_int(unbox(Uint16,x)))
-bswap(x::Int32)   = box(Int32,bswap_int(unbox(Int32,x)))
-bswap(x::Uint32)  = box(Uint32,bswap_int(unbox(Uint32,x)))
-bswap(x::Int64)   = box(Int64,bswap_int(unbox(Int64,x)))
-bswap(x::Uint64)  = box(Uint64,bswap_int(unbox(Uint64,x)))
-bswap(x::Int128)  = box(Int128,bswap_int(unbox(Int128,x)))
-bswap(x::Uint128) = box(Uint128,bswap_int(unbox(Uint128,x)))
+typealias ByteSwapIntegers Union(Int16, Uint16, Int32, Uint32, Int64, Uint64, Int128, Uint128)
+bswap{T<:ByteSwapIntegers}(x::T) = box(T,bswap_int(unbox(T,x)))
 
-count_ones{T<:Integer}(x::T) = int(box(T,ctpop_int(unbox(T,x))))
-leading_zeros{T<:Integer}(x::T) = int(box(T,ctlz_int(unbox(T,x))))
-trailing_zeros{T<:Integer}(x::T) = int(box(T,cttz_int(unbox(T,x))))
+count_ones{T<:Integer128}(x::T) = int(box(T,ctpop_int(unbox(T,x))))
+leading_zeros{T<:Integer128}(x::T) = int(box(T,ctlz_int(unbox(T,x))))
+trailing_zeros{T<:Integer128}(x::T) = int(box(T,cttz_int(unbox(T,x))))
 
 count_zeros  (x::Integer) = count_ones(~x)
 leading_ones (x::Integer) = leading_zeros(~x)
@@ -96,10 +94,10 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 
 ## integer comparisons ##
 
-<{T<:Signed}(x::T, y::T) = slt_int(unbox(T,x),unbox(T,y))
-<{T<:Unsigned}(x::T, y::T) = ult_int(unbox(T,x),unbox(T,y))
-<={T<:Signed}(x::T, y::T) = sle_int(unbox(T,x),unbox(T,y))
-<={T<:Unsigned}(x::T, y::T) = ule_int(unbox(T,x),unbox(T,y))
+<{T<:Signed128}(x::T, y::T) = slt_int(unbox(T,x),unbox(T,y))
+<{T<:Unsigned128}(x::T, y::T) = ult_int(unbox(T,x),unbox(T,y))
+<={T<:Signed128}(x::T, y::T) = sle_int(unbox(T,x),unbox(T,y))
+<={T<:Unsigned128}(x::T, y::T) = ule_int(unbox(T,x),unbox(T,y))
 
 ==(x::Signed,   y::Unsigned) = (x >= 0) & (unsigned(x) == y)
 ==(x::Unsigned, y::Signed  ) = (y >= 0) & (x == unsigned(y))
@@ -129,19 +127,10 @@ for to in _inttypes, from in _inttypes
     end
 end
 
-for to in (Int8, Int16, Int32, Int64)
-    @eval begin
-        convert(::Type{$to}, x::Float32) = box($to,checked_fptosi($to,unbox(Float32,x)))
-        convert(::Type{$to}, x::Float64) = box($to,checked_fptosi($to,unbox(Float64,x)))
-    end
-end
-
-for to in (Uint8, Uint16, Uint32, Uint64)
-    @eval begin
-        convert(::Type{$to}, x::Float32) = box($to,checked_fptoui($to,unbox(Float32,x)))
-        convert(::Type{$to}, x::Float64) = box($to,checked_fptoui($to,unbox(Float64,x)))
-    end
-end
+convert{T<:Signed64}(::Type{T}, x::Float32) = box(T,checked_fptosi(T,unbox(Float32,x)))
+convert{T<:Signed64}(::Type{T}, x::Float64) = box(T,checked_fptosi(T,unbox(Float64,x)))
+convert{T<:Unsigned64}(::Type{T}, x::Float32) = box(T,checked_fptoui(T,unbox(Float32,x)))
+convert{T<:Unsigned64}(::Type{T}, x::Float64) = box(T,checked_fptoui(T,unbox(Float64,x)))
 
 function convert(::Type{Int128}, x::FloatingPoint)
     ax = abs(x)

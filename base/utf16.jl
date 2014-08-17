@@ -11,7 +11,7 @@ end
 utf16_is_lead(c::Uint16) = (c & 0xfc00) == 0xd800
 utf16_is_trail(c::Uint16) = (c & 0xfc00) == 0xdc00
 utf16_is_surrogate(c::Uint16) = (c & 0xf800) == 0xd800
-utf16_get_supplementary(lead::Uint16, trail::Uint16) = char((lead-0xd7f7)<<10 + trail)
+utf16_get_supplementary(lead::Uint16, trail::Uint16) = char((int32(lead)-0xd7f7)<<10 + trail)
 
 function endof(s::UTF16String)
     d = s.data
