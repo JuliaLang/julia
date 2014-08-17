@@ -809,23 +809,22 @@ timesofar("datamove")
 
 ## countnz & find ##
 
-b1 = randbool(v1)
-@check_bit_operation countnz(b1) Int
+for m = 0:v1, b1 in {randbool(m), trues(m), falses(m)}
+    @check_bit_operation countnz(b1) Int
 
-@check_bit_operation findfirst(b1)         Int
-@check_bit_operation findfirst(trues(v1))  Int
-@check_bit_operation findfirst(falses(v1)) Int
+    @check_bit_operation findfirst(b1) Int
 
-@check_bit_operation findfirst(b1, true)  Int
-@check_bit_operation findfirst(b1, false) Int
-@check_bit_operation findfirst(b1, 3)     Int
+    @check_bit_operation findfirst(b1, true)  Int
+    @check_bit_operation findfirst(b1, false) Int
+    @check_bit_operation findfirst(b1, 3)     Int
 
-@check_bit_operation findfirst(x->x, b1)     Int
-@check_bit_operation findfirst(x->!x, b1)    Int
-@check_bit_operation findfirst(x->true, b1)  Int
-@check_bit_operation findfirst(x->false, b1) Int
+    @check_bit_operation findfirst(x->x, b1)     Int
+    @check_bit_operation findfirst(x->!x, b1)    Int
+    @check_bit_operation findfirst(x->true, b1)  Int
+    @check_bit_operation findfirst(x->false, b1) Int
 
-@check_bit_operation find(b1) Vector{Int}
+    @check_bit_operation find(b1) Vector{Int}
+end
 
 b1 = trues(v1)
 for i = 0:v1-1
@@ -836,8 +835,8 @@ end
 for i = 3:v1-1
     for j = 2:i
         submask = b1 << (v1-j+1)
-        @test findnext((b1 >> i) | submask,j) == i+1
-        @test Base.findnextnot((~(b1 >> i)) $ submask,j) == i+1
+        @test findnext((b1 >> i) | submask, j) == i+1
+        @test Base.findnextnot((~(b1 >> i)) $ submask, j) == i+1
     end
 end
 
