@@ -52,26 +52,24 @@ function test_dates(from,to)
         end
     end
 end
-test_dates(-1000,3000)
+test_dates(0,2100)
 
 # Test year, month, day, hour, minute
 function test_dates()
     y = m = d = h = mi = 0
-    for y in [-2013,-1,0,1,2013]
-        for m = 1:12
-            for d = 1:Dates.daysinmonth(y,m)
-                for h = 0:23
-                    for mi = 0:59
-                        dt = Dates.DateTime(y,m,d,h,mi)
-                        @test y == Dates.year(dt)
-                        @test m == Dates.month(dt)
-                        @test d == Dates.day(dt)
-                        @test d == Dates.dayofmonth(dt)
-                        @test h == Dates.hour(dt)
-                        @test mi == Dates.minute(dt)
-                        #@test s == Dates.second(dt)
-                        #@test ms == Dates.millisecond(dt)
-                    end
+    for m = 1:12
+        for d = 1:Dates.daysinmonth(y,m)
+            for h = 0:23
+                for mi = 0:59
+                    dt = Dates.DateTime(y,m,d,h,mi)
+                    @test y == Dates.year(dt)
+                    @test m == Dates.month(dt)
+                    @test d == Dates.day(dt)
+                    @test d == Dates.dayofmonth(dt)
+                    @test h == Dates.hour(dt)
+                    @test mi == Dates.minute(dt)
+                    #@test s == Dates.second(dt)
+                    #@test ms == Dates.millisecond(dt)
                 end
             end
         end
@@ -117,7 +115,7 @@ function test_dates(from,to)
         end
     end
 end
-test_dates(-2000,2000)
+test_dates(0,2100)
 
 # week function
 # Tests from http://en.wikipedia.org/wiki/ISO_week_date
