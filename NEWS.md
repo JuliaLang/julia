@@ -9,11 +9,11 @@ New language features
 Library improvements
 --------------------
 
-  * Added generic Cholesky factorization
+  * New `Dates` module for calendar dates and other time-interval calculations ([#7654]).
 
-  * Cholesky factorization is now parametrized on matrix type
+  * Added generic Cholesky factorization, and the Cholesky factorization is now parametrized on the matrix type ([#7236]).
 
-  * Symmetric and Hermitian immutables are now parametrized on matrix type
+  * Symmetric and Hermitian immutables are now parametrized on matrix type ([#7992]).
 
 Julia v0.3.0 Release Notes
 ==========================
@@ -924,6 +924,7 @@ Too numerous to mention.
 [#7125]: https://github.com/JuliaLang/julia/issues/7125
 [#7131]: https://github.com/JuliaLang/julia/issues/7131
 [#7146]: https://github.com/JuliaLang/julia/issues/7146
+[#7236]: https://github.com/JuliaLang/julia/issues/7236
 [#7242]: https://github.com/JuliaLang/julia/issues/7242
 [#7359]: https://github.com/JuliaLang/julia/issues/7359
 [#7365]: https://github.com/JuliaLang/julia/issues/7365
@@ -933,3 +934,6 @@ Too numerous to mention.
 [#7464]: https://github.com/JuliaLang/julia/issues/7464
 [#7513]: https://github.com/JuliaLang/julia/issues/7513
 [#7647]: https://github.com/JuliaLang/julia/issues/7647
+[#7654]: https://github.com/JuliaLang/julia/issues/7654
+[#7917]: https://github.com/JuliaLang/julia/issues/7917
+[#7992]: https://github.com/JuliaLang/julia/issues/7992
