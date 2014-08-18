@@ -742,22 +742,20 @@ else
 endif
 endef
 
-ifeq ($(BUILD_OS), WINNT)
+ifeq ($(BUILD_OS), WINNT) # MSYS
 spawn = $(1)
-else ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
+cygpath_w = $(1)
+else ifneq (,$(findstring CYGWIN,$(BUILD_OS))) # Cygwin
 spawn = $(1)
-else
-ifeq ($(OS), WINNT)
-spawn = wine $(1)
-else
-spawn = $(1)
-endif
-endif
-
-ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
 cygpath_w = `cygpath -w $(1)`
 else
+ifeq ($(OS), WINNT) # unix-to-Windows cross-compile
+spawn = wine $(1)
+cygpath_w = `winepath -w $(1)`
+else # not Windows
+spawn = $(1)
 cygpath_w = $(1)
+endif
 endif
 
 exec = $(shell $(call spawn,$(1)))
