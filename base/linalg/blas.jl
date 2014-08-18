@@ -711,7 +711,7 @@ for (fname, elty) in ((:dsyr2k_,:Float64),
             nn = size(A, trans == 'N' ? 1 : 2)
             if nn != n throw(DimensionMismatch("syr2k!")) end
             k  = size(A, trans == 'N' ? 2 : 1)
-            ccall(($(string(fname)),Base.libblas_name), Void,
+            ccall(($(string(fname)),libblas), Void,
                 (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, 
                  Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, 
                  Ptr{$elty}, Ptr{BlasInt}),

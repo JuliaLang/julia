@@ -267,6 +267,10 @@ include("graphics.jl")
 include("profile.jl")
 importall .Profile
 
+# dates
+include("Dates.jl")
+import .Dates: Date, DateTime, now
+
 function __init__()
     # Base library init
     reinit_stdio()
