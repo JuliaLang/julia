@@ -80,7 +80,12 @@
 ].* \\(in\\)\\(\\s-\\|$\\)+")
 
 (defconst julia-function-regex
-  (rx symbol-start "function" (1+ space) (group (1+ (or word ?_ ?!)))))
+  (rx symbol-start "function"
+      (1+ space)
+      ;; Don't highlight module names in function declarations:
+      (* (seq (1+ (or word ?_)) "."))
+      ;; The function name itself
+      (group (1+ (or word ?_ ?!)))))
 
 (defconst julia-type-regex
   (rx symbol-start (or "immutable" "type" "abstract") (1+ space) (group (1+ (or word ?_)))))
