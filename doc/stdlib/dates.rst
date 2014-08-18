@@ -335,32 +335,32 @@ Constants
 ---------
 
 Days of the Week:
-   =============== ========= ================
-   Variable        Abbr.     Value (Int64)
-   --------------- --------- -------------
-   ``Monday``      ``Mon``   1
-   ``Tuesday``     ``Tue``   2
-   ``Wednesday``   ``Wed``   3
-   ``Thursday``    ``Thu``   4
-   ``Friday``      ``Fri``   5
-   ``Saturday``    ``Sat``   6
-   ``Sunday``      ``Sun``   7
-   =============== ========= =============
+=============== ========= ================
+Variable        Abbr.     Value (Int64)
+--------------- --------- -------------
+``Monday``      ``Mon``   1
+``Tuesday``     ``Tue``   2
+``Wednesday``   ``Wed``   3
+``Thursday``    ``Thu``   4
+``Friday``      ``Fri``   5
+``Saturday``    ``Sat``   6
+``Sunday``      ``Sun``   7
+=============== ========= =============
 
 Months of the Year:
-   =============== ========= ================
-   Variable        Abbr.     Value (Int64)
-   --------------- --------- -------------
-   ``January``     ``Jan``   1
-   ``February``    ``Feb``   2
-   ``March``       ``Mar``   3
-   ``April``       ``Apr``   4
-   ``May``         ``May``   5
-   ``June``        ``Jun``   6
-   ``July``        ``Jul``   7
-   ``August``      ``Aug``   8
-   ``September``   ``Sep``   9
-   ``October``     ``Oct``   10
-   ``November``    ``Nov``   11
-   ``December``    ``Dec``   12
-   =============== ========= =============
+=============== ========= ================
+Variable        Abbr.     Value (Int64)
+--------------- --------- -------------
+``January``     ``Jan``   1
+``February``    ``Feb``   2
+``March``       ``Mar``   3
+``April``       ``Apr``   4
+``May``         ``May``   5
+``June``        ``Jun``   6
+``July``        ``Jul``   7
+``August``      ``Aug``   8
+``September``   ``Sep``   9
+``October``     ``Oct``   10
+``November``    ``Nov``   11
+``December``    ``Dec``   12
+=============== ========= =============
