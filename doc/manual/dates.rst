@@ -6,7 +6,7 @@
 
 The ``Dates`` module provides two types for working with dates: ``Date`` and ``DateTime``, representing day and millisecond precision, respectively; both are subtypes of the abstract ``TimeType``. The motivation for distinct types is simple: some operations are much simpler, both in terms of code and mental reasoning, when the complexities of greater precision don't have to be dealt with. For example, since the ``Date`` type only resolves to the precision of a single date (i.e. no hours, minutes, or seconds), normal considerations for time zones, daylight savings/summer time, and leap seconds are unnecessary and avoided.
 
-Both ``Date`` and ``DateTime`` are basically immutable ``Int64`` wrappers. The single ``instant`` field of either type is actually a ``UTInstant{P}`` type, which represents a continuously increasing machine timeline based on the UT second [1]_. The ``DateTime`` type is *timezone-unaware* (in Python parlance) or is analogous to a *LocalDateTime* in Java 8. Additional time zone functionality can be added through the `Timezones.jl package <https://github.com/quinnj/Timezones.jl/>`_, which compiles the `Olsen Time Zone Database <http://www.iana.org/time-zones>`_. Both ``Date`` and ``DateTime`` are based on the ISO 8601 standard, which follows the proleptic Gregorian calendar. One note is that the ISO 8601 standard is particular about BC/BCE dates. In general, the last day of the BC/BCE era, 1-12-31 BC/BCE, was followed by 1-1-1 AD/CE, thus no year 0 exists. The ISO standard, however, states that 1 BC/BCE is year 0, so ``0000-12-31`` is the day before ``0001-01-01``, and year ``-0001`` (yes, negative 1 for the year) is 2 BC/BCE, year ``-0002`` is 3 BC/BCE, etc.
+Both ``Date`` and ``DateTime`` are basically immutable ``Int64`` wrappers. The single ``instant`` field of either type is actually a ``UTInstant{P}`` type, which represents a continuously increasing machine timeline based on the UT second [1]_. The ``DateTime`` type is *timezone-unaware* (in Python parlance) or is analogous to a *LocalDateTime* in Java 8. Additional time zone functionality can be added through the `Timezones.jl package <https://github.com/quinnj/Timezones.jl/>`_, which compiles the `Olsen Time Zone Database <http://www.iana.org/time-zones>`_. Both ``Date`` and ``DateTime`` are based on the ISO 8601 standard, which follows the proleptic Gregorian calendar. One note is that the ISO 8601 standard is particular about BC/BCE dates. In general, the last day of the BC/BCE era, 1-12-31 BC/BCE, was followed by 1-1-1 AD/CE, thus no year zero exists. The ISO standard, however, states that 1 BC/BCE is year zero, so ``0000-12-31`` is the day before ``0001-01-01``, and year ``-0001`` (yes, negative one for the year) is 2 BC/BCE, year ``-0002`` is 3 BC/BCE, etc.
 
 .. [1] The notion of the UT second is actually quite fundamental. There are basically two different notions of time generally accepted, one based on the physical rotation of the earth (one full rotation = 1 day), the other based on the SI second (a fixed, constant value). These are radically different! Think about it, a "UT second", as defined relative to the rotation of the earth, may have a different absolute length depending on the day! Anyway, the fact that ``Date`` and ``DateTime`` are based on UT seconds is a simplifying, yet honest assumption so that things like leap seconds and all their complexity can be avoided. This basis of time is formally called `UT <http://en.wikipedia.org/wiki/Universal_Time>`_ or UT1. Basing types on the UT second basically means that every minute has 60 seconds and every day has 24 hours and leads to more natural calculations when working with calendar dates.
 
@@ -56,14 +56,16 @@ Delimited slots are marked by specifying the delimiter the parser should expect 
 
 Fixed-width slots are specified by repeating the period character the number of times corresponding to the width. So ``"yyyymmdd"`` would correspond to a date string like ``"20140716"``. The parser distinguishes a fixed-width slot by the absence of a delimiter, noting the transition ``"yyyymm"`` from one period character to the next. 
 
-Support for text-form month parsing is also supported through the ``u`` and ``U`` characters, for abbreviated and full-length month names, respectively. By default, only English month names are supported, so ``u`` corresponds to "Jan", "Feb", "Mar", etc. And ``U`` corresponds to "January", "February", "March", etc. Just like the query functions ``dayname`` and ``monthname``, however, custom locales can be loaded in a similar fashion by passing in the ``locale=>Dict{UTF8String,Int}`` mapping to the ``Dates.MONTHTOVALUEABBR`` and ``Dates.MONTHTOVALUE`` dicts for abbreviated and full-name month names, respectively.
+Support for text-form month parsing is also supported through the ``u`` and ``U`` characters, for abbreviated and full-length month names, respectively. By default, only English month names are supported, so ``u`` corresponds to "Jan", "Feb", "Mar", etc. And ``U`` corresponds to "January", "February", "March", etc. Similar to other name=>value mapping functions ``dayname`` and ``monthname``, custom locales can be loaded by passing in the ``locale=>Dict{UTF8String,Int}`` mapping to the ``Dates.MONTHTOVALUEABBR`` and ``Dates.MONTHTOVALUE`` dicts for abbreviated and full-name month names, respectively.
 
-A full suite of parsing and formatting tests and examples is available in ``tests/dates``.
+A full suite of parsing and formatting tests and examples is available in `tests/dates/io.jl <https://github.com/JuliaLang/julia/blob/master/test/dates/io.jl>`_.
 
 Durations/Comparisons
 ---------------------
 
-Finding the length of time between two ``Date`` or ``DateTime`` is straightforward given their underlying representation as ``UTInstant{Day}`` and ``UTInstant{Millisecond}``, respectively. The difference between ``Date`` is returned in the number of ``Day``, and ``DateTime`` in the number of ``Millisecond``. Similarly, comparing ``TimeType`` is a simple matter of comparing the underlying machine instants (which in turn compares the internal ``Int64`` values).::
+Finding the length of time between two ``Date`` or ``DateTime`` is straightforward given their underlying representation as ``UTInstant{Day}`` and ``UTInstant{Millisecond}``, respectively. The difference between ``Date`` is returned in the number of ``Day``, and ``DateTime`` in the number of ``Millisecond``. Similarly, comparing ``TimeType`` is a simple matter of comparing the underlying machine instants (which in turn compares the internal ``Int64`` values).
+
+::
 
   julia> dt = Date(2012,2,29)
   2012-02-29
@@ -192,7 +194,7 @@ Month of the year::
   julia> Dates.daysinmonth(t)
   31
 
-As well as informationa about the ``TimeType``'s year and quarter::
+As well as information about the ``TimeType``'s year and quarter::
 
   julia> Dates.isleapyear(t)
   false
@@ -233,7 +235,7 @@ Now just imagine that instead of 7-7-7, the slots are Year-Month-Day, or in our 
   julia> (Date(2014,1,29)+Dates.Month(1)) + Dates.Day(1)
   2014-03-01
 
-What's going on there? In the first line, we're adding 1 day to January 29th, which results in 2014-01-30; then we add 1 month, so we get 2014-02-30, which then adjusts down to 2014-02-28. In the second example, we add 1 month *first*, where we get 2014-02-29, which adjusts down to 2014-02-28, and *then* add 1 day, which results in 2014-03-01. One design principle that helps in this case is that, in the presence of multiple Periods, the operations will be ordered by the Periods' *types*, not their value or positional order; this means ``Year`` will always be added first, then ``Month``, then ``Week``, etc. Hence the following *does* result in associativity and Just Works:sup:`TM`::
+What's going on there? In the first line, we're adding 1 day to January 29th, which results in 2014-01-30; then we add 1 month, so we get 2014-02-30, which then adjusts down to 2014-02-28. In the second example, we add 1 month *first*, where we get 2014-02-29, which adjusts down to 2014-02-28, and *then* add 1 day, which results in 2014-03-01. One design principle that helps in this case is that, in the presence of multiple Periods, the operations will be ordered by the Periods' *types*, not their value or positional order; this means ``Year`` will always be added first, then ``Month``, then ``Week``, etc. Hence the following *does* result in associativity and Just Works::
 
   julia> Date(2014,1,29) + Dates.Day(1) + Dates.Month(1)
   2014-03-01
@@ -247,7 +249,7 @@ Tricky? Perhaps. What is an innocent ``Dates`` user to do? The bottom line is to
 Adjuster Functions
 ------------------
 
-As convenient as date-period arithmetics are, often the kinds of calculations needed on dates take on a *calendrical* or *temporal* nature rather than a fixed number of periods. Holidays are a perfect example; most follow rules such as ``Memorial Day = Last Monday of May``, or ``Thanksgiving = 4th Thursday of November``. These kinds of temporal expressions deal with rules relative to the calendar, like first or last of the month, next Tuesday, or the first and third Wednesdays, etc.
+As convenient as date-period arithmetics are, often the kinds of calculations needed on dates take on a *calendrical* or *temporal* nature rather than a fixed number of periods. Holidays are a perfect example; most follow rules such as "Memorial Day = Last Monday of May", or "Thanksgiving = 4th Thursday of November". These kinds of temporal expressions deal with rules relative to the calendar, like first or last of the month, next Tuesday, or the first and third Wednesdays, etc.
 
 The ``Dates`` module provides the *adjuster* API through several convenient methods that aid in simply and succinctly expressing temporal rules. The first group of adjuster methods deal with the first and last of weeks, months, quarters, and years. They each take a single ``TimeType`` as input and return or *adjust to* the first or last of the desired period relative to the input.
 
@@ -324,10 +326,13 @@ The final method in the adjuster API is the ``recur`` function. ``recur`` vector
     2014-10-14
     2014-11-11
 
+Additional examples and tests are availabe in `test/dates/adjusters.jl <https://github.com/JuliaLang/julia/blob/master/test/dates/adjusters.jl>`_.
+
+
 Period Types
 ------------
 
-Periods are a human view of discrete, sometimes irregular durations of time. Consider 1 month; it could represent, in days, a value of 28, 29, 30, or 31 depending on the year and month context. Or a year could represent 365 or 366 days in the case of a leap year. ``Period`` types are simple ``Int64`` wrappers and are constructed by wrapping any convertible to ``Int64`` type, i.e. ``Year(1)`` or ``Month(3.0)``. Arithmetic between ``Period`` of the same type behave like integers, and limited ``Period-Real`` arithmetic is available.
+Periods are a human view of discrete, sometimes irregular durations of time. Consider 1 month; it could represent, in days, a value of 28, 29, 30, or 31 depending on the year and month context. Or a year could represent 365 or 366 days in the case of a leap year. ``Period`` types are simple ``Int64`` wrappers and are constructed by wrapping any ``Int64`` convertible type, i.e. ``Year(1)`` or ``Month(3.0)``. Arithmetic between ``Period`` of the same type behave like integers, and limited ``Period-Real`` arithmetic is available.
 ::
 
   julia> y1 = Dates.Year(1)
@@ -361,4 +366,4 @@ Periods are a human view of discrete, sometimes irregular durations of time. Con
   3 years
 
 
-See also the API reference for the :mod:`Dates` module.
+See the `API reference <http://docs.julialang.org/en/latest/stdlib/dates/>`_ for additional information on methods exported from the :mod:`Dates` module.
