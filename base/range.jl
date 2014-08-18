@@ -164,6 +164,7 @@ linrange(a::Real, b::Real, len::Integer) =
 
 ## interface implementations
 
+similar(r::Range, T::Type, dims::(Integer...)) = Array(T, dims...)
 similar(r::Range, T::Type, dims::Dims) = Array(T, dims)
 
 size(r::Range) = (length(r),)
