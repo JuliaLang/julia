@@ -1724,15 +1724,11 @@ endif
 
 libgit2-$(LIBGIT2_VER).tar.gz:
 	$(JLDOWNLOAD) $@ https://github.com/libgit2/libgit2/archive/v$(LIBGIT2_VER).tar.gz
-libgit2-$(LIBGIT2_VER).zip:
-	$(JLDOWNLOAD) $@ https://github.com/libgit2/libgit2/archive/v$(LIBGIT2_VER).zip
-ifeq ($(BUILD_OS),WINNT) # repo has symlinks, tar fails to extract in MSYS2
-libgit2-$(LIBGIT2_VER)/CMakeLists.txt: libgit2-$(LIBGIT2_VER).zip
-	$(JLCHECKSUM) $<
-	unzip -qu $<
-else
 libgit2-$(LIBGIT2_VER)/CMakeLists.txt: libgit2-$(LIBGIT2_VER).tar.gz
 	$(JLCHECKSUM) $<
+ifeq ($(BUILD_OS),WINNT)
+	$(TAR) --exclude=libgit2-$(LIBGIT2_VER)/tests/resources/template/hooks/link.sample -zxf $<
+else
 	$(TAR) zxf $<
 endif
 	touch -c $@
@@ -1758,11 +1754,7 @@ clean-libgit2:
 distclean-libgit2:
 	-rm -rf libgit2-$(LIBGIT2_VER).tar.gz libgit2-$(LIBGIT2_VER).zip libgit2-$(LIBGIT2_VER)
 
-ifeq ($(BUILD_OS),WINNT)
-get-libgit2: libgit2-$(LIBGIT2_VER).zip
-else
 get-libgit2: libgit2-$(LIBGIT2_VER).tar.gz
-endif
 configure-libgit2: libgit2-$(LIBGIT2_VER)/Makefile
 compile-libgit2: $(LIBGIT2_OBJ_SOURCE)
 check-libgit2: compile-libgit2
