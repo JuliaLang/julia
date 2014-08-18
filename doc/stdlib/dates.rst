@@ -60,7 +60,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
    Construct a ``Date`` type by parts. Arguments must be convertible to
    ``Int64``.
 
-.. function:: Date(period::Period...)
+.. function:: Date(period::Period...) -> Date
 
    Constuct a Date type by ``Period`` type parts. Arguments may be in any order.
    Date parts not provided will default to the value of ``Dates.default(period)``.
@@ -77,16 +77,16 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 .. function:: Date(dt::DateTime) -> Date
 
     Converts a ``DateTime`` type to a ``Date``. The hour, minute, second, and millisecond
-    parts of the ``DateTime`` are truncated, so only the year, month and day parts are kept.
+    parts of the ``DateTime`` are truncated, so only the year, month and day parts are used in construction.
 
 .. function:: Date(dt::String, format::String; locale="english") -> Date
 
    Construct a Date type by parsing a ``dt`` date string following the pattern given in
-   the ``format`` string. Follows the same convention as ``DateTime`` above.
+   the ``format`` string. Follows the same conventions as ``DateTime`` above.
 
 .. function:: now() -> DateTime
 
-   Returns a DateTime type corresponding to the user's system
+   Returns a DateTime corresponding to the user's system
    time.
    
 Accessor Functions
@@ -178,7 +178,7 @@ Query Functions
 
     Returns the number of days in the month of ``dt``. Value will be 28, 29, 30, or 31.
 
-.. function:: isleapyear(dt::TimeType) -> Bool``    
+.. function:: isleapyear(dt::TimeType) -> Bool 
 
     Returns true if the year of ``dt`` is a leap year.
 
@@ -274,7 +274,7 @@ Adjuster Functions
     ``same`` allows ``dt`` to be considered in satisfying ``func``. ``negate`` will make the adjustment
     process terminate when ``func`` returns false instead of true.
 
-.. function:: recur{T<:TimeType}(func::Function,dr::StepRange{T};negate=false,limit=10000) -> Array{T,1}
+.. function:: recur{T<:TimeType}(func::Function,dr::StepRange{T};negate=false,limit=10000) -> Vector{T}
 
     ``func`` takes a single TimeType argument and returns a ``Bool`` indicating whether the input
     should be "included" in the final set. ``recur`` applies ``func`` over each element in the 
@@ -348,7 +348,7 @@ Conversion Functions
    Takes the given DateTime and returns the number of seconds since
    the unix epoch as a ``Float64``.
 
-.. function:: julian2datetime(j) -> DateTime
+.. function:: julian2datetime(julian_days) -> DateTime
 
    Takes the number of Julian calendar days since epoch
    ``-4713-11-24T12:00:00`` and returns the corresponding DateTime.
@@ -373,43 +373,32 @@ Constants
 ---------
 
 Days of the Week:
-
-  ``Monday``     = ``Mon`` = 1
-
-  ``Tuesday``    = ``Tue`` = 2
-
-  ``Wednesday``  = ``Wed`` = 3
-
-  ``Thursday``   = ``Thu`` = 4
-
-  ``Friday``     = ``Fri`` = 5
-
-  ``Saturday``   = ``Sat`` = 6
-
-  ``Sunday``     = ``Sun`` = 7
+   =============== ========= ================
+   Variable        Abbr.     Value (Int64)
+   --------------- --------- -------------
+   ``Monday``      ``Mon``   1
+   ``Tuesday``     ``Tue``   2
+   ``Wednesday``   ``Wed``   3
+   ``Thursday``    ``Thu``   4
+   ``Friday``      ``Fri``   5
+   ``Saturday``    ``Sat``   6
+   ``Sunday``      ``Sun``   7
+   =============== ========= =============
 
 Months of the Year:
-
-  ``January``    = ``Jan`` = 1
-
-  ``February``   = ``Feb`` = 2
-
-  ``March``      = ``Mar`` = 3
-
-  ``April``      = ``Apr`` = 4
-
-  ``May``        = ``May`` = 5
-
-  ``June``       = ``Jun`` = 6
-
-  ``July``       = ``Jul`` = 7
-
-  ``August``     = ``Aug`` = 8
-
-  ``September``  = ``Sep`` = 9
-
-  ``October``    = ``Oct`` = 10
-
-  ``November``   = ``Nov`` = 11
-
-  ``December``   = ``Dec`` = 12
+   =============== ========= ================
+   Variable        Abbr.     Value (Int64)
+   --------------- --------- -------------
+   ``January``     ``Jan``   1
+   ``February``    ``Feb``   2
+   ``March``       ``Mar``   3
+   ``April``       ``Apr``   4
+   ``May``         ``May``   5
+   ``June``        ``Jun``   6
+   ``July``        ``Jul``   7
+   ``August``      ``Aug``   8
+   ``September``   ``Sep``   9
+   ``October``     ``Oct``   10
+   ``November``    ``Nov``   11
+   ``December``    ``Dec``   12
+   =============== ========= =============
