@@ -4,8 +4,8 @@
 Base.colon{T<:DateTime}(start::T, stop::T) = StepRange(start, Day(1), stop)
 
 # Given a start and end date, how many steps/periods are in between
-guess(a::DateTime,b::DateTime,c) = ifloor((int128(b) - int128(a))/toms(c))
-guess(a::Date,b::Date,c) = int(div(int(b - a),days(c)))
+guess(a::DateTime,b::DateTime,c) = ifloor(Int64,(int128(b) - int128(a))/toms(c))
+guess(a::Date,b::Date,c) = int64(div(int64(b - a),days(c)))
 function len(a,b,c)
     lo, hi, st = min(a,b), max(a,b), abs(c)
     i = guess(a,b,c)-1
