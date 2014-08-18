@@ -853,7 +853,7 @@ for ``v"0.2-rc2"``.
 It is good practice to use such special versions in comparisons (particularly,
 the trailing ``-`` should always be used on upper bounds unless there's a good
 reason not to), but they must not be used as the actual version number of
-anything, as they are illegal in the semantic versioning scheme.
+anything, as they are invalid in the semantic versioning scheme.
 
 Besides being used for the ``VERSION`` constant, ``VersionNumber`` objects are
 widely used in the ``Pkg`` module, to specify packages versions and their
