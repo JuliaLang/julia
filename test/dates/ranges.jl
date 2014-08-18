@@ -34,7 +34,7 @@ function test_all_combos()
                     dr = f:pos_step:l
                     len = length(dr)
                     @test len > 0
-                    @test typeof(len) <: Int
+                    @test typeof(len) <: Int64
                     @test !isempty(dr)
                     @test first(dr) == f
                     @test last(dr) <= l
@@ -86,7 +86,7 @@ function test_all_combos()
                     dr = l:neg_step:f
                     len = length(dr)
                     @test len > 0
-                    @test typeof(len) <: Int
+                    @test typeof(len) <: Int64
                     @test !isempty(dr)
                     @test first(dr) == l
                     @test last(dr) >= f
@@ -139,7 +139,7 @@ function test_all_combos()
                         dr = f:pos_step:l
                         len = length(dr)
                         @test len > 0
-                        @test typeof(len) <: Int
+                        @test typeof(len) <: Int64
                         @test !isempty(dr)
                         @test first(dr) == f
                         @test last(dr) <= l
@@ -191,7 +191,7 @@ function test_all_combos()
                         dr = l:neg_step:f
                         len = length(dr)
                         @test len > 0
-                        @test typeof(len) <: Int
+                        @test typeof(len) <: Int64
                         @test !isempty(dr)
                         @test first(dr) == l
                         @test last(dr) >= f
