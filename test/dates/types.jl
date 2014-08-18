@@ -49,38 +49,38 @@ test = Dates.Date(Dates.UTD(734869))
 @test Dates.Date(2013,1,1) == test
 
 # Test various input types for Date/DateTime
-test = Date(1,1,1)
-@test Date(int8(1),int8(1),int8(1)) == test
-@test Date(uint8(1),uint8(1),uint8(1)) == test
-@test Date(int16(1),int16(1),int16(1)) == test
-@test Date(uint8(1),uint8(1),uint8(1)) == test
-@test Date(int32(1),int32(1),int32(1)) == test
-@test Date(uint32(1),uint32(1),uint32(1)) == test
-@test Date(int64(1),int64(1),int64(1)) == test
-@test Date('\x01','\x01','\x01') == test
-@test Date(true,true,true) == test
-@test_throws ArgumentError Date(false,true,false)
-@test Date(false,true,true) == test - Dates.Year(1)
-@test_throws ArgumentError Date(true,true,false)
-@test Date(uint64(1),uint64(1),uint64(1)) == test
-@test Date(0xffffffffffffffff,uint64(1),uint64(1)) == test - Dates.Year(2)
-@test Date(int128(1),int128(1),int128(1)) == test
-@test Date(170141183460469231731687303715884105727,int128(1),int128(1)) == test - Dates.Year(2)
-@test Date(uint128(1),uint128(1),uint128(1)) == test
-@test Date(big(1),big(1),big(1)) == test
-@test Date(big(1),big(1),big(1)) == test
+test = Dates.Date(1,1,1)
+@test Dates.Date(int8(1),int8(1),int8(1)) == test
+@test Dates.Date(uint8(1),uint8(1),uint8(1)) == test
+@test Dates.Date(int16(1),int16(1),int16(1)) == test
+@test Dates.Date(uint8(1),uint8(1),uint8(1)) == test
+@test Dates.Date(int32(1),int32(1),int32(1)) == test
+@test Dates.Date(uint32(1),uint32(1),uint32(1)) == test
+@test Dates.Date(int64(1),int64(1),int64(1)) == test
+@test Dates.Date('\x01','\x01','\x01') == test
+@test Dates.Date(true,true,true) == test
+@test_throws ArgumentError Dates.Date(false,true,false)
+@test Dates.Date(false,true,true) == test - Dates.Year(1)
+@test_throws ArgumentError Dates.Date(true,true,false)
+@test Dates.Date(uint64(1),uint64(1),uint64(1)) == test
+@test Dates.Date(0xffffffffffffffff,uint64(1),uint64(1)) == test - Dates.Year(2)
+@test Dates.Date(int128(1),int128(1),int128(1)) == test
+@test Dates.Date(170141183460469231731687303715884105727,int128(1),int128(1)) == test - Dates.Year(2)
+@test Dates.Date(uint128(1),uint128(1),uint128(1)) == test
+@test Dates.Date(big(1),big(1),big(1)) == test
+@test Dates.Date(big(1),big(1),big(1)) == test
 # Potentially won't work if can't losslessly convert to Int64
-@test Date(BigFloat(1),BigFloat(1),BigFloat(1)) == test
-@test Date(complex(1),complex(1),complex(1)) == test
-@test Date(float64(1),float64(1),float64(1)) == test
-@test Date(float32(1),float32(1),float32(1)) == test
-@test Date(float16(1),float16(1),float16(1)) == test
-@test Date(Rational(1),Rational(1),Rational(1)) == test
-@test_throws InexactError Date(BigFloat(1.2),BigFloat(1),BigFloat(1))
-@test_throws InexactError Date(1 + im,complex(1),complex(1))
-@test_throws InexactError Date(1.2,1.0,1.0)
-@test_throws InexactError Date(1.2f0,1.f0,1.f0)
-@test_throws InexactError Date(3//4,Rational(1),Rational(1)) == test
+@test Dates.Date(BigFloat(1),BigFloat(1),BigFloat(1)) == test
+@test Dates.Date(complex(1),complex(1),complex(1)) == test
+@test Dates.Date(float64(1),float64(1),float64(1)) == test
+@test Dates.Date(float32(1),float32(1),float32(1)) == test
+@test Dates.Date(float16(1),float16(1),float16(1)) == test
+@test Dates.Date(Rational(1),Rational(1),Rational(1)) == test
+@test_throws InexactError Dates.Date(BigFloat(1.2),BigFloat(1),BigFloat(1))
+@test_throws InexactError Dates.Date(1 + im,complex(1),complex(1))
+@test_throws InexactError Dates.Date(1.2,1.0,1.0)
+@test_throws InexactError Dates.Date(1.2f0,1.f0,1.f0)
+@test_throws InexactError Dates.Date(3//4,Rational(1),Rational(1)) == test
 
 # Months, days, hours, minutes, seconds, and milliseconds must be in range
 @test_throws ArgumentError Dates.Date(2013,0,1)
@@ -143,7 +143,7 @@ b = Dates.Date(2001)
 @test b > a
 @test a < b
 @test a != b
-@test Date(DateTime(Date(2012,7,1))) == Date(2012,7,1)
+@test Dates.Date(Dates.DateTime(Dates.Date(2012,7,1))) == Dates.Date(2012,7,1)
 
 y = Dates.Year(1)
 m = Dates.Month(1)
@@ -162,7 +162,8 @@ ms = Dates.Millisecond(1)
 @test Dates.DateTime(y,m,d,h,mi,s,ms) == Dates.DateTime(1,1,1,1,1,1,1)
 @test Dates.DateTime(Dates.Day(10),Dates.Month(2),y) == Dates.DateTime(1,2,10)
 @test Dates.DateTime(Dates.Second(10),Dates.Month(2),y,Dates.Hour(4)) == Dates.DateTime(1,2,1,4,0,10)
-@test Dates.DateTime(Dates.Year(1),Dates.Month(2),Dates.Day(1),Dates.Hour(4),Dates.Second(10)) == Dates.DateTime(1,2,1,4,0,10)
+@test Dates.DateTime(Dates.Year(1),Dates.Month(2),Dates.Day(1),
+                     Dates.Hour(4),Dates.Second(10)) == Dates.DateTime(1,2,1,4,0,10)
 @test Dates.Date(y) == Dates.Date(1)
 @test Dates.Date(y,m) == Dates.Date(1,1)
 @test Dates.Date(y,m,d) == Dates.Date(1,1,1)
