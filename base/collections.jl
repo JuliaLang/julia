@@ -1,7 +1,7 @@
 
 module Collections
 
-import Base: setindex!, done, get, haskey, isempty, length, next, getindex, start
+import Base: setindex!, done, get, haskey, isempty, length, next, getindex, start, in
 import ..Order: Forward, Ordering, lt
 
 export
@@ -277,5 +277,25 @@ function next(pq::PriorityQueue, i)
 end
 
 
-end # module Collections
+# the complement of an arbitrary collection
 
+immutable Complement{T}
+    collection::T
+end
+
+in(x,c::Complement) = !in(x,c.collection)
+
+!(a::AbstractArray) = Complement(a)
+!(x::Number) = Complement(x)
+
+getindex(v::AbstractArray, c::Complement) = v[filter(i->in(i,c),1:length(v))]
+
+getindex(m::AbstractMatrix, I::Complement, J::Complement) =
+    m[filter(i->in(i,I),1:size(m,1)),filter(j->in(j,J),1:size(m,2))]
+getindex(m::AbstractMatrix, I::Complement, J...) =
+    m[filter(i->in(i,I),1:size(m,1)),J]
+getindex(m::AbstractMatrix, I, J::Complement) =
+    m[I,filter(j->in(j,J),1:size(m,2))]
+
+
+end # module Collections
