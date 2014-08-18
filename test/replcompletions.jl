@@ -96,8 +96,23 @@ c,r = test_latexcomplete(s)
 
 @unix_only begin
     #Assume that we can rely on the existence and accessibility of /tmp
+
+    # Tests path in Julia code and closing "
+    s = "@show \"/t"
+    c,r = test_complete(s)
+    @test "tmp/\"" in c
+    @test r == 9:9
+    @test s[r] == "t"
+
+    # Tests path in Julia code and not double-closing "
+    s = "@show \"/t\""
+    c,r = completions(s, 9)
+    @test "tmp/" in c
+    @test r == 9:9
+    @test s[r] == "t"
+
     s = "/t"
-    c,r = test_scomplete("/t")
+    c,r = test_scomplete(s)
     @test "tmp/" in c
     @test r == 2:2
     @test s[r] == "t"
