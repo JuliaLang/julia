@@ -68,7 +68,7 @@ let vec_ops = [:.+,:.-,:.*,:.%,:div]
 end
 
 # intfuncs
-Base.gcdx{T<:Period}(a::T,b::T) = ((g,x,y)=gcdx(Dates.value(a),Dates.value(b)); return T(g),x,y)
+Base.gcdx{T<:Period}(a::T,b::T) = ((g,x,y)=gcdx(value(a),value(b)); return T(g),x,y)
 Base.abs{T<:Period}(a::T) = T(abs(value(a)))
 
 periodisless(::Period,::Year)        = true
