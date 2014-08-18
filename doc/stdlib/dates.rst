@@ -93,36 +93,26 @@ Accessor Functions
 ~~~~~~~~~~~~~~~~~~
 
 .. function:: year(dt::TimeType) -> Int64
+              month(dt::TimeType) -> Int64
+              week(dt::TimeType) -> Int64
+              day(dt::TimeType) -> Int64
+              hour(dt::TimeType) -> Int64
+              minute(dt::TimeType) -> Int64
+              second(dt::TimeType) -> Int64
+              millisecond(dt::TimeType) -> Int64
 
-   Return the year part of a Date or DateTime. Use ``Year(dt)`` to return a ``Year`` type.
+   Return the field part of a Date or DateTime as an ``Int64``.
 
-.. function:: month(dt::TimeType) -> Int64
+.. function:: Year(dt::TimeType) -> Year
+              Month(dt::TimeType) -> Month
+              Week(dt::TimeType) -> Week
+              Day(dt::TimeType) -> Day
+              Hour(dt::TimeType) -> Hour
+              Minute(dt::TimeType) -> Minute
+              Second(dt::TimeType) -> Second
+              Millisecond(dt::TimeType) -> Millisecond
 
-   Return the month part of a Date or DateTime. Use ``Month(dt)`` to return a ``Month`` type.
-
-.. function:: week(dt::TimeType) -> Int64
-
-   Return the ISO 8601 week number of a Date or DateTime. Use ``Week(dt)`` to return a ``Week`` type.
-
-.. function:: day(dt::TimeType) -> Int64
-
-   Return the day part of a Date or DateTime. Use ``Day(dt)`` to return a ``Day`` type.
-
-.. function:: hour(dt::TimeType) -> Int64
-
-   Return the hour part of a DateTime. Use ``Hour(dt)`` to return a ``Hour`` type.
-
-.. function:: minute(dt::TimeType) -> Int64
-
-   Return the minute part of a DateTime. Use ``Minute(dt)`` to return a ``Minute`` type.
-
-.. function:: second(dt::TimeType) -> Int64
-
-   Return the second part of a DateTime. Use ``Second(dt)`` to return a ``Second`` type.
-
-.. function:: millisecond(dt::TimeType) -> Int64
-
-   Return the millisecond part of a DateTime. Use ``Millisecond(dt)`` to return a ``Millisecond`` type.
+   Return the field part of a Date or DateTime as a ``Period`` type.
 
 .. function:: yearmonth(dt::TimeType) -> (Int64, Int64)
 
@@ -285,44 +275,16 @@ Adjuster Functions
 Periods
 ~~~~~~~
 
-.. function:: Year(y)
+.. function:: Year(v)
+              Month(v)
+              Week(v)
+              Day(v)
+              Hour(v)
+              Minute(v)
+              Second(v)
+              Millisecond(v)
 
-   Construct a ``Year`` type with the given ``y`` value.
-   Input must be losslessly convertible to an ``Int64``.
-
-.. function:: Month(m)
-
-   Construct a ``Month`` type with the given ``m`` value.
-   Input must be losslessly convertible to an ``Int64``.
-
-.. function:: Week(w)
-
-   Construct a ``Week`` type with the given ``w`` value.
-   Input must be losslessly convertible to an ``Int64``.
-
-.. function:: Day(d)
-
-   Construct a ``Day`` type with the given ``d`` value.
-   Input must be losslessly convertible to an ``Int64``.
-
-.. function:: Hour(h)
-
-   Construct a ``Hour`` type with the given ``h`` value.
-   Input must be losslessly convertible to an ``Int64``.
-
-.. function:: Minute(mi)
-
-   Construct a ``Minute`` type with the given ``mi`` value.
-   Input must be losslessly convertible to an ``Int64``.
-
-.. function:: Second(s)
-
-   Construct a ``Second`` type with the given ``s`` value.
-   Input must be losslessly convertible to an ``Int64``.
-
-.. function:: Millisecond(ms)
-
-   Construct a ``Millisecond`` type with the given ``ms`` value.
+   Construct a ``Period`` type with the given ``v`` value.
    Input must be losslessly convertible to an ``Int64``.
 
 .. function:: default(p::Period) => Period
