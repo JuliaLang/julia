@@ -14,7 +14,7 @@ for p in (:Year,:Month,:Week,:Day,:Hour,:Minute,:Second,:Millisecond)
     # periodisless
     @eval periodisless(x::$p,y::$p) = value(x) < value(y)
     # String parsing (mainly for IO code)
-    @eval $p(x::String) = $p(parseint(x))
+    @eval $p(x::String) = $p(parseint(Int64,x))
     # Period accessors
     @eval $p(x::TimeType) = $p($(symbol(lowercase(string(p))))(x))
 end
