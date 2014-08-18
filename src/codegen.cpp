@@ -212,7 +212,7 @@ static Type *jl_value_llvmt;
 static Type *jl_pvalue_llvmt;
 static Type *jl_ppvalue_llvmt;
 static FunctionType *jl_func_sig;
-static Type *jl_fptr_llvmt;
+static Type *jl_pfptr_llvmt;
 static Type *T_int1;
 static Type *T_int8;
 static Type *T_pint8;
@@ -1758,7 +1758,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     else if (f->fptr == &jl_f_apply && nargs==2 && ctx->vaStack &&
              symbol_eq(args[2], ctx->vaName)) {
         Value *theF = emit_expr(args[1],ctx);
-        Value *theFptr = builder.CreateBitCast(emit_nthptr(theF,1, tbaa_func),jl_fptr_llvmt);
+        Value *theFptr = emit_nthptr_recast(theF,1, tbaa_func,jl_pfptr_llvmt);
         Value *nva = emit_n_varargs(ctx);
 #ifdef _P64
         nva = builder.CreateTrunc(nva, T_int32);
@@ -2247,7 +2247,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
         }
         // extract pieces of the function object
         // TODO: try extractvalue instead
-        theFptr = builder.CreateBitCast(emit_nthptr(theFunc, 1, tbaa_func), jl_fptr_llvmt);
+        theFptr = emit_nthptr_recast(theFunc, 1, tbaa_func, jl_pfptr_llvmt);
         theF = theFunc;
     }
     else {
@@ -4082,7 +4082,7 @@ static void init_julia_llvm_env(Module *m)
     ftargs.push_back(T_int32);
     jl_func_sig = FunctionType::get(jl_pvalue_llvmt, ftargs, false);
     assert(jl_func_sig != NULL);
-    jl_fptr_llvmt = PointerType::get(jl_func_sig, 0);
+    jl_pfptr_llvmt = PointerType::get(PointerType::get(jl_func_sig, 0), 0);
 
 #ifdef JL_GC_MARKSWEEP
     jlpgcstack_var =
