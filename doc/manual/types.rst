@@ -1098,7 +1098,7 @@ This is accomplished via the following code in ``base/boot.jl``::
     end
 
 Of course, this depends on what ``Int`` is aliased to — but that is
-pre-defined to be the correct type — either ``Int32`` or ``Int64``.
+predefined to be the correct type — either ``Int32`` or ``Int64``.
 
 For parametric types, ``typealias`` can be convenient for providing
 names for cases where some of the parameter choices are fixed.
