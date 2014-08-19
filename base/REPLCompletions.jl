@@ -127,7 +127,7 @@ function complete_path(path::String, pos)
             push!(matches, isdir(joinpath(dir, file)) ? joinpath(file,"") : file)
         end
     end
-    matches, (nextind(path, pos-sizeof(prefix))):pos, true
+    matches, (nextind(path, pos-sizeof(prefix))):pos, length(matches) > 0
 end
 
 function complete_methods(input::String)
@@ -190,7 +190,7 @@ function completions(string, pos)
         if inc_tag == :string && success && !isdir(paths[1]) && (length(string) <= pos || string[pos+1] != '"')
             paths[1] *= "\""
         end
-        return sort(paths), r, true
+        return sort(paths), r, success
     end
 
     ok, ret = latex_completions(string, pos)
