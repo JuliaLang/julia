@@ -232,20 +232,23 @@ subtype of its right operand:
     julia> Integer <: FloatingPoint
     false
 
-An important use of abstract types is to provide default implementations for concrete types.  To give a trivial
-example, consider::
+An important use of abstract types is to provide default implementations for
+concrete types. To give a simple example, consider::
 
     function myplus(x,y)
      x+y
     end
 
-The first thing to note is that the above argument declarations are equivalent to ``x::Any`` and ``y::Any``.  When
-this function is invoked, say as ``myplus(2,5)``, Julia first looks for the most specific method named ``myplus``
-that matches the given arguments.  (See below for more information on multiple dispatch.)  Assuming no method more 
-specific than the above is found, Julia next internally defines and compiles a method called ``myplus`` 
-specifically for 
-two Int arguments
-based on the generic function given above, i.e., it implicitly defines and compiles::
+The first thing to note is that the above argument declarations are equivalent
+to ``x::Any`` and ``y::Any``. When this function is invoked, say as
+``myplus(2,5)``, the dispatcher chooses the most specific method named
+``myplus`` that matches the given arguments. (See :ref:`man-methods` for more
+information on multiple dispatch.)
+
+Assuming no method more specific than the above is found, Julia next internally
+defines and compiles a method called ``myplus`` specifically for two ``Int``
+arguments based on the generic function given above, i.e., it implicitly
+defines and compiles::
  
     function myplus(x::Int,y::Int)
      x+y
@@ -253,21 +256,16 @@ based on the generic function given above, i.e., it implicitly defines and compi
     
 and finally, it invokes this specific method.
 
-Thus, abstract types allow programmers to write generic functions that can later be used as the default
-method by many combinations of concrete
-types.  
-Thanks to multiple dispatch,
-the programmer has full control over whether the default or more specific method is used.
+Thus, abstract types allow programmers to write generic functions that can
+later be used as the default method by many combinations of concrete types.  
+Thanks to multiple dispatch, the programmer has full control over whether the
+default or more specific method is used.
 
-An important point to note is that there is no loss in performance if the programmer relies on a function whose
-arguments are abstract types
-because it is recompiled for each tuple of argument
-concrete types with which it is invoked.  (There may be a performance issue,
-however, in the case of function arguments that are
-containers of abstract types; refer to performance notes below.)
- 
- 
-
+An important point to note is that there is no loss in performance if the
+programmer relies on a function whose arguments are abstract types, because it
+is recompiled for each tuple of argument concrete types with which it is
+invoked. (There may be a performance issue, however, in the case of function
+arguments that are containers of abstract types; see :ref:`man-performance-tips`.)
 
 
 Bits Types
