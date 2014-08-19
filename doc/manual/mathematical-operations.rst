@@ -270,6 +270,16 @@ work on arrays. For example, ``0 .< A .< 1`` gives a boolean array whose
 entries are true where the corresponding elements of ``A`` are between 0
 and 1.
 
+The operator ``.<`` is intended for array objects; the operation
+``A .< B`` is valid only if ``A`` and ``B`` have the same dimensions.  The
+operator returns an array with boolean entries and with the same dimensions
+as ``A`` and ``B``.  Such operators are called *elementwise*; Julia offers a
+suite of elementwise operators: ``.*``, ``.+``, etc.  Some of the elementwise
+operators can take a scalar operand such as the example ``0 .< A .< 1`` in
+the preceding paragraph.
+This notation means that the scalar operand should be replicated for each entry of
+the array.
+
 Note the evaluation behavior of chained comparisons::
 
     v(x) = (println(x); x)
