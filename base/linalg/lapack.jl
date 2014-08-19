@@ -2845,7 +2845,7 @@ for (syev, syevr, sygvd, elty) in
             chkstride1(A)
             n = chksquare(A)
             if range == 'I'
-                1 <= il <= iu <= n || throw(ArgumentError("illegal choise of eigenvalue indices"))
+                1 <= il <= iu <= n || throw(ArgumentError("illegal choice of eigenvalue indices"))
             end
             if range == 'V' 
                 vl < vu || throw(ArgumentError("lower boundary must be less than upper boundary"))
@@ -2986,7 +2986,7 @@ for (syev, syevr, sygvd, elty, relty) in
             chkstride1(A)
             n = chksquare(A)
             if range == 'I'
-                1 <= il <= iu <= n || throw(ArgumentError("illegal choise of eigenvalue indices"))
+                1 <= il <= iu <= n || throw(ArgumentError("illegal choice of eigenvalue indices"))
             end
             if range == 'V' 
                 vl < vu || throw(ArgumentError("lower boundary must be less than upper boundary"))
