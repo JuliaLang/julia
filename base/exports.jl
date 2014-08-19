@@ -44,11 +44,9 @@ export
     Dict,
     Dims,
     EachLine,
-    Enumerate,
     Factorization,
     FileMonitor,
     FileOffset,
-    Filter,
     FloatRange,
     Hermitian,
     UniformScaling,
@@ -112,7 +110,6 @@ export
     WeakRef,
     Woodbury,
     WString,
-    Zip,
 
 # Ccall types
     Cchar,
@@ -195,7 +192,7 @@ export
     ≠,
     !==,
     ≡,
-    ≢, 
+    ≢,
     $,
     %,
     &,
@@ -1226,7 +1223,7 @@ export
 # shared arrays
     sdata,
     indexpids,
-    
+
 # paths and file names
     abspath,
     basename,
