@@ -154,6 +154,25 @@ for (fa, fainv) in ((:asec, :acos), (:acsc, :asin), (:acot, :atan),
     end
 end
 
+
+# multiply in extended precision
+function deg2rad_ext(x::Float64)
+    m = 0.017453292519943295
+    m_hi = 0.01745329238474369
+    m_lo = 1.3519960527851425e-10
+
+    u = 134217729.0*x # 0x1p27 + 1
+    x_hi = u-(u-x)
+    x_lo = x-x_hi
+    
+    y_hi = m*x
+    y_lo = x_hi * m_lo + (x_lo* m_hi + ((x_hi*m_hi-y_hi) + x_lo*m_lo))
+
+    Double64(y_hi,y_lo)
+end
+deg2rad_ext(x::Float32) = Double32(deg2rad(float64(x)))
+deg2rad_ext(x::Real) = deg2rad(x) # Fallback
+
 function sind(x::Real)
     if isinf(x)
         return throw(DomainError())
@@ -164,20 +183,24 @@ function sind(x::Real)
     rx = copysign(float(rem(x,360)),x)
     arx = abs(rx)
 
-    if arx < oftype(rx,45.0)
-        return sin(deg2rad(rx))
-    elseif arx <= oftype(rx,135.0)
-        arx = oftype(rx,90.0) - arx
-        return copysign(cos(deg2rad(arx)),rx)
-    elseif arx < oftype(rx,225.0)
-        rx = (oftype(rx,180.0) - arx)*sign(rx)
-        return sin(deg2rad(rx))
-    elseif arx <= 315.0
-        arx = oftype(rx,270.0) - arx
-        return -copysign(cos(deg2rad(arx)),rx)
+    if rx == zero(rx)
+        return rx 
+    elseif arx < oftype(rx,45)
+        return sin_kernel(deg2rad_ext(rx))
+    elseif arx <= oftype(rx,135)
+        y = deg2rad_ext(oftype(rx,90) - arx)
+        return copysign(cos_kernel(y),rx)
+    elseif arx == oftype(rx,180)
+        return copysign(zero(rx),rx)
+    elseif arx < oftype(rx,225)
+        y = deg2rad_ext((oftype(rx,180) - arx)*sign(rx))
+        return sin_kernel(y)
+    elseif arx <= oftype(rx,315)
+        y = deg2rad_ext(oftype(rx,270) - arx)
+        return -copysign(cos_kernel(y),rx)
     else
-        rx = rx - copysign(oftype(rx,360.0),rx)
-        return sin(deg2rad(rx))
+        y = deg2rad_ext(rx - copysign(oftype(rx,360),rx))
+        return sin_kernel(y)
     end
 end
 @vectorize_1arg Real sind
@@ -191,20 +214,20 @@ function cosd(x::Real)
 
     rx = abs(float(rem(x,360)))
 
-    if rx <= oftype(rx,45.0)
-        return cos(deg2rad(rx))
-    elseif rx < oftype(rx,135.0)
-        rx = oftype(rx,90.0) - rx
-        return sin(deg2rad(rx))
-    elseif rx <= oftype(rx,225.0)
-        rx = oftype(rx,180.0) - rx
-        return -cos(deg2rad(rx))
-    elseif rx < oftype(rx,315.0)
-        rx = rx - oftype(rx,270.0)
-        return sin(deg2rad(rx))
+    if rx <= oftype(rx,45)
+        return cos_kernel(deg2rad_ext(rx))
+    elseif rx < oftype(rx,135)
+        y = deg2rad_ext(oftype(rx,90) - rx)
+        return sin_kernel(y)
+    elseif rx <= oftype(rx,225)
+        y = deg2rad_ext(oftype(rx,180) - rx)
+        return -cos_kernel(y)
+    elseif rx < oftype(rx,315)
+        y = deg2rad_ext(rx - oftype(rx,270))
+        return sin_kernel(y)
     else
-        rx = oftype(rx,360.0) - rx
-        return cos(deg2rad(rx))
+        y = deg2rad_ext(oftype(rx,360) - rx)
+        return cos_kernel(y)
     end
 end
 @vectorize_1arg Real cosd
