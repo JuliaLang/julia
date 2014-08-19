@@ -105,10 +105,24 @@
 ].* \\(in\\)\\(\\s-\\|$\\)+")
 
 (defconst julia-function-regex
-  (rx symbol-start "function" (1+ space) (group (1+ (or word ?_ ?!)))))
+  (rx symbol-start "function"
+      (1+ space)
+      ;; Don't highlight module names in function declarations:
+      (* (seq (1+ (or word ?_)) "."))
+      ;; The function name itself
+      (group (1+ (or word ?_ ?!)))))
 
 (defconst julia-type-regex
-  (rx symbol-start "type" (1+ space) (group (1+ (or word ?_)))))
+  (rx symbol-start (or "immutable" "type" "abstract") (1+ space) (group (1+ (or word ?_)))))
+
+(defconst julia-type-annotation-regex
+  (rx "::" (group (1+ (or word ?_)))))
+
+(defconst julia-type-parameter-regex
+  (rx symbol-start (1+ (or word ?_)) "{" (group (1+ (or word ?_))) "}"))
+
+(defconst julia-subtype-regex
+  (rx "<:" (1+ space) (group (1+ (or word ?_))) (0+ space) (or "\n" "{" "end")))
 
 (defconst julia-macro-regex
   "@\\w+")
@@ -118,8 +132,14 @@
    '("if" "else" "elseif" "while" "for" "begin" "end" "quote"
      "try" "catch" "return" "local" "abstract" "function" "macro" "ccall"
      "finally" "typealias" "break" "continue" "type" "global"
-     "module" "using" "import" "export" "const" "let" "bitstype" "do"
-     "baremodule" "importall" "immutable")))
+     "module" "using" "import" "export" "const" "let" "bitstype" "do" "in"
+     "baremodule" "importall" "immutable")
+   'symbols))
+
+(defconst julia-builtin-regex
+  (regexp-opt
+   '("error" "throw")
+   'symbols))
 
 (defconst julia-font-lock-keywords
   (list
@@ -129,13 +149,18 @@
     (cons julia-macro-regex 'font-lock-keyword-face)
     (cons
      (regexp-opt
-      '("true" "false" "C_NULL" "Inf" "NaN" "Inf32" "NaN32" "nothing"))
+      '("true" "false" "C_NULL" "Inf" "NaN" "Inf32" "NaN32" "nothing")
+      'symbols)
      'font-lock-constant-face)
     (list julia-unquote-regex 2 'font-lock-constant-face)
     (list julia-char-regex 2 'font-lock-string-face)
     (list julia-forloop-in-regex 1 'font-lock-keyword-face)
     (list julia-function-regex 1 'font-lock-function-name-face)
     (list julia-type-regex 1 'font-lock-type-face)
+    (list julia-type-annotation-regex 1 'font-lock-type-face)
+    (list julia-type-parameter-regex 1 'font-lock-type-face)
+    (list julia-subtype-regex 1 'font-lock-type-face)
+    (list julia-builtin-regex 1 'font-lock-builtin-face)
 ))
 
 (defconst julia-block-start-keywords
