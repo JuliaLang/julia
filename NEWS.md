@@ -15,6 +15,16 @@ Library improvements
 
   * Symmetric and Hermitian immutables are now parametrized on matrix type ([#7992]).
 
+  * Switch from `O(N)` to `O(logN)` algorithm for `dequeue!(pq, key)`
+    with PriorityQueues. This provides major speedups for large
+    queues.
+
+  * PriorityQueues now include the order type among their parameters,
+    `PriorityQueue{KeyType,ValueType,OrderType}`. An empty queue can
+    be constructed as `pq = PriorityQueue(KeyType,ValueType)`, if you
+    intend to use the default `Forward` order, or
+    `pq = PriorityQueue(KeyType, ValueType, OrderType)` otherwise.
+
 Julia v0.3.0 Release Notes
 ==========================
 

@@ -14,7 +14,7 @@ The ``PriorityQueue`` type is a basic priority queue implementation allowing for
 arbitrary key and priority types. Multiple identical keys are not permitted, but
 the priority of existing keys can be changed efficiently.
 
-.. function:: PriorityQueue{K,V}([ord])
+.. function:: PriorityQueue(K, V, [ord])
 
    Construct a new PriorityQueue, with keys of type ``K`` and values/priorites of
    type ``V``. If an order is not given, the priority queue is min-ordered using
