@@ -2843,7 +2843,13 @@ for (syev, syevr, sygvd, elty) in
         #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * ), Z( LDZ, * )    
         function syevr!(jobz::BlasChar, range::BlasChar, uplo::BlasChar, A::StridedMatrix{$elty}, vl::FloatingPoint, vu::FloatingPoint, il::Integer, iu::Integer, abstol::FloatingPoint)
             chkstride1(A)
-            n = chksquare(A)                   
+            n = chksquare(A)
+            if range == 'I'
+                1 <= il <= iu <= n || throw(ArgumentError("illegal choise of eigenvalue indices"))
+            end
+            if range == 'V' 
+                vl < vu || throw(ArgumentError("lower boundary must be less than upper boundary"))
+            end
             lda = max(1,stride(A,2))
             m = Array(BlasInt, 1)
             w = similar(A, $elty, n)
