@@ -344,3 +344,9 @@ for r in (0:1, 0.0:1.0)
     @test r*im == [r]*im
     @test r/im == [r]/im
 end
+
+# issue #7709
+@test length(map(identity, 0x01:0x05)) == 5
+@test length(map(identity, 0x0001:0x0005)) == 5
+@test length(map(identity, uint64(1):uint64(5))) == 5
+@test length(map(identity, uint128(1):uint128(5))) == 5
