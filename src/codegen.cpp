@@ -612,7 +612,11 @@ static void jl_setup_module(Module *m, bool add)
         llvm::DEBUG_METADATA_VERSION);
 #endif
     if (add)
+#ifdef LLVM36
+        jl_ExecutionEngine->addModule(std::unique_ptr<Module>(m));
+#else
         jl_ExecutionEngine->addModule(m);
+#endif
 }
 
 extern "C" void jl_generate_fptr(jl_function_t *f)
@@ -4584,8 +4588,12 @@ extern "C" void jl_init_codegen(void)
     };
     SmallVector<std::string, 4> MAttrs(mattr, mattr+2);
 #endif
-    EngineBuilder eb = EngineBuilder(engine_module)
-        .setEngineKind(EngineKind::JIT)
+#ifdef LLVM36
+    EngineBuilder eb = EngineBuilder(std::unique_ptr<Module>(engine_module));
+#else
+    EngineBuilder eb = EngineBuilder(engine_module);
+#endif
+    eb  .setEngineKind(EngineKind::JIT)
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_) && !defined(USE_MCJIT)
         .setJITMemoryManager(new JITMemoryManagerWin())
 #endif
