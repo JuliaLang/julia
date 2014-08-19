@@ -1,3 +1,41 @@
+immutable Double64
+    hi::Float64
+    lo::Float64
+end
+immutable Double32
+    hi::Float64
+end
+
+# kernel functions are only valid for |x| < pi/4 = 0.7854
+sin_kernel(x::Double64) = ccall((:__kernel_sin,Base.Math.libm),Float64,(Float64,Float64,Cint),x.hi,x.lo,1)
+cos_kernel(x::Double64) = ccall((:__kernel_cos,Base.Math.libm),Float64,(Float64,Float64),x.hi,x.lo)
+sin_kernel(x::Float64) = ccall((:__kernel_sin,Base.Math.libm),Float64,(Float64,Float64,Cint),x,0.0,0)
+cos_kernel(x::Float64) = ccall((:__kernel_cos,Base.Math.libm),Float64,(Float64,Float64),x,0.0)
+
+sin_kernel(x::Double32) = ccall((:__kernel_sindf,Base.Math.libm),Float32,(Float64,),x.hi)
+cos_kernel(x::Double32) = ccall((:__kernel_cosdf,Base.Math.libm),Float32,(Float64,),x.hi)
+
+sin_kernel(x::Real) = sin(x)
+cos_kernel(x::Real) = cos(x)
+
+# multiply in extended precision
+function mulpi_ext(x::Float64)
+    m = 3.141592653589793
+    m_hi = 3.1415926218032837
+    m_lo = 3.178650954705639e-8
+
+    u = 134217729.0*x # 0x1p27 + 1
+    x_hi = u-(u-x)
+    x_lo = x-x_hi
+    
+    y_hi = m*x
+    y_lo = x_hi * m_lo + (x_lo* m_hi + ((x_hi*m_hi-y_hi) + x_lo*m_lo))
+
+    Double64(y_hi,y_lo)
+end
+mulpi_ext(x::Float32) = Double32(pi*float64(x))
+mulpi_ext(x::Real) = pi*x # Fallback
+
 function sinpi(x::Real)
     if isinf(x)
         return throw(DomainError())
@@ -8,20 +46,24 @@ function sinpi(x::Real)
     rx = copysign(float(rem(x,2)),x)
     arx = abs(rx)
 
-    if arx < oftype(rx,0.25)
-        return sin(pi*rx)
+    if rx == zero(rx)
+        return rx 
+    elseif arx < oftype(rx,0.25)
+        return sin_kernel(mulpi_ext(rx))
     elseif arx <= oftype(rx,0.75)
-        arx = oftype(rx,0.5) - arx
-        return copysign(cos(pi*arx),rx)
+        y = mulpi_ext(oftype(rx,0.5) - arx)
+        return copysign(cos_kernel(y),rx)
+    elseif arx == one(x)
+        return copysign(zero(rx),rx)
     elseif arx < oftype(rx,1.25)
-        rx = (one(rx) - arx)*sign(rx)
-        return sin(pi*rx)
+        y = mulpi_ext((one(rx) - arx)*sign(rx))
+        return sin_kernel(y)
     elseif arx <= oftype(rx,1.75)
-        arx = oftype(rx,1.5) - arx
-        return -copysign(cos(pi*arx),rx)
+        y = mulpi_ext(oftype(rx,1.5) - arx)
+        return -copysign(cos_kernel(y),rx)
     else
-        rx = rx - copysign(oftype(rx,2.0),rx)
-        return sin(pi*rx)
+        y = mulpi_ext(rx - copysign(oftype(rx,2.0),rx))
+        return sin_kernel(y)
     end
 end
 
@@ -35,21 +77,22 @@ function cospi(x::Real)
     rx = abs(float(rem(x,2)))
 
     if rx <= oftype(rx,0.25)
-        return cos(pi*rx)
+        return cos_kernel(mulpi_ext(rx))
     elseif rx < oftype(rx,0.75)
-        rx = oftype(rx,0.5) - rx
-        return sin(pi*rx)
+        y = mulpi_ext(oftype(rx,0.5) - rx)
+        return sin_kernel(y)
     elseif rx <= oftype(rx,1.25)
-        rx = one(rx) - rx
-        return -cos(pi*rx)
+        y = mulpi_ext(one(rx) - rx)
+        return -cos_kernel(y)
     elseif rx < oftype(rx,1.75)
-        rx = rx - oftype(rx,1.5)
-        return sin(pi*rx)
+        y = mulpi_ext(rx - oftype(rx,1.5))
+        return sin_kernel(y)
     else
-        rx = oftype(rx,2.0) - rx
-        return cos(pi*rx)
+        y = mulpi_ext(oftype(rx,2.0) - rx)
+        return cos_kernel(y)
     end
 end
+
 
 sinpi(x::Integer) = zero(x)
 cospi(x::Integer) = isodd(x) ? -one(x) : one(x)
