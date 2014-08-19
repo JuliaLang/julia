@@ -6,15 +6,74 @@ immutable Double32
     hi::Float64
 end
 
-# kernel functions are only valid for |x| < pi/4 = 0.7854
-sin_kernel(x::Double64) = ccall((:__kernel_sin,Base.Math.libm),Float64,(Float64,Float64,Cint),x.hi,x.lo,1)
-cos_kernel(x::Double64) = ccall((:__kernel_cos,Base.Math.libm),Float64,(Float64,Float64),x.hi,x.lo)
-sin_kernel(x::Float64) = ccall((:__kernel_sin,Base.Math.libm),Float64,(Float64,Float64,Cint),x,0.0,0)
-cos_kernel(x::Float64) = ccall((:__kernel_cos,Base.Math.libm),Float64,(Float64,Float64),x,0.0)
+# kernel_* functions are only valid for |x| < pi/4 = 0.7854
+# translated from openlibm code: k_sin.c, k_cos.c, k_sinf.c, k_cosf.c
+# which are made available under following licence:
 
-sin_kernel(x::Double32) = ccall((:__kernel_sindf,Base.Math.libm),Float32,(Float64,),x.hi)
-cos_kernel(x::Double32) = ccall((:__kernel_cosdf,Base.Math.libm),Float32,(Float64,),x.hi)
+## Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+##
+## Developed at SunPro, a Sun Microsystems, Inc. business.
+## Permission to use, copy, modify, and distribute this
+## software is freely granted, provided that this notice
+## is preserved.
 
+function sin_kernel(x::Double64)
+    S1 = -1.66666666666666324348e-01
+    S2 =  8.33333333332248946124e-03
+    S3 = -1.98412698298579493134e-04
+    S4 =  2.75573137070700676789e-06
+    S5 = -2.50507602534068634195e-08
+    S6 =  1.58969099521155010221e-10
+
+    z = x.hi*x.hi
+    w = z*z
+    r = S2+z*(S3+z*S4) + z*w*(S5+z*S6)
+    v = z*x.hi
+    x.hi-((z*(0.5*x.lo-v*r)-x.lo)-v*S1)
+end
+
+function cos_kernel(x::Double64)
+    C1 =  4.16666666666666019037e-02
+    C2 = -1.38888888888741095749e-03
+    C3 =  2.48015872894767294178e-05
+    C4 = -2.75573143513906633035e-07
+    C5 =  2.08757232129817482790e-09
+    C6 = -1.13596475577881948265e-11
+
+    z = x.hi*x.hi
+    w = z*z
+    r = z*(C1+z*(C2+z*C3)) + w*w*(C4+z*(C5+z*C6))
+    hz = 0.5*z
+    w = 1.0-hz
+    w + (((1.0-w)-hz) + (z*r-x.hi*x.lo))
+end
+
+function sin_kernel(x::Double32)
+    S1 = -0x15555554cbac77.0p-55
+    S2 =  0x111110896efbb2.0p-59
+    S3 = -0x1a00f9e2cae774.0p-65
+    S4 =  0x16cd878c3b46a7.0p-71
+    
+    z = x.hi*x.hi
+    w = z*z
+    r = S3+z*S4
+    s = z*x.hi
+    float32((x.hi + s*(S1+z*S2)) + s*w*r)
+end
+
+function cos_kernel(x::Double32)
+    C0 = -0x1ffffffd0c5e81.0p-54
+    C1 =  0x155553e1053a42.0p-57
+    C2 = -0x16c087e80f1e27.0p-62
+    C3 =  0x199342e0ee5069.0p-68
+
+    z = x.hi*x.hi
+    w = z*z
+    r = C2+z*C3
+    float32(((1.0+z*C0) + w*C1) + (w*z)*r)
+end
+
+# fallback methods
 sin_kernel(x::Real) = sin(x)
 cos_kernel(x::Real) = cos(x)
 
