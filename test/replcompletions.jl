@@ -61,6 +61,11 @@ c,r = test_complete(s)
 @test r == 19:23
 @test s[r] == "getin"
 
+# inexistent completion inside a string
+s = "Pkg.add(\"lol"
+c,r,res = test_complete(s)
+@test res == false
+
 # test latex symbol completions
 s = "\\alpha"
 c,r = test_latexcomplete(s)
@@ -98,6 +103,7 @@ c,r = test_latexcomplete(s)
     #Assume that we can rely on the existence and accessibility of /tmp
 
     # Tests path in Julia code and closing "
+    # Issue #8047
     s = "@show \"/t"
     c,r = test_complete(s)
     @test "tmp/\"" in c
@@ -105,6 +111,7 @@ c,r = test_latexcomplete(s)
     @test s[r] == "t"
 
     # Tests path in Julia code and not double-closing "
+    # Issue #8047
     s = "@show \"/t\""
     c,r = completions(s, 9)
     @test "tmp/" in c
