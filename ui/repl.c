@@ -80,7 +80,8 @@ static const char *opts =
     " --track-allocation={none|user|all}\n"
     "                          Count bytes allocated by each source line\n"
     " --check-bounds={yes|no}  Emit bounds checks always or never (ignoring declarations)\n"
-    " --int-literals={32|64}   Select integer literal size independent of platform\n";
+    " --int-literals={32|64}   Select integer literal size independent of platform\n"
+    " --dump-bitcode={yes|no}  Dump bitcode for the system image (used with --build)\n";
 
 void parse_opts(int *argcp, char ***argvp)
 {
@@ -96,6 +97,7 @@ void parse_opts(int *argcp, char ***argvp)
         { "track-allocation",required_argument, 0, 'm' },
         { "check-bounds",  required_argument, 0, 300 },
         { "int-literals",  required_argument, 0, 301 },
+        { "dump-bitcode",  required_argument, 0, 302 },
         { 0, 0, 0, 0 }
     };
     int c;
@@ -165,6 +167,12 @@ void parse_opts(int *argcp, char ***argvp)
                 ios_printf(ios_stderr, "julia: invalid integer literal size (%s)\n", optarg);
                 exit(1);
             }
+            break;
+        case 302:
+            if (!strcmp(optarg,"yes"))
+                jl_compileropts.dumpbitcode = JL_COMPILEROPT_DUMPBITCODE_ON;
+            else if (!strcmp(optarg,"no"))
+                jl_compileropts.dumpbitcode = JL_COMPILEROPT_DUMPBITCODE_OFF;
             break;
         default:
             ios_printf(ios_stderr, "julia: unhandled option -- %c\n",  c);

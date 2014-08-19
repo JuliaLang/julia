@@ -125,7 +125,7 @@ static void jl_load_sysimg_so(char *fname)
                 jl_error("Target architecture mismatch. Please delete or regenerate sys.{so,dll,dylib}.");
         }
         else if (strcmp(cpu_target,"core2") == 0) {
-            int HasSSSE3 = (info[3] & 1<<9);
+            int HasSSSE3 = (info[2] & 1<<9);
             if (!HasSSSE3)
                 jl_error("The current host does not support SSSE3, but the system image was compiled for Core2.\n"
                          "Please delete or regenerate sys.{so,dll,dylib}.");
@@ -1038,7 +1038,7 @@ void jl_restore_system_image(char *fname)
         JL_PRINTF(JL_STDERR, "System image file \"%s\" not found\n", fname);
         exit(1);
     }
-    int build_mode = (jl_compileropts.build_path != NULL);
+    int build_mode = 0;
 #ifdef _OS_WINDOWS_
     //XXX: the windows linker forces our system image to be
     //     linked against only one dll, I picked libjulia-release

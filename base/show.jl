@@ -99,7 +99,7 @@ showcompact_lim(io, x::Number) = _limit_output ? showcompact(io, x) : print(io, 
 macro show(exs...)
     blk = Expr(:block)
     for ex in exs
-        push!(blk.args, :(println($(sprint(show_unquoted,ex)*" => "),
+        push!(blk.args, :(println($(sprint(show_unquoted,ex)*" = "),
                                   repr(begin value=$(esc(ex)) end))))
     end
     if !isempty(exs); push!(blk.args, :value); end

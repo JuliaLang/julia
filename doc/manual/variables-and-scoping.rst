@@ -260,8 +260,8 @@ block without creating any new bindings:
            end
     1
 
-The first example is illegal because you cannot declare the same
-variable as local in the same scope twice. The second example is legal
+The first example is invalid because you cannot declare the same
+variable as local in the same scope twice. The second example is valid
 since the ``let`` introduces a new scope block, so the inner local ``x``
 is a different variable than the outer local ``x``.
 

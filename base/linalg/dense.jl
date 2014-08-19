@@ -60,13 +60,13 @@ vecnorm1{T<:BlasReal}(x::Union(Array{T},StridedVector{T})) =
 vecnorm2{T<:BlasFloat}(x::Union(Array{T},StridedVector{T})) = 
     length(x) < NRM2_CUTOFF ? generic_vecnorm2(x) : BLAS.nrm2(x)
 
-function triu!{T}(M::Matrix{T}, k::Integer)
+function triu!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
     idx = 1
     for j = 0:n-1
         ii = min(max(0, j+1-k), m)
         for i = (idx+ii):(idx+m-1)
-            M[i] = zero(T)
+            M[i] = zero(M[i])
         end
         idx += m
     end
@@ -75,13 +75,13 @@ end
 
 triu(M::Matrix, k::Integer) = triu!(copy(M), k)
 
-function tril!{T}(M::Matrix{T}, k::Integer)
+function tril!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
     idx = 1
     for j = 0:n-1
         ii = min(max(0, j-k), m)
         for i = idx:(idx+ii-1)
-            M[i] = zero(T)
+            M[i] = zero(M[i])
         end
         idx += m
     end

@@ -50,6 +50,8 @@ const latex_symbols = [
     "\\pprime" => "″",
     "\\ppprime" => "‴",
     "\\pppprime" => "⁗",
+    "\\backpprime" => "‶",
+    "\\backppprime" => "‷",
 
     # Superscripts
     "\\^0" => "⁰",
