@@ -64,7 +64,7 @@ Suppose you call a function like this::
 	julia> x # x is unchanged!
 	10
 
-In Julia, any function (including ``change_value!()``) can't change the binding of a local variable. If ``x`` (in the calling scope) is bound to a immutable object (like a real number), you can't modify the object; likewise, if x is bound in the calling scope to a Dict, you can't change it to be bound to an ASCIIString. 
+In Julia, any function (including ``change_value!()``) can't change the binding of a local variable. If ``x`` (in the calling scope) is bound to a immutable object (like a real number), you can't modify the object; likewise, if x is bound in the calling scope to a Dict, you can't change it to be bound to an ASCIIString.
 
 But here is a thing you should pay attention to: suppose ``x`` is bound to an Array (or any other mutable type). You cannot "unbind" ``x`` from this Array. But, since an Array is a *mutable* type, you can change its content. For example::
 
@@ -121,7 +121,71 @@ inside a specific function or set of functions, you have two options:
 
     This imports all the symbols from Foo, but only inside the module Bar.
 
+.. _man-slurping-splatting:
 
+What does the ``...`` operator do?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The two uses of the `...` operator: slurping and splatting
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Many newcomers to Julia find the use of ``...`` operator confusing. Part of
+what makes the ``...`` operator confusing is that it means two different things
+depending on context.
+
+``...`` combines many arguments into one argument in function definitions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In the context of function definitions, the ``...`` operator is used to combine
+many different arguments into a single argument. This use of ``...`` for
+combining many different arguments into a single argument is called slurping:
+
+    julia> function printargs(args...)
+               @printf("%s\n", typeof(args))
+               for (i, arg) in enumerate(args)
+                   @printf("Arg %d = %s\n", i, arg)
+               end
+           end
+    printargs (generic function with 1 method)
+
+    julia> printargs(1, 2, 3)
+    (Int64,Int64,Int64)
+    Arg 1 = 1
+    Arg 2 = 2
+    Arg 3 = 3
+
+If Julia were a language that made more liberal use of ASCII characters, the
+slurping operator might have been written as ``<-...`` instead of ``...``.
+
+``...`` splits one argument into many different arguments in function calls
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In contrast to the use of the ``...`` operator to denote slurping many
+different arguments into one argument when defining a function, the ``...``
+operator is also used to cause a single function argument to be split apart
+into many different arguments when used in the context of a function call. This
+use of ``...`` is called splatting:
+
+    julia> function threeargs(a, b, c)
+               @printf("a = %s::%s\n", a, typeof(a))
+               @printf("b = %s::%s\n", b, typeof(b))
+               @printf("c = %s::%s\n", c, typeof(c))
+           end
+    threeargs (generic function with 1 method)
+
+    julia> vec = [1, 2, 3]
+    3-element Array{Int64,1}:
+     1
+     2
+     3
+
+    julia> threeargs(vec...)
+    a = 1::Int64
+    b = 2::Int64
+    c = 3::Int64
+
+If Julia were a language that made more liberal use of ASCII characters,
+the splatting operator might have been written as ``...->`` instead of ``...``.
 
 Types, type declarations, and constructors
 ------------------------------------------
@@ -193,7 +257,7 @@ Julia uses machine arithmetic for integer computations. This means that the rang
 
     julia> typemax(Int)
     9223372036854775807
-    
+
     julia> ans+1
     -9223372036854775808
 
@@ -255,13 +319,13 @@ At first blush, this seems reasonable enough since 9223372036854775807 is much c
 
     >> n = int64(2)^62
     4611686018427387904
-    
+
     >> n + (n - 1)
     9223372036854775807
-    
+
     >> (n + n) - 1
     9223372036854775806
-    
+
 This makes it hard to write many basic integer algorithms since a lot of
 common techniques depend on the fact that machine addition with overflow *is*
 associative. Consider finding the midpoint between integer values ``lo`` and
@@ -269,7 +333,7 @@ associative. Consider finding the midpoint between integer values ``lo`` and
 
     julia> n = 2^62
     4611686018427387904
-    
+
     julia> (n + 2n) >>> 1
     6917529027641081856
 
@@ -277,9 +341,9 @@ See? No problem. That's the correct midpoint between 2^62 and 2^63, despite
 the fact that ``n + 2n`` is -4611686018427387904. Now try it in Matlab::
 
     >> (n + 2*n)/2
-    
+
     ans =
-    
+
       4611686018427387904
 
 Oops. Adding a ``>>>`` operator to Matlab wouldn't help, because saturation
@@ -471,7 +535,7 @@ to change the type of field ``a``:
 
     julia> t.a = 4.5f0
     4.5f0
-    
+
     julia> typeof(t.a)
     Float32
 
@@ -482,10 +546,10 @@ change:
 
     julia> m.a = 4.5f0
     4.5
-    
+
     julia> typeof(m.a)
     Float64
-    
+
 The fact that the type of ``m.a`` is known from ``m``'s type---coupled
 with the fact that its type cannot change mid-function---allows the
 compiler to generate highly-optimized code for objects like ``m`` but
@@ -502,10 +566,10 @@ an abstract type:
 
     julia> typeof(m.a)
     Float64
-    
+
     julia> m.a = 4.5f0
     4.5f0
-    
+
     julia> typeof(m.a)
     Float32
 
@@ -645,7 +709,7 @@ With this approach, one can write functions such as::
 
     julia> myfunc(MyContainer(1:3))
     2
-    
+
     julia> myfunc(MyContainer(1.0:3))
     3.0
 
@@ -807,3 +871,4 @@ Within emacs
 - Go back to the Julia prompt via ``(gdb) c``
 
 - Execute the Julia command you want to see running.
+
