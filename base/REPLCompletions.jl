@@ -187,7 +187,10 @@ function completions(string, pos)
         startpos = nextind(partial, rsearch(partial, non_filename_chars, pos))
         r = startpos:pos
         paths, r, success = complete_path(string[r], pos)
-        if inc_tag == :string && success && !isdir(paths[1]) && (length(string) <= pos || string[pos+1] != '"')
+        if inc_tag == :string &&
+           length(paths) == 1 &&                              # Only close if there's a single choice,
+           !isdir(string[startpos:start(r)-1] * paths[1]) &&  # except if it's a directory
+           (length(string) <= pos || string[pos+1] != '"')    # or there's already a " at the cursor.
             paths[1] *= "\""
         end
         return sort(paths), r, success
