@@ -713,7 +713,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         std::string ir_string = ir_stream.str();
 #ifdef LLVM36
         Module *m = NULL;
-        bool failed = parseAssemblyInto(std::unique_ptr<llvm::MemoryBuffer>(llvm::MemoryBuffer::getMemoryBuffer::getMemBuffer(ir_string)),*jl_Module,Err);
+        bool failed = parseAssemblyInto(std::unique_ptr<llvm::MemoryBuffer>(llvm::MemoryBuffer::getMemBuffer(ir_string)),*jl_Module,Err);
         if (!failed)
             m = jl_Module;
 #else
