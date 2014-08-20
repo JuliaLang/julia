@@ -276,20 +276,23 @@ bytestring_beforecursor(buf::IOBuffer) = bytestring(pointer(buf.data), buf.ptr-1
 
 function complete_line(c::REPLCompletionProvider, s)
     partial = bytestring_beforecursor(s.input_buffer)
-    ret, range, should_complete = completions(partial, endof(partial))
+    full = LineEdit.input_string(s)
+    ret, range, should_complete = completions(full, endof(partial))
     return ret, partial[range], should_complete
 end
 
 function complete_line(c::ShellCompletionProvider, s)
     # First parse everything up to the current position
     partial = bytestring_beforecursor(s.input_buffer)
-    ret, range, should_complete = shell_completions(partial, endof(partial))
+    full = LineEdit.input_string(s)
+    ret, range, should_complete = shell_completions(full, endof(partial))
     return ret, partial[range], should_complete
 end
 
 function complete_line(c::LatexCompletions, s)
     partial = bytestring_beforecursor(LineEdit.buffer(s))
-    ret, range, should_complete = latex_completions(partial, endof(partial))[2]
+    full = LineEdit.input_string(s)
+    ret, range, should_complete = latex_completions(full, endof(partial))[2]
     return ret, partial[range], should_complete
 end
 
