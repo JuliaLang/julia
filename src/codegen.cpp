@@ -212,7 +212,7 @@ static Type *jl_value_llvmt;
 static Type *jl_pvalue_llvmt;
 static Type *jl_ppvalue_llvmt;
 static FunctionType *jl_func_sig;
-static Type *jl_fptr_llvmt;
+static Type *jl_pfptr_llvmt;
 static Type *T_int1;
 static Type *T_int8;
 static Type *T_pint8;
@@ -612,7 +612,11 @@ static void jl_setup_module(Module *m, bool add)
         llvm::DEBUG_METADATA_VERSION);
 #endif
     if (add)
+#ifdef LLVM36
+        jl_ExecutionEngine->addModule(std::unique_ptr<Module>(m));
+#else
         jl_ExecutionEngine->addModule(m);
+#endif
 }
 
 extern "C" void jl_generate_fptr(jl_function_t *f)
@@ -1758,7 +1762,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     else if (f->fptr == &jl_f_apply && nargs==2 && ctx->vaStack &&
              symbol_eq(args[2], ctx->vaName)) {
         Value *theF = emit_expr(args[1],ctx);
-        Value *theFptr = builder.CreateBitCast(emit_nthptr(theF,1, tbaa_func),jl_fptr_llvmt);
+        Value *theFptr = emit_nthptr_recast(theF,1, tbaa_func,jl_pfptr_llvmt);
         Value *nva = emit_n_varargs(ctx);
 #ifdef _P64
         nva = builder.CreateTrunc(nva, T_int32);
@@ -2247,7 +2251,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
         }
         // extract pieces of the function object
         // TODO: try extractvalue instead
-        theFptr = builder.CreateBitCast(emit_nthptr(theFunc, 1, tbaa_func), jl_fptr_llvmt);
+        theFptr = emit_nthptr_recast(theFunc, 1, tbaa_func, jl_pfptr_llvmt);
         theF = theFunc;
     }
     else {
@@ -2878,10 +2882,12 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                                         ConstantInt::get(T_size,0));
         builder.CreateCall(prepare_call(jlenter_func), jbuf);
 #ifndef _OS_WINDOWS_
-        Value *sj = builder.CreateCall2(prepare_call(setjmp_func), jbuf, ConstantInt::get(T_int32,0));
+        CallInst *sj = builder.CreateCall2(prepare_call(setjmp_func), jbuf, ConstantInt::get(T_int32,0));
 #else
-        Value *sj = builder.CreateCall(prepare_call(setjmp_func), jbuf);
+        CallInst *sj = builder.CreateCall(prepare_call(setjmp_func), jbuf);
 #endif
+        // We need to mark this on the call site as well. See issue #6757
+        sj->setCanReturnTwice();
         Value *isz = builder.CreateICmpEQ(sj, ConstantInt::get(T_int32,0));
         BasicBlock *tryblk = BasicBlock::Create(getGlobalContext(), "try",
                                                 ctx->f);
@@ -4080,7 +4086,7 @@ static void init_julia_llvm_env(Module *m)
     ftargs.push_back(T_int32);
     jl_func_sig = FunctionType::get(jl_pvalue_llvmt, ftargs, false);
     assert(jl_func_sig != NULL);
-    jl_fptr_llvmt = PointerType::get(jl_func_sig, 0);
+    jl_pfptr_llvmt = PointerType::get(PointerType::get(jl_func_sig, 0), 0);
 
 #ifdef JL_GC_MARKSWEEP
     jlpgcstack_var =
@@ -4582,8 +4588,12 @@ extern "C" void jl_init_codegen(void)
     };
     SmallVector<std::string, 4> MAttrs(mattr, mattr+2);
 #endif
-    EngineBuilder eb = EngineBuilder(engine_module)
-        .setEngineKind(EngineKind::JIT)
+#ifdef LLVM36
+    EngineBuilder eb = EngineBuilder(std::unique_ptr<Module>(engine_module));
+#else
+    EngineBuilder eb = EngineBuilder(engine_module);
+#endif
+    eb  .setEngineKind(EngineKind::JIT)
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_) && !defined(USE_MCJIT)
         .setJITMemoryManager(new JITMemoryManagerWin())
 #endif

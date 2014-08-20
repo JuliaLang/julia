@@ -876,6 +876,12 @@ static Value *emit_nthptr(Value *v, Value *idx, MDNode *tbaa)
     return tbaa_decorate(tbaa,builder.CreateLoad(vptr, false));
 }
 
+static Value *emit_nthptr_recast(Value *v, size_t n, MDNode *tbaa, Type* ptype) {
+    // p = (jl_value_t**)v; *(ptype)&p[n]
+    Value *vptr = emit_nthptr_addr(v, n);
+    return tbaa_decorate(tbaa,builder.CreateLoad(builder.CreateBitCast(vptr,ptype), false));
+}
+ 
 static Value *typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
                          jl_codectx_t *ctx)
 {
@@ -1013,8 +1019,7 @@ static Value *emit_tuplelen(Value *t,jl_value_t *jt)
         return builder.CreateLShr(builder.CreatePtrToInt(lenbits, T_int64),
                                   ConstantInt::get(T_int32, 52));
 #else
-        Value *lenbits = emit_nthptr(t, 1, tbaa_tuplelen);
-        return builder.CreatePtrToInt(lenbits, T_size);
+        return emit_nthptr_recast(t, 1, tbaa_tuplelen, T_psize);
 #endif
     }
     else { //unboxed
@@ -1279,8 +1284,7 @@ static Value *emit_arraylen_prim(Value *t, jl_value_t *ty)
 {
 #ifdef STORE_ARRAY_LEN
     (void)ty;
-    Value *lenbits = emit_nthptr(t, 2, tbaa_arraylen);
-    return builder.CreatePtrToInt(lenbits, T_size);
+    return emit_nthptr_recast(t, 2, tbaa_arraylen, T_psize);
 #else
     jl_value_t *p1 = jl_tparam1(ty);
     if (jl_is_long(p1)) {
