@@ -219,7 +219,7 @@ function naivesub!{T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, b::AbstractV
                 x[j] -= A[j,k] * x[k]
             end
             if !IsUnit
-                x[j]/= A[j,j]==0 ? throw(SingularException(j)) : A[j,j]
+                x[j] = A[j,j]==0 ? throw(SingularException(j)) : A[j,j]\x[j]
             end
         end
     elseif UpLo == :U #do backward substitution
@@ -229,7 +229,7 @@ function naivesub!{T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, b::AbstractV
                 x[j] -= A[j,k] * x[k]
             end
             if !IsUnit
-                x[j]/= A[j,j]==0 ? throw(SingularException(j)) : A[j,j]
+                x[j] = A[j,j]==0 ? throw(SingularException(j)) : A[j,j]\x[j]
             end
         end
     else
