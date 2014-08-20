@@ -615,12 +615,13 @@ static void jl_setup_module(Module *m, bool add)
     m->addModuleFlag(llvm::Module::Error, "Debug Info Version",
         llvm::DEBUG_METADATA_VERSION);
 #endif
-    if (add)
+    if (add) {
 #ifdef LLVM36
         jl_ExecutionEngine->addModule(std::unique_ptr<Module>(m));
 #else
         jl_ExecutionEngine->addModule(m);
 #endif
+    }
 }
 
 extern "C" void jl_generate_fptr(jl_function_t *f)
