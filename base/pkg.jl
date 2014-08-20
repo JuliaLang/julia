@@ -26,6 +26,7 @@ installed() = cd(Entry.installed)
 installed(pkg::String) = cd(Entry.installed,pkg)
 
 status(io::IO=STDOUT) = cd(Entry.status,io)
+status(pkg::String = "", io::IO=STDOUT) = cd(Entry.status,io,pkg)
 
 clone(url_or_pkg::String) = cd(Entry.clone,url_or_pkg)
 clone(url::String, pkg::String) = cd(Entry.clone,url,pkg)
