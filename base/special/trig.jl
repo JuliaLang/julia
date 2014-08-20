@@ -8,7 +8,7 @@ end
 
 # kernel_* functions are only valid for |x| < pi/4 = 0.7854
 # translated from openlibm code: k_sin.c, k_cos.c, k_sinf.c, k_cosf.c
-# which are made available under following licence:
+# which are made available under the following licence:
 
 ## Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
 ##
@@ -93,6 +93,7 @@ function mulpi_ext(x::Float64)
     Double64(y_hi,y_lo)
 end
 mulpi_ext(x::Float32) = Double32(pi*float64(x))
+mulpi_ext(x::Rational) = mulpi_ext(float(x))
 mulpi_ext(x::Real) = pi*x # Fallback
 
 function sinpi(x::Real)
@@ -102,18 +103,18 @@ function sinpi(x::Real)
         return nan(x)
     end
 
-    rx = copysign(float(rem(x,2)),x)
+    rx = copysign(rem(x,2),x)
     arx = abs(rx)
 
     if rx == zero(rx)
-        return rx 
+        return copysign(float(zero(rx)),x)
     elseif arx < oftype(rx,0.25)
         return sin_kernel(mulpi_ext(rx))
     elseif arx <= oftype(rx,0.75)
         y = mulpi_ext(oftype(rx,0.5) - arx)
         return copysign(cos_kernel(y),rx)
     elseif arx == one(x)
-        return copysign(zero(rx),rx)
+        return copysign(float(zero(rx)),rx)
     elseif arx < oftype(rx,1.25)
         y = mulpi_ext((one(rx) - arx)*sign(rx))
         return sin_kernel(y)
@@ -152,9 +153,8 @@ function cospi(x::Real)
     end
 end
 
-
-sinpi(x::Integer) = zero(x)
-cospi(x::Integer) = isodd(x) ? -one(x) : one(x)
+sinpi(x::Integer) = x >= 0 ? zero(float(x)) : -zero(float(x))
+cospi(x::Integer) = isodd(x) ? -one(float(x)) : one(float(x))
 
 function sinpi(z::Complex)
     zr, zi = reim(z)
