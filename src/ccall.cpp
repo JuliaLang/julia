@@ -711,7 +711,14 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         << jl_string_data(ir) << "\n}";
         SMDiagnostic Err = SMDiagnostic();
         std::string ir_string = ir_stream.str();
+#ifdef LLVM36
+        Module *m = NULL;
+        bool failed = parseAssemblyInto(std::unique_ptr<llvm::MemoryBuffer>(llvm::MemoryBuffer::getMemoryBuffer::getMemBuffer(ir_string)),*jl_Module,Err);
+        if (!failed)
+            m = jl_Module;
+#else
         Module *m = ParseAssemblyString(ir_string.data(),jl_Module,Err,jl_LLVMContext);
+#endif
         if (m == NULL) {
             std::string message = "Failed to parse LLVM Assembly: \n";
             llvm::raw_string_ostream stream(message);

@@ -323,7 +323,7 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
                 goto lookup;
             }
 #ifdef LLVM36
-            llvm::object::MachOObjectFile *morigobj = (llvm::object::MachOObjectFile *)origerrorobj.get().release();
+            llvm::object::MachOObjectFile *morigobj = (llvm::object::MachOObjectFile *)origerrorobj.get().getBinary().release();
 #elif LLVM35
             llvm::object::MachOObjectFile *morigobj = (llvm::object::MachOObjectFile *)origerrorobj.get();
 #else
@@ -359,7 +359,7 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
 #endif
 #ifdef LLVM36
             if (errorobj) {
-                obj = errorobj.get().release();
+                obj = errorobj.get().getBinary().release();
 #elif LLVM35
             if (errorobj) {
                 obj = errorobj.get();
