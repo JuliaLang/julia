@@ -255,7 +255,7 @@ function combinations(a, t::Integer)
     Combinations(a, t)
 end
 
-start(c::Combinations) = [1:c.t]
+start(c::Combinations) = [1:c.t;]
 function next(c::Combinations, s)
     comb = c.a[s]
     if c.t == 0
@@ -289,7 +289,7 @@ length(c::Permutations) = factorial(length(c.a))
 
 permutations(a) = Permutations(a)
 
-start(p::Permutations) = [1:length(p.a)]
+start(p::Permutations) = [1:length(p.a);]
 function next(p::Permutations, s)
     if length(p.a) == 0
         # special case to generate 1 result for len==0
@@ -400,7 +400,7 @@ function nextfixedpartition(n, m, bs)
     as = copy(bs)
     if isempty(as)
         # First iteration
-        as = [n-m+1, ones(Int, m-1)]
+        as = [n-m+1; ones(Int, m-1)]
     elseif as[2] < as[1]-1
         # Most common iteration
         as[1] -= 1

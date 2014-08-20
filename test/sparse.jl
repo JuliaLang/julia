@@ -272,10 +272,10 @@ for (aa116, ss116) in [(a116, s116), (ad116, sd116)]
     # float-range indexing is not supported
 
     # sorted vector indexing
-    @test full(ss116[i,[3:2:end-3]]) == aa116[i,[3:2:end-3]]
-    @test full(ss116[[3:2:end-3],j]) == aa116[[3:2:end-3],j]''
-    @test full(ss116[i,[end-3:-2:1]]) == aa116[i,[end-3:-2:1]]
-    @test full(ss116[[end-3:-2:1],j]) == aa116[[end-3:-2:1],j]''
+    @test full(ss116[i,[3:2:end-3;]]) == aa116[i,[3:2:end-3;]]
+    @test full(ss116[[3:2:end-3;],j]) == aa116[[3:2:end-3;],j]''
+    @test full(ss116[i,[end-3:-2:1;]]) == aa116[i,[end-3:-2:1;]]
+    @test full(ss116[[end-3:-2:1;],j]) == aa116[[end-3:-2:1;],j]''
 
     # unsorted vector indexing with repetition
     p = [4, 1, 2, 3, 2, 6]
@@ -316,9 +316,9 @@ let a = spzeros(Int, 10, 10)
     @test a[:,2] == 2*sparse(ones(Int,10,1))
 
     a[1,:] = 1:10
-    @test a[1,:] == sparse([1:10]')
+    @test a[1,:] == sparse([1:10;]')
     a[:,2] = 1:10
-    @test a[:,2] == sparse([1:10])
+    @test a[:,2] == sparse([1:10;])
 end
 
 let A = spzeros(Int, 10, 20)
@@ -355,10 +355,10 @@ let ASZ = 1000, TSZ = 800
     @test A == B
 end
 
-let A = speye(Int, 5), I=[1:10], X=reshape([trues(10), falses(15)],5,5)
+let A = speye(Int, 5), I=1:10, X=reshape([trues(10); falses(15)],5,5)
     @test A[I] == A[X] == reshape([1,0,0,0,0,0,1,0,0,0], 10, 1)
-    A[I] = [1:10]
-    @test A[I] == A[X] == reshape([1:10], 10, 1)
+    A[I] = [1:10;]
+    @test A[I] == A[X] == reshape(1:10, 10, 1)
 end
 
 let S = sprand(50, 30, 0.5, x->int(rand(x)*100)), I = sprandbool(50, 30, 0.2)
@@ -379,7 +379,7 @@ let S = sprand(50, 30, 0.5, x->int(rand(x)*100)), I = sprandbool(50, 30, 0.2)
     S[FI] = 0
     @test sum(S) == sumS2
 
-    S[FI] = [1:sum(FI)]
+    S[FI] = [1:sum(FI);]
     @test sum(S) == sumS2 + sum(1:sum(FI))
 end
 

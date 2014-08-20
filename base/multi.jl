@@ -309,7 +309,7 @@ function rmprocs(args...; waitfor = 0.0)
     global rmprocset
     empty!(rmprocset)
     
-    for i in [args...]
+    for i in vcat(args...)
         if i == 1
             warn("rmprocs: process 1 not removed")
         else

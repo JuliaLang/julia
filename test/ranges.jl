@@ -17,7 +17,7 @@ L64 = linspace(int64(1), int64(4), 4)
 @test L32[3] == 3 && L64[3] == 3
 @test L32[4] == 4 && L64[4] == 4
 
-r = [5:-1:1]
+r = 5:-1:1
 @test r[1]==5
 @test r[2]==4
 @test r[3]==3
@@ -196,63 +196,63 @@ end
 @test (1:2:6) - 0.3 == 1-0.3:2:5-0.3
 
 # operations between ranges and arrays
-@test all(([1:5] + (5:-1:1)) .== 6)
-@test all(((5:-1:1) + [1:5]) .== 6)
-@test all(([1:5] - (1:5)) .== 0)
-@test all(((1:5) - [1:5]) .== 0)
+@test all(([1:5;] + (5:-1:1)) .== 6)
+@test all(((5:-1:1) + [1:5;]) .== 6)
+@test all(([1:5;] - (1:5)) .== 0)
+@test all(((1:5) - [1:5;]) .== 0)
 
 # tricky floating-point ranges
 
-@test [0.1:0.1:0.3]   == [1:3]./10
-@test [0.0:0.1:0.3]   == [0:3]./10
-@test [0.3:-0.1:-0.1] == [3:-1:-1]./10
-@test [0.1:-0.1:-0.3] == [1:-1:-3]./10
-@test [0.0:0.1:1.0]   == [0:10]./10
-@test [0.0:-0.1:1.0]  == []
-@test [0.0:0.1:-1.0]  == []
-@test [0.0:-0.1:-1.0] == [0:-1:-10]./10
-@test [1.0:1/49:27.0] == [49:1323]./49
-@test [0.0:0.7:2.1]   == [0:7:21]./10
-@test [0.0:1.1:3.3]   == [0:11:33]./10
-@test [0.1:1.1:3.4]   == [1:11:34]./10
-@test [0.0:1.3:3.9]   == [0:13:39]./10
-@test [0.1:1.3:4.0]   == [1:13:40]./10
-@test [1.1:1.1:3.3]   == [11:11:33]./10
-@test [0.3:0.1:1.1]   == [3:1:11]./10
+@test [0.1:0.1:0.3;]   == [1:3;]./10
+@test [0.0:0.1:0.3;]   == [0:3;]./10
+@test [0.3:-0.1:-0.1;] == [3:-1:-1;]./10
+@test [0.1:-0.1:-0.3;] == [1:-1:-3;]./10
+@test [0.0:0.1:1.0;]   == [0:10;]./10
+@test [0.0:-0.1:1.0;]  == []
+@test [0.0:0.1:-1.0;]  == []
+@test [0.0:-0.1:-1.0;] == [0:-1:-10;]./10
+@test [1.0:1/49:27.0;] == [49:1323;]./49
+@test [0.0:0.7:2.1;]   == [0:7:21;]./10
+@test [0.0:1.1:3.3;]   == [0:11:33;]./10
+@test [0.1:1.1:3.4;]   == [1:11:34;]./10
+@test [0.0:1.3:3.9;]   == [0:13:39;]./10
+@test [0.1:1.3:4.0;]   == [1:13:40;]./10
+@test [1.1:1.1:3.3;]   == [11:11:33;]./10
+@test [0.3:0.1:1.1;]   == [3:1:11;]./10
 
-@test [0.0:1.0:5.5]   == [0:10:55]./10
-@test [0.0:-1.0:0.5]  == []
-@test [0.0:1.0:0.5]   == [0.0]
+@test [0.0:1.0:5.5;]   == [0:10:55;]./10
+@test [0.0:-1.0:0.5;]  == []
+@test [0.0:1.0:0.5;]   == [0.0]
 
-@test [prevfloat(0.1):0.1:0.3] == [prevfloat(0.1), 0.2, 0.3]
-@test [nextfloat(0.1):0.1:0.3] == [nextfloat(0.1), 0.2]
-@test [prevfloat(0.0):0.1:0.3] == [prevfloat(0.0), 0.1, 0.2]
-@test [nextfloat(0.0):0.1:0.3] == [nextfloat(0.0), 0.1, 0.2]
-@test [0.1:0.1:prevfloat(0.3)] == [0.1, 0.2]
-@test [0.1:0.1:nextfloat(0.3)] == [0.1, 0.2, nextfloat(0.3)]
-@test [0.0:0.1:prevfloat(0.3)] == [0.0, 0.1, 0.2]
-@test [0.0:0.1:nextfloat(0.3)] == [0.0, 0.1, 0.2, nextfloat(0.3)]
-@test [0.1:prevfloat(0.1):0.3] == [0.1, 0.2, 0.3]
-@test [0.1:nextfloat(0.1):0.3] == [0.1, 0.2]
-@test [0.0:prevfloat(0.1):0.3] == [0.0, prevfloat(0.1), prevfloat(0.2), 0.3]
-@test [0.0:nextfloat(0.1):0.3] == [0.0, nextfloat(0.1), nextfloat(0.2)]
+@test [prevfloat(0.1):0.1:0.3;] == [prevfloat(0.1), 0.2, 0.3]
+@test [nextfloat(0.1):0.1:0.3;] == [nextfloat(0.1), 0.2]
+@test [prevfloat(0.0):0.1:0.3;] == [prevfloat(0.0), 0.1, 0.2]
+@test [nextfloat(0.0):0.1:0.3;] == [nextfloat(0.0), 0.1, 0.2]
+@test [0.1:0.1:prevfloat(0.3);] == [0.1, 0.2]
+@test [0.1:0.1:nextfloat(0.3);] == [0.1, 0.2, nextfloat(0.3)]
+@test [0.0:0.1:prevfloat(0.3);] == [0.0, 0.1, 0.2]
+@test [0.0:0.1:nextfloat(0.3);] == [0.0, 0.1, 0.2, nextfloat(0.3)]
+@test [0.1:prevfloat(0.1):0.3;] == [0.1, 0.2, 0.3]
+@test [0.1:nextfloat(0.1):0.3;] == [0.1, 0.2]
+@test [0.0:prevfloat(0.1):0.3;] == [0.0, prevfloat(0.1), prevfloat(0.2), 0.3]
+@test [0.0:nextfloat(0.1):0.3;] == [0.0, nextfloat(0.1), nextfloat(0.2)]
 
 for T = (Float32, Float64,),# BigFloat),
-    a = -5:25, s = [-5:-1;1:25], d = 1:25, n = -1:15
+    a = -5:25, s = [-5:-1;1:25;], d = 1:25, n = -1:15
     den   = convert(T,d)
     start = convert(T,a)/den
     step  = convert(T,s)/den
     stop  = convert(T,(a+(n-1)*s))/den
     r = start:step:stop
-    @test [r] == T[a:s:a+(n-1)*s]./den
+    @test [r;] == T[a:s:a+(n-1)*s;]./den
     # issue #7420
     n = length(r)
-    @test [r[1:n]] == [r]
-    @test [r[2:n]] == [r][2:end]
-    @test [r[1:3:n]] == [r][1:3:n]
-    @test [r[2:2:n]] == [r][2:2:n]
-    @test [r[n:-1:2]] == [r][n:-1:2]
-    @test [r[n:-2:1]] == [r][n:-2:1]
+    @test [r[1:n];] == [r;]
+    @test [r[2:n];] == [r;][2:end]
+    @test [r[1:3:n];] == [r;][1:3:n]
+    @test [r[2:2:n];] == [r;][2:2:n]
+    @test [r[n:-1:2];] == [r;][n:-1:2]
+    @test [r[n:-2:1];] == [r;][n:-2:1]
 end
 
 # near-equal ranges
@@ -331,18 +331,18 @@ r = linrange(0.25,0.25,1)
 @test_throws Exception linrange(0.25,0.5,1)
 
 # issue #7426
-@test [typemax(Int):1:typemax(Int)] == [typemax(Int)]
+@test [typemax(Int):1:typemax(Int);] == [typemax(Int)]
 
 #issue #7484
 r7484 = 0.1:0.1:1
-@test [reverse(r7484)] == reverse([r7484])
+@test [reverse(r7484);] == reverse([r7484;])
 
 # issue #7387
 for r in (0:1, 0.0:1.0)
-    @test r+im == [r]+im
-    @test r-im == [r]-im
-    @test r*im == [r]*im
-    @test r/im == [r]/im
+    @test r+im == [r;]+im
+    @test r-im == [r;]-im
+    @test r*im == [r;]*im
+    @test r/im == [r;]/im
 end
 
 # issue #7709

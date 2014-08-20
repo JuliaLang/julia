@@ -1025,11 +1025,11 @@ end
 @test_throws BoundsError checkbounds("hello", 6)
 @test_throws BoundsError checkbounds("hello", 0:3)
 @test_throws BoundsError checkbounds("hello", 4:6)
-@test_throws BoundsError checkbounds("hello", [0:3])
-@test_throws BoundsError checkbounds("hello", [4:6])
+@test_throws BoundsError checkbounds("hello", [0:3;])
+@test_throws BoundsError checkbounds("hello", [4:6;])
 @test checkbounds("hello", 2)
 @test checkbounds("hello", 1:5)
-@test checkbounds("hello", [1:5])
+@test checkbounds("hello", [1:5;])
 
 
 # isvalid(), chr2ind() and ind2chr() for SubString{DirectIndexString}

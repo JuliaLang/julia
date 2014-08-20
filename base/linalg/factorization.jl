@@ -354,7 +354,7 @@ function \{TA,Tb}(A::Union(QR{TA},QRCompactWY{TA},QRPivoted{TA}),b::StridedVecto
     S = promote_type(TA,Tb)
     m,n = size(A)
     m == length(b) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has length $(length(b))"))
-    n > m ? A_ldiv_B!(convert(Factorization{S},A),[b,zeros(S,n-m)]) : A_ldiv_B!(convert(Factorization{S},A), S == Tb ? copy(b) : convert(AbstractVector{S}, b))
+    n > m ? A_ldiv_B!(convert(Factorization{S},A),[b;zeros(S,n-m)]) : A_ldiv_B!(convert(Factorization{S},A), S == Tb ? copy(b) : convert(AbstractVector{S}, b))
 end
 function \{TA,TB}(A::Union(QR{TA},QRCompactWY{TA},QRPivoted{TA}),B::StridedMatrix{TB})
     S = promote_type(TA,TB)

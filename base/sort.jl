@@ -337,7 +337,7 @@ sort(v::AbstractVector; kws...) = sort!(copy(v); kws...)
 
 sortperm(v::AbstractVector; alg::Algorithm=DEFAULT_UNSTABLE,
     lt::Function=isless, by::Function=identity, rev::Bool=false, order::Ordering=Forward) =
-    sort!([1:length(v)], alg, Perm(ord(lt,by,rev,order),v))
+    sort!([1:length(v);], alg, Perm(ord(lt,by,rev,order),v))
 
 ## sorting multi-dimensional arrays ##
 

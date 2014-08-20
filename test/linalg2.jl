@@ -126,7 +126,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
 
     # The determinant of a rotation matrix should always be 1.
     if elty != Int
-        for theta = convert(Vector{elty}, pi ./ [1:4])
+        for theta = convert(Vector{elty}, pi ./ [1:4;])
             R = [cos(theta) -sin(theta);
                  sin(theta) cos(theta)]
             @test_approx_eq convert(elty, det(R)) one(elty)
@@ -223,10 +223,10 @@ end
 # Test gradient
 for elty in (Int32, Int64, Float32, Float64, Complex64, Complex128)
     if elty <: Real
-        x = convert(Vector{elty}, [1:3])
+        x = convert(Vector{elty}, [1:3;])
         g = ones(elty, 3)
     else
-        x = convert(Vector{elty}, complex([1:3],[1:3]))
+        x = convert(Vector{elty}, complex([1:3;], [1:3;]))
         g = convert(Vector{elty}, complex(ones(3), ones(3)))
     end
     @test_approx_eq gradient(x) g

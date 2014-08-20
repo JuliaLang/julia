@@ -84,7 +84,7 @@ size(A::LU) = size(A.factors)
 size(A::LU,n) = size(A.factors,n)
 
 function ipiv2perm{T}(v::AbstractVector{T}, maxi::Integer)
-    p = T[1:maxi]
+    p = T[1:maxi;]
     @inbounds for i in 1:length(v)
         p[i], p[v[i]] = p[v[i]], p[i]
     end
