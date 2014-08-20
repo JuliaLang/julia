@@ -115,7 +115,7 @@
 	  cadar #fn("6000r1|M\x84;" [] cadar) caddar
 	  #fn("6000r1|MN\x84;" [] caddar) cadddr #fn("6000r1|NN\x84;" [] cadddr)
 	  caddr #fn("6000r1|N\x84;" [] caddr) cadr
-	  #fn("6000r1|\x84;" [] cadr) call-with-values #fn("7000r2c0q|3041;" [#fn("7000r1|F16902i10|M<680\x7f|Nv2;\x7f|41;" [])] #2=[(*values*)
+	  #fn("6000r1|\x84;" [] cadr) call-with-values #fn("7000r2c0q|3041;" [#fn("7000r1|F16902i10|M<680\x7f|Nv2;\x7f|41;" [])] #1=[(*values*)
   ()])
 	  cdaaar #fn("6000r1|MMMN;" [] cdaaar) cdaadr
 	  #fn("6000r1|\x84MN;" [] cdaadr) cdaar #fn("6000r1|MMN;" [] cdaar)
@@ -129,8 +129,8 @@
 	  #fn("6000r1|NN;" [] cddr) char? #fn("7000r1c0|31c1<;" [#fn(typeof)
 								 wchar] char?)
 	  closure? #fn("7000r1|J16602|G@;" [] closure?) compile
-	  #fn("8000r1e0_|42;" [compile-f] compile) compile-and #fn("<000r4e0|}g2g3]c146;" [compile-short-circuit
-  brf] compile-and)
+	  #fn("9000r1e0_e1|3142;" [compile-f lower-define] compile) compile-and
+	  #fn("<000r4e0|}g2g3]c146;" [compile-short-circuit brf] compile-and)
 	  compile-app #fn("7000r4c0qg3M41;" [#fn("9000r1c0q|C16V02e1|\x7f32@16J02|E16C02c2|3116902c3|31G6:0c3|31530|41;" [#fn(":000r1e0i13Nc1326S0e2i10i11^|342c3qe4i10i11i13N3341;c5q|G16802e6|3141;" [length>
   255 compile-in #fn(":000r1e0i20i22670c1540c2|43;" [emit tcall.l call.l])
   compile-arglist #fn(";000r1~c0<16X02e1~i2132@16J02c2c031e0>16<02e3i23b2326L0e4i20i21^i23\x84342e5i20c042;|7A0e4i20i21^~34530]2c6qe7i20i21i23N3341;" [cadr
@@ -147,31 +147,28 @@
   apply tapply])]) #fn(get) arg-counts] compile-builtin-call)
 	  compile-f #fn("8000r2e0c1qc242;" [call-with-values #fn("8000r0e0~\x7f42;" [compile-f-])
 					    #fn("6000r2|;" [])] compile-f)
-	  compile-f- #fn("7000r2c0q]41;" [#fn(">000r1c0qm02c1qe230\x7f\x84e3\x7f\x8431e4\x7f\x8431e5c6\x7f\x8432e3\x7f31i10\x8270c7570e3\x7f3146;" [#fn("9000r1c0qe1|31F6N0e2|31F6=0c3e1|31K570e4|31560e53041;" [#fn("8000r1c0qe1|3141;" [#fn(":000r1|\x8540~;c0c1|~i4034c2c3|32K;" [#fn(list*)
-  lambda #fn(map) #fn("6000r1e040;" [void])]) get-defined-vars]) cddr cdddr
-  begin caddr void] lambda-body) #fn("9000r6c0q}?660`570c1}3141;" [#fn("9000r1c0q|c1i0431x41;" [#fn("9000r1c0qe1e2i143241;" [#fn("D000r1i24\x87\xa90|\x85O0e0i20c1~i22\x8580i10560i10y345s0e2i20e3c4c5c4c6|32e7c8|31313331322e0i20c9~c8|31i22\x8580i10560i10y352e:i20i40i24i23~35530]2e;i10c<326L0e0i20i22\x8570c=540c>i10335]0i22\x87A0e0i20c?i10335H0i24\x85A0e0i20c@i1033530^2eAi20i23i40K]eBi4131i50\x82<0eCi41315:0i30i4131342e0i20cD322eEcFeGeHi203131eIi2031i2533i20b3[42;" [emit
+	  compile-f- #fn("=000r2c0qe130}\x84e2}\x8431e3}\x8431e4c5}\x8432e2}3146;" [#fn("8000r6c0qg5\x8570c1540g541;" [#fn("9000r1c0q\x7f?660`570c1\x7f3141;" [#fn("9000r1c0q|c1i1431x41;" [#fn("9000r1c0qe1e2i243241;" [#fn("C000r1i34\x87\xa90|\x85O0e0i30c1~i32\x8580i10560i10y345s0e2i30e3c4c5c4c6|32e7c8|31313331322e0i30c9~c8|31i32\x8580i10560i10y352e:i30i40i34i33~35530]2e;i10c<326L0e0i30i32\x8570c=540c>i10335]0i32\x87A0e0i30c?i10335H0i34\x85A0e0i30c@i1033530^2eAi30i33i40K]eBi4131342e0i30cC322eDcEeFeGi303131eHi3031i2033i30b3[42;" [emit
   optargs bcode:indexfor make-perfect-hash-table
   #fn(map) #.cons #.car iota #fn(length) keyargs emit-optional-arg-inits > 255
-  largc lvargc vargc argc compile-in lastcdr caddr ret values #fn(function)
+  largc lvargc vargc argc compile-in caddr ret values #fn(function)
   encode-byte-code bcode:code const-to-idx-vec]) filter keyword-arg?])
-  #fn(length)]) #fn(length)]) make-code-emitter lastcdr lambda-vars filter #.pair?
-  lambda])] #0=[#:g669 ()])
+  #fn(length)]) #fn(length)]) lambda]) make-code-emitter lastcdr lambda-vars
+  filter #.pair?] compile-f-)
 	  compile-for #fn(":000r5e0g4316X0e1|}^g2342e1|}^g3342e1|}^g4342e2|c342;e4c541;" [1arg-lambda?
   compile-in emit for error "for: third form must be a 1-argument lambda"] compile-for)
 	  compile-if #fn("<000r4c0qe1|31e1|31g3\x84e2g331e3g331F6;0e4g331560e53045;" [#fn(";000r5g2]\x82>0e0~\x7fi02g344;g2^\x82>0e0~\x7fi02g444;e0~\x7f^g2342e1~c2|332e0~\x7fi02g3342i026<0e1~c3325:0e1~c4}332e5~|322e0~\x7fi02g4342e5~}42;" [compile-in
   emit brf ret jmp mark-label]) make-label caddr cdddr cadddr void] compile-if)
 	  compile-in #fn(";000r4g3C6=0e0|}g3c144;g3?6\xaf0g3`\x82:0e2|c342;g3a\x82:0e2|c442;g3]\x82:0e2|c542;g3^\x82:0e2|c642;g3_\x82:0e2|c742;e8g3316<0e2|c9g343;c:g3316C0e;|}g2c<c=31L144;e2|c>g343;g3MC@17D02g3ME17;02e?g3M}326=0e@|}g2g344;cAqg3M41;" [compile-sym
   [loada loadc loadg] emit load0 load1 loadt loadf loadnil fits-i8 loadi8 #fn(eof-object?)
-  compile-in #fn(top-level-value) eof-object loadv in-env? compile-app #fn("<000r1|c0\x82W0e1i03\x84316@0e2~\x7fi02i03\x8444;e3~c4i03\x8443;|c5\x82?0e6~\x7fi02i0344;|c7\x82@0e8~\x7fi02i03N44;|c9\x82<0e:~\x7fi0343;|c;\x82=0e<c=qc>q42;|c?\x82@0e@~\x7fi02i03N44;|cA\x82@0eB~\x7fi02i03N44;|cC\x82G0eD~\x7fi03\x84c7eEi0331K44;|cF\x82K0eG~\x7fi03\x84eHi0331eIi033145;|cJ\x82F0e2~\x7f]i03\x84342e3~cK42;|cL\x82N0e2~\x7f^eHi0331342eM~\x7fi03\x84cN44;|cO\x82C0e2~\x7fi02ePi033144;|cQ\x82s0e2~\x7f^c;_i03\x84L3342eReHi033131660^580eScT312e2~\x7f^eHi0331342e3~cQ42;eU~\x7fi02i0344;" [quote
+  compile-in #fn(top-level-value) eof-object loadv in-env? compile-app #fn("<000r1|c0\x82W0e1i03\x84316@0e2~\x7fi02i03\x8444;e3~c4i03\x8443;|c5\x82?0e6~\x7fi02i0344;|c7\x82@0e8~\x7fi02i03N44;|c9\x82<0e:~\x7fi0343;|c;\x82=0e<c=qc>q42;|c?\x82@0e@~\x7fi02i03N44;|cA\x82@0eB~\x7fi02i03N44;|cC\x82G0eD~\x7fi03\x84c7eEi0331K44;|cF\x82K0eG~\x7fi03\x84eHi0331eIi033145;|cJ\x82F0e2~\x7f]i03\x84342e3~cK42;|cL\x82N0e2~\x7f^eHi0331342eM~\x7fi03\x84cN44;|cO\x82s0e2~\x7f^c;_i03\x84L3342ePeHi033131660^580eQcR312e2~\x7f^eHi0331342e3~cO42;eS~\x7fi02i0344;" [quote
   self-evaluating? compile-in emit loadv if compile-if begin compile-begin
   prog1 compile-prog1 lambda call-with-values #fn("8000r0e0i11i1342;" [compile-f-])
   #fn("9000r2e0i10c1|332e2i10}322}e3i1131X6<0e0i10c442;];" [emit loadv
 							    bcode:cdepth nnn
 							    closure]) and
   compile-and or compile-or while compile-while cddr for compile-for caddr
-  cadddr return ret set! compile-sym [seta setc setg] define expand-define
-  trycatch 1arg-lambda? error "trycatch: second form must be a 1-argument lambda"
-  compile-app])] compile-in)
+  cadddr return ret set! compile-sym [seta setc setg] trycatch 1arg-lambda?
+  error "trycatch: second form must be a 1-argument lambda" compile-app])] compile-in)
 	  compile-or #fn("<000r4e0|}g2g3^c146;" [compile-short-circuit brt] compile-or)
 	  compile-prog1 #fn(";000r3e0|}^g2\x84342e1g231F6H0e2|}^e1g231342e3|c442;];" [compile-in
   cddr compile-begin emit pop] compile-prog1)
@@ -181,8 +178,8 @@
 	  compile-sym #fn(";000r4c0qe1g2}`]3441;" [#fn(":000r1|D6>0e0~i03`[|43;|MD6R0e0~i03a[|M|N342e1~e2\x7fN31a|MS342;c3i023116>02e4c5i0231316A0e0~c6c5i023143;e0~i03b2[i0243;" [emit
   bcode:cdepth nnn #fn(constant?) printable? #fn(top-level-value) loadv])
 						   lookup-sym] compile-sym)
-	  compile-thunk #fn(";000r1e0c1c2L1_L1|L1~3441;" [compile #fn(nconc)
-							  lambda] #0#)
+	  compile-thunk #fn(";000r1e0_c1_e2|31L342;" [compile-f lambda
+						      lower-define] compile-thunk)
 	  compile-while #fn("9000r4c0qe1|31e1|3142;" [#fn(":000r2e0~\x7f^e130342e2~|322e0~\x7f^i02342e3~c4}332e3~c5322e0~\x7f^i03342e3~c6|332e2~}42;" [compile-in
   void mark-label emit brf pop jmp]) make-label] compile-while)
 	  const-to-idx-vec #fn("9000r1c0qc1e2|313141;" [#fn("9000r1e0c1qe2~31322|;" [table.foreach
@@ -248,8 +245,8 @@
 	  foldl #fn(":000r3g2\x8540};e0||g2M}32g2N43;" [foldl] foldl) for-each
 	  #fn(";000s2c0q]41;" [#fn(":000r1c0qm02i02\x85J0]\x7fF6A02~\x7fM312\x7fNo015\x1e/5;0|~\x7fi02K322];" [#fn(":000r2}MF6I0|c0c1}32Q22~|c0c2}3242;];" [#fn(map)
   #.car #.cdr] for-each-n)])] for-each)
-	  get-defined-vars #fn("8000r1e0~|3141;" [delete-duplicates] #1=[#fn("9000r1|?640_;|Mc0<16602|NF6d0|\x84C16702|\x84L117S02|\x84F16E02e1|31C16:02e1|31L117402_;|Mc2\x82>0c3c4~|N32v2;_;" [define
-  caadr begin #fn(nconc) #fn(map)] #1#) ()])
+	  get-defined-vars #fn("8000r1e0~|3141;" [delete-duplicates] #0=[#fn("9000r1|?640_;|Mc0<16602|NF6d0|\x84C16702|\x84L117S02|\x84F16E02e1|31C16:02e1|31L117402_;|Mc2\x82>0c3c4~|N32v2;_;" [define
+  caadr begin #fn(nconc) #fn(map)] #0#) ()])
 	  identity #fn("6000r1|;" [] identity) in-env?
 	  #fn("8000r2}F16F02c0|}M3217:02e1|}N42;" [#fn(memq) in-env?] in-env?)
 	  index-of #fn(":000r3}\x8540^;|}M\x8250g2;e0|}Ng2aw43;" [index-of] index-of)
@@ -287,6 +284,10 @@
 	  #fn("7000r4}\x8550c0;c1q}M41;" [(global)
 					  #fn(":000r1c0qe1~|`3341;" [#fn(";000r1|6@0i13640|;i12|K;e0i10i11Ni1317502~A680i12570i12aw^44;" [lookup-sym])
   index-of])] lookup-sym)
+	  lower-define #fn("7000r1c0q]41;" [#fn(";000r1c0m02~?17802e1~31640~;~Mc2\x82<0e3e4~3141;~Mc5\x82J0c6c5L1~\x84L1|~31L1e7~3144;c8e3~42;" [#fn("9000r1c0e1|31F6N0e2|31F6=0c3e1|31K570e4|31560e53041;" [#fn("9000r1c0e1|31e2|3142;" [#fn("9000r2|\x8540};c0|}L3c1c2|32K;" [lambda
+  #fn(map) #fn("6000r1e040;" [void])]) get-defined-vars lower-define]) cddr
+  cdddr begin caddr void] lambda-body) quoted? define lower-define
+  expand-define lambda #fn(nconc) lastcdr #fn(map)])] lower-define)
 	  macrocall? #fn("7000r1|MC16902e0|M41;" [symbol-syntax] macrocall?)
 	  make-code-emitter #fn("9000r0_c030`c1Z4;" [#fn(table) +inf.0] make-code-emitter)
 	  make-label #fn("6000r1c040;" [#fn(gensym)] make-label)
@@ -352,8 +353,8 @@
 	  printable? #fn("7000r1c0|3117802c1|31@;" [#fn(iostream?)
 						    #fn(eof-object?)] printable?)
 	  quote-value #fn("7000r1e0|31640|;c1|L2;" [self-evaluating? quote] quote-value)
-	  read-all #fn("8000r1e0c1|42;" [read-all-of #fn(read)] read-all)
-	  read-all-of #fn("9000r2c0q]31_|}3142;" [#fn("6000r1c0qm02|;" [#fn("9000r2c0i1131680e1|41;~}|Ki10i113142;" [#fn(io.eof?)
+	  quoted? #fn("7000r1|Mc0<;" [quote] quoted?) read-all
+	  #fn("8000r1e0c1|42;" [read-all-of #fn(read)] read-all) read-all-of #fn("9000r2c0q]31_|}3142;" [#fn("6000r1c0qm02|;" [#fn("9000r2c0i1131680e1|41;~}|Ki10i113142;" [#fn(io.eof?)
   reverse!])])] read-all-of)
 	  repl #fn("8000r0c0]]42;" [#fn("6000r2c0m02c1qm12}302e240;" [#fn("8000r0e0c1312c2e3312c4c5c6t41;" [princ
   "> " #fn(io.flush) *output-stream* #fn("8000r1c0e131@16<02c2e3|3141;" [#fn(io.eof?)
@@ -397,7 +398,7 @@
   *output-stream* #fn("7000r1c0qc1qt|302;" [#fn("7000r0e0i20312e1c23041;" [print-exception
   print-stack-trace #fn(stacktrace)]) #fn("7000r1~302c0|41;" [#fn(raise)])])
   #fn("6000r0~k0;" [*output-stream*])]) *output-stream*] top-level-exception-handler)
-	  values #fn("9000s0|F16602|NA650|M;~|K;" [] #2#) vector->list
+	  values #fn("9000s0|F16602|NA650|M;~|K;" [] #1#) vector->list
 	  #fn("8000r1c0qc1|31_42;" [#fn(":000r2a|c0qu2};" [#fn("8000r1i10~|x[\x7fKo01;" [])])
 				    #fn(length)] vector->list)
 	  void #fn("6000r0];" [] void) zero?
