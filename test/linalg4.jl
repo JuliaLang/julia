@@ -341,3 +341,11 @@ A7933 = [1 2; 3 4]
 B7933 = copy(A7933)
 C7933 = full(Symmetric(A7933))
 @test A7933 == B7933
+
+# Issues #8057 and #8058
+for f in (eigfact, eigvals)
+    for A in (Symmetric(randn(2,2)), Hermitian(complex(randn(2,2), randn(2,2))))
+        @test_throws ArgumentError f(A, 3, 2)
+        @test_throws ArgumentError f(A, 1:4)
+    end
+end
