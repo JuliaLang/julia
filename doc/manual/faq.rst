@@ -121,7 +121,71 @@ inside a specific function or set of functions, you have two options:
 
     This imports all the symbols from Foo, but only inside the module Bar.
 
+.. _man-slurping-splatting:
 
+What does the ``...`` operator do?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The two uses of the `...` operator: slurping and splatting
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Many newcomers to Julia find the use of ``...`` operator confusing. Part of
+what makes the ``...`` operator confusing is that it means two different things
+depending on context.
+
+``...`` combines many arguments into one argument in function definitions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In the context of function definitions, the ``...`` operator is used to combine
+many different arguments into a single argument. This use of ``...`` for
+combining many different arguments into a single argument is called slurping:
+
+    julia> function printargs(args...)
+               @printf("%s\n", typeof(args))
+               for (i, arg) in enumerate(args)
+                   @printf("Arg %d = %s\n", i, arg)
+               end
+           end
+    printargs (generic function with 1 method)
+
+    julia> printargs(1, 2, 3)
+    (Int64,Int64,Int64)
+    Arg 1 = 1
+    Arg 2 = 2
+    Arg 3 = 3
+
+If Julia were a language that made more liberal use of ASCII characters, the
+slurping operator might have been written as ``<-...`` instead of ``...``.
+
+``...`` splits one argument into many different arguments in function calls
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In contrast to the use of the ``...`` operator to denote slurping many
+different arguments into one argument when defining a function, the ``...``
+operator is also used to cause a single function argument to be split apart
+into many different arguments when used in the context of a function call. This
+use of ``...`` is called splatting:
+
+    julia> function threeargs(a, b, c)
+               @printf("a = %s::%s\n", a, typeof(a))
+               @printf("b = %s::%s\n", b, typeof(b))
+               @printf("c = %s::%s\n", c, typeof(c))
+           end
+    threeargs (generic function with 1 method)
+
+    julia> vec = [1, 2, 3]
+    3-element Array{Int64,1}:
+     1
+     2
+     3
+
+    julia> threeargs(vec...)
+    a = 1::Int64
+    b = 2::Int64
+    c = 3::Int64
+
+If Julia were a language that made more liberal use of ASCII characters,
+the splatting operator might have been written as ``...->`` instead of ``...``.
 
 Types, type declarations, and constructors
 ------------------------------------------
@@ -737,3 +801,75 @@ When are deprecated functions removed?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Deprecated functions are removed after the subsequent release. For example, functions marked as deprecated in the 0.1 release will not be available starting with the 0.2 release.
+
+Developing Julia
+----------------
+
+How do I debug julia's C code? (running the julia REPL from within a debugger like gdb)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+First, you should build the debug version of julia with ``make
+debug``.  Below, lines starting with ``(gdb)`` mean things you should
+type at the gdb prompt.
+
+From the shell
+^^^^^^^^^^^^^^
+
+The main challenge is that Julia and gdb each need to have their own
+terminal, to allow you to interact with them both.  One approach is to
+use gdb's ``attach`` functionality to debug an already-running julia
+session.  However, on many systems you'll need root access to get this
+to work. What follows is a method that can be implemented with just
+user-level permissions.
+
+The first time you do this, you'll need to define a script, here
+called ``oterm``, containing the following lines::
+
+    ps
+    sleep 600000
+
+Make it executable with ``chmod +x oterm``.
+
+Now:
+
+- From a shell (called shell 1), type ``xterm -e oterm &``. You'll see
+  a new window pop up; this will be called terminal 2.
+
+- From within shell 1, ``gdb julia-debug``. You can find this
+  executable within ``julia/usr/bin``.
+
+- From within shell 1, ``(gdb) tty /dev/pts/#`` where ``#`` is the
+  number shown after ``pts/`` in terminal 2.
+
+- From within shell 1, ``(gdb) run``
+
+- From within terminal 2, issue any preparatory commands in Julia that
+  you need to get to the step you want to debug
+
+- From within shell 1, hit Ctrl-C
+
+- From within shell 1, insert your breakpoint, e.g., ``(gdb) b codegen.cpp:2244``
+- From within shell 1, ``(gdb) c`` to resume execution of julia
+
+- From within terminal 2, issue the command that you want to
+  debug. Shell 1 will stop at your breakpoint.
+
+
+Within emacs
+^^^^^^^^^^^^
+
+- ``M-x gdb``, then enter ``julia-debug`` (this is easiest from
+  within julia/usr/bin, or you can specify the full path)
+
+- ``(gdb) run``
+
+- Now you'll see the Julia prompt. Run any commands in Julia you need
+  to get to the step you want to debug.
+
+- Under emacs' "Signals" menu choose BREAK---this will return you to the ``(gdb)`` prompt
+
+- Set a breakpoint, e.g., ``(gdb) b codegen.cpp:2244``
+
+- Go back to the Julia prompt via ``(gdb) c``
+
+- Execute the Julia command you want to see running.
