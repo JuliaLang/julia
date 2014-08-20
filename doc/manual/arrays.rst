@@ -139,6 +139,8 @@ Expression          Yields
 Note that this form does not do any concatenation; each argument becomes
 an element of the resulting array.
 
+.. _comprehensions:
+
 Comprehensions
 --------------
 

@@ -1,4 +1,7 @@
+module TestDates
+
 using Base.Dates
+using Base.Test
 
 include("dates/types.jl")
 include("dates/periods.jl")
@@ -9,3 +12,5 @@ include("dates/conversions.jl")
 include("dates/ranges.jl")
 include("dates/adjusters.jl")
 include("dates/io.jl")
+
+end

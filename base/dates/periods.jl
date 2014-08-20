@@ -14,7 +14,7 @@ for p in (:Year,:Month,:Week,:Day,:Hour,:Minute,:Second,:Millisecond)
     # periodisless
     @eval periodisless(x::$p,y::$p) = value(x) < value(y)
     # String parsing (mainly for IO code)
-    @eval $p(x::String) = $p(parseint(x))
+    @eval $p(x::String) = $p(parseint(Int64,x))
     # Period accessors
     @eval $p(x::TimeType) = $p($(symbol(lowercase(string(p))))(x))
 end
@@ -68,7 +68,7 @@ let vec_ops = [:.+,:.-,:.*,:.%,:div]
 end
 
 # intfuncs
-Base.gcdx{T<:Period}(a::T,b::T) = ((g,x,y)=gcdx(Dates.value(a),Dates.value(b)); return T(g),x,y)
+Base.gcdx{T<:Period}(a::T,b::T) = ((g,x,y)=gcdx(value(a),value(b)); return T(g),x,y)
 Base.abs{T<:Period}(a::T) = T(abs(value(a)))
 
 periodisless(::Period,::Year)        = true

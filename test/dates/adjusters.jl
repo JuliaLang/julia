@@ -303,20 +303,20 @@ januarymondays2014 = [Dates.Date(2014,1,6),Dates.Date(2014,1,13),Dates.Date(2014
 @test Dates.recur(Dates.ismonday,startdate:stopdate) == januarymondays2014
 @test Dates.recur(x->!Dates.ismonday(x),startdate,stopdate;negate=true) == januarymondays2014
 
-@test_throws ArgumentError recur((x,y)->x+y,Dates.Date(2013):Dates.Date(2014))
-@test length(recur(x->true,Dates.Date(2013):Dates.Date(2013,2))) == 32
-@test length(recur(x->true,Dates.Date(2013):Dates.Date(2013,1,1))) == 1
-@test length(recur(x->true,Dates.Date(2013):Dates.Date(2013,1,2))) == 2
-@test length(recur(x->true,Dates.Date(2013):Dates.Date(2013,1,3))) == 3
-@test length(recur(x->true,Dates.Date(2013):Dates.Date(2013,1,4))) == 4
-@test length(recur(x->true,Dates.Date(2013):Dates.Date(2013,1,5))) == 5
-@test length(recur(x->true,Dates.Date(2013):Dates.Date(2013,1,6))) == 6
-@test length(recur(x->true,Dates.Date(2013):Dates.Date(2013,1,7))) == 7
-@test length(recur(x->true,Dates.Date(2013):Dates.Date(2013,1,8))) == 8
-@test length(recur(x->true,Dates.Date(2013):Dates.Month(1):Dates.Date(2013,1,1))) == 1
-@test length(recur(x->true,Dates.Date(2013):Dates.Day(-1):Dates.Date(2012,1,1))) == 367
+@test_throws ArgumentError Dates.recur((x,y)->x+y,Dates.Date(2013):Dates.Date(2014))
+@test length(Dates.recur(x->true,Dates.Date(2013):Dates.Date(2013,2))) == 32
+@test length(Dates.recur(x->true,Dates.Date(2013):Dates.Date(2013,1,1))) == 1
+@test length(Dates.recur(x->true,Dates.Date(2013):Dates.Date(2013,1,2))) == 2
+@test length(Dates.recur(x->true,Dates.Date(2013):Dates.Date(2013,1,3))) == 3
+@test length(Dates.recur(x->true,Dates.Date(2013):Dates.Date(2013,1,4))) == 4
+@test length(Dates.recur(x->true,Dates.Date(2013):Dates.Date(2013,1,5))) == 5
+@test length(Dates.recur(x->true,Dates.Date(2013):Dates.Date(2013,1,6))) == 6
+@test length(Dates.recur(x->true,Dates.Date(2013):Dates.Date(2013,1,7))) == 7
+@test length(Dates.recur(x->true,Dates.Date(2013):Dates.Date(2013,1,8))) == 8
+@test length(Dates.recur(x->true,Dates.Date(2013):Dates.Month(1):Dates.Date(2013,1,1))) == 1
+@test length(Dates.recur(x->true,Dates.Date(2013):Dates.Day(-1):Dates.Date(2012,1,1))) == 367
 # Empty range
-@test length(recur(x->true,Dates.Date(2013):Dates.Date(2012,1,1))) == 0
+@test length(Dates.recur(x->true,Dates.Date(2013):Dates.Date(2012,1,1))) == 0
 
 # All leap days in 20th century
 @test length(Dates.recur(Dates.Date(1900):Dates.Date(2000)) do x
@@ -340,7 +340,7 @@ end == Dates.Date(2013,11,28)
 
 # Pittsburgh street cleaning
 dr = Dates.Date(2014):Dates.Date(2015)
-@test length(recur(dr) do x
+@test length(Dates.recur(dr) do x
     Dates.dayofweek(x) == Dates.Tue && 
     Dates.April < Dates.month(x) < Dates.Nov &&
     Dates.dayofweekofmonth(x) == 2
@@ -362,10 +362,10 @@ ispresidentsday(dt) = Dates.dayofweek(dt) == Dates.Mon &&
     Dates.month(dt) == Dates.Feb && Dates.dayofweekofmonth(dt) == 3 
 # Last Monday of May
 ismemorialday(dt) = Dates.dayofweek(dt) == Dates.Mon && 
-                    Dates.month(dt) == May && 
+                    Dates.month(dt) == Dates.May && 
                     Dates.dayofweekofmonth(dt) == Dates.daysofweekinmonth(dt)
 islaborday(dt) = Dates.dayofweek(dt) == Dates.Mon &&
-    Dates.month(dt) == Dates.Sep && dayofweekofmonth(dt) == 1
+    Dates.month(dt) == Dates.Sep && Dates.dayofweekofmonth(dt) == 1
 iscolumbusday(dt) = Dates.dayofweek(dt) == Dates.Mon &&
     Dates.month(dt) == Dates.Oct && Dates.dayofweekofmonth(dt) == 2
 isthanksgiving(dt) = Dates.dayofweek(dt) == Dates.Thu &&
