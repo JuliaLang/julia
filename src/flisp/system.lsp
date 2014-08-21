@@ -670,7 +670,7 @@
 		    (set! i (string.inc s i)))))
     (io.tostring! b)))
 
-#;(define (string.rep s k)
+(define (string.rep s k)
   (cond ((< k 4)
 	 (cond ((<= k 0) "")
 	       ((=  k 1) (string s))
@@ -679,7 +679,7 @@
 	((odd? k) (string s (string.rep s (- k 1))))
 	(else     (string.rep (string s s) (/ k 2)))))
 
-#;(define (string.lpad s n c) (string (string.rep c (- n (string.count s))) s))
+(define (string.lpad s n c) (string (string.rep c (- n (string.count s))) s))
 #;(define (string.rpad s n c) (string s (string.rep c (- n (string.count s)))))
 
 (define (print-to-string v)
@@ -1023,3 +1023,18 @@
 	     (princ *banner*)
 	     (repl)))
   (exit 0))
+
+
+(define (compile-file inf)
+  (let ((in  (file inf :read)))
+    (let next ((E (read in)))
+      (if (not (io.eof? in))
+	  (begin (print (compile-thunk (expand E)))
+		 (princ "\n")
+		 (next (read in)))))
+    (io.close in)))
+
+(define (do-boot0)
+  (for-each (lambda (file)
+	      (compile-file file))
+	    (cdr *argv*)))

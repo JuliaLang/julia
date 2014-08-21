@@ -1070,7 +1070,7 @@ static value_t apply_cl(uint32_t nargs)
     VM_APPLY_LABELS;
     uint32_t top_frame = curr_frame;
     // frame variables
-    uint32_t n=0, captured;
+    uint32_t n=0;//, captured;
     uint32_t bp;
     const uint8_t *ip;
     fixnum_t s, hi;
@@ -1087,7 +1087,7 @@ static value_t apply_cl(uint32_t nargs)
     static value_t func, v, e;
 
  apply_cl_top:
-    captured = 0;
+    //captured = 0;
     func = Stack[SP-nargs-1];
     ip = (uint8_t*)cv_data((cvalue_t*)ptr(fn_bcode(func)));
 #ifndef MEMDEBUG2
@@ -1164,9 +1164,11 @@ static value_t apply_cl(uint32_t nargs)
             goto do_vargc;
         OP(OP_BRBOUND)
             i = GET_INT32(ip); ip+=4;
+        /*
             if (captured)
                 v = vector_elt(Stack[bp], i);
             else
+        */
                 v = Stack[bp+i];
             if (v != UNBOUND) PUSH(FL_T);
             else PUSH(FL_F);
@@ -1337,7 +1339,7 @@ static value_t apply_cl(uint32_t nargs)
             curr_frame = Stack[SP-4];
             if (curr_frame == top_frame) return v;
             SP -= (5+nargs);
-            captured     = Stack[curr_frame-1];
+            //captured     = Stack[curr_frame-1];
             ip = (uint8_t*)Stack[curr_frame-2];
             nargs        = Stack[curr_frame-3];
             bp           = curr_frame - 5 - nargs;
@@ -1752,6 +1754,7 @@ static value_t apply_cl(uint32_t nargs)
         OP(OP_LOADA)
             assert(nargs > 0);
             i = *ip++;
+            /*
             if (captured) {
                 e = Stack[bp];
                 assert(isvector(e));
@@ -1759,30 +1762,37 @@ static value_t apply_cl(uint32_t nargs)
                 v = vector_elt(e, i);
             }
             else {
+            */
                 v = Stack[bp+i];
-            }
+            //}
             PUSH(v);
             NEXT_OP;
         OP(OP_LOADA0)
+            /*
             if (captured)
                 v = vector_elt(Stack[bp], 0);
             else
+            */
                 v = Stack[bp];
             PUSH(v);
             NEXT_OP;
         OP(OP_LOADA1)
+            /*
             if (captured)
                 v = vector_elt(Stack[bp], 1);
             else
+            */
                 v = Stack[bp+1];
             PUSH(v);
             NEXT_OP;
         OP(OP_LOADAL)
             assert(nargs > 0);
             i = GET_INT32(ip); ip+=4;
+            /*
             if (captured)
                 v = vector_elt(Stack[bp], i);
             else
+            */
                 v = Stack[bp+i];
             PUSH(v);
             NEXT_OP;
@@ -1790,6 +1800,7 @@ static value_t apply_cl(uint32_t nargs)
             assert(nargs > 0);
             v = Stack[SP-1];
             i = *ip++;
+            /*
             if (captured) {
                 e = Stack[bp];
                 assert(isvector(e));
@@ -1797,52 +1808,76 @@ static value_t apply_cl(uint32_t nargs)
                 vector_elt(e, i) = v;
             }
             else {
+            */
                 Stack[bp+i] = v;
-            }
+            //}
             NEXT_OP;
         OP(OP_SETAL)
             assert(nargs > 0);
             v = Stack[SP-1];
             i = GET_INT32(ip); ip+=4;
+            /*
             if (captured)
                 vector_elt(Stack[bp], i) = v;
             else
+            */
                 Stack[bp+i] = v;
             NEXT_OP;
+
+        OP(OP_BOX)
+            i = *ip++;
+            v = mk_cons();
+            car_(v) = Stack[bp+i];
+            cdr_(v) = NIL;
+            Stack[bp+i] = v;
+            NEXT_OP;
+        OP(OP_BOXL)
+            i = GET_INT32(ip); ip+=4;
+            v = mk_cons();
+            car_(v) = Stack[bp+i];
+            cdr_(v) = NIL;
+            Stack[bp+i] = v;
+            NEXT_OP;
+
         OP(OP_LOADC)
-            s = *ip++;
+            //s = *ip++;
             i = *ip++;
             v = Stack[bp+nargs];
-            while (s--)
-                v = vector_elt(v, vector_size(v)-1);
+            //while (s--)
+            //    v = vector_elt(v, vector_size(v)-1);
             assert(isvector(v));
             assert(i < vector_size(v));
             PUSH(vector_elt(v, i));
             NEXT_OP;
+            
         OP(OP_SETC)
-            s = *ip++;
+            //s = *ip++;
             i = *ip++;
             v = Stack[bp+nargs];
-            while (s--)
-                v = vector_elt(v, vector_size(v)-1);
+            //while (s--)
+            //    v = vector_elt(v, vector_size(v)-1);
             assert(isvector(v));
             assert(i < vector_size(v));
             vector_elt(v, i) = Stack[SP-1];
             NEXT_OP;
-        OP(OP_LOADC00)
+            
+            
+        OP(OP_LOADC0)
             PUSH(vector_elt(Stack[bp+nargs], 0));
             NEXT_OP;
-        OP(OP_LOADC01)
+        OP(OP_LOADC1)
             PUSH(vector_elt(Stack[bp+nargs], 1));
             NEXT_OP;
+            
         OP(OP_LOADCL)
-            s = GET_INT32(ip); ip+=4;
+            //s = GET_INT32(ip); ip+=4;
             i = GET_INT32(ip); ip+=4;
             v = Stack[bp+nargs];
-            while (s--)
-                v = vector_elt(v, vector_size(v)-1);
+            //while (s--)
+            //    v = vector_elt(v, vector_size(v)-1);
             PUSH(vector_elt(v, i));
             NEXT_OP;
+            
         OP(OP_SETCL)
             s = GET_INT32(ip); ip+=4;
             i = GET_INT32(ip); ip+=4;
@@ -1851,9 +1886,21 @@ static value_t apply_cl(uint32_t nargs)
                 v = vector_elt(v, vector_size(v)-1);
             vector_elt(v, i) = Stack[SP-1];
             NEXT_OP;
-
+            
         OP(OP_CLOSURE)
-            // build a closure (lambda args body . env)
+            n = *ip++;
+            assert(n > 0);
+            pv = alloc_words(n + 1);
+            v = tagptr(pv, TAG_VECTOR);
+            pv[0] = fixnum(n);
+            i = 1;
+            do {
+                pv[i] = Stack[SP-n + i-1];
+                i++;
+            } while (i<=n);
+            POPN(n);
+            PUSH(v);
+        /*
             if (nargs > 0 && !captured) {
                 // save temporary environment to the heap
                 n = nargs;
@@ -1873,6 +1920,7 @@ static value_t apply_cl(uint32_t nargs)
             else {
                 PUSH(Stack[bp]); // env has already been captured; share
             }
+        */
 #ifdef MEMDEBUG2
             pv = alloc_words(4);
 #else
@@ -2050,7 +2098,7 @@ static uint32_t compute_maxstack(uint8_t *code, size_t len, int bswap)
         case OP_PAIRP: case OP_ATOMP: case OP_NOT: case OP_NULLP:
         case OP_BOOLEANP: case OP_SYMBOLP: case OP_NUMBERP: case OP_FIXNUMP:
         case OP_BOUNDP: case OP_BUILTINP: case OP_FUNCTIONP: case OP_VECTORP:
-        case OP_NOP: case OP_CAR: case OP_CDR: case OP_NEG: case OP_CLOSURE:
+        case OP_NOP: case OP_CAR: case OP_CDR: case OP_NEG:
             break;
 
         case OP_TAPPLY: case OP_APPLY:
@@ -2063,6 +2111,10 @@ static uint32_t compute_maxstack(uint8_t *code, size_t len, int bswap)
             n = *ip++;
             sp -= (n-1);
             break;
+        case OP_CLOSURE:
+            n = *ip++;
+            sp -= n;
+            break;
 
         case OP_ASET:
             sp -= 2;
@@ -2073,8 +2125,8 @@ static uint32_t compute_maxstack(uint8_t *code, size_t len, int bswap)
             break;
 
         case OP_LOADT: case OP_LOADF: case OP_LOADNIL: case OP_LOAD0:
-        case OP_LOAD1: case OP_LOADA0: case OP_LOADA1: case OP_LOADC00:
-        case OP_LOADC01: case OP_DUP:
+        case OP_LOAD1: case OP_LOADA0: case OP_LOADA1: case OP_DUP:
+        case OP_LOADC0: case OP_LOADC1:
             sp++;
             break;
 
@@ -2088,30 +2140,34 @@ static uint32_t compute_maxstack(uint8_t *code, size_t len, int bswap)
             sp++;
             break;
 
-        case OP_SETG: case OP_SETA:
+        case OP_SETG: case OP_SETA: case OP_BOX:
             ip++;
             break;
-        case OP_SETGL: case OP_SETAL:
+        case OP_SETGL: case OP_SETAL: case OP_BOXL:
             if (bswap) SWAP_INT32(ip);
             ip+=4;
             break;
 
-        case OP_LOADC: ip+=2; sp++; break;
+        case OP_LOADC: ip+=1; sp++; break;
+            /*
         case OP_SETC:
             ip+=2;
             break;
+            */
         case OP_LOADCL:
             if (bswap) SWAP_INT32(ip);
             ip+=4;
-            if (bswap) SWAP_INT32(ip);
-            ip+=4;
+            //if (bswap) SWAP_INT32(ip);
+            //ip+=4;
             sp++; break;
+            /*
         case OP_SETCL:
             if (bswap) SWAP_INT32(ip);
             ip+=4;
             if (bswap) SWAP_INT32(ip);
             ip+=4;
             break;
+            */
         }
     }
     return maxsp+5;
