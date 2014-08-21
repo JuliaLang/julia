@@ -83,7 +83,9 @@ jl_compileropts_t jl_compileropts = { NULL, // build_path
                                       0,    // code_coverage
                                       0,    // malloc_log
                                       JL_COMPILEROPT_CHECK_BOUNDS_DEFAULT,
-                                      0     // int32_literals
+                                      JL_COMPILEROPT_DUMPBITCODE_OFF,
+                                      0,    // int_literals
+                                      JL_COMPILEROPT_COMPILE_DEFAULT
 };
 
 int jl_boot_file_loaded = 0;
@@ -990,6 +992,8 @@ DLLEXPORT void jl_install_sigint_handler()
 extern int asprintf(char **str, const char *fmt, ...);
 extern void *__stack_chk_guard;
 
+void jl_compile_all(void);
+
 DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *av[]))
 {
 #if defined(_OS_WINDOWS_)
@@ -1007,10 +1011,22 @@ DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *
     int ret = pmain(argc, argv);
     char *build_path = jl_compileropts.build_path;
     if (build_path) {
+        if (jl_compileropts.compile_enabled == JL_COMPILEROPT_COMPILE_ALL)
+            jl_compile_all();
         char *build_ji;
         if (asprintf(&build_ji, "%s.ji",build_path) > 0) {
             jl_save_system_image(build_ji);
             free(build_ji);
+            if (jl_compileropts.dumpbitcode == JL_COMPILEROPT_DUMPBITCODE_ON)
+            {
+                char *build_bc;
+                if (asprintf(&build_bc, "%s.bc",build_path) > 0) {
+                    jl_dump_bitcode(build_bc);
+                    free(build_bc);
+                } else {
+                    ios_printf(ios_stderr,"\nWARNING: failed to create string for .bc build path\n");
+                }
+            }
             char *build_o;
             if (asprintf(&build_o, "%s.o",build_path) > 0) {
                 jl_dump_objfile(build_o,0);

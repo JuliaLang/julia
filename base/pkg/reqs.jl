@@ -24,7 +24,7 @@ immutable Requirement <: Line
         package = shift!(fields)
         all(field->ismatch(Base.VERSION_REGEX, field), fields) ||
             error("invalid requires entry for $package: $content")
-        versions = [ convert(VersionNumber, field) for field in fields ]
+        versions = [VersionNumber(field) for field in fields]
         issorted(versions) || error("invalid requires entry for $package: $content")
         new(content, package, VersionSet(versions), system)
     end

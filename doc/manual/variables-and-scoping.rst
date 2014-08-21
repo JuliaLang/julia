@@ -260,18 +260,18 @@ block without creating any new bindings:
            end
     1
 
-The first example is illegal because you cannot declare the same
-variable as local in the same scope twice. The second example is legal
+The first example is invalid because you cannot declare the same
+variable as local in the same scope twice. The second example is valid
 since the ``let`` introduces a new scope block, so the inner local ``x``
 is a different variable than the outer local ``x``.
 
 For Loops and Comprehensions
 ----------------------------
 
-For loops and comprehensions have a special additional behavior: any
-new variables introduced in their body scopes are freshly allocated for
-each loop iteration. Therefore these constructs are similar to ``while``
-loops with ``let`` blocks inside::
+``for`` loops and :ref:`comprehensions <comprehensions>` have a special
+additional behavior: any new variables introduced in their body scopes are
+freshly allocated for each loop iteration. Therefore these constructs are
+similar to ``while`` loops with ``let`` blocks inside::
 
     Fs = cell(2)
     for i = 1:2

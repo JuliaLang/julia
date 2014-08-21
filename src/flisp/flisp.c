@@ -685,8 +685,12 @@ void gc(int mustgrow)
 #ifdef MEMDEBUG
     LLT_FREE(tospace);
 #endif
-    if (curheap > lim)  // all data was live
+    if ((value_t*)curheap > ((value_t*)lim)-2) {
+        // all data was live; gc again and grow heap.
+        // but also always leave at least 4 words available, so a closure
+        // can be allocated without an extra check.
         gc(0);
+    }
 #endif
 }
 
@@ -1872,7 +1876,7 @@ static value_t apply_cl(uint32_t nargs)
 #ifdef MEMDEBUG2
             pv = alloc_words(4);
 #else
-            if (curheap > lim-2)
+            if ((value_t*)curheap > ((value_t*)lim)-2)
                 gc(0);
             pv = (value_t*)curheap;
             curheap += (4*sizeof(value_t));
@@ -2292,8 +2296,8 @@ value_t fl_map1(value_t *args, u_int32_t nargs)
     if (nargs < 2)
         lerror(ArgError, "map: too few arguments");
     if (!iscons(args[1])) return NIL;
-    value_t *first, *last, v;
-    int64_t argSP = args-Stack;
+    value_t v;
+    uint32_t first, last, argSP = args-Stack;
     assert(argSP >= 0 && argSP < N_STACK);
     if (nargs == 2) {
         if (SP+4 > N_STACK) grow_stack();
@@ -2306,8 +2310,8 @@ value_t fl_map1(value_t *args, u_int32_t nargs)
         car_(v) = POP(); cdr_(v) = NIL;
         PUSH(v);
         PUSH(v);
-        first = &Stack[SP-2];
-        last = &Stack[SP-1];
+        first = SP-2;
+        last = SP-1;
         Stack[argSP+1] = cdr_(Stack[argSP+1]);
         while (iscons(Stack[argSP+1])) {
             PUSH(Stack[argSP]);
@@ -2317,8 +2321,8 @@ value_t fl_map1(value_t *args, u_int32_t nargs)
             PUSH(v);
             v = mk_cons();
             car_(v) = POP(); cdr_(v) = NIL;
-            cdr_(*last) = v;
-            *last = v;
+            cdr_(Stack[last]) = v;
+            Stack[last] = v;
             Stack[argSP+1] = cdr_(Stack[argSP+1]);
         }
         POPN(2);
@@ -2338,8 +2342,8 @@ value_t fl_map1(value_t *args, u_int32_t nargs)
         car_(v) = POP(); cdr_(v) = NIL;
         PUSH(v);
         PUSH(v);
-        first = &Stack[SP-2];
-        last = &Stack[SP-1];
+        first = SP-2;
+        last = SP-1;
         while (iscons(Stack[argSP+1])) {
             PUSH(Stack[argSP]);
             for(i=1; i < nargs; i++) {
@@ -2351,12 +2355,12 @@ value_t fl_map1(value_t *args, u_int32_t nargs)
             PUSH(v);
             v = mk_cons();
             car_(v) = POP(); cdr_(v) = NIL;
-            cdr_(*last) = v;
-            *last = v;
+            cdr_(Stack[last]) = v;
+            Stack[last] = v;
         }
         POPN(2);
     }
-    return *first;
+    return Stack[first];
 }
 
 static builtinspec_t core_builtin_info[] = {

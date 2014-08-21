@@ -1280,20 +1280,20 @@ function findnextnot(B::BitArray, start::Integer)
     within_chunk_start = @_mod64(start-1)
     mask = ~(_msk64 << within_chunk_start)
 
-    @inbounds begin
+    @inbounds if chunk_start < l
         if Bc[chunk_start] | mask != _msk64
             return (chunk_start-1) << 6 + trailing_ones(Bc[chunk_start] | mask) + 1
         end
-
         for i = chunk_start+1:l-1
             if Bc[i] != _msk64
                 return (i-1) << 6 + trailing_ones(Bc[i]) + 1
             end
         end
-        ce = Bc[end]
-    end
-    if ce != @_msk_end length(B)
-        return (l-1) << 6 + trailing_ones(ce) + 1
+        if Bc[l] != @_msk_end length(B)
+            return (l-1) << 6 + trailing_ones(Bc[l]) + 1
+        end
+    elseif Bc[l] | mask != @_msk_end length(B)
+        return (l-1) << 6 + trailing_ones(Bc[l] | mask) + 1
     end
     return 0
 end
