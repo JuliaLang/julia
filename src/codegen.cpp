@@ -768,7 +768,7 @@ const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
         assert(fptr != 0);
 #ifndef USE_MCJIT
         std::map<size_t, FuncInfo, revcomp> &fmap = jl_jit_events->getMap();
-        std::map<size_t, FuncInfo>::iterator fit = fmap.find(fptr);
+        std::map<size_t, FuncInfo, revcomp>::iterator fit = fmap.find(fptr);
 
         if (fit == fmap.end()) {
             JL_PRINTF(JL_STDERR, "Warning: Unable to find function pointer\n");

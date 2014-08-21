@@ -24,9 +24,7 @@
 #include <mach-o/dyld.h>
 #include <mach-o/nlist.h>
 #include <sys/types.h> // for jl_raise_debugger
-#endif
-
-#ifdef _OS_LINUX_
+#elif !defined(_OS_WINDOWS_)
 #include <link.h>
 #endif
 
@@ -631,16 +629,9 @@ DLLEXPORT const char *jl_pathname_for_handle(uv_lib_t *uv_lib)
                 return info.dli_fname;
         }
     }
-#endif
 
-#ifdef _OS_LINUX_
-    struct link_map *map;
-    dlinfo(handle, RTLD_DI_LINKMAP, &map);
-    if (map)
-        return map->l_name;
-#endif
+#elif defined(_OS_WINDOWS_)
 
-#ifdef _OS_WINDOWS_
     wchar_t *pth16 = (wchar_t*)malloc(32768); // max long path length
     DWORD n16 = GetModuleFileNameW(handle,pth16,32768);
     if (n16 <= 0) {
@@ -661,6 +652,14 @@ DLLEXPORT const char *jl_pathname_for_handle(uv_lib_t *uv_lib)
     }
     free(pth16);
     return filepath;
+
+#else // Linux, FreeBSD, ...
+
+    struct link_map *map;
+    dlinfo(handle, RTLD_DI_LINKMAP, &map);
+    if (map)
+        return map->l_name;
+
 #endif
     return NULL;
 }
