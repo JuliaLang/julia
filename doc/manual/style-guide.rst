@@ -143,11 +143,23 @@ In this case ``cell(n)`` is better. It is also more helpful to the compiler
 to annotate specific uses (e.g. ``a[i]::Int``) than to try to pack many
 alternatives into one type.
 
-Avoid underscores in names
---------------------------
+Use naming conventions consistent with Julia's ``base/``
+--------------------------------------------------------
 
-If a function name requires multiple words, it might represent more than one
-concept. It is better to keep identifier names concise.
+- modules and type names use capitalization and camel case:
+  ``module SparseMatrix``,  ``immutable UnitRange``.
+- functions are lowercase (``maximum``, ``convert``) and,
+  when readable, with multiple words squashed together (``isequal``, ``haskey``).
+  When necessary, use underscores as word separators.
+  Underscores are also used to indicate a combination of
+  concepts (``remotecall_fetch`` as a more efficient implementation
+  of ``remotecall(fetch(...))``) or as modifiers (``sum_kbn``).
+- conciseness is valued, but avoid abbreviation
+  (``indexin`` rather than ``indxin``) as it becomes difficult to
+  remember whether and how particular words are abbreviated.
+
+If a function name requires multiple words, consider whether it might
+represent more than one concept and might be better split into pieces.
 
 Don't overuse try-catch
 -----------------------

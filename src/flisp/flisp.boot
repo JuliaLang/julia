@@ -34,9 +34,7 @@
 		      #fn("8000r3|}g2\\;" [])]
 	  *interactive* #f *syntax-environment*
 	  #table(throw #fn(":000r2c0c1c2c3L2|}L4L2;" [raise list quote
-						      thrown-value])  do #fn("A000s2c0qc130}Mc2c3|32c2e4|32c2c5|3245;" [#fn("A000r5c0|c1g2c2}c3c4\x7fN31Kc5c3L1c4i0231|g4KL133L4L3L2L1|g3KL3;" [letrec
-  lambda if begin #fn(copy-list) #fn(nconc)])
-  #fn(gensym) #fn(map) #.car cadr #fn("7000r1e0|31F680e1|41;|M;" [cddr caddr])])  assert #fn("<000r1c0|]c1c2c3|L2L2L2L4;" [if
+						      thrown-value])  assert #fn("<000r1c0|]c1c2c3|L2L2L2L4;" [if
   raise quote assert-failed])  case #fn(":000s1c0q]41;" [#fn("7000r1c0m02c1qc23041;" [#fn("9000r2}c0\x8250c0;}\x8540^;}C6=0c1|e2}31L3;}?6=0c3|e2}31L3;}N\x85>0c3|e2}M31L3;e4c5}326=0c6|c7}L2L3;c8|c7}L2L3;" [else
   eq? quote-value eqv? every #.symbol? memq quote memv] vals->cond)
   #fn(";000r1c0|i10L2L1c1c2c3qi1132KL3;" [let cond #fn(map)
@@ -62,7 +60,7 @@
   lambda #fn(nconc) #fn(copy-list)])  let* #fn("A000s1|?6E0c0c1L1_L1c2}3133L1;c0c1L1e3|31L1L1c2|NF6H0c0c4L1|NL1c2}3133L1530}3133e5|31L2;" [#fn(nconc)
   lambda #fn(copy-list) caar let* cadar])  when #fn("<000s1c0|c1}K^L4;" [if
   begin])  catch #fn("7000r2c0qc13041;" [#fn("@000r1c0\x7fc1|L1c2c3c4|L2c5c6|L2c7c8L2L3c5c9|L2~L3L4c:|L2c;|L2L4L3L3;" [trycatch
-  lambda if and pair? eq car quote thrown-value cadr caddr raise])
+  lambda if and pair? eq? car quote thrown-value cadr caddr raise])
 					 #fn(gensym)])  let #fn(":000s1c0q^41;" [#fn("<000r1~C6D0~m02\x7fMo002\x7fNo01530]2c0qc1c2L1c3c4~32L1c5\x7f3133c3c6~3242;" [#fn("8000r2~6@0c0~|L2L1~L3530|}K;" [letrec])
   #fn(nconc) lambda #fn(map) #fn("6000r1|F650|M;|;" [])
   #fn(copy-list) #fn("6000r1|F650|\x84;e040;" [void])])]))
@@ -157,7 +155,7 @@
   largc lvargc vargc argc compile-in lastcdr caddr ret values #fn(function)
   encode-byte-code bcode:code const-to-idx-vec]) filter keyword-arg?])
   #fn(length)]) #fn(length)]) make-code-emitter lastcdr lambda-vars filter #.pair?
-  lambda])] #0=[#:g679 ()])
+  lambda])] #0=[#:g669 ()])
 	  compile-for #fn(":000r5e0g4316X0e1|}^g2342e1|}^g3342e1|}^g4342e2|c342;e4c541;" [1arg-lambda?
   compile-in emit for error "for: third form must be a 1-argument lambda"] compile-for)
 	  compile-if #fn("<000r4c0qe1|31e1|31g3\x84e2g331e3g331F6;0e4g331560e53045;" [#fn(";000r5g2]\x82>0e0~\x7fi02g344;g2^\x82>0e0~\x7fi02g444;e0~\x7f^g2342e1~c2|332e0~\x7fi02g3342i026<0e1~c3325:0e1~c4}332e5~|322e0~\x7fi02g4342e5~}42;" [compile-in
@@ -247,8 +245,8 @@
   print-to-string] expand-define)
 	  filter #fn("7000r2c0q]41;" [#fn("9000r1c0qm02|~\x7f_L143;" [#fn("9000r3g2]}F6S02i10}M316?0g2}M_KPNm2530]2}Nm15\f/2N;" [] filter-)])] filter)
 	  fits-i8 #fn("8000r1|I16F02e0|b\xb03216:02e1|b\xaf42;" [>= <=] fits-i8)
-	  foldl #fn(":000r3g2\x8540};e0||g2M}32g2N43;" [foldl] foldl) foldr
-	  #fn(";000r3g2\x8540};|g2Me0|}g2N3342;" [foldr] foldr) for-each #fn(";000s2c0q]41;" [#fn(":000r1c0qm02i02\x85J0]\x7fF6A02~\x7fM312\x7fNo015\x1e/5;0|~\x7fi02K322];" [#fn(":000r2}MF6I0|c0c1}32Q22~|c0c2}3242;];" [#fn(map)
+	  foldl #fn(":000r3g2\x8540};e0||g2M}32g2N43;" [foldl] foldl) for-each
+	  #fn(";000s2c0q]41;" [#fn(":000r1c0qm02i02\x85J0]\x7fF6A02~\x7fM312\x7fNo015\x1e/5;0|~\x7fi02K322];" [#fn(":000r2}MF6I0|c0c1}32Q22~|c0c2}3242;];" [#fn(map)
   #.car #.cdr] for-each-n)])] for-each)
 	  get-defined-vars #fn("8000r1e0~|3141;" [delete-duplicates] #1=[#fn("9000r1|?640_;|Mc0<16602|NF6d0|\x84C16702|\x84L117S02|\x84F16E02e1|31C16:02e1|31L117402_;|Mc2\x82>0c3c4~|N32v2;_;" [define
   caadr begin #fn(nconc) #fn(map)] #1#) ()])
@@ -268,12 +266,12 @@
 						#fn("<000r1c0|`c1|c2|313243;" [#fn(string.sub)
   #fn(string.dec) #fn(length)]) #fn(string)] keyword->symbol)
 	  keyword-arg? #fn("7000r1|F16902c0|M41;" [#fn(keyword?)] keyword-arg?)
-	  lambda-vars #fn("7000r1c0q]41;" [#fn(":000r1c0qm02|~~^^342e1c2e3~3142;" [#fn(";000r4|A17502|C640];|F16602|MC6S0g217502g36<0e0c1}c243;~|N}g2g344;|F16602|MF6\x870e3|Mb23216902e4|31C660^5=0e0c5|Mc6}342c7e4|31316<0~|N}g2]44;g36<0e0c1}c843;~|N}]g344;|F6>0e0c9|Mc6}44;|}\x82:0e0c1}42;e0c9|c6}44;" [error
+	  lambda-vars #fn("7000r1c0q]41;" [#fn(":000r1c0qm02|~~^^342c1c2e3~3142;" [#fn(";000r4|A17502|C640];|F16602|MC6S0g217502g36<0e0c1}c243;~|N}g2g344;|F16602|MF6\x870e3|Mb23216902e4|31C660^5=0e0c5|Mc6}342c7e4|31316<0~|N}g2]44;g36<0e0c1}c843;~|N}]g344;|F6>0e0c9|Mc6}44;|}\x82:0e0c1}42;e0c9|c6}44;" [error
   "compile error: invalid argument list "
   ". optional arguments must come after required." length= caar "compile error: invalid optional argument "
   " in list " #fn(keyword?) ". keyword arguments must come last."
-  "compile error: invalid formal argument "] check-formals) map! #fn("7000r1|F690e0|M41;|;" [keyword->symbol])
-  to-proper])] lambda-vars)
+  "compile error: invalid formal argument "] check-formals)
+  #fn(map) #fn("7000r1|F690e0|M41;|;" [keyword->symbol]) to-proper])] lambda-vars)
 	  last-pair #fn("7000r1|N?640|;e0|N41;" [last-pair] last-pair) lastcdr
 	  #fn("7000r1|?640|;e0|31N;" [last-pair] lastcdr) length= #fn("9000r2}`X640^;}`W650|?;|?660}`W;e0|N}ax42;" [length=] length=)
 	  length> #fn("9000r2}`X640|;}`W6;0|F16402|;|?660}`X;e0|N}ax42;" [length>] length>)
@@ -290,8 +288,6 @@
 					  #fn(":000r1c0qe1~|`3341;" [#fn(";000r1|6@0i13640|;i12|K;e0i10i11Ni1317502~A680i12570i12aw^44;" [lookup-sym])
   index-of])] lookup-sym)
 	  macrocall? #fn("7000r1|MC16902e0|M41;" [symbol-syntax] macrocall?)
-	  macroexpand-1 #fn("8000r1|?640|;c0qe1|3141;" [#fn("7000r1|680|~Nv2;~;" [])
-							macrocall?] macroexpand-1)
 	  make-code-emitter #fn("9000r0_c030`c1Z4;" [#fn(table) +inf.0] make-code-emitter)
 	  make-label #fn("6000r1c040;" [#fn(gensym)] make-label)
 	  make-perfect-hash-table #fn("7000r1c0q]41;" [#fn("8000r1c0m02c1q]31c2~3141;" [#fn("9000r2e0e1c2|3131}42;" [mod0
@@ -314,8 +310,7 @@
 							 *print-level*
 							 *print-length*
 							 *os-name*)] make-system-image)
-	  map! #fn("9000r2}]}F6B02}|}M31O2}Nm15\x1d/2;" [] map!) map-int
-	  #fn("8000r2e0}`32640_;c1q|`31_K_42;" [<= #fn(":000r2|m12a\x7faxc0qu2|;" [#fn("8000r1\x7fi10|31_KP2\x7fNo01;" [])])] map-int)
+	  map-int #fn("8000r2e0}`32640_;c1q|`31_K_42;" [<= #fn(":000r2|m12a\x7faxc0qu2|;" [#fn("8000r1\x7fi10|31_KP2\x7fNo01;" [])])] map-int)
 	  mark-label #fn("9000r2e0|c1}43;" [emit label] mark-label) max
 	  #fn("<000s1}\x8540|;e0c1|}43;" [foldl #fn("7000r2|}X640};|;" [])] max)
 	  member #fn("8000r2}?640^;}M|>640};e0|}N42;" [member] member) memv
@@ -397,8 +392,6 @@
 					    #fn("7000r3|g2K;" [])] table.keys)
 	  table.pairs #fn("9000r1c0c1_|43;" [#fn(table.foldl)
 					     #fn("7000r3|}Kg2K;" [])] table.pairs)
-	  table.values #fn("9000r1c0c1_|43;" [#fn(table.foldl)
-					      #fn("7000r3}g2K;" [])] table.values)
 	  to-proper #fn("8000r1|\x8540|;|?660|L1;|Me0|N31K;" [to-proper] to-proper)
 	  top-level-exception-handler #fn("7000r1c0qe141;" [#fn("7000r1e0k12c2qc3q41;" [*stderr*
   *output-stream* #fn("7000r1c0qc1qt|302;" [#fn("7000r0e0i20312e1c23041;" [print-exception
@@ -407,7 +400,5 @@
 	  values #fn("9000s0|F16602|NA650|M;~|K;" [] #2#) vector->list
 	  #fn("8000r1c0qc1|31_42;" [#fn(":000r2a|c0qu2};" [#fn("8000r1i10~|x[\x7fKo01;" [])])
 				    #fn(length)] vector->list)
-	  vector.map #fn("8000r2c0qc1}3141;" [#fn("8000r1c0qc1|3141;" [#fn(":000r1`~axc0qu2|;" [#fn(":000r1~|i20i21|[31\\;" [])])
-  #fn(vector.alloc)]) #fn(length)] vector.map)
 	  void #fn("6000r0];" [] void) zero?
 	  #fn("7000r1|`W;" [] zero?))

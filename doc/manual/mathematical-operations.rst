@@ -130,16 +130,16 @@ Numeric Comparisons
 Standard comparison operations are defined for all the primitive numeric
 types:
 
-======== ========================
-Operator Name
-======== ========================
-``==``   equality
-``!=``   inequality
-``<``    less than
-``<=``   less than or equal to
-``>``    greater than
-``>=``   greater than or equal to
-======== ========================
+============= ========================
+Operator      Name
+============= ========================
+``==``        equality
+``!=`` ``≠``  inequality
+``<``         less than
+``<=`` ``≤``  less than or equal to
+``>``         greater than
+``>=`` ``≥``  greater than or equal to
+============= ========================
 
 Here are some simple examples:
 
@@ -270,6 +270,16 @@ work on arrays. For example, ``0 .< A .< 1`` gives a boolean array whose
 entries are true where the corresponding elements of ``A`` are between 0
 and 1.
 
+The operator ``.<`` is intended for array objects; the operation
+``A .< B`` is valid only if ``A`` and ``B`` have the same dimensions.  The
+operator returns an array with boolean entries and with the same dimensions
+as ``A`` and ``B``.  Such operators are called *elementwise*; Julia offers a
+suite of elementwise operators: ``.*``, ``.+``, etc.  Some of the elementwise
+operators can take a scalar operand such as the example ``0 .< A .< 1`` in
+the preceding paragraph.
+This notation means that the scalar operand should be replicated for each entry of
+the array.
+
 Note the evaluation behavior of chained comparisons::
 
     v(x) = (println(x); x)
@@ -377,8 +387,8 @@ Powers, logs and roots
 =================== ==============================================================================
 Function            Description
 =================== ==============================================================================
-``sqrt(x)``         the square root of ``x``
-``cbrt(x)``         the cube root of ``x``
+``sqrt(x)`` ``√x``  the square root of ``x``
+``cbrt(x)`` ``∛x``   the cube root of ``x``
 ``hypot(x,y)``      hypotenuse of right-angled triangle with other sides of length ``x`` and ``y``
 ``exp(x)``          the natural exponential function at ``x``
 ``expm1(x)``        accurate ``exp(x)-1`` for ``x`` near zero

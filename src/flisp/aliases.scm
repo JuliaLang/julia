@@ -22,10 +22,12 @@
 
 (define (list->string l) (apply string l))
 (define (string->list s)
-  (do ((i (sizeof s) i)
-       (l '() (cons (string.char s i) l)))
-      ((= i 0) l)
-    (set! i (string.dec s i))))
+  (let loop ((i (sizeof s))
+	     (l '()))
+    (if (= i 0)
+	l
+	(let ((newi (string.dec s i)))
+	  (loop newi (cons (string.char s newi) l))))))
 
 (define (substring s start end)
   (string.sub s (string.inc s 0 start) (string.inc s 0 end)))

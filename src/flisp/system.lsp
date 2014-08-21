@@ -243,7 +243,7 @@
 	((atom? l) (list l))
 	(else (cons (car l) (to-proper (cdr l))))))
 
-(define (map! f lst)
+#;(define (map! f lst)
   (prog1 lst
 	 (while (pair? lst)
 		(set-car! lst (f (car lst)))
@@ -284,7 +284,7 @@
 			      n))))
   (count- f l 0))
 
-(define (foldr f zero lst)
+#;(define (foldr f zero lst)
   (if (null? lst) zero
       (f (car lst) (foldr f zero (cdr lst)))))
 
@@ -337,7 +337,7 @@
            (not (symbol? x)))
       (and (constant? x)
 	   (symbol? x)
-           (eq x (top-level-value x)))))
+           (eq? x (top-level-value x)))))
 
 (define-macro (quasiquote x) (bq-process x))
 
@@ -428,7 +428,7 @@
 			    (cdr clause)))
 		    clauses)))))
 
-(define-macro (do vars test-spec . commands)
+#;(define-macro (do vars test-spec . commands)
   (let ((loop (gensym))
 	(test-expr (car test-spec))
 	(vars  (map car  vars))
@@ -503,8 +503,8 @@
   (let ((e (gensym)))
     `(trycatch ,expr
                (lambda (,e) (if (and (pair? ,e)
-                                     (eq (car  ,e) 'thrown-value)
-                                     (eq (cadr ,e) ,tag))
+                                     (eq? (car  ,e) 'thrown-value)
+                                     (eq? (cadr ,e) ,tag))
                                 (caddr ,e)
 				(raise ,e))))))
 
@@ -604,7 +604,7 @@
            (set! l (cons (aref v (- n i)) l))))
     l))
 
-(define (vector.map f v)
+#;(define (vector.map f v)
   (let* ((n (length v))
          (nv (vector.alloc n)))
     (for 0 (- n 1)
@@ -620,7 +620,7 @@
 (define (table.keys t)
   (table.foldl (lambda (k v z) (cons k z))
                () t))
-(define (table.values t)
+#;(define (table.values t)
   (table.foldl (lambda (k v z) (cons v z))
                () t))
 #;(define (table.clone t)
@@ -701,7 +701,7 @@
 (define (macrocall? e) (and (symbol? (car e))
 			    (symbol-syntax (car e))))
 
-(define (macroexpand-1 e)
+#;(define (macroexpand-1 e)
   (if (atom? e) e
       (let ((f (macrocall? e)))
 	(if f (apply f (cdr e))

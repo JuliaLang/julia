@@ -9,8 +9,8 @@ include $(JULIAHOME)/Make.inc
 # so that prefix/share/julia/VERSDIR can be overwritten without touching
 # third-party code).
 VERSDIR = v`cut -d. -f1-2 < VERSION`
-INSTALL_F = install -pm644
-INSTALL_M = install -pm755
+INSTALL_F = contrib/install.sh 644
+INSTALL_M = contrib/install.sh 755
 
 #file name of make dist result
 ifeq ($(JULIA_DIST_TARNAME),)
@@ -247,15 +247,6 @@ endif
 	done
 endif
 
-ifeq ($(USE_SYSTEM_LIBUV),0)
-ifeq ($(OS),WINNT)
-	$(INSTALL_M) $(build_libdir)/libuv.a $(DESTDIR)$(private_libdir)
-	$(INSTALL_F) $(build_includedir)/tree.h $(DESTDIR)$(includedir)/julia
-else
-	$(INSTALL_M) $(build_libdir)/libuv.a $(DESTDIR)$(private_libdir)
-endif
-	$(INSTALL_F) $(build_includedir)/uv* $(DESTDIR)$(includedir)/julia
-endif
 	$(INSTALL_F) src/julia.h src/options.h src/support/*.h $(DESTDIR)$(includedir)/julia
 	# Copy system image
 	$(INSTALL_F) $(build_private_libdir)/sys.ji $(DESTDIR)$(private_libdir)
@@ -284,7 +275,7 @@ endif
 
 	# Overwrite JL_SYSTEM_IMAGE_PATH in julia binaries:
 	for julia in $(DESTDIR)$(bindir)/julia* ; do \
-		$(build_bindir)/stringreplace $$(strings -t x - $$julia | grep "sys.ji$$" | awk '{print $$1;}' ) "$(private_libdir_rel)/sys.ji" 256 $(call cygpath_w,$$julia); \
+		$(call spawn,$(build_bindir)/stringreplace $$(strings -t x - $$julia | grep "sys.ji$$" | awk '{print $$1;}' ) "$(private_libdir_rel)/sys.ji" 256 $(call cygpath_w,$$julia)); \
 	done
 
 	mkdir -p $(DESTDIR)$(sysconfdir)
