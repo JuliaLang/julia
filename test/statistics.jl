@@ -2,6 +2,9 @@
 
 @test middle(3) === 3.0
 @test middle(2, 3) === 2.5
+let x = ((realmax(1.0)/4)*3)
+    @test middle(x, x) === x
+end
 @test middle(1:8) === 4.5
 @test middle([1:8]) === 4.5
 
