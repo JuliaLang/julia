@@ -175,8 +175,8 @@ function fastfixedtoa(v,mode,fractional_count,buffer)
     fractional_count > 20 && return false, 0, 0, buffer
     len = 1
     if exponent + kDoubleSignificandSize > 64
-        kFive17 = divisor = 5^17
-        divisor_power = 17
+        kFive17 = divisor = int64(5)^17
+        divisor_power = int64(17)
         dividend = significand
         if exponent > divisor_power
             dividend <<= exponent - divisor_power
