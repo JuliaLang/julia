@@ -156,7 +156,7 @@ format(dt::TimeType,f::String;locale::String="english") = format(dt,DateFormat(f
 
 # vectorized
 DateTime{T<:String}(y::AbstractArray{T},format::String;locale::String="english") = DateTime(y,DateFormat(format,locale))
-function DateTime{T<:String}(y::AbstractArray{T},df::DateFormat=ISODateFormat)
+function DateTime{T<:String}(y::AbstractArray{T},df::DateFormat=ISODateTimeFormat)
     return reshape(DateTime[DateTime(parse(y[i],df)...) for i in 1:length(y)], size(y))
 end
 Date{T<:String}(y::AbstractArray{T},format::String;locale::String="english") = Date(y,DateFormat(format,locale))
