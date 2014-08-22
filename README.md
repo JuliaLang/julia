@@ -56,7 +56,7 @@ All systems are supported with both x86/64 (64-bit) and x86 (32-bit) architectur
 
 First, acquire the source code by cloning the git repository:
 
-    git clone git://github.com/JuliaLang/julia.git
+    git clone -b release-0.3 git://github.com/JuliaLang/julia.git
 
 (If you are behind a firewall, you may need to use the `https` protocol instead of the `git` protocol:
 
