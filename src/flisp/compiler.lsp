@@ -20,7 +20,7 @@
 	  loadg loadg.l
 	  loada loada.l loadc loadc.l
 	  setg setg.l
-	  seta seta.l setc setc.l
+	  seta seta.l removed-setc removed-setc.l
 	  
 	  closure argc vargc trycatch for tapply
 	  add2 sub2 neg largc lvargc
@@ -55,7 +55,6 @@
 (define (bcode:ctable b) (aref b 1))
 (define (bcode:nconst b) (aref b 2))
 (define (bcode:cenv b)   (aref b 3))
-;;(define (bcode:cdepth b d) (aset! b 3 (min (aref b 3) d)))
 
 ;; get an index for a referenced value in a bytecode object
 (define (bcode:indexfor b v)
@@ -83,7 +82,7 @@
 		   (> (car args) 255))
 	      (set! inst (cadr longform))))
 	(let ((longform
-	       (assq inst '((loadc loadc.l) (setc setc.l)))))
+	       (assq inst '((loadc loadc.l)))))
 	  (if (and longform
 		   (> (car  args) 255))
 	      (set! inst (cadr longform))))
@@ -175,15 +174,9 @@
 		       (set! i (+ i 1)))
 		      ((number? nxt)
 		       (case vi
-			 ((loadv.l loadg.l setg.l loada.l seta.l loadc.l setc.l
+			 ((loadv.l loadg.l setg.l loada.l seta.l loadc.l
 			   largc lvargc call.l tcall.l box.l)
 			  (io.write bcode (int32 nxt))
-			  (set! i (+ i 1)))
-			 
-			 #;((loadc setc)  ; 1 uint8 arg
-			  (io.write bcode (uint8 nxt))
-			  (set! i (+ i 1))
-			  (io.write bcode (uint8 (aref v i)))
 			  (set! i (+ i 1)))
 			 
 			 ((optargs keyargs)  ; 2 int32 args
@@ -253,9 +246,6 @@
 			(cdr env)
 			(+ lev 1))))))
 
-; number of non-nulls
-#;(define (nnn e) (count (lambda (x) (not (null? x))) e))
-
 (define (printable? x) (not (or (iostream? x)
 				(eof-object? x))))
 
@@ -294,7 +284,7 @@
 
 		(begin (compile-in g env #f rhs)
 		       (if (not arg?) (error (string "internal error: misallocated var " s)))
-		       (emit g (if arg? 'seta 'setc) idx))))))))
+		       (emit g 'seta idx))))))))
 
 ;; control flow
 
@@ -724,12 +714,7 @@
 		   (i 0))
 	  (if (pair? e)
 	      (begin (if (cadr (car e))
-			 (emit g 'box i)
-			 #;(begin (emit g 'loada i)
-				(emit g 'loadnil)
-				(emit g 'cons)
-				(emit g 'seta i)
-				(emit g 'pop)))
+			 (emit g 'box i))
 		     (loop (cdr e) (+ i 1)))))
 
 	;; compile body and return
@@ -791,20 +776,14 @@
 		  (print-val (aref vals (aref code i)))
 		  (set! i (+ i 1)))
 		 
-		 ((loada seta loadc setc call tcall list + - * / vector
+		 ((loada seta loadc call tcall list + - * / vector
 		   argc vargc loadi8 apply tapply closure box)
 		  (princ (number->string (aref code i)))
 		  (set! i (+ i 1)))
 		 
-		 ((loada.l seta.l loadc.l setc.l largc lvargc call.l tcall.l box.l)
+		 ((loada.l seta.l loadc.l largc lvargc call.l tcall.l box.l)
 		  (princ (number->string (ref-int32-LE code i)))
 		  (set! i (+ i 4)))
-		 
-		 #;((loadc setc)
-		  (princ (number->string (aref code i)) " ")
-		  (set! i (+ i 1))
-		  (princ (number->string (aref code i)))
-		  (set! i (+ i 1)))
 		 
 		 ((optargs keyargs)
 		  (princ (number->string (ref-int32-LE code i)) " ")
