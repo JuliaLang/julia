@@ -347,12 +347,12 @@ source-dist: git-submodules
 	git submodule --quiet foreach 'git ls-files | sed "s&^&$$path/&"' >> source-dist.tmp
 
 	# Remove unwanted files
-	sed '/\.git/d' source-dist.tmp > source-dist.tmp1
-	sed '/\.travis/d' source-dist.tmp1 > source-dist.tmp
+	sed -e '/\.git/d' -e '/\.travis/d' source-dist.tmp > source-dist.tmp1
 
-	# Create tarball
-	tar -cz -T source-dist.tmp --no-recursion -f julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz
-	rm -f source-dist.tmp source-dist.tmp1
+	# Prefix everything with the current directory name (usually "julia"), then create tarball
+	DIRNAME=$$(basename $$(pwd)); \
+	sed -e "s_.*_$$DIRNAME/&_" source-dist.tmp1 > source-dist.tmp; \
+	cd ../ && tar -cz -T $$DIRNAME/source-dist.tmp --no-recursion -f $$DIRNAME/julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz
 
 clean: | $(CLEAN_TARGETS)
 	@$(MAKE) -C base clean
