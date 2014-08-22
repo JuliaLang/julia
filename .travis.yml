@@ -38,7 +38,7 @@ before_install:
         LDFLAGS="-L$(brew --prefix suite-sparse-julia)/lib" make $BUILDOPTS -C contrib -f repackage_system_suitesparse4.make;
       fi
 script:
-    - make $BUILDOPTS prefix=/tmp/julia install
+    - LDFLAGS="-L$(brew --prefix suite-sparse-julia)/lib -L$(brew --prefix arpack-julia)/lib" make $BUILDOPTS prefix=/tmp/julia install
     - if [ `uname` = "Darwin" ]; then
         for name in spqr umfpack colamd cholmod amd suitesparse_wrapper; do
             install -pm755 usr/lib/lib${name}*.dylib* /tmp/julia/lib/julia/;
