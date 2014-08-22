@@ -35,7 +35,7 @@ before_install:
         brew install -v --only-dependencies --HEAD julia;
         brew update;
         brew upgrade gcc;
-        make $BUILDOPTS -C contrib -f repackage_system_suitesparse4.make;
+        LDFLAGS="-L$(brew --prefix suite-sparse-julia)/lib" make $BUILDOPTS -C contrib -f repackage_system_suitesparse4.make;
       fi
 script:
     - make $BUILDOPTS prefix=/tmp/julia install
