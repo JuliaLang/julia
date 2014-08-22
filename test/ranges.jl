@@ -350,3 +350,11 @@ end
 @test length(map(identity, 0x0001:0x0005)) == 5
 @test length(map(identity, uint64(1):uint64(5))) == 5
 @test length(map(identity, uint128(1):uint128(5))) == 5
+
+# mean/median
+for f in (mean, median)
+    for n = 2:5
+        @test f(2:n) == f([2:n])
+        @test_approx_eq f(2:0.1:n) f([2:0.1:n])
+    end
+end
