@@ -26,15 +26,17 @@ before_install:
         sudo apt-get update -qq -y;
         sudo apt-get install patchelf gfortran llvm-3.3-dev libsuitesparse-dev libopenblas-dev liblapack-dev libarpack2-dev libfftw3-dev libgmp-dev libpcre3-dev libunwind7-dev libdouble-conversion-dev libopenlibm-dev librmath-dev libmpfr-dev -y;
       elif [ `uname` = "Darwin" ]; then
-        BUILDOPTS="USECLANG=1 LLVM_CONFIG=llvm-config-3.3 LLVM_LLC=llc-3.3 VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC='-I/usr/local/include'";
-        BUILDOPTS="$BUILDOPTS LIBBLAS=-lopenblas LIBBLASNAME=libopenblas LIBLAPACK=-lopenblas LIBLAPACKNAME=libopenblas";
-        for lib in LLVM ZLIB SUITESPARSE ARPACK BLAS FFTW LAPACK GMP MPFR PCRE LIBUNWIND; do
-            export BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";
-        done;
         brew tap staticfloat/julia;
         brew install -v --only-dependencies --HEAD julia;
         brew update;
         brew upgrade gcc;
+        BUILDOPTS="USECLANG=1 LLVM_CONFIG=$(brew --prefix llvm33-julia)/bin/llvm-config-3.3 VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC=-I$(brew --prefix suite-sparse-julia)/include";
+        BUILDOPTS="$BUILDOPTS LIBBLAS=-lopenblas LIBBLASNAME=libopenblas LIBLAPACK=-lopenblas LIBLAPACKNAME=libopenblas";
+        for lib in LLVM ZLIB SUITESPARSE ARPACK BLAS FFTW LAPACK GMP MPFR PCRE LIBUNWIND; do
+            export BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";
+        done;
+        export LDFLAGS="-L$(brew --prefix openblas-julia)/lib -L$(brew --prefix suite-sparse-julia)/lib";
+        export DYLD_FALLBACK_LIBRARY_PATH="/usr/local/lib:/lib:/usr/lib:$(brew --prefix openblas-julia)/lib:$(brew --prefix suite-sparse-julia)/lib:$(brew --prefix arpack-julia)/lib";
         make $BUILDOPTS -C contrib -f repackage_system_suitesparse4.make;
       fi
 script:
