@@ -358,10 +358,6 @@ clean: | $(CLEAN_TARGETS)
 	@$(MAKE) -C base clean
 	@$(MAKE) -C src clean
 	@$(MAKE) -C ui clean
-	for repltype in "basic" "readline"; do \
-		rm -f $(build_bindir)/julia-debug-$${repltype}; \
-		rm -f $(build_bindir)/julia-$${repltype}; \
-	done
 	@rm -f julia
 	@rm -f *~ *# *.tar.gz
 	@rm -f $(build_bindir)/stringreplace source-dist.tmp source-dist.tmp1
