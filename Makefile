@@ -367,7 +367,7 @@ clean: | $(CLEAN_TARGETS)
 
 cleanall: clean
 	@$(MAKE) -C src clean-flisp clean-support
-	@rm -fr $(build_libdir)
+	@rm -fr $(build_shlibdir)
 ifeq ($(OS),WINNT)
 	@rm -rf $(build_prefix)/lib
 endif
