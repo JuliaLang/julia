@@ -324,7 +324,14 @@ ifeq ($(OS), WINNT)
 	    cp busybox.exe $(DESTDIR)$(prefix)/Git/bin/echo.exe && \
 	    cp busybox.exe $(DESTDIR)$(prefix)/Git/bin/printf.exe )
 	cd $(DESTDIR)$(bindir) && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
+
+	# create file listing for uninstall. note: must have Windows path separators and line endings.
+	cd $(prefix) && find * | sed -e 's/\//\\/g' -e 's/$$/\r/g' > etc/uninstall.log
+
+	# build nsis package
 	$(call spawn,./dist-extras/nsis/makensis.exe) -NOCD -DVersion=$(JULIA_VERSION) -DArch=$(ARCH) -DCommit=$(JULIA_COMMIT) ./contrib/windows/build-installer.nsi
+
+	# compress nsis installer and combine with 7zip self-extracting header
 	./dist-extras/7z a -mx9 "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" julia-installer.exe
 	cat ./contrib/windows/7zS.sfx ./contrib/windows/7zSFX-config.txt "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" > "julia-${JULIA_VERSION}-${ARCH}.exe"
 	-rm -f julia-installer.exe
