@@ -21,6 +21,7 @@ tupletail(x::Tuple) = argtail(x...)
 convert(T::(Any, Any...), x::(Any, Any...)) =
     tuple(convert(T[1],x[1]), convert(tupletail(T), tupletail(x))...)
 
+convert{T}(::Type{(T...)}, x::(T...)) = x
 convert{T}(::Type{(T...)}, x::Tuple) = cnvt_all(T, x...)
 cnvt_all(T) = ()
 cnvt_all(T, x, rest...) = tuple(convert(T,x), cnvt_all(T, rest...)...)

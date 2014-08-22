@@ -106,7 +106,8 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
     S
 end
 
-SharedArray(T, I::Int...; kwargs...) = SharedArray(T, I; kwargs...)
+SharedArray(T, I::Integer...; kwargs...) = SharedArray(T, convert(Dims, I);
+                                                       kwargs...)
 
 typealias SharedVector{T} SharedArray{T,1}
 typealias SharedMatrix{T} SharedArray{T,2}
@@ -243,7 +244,8 @@ end
 function shmem_fill(v, dims; kwargs...)
     SharedArray(typeof(v), dims; init = S->fill!(S.loc_subarr_1d, v), kwargs...)
 end
-shmem_fill(v, I::Int...; kwargs...) = shmem_fill(v, I; kwargs...)
+shmem_fill(v, I::Integer...; kwargs...) = shmem_fill(v, convert(Dims, I);
+                                                     kwargs...)
 
 # rand variant with range
 function shmem_rand(TR::Union(DataType, UnitRange), dims; kwargs...)
@@ -253,16 +255,16 @@ function shmem_rand(TR::Union(DataType, UnitRange), dims; kwargs...)
         SharedArray(TR, dims; init = S -> map!((x)->rand(TR), S.loc_subarr_1d), kwargs...)
     end
 end
-shmem_rand(TR::Union(DataType, UnitRange), i::Int; kwargs...) = shmem_rand(TR, (i,); kwargs...)
-shmem_rand(TR::Union(DataType, UnitRange), I::Int...; kwargs...) = shmem_rand(TR, I; kwargs...)
+shmem_rand(TR::Union(DataType, UnitRange), i::Integer; kwargs...) = shmem_rand(TR, (int(i),); kwargs...)
+shmem_rand(TR::Union(DataType, UnitRange), I::Integer...; kwargs...) = shmem_rand(TR, convert(Dims, I); kwargs...)
 
 shmem_rand(dims; kwargs...) = shmem_rand(Float64, dims; kwargs...)
-shmem_rand(I::Int...; kwargs...) = shmem_rand(I; kwargs...)
+shmem_rand(I::Integer...; kwargs...) = shmem_rand(convert(Dims, I); kwargs...)
 
 function shmem_randn(dims; kwargs...)
     SharedArray(Float64, dims; init = S-> map!((x)->randn(), S.loc_subarr_1d), kwargs...)
 end
-shmem_randn(I::Int...; kwargs...) = shmem_randn(I; kwargs...)
+shmem_randn(I::Integer...; kwargs...) = shmem_randn(convert(Dims, I); kwargs...)
 
 similar(S::SharedArray, T, dims::Dims) = SharedArray(T, dims; pids=procs(S))
 similar(S::SharedArray, T) = similar(S, T, size(S))
