@@ -355,18 +355,23 @@ libcxx-build:
 libcxx-build/Makefile: llvm-$(LLVM_VER)/projects/libcxx | llvm-$(LLVM_VER)/projects/libcxxabi libcxx-build
 	cd libcxx-build && \
 		cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS="../llvm-$(LLVM_VER)/projects/libcxxabi/include" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(build_prefix) ../llvm-$(LLVM_VER)/projects/libcxx -DCMAKE_C_COMPILER="$(CC)" -DCMAKE_CXX_COMPILER="$(CXX)"  -DCMAKE_SHARED_LINKER_FLAGS="-L$(build_libdir) -Bstatic -lirc -Bdynamic" -DCMAKE_CXX_FLAGS="$(CXXFLAGS)"
+libcxxabi-build:
+	mkdir -p libcxxabi-build
+libcxxabi-build/Makefile: llvm-$(LLVM_VER)/projects/libcxxabi | libcxxabi-build
+	cd libcxxabi-build && \
+        cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DLLVM_MAIN_SRC_DIR=../llvm-svn -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(build_prefix) ../llvm-$(LLVM_VER)/projects/libcxxabi -DCMAKE_C_COMPILER="$(CC)" -DCMAKE_CXX_COMPILER="$(CXX)" -DLIBCXXABI_CXX_ABI_LIBRARIES="-Bstatic -lirc -Bdynamic" -DCMAKE_CXX_FLAGS="$(CXXFLAGS) -std=c++11"
 llvm-$(LLVM_VER)/projects/libcxxabi/lib/libc++abi.so.1.0: llvm-$(LLVM_VER)/projects/libcxxabi | llvm-$(LLVM_VER)/projects/libcxx
-	cd llvm-$(LLVM_VER)/projects/libcxxabi/lib && \
-	$(LIBCXX_OPTIONS) ./buildit
-$(build_libdir)/libc++abi.so.1.0: llvm-$(LLVM_VER)/projects/libcxxabi/lib/libc++abi.so.1.0
-	cp llvm-$(LLVM_VER)/projects/libcxxabi/lib/libc++abi.so.1.0 $(build_libdir)
-	-ln -s $(build_libdir)/libc++abi.so.1.0 $(build_libdir)/libc++abi.so
-	-ln -s $(build_libdir)/libc++abi.so.1.0 $(build_libdir)/libc++abi.so.1
-install-libcxxabi: $(build_libdir)/libc++abi.so
+libcxxabi-build/libc++abi.so.1.0: | libcxxabi-build/Makefile
+	cd libcxxabi-build && $(MAKE)
+$(build_libdir)/libc++abi.so.1.0: libcxxabi-build/lib/libc++abi.so.1.0
+	cd libcxxabi-build && $(MAKE) install
+	touch $@
+install-libcxxabi: $(build_libdir)/libc++abi.so.1.0
 libcxx-build/lib/libc++.so.1.0: | $(build_libdir)/libc++abi.so.1.0 libcxx-build/Makefile
 	cd libcxx-build && $(MAKE)
 $(build_libdir)/libc++.so.1.0: libcxx-build/lib/libc++.so.1.0
 	cd libcxx-build && $(MAKE) install
+	touch $@
 install-libcxx: $(build_libdir)/libc++.so.1.0
 get-libcxx: llvm-$(LLVM_VER)/projects/libcxx
 get-libcxxabi: llvm-$(LLVM_VER)/projects/libcxxabi
