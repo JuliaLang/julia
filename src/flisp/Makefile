@@ -75,14 +75,14 @@ $(EXENAME)-debug: $(DOBJS) $(LIBFILES) $(LIBTARGET)-debug.a flmain.do
 	@$(call PRINT_LINK, $(CCLD) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME)-debug $(LIBTARGET).a $(LIBS) $(OSLIBS))
 ifndef CROSS_COMPILE
 ifneq ($(USEMSVC), 1)
-#	$(call spawn,./$(EXENAME)-debug) unittest.lsp
+	$(call spawn,./$(EXENAME)-debug) unittest.lsp
 endif
 endif
 
 $(EXENAME): $(OBJS) $(LIBFILES) $(LIBTARGET).a flmain.o
 	@$(call PRINT_LINK, $(CCLD) $(SHIPFLAGS) $(OBJS) flmain.o -o $(EXENAME) $(LIBTARGET).a $(LIBS) $(OSLIBS))
 ifneq ($(USEMSVC), 1)
-#	$(call spawn,./$(EXENAME)) unittest.lsp
+	$(call spawn,./$(EXENAME)) unittest.lsp
 endif
 
 clean:
