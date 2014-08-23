@@ -553,22 +553,12 @@ function sum{T<:Real}(r::Range{T})
                                      : (step(r) * l) * ((l-1)>>1))
 end
 
-
 function mean{T<:Real}(r::Range{T})
     isempty(r) && error("mean of an empty range is undefined")
     (first(r) + last(r)) / 2
 end
 
-function median{T<:Real}(r::Range{T})
-    isempty(r) && error("median of an empty range is undefined")
-    n = length(r)
-    if iseven(n)
-        mid = n >> 1
-        return (r[mid] + r[mid+1]) / 2
-    else # odd
-        return float(r[(n+1)>>1])
-    end
-end
+median{T<:Real}(r::Range{T}) = mean(r)
 
 function map!(f::Callable, dest, r::Range)
     i = 1
