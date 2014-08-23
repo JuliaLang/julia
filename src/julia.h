@@ -1024,9 +1024,10 @@ typedef struct _jl_gcframe_t {
 // rooted. foo(f(), g()) will not work, and foo can't do anything about it,
 // so the caller must do
 // jl_value_t *x=NULL, *y=NULL; JL_GC_PUSH(&x, &y);
-// x = f(); y = g(); foo(x, y)
+// x = f(); y = g(); foo(x, y); JL_GC_POP();
 
 extern DLLEXPORT jl_gcframe_t *jl_pgcstack;
+extern DLLEXPORT void** jl_alloca_stack;
 
 #define JL_GC_PUSH(...)                                                   \
   void *__gc_stkf[] = {(void*)((VA_NARG(__VA_ARGS__)<<1)|1), jl_pgcstack, \
@@ -1133,6 +1134,7 @@ typedef struct _jl_handler_t {
 #ifdef JL_GC_MARKSWEEP
     jl_gcframe_t *gcstack;
 #endif
+    void* *alloca_stack;
     struct _jl_handler_t *prev;
 } jl_handler_t;
 
@@ -1161,6 +1163,7 @@ typedef struct _jl_task_t {
     jl_handler_t *eh;
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
+    void* *alloca_stack;
     // current module, or NULL if this task has not set one
     jl_module_t *current_module;
 } jl_task_t;
@@ -1183,6 +1186,7 @@ STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
 #ifdef JL_GC_MARKSWEEP
     jl_pgcstack = eh->gcstack;
 #endif
+    jl_alloca_stack = eh->alloca_stack;
     JL_SIGATOMIC_END();
 }
 

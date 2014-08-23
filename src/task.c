@@ -153,6 +153,7 @@ jl_value_t *jl_exception_in_transit;
 #ifdef JL_GC_MARKSWEEP
 jl_gcframe_t *jl_pgcstack = NULL;
 #endif
+void* *jl_alloca_stack = NULL;
 
 static void start_task(jl_task_t *t);
 
@@ -246,6 +247,8 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
         jl_current_task->gcstack = jl_pgcstack;
         jl_pgcstack = t->gcstack;
 #endif
+        jl_current_task->alloca_stack = jl_alloca_stack;
+        jl_alloca_stack = t->alloca_stack;
 
         // restore task's current module, looking at parent tasks
         // if it hasn't set one.
