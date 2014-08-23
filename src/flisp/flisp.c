@@ -289,7 +289,7 @@ static symbol_t **symtab_lookup(symbol_t **ptree, const char *str)
 {
     int x;
 
-    while(*ptree != NULL) {
+    while (*ptree != NULL) {
         x = strcmp(str, (*ptree)->name);
         if (x == 0)
             return ptree;
@@ -497,7 +497,10 @@ static value_t relocate(value_t v)
 #endif
             d = cdr_(v);
             car_(v) = TAG_FWD; cdr_(v) = nc;
-            car_(nc) = relocate(a);
+            if ((tag(a)&3) == 0 || !ismanaged(a))
+                car_(nc) = a;
+            else
+                car_(nc) = relocate(a);
             pcdr = &cdr_(nc);
             v = d;
         } while (iscons(v));
@@ -505,8 +508,7 @@ static value_t relocate(value_t v)
         return first;
     }
 
-    if ((t&3) == 0) return v;
-    if (!ismanaged(v)) return v;
+    if ((t&3) == 0 || !ismanaged(v)) return v;
     if (isforwarded(v)) return forwardloc(v);
 
     if (t == TAG_VECTOR) {
@@ -524,8 +526,13 @@ static value_t relocate(value_t v)
             forward(v, nc);
             if (sz > 0) {
                 vector_elt(nc,0) = relocate(a);
-                for(i=1; i < sz; i++)
-                    vector_elt(nc,i) = relocate(vector_elt(v,i));
+                for(i=1; i < sz; i++) {
+                    a = vector_elt(v,i);
+                    if ((tag(a)&3) == 0 || !ismanaged(a))
+                        vector_elt(nc,i) = a;
+                    else
+                        vector_elt(nc,i) = relocate(a);
+                }
             }
         }
         return nc;
