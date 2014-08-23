@@ -616,12 +616,15 @@ static bool has_julia_type(Value *v)
 
 static jl_value_t *julia_type_of_without_metadata(Value *v, bool err=true)
 {
-    if (dyn_cast<AllocaInst>(v) != NULL ||
-        dyn_cast<GetElementPtrInst>(v) != NULL) {
-        // an alloca always has llvm type pointer
-        return llvm_type_to_julia(v->getType()->getContainedType(0), err);
+    Type *T = v->getType();
+    if (T != jl_pvalue_llvmt) {
+        if (dyn_cast<AllocaInst>(v) != NULL ||
+            dyn_cast<GetElementPtrInst>(v) != NULL) {
+                // an alloca always has llvm type pointer
+                return llvm_type_to_julia(T->getContainedType(0), err);
+        }
     }
-    return llvm_type_to_julia(v->getType(), err);
+    return llvm_type_to_julia(T, err);
 }
 
 static jl_value_t *julia_type_of(Value *v)

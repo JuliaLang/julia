@@ -104,6 +104,7 @@ static size_t total_freed_bytes=0;
 // manipulating mark bits
 #define gc_marked(o)  (((gcval_t*)(o))->marked)
 #define gc_setmark(o) (((gcval_t*)(o))->marked=1)
+#define gc_clrmark(o) (((gcval_t*)(o))->marked=0)
 #define gc_val_buf(o) ((gcval_t*)(((void**)(o))-1))
 #define gc_setmark_buf(o) gc_setmark(gc_val_buf(o))
 #define gc_typeof(v) ((jl_value_t*)(((uptrint_t)jl_typeof(v))&~1UL))
@@ -614,6 +615,7 @@ static void sweep_pool(pool_t *p)
 // sweep phase
 
 extern void jl_unmark_symbols(void);
+static void gc_unmark_stacks(void);
 
 static void gc_sweep(void)
 {
@@ -624,6 +626,7 @@ static void gc_sweep(void)
         sweep_pool(&norm_pools[i]);
         sweep_pool(&ephe_pools[i]);
     }
+    gc_unmark_stacks();
     jl_unmark_symbols();
 }
 
@@ -632,6 +635,13 @@ static void gc_sweep(void)
 static jl_value_t **mark_stack = NULL;
 static size_t mark_stack_size = 0;
 static size_t mark_sp = 0;
+
+static struct {
+    jl_gcframe_t *s;
+    ptrint_t offset;
+} *marked_stacks;
+static size_t marked_stacks_size = 0;
+static size_t marked_stacks_sp = 0;
 
 static void push_root(jl_value_t *v, int d);
 
@@ -642,8 +652,46 @@ void jl_gc_setmark(jl_value_t *v)
     gc_setmark(v);
 }
 
+static void gc_unmark_stacks()
+{
+    size_t i;
+    for (i = 0; i < marked_stacks_sp; i++) {
+        jl_gcframe_t *s = marked_stacks[i].s;
+        ptrint_t offset = marked_stacks[i].offset;
+        while (s != NULL) {
+            s = (jl_gcframe_t*)((char*)s + offset);
+            jl_value_t ***rts = (jl_value_t***)(((void**)s)+2);
+            size_t nr = s->nroots>>1;
+            if (s->nroots & 1) {
+                for(size_t i=0; i < nr; i++) {
+                    jl_value_t **ptr = (jl_value_t**)((char*)rts[i] + offset);
+                    if (*ptr != NULL && gc_marked(*ptr))
+                        gc_clrmark(*ptr);
+                }
+            }
+            else {
+                for(size_t i=0; i < nr; i++) {
+                    if (rts[i] != NULL && gc_marked(rts[i]))
+                        gc_clrmark(rts[i]);
+                }
+            }
+            s = s->prev;
+        }
+    }
+}
+
 static void gc_mark_stack(jl_gcframe_t *s, ptrint_t offset, int d)
 {
+    if (marked_stacks_sp >= marked_stacks_size) {
+        size_t newsz = marked_stacks_size>0 ? marked_stacks_size*2 : 8;
+        marked_stacks = (typeof(marked_stacks))realloc(marked_stacks,newsz*sizeof(*marked_stacks));
+        if (marked_stacks == NULL) exit(1);
+        marked_stacks_size = newsz;
+    }
+    marked_stacks[marked_stacks_sp].s = s;
+    marked_stacks[marked_stacks_sp].offset = offset;
+    marked_stacks_sp++;
+
     while (s != NULL) {
         s = (jl_gcframe_t*)((char*)s + offset);
         jl_value_t ***rts = (jl_value_t***)(((void**)s)+2);
@@ -840,6 +888,7 @@ extern jl_array_t *jl_module_init_order;
 static void gc_mark(void)
 {
     // mark all roots
+    marked_stacks_sp = 0;
 
     // active tasks
     gc_push_root(jl_root_task, 0);
