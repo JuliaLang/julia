@@ -302,17 +302,19 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
 #endif
         if (it == objfilemap.end()) {
 #ifdef _OS_DARWIN_
-            // First find the uuid of the object file (we'll use this to make sure we find the
-            // correct debug symbol file).
-            uint8_t uuid[16], uuid2[16];
-
-            MemoryBuffer *membuf = MemoryBuffer::getMemBuffer(
-                StringRef((const char *)fbase, (size_t)(((uint64_t)-1)-fbase)),"",false);
-
-#ifdef LLVM35
+           // First find the uuid of the object file (we'll use this to make sure we find the
+           // correct debug symbol file).
+           uint8_t uuid[16], uuid2[16];
+	   
+	   MemoryBuffer *membuf = MemoryBuffer::getMemBuffer(
+        	StringRef((const char *)fbase, (size_t)(((uint64_t)-1)-fbase)),"",false);
+#ifdef LLVM36
+	   auto origerrorobj = llvm::object::ObjectFile::createObjectFile(
+	   		membuf->getMemBufferRef(), sys::fs::file_magic::unknown);
+#elif LLVM35
             std::unique_ptr<MemoryBuffer> buf(membuf);
             auto origerrorobj = llvm::object::ObjectFile::createObjectFile(
-                buf, sys::fs::file_magic::unknown);
+            		buf, sys::fs::file_magic::unknown);
 #else
             llvm::object::ObjectFile *origerrorobj = llvm::object::ObjectFile::createObjectFile(
                 membuf);
@@ -323,8 +325,7 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
                 goto lookup;
             }
 #ifdef LLVM36
-            llvm::object::MachOObjectFile *morigobj = (llvm::object::MachOObjectFile *)origerrorobj.get().getBinary().release();
-            origerrorobj.get().getBuffer().release();
+            llvm::object::MachOObjectFile *morigobj = (llvm::object::MachOObjectFile *)origerrorobj.get().release();
 #elif LLVM35
             llvm::object::MachOObjectFile *morigobj = (llvm::object::MachOObjectFile *)origerrorobj.get();
 #else
