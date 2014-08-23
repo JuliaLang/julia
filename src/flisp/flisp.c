@@ -1741,7 +1741,6 @@ static value_t apply_cl(uint32_t nargs)
             NEXT_OP;
 
         OP(OP_LOADA)
-            assert(nargs > 0);
             i = *ip++;
             v = Stack[bp+i];
             PUSH(v);
@@ -1755,19 +1754,16 @@ static value_t apply_cl(uint32_t nargs)
             PUSH(v);
             NEXT_OP;
         OP(OP_LOADAL)
-            assert(nargs > 0);
             i = GET_INT32(ip); ip+=4;
             v = Stack[bp+i];
             PUSH(v);
             NEXT_OP;
         OP(OP_SETA)
-            assert(nargs > 0);
             v = Stack[SP-1];
             i = *ip++;
             Stack[bp+i] = v;
             NEXT_OP;
         OP(OP_SETAL)
-            assert(nargs > 0);
             v = Stack[SP-1];
             i = GET_INT32(ip); ip+=4;
             Stack[bp+i] = v;
@@ -1786,6 +1782,12 @@ static value_t apply_cl(uint32_t nargs)
             car_(v) = Stack[bp+i];
             cdr_(v) = NIL;
             Stack[bp+i] = v;
+            NEXT_OP;
+
+        OP(OP_SHIFT)
+            i = *ip++;
+            Stack[SP-1-i] = Stack[SP-1];
+            SP -= i;
             NEXT_OP;
 
         OP(OP_LOADC)
@@ -2012,6 +2014,10 @@ static uint32_t compute_maxstack(uint8_t *code, size_t len, int bswap)
             sp -= (n-1);
             break;
         case OP_CLOSURE:
+            n = *ip++;
+            sp -= n;
+            break;
+        case OP_SHIFT:
             n = *ip++;
             sp -= n;
             break;
