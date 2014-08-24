@@ -829,6 +829,7 @@ export
     isgraph,
     islower,
     ismatch,
+    isnumber,
     isprint,
     ispunct,
     isspace,

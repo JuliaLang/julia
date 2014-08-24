@@ -1097,3 +1097,116 @@ let
     @test srep[7] == 'β'
     @test_throws BoundsError srep[8]
 end
+
+#issue #5939  uft8proc/libmojibake character predicates
+let
+    alower=['a', 'd', 'j', 'y', 'z']
+    ulower=['α', 'β', 'γ', 'δ', 'ф', 'я']
+    for c in vcat(alower,ulower)
+        @test islower(c) == true
+        @test isupper(c) == false
+        @test isdigit(c) == false
+        @test isnumber(c) == false
+    end
+
+    aupper=['A', 'D', 'J', 'Y', 'Z']
+    uupper= ['Δ', 'Γ', 'Π', 'Ψ', 'ǅ', 'Ж', 'Д']
+
+    for c in vcat(aupper,uupper)
+        @test islower(c) == false
+        @test isupper(c) == true
+        @test isdigit(c) == false
+        @test isnumber(c) == false
+    end
+
+    nocase=['電', '仮', 'ऊ', 'א','ﺵ']
+    alphas=vcat(alower,ulower,aupper,uupper,nocase)
+
+    for c in alphas
+         @test isalpha(c) == true
+         @test isnumber(c) == false
+    end
+
+
+    anumber=['0', '1', '5', '9']
+    unumber=['٣', '٥', '٨', '೬', '¹', 'ⅳ' ]
+
+    for c in anumber
+         @test isdigit(c) == true
+         @test isnumber(c) == true
+    end
+    for c in unumber
+         @test isdigit(c) == false
+         @test isnumber(c) == true
+    end
+
+    alnums=vcat(alphas,anumber,unumber)
+    for c in alnums
+         @test isalnum(c) == true
+         @test ispunct(c) == false
+    end
+
+    asymbol = ['(',')', '~', '$' ]
+    usymbol = ['∪', '∩', '⊂', '⊃', '√', '€', '¥', '↰', '△', '§']
+
+    apunct =['.',',',';',':','&']
+    upunct =['‡', '؟', '჻' ]
+
+    for c in vcat(apunct,upunct)
+         @test ispunct(c) == true
+         @test isalnum(c) == false
+    end
+
+    for c in vcat(alnums,asymbol,usymbol,apunct,upunct)
+        @test isprint(c) == true
+        @test isgraph(c) == true
+        @test isspace(c) == false
+        @test iscntrl(c) == false
+    end
+
+    NBSP = char(0x0000A0)
+    ENSPACE = char(0x002002)
+    EMSPACE = char(0x002003)
+    THINSPACE = char(0x002009)
+    ZWSPACE = char(0x002060)
+
+    uspace = [ENSPACE, EMSPACE, THINSPACE]
+    aspace = [' ']
+    acntrl_space = ['\t', '\n', '\v', '\f', '\r']
+    for c in vcat(aspace,uspace)
+        #println(c," ",uint(c),":  ",category_code_assigned(c))
+        @test isspace(c) == true
+        @test isprint(c) == true
+        @test isgraph(c) == false
+    end
+
+    for c in vcat(acntrl_space)
+        @test isspace(c) == true
+        @test isprint(c) == false
+        @test isgraph(c) == false
+    end
+
+    @test isspace(ZWSPACE) == false # zero-width space
+
+    acontrol = [ char(0x001c), char(0x001d), char(0x001e), char(0x001f)]
+    latincontrol = [ char(0x0080), char(0x0085) ]
+    ucontrol = [ char(0x200E), char(0x202E) ]
+
+    for c in vcat(acontrol, acntrl_space, latincontrol)
+        @test iscntrl(c) == true
+        @test isalnum(c) == false
+        @test isprint(c) == false
+        @test isgraph(c) == false
+    end
+
+    for c in ucontrol  #non-latin1 controls
+        if c!=char(0x0085)
+            @test iscntrl(c) == false
+            @test isspace(c) == false
+            @test isalnum(c) == false
+            @test isprint(c) == false
+            @test isgraph(c) == false
+        end
+    end
+
+end

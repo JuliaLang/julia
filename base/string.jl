@@ -1,4 +1,6 @@
 ## core text I/O ##
+include("utf8proc.jl")
+importall .UTF8proc
 
 print(io::IO, x) = show(io, x)
 print(io::IO, xs...) = for x in xs print(io, x) end
@@ -547,10 +549,54 @@ isascii(c::Char) = c < 0x80
 isascii(s::String) = all(isascii, s)
 isascii(s::ASCIIString) = true
 
+#   utf8proc/libmojibase categories
+catcode = Base.UTF8proc.category_code_assigned
+const LU=Base.UTF8proc.UTF8PROC_CATEGORY_LU
+const LL=Base.UTF8proc.UTF8PROC_CATEGORY_LL
+const LT=Base.UTF8proc.UTF8PROC_CATEGORY_LT
+const LO=Base.UTF8proc.UTF8PROC_CATEGORY_LO
+const ND=Base.UTF8proc.UTF8PROC_CATEGORY_ND
+const NO=Base.UTF8proc.UTF8PROC_CATEGORY_NO
+const PC=Base.UTF8proc.UTF8PROC_CATEGORY_PC
+const PO=Base.UTF8proc.UTF8PROC_CATEGORY_PO
+const SO=Base.UTF8proc.UTF8PROC_CATEGORY_SO
+const ZS=Base.UTF8proc.UTF8PROC_CATEGORY_ZS
+
+islower(c::Char) = (catcode(c)==LL)
+
+function isupper(c::Char)
+    ccode=catcode(c)
+    return ccode==LU || ccode==LT
+end
+
+isalpha(c::Char) = (LU <= catcode(c) <= LO)
+
+isdigit(c::Char) = ('0' <= c <= '9')
+
+isnumber(c::Char) = (ND <= catcode(c) <= NO)
+
+function isalnum(c::Char)
+    ccode=catcode(c)
+    return (LU <= ccode <= LO) || (ND <= ccode <= NO)
+end
+
+iscntrl(c::Char) = (uint(c)<= 0x1f || 0x7f<=uint(c)<=0x9f)
+
+function ispunct(c::Char)
+    ccode=catcode(c)
+    return (PC <= ccode <= PO)
+end
+
+isspace(c::Char) = c in (' ','\t','\n','\r','\f','\v', char(0x85)) ||  catcode(c)==ZS
+
+isprint(c::Char) = (LU <= catcode(c) <= ZS)
+
+isgraph(c::Char) = (LU <= catcode(c) <= SO)
+
+
 for name = ("alnum", "alpha", "cntrl", "digit", "graph",
-            "lower", "print", "punct", "space", "upper")
+            "lower", "number","print", "punct", "space", "upper")
     f = symbol(string("is",name))
-    @eval ($f)(c::Char) = bool(ccall($(string("isw",name)), Int32, (Cwchar_t,), c))
     @eval $f(s::String) = all($f, s)
 end
 
