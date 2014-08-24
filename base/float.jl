@@ -132,6 +132,8 @@ widen(::Type{Float32}) = Float64
 rem(x::Float32, y::Float32) = box(Float32,rem_float(unbox(Float32,x),unbox(Float32,y)))
 rem(x::Float64, y::Float64) = box(Float64,rem_float(unbox(Float64,x),unbox(Float64,y)))
 
+cld{T<:FloatingPoint}(x::T, y::T) = -fld(-x,y)
+
 mod{T<:FloatingPoint}(x::T, y::T) = rem(y+rem(x,y),y)
 
 ## floating point comparisons ##
