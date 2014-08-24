@@ -25,6 +25,8 @@ Library improvements
     intend to use the default `Forward` order, or
     `pq = PriorityQueue(KeyType, ValueType, OrderType)` otherwise ([#8011]).
 
+  * Efficient `mean` and `median` for ranges ([#8089]).
+
 Julia v0.3.0 Release Notes
 ==========================
 
@@ -948,3 +950,4 @@ Too numerous to mention.
 [#7917]: https://github.com/JuliaLang/julia/issues/7917
 [#7992]: https://github.com/JuliaLang/julia/issues/7992
 [#8011]: https://github.com/JuliaLang/julia/issues/8011
+[#8089]: https://github.com/JuliaLang/julia/issues/8089
