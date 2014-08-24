@@ -211,7 +211,7 @@ function frexp(x::Float64)
         x == zero(x) && return x,0
         x *= 0x1p54 # normalise significand
         xu = reinterpret(Uint64,x)
-        k = int(xu >> 52) & 0x07ff - 54
+        k = (int(xu >> 52) & 0x07ff) - 54
     elseif k == 0x07ff # NaN or Inf
         return x,0
     end
@@ -226,7 +226,7 @@ function frexp(x::Float32)
         x == zero(x) && return x,0
         x *= 3.3554432f7 # 0x1p25: no Float32 hex literal
         xu = reinterpret(Uint32,x)
-        k = int(xu >> 23) & 0x00ff - 25
+        k = (int(xu >> 23) & 0x00ff) - 25
     elseif k == 0x00ff # NaN or Inf
         return x,0
     end
@@ -339,7 +339,7 @@ function mod2pi(x::Float64) # or modtau(x)
     (n,y) = ieee754_rem_pio2(x)
 
     if iseven(n)
-        if n & 2 == 2 # add pi
+        if (n & 2) == 2 # add pi
             return add22condh(y[1],y[2],pi2o2_h,pi2o2_l)
         else # add 0 or 2pi
             if y[1] > 0.0
@@ -349,7 +349,7 @@ function mod2pi(x::Float64) # or modtau(x)
             end
         end
     else # add pi/2 or 3pi/2
-        if n & 2 == 2 # add 3pi/2
+        if (n & 2) == 2 # add 3pi/2
             return add22condh(y[1],y[2],pi3o2_h,pi3o2_l) 
         else # add pi/2
             return add22condh(y[1],y[2],pi1o2_h,pi1o2_l) 

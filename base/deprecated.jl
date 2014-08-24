@@ -169,3 +169,7 @@ scale!{T<:Base.LinAlg.BlasReal}(X::Array{T}, s::Complex) = error("scale!: Cannot
 @deprecate rsplit(x,y,l::Integer,k::Bool) rsplit(x,y;limit=l,keep=k)
 @deprecate rsplit(x,y,l::Integer) rsplit(x,y;limit=l)
 @deprecate rsplit(x,y,k::Bool) rsplit(x,y;keep=k)
+
+_precedence_or(xs...)  = (depwarn("precedence of | will change in the future", :|); (|)(xs...))
+_precedence_and(xs...) = (depwarn("precedence of & will change in the future", :&); (&)(xs...))
+export _precedence_and, _precedence_or

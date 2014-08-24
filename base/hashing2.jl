@@ -99,7 +99,7 @@ function decompose(x::Float32)
     isinf(x) && return ifelse(x < 0, -1, 1), 0, 0
     n = reinterpret(Int32, x)
     s = int32(n & 0x007fffff)
-    e = int32(n & 0x7f800000 >> 23)
+    e = int32((n & 0x7f800000) >> 23)
     s |= int32(e != 0) << 23
     d = ifelse(signbit(n) == 1, -1, 1)
     int(s), int(e - 150 + (e == 0)), d
@@ -110,7 +110,7 @@ function decompose(x::Float64)
     isinf(x) && return ifelse(x < 0, -1, 1), 0, 0
     n = reinterpret(Int64, x)
     s = int64(n & 0x000fffffffffffff)
-    e = int64(n & 0x7ff0000000000000 >> 52)
+    e = int64((n & 0x7ff0000000000000) >> 52)
     s |= int64(e != 0) << 52
     d = ifelse(signbit(n) == 1, -1, 1)
     int(s), int(e - 1075 + (e == 0)), d

@@ -75,7 +75,7 @@ function ipv6_field(ip::IPv6,i)
     if i < 0 || i > 7
         throw(BoundsError())
     end
-    uint16(ip.host&(uint128(0xFFFF)<<(i*16))>>(i*16))
+    uint16((ip.host&(uint128(0xFFFF)<<(i*16)))>>(i*16))
 end
 
 show(io::IO, ip::IPv6) = print(io,"ip\"",ip,"\"")
@@ -461,7 +461,7 @@ function recv(sock::UdpSocket)
 end
 
 function _uv_hook_recv(sock::UdpSocket, nread::Int, buf_addr::Ptr{Void}, buf_size::Uint, addr::Ptr{Void}, flags::Int32)
-    if flags & UV_UDP_PARTIAL > 0
+    if (flags & UV_UDP_PARTIAL) > 0
         # TODO: Decide what to do in this case. For now throw an error
         c_free(buf_addr)
         notify_error(sock.recvnotify,"Partial message received")

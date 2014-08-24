@@ -156,7 +156,7 @@ function (*){T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, x::Number)
     n = size(A,1)
     for j = 1:n
         for i = UpLo == :L ? j:n : 1:j
-            A.data[i,j] = i == j & IsUnit ? x : A.data[i,j]*x
+            A.data[i,j] = i == (j & IsUnit) ? x : A.data[i,j]*x
         end
     end
     A
@@ -165,7 +165,7 @@ function (*){T,S,UpLo,IsUnit}(x::Number, A::Triangular{T,S,UpLo,IsUnit})
     n = size(A,1)
     for j = 1:n
         for i = UpLo == :L ? j:n : 1:j
-            A.data[i,j] = i == j & IsUnit ? x : x*A.data[i,j]
+            A.data[i,j] = i == (j & IsUnit) ? x : x*A.data[i,j]
         end
     end
     A

@@ -12,15 +12,15 @@
 @test ~true == false
 @test ~false == true
 
-@test false & false == false
-@test true  & false == false
-@test false & true  == false
-@test true  & true  == true
+@test (false & false) == false
+@test (true  & false) == false
+@test (false & true ) == false
+@test (true  & true ) == true
 
-@test false | false == false
-@test true  | false == true
-@test false | true  == true
-@test true  | true  == true
+@test (false | false) == false
+@test (true  | false) == true
+@test (false | true ) == true
+@test (true  | true ) == true
 
 @test false $ false == false
 @test true  $ false == true
@@ -574,9 +574,9 @@ for x=int64(2)^53-2:int64(2)^53+5,
     @test (-x==-y)==(-y==-x)
     @test (-x!=-y)==!(-x==-y)
 
-    @test (x<y)==(x<=y)&(x!=y)
-    @test (x<=y)==(x<y)|(x==y)
-    @test (x==y)==(x<=y)&!(x<y)
+    @test (x<y)==((x<=y)&(x!=y))
+    @test (x<=y)==((x<y)|(x==y))
+    @test (x==y)==((x<=y)&!(x<y))
 
     @test -x != x
     @test -y != y

@@ -35,8 +35,8 @@ function encode16(s::String)
         if c < 0x10000
             push!(buf, uint16(c))
         else
-            push!(buf, uint16(0xd7c0 + (c>>10) & 0x3ff))
-            push!(buf, uint16(0xdc00 + c & 0x3ff))
+            push!(buf, uint16(0xd7c0 + ((c>>10) & 0x3ff)))
+            push!(buf, uint16(0xdc00 + (c & 0x3ff)))
         end
     end
     push!(buf, 0) # NULL termination
