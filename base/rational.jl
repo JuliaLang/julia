@@ -153,9 +153,13 @@ fld(x::Rational, y::Rational) = fld(x.num*y.den, x.den*y.num)
 fld(x::Rational, y::Real    ) = fld(x.num, x.den*y)
 fld(x::Real    , y::Rational) = fld(x*y.den, y.num)
 
+cld(x::Rational, y::Rational) = cld(x.num*y.den, x.den*y.num)
+cld(x::Rational, y::Real    ) = cld(x.num, x.den*y)
+cld(x::Real    , y::Rational) = cld(x*y.den, y.num)
+
 itrunc(x::Rational) = div(x.num,x.den)
 ifloor(x::Rational) = fld(x.num,x.den)
-iceil (x::Rational) = -fld(-x.num,x.den)
+iceil (x::Rational) = cld(x.num,x.den)
 iround(x::Rational) = div(x.num*2 + copysign(x.den,x.num), x.den*2)
 
 trunc(x::Rational) = Rational(itrunc(x))
