@@ -115,6 +115,13 @@ function category_code(c)
     cat == 0 ? UTF8PROC_CATEGORY_CN : cat
 end
 
+# category_code() modified to ignore case of unassigned category CN
+#  used by character class predicates for improved performance
+function category_code_assigned(c)
+    c > 0x10FFFF && return 0x0000 # see utf8proc_get_property docs
+    cat = unsafe_load(ccall(:utf8proc_get_property, Ptr{Uint16}, (Int32,), c))
+end
+
 is_assigned_char(c) = category_code(c) != UTF8PROC_CATEGORY_CN
 
 # TODO: use UTF8PROC_CHARBOUND to extract graphemes from a string, e.g. to iterate over graphemes?
