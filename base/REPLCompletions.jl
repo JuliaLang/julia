@@ -107,23 +107,29 @@ function complete_keyword(s::ByteString)
     sorted_keywords[r]
 end
 
-function complete_path(path::ByteString)
-    matches = ByteString[]
+function complete_path(path::String, pos)
     dir, prefix = splitdir(path)
-    if length(dir) == 0
-        files = readdir()
-    elseif isdir(dir)
-        files = readdir(dir)
-    else
-        return matches
+    local files
+    try
+        if length(dir) == 0
+            files = readdir()
+        elseif isdir(dir)
+            files = readdir(dir)
+        else
+            return UTF8String[], 0:-1, false
+        end
+    catch
+        return UTF8String[], 0:-1, false
     end
+
+    matches = UTF8String[]
     for file in files
         if beginswith(file, prefix)
-            p = joinpath(dir, file)
-            push!(matches, isdir(p) ? joinpath(p,"") : p)
+            id = try isdir(joinpath(dir, file)) catch; false end
+            push!(matches, id ? joinpath(file,"") : file)
         end
     end
-    matches
+    matches, (nextind(path, pos-sizeof(prefix))):pos, length(matches) > 0
 end
 
 function complete_methods(input::String)
@@ -176,18 +182,23 @@ function latex_completions(string, pos)
 end
 
 function completions(string, pos)
-    inc_tag = Base.incomplete_tag(parse(string[1:pos], raise=false))
+    # First parse everything up to the current position
+    partial = string[1:pos]
+    inc_tag = Base.incomplete_tag(parse(partial , raise=false))
     if inc_tag in [:cmd, :string]
-        startpos = nextind(string, rsearch(string, non_filename_chars, pos))
+        startpos = nextind(partial, rsearch(partial, non_filename_chars, pos))
         r = startpos:pos
-        paths = complete_path(string[r])
-        if inc_tag == :string && length(paths) == 1 && !isdir(paths[1])
+        paths, r, success = complete_path(string[r], pos)
+        if inc_tag == :string &&
+           length(paths) == 1 &&                              # Only close if there's a single choice,
+           !isdir(string[startpos:start(r)-1] * paths[1]) &&  # except if it's a directory
+           (length(string) <= pos || string[pos+1] != '"')    # or there's already a " at the cursor.
             paths[1] *= "\""
         end
-        return sort(paths), r, true
+        return sort(paths), r, success
     end
 
-    ok, ret = latex_completions(string,pos)
+    ok, ret = latex_completions(string, pos)
     ok && return ret
 
     if inc_tag == :other && string[pos] == '('
@@ -230,7 +241,7 @@ function completions(string, pos)
     return sort(unique(suggestions)), (dotpos+1):pos, true
 end
 
-function shell_completions(string,pos)
+function shell_completions(string, pos)
     # First parse everything up to the current position
     scs = string[1:pos]
     local args, last_parse
@@ -239,34 +250,12 @@ function shell_completions(string,pos)
     catch
         return UTF8String[], 0:-1, false
     end
-    # Now look at the last this we parsed
+    # Now look at the last thing we parsed
     isempty(args.args[end].args) && return UTF8String[], 0:-1, false
     arg = args.args[end].args[end]
     if isa(arg,String)
         # Treat this as a path (perhaps give a list of comands in the future as well?)
-        dir,name = splitdir(arg)
-        local files
-        try
-            if isempty(dir)
-                files = readdir()
-            else
-                isdir(dir) || return UTF8String[], 0:-1, false
-                files = readdir(dir)
-            end
-        catch
-            return UTF8String[], 0:-1, false
-        end
-        # Filter out files and directories that do not begin with the partial name we were
-        # completing and append "/" to directories to simplify further completion
-        ret = map(filter(x->beginswith(x, name), files)) do x
-            if !isdir(joinpath(dir, x))
-                return x
-            else
-                return x*"/"
-            end
-        end
-        r = (nextind(string, pos-sizeof(name))):pos
-        return ret, r, true
+        return complete_path(arg, pos)
     elseif isexpr(arg, :escape) && (isexpr(arg.args[1], :incomplete) || isexpr(arg.args[1], :error))
         r = first(last_parse):prevind(last_parse, last(last_parse))
         partial = scs[r]
