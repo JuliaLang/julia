@@ -130,36 +130,38 @@ is_assigned_char(c) = category_code(c) != UTF8PROC_CATEGORY_CN
 # TODO: use UTF8PROC_CHARBOUND to extract graphemes from a string, e.g. to iterate over graphemes?
 
 ## libc character class predicates ##
-                            
 
-    islower(c::Char) = (_catcode(c)==UTF8PROC_CATEGORY_LL)
+islower(c::Char) = (_catcode(c)==UTF8PROC_CATEGORY_LL)
 
-    function isupper(c::Char)
-        ccode=_catcode(c)
-        return ccode==UTF8PROC_CATEGORY_LU || ccode==UTF8PROC_CATEGORY_LT
-    end
+function isupper(c::Char)
+    ccode=_catcode(c)
+    return ccode==UTF8PROC_CATEGORY_LU || ccode==UTF8PROC_CATEGORY_LT
+end
 
-    isalpha(c::Char) = (UTF8PROC_CATEGORY_LU <= _catcode(c) <=
-                                             UTF8PROC_CATEGORY_LO)
+isalpha(c::Char) = (UTF8PROC_CATEGORY_LU <= _catcode(c) <=
+                                            UTF8PROC_CATEGORY_LO)
 
-    isdigit(c::Char) = ('0' <= c <= '9')
+isdigit(c::Char) = ('0' <= c <= '9')
 
-    isnumber(c::Char) = (UTF8PROC_CATEGORY_ND <= _catcode(c) <=
-                                             UTF8PROC_CATEGORY_NO)
+isnumber(c::Char) = (UTF8PROC_CATEGORY_ND <= _catcode(c) <=
+                                            UTF8PROC_CATEGORY_NO)
 
-    function isalnum(c::Char)
-        ccode=_catcode(c)
-        return (UTF8PROC_CATEGORY_LU <= ccode <= UTF8PROC_CATEGORY_LO) ||
-                     (UTF8PROC_CATEGORY_ND <= ccode <= UTF8PROC_CATEGORY_NO)
-    end
+function isalnum(c::Char)
+    ccode=_catcode(c)
+    return (UTF8PROC_CATEGORY_LU <= ccode <= UTF8PROC_CATEGORY_LO) ||
+                    (UTF8PROC_CATEGORY_ND <= ccode <= UTF8PROC_CATEGORY_NO)
+end
 
-    iscntrl(c::Char) = (uint(c)<= 0x1f || 0x7f<=uint(c)<=0x9f)
+iscntrl(c::Char) = (uint(c)<= 0x1f || 0x7f<=uint(c)<=0x9f)
 
-    ispunct(c::Char) = (UTF8PROC_CATEGORY_PC <=_catcode(c) <= UTF8PROC_CATEGORY_PO)
+ispunct(c::Char) = (UTF8PROC_CATEGORY_PC <=_catcode(c) <= UTF8PROC_CATEGORY_PO)
 
-    isspace(c::Char) = c in (' ','\t','\n','\r','\f','\v', char(0x85)) ||  _catcode(c)==UTF8PROC_CATEGORY_ZS
-    isprint(c::Char) = (UTF8PROC_CATEGORY_LU <= _catcode(c) <= UTF8PROC_CATEGORY_ZS)
-    isgraph(c::Char) = (UTF8PROC_CATEGORY_LU <= _catcode(c) <= UTF8PROC_CATEGORY_SO)
+isspace(c::Char) = c==' ' || c=='\t' || c=='\n' || c=='\r' || 
+                               c in ('\f','\v', char(0x85)) ||  
+                               _catcode(c)==UTF8PROC_CATEGORY_ZS
+                               
+isprint(c::Char) = (UTF8PROC_CATEGORY_LU <= _catcode(c) <= UTF8PROC_CATEGORY_ZS)
+isgraph(c::Char) = (UTF8PROC_CATEGORY_LU <= _catcode(c) <= UTF8PROC_CATEGORY_SO)
 
 
 for name = ("alnum", "alpha", "cntrl", "digit", "graph",
