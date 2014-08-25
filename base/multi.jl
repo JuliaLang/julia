@@ -1248,7 +1248,7 @@ end
 
 ## higher-level functions: spawn, pmap, pfor, etc. ##
 
-let nextidx = 1
+let nextidx = 0
     global chooseproc
     function chooseproc(thunk::Function)
         p = -1
