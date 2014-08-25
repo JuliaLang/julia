@@ -124,8 +124,8 @@ y2 = Dates.Year(2)
 @test_throws ArgumentError Dates.Year(mi) == y
 @test_throws ArgumentError Dates.Year(s) == y
 @test_throws ArgumentError Dates.Year(ms) == y
-@test Dates.Year(Date(2013,1,1)) == Dates.Year(2013)
-@test Dates.Year(DateTime(2013,1,1)) == Dates.Year(2013)
+@test Dates.Year(Dates.Date(2013,1,1)) == Dates.Year(2013)
+@test Dates.Year(Dates.DateTime(2013,1,1)) == Dates.Year(2013)
 @test typeof(y+m) <: Dates.CompoundPeriod
 @test typeof(m+y) <: Dates.CompoundPeriod
 @test typeof(y+w) <: Dates.CompoundPeriod
