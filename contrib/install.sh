@@ -15,7 +15,7 @@ DEST=$1
 
 for SRC in $ARGS; do
     # Copy file, then take output of the form 'src' -> 'dest' and get only 'dest'
-    DESTFILE=$(cp -va $SRC $DEST | sed -e $'s/ -> /\\\n/g' | tail -n 1)
+    DESTFILE=$(LC_ALL=C cp -va $SRC $DEST | sed -e $'s/ -> /\\\n/g' | tail -n 1)
 
     # If there are surrounding quotes, remove them.  We do this simply by knowing that the destination is always an absolute path
     if [ "$(echo $DESTFILE | head -c1)" != "/" ]; then
