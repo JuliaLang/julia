@@ -156,9 +156,7 @@ iscntrl(c::Char) = (uint(c)<= 0x1f || 0x7f<=uint(c)<=0x9f)
 
 ispunct(c::Char) = (UTF8PROC_CATEGORY_PC <=_catcode(c) <= UTF8PROC_CATEGORY_PO)
 
-isspace(c::Char) = c==' ' || c=='\t' || c=='\n' || c=='\r' || 
-                               c in ('\f','\v', char(0x85)) ||  
-                               _catcode(c)==UTF8PROC_CATEGORY_ZS
+isspace(c::Char) = c==' ' || '\t'<=c<='\r' || c==0x85 || _catcode(c)==UTF8PROC_CATEGORY_ZS
                                
 isprint(c::Char) = (UTF8PROC_CATEGORY_LU <= _catcode(c) <= UTF8PROC_CATEGORY_ZS)
 isgraph(c::Char) = (UTF8PROC_CATEGORY_LU <= _catcode(c) <= UTF8PROC_CATEGORY_SO)
