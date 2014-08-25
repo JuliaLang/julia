@@ -56,24 +56,28 @@ immutable DateFormat
     trans #trans[i] == how to transition FROM slots[i] TO slots[i+1]
 end
 
+immutable DayOfWeekSlot <: AbstractTime end
+
 duplicates(slots) = any(map(x->count(y->x.period==y.period,slots),slots) .> 1)
 
 function DateFormat(f::String,locale::String="english")
     slots = Slot[]
     trans = {}
-    begtran = match(r"^.*?(?=[ymuUdHMSs])",f).match
-    ss = split(f,r"^.*?(?=[ymuUdHMSs])")
-    s = split(begtran == "" ? ss[1] : ss[2],r"[^ymuUdHMSs]|(?<=([ymuUdHMSs])(?!\1))")
+    begtran = match(r"^.*?(?=[ymuUdHMSsEe])",f).match
+    ss = split(f,r"^.*?(?=[ymuUdHMSsEe])")
+    s = split(begtran == "" ? ss[1] : ss[2],r"[^ymuUdHMSsEe]+|(?<=([ymuUdHMSsEe])(?!\1))")
     for (i,k) in enumerate(s)
         k == "" && break
         tran = i >= endof(s) ? r"$" : match(Regex("(?<=$(s[i])).*(?=$(s[i+1]))"),f).match
         slot = tran == "" || tran == r"$" ? FixedWidthSlot : DelimitedSlot
         width = length(k)
-        typ = 'y' in k ? Year : 'm' in k ? Month : 
+        typ = 'E' in k ? DayOfWeekSlot : 'e' in k ? DayOfWeekSlot :
+              'y' in k ? Year : 'm' in k ? Month : 
               'u' in k ? Month : 'U' in k ? Month :
               'd' in k ? Day : 'H' in k ? Hour : 
               'M' in k ? Minute : 'S' in k ? Second : Millisecond 
-        option = 'U' in k ? 2 : 'u' in k ? 1 : 0
+        option = 'E' in k ? 2 : 'e' in k ? 1 :
+                 'U' in k ? 2 : 'u' in k ? 1 : 0
         push!(slots,slot(i,typ,width,option,locale))
         push!(trans,tran)
     end
@@ -82,18 +86,18 @@ function DateFormat(f::String,locale::String="english")
 end
 
 const SLOTERROR = ArgumentError("Non-digit character encountered")
-slotparse(slot,x) = !ismatch(r"\D",x) ? slot.period(x) : throw(SLOTERROR)
+slotparse(slot,x) = !ismatch(r"[^0-9\s]",x) ? slot.period(x) : throw(SLOTERROR)
 function slotparse(slot::Slot{Month},x)
     if slot.option == 0
-        ismatch(r"\D",x) && throw(SLOTERROR)
-        return Month(x)
+        ismatch(r"[^0-9\s]",x) ? throw(SLOTERROR) : return Month(x)
     elseif slot.option == 1
         return Month(MONTHTOVALUEABBR[slot.locale][lowercase(x)])
     else
         return Month(MONTHTOVALUE[slot.locale][lowercase(x)])
     end
 end
-slotparse(slot::Slot{Millisecond},x) = !ismatch(r"\D",x) ? slot.period(parsefloat("."*x)*1000.0) : throw(SLOTERROR)
+slotparse(slot::Slot{Millisecond},x) = !ismatch(r"[^0-9\s]",x) ? slot.period(parsefloat("."*x)*1000.0) : throw(SLOTERROR)
+slotparse(slot::Slot{DayOfWeekSlot},x) = nothing
 
 function getslot(x,slot::DelimitedSlot,df,cursor)
     endind = first(search(x,df.trans[slot.i],cursor+1))
@@ -108,13 +112,13 @@ getslot(x,slot,df,cursor) = (cursor+slot.width, slotparse(slot,x[cursor:(cursor+
 function parse(x::String,df::DateFormat)
     x = strip(replace(x, r"#.*$", ""))
     x = replace(x,df.begtran,"")
-    isempty(x) && throw(ArgumentError("Cannot parse empty string"))
+    isempty(x) && throw(ArgumentError("Cannot parse empty format string"))
     (typeof(df.slots[1]) <: DelimitedSlot && first(search(x,df.trans[1])) == 0) && throw(ArgumentError("Delimiter mismatch. Couldn't find first delimiter, \"$(df.trans[1])\", in date string"))
     periods = Period[]
     cursor = 1
     for slot in df.slots
         cursor, pe = getslot(x,slot,df,cursor)
-        push!(periods,pe)
+        pe != nothing && push!(periods,pe)
         cursor > endof(x) && break
     end
     return sort!(periods,rev=true,lt=periodisless)
@@ -131,6 +135,13 @@ function slotformat(slot::Slot{Month},dt)
         return VALUETOMONTH[slot.locale][month(dt)]
     end
 end
+function slotformat(slot::Slot{DayOfWeekSlot},dt)
+    if slot.option == 1
+        return VALUETODAYOFWEEKABBR[slot.locale][dayofweek(dt)]
+    else # == 2
+        return VALUETODAYOFWEEK[slot.locale][dayofweek(dt)]
+    end
+end
 slotformat(slot::Slot{Millisecond},dt) = rpad(string(millisecond(dt)/1000.0)[3:end], slot.width, "0")
 
 function format(dt::TimeType,df::DateFormat)
@@ -145,6 +156,7 @@ end
 # UI
 const ISODateTimeFormat = DateFormat("yyyy-mm-ddTHH:MM:SS.s")
 const ISODateFormat = DateFormat("yyyy-mm-dd")
+const RFC1123Format = DateFormat("e, dd u yyyy HH:MM:SS")
 
 DateTime(dt::String,format::String;locale::String="english") = DateTime(dt,DateFormat(format,locale))
 DateTime(dt::String,df::DateFormat=ISODateTimeFormat) = DateTime(parse(dt,df)...)
