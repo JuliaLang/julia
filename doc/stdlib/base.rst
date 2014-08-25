@@ -892,12 +892,14 @@ Iterable Collections
 
 .. function:: first(coll)
 
-   Get the first element of an iterable collection.
+   Get the first element of an iterable collection. Returns the start point of a ``Range``
+   even if it is empty.
 
 .. function:: last(coll)
 
    Get the last element of an ordered collection, if it can be computed in O(1) time.
    This is accomplished by calling ``endof`` to get the last index.
+   Returns the end point of a ``Range`` even if it is empty.
 
 .. function:: step(r)
 
