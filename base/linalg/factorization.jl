@@ -570,8 +570,9 @@ svdvals(x::Number) = [abs(x)]
 function \{T<:BlasFloat}(A::SVD{T}, B::StridedVecOrMat{T})
     n = length(A.S)
     Sinv = zeros(T, n)
-    Sinv[A.S .> sqrt(eps())] = 1.0 ./ A.S
-    scale(A.Vt', Sinv) * A.U[:,1:n]'B
+    k = length(find(A.S .> eps(real(float(one(T))))*maximum(A.S)))
+    Sinv[1:k] = one(T) ./ A.S[1:k]
+    A.Vt[1:k,:]' * (Sinv[1:k] .* (A.U[:,1:k]' * B))
 end
 
 # Generalized svd
