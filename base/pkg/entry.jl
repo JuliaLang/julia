@@ -102,30 +102,32 @@ function installed(pkg::String)
     return nothing # registered but not installed
 end
 
-function status(io::IO)
+function status(io::IO; pkgname::String = "")
+    showpkg(pkg) = (pkgname == "") ? (true) : (pkg == pkgname)
     reqs = Reqs.parse("REQUIRE")
     instd = Read.installed()
     required = sort!([keys(reqs)...])
     if !isempty(required)
-        println(io, "$(length(required)) required packages:")
+        showpkg("") && println(io, "$(length(required)) required packages:")
         for pkg in required
             ver,fix = pop!(instd,pkg)
-            status(io,pkg,ver,fix)
+            showpkg(pkg) && status(io,pkg,ver,fix)
         end
     end
     additional = sort!([keys(instd)...])
     if !isempty(additional)
-        println(io, "$(length(additional)) additional packages:")
+        showpkg("") && println(io, "$(length(additional)) additional packages:")
         for pkg in additional
             ver,fix = instd[pkg]
-            status(io,pkg,ver,fix)
+            showpkg(pkg) && status(io,pkg,ver,fix)
         end
     end
     if isempty(required) && isempty(additional)
         println(io, "No packages installed")
     end
 end
-# TODO: status(io::IO, pkg::String)
+
+status(io::IO, pkg::String) = status(io, pkgname = pkg)
 
 function status(io::IO, pkg::String, ver::VersionNumber, fix::Bool)
     @printf io " - %-29s " pkg
