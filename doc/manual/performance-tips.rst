@@ -446,7 +446,8 @@ These are some minor points that might help in tight inner loops.
 -  Use ``abs2(z)`` instead of ``abs(z)^2`` for complex ``z``. In general,
    try to rewrite code to use ``abs2`` instead of ``abs`` for complex arguments.
 -  Use ``div(x,y)`` for truncating division of integers instead of
-   ``trunc(x/y)``, and ``fld(x,y)`` instead of ``floor(x/y)``.
+   ``trunc(x/y)``, ``fld(x,y)`` instead of ``floor(x/y)``, and
+   ``cld(x,y)`` instead of ``ceil(x/y)``.
 
 Performance Annotations
 -----------------------
