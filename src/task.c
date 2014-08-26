@@ -791,6 +791,7 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 #ifdef JL_GC_MARKSWEEP
     t->gcstack = NULL;
 #endif
+    t->alloca_stack = NULL;
     t->stkbuf = NULL;
 
 #ifdef COPY_STACKS
