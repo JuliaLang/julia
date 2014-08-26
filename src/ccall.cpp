@@ -668,8 +668,9 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         jl_value_t *argi = args[4+i];
         Value *arg;
         bool needroot = false;
+        bool escape = (tti == (jl_value_t*)jl_any_type);
         if (t == jl_pvalue_llvmt || !jl_isbits(tti)) {
-            arg = emit_expr(argi, ctx, false, true);
+            arg = emit_expr(argi, ctx, escape, true);
             if (t == jl_pvalue_llvmt && arg->getType() != jl_pvalue_llvmt) {
                 arg = boxed(arg, ctx);
                 needroot = true;
@@ -998,7 +999,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     if (fptr == (void *) &jl_array_ptr ||
         (f_lib==NULL && f_name && !strcmp(f_name,"jl_array_ptr"))) {
         assert(lrt->isPointerTy());
-        Value *ary = emit_expr(args[4], ctx, false);
+        Value *ary = emit_expr(args[4], ctx, true);
         JL_GC_POP();
         return mark_or_box_ccall_result(builder.CreateBitCast(emit_arrayptr(ary),lrt),
                                         args[2], rt, static_rt, ctx);
@@ -1012,7 +1013,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             addressOf = true;
             argi = jl_exprarg(argi,0);
         }
-        Value *ary = boxed(emit_expr(argi, ctx, false),ctx);
+        Value *ary = boxed(emit_expr(argi, ctx, true),ctx);
         JL_GC_POP();
         return mark_or_box_ccall_result(builder.CreateBitCast(emit_nthptr_addr(ary, addressOf?1:0), lrt),
                                         args[2], rt, static_rt, ctx);
@@ -1103,8 +1104,9 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         }
         Value *arg;
         bool needroot = false;
+        bool escape = (jargty == (jl_value_t*)jl_any_type);
         if (largty == jl_pvalue_llvmt || largty->isStructTy()) {
-            arg = emit_expr(argi, ctx, false, true);
+            arg = emit_expr(argi, ctx, escape, true);
             if (largty == jl_pvalue_llvmt && arg->getType() != jl_pvalue_llvmt) {
                 arg = boxed(arg,ctx);
                 needroot = true;
