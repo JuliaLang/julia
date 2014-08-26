@@ -22,11 +22,17 @@ function dlsym_e(hnd::Ptr, s::Union(Symbol,String))
     ccall(:jl_dlsym_e, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
 end
 
+dlopen(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
+    dlopen(string(s), flags)
+
 dlopen(s::String, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
     ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},Uint32), s, flags)
 
 dlopen_e(s::String, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
     ccall(:jl_load_dynamic_library_e, Ptr{Void}, (Ptr{Uint8},Uint32), s, flags)
+
+dlopen_e(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
+    dlopen_e(string(s), flags)
 
 dlclose(p::Ptr) = if p!=C_NULL; ccall(:uv_dlclose,Void,(Ptr{Void},),p); end
 
