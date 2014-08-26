@@ -315,8 +315,11 @@ end
 ## file downloading ##
 
 downloadcmd = nothing
-@unix_only function download(url::String, filename::String)
+@unix_only function download(url::String, filename::String, overwrite::Bool=true)
     global downloadcmd
+    if !overwrite && isfile(filename)
+        return filename
+    end
     if downloadcmd === nothing
         for checkcmd in (:curl, :wget, :fetch)
             if success(`which $checkcmd` |> DevNull)
@@ -337,7 +340,10 @@ downloadcmd = nothing
     filename
 end
 
-@windows_only function download(url::String, filename::String)
+@windows_only function download(url::String, filename::String, overwrite::Bool=true)
+    if !overwrite && isfile(filename)
+        return filename
+    end
     res = ccall((:URLDownloadToFileW,:urlmon),stdcall,Cuint,
                 (Ptr{Void},Ptr{Uint16},Ptr{Uint16},Cint,Ptr{Void}),0,utf16(url),utf16(filename),0,0)
     if res != 0
