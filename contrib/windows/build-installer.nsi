@@ -11,6 +11,10 @@ ShowInstDetails show
 RequestExecutionLevel user
 BrandingText "Julia ${Version}"
 
+# Uninstall settings
+!define UninstLog "uninstall.log"
+var UninstLog
+
 # User interface changes
 var Checkbox
 
@@ -25,7 +29,7 @@ FunctionEnd
 Function createDesktopLink
   ${NSD_GetState} $Checkbox $0
   ${If} $0 <> 0
-    CreateShortCut "$DESKTOP\Julia.lnk" "$INSTDIR\bin\julia.exe"
+    CreateShortCut "$DESKTOP\julia.lnk" "$INSTDIR\bin\julia.exe"
   ${EndIf}
 FunctionEnd
 
@@ -34,7 +38,7 @@ FunctionEnd
 
 # Variable definitions used in installer pages
 InstallDir "$LOCALAPPDATA\Julia-${Version}"
-!define StartMenuFolder "Julia ${Version}" 
+!define JuliaStartMenuFolder "Julia ${Version}"
 
 # Page settings
 # Note that we repurpose the checkboxes on the FinishPage
@@ -82,21 +86,71 @@ Section "Dummy Section" SecDummy
     WriteRegDWORD HKCU "${ARP}" "NoModify" "1"
     WriteRegDWORD HKCU "${ARP}" "NoRepair" "1"
 SectionEnd
- 
+
 Section "uninstall"
-    Delete "$INSTDIR/uninstall.exe"
-    Delete "$DESKTOP\Julia.lnk"
+    Delete "$DESKTOP\julia.lnk"
+    Delete "$INSTDIR\julia.lnk"
     DeleteRegKey HKCU "${ARP}"
-    RMDir /r "$SMPROGRAMS\${StartMenuFolder}"
-    RMDir /r "$INSTDIR/"
+
+    # Remove Start Menu entries
+    Delete "$SMPROGRAMS\${JuliaStartMenuFolder}\julia.lnk"
+    Delete "$SMPROGRAMS\${JuliaStartMenuFolder}\Uninstall.lnk"
+    RMDir "$SMPROGRAMS\${JuliaStartMenuFolder}"
+
+
+    # Remove only files listed in uninstall log
+    IfFileExists "$INSTDIR\etc\${UninstLog}" +3
+        MessageBox MB_OK|MB_ICONSTOP "Missing uninstall log: ${UninstLog}"
+            Abort
+
+    Push $R0
+    Push $R1
+    Push $R2
+    SetFileAttributes "$INSTDIR\etc\${UninstLog}" NORMAL
+    FileOpen $UninstLog "$INSTDIR\etc\${UninstLog}" r
+    StrCpy $R1 -1
+
+    GetLineCount:
+        ClearErrors
+        FileRead $UninstLog $R0
+        IntOp $R1 $R1 + 1
+        StrCpy $R0 $R0 -2
+        Push $R0
+        IfErrors 0 GetLineCount
+    Pop $R0
+
+    LoopRead:
+        StrCmp $R1 0 LoopDone
+        Pop $R0
+
+        IfFileExists "$INSTDIR\$R0\*.*" 0 +3
+            RMDir "$INSTDIR\$R0"  #is dir
+        Goto +3
+        IfFileExists "$INSTDIR\$R0" 0 +2
+            Delete "$INSTDIR\$R0" #is file
+
+        IntOp $R1 $R1 - 1
+        Goto LoopRead
+    LoopDone:
+    FileClose $UninstLog
+    Delete "$INSTDIR\etc\${UninstLog}"
+    RMDir "$INSTDIR\etc"
+    Delete "$INSTDIR\uninstall.exe"
+    SetOutPath $DESKTOP
+    RMDir "$INSTDIR"
+
+    Pop $R2
+    Pop $R1
+    Pop $R0
+    # End of file deletion section
 SectionEnd
 
 # Helper function to create Start Menu folder and shortcuts
 Function AddToStartMenu
-    CreateDirectory "$SMPROGRAMS\${StartMenuFolder}"
-    CreateShortcut "$SMPROGRAMS\${StartMenuFolder}\julia.lnk" "$INSTDIR\julia.lnk" "" "" "" "" "" "The Julia Language"
-    CreateShortcut "$SMPROGRAMS\${StartMenuFolder}\Uninstall.lnk" "$instdir\Uninstall.exe"
-FunctionEnd 
+    CreateDirectory "$SMPROGRAMS\${JuliaStartMenuFolder}"
+    CreateShortcut "$SMPROGRAMS\${JuliaStartMenuFolder}\julia.lnk" "$INSTDIR\julia.lnk" "" "" "" "" "" "The Julia Language"
+    CreateShortcut "$SMPROGRAMS\${JuliaStartMenuFolder}\Uninstall.lnk" "$instdir\Uninstall.exe"
+FunctionEnd
 
 # Opens the installation folder
 Function ShowInstallFolder
