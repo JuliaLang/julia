@@ -216,6 +216,7 @@ endif
 
 STDLIBCPP_FLAG = 
 
+ifneq ($(DISABLE_OSX_OVERRIDE), 1)
 ifeq ($(OS), Darwin)
 DARWINVER := $(shell uname -r | cut -b 1-2)
 DARWINVER_GTE13 := $(shell expr `uname -r | cut -b 1-2` \>= 13)
@@ -235,6 +236,7 @@ USE_LIBCPP = 0
 endif
 USEGCC = 0
 USECLANG = 1
+endif
 endif
 endif
 
