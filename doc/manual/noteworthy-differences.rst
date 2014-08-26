@@ -105,9 +105,9 @@ One of Julia's goals is to provide an effective language for data analysis and s
   functionality for Julia is found in `packages <http://pkg.julialang.org/>`_ like the
   DataFrames and Distributions packages:
 
-	- Distributions functions are found in the `Distributions package <https://github.com/JuliaStats/Distributions.jl>`_
+	- Distributions functions are found in the `Distributions package <https://github.com/JuliaStats/Distributions.jl>`_.
 	- The `DataFrames package <https://github.com/JuliaStats/DataFrames.jl>`_ provides data frames.
-	- Formulas for GLM's must be escaped: use ``:(y ~ x)`` instead of ``y ~ x``.
+	- Generalized linear models are provided by the `GLM package <https://github.com/JuliaStats/GLM.jl>`_.
 
 - Julia provides tuples and real hash tables, but not R's lists. When returning multiple items, you should typically use a tuple: instead of ``list(a = 1, b = 2)``, use ``(1, 2)``.
 - Julia encourages all users to write their own types. Julia's types are much easier to use than S3 or S4 objects in R. Julia's multiple dispatch system means that ``table(x::TypeA)`` and ``table(x::TypeB)`` act like R's ``table.TypeA(x)`` and ``table.TypeB(x)``.
