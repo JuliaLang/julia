@@ -502,7 +502,7 @@ Iteration
 Sequential iteration is implemented by the methods ``start``, ``done``, and
 ``next``. The general ``for`` loop::
 
-    for i = I
+    for i = I   # or  "for i in I"
       # body
     end
 
