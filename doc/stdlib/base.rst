@@ -1933,7 +1933,7 @@ I/O
 
    Copy a file from `src` to `dest`.
 
-.. function:: download(url,[localfile]; overwrite=false)
+.. function:: download(url,[localfile]; overwrite=true)
 
    Download a file from the given url, optionally renaming it to the given local file name.
    If the flag ``overwrite=false``  and `localfile` exists the file will not be downloaded.
