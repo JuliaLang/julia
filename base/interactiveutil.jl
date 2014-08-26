@@ -315,7 +315,7 @@ end
 ## file downloading ##
 
 downloadcmd = nothing
-@unix_only function download(url::String, filename::String, overwrite::Bool=true)
+@unix_only function download(url::String, filename::String; overwrite::Bool=true)
     global downloadcmd
     if !overwrite && isfile(filename)
         return filename
@@ -340,7 +340,7 @@ downloadcmd = nothing
     filename
 end
 
-@windows_only function download(url::String, filename::String, overwrite::Bool=true)
+@windows_only function download(url::String, filename::String; overwrite::Bool=true)
     if !overwrite && isfile(filename)
         return filename
     end
