@@ -1432,6 +1432,7 @@ static Value *init_bits_value(Value *newv, Value *jt, Type *t, Value *v)
 // allocate a box where the type might not be known at compile time
 static Value *allocate_box_dynamic(Value *jlty, Value *nb, Value *v)
 {
+    // TODO: allocate on the stack if !envescapes
     if (v->getType()->isPointerTy()) {
         v = builder.CreatePtrToInt(v, T_size);
     }

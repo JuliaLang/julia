@@ -355,7 +355,8 @@ struct jl_varinfo_t {
     bool isArgument;
     bool isGhost;     // Has size 0 and is thus never actually allocated
     bool hasGCRoot;
-    bool escapes;
+    bool envescapes;
+    bool varescapes;
     bool usedUndef;
     bool used;
     jl_value_t *declType;
@@ -363,8 +364,8 @@ struct jl_varinfo_t {
 
     jl_varinfo_t() : memvalue(NULL), SAvalue(NULL), passedAs(NULL), closureidx(-1),
                      isAssigned(true), isCaptured(false), isSA(false), isVolatile(false),
-                     isArgument(false), isGhost(false), hasGCRoot(false), escapes(true), 
-                     usedUndef(false), used(false), 
+                     isArgument(false), isGhost(false), hasGCRoot(false),
+                     envescapes(true), varescapes(true), usedUndef(false), used(false), 
                      declType((jl_value_t*)jl_any_type), initExpr(NULL)
     {
     }
@@ -1142,68 +1143,113 @@ static void mark_volatile_vars(jl_array_t *stmts, std::map<jl_sym_t*,jl_varinfo_
 
 // --- escape analysis ---
 
-static bool expr_is_symbol(jl_value_t *e)
-{
-    return (jl_is_symbol(e) || jl_is_symbolnode(e) || jl_is_topnode(e));
-}
-
 // a very simple, conservative escape analysis that is sufficient for
-// eliding allocation of varargs tuples.
+// eliding allocation of varargs tuples and stack allocating some variables
 // "esc" means "in escaping context"
-static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx)
+// "varesc" means "the var might appear in an expression"
+// "envesc" mean "the var might be used outside the function"
+static void simple_escape_analysis(jl_value_t *expr, bool varesc, bool envesc, jl_codectx_t *ctx)
 {
     if (jl_is_expr(expr)) {
-        esc = true;
         jl_expr_t *e = (jl_expr_t*)expr;
-        size_t i;
+        size_t i, elen = jl_array_dim0(e->args);
         if (e->head == call_sym || e->head == call1_sym || e->head == new_sym) {
-            int alen = jl_array_dim0(e->args);
+            i = 1;
             jl_value_t *f = jl_exprarg(e,0);
-            simple_escape_analysis(f, esc, ctx);
-            if (expr_is_symbol(f)) {
-                if (is_constant(f, ctx, false)) {
-                    jl_value_t *fv =
-                        jl_interpret_toplevel_expr_in(ctx->module, f, NULL, 0);
-                    if (jl_typeis(fv, jl_intrinsic_type)) {
-                        esc = false;
-                        JL_I::intrinsic fi = (JL_I::intrinsic)jl_unbox_int32(fv);
-                        if (fi == JL_I::ccall) {
-                            esc = true;
-                            simple_escape_analysis(jl_exprarg(e,1), esc, ctx);
-                            // 2nd and 3d arguments are static
-                            for(i=4; i < (size_t)alen; i+=2) {
-                                simple_escape_analysis(jl_exprarg(e,i), esc, ctx);
-                            }
-                            return;
-                        }
+            simple_escape_analysis(f, true, false, ctx);
+            jl_value_t *fv = static_eval(f, ctx, false);
+            if (fv) {
+                if (jl_typeis(fv, jl_intrinsic_type)) {
+                    JL_I::intrinsic fi = (JL_I::intrinsic)jl_unbox_int32(fv);
+                    if (fi == JL_I::ccall) {
+                        varesc = true;
+                        envesc = local_var_occurs(jl_exprarg(e,3),jl_any_type->name->name);
+                        simple_escape_analysis(jl_exprarg(e,1), varesc, envesc, ctx);
+                        // 2nd and 3d arguments are static
+                        i = 4;
                     }
-                    else if (jl_is_function(fv)) {
-                        jl_function_t *ff = (jl_function_t*)fv;
-                        if (ff->fptr == jl_f_tuplelen ||
-                            ff->fptr == jl_f_tupleref ||
-                            (ff->fptr == jl_f_apply && alen==3 &&
-                             expr_type(jl_exprarg(e,1),ctx) == (jl_value_t*)jl_function_type)) {
-                            esc = false;
-                        }
+                    else if (fi == JL_I::llvmcall) {
+                        varesc = true;
+                        envesc = false;
+                        // 1st, 2nd and 3d arguments are static
+                        i = 4;
+                    }
+                    else {
+                        varesc = false;
+                        envesc = false;
                     }
                 }
+                else if (jl_is_function(fv)) {
+                    jl_function_t *ff = (jl_function_t*)fv;
+                    if (ff->fptr == jl_f_tuplelen ||
+                        ff->fptr == jl_f_tupleref ||
+                        (ff->fptr == jl_f_apply && elen==3 &&
+                         expr_type(jl_exprarg(e,1),ctx) == (jl_value_t*)jl_function_type &&
+                         expr_type(jl_exprarg(e,2),ctx) == (jl_value_t*)jl_tuple_type)) {
+                        varesc = false;
+                        envesc = false;
+                    }
+                    else if (ff->fptr == jl_f_arrayref ||
+                             ff->fptr == jl_f_arraylen ||
+                             ff->fptr == jl_f_get_field ||
+                             ff->fptr == jl_f_typeof ||
+                             ff->fptr == jl_f_isa ||
+                             ff->fptr == jl_f_is ||
+                             ff->fptr == jl_f_subtype) {
+                        varesc = true;
+                        envesc = false;
+                    }
+                    else if (ff->fptr == jl_f_set_field) {
+                        simple_escape_analysis(jl_exprarg(e,1), true, false, ctx);
+                        varesc = true;
+                        envesc = true;
+                        i = 2;
+                    } else if (ff->fptr == jl_f_typeassert) {
+                        varesc = true;
+                        //envesc = envesc;
+                    }
+                    else {
+                        varesc = true;
+                        envesc = true;
+                    }
+                }
+                else {
+                    varesc = true;
+                    envesc = true;
+                }
             }
-
-            for(i=1; i < (size_t)alen; i++) {
-                simple_escape_analysis(jl_exprarg(e,i), esc, ctx);
+            else {
+                varesc = true;
+                envesc = true;
             }
         }
         else if (e->head == method_sym) {
-            simple_escape_analysis(jl_exprarg(e,0), esc, ctx);
-            simple_escape_analysis(jl_exprarg(e,1), esc, ctx);
-            simple_escape_analysis(jl_exprarg(e,2), esc, ctx);
+            varesc = true;
+            envesc = true;
+            i = 0;
         }
-        else if (e->head != line_sym) {
-            size_t elen = jl_array_dim0(e->args);
-            for(i=0; i < elen; i++) {
-                simple_escape_analysis(jl_exprarg(e,i), esc, ctx);
-            }
+        else if (e->head == assign_sym) {
+            varesc = true;
+            envesc = true;
+            i = 1;
         }
+        else if (e->head == line_sym) {
+            return;
+        }
+        else {
+            varesc = true;
+            envesc = true;
+            i = 0;
+        }
+        for(; i < elen; i++) {
+            simple_escape_analysis(jl_exprarg(e,i), varesc, envesc, ctx);
+        }
+        return;
+    }
+    if (jl_is_getfieldnode(expr)) {
+        varesc = true;
+        envesc = false;
+        simple_escape_analysis(jl_fieldref(expr,0), varesc, envesc, ctx);
         return;
     }
     jl_value_t *ty = expr_type(expr, ctx);
@@ -1214,7 +1260,8 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
         jl_sym_t *vname = ((jl_sym_t*)expr);
         if (ctx->vars.find(vname) != ctx->vars.end()) {
             jl_varinfo_t &vi = ctx->vars[vname];
-            vi.escapes |= esc;
+            vi.varescapes |= varesc;
+            vi.envescapes |= envesc;
             vi.usedUndef |= (jl_subtype((jl_value_t*)jl_undef_type,ty,0)!=0);
             if (!ctx->linfo->inferred)
                 vi.usedUndef = true;
@@ -1222,6 +1269,7 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
         }
     }
 }
+
 
 // --- gc root utils ---
 
@@ -1471,7 +1519,7 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx,
         unsigned idx = jl_field_index(sty, name, 0);
         if (idx != (unsigned)-1) {
             jl_value_t *jfty = jl_tupleref(sty->types, idx);
-            Value *strct = emit_expr(expr, ctx, escapes, false);
+            Value *strct = emit_expr(expr, ctx, false, false);
             if (strct->getType() == jl_pvalue_llvmt) {
                 Value *addr =
                     builder.CreateGEP(builder.CreateBitCast(strct, T_pint8),
@@ -1516,7 +1564,7 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx,
     JL_GC_POP();
 
     int argStart = ctx->argDepth;
-    Value *arg1 = boxed(emit_expr(expr, ctx, escapes),ctx,expr_type(expr,ctx));
+    Value *arg1 = boxed(emit_expr(expr, ctx, false),ctx,expr_type(expr,ctx));
     // TODO: generic getfield func with more efficient calling convention
     make_gcroot(arg1, ctx);
     Value *arg2 = literal_pointer_val((jl_value_t*)name);
@@ -1833,7 +1881,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 return tbaa_decorate(tbaa_user, builder.
                     CreateLoad(builder.CreateGEP(ctx->argArray,idx),false));
             }
-            Value *arg1 = emit_expr(args[1], ctx, escapes);
+            Value *arg1 = emit_expr(args[1], ctx, false);
             if (jl_is_long(args[2])) {
                 size_t tlen = jl_tuple_len(tty);
                 int isseqt =
@@ -1914,7 +1962,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         size_t sz = sizeof(void*)*nwords;
         escapes |= (sz >= 1024);
         // eval the first argument first, then do hand-over-hand to track the tuple.
-        Value *arg1val = emit_expr(args[1], ctx, escapes);
+        Value *arg1val = emit_expr(args[1], ctx, true);
         Value *arg1 = boxed(arg1val,ctx);
         if (arg1val->getType() != jl_pvalue_llvmt || might_need_root(args[1]))
             make_gcroot(arg1, ctx);
@@ -1964,7 +2012,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 make_gcroot(tup, ctx);
                 rooted = true;
             }
-            Value *argval = emit_expr(args[i+1], ctx, escapes);
+            Value *argval = emit_expr(args[i+1], ctx, true);
             if (argval->getType() != jl_pvalue_llvmt && !rooted) {
                 make_gcroot(tup, ctx);
                 rooted = true;
@@ -2056,7 +2104,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     ety = (jl_value_t*)jl_any_type;
                 jl_value_t *ndp = jl_tparam1(aty);
                 if (jl_is_long(ndp) || nargs==2) {
-                    Value *ary = emit_expr(args[1], ctx, escapes);
+                    Value *ary = emit_expr(args[1], ctx, false);
                     size_t nd = jl_is_long(ndp) ? jl_unbox_long(ndp) : 1;
                     Value *idx = emit_array_nd_index(ary, args[1], nd, &args[2], nargs-1, ctx);
                     JL_GC_POP();
@@ -2097,11 +2145,11 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                         emit_expr(args[2],ctx,false,false);
                     }
                     else {
-                        Instruction *I = dyn_cast<Instruction>(ary);
-                        escapes = !I || !I->getMetadata("isAlloca");
+                        //Instruction *I = dyn_cast<Instruction>(ary);
+                        //escapes = escapes || !I || !I->getMetadata("isAlloca");
                         typed_store(emit_arrayptr(ary,args[1],ctx), idx,
                                     ety == (jl_value_t*)jl_any_type ?
-                                        emit_expr(args[2],ctx,escapes) :
+                                        emit_expr(args[2],ctx,true) :
                                         emit_unboxed(args[2],ctx),
                                     ety, ctx);
                     }
@@ -2136,7 +2184,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             }
             else {
                 // unknown index
-                Value *strct = emit_expr(args[1], ctx, escapes);
+                Value *strct = emit_expr(args[1], ctx, false);
                 Value *idx = emit_unbox(T_size, emit_unboxed(args[2], ctx), (jl_value_t*)jl_long_type);
                 Type *llvm_st = strct->getType();
                 if (llvm_st == jl_pvalue_llvmt) {
@@ -2203,12 +2251,12 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 rt2 = rhst;
                 if (jl_is_leaf_type((jl_value_t*)sty) && jl_subtype(rhst, ft, 0)) {
                     // TODO: attempt better codegen for approximate types
-                    Value *strct = emit_expr(args[1], ctx, escapes);
+                    Value *strct = emit_expr(args[1], ctx, false);
                     Value *rhs;
                     if (sty->fields[idx].isptr) {
-                        Instruction *I = dyn_cast<Instruction>(strct);
-                        escapes = !I || !I->getMetadata("isAlloca");
-                        rhs = emit_expr(args[3], ctx, escapes);
+                        //Instruction *I = dyn_cast<Instruction>(strct);
+                        //escapes = escapes || !I || !I->getMetadata("isAlloca");
+                        rhs = emit_expr(args[3], ctx, true);
                     }
                     else {
                         rhs = emit_unboxed(args[3], ctx);
@@ -2563,7 +2611,13 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
     }
     else {
         jl_varinfo_t &vi = ctx->vars[s];
-        bool escapes = vi.escapes | vi.isVolatile;
+        if (!vi.used) { // variable assigned but never read
+            // emit the expression for possible side-effects
+            // but don't bother storing the result
+            emit_expr(r, ctx, false, true);
+            return;
+        }
+        bool escapes = vi.envescapes | vi.isVolatile;
         jl_value_t *rt = expr_type(r,ctx);
         if ((jl_is_symbol(r) || jl_is_symbolnode(r)) && rt == jl_bottom_type) {
             // sometimes x = y::None occurs
@@ -2580,7 +2634,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
                 rval = emit_unbox(vt->getContainedType(0), emit_unboxed(r, ctx), vi.declType);
             }
             else {
-                rval = boxed(emit_expr(r, ctx, true, true),ctx,rt);
+                rval = boxed(emit_expr(r, ctx, escapes, true),ctx,rt);
             }
             if (builder.GetInsertBlock()->getTerminator() == NULL) {
                 builder.CreateStore(rval, bp, vi.isVolatile);
@@ -2892,7 +2946,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool escapes,
                     // a couple store instructions. avoids initializing
                     // the first field to NULL, and sometimes the GC root
                     // for the new struct.
-                    Value *fval = emit_expr(args[1],ctx,escapes);
+                    Value *fval = emit_expr(args[1],ctx,true);
                     f1 = boxed(fval,ctx);
                     j++;
                     if (might_need_root(args[1]) || fval->getType() != jl_pvalue_llvmt)
@@ -2930,7 +2984,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool escapes,
                     }
                 }
                 for(size_t i=j+1; i < nargs; i++) {
-                    Value *rhs = emit_expr(args[i],ctx,escapes);
+                    Value *rhs = emit_expr(args[i],ctx,true);
                     if (sty->fields[i-1].isptr && rhs->getType() != jl_pvalue_llvmt &&
                         !needroots) {
                         // if this struct element needs boxing and we haven't rooted
@@ -2952,7 +3006,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool escapes,
                 return literal_pointer_val(jl_new_struct_uninit((jl_datatype_t*)ty));
             }
         }
-        Value *typ = emit_expr(args[0], ctx, /*escapes=*/true);
+        Value *typ = emit_expr(args[0], ctx, true);
         return emit_jlcall(jlnew_func, typ, &args[1], nargs-1, ctx);
     }
     else if (head == exc_sym) {
@@ -3386,7 +3440,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         jl_varinfo_t &varinfo = ctx.vars[vname];
         varinfo.isAssigned = (jl_vinfo_assigned(vi)!=0);
         varinfo.isCaptured = (jl_vinfo_capt(vi)!=0);
-        varinfo.escapes = varinfo.isCaptured;
+        varinfo.varescapes = varinfo.isCaptured;
+        varinfo.envescapes = varinfo.isCaptured;
         if (varinfo.isCaptured)
             varinfo.used = true;
         varinfo.isSA = (jl_vinfo_sa(vi)!=0);
@@ -3405,14 +3460,15 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         varinfo.isAssigned = (jl_vinfo_assigned(vi)!=0);
         varinfo.isCaptured = true;
         varinfo.used = true;
-        varinfo.escapes = true;
+        varinfo.varescapes = true;
+        varinfo.envescapes = true;
         varinfo.declType = jl_cellref(vi,1);
     }
 
     // step 3. some variable analysis
 
     // finish recording escape info
-    simple_escape_analysis((jl_value_t*)ast, true, &ctx);
+    simple_escape_analysis((jl_value_t*)ast, true, true, &ctx);
 
     // determine which vars need to be volatile
     jl_array_t *stmts = jl_lam_body(ast)->args;
@@ -3862,13 +3918,14 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     if (va) {
         jl_sym_t *argname = ctx.vaName;
         jl_varinfo_t &vi = ctx.vars[argname];
-        if (!vi.escapes && !vi.isAssigned) {
+        if (!vi.varescapes && !vi.isAssigned) {
             ctx.vaStack = true;
         }
         else if (!vi.isGhost) {
             // restarg = jl_f_tuple(NULL, &args[nreq], nargs-nreq)
             Value *lv = vi.memvalue;
             if (dyn_cast<GetElementPtrInst>(lv) != NULL || dyn_cast<AllocaInst>(lv)->getAllocatedType() == jl_pvalue_llvmt) {
+                // TODO: stack allocate if !envescapes
                 Value *restTuple =
                     builder.CreateCall3(prepare_call(jltuple_func), V_null,
                                         builder.CreateGEP(argArray,

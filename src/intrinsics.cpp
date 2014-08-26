@@ -456,7 +456,7 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     }
 
     // dynamically-determined type; evaluate.
-    return allocate_box_dynamic(emit_expr(targ, ctx, true), ConstantInt::get(T_size,(nb+7)/8), vx);
+    return allocate_box_dynamic(emit_expr(targ, ctx, false), ConstantInt::get(T_size,(nb+7)/8), vx);
 }
 
 static Type *staticeval_bitstype(jl_value_t *targ, const char *fname, jl_codectx_t *ctx)
@@ -696,7 +696,7 @@ static Value *emit_runtime_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t
                                        FunctionType::get(jl_pvalue_llvmt, two_pvalue_llvmt, false));
     int ldepth = ctx->argDepth;
     Value *parg = emit_boxed_rooted(e, ctx);
-    Value *iarg = boxed(emit_expr(i, ctx, true), ctx);
+    Value *iarg = boxed(emit_expr(i, ctx, false), ctx);
     Value *ret = builder.CreateCall2(prepare_call(preffunc), parg, iarg);
     ctx->argDepth = ldepth;
     return ret;
@@ -752,7 +752,7 @@ static Value *emit_runtime_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *
     int ldepth = ctx->argDepth;
     Value *parg = emit_boxed_rooted(e, ctx);
     Value *iarg = emit_boxed_rooted(i, ctx);
-    Value *xarg = boxed(emit_expr(x, ctx, true), ctx);
+    Value *xarg = boxed(emit_expr(x, ctx, false), ctx);
     builder.CreateCall3(prepare_call(psetfunc), parg, xarg, iarg);
     ctx->argDepth = ldepth;
     return parg;
@@ -772,7 +772,7 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
     jl_value_t *xty = expr_type(x, ctx);
     Value *val=NULL;
     if (!jl_subtype(xty, ety, 0)) {
-        val = emit_expr(x,ctx,true);
+        val = emit_expr(x,ctx,false);
         emit_typecheck(val, ety, "pointerset: type mismatch in assign", ctx);
     }
     if (expr_type(i, ctx) != (jl_value_t*)jl_long_type)
