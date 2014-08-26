@@ -975,7 +975,7 @@ end
 function indentation(s::String)
     count = 0
     for c in s
-        if isblank(c)
+        if c == ' ' || c == '\t'
             count += blank_width(c)
         else
             return count, false
@@ -993,7 +993,7 @@ function unindent(s::String, indent::Int)
     cut = 0
     while !done(s,i)
         c,i_ = next(s,i)
-        if cutting && isblank(c)
+        if cutting && (c == ' ' || c == '\t')
             a = i_
             cut += blank_width(c)
             if cut == indent

@@ -176,8 +176,5 @@ for name = ("alnum", "alpha", "cntrl", "digit", "number", "graph",
     end
 end
 
-isblank(c::Char) = c==' ' || c=='\t'
-isblank(s::String) = all(isblank, s)
-
 
 end # module
