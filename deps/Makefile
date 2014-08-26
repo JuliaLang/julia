@@ -527,7 +527,7 @@ ifeq ($(USEICC), 1)
 UV_CFLAGS += -static-intel
 endif
 
-UV_OPTS += LDFLAGS="$(CLDFLAGS) -v"
+UV_OPTS += LDFLAGS="$(LDFLAGS) $(CLDFLAGS) -v"
 ifneq ($(UV_CFLAGS),)
 UV_OPTS += CFLAGS="$(UV_CFLAGS)"
 endif
