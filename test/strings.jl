@@ -1210,3 +1210,25 @@ let
     end
 
 end
+
+@test isspace("  \t   \n   \r  ")==true
+@test isgraph("  \t   \n   \r  ")==false
+@test isprint("  \t   \n   \r  ")==false
+@test isalpha("  \t   \n   \r  ")==false
+@test isnumber("  \t   \n   \r  ")==false
+@test ispunct("  \t   \n   \r  ")==false
+
+@test isspace("ΣβΣβ")==false
+@test isalpha("ΣβΣβ")==true
+@test isgraph("ΣβΣβ")==true
+@test isprint("ΣβΣβ")==true
+@test isupper("ΣβΣβ")==false
+@test islower("ΣβΣβ")==false
+@test isnumber("ΣβΣβ")==false
+@test iscntrl("ΣβΣβ")==false
+@test ispunct("ΣβΣβ")==false
+
+@test isnumber("23435")==true
+@test isdigit("23435")==true
+@test isalnum("23435")==true
+@test isalpha("23435")==false
