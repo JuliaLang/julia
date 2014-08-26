@@ -449,7 +449,7 @@ UV_OBJ_TARGET = $(build_libdir)/libuv.a
 ifneq ($(USEMSVC), 1)
 UV_OPTS =
 else
-UV_OPTS = CFLAGS=-DBUILDING_UV_SHARED
+UV_OPTS = CFLAGS=-DBUILDING_UV_SHARED LDFLAGS="$(LDFLAGS)"
 endif
 
 libuv/configure:
