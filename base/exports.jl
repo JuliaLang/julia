@@ -823,7 +823,6 @@ export
     isalnum,
     isalpha,
     isascii,
-    #isblank,
     iscntrl,
     isdigit,
     isgraph,
