@@ -1204,9 +1204,16 @@ static void simple_escape_analysis(jl_value_t *expr, bool varesc, bool envesc, j
                         varesc = true;
                         envesc = true;
                         i = 2;
-                    } else if (ff->fptr == jl_f_typeassert) {
-                        varesc = true;
-                        //envesc = envesc;
+                    }
+                    else if (ff->fptr == jl_f_typeassert) {
+                        simple_escape_analysis(jl_exprarg(e,1), true, envesc, ctx);
+                        simple_escape_analysis(jl_exprarg(e,2), true, false, ctx);
+                        return;
+                    }
+                    else if ( ff->fptr == jl_f_convert_default) {
+                        simple_escape_analysis(jl_exprarg(e,1), true, false, ctx);
+                        simple_escape_analysis(jl_exprarg(e,2), true, envesc, ctx);
+                        return;
                     }
                     else {
                         varesc = true;
@@ -1232,6 +1239,9 @@ static void simple_escape_analysis(jl_value_t *expr, bool varesc, bool envesc, j
             varesc = true;
             envesc = true;
             i = 1;
+        }
+        else if (e->head == amp_sym) {
+            i = 0;
         }
         else if (e->head == line_sym) {
             return;
