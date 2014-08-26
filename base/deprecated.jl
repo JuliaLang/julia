@@ -172,4 +172,4 @@ scale!{T<:Base.LinAlg.BlasReal}(X::Array{T}, s::Complex) = error("scale!: Cannot
 
 @deprecate isblank(c::Char) c == ' ' || c == '\t'
 @deprecate isblank(s::String) all(c -> c == ' ' || c == '\t', s)
-export isblank
+
