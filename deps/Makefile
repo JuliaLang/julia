@@ -527,7 +527,7 @@ ifeq ($(USEICC), 1)
 UV_CFLAGS += -static-intel
 endif
 
-UV_OPTS += LDFLAGS="$(CLDFLAGS) -v"
+UV_OPTS += LDFLAGS="$(LDFLAGS) $(CLDFLAGS) -v"
 ifneq ($(UV_CFLAGS),)
 UV_OPTS += CFLAGS="$(UV_CFLAGS)"
 endif
@@ -1088,7 +1088,7 @@ ARPACK_MFLAGS = F77="$(FC)" MPIF77="$(FC)"
 ARPACK_FFLAGS += $(FFLAGS) $(JFFLAGS)
 ARPACK_FLAGS = --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared FFLAGS="$(ARPACK_FFLAGS)"
 ifneq ($(OS),WINNT)
-ARPACK_FLAGS += LDFLAGS="-Wl,-rpath,'$(build_libdir)'"
+ARPACK_FLAGS += LDFLAGS="$(LDFLAGS) -Wl,-rpath,'$(build_libdir)'"
 endif
 
 # ARPACK-NG upstream keeps changing their download filenames
@@ -1481,7 +1481,7 @@ install-unwind: $(LIBUNWIND_TARGET_OBJ)
 
 ## OS X Unwind ##
 
-OSXUNWIND_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) CFLAGS="-ggdb3 -O0" CXXFLAGS="-ggdb3 -O0" SFLAGS="-ggdb3" LDFLAGS="-Wl,-macosx_version_min,10.7"
+OSXUNWIND_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) CFLAGS="-ggdb3 -O0" CXXFLAGS="$(CXXFLAGS) -ggdb3 -O0" SFLAGS="-ggdb3" LDFLAGS="-Wl,-macosx_version_min,10.7"
 
 OSXUNWIND_OBJ_TARGET = $(build_shlibdir)/libosxunwind.$(SHLIB_EXT)
 OSXUNWIND_OBJ_SOURCE = libosxunwind-$(OSXUNWIND_VER)/libosxunwind.$(SHLIB_EXT)
