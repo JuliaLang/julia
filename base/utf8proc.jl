@@ -161,11 +161,19 @@ isspace(c::Char) = c==' ' || '\t'<=c<='\r' || c==0x85 || _catcode(c)==UTF8PROC_C
 isprint(c::Char) = (UTF8PROC_CATEGORY_LU <= _catcode(c) <= UTF8PROC_CATEGORY_ZS)
 isgraph(c::Char) = (UTF8PROC_CATEGORY_LU <= _catcode(c) <= UTF8PROC_CATEGORY_SO)
 
-
-for name = ("alnum", "alpha", "cntrl", "digit", "graph",
-                     "lower", "number","print", "punct", "space", "upper")
+for name = ("alnum", "alpha", "cntrl", "digit", "number", "graph",
+            "lower", "print", "punct", "space", "upper")
     f = symbol(string("is",name))
-    @eval $f(s::String) = all($f, s)
+    @eval begin
+        function $f(s::String)
+            for c in s
+                if !$f(c)
+                    return false
+                end
+            end
+            return true
+        end
+    end
 end
 
 isblank(c::Char) = c==' ' || c=='\t'
