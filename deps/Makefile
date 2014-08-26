@@ -133,16 +133,16 @@ endif
 
 ## Common build target prefixes
 
-LIBS = $(STAGE1_DEPS) $(STAGE2_DEPS) $(STAGE3_DEPS)
+DEP_LIBS = $(STAGE1_DEPS) $(STAGE2_DEPS) $(STAGE3_DEPS)
 
 default: $(build_prefix) install
-get: $(addprefix get-, $(LIBS))
-configure: $(addprefix configure-, $(LIBS))
-compile: $(addprefix compile-, $(LIBS))
-check: $(addprefix check-, $(LIBS))
-install: $(addprefix install-, $(LIBS))
-cleanall: $(addprefix clean-, $(LIBS))
-distcleanall: $(addprefix distclean-, $(LIBS))
+get: $(addprefix get-, $(DEP_LIBS))
+configure: $(addprefix configure-, $(DEP_LIBS))
+compile: $(addprefix compile-, $(DEP_LIBS))
+check: $(addprefix check-, $(DEP_LIBS))
+install: $(addprefix install-, $(DEP_LIBS))
+cleanall: $(addprefix clean-, $(DEP_LIBS))
+distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
 getall: get-llvm get-uv get-pcre get-double-conversion get-openlibm get-openspecfun get-dsfmt get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf get-utf8proc
 
