@@ -218,20 +218,9 @@ const DecimalExponentDistance = 8
 const MinDecimalExponent = -348
 const MaxDecimalExponent = 340
 
-function GetCachedPowerForBinaryExponentRange(
-            min_exponent::Int,
-            max_exponent::Int)
-    kQ = 64
-    k = ceil((min_exponent+kQ-1)*D_1_LOG2_10)
-    foo = CachedPowersOffset
-    index = div(foo+itrunc(k)-1,DecimalExponentDistance) + 1
-    cp = CachedPowers[index+1]
-    return cp
-end
-
-function GetCachedPowerForDecimalExponent(
-    requested_exponent::Int)
-    index = div(requested_exponent + CachedPowersOffset,DecimalExponentDistance)
+function binexp_cache(min_exponent,max_exponent)
+    k = iceil((min_exponent+63)*D_1_LOG2_10)
+    index = div(CachedPowersOffset+k-1,DecimalExponentDistance) + 1
     cp = CachedPowers[index+1]
     return cp
 end

@@ -10,9 +10,10 @@ const PRECISION = 3
 const DIGITS = Array(Uint8,309+17)
 
 include("grisu/float.jl")
-include("grisu/fastdtoa.jl")
-include("grisu/fastfixedtoa.jl")
-include("grisu/bignum-dtoa.jl")
+include("grisu/fastshortest.jl")
+include("grisu/fastprecision.jl")
+include("grisu/fastfixed.jl")
+include("grisu/bignum.jl")
 
 function grisu(v::FloatingPoint,mode,requested_digits,buffer=DIGITS)
     if signbit(v)
@@ -33,11 +34,11 @@ function grisu(v::FloatingPoint,mode,requested_digits,buffer=DIGITS)
         return len, point, neg, buffer
     end
     if mode == SHORTEST
-        status,len,point,buf = fastdtoa(v,SHORTEST,0,buffer)
+        status,len,point,buf = fastshortest(v,buffer)
     elseif mode == FIXED
         status,len,point,buf = fastfixedtoa(v,0,requested_digits,buffer)
     elseif mode == PRECISION
-        status,len,point,buf = fastdtoa(v,PRECISION,requested_digits,buffer)
+        status,len,point,buf = fastprecision(v,requested_digits,buffer)
     end
     status && return len-1, point, neg, buf
     status, len, point, buf = bignumdtoa(v,mode,requested_digits,buffer)
