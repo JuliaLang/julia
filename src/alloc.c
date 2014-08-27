@@ -129,6 +129,8 @@ static jl_value_t *jl_new_bits_internal(jl_value_t *dt, void *data, size_t *len)
 
     jl_datatype_t *bt = (jl_datatype_t*)dt;
     size_t nb = jl_datatype_size(bt);
+    if (nb == 0)
+        return jl_new_struct_uninit(bt);
     *len = LLT_ALIGN(*len, bt->alignment);
     data = (char*)data + (*len);
     *len += nb;
@@ -175,6 +177,7 @@ DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i)
 void jl_assign_bits(void *dest, jl_value_t *bits)
 {
     size_t nb = jl_datatype_size(jl_typeof(bits));
+    if (nb == 0) return;
     switch (nb) {
     case  1: *(int8_t*)dest    = *(int8_t*)jl_data_ptr(bits);    break;
     case  2: *(int16_t*)dest   = *(int16_t*)jl_data_ptr(bits);   break;
@@ -270,7 +273,6 @@ DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...)
     for(size_t i=0; i < nf; i++) {
         jl_set_nth_field(jv, i, va_arg(args, jl_value_t*));
     }
-    if (type->size == 0) type->instance = jv;
     va_end(args);
     return jv;
 }
@@ -287,7 +289,6 @@ DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, uin
         if (type->fields[i].isptr)
             *(jl_value_t**)((char*)jv+jl_field_offset(type,i)+sizeof(void*)) = NULL;
     }
-    if (type->size == 0) type->instance = jv;
     return jv;
 }
 
@@ -295,8 +296,8 @@ DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type)
 {
     if (type->instance != NULL) return type->instance;
     jl_value_t *jv = newstruct(type);
-    if (type->size == 0) type->instance = jv;
-    else memset(&((void**)jv)[1], 0, type->size);
+    if (type->size > 0)
+        memset(&((void**)jv)[1], 0, type->size);
     return jv;
 }
 
@@ -661,9 +662,9 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     for(size_t i=0; i < jl_tuple_len(st->types); i++) {
         jl_value_t *ty = jl_tupleref(st->types, i);
         size_t fsz, al;
-        if (jl_isbits(ty) && (al=((jl_datatype_t*)ty)->alignment)!=0 &&
-            jl_is_leaf_type(ty)) {
+        if (jl_isbits(ty) && jl_is_leaf_type(ty)) {
             fsz = jl_datatype_size(ty);
+            al = ((jl_datatype_t*)ty)->alignment;
             st->fields[i].isptr = 0;
         }
         else {
@@ -672,9 +673,11 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             st->fields[i].isptr = 1;
             ptrfree = 0;
         }
-        sz = LLT_ALIGN(sz, al);
-        if (al > alignm)
-            alignm = al;
+        if (al != 0) {
+            sz = LLT_ALIGN(sz, al);
+            if (al > alignm)
+                alignm = al;
+        }
         st->fields[i].offset = sz;
         st->fields[i].size = fsz;
         sz += fsz;

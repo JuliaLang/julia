@@ -1949,7 +1949,15 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             // recursively instantiate the types of the fields
             ndt->types = (jl_tuple_t*)inst_type_w_((jl_value_t*)ftypes, env, n, stack, 1);
             if (!isabstract) {
-                jl_compute_field_offsets(ndt);
+                if (jl_tuple_len(ftypes) == 0) {
+                    ndt->alignment = ndt->size = dt->size;
+                    ndt->pointerfree = dt->pointerfree;
+                }
+                else {
+                    jl_compute_field_offsets(ndt);
+                }
+                if (ndt->size == 0 && tn != jl_array_typename)
+                    ndt->instance = newstruct(ndt);
             }
             else {
                 ndt->size = 0;
@@ -1957,10 +1965,6 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             }
             if (tn == jl_array_typename)
                 ndt->pointerfree = 0;
-            if (jl_tuple_len(ftypes) == 0) {
-                ndt->alignment = ndt->size = dt->size;
-                ndt->pointerfree = dt->pointerfree;
-            }
         }
         if (cacheable) cache_type_((jl_value_t*)ndt);
         result = (jl_value_t*)ndt;
