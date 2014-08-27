@@ -1,6 +1,6 @@
 const kDoubleSignificandSize = 53
 
-function FillDigits32FixedLength(n1,requested_len,buffer,len)
+function filldigits32fixedlength(n1,requested_len,buffer,len)
     for i = (requested_len-1):-1:0
         buffer[len+i] = 0x30 + n1 % 10
         n1 = div(n1,10)
@@ -8,7 +8,7 @@ function FillDigits32FixedLength(n1,requested_len,buffer,len)
     return len + requested_len
 end
 
-function FillDigits32(n,buffer,len)
+function filldigits32(n,buffer,len)
     n_len = 0
     while n != 0
         digit = n % 10
@@ -25,36 +25,36 @@ function FillDigits32(n,buffer,len)
     return len + n_len
 end
 
-function FillDigits64FixedLength(n2,buffer,len)
+function filldigits64fixedlength(n2,buffer,len)
     kTen7 = 10000000
     part2 = n2 % kTen7
     n2 = div(n2,kTen7)
     part0, part1 = divrem(n2,kTen7)
-    len = FillDigits32FixedLength(part0, 3, buffer, len)
-    len = FillDigits32FixedLength(part1, 7, buffer, len)
-    len = FillDigits32FixedLength(part2, 7, buffer, len)
+    len = filldigits32fixedlength(part0, 3, buffer, len)
+    len = filldigits32fixedlength(part1, 7, buffer, len)
+    len = filldigits32fixedlength(part2, 7, buffer, len)
     return len
 end
 
-function FillDigits64(n3,buffer,len)
+function filldigits64(n3,buffer,len)
     kTen7 = 10000000
     part2 = n3 % kTen7
     n3 = div(n3,kTen7)
     part0, part1 = divrem(n3,kTen7)
     if part0 != 0
-        len = FillDigits32(part0, buffer, len)
-        len = FillDigits32FixedLength(part1, 7, buffer, len)
-        len = FillDigits32FixedLength(part2, 7, buffer, len)
+        len = filldigits32(part0, buffer, len)
+        len = filldigits32fixedlength(part1, 7, buffer, len)
+        len = filldigits32fixedlength(part2, 7, buffer, len)
     elseif part1 != 0
-        len = FillDigits32(part1, buffer, len)
-        len = FillDigits32FixedLength(part2, 7, buffer, len)
+        len = filldigits32(part1, buffer, len)
+        len = filldigits32fixedlength(part2, 7, buffer, len)
     else
-        len = FillDigits32(part2, buffer, len)
+        len = filldigits32(part2, buffer, len)
     end
     return len
 end
 
-function RoundUp(buffer, len, decimal_point)
+function roundup(buffer, len, decimal_point)
     if len == 1
         buffer[1] = 0x31
         decimal_point = 1
@@ -74,7 +74,7 @@ function RoundUp(buffer, len, decimal_point)
     return len, decimal_point
 end
 
-function FillFractionals(fractionals, exponent,
+function fillfractionals(fractionals, exponent,
                          fractional_count, buffer,
                          len, decimal_point)
     if -exponent <= 64
@@ -89,7 +89,7 @@ function FillFractionals(fractionals, exponent,
             fractionals -= uint64(digit) << point
         end
         if ((fractionals >> (point - 1)) & 1) == 1
-            len, decimal_point = RoundUp(buffer, len, decimal_point)
+            len, decimal_point = roundup(buffer, len, decimal_point)
         end
     else
         fract128 = uint128(fractionals) << 64
@@ -104,7 +104,7 @@ function FillFractionals(fractionals, exponent,
             len += 1
         end
         if bitat(fract128,point - 1) == 1
-            len, decimal_point = RoundUp(buffer, len, decimal_point)
+            len, decimal_point = roundup(buffer, len, decimal_point)
         end
     end
     return len, decimal_point
@@ -149,7 +149,7 @@ function shift(x::Uint128,amt)
     end
 end
 
-function TrimZeros(buffer, len, decimal_point)
+function trimzeros(buffer, len, decimal_point)
     while len > 1 && buffer[len - 1] == 0x30
         len -= 1
     end
@@ -176,7 +176,7 @@ function fastfixedtoa(v,mode,fractional_count,buffer)
     len = 1
     if exponent + kDoubleSignificandSize > 64
         kFive17 = divisor = int64(5)^17
-        divisor_power = int64(17)
+        divisor_power = 17
         dividend = significand
         if exponent > divisor_power
             dividend <<= exponent - divisor_power
@@ -187,33 +187,33 @@ function fastfixedtoa(v,mode,fractional_count,buffer)
             quotient = div(dividend,divisor)
             remainder = (dividend % divisor) << exponent
         end
-        len = FillDigits32(quotient, buffer, len)
-        len = FillDigits64FixedLength(remainder, buffer, len)
+        len = filldigits32(quotient, buffer, len)
+        len = filldigits64fixedlength(remainder, buffer, len)
         decimal_point = len-1
     elseif exponent >= 0
         significand <<= exponent
-        len = FillDigits64(significand, buffer, len)
+        len = filldigits64(significand, buffer, len)
         decimal_point = len-1
     elseif exponent > -kDoubleSignificandSize
         integrals = significand >> -exponent
         fractionals = significand - (integrals << -exponent)
         if integrals > 0xFFFFFFFF
-            len = FillDigits64(integrals,buffer,len)
+            len = filldigits64(integrals,buffer,len)
         else
-            len = FillDigits32(uint32(integrals),buffer,len)
+            len = filldigits32(uint32(integrals),buffer,len)
         end
         decimal_point = len-1
-        len, decimal_point = FillFractionals(fractionals,exponent,fractional_count,
+        len, decimal_point = fillfractionals(fractionals,exponent,fractional_count,
                                                     buffer,len, decimal_point)
     elseif exponent < -128
         len = 1
         decimal_point = -fractional_count
     else
         decimal_point = 0
-        len, decimal_point = FillFractionals(significand,exponent,fractional_count,
+        len, decimal_point = fillfractionals(significand,exponent,fractional_count,
                                                     buffer,len, decimal_point)
     end
-    len, decimal_point = TrimZeros(buffer,len,decimal_point)
+    len, decimal_point = trimzeros(buffer,len,decimal_point)
     buffer[len] = 0
     if (len-1) == 0
         decimal_point = -fractional_count

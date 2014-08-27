@@ -1,4 +1,4 @@
-function NormalizedExponent(significand, exponent::Int32)
+function normalizedexponent(significand, exponent::Int32)
     significand::Uint64    
     while (significand & HiddenBit(Float64)) == 0
         significand <<= 1
@@ -14,8 +14,8 @@ function bignumdtoa(v,mode,requested_digits::Int,buffer)
     need_boundary_deltas = mode == SHORTEST
 
     is_even = (significand & 1) == 0
-    normalized_exponent = NormalizedExponent(significand, exponent)
-    estimated_power = EstimatePower(normalized_exponent)
+    normalized_exponent = normalizedexponent(significand, exponent)
+    estimated_power = estimatepower(normalized_exponent)
 
     if mode == FIXED && -estimated_power - 1 > requested_digits
         buffer[1] = 0
@@ -24,24 +24,24 @@ function bignumdtoa(v,mode,requested_digits::Int,buffer)
         return true, len, decimal_point, buffer
     end
     num = den = minus = plus = BigInt(0)
-    num, den, minus, plus = InitialScaledStartValues(significand,exponent,lower_boundary_is_closer,
+    num, den, minus, plus = initialscaledstartvalues(significand,exponent,lower_boundary_is_closer,
                               estimated_power,need_boundary_deltas,
                               num,den,minus,plus);
-    num, den, minus, plus, decimal_point = FixupMultiply10(
+    num, den, minus, plus, decimal_point = fixupmultiply10(
         estimated_power,is_even,num,den,minus,plus);
 
     if mode == SHORTEST
-        len, buffer = GenerateShortestDigits(num,den,minus,plus,is_even,buffer)
+        len, buffer = generateshortestdigits(num,den,minus,plus,is_even,buffer)
     elseif mode == FIXED
-        len, decimal_point, buffer = BignumToFixed(requested_digits,num,den,buffer,decimal_point)
+        len, decimal_point, buffer = bignumtofixed(requested_digits,num,den,buffer,decimal_point)
     elseif mode == PRECISION
-        len, decimal_point, buffer = GenerateCountedDigits(requested_digits,num,den,buffer,decimal_point)
+        len, decimal_point, buffer = generatecounteddigits(requested_digits,num,den,buffer,decimal_point)
     end
     buffer[len] = 0
     return true, len, decimal_point, buffer
 end
 
-function GenerateShortestDigits(num,den,minus,plus,is_even,buffer)
+function generateshortestdigits(num,den,minus,plus,is_even,buffer)
     len = 1
     while true
         digit, num = divrem(num,den)
@@ -77,7 +77,7 @@ function GenerateShortestDigits(num,den,minus,plus,is_even,buffer)
     end
 end
 
-function GenerateCountedDigits(count,num,den,buffer,decimal_point)
+function generatecounteddigits(count,num,den,buffer,decimal_point)
     for i = 1:(count-1)
         digit, num = divrem(num,den)
         buffer[i] = 0x30 + digit
@@ -101,7 +101,7 @@ function GenerateCountedDigits(count,num,den,buffer,decimal_point)
     return len, decimal_point, buffer
 end
 
-function BignumToFixed(requested_digits,num,den,buffer,decimal_point)
+function bignumtofixed(requested_digits,num,den,buffer,decimal_point)
     if -decimal_point > requested_digits
         decimal_point = -requested_digits
         len = 1
@@ -118,7 +118,7 @@ function BignumToFixed(requested_digits,num,den,buffer,decimal_point)
         return len, decimal_point, buffer
     else
         needed_digits = decimal_point + requested_digits
-        len, decimal_point, buffer = GenerateCountedDigits(
+        len, decimal_point, buffer = generatecounteddigits(
               needed_digits,num,den,buffer,decimal_point)
     end
     return len, decimal_point, buffer
@@ -126,14 +126,14 @@ end
 
 
 const k1Log10 = 0.30102999566398114
-function EstimatePower(exponent)
+function estimatepower(exponent)
     kSignificandSize = SignificandSize(Float64)
     estimate = ceil((exponent + kSignificandSize - 1) * k1Log10 - 1e-10)
     return estimate
 end
 
 
-function InitialScaledStartValuesPositiveExponent(
+function init3(
         significand,exponent,estimated_power,need_boundary_deltas,
         num,den,minus,plus)
     num::BigInt = BigInt(significand)
@@ -151,7 +151,7 @@ function InitialScaledStartValuesPositiveExponent(
 end
 
 
-function InitialScaledStartValuesNegativeExponentPositivePower(
+function init1(
         significand,exponent,estimated_power,need_boundary_deltas,
         num,den,minus,plus)
     num::BigInt = BigInt(significand)
@@ -166,7 +166,7 @@ function InitialScaledStartValuesNegativeExponentPositivePower(
     return num, den, minus, plus
 end
 
-function InitialScaledStartValuesNegativeExponentNegativePower(
+function init2(
         significand,exponent,estimated_power,need_boundary_deltas,
         num,den,minus,plus)
     num::BigInt = BigInt(10)^-estimated_power
@@ -184,19 +184,19 @@ function InitialScaledStartValuesNegativeExponentNegativePower(
     return num, den, minus, plus
 end
 
-function InitialScaledStartValues(significand,
+function initialscaledstartvalues(significand,
             exponent,lower_boundary_is_closer,estimated_power,
             need_boundary_deltas,num,den,minus,plus)
     if exponent >= 0
-        num,den,minus,plus = InitialScaledStartValuesPositiveExponent(
+        num,den,minus,plus = init3(
                 significand, exponent, estimated_power, need_boundary_deltas,
                 num,den,minus,plus)
     elseif estimated_power >= 0
-        num,den,minus,plus = InitialScaledStartValuesNegativeExponentPositivePower(
+        num,den,minus,plus = init1(
                 significand, exponent, estimated_power, need_boundary_deltas,
                 num,den,minus,plus)
     else
-        num,den,minus,plus = InitialScaledStartValuesNegativeExponentNegativePower(
+        num,den,minus,plus = init2(
                 significand, exponent, estimated_power, need_boundary_deltas,
                 num,den,minus,plus)
     end
@@ -208,7 +208,7 @@ function InitialScaledStartValues(significand,
     return num, den, minus, plus
 end
 
-function FixupMultiply10(estimated_power,is_even,num,den,minus,plus)
+function fixupmultiply10(estimated_power,is_even,num,den,minus,plus)
     in_range = is_even ? num + plus >= den : num + plus > den
     if in_range
         decimal_point::Int32 = estimated_power + 1
