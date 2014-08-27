@@ -22,6 +22,9 @@ if [  "$#" = "1"  -a "$1" = "NO_GIT" ]; then
 fi
 # Collect temporary variables
 origin=$(git config -l 2>/dev/null | grep 'remote\.\w*\.url.*JuliaLang/julia.git' | sed -n 's/remote\.\([a-zA-Z]*\)\..*/\1\//p')
+if [ -z "$origin" ]; then
+    origin="origin/"
+fi
 last_tag=$(git describe --tags --abbrev=0)
 git_time=$(git log -1 --pretty=format:%ct)
 
