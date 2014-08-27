@@ -12,7 +12,7 @@ include("dates/io.jl")
 
 export Period, DatePeriod, TimePeriod,
        Year, Month, Week, Day, Hour, Minute, Second, Millisecond,
-       TimeType, DateTime, Date,
+       TimeZone, UTC, TimeType, DateTime, Date,
        # accessors.jl
        yearmonthday, yearmonth, monthday, year, month, week, day,
        hour, minute, second, millisecond, dayofmonth,
@@ -26,7 +26,7 @@ export Period, DatePeriod, TimePeriod,
        July, August, September, October, November, December,
        Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec,
        # conversions.jl
-       unix2datetime, datetime2unix, now, nowutc, today, 
+       unix2datetime, datetime2unix, now, today, 
        rata2datetime, datetime2rata, julian2datetime, datetime2julian,
        # adjusters.jl
        firstdayofweek, lastdayofweek,

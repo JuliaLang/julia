@@ -43,4 +43,4 @@
 
 @test typeof(Dates.now()) <: Dates.DateTime
 @test typeof(Dates.today()) <: Dates.Date
-@test typeof(Dates.nowutc()) <: Dates.DateTime
+@test typeof(Dates.now(Dates.UTC)) <: Dates.DateTime
