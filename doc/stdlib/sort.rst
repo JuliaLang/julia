@@ -216,7 +216,7 @@ appeared in the array to be sorted. ``QuickSort`` is the default
 algorithm for numeric values, including integers and floats.
 
 ``MergeSort`` is an O(n log n) stable sorting algorithm but is not
-in-place – it requires a temporary array of equal size to the
+in-place – it requires a temporary array of half the size of the
 input array – and is typically not quite as fast as ``QuickSort``.
 It is the default algorithm for non-numeric data.
 
