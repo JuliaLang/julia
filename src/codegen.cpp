@@ -861,8 +861,14 @@ void *jl_get_llvmf(jl_function_t *f, jl_tuple_t *types, bool getwrapper)
                   "Warning: Returned code may not match what actually runs.\n");
     }
     Function *llvmf;
-    if (sf->linfo->functionObject == NULL) {
-        jl_compile(sf);
+    if (getwrapper) {
+        if (sf->linfo->functionObject == NULL) {
+            jl_compile(sf);
+        }
+    } else {
+        if (sf->linfo->cFunctionObject == NULL) {
+            jl_cstyle_compile(sf);
+        }
     }
     if (sf->fptr == &jl_trampoline) {
         if (!getwrapper && sf->linfo->cFunctionObject != NULL)
