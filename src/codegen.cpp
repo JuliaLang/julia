@@ -375,10 +375,15 @@ static void jl_gen_llvm_gv_array();
 extern "C"
 void jl_dump_bitcode(char *fname)
 {
+#ifdef LLVM36
+    std::error_code err;
+    StringRef fname_ref = StringRef(fname);
+    raw_fd_ostream OS(fname_ref, err, sys::fs::F_None); 
+#elif LLVM35
     std::string err;
-#ifdef LLVM35
     raw_fd_ostream OS(fname, err, sys::fs::F_None);
 #else
+    std::string err;
     raw_fd_ostream OS(fname, err);
 #endif
     jl_gen_llvm_gv_array();
@@ -392,10 +397,15 @@ void jl_dump_bitcode(char *fname)
 extern "C"
 void jl_dump_objfile(char *fname, int jit_model)
 {
+#ifdef LLVM36
+    std::error_code err;
+    StringRef fname_ref = StringRef(fname);
+    raw_fd_ostream OS(fname_ref, err, sys::fs::F_None); 
+#elif  LLVM35
     std::string err;
-#ifdef LLVM35
     raw_fd_ostream OS(fname, err, sys::fs::F_None);
 #else
+    std::string err;
     raw_fd_ostream OS(fname, err);
 #endif
     formatted_raw_ostream FOS(OS);
@@ -785,7 +795,7 @@ const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
         assert(fptr != 0);
 #ifndef USE_MCJIT
         std::map<size_t, FuncInfo, revcomp> &fmap = jl_jit_events->getMap();
-        std::map<size_t, FuncInfo>::iterator fit = fmap.find(fptr);
+        std::map<size_t, FuncInfo, revcomp>::iterator fit = fmap.find(fptr);
 
         if (fit == fmap.end()) {
             JL_PRINTF(JL_STDERR, "Warning: Unable to find function pointer\n");

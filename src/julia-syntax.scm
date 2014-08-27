@@ -2886,39 +2886,39 @@ So far only the second case can actually occur.
 		      '(null))
 	       `(call (top typeassert) ,(cadr e) ,(caddr e)))))
 	((lambda)
-	 (letrec ((args (lam:args e))
-		  (locl (cdr (caddr e)))
-		  (allv (nconc (map arg-name args) locl))
-		  (fv   (let* ((fv (diff (free-vars (lam:body e)) allv))
-			       ;; add variables referenced in declared types for free vars
-			       (dv (apply nconc (map (lambda (v)
-						       (let ((vi (var-info-for v env)))
-							 (if vi (free-vars (vinfo:type vi)) '())))
-						     fv))))
-			  (append (diff dv fv) fv)))
-		  (glo  (declared-global-vars (lam:body e)))
-		  ; make var-info records for vars introduced by this lambda
-		  (vi   (nconc
-			 (map (lambda (decl) (make-var-info (decl-var decl)))
-			      args)
-			 (map make-var-info locl)))
-		  ; captured vars: vars from the environment that occur
-		  ; in our set of free variables (fv).
-		  (cv    (filter (lambda (v) (and (memq (vinfo:name v) fv)
-						  (not (memq
-							(vinfo:name v) glo))))
-				 env))
-		  (bod   (analyze-vars
-			  (lam:body e)
-			  (append vi
-				  ; new environment: add our vars
-				  (filter (lambda (v)
-					    (and
-					     (not (memq (vinfo:name v) allv))
-					     (not (memq (vinfo:name v) glo))))
-					  env))
-			  cv)))
-	   ; mark all the vars we capture as captured
+	 (let* ((args (lam:args e))
+		(locl (cdr (caddr e)))
+		(allv (nconc (map arg-name args) locl))
+		(fv   (let* ((fv (diff (free-vars (lam:body e)) allv))
+			     ;; add variables referenced in declared types for free vars
+			     (dv (apply nconc (map (lambda (v)
+						     (let ((vi (var-info-for v env)))
+						       (if vi (free-vars (vinfo:type vi)) '())))
+						   fv))))
+			(append (diff dv fv) fv)))
+		(glo  (declared-global-vars (lam:body e)))
+		;; make var-info records for vars introduced by this lambda
+		(vi   (nconc
+		       (map (lambda (decl) (make-var-info (decl-var decl)))
+			    args)
+		       (map make-var-info locl)))
+		;; captured vars: vars from the environment that occur
+		;; in our set of free variables (fv).
+		(cv    (filter (lambda (v) (and (memq (vinfo:name v) fv)
+						(not (memq
+						      (vinfo:name v) glo))))
+			       env))
+		(bod   (analyze-vars
+			(lam:body e)
+			(append vi
+				;; new environment: add our vars
+				(filter (lambda (v)
+					  (and
+					   (not (memq (vinfo:name v) allv))
+					   (not (memq (vinfo:name v) glo))))
+					env))
+			cv)))
+	   ;; mark all the vars we capture as captured
 	   (for-each (lambda (v) (vinfo:set-capt! v #t))
 		     cv)
 	   `(lambda ,args

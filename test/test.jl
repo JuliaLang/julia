@@ -40,6 +40,31 @@ Test.with_handler(test_handler) do
     @test errorflag
 end
 
+# Test evaluation of comparison tests
+i7586_1() = 1
+i7586_2() = 7
+i7586_3() = 9
+
+comparison_flags_s = [false,false,false]
+comparison_flags_f = [false,false,false]
+function test_handler2(r::Test.Success)
+    comparison_flags_s[1] = (r.resultexpr.args[1] == 1)
+    comparison_flags_s[2] = (r.resultexpr.args[3] == 7)
+    comparison_flags_s[3] = (r.resultexpr.args[5] == 9)
+end
+
+function test_handler2(r::Test.Failure)
+    comparison_flags_f[1] = (r.resultexpr.args[1] == 1)
+    comparison_flags_f[2] = (r.resultexpr.args[3] == 7)
+    comparison_flags_f[3] = (r.resultexpr.args[5] == 10)
+end
+
+Test.with_handler(test_handler2) do
+    @test i7586_1() <= i7586_2() <= i7586_3()
+    @test i7586_1() >= i7586_2() >= 10
+end
+@test all(comparison_flags_s)
+@test all(comparison_flags_f)
 
 # Test @test_throws
 domainerror_thrower() = throw(DomainError())

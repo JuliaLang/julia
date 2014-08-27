@@ -456,11 +456,28 @@ static void init_task(jl_task_t *t)
 ptrint_t bt_data[MAX_BT_SIZE+1];
 size_t bt_size = 0;
 
-void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, size_t pointer, int *fromC, int skipC);
+void jl_getFunctionInfo(
+    const char **name,
+    size_t *line,
+    const char **filename,
+    size_t pointer,
+    int *fromC,
+    int skipC);
 
-static const char *name_unknown = "???";
-static int frame_info_from_ip(const char **func_name, size_t *line_num, const char **file_name, size_t ip, int skipC)
+static int frame_info_from_ip(
+    const char **func_name,
+    size_t *line_num,
+    const char **file_name,
+    size_t ip,
+    int skipC)
 {
+    static const char *name_unknown = "???";
+#if defined(_OS_WINDOWS_)
+    static char frame_info_func[
+        sizeof(SYMBOL_INFO) +
+        MAX_SYM_NAME * sizeof(TCHAR)];
+    static IMAGEHLP_LINE64 frame_info_line;
+#endif
     int fromC = 0;
 
     jl_getFunctionInfo(func_name, line_num, file_name, ip, &fromC, skipC);
@@ -477,14 +494,13 @@ static int frame_info_from_ip(const char **func_name, size_t *line_num, const ch
             DWORD64 dwDisplacement64 = 0;
             DWORD64 dwAddress = ip;
 
-            char buffer[sizeof(SYMBOL_INFO) + MAX_SYM_NAME * sizeof(TCHAR)];
-            PSYMBOL_INFO pSymbol = (PSYMBOL_INFO)buffer;
+            PSYMBOL_INFO pSymbol = (PSYMBOL_INFO)frame_info_func;
             pSymbol->SizeOfStruct = sizeof(SYMBOL_INFO);
             pSymbol->MaxNameLen = MAX_SYM_NAME;
 
             if (SymFromAddr(GetCurrentProcess(), dwAddress, &dwDisplacement64, pSymbol)) {
                 // SymFromAddr returned success
-                *func_name = strdup(pSymbol->Name);
+                *func_name = pSymbol->Name;
             }
             else {
                 *func_name = name_unknown;
@@ -493,14 +509,13 @@ static int frame_info_from_ip(const char **func_name, size_t *line_num, const ch
                 //printf("SymFromAddr returned error : %d\n", error);
             }
 
-            IMAGEHLP_LINE64 line;
             DWORD dwDisplacement = 0;
-            line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
+            frame_info_line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
 
-            if (SymGetLineFromAddr64(GetCurrentProcess(), dwAddress, &dwDisplacement, &line)) {
+            if (SymGetLineFromAddr64(GetCurrentProcess(), dwAddress, &dwDisplacement, &frame_info_line)) {
                 // SymGetLineFromAddr64 returned success
-                *file_name = strdup(line.FileName);
-                *line_num = line.LineNumber;
+                *file_name = frame_info_line.FileName;
+                *line_num = frame_info_line.LineNumber;
             }
             else {
                 *file_name = name_unknown;
@@ -659,10 +674,6 @@ DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
         jl_tupleset(r, 2, jl_box_long(line_num));
         jl_tupleset(r, 3, jl_box_bool(fromC));
         jl_tupleset(r, 4, jl_box_long((intptr_t)ip));
-#if defined(_OS_WINDOWS_) && !defined(LLVM34)
-        if (fromC && func_name != name_unknown) free((void*)func_name);
-        if (fromC && file_name != name_unknown) free((void*)file_name);
-#endif
         JL_GC_POP();
         return r;
     }
@@ -686,10 +697,7 @@ DLLEXPORT void gdblookup(ptrint_t ip)
     const char *func_name;
     size_t line_num;
     const char *file_name;
-    int fromC = frame_info_from_ip(&func_name, &line_num, &file_name, ip, 0);
-#ifndef _OS_WINDOWS_
-    (void)fromC; // fromC not used on unix
-#endif
+    frame_info_from_ip(&func_name, &line_num, &file_name, ip, 0);
     if (func_name != NULL) {
         if (line_num == ip)
             ios_printf(ios_stderr, "unknown function (ip: %d)\n", line_num);
@@ -697,10 +705,6 @@ DLLEXPORT void gdblookup(ptrint_t ip)
             ios_printf(ios_stderr, "%s at %s (unknown line)\n", func_name, file_name, line_num);
         else
             ios_printf(ios_stderr, "%s at %s:%d\n", func_name, file_name, line_num);
-#ifdef _OS_WINDOWS_
-        if (fromC && func_name != name_unknown) free((void*)func_name);
-        if (fromC && file_name != name_unknown) free((void*)file_name);
-#endif
     }
 }
 

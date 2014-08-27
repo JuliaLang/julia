@@ -48,6 +48,8 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
    ``M``           00        Matches minutes
    ``S``           00        Matches seconds
    ``s``           .500      Matches milliseconds
+   ``e``           Mon, Tues Matches abbreviated days of the week
+   ``E``           Monday    Matches full name days of the week
    ``yyyymmdd``    19960101  Matches fixed-width year, month, and day
    =============== ========= ===============================================================
 
@@ -87,7 +89,12 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 .. function:: now() -> DateTime
 
    Returns a DateTime corresponding to the user's system
-   time.
+   time including the system timezone locale.
+
+.. function:: nowutc() -> DateTime
+  
+   Returns a DateTime corresponding to the user's system
+   time as UTC/GMT.
    
 Accessor Functions
 ~~~~~~~~~~~~~~~~~~
