@@ -2025,8 +2025,8 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     JL_GC_POP();
                     if (jl_array_store_unboxed(ety) &&
                         ((jl_datatype_t*)ety)->size == 0) {
-                        jl_new_struct_uninit((jl_datatype_t*)ety);
                         assert(jl_is_datatype(ety));
+                        assert(((jl_datatype_t*)ety)->instance != NULL);
                         return literal_pointer_val(((jl_datatype_t*)ety)->instance);
                     }
                     return typed_load(emit_arrayptr(ary, args[1], ctx), idx, ety, ctx);
@@ -2419,9 +2419,10 @@ static Value *ghostValue(jl_value_t *ty)
 {
     if (jl_is_datatype(ty)) {
         Type *llvmty = julia_struct_to_llvm(ty);
-        assert(llvmty != T_void);
+        if (llvmty == T_void)
+            return mark_julia_type(UndefValue::get(NoopType),ty);
         return UndefValue::get(llvmty);
-    } 
+    }
     else {
         return mark_julia_type(UndefValue::get(NoopType),ty);
     }
@@ -2798,7 +2799,8 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
             if (nf > 0) {
                 if (jl_isbits(sty)) {
                     Type *lt = julia_type_to_llvm(ty);
-                    assert(lt != T_void);
+                    if (lt == T_void)
+                        return mark_julia_type(UndefValue::get(NoopType),ty);
                     Value *strct = UndefValue::get(lt);
                     size_t na = nargs-1 < nf ? nargs-1 : nf;
                     unsigned idx = 0;
@@ -3202,8 +3204,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
         Value *theArg = builder.CreateLoad(argPtr, false);
         Value *theNewArg = theArg;
         argIdx++;
-        if ((jl_is_leaf_type(ty) && jl_isbits(ty) &&
-            ((jl_datatype_t*)ty)->size > 0)) {
+        if (jl_is_leaf_type(ty) && jl_isbits(ty)) {
             Type *lty = julia_struct_to_llvm(ty);
             assert(lty != NULL);
             if (lty == T_void || lty->isEmptyTy())

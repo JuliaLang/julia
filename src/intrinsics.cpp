@@ -798,7 +798,7 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
             else
                 val = emit_unboxed(x,ctx);
         }
-        (void)typed_store(thePtr, im1, val, ety, ctx);
+        typed_store(thePtr, im1, val, ety, ctx);
     }
     return mark_julia_type(thePtr, aty);
 }
