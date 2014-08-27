@@ -54,6 +54,8 @@ differences that may trip up Julia users accustomed to MATLAB:
    behavior for 1xN arrays; the argument is returned unmodified since it
    still performs ``sort(A,1)``. To sort a 1xN matrix like a vector, use
    ``sort(A,2)``.
+-  If ``A`` is a 2-dimensional array ``fft(A)`` computes a 2D FFT. In particular, 
+   it is not equivalent to ``fft(A,1)``, which computes a 1D FFT acting column-wise.
 -  Parentheses must be used to call a function with zero arguments, as
    in ``tic()`` and ``toc()``.
 -  Do not use semicolons to end statements. The results of statements are
