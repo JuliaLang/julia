@@ -275,3 +275,26 @@ t = Dates.DateTime(1,1,1,14,51,0,118)
 @test Dates.DateTime("?14:51:00.118?", "?HH:MM:SS.sss?") == t
 @test Dates.DateTime("x14:51:00.118", "xHH:MM:SS.sss") == t
 @test Dates.DateTime("14:51:00.118]", "HH:MM:SS.sss]") == t
+
+# RFC1123Format
+dt = Dates.DateTime(2014,8,23,17,22,15)
+@test Dates.format(dt,Dates.RFC1123Format) == "Sat, 23 Aug 2014 17:22:15"
+@test Dates.DateTime(Dates.format(dt,Dates.RFC1123Format),Dates.RFC1123Format) == dt
+@test Dates.format(dt,"yyyy-mm-ddTHH:MM:SS E") == "2014-08-23T17:22:15 Saturday"
+@test Dates.format(dt,"yyyy-mm-ddTHH:MM:SS e") == "2014-08-23T17:22:15 Sat"
+@test Dates.format(dt,"yyyy-mm-dd E") == "2014-08-23 Saturday"
+@test Dates.format(dt,"yyyy-mm-dd e") == "2014-08-23 Sat"
+@test Dates.format(dt,"yyyy-e-mm-dd") == "2014-Sat-08-23"
+
+@test Dates.format(Dates.DateTime(2014,1,2,0,0,0,999),Dates.RFC1123Format) == "Thu, 02 Jan 2014 00:00:00"
+@test Dates.format(Dates.DateTime(2014,2,18,0,0,0,9),Dates.RFC1123Format) == "Tue, 18 Feb 2014 00:00:00"
+@test Dates.format(Dates.DateTime(2014,3,8,0,0,0,9),Dates.RFC1123Format) == "Sat, 08 Mar 2014 00:00:00"
+@test Dates.format(Dates.DateTime(2014,4,28,0,0,0,9),Dates.RFC1123Format) == "Mon, 28 Apr 2014 00:00:00"
+@test Dates.format(Dates.DateTime(2014,5,10,0,0,0,9),Dates.RFC1123Format) == "Sat, 10 May 2014 00:00:00"
+@test Dates.format(Dates.DateTime(2014,6,4,0,0,0,9),Dates.RFC1123Format) == "Wed, 04 Jun 2014 00:00:00"
+@test Dates.format(Dates.DateTime(2014,7,13,0,0,0,9),Dates.RFC1123Format) == "Sun, 13 Jul 2014 00:00:00"
+@test Dates.format(Dates.DateTime(2014,8,17,0,0,0,9),Dates.RFC1123Format) == "Sun, 17 Aug 2014 00:00:00"
+@test Dates.format(Dates.DateTime(2014,9,20,0,0,0,9),Dates.RFC1123Format) == "Sat, 20 Sep 2014 00:00:00"
+@test Dates.format(Dates.DateTime(2014,10,31,0,0,0,9),Dates.RFC1123Format) == "Fri, 31 Oct 2014 00:00:00"
+@test Dates.format(Dates.DateTime(2014,11,2,0,0,0,9),Dates.RFC1123Format) == "Sun, 02 Nov 2014 00:00:00"
+@test Dates.format(Dates.DateTime(2014,12,5,0,0,0,9),Dates.RFC1123Format) == "Fri, 05 Dec 2014 00:00:00"

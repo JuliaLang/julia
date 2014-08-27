@@ -121,10 +121,12 @@ function complete_path(path::String, pos)
     catch
         return UTF8String[], 0:-1, false
     end
+
     matches = UTF8String[]
     for file in files
         if beginswith(file, prefix)
-            push!(matches, isdir(joinpath(dir, file)) ? joinpath(file,"") : file)
+            id = try isdir(joinpath(dir, file)) catch; false end
+            push!(matches, id ? joinpath(file,"") : file)
         end
     end
     matches, (nextind(path, pos-sizeof(prefix))):pos, length(matches) > 0

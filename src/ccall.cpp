@@ -3,7 +3,7 @@
 // --- library symbol lookup ---
 
 // map from "libX" to full soname "libX.so.ver"
-#if defined(__linux__)
+#if defined(__linux__) || defined(__FreeBSD__)
 static std::map<std::string, std::string> sonameMap;
 static bool got_sonames = false;
 
@@ -11,7 +11,11 @@ extern "C" DLLEXPORT void jl_read_sonames(void)
 {
     char *line=NULL;
     size_t sz=0;
+#if defined(__linux__)
     FILE *ldc = popen("/sbin/ldconfig -p", "r");
+#else
+    FILE *ldc = popen("/sbin/ldconfig -r", "r");
+#endif
 
     while (!feof(ldc)) {
         ssize_t n = getline(&line, &sz, ldc);
@@ -19,14 +23,22 @@ extern "C" DLLEXPORT void jl_read_sonames(void)
             break;
         if (n > 2 && isspace((unsigned char)line[0])) {
             int i=0;
+#ifdef __linux__
             while (isspace((unsigned char)line[++i])) ;
             char *name = &line[i];
             char *dot = strstr(name, ".so");
+#else
+            char *name = strstr(line, ":-l");
+            if (name == NULL) continue;
+            strncpy(name, "lib", 3);
+            char *dot = strchr(name, '.');
+#endif
             i=0;
 
             if (NULL == dot)
                 continue;
 
+#ifdef __linux__
             // Detect if this entry is for the current architecture
             while (!isspace((unsigned char)dot[++i])) ;
             while (isspace((unsigned char)dot[++i])) ;
@@ -43,6 +55,7 @@ extern "C" DLLEXPORT void jl_read_sonames(void)
                 continue;
 #endif
             }
+#endif // __linux__
 
             char *abslibpath = strrchr(line, ' ');
             if (dot != NULL && abslibpath != NULL) {

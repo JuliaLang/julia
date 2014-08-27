@@ -33,6 +33,96 @@ Writing functions is better style. It leads to more reusable code and
 clarifies what steps are being done, and what their inputs and outputs
 are.
 
+Measure performance with ``@time`` and pay attention to memory allocation
+-------------------------------------------------------------------------
+
+The most useful tool for measuring performance is the ``@time`` macro.
+The following example illustrates good working style::
+
+    julia> function f(n)
+               s = 0
+               for i = 1:n
+                   s += i/2
+               end
+               s
+           end
+    f (generic function with 1 method)
+
+    julia> @time f(1)
+    elapsed time: 0.008217942 seconds (93784 bytes allocated)
+    0.5
+
+    julia> @time f(10^6)
+    elapsed time: 0.063418472 seconds (32002136 bytes allocated)
+    2.5000025e11
+
+On the first call (``@time f(1)``), ``f`` gets compiled.  (If you've
+not yet used ``@time`` in this session, it will also compile functions
+needed for timing.)  You should not take the results of this run
+seriously. For the second run, note that in addition to reporting the
+time, it also indicated that a large amount of memory was allocated.
+This is the single biggest advantage of ``@time`` vs. functions like
+``tic`` and ``toc``, which only report time.
+
+Unexpected memory allocation is almost always a sign of some problem
+with your code, usually a problem with type-stability. Consequently,
+in addition to the allocation itself, it's very likely that the code
+generated for your function is far from optimal. Take such indications
+seriously and follow the advice below.
+
+As a teaser, note that an improved version of this function allocates
+no memory (except to pass back the result back to the REPL) and has
+thirty-fold faster execution::
+
+    julia> @time f_improved(10^6)
+    elapsed time: 0.00253829 seconds (112 bytes allocated)
+    2.5000025e11
+
+Below you'll learn how to spot the problem with ``f`` and how to fix it.
+
+In some situations, your function may need to allocate memory as part
+of its operation, and this can complicate the simple picture above. In
+such cases, consider using one of the :ref:`tools
+<man-performance-tools>` below to diagnose problems, or write a
+version of your function that separates allocation from its
+algorithmic aspects (see :ref:`man-preallocation`).
+
+
+.. _man-performance-tools:
+
+Tools
+-----
+
+Julia and its package ecosystem includes tools that may help you
+diagnose problems and improve the performance of your code:
+
+- :ref:`stdlib-profiling` allows you to measure the performance of
+  your running code and identify lines that serve as bottlenecks.  For
+  complex projects, the `ProfileView
+  <https://github.com/timholy/ProfileView.jl>`_ package can help you
+  visualize your profiling results.
+
+- Unexpectedly-large memory allocations---as reported by ``@time``,
+  ``@allocated``, or the profiler (through calls to the
+  garbage-collection routines)---hint that there might be issues with
+  your code.  If you don't see another reason for the allocations,
+  suspect a type problem.  You can also start julia with the
+  ``--track-allocation=user`` option and examine the resulting
+  ``*.mem`` files to see information about where those allocations
+  occur.
+
+- The `TypeCheck <https://github.com/astrieanna/TypeCheck.jl>`_
+  package can help identify certain kinds of type problems. A more
+  laborious but comprehensive tool is ``code_typed``.  Look
+  particularly for variables that have type ``Any`` (in the header) or
+  statements declared as ``Union`` types.  Such problems can usually
+  be fixed using the tips below.
+
+- The `Lint <https://github.com/tonyhffong/Lint.jl>`_ package can also
+  warn you of certain types of programming errors.
+
+
+
 Avoid containers with abstract type parameters
 ----------------------------------------------
 
@@ -337,6 +427,8 @@ of the ``Matrix`` and fills it one column at a time. Additionally,
 our rule of thumb that the first element to appear in a slice expression
 should be coupled with the inner-most loop.
 
+.. _man-preallocation:
+
 Pre-allocating outputs
 ----------------------
 
@@ -522,21 +614,3 @@ properties:
 - The stride should be unit stride.
 - In some simple cases, for example with 2-3 arrays accessed in a loop, the LLVM auto-vectorization may kick in automatically, leading to no further speedup with ``@simd``. 
 
-Tools
------
-
-Julia includes some tools that may help you improve the performance of your code:
-
-- :ref:`stdlib-profiling` allows you to measure the performance of
-  your running code and identify lines that serve as bottlenecks.
-
-- Unexpectedly-large memory allocations---as reported by ``@time``,
-  ``@allocated``, or the profiler (through calls to the
-  garbage-collection routines)---hint that there might be issues with
-  your code.  If you don't see another reason for the allocations,
-  suspect a type problem.
-
-- Using ``code_typed()`` on your function can help identify sources of
-  type problems.  Look particularly for variables that, contrary to
-  your intentions, are inferred to be ``Union`` types.  Such problems
-  can usually be fixed using the tips above.

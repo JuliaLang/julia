@@ -212,9 +212,9 @@ function dlpath( handle::Ptr{Void} )
     return s
 end
 
-function dlpath( libname::String )
+function dlpath{T<:Union(String, Symbol)}(libname::T)
     handle = dlopen(libname)
-    path = dlpath( handle )
+    path = dlpath(handle)
     dlclose(handle)
     return path
 end

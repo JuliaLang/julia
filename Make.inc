@@ -67,7 +67,7 @@ endif
 # disable automatic Makefile rules
 .SUFFIXES:
 
-# find out if git repository is availible
+# find out if git repository is available
 ifeq ($(shell [ -e $(JULIAHOME)/.git ] && echo true || echo "Warning: git information unavailable; versioning information limited" >&2), true)
 NO_GIT = 0
 else
@@ -769,14 +769,7 @@ pathsearch = $(firstword $(wildcard $(addsuffix /$(1),$(subst :, ,$(2)))))
 
 JULIA_EXECUTABLE_debug = $(build_bindir)/julia-debug$(EXE)
 JULIA_EXECUTABLE_release = $(build_bindir)/julia$(EXE)
-
-ifeq ($(OS), WINNT)
 JULIA_EXECUTABLE = $(JULIA_EXECUTABLE_release)
-else ifdef JULIA_VAGRANT_BUILD
-JULIA_EXECUTABLE = $(JULIA_EXECUTABLE_release)
-else
-JULIA_EXECUTABLE = $(JULIAHOME)/julia
-endif
 
 # Colors for make
 ifndef VERBOSE

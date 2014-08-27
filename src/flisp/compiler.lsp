@@ -20,13 +20,13 @@
 	  loadg loadg.l
 	  loada loada.l loadc loadc.l
 	  setg setg.l
-	  seta seta.l setc setc.l
+	  seta seta.l removed-setc removed-setc.l
 	  
 	  closure argc vargc trycatch for tapply
 	  add2 sub2 neg largc lvargc
-	  loada0 loada1 loadc00 loadc01 call.l tcall.l
+	  loada0 loada1 loadc0 loadc1 call.l tcall.l
 	  brne brne.l cadr brnn brnn.l brn brn.l
-	  optargs brbound keyargs
+	  optargs brbound keyargs box box.l shift
 	  
 	  dummy_t dummy_f dummy_nil]))
     (for 0 (1- (length keys))
@@ -48,12 +48,17 @@
          aref     2      aset!    3
 	 div0     2))
 
-(define (make-code-emitter) (vector () (table) 0 +inf.0))
+;; code generation state, constant tables, bytecode encoding
+
+(define (make-code-emitter) (vector () (table) 0 () 0))
 (define (bcode:code   b) (aref b 0))
 (define (bcode:ctable b) (aref b 1))
 (define (bcode:nconst b) (aref b 2))
-(define (bcode:cdepth b d) (aset! b 3 (min (aref b 3) d)))
-; get an index for a referenced value in a bytecode object
+(define (bcode:cenv b)   (aref b 3))
+(define (bcode:sp b)     (aref b 4))
+(define (bcode:stack b n) (aset! b 4 (+ (aref b 4) n)))
+
+;; get an index for a referenced value in a bytecode object
 (define (bcode:indexfor b v)
   (let ((const-to-idx (bcode:ctable b))
 	(nconst       (bcode:nconst b)))
@@ -62,6 +67,7 @@
 	(begin (put! const-to-idx v nconst)
 	       (prog1 nconst
 		      (aset! b 2 (+ nconst 1)))))))
+
 (define (emit e inst . args)
   (if (null? args)
       (if (and (eq? inst 'car) (pair? (aref e 0))
@@ -73,15 +79,14 @@
 	    (set! args (list (bcode:indexfor e (car args)))))
 	(let ((longform
 	       (assq inst '((loadv loadv.l) (loadg loadg.l) (setg setg.l)
-			    (loada loada.l) (seta  seta.l)))))
+			    (loada loada.l) (seta  seta.l) (box box.l)))))
 	  (if (and longform
 		   (> (car args) 255))
 	      (set! inst (cadr longform))))
 	(let ((longform
-	       (assq inst '((loadc loadc.l) (setc setc.l)))))
+	       (assq inst '((loadc loadc.l)))))
 	  (if (and longform
-		   (or (> (car  args) 255)
-		       (> (cadr args) 255)))
+		   (> (car  args) 255))
 	      (set! inst (cadr longform))))
 	(if (eq? inst 'loada)
 	    (cond ((equal? args '(0))
@@ -91,11 +96,11 @@
 		   (set! inst 'loada1)
 		   (set! args ()))))
 	(if (eq? inst 'loadc)
-	    (cond ((equal? args '(0 0))
-		   (set! inst 'loadc00)
+	    (cond ((equal? args '(0))
+		   (set! inst 'loadc0)
 		   (set! args ()))
-		  ((equal? args '(0 1))
-		   (set! inst 'loadc01)
+		  ((equal? args '(1))
+		   (set! inst 'loadc1)
 		   (set! args ()))))
 
 	(let ((lasti (if (pair? (aref e 0))
@@ -122,14 +127,14 @@
 (define (make-label e)   (gensym))
 (define (mark-label e l) (emit e 'label l))
 
-; convert symbolic bytecode representation to a byte array.
-; labels are fixed-up.
+;; convert symbolic bytecode representation to a byte array.
+;; labels are fixed-up.
 (define (encode-byte-code e)
   (let* ((cl (reverse! e))
 	 (v  (list->vector cl))
-	 (long? (>= (+ (length v)  ; 1 byte for each entry, plus...
-		       ; at most half the entries in this vector can be
-		       ; instructions accepting 32-bit arguments
+	 (long? (>= (+ (length v)  ;; 1 byte for each entry, plus...
+		       ;; at most half the entries in this vector can be
+		       ;; instructions accepting 32-bit arguments
 		       (* 3 (div0 (length v) 2)))
 		    65536)))
     (let ((n              (length v))
@@ -171,18 +176,12 @@
 		       (set! i (+ i 1)))
 		      ((number? nxt)
 		       (case vi
-			 ((loadv.l loadg.l setg.l loada.l seta.l
-			   largc lvargc call.l tcall.l)
+			 ((loadv.l loadg.l setg.l loada.l seta.l loadc.l
+			   largc lvargc call.l tcall.l box.l)
 			  (io.write bcode (int32 nxt))
 			  (set! i (+ i 1)))
 			 
-			 ((loadc setc)  ; 2 uint8 args
-			  (io.write bcode (uint8 nxt))
-			  (set! i (+ i 1))
-			  (io.write bcode (uint8 (aref v i)))
-			  (set! i (+ i 1)))
-			 
-			 ((loadc.l setc.l optargs keyargs)  ; 2 int32 args
+			 ((optargs keyargs)  ; 2 int32 args
 			  (io.write bcode (int32 nxt))
 			  (set! i (+ i 1))
 			  (io.write bcode (int32 (aref v i)))
@@ -212,47 +211,93 @@
 		   (bcode:ctable e))
     cvec))
 
+;; variables
+
+(define (vinfo sym heap? index) (list sym heap? index))
+(define vinfo:sym car)
+(define vinfo:heap? cadr)
+(define vinfo:index caddr)
+
+(define (quoted? e) (eq? (car e) 'quote))
+
 (define (index-of item lst start)
   (cond ((null? lst) #f)
 	((eq? item (car lst)) start)
 	(else (index-of item (cdr lst) (+ start 1)))))
 
+(define (capture-var! g sym)
+  (let ((ce (bcode:cenv g)))
+    (let ((n (index-of sym ce 0)))
+      (or n
+	  (prog1 (length ce)
+		 (aset! g 3 (append! ce (list sym))))))))
+
 (define (in-env? s env)
   (and (pair? env)
-       (or (memq s (car env))
+       (or (assq s (car env))
 	   (in-env? s (cdr env)))))
 
-(define (lookup-sym s env lev arg?)
+(define (lookup-sym s env lev)
   (if (null? env)
-      '(global)
+      'global
       (let* ((curr (car env))
-	     (i    (index-of s curr 0)))
-	(if i
-	    (if arg?
-		i
-		(cons lev i))
+	     (vi   (assq s curr)))
+	(if vi
+	    (cons lev vi)
 	    (lookup-sym s
 			(cdr env)
-			(if (or arg? (null? curr)) lev (+ lev 1))
-			#f)))))
-
-; number of non-nulls
-(define (nnn e) (count (lambda (x) (not (null? x))) e))
+			(+ lev 1))))))
 
 (define (printable? x) (not (or (iostream? x)
 				(eof-object? x))))
 
-(define (compile-sym g env s Is)
-  (let ((loc (lookup-sym s env 0 #t)))
-    (cond ((number? loc)       (emit g (aref Is 0) loc))
-	  ((number? (car loc)) (emit g (aref Is 1) (car loc) (cdr loc))
-			       ; update index of most distant captured frame
-	                       (bcode:cdepth g (- (nnn (cdr env)) 1 (car loc))))
-	  (else
+(define (compile-sym g env s deref)
+  (let ((loc (lookup-sym s env 0)))
+    (cond ((eq? loc 'global)
 	   (if (and (constant? s)
 		    (printable? (top-level-value s)))
 	       (emit g 'loadv (top-level-value s))
-	       (emit g (aref Is 2) s))))))
+	       (emit g 'loadg s)))
+
+	  ((= (car loc) 0)
+	   (emit g 'loada (vinfo:index (cdr loc)))
+	   (if (and deref (vinfo:heap? (cdr loc)))
+	       (emit g 'car)))
+
+	  (else
+	   (emit g 'loadc (capture-var! g s))
+	   (if (and deref (vinfo:heap? (cdr loc)))
+	       (emit g 'car))))))
+
+(define (compile-set! g env s rhs)
+  (let ((loc (lookup-sym s env 0)))
+    (if (eq? loc 'global)
+	(begin (compile-in g env #f rhs)
+	       (emit g 'setg s))
+	(let ((arg?   (= (car loc) 0)))
+	  (let ((h?   (vinfo:heap? (cdr loc)))
+		(idx  (if arg?
+			  (vinfo:index (cdr loc))
+			  (capture-var! g s))))
+	    (if h?
+		(begin (emit g (if arg? 'loada 'loadc) idx)
+		       (bcode:stack g 1)
+		       (compile-in g env #f rhs)
+		       (bcode:stack g -1)
+		       (emit g 'set-car!))
+
+		(begin (compile-in g env #f rhs)
+		       (if (not arg?) (error (string "internal error: misallocated var " s)))
+		       (emit g 'seta idx))))))))
+
+(define (box-vars g env)
+  (let loop ((e env))
+    (if (pair? e)
+	(begin (if (cadr (car e))
+		   (emit g 'box (caddr (car e))))
+	       (loop (cdr e))))))
+
+;; control flow
 
 (define (compile-if g env tail? x)
   (let ((elsel (make-label g))
@@ -289,17 +334,21 @@
 (define (compile-prog1 g env x)
   (compile-in g env #f (cadr x))
   (if (pair? (cddr x))
-      (begin (compile-begin g env #f (cddr x))
-	     (emit g 'pop))))
+      (begin (bcode:stack g 1)
+	     (compile-begin g env #f (cddr x))
+	     (emit g 'pop)
+	     (bcode:stack g -1))))
 
 (define (compile-while g env cond body)
   (let ((top  (make-label g))
 	(end  (make-label g)))
     (compile-in g env #f (void))
+    (bcode:stack g 1)
     (mark-label g top)
     (compile-in g env #f cond)
     (emit g 'brf end)
     (emit g 'pop)
+    (bcode:stack g -1)
     (compile-in g env #f body)
     (emit g 'jmp top)
     (mark-label g end)))
@@ -314,9 +363,12 @@
 (define (compile-for g env lo hi func)
   (if (1arg-lambda? func)
       (begin (compile-in g env #f lo)
+	     (bcode:stack g 1)
 	     (compile-in g env #f hi)
+	     (bcode:stack g 1)
 	     (compile-in g env #f func)
-	     (emit g 'for))
+	     (emit g 'for)
+	     (bcode:stack g -2))
       (error "for: third form must be a 1-argument lambda")))
 
 (define (compile-short-circuit g env tail? forms default branch)
@@ -325,8 +377,10 @@
 	(else
 	 (let ((end  (make-label g)))
 	   (compile-in g env #f (car forms))
+	   (bcode:stack g 1)
 	   (emit g 'dup)
 	   (emit g branch end)
+	   (bcode:stack g -1)
 	   (emit g 'pop)
 	   (compile-short-circuit g env tail? (cdr forms) default branch)
 	   (mark-label g end)))))
@@ -336,9 +390,12 @@
 (define (compile-or g env tail? forms)
   (compile-short-circuit g env tail? forms #f 'brt))
 
+;; calls
+
 (define (compile-arglist g env lst)
   (for-each (lambda (a)
-	      (compile-in g env #f a))
+	      (compile-in g env #f a)
+	      (bcode:stack g 1))
 	    lst)
   (length lst))
 
@@ -392,6 +449,33 @@
 		    (emit g (if tail? 'tapply 'apply) nargs)))
       (else      (emit g b)))))
 
+(define (inlineable? form)
+  (let ((lam (car form)))
+    (and (pair? lam)
+	 (eq? (car lam) 'lambda)
+	 (list? (cadr lam))
+	 (every symbol? (cadr lam))
+	 (not (length> (cadr lam) 255))
+	 (length= (cadr lam) (length (cdr form))))))
+
+;; compile call to lambda in head position, inlined
+(define (compile-let g env tail? form)
+  (let ((lam  (car form))
+	(args (cdr form))
+	(sp   (bcode:sp g)))
+    (let ((vars (cadr lam))
+	  (n    (compile-arglist g env args)))
+      (let ((newvars
+	     (vars-to-env vars (complex-bindings (caddr lam) vars) sp)))
+	(box-vars g newvars)
+	(let ((newenv
+	       (cons (append! newvars (car env))
+		     (cdr env))))
+	  (compile-in g newenv tail? (caddr lam))
+	  (bcode:stack g (- n))
+	  (if (and (> n 0) (not tail?))
+	      (emit g 'shift n)))))))
+
 (define (compile-app g env tail? x)
   (let ((head  (car x)))
     (let ((head
@@ -403,9 +487,11 @@
 	       (top-level-value head)
 	       head)))
       (if (length> (cdr x) 255)
-	  ; more than 255 arguments, need long versions of instructions
+	  ;; more than 255 arguments, need long versions of instructions
 	  (begin (compile-in g env #f head)
+		 (bcode:stack g 1)
 		 (let ((nargs (compile-arglist g env (cdr x))))
+		   (bcode:stack g (- nargs))
 		   (emit g (if tail? 'tcall.l 'call.l) nargs)))
 	  (let ((b (and (builtin? head)
 			(builtin->instruction head))))
@@ -415,31 +501,26 @@
 		     (length= x 2))
 		(begin (compile-in g env #f (cadr x))
 		       (emit g 'cadr))
-		(begin
-		  (if (not b)
-		      (compile-in g env #f head))
-		  (let ((nargs (compile-arglist g env (cdr x))))
-		    (if b
-			(compile-builtin-call g env tail? x head b nargs)
-			(emit g (if tail? 'tcall 'call) nargs))))))))))
+		(if (and (pair? head) (eq? (car head) 'lambda)
+			 (inlineable? x))
+		    (compile-let g env tail? x)
+		    (begin
+		      (if (not b)
+			  (begin (compile-in g env #f head)
+				 (bcode:stack g 1)))
+		      (let ((nargs (compile-arglist g env (cdr x))))
+			(bcode:stack g (- nargs))
+			(if (not b) (bcode:stack g -1))
+			(if b
+			    (compile-builtin-call g env tail? x head b nargs)
+			    (emit g (if tail? 'tcall 'call) nargs)))))))))))
 
-(define (expand-define x)
-  (let ((form (cadr x))
-	(body (if (pair? (cddr x))
-		  (cddr x)
-		  (if (symbol? (cadr x))
-		      `(,(void))
-		      (error "compile error: invalid syntax "
-			     (print-to-string x))))))
-    (if (symbol? form)
-	`(set! ,form ,(car body))
-	`(set! ,(car form)
-	       (lambda ,(cdr form) ,@body . ,(car form))))))
+;; lambda, main compilation loop
 
 (define (fits-i8 x) (and (fixnum? x) (>= x -128) (<= x 127)))
 
 (define (compile-in g env tail? x)
-  (cond ((symbol? x) (compile-sym g env x [loada loadc loadg]))
+  (cond ((symbol? x) (compile-sym g env x #t))
 	((atom? x)
 	 (cond ((eq? x 0)   (emit g 'load0))
 	       ((eq? x 1)   (emit g 'load1))
@@ -460,21 +541,21 @@
 	   (if       (compile-if g env tail? x))
 	   (begin    (compile-begin g env tail? (cdr x)))
 	   (prog1    (compile-prog1 g env x))
-	   (lambda   (receive (the-f dept) (compile-f- env x)
+	   (lambda   (receive (the-f cenv) (compile-f- env x)
 		       (begin (emit g 'loadv the-f)
-			      (bcode:cdepth g dept)
-			      (if (< dept (nnn env))
-				  (emit g 'closure)))))
+			      (if (not (null? cenv))
+				  (begin
+				    (for-each (lambda (var)
+						(compile-sym g env var #f))
+					      cenv)
+				    (emit g 'closure (length cenv)))))))
 	   (and      (compile-and g env tail? (cdr x)))
 	   (or       (compile-or  g env tail? (cdr x)))
 	   (while    (compile-while g env (cadr x) (cons 'begin (cddr x))))
 	   (for      (compile-for   g env (cadr x) (caddr x) (cadddr x)))
 	   (return   (compile-in g env #t (cadr x))
 		     (emit g 'ret))
-	   (set!     (compile-in g env #f (caddr x))
-		     (compile-sym g env (cadr x) [seta setc setg]))
-	   (define   (compile-in g env tail?
-				 (expand-define x)))
+	   (set!     (compile-set! g env (cadr x) (caddr x)))
 	   (trycatch (compile-in g env #f `(lambda () ,(cadr x)))
 		     (unless (1arg-lambda? (caddr x))
 			     (error "trycatch: second form must be a 1-argument lambda"))
@@ -482,27 +563,7 @@
 		     (emit g 'trycatch))
 	   (else   (compile-app g env tail? x))))))
 
-(define (compile-f env f)
-  (receive (ff ignore)
-	   (compile-f- env f)
-	   ff))
-
-(define get-defined-vars
-  (letrec ((get-defined-vars-
-	    (lambda (expr)
-	      (cond ((atom? expr) ())
-		    ((and (eq? (car expr) 'define)
-			  (pair? (cdr expr)))
-		     (or (and (symbol? (cadr expr))
-			      (list (cadr expr)))
-			 (and (pair? (cadr expr))
-			      (symbol? (caadr expr))
-			      (list (caadr expr)))
-			 ()))
-		    ((eq? (car expr) 'begin)
-		     (apply nconc (map get-defined-vars- (cdr expr))))
-		    (else ())))))
-    (lambda (expr) (delete-duplicates (get-defined-vars- expr)))))
+;; optional and keyword args
 
 (define (keyword-arg? x) (and (pair? x) (keyword? (car x))))
 (define (keyword->symbol k)
@@ -548,78 +609,176 @@
       (let ((nxt (make-label g)))
 	(emit g 'brbound i)
 	(emit g 'brt nxt)
-	(compile-in g (cons (list-head vars i) env) #f (cadar opta))
+	(compile-in g (extend-env env (list-head vars i) '()) #f (cadar opta))
 	(emit g 'seta i)
 	(emit g 'pop)
 	(mark-label g nxt)
 	(emit-optional-arg-inits g env (cdr opta) vars (+ i 1)))))
 
-(define compile-f-
-  (let ((*defines-processed-token* (gensym)))
-    ; to eval a top-level expression we need to avoid internal define
-    (set-top-level-value!
-     'compile-thunk
-     (lambda (expr)
-       (compile `(lambda () ,expr . ,*defines-processed-token*))))
+;; define
 
-    (lambda (env f)
-      ; convert lambda to one body expression and process internal defines
-      (define (lambda-body e)
-	(let ((B (if (pair? (cddr e))
-		     (if (pair? (cdddr e))
-			 (cons 'begin (cddr e))
-			 (caddr e))
-		     (void))))
-	  (let ((V (get-defined-vars B)))
-	    (if (null? V)
-		B
-		(cons (list* 'lambda V B *defines-processed-token*)
-		      (map (lambda (x) (void)) V))))))
-      
-      (let ((g    (make-code-emitter))
-	    (args (cadr f))
-	    (atail (lastcdr (cadr f)))
-	    (vars (lambda-vars (cadr f)))
-	    (opta (filter pair? (cadr f)))
-	    (name (if (eq? (lastcdr f) *defines-processed-token*)
-		      'lambda
-		      (lastcdr f))))
-	(let* ((nargs (if (atom? args) 0 (length args)))
-	       (nreq  (- nargs (length opta)))
-	       (kwa   (filter keyword-arg? opta)))
+(define (expand-define x)
+  ;; expand a single `define` expression to `set!`
+  (let ((form (cadr x))
+	(body (if (pair? (cddr x))
+		  (cddr x)
+		  (if (symbol? (cadr x))
+		      `(,(void))
+		      (error "compile error: invalid syntax "
+			     (print-to-string x))))))
+    (if (symbol? form)
+	`(set! ,form ,(car body))
+	`(set! ,(car form)
+	       (lambda ,(cdr form) ,@body . ,(car form))))))
 
-	  ; emit argument checking prologue
-	  (if (not (null? opta))
-	      (begin
-		(if (null? kwa)
-		    (emit g 'optargs nreq
-			  (if (null? atail) nargs (- nargs)))
-		    (begin
-		      (bcode:indexfor g (make-perfect-hash-table
-					 (map cons
-					      (map car kwa)
-					      (iota (length kwa)))))
-		      (emit g 'keyargs nreq (length kwa)
-			    (if (null? atail) nargs (- nargs)))))
-		(emit-optional-arg-inits g env opta vars nreq)))
+(define get-defined-vars
+  (letrec ((get-defined-vars-
+	    (lambda (expr)
+	      (cond ((atom? expr) ())
+		    ((and (eq? (car expr) 'define)
+			  (pair? (cdr expr)))
+		     (or (and (symbol? (cadr expr))
+			      (list (cadr expr)))
+			 (and (pair? (cadr expr))
+			      (symbol? (caadr expr))
+			      (list (caadr expr)))
+			 ()))
+		    ((eq? (car expr) 'begin)
+		     (apply nconc (map get-defined-vars- (cdr expr))))
+		    (else ())))))
+    (lambda (expr) (delete-duplicates (get-defined-vars- expr)))))
 
-	  (cond ((> nargs 255)           (emit g (if (null? atail)
-						     'largc 'lvargc)
-					       nargs))
-		((not (null? atail))     (emit g 'vargc nargs))
-		((null? opta)            (emit g 'argc  nargs)))
+(define (lower-define e)
+  ;; convert lambda to one body expression and process internal defines
+  (define (lambda-body e)
+    (let ((B (if (pair? (cddr e))
+		 (if (pair? (cdddr e))
+		     (cons 'begin (cddr e))
+		     (caddr e))
+		 (void))))
+      (let ((V     (get-defined-vars B))
+	    (new-B (lower-define B)))
+	(if (null? V)
+	    new-B
+	    (cons `(lambda ,V ,new-B)
+		  (map (lambda (x) (void)) V))))))
+  (cond ((or (atom? e) (quoted? e))
+	 e)
+	((eq? (car e) 'define)
+	 (lower-define (expand-define e)))
+	((eq? (car e) 'lambda)
+	 `(lambda ,(cadr e) ,(lambda-body e) . ,(lastcdr e)))
+	(else
+	 (map lower-define e))))
 
-	  ; compile body and return
-	  (compile-in g (cons vars env) #t
-		      (if (eq? (lastcdr f) *defines-processed-token*)
-			  (caddr f)
-			  (lambda-body f)))
-	  (emit g 'ret)
-	  (values (function (encode-byte-code (bcode:code g))
-			    (const-to-idx-vec g) name)
-		  (aref g 3)))))))
+;; closure analysis
 
-(define (compile f) (compile-f () f))
+(define (lambda:body e) (caddr e))
+(define (lambda:vars e) (lambda-vars (cadr e)))
+
+(define (diff s1 s2)
+  (cond ((null? s1)         '())
+	((memq (car s1) s2) (diff (cdr s1) s2))
+	(else               (cons (car s1) (diff (cdr s1) s2)))))
+
+;; bindings that are both captured and set!'d
+(define (complex-bindings- e vars head nested capt setd)
+  (cond ((null? vars) #f)
+	((symbol? e)
+	 (if (and nested (memq e vars))
+	     (put! capt e #t)))
+	((or (atom? e) (quoted? e)) #f)
+	((eq? (car e) 'set!)
+	 (if (memq (cadr e) vars)
+	     (begin (put! setd (cadr e) #t)
+		    (if nested (put! capt (cadr e) #t))))
+	 (complex-bindings- (caddr e) vars #f nested capt setd))
+	((eq? (car e) 'lambda)
+	 (complex-bindings- (lambda:body e)
+			    (diff vars (lambda:vars e))
+			    #f
+			    (or (not head) nested)
+			    capt setd))
+	(else
+	 (cons (complex-bindings- (car e) vars (inlineable? e) nested capt setd)
+	       (map (lambda (x)
+		      (complex-bindings- x vars #f nested capt setd))
+		    (cdr e))))))
+
+(define (complex-bindings e vars)
+  (let ((capt (table))
+	(setd (table)))
+    (complex-bindings- e vars #f #f capt setd)
+    (filter (lambda (x) (has? capt x))
+	    (table.keys setd))))
+
+(define (vars-to-env vars cb offs)
+  (map (lambda (var i) (vinfo var (not (not (memq var cb))) (+ i offs)))
+       vars (iota (length vars))))
+
+(define (extend-env env vars cb)
+  (cons (vars-to-env vars cb 0)
+	env))
+
+;; main entry points
+
+(define (compile f) (compile-f () (lower-define f)))
+
+(define (compile-thunk expr)
+  ;; to eval a top-level expression we need to avoid internal define
+  (compile-f () `(lambda () ,(lower-define expr))))
+
+(define (compile-f env f)
+  (receive (ff ignore)
+	   (compile-f- env f)
+	   ff))
+
+(define (compile-f- env f)
+  ;; compile lambda expression, assuming defines already lowered
+  (let ((g     (make-code-emitter))
+	(args  (cadr f))
+	(atail (lastcdr (cadr f)))
+	(vars  (lambda:vars f))
+	(opta  (filter pair? (cadr f)))
+	(last  (lastcdr f)))
+    (let* ((name  (if (null? last) 'lambda last))
+	   (nargs (if (atom? args) 0 (length args)))
+	   (nreq  (- nargs (length opta)))
+	   (kwa   (filter keyword-arg? opta)))
+
+      ;; emit argument checking prologue
+      (if (not (null? opta))
+	  (begin
+	    (if (null? kwa)
+		(emit g 'optargs nreq
+		      (if (null? atail) nargs (- nargs)))
+		(begin
+		  (bcode:indexfor g (make-perfect-hash-table
+				     (map cons
+					  (map car kwa)
+					  (iota (length kwa)))))
+		  (emit g 'keyargs nreq (length kwa)
+			(if (null? atail) nargs (- nargs)))))
+	    (emit-optional-arg-inits g env opta vars nreq)))
+
+      (cond ((> nargs 255)           (emit g (if (null? atail)
+						 'largc 'lvargc)
+					   nargs))
+	    ((not (null? atail))     (emit g 'vargc nargs))
+	    ((null? opta)            (emit g 'argc  nargs)))
+
+      (let ((newenv (extend-env env vars (complex-bindings (lambda:body f) vars))))
+	(box-vars g (car newenv))
+	;; set initial stack pointer
+	(aset! g 4 (+ (length vars) 4))
+	;; compile body and return
+	(compile-in g newenv #t (lambda:body f))
+	(emit g 'ret)
+	(values (function (encode-byte-code (bcode:code g))
+			  (const-to-idx-vec g) name)
+		(bcode:cenv g))))))
+
+;; disassembler
 
 #;(define (ref-int32-LE a i)
   (int32 (+ (ash (aref a (+ i 0)) 0)
@@ -671,22 +830,16 @@
 		  (print-val (aref vals (aref code i)))
 		  (set! i (+ i 1)))
 		 
-		 ((loada seta call tcall list + - * / vector
-		   argc vargc loadi8 apply tapply)
+		 ((loada seta loadc call tcall list + - * / vector
+		   argc vargc loadi8 apply tapply closure box shift)
 		  (princ (number->string (aref code i)))
 		  (set! i (+ i 1)))
 		 
-		 ((loada.l seta.l largc lvargc call.l tcall.l)
+		 ((loada.l seta.l loadc.l largc lvargc call.l tcall.l box.l)
 		  (princ (number->string (ref-int32-LE code i)))
 		  (set! i (+ i 4)))
 		 
-		 ((loadc setc)
-		  (princ (number->string (aref code i)) " ")
-		  (set! i (+ i 1))
-		  (princ (number->string (aref code i)))
-		  (set! i (+ i 1)))
-		 
-		 ((loadc.l setc.l optargs keyargs)
+		 ((optargs keyargs)
 		  (princ (number->string (ref-int32-LE code i)) " ")
 		  (set! i (+ i 4))
 		  (princ (number->string (ref-int32-LE code i)))
