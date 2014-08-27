@@ -61,6 +61,7 @@ export
     MathConst,
     Matrix,
     MergeSort,
+    Nullable,
     ObjectIdDict,
     OrdinalRange,
     PollingFileWatcher,
@@ -145,6 +146,7 @@ export
     KeyError,
     LoadError,
     MethodError,
+    NullException,
     ParseError,
     ProcessExitedException,
     SystemError,
@@ -197,7 +199,7 @@ export
     ≠,
     !==,
     ≡,
-    ≢, 
+    ≢,
     $,
     %,
     &,
@@ -964,7 +966,7 @@ export
     rfft,
     xcorr,
 
-#   numerical integration
+# numerical integration
     quadgk,
 
 # iteration
@@ -1010,7 +1012,7 @@ export
     toc,
     toq,
 
-#dates
+# dates
     Date,
     DateTime,
     now,
@@ -1229,7 +1231,7 @@ export
 # shared arrays
     sdata,
     indexpids,
-    
+
 # paths and file names
     abspath,
     basename,
@@ -1322,6 +1324,9 @@ export
     unsafe_load,
     unsafe_pointer_to_objref,
     unsafe_store!,
+
+# nullable types
+    isnull,
 
 # Macros
     @__FILE__,
