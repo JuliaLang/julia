@@ -372,7 +372,7 @@ function gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     x, ex, blk = special_handler(flags,width)
     # interpret the number
     if precision < 0; precision = 6; end
-    ndigits = min(precision+1,BUFLEN-1)
+    ndigits = min(precision+1,length(DIGITS)-1)
     push!(blk.args, :((do_out, args) = ini_dec(out,$x,$ndigits, $flags, $width, $precision, $c)))
     ifblk = Expr(:if, :do_out, Expr(:block))
     push!(blk.args, ifblk)
@@ -671,16 +671,16 @@ function decode_dec(x::SmallFloatingPoint)
         DIGITS[1] = '0'
         return (int32(1), int32(1), false)
     end
-    @grisu_ccall x Grisu.FIXED 0
-    if LEN[1] == 0
+    len,pt,neg,buffer = grisu(x,Grisu.FIXED,0)
+    if len == 0
         DIGITS[1] = '0'
         return (int32(1), int32(1), false)
     else
-        for i = LEN[1]+1:POINT[1]
+        for i = len+1:pt
             DIGITS[i] = '0'
         end
     end
-    return LEN[1], POINT[1], NEG[1]
+    return int32(len), int32(pt), neg
 end
 # TODO: implement decode_oct, decode_0ct, decode_hex, decode_HEX for SmallFloatingPoint
 
@@ -696,13 +696,13 @@ fix_dec(x::Real, n::Int) = fix_dec(float(x),n)
 fix_dec(x::Integer, n::Int) = decode_dec(x)
 
 function fix_dec(x::SmallFloatingPoint, n::Int)
-    if n > BUFLEN-1; n = BUFLEN-1; end
-    @grisu_ccall x Grisu.FIXED n
-    if LEN[1] == 0
+    if n > length(DIGITS)-1; n = length(DIGITS)-1; end
+    len,pt,neg,buffer = grisu(x,Grisu.FIXED,n)
+    if len == 0
         DIGITS[1] = '0'
-        return (int32(1), int32(1), NEG[1]) 
+        return (int32(1), int32(1), neg)
     end
-    return LEN[1], POINT[1], NEG[1]
+    return int32(len), int32(pt), neg
 end
 
 ## ini decoding functions ##
@@ -751,9 +751,9 @@ function ini_dec(x::SmallFloatingPoint, n::Int)
         ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', n)
         return int32(1), int32(1), bool(signbit(x))
     else
-        @grisu_ccall x Grisu.PRECISION n
+        len,pt,neg,buffer = grisu(x,Grisu.PRECISION,n)
     end
-    return LEN[1], POINT[1], NEG[1]
+    return int32(len), int32(pt), neg
 end
 
 function ini_dec(x::BigInt, n::Int)
@@ -801,7 +801,7 @@ function bigfloat_printf(out, d, flags::ASCIIString, width::Int, precision::Int,
     write(fmt, uint8(0))
     printf_fmt = takebuf_array(fmt)
     @assert length(printf_fmt) == fmt_len
-    lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{Uint8}, Culong, Ptr{Uint8}, Ptr{BigFloat}...), DIGITS, BUFLEN-1, printf_fmt, &d)
+    lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{Uint8}, Culong, Ptr{Uint8}, Ptr{BigFloat}...), DIGITS, length(DIGITS)-1, printf_fmt, &d)
     lng > 0 || error("invalid printf formatting for BigFloat")
     write(out, pointer(DIGITS), lng)
     return (false, ())
