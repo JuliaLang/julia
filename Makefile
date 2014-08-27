@@ -144,7 +144,7 @@ $(build_bindir)/stringreplace: $(build_bindir) contrib/stringreplace.c
 JL_LIBS = julia julia-debug
 
 # private libraries, that are installed in $(prefix)/lib/julia
-JL_PRIVATE_LIBS = suitesparse_wrapper grisu Rmath
+JL_PRIVATE_LIBS = suitesparse_wrapper Rmath
 ifeq ($(USE_SYSTEM_FFTW),0)
 JL_PRIVATE_LIBS += fftw3 fftw3f fftw3_threads fftw3f_threads
 endif

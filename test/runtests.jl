@@ -8,7 +8,8 @@ testnames = [
     "resolve", "pollfd", "mpfr", "broadcast", "complex", "socket",
     "floatapprox", "readdlm", "regex", "float16", "combinatorics", "dates",
     "sysinfo", "rounding", "ranges", "mod2pi", "euler", "show",
-    "lineedit", "replcompletions", "repl", "test", "examples", "goto", "llvmcall"
+    "lineedit", "replcompletions", "repl", "test", "examples", "goto",
+    "llvmcall", "grisu"
 ]
 @unix_only push!(testnames, "unicode")
 

@@ -16,7 +16,7 @@ apt-get update -qq -y
 apt-get install python-software-properties -y
 add-apt-repository ppa:staticfloat/julia-deps -y
 apt-get update -qq -y
-apt-get install g++ git make patchelf gfortran llvm-3.3 libsuitesparse-dev libopenblas-dev liblapack-dev libarpack2-dev libfftw3-dev libgmp-dev libpcre3-dev libunwind8-dev libdouble-conversion-dev libmpfr-dev cmake -y
+apt-get install g++ git make patchelf gfortran llvm-3.3 libsuitesparse-dev libopenblas-dev liblapack-dev libarpack2-dev libfftw3-dev libgmp-dev libpcre3-dev libunwind8-dev libmpfr-dev cmake -y
 SCRIPT
 
 Vagrant.configure("2") do |config|

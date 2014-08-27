@@ -1,77 +1,73 @@
 module Grisu
+
 export print_shortest
-export @grisu_ccall, NEG, DIGITS, BUFLEN, LEN, POINT
+export DIGITS, grisu
 
-import Base.show, Base.print, Base.showcompact
+const SHORTEST = 1
+const FIXED = 2
+const PRECISION = 3
 
-const NEG    = Array(Bool)
 const DIGITS = Array(Uint8,309+17)
-const BUFLEN = int32(length(DIGITS)+1)
-const LEN    = Array(Int32)
-const POINT  = Array(Int32)
 
-macro grisu_ccall(value, mode, ndigits)
-    quote
-        ccall((:grisu, :libgrisu), Void,
-              (Float64, Int32, Int32, Ptr{Uint8}, Int32,
-               Ptr{Bool}, Ptr{Int32}, Ptr{Int32}),
-              $(esc(value)), $(esc(mode)), $(esc(ndigits)),
-              DIGITS, BUFLEN, NEG, LEN, POINT)
+include("grisu/float.jl")
+include("grisu/fastshortest.jl")
+include("grisu/fastprecision.jl")
+include("grisu/fastfixed.jl")
+include("grisu/bignum.jl")
+
+function grisu(v::FloatingPoint,mode,requested_digits,buffer=DIGITS)
+    if signbit(v)
+        neg = true
+        v = -v
+    else
+        neg = false
     end
+    if mode == PRECISION && requested_digits == 0
+        buffer[1] = 0x00
+        len = 0
+        return 0, 0, neg, buffer
+    end
+    if v == 0.0
+        buffer[1] = 0x30
+        buffer[2] = 0x00
+        len = point = 1
+        return len, point, neg, buffer
+    end
+    if mode == SHORTEST
+        status,len,point,buf = fastshortest(v,buffer)
+    elseif mode == FIXED
+        status,len,point,buf = fastfixedtoa(v,0,requested_digits,buffer)
+    elseif mode == PRECISION
+        status,len,point,buf = fastprecision(v,requested_digits,buffer)
+    end
+    status && return len-1, point, neg, buf
+    status, len, point, buf = bignumdtoa(v,mode,requested_digits,buffer)
+    return len-1, point, neg, buf
 end
 
-const SHORTEST        = int32(0) # shortest exact representation for doubles
-const SHORTEST_SINGLE = int32(1) # shortest exact representation for singles
-const FIXED           = int32(2) # fixed number of trailing decimal points
-const PRECISION       = int32(3) # fixed precision regardless of magnitude
-
-# wrapper for the core grisu function, primarily for debugging
-function grisu(x::Float64, mode::Integer, ndigits::Integer)
-    if !isfinite(x); error("non-finite value: $x"); end
-    if ndigits < 0; error("negative digits requested"); end
-    @grisu_ccall x mode ndigits
-    NEG[1], DIGITS[1:LEN[1]], int(POINT[1])
-end
-
-grisu(x::Float64) = grisu(x, SHORTEST, int32(0))
-grisu(x::Float32) = grisu(float64(x), SHORTEST_SINGLE, int32(0))
-grisu(x::Real) = grisu(float(x))
-
-function grisu_fix(x::Real, n::Integer)
-    if n > 17; n = 17; end
-    grisu(float64(x), FIXED, int32(n))
-end
-function grisu_sig(x::Real, n::Integer)
-    if n > 309; n = 309; end
-    grisu(float64(x), PRECISION, int32(n))
-end
-
-_show(io::IO, x::FloatingPoint, mode::Int32, n::Int, t) =
+_show(io::IO, x::FloatingPoint, mode, n::Int, t) =
     _show(io, x, mode, n, t, "NaN", "Inf")
-_show(io::IO, x::Float32, mode::Int32, n::Int, t) =
+_show(io::IO, x::Float32, mode, n::Int, t) =
     _show(io, x, mode, n, t, "NaN32", "Inf32")
-_show(io::IO, x::Float16, mode::Int32, n::Int, t) =
+_show(io::IO, x::Float16, mode, n::Int, t) =
     _show(io, x, mode, n, t, "NaN16", "Inf16")
 
-function _show(io::IO, x::FloatingPoint, mode::Int32, n::Int, typed, nanstr, infstr)
-    if isnan(x) return write(io, typed ? nanstr : "NaN"); end
+function _show(io::IO, x::FloatingPoint, mode, n::Int, typed, nanstr, infstr)
+    isnan(x) && return write(io, typed ? nanstr : "NaN")
     if isinf(x)
-        if x < 0 write(io,'-') end
+        signbit(x) && write(io,'-')
         write(io, typed ? infstr : "Inf")
         return
     end
-    if typed && isa(x,Float16) write(io, "float16("); end
-    @grisu_ccall x mode n
-    pdigits = pointer(DIGITS)
-    neg = NEG[1]
-    len = int(LEN[1])
-    pt  = int(POINT[1])
+    typed && isa(x,Float16) && write(io, "float16(")
+    len,pt,neg,buffer = grisu(x,mode,n)
+    pdigits = pointer(buffer)
     if mode == PRECISION
-        while len > 1 && DIGITS[len] == '0'
+        while len > 1 && buffer[len] == 0x30
             len -= 1
         end
     end
-    if neg write(io,'-') end
+    neg && write(io,'-')
     if pt <= -4 || pt > 6 # .00001 to 100000.
         # => #.#######e###
         write(io, pdigits, 1)
@@ -83,7 +79,7 @@ function _show(io::IO, x::FloatingPoint, mode::Int32, n::Int, typed, nanstr, inf
         end
         write(io, typed && isa(x,Float32) ? 'f' : 'e')
         write(io, dec(pt-1))
-        if typed && isa(x,Float16) write(io, ")"); end
+        typed && isa(x,Float16) && write(io, ")")
         return
     elseif pt <= 0
         # => 0.00########
@@ -106,21 +102,16 @@ function _show(io::IO, x::FloatingPoint, mode::Int32, n::Int, typed, nanstr, inf
         write(io, '.')
         write(io, pdigits+pt, len-pt)
     end
-    if typed && isa(x,Float32) write(io, "f0") end
-    if typed && isa(x,Float16) write(io, ")"); end
+    typed && isa(x,Float32) && write(io, "f0")
+    typed && isa(x,Float16) && write(io, ")")
     nothing
 end
 
-show(io::IO, x::Float64) = _show(io, x, SHORTEST, 0, true)
-show(io::IO, x::Float32) = _show(io, x, SHORTEST_SINGLE, 0, true)
-show(io::IO, x::Float16) = _show(io, x, PRECISION, 5, true)
+Base.show(io::IO, x::FloatingPoint) = _show(io, x, SHORTEST, 0, true)
 
-print(io::IO, x::Float32) = _show(io, x, SHORTEST_SINGLE, 0, false)
-print(io::IO, x::Float16) = _show(io, x, PRECISION, 5, false)
-
-showcompact(io::IO, x::Float64) = _show(io, x, PRECISION, 6, false)
-showcompact(io::IO, x::Float32) = _show(io, x, PRECISION, 6, false)
-showcompact(io::IO, x::Float16) = _show(io, x, PRECISION, 5, false)
+Base.showcompact(io::IO, x::Float64) = _show(io, x, PRECISION, 6, false)
+Base.showcompact(io::IO, x::Float32) = _show(io, x, PRECISION, 6, false)
+Base.showcompact(io::IO, x::Float16) = _show(io, x, PRECISION, 5, false)
 
 # normal:
 #   0 < pt < len        ####.####           len+1
@@ -131,14 +122,12 @@ showcompact(io::IO, x::Float16) = _show(io, x, PRECISION, 5, false)
 #   pt <= 0             ########e-###       len+k+2
 #   0 < pt              ########e###        len+k+1
 
-function _print_shortest(io::IO, x::FloatingPoint, dot::Bool, mode::Int32, n::Int)
-    if isnan(x); return write(io, "NaN"); end
-    if x < 0 write(io,'-') end
-    if isinf(x); return write(io, "Inf"); end
-    @grisu_ccall x mode n
-    pdigits = pointer(DIGITS)
-    len = int(LEN[1])
-    pt  = int(POINT[1])
+function _print_shortest(io::IO, x::FloatingPoint, dot::Bool, mode, n::Int)
+    isnan(x) && return write(io, "NaN")
+    x < 0 && write(io,'-')
+    isinf(x) && return write(io, "Inf")
+    len,pt,neg,buffer = grisu(x,mode,n)
+    pdigits = pointer(buffer)
     e = pt-len
     k = -9<=e<=9 ? 1 : 2
     if -pt > k+1 || e+dot > k+1
@@ -173,9 +162,7 @@ function _print_shortest(io::IO, x::FloatingPoint, dot::Bool, mode::Int32, n::In
     nothing
 end
 
-print_shortest(io::IO, x::Float64, dot::Bool) = _print_shortest(io, x, dot, SHORTEST, 0)
-print_shortest(io::IO, x::Float32, dot::Bool) = _print_shortest(io, x, dot, SHORTEST_SINGLE, 0)
-print_shortest(io::IO, x::Float16, dot::Bool=false) = _print_shortest(io, x, dot, PRECISION, 5)
+print_shortest(io::IO, x::FloatingPoint, dot::Bool) = _print_shortest(io, x, dot, SHORTEST, 0)
 print_shortest(io::IO, x::Union(FloatingPoint,Integer)) = print_shortest(io, float(x), false)
 
 end # module
