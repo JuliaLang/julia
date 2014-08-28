@@ -1956,7 +1956,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
                 else {
                     jl_compute_field_offsets(ndt);
                 }
-                if (ndt->size == 0 && tn != jl_array_typename)
+                if (jl_is_datatype_singleton(ndt) && tn != jl_array_typename)
                     ndt->instance = newstruct(ndt);
             }
             else {
