@@ -48,8 +48,8 @@ release-candidate: release test
 		echo "Undocumented functions found in doc/UNDOCUMENTED.rst; document them, then retry"; \
 		exit 1; \
 	fi
-	@$(MAKE) -C doc html  SPHINXOPTS="-W" #Rebuild Julia HTML docs pedantically
-	@$(MAKE) -C doc latex SPHINXOPTS="-W" #Rebuild Julia PDF docs pedantically
+	@$(MAKE) -C doc html  SPHINXOPTS="-W -n" #Rebuild Julia HTML docs pedantically
+	@$(MAKE) -C doc latex SPHINXOPTS="-W -n" #Rebuild Julia PDF docs pedantically
 	@$(MAKE) -C doc doctest #Run Julia doctests
 	@$(MAKE) -C doc linkcheck #Check all links
 	@$(MAKE) -C doc helpdb.jl #Rebuild Julia online documentation for help(), apropos(), etc...
