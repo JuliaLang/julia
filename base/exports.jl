@@ -1172,6 +1172,7 @@ export
     write,
     writecsv,
     writedlm,
+    TCPSocket,
     UDPSocket,
 
 # multiprocessing
