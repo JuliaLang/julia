@@ -1240,3 +1240,5 @@ end
 @test isdigit("23435")==true
 @test isalnum("23435")==true
 @test isalpha("23435")==false
+@test iscntrl( string(char(0x0080))) == true
+@test ispunct( "‡؟჻") ==true
