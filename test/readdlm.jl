@@ -67,6 +67,7 @@ let result1 = reshape({"t", "c", "", "c"}, 2, 2),
 end
 
 @test isequaldlm(readcsv(IOBuffer("\n1,2,3\n4,5,6\n\n\n")), reshape({"",1.0,4.0,"","","",2.0,5.0,"","","",3.0,6.0,"",""}, 5, 3), Any)
+@test isequaldlm(readcsv(IOBuffer("1,2\n\n4,5")), reshape({1.0,"",4.0,2.0,"",5.0}, 3, 2), Any)
 
 let x = randbool(5, 10), io = IOBuffer()
     writedlm(io, x)
