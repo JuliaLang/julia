@@ -234,8 +234,9 @@ particular algorithm to be registered as the default in all sorting
 functions for specific arrays. For example, here are the two default
 methods from `sort.jl
 <https://github.com/JuliaLang/julia/blob/master/base/sort.jl>`_::
-  defalg(v::AbstractArray) = MergeSort
-  defalg{T<:Number}(v::AbstractArray{T}) = QuickSort
+
+    defalg(v::AbstractArray) = MergeSort
+    defalg{T<:Number}(v::AbstractArray{T}) = QuickSort
 
 As for numeric arrays, choosing a non-stable default algorithm for
 array types for which the notion of a stable sort is meaningless (i.e.
