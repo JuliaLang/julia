@@ -154,7 +154,7 @@ function DLMStore{T,S<:String}(::Type{T}, dims::NTuple{2,Integer}, has_header::B
     ((nrows == 0) || (ncols == 0)) && error("Empty input")
     ((nrows < 0) || (ncols < 0)) && error("Invalid dimensions")
     hdr_offset = has_header ? 1 : 0
-    DLMStore{T,S}(fill(SubString(sbuff,1,0), 1, ncols), Array(T, nrows-hdr_offset, ncols), nrows, ncols, 1, 0, hdr_offset, sbuff, auto, eol, Array(Float64,1))
+    DLMStore{T,S}(fill(SubString(sbuff,1,0), 1, ncols), Array(T, nrows-hdr_offset, ncols), nrows, ncols, 0, 0, hdr_offset, sbuff, auto, eol, Array(Float64,1))
 end
 
 function store_cell{T,S<:String}(dlmstore::DLMStore{T,S}, row::Int, col::Int, quoted::Bool, startpos::Int, endpos::Int) 
@@ -173,8 +173,11 @@ function store_cell{T,S<:String}(dlmstore::DLMStore{T,S}, row::Int, col::Int, qu
 
     if drow > 0
         # fill missing elements
-        while ((drow - lastrow) > 1) || ((drow > lastrow) && (lastcol < ncols))
-            (lastcol == ncols) && (lastcol = 0)
+        while ((drow - lastrow) > 1) || ((drow > lastrow > 0) && (lastcol < ncols))
+            if (lastcol == ncols) || (lastrow == 0)
+                lastcol = 0
+                lastrow += 1
+            end
             for cidx in (lastcol+1):ncols
                 if (T <: String) || (T == Any)
                     cells[lastrow,cidx] = SubString(sbuff, 1, 0)
@@ -185,7 +188,6 @@ function store_cell{T,S<:String}(dlmstore::DLMStore{T,S}, row::Int, col::Int, qu
                 end
             end
             lastcol = ncols
-            lastrow += 1
         end
 
         # fill data
