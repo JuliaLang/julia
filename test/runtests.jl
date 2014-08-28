@@ -9,7 +9,7 @@ testnames = [
     "floatapprox", "readdlm", "reflection", "regex", "float16", "combinatorics",
     "sysinfo", "rounding", "ranges", "mod2pi", "euler", "show",
     "lineedit", "replcompletions", "repl", "test", "goto",
-    "llvmcall", "grisu", "nullable", "meta", "staged"
+    "llvmcall", "grisu", "arrayviews", "nullable", "meta", "staged"
 ]
 
 if isdir(joinpath(dirname(@__FILE__), "..", "examples"))
