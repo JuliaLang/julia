@@ -505,6 +505,8 @@ static Type *julia_struct_to_llvm(jl_value_t *jt)
                     lty = jl_pvalue_llvmt;
                 else
                     lty = ty==(jl_value_t*)jl_bool_type ? T_int8 : julia_type_to_llvm(ty);
+                if (lty == T_void || lty->isEmptyTy())
+                    continue;
                 latypes.push_back(lty);
             }
             structdecl->setBody(latypes);
