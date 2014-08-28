@@ -114,20 +114,20 @@ $(build_private_libdir)/sys%ji: $(build_private_libdir)/sys%o
 .PRECIOUS: $(build_private_libdir)/sys%o
 
 $(build_private_libdir)/sys%$(SHLIB_EXT): $(build_private_libdir)/sys%o
-	$(CXX) -shared -fPIC -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ $< \
+	@$(call PRINT_LINK, $(CXX) -shared -fPIC -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ $< \
 		$$([ $(OS) = Darwin ] && echo -Wl,-undefined,dynamic_lookup || echo -Wl,--unresolved-symbols,ignore-all ) \
-		$$([ $(OS) = WINNT ] && echo -ljulia -lssp)
+		$$([ $(OS) = WINNT ] && echo -ljulia -lssp))
 	$(DSYMUTIL) $@
 
 $(build_private_libdir)/sys0.o:
-	@$(QUIET_JULIA) cd base && \
-	$(call spawn,$(JULIA_EXECUTABLE)) --build $(call cygpath_w,$(build_private_libdir)/sys0) sysimg.jl
+	@$(call PRINT_JULIA, cd base && \
+	$(call spawn,$(JULIA_EXECUTABLE)) --build $(call cygpath_w,$(build_private_libdir)/sys0) sysimg.jl)
 
 $(build_private_libdir)/sys.o: VERSION base/*.jl base/pkg/*.jl base/linalg/*.jl base/sparse/*.jl $(build_datarootdir)/julia/helpdb.jl $(build_datarootdir)/man/man1/julia.1 $(build_private_libdir)/sys0.$(SHLIB_EXT)
-	@$(QUIET_JULIA) cd base && \
+	@$(call PRINT_JULIA, cd base && \
 	$(call spawn,$(JULIA_EXECUTABLE)) --build $(call cygpath_w,$(build_private_libdir)/sys) \
 		-J$(call cygpath_w,$(build_private_libdir))/$$([ -e $(build_private_libdir)/sys.ji ] && echo sys.ji || echo sys0.ji) -f sysimg.jl \
-		|| (echo "*** This error is usually fixed by running 'make clean'. If the error persists, try 'make cleanall'. ***" && false)
+		|| (echo "*** This error is usually fixed by running 'make clean'. If the error persists, try 'make cleanall'. ***" && false))
 
 run-julia-debug run-julia-release: run-julia-%:
 	$(MAKE) $(QUIET_MAKE) run-julia JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$*)"
