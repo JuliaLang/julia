@@ -554,6 +554,11 @@ STATIC_INLINE int jl_isbits(void *t)   // corresponding to isbits() in julia
             ((jl_datatype_t*)t)->pointerfree && !((jl_datatype_t*)t)->abstract);
 }
 
+STATIC_INLINE int jl_is_datatype_singleton(jl_datatype_t *d)
+{
+    return (d->size == 0 && (d->names==jl_null || !d->mutabl));
+}
+
 STATIC_INLINE int jl_is_abstracttype(void *v)
 {
     return (jl_is_datatype(v) && ((jl_datatype_t*)(v))->abstract);
