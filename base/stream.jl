@@ -243,7 +243,7 @@ function init_stdio(handle)
         if t == UV_TTY
             ret = TTY(handle)
         elseif t == UV_TCP
-            ret = TcpSocket(handle)
+            ret = TCPSocket(handle)
         elseif t == UV_NAMED_PIPE
             ret = Pipe(handle)
         else
