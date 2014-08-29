@@ -1839,3 +1839,14 @@ let m = My8156(nothing, 1)
     @test m.a === nothing
     @test m.b === 1
 end
+
+# issue #8184
+immutable Foo8184
+    x::Nothing
+    y::Nothing
+    z::Float64
+end
+let f = Foo8184(nothing,nothing,1.0)
+    g(x) = x.z
+    @test g(f) === 1.0
+end

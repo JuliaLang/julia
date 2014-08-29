@@ -167,6 +167,7 @@ static Constant *julia_const_to_llvm(jl_value_t *e)
     }
     else if (jl_isbits(jt)) {
         size_t nf = jl_tuple_len(bt->names), i;
+        size_t llvm_nf = 0;
         Constant **fields = (Constant**)alloca(nf * sizeof(Constant*));
         jl_value_t *f=NULL;
         JL_GC_PUSH1(&f);
@@ -183,7 +184,8 @@ static Constant *julia_const_to_llvm(jl_value_t *e)
                 JL_GC_POP();
                 return NULL;
             }
-            fields[i] = val;
+            if (val->getType() != NoopType)
+                fields[llvm_nf++] = val;
         }
         JL_GC_POP();
         Type *t = julia_struct_to_llvm(jt);
@@ -191,7 +193,7 @@ static Constant *julia_const_to_llvm(jl_value_t *e)
             return UndefValue::get(NoopType);
         StructType *st = dyn_cast<StructType>(t);
         assert(st);
-        return ConstantStruct::get(st, ArrayRef<Constant*>(fields,nf));
+        return ConstantStruct::get(st, ArrayRef<Constant*>(fields,llvm_nf));
     }
     return NULL;
 }
