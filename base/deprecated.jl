@@ -169,3 +169,7 @@ scale!{T<:Base.LinAlg.BlasReal}(X::Array{T}, s::Complex) = error("scale!: Cannot
 @deprecate rsplit(x,y,l::Integer,k::Bool) rsplit(x,y;limit=l,keep=k)
 @deprecate rsplit(x,y,l::Integer) rsplit(x,y;limit=l)
 @deprecate rsplit(x,y,k::Bool) rsplit(x,y;keep=k)
+
+@deprecate isblank(c::Char) c == ' ' || c == '\t'
+@deprecate isblank(s::String) all(c -> c == ' ' || c == '\t', s)
+

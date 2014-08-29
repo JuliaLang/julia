@@ -4,7 +4,10 @@ module UTF8proc
 import Base: show, showcompact, ==, string, symbol, isless
 
 # also exported by Base:
-export normalize_string, is_valid_char, is_assigned_char
+export normalize_string, is_valid_char, is_assigned_char,
+   islower, isupper, isalpha, isdigit, isnumber, isalnum, 
+   iscntrl, ispunct, isspace, isprint, isgraph, isblank
+
 
 # whether codepoints are valid Unicode
 is_valid_char(c) = bool(ccall(:utf8proc_codepoint_valid, Cchar, (Int32,), c))
@@ -115,8 +118,63 @@ function category_code(c)
     cat == 0 ? UTF8PROC_CATEGORY_CN : cat
 end
 
+# category_code() modified to ignore case of unassigned category CN
+#  used by character class predicates for improved performance
+function _catcode(c)
+    c > 0x10FFFF && return 0x0000 # see utf8proc_get_property docs
+    cat = unsafe_load(ccall(:utf8proc_get_property, Ptr{Uint16}, (Int32,), c))
+end
+
 is_assigned_char(c) = category_code(c) != UTF8PROC_CATEGORY_CN
 
 # TODO: use UTF8PROC_CHARBOUND to extract graphemes from a string, e.g. to iterate over graphemes?
+
+## libc character class predicates ##
+
+islower(c::Char) = (_catcode(c)==UTF8PROC_CATEGORY_LL)
+
+function isupper(c::Char)
+    ccode=_catcode(c)
+    return ccode==UTF8PROC_CATEGORY_LU || ccode==UTF8PROC_CATEGORY_LT
+end
+
+isalpha(c::Char) = (UTF8PROC_CATEGORY_LU <= _catcode(c) <=
+                                            UTF8PROC_CATEGORY_LO)
+
+isdigit(c::Char) = ('0' <= c <= '9')
+
+isnumber(c::Char) = (UTF8PROC_CATEGORY_ND <= _catcode(c) <=
+                                            UTF8PROC_CATEGORY_NO)
+
+function isalnum(c::Char)
+    ccode=_catcode(c)
+    return (UTF8PROC_CATEGORY_LU <= ccode <= UTF8PROC_CATEGORY_LO) ||
+                    (UTF8PROC_CATEGORY_ND <= ccode <= UTF8PROC_CATEGORY_NO)
+end
+
+iscntrl(c::Char) = (uint(c)<= 0x1f || 0x7f<=uint(c)<=0x9f)
+
+ispunct(c::Char) = (UTF8PROC_CATEGORY_PC <=_catcode(c) <= UTF8PROC_CATEGORY_PO)
+
+isspace(c::Char) = c==' ' || '\t'<=c<='\r' || c==0x85 || _catcode(c)==UTF8PROC_CATEGORY_ZS
+                               
+isprint(c::Char) = (UTF8PROC_CATEGORY_LU <= _catcode(c) <= UTF8PROC_CATEGORY_ZS)
+isgraph(c::Char) = (UTF8PROC_CATEGORY_LU <= _catcode(c) <= UTF8PROC_CATEGORY_SO)
+
+for name = ("alnum", "alpha", "cntrl", "digit", "number", "graph",
+            "lower", "print", "punct", "space", "upper")
+    f = symbol(string("is",name))
+    @eval begin
+        function $f(s::String)
+            for c in s
+                if !$f(c)
+                    return false
+                end
+            end
+            return true
+        end
+    end
+end
+
 
 end # module
