@@ -1485,8 +1485,18 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
                 }
             }
             else {
-                Value *fldv = builder.
-                    CreateExtractValue(strct, ArrayRef<unsigned>(&idx,1));
+                unsigned llvmidx = 0;
+                // LLVM struct omits 0-size entries
+                // TODO: try to avoid this loop
+                for(unsigned i=0; i < idx; i++) {
+                    if (julia_type_to_llvm(jl_tupleref(sty->types, i)) != T_void)
+                        llvmidx++;
+                }
+                Value *fldv;
+                if (julia_type_to_llvm(jfty) == T_void)
+                    fldv = UndefValue::get(NoopType);
+                else
+                    fldv = builder.CreateExtractValue(strct, ArrayRef<unsigned>(&llvmidx,1));
                 if (jfty == (jl_value_t*)jl_bool_type) {
                     fldv = builder.CreateTrunc(fldv, T_int1);
                 }
@@ -1596,15 +1606,19 @@ static Value *emit_f_is(jl_value_t *rt1, jl_value_t *rt2,
             }
             answer = ConstantInt::get(T_int1, 1);
             size_t l = jl_tuple_len(types);
+            unsigned j = 0;
             for(unsigned i=0; i < l; i++) {
                 jl_value_t *fldty = jl_tupleref(types,i);
                 Value *subAns;
                 if (isStruct) {
-                    subAns =
-                        emit_f_is(fldty, fldty, NULL, NULL,
-                                  builder.CreateExtractValue(varg1, ArrayRef<unsigned>(&i,1)),
-                                  builder.CreateExtractValue(varg2, ArrayRef<unsigned>(&i,1)),
-                                  ctx);
+                    if (julia_type_to_llvm(fldty) != T_void) {
+                        subAns =
+                            emit_f_is(fldty, fldty, NULL, NULL,
+                                      builder.CreateExtractValue(varg1, ArrayRef<unsigned>(&j,1)),
+                                      builder.CreateExtractValue(varg2, ArrayRef<unsigned>(&j,1)),
+                                      ctx);
+                        j++;
+                    }
                 }
                 else {
                     subAns =
