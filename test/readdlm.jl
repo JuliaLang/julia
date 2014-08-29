@@ -66,7 +66,10 @@ let result1 = reshape({"t", "c", "", "c"}, 2, 2),
     @test isequaldlm(readdlm(IOBuffer("t t \n\"\"\"c\" c")), result2, Any)
 end
 
-@test isequaldlm(readcsv(IOBuffer("\n1,2,3\n4,5,6\n\n\n")), reshape({"",1.0,4.0,"","","",2.0,5.0,"","","",3.0,6.0,"",""}, 5, 3), Any)
+@test isequaldlm(readcsv(IOBuffer("\n1,2,3\n4,5,6\n\n\n"), skipblanks=false), reshape({"",1.0,4.0,"","","",2.0,5.0,"","","",3.0,6.0,"",""}, 5, 3), Any)
+@test isequaldlm(readcsv(IOBuffer("\n1,2,3\n4,5,6\n\n\n"), skipblanks=true), reshape([1.0,4.0,2.0,5.0,3.0,6.0], 2, 3), Float64)
+@test isequaldlm(readcsv(IOBuffer("1,2\n\n4,5"), skipblanks=false), reshape({1.0,"",4.0,2.0,"",5.0}, 3, 2), Any)
+@test isequaldlm(readcsv(IOBuffer("1,2\n\n4,5"), skipblanks=true), reshape([1.0,4.0,2.0,5.0], 2, 2), Float64)
 
 let x = randbool(5, 10), io = IOBuffer()
     writedlm(io, x)
