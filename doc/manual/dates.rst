@@ -326,7 +326,7 @@ The final method in the adjuster API is the ``recur`` function. ``recur`` vector
     2014-10-14
     2014-11-11
 
-Additional examples and tests are availabe in `test/dates/adjusters.jl <https://github.com/JuliaLang/julia/blob/master/test/dates/adjusters.jl>`_.
+Additional examples and tests are available in `test/dates/adjusters.jl <https://github.com/JuliaLang/julia/blob/master/test/dates/adjusters.jl>`_.
 
 
 Period Types
