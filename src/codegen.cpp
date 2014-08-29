@@ -1619,6 +1619,9 @@ static Value *emit_f_is(jl_value_t *rt1, jl_value_t *rt2,
                                       ctx);
                         j++;
                     }
+                    else {
+                        continue;
+                    }
                 }
                 else {
                     subAns =
