@@ -3059,7 +3059,7 @@
 
 "),
 
-("Base","readdlm","readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
+("Base","readdlm","readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
 
    Read a matrix from the source where each line (separated by
    \"eol\") gives one row, with elements separated by the given
@@ -3078,6 +3078,9 @@
 
    Specifying \"skipstart\" will ignore the corresponding number of
    initial lines from the input.
+
+   If \"skipblanks\" is \"true\", blank lines in the input will be 
+   ignored.
 
    If \"use_mmap\" is \"true\", the file specified by \"source\" is
    memory mapped for potential speedups. Default is \"true\" except on
