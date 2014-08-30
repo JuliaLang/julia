@@ -737,6 +737,39 @@ jl_expr_t *jl_lam_body(jl_expr_t *l)
     return (jl_expr_t*)be;
 }
 
+jl_expr_t *jl_lam_argtypes(jl_expr_t *ast)
+{
+    jl_array_t *sig = jl_lam_args(ast);
+    int n = jl_array_len(sig);
+    jl_expr_t *argsig = jl_exprn(call_sym, n+1);
+    JL_GC_PUSH1(&argsig);
+    jl_exprargset(argsig, 0, jl_new_struct(jl_topnode_type, tuple_sym));
+    for (int i = 0; i < n; i++) {
+        jl_value_t *param = jl_cellref(sig, i);
+        jl_value_t *aty = (jl_value_t*)jl_any_type;
+        if (jl_is_expr(param))
+            aty = jl_exprarg(param, 1);
+        jl_exprargset(argsig, i+1, aty);
+    }
+    JL_GC_POP();
+    return argsig;
+}
+
+
+jl_expr_t *jl_lam_retsigty(jl_expr_t *ast)
+{
+    ast = jl_lam_body(ast);
+    ast = (jl_expr_t*)jl_exprarg(ast, jl_array_len(ast->args)-1);
+    if (!(jl_is_expr(ast) && ast->head == return_sym)) return NULL;
+    ast = (jl_expr_t*)jl_exprarg(ast, 0);
+    if (!(jl_is_expr(ast) && ast->head == call_sym)) return NULL;
+    jl_value_t *func = jl_exprarg(ast, 0);
+    if (!(jl_is_topnode(func) && jl_fieldref(func, 0) == (jl_value_t*)typeassert_sym)) return NULL;
+    jl_value_t *ty = jl_exprarg(ast, 2);
+    if (!(jl_is_symbol(ty) || jl_is_symbolnode(ty))) return NULL;
+    return (jl_expr_t*)ty;
+}
+
 jl_sym_t *jl_decl_var(jl_value_t *ex)
 {
     if (jl_is_symbol(ex)) return (jl_sym_t*)ex;
@@ -750,7 +783,7 @@ int jl_is_rest_arg(jl_value_t *ex)
     if (((jl_expr_t*)ex)->head != colons_sym) return 0;
     jl_expr_t *atype = (jl_expr_t*)jl_exprarg(ex,1);
     if (!jl_is_expr(atype)) return 0;
-    if (atype->head != call_sym || jl_array_len(atype->args) != 3)
+    if ((atype->head != call_sym && atype->head != call1_sym) || jl_array_len(atype->args) != 3)
         return 0;
     if ((jl_sym_t*)jl_exprarg(atype,1) != dots_sym)
         return 0;

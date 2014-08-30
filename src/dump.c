@@ -908,7 +908,8 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
         if (dt->name == jl_array_type->name || dt->name == jl_pointer_type->name ||
             dt->name == jl_type_type->name || dt->name == jl_vararg_type->name ||
             dt->name == jl_abstractarray_type->name ||
-            dt->name == jl_densearray_type->name) {
+            dt->name == jl_densearray_type->name ||
+            dt->name == jl_function_type->name) {
             // builtin types are not serialized, so their caches aren't
             // explicitly saved. so we reconstruct the caches of builtin
             // parametric types here.
@@ -1080,7 +1081,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
     }
     else if (vtag == (jl_value_t*)jl_function_type) {
         jl_function_t *f =
-            (jl_function_t*)newobj((jl_value_t*)jl_function_type, 3);
+            (jl_function_t*)newobj((jl_value_t*)jl_function_any_type, 3);
         if (usetable)
             arraylist_push(&backref_list, f);
         f->linfo = (jl_lambda_info_t*)jl_deserialize_value(s, (jl_value_t**)&f->linfo);
@@ -1854,7 +1855,7 @@ void jl_init_serializer(void)
                      jl_typetype_type, jl_typetype_tvar, jl_ANY_flag, jl_array_any_type,
                      jl_intrinsic_type, jl_method_type, jl_methtable_type,
                      jl_voidpointer_type, jl_newvarnode_type, jl_array_symbol_type,
-                     jl_tupleref(jl_tuple_type,0),
+                     jl_tupleref(jl_tuple_type,0), jl_function_any_type,
 
                      jl_symbol_type->name, jl_gensym_type->name, jl_pointer_type->name,
                      jl_datatype_type->name, jl_uniontype_type->name, jl_array_type->name,

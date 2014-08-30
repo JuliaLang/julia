@@ -176,6 +176,7 @@ typedef struct _jl_function_t {
     jl_fptr_t fptr;
     jl_value_t *env;
     jl_lambda_info_t *linfo;
+    void *fptrSpec;
 } jl_function_t;
 
 typedef struct {
@@ -326,6 +327,7 @@ extern DLLEXPORT jl_datatype_t *jl_lambda_info_type;
 extern DLLEXPORT jl_datatype_t *jl_module_type;
 extern DLLEXPORT jl_datatype_t *jl_vararg_type;
 extern DLLEXPORT jl_datatype_t *jl_function_type;
+extern DLLEXPORT jl_typename_t *jl_function_typename;
 extern DLLEXPORT jl_datatype_t *jl_abstractarray_type;
 extern DLLEXPORT jl_datatype_t *jl_densearray_type;
 extern DLLEXPORT jl_datatype_t *jl_array_type;
@@ -368,6 +370,7 @@ extern DLLEXPORT jl_datatype_t *jl_void_type;
 extern DLLEXPORT jl_datatype_t *jl_voidpointer_type;
 extern DLLEXPORT jl_datatype_t *jl_pointer_type;
 
+extern DLLEXPORT jl_value_t *jl_function_any_type;
 extern DLLEXPORT jl_value_t *jl_array_uint8_type;
 extern DLLEXPORT jl_value_t *jl_array_any_type;
 extern DLLEXPORT jl_value_t *jl_array_symbol_type;
@@ -421,6 +424,7 @@ extern jl_sym_t *fastmath_sym;
 extern jl_sym_t *simdloop_sym; extern jl_sym_t *meta_sym;
 extern jl_sym_t *arrow_sym; extern jl_sym_t *ldots_sym;
 extern jl_sym_t *inert_sym;
+extern jl_sym_t *typeassert_sym;
 
 
 // GC write barrier
@@ -593,7 +597,8 @@ STATIC_INLINE jl_value_t *jl_cellset(void *a, size_t i, void *x)
 #define jl_is_module(v)      jl_typeis(v,jl_module_type)
 #define jl_is_mtable(v)      jl_typeis(v,jl_methtable_type)
 #define jl_is_task(v)        jl_typeis(v,jl_task_type)
-#define jl_is_func(v)        jl_typeis(v,jl_function_type)
+#define jl_is_functype(t) ((((jl_datatype_t*)(t))->name == jl_function_typename))
+#define jl_is_func(v)        ((jl_is_datatype(jl_typeof(v)) && ((jl_datatype_t*)jl_typeof(v))->name == jl_function_typename))
 #define jl_is_function(v)    jl_is_func(v)
 #define jl_is_ascii_string(v) jl_typeis(v,jl_ascii_string_type)
 #define jl_is_utf8_string(v) jl_typeis(v,jl_utf8_string_type)
@@ -724,7 +729,8 @@ DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...);
 DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, uint32_t na);
 DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type);
 DLLEXPORT jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env,
-                                        jl_lambda_info_t *li);
+                                        jl_lambda_info_t *li,
+                                        jl_value_t *argsig, jl_value_t *retsig);
 DLLEXPORT jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams);
 DLLEXPORT jl_tuple_t *jl_tuple(size_t n, ...);
 DLLEXPORT jl_tuple_t *jl_tuplev(size_t n, jl_value_t **v);
@@ -1009,6 +1015,7 @@ int jl_is_toplevel_only_expr(jl_value_t *e);
 jl_module_t *jl_base_relative_to(jl_module_t *m);
 void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
                    jl_lambda_info_t *def);
+void *jl_function_ptr(jl_function_t*, jl_value_t *argtypes, jl_value_t* rettype);
 
 jl_function_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tuple_t *types,
                                         int cache, int inexact);
@@ -1025,6 +1032,8 @@ jl_value_t *jl_lam_gensyms(jl_expr_t *l);
 jl_sym_t *jl_lam_argname(jl_lambda_info_t *li, int i);
 int jl_lam_vars_captured(jl_expr_t *ast);
 jl_expr_t *jl_lam_body(jl_expr_t *l);
+DLLEXPORT jl_expr_t *jl_lam_argtypes(jl_expr_t *l);
+DLLEXPORT jl_expr_t *jl_lam_retsigty(jl_expr_t *l);
 DLLEXPORT jl_value_t *jl_ast_rettype(jl_lambda_info_t *li, jl_value_t *ast);
 jl_sym_t *jl_decl_var(jl_value_t *ex);
 DLLEXPORT int jl_is_rest_arg(jl_value_t *ex);

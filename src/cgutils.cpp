@@ -942,6 +942,8 @@ static Value *emit_bounds_check(Value *a, jl_value_t *ty, Value *i, Value *len, 
     return im1;
 }
 
+static Value *emit_nthptr(Value *base, size_t n, MDNode* tbaa);
+
 // --- loading and storing ---
 
 static Value *emit_nthptr_addr(Value *v, size_t n)

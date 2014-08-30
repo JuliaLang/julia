@@ -62,7 +62,7 @@ cconvert(T, x) = convert(T, x)
 cconvert{T}(::Type{Ptr{Ptr{T}}}, a::Array) = a
 # convert strings to ByteString to pass as pointers
 cconvert{P<:Union(Int8,UInt8)}(::Type{Ptr{P}}, s::AbstractString) = bytestring(s)
-
+_print(x::ANY) = ccall(:jl_, Void, (Any,), x)
 reinterpret{T,S}(::Type{T}, x::S) = box(T,unbox(S,x))
 
 abstract IO
