@@ -46,6 +46,7 @@ External libraries, if used, include their own licenses:
 - [PCRE](http://www.pcre.org/licence.txt)
 - [RMATH](http://www.r-project.org/Licenses/)
 - [SUITESPARSE](http://www.cise.ufl.edu/research/sparse/SuiteSparse/current/SuiteSparse/)
+- [ZLIB](http://zlib.net/zlib_license.html)
 
 Julia bundles the following as external executables on some platforms:
 
