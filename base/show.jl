@@ -366,7 +366,15 @@ function show_call(io::IO, head, func, func_args, indent)
         show_unquoted(io, func, indent)
         print(io, ')')
     end
-    show_enclosed_list(io, op, func_args, ",", cl, indent)
+    if !isempty(func_args) && isa(func_args[1], Expr) && func_args[1].head === :parameters
+        print(io, op)
+        show_list(io, func_args[2:end], ',', indent, 0)
+        print(io, "; ")
+        show_list(io, func_args[1].args, ',', indent, 0)
+        print(io, cl)
+    else
+        show_enclosed_list(io, op, func_args, ",", cl, indent)
+    end
 end
 
 ## AST printing ##
