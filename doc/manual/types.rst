@@ -60,9 +60,11 @@ Julia's type system that should be mentioned up front are:
    distinction significant.
 -  Only values, not variables, have types — variables are simply names
    bound to values.
--  Both abstract and concrete types can be parameterized by other types
-   and by certain other values (currently integers, symbols, bools, and tuples thereof).
-   Type parameters may be completely omitted when they
+-  Both abstract and concrete types can be parameterized by other types.
+   They can also be parameterized by symbols, by values of any type for
+   which `isbits` returns true (essentially, things like numbers and bools
+   that are stored like C types or structs with no pointers to other objects),
+   and also by tuples thereof. Type parameters may be omitted when they
    do not need to be referenced or restricted.
 
 Julia's type system is designed to be powerful and expressive, yet

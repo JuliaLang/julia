@@ -6,6 +6,9 @@ New language features
 
   * Unicode version 7 is now supported for identifiers etcetera ([#7917]).
 
+  * Type parameters now permit any arbitrary `isbits` type, not just
+    `Int` and `Bool` ([#6081]). 
+
 Library improvements
 --------------------
 
@@ -905,6 +908,7 @@ Too numerous to mention.
 [#6056]: https://github.com/JuliaLang/julia/issues/6056
 [#6057]: https://github.com/JuliaLang/julia/issues/6057
 [#6073]: https://github.com/JuliaLang/julia/issues/6073
+[#6081]: https://github.com/JuliaLang/julia/issues/6081
 [#6116]: https://github.com/JuliaLang/julia/issues/6116
 [#6128]: https://github.com/JuliaLang/julia/issues/6128
 [#6169]: https://github.com/JuliaLang/julia/issues/6169
