@@ -1,3 +1,12 @@
+Julia v0.3.4 Release Notes
+==========================
+
+New language features
+---------------------
+
+  * Type parameters now permit any arbitrary `isbits` type, not just
+    `Int` and `Bool` ([#9161]). 
+
 Julia v0.3.0 Release Notes
 ==========================
 
@@ -916,3 +925,4 @@ Too numerous to mention.
 [#7464]: https://github.com/JuliaLang/julia/issues/7464
 [#7513]: https://github.com/JuliaLang/julia/issues/7513
 [#7647]: https://github.com/JuliaLang/julia/issues/7647
+[#9161]: https://github.com/JuliaLang/julia/issues/9161
