@@ -179,9 +179,6 @@ endif
 ifeq ($(USE_SYSTEM_SUITESPARSE),0)
 JL_PRIVATE_LIBS += amd camd ccolamd cholmod colamd umfpack spqr
 endif
-#ifeq ($(USE_SYSTEM_ZLIB),0)
-#JL_PRIVATE_LIBS += z
-#endif
 ifeq ($(OS),Darwin)
 ifeq ($(USE_SYSTEM_BLAS),1)
 ifeq ($(USE_SYSTEM_LAPACK),0)
