@@ -86,10 +86,6 @@ ifeq ($(USE_SYSTEM_GMP), 0)
 STAGE1_DEPS += gmp
 endif
 
-#ifeq ($(USE_SYSTEM_ZLIB), 0)
-#STAGE1_DEPS += zlib
-#endif
-
 ifeq ($(USE_SYSTEM_MPFR), 0)
 STAGE2_DEPS += mpfr
 ifeq ($(USE_SYSTEM_GMP), 0)
@@ -143,7 +139,7 @@ install: $(addprefix install-, $(DEP_LIBS))
 cleanall: $(addprefix clean-, $(DEP_LIBS))
 distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-uv get-pcre get-openlibm get-openspecfun get-dsfmt get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf get-mojibake
+getall: get-llvm get-uv get-pcre get-openlibm get-openspecfun get-dsfmt get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-mojibake
 
 ## PATHS ##
 # sort is used to remove potential duplicates
@@ -1555,66 +1551,6 @@ configure-mpfr: mpfr-$(MPFR_VER)/config.status
 compile-mpfr: $(MPFR_SRC_TARGET)
 check-mpfr: mpfr-$(MPFR_VER)/checked
 install-mpfr: $(MPFR_OBJ_TARGET)
-
-## ZLIB ##
-
-ifeq ($(OS),WINNT)
-ZLIB_SRC_TARGET = zlib-$(ZLIB_VER)/zlib1.$(SHLIB_EXT)
-else
-ZLIB_SRC_TARGET = zlib-$(ZLIB_VER)/libz.$(SHLIB_EXT)
-endif
-ZLIB_OBJ_TARGET = $(build_shlibdir)/libz.$(SHLIB_EXT)
-ZLIB_CONFIGFLAGS = CFLAGS="-O3 $(CFLAGS) -D_FILE_OFFSET_BITS=64"
-ifneq ($(OS),$(BUILD_OS))
-ZLIB_CONFIGFLAGS += CHOST=$(XC_HOST)
-else
-ZLIB_CONFIGFLAGS += CC="$(CC)"
-endif
-
-zlib-$(ZLIB_VER).tar.gz:
-	$(JLDOWNLOAD) $@ http://zlib.net/$@
-zlib-$(ZLIB_VER)/configure: zlib-$(ZLIB_VER).tar.gz
-	$(JLCHECKSUM) $<
-	$(TAR) zxf $<
-	touch -c $@
-zlib-$(ZLIB_VER)/config.status: zlib-$(ZLIB_VER)/configure
-ifeq ($(OS), WINNT)
-	cd zlib-$(ZLIB_VER) && \
-	cp win32/Makefile.gcc Makefile
-else
-	cd zlib-$(ZLIB_VER) && \
-	$(ZLIB_CONFIGFLAGS) ./configure --prefix=$(abspath $(build_prefix)) #not an autoconf script
-endif
-	echo 1 > $@
-$(ZLIB_SRC_TARGET): zlib-$(ZLIB_VER)/config.status
-	$(MAKE) -C zlib-$(ZLIB_VER)
-	touch -c $@
-zlib-$(ZLIB_VER)/checked: $(ZLIB_SRC_TARGET)
-ifneq ($(OS), WINNT)
-	$(MAKE) -C zlib-$(ZLIB_VER) check prefix=$(CROSS_COMPILE)
-endif
-	echo 1 > $@
-$(ZLIB_OBJ_TARGET): $(ZLIB_SRC_TARGET) zlib-$(ZLIB_VER)/checked
-ifeq ($(OS), WINNT)
-	cp zlib-$(ZLIB_VER)/zlib1.dll $@
-else
-	$(MAKE) -C zlib-$(ZLIB_VER) install prefix=$(CROSS_COMPILE) $(MAKE_COMMON)
-endif
-	$(INSTALL_NAME_CMD)libz.$(SHLIB_EXT) $@
-	touch -c $@
-
-clean-zlib:
-	-$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C zlib-$(ZLIB_VER) clean
-	-rm -f $(ZLIB_OBJ_TARGET)
-distclean-zlib:
-	-rm -rf zlib-$(ZLIB_VER).tar.gz zlib-$(ZLIB_VER)
-
-get-zlib: zlib-$(ZLIB_VER).tar.gz
-configure-zlib: zlib-$(ZLIB_VER)/config.status
-compile-zlib: $(ZLIB_SRC_TARGET)
-check-zlib: zlib-$(ZLIB_VER)/checked
-install-zlib: $(ZLIB_OBJ_TARGET)
-
 
 ## patchelf ##
 
