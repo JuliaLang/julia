@@ -67,15 +67,16 @@ macro evalpoly(z, p...)
     ai = :a0
     push!(as, :($ai = $a))
     C = Expr(:block,
-             :(t = $(esc(z))),
-             :(x = real(t)),
-             :(y = imag(t)),
+             :(x = real(tt)),
+             :(y = imag(tt)),
              :(r = x + x),
              :(s = x*x + y*y),
              as...,
-             :($ai * t + $b))
-    R = Expr(:macrocall, symbol("@horner"), esc(z), p...)
-    :(isa($(esc(z)), Complex) ? $C : $R)
+             :($ai * tt + $b))
+    R = Expr(:macrocall, symbol("@horner"), :tt, p...)
+    :(let tt = $(esc(z))
+          isa(tt, Complex) ? $C : $R
+      end)
 end
 
 rad2deg(z::Real) = oftype(z, 57.29577951308232*z)
