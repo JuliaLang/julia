@@ -67,7 +67,7 @@ release-candidate: release test
 	@echo
 	@echo To complete the release candidate checklist:
 	@echo
-	
+
 	@echo 1. Remove deprecations in base/deprecated.jl
 	@echo 2. Bump VERSION
 	@echo 3. Create tag, push to github "\(git tag v\`cat VERSION\` && git push --tags\)"
@@ -252,7 +252,7 @@ endif
 	cp -R -L $(build_datarootdir)/julia $(DESTDIR)$(datarootdir)/
 	# Remove git repository of juliadoc
 	-rm -rf $(DESTDIR)$(datarootdir)/julia/doc/juliadoc/.git
-	-rm $(DESTDIR)$(datarootdir)/julia/doc/juliadoc/.gitignore
+	-rm -f $(DESTDIR)$(datarootdir)/julia/doc/juliadoc/.gitignore
 	# Copy in beautiful new man page!
 	$(INSTALL_F) $(build_datarootdir)/man/man1/julia.1 $(DESTDIR)$(datarootdir)/man/man1/
 
