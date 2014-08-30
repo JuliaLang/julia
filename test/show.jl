@@ -164,3 +164,7 @@ end"""
 # unicode operator printing
 @test sprint(show, :(1 ⊕ (2 ⊗ 3))) == ":(1 ⊕ 2 ⊗ 3)"
 @test sprint(show, :((1 ⊕ 2) ⊗ 3)) == ":((1 ⊕ 2) ⊗ 3)"
+
+# issue #8155
+@test_repr "foo(x,y; z=bar)"
+@test_repr "foo(x,y,z=bar)"
