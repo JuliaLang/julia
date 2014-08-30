@@ -1272,17 +1272,17 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
     // if this contains Union types, methods after it might actually be
     // more specific than it. we need to re-sort them.
     if (has_unions(type)) {
-        jl_value_t* item_parent = newrec;
-	jl_value_t* next_parent = 0;
+        jl_value_t* item_parent = (jl_value_t*)newrec;
+        jl_value_t* next_parent = 0;
         jl_methlist_t *item = newrec->next, *next;
         jl_methlist_t **pitem = &newrec->next, **pnext;
         while (item != JL_NULL) {
             pl = pml;
             l = *pml;
-	    pa = parent;
+            pa = parent;
             next = item->next;
             pnext = &item->next;
-	    next_parent = item;
+            next_parent = (jl_value_t*)item;
             while (l != newrec->next) {
                 if (jl_args_morespecific((jl_value_t*)item->sig,
                                          (jl_value_t*)l->sig)) {
@@ -1294,7 +1294,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
                     *pl = item;
                     gc_wb(pa, item);
                     pnext = pitem;
-		    next_parent = item_parent;
+                    next_parent = item_parent;
                     break;
                 }
                 pl = &l->next;

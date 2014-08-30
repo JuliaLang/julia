@@ -270,7 +270,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             else {
                 jl_methtable_t *env = (jl_methtable_t*)((jl_function_t*)gf)->env;
                 bp = (jl_value_t**)&env->kwsorter;
-                bp_owner = env;
+                bp_owner = (jl_value_t*)env;
             }
             assert(jl_is_symbol(fname));
         }
@@ -284,7 +284,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             if (bp == NULL) {
                 b = jl_get_binding_for_method_def(jl_current_module, fname);
                 bp = &b->value;
-                bp_owner = jl_current_module;
+                bp_owner = (jl_value_t*)jl_current_module;
             }
         }
         jl_value_t *atypes=NULL, *meth=NULL;
