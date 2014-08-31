@@ -67,7 +67,7 @@ release-candidate: release test
 	@echo
 	@echo To complete the release candidate checklist:
 	@echo
-	
+
 	@echo 1. Remove deprecations in base/deprecated.jl
 	@echo 2. Bump VERSION
 	@echo 3. Create tag, push to github "\(git tag v\`cat VERSION\` && git push --tags\)"
