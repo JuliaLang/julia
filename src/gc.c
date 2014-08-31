@@ -263,8 +263,11 @@ static void add_lostval_parent(jl_value_t* parent)
 
 #define verify_val(v) do {                                              \
         if(lostval == (jl_value_t*)(v) && (v) != 0) {                   \
-            JL_PRINTF(JL_STDOUT, "Found lostval 0x%lx at %s:%d\n",      \
+            JL_PRINTF(JL_STDOUT,                                        \
+                      "Found lostval 0x%lx at %s:%d oftype: ",          \
                       (uintptr_t)(lostval), __FILE__, __LINE__);        \
+            jl_static_show(JL_STDOUT, jl_typeof(v));                    \
+            JL_PRINTF(JL_STDOUT, "\n");                                 \
         }                                                               \
     } while(0);
 
@@ -275,6 +278,9 @@ static void add_lostval_parent(jl_value_t* parent)
                       ty, (uintptr_t)(obj), __FILE__, __LINE__);        \
             JL_PRINTF(JL_STDOUT, "\tloc 0x%lx : ", (uintptr_t)(slot));  \
             JL_PRINTF(JL_STDOUT, args);                                 \
+            JL_PRINTF(JL_STDOUT, "\n");                                 \
+            JL_PRINTF(JL_STDOUT, "\ttype: ");                           \
+            jl_static_show(JL_STDOUT, jl_typeof(obj));                  \
             JL_PRINTF(JL_STDOUT, "\n");                                 \
             add_lostval_parent((jl_value_t*)(obj));                     \
         }                                                               \
@@ -1995,8 +2001,9 @@ static void gc_verify(void)
         jl_value_t* lostval_parent = NULL;
         for(int i = 0; i < lostval_parents.len; i++) {
             lostval_parent = (jl_value_t*)lostval_parents.items[i];
-            for(int j = 0; j < bits_save[GC_CLEAN].len; j++) {
-                if (bits_save[GC_CLEAN].items[j] == lostval_parent) {
+            int clean_len = bits_save[GC_CLEAN].len;
+            for(int j = 0; j < clean_len + bits_save[GC_QUEUED].len; j++) {
+                if (bits_save[j >= clean_len ? GC_QUEUED : GC_CLEAN].items[j >= clean_len ? j - clean_len : j] == lostval_parent) {
                     lostval = lostval_parent;
                     lostval_parent = NULL;
                     break;
@@ -2140,9 +2147,6 @@ void jl_gc_collect(void)
             uintptr_t item = (uintptr_t)last_remset->items[i];
             void* ptr = (void*)(item & ~(uintptr_t)1);
             objprofile_count(jl_typeof(ptr), 2, 0);
-            /*            jl_printf(JL_STDOUT, "rem : ");
-            jl_(ptr);
-            jl_printf(JL_STDOUT, "\n");*/
             if (item & 1) {
                 arraylist_push(remset, item);
             }
@@ -2150,16 +2154,6 @@ void jl_gc_collect(void)
             push_root(ptr, 0, gc_bits(ptr));
         }
         perm_scanned_bytes = SA;
-        /*        if (sweep_mask == GC_MARKED)
-            perm_marked = 0;
-        else {
-            for (int i = 0; i < perm_marked; i++) {
-                gc_bits((uintptr_t)scratch[i] & ~(uintptr_t)3) = GC_MARKED;
-            }
-            memcpy(mark_stack, scratch, perm_marked*sizeof(void*));
-            free(scratch);
-            mark_stack += perm_marked;
-            }*/
         
         pre_mark();
         visit_mark_stack(GC_MARKED_NOESC);
@@ -2416,8 +2410,8 @@ void *reallocb(void *b, size_t sz)
         memcpy(b2, b, GC_PAGE(buff)->osize);
         return b2;
     } else {
-        char* bv = (bigval_t*)realloc(bigval_header(buff), sz + (BVOFFS + 1)*sizeof(void*));
-        return bv + (BVOFFS + 1)*sizeof(void*);
+        bigval_t* bv = (bigval_t*)realloc(bigval_header(buff), sz + (BVOFFS + 1)*sizeof(void*));
+        return (char*)bv + (BVOFFS + 1)*sizeof(void*);
     }
 }
 

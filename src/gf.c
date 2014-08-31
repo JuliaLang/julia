@@ -1499,6 +1499,7 @@ static void all_p2c(jl_value_t *ast, jl_tuple_t *tvars)
     if (jl_is_lambda_info(ast)) {
         jl_lambda_info_t *li = (jl_lambda_info_t*)ast;
         li->ast = jl_prepare_ast(li, jl_null);
+        gc_wb(li, li->ast);
         parameters_to_closureenv(li->ast, tvars);
     }
     else if (jl_is_expr(ast)) {
@@ -1516,6 +1517,7 @@ static void precompile_unspecialized(jl_function_t *func, jl_tuple_t *sig, jl_tu
         // assuming they are there. method cache will fill them in when
         // it constructs closures for new "specializations".
         func->linfo->ast = jl_prepare_ast(func->linfo, jl_null);
+        gc_wb(func->linfo, func->linfo->ast);
         parameters_to_closureenv(func->linfo->ast, tvars);
         all_p2c(func->linfo->ast, tvars);
     }

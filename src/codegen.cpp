@@ -1378,8 +1378,8 @@ static void emit_write_barrier(jl_codectx_t* ctx, Value *parent, Value *ptr)
     builder.CreateCondBr(parent_marked, barrier_may_trigger, cont);
     
     builder.SetInsertPoint(barrier_may_trigger);
-    Value* ptr_mark_bits = builder.CreateAnd(builder.CreateLoad(builder.CreateBitCast(ptr, T_psize)), 3);
-    Value* ptr_not_marked = builder.CreateICmpEQ(ptr_mark_bits, ConstantInt::get(T_size, 0));
+    Value* ptr_mark_bit = builder.CreateAnd(builder.CreateLoad(builder.CreateBitCast(ptr, T_psize)), 1);
+    Value* ptr_not_marked = builder.CreateICmpEQ(ptr_mark_bit, ConstantInt::get(T_size, 0));
     builder.CreateCondBr(ptr_not_marked, barrier_trigger, cont);
     builder.SetInsertPoint(barrier_trigger);
     builder.CreateCall(prepare_call(queuerootfun), builder.CreateBitCast(parent, jl_pvalue_llvmt));

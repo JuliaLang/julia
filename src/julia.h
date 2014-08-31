@@ -1384,7 +1384,7 @@ static inline void gc_wb_fwd(void* parent, void* ptr)
 {
     #ifdef GC_INC
     // if parent is marked and ptr is clean
-    if(__unlikely((*((uintptr_t*)parent) & 3) == 1 && (*((uintptr_t*)ptr) & 3) == 0)) {
+    if(__unlikely((*((uintptr_t*)parent) & 3) == 1 && (*((uintptr_t*)ptr) & 1) == 0)) {
         gc_queue_root((void*)((uintptr_t)ptr | 1));
     }
     #endif
@@ -1393,7 +1393,7 @@ static inline void gc_wb_fwd(void* parent, void* ptr)
 static inline void gc_wb(void *parent, void *ptr)
 {
     if (__unlikely((*((uintptr_t*)parent) & 3) == 1 &&
-                   (*((uintptr_t*)ptr) & 3) == 0))
+                   (*((uintptr_t*)ptr) & 1) == 0))
         gc_queue_root(parent);
 }
 
