@@ -2387,7 +2387,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx, jl_
 #endif
             // extract pieces of the function object
             // TODO: try extractvalue instead
-            theFptr = builder.CreateBitCast(emit_nthptr(theFunc, 1, tbaa_func), jl_fptr_llvmt);
+            theFptr = emit_nthptr_recast(theFunc, 1, tbaa_func, jl_pfptr_llvmt);
             theF = theFunc;
         }
         else {
@@ -2421,7 +2421,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx, jl_
             myargs = builder.CreateGEP(ctx->argTemp,
                                        ConstantInt::get(T_size, argStart+1+ctx->argSpaceOffs));
         }
-        theFptr = builder.CreateBitCast(emit_nthptr(theFunc, 1, tbaa_func), jl_fptr_llvmt);
+        theFptr = emit_nthptr_recast(theFunc, 1, tbaa_func, jl_pfptr_llvmt);
         Value *r1 = builder.CreateCall3(prepare_call(theFptr), theFunc, myargs,
                                         ConstantInt::get(T_int32,nargs));
         builder.CreateBr(mergeBB1);
