@@ -2176,13 +2176,10 @@ static Value *emit_jlcall(Value *theFptr, Value *theF, jl_value_t **args,
     }
 
     // call
-    Value *myargs;
+    Value *myargs = Constant::getNullValue(jl_ppvalue_llvmt);
     if (ctx->argTemp != NULL && nargs > 0) {
         myargs = builder.CreateGEP(ctx->argTemp,
                                    ConstantInt::get(T_size, argStart+ctx->argSpaceOffs));
-    }
-    else {
-        myargs = Constant::getNullValue(jl_ppvalue_llvmt);
     }
     Value *result = builder.CreateCall3(prepare_call(theFptr), theF, myargs,
                                         ConstantInt::get(T_int32,nargs));
@@ -2190,71 +2187,18 @@ static Value *emit_jlcall(Value *theFptr, Value *theF, jl_value_t **args,
     return result;
 }
 
-static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
-                        jl_value_t *expr)
+static Value *emit_call_function_object(jl_function_t *f, Value *theF, Value *theFptr,
+                                        bool specialized,
+                                        jl_value_t **args, size_t nargs,
+                                        jl_codectx_t *ctx)
 {
-    size_t nargs = arglen-1;
-    Value *theFptr=NULL, *theF=NULL;
-    jl_value_t *a0 = args[0];
-    jl_value_t *hdtype;
-    bool headIsGlobal = false;
-
-    jl_function_t *f = (jl_function_t*)static_eval(a0, ctx, true);
-    if (f != NULL) {
-        Value *result;
-        headIsGlobal = true;
-        if (f->fptr != jl_f_no_function) {
-          result = emit_known_call((jl_value_t*)f, args, nargs, ctx,
-                                   &theFptr, &f, expr);
-        }
-        else {
-          result = emit_known_call((jl_value_t*)jl_call_func,
-                                   --args, ++nargs, ctx, &theFptr, &f, expr);
-        }
-        if (result != NULL) return result;
-    }
-    bool specialized = true;
-    int last_depth = ctx->argDepth;
-    hdtype = expr_type(a0, ctx);
-    if (theFptr == NULL) {
-        specialized = false;
-        Value *theFunc = emit_expr(args[0], ctx);
-        if ((hdtype!=(jl_value_t*)jl_function_type &&
-             hdtype!=(jl_value_t*)jl_datatype_type &&
-             !(jl_is_type_type(hdtype) &&
-               jl_is_datatype(jl_tparam0(hdtype)))) ||
-            jl_is_tuple(hdtype) || theFunc->getType() != jl_pvalue_llvmt) {
-            // it may not be a function, use call(f, ...) instead
-            headIsGlobal = true;
-            Value *result = emit_known_call((jl_value_t*)jl_call_func,
-                                            --args, ++nargs, ctx,
-                                            &theFptr, &f, expr);
-            if (result != NULL) return result;
-            theF = literal_pointer_val((jl_value_t*)f);
-        }
-        else {
-#ifdef JL_GC_MARKSWEEP
-          if (!headIsGlobal && (jl_is_expr(a0) || jl_is_lambda_info(a0))) {
-            make_gcroot(boxed(theFunc,ctx), ctx);
-          }
-#endif
-          // extract pieces of the function object
-          // TODO: try extractvalue instead
-          theFptr = builder.CreateBitCast(emit_nthptr(theFunc, 1, tbaa_func), jl_fptr_llvmt);
-          theF = theFunc;
-        }
-    }
-    else {
-        theF = literal_pointer_val((jl_value_t*)f);
-    }
-
     Value *result;
     if (f!=NULL && specialized && f->linfo!=NULL && f->linfo->cFunctionObject!=NULL) {
         // emit specialized call site
         Function *cf = (Function*)f->linfo->cFunctionObject;
         FunctionType *cft = cf->getFunctionType();
         size_t nfargs = cft->getNumParams();
-        Value **argvals = (Value**) alloca(nfargs*sizeof(Value*));
+        Value **argvals = (Value**)alloca(nfargs*sizeof(Value*));
         unsigned idx = 0;
         for(size_t i=0; i < nargs; i++) {
             Type *at = cft->getParamType(idx);
@@ -2277,8 +2221,8 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
             }
             else {
                 assert(at == et);
-                argvals[idx] = emit_unbox(at, 
-                                        emit_unboxed(args[i+1], ctx),jl_tupleref(f->linfo->specTypes,i));
+                argvals[idx] = emit_unbox(at, emit_unboxed(args[i+1], ctx),
+                                          jl_tupleref(f->linfo->specTypes,i));
                 assert(dyn_cast<UndefValue>(argvals[idx]) == 0);
             }
             idx++;
@@ -2289,6 +2233,142 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
     }
     else {
         result = emit_jlcall(theFptr, theF, &args[1], nargs, ctx);
+    }
+    return result;
+}
+
+static Value *emit_is_function(Value *x, jl_codectx_t *ctx)
+{
+    Value *xty = emit_typeof(x);
+    Value *isfunc =
+        builder.
+        CreateOr(builder.
+                 CreateICmpEQ(xty,
+                              literal_pointer_val((jl_value_t*)jl_function_type)),
+                 builder.
+                 CreateICmpEQ(xty,
+                              literal_pointer_val((jl_value_t*)jl_datatype_type)));
+    return isfunc;
+}
+
+static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx, jl_value_t *expr)
+{
+    size_t nargs = arglen-1;
+    Value *theFptr=NULL, *theF=NULL;
+    jl_value_t *a0 = args[0];
+    jl_value_t *hdtype;
+    bool headIsGlobal = false;
+    bool definitely_function = false;
+    bool definitely_not_function = false;
+
+    jl_function_t *f = (jl_function_t*)static_eval(a0, ctx, true);
+    if (f != NULL) {
+        // function is a compile-time constant
+        Value *result;
+        headIsGlobal = true;
+        definitely_function = jl_is_func(f);
+        definitely_not_function = !definitely_function;
+        if (jl_typeis(f, jl_intrinsic_type) || jl_is_func(f)) {
+            result = emit_known_call((jl_value_t*)f, args, nargs, ctx,
+                                     &theFptr, &f, expr);
+            assert(!jl_typeis(f,jl_intrinsic_type) || result!=NULL);
+        }
+        else {
+            result = emit_known_call((jl_value_t*)jl_call_func,
+                                     args-1, nargs+1, ctx, &theFptr, &f, expr);
+        }
+        if (result != NULL) return result;
+    }
+
+    hdtype = expr_type(a0, ctx);
+    definitely_function |= (hdtype == (jl_value_t*)jl_function_type ||
+                            hdtype == (jl_value_t*)jl_datatype_type ||
+                            (jl_is_type_type(hdtype) &&
+                             jl_is_datatype(jl_tparam0(hdtype))));
+    definitely_not_function |= (jl_is_leaf_type(hdtype) && !definitely_function);
+
+    assert(!(definitely_function && definitely_not_function));
+
+    int last_depth = ctx->argDepth;
+    Value *result;
+
+    if (definitely_not_function) {
+        if (f == NULL) {
+            f = jl_call_func;
+            Value *r = emit_known_call((jl_value_t*)jl_call_func,
+                                       args-1, nargs+1, ctx, &theFptr, &f, expr);
+            assert(r == NULL);
+            assert(theFptr != NULL);
+        }
+        theF = literal_pointer_val((jl_value_t*)f);
+        result = emit_call_function_object(f, theF, theFptr, true, args-1, nargs+1, ctx);
+    }
+    else if (definitely_function) {
+        bool specialized = true;
+        if (theFptr == NULL) {
+            specialized = false;
+            Value *theFunc = emit_expr(args[0], ctx);
+#ifdef JL_GC_MARKSWEEP
+            if (!headIsGlobal && (jl_is_expr(a0) || jl_is_lambda_info(a0))) {
+                make_gcroot(boxed(theFunc,ctx), ctx);
+            }
+#endif
+            // extract pieces of the function object
+            // TODO: try extractvalue instead
+            theFptr = builder.CreateBitCast(emit_nthptr(theFunc, 1, tbaa_func), jl_fptr_llvmt);
+            theF = theFunc;
+        }
+        else {
+            theF = literal_pointer_val((jl_value_t*)f);
+        }
+        result = emit_call_function_object(f, theF, theFptr, specialized, args, nargs, ctx);
+    }
+    else {
+        // either direct function, or use call(), based on run-time branch
+
+        // emit "function" and arguments
+        int argStart = ctx->argDepth;
+        Value *theFunc = boxed(emit_expr(args[0], ctx), ctx);
+        make_gcroot(theFunc, ctx);
+        for(size_t i=0; i < nargs; i++) {
+            Value *anArg = emit_expr(args[i+1], ctx);
+            // put into argument space
+            make_gcroot(boxed(anArg, ctx, expr_type(args[i+1],ctx)), ctx);
+        }
+
+        Value *isfunc = emit_is_function(theFunc, ctx);
+        BasicBlock *funcBB1 = BasicBlock::Create(getGlobalContext(),"isf", ctx->f);
+        BasicBlock *elseBB1 = BasicBlock::Create(getGlobalContext(),"notf");
+        BasicBlock *mergeBB1 = BasicBlock::Create(getGlobalContext(),"mergef");
+        builder.CreateCondBr(isfunc, funcBB1, elseBB1);
+
+        builder.SetInsertPoint(funcBB1);
+        // is function
+        Value *myargs = Constant::getNullValue(jl_ppvalue_llvmt);
+        if (ctx->argTemp != NULL && nargs > 0) {
+            myargs = builder.CreateGEP(ctx->argTemp,
+                                       ConstantInt::get(T_size, argStart+1+ctx->argSpaceOffs));
+        }
+        theFptr = builder.CreateBitCast(emit_nthptr(theFunc, 1, tbaa_func), jl_fptr_llvmt);
+        Value *r1 = builder.CreateCall3(prepare_call(theFptr), theFunc, myargs,
+                                        ConstantInt::get(T_int32,nargs));
+        builder.CreateBr(mergeBB1);
+        ctx->f->getBasicBlockList().push_back(elseBB1);
+        builder.SetInsertPoint(elseBB1);
+        // not function
+        myargs = builder.CreateGEP(ctx->argTemp,
+                                   ConstantInt::get(T_size, argStart+ctx->argSpaceOffs));
+        Value *r2 = builder.CreateCall3(prepare_call(jlapplygeneric_func),
+                                        literal_pointer_val((jl_value_t*)jl_call_func),
+                                        myargs,
+                                        ConstantInt::get(T_int32,nargs+1));
+        builder.CreateBr(mergeBB1);
+        ctx->f->getBasicBlockList().push_back(mergeBB1);
+        builder.SetInsertPoint(mergeBB1);
+        PHINode *ph = builder.CreatePHI(jl_pvalue_llvmt, 2);
+        ph->addIncoming(r1, funcBB1);
+        ph->addIncoming(r2, elseBB1);
+        result = ph;
     }
 
     ctx->argDepth = last_depth;

@@ -4,7 +4,7 @@ using Core: Intrinsics, arraylen, arrayref, arrayset, arraysize,
             tuplelen, tupleref, convert_default, kwcall,
             typeassert, apply_type
 
-import Core: Array, call  # to add methods
+import Core: Array  # to add methods
 
 const NonTupleType = Union(DataType,UnionType,TypeConstructor)
 

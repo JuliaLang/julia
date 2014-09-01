@@ -208,11 +208,10 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             }
         }
         jl_function_t *f = (jl_function_t*)eval(args[0], locals, nl);
-        if (jl_is_func(f) && f->fptr != jl_f_no_function)
+        if (jl_is_func(f))
             return do_call(f, &args[1], nargs-1, NULL, locals, nl);
         else
-            return do_call(jl_call_func, args, nargs, (jl_value_t*)f,
-                           locals, nl);
+            return do_call(jl_call_func, args, nargs, (jl_value_t*)f, locals, nl);
     }
     else if (ex->head == assign_sym) {
         jl_value_t *sym = args[0];
