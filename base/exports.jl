@@ -7,6 +7,7 @@ export
     Operators,
     Pkg,
     Profile,
+    Dates,
     Sys,
     Test,
     BLAS,
@@ -1007,6 +1008,11 @@ export
     toc,
     toq,
 
+#dates
+    Date,
+    DateTime,
+    now,
+
 # errors
     assert,
     backtrace,
@@ -1166,7 +1172,8 @@ export
     write,
     writecsv,
     writedlm,
-    UdpSocket,
+    TCPSocket,
+    UDPSocket,
 
 # multiprocessing
     addprocs,

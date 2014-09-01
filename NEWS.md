@@ -6,8 +6,29 @@ New language features
 
   * Unicode version 7 is now supported for identifiers etcetera ([#7917]).
 
+  * Type parameters now permit any arbitrary `isbits` type, not just
+    `Int` and `Bool` ([#6081]). 
+
 Library improvements
 --------------------
+
+  * New `Dates` module for calendar dates and other time-interval calculations ([#7654]).
+
+  * Added generic Cholesky factorization, and the Cholesky factorization is now parametrized on the matrix type ([#7236]).
+
+  * Symmetric and Hermitian immutables are now parametrized on matrix type ([#7992]).
+
+  * Switch from `O(N)` to `O(logN)` algorithm for `dequeue!(pq, key)`
+    with `PriorityQueue`. This provides major speedups for large
+    queues ([#8011]).
+
+  * `PriorityQueue` now includes the order type among its parameters,
+    `PriorityQueue{KeyType,ValueType,OrderType}`. An empty queue can
+    be constructed as `pq = PriorityQueue(KeyType,ValueType)`, if you
+    intend to use the default `Forward` order, or
+    `pq = PriorityQueue(KeyType, ValueType, OrderType)` otherwise ([#8011]).
+
+  * Efficient `mean` and `median` for ranges ([#8089]).
 
 Julia v0.3.0 Release Notes
 ==========================
@@ -42,7 +63,7 @@ New language features
 
   * Multi-line comments ([#69], [#6128]): `#= .... =#`
 
-  * `--bounds-check=yes|no` compiler option
+  * `--check-bounds=yes|no` compiler option
 
   * Unicode identifiers are normalized (NFC) so that different encodings
     of equivalent strings are treated as the same identifier ([#5462]).
@@ -887,6 +908,7 @@ Too numerous to mention.
 [#6056]: https://github.com/JuliaLang/julia/issues/6056
 [#6057]: https://github.com/JuliaLang/julia/issues/6057
 [#6073]: https://github.com/JuliaLang/julia/issues/6073
+[#6081]: https://github.com/JuliaLang/julia/issues/6081
 [#6116]: https://github.com/JuliaLang/julia/issues/6116
 [#6128]: https://github.com/JuliaLang/julia/issues/6128
 [#6169]: https://github.com/JuliaLang/julia/issues/6169
@@ -918,6 +940,7 @@ Too numerous to mention.
 [#7125]: https://github.com/JuliaLang/julia/issues/7125
 [#7131]: https://github.com/JuliaLang/julia/issues/7131
 [#7146]: https://github.com/JuliaLang/julia/issues/7146
+[#7236]: https://github.com/JuliaLang/julia/issues/7236
 [#7242]: https://github.com/JuliaLang/julia/issues/7242
 [#7359]: https://github.com/JuliaLang/julia/issues/7359
 [#7365]: https://github.com/JuliaLang/julia/issues/7365
@@ -927,3 +950,8 @@ Too numerous to mention.
 [#7464]: https://github.com/JuliaLang/julia/issues/7464
 [#7513]: https://github.com/JuliaLang/julia/issues/7513
 [#7647]: https://github.com/JuliaLang/julia/issues/7647
+[#7654]: https://github.com/JuliaLang/julia/issues/7654
+[#7917]: https://github.com/JuliaLang/julia/issues/7917
+[#7992]: https://github.com/JuliaLang/julia/issues/7992
+[#8011]: https://github.com/JuliaLang/julia/issues/8011
+[#8089]: https://github.com/JuliaLang/julia/issues/8089

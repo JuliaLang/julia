@@ -64,6 +64,12 @@ function:
 The ``apply`` function applies its first argument — a function object —
 to its remaining arguments.
 
+As with variables, Unicode can also be used for function names::
+
+    julia> ∑(x,y) = x + y
+    ∑ (generic function with 1 method)
+
+
 Argument Passing Behavior
 -------------------------
 
@@ -485,19 +491,21 @@ Evaluation Scope of Default Values
 
 Optional and keyword arguments differ slightly in how their default
 values are evaluated. When optional argument default expressions are
-evaluated, only *previous* arguments are in scope. For example, given
-this definition::
+evaluated, only *previous* arguments are in scope. In contrast, *all*
+the arguments are in scope when keyword arguments default expressions
+are evaluated. For example, given this definition::
 
     function f(x, a=b, b=1)
         ###
     end
 
-the ``b`` in ``a=b`` refers to the ``b`` in an outer scope, not the
+the ``b`` in ``a=b`` refers to a ``b`` in an outer scope, not the
 subsequent argument ``b``. However, if ``a`` and ``b`` were keyword
 arguments instead, then both would be created in the same scope and
-``a=b`` would result in an undefined variable error (since the
-default expressions are evaluated left-to-right, and ``b`` has not
-been assigned yet).
+the ``b`` in ``a=b`` would refer the the subsequent argument ``b``
+(shadowing any ``b`` in an outer scope), which would result in an
+undefined variable error (since the default expressions are evaluated
+left-to-right, and ``b`` has not been assigned yet).
 
 
 Block Syntax for Function Arguments

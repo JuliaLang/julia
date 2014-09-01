@@ -90,20 +90,20 @@ abstract ClusterManager
 type Worker
     host::ByteString
     port::Uint16
-    socket::TcpSocket
+    socket::TCPSocket
     sendbuf::IOBuffer
     del_msgs::Array{Any,1}
     add_msgs::Array{Any,1}
     id::Int
     gcflag::Bool
-    bind_addr::IpAddr
+    bind_addr::IPAddr
     manage::Function
     config::Dict
     
-    Worker(host::String, port::Integer, sock::TcpSocket, id::Int) =
+    Worker(host::String, port::Integer, sock::TCPSocket, id::Int) =
         new(bytestring(host), uint16(port), sock, IOBuffer(), {}, {}, id, false)
 end
-Worker(host::String, port::Integer, sock::TcpSocket) =
+Worker(host::String, port::Integer, sock::TCPSocket) =
     Worker(host, port, sock, 0)
 function Worker(host::String, port::Integer) 
     # Connect to the loopback port if requested host has the same ipaddress as self.
@@ -158,7 +158,7 @@ function flush_gc_msgs(w::Worker)
 end
 
 #TODO: Move to different Thread
-function enq_send_req(sock::TcpSocket,buf,now::Bool)
+function enq_send_req(sock::TCPSocket, buf, now::Bool)
     arr=takebuf_array(buf)
     write(sock,arr)
     #TODO implement "now"
@@ -194,7 +194,7 @@ end
 
 type LocalProcess
     id::Int
-    bind_addr::IpAddr
+    bind_addr::IPAddr
     LocalProcess() = new(1)
 end
 
@@ -816,7 +816,7 @@ notify_empty(rv::RemoteValue) = notify(rv.empty)
 ## message event handlers ##
 
 # activity on accept fd
-function accept_handler(server::TcpServer, status::Int32)
+function accept_handler(server::TCPServer, status::Int32)
     if status == -1
         error("an error occured during the creation of the server")
     end
@@ -1101,7 +1101,7 @@ tunnel_port = 9201
 function ssh_tunnel(user, host, bind_addr, port, sshflags)
     global tunnel_port
     localp = tunnel_port::Int
-    while !success(detach(`ssh -T -a -x -o ClearAllForwardings=yes -o ExitOnForwardFailure=yes -f $sshflags $(user)@$host -L $localp:$bind_addr:$(int(port)) sleep 60`)) && localp < 10000
+    while !success(detach(`ssh -T -a -x -o ExitOnForwardFailure=yes -f $sshflags $(user)@$host -L $localp:$bind_addr:$(int(port)) sleep 60`)) && localp < 10000
         localp += 1
     end
     
@@ -1248,7 +1248,7 @@ end
 
 ## higher-level functions: spawn, pmap, pfor, etc. ##
 
-let nextidx = 1
+let nextidx = 0
     global chooseproc
     function chooseproc(thunk::Function)
         p = -1

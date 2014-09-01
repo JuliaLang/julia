@@ -94,4 +94,4 @@ let
 end
 
 # issue #5948
-@test string(reinterpret(Float16, 0x7bff)) == "65504.0"
+@test string(reinterpret(Float16, 0x7bff)) == "float16(65500.0)"

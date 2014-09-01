@@ -60,9 +60,11 @@ Julia's type system that should be mentioned up front are:
    distinction significant.
 -  Only values, not variables, have types — variables are simply names
    bound to values.
--  Both abstract and concrete types can be parameterized by other types
-   and by certain other values (currently integers, symbols, bools, and tuples thereof).
-   Type parameters may be completely omitted when they
+-  Both abstract and concrete types can be parameterized by other types.
+   They can also be parameterized by symbols, by values of any type for
+   which `isbits` returns true (essentially, things like numbers and bools
+   that are stored like C types or structs with no pointers to other objects),
+   and also by tuples thereof. Type parameters may be omitted when they
    do not need to be referenced or restricted.
 
 Julia's type system is designed to be powerful and expressive, yet
@@ -232,10 +234,41 @@ subtype of its right operand:
     julia> Integer <: FloatingPoint
     false
 
-Since abstract types have no instantiations and serve as no more than
-nodes in the type graph, there is not much more to say about them until
-we introduce parametric abstract types later on in `Parametric
-Types <#man-parametric-types>`_.
+An important use of abstract types is to provide default implementations for
+concrete types. To give a simple example, consider::
+
+    function myplus(x,y)
+     x+y
+    end
+
+The first thing to note is that the above argument declarations are equivalent
+to ``x::Any`` and ``y::Any``. When this function is invoked, say as
+``myplus(2,5)``, the dispatcher chooses the most specific method named
+``myplus`` that matches the given arguments. (See :ref:`man-methods` for more
+information on multiple dispatch.)
+
+Assuming no method more specific than the above is found, Julia next internally
+defines and compiles a method called ``myplus`` specifically for two ``Int``
+arguments based on the generic function given above, i.e., it implicitly
+defines and compiles::
+ 
+    function myplus(x::Int,y::Int)
+     x+y
+    end
+    
+and finally, it invokes this specific method.
+
+Thus, abstract types allow programmers to write generic functions that can
+later be used as the default method by many combinations of concrete types.  
+Thanks to multiple dispatch, the programmer has full control over whether the
+default or more specific method is used.
+
+An important point to note is that there is no loss in performance if the
+programmer relies on a function whose arguments are abstract types, because it
+is recompiled for each tuple of argument concrete types with which it is
+invoked. (There may be a performance issue, however, in the case of function
+arguments that are containers of abstract types; see :ref:`man-performance-tips`.)
+
 
 Bits Types
 ----------
@@ -458,6 +491,29 @@ type immutable, ask whether two instances with the same field values
 would be considered identical, or if they might need to change independently
 over time. If they would be considered identical, the type should probably
 be immutable.
+
+To recap, two essential properties define immutability
+in Julia:
+
+* An object with an immutable type is passed around (both in assignment
+  statements and in function calls) by copying, whereas a mutable type is
+  passed around by reference.
+
+* It is not permitted to modify the fields of a composite immutable
+  type.
+
+It is instructive, particularly for readers whose background is C/C++, to consider
+why these two properties go hand in hand.  If they were separated,
+i.e., if the fields of objects passed around by copying could be modified,
+then it would become more difficult to reason about certain instances of generic code.  For example,
+suppose ``x`` is a function argument of an abstract type, and suppose that the function
+changes a field: ``x.isprocessed = true``.  Depending on whether ``x`` is passed by copying
+or by reference, this statement may or may not alter the actual argument in the 
+calling routine.  Julia
+sidesteps the possibility of creating functions with unknown effects in this
+scenario by forbidding modification of fields
+of objects passed around by copying.
+
 
 Declared Types
 --------------
@@ -1042,7 +1098,7 @@ This is accomplished via the following code in ``base/boot.jl``::
     end
 
 Of course, this depends on what ``Int`` is aliased to — but that is
-pre-defined to be the correct type — either ``Int32`` or ``Int64``.
+predefined to be the correct type — either ``Int32`` or ``Int64``.
 
 For parametric types, ``typealias`` can be convenient for providing
 names for cases where some of the parameter choices are fixed.

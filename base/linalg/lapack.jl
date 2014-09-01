@@ -2843,7 +2843,13 @@ for (syev, syevr, sygvd, elty) in
         #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * ), Z( LDZ, * )    
         function syevr!(jobz::BlasChar, range::BlasChar, uplo::BlasChar, A::StridedMatrix{$elty}, vl::FloatingPoint, vu::FloatingPoint, il::Integer, iu::Integer, abstol::FloatingPoint)
             chkstride1(A)
-            n = chksquare(A)                   
+            n = chksquare(A)
+            if range == 'I'
+                1 <= il <= iu <= n || throw(ArgumentError("illegal choice of eigenvalue indices"))
+            end
+            if range == 'V' 
+                vl < vu || throw(ArgumentError("lower boundary must be less than upper boundary"))
+            end
             lda = max(1,stride(A,2))
             m = Array(BlasInt, 1)
             w = similar(A, $elty, n)
@@ -2979,6 +2985,12 @@ for (syev, syevr, sygvd, elty, relty) in
         function syevr!(jobz::BlasChar, range::BlasChar, uplo::BlasChar, A::StridedMatrix{$elty}, vl::FloatingPoint, vu::FloatingPoint, il::Integer, iu::Integer, abstol::FloatingPoint)
             chkstride1(A)
             n = chksquare(A)
+            if range == 'I'
+                1 <= il <= iu <= n || throw(ArgumentError("illegal choice of eigenvalue indices"))
+            end
+            if range == 'V' 
+                vl < vu || throw(ArgumentError("lower boundary must be less than upper boundary"))
+            end
             lda = max(1,stride(A,2))
             m = Array(BlasInt, 1)
             w = similar(A, $relty, n)
@@ -3345,10 +3357,10 @@ for (gees, gges, elty) in
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                         Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                         Ptr{BlasInt}, Ptr{Void}, Ptr{BlasInt}),
-                    &jobvs, &'N', [], &n, 
+                    &jobvs, &'N', C_NULL, &n, 
                         A, &max(1, n), sdim, wr,
                         wi, vs, &ldvs, work, 
-                        &lwork, [], info)
+                        &lwork, C_NULL, info)
                 @lapackerror
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
@@ -3389,11 +3401,11 @@ for (gees, gges, elty) in
                         Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                         Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{Void},
                         Ptr{BlasInt}),
-                    &jobvsl, &jobvsr, &'N', [], 
+                    &jobvsl, &jobvsr, &'N', C_NULL, 
                     &n, A, &max(1,n), B, 
                     &max(1,n), &sdim, alphar, alphai, 
                     beta, vsl, &ldvsl, vsr, 
-                    &ldvsr, work, &lwork, [], 
+                    &ldvsr, work, &lwork, C_NULL, 
                     info)
                 if i == 1
                     lwork = blas_int(real(work[1]))
@@ -3435,10 +3447,10 @@ for (gees, gges, elty, relty) in
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
                         Ptr{$relty}, Ptr{Void}, Ptr{BlasInt}),
-                    &jobvs, &sort, [], &n, 
+                    &jobvs, &sort, C_NULL, &n, 
                         A, &max(1, n), &sdim, w,
                         vs, &ldvs, work, &lwork, 
-                        rwork, [], info)
+                        rwork, C_NULL, info)
                 @lapackerror
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
@@ -3480,11 +3492,11 @@ for (gees, gges, elty, relty) in
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{Void},
                         Ptr{BlasInt}),
-                    &jobvsl, &jobvsr, &'N', [], 
+                    &jobvsl, &jobvsr, &'N', C_NULL, 
                     &n, A, &max(1,n), B, 
                     &max(1,n), &sdim, alpha, beta, 
                     vsl, &ldvsl, vsr, &ldvsr, 
-                    work, &lwork, rwork, [], 
+                    work, &lwork, rwork, C_NULL, 
                     info)
                 if i == 1
                     lwork = blas_int(real(work[1]))

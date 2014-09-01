@@ -161,3 +161,45 @@ The Julia REPL makes great use of key bindings.  Several control-key bindings we
 +------------------------+----------------------------------------------------+
 | Delete, ``^D``         | Forward delete one character (when buffer has text)|
 +------------------------+----------------------------------------------------+
+
+Tab completion
+--------------
+
+In both the Julian and help modes of the REPL, one can enter the first few characters of a function or type and then press the tab key to get a list all matches::
+
+    julia> stri
+    stride     strides     string      stringmime  strip
+
+    julia> Stri
+    StridedArray    StridedVecOrMat  String
+    StridedMatrix   StridedVector
+
+The tab key can also be used to substitute LaTeX math symbols with their unicode equivalents,
+and get a list of LaTeX matches as well::
+
+    julia> \pi[TAB]
+    julia> π
+    π = 3.1415926535897...
+
+    julia> e\_1[TAB] = [1,0]
+    julia> e₁ = [1,0]
+    2-element Array{Int64,1}:
+     1
+     0
+
+    julia> e\^1[TAB] = [1 0]
+    julia> e¹ = [1 0]
+    1x2 Array{Int64,2}:
+     1  0
+
+    julia> \sqrt[TAB]2     # √ is equivalent to the sqrt() function
+    julia> √2
+    1.4142135623730951
+
+    julia> \hbar[TAB](h) = h / 2\pi[TAB]
+    julia> ħ(h) = h / 2π
+    ħ (generic function with 1 method)
+
+    julia> \h[TAB]
+    \hat              \heartsuit         \hksearow          \hookleftarrow     \hslash
+    \hbar             \hermitconjmatrix  \hkswarow          \hookrightarrow    \hspace

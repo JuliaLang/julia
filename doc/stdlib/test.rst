@@ -13,22 +13,22 @@ ________
 
 To use the default handler, the macro :func:`@test` can be used directly::
 
-  # Julia code
   julia> using Base.Test
   
   julia> @test 1 == 1
 
   julia> @test 1 == 0
-  ERROR: test failed: :((1==0))
-   in default_handler at test.jl:20
-   in do_test at test.jl:37
+  ERROR: test failed: 1 == 0
+   in error at error.jl:21
+   in default_handler at test.jl:19
+   in do_test at test.jl:39
 
   julia> @test error("This is what happens when a test fails")
-  ERROR: test error during :(error("This is what happens when a test fails"))
+  ERROR: test error during error("This is what happens when a test fails")
   This is what happens when a test fails
    in error at error.jl:21
    in anonymous at test.jl:62
-   in do_test at test.jl:35
+   in do_test at test.jl:37
 
 As seen in the examples above, failures or errors will print the abstract
 syntax tree of the expression in question.
@@ -79,10 +79,10 @@ ________
 
 A handler is a function defined for three kinds of arguments: ``Success``, ``Failure``, ``Error``::
 
-  # The definition of the default handler
-  default_handler(r::Success) = nothing
-  default_handler(r::Failure) = error("test failed: $(r.expr)")
-  default_handler(r::Error)   = rethrow(r)
+  # An example definition of a test handler
+  test_handler(r::Success) = nothing
+  test_handler(r::Failure) = error("test failed: $(r.expr)")
+  test_handler(r::Error)   = rethrow(r)
 
 A different handler can be used for a block (with :func:`with_handler`)::
 
@@ -109,6 +109,8 @@ A different handler can be used for a block (with :func:`with_handler`)::
    in anonymous at no file:3
    in task_local_storage at task.jl:28
    in with_handler at test.jl:24
+
+The ``Success`` and ``Failure`` types include an additonal field, ``resultexpr``, which is a partially evaluated expression. For example, in a comparison it will contain an expression with the left and right sides evaluated.
 
 Macros
 ______

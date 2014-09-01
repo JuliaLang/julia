@@ -149,8 +149,7 @@ html_static_path = []
 #html_use_smartypants = True
 
 # Custom sidebar templates, maps document names to template names.
-html_sidebars = juliadoc.default_sidebars()
-html_sidebars['index'].insert(0, 'sidebarintro.html')
+#html_sidebars = {}
 
 # Additional templates that should be rendered to pages, maps page names to
 # template names.
@@ -200,16 +199,40 @@ latex_elements = {
 
     'utf8extra': r'''
         \usepackage{CJKutf8}
+        \usepackage{amssymb}
         \DeclareUnicodeCharacter{00A0}{\nobreakspace}
         \DeclareUnicodeCharacter{2203}{\ensuremath{\exists}}
         \DeclareUnicodeCharacter{2200}{\ensuremath{\forall}}
-        \DeclareUnicodeCharacter{2286}{\ensuremath{\subseteq}}
         \DeclareUnicodeCharacter{2713}{x}
         \DeclareUnicodeCharacter{27FA}{\ensuremath{\Longleftrightarrow}}
         \DeclareUnicodeCharacter{221A}{\ensuremath{\sqrt{}}}
         \DeclareUnicodeCharacter{221B}{\ensuremath{\sqrt[3]{}}}
         \DeclareUnicodeCharacter{2295}{\ensuremath{\oplus}}
         \DeclareUnicodeCharacter{2297}{\ensuremath{\otimes}}
+        \DeclareUnicodeCharacter{2211}{\ensuremath{\sum}}
+        \DeclareUnicodeCharacter{03C0}{\ensuremath{\pi}}
+        \DeclareUnicodeCharacter{2081}{\ensuremath{_{1}}}
+        \DeclareUnicodeCharacter{00B9}{\ensuremath{^{1}}}
+        \DeclareUnicodeCharacter{0127}{\ensuremath{\hbar}}
+        \DeclareUnicodeCharacter{2260}{\ensuremath{\ne}}
+        \DeclareUnicodeCharacter{2264}{\ensuremath{\le}}
+        \DeclareUnicodeCharacter{2265}{\ensuremath{\ge}}
+        \DeclareUnicodeCharacter{2261}{\ensuremath{\equiv}}
+        \DeclareUnicodeCharacter{2262}{\ensuremath{\not\equiv}}
+        \DeclareUnicodeCharacter{2208}{\ensuremath{\in}}
+        \DeclareUnicodeCharacter{220B}{\ensuremath{\ni}}
+        \DeclareUnicodeCharacter{2209}{\ensuremath{\notin}}
+        \DeclareUnicodeCharacter{220C}{\ensuremath{\not\ni}}
+        \DeclareUnicodeCharacter{2286}{\ensuremath{\subseteq}}
+        \DeclareUnicodeCharacter{2288}{\ensuremath{\nsubseteq}}
+        \DeclareUnicodeCharacter{228A}{\ensuremath{\subsetneq}}
+        \DeclareUnicodeCharacter{222A}{\ensuremath{\cup}}
+        \DeclareUnicodeCharacter{2229}{\ensuremath{\cap}}
+        \DeclareUnicodeCharacter{00F7}{\ensuremath{\div}}
+        \DeclareUnicodeCharacter{03B3}{\ensuremath{\gamma}}
+        \DeclareUnicodeCharacter{03C6}{\ensuremath{\varphi}}
+        \DeclareUnicodeCharacter{22C5}{\ensuremath{\cdot}}
+        \DeclareUnicodeCharacter{00D7}{\ensuremath{\times}}
     ''',
 }
 

@@ -2294,7 +2294,7 @@
 	 (let ((assigned
 		;; vars assigned in each arg
 		;; start with cddr since each arg only considers subsequent ones
-		(map (lambda (x) (expr-find-all assignment-like? x key: cadr))
+		(map (lambda (x) (expr-find-all assignment-like? x cadr))
 		     (cddr e))))
 	   (if (every null? assigned)
 	       ;; no assignments
@@ -2679,15 +2679,7 @@ So far only the second case can actually occur.
 
 ;; all vars used in e outside x
 (define (vars-used-outside e x)
-  (cond ((symbol? e) (list e))
-	((or (atom? e) (quoted? e)) '())
-	((eq? e x) '())
-	((eq? (car e) 'lambda)
-	 (diff (free-vars (lam:body e))
-	       (lambda-all-vars e)))
-	(else (unique
-	       (apply nconc
-		      (map (lambda (e) (vars-used-outside e x)) (cdr e)))))))
+  (table.keys (free-vars- e (table) x)))
 
 (define (flatten-lambda-scopes e)
   (cond ((or (atom? e) (quoted? e)) e)
@@ -2835,20 +2827,32 @@ So far only the second case can actually occur.
   (append (lam:vars e)
 	  (cdr (caddr e))))
 
-(define (free-vars e)
-  (cond ((symbol? e) (list e))
-	((or (atom? e) (quoted? e)) '())
+(define (free-vars- e tab excl)
+  (cond ((symbol? e) (put! tab e #t))
+	((or (atom? e) (quoted? e)) tab)
+	((eq? e excl) tab)
 	((eq? (car e) 'lambda)
-	 (diff (free-vars (lam:body e))
-	       (lambda-all-vars e)))
-	(else (unique (apply nconc (map free-vars (cdr e)))))))
+	 (let ((bound (lambda-all-vars e)))
+	   (for-each (lambda (v) (if (not (memq v bound)) (put! tab v #t)))
+		     (free-vars (lam:body e))))
+	 tab)
+	(else
+	 (for-each (lambda (x) (free-vars- x tab excl))
+		   (cdr e))
+	 tab)))
+
+(define *free-vars-secret-value* (list 0))
+(define (free-vars e)
+  (table.keys (free-vars- e (table) *free-vars-secret-value*)))
 
 ; convert each lambda's (locals ...) to
 ;   ((localvars...) var-info-lst captured-var-infos)
 ; where var-info-lst is a list of var-info records
 (define (analyze-vars e env captvars)
-  (cond ((or (atom? e) (quoted? e)) e)
-	((eq? (car e) '=)
+  (if (or (atom? e) (quoted? e))
+      e
+      (case (car e)
+	((=)
 	 (let ((vi (var-info-for (cadr e) env)))
 	   (if vi
 	       (begin
@@ -2861,13 +2865,13 @@ So far only the second case can actually occur.
 	 `(= ,(cadr e) ,(analyze-vars (caddr e) env captvars)))
 	#;((or (eq? (car e) 'local) (eq? (car e) 'local!))
 	 '(null))
-	((eq? (car e) 'typeassert)
+	((typeassert)
 	 ;(let ((vi (var-info-for (cadr e) env)))
 	 ;  (if vi
 	 ;      (begin (vinfo:set-type! vi (caddr e))
 	 ;	     (cadr e))
 	 `(call (top typeassert) ,(cadr e) ,(caddr e)))
-	((or (eq? (car e) 'decl) (eq? (car e) '|::|))
+	((decl |::|)
 	 ; handle var::T declaration by storing the type in the var-info
 	 ; record. for non-symbols or globals, emit a type assertion.
 	 (let ((vi (var-info-for (cadr e) env)))
@@ -2881,46 +2885,46 @@ So far only the second case can actually occur.
 		      (vinfo:set-type! vi (caddr e))
 		      '(null))
 	       `(call (top typeassert) ,(cadr e) ,(caddr e)))))
-	((eq? (car e) 'lambda)
-	 (letrec ((args (lam:args e))
-		  (locl (cdr (caddr e)))
-		  (allv (nconc (map arg-name args) locl))
-		  (fv   (let* ((fv (diff (free-vars (lam:body e)) allv))
-			       ;; add variables referenced in declared types for free vars
-			       (dv (apply nconc (map (lambda (v)
-						       (let ((vi (var-info-for v env)))
-							 (if vi (free-vars (vinfo:type vi)) '())))
-						     fv))))
-			  (append (diff dv fv) fv)))
-		  (glo  (declared-global-vars (lam:body e)))
-		  ; make var-info records for vars introduced by this lambda
-		  (vi   (nconc
-			 (map (lambda (decl) (make-var-info (decl-var decl)))
-			      args)
-			 (map make-var-info locl)))
-		  ; captured vars: vars from the environment that occur
-		  ; in our set of free variables (fv).
-		  (cv    (filter (lambda (v) (and (memq (vinfo:name v) fv)
-						  (not (memq
-							(vinfo:name v) glo))))
-				 env))
-		  (bod   (analyze-vars
-			  (lam:body e)
-			  (append vi
-				  ; new environment: add our vars
-				  (filter (lambda (v)
-					    (and
-					     (not (memq (vinfo:name v) allv))
-					     (not (memq (vinfo:name v) glo))))
-					  env))
-			  cv)))
-	   ; mark all the vars we capture as captured
+	((lambda)
+	 (let* ((args (lam:args e))
+		(locl (cdr (caddr e)))
+		(allv (nconc (map arg-name args) locl))
+		(fv   (let* ((fv (diff (free-vars (lam:body e)) allv))
+			     ;; add variables referenced in declared types for free vars
+			     (dv (apply nconc (map (lambda (v)
+						     (let ((vi (var-info-for v env)))
+						       (if vi (free-vars (vinfo:type vi)) '())))
+						   fv))))
+			(append (diff dv fv) fv)))
+		(glo  (declared-global-vars (lam:body e)))
+		;; make var-info records for vars introduced by this lambda
+		(vi   (nconc
+		       (map (lambda (decl) (make-var-info (decl-var decl)))
+			    args)
+		       (map make-var-info locl)))
+		;; captured vars: vars from the environment that occur
+		;; in our set of free variables (fv).
+		(cv    (filter (lambda (v) (and (memq (vinfo:name v) fv)
+						(not (memq
+						      (vinfo:name v) glo))))
+			       env))
+		(bod   (analyze-vars
+			(lam:body e)
+			(append vi
+				;; new environment: add our vars
+				(filter (lambda (v)
+					  (and
+					   (not (memq (vinfo:name v) allv))
+					   (not (memq (vinfo:name v) glo))))
+					env))
+			cv)))
+	   ;; mark all the vars we capture as captured
 	   (for-each (lambda (v) (vinfo:set-capt! v #t))
 		     cv)
 	   `(lambda ,args
 	      (,(cdaddr e) ,vi ,cv)
 	      ,bod)))
-	((eq? (car e) 'localize)
+	((localize)
 	 ;; special feature for @spawn that wraps a piece of code in a "let"
 	 ;; binding each free variable.
 	 (let ((env-vars (map vinfo:name env))
@@ -2933,7 +2937,7 @@ So far only the second case can actually occur.
 	      `(call (lambda ,vs ,(caddr (cadr e)) ,(cadddr (cadr e)))
 		     ,@vs)
 	      env captvars))))
-	((eq? (car e) 'method)
+	((method)
 	 (let ((vi (var-info-for (method-expr-name e) env)))
 	   (if vi
 	       (begin
@@ -2947,7 +2951,7 @@ So far only the second case can actually occur.
 		  ,(analyze-vars (cadddr e) env captvars)))
 	(else (cons (car e)
 		    (map (lambda (x) (analyze-vars x env captvars))
-			 (cdr e))))))
+			 (cdr e)))))))
 
 (define (analyze-variables e) (analyze-vars e '() '()))
 
