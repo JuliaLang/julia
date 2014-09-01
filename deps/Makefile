@@ -1472,6 +1472,9 @@ gmp-$(GMP_VER).tar.bz2:
 gmp-$(GMP_VER)/configure: gmp-$(GMP_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	$(TAR) jxf $<
+ifeq ($(OS), Darwin)
+	cd gmp-$(GMP_VER) && patch -p1 < ../gmp_6.0.0_osx.patch
+endif
 	touch -c $@
 gmp-$(GMP_VER)/config.status: gmp-$(GMP_VER)/configure
 	cd gmp-$(GMP_VER) && \
