@@ -125,7 +125,7 @@ static void jl_load_sysimg_so(char *fname)
                 jl_error("Target architecture mismatch. Please delete or regenerate sys.{so,dll,dylib}.");
         }
         else if (strcmp(cpu_target,"core2") == 0) {
-            int HasSSSE3 = (info[3] & 1<<9);
+            int HasSSSE3 = (info[2] & 1<<9);
             if (!HasSSSE3)
                 jl_error("The current host does not support SSSE3, but the system image was compiled for Core2.\n"
                          "Please delete or regenerate sys.{so,dll,dylib}.");
@@ -300,7 +300,6 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
     jl_serialize_value(s, dt->parameters);
     jl_serialize_value(s, dt->name);
     jl_serialize_value(s, dt->super);
-    jl_serialize_value(s, dt->ctor_factory);
     jl_serialize_value(s, dt->env);
     jl_serialize_value(s, dt->linfo);
     if (has_instance)
@@ -523,6 +522,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)li->roots);
         jl_serialize_value(s, (jl_value_t*)li->def);
         jl_serialize_value(s, (jl_value_t*)li->capt);
+        jl_serialize_value(s, (jl_value_t*)li->unspecialized);
         // save functionObject pointers
         write_int32(s, li->functionID);
         write_int32(s, li->cFunctionID);
@@ -645,7 +645,6 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
     dt->parameters = (jl_tuple_t*)jl_deserialize_value(s);
     dt->name = (jl_typename_t*)jl_deserialize_value(s);
     dt->super = (jl_datatype_t*)jl_deserialize_value(s);
-    dt->ctor_factory = jl_deserialize_value(s);
     dt->env = jl_deserialize_value(s);
     dt->linfo = (jl_lambda_info_t*)jl_deserialize_value(s);
     if (has_instance) {
@@ -825,7 +824,7 @@ static jl_value_t *jl_deserialize_value_internal(ios_t *s)
         li->cFunctionObject = NULL;
         li->inInference = 0;
         li->inCompile = 0;
-        li->unspecialized = NULL;
+        li->unspecialized = (jl_function_t*)jl_deserialize_value(s);
         li->functionID = 0;
         li->cFunctionID = 0;
         int32_t cfunc_llvm, func_llvm;
@@ -1038,7 +1037,7 @@ void jl_restore_system_image(char *fname)
         JL_PRINTF(JL_STDERR, "System image file \"%s\" not found\n", fname);
         exit(1);
     }
-    int build_mode = (jl_compileropts.build_path != NULL);
+    int build_mode = 0;
 #ifdef _OS_WINDOWS_
     //XXX: the windows linker forces our system image to be
     //     linked against only one dll, I picked libjulia-release
@@ -1353,7 +1352,7 @@ void jl_init_serializer(void)
                           jl_f_invoke, jl_apply_generic,
                           jl_unprotect_stack, jl_f_task,
                           jl_f_yieldto, jl_f_ctor_trampoline,
-                          jl_f_new_module,
+                          jl_f_new_module, jl_f_sizeof,
                           NULL };
     i=2;
     while (fptrs[i-2] != NULL) {

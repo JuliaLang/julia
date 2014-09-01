@@ -154,7 +154,7 @@ function DLMStore{T,S<:String}(::Type{T}, dims::NTuple{2,Integer}, has_header::B
     ((nrows == 0) || (ncols == 0)) && error("Empty input")
     ((nrows < 0) || (ncols < 0)) && error("Invalid dimensions")
     hdr_offset = has_header ? 1 : 0
-    DLMStore{T,S}(fill(SubString(sbuff,1,0), 1, ncols), Array(T, nrows-hdr_offset, ncols), nrows, ncols, 1, 0, hdr_offset, sbuff, auto, eol, Array(Float64,1))
+    DLMStore{T,S}(fill(SubString(sbuff,1,0), 1, ncols), Array(T, nrows-hdr_offset, ncols), nrows, ncols, 0, 0, hdr_offset, sbuff, auto, eol, Array(Float64,1))
 end
 
 function store_cell{T,S<:String}(dlmstore::DLMStore{T,S}, row::Int, col::Int, quoted::Bool, startpos::Int, endpos::Int) 
@@ -173,8 +173,11 @@ function store_cell{T,S<:String}(dlmstore::DLMStore{T,S}, row::Int, col::Int, qu
 
     if drow > 0
         # fill missing elements
-        while ((drow - lastrow) > 1) || ((drow > lastrow) && (lastcol < ncols))
-            (lastcol == ncols) && (lastcol = 0)
+        while ((drow - lastrow) > 1) || ((drow > lastrow > 0) && (lastcol < ncols))
+            if (lastcol == ncols) || (lastrow == 0)
+                lastcol = 0
+                lastrow += 1
+            end
             for cidx in (lastcol+1):ncols
                 if (T <: String) || (T == Any)
                     cells[lastrow,cidx] = SubString(sbuff, 1, 0)
@@ -185,7 +188,6 @@ function store_cell{T,S<:String}(dlmstore::DLMStore{T,S}, row::Int, col::Int, qu
                 end
             end
             lastcol = ncols
-            lastrow += 1
         end
 
         # fill data
@@ -252,11 +254,13 @@ function readdlm_string(sbuff::String, dlm::Char, T::Type, eol::Char, auto::Bool
     skipstart = get(optsd, :skipstart, 0)
     (skipstart >= 0) || error("invalid value for skipstart")
 
+    skipblanks = get(optsd, :skipblanks, true)
+
     offset_handler = (dims == nothing) ? DLMOffsets(sbuff) : DLMStore(T, dims, has_header, sbuff, auto, eol)
 
     for retry in 1:2
         try
-            dims = dlm_parse(sbuff, eol, dlm, '"', comment_char, ign_empty, quotes, comments, skipstart, offset_handler)
+            dims = dlm_parse(sbuff, eol, dlm, '"', comment_char, ign_empty, quotes, comments, skipstart, skipblanks, offset_handler)
             break
         catch ex
             if isa(ex, TypeError) && (ex.func == :store_cell)
@@ -279,8 +283,8 @@ function readdlm_string(sbuff::String, dlm::Char, T::Type, eol::Char, auto::Bool
     return readdlm_string(sbuff, dlm, T, eol, auto, optsd)
 end
 
-const valid_opts = [:header, :has_header, :ignore_invalid_chars, :use_mmap, :quotes, :comments, :dims, :comment_char, :skipstart]
-const valid_opt_types = [Bool, Bool, Bool, Bool, Bool, Bool, NTuple{2,Integer}, Char, Integer]
+const valid_opts = [:header, :has_header, :ignore_invalid_chars, :use_mmap, :quotes, :comments, :dims, :comment_char, :skipstart, :skipblanks]
+const valid_opt_types = [Bool, Bool, Bool, Bool, Bool, Bool, NTuple{2,Integer}, Char, Integer, Bool]
 const deprecated_opts = [ :has_header => :header ]
 function val_opts(opts)
     d = Dict{Symbol,Union(Bool,NTuple{2,Integer},Char,Integer)}()
@@ -327,12 +331,12 @@ colval{T<:Char, S<:String}(sval::S, cells::Array{T,2}, row::Int, col::Int, tmp64
 colval{S<:String}(sval::S, cells::Array, row::Int, col::Int, tmp64::Array{Float64,1}) = true
 
 
-dlm_parse(s::ASCIIString, eol::Char, dlm::Char, qchar::Char, cchar::Char, ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool, skipstart::Int, dh::DLMHandler) = 
-    dlm_parse(s.data, uint8(eol), uint8(dlm), uint8(qchar), uint8(cchar), ign_adj_dlm, allow_quote, allow_comments, skipstart, dh)
+dlm_parse(s::ASCIIString, eol::Char, dlm::Char, qchar::Char, cchar::Char, ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool, skipstart::Int, skipblanks::Bool, dh::DLMHandler) = 
+    dlm_parse(s.data, uint8(eol), uint8(dlm), uint8(qchar), uint8(cchar), ign_adj_dlm, allow_quote, allow_comments, skipstart, skipblanks, dh)
 
-function dlm_parse{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, cchar::D, ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool, skipstart::Int, dh::DLMHandler)
+function dlm_parse{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, cchar::D, ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool, skipstart::Int, skipblanks::Bool, dh::DLMHandler)
     all_ascii = (D <: Uint8) || (isascii(eol) && isascii(dlm) && (!allow_quote || isascii(qchar)) && (!allow_comments || isascii(cchar)))
-    (T <: UTF8String) && all_ascii && (return dlm_parse(dbuff.data, uint8(eol), uint8(dlm), uint8(qchar), uint8(cchar), ign_adj_dlm, allow_quote, allow_comments, skipstart, dh))
+    (T <: UTF8String) && all_ascii && (return dlm_parse(dbuff.data, uint8(eol), uint8(dlm), uint8(qchar), uint8(cchar), ign_adj_dlm, allow_quote, allow_comments, skipstart, skipblanks, dh))
     ncols = nrows = col = 0
     is_default_dlm = (dlm == convert(D, invalid_dlm))
     error_str = ""
@@ -400,14 +404,16 @@ function dlm_parse{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, cchar::D, ign_adj_dl
                     end
                     col_start_idx = idx
                 elseif is_eol
-                    nrows += 1
-                    if expct_col 
-                        col += 1
-                        store_cell(dh, nrows, col, false, col_start_idx, idx - (was_cr ? 3 : 2))
+                    if (col > 0) || !skipblanks
+                        nrows += 1
+                        if expct_col 
+                            col += 1
+                            store_cell(dh, nrows, col, false, col_start_idx, idx - (was_cr ? 3 : 2))
+                        end
+                        ncols = max(ncols, col)
+                        col = 0
                     end
                     col_start_idx = idx
-                    ncols = max(ncols, col)
-                    col = 0
                     expct_col = false
                 elseif is_comment && allow_comments
                     if col > 0

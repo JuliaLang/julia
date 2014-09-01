@@ -99,7 +99,7 @@ showcompact_lim(io, x::Number) = _limit_output ? showcompact(io, x) : print(io, 
 macro show(exs...)
     blk = Expr(:block)
     for ex in exs
-        push!(blk.args, :(println($(sprint(show_unquoted,ex)*" => "),
+        push!(blk.args, :(println($(sprint(show_unquoted,ex)*" = "),
                                   repr(begin value=$(esc(ex)) end))))
     end
     if !isempty(exs); push!(blk.args, :value); end
@@ -544,10 +544,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     elseif is(head, :try) && 3 <= nargs <= 4
         show_block(io, "try", args[1], indent)
         if is_expr(args[3], :block)
-            show_block(io, "catch", is(args[2], false) ? [] : args[2], args[3], indent)
+            show_block(io, "catch", is(args[2], false) ? Any[] : args[2], args[3], indent)
         end
         if nargs >= 4 && is_expr(args[4], :block)
-            show_block(io, "finally", [], args[4], indent)
+            show_block(io, "finally", Any[], args[4], indent)
         end
         print(io, "end")
     elseif is(head, :let) && nargs >= 1

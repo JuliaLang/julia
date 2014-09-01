@@ -9,8 +9,8 @@ include $(JULIAHOME)/Make.inc
 # so that prefix/share/julia/VERSDIR can be overwritten without touching
 # third-party code).
 VERSDIR = v`cut -d. -f1-2 < VERSION`
-INSTALL_F = install -pm644
-INSTALL_M = install -pm755
+INSTALL_F = contrib/install.sh 644
+INSTALL_M = contrib/install.sh 755
 
 #file name of make dist result
 ifeq ($(JULIA_DIST_TARNAME),)
@@ -48,8 +48,8 @@ release-candidate: release test
 		echo "Undocumented functions found in doc/UNDOCUMENTED.rst; document them, then retry"; \
 		exit 1; \
 	fi
-	@$(MAKE) -C doc html  SPHINXOPTS="-W" #Rebuild Julia HTML docs pedantically
-	@$(MAKE) -C doc latex SPHINXOPTS="-W" #Rebuild Julia PDF docs pedantically
+	@$(MAKE) -C doc html  SPHINXOPTS="-W -n" #Rebuild Julia HTML docs pedantically
+	@$(MAKE) -C doc latex SPHINXOPTS="-W -n" #Rebuild Julia PDF docs pedantically
 	@$(MAKE) -C doc doctest #Run Julia doctests
 	@$(MAKE) -C doc linkcheck #Check all links
 	@$(MAKE) -C doc helpdb.jl #Rebuild Julia online documentation for help(), apropos(), etc...
@@ -67,7 +67,7 @@ release-candidate: release test
 	@echo
 	@echo To complete the release candidate checklist:
 	@echo
-	
+
 	@echo 1. Remove deprecations in base/deprecated.jl
 	@echo 2. Bump VERSION
 	@echo 3. Create tag, push to github "\(git tag v\`cat VERSION\` && git push --tags\)"
@@ -144,7 +144,7 @@ $(build_bindir)/stringreplace: $(build_bindir) contrib/stringreplace.c
 JL_LIBS = julia julia-debug
 
 # private libraries, that are installed in $(prefix)/lib/julia
-JL_PRIVATE_LIBS = suitesparse_wrapper grisu Rmath
+JL_PRIVATE_LIBS = suitesparse_wrapper Rmath
 ifeq ($(USE_SYSTEM_FFTW),0)
 JL_PRIVATE_LIBS += fftw3 fftw3f fftw3_threads fftw3f_threads
 endif
@@ -179,9 +179,6 @@ endif
 ifeq ($(USE_SYSTEM_SUITESPARSE),0)
 JL_PRIVATE_LIBS += amd camd ccolamd cholmod colamd umfpack spqr
 endif
-#ifeq ($(USE_SYSTEM_ZLIB),0)
-#JL_PRIVATE_LIBS += z
-#endif
 ifeq ($(OS),Darwin)
 ifeq ($(USE_SYSTEM_BLAS),1)
 ifeq ($(USE_SYSTEM_LAPACK),0)
@@ -247,15 +244,6 @@ endif
 	done
 endif
 
-ifeq ($(USE_SYSTEM_LIBUV),0)
-ifeq ($(OS),WINNT)
-	$(INSTALL_M) $(build_libdir)/libuv.a $(DESTDIR)$(private_libdir)
-	$(INSTALL_F) $(build_includedir)/tree.h $(DESTDIR)$(includedir)/julia
-else
-	$(INSTALL_M) $(build_libdir)/libuv.a $(DESTDIR)$(private_libdir)
-endif
-	$(INSTALL_F) $(build_includedir)/uv* $(DESTDIR)$(includedir)/julia
-endif
 	$(INSTALL_F) src/julia.h src/options.h src/support/*.h $(DESTDIR)$(includedir)/julia
 	# Copy system image
 	$(INSTALL_F) $(build_private_libdir)/sys.ji $(DESTDIR)$(private_libdir)
@@ -264,7 +252,7 @@ endif
 	cp -R -L $(build_datarootdir)/julia $(DESTDIR)$(datarootdir)/
 	# Remove git repository of juliadoc
 	-rm -rf $(DESTDIR)$(datarootdir)/julia/doc/juliadoc/.git
-	-rm $(DESTDIR)$(datarootdir)/julia/doc/juliadoc/.gitignore
+	-rm -f $(DESTDIR)$(datarootdir)/julia/doc/juliadoc/.gitignore
 	# Copy in beautiful new man page!
 	$(INSTALL_F) $(build_datarootdir)/man/man1/julia.1 $(DESTDIR)$(datarootdir)/man/man1/
 
@@ -284,7 +272,7 @@ endif
 
 	# Overwrite JL_SYSTEM_IMAGE_PATH in julia binaries:
 	for julia in $(DESTDIR)$(bindir)/julia* ; do \
-		$(build_bindir)/stringreplace $$(strings -t x - $$julia | grep "sys.ji$$" | awk '{print $$1;}' ) "$(private_libdir_rel)/sys.ji" 256 $(call cygpath_w,$$julia); \
+		$(call spawn,$(build_bindir)/stringreplace $$(strings -t x - $$julia | grep "sys.ji$$" | awk '{print $$1;}' ) "$(private_libdir_rel)/sys.ji" 256 $(call cygpath_w,$$julia)); \
 	done
 
 	mkdir -p $(DESTDIR)$(sysconfdir)
@@ -333,7 +321,14 @@ ifeq ($(OS), WINNT)
 	    cp busybox.exe $(DESTDIR)$(prefix)/Git/bin/echo.exe && \
 	    cp busybox.exe $(DESTDIR)$(prefix)/Git/bin/printf.exe )
 	cd $(DESTDIR)$(bindir) && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
+
+	# create file listing for uninstall. note: must have Windows path separators and line endings.
+	cd $(prefix) && find * | sed -e 's/\//\\/g' -e 's/$$/\r/g' > etc/uninstall.log
+
+	# build nsis package
 	$(call spawn,./dist-extras/nsis/makensis.exe) -NOCD -DVersion=$(JULIA_VERSION) -DArch=$(ARCH) -DCommit=$(JULIA_COMMIT) ./contrib/windows/build-installer.nsi
+
+	# compress nsis installer and combine with 7zip self-extracting header
 	./dist-extras/7z a -mx9 "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" julia-installer.exe
 	cat ./contrib/windows/7zS.sfx ./contrib/windows/7zSFX-config.txt "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" > "julia-${JULIA_VERSION}-${ARCH}.exe"
 	-rm -f julia-installer.exe
@@ -356,21 +351,17 @@ source-dist: git-submodules
 	git submodule --quiet foreach 'git ls-files | sed "s&^&$$path/&"' >> source-dist.tmp
 
 	# Remove unwanted files
-	sed '/\.git/d' source-dist.tmp > source-dist.tmp1
-	sed '/\.travis/d' source-dist.tmp1 > source-dist.tmp
+	sed -e '/\.git/d' -e '/\.travis/d' source-dist.tmp > source-dist.tmp1
 
-	# Create tarball
-	tar -cz -T source-dist.tmp --no-recursion -f julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz
-	rm -f source-dist.tmp source-dist.tmp1
+	# Prefix everything with the current directory name (usually "julia"), then create tarball
+	DIRNAME=$$(basename $$(pwd)); \
+	sed -e "s_.*_$$DIRNAME/&_" source-dist.tmp1 > source-dist.tmp; \
+	cd ../ && tar -cz -T $$DIRNAME/source-dist.tmp --no-recursion -f $$DIRNAME/julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz
 
 clean: | $(CLEAN_TARGETS)
 	@$(MAKE) -C base clean
 	@$(MAKE) -C src clean
 	@$(MAKE) -C ui clean
-	for repltype in "basic" "readline"; do \
-		rm -f $(build_bindir)/julia-debug-$${repltype}; \
-		rm -f $(build_bindir)/julia-$${repltype}; \
-	done
 	@rm -f julia
 	@rm -f *~ *# *.tar.gz
 	@rm -f $(build_bindir)/stringreplace source-dist.tmp source-dist.tmp1
@@ -380,7 +371,7 @@ clean: | $(CLEAN_TARGETS)
 
 cleanall: clean
 	@$(MAKE) -C src clean-flisp clean-support
-	@rm -fr $(build_libdir)
+	@rm -fr $(build_shlibdir)
 ifeq ($(OS),WINNT)
 	@rm -rf $(build_prefix)/lib
 endif

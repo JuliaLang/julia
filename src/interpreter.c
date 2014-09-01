@@ -387,7 +387,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
                              (jl_tuple_t*)temp, NULL,
                              0, args[6]==jl_true ? 1 : 0);
         dt->fptr = jl_f_ctor_trampoline;
-        dt->ctor_factory = eval(args[3], locals, nl);
+        dt->name->ctor_factory = eval(args[3], locals, nl);
 
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)name);
         temp = b->value;  // save old value
@@ -412,6 +412,8 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             ((jl_tvar_t*)jl_tupleref(para,i))->bound = 0;
         }
         jl_compute_field_offsets(dt);
+        if (para == (jl_value_t*)jl_null && jl_is_datatype_singleton(dt))
+            dt->instance = newstruct(dt);
 
         b->value = temp;
         if (temp==NULL || !equiv_type(dt, (jl_datatype_t*)temp)) {
@@ -420,7 +422,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             jl_add_constructors(dt);
         }
         else {
-            // TODO: remove all old ctors and set temp->ctor_factory = dt->ctor_factory
+            // TODO: remove all old ctors and set temp->name->ctor_factory = dt->name->ctor_factory
         }
 
         JL_GC_POP();

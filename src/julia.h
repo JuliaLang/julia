@@ -188,6 +188,9 @@ typedef struct {
     // not the original.
     jl_value_t *primary;
     jl_value_t *cache;
+    // to create a set of constructors for this sort of type
+    jl_value_t *ctor_factory;
+    jl_function_t *static_ctor_factory;
 } jl_typename_t;
 
 typedef struct {
@@ -209,8 +212,6 @@ typedef struct _jl_datatype_t {
     jl_tuple_t *parameters;
     jl_tuple_t *names;
     jl_tuple_t *types;
-    // to create a set of constructors for this sort of type
-    jl_value_t *ctor_factory;
     jl_value_t *instance;  // for singletons
     int32_t size;
     uint8_t abstract;
@@ -551,6 +552,11 @@ STATIC_INLINE int jl_isbits(void *t)   // corresponding to isbits() in julia
 {
     return (jl_is_datatype(t) && !((jl_datatype_t*)t)->mutabl &&
             ((jl_datatype_t*)t)->pointerfree && !((jl_datatype_t*)t)->abstract);
+}
+
+STATIC_INLINE int jl_is_datatype_singleton(jl_datatype_t *d)
+{
+    return (d->size == 0 && (d->names==jl_null || !d->mutabl));
 }
 
 STATIC_INLINE int jl_is_abstracttype(void *v)
@@ -901,7 +907,7 @@ DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle);
 char *jl_dlfind_win32(char *name);
 DLLEXPORT int add_library_mapping(char *lib, void *hnd);
 
-#if defined(__linux__)
+#if defined(__linux__) || defined(__FreeBSD__)
 DLLEXPORT const char *jl_lookup_soname(char *pfx, size_t n);
 #endif
 
@@ -1326,7 +1332,9 @@ typedef struct {
     int8_t code_coverage;
     int8_t malloc_log;
     int8_t check_bounds;
+    int8_t dumpbitcode;
     int int_literals;
+    int8_t compile_enabled;
 } jl_compileropts_t;
 
 extern DLLEXPORT jl_compileropts_t jl_compileropts;
@@ -1339,6 +1347,13 @@ extern DLLEXPORT jl_compileropts_t jl_compileropts;
 #define JL_COMPILEROPT_CHECK_BOUNDS_DEFAULT 0
 #define JL_COMPILEROPT_CHECK_BOUNDS_ON 1
 #define JL_COMPILEROPT_CHECK_BOUNDS_OFF 2
+#define JL_COMPILEROPT_COMPILE_DEFAULT 1
+#define JL_COMPILEROPT_COMPILE_OFF 0
+#define JL_COMPILEROPT_COMPILE_ON  1
+#define JL_COMPILEROPT_COMPILE_ALL 2
+
+#define JL_COMPILEROPT_DUMPBITCODE_ON 1
+#define JL_COMPILEROPT_DUMPBITCODE_OFF 2
 
 #ifdef __cplusplus
 }

@@ -138,6 +138,7 @@ export
     apply, fieldtype, getfield, setfield!, yieldto, throw, tuple, is, ===, isdefined,
     # arraylen, arrayref, arrayset, arraysize, tuplelen, tupleref, convert_default,
     # kwcall,
+    # sizeof    # not exported, to avoid conflicting with Base.sizeof
     # type reflection
     issubtype, typeof, isa,
     # typeassert, apply_type,

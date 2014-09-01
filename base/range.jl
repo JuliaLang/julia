@@ -164,6 +164,7 @@ linrange(a::Real, b::Real, len::Integer) =
 
 ## interface implementations
 
+similar(r::Range, T::Type, dims::(Integer...)) = Array(T, dims...)
 similar(r::Range, T::Type, dims::Dims) = Array(T, dims)
 
 size(r::Range) = (length(r),)
@@ -551,6 +552,13 @@ function sum{T<:Real}(r::Range{T})
     return l * first(r) + (iseven(l) ? (step(r) * (l-1)) * (l>>1)
                                      : (step(r) * l) * ((l-1)>>1))
 end
+
+function mean{T<:Real}(r::Range{T})
+    isempty(r) && error("mean of an empty range is undefined")
+    (first(r) + last(r)) / 2
+end
+
+median{T<:Real}(r::Range{T}) = mean(r)
 
 function map!(f::Callable, dest, r::Range)
     i = 1

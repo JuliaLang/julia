@@ -131,6 +131,7 @@ t_func[is] = (2, 2, cmp_tfunc)
 t_func[issubtype] = (2, 2, cmp_tfunc)
 t_func[isa] = (2, 2, cmp_tfunc)
 t_func[isdefined] = (1, Inf, (args...)->Bool)
+t_func[Core.sizeof] = (1, 1, x->Int)
 t_func[Union] = (0, Inf,
                  (args...)->(if all(isType,args)
                                  Type{Union(map(t->t.parameters[1],args)...)}
@@ -1924,6 +1925,7 @@ function is_pure_builtin(f)
         if !(f === Intrinsics.pointerref || # this one is volatile
              f === Intrinsics.pointerset || # this one is never effect-free
              f === Intrinsics.ccall ||      # this one is never effect-free
+             f === Intrinsics.llvmcall ||   # this one is never effect-free
              f === Intrinsics.jl_alloca ||  # this one is volatile, TODO: possibly also effect-free?
              f === Intrinsics.pointertoref) # this one is volatile
             return true
@@ -2564,6 +2566,9 @@ function inlining_pass(e::Expr, sv, ast)
         if is_known_call(e, Core.Intrinsics.ccall, sv)
             i0 = 5
             isccall = true
+        elseif is_known_call(e, Core.Intrinsics.llvmcall, sv)
+            i0 = 5
+            isccall = false
         else
             i0 = 1
             isccall = false

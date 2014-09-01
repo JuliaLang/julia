@@ -67,15 +67,16 @@ macro evalpoly(z, p...)
     ai = :a0
     push!(as, :($ai = $a))
     C = Expr(:block,
-             :(t = $(esc(z))),
-             :(x = real(t)),
-             :(y = imag(t)),
+             :(x = real(tt)),
+             :(y = imag(tt)),
              :(r = x + x),
              :(s = x*x + y*y),
              as...,
-             :($ai * t + $b))
-    R = Expr(:macrocall, symbol("@horner"), esc(z), p...)
-    :(isa($(esc(z)), Complex) ? $C : $R)
+             :($ai * tt + $b))
+    R = Expr(:macrocall, symbol("@horner"), :tt, p...)
+    :(let tt = $(esc(z))
+          isa(tt, Complex) ? $C : $R
+      end)
 end
 
 rad2deg(z::Real) = oftype(z, 57.29577951308232*z)
@@ -204,35 +205,44 @@ ldexp(x::Float64,e::Int) = ccall((:scalbn,libm),  Float64, (Float64,Int32), x, i
 ldexp(x::Float32,e::Int) = ccall((:scalbnf,libm), Float32, (Float32,Int32), x, int32(e))
 # TODO: vectorize ldexp
 
-begin
-    local exp::Array{Int32,1} = zeros(Int32,1)
-    global frexp
-    function frexp(x::Float64)
-        s = ccall((:frexp,libm), Float64, (Float64, Ptr{Int32}), x, exp)
-        (s, int(exp[1]))
+function frexp(x::Float64)
+    xu = reinterpret(Uint64,x)
+    k = int(xu >> 52) & 0x07ff
+    if k == 0 # x is subnormal
+        x == zero(x) && return x,0
+        x *= 0x1p54 # normalise significand
+        xu = reinterpret(Uint64,x)
+        k = int(xu >> 52) & 0x07ff - 54
+    elseif k == 0x07ff # NaN or Inf
+        return x,0
     end
-    function frexp(x::Float32)
-        s = ccall((:frexpf,libm), Float32, (Float32, Ptr{Int32}), x, exp)
-        (s, int(exp[1]))
+    k -= 1022
+    xu = (xu & 0x800f_ffff_ffff_ffff) | 0x3fe0_0000_0000_0000
+    reinterpret(Float64,xu), k
+end
+function frexp(x::Float32)
+    xu = reinterpret(Uint32,x)
+    k = int(xu >> 23) & 0x00ff
+    if k == 0 # x is subnormal
+        x == zero(x) && return x,0
+        x *= 3.3554432f7 # 0x1p25: no Float32 hex literal
+        xu = reinterpret(Uint32,x)
+        k = int(xu >> 23) & 0x00ff - 25
+    elseif k == 0x00ff # NaN or Inf
+        return x,0
     end
-    function frexp(A::Array{Float64})
-        f = similar(A)
-        e = Array(Int, size(A))
-        for i = 1:length(A)
-            f[i] = ccall((:frexp,libm), Float64, (Float64, Ptr{Int32}), A[i], exp)
-            e[i] = exp[1]
-        end
-        return (f, e)
+    k -= 126
+    xu = (xu & 0x807f_ffff) | 0x3f00_0000
+    reinterpret(Float32,xu), k
+end
+
+function frexp{T<:FloatingPoint}(A::Array{T})
+    f = similar(A)
+    e = Array(Int, size(A))
+    for i = 1:length(A)
+        f[i], e[i] = frexp(A[i])
     end
-    function frexp(A::Array{Float32})
-        f = similar(A)
-        e = Array(Int, size(A))
-        for i = 1:length(A)
-            f[i] = ccall((:frexpf,libm), Float32, (Float32, Ptr{Int32}), A[i], exp)
-            e[i] = exp[1]
-        end
-        return (f, e)
-    end
+    return (f, e)
 end
 
 modf(x) = rem(x,one(x)), trunc(x)

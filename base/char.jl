@@ -43,10 +43,6 @@ bswap(x::Char) = char(bswap(uint32(x)))
 < (x::Char, y::Char) = uint32(x) <  uint32(y)
 <=(x::Char, y::Char) = uint32(x) <= uint32(y)
 
-## traits ##
-
-sizeof(::Type{Char}) = 4
-
 ## printing & showing characters ##
 
 print(io::IO, c::Char) = (write(io,c); nothing)

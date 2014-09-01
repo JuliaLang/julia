@@ -19,12 +19,11 @@ CONFIGURE_COMMON += F77="$(FC)" CC="$(CC)" CXX="$(CXX)"
 MAKE_COMMON = DESTDIR="" prefix=$(build_prefix) bindir=$(build_bindir) libdir=$(build_libdir) libexecdir=$(build_libexecdir) datarootdir=$(build_datarootdir) includedir=$(build_includedir) sysconfdir=$(build_sysconfdir)
 
 #autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf uv
-#custom Makefile rules: openlibm Rmath double-conversion dsfmt suitesparse-wrapper suitesparse lapack openblas mojibake
+#custom Makefile rules: openlibm Rmath dsfmt suitesparse-wrapper suitesparse lapack openblas mojibake
 
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-STAGE1_DEPS = double-conversion
 STAGE2_DEPS = Rmath
 STAGE3_DEPS = suitesparse-wrapper
 
@@ -43,7 +42,7 @@ endif
 endif
 
 ifeq ($(OS), Linux)
-ifeq ($(shell which patchelf),)
+ifeq ($(shell which patchelf 2>/dev/null),)
 STAGE1_DEPS += patchelf
 PATCHELF=$(build_bindir)/patchelf
 else
@@ -87,10 +86,6 @@ ifeq ($(USE_SYSTEM_GMP), 0)
 STAGE1_DEPS += gmp
 endif
 
-#ifeq ($(USE_SYSTEM_ZLIB), 0)
-#STAGE1_DEPS += zlib
-#endif
-
 ifeq ($(USE_SYSTEM_MPFR), 0)
 STAGE2_DEPS += mpfr
 ifeq ($(USE_SYSTEM_GMP), 0)
@@ -133,18 +128,18 @@ endif
 
 ## Common build target prefixes
 
-LIBS = $(STAGE1_DEPS) $(STAGE2_DEPS) $(STAGE3_DEPS)
+DEP_LIBS = $(STAGE1_DEPS) $(STAGE2_DEPS) $(STAGE3_DEPS)
 
 default: $(build_prefix) install
-get: $(addprefix get-, $(LIBS))
-configure: $(addprefix configure-, $(LIBS))
-compile: $(addprefix compile-, $(LIBS))
-check: $(addprefix check-, $(LIBS))
-install: $(addprefix install-, $(LIBS))
-cleanall: $(addprefix clean-, $(LIBS))
-distcleanall: $(addprefix distclean-, $(LIBS))
+get: $(addprefix get-, $(DEP_LIBS))
+configure: $(addprefix configure-, $(DEP_LIBS))
+compile: $(addprefix compile-, $(DEP_LIBS))
+check: $(addprefix check-, $(DEP_LIBS))
+install: $(addprefix install-, $(DEP_LIBS))
+cleanall: $(addprefix clean-, $(DEP_LIBS))
+distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-uv get-pcre get-double-conversion get-openlibm get-openspecfun get-dsfmt get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf get-mojibake
+getall: get-llvm get-uv get-pcre get-openlibm get-openspecfun get-dsfmt get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-mojibake
 
 ## PATHS ##
 # sort is used to remove potential duplicates
@@ -160,6 +155,8 @@ LLVM_GIT_URL_LLVM ?= $(LLVM_GIT_URL_BASE)/llvm.git
 LLVM_GIT_URL_CLANG ?= $(LLVM_GIT_URL_BASE)/clang.git
 LLVM_GIT_URL_COMPILER_RT ?= $(LLVM_GIT_URL_BASE)/compiler-rt.git
 LLVM_GIT_URL_LLDB ?= $(LLVM_GIT_URL_BASE)/lldb.git
+LLVM_GIT_URL_LIBCXX ?= $(LLVM_GIT_URL_BASE)/libcxx.git
+LLVM_GIT_URL_LIBCXXABI ?= $(LLVM_GIT_URL_BASE)/libcxxabi.git
 
 ifeq ($(BUILD_LLDB), 1)
 BUILD_LLVM_CLANG = 1
@@ -197,11 +194,9 @@ LLVM_COMPILER_RT_TAR=
 else ifeq ($(LLVM_VER), 3.3)
 LLVM_CLANG_TAR=cfe-$(LLVM_VER).src.tar.gz
 LLVM_COMPILER_RT_TAR=compiler-rt-$(LLVM_VER).src.tar.gz
-LLVM_LIBCXX_TAR=libcxx-$(LLVM_VER).src.tar.gz
 else
 LLVM_CLANG_TAR=clang-$(LLVM_VER).src.tar.gz
 LLVM_COMPILER_RT_TAR=compiler-rt-$(LLVM_VER).src.tar.gz
-LLVM_LIBCXX_TAR=libcxx-$(LLVM_VER).src.tar.gz
 endif
 else
 LLVM_CLANG_TAR=
@@ -210,7 +205,15 @@ LLVM_LIBCXX_TAR=
 endif
 endif
 
-LLVM_CXXFLAGS =
+ifeq ($(BUILD_CUSTOM_LIBCXX),1)
+ifneq ($(LLVM_VER),svn)
+LLVM_LIBCXX_TAR=libcxx-$(LLVM_VER).src.tar.gz
+endif
+endif
+
+LLVM_CXXFLAGS = $(CXXFLAGS)
+LLVM_CPPFLAGS = $(CPPFLAGS)
+LLVM_LDFLAGS = $(LDFLAGS)
 LLVM_TARGET_FLAGS= --enable-targets=host
 LLVM_FLAGS += --disable-profiling --enable-shared --enable-static $(LLVM_TARGET_FLAGS) --disable-bindings --disable-docs
 LLVM_MFLAGS =
@@ -232,7 +235,7 @@ LLVM_FLAGS += --enable-libcpp
 endif
 ifeq ($(OS), WINNT)
 LLVM_FLAGS += --with-extra-ld-options="-Wl,--stack,8388608" LDFLAGS="" --disable-shared
-LLVM_MFLAGS += CPPFLAGS="-D__USING_SJLJ_EXCEPTIONS__ -D__CRT__NO_INLINE"
+LLVM_CPPFLAGS += -D__USING_SJLJ_EXCEPTIONS__ -D__CRT__NO_INLINE
 endif
 ifeq ($(USE_INTEL_JITEVENTS), 1)
 LLVM_FLAGS += --with-intel-jitevents
@@ -260,7 +263,8 @@ endif
 
 
 ifeq ($(LLVM_SANITIZE),1)
-LLVM_CC = CFLAGS="-fsanitize=address" LDFLAGS="-fsanitize=address"
+LLVM_CC = CFLAGS="-fsanitize=address"
+LLVM_LDFLAGS += -fsanitize=address
 LLVM_CXXFLAGS += -fsanitize=address
 LLVM_MFLAGS += TOOL_NO_EXPORTS= HAVE_LINK_VERSION_SCRIPT=0
 else
@@ -272,6 +276,22 @@ LLVM_FLAGS += CXXFLAGS="$(LLVM_CXXFLAGS)"
 LLVM_MFLAGS += CXXFLAGS="$(LLVM_CXXFLAGS)"
 endif
 LLVM_MFLAGS += $(LLVM_CC)
+
+ifeq ($(BUILD_CUSTOM_LIBCXX),1)
+LLVM_LDFLAGS += -Wl,-R$(build_libdir)
+ifeq ($(USEICC),1)
+LLVM_LDFLAGS += -no_cpprt -lc++ -lc++abi
+endif
+endif
+
+ifneq ($(LLVM_CPPFLAGS),)
+LLVM_FLAGS += CPPFLAGS="$(LLVM_CPPFLAGS)"
+LLVM_MFLAGS += CPPFLAGS="$(LLVM_CPPFLAGS)"
+endif
+ifneq ($(LLVM_LDFLAGS),)
+LLVM_FLAGS += LDFLAGS="$(LLVM_LDFLAGS)"
+LLVM_MFLAGS += LDFLAGS="$(LLVM_LDFLAGS)"
+endif
 
 ifneq ($(LLVM_CLANG_TAR),)
 $(LLVM_CLANG_TAR):
@@ -308,6 +328,55 @@ else
   LLVM_FLAGS += --with-python="$(shell ./find_python_for_llvm)"
 endif
 
+ifeq ($(BUILD_CUSTOM_LIBCXX),1)
+
+LIBCXX_OPTIONS = OPTIONS="-I../../libcxx/include $(CXXFLAGS) $(LDFLAGS)" CC="$(CC) $(CFLAGS)" CXX="$(CXX)"
+ifeq ($(USEICC),1)
+LIBCXX_OPTIONS += EXTRA_LIBS="-Bstatic -lirc"
+endif
+
+llvm-$(LLVM_VER)/projects/libcxx: $(LLVM_LIBCXX_TAR) | llvm-svn/configure
+	([ ! -d llvm-$(LLVM_VER)/projects/libcxx ] && \
+	git clone $(LLVM_GIT_URL_LIBCXX) llvm-$(LLVM_VER)/projects/libcxx  ) || \
+	(cd llvm-$(LLVM_VER)/projects/libcxx  && \
+	git pull --ff-only)
+llvm-$(LLVM_VER)/projects/libcxxabi: $(LLVM_LIBCXXABI_TAR) | llvm-svn/configure
+	([ ! -d llvm-$(LLVM_VER)/projects/libcxxabi ] && \
+	git clone $(LLVM_GIT_URL_LIBCXXABI) llvm-$(LLVM_VER)/projects/libcxxabi  ) || \
+	(cd llvm-$(LLVM_VER)/projects/libcxxabi  && \
+	git pull --ff-only)
+libcxx-build:
+	mkdir -p libcxx-build
+libcxx-build/Makefile: llvm-$(LLVM_VER)/projects/libcxx | llvm-$(LLVM_VER)/projects/libcxxabi libcxx-build
+	cd libcxx-build && \
+		cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS="../llvm-$(LLVM_VER)/projects/libcxxabi/include" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(build_prefix) ../llvm-$(LLVM_VER)/projects/libcxx -DCMAKE_C_COMPILER="$(CC)" -DCMAKE_CXX_COMPILER="$(CXX)"  -DCMAKE_SHARED_LINKER_FLAGS="-L$(build_libdir) -Bstatic -lirc -Bdynamic" -DCMAKE_CXX_FLAGS="$(CXXFLAGS)"
+libcxxabi-build:
+	mkdir -p libcxxabi-build
+libcxxabi-build/Makefile: llvm-$(LLVM_VER)/projects/libcxxabi | libcxxabi-build
+	cd libcxxabi-build && \
+        cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DLLVM_MAIN_SRC_DIR=../llvm-svn -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(build_prefix) ../llvm-$(LLVM_VER)/projects/libcxxabi -DCMAKE_C_COMPILER="$(CC)" -DCMAKE_CXX_COMPILER="$(CXX)" -DLIBCXXABI_CXX_ABI_LIBRARIES="-Bstatic -lirc -Bdynamic" -DCMAKE_CXX_FLAGS="$(CXXFLAGS) -std=c++11"
+llvm-$(LLVM_VER)/projects/libcxxabi/lib/libc++abi.so.1.0: llvm-$(LLVM_VER)/projects/libcxxabi | llvm-$(LLVM_VER)/projects/libcxx
+libcxxabi-build/libc++abi.so.1.0: | libcxxabi-build/Makefile
+	cd libcxxabi-build && $(MAKE)
+$(build_libdir)/libc++abi.so.1.0: libcxxabi-build/lib/libc++abi.so.1.0
+	cd libcxxabi-build && $(MAKE) install
+	touch $@
+install-libcxxabi: $(build_libdir)/libc++abi.so.1.0
+libcxx-build/lib/libc++.so.1.0: | $(build_libdir)/libc++abi.so.1.0 libcxx-build/Makefile
+	cd libcxx-build && $(MAKE)
+$(build_libdir)/libc++.so.1.0: libcxx-build/lib/libc++.so.1.0
+	cd libcxx-build && $(MAKE) install
+	touch $@
+install-libcxx: $(build_libdir)/libc++.so.1.0
+get-libcxx: llvm-$(LLVM_VER)/projects/libcxx
+get-libcxxabi: llvm-$(LLVM_VER)/projects/libcxxabi
+endif
+
+ifeq ($(BUILD_CUSTOM_LIBCXX),1)
+LIBCXX_DEPENDENCY = $(build_libdir)/libc++abi.so.1.0 $(build_libdir)/libc++.so.1.0
+LIBCXX_GET_DEPENDENCY = get-libcxx get-libcxxabi
+endif
+
 llvm-$(LLVM_VER)/configure: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR)
 ifneq ($(LLVM_CLANG_TAR),)
 	$(JLCHECKSUM) $(LLVM_CLANG_TAR)
@@ -315,7 +384,6 @@ endif
 ifneq ($(LLVM_COMPILER_RT_TAR),)
 	$(JLCHECKSUM) $(LLVM_COMPILER_RT_TAR)
 endif
-
 ifneq ($(LLVM_LIBCXX_TAR),)
 	$(JLCHECKSUM) $(LLVM_LIBCXX_TAR)
 endif
@@ -340,24 +408,19 @@ ifneq ($(LLVM_CLANG_TAR),)
 	mkdir -p llvm-$(LLVM_VER)/tools/clang && \
 	$(TAR) -C llvm-$(LLVM_VER)/tools/clang --strip-components 1 -xf $(LLVM_CLANG_TAR)
 endif
+ifneq ($(LLVM_COMPILER_RT_TAR),)
+	mkdir -p llvm-$(LLVM_VER)/projects/compiler-rt && \
+	$(TAR) -C llvm-$(LLVM_VER)/projects/compiler-rt --strip-components 1 -xf $(LLVM_COMPILER_RT_TAR)
+endif
 else
 ifeq ($(BUILD_LLVM_CLANG),1)
 	([ ! -d llvm-$(LLVM_VER)/tools/clang ] && \
 		git clone $(LLVM_GIT_URL_CLANG) llvm-$(LLVM_VER)/tools/clang  ) || \
 		(cd llvm-$(LLVM_VER)/tools/clang  && \
-		git pull --ff-only)	
+		git pull --ff-only)
 endif
 endif
-ifneq ($(LLVM_VER),svn)
-ifneq ($(LLVM_COMPILER_RT_TAR),)
-	mkdir -p llvm-$(LLVM_VER)/projects/compiler-rt && \
-	$(TAR) -C llvm-$(LLVM_VER)/projects/compiler-rt --strip-components 1 -xf $(LLVM_COMPILER_RT_TAR)
-endif
-ifneq ($(LLVM_LIBCXX_TAR),)
-	mkdir -p llvm-$(LLVM_VER)/projects/libcxx && \
-	$(TAR) -C llvm-$(LLVM_VER)/projects/libcxx --strip-components 1 -xf $(LLVM_LIBCXX_TAR)
-endif
-else
+ifeq ($(LLVM_VER),svn)
 ifeq ($(BUILD_LLVM_CLANG),1)
 	([ ! -d llvm-$(LLVM_VER)/tools/clang ] && \
 		git clone $(LLVM_GIT_URL_CLANG) llvm-$(LLVM_VER)/tools/clang  ) || \
@@ -396,7 +459,7 @@ endif
 endif
 	touch -c $@
 
-llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/config.status: llvm-$(LLVM_VER)/configure | $(llvm_python_workaround)
+llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/config.status: llvm-$(LLVM_VER)/configure | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
 	cd llvm-$(LLVM_VER) && \
 	mkdir -p build_$(LLVM_BUILDTYPE) && cd build_$(LLVM_BUILDTYPE) && \
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
@@ -425,6 +488,7 @@ $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
 	touch -c $@
 
 reinstall-llvm:
+	-rm $(build_bindir)/llvm-config
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
 	$(MAKE) -C llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE) install $(LLVM_MFLAGS) $(MAKE_COMMON) PROJ_libdir=$(build_libdir) PROJ_bindir=$(build_bindir)
 
@@ -434,7 +498,11 @@ clean-llvm:
 distclean-llvm:
 	-rm -rf llvm-$(LLVM_VER).tar.gz llvm-$(LLVM_VER).src.tar.gz clang-$(LLVM_VER).src.tar.gz clang-$(LLVM_VER).tar.gz libcxx-$(LLVM_VER).src.tar.gz compiler-rt-$(LLVM_VER).src.tar.gz llvm-$(LLVM_VER)
 
+ifneq ($(LLVM_VER),svn)
 get-llvm: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR)
+else
+get-llvm: llvm-$(LLVM_VER)/configure $(LIBCXX_GET_DEPENDENCY)
+endif
 configure-llvm: llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/config.status
 compile-llvm: $(LLVM_OBJ_SOURCE)
 check-llvm: llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/checked
@@ -446,10 +514,17 @@ install-llvm: $(LLVM_OBJ_TARGET)
 
 UV_SRC_TARGET = libuv/.libs/libuv.a
 UV_OBJ_TARGET = $(build_libdir)/libuv.a
-ifneq ($(USEMSVC), 1)
-UV_OPTS =
-else
-UV_OPTS = CFLAGS=-DBUILDING_UV_SHARED
+UV_CFLAGS = 
+ifeq ($(USEMSVC), 1)
+UV_CFLAGS += -DBUILDING_UV_SHARED
+endif
+ifeq ($(USEICC), 1)
+UV_CFLAGS += -static-intel
+endif
+
+UV_OPTS += LDFLAGS="$(LDFLAGS) $(CLDFLAGS) -v"
+ifneq ($(UV_CFLAGS),)
+UV_OPTS += CFLAGS="$(UV_CFLAGS)"
 endif
 
 libuv/configure:
@@ -469,7 +544,7 @@ $(UV_SRC_TARGET): libuv/config.status
 	touch -c libuv/Makefile.in
 	touch -c libuv/configure
 	touch -c libuv/config.status
-	$(MAKE) -C libuv
+	$(MAKE) -C libuv $(UV_OPTS)
 	touch -c $@
 libuv/checked: $(UV_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
@@ -535,53 +610,6 @@ configure-pcre: pcre-$(PCRE_VER)/config.status
 compile-pcre: $(PCRE_SRC_TARGET)
 check-pcre: pcre-$(PCRE_VER)/checked
 install-pcre: $(PCRE_OBJ_TARGET)
-
-
-## Grisu floating-point printing library ##
-
-GRISU_OPTS = $(CXXFLAGS) -O3 -fvisibility=hidden $(fPIC)
-GRISU_OBJ_TARGET = $(build_shlibdir)/libgrisu.$(SHLIB_EXT)
-
-double-conversion-$(GRISU_VER).tar.gz:
-	$(JLDOWNLOAD) $@ http://double-conversion.googlecode.com/files/$@
-	touch -c $@
-double-conversion-$(GRISU_VER)/Makefile: double-conversion-$(GRISU_VER).tar.gz
-	$(JLCHECKSUM) $<
-	mkdir -p double-conversion-$(GRISU_VER) && \
-	$(TAR) -C double-conversion-$(GRISU_VER) --strip-components 1 -xf double-conversion-$(GRISU_VER).tar.gz
-	touch -c $@
-
-ifeq ($(USE_SYSTEM_GRISU), 0)
-$(GRISU_OBJ_TARGET): double-conversion-$(GRISU_VER)/Makefile
-	cd double-conversion-$(GRISU_VER) && \
-	$(CXX) -c $(GRISU_OPTS) -o src/bignum.o -Isrc src/bignum.cc && \
-	$(CXX) -c $(GRISU_OPTS) -o src/bignum-dtoa.o -Isrc src/bignum-dtoa.cc && \
-	$(CXX) -c $(GRISU_OPTS) -o src/cached-powers.o -Isrc src/cached-powers.cc && \
-	$(CXX) -c $(GRISU_OPTS) -o src/diy-fp.o -Isrc src/diy-fp.cc && \
-	$(CXX) -c $(GRISU_OPTS) -o src/double-conversion.o -Isrc src/double-conversion.cc && \
-	$(CXX) -c $(GRISU_OPTS) -o src/fast-dtoa.o -Isrc src/fast-dtoa.cc && \
-	$(CXX) -c $(GRISU_OPTS) -o src/fixed-dtoa.o -Isrc src/fixed-dtoa.cc && \
-	$(CXX) -c $(GRISU_OPTS) -o src/strtod.o -Isrc src/strtod.cc && \
-	$(CXX) -c $(GRISU_OPTS) -o src/libdouble-conversion.o -I.. -Isrc ../double_conversion_wrapper.cpp && \
-	$(CXX) $(GRISU_OPTS) src/*.o $(LDFLAGS) -shared -dead_strip -o $@ && \
-	$(INSTALL_NAME_CMD)libgrisu.$(SHLIB_EXT) $@
-else
-$(GRISU_OBJ_TARGET):
-	$(CXX) $(GRISU_OPTS) -I/usr/include/double-conversion double_conversion_wrapper.cpp -shared $(LDFLAGS) -o $@ -ldouble-conversion && \
-	$(INSTALL_NAME_CMD)libgrisu.$(SHLIB_EXT) $@
-endif
-
-clean-double-conversion:
-	-rm -f double-conversion-$(GRISU_VER)/src/*.o
-	-rm -f $(GRISU_OBJ_TARGET)
-distclean-double-conversion:
-	-rm -rf double-conversion-$(GRISU_VER).tar.gz double-conversion-$(GRISU_VER) $(GRISU_OBJ_TARGET)
-
-get-double-conversion: double-conversion-$(GRISU_VER).tar.gz
-configure-double-conversion: get-double-conversion
-compile-double-conversion: get-double-conversion
-check-double-conversion: compile-double-conversion
-install-double-conversion: $(GRISU_OBJ_TARGET)
 
 
 ## openlibm ##
@@ -756,7 +784,7 @@ install-Rmath: $(RMATH_OBJ_TARGET)
 OPENBLAS_OBJ_SOURCE = openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT)
 OPENBLAS_OBJ_TARGET = $(build_shlibdir)/libopenblas.$(SHLIB_EXT)
 
-OPENBLAS_BUILD_OPTS = CC="$(CC)" FC="$(FC)" RANLIB="$(RANLIB)" FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(OPENBLAS_TARGET_ARCH) BINARY=$(BINARY)
+OPENBLAS_BUILD_OPTS = CC="$(CC)" FC="$(FC)" RANLIB="$(RANLIB)" FFLAGS="$(FFLAGS) $(JFFLAGS)" LDFLAGS="$(LDFLAGS)" TARGET=$(OPENBLAS_TARGET_ARCH) BINARY=$(BINARY)
 
 # Thread support
 ifeq ($(OPENBLAS_USE_THREAD), 1)
@@ -1008,7 +1036,7 @@ ARPACK_MFLAGS = F77="$(FC)" MPIF77="$(FC)"
 ARPACK_FFLAGS += $(FFLAGS) $(JFFLAGS)
 ARPACK_FLAGS = --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared FFLAGS="$(ARPACK_FFLAGS)"
 ifneq ($(OS),WINNT)
-ARPACK_FLAGS += LDFLAGS="-Wl,-rpath,'$(build_libdir)'"
+ARPACK_FLAGS += LDFLAGS="$(LDFLAGS) -Wl,-rpath,'$(build_libdir)'"
 endif
 
 # ARPACK-NG upstream keeps changing their download filenames
@@ -1307,11 +1335,11 @@ $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
 	$(INSTALL_NAME_CMD)libcamd.$(SHLIB_EXT) $(build_shlibdir)/libcamd.$(SHLIB_EXT) && \
 	$(CC) -shared $(WHOLE_ARCHIVE) libccolamd.a $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libccolamd.$(SHLIB_EXT) && \
 	$(INSTALL_NAME_CMD)libccolamd.$(SHLIB_EXT) $(build_shlibdir)/libccolamd.$(SHLIB_EXT) && \
-	$(CXX) -shared $(WHOLE_ARCHIVE) libsuitesparseconfig.a libcholmod.a  $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libcholmod.$(SHLIB_EXT) -L$(build_shlibdir) -lcolamd -lamd -lcamd -lccolamd $(LIBBLAS) $(RPATH_ORIGIN) && \
+	$(CXX) -shared $(WHOLE_ARCHIVE) libsuitesparseconfig.a libcholmod.a  $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libcholmod.$(SHLIB_EXT) $(LDFLAGS) -L$(build_shlibdir) -lcolamd -lamd -lcamd -lccolamd $(LIBBLAS) $(RPATH_ORIGIN) && \
 	$(INSTALL_NAME_CMD)libcholmod.$(SHLIB_EXT) $(build_shlibdir)/libcholmod.$(SHLIB_EXT) && \
-	$(CXX) -shared $(WHOLE_ARCHIVE) libsuitesparseconfig.a libumfpack.a  $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libumfpack.$(SHLIB_EXT) -L$(build_shlibdir) -lcholmod -lcolamd -lamd $(LIBBLAS) $(RPATH_ORIGIN) && \
+	$(CXX) -shared $(WHOLE_ARCHIVE) libsuitesparseconfig.a libumfpack.a  $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libumfpack.$(SHLIB_EXT) $(LDFLAGS) -L$(build_shlibdir) -lcholmod -lcolamd -lamd $(LIBBLAS) $(RPATH_ORIGIN) && \
 	$(INSTALL_NAME_CMD)libumfpack.$(SHLIB_EXT) $(build_shlibdir)/libumfpack.$(SHLIB_EXT) && \
-	$(CXX) -shared $(WHOLE_ARCHIVE) libsuitesparseconfig.a libspqr.a  $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libspqr.$(SHLIB_EXT) -L$(build_shlibdir) -lcholmod -lcolamd -lamd $(LIBLAPACK) $(RPATH_ORIGIN) && \
+	$(CXX) -shared $(WHOLE_ARCHIVE) libsuitesparseconfig.a libspqr.a  $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libspqr.$(SHLIB_EXT) $(LDFLAGS) -L$(build_shlibdir) -lcholmod -lcolamd -lamd $(LIBLAPACK) $(LIBBLAS) $(RPATH_ORIGIN) && \
 	$(INSTALL_NAME_CMD)libspqr.$(SHLIB_EXT) $(build_shlibdir)/libspqr.$(SHLIB_EXT)
 
 clean-suitesparse:
@@ -1358,6 +1386,7 @@ install-suitesparse-wrapper: $(build_shlibdir)/libsuitesparse_wrapper.$(SHLIB_EX
 LIBUNWIND_TARGET_OBJ = $(build_libdir)/libunwind.a
 LIBUNWIND_TARGET_SOURCE = libunwind-$(UNWIND_VER)/src/.libs/libunwind.a
 LIBUNWIND_CFLAGS = $(CFLAGS) -U_FORTIFY_SOURCE $(fPIC)
+LIBUNWIND_CPPFLAGS = $(CPPFLAGS)
 
 libunwind-$(UNWIND_VER).tar.gz:
 	$(JLDOWNLOAD) $@ http://download.savannah.gnu.org/releases/libunwind/$@ 
@@ -1368,7 +1397,7 @@ libunwind-$(UNWIND_VER)/configure: libunwind-$(UNWIND_VER).tar.gz
 	touch -c $@
 libunwind-$(UNWIND_VER)/config.status: libunwind-$(UNWIND_VER)/configure
 	cd libunwind-$(UNWIND_VER) && \
-	./configure $(CONFIGURE_COMMON) CFLAGS="$(LIBUNWIND_CFLAGS)" --disable-shared --disable-minidebuginfo
+	./configure $(CONFIGURE_COMMON) CPPFLAGS="$(LIBUNWIND_CPPFLAGS)" CFLAGS="$(LIBUNWIND_CFLAGS)" --disable-shared --disable-minidebuginfo
 	touch -c $@
 $(LIBUNWIND_TARGET_SOURCE): libunwind-$(UNWIND_VER)/config.status
 	$(MAKE) -C libunwind-$(UNWIND_VER)
@@ -1400,7 +1429,7 @@ install-unwind: $(LIBUNWIND_TARGET_OBJ)
 
 ## OS X Unwind ##
 
-OSXUNWIND_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) CFLAGS="-ggdb3 -O0" CXXFLAGS="-ggdb3 -O0" SFLAGS="-ggdb3" LDFLAGS="-Wl,-macosx_version_min,10.7"
+OSXUNWIND_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) CFLAGS="-ggdb3 -O0" CXXFLAGS="$(CXXFLAGS) -ggdb3 -O0" SFLAGS="-ggdb3" LDFLAGS="-Wl,-macosx_version_min,10.7"
 
 OSXUNWIND_OBJ_TARGET = $(build_shlibdir)/libosxunwind.$(SHLIB_EXT)
 OSXUNWIND_OBJ_SOURCE = libosxunwind-$(OSXUNWIND_VER)/libosxunwind.$(SHLIB_EXT)
@@ -1522,66 +1551,6 @@ configure-mpfr: mpfr-$(MPFR_VER)/config.status
 compile-mpfr: $(MPFR_SRC_TARGET)
 check-mpfr: mpfr-$(MPFR_VER)/checked
 install-mpfr: $(MPFR_OBJ_TARGET)
-
-## ZLIB ##
-
-ifeq ($(OS),WINNT)
-ZLIB_SRC_TARGET = zlib-$(ZLIB_VER)/zlib1.$(SHLIB_EXT)
-else
-ZLIB_SRC_TARGET = zlib-$(ZLIB_VER)/libz.$(SHLIB_EXT)
-endif
-ZLIB_OBJ_TARGET = $(build_shlibdir)/libz.$(SHLIB_EXT)
-ZLIB_CONFIGFLAGS = CFLAGS="-O3 $(CFLAGS) -D_FILE_OFFSET_BITS=64"
-ifneq ($(OS),$(BUILD_OS))
-ZLIB_CONFIGFLAGS += CHOST=$(XC_HOST)
-else
-ZLIB_CONFIGFLAGS += CC="$(CC)"
-endif
-
-zlib-$(ZLIB_VER).tar.gz:
-	$(JLDOWNLOAD) $@ http://zlib.net/$@
-zlib-$(ZLIB_VER)/configure: zlib-$(ZLIB_VER).tar.gz
-	$(JLCHECKSUM) $<
-	$(TAR) zxf $<
-	touch -c $@
-zlib-$(ZLIB_VER)/config.status: zlib-$(ZLIB_VER)/configure
-ifeq ($(OS), WINNT)
-	cd zlib-$(ZLIB_VER) && \
-	cp win32/Makefile.gcc Makefile
-else
-	cd zlib-$(ZLIB_VER) && \
-	$(ZLIB_CONFIGFLAGS) ./configure --prefix=$(abspath $(build_prefix)) #not an autoconf script
-endif
-	echo 1 > $@
-$(ZLIB_SRC_TARGET): zlib-$(ZLIB_VER)/config.status
-	$(MAKE) -C zlib-$(ZLIB_VER)
-	touch -c $@
-zlib-$(ZLIB_VER)/checked: $(ZLIB_SRC_TARGET)
-ifneq ($(OS), WINNT)
-	$(MAKE) -C zlib-$(ZLIB_VER) check prefix=$(CROSS_COMPILE)
-endif
-	echo 1 > $@
-$(ZLIB_OBJ_TARGET): $(ZLIB_SRC_TARGET) zlib-$(ZLIB_VER)/checked
-ifeq ($(OS), WINNT)
-	cp zlib-$(ZLIB_VER)/zlib1.dll $@
-else
-	$(MAKE) -C zlib-$(ZLIB_VER) install prefix=$(CROSS_COMPILE) $(MAKE_COMMON)
-endif
-	$(INSTALL_NAME_CMD)libz.$(SHLIB_EXT) $@
-	touch -c $@
-
-clean-zlib:
-	-$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C zlib-$(ZLIB_VER) clean
-	-rm -f $(ZLIB_OBJ_TARGET)
-distclean-zlib:
-	-rm -rf zlib-$(ZLIB_VER).tar.gz zlib-$(ZLIB_VER)
-
-get-zlib: zlib-$(ZLIB_VER).tar.gz
-configure-zlib: zlib-$(ZLIB_VER)/config.status
-compile-zlib: $(ZLIB_SRC_TARGET)
-check-zlib: zlib-$(ZLIB_VER)/checked
-install-zlib: $(ZLIB_OBJ_TARGET)
-
 
 ## patchelf ##
 

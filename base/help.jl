@@ -180,6 +180,7 @@ function help(io::IO, x)
 end
 
 help(args...) = help(STDOUT, args...)
+help(::IO, args...) = error("too many arguments to help()")
 
 # check whether an expression is a qualified name, e.g. Base.FFTW.FORWARD
 isname(n::Symbol) = true

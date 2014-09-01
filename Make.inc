@@ -25,8 +25,6 @@ USE_SYSTEM_GMP=0
 USE_SYSTEM_MPFR=0
 USE_SYSTEM_ARPACK=0
 USE_SYSTEM_SUITESPARSE=0
-USE_SYSTEM_ZLIB=0
-USE_SYSTEM_GRISU=0
 USE_SYSTEM_RMATH=0
 USE_SYSTEM_LIBUV=0
 USE_SYSTEM_UTF8PROC=0
@@ -67,7 +65,7 @@ endif
 # disable automatic Makefile rules
 .SUFFIXES:
 
-# find out if git repository is availible
+# find out if git repository is available
 ifeq ($(shell [ -e $(JULIAHOME)/.git ] && echo true || echo "Warning: git information unavailable; versioning information limited" >&2), true)
 NO_GIT = 0
 else
@@ -291,6 +289,12 @@ DEBUGFLAGS = -O0 -ggdb3 -DJL_DEBUG_BUILD -fstack-protector-all
 SHIPFLAGS = -O3 -g -falign-functions
 endif
 
+ifneq ($(USEICC),1)
+JCFLAGS += -m$(BINARY)
+JCXXFLAGS += -m$(BINARY)
+JFFLAGS += -m$(BINARY)
+endif
+
 ifeq ($(LLVM_VER),svn)
 JCXXFLAGS += -std=c++11
 endif
@@ -431,9 +435,6 @@ BINARY=64
 else
 $(error "unknown word-size for arch: $(ARCH)")
 endif
-CC += -m$(BINARY)
-CXX += -m$(BINARY)
-FC += -m$(BINARY)
 
 ifeq ($(USEGCC),1)
 ifneq ($(ARCH), ppc64)
@@ -568,7 +569,7 @@ ifeq ($(OS), WINNT)
   RPATH_ORIGIN =
 else ifeq ($(OS), Darwin)
   RPATH = -Wl,-rpath,'@executable_path/$(build_private_libdir_rel)' -Wl,-rpath,'@executable_path/$(build_libdir_rel)'
-  RPATH_ORIGIN =
+  RPATH_ORIGIN = -Wl,-rpath,'@loader_path/'
 else
   RPATH = -Wl,-rpath,'$$ORIGIN/$(build_private_libdir_rel)' -Wl,-rpath,'$$ORIGIN/$(build_libdir_rel)' -Wl,-z,origin
   RPATH_ORIGIN = -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
@@ -692,6 +693,18 @@ LIBBLASNAME = libsatlas
 LIBLAPACKNAME = $(LIBBLASNAME)
 endif
 
+# Custom libcxx
+ifeq ($(BUILD_CUSTOM_LIBCXX),1)
+LDFLAGS += -L$(build_libdir) -lc++abi
+CXXLDFLAGS += -L$(build_libdir) -lc++abi -stdlib=libc++ -lc++
+CPPFLAGS += -I$(build_includedir)/c++/v1
+ifeq ($(USEICC),1)
+CXXFLAGS += -cxxlib-nostd -static-intel
+CLDFLAGS += -static-intel
+LDFLAGS += -cxxlib-nostd -static-intel
+endif
+endif
+
 # Make tricks
 
 define dir_target
@@ -727,22 +740,20 @@ else
 endif
 endef
 
-ifeq ($(BUILD_OS), WINNT)
+ifeq ($(BUILD_OS), WINNT) # MSYS
 spawn = $(1)
-else ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
+cygpath_w = $(1)
+else ifneq (,$(findstring CYGWIN,$(BUILD_OS))) # Cygwin
 spawn = $(1)
-else
-ifeq ($(OS), WINNT)
-spawn = wine $(1)
-else
-spawn = $(1)
-endif
-endif
-
-ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
 cygpath_w = `cygpath -w $(1)`
 else
+ifeq ($(OS), WINNT) # unix-to-Windows cross-compile
+spawn = wine $(1)
+cygpath_w = `winepath -w $(1)`
+else # not Windows
+spawn = $(1)
 cygpath_w = $(1)
+endif
 endif
 
 exec = $(shell $(call spawn,$(1)))
@@ -756,14 +767,7 @@ pathsearch = $(firstword $(wildcard $(addsuffix /$(1),$(subst :, ,$(2)))))
 
 JULIA_EXECUTABLE_debug = $(build_bindir)/julia-debug$(EXE)
 JULIA_EXECUTABLE_release = $(build_bindir)/julia$(EXE)
-
-ifeq ($(OS), WINNT)
 JULIA_EXECUTABLE = $(JULIA_EXECUTABLE_release)
-else ifdef JULIA_VAGRANT_BUILD
-JULIA_EXECUTABLE = $(JULIA_EXECUTABLE_release)
-else
-JULIA_EXECUTABLE = $(JULIAHOME)/julia
-endif
 
 # Colors for make
 ifndef VERBOSE

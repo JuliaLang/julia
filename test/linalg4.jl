@@ -331,6 +331,19 @@ for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Triangular, Matrix]
     @test full(convert(newtype, A)) == full(A)
 end
 
+# Test generic cholfact!
+for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
+    if elty <: Complex
+        A = complex(randn(5,5), randn(5,5))
+    else
+        A = randn(5,5)
+    end
+    A = convert(Matrix{elty}, A'A)
+    for ul in (:U, :L)
+        @test_approx_eq full(cholfact(A, ul)[ul]) full(invoke(Base.LinAlg.chol!, (AbstractMatrix,Symbol),copy(A), ul))
+    end
+end
+
 # Issue #7886
 x, r = LAPACK.gelsy!([0 1; 0 2; 0 3.], [2, 4, 6.])
 @test_approx_eq x [0,2]
@@ -341,3 +354,11 @@ A7933 = [1 2; 3 4]
 B7933 = copy(A7933)
 C7933 = full(Symmetric(A7933))
 @test A7933 == B7933
+
+# Issues #8057 and #8058
+for f in (eigfact, eigvals)
+    for A in (Symmetric(randn(2,2)), Hermitian(complex(randn(2,2), randn(2,2))))
+        @test_throws ArgumentError f(A, 3, 2)
+        @test_throws ArgumentError f(A, 1:4)
+    end
+end

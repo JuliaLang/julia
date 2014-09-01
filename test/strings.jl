@@ -497,18 +497,18 @@ end
 @test isequal(split("foo,bar,baz", ','), ["foo","bar","baz"])
 @test isequal(split("foo,bar,baz", ","), ["foo","bar","baz"])
 @test isequal(split("foo,bar,baz", r","), ["foo","bar","baz"])
-@test isequal(split("foo,bar,baz", ',', 0), ["foo","bar","baz"])
-@test isequal(split("foo,bar,baz", ',', 1), ["foo,bar,baz"])
-@test isequal(split("foo,bar,baz", ',', 2), ["foo","bar,baz"])
-@test isequal(split("foo,bar,baz", ',', 3), ["foo","bar","baz"])
+@test isequal(split("foo,bar,baz", ','; limit=0), ["foo","bar","baz"])
+@test isequal(split("foo,bar,baz", ','; limit=1), ["foo,bar,baz"])
+@test isequal(split("foo,bar,baz", ','; limit=2), ["foo","bar,baz"])
+@test isequal(split("foo,bar,baz", ','; limit=3), ["foo","bar","baz"])
 @test isequal(split("foo,bar", "o,b"), ["fo","ar"])
 
 @test isequal(split("", ','), [""])
 @test isequal(split(",", ','), ["",""])
 @test isequal(split(",,", ','), ["","",""])
-@test isequal(split("", ',', false), [])
-@test isequal(split(",", ',', false), [])
-@test isequal(split(",,", ',', false), [])
+@test isequal(split("", ','  ; keep=false), [])
+@test isequal(split(",", ',' ; keep=false), [])
+@test isequal(split(",,", ','; keep=false), [])
 
 @test isequal(split("a b c"), ["a","b","c"])
 @test isequal(split("a  b \t c\n"), ["a","b","c"])
@@ -516,39 +516,39 @@ end
 @test isequal(rsplit("foo,bar,baz", 'x'), ["foo,bar,baz"])
 @test isequal(rsplit("foo,bar,baz", ','), ["foo","bar","baz"])
 @test isequal(rsplit("foo,bar,baz", ","), ["foo","bar","baz"])
-@test isequal(rsplit("foo,bar,baz", ',', 0), ["foo","bar","baz"])
-@test isequal(rsplit("foo,bar,baz", ',', 1), ["foo,bar,baz"])
-@test isequal(rsplit("foo,bar,baz", ',', 2), ["foo,bar","baz"])
-@test isequal(rsplit("foo,bar,baz", ',', 3), ["foo","bar","baz"])
+@test isequal(rsplit("foo,bar,baz", ','; limit=0), ["foo","bar","baz"])
+@test isequal(rsplit("foo,bar,baz", ','; limit=1), ["foo,bar,baz"])
+@test isequal(rsplit("foo,bar,baz", ','; limit=2), ["foo,bar","baz"])
+@test isequal(rsplit("foo,bar,baz", ','; limit=3), ["foo","bar","baz"])
 @test isequal(rsplit("foo,bar", "o,b"), ["fo","ar"])
 
 @test isequal(rsplit("", ','), [""])
 @test isequal(rsplit(",", ','), ["",""])
 @test isequal(rsplit(",,", ','), ["","",""])
-@test isequal(rsplit(",,", ',', 2), [",",""])
-@test isequal(rsplit("", ',', false), [])
-@test isequal(rsplit(",", ',', false), [])
-@test isequal(rsplit(",,", ',', false), [])
+@test isequal(rsplit(",,", ','; limit=2), [",",""])
+@test isequal(rsplit("", ','  ; keep=false), [])
+@test isequal(rsplit(",", ',' ; keep=false), [])
+@test isequal(rsplit(",,", ','; keep=false), [])
 
 #@test isequal(rsplit("a b c"), ["a","b","c"])
 #@test isequal(rsplit("a  b \t c\n"), ["a","b","c"])
 
 let str = "a.:.ba..:..cba.:.:.dcba.:."
 @test isequal(split(str, ".:."), ["a","ba.",".cba",":.dcba",""])
-@test isequal(split(str, ".:.", false), ["a","ba.",".cba",":.dcba"])
+@test isequal(split(str, ".:."; keep=false), ["a","ba.",".cba",":.dcba"])
 @test isequal(split(str, ".:."), ["a","ba.",".cba",":.dcba",""])
 @test isequal(split(str, r"\.(:\.)+"), ["a","ba.",".cba","dcba",""])
-@test isequal(split(str, r"\.(:\.)+", false), ["a","ba.",".cba","dcba"])
+@test isequal(split(str, r"\.(:\.)+"; keep=false), ["a","ba.",".cba","dcba"])
 @test isequal(split(str, r"\.+:\.+"), ["a","ba","cba",":.dcba",""])
-@test isequal(split(str, r"\.+:\.+", false), ["a","ba","cba",":.dcba"])
+@test isequal(split(str, r"\.+:\.+"; keep=false), ["a","ba","cba",":.dcba"])
 
 @test isequal(rsplit(str, ".:."), ["a","ba.",".cba.:","dcba",""])
-@test isequal(rsplit(str, ".:.", false), ["a","ba.",".cba.:","dcba"])
-@test isequal(rsplit(str, ".:.", 2), ["a.:.ba..:..cba.:.:.dcba", ""])
-@test isequal(rsplit(str, ".:.", 3), ["a.:.ba..:..cba.:", "dcba", ""])
-@test isequal(rsplit(str, ".:.", 4), ["a.:.ba.", ".cba.:", "dcba", ""])
-@test isequal(rsplit(str, ".:.", 5), ["a", "ba.", ".cba.:", "dcba", ""])
-@test isequal(rsplit(str, ".:.", 6), ["a", "ba.", ".cba.:", "dcba", ""])
+@test isequal(rsplit(str, ".:."; keep=false), ["a","ba.",".cba.:","dcba"])
+@test isequal(rsplit(str, ".:."; limit=2), ["a.:.ba..:..cba.:.:.dcba", ""])
+@test isequal(rsplit(str, ".:."; limit=3), ["a.:.ba..:..cba.:", "dcba", ""])
+@test isequal(rsplit(str, ".:."; limit=4), ["a.:.ba.", ".cba.:", "dcba", ""])
+@test isequal(rsplit(str, ".:."; limit=5), ["a", "ba.", ".cba.:", "dcba", ""])
+@test isequal(rsplit(str, ".:."; limit=6), ["a", "ba.", ".cba.:", "dcba", ""])
 end
 
 # zero-width splits
@@ -895,6 +895,14 @@ bin_val = hex2bytes("07bf")
 @test (@sprintf "%s" "tést") == "tést"
 # reasonably complex
 @test (@sprintf "Test: %s%c%C%c%#-.0f." "t" 65 66 67 -42) == "Test: tABC-42.."
+#test simple splatting
+@test (@sprintf "%d%d" [1 2]...) == "12"
+# combo
+@test (@sprintf "%f %d %d %f" 1.0 [3 4]... 5) == "1.000000 3 4 5.000000"
+# multi
+@test (@sprintf "%s %f %9.5f %d %d %d %d%d%d%d" [1:6]... [7,8,9,10]...) == "1 2.000000   3.00000 4 5 6 78910"
+# comprehension
+@test (@sprintf "%s %s %s %d %d %d %f %f %f" {10^x+y for x=1:3,y=1:3 }...) == "11 101 1001 12 102 1002 13.000000 103.000000 1003.000000"
 
 # issue #4183
 @test split(SubString(ascii("x"), 2, 0), "y") == String[""]

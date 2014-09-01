@@ -13,6 +13,7 @@ JL_CALLABLE(jl_f_new_module);
 JL_CALLABLE(jl_f_throw);
 JL_CALLABLE(jl_f_is);
 JL_CALLABLE(jl_f_typeof);
+JL_CALLABLE(jl_f_sizeof);
 JL_CALLABLE(jl_f_subtype);
 JL_CALLABLE(jl_f_isa);
 JL_CALLABLE(jl_f_typeassert);
