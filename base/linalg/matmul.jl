@@ -45,15 +45,15 @@ function dot{T<:BlasComplex, TI<:Integer}(x::Vector{T}, rx::Union(UnitRange{TI},
     end
     BLAS.dotc(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
 end
-function dot(x::AbstractVector, y::AbstractVector)
-    lx = length(x)
-    lx==length(y) || throw(DimensionMismatch(""))
-    if lx == 0
-        return zero(eltype(x))*zero(eltype(y))
-    end
-    s = conj(x[1])*y[1]
-    @inbounds for i = 2:lx
-        s += conj(x[i])*y[i]
+function dot{Tx,Ty}(x::AbstractVector{Tx}, y::AbstractVector{Ty})
+    lx = length(x) == length(y) || throw(DimensionMismatch("vectors must have same length"))
+    T = promote_type(Int, arithtype(Tx), arithtype(Ty))
+    lx == 0 && return zero(T)
+    @inbounds begin
+        s::T = x[1]'y[1]
+        for i = 2:lx
+            s += x[i]'y[i]
+        end
     end
     s
 end
