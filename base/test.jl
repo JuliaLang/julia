@@ -57,7 +57,10 @@ function do_test_throws(body, qex, bt, extype)
         Failure(qex)
     catch err
         if extype == nothing
-            Base.warn("@test_throws without an exception type is deprecated\n\t Use @test_throws $(typeof(err)) $(qex)", bt = bt)
+            Base.warn("""
+            @test_throws without an exception type is deprecated;
+            Use `@test_throws $(typeof(err)) $(qex)` instead.
+            """, bt = bt)
             Success(qex)
         else
             if isa(err, extype)
@@ -77,7 +80,6 @@ macro test(ex)
         func_block.args = [:($(syms[i]) = $(esc(ex.args[i]))) for i = 1:length(ex.args)]
         # finish the block with a return
         push!(func_block.args, Expr(:return, :(Expr(:comparison, $(syms...)), $(Expr(:comparison, syms...)))))
-
         :(do_test(()->($func_block), $(Expr(:quote,ex))))
     else
         :(do_test(()->($(Expr(:quote,ex)), $(esc(ex))), $(Expr(:quote,ex))))
