@@ -174,3 +174,6 @@ export TcpSocket, UdpSocket, IpAddr
 const TcpSocket = TCPSocket
 const UdpSocket = UDPSocket
 const IpAddr = IPAddr
+
+@deprecate isblank(c::Char) c == ' ' || c == '\t'
+@deprecate isblank(s::String) all(c -> c == ' ' || c == '\t', s)
