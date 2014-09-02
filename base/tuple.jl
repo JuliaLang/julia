@@ -56,6 +56,7 @@ heads() = ()
 heads(t::Tuple, ts::Tuple...) = tuple(t[1], heads(ts...)...)
 tails() = ()
 tails(t::Tuple, ts::Tuple...) = tuple(tail(t), tails(ts...)...)
+map(f::Callable, ::(), ts::Tuple...) = ()
 map(f::Callable, ts::Tuple...) =
     tuple(f(heads(ts...)...), map(f, tails(ts...)...)...)
 

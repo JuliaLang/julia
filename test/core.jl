@@ -1850,3 +1850,6 @@ let f = Foo8184(nothing,nothing,1.0)
     g(x) = x.z
     @test g(f) === 1.0
 end
+
+# issue #8213
+@test map((x...)->x,(1,2),(3,4),(5,6)) === ((1,3,5),(2,4,6))
