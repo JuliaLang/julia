@@ -61,9 +61,11 @@ function token(user::String=user())
     tokfile = Dir.path(".github","token")
     isfile(tokfile) && return strip(readchomp(tokfile))
     status, header, content = curl("https://api.github.com/authorizations",AUTH_DATA,`-u $user`)
+    tfa = false
 
     # Check for two-factor authentication
     if status == 401 && get(header, "X-GitHub-OTP", "") |> x->beginswith(x, "required") && isinteractive()
+        tfa = true
         info("Two-factor authentication in use.  Enter auth code.  (You may have to re-enter your password.)")
         print(STDERR, "Authentication code: ")
         code = readline(STDIN) |> chomp
@@ -73,8 +75,17 @@ function token(user::String=user())
     if status == 422
         error_code = json().parse(content)["errors"][1]["code"]
         if error_code == "already_exists"
-            info("Retrieving existing GitHub token. (You may have to re-enter your password.)")
-            status, header, content = curl("https://api.github.com/authorizations",`-u $user`)
+            if tfa
+                info("Retrieving existing GitHub token. (You may have to re-enter your password twice more.)")
+                status, header, content = curl("https://api.github.com/authorizations",AUTH_DATA,`-u $user`)
+                status != 401 && error("$status: $(json().parse(content)["message"])")
+                print(STDERR, "New authentication code: ")
+                code = readline(STDIN) |> chomp
+                status, header, content = curl("https://api.github.com/authorizations",`-H "X-GitHub-OTP: $code" -u $user`)
+            else
+                info("Retrieving existing GitHub token. (You may have to re-enter your password.)")
+                status, header, content = curl("https://api.github.com/authorizations", `-u $user`)
+            end
             (status >= 400) && error("$status: $(json().parse(content)["message"])")
             for entry in json().parse(content)
                 if entry["note"] == AUTH_NOTE
@@ -89,6 +100,7 @@ function token(user::String=user())
         (status != 401 && status != 403) || error("$status: $(json().parse(content)["message"])")
         tok = json().parse(content)["token"]
     end
+
     mkpath(dirname(tokfile))
     open(io->println(io,tok),tokfile,"w")
     return tok
