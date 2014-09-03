@@ -1464,11 +1464,9 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 @test rationalize(Int16, 0.2264705884044309) == 77//340
 @test rationalize(Int16, 0.39999899264235683) == 2//5
 @test rationalize(Int16, 1.1264233500618559e-5) == 0//1
-@test rationalize(Uint16, 1.1264233500618559e-5) == 1//65535
 @test rationalize(Uint16, 0.6666652791223875) == 2//3
 @test rationalize(Int8, 0.9374813124660655) == 15//16
 @test rationalize(Int8, 0.003803032342443835) == 0//1
-@test rationalize(Uint8, 0.003803032342443835) == 1//255
 
 # issue 3412
 @test convert(Rational{Int32},0.5) === int32(1)//int32(2)
@@ -1490,6 +1488,31 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 @test convert(Rational{BigInt},realmax(Float64)) == realmax(Float64)
 
 @test isa(convert(Float64, big(1)//2), Float64)
+
+# issue 5935
+@test rationalize(Int64, nextfloat(0.1)) == 1//10
+@test rationalize(Int128,nextfloat(0.1)) == 1//10
+@test rationalize(BigInt,nextfloat(0.1)) == 1//10
+@test rationalize(BigInt,nextfloat(BigFloat("0.1"))) == 1//10
+@test rationalize(Int64, nextfloat(0.1),tol=0) == 379250494936463//3792504949364629
+@test rationalize(Int128,nextfloat(0.1),tol=0) == 379250494936463//3792504949364629
+@test rationalize(BigInt,nextfloat(0.1),tol=0) == 379250494936463//3792504949364629
+@test rationalize(BigInt,nextfloat(BigFloat("0.1")),tol=0) == 5449039493520762137579811059232372134271528690147791248915651012137088453645//54490394935207621375798110592323721342715286901477912489156510121370884536449
+
+@test rationalize(Int8, 200f0) == 1//0
+@test rationalize(Int8, -200f0) == -1//0
+
+@test [rationalize(1pi,tol=0.1^n) for n=1:10] == [
+             16//5
+             22//7
+            201//64
+            333//106
+            355//113
+            355//113
+          75948//24175
+         100798//32085
+         103993//33102
+         312689//99532 ]
 
 # primes
 
