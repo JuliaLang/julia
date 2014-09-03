@@ -405,8 +405,6 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             ((jl_tvar_t*)jl_tupleref(para,i))->bound = 0;
         }
         jl_compute_field_offsets(dt);
-        if (para == (jl_value_t*)jl_null && jl_is_datatype_singleton(dt))
-            dt->instance = newstruct(dt);
 
         b->value = temp;
         if (temp==NULL || !equiv_type(dt, (jl_datatype_t*)temp)) {

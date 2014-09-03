@@ -476,7 +476,10 @@ DLLEXPORT Type *julia_type_to_llvm(jl_value_t *jt)
     }
     if (jl_isbits(jt)) {
         if (((jl_datatype_t*)jt)->size == 0) {
-            return T_void;
+            // TODO: come up with a representation for a 0-size value,
+            // and make this 0 size everywhere. as an argument, simply
+            // skip passing it.
+            return jl_pvalue_llvmt;
         }
         return julia_struct_to_llvm(jt);
     }
@@ -492,7 +495,7 @@ static Type *julia_struct_to_llvm(jl_value_t *jt)
         jl_datatype_t *jst = (jl_datatype_t*)jt;
         if (jst->struct_decl == NULL) {
             size_t ntypes = jl_tuple_len(jst->types);
-            if (ntypes == 0 || jst->size == 0)
+            if (ntypes == 0)
                 return T_void;
             StructType *structdecl = StructType::create(getGlobalContext(), jst->name->name->name);
             jst->struct_decl = structdecl;
@@ -505,8 +508,6 @@ static Type *julia_struct_to_llvm(jl_value_t *jt)
                     lty = jl_pvalue_llvmt;
                 else
                     lty = ty==(jl_value_t*)jl_bool_type ? T_int8 : julia_type_to_llvm(ty);
-                if (lty == T_void || lty->isEmptyTy())
-                    continue;
                 latypes.push_back(lty);
             }
             structdecl->setBody(latypes);
@@ -880,16 +881,12 @@ static Value *emit_nthptr_recast(Value *v, size_t n, MDNode *tbaa, Type* ptype) 
     Value *vptr = emit_nthptr_addr(v, n);
     return tbaa_decorate(tbaa,builder.CreateLoad(builder.CreateBitCast(vptr,ptype), false));
 }
-
-static Value *ghostValue(jl_value_t *ty);
  
 static Value *typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
                          jl_codectx_t *ctx)
 {
     Type *elty = julia_type_to_llvm(jltype);
     assert(elty != NULL);
-    if (elty == T_void)
-        return ghostValue(jltype);
     bool isbool=false;
     if (elty==T_int1) { elty = T_int8; isbool=true; }
     Value *data;
@@ -908,13 +905,11 @@ static Value *typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
 
 static Value *emit_unbox(Type *to, Value *x, jl_value_t *jt);
 
-static void typed_store(Value *ptr, Value *idx_0based, Value *rhs,
-                        jl_value_t *jltype, jl_codectx_t *ctx)
+static Value *typed_store(Value *ptr, Value *idx_0based, Value *rhs,
+                          jl_value_t *jltype, jl_codectx_t *ctx)
 {
     Type *elty = julia_type_to_llvm(jltype);
     assert(elty != NULL);
-    if (elty == T_void)
-        return;
     if (elty==T_int1) { elty = T_int8; }
     if (jl_isbits(jltype) && ((jl_datatype_t*)jltype)->size > 0)
         rhs = emit_unbox(elty, rhs, jltype);
@@ -925,7 +920,7 @@ static void typed_store(Value *ptr, Value *idx_0based, Value *rhs,
         data = builder.CreateBitCast(ptr, PointerType::get(elty, 0));
     else
         data = ptr;
-    tbaa_decorate(tbaa_user, builder.CreateStore(rhs, builder.CreateGEP(data, idx_0based)));
+    return tbaa_decorate(tbaa_user, builder.CreateStore(rhs, builder.CreateGEP(data, idx_0based)));
 }
 
 // --- convert boolean value to julia ---
@@ -1449,6 +1444,8 @@ static jl_value_t *static_void_instance(jl_value_t *jt)
     if (jl_is_datatype(jt)) {
         jl_datatype_t *jb = (jl_datatype_t*)jt;
         if (jb->instance == NULL)
+            jl_new_struct_uninit(jb);
+        if (jb->instance == NULL)
             // if we can't get an instance then this was an UndefValue due
             // to throwing an error.
             return (jl_value_t*)jl_nothing;
@@ -1615,6 +1612,8 @@ static Value *boxed(Value *v, jl_codectx_t *ctx, jl_value_t *jt)
     }
 
     if (!jb->abstract && jb->size == 0) {
+        if (jb->instance == NULL)
+            jl_new_struct_uninit(jb);
         assert(jb->instance != NULL);
         return literal_pointer_val(jb->instance);
     }
