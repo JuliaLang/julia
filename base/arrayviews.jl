@@ -198,18 +198,18 @@ end
 
 # getindex
 
-getindex(a::ArrayView) = getindex(a.arr, a.offset + 1)
+getindex(a::ArrayView) = getindex(parent(a), offset(a) + 1)
 
-getindex(a::ArrayView, i::Int) = getindex(a.arr, uindex(a, i))
-getindex(a::ArrayView, i1::Int, i2::Int) = getindex(a.arr, uindex(a, i1, i2))
+getindex(a::ArrayView, i::Int) = getindex(parent(a), uindex(a, i))
+getindex(a::ArrayView, i1::Int, i2::Int) = getindex(parent(a), uindex(a, i1, i2))
 getindex(a::ArrayView, i1::Int, i2::Int, i3::Int) = 
-    getindex(a.arr, uindex(a, i1, i2, i3))
+    getindex(parent(a), uindex(a, i1, i2, i3))
 getindex(a::ArrayView, i1::Int, i2::Int, i3::Int, i4::Int) = 
-    getindex(a.arr, uindex(a, i1, i2, i3, i4))
+    getindex(parent(a), uindex(a, i1, i2, i3, i4))
 getindex(a::ArrayView, i1::Int, i2::Int, i3::Int, i4::Int, i5::Int) = 
-    getindex(a.arr, uindex(a, i1, i2, i3, i4, i5))
+    getindex(parent(a), uindex(a, i1, i2, i3, i4, i5))
 getindex(a::ArrayView, i1::Int, i2::Int, i3::Int, i4::Int, i5::Int, i6::Int, I::Int...) = 
-    getindex(a.arr, uindex(a, i1, i2, i3, i4, i5, i6, I...))
+    getindex(parent(a), uindex(a, i1, i2, i3, i4, i5, i6, I...))
 
 getindex(a::ArrayView, i::Real) = getindex(a, to_index(i))
 getindex(a::ArrayView, i1::Real, i2::Real) = getindex(a, to_index(i1), to_index(i2))
@@ -225,17 +225,17 @@ getindex(a::ArrayView, i1::Real, i2::Real, i3::Real, i4::Real, i5::Real, i6::Rea
 
 # setindex!
 
-setindex!{T}(a::ArrayView{T}, v, i::Int) = setindex!(a.arr, convert(T, v), uindex(a, i))
+setindex!{T}(a::ArrayView{T}, v, i::Int) = setindex!(parent(a), convert(T, v), uindex(a, i))
 setindex!{T}(a::ArrayView{T}, v, i1::Int, i2::Int) = 
-    setindex!(a.arr, convert(T, v), uindex(a, i1, i2))
+    setindex!(parent(a), convert(T, v), uindex(a, i1, i2))
 setindex!{T}(a::ArrayView{T}, v, i1::Int, i2::Int, i3::Int) = 
-    setindex!(a.arr, convert(T, v), uindex(a, i1, i2, i3))
+    setindex!(parent(a), convert(T, v), uindex(a, i1, i2, i3))
 setindex!{T}(a::ArrayView{T}, v, i1::Int, i2::Int, i3::Int, i4::Int) = 
-    setindex!(a.arr, convert(T, v), uindex(a, i1, i2, i3, i4))
+    setindex!(parent(a), convert(T, v), uindex(a, i1, i2, i3, i4))
 setindex!{T}(a::ArrayView{T}, v, i1::Int, i2::Int, i3::Int, i4::Int, i5::Int) = 
-    setindex!(a.arr, convert(T, v), uindex(a, i1, i2, i3, i4, i5))
+    setindex!(parent(a), convert(T, v), uindex(a, i1, i2, i3, i4, i5))
 setindex!{T}(a::ArrayView{T}, v, i1::Int, i2::Int, i3::Int, i4::Int, i5::Int, i6::Int, I::Int...) = 
-    setindex!(a.arr, convert(T, v), uindex(a, i1, i2, i3, i4, i5, i6, I...))
+    setindex!(parent(a), convert(T, v), uindex(a, i1, i2, i3, i4, i5, i6, I...))
 
 setindex!(a::ArrayView, v, i::Real) = setindex!(a, v, to_index(i))
 setindex!(a::ArrayView, v, i1::Real, i2::Real) = setindex!(a, v, to_index(i1), to_index(i2))
@@ -254,13 +254,13 @@ setindex!(a::ArrayView, v, i1::Real, i2::Real, i3::Real, i4::Real, i5::Real, i6:
 
 # index calculation for ContiguousView
 
-uindex{T,N}(a::ArrayView{T,N,N}, i::Int) = a.offset + i
+uindex{T,N}(a::ArrayView{T,N,N}, i::Int) = offset(a) + i
 uindex{T,N}(a::ArrayView{T,N,N}, i1::Int, i2::Int) = 
-    a.offset + sub2ind(size(a), i1, i2)
+    offset(a) + sub2ind(size(a), i1, i2)
 uindex{T,N}(a::ArrayView{T,N,N}, i1::Int, i2::Int, i3::Int) = 
-    a.offset + sub2ind(size(a), i1, i2, i3)
+    offset(a) + sub2ind(size(a), i1, i2, i3)
 uindex{T,N}(a::ArrayView{T,N,N}, i1::Int, i2::Int, i3::Int, i4::Int, I::Int...) = 
-    a.offset + sub2ind(size(a), i1, i2, i3, i4, I...)
+    offset(a) + sub2ind(size(a), i1, i2, i3, i4, I...)
 
 # index calculation for StridedView
 
@@ -363,14 +363,14 @@ aoffset(a::Array, i1::Subs, i2::Subs, i3::Subs, i4::Subs) =
 aoffset(a::Array, i1::Subs, i2::Subs, i3::Subs, i4::Subs, i5::Subs, I::Subs...) = 
     roffset(a, i1, i2, i3, i4, i5, I...)
 
-aoffset(a::ArrayView, i::Subs) = a.offset + roffset(a, i)
-aoffset(a::ArrayView, i1::Subs, i2::Subs) = a.offset + roffset(a, i1, i2)
+aoffset(a::ArrayView, i::Subs) = offset(a) + roffset(a, i)
+aoffset(a::ArrayView, i1::Subs, i2::Subs) = offset(a) + roffset(a, i1, i2)
 aoffset(a::ArrayView, i1::Subs, i2::Subs, i3::Subs) = 
-    a.offset + roffset(a, i1, i2, i3)
+    offset(a) + roffset(a, i1, i2, i3)
 aoffset(a::ArrayView, i1::Subs, i2::Subs, i3::Subs, i4::Subs) = 
-    a.offset + roffset(a, i1, i2, i3, i4)
+    offset(a) + roffset(a, i1, i2, i3, i4)
 aoffset(a::ArrayView, i1::Subs, i2::Subs, i3::Subs, i4::Subs, i5::Subs, I::Subs...) = 
-    a.offset + roffset(a, i1, i2, i3, i4, i5, I...)
+    offset(a) + roffset(a, i1, i2, i3, i4, i5, I...)
 
 # roffset: offset w.r.t. the first element of the view
 
