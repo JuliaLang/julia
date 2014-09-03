@@ -1830,16 +1830,6 @@ end
 # issue #7582
 aₜ = "a variable using Unicode 6"
 
-immutable My8156{A, B}
-    a::A
-    b::B
-end
-let m = My8156(nothing, 1)
-    @test sizeof(m) == sizeof(1)
-    @test m.a === nothing
-    @test m.b === 1
-end
-
 # issue #8184
 immutable Foo8184
     x::Nothing
