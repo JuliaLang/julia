@@ -52,6 +52,8 @@ include("abstractarray.jl")
 include("reduce.jl")
 
 include("subarray.jl")
+include("arrayviews.jl")
+using .ArrayViews
 include("array.jl")
 include("bitarray.jl")
 include("intset.jl")
@@ -190,8 +192,6 @@ importall .Random
 include("darray.jl")
 include("mmap.jl")
 include("sharedarray.jl")
-include("arrayviews.jl")
-using .ArrayViews
 
 # utilities - version, timing, help, edit, metaprogramming
 include("version.jl")
