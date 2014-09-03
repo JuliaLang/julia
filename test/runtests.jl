@@ -1,12 +1,12 @@
 # linalg tests take the longest - start them off first
 testnames = [
-    "linalg", "core", "keywordargs", "numbers", "strings",
+    "linalg", "core", "keywordargs", "numbers", "strings", "dates",
     "collections", "hashing", "remote", "iobuffer", "arrayops", "reduce", "reducedim",
     "simdloop", "blas", "fft", "dsp", "sparse", "bitarray", "random", "math",
     "functional", "bigint", "sorting", "statistics", "spawn",
     "backtrace", "priorityqueue", "arpack", "file", "suitesparse", "version",
     "resolve", "pollfd", "mpfr", "broadcast", "complex", "socket",
-    "floatapprox", "readdlm", "regex", "float16", "combinatorics", "dates",
+    "floatapprox", "readdlm", "regex", "float16", "combinatorics",
     "sysinfo", "rounding", "ranges", "mod2pi", "euler", "show",
     "lineedit", "replcompletions", "repl", "test", "examples", "goto",
     "llvmcall", "grisu"
