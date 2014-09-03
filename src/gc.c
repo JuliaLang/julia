@@ -198,6 +198,8 @@ static int64_t total_allocd_bytes = 0;
 static int64_t allocd_bytes_since_sweep = 0;
 static int64_t freed_bytes = 0;
 static uint64_t total_gc_time=0;
+#define NS_TO_S(t) ((double)(t/1000)/(1000*1000))
+#define NS2MS(t) ((double)(t/1000)/1000)
 static int64_t live_bytes = 0;
 static int64_t live_bytes2 = 0;
 static size_t current_pg_count = 0;
@@ -214,9 +216,9 @@ static htable_t obj_sizes[3];
 static double page_alloc_time=0;
 static size_t total_freed_bytes=0;
 static double max_pause = 0.0;
-static double total_sweep_time=0;
-static double total_mark_time=0;
-static double total_fin_time=0;
+static uint64_t total_sweep_time=0;
+static uint64_t total_mark_time=0;
+static uint64_t total_fin_time=0;
 #endif
 static int n_pause = 0;
 
@@ -1546,7 +1548,7 @@ static int push_root(jl_value_t *v, int d, int bits)
     } while (0)
 
     d++;
-    //    __builtin_prefetch(&(GC_PAGE(v)->age[v - PAGE_DATA);
+
     // some values have special representations
     if (vt == (jl_value_t*)jl_tuple_type) {
         size_t l = jl_tuple_len(v);
@@ -2034,7 +2036,7 @@ DLLEXPORT void jl_gc_enable(void)    { is_gc_enabled = 1; }
 DLLEXPORT void jl_gc_disable(void)   { is_gc_enabled = 0; }
 DLLEXPORT int jl_gc_is_enabled(void) { return is_gc_enabled; }
 
-DLLEXPORT int64_t jl_gc_total_bytes(void) { return total_allocd_bytes + allocd_bytes; }
+DLLEXPORT int64_t jl_gc_total_bytes(void) { return total_allocd_bytes + allocd_bytes + collect_interval/gc_steps; }
 DLLEXPORT uint64_t jl_gc_total_hrtime(void) { return total_gc_time; }
 
 int64_t diff_gc_total_bytes(void)
@@ -2122,7 +2124,7 @@ void jl_gc_collect(void)
     if (jl_in_gc) return;
     jl_in_gc = 1;
     JL_SIGATOMIC_BEGIN();
-    double t0 = clock_now();
+    uint64_t t0 = jl_hrtime();
 #if defined(GC_TIME) || defined(GC_FINAL_STATS)
     int wb_activations = mark_sp - saved_mark_sp;
 #endif
@@ -2166,31 +2168,30 @@ void jl_gc_collect(void)
         }
         allocd_bytes_since_sweep += allocd_bytes + (int64_t)collect_interval/gc_steps;
         //        allocd_bytes = -(int64_t)collect_interval/gc_steps;
-        double mark_pause = (clock_now() - t0);
+        uint64_t mark_pause = jl_hrtime() - t0;
 #ifdef GC_FINAL_STATS
         total_mark_time += mark_pause;
 #endif
 #ifdef GC_TIME
-        JL_PRINTF(JL_STDOUT, "GC mark pause %.2f ms | scanned %ld kB = %ld + %ld | stack %d -> %d (wb %d) | remset %d %d %d\n", mark_pause*1000, (scanned_bytes + perm_scanned_bytes)/1024, scanned_bytes/1024, perm_scanned_bytes/1024, saved_mark_sp, mark_sp, wb_activations, last_remset->len, perm_marked, allocd_bytes/1024);
+        JL_PRINTF(JL_STDOUT, "GC mark pause %.2f ms | scanned %ld kB = %ld + %ld | stack %d -> %d (wb %d) | remset %d %d %d\n", NS2MS(mark_pause), (scanned_bytes + perm_scanned_bytes)/1024, scanned_bytes/1024, perm_scanned_bytes/1024, saved_mark_sp, mark_sp, wb_activations, last_remset->len, perm_marked, allocd_bytes/1024);
         saved_mark_sp = mark_sp;
 #endif
     }
     int64_t pct = -1, bonus = -1, SAVE = -1, SAVE2 = -1, est_fb = 0, SAVE3 = -1;
-    double post_time = 0.0, finalize_time = 0.0;
+    uint64_t post_time = 0, finalize_time = 0;
     if(mark_sp == 0 || sweeping) {
 #if defined(GC_TIME) || defined(GC_FINAL_STATS)
-        double sweep_t0 = clock_now();
+        uint64_t sweep_t0 = jl_hrtime();
 #endif
         int64_t actual_allocd = allocd_bytes_since_sweep, promo_bytes = 0;
         if (!sweeping) {
 #ifdef GC_TIME
-            post_time = clock_now();
-#endif      
-
-#ifdef GC_TIME
-            post_time = clock_now() - post_time;
+            post_time = jl_hrtime();
 #endif
             post_mark();
+#ifdef GC_TIME
+            post_time = jl_hrtime() - post_time;
+#endif
 
             est_fb = live_bytes - scanned_bytes - (sweep_mask == GC_MARKED_NOESC ? perm_scanned_bytes : perm_scanned_bytes) + actual_allocd;
             promo_bytes = perm_scanned_bytes - last_perm_scanned;
@@ -2257,10 +2258,15 @@ void jl_gc_collect(void)
             pct = actual_allocd ? (freed_bytes*100)/actual_allocd : -1;
 
             if (sweep_mask == GC_MARKED_NOESC) {
-                collect_interval = default_collect_interval;
-                if (freed_bytes < actual_allocd/2) {
-                    quick_count = 15;
-                    collect_interval = 0;
+                if (freed_bytes >= actual_allocd) {
+                    quick_count--;
+                }
+                else {
+                    collect_interval = default_collect_interval;
+                    if (freed_bytes < actual_allocd/2) {
+                        quick_count = 15;
+                        //                    collect_interval = 0;
+                    }
                 }
             }
             else if (sweep_mask == GC_MARKED && freed_bytes < (7*(actual_allocd/10)) && n_pause > 1) {
@@ -2282,33 +2288,29 @@ void jl_gc_collect(void)
             allocd_bytes_since_sweep = 0;
             freed_bytes = 0;
             
-            finalize_time = clock_now();
+            finalize_time = jl_hrtime();
             run_finalizers();
             
-            finalize_time = clock_now() - finalize_time;
+            finalize_time = jl_hrtime() - finalize_time;
         }
 #if defined(GC_FINAL_STATS) || defined(GC_TIME)
-        double sweep_pause = clock_now() - sweep_t0;
+        uint64_t sweep_pause = jl_hrtime() - sweep_t0;
 #endif
 #ifdef GC_FINAL_STATS
         total_sweep_time += sweep_pause - finalize_time - post_time;
         total_fin_time += finalize_time + post_time;
 #endif
 #ifdef GC_TIME
-        JL_PRINTF(JL_STDOUT, "GC sweep pause %.2f ms live %ld kB (freed %d kB = %d%% of allocd %d kB b/r %ld/%ld) (%.2f ms in post_mark, %.2f ms in %d fin) (marked in %d inc) mask %d | next in %d kB\n", sweep_pause*1000, live_bytes/1024, SAVE2/1024, pct, SAVE3/1024, bonus/1024, SAVE/1024, post_time*1000, finalize_time*1000, n_finalized, inc_count, sweep_mask, -allocd_bytes/1024);
+        JL_PRINTF(JL_STDOUT, "GC sweep pause %.2f ms live %ld kB (freed %d kB = %d%% of allocd %d kB b/r %ld/%ld) (%.2f ms in post_mark, %.2f ms in %d fin) (marked in %d inc) mask %d | next in %d kB\n", NS2MS(sweep_pause), live_bytes/1024, SAVE2/1024, pct, SAVE3/1024, bonus/1024, SAVE/1024, NS2MS(post_time), NS2MS(finalize_time), n_finalized, inc_count, sweep_mask, -allocd_bytes/1024);
         int64_t diff = est_fb - SAVE2;
-        /*JL_PRINTF(JL_STDOUT, "relerr : %d %% (%ld)\n",  SAVE2? 100*diff/SAVE2 : -1, diff);
-        if (lr == 0) lr = diff;
-        else if (lr != diff && diff < 0) { abort(); }*/
 #endif
     }
     n_pause++;
+    double pause = jl_hrtime() - t0;
+    total_gc_time += pause;
 #ifdef GC_FINAL_STATS
-    double pause = clock_now() - t0;
-    total_gc_time += pause*1000*1000*1000; // i don't think ns precision is really relevant here
-    pause -= finalize_time;
     // do not count the first pause as it is always a full collection
-    max_pause = (max_pause < pause && n_pause > 1) ? pause : max_pause;
+    //    max_pause = (max_pause < pause && n_pause > 1) ? pause : max_pause;
 #endif
     JL_SIGATOMIC_END();
     jl_in_gc = 0;
@@ -2462,7 +2464,7 @@ DLLEXPORT void *alloc_4w(void)
     return pool_alloc(&pools[2]);
 #endif
 }
-#define NS_TO_S(t) ((double)(t/1000)/(1000*1000))
+
 #ifdef GC_FINAL_STATS
 static double process_t0;
 #include <malloc.h>

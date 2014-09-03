@@ -39,12 +39,17 @@ function toc()
 end
 
 # print elapsed time, return expression value
-
+const _units = ["bytes", "kB", "MB"]
 function time_print(t, b, g)
+    i = 1
+    while b > 1024 && i < length(_units)
+        b = div(b, 1024)
+        i += 1
+    end
     if 0 < g
-        @printf("elapsed time: %s seconds (%d bytes allocated, %.2f%% gc time)\n", t/1e9, b, 100*g/t)
+        @printf("elapsed time: %s seconds (%d %s allocated, %.2f%% gc time)\n", t/1e9, b, _units[i], 100*g/t)
     else
-        @printf("elapsed time: %s seconds (%d bytes allocated)\n", t/1e9, b)
+        @printf("elapsed time: %s seconds (%d %s allocated)\n", t/1e9, b, _units[i])
     end
 end
 
