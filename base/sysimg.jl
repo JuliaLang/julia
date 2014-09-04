@@ -278,6 +278,9 @@ function __init__()
     fdwatcher_init()
 end
 
+# Views
+include("views.jl")
+
 include("precompile.jl")
 
 include = include_from_node1
