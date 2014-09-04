@@ -375,6 +375,8 @@ imag{T<:Real}(x::AbstractArray{T}) = zero(x)
 
 getindex(t::AbstractArray, i::Real) = error("indexing not defined for ", typeof(t))
 
+unsafe_getindex(args...) = getindex(args...)
+
 # linear indexing with a single multi-dimensional index
 function getindex(A::AbstractArray, I::AbstractArray)
     x = similar(A, size(I))
@@ -440,6 +442,8 @@ end
 setindex!(t::AbstractArray, x, i::Real) =
     error("setindex! not defined for ",typeof(t))
 setindex!(t::AbstractArray, x) = throw(MethodError(setindex!, (t, x)))
+
+unsafe_setindex!(args...) = setindex!(args...)
 
 ## Indexing: handle more indices than dimensions if "extra" indices are 1
 

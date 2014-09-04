@@ -206,8 +206,25 @@ macro boundscheck(yesno,blk)
       $(Expr(:boundscheck,:pop)))
 end
 
-macro inbounds(blk)
-    :(@boundscheck false $(esc(blk)))
+function rewrite_ref(getindexfn, setindexfn, ast::Expr)
+    if ast.head === :ref
+        ast = Expr(:custom_ref, getindexfn, setindexfn, ast.args...)
+    end
+
+    args = ast.args
+    for i = 1:arraylen(args)
+        arg = arrayref(args, i)
+        if isa(arg, Expr)
+            arrayset(args, rewrite_ref(getindexfn, setindexfn, arg), i)
+        end
+    end
+
+    return ast
+end
+rewrite_ref(getindexfn, setindexfn, x) = x
+
+macro inbounds(ex)
+    esc(rewrite_ref(:unsafe_getindex, :unsafe_setindex!, ex))
 end
 
 macro label(name::Symbol)

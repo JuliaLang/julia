@@ -252,15 +252,15 @@ done(r::UnitRange, i) = i==oftype(i,r.stop)+1
 
 ## indexing
 
-getindex(r::Range, i::Real) = getindex(r, to_index(i))
+unsafe_getindex(r::Range, i::Real) = getindex(r, to_index(i))
+unsafe_getindex{T}(r::Range{T}, i::Integer) =
+    oftype(T, first(r) + (i-1)*step(r))
+unsafe_getindex{T}(r::FloatRange{T}, i::Integer) =
+    oftype(T, (r.start + (i-1)*r.step)/r.divisor)
 
 function getindex{T}(r::Range{T}, i::Integer)
     1 <= i <= length(r) || error(BoundsError)
-    oftype(T, first(r) + (i-1)*step(r))
-end
-function getindex{T}(r::FloatRange{T}, i::Integer)
-    1 <= i <= length(r) || error(BoundsError)
-    oftype(T, (r.start + (i-1)*r.step)/r.divisor)
+    unsafe_getindex(r, i)
 end
 
 function getindex(r::UnitRange, s::UnitRange{Int})
@@ -509,7 +509,7 @@ function vcat{T}(r::Range{T})
     a = Array(T,n)
     i = 1
     for x in r
-        @inbounds a[i] = x
+        @boundscheck false a[i] = x
         i += 1
     end
     return a
@@ -523,7 +523,7 @@ function vcat{T}(rs::Range{T}...)
     i = 1
     for r in rs
         for x in r
-            @inbounds a[i] = x
+            @boundscheck false a[i] = x
             i += 1
         end
     end

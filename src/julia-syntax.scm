@@ -182,12 +182,13 @@
 		 `(= ,(car e) (call ,op (:: ,(car e) ,(car declT)) ,rhs))))))
 
 (define (expand-update-operator op lhs rhs . declT)
-  (cond ((and (pair? lhs) (eq? (car lhs) 'ref))
+  (cond ((and (pair? lhs) (or (eq? (car lhs) 'ref) (eq? (car lhs) 'custom_ref)))
 	 ;; expand indexing inside op= first, to remove "end" and ":"
 	 (let* ((ex (partially-expand-ref lhs))
 		(stmts (butlast (cdr ex)))
 		(refex (last    (cdr ex)))
-		(nuref `(ref ,(caddr refex) ,@(cdddr refex))))
+		(nuref `(,@(if (eq? (car lhs) 'custom_ref) `(custom_ref ,(cadr lhs) ,(caddr lhs)) `(ref))
+             ,(caddr refex) ,@(cdddr refex))))
 	   `(block ,@stmts
 		   ,(expand-update-operator- op nuref rhs declT))))
 	((and (pair? lhs) (eq? (car lhs) '|::|))
@@ -202,8 +203,8 @@
 (define (dotop? o) (and (symbol? o) (eqv? (string.char (string o) 0) #\.)))
 
 (define (partially-expand-ref e)
-  (let ((a    (cadr e))
-	(idxs (cddr e)))
+  (let ((a    (if (eq? (car e) 'custom_ref) (cadddr e) (cadr e)))
+	(idxs (if (eq? (car e) 'custom_ref) (cddddr e) (cddr e))))
     (let* ((reuse (and (pair? a)
 		       (contains (lambda (x)
 				   (or (eq? x 'end)
@@ -217,7 +218,7 @@
        (new-idxs stuff) (process-indexes arr idxs)
        `(block
 	 ,@(append stmts stuff)
-	 (call getindex ,arr ,@new-idxs))))))
+	  (call ,(if (eq? (car e) 'custom_ref) (cadr e) 'getindex) ,arr ,@new-idxs))))))
 
 ;; accumulate a series of comparisons, with the given "and" constructor,
 ;; exit criteria, and "take" function that consumes part of a list,
@@ -312,6 +313,11 @@
 	 ;; inside ref only replace within the first argument
 	 (list* 'ref (replace-end (cadr ex) a n tuples last)
 		(cddr ex)))
+  ((eq? (car ex) 'custom_ref)
+   ;; inside custom_ref only replace within the third argument
+   (list* 'custom_ref (cadr ex) (caddr ex)
+    (replace-end (cadddr ex) a n tuples last)
+    (cddddr ex)))
 	(else
 	 (cons (car ex)
 	       (map (lambda (x) (replace-end x a n tuples last))
@@ -1534,6 +1540,28 @@
       e
       ((get expand-table (car e) map-expand-forms) e)))
 
+(define (expand-setindex a idxs rhs setindexfn)
+  (let* ((reuse (and (pair? a)
+	 (contains (lambda (x)
+		     (or (eq? x 'end)
+			 (and (pair? x)
+			      (eq? (car x) ':))))
+		   idxs)))
+   (arr   (if reuse (gensy) a))
+   (stmts (if reuse `((= ,arr ,(expand-forms a))) '())))
+	(let* ((rrhs (and (pair? rhs) (not (quoted? rhs))))
+	       (r    (if rrhs (gensy) rhs))
+	       (rini (if rrhs `((= ,r ,(expand-forms rhs))) '())))
+	  (receive
+	   (new-idxs stuff) (process-indexes arr idxs)
+	   `(block
+	     ,@stmts
+	     ,.(map expand-forms stuff)
+	     ,@rini
+	     ,(expand-forms
+	       `(call ,setindexfn ,arr ,r ,@new-idxs))
+	     ,r)))))
+
 (define expand-table
   (table
    'quote identity
@@ -1611,29 +1639,14 @@
 
 	   ((ref)
 	    ;; (= (ref a . idxs) rhs)
-	    (let ((a    (cadr (cadr e)))
-		  (idxs (cddr (cadr e)))
-		  (rhs  (caddr e)))
-	      (let* ((reuse (and (pair? a)
-				 (contains (lambda (x)
-					     (or (eq? x 'end)
-						 (and (pair? x)
-						      (eq? (car x) ':))))
-					   idxs)))
-		     (arr   (if reuse (gensy) a))
-		     (stmts (if reuse `((= ,arr ,(expand-forms a))) '())))
-		(let* ((rrhs (and (pair? rhs) (not (quoted? rhs))))
-		       (r    (if rrhs (gensy) rhs))
-		       (rini (if rrhs `((= ,r ,(expand-forms rhs))) '())))
-		  (receive
-		   (new-idxs stuff) (process-indexes arr idxs)
-		   `(block
-		     ,@stmts
-		     ,.(map expand-forms stuff)
-		     ,@rini
-		     ,(expand-forms
-		       `(call setindex! ,arr ,r ,@new-idxs))
-		     ,r))))))
+      (expand-setindex (cadr (cadr e)) (cddr (cadr e))
+                       (caddr e) 'setindex!)
+	    )
+
+     ((custom_ref)
+      (expand-setindex (cadddr (cadr e)) (cddddr (cadr e))
+                       (caddr e) (caddr (cadr e)))
+      )
 
 	   ((|::|)
 	    ;; (= (|::| x T) rhs)
@@ -1673,6 +1686,10 @@
      (expand-forms (expand-compare-chain (cdr e))))
 
    'ref
+   (lambda (e)
+     (expand-forms (partially-expand-ref e)))
+
+   'custom_ref
    (lambda (e)
      (expand-forms (partially-expand-ref e)))
 
