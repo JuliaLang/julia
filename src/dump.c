@@ -29,6 +29,7 @@ static const ptrint_t SmallInt64_tag = 27;
 static const ptrint_t IdTable_tag    = 28;
 static const ptrint_t Int32_tag      = 29;
 static const ptrint_t Array1d_tag    = 30;
+static const ptrint_t Singleton_tag    = 31;
 static const ptrint_t Null_tag         = 253;
 static const ptrint_t ShortBackRef_tag = 254;
 static const ptrint_t BackRef_tag      = 255;
@@ -95,7 +96,6 @@ static void write_as_tag(ios_t *s, uint8_t tag)
 #define jl_serialize_value(s, v) jl_serialize_value_(s,(jl_value_t*)(v))
 static void jl_serialize_value_(ios_t *s, jl_value_t *v);
 static jl_value_t *jl_deserialize_value(ios_t *s);
-static jl_value_t *jl_deserialize_value_internal(ios_t *s);
 jl_value_t ***sysimg_gvars = NULL;
 
 extern int globalUnique;
@@ -286,24 +286,24 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
     size_t nf = jl_tuple_len(dt->names);
     write_uint16(s, nf);
     write_int32(s, dt->size);
+    int has_instance = !!(dt->instance != NULL);
+    write_uint8(s, dt->abstract | (dt->mutabl<<1) | (dt->pointerfree<<2) | (has_instance<<3));
+    if (!dt->abstract)
+        write_int32(s, dt->uid);
+    if (has_instance)
+        jl_serialize_value(s, dt->instance);
     if (nf > 0) {
         write_int32(s, dt->alignment);
         ios_write(s, (char*)&dt->fields[0], nf*sizeof(jl_fielddesc_t));
         jl_serialize_value(s, dt->names);
         jl_serialize_value(s, dt->types);
     }
-    int has_instance = !!(dt->instance != NULL);
-    write_uint8(s, dt->abstract | (dt->mutabl<<1) | (dt->pointerfree<<2) | (has_instance<<3));
-    if (!dt->abstract)
-        write_int32(s, dt->uid);
 
     jl_serialize_value(s, dt->parameters);
     jl_serialize_value(s, dt->name);
     jl_serialize_value(s, dt->super);
     jl_serialize_value(s, dt->env);
     jl_serialize_value(s, dt->linfo);
-    if (has_instance)
-        jl_serialize_value(s, dt->instance);
     jl_serialize_fptr(s, (void*)dt->fptr);
 }
 
@@ -546,6 +546,10 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
             write_int32(s, (int32_t)*(int32_t*)data);
         }
         else {
+            if (v == t->instance) {
+                writetag(s, (jl_value_t*)Singleton_tag);
+                return;
+            }
             if ((jl_value_t*)t == jl_idtable_type)
                 writetag(s, (jl_value_t*)IdTable_tag);
             else
@@ -598,13 +602,12 @@ static jl_fptr_t jl_deserialize_fptr(ios_t *s)
     return *(jl_fptr_t*)pbp;
 }
 
-#define DTINSTANCE_PLACEHOLDER ((void*)2)
-
 static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
 {
     int tag = read_uint8(s);
     uint16_t nf = read_uint16(s);
     size_t size = read_int32(s);
+    uint8_t flags = read_uint8(s);
     jl_datatype_t *dt;
     if (tag == 2)
         dt = jl_int32_type;
@@ -617,7 +620,18 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
     dt->size = size;
     dt->struct_decl = NULL;
     dt->instance = NULL;
-
+    dt->abstract = flags&1;
+    dt->mutabl = (flags>>1)&1;
+    dt->pointerfree = (flags>>2)&1;
+    if (!dt->abstract)
+        dt->uid = read_int32(s);
+    else
+        dt->uid = 0;
+    int has_instance = (flags>>3)&1;
+    if (has_instance) {
+        dt->instance = jl_deserialize_value(s);
+        dt->instance->type = (jl_value_t*)dt;
+    }
     assert(tree_literal_values==NULL);
     ptrhash_put(&backref_table, (void*)(ptrint_t)pos, dt);
 
@@ -633,26 +647,11 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
             dt->alignment = MAX_ALIGN;
         dt->names = dt->types = jl_null;
     }
-    uint8_t flags = read_uint8(s);
-    dt->abstract = flags&1;
-    dt->mutabl = (flags>>1)&1;
-    dt->pointerfree = (flags>>2)&1;
-    int has_instance = (flags>>3)&1;
-    if (!dt->abstract)
-        dt->uid = read_int32(s);
-    else
-        dt->uid = 0;
     dt->parameters = (jl_tuple_t*)jl_deserialize_value(s);
     dt->name = (jl_typename_t*)jl_deserialize_value(s);
     dt->super = (jl_datatype_t*)jl_deserialize_value(s);
     dt->env = jl_deserialize_value(s);
     dt->linfo = (jl_lambda_info_t*)jl_deserialize_value(s);
-    if (has_instance) {
-        jl_value_t *instance = (jl_value_t*)jl_deserialize_value_internal(s);
-        if (instance == DTINSTANCE_PLACEHOLDER)
-            instance = jl_new_struct_uninit(dt);
-        dt->instance = instance;
-    }
     dt->fptr = jl_deserialize_fptr(s);
     if (dt->name == jl_array_type->name || dt->name == jl_pointer_type->name ||
         dt->name == jl_type_type->name || dt->name == jl_vararg_type->name ||
@@ -663,14 +662,12 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
         // parametric types here.
         jl_cell_1d_push(datatype_list, (jl_value_t*)dt);
     }
-
     return (jl_value_t*)dt;
 }
 
 jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val);
 
-// Internal jl_deserialize_value. May return the placeholder value DTINSTANCE_PLACEHOLDER, unlike jl_deserialize_value
-static jl_value_t *jl_deserialize_value_internal(ios_t *s)
+static jl_value_t *jl_deserialize_value(ios_t *s)
 {
     int pos = ios_pos(s);
     int32_t tag = read_uint8(s);
@@ -873,14 +870,6 @@ static jl_value_t *jl_deserialize_value_internal(ios_t *s)
         return v;
     }
     else if (vtag == (jl_value_t*)jl_datatype_type || vtag == (jl_value_t*)IdTable_tag) {
-        // If the value v we are about to deserialize is some dt->instance, we have a circular 
-        // reference, because v == v->type->instance. To avoid this, we put a null value in 
-        // the backref table to reserve the space. If jl_deserialize_value encounters this,
-        // it knows to do the allocation itself. This work, because in all instances where
-        // v->type->instance != null, v->type has no fields, so there is no further serialized
-        // data stored that we would need to construct the type. 
-        if (usetable)
-            ptrhash_put(&backref_table, (void*)(ptrint_t)pos, DTINSTANCE_PLACEHOLDER);
         jl_datatype_t *dt = (jl_datatype_t*)jl_deserialize_value(s);
         if (dt == jl_datatype_type)
             return jl_deserialize_datatype(s, pos);
@@ -913,11 +902,6 @@ static jl_value_t *jl_deserialize_value_internal(ios_t *s)
                 ptrhash_put(&backref_table, (void*)(ptrint_t)pos, v);
         }
         else {
-            if (dt->instance) {
-                if (usetable)
-                    *ptrhash_bp(&backref_table, (void*)(ptrint_t)pos) = dt->instance;
-                return dt->instance;
-            }
             v = jl_new_struct_uninit(dt);
             if (usetable)
                 ptrhash_put(&backref_table, (void*)(ptrint_t)pos, v);
@@ -941,15 +925,14 @@ static jl_value_t *jl_deserialize_value_internal(ios_t *s)
         // TODO: put WeakRefs on the weak_refs list
         return v;
     }
+    else if (vtag == (jl_value_t*)Singleton_tag) {
+        jl_value_t *v = allocobj(sizeof(void*));
+        if (usetable)
+            ptrhash_put(&backref_table, (void*)(ptrint_t)pos, v);
+        return v;
+    }
     assert(0);
     return NULL;
-}
-
-static jl_value_t *jl_deserialize_value(ios_t *s)
-{
-    jl_value_t *v = jl_deserialize_value_internal(s);
-    assert(v != DTINSTANCE_PLACEHOLDER);
-    return v;
 }
 
 // --- entry points ---
@@ -1215,7 +1198,7 @@ void jl_init_serializer(void)
                      jl_expr_type, (void*)LongSymbol_tag, (void*)LongTuple_tag,
                      (void*)LongExpr_tag, (void*)LiteralVal_tag,
                      (void*)SmallInt64_tag, (void*)IdTable_tag,
-                     (void*)Int32_tag, (void*)Array1d_tag,
+                     (void*)Int32_tag, (void*)Array1d_tag, (void*)Singleton_tag,
                      jl_module_type, jl_tvar_type, jl_lambda_info_type,
 
                      jl_null, jl_false, jl_true, jl_any_type, jl_symbol("Any"),
