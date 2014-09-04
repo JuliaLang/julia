@@ -127,3 +127,11 @@ a = Array(UInt8,1024)
 end
 
 @test isempty(readlines(IOBuffer()))
+
+# issue #8193
+let io=IOBuffer("asdf")
+    @test position(skip(io, -1)) == 0
+    @test position(skip(io, 6)) == 4
+    @test position(seek(io, -1)) == 0
+    @test position(seek(io, 6)) == 4
+end
