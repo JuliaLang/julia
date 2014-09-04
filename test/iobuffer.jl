@@ -127,9 +127,3 @@ a = Array(Uint8,1024)
 end
 
 @test isempty(readlines(IOBuffer()))
-
-# issue #8193
-let io=IOBuffer("asdf")
-    @test_throws ArgumentError seek(io, -1)
-    @test_throws ArgumentError skip(io, -1)
-end
