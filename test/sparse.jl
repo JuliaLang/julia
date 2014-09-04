@@ -424,3 +424,7 @@ let A = sprand(5,5,0.5,(n)->rand(Float64,n)), ACPY = copy(A)
     D = reinterpret(Int64, B)
     @test C == D
 end
+
+# issue #8225
+@test_throws BoundsError sparse([0],[-1],[1.0],2,2)
+
