@@ -1035,7 +1035,7 @@ function findnext(A, start::Integer)
     end
     return 0
 end
-findfirst(A) = findnext(A,1)
+findfirst(A) = findnext(A, 1)
 
 # returns the index of the next matching element
 function findnext(A, v, start::Integer)
@@ -1046,7 +1046,7 @@ function findnext(A, v, start::Integer)
     end
     return 0
 end
-findfirst(A,v) = findnext(A,v,1)
+findfirst(A, v) = findnext(A, v, 1)
 
 # returns the index of the next element for which the function returns true
 function findnext(testf::Function, A, start::Integer)
