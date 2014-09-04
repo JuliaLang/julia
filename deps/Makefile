@@ -575,10 +575,9 @@ PCRE_OBJ_TARGET = $(build_shlibdir)/libpcre.$(SHLIB_EXT)
 
 pcre-$(PCRE_VER).tar.bz2:
 	$(JLDOWNLOAD) $@ http://sourceforge.net/projects/pcre/files/pcre/$(PCRE_VER)/$@/download
-pcre-$(PCRE_VER)/configure: pcre-$(PCRE_VER).tar.bz2 pcre-gcc49-compile.patch
+pcre-$(PCRE_VER)/configure: pcre-$(PCRE_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	$(TAR) jxf $<
-	cd pcre-$(PCRE_VER) && patch -p1 < ../pcre-gcc49-compile.patch
 	touch -c $@
 pcre-$(PCRE_VER)/config.status: pcre-$(PCRE_VER)/configure
 	cd pcre-$(PCRE_VER) && \
@@ -1127,10 +1126,6 @@ fftw-$(FFTW_VER)-single/configure: fftw-$(FFTW_VER).tar.gz
 	$(JLCHECKSUM) $<
 	mkdir -p fftw-$(FFTW_VER)-single && \
 	$(TAR) -C fftw-$(FFTW_VER)-single --strip-components 1 -xf $<
-ifeq ($(OS),WINNT)
-	patch fftw-$(FFTW_VER)-single/configure < fftw-config-nopthreads.patch
-	patch fftw-$(FFTW_VER)-single/kernel/ifftw.h < ifftw.h.patch
-endif
 	touch -c $@
 fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
 	cd fftw-$(FFTW_VER)-single && \
@@ -1165,10 +1160,6 @@ fftw-$(FFTW_VER)-double/configure: fftw-$(FFTW_VER).tar.gz
 	$(JLCHECKSUM) $<
 	mkdir -p fftw-$(FFTW_VER)-double && \
 	$(TAR) -C fftw-$(FFTW_VER)-double --strip-components 1 -xf $<
-ifeq ($(OS),WINNT)
-	patch fftw-$(FFTW_VER)-double/configure < fftw-config-nopthreads.patch
-	patch fftw-$(FFTW_VER)-double/kernel/ifftw.h < ifftw.h.patch
-endif
 	touch -c $@
 fftw-$(FFTW_VER)-double/config.status: fftw-$(FFTW_VER)-double/configure
 	cd fftw-$(FFTW_VER)-double && \
