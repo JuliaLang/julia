@@ -310,6 +310,18 @@ Indexing, Assignment, and Concatenation
 
    Return the index of the first element of ``A`` for which ``predicate`` returns true.
 
+.. function:: findlast(A)
+
+   Return the index of the last non-zero value in ``A`` (determined by ``A[i]!=0``).
+
+.. function:: findlast(A, v)
+
+   Return the index of the last element equal to ``v`` in ``A``.
+
+.. function:: findlast(predicate, A)
+
+   Return the index of the last element of ``A`` for which ``predicate`` returns true.
+
 .. function:: findnext(A, i)
 
    Find the next index >= ``i`` of a non-zero element of ``A``, or ``0`` if not found.
@@ -321,6 +333,19 @@ Indexing, Assignment, and Concatenation
 .. function:: findnext(A, v, i)
 
    Find the next index >= ``i`` of an element of ``A`` equal to ``v`` (using ``==``),
+   or ``0`` if not found.
+
+.. function:: findprev(A, i)
+
+   Find the previous index <= ``i`` of a non-zero element of ``A``, or 0 if not found.
+
+.. function:: findprev(predicate, A, i)
+
+   Find the previous index <= ``i`` of an element of ``A`` for which ``predicate`` returns true, or ``0`` if not found.
+
+.. function:: findprev(A, v, i)
+
+   Find the previous index <= ``i`` of an element of ``A`` equal to ``v`` (using ``==``),
    or ``0`` if not found.
 
 .. function:: permutedims(A, perm)
