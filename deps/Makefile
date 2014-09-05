@@ -181,10 +181,10 @@ LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/$(LLVM_FLAVOR)/lib/$(
 LLVM_OBJ_TARGET = $(build_libdir)/$(LLVM_LIB_FILE)
 
 ifneq ($(LLVM_VER),svn)
-ifeq ($(LLVM_VER), 3.0)
-LLVM_TAR=llvm-$(LLVM_VER).tar.gz
-else
+ifeq ($(LLVM_VER), 3.3)
 LLVM_TAR=llvm-$(LLVM_VER).src.tar.gz
+else
+LLVM_TAR=llvm-$(LLVM_VER).src.tar.xz
 endif
 
 ifeq ($(BUILD_LLVM_CLANG),1)
