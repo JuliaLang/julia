@@ -79,7 +79,7 @@ function cholfact(x::Number, uplo::Symbol=:U)
     Cholesky{:U, eltype(xf), typeof(xf)}(xf)
 end
 
-chol(A::AbstractMatrix, uplo::Symbol=:U) = Triangular(chol!(copy(A), uplo), uplo, false)
+chol(A::AbstractMatrix, uplo::Symbol=:U) = chol!(copy(A), uplo)
 function chol!(x::Number, uplo::Symbol=:U)
     rx = real(x)
     rx == abs(x) || throw(DomainError())
