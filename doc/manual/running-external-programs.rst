@@ -246,7 +246,9 @@ This prints the highest five user IDs on a UNIX system. The ``cut``,
 the current ``julia`` process, with no intervening shell process. Julia
 itself does the work to setup pipes and connect file descriptors that is
 normally done by the shell. Since Julia does this itself, it retains
-better control and can do some things that shells cannot.
+better control and can do some things that shells cannot. Note that ``|>``
+only redirects ``stdout``. To redirect ``stderr``, use ``.>``
+
 
 Julia can run multiple commands in parallel::
 
