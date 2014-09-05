@@ -30,7 +30,7 @@ DEBUG_LIBS = $(WHOLE_ARCHIVE) $(JULIAHOME)/src/flisp/libflisp-debug.a $(WHOLE_AR
 RELEASE_LIBS = $(WHOLE_ARCHIVE) $(JULIAHOME)/src/flisp/libflisp.a $(WHOLE_ARCHIVE) $(JULIAHOME)/src/support/libsupport.a $(COMMON_LIBS)
 
 OBJS = $(SRCS:%=%.o)
-DOBJS = $(SRCS:%=%.do)
+DOBJS = $(SRCS:%=%.dbg.obj)
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
 
@@ -50,14 +50,14 @@ HEADERS = julia.h julia_internal.h options.h $(wildcard support/*.h) $(LIBUV_INC
 
 %.o: %.c $(HEADERS)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) -DNDEBUG -c $< -o $@)
-%.do: %.c $(HEADERS)
+%.dbg.obj: %.c $(HEADERS)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 %.o: %.cpp $(HEADERS)
 	@$(call PRINT_CC, $(CXX) $(call exec,$(LLVM_CONFIG) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(SHIPFLAGS) -c $< -o $@)
-%.do: %.cpp $(HEADERS)
+%.dbg.obj: %.cpp $(HEADERS)
 	@$(call PRINT_CC, $(CXX) $(call exec,$(LLVM_CONFIG) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
-ast.o ast.do: julia_flisp.boot.inc flisp/*.h
+ast.o ast.dbg.obj: julia_flisp.boot.inc flisp/*.h
 
 julia_flisp.boot.inc: julia_flisp.boot flisp/libflisp.a
 	@$(call PRINT_FLISP, $(call spawn,./flisp/flisp) ./bin2hex.scm < $< > $@)
@@ -66,8 +66,8 @@ julia_flisp.boot: julia-parser.scm julia-syntax.scm \
 	match.scm utils.scm jlfrontend.scm mk_julia_flisp_boot.scm flisp/libflisp.a
 	@$(call PRINT_FLISP, $(call spawn,./flisp/flisp) ./mk_julia_flisp_boot.scm)
 
-codegen.o codegen.do: intrinsics.cpp debuginfo.cpp cgutils.cpp ccall.cpp disasm.cpp
-builtins.o builtins.do: table.c
+codegen.o codegen.dbg.obj: intrinsics.cpp debuginfo.cpp cgutils.cpp ccall.cpp disasm.cpp
+builtins.o builtins.dbg.obj: table.c
 
 support/libsupport.a: support/*.h support/*.c
 	$(MAKE) -C support
@@ -114,7 +114,7 @@ libjulia-release: $(build_shlibdir)/libjulia.$(SHLIB_EXT)
 clean:
 	-rm -f $(build_shlibdir)/libjulia*
 	-rm -f julia_flisp.boot julia_flisp.boot.inc
-	-rm -f *.do *.o *~ *# *.$(SHLIB_EXT) *.a
+	-rm -f *.dbg.obj *.o *~ *# *.$(SHLIB_EXT) *.a
 
 clean-flisp:
 	-$(MAKE) -C flisp clean
