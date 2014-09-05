@@ -20,7 +20,7 @@ OBJS += _setjmp.win64.o _longjmp.win64.o
 endif
 endif
 
-DOBJS = $(OBJS:%.o=%.do)
+DOBJS = $(OBJS:%.o=%.dbg.obj)
 
 FLAGS = $(CFLAGS) $(HFILEDIRS:%=-I%) -I$(LIBUV_INC) -DLIBRARY_EXPORTS
 ifneq ($(USEMSVC), 1)
@@ -36,18 +36,18 @@ HEADERS = $(wildcard *.h) $(LIBUV_INC)/uv.h
 
 %.o: %.c $(HEADERS)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(SHIPFLAGS) -DNDEBUG -c $< -o $@)
-%.do: %.c $(HEADERS)
+%.dbg.obj: %.c $(HEADERS)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 ifneq ($(USEMSVC), 1)
 %.o: %.S
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(SHIPFLAGS) -c $< -o $@)
-%.do: %.S
+%.dbg.obj: %.S
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 else
 %.o: %.S
 	@$(call PRINT_CC, $(CPP) -P $(CPPFLAGS) $(SHIPFLAGS) $<)
 	@$(call PRINT_CC, $(AS) $(CPPFLAGS) $(SHIPFLAGS) -Fo$@ -c $*.i)
-%.do: %.S
+%.dbg.obj: %.S
 	@$(call PRINT_CC, $(CPP) -P $(CPPFLAGS) $(DEBUGFLAGS) $<)
 	@$(call PRINT_CC, $(AS) $(CPPFLAGS) $(DEBUGFLAGS) -Fo$@ -c $*.i)
 endif
@@ -65,7 +65,7 @@ libsupport-debug.a: $(DOBJS)
 
 clean:
 	rm -f *.o
-	rm -f *.do
+	rm -f *.dbg.obj
 	rm -f *.a
 	rm -f *~ *#
 	rm -f core*

@@ -17,7 +17,7 @@ FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer
 endif
 
 OBJS = $(SRCS:%=%.o)
-DOBJS = $(SRCS:%=%.do)
+DOBJS = $(SRCS:%=%.dbg.obj)
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
 ifeq ($(USE_LLVM_SHLIB),1)
@@ -42,7 +42,7 @@ release debug:
 
 %.o: %.c
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@)
-%.do: %.c
+%.dbg.obj: %.c
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 ifeq ($(OS),WINNT)
@@ -77,7 +77,7 @@ $(build_bindir)/julia-debug$(EXE): $(DOBJS)
 	@$(call PRINT_LINK, $(CXXLD) $(CXXLDFLAGS) $(LINK_FLAGS) $(DEBUGFLAGS) $^ -o $@ -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -ljulia-debug $(JLDFLAGS) $(CXXLDFLAGS))
 
 clean: | $(CLEAN_TARGETS)
-	rm -f *.o *.do
+	rm -f *.o *.dbg.obj
 	rm -f $(build_bindir)/julia*
 
 .PHONY: clean release debug julia-release julia-debug
