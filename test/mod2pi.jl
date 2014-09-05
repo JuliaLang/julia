@@ -183,6 +183,9 @@ function testModPi()
 end
 testModPi()
 
+# test vector version
+@test mod2pi(testCases[:, 1]) == testCases[:, 2]
+
 # 2pi
 @test_approx_eq mod2pi(10)          mod(10,2pi)
 @test_approx_eq mod2pi(-10)         mod(-10,2pi)
