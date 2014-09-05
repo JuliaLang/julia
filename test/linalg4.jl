@@ -74,6 +74,10 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
                 @test_approx_eq full(op(TM, M2)) op(M, M2)
                 @test_approx_eq full(op(M, TM2)) op(M, M2)
             end
+            @test M2*0.5 == full(TM2*0.5)
+            @test 0.5*M2 == full(0.5*TM2)
+            @test M2/0.5 == full(TM2/0.5)
+            @test 0.5\M2 == full(0.5\TM2)
         end
     end
 end

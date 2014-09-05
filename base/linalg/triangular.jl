@@ -154,21 +154,45 @@ end
 
 function (*){T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, x::Number)
     n = size(A,1)
+    B = copy(A.data)
     for j = 1:n
-        for i = UpLo == :L ? j:n : 1:j
-            A.data[i,j] = i == j & IsUnit ? x : A.data[i,j]*x
+        for i = UpLo == :L ? (j:n) : (1:j)
+            B[i,j] = (i == j && IsUnit ? x : B[i,j]*x)
         end
     end
-    A
+    Triangular{T,S,UpLo,IsUnit}(B)
 end
 function (*){T,S,UpLo,IsUnit}(x::Number, A::Triangular{T,S,UpLo,IsUnit})
     n = size(A,1)
+    B = copy(A.data)
     for j = 1:n
-        for i = UpLo == :L ? j:n : 1:j
-            A.data[i,j] = i == j & IsUnit ? x : x*A.data[i,j]
+        for i = UpLo == :L ? (j:n) : (1:j)
+            B[i,j] = i == j && IsUnit ? x : x*B[i,j]
         end
     end
-    A
+    Triangular{T,S,UpLo,IsUnit}(B)
+end
+function (/){T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, x::Number)
+    n = size(A,1)
+    B = copy(A.data)
+    invx = inv(x)
+    for j = 1:n
+        for i = UpLo == :L ? (j:n) : (1:j)
+            B[i,j] = (i == j && IsUnit ? invx : B[i,j]*invx)
+        end
+    end
+    Triangular{T,S,UpLo,IsUnit}(B)
+end
+function (\){T,S,UpLo,IsUnit}(x::Number, A::Triangular{T,S,UpLo,IsUnit})
+    n = size(A,1)
+    B = copy(A.data)
+    invx = inv(x)
+    for j = 1:n
+        for i = UpLo == :L ? (j:n) : (1:j)
+            B[i,j] = i == j && IsUnit ? invx : invx*B[i,j]
+        end
+    end
+    Triangular{T,S,UpLo,IsUnit}(B)
 end
 
 A_mul_B!{T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, B::Triangular{T,S,UpLo,IsUnit}) = Triangular{T,S,UpLo,IsUnit}(A*full!(B))
