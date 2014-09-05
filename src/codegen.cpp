@@ -861,7 +861,7 @@ void *jl_get_llvmf(jl_function_t *f, jl_tuple_t *types, bool getwrapper)
                   "Warning: Returned code may not match what actually runs.\n");
     }
     Function *llvmf;
-    if (getwrapper) {
+    if (getwrapper || sf->linfo->specTypes == NULL) {
         if (sf->linfo->functionObject == NULL) {
             jl_compile(sf);
         }
