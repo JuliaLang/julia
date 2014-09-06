@@ -450,3 +450,6 @@ let A = Array(Int,0,0), S = sparse(A)
     @test iA == iS == false
 end
 
+# issue #8225
+@test_throws BoundsError sparse([0],[-1],[1.0],2,2)
+
