@@ -5,8 +5,8 @@ export BigInt
 import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
-             widemul, sum, trailing_zeros, trailing_ones, count_ones, base, parseint,
-             serialize, deserialize, bin, oct, dec, hex, isequal, invmod,
+             widemul, sum, trailing_zeros, trailing_ones, leading_zeros, leading_ones, count_ones,
+             base, parseint, serialize, deserialize, bin, oct, dec, hex, isequal, invmod,
              prevpow2, nextpow2, ndigits0z, widen
 
 if Clong == Int32
@@ -312,6 +312,9 @@ end
 
 trailing_zeros(x::BigInt) = int(ccall((:__gmpz_scan1, :libgmp), Culong, (Ptr{BigInt}, Culong), &x, 0))
 trailing_ones(x::BigInt) = int(ccall((:__gmpz_scan0, :libgmp), Culong, (Ptr{BigInt}, Culong), &x, 0))
+
+leading_zeros(x::BigInt) = x>=0 ? -1 : 0
+leading_ones(x::BigInt)  = x<0  ? -1 : 0
 
 count_ones(x::BigInt) = int(ccall((:__gmpz_popcount, :libgmp), Culong, (Ptr{BigInt},), &x))
 
