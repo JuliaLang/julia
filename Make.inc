@@ -335,8 +335,8 @@ include $(JULIAHOME)/Make.user
 endif
 
 # ARM specific configuration
-ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.inc.arm ] && echo exists ))
-include $(JULIAHOME)/Make.inc.arm
+ifeq (exists, $(shell [ -e $(JULIAHOME)/ARM.inc ] && echo exists ))
+include $(JULIAHOME)/ARM.inc
 endif
 
 ifeq ($(SANITIZE),1)
