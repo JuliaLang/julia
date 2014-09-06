@@ -345,7 +345,7 @@ for fn in _numeric_conversion_func_names
     end
 end
 
-for fn in (:float,:float16,:float32,:float64)
+for fn in (:float,:float16,:float32,:float64,:big)
     @eval begin
         $fn(r::FloatRange) = FloatRange($fn(r.start), $fn(r.step), r.len, $fn(r.divisor))
     end
