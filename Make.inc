@@ -57,6 +57,101 @@ USE_LIBCPP = 0
 # Prevent picking up $ARCH from the environment variables
 ARCH=
 
+# ===========================================================================
+# Figure out compiler
+
+# Cross-compile
+#XC_HOST = i686-w64-mingw32
+#XC_HOST = x86_64-w64-mingw32
+
+BUILD_OS := $(shell uname)
+
+ifeq ($(XC_HOST),)
+CROSS_COMPILE=
+HOSTCC = $(CC)
+else
+HOSTCC = gcc
+override OPENBLAS_DYNAMIC_ARCH = 1
+override CROSS_COMPILE=$(XC_HOST)-
+ifneq (,$(findstring mingw,$(XC_HOST)))
+override OS := WINNT
+ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
+export STD_LIB_PATH := $(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed -e "s/^programs: =//" -e "s!/lib/!/bin/!g")
+export STD_LIB_PATH := $(STD_LIB_PATH):$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep libraries | sed -e "s/^libraries: =//" -e "s!/lib/!/bin/!g")
+else
+export STD_LIB_PATH := $(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed "s/^programs: =//" | xargs -d":" winepath -w | tr '\n' ';')
+export STD_LIB_PATH := $(STD_LIB_PATH);$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep libraries | sed "s/^libraries: =//" | xargs -d":" winepath -w | tr '\n' ';')
+endif
+else
+$(error "unknown XC_HOST variable set")
+endif
+endif
+
+# ===========================================================================
+# Select the cpu architecture to target, or automatically detects the user's compiler
+# ARCH is the first element of the triple, and gives the CPU class (e.g. x86_64)
+# MARCH is the CPU type, and accepts anything that can be passed to the gcc -march flag
+#    it is set equal to ARCH (for cases where the two are the same, such as i686)
+#    it can be set to native to optimize all code for the user's machine (not just the JIT code)
+#    if MARCH is set newer than the native processor, be forewarned that the compile might fail
+# JULIA_CPU_TARGET is the JIT-only complement to MARCH. Setting it explicitly is not generally necessary,
+#    since it is set equal to MARCH by default
+
+BUILD_MACHINE := $(shell $(HOSTCC) -dumpmachine)
+ifeq ($(ARCH),)
+override ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
+ifeq ($(ARCH),mingw32)
+$(error "the mingw32 compiler you are using fails the openblas testsuite. please see the README.windows document for a replacement")
+endif
+ifeq ($(BUILD_OS),Darwin)
+## Mac is a rather amazing 64-bit user-space on 32-bit kernel architecture, so to determine arch we detect
+## the capabilities of the hardware, rather than the compiler or kernel, and make a substitution
+ifeq ($(ARCH),x86_64)
+override ARCH = i686
+else ifeq ($(ARCH),i386)
+override ARCH = i686
+endif
+ifeq ($(ARCH),i686)
+ifeq ($(shell sysctl -n hw.cpu64bit_capable),1)
+override ARCH = x86_64
+endif
+BUILD_MACHINE := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
+endif
+endif
+else
+XC_HOST := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
+MARCH = $(ARCH)
+endif
+
+ifneq ($(MARCH),)
+CC += -march=$(MARCH)
+CXX += -march=$(MARCH)
+FC += -march=$(MARCH)
+JULIA_CPU_TARGET ?= $(MARCH)
+ifeq ($(OS),Darwin)
+# on Darwin, the standalone `as` program doesn't know
+# how to handle AVX instructions, but it does know how
+# to dispatch to the clang assembler (if we ask it to)
+ifeq ($(USECLANG),1)
+CC += -integrated-as
+CXX += -integrated-as
+else
+CC += -Wa,-q
+CXX += -Wa,-q
+endif
+FC += -Wa,-q
+AS += -q
+endif
+endif
+
+# End of target detection
+# ===========================================================================
+
+# ARM specific configuration
+ifeq ($(ARCH), arm)
+include $(JULIAHOME)/ARM.inc
+endif
+
 # we include twice to pickup user definitions better
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
@@ -116,34 +211,6 @@ BUILD_LLVM_CLANG = 0
 # set to 1 to get lldb (often does not work, no chance with llvm3.2 and earlier)
 # see http://lldb.llvm.org/build.html for dependencies
 BUILD_LLDB = 0
-
-# Cross-compile
-#XC_HOST = i686-w64-mingw32
-#XC_HOST = x86_64-w64-mingw32
-
-# Figure out OS and architecture
-BUILD_OS := $(shell uname)
-
-ifeq ($(XC_HOST),)
-CROSS_COMPILE=
-HOSTCC = $(CC)
-else
-HOSTCC = gcc
-override OPENBLAS_DYNAMIC_ARCH = 1
-override CROSS_COMPILE=$(XC_HOST)-
-ifneq (,$(findstring mingw,$(XC_HOST)))
-override OS := WINNT
-ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
-export STD_LIB_PATH := $(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed -e "s/^programs: =//" -e "s!/lib/!/bin/!g")
-export STD_LIB_PATH := $(STD_LIB_PATH):$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep libraries | sed -e "s/^libraries: =//" -e "s!/lib/!/bin/!g")
-else
-export STD_LIB_PATH := $(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed "s/^programs: =//" | xargs -d":" winepath -w | tr '\n' ';')
-export STD_LIB_PATH := $(STD_LIB_PATH);$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep libraries | sed "s/^libraries: =//" | xargs -d":" winepath -w | tr '\n' ';')
-endif
-else
-$(error "unknown XC_HOST variable set")
-endif
-endif
 
 JLDOWNLOAD = $(JULIAHOME)/deps/jldownload
 JLCHECKSUM = $(JULIAHOME)/deps/jlchecksum
@@ -350,64 +417,6 @@ TAR_TEST := $(shell $(TAR) --help 2>&1  | egrep 'bsdtar|strip-components')
 ifeq (,$(findstring components,$(TAR_TEST)))
 ifneq (bsdtar,$(findstring bsdtar,$(TAR_TEST)))
 $(error "please install either GNU tar or bsdtar")
-endif
-endif
-
-# ===========================================================================
-
-# Select the cpu architecture to target, or automatically detects the user's compiler
-# ARCH is the first element of the triple, and gives the CPU class (e.g. x86_64)
-# MARCH is the CPU type, and accepts anything that can be passed to the gcc -march flag
-#    it is set equal to ARCH (for cases where the two are the same, such as i686)
-#    it can be set to native to optimize all code for the user's machine (not just the JIT code)
-#    if MARCH is set newer than the native processor, be forewarned that the compile might fail
-# JULIA_CPU_TARGET is the JIT-only complement to MARCH. Setting it explicitly is not generally necessary,
-#    since it is set equal to MARCH by default
-
-BUILD_MACHINE := $(shell $(HOSTCC) -dumpmachine)
-ifeq ($(ARCH),)
-override ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
-ifeq ($(ARCH),mingw32)
-$(error "the mingw32 compiler you are using fails the openblas testsuite. please see the README.windows document for a replacement")
-endif
-ifeq ($(BUILD_OS),Darwin)
-## Mac is a rather amazing 64-bit user-space on 32-bit kernel architecture, so to determine arch we detect
-## the capabilities of the hardware, rather than the compiler or kernel, and make a substitution
-ifeq ($(ARCH),x86_64)
-override ARCH = i686
-else ifeq ($(ARCH),i386)
-override ARCH = i686
-endif
-ifeq ($(ARCH),i686)
-ifeq ($(shell sysctl -n hw.cpu64bit_capable),1)
-override ARCH = x86_64
-endif
-BUILD_MACHINE := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
-endif
-endif
-else
-XC_HOST := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
-MARCH = $(ARCH)
-endif
-
-ifneq ($(MARCH),)
-CC += -march=$(MARCH)
-CXX += -march=$(MARCH)
-FC += -march=$(MARCH)
-JULIA_CPU_TARGET ?= $(MARCH)
-ifeq ($(OS),Darwin)
-# on Darwin, the standalone `as` program doesn't know
-# how to handle AVX instructions, but it does know how
-# to dispatch to the clang assembler (if we ask it to)
-ifeq ($(USECLANG),1)
-CC += -integrated-as
-CXX += -integrated-as
-else
-CC += -Wa,-q
-CXX += -Wa,-q
-endif
-FC += -Wa,-q
-AS += -q
 endif
 endif
 
