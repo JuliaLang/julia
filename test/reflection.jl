@@ -1,4 +1,4 @@
-# catch regressions like #8239
+# code_native (#8239)
 
 # redirect stdout and stderr to avoid spam during tests.
 oldout = STDOUT
@@ -22,3 +22,11 @@ redirect_stdout(olderr)
 
 @test_throws Exception code_llvm(+, Int, Int)
 @test_throws Exception code_llvm(+, Array{Float32}, Array{Float32})
+
+
+# isbits
+
+@test !isbits(Array{Int})
+@test isbits(Float32)
+@test isbits(Int)
+@test !isbits(String)
