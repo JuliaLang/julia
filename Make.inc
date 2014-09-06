@@ -330,13 +330,13 @@ else
 build_shlibdir = $(build_libdir)
 endif
 
-ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
-include $(JULIAHOME)/Make.user
-endif
-
 # ARM specific configuration
 ifeq (exists, $(shell [ -e $(JULIAHOME)/ARM.inc ] && echo exists ))
 include $(JULIAHOME)/ARM.inc
+endif
+
+ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
+include $(JULIAHOME)/Make.user
 endif
 
 ifeq ($(SANITIZE),1)
