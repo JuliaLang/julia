@@ -44,13 +44,15 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
     @simd for i=1:nrow; @inbounds Wj[i] = Rp[i]; end
 
     @inbounds for k=1:N
-        ind = I[k]
-        p = Wj[ind]
+        iind = I[k]
+        jind = J[k]
+        ((iind > 0) && (jind > 0)) || throw(BoundsError())
+        p = Wj[iind]
         Vk = V[k]
         if Vk != 0
-            Wj[ind] += 1
+            Wj[iind] += 1
             Rx[p] = Vk
-            Ri[p] = J[k]
+            Ri[p] = jind
         end
     end
 
