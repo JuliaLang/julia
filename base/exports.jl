@@ -298,6 +298,7 @@ export
     ceil,
     cis,
     clamp,
+    cld,
     cmp,
     combinations,
     complex,

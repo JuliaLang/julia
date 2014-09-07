@@ -112,13 +112,15 @@ const .≠ = .!=
 >>(x,y::Integer)  = x >> convert(Int32,y)
 >>>(x,y::Integer) = x >>> convert(Int32,y)
 
-# fallback div and fld implementations
+# fallback div, fld, and cld implementations
 # NOTE: C89 fmod() and x87 FPREM implicitly provide truncating float division,
 # so it is used here as the basis of float div().
 div{T<:Real}(x::T, y::T) = convert(T,round((x-rem(x,y))/y))
 fld{T<:Real}(x::T, y::T) = convert(T,round((x-mod(x,y))/y))
+cld{T<:Real}(x::T, y::T) = convert(T,round((x-modCeil(x,y))/y))
 #rem{T<:Real}(x::T, y::T) = convert(T,x-y*trunc(x/y))
 #mod{T<:Real}(x::T, y::T) = convert(T,x-y*floor(x/y))
+modCeil{T<:Real}(x::T, y::T) = convert(T,x-y*ceil(x/y))
 
 # operator alias
 const % = rem

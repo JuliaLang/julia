@@ -57,5 +57,6 @@ end
 
 div(x::Bool, y::Bool) = y ? x : throw(DivideError())
 fld(x::Bool, y::Bool) = div(x,y)
+cld(x::Bool, y::Bool) = div(x,y)
 rem(x::Bool, y::Bool) = y ? false : throw(DivideError())
 mod(x::Bool, y::Bool) = rem(x,y)
