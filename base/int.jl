@@ -88,6 +88,9 @@ fld(x::Unsigned, y::Signed) = div(x,y)-(signbit(y)&(rem(x,y)!=0))
 mod(x::Signed, y::Unsigned) = rem(y+unsigned(rem(x,y)),y)
 mod(x::Unsigned, y::Signed) = rem(y+signed(rem(x,y)),y)
 
+cld(x::Signed, y::Unsigned) = div(x,y)+(!signbit(x)&(rem(x,y)!=0))
+cld(x::Unsigned, y::Signed) = div(x,y)+(!signbit(y)&(rem(x,y)!=0))
+
 # Don't promote integers for div/rem/mod since there no danger of overflow,
 # while there is a substantial performance penalty to 64-bit promotion.
 typealias Signed64 Union(Int8,Int16,Int32,Int64)
@@ -104,6 +107,9 @@ mod{T<:Unsigned}(x::T, y::T) = rem(x,y)
 
 fld{T<:Unsigned}(x::T, y::T) = div(x,y)
 fld{T<:Integer }(x::T, y::T) = div(x,y)-(signbit(x$y)&(rem(x,y)!=0))
+
+cld{T<:Unsigned}(x::T, y::T) = div(x,y)+(rem(x,y)!=0)
+cld{T<:Integer }(x::T, y::T) = div(x,y)+(!signbit(x$y)&(rem(x,y)!=0))
 
 ## integer bitwise operations ##
 
