@@ -89,6 +89,18 @@ macro timeit_init(ex,init,name,desc,group...)
     end
 end
 
+@linux? macro maxrss(name)
+    quote
+        rus = Array(Int64, div(144,8))
+        fill!(rus, 0x0)
+        res = ccall(:getrusage, Int32, (Int32, Ptr{Void}), 0, rus)
+        if res == 0
+            mx = rus[5]/1024
+            @printf "julia,%s.mem,%f,%f,%f,%f\n" $name mx mx mx 0
+        end
+    end
+end : macro maxrss(name) end
+
 
 # seed rng for more consistent timings
 srand(1776)

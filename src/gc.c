@@ -935,7 +935,7 @@ static inline void bzero_small_a16(char *p, size_t sz)
 #ifndef __SSE__
     memset(p, 0, sz);
 #else
-    __m128i c = _mm_set_epi8(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+    __m128i c = _mm_set1_epi8(0);
     for(int i=0; i < sz/16; i++)
         _mm_store_si128((__m128i*)p, c);
 #endif
@@ -2262,11 +2262,10 @@ void jl_gc_collect(void)
                     quick_count--;
                 }
                 else {
-                    collect_interval = default_collect_interval;
                     if (freed_bytes < actual_allocd/2) {
                         quick_count = 15;
                         //                    collect_interval = 0;
-                    }
+                    } else                     collect_interval = default_collect_interval;
                 }
             }
             else if (sweep_mask == GC_MARKED && freed_bytes < (7*(actual_allocd/10)) && n_pause > 1) {
