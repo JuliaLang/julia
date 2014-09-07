@@ -165,8 +165,7 @@ function ndigitsnb(n::Int, b::Int)
 
     d = 0
     while n != 0
-        # cld, while #8111 is waiting to be merged.
-        n = div(n,b)+(!signbit(n$b)&(rem(n,b)!=0))
+        n = cld(n,b)
         d += 1
     end
     return d
