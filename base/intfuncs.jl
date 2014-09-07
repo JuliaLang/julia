@@ -158,10 +158,6 @@ ndigits0z(x::Integer) = ndigits0z(unsigned(abs(x)))
 
 const ndigits_max_mul = WORD_SIZE==32 ? 69000000 : 290000000000000000
 
-function ndigits0zpos(n::Unsigned, b::Int)
-
-end
-
 function ndigitsnb(n::Int, b::Int)
     if n == 0
         return 1
