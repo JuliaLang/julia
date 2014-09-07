@@ -2515,6 +2515,10 @@ Mathematical Operators
 
    Largest integer less than or equal to a/b.
 
+.. function:: cld(a,b)
+
+   Smallest integer larger than or equal to a/b.
+
 .. function:: mod(x,m)
 
    Modulus after division, returning in the range [0,m).

@@ -359,6 +359,7 @@ Function        Description
 =============== =======================================================================
 ``div(x,y)``    truncated division; quotient rounded towards zero
 ``fld(x,y)``    floored division; quotient rounded towards ``-Inf``
+``cld(x,y)``    ceiling division; quotient rounded towards ``+Inf``
 ``rem(x,y)``    remainder; satisfies ``x == div(x,y)*y + rem(x,y)``; sign matches ``x``
 ``divrem(x,y)`` returns ``(div(x,y),rem(x,y))``
 ``mod(x,y)``    modulus; satisfies ``x == fld(x,y)*y + mod(x,y)``; sign matches ``y``

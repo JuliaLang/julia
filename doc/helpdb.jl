@@ -3552,6 +3552,12 @@ popdisplay(d::Display)
 
 "),
 
+("Base","cld","cld(a, b)
+
+   Smallest integer larger than or equal to a/b.
+
+"),
+
 ("Base","mod","mod(x, m)
 
    Modulus after division, returning in the range [0,m).
