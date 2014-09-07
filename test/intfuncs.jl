@@ -10,6 +10,7 @@
 @test ndigits(10, -10) == 3
 @test ndigits(17, 10) == 2
 @test ndigits(17, -10) == 3
+@test ndigits(unsigned(17), -10) == 3
 
 @test ndigits(146, -3) == 5
 
