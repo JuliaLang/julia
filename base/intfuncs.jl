@@ -158,6 +158,23 @@ ndigits0z(x::Integer) = ndigits0z(unsigned(abs(x)))
 
 const ndigits_max_mul = WORD_SIZE==32 ? 69000000 : 290000000000000000
 
+function ndigits0zpos(n::Unsigned, b::Int)
+
+end
+
+function ndigitsnb(n::Int, b::Int)
+    if n == 0
+        return 1
+    end
+
+    d = 0
+    while n != 0
+        n = iceil(n/b)
+        d += 1
+    end
+    return d
+end
+
 function ndigits0z(n::Unsigned, b::Int)
     b == 2  && return (sizeof(n)<<3-leading_zeros(n))
     b == 8  && return div((sizeof(n)<<3)-leading_zeros(n)+2,3)
@@ -180,7 +197,7 @@ ndigits0z(x::Integer, b::Integer) = ndigits0z(unsigned(abs(x)),int(b))
 ndigits(x::Unsigned, b::Integer) = x==0 ? 1 : ndigits0z(x,int(b))
 ndigits(x::Unsigned)             = x==0 ? 1 : ndigits0z(x)
 
-ndigits(x::Integer, b::Integer) = ndigits(unsigned(abs(x)),int(b))
+ndigits(x::Integer, b::Integer) = b >= 0 ? ndigits(unsigned(abs(x)),int(b)) : ndigitsnb(x, b)
 ndigits(x::Integer) = ndigits(unsigned(abs(x)))
 
 ## integer to string functions ##
