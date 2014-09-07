@@ -1,13 +1,14 @@
 module Pkg
 
-export Git, Dir, GitHub, Types, Reqs, Cache, Read, Query, Resolve, Write, Generate, Entry
+export Git, Dir, GitHub, Types, Reqs, Cache, Read, Query, Resolve, Write,
+       Licenses, Generate, Entry
 export dir, init, rm, add, available, installed, status, clone, checkout,
        release, fix, update, resolve, register, tag, publish, generate, test
 
 const DEFAULT_META = "git://github.com/JuliaLang/METADATA.jl"
 const META_BRANCH = "metadata-v2"
 
-for file in split("git dir github types reqs cache read query resolve write generate entry")
+for file in split("git dir github types reqs cache read query resolve write licenses generate entry")
     include("pkg/$file.jl")
 end
 const cd = Dir.cd
