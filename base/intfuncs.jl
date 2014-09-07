@@ -198,7 +198,7 @@ ndigits0z(x::Integer, b::Integer) = ndigits0z(unsigned(abs(x)),int(b))
 ndigits(x::Unsigned, b::Integer) = x==0 ? 1 : ndigits0z(x,int(b))
 ndigits(x::Unsigned)             = x==0 ? 1 : ndigits0z(x)
 
-ndigits(x::Integer, b::Integer) = ndigits(unsigned(abs(x)),int(b))
+ndigits(x::Integer, b::Integer) = b >= 0 ? ndigits(unsigned(abs(x)),int(b)) : ndigitsnb(x, b)
 ndigits(x::Integer) = ndigits(unsigned(abs(x)))
 
 ## integer to string functions ##
