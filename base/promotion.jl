@@ -171,6 +171,7 @@ promote_to_super{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type) =
 
 div(x::Real, y::Real) = div(promote(x,y)...)
 fld(x::Real, y::Real) = fld(promote(x,y)...)
+cld(x::Real, y::Real) = cld(promote(x,y)...)
 rem(x::Real, y::Real) = rem(promote(x,y)...)
 mod(x::Real, y::Real) = mod(promote(x,y)...)
 
