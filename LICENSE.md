@@ -1,4 +1,7 @@
-Julia is licensed under the MIT License:
+The Julia language is licensed under the MIT License. The "language" consists
+of the compiler (the contents of src/), most of the standard library (base/),
+and some utilities (most of the rest of the files in this repository). See below
+for exceptions.
 
 > Copyright (c) 2009-2014: Jeff Bezanson, Stefan Karpinski, Viral B. Shah,
 > and other contributors:
@@ -24,29 +27,51 @@ Julia is licensed under the MIT License:
 > OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 > WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-External libraries, if used, include their own licenses:
+
+The Julia language links to the following external libraries, which have their
+own licenses:
+
+- [FEMTOLISP](https://github.com/JeffBezanson/femtolisp)
+- [LIBUNWIND](http://git.savannah.gnu.org/gitweb/?p=libunwind.git;a=blob_plain;f=LICENSE;hb=master)
+- [LIBUV](https://github.com/joyent/libuv/blob/master/LICENSE)
+- [LLVM](http://llvm.org/releases/3.3/LICENSE.TXT)
+- [LIBMOJIBAKE](https://github.com/JuliaLang/libmojibake)
+
+
+Julia's standard library uses the following external libraries, which have
+their own licenses:
 
 - [AMOS](http://www.netlib.org/slatec/guide)
 - [ARPACK](http://www.caam.rice.edu/software/ARPACK/RiceBSD.txt#LICENSE)
 - [ATLAS](http://math-atlas.sourceforge.net/faq.html#license)
 - [DSFMT](http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/LICENSE.txt)
 - [OPENLIBM](https://github.com/JuliaLang/openlibm/blob/master/LICENSE.md)
+- [OPENSPECFUN](https://github.com/JuliaLang/openspecfun)
 - [FADDEEVA](http://ab-initio.mit.edu/Faddeeva)
-- [FEMTOLISP](https://github.com/JeffBezanson/femtolisp)
 - [FFTW](http://fftw.org/doc/License-and-Copyright.html)
 - [GMP](http://gmplib.org/manual/Copying.html#Copying)
-- [LAPACK](http://netlib.org/lapack/LICENSE.txt)
-- [LIBEXPAT](http://expat.cvs.sourceforge.net/viewvc/expat/expat/README)
-- [LIBUNWIND](http://git.savannah.gnu.org/gitweb/?p=libunwind.git;a=blob_plain;f=LICENSE;hb=master)
-- [LIBUV](https://github.com/joyent/libuv/blob/master/LICENSE)
-- [LLVM](http://llvm.org/releases/3.0/LICENSE.TXT)
 - [MPFR](http://www.mpfr.org/mpfr-current/mpfr.html#Copying)
 - [OPENBLAS](https://raw.github.com/xianyi/OpenBLAS/master/LICENSE)
-- [PATCHELF](http://hydra.nixos.org/build/1524660/download/1/README)
+- [LAPACK](http://netlib.org/lapack/LICENSE.txt)
 - [PCRE](http://www.pcre.org/licence.txt)
-- [RMATH](http://www.r-project.org/Licenses/)
 - [SUITESPARSE](http://www.cise.ufl.edu/research/sparse/SuiteSparse/current/SuiteSparse/)
-- [ZLIB](http://zlib.net/zlib_license.html)
+
+
+The following components of Julia's standard library have separate licenses:
+
+- base/fftw.jl (see [FFTW](http://fftw.org/doc/License-and-Copyright.html))
+- base/sparse/csparse.jl (LGPL-2.1+)
+
+
+Julia builds the following libraries by default, but does not use them itself:
+
+- [RMATH](http://www.r-project.org/Licenses/)
+
+
+Julia's build process uses the following external tools:
+
+- [PATCHELF](http://hydra.nixos.org/build/1524660/download/1/README)
+
 
 Julia bundles the following as external executables on some platforms:
 
