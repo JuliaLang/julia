@@ -2,7 +2,7 @@ JULIAHOME = $(abspath ..)
 include ../Make.inc
 
 TESTS = all core keywordargs numbers strings unicode collections hashing	\
-	remote iobuffer arrayops reduce reducedim \
+	remote iobuffer arrayops reduce reducedim intfuncs \
 	simdloop linalg blas fft dsp sparse bitarray random \
 	math functional bigint sorting statistics spawn parallel arpack file	\
 	git pkg resolve suitesparse complex version pollfd mpfr	broadcast       \
