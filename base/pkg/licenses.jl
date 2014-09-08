@@ -3,22 +3,32 @@ module Licenses
 type License
     abbreviation::String
     name::String
-    terms::String
+    terms::String # Markdown formatted terms with pkg and copyright info
+    wiki::String
 end
 
 
+asl() = License("ASL", "Apache License, Version 2.0", "", "http://en.wikipedia.org/wiki/Apache_License")
 function asl(pkg::String, copyright::String)
-    return License("ASL", "Apache License, Version 2.0", asl_terms(pkg,copyright))
+    lic = asl()
+    lic.terms = asl_terms(pkg,copyright)
+    return lic
 end
 
 
+bsd() = License("BSD", "BSD 2-Clause License", "", "http://en.wikipedia.org/wiki/BSD_licenses")
 function bsd(pkg::String, copyright::String)
-    return License("BSD", "BSD 2-Clause License", bsd_terms(pkg,copyright))
+    lic = bsd()
+    lic.terms = bsd_terms(pkg,copyright)
+    return lic
 end
 
 
+mit() = License("MIT", "MIT \"Expat\" License", "", "http://en.wikipedia.org/wiki/MIT_License")
 function mit(pkg::String, copyright::String)
-    return License("MIT", "MIT \"Expat\" License", mit_terms(pkg,copyright))
+    lic = mit()
+    lic.terms = mit_terms(pkg,copyright)
+    return lic
 end
 
 # http://www.apache.org/licenses/LICENSE-2.0

@@ -1,7 +1,6 @@
 module Generate
 
-import ..Git, ..Read
-using ..Licenses
+import ..Git, ..Read, ..Licenses
 
 const LICENSES = ["MIT" => Licenses.mit,
                   "BSD" => Licenses.bsd,
@@ -55,8 +54,7 @@ function package(
                 authors = isnew ? copyright_name(pkg) : git_contributors(pkg,5)
             end
             if !haskey(LICENSES,license)
-                licenses = join(sort!([keys(LICENSES)...], by=lowercase), ", ")
-                error("$license is not a known license choice, choose one of: $licenses.")
+                error(license_help(license))
             end
             license = LICENSES[license](pkg,copyright(years,authors))
             Generate.license(pkg, license,force=force)
@@ -123,7 +121,7 @@ function readme(pkg::String, license::Licenses.License, user::String=""; force::
         println(io, "\n[![Build Status]($url.svg?branch=master)]($url)")
         println(io, """
         \n## License
-        Available under the $(license.name). See: [LICENSE.md](./LICENSE.md).
+        Available under the [$(license.name)]($(license.wiki)). See: [LICENSE.md](./LICENSE.md).
         """)
     end
 end
@@ -196,6 +194,19 @@ function copyright(years::String, authors::Array)
         text *= "\n>  * $author"
     end
     return text
+end
+
+function license_help()
+    help = """Please specify a license from below as arguments to Pkg.Generate(<pkg_name>, <license>)
+    See http://choosealicense.com/ for help with choosing a license for your package.
+    """
+    licenses = [string("\t", lic[1],": ", lic[2]().name) for lic in LICENSES]
+    help *= join(licenses, "\n")
+    return help
+end
+
+function license_help(requested::String)
+    help = "$requested is not a known license choice.\n"*license_help()
 end
 
 end # module
