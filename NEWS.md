@@ -30,7 +30,7 @@ Library improvements
 
   * Efficient `mean` and `median` for ranges ([#8089]).
 
-  * Character predicates such as `islower()`, `isspace()`, etc. use `utf8proc`\`libmojibake`
+  * Character predicates such as `islower()`, `isspace()`, etc. use utf8proc/libmojibake
     to provide uniform cross-platform behavior and up-to-date, locale-independent support
     for Unicode standards ([#5939]).
 
