@@ -76,8 +76,10 @@ Julia's build process uses the following external tools:
 - [PATCHELF](http://hydra.nixos.org/build/1524660/download/1/README)
 
 
-Julia bundles the following as external executables on some platforms:
+Julia bundles the following external programs and libraries on some platforms:
 
 - [7-Zip](http://www.7-zip.org/license.txt)
 - [BUSYBOX](https://github.com/rmyorston/busybox-w32/blob/master/LICENSE)
 - [GIT](http://git-scm.com/about/free-and-open-source)
+- [ZLIB](http://zlib.net/zlib_license.html)
+- [LIBEXPAT](http://expat.cvs.sourceforge.net/viewvc/expat/expat/README)
