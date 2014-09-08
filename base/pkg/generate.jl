@@ -44,6 +44,11 @@ function package(
     config::Dict = {},
 )
     isnew = !ispath(pkg)
+
+    if in(pkg, keys(Read.available()))
+        warn("$pkg is already a registered package name in METADATA")
+    end
+
     try
         if isnew
             url = isempty(user) ? "" : "git://github.com/$user/$pkg.jl.git"
