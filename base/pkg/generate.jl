@@ -62,6 +62,7 @@ function package(
             Generate.entrypoint(pkg,force=force)
             Generate.tests(pkg,force=force)
             Generate.travis(pkg,force=force)
+            Generate.gitignore(pkg,force=force)
 
             msg = """
             $pkg.jl $(isnew ? "generated" : "regenerated") files.
@@ -158,6 +159,15 @@ function travis(pkg::String; force::Bool=false)
           - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
         script:
           - julia -e 'Pkg.init(); Pkg.clone(pwd()); Pkg.test("$pkg")'
+        """)
+    end
+end
+
+function gitignore(pkg::String; force::Bool=false)
+    genfile(pkg,".gitignore",force) do io
+        print(io, """
+        *.jl.cov
+        *.jl.mem
         """)
     end
 end
