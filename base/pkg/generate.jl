@@ -6,7 +6,8 @@ const LICENSES = ["MIT" => Licenses.mit,
                   "BSD" => Licenses.bsd,
                   "ASL" => Licenses.asl,
                   "LGPL2" => Licenses.lgpl2,
-                  "GPL2" => Licenses.gpl2,]
+                  "GPL2" => Licenses.gpl2,
+                  "CC0" => Licenses.cc0]
 
 copyright_year() = readchomp(`date +%Y`)
 copyright_name(dir::String) = readchomp(Git.cmd(`config --get user.name`, dir=dir))
