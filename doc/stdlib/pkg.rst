@@ -112,9 +112,10 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
 .. function:: generate(pkg,license)
 
-   Generate a new package named ``pkg`` with one of these license keys: ``"MIT"`` or ``"BSD"``.
+   Generate a new package named ``pkg`` with one of these license keys: ``"MIT"``(Recommended), ``"BSD"``, ``ASL``, ``LGPL2``, ``GPL2``, or ``CC0``.
    If you want to make a package with a different license, you can edit it afterwards.
-   Generate creates a git repo at ``Pkg.dir(pkg)`` for the package and inside it ``LICENSE.md``, ``README.md``, the julia entrypoint ``$pkg/src/$pkg.jl``, and a travis test file, ``.travis.yml``.
+   Generate creates a git repo at ``Pkg.dir(pkg)`` for the package and inside it ``LICENSE.md``, ``README.md``, the julia entrypoint ``$pkg/src/$pkg.jl``, ``.gitignore``.
+   It also creates a a `travis <https://travis-ci.org/>`_ test file, ``.travis.yml``, which has code coverage enabled and viewable at `coveralls.io <https://coveralls.io/>`_ .
 
 .. function:: register(pkg, [url])
 
