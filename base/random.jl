@@ -182,6 +182,27 @@ for (T, U) in [(Uint8, Uint32), (Uint16, Uint32),
     @eval RandIntGen(r::UnitRange{$T}) = isempty(r) ? error("range must be non-empty") : RandIntGen(first(r), convert($U, last(r) - first(r) + 1)) # overflow ok
 end
 
+
+# generator for BigInt
+immutable RandIntGenBigInt
+    a::BigInt      # first
+    m::BigInt      # range length - 1
+    nlimbs::Int    # number of limbs in generated BigInt's
+    mask::Culong   # applied to the highest limb
+end
+
+function RandIntGen(r::UnitRange{BigInt})
+    isempty(r) && error("range must be non-empty")
+    m = last(r) - first(r)
+    # mpz_sizeinbase is exact in this case, so this is faster than calling ndigits(m,2)
+    nd = int(ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &m, 2))
+    nlimbs, highbits = divrem(nd, 8*sizeof(Culong))
+    highbits > 0 && (nlimbs += 1)
+    mask = highbits == 0 ? ~zero(Culong) : one(Culong)<<highbits - one(Culong)
+    return RandIntGenBigInt(first(r), m, nlimbs, mask)
+end
+
+
 # this function uses 32 bit entropy for small ranges of length <= typemax(Uint32) + 1
 # RandIntGen is responsible for providing the right value of k
 function rand{T<:Union(Uint64, Int64)}(g::RandIntGen{T,Uint64})
@@ -208,17 +229,32 @@ function rand{T<:Integer, U<:Unsigned}(g::RandIntGen{T,U})
     convert(T, g.a + rem_knuth(x, g.k))
 end
 
-rand{T<:Union(Signed,Unsigned,Bool,Char)}(r::UnitRange{T}) = rand(RandIntGen(r))
 rand{T}(r::Range{T}) = r[rand(1:(length(r)))]
 
-function rand!(g::RandIntGen, A::AbstractArray)
+function rand(g::RandIntGenBigInt)
+   x = BigInt()
+   while true
+        xd = ccall((:__gmpz_limbs_write, :libgmp), Ptr{Culong}, (Ptr{BigInt}, Cint), &x, g.nlimbs)
+        limbs = pointer_to_array(xd, g.nlimbs)
+        rand!(limbs)
+        limbs[end] &= g.mask
+        ccall((:__gmpz_limbs_finish, :libgmp), Ptr{Culong}, (Ptr{BigInt}, Cint), &x, g.nlimbs)
+        x <= g.m && break
+    end
+    ccall((:__gmpz_add, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &x, &x, &g.a)
+    return x
+end
+
+rand{T<:Union(Signed,Unsigned,BigInt,Bool,Char)}(r::UnitRange{T}) = rand(RandIntGen(r))
+
+function rand!(g::Union(RandIntGen,RandIntGenBigInt), A::AbstractArray)
     for i = 1 : length(A)
         @inbounds A[i] = rand(g)
     end    
     return A
 end
 
-rand!{T<:Union(Signed,Unsigned,Bool,Char)}(r::UnitRange{T}, A::AbstractArray) = rand!(RandIntGen(r), A)
+rand!{T<:Union(Signed,Unsigned,BigInt,Bool,Char)}(r::UnitRange{T}, A::AbstractArray) = rand!(RandIntGen(r), A)
 
 function rand!(r::Range, A::AbstractArray)
     g = RandIntGen(1:(length(r)))
