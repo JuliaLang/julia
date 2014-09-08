@@ -118,8 +118,9 @@ function readme(pkg::String, license::Licenses.License, user::String=""; force::
     genfile(pkg,"README.md",force) do io
         println(io, "# $pkg")
         isempty(user) && return
-        url = "https://travis-ci.org/$user/$pkg.jl"
-        println(io, "\n[![Build Status]($url.svg?branch=master)]($url)")
+        travis_url = "https://travis-ci.org/$user/$pkg.jl"
+        println(io, "\n[![Build Status]($travis_url.svg?branch=master)]($travis_url)")
+        println(io, "[![Coverage Status](https://img.shields.io/coveralls/$user/$pkg.jl.svg)](https://coveralls.io/r/$user/$pkg.jl)")
         println(io, """
         \n## License
         Available under the [$(license.name)]($(license.wiki)). See: [LICENSE.md](./LICENSE.md).
@@ -158,7 +159,9 @@ function travis(pkg::String; force::Bool=false)
           - sudo apt-get install libpcre3-dev julia -y
           - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
         script:
-          - julia -e 'Pkg.init(); Pkg.clone(pwd()); Pkg.test("$pkg")'
+          - julia -e 'Pkg.init(); Pkg.clone(pwd()); Pkg.test("$pkg", coverage=true)'
+        after_success:
+          - julia -e 'cd(Pkg.dir("$pkg")); Pkg.add("Coverage"); using Coverage; Coveralls.submit(Coveralls.process_folder())'
         """)
     end
 end
