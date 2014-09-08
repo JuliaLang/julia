@@ -18,10 +18,25 @@ else
 end
 typealias CdoubleMax Union(Float16, Float32, Float64)
 
+const GMP_VERSION = VersionNumber(bytestring(unsafe_load(cglobal((:__gmp_version, :libgmp), Ptr{Cchar}))))
+const GMP_BITS_PER_LIMB = Int(unsafe_load(cglobal((:__gmp_bits_per_limb, :libgmp), Cint)))
+
+# GMP's mp_limb_t is by default a typedef of `unsigned long`, but can also be configured to be either
+# `unsigned int` or `unsigned long long int`. The correct unsigned type is here named Limb, and must
+# be used whenever mp_limb_t is in the signature of ccall'ed GMP functions.
+if GMP_BITS_PER_LIMB == 32
+    typealias Limb UInt32
+elseif GMP_BITS_PER_LIMB == 64
+    typealias Limb UInt64
+else
+    error("GMP: cannot determine the type mp_limb_t (__gmp_bits_per_limb == $GMP_BITS_PER_LIMB)")
+end
+
+
 type BigInt <: Integer
     alloc::Cint
     size::Cint
-    d::Ptr{Culong}
+    d::Ptr{Limb}
     function BigInt()
         b = new(zero(Cint), zero(Cint), C_NULL)
         ccall((:__gmpz_init,:libgmp), Void, (Ptr{BigInt},), &b)

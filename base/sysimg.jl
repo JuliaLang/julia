@@ -176,6 +176,9 @@ include("combinatorics.jl")
 include("rounding.jl")
 importall .Rounding
 
+# version
+include("version.jl")
+
 # BigInts and BigFloats
 include("gmp.jl")
 importall .GMP
@@ -198,8 +201,7 @@ include("darray.jl")
 include("mmap.jl")
 include("sharedarray.jl")
 
-# utilities - version, timing, help, edit, metaprogramming
-include("version.jl")
+# utilities - timing, help, edit, metaprogramming
 include("datafmt.jl")
 importall .DataFmt
 include("deepcopy.jl")
