@@ -2,13 +2,13 @@ JULIAHOME = $(abspath ..)
 include ../Make.inc
 
 TESTS = all core keywordargs numbers strings unicode collections hashing	\
-	remote iobuffer arrayops reduce reducedim \
-	simdloop linalg blas fft dsp sparse bitarray random \
-	math functional bigint sorting statistics spawn parallel arpack file	\
-	git pkg resolve suitesparse complex version pollfd mpfr	broadcast       \
-	socket floatapprox priorityqueue readdlm regex float16 combinatorics    \
-	dates sysinfo rounding ranges mod2pi euler show lineedit      \
-	replcompletions backtrace repl test goto llvmcall grisu
+	remote iobuffer arrayops reduce reducedim	\
+	simdloop linalg blas fft dsp sparse bitarray random math functional	\
+	bigint sorting statistics spawn parallel arpack file git pkg resolve	\
+	suitesparse complex version pollfd mpfr	broadcast socket floatapprox	\
+	priorityqueue readdlm reflection regex float16 combinatorics dates	\
+	sysinfo rounding ranges mod2pi euler show lineedit replcompletions	\
+	backtrace repl test examples goto llvmcall grisu
 
 default: all
 
