@@ -3402,9 +3402,9 @@ static void allocate_gc_frame(size_t n_roots, BasicBlock *b0, jl_codectx_t *ctx)
     ctx->argTemp = (Instruction*)builder.CreateConstGEP1_32(ctx->argTemp, 2);
     ctx->storeFrameSize =
         builder.CreateStore(ConstantInt::get(T_size, n_roots<<1),
-                            builder.CreateBitCast(builder.CreateConstGEP1_32(ctx->gcframe, 0), T_psize));
+                            preserving_bitcast(builder.CreateConstGEP1_32(ctx->gcframe, 0), T_psize));
     builder.CreateStore(builder.CreateLoad(prepare_global(jlpgcstack_var), false),
-                        builder.CreateBitCast(builder.CreateConstGEP1_32(ctx->gcframe, 1), PointerType::get(jl_ppvalue_llvmt,0)));
+                        preserving_bitcast(builder.CreateConstGEP1_32(ctx->gcframe, 1), PointerType::get(jl_ppvalue_llvmt,0)));
     Instruction *linst = builder.CreateStore(ctx->gcframe, prepare_global(jlpgcstack_var), false);
     ctx->argSpaceInits = &b0->back();
 #else
@@ -3794,7 +3794,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
 #ifdef JL_GC_MARKSWEEP
     Instruction *gcpop = (Instruction*)builder.CreateConstGEP1_32(ctx.gcframe, 1);
     ctx.gc_frame_pops.push_back(gcpop);
-    builder.CreateStore(builder.CreateBitCast(builder.CreateLoad(gcpop, false), jl_ppvalue_llvmt),
+    builder.CreateStore(preserving_bitcast(builder.CreateLoad(gcpop, false), jl_ppvalue_llvmt),
                         prepare_global(jlpgcstack_var));
 #endif
     finalize_gc_frame(&ctx);
@@ -4658,7 +4658,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
 #ifdef JL_GC_MARKSWEEP
             Instruction *gcpop = (Instruction*)builder.CreateConstGEP1_32(ctx.gcframe, 1);
             ctx.gc_frame_pops.push_back(gcpop);
-            builder.CreateStore(builder.CreateBitCast(builder.CreateLoad(gcpop, false), jl_ppvalue_llvmt),
+            builder.CreateStore(preserving_bitcast(builder.CreateLoad(gcpop, false), jl_ppvalue_llvmt),
                                 prepare_global(jlpgcstack_var));
 #endif
             if (do_malloc_log && lno != -1)
