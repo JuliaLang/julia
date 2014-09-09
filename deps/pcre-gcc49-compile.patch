@@ -1,0 +1,100 @@
+From: Philip Hazel <ph10>
+Date: Mon, 21 Apr 2014 16:11:50 +0000
+Subject: Fix silly quantifier size check
+
+The tests for quantifiers being too big (greater than 65535) were being
+applied after reading the number, and stupidly assuming that integer
+overflow would give a negative number. The tests are now applied as the
+numbers are read.
+
+Bug: http://bugs.exim.org/show_bug.cgi?id=1463
+Bug-Debian: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=751828
+Origin: upstream, part of http://vcs.pcre.org/viewvc?view=revision&sortby=date&revision=1472
+Applied-upstream: 8.36
+---
+ pcre_compile.c       | 35 ++++++++++++++++-------------------
+ testdata/testoutput2 |  6 +++---
+ 2 files changed, 19 insertions(+), 22 deletions(-)
+
+diff --git a/pcre_compile.c b/pcre_compile.c
+index 8a5b723..ae0027b 100644
+--- a/pcre_compile.c
++++ b/pcre_compile.c
+@@ -1583,30 +1583,30 @@ read_repeat_counts(const pcre_uchar *p, int *minp, int *maxp, int *errorcodeptr)
+ int min = 0;
+ int max = -1;
+ 
+-/* Read the minimum value and do a paranoid check: a negative value indicates
+-an integer overflow. */
+-
+-while (IS_DIGIT(*p)) min = min * 10 + (int)(*p++ - CHAR_0);
+-if (min < 0 || min > 65535)
++while (IS_DIGIT(*p)) 
+   {
+-  *errorcodeptr = ERR5;
+-  return p;
+-  }
+-
+-/* Read the maximum value if there is one, and again do a paranoid on its size.
+-Also, max must not be less than min. */
++  min = min * 10 + (int)(*p++ - CHAR_0);
++  if (min > 65535)
++    {
++    *errorcodeptr = ERR5;
++    return p;
++    }
++  }   
+ 
+ if (*p == CHAR_RIGHT_CURLY_BRACKET) max = min; else
+   {
+   if (*(++p) != CHAR_RIGHT_CURLY_BRACKET)
+     {
+     max = 0;
+-    while(IS_DIGIT(*p)) max = max * 10 + (int)(*p++ - CHAR_0);
+-    if (max < 0 || max > 65535)
++    while(IS_DIGIT(*p)) 
+       {
+-      *errorcodeptr = ERR5;
+-      return p;
+-      }
++      max = max * 10 + (int)(*p++ - CHAR_0);
++      if (max > 65535)
++        {
++        *errorcodeptr = ERR5;
++        return p;
++        }
++      }   
+     if (max < min)
+       {
+       *errorcodeptr = ERR4;
+@@ -1615,9 +1615,6 @@ if (*p == CHAR_RIGHT_CURLY_BRACKET) max = min; else
+     }
+   }
+ 
+-/* Fill in the required variables, and pass back the pointer to the terminating
+-'}'. */
+-
+ *minp = min;
+ *maxp = max;
+ return p;
+diff --git a/testdata/testoutput2 b/testdata/testoutput2
+index b6da7df..cfb446e 100644
+--- a/testdata/testoutput2
++++ b/testdata/testoutput2
+@@ -5821,13 +5821,13 @@ No match
+ No match
+ 
+ /a{11111111111111111111}/I
+-Failed: number too big in {} quantifier at offset 22
++Failed: number too big in {} quantifier at offset 8
+ 
+ /(){64294967295}/I
+-Failed: number too big in {} quantifier at offset 14
++Failed: number too big in {} quantifier at offset 9
+ 
+ /(){2,4294967295}/I
+-Failed: number too big in {} quantifier at offset 15
++Failed: number too big in {} quantifier at offset 11
+ 
+ "(?i:a)(?i:b)(?i:c)(?i:d)(?i:e)(?i:f)(?i:g)(?i:h)(?i:i)(?i:j)(k)(?i:l)A\1B"I
+ Capturing subpattern count = 1
