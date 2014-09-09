@@ -204,7 +204,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: eigvals(A,[irange,][vl,][vu])
 
-   Returns the eigenvalues of ``A``. If ``A`` is :func:`Symmetric`, :func:`Hermitian` or :func:`SymTridiagonal`, it is possible to calculate only a subset of the eigenvalues by specifying either a :func:`UnitRange` ``irange`` covering indices of the sorted eigenvalues, or a pair ``vl`` and ``vu`` for the lower and upper boundaries of the eigenvalues.
+   Returns the eigenvalues of ``A``. If ``A`` is ``Symmetric``, ``Hermitian`` or ``SymTridiagonal``, it is possible to calculate only a subset of the eigenvalues by specifying either a ``UnitRange`` ``irange`` covering indices of the sorted eigenvalues, or a pair ``vl`` and ``vu`` for the lower and upper boundaries of the eigenvalues.
 
    For general non-symmetric matrices it is possible to specify how the matrix is balanced before the eigenvector calculation. The option ``permute=true`` permutes the matrix to become closer to upper triangular, and ``scale=true`` scales the matrix by its diagonal elements to make rows and columns more equal in norm. The default is ``true`` for both options.
 
@@ -221,13 +221,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    Returns the eigenvectors of ``A``.
    The ``permute`` and ``scale`` keywords are the same as for :func:`eigfact`.
 
-   For :func:`SymTridiagonal` matrices, if the optional vector of eigenvalues ``eigvals`` is specified, returns the specific corresponding eigenvectors.
+   For ``SymTridiagonal`` matrices, if the optional vector of eigenvalues ``eigvals`` is specified, returns the specific corresponding eigenvectors.
 
-.. function:: eigfact(A,[il,][iu,][vl,][vu,][permute=true,][scale=true])
+.. function:: eigfact(A,[irange,][vl,][vu,][permute=true,][scale=true])
 
    Compute the eigenvalue decomposition of ``A`` and return an ``Eigen`` object. If ``F`` is the factorization object, the eigenvalues can be accessed with ``F[:values]`` and the eigenvectors with ``F[:vectors]``. The following functions are available for ``Eigen`` objects: ``inv``, ``det``.
    
-   If ``A`` is ``Symmetric``, ``Hermitian`` or ``SymTridiagonal``, it is possible to calculate only a subset of the eigenvalues by specifying either a `UnitRange`` ``irange`` covering indices of the sorted eigenvalues or a pair ``vl`` and ``vu`` for the lower and upper boundaries of the eigenvalues. 
+   If ``A`` is ``Symmetric``, ``Hermitian`` or ``SymTridiagonal``, it is possible to calculate only a subset of the eigenvalues by specifying either a ``UnitRange`` ``irange`` covering indices of the sorted eigenvalues or a pair ``vl`` and ``vu`` for the lower and upper boundaries of the eigenvalues. 
 
    For general non-symmetric matrices it is possible to specify how the matrix is balanced before the eigenvector calculation. The option ``permute=true`` permutes the matrix to become closer to upper triangular, and ``scale=true`` scales the matrix by its diagonal elements to make rows and columns more equal in norm. The default is ``true`` for both options.
 
