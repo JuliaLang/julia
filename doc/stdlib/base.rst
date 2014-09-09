@@ -550,7 +550,7 @@ The ``state`` object may be anything, and should be chosen appropriately for eac
         3 c
 
 
-Fully implemented by: ``Range``, ``Range1``, ``NDRange``, ``Tuple``, ``Real``, ``AbstractArray``, ``IntSet``, ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``, ``EachLine``, ``String``, ``Set``, ``Task``.
+Fully implemented by: ``Range``, ``UnitRange``, ``NDRange``, ``Tuple``, ``Real``, ``AbstractArray``, ``IntSet``, ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``, ``EachLine``, ``String``, ``Set``, ``Task``.
 
 General Collections
 -------------------
@@ -584,7 +584,7 @@ General Collections
    	julia> endof([1,2,4])
    	3
 
-Fully implemented by: ``Range``, ``Range1``, ``Tuple``, ``Number``, ``AbstractArray``, ``IntSet``, ``Dict``, ``WeakKeyDict``, ``String``, ``Set``.
+Fully implemented by: ``Range``, ``UnitRange``, ``Tuple``, ``Number``, ``AbstractArray``, ``IntSet``, ``Dict``, ``WeakKeyDict``, ``String``, ``Set``.
 
 Iterable Collections
 --------------------
@@ -949,7 +949,7 @@ Indexable Collections
 
 Fully implemented by: ``Array``, ``DArray``, ``BitArray``, ``AbstractArray``, ``SubArray``, ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``, ``String``.
 
-Partially implemented by: ``Range``, ``Range1``, ``Tuple``.
+Partially implemented by: ``Range``, ``UnitRange``, ``Tuple``.
 
 Associative Collections
 -----------------------
@@ -3950,7 +3950,7 @@ Random number generation in Julia uses the `Mersenne Twister library <http://www
 
 .. function:: rand(r, [dims...])
 
-   Generate a random integer from the inclusive interval specified by ``Range1 r`` (for example, ``1:n``). Optionally, generate a random integer array.
+   Generate a random integer in the range ``r`` (for example, ``1:n`` or ``0:2:10``). Optionally, generate a random integer array.
 
 .. function:: randbool([dims...])
 
