@@ -975,7 +975,7 @@ end
 function indentation(s::String)
     count = 0
     for c in s
-        if (c == ' ' || c == '\t')
+        if c == ' ' || c == '\t'
             count += blank_width(c)
         else
             return count, false

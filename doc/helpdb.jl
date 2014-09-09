@@ -2130,7 +2130,7 @@
    Tests whether a character is printable, and not a space, or whether
    this is true for all elements of a string.  Any character that
    would cause a printer to use ink should be classified with
-   isgraphic(c)==true.
+   isgraph(c)==true.
 
 "),
 
