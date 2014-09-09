@@ -3950,7 +3950,7 @@ Random number generation in Julia uses the `Mersenne Twister library <http://www
 
 .. function:: rand(r, [dims...])
 
-   Generate a random integer from the inclusive interval specified by ``Range1 r`` (for example, ``1:n``). Optionally, generate a random integer array.
+   Generate a random integer in the range ``r`` (for example, ``1:n`` or ``0:2:10``). Optionally, generate a random integer array.
 
 .. function:: randbool([dims...])
 
