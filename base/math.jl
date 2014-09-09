@@ -366,6 +366,15 @@ function mod2pi(x::Int64)
   mod2pi(fx)
 end
 
+function mod2pi!{T <: Real}(x::AbstractArray{T})
+    for i in 1:length(x)
+        x[i] = mod2pi(x[i])
+    end
+
+    x
+end
+mod2pi{T <: Real}(x::AbstractArray{T}) = mod2pi!(copy(x))
+
 # More special functions
 
 include("special/trig.jl")
