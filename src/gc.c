@@ -1359,6 +1359,7 @@ void grow_mark_stack(void)
 int max_msp = 0;
 #ifdef GC_INC
 static arraylist_t tasks;
+static arraylist_t rem_bindings;
 static arraylist_t _remset[2];
 static arraylist_t *remset = &_remset[0];
 static arraylist_t *last_remset = &_remset[1];
@@ -1373,9 +1374,14 @@ void reset_remset(void)
 DLLEXPORT void gc_queue_root(void *p)
 {
     void *ptr = (void*)((uintptr_t)p & ~(uintptr_t)1);
-    if (gc_bits(ptr) == GC_QUEUED) return;
+    if (gc_bits(ptr) == GC_QUEUED) return; // TODO check if still needed
     gc_bits(ptr) = GC_QUEUED;
     arraylist_push(remset, p);
+}
+void gc_queue_binding(void *bnd)
+{
+    gc_bits(bnd) = GC_QUEUED;
+    arraylist_push(&rem_bindings, (void*)((void**)bnd + 1));
 }
 
 static int push_root(jl_value_t *v, int d, int);
@@ -2155,6 +2161,16 @@ void jl_gc_collect(void)
             gc_bits(ptr) = GC_MARKED;
             push_root(ptr, 0, gc_bits(ptr));
         }
+        int n_bnd_refyoung = 0;
+        for (int i = 0; i < rem_bindings.len; i++) {
+            void *ptr = rem_bindings.items[i];
+            gc_bits(gc_val_buf(ptr)) = GC_MARKED;
+            if (gc_push_root(((jl_binding_t*)ptr)->value, 0) == GC_MARKED_NOESC) {
+                rem_bindings.items[n_bnd_refyoung] = ptr;
+                n_bnd_refyoung++;
+            }
+        }
+        rem_bindings.len = n_bnd_refyoung;
         perm_scanned_bytes = SA;
         
         pre_mark();
@@ -2212,7 +2228,7 @@ void jl_gc_collect(void)
             
             prepare_sweep();
             
-            if (quick_count >= 10) {
+            if (quick_count >= 30) {
                 sweep_mask = GC_MARKED; // next collection is a full one
                 gc_steps = gc_inc_steps;
                 quick_count = 0;
@@ -2258,21 +2274,23 @@ void jl_gc_collect(void)
             pct = actual_allocd ? (freed_bytes*100)/actual_allocd : -1;
 
             if (sweep_mask == GC_MARKED_NOESC) {
+                collect_interval = default_collect_interval/4;
                 if (freed_bytes >= actual_allocd) {
                     quick_count--;
                 }
                 else {
-                    if (freed_bytes < actual_allocd/2) {
-                        quick_count = 15;
-                        //                    collect_interval = 0;
-                    } else                     collect_interval = default_collect_interval;
+                    if (freed_bytes/quick_count < actual_allocd/30) {
+                        quick_count = 50;
+                        collect_interval = default_collect_interval;
+                    }
                 }
             }
-            else if (sweep_mask == GC_MARKED && freed_bytes < (7*(actual_allocd/10)) && n_pause > 1) {
+            else if (freed_bytes < (7*(actual_allocd/10)) && n_pause > 1) {
                 if (collect_interval <= 2*(max_collect_interval/5)) {
-                    collect_interval = 5*(collect_interval/2);
-                    quick_count = 15;
+                    //                    if (prev_sweep_mask == GC_MARKED)
+                        collect_interval = 5*(collect_interval/2);
                 }
+                quick_count = 50;
             }
             else {
                 collect_interval = default_collect_interval;
@@ -2529,6 +2547,7 @@ void jl_gc_init(void)
 #endif
 #ifdef GC_INC
     arraylist_new(&tasks, 0);
+    arraylist_new(&rem_bindings, 0);
     arraylist_new(remset, 0);
     arraylist_new(last_remset, 0);
 #endif

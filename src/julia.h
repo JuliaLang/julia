@@ -1377,8 +1377,17 @@ extern DLLEXPORT jl_compileropts_t jl_compileropts;
 #define JL_COMPILEROPT_DUMPBITCODE_OFF 2
 
 DLLEXPORT void gc_queue_root(void *root);
+void gc_queue_binding(void *bnd);
 void gc_setmark_buf(void *buf, int);
 DLLEXPORT void gc_wb_slow(void* parent, void* ptr);
+
+static inline void gc_wb_binding(void *bnd, void *val)
+{
+    #ifdef GC_INC
+    if (__unlikely((*(uintptr_t*)bnd & 3) == 1 && (*(uintptr_t*)val & 1) == 0))
+        gc_queue_binding(bnd);
+    #endif
+}
 
 static inline void gc_wb_fwd(void* parent, void* ptr)
 {

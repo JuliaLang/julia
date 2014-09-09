@@ -1,4 +1,5 @@
-const ntrials = 5
+const mintrials = 5
+const mintime = 2000.0
 print_output = isempty(ARGS)
 codespeed = length(ARGS) > 0 && ARGS[1] == "codespeed"
 
@@ -62,13 +63,17 @@ end
 
 macro timeit(ex,name,desc,group...)
     quote
-        t = zeros(ntrials)
-        for i=0:ntrials
+        t = Float64[]
+        tot = 0.0
+        i = 0
+        while i < mintrials || tot < mintime
             e = 1000*(@elapsed $(esc(ex)))
+            tot += e
             if i > 0
                 # warm up on first iteration
-                t[i] = e
+                push!(t, e)
             end
+            i += 1
         end
         @output_timings t $name $desc $group
     end
