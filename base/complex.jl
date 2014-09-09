@@ -690,3 +690,12 @@ function lexcmp(a::Complex, b::Complex)
     c == 0 || return c
     cmp(imag(a), imag(b))
 end
+
+for f in (:round, :ceil, :floor, :trunc)
+    @eval begin
+        function ($f)(x::Complex, digits::Integer, base::Integer=10)
+            Complex(($f)(real(z)), ($f)(imag(z)))
+        end
+    end
+end
+
