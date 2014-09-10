@@ -42,9 +42,9 @@ macro math_const(sym, val, def)
         $bigconvert
         Base.convert(::Type{Float64}, ::MathConst{$qsym}) = $val
         Base.convert(::Type{Float32}, ::MathConst{$qsym}) = $(float32(val))
-        #@assert isa(big($esym), BigFloat)
-        #@assert float64($esym) == float64(big($esym))
-        #@assert float32($esym) == float32(big($esym))
+        @assert isa(big($esym), BigFloat)
+        @assert float64($esym) == float64(big($esym))
+        @assert float32($esym) == float32(big($esym))
     end
 end
 
