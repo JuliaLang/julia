@@ -97,7 +97,7 @@ type Worker
     id::Int
     gcflag::Bool
     bind_addr::IPAddr
-    manage::Function
+    cman::ClusterManager
     config::Dict
     
     Worker(host::String, port::Integer, sock::TCPSocket, id::Int) =
@@ -237,35 +237,24 @@ function get_bind_addr(w::Union(Worker, LocalProcess))
     w.bind_addr
 end 
 
-function add_workers(pg::ProcessGroup, ws::Array{Any,1})
+function add_worker(pg::ProcessGroup, w)
     # NOTE: currently only node 1 can add new nodes, since nobody else
     # has the full list of address:port
     assert(LPROC.id == 1)
-    rr_join = similar(ws, RemoteRef)
-    for (i, w) in enumerate(ws)
-        w.id = get_next_pid()
-        register_worker(w)
-        rr_join[i] = RemoteRef()
-        create_message_handler_loop(w.socket; ntfy_join_complete=rr_join[i]) 
-    end
+    rr_join = RemoteRef()
+    w.id = get_next_pid()
+    register_worker(w)
+    create_message_handler_loop(w.socket; ntfy_join_complete=rr_join) 
 
-    all_locs = map(x -> isa(x, Worker) ? (string(x.bind_addr), x.port, x.id, x.manage == manage_local_worker) : ("", 0, x.id, true), pg.workers)
+    all_locs = map(x -> isa(x, Worker) ? (string(x.bind_addr), x.port, x.id, isa(x.cman, LocalManager)) : ("", 0, x.id, true), pg.workers)
     
-    for w in ws
-        send_msg_now(w, :join_pgrp, w.id, all_locs, w.manage == manage_local_worker)
-    end
-    for w in ws
-        @schedule begin
-            w.manage(w.id, w.config, :register)
-        end
-    end 
+    send_msg_now(w, :join_pgrp, w.id, all_locs, isa(w.cman, LocalManager))
     
-    # Wait till the all nodes have connected to each other
-    for rr in rr_join
-        wait(rr)
+    @schedule begin
+        manage(w.cman, w.id, w.config, :register)
     end
     
-    [w.id for w in ws]
+    (w.id, rr_join)
 end
 
 myid() = LPROC.id
@@ -279,8 +268,8 @@ end
 procs() = Int[x.id for x in PGRP.workers]
 function procs(pid::Integer)
     if myid() == 1
-        if (pid == 1) || (map_pid_wrkr[pid].manage == manage_local_worker)
-            Int[x.id for x in filter(w -> (w.id==1) || (w.manage == manage_local_worker), PGRP.workers)]
+        if (pid == 1) || isa(map_pid_wrkr[pid].cman, LocalManager)
+            Int[x.id for x in filter(w -> (w.id==1) || isa(w.cman, LocalManager), PGRP.workers)]
         else
             ipatpid = get_bind_addr(pid)
             Int[x.id for x in filter(w -> get_bind_addr(w) == ipatpid, PGRP.workers)]
@@ -387,7 +376,7 @@ function deregister_worker(pg, pid)
         
         # Notify the cluster manager of this workers death
         if myid() == 1
-            w.manage(w.id, w.config, :deregister)
+            manage(w.cman, w.id, w.config, :deregister)
         end
     end
     push!(map_del_wrkr, pid)
@@ -997,37 +986,47 @@ function start_worker(out::IO)
     exit(0)
 end
 
-function start_cluster_workers(np::Integer, config::Dict, cman::ClusterManager)
-    ws = cell(np)
-    
+function read_cb_response(io::IO, config::Dict)
+    (host, port) = read_worker_host_port(io)
+    return (io, host, port, host, config)
+end
+
+function read_cb_response(io::IO, host::String, config::Dict) 
+    (bind_addr, port) = read_worker_host_port(io)
+    return (io, bind_addr, port, host, config)
+end
+
+read_cb_response(io::IO, host::String, port::Integer, config::Dict) = (io, host, port, host, config)
+
+read_cb_response(host::String, port::Integer, config::Dict) = (nothing, host, port, host, config)
+
+
+function start_cluster_workers(np::Integer, config::Dict, cman::ClusterManager, resp_arr::Array, launched_ntfy::Condition)
     # Get the cluster manager to launch the instance
-    (insttype, instances) = cman.launch(cman, np, config)
+    instance_sets = {}
+    instances_ntfy = Condition()
     
-    if insttype == :io_only
-        read_cb_response(inst) = 
-        begin
-            (host, port) = read_worker_host_port(inst[1])
-            inst[1], host, port, host, inst[2]
+    @schedule launch(cman, np, config, instance_sets, instances_ntfy)
+    
+    while true
+        if length(instance_sets) == 0
+            wait(instances_ntfy)
         end
-    elseif  insttype == :io_host
-        read_cb_response(inst) = 
-        begin
-            (bind_addr, port) = read_worker_host_port(inst[1])
-            inst[1], bind_addr, port, inst[2], inst[3]
+        
+        instances = shift!(instance_sets)
+        if instances == :DONE
+            break
         end
-    elseif insttype == :io_host_port
-        read_cb_response(inst) = (inst[1], inst[2], inst[3], inst[2], inst[4])
-    elseif insttype == :host_port
-        read_cb_response(inst) = (nothing, inst[1], inst[2], inst[1], inst[3])
-    else
-        error("unsupported format from ClusterManager callback")
+        
+        for inst in instances
+            (io, bind_addr, port, pubhost, wconfig) = read_cb_response(inst...)
+            push!(resp_arr, create_worker(bind_addr, port, pubhost, io, wconfig, cman))
+            notify(launched_ntfy)
+        end
     end
     
-    for i=1:np
-        (io, bind_addr, port, pubhost, wconfig) = read_cb_response(instances[i])
-        ws[i] = create_worker(bind_addr, port, pubhost, io, wconfig, cman.manage)
-    end
-    ws
+    push!(resp_arr, :DONE)
+    notify(launched_ntfy)
 end
 
 function read_worker_host_port(io::IO)
@@ -1041,7 +1040,7 @@ function read_worker_host_port(io::IO)
     end
 end
 
-function create_worker(bind_addr, port, pubhost, stream, config, manage)
+function create_worker(bind_addr, port, pubhost, stream, config, cman)
     tunnel = config[:tunnel]
     
     s = split(pubhost,'@')
@@ -1065,7 +1064,7 @@ function create_worker(bind_addr, port, pubhost, stream, config, manage)
     end
     
     w.config = config
-    w.manage = manage
+    w.cman = cman
     
     if isa(stream, AsyncStream)
         let wrker = w
@@ -1080,7 +1079,7 @@ function create_worker(bind_addr, port, pubhost, stream, config, manage)
     end
 
     # install a finalizer to perform cleanup if necessary
-    finalizer(w, (w)->if myid() == 1 w.manage(w.id, w.config, :finalize) end)
+    finalizer(w, (w)->if myid() == 1 manage(w.cman, w.id, w.config, :finalize) end)
 
     w
 end
@@ -1115,15 +1114,12 @@ end
 
 
 immutable LocalManager <: ClusterManager
-    launch::Function
-    manage::Function
-
-    LocalManager() = new(launch_local_workers, manage_local_worker)
+    LocalManager() = new()
 end
 
 show(io::IO, cman::LocalManager) = println("LocalManager()")
 
-function launch_local_workers(cman::LocalManager, np::Integer, config::Dict)
+function launch(cman::LocalManager, np::Integer, config::Dict, resp_arr::Array, c::Condition)
     dir = config[:dir]
     exename = config[:exename]
     exeflags = config[:exeflags]
@@ -1137,74 +1133,144 @@ function launch_local_workers(cman::LocalManager, np::Integer, config::Dict)
         io_objs[i] = io
         configs[i] = merge(config, {:process => pobj})
     end
-
+    
     # ...and then read the host:port info. This optimizes overall start times.
-    return (:io_only, collect(zip(io_objs, configs)))
+    push!(resp_arr, collect(zip(io_objs, configs)))
+    push!(resp_arr, :DONE)
+    notify(c)
 end
 
-function manage_local_worker(id::Integer, config::Dict, op::Symbol)
+function manage(cman::LocalManager, id::Integer, config::Dict, op::Symbol)
     if op == :interrupt
         kill(config[:process], 2)
     end
 end
 
 immutable SSHManager <: ClusterManager
-    launch::Function
-    manage::Function
-    machines::AbstractVector
+    machines::Dict
 
-    SSHManager(; machines=[]) = new(launch_ssh_workers, manage_ssh_worker, machines)
+    function SSHManager(; machines=[]) 
+        mhist = Dict()
+        for m in machines
+            cnt = get(mhist, m, 0)
+            mhist[m] = cnt + 1
+        end
+        
+        new(mhist)
+    end
 end
 
 show(io::IO, cman::SSHManager) = println("SSHManager(machines=", cman.machines, ")")
 
-function launch_ssh_workers(cman::SSHManager, np::Integer, config::Dict)
+function launch(cman::SSHManager, np::Integer, config::Dict, resp_arr::Array, machines_launch_ntfy::Condition)
+    # Launch on each unique host in parallel.
+    # Wait for all launches to complete.
+    
+    plaunch_ntfy = Condition()
+    launch_tasks = Array(Task, length(cman.machines))
+    
+    for (i,(machine, cnt)) in  enumerate(cman.machines)
+        launch_tasks[i]=@schedule launch_on_machine(cman, config, resp_arr, machines_launch_ntfy, machine, cnt, plaunch_ntfy)
+    end
+    
+    while length(launch_tasks) > 0
+        if istaskdone(launch_tasks[1])
+            shift!(launch_tasks)
+        else
+            wait(plaunch_ntfy)
+        end
+    end
+
+    push!(resp_arr, :DONE)
+    notify(machines_launch_ntfy)
+end
+
+
+function launch_on_machine(cman::SSHManager, config::Dict, resp_arr::Array, machines_launch_ntfy::Condition, 
+                                        machine::String, cnt::Integer, plaunch_ntfy::Condition)
     dir = config[:dir]
     exename = config[:exename]
     exeflags_base = config[:exeflags]
 
-    io_objs = cell(np)
-    configs = cell(np)
+    thisconfig = copy(config) # config for this worker
 
+    # machine could be of the format [user@]host[:port] bind_addr
+    machine_bind = split(machine)
+    if length(machine_bind) > 1
+        exeflags = `--bind-to $(machine_bind[2]) $exeflags_base`
+    else
+        exeflags = exeflags_base
+    end
+    machine_def = machine_bind[1]
+    
+    machine_def = split(machine_def, ':')
+    portopt = length(machine_def) == 2 ? ` -p $(machine_def[2]) ` : ``
+    sshflags = `$(config[:sshflags]) $portopt`
+    thisconfig[:sshflags] = sshflags
+    
+    host = machine_def[1]
+    
+    # Build up the ssh command
+    cmd = `cd $dir && $exename $exeflags` # launch julia
+    cmd = `sh -l -c $(shell_escape(cmd))` # shell to launch under
+    cmd = `ssh -T -a -x -o ClearAllForwardings=yes -n $sshflags $host $(shell_escape(cmd))` # use ssh to remote launch
+    
+    thisconfig[:machine] = host
+    
     # start the processes first...
-
-    for i in 1:np
-        thisconfig = copy(config) # config for this worker
-
-        # machine could be of the format [user@]host[:port] bind_addr
-        machine_bind = split(cman.machines[i])
-        if length(machine_bind) > 1
-            exeflags = `--bind-to $(machine_bind[2]) $exeflags_base`
-        else
-            exeflags = exeflags_base
+    maxp = config[:max_parallel]
+    
+    if config[:tunnel] 
+        maxp = div(maxp,2) + 1   # Since the tunnel will also take up one ssh connection
+    end
+    
+    ios_to_check=Array(IO, 0)
+    
+    t_check=time()
+    while cnt > 0
+        ios_to_check2=Array(IO, 0)
+        for io in ios_to_check
+            if nb_available(io) == 0
+                push!(ios_to_check2, io)
+            end
         end
-        machine_def = machine_bind[1]
+        ios_to_check=ios_to_check2
         
-        machine_def = split(machine_def, ':')
-        portopt = length(machine_def) == 2 ? ` -p $(machine_def[2]) ` : ``
-        sshflags = `$(config[:sshflags]) $portopt`
-        thisconfig[:sshflags] = sshflags
+        maxp_in_loop = maxp - length(ios_to_check)
+        if maxp_in_loop == 0
+            # wait for sometime and check again
+            sleep(0.1)
+            if (time() - t_check) > 50
+                error("Timed out waiting for launched worker")
+            end
+            continue
+        end
+        lc = cnt > maxp_in_loop ? maxp_in_loop : cnt
+    
+        io_objs = cell(lc)
+        configs = cell(lc)
         
-        host = cman.machines[i] = machine_def[1]
+        for i in 1:lc
+            io, pobj = open(detach(cmd), "r")
+            io_objs[i] = io
+            push!(ios_to_check, io)
+        end
         
-        # Build up the ssh command
-        cmd = `cd $dir && $exename $exeflags` # launch julia
-        cmd = `sh -l -c $(shell_escape(cmd))` # shell to launch under
-        cmd = `ssh -T -a -x -o ClearAllForwardings=yes -n $sshflags $host $(shell_escape(cmd))` # use ssh to remote launch
+        cnt = cnt - lc
+
+        # ...and then read the host:port info. This optimizes overall start times.
+        # For ssh, the tunnel connection, if any, has to be with the specified machine name.
+        # but the port needs to be forwarded to the bound hostname/ip-address
+        push!(resp_arr, collect(zip(io_objs, fill(host, lc), fill(thisconfig, lc))))
+        notify(machines_launch_ntfy)
         
-        io, pobj = open(detach(cmd), "r")
-        io_objs[i] = io
-        thisconfig[:machine] = cman.machines[i]
-        configs[i] = thisconfig
+        t_check=time()
     end
 
-    # ...and then read the host:port info. This optimizes overall start times.
-    # For ssh, the tunnel connection, if any, has to be with the specified machine name.
-    # but the port needs to be forwarded to the bound hostname/ip-address
-    return (:io_host, collect(zip(io_objs, cman.machines, configs)))
+    notify(plaunch_ntfy)
 end
 
-function manage_ssh_worker(id::Integer, config::Dict, op::Symbol)
+function manage(cman::SSHManager, id::Integer, config::Dict, op::Symbol)
     if op == :interrupt
         if haskey(config, :ospid)
             machine = config[:machine]
@@ -1224,14 +1290,42 @@ end
 # optionally through an SSH tunnel.
 # the tunnel is only used from the head (process 1); the nodes are assumed
 # to be mutually reachable without a tunnel, as is often the case in a cluster.
+# Default value of kw arg max_parallel is the default value of MaxStartups in sshd_config 
 function addprocs_internal(np::Integer;
                   tunnel=false, dir=JULIA_HOME,
                   exename=(ccall(:jl_is_debugbuild,Cint,())==0?"./julia":"./julia-debug"),
-                  sshflags::Cmd=``, cman=LocalManager(), exeflags=``)
+                  sshflags::Cmd=``, cman=LocalManager(), exeflags=``, max_parallel=10)
                   
-    config={:dir=>dir, :exename=>exename, :exeflags=>`$exeflags --worker`, :tunnel=>tunnel, :sshflags=>sshflags}
+    config={:dir=>dir, :exename=>exename, :exeflags=>`$exeflags --worker`, :tunnel=>tunnel, :sshflags=>sshflags, :max_parallel=>max_parallel}
     disable_threaded_libs()
-    add_workers(PGRP, start_cluster_workers(np, config, cman))
+    
+    ret = Array(Integer, np)
+    rr_join = Array(RemoteRef, np)
+    
+    resp_arr = {}
+    c = Condition()
+    
+    @schedule start_cluster_workers(np, config, cman, resp_arr, c)
+    
+    i=1
+    while true
+        if length(resp_arr) == 0 
+            wait(c)
+        end
+        w = shift!(resp_arr)
+        if w == :DONE
+            break
+        else
+            ret[i], rr_join[i] = add_worker(PGRP, w)
+            i += 1
+        end
+    end
+    
+    for rr in rr_join
+        wait(rr)
+    end
+    
+    ret
 end
 
 addprocs(np::Integer; kwargs...) = addprocs_internal(np; kwargs...)
@@ -1564,7 +1658,7 @@ function interrupt(pid::Integer)
     assert(myid() == 1)
     w = map_pid_wrkr[pid]
     if isa(w, Worker) 
-        w.manage(w.id, w.config, :interrupt)
+        manage(w.cman, w.id, w.config, :interrupt)
     end
 end
 interrupt(pids::Integer...) = interrupt([pids...])
@@ -1596,7 +1690,7 @@ function check_same_host(pids)
         # We checkfirst if all test pids have been started using the local manager,
         # else we check for the same bind_to addr. This handles the special case
         # where the local ip address may change - as during a system sleep/awake
-        if all(p -> (p==1) || (map_pid_wrkr[p].manage == manage_local_worker), pids)
+        if all(p -> (p==1) || isa(map_pid_wrkr[p].cman, LocalManager), pids)
             return true
         else
             first_bind_addr = map_pid_wrkr[pids[1]].bind_addr
