@@ -210,13 +210,6 @@ end
 
 rand{T}(r::Range{T}) = r[rand(randintgen(length(r)))]
 
-function rand!(g::RandIntGen, A::AbstractArray)
-    for i = 1 : length(A)
-        @inbounds A[i] = rand(g)
-    end    
-    return A
-end
-
 function rand!(r::Range, A::AbstractArray)
     g = randintgen(length(r))
     for i = 1 : length(A)
