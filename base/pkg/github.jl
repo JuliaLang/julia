@@ -39,7 +39,7 @@ function curl(url::String, opts::Cmd=``)
     header = (String=>String)[]
     for line in eachline(out)
         if !ismatch(r"^\s*$",line)
-            (k,v) = split(line, r":\s*", 2)
+            (k,v) = split(line, r":\s*"; limit=2)
             header[k] = v
             continue
         end
