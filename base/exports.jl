@@ -1384,4 +1384,5 @@ export
     @inbounds,
     @simd,
     @label,
-    @goto
+    @goto,
+    @inline
