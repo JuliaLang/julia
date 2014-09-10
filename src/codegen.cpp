@@ -268,7 +268,6 @@ static GlobalVariable *jlfloattemp_var;
 #ifdef JL_GC_MARKSWEEP
 static GlobalVariable *jlpgcstack_var;
 #endif
-static GlobalVariable *jl_alloca_stack_var;
 static GlobalVariable *jlexc_var;
 static GlobalVariable *jldiverr_var;
 static GlobalVariable *jlundeferr_var;
@@ -490,16 +489,14 @@ typedef struct {
     std::string funcName;
     jl_sym_t *vaName;  // name of vararg argument
     bool vaStack;      // varargs stack-allocated
-    bool uses_alloca;  // uses alloca-based gc allocation
     int nReqArgs;
     int lineno;
     std::vector<bool> boundsCheck;
 #ifdef JL_GC_MARKSWEEP
-    Instruction *gcframe;
+    Instruction *gcframe ;
     Instruction *argSpaceInits;
     StoreInst *storeFrameSize;
 #endif
-    Instruction *alloca_frame;
     BasicBlock::iterator first_gcframe_inst;
     BasicBlock::iterator last_gcframe_inst;
     llvm::DIBuilder *dbuilder;
@@ -1159,36 +1156,36 @@ static void simple_escape_analysis(jl_value_t *expr, bool varesc, bool envesc, j
             simple_escape_analysis(f, true, false, ctx);
             jl_value_t *fv = static_eval(f, ctx, false);
             if (fv) {
-                if (jl_typeis(fv, jl_intrinsic_type)) {
-                    JL_I::intrinsic fi = (JL_I::intrinsic)jl_unbox_int32(fv);
-                    if (fi == JL_I::ccall) {
+                    if (jl_typeis(fv, jl_intrinsic_type)) {
+                        JL_I::intrinsic fi = (JL_I::intrinsic)jl_unbox_int32(fv);
+                        if (fi == JL_I::ccall) {
                         varesc = true;
                         envesc = local_var_occurs(jl_exprarg(e,3),jl_any_type->name->name);
                         simple_escape_analysis(jl_exprarg(e,1), varesc, envesc, ctx);
-                        // 2nd and 3d arguments are static
+                            // 2nd and 3d arguments are static
                         i = 4;
-                    }
+                            }
                     else if (fi == JL_I::llvmcall) {
                         varesc = true;
                         envesc = false;
                         // 1st, 2nd and 3d arguments are static
                         i = 4;
-                    }
+                        }
                     else {
                         varesc = false;
                         envesc = false;
                     }
                 }
-                else if (jl_is_function(fv)) {
-                    jl_function_t *ff = (jl_function_t*)fv;
-                    if (ff->fptr == jl_f_tuplelen ||
-                        ff->fptr == jl_f_tupleref ||
+                    else if (jl_is_function(fv)) {
+                        jl_function_t *ff = (jl_function_t*)fv;
+                        if (ff->fptr == jl_f_tuplelen ||
+                            ff->fptr == jl_f_tupleref ||
                         (ff->fptr == jl_f_apply && elen==3 &&
                          expr_type(jl_exprarg(e,1),ctx) == (jl_value_t*)jl_function_type &&
                          expr_type(jl_exprarg(e,2),ctx) == (jl_value_t*)jl_tuple_type)) {
                         varesc = false;
                         envesc = false;
-                    }
+                        }
                     else if (ff->fptr == jl_f_arrayref ||
                              ff->fptr == jl_f_arraylen ||
                              ff->fptr == jl_f_get_field ||
@@ -1204,21 +1201,21 @@ static void simple_escape_analysis(jl_value_t *expr, bool varesc, bool envesc, j
                         varesc = true;
                         envesc = true;
                         i = 2;
-                    }
+                }
                     else if (ff->fptr == jl_f_typeassert) {
                         simple_escape_analysis(jl_exprarg(e,1), true, envesc, ctx);
                         simple_escape_analysis(jl_exprarg(e,2), true, false, ctx);
                         return;
-                    }
+            }
                     else if ( ff->fptr == jl_f_convert_default) {
                         simple_escape_analysis(jl_exprarg(e,1), true, false, ctx);
                         simple_escape_analysis(jl_exprarg(e,2), true, envesc, ctx);
                         return;
-                    }
+            }
                     else {
                         varesc = true;
                         envesc = true;
-                    }
+        }
                 }
                 else {
                     varesc = true;
@@ -1239,13 +1236,13 @@ static void simple_escape_analysis(jl_value_t *expr, bool varesc, bool envesc, j
             varesc = true;
             envesc = true;
             i = 1;
-        }
+            }
         else if (e->head == amp_sym) {
             i = 0;
         }
         else if (e->head == line_sym) {
-            return;
-        }
+        return;
+    }
         else {
             varesc = true;
             envesc = true;
@@ -1982,12 +1979,8 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             tup = builder.CreateCall(prepare_call(jlallocobj_func),
                                      ConstantInt::get(T_size, sz));
         } else {
-            tup = builder.CreateAlloca(T_pint8, ConstantInt::get(T_int32, 1+nwords));
-            ctx->uses_alloca = true;
-            builder.CreateStore(builder.CreateLoad(prepare_global(jl_alloca_stack_var)), tup);
-            builder.CreateStore(builder.CreatePointerCast(tup,T_pint8), prepare_global(jl_alloca_stack_var));
-            tup = builder.CreatePointerCast(builder.CreateConstGEP1_32(tup, 1), jl_pvalue_llvmt);
-            ((Instruction*)tup)->setMetadata("isAlloca", MDNode::get(jl_LLVMContext, ArrayRef<Value*>()));
+            tup = builder.CreateAlloca(jl_value_llvmt, ConstantInt::get(T_int32, nwords));
+            // assert( dyn_cast<AllocaInst>(tup) != NULL );
         }
 #ifdef OVERLAP_TUPLE_LEN
         builder.CreateStore(arg1, emit_nthptr_addr(tup, 1));
@@ -2155,8 +2148,6 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                         emit_expr(args[2],ctx,false,false);
                     }
                     else {
-                        //Instruction *I = dyn_cast<Instruction>(ary);
-                        //escapes = escapes || !I || !I->getMetadata("isAlloca");
                         typed_store(emit_arrayptr(ary,args[1],ctx), idx,
                                     ety == (jl_value_t*)jl_any_type ?
                                         emit_expr(args[2],ctx,true) :
@@ -2264,8 +2255,6 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     Value *strct = emit_expr(args[1], ctx, false);
                     Value *rhs;
                     if (sty->fields[idx].isptr) {
-                        //Instruction *I = dyn_cast<Instruction>(strct);
-                        //escapes = escapes || !I || !I->getMetadata("isAlloca");
                         rhs = emit_expr(args[3], ctx, true);
                     }
                     else {
@@ -2968,12 +2957,8 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool escapes,
                                                ConstantInt::get(T_size, sz));
                 }
                 else {
-                    strct = builder.CreateAlloca(T_pint8, ConstantInt::get(T_int32, 1+sz/sizeof(void*)));
-                    ctx->uses_alloca = true;
-                    builder.CreateStore(builder.CreateLoad(prepare_global(jl_alloca_stack_var)), strct);
-                    builder.CreateStore(builder.CreatePointerCast(strct,T_pint8), prepare_global(jl_alloca_stack_var));
-                    strct = builder.CreatePointerCast(builder.CreateConstGEP1_32(strct, 1), jl_pvalue_llvmt);
-                    ((Instruction*)strct)->setMetadata("isAlloca", MDNode::get(jl_LLVMContext, ArrayRef<Value*>()));
+                    strct = builder.CreateAlloca(jl_value_llvmt, ConstantInt::get(T_int32, sz/sizeof(void*)));
+                    // assert( dyn_cast<AllocaInst>(strct) != NULL );
                 }
                 builder.CreateStore(literal_pointer_val((jl_value_t*)ty),
                                     emit_nthptr_addr(strct, (size_t)0));
@@ -3225,7 +3210,6 @@ static void allocate_gc_frame(size_t n_roots, jl_codectx_t *ctx)
     ctx->argTemp = builder.CreateAlloca(jl_pvalue_llvmt,
                                        ConstantInt::get(T_int32, n_roots));
 #endif
-    ctx->alloca_frame = builder.CreateLoad(prepare_global(jl_alloca_stack_var), false);
 
 }
 
@@ -3259,8 +3243,6 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
         il.erase(ctx->first_gcframe_inst, ctx->last_gcframe_inst);
         // erase() erases up *to* the end point; erase last inst too
         il.erase(ctx->last_gcframe_inst);
-        //if (!ctx->uses_alloca)
-        //    il.erase(ctx->alloca_frame);
         for(size_t i=0; i < ctx->gc_frame_pops.size(); i++) {
             Instruction *pop = ctx->gc_frame_pops[i];
             BasicBlock::InstListType &il2 = pop->getParent()->getInstList();
@@ -3299,10 +3281,6 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
             after = new StoreInst(V_null, argTempi);
             instList.insertAfter(argTempi, after);
         }
-        //if (!ctx->uses_alloca) {
-        //    BasicBlock::InstListType &il = ctx->gcframe->getParent()->getInstList();
-        //    il.erase(ctx->alloca_frame);
-        //}
     }
 }
 
@@ -3378,7 +3356,6 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
     ctx.gc_frame_pops.push_back(gcpop);
     builder.CreateStore(builder.CreateBitCast(builder.CreateLoad(gcpop, false), jl_ppvalue_llvmt),
                         prepare_global(jlpgcstack_var));
-    builder.CreateStore(ctx.alloca_frame, prepare_global(jl_alloca_stack_var)),
 
     finalize_gc_frame(&ctx);
     builder.CreateRet(r);
@@ -4052,7 +4029,6 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             builder.CreateStore(builder.CreateBitCast(builder.CreateLoad(gcpop, false), jl_ppvalue_llvmt),
                                 prepare_global(jlpgcstack_var));
 #endif
-            builder.CreateStore(ctx.alloca_frame, prepare_global(jl_alloca_stack_var));
             if (do_malloc_log && lno != -1)
                 mallocVisitLine(filename, lno);
             if (builder.GetInsertBlock()->getTerminator() == NULL) {
@@ -4263,12 +4239,6 @@ static void init_julia_llvm_env(Module *m)
                            NULL, "jl_pgcstack");
     add_named_global(jlpgcstack_var, (void*)&jl_pgcstack);
 #endif
-    
-    jl_alloca_stack_var =
-        new GlobalVariable(*m, T_pint8,
-                           false, GlobalVariable::ExternalLinkage,
-                           NULL, "jl_alloca_stack");
-    add_named_global(jl_alloca_stack_var, (void*)&jl_alloca_stack);
 
     global_to_llvm("__stack_chk_guard", (void*)&__stack_chk_guard, m);
     Function *jl__stack_chk_fail =

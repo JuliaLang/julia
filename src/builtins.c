@@ -120,7 +120,6 @@ void jl_enter_handler(jl_handler_t *eh)
 #ifdef JL_GC_MARKSWEEP
     eh->gcstack = jl_pgcstack;
 #endif
-    eh->alloca_stack = jl_alloca_stack;
     jl_current_task->eh = eh;
     // TODO: this should really go after setjmp(). see comment in
     // ctx_switch in task.c.

@@ -637,7 +637,7 @@ static size_t mark_stack_size = 0;
 static size_t mark_sp = 0;
 
 static struct {
-    void* *s;
+    jl_gcframe_t *s;
     ptrint_t offset;
 } *marked_stacks;
 static size_t marked_stacks_size = 0;
@@ -656,18 +656,42 @@ static void gc_unmark_stacks()
 {
     size_t i;
     for (i = 0; i < marked_stacks_sp; i++) {
-        void* *s = marked_stacks[i].s;
+        jl_gcframe_t *s = marked_stacks[i].s;
         ptrint_t offset = marked_stacks[i].offset;
         while (s != NULL) {
-            s = (void**)((char*)s + offset);
-            gc_clrmark(s+1);
-            s = (void**)(*s);
+            s = (jl_gcframe_t*)((char*)s + offset);
+            jl_value_t ***rts = (jl_value_t***)(((void**)s)+2);
+            size_t nr = s->nroots>>1;
+            if (s->nroots & 1) {
+                for(size_t i=0; i < nr; i++) {
+                    jl_value_t **ptr = (jl_value_t**)((char*)rts[i] + offset);
+                    if (*ptr != NULL && gc_marked(*ptr))
+                        gc_clrmark(*ptr);
+                }
+            }
+            else {
+                for(size_t i=0; i < nr; i++) {
+                    if (rts[i] != NULL && gc_marked(rts[i]))
+                        gc_clrmark(rts[i]);
+                }
+            }
+            s = s->prev;
         }
     }
 }
 
 static void gc_mark_stack(jl_gcframe_t *s, ptrint_t offset, int d)
 {
+    if (marked_stacks_sp >= marked_stacks_size) {
+        size_t newsz = marked_stacks_size>0 ? marked_stacks_size*2 : 8;
+        marked_stacks = (typeof(marked_stacks))realloc(marked_stacks,newsz*sizeof(*marked_stacks));
+        if (marked_stacks == NULL) exit(1);
+        marked_stacks_size = newsz;
+    }
+    marked_stacks[marked_stacks_sp].s = s;
+    marked_stacks[marked_stacks_sp].offset = offset;
+    marked_stacks_sp++;
+
     while (s != NULL) {
         s = (jl_gcframe_t*)((char*)s + offset);
         jl_value_t ***rts = (jl_value_t***)(((void**)s)+2);
@@ -727,32 +751,17 @@ static void gc_mark_task(jl_task_t *ta, int d)
     if (ta->stkbuf != NULL || ta == jl_current_task) {
         if (ta->stkbuf != NULL)
             gc_setmark_buf(ta->stkbuf);
-        if (marked_stacks_sp >= marked_stacks_size) {
-            size_t newsz = marked_stacks_size>0 ? marked_stacks_size*2 : 8;
-            marked_stacks = (typeof(marked_stacks))realloc(marked_stacks,newsz*sizeof(*marked_stacks));
-            if (marked_stacks == NULL) exit(1);
-            marked_stacks_size = newsz;
-        }
 #ifdef COPY_STACKS
         ptrint_t offset;
         if (ta == jl_current_task) {
             offset = 0;
-            marked_stacks[marked_stacks_sp].s = jl_alloca_stack;
-            marked_stacks[marked_stacks_sp].offset = offset;
-            marked_stacks_sp++;
             gc_mark_stack(jl_pgcstack, offset, d);
         }
         else {
             offset = (char *)ta->stkbuf - ((char *)ta->stackbase - ta->ssize);
-            marked_stacks[marked_stacks_sp].s = ta->alloca_stack;
-            marked_stacks[marked_stacks_sp].offset = offset;
-            marked_stacks_sp++;
             gc_mark_stack(ta->gcstack, offset, d);
         }
 #else
-        marked_stacks[marked_stacks_sp].s = ta->alloca_stack;
-        marked_stacks[marked_stacks_sp].offset = offset;
-        marked_stacks_sp++;
         gc_mark_stack(ta->gcstack, 0, d);
 #endif
     }
