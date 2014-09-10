@@ -54,8 +54,8 @@ if sizeof(Int32) < sizeof(Int)
     r = rand(int32(-1):typemax(Int32))
     @test typeof(r) == Int32
     @test -1 <= r <= typemax(Int32)
-    @test all([div(0x00010000000000000000,k)*k - 1 == Base.Random.RandIntGen(uint64(1:k)).u for k in 13 .+ int64(2).^(32:62)])
-    @test all([div(0x00010000000000000000,k)*k - 1 == Base.Random.RandIntGen(int64(1:k)).u for k in 13 .+ int64(2).^(32:61)])
+    @test all([div(0x00010000000000000000,k)*k - 1 == Base.Random.randintgen(uint64(k)).u for k in 13 .+ int64(2).^(32:62)])
+    @test all([div(0x00010000000000000000,k)*k - 1 == Base.Random.randintgen(int64(k)).u for k in 13 .+ int64(2).^(32:61)])
 
 end
 
@@ -160,8 +160,8 @@ r = uint64(rand(uint32(97:122)))
 srand(seed)
 @test r == rand(uint64(97:122))
 
-@test all([div(0x000100000000,k)*k - 1 == Base.Random.RandIntGen(uint64(1:k)).u for k in 13 .+ int64(2).^(1:30)])
-@test all([div(0x000100000000,k)*k - 1 == Base.Random.RandIntGen(int64(1:k)).u for k in 13 .+ int64(2).^(1:30)])
+@test all([div(0x000100000000,k)*k - 1 == Base.Random.randintgen(uint64(k)).u for k in 13 .+ int64(2).^(1:30)])
+@test all([div(0x000100000000,k)*k - 1 == Base.Random.randintgen(int64(k)).u for k in 13 .+ int64(2).^(1:30)])
 
 import Base.Random: uuid4, UUID
 
