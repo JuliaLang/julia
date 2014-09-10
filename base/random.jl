@@ -146,7 +146,7 @@ rand{T<:Number}(::Type{T}) = error("no random number generator for type $T; try 
 rand{T<:Number}(::Type{T}, dims::Int...) = rand(T, dims)
 
 
-## Generate random integer within a range
+## Generate random integer within a range 1:n
 
 # remainder function according to Knuth, where rem_knuth(a, 0) = a
 rem_knuth(a::Uint, b::Uint) = a % (b + (b == 0)) + a * (b == 0)
@@ -208,9 +208,15 @@ function rand{T<:Integer, U<:Unsigned}(g::RandIntGen{T,U})
     itrunc(T, one(U) + rem_knuth(x, g.k))
 end
 
-rand{T}(r::Range{T}) = r[rand(randintgen(length(r)))]
 
-function rand!(r::Range, A::AbstractArray)
+## Randomly draw a sample from an AbstractArray r
+# (e.g. r is a range 0:2:8 or a vector [2, 3, 5, 7])
+
+rand(r::AbstractArray) = r[rand(randintgen(length(r)))]
+
+# Arrays of random integers
+
+function rand!(r::AbstractArray, A::AbstractArray)
     g = randintgen(length(r))
     for i = 1 : length(A)
         @inbounds A[i] = r[rand(g)]
@@ -218,8 +224,8 @@ function rand!(r::Range, A::AbstractArray)
     return A
 end
 
-rand{T}(r::Range{T}, dims::Dims) = rand!(r, Array(T, dims))
-rand(r::Range, dims::Int...) = rand(r, dims)
+rand{T}(r::AbstractArray{T}, dims::Dims) = rand!(r, Array(T, dims))
+rand(r::AbstractArray, dims::Int...) = rand(r, dims)
 
 
 ## random Bools
