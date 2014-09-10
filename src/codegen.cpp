@@ -497,6 +497,7 @@ typedef struct {
     Instruction *argSpaceInits;
     StoreInst *storeFrameSize;
 #endif
+    BasicBlock *allocaBB;
     BasicBlock::iterator first_gcframe_inst;
     BasicBlock::iterator last_gcframe_inst;
     llvm::DIBuilder *dbuilder;
@@ -1975,19 +1976,16 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             make_gcroot(arg1, ctx);
         bool rooted = false;
         Value *tup;
+        IRBuilderBase::InsertPoint ip;
         if (escapes) {
             tup = builder.CreateCall(prepare_call(jlallocobj_func),
                                      ConstantInt::get(T_size, sz));
         } else {
+            ip = builder.saveIP();
+            builder.SetInsertPoint(ctx->allocaBB, ctx->allocaBB->getFirstInsertionPt());
             tup = builder.CreateAlloca(jl_value_llvmt, ConstantInt::get(T_int32, nwords));
             // assert( dyn_cast<AllocaInst>(tup) != NULL );
         }
-#ifdef OVERLAP_TUPLE_LEN
-        builder.CreateStore(arg1, emit_nthptr_addr(tup, 1));
-#else
-        builder.CreateStore(arg1, emit_nthptr_addr(tup, 2));
-#endif
-        ctx->argDepth = last_depth;
 #ifdef  OVERLAP_TUPLE_LEN
         builder.
             CreateStore(builder.
@@ -1995,17 +1993,22 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                                  ConstantInt::get(T_int64, nargs<<52)),
                         builder.CreateBitCast(emit_nthptr_addr(tup, (size_t)0),
                                               T_pint64));
+        if (!escapes)
+            builder.restoreIP(ip);
+        builder.CreateStore(arg1, emit_nthptr_addr(tup, 1));
+        size_t offs = 1;
 #else
         builder.CreateStore(literal_pointer_val((jl_value_t*)jl_tuple_type),
                             emit_nthptr_addr(tup, (size_t)0));
         builder.CreateStore(ConstantInt::get(T_size, nargs),
                             builder.CreateBitCast(emit_nthptr_addr(tup, (size_t)1), T_psize));
-#endif
-#ifdef OVERLAP_TUPLE_LEN
-        size_t offs = 1;
-#else
+        if (!escapes)
+            builder.restoreIP(ip);
+        builder.CreateStore(arg1, emit_nthptr_addr(tup, 2));
         size_t offs = 2;
 #endif
+
+        ctx->argDepth = last_depth;
         for(i=1; i < nargs; i++) {
             builder.CreateStore(V_null,
                                 emit_nthptr_addr(tup, i+offs));
@@ -2218,21 +2221,15 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 }
                 else if (is_tupletype_homogeneous(stt->types)) {
                     assert(llvm_st->isStructTy());
-                    // TODO: move these allocas to the first basic block instead of
-                    // frobbing the stack
-                    Instruction *stacksave =
-                        CallInst::Create(Intrinsic::getDeclaration(jl_Module,
-                                                                   Intrinsic::stacksave));
-                    builder.Insert(stacksave);
+                    IRBuilderBase::InsertPoint ip = builder.saveIP();
+                    builder.SetInsertPoint(ctx->allocaBB, ctx->allocaBB->getFirstInsertionPt());
                     Value *tempSpace = builder.CreateAlloca(llvm_st);
+                    builder.restoreIP(ip);
                     builder.CreateStore(strct, tempSpace);
                     jl_value_t *jt = jl_t0(stt->types);
                     idx = emit_bounds_check(idx, ConstantInt::get(T_size, nfields), ctx);
                     Value *ptr = builder.CreateGEP(tempSpace, ConstantInt::get(T_size, 0));
                     Value *fld = typed_load(ptr, idx, jt, ctx);
-                    builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
-                                                                 Intrinsic::stackrestore),
-                                       stacksave);
                     JL_GC_POP();
                     return fld;
                 }
@@ -2952,16 +2949,21 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool escapes,
                         make_gcroot(f1, ctx);
                 }
                 Value *strct;
+                IRBuilderBase::InsertPoint ip;
                 if (escapes) {
                     strct = builder.CreateCall(prepare_call(jlallocobj_func),
                                                ConstantInt::get(T_size, sz));
                 }
                 else {
+                    ip = builder.saveIP();
+                    builder.SetInsertPoint(ctx->allocaBB, ctx->allocaBB->getFirstInsertionPt());
                     strct = builder.CreateAlloca(jl_value_llvmt, ConstantInt::get(T_int32, sz/sizeof(void*)));
                     // assert( dyn_cast<AllocaInst>(strct) != NULL );
                 }
                 builder.CreateStore(literal_pointer_val((jl_value_t*)ty),
                                     emit_nthptr_addr(strct, (size_t)0));
+                if (!escapes)
+                    builder.restoreIP(ip);
                 if (f1) {
                     if (!jl_subtype(expr_type(args[1],ctx), jl_t0(sty->types), 0))
                         emit_typecheck(f1, jl_t0(sty->types), "new", ctx);
@@ -3736,6 +3738,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         }
         maybe_alloc_arrayvar(s, &ctx);
     }
+    ctx.allocaBB = builder.GetInsertBlock();
 
     // fetch env out of function object if we need it
     if (hasCapt) {
