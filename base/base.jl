@@ -233,9 +233,17 @@ Array{T}(::Type{T}, m::Int,n::Int,o::Int) =
 Array(T::Type, d::Int...) = Array(T, d)
 Array(T::Type, d::Integer...) = Array(T, convert((Int...), d))
 
-Array{T}(::Type{T}, m::Integer) =
+function Array{T}(::Type{T}, m::Integer)
+    abs(m) > typemax(Int) && throw(MemoryError)
     ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1}, m)
-Array{T}(::Type{T}, m::Integer,n::Integer) =
+end
+
+function Array{T}(::Type{T}, m::Integer,n::Integer)
+    abs(m) > typemax(Int) && abs(n) > typemax(Int) && throw(MemoryError)
     ccall(:jl_alloc_array_2d, Array{T,2}, (Any,Int,Int), Array{T,2}, m, n)
-Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer) =
+end
+
+function Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer)
+    abs(m) > typemax(Int) && abs(n) > typemax(Int) && abs(o) > typemax(Int) && throw(MemoryError)
     ccall(:jl_alloc_array_3d, Array{T,3}, (Any,Int,Int,Int), Array{T,3}, m, n, o)
+end
