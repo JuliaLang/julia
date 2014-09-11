@@ -65,31 +65,59 @@ promote_rule{T<:Integer,S<:FloatingPoint}(::Type{Rational{T}}, ::Type{S}) = prom
 widen{T}(::Type{Rational{T}}) = Rational{widen(T)}
 
 function rationalize{T<:Integer}(::Type{T}, x::FloatingPoint; tol::Real=eps(x))
-    if isnan(x);       return zero(T)//zero(T); end
-    if x < typemin(T); return -one(T)//zero(T); end
-    if typemax(T) < x; return  one(T)//zero(T); end
-    tm = x < 0 ? typemin(T) : typemax(T)
-    z = x*tm
-    if z <= 0.5 return zero(T)//one(T) end
-    if z <= 1.0 return one(T)//tm end
-    y = x
-    a = d = 1
-    b = c = 0
-    while true
-        f = itrunc(y); y -= f
-        p, q = f*a+c, f*b+d
-        typemin(T) <= p <= typemax(T) &&
-        typemin(T) <= q <= typemax(T) || break
-        0 != sign(a)*sign(b) != sign(p)*sign(q) && break
-        a, b, c, d = p, q, a, b
-        if y == 0 || abs(a/b-x) <= tol
+    tol < 0 && throw(ArgumentError("negative tolerance"))
+    isnan(x) && return zero(T)//zero(T)
+    isinf(x) && return (x < 0 ? -one(T) : one(T))//zero(T)
+    y = widen(x)
+    a::T = d::T = 1
+    b::T = c::T = 0
+    ok(r,s) = abs(oftype(x,r)/oftype(x,s) - x) <= tol
+    local n
+    const max_n = 1000
+    for n = 0:max_n
+        local f::T, p::T, q::T
+        try
+            f = itrunc(T,y)
+            abs(y - f) < 1 || throw(InexactError()) # XXX: remove when #3040 is fixed
+        catch e
+            isa(e,InexactError) || rethrow(e)
+            n == 0 && return (x < 0 ? -one(T) : one(T))//zero(T)
             break
         end
+        y -= f
+        try
+            p = checked_add(checked_mul(f,a), c)
+            q = checked_add(checked_mul(f,b), d)
+        catch e
+            isa(e,OverflowError) || rethrow(e)
+            break
+        end
+        if y == 0 || ok(p, q)
+            if n > 0 && f > 1
+                # check semi-convergents
+                u::T, v::T = iceil(f/2), f
+                p, q = u*a+c, u*b+d
+                ok(p, q) && return p//q
+                while u + 1 < v
+                    m = div(u+v, 2)
+                    p, q = m*a+c, m*b+d
+                    if ok(p, q)
+                        v = m
+                    else
+                        u = m
+                    end
+                end
+                p, q = v*a+c, v*b+d
+            end
+            return p//q
+        end
+        a, b, c, d = p, q, a, b
         y = inv(y)
     end
-    return convert(T,a)//convert(T,b)
+    @assert n < max_n
+    return a//b
 end
-rationalize(x::Union(Float64,Float32); tol::Real=eps(x)) = rationalize(Int, x, tol=tol)
+rationalize(x::FloatingPoint; kvs...) = rationalize(Int, x; kvs...)
 
 num(x::Integer) = x
 den(x::Integer) = one(x)

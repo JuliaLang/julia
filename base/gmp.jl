@@ -443,4 +443,8 @@ widemul(x::Uint128, y::Int128)  = BigInt(x)*BigInt(y)
 prevpow2(x::BigInt) = x.size < 0 ? -prevpow2(-x) : (x <= 2 ? x : one(BigInt) << (ndigits(x, 2)-1))
 nextpow2(x::BigInt) = x.size < 0 ? -nextpow2(-x) : (x <= 2 ? x : one(BigInt) << ndigits(x-1, 2))
 
+Base.checked_add(a::BigInt, b::BigInt) = a + b
+Base.checked_sub(a::BigInt, b::BigInt) = a - b
+Base.checked_mul(a::BigInt, b::BigInt) = a * b
+
 end # module
