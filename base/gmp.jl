@@ -5,8 +5,8 @@ export BigInt
 import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
-             widemul, sum, trailing_zeros, trailing_ones, count_ones, base, parseint,
-             serialize, deserialize, bin, oct, dec, hex, isequal, invmod,
+             widemul, sum, trailing_zeros, trailing_ones, leading_zeros, leading_ones, count_ones,
+             base, parseint, serialize, deserialize, bin, oct, dec, hex, bits, isequal, invmod,
              prevpow2, nextpow2, ndigits0z, widen
 
 if Clong == Int32
@@ -313,6 +313,9 @@ end
 trailing_zeros(x::BigInt) = int(ccall((:__gmpz_scan1, :libgmp), Culong, (Ptr{BigInt}, Culong), &x, 0))
 trailing_ones(x::BigInt) = int(ccall((:__gmpz_scan0, :libgmp), Culong, (Ptr{BigInt}, Culong), &x, 0))
 
+leading_zeros(x::BigInt) = x>=0 ? -1 : 0
+leading_ones(x::BigInt)  = x<0  ? -1 : 0
+
 count_ones(x::BigInt) = int(ccall((:__gmpz_popcount, :libgmp), Culong, (Ptr{BigInt},), &x))
 
 function divrem(x::BigInt, y::BigInt)
@@ -426,6 +429,18 @@ function base(b::Integer, n::BigInt)
     p = ccall((:__gmpz_get_str,:libgmp), Ptr{Uint8}, (Ptr{Uint8}, Cint, Ptr{BigInt}), C_NULL, b, &n)
     len = int(ccall(:strlen, Csize_t, (Ptr{Uint8},), p))
     ASCIIString(pointer_to_array(p,len,true))
+end
+
+function bits(x::BigInt)
+    if x==0
+        "...0"
+    elseif x>0
+        "...0"*bin(x)
+    elseif x==-1
+        "...1"
+    else
+        "...1"*map(b->b=='0'?'1':'0', bin(~x))
+    end
 end
 
 function ndigits0z(x::BigInt, b::Integer=10)
