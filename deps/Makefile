@@ -826,7 +826,6 @@ endif
 ifneq ($(BUILD_OS),$(OS))
 OPENBLAS_BUILD_OPTS += OSNAME=$(OS) CROSS=1 HOSTCC=$(HOSTCC)
 endif
-
 ifeq ($(OS),WINNT)
 ifneq ($(ARCH),x86_64)
 OPENBLAS_BUILD_OPTS += CFLAGS="$(CFLAGS) -mincoming-stack-boundary=2"
@@ -1109,13 +1108,17 @@ endif
 FFTW_SINGLE_OBJ_TARGET = $(build_shlibdir)/libfftw3f.$(SHLIB_EXT)
 FFTW_DOUBLE_OBJ_TARGET = $(build_shlibdir)/libfftw3.$(SHLIB_EXT)
 
-FFTW_CONFIG = --enable-shared --disable-fortran --disable-mpi --enable-fma --enable-threads
-ifneq ($(ARCH), ppc64)
-  FFTW_CONFIG += --enable-sse2
+FFTW_CONFIG = --enable-shared --disable-fortran --disable-mpi --enable-threads
+ifeq ($(ARCH), arm)
+  FFTW_CONFIG += --enable-neon
+else ifeq ($(ARCH), ppc)
+  FFTW_CONFIG += --enable-altivec
+else ifeq ($(ARCH), x86_64)
+  FFTW_CONFIG += --enable-sse2 --enable-fma
 endif
 ifeq ($(OS),WINNT)
 FFTW_CONFIG += --with-our-malloc --with-combined-threads
-ifneq ($(OS),x86_64)
+ifneq ($(ARCH),x86_64)
 FFTW_CONFIG += --with-incoming-stack-boundary=2
 endif
 endif
