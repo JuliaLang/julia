@@ -231,19 +231,35 @@ Array{T}(::Type{T}, m::Int,n::Int,o::Int) =
     ccall(:jl_alloc_array_3d, Array{T,3}, (Any,Int,Int,Int), Array{T,3}, m,n,o)
 
 Array(T::Type, d::Int...) = Array(T, d)
-Array(T::Type, d::Integer...) = Array(T, convert((Int...), d))
+function Array(T::Type, ds::Integer...)
+    for d in ds
+        if d > typemax(Int) || d < 0
+            throw(ArgumentError("invalid Array dimensions"))
+        end
+    end
+    Array(T, convert((Int...), ds))
+end
 
 function Array{T}(::Type{T}, m::Integer)
-    abs(m) > typemax(Int) && throw(MemoryError)
+    if m > typemax(Int) || m < 0
+        throw(ArgumentError("invalid Array dimensions"))
+    end
     ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1}, m)
 end
 
 function Array{T}(::Type{T}, m::Integer,n::Integer)
-    abs(m) > typemax(Int) && abs(n) > typemax(Int) && throw(MemoryError)
+    if (m > typemax(Int) || m < 0) ||
+       (n > typemax(Int) || n < 0)
+        throw(ArgumentError("invalid Array dimensions"))
+    end
     ccall(:jl_alloc_array_2d, Array{T,2}, (Any,Int,Int), Array{T,2}, m, n)
 end
 
 function Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer)
-    abs(m) > typemax(Int) && abs(n) > typemax(Int) && abs(o) > typemax(Int) && throw(MemoryError)
+    if (m > typemax(Int) || m < 0) ||
+       (n > typemax(Int) || n < 0) ||
+       (o > typemax(Int) || n < 0)
+        throw(ArgumentError("invalid Array dimensions"))
+    end
     ccall(:jl_alloc_array_3d, Array{T,3}, (Any,Int,Int,Int), Array{T,3}, m, n, o)
 end
