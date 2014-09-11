@@ -406,6 +406,11 @@ DLLEXPORT void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
 {
 #if defined _MSC_VER
     __cpuid(CPUInfo, InfoType);
+#elif defined(__arm__)
+    CPUInfo[0] = 0x41; // ARMv7
+    CPUInfo[1] = 0; // godspeed
+    CPUInfo[2] = 0; // to anyone
+    CPUInfo[3] = 0; // using <v7
 #else
     __asm__ __volatile__ (
         #if defined(__i386__) && defined(__PIC__)

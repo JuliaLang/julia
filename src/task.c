@@ -605,6 +605,7 @@ DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize)
 }
 DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, unw_context_t *uc)
 {
+#ifndef __arm__
     unw_cursor_t cursor;
     unw_word_t ip;
     size_t n=0;
@@ -619,6 +620,9 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, unw_context_t
         data[n++] = ip;
     } while (unw_step(&cursor) > 0);
     return n;
+#else
+    return 0;
+#endif
 }
 #ifdef LIBOSXUNWIND
 size_t rec_backtrace_ctx_dwarf(ptrint_t *data, size_t maxsize, unw_context_t *uc)
