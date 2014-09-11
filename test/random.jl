@@ -26,6 +26,11 @@ rand!(MersenneTwister(0), A)
 @test A == [0.8236475079774124  0.16456579813368521;
             0.9103565379264364  0.17732884646626457]
 
+@test rand(0:3:1000) in 0:3:1000
+coll = {2, uint128(128), big(619), "string", 'c'}
+@test rand(coll) in coll
+@test issubset(rand!(coll, cell(10)), coll)
+
 # randn
 @test randn(MersenneTwister(42)) == -0.5560268761463861
 A = zeros(2, 2)
