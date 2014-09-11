@@ -128,7 +128,7 @@ function readme(pkg::String, license::Licenses.License, user::String=""; force::
         isempty(user) && return
         travis_url = "https://travis-ci.org/$user/$pkg.jl"
         println(io, "\n[![Build Status]($travis_url.svg?branch=master)]($travis_url)")
-        println(io, "[![Coverage Status](https://img.shields.io/coveralls/$user/$pkg.jl.svg)](https://coveralls.io/r/$user/$pkg.jl)")
+        println(io, "[![Coverage Status](https://img.shields.io/coveralls/$user/$pkg.jl.svg)](https://coveralls.io/r/$user/$pkg.jl?branch=master)")
         println(io, """
         \n## License
         Available under the [$(license.name)]($(license.wiki)). See: [LICENSE.md](./LICENSE.md).
