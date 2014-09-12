@@ -133,6 +133,7 @@ end
 
 islower(c::Char) = (_catcode(c)==UTF8PROC_CATEGORY_LL)
 
+# true for Unicode upper and mixed case
 function isupper(c::Char)
     ccode=_catcode(c)
     return ccode==UTF8PROC_CATEGORY_LU || ccode==UTF8PROC_CATEGORY_LT
@@ -152,13 +153,17 @@ function isalnum(c::Char)
                     (UTF8PROC_CATEGORY_ND <= ccode <= UTF8PROC_CATEGORY_NO)
 end
 
+# following C++ only control characters from the Latin-1 subset return true
 iscntrl(c::Char) = (uint(c)<= 0x1f || 0x7f<=uint(c)<=0x9f)
 
 ispunct(c::Char) = (UTF8PROC_CATEGORY_PC <=_catcode(c) <= UTF8PROC_CATEGORY_PO)
 
+# 0x85 is the Unicode Next Line (NEL) character
 isspace(c::Char) = c==' ' || '\t'<=c<='\r' || c==0x85 || _catcode(c)==UTF8PROC_CATEGORY_ZS
-                               
+
 isprint(c::Char) = (UTF8PROC_CATEGORY_LU <= _catcode(c) <= UTF8PROC_CATEGORY_ZS)
+
+# true in principal if a printer would use ink
 isgraph(c::Char) = (UTF8PROC_CATEGORY_LU <= _catcode(c) <= UTF8PROC_CATEGORY_SO)
 
 for name = ("alnum", "alpha", "cntrl", "digit", "number", "graph",
