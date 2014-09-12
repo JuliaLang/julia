@@ -5758,6 +5758,14 @@ C Interface
 
    Equivalent to the native ``unsigned long long`` c-type (Uint64)
 
+.. data:: Cintmax_t
+
+   Equivalent to the native ``intmax_t`` c-type (Int64)
+
+.. data:: Cuintmax_t
+
+   Equivalent to the native ``uintmax_t`` c-type (Uint64)
+
 .. data:: Csize_t
 
    Equivalent to the native ``size_t`` c-type (Uint)
