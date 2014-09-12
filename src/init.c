@@ -800,14 +800,15 @@ void julia_init(char *imageFile)
 
     if (!imageFile) {
         jl_core_module = jl_new_module(jl_symbol("Core"));
+        jl_init_intrinsic_functions();
+        jl_init_primitives();
+
         jl_new_main_module();
         jl_internal_main_module = jl_main_module;
 
         jl_current_module = jl_core_module;
         jl_root_task->current_module = jl_current_module;
 
-        jl_init_intrinsic_functions();
-        jl_init_primitives();
         jl_load("boot.jl");
         jl_get_builtin_hooks();
         jl_boot_file_loaded = 1;
