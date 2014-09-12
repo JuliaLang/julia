@@ -202,7 +202,7 @@ static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
 {
     Constant *c = julia_const_to_llvm(e);
     if (c) return mark_julia_type(c, jl_typeof(e));
-    return emit_expr(e, ctx, false);
+    return emit_expr(e, ctx, false, false);
 }
 
 static Type *jl_llvmtuple_eltype(Type *tuple, jl_value_t *jt, size_t i)
@@ -456,7 +456,7 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     }
 
     // dynamically-determined type; evaluate.
-    return allocate_box_dynamic(emit_expr(targ, ctx), ConstantInt::get(T_size,(nb+7)/8), vx);
+    return allocate_box_dynamic(emit_expr(targ, ctx, false), ConstantInt::get(T_size,(nb+7)/8), vx);
 }
 
 static Type *staticeval_bitstype(jl_value_t *targ, const char *fname, jl_codectx_t *ctx)
@@ -696,7 +696,7 @@ static Value *emit_runtime_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t
                                        FunctionType::get(jl_pvalue_llvmt, two_pvalue_llvmt, false));
     int ldepth = ctx->argDepth;
     Value *parg = emit_boxed_rooted(e, ctx);
-    Value *iarg = boxed(emit_expr(i, ctx), ctx);
+    Value *iarg = boxed(emit_expr(i, ctx, false), ctx);
     Value *ret = builder.CreateCall2(prepare_call(preffunc), parg, iarg);
     ctx->argDepth = ldepth;
     return ret;
@@ -752,7 +752,7 @@ static Value *emit_runtime_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *
     int ldepth = ctx->argDepth;
     Value *parg = emit_boxed_rooted(e, ctx);
     Value *iarg = emit_boxed_rooted(i, ctx);
-    Value *xarg = boxed(emit_expr(x, ctx), ctx);
+    Value *xarg = boxed(emit_expr(x, ctx, false), ctx);
     builder.CreateCall3(prepare_call(psetfunc), parg, xarg, iarg);
     ctx->argDepth = ldepth;
     return parg;
@@ -772,7 +772,7 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
     jl_value_t *xty = expr_type(x, ctx);
     Value *val=NULL;
     if (!jl_subtype(xty, ety, 0)) {
-        val = emit_expr(x,ctx);
+        val = emit_expr(x,ctx,false);
         emit_typecheck(val, ety, "pointerset: type mismatch in assign", ctx);
     }
     if (expr_type(i, ctx) != (jl_value_t*)jl_long_type)
@@ -786,7 +786,7 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
             emit_error("pointerset: invalid pointer type", ctx);
             return NULL;
         }
-        if (val==NULL) val = emit_expr(x,ctx,true,true);
+        if (val==NULL) val = emit_expr(x,ctx,true,true,true);
         assert(val->getType() == jl_pvalue_llvmt); //Boxed
         assert(jl_is_datatype(ety));
         uint64_t size = ((jl_datatype_t*)ety)->size;
@@ -796,7 +796,7 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
     else {
         if (val == NULL) {
             if (ety == (jl_value_t*)jl_any_type)
-                val = emit_expr(x,ctx);
+                val = emit_expr(x,ctx,true);
             else
                 val = emit_unboxed(x,ctx);
         }
@@ -866,7 +866,7 @@ static Value *emit_smod(Value *x, Value *den, jl_codectx_t *ctx)
     case intr: if (nargs!=n) jl_error(#intr": wrong number of arguments");
 
 static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
-                             jl_codectx_t *ctx)
+                             jl_codectx_t *ctx, bool escapes)
 {
     switch (f) {
     case ccall: return emit_ccall(args, nargs, ctx);
@@ -965,12 +965,12 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         int argStart = ctx->argDepth;
         Value *ifelse_result;
         if (llt1 == jl_pvalue_llvmt && llt2 == jl_pvalue_llvmt) {
-            Value *arg1 = emit_expr(args[3], ctx, false);
+            Value *arg1 = emit_expr(args[3], ctx, escapes, false);
             if (arg1->getType() == jl_pvalue_llvmt)
                 make_gcroot(arg1, ctx);
             ifelse_result = builder.CreateSelect(isfalse,
                                                  arg1,
-                                                 emit_expr(args[2], ctx, false));
+                                                 emit_expr(args[2], ctx, escapes, false));
         }
         else if (t1 == t2 && llt1 == llt2 && llt1 != jl_pvalue_llvmt) {
             ifelse_result = builder.CreateSelect(isfalse,
@@ -978,11 +978,11 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                                                  auto_unbox(args[2], ctx));
         }
         else {
-            Value *arg1 = boxed(emit_expr(args[3],ctx,false), ctx, expr_type(args[3],ctx));
+            Value *arg1 = boxed(emit_expr(args[3],ctx,escapes,false), ctx, expr_type(args[3],ctx));
             make_gcroot(arg1, ctx);
             ifelse_result = builder.CreateSelect(isfalse,
                                                  arg1,
-                                                 boxed(emit_expr(args[2],ctx,false), ctx, expr_type(args[2],ctx)));
+                                                 boxed(emit_expr(args[2],ctx,escapes,false), ctx, expr_type(args[2],ctx)));
         }
         ctx->argDepth = argStart;
         return ifelse_result;
