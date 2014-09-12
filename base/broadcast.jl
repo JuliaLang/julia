@@ -277,6 +277,8 @@ end
 
 .*(As::AbstractArray...) = broadcast(*, As...)
 .%(A::AbstractArray, B::AbstractArray) = broadcast(%, A, B)
+.<<(A::AbstractArray, B::AbstractArray) = broadcast(<<, A, B)
+.>>(A::AbstractArray, B::AbstractArray) = broadcast(>>, A, B)
 
 eltype_plus(As::AbstractArray...) = promote_eltype(As...)
 eltype_plus(As::AbstractArray{Bool}...) = typeof(true+true)
