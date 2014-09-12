@@ -13,21 +13,14 @@ abstract AbstractRNG
 
 type MersenneTwister <: AbstractRNG
     state::DSFMT_state
-    seed::Union(Uint32,Vector{Uint32})
+    seed::Vector{Uint32}
 
-    function MersenneTwister(seed::Vector{Uint32})
+    function MersenneTwister(seed::Union(Integer,Vector{Uint32}))
         state = DSFMT_state()
-        dsfmt_init_by_array(state, seed)
-        return new(state, seed)
+        return srand(new(state), seed)
     end
 
-    MersenneTwister(seed=0) = MersenneTwister(make_seed(seed))
-end
-
-function srand(r::MersenneTwister, seed) 
-    r.seed = seed
-    dsfmt_init_gen_rand(r.state, seed)
-    return r
+    MersenneTwister() = MersenneTwister(make_seed(0))
 end
 
 ## initialization
@@ -59,11 +52,18 @@ __init__() = srand()
 
 ## srand()
 
-function srand(seed::Vector{Uint32})
-    global RANDOM_SEED = seed
-    dsfmt_gv_init_by_array(seed)
+function srand(seed::Union(Integer, Vector{Uint32}))
+    global RANDOM_SEED = make_seed(seed)
+    dsfmt_gv_init_by_array(RANDOM_SEED)
 end
-srand(n::Integer) = srand(make_seed(n))
+
+function srand(r::MersenneTwister, seed::Union(Integer, Vector{Uint32}))
+    r.seed = make_seed(seed)
+    dsfmt_init_by_array(r.state, r.seed)
+    return r
+end
+
+make_seed(seed::Vector{Uint32}) = seed
 
 function make_seed(n::Integer)
     n < 0 && throw(DomainError())
