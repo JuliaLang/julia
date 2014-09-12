@@ -1054,7 +1054,7 @@ function findnext(testf::Function, A, start::Integer)
 end
 findfirst(testf::Function, A) = findnext(testf, A, 1)
 
-function find(testf::Function, A::StridedArray)
+function find(testf::Function, A::AbstractArray)
     # use a dynamic-length array to store the indexes, then copy to a non-padded
     # array for the return
     tmpI = Array(Int, 0)
@@ -1063,7 +1063,7 @@ function find(testf::Function, A::StridedArray)
             push!(tmpI, i)
         end
     end
-    I = similar(A, Int, length(tmpI))
+    I = Array(Int, length(tmpI))
     copy!(I, tmpI)
     I
 end
@@ -1082,7 +1082,7 @@ function find(A::StridedArray)
 end
 
 find(x::Number) = x == 0 ? Array(Int,0) : [1]
-find(testf::Function, x) = find(testf(x))
+find(testf::Function, x::Number) = testf(x) == 0 ? Array(Int,0) : [1]
 
 findn(A::AbstractVector) = find(A)
 
