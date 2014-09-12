@@ -168,8 +168,11 @@ round {T<:Integer}(::Type{T}, x::FloatingPoint) = trunc(T,round(x))
 
 
 # this is needed very early because it is used by Range and colon
-round(x::Float64) = ccall((:round, Base.libm_name), Float64, (Float64,), x)
-floor(x::Float64) = ccall((:floor, Base.libm_name), Float64, (Float64,), x)
+function round(x::Float64)
+    y = trunc(x)
+    ifelse(x==y,y,trunc(2.0*x-y))
+end
+floor(x::Float64) = box(Float64,floor_llvm(unbox(Float64,x)))
 
 ## floating point promotions ##
 promote_rule(::Type{Float32}, ::Type{Float16}) = Float32
