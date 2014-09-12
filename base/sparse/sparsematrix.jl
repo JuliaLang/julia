@@ -178,33 +178,33 @@ function full{Tv}(S::SparseMatrixCSC{Tv})
 end
 
 function sortCSC!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti})
-  m, n = size(A)
+    m, n = size(A)
 
-  colptr = A.colptr; rowval = A.rowval; nzval = A.nzval
+    colptr = A.colptr; rowval = A.rowval; nzval = A.nzval
 
-	for i = 1:n
-  		col_start = colptr[i]
-		col_end = colptr[i+1] -1
+    for i = 1:n
+        col_start = colptr[i]
+        col_end = colptr[i+1] -1
  
-   		numrows = (col_end - col_start) +1;
-    	row = Array(Ti, numrows)
-      	val = Array(Tv, numrows)
+        numrows = (col_end - col_start) +1;
+        row = Array(Ti, numrows)
+        val = Array(Tv, numrows)
 
-      	jj = 1
-      	@simd for j = col_start:col_end
-        	@inbounds row[jj] = rowval[j]
-        	@inbounds val[jj] = nzval[j]
-        	jj += 1
-      	end
+        jj = 1
+        @simd for j = col_start:col_end
+            @inbounds row[jj] = rowval[j]
+            @inbounds val[jj] = nzval[j]
+            jj += 1
+        end
 
-      	index = sortperm(row)
+        index = sortperm(row)
 
-      	jj = 1;
-      	@simd for j = col_start:col_end
-        	@inbounds rowval[j] = row[index[jj]]
-        	@inbounds nzval[j] = val[index[jj]]
-        	jj += 1
-      	end
+        jj = 1;
+        @simd for j = col_start:col_end
+            @inbounds rowval[j] = row[index[jj]]
+            @inbounds nzval[j] = val[index[jj]]
+            jj += 1
+        end
     end
 end
 
