@@ -95,7 +95,7 @@ function rationalize{T<:Integer}(::Type{T}, x::FloatingPoint; tol::Real=eps(x))
         if y == 0 || ok(p, q)
             if n > 0 && f > 1
                 # check semi-convergents
-                u::T, v::T = iceil(f/2), f
+                u::T, v::T = iceil(T,f/2), f
                 p, q = u*a+c, u*b+d
                 ok(p, q) && return p//q
                 while u + 1 < v
