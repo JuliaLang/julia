@@ -3934,7 +3934,7 @@ Random number generation in Julia uses the `Mersenne Twister library <http://www
 
 .. function:: srand([rng], [seed])
 
-   Reseed the random number generator. If a ``seed`` is provided, the RNG will give a reproducible sequence of numbers, otherwise Julia will get entropy from the system. The ``seed`` may be an unsigned integer, a vector of unsigned integers or a filename, in which case the seed is read from a file. If the argument ``rng`` is not provided, the default global RNG is seeded.
+   Reseed the random number generator. If a ``seed`` is provided, the RNG will give a reproducible sequence of numbers, otherwise Julia will get entropy from the system. The ``seed`` may be a non-negative integer, a vector of ``Uint32`` integers or a filename, in which case the seed is read from a file. If the argument ``rng`` is not provided, the default global RNG is seeded.
 
 .. function:: MersenneTwister([seed])
 

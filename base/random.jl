@@ -20,16 +20,20 @@ type MersenneTwister <: AbstractRNG
         return srand(new(state), seed)
     end
 
-    MersenneTwister() = MersenneTwister(make_seed(0))
+    MersenneTwister() = MersenneTwister(0)
 end
 
 ## initialization
 
-function srand()
+__init__() = srand()
+
+## make_seed()
+
+function make_seed()
 
 @unix_only begin
     try
-        srand("/dev/urandom")
+        return make_seed("/dev/urandom", 4)
     catch
         println(STDERR, "Entropy pool not available to seed RNG; using ad-hoc entropy sources.")
         seed = reinterpret(Uint64, time())
@@ -37,30 +41,15 @@ function srand()
         try
         seed = hash(seed, parseint(Uint64, readall(`ifconfig` |> `sha1sum`)[1:40], 16))
         end
-        srand(seed)
+        return make_seed(seed)
     end
 end
 
 @windows_only begin
     a = zeros(Uint32, 2)
     win32_SystemFunction036!(a)
-    srand(a)
+    return make_seed(a)
 end
-end
-
-__init__() = srand()
-
-## srand()
-
-function srand(seed::Union(Integer, Vector{Uint32}))
-    global RANDOM_SEED = make_seed(seed)
-    dsfmt_gv_init_by_array(RANDOM_SEED)
-end
-
-function srand(r::MersenneTwister, seed::Union(Integer, Vector{Uint32}))
-    r.seed = make_seed(seed)
-    dsfmt_init_by_array(r.state, r.seed)
-    return r
 end
 
 make_seed(seed::Vector{Uint32}) = seed
@@ -77,14 +66,34 @@ function make_seed(n::Integer)
     end
 end
 
-function srand(filename::String, n::Integer)
+function make_seed(filename::String, n::Integer)
     open(filename) do io
         a = Array(Uint32, int(n))
         read!(io, a)
-        srand(a)
+        a
     end
 end
-srand(filename::String) = srand(filename, 4)
+
+## srand()
+
+srand() = srand(make_seed())
+
+srand(r::MersenneTwister) = srand(r, make_seed())
+
+function srand(seed::Union(Integer, Vector{Uint32}))
+    global RANDOM_SEED = make_seed(seed)
+    dsfmt_gv_init_by_array(RANDOM_SEED)
+end
+
+function srand(r::MersenneTwister, seed::Union(Integer, Vector{Uint32}))
+    r.seed = make_seed(seed)
+    dsfmt_init_by_array(r.state, r.seed)
+    return r
+end
+
+srand(filename::String, n::Integer=4) = srand(make_seed(filename, n))
+
+srand(r::MersenneTwister, filename::String, n::Integer=4) = srand(r, make_seed(filename, n))
 
 ## random floating point values
 
