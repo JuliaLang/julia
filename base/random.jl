@@ -50,15 +50,18 @@ function srand(r::MersenneTwister, seed::Vector{Uint32})
     return r
 end
 
-srand(r::MersenneTwister, n::Integer) = srand(r, make_seed(n))
-
 ## initialization
 
-function srand()
+__init__() = srand()
+
+## make_seed()
+# make_seed methods produce values of type Array{Uint32}, suitable for MersenneTwister seeding
+
+function make_seed()
 
 @unix_only begin
     try
-        srand("/dev/urandom")
+        return make_seed("/dev/urandom", 4)
     catch
         println(STDERR, "Entropy pool not available to seed RNG; using ad-hoc entropy sources.")
         seed = reinterpret(Uint64, time())
@@ -66,22 +69,16 @@ function srand()
         try
         seed = hash(seed, parseint(Uint64, readall(`ifconfig` |> `sha1sum`)[1:40], 16))
         end
-        srand(seed)
+        return make_seed(seed)
     end
 end
 
 @windows_only begin
     a = zeros(Uint32, 2)
     win32_SystemFunction036!(a)
-    srand(a)
+    return a
 end
 end
-
-__init__() = srand()
-
-## srand()
-
-srand(seed::Union(Integer, Vector{Uint32})) = srand(GLOBAL_RNG, seed)
 
 function make_seed(n::Integer)
     n < 0 && throw(DomainError())
@@ -95,14 +92,23 @@ function make_seed(n::Integer)
     end
 end
 
-function srand(filename::String, n::Integer)
+function make_seed(filename::String, n::Integer)
     open(filename) do io
         a = Array(Uint32, int(n))
         read!(io, a)
-        srand(a)
+        a
     end
 end
-srand(filename::String) = srand(filename, 4)
+
+## srand()
+
+srand(r::MersenneTwister) = srand(r, make_seed())
+srand(r::MersenneTwister, n::Integer) = srand(r, make_seed(n))
+srand(r::MersenneTwister, filename::String, n::Integer=4) = srand(r, make_seed(filename, n))
+
+srand() = srand(GLOBAL_RNG)
+srand(seed::Union(Integer, Vector{Uint32})) = srand(GLOBAL_RNG, seed)
+srand(filename::String, n::Integer=4) = srand(GLOBAL_RNG, filename, n)
 
 ## Global RNG
 
