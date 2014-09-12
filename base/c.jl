@@ -61,6 +61,8 @@ end
 typealias Cptrdiff_t Int
 typealias Csize_t Uint
 typealias Cssize_t Int
+typealias Cintmax_t Int64
+typealias Cuintmax_t Uint64
 typealias Clonglong Int64
 typealias Culonglong Uint64
 typealias Cfloat Float32
