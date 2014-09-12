@@ -425,7 +425,7 @@ the method name and before the parameter tuple:
 The first method applies whenever both arguments are of the same
 concrete type, regardless of what type that is, while the second method
 acts as a catch-all, covering all other cases. Thus, overall, this
-defines a boolean function that checks whether its two arguments are of
+defines a Boolean function that checks whether its two arguments are of
 the same type:
 
 .. doctest::

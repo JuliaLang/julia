@@ -75,7 +75,7 @@ Conditional Evaluation
 ----------------------
 
 Conditional evaluation allows portions of code to be evaluated or not
-evaluated depending on the value of a boolean expression. Here is the
+evaluated depending on the value of a Boolean expression. Here is the
 anatomy of the ``if``-``elseif``-``else`` conditional syntax::
 
     if x < y
@@ -215,9 +215,9 @@ Short-Circuit Evaluation
 
 Short-circuit evaluation is quite similar to conditional evaluation. The
 behavior is found in most imperative programming languages having the
-``&&`` and ``||`` boolean operators: in a series of boolean expressions
+``&&`` and ``||`` Boolean operators: in a series of Boolean expressions
 connected by these operators, only the minimum number of expressions are
-evaluated as are necessary to determine the final boolean value of the
+evaluated as are necessary to determine the final Boolean value of the
 entire chain. Explicitly, this means that:
 
 -  In the expression ``a && b``, the subexpression ``b`` is only
@@ -308,7 +308,7 @@ For example, a recursive factorial routine could be defined like this:
 
 
 Boolean operations *without* short-circuit evaluation can be done with the
-bitwise boolean operators introduced in :ref:`man-mathematical-operations`:
+bitwise Boolean operators introduced in :ref:`man-mathematical-operations`:
 ``&`` and ``|``. These are normal functions, which happen to support
 infix operator syntax, but always evaluate their arguments:
 
@@ -325,8 +325,8 @@ infix operator syntax, but always evaluate their arguments:
     true
 
 Just like condition expressions used in ``if``, ``elseif`` or the
-ternary operator, the operands of ``&&`` or ``||`` must be boolean
-values (``true`` or ``false``). Using a non-boolean value anywhere 
+ternary operator, the operands of ``&&`` or ``||`` must be Boolean
+values (``true`` or ``false``). Using a non-Boolean value anywhere 
 except for the last entry in a conditional chain is an error:
 
 .. doctest::

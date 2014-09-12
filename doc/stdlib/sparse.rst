@@ -65,7 +65,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
 .. function:: sprandbool(m,n,p)
 
-   Create a random ``m`` by ``n`` sparse boolean matrix with the specified (independent) probability ``p`` of any entry being ``true``.
+   Create a random ``m`` by ``n`` sparse Boolean matrix with the specified (independent) probability ``p`` of any entry being ``true``.
 
 .. function:: etree(A[, post])
 

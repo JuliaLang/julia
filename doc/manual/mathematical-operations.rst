@@ -266,13 +266,13 @@ comparisons can be arbitrarily chained:
 Chaining comparisons is often quite convenient in numerical code.
 Chained comparisons use the ``&&`` operator for scalar comparisons,
 and the ``&`` operator for elementwise comparisons, which allows them to
-work on arrays. For example, ``0 .< A .< 1`` gives a boolean array whose
+work on arrays. For example, ``0 .< A .< 1`` gives a Boolean array whose
 entries are true where the corresponding elements of ``A`` are between 0
 and 1.
 
 The operator ``.<`` is intended for array objects; the operation
 ``A .< B`` is valid only if ``A`` and ``B`` have the same dimensions.  The
-operator returns an array with boolean entries and with the same dimensions
+operator returns an array with Boolean entries and with the same dimensions
 as ``A`` and ``B``.  Such operators are called *elementwise*; Julia offers a
 suite of elementwise operators: ``.*``, ``.+``, etc.  Some of the elementwise
 operators can take a scalar operand such as the example ``0 .< A .< 1`` in
