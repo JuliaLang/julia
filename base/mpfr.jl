@@ -93,8 +93,8 @@ for to in (Int8, Int16, Int32, Int64)
     @eval begin
         function convert(::Type{$to}, x::BigFloat)
             (isinteger(x) && (typemin($to) <= x <= typemax($to))) || throw(InexactError())
-            convert($to, ccall((:mpfr_get_si,:libmpfr),
-                               Clong, (Ptr{BigFloat}, Int32), &x, 0))
+            convert($to, ccall((:__gmpfr_mpfr_get_sj,:libmpfr),
+                               Cintmax_t, (Ptr{BigFloat}, Int32), &x, 0))
         end
     end
 end
@@ -103,8 +103,8 @@ for to in (Uint8, Uint16, Uint32, Uint64)
     @eval begin
         function convert(::Type{$to}, x::BigFloat)
             (isinteger(x) && (typemin($to) <= x <= typemax($to))) || throw(InexactError())
-            convert($to, ccall((:mpfr_get_ui,:libmpfr),
-                               Culong, (Ptr{BigFloat}, Int32), &x, 0))
+            convert($to, ccall((:__gmpfr_mpfr_get_uj,:libmpfr),
+                               Cuintmax_t, (Ptr{BigFloat}, Int32), &x, 0))
         end
     end
 end
