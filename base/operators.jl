@@ -96,6 +96,8 @@ end
 .^(x::Number,y::Number) = x^y
 .+(x::Number,y::Number) = x+y
 .-(x::Number,y::Number) = x-y
+.<<(x::Number,y::Number) = x<<y
+.>>(x::Number,y::Number) = x>>y
 
 .==(x::Number,y::Number) = x == y
 .!=(x::Number,y::Number) = x != y
