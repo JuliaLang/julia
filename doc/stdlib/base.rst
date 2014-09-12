@@ -26,7 +26,7 @@ Getting Around
 
 .. function:: quit()
 
-   Quit the program indicating that the processes completed succesfully. This function calls ``exit(0)`` (see :func:`exit`).
+   Quit the program indicating that the processes completed successfully. This function calls ``exit(0)`` (see :func:`exit`).
 
 .. function:: atexit(f)
 
@@ -1015,7 +1015,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 
 .. function:: delete!(collection, key)
 
-   Delete the mapping for the given key in a collection, and return the colection.
+   Delete the mapping for the given key in a collection, and return the collection.
 
 .. function:: pop!(collection, key[, default])
 
@@ -1334,7 +1334,7 @@ Strings
 
 .. function:: search(string, chars, [start])
 
-   Search for the first occurance of the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (though regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a range of indexes where the matching sequence is found, such that ``s[search(s,x)] == x``:
+   Search for the first occurrence of the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (though regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a range of indexes where the matching sequence is found, such that ``s[search(s,x)] == x``:
    
    ``search(string, "substring")`` = ``start:end`` such that ``string[start:end] == "substring"``, or ``0:-1`` if unmatched.
    
@@ -1342,7 +1342,7 @@ Strings
 
 .. function:: rsearch(string, chars, [start])
 
-   Similar to ``search``, but returning the last occurance of the given characters within the given string, searching in reverse from ``start``.
+   Similar to ``search``, but returning the last occurrence of the given characters within the given string, searching in reverse from ``start``.
 
 .. function:: searchindex(string, substring, [start])
 
@@ -1882,7 +1882,7 @@ I/O
     uid       The user id of the owner of the file
     gid       The group id of the file owner
     rdev      If this file refers to a device, the ID of the device it refers to 
-    blksize   The file-system preffered block size for the file
+    blksize   The file-system preferred block size for the file
     blocks    The number of such blocks allocated
     mtime     Unix timestamp of when the file was last modified
     ctime     Unix timestamp of when the file was created
@@ -2221,7 +2221,7 @@ Julia environments (such as the IPython-based IJulia notebook).
 
    There are also two variants with a ``mime`` argument (a MIME type
    string, such as ``"image/png"``), which attempt to display ``x`` using the
-   requesed MIME type *only*, throwing a ``MethodError`` if this type
+   requested MIME type *only*, throwing a ``MethodError`` if this type
    is not supported by either the display(s) or by ``x``.   With these
    variants, one can also supply the "raw" data in the requested MIME
    type by passing ``x::String`` (for MIME types with text-based storage,
@@ -3892,7 +3892,7 @@ Integers
 
 BigFloats
 ---------
-The `BigFloat` type implements arbitrary-precision floating-point aritmetic using the `GNU MPFR library <http://www.mpfr.org/>`_.
+The `BigFloat` type implements arbitrary-precision floating-point arithmetic using the `GNU MPFR library <http://www.mpfr.org/>`_.
 
 .. function:: precision(num::FloatingPoint)
 
@@ -3922,7 +3922,7 @@ Random number generation in Julia uses the `Mersenne Twister library <http://www
 
 .. function:: srand([rng], [seed])
 
-   Reseed the random number generator. If a ``seed`` is provided, the RNG wil give a reproducable sequence of numbers, otherwise Julia will get entropy from the system. The ``seed`` may be an unsigned integer, a vector of unsigned integers or a filename, in which case the seed is read from a file. If the argument ``rng`` is not provided, the default global RNG is seeded.
+   Reseed the random number generator. If a ``seed`` is provided, the RNG will give a reproducible sequence of numbers, otherwise Julia will get entropy from the system. The ``seed`` may be an unsigned integer, a vector of unsigned integers or a filename, in which case the seed is read from a file. If the argument ``rng`` is not provided, the default global RNG is seeded.
 
 .. function:: MersenneTwister([seed])
 
@@ -4468,7 +4468,7 @@ Combinatorics
    Generate all integer arrays that sum to ``n``. Because the number of
    partitions can be very large, this function returns an iterator
    object. Use ``collect(partitions(n))`` to get an array of all
-   partitions. The number of partitions to generete can be efficiently
+   partitions. The number of partitions to generate can be efficiently
    computed using ``length(partitions(n))``.
 
 .. function:: partitions(n, m)
@@ -4476,7 +4476,7 @@ Combinatorics
    Generate all arrays of ``m`` integers that sum to ``n``. Because
    the number of partitions can be very large, this function returns an
    iterator object. Use ``collect(partitions(n,m))`` to get an array of
-   all partitions. The number of partitions to generete can be efficiently
+   all partitions. The number of partitions to generate can be efficiently
    computed using ``length(partitions(n,m))``.
 
 .. function:: partitions(array)
@@ -4485,7 +4485,7 @@ Combinatorics
    represented as arrays of arrays. Because the number of partitions
    can be very large, this function returns an iterator object. Use
    ``collect(partitions(array))`` to get an array of all partitions.
-   The number of partitions to generete can be efficiently
+   The number of partitions to generate can be efficiently
    computed using ``length(partitions(array))``.
 
 .. function:: partitions(array, m)
@@ -5217,7 +5217,7 @@ Distributed Arrays
    Construct a distributed array. The parameter ``init`` is a function that accepts a tuple of index ranges. 
    This function should allocate a local chunk of the distributed array and initialize it for the specified indices. 
    ``dims`` is the overall size of the distributed array. ``procs`` optionally specifies a vector of process IDs to use. 
-   If unspecified, the array is distributed over all worker processes only. Typically, when runnning in distributed mode,
+   If unspecified, the array is distributed over all worker processes only. Typically, when running in distributed mode,
    i.e., ``nprocs() > 1``, this would mean that no chunk of the distributed array exists on the process hosting the 
    interactive julia prompt.
    ``dist`` is an integer vector specifying how many chunks the distributed array should be divided into in each dimension.
