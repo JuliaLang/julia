@@ -3920,9 +3920,9 @@ Random Numbers
 
 Random number generation in Julia uses the `Mersenne Twister library <http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT>`_. Julia has a global RNG, which is used by default. Multiple RNGs can be plugged in using the ``AbstractRNG`` object, which can then be used to have multiple streams of random numbers. Currently, only ``MersenneTwister`` is supported.
 
-.. function:: srand([rng], seed)
+.. function:: srand([rng], [seed])
 
-   Seed the RNG with a ``seed``, which may be an unsigned integer or a vector of unsigned integers. ``seed`` can even be a filename, in which case the seed is read from a file. If the argument ``rng`` is not provided, the default global RNG is seeded.
+   Reseed the random number generator. If a ``seed`` is provided, the RNG wil give a reproducable sequence of numbers, otherwise Julia will get entropy from the system. The ``seed`` may be an unsigned integer, a vector of unsigned integers or a filename, in which case the seed is read from a file. If the argument ``rng`` is not provided, the default global RNG is seeded.
 
 .. function:: MersenneTwister([seed])
 
