@@ -32,7 +32,7 @@ end
 
 ## initialization
 
-function __init__()
+function srand()
 
 @unix_only begin
     try
@@ -54,6 +54,8 @@ end
     srand(a)
 end
 end
+
+__init__() = srand()
 
 ## srand()
 
