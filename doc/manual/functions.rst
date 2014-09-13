@@ -471,14 +471,14 @@ signature::
 Extra keyword arguments can be collected using ``...``, as in varargs
 functions::
 
-    function f(x; args...)
+    function f(x; y=0, args...)
         ###
     end
 
 Inside ``f``, ``args`` will be a collection of ``(key,value)`` tuples,
 where each ``key`` is a symbol. Such collections can be passed as keyword
-arguments using a semicolon in a call, ``f(x; k...)``. Dictionaries
-can be used for this purpose.
+arguments using a semicolon in a call, e.g. ``f(x, z=1; args...)``.
+Dictionaries can be used for this purpose.
 
 Keyword argument default values are evaluated only when necessary
 (when a corresponding keyword argument is not passed), and in
