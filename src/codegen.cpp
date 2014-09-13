@@ -439,7 +439,9 @@ void jl_dump_objfile(char *fname, int jit_model)
 
     PassManager PM;
     PM.add(new TargetLibraryInfo(Triple(jl_TargetMachine->getTargetTriple())));
-#ifdef LLVM35
+#ifdef LLVM36
+    PM.add(new DataLayoutPass());
+#elif LLVM35
     PM.add(new DataLayoutPass(*jl_ExecutionEngine->getDataLayout()));
 #else
     PM.add(new DataLayout(*jl_ExecutionEngine->getDataLayout()));
@@ -624,6 +626,10 @@ static void jl_setup_module(Module *m, bool add)
 #ifdef LLVM34
     m->addModuleFlag(llvm::Module::Error, "Debug Info Version",
         llvm::DEBUG_METADATA_VERSION);
+#endif
+#ifdef LLVM36
+    if (jl_ExecutionEngine)
+        m->setDataLayout(jl_ExecutionEngine->getDataLayout());
 #endif
     if (add) {
 #ifdef LLVM36
@@ -4478,7 +4484,9 @@ static void init_julia_llvm_env(Module *m)
     // set up optimization passes
     FPM = new FunctionPassManager(m);
     
-#ifdef LLVM35
+#ifdef LLVM36
+    jl_data_layout = new llvm::DataLayoutPass();
+#elif LLVM35
     jl_data_layout = new llvm::DataLayoutPass(*jl_ExecutionEngine->getDataLayout());
 #elif defined(LLVM32)
     jl_data_layout = new DataLayout(*jl_ExecutionEngine->getDataLayout());
@@ -4681,6 +4689,11 @@ extern "C" void jl_init_codegen(void)
 #endif // LLVM VERSION
     jl_ExecutionEngine->DisableLazyCompilation();
     mbuilder = new MDBuilder(getGlobalContext());
+
+#ifdef LLVM36
+    m->setDataLayout(jl_ExecutionEngine->getDataLayout());
+    engine_module->setDataLayout(jl_ExecutionEngine->getDataLayout());
+#endif
 
     init_julia_llvm_env(m);
 
