@@ -30,6 +30,11 @@ Library improvements
 
   * Efficient `mean` and `median` for ranges ([#8089]).
 
+  * Character predicates such as `islower()`, `isspace()`, etc. use utf8proc/libmojibake
+    to provide uniform cross-platform behavior and up-to-date, locale-independent support
+    for Unicode standards ([#5939]).
+
+
 Julia v0.3.0 Release Notes
 ==========================
 
@@ -904,6 +909,7 @@ Too numerous to mention.
 [#5832]: https://github.com/JuliaLang/julia/issues/5832
 [#5927]: https://github.com/JuliaLang/julia/issues/5927
 [#5936]: https://github.com/JuliaLang/julia/issues/5936
+[#5939]: https://github.com/JuliaLang/julia/issues/5939
 [#5970]: https://github.com/JuliaLang/julia/issues/5970
 [#6056]: https://github.com/JuliaLang/julia/issues/6056
 [#6057]: https://github.com/JuliaLang/julia/issues/6057

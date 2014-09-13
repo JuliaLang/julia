@@ -541,21 +541,9 @@ strwidth(s::String) = (w=0; for c in s; w += charwidth(c); end; w)
 strwidth(s::ByteString) = int(ccall(:u8_strwidth, Csize_t, (Ptr{Uint8},), s.data))
 # TODO: implement and use u8_strnwidth that takes a length argument
 
-## libc character class predicates ##
-
 isascii(c::Char) = c < 0x80
 isascii(s::String) = all(isascii, s)
 isascii(s::ASCIIString) = true
-
-for name = ("alnum", "alpha", "cntrl", "digit", "graph",
-            "lower", "print", "punct", "space", "upper")
-    f = symbol(string("is",name))
-    @eval ($f)(c::Char) = bool(ccall($(string("isw",name)), Int32, (Cwchar_t,), c))
-    @eval $f(s::String) = all($f, s)
-end
-
-isblank(c::Char) = c==' ' || c=='\t'
-isblank(s::String) = all(isblank, s)
 
 ## generic string uses only endof and next ##
 
@@ -987,7 +975,7 @@ end
 function indentation(s::String)
     count = 0
     for c in s
-        if isblank(c)
+        if c == ' ' || c == '\t'
             count += blank_width(c)
         else
             return count, false
@@ -1005,7 +993,7 @@ function unindent(s::String, indent::Int)
     cut = 0
     while !done(s,i)
         c,i_ = next(s,i)
-        if cutting && isblank(c)
+        if cutting && (c == ' ' || c == '\t')
             a = i_
             cut += blank_width(c)
             if cut == indent

@@ -1453,27 +1453,27 @@ Strings
 .. function:: isalnum(c::Union(Char,String)) -> Bool
 
    Tests whether a character is alphanumeric, or whether this
-   is true for all elements of a string.
+   is true for all elements of a string.  A character is classified as alphabetic
+   if it belongs to the Unicode general category Letter or Number, i.e. a character whose
+   category code begins with 'L' or 'N'.
 
 .. function:: isalpha(c::Union(Char,String)) -> Bool
 
    Tests whether a character is alphabetic, or whether this
-   is true for all elements of a string.
+   is true for all elements of a string. A character is classified as alphabetic
+   if it belongs to the Unicode general category Letter, i.e. a character whose
+   category code begins with 'L'.
 
 .. function:: isascii(c::Union(Char,String)) -> Bool
 
    Tests whether a character belongs to the ASCII character set, or whether this
    is true for all elements of a string.
 
-.. function:: isblank(c::Union(Char,String)) -> Bool
-
-   Tests whether a character is a tab or space, or whether this
-   is true for all elements of a string.
-
 .. function:: iscntrl(c::Union(Char,String)) -> Bool
 
    Tests whether a character is a control character, or whether this
-   is true for all elements of a string.
+   is true for all elements of a string.  Control characters are the
+   non-printing characters of the Latin-1 subset of Unicode.
 
 .. function:: isdigit(c::Union(Char,String)) -> Bool
 
@@ -1483,32 +1483,39 @@ Strings
 .. function:: isgraph(c::Union(Char,String)) -> Bool
 
    Tests whether a character is printable, and not a space, or whether this
-   is true for all elements of a string.
+   is true for all elements of a string.  Any character that would cause a printer
+   to use ink should be classified with isgraph(c)==true.
 
 .. function:: islower(c::Union(Char,String)) -> Bool
 
    Tests whether a character is a lowercase letter, or whether this
-   is true for all elements of a string.
+   is true for all elements of a string.  A character is classified as lowercase
+   if it belongs to Unicode category Ll, Letter: Lowercase.
+
+.. function:: isnumber(c::Union(Char,String)) -> Bool
+
+   Tests whether a character is numeric, or whether this
+   is true for all elements of a string.   A character is classified as numeric
+   if it belongs to the Unicode general category Number, i.e. a character whose
+   category code begins with 'N'.
 
 .. function:: isprint(c::Union(Char,String)) -> Bool
 
-   Tests whether a character is printable, including space, or whether this
-   is true for all elements of a string.
+   Tests whether a character is printable, including spaces, but not a control character. For strings, tests whether this is true for all elements of the string.
 
 .. function:: ispunct(c::Union(Char,String)) -> Bool
 
-   Tests whether a character is printable, and not a space or
-   alphanumeric, or whether this is true for all elements of a string.
+   Tests whether a character belongs to the Unicode general category Punctuation, i.e. a character whose category code begins with 'P'. For strings, tests whether this is true for all elements of the string.
 
 .. function:: isspace(c::Union(Char,String)) -> Bool
 
-   Tests whether a character is any whitespace character, or whether this
-   is true for all elements of a string.
+   Tests whether a character is any whitespace character.  Includes ASCII characters '\t', '\n', '\v', '\f', '\r', and ' ', Latin-1 character U+0085, and characters in Unicode category Zs.  For strings, tests whether this    is true for all elements of the string.
 
 .. function:: isupper(c::Union(Char,String)) -> Bool
 
    Tests whether a character is an uppercase letter, or whether this
-   is true for all elements of a string.
+   is true for all elements of a string.    A character is classified as uppercase
+   if it belongs to Unicode category Lu, Letter: Uppercase, or Lt, Letter: Titlecase.
 
 .. function:: isxdigit(c::Union(Char,String)) -> Bool
 
