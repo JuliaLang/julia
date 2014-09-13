@@ -1,6 +1,17 @@
-# Issue #6573
-srand(0); rand(); x = rand(384);
-@test find(x .== rand()) == []
+## Non-deterministic tests
+#  deterministic tests (using srand) should go at the end of the file
+
+using Base.Random.RANDOM_SEED
+
+srand()
+# bugs (failed tests) are still reproducible, provided that each test calls
+# `rand` a deterministic (once global RNG state is known) number of times
+# (e.g. not based on `time()`)
+let seed = rand(Uint128)
+    # change seed to the printed value for reproducing (failed) tests
+    srand(seed)
+    println("Running random tests with seed: 0x", hex(seed))
+end
 
 @test rand() != rand()
 @test 0.0 <= rand() < 1.0
@@ -141,25 +152,25 @@ randmtzig_fill_ziggurat_tables()
 @test all(we == Base.Random.we)
 @test all(fe == Base.Random.fe)
 
-#same random numbers on for small ranges on all systems
 
-seed = rand(Uint) #leave state nondeterministic as above
-srand(seed)
+# same random numbers for small ranges on all systems
+
+srand(RANDOM_SEED)
 r = int64(rand(int32(97:122)))
-srand(seed)
+srand(RANDOM_SEED)
 @test r == rand(int64(97:122))
 
-srand(seed)
+srand(RANDOM_SEED)
 r = uint64(rand(uint32(97:122)))
-srand(seed)
+srand(RANDOM_SEED)
 @test r == rand(uint64(97:122))
 
 @test all([div(0x000100000000,k)*k - 1 == Base.Random.RandIntGen(uint64(1:k)).u for k in 13 .+ int64(2).^(1:30)])
 @test all([div(0x000100000000,k)*k - 1 == Base.Random.RandIntGen(int64(1:k)).u for k in 13 .+ int64(2).^(1:30)])
 
-import Base.Random: uuid4, UUID
-
 # UUID
+using Base.Random: uuid4, UUID
+
 a = uuid4()
 @test a == UUID(string(a)) == UUID(utf16(string(a))) == UUID(utf32(string(a)))
 @test_throws ArgumentError UUID("550e8400e29b-41d4-a716-446655440000")
@@ -171,3 +182,9 @@ i8257 = 1:1/3:100
 for i = 1:100
     @test rand(i8257) in i8257
 end
+
+## Deterministic tests
+
+# Issue #6573
+srand(0); rand(); x = rand(384);
+@test find(x .== rand()) == []
