@@ -242,7 +242,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 [OpenBLAS]:     https://github.com/xianyi/OpenBLAS
 [LAPACK]:       http://www.netlib.org/lapack/
 [MKL]:          http://software.intel.com/en-us/articles/intel-mkl/
-[SuiteSparse]:  http://www.cise.ufl.edu/research/sparse/SuiteSparse/
+[SuiteSparse]:  http://faculty.cse.tamu.edu/davis/suitesparse.html
 [AMOS]:         http://netlib.org/amos
 [ARPACK]:       http://forge.scilab.org/index.php/p/arpack-ng/
 [FFTW]:         http://www.fftw.org/
