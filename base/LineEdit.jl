@@ -927,6 +927,8 @@ function history_set_backward(s::SearchState, backward)
     s.backward = backward
 end
 
+input_string(s::SearchState) = bytestring(pointer(s.query_buffer.data), s.query_buffer.size)
+
 refresh_multi_line(termbuf::TerminalBuffer, term, s::Union(SearchState,PromptState)) = (@assert term == terminal(s); refresh_multi_line(termbuf,s))
 function refresh_multi_line(termbuf::TerminalBuffer, s::SearchState)
     buf = IOBuffer()
