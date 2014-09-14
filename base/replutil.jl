@@ -1,5 +1,5 @@
 # fallback text/plain representation of any type:
-writemime(io, ::MIME"text/plain", x) = showlimited(io, x)
+writemime(io::IO, ::MIME"text/plain", x) = showlimited(io, x)
 
 function writemime(io::IO, ::MIME"text/plain", f::Function)
     if isgeneric(f)
