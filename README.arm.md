@@ -31,3 +31,8 @@ Crouton, you can do so by following these tutorials.
 
 - [Crouton Tutorial 1](http://www.howtogeek.com/162120/how-to-install-ubuntu-linux-on-your-chromebook-with-crouton/)
 - [Crouton Tutorial 2](http://lifehacker.com/how-to-install-linux-on-a-chromebook-and-unlock-its-ful-509039343)
+
+# Known ARM issues
+
+- This is the list of known issues on ARM: [https://github.com/JuliaLang/julia/labels/arm](https://github.com/JuliaLang/julia/labels/arm)
+
