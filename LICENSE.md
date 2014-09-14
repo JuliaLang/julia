@@ -35,7 +35,7 @@ own licenses:
 - [LIBUNWIND](http://git.savannah.gnu.org/gitweb/?p=libunwind.git;a=blob_plain;f=LICENSE;hb=master)
 - [LIBUV](https://github.com/joyent/libuv/blob/master/LICENSE)
 - [LLVM](http://llvm.org/releases/3.3/LICENSE.TXT)
-- [LIBMOJIBAKE](https://github.com/JuliaLang/libmojibake)
+- [UTF8PROC](http://www.public-software-group.org/utf8proc)
 
 
 Julia's standard library uses the following external libraries, which have
