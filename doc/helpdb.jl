@@ -12,7 +12,7 @@
 ("Base","quit","quit()
 
    Quit the program indicating that the processes completed
-   succesfully. This function calls \"exit(0)\" (see \"exit()\").
+   successfully. This function calls \"exit(0)\" (see \"exit()\").
 
 "),
 
@@ -1402,7 +1402,7 @@
 ("Base","delete!","delete!(collection, key)
 
    Delete the mapping for the given key in a collection, and return
-   the colection.
+   the collection.
 
 "),
 
@@ -1874,7 +1874,7 @@
 
 ("Base","search","search(string, chars[, start])
 
-   Search for the first occurance of the given characters within the
+   Search for the first occurrence of the given characters within the
    given string. The second argument may be a single character, a
    vector or a set of characters, a string, or a regular expression
    (though regular expressions are only allowed on contiguous strings,
@@ -1893,7 +1893,7 @@
 
 ("Base","rsearch","rsearch(string, chars[, start])
 
-   Similar to \"search\", but returning the last occurance of the
+   Similar to \"search\", but returning the last occurrence of the
    given characters within the given string, searching in reverse from
    \"start\".
 
@@ -2758,7 +2758,7 @@
    +-----------+------------------------------------------------------------------------+
    | rdev      | If this file refers to a device, the ID of the device it refers to     |
    +-----------+------------------------------------------------------------------------+
-   | blksize   | The file-system preffered block size for the file                      |
+   | blksize   | The file-system preferred block size for the file                      |
    +-----------+------------------------------------------------------------------------+
    | blocks    | The number of such blocks allocated                                    |
    +-----------+------------------------------------------------------------------------+
@@ -3080,9 +3080,16 @@
 
 "),
 
-("Base","readall","readall(stream)
+("Base","readall","readall(stream::IO)
 
    Read the entire contents of an I/O stream as a string.
+
+"),
+
+("Base","readall","readall(filename::String)
+
+   Open \"filename\", read the entire contents as a string, then close
+   the file. Equivalent to \"open(readall, filename)\".
 
 "),
 
@@ -3260,7 +3267,7 @@ display(d::Display, mime, x)
 
    There are also two variants with a \"mime\" argument (a MIME type
    string, such as \"\"image/png\"\"), which attempt to display \"x\"
-   using the requesed MIME type *only*, throwing a \"MethodError\" if
+   using the requested MIME type *only*, throwing a \"MethodError\" if
    this type is not supported by either the display(s) or by \"x\".
    With these variants, one can also supply the \"raw\" data in the
    requested MIME type by passing \"x::String\" (for MIME types with
@@ -5661,12 +5668,14 @@ popdisplay(d::Display)
 
 "),
 
-("Base","srand","srand([rng], seed)
+("Base","srand","srand([rng][, seed])
 
-   Seed the RNG with a \"seed\", which may be an unsigned integer or a
-   vector of unsigned integers. \"seed\" can even be a filename, in
-   which case the seed is read from a file. If the argument \"rng\" is
-   not provided, the default global RNG is seeded.
+   Reseed the random number generator. If a \"seed\" is provided, the
+   RNG will give a reproducible sequence of numbers, otherwise Julia
+   will get entropy from the system. The \"seed\" may be an unsigned
+   integer, a vector of unsigned integers or a filename, in which case
+   the seed is read from a file. If the argument \"rng\" is not
+   provided, the default global RNG is seeded.
 
 "),
 
@@ -5715,9 +5724,8 @@ popdisplay(d::Display)
 
 ("Base","rand","rand(r[, dims...])
 
-   Generate a random integer from the inclusive interval specified by
-   \"Range1 r\" (for example, \"1:n\"). Optionally, generate a random
-   integer array.
+   Generate a random integer in the range \"r\" (for example, \"1:n\"
+   or \"0:2:10\"). Optionally, generate a random integer array.
 
 "),
 
@@ -6233,46 +6241,47 @@ popdisplay(d::Display)
 
 ("Base","cumprod","cumprod(A[, dim])
 
-   Cumulative product along a dimension.
+   Cumulative product along a dimension. The dimension defaults to 1.
 
 "),
 
 ("Base","cumprod!","cumprod!(B, A[, dim])
 
    Cumulative product of \"A\" along a dimension, storing the result
-   in \"B\".
+   in \"B\". The dimension defaults to 1.
 
 "),
 
 ("Base","cumsum","cumsum(A[, dim])
 
-   Cumulative sum along a dimension.
+   Cumulative sum along a dimension. The dimension defaults to 1.
 
 "),
 
 ("Base","cumsum!","cumsum!(B, A[, dim])
 
    Cumulative sum of \"A\" along a dimension, storing the result in
-   \"B\".
+   \"B\". The dimension defaults to 1.
 
 "),
 
 ("Base","cumsum_kbn","cumsum_kbn(A[, dim])
 
    Cumulative sum along a dimension, using the Kahan-Babuska-Neumaier
-   compensated summation algorithm for additional accuracy.
+   compensated summation algorithm for additional accuracy. The
+   dimension defaults to 1.
 
 "),
 
 ("Base","cummin","cummin(A[, dim])
 
-   Cumulative minimum along a dimension.
+   Cumulative minimum along a dimension. The dimension defaults to 1.
 
 "),
 
 ("Base","cummax","cummax(A[, dim])
 
-   Cumulative maximum along a dimension.
+   Cumulative maximum along a dimension. The dimension defaults to 1.
 
 "),
 
@@ -6487,7 +6496,7 @@ popdisplay(d::Display)
    Generate all integer arrays that sum to \"n\". Because the number
    of partitions can be very large, this function returns an iterator
    object. Use \"collect(partitions(n))\" to get an array of all
-   partitions. The number of partitions to generete can be efficiently
+   partitions. The number of partitions to generate can be efficiently
    computed using \"length(partitions(n))\".
 
 "),
@@ -6497,7 +6506,7 @@ popdisplay(d::Display)
    Generate all arrays of \"m\" integers that sum to \"n\". Because
    the number of partitions can be very large, this function returns
    an iterator object. Use \"collect(partitions(n,m))\" to get an
-   array of all partitions. The number of partitions to generete can
+   array of all partitions. The number of partitions to generate can
    be efficiently computed using \"length(partitions(n,m))\".
 
 "),
@@ -6508,7 +6517,7 @@ popdisplay(d::Display)
    represented as arrays of arrays. Because the number of partitions
    can be very large, this function returns an iterator object. Use
    \"collect(partitions(array))\" to get an array of all partitions.
-   The number of partitions to generete can be efficiently computed
+   The number of partitions to generate can be efficiently computed
    using \"length(partitions(array))\".
 
 "),
@@ -7446,7 +7455,7 @@ popdisplay(d::Display)
    specified indices. \"dims\" is the overall size of the distributed
    array. \"procs\" optionally specifies a vector of process IDs to
    use. If unspecified, the array is distributed over all worker
-   processes only. Typically, when runnning in distributed mode, i.e.,
+   processes only. Typically, when running in distributed mode, i.e.,
    \"nprocs() > 1\", this would mean that no chunk of the distributed
    array exists on the process hosting the interactive julia prompt.
    \"dist\" is an integer vector specifying how many chunks the
@@ -8272,6 +8281,18 @@ popdisplay(d::Display)
 ("Base","Culonglong","Culonglong
 
    Equivalent to the native \"unsigned long long\" c-type (Uint64)
+
+"),
+
+("Base","Cintmax_t","Cintmax_t
+
+   Equivalent to the native \"intmax_t\" c-type (Int64)
+
+"),
+
+("Base","Cuintmax_t","Cuintmax_t
+
+   Equivalent to the native \"uintmax_t\" c-type (Uint64)
 
 "),
 
