@@ -36,3 +36,6 @@ Crouton, you can do so by following these tutorials.
 
 - This is the list of known issues on ARM: [https://github.com/JuliaLang/julia/labels/arm](https://github.com/JuliaLang/julia/labels/arm)
 
+# Building LLVM on ARM
+
+- If you run in to issues building LLVM, see these notes: [http://llvm.org/docs/HowToBuildOnARM.html](http://llvm.org/docs/HowToBuildOnARM.html)
