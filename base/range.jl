@@ -263,45 +263,35 @@ function getindex{T}(r::FloatRange{T}, i::Integer)
     oftype(T, (r.start + (i-1)*r.step)/r.divisor)
 end
 
-function getindex(r::UnitRange, s::UnitRange{Int})
+function check_indexingrange(s, r)
     sl = length(s)
-    if sl > 0
-        if !(1 <= last(s) <= length(r))
-            throw(BoundsError())
-        end
-    end
+    rl = length(r)
+    sl == 0 || 1 <= first(s) <= rl &&
+               1 <=  last(s) <= rl || throw(BoundsError())
+    sl
+end
+
+function getindex(r::UnitRange, s::UnitRange{Int})
+    sl = check_indexingrange(s, r)
     st = oftype(r.start, r.start + s.start-1)
     range(st, sl)
 end
 
 function getindex(r::UnitRange, s::StepRange{Int})
-    sl = length(s)
-    if sl > 0
-        if !(1 <= first(s) <= length(r) && 1 <= last(s) <= length(r))
-            throw(BoundsError())
-        end
-    end
+    sl = check_indexingrange(s, r)
     st = oftype(r.start, r.start + s.start-1)
     range(st, step(s), sl)
 end
 
 function getindex(r::StepRange, s::Range{Int})
-    sl = length(s)
-    if sl > 0
-        if !(1 <= last(s) <= length(r))
-            throw(BoundsError())
-        end
-        st = r[first(s)]
-    else
-        st = oftype(r.start, r.start + (first(s)-1)*step(r))
-    end
+    sl = check_indexingrange(s, r)
+    st = oftype(r.start, r.start + (first(s)-1)*step(r))
     range(st, step(r)*step(s), sl)
 end
 
 function getindex(r::FloatRange, s::OrdinalRange)
-    isempty(s) || 1 <= first(s) <= length(r) &&
-                  1 <=  last(s) <= length(r) || throw(BoundsError())
-    FloatRange(r.start + (first(s)-1)*r.step, step(s)*r.step, length(s), r.divisor)
+    sl = check_indexingrange(s, r)
+    FloatRange(r.start + (first(s)-1)*r.step, step(s)*r.step, sl, r.divisor)
 end
 
 function show(io::IO, r::Range)
