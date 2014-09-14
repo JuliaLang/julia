@@ -178,31 +178,23 @@ for (T, U) in [(Uint8, Uint32), (Uint16, Uint32),
     @eval randintgen(k::$T) = k<1 ? error("range must be non-empty") : RandIntGen($T, convert($U, k))
 end
 
+@inline function rand_lessthan{U}(u::U)
+    while true
+        x = rand(U)
+        x <= u && return x
+    end
+end
+
 # this function uses 32 bit entropy for small ranges of length <= typemax(Uint32) + 1
 # RandIntGen is responsible for providing the right value of k
-function rand{T<:Union(Uint64, Int64)}(g::RandIntGen{T,Uint64})
-    local x::Uint64
-    if (g.k - 1) >> 32 == 0
-        x = rand(Uint32)
-        while x > g.u
-            x = rand(Uint32)
-        end
-    else
-        x = rand(Uint64)
-        while x > g.u
-            x = rand(Uint64)
-        end
-    end
+function rand{T}(g::RandIntGen{T,Uint64})
+    x = (g.k - 1) >> 32 == 0 ?
+        uint64(rand_lessthan(itrunc(Uint32, g.u))) :
+        rand_lessthan(g.u)
     return reinterpret(T, one(Uint64) + x % g.k)
 end
 
-function rand{T<:Integer, U<:Unsigned}(g::RandIntGen{T,U})
-    x = rand(U)
-    while x > g.u
-        x = rand(U)
-    end
-    itrunc(T, one(U) + x % g.k)
-end
+rand{T,U}(g::RandIntGen{T,U}) = itrunc(T, one(U) + rand_lessthan(g.u) % g.k)
 
 
 ## Randomly draw a sample from an AbstractArray r
