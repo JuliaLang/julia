@@ -1211,10 +1211,8 @@ jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data)
     src.size = jl_array_len(bytes);
     int en = jl_gc_is_enabled();
     jl_gc_disable();
-    jl_gc_ephemeral_on();
     (void)jl_deserialize_value(&src); // skip ret type
     jl_value_t *v = jl_deserialize_value(&src);
-    jl_gc_ephemeral_off();
     if (en)
         jl_gc_enable();
     tree_literal_values = NULL;
