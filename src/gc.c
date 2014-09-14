@@ -46,6 +46,7 @@ typedef struct {
 
 #define HEAP_COUNT 64
 static region_t *heaps[HEAP_COUNT] = {NULL};
+static int heaps_lb[HEAP_COUNT] = {0};
 
 typedef struct _bigval_t {
     struct _bigval_t *next;
@@ -91,15 +92,11 @@ typedef struct _pool_t {
     gcval_t *freelist ;
     uint16_t end_offset; // avoid to compute this at each allocation
     uint16_t osize;
-    union {
-        struct _gcpage_t *pages;
-        struct {
-            uint16_t allocd : 1;
-            uint16_t linear : 1;
-        };
-    };
-    struct _gcpage_t *needsweep;
     uint16_t nfree;
+    struct {
+        uint16_t allocd : 1;
+        uint16_t linear : 1;
+    };
 } pool_t;
 
 /*#ifdef _P64
@@ -190,8 +187,6 @@ static size_t long_collect_interval;
 static int gc_steps;
 #define N_POOLS 42
 static __attribute__((aligned (64))) pool_t norm_pools[N_POOLS];
-static pool_t ephe_pools[N_POOLS];
-//static pool_t *pools = &norm_pools[0];
 #define pools norm_pools
 
 static int64_t total_allocd_bytes = 0;
@@ -469,12 +464,12 @@ static __attribute__((noinline)) void *malloc_page(void)
 #endif
             memset(heap->freemap, 0xff, REGION_PG_COUNT/8);
         }
-        heap_i++;
-        for(i = 0; i < REGION_PG_COUNT/32; i++) {
+        for(i = heaps_lb[heap_i]; i < REGION_PG_COUNT/32; i++) {
             if (heap->freemap[i]) break;
         }
         if (i == REGION_PG_COUNT/32) {
             // heap full
+            heap_i++;
             continue;
         }
         break;
@@ -483,6 +478,8 @@ static __attribute__((noinline)) void *malloc_page(void)
         jl_printf(JL_STDERR, "increase HEAP_COUNT or allocate less memory\n");
         abort();
     }
+    if (heaps_lb[heap_i] < i)
+        heaps_lb[heap_i] = i;
     int j = (ffs(heap->freemap[i]) - 1);
     heap->freemap[i] &= ~(uint32_t)(1 << j);
     if (j == 0) { // reserve a page for metadata (every 31 data pages)
@@ -530,6 +527,7 @@ static inline void free_page(void *p)
         madvise(&heap->pages[pg_idx], GC_PAGE_SZ, MADV_DONTNEED);
 #endif        
     }
+    if (heaps_lb[i] > pg_idx/32) heaps_lb[i] = pg_idx/32;
     current_pg_count--;
 }
 
@@ -1004,9 +1002,8 @@ static inline  void *__pool_alloc(pool_t* p, int osize, int end_offset)
     p->nfree--;
     p->allocd = 1;
     end = &(GC_PAGE_DATA(v)[end_offset]);
-    if ((v == end) | (!p->linear)) {
+    if (__unlikely((v == end) | (!p->linear))) {
         _update_freelist(p, v->next);
-        p->freelist = v->next;
     } else {
         p->freelist = (char*)v + osize;
     }
@@ -1129,24 +1126,18 @@ static gcval_t** sweep_page(pool_t* p, gcpage_t* pg, gcval_t **pfl, int sweep_ma
     prev_pfl = pfl;
     if (pg->gc_bits == GC_MARKED) {
         // skip
-        if (sweep_mask == GC_MARKED_NOESC && (!pg->allocd/* || pg->nmarked >= (8*obj_per_page)/10)*/)) {
-            //            pg->allocd = 0;
-            if (!pg->allocd) {
-                pg_skpd++;
-                freedall = 0;
-                if (pg->fl_begin_offset != (uint16_t)-1) {
-                    *pfl = (gcval_t*)PAGE_PFL_BEG(pg);
-                    pfl = prev_pfl = PAGE_PFL_END(pg);
-                }
-                goto free_page;
+        if (sweep_mask == GC_MARKED_NOESC && !pg->allocd) {
+            pg_skpd++;
+            freedall = 0;
+            if (pg->fl_begin_offset != (uint16_t)-1) {
+                *pfl = (gcval_t*)PAGE_PFL_BEG(pg);
+                pfl = prev_pfl = PAGE_PFL_END(pg);
             }
+            goto free_page;
         }
         pg->allocd = 0;
     }
     else if(pg->gc_bits == GC_CLEAN) {
-        //            if (whole_page)
-        //                p->nfree += obj_per_page; // overestimation
-        //            else
         pg->allocd = 0;
         goto free_page;
     }
@@ -1178,11 +1169,9 @@ static gcval_t** sweep_page(pool_t* p, gcpage_t* pg, gcval_t **pfl, int sweep_ma
             } else if ((sweep_mask & bits) == sweep_mask)
                 gc_bits(v) = GC_CLEAN;
 
-            //            else {
                 inc_sat(age, PROMOTE_AGE);
                 ages[obj_i/4] &= ~(3 << sh);
                 ages[obj_i/4] |= age << sh;
-                //            }
             freedall = 0;
         }
         v = (gcval_t*)((char*)v + osize);
@@ -1194,8 +1183,6 @@ static gcval_t** sweep_page(pool_t* p, gcpage_t* pg, gcval_t **pfl, int sweep_ma
     pg->nfree = pg_nfree;
     page_done++;
  free_page:
-    //        nfreed += this_page_nfree;
-    //        pg->nfree = this_page_nfree;
     if (sweep_mask == GC_MARKED)
         pg->nmarked = 0;
     pg_freedall += freedall;
@@ -1206,14 +1193,10 @@ static gcval_t** sweep_page(pool_t* p, gcpage_t* pg, gcval_t **pfl, int sweep_ma
     pg_total++;
     if (freedall) {
         if (prev_sweep_mask == GC_MARKED_NOESC && lazy_freed_pages <= default_collect_interval/4*4096) {
-            gcval_t *begin = reset_page(p, pg, 0x1234);
+            gcval_t *begin = reset_page(p, pg, 0);
             *prev_pfl = begin;
             pfl = (gcval_t**)((char*)begin + ((int)pg->nfree - 1)*osize);
-            begin->next = (gcval_t*)0xdeadbeef;
-            //            jl_printf(JL_STDOUT, "SZ: 0x%lx 0x%lx 0x%lx\n", begin, prev_pfl, ((intptr_t)pfl - (intptr_t)begin));
-            //            if (!isinfl(p->freelist, begin))
-            //                abort(); 
-            //            ppg = &pg->next;
+            begin->next = (gcval_t*)0;
             lazy_freed_pages++;
         }
         else {
@@ -1231,30 +1214,12 @@ static gcval_t** sweep_page(pool_t* p, gcpage_t* pg, gcval_t **pfl, int sweep_ma
     }
     else {
         pg->gc_bits = GC_MARKED;
-        //        ppg = &pg->next;
         pg->linear = 0;
         nfree += pg->nfree;
     }
-    /*        if (should_timeout() && nextpg) {
-            pg->next = NULL;
-            pg = nextpg;
-            break;
-        }*/
-    //    scanned_bytes += GC_PAGE_SZ;
-    //    pg = nextpg;
-    //gcpage_t* pgs = p->pages;
-    //    *ppg = p->pages;
-    /*    p->pages = p->needsweep;
-    if (pg == NULL) {
-        p->needsweep = NULL;
-    } else {
-        p->needsweep = pg;
-        }*/
+
     skipped_pages += pg_skpd;
     total_pages += pg_total;
-    //    *pfl = NULL;
-    /*    if (stats[0] + stats[1] + stats[2] + stats[2] > 0)
-          jl_printf(JL_STDOUT, "Pool : %d %d %d %d\n", stats[0], stats[1], stats[2], stats[3]);*/
     freed_bytes += (nfree - old_nfree)*osize;
     return pfl;
 }
@@ -1310,13 +1275,8 @@ static int gc_sweep_inc(int sweep_mask)
 #endif
     for (int i = 0; i < HEAP_COUNT; i++) {
         if (heaps[i])
-            sweep_pool_region(heaps[i], sweep_mask);
+            /*finished &= */sweep_pool_region(heaps[i], sweep_mask);
     }
-    /*    for(i=0; i < N_POOLS; i++) {
-        sweep_pool(&norm_pools[i], sweep_mask);
-        finished &= !norm_pools[i].needsweep;
-        }*/
-    finished = 1;
 #ifdef GC_INC
     check_timeout = ct;
 #endif
@@ -1374,12 +1334,13 @@ void reset_remset(void)
 DLLEXPORT void gc_queue_root(void *p)
 {
     void *ptr = (void*)((uintptr_t)p & ~(uintptr_t)1);
-    if (gc_bits(ptr) == GC_QUEUED) return; // TODO check if still needed
+    assert(gc_bits(ptr) != GC_QUEUED);
     gc_bits(ptr) = GC_QUEUED;
     arraylist_push(remset, p);
 }
 void gc_queue_binding(void *bnd)
 {
+    assert(gc_bits(bnd) != GC_QUEUED);
     gc_bits(bnd) = GC_QUEUED;
     arraylist_push(&rem_bindings, (void*)((void**)bnd + 1));
 }
@@ -1473,7 +1434,6 @@ static void gc_mark_task_stack(jl_task_t *ta, int d)
     if (ta->stkbuf != NULL || ta == jl_current_task) {
         if (ta->stkbuf != NULL) {
             gc_setmark_buf(ta->stkbuf, gc_bits(ta));
-            //            scanned_bytes += ta->ssize + 2*4096 - 1;
         }
 #ifdef COPY_STACKS
         ptrint_t offset;
@@ -1507,15 +1467,7 @@ __attribute__((noinline)) static void gc_mark_task(jl_task_t *ta, int d)
     gc_push_root(ta->exception, d);
     if (ta->start)  gc_push_root(ta->start, d);
     if (ta->result) gc_push_root(ta->result, d);
-#ifdef GC_INC
-    //    if (1 || mark_mode == GC_MARKED_NOESC) {
-        gc_mark_task_stack(ta, d);
-        /*    } else {
-        arraylist_push(&tasks, (void*)ta);
-        }*/
-#else
     gc_mark_task_stack(ta, d);
-#endif
 }
 
 
@@ -1526,12 +1478,11 @@ DLLEXPORT void jl_gc_lookfor(jl_value_t *v) { lookforme = v; }
 */
 
 #define MAX_MARK_DEPTH 400
-// returns 1 if v is young after this marking
+// returns the new gc_bits of v
 static int push_root(jl_value_t *v, int d, int bits)
 {
     assert(v != NULL);
     jl_value_t *vt = (jl_value_t*)gc_typeof(v);
-    //    gc_setmark(v);
     int refyoung = 0;
 
     if (vt == (jl_value_t*)jl_weakref_type) {
@@ -1541,7 +1492,6 @@ static int push_root(jl_value_t *v, int d, int bits)
     if ((jl_is_datatype(vt) && ((jl_datatype_t*)vt)->pointerfree)) {
         int sz = jl_datatype_size(vt);
         bits = gc_setmark(v, sz, GC_MARKED_NOESC);
-        //        scanned_bytes += allocdsz(sz);
         goto ret;
     }
     int marked = 0;
@@ -1598,7 +1548,7 @@ static int push_root(jl_value_t *v, int d, int bits)
         }
         if (a->ptrarray && a->data!=NULL) {
             size_t l = jl_array_len(a);
-            if (0 && l > 100000 && d > MAX_MARK_DEPTH-10) {
+            if (l > 100000 && d > MAX_MARK_DEPTH-10) {
                 // don't mark long arrays at high depth, to try to avoid
                 // copying the whole array into the mark queue
                 goto queue_the_root;
@@ -1608,7 +1558,6 @@ static int push_root(jl_value_t *v, int d, int bits)
                 int has_young_elt = 0;
                 for(size_t i=0; i < l; i++) {
                     jl_value_t *elt = ((jl_value_t**)data)[i];
-                    //                    scanned_bytes += sizeof(void*);
                     if (elt != NULL) {
                         verify_parent("array", v, &((jl_value_t**)data)[i], "elem(%d)", i);
                         refyoung |= gc_push_root(elt, d);
@@ -1624,16 +1573,14 @@ static int push_root(jl_value_t *v, int d, int bits)
     else if (vt == (jl_value_t*)jl_module_type) {
         MARK(v, bits = gc_setmark(v, sizeof(jl_module_t), GC_MARKED_NOESC));
         refyoung |= gc_mark_module((jl_module_t*)v, d);
-        //        scanned_bytes += allocdsz(sizeof(jl_module_t));
     }
     else if (vt == (jl_value_t*)jl_task_type) {
         MARK(v, bits = gc_setmark(v, sizeof(jl_task_t), GC_MARKED_NOESC));
         gc_mark_task((jl_task_t*)v, d);
         refyoung = GC_MARKED_NOESC;
-        //        scanned_bytes += allocdsz(sizeof(jl_task_t));
     }
     else if(vt == (jl_value_t*)jl_symbol_type) {
-        gc_setmark_other(v, GC_MARKED); // symbols are not pooled
+        gc_setmark_other(v, GC_MARKED); // symbols have their own allocator
     }
     else if(
 #ifdef GC_VERIFY
@@ -1652,7 +1599,6 @@ static int push_root(jl_value_t *v, int d, int bits)
         int ci = 0;
         for(int i=0; i < nf; i++) {
             if (fields[i].isptr) {
-                //                scanned_bytes += sizeof(void*);
                 jl_value_t **slot = (jl_value_t**)((char*)v + fields[i].offset + sizeof(void*));
                 jl_value_t *fld = *slot;
                 if (fld) {
@@ -1660,9 +1606,6 @@ static int push_root(jl_value_t *v, int d, int bits)
                     //                    children[ci++] = fld;
                     refyoung |= gc_push_root(fld, d);
                 }
-            }
-            else {
-                //                scanned_bytes += jl_field_size(dt, i);
             }
         }
         //        while(ci)
@@ -1680,18 +1623,14 @@ static int push_root(jl_value_t *v, int d, int bits)
 #ifdef GC_VERIFY
     if (verifying) return;
 #endif
-    //    objprofile_count(jl_typeof(v), gc_bits(v) == GC_MARKED ? 1 : 0, );
     if ((bits == GC_MARKED) && (refyoung == GC_MARKED_NOESC)) {
-        /*for (int i = 0; i < remset.len; i++) {
-            if (remset.items[i] == v)
-                abort();
-                }*/
         arraylist_push(remset, v);
     }
     return bits;
 
+#undef MARK
+
  queue_the_root:
-    scanned_bytes += 0;//sizeof(void*);
     if(mark_sp >= mark_stack_size) grow_mark_stack();
     mark_stack[mark_sp++] = (jl_value_t*)v;
     max_msp = max_msp > mark_sp ? max_msp : mark_sp;
@@ -1702,7 +1641,7 @@ static void visit_mark_stack_inc(int mark_mode)
 {
     while(mark_sp > 0 && !should_timeout()) {
         gcval_t* v = (gcval_t*)mark_stack[--mark_sp];
-        //        assert(gc_bits(v) == GC_QUEUED || gc_bits(v) == GC_MARKED || gc_bits(v) == GC_MARKED_NOESC);
+        assert(gc_bits(v) == GC_QUEUED || gc_bits(v) == GC_MARKED || gc_bits(v) == GC_MARKED_NOESC);
         push_root(v, 0, gc_bits(v));
     }
 }
@@ -1714,7 +1653,7 @@ static void visit_mark_stack(int mark_mode)
     check_timeout = 0;
 #endif
     visit_mark_stack_inc(mark_mode);
-    //    assert(!mark_sp);
+    assert(!mark_sp);
 #ifdef GC_INC
     check_timeout = ct;
 #endif
@@ -1763,8 +1702,6 @@ static void pre_mark(void)
         gc_push_root(to_finalize.items[i], 0);
     }
 
-    //if (inc_count > 1 || quick_count > 1) return; // the following roots are constant and will stay marked in between increments
-    //    if (prev_sweep_mask == GC_MARKED)
     jl_mark_box_caches();
     gc_push_root(jl_unprotect_stack_func, 0);
     gc_push_root(jl_bottom_func, 0);
@@ -1850,9 +1787,6 @@ static void post_mark(void)
             if (!gc_marked(v)) {
                 jl_value_t *fin = finalizer_table.table[i+1];
                 if (gc_typeof(fin) == (jl_value_t*)jl_voidpointer_type) {
-                    /*                    jl_printf(JL_STDOUT, "CFINA: ");
-                    jl_static_show(JL_STDOUT, v);
-                    jl_printf(JL_STDOUT, "\n");*/
                     void *p = jl_unbox_voidpointer(fin);
                     if (p)
                         ((void (*)(void*))p)(jl_data_ptr(v));
@@ -1861,9 +1795,6 @@ static void post_mark(void)
                 }
                 gc_push_root(v, 0);
                 schedule_finalization(v);
-                //jl_printf(JL_STDOUT, "FINA: ");
-                //jl_static_show(JL_STDOUT, v);
-                //jl_printf(JL_STDOUT, "\n");
                 n_finalized++;
             }
             gc_push_root(finalizer_table.table[i+1], 0);
@@ -2054,8 +1985,8 @@ int64_t diff_gc_total_bytes(void)
 }
 void sync_gc_total_bytes(void) {last_gc_total_bytes = jl_gc_total_bytes();}
 
-void jl_gc_ephemeral_on(void)  { }//pools = &ephe_pools[0]; }
-void jl_gc_ephemeral_off(void) { }//pools = &norm_pools[0]; }
+void jl_gc_ephemeral_on(void)  { }
+void jl_gc_ephemeral_off(void) { }
 
 #if defined(MEMPROFILE)
 static void all_pool_stats(void);
@@ -2110,14 +2041,6 @@ static void gc_mark_task_stack(jl_task_t*,int);
 
 void prepare_sweep(void)
 {
-    for(int i = 0; i < 2*N_POOLS; i++) {
-        pool_t *p = i < N_POOLS ? &norm_pools[i] : &ephe_pools[i - N_POOLS];
-        /*        if (p->pages) {
-            p->needsweep = p->pages;
-            p->pages = NULL;
-                       p->freelist = NULL;
-            }*/
-    }
 }
 
 #ifdef GC_INC
@@ -2403,7 +2326,6 @@ void jl_gc_collect(void)
 
 void *allocb(size_t sz)
 {
-    //    jl_printf(JL_STDOUT, "BUFF relerr: %d\n", sz);
     buff_t *b;
     sz += sizeof(void*);
 #ifdef MEMDEBUG
@@ -2514,16 +2436,8 @@ void jl_gc_init(void)
     for(i=0; i < N_POOLS; i++) {
         assert(szc[i] % 4 == 0);
         norm_pools[i].osize = szc[i];
-        norm_pools[i].pages = NULL;
         norm_pools[i].freelist = NULL;
-        norm_pools[i].needsweep = NULL;
         norm_pools[i].end_offset = ((GC_PAGE_SZ/szc[i]) - 1)*szc[i];
-
-        ephe_pools[i].osize = szc[i];
-        ephe_pools[i].pages = NULL;
-        ephe_pools[i].freelist = NULL;
-        ephe_pools[i].needsweep = NULL;
-        ephe_pools[i].end_offset = ((GC_PAGE_SZ/szc[i]) - 1)*szc[i];
     }
     assert(offsetof(gcpages_t, data) == GC_PAGE_SZ);
     
@@ -2630,12 +2544,6 @@ static void all_pool_stats(void)
         tp += np;
         nold += nol;
         noldbytes += nol*norm_pools[i].osize;
-        /*
-        b = pool_stats(&ephe_pools[i], &w, &np);
-        nb += b;
-        no += (b/ephe_pools[i].osize);
-        tw += w;
-        tp += np;*/
     }
     JL_PRINTF(JL_STDOUT,
               "%d objects (%d%% old), %d kB (%d%% old) total allocated, %d total fragments (%d%% overhead), in %d pages\n",
