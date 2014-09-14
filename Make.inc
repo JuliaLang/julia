@@ -217,6 +217,7 @@ STDLIBCPP_FLAG =
 ifeq ($(OS), Darwin)
 DARWINVER := $(shell uname -r | cut -b 1-2)
 DARWINVER_GTE13 := $(shell expr `uname -r | cut -b 1-2` \>= 13)
+DARWINVER_LTE13 := $(shell expr `uname -r | cut -b 1-2` \<= 13)
 OSXVER := $(shell sw_vers -productVersion | cut -b 1-4)
 ifeq ($(DARWINVER), 10) # Snow Leopard specific configuration
 USEGCC = 1
