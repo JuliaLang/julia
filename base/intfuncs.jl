@@ -170,7 +170,7 @@ end
 function ndigits0z(n::Unsigned, b::Int)
     d = 0
     if b < 0
-        d = ndigitsnb(signed(n), b)
+        d = ndigits0znb(signed(n), b)
     else
         b == 2  && return (sizeof(n)<<3-leading_zeros(n))
         b == 8  && return div((sizeof(n)<<3)-leading_zeros(n)+2,3)
