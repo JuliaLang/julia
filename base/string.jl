@@ -466,7 +466,7 @@ function rsearch(s::String, t::String, i::Integer=endof(s))
     end
 end
 
-contains(haystack::String, needle::String) = searchindex(a,b)!=0
+contains(haystack::String, needle::String) = searchindex(haystack,needle)!=0
 
 in(::String, ::String) = error("use contains(x,y) for string containment")
 
