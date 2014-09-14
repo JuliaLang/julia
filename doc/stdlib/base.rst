@@ -4295,30 +4295,38 @@ Array functions
 .. function:: cumprod(A, [dim])
 
    Cumulative product along a dimension.
+   The dimension defaults to 1.
 
 .. function:: cumprod!(B, A, [dim])
 
    Cumulative product of ``A`` along a dimension, storing the result in ``B``.
+   The dimension defaults to 1.
 
 .. function:: cumsum(A, [dim])
 
    Cumulative sum along a dimension.
+   The dimension defaults to 1.
 
 .. function:: cumsum!(B, A, [dim])
 
    Cumulative sum of ``A`` along a dimension, storing the result in ``B``.
+   The dimension defaults to 1.
 
 .. function:: cumsum_kbn(A, [dim])
 
-   Cumulative sum along a dimension, using the Kahan-Babuska-Neumaier compensated summation algorithm for additional accuracy.
+   Cumulative sum along a dimension, using the Kahan-Babuska-Neumaier
+   compensated summation algorithm for additional accuracy.
+   The dimension defaults to 1.
 
 .. function:: cummin(A, [dim])
 
    Cumulative minimum along a dimension.
+   The dimension defaults to 1.
 
 .. function:: cummax(A, [dim])
 
    Cumulative maximum along a dimension.
+   The dimension defaults to 1.
 
 .. function:: diff(A, [dim])
 

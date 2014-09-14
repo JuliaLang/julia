@@ -901,7 +901,7 @@ function cumsum_kbn{T<:FloatingPoint}(v::AbstractVector{T})
 end
 
 # Uses K-B-N summation
-function cumsum_kbn{T<:FloatingPoint}(A::AbstractArray{T}, axis::Integer)
+function cumsum_kbn{T<:FloatingPoint}(A::AbstractArray{T}, axis::Integer=1)
     dimsA = size(A)
     ndimsA = ndims(A)
     axis_size = dimsA[axis]

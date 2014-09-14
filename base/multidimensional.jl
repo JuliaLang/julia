@@ -134,13 +134,13 @@ end
 
 eval(ngenerate(:N, nothing, :(setindex!{T}(s::SubArray{T,N}, v, ind::Integer)), gen_setindex!_body, 2:5, false))
 
- cumsum(A::AbstractArray, axis::Integer) =  cumsum!(similar(A, Base._cumsum_type(A)), A, axis)
-cumprod(A::AbstractArray, axis::Integer) = cumprod!(similar(A), A, axis)
+ cumsum(A::AbstractArray, axis::Integer=1) =  cumsum!(similar(A, Base._cumsum_type(A)), A, axis)
+cumprod(A::AbstractArray, axis::Integer=1) = cumprod!(similar(A), A, axis)
 
 for (f, op) in ((:cumsum!, :+),
                 (:cumprod!, :*))
     @eval begin
-        @ngenerate N typeof(B) function ($f){T,N}(B, A::AbstractArray{T,N}, axis::Integer)
+        @ngenerate N typeof(B) function ($f){T,N}(B, A::AbstractArray{T,N}, axis::Integer=1)
             if size(B, axis) < 1
                 return B
             end
