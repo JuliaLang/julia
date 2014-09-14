@@ -2098,9 +2098,14 @@ Text I/O
 
    Show all structure of a value, including all fields of objects.
 
-.. function:: readall(stream)
+.. function:: readall(stream::IO)
 
    Read the entire contents of an I/O stream as a string.
+
+.. function:: readall(filename::String)
+
+   Open ``filename``, read the entire contents as a string, then close the file.
+   Equivalent to ``open(readall, filename)``.
 
 .. function:: readline(stream=STDIN)
 
