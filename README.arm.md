@@ -8,7 +8,7 @@ available.
 In addition to the standard `build-essentials` toolchain the following
 libraries must be installed to build on ARM:
 
-- libblas3gf, liblapack3gf, libfftw3-dev, libgmp3-dev, libmpfr-dev
+- libblas3gf, liblapack3gf, libfftw3-dev, libgmp3-dev, libmpfr-dev, libblas-dev, liblapack-dev
 
 Please start from the standard [build
 instructions](README.md#source-download-and-compilation), in
