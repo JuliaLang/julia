@@ -472,6 +472,9 @@
 (define (keywords-method-def-expr name sparams argl body)
   (let* ((kargl (cdar argl))  ;; keyword expressions (= k v)
          (pargl (cdr argl))   ;; positional args
+	 (body  (if (and (pair? body) (eq? (car body) 'block))
+		    body
+		    `(block ,body)))
 	 ;; 1-element list of vararg argument, or empty if none
 	 (vararg (let ((l (if (null? pargl) '() (last pargl))))
 		   (if (vararg? l)
