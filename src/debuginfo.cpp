@@ -305,17 +305,24 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
            // First find the uuid of the object file (we'll use this to make sure we find the
            // correct debug symbol file).
            uint8_t uuid[16], uuid2[16];
-	   
-	   MemoryBuffer *membuf = MemoryBuffer::getMemBuffer(
-        	StringRef((const char *)fbase, (size_t)(((uint64_t)-1)-fbase)),"",false);
+
 #ifdef LLVM36
+	   std::unique_ptr<MemoryBuffer> membuf = MemoryBuffer::getMemBuffer(
+			StringRef((const char *)fbase, (size_t)(((uint64_t)-1)-fbase)),"",false);
+
 	   auto origerrorobj = llvm::object::ObjectFile::createObjectFile(
 	   		membuf->getMemBufferRef(), sys::fs::file_magic::unknown);
 #elif LLVM35
+  	    MemoryBuffer *membuf = MemoryBuffer::getMemBuffer(
+        	StringRef((const char *)fbase, (size_t)(((uint64_t)-1)-fbase)),"",false);
+
             std::unique_ptr<MemoryBuffer> buf(membuf);
             auto origerrorobj = llvm::object::ObjectFile::createObjectFile(
             		buf, sys::fs::file_magic::unknown);
 #else
+  	    MemoryBuffer *membuf = MemoryBuffer::getMemBuffer(
+        	StringRef((const char *)fbase, (size_t)(((uint64_t)-1)-fbase)),"",false);
+
             llvm::object::ObjectFile *origerrorobj = llvm::object::ObjectFile::createObjectFile(
                 membuf);
 #endif
