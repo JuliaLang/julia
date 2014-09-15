@@ -134,7 +134,8 @@ function help(io::IO, fname::String, obj=0)
         elseif isgeneric(obj)
             writemime(io, "text/plain", obj); println()
         else
-            println(io, "No help information found.")
+            println(io, "Symbol not found. Falling back on apropos search ...")
+            apropos(io, fname)
         end
     end
 end
