@@ -9,8 +9,8 @@ include $(JULIAHOME)/Make.inc
 # so that prefix/share/julia/VERSDIR can be overwritten without touching
 # third-party code).
 VERSDIR = v`cut -d. -f1-2 < VERSION`
-INSTALL_F = install -pm644
-INSTALL_M = install -pm755
+INSTALL_F = contrib/install.sh 644
+INSTALL_M = contrib/install.sh 755
 
 #file name of make dist result
 ifeq ($(JULIA_DIST_TARNAME),)
@@ -247,15 +247,6 @@ endif
 	done
 endif
 
-ifeq ($(USE_SYSTEM_LIBUV),0)
-ifeq ($(OS),WINNT)
-	$(INSTALL_M) $(build_libdir)/libuv.a $(DESTDIR)$(private_libdir)
-	$(INSTALL_F) $(build_includedir)/tree.h $(DESTDIR)$(includedir)/julia
-else
-	$(INSTALL_M) $(build_libdir)/libuv.a $(DESTDIR)$(private_libdir)
-endif
-	$(INSTALL_F) $(build_includedir)/uv* $(DESTDIR)$(includedir)/julia
-endif
 	$(INSTALL_F) src/julia.h src/options.h src/support/*.h $(DESTDIR)$(includedir)/julia
 	# Copy system image
 	$(INSTALL_F) $(build_private_libdir)/sys.ji $(DESTDIR)$(private_libdir)
@@ -333,7 +324,14 @@ ifeq ($(OS), WINNT)
 	    cp busybox.exe $(DESTDIR)$(prefix)/Git/bin/echo.exe && \
 	    cp busybox.exe $(DESTDIR)$(prefix)/Git/bin/printf.exe )
 	cd $(DESTDIR)$(bindir) && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
+
+	# create file listing for uninstall. note: must have Windows path separators and line endings.
+	cd $(prefix) && find * | sed -e 's/\//\\/g' -e 's/$$/\r/g' > etc/uninstall.log
+
+	# build nsis package
 	$(call spawn,./dist-extras/nsis/makensis.exe) -NOCD -DVersion=$(JULIA_VERSION) -DArch=$(ARCH) -DCommit=$(JULIA_COMMIT) ./contrib/windows/build-installer.nsi
+
+	# compress nsis installer and combine with 7zip self-extracting header
 	./dist-extras/7z a -mx9 "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" julia-installer.exe
 	cat ./contrib/windows/7zS.sfx ./contrib/windows/7zSFX-config.txt "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" > "julia-${JULIA_VERSION}-${ARCH}.exe"
 	-rm -f julia-installer.exe
@@ -356,12 +354,12 @@ source-dist: git-submodules
 	git submodule --quiet foreach 'git ls-files | sed "s&^&$$path/&"' >> source-dist.tmp
 
 	# Remove unwanted files
-	sed '/\.git/d' source-dist.tmp > source-dist.tmp1
-	sed '/\.travis/d' source-dist.tmp1 > source-dist.tmp
+	sed -e '/\.git/d' -e '/\.travis/d' source-dist.tmp > source-dist.tmp1
 
-	# Create tarball
-	tar -cz -T source-dist.tmp --no-recursion -f julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz
-	rm -f source-dist.tmp source-dist.tmp1
+	# Prefix everything with the current directory name (usually "julia"), then create tarball
+	DIRNAME=$$(basename $$(pwd)); \
+	sed -e "s_.*_$$DIRNAME/&_" source-dist.tmp1 > source-dist.tmp; \
+	cd ../ && tar -cz -T $$DIRNAME/source-dist.tmp --no-recursion -f $$DIRNAME/julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz
 
 clean: | $(CLEAN_TARGETS)
 	@$(MAKE) -C base clean
@@ -380,7 +378,7 @@ clean: | $(CLEAN_TARGETS)
 
 cleanall: clean
 	@$(MAKE) -C src clean-flisp clean-support
-	@rm -fr $(build_libdir)
+	@rm -fr $(build_shlibdir)
 ifeq ($(OS),WINNT)
 	@rm -rf $(build_prefix)/lib
 endif

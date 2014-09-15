@@ -7,7 +7,7 @@ Linear Algebra
 
 .. currentmodule:: Base
 
-Linear algebra functions in Julia are largely implemented by calling functions from `LAPACK <http://www.netlib.org/lapack/>`_.  Sparse factorizations call functions from `SuiteSparse <http://www.cise.ufl.edu/research/sparse>`_.
+Linear algebra functions in Julia are largely implemented by calling functions from `LAPACK <http://www.netlib.org/lapack/>`_.  Sparse factorizations call functions from `SuiteSparse <http://faculty.cse.tamu.edu/davis/suitesparse.html>`_.
 
 .. function:: *(A, B)
    :noindex:
@@ -779,21 +779,20 @@ Usually a function has 4 methods defined, one each for ``Float64``,
    Only the ``ul`` triangle of ``A`` is used.  ``dA`` indicates if
    ``A`` is unit-triangular (the diagonal is assumed to be all ones).
 
-.. function:: trsv!(side, ul, tA, dA, alpha, A, b)
+.. function:: trsv!(ul, tA, dA, A, b)
 
-   Overwrite ``b`` with the solution to ``A*X = alpha*b`` or one of
-   the other three variants determined by ``side`` (A on left or
-   right of ``X``) and ``tA`` (transpose A). Only the ``ul`` triangle
-   of ``A`` is used.  ``dA`` indicates if ``A`` is unit-triangular
-   (the diagonal is assumed to be all ones).  Returns the updated ``b``.
+   Overwrite ``b`` with the solution to ``A*x = b`` or one of the other two 
+   variants determined by ``tA`` (transpose A) and ``ul`` (triangle of ``A`` 
+   used).  ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed 
+   to be all ones).  Returns the updated ``b``.
 
-.. function:: trsv(side, ul, tA, dA, alpha, A, b)
+.. function:: trsv(ul, tA, dA, A, b)
 
-   Returns the solution to ``A*X = alpha*b`` or one of
-   the other three variants determined by ``side`` (A on left or
-   right of ``X``) and ``tA`` (transpose A). Only the ``ul`` triangle
-   of ``A`` is used.  ``dA`` indicates if ``A`` is unit-triangular
-   (the diagonal is assumed to be all ones).
+   Returns the solution to ``A*x = b`` or one of the other two variants 
+   determined by ``tA`` (transpose A) and ``ul`` (triangle of ``A`` is used.) 
+   ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be 
+   all ones).
+
 
 .. function:: blas_set_num_threads(n)
 

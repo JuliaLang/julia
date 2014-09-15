@@ -768,7 +768,7 @@ const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
         assert(fptr != 0);
 #ifndef USE_MCJIT
         std::map<size_t, FuncInfo, revcomp> &fmap = jl_jit_events->getMap();
-        std::map<size_t, FuncInfo>::iterator fit = fmap.find(fptr);
+        std::map<size_t, FuncInfo, revcomp>::iterator fit = fmap.find(fptr);
 
         if (fit == fmap.end()) {
             JL_PRINTF(JL_STDERR, "Warning: Unable to find function pointer\n");
@@ -2861,10 +2861,12 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                                         ConstantInt::get(T_size,0));
         builder.CreateCall(prepare_call(jlenter_func), jbuf);
 #ifndef _OS_WINDOWS_
-        Value *sj = builder.CreateCall2(prepare_call(setjmp_func), jbuf, ConstantInt::get(T_int32,0));
+        CallInst *sj = builder.CreateCall2(prepare_call(setjmp_func), jbuf, ConstantInt::get(T_int32,0));
 #else
-        Value *sj = builder.CreateCall(prepare_call(setjmp_func), jbuf);
+        CallInst *sj = builder.CreateCall(prepare_call(setjmp_func), jbuf);
 #endif
+        // We need to mark this on the call site as well. See issue #6757
+        sj->setCanReturnTwice();
         Value *isz = builder.CreateICmpEQ(sj, ConstantInt::get(T_int32,0));
         BasicBlock *tryblk = BasicBlock::Create(getGlobalContext(), "try",
                                                 ctx->f);

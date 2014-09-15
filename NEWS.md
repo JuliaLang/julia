@@ -31,7 +31,7 @@ New language features
 
   * Multi-line comments ([#69], [#6128]): `#= .... =#`
 
-  * `--bounds-check=yes|no` compiler option
+  * `--check-bounds=yes|no` compiler option
 
   * Unicode identifiers are normalized (NFC) so that different encodings
     of equivalent strings are treated as the same identifier ([#5462]).

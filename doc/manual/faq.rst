@@ -609,7 +609,7 @@ versions of the outer function for different element types of
     end
 
 This works fine for ``Vector{T}``, but we'd also have to write
-explicit versions for ``Range1{T}`` or other abstract types. To
+explicit versions for ``UnitRange{T}`` or other abstract types. To
 prevent such tedium, you can use two parameters in the declaration of
 ``MyContainer``::
 
@@ -621,7 +621,7 @@ prevent such tedium, you can use two parameters in the declaration of
     julia> b = MyContainer(1.3:5);
 
     julia> typeof(b)
-    MyContainer{Float64,Range1{Float64}}
+    MyContainer{Float64,UnitRange{Float64}}
 
 Note the somewhat surprising fact that ``T`` doesn't appear in the
 declaration of field ``a``, a point that we'll return to in a moment.
@@ -659,10 +659,10 @@ However, there's one remaining hole: we haven't enforced that ``A``
 has element type ``T``, so it's perfectly possible to construct an
 object like this::
 
-  julia> b = MyContainer{Int64, Range1{Float64}}(1.3:5);
+  julia> b = MyContainer{Int64, UnitRange{Float64}}(1.3:5);
 
   julia> typeof(b)
-  MyContainer{Int64,Range1{Float64}}
+  MyContainer{Int64,UnitRange{Float64}}
 
 To prevent this, we can add an inner constructor::
 
@@ -677,10 +677,10 @@ To prevent this, we can add an inner constructor::
     julia> b = MyBetterContainer(1.3:5);
 
     julia> typeof(b)
-    MyBetterContainer{Float64,Range1{Float64}}
+    MyBetterContainer{Float64,UnitRange{Float64}}
 
-    julia> b = MyBetterContainer{Int64, Range1{Float64}}(1.3:5);
-    ERROR: no method MyBetterContainer(Range1{Float64},)
+    julia> b = MyBetterContainer{Int64, UnitRange{Float64}}(1.3:5);
+    ERROR: no method MyBetterContainer(UnitRange{Float64},)
 
 The inner constructor requires that the element type of ``A`` be ``T``.
 

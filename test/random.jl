@@ -53,6 +53,11 @@ if sizeof(Int32) < sizeof(Int)
 
 end
 
+randn(100000)
+randn!(Array(Float64, 100000))
+randn(MersenneTwister(10), 100000)
+randn!(MersenneTwister(10), Array(Float64, 100000))
+
 # Test ziggurat tables
 ziggurat_table_size = 256
 nmantissa           = int64(2)^51 # one bit for the sign
@@ -129,12 +134,12 @@ function randmtzig_fill_ziggurat_tables() # Operates on the global arrays
     return nothing
 end
 randmtzig_fill_ziggurat_tables()
-@test all(ki == Base.dSFMT.ki)
-@test all(wi == Base.dSFMT.wi)
-@test all(fi == Base.dSFMT.fi)
-@test all(ke == Base.dSFMT.ke)
-@test all(we == Base.dSFMT.we)
-@test all(fe == Base.dSFMT.fe)
+@test all(ki == Base.Random.ki)
+@test all(wi == Base.Random.wi)
+@test all(fi == Base.Random.fi)
+@test all(ke == Base.Random.ke)
+@test all(we == Base.Random.we)
+@test all(fe == Base.Random.fe)
 
 #same random numbers on for small ranges on all systems
 
@@ -160,3 +165,9 @@ a = uuid4()
 @test_throws ArgumentError UUID("550e8400e29b-41d4-a716-446655440000")
 @test_throws ArgumentError UUID("550e8400e29b-41d4-a716-44665544000098")
 @test_throws ArgumentError UUID("z50e8400-e29b-41d4-a716-446655440000")
+
+#issue 8257
+i8257 = 1:1/3:100
+for i = 1:100
+    @test rand(i8257) in i8257
+end

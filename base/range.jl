@@ -164,6 +164,7 @@ linrange(a::Real, b::Real, len::Integer) =
 
 ## interface implementations
 
+similar(r::Range, T::Type, dims::(Integer...)) = Array(T, dims...)
 similar(r::Range, T::Type, dims::Dims) = Array(T, dims)
 
 size(r::Range) = (length(r),)
@@ -559,7 +560,7 @@ function map!(f::Callable, dest, r::Range)
 end
 
 function in(x, r::Range)
-    n = step(r) == zero(step(r)) ? 1 : iround((x-first(r))/step(r))+1
+    n = step(r) == 0 ? 1 : iround((x-first(r))/step(r))+1
     n >= 1 && n <= length(r) && r[n] == x
 end
 
