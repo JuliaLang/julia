@@ -343,16 +343,13 @@ function A_ldiv_B!{Tb<:Complex}(lu::UmfpackLU{Float64}, b::Vector{Tb})
     i = solve(lu, [convert(Tlu,imag(be)) for be in b], UMFPACK_A)
     Tb[r[k]+im*i[k] for k = 1:length(r)]
 end
-A_ldiv_B!{Tlu<:UMFVTypes,Tb<:Number}(lu::UmfpackLU{Tlu}, b::AbstractVecOrMat{Tb}) = A_ldiv_B!(lu, convert(Array{Tlu}, b))
 
-Ac_ldiv_B!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::Vector{T}) = solve(lu, b, UMFPACK_At)
+Ac_ldiv_B!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::VecOrMat{T}) = solve(lu, b, UMFPACK_At)
 function Ac_ldiv_B!{Tb<:Complex}(lu::UmfpackLU{Float64}, b::Vector{Tb})
     r = solve(lu, [convert(Float64,real(be)) for be in b], UMFPACK_At)
     i = solve(lu, [convert(Float64,imag(be)) for be in b], UMFPACK_At)
     Tb[r[k]+im*i[k] for k = 1:length(r)]
 end
-Ac_ldiv_B!{Tlu<:UMFVTypes,Tb<:Number}(lu::UmfpackLU{Tlu}, b::StridedVecOrMat{Tb}) = Ac_ldiv_B!(lu, convert(Array{Tlu}, b))
-Ac_ldiv_B!{Tlu<:UMFVTypes,Tb<:Number}(lu::UmfpackLU{Tlu}, b::AbstractVecOrMat{Tb}) = Ac_ldiv_B!(lu, convert(Array{Tlu}, b))
 
 At_ldiv_B!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::VecOrMat{T}) = solve(lu, b, UMFPACK_Aat)
 function At_ldiv_B!{Tb<:Complex}(lu::UmfpackLU{Float64}, b::Vector{Tb})
@@ -360,7 +357,6 @@ function At_ldiv_B!{Tb<:Complex}(lu::UmfpackLU{Float64}, b::Vector{Tb})
     i = solve(lu, [convert(Float64,imag(be)) for be in b], UMFPACK_Aat)
     Tb[r[k]+im*i[k] for k = 1:length(r)]
 end
-At_ldiv_B!{Tlu<:UMFVTypes,Tb<:Number}(lu::UmfpackLU{Tlu}, b::AbstractVecOrMat{Tb}) = At_ldiv_B!(lu, convert(Array{Tlu}, b))
 
 function getindex(lu::UmfpackLU, d::Symbol)
     L,U,p,q,Rs = umf_extract(lu)
