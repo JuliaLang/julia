@@ -179,7 +179,7 @@ ifeq ($(USE_SYSTEM_ARPACK),0)
 JL_PRIVATE_LIBS += arpack
 endif
 ifeq ($(USE_SYSTEM_SUITESPARSE),0)
-JL_PRIVATE_LIBS += amd camd ccolamd cholmod colamd umfpack spqr
+JL_PRIVATE_LIBS += amd camd ccolamd cholmod colamd umfpack spqr suitesparseconfig
 endif
 ifeq ($(OS),Darwin)
 ifeq ($(USE_SYSTEM_BLAS),1)
