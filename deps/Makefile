@@ -861,7 +861,7 @@ $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/config.status
 $(OPENBLAS_OBJ_TARGET): $(OPENBLAS_OBJ_SOURCE) | $(build_shlibdir)
 	cp -f openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT) $(build_shlibdir)
 ifeq ($(OS), Linux)
-	cd $(build_shlibdir)
+	cd $(build_shlibdir) && \
 	ln -sf libopenblas.$(SHLIB_EXT) libopenblas.$(SHLIB_EXT).0
 endif
 	$(INSTALL_NAME_CMD)libopenblas.$(SHLIB_EXT) $(build_shlibdir)/libopenblas.$(SHLIB_EXT)
