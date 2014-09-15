@@ -37,7 +37,6 @@ end
 function init_help()
     global MODULE_DICT, FUNCTION_DICT
     if FUNCTION_DICT == nothing
-        info("Loading help data...")
         helpdb = evalfile(helpdb_filename())
         MODULE_DICT = Dict()
         FUNCTION_DICT = Dict()
