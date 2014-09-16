@@ -3964,9 +3964,9 @@ Random number generation in Julia uses the `Mersenne Twister library <http://www
 
    Pick a random element or array of random elements from the indexable collection  ``coll`` (for example, ``1:n`` or ``['x','y','z']``).
 
-.. function:: rand!(coll, A)
+.. function:: rand!(r, A)
 
-   Populate the array A with random values drawn uniformly from the indexable collection ``coll``.
+   Populate the array A with random values drawn uniformly from the range ``r``.
 
 .. function:: randbool([dims...])
 
