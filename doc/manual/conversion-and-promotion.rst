@@ -111,7 +111,7 @@ Defining New Conversions
 
 To define a new conversion, simply provide a new method for ``convert``.
 That's really all there is to it. For example, the method to convert a
-number to a boolean is simply this::
+number to a Boolean is simply this::
 
     convert(::Type{Bool}, x::Number) = (x!=0)
 
@@ -125,7 +125,7 @@ specified but whose value is never used in the function body.  In this example,
 since the type is a singleton, there would never be any reason to use its value
 within the body.
 When invoked, the method determines
-whether a numeric value is true or false as a boolean, by comparing it
+whether a numeric value is true or false as a Boolean, by comparing it
 to zero:
 
 .. doctest::

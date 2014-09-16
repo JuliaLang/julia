@@ -224,7 +224,7 @@ where each I\_k may be:
 1. A scalar value
 2. A ``Range`` of the form ``:``, ``a:b``, or ``a:b:c``
 3. An arbitrary integer vector, including the empty vector ``[]``
-4. A boolean vector
+4. A Boolean vector
 
 The result X generally has dimensions
 ``(length(I_1), length(I_2), ..., length(I_n))``, with location
@@ -232,7 +232,7 @@ The result X generally has dimensions
 ``A[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``. Trailing dimensions indexed with
 scalars are dropped. For example, the dimensions of ``A[I, 1]`` will be
 ``(length(I),)``. Boolean vectors are first transformed with ``find``; the size of
-a dimension indexed by a boolean vector will be the number of true values in the vector.
+a dimension indexed by a Boolean vector will be the number of true values in the vector.
 
 Indexing syntax is equivalent to a call to ``getindex``::
 
@@ -278,14 +278,14 @@ where each I\_k may be:
 1. A scalar value
 2. A ``Range`` of the form ``:``, ``a:b``, or ``a:b:c``
 3. An arbitrary integer vector, including the empty vector ``[]``
-4. A boolean vector
+4. A Boolean vector
 
 If ``X`` is an array, its size must be ``(length(I_1), length(I_2), ..., length(I_n))``,
 and the value in location ``i_1, i_2, ..., i_n`` of ``A`` is overwritten with
 the value ``X[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``. If ``X`` is not an array, its
 value is written to all referenced locations of ``A``.
 
-A boolean vector used as an index behaves as in ``getindex`` (it is first transformed
+A Boolean vector used as an index behaves as in ``getindex`` (it is first transformed
 with ``find``).
 
 Index assignment syntax is equivalent to a call to ``setindex!``::
@@ -329,7 +329,7 @@ scalar. These operators are ``*``, ``/``, ``\``, and the bitwise
 operators.
 
 Note that comparisons such as ``==`` operate on whole arrays, giving a single
-boolean answer. Use dot operators for elementwise comparisons.
+Boolean answer. Use dot operators for elementwise comparisons.
 
 The following built-in functions are also vectorized, whereby the functions act
 elementwise::

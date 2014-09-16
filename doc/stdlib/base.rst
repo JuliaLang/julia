@@ -807,7 +807,7 @@ Iterable Collections
 
 .. function:: any(itr) -> Bool
 
-   Test whether any elements of a boolean collection are true.
+   Test whether any elements of a Boolean collection are true.
 
 .. function:: any(A, dims)
 
@@ -820,7 +820,7 @@ Iterable Collections
 
 .. function:: all(itr) -> Bool
 
-   Test whether all elements of a boolean collection are true.
+   Test whether all elements of a Boolean collection are true.
 
 .. function:: all(A, dims)
 
@@ -1276,7 +1276,7 @@ Strings
 
    Alternatively, finer control and additional transformations may be
    be obtained by calling `normalize_string(s; keywords...)`, where
-   any number of the following boolean keywords options (which all default
+   any number of the following Boolean keywords options (which all default
    to ``false`` except for ``compose``) are specified:
 
    * ``compose=false``: do not perform canonical composition
@@ -1606,11 +1606,11 @@ I/O
 
 .. function:: open(file_name, [read, write, create, truncate, append]) -> IOStream
 
-   Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
+   Open a file in a mode specified by five Boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
 
 .. function:: open(file_name, [mode]) -> IOStream
 
-   Alternate syntax for open, where a string-based mode specifier is used instead of the five booleans. The values of ``mode`` correspond to those from ``fopen(3)`` or Perl ``open``, and are equivalent to setting the following boolean groups:
+   Alternate syntax for open, where a string-based mode specifier is used instead of the five Booleans. The values of ``mode`` correspond to those from ``fopen(3)`` or Perl ``open``, and are equivalent to setting the following Boolean groups:
 
    ==== =================================
     r    read
@@ -2014,14 +2014,14 @@ Network I/O
 
 .. function:: watch_file(cb=false, s; poll=false)
 
-   Watch file or directory ``s`` and run callback ``cb`` when ``s`` is modified. The ``poll`` parameter specifies whether to use file system event monitoring or polling. The callback function ``cb`` should accept 3 arguments: ``(filename, events, status)`` where ``filename`` is the name of file that was modified, ``events`` is an object with boolean fields ``changed`` and ``renamed`` when using file system event monitoring, or ``readable`` and ``writable`` when using polling, and ``status`` is always 0. Pass ``false`` for ``cb`` to not use a callback function.
+   Watch file or directory ``s`` and run callback ``cb`` when ``s`` is modified. The ``poll`` parameter specifies whether to use file system event monitoring or polling. The callback function ``cb`` should accept 3 arguments: ``(filename, events, status)`` where ``filename`` is the name of file that was modified, ``events`` is an object with Boolean fields ``changed`` and ``renamed`` when using file system event monitoring, or ``readable`` and ``writable`` when using polling, and ``status`` is always 0. Pass ``false`` for ``cb`` to not use a callback function.
 
 .. function:: poll_fd(fd, seconds::Real; readable=false, writable=false)
 
    Poll a file descriptor fd for changes in the read or write availability and with a timeout given by the second argument.
    If the timeout is not needed, use ``wait(fd)`` instead. The keyword arguments determine which of read and/or write status
    should be monitored and at least one of them needs to be set to true.
-   The returned value is an object with boolean fields ``readable``, ``writable``, and
+   The returned value is an object with Boolean fields ``readable``, ``writable``, and
    ``timedout``, giving the result of the polling.
 
 .. function:: poll_file(s, interval_seconds::Real, seconds::Real)
@@ -2255,7 +2255,7 @@ Julia environments (such as the IPython-based IJulia notebook).
 .. function:: displayable(mime) -> Bool
               displayable(d::Display, mime) -> Bool
 
-   Returns a boolean value indicating whether the given ``mime`` type (string)
+   Returns a Boolean value indicating whether the given ``mime`` type (string)
    is displayable by any of the displays in the current display stack, or
    specifically by the display ``d`` in the second variant.
 
@@ -2287,7 +2287,7 @@ Julia environments (such as the IPython-based IJulia notebook).
 
 .. function:: mimewritable(mime, x)
 
-   Returns a boolean value indicating whether or not the object ``x``
+   Returns a Boolean value indicating whether or not the object ``x``
    can be written as the given ``mime`` type.  (By default, this
    is determined automatically by the existence of the corresponding
    ``writemime`` function for ``typeof(x)``.)
@@ -2748,12 +2748,12 @@ Mathematical Operators
 .. _&&:
 .. function:: x && y
 
-   Short-circuiting boolean and
+   Short-circuiting Boolean and
 
 .. _||:
 .. function:: x || y
 
-   Short-circuiting boolean or
+   Short-circuiting Boolean or
 
 .. function:: A_ldiv_Bc(a,b)
 
@@ -3529,7 +3529,7 @@ Data Formats
 
 .. function:: bool(x)
 
-   Convert a number or numeric array to boolean
+   Convert a number or numeric array to Boolean
 
 .. function:: int(x)
 
@@ -3966,11 +3966,11 @@ Random number generation in Julia uses the `Mersenne Twister library <http://www
 
 .. function:: randbool([dims...])
 
-   Generate a random boolean value. Optionally, generate an array of random boolean values.
+   Generate a random Boolean value. Optionally, generate an array of random Boolean values.
 
 .. function:: randbool!(A)
 
-   Fill an array with random boolean values. A may be an ``Array`` or a ``BitArray``.
+   Fill an array with random Boolean values. A may be an ``Array`` or a ``BitArray``.
 
 .. function:: randn([rng], dims or [dims...])
 
@@ -4208,7 +4208,7 @@ Indexing, Assignment, and Concatenation
 
    Return a vector of the linear indexes of the non-zeros in ``A``
    (determined by ``A[i]!=0``).  A common use of this is to convert a
-   boolean array to an array of indexes of the ``true``
+   Boolean array to an array of indexes of the ``true``
    elements.
 
 .. function:: find(f,A)
@@ -4390,11 +4390,11 @@ BitArrays
 
 .. function:: bitpack(A::AbstractArray{T,N}) -> BitArray
 
-   Converts a numeric array to a packed boolean array
+   Converts a numeric array to a packed Boolean array
 
 .. function:: bitunpack(B::BitArray{N}) -> Array{Bool,N}
 
-   Converts a packed boolean array to an array of booleans
+   Converts a packed Boolean array to an array of Booleans
 
 .. function:: flipbits!(B::BitArray{N}) -> BitArray{N}
 

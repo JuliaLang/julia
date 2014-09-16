@@ -132,7 +132,7 @@ Alternatively, if you have already allocated the array you can generate a thin w
     double *existingArray = (double*)malloc(sizeof(double)*10);
     jl_array_t *x = jl_ptr_to_array_1d(array_type, existingArray, 10, 0);
     
-The last argument is a boolean indicating whether Julia should take ownership of the data. If this argument is non-zero, the GC will call ``free`` on the data pointer when the array is no longer referenced.
+The last argument is a Boolean indicating whether Julia should take ownership of the data. If this argument is non-zero, the GC will call ``free`` on the data pointer when the array is no longer referenced.
 
 In order to access the data of x, we can use ``jl_array_data``::
 

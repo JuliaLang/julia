@@ -63,7 +63,7 @@ differences that may trip up Julia users accustomed to MATLAB:
    lines of code do not need to end with semicolons. The function
    ``println`` can be used to print a value followed by a newline.
 -  If ``A`` and ``B`` are arrays, ``A == B`` doesn't return an array of
-   booleans. Use ``A .== B`` instead. Likewise for the other boolean
+   Booleans. Use ``A .== B`` instead. Likewise for the other Boolean
    operators, ``<``, ``>``, ``!=``, etc.
 -  The operators ``&``, ``|``, and ``$`` perform the bitwise operations and,
    or, and xor, respectively, and have precedence similar to Python's bitwise
@@ -97,7 +97,7 @@ One of Julia's goals is to provide an effective language for data analysis and s
 - Julia's matrix operations are more like traditional mathematical notation than R's. If ``A`` and ``B`` are matrices, then ``A * B`` defines a matrix multiplication in Julia equivalent to R's ``A %*% B``. In R, this same notation would perform an elementwise Hadamard product. To get the elementwise multiplication operation, you need to write ``A .* B`` in Julia.
 - Julia performs matrix transposition using the ``'`` operator. Julia's ``A'`` is therefore equivalent to R's ``t(A)``.
 - Julia does not require parentheses when writing ``if`` statements or ``for`` loops: use ``for i in [1, 2, 3]`` instead of ``for (i in c(1, 2, 3))`` and ``if i == 1`` instead of ``if (i == 1)``.
-- Julia does not treat the numbers ``0`` and ``1`` as Booleans. You cannot write ``if (1)`` in Julia, because ``if`` statements accept only booleans. Instead, you can write ``if true``.
+- Julia does not treat the numbers ``0`` and ``1`` as Booleans. You cannot write ``if (1)`` in Julia, because ``if`` statements accept only Booleans. Instead, you can write ``if true``.
 - Julia does not provide ``nrow`` and ``ncol``. Instead, use ``size(M, 1)`` for ``nrow(M)`` and ``size(M, 2)`` for ``ncol(M)``.
 - Julia's SVD is not thinned by default, unlike R. To get results like R's, you will often want to call ``svd(X, true)`` on a matrix ``X``.
 - Julia is careful to distinguish scalars, vectors and matrices. In R, ``1`` and ``c(1)`` are the same. In Julia, they can not be used interchangeably. One potentially confusing result of this is that ``x' * y`` for vectors ``x`` and ``y`` is a 1-element vector, not a scalar. To get a scalar, use ``dot(x, y)``.

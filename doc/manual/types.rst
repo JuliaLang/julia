@@ -306,10 +306,10 @@ The number of bits indicates how much storage the type requires and the
 name gives the new type a name. A bits type can optionally be declared
 to be a subtype of some supertype. If a supertype is omitted, then the
 type defaults to having ``Any`` as its immediate supertype. The
-declaration of ``Bool`` above therefore means that a boolean value takes
+declaration of ``Bool`` above therefore means that a Boolean value takes
 eight bits to store, and has ``Integer`` as its immediate supertype.
 Currently, only sizes that are multiples of 8 bits are supported.
-Therefore, boolean values, although they really need just a single bit,
+Therefore, Boolean values, although they really need just a single bit,
 cannot be declared to be any smaller than eight bits.
 
 The types ``Bool``, ``Int8`` and ``Uint8`` all have identical
