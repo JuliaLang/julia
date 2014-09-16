@@ -56,6 +56,7 @@ endif
 	@echo "const VERSION_STRING = \"$(JULIA_VERSION)\"" >> $@
 	@echo "const TAGGED_RELEASE_BANNER = \"$(TAGGED_RELEASE_BANNER)\"" >> $@
 	@echo "const SYSCONFDIR = \"$(sysconfdir)\"" >> $@
+	@echo "const DATAROOTDIR = \"$(datarootdir)\"" >> $@
 
 	@# This to ensure that we always rebuild this file, but only when it is modified do we touch build_h.jl,
 	@# ensuring we rebuild the system image as infrequently as possible
