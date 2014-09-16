@@ -204,7 +204,10 @@ rand(r::AbstractArray) = r[rand(randintgen(length(r)))]
 
 # Arrays of random integers
 
-function rand!(r::AbstractArray, A::AbstractArray)
+rand!(r::Range, A::AbstractArray) = rand!(r, A, ())
+
+# TODO: this more general version is "disabled" until #8246 is resolved
+function rand!(r::AbstractArray, A::AbstractArray, ::())
     g = randintgen(length(r))
     for i = 1 : length(A)
         @inbounds A[i] = r[rand(g)]
@@ -212,7 +215,7 @@ function rand!(r::AbstractArray, A::AbstractArray)
     return A
 end
 
-rand{T}(r::AbstractArray{T}, dims::Dims) = rand!(r, Array(T, dims))
+rand{T}(r::AbstractArray{T}, dims::Dims) = rand!(r, Array(T, dims), ())
 rand(r::AbstractArray, dims::Int...) = rand(r, dims)
 
 
