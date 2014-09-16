@@ -8,6 +8,13 @@ typealias SmallSigned Union(Int8,Int16,Int32)
 typealias SmallUnsigned Union(Uint8,Uint16,Uint32)
 end
 
+typealias Signed64 Union(Int8,Int16,Int32,Int64)
+typealias Unsigned64 Union(Uint8,Uint16,Uint32,Uint64)
+typealias Integer64 Union(Signed64,Unsigned64)
+typealias Signed128 Union(Signed64, Int128)
+typealias Unsigned128 Union(Unsigned64, Uint128)
+typealias Integer128 Union(Signed128,Unsigned128)
+
 ## integer arithmetic ##
 
 -(x::SmallSigned) = -int(x)
@@ -93,9 +100,6 @@ cld(x::Unsigned, y::Signed) = div(x,y)+(!signbit(y)&(rem(x,y)!=0))
 
 # Don't promote integers for div/rem/mod since there no danger of overflow,
 # while there is a substantial performance penalty to 64-bit promotion.
-typealias Signed64 Union(Int8,Int16,Int32,Int64)
-typealias Unsigned64 Union(Uint8,Uint16,Uint32,Uint64)
-typealias Integer64 Union(Signed64,Unsigned64)
 
 div{T<:Signed64}  (x::T, y::T) = box(T,sdiv_int(unbox(T,x),unbox(T,y)))
 div{T<:Unsigned64}(x::T, y::T) = box(T,udiv_int(unbox(T,x),unbox(T,y)))
@@ -370,6 +374,23 @@ uint128(x) = convert(Uint128,x)
 signed(x) = convert(Signed,x)
 unsigned(x) = convert(Unsigned,x)
 integer(x) = convert(Integer,x)
+
+as_signed{T<:Signed128}(::Type{T}) = T
+as_signed(::Type{Uint8}  ) = Int8
+as_signed(::Type{Uint16} ) = Int16
+as_signed(::Type{Uint32} ) = Int32
+as_signed(::Type{Uint64} ) = Int64
+as_signed(::Type{Uint128}) = Int128
+
+as_unsigned{T<:Unsigned128}(::Type{T}) = T
+as_unsigned(::Type{Int8}  ) = Uint8
+as_unsigned(::Type{Int16} ) = Uint16
+as_unsigned(::Type{Int32} ) = Uint32
+as_unsigned(::Type{Int64} ) = Uint64
+as_unsigned(::Type{Int128}) = Uint128
+
+as_signed{T<:Integer128}(x::T)   = convert(as_signed(T), x)
+as_unsigned{T<:Integer128}(x::T) = convert(as_unsigned(T), x)
 
 round(x::Integer) = x
 trunc(x::Integer) = x

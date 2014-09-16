@@ -3932,43 +3932,35 @@ Random Numbers
 
 Random number generation in Julia uses the `Mersenne Twister library <http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT>`_. Julia has a global RNG, which is used by default. Multiple RNGs can be plugged in using the ``AbstractRNG`` object, which can then be used to have multiple streams of random numbers. Currently, only ``MersenneTwister`` is supported.
 
+Most functions related to random generation accept an optional ``AbstractRNG`` as the first argument, ``rng`` , which defaults to the global one if not provided. Morever, some of them accept optionally dimension specifications ``dims...`` (which can be given as a tuple) to generate arrays of random values.
+
+A ``MersenneTwister`` RNG can generate random numbers of the following types: ``Float16, Float32, Float64, Bool, Int16, Uint16, Int32, Uint32, Int64, Uint64, Int128, Uint128`` (or complex numbers or arrays of those types). Random floating point numbers are generated uniformly in [0,1).
+
 .. function:: srand([rng], [seed])
 
-   Reseed the random number generator. If a ``seed`` is provided, the RNG will give a reproducible sequence of numbers, otherwise Julia will get entropy from the system. The ``seed`` may be a non-negative integer, a vector of ``Uint32`` integers or a filename, in which case the seed is read from a file. If the argument ``rng`` is not provided, the default global RNG is seeded.
+   Reseed the random number generator. If a ``seed`` is provided, the RNG will give a reproducible sequence of numbers, otherwise Julia will get entropy from the system. The ``seed`` may be a non-negative integer, a vector of ``Uint32`` integers or a filename, in which case the seed is read from a file.
 
 .. function:: MersenneTwister([seed])
 
    Create a ``MersenneTwister`` RNG object. Different RNG objects can have their own seeds, which may be useful for generating different streams of random numbers.
 
-.. function:: rand() -> Float64
+.. function:: rand([rng], [t::Type], [dims...])
 
-   Generate a ``Float64`` random number uniformly in [0,1)
+   Generate a random value or an array of random values of the given type, ``t``, which defaults to ``Float64``.
 
 .. function:: rand!([rng], A)
 
-   Populate the array A with random number generated from the specified RNG.
-
-.. function:: rand(rng::AbstractRNG, [dims...])
-
-   Generate a random ``Float64`` number or array of the size specified by dims, using the specified RNG object. Currently, ``MersenneTwister`` is the only available Random Number Generator (RNG), which may be seeded using srand.
-
-.. function:: rand(dims or [dims...])
-
-   Generate a random ``Float64`` array of the size specified by dims
-
-.. function:: rand(t::Type, [dims...])
-
-   Generate a random number or array of random numbes of the given type.
+   Populate the array A with random values.
 
 .. function:: rand(r, [dims...])
 
    Pick a random element or array of random elements from range ``r`` (for example, ``1:n`` or ``0:2:10``).
 
-.. function:: randbool([dims...])
+.. function:: randbool([rng], [dims...])
 
-   Generate a random boolean value. Optionally, generate an array of random boolean values.
+   Generate a random boolean value. Optionally, generate a ``BitArray`` of random boolean values.
 
-.. function:: randn([rng], dims or [dims...])
+.. function:: randn([rng], [dims...])
 
    Generate a normally-distributed random number with mean 0 and standard deviation 1. Optionally generate an array of normally-distributed random numbers.
 
