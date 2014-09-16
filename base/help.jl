@@ -188,6 +188,7 @@ isname(ex::Expr) = ((ex.head == :. && isname(ex.args[1]) && isname(ex.args[2]))
                     || (ex.head == :quote && isname(ex.args[1])))
 
 macro help(ex)
+    ex = isdefined(ex.args[1]) ? eval(ex.args[1]) : "$(ex.args[1])"
     if ex === :? || ex === :help
         return Expr(:call, :help)
     elseif !isa(ex, Expr) || isname(ex)
