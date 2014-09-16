@@ -10,6 +10,24 @@ srand(0); rand(); x = rand(384);
 @test minimum([rand(int32(1):int32(7^7)) for i = 1:100000]) > 0
 @test(typeof(rand(false:true)) == Bool)
 
+# Test rand(::AbstractRNG, ::Type{...})
+@test rand(MersenneTwister(), Uint32) == 0x02631e40
+@test rand(MersenneTwister(42), Float16) == float16(0.5332)
+@test rand(MersenneTwister(42), Float32) == 0.53318304f0
+@test rand(MersenneTwister(42), Float64) == 0.5331830160438613
+@test rand(MersenneTwister(42), Uint8) == 0x73
+@test rand(MersenneTwister(42), Uint16) == 0x0e73
+@test rand(MersenneTwister(42), Uint32) == 0xea0b0e73
+@test rand(MersenneTwister(42), Uint64) == 0x0e0c7263ea0b0e73
+@test rand(MersenneTwister(42), Uint128) == 0x0e0c7263ea0b0e736c7aeb39fb64f900
+@test rand(MersenneTwister(42), Int8) == 115
+@test rand(MersenneTwister(42), Int16) == 3699
+@test rand(MersenneTwister(42), Int32) == -368374157
+@test rand(MersenneTwister(42), Int64) == 1012309789705440883
+@test rand(MersenneTwister(42), Int128) == 18673819614007004079327070939043395840
+@test rand(MersenneTwister(42), Complex{Int8}) == 115 + 99im
+@test rand(MersenneTwister(42), Complex{Int64}) == 1012309789705440883 + 7816818737518278912im
+
 @test length(randn(4, 5)) == 20
 @test length(randbool(4, 5)) == 20
 
