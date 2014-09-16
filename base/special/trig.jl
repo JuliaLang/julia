@@ -1,8 +1,8 @@
-immutable Double64
+immutable DoubleFloat64
     hi::Float64
     lo::Float64
 end
-immutable Double32
+immutable DoubleFloat32
     hi::Float64
 end
 
@@ -17,7 +17,7 @@ end
 ## software is freely granted, provided that this notice
 ## is preserved.
 
-function sin_kernel(x::Double64)
+function sin_kernel(x::DoubleFloat64)
     S1 = -1.66666666666666324348e-01
     S2 =  8.33333333332248946124e-03
     S3 = -1.98412698298579493134e-04
@@ -32,7 +32,7 @@ function sin_kernel(x::Double64)
     x.hi-((z*(0.5*x.lo-v*r)-x.lo)-v*S1)
 end
 
-function cos_kernel(x::Double64)
+function cos_kernel(x::DoubleFloat64)
     C1 =  4.16666666666666019037e-02
     C2 = -1.38888888888741095749e-03
     C3 =  2.48015872894767294178e-05
@@ -48,7 +48,7 @@ function cos_kernel(x::Double64)
     w + (((1.0-w)-hz) + (z*r-x.hi*x.lo))
 end
 
-function sin_kernel(x::Double32)
+function sin_kernel(x::DoubleFloat32)
     S1 = -0x15555554cbac77.0p-55
     S2 =  0x111110896efbb2.0p-59
     S3 = -0x1a00f9e2cae774.0p-65
@@ -61,7 +61,7 @@ function sin_kernel(x::Double32)
     float32((x.hi + s*(S1+z*S2)) + s*w*r)
 end
 
-function cos_kernel(x::Double32)
+function cos_kernel(x::DoubleFloat32)
     C0 = -0x1ffffffd0c5e81.0p-54
     C1 =  0x155553e1053a42.0p-57
     C2 = -0x16c087e80f1e27.0p-62
@@ -90,9 +90,9 @@ function mulpi_ext(x::Float64)
     y_hi = m*x
     y_lo = x_hi * m_lo + (x_lo* m_hi + ((x_hi*m_hi-y_hi) + x_lo*m_lo))
 
-    Double64(y_hi,y_lo)
+    DoubleFloat64(y_hi,y_lo)
 end
-mulpi_ext(x::Float32) = Double32(pi*float64(x))
+mulpi_ext(x::Float32) = DoubleFloat32(pi*float64(x))
 mulpi_ext(x::Rational) = mulpi_ext(float(x))
 mulpi_ext(x::Real) = pi*x # Fallback
 
@@ -227,9 +227,9 @@ function deg2rad_ext(x::Float64)
     y_hi = m*x
     y_lo = x_hi * m_lo + (x_lo* m_hi + ((x_hi*m_hi-y_hi) + x_lo*m_lo))
 
-    Double64(y_hi,y_lo)
+    DoubleFloat64(y_hi,y_lo)
 end
-deg2rad_ext(x::Float32) = Double32(deg2rad(float64(x)))
+deg2rad_ext(x::Float32) = DoubleFloat32(deg2rad(float64(x)))
 deg2rad_ext(x::Real) = deg2rad(x) # Fallback
 
 function sind(x::Real)
