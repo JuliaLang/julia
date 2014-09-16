@@ -30,7 +30,7 @@
 
 ("Base","whos","whos([Module,] [pattern::Regex])
 
-   Print information about global variables in a module, optionally
+   Print information about exported global variables in a module, optionally
    restricted to those matching \"pattern\".
 
 "),
