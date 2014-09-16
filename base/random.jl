@@ -5,7 +5,7 @@ using Base.dSFMT
 export srand,
        rand, rand!,
        randn, randn!,
-       randbool, randbool!,
+       randbool,
        AbstractRNG, RNG, MersenneTwister,
        randmtzig_randn, randmtzig_exprnd
 
@@ -240,7 +240,7 @@ randbool(dims::Dims) = rand!(BitArray(dims))
 randbool(dims::Int...) = rand!(BitArray(dims))
 
 randbool() = ((dsfmt_randui32() & 1) == 1)
-randbool!(B::BitArray) = rand!(B)
+rand(::Type{Bool}) = randbool()
 
 ## randn() - Normally distributed random numbers using Ziggurat algorithm
 

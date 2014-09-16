@@ -895,7 +895,6 @@ export
     MersenneTwister,
     rand!,
     rand,
-    randbool!,
     randbool,
     randn!,
     randn,

@@ -177,3 +177,5 @@ const IpAddr = IPAddr
 
 @deprecate isblank(c::Char) c == ' ' || c == '\t'
 @deprecate isblank(s::String) all(c -> c == ' ' || c == '\t', s)
+
+@deprecate randbool! rand!
