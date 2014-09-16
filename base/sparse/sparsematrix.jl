@@ -210,6 +210,7 @@ function sparsevec(I::AbstractVector, V, m::Integer, combine::Function)
     p = sortperm(I)
     @inbounds I = I[p]
     (nI==0 || m >= I[end]) || throw(DimensionMismatch("indices cannot be larger than length of vector"))
+    (nI==0 || I[1] > 0) || throw(BoundsError())
     V = V[p]
     sparse_IJ_sorted!(I, ones(eltype(I), nI), V, m, 1, combine)
 end
