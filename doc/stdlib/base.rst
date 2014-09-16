@@ -38,7 +38,7 @@ Getting Around
 
 .. function:: whos([Module,] [pattern::Regex])
 
-   Print information about global variables in a module, optionally restricted
+   Print information about exported global variables in a module, optionally restricted
    to those matching ``pattern``.
 
 .. function:: edit(file::String, [line])
