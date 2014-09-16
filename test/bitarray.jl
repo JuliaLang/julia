@@ -39,7 +39,7 @@ allsizes = [((), BitArray{0}), ((v1,), BitVector),
 ## Conversions ##
 
 for (sz,T) in allsizes
-    b1 = randbool!(falses(sz...))
+    b1 = rand!(falses(sz...))
     @test isequal(bitpack(bitunpack(b1)), b1)
     @test isequal(convert(Array{Float64,ndims(b1)}, b1),
                   convert(Array{Float64,ndims(b1)}, bitunpack(b1)))
@@ -62,7 +62,7 @@ for (sz,T) in allsizes
     @test isequal(bitunpack(trues(sz...)), ones(Bool, sz...))
     @test isequal(bitunpack(falses(sz...)), zeros(Bool, sz...))
 
-    b1 = randbool!(falses(sz...))
+    b1 = rand!(falses(sz...))
     @test isa(b1, T)
 
     @check_bit_operation length(b1) Int
@@ -79,7 +79,7 @@ timesofar("utils")
 
 # 0d
 for (sz,T) in allsizes
-    b1 = randbool!(falses(sz...))
+    b1 = rand!(falses(sz...))
     @check_bit_operation getindex(b1)         Bool
     @check_bit_operation setindex!(b1, true)  T
     @check_bit_operation setindex!(b1, false) T
@@ -89,7 +89,7 @@ end
 # linear
 for (sz,T) in allsizes[2:end]
     l = *(sz...)
-    b1 = randbool!(falses(sz...))
+    b1 = rand!(falses(sz...))
     for j = 1:l
         @check_bit_operation getindex(b1, j) Bool
     end

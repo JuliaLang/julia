@@ -3956,21 +3956,17 @@ Random number generation in Julia uses the `Mersenne Twister library <http://www
 
    Generate a random ``Float64`` array of the size specified by dims
 
-.. function:: rand(Int32|Uint32|Int64|Uint64|Int128|Uint128, [dims...])
+.. function:: rand(t::Type, [dims...])
 
-   Generate a random integer of the given type. Optionally, generate an array of random integers of the given type by specifying dims.
+   Generate a random number or array of random numbes of the given type.
 
 .. function:: rand(r, [dims...])
 
-   Generate a random integer in the range ``r`` (for example, ``1:n`` or ``0:2:10``). Optionally, generate a random integer array.
+   Pick a random element or array of random elements from range ``r`` (for example, ``1:n`` or ``0:2:10``).
 
 .. function:: randbool([dims...])
 
    Generate a random boolean value. Optionally, generate an array of random boolean values.
-
-.. function:: randbool!(A)
-
-   Fill an array with random boolean values. A may be an ``Array`` or a ``BitArray``.
 
 .. function:: randn([rng], dims or [dims...])
 
