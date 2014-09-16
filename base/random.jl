@@ -115,49 +115,53 @@ srand(filename::String, n::Integer=4) = srand(GLOBAL_RNG, filename, n)
 const GLOBAL_RNG = MersenneTwister()
 globalRNG() = GLOBAL_RNG
 
+# rand: a non-specified RNG defaults to GLOBAL_RNG
+
+rand() = rand(GLOBAL_RNG)
+rand(T::Type) = rand(GLOBAL_RNG, T)
+rand(::()) = rand(GLOBAL_RNG, ()) # needed to resolve ambiguity
+rand(dims::Dims) = rand(GLOBAL_RNG, dims)
+rand(dims::Int...) = rand(dims)
+rand(T::Type, dims::Dims) = rand(GLOBAL_RNG, T, dims)
+rand(T::Type, d1::Int, dims::Int...) = rand(T, tuple(d1, dims...))
+rand!(A::AbstractArray) = rand!(GLOBAL_RNG, A)
+
 ## random floating point values
 
-rand(r::MersenneTwister=GLOBAL_RNG) = rand_close_open(r)
-
-rand(::Type{Float64}) = rand()
-
-rand(::Type{Float32}) = float32(rand())
-rand(::Type{Float16}) = float16(rand())
-
-rand{T<:Real}(::Type{Complex{T}}) = complex(rand(T),rand(T))
-
-## random integers
-
-rand(::Type{Uint8})   = rand(Uint32) % Uint8
-rand(::Type{Uint16})  = rand(Uint32) % Uint16
-rand(::Type{Uint32})  = rand_ui32(GLOBAL_RNG)
-rand(::Type{Uint64})  = uint64(rand(Uint32)) <<32 | rand(Uint32)
-rand(::Type{Uint128}) = uint128(rand(Uint64))<<64 | rand(Uint64)
-
-rand(::Type{Int8})    = rand(Uint32) % Int8
-rand(::Type{Int16})   = rand(Uint32) % Int16
-rand(::Type{Int32})   = reinterpret(Int32,rand(Uint32))
-rand(::Type{Int64})   = reinterpret(Int64,rand(Uint64))
-rand(::Type{Int128})  = reinterpret(Int128,rand(Uint128))
-
-# Arrays of random numbers
-
-rand(::Type{Float64}, dims::Dims) = rand!(Array(Float64, dims))
-rand(::Type{Float64}, dims::Int...) = rand(Float64, dims)
-
-rand(dims::Dims) = rand(Float64, dims)
-rand(dims::Int...) = rand(Float64, dims)
-
 rand(r::AbstractRNG) = rand(r, Float64)
-rand(r::AbstractRNG, dims::Dims) = rand!(r, Array(Float64, dims))
+
+# MersenneTwister
+rand(r::MersenneTwister, ::Type{Float64}) = rand_close_open(r)
+rand{T<:Union(Float16, Float32)}(r::MersenneTwister, ::Type{T}) = convert(T, rand(r, Float64))
+
+## random integers (MersenneTwister)
+
+rand(r::MersenneTwister, ::Type{Uint8})   = rand(r, Uint32) % Uint8
+rand(r::MersenneTwister, ::Type{Uint16})  = rand(r, Uint32) % Uint16
+rand(r::MersenneTwister, ::Type{Uint32})  = rand_ui32(r)
+rand(r::MersenneTwister, ::Type{Uint64})  = uint64(rand(r, Uint32)) <<32 | rand(r, Uint32)
+rand(r::MersenneTwister, ::Type{Uint128}) = uint128(rand(r, Uint64))<<64 | rand(r, Uint64)
+
+rand(r::MersenneTwister, ::Type{Int8})    = rand(r, Uint32) % Int8
+rand(r::MersenneTwister, ::Type{Int16})   = rand(r, Uint32) % Int16
+rand(r::MersenneTwister, ::Type{Int32})   = reinterpret(Int32,  rand(r, Uint32))
+rand(r::MersenneTwister, ::Type{Int64})   = reinterpret(Int64,  rand(r, Uint64))
+rand(r::MersenneTwister, ::Type{Int128})  = reinterpret(Int128, rand(r, Uint128))
+
+## random complex values
+
+rand{T<:Real}(r::AbstractRNG, ::Type{Complex{T}}) = complex(rand(r, T), rand(r, T))
+
+## Arrays of random numbers
+
+rand(r::AbstractRNG, dims::Dims) = rand(r, Float64, dims)
 rand(r::AbstractRNG, dims::Int...) = rand(r, dims)
 
-function rand!{T}(A::Array{T})
-    for i = 1:length(A)
-        A[i] = rand(T)
-    end
-    A
-end
+rand(r::AbstractRNG, T::Type, dims::Dims) = rand!(r, Array(T, dims))
+rand(r::AbstractRNG, T::Type, d1::Int, dims::Int...) = rand(r, T, tuple(d1, dims...))
+# note: the above method would trigger an ambiguity warning if d1 was not separated out:
+# rand(r, ()) would match both this method and rand(r, dims::Dims)
+# moreover, a call like rand(r, NotImplementedType()) would be an infinite loop
 
 function rand!{T}(r::AbstractRNG, A::AbstractArray{T})
     for i = 1:length(A)
@@ -165,6 +169,8 @@ function rand!{T}(r::AbstractRNG, A::AbstractArray{T})
     end
     A
 end
+
+# MersenneTwister
 
 function rand_AbstractArray_Float64!(r::MersenneTwister, A::AbstractArray{Float64})
     n = length(A)
@@ -200,14 +206,6 @@ function rand!(r::MersenneTwister, A::Array{Float64})
     end
     A
 end
-
-rand!(A::AbstractArray{Float64}) = rand!(GLOBAL_RNG, A)
-rand!(A::Array{Float64}) = rand!(GLOBAL_RNG, A)
-
-rand(T::Type, dims::Dims) = rand!(Array(T, dims))
-rand{T<:Number}(::Type{T}) = error("no random number generator for type $T; try a more specific type")
-rand{T<:Number}(::Type{T}, dims::Int...) = rand(T, dims)
-
 
 ## Generate random integer within a range
 
@@ -295,16 +293,20 @@ end
 rand{T}(r::Range{T}, dims::Dims) = rand!(r, Array(T, dims))
 rand(r::Range, dims::Int...) = rand(r, dims)
 
+## random BitArrays (AbstractRNG)
 
-## random Bools
+rand!(r::AbstractRNG, B::BitArray) = Base.bitarray_rand_fill!(r, B)
 
-rand!(B::BitArray) = Base.bitarray_rand_fill!(B)
+randbool(r::AbstractRNG, dims::Dims)   = rand!(r, BitArray(dims))
+randbool(r::AbstractRNG, dims::Int...) = rand!(r, BitArray(dims))
 
-randbool(dims::Dims) = rand!(BitArray(dims))
+randbool(dims::Dims)   = rand!(BitArray(dims))
 randbool(dims::Int...) = rand!(BitArray(dims))
 
-randbool() = ((rand(Uint32) & 1) == 1)
-rand(::Type{Bool}) = randbool()
+randbool(r::MersenneTwister=GLOBAL_RNG) = ((rand(r, Uint32) & 1) == 1)
+
+rand(r::MersenneTwister, ::Type{Bool}) = randbool(r)
+
 
 ## randn() - Normally distributed random numbers using Ziggurat algorithm
 
