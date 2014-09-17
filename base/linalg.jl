@@ -84,6 +84,7 @@ export
     lufact!,
     lyap,
     norm,
+    normfro,
     null,
     peakflops,
     pinv,

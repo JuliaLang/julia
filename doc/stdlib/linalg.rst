@@ -390,6 +390,10 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    For example, if ``A`` is a matrix and ``p=2``, then this is equivalent
    to the Frobenius norm.
 
+.. function:: normfro(A)
+
+   Compute the Frobenius norm of a matrix ``A``.
+
 .. function:: cond(M, [p])
 
    Condition number of the matrix ``M``, computed using the operator ``p``-norm. Valid values for ``p`` are ``1``, ``2`` (default), or ``Inf``.
