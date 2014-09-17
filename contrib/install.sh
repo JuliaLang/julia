@@ -26,3 +26,5 @@ for SRC in $ARGS; do
     # Do the chmod dance, and ignore errors on platforms that don't like setting permissions of symlinks
     chmod $PERMS $DESTFILE 2>/dev/null
 done
+
+exit 0
