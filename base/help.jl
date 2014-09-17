@@ -188,16 +188,23 @@ isname(ex::Expr) = ((ex.head == :. && isname(ex.args[1]) && isname(ex.args[2]))
                     || (ex.head == :quote && isname(ex.args[1])))
 
 macro help(ex)
-    ex = isdefined(ex.args[1]) ? eval(ex.args[1]) : "$(ex.args[1])"
     if ex === :? || ex === :help
-        return Expr(:call, :help)
+        ret = Expr(:call, :help)
     elseif !isa(ex, Expr) || isname(ex)
-        return Expr(:call, :help, esc(ex))
+        ret = Expr(:call, :help, esc(ex))
     elseif ex.head == :macrocall && length(ex.args) == 1
         # e.g., "julia> @help @printf"
-        return Expr(:call, :help, string(ex.args[1]))
+        ret = Expr(:call, :help, string(ex.args[1]))
     else
-        return Expr(:macrocall, symbol("@which"), esc(ex))
+        ret = Expr(:macrocall, symbol("@which"), esc(ex))
+    end
+    quote
+        try
+            $ret
+        catch
+            println("Symbol not found. Falling back on apropos search ...")
+            apropos($(string(ex)))
+        end
     end
 end
 
