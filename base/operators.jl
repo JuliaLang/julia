@@ -181,14 +181,14 @@ copy(x::Union(Symbol,Number,String,Function,Tuple,LambdaStaticData,
 
 function promote_shape(a::(Int,), b::(Int,))
     if a[1] != b[1]
-        error("dimensions must match")
+        throw(DimensionMismatch("Cannot promote dimensions $(a) to $(b)"))
     end
     return a
 end
 
 function promote_shape(a::(Int,Int), b::(Int,))
     if a[1] != b[1] || a[2] != 1
-        error("dimensions must match")
+        throw(DimensionMismatch("Cannot promote dimensions $(a) to $(b)"))
     end
     return a
 end
@@ -197,7 +197,7 @@ promote_shape(a::(Int,), b::(Int,Int)) = promote_shape(b, a)
 
 function promote_shape(a::(Int, Int), b::(Int, Int))
     if a[1] != b[1] || a[2] != b[2]
-        error("dimensions must match")
+        throw(DimensionMismatch("Cannot promote dimensions $(a) to $(b)"))
     end
     return a
 end
@@ -208,12 +208,12 @@ function promote_shape(a::Dims, b::Dims)
     end
     for i=1:length(b)
         if a[i] != b[i]
-            error("dimensions must match")
+            throw(DimensionMismatch("Cannot promote dimensions $(a) to $(b)"))
         end
     end
     for i=length(b)+1:length(a)
         if a[i] != 1
-            error("dimensions must match")
+            throw(DimensionMismatch("Cannot promote dimensions $(a) to $(b)"))
         end
     end
     return a
