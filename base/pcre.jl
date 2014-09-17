@@ -6,6 +6,14 @@ include("pcre_h.jl")
 
 const VERSION = bytestring(ccall((:pcre_version, :libpcre), Ptr{Uint8}, ()))
 
+global JIT_STACK = C_NULL
+function __init__()
+    JIT_STACK_START_SIZE = 32768
+    JIT_STACK_MAX_SIZE = 1048576
+    global JIT_STACK = ccall((:pcre_jit_stack_alloc, :libpcre), Ptr{Void},
+                             (Cint, Cint), JIT_STACK_START_SIZE, JIT_STACK_MAX_SIZE)
+end
+
 # supported options for different use cases
 
 const COMPILE_MASK      =
@@ -85,6 +93,7 @@ function compile(pattern::String, options::Integer)
               " at position $(erroff[1]+1)",
               " in $(repr(pattern))")
     end
+
     re_ptr
 end
 
@@ -97,6 +106,10 @@ function study(regex::Ptr{Void}, options::Integer)
     if errstr[1] != C_NULL
         error("$(bytestring(errstr[1]))")
     end
+
+    ccall((:pcre_assign_jit_stack, :libpcre), Void,
+          (Ptr{Void}, Ptr{Void}, Ptr{Void}),
+          extra, C_NULL, JIT_STACK)
     extra
 end
 
