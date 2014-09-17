@@ -212,7 +212,6 @@ endif
 $(eval $(call std_dll,ssp-0))
 endif
 
-prefix ?= $(abspath julia-$(JULIA_COMMIT))
 install: $(build_bindir)/stringreplace
 	@$(MAKE) $(QUIET_MAKE) release
 	@$(MAKE) $(QUIET_MAKE) debug

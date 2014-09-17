@@ -81,6 +81,7 @@ JULIA_COMMIT = $(JULIA_VERSION)
 endif
 
 # Directories where said libraries get installed to
+prefix ?= $(abspath julia-$(JULIA_COMMIT))
 bindir = $(prefix)/bin
 libdir = $(prefix)/lib
 private_libdir = $(libdir)/julia
@@ -99,6 +100,14 @@ build_datarootdir = $(build_prefix)/share
 build_includedir = $(build_prefix)/include
 build_sysconfdir = $(build_prefix)/etc
 
+
+# Calculate relative paths to libdir, private_libdir, datarootdir, and sysconfdir
+build_libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(build_bindir) $(build_libdir))
+libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(libdir))
+build_private_libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(build_bindir) $(build_private_libdir))
+private_libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(private_libdir))
+datarootdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(datarootdir))
+sysconfdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(sysconfdir))
 
 # This used for debian packaging, to conform to library layout guidelines
 ifeq ($(MULTIARCH_INSTALL), 1)
@@ -313,13 +322,6 @@ LD := link
 endif
 RANLIB := $(CROSS_COMPILE)ranlib
 
-
-# Calculate relative paths to libdir and private_libdir
-build_libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(build_bindir) $(build_libdir))
-libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(libdir))
-
-build_private_libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(build_bindir) $(build_private_libdir))
-private_libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(private_libdir))
 
 # if not absolute, then relative to the directory of the julia executable
 JCPPFLAGS += "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys.ji\""
