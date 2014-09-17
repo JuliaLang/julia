@@ -29,11 +29,15 @@ import Core.Intrinsics: nan_dom_err, sqrt_llvm, box, unbox, powi_llvm
 
 # non-type specific math functions
 
-clamp{X,L,H}(x::X, lo::L, hi::H) =
+function clamp{X,L,H}(x::X, lo::L, hi::H)
+    # Catch an invalid domain for this function (#8006)
+    if lo > hi
+        throw(DomainError())
+    end
     ifelse(x > hi, convert(promote_type(X,L,H), hi),
-           ifelse(x < lo,
-                  convert(promote_type(X,L,H), lo),
-                  convert(promote_type(X,L,H), x)))
+        ifelse(x < lo, convert(promote_type(X,L,H), lo),
+            convert(promote_type(X,L,H), x)))
+end
 
 clamp{T}(x::AbstractArray{T,1}, lo, hi) = [clamp(xx, lo, hi) for xx in x]
 clamp{T}(x::AbstractArray{T,2}, lo, hi) =
