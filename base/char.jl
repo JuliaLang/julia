@@ -3,6 +3,10 @@ char(x::FloatingPoint) = char(iround(x))
 
 integer(x::Char) = int(x)
 
+convert(::Type{Char}, x::Float16) = char(convert(Uint32, x))
+convert(::Type{Char}, x::Float32) = char(convert(Uint32, x))
+convert(::Type{Char}, x::Float64) = char(convert(Uint32, x))
+
 ## char promotions ##
 
 promote_rule(::Type{Char}, ::Type{Int8})    = Int32
