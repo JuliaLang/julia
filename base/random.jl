@@ -104,17 +104,17 @@ rand(r::MersenneTwister) = dsfmt_genrand_close_open(r.state)
 dsfmt_randui32() = dsfmt_gv_genrand_uint32()
 dsfmt_randui64() = uint64(dsfmt_randui32()) | (uint64(dsfmt_randui32())<<32)
 
-rand(::Type{Uint8})   = uint8(rand(Uint32))
-rand(::Type{Uint16})  = uint16(rand(Uint32))
+rand(::Type{Uint8})   = itrunc(Uint8,rand(Uint32))
+rand(::Type{Uint16})  = itrunc(Uint16,rand(Uint32))
 rand(::Type{Uint32})  = dsfmt_randui32()
 rand(::Type{Uint64})  = dsfmt_randui64()
 rand(::Type{Uint128}) = uint128(rand(Uint64))<<64 | rand(Uint64)
 
-rand(::Type{Int8})    = int8(rand(Uint8))
-rand(::Type{Int16})   = int16(rand(Uint16))
-rand(::Type{Int32})   = int32(rand(Uint32))
-rand(::Type{Int64})   = int64(rand(Uint64))
-rand(::Type{Int128})  = int128(rand(Uint128))
+rand(::Type{Int8})    = itrunc(Int8,rand(Uint32))
+rand(::Type{Int16})   = itrunc(Int16,rand(Uint32))
+rand(::Type{Int32})   = reinterpret(Int32,rand(Uint32))
+rand(::Type{Int64})   = reinterpret(Int64,rand(Uint64))
+rand(::Type{Int128})  = reinterpret(Int128,rand(Uint128))
 
 # Arrays of random numbers
 

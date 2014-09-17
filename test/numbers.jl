@@ -1459,7 +1459,7 @@ end
 @test -0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001 ==
     -(0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001)
 
-@test isa(-0x00,Uint)
+@test isa(-0x00,Uint8)
 @test isa(-0x0000000000000000,Uint64)
 @test isa(-0x00000000000000000,Uint128)
 @test isa(-0x00000000000000000000000000000000,Uint128)
@@ -1901,9 +1901,9 @@ end
 
 for T = (Uint8,Int8,Uint16,Int16,Uint32,Int32,Uint64,Int64,Uint128,Int128)
     for n = 1:2:1000
-        @test convert(T,n*(n^typemax(T))) == one(T)
+        @test n*(n^typemax(T)) & typemax(T) == 1
         n = rand(T) | one(T)
-        @test convert(T,n*(n^typemax(T))) == one(T)
+        @test n*(n^typemax(T)) == 1
     end
 end
 
@@ -1931,7 +1931,7 @@ end
 # widen
 @test widen(1.5f0) === 1.5
 @test widen(int32(42)) === int64(42)
-@test widen(Int8) === Int
+@test widen(Int8) === Int16
 @test widen(Float32) === Float64
 ## Note: this should change to e.g. Float128 at some point
 @test widen(Float64) === BigFloat
