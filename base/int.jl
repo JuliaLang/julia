@@ -132,12 +132,14 @@ for T in IntTypes
     end
 end
 
-==(x::Signed,   y::Unsigned) = (x >= 0) & (unsigned(x) == y)
-==(x::Unsigned, y::Signed  ) = (y >= 0) & (x == unsigned(y))
-< (x::Signed,   y::Unsigned) = (x <  0) | (unsigned(x) <  y)
-< (x::Unsigned, y::Signed  ) = (y >  0) & (x <  unsigned(y))
-<=(x::Signed,   y::Unsigned) = (x <= 0) | (unsigned(x) <= y)
-<=(x::Unsigned, y::Signed  ) = (y >= 0) & (x <= unsigned(y))
+asunsigned(x) = reinterpret(typeof(unsigned(zero(x))), x)
+
+==(x::Signed,   y::Unsigned) = (x >= 0) & (asunsigned(x) == y)
+==(x::Unsigned, y::Signed  ) = (y >= 0) & (x == asunsigned(y))
+< (x::Signed,   y::Unsigned) = (x <  0) | (asunsigned(x) <  y)
+< (x::Unsigned, y::Signed  ) = (y >  0) & (x <  asunsigned(y))
+<=(x::Signed,   y::Unsigned) = (x <= 0) | (asunsigned(x) <= y)
+<=(x::Unsigned, y::Signed  ) = (y >= 0) & (x <= asunsigned(y))
 
 ## integer conversions ##
 
@@ -338,12 +340,10 @@ typemin(::Type{Int64 }) = -9223372036854775808
 typemax(::Type{Int64 }) = 9223372036854775807
 typemin(::Type{Uint64}) = uint64(0)
 typemax(::Type{Uint64}) = 0xffffffffffffffff
-@eval begin
-    typemin(::Type{Uint128}) = uint128(0)
-    typemax(::Type{Uint128}) = $(uint128(-1))
-    typemin(::Type{Int128} ) = $(int128((uint128(-1))>>int32(1))+int128(1))
-    typemax(::Type{Int128} ) = $(int128((uint128(-1))>>int32(1)))
-end
+@eval typemin(::Type{Uint128}) = $(uint128(0))
+@eval typemax(::Type{Uint128}) = $(box(Uint128,unbox(Int128,convert(Int128,-1))))
+@eval typemin(::Type{Int128} ) = $(convert(Int128,1)<<int32(127))
+@eval typemax(::Type{Int128} ) = $(box(Int128,unbox(Uint128,typemax(Uint128)>>int32(1))))
 
 widen(::Type{Int8}) = Int16
 widen(::Type{Int16}) = Int32
