@@ -373,8 +373,8 @@ function runtests(tests = ["all"], numcores = iceil(CPU_CORES/2))
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_CORES"] = "$numcores"
     try
-        run(setenv(`$(joinpath(JULIA_HOME, "julia")) $(joinpath(JULIA_HOME, "..",
-            "share", "julia", "test", "runtests.jl")) $tests`, ENV2))
+        run(setenv(`$(joinpath(JULIA_HOME, "julia")) $(joinpath(JULIA_HOME,
+            Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
     catch
         buf = PipeBuffer()
         versioninfo(buf)
