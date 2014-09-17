@@ -63,8 +63,12 @@ Function                              Description
 ===================================== =====================================================================
 ``Array(type, dims...)``              an uninitialized dense array
 ``cell(dims...)``                     an uninitialized cell array (heterogeneous array)
-``zeros(type, dims...)``              an array of all zeros of specified type
-``ones(type, dims...)``               an array of all ones of specified type
+``zeros(type, dims...)``              an array of all zeros of specified type, defaults to ``Float64`` if 
+                                      ``type`` not specified
+``zeros(A)``                          an array of all zeros of same element type and shape of ``A``
+``ones(type, dims...)``               an array of all ones of specified type, defaults to ``Float64`` if
+                                      if ``type`` not specified
+``ones(A)``                           an array of all ones of same element type and shape of ``A``
 ``trues(dims...)``                    a ``Bool`` array with all values ``true``
 ``falses(dims...)``                   a ``Bool`` array with all values ``false``
 ``reshape(A, dims...)``               an array with the same data as the given array, but with
