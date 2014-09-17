@@ -1082,7 +1082,7 @@ function find(A::StridedArray)
 end
 
 find(x::Number) = x == 0 ? Array(Int,0) : [1]
-find(testf::Function, x::Number) = testf(x) == 0 ? Array(Int,0) : [1]
+find(testf::Function, x::Number) = !testf(x) ? Array(Int,0) : [1]
 
 findn(A::AbstractVector) = find(A)
 
