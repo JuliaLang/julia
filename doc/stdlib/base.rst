@@ -4040,11 +4040,19 @@ Constructors
    Construct an uninitialized cell array (heterogeneous array). ``dims`` can be either a tuple or a series of integer arguments.
 .. function:: zeros(type, dims)
 
-   Create an array of all zeros of specified type
+   Create an array of all zeros of specified type. The type defaults to Float64 if not specified.
+
+.. function:: zeros(A)
+
+   Create an array of all zeros with the same element type and shape as A.
 
 .. function:: ones(type, dims)
 
-   Create an array of all ones of specified type
+   Create an array of all ones of specified type. The type defaults to Float64 if not specified.
+
+.. function:: ones(A)
+
+   Create an array of all ones with the same element type and shape as A.
 
 .. function:: trues(dims)
 
