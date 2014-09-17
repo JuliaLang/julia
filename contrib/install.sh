@@ -27,3 +27,5 @@ for SRC in $ARGS; do
     # TODO: Test if it's a symlink instead of having to redirect stderr to /dev/null
     chmod $PERMS $DESTFILE 2>/dev/null
 done
+
+exit 0
