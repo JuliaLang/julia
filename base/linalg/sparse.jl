@@ -190,8 +190,9 @@ function *{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti})
     deleteat!(nzvalC, colptrC[end]:length(nzvalC))
 
     # The Gustavson algorithm does not guarantee the product to have sorted row indices.
-    Cunsorted = SparseMatrixCSC(mA, nB, colptrC, rowvalC, nzvalC)
-    return sortCSC!(Cunsorted)
+    C = SparseMatrixCSC(mA, nB, colptrC, rowvalC, nzvalC)
+    sortCSC!(C)
+    return C
 end
 
 ## solvers
