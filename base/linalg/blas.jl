@@ -53,7 +53,7 @@ export
 
 const libblas = Base.libblas_name
 
-import ..LinAlg: BlasFloat, BlasChar, BlasInt, blas_int, DimensionMismatch, chksquare, axpy!
+import ..LinAlg: BlasReal, BlasComplex, BlasFloat, BlasChar, BlasInt, blas_int, DimensionMismatch, chksquare, axpy!
 
 # Level 1
 ## copy
@@ -154,17 +154,17 @@ for (fname, elty) in ((:cblas_zdotu_sub,:Complex128),
         end
     end
 end
-function dot{T<:BlasFloat}(DX::StridedArray{T}, DY::StridedArray{T})
+function dot{T<:BlasReal}(DX::StridedArray{T}, DY::StridedArray{T})
     n = length(DX)
     n == length(DY) || throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     dot(n, DX, stride(DX, 1), DY, stride(DY, 1))
 end
-function dotc{T<:BlasFloat}(DX::StridedArray{T}, DY::StridedArray{T})
+function dotc{T<:BlasComplex}(DX::StridedArray{T}, DY::StridedArray{T})
     n = length(DX)
     n == length(DY) || throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     dotc(n, DX, stride(DX, 1), DY, stride(DY, 1))
 end
-function dotu{T<:BlasFloat}(DX::StridedArray{T}, DY::StridedArray{T})
+function dotu{T<:BlasComplex}(DX::StridedArray{T}, DY::StridedArray{T})
     n = length(DX)
     n == length(DY) || throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     dotu(n, DX, stride(DX, 1), DY, stride(DY, 1))
@@ -249,7 +249,6 @@ for (fname, elty) in ((:idamax_,:Float64),
                       (:icamax_,:Complex64))
     @eval begin
         function iamax(n::BlasInt, dx::Union(StridedVector{$elty}, Ptr{$elty}), incx::BlasInt)
-            n*incx >= length(x) || throw(DimensionMismatch(""))
             ccall(($(string(fname)), libblas),BlasInt,
                 (Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                 &n, dx, &incx)
@@ -319,8 +318,9 @@ for (fname, elty) in ((:dgbmv_,:Float64),
             y
         end
         function gbmv(trans::BlasChar, m::Integer, kl::Integer, ku::Integer, alpha::($elty), A::StridedMatrix{$elty}, x::StridedVector{$elty})
-            n = stride(A,2)
-            gbmv!(trans, m, kl, ku, alpha, A, x, zero($elty), similar(x, $elty, n))
+            n = size(A,2)
+            leny = trans == 'N' ? m : n
+            gbmv!(trans, m, kl, ku, alpha, A, x, zero($elty), similar(x, $elty, leny))
         end
         function gbmv(trans::BlasChar, m::Integer, kl::Integer, ku::Integer, A::StridedMatrix{$elty}, x::StridedVector{$elty})
             gbmv(trans, m, kl, ku, one($elty), A, x)
@@ -366,7 +366,7 @@ end
 
 ### hemv
 for (fname, elty) in ((:zhemv_,:Complex128),
-                      (:cgemv_,:Complex64))
+                      (:chemv_,:Complex64))
     @eval begin
         function hemv!(uplo::Char, α::$elty, A::StridedMatrix{$elty}, x::StridedVector{$elty}, β::$elty, y::StridedVector{$elty})
             n = size(A, 2)
