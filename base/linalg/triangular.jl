@@ -7,6 +7,10 @@ function Triangular{T}(A::AbstractMatrix{T}, uplo::Symbol, isunit::Bool=false)
     return Triangular{T,typeof(A),uplo,isunit}(A)
 end
 
+const CHARU = 'U'
+const CHARL = 'L'
+char_uplo(uplo::Symbol) = uplo == :U ? CHARU : (uplo == :L ? CHARL : throw(ArgumentError("uplo argument must be either :U or :L")))
+
 +{T, MT, uplo}(A::Triangular{T, MT, uplo, false}, B::Triangular{T, MT, uplo, false}) = Triangular(A.data + B.data, uplo)
 +{T, MT}(A::Triangular{T, MT, :U, false}, B::Triangular{T, MT, :U, true}) = Triangular(A.data + triu(B.data, 1) + I, :U)
 +{T, MT}(A::Triangular{T, MT, :L, false}, B::Triangular{T, MT, :L, true}) = Triangular(A.data + tril(B.data, -1) + I, :L)

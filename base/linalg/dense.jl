@@ -20,7 +20,7 @@ scale!{T<:BlasFloat}(X::Array{T}, s::Number) = scale!(X, convert(T, s))
 scale!{T<:BlasComplex}(X::Array{T}, s::Real) = BLAS.scal!(length(X), oftype(real(zero(T)),s), X, 1)
 
 #Test whether a matrix is positive-definite
-isposdef!{T<:BlasFloat}(A::StridedMatrix{T}, UL::Symbol) = LAPACK.potrf!(string(UL)[1], A)[2] == 0
+isposdef!{T<:BlasFloat}(A::StridedMatrix{T}, UL::Symbol) = LAPACK.potrf!(char_uplo(UL), A)[2] == 0
 isposdef!(A::StridedMatrix) = ishermitian(A) && isposdef!(A, :U)
 
 isposdef{T}(A::AbstractMatrix{T}, UL::Symbol) = (S = typeof(sqrt(one(T))); isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A), UL))
