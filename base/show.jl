@@ -461,7 +461,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         func_args = args[2:end]
 
         # scalar multiplication (i.e. "100x")
-        if (func == :(*) && length(func_args)==2 && 
+        if (func == :(*) && length(func_args)==2 &&
             isa(func_args[1], Real) && isa(func_args[2], Symbol))
             if func_prec <= prec
                 show_enclosed_list(io, '(', func_args, "", ')', indent, func_prec)
@@ -500,6 +500,15 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         else
             show_call(io, head, func, func_args, indent)
         end
+
+    # typed comprehension
+    elseif is(head, :typed_comprehension) && length(args) == 3
+        show_unquoted(io, args[1], indent)
+        print(io, '[')
+        show_unquoted(io, args[2], indent)
+        print(io, " for ")
+        show_unquoted(io, args[3], indent)
+        print(io, ']')
 
     elseif is(head, :ccall)
         show_unquoted(io, :ccall, indent)
@@ -615,7 +624,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     elseif is(head, :&) && length(args) == 1
         print(io, '&')
         show_unquoted(io, args[1])
-    
+
     # print anything else as "Expr(head, args...)"
     else
         print(io, "\$(Expr(")
@@ -626,7 +635,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
         print(io, "))")
     end
-    
+
     show_expr_type(io, ex.typ)
 end
 
