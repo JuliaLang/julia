@@ -88,7 +88,8 @@ Function                              Description
 ``eye(n)``                            ``n``-by-``n`` identity matrix
 ``eye(m, n)``                         ``m``-by-``n`` identity matrix
 ``linspace(start, stop, n)``          vector of ``n`` linearly-spaced elements from ``start`` to ``stop``
-``fill!(A, x)``                       fill the array ``A`` with value ``x``
+``fill!(A, x)``                       fill the array ``A`` with the value ``x``
+``fill(x, dims)``                     create an array filled with the value ``x``
 ===================================== =====================================================================
 
 .. [#] *iid*, independently and identically distributed.

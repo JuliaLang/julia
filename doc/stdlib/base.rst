@@ -3920,13 +3920,13 @@ Constructors
 
    Create a ``BitArray`` with all values set to false
 
-.. function:: fill(v, dims)
+.. function:: fill(x, dims)
 
-   Create an array filled with ``v``
+   Create an array filled with the value ``x``
 
 .. function:: fill!(A, x)
 
-   Fill array ``A`` with value ``x``
+   Fill the array ``A`` with the value ``x``
 
 .. function:: reshape(A, dims)
 
