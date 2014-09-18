@@ -1,5 +1,5 @@
 /*
-  GENERIC Functions
+  Generic Functions
   . method table and lookup
   . GF constructor, add_method
   . dispatch
