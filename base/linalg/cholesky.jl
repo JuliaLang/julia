@@ -14,7 +14,7 @@ immutable CholeskyPivoted{T} <: Factorization{T}
 end
 
 function chol!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U)
-    C, info = LAPACK.potrf!(string(uplo)[1], A)
+    C, info = LAPACK.potrf!(char_uplo(uplo), A)
     return @assertposdef Triangular(C, uplo, false) info
 end
 
@@ -57,7 +57,7 @@ function chol!{T}(A::AbstractMatrix{T}, uplo::Symbol=:U)
 end
 
 function cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U; pivot=false, tol=0.0)
-    uplochar = string(uplo)[1]
+    uplochar = char_uplo(uplo)
     if pivot
         A, piv, rank, info = LAPACK.pstrf!(uplochar, A, tol)
         return CholeskyPivoted{T}(A, uplochar, piv, rank, tol, info)
@@ -65,6 +65,12 @@ function cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U; pivot=fal
     return Cholesky{T,typeof(A),uplo}(chol!(A, uplo).data)
 end
 cholfact!(A::AbstractMatrix, uplo::Symbol=:U) = Cholesky{eltype(A),typeof(A),uplo}(chol!(A, uplo).data)
+
+function cholfact!{T<:BlasFloat,S,UpLo}(C::Cholesky{T,S,UpLo})
+    _, info = LAPACK.potrf!(char_uplo(UpLo), C.UL)
+    info[1]>0 && throw(PosDefException(info[1]))
+    C
+end
 
 cholfact{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U; pivot=false, tol=0.0) = cholfact!(copy(A), uplo, pivot=pivot, tol=tol)
 function cholfact{T}(A::StridedMatrix{T}, uplo::Symbol=:U; pivot=false, tol=0.0)
