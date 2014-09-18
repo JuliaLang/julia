@@ -37,7 +37,6 @@ developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/jul
 - [**StackOverflow**](https://stackoverflow.com/questions/tagged/julia-lang)
 - [**Youtube**](https://www.youtube.com/channel/UC9IuUwwE2xdjQUT_LMLONoA)
 - [**Twitter**](https://twitter.com/JuliaLanguage)
-- [**Facebook Group**](https://www.facebook.com/juliaLanguageUserGroup)
 - [**Google+**](https://plus.google.com/communities/111295162646766639102)
 - [**Meetup**](http://julia.meetup.com/)
 
