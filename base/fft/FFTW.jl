@@ -20,7 +20,7 @@ export export_wisdom, import_wisdom, import_system_wisdom, forget_wisdom,
 const libfftw = Base.libfftw_name
 const libfftwf = Base.libfftwf_name
 
-const version = convert(VersionNumber, split(bytestring(cglobal((:fftw_version,Base.DFT.FFTW.libfftw), Uint8)), "-")[2])
+const version = convert(VersionNumber, split(bytestring(cglobal((:fftw_version,Base.DFT.FFTW.libfftw), UInt8)), "-")[2])
 
 ## Direction of FFT
 
@@ -54,10 +54,7 @@ const RODFT01 = 8
 const RODFT10 = 9
 const RODFT11 = 10
 
-let k2s = [R2HC => "R2HC", HC2R => "HC2R", DHT => "DHT",
-           REDFT00 => "REDFT00", REDFT01 => "REDFT01", REDFT10 => "REDFT10",
-           REDFT11 => "REDFT11", RODFT00 => "RODFT00", RODFT01 => "RODFT01",
-           RODFT10 => "RODFT10", RODFT11 => "RODFT11" ]
+let k2s = Dict{Int,ASCIIString}(R2HC => "R2HC", HC2R => "HC2R", DHT => "DHT", REDFT00 => "REDFT00", REDFT01 => "REDFT01", REDFT10 => "REDFT10", REDFT11 => "REDFT11", RODFT00 => "RODFT00", RODFT01 => "RODFT01", RODFT10 => "RODFT10", RODFT11 => "RODFT11")
     global kind2string
     kind2string(k::Integer) = k2s[int(k)]
 end
@@ -280,9 +277,9 @@ end
 
 # The sprint_plan function was released in FFTW 3.3.4
 sprint_plan_{T<:fftwDouble}(plan::FFTWPlan{T}) =
-    ccall((:fftw_sprint_plan,libfftw), Ptr{Uint8}, (PlanPtr,), plan)
+    ccall((:fftw_sprint_plan,libfftw), Ptr{UInt8}, (PlanPtr,), plan)
 sprint_plan_{T<:fftwSingle}(plan::FFTWPlan{T}) =
-    ccall((:fftwf_sprint_plan,libfftwf), Ptr{Uint8}, (PlanPtr,), plan)
+    ccall((:fftwf_sprint_plan,libfftwf), Ptr{UInt8}, (PlanPtr,), plan)
 function sprint_plan(plan::FFTWPlan)
     pointer_to_string(sprint_plan_(plan), true)
 end
@@ -729,13 +726,13 @@ function plan_r2r!{T<:fftwNumber}(X::StridedArray{T}, kinds, region;
 end
 
 # mapping from r2r kind to the corresponding inverse transform
-const inv_kind = [R2HC => HC2R, HC2R => R2HC, DHT => DHT,
-                  REDFT00 => REDFT00,
-                  REDFT01 => REDFT10, REDFT10 => REDFT01,
-                  REDFT11 => REDFT11,
-                  RODFT00 => RODFT00,
-                  RODFT01 => RODFT10, RODFT10 => RODFT01,
-                  RODFT11 => RODFT11]
+const inv_kind = Dict{Int,Int}(R2HC => HC2R, HC2R => R2HC, DHT => DHT,
+                               REDFT00 => REDFT00,
+                               REDFT01 => REDFT10, REDFT10 => REDFT01,
+                               REDFT11 => REDFT11,
+                               RODFT00 => RODFT00,
+                               RODFT01 => RODFT10, RODFT10 => RODFT01,
+                               RODFT11 => RODFT11)
 
 # r2r inverses are normalized to 1/N, where N is a "logical" size
 # the transform with length n and kind k:

@@ -263,6 +263,9 @@ include("statistics.jl")
 include("sparse.jl")
 importall .SparseMatrix
 
+# mathematical constants
+include("constants.jl")
+
 # signal processing
 include("dft.jl")
 importall .DFT
@@ -272,9 +275,6 @@ importall .DSP
 # system information
 include("sysinfo.jl")
 import .Sys.CPU_CORES
-
-# mathematical constants
-include("constants.jl")
 
 # Numerical integration
 include("quadgk.jl")
