@@ -3,12 +3,12 @@ immutable Symmetric{T,S<:AbstractMatrix{T}} <: AbstractMatrix{T}
     data::S
     uplo::Char
 end
-Symmetric(A::AbstractMatrix, uplo::Symbol=:U) = (chksquare(A);Symmetric{eltype(A),typeof(A)}(A, string(uplo)[1]))
+Symmetric(A::AbstractMatrix, uplo::Symbol=:U) = (chksquare(A);Symmetric{eltype(A),typeof(A)}(A, char_uplo(uplo)))
 immutable Hermitian{T,S<:AbstractMatrix{T}} <: AbstractMatrix{T}
     data::S
     uplo::Char
 end
-Hermitian(A::AbstractMatrix, uplo::Symbol=:U) = (chksquare(A);Hermitian{eltype(A),typeof(A)}(A, string(uplo)[1]))
+Hermitian(A::AbstractMatrix, uplo::Symbol=:U) = (chksquare(A);Hermitian{eltype(A),typeof(A)}(A, char_uplo(uplo)))
 typealias HermOrSym{T,S} Union(Hermitian{T,S}, Symmetric{T,S})
 typealias RealHermSymComplexHerm{T<:Real,S} Union(Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S})
 
