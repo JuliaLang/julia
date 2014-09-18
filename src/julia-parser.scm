@@ -1404,7 +1404,10 @@
 			(cons 'vcat (reverse (cons nxt lst))))
 		 (loop (cons nxt lst) (parse-eq* s))))
 	    ((#\;)
-	     (error "unexpected semicolon in array expression"))
+	     (if (eqv? (require-token s) closer)
+		 (loop lst nxt)
+		 (let ((params (parse-arglist s closer)))
+		   `(vcat ,@params ,@lst ,nxt))))
 	    ((#\] #\})
 	     (error (string "unexpected \"" t "\"")))
 	    (else
