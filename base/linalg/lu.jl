@@ -62,7 +62,7 @@ function generic_lufact!{T}(A::StridedMatrix{T}; pivot = true)
     LU{T,typeof(A)}(A, ipiv, convert(BlasInt, info))
 end
 lufact{T<:BlasFloat}(A::AbstractMatrix{T}; pivot = true) = lufact!(copy(A), pivot=pivot)
-lufact{T}(A::AbstractMatrix{T}; pivot = true) = (S = typeof(one(T)/one(T)); S != T ? lufact!(convert(AbstractMatrix{S}, A), pivot=pivot) : lufact!(copy(A), pivot=pivot))
+lufact{T}(A::AbstractMatrix{T}; pivot = true) = (S = typeof(zero(T)/one(T)); S != T ? lufact!(convert(AbstractMatrix{S}, A), pivot=pivot) : lufact!(copy(A), pivot=pivot))
 lufact(x::Number) = LU(fill(x, 1, 1), BlasInt[1], x == 0 ? one(BlasInt) : zero(BlasInt))
 lufact(F::LU) = F
 
