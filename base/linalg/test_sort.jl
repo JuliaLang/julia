@@ -1,6 +1,6 @@
-module test_sort
-
 const liblapack = Base.liblapack_name
+
+using Base, Base.LinAlg
 
 import Base.LinAlg: BlasFloat, BlasChar, BlasInt, blas_int, LAPACKException,
     DimensionMismatch, SingularException, PosDefException, chkstride1, chksquare
@@ -32,7 +32,7 @@ end
 @eval begin
     function test_gges!(jobvsl::Char, jobvsr::Char,
                         A::StridedMatrix{$elty}, B::StridedMatrix{$elty},
-                        sort::Char, selctg::Function)
+                        sort::Char, selctg::Ptr{None})
 
     # *     .. Scalar Arguments ..
     #       CHARACTER          JOBVSL, JOBVSR, SORT
@@ -82,24 +82,24 @@ end
     end
 end
 
-end # module
 
-
-test_schurfact{T<:BlasFloat}(A::StridedMatrix{T},B::StridedMatrix{T}, sort::Char='V', selctg::Function=C_NULL) = schurfact!(copy(A),copy(B), sort, selctg)
-test_schurfact!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T}, sort::Char='V', selctg::Function=C_NULL) = GeneralizedSchur(LinAlg.LAPACK.gges!('V', 'V', A, B, sort, selctg)...)
-test_schurfact{TA,TB}(A::StridedMatrix{TA}, B::StridedMatrix{TB}, sort::Char='V', selctg::Function=C_NULL) = (S = promote_type(Float32,typeof(one(TA)/norm(one(TA))),TB); schurfact!(S != TA ? convert(AbstractMatrix{S},A) : copy(A), S != TB ? convert(AbstractMatrix{S},B) : copy(B), sort, selctg))
+test_schurfact{T<:BlasFloat}(A::StridedMatrix{T},B::StridedMatrix{T}, sort::Char='V', selctg::Ptr{None}=C_NULL) = schurfact!(copy(A),copy(B), sort, selctg)
+test_schurfact!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T}, sort::Char='V', selctg::Ptr{None}=C_NULL) = GeneralizedSchur(test_gges!('V', 'V', A, B, sort, selctg)...)
+test_schurfact{TA,TB}(A::StridedMatrix{TA}, B::StridedMatrix{TB}, sort::Char='V', selctg::Ptr{None}=C_NULL) = (S = promote_type(Float32,typeof(one(TA)/norm(one(TA))),TB); test_schurfact!(S != TA ? convert(AbstractMatrix{S},A) : copy(A), S != TB ? convert(AbstractMatrix{S},B) : copy(B), sort, selctg))
 
 
 function order_eigs(alphar, alphai, beta)
     if alphar/alphai > 1
-        return true
+        return int32(1)
     else
-        return false
+        return int32(0)
     end
 end
+
+const order_eigs_c = cfunction(order_eigs, Cint, (Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cdouble}))
 
 # Test call
 A = randn(3, 3)
 B = reshape(1:9, 3, 3)
 
-test_schurfact(A, B, 'S', order_eigs)
+test_schurfact(A, B, 'S', order_eigs_c)
