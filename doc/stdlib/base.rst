@@ -4068,7 +4068,7 @@ Constructors
 
 .. function:: fill!(A, x)
 
-   Fill array ``A`` with the value ``x``
+   Fill the array ``A`` with the value ``x``
 
 .. function:: reshape(A, dims)
 
