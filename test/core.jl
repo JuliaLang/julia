@@ -243,31 +243,31 @@ end
 # conversions
 function fooo()
     local x::Int8
-    x = 1000
+    x = 100
     x
 end
-@test int32(fooo()) == -24
+@test fooo() === convert(Int8,100)
 function fooo_2()
     local x::Int8
-    x = 1000
+    x = 100
 end
-@test fooo_2() == 1000
+@test fooo_2() === 100
 function fooo_3()
     local x::Int8
-    y = x = 1000
-    @test x == -24
+    y = x = 100
+    @test isa(x,Int8)
     y
 end
-@test fooo_3() == 1000
+@test fooo_3() === 100
 function foo()
     local x::Int8
     function bar()
-        x = 1000
+        x = 100
     end
     bar()
     x
 end
-@test int32(foo()) == -24
+@test foo() === convert(Int8,100)
 
 function bar{T}(x::T)
     local z::Complex{T}

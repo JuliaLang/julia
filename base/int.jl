@@ -43,17 +43,17 @@ abs(x::Signed) = flipsign(x,x)
 
 ~(n::Integer) = -n-1
 
-div(x::Signed, y::Unsigned) = flipsign(signed(div(unsigned(abs(x)),y)),x)
-div(x::Unsigned, y::Signed) = unsigned(flipsign(signed(div(x,unsigned(abs(y)))),y))
+div(x::Signed, y::Unsigned) = flipsign(assigned(div(asunsigned(abs(x)),y)),x)
+div(x::Unsigned, y::Signed) = asunsigned(flipsign(assigned(div(x,asunsigned(abs(y)))),y))
 
-rem(x::Signed, y::Unsigned) = flipsign(signed(rem(unsigned(abs(x)),y)),x)
-rem(x::Unsigned, y::Signed) = rem(x,unsigned(abs(y)))
+rem(x::Signed, y::Unsigned) = flipsign(assigned(rem(asunsigned(abs(x)),y)),x)
+rem(x::Unsigned, y::Signed) = rem(x,asunsigned(abs(y)))
 
 fld(x::Signed, y::Unsigned) = div(x,y)-(signbit(x)&(rem(x,y)!=0))
 fld(x::Unsigned, y::Signed) = div(x,y)-(signbit(y)&(rem(x,y)!=0))
 
-mod(x::Signed, y::Unsigned) = rem(y+unsigned(rem(x,y)),y)
-mod(x::Unsigned, y::Signed) = rem(y+signed(rem(x,y)),y)
+mod(x::Signed, y::Unsigned) = rem(y+asunsigned(rem(x,y)),y)
+mod(x::Unsigned, y::Signed) = rem(y+assigned(rem(x,y)),y)
 
 cld(x::Signed, y::Unsigned) = div(x,y)+(!signbit(x)&(rem(x,y)!=0))
 cld(x::Unsigned, y::Signed) = div(x,y)+(!signbit(y)&(rem(x,y)!=0))
@@ -133,6 +133,7 @@ for T in IntTypes
 end
 
 asunsigned(x) = reinterpret(typeof(unsigned(zero(x))), x)
+assigned(x) = reinterpret(typeof(signed(zero(x))), x)
 
 ==(x::Signed,   y::Unsigned) = (x >= 0) & (asunsigned(x) == y)
 ==(x::Unsigned, y::Signed  ) = (y >= 0) & (x == asunsigned(y))
@@ -158,6 +159,9 @@ for to in tuple(IntTypes...,Char), from in tuple(IntTypes...,Char,Bool)
             else
                 @eval convert(::Type{$to}, x::($from)) = box($to,zext_int($to,unbox($from,x)))
             end
+        elseif !(issubtype(from,Signed) === issubtype(to,Signed))
+            # raise InexactError if x's top bit is set
+            @eval convert(::Type{$to}, x::($from)) = box($to,check_top_bit(unbox($from,x)))
         else
             @eval convert(::Type{$to}, x::($from)) = box($to,unbox($from,x))
         end
@@ -223,7 +227,8 @@ int32(x) = convert(Int32,x)
 int64(x) = convert(Int64,x)
 int128(x) = convert(Int128,x)
 
-uint8(x) = convert(Uint8,x)
+uint8(x) = itrunc(Uint8,x)
+uint8(x::Int8) = box(Uint8,unbox(Int8,x))
 uint16(x) = convert(Uint16,x)
 uint32(x) = convert(Uint32,x)
 uint64(x) = convert(Uint64,x)
