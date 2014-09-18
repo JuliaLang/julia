@@ -1677,7 +1677,10 @@
 
    'ref
    (lambda (e)
-     (expand-forms (partially-expand-ref e)))
+     (let ((args (cddr e)))
+       (if (has-parameters? args)
+	 (error "unexpected semicolon in array expression")
+	 (expand-forms (partially-expand-ref e)))))
 
    'curly
    (lambda (e)
@@ -1692,9 +1695,9 @@
 		       (eq? (car (caddr e)) 'parameters))
 		  ;; (call f (parameters . kwargs) ...)
 		  (expand-forms
-		   (receive
-		    (kws args) (separate kwarg? (cdddr e))
-		    (lower-kw-call f (append kws (cdr (caddr e))) args))))
+		    (receive
+		      (kws args) (separate kwarg? (cdddr e))
+		      (lower-kw-call f (append kws (cdr (caddr e))) args))))
 		 ((any kwarg? (cddr e))
 		  ;; (call f ... (kw a b) ...)
 		  (expand-forms
@@ -1777,7 +1780,9 @@
    'cell1d
    (lambda (e)
      (let ((args (cdr e)))
-       (cond ((any vararg? args)
+       (cond ((has-parameters? args)
+	      (error "unexpected semicolon in array expression"))
+	     ((any vararg? args)
 	      (expand-forms
 	       `(call (top cell_1d) ,@args)))
 	     (else
@@ -1896,20 +1901,22 @@
    'vcat
    (lambda (e)
      (let ((a (cdr e)))
-       (expand-forms
-	(if (any (lambda (x)
-		   (and (pair? x) (eq? (car x) 'row)))
-		 a)
-	    ;; convert nested hcat inside vcat to hvcat
-	    (let ((rows (map (lambda (x)
+       (if (has-parameters? a)
+	 (error "unexpected semicolon in array expression")
+         (expand-forms
+	   (if (any (lambda (x)
+		      (and (pair? x) (eq? (car x) 'row)))
+		    a)
+	     ;; convert nested hcat inside vcat to hvcat
+	     (let ((rows (map (lambda (x)
 			       (if (and (pair? x) (eq? (car x) 'row))
 				   (cdr x)
 				   (list x)))
 			     a)))
-	      `(call hvcat
-		     (tuple ,.(map length rows))
+	       `(call hvcat
+		   (tuple ,.(map length rows))
 		     ,.(apply nconc rows)))
-	    `(call vcat ,@a)))))
+	     `(call vcat ,@a))))))
 
    'typed_hcat
    (lambda (e)
