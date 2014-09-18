@@ -14,7 +14,7 @@ if [[ ! -f "$private_libdir/libarpack.dylib" ]]; then
 fi
 
 # First, discover all the places where libgfortran/libgcc is
-for lib in arpack openlibm openspecfun arpack lapack; do
+for lib in arpack openlibm openspecfun lapack; do
     LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $(otool -L "$private_libdir/lib$lib.dylib" | grep libgfortran | cut -d' ' -f1 | xargs) 2>/dev/null)"
     LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $(otool -L "$private_libdir/lib$lib.dylib" | grep libgcc | cut -d' ' -f1 | xargs) 2>/dev/null)"
 done
