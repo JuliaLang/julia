@@ -1232,13 +1232,13 @@ const history_keymap = {
     "^P" => (s,o...)->(history_prev(s, mode(s).hist)),
     "^N" => (s,o...)->(history_next(s, mode(s).hist)),
     # Up Arrow
-    "\e[A" => (s,o...)->(edit_move_up(s) || history_prev(s, mode(s).hist)),
+    "\e[A" => (s,o...)->(edit_move_up(s) || history_prev_prefix(s, mode(s).hist)),
     # Down Arrow
-    "\e[B" => (s,o...)->(edit_move_down(s) || history_next(s, mode(s).hist)),
+    "\e[B" => (s,o...)->(edit_move_down(s) || history_next_prefix(s, mode(s).hist)),
     # Page Up
-    "\e[5~" => (s,o...)->(history_prev_prefix(s, mode(s).hist)),
+    "\e[5~" => (s,o...)->(history_prev(s, mode(s).hist)),
     # Page Down
-    "\e[6~" => (s,o...)->(history_next_prefix(s, mode(s).hist))
+    "\e[6~" => (s,o...)->(history_next(s, mode(s).hist))
 }
 
 function deactivate(p::Union(Prompt,HistoryPrompt), s::Union(SearchState,PromptState), termbuf)
