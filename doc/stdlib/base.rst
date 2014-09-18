@@ -4062,9 +4062,9 @@ Constructors
 
    Create a ``BitArray`` with all values set to false
 
-.. function:: fill(v, dims)
+.. function:: fill(x, dims)
 
-   Create an array filled with ``v``
+   Create an array filled with value ``x``
 
 .. function:: fill!(A, x)
 
