@@ -168,3 +168,6 @@ end"""
 # issue #8155
 @test_repr "foo(x,y; z=bar)"
 @test_repr "foo(x,y,z=bar)"
+
+@test_repr "Int[i for i=1:10]"
+@test_repr "Int[(i, j) for (i, j) in zip(1:10,1:0)]"
