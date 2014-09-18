@@ -14,7 +14,7 @@ immutable CholeskyPivoted{T} <: Factorization{T}
 end
 
 function chol!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U)
-    C, info = LAPACK.potrf!(string(uplo)[1], A)
+    C, info = LAPACK.potrf!(char_uplo(uplo), A)
     return @assertposdef Triangular(C, uplo, false) info
 end
 
@@ -57,7 +57,7 @@ function chol!{T}(A::AbstractMatrix{T}, uplo::Symbol=:U)
 end
 
 function cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U; pivot=false, tol=0.0)
-    uplochar = string(uplo)[1]
+    uplochar = char_uplo(uplo)
     if pivot
         A, piv, rank, info = LAPACK.pstrf!(uplochar, A, tol)
         return CholeskyPivoted{T}(A, uplochar, piv, rank, tol, info)
