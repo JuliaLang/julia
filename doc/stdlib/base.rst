@@ -4064,11 +4064,11 @@ Constructors
 
 .. function:: fill(x, dims)
 
-   Create an array filled with value ``x``
+   Create an array filled with the value ``x``
 
 .. function:: fill!(A, x)
 
-   Fill array ``A`` with value ``x``
+   Fill array ``A`` with the value ``x``
 
 .. function:: reshape(A, dims)
 
