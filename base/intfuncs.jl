@@ -109,10 +109,10 @@ end
 
 # smallest power of 2 >= x
 nextpow2(x::Unsigned) = one(x)<<((sizeof(x)<<3)-leading_zeros(x-1))
-nextpow2(x::Integer) = oftype(x,x < 0 ? -nextpow2(unsigned(-x)) : nextpow2(unsigned(x)))
+nextpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -nextpow2(unsigned(-x)) : nextpow2(unsigned(x)))
 
 prevpow2(x::Unsigned) = (one(x)>>(x==0)) << ((sizeof(x)<<3)-leading_zeros(x)-1)
-prevpow2(x::Integer) = oftype(x,x < 0 ? -prevpow2(unsigned(-x)) : prevpow2(unsigned(x)))
+prevpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -prevpow2(unsigned(-x)) : prevpow2(unsigned(x)))
 
 ispow2(x::Integer) = count_ones(x)==1
 
@@ -154,7 +154,7 @@ function ndigits0z(x::Uint128)
     end
     return n + ndigits0z(uint64(x))
 end
-ndigits0z(x::Integer) = ndigits0z(unsigned(abs(x)))
+ndigits0z(x::Integer) = ndigits0z(asunsigned(abs(x)))
 
 const ndigits_max_mul = WORD_SIZE==32 ? 69000000 : 290000000000000000
 
@@ -175,13 +175,13 @@ function ndigits0z(n::Unsigned, b::Int)
     end
     return d
 end
-ndigits0z(x::Integer, b::Integer) = ndigits0z(unsigned(abs(x)),int(b))
+ndigits0z(x::Integer, b::Integer) = ndigits0z(asunsigned(abs(x)),int(b))
 
 ndigits(x::Unsigned, b::Integer) = x==0 ? 1 : ndigits0z(x,int(b))
 ndigits(x::Unsigned)             = x==0 ? 1 : ndigits0z(x)
 
-ndigits(x::Integer, b::Integer) = ndigits(unsigned(abs(x)),int(b))
-ndigits(x::Integer) = ndigits(unsigned(abs(x)))
+ndigits(x::Integer, b::Integer) = ndigits(asunsigned(abs(x)),int(b))
+ndigits(x::Integer) = ndigits(asunsigned(abs(x)))
 
 ## integer to string functions ##
 
@@ -252,7 +252,7 @@ function base(b::Int, x::Unsigned, pad::Int, neg::Bool)
     if neg; a[1]='-'; end
     ASCIIString(a)
 end
-base(b::Integer, n::Integer, pad::Integer=1) = base(int(b), unsigned(abs(n)), pad, n<0)
+base(b::Integer, n::Integer, pad::Integer=1) = base(int(b), asunsigned(abs(n)), pad, n<0)
 
 for sym in (:bin, :oct, :dec, :hex)
     @eval begin
@@ -260,8 +260,8 @@ for sym in (:bin, :oct, :dec, :hex)
         ($sym)(x::Unsigned)         = ($sym)(x,1,false)
         ($sym)(x::Char, p::Int)     = ($sym)(unsigned(x),p,false)
         ($sym)(x::Char)             = ($sym)(unsigned(x),1,false)
-        ($sym)(x::Integer, p::Int)  = ($sym)(unsigned(abs(x)),p,x<0)
-        ($sym)(x::Integer)          = ($sym)(unsigned(abs(x)),1,x<0)
+        ($sym)(x::Integer, p::Int)  = ($sym)(asunsigned(abs(x)),p,x<0)
+        ($sym)(x::Integer)          = ($sym)(asunsigned(abs(x)),1,x<0)
     end
 end
 

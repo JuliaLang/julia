@@ -802,15 +802,15 @@ end
 
 for T in {Int8,Int16,Int32,Int64,Int128}
     @test abs(typemin(T)) == -typemin(T)
-    for x in {typemin(T),convert(T,-1),zero(T),one(T),typemax(T)}
-        @test signed(unsigned(x)) == x
-    end
+    #for x in {typemin(T),convert(T,-1),zero(T),one(T),typemax(T)}
+    #    @test signed(unsigned(x)) == x
+    #end
 end
 
-for T in {Uint8,Uint16,Uint32,Uint64,Uint128},
-    x in {typemin(T),one(T),typemax(T)}
-    @test unsigned(signed(x)) == x
-end
+#for T in {Uint8,Uint16,Uint32,Uint64,Uint128},
+#    x in {typemin(T),one(T),typemax(T)}
+#    @test unsigned(signed(x)) == x
+#end
 
 for S = {Int8,  Int16,  Int32,  Int64},
     U = {Uint8, Uint16, Uint32, Uint64}
@@ -1133,19 +1133,21 @@ end
 @test cld(typemin(Int64)+3,-2) ==  4611686018427387903
 @test cld(typemin(Int64)+3,-7) ==  1317624576693539401
 
+import Base.asunsigned
+
 for x={typemin(Int64), -typemax(Int64), -typemax(Int64)+1, -typemax(Int64)+2,
        typemax(Int64)-2, typemax(Int64)-1, typemax(Int64),
        typemax(Uint64)-1, typemax(Uint64)-2, typemax(Uint64)},
     y={-7,-2,-1,1,2,7}
     if x >= 0
-        @test div(unsigned(x),y) == unsigned(div(x,y))
-        @test fld(unsigned(x),y) == unsigned(fld(x,y))
-        @test cld(unsigned(x),y) == unsigned(cld(x,y))
+        @test div(asunsigned(x),y) == asunsigned(div(x,y))
+        @test fld(asunsigned(x),y) == asunsigned(fld(x,y))
+        @test cld(asunsigned(x),y) == asunsigned(cld(x,y))
     end
     if isa(x,Signed) && y >= 0
-        @test div(x,unsigned(y)) == div(x,y)
-        @test fld(x,unsigned(y)) == fld(x,y)
-        @test cld(x,unsigned(y)) == cld(x,y)
+        @test div(x,asunsigned(y)) == div(x,y)
+        @test fld(x,asunsigned(y)) == fld(x,y)
+        @test cld(x,asunsigned(y)) == cld(x,y)
     end
 end
 
@@ -1153,19 +1155,19 @@ for x=0:5, y=1:5
     @test div(uint(x),uint(y)) == div(x,y)
     @test div(uint(x),y) == div(x,y)
     @test div(x,uint(y)) == div(x,y)
-    @test div(uint(x),-y) == uint(div(x,-y))
+    @test div(uint(x),-y) == reinterpret(Uint,div(x,-y))
     @test div(-x,uint(y)) == div(-x,y)
 
     @test fld(uint(x),uint(y)) == fld(x,y)
     @test fld(uint(x),y) == fld(x,y)
     @test fld(x,uint(y)) == fld(x,y)
-    @test fld(uint(x),-y) == uint(fld(x,-y))
+    @test fld(uint(x),-y) == reinterpret(Uint,fld(x,-y))
     @test fld(-x,uint(y)) == fld(-x,y)
 
     @test cld(uint(x),uint(y)) == cld(x,y)
     @test cld(uint(x),y) == cld(x,y)
     @test cld(x,uint(y)) == cld(x,y)
-    @test cld(uint(x),-y) == uint(cld(x,-y))
+    @test cld(uint(x),-y) == reinterpret(Uint,cld(x,-y))
     @test cld(-x,uint(y)) == cld(-x,y)
 
     @test rem(uint(x),uint(y)) == rem(x,y)
@@ -1188,20 +1190,22 @@ end
 @test div(typemax(Uint64)-2, 1) ==  typemax(Uint64)-2
 @test div(typemax(Uint64)-2,-1) == -typemax(Uint64)+2
 
-@test signed(div(unsigned(typemax(Int64))+2, 1)) ==  typemax(Int64)+2
-@test signed(div(unsigned(typemax(Int64))+2,-1)) == -typemax(Int64)-2
-@test signed(div(unsigned(typemax(Int64))+1, 1)) ==  typemax(Int64)+1
-@test signed(div(unsigned(typemax(Int64))+1,-1)) == -typemax(Int64)-1
-@test signed(div(unsigned(typemax(Int64))  , 1)) ==  typemax(Int64)
-@test signed(div(unsigned(typemax(Int64))  ,-1)) == -typemax(Int64)
+using Base.assigned
 
-@test signed(div(typemax(Uint),typemax(Int)))        ==  2
-@test signed(div(typemax(Uint),(typemax(Int)>>1)+1)) ==  3
-@test signed(div(typemax(Uint),typemax(Int)>>1))     ==  4
-@test signed(div(typemax(Uint),typemin(Int)))        == -1
-@test signed(div(typemax(Uint),typemin(Int)+1))      == -2
-@test signed(div(typemax(Uint),typemin(Int)>>1))     == -3
-@test signed(div(typemax(Uint),(typemin(Int)>>1)+1)) == -4
+@test assigned(div(asunsigned(typemax(Int64))+2, 1)) ==  typemax(Int64)+2
+@test assigned(div(asunsigned(typemax(Int64))+2,-1)) == -typemax(Int64)-2
+@test assigned(div(asunsigned(typemax(Int64))+1, 1)) ==  typemax(Int64)+1
+@test assigned(div(asunsigned(typemax(Int64))+1,-1)) == -typemax(Int64)-1
+@test assigned(div(asunsigned(typemax(Int64))  , 1)) ==  typemax(Int64)
+@test assigned(div(asunsigned(typemax(Int64))  ,-1)) == -typemax(Int64)
+
+@test assigned(div(typemax(Uint),typemax(Int)))        ==  2
+@test assigned(div(typemax(Uint),(typemax(Int)>>1)+1)) ==  3
+@test assigned(div(typemax(Uint),typemax(Int)>>1))     ==  4
+@test assigned(div(typemax(Uint),typemin(Int)))        == -1
+@test assigned(div(typemax(Uint),typemin(Int)+1))      == -2
+@test assigned(div(typemax(Uint),typemin(Int)>>1))     == -3
+@test assigned(div(typemax(Uint),(typemin(Int)>>1)+1)) == -4
 
 @test fld(typemax(Uint64)  , 1) ==  typemax(Uint64)
 @test fld(typemax(Uint64)  ,-1) == -typemax(Uint64)
@@ -1210,20 +1214,20 @@ end
 @test fld(typemax(Uint64)-2, 1) ==  typemax(Uint64)-2
 @test fld(typemax(Uint64)-2,-1) == -typemax(Uint64)+2
 
-@test signed(fld(unsigned(typemax(Int64))+2, 1)) ==  typemax(Int64)+2
-@test signed(fld(unsigned(typemax(Int64))+2,-1)) == -typemax(Int64)-2
-@test signed(fld(unsigned(typemax(Int64))+1, 1)) ==  typemax(Int64)+1
-@test signed(fld(unsigned(typemax(Int64))+1,-1)) == -typemax(Int64)-1
-@test signed(fld(unsigned(typemax(Int64))  , 1)) ==  typemax(Int64)
-@test signed(fld(unsigned(typemax(Int64))  ,-1)) == -typemax(Int64)
+@test assigned(fld(asunsigned(typemax(Int64))+2, 1)) ==  typemax(Int64)+2
+@test assigned(fld(asunsigned(typemax(Int64))+2,-1)) == -typemax(Int64)-2
+@test assigned(fld(asunsigned(typemax(Int64))+1, 1)) ==  typemax(Int64)+1
+@test assigned(fld(asunsigned(typemax(Int64))+1,-1)) == -typemax(Int64)-1
+@test assigned(fld(asunsigned(typemax(Int64))  , 1)) ==  typemax(Int64)
+@test assigned(fld(asunsigned(typemax(Int64))  ,-1)) == -typemax(Int64)
 
-@test signed(fld(typemax(Uint),typemax(Int)))        ==  2
-@test signed(fld(typemax(Uint),(typemax(Int)>>1)+1)) ==  3
-@test signed(fld(typemax(Uint),typemax(Int)>>1))     ==  4
-@test signed(fld(typemax(Uint),typemin(Int)))        == -2
-@test signed(fld(typemax(Uint),typemin(Int)+1))      == -3
-@test signed(fld(typemax(Uint),typemin(Int)>>1))     == -4
-@test signed(fld(typemax(Uint),(typemin(Int)>>1)+1)) == -5
+@test assigned(fld(typemax(Uint),typemax(Int)))        ==  2
+@test assigned(fld(typemax(Uint),(typemax(Int)>>1)+1)) ==  3
+@test assigned(fld(typemax(Uint),typemax(Int)>>1))     ==  4
+@test assigned(fld(typemax(Uint),typemin(Int)))        == -2
+@test assigned(fld(typemax(Uint),typemin(Int)+1))      == -3
+@test assigned(fld(typemax(Uint),typemin(Int)>>1))     == -4
+@test assigned(fld(typemax(Uint),(typemin(Int)>>1)+1)) == -5
 
 @test cld(typemax(Uint64)  , 1) ==  typemax(Uint64)
 @test cld(typemax(Uint64)  ,-1) == -typemax(Uint64)
@@ -1232,20 +1236,20 @@ end
 @test cld(typemax(Uint64)-2, 1) ==  typemax(Uint64)-2
 @test cld(typemax(Uint64)-2,-1) == -typemax(Uint64)+2
 
-@test signed(cld(unsigned(typemax(Int64))+2, 1)) ==  typemax(Int64)+2
-@test signed(cld(unsigned(typemax(Int64))+2,-1)) == -typemax(Int64)-2
-@test signed(cld(unsigned(typemax(Int64))+1, 1)) ==  typemax(Int64)+1
-@test signed(cld(unsigned(typemax(Int64))+1,-1)) == -typemax(Int64)-1
-@test signed(cld(unsigned(typemax(Int64))  , 1)) ==  typemax(Int64)
-@test signed(cld(unsigned(typemax(Int64))  ,-1)) == -typemax(Int64)
+@test assigned(cld(asunsigned(typemax(Int64))+2, 1)) ==  typemax(Int64)+2
+@test assigned(cld(asunsigned(typemax(Int64))+2,-1)) == -typemax(Int64)-2
+@test assigned(cld(asunsigned(typemax(Int64))+1, 1)) ==  typemax(Int64)+1
+@test assigned(cld(asunsigned(typemax(Int64))+1,-1)) == -typemax(Int64)-1
+@test assigned(cld(asunsigned(typemax(Int64))  , 1)) ==  typemax(Int64)
+@test assigned(cld(asunsigned(typemax(Int64))  ,-1)) == -typemax(Int64)
 
 @test signed(cld(typemax(Uint),typemax(Int)))        ==  3
 @test signed(cld(typemax(Uint),(typemax(Int)>>1)+1)) ==  4
 @test signed(cld(typemax(Uint),typemax(Int)>>1))     ==  5
-@test signed(cld(typemax(Uint),typemin(Int)))        == -1
-@test signed(cld(typemax(Uint),typemin(Int)+1))      == -2
-@test signed(cld(typemax(Uint),typemin(Int)>>1))     == -3
-@test signed(cld(typemax(Uint),(typemin(Int)>>1)+1)) == -4
+@test assigned(cld(typemax(Uint),typemin(Int)))        == -1
+@test assigned(cld(typemax(Uint),typemin(Int)+1))      == -2
+@test assigned(cld(typemax(Uint),typemin(Int)>>1))     == -3
+@test assigned(cld(typemax(Uint),(typemin(Int)>>1)+1)) == -4
 
 # issue #4156
 @test fld(1.4,0.35667494393873234) == 3.0
