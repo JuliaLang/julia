@@ -197,7 +197,7 @@ function rand{T<:Union(Uint64, Int64)}(g::RandIntGen{T,Uint64})
             x = rand(Uint64)
         end
     end
-    return convert(T, g.a + rem_knuth(x, g.k))
+    return reinterpret(T, reinterpret(Uint64, g.a) + rem_knuth(x, g.k))
 end
 
 function rand{T<:Integer, U<:Unsigned}(g::RandIntGen{T,U})
@@ -205,7 +205,8 @@ function rand{T<:Integer, U<:Unsigned}(g::RandIntGen{T,U})
     while x > g.u
         x = rand(U)
     end
-    convert(T, g.a + rem_knuth(x, g.k))
+    # TODO: fix for when T is smaller than U
+    reinterpret(T, Base.asunsigned(g.a) + rem_knuth(x, g.k))
 end
 
 rand{T<:Union(Signed,Unsigned,Bool,Char)}(r::UnitRange{T}) = rand(RandIntGen(r))

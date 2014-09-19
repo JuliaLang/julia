@@ -184,7 +184,7 @@ end
 function hash(s::IntSet, h::Uint)
     h += uint(0x88989f1fc7dea67d)
     h += hash(s.fill1s)
-    filln = s.fill1s ? uint32(-1) : uint32(0)
+    filln = s.fill1s ? ~zero(eltype(s.bits)) : zero(eltype(s.bits))
     for x in s.bits
         if x != filln
             h = hash(x, h)
