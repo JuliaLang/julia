@@ -721,7 +721,7 @@ Do I want to use a release, beta, or nightly version of Julia?
 
 You may prefer the release version of Julia if you are looking for a stable code base. Releases generally occur every 6 months, giving you a stable platform for writing code.
 
-You may prefer the beta version of Julia if you don't mind being slightly behind the latest bugfixes and changes, but find the slightly slower rate of changes more appealing. Additionally, these binaries are tested before they are published to ensure they are fully functional.
+You may prefer the beta version of Julia if you don't mind being slightly behind the latest bugfixes and changes, but find the slightly faster rate of changes more appealing. Additionally, these binaries are tested before they are published to ensure they are fully functional.
 
 You may prefer the nightly version of Julia if you want to take advantage of the latest updates to the language, and don't mind if the version available today occasionally doesn't actually work.
 
