@@ -450,7 +450,7 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
         jl_value_t *ptr_ty = expr_type(arg, ctx);
         Value *arg1 = emit_unboxed(arg, ctx);
         if (!jl_is_cpointer_type(ptr_ty)) {
-            emit_cpointercheck(arg1, 
+            emit_cpointercheck(arg1,
                                !strcmp(fname,"ccall") ?
                                "ccall: first argument not a pointer or valid constant expression" :
                                "cglobal: first argument not a pointer or valid constant expression",
@@ -510,7 +510,7 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
 
 #ifdef LLVM33
     typedef AttributeSet attr_type;
-#else 
+#else
     typedef AttrListPtr attr_type;
 #endif
 
@@ -709,7 +709,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         for (std::vector<Type *>::iterator it = argtypes.begin(); it != argtypes.end(); ++it) {
             if(!first)
                 argstream << ",";
-            else 
+            else
                 first = false;
             (*it)->print(argstream);
             argstream << " ";
@@ -928,11 +928,11 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 if (jl_signed_type == NULL) {
                     jl_signed_type = jl_get_global(jl_core_module,jl_symbol("Signed"));
                 }
-#if LLVM33 
+#if LLVM33
                 Attribute::AttrKind av;
-#elif LLVM32 
+#elif LLVM32
                 Attributes::AttrVal av;
-#else 
+#else
                 Attribute::AttrConst av;
 #endif
 #if LLVM32 && !LLVM33
@@ -989,7 +989,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             nargs--;
         }
     }
-    
+
     if ((!isVa && jl_tuple_len(tt)  != (nargs-2)/2) ||
         ( isVa && jl_tuple_len(tt)-1 > (nargs-2)/2))
         jl_error("ccall: wrong number of arguments to C function");
@@ -1245,7 +1245,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
     ctx->argDepth = last_depth;
     if (0) { // Enable this to turn on SSPREQ (-fstack-protector) on the function containing this ccall
-#if LLVM32 && !LLVM33     
+#if LLVM32 && !LLVM33
         ctx->f->addFnAttr(Attributes::StackProtectReq);
 #else
         ctx->f->addFnAttr(Attribute::StackProtectReq);

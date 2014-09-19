@@ -1041,7 +1041,7 @@ void jl_restore_system_image(char *fname)
     datatype_list = jl_alloc_cell_1d(0);
 
     jl_array_type->env = jl_deserialize_value(&f);
-    
+
     jl_main_module = (jl_module_t*)jl_deserialize_value(&f);
     jl_internal_main_module = jl_main_module;
     jl_core_module = (jl_module_t*)jl_get_global(jl_main_module,
@@ -1221,7 +1221,7 @@ void jl_init_serializer(void)
                      jl_symbol("T"), jl_symbol("S"),
                      jl_symbol("X"), jl_symbol("Y"),
                      jl_symbol("add_int"), jl_symbol("sub_int"),
-                     jl_symbol("mul_int"), 
+                     jl_symbol("mul_int"),
                      jl_symbol("add_float"), jl_symbol("sub_float"),
                      jl_symbol("mul_float"), jl_symbol("ccall"),
                      jl_symbol("box"), jl_symbol("unbox"),

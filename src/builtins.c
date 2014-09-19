@@ -771,7 +771,7 @@ void jl_show(jl_value_t *stream, jl_value_t *v)
         }
         if (jl_show_gf==NULL || stream==NULL) {
             JL_PRINTF(JL_STDERR, " could not show value of type %s",
-                      jl_is_tuple(v) ? "Tuple" : 
+                      jl_is_tuple(v) ? "Tuple" :
                       ((jl_datatype_t*)jl_typeof(v))->name->name->name);
             return;
         }
@@ -1040,7 +1040,7 @@ void jl_init_primitives(void)
     add_builtin_func("eval", jl_f_top_eval);
     add_builtin_func("isdefined", jl_f_isdefined);
     add_builtin_func("yieldto", jl_f_yieldto);
-    
+
     // functions for internal use
     add_builtin_func("convert_default", jl_f_convert_default);
     add_builtin_func("tupleref",  jl_f_tupleref);
