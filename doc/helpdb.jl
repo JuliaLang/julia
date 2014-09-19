@@ -4437,8 +4437,8 @@ popdisplay(d::Display)
 
 ("Base","signbit","signbit(x)
 
-   Returns \"1\" if the value of the sign of \"x\" is negative,
-   otherwise \"0\".
+   Returns \"true\" if the value of the sign of \"x\" is negative,
+   otherwise \"false\".
 
 "),
 
