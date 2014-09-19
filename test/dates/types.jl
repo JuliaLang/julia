@@ -63,9 +63,9 @@ test = Dates.Date(1,1,1)
 @test Dates.Date(false,true,true) == test - Dates.Year(1)
 @test_throws ArgumentError Dates.Date(true,true,false)
 @test Dates.Date(uint64(1),uint64(1),uint64(1)) == test
-@test Dates.Date(0xffffffffffffffff,uint64(1),uint64(1)) == test - Dates.Year(2)
+@test Dates.Date(-1,uint64(1),uint64(1)) == test - Dates.Year(2)
 @test Dates.Date(int128(1),int128(1),int128(1)) == test
-@test Dates.Date(170141183460469231731687303715884105727,int128(1),int128(1)) == test - Dates.Year(2)
+@test_throws InexactError Dates.Date(170141183460469231731687303715884105727,int128(1),int128(1))
 @test Dates.Date(uint128(1),uint128(1),uint128(1)) == test
 @test Dates.Date(big(1),big(1),big(1)) == test
 @test Dates.Date(big(1),big(1),big(1)) == test

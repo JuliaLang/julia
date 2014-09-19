@@ -39,9 +39,9 @@ immutable StepRange{T,S} <: OrdinalRange{T,S}
                 if T<:Signed && (diff > zero(diff)) != (stop > start)
                     # handle overflowed subtraction with unsigned rem
                     if diff > zero(diff)
-                        remain = -oftype(T, unsigned(-diff) % step)
+                        remain = -oftype(T, asunsigned(-diff) % step)
                     else
-                        remain = oftype(T, unsigned(diff) % step)
+                        remain = oftype(T, asunsigned(diff) % step)
                     end
                 else
                     remain = steprem(start,stop,step)

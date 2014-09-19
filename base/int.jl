@@ -43,6 +43,11 @@ abs(x::Signed) = flipsign(x,x)
 
 ~(n::Integer) = -n-1
 
+asunsigned(x::Integer) = reinterpret(typeof(unsigned(zero(x))), x)
+asunsigned(x) = unsigned(x)
+assigned(x::Integer) = reinterpret(typeof(signed(zero(x))), x)
+assigned(x) = signed(x)
+
 div(x::Signed, y::Unsigned) = flipsign(assigned(div(asunsigned(abs(x)),y)),x)
 div(x::Unsigned, y::Signed) = asunsigned(flipsign(assigned(div(x,asunsigned(abs(y)))),y))
 
@@ -131,9 +136,6 @@ for T in IntTypes
         @eval <=(x::$T, y::$T) = ule_int(unbox($T,x),unbox($T,y))
     end
 end
-
-asunsigned(x) = reinterpret(typeof(unsigned(zero(x))), x)
-assigned(x) = reinterpret(typeof(signed(zero(x))), x)
 
 ==(x::Signed,   y::Unsigned) = (x >= 0) & (asunsigned(x) == y)
 ==(x::Unsigned, y::Signed  ) = (y >= 0) & (x == asunsigned(y))
@@ -227,7 +229,8 @@ int32(x) = convert(Int32,x)
 int64(x) = convert(Int64,x)
 int128(x) = convert(Int128,x)
 
-uint8(x) = itrunc(Uint8,x)
+uint8(x) = convert(Uint8, x)
+uint8(x::Integer) = itrunc(Uint8,x)
 uint8(x::Int8) = box(Uint8,unbox(Int8,x))
 uint16(x) = convert(Uint16,x)
 uint32(x) = convert(Uint32,x)
