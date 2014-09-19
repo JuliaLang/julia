@@ -39,12 +39,7 @@ done(x::Number, state) = state
 isempty(x::Number) = false
 in(x::Number, y::Number) = x == y
 
-function reinterpret{T,S}(::Type{T}, x::S)
-    if !isbits(T)
-        error("cannot reinterpret to type ", T)
-    end
-    box(T,unbox(S,x))
-end
+reinterpret{T,S}(::Type{T}, x::S) = box(T,unbox(S,x))
 
 map(f::Callable, x::Number) = f(x)
 

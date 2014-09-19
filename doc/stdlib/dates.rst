@@ -340,7 +340,7 @@ Conversion Functions
 
 
 Constants
----------
+~~~~~~~~~
 
 Days of the Week:
 
