@@ -223,7 +223,7 @@ trace(x::Number) = x
 
 inv(a::AbstractVector) = error("argument must be a square matrix")
 function inv{T}(A::AbstractMatrix{T})
-    S = typeof(one(T)/one(T))
+    S = typeof(zero(T)/one(T))
     A_ldiv_B!(convert(AbstractMatrix{S}, A), eye(S, chksquare(A)))
 end
 

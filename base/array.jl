@@ -591,7 +591,7 @@ end
 
 const _default_splice = []
 
-function splice!(a::Vector, i::Integer, ins::AbstractArray=_default_splice)
+function splice!(a::Vector, i::Integer, ins=_default_splice)
     v = a[i]
     m = length(ins)
     if m == 0
@@ -607,7 +607,7 @@ function splice!(a::Vector, i::Integer, ins::AbstractArray=_default_splice)
     return v
 end
 
-function splice!{T<:Integer}(a::Vector, r::UnitRange{T}, ins::AbstractArray=_default_splice)
+function splice!{T<:Integer}(a::Vector, r::UnitRange{T}, ins=_default_splice)
     v = a[r]
     m = length(ins)
     if m == 0
@@ -1082,7 +1082,7 @@ function find(A::StridedArray)
 end
 
 find(x::Number) = x == 0 ? Array(Int,0) : [1]
-find(testf::Function, x::Number) = testf(x) == 0 ? Array(Int,0) : [1]
+find(testf::Function, x::Number) = !testf(x) ? Array(Int,0) : [1]
 
 findn(A::AbstractVector) = find(A)
 

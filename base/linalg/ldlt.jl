@@ -25,7 +25,7 @@ function ldltfact!{T<:Real}(S::SymTridiagonal{T})
 	return LDLt{T,SymTridiagonal{T}}(S)
 end
 function ldltfact{T}(M::SymTridiagonal{T})
-	S = typeof(one(T)/one(T))
+	S = typeof(zero(T)/one(T))
 	return S == T ? ldltfact!(copy(M)) : ldltfact!(convert(SymTridiagonal{S}, M))
 end
 function A_ldiv_B!{T}(S::LDLt{T,SymTridiagonal{T}}, B::AbstractVecOrMat{T})
