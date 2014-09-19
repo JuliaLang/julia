@@ -99,13 +99,13 @@ type Worker
     bind_addr::IPAddr
     manage::Function
     config::Dict
-    
+
     Worker(host::String, port::Integer, sock::TCPSocket, id::Int) =
         new(bytestring(host), uint16(port), sock, IOBuffer(), {}, {}, id, false)
 end
 Worker(host::String, port::Integer, sock::TCPSocket) =
     Worker(host, port, sock, 0)
-function Worker(host::String, port::Integer) 
+function Worker(host::String, port::Integer)
     # Connect to the loopback port if requested host has the same ipaddress as self.
     if host == string(LPROC.bind_addr)
         w = Worker(host, port, connect("127.0.0.1", uint16(port)))
@@ -117,15 +117,15 @@ function Worker(host::String, port::Integer)
     if host == "localhost"
         w.bind_addr = parseip("127.0.0.1")
     else
-        try 
+        try
             w.bind_addr = parseip(host)
         catch
-            w.bind_addr = getaddrinfo(host) 
+            w.bind_addr = getaddrinfo(host)
         end
     end
     w
 end
-function Worker(host::String, bind_addr::String, port::Integer, tunnel_user::String, sshflags) 
+function Worker(host::String, bind_addr::String, port::Integer, tunnel_user::String, sshflags)
     w = Worker(host, port, connect("localhost",
                                ssh_tunnel(tunnel_user, host, bind_addr, uint16(port), sshflags)))
     w.bind_addr = parseip(bind_addr)
@@ -225,17 +225,17 @@ end
 const PGRP = ProcessGroup({})
 
 get_bind_addr(pid::Integer) = get_bind_addr(worker_from_id(pid))
-function get_bind_addr(w::Union(Worker, LocalProcess)) 
-    if !isdefined(w, :bind_addr) 
+function get_bind_addr(w::Union(Worker, LocalProcess))
+    if !isdefined(w, :bind_addr)
         if w.id != myid()
             w.bind_addr = remotecall_fetch(w.id, get_bind_addr, w.id)
         else
-            error("LPROC.bind_addr not defined") # Should never happend since LPROC.bind_addr 
+            error("LPROC.bind_addr not defined") # Should never happend since LPROC.bind_addr
                                            # is defined early on during process init.
         end
     end
     w.bind_addr
-end 
+end
 
 function add_workers(pg::ProcessGroup, ws::Array{Any,1})
     # NOTE: currently only node 1 can add new nodes, since nobody else
@@ -246,11 +246,11 @@ function add_workers(pg::ProcessGroup, ws::Array{Any,1})
         w.id = get_next_pid()
         register_worker(w)
         rr_join[i] = RemoteRef()
-        create_message_handler_loop(w.socket; ntfy_join_complete=rr_join[i]) 
+        create_message_handler_loop(w.socket; ntfy_join_complete=rr_join[i])
     end
 
     all_locs = map(x -> isa(x, Worker) ? (string(x.bind_addr), x.port, x.id, x.manage == manage_local_worker) : ("", 0, x.id, true), pg.workers)
-    
+
     for w in ws
         send_msg_now(w, :join_pgrp, w.id, all_locs, w.manage == manage_local_worker)
     end
@@ -258,20 +258,20 @@ function add_workers(pg::ProcessGroup, ws::Array{Any,1})
         @schedule begin
             w.manage(w.id, w.config, :register)
         end
-    end 
-    
+    end
+
     # Wait till the all nodes have connected to each other
     for rr in rr_join
         wait(rr)
     end
-    
+
     [w.id for w in ws]
 end
 
 myid() = LPROC.id
 
 nprocs() = length(PGRP.workers)
-function nworkers() 
+function nworkers()
     n = nprocs()
     n == 1 ? 1 : n-1
 end
@@ -293,7 +293,7 @@ end
 function workers()
     allp = procs()
     if nprocs() == 1
-       allp 
+       allp
     else
        filter(x -> x != 1, allp)
     end
@@ -305,10 +305,10 @@ function rmprocs(args...; waitfor = 0.0)
     if myid() != 1
         error("only process 1 can add and remove processes")
     end
-    
+
     global rmprocset
     empty!(rmprocset)
-    
+
     for i in [args...]
         if i == 1
             warn("rmprocs: process 1 not removed")
@@ -319,16 +319,16 @@ function rmprocs(args...; waitfor = 0.0)
             end
         end
     end
-    
+
     start = time()
-    while (time() - start) < waitfor 
+    while (time() - start) < waitfor
         if length(rmprocset) == 0
             break;
         else
             sleep(0.1)
         end
     end
-    
+
     ((waitfor > 0) && (length(rmprocset) > 0)) ? :timed_out : :ok
 end
 
@@ -381,10 +381,10 @@ deregister_worker(pid) = deregister_worker(PGRP, pid)
 function deregister_worker(pg, pid)
     pg.workers = filter(x -> !(x.id == pid), pg.workers)
     w = pop!(map_pid_wrkr, pid, nothing)
-    if isa(w, Worker) 
+    if isa(w, Worker)
         pop!(map_sock_wrkr, w.socket)
         pop!(map_sock_wrkr, w.sendbuf)
-        
+
         # Notify the cluster manager of this workers death
         if myid() == 1
             w.manage(w.id, w.config, :deregister)
@@ -831,7 +831,7 @@ function create_message_handler_loop(sock::AsyncStream; ntfy_join_complete=nothi
         disable_nagle(sock)
         start_reading(sock)
         wait_connected(sock)
-        
+
         try
             while true
                 msg = deserialize(sock)
@@ -888,17 +888,17 @@ function create_message_handler_loop(sock::AsyncStream; ntfy_join_complete=nothi
                     self_is_local = deserialize(sock)
                     #print("\nLocation: ",locs,"\nId:",myid(),"\n")
                     # joining existing process group
-                    
+
                     controller = Worker("", 0, sock, 1)
                     register_worker(controller)
                     register_worker(LPROC)
-                    
+
                     for (rhost, rport, rpid, r_is_local) in locs
                         if (rpid < self_pid) && (!(rpid == 1))
                             # Connect to them
                             if self_is_local && r_is_local
                                 # If on localhost, use the loopback address - this addresses
-                                # the special case of system suspend wherein the local ip 
+                                # the special case of system suspend wherein the local ip
                                 # may be changed upon system awake.
                                 w = Worker("127.0.0.1", rport)
                             else
@@ -913,14 +913,14 @@ function create_message_handler_loop(sock::AsyncStream; ntfy_join_complete=nothi
                             continue
                         end
                     end
-                    
+
                     send_msg_now(controller, :join_complete)
-                    
+
                 elseif is(msg, :join_complete)
                     put!(ntfy_join_complete, :join_complete)
                     ntfy_join_complete = nothing    # so that it gets gc'ed
                 end
-                
+
             end # end of while
         catch e
             iderr = worker_id_from_socket(sock)
@@ -932,20 +932,20 @@ function create_message_handler_loop(sock::AsyncStream; ntfy_join_complete=nothi
                 end
                 exit(1)
             end
-            
+
             # Will treat any exception as death of node and cleanup
             # since currently we do not have a mechanism for workers to reconnect
             # to each other on unhandled errors
             deregister_worker(iderr)
-            
+
             if isopen(sock) close(sock) end
-            
-            if (myid() == 1) 
+
+            if (myid() == 1)
                 global rmprocset
                 if in(iderr, rmprocset)
                     delete!(rmprocset, iderr)
                 else
-                    println("Worker $iderr terminated.") 
+                    println("Worker $iderr terminated.")
                     rethrow(e)
                 end
             end
@@ -999,18 +999,18 @@ end
 
 function start_cluster_workers(np::Integer, config::Dict, cman::ClusterManager)
     ws = cell(np)
-    
+
     # Get the cluster manager to launch the instance
     (insttype, instances) = cman.launch(cman, np, config)
-    
+
     if insttype == :io_only
-        read_cb_response(inst) = 
+        read_cb_response(inst) =
         begin
             (host, port) = read_worker_host_port(inst[1])
             inst[1], host, port, host, inst[2]
         end
     elseif  insttype == :io_host
-        read_cb_response(inst) = 
+        read_cb_response(inst) =
         begin
             (bind_addr, port) = read_worker_host_port(inst[1])
             inst[1], bind_addr, port, inst[2], inst[3]
@@ -1022,7 +1022,7 @@ function start_cluster_workers(np::Integer, config::Dict, cman::ClusterManager)
     else
         error("unsupported format from ClusterManager callback")
     end
-    
+
     for i=1:np
         (io, bind_addr, port, pubhost, wconfig) = read_cb_response(instances[i])
         ws[i] = create_worker(bind_addr, port, pubhost, io, wconfig, cman.manage)
@@ -1043,7 +1043,7 @@ end
 
 function create_worker(bind_addr, port, pubhost, stream, config, manage)
     tunnel = config[:tunnel]
-    
+
     s = split(pubhost,'@')
     user = ""
     if length(s) > 1
@@ -1056,17 +1056,17 @@ function create_worker(bind_addr, port, pubhost, stream, config, manage)
             error("USER must be specified either in the environment or as part of the hostname when tunnel option is used")
         end
     end
-    
+
     if tunnel
         sshflags = config[:sshflags]
         w = Worker(pubhost, bind_addr, port, user, sshflags)
     else
         w = Worker(bind_addr, port)
     end
-    
+
     w.config = config
     w.manage = manage
-    
+
     if isa(stream, AsyncStream)
         let wrker = w
             # redirect console output from workers to the client's stdout:
@@ -1104,11 +1104,11 @@ function ssh_tunnel(user, host, bind_addr, port, sshflags)
     while !success(detach(`ssh -T -a -x -o ExitOnForwardFailure=yes -f $sshflags $(user)@$host -L $localp:$bind_addr:$(int(port)) sleep 60`)) && localp < 10000
         localp += 1
     end
-    
+
     if localp >= 10000
         error("unable to assign a local tunnel port between 9201 and 10000")
     end
-    
+
     tunnel_port = localp+1
     localp
 end
@@ -1179,19 +1179,19 @@ function launch_ssh_workers(cman::SSHManager, np::Integer, config::Dict)
             exeflags = exeflags_base
         end
         machine_def = machine_bind[1]
-        
+
         machine_def = split(machine_def, ':')
         portopt = length(machine_def) == 2 ? ` -p $(machine_def[2]) ` : ``
         sshflags = `$(config[:sshflags]) $portopt`
         thisconfig[:sshflags] = sshflags
-        
+
         host = cman.machines[i] = machine_def[1]
-        
+
         # Build up the ssh command
         cmd = `cd $dir && $exename $exeflags` # launch julia
         cmd = `sh -l -c $(shell_escape(cmd))` # shell to launch under
         cmd = `ssh -T -a -x -o ClearAllForwardings=yes -n $sshflags $host $(shell_escape(cmd))` # use ssh to remote launch
-        
+
         io, pobj = open(detach(cmd), "r")
         io_objs[i] = io
         thisconfig[:machine] = cman.machines[i]
@@ -1228,7 +1228,7 @@ function addprocs_internal(np::Integer;
                   tunnel=false, dir=JULIA_HOME,
                   exename=(ccall(:jl_is_debugbuild,Cint,())==0?"./julia":"./julia-debug"),
                   sshflags::Cmd=``, cman=LocalManager(), exeflags=``)
-                  
+
     config={:dir=>dir, :exename=>exename, :exeflags=>`$exeflags --worker`, :tunnel=>tunnel, :sshflags=>sshflags}
     disable_threaded_libs()
     add_workers(PGRP, start_cluster_workers(np, config, cman))
@@ -1350,7 +1350,7 @@ function pmap(f, lsts...; err_retry=true, err_stop=false)
             return (getnextidx(), nxtvals)
         elseif !isempty(retryqueue)
             return shift!(retryqueue)
-        else    
+        else
             return nothing
         end
     end
@@ -1363,21 +1363,21 @@ function pmap(f, lsts...; err_retry=true, err_stop=false)
                     (idx, fvals) = tasklet
                     try
                         result = remotecall_fetch(wpid, f, fvals...)
-                        if isa(result, Exception) 
-                            ((wpid == myid()) ? rethrow(result) : throw(result)) 
-                        else 
+                        if isa(result, Exception)
+                            ((wpid == myid()) ? rethrow(result) : throw(result))
+                        else
                             results[idx] = result
                         end
                     catch ex
-                        if err_retry 
+                        if err_retry
                             push!(retryqueue, (idx,fvals, ex))
                         else
                             results[idx] = ex
                         end
                         set_task_in_error()
-                        break # remove this worker from accepting any more tasks 
+                        break # remove this worker from accepting any more tasks
                     end
-                    
+
                     tasklet = getnext_tasklet()
                 end
             end
@@ -1523,7 +1523,7 @@ function check_master_connect(timeout)
         while !haskey(map_pid_wrkr, 1) && (time() - start) < timeout
             sleep(1.0)
         end
-        
+
         if !haskey(map_pid_wrkr, 1)
             print(STDERR, "Master process (id 1) could not connect within $timeout seconds.\nexiting.\n")
             exit(1)
@@ -1563,7 +1563,7 @@ end
 function interrupt(pid::Integer)
     assert(myid() == 1)
     w = map_pid_wrkr[pid]
-    if isa(w, Worker) 
+    if isa(w, Worker)
         w.manage(w.id, w.config, :interrupt)
     end
 end
@@ -1583,7 +1583,7 @@ function disable_nagle(sock)
     ccall(:uv_tcp_nodelay, Cint, (Ptr{Void}, Cint), sock.handle, 1)
     @linux_only begin
         # tcp_quickack is a linux only option
-        if ccall(:jl_tcp_quickack, Cint, (Ptr{Void}, Cint), sock.handle, 1) < 0 
+        if ccall(:jl_tcp_quickack, Cint, (Ptr{Void}, Cint), sock.handle, 1) < 0
             warn_once("Parallel networking unoptimized ( Error enabling TCP_QUICKACK : ", strerror(errno()), " )")
         end
     end
@@ -1609,7 +1609,7 @@ function terminate_all_workers()
     if myid() != 1
         return
     end
-    
+
     if nprocs() > 1
         ret = rmprocs(workers(); waitfor=0.5)
         if ret != :ok
@@ -1621,5 +1621,5 @@ function terminate_all_workers()
                 warn("Unable to terminate all workers")
             end
         end
-     end   
+     end
 end

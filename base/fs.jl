@@ -160,7 +160,7 @@ end
     end
     uv_error("symlink",err)
 end
-@windowsxp_only symlink(p::String, np::String) = 
+@windowsxp_only symlink(p::String, np::String) =
     error("WindowsXP does not support soft symlinks")
 
 function chmod(p::String, mode::Integer)

@@ -324,12 +324,12 @@ float{T<:Integer64}(x::AbstractArray{T}) = convert(AbstractArray{typeof(float(ze
 complex{T<:Union(Integer64,Float64,Float32,Float16)}(x::AbstractArray{T}) =
     convert(AbstractArray{typeof(complex(zero(T)))}, x)
 
-function float(A::AbstractArray) 
+function float(A::AbstractArray)
     cnv(x) = convert(FloatingPoint,x)
     map_promote(cnv, A)
 end
 
-function complex(A::AbstractArray) 
+function complex(A::AbstractArray)
     cnv(x) = convert(Complex,x)
     map_promote(cnv, A)
 end
@@ -1407,7 +1407,7 @@ function randsubseq!(S::AbstractArray, A::AbstractArray, p::Real)
         end
     else
         # Skip through A, in order, from each element i to the next element i+s
-        # included in S. The probability that the next included element is 
+        # included in S. The probability that the next included element is
         # s==k (k > 0) is (1-p)^(k-1) * p, and hence the probability (CDF) that
         # s is in {1,...,k} is 1-(1-p)^k = F(k).   Thus, we can draw the skip s
         # from this probability distribution via the discrete inverse-transform

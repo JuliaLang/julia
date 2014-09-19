@@ -24,7 +24,7 @@ type MersenneTwister <: AbstractRNG
     MersenneTwister(seed=0) = MersenneTwister(make_seed(seed))
 end
 
-function srand(r::MersenneTwister, seed) 
+function srand(r::MersenneTwister, seed)
     r.seed = seed
     dsfmt_init_gen_rand(r.state, seed)
     return r
@@ -214,7 +214,7 @@ rand{T}(r::Range{T}) = r[rand(1:(length(r)))]
 function rand!(g::RandIntGen, A::AbstractArray)
     for i = 1 : length(A)
         @inbounds A[i] = rand(g)
-    end    
+    end
     return A
 end
 
@@ -245,11 +245,11 @@ rand(::Type{Bool}) = randbool()
 ## randn() - Normally distributed random numbers using Ziggurat algorithm
 
 # The Ziggurat Method for generating random variables - Marsaglia and Tsang
-# Paper and reference code: http://www.jstatsoft.org/v05/i08/ 
+# Paper and reference code: http://www.jstatsoft.org/v05/i08/
 
 # randmtzig (covers also exponential variates)
 ## Tables for normal variates
-const ki = 
+const ki =
     Uint64[0x0007799ec012f7b3,                 0,0x0006045f4c7de363,0x0006d1aa7d5ec0a6,
            0x000728fb3f60f778,0x0007592af4e9fbc0,0x000777a5c0bf655d,0x00078ca3857d2256,
            0x00079bf6b0ffe58c,0x0007a7a34ab092ae,0x0007b0d2f20dd1cb,0x0007b83d3aa9cb52,
@@ -314,7 +314,7 @@ const ki =
            0x0007e8d0d3da63d6,0x0007e771023b0fcf,0x0007e5d46c2f08d9,0x0007e3e937669691,
            0x0007e195978f1176,0x0007deb2c0e05c1d,0x0007db0362002a1a,0x0007d6202c15143a,
            0x0007cf4b8f00a2cc,0x0007c4fd24520efe,0x0007b362fbf81816,0x00078d2d25998e25]
-const wi = 
+const wi =
     [1.7367254121602630e-15,9.5586603514556339e-17,1.2708704834810623e-16,
      1.4909740962495474e-16,1.6658733631586268e-16,1.8136120810119029e-16,
      1.9429720153135588e-16,2.0589500628482093e-16,2.1646860576895422e-16,
@@ -401,7 +401,7 @@ const wi =
      1.3446300925011171e-15,1.3693606835128518e-15,1.3979436672775240e-15,
      1.4319989869661328e-15,1.4744848603597596e-15,1.5317872741611144e-15,
      1.6227698675312968e-15]
-const fi = 
+const fi =
     [1.0000000000000000e+00,9.7710170126767082e-01,9.5987909180010600e-01,
      9.4519895344229909e-01,9.3206007595922991e-01,9.1999150503934646e-01,
      9.0872644005213032e-01,8.9809592189834297e-01,8.8798466075583282e-01,
@@ -490,7 +490,7 @@ const fi =
      1.2602859304985975e-03]
 
 ## Tables for exponential variates
-const ke = 
+const ke =
 Uint64[0x000e290a13924be4,0                 ,0x0009beadebce18c0,0x000c377ac71f9e08,
        0x000d4ddb99075857,0x000de893fb8ca23e,0x000e4a8e87c4328e,0x000e8dff16ae1cba,
        0x000ebf2deab58c5a,0x000ee49a6e8b9639,0x000f0204efd64ee5,0x000f19bdb8ea3c1c,
@@ -556,7 +556,7 @@ Uint64[0x000e290a13924be4,0                 ,0x0009beadebce18c0,0x000c377ac71f9e
        0x000f930a1a281a05,0x000f889f023d820a,0x000f7b577d2be5f4,0x000f69c650c40a8f,
        0x000f51530f0916d9,0x000f2cb0e3c5933e,0x000eeefb15d605d9,0x000e6da6ecf27460]
 
-const we = 
+const we =
     [1.9311480126418366e-15,1.4178028487910829e-17,2.3278824993382448e-17,
      3.0487830247064320e-17,3.6665697714474878e-17,4.2179302189289733e-17,
      4.7222561556862764e-17,5.1911915446217879e-17,5.6323471083955047e-17,
@@ -643,7 +643,7 @@ const we =
      1.2174462832361815e-15,1.2581958069755114e-15,1.3060984107128082e-15,
      1.3642786158057857e-15,1.4384889932178723e-15,1.5412190700064194e-15,
      1.7091034077168055e-15]
-const fe = 
+const fe =
     [1.0000000000000000e+00,9.3814368086217470e-01,9.0046992992574648e-01,
      8.7170433238120359e-01,8.4778550062398961e-01,8.2699329664305032e-01,
      8.0842165152300838e-01,7.9152763697249562e-01,7.7595685204011555e-01,
@@ -738,9 +738,9 @@ ziggurat_exp_r      = 7.6971174701310497140446280481
 rand(state::DSFMT_state) = dsfmt_genrand_close_open(state)
 randi() = reinterpret(Uint64,dsfmt_gv_genrand_close1_open2()) & 0x000fffffffffffff
 randi(state::DSFMT_state) = reinterpret(Uint64,dsfmt_genrand_close1_open2(state)) & 0x000fffffffffffff
-for (lhs, rhs) in (([], []), 
+for (lhs, rhs) in (([], []),
                   ([:(state::DSFMT_state)], [:state]))
-    @eval begin                
+    @eval begin
         function randmtzig_randn($(lhs...))
             @inbounds begin
                 while true
@@ -763,7 +763,7 @@ for (lhs, rhs) in (([], []),
                     end
                 end
             end
-        end    
+        end
 
         function randmtzig_exprnd($(lhs...))
             @inbounds begin
@@ -780,7 +780,7 @@ for (lhs, rhs) in (([], []),
                     end
                 end
             end
-        end       
+        end
     end
 end
 

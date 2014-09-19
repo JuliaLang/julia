@@ -12,7 +12,7 @@
 # Based on Direct Methods for Sparse Linear Systems, T. A. Davis, SIAM, Philadelphia, Sept. 2006.
 # Section 2.4: Triplet form
 # http://www.cise.ufl.edu/research/sparse/CSparse/
-function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti}, 
+function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
                                 V::AbstractVector{Tv},
                                 nrow::Integer, ncol::Integer, combine::Function)
 
@@ -94,7 +94,7 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
     @simd for i=2:(ncol+1); @inbounds Wj[i] = 0; end
     @inbounds for j = 1:nrow
         p1 = Rp[j]
-        p2 = p1 + Rnz[j] - 1        
+        p2 = p1 + Rnz[j] - 1
         for p = p1:p2
             Wj[Ri[p]+1] += 1
         end
@@ -151,7 +151,7 @@ end
 
 function transpose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     (nT, mT) = size(S)
-    nnzS = nnz(S)    
+    nnzS = nnz(S)
     rowval_S = S.rowval
 
     rowval_T = Array(Ti, nnzS)
@@ -193,11 +193,11 @@ function ctranspose!{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, T::SparseMatrixCSC{Tv,Ti}
     return SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
 end
 
-function ctranspose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}) 
+function ctranspose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     (nT, mT) = size(S)
     nnzS = nnz(S)
     rowval_S = S.rowval
-    
+
     rowval_T = Array(Ti, nnzS)
     nzval_T = Array(Tv, nnzS)
 
@@ -286,7 +286,7 @@ end
 # based on cs_permute p. 21, "Direct Methods for Sparse Linear Systems"
 function csc_permute{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, pinv::Vector{Ti}, q::Vector{Ti})
     m,n = size(A); Ap = A.colptr; Ai = A.rowval; Ax = A.nzval
-    if length(pinv) != m || length(q) !=  n 
+    if length(pinv) != m || length(q) !=  n
         error("dimension mismatch, size(A) = $(size(A)), length(pinv) = $(length(pinv)) and length(q) = $(length(q))")
     end
     if !isperm(pinv) || !isperm(q) error("both pinv and q must be permutations") end

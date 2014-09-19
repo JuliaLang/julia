@@ -72,10 +72,10 @@ function DateFormat(f::String,locale::String="english")
         slot = tran == "" || tran == r"$" ? FixedWidthSlot : DelimitedSlot
         width = length(k)
         typ = 'E' in k ? DayOfWeekSlot : 'e' in k ? DayOfWeekSlot :
-              'y' in k ? Year : 'm' in k ? Month : 
+              'y' in k ? Year : 'm' in k ? Month :
               'u' in k ? Month : 'U' in k ? Month :
-              'd' in k ? Day : 'H' in k ? Hour : 
-              'M' in k ? Minute : 'S' in k ? Second : Millisecond 
+              'd' in k ? Day : 'H' in k ? Hour :
+              'M' in k ? Minute : 'S' in k ? Second : Millisecond
         option = 'E' in k ? 2 : 'e' in k ? 1 :
                  'U' in k ? 2 : 'u' in k ? 1 : 0
         push!(slots,slot(i,typ,width,option,locale))

@@ -10,7 +10,7 @@ abstract UVServer
 typealias UVHandle Ptr{Void}
 typealias UVStream AsyncStream
 
-# A dict of all libuv handles that are being waited on somewhere in the system 
+# A dict of all libuv handles that are being waited on somewhere in the system
 # and should thus not be garbage collected
 const uvhandles = ObjectIdDict()
 
@@ -144,7 +144,7 @@ type PipeServer <: UVServer
 end
 
 function init_pipe!(pipe::Union(Pipe,PipeServer);readable::Bool=false,writable=false,julia_only=true)
-    if pipe.handle == C_NULL 
+    if pipe.handle == C_NULL
         error("failed to initialize pipe")
     elseif pipe.status != StatusUninit
         error("pipe is already initialized")
@@ -200,7 +200,7 @@ function TTY(fd::RawFD; readable::Bool = false)
     ret = TTY(handle)
     associate_julia_struct(handle,ret)
     finalizer(ret,uvfinalize)
-    # This needs to go after associate_julia_struct so that there 
+    # This needs to go after associate_julia_struct so that there
     # is no garbage in the ->data field
     uv_error("TTY",ccall(:uv_tty_init,Int32,(Ptr{Void},Ptr{Void},Int32,Int32),eventloop(),handle,fd.fd,readable))
     ret.status = StatusOpen
@@ -229,10 +229,10 @@ handle(s::Ptr{Void}) = s
 
 make_stdout_stream() = _uv_tty2tty(ccall(:jl_stdout_stream, Ptr{Void}, ()))
 
-associate_julia_struct(handle::Ptr{Void},jlobj::ANY) = 
+associate_julia_struct(handle::Ptr{Void},jlobj::ANY) =
     ccall(:jl_uv_associate_julia_struct,Void,(Ptr{Void},Any),handle,jlobj)
 disassociate_julia_struct(uv) = disassociate_julia_struct(uv.handle)
-disassociate_julia_struct(handle::Ptr{Void}) = 
+disassociate_julia_struct(handle::Ptr{Void}) =
     handle != C_NULL && ccall(:jl_uv_disassociate_julia_struct,Void,(Ptr{Void},),handle)
 
 function init_stdio(handle)
@@ -250,7 +250,7 @@ function init_stdio(handle)
             error("FATAL: stdio type ($t) invalid")
         end
         ret.status = StatusOpen
-        ret.line_buffered = false  
+        ret.line_buffered = false
         associate_julia_struct(ret.handle,ret)
         finalizer(ret,uvfinalize)
         return ret
@@ -385,11 +385,11 @@ function notify_filled(stream::AsyncStream, nread::Int)
     end
 end
 
-const READ_BUFFER_SZ=10485760           # 10 MB 
+const READ_BUFFER_SZ=10485760           # 10 MB
 function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::Uint)
     if nread < 0
         if nread != UV_EOF
-            # This is a fatal connectin error. Shutdown requests as per the usual 
+            # This is a fatal connectin error. Shutdown requests as per the usual
             # close function won't work and libuv will fail with an assertion failre
             ccall(:jl_forceclose_uv,Void,(Ptr{Void},),stream.handle)
             notify_error(stream.readnotify, UVError("readcb",nread))
@@ -408,9 +408,9 @@ function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::
         notify(stream.readnotify)
     end
 
-    # Stop reading when 
+    # Stop reading when
     # 1) when we have an infinite buffer, and we have accumulated a lot of unread data OR
-    # 2) we have an alternate buffer that has reached its limit. 
+    # 2) we have an alternate buffer that has reached its limit.
     if (is_maxsize_unlimited(stream.buffer) && (nb_available(stream.buffer) > READ_BUFFER_SZ )) ||
        (nb_available(stream.buffer) == stream.buffer.maxsize)
         stop_reading(stream)
@@ -541,7 +541,7 @@ function process_events(block::Bool)
 end
 
 ## pipe functions ##
-function malloc_julia_pipe(x) 
+function malloc_julia_pipe(x)
     x.handle = c_malloc(_sizeof_uv_named_pipe)
     associate_julia_struct(x.handle,x)
     finalizer(x,uvfinalize)
@@ -665,30 +665,30 @@ function read!(s::AsyncStream, a::Vector{Uint8})
     sbuf = s.buffer
     @assert sbuf.seekable == false
     @assert sbuf.maxsize >= nb
-    
+
     if nb_available(sbuf) >= nb
         return read!(sbuf, a)
     end
-    
+
     if nb <= 65536 # Arbitrary 64K limit under which we are OK with copying the array from the stream's buffer
         wait_readnb(s,nb)
         read!(sbuf, a)
     else
         stop_reading(s) # Just playing it safe, since we are going to switch buffers.
-        newbuf = PipeBuffer(a, nb) 
+        newbuf = PipeBuffer(a, nb)
         newbuf.size = 0
         s.buffer = newbuf
-        write(newbuf, sbuf) 
+        write(newbuf, sbuf)
         wait_readnb(s,nb)
         s.buffer = sbuf
     end
     return a
 end
 
-function read{T}(s::AsyncStream, ::Type{T}, dims::Dims) 
+function read{T}(s::AsyncStream, ::Type{T}, dims::Dims)
     isbits(T) || error("read from buffer only supports bits types or arrays of bits types")
     nb = prod(dims)*sizeof(T)
-    a = read!(s, Array(Uint8, nb)) 
+    a = read!(s, Array(Uint8, nb))
     reshape(reinterpret(T, a), dims)
 end
 
@@ -801,7 +801,7 @@ function write(s::AsyncStream, p::Ptr, nb::Integer)
     return int(nb)
 end
 
-function _uv_hook_writecb_task(s::AsyncStream,req::Ptr{Void},status::Int32) 
+function _uv_hook_writecb_task(s::AsyncStream,req::Ptr{Void},status::Int32)
     d = uv_req_data(req)
     if status < 0
         err = UVError("write",status)
@@ -850,7 +850,7 @@ function accept_nonblock(server::PipeServer)
 end
 
 function accept(server::UVServer, client::AsyncStream)
-    if server.status != StatusActive 
+    if server.status != StatusActive
         throw(ArgumentError("server not connected; make sure \"listen\" has been called"))
     end
     while isopen(server)

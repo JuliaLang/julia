@@ -96,7 +96,7 @@ end
 
 convert(::Type{VersionNumber}, v::String) = VersionNumber(v)
 
-macro v_str(v); VersionNumber(v); end 
+macro v_str(v); VersionNumber(v); end
 
 typemin(::Type{VersionNumber}) = v"0-"
 typemax(::Type{VersionNumber}) = VersionNumber(typemax(Int),typemax(Int),typemax(Int),(),("",))

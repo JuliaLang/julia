@@ -9,9 +9,9 @@ export
     isinside, xmin, xmax, ymin, ymax, center, xrange, yrange,
     aspect_ratio, with_aspect_ratio, diagonal, shift, deform,
     # TODO: more
-    
+
     # TODO: 3D geometry
-    
+
     # Part 2. 2D Drawing
     # device and context
     GraphicsDevice, GraphicsContext, creategc, getgc,
@@ -19,32 +19,32 @@ export
     # but in device coordinates for GraphicsDevice, GraphicsContext, and
     # other concrete things like windows and widgets.
     width, height,
-    
+
     # drawing attribute manipulation
     save, restore, set_line_width, set_dash, set_source_rgb, set_source_rgba,
     set_source,
-    
+
     # coordinate systems
     reset_transform, set_coords, rotate, scale, translate, user_to_device!,
     device_to_user!, user_to_device_distance!, device_to_user_distance!,
     user_to_device, device_to_user,
-    
+
     # clipping
     clip, clip_preserve, reset_clip,
-    
+
     # path primitives
     move_to, line_to, rel_line_to, rel_move_to, new_path, new_sub_path,
     close_path, arc,
-    
+
     # fill and stroke
     fill, fill_preserve, paint, stroke, stroke_preserve,
     stroke_transformed, stroke_transformed_preserve,
-    
+
     # derived path operations
     rectangle, circle, polygon
-    
+
     # TODO: text drawing API
-    
+
     # TODO: rendering pipeline API
 
 

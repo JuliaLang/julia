@@ -12,7 +12,7 @@ export                                  # types
  etree
 
 using Base.LinAlg.UMFPACK               # for decrement, increment, etc.
- 
+
 import Base: (*), convert, copy, ctranspose, eltype, findnz, getindex, hcat,
              isvalid, nnz, show, size, sort!, transpose, vcat
 
@@ -34,16 +34,16 @@ else
 end
 const chm_com_sz = ccall((:jl_cholmod_common_size,:libsuitesparse_wrapper),Int,())
 const chm_com    = fill(0xff, chm_com_sz)
-const chm_l_com  = fill(0xff, chm_com_sz)             
+const chm_l_com  = fill(0xff, chm_com_sz)
 ## chm_com and chm_l_com must be initialized at runtime because they contain pointers
-## to functions in libc.so, whose addresses can change             
+## to functions in libc.so, whose addresses can change
 function cmn(::Type{Int32})
     if isnan(reinterpret(Float64,chm_com[1:8])[1])
         @isok ccall((:cholmod_start, :libcholmod), Cint, (Ptr{Uint8},), chm_com)
     end
     chm_com
 end
-function cmn(::Type{Int64})             
+function cmn(::Type{Int64})
     if isnan(reinterpret(Float64,chm_l_com[1:8])[1])
         @isok ccall((:cholmod_l_start, :libcholmod), Cint, (Ptr{Uint8},), chm_l_com)
     end
@@ -57,7 +57,7 @@ type CholmodException <: Exception end
 
 ## macro to generate the name of the C function according to the integer type
 macro chm_nm(nm,typ) string("cholmod_", eval(typ) == Int64 ? "l_" : "", nm) end
-             
+
 ### A way of examining some of the fields in chm_com
 ### Probably better to make this a Dict{ASCIIString,Tuple} and
 ### save the offsets and the lengths and the types.  Then the names can be checked.
@@ -102,7 +102,7 @@ end
 function set_chm_prt_lev(cm::Array{Uint8}, lev::Integer) # can probably be removed
     cm[(1:4) + chm_com_offsets[13]] = reinterpret(Uint8, [int32(lev)])
 end
-             
+
 ## cholmod_dense pointers passed to or returned from C functions are of Julia type
 ## Ptr{c_CholmodDense}.  The CholmodDense type contains a c_CholmodDense object and other
 ## fields then ensure the memory pointed to is freed when it should be and not before.
@@ -321,7 +321,7 @@ function CholmodDense!{T<:CHMVTypes}(aa::VecOrMat{T}) # uses the memory from Jul
                  length(size(aa)) == 2 ? aa : reshape(aa, (m,n)))
 end
 
-## The CholmodDense constructor copies the contents             
+## The CholmodDense constructor copies the contents
 function CholmodDense{T<:CHMVTypes}(aa::VecOrMat{T})
     m = size(aa,1); n = size(aa,2)
     acp = length(size(aa)) == 2 ? copy(aa) : reshape(copy(aa), (m,n))
@@ -387,7 +387,7 @@ function copy{Tv<:CHMVTypes}(B::CholmodDense{Tv})
 end
 
 function norm{Tv<:CHMVTypes}(D::CholmodDense{Tv},p::Real=1)
-    ccall((:cholmod_norm_dense, :libcholmod), Float64, 
+    ccall((:cholmod_norm_dense, :libcholmod), Float64,
           (Ptr{c_CholmodDense{Tv}}, Cint, Ptr{Uint8}),
           &D.c, p == 1 ? 1 :(p == Inf ? 1 : throw(ArgumentError("p must be 1 or Inf"))),cmn(Int32))
 end
@@ -402,7 +402,7 @@ function CholmodSparse!{Tv<:CHMVTypes,Ti<:CHMITypes}(colpt::Vector{Ti},
     if bb != 0 && bb != 1 throw(DimensionMismatch("colpt[1] is $bb, must be 0 or 1")) end
     if any(diff(colpt) .< 0) throw(ArgumentError("elements of colpt must be non-decreasing")) end
     if length(colpt) != n + 1 throw(DimensionMismatch("length(colptr) = $(length(colpt)), should be $(n+1)")) end
-    if bool(bb)                         # one-based 
+    if bool(bb)                         # one-based
         decrement!(colpt)
         decrement!(rowval)
     end
@@ -456,7 +456,7 @@ CholmodSparse{Tv<:CHMVTypes}(D::CholmodDense{Tv}) = CholmodSparse(D,1) # default
 function CholmodTriplet{Tv<:CHMVTypes,Ti<:CHMITypes}(tp::Ptr{c_CholmodTriplet{Tv,Ti}})
     ctp = unsafe_load(tp)
     i = pointer_to_array(ctp.i, (ctp.nnz,), true)
-    j = pointer_to_array(ctp.j, (ctp.nnz,), true)    
+    j = pointer_to_array(ctp.j, (ctp.nnz,), true)
     x = pointer_to_array(ctp.x, (ctp.x == C_NULL ? 0 : ctp.nnz), true)
     ct = CholmodTriplet{Tv,Ti}(ctp, i, j, x)
     c_free(tp)
@@ -574,7 +574,7 @@ for Ti in (:Int32,:Int64)
                                            (Ptr{c_CholmodFactor{Tv,$Ti}},Ptr{Uint8}),
                                            &L.c,cmn($Ti)))
             end
-            cm = cmn($Ti)                               
+            cm = cmn($Ti)
             Lcll = ccall((@chm_nm "copy_factor" $Ti
                           ,:libcholmod), Ptr{c_CholmodFactor{Tv,$Ti}},
                          (Ptr{c_CholmodFactor{Tv,$Ti}},Ptr{Uint8}),
@@ -784,7 +784,7 @@ for Ti in (:Int32,:Int64)
         end
         function norm{Tv<:CHMVTypes}(A::CholmodSparse{Tv,$Ti},p::Real)
             ccall((@chm_nm "norm_sparse" $Ti
-                   , :libcholmod), Float64, 
+                   , :libcholmod), Float64,
                   (Ptr{c_CholmodSparse{Tv,$Ti}}, Cint, Ptr{Uint8}),
                   &A.c,p == 1 ? 1 :(p == Inf ? 1 : throw(ArgumentError("p must be 1 or Inf"))),cmn($Ti))
         end
@@ -857,7 +857,7 @@ end
 function Ac_ldiv_B{Tv<:CHMVTypes,Ti<:CHMITypes}(L::CholmodFactor{Tv,Ti},B::SparseMatrixCSC{Tv,Ti})
     sparse!(solve(L,CholmodSparse(B),CHOLMOD_A))
 end
- 
+
 function Ac_mul_B{Tv<:CHMVTypes}(A::CholmodSparse{Tv},B::CholmodDense{Tv})
     chm_sdmult(A,true,1.,0.,B)
 end
@@ -871,7 +871,7 @@ function At_mul_B{Tv<:Union(Float32,Float64),Ti<:CHMITypes}(A::CholmodSparse{Tv,
 end
 
 cholfact{T<:CHMVTypes}(A::CholmodSparse{T},beta::T) = cholfact(A,beta,false)
-cholfact(A::CholmodSparse) = cholfact(A,false) 
+cholfact(A::CholmodSparse) = cholfact(A,false)
 cholfact(A::SparseMatrixCSC,ll::Bool) = cholfact(CholmodSparse(A),ll)
 cholfact(A::SparseMatrixCSC) = cholfact(CholmodSparse(A),false)
 function cholfact!{T<:CHMVTypes}(L::CholmodFactor{T},A::CholmodSparse{T},beta::Number)
@@ -910,7 +910,7 @@ end
 scale{T<:CHMVTypes}(A::CholmodSparse{T},b::Vector{T}) = scale!(copy(A), b)
 
 norm(A::CholmodSparse) = norm(A,1)
-                          
+
 show(io::IO,L::CholmodFactor) = chm_print(L,int32(4),"")
 show(io::IO,A::CholmodSparse) = chm_print(A,int32(4),"")
 
@@ -1028,7 +1028,7 @@ function sparse(A::CholmodSparse)
 end
 function sparse!(A::CholmodSparse)
     SparseMatrixCSC(A.c.m, A.c.n, increment!(A.colptr0), increment!(A.rowval0), A.nzval)
-end    
+end
 sparse(L::CholmodFactor) = sparse!(CholmodSparse(L))
 sparse(D::CholmodDense) = sparse!(CholmodSparse(D))
 sparse(T::CholmodTriplet) = sparse!(CholmodSparse(T))
