@@ -1,13 +1,14 @@
 module Pkg
 
-export Git, Dir, GitHub, Types, Reqs, Cache, Read, Query, Resolve, Write, Generate, Entry
+export Git, Dir, GitHub, Types, Reqs, Cache, Read, Query, Resolve, Write,
+       Licenses, Generate, Entry
 export dir, init, rm, add, available, installed, status, clone, checkout,
        release, fix, update, resolve, register, tag, publish, generate, test
 
 const DEFAULT_META = "git://github.com/JuliaLang/METADATA.jl"
 const META_BRANCH = "metadata-v2"
 
-for file in split("git dir github types reqs cache read query resolve write generate entry")
+for file in split("git dir github types reqs cache read query resolve write licenses generate entry")
     include("pkg/$file.jl")
 end
 const cd = Dir.cd
@@ -50,7 +51,7 @@ tag(pkg::String, sym::Symbol, commit::String) = cd(Entry.tag,pkg,sym,false,commi
 
 tag(pkg::String, ver::VersionNumber; force::Bool=false) = cd(Entry.tag,pkg,ver,force)
 tag(pkg::String, ver::VersionNumber, commit::String; force::Bool=false) =
-	cd(Entry.tag,pkg,ver,force,commit)
+    cd(Entry.tag,pkg,ver,force,commit)
 
 submit(pkg::String) = cd(Entry.submit,pkg)
 submit(pkg::String, commit::String) = cd(Entry.submit,pkg,commit)
@@ -60,8 +61,10 @@ publish() = cd(Entry.publish,META_BRANCH)
 build() = cd(Entry.build)
 build(pkgs::String...) = cd(Entry.build,[pkgs...])
 
+generate() = println(Generate.license_help())
+generate(::String) = generate()
 generate(pkg::String, license::String; force::Bool=false, authors::Union(String,Array) = [], config::Dict=Dict()) =
-	cd(Generate.package,pkg,license,force=force,authors=authors,config=config)
+    cd(Generate.package,pkg,license,force=force,authors=authors,config=config)
 
 
 test(;coverage::Bool=false) = cd(Entry.test; coverage=coverage)
