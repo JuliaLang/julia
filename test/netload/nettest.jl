@@ -113,7 +113,7 @@ test_send(9)
 
     bsent = 0
     bread = 0
-    
+
     @sync begin
         # Create an asynchronous task that can modify bread properly
         recv_task = @task begin
@@ -125,7 +125,7 @@ test_send(9)
         end
         Base.sync_add(recv_task)
         Base.enq_work(recv_task)
-        
+
         send_task = @task begin
             # write in chunks of xfer_block
             data = fill!(zeros(Uint8, xfer_block), int8(65))

@@ -1042,11 +1042,11 @@ end
 
 # isvalid(), chr2ind() and ind2chr() for SubString{DirectIndexString}
 let s="lorem ipsum",
-    sdict=[SubString(s,1,11)=>s, 
+    sdict=[SubString(s,1,11)=>s,
         SubString(s,1,6)=>"lorem ",
-        SubString(s,1,0)=>"", 
-        SubString(s,2,4)=>"ore", 
-        SubString(s,2,16)=>"orem ipsum", 
+        SubString(s,1,0)=>"",
+        SubString(s,2,4)=>"ore",
+        SubString(s,2,16)=>"orem ipsum",
         SubString(s,12,14)=>""
     ]
     for (ss,s) in sdict

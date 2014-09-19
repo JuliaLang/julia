@@ -26,11 +26,11 @@ for KK=1:g
       t=t+1;
       iter=t;
       %iteration number
-      
+
       if rem(iter, 100) == 0
         disp(iter)
       end
-      
+
       iter ;
       %cumsum = zeros(n,1);
       for i=1:n
@@ -49,12 +49,12 @@ for KK=1:g
         end
       end
       %end
-      
+
       X(k)=X(k)+1;
       for i=1:n
         U(i)=U(i)+A(i,k);
       end
-      
+
       s= (sum(p(1:n).*exp((eps/2)*A(1:n,k))));
       for i=1:n
         p(i)=(p(i)*exp((eps/2)*A(i,k))) / s;
@@ -68,9 +68,9 @@ for KK=1:g
         stop=1;
         x=X/t;
       end
-      
+
       %disp('hello')
-      
+
     end
     iter;
     x;
@@ -82,18 +82,18 @@ for KK=1:g
   error=abs(AX)-abs(U);
   error;
   sum(error)
-  
+
   if A*x <= eps*e
     disp(' Ax <= eps*e  ')
   end
   if error<10^-8
-    
+
     disp('Assertion condition is satisfied i.e. AX-U<10^-8')
-    
+
   else
     disp('Error:  AX-U<10^-8 not satisfied ')
   end
-  
+
   disp('Time for');
   disp(eps);
   disp('is');
@@ -114,7 +114,7 @@ disp('Epsilon-Time-Iteration tradeoff');
 disp(out);
 
 %save outputallvar.mat
-%save outputdat.dat A -ASCII 
+%save outputdat.dat A -ASCII
 %xlswrite('outputxls.xls', out,'eps-time-iterations GK')
 
 %{
@@ -148,7 +148,7 @@ for i=1:n
          a(j,i)= rand;
          a(i,j)= -a(j,i);
         end
-    
+
     end
     if rem(i,1000) == 0
         disp(i)

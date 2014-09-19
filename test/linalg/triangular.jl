@@ -28,9 +28,9 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     	@test full(M1/α) == full(M1)/α
     end
 
-    for (M, TM) in ((triu(A), Triangular(A, :U)), 
+    for (M, TM) in ((triu(A), Triangular(A, :U)),
     				(tril(A), Triangular(A, :L)))
-        
+
         ##Idempotent tests #XXX - not implemented
         #for func in (conj, transpose, ctranspose)
         #    @test full(func(func(TM))) == M

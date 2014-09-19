@@ -272,7 +272,7 @@ int main() {
     //     if (t < tmin) tmin = t;
     // }
     // print_perf("ones", tmin);
-    // 
+    //
     // // A*A'
     // //SUBROUTINE DGEMM(TRANSA,TRANSB,M,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
     // double *b = ones(200, 200);

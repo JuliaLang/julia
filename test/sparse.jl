@@ -340,7 +340,7 @@ let A = spzeros(Int, 10, 20)
     @test A[4:8,8:16] == 15 * ones(Int, 5, 9)
 end
 
-let ASZ = 1000, TSZ = 800 
+let ASZ = 1000, TSZ = 800
     A = sprand(ASZ, 2*ASZ, 0.0001)
     B = copy(A)
     nA = countnz(A)

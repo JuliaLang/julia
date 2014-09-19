@@ -30,7 +30,7 @@ x = lua'\b
 Ac = complex(A,A)
 lua = lufact(Ac)
 L,U,p,q,Rs = lua[:(:)]
-@test_approx_eq scale(Rs,Ac)[p,q] L*U 
+@test_approx_eq scale(Rs,Ac)[p,q] L*U
 
 #4523 - complex sparse \
 x = speye(2) + im * speye(2)
@@ -160,6 +160,6 @@ pred = afiro'*sol
 @test norm(afiro * (y.mat - pred.mat)) < 1e-8
 
 # explicit zeros
-a = SparseMatrixCSC(2,2,[1,3,5],[1,2,1,2],[1.0,0.0,0.0,1.0]) 
+a = SparseMatrixCSC(2,2,[1,3,5],[1,2,1,2],[1.0,0.0,0.0,1.0])
 @test_approx_eq lufact(a)\[2.0,3.0] [2.0,3.0]
 @test_approx_eq cholfact(a)\[2.0,3.0] [2.0,3.0]

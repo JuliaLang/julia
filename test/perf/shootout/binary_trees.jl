@@ -2,9 +2,9 @@
 # The Computer Language Benchmarks Game
 # binary-trees benchmark
 # http://shootout.alioth.debian.org/u32/performance.php?test=binarytrees
-# 
+#
 # Ported from an OCaml version
-# 
+#
 
 abstract BTree
 
@@ -18,9 +18,9 @@ type Node <: BTree
 end
 
 function make(val, d)
-    if d == 0 
+    if d == 0
         Node(val, Empty(), Empty())
-    else 
+    else
         nval = val * 2
         Node(val, make(nval-1, d-1), make(nval, d-1))
     end
@@ -37,7 +37,7 @@ function loop_depths(d, min_depth, max_depth)
             c += check(make(i, d)) + check(make(-i, d))
         end
 #        @printf("%i\t trees of depth %i\t check: %i\n", 2*niter, d, c)
-        d += 2        
+        d += 2
     end
 end
 

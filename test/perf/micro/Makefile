@@ -52,7 +52,7 @@ bin/perf%: perf.c perf.h
 	$(CC) -std=c99 -O$* $< -o $@  -I$(DSFMTDIR) -L$(BLASDIR) $(LIBBLAS) -L$(LIBMDIR) $(LIBM) $(CFLAGS) -lpthread
 
 bin/fperf%: perf.f90
-	mkdir -p mods/$@ #Modules for each binary go in separate directories 
+	mkdir -p mods/$@ #Modules for each binary go in separate directories
 	$(FC) $(FFLAGS) -Jmods/$@ -O$* $< -o $@ -L$(BLASDIR) $(LIBBLAS) -L$(LIBMDIR) $(LIBM) -lpthread
 
 benchmarks/c.csv: \
