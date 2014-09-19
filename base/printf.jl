@@ -749,7 +749,7 @@ end
 function ini_dec(x::SmallFloatingPoint, n::Int)
     if x == 0.0
         ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', n)
-        return int32(1), int32(1), bool(signbit(x))
+        return int32(1), int32(1), signbit(x)
     else
         @grisu_ccall x Grisu.PRECISION n
     end
