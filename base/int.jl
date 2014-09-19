@@ -44,6 +44,7 @@ abs(x::Signed) = flipsign(x,x)
 ~(n::Integer) = -n-1
 
 asunsigned(x::Integer) = reinterpret(typeof(unsigned(zero(x))), x)
+asunsigned(x::Bool) = unsigned(x)
 asunsigned(x) = unsigned(x)
 assigned(x::Integer) = reinterpret(typeof(signed(zero(x))), x)
 assigned(x) = signed(x)
@@ -210,6 +211,7 @@ convert(::Type{Signed}, x::Uint128) = convert(Int128,x)
 convert(::Type{Signed}, x::Float32) = convert(Int,x)
 convert(::Type{Signed}, x::Float64) = convert(Int,x)
 convert(::Type{Signed}, x::Char)    = convert(Int,x)
+convert(::Type{Signed}, x::Bool)    = convert(Int,x)
 
 convert(::Type{Unsigned}, x::Int8   ) = convert(Uint8,x)
 convert(::Type{Unsigned}, x::Int16  ) = convert(Uint16,x)
@@ -219,6 +221,7 @@ convert(::Type{Unsigned}, x::Int128 ) = convert(Uint128,x)
 convert(::Type{Unsigned}, x::Float32) = convert(Uint,x)
 convert(::Type{Unsigned}, x::Float64) = convert(Uint,x)
 convert(::Type{Unsigned}, x::Char)    = convert(Uint,x)
+convert(::Type{Unsigned}, x::Bool)    = convert(Uint,x)
 
 convert(::Type{Integer}, x::Float32) = convert(Int,x)
 convert(::Type{Integer}, x::Float64) = convert(Int,x)

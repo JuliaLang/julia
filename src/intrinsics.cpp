@@ -439,7 +439,7 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
                 !(vxt->isPointerTy() && llvmt->getPrimitiveSizeInBits() == sizeof(void*)*8) &&
                 !(llvmt->isPointerTy() && vxt->getPrimitiveSizeInBits() == sizeof(void*)*8)) {
                 emit_error("box: argument is of incorrect size", ctx);
-                return vx;
+                return UndefValue::get(llvmt);
             }
             // PtrToInt and IntToPtr ignore size differences
             if (vxt->isPointerTy() && !llvmt->isPointerTy()) {
