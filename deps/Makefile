@@ -1435,7 +1435,7 @@ GMP_SRC_TARGET = gmp-$(GMP_VER)/.libs/libgmp.$(SHLIB_EXT)
 GMP_OBJ_TARGET = $(build_shlibdir)/libgmp.$(SHLIB_EXT)
 
 gmp-$(GMP_VER).tar.bz2:
-	$(JLDOWNLOAD) $@ ftp://ftp.gmplib.org/pub/gmp-$(GMP_VER)/$@
+	$(JLDOWNLOAD) $@ https://gmplib.org/download/gmp/$@
 gmp-$(GMP_VER)/configure: gmp-$(GMP_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	$(TAR) jxf $<
