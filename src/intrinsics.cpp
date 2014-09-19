@@ -388,7 +388,8 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     if (bt == NULL) {
     }
     else if (!jl_is_bitstype(bt)) {
-        jl_error("box: expected bits type as first argument");
+        emit_error("reinterpret: expected bits type as first argument", ctx);
+        return UndefValue::get(jl_pvalue_llvmt);
     }
     else {
         llvmt = julia_type_to_llvm(bt);
@@ -401,8 +402,10 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
             nb = (bt==(jl_value_t*)jl_bool_type) ? 1 : jl_datatype_size(bt)*8;
     }
 
-    if (nb == -1)
-        jl_error("box: could not determine argument size");
+    if (nb == -1) {
+        emit_error("box: could not determine argument size", ctx);
+        return UndefValue::get(jl_pvalue_llvmt);
+    }
 
     if (llvmt == NULL)
         llvmt = IntegerType::get(jl_LLVMContext, nb);
