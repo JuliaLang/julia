@@ -66,7 +66,7 @@ end
                     Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                     Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{Void},
                     Ptr{BlasInt}),
-                &jobvsl, &jobvsr, &sort, &selctg,
+                &jobvsl, &jobvsr, &sort, selctg,
                 &n, A, &max(1,n), B,
                 &max(1,n), &sdim, alphar, alphai,
                 beta, vsl, &ldvsl, vsr,
@@ -89,17 +89,28 @@ test_schurfact{TA,TB}(A::StridedMatrix{TA}, B::StridedMatrix{TB}, sort::Char='V'
 
 
 function order_eigs(alphar, alphai, beta)
-    if alphar/alphai > 1
-        return int32(1)
+    if abs(alphar + alphai)/beta > 1
+        return true
     else
-        return int32(0)
+        return false
     end
 end
 
-const order_eigs_c = cfunction(order_eigs, Cint, (Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cdouble}))
+const order_eigs_c = cfunction(order_eigs, Bool, (Cdouble, Cdouble, Cdouble))
 
 # Test call
 A = randn(3, 3)
 B = reshape(1:9, 3, 3)
+
+their_schur = schurfact(A, B)
+our_schur = test_schurfact(A, B, 'N')
+
+
+println(their_schur[:S] - our_schur[:S])
+println(their_schur[:T] - our_schur[:T])
+println(their_schur[:alpha] - our_schur[:alpha])
+println(their_schur[:beta] - our_schur[:beta])
+println(their_schur[:Q] - our_schur[:Q])
+println(their_schur[:Z] - our_schur[:Z])
 
 test_schurfact(A, B, 'S', order_eigs_c)

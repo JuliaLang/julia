@@ -111,7 +111,7 @@ immutable QRPackedQ{T} <: AbstractMatrix{T}
     factors::Matrix{T}
     τ::Vector{T}
 end
-immutable QRCompactWYQ{S} <: AbstractMatrix{S} 
+immutable QRCompactWYQ{S} <: AbstractMatrix{S}
     factors::Matrix{S}
     T::Triangular{S}
 end
@@ -445,7 +445,7 @@ end
 function eigfact!{T<:BlasComplex}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
     n = size(A, 2)
     n == 0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
-    ishermitian(A) && return eigfact!(Hermitian(A)) 
+    ishermitian(A) && return eigfact!(Hermitian(A))
     return Eigen(LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)[[2,4]]...)
 end
 eigfact{T}(A::AbstractMatrix{T}, args...; kwargs...) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); S != T ? eigfact!(convert(AbstractMatrix{S}, A), args...; kwargs...) : eigfact!(copy(A), args...; kwargs...))
@@ -668,9 +668,9 @@ immutable GeneralizedSchur{Ty<:BlasFloat} <: Factorization{Ty}
     Z::Matrix{Ty}
 end
 
-schurfact!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T}) = GeneralizedSchur(LinAlg.LAPACK.gges!('V', 'V', A, B)...)
-schurfact{T<:BlasFloat}(A::StridedMatrix{T},B::StridedMatrix{T}) = schurfact!(copy(A),copy(B))
-schurfact{TA,TB}(A::StridedMatrix{TA}, B::StridedMatrix{TB}) = (S = promote_type(Float32,typeof(one(TA)/norm(one(TA))),TB); schurfact!(S != TA ? convert(AbstractMatrix{S},A) : copy(A), S != TB ? convert(AbstractMatrix{S},B) : copy(B)))
+schurfact!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T}, sort::Char='N', selctg::Ptr{None}=C_NULL) = GeneralizedSchur(LinAlg.LAPACK.gges!('V', 'V', A, B)...)
+schurfact{T<:BlasFloat}(A::StridedMatrix{T},B::StridedMatrix{T}, sort::Char='N', selctg::Ptr{None}=C_NULL) = schurfact!(copy(A),copy(B))
+schurfact{TA,TB}(A::StridedMatrix{TA}, B::StridedMatrix{TB}, sort::Char='N', selctg::Ptr{None}=C_NULL) = (S = promote_type(Float32,typeof(one(TA)/norm(one(TA))),TB); schurfact!(S != TA ? convert(AbstractMatrix{S},A) : copy(A), S != TB ? convert(AbstractMatrix{S},B) : copy(B)))
 
 function getindex(F::GeneralizedSchur, d::Symbol)
     d == :S && return F.S
@@ -692,16 +692,16 @@ end
 convert{T}(::Type{Factorization{T}}, F::Factorization{T}) = F
 inv{T}(F::Factorization{T}) = A_ldiv_B!(F, eye(T, size(F,1)))
 function \{TF<:Number,TB<:Number,N}(F::Factorization{TF}, B::AbstractArray{TB,N})
-    TFB = typeof(one(TF)/one(TB)) 
+    TFB = typeof(one(TF)/one(TB))
     A_ldiv_B!(convert(Factorization{TFB}, F), TB == TFB ? copy(B) : convert(AbstractArray{TFB,N}, B))
 end
 
 function Ac_ldiv_B{TF<:Number,TB<:Number,N}(F::Factorization{TF}, B::AbstractArray{TB,N})
-    TFB = typeof(one(TF)/one(TB)) 
+    TFB = typeof(one(TF)/one(TB))
     Ac_ldiv_B!(convert(Factorization{TFB}, F), TB == TFB ? copy(B) : convert(AbstractArray{TFB,N}, B))
 end
 
 function At_ldiv_B{TF<:Number,TB<:Number,N}(F::Factorization{TF}, B::AbstractArray{TB,N})
-    TFB = typeof(one(TF)/one(TB)) 
+    TFB = typeof(one(TF)/one(TB))
     At_ldiv_B!(convert(Factorization{TFB}, F), TB == TFB ? copy(B) : convert(AbstractArray{TFB,N}, B))
 end
