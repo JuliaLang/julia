@@ -424,6 +424,9 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     if (vxt != llvmt) {
         if (vxt == T_void)
             return vx;
+        if (!vxt->isSingleValueType()) {
+            jl_error("box: argument not of a primitive type");
+        }
         if (llvmt == T_int1) {
             vx = builder.CreateTrunc(vx, llvmt);
         }
