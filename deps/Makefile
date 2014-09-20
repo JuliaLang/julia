@@ -1254,7 +1254,7 @@ ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/libmojibake ] && echo 
 $(MOJIBAKE_SRC_TARGET): $(JULIAHOME)/.git/modules/deps/libmojibake/HEAD
 endif
 $(MOJIBAKE_SRC_TARGET): libmojibake/Makefile
-	$(MAKE) -C libmojibake cc="$(CC) -O2 -std=c99 $(fPIC)" AR="$(AR)" libmojibake.a
+	$(MAKE) -C libmojibake cc="$(CC) -O2 -std=c99 $(fPIC) -DMOJIBAKE_EXPORTS" AR="$(AR)" libmojibake.a
 	touch -c $@
 libmojibake/checked: $(MOJIBAKE_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))

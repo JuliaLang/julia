@@ -22,7 +22,7 @@ LLT = $(LLTDIR)/libsupport.a $(LIBUV) $(LIBMOJIBAKE)
 
 FLAGS = -I$(LLTDIR) $(CFLAGS) $(HFILEDIRS:%=-I%) \
         -I$(LIBUV_INC) -I$(build_includedir) $(LIBDIRS:%=-L%) \
-        -DLIBRARY_EXPORTS
+        -DLIBRARY_EXPORTS -DMOJIBAKE_EXPORTS
 ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -DUSE_COMPUTED_GOTO -fvisibility=hidden
 endif
