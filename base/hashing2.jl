@@ -129,7 +129,7 @@ end
 
 ## streamlined hashing for smallish rational types ##
 
-function hash{T<:Integer64}(x::Rational{T}, h::Uint)
+function hash{T<:IntegerUpto64}(x::Rational{T}, h::Uint)
     num, den = Base.num(x), Base.den(x)
     den == 1 && return hash(num, h)
     den == 0 && return hash(ifelse(num > 0, Inf, -Inf), h)

@@ -101,9 +101,9 @@ reducedim_init(f, op::OrFun, A::AbstractArray, region) = reducedim_initarray(A, 
 
 # specialize to make initialization more efficient for common cases
 
-typealias CommonReduceResult Union(Uint64,Uint128,Int64,Int128,Float32,Float64)
+typealias CommonReduceResult Union(Int8,Uint8,Int16,Uint16,Int32,Uint32,Uint64,Uint128,Int64,Int128,Float32,Float64)
 
-for (IT, RT) in ((CommonReduceResult, :(eltype(A))), (SmallSigned, :Int), (SmallUnsigned, :Uint))
+for (IT, RT) in ((CommonReduceResult, :(eltype(A))),)
     T = Union([AbstractArray{t} for t in IT.types]..., [AbstractArray{Complex{t}} for t in IT.types]...)
     @eval begin
         reducedim_init(f::IdFun, op::AddFun, A::$T, region) =

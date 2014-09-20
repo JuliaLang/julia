@@ -320,8 +320,8 @@ end
 float{T<:FloatingPoint}(x::AbstractArray{T}) = x
 complex{T<:Complex}(x::AbstractArray{T}) = x
 
-float{T<:Integer64}(x::AbstractArray{T}) = convert(AbstractArray{typeof(float(zero(T)))}, x)
-complex{T<:Union(Integer64,Float64,Float32,Float16)}(x::AbstractArray{T}) =
+float{T<:IntegerUpto64}(x::AbstractArray{T}) = convert(AbstractArray{typeof(float(zero(T)))}, x)
+complex{T<:Union(IntegerUpto64,Float64,Float32,Float16)}(x::AbstractArray{T}) =
     convert(AbstractArray{typeof(complex(zero(T)))}, x)
 
 function float(A::AbstractArray) 
