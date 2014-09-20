@@ -1,3 +1,101 @@
+immutable DoubleFloat64
+    hi::Float64
+    lo::Float64
+end
+immutable DoubleFloat32
+    hi::Float64
+end
+
+# kernel_* functions are only valid for |x| < pi/4 = 0.7854
+# translated from openlibm code: k_sin.c, k_cos.c, k_sinf.c, k_cosf.c
+# which are made available under the following licence:
+
+## Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+##
+## Developed at SunPro, a Sun Microsystems, Inc. business.
+## Permission to use, copy, modify, and distribute this
+## software is freely granted, provided that this notice
+## is preserved.
+
+function sin_kernel(x::DoubleFloat64)
+    S1 = -1.66666666666666324348e-01
+    S2 =  8.33333333332248946124e-03
+    S3 = -1.98412698298579493134e-04
+    S4 =  2.75573137070700676789e-06
+    S5 = -2.50507602534068634195e-08
+    S6 =  1.58969099521155010221e-10
+
+    z = x.hi*x.hi
+    w = z*z
+    r = S2+z*(S3+z*S4) + z*w*(S5+z*S6)
+    v = z*x.hi
+    x.hi-((z*(0.5*x.lo-v*r)-x.lo)-v*S1)
+end
+
+function cos_kernel(x::DoubleFloat64)
+    C1 =  4.16666666666666019037e-02
+    C2 = -1.38888888888741095749e-03
+    C3 =  2.48015872894767294178e-05
+    C4 = -2.75573143513906633035e-07
+    C5 =  2.08757232129817482790e-09
+    C6 = -1.13596475577881948265e-11
+
+    z = x.hi*x.hi
+    w = z*z
+    r = z*(C1+z*(C2+z*C3)) + w*w*(C4+z*(C5+z*C6))
+    hz = 0.5*z
+    w = 1.0-hz
+    w + (((1.0-w)-hz) + (z*r-x.hi*x.lo))
+end
+
+function sin_kernel(x::DoubleFloat32)
+    S1 = -0x15555554cbac77.0p-55
+    S2 =  0x111110896efbb2.0p-59
+    S3 = -0x1a00f9e2cae774.0p-65
+    S4 =  0x16cd878c3b46a7.0p-71
+    
+    z = x.hi*x.hi
+    w = z*z
+    r = S3+z*S4
+    s = z*x.hi
+    float32((x.hi + s*(S1+z*S2)) + s*w*r)
+end
+
+function cos_kernel(x::DoubleFloat32)
+    C0 = -0x1ffffffd0c5e81.0p-54
+    C1 =  0x155553e1053a42.0p-57
+    C2 = -0x16c087e80f1e27.0p-62
+    C3 =  0x199342e0ee5069.0p-68
+
+    z = x.hi*x.hi
+    w = z*z
+    r = C2+z*C3
+    float32(((1.0+z*C0) + w*C1) + (w*z)*r)
+end
+
+# fallback methods
+sin_kernel(x::Real) = sin(x)
+cos_kernel(x::Real) = cos(x)
+
+# multiply in extended precision
+function mulpi_ext(x::Float64)
+    m = 3.141592653589793
+    m_hi = 3.1415926218032837
+    m_lo = 3.178650954705639e-8
+
+    u = 134217729.0*x # 0x1p27 + 1
+    x_hi = u-(u-x)
+    x_lo = x-x_hi
+    
+    y_hi = m*x
+    y_lo = x_hi * m_lo + (x_lo* m_hi + ((x_hi*m_hi-y_hi) + x_lo*m_lo))
+
+    DoubleFloat64(y_hi,y_lo)
+end
+mulpi_ext(x::Float32) = DoubleFloat32(pi*float64(x))
+mulpi_ext(x::Rational) = mulpi_ext(float(x))
+mulpi_ext(x::Real) = pi*x # Fallback
+
 function sinpi(x::Real)
     if isinf(x)
         return throw(DomainError())
@@ -5,23 +103,27 @@ function sinpi(x::Real)
         return nan(x)
     end
 
-    rx = copysign(float(rem(x,2)),x)
+    rx = copysign(rem(x,2),x)
     arx = abs(rx)
 
-    if arx < oftype(rx,0.25)
-        return sin(pi*rx)
+    if rx == zero(rx)
+        return copysign(float(zero(rx)),x)
+    elseif arx < oftype(rx,0.25)
+        return sin_kernel(mulpi_ext(rx))
     elseif arx <= oftype(rx,0.75)
-        arx = oftype(rx,0.5) - arx
-        return copysign(cos(pi*arx),rx)
+        y = mulpi_ext(oftype(rx,0.5) - arx)
+        return copysign(cos_kernel(y),rx)
+    elseif arx == one(x)
+        return copysign(float(zero(rx)),rx)
     elseif arx < oftype(rx,1.25)
-        rx = (one(rx) - arx)*sign(rx)
-        return sin(pi*rx)
+        y = mulpi_ext((one(rx) - arx)*sign(rx))
+        return sin_kernel(y)
     elseif arx <= oftype(rx,1.75)
-        arx = oftype(rx,1.5) - arx
-        return -copysign(cos(pi*arx),rx)
+        y = mulpi_ext(oftype(rx,1.5) - arx)
+        return -copysign(cos_kernel(y),rx)
     else
-        rx = rx - copysign(oftype(rx,2.0),rx)
-        return sin(pi*rx)
+        y = mulpi_ext(rx - copysign(oftype(rx,2.0),rx))
+        return sin_kernel(y)
     end
 end
 
@@ -35,24 +137,24 @@ function cospi(x::Real)
     rx = abs(float(rem(x,2)))
 
     if rx <= oftype(rx,0.25)
-        return cos(pi*rx)
+        return cos_kernel(mulpi_ext(rx))
     elseif rx < oftype(rx,0.75)
-        rx = oftype(rx,0.5) - rx
-        return sin(pi*rx)
+        y = mulpi_ext(oftype(rx,0.5) - rx)
+        return sin_kernel(y)
     elseif rx <= oftype(rx,1.25)
-        rx = one(rx) - rx
-        return -cos(pi*rx)
+        y = mulpi_ext(one(rx) - rx)
+        return -cos_kernel(y)
     elseif rx < oftype(rx,1.75)
-        rx = rx - oftype(rx,1.5)
-        return sin(pi*rx)
+        y = mulpi_ext(rx - oftype(rx,1.5))
+        return sin_kernel(y)
     else
-        rx = oftype(rx,2.0) - rx
-        return cos(pi*rx)
+        y = mulpi_ext(oftype(rx,2.0) - rx)
+        return cos_kernel(y)
     end
 end
 
-sinpi(x::Integer) = zero(x)
-cospi(x::Integer) = isodd(x) ? -one(x) : one(x)
+sinpi(x::Integer) = x >= 0 ? zero(float(x)) : -zero(float(x))
+cospi(x::Integer) = isodd(x) ? -one(float(x)) : one(float(x))
 
 function sinpi(z::Complex)
     zr, zi = reim(z)
@@ -111,6 +213,25 @@ for (fa, fainv) in ((:asec, :acos), (:acsc, :asin), (:acot, :atan),
     end
 end
 
+
+# multiply in extended precision
+function deg2rad_ext(x::Float64)
+    m = 0.017453292519943295
+    m_hi = 0.01745329238474369
+    m_lo = 1.3519960527851425e-10
+
+    u = 134217729.0*x # 0x1p27 + 1
+    x_hi = u-(u-x)
+    x_lo = x-x_hi
+    
+    y_hi = m*x
+    y_lo = x_hi * m_lo + (x_lo* m_hi + ((x_hi*m_hi-y_hi) + x_lo*m_lo))
+
+    DoubleFloat64(y_hi,y_lo)
+end
+deg2rad_ext(x::Float32) = DoubleFloat32(deg2rad(float64(x)))
+deg2rad_ext(x::Real) = deg2rad(x) # Fallback
+
 function sind(x::Real)
     if isinf(x)
         return throw(DomainError())
@@ -121,20 +242,24 @@ function sind(x::Real)
     rx = copysign(float(rem(x,360)),x)
     arx = abs(rx)
 
-    if arx < oftype(rx,45.0)
-        return sin(deg2rad(rx))
-    elseif arx <= oftype(rx,135.0)
-        arx = oftype(rx,90.0) - arx
-        return copysign(cos(deg2rad(arx)),rx)
-    elseif arx < oftype(rx,225.0)
-        rx = (oftype(rx,180.0) - arx)*sign(rx)
-        return sin(deg2rad(rx))
-    elseif arx <= 315.0
-        arx = oftype(rx,270.0) - arx
-        return -copysign(cos(deg2rad(arx)),rx)
+    if rx == zero(rx)
+        return rx 
+    elseif arx < oftype(rx,45)
+        return sin_kernel(deg2rad_ext(rx))
+    elseif arx <= oftype(rx,135)
+        y = deg2rad_ext(oftype(rx,90) - arx)
+        return copysign(cos_kernel(y),rx)
+    elseif arx == oftype(rx,180)
+        return copysign(zero(rx),rx)
+    elseif arx < oftype(rx,225)
+        y = deg2rad_ext((oftype(rx,180) - arx)*sign(rx))
+        return sin_kernel(y)
+    elseif arx <= oftype(rx,315)
+        y = deg2rad_ext(oftype(rx,270) - arx)
+        return -copysign(cos_kernel(y),rx)
     else
-        rx = rx - copysign(oftype(rx,360.0),rx)
-        return sin(deg2rad(rx))
+        y = deg2rad_ext(rx - copysign(oftype(rx,360),rx))
+        return sin_kernel(y)
     end
 end
 @vectorize_1arg Real sind
@@ -148,20 +273,20 @@ function cosd(x::Real)
 
     rx = abs(float(rem(x,360)))
 
-    if rx <= oftype(rx,45.0)
-        return cos(deg2rad(rx))
-    elseif rx < oftype(rx,135.0)
-        rx = oftype(rx,90.0) - rx
-        return sin(deg2rad(rx))
-    elseif rx <= oftype(rx,225.0)
-        rx = oftype(rx,180.0) - rx
-        return -cos(deg2rad(rx))
-    elseif rx < oftype(rx,315.0)
-        rx = rx - oftype(rx,270.0)
-        return sin(deg2rad(rx))
+    if rx <= oftype(rx,45)
+        return cos_kernel(deg2rad_ext(rx))
+    elseif rx < oftype(rx,135)
+        y = deg2rad_ext(oftype(rx,90) - rx)
+        return sin_kernel(y)
+    elseif rx <= oftype(rx,225)
+        y = deg2rad_ext(oftype(rx,180) - rx)
+        return -cos_kernel(y)
+    elseif rx < oftype(rx,315)
+        y = deg2rad_ext(rx - oftype(rx,270))
+        return sin_kernel(y)
     else
-        rx = oftype(rx,360.0) - rx
-        return cos(deg2rad(rx))
+        y = deg2rad_ext(oftype(rx,360) - rx)
+        return cos_kernel(y)
     end
 end
 @vectorize_1arg Real cosd
