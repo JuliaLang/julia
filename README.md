@@ -6,6 +6,7 @@
 </div>
 
 [![Build Status](https://api.travis-ci.org/JuliaLang/julia.svg?branch=master)](https://travis-ci.org/JuliaLang/julia)
+[![Coverage Status](https://img.shields.io/coveralls/JuliaLang/julia.svg)](https://coveralls.io/r/JuliaLang/julia?branch=master)
 
 <a name="The-Julia-Language"/>
 ## The Julia Language
