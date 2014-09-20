@@ -259,10 +259,11 @@ endif
 	$(INSTALL_M) $(build_private_libdir)/sys.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 	# Copy in all .jl sources as well
 	cp -R -L $(build_datarootdir)/julia $(DESTDIR)$(datarootdir)/
-	# Remove git repository of juliadoc
-	-rm -rf $(DESTDIR)$(datarootdir)/julia/doc/juliadoc/.git
-	-rm -f $(DESTDIR)$(datarootdir)/julia/doc/juliadoc/.gitignore
-	# Copy in beautiful new man page!
+	# Remove perf suite
+	-rm -rf $(DESTDIR)$(datarootdir)/julia/test/perf/
+	# Remove various files which should not be installed
+	-rm -f $(DESTDIR)$(datarootdir)/julia/base/version_git.sh
+	-rm -f $(DESTDIR)$(datarootdir)/julia/test/Makefile
 	$(INSTALL_F) $(build_datarootdir)/man/man1/julia.1 $(DESTDIR)$(datarootdir)/man/man1/
 	# Copy icon and .desktop file
 	mkdir -p $(DESTDIR)$(datarootdir)/icons/hicolor/scalable/apps/
