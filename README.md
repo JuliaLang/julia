@@ -76,7 +76,7 @@ Once it is built, you can run the `julia` executable using its full path in the 
 
 - add a soft link to the `julia` executable in the `julia` directory to `/usr/local/bin` (or any suitable directory already in your path), or
 
-- add the `julia` directory to your executable path for this shell session (in bash: `export PATH="$(pwd):$PATH"` ; in csh or tcsh:
+- add the `julia` directory to your executable path for this shell session (in `bash`: `export PATH="$(pwd):$PATH"` ; in `csh` or `tcsh`:
 `set path= ( $path $cwd )` ), or
 
 - add the `julia` directory to your executable path permanently (e.g. in `.bash_profile`), or
@@ -91,7 +91,7 @@ If everything works correctly, you will see a Julia banner and an interactive pr
 
 Your first test of Julia should be to determine whether your
 build is working properly. From the UNIX/Windows command prompt inside
-the julia source directory, type `make testall`. You should see output
+the `julia` source directory, type `make testall`. You should see output
 that lists a series of tests being run; if they complete without
 error, you should be in good shape to start using Julia.
 
@@ -100,6 +100,52 @@ You can read about [getting started](http://julialang.org/manual/getting-started
 If you are building a Julia package for distribution on Linux, OS X,
 or Windows, take a look at the detailed notes in
 [DISTRIBUTING.md](https://github.com/JuliaLang/julia/blob/master/DISTRIBUTING.md).
+
+### Updating an existing source tree
+
+If you have previously downloaded `julia` using `git clone`, you can update the
+existing source tree using `git pull` rather than starting anew:
+
+    cd julia
+    git pull && make
+
+Assuming that you had made no changes to the source tree that will conflict
+with upstream updates, these commands will trigger a build to update to the
+latest version.
+
+#### General troubleshooting
+
+1. Over time, the base library may accumulate enough changes such that the
+   bootstrapping process in building the system image will fail. If this
+   happens, the build may fail with an error like
+
+   ```sh
+    *** This error is usually fixed by running 'make clean'. If the error persists, try 'make cleanall' ***
+   ```
+
+   As described, running `make clean && make` is usually sufficient.
+   Occasionally, the stronger cleanup done by `make cleanall` is needed.
+
+2. New versions of external dependencies may be introduced which may
+   occasionally cause conflicts with existing builds of older versions.
+   
+   a. Special `make` targets exist to help wipe the existing build of a
+      dependency. For example, `make -C deps clean-llvm` will clean out the
+      existing build of `llvm`.
+
+   b. To delete existing binaries of `julia` and all its dependencies,
+      delete the `./usr` directory _in the source tree_.
+
+3. In extreme cases, you may wish to reset the source tree to a pristine state.
+   The following git commands may be helpful:
+
+   ```sh
+    git reset --hard #Forcibly remove any changes to any files under version control
+    git clean -x -f -d #Forcibly remove any file or directory not under version control
+   ```
+
+   _To avoid losing work, make sure you know what these commands do before you
+   run them. `git` will not be able to undo these changes!_
 
 <a name="Uninstalling-Julia"/>
 ## Uninstalling Julia
