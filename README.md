@@ -6,6 +6,7 @@
 </div>
 
 [![Build Status](https://api.travis-ci.org/JuliaLang/julia.svg?branch=master)](https://travis-ci.org/JuliaLang/julia)
+[![DOI](https://zenodo.org/badge/doi/10.5281/zenodo.11242.png)](http://dx.doi.org/10.5281/zenodo.11242)
 
 <a name="The-Julia-Language"/>
 ## The Julia Language
