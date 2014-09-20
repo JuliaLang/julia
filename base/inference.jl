@@ -2496,10 +2496,9 @@ const inline_incompletematch_allowed = false
 
 inline_worthy(body, cost::Real) = true
 function inline_worthy(body::Expr, cost::Real=1.0) # precondition: 0<cost
-#    if isa(body.args[1],QuoteNode) && (body.args[1]::QuoteNode).value === :inline
-#        shift!(body.args)
-#        return true
-#    end
+    if popmeta!(body, :inline)
+        return true
+    end
     symlim = 1+5/cost
     if length(body.args) < symlim
         symlim *= 16
