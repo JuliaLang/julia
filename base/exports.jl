@@ -135,8 +135,6 @@ export
     Culonglong,
     Cushort,
     Cwchar_t,
-    #Ccomplex_float,
-    #Ccomplex_double,
 
 # Exceptions
     ArgumentError,
