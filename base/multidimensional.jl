@@ -1,3 +1,122 @@
+### Multidimensional iterators
+module IteratorsMD
+
+import Base: start, done, next, getindex, setindex!
+import Base: @nref, @ncall, @nif, @nexprs
+
+export eachelement, eachindex, linearindexing, LinearFast
+
+# Traits for linear indexing
+abstract LinearIndexing
+immutable LinearFast <: LinearIndexing end
+immutable LinearSlow <: LinearIndexing end
+
+linearindexing(::AbstractArray) = LinearSlow()
+linearindexing(::Array) = LinearFast()
+linearindexing(::BitArray) = LinearFast()
+linearindexing(::Range) = LinearFast()
+
+# this generates types like this:
+#   immutable Subscripts_3 <: Subscripts{3}
+#     I_1::Int
+#     I_2::Int
+#     I_3::Int
+#   end
+# they are used as iterator states
+# TODO: when tuples get improved, replace with a tuple-based implementation. See #6437.
+
+abstract Subscripts{N}           # the state for all multidimensional iterators
+abstract SizeIterator{N}         # Iterator that visits the index associated with each element
+
+function gen_iterators(N::Int, with_shared=true)
+    # Create the types
+    namestate = symbol("Subscripts_$N")
+    namesize  = symbol("SizeIterator_$N")
+    fieldnames = [symbol("I_$i") for i = 1:N]
+    fields = [Expr(:(::), fieldnames[i], :Int) for i = 1:N]
+    exstate = Expr(:type, false, Expr(:(<:), namestate, Expr(:curly, :Subscripts, N)), Expr(:block, fields...))
+    dimsindexes = Expr[:(dims[$i]) for i = 1:N]
+    onesN   = ones(Int, N)
+    infsN   = fill(typemax(Int), N)
+    anyzero = Expr(:(||), [:(SZ.I.$(fieldnames[i]) == 0) for i = 1:N]...)
+    # Some necessary ambiguity resolution
+    exrange = N != 1 ? nothing : quote
+        next(R::StepRange, I::Subscripts_1) = R[I.I_1], Subscripts_1(I.I_1+1)
+        next{T}(R::UnitRange{T}, I::Subscripts_1) = R[I.I_1], Subscripts_1(I.I_1+1)
+    end
+    exshared = !with_shared ? nothing : quote
+         getindex{T}(S::SharedArray{T,$N}, state::$namestate) = S.s[state]
+        setindex!{T}(S::SharedArray{T,$N}, v, state::$namestate) = S.s[state] = v
+    end
+    quote
+        $exstate
+        immutable $namesize <: SizeIterator{$N}
+            I::$namestate
+        end
+        $namestate(dims::NTuple{$N,Int}) = $namestate($(dimsindexes...))
+        _eachindex(dims::NTuple{$N,Int}) = $namesize($namestate(dims))
+
+        start{T}(AT::(AbstractArray{T,$N},LinearSlow)) = isempty(AT[1]) ? $namestate($(infsN...)) : $namestate($(onesN...))
+        start(SZ::$namesize) = $anyzero ? $namestate($(infsN...)) : $namestate($(onesN...))
+
+        $exrange
+
+        @inline function next{T}(A::AbstractArray{T,$N}, state::$namestate)
+            @inbounds v = A[state]
+            newstate = @nif $N d->(getfield(state,d) < size(A, d)) d->(@ncall($N, $namestate, k->(k>d ? getfield(state,k) : k==d ? getfield(state,k)+1 : 1)))
+            v, newstate
+        end
+        @inline function next(iter::$namesize, state::$namestate)
+            newstate = @nif $N d->(getfield(state,d) < getfield(iter.I,d)) d->(@ncall($N, $namestate, k->(k>d ? getfield(state,k) : k==d ? getfield(state,k)+1 : 1)))
+            state, newstate
+        end
+
+        $exshared
+         getindex{T}(A::AbstractArray{T,$N}, state::$namestate) = @nref $N A d->getfield(state,d)
+        setindex!{T}(A::AbstractArray{T,$N}, v, state::$namestate) = (@nref $N A d->getfield(state,d)) = v
+    end
+end
+
+# Ambiguity resolution
+done(R::StepRange, I::Subscripts{1}) = getfield(I, 1) > length(R)
+done(R::UnitRange, I::Subscripts{1}) = getfield(I, 1) > length(R)
+
+Base.start(A::AbstractArray) = start((A,linearindexing(A)))
+start(::(AbstractArray,LinearFast)) = 1
+done{T,N}(A::AbstractArray{T,N}, I::Subscripts{N}) = getfield(I, N) > size(A, N)
+done{N}(iter::SizeIterator{N}, I::Subscripts{N}) = getfield(I, N) > getfield(iter.I, N)
+
+eachindex(A::AbstractArray) = eachindex(size(A))
+
+let implemented = IntSet()
+global eachindex
+global eachelement
+function eachindex{N}(t::NTuple{N,Int})
+    if !in(N, implemented)
+        eval(gen_iterators(N))
+    end
+    _eachindex(t)
+end
+function eachelement{T,N}(A::AbstractArray{T,N})
+    if !in(N, implemented)
+        eval(gen_iterators(N))
+    end
+    A
+end
+end
+
+# Pre-generate for low dimensions
+for N = 1:8
+    eval(gen_iterators(N, false))
+    eval(:(eachindex(t::NTuple{$N,Int}) = _eachindex(t)))
+    eval(:(eachelement{T}(A::AbstractArray{T,$N}) = A))
+end
+
+end  # IteratorsMD
+
+using .IteratorsMD
+
+
 ### From array.jl
 
 @ngenerate N Void function checksize(A::AbstractArray, I::NTuple{N, Any}...)
