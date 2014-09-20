@@ -561,7 +561,7 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Cont
         jl_in_stackwalk = 0;
         needsSymRefreshModuleList = 0;
     }
-#if defined(_CPU_X86_64_) 
+#if defined(_CPU_X86_64_)
     DWORD MachineType = IMAGE_FILE_MACHINE_AMD64;
     stk.AddrPC.Offset = Context->Rip;
     stk.AddrStack.Offset = Context->Rsp;
@@ -577,7 +577,7 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Cont
     stk.AddrPC.Mode = AddrModeFlat;
     stk.AddrStack.Mode = AddrModeFlat;
     stk.AddrFrame.Mode = AddrModeFlat;
-    
+
     size_t n = 0;
     intptr_t lastsp = stk.AddrStack.Offset;
     while (n < maxsize) {
@@ -587,7 +587,7 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Cont
         jl_in_stackwalk = 0;
         data[n++] = (intptr_t)stk.AddrPC.Offset;
         intptr_t sp = (intptr_t)stk.AddrStack.Offset;
-        if (!result || sp == 0 || 
+        if (!result || sp == 0 ||
             (_stack_grows_up ? sp < lastsp : sp > lastsp) ||
             stk.AddrReturn.Offset == 0)
             break;
@@ -609,7 +609,7 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, unw_context_t
     unw_cursor_t cursor;
     unw_word_t ip;
     size_t n=0;
-    
+
     unw_init_local(&cursor, uc);
     do {
         if (n >= maxsize)
@@ -630,7 +630,7 @@ size_t rec_backtrace_ctx_dwarf(ptrint_t *data, size_t maxsize, unw_context_t *uc
     unw_cursor_t cursor;
     unw_word_t ip;
     size_t n=0;
-    
+
     unw_init_local_dwarf(&cursor, uc);
     do {
         if (n >= maxsize)

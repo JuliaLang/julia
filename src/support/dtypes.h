@@ -21,7 +21,7 @@
 
 #define strtoull                                            _strtoui64
 #define strtoll                                             _strtoi64
-#define strcasecmp                                          _stricmp 
+#define strcasecmp                                          _stricmp
 #define strncasecmp                                         _strnicmp
 #define snprintf                                            _snprintf
 #define stat                                                _stat

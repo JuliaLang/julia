@@ -292,7 +292,7 @@ DLLEXPORT void jl_close_uv(uv_handle_t *handle)
          * a) In case the stream is already shut down, in which case we're likely
          *    in the process of closing this stream (since there's no other call to
          *    uv_shutdown).
-         * b) In case the stream is already closed, in which case uv_close would 
+         * b) In case the stream is already closed, in which case uv_close would
          *    cause an assertion failure.
          */
         uv_shutdown(req, (uv_stream_t*)handle, &jl_uv_shutdownCallback);
@@ -334,7 +334,7 @@ DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
                        uv_process_t *proc, jl_value_t *julia_struct,
                        uv_handle_type stdin_type, uv_pipe_t *stdin_pipe,
                        uv_handle_type stdout_type, uv_pipe_t *stdout_pipe,
-                       uv_handle_type stderr_type, uv_pipe_t *stderr_pipe, 
+                       uv_handle_type stderr_type, uv_pipe_t *stderr_pipe,
                        int detach, char **env, char *cwd)
 {
     uv_process_options_t opts;
@@ -398,7 +398,7 @@ DLLEXPORT int jl_fs_poll_start(uv_fs_poll_t *handle, char *file, uint32_t interv
 DLLEXPORT int jl_fs_event_init(uv_loop_t *loop, uv_fs_event_t *handle,
                                const char *filename, int flags)
 {
-    uv_fs_event_init(loop,handle); 
+    uv_fs_event_init(loop,handle);
     return uv_fs_event_start(handle,&jl_uv_fseventscb,filename,flags);
 }
 
@@ -955,7 +955,7 @@ DLLEXPORT int jl_ispty(uv_pipe_t *pipe)
     int n = 0;
     if (!strncmp(name,"\\\\?\\pipe\\msys-",14))
         n = 14;
-    else if (!strncmp(name,"\\\\?\\pipe\\cygwin-",16)) 
+    else if (!strncmp(name,"\\\\?\\pipe\\cygwin-",16))
         n = 16;
     else
         return 0;
@@ -972,7 +972,7 @@ DLLEXPORT int jl_ispty(uv_pipe_t *pipe)
     return 1;
 }
 #endif
- 
+
 DLLEXPORT uv_handle_type jl_uv_handle_type(uv_handle_t *handle)
 {
 #ifdef _OS_WINDOWS_
@@ -997,8 +997,8 @@ DLLEXPORT void jl_uv_req_set_data(uv_req_t *req, void *data)
 {
     req->data = data;
 }
- 
- 
+
+
 DLLEXPORT void *jl_uv_req_data(uv_req_t *req)
 {
     return req->data;

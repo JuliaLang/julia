@@ -95,7 +95,7 @@ int asprintf(char **str, const char *fmt, ...)
 {
         va_list ap;
         int ret;
-        
+
         *str = NULL;
         va_start(ap, fmt);
         ret = vasprintf(str, fmt, ap);

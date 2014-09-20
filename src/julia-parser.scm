@@ -387,7 +387,7 @@
 (define (skip-comment port)
   (define (skip-multiline-comment port count)
     (let ((c (read-char port)))
-      (if (eof-object? c) 
+      (if (eof-object? c)
           (error "incomplete: unterminated multi-line comment #= ... =#") ; NOTE: changing this may affect code in base/client.jl
           (begin (if (eqv? c #\=)
                      (let ((c (peek-char port)))

@@ -3036,7 +3036,7 @@ void jl_init_types(void)
                             tv);
 
     tv = jl_tuple2(tvar("T"), tvar("N"));
-    jl_array_type = 
+    jl_array_type =
         jl_new_datatype(jl_symbol("Array"),
                         (jl_datatype_t*)
                         jl_apply_type((jl_value_t*)jl_densearray_type, tv),
@@ -3052,12 +3052,12 @@ void jl_init_types(void)
         (jl_value_t*)jl_apply_type((jl_value_t*)jl_array_type,
                                    jl_tuple(2, jl_any_type,
                                             jl_box_long(1)));
-    
+
     jl_array_symbol_type =
         (jl_value_t*)jl_apply_type((jl_value_t*)jl_array_type,
                                    jl_tuple(2, jl_symbol_type,
                                             jl_box_long(1)));
-    
+
     jl_expr_type =
         jl_new_datatype(jl_symbol("Expr"),
                         jl_any_type, jl_null,
