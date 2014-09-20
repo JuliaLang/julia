@@ -207,6 +207,14 @@ end
 convert(::Type{Array}, S::SharedArray) = S.s
 
 # # pass through getindex and setindex! - they always work on the complete array unlike DArrays
+for N = 1:8
+    name = symbol("Subscripts_$N")
+    @eval begin
+         getindex{T}(S::SharedArray{T,$N}, I::IteratorsMD.$name) = getindex(S.s, I)
+        setindex!{T}(S::SharedArray{T,$N}, v, I::IteratorsMD.$name) = setindex!(S.s, v, I)
+    end
+end
+
 getindex(S::SharedArray) = getindex(S.s)
 getindex(S::SharedArray, I::Real) = getindex(S.s, I)
 getindex(S::SharedArray, I::AbstractArray) = getindex(S.s, I)

@@ -29,5 +29,5 @@ function in{T<:TimeType}(x::T, r::StepRange{T})
 end
 
 Base.start{T<:TimeType}(r::StepRange{T}) = 0
-Base.next{T<:TimeType}(r::StepRange{T}, i) = (r.start+r.step*i,i+1)
+Base.next{T<:TimeType}(r::StepRange{T}, i::Int) = (r.start+r.step*i,i+1)
 Base.done{T<:TimeType,S<:Period}(r::StepRange{T,S}, i::Integer) = length(r) <= i
