@@ -37,7 +37,9 @@ STAGE1_DEPS += unwind
 else ifeq ($(OS), FreeBSD)
 STAGE1_DEPS += unwind
 else ifeq ($(OS), Darwin)
+ifeq ($(DARWINVER_LTE13),1)
 STAGE1_DEPS += osxunwind
+endif
 endif
 endif
 
