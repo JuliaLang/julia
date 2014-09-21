@@ -3006,6 +3006,9 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                       "Warning: could not attach metadata for @simd loop.\n");
         return NULL;
     }
+    else if (head == meta_sym) {
+        return literal_pointer_val((jl_value_t*)jl_nothing);  // will change as new metadata gets added
+    }
     else {
         if (!strcmp(head->name, "$"))
             jl_error("syntax: prefix $ in non-quoted expression");

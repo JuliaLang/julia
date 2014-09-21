@@ -30,6 +30,9 @@ const CARTESIAN_DIMS = 4
 #   myfunction(A::AbstractArray, I::Int...N)
 # where N can be an integer or symbol. Currently T...N generates a parser error.
 macro ngenerate(itersym, returntypeexpr, funcexpr)
+    if isa(funcexpr, Expr) && funcexpr.head == :macrocall && funcexpr.args[1] == symbol("@inline")
+        funcexpr = Base._inline(funcexpr.args[2])
+    end
     isfuncexpr(funcexpr) || error("Requires a function expression")
     esc(ngenerate(itersym, returntypeexpr, funcexpr.args[1], N->sreplace!(copy(funcexpr.args[2]), itersym, N)))
 end
@@ -56,6 +59,9 @@ macro nsplat(itersym, args...)
         rng = rangeexpr.args[1]:rangeexpr.args[2]
     else
         error("Wrong number of arguments")
+    end
+    if isa(funcexpr, Expr) && funcexpr.head == :macrocall && funcexpr.args[1] == symbol("@inline")
+        funcexpr = Base._inline(funcexpr.args[2])
     end
     isfuncexpr(funcexpr) || error("Second argument must be a function expression")
     prototype = funcexpr.args[1]

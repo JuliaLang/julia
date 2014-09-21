@@ -54,7 +54,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
       ----------------------- ------------------------- ----------------------------------------
       :func:`Matrix`           ``LU``                   ``F[:L]*F[:U] == A[F[:p], :]``
       :func:`Tridiagonal`      ``LU{T,Tridiagonal{T}}``  N/A
-      :func:`SparseMatrixCSC`  ``UmfpackLU``            ``F[:L]*F[:U] == Rs .* A[F[:p], F[:q]]``
+      :func:`SparseMatrixCSC`  ``UmfpackLU``            ``F[:L]*F[:U] == F[:Rs] .* A[F[:p], F[:q]]``
       ======================= ========================= ========================================
 
    The individual components of the factorization ``F`` can be accessed by indexing:
@@ -183,7 +183,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: eig(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> D, V
 
-   Compute eigenvalues and eigenvectors of ``A``. See :func:`eigfact` for details on the ``balance`` keyword argument.
+   Computes eigenvalues and eigenvectors of ``A``. See :func:`eigfact` for
+   details on the ``balance`` keyword argument.
    
    .. doctest::
 
@@ -194,19 +195,31 @@ Linear algebra functions in Julia are largely implemented by calling functions f
        0.0  1.0  0.0
        0.0  0.0  1.0)
    
-   ``eig`` is a wrapper around :func:`eigfact`, extracting all parts of the factorization to a tuple; where possible, using :func:`eigfact` is recommended.
+   ``eig`` is a wrapper around :func:`eigfact`, extracting all parts of the
+   factorization to a tuple; where possible, using :func:`eigfact` is
+   recommended.
 
 .. function:: eig(A, B) -> D, V
 
    Computes generalized eigenvalues and vectors of ``A`` with respect to ``B``.
     
-   ``eig`` is a wrapper around :func:`eigfact`, extracting all parts of the factorization to a tuple; where possible, using :func:`eigfact` is recommended.
+   ``eig`` is a wrapper around :func:`eigfact`, extracting all parts of the
+   factorization to a tuple; where possible, using :func:`eigfact` is
+   recommended.
 
 .. function:: eigvals(A,[irange,][vl,][vu])
 
-   Returns the eigenvalues of ``A``. If ``A`` is :func:`Symmetric`, :func:`Hermitian` or :func:`SymTridiagonal`, it is possible to calculate only a subset of the eigenvalues by specifying either a :func:`UnitRange` ``irange`` covering indices of the sorted eigenvalues, or a pair ``vl`` and ``vu`` for the lower and upper boundaries of the eigenvalues.
+   Returns the eigenvalues of ``A``. If ``A`` is :func:`Symmetric`,
+   :func:`Hermitian` or :func:`SymTridiagonal`, it is possible to calculate
+   only a subset of the eigenvalues by specifying either a :func:`UnitRange`
+   ``irange`` covering indices of the sorted eigenvalues, or a pair ``vl`` and
+   ``vu`` for the lower and upper boundaries of the eigenvalues.
 
-   For general non-symmetric matrices it is possible to specify how the matrix is balanced before the eigenvector calculation. The option ``permute=true`` permutes the matrix to become closer to upper triangular, and ``scale=true`` scales the matrix by its diagonal elements to make rows and columns more equal in norm. The default is ``true`` for both options.
+   For general non-symmetric matrices it is possible to specify how the matrix
+   is balanced before the eigenvector calculation. The option ``permute=true``
+   permutes the matrix to become closer to upper triangular, and ``scale=true``
+   scales the matrix by its diagonal elements to make rows and columns more
+   equal in norm. The default is ``true`` for both options.
 
 .. function:: eigmax(A)
 
@@ -216,28 +229,50 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Returns the smallest eigenvalue of ``A``.
 
-.. function:: eigvecs(A, [eigvals,][permute=true,][scale=true])
+.. function:: eigvecs(A, [eigvals,][permute=true,][scale=true]) -> Matrix
 
-   Returns the eigenvectors of ``A``.
+   Returns a matrix ``M`` whose columns are the eigenvectors of ``A``.
+   (The ``k``th eigenvector can be obtained from the slice ``M[:, k]``.)
    The ``permute`` and ``scale`` keywords are the same as for :func:`eigfact`.
 
-   For :func:`SymTridiagonal` matrices, if the optional vector of eigenvalues ``eigvals`` is specified, returns the specific corresponding eigenvectors.
+   For :func:`SymTridiagonal` matrices, if the optional vector of eigenvalues
+   ``eigvals`` is specified, returns the specific corresponding eigenvectors.
 
-.. function:: eigfact(A,[irange,][vl,][vu,][permute=true,][scale=true])
+.. function:: eigfact(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> Eigen
 
-   Compute the eigenvalue decomposition of ``A`` and return an ``Eigen`` object. If ``F`` is the factorization object, the eigenvalues can be accessed with ``F[:values]`` and the eigenvectors with ``F[:vectors]``. The following functions are available for ``Eigen`` objects: ``inv``, ``det``.
+   Computes the eigenvalue decomposition of ``A``, returning an ``Eigen``
+   factorization object ``F`` which contains the eigenvalues in ``F[:values]``
+   and the eigenvectors in the columns of the matrix ``F[:vectors]``. (The
+   ``k``th eigenvector can be obtained from the slice ``F[:vectors][:, k]``.)
+ 
+   The following functions are available for ``Eigen`` objects: ``inv``,
+   ``det``.
 
-   If ``A`` is :func:`Symmetric`, :func:`Hermitian` or :func:`SymTridiagonal`, it is possible to calculate only a subset of the eigenvalues by specifying either a :func:`UnitRange` ``irange`` covering indices of the sorted eigenvalues or a pair ``vl`` and ``vu`` for the lower and upper boundaries of the eigenvalues.
+   If ``A`` is :func:`Symmetric`, :func:`Hermitian` or :func:`SymTridiagonal`,
+   it is possible to calculate only a subset of the eigenvalues by specifying
+   either a :func:`UnitRange` ``irange`` covering indices of the sorted
+   eigenvalues or a pair ``vl`` and ``vu`` for the lower and upper boundaries
+   of the eigenvalues.
 
-   For general non-symmetric matrices it is possible to specify how the matrix is balanced before the eigenvector calculation. The option ``permute=true`` permutes the matrix to become closer to upper triangular, and ``scale=true`` scales the matrix by its diagonal elements to make rows and columns more equal in norm. The default is ``true`` for both options.
+   For general nonsymmetric matrices it is possible to specify how the matrix
+   is balanced before the eigenvector calculation. The option ``permute=true``
+   permutes the matrix to become closer to upper triangular, and ``scale=true``
+   scales the matrix by its diagonal elements to make rows and columns more
+   equal in norm. The default is ``true`` for both options.
 
-.. function:: eigfact(A, B)
+.. function:: eigfact(A, B) -> GeneralizedEigen
 
-   Compute the generalized eigenvalue decomposition of ``A`` and ``B`` and return an ``GeneralizedEigen`` object. If ``F`` is the factorization object, the eigenvalues can be accessed with ``F[:values]`` and the eigenvectors with ``F[:vectors]``.
+   Computes the generalized eigenvalue decomposition of ``A`` and ``B``,
+   returning a ``GeneralizedEigen`` factorization object ``F`` which contains
+   the generalized eigenvalues in ``F[:values]`` and the generalized
+   eigenvectors in the columns of the matrix ``F[:vectors]``. (The ``k``th
+   generalized eigenvector can be obtained from the slice ``F[:vectors][:,
+   k]``.)
 
 .. function:: eigfact!(A, [B])
 
-   ``eigfact!`` is the same as :func:`eigfact`, but saves space by overwriting the input A (and B), instead of creating a copy.
+   Same as :func:`eigfact`, but saves space by overwriting the input ``A`` (and
+   ``B``), instead of creating a copy.
 
 .. function:: hessfact(A)
 

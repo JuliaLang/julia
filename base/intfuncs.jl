@@ -158,29 +158,44 @@ ndigits0z(x::Integer) = ndigits0z(unsigned(abs(x)))
 
 const ndigits_max_mul = WORD_SIZE==32 ? 69000000 : 290000000000000000
 
-function ndigits0z(n::Unsigned, b::Int)
-    b == 2  && return (sizeof(n)<<3-leading_zeros(n))
-    b == 8  && return div((sizeof(n)<<3)-leading_zeros(n)+2,3)
-    b == 16 && return (sizeof(n)<<1)-(leading_zeros(n)>>2)
-    b == 10 && return ndigits0z(n)
+function ndigits0znb(n::Int, b::Int)
     d = 0
-    while ndigits_max_mul < n
-        n = div(n,b)
+    while n != 0
+        n = cld(n,b)
         d += 1
     end
-    m = 1
-    while m <= n
-        m *= b
-        d += 1
+    return d
+end
+
+function ndigits0z(n::Unsigned, b::Int)
+    d = 0
+    if b < 0
+        d = ndigits0znb(signed(n), b)
+    else
+        b == 2  && return (sizeof(n)<<3-leading_zeros(n))
+        b == 8  && return div((sizeof(n)<<3)-leading_zeros(n)+2,3)
+        b == 16 && return (sizeof(n)<<1)-(leading_zeros(n)>>2)
+        b == 10 && return ndigits0z(n)
+        while ndigits_max_mul < n
+            n = div(n,b)
+            d += 1
+        end
+        m = 1
+        while m <= n
+            m *= b
+            d += 1
+        end
     end
     return d
 end
 ndigits0z(x::Integer, b::Integer) = ndigits0z(unsigned(abs(x)),int(b))
 
+ndigitsnb(x::Integer, b::Integer) = x==0 ? 1 : ndigits0znb(x, b)
+
 ndigits(x::Unsigned, b::Integer) = x==0 ? 1 : ndigits0z(x,int(b))
 ndigits(x::Unsigned)             = x==0 ? 1 : ndigits0z(x)
 
-ndigits(x::Integer, b::Integer) = ndigits(unsigned(abs(x)),int(b))
+ndigits(x::Integer, b::Integer) = b >= 0 ? ndigits(unsigned(abs(x)),int(b)) : ndigitsnb(x, b)
 ndigits(x::Integer) = ndigits(unsigned(abs(x)))
 
 ## integer to string functions ##
