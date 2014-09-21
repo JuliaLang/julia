@@ -367,10 +367,10 @@ function sprand{T}(m::Integer, n::Integer, density::FloatingPoint,
 
     # density of nonzero columns:
     L = log1p(-density)
-    coldensity = -expm1(m*L) # = 1 - (1-density)^m 
+    coldensity = -expm1(m*L) # = 1 - (1-density)^m
     colsparsity = exp(m*L) # = 1 - coldensity
     L = 1/L
-    
+
     rows = Array(Int, 0)
     for j in randsubseq(1:n, coldensity)
         # To get the right statistics, we *must* have a nonempty column j
@@ -509,7 +509,7 @@ for op in (:cos, :cosh, :acos, :sec, :csc, :cot, :acot, :sech,
             end
             return B
         end
-        
+
     end
 end
 
@@ -1322,7 +1322,7 @@ function spset!{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv}, x::Tv, I::AbstractVector
         colptrA[n+1] = rowidx
         deleteat!(rowvalA, rowidx:nnzA)
         deleteat!(nzvalA, rowidx:nnzA)
-        
+
         A.colptr = colptrA
         A.rowval = rowvalA
         A.nzval = nzvalA
@@ -1379,7 +1379,7 @@ function spdelete!{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv}, I::AbstractVector{Ti}
         colptrA[n+1] = rowidx
         deleteat!(rowvalA, rowidx:nnzA)
         deleteat!(nzvalA, rowidx:nnzA)
-        
+
         A.colptr = colptrA
         A.rowval = rowvalA
         A.nzval = nzvalA
@@ -1430,7 +1430,7 @@ function setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixC
     colptrS = Array(Ti, n+1)
     rowvalS = Array(Ti, nnzS)
     nzvalS = Array(Tv, nnzS)
-    
+
     colptrS[1] = 1
     colB = 1
     asgn_col = J[colB]
@@ -1445,7 +1445,7 @@ function setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixC
         # Copy column of A if it is not being assigned into
         if colB > nJ || col != J[colB]
             colptrS[col+1] = colptrS[col] + (colptrA[col+1]-colptrA[col])
-            
+
             for k = colptrA[col]:colptrA[col+1]-1
                 rowvalS[ptrS] = rowvalA[k]
                 nzvalS[ptrS] = nzvalA[k]
@@ -1738,7 +1738,7 @@ end
 
 function vcat(X::SparseMatrixCSC...)
     num = length(X)
-    mX = [ size(x, 1) for x in X ] 
+    mX = [ size(x, 1) for x in X ]
     nX = [ size(x, 2) for x in X ]
     n = nX[1]
     for i = 2 : num
@@ -1904,7 +1904,7 @@ function istril{Tv}(A::SparseMatrixCSC{Tv})
     return true
 end
 
-# Create a sparse diagonal matrix by specifying multiple diagonals 
+# Create a sparse diagonal matrix by specifying multiple diagonals
 # packed into a tuple, alongside their diagonal offsets and matrix shape
 
 function spdiagm_internal(B, d)

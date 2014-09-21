@@ -3,7 +3,7 @@ module LinAlg
 importall Base
 import Base: USE_BLAS64, size, copy, copy_transpose!, power_by_squaring, print_matrix, transpose!
 
-export 
+export
 # Modules
     LAPACK,
     BLAS,
@@ -159,9 +159,9 @@ end
 
 #Check that stride of matrix/vector is 1
 function chkstride1(A::StridedVecOrMat...)
-    for a in A 
+    for a in A
         stride(a,1)== 1 || error("Matrix does not have contiguous columns")
-    end  
+    end
 end
 
 #Check that matrix is square
@@ -173,7 +173,7 @@ end
 
 function chksquare(A...)
     sizes=Int[]
-    for a in A 
+    for a in A
         size(a,1)==size(a,2) || throw(DimensionMismatch("Matrix is not square: dimensions are $(size(a))"))
         push!(sizes, size(a,1))
     end
@@ -183,7 +183,7 @@ end
 #Check that upper/lower (for special matrices) is correctly specified
 macro chkuplo()
    :((uplo=='U' || uplo=='L') || throw(ArgumentError("""invalid uplo = $uplo
-            
+
 Valid choices are 'U' (upper) or 'L' (lower).""")))
 end
 

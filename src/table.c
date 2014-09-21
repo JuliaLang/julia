@@ -66,7 +66,7 @@ static void **jl_table_lookup_bp(jl_array_t **pa, void *key)
     jl_idtable_rehash(pa, newsz);
 
     a = *pa;
-    tab = (void**)a->data;    
+    tab = (void**)a->data;
     sz = hash_size(a);
     maxprobe = max_probe(sz);
 

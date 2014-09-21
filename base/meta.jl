@@ -3,8 +3,8 @@ module Meta
 # convenience functions for metaprogramming
 #
 
-export quot, 
-       isexpr, 
+export quot,
+       isexpr,
        show_sexpr
 
 quot(ex) = Expr(:quote, ex)

@@ -64,7 +64,7 @@ function dependencies(avail::Dict, fix::Dict = (ByteString=>Fixed)["julia"=>Fixe
     avail, conflicts
 end
 
-typealias PackageState Union(Nothing,VersionNumber) 
+typealias PackageState Union(Nothing,VersionNumber)
 
 function diff(have::Dict, want::Dict, avail::Dict, fixed::Dict)
     change = Array((ByteString,(PackageState,PackageState)),0)

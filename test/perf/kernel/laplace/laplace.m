@@ -8,7 +8,7 @@ dy2 = dy*dy;
 
 N     = 150;
 Niter = 2^10;
- 
+
 u = zeros(N,N);
 u(1,:) = 1;
 

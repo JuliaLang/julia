@@ -882,7 +882,7 @@ static Value *emit_nthptr_recast(Value *v, size_t n, MDNode *tbaa, Type* ptype) 
 }
 
 static Value *ghostValue(jl_value_t *ty);
- 
+
 static Value *typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
                          jl_codectx_t *ctx)
 {

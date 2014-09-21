@@ -58,7 +58,7 @@ if Base.fftw_vendor() != :mkl
     Xidct!_1 = copy(true_Xdct_1); idct!(Xidct!_1,1)
     Xidct_2 = idct(true_Xdct_2,2)
     Xidct!_2 = copy(true_Xdct_2); idct!(Xidct!_2,2)
-    
+
     pXdct = plan_dct(X)(X)
     pXdct! = float(X); plan_dct!(pXdct!)(pXdct!)
     pXdct_1 = plan_dct(X,1)(X)

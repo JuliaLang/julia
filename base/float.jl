@@ -17,7 +17,7 @@ end
 
 for t1 in (Float32,Float64)
     for st in (Int8,Int16,Int32,Int64)
-        @eval begin 
+        @eval begin
             convert(::Type{$t1},x::($st)) = box($t1,sitofp($t1,unbox($st,x)))
             promote_rule(::Type{$t1}, ::Type{$st}  ) = $t1
         end

@@ -112,8 +112,8 @@ abspath(a::String, b::String...) = abspath(joinpath(a,b...))
     while true
         buflength = p
         buf = zeros(Uint16,buflength)
-        p = ccall((:GetFullPathNameW, "Kernel32"), stdcall, 
-            Uint32, (Ptr{Uint16}, Uint32, Ptr{Uint16}, Ptr{Void}), 
+        p = ccall((:GetFullPathNameW, "Kernel32"), stdcall,
+            Uint32, (Ptr{Uint16}, Uint32, Ptr{Uint16}, Ptr{Void}),
             path, buflength, buf, C_NULL)
         systemerror(:realpath, p == 0)
         if (p < buflength)

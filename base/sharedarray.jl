@@ -33,10 +33,10 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
         pids = procs(myid())
         onlocalhost = true
     else
-        if !check_same_host(pids) 
+        if !check_same_host(pids)
             error("SharedArray requires all requested processes to be on the same machine.")
         end
-    
+
         onlocalhost = myid() in procs(pids[1])
     end
 
@@ -339,7 +339,7 @@ function shm_mmap_array(T, dims, shm_seg_name, mode)
     if prod(dims) == 0
         return Array(T, dims)
     end
-    
+
     try
         fd_mem = shm_open(shm_seg_name, mode, S_IRUSR | S_IWUSR)
         systemerror("shm_open() failed for " * shm_seg_name, fd_mem <= 0)

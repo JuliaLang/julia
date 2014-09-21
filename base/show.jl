@@ -11,18 +11,18 @@ function show(io::IO, x::ANY)
         recorded = false
         oid = object_id(x)
         shown_set = get(task_local_storage(), :SHOWNSET, nothing)
-        if shown_set == nothing 
+        if shown_set == nothing
             shown_set = Set()
-            task_local_storage(:SHOWNSET, shown_set) 
+            task_local_storage(:SHOWNSET, shown_set)
         end
-        
+
         try
             if oid in shown_set
                 print(io, "#= circular reference =#")
             else
                 push!(shown_set, oid)
                 recorded = true
-            
+
                 n = length(t.names)
                 for i=1:n
                     f = t.names[i]
@@ -38,7 +38,7 @@ function show(io::IO, x::ANY)
             end
         catch e
             rethrow(e)
-        
+
         finally
             if recorded delete!(shown_set, oid) end
         end
@@ -210,7 +210,7 @@ print(io::IO, n::Unsigned) = print(io, dec(n))
 #   print(io, ex) defers to show_unquoted(io, ex)
 #   show(io, ex) defers to show_unquoted(io, QuoteNode(ex))
 #   show_unquoted(io, ex) does the heavy lifting
-# 
+#
 # AST printing should follow two rules:
 #   1. parse(string(ex)) == ex
 #   2. eval(parse(repr(ex))) == ex
@@ -446,7 +446,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     # (:calldecl is a "fake" expr node created when we find a :function expr)
     elseif head == :calldecl && nargs >= 1
         show_call(io, head, args[1], args[2:end], indent)
-        
+
     # function call
     elseif haskey(expr_calls, head) && nargs >= 1  # :call/:ref/:curly
         func = args[1]
@@ -732,7 +732,7 @@ function dumptype(io::IO, x, n::Int, indent)
     # based on Jameson Nash's examples/typetree.jl
     println(io, x)
     if n == 0   # too deeply nested
-        return  
+        return
     end
     typargs(t) = split(string(t), "{")[1]
     # todo: include current module?
@@ -757,7 +757,7 @@ function dumptype(io::IO, x, n::Int, indent)
                     # type aliases
                     if string(s) != string(t.name)
                         println(io, indent, "  ", s, " = ", t.name)
-                    elseif t != Any 
+                    elseif t != Any
                         print(io, indent, "  ")
                         dump(io, t, n - 1, string(indent, "  "))
                     end

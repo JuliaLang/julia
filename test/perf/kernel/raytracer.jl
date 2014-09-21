@@ -8,7 +8,7 @@
 # It is most likely GC-bound.
 
 const delta = sqrt(eps(Float64))
- 
+
 immutable Vec
     x::Float64
     y::Float64
@@ -21,24 +21,24 @@ end
 *(a::Vec, b::Float64) = *(b,a)
 dot(a::Vec, b::Vec) = (a.x*b.x + a.y*b.y + a.z*b.z)
 unitize(a::Vec) = (1. / sqrt(dot(a, a)) * a)
- 
+
 type Ray
     orig::Vec
     dir::Vec
 end
- 
+
 type Hit
     lambda::Float64
     normal::Vec
 end
- 
+
 abstract Scene
- 
+
 immutable Sphere <: Scene
     center::Vec
     radius::Float64
 end
- 
+
 function ray_sphere(s::Sphere, ray::Ray)
     v = s.center - ray.orig
     b = dot(v, ray.dir)
@@ -53,7 +53,7 @@ function ray_sphere(s::Sphere, ray::Ray)
     end
     return Inf
 end
- 
+
 function intersect(s::Sphere, i::Hit, ray::Ray)
     l = ray_sphere(s, ray)
     if l >= i.lambda
@@ -63,14 +63,14 @@ function intersect(s::Sphere, i::Hit, ray::Ray)
         return Hit(l, unitize(n))
     end
 end
- 
+
 immutable Group <: Scene
     bound::Sphere
     objs::Array{Scene}
 end
- 
+
 Group(b::Sphere) = Group(b, Scene[])
- 
+
 function intersect(g::Group, i::Hit, ray::Ray)
     l = ray_sphere(g.bound, ray)
     if l >= i.lambda
@@ -82,7 +82,7 @@ function intersect(g::Group, i::Hit, ray::Ray)
         return i
     end
 end
- 
+
 function ray_trace(light::Vec, ray::Ray, scene::Scene)
     i = intersect(scene, Hit(Inf, Vec(0.,0.,0.)), ray)
     if i.lambda == Inf
@@ -97,7 +97,7 @@ function ray_trace(light::Vec, ray::Ray, scene::Scene)
     si = intersect(scene, Hit(Inf, Vec(0.,0.,0.)), sray)
     return si.lambda == Inf ? -g : 0
 end
- 
+
 function create(level, c::Vec, r)
     sphere = Sphere(c, r)
     if level == 1
@@ -114,8 +114,8 @@ function create(level, c::Vec, r)
     end
     return group
 end
- 
- 
+
+
 function Raytracer(levels, n, ss)
     scene = create(levels, Vec(0., -1., 0.), 1.)
     light = unitize(Vec(-1., -3., 2.))

@@ -816,10 +816,10 @@ is_str_expr(ex) =
 function _printf(macroname, io, fmt, args)
     isa(fmt, String) || error("$macroname: format must be a plain static string (no interpolation or prefix)")
     sym_args, blk = gen(fmt)
-  
+
     has_splatting = false
-    for arg in args 
-       if typeof(arg) == Expr && arg.head == :... 
+    for arg in args
+       if typeof(arg) == Expr && arg.head == :...
           has_splatting = true
           break
        end
@@ -827,7 +827,7 @@ function _printf(macroname, io, fmt, args)
 
     #
     #  Immediately check for corresponding arguments if there is no splatting
-    #  
+    #
     if !has_splatting && length(sym_args) != length(args)
        error("$macroname: wrong number of arguments ($(length(args))) should be ($(length(sym_args)))")
     end
@@ -874,7 +874,7 @@ end
 
 macro sprintf(args...)
     !isempty(args) || error("@sprintf: called with zero arguments")
-    isa(args[1], String) || is_str_expr(args[1]) || 
+    isa(args[1], String) || is_str_expr(args[1]) ||
         error("@sprintf: first argument must be a format string")
     blk = _printf("@sprintf", :(IOBuffer()), args[1], args[2:end])
     push!(blk.args, :(takebuf_string(out)))

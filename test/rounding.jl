@@ -16,7 +16,7 @@ d = prevfloat(1.)
 @test b - a === c
 
 # RoundToZero
-with_rounding(Float64,RoundToZero) do 
+with_rounding(Float64,RoundToZero) do
     @test a + b === d
     @test - a - b === -d
     @test a - b === -c
@@ -30,7 +30,7 @@ end
 @test b - a == c
 
 # RoundUp
-with_rounding(Float64,RoundUp) do 
+with_rounding(Float64,RoundUp) do
     @test a + b === 1.
     @test - a - b === -d
     @test a - b === -c
@@ -38,7 +38,7 @@ with_rounding(Float64,RoundUp) do
 end
 
 # RoundDown
-with_rounding(Float64,RoundDown) do 
+with_rounding(Float64,RoundDown) do
     @test a + b === d
     @test - a - b === -1.
     @test a - b === -c
@@ -59,7 +59,7 @@ d32 = prevfloat(1.0f0)
 @test b32 - a32 === c32
 
 # RoundToZero
-with_rounding(Float32,RoundToZero) do 
+with_rounding(Float32,RoundToZero) do
     @test a32 + b32 === d32
     @test - a32 - b32 === -d32
     @test a32 - b32 === -c32
@@ -73,7 +73,7 @@ end
 @test b32 - a32 == c32
 
 # RoundUp
-with_rounding(Float32,RoundUp) do 
+with_rounding(Float32,RoundUp) do
     @test a32 + b32 === 1.0f0
     @test - a32 - b32 === -d32
     @test a32 - b32 === -c32
@@ -81,7 +81,7 @@ with_rounding(Float32,RoundUp) do
 end
 
 # RoundDown
-with_rounding(Float32,RoundDown) do 
+with_rounding(Float32,RoundDown) do
     @test a32 + b32 === d32
     @test - a32 - b32 === -1.0f0
     @test a32 - b32 === -c32

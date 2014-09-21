@@ -32,8 +32,8 @@ if codespeed
         end
     end
 else
-    for (T, typename, randfn!) in [(Int, string(Int), randint_fn!(10)), 
-                                    (Float64, string(Float64), rand!), 
+    for (T, typename, randfn!) in [(Int, string(Int), randint_fn!(10)),
+                                    (Float64, string(Float64), rand!),
                                     (String, "String_05", randstr_fn!(5)),
                                     (String, "String_10", randstr_fn!(10))]
         for logsize = 6:2:18
@@ -59,20 +59,20 @@ else
 
                 ## Sorted with 3 exchanges
                 name = "$(typename)_$(logsize)_$(string(s)[1:end-5])_3exchanges"
-                @timeit_init(sort!(data, alg=s), 
+                @timeit_init(sort!(data, alg=s),
                              begin
                                  for i = 1:3
                                      n1 = rand(1:size)
                                      n2 = rand(1:size)
                                      data[n1], data[n2] = data[n2], data[n1]
                                  end
-                             end, 
+                             end,
                              name, "")
 
                 ## Sorted with 10 unsorted values appended
                 name = "$(typename)_$(logsize)_$(string(s)[1:end-5])_append"
                 @timeit_init(sort!(data, alg=s), begin data[end-9:end]=randfn!(Array(T,10)) end, name, "")
-                
+
                 ## Random data with 4 unique values
                 name = "$(typename)_$(logsize)_$(string(s)[1:end-5])_4unique"
                 @timeit_init(sort!(data4, alg=s), begin data4=data[rand(1:4,size)] end, name, "")

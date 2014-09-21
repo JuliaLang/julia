@@ -71,7 +71,7 @@ convert{T<:Union(Int32,Uint32,Char)}(::Type{Ptr{T}}, s::UTF32String) =
 function convert(T::Type{UTF32String}, bytes::AbstractArray{Uint8})
     isempty(bytes) && return UTF32String(Char[0])
     length(bytes) & 3 != 0 && throw(ArgumentError("need multiple of 4 bytes"))
-    data = reinterpret(Char, bytes)    
+    data = reinterpret(Char, bytes)
     # check for byte-order mark (BOM):
     if data[1] == 0x0000feff        # native byte order
         d = Array(Char, length(data))

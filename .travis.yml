@@ -40,6 +40,8 @@ before_install:
         make $BUILDOPTS -C contrib -f repackage_system_suitesparse4.make;
       fi
 script:
+    - ! git grep ' $' -- \*.jl \*.scm \*.c \*.cpp \*.h > /dev/null || { echo "trailing whitespace found in source file"; exit 1; }
+
     - make $BUILDOPTS prefix=/tmp/julia install
     - if [ `uname` = "Darwin" ]; then
         for name in spqr umfpack colamd cholmod amd suitesparse_wrapper; do

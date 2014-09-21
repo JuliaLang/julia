@@ -4,7 +4,7 @@ function collect_eachmatch(re, str, overlap=false)
 end
 
 for f in [matchall, collect_eachmatch]
-    @test f(r"a?b?", "asbd") == ["a","","b","",""] == f(r"""a?b?""", "asbd") 
+    @test f(r"a?b?", "asbd") == ["a","","b","",""] == f(r"""a?b?""", "asbd")
     @test f(r"a?b?", "asbd", true) == ["a","","b","",""]
     @test f(r"\w+", "hello", true) == ["hello","ello","llo","lo","o"]
     @test f(r".\s", "x \u2200 x \u2203 y") == ["x ", "∀ ", "x ", "∃ "]

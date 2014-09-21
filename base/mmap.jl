@@ -137,7 +137,7 @@ function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::IO, offset::File
     # Set the offset to a page boundary
     offset_page::FileOffset = div(offset, granularity)*granularity
     szfile = convert(Csize_t, len + offset)
-    szarray = szfile - convert(Csize_t, offset_page)    
+    szarray = szfile - convert(Csize_t, offset_page)
     mmaphandle = ccall(:CreateFileMappingW, stdcall, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Cint, Cint, Cint, Ptr{Uint16}),
         shandle.handle, C_NULL, flprotect, szfile>>32, szfile&typemax(Uint32), C_NULL)
     if mmaphandle == C_NULL

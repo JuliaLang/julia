@@ -212,9 +212,9 @@ function reshape{T,S<:Array}(A::DArray{T,1,S}, d::Dims)
         for i=1:div(length(B),nr)
             i2 = ind2sub(sztail, i)
             globalidx = [ I[j][i2[j-1]] for j=2:nd ]
-            
+
             a = sub2ind(d, d1offs, globalidx...)
-            
+
             B[:,i] = A[a:(a+nr-1)]
         end
         B
@@ -304,8 +304,8 @@ reduce(f::Function, d::DArray) =
     mapreduce(fetch, f,
               { @spawnat p reduce(f, localpart(d)) for p in procs(d) })
 
-              
-function map!(f::Callable, d::DArray) 
+
+function map!(f::Callable, d::DArray)
     @sync begin
         for p in procs(d)
             @spawnat p map!(f, localpart(d))

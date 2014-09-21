@@ -356,7 +356,7 @@ EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord, 
     EXCEPTION_POINTERS ExceptionInfo;
     ExceptionInfo.ExceptionRecord = ExceptionRecord;
     ExceptionInfo.ContextRecord = ContextRecord;
-    
+
     EXCEPTION_DISPOSITION rval;
     switch (_exception_handler(&ExceptionInfo,1)) {
         case EXCEPTION_CONTINUE_EXECUTION:
@@ -370,7 +370,7 @@ EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord, 
     }
 
     return rval;
-} 
+}
 void* CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserContext);
 #endif
 
@@ -531,7 +531,7 @@ void *init_stdio_handle(uv_file fd,int readable)
     void *handle;
     uv_handle_type type = uv_guess_handle(fd);
     jl_uv_file_t *file;
-#ifndef _OS_WINDOWS_    
+#ifndef _OS_WINDOWS_
     // Duplicate the file descriptor so we can later dup it over if we want to redirect
     // STDIO without having to worry about closing the associated libuv object.
     // On windows however, libuv objects remember streams by their HANDLE, so this is
@@ -549,7 +549,7 @@ void *init_stdio_handle(uv_file fd,int readable)
             ((uv_tty_t*)handle)->data=0;
             uv_tty_set_mode((uv_tty_t*)handle,0); //cooked stdio
             break;
-        case UV_FILE: 
+        case UV_FILE:
             file = (jl_uv_file_t*)malloc(sizeof(jl_uv_file_t));
             file->loop = jl_io_loop;
             file->type = UV_FILE;
@@ -602,7 +602,7 @@ char jl_using_intel_jitevents; // Non-zero if running under Intel VTune Amplifie
 #endif
 
 #if defined(JL_USE_INTEL_JITEVENTS) && defined(__linux__)
-unsigned sig_stack_size = SIGSTKSZ; 
+unsigned sig_stack_size = SIGSTKSZ;
 #else
 #define sig_stack_size SIGSTKSZ
 #endif
@@ -730,7 +730,7 @@ void julia_init(char *imageFile)
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
                                     // best to call this first, since it also initializes libuv
     jl_page_size = jl_getpagesize();
-    jl_arr_xtralloc_limit = uv_get_total_memory() / 100;  // Extra allocation limited to 1% of total RAM 
+    jl_arr_xtralloc_limit = uv_get_total_memory() / 100;  // Extra allocation limited to 1% of total RAM
     jl_find_stack_bottom();
     jl_dl_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT);
 #ifdef RTLD_DEFAULT
@@ -770,8 +770,8 @@ void julia_init(char *imageFile)
         jl_using_intel_jitevents = 1;
 #if defined(__linux__)
         // Intel VTune Amplifier needs at least 64k for alternate stack.
-        if (SIGSTKSZ < 1<<16) 
-            sig_stack_size = 1<<16; 
+        if (SIGSTKSZ < 1<<16)
+            sig_stack_size = 1<<16;
 #endif
     }
 #endif
@@ -887,13 +887,13 @@ void julia_init(char *imageFile)
     pthread_attr_t attr;
     if (pthread_attr_init(&attr) != 0) {
         JL_PRINTF(JL_STDERR, "pthread_attr_init failed");
-        jl_exit(1);  
+        jl_exit(1);
     }
     pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_DETACHED);
     if (pthread_create(&thread,&attr,mach_segv_listener,NULL) != 0) {
         JL_PRINTF(JL_STDERR, "pthread_create failed");
-        jl_exit(1);  
-    }     
+        jl_exit(1);
+    }
     pthread_attr_destroy(&attr);
 
     ret = thread_set_exception_ports(mach_thread_self(),EXC_MASK_BAD_ACCESS,segv_port,EXCEPTION_DEFAULT,MACHINE_THREAD_STATE);

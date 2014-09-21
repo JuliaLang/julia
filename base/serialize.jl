@@ -20,7 +20,7 @@ let i = 2
              Module, UndefRefTag, Task, ASCIIString, UTF8String,
              UTF16String, UTF32String, Float16,
              :reserved9, :reserved10, :reserved11, :reserved12,
-             
+
              (), Bool, Any, :Any, None, Top, Undef, Type,
              :Array, :TypeVar, :Box,
              :lambda, :body, :return, :call, symbol("::"),

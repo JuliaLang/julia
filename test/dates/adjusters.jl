@@ -324,14 +324,14 @@ januarymondays2014 = [Dates.Date(2014,1,6),Dates.Date(2014,1,13),Dates.Date(2014
 end) == 24
 
 # Thanksgiving: 4th Thursday of November
-thanksgiving = x->Dates.dayofweek(x) == Dates.Thu && 
-                      Dates.month(x) == Dates.Nov && 
+thanksgiving = x->Dates.dayofweek(x) == Dates.Thu &&
+                      Dates.month(x) == Dates.Nov &&
            Dates.dayofweekofmonth(x) == 4
 
 d = Dates.Date(2014,6,5)
 
 @test Dates.tonext(d) do x
-    thanksgiving(x)    
+    thanksgiving(x)
 end == Dates.Date(2014,11,27)
 
 @test Dates.toprev(d) do x
@@ -341,7 +341,7 @@ end == Dates.Date(2013,11,28)
 # Pittsburgh street cleaning
 dr = Dates.Date(2014):Dates.Date(2015)
 @test length(Dates.recur(dr) do x
-    Dates.dayofweek(x) == Dates.Tue && 
+    Dates.dayofweek(x) == Dates.Tue &&
     Dates.April < Dates.month(x) < Dates.Nov &&
     Dates.dayofweekofmonth(x) == 2
 end) == 6
@@ -359,10 +359,10 @@ ischristmas(dt) = Dates.yearmonthday(dt) == christmas(Dates.year(dt))
 ismartinlutherking(dt) = Dates.dayofweek(dt) == Dates.Mon &&
     Dates.month(dt) == Dates.Jan && Dates.dayofweekofmonth(dt) == 3
 ispresidentsday(dt) = Dates.dayofweek(dt) == Dates.Mon &&
-    Dates.month(dt) == Dates.Feb && Dates.dayofweekofmonth(dt) == 3 
+    Dates.month(dt) == Dates.Feb && Dates.dayofweekofmonth(dt) == 3
 # Last Monday of May
-ismemorialday(dt) = Dates.dayofweek(dt) == Dates.Mon && 
-                    Dates.month(dt) == Dates.May && 
+ismemorialday(dt) = Dates.dayofweek(dt) == Dates.Mon &&
+                    Dates.month(dt) == Dates.May &&
                     Dates.dayofweekofmonth(dt) == Dates.daysofweekinmonth(dt)
 islaborday(dt) = Dates.dayofweek(dt) == Dates.Mon &&
     Dates.month(dt) == Dates.Sep && Dates.dayofweekofmonth(dt) == 1
@@ -424,12 +424,12 @@ observed = Dates.recur(OBSERVEDHOLIDAYS,Dates.Date(1999):Dates.Date(2000))
 # we just look at weekend days and use the "negate" keyword of recur
 # validate with http://www.workingdays.us/workingdays_holidays_2014.htm
 @test length(Dates.recur(Dates.Date(2014):Dates.Date(2015);negate=true) do x
-    OBSERVEDHOLIDAYS(x) || 
+    OBSERVEDHOLIDAYS(x) ||
     Dates.dayofweek(x) > 5
 end) == 251
 
 # First day of the next month for each day of 2014
-@test length([Dates.firstdayofmonth(i+Dates.Month(1)) 
+@test length([Dates.firstdayofmonth(i+Dates.Month(1))
     for i in Dates.Date(2014):Dates.Date(2014,12,31)]) == 365
 
 # From those goofy email forwards claiming a "special, lucky month"

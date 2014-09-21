@@ -54,10 +54,10 @@ function norm{T<:BlasFloat, TI<:Integer}(x::StridedVector{T}, rx::Union(UnitRang
     BLAS.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
 end
 
-vecnorm1{T<:BlasReal}(x::Union(Array{T},StridedVector{T})) = 
+vecnorm1{T<:BlasReal}(x::Union(Array{T},StridedVector{T})) =
     length(x) < ASUM_CUTOFF ? generic_vecnorm1(x) : BLAS.asum(x)
 
-vecnorm2{T<:BlasFloat}(x::Union(Array{T},StridedVector{T})) = 
+vecnorm2{T<:BlasFloat}(x::Union(Array{T},StridedVector{T})) =
     length(x) < NRM2_CUTOFF ? generic_vecnorm2(x) : BLAS.nrm2(x)
 
 function triu!(M::AbstractMatrix, k::Integer)
@@ -121,7 +121,7 @@ function diagm{T}(v::AbstractVector{T}, k::Integer=0)
     A = zeros(T,n,n)
     A[diagind(A,k)] = v
     A
-end  
+end
 
 diagm(x::Number) = (X = Array(typeof(x),1,1); X[1,1] = x; X)
 
@@ -147,8 +147,8 @@ function kron{T,S}(a::Matrix{T}, b::Matrix{S})
     R
 end
 
-kron(a::Number, b::Union(Number, Vector, Matrix)) = a * b 
-kron(a::Union(Vector, Matrix), b::Number) = a * b 
+kron(a::Number, b::Union(Number, Vector, Matrix)) = a * b
+kron(a::Union(Vector, Matrix), b::Number) = a * b
 kron(a::Vector, b::Vector)=vec(kron(reshape(a,length(a),1),reshape(b,length(b),1)))
 kron(a::Matrix, b::Vector)=kron(a,reshape(b,length(b),1))
 kron(a::Vector, b::Matrix)=kron(reshape(a,length(a),1),b)
@@ -156,8 +156,8 @@ kron(a::Vector, b::Matrix)=kron(reshape(a,length(a),1),b)
 ^(A::Matrix, p::Integer) = p < 0 ? inv(A^-p) : Base.power_by_squaring(A,p)
 
 function ^(A::Matrix, p::Number)
-    isinteger(p) && return A^integer(real(p)) 
-    
+    isinteger(p) && return A^integer(real(p))
+
     chksquare(A)
     v, X = eig(A)
     any(v.<0) && (v = complex(v))
@@ -263,7 +263,7 @@ function expm!{T<:BlasFloat}(A::StridedMatrix{T})
 
         X = V + U
         LAPACK.gesv!(V-U, X)
-    
+
         if s > 0            # squaring to reverse dividing by power of 2
             for t=1:si X *= X end
         end
@@ -322,9 +322,9 @@ function inv{S}(A::StridedMatrix{S})
     Ac = convert(AbstractMatrix{T}, A)
     if istriu(Ac)
         Ai = inv(Triangular(A, :U, false))
-    elseif istril(Ac) 
+    elseif istril(Ac)
         Ai = inv(Triangular(A, :L, false))
-    else 
+    else
         Ai = inv(lufact(Ac))
     end
     return convert(typeof(Ac), Ai)
@@ -380,7 +380,7 @@ function factorize{T}(A::Matrix{T})
             end
             if utri1
                 if (herm & (T <: Complex)) | sym
-                    try 
+                    try
                         return ldltfact!(SymTridiagonal(diag(A), diag(A, -1)))
                     end
                 end
@@ -409,7 +409,7 @@ function (\)(A::StridedMatrix, B::StridedVecOrMat)
     m, n = size(A)
     if m == n
         if istril(A)
-            return istriu(A) ? \(Diagonal(A),B) : \(Triangular(A, :L),B) 
+            return istriu(A) ? \(Diagonal(A),B) : \(Triangular(A, :L),B)
         end
         istriu(A) && return \(Triangular(A, :U),B)
         return \(lufact(A),B)
@@ -441,7 +441,7 @@ function null{T}(A::StridedMatrix{T})
 end
 null(a::StridedVector) = null(reshape(a, length(a), 1))
 
-function cond(A::StridedMatrix, p::Real=2) 
+function cond(A::StridedMatrix, p::Real=2)
     if p == 2
         v = svdvals(A)
         maxv = maximum(v)
@@ -476,4 +476,4 @@ function lyap{T<:BlasFloat}(A::StridedMatrix{T},C::StridedMatrix{T})
 end
 lyap{T<:Integer}(A::StridedMatrix{T},C::StridedMatrix{T}) = lyap(float(A), float(C))
 lyap{T<:Number}(a::T, c::T) = -c/(2a)
-                                    
+

@@ -18,7 +18,7 @@ s = "ccall(:f,Int,(Ptr{Void},),&x)"
 
 macro test_repr(x)
     quote
-        # Note: We can't just compare x1 and x2 because interpolated 
+        # Note: We can't just compare x1 and x2 because interpolated
         # strings get converted to string Exprs by the first show().
         # This could produce a few false positives, but until string
         # interpolation works we don't really have a choice.

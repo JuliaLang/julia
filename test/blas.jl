@@ -6,15 +6,15 @@ for elty in (Float32, Float64, Complex64, Complex128)
     z4 = zeros(elty, 4)
 
     I4 = eye(elty, 4)
-    I43 = eye(elty, 4, 3)    
-    L4 = tril(ones(elty, (4,4)))    
+    I43 = eye(elty, 4, 3)
+    L4 = tril(ones(elty, (4,4)))
     U4 = triu(ones(elty, (4,4)))
     Z4 = zeros(elty, (4,4))
 
-    elm1 = convert(elty, -1)    
+    elm1 = convert(elty, -1)
     el2 = convert(elty, 2)
     v14 = convert(Vector{elty}, [1:4])
-    v41 = convert(Vector{elty}, [4:-1:1])    
+    v41 = convert(Vector{elty}, [4:-1:1])
 
     # dot
     if elty <: Real
@@ -43,15 +43,15 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @test all(o4cp .== z4)
     @test all(BLAS.gemv('N', U4, o4) .== v41)
     @test all(BLAS.gemv('N', U4, o4) .== v41)
-    
+
     # gemm
     @test all(BLAS.gemm('N', 'N', I4, I4) .== I4)
     @test all(BLAS.gemm('N', 'T', I4, I4) .== I4)
     @test all(BLAS.gemm('T', 'N', I4, I4) .== I4)
     @test all(BLAS.gemm('T', 'T', I4, I4) .== I4)
-    @test all(BLAS.gemm('N', 'N', el2, I4, I4) .== el2 * I4)    
-    @test all(BLAS.gemm('N', 'T', el2, I4, I4) .== el2 * I4)    
-    @test all(BLAS.gemm('T', 'N', el2, I4, I4) .== el2 * I4)    
+    @test all(BLAS.gemm('N', 'N', el2, I4, I4) .== el2 * I4)
+    @test all(BLAS.gemm('N', 'T', el2, I4, I4) .== el2 * I4)
+    @test all(BLAS.gemm('T', 'N', el2, I4, I4) .== el2 * I4)
     @test all(LinAlg.BLAS.gemm('T', 'T', el2, I4, I4) .== el2 * I4)
     I4cp = copy(I4)
     @test all(BLAS.gemm!('N', 'N', one(elty), I4, I4, elm1, I4cp) .== Z4)
@@ -67,7 +67,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @test all(I4cp .== Z4)
     @test all(BLAS.gemm('N', 'N', I4, U4) .== U4)
     @test all(BLAS.gemm('N', 'T', I4, U4) .== L4)
-    
+
     # gemm compared to (sy)(he)rk
     if iseltype(elm1,Complex)
         @test all(triu(BLAS.herk('U', 'N', U4)) .== triu(BLAS.gemm('N', 'T', U4, U4)))

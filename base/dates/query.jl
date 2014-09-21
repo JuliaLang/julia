@@ -38,7 +38,7 @@ issaturday(dt::TimeType) = dayofweek(dt) == Sat
 issunday(dt::TimeType) = dayofweek(dt) == Sun
 
 # i.e. 1st Monday? 2nd Monday? 3rd Wednesday? 5th Sunday?
-dayofweekofmonth(dt::TimeType) = (d = day(dt); return d < 8 ? 1 : 
+dayofweekofmonth(dt::TimeType) = (d = day(dt); return d < 8 ? 1 :
     d < 15 ? 2 : d < 22 ? 3 : d < 29 ? 4 : 5)
 
 # Total number of a day of week in the month

@@ -154,7 +154,7 @@ inv{T<:Union(Float16,Float32)}(z::Complex{T}) =
 # the first step is to scale variables if appropriate ,then do calculations
 # in a way that avoids over/underflow (subfuncs 1 and 2), then undo the scaling.
 # scaling variable s and other techniques
-# based on arxiv.1210.4539 
+# based on arxiv.1210.4539
 #             a + i*b
 #  p + i*q = ---------
 #             c + i*d
@@ -368,10 +368,10 @@ function expm1(z::Complex)
             Complex(nan(zr), nan(zi))
         end
     else
-        erm1 = expm1(zr)        
+        erm1 = expm1(zr)
         if zi == 0
             Complex(erm1, zi)
-        else            
+        else
             er = erm1+one(erm1)
             wr = isfinite(er) ? erm1 - 2.0*er*(sin(0.5*zi))^2 : er*cos(zi)
             Complex(wr, er*sin(zi))

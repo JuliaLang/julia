@@ -51,7 +51,7 @@ open("unicode-math-table.tex") do f
         c = char(parseint(x[2], 16))
         if (Base.is_id_char(c) || Base.isoperator(symbol(c))) &&
            string(c) ∉ latex_strings && !isascii(c)
-            println("    \"", escape_string(x[3]), "\" => \"", 
+            println("    \"", escape_string(x[3]), "\" => \"",
                     escape_string("$c"), "\",  # ", x[5])
         end
     end

@@ -75,7 +75,7 @@ for relty in (Float32, Float64), elty in (relty, )#XXX Complex{relty}) doesn't w
 
     A=SymTridiagonal(a, b)
     fA=(elty<:Complex?complex128:float64)(full(A))
-    
+
     debug && println("Idempotent tests")
     for func in (conj, transpose, ctranspose)
         @test func(func(A)) == A
@@ -183,7 +183,7 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         end
 
         debug && println("Binary operations")
-        for isupper2 in (true, false) 
+        for isupper2 in (true, false)
             dv = convert(Vector{elty}, randn(n))
             ev = convert(Vector{elty}, randn(n-1))
             T2 = Bidiagonal(dv, ev, isupper2)

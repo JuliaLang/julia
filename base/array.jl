@@ -571,7 +571,7 @@ function deleteat!(a::Vector, inds)
     q = p+1
     while !done(inds, s)
         (i,s) = next(inds, s)
-        if !(q <= i <= n) 
+        if !(q <= i <= n)
             i < q && error("indices must be unique and sorted")
             throw(BoundsError())
         end
@@ -764,7 +764,7 @@ end
 
 # familiar aliases for broadcasting operations of array ± scalar (#7226):
 (+)(A::AbstractArray{Bool},x::Bool) = A .+ x
-(+)(x::Bool,A::AbstractArray{Bool}) = x .+ A 
+(+)(x::Bool,A::AbstractArray{Bool}) = x .+ A
 (-)(A::AbstractArray{Bool},x::Bool) = A .- x
 (-)(x::Bool,A::AbstractArray{Bool}) = x .- A
 (+)(A::AbstractArray,x::Number) = A .+ x
@@ -798,7 +798,7 @@ for f in (:+, :-)
             for i=1:length(A)
                 @inbounds F[i] = ($f)(A[i], B[i])
             end
-            return F        
+            return F
         end
     end
 end

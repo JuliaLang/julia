@@ -120,7 +120,7 @@ func randmatmul(n int) matrix.MatrixRO {
 	return matrix.Product(a, b)
 }
 
-// mandelbrot 
+// mandelbrot
 
 func mandel(z complex128) int {
 	maxiter := 80

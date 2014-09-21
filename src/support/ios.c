@@ -246,7 +246,7 @@ static size_t _ios_read(ios_t *s, char *dest, size_t n, int all)
 
     while (n > 0) {
         avail = s->size - s->bpos;
-        
+
         if (avail > 0) {
             size_t ncopy = (avail >= n) ? n : avail;
             memcpy(dest, s->buf + s->bpos, ncopy);
@@ -261,14 +261,14 @@ static size_t _ios_read(ios_t *s, char *dest, size_t n, int all)
                 s->_eof = 1;
             return avail;
         }
-        
+
         dest += avail;
         n -= avail;
         tot += avail;
-        
+
         ios_flush(s);
         s->bpos = s->size = 0;
-        
+
         s->fpos = -1;
         if (n > MOST_OF(s->maxsize)) {
             // doesn't fit comfortably in buffer; go direct

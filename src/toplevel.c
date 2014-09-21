@@ -563,7 +563,7 @@ jl_value_t *jl_load(const char *fname)
     if (jl_current_module == jl_base_module) {
         //This deliberatly uses ios, because stdio initialization has been moved to Julia
         jl_printf(JL_STDOUT, "%s\r\n", fname);
-#ifdef _OS_WINDOWS_        
+#ifdef _OS_WINDOWS_
         uv_run(uv_default_loop(), 1);
 #endif
     }

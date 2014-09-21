@@ -611,7 +611,7 @@ DLLEXPORT const char *jl_pathname_for_handle(uv_lib_t *uv_lib)
 {
     if (!uv_lib)
         return NULL;
-    
+
     void *handle = uv_lib->handle;
 #ifdef __APPLE__
     for (int32_t i = _dyld_image_count(); i >= 0 ; i--) {

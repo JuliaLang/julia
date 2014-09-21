@@ -119,7 +119,7 @@ t_func[eval(Core.Intrinsics,:ccall)] =
                                     isType(rt) ? rt.parameters[1] : Any))
 t_func[eval(Core.Intrinsics,:llvmcall)] =
     (3, Inf, (fptr, rt, at, a...)->(is(rt,Type{Void}) ? Nothing :
-                                    isType(rt) ? rt.parameters[1] : 
+                                    isType(rt) ? rt.parameters[1] :
                                     isa(rt,Tuple) ? map(x->x.parameters[1],rt) : Any))
 t_func[eval(Core.Intrinsics,:cglobal)] =
     (1, 2, (fptr, t...)->(isempty(t) ? Ptr{Void} :
