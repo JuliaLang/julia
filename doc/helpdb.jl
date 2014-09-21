@@ -3027,9 +3027,16 @@
 
 "),
 
-("Base","readall","readall(stream)
+("Base","readall","readall(stream::IO)
 
    Read the entire contents of an I/O stream as a string.
+
+"),
+
+("Base","readall","readall(filename::String)
+
+   Open \"filename\", read the entire contents as a string, then close
+   the file. Equivalent to \"open(readall, filename)\".
 
 "),
 
@@ -5603,9 +5610,8 @@ popdisplay(d::Display)
 
 ("Base","rand","rand(r[, dims...])
 
-   Generate a random integer from the inclusive interval specified by
-   \"Range1 r\" (for example, \"1:n\"). Optionally, generate a random
-   integer array.
+   Generate a random integer in the range \"r\" (for example, \"1:n\"
+   or \"0:2:10\"). Optionally, generate a random integer array.
 
 "),
 
@@ -5731,13 +5737,29 @@ popdisplay(d::Display)
 
 ("Base","zeros","zeros(type, dims)
 
-   Create an array of all zeros of specified type
+   Create an array of all zeros of specified type. The type defaults
+   to Float64 if not specified.
+
+"),
+
+("Base","zeros","zeros(A)
+
+   Create an array of all zeros with the same element type and shape
+   as A.
 
 "),
 
 ("Base","ones","ones(type, dims)
 
-   Create an array of all ones of specified type
+   Create an array of all ones of specified type. The type defaults to
+   Float64 if not specified.
+
+"),
+
+("Base","ones","ones(A)
+
+   Create an array of all ones with the same element type and shape as
+   A.
 
 "),
 
@@ -9434,7 +9456,7 @@ popdisplay(d::Display)
 
 ("Base","eig","eig(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> D, V
 
-   Compute eigenvalues and eigenvectors of \"A\". See \"eigfact()\"
+   Computes eigenvalues and eigenvectors of \"A\". See \"eigfact()\"
    for details on the \"balance\" keyword argument.
 
    **Example**:
@@ -9493,10 +9515,12 @@ popdisplay(d::Display)
 
 "),
 
-("Base","eigvecs","eigvecs(A, [eigvals,][permute=true,][scale=true])
+("Base","eigvecs","eigvecs(A, [eigvals,][permute=true,][scale=true]) -> Matrix
 
-   Returns the eigenvectors of \"A\". The \"permute\" and \"scale\"
-   keywords are the same as for \"eigfact()\".
+   Returns a matrix \"M\" whose columns are the eigenvectors of \"A\".
+   (The \"k``th eigenvector can be obtained from the slice ``M[:,
+   k]\".) The \"permute\" and \"scale\" keywords are the same as for
+   \"eigfact()\".
 
    For \"SymTridiagonal()\" matrices, if the optional vector of
    eigenvalues \"eigvals\" is specified, returns the specific
@@ -9504,42 +9528,47 @@ popdisplay(d::Display)
 
 "),
 
-("Base","eigfact","eigfact(A,[il,][iu,][vl,][vu,][permute=true,][scale=true])
+("Base","eigfact","eigfact(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> Eigen
 
-   Compute the eigenvalue decomposition of \"A\" and return an
-   \"Eigen\" object. If \"F\" is the factorization object, the
-   eigenvalues can be accessed with \"F[:values]\" and the
-   eigenvectors with \"F[:vectors]\". The following functions are
-   available for \"Eigen\" objects: \"inv\", \"det\".
+   Computes the eigenvalue decomposition of \"A\", returning an
+   \"Eigen\" factorization object \"F\" which contains the eigenvalues
+   in \"F[:values]\" and the eigenvectors in the columns of the matrix
+   \"F[:vectors]\". (The \"k``th eigenvector can be obtained from the
+   slice ``F[:vectors][:, k]\".)
 
-   If \"A\" is \"Symmetric\", \"Hermitian\" or \"SymTridiagonal\", it
-   is possible to calculate only a subset of the eigenvalues by
-   specifying either a *UnitRange`* \"irange\" covering indices of the
-   sorted eigenvalues or a pair \"vl\" and \"vu\" for the lower and
-   upper boundaries of the eigenvalues.
+   The following functions are available for \"Eigen\" objects:
+   \"inv\", \"det\".
 
-   For general non-symmetric matrices it is possible to specify how
-   the matrix is balanced before the eigenvector calculation. The
-   option \"permute=true\" permutes the matrix to become closer to
-   upper triangular, and \"scale=true\" scales the matrix by its
-   diagonal elements to make rows and columns more equal in norm. The
-   default is \"true\" for both options.
+   If \"A\" is \"Symmetric()\", \"Hermitian()\" or
+   \"SymTridiagonal()\", it is possible to calculate only a subset of
+   the eigenvalues by specifying either a \"UnitRange()\" \"irange\"
+   covering indices of the sorted eigenvalues or a pair \"vl\" and
+   \"vu\" for the lower and upper boundaries of the eigenvalues.
+
+   For general nonsymmetric matrices it is possible to specify how the
+   matrix is balanced before the eigenvector calculation. The option
+   \"permute=true\" permutes the matrix to become closer to upper
+   triangular, and \"scale=true\" scales the matrix by its diagonal
+   elements to make rows and columns more equal in norm. The default
+   is \"true\" for both options.
 
 "),
 
-("Base","eigfact","eigfact(A, B)
+("Base","eigfact","eigfact(A, B) -> GeneralizedEigen
 
-   Compute the generalized eigenvalue decomposition of \"A\" and \"B\"
-   and return an \"GeneralizedEigen\" object. If \"F\" is the
-   factorization object, the eigenvalues can be accessed with
-   \"F[:values]\" and the eigenvectors with \"F[:vectors]\".
+   Computes the generalized eigenvalue decomposition of \"A\" and
+   \"B\", returning a \"GeneralizedEigen\" factorization object \"F\"
+   which contains the generalized eigenvalues in \"F[:values]\" and
+   the generalized eigenvectors in the columns of the matrix
+   \"F[:vectors]\". (The \"k``th generalized eigenvector can be
+   obtained from the slice ``F[:vectors][:, k]\".)
 
 "),
 
 ("Base","eigfact!","eigfact!(A[, B])
 
-   \"eigfact!\" is the same as \"eigfact()\", but saves space by
-   overwriting the input A (and B), instead of creating a copy.
+   Same as \"eigfact()\", but saves space by overwriting the input
+   \"A\" (and \"B\"), instead of creating a copy.
 
 "),
 
@@ -10399,23 +10428,22 @@ popdisplay(d::Display)
 
 "),
 
-("Base.LinAlg.BLAS","trsv!","trsv!(side, ul, tA, dA, alpha, A, b)
+("Base.LinAlg.BLAS","trsv!","trsv!(ul, tA, dA, A, b)
 
-   Overwrite \"b\" with the solution to \"A*X = alpha*b\" or one of
-   the other three variants determined by \"side\" (A on left or right
-   of \"X\") and \"tA\" (transpose A). Only the \"ul\" triangle of
-   \"A\" is used.  \"dA\" indicates if \"A\" is unit-triangular (the
-   diagonal is assumed to be all ones).  Returns the updated \"b\".
+   Overwrite \"b\" with the solution to \"A*x = b\" or one of the
+   other two variants determined by \"tA\" (transpose A) and \"ul\"
+   (triangle of \"A\" used).  \"dA\" indicates if \"A\" is unit-
+   triangular (the diagonal is assumed to be all ones).  Returns the
+   updated \"b\".
 
 "),
 
-("Base.LinAlg.BLAS","trsv","trsv(side, ul, tA, dA, alpha, A, b)
+("Base.LinAlg.BLAS","trsv","trsv(ul, tA, dA, A, b)
 
-   Returns the solution to \"A*X = alpha*b\" or one of the other three
-   variants determined by \"side\" (A on left or right of \"X\") and
-   \"tA\" (transpose A). Only the \"ul\" triangle of \"A\" is used.
-   \"dA\" indicates if \"A\" is unit-triangular (the diagonal is
-   assumed to be all ones).
+   Returns the solution to \"A*x = b\" or one of the other two
+   variants determined by \"tA\" (transpose A) and \"ul\" (triangle of
+   \"A\" is used.) \"dA\" indicates if \"A\" is unit-triangular (the
+   diagonal is assumed to be all ones).
 
 "),
 
