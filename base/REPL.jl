@@ -700,7 +700,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
     end
 
     const repl_keymap = {
-        ';' => function (s)
+        ';' => function (s,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
                 buf = copy(LineEdit.buffer(s))
                 transition(s, shell_mode)
@@ -710,7 +710,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
                 edit_insert(s, ';')
             end
         end,
-        '?' => function (s)
+        '?' => function (s,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
                 buf = copy(LineEdit.buffer(s))
                 transition(s, help_mode)
@@ -722,7 +722,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
         end,
 
         # Bracketed Paste Mode
-        "\e[200~" => s->begin
+        "\e[200~" => (s,o...)->begin
             ps = LineEdit.state(s, LineEdit.mode(s))
             input = readuntil(ps.terminal, "\e[201~")[1:(end-6)]
             input = replace(input, '\r', '\n')
@@ -772,13 +772,13 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
         end,
     }
 
-    a = Dict{Any,Any}[hkeymap, repl_keymap, LineEdit.history_keymap(hp), LineEdit.default_keymap, LineEdit.escape_defaults]
+    a = Dict{Any,Any}[hkeymap, repl_keymap, LineEdit.history_keymap, LineEdit.default_keymap, LineEdit.escape_defaults]
     prepend!(a, extra_repl_keymap)
 
-    julia_prompt.keymap_func = @eval @LineEdit.keymap $(a)
+    julia_prompt.keymap_func = LineEdit.keymap(a)
 
     const mode_keymap = {
-        '\b' => function (s)
+        '\b' => function (s,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
                 buf = copy(LineEdit.buffer(s))
                 transition(s, julia_prompt)
@@ -788,7 +788,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
                 LineEdit.edit_backspace(s)
             end
         end,
-        "^C" => function (s)
+        "^C" => function (s,o...)
             LineEdit.move_input_end(s)
             LineEdit.refresh_line(s)
             print(LineEdit.terminal(s), "^C\n\n")
@@ -798,9 +798,9 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
         end
     }
 
-    b = Dict{Any,Any}[hkeymap, mode_keymap, LineEdit.history_keymap(hp), LineEdit.default_keymap, LineEdit.escape_defaults]
+    b = Dict{Any,Any}[hkeymap, mode_keymap, LineEdit.history_keymap, LineEdit.default_keymap, LineEdit.escape_defaults]
 
-    shell_mode.keymap_func = help_mode.keymap_func = @eval @LineEdit.keymap $(b)
+    shell_mode.keymap_func = help_mode.keymap_func = LineEdit.keymap(b)
 
     ModalInterface([julia_prompt, shell_mode, help_mode,hkp])
 end
