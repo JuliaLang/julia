@@ -799,6 +799,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
     }
 
     b = Dict{Any,Any}[hkeymap, mode_keymap, LineEdit.history_keymap, LineEdit.default_keymap, LineEdit.escape_defaults]
+    prepend!(b, extra_repl_keymap)
 
     shell_mode.keymap_func = help_mode.keymap_func = LineEdit.keymap(b)
 
