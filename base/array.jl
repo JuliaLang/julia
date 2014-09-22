@@ -600,8 +600,10 @@ function splice!(a::Vector, i::Integer, ins=_default_splice)
         a[i] = ins[1]
     else
         _growat!(a, i, m-1)
-        for k = 1:m
-            a[i+k-1] = ins[k]
+        k = 1
+        for x in ins
+            a[i+k-1] = x
+            k += 1
         end
     end
     return v
@@ -636,8 +638,10 @@ function splice!{T<:Integer}(a::Vector, r::UnitRange{T}, ins=_default_splice)
         end
     end
 
-    for k = 1:m
-        a[f+k-1] = ins[k]
+    k = 1
+    for x in ins
+        a[f+k-1] = x
+        k += 1
     end
     return v
 end
