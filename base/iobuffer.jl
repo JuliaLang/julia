@@ -142,7 +142,7 @@ function compact(io::IOBuffer)
     if io.seekable error("compact failed") end
     local ptr::Int, bytes_to_move::Int
     if ismarked(io) && io.mark < io.ptr
-        if io.mark == 0; return; end
+        if io.mark == 0 return end
         ptr = io.mark
         bytes_to_move = nb_available(io) + (io.ptr-io.mark)
     else
@@ -240,7 +240,7 @@ function write(to::IOBuffer, p::Ptr, nb::Int)
     nb = min(nb, length(to.data) - ptr + 1)
     ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), pointer(to.data,ptr), p, nb)
     to.size = max(to.size, ptr - 1 + nb)
-    if !to.append; to.ptr += nb; end
+    if !to.append to.ptr += nb end
     nb
 end
 
@@ -271,7 +271,7 @@ function write(to::IOBuffer, a::Uint8)
         to.data[ptr] = a
     end
     to.size = max(to.size, ptr)
-    if !to.append; to.ptr += 1; end
+    if !to.append to.ptr += 1 end
     sizeof(Uint8)
 end
 
