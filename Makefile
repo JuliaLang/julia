@@ -304,8 +304,8 @@ ifneq ($(DESTDIR),)
 endif
 	@$(MAKE) install
 	cp LICENSE.md $(prefix)
-ifeq ($(OS), Darwin)
-	-./contrib/mac/fixup-libgfortran.sh $(DESTDIR)$(private_libdir)
+ifneq ($(OS), WINNT)
+	-./contrib/fixup-libgfortran.sh $(DESTDIR)$(private_libdir)
 endif
 	# Copy in juliarc.jl files per-platform for binary distributions as well
 	# Note that we don't install to sysconfdir: we always install to $(DESTDIR)$(prefix)/etc.
