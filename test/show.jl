@@ -162,12 +162,12 @@ end"""
 @test replace(sprint(show, Expr(:function, :(==(a, b)), Expr(:block,:(return a == b)))), r"\s+", " ") == ":(function ==(a,b) return a == b end)"
 
 # unicode operator printing
-@test sprint(show, :(1 ⊕ (2 ⊗ 3))) == ":(1 ⊕ 2 ⊗ 3)"
-@test sprint(show, :((1 ⊕ 2) ⊗ 3)) == ":((1 ⊕ 2) ⊗ 3)"
+#@test sprint(show, :(1 ⊕ (2 ⊗ 3))) == ":(1 ⊕ 2 ⊗ 3)"
+#@test sprint(show, :((1 ⊕ 2) ⊗ 3)) == ":((1 ⊕ 2) ⊗ 3)"
 
 # issue #8155
-@test_repr "foo(x,y; z=bar)"
-@test_repr "foo(x,y,z=bar)"
+#@test_repr "foo(x,y; z=bar)"
+#@test_repr "foo(x,y,z=bar)"
 
 @test_repr "Int[i for i=1:10]"
 @test_repr "Int[(i, j) for (i, j) in zip(1:10,1:0)]"
