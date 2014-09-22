@@ -1582,8 +1582,8 @@
    specified, replacement values from an ordered collection will be
    spliced in place of the removed item.
 
-   To insert *replacement* before an index *n* without removing any
-   items, use \"splice(collection, n-1:n, replacement)\".
+   To insert \"replacement\" before an index \"n\" without removing
+   any items, use \"splice!(collection, n:n-1, replacement)\".
 
 "),
 
@@ -1594,8 +1594,8 @@
    fill the resulting gap. If specified, replacement values from an
    ordered collection will be spliced in place of the removed items.
 
-   To insert *replacement* before an index *n* without removing any
-   items, use \"splice(collection, n-1:n, replacement)\".
+   To insert \"replacement\" before an index \"n\" without removing
+   any items, use \"splice!(collection, n:n-1, replacement)\".
 
 "),
 
@@ -5775,15 +5775,15 @@ popdisplay(d::Display)
 
 "),
 
-("Base","fill","fill(v, dims)
+("Base","fill","fill(x, dims)
 
-   Create an array filled with \"v\"
+   Create an array filled with the value \"x\"
 
 "),
 
 ("Base","fill!","fill!(A, x)
 
-   Fill array \"A\" with value \"x\"
+   Fill the array \"A\" with the value \"x\"
 
 "),
 
