@@ -1,5 +1,5 @@
 stagedfunction t1(a,b)
-    if a == Int64
+    if a == Int
         return :(a+b)
     else
         return :(a*b)
@@ -19,7 +19,40 @@ stagedfunction splat(a,b...)
     :( ($a,$b,a,b) )
 end
 
-@test splat(1,2,3) == (Int64,(Int64,Int64),1,(2,3))
+@test splat(1,2,3) == (Int,(Int,Int),1,(2,3))
+
+stagediobuf = IOBuffer()
+stagedfunction splat2(a...)
+    print(stagediobuf, a)
+    :(nothing)
+end
+
+const intstr = @sprintf("%s", Int)
+splat2(1)
+@test takebuf_string(stagediobuf) == "($intstr,)"
+splat2(1,3)
+@test takebuf_string(stagediobuf) == "($intstr,$intstr)"
+splat2(5,2)
+@test takebuf_string(stagediobuf) == ""
+splat2(1:3,5.2)
+@test takebuf_string(stagediobuf) == "(UnitRange{$intstr},Float64)"
+splat2(3,5:2:7)
+@test takebuf_string(stagediobuf) == "($intstr,StepRange{$intstr,$intstr})"
+splat2(1,2,3,4)
+@test takebuf_string(stagediobuf) == "($intstr,$intstr,$intstr,$intstr)"
+splat2(1,2,3)
+@test takebuf_string(stagediobuf) == "($intstr,$intstr,$intstr)"
+splat2(1:5, 3, 3:3)
+@test takebuf_string(stagediobuf) == "(UnitRange{$intstr},$intstr,UnitRange{$intstr})"
+splat2(1:5, 3, 3:3)
+@test takebuf_string(stagediobuf) == ""
+splat2(1:5, 3:3, 3)
+@test takebuf_string(stagediobuf) == "(UnitRange{$intstr},UnitRange{$intstr},$intstr)"
+splat2(1:5, 3:3)
+@test takebuf_string(stagediobuf) == "(UnitRange{$intstr},UnitRange{$intstr})"
+splat2(3, 3:5)
+@test takebuf_string(stagediobuf) == "($intstr,UnitRange{$intstr})"
+
 
 A = rand(5,5,3);
 B = slice(A, 1:3, 2, 1:3);
