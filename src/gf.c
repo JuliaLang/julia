@@ -704,9 +704,9 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     // in general, here we want to find the biggest type that's not a
     // supertype of any other method signatures. so far we are conservative
     // and the types we find should be bigger.
-    if (jl_tuple_len(type) > mt->max_args &&
+    if (!isstaged && jl_tuple_len(type) > mt->max_args &&
         jl_is_vararg_type(jl_tupleref(decl,jl_tuple_len(decl)-1))) {
-        size_t nspec = isstaged ? jl_tuple_len(type) : mt->max_args + 2;
+        size_t nspec = mt->max_args + 2;
         jl_tuple_t *limited = jl_alloc_tuple(nspec);
         for(i=0; i < nspec-1; i++) {
             jl_tupleset(limited, i, jl_tupleref(type, i));
