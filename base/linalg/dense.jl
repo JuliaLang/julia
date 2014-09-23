@@ -269,7 +269,7 @@ function expm!{T<:BlasFloat}(A::StridedMatrix{T})
         end
     end
 
-	# Undo the balancing
+    # Undo the balancing
     for j = ilo:ihi
         scj = scale[j]
         for i = 1:n
