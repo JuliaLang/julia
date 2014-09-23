@@ -1225,7 +1225,7 @@ const default_keymap =
         end
         edit_insert(s, input)
     end,
-    "^T" => edit_transpose,
+    "^T" => (s,o...)->edit_transpose(s),
 }
 
 const history_keymap = {
