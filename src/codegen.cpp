@@ -4162,7 +4162,7 @@ static void init_julia_llvm_env(Module *m)
 #endif
     };
     Type* jl_array_llvmt = 
-        StructType::create(getGlobalContext(), 
+        StructType::create(jl_LLVMContext,
                            ArrayRef<Type*>(vaelts,sizeof(vaelts)/sizeof(vaelts[0])), 
                            "jl_array_t");
     jl_parray_llvmt = PointerType::get(jl_array_llvmt,0);
