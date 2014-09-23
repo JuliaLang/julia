@@ -1341,7 +1341,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     if la > 0
         lastarg = ast.args[1][la]
         if is_rest_arg(lastarg)
-	    if atypes === Tuple
+            if atypes === Tuple
                 if la > 1
                     atypes = tuple(NTuple{la-1,Any}..., Tuple[1])
                 end
