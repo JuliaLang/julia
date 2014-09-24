@@ -184,14 +184,18 @@ mfe22 = eye(Float64, 2)
 @test_throws DimensionMismatch sparsevec([3,5,7],[0.1,0.0,3.2],4)
 
 # issue #5169
-@test nfilled(sparse([1,1],[1,2],[0.0,-0.0])) == 0
+@test nnz(sparse([1,1],[1,2],[0.0,-0.0])) == 0
 
 # issue #5386
 K,J,V = findnz(SparseMatrixCSC(2,1,[1,3],[1,2],[1.0,0.0]))
 @test length(K) == length(J) == length(V) == 1
 
+# https://groups.google.com/d/msg/julia-users/Yq4dh8NOWBQ/GU57L90FZ3EJ
+A = speye(Bool, 5)
+@test find(A) == find(x -> x == true, A) == find(full(A))
+
 # issue #5437
-@test nfilled(sparse([1,2,3],[1,2,3],[0.0,1.0,2.0])) == 2
+@test nnz(sparse([1,2,3],[1,2,3],[0.0,1.0,2.0])) == 2
 
 # issue #5824
 @test sprand(4,5,0.5).^0 == sparse(ones(4,5))
@@ -199,12 +203,16 @@ K,J,V = findnz(SparseMatrixCSC(2,1,[1,3],[1,2],[1.0,0.0]))
 # issue #5985
 @test sprandbool(4, 5, 0.0) == sparse(zeros(Bool, 4, 5))
 @test sprandbool(4, 5, 1.00) == sparse(ones(Bool, 4, 5))
-sprb45 = sprandbool(4, 5, 0.5)
-@test length(sprb45) == 20
-@test 4 <= sum(sprb45)[1] <= 16
+sprb45nnzs = zeros(5)
+for i=1:5
+    sprb45 = sprandbool(4, 5, 0.5)
+    @test length(sprb45) == 20
+    sprb45nnzs[i] = sum(sprb45)[1]
+end
+@test 4 <= mean(sprb45nnzs) <= 16
 
 # issue #5853, sparse diff
-for i=1:2, a={[1 2 3], [1 2 3]', speye(3)}
+for i=1:2, a={[1 2 3], [1 2 3]', eye(3)}
     @test all(diff(sparse(a),i) == diff(a,i))
 end
 
@@ -238,6 +246,68 @@ for op in (:sin, :cos, :tan, :iceil, :ifloor, :ceil, :floor, :abs, :abs2)
         @test ($op)(afull) == full($(op)(a))
     end
 end
+
+# getindex tests
+ni = 23
+nj = 32
+a116 = reshape(1:(ni*nj), ni, nj)
+s116 = sparse(a116)
+
+ad116 = diagm(diag(a116))
+sd116 = sparse(ad116)
+
+for (aa116, ss116) in [(a116, s116), (ad116, sd116)]
+    ij=11; i=3; j=2
+    @test ss116[ij] == aa116[ij]
+    @test ss116[(i,j)] == aa116[i,j]
+    @test ss116[i,j] == aa116[i,j]
+    @test ss116[i-1,j] == aa116[i-1,j]
+    ss116[i,j] = 0
+    @test ss116[i,j] == 0
+    ss116 = sparse(aa116)
+
+    # range indexing
+    @test full(ss116[i,:]) == aa116[i,:]
+    @test full(ss116[:,j]) == aa116[:,j]'' # sparse matrices/vectors always have ndims==2:
+    @test full(ss116[i,1:2:end]) == aa116[i,1:2:end]
+    @test full(ss116[1:2:end,j]) == aa116[1:2:end,j]''
+    @test full(ss116[i,end:-2:1]) == aa116[i,end:-2:1]
+    @test full(ss116[end:-2:1,j]) == aa116[end:-2:1,j]''
+    # float-range indexing is not supported
+
+    # sorted vector indexing
+    @test full(ss116[i,[3:2:end-3]]) == aa116[i,[3:2:end-3]]
+    @test full(ss116[[3:2:end-3],j]) == aa116[[3:2:end-3],j]''
+    @test full(ss116[i,[end-3:-2:1]]) == aa116[i,[end-3:-2:1]]
+    @test full(ss116[[end-3:-2:1],j]) == aa116[[end-3:-2:1],j]''
+
+    # unsorted vector indexing with repetition
+    p = [4, 1, 2, 3, 2, 6]
+    @test full(ss116[p,:]) == aa116[p,:]
+    @test full(ss116[:,p]) == aa116[:,p]
+    @test full(ss116[p,p]) == aa116[p,p]
+
+    # bool indexing
+    li = randbool(size(aa116,1))
+    lj = randbool(size(aa116,2))
+    @test full(ss116[li,j]) == aa116[li,j]''
+    @test full(ss116[li,:]) == aa116[li,:]
+    @test full(ss116[i,lj]) == aa116[i,lj]
+    @test full(ss116[:,lj]) == aa116[:,lj]
+    @test full(ss116[li,lj]) == aa116[li,lj]
+end
+
+# workaround issue #7197: comment out let-block
+#let S = SparseMatrixCSC(3, 3, Uint8[1,1,1,1], Uint8[], Int64[])
+S1290 = SparseMatrixCSC(3, 3, Uint8[1,1,1,1], Uint8[], Int64[])
+    S1290[1,1] = 1
+    S1290[5] = 2
+    S1290[end] = 3
+    @test S1290[end] == (S1290[1] + S1290[2,2])
+    @test 6 == sum(diag(S1290))
+    @test (full(S1290)[[3,1],1])'' == full(S1290[[3,1],1])
+# end
+
 
 # setindex tests
 let a = spzeros(Int, 10, 10)
@@ -288,4 +358,105 @@ let ASZ = 1000, TSZ = 800
     @test countnz(A) == nA
     @test A == B
 end
+
+let A = speye(Int, 5), I=[1:10], X=reshape([trues(10), falses(15)],5,5)
+    @test A[I] == A[X] == reshape([1,0,0,0,0,0,1,0,0,0], 10, 1)
+    A[I] = [1:10]
+    @test A[I] == A[X] == reshape([1:10], 10, 1)
+end
+
+let S = sprand(50, 30, 0.5, x->int(rand(x)*100)), I = sprandbool(50, 30, 0.2)
+    FS = full(S)
+    FI = full(I)
+    @test sparse(FS[FI]) == S[I] == S[FI]
+    @test sum(S[FI]) + sum(S[!FI]) == sum(S)
+
+    sumS1 = sum(S)
+    sumFI = sum(S[FI])
+    S[FI] = 0
+    @test sum(S[FI]) == 0
+    sumS2 = sum(S)
+    @test (sum(S) + sumFI) == sumS1
+
+    S[FI] = 10
+    @test sum(S) == sumS2 + 10*sum(FI)
+    S[FI] = 0
+    @test sum(S) == sumS2
+
+    S[FI] = [1:sum(FI)]
+    @test sum(S) == sumS2 + sum(1:sum(FI))
+end
+
+let S = sprand(50, 30, 0.5, x->int(rand(x)*100))
+    N = length(S) >> 2
+    I = randperm(N) .* 4
+    J = randperm(N)
+    sumS1 = sum(S)
+    sumS2 = sum(S[I])
+    S[I] = 0
+    @test sum(S) == (sumS1 - sumS2)
+    S[I] = J
+    @test sum(S) == (sumS1 - sumS2 + sum(J))
+end
+
+#Issue 7507
+@test (i7507=sparsevec(Dict{Int64, Float64}(), 10))==spzeros(10,1)
+
+#Issue 7650
+let S = spzeros(3, 3)
+    @test size(reshape(S, 9, 1)) == (9,1)
+end
+
+let X = eye(5), M = rand(5,4), C = spzeros(3,3)
+    SX = sparse(X); SM = sparse(M)
+    VX = vec(X); VSX = vec(SX)
+    VM = vec(M); VSM1 = vec(SM); VSM2 = sparsevec(M)
+    VC = vec(C)
+    @test reshape(VX, (25,1)) == VSX
+    @test reshape(VM, (20,1)) == VSM1 == VSM2
+    @test size(VC) == (9,1)
+    @test nnz(VC) == 0
+    @test nnz(VSX) == 5
+end
+
+#Issue 7677
+let A = sprand(5,5,0.5,(n)->rand(Float64,n)), ACPY = copy(A)
+    B = reshape(A,25,1)
+    @test A == ACPY
+    C = reinterpret(Int64, A, (25, 1))
+    @test A == ACPY
+    D = reinterpret(Int64, B)
+    @test C == D
+end
+
+# indmax, indmin, findmax, findmin
+let S = sprand(100,80, 0.5), A = full(S)
+    @test indmax(S) == indmax(A)
+    @test indmin(S) == indmin(A)
+    @test findmin(S) == findmin(A)
+    @test findmax(S) == findmax(A)
+    for region in [(1,), (2,), (1,2)], m in [findmax, findmin]
+        @test m(S, region) == m(A, region)
+    end
+end
+
+let S = spzeros(10,8), A = full(S)
+    @test indmax(S) == indmax(A) == 1
+    @test indmin(S) == indmin(A) == 1
+end
+
+let A = Array(Int,0,0), S = sparse(A)
+    iA = try indmax(A) end
+    iS = try indmax(S) end
+    @test iA == iS == false
+    iA = try indmin(A) end
+    iS = try indmin(S) end
+    @test iA == iS == false
+end
+
+# issue #8225
+@test_throws BoundsError sparse([0],[-1],[1.0],2,2)
+
+# issue #8363
+@test_throws BoundsError sparsevec([-1=>1,1=>2])
 

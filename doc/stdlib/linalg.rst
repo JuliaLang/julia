@@ -7,7 +7,7 @@ Linear Algebra
 
 .. currentmodule:: Base
 
-Linear algebra functions in Julia are largely implemented by calling functions from `LAPACK <http://www.netlib.org/lapack/>`_.  Sparse factorizations call functions from `SuiteSparse <http://www.suitesparse.com/>`_.
+Linear algebra functions in Julia are largely implemented by calling functions from `LAPACK <http://www.netlib.org/lapack/>`_.  Sparse factorizations call functions from `SuiteSparse <http://faculty.cse.tamu.edu/davis/suitesparse.html>`_.
 
 .. function:: *(A, B)
    :noindex:
@@ -20,10 +20,12 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    Matrix division using a polyalgorithm. For input matrices ``A`` and ``B``, the result ``X`` is such that ``A*X == B`` when ``A`` is square.  The solver that is used depends upon the structure of ``A``.  A direct solver is used for upper- or lower triangular ``A``.  For Hermitian ``A`` (equivalent to symmetric ``A`` for non-complex ``A``) the ``BunchKaufman`` factorization is used.  Otherwise an LU factorization is used. For rectangular ``A`` the result is the minimum-norm least squares solution computed by reducing ``A`` to bidiagonal form and solving the bidiagonal least squares problem.  For sparse, square ``A`` the LU factorization (from UMFPACK) is used.
 
 .. function:: dot(x, y)
+              ⋅(x,y)
 
    Compute the dot product. For complex vectors, the first vector is conjugated.
 
 .. function:: cross(x, y)
+              ×(x,y)
 
    Compute the cross product of two 3-vectors.
 
@@ -52,7 +54,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
       ----------------------- ------------------------- ----------------------------------------
       :func:`Matrix`           ``LU``                   ``F[:L]*F[:U] == A[F[:p], :]``
       :func:`Tridiagonal`      ``LU{T,Tridiagonal{T}}``  N/A
-      :func:`SparseMatrixCSC`  ``UmfpackLU``            ``F[:L]*F[:U] == Rs .* A[F[:p], F[:q]]``
+      :func:`SparseMatrixCSC`  ``UmfpackLU``            ``F[:L]*F[:U] == F[:Rs] .* A[F[:p], F[:q]]``
       ======================= ========================= ========================================
 
    The individual components of the factorization ``F`` can be accessed by indexing:
@@ -115,8 +117,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
       Return type      ``eltype(A)``     ``pivot``  Relationship between ``F`` and ``A``
       ---------------- ----------------- --------- -------------------------------------
       ``QR``           not ``BlasFloat`` either     ``A==F[:Q]*F[:R]``
-      ``QRCompactWY``  ``BlasFloat``     ``true``   ``A==F[:Q]*F[:R]``
-      ``QRPivoted``    ``BlasFloat``     ``false``  ``A[:,F[:p]]==F[:Q]*F[:R]``
+      ``QRCompactWY``  ``BlasFloat``     ``false``  ``A==F[:Q]*F[:R]``
+      ``QRPivoted``    ``BlasFloat``     ``true``   ``A[:,F[:p]]==F[:Q]*F[:R]``
       ================ ================= ========= =====================================
 
    ``BlasFloat`` refers to any of: ``Float32``, ``Float64``, ``Complex64`` or ``Complex128``.
@@ -181,30 +183,43 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: eig(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> D, V
 
-   Compute eigenvalues and eigenvectors of ``A``. See :func:`eigfact` for details on the ``balance`` keyword argument.
+   Computes eigenvalues and eigenvectors of ``A``. See :func:`eigfact` for
+   details on the ``balance`` keyword argument.
    
-   **Example**::
+   .. doctest::
+
+      julia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
+      ([1.0,3.0,18.0],
+      3x3 Array{Float64,2}:
+       1.0  0.0  0.0
+       0.0  1.0  0.0
+       0.0  0.0  1.0)
    
-    julia> eig(a = [1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
-    ([1.0,3.0,18.0],
-    3x3 Array{Float64,2}:
-     1.0  0.0  0.0
-     0.0  1.0  0.0
-     0.0  0.0  1.0)
-   
-   ``eig`` is a wrapper around :func:`eigfact`, extracting all parts of the factorization to a tuple; where possible, using :func:`eigfact` is recommended.
+   ``eig`` is a wrapper around :func:`eigfact`, extracting all parts of the
+   factorization to a tuple; where possible, using :func:`eigfact` is
+   recommended.
 
 .. function:: eig(A, B) -> D, V
 
    Computes generalized eigenvalues and vectors of ``A`` with respect to ``B``.
     
-   ``eig`` is a wrapper around :func:`eigfact`, extracting all parts of the factorization to a tuple; where possible, using :func:`eigfact` is recommended.
+   ``eig`` is a wrapper around :func:`eigfact`, extracting all parts of the
+   factorization to a tuple; where possible, using :func:`eigfact` is
+   recommended.
 
 .. function:: eigvals(A,[irange,][vl,][vu])
 
-   Returns the eigenvalues of ``A``. If ``A`` is :func:`Symmetric`, :func:`Hermitian` or :func:`SymTridiagonal`, it is possible to calculate only a subset of the eigenvalues by specifying either a :func:`UnitRange` ``irange`` covering indices of the sorted eigenvalues, or a pair ``vl`` and ``vu`` for the lower and upper boundaries of the eigenvalues.
+   Returns the eigenvalues of ``A``. If ``A`` is :func:`Symmetric`,
+   :func:`Hermitian` or :func:`SymTridiagonal`, it is possible to calculate
+   only a subset of the eigenvalues by specifying either a :func:`UnitRange`
+   ``irange`` covering indices of the sorted eigenvalues, or a pair ``vl`` and
+   ``vu`` for the lower and upper boundaries of the eigenvalues.
 
-   For general non-symmetric matrices it is possible to specify how the matrix is balanced before the eigenvector calculation. The option ``permute=true`` permutes the matrix to become closer to upper triangular, and ``scale=true`` scales the matrix by its diagonal elements to make rows and columns more equal in norm. The default is ``true`` for both options.
+   For general non-symmetric matrices it is possible to specify how the matrix
+   is balanced before the eigenvector calculation. The option ``permute=true``
+   permutes the matrix to become closer to upper triangular, and ``scale=true``
+   scales the matrix by its diagonal elements to make rows and columns more
+   equal in norm. The default is ``true`` for both options.
 
 .. function:: eigmax(A)
 
@@ -214,28 +229,50 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Returns the smallest eigenvalue of ``A``.
 
-.. function:: eigvecs(A, [eigvals,][permute=true,][scale=true])
+.. function:: eigvecs(A, [eigvals,][permute=true,][scale=true]) -> Matrix
 
-   Returns the eigenvectors of ``A``.
+   Returns a matrix ``M`` whose columns are the eigenvectors of ``A``.
+   (The ``k``th eigenvector can be obtained from the slice ``M[:, k]``.)
    The ``permute`` and ``scale`` keywords are the same as for :func:`eigfact`.
 
-   For :func:`SymTridiagonal` matrices, if the optional vector of eigenvalues ``eigvals`` is specified, returns the specific corresponding eigenvectors.
+   For :func:`SymTridiagonal` matrices, if the optional vector of eigenvalues
+   ``eigvals`` is specified, returns the specific corresponding eigenvectors.
 
-.. function:: eigfact(A,[il,][iu,][vl,][vu,][permute=true,][scale=true])
+.. function:: eigfact(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> Eigen
 
-   Compute the eigenvalue decomposition of ``A`` and return an ``Eigen`` object. If ``F`` is the factorization object, the eigenvalues can be accessed with ``F[:values]`` and the eigenvectors with ``F[:vectors]``. The following functions are available for ``Eigen`` objects: ``inv``, ``det``.
-   
-   If ``A`` is ``Symmetric``, ``Hermitian`` or ``SymTridiagonal``, it is possible to calculate only a subset of the eigenvalues by specifying either a `UnitRange`` ``irange`` covering indices of the sorted eigenvalues or a pair ``vl`` and ``vu`` for the lower and upper boundaries of the eigenvalues. 
+   Computes the eigenvalue decomposition of ``A``, returning an ``Eigen``
+   factorization object ``F`` which contains the eigenvalues in ``F[:values]``
+   and the eigenvectors in the columns of the matrix ``F[:vectors]``. (The
+   ``k``th eigenvector can be obtained from the slice ``F[:vectors][:, k]``.)
+ 
+   The following functions are available for ``Eigen`` objects: ``inv``,
+   ``det``.
 
-   For general non-symmetric matrices it is possible to specify how the matrix is balanced before the eigenvector calculation. The option ``permute=true`` permutes the matrix to become closer to upper triangular, and ``scale=true`` scales the matrix by its diagonal elements to make rows and columns more equal in norm. The default is ``true`` for both options.
+   If ``A`` is :func:`Symmetric`, :func:`Hermitian` or :func:`SymTridiagonal`,
+   it is possible to calculate only a subset of the eigenvalues by specifying
+   either a :func:`UnitRange` ``irange`` covering indices of the sorted
+   eigenvalues or a pair ``vl`` and ``vu`` for the lower and upper boundaries
+   of the eigenvalues.
 
-.. function:: eigfact(A, B)
+   For general nonsymmetric matrices it is possible to specify how the matrix
+   is balanced before the eigenvector calculation. The option ``permute=true``
+   permutes the matrix to become closer to upper triangular, and ``scale=true``
+   scales the matrix by its diagonal elements to make rows and columns more
+   equal in norm. The default is ``true`` for both options.
 
-   Compute the generalized eigenvalue decomposition of ``A`` and ``B`` and return an ``GeneralizedEigen`` object. If ``F`` is the factorization object, the eigenvalues can be accessed with ``F[:values]`` and the eigenvectors with ``F[:vectors]``.
+.. function:: eigfact(A, B) -> GeneralizedEigen
+
+   Computes the generalized eigenvalue decomposition of ``A`` and ``B``,
+   returning a ``GeneralizedEigen`` factorization object ``F`` which contains
+   the generalized eigenvalues in ``F[:values]`` and the generalized
+   eigenvectors in the columns of the matrix ``F[:vectors]``. (The ``k``th
+   generalized eigenvector can be obtained from the slice ``F[:vectors][:,
+   k]``.)
 
 .. function:: eigfact!(A, [B])
 
-   ``eigfact!`` is the same as :func:`eigfact`, but saves space by overwriting the input A (and B), instead of creating a copy.
+   Same as :func:`eigfact`, but saves space by overwriting the input ``A`` (and
+   ``B``), instead of creating a copy.
 
 .. function:: hessfact(A)
 
@@ -445,8 +482,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: linreg(x, y) -> [a; b]
 
    Linear Regression. Returns ``a`` and ``b`` such that ``a+b*x`` is the closest line to the given points ``(x,y)``. In other words, this function determines parameters ``[a, b]`` that minimize the squared error between ``y`` and ``a+b*x``. 
-   
+
    **Example**::
+
       using PyPlot;
       x = float([1:12])
       y = [5.5; 6.3; 7.6; 8.8; 10.9; 11.79; 13.48; 15.02; 17.77; 20.81; 22.0; 22.99]
@@ -461,6 +499,14 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: expm(A)
 
    Matrix exponential.
+
+.. function:: lyap(A, C)
+
+   Computes the solution ``X`` to the continuous Lyapunov equation ``AX + XA' + C = 0``, where no eigenvalue of ``A`` has a zero real part and no two eigenvalues are negative complex conjugates of each other. 
+
+.. function:: sylvester(A, B, C)
+
+   Computes the solution ``X`` to the Sylvester equation ``AX + XB + C = 0``, where ``A``, ``B`` and ``C`` have compatible dimensions and ``A`` and ``-B`` have no eigenvalues with equal real part.
 
 .. function:: issym(A) -> Bool
 
@@ -498,24 +544,23 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ``eigs`` computes eigenvalues ``d`` of ``A`` using Lanczos or Arnoldi iterations for real symmetric or general nonsymmetric matrices respectively. If ``B`` is provided, the generalized eigen-problem is solved.  The following keyword arguments are supported:
     * ``nev``: Number of eigenvalues
+    * ``ncv``: Number of Krylov vectors used in the computation; should satisfy ``nev+1 <= ncv <= n`` for real symmetric problems and ``nev+2 <= ncv <= n`` for other problems; default is ``ncv = max(20,2*nev+1)``.
     * ``which``: type of eigenvalues to compute. See the note below.
 
       ========= ======================================================================================================================
       ``which`` type of eigenvalues
       --------- ----------------------------------------------------------------------------------------------------------------------
-      ``"LM"``  eigenvalues of largest magnitude
-      ``"SM"``  eigenvalues of smallest magnitude
-      ``"LA"``  largest algebraic eigenvalues (real symmetric ``A`` only)
-      ``"SA"``  smallest algebraic eigenvalues (real symmetric ``A`` only)
-      ``"BE"``  compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (symmetric ``A`` only)
-      ``"LR"``  eigenvalues of largest real part (nonsymmetric ``A`` only)
-      ``"SR"``  eigenvalues of smallest real part (nonsymmetric ``A`` only)
-      ``"LI"``  eigenvalues of largest imaginary part (nonsymmetric ``A`` only)
-      ``"SI"``  eigenvalues of smallest imaginary part (nonsymmetric ``A`` only)
+      ``:LM``   eigenvalues of largest magnitude (default)
+      ``:SM``   eigenvalues of smallest magnitude
+      ``:LR``   eigenvalues of largest real part
+      ``:SR``   eigenvalues of smallest real part
+      ``:LI``   eigenvalues of largest imaginary part (nonsymmetric or complex ``A`` only)
+      ``:SI``   eigenvalues of smallest imaginary part (nonsymmetric or complex ``A`` only)
+      ``:BE``   compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric ``A`` only)
       ========= ======================================================================================================================
 
     * ``tol``: tolerance (:math:`tol \le 0.0` defaults to ``DLAMCH('EPS')``)
-    * ``maxiter``: Maximum number of iterations
+    * ``maxiter``: Maximum number of iterations (default = 300)
     * ``sigma``: Specifies the level shift used in inverse iteration. If ``nothing`` (default), defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to ``sigma`` using shift and invert iterations.
     * ``ritzvec``: Returns the Ritz vectors ``v`` (eigenvectors) if ``true``
     * ``v0``: starting vector from which to start the iterations
@@ -533,7 +578,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: peakflops(n; parallel=false)
 
-   ``peakflops`` computes the peak flop rate of the computer by using BLAS double precision :func:`gemm!`. By default, if no arguments are specified, it multiplies a matrix of size ``n x n``, where ``n = 2000``. If the underlying BLAS is using multiple threads, higher flop rates are realized. The number of BLAS threads can be set with ``blas_set_num_threads(n)``.
+   ``peakflops`` computes the peak flop rate of the computer by using double precision :func:`Base.LinAlg.BLAS.gemm!`. By default, if no arguments are specified, it multiplies a matrix of size ``n x n``, where ``n = 2000``. If the underlying BLAS is using multiple threads, higher flop rates are realized. The number of BLAS threads can be set with ``blas_set_num_threads(n)``.
 
    If the keyword argument ``parallel`` is set to ``true``, ``peakflops`` is run in parallel on all the worker processors. The flop rate of the entire parallel computer is returned. When running in parallel, only 1 BLAS thread is used. The argument ``n`` still refers to the size of the problem that is solved on each processor.
 
@@ -771,21 +816,20 @@ Usually a function has 4 methods defined, one each for ``Float64``,
    Only the ``ul`` triangle of ``A`` is used.  ``dA`` indicates if
    ``A`` is unit-triangular (the diagonal is assumed to be all ones).
 
-.. function:: trsv!(side, ul, tA, dA, alpha, A, b)
+.. function:: trsv!(ul, tA, dA, A, b)
 
-   Overwrite ``b`` with the solution to ``A*X = alpha*b`` or one of
-   the other three variants determined by ``side`` (A on left or
-   right of ``X``) and ``tA`` (transpose A). Only the ``ul`` triangle
-   of ``A`` is used.  ``dA`` indicates if ``A`` is unit-triangular
-   (the diagonal is assumed to be all ones).  Returns the updated ``b``.
+   Overwrite ``b`` with the solution to ``A*x = b`` or one of the other two 
+   variants determined by ``tA`` (transpose A) and ``ul`` (triangle of ``A`` 
+   used).  ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed 
+   to be all ones).  Returns the updated ``b``.
 
-.. function:: trsv(side, ul, tA, dA, alpha, A, b)
+.. function:: trsv(ul, tA, dA, A, b)
 
-   Returns the solution to ``A*X = alpha*b`` or one of
-   the other three variants determined by ``side`` (A on left or
-   right of ``X``) and ``tA`` (transpose A). Only the ``ul`` triangle
-   of ``A`` is used.  ``dA`` indicates if ``A`` is unit-triangular
-   (the diagonal is assumed to be all ones).
+   Returns the solution to ``A*x = b`` or one of the other two variants 
+   determined by ``tA`` (transpose A) and ``ul`` (triangle of ``A`` is used.) 
+   ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be 
+   all ones).
+
 
 .. function:: blas_set_num_threads(n)
 

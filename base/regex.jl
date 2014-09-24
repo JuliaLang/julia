@@ -9,6 +9,8 @@ type Regex
     options::Uint32
     regex::Ptr{Void}
     extra::Ptr{Void}
+    ovec::Vector{Int32}
+
 
     function Regex(pattern::String, options::Integer)
         pattern = bytestring(pattern)
@@ -16,7 +18,7 @@ type Regex
         if (options & ~PCRE.OPTIONS_MASK) != 0
             error("invalid regex options: $options")
         end
-        re = compile(new(pattern, options, C_NULL, C_NULL))
+        re = compile(new(pattern, options, C_NULL, C_NULL, Array(Int32, 0)))
         finalizer(re,
             function(re::Regex)
                 re.extra != C_NULL && PCRE.free_study(re.extra)
@@ -43,6 +45,9 @@ function compile(regex::Regex)
     if regex.regex == C_NULL
         regex.regex = PCRE.compile(regex.pattern, regex.options & PCRE.COMPILE_MASK)
         regex.extra = PCRE.study(regex.regex, PCRE.STUDY_JIT_COMPILE)
+        ncap  = PCRE.info(regex.regex, regex.extra,
+                          PCRE.INFO_CAPTURECOUNT, Int32)
+        resize!(regex.ovec, 3(ncap+1))
     end
     regex
 end
@@ -98,23 +103,28 @@ end
 
 function ismatch(r::Regex, s::String, offset::Integer=0)
     compile(r)
-    PCRE.exec(r.regex, r.extra, bytestring(s), offset, r.options & PCRE.EXECUTE_MASK, false)
+    return PCRE.exec(r.regex, r.extra, bytestring(s), offset, r.options & PCRE.EXECUTE_MASK,
+                     r.ovec)
 end
+
 function ismatch(r::Regex, s::SubString, offset::Integer=0)
     compile(r)
-    PCRE.exec(r.regex, r.extra, s, offset, r.options & PCRE.EXECUTE_MASK, false)
+    return PCRE.exec(r.regex, r.extra, s, offset, r.options & PCRE.EXECUTE_MASK,
+                  r.ovec)
 end
 
 function match(re::Regex, str::UTF8String, idx::Integer, add_opts::Uint32=uint32(0))
     opts = re.options & PCRE.EXECUTE_MASK | add_opts
     compile(re)
-    m, n = PCRE.exec(re.regex, re.extra, str, idx-1, opts, true)
-    if isempty(m); return nothing; end
-    mat = SubString(str, m[1]+1, m[2])
+    if !PCRE.exec(re.regex, re.extra, str, idx-1, opts, re.ovec)
+        return nothing
+    end
+    n = length(re.ovec)/3 - 1
+    mat = SubString(str, re.ovec[1]+1, re.ovec[2])
     cap = Union(Nothing,SubString{UTF8String})[
-            m[2i+1] < 0 ? nothing : SubString(str, m[2i+1]+1, m[2i+2]) for i=1:n ]
-    off = Int[ m[2i+1]::Int32+1 for i=1:n ]
-    RegexMatch(mat, cap, m[1]+1, off)
+            re.ovec[2i+1] < 0 ? nothing : SubString(str, re.ovec[2i+1]+1, re.ovec[2i+2]) for i=1:n ]
+    off = Int[ re.ovec[2i+1]::Int32+1 for i=1:n ]
+    RegexMatch(mat, cap, re.ovec[1]+1, off)
 end
 
 match(re::Regex, str::Union(ByteString,SubString), idx::Integer, add_opts::Uint32=uint32(0)) =
@@ -173,8 +183,8 @@ function search(str::Union(ByteString,SubString), re::Regex, idx::Integer)
     end
     opts = re.options & PCRE.EXECUTE_MASK
     compile(re)
-    m, n = PCRE.exec(re.regex, re.extra, str, idx-1, opts, true)
-    isempty(m) ? (0:-1) : ((m[1]+1):prevind(str,m[2]+1))
+    PCRE.exec(re.regex, re.extra, str, idx-1, opts, re.ovec) ?
+        ((re.ovec[1]+1):prevind(str,re.ovec[2]+1)) : (0:-1)
 end
 search(s::String, r::Regex, idx::Integer) =
     error("regex search is only available for bytestrings; use bytestring(s) to convert")

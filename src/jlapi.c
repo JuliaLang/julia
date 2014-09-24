@@ -22,7 +22,7 @@ DLLEXPORT char * __cdecl basename(char *);
 #include <libgen.h>
 #endif
 
-DLLEXPORT char *jl_locate_sysimg(char *jlhome, char* imgpath)
+DLLEXPORT char *jl_locate_sysimg(char *jlhome, char *imgpath)
 {
     if (jlhome == NULL) {
         char *julia_path = (char*)malloc(512);

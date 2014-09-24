@@ -18,7 +18,7 @@ function mkcachedir()
             if !isdir(rootcache)
                 mkdir(rootcache)
             end
-            run(`ln -s $rootcache $cache`)
+            symlink(rootcache, cache)
             return
         end
         mkdir(cache)
@@ -33,16 +33,16 @@ function prefetch{S<:String}(pkg::String, url::String, sha1s::Vector{S})
         info("Cloning cache of $pkg from $url")
         try Git.run(`clone -q --mirror $url $cache`)
         catch
-            run(`rm -rf $cache`)
+            rm(cache, recursive=true)
             rethrow()
         end
     end
     Git.set_remote_url(url, dir=cache)
     if !all(sha1->Git.iscommit(sha1, dir=cache), sha1s)
         info("Updating cache of $pkg...")
-	    Git.success(`remote update`, dir=cache) ||
-            error("couldn't update $cache using `git remote update`")
-	end
+        Git.success(`remote update`, dir=cache) ||
+        error("couldn't update $cache using `git remote update`")
+    end
     filter(sha1->!Git.iscommit(sha1, dir=cache), sha1s)
 end
 prefetch(pkg::String, url::String, sha1::String...) = prefetch(pkg, url, String[sha1...])

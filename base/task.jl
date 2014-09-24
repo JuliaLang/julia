@@ -128,6 +128,11 @@ function produce(v)
         end
     else
         schedule(t, v)
+        # make sure `t` runs before us. otherwise, the producer might
+        # finish before `t` runs again, causing it to see the producer
+        # as done, causing done(::Task, _) to miss the value `v`.
+        # see issue #7727
+        yield()
         return q.waitq[1].result
     end
 end

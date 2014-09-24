@@ -13,8 +13,8 @@
 
 module DocCheck
 
-import Base.Help: init_help, FUNCTION_DICT, MODULE_DICT, CATEGORY_DICT
-import Base: argtype_decl_string, uncompressed_ast
+import Base.Help: init_help, FUNCTION_DICT, MODULE_DICT
+import Base: argtype_decl, uncompressed_ast
 
 export isdeprecated, isdocumented, undefined_exports, undocumented, undocumented_by_file, undocumented_rst,
        gen_undocumented_template
@@ -102,7 +102,7 @@ function _undocumented_rst()
             else
                s = symbol(line) # for submodules: string(:Sort) == "Base.Sort"
                if !isdefined(s) continue end
-               if haskey(FUNCTION_DICT, line) || haskey(MODULE_DICT, line) || haskey(CATEGORY_DICT, string(s))
+               if haskey(FUNCTION_DICT, line) || haskey(MODULE_DICT, line)
                   m = eval(symbol(getkey(MODULE_DICT, line, "Base")))
                   isdeprecated(m,s) && continue
                   havecount+=1; total+=1; continue
@@ -157,7 +157,7 @@ function gen_undocumented_template(outfile = "$JULIA_HOME/../../doc/UNDOCUMENTED
             else
                 s = symbol(line) # for submodules: string(:Sort) == "Base.Sort"
                 if !isdefined(s) continue end
-                if haskey(FUNCTION_DICT, line) || haskey(MODULE_DICT, line) || haskey(CATEGORY_DICT, string(s))
+                if haskey(FUNCTION_DICT, line) || haskey(MODULE_DICT, line)
                     continue
                 end
                 if line[1]=='@'; line = line[2:end] end
@@ -169,7 +169,7 @@ function gen_undocumented_template(outfile = "$JULIA_HOME/../../doc/UNDOCUMENTED
                         li = m.func.code
                         e = uncompressed_ast(li)
                         argnames = e.args[1]
-                        decls = map(argtype_decl_string, argnames, {m.sig...})
+                        decls = map(argtype_decl, argnames, {m.sig...})
                         args = join(decls, ",")
                         line = line * "($args)"
                     else

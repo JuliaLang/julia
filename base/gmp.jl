@@ -111,6 +111,7 @@ function BigInt(x::Integer)
 end
 
 convert(::Type{BigInt}, x::Integer) = BigInt(x)
+convert(::Type{BigInt}, x::Float16) = BigInt(x)
 convert(::Type{BigInt}, x::FloatingPoint) = BigInt(x)
 
 function convert(::Type{Int64}, x::BigInt)
@@ -428,6 +429,7 @@ function base(b::Integer, n::BigInt)
 end
 
 function ndigits0z(x::BigInt, b::Integer=10)
+    b < 0 && throw(DomainError()) # TODO: make this work correctly.
     # mpz_sizeinbase might return an answer 1 too big
     n = int(ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &x, b))
     abs(x) < big(b)^(n-1) ? n-1 : n
@@ -441,5 +443,9 @@ widemul(x::Uint128, y::Int128)  = BigInt(x)*BigInt(y)
 
 prevpow2(x::BigInt) = x.size < 0 ? -prevpow2(-x) : (x <= 2 ? x : one(BigInt) << (ndigits(x, 2)-1))
 nextpow2(x::BigInt) = x.size < 0 ? -nextpow2(-x) : (x <= 2 ? x : one(BigInt) << ndigits(x-1, 2))
+
+Base.checked_add(a::BigInt, b::BigInt) = a + b
+Base.checked_sub(a::BigInt, b::BigInt) = a - b
+Base.checked_mul(a::BigInt, b::BigInt) = a * b
 
 end # module

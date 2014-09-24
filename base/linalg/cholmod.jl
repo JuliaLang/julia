@@ -14,11 +14,11 @@ export                                  # types
 using Base.LinAlg.UMFPACK               # for decrement, increment, etc.
  
 import Base: (*), convert, copy, ctranspose, eltype, findnz, getindex, hcat,
-             isvalid, nfilled, show, size, sort!, transpose, vcat
+             isvalid, nnz, show, size, sort!, transpose, vcat
 
 import ..LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul_B,
                  cholfact, cholfact!, copy, det, diag,
-                 full, logdet, norm, scale, scale!, sparse
+                 full, isposdef!, logdet, norm, scale, scale!, sparse
 
 include("cholmod_h.jl")
 
@@ -563,8 +563,8 @@ for Ti in (:Int32,:Int64)
         end
         function CholmodSparse{Tv<:CHMVTypes}(D::CholmodDense{Tv},i::$Ti)
             CholmodSparse(ccall((@chm_nm "dense_to_sparse" $Ti
-                                 ,:libcholmod), Ptr{c_CholmodSparse{Tv,Ti}},
-                                (Ptr{c_CholmodDense{Tv,Ti}},Ptr{Uint8}),
+                                 ,:libcholmod), Ptr{c_CholmodSparse{Tv,$Ti}},
+                                (Ptr{c_CholmodDense{Tv,$Ti}},Ptr{Uint8}),
                                 &D.c,cmn($Ti)))
         end
         function CholmodSparse{Tv<:CHMVTypes}(L::CholmodFactor{Tv,$Ti})
@@ -734,13 +734,13 @@ for Ti in (:Int32,:Int64)
             CholmodSparse(ccall((@chm_nm "speye" $Ti
                                  , :libcholmod), Ptr{c_CholmodSparse{Tv,$Ti}},
                                 (Int, Int, Cint, Ptr{Uint8}),
-                                m, n, xtyp{Tv}, cmn($Ti)))
+                                m, n, xtyp(Tv), cmn($Ti)))
         end
         function chm_spzeros{Tv<:Union(Float64,Complex128)}(m::$Ti, n::$Ti, nzmax::$Ti, x::Tv)
             CholmodSparse(ccall((@chm_nm "spzeros" $Ti
                          , :libcholmod), Ptr{c_CholmodSparse{Tv,$Ti}},
-                                (Int, Int, Int, Ptr{Uint8}),
-                                m, n, nzmax, xtyp{Tv}, cmn($Ti)))
+                                (Int, Int, Int, Cint, Ptr{Uint8}),
+                                m, n, nzmax, xtyp(Tv), cmn($Ti)))
         end
 ## add chm_xtype and chm_pack
         function copy{Tv<:CHMVTypes}(L::CholmodFactor{Tv,$Ti})
@@ -778,7 +778,7 @@ for Ti in (:Int32,:Int64)
                   (Ptr{c_CholmodSparse{Tv,$Ti}},Ptr{c_CholmodSparse{Tv,$Ti}},Cint,Ptr{Uint8}),
                   &A.c,&B.c,true,cmn($Ti))
         end
-        function nfilled{Tv<:CHMVTypes}(A::CholmodSparse{Tv,$Ti})
+        function nnz{Tv<:CHMVTypes}(A::CholmodSparse{Tv,$Ti})
             ccall((@chm_nm "nnz" $Ti
                    ,:libcholmod), Int, (Ptr{c_CholmodSparse{Tv,$Ti}},Ptr{Uint8}),&A.c,cmn($Ti))
         end
@@ -1032,4 +1032,17 @@ end
 sparse(L::CholmodFactor) = sparse!(CholmodSparse(L))
 sparse(D::CholmodDense) = sparse!(CholmodSparse(D))
 sparse(T::CholmodTriplet) = sparse!(CholmodSparse(T))
+
+isposdef!{Tv<:CHMVTypes,Ti}(A::SparseMatrixCSC{Tv,Ti}) = ishermitian(A) && cholfact(A).c.minor == size(A,1)
+
 end #module
+
+# placing factorize here for now. Maybe add a new file
+function factorize(A::SparseMatrixCSC)
+    m, n = size(A)
+    if m == n
+        Ac = cholfact(A)
+        Ac.c.minor == m && ishermitian(A) && return Ac
+    end
+    return lufact(A)
+end

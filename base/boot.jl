@@ -138,6 +138,7 @@ export
     apply, fieldtype, getfield, setfield!, yieldto, throw, tuple, is, ===, isdefined,
     # arraylen, arrayref, arrayset, arraysize, tuplelen, tupleref, convert_default,
     # kwcall,
+    # sizeof    # not exported, to avoid conflicting with Base.sizeof
     # type reflection
     issubtype, typeof, isa,
     # typeassert, apply_type,
@@ -147,14 +148,15 @@ export
     JULIA_HOME, nothing, Main,
     # intrinsics module
     Intrinsics
-    #ccall, cglobal, abs_float, add_float, add_int, and_int, ashr_int,
+    #ccall, cglobal, llvmcall, abs_float, add_float, add_int, and_int, ashr_int,
     #box, bswap_int, checked_fptosi, checked_fptoui, checked_sadd,
     #checked_smul, checked_ssub, checked_uadd, checked_umul, checked_usub,
+    #checked_trunc_sint, checked_trunc_uint,
     #nan_dom_err, copysign_float, ctlz_int, ctpop_int, cttz_int,
     #div_float, eq_float, eq_int, eqfsi64, eqfui64, flipsign_int, select_value,
     #sqrt_llvm, powi_llvm,
-    #fpext64, fpiseq, fpislt, fpsiround, fpuiround, fptosi, fptoui,
-    #fptrunc32, le_float, lefsi64, lefui64, lesif64,
+    #fpext, fpiseq, fpislt, fpsiround, fpuiround, fptosi, fptoui,
+    #fptrunc, le_float, lefsi64, lefui64, lesif64,
     #leuif64, lshr_int, lt_float, ltfsi64, ltfui64, ltsif64, ltuif64, mul_float,
     #mul_int, ne_float, ne_int, neg_float, neg_int, not_int, or_int, rem_float,
     #sdiv_int, shl_int, sitofp, sle_int, slt_int, smod_int,

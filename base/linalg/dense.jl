@@ -1,33 +1,72 @@
 # Linear algebra functions for dense matrices in column major format
 
-scale!{T<:BlasFloat}(X::Array{T}, s::Number) = BLAS.scal!(length(X), convert(T,s), X, 1)
+## BLAS cutoff threshold constants
+
+const SCAL_CUTOFF = 2048
+const DOT_CUTOFF = 128
+const ASUM_CUTOFF = 32
+const NRM2_CUTOFF = 32
+
+function scale!{T<:BlasFloat}(X::Array{T}, s::T)
+    if length(X) < SCAL_CUTOFF
+        generic_scale!(X, s)
+    else
+        BLAS.scal!(length(X), s, X, 1)
+    end
+    X
+end
+
+scale!{T<:BlasFloat}(X::Array{T}, s::Number) = scale!(X, convert(T, s))
 scale!{T<:BlasComplex}(X::Array{T}, s::Real) = BLAS.scal!(length(X), oftype(real(zero(T)),s), X, 1)
 
 #Test whether a matrix is positive-definite
-isposdef!{T<:BlasFloat}(A::Matrix{T}, UL::Char) = LAPACK.potrf!(UL, A)[2] == 0
-isposdef!(A::Matrix) = ishermitian(A) && isposdef!(A, 'U')
+isposdef!{T<:BlasFloat}(A::StridedMatrix{T}, UL::Symbol) = LAPACK.potrf!(char_uplo(UL), A)[2] == 0
+isposdef!(A::StridedMatrix) = ishermitian(A) && isposdef!(A, :U)
 
-isposdef{T<:BlasFloat}(A::Matrix{T}, UL::Char) = isposdef!(copy(A), UL)
-isposdef{T<:BlasFloat}(A::Matrix{T}) = isposdef!(copy(A))
-isposdef{T<:Number}(A::Matrix{T}, UL::Char) = isposdef!(float64(A), UL)
-isposdef{T<:Number}(A::Matrix{T}) = isposdef!(float64(A))
+isposdef{T}(A::AbstractMatrix{T}, UL::Symbol) = (S = typeof(sqrt(one(T))); isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A), UL))
+isposdef{T}(A::AbstractMatrix{T}) = (S = typeof(sqrt(one(T))); isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A)))
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
+
+stride1(x::Array) = 1
+stride1(x::StridedVector) = stride(x, 1)::Int
+
+import Base: mapreduce_seq_impl, AbsFun, Abs2Fun, AddFun
+
+mapreduce_seq_impl{T<:BlasReal}(::AbsFun, ::AddFun, a::Union(Array{T},StridedVector{T}), ifirst::Int, ilast::Int) =
+    BLAS.asum(ilast-ifirst+1, pointer(a, ifirst), stride1(a))
+
+function mapreduce_seq_impl{T<:BlasReal}(::Abs2Fun, ::AddFun, a::Union(Array{T},StridedVector{T}), ifirst::Int, ilast::Int)
+    n = ilast-ifirst+1
+    px = pointer(a, ifirst)
+    incx = stride1(a)
+    BLAS.dot(n, px, incx, px, incx)
+end
+
+function mapreduce_seq_impl{T<:BlasComplex}(::Abs2Fun, ::AddFun, a::Union(Array{T},StridedVector{T}), ifirst::Int, ilast::Int)
+    n = ilast-ifirst+1
+    px = pointer(a, ifirst)
+    incx = stride1(a)
+    real(BLAS.dotc(n, px, incx, px, incx))
+end
 
 function norm{T<:BlasFloat, TI<:Integer}(x::StridedVector{T}, rx::Union(UnitRange{TI},Range{TI}))
     (minimum(rx) < 1 || maximum(rx) > length(x)) && throw(BoundsError())
     BLAS.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
 end
 
-vecnorm1{T<:BlasReal}(x::Union(Array{T},StridedVector{T})) = BLAS.asum(x)
-vecnorm2{T<:BlasFloat}(x::Union(Array{T},StridedVector{T})) = BLAS.nrm2(x)
+vecnorm1{T<:BlasReal}(x::Union(Array{T},StridedVector{T})) = 
+    length(x) < ASUM_CUTOFF ? generic_vecnorm1(x) : BLAS.asum(x)
 
-function triu!{T}(M::Matrix{T}, k::Integer)
+vecnorm2{T<:BlasFloat}(x::Union(Array{T},StridedVector{T})) = 
+    length(x) < NRM2_CUTOFF ? generic_vecnorm2(x) : BLAS.nrm2(x)
+
+function triu!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
     idx = 1
     for j = 0:n-1
         ii = min(max(0, j+1-k), m)
         for i = (idx+ii):(idx+m-1)
-            M[i] = zero(T)
+            M[i] = zero(M[i])
         end
         idx += m
     end
@@ -36,13 +75,13 @@ end
 
 triu(M::Matrix, k::Integer) = triu!(copy(M), k)
 
-function tril!{T}(M::Matrix{T}, k::Integer)
+function tril!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
     idx = 1
     for j = 0:n-1
         ii = min(max(0, j-k), m)
         for i = idx:(idx+ii-1)
-            M[i] = zero(T)
+            M[i] = zero(M[i])
         end
         idx += m
     end
@@ -69,12 +108,8 @@ function gradient(F::Vector, h::Vector)
 end
 
 function diagind(m::Integer, n::Integer, k::Integer=0)
-    if 0 < k < n
-        return range(k*m+1, m+1, min(m, n-k))
-    elseif 0 <= -k <= m
-        return range(1-k, m+1, min(m+k,n))
-    end
-    throw(BoundsError())
+    -m <= k <= n || throw(BoundsError())
+    k <= 0 ? range(1-k, m+1, min(m+k, n)) : range(k*m+1, m+1, min(m, n-k))
 end
 
 diagind(A::AbstractMatrix, k::Integer=0) = diagind(size(A,1), size(A,2), k)
@@ -234,7 +269,7 @@ function expm!{T<:BlasFloat}(A::StridedMatrix{T})
         end
     end
 
-	# Undo the balancing
+    # Undo the balancing
     for j = ilo:ihi
         scj = scale[j]
         for i = 1:n
@@ -268,7 +303,7 @@ function sqrtm{T<:Real}(A::StridedMatrix{T})
     issym(A) && return sqrtm(Symmetric(A))
     n = chksquare(A)
     SchurF = schurfact(complex(A))
-    R = full(sqrtm(Triangular(SchurF[:T])))
+    R = full(sqrtm(Triangular(SchurF[:T], :U, false)))
     retmat = SchurF[:vectors]*R*SchurF[:vectors]'
     all(imag(retmat) .== 0) ? real(retmat) : retmat
 end
@@ -276,24 +311,23 @@ function sqrtm{T<:Complex}(A::StridedMatrix{T})
     ishermitian(A) && return sqrtm(Hermitian(A))
     n = chksquare(A)
     SchurF = schurfact(A)
-    R = full(sqrtm(Triangular(SchurF[:T])))
+    R = full(sqrtm(Triangular(SchurF[:T], :U, false)))
     SchurF[:vectors]*R*SchurF[:vectors]'
 end
 sqrtm(a::Number) = (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b)
 sqrtm(a::Complex) = sqrt(a)
 
-function det(A::Matrix)
-    (istriu(A) || istril(A)) && return det(Triangular(A, :U, false))
-    return det(lufact(A))
-end
-det(x::Number) = x
-
-logdet(A::Matrix) = logdet(lufact(A))
-
-function inv(A::Matrix)
-    if istriu(A) return inv(Triangular(A, :U, false)) end
-    if istril(A) return inv(Triangular(A, :L, false)) end
-    return inv(lufact(A))
+function inv{S}(A::StridedMatrix{S})
+    T = typeof(one(S)/one(S))
+    Ac = convert(AbstractMatrix{T}, A)
+    if istriu(Ac)
+        Ai = inv(Triangular(A, :U, false))
+    elseif istril(Ac) 
+        Ai = inv(Triangular(A, :L, false))
+    else 
+        Ai = inv(lufact(Ac))
+    end
+    return convert(typeof(Ac), Ai)
 end
 
 function factorize{T}(A::Matrix{T})
@@ -418,3 +452,28 @@ function cond(A::StridedMatrix, p::Real=2)
     end
     throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2 or Inf"))
 end
+
+## Lyapunov and Sylvester equation
+
+# AX + XB + C = 0
+function sylvester{T<:BlasFloat}(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T})
+    RA, QA = schur(A)
+    RB, QB = schur(B)
+
+    D = -Ac_mul_B(QA,C*QB)
+    Y, scale = LAPACK.trsyl!('N','N', RA, RB, D)
+    scale!(QA*A_mul_Bc(Y,QB), inv(scale))
+end
+sylvester{T<:Integer}(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T}) = sylvester(float(A), float(B), float(C))
+
+# AX + XA' + C = 0
+function lyap{T<:BlasFloat}(A::StridedMatrix{T},C::StridedMatrix{T})
+    R, Q = schur(A)
+
+    D = -Ac_mul_B(Q,C*Q)
+    Y, scale = LAPACK.trsyl!('N', T <: Complex ? 'C' : 'T', R, R, D)
+    scale!(Q*A_mul_Bc(Y,Q), inv(scale))
+end
+lyap{T<:Integer}(A::StridedMatrix{T},C::StridedMatrix{T}) = lyap(float(A), float(C))
+lyap{T<:Number}(a::T, c::T) = -c/(2a)
+                                    

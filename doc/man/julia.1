@@ -12,7 +12,6 @@
 .\" # TODOs:
 .\" 1. Simple, hopefully portable way to get the man page on everyone's manpath.
 .\"    (The whole point was to be able to simply `man julia`!)
-.\" 2. Put options in alphabetical order instead of the order from julia --help?
 .\"
 .\" Possible sections to add to man page:
 .\" - licensing
@@ -50,66 +49,23 @@ For a more in-depth discussion of the rationale and advantages of Julia
 over other systems, please see the online manual:
 http://docs.julialang.org/en/latest/manual/
 
-If a Julia source file is given as \fIprogram\fP (possibly with arguments in
-\fIargs\fP) then, instead of launching an interactive session, Julia executes
-the program and exits.
+If a Julia source file is given as a \fIprogram\fP (optionally followed by
+ arguments in \fIargs\fP) Julia will execute the program and exit.
 
 .\" This section was taken nearly verbatim from the output of `julia --help`
 .SH "COMMAND-LINE OPTIONS"
 .TP 25
--v --version
-Display version information
 
 .TP
--q --quiet
-Quiet startup without banner
-
-.TP
---color=<yes|no>
-Turn colored prompts on (yes) and off (no).
-
-.TP
--H --home <dir>
-Load files relative to <dir>
-
-.TP
--T --tab <size>
-Set REPL tab width to <size>
-
-.TP
--e --eval <expr>
+-e, --eval <expr>
 Evaluate <expr>
 
 .TP
--E --print <expr>
+-E, --print <expr>
 Evaluate and show <expr>
 
 .TP
--P --post-boot <expr>
-Evaluate <expr> right after boot
-
-.TP
--L --load file
-Load <file> right after boot on all processors
-
-.TP
--J --sysimage file
-Start up with the given system image file
-
-.TP
--p n
-Run n local processes
-
-.TP
---machinefile file
-Run processes on hosts listed in file
-
-.TP
---no-history
-Don't load or save history
-
-.TP
--f --no-startup
+-f, --no-startup
 Don't load ~/.juliarc.jl
 
 .TP
@@ -117,9 +73,64 @@ Don't load ~/.juliarc.jl
 Load ~/.juliarc.jl, then handle remaining inputs
 
 .TP
--h --help
-Print a help message displaying command-line arguments
+-h, --help
+Print this message
 
+.TP
+-H, --home <dir>
+Set location of julia executable
+
+.TP
+-i
+Force isinteractive() to be true
+
+.TP
+-J, --sysimage <file>
+Start up with the given system image file
+
+.TP
+-L, --load <file>
+Load <file> right after boot on all processors
+
+.TP
+-p <n>
+Run n local processes
+
+.TP
+-P, --post-boot <expr>
+Evaluate <expr> right after boot
+
+.TP
+-q, --quiet
+Quiet startup without banner
+
+.TP
+-v, --version
+Display version information
+
+.TP
+--code-coverage
+Count executions of source lines
+
+.TP
+--color={yes|no}
+Enable or disable color text
+
+.TP
+--check-bounds={yes|no}
+Emit bounds checks always or never (ignoring declarations)
+
+.TP
+--int-literals={32|64}
+Select integer literal size independent of platform
+
+.TP
+--machinefile <file>
+Run processes on hosts listed in <file>
+
+.TP
+--no-history-file
+Don't load or save history
 
 .SH FILES
 .I ~/.juliarc.jl

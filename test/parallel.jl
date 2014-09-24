@@ -202,3 +202,13 @@ if haskey(ENV, "PTEST_FULL")
 
     println("END of parallel tests that print errors")
 end
+
+# issue #7727
+let A = {}, B = {}
+    t = @task produce(11)
+    @sync begin
+        @async for x in t; push!(A,x); end
+        @async for x in t; push!(B,x); end
+    end
+    @test (A == {11}) != (B == {11})
+end

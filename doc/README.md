@@ -6,8 +6,8 @@ is the [Documenting Python](http://docs.python.org/devguide/documenting.html)
 chapter of the Python Developer's Guide.
 
 
-Building the documentation
---------------------------
+Prerequisites for building the documentation
+--------------------------------------------
 
 The documentation is built using [Sphinx](http://sphinx.pocoo.org/) and LaTeX.
 On ubuntu, you'll need the following packages installed:
@@ -23,7 +23,20 @@ Use pip to install sphinx_rtd_theme:
 
     $ sudo pip install sphinx_rtd_theme
 
-Then run
+
+On OS X, you can install these packages with [homebrew](http://brew.sh/) and [MacTex](https://tug.org/mactex/)
+
+    brew install python
+    brew install sphinx
+	(install MacTex using the GUI installer)
+
+and install sphinx_rtd_theme as for Ubuntu.
+
+
+Building the documentation
+--------------------------
+
+Build the documentation by running
 
     $ make helpdb.jl
     $ make html

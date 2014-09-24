@@ -231,10 +231,10 @@ function getindex(r::RemoteRef, args...)
     end
 end
 
-getindex(d::DArray, i::Int) = getindex(d, ind2sub(size(d), i))
-getindex(d::DArray, i::Int...) = getindex(d, sub2ind(size(d), i...))
+getindex(d::DArray, i::Int) = getindex_tuple(d, ind2sub(size(d), i))
+getindex(d::DArray, i::Int...) = getindex_tuple(d, i)
 
-function getindex{T}(d::DArray{T}, I::(Int...))
+function getindex_tuple{T}(d::DArray{T}, I::(Int...))
     chidx = locate(d, I...)
     chunk = d.chunks[chidx...]
     idxs = d.indexes[chidx...]

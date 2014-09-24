@@ -40,7 +40,7 @@ end
 
 #aCb{T, S}(A::BitMatrix{T}, B::BitMatrix{S}) = aTb(A, B)
 
-function triu(B::BitMatrix, k::Integer)
+function triu(B::BitMatrix, k::Integer=0)
     m,n = size(B)
     A = falses(m,n)
     Ac = A.chunks
@@ -52,7 +52,7 @@ function triu(B::BitMatrix, k::Integer)
     A
 end
 
-function tril(B::BitMatrix, k::Integer)
+function tril(B::BitMatrix, k::Integer=0)
     m,n = size(B)
     A = falses(m, n)
     Ac = A.chunks

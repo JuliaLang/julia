@@ -97,8 +97,8 @@ requested conversion:
 .. doctest::
 
     julia> convert(FloatingPoint, "foo")
-    ERROR: no method convert(Type{FloatingPoint}, ASCIIString)
-     in convert at base.jl:11
+    ERROR: `convert` has no method matching convert(::Type{FloatingPoint}, ::ASCIIString)
+     in convert at base.jl:13
 
 Some languages consider parsing strings as numbers or formatting
 numbers as strings to be conversions (many dynamic languages will even
@@ -118,7 +118,13 @@ number to a boolean is simply this::
 The type of the first argument of this method is a :ref:`singleton
 type <man-singleton-types>`, ``Type{Bool}``, the only instance of
 which is ``Bool``. Thus, this method is only invoked when the first
-argument is the type value ``Bool``. When invoked, the method determines
+argument is the type value ``Bool``. Notice the syntax used for the first
+argument: the argument name is omitted prior to the ``::`` symbol, and only
+the type is given.  This is the syntax in Julia for a function argument whose type is
+specified but whose value is never used in the function body.  In this example,
+since the type is a singleton, there would never be any reason to use its value
+within the body.
+When invoked, the method determines
 whether a numeric value is true or false as a boolean, by comparing it
 to zero:
 
@@ -132,7 +138,7 @@ to zero:
 
     julia> convert(Bool, 1im)
     ERROR: InexactError()
-     in convert at complex.jl:27
+     in convert at complex.jl:18
 
     julia> convert(Bool, 0im)
     false
@@ -158,10 +164,10 @@ conversions declared in
 `rational.jl <https://github.com/JuliaLang/julia/blob/master/base/rational.jl>`_,
 right after the declaration of the type and its constructors::
 
-    convert{T<:Int}(::Type{Rational{T}}, x::Rational) = Rational(convert(T,x.num),convert(T,x.den))
-    convert{T<:Int}(::Type{Rational{T}}, x::Int) = Rational(convert(T,x), convert(T,1))
+    convert{T<:Integer}(::Type{Rational{T}}, x::Rational) = Rational(convert(T,x.num),convert(T,x.den))
+    convert{T<:Integer}(::Type{Rational{T}}, x::Integer) = Rational(convert(T,x), convert(T,1))
 
-    function convert{T<:Int}(::Type{Rational{T}}, x::FloatingPoint, tol::Real)
+    function convert{T<:Integer}(::Type{Rational{T}}, x::FloatingPoint, tol::Real)
         if isnan(x); return zero(T)//zero(T); end
         if isinf(x); return sign(x)//zero(T); end
         y = x
@@ -176,10 +182,10 @@ right after the declaration of the type and its constructors::
             y = 1/y
         end
     end
-    convert{T<:Int}(rt::Type{Rational{T}}, x::FloatingPoint) = convert(rt,x,eps(x))
+    convert{T<:Integer}(rt::Type{Rational{T}}, x::FloatingPoint) = convert(rt,x,eps(x))
 
     convert{T<:FloatingPoint}(::Type{T}, x::Rational) = convert(T,x.num)/convert(T,x.den)
-    convert{T<:Int}(::Type{T}, x::Rational) = div(convert(T,x.num),convert(T,x.den))
+    convert{T<:Integer}(::Type{T}, x::Rational) = div(convert(T,x.num),convert(T,x.den))
 
 The initial four convert methods provide conversions to rational types.
 The first method converts one type of rational to another type of
@@ -239,7 +245,7 @@ promotion is to convert numeric arguments to a common type:
     (1.5 + 0.0im,0.0 + 1.0im)
 
     julia> promote(1 + 2im, 3//4)
-    (1//1 + 2//1im,3//4 + 0//1im)
+    (1//1 + 2//1*im,3//4 + 0//1*im)
 
 Floating-point values are promoted to the largest of the floating-point
 argument types. Integer values are promoted to the larger of either the
@@ -353,10 +359,10 @@ Finally, we finish off our ongoing case study of Julia's rational number
 type, which makes relatively sophisticated use of the promotion
 mechanism with the following promotion rules::
 
-    promote_rule{T<:Int}(::Type{Rational{T}}, ::Type{T}) = Rational{T}
-    promote_rule{T<:Int,S<:Int}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
-    promote_rule{T<:Int,S<:Int}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
-    promote_rule{T<:Int,S<:FloatingPoint}(::Type{Rational{T}}, ::Type{S}) = promote_type(T,S)
+    promote_rule{T<:Integer}(::Type{Rational{T}}, ::Type{T}) = Rational{T}
+    promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
+    promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
+    promote_rule{T<:Integer,S<:FloatingPoint}(::Type{Rational{T}}, ::Type{S}) = promote_type(T,S)
 
 The first rule asserts that promotion of a rational number with its own
 numerator/denominator type, simply promotes to itself. The second rule

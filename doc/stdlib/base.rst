@@ -7,7 +7,7 @@
 Introduction
 ------------
 
-The Julia standard library contains a range of functions and macros appropriate for performing scientific and numerical computing, but is also as broad as those of many general purpose programming languages.  Additional functionality is available from a growing collection of :ref:`available-packages`. Functions are grouped by topic below.  
+The Julia standard library contains a range of functions and macros appropriate for performing scientific and numerical computing, but is also as broad as those of many general purpose programming languages.  Additional functionality is available from a growing collection of available packages. Functions are grouped by topic below.  
 
 Some general notes:
 
@@ -26,7 +26,7 @@ Getting Around
 
 .. function:: quit()
 
-   Quit the program indicating that the processes completed succesfully. This function calls ``exit(0)`` (see :func:`exit`).
+   Quit the program indicating that the processes completed successfully. This function calls ``exit(0)`` (see :func:`exit`).
 
 .. function:: atexit(f)
 
@@ -38,7 +38,7 @@ Getting Around
 
 .. function:: whos([Module,] [pattern::Regex])
 
-   Print information about global variables in a module, optionally restricted
+   Print information about exported global variables in a module, optionally restricted
    to those matching ``pattern``.
 
 .. function:: edit(file::String, [line])
@@ -75,7 +75,9 @@ Getting Around
 
 .. function:: require(file::String...)
 
-   Load source files once, in the context of the ``Main`` module, on every active node, searching the system-wide ``LOAD_PATH`` for files. ``require`` is considered a top-level operation, so it sets the current ``include`` path but does not use it to search for files (see help for ``include``). This function is typically used to load library code, and is implicitly called by ``using`` to load packages.
+   Load source files once, in the context of the ``Main`` module, on every active node, searching standard locations for files. ``require`` is considered a top-level operation, so it sets the current ``include`` path but does not use it to search for files (see help for ``include``). This function is typically used to load library code, and is implicitly called by ``using`` to load packages.
+
+   When searching for files, ``require`` first looks in the current working directory, then looks for package code under ``Pkg.dir()``, then tries paths in the global array ``LOAD_PATH``.
 
 .. function:: reload(file::String)
 
@@ -111,11 +113,14 @@ Getting Around
 
    If ``types`` is specified, an array of methods whose types match is returned.
 
-.. function:: methodswith(typ[, showparents])
+.. function:: methodswith(typ[, module or function][, showparents])
 
    Return an array of methods with an argument of type ``typ``. If optional
    ``showparents`` is ``true``, also return arguments with a parent type
    of ``typ``, excluding type ``Any``.
+
+   The optional second argument restricts the search to a particular module
+   or function.
 
 .. function:: @show
 
@@ -126,12 +131,22 @@ Getting Around
    Print information about the version of Julia in use. If the ``verbose`` argument
    is true, detailed system information is shown as well.
 
+.. function:: workspace()
+
+   Replace the top-level module (``Main``) with a new one, providing a clean workspace.
+   The previous ``Main`` module is made available as ``LastMain``. A previously-loaded
+   package can be accessed using a statement such as ``using LastMain.Package``.
+
+   This function should only be used interactively.
+
 All Objects
 -----------
 
 .. function:: is(x, y) -> Bool
+              ===(x,y) -> Bool
+              ≡(x,y) -> Bool
 
-   Determine whether ``x`` and ``y`` are identical, in the sense that no program could distinguish them. Compares mutable objects by address in memory, and compares immutable objects (such as numbers) by contents at the bit level. This function is sometimes called ``egal``. The ``===`` operator is an alias for this function.
+   Determine whether ``x`` and ``y`` are identical, in the sense that no program could distinguish them. Compares mutable objects by address in memory, and compares immutable objects (such as numbers) by contents at the bit level. This function is sometimes called ``egal``.
 
 .. function:: isa(x, type) -> Bool
 
@@ -236,10 +251,12 @@ All Objects
    a type with at least as much range and precision as the argument, and usually more).
    Otherwise the argument ``x`` is converted to ``widen(typeof(x))``.
 
-   **Examples**::
+   .. doctest::
    
 	   julia> widen(Int32)
 	   Int64
+
+   .. doctest::
 	   
 	   julia> widen(1.5f0)
 	   1.5
@@ -305,7 +322,7 @@ Types
 
 .. function:: promote_type(type1, type2)
 
-   Determine a type big enough to hold values of each argument type without loss, whenever possible. In some cases, where no type exists which to which both types can be promoted losslessly, some loss is tolerated; for example, ``promote_type(Int64,Float64)`` returns ``Float64`` even though strictly, not all ``Int64`` values can be represented exactly as ``Float64`` values.
+   Determine a type big enough to hold values of each argument type without loss, whenever possible. In some cases, where no type exists to which both types can be promoted losslessly, some loss is tolerated; for example, ``promote_type(Int64,Float64)`` returns ``Float64`` even though strictly, not all ``Int64`` values can be represented exactly as ``Float64`` values.
 
 .. function:: promote_rule(type1, type2)
 
@@ -327,10 +344,26 @@ Types
 .. function:: fieldoffsets(type)
 
    The byte offset of each field of a type relative to the data start. For example, we could use it
-   in the following manner to summarize information about a struct type::
+   in the following manner to summarize information about a struct type:
 
-        structinfo(T) = [zip(fieldoffsets(T),names(T),T.types)...]
-        structinfo(StatStruct)
+   .. doctest::
+
+      julia> structinfo(T) = [zip(fieldoffsets(T),names(T),T.types)...];
+
+      julia> structinfo(StatStruct)
+      12-element Array{(Int64,Symbol,DataType),1}:
+       (0,:device,Uint64) 
+       (8,:inode,Uint64)  
+       (16,:mode,Uint64)  
+       (24,:nlink,Int64)  
+       (32,:uid,Uint64)   
+       (40,:gid,Uint64)   
+       (48,:rdev,Uint64)  
+       (56,:size,Int64)   
+       (64,:blksize,Int64)
+       (72,:blocks,Int64) 
+       (80,:mtime,Float64)
+       (88,:ctime,Float64)
 
 .. function:: fieldtype(value, name::Symbol)
 
@@ -343,6 +376,14 @@ Types
 .. function:: isbits(T)
 
    True if ``T`` is a "plain data" type, meaning it is immutable and contains no references to other values. Typical examples are numeric types such as ``Uint8``, ``Float64``, and ``Complex{Float64}``.
+
+   .. doctest::
+
+      julia> isbits(Complex{Float64})
+      true
+
+      julia> isbits(Complex)
+      false
 
 .. function:: isleaftype(T)
 
@@ -367,17 +408,14 @@ Generic Functions
    The elements generated by all the arguments are appended into a single
    list, which is then passed to ``f`` as its argument list.
    
-   **Example**:
+   .. doctest::
    	
-   	# Define a function f
-   	julia> function f(x, y)
+   	julia> function f(x, y) # Define a function f
    	           x + y
-   	       end
+   	       end;
    	
-   	# Apply f with 1 and 2 as arguments
-   	julia> apply(f, [1 2])
+   	julia> apply(f, [1 2]) # Apply f with 1 and 2 as arguments
    	3
-
    
    ``apply`` is called to implement the ``...`` argument splicing syntax,
    and is usually not called directly: ``apply(f,x) === f(x...)``
@@ -386,7 +424,8 @@ Generic Functions
 
    Determine whether the given generic function has a method matching the given tuple of argument types.
 
-   **Example**::
+   .. doctest::
+
    	julia> method_exists(length, (Array,))
    	true
 
@@ -394,11 +433,11 @@ Generic Functions
 
    Determine whether the given generic function has a method applicable to the given arguments.
    
-   **Examples**::
+   .. doctest::
    
    	julia> function f(x, y)
    	           x + y
-   	       end
+   	       end;
    	       
    	julia> applicable(f, 1)
    	false
@@ -414,8 +453,10 @@ Generic Functions
 
    Applies a function to the preceding argument. This allows for easy function chaining.
 
-   **Example**: ``[1:5] |> x->x.^2 |> sum |> inv``
+   .. doctest::
 
+      julia> [1:5] |> x->x.^2 |> sum |> inv
+      0.01818181818181818
 
 Syntax
 ------
@@ -436,7 +477,7 @@ Syntax
 
 .. function:: esc(e::ANY)
 
-   Only valid in the context of an Expr returned from a macro. Prevents the macro hygine pass from turning embedded variables into gensym variables. See the :ref:`man-macros`
+   Only valid in the context of an Expr returned from a macro. Prevents the macro hygiene pass from turning embedded variables into gensym variables. See the :ref:`man-macros`
    section of the Metaprogramming chapter of the manual for more details and examples.
 
 .. function:: gensym([tag])
@@ -445,7 +486,7 @@ Syntax
 
 .. function:: @gensym
 
-   Generates a gensym symbol for a variable. For example, `@gensym x y` is transformed into `x = gensym("x"); y = gensym("y")`.
+   Generates a gensym symbol for a variable. For example, ``@gensym x y`` is transformed into ``x = gensym("x"); y = gensym("y")``.
 
 .. function:: parse(str, start; greedy=true, raise=true)
 
@@ -461,7 +502,7 @@ Iteration
 Sequential iteration is implemented by the methods ``start``, ``done``, and
 ``next``. The general ``for`` loop::
 
-    for i = I
+    for i = I   # or  "for i in I"
       # body
     end
 
@@ -495,10 +536,12 @@ The ``state`` object may be anything, and should be chosen appropriately for eac
 
 .. function:: enumerate(iter)
 
-   Return an iterator that yields ``(i, x)`` where ``i`` is an index starting at 1, and ``x`` is the ``ith`` value from the given iterator. It's useful when you need not only the values `x` over which you are iterating, but also the index `i` of the iterations.
+   Return an iterator that yields ``(i, x)`` where ``i`` is an index starting at 1, and ``x`` is the ``i``\ th value from the given iterator. It's useful when you need not only the values ``x`` over which you are iterating, but also the index ``i`` of the iterations.
    
-   **Example**::
-   	julia> a = ["a", "b", "c"]
+   .. doctest::
+
+   	julia> a = ["a", "b", "c"];
+
    	julia> for (index, value) in enumerate(a)
                    println("$index $value")
                end
@@ -507,7 +550,7 @@ The ``state`` object may be anything, and should be chosen appropriately for eac
         3 c
 
 
-Fully implemented by: ``Range``, ``Range1``, ``NDRange``, ``Tuple``, ``Real``, ``AbstractArray``, ``IntSet``, ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``, ``EachLine``, ``String``, ``Set``, ``Task``.
+Fully implemented by: ``Range``, ``UnitRange``, ``NDRange``, ``Tuple``, ``Real``, ``AbstractArray``, ``IntSet``, ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``, ``EachLine``, ``String``, ``Set``, ``Task``.
 
 General Collections
 -------------------
@@ -516,16 +559,13 @@ General Collections
 
    Determine whether a collection is empty (has no elements).
    
-   **Examples**::
+   .. doctest::
    
-   	julia> a = []
-   	julia> isempty(a)
+   	julia> isempty([])
    	true
 	
-   	julia> b = [1 2 3]
-   	julia> isempty(b)
+   	julia> isempty([1 2 3])
    	false
-
 
 .. function:: empty!(collection) -> collection
 
@@ -539,17 +579,21 @@ General Collections
 
    Returns the last index of the collection.
 
-   **Example**::
-   
+   .. doctest::
+
    	julia> endof([1,2,4])
    	3
 
-Fully implemented by: ``Range``, ``Range1``, ``Tuple``, ``Number``, ``AbstractArray``, ``IntSet``, ``Dict``, ``WeakKeyDict``, ``String``, ``Set``.
+Fully implemented by: ``Range``, ``UnitRange``, ``Tuple``, ``Number``, ``AbstractArray``, ``IntSet``, ``Dict``, ``WeakKeyDict``, ``String``, ``Set``.
 
 Iterable Collections
 --------------------
 
 .. function:: in(item, collection) -> Bool
+              ∈(item,collection) -> Bool
+              ∋(collection,item) -> Bool
+              ∉(item,collection) -> Bool
+              ∌(collection,item) -> Bool
 
    Determine whether an item is in the given collection, in the sense that it is
    ``==`` to one of the values generated by iterating over the collection.
@@ -598,13 +642,25 @@ Iterable Collections
    the algorithm. Note that the elements are not reordered if you use an ordered
    collection.
 
+.. function:: reduce(op, itr)
+
+   Like ``reduce`` but using the first element as v0.
+
 .. function:: foldl(op, v0, itr)
 
-   Like ``reduce``, but with guaranteed left associativity. 
+   Like ``reduce``, but with guaranteed left associativity.
+
+.. function:: foldl(op, itr)
+
+   Like ``foldl``, but using the first element as v0.
 
 .. function:: foldr(op, v0, itr)
 
-   Like ``reduce``, but with guaranteed right associativity. 
+   Like ``reduce``, but with guaranteed right associativity.
+
+.. function:: foldr(op, itr)
+
+   Like ``foldr``, but using the last element as v0.
 
 .. function:: maximum(itr)
 
@@ -663,6 +719,32 @@ Iterable Collections
    For an array input, returns the value and index of the minimum over
    the given dimensions.
 
+.. function:: maxabs(itr)
+
+   Compute the maximum absolute value of a collection of values.
+
+.. function:: maxabs(A, dims)
+
+   Compute the maximum absolute values over given dimensions.
+
+.. function:: maxabs!(r, A)
+
+   Compute the maximum absolute values over the singleton dimensions of ``r``,
+   and write values to ``r``.
+
+.. function:: minabs(itr)
+
+   Compute the minimum absolute value of a collection of values.
+
+.. function:: minabs(A, dims)
+
+   Compute the minimum absolute values over given dimensions.
+
+.. function:: minabs!(r, A)
+
+   Compute the minimum absolute values over the singleton dimensions of ``r``,
+   and write values to ``r``.
+
 .. function:: sum(itr)
 
    Returns the sum of all elements in a collection.
@@ -679,6 +761,36 @@ Iterable Collections
 .. function:: sum(f, itr)
 
    Sum the results of calling function ``f`` on each element of ``itr``.
+
+.. function:: sumabs(itr)
+
+   Sum absolute values of all elements in a collection. This is
+   equivalent to `sum(abs(itr))` but faster.
+
+.. function:: sumabs(A, dims)
+
+   Sum absolute values of elements of an array over the given
+   dimensions.
+
+.. function:: sumabs!(r, A)
+
+   Sum absolute values of elements of ``A`` over the singleton
+   dimensions of ``r``, and write results to ``r``.
+
+.. function:: sumabs2(itr)
+
+   Sum squared absolute values of all elements in a collection. This
+   is equivalent to `sum(abs2(itr))` but faster.
+
+.. function:: sumabs2(A, dims)
+
+   Sum squared absolute values of elements of an array over the given
+   dimensions.
+
+.. function:: sumabs2!(r, A)
+
+   Sum squared absolute values of elements of ``A`` over the singleton
+   dimensions of ``r``, and write results to ``r``.
 
 .. function:: prod(itr)
 
@@ -731,8 +843,8 @@ Iterable Collections
 
    Determine whether predicate ``p`` returns true for all elements of ``itr``.
 
-   **Example**::
-   
+   .. doctest::
+
    	julia> all(i->(4<=i<=6), [4,5,6])
    	true
 
@@ -741,22 +853,38 @@ Iterable Collections
    Transform collection ``c`` by applying ``f`` to each element.
    For multiple collection arguments, apply ``f`` elementwise.
 
-   **Examples**::
-   
-   	julia> map((x) -> x * 2, [1, 2, 3])
-   	[2, 4, 6]
-   	julia> map(+, [1, 2, 3], [10, 20, 30])
-   	[11, 22, 33]
+   .. doctest::
+
+      julia> map((x) -> x * 2, [1, 2, 3])
+      3-element Array{Int64,1}:
+       2
+       4
+       6
+
+      julia> map(+, [1, 2, 3], [10, 20, 30])
+      3-element Array{Int64,1}:
+       11
+       22
+       33
 
 .. function:: map!(function, collection)
 
    In-place version of :func:`map`.
 
+.. function:: map!(function, destination, collection...)
+
+   Like :func:`map()`, but stores the result in ``destination`` rather than a
+   new collection. ``destination`` must be at least as large as the first
+   collection.
+
 .. function:: mapreduce(f, op, itr)
 
    Applies function ``f`` to each element in ``itr`` and then reduces the result using the binary function ``op``.
 
-   **Example**: ``mapreduce(x->x^2, +, [1:3]) == 1 + 4 + 9 == 14``
+   .. doctest::
+
+      julia> mapreduce(x->x^2, +, [1:3]) # == 1 + 4 + 9
+      14
 
    The associativity of the reduction is implementation-dependent; if you
    need a particular associativity, e.g. left-to-right, you should write
@@ -764,12 +892,14 @@ Iterable Collections
 
 .. function:: first(coll)
 
-   Get the first element of an iterable collection.
+   Get the first element of an iterable collection. Returns the start point of a ``Range``
+   even if it is empty.
 
 .. function:: last(coll)
 
    Get the last element of an ordered collection, if it can be computed in O(1) time.
    This is accomplished by calling ``endof`` to get the last index.
+   Returns the end point of a ``Range`` even if it is empty.
 
 .. function:: step(r)
 
@@ -784,6 +914,9 @@ Iterable Collections
    Return an array of type ``Array{element_type,1}`` of all items in a collection.
 
 .. function:: issubset(a, b)
+              ⊆(A,S) -> Bool
+              ⊈(A,S) -> Bool
+              ⊊(A,S) -> Bool
 
    Determine whether every element of ``a`` is also in ``b``, using the
    ``in`` function.
@@ -816,7 +949,7 @@ Indexable Collections
 
 Fully implemented by: ``Array``, ``DArray``, ``BitArray``, ``AbstractArray``, ``SubArray``, ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``, ``String``.
 
-Partially implemented by: ``Range``, ``Range1``, ``Tuple``.
+Partially implemented by: ``Range``, ``UnitRange``, ``Tuple``.
 
 Associative Collections
 -----------------------
@@ -834,7 +967,11 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 
 .. function:: Dict()
 
-   ``Dict{K,V}()`` constructs a hashtable with keys of type K and values of type V.
+   ``Dict{K,V}()`` constructs a hash 
+
+
+
+   table with keys of type K and values of type V.
    The literal syntax is ``{"A"=>1, "B"=>2}`` for a ``Dict{Any,Any}``, or
    ``["A"=>1, "B"=>2]`` for a ``Dict`` of inferred type.
 
@@ -854,7 +991,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 
      get(dict, key) do
          # default value calculated here
-	 time()
+	      time()
      end
 
 .. function:: get!(collection, key, default)
@@ -869,7 +1006,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 
      get!(dict, key) do
          # default value calculated here
-	 time()
+	      time()
      end
 
 .. function:: getkey(collection, key, default)
@@ -878,7 +1015,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 
 .. function:: delete!(collection, key)
 
-   Delete the mapping for the given key in a collection, and return the colection.
+   Delete the mapping for the given key in a collection, and return the collection.
 
 .. function:: pop!(collection, key[, default])
 
@@ -918,9 +1055,10 @@ Set-Like Collections
 
 .. function:: IntSet([itr])
 
-   Construct a sorted set of the integers generated by the given iterable object, or an empty set. Implemented as a bit string, and therefore designed for dense integer sets. If the set will be sparse (for example holding a single very large integer), use ``Set`` instead.
+   Construct a sorted set of the integers generated by the given iterable object, or an empty set. Implemented as a bit string, and therefore designed for dense integer sets. Only non-negative integers can be stored. If the set will be sparse (for example holding a single very large integer), use ``Set`` instead.
 
 .. function:: union(s1,s2...)
+              ∪(s1,s2)
 
    Construct the union of two or more sets. Maintains order with arrays.
 
@@ -929,6 +1067,7 @@ Set-Like Collections
    Union each element of ``iterable`` into set ``s`` in-place.
 
 .. function:: intersect(s1,s2...)
+              ∩(s1,s2)
 
    Construct the intersection of two or more sets. Maintains order and multiplicity of the first argument for arrays and ranges.
 
@@ -961,19 +1100,20 @@ Set-Like Collections
 
 .. function:: complement(s)
 
-   Returns the set-complement of IntSet s.
+   Returns the set-complement of IntSet ``s``.
 
 .. function:: complement!(s)
 
-   Mutates IntSet s into its set-complement.
+   Mutates IntSet ``s`` into its set-complement.
 
 .. function:: intersect!(s1, s2)
 
-   Intersects IntSets s1 and s2 and overwrites the set s1 with the result. If needed, s1 will be expanded to the size of s2.
+   Intersects IntSets ``s1`` and ``s2`` and overwrites the set ``s1`` with the result. If needed, s1 will be expanded to the size of ``s2``.
 
 .. function:: issubset(A, S) -> Bool
+              ⊆(A,S) -> Bool
 
-   True if ``A ⊆ S`` (A is a subset of or equal to S)
+   True if A is a subset of or equal to S.
 
 Fully implemented by: ``IntSet``, ``Set``.
 
@@ -1009,14 +1149,16 @@ Dequeues
 
 .. function:: deleteat!(collection, itr)
 
-   Remove the items at the indices given by `itr`, and return the modified collection. Subsequent 
-   items are shifted to fill the resulting gap.  `itr` must be sorted and unique.
+   Remove the items at the indices given by ``itr``, and return the modified collection. Subsequent 
+   items are shifted to fill the resulting gap.  ``itr`` must be sorted and unique.
 
 .. function:: splice!(collection, index, [replacement]) -> item
 
    Remove the item at the given index, and return the removed item. Subsequent items
    are shifted down to fill the resulting gap. If specified, replacement values from
    an ordered collection will be spliced in place of the removed item.
+
+   To insert ``replacement`` before an index ``n`` without removing any items, use ``splice!(collection, n:n-1, replacement)``.
 
 .. function:: splice!(collection, range, [replacement]) -> items
 
@@ -1025,17 +1167,35 @@ Dequeues
    If specified, replacement values from an ordered collection will be spliced in place
    of the removed items.
 
+   To insert ``replacement`` before an index ``n`` without removing any items, use ``splice!(collection, n:n-1, replacement)``.
+
 .. function:: resize!(collection, n) -> collection
 
    Resize collection to contain ``n`` elements.
 
 .. function:: append!(collection, items) -> collection.
 
-   Add the elements of ``items`` to the end of a collection. ``append!([1],[2,3]) => [1,2,3]``
+   Add the elements of ``items`` to the end of a collection.
+
+   .. doctest::
+
+      julia> append!([1],[2,3])
+      3-element Array{Int64,1}:
+       1
+       2
+       3
 
 .. function:: prepend!(collection, items) -> collection
 
-   Insert the elements of ``items`` to the beginning of a collection. ``prepend!([3],[1,2]) => [1,2,3]``
+   Insert the elements of ``items`` to the beginning of a collection.
+
+   .. doctest::
+
+      julia> prepend!([3],[1,2])
+      3-element Array{Int64,1}:
+       1
+       2
+       3
 
 Fully implemented by: ``Vector`` (aka 1-d ``Array``), ``BitVector`` (aka 1-d ``BitArray``).
 
@@ -1055,8 +1215,8 @@ Strings
 
    Concatenate strings. The ``*`` operator is an alias to this function.
 
-   **Example**::
-   
+   .. doctest::
+
 	   julia> "Hello " * "world"
 	   "Hello world"
 
@@ -1064,7 +1224,7 @@ Strings
 
    Repeat ``n`` times the string ``s``. The ``^`` operator is an alias to this function.
 
-   **Example**::
+   .. doctest::
    
    	julia> "Test "^3
    	"Test Test Test "
@@ -1154,7 +1314,7 @@ Strings
 
 .. function:: match(r::Regex, s::String[, idx::Integer[, addopts]])
 
-   Search for the first match of the regular expression ``r`` in ``s`` and return a RegexMatch object containing the match, or nothing if the match failed. The matching substring can be retrieved by accessing ``m.match`` and the captured sequences can be retrieved by accessing ``m.captures``
+   Search for the first match of the regular expression ``r`` in ``s`` and return a RegexMatch object containing the match, or nothing if the match failed. The matching substring can be retrieved by accessing ``m.match`` and the captured sequences can be retrieved by accessing ``m.captures`` The optional ``idx`` argument specifies an index at which to start the search.
 
 .. function:: eachmatch(r::Regex, s::String[, overlap::Bool=false])
 
@@ -1174,7 +1334,7 @@ Strings
 
 .. function:: search(string, chars, [start])
 
-   Search for the first occurance of the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (though regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a range of indexes where the matching sequence is found, such that ``s[search(s,x)] == x``:
+   Search for the first occurrence of the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (though regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a range of indexes where the matching sequence is found, such that ``s[search(s,x)] == x``:
    
    ``search(string, "substring")`` = ``start:end`` such that ``string[start:end] == "substring"``, or ``0:-1`` if unmatched.
    
@@ -1182,7 +1342,7 @@ Strings
 
 .. function:: rsearch(string, chars, [start])
 
-   Similar to ``search``, but returning the last occurance of the given characters within the given string, searching in reverse from ``start``.
+   Similar to ``search``, but returning the last occurrence of the given characters within the given string, searching in reverse from ``start``.
 
 .. function:: searchindex(string, substring, [start])
 
@@ -1200,11 +1360,11 @@ Strings
 
    Search for the given pattern ``pat``, and replace each occurrence with ``r``. If ``n`` is provided, replace at most ``n`` occurrences.  As with search, the second argument may be a single character, a vector or a set of characters, a string, or a regular expression. If ``r`` is a function, each occurrence is replaced with ``r(s)`` where ``s`` is the matched substring.
 
-.. function:: split(string, [chars, [limit,] [include_empty]])
+.. function:: split(string, [chars]; limit=0, keep=true)
 
-   Return an array of substrings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by ``search``'s second argument (i.e. a single character, collection of characters, string, or regular expression). If ``chars`` is omitted, it defaults to the set of all space characters, and ``include_empty`` is taken to be false. The last two arguments are also optional: they are are a maximum size for the result and a flag determining whether empty fields should be included in the result.
+   Return an array of substrings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by ``search``'s second argument (i.e. a single character, collection of characters, string, or regular expression). If ``chars`` is omitted, it defaults to the set of all space characters, and ``keep`` is taken to be false. The two keyword arguments are optional: they are are a maximum size for the result and a flag determining whether empty fields should be kept in the result.
 
-.. function:: rsplit(string, [chars, [limit,] [include_empty]])
+.. function:: rsplit(string, [chars]; limit=0, keep=true)
 
    Similar to ``split``, but starting from the end of the string.
 
@@ -1293,27 +1453,27 @@ Strings
 .. function:: isalnum(c::Union(Char,String)) -> Bool
 
    Tests whether a character is alphanumeric, or whether this
-   is true for all elements of a string.
+   is true for all elements of a string.  A character is classified as alphabetic
+   if it belongs to the Unicode general category Letter or Number, i.e. a character whose
+   category code begins with 'L' or 'N'.
 
 .. function:: isalpha(c::Union(Char,String)) -> Bool
 
    Tests whether a character is alphabetic, or whether this
-   is true for all elements of a string.
+   is true for all elements of a string. A character is classified as alphabetic
+   if it belongs to the Unicode general category Letter, i.e. a character whose
+   category code begins with 'L'.
 
 .. function:: isascii(c::Union(Char,String)) -> Bool
 
    Tests whether a character belongs to the ASCII character set, or whether this
    is true for all elements of a string.
 
-.. function:: isblank(c::Union(Char,String)) -> Bool
-
-   Tests whether a character is a tab or space, or whether this
-   is true for all elements of a string.
-
 .. function:: iscntrl(c::Union(Char,String)) -> Bool
 
    Tests whether a character is a control character, or whether this
-   is true for all elements of a string.
+   is true for all elements of a string.  Control characters are the
+   non-printing characters of the Latin-1 subset of Unicode.
 
 .. function:: isdigit(c::Union(Char,String)) -> Bool
 
@@ -1323,32 +1483,39 @@ Strings
 .. function:: isgraph(c::Union(Char,String)) -> Bool
 
    Tests whether a character is printable, and not a space, or whether this
-   is true for all elements of a string.
+   is true for all elements of a string.  Any character that would cause a printer
+   to use ink should be classified with isgraph(c)==true.
 
 .. function:: islower(c::Union(Char,String)) -> Bool
 
    Tests whether a character is a lowercase letter, or whether this
-   is true for all elements of a string.
+   is true for all elements of a string.  A character is classified as lowercase
+   if it belongs to Unicode category Ll, Letter: Lowercase.
+
+.. function:: isnumber(c::Union(Char,String)) -> Bool
+
+   Tests whether a character is numeric, or whether this
+   is true for all elements of a string.   A character is classified as numeric
+   if it belongs to the Unicode general category Number, i.e. a character whose
+   category code begins with 'N'.
 
 .. function:: isprint(c::Union(Char,String)) -> Bool
 
-   Tests whether a character is printable, including space, or whether this
-   is true for all elements of a string.
+   Tests whether a character is printable, including spaces, but not a control character. For strings, tests whether this is true for all elements of the string.
 
 .. function:: ispunct(c::Union(Char,String)) -> Bool
 
-   Tests whether a character is printable, and not a space or
-   alphanumeric, or whether this is true for all elements of a string.
+   Tests whether a character belongs to the Unicode general category Punctuation, i.e. a character whose category code begins with 'P'. For strings, tests whether this is true for all elements of the string.
 
 .. function:: isspace(c::Union(Char,String)) -> Bool
 
-   Tests whether a character is any whitespace character, or whether this
-   is true for all elements of a string.
+   Tests whether a character is any whitespace character.  Includes ASCII characters '\t', '\n', '\v', '\f', '\r', and ' ', Latin-1 character U+0085, and characters in Unicode category Zs.  For strings, tests whether this    is true for all elements of the string.
 
 .. function:: isupper(c::Union(Char,String)) -> Bool
 
    Tests whether a character is an uppercase letter, or whether this
-   is true for all elements of a string.
+   is true for all elements of a string.    A character is classified as uppercase
+   if it belongs to Unicode category Lu, Letter: Uppercase, or Lt, Letter: Titlecase.
 
 .. function:: isxdigit(c::Union(Char,String)) -> Bool
 
@@ -1374,9 +1541,53 @@ Strings
    byte arrays check for a byte-order marker in the first two bytes,
    and do not include it in the resulting string.)
 
+   Note that the resulting ``UTF16String`` data is terminated by the NUL
+   codepoint (16-bit zero), which is not treated as a character in the
+   string (so that it is mostly invisible in Julia); this allows the
+   string to be passed directly to external functions requiring
+   NUL-terminated data.  This NUL is appended automatically by the
+   `utf16(s)` conversion function.  If you have a ``Uint16`` array
+   ``A`` that is already NUL-terminated valid UTF-16 data, then you
+   can instead use `UTF16String(A)`` to construct the string without
+   making a copy of the data and treating the NUL as a terminator
+   rather than as part of the string.
+
+.. function:: utf16(::Union(Ptr{Uint16},Ptr{Int16}) [, length])
+
+   Create a string from the address of a NUL-terminated UTF-16 string. A copy is made; the pointer can be safely freed. If ``length`` is specified, the string does not have to be NUL-terminated.
+
 .. function:: is_valid_utf16(s) -> Bool
 
    Returns true if the string or ``Uint16`` array is valid UTF-16.
+
+.. function:: utf32(s)
+
+   Create a UTF-32 string from a byte array, array of ``Uint32``, or
+   any other string type.  (Conversions of byte arrays check for a
+   byte-order marker in the first four bytes, and do not include it in
+   the resulting string.)
+
+   Note that the resulting ``UTF32String`` data is terminated by the NUL
+   codepoint (32-bit zero), which is not treated as a character in the
+   string (so that it is mostly invisible in Julia); this allows the
+   string to be passed directly to external functions requiring
+   NUL-terminated data.  This NUL is appended automatically by the
+   `utf32(s)` conversion function.  If you have a ``Uint32`` array
+   ``A`` that is already NUL-terminated UTF-32 data, then you
+   can instead use `UTF32String(A)`` to construct the string without
+   making a copy of the data and treating the NUL as a terminator
+   rather than as part of the string.
+
+.. function:: utf32(::Union(Ptr{Char},Ptr{Uint32},Ptr{Int32}) [, length])
+
+   Create a string from the address of a NUL-terminated UTF-32 string. A copy is made; the pointer can be safely freed. If ``length`` is specified, the string does not have to be NUL-terminated.
+
+.. function:: wstring(s)
+
+   This is a synonym for either ``utf32(s)`` or ``utf16(s)``,
+   depending on whether ``Cwchar_t`` is 32 or 16 bits, respectively.
+   The synonym ``WString`` for ``UTF32String`` or ``UTF16String``
+   is also provided.
 
 I/O
 ---
@@ -1505,6 +1716,33 @@ I/O
 .. function:: skip(s, offset)
 
    Seek a stream relative to the current position.
+
+.. function:: mark(s)
+
+   Add a mark at the current position of stream ``s``.  Returns the marked position.
+
+   See also :func:`unmark`, :func:`reset`, :func:`ismarked`
+
+.. function:: unmark(s)
+
+   Remove a mark from stream ``s``. 
+   Returns ``true`` if the stream was marked, ``false`` otherwise.
+
+   See also :func:`mark`, :func:`reset`, :func:`ismarked`
+
+.. function:: reset(s)
+
+   Reset a stream ``s`` to a previously marked position, and remove the mark.  
+   Returns the previously marked position.
+   Throws an error if the stream is not marked.
+
+   See also :func:`mark`, :func:`unmark`, :func:`ismarked`
+
+.. function:: ismarked(s)
+
+   Returns true if stream ``s`` is marked.
+
+   See also :func:`mark`, :func:`unmark`, :func:`reset`
 
 .. function:: eof(stream) -> Bool
 
@@ -1651,7 +1889,7 @@ I/O
     uid       The user id of the owner of the file
     gid       The group id of the file owner
     rdev      If this file refers to a device, the ID of the device it refers to 
-    blksize   The file-system preffered block size for the file
+    blksize   The file-system preferred block size for the file
     blocks    The number of such blocks allocated
     mtime     Unix timestamp of when the file was last modified
     ctime     Unix timestamp of when the file was created
@@ -1687,7 +1925,7 @@ I/O
     04   Read Permission
    ==== =====================
 
-   For allowed arguments, see the stat method.
+   For allowed arguments, see ``stat``.
 
 .. function:: gperm(file)
 
@@ -1714,9 +1952,10 @@ I/O
 
    Move a file from `src` to `dst`.
 
-.. function:: rm(path::String)
+.. function:: rm(path::String; recursive=false)
 
-   Delete the file at the given path. Note that this does not work on directories.
+   Delete the file, link, or empty directory at the given path. If ``recursive=true`` is
+   passed and the path is a directory, then all contents are removed recursively.
 
 .. function:: touch(path::String)
 
@@ -1859,9 +2098,14 @@ Text I/O
 
    Show all structure of a value, including all fields of objects.
 
-.. function:: readall(stream)
+.. function:: readall(stream::IO)
 
    Read the entire contents of an I/O stream as a string.
+
+.. function:: readall(filename::String)
+
+   Open ``filename``, read the entire contents as a string, then close the file.
+   Equivalent to ``open(readall, filename)``.
 
 .. function:: readline(stream=STDIN)
 
@@ -1879,15 +2123,19 @@ Text I/O
 
    Create an iterable object that will yield each line from a stream.
 
-.. function:: readdlm(source, delim::Char, T::Type, eol::Char; has_header=false, use_mmap=true, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
+.. function:: readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
 
    Read a matrix from the source where each line (separated by ``eol``) gives one row, with elements separated by the given delimeter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source. 
 
    If ``T`` is a numeric type, the result is an array of that type, with any non-numeric elements as ``NaN`` for floating-point types, or zero. Other useful values of ``T`` include ``ASCIIString``, ``String``, and ``Any``.
 
-   If ``has_header`` is ``true``, the first row of data would be read as headers and the tuple ``(data_cells, header_cells)`` is returned instead of only ``data_cells``.
+   If ``header`` is ``true``, the first row of data will be read as header and the tuple ``(data_cells, header_cells)`` is returned instead of only ``data_cells``.
 
-   If ``use_mmap`` is ``true``, the file specified by ``source`` is memory mapped for potential speedups.
+   Specifying ``skipstart`` will ignore the corresponding number of initial lines from the input.
+
+   If ``skipblanks`` is ``true``, blank lines in the input will be ignored.
+
+   If ``use_mmap`` is ``true``, the file specified by ``source`` is memory mapped for potential speedups. Default is ``true`` except on Windows. On Windows, you may want to specify ``true`` if the file is large, and is only read once and not written to.
 
    If ``ignore_invalid_chars`` is ``true``, bytes in ``source`` with invalid character encoding will be ignored. Otherwise an error is thrown indicating the offending character position.
 
@@ -1985,7 +2233,7 @@ Julia environments (such as the IPython-based IJulia notebook).
 
    There are also two variants with a ``mime`` argument (a MIME type
    string, such as ``"image/png"``), which attempt to display ``x`` using the
-   requesed MIME type *only*, throwing a ``MethodError`` if this type
+   requested MIME type *only*, throwing a ``MethodError`` if this type
    is not supported by either the display(s) or by ``x``.   With these
    variants, one can also supply the "raw" data in the requested MIME
    type by passing ``x::String`` (for MIME types with text-based storage,
@@ -2125,32 +2373,32 @@ Memory-mapped I/O
 
    The type determines how the bytes of the array are interpreted. Note that the file must be stored in binary format, and no format conversions are possible (this is a limitation of operating systems, not Julia).
    
-   dims is a tuple specifying the size of the array.
+   ``dims`` is a tuple specifying the size of the array.
 
    The file is passed via the stream argument.  When you initialize the stream, use ``"r"`` for a "read-only" array, and ``"w+"`` to create a new array used to write values to disk.
    
    Optionally, you can specify an offset (in bytes) if, for example, you want to skip over a header in the file. The default value for the offset is the current stream position.
 
-   **Example**::
-   
-       # Create a file for mmapping
-       # (you could alternatively use mmap_array to do this step, too)
-       A = rand(1:20, 5, 30)
-       s = open("/tmp/mmap.bin", "w+")
-       # We'll write the dimensions of the array as the first two Ints in the file
-       write(s, size(A,1))
-       write(s, size(A,2))
-       # Now write the data
-       write(s, A)
-       close(s)
-       
-       # Test by reading it back in
-       s = open("/tmp/mmap.bin")   # default is read-only
-       m = read(s, Int)
-       n = read(s, Int)
-       A2 = mmap_array(Int, (m,n), s)
+   For example, the following code::
 
-   This would create a m-by-n ``Matrix{Int}``, linked to the file associated with stream ``s``.
+      # Create a file for mmapping
+      # (you could alternatively use mmap_array to do this step, too)
+      A = rand(1:20, 5, 30)
+      s = open("/tmp/mmap.bin", "w+")
+      # We'll write the dimensions of the array as the first two Ints in the file
+      write(s, size(A,1))
+      write(s, size(A,2))
+      # Now write the data
+      write(s, A)
+      close(s)
+
+      # Test by reading it back in
+      s = open("/tmp/mmap.bin")   # default is read-only
+      m = read(s, Int)
+      n = read(s, Int)
+      A2 = mmap_array(Int, (m,n), s)
+
+   creates a ``m``-by-``n`` ``Matrix{Int}``, linked to the file associated with stream ``s``.
    
    A more portable file would need to encode the word size---32 bit or 64 bit---and endianness information in the header. In practice, consider encoding binary data using standard formats like HDF5 (which can be used with memory-mapping).
 
@@ -2168,29 +2416,29 @@ Memory-mapped I/O
 
 .. function:: msync(ptr, len, [flags])
 
-   Forces synchronization of the mmap'd memory region from ptr to ptr+len. Flags defaults to MS_SYNC, but can be a combination of MS_ASYNC, MS_SYNC, or MS_INVALIDATE. See your platform man page for specifics. The flags argument is not valid on Windows.
+   Forces synchronization of the :func:`mmap`\ ped memory region from ``ptr`` to ``ptr+len``. Flags defaults to ``MS_SYNC``, but can be a combination of ``MS_ASYNC``, ``MS_SYNC``, or ``MS_INVALIDATE``. See your platform man page for specifics. The flags argument is not valid on Windows.
  
    You may not need to call ``msync``, because synchronization is performed at intervals automatically by the operating system. However, you can call this directly if, for example, you are concerned about losing the result of a long-running calculation.
 
 .. data:: MS_ASYNC
 
-   Enum constant for msync. See your platform man page for details. (not available on Windows).
+   Enum constant for :func:`msync`. See your platform man page for details. (not available on Windows).
 
 .. data:: MS_SYNC
 
-   Enum constant for msync. See your platform man page for details. (not available on Windows).
+   Enum constant for :func:`msync`. See your platform man page for details. (not available on Windows).
 
 .. data:: MS_INVALIDATE
 
-   Enum constant for msync. See your platform man page for details. (not available on Windows).
+   Enum constant for :func:`msync`. See your platform man page for details. (not available on Windows).
 
 .. function:: mmap(len, prot, flags, fd, offset)
 
-   Low-level interface to the mmap system call. See the man page.
+   Low-level interface to the ``mmap`` system call. See the man page.
 
 .. function:: munmap(pointer, len)
 
-   Low-level interface for unmapping memory (see the man page). With mmap_array you do not need to call this directly; the memory is unmapped for you when the array goes out of scope.
+   Low-level interface for unmapping memory (see the man page). With :func:`mmap_array` you do not need to call this directly; the memory is unmapped for you when the array goes out of scope.
 
 Standard Numeric Types
 ----------------------
@@ -2207,76 +2455,85 @@ Mathematical Operators
    Unary minus operator.
 
 .. _+:
-.. function:: +(x, y)
+.. function:: +(x, y...)
 
-   Binary addition operator.
+   Addition operator. ``x+y+z+...`` calls this function with all arguments, i.e.
+   ``+(x, y, z, ...)``.
 
 .. _-:
 .. function:: -(x, y)
 
-   Binary subtraction operator.
+   Subtraction operator.
 
 .. _*:
-.. function:: *(x, y)
+.. function:: *(x, y...)
 
-   Binary multiplication operator.
+   Multiplication operator. ``x*y*z*...`` calls this function with all arguments, i.e.
+   ``*(x, y, z, ...)``.
 
 .. _/:
 .. function:: /(x, y)
 
-   Binary left-division operator.
+   Right division operator: multiplication of ``x`` by the inverse of ``y`` on the right.
+   Gives floating-point results for integer arguments.
 
 .. _\\:
 .. function:: \\(x, y)
 
-   Binary right-division operator.
+   Left division operator: multiplication of ``y`` by the inverse of ``x`` on the left.
+   Gives floating-point results for integer arguments.
 
 .. _^:
 .. function:: ^(x, y)
 
-   Binary exponentiation operator.
+   Exponentiation operator.
 
 .. _.+:
 .. function:: .+(x, y)
 
-   Element-wise binary addition operator.
+   Element-wise addition operator.
 
 .. _.-:
 .. function:: .-(x, y)
 
-   Element-wise binary subtraction operator.
+   Element-wise subtraction operator.
 
 .. _.*:
 .. function:: .*(x, y)
 
-   Element-wise binary multiplication operator.
+   Element-wise multiplication operator.
 
 .. _./:
 .. function:: ./(x, y)
 
-   Element-wise binary left division operator.
+   Element-wise right division operator.
 
 .. _.\\:
 .. function:: .\\(x, y)
 
-   Element-wise binary right division operator.
+   Element-wise left division operator.
 
 .. _.^:
 .. function:: .^(x, y)
 
-   Element-wise binary exponentiation operator.
+   Element-wise exponentiation operator.
 
 .. function:: div(a,b)
+              ÷(a,b)
 
-   Compute a/b, truncating to an integer
+   Compute a/b, truncating to an integer.
 
 .. function:: fld(a,b)
 
-   Largest integer less than or equal to a/b
+   Largest integer less than or equal to a/b.
+
+.. function:: cld(a,b)
+
+   Smallest integer larger than or equal to a/b.
 
 .. function:: mod(x,m)
 
-   Modulus after division, returning in the range [0,m)
+   Modulus after division, returning in the range [0,m).
 
 .. function:: mod2pi(x)
 
@@ -2289,11 +2546,11 @@ Mathematical Operators
 
 .. function:: rem(x, m)
 
-   Remainder after division
+   Remainder after division.
 
 .. function:: divrem(x, y)
 
-   Compute ``x/y`` and ``x%y`` at the same time
+   Returns ``(x/y, x%y)``.
 
 .. _%:
 .. function:: %(x, m)
@@ -2311,11 +2568,12 @@ Mathematical Operators
 .. _//:
 .. function:: //(num, den)
 
-   Rational division
+   Divide two integers or rational numbers, giving a ``Rational`` result.
 
-.. function:: rationalize([Type,] x)
+.. function:: rationalize([Type=Int,] x; tol=eps(x))
 
-   Approximate the number x as a rational fraction
+   Approximate floating point number ``x`` as a Rational number with components of the given
+   integer type. The result will differ from ``x`` by no more than ``tol``.
 
 .. function:: num(x)
 
@@ -2328,17 +2586,17 @@ Mathematical Operators
 .. _<<:
 .. function:: <<(x, n)
 
-   Left shift operator.
+   Left bit shift operator.
 
 .. _>>:
 .. function:: >>(x, n)
 
-   Right shift operator.
+   Right bit shift operator, preserving the sign of ``x``.
 
 .. _>>>:
 .. function:: >>>(x, n)
 
-   Unsigned right shift operator.
+   Unsigned right bit shift operator.
 
 .. _\::
 .. function:: \:(start, [step], stop)
@@ -2355,6 +2613,10 @@ Mathematical Operators
 .. function:: range(start, [step], length)
 
    Construct a range by length, given a starting value and optional step (defaults to 1).
+
+.. function:: linrange(start, end, length)
+
+   Construct a range by length, given a starting and ending value.
 
 .. _==:
 .. function:: ==(x, y)
@@ -2374,6 +2636,7 @@ Mathematical Operators
 
 .. _!=:
 .. function:: !=(x, y)
+              ≠(x,y)
 
    Not-equals comparison operator. Always gives the opposite answer as ``==``.
    New types should generally not implement this, and rely on the fallback
@@ -2381,11 +2644,13 @@ Mathematical Operators
 
 .. _===:
 .. function:: ===(x, y)
+              ≡(x,y)
 
    See the :func:`is` operator
 
 .. _!==:
 .. function:: !==(x, y)
+              ≢(x,y)
 
    Equivalent to ``!is(x, y)``
 
@@ -2400,6 +2665,7 @@ Mathematical Operators
 
 .. _<=:
 .. function:: <=(x, y)
+              ≤(x,y)
 
    Less-than-or-equals comparison operator.
 
@@ -2411,6 +2677,7 @@ Mathematical Operators
 
 .. _>=:
 .. function:: >=(x, y)
+              ≥(x,y)
 
    Greater-than-or-equals comparison operator.
 
@@ -2421,6 +2688,7 @@ Mathematical Operators
 
 .. _.!=:
 .. function:: .!=(x, y)
+              .≠(x,y)
 
    Element-wise not-equals comparison operator.
 
@@ -2431,6 +2699,7 @@ Mathematical Operators
 
 .. _.<=:
 .. function:: .<=(x, y)
+              .≤(x,y)
 
    Element-wise less-than-or-equals comparison operator.
 
@@ -2441,6 +2710,7 @@ Mathematical Operators
 
 .. _.>=:
 .. function:: .>=(x, y)
+              .≥(x,y)
 
    Element-wise greater-than-or-equals comparison operator.
 
@@ -2875,7 +3145,7 @@ Mathematical Functions
 
 .. function:: signbit(x)
 
-   Returns ``1`` if the value of the sign of ``x`` is negative, otherwise ``0``.
+   Returns ``true`` if the value of the sign of ``x`` is negative, otherwise ``false``.
 
 .. function:: flipsign(x, y)
 
@@ -2883,7 +3153,7 @@ Mathematical Functions
 
 .. function:: sqrt(x)
 
-   Return :math:`\sqrt{x}`. Throws ``DomainError`` for negative ``Real`` arguments. Use complex negative arguments instead.
+   Return :math:`\sqrt{x}`. Throws ``DomainError`` for negative ``Real`` arguments. Use complex negative arguments instead.  The prefix operator ``√`` is equivalent to ``sqrt``.
 
 .. function:: isqrt(n)
 
@@ -2891,7 +3161,7 @@ Mathematical Functions
 
 .. function:: cbrt(x)
 
-   Return :math:`x^{1/3}`
+   Return :math:`x^{1/3}`.  The prefix operator ``∛`` is equivalent to ``cbrt``.
 
 .. function:: erf(x)
 
@@ -2953,7 +3223,7 @@ Mathematical Functions
 
 .. function:: cis(z)
 
-   Return ``cos(z) + i*sin(z)`` if z is real. Return ``(cos(real(z)) + i*sin(real(z)))/exp(imag(z))`` if ``z`` is complex
+   Return :math:`\exp(iz)`.
 
 .. function:: binomial(n,k)
 
@@ -2971,10 +3241,12 @@ Mathematical Functions
 
    Compute the prime factorization of an integer ``n``. Returns a dictionary. The keys of the dictionary correspond to the factors, and hence are of the same type as ``n``. The value associated with each key indicates the number of times the factor appears in the factorization.
 
-   **Example**: :math:`100=2*2*5*5`; then::
+   .. doctest::
    
-   	julia> factor(100)
-   	[5=>2,2=>2]
+      julia> factor(100) # == 2*2*5*5
+      Dict{Int64,Int64} with 2 entries:
+        2 => 2
+        5 => 2
 	
 .. function:: gcd(x,y)
 
@@ -2986,7 +3258,21 @@ Mathematical Functions
 
 .. function:: gcdx(x,y)
 
-   Greatest common (positive) divisor, also returning integer coefficients ``u`` and ``v`` that solve ``ux+vy == gcd(x,y)``
+   Computes the greatest common (positive) divisor of ``x`` and ``y`` and their Bézout coefficients, i.e. the integer coefficients ``u`` and ``v`` that satisfy :math:`ux+vy = d = gcd(x,y)`.
+
+   .. doctest::
+
+      julia> gcdx(12, 42)
+      (6,-3,1)
+
+   .. doctest::
+
+      julia> gcdx(240, 46)
+      (2,-9,47)
+
+   .. note::
+
+      Bézout coefficients are *not* uniquely defined. ``gcdx`` returns the minimal Bézout coefficients that are computed by the extended Euclid algorithm. (Ref: D. Knuth, TAoCP, 2/e, p. 325, Algorithm X.) These coefficients ``u`` and ``v`` are minimal in the sense that :math:`|u| < |\frac y d` and :math:`|v| < |\frac x d`. Furthermore, the signs of ``u`` and ``v`` are chosen so that ``d`` is positive.
 
 .. function:: ispow2(n) -> Bool
 
@@ -3080,6 +3366,10 @@ Mathematical Functions
 
    Airy function derivative :math:`\operatorname{Bi}'(x)`.
 
+.. function:: airyx(k,x)
+
+   scaled kth derivative of the Airy function, return :math:`\operatorname{Ai}(x) e^{\frac{2}{3} x \sqrt{x}}` for ``k == 0 || k == 1``, and :math:`\operatorname{Ai}(x) e^{- \left| \operatorname{Re} \left( \frac{2}{3} x \sqrt{x} \right) \right|}` for ``k == 2 || k == 3``.
+
 .. function:: besselj0(x)
 
    Bessel function of the first kind of order 0, :math:`J_0(x)`.
@@ -3091,6 +3381,10 @@ Mathematical Functions
 .. function:: besselj(nu, x)
 
    Bessel function of the first kind of order ``nu``, :math:`J_\nu(x)`.
+
+.. function:: besseljx(nu, x)
+
+   Scaled Bessel function of the first kind of order ``nu``, :math:`J_\nu(x) e^{- | \operatorname{Im}(x) |}`.
 
 .. function:: bessely0(x)
 
@@ -3104,13 +3398,25 @@ Mathematical Functions
 
    Bessel function of the second kind of order ``nu``, :math:`Y_\nu(x)`.
 
+.. function:: besselyx(nu, x)
+
+   Scaled Bessel function of the second kind of order ``nu``, :math:`Y_\nu(x) e^{- | \operatorname{Im}(x) |}`.
+
 .. function:: hankelh1(nu, x)
 
    Bessel function of the third kind of order ``nu``, :math:`H^{(1)}_\nu(x)`.
 
+.. function:: hankelh1x(nu, x)
+
+   Scaled Bessel function of the third kind of order ``nu``, :math:`H^{(1)}_\nu(x) e^{-x i}`.
+
 .. function:: hankelh2(nu, x)
 
    Bessel function of the third kind of order ``nu``, :math:`H^{(2)}_\nu(x)`.
+
+.. function:: hankelh2x(nu, x)
+
+   Scaled Bessel function of the third kind of order ``nu``, :math:`H^{(2)}_\nu(x) e^{x i}`.
 
 .. function:: besselh(nu, k, x)
 
@@ -3121,9 +3427,17 @@ Mathematical Functions
 
    Modified Bessel function of the first kind of order ``nu``, :math:`I_\nu(x)`.
 
+.. function:: besselix(nu, x)
+
+   Scaled modified Bessel function of the first kind of order ``nu``, :math:`I_\nu(x) e^{- | \operatorname{Re}(x) |}`.
+
 .. function:: besselk(nu, x)
 
    Modified Bessel function of the second kind of order ``nu``, :math:`K_\nu(x)`.
+
+.. function:: besselkx(nu, x)
+
+   Scaled modified Bessel function of the second kind of order ``nu``, :math:`K_\nu(x) e^x`.
 
 .. function:: beta(x, y)
 
@@ -3137,9 +3451,14 @@ Mathematical Functions
 
    Dirichlet eta function :math:`\eta(s) = \sum^\infty_{n=1}(-)^{n-1}/n^{s}`.
 
-.. function:: zeta(x)
+.. function:: zeta(s)
 
    Riemann zeta function :math:`\zeta(s)`.
+
+.. function:: zeta(s, z)
+
+   Hurwitz zeta function :math:`\zeta(s, z)`.  (This is equivalent to
+   the Riemann zeta function :math:`\zeta(s)` for the case of ``z=1``.)
 
 .. function:: ndigits(n, b)
 
@@ -3148,6 +3467,14 @@ Mathematical Functions
 .. function:: widemul(x, y)
 
    Multiply ``x`` and ``y``, giving the result as a larger type.
+
+.. function:: @evalpoly(z, c...)
+
+   Evaluate the polynomial :math:`\sum_k c[k] z^{k-1}` for the
+   coefficients ``c[1]``, ``c[2]``, ...; that is, the coefficients are
+   given in ascending order by power of ``z``.  This macro expands to
+   efficient inline code that uses either Horner's method or, for
+   complex ``z``, a more efficient Goertzel-like algorithm.
 
 Data Formats
 ------------
@@ -3177,6 +3504,12 @@ Data Formats
    Returns an array of the digits of ``n`` in the given base, optionally padded with
    zeros to a specified size. More significant digits are at higher indexes, such
    that ``n == sum([digits[k]*base^(k-1) for k=1:length(digits)])``.
+
+.. function:: digits!(array, n, [base])
+
+    Fills an array of the digits of ``n`` in the given base. More significant digits are at higher indexes.
+    If the array length is insufficient, the least significant digits are filled up to the array length.
+    If the array length is excessive, the excess portion is filled with zeros.
 
 .. function:: bits(n)
 
@@ -3280,33 +3613,41 @@ Data Formats
 
 .. function:: float(x)
 
-   Convert a number, array, or string to a ``FloatingPoint`` data type. For numeric data, the smallest suitable ``FloatingPoint`` type is used. For strings, it converts to ``Float64``.
+   Convert a number, array, or string to a ``FloatingPoint`` data type. For numeric data, the smallest suitable ``FloatingPoint`` type is used. Converts strings to ``Float64``.
+
+   This function is not recommended for arrays. It is better to use a more specific function such as ``float32`` or ``float64``.
 
 .. function:: significand(x)
 
    Extract the significand(s) (a.k.a. mantissa), in binary representation, of a floating-point number or array.
 
-   For example, ``significand(15.2)/15.2 == 0.125``, and ``significand(15.2)*8 == 15.2``
+   .. doctest::
+
+      julia> significand(15.2)/15.2
+      0.125
+
+      julia> significand(15.2)*8
+      15.2
 
 .. function:: exponent(x) -> Int
 
    Get the exponent of a normalized floating-point number.
 
-.. function:: complex64(r,i)
+.. function:: complex64(r, [i])
 
-   Convert to ``r+i*im`` represented as a ``Complex64`` data type
+   Convert to ``r + i*im`` represented as a ``Complex64`` data type. ``i`` defaults to zero.
 
-.. function:: complex128(r,i)
+.. function:: complex128(r, [i])
 
-   Convert to ``r+i*im`` represented as a ``Complex128`` data type
+   Convert to ``r + i*im`` represented as a ``Complex128`` data type. ``i`` defaults to zero.
+
+.. function:: complex(r, [i])
+
+   Convert real numbers or arrays to complex. ``i`` defaults to zero.
 
 .. function:: char(x)
 
    Convert a number or array to ``Char`` data type
-
-.. function:: complex(r,i)
-
-   Convert real numbers or arrays to complex
 
 .. function:: bswap(n)
 
@@ -3341,6 +3682,7 @@ Numbers
    Get the additive identity element for the type of x (x can also specify the type itself).
 
 .. data:: pi
+          π
 
    The constant pi
 
@@ -3355,6 +3697,14 @@ Numbers
 .. data:: catalan
 
    Catalan's constant
+
+.. data:: γ
+
+   Euler's constant
+
+.. data:: φ
+
+   The golden ratio
 
 .. data:: Inf
 
@@ -3398,11 +3748,11 @@ Numbers
 
 .. function:: inf(f)
 
-   Returns infinity in the same floating point type as ``f`` (or ``f`` can by the type itself)
+   Returns positive infinity of the floating point type ``f`` or of the same floating point type as ``f``
 
 .. function:: nan(f)
 
-   Returns NaN in the same floating point type as ``f`` (or ``f`` can by the type itself)
+   Returns NaN (not-a-number) of the floating point type ``f`` or of the same floating point type as ``f``
 
 .. function:: nextfloat(f)
 
@@ -3465,44 +3815,62 @@ Integers
 
    Number of ones in the binary representation of ``x``.
 
-   **Example**: ``count_ones(7) -> 3``
+   .. doctest::
+
+      julia> count_ones(7)
+      3
 
 .. function:: count_zeros(x::Integer) -> Integer
 
    Number of zeros in the binary representation of ``x``.
 
-   **Example**: ``count_zeros(int32(2 ^ 16 - 1)) -> 16``
+   .. doctest::
+
+      julia> count_zeros(int32(2 ^ 16 - 1))
+      16
 
 .. function:: leading_zeros(x::Integer) -> Integer
 
    Number of zeros leading the binary representation of ``x``.
 
-   **Example**: ``leading_zeros(int32(1)) -> 31``
+   .. doctest::
+
+      julia> leading_zeros(int32(1))
+      31
 
 .. function:: leading_ones(x::Integer) -> Integer
 
    Number of ones leading the binary representation of ``x``.
 
-   **Example**: ``leading_ones(int32(2 ^ 32 - 2)) -> 31``
+   .. doctest::
+
+      julia> leading_ones(int32(2 ^ 32 - 2))
+      31
 
 .. function:: trailing_zeros(x::Integer) -> Integer
 
    Number of zeros trailing the binary representation of ``x``.
 
-   **Example**: ``trailing_zeros(2) -> 1``
+   .. doctest::
+
+      julia> trailing_zeros(2)
+      1
 
 .. function:: trailing_ones(x::Integer) -> Integer
 
    Number of ones trailing the binary representation of ``x``.
 
-   **Example**: ``trailing_ones(3) -> 2``
+   .. doctest::
+
+      julia> trailing_ones(3)
+      2
 
 .. function:: isprime(x::Integer) -> Bool
 
    Returns ``true`` if ``x`` is prime, and ``false`` otherwise.
 
-   **Example**::
-   
+   .. doctest::
+
    	julia> isprime(3)
    	true
 
@@ -3514,29 +3882,29 @@ Integers
 
    Returns ``true`` if ``x`` is odd (that is, not divisible by 2), and ``false`` otherwise.
 
-   **Examples**::
+   .. doctest::
    
    	julia> isodd(9)
-   	false
+   	true
    
    	julia> isodd(10)
-   	true
+   	false
 
 .. function:: iseven(x::Integer) -> Bool
 
    Returns ``true`` is ``x`` is even (that is, divisible by 2), and ``false`` otherwise.
 
-   **Examples**::
-   
-   	julia> iseven(10)
-   	false
+   .. doctest::
    
    	julia> iseven(9)
+   	false
+   
+   	julia> iseven(10)
    	true
 
 BigFloats
 ---------
-The `BigFloat` type implements arbitrary-precision floating-point aritmetic using the `GNU MPFR library <http://www.mpfr.org/>`_.
+The `BigFloat` type implements arbitrary-precision floating-point arithmetic using the `GNU MPFR library <http://www.mpfr.org/>`_.
 
 .. function:: precision(num::FloatingPoint)
 
@@ -3564,9 +3932,9 @@ Random Numbers
 
 Random number generation in Julia uses the `Mersenne Twister library <http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT>`_. Julia has a global RNG, which is used by default. Multiple RNGs can be plugged in using the ``AbstractRNG`` object, which can then be used to have multiple streams of random numbers. Currently, only ``MersenneTwister`` is supported.
 
-.. function:: srand([rng], seed)
+.. function:: srand([rng], [seed])
 
-   Seed the RNG with a ``seed``, which may be an unsigned integer or a vector of unsigned integers. ``seed`` can even be a filename, in which case the seed is read from a file. If the argument ``rng`` is not provided, the default global RNG is seeded.
+   Reseed the random number generator. If a ``seed`` is provided, the RNG will give a reproducible sequence of numbers, otherwise Julia will get entropy from the system. The ``seed`` may be an unsigned integer, a vector of unsigned integers or a filename, in which case the seed is read from a file. If the argument ``rng`` is not provided, the default global RNG is seeded.
 
 .. function:: MersenneTwister([seed])
 
@@ -3588,21 +3956,17 @@ Random number generation in Julia uses the `Mersenne Twister library <http://www
 
    Generate a random ``Float64`` array of the size specified by dims
 
-.. function:: rand(Int32|Uint32|Int64|Uint64|Int128|Uint128, [dims...])
+.. function:: rand(t::Type, [dims...])
 
-   Generate a random integer of the given type. Optionally, generate an array of random integers of the given type by specifying dims.
+   Generate a random number or array of random numbes of the given type.
 
 .. function:: rand(r, [dims...])
 
-   Generate a random integer from the inclusive interval specified by ``Range1 r`` (for example, ``1:n``). Optionally, generate a random integer array.
+   Pick a random element or array of random elements from range ``r`` (for example, ``1:n`` or ``0:2:10``).
 
 .. function:: randbool([dims...])
 
    Generate a random boolean value. Optionally, generate an array of random boolean values.
-
-.. function:: randbool!(A)
-
-   Fill an array with random boolean values. A may be an ``Array`` or a ``BitArray``.
 
 .. function:: randn([rng], dims or [dims...])
 
@@ -3636,7 +4000,7 @@ Basic functions
 
 .. function:: countnz(A)
 
-   Counts the number of nonzero values in array A (dense or sparse). Note that this is not a constant-time operation. For sparse matrices, one should usually use ``nfilled`` instead.
+   Counts the number of nonzero values in array A (dense or sparse). Note that this is not a constant-time operation. For sparse matrices, one should usually use ``nnz``, which returns the number of stored values.
 
 .. function:: conj!(A)
 
@@ -3676,11 +4040,19 @@ Constructors
    Construct an uninitialized cell array (heterogeneous array). ``dims`` can be either a tuple or a series of integer arguments.
 .. function:: zeros(type, dims)
 
-   Create an array of all zeros of specified type
+   Create an array of all zeros of specified type. The type defaults to Float64 if not specified.
+
+.. function:: zeros(A)
+
+   Create an array of all zeros with the same element type and shape as A.
 
 .. function:: ones(type, dims)
 
-   Create an array of all ones of specified type
+   Create an array of all ones of specified type. The type defaults to Float64 if not specified.
+
+.. function:: ones(A)
+
+   Create an array of all ones with the same element type and shape as A.
 
 .. function:: trues(dims)
 
@@ -3690,13 +4062,13 @@ Constructors
 
    Create a ``BitArray`` with all values set to false
 
-.. function:: fill(v, dims)
+.. function:: fill(x, dims)
 
-   Create an array filled with ``v``
+   Create an array filled with the value ``x``
 
 .. function:: fill!(A, x)
 
-   Fill array ``A`` with value ``x``
+   Fill the array ``A`` with the value ``x``
 
 .. function:: reshape(A, dims)
 
@@ -3725,6 +4097,7 @@ Constructors
 .. function:: linspace(start, stop, n)
 
    Construct a vector of ``n`` linearly-spaced elements from ``start`` to ``stop``.
+   See also: :func:`linrange` that constructs a range object.
 
 .. function:: logspace(start, stop, n)
 
@@ -3837,8 +4210,9 @@ Indexing, Assignment, and Concatenation
 
 .. function:: find(A)
 
-   Return a vector of the linear indexes of the non-zeros in ``A`` (determined by ``A[i]!=0``).
-   A common use of this is to convert a boolean array to an array of indexes of the ``true``
+   Return a vector of the linear indexes of the non-zeros in ``A``
+   (determined by ``A[i]!=0``).  A common use of this is to convert a
+   boolean array to an array of indexes of the ``true``
    elements.
 
 .. function:: find(f,A)
@@ -3847,16 +4221,13 @@ Indexing, Assignment, and Concatenation
 
 .. function:: findn(A)
 
-   Return a vector of indexes for each dimension giving the locations of the non-zeros in ``A``
-   (determined by ``A[i]!=0``).
+   Return a vector of indexes for each dimension giving the locations of the non-zeros in ``A`` (determined by ``A[i]!=0``).
 
 .. function:: findnz(A)
 
-   Return a tuple ``(I, J, V)`` where ``I`` and ``J`` are the row and column indexes of the non-zero values in matrix ``A``, and ``V`` is a vector of the non-zero values.
-
-.. function:: nonzeros(A)
-
-   Return a vector of the non-zero values in array ``A`` (determined by ``A[i]!=0``).
+   Return a tuple ``(I, J, V)`` where ``I`` and ``J`` are the row and
+   column indexes of the non-zero values in matrix ``A``, and ``V`` is
+   a vector of the non-zero values.
 
 .. function:: findfirst(A)
 
@@ -3928,22 +4299,38 @@ Array functions
 .. function:: cumprod(A, [dim])
 
    Cumulative product along a dimension.
+   The dimension defaults to 1.
+
+.. function:: cumprod!(B, A, [dim])
+
+   Cumulative product of ``A`` along a dimension, storing the result in ``B``.
+   The dimension defaults to 1.
 
 .. function:: cumsum(A, [dim])
 
    Cumulative sum along a dimension.
+   The dimension defaults to 1.
+
+.. function:: cumsum!(B, A, [dim])
+
+   Cumulative sum of ``A`` along a dimension, storing the result in ``B``.
+   The dimension defaults to 1.
 
 .. function:: cumsum_kbn(A, [dim])
 
-   Cumulative sum along a dimension, using the Kahan-Babuska-Neumaier compensated summation algorithm for additional accuracy.
+   Cumulative sum along a dimension, using the Kahan-Babuska-Neumaier
+   compensated summation algorithm for additional accuracy.
+   The dimension defaults to 1.
 
 .. function:: cummin(A, [dim])
 
    Cumulative minimum along a dimension.
+   The dimension defaults to 1.
 
 .. function:: cummax(A, [dim])
 
    Cumulative maximum along a dimension.
+   The dimension defaults to 1.
 
 .. function:: diff(A, [dim])
 
@@ -3994,13 +4381,13 @@ Array functions
    Given a ``dims`` tuple of integers ``(m, n, ...)``, call ``f`` on all combinations of
    integers in the ranges ``1:m``, ``1:n``, etc.
    
-   **Example**::
+   .. doctest::
 
-       julia> cartesianmap(println, (2,2))
-       11
-       21
-       12
-       22
+      julia> cartesianmap(println, (2,2))
+      11
+      21
+      12
+      22
 
 BitArrays
 ~~~~~~~~~
@@ -4105,7 +4492,7 @@ Combinatorics
    Generate all integer arrays that sum to ``n``. Because the number of
    partitions can be very large, this function returns an iterator
    object. Use ``collect(partitions(n))`` to get an array of all
-   partitions. The number of partitions to generete can be efficiently
+   partitions. The number of partitions to generate can be efficiently
    computed using ``length(partitions(n))``.
 
 .. function:: partitions(n, m)
@@ -4113,7 +4500,7 @@ Combinatorics
    Generate all arrays of ``m`` integers that sum to ``n``. Because
    the number of partitions can be very large, this function returns an
    iterator object. Use ``collect(partitions(n,m))`` to get an array of
-   all partitions. The number of partitions to generete can be efficiently
+   all partitions. The number of partitions to generate can be efficiently
    computed using ``length(partitions(n,m))``.
 
 .. function:: partitions(array)
@@ -4122,7 +4509,7 @@ Combinatorics
    represented as arrays of arrays. Because the number of partitions
    can be very large, this function returns an iterator object. Use
    ``collect(partitions(array))`` to get an array of all partitions.
-   The number of partitions to generete can be efficiently
+   The number of partitions to generate can be efficiently
    computed using ``length(partitions(array))``.
 
 .. function:: partitions(array, m)
@@ -4512,9 +4899,15 @@ calling functions from `FFTW <http://www.fftw.org>`_.
 
    Undoes the effect of ``fftshift``.
 
-.. function:: filt(b,a,x)
+.. function:: filt(b, a, x, [si])
 
-   Apply filter described by vectors ``a`` and ``b`` to vector ``x``.
+   Apply filter described by vectors ``a`` and ``b`` to vector ``x``, with an
+   optional initial filter state vector ``si`` (defaults to zeros).
+
+.. function:: filt!(out, b, a, x, [si])
+
+   Same as :func:`filt` but writes the result into the ``out`` argument,
+   which may alias the input ``x`` to modify it in-place.
 
 .. function:: deconv(b,a)
 
@@ -4755,18 +5148,26 @@ Parallel Computing
 
 .. function:: put!(RemoteRef, value)
 
-   Store a value to a remote reference. Implements "shared queue of length 1" semantics: if a value is already present, blocks until the value is removed with ``take``. Returns its first argument.
+   Store a value to a remote reference. Implements "shared queue of length 1" semantics: if a value is already present, blocks until the value is removed with ``take!``. Returns its first argument.
 
 .. function:: take!(RemoteRef)
 
    Fetch the value of a remote reference, removing it so that the reference is empty again.
 
-.. function:: isready(RemoteRef)
+.. function:: isready(r::RemoteRef)
 
    Determine whether a ``RemoteRef`` has a value stored to it. Note that this function
-   can easily cause race conditions, since by the time you receive its result it may
+   can cause race conditions, since by the time you receive its result it may
    no longer be true. It is recommended that this function only be used on a
    ``RemoteRef`` that is assigned once.
+
+   If the argument ``RemoteRef`` is owned by a different node, this call will block to
+   wait for the answer. It is recommended to wait for ``r`` in a separate task instead,
+   or to use a local ``RemoteRef`` as a proxy::
+
+       rr = RemoteRef()
+       @async put!(rr, remotecall_fetch(p, long_computation))
+       isready(rr)  # will not block
 
 .. function:: RemoteRef()
 
@@ -4840,7 +5241,7 @@ Distributed Arrays
    Construct a distributed array. The parameter ``init`` is a function that accepts a tuple of index ranges. 
    This function should allocate a local chunk of the distributed array and initialize it for the specified indices. 
    ``dims`` is the overall size of the distributed array. ``procs`` optionally specifies a vector of process IDs to use. 
-   If unspecified, the array is distributed over all worker processes only. Typically, when runnning in distributed mode,
+   If unspecified, the array is distributed over all worker processes only. Typically, when running in distributed mode,
    i.e., ``nprocs() > 1``, this would mean that no chunk of the distributed array exists on the process hosting the 
    interactive julia prompt.
    ``dist`` is an integer vector specifying how many chunks the distributed array should be divided into in each dimension.
@@ -4949,13 +5350,22 @@ System
 
    Send a signal to a process. The default is to terminate the process.
 
-.. function:: readsfrom(command)
+.. function:: open(command, mode::String="r", stdio=DevNull)
 
-   Starts running a command asynchronously, and returns a tuple (stream,process). The first value is a stream reading from the process' standard output.
+   Start running ``command`` asynchronously, and return a tuple
+   ``(stream,process)``.  If ``mode`` is ``"r"``, then ``stream``
+   reads from the process's standard output and ``stdio`` optionally
+   specifies the process's standard input stream.  If ``mode`` is
+   ``"w"``, then ``stream`` writes to the process's standard input
+   and ``stdio`` optionally specifies the process's standard output
+   stream.
 
-.. function:: writesto(command)
+.. function:: open(f::Function, command, mode::String="r", stdio=DevNull)
 
-   Starts running a command asynchronously, and returns a tuple (stream,process). The first value is a stream writing to the process' standard input.
+   Similar to ``open(command, mode, stdio)``, but calls ``f(stream)``
+   on the resulting read or write stream, then closes the stream
+   and waits for the process to complete.  Returns the value returned
+   by ``f``.
 
 .. function:: readandwrite(command)
 
@@ -4972,11 +5382,14 @@ System
    allowing it to outlive the julia process, and not have Ctrl-C interrupts
    passed to it.
 
-.. function:: setenv(command, env)
+.. function:: setenv(command, env; dir=working_dir)
 
    Set environment variables to use when running the given command. ``env`` is either
    a dictionary mapping strings to strings, or an array of strings of the form
    ``"var=val"``.
+
+   The ``dir`` keyword argument can be used to specify a working directory for the
+   command.
 
 .. function:: |>(command, command)
               |>(command, filename)
@@ -5011,7 +5424,7 @@ System
 
 .. function:: cd(dir::String)
 
-   Set the current working directory. Returns the new current directory.
+   Set the current working directory.
 
 .. function:: cd(f, [dir])
 
@@ -5027,9 +5440,19 @@ System
    Create all directories in the given ``path``, with permissions ``mode``.
    ``mode`` defaults to 0o777, modified by the current file creation mask.
 
-.. function:: rmdir(path)
+.. function:: symlink(target, link)
 
-   Remove the directory named ``path``.
+   Creates a symbolic link to ``target`` with the name ``link``. 
+   
+   .. note::
+   
+      This function raises an error under operating systems that do not support
+      soft symbolic links, such as Windows XP.
+
+.. function:: chmod(path, mode)
+
+   Change the permissions mode of ``path`` to ``mode``. Only integer ``mode``\ s
+   (e.g. 0o777) are currently supported.
 
 .. function:: getpid() -> Int32
 
@@ -5141,52 +5564,52 @@ C Interface
    Load a shared library, returning an opaque handle.
 
    The optional flags argument is a bitwise-or of zero or more of
-   RTLD_LOCAL, RTLD_GLOBAL, RTLD_LAZY, RTLD_NOW, RTLD_NODELETE,
-   RTLD_NOLOAD, RTLD_DEEPBIND, and RTLD_FIRST.  These are converted to
+   ``RTLD_LOCAL``, ``RTLD_GLOBAL``, ``RTLD_LAZY``, ``RTLD_NOW``, ``RTLD_NODELETE``,
+   ``RTLD_NOLOAD``, ``RTLD_DEEPBIND``, and ``RTLD_FIRST``.  These are converted to
    the corresponding flags of the POSIX (and/or GNU libc and/or MacOS)
    dlopen command, if possible, or are ignored if the specified
    functionality is not available on the current platform.  The
-   default is RTLD_LAZY|RTLD_DEEPBIND|RTLD_LOCAL.  An important usage
+   default is ``RTLD_LAZY|RTLD_DEEPBIND|RTLD_LOCAL``.  An important usage
    of these flags, on POSIX platforms, is to specify
-   RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL in order for the library's
+   ``RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL`` in order for the library's
    symbols to be available for usage in other shared libraries, in
    situations where there are dependencies between shared libraries.
 
 .. function:: dlopen_e(libfile::String [, flags::Integer])
 
-   Similar to ``dlopen``, except returns a NULL pointer instead of raising errors.
+   Similar to :func:`dlopen`, except returns a ``NULL`` pointer instead of raising errors.
 
 .. data:: RTLD_DEEPBIND
 
-   Enum constant for dlopen. See your platform man page for details, if applicable.
+   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
 
 .. data:: RTLD_FIRST
 
-   Enum constant for dlopen. See your platform man page for details, if applicable.
+   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
 
 .. data:: RTLD_GLOBAL
 
-   Enum constant for dlopen. See your platform man page for details, if applicable.
+   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
 
 .. data:: RTLD_LAZY
 
-   Enum constant for dlopen. See your platform man page for details, if applicable.
+   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
 
 .. data:: RTLD_LOCAL
 
-   Enum constant for dlopen. See your platform man page for details, if applicable.
+   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
 
 .. data:: RTLD_NODELETE
     
-   Enum constant for dlopen. See your platform man page for details, if applicable.
+   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
 
 .. data:: RTLD_NOLOAD
 
-   Enum constant for dlopen. See your platform man page for details, if applicable.
+   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
 
 .. data:: RTLD_NOW
 
-   Enum constant for dlopen. See your platform man page for details, if applicable.
+   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
 
 .. function:: dlsym(handle, sym)
 
@@ -5250,12 +5673,12 @@ C Interface
 
 .. function:: copy!(dest, src)
 
-   Copy all elements from collection ``src`` to array ``dest``.
+   Copy all elements from collection ``src`` to array ``dest``. Returns ``dest``.
 
 .. function:: copy!(dest, do, src, so, N)
 
    Copy ``N`` elements from collection ``src`` starting at offset ``so``, to
-   array ``dest`` starting at offset ``do``.
+   array ``dest`` starting at offset ``do``. Returns ``dest``.
 
 .. function:: pointer(a[, index])
 
@@ -5358,6 +5781,14 @@ C Interface
 .. data:: Culonglong
 
    Equivalent to the native ``unsigned long long`` c-type (Uint64)
+
+.. data:: Cintmax_t
+
+   Equivalent to the native ``intmax_t`` c-type (Int64)
+
+.. data:: Cuintmax_t
+
+   Equivalent to the native ``uintmax_t`` c-type (Uint64)
 
 .. data:: Csize_t
 
@@ -5554,7 +5985,8 @@ Tasks
 
 .. function:: sleep(seconds)
 
-   Block the current task for a specified number of seconds.
+   Block the current task for a specified number of seconds. The minimum sleep
+   time is 1 millisecond or input of ``0.001``.
 
 Events
 ------
@@ -5562,9 +5994,8 @@ Events
 .. function:: Timer(f::Function)
 
    Create a timer to call the given callback function. The callback
-   is passed two arguments: the timer object itself, and a status code,
-   which will be 0 unless an error occurs. The timer can be started and
-   stopped with ``start_timer`` and ``stop_timer``.
+   is passed one argument, the timer object itself. The timer can be
+   started and stopped with ``start_timer`` and ``stop_timer``.
 
 .. function:: start_timer(t::Timer, delay, repeat)
 
@@ -5598,9 +6029,14 @@ Reflection
    Get the fully-qualified name of a module as a tuple of symbols. For example,
    ``fullname(Base.Pkg)`` gives ``(:Base,:Pkg)``, and ``fullname(Main)`` gives ``()``.
 
-.. function:: names(x)
+.. function:: names(x::Module[, all=false[, imported=false]])
 
-   Get an array of the names exported by a module, or the fields of a data type.
+   Get an array of the names exported by a module, with optionally more module
+   globals according to the additional parameters.
+
+.. function:: names(x::DataType)
+
+   Get an array of the fields of a data type.
 
 .. function:: isconst([m::Module], s::Symbol) -> Bool
 
@@ -5685,4 +6121,4 @@ Internals
 
 .. function:: precompile(f,args::(Any...,))
 
-   Compile the given function `f` for the argument tuple (of types) `args`, but do not execute it. 
+   Compile the given function ``f`` for the argument tuple (of types) ``args``, but do not execute it. 

@@ -37,7 +37,6 @@ end
 function init_help()
     global MODULE_DICT, FUNCTION_DICT
     if FUNCTION_DICT == nothing
-        info("Loading help data...")
         helpdb = evalfile(helpdb_filename())
         MODULE_DICT = Dict()
         FUNCTION_DICT = Dict()
@@ -134,10 +133,13 @@ function help(io::IO, fname::String, obj=0)
         elseif isgeneric(obj)
             writemime(io, "text/plain", obj); println()
         else
-            println(io, "No help information found.")
+            println(io, "Symbol not found. Falling back on apropos search ...")
+            apropos(io, fname)
         end
     end
 end
+
+apropos() = help()
 
 apropos(s::String) = apropos(STDOUT, s)
 function apropos(io::IO, txt::String)
@@ -178,6 +180,7 @@ function help(io::IO, x)
 end
 
 help(args...) = help(STDOUT, args...)
+help(::IO, args...) = error("too many arguments to help()")
 
 # check whether an expression is a qualified name, e.g. Base.FFTW.FORWARD
 isname(n::Symbol) = true

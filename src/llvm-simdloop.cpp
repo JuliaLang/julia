@@ -82,8 +82,13 @@ void LowerSIMDLoop::enableUnsafeAlgebraIfReduction(PHINode* Phi, Loop* L) const 
     for (Instruction *I = Phi; ; I=J) {
         J = NULL;
         // Find the user of instruction I that is within loop L.
+#if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 5
+        for (User *UI : I->users()) { /*}*/
+            Instruction *U = cast<Instruction>(UI);
+#else
         for (Value::use_iterator UI = I->use_begin(), UE = I->use_end(); UI != UE; ++UI) {
             Instruction *U = cast<Instruction>(*UI);
+#endif
             if (L->contains(U)) {
                 if (J) {
                     DEBUG(dbgs() << "LSL: not a reduction var because op has two internal uses: " << *I << "\n");

@@ -24,9 +24,7 @@
 #include <mach-o/dyld.h>
 #include <mach-o/nlist.h>
 #include <sys/types.h> // for jl_raise_debugger
-#endif
-
-#ifdef _OS_LINUX_
+#elif !defined(_OS_WINDOWS_)
 #include <link.h>
 #endif
 
@@ -87,37 +85,28 @@ DLLEXPORT int32_t jl_nb_available(ios_t *s)
     return (int32_t)(s->size - s->bpos);
 }
 
-DLLEXPORT int jl_ios_eof(ios_t *s)
-{
-    if (ios_eof(s))
-        return 1;
-    if (ios_readprep(s, 1) < 1)
-        return 1;
-    return 0;
-}
-
 // --- dir/file stuff ---
 
 DLLEXPORT int jl_sizeof_uv_fs_t(void) { return sizeof(uv_fs_t); }
-DLLEXPORT void jl_uv_fs_req_cleanup(uv_fs_t* req)
+DLLEXPORT void jl_uv_fs_req_cleanup(uv_fs_t *req)
 {
     uv_fs_req_cleanup(req);
 }
 
-DLLEXPORT int jl_readdir(const char* path, uv_fs_t* readdir_req)
+DLLEXPORT int jl_readdir(const char *path, uv_fs_t *readdir_req)
 {
     // Note that the flags field is mostly ignored by libuv
     return uv_fs_readdir(uv_default_loop(), readdir_req, path, 0 /*flags*/, NULL);
 }
 
-DLLEXPORT char* jl_uv_fs_t_ptr(uv_fs_t* req) { return (char*)req->ptr; }
-DLLEXPORT char* jl_uv_fs_t_ptr_offset(uv_fs_t* req, int offset) { return (char*)req->ptr + offset; }
+DLLEXPORT char *jl_uv_fs_t_ptr(uv_fs_t *req) { return (char*)req->ptr; }
+DLLEXPORT char *jl_uv_fs_t_ptr_offset(uv_fs_t *req, int offset) { return (char*)req->ptr + offset; }
 DLLEXPORT int jl_uv_fs_result(uv_fs_t *f) { return f->result; }
 
 // --- stat ---
 DLLEXPORT int jl_sizeof_stat(void) { return sizeof(uv_stat_t); }
 
-DLLEXPORT int32_t jl_stat(const char* path, char* statbuf)
+DLLEXPORT int32_t jl_stat(const char *path, char *statbuf)
 {
     uv_fs_t req;
     int ret;
@@ -131,7 +120,7 @@ DLLEXPORT int32_t jl_stat(const char* path, char* statbuf)
     return ret;
 }
 
-DLLEXPORT int32_t jl_lstat(const char* path, char* statbuf)
+DLLEXPORT int32_t jl_lstat(const char *path, char *statbuf)
 {
     uv_fs_t req;
     int ret;
@@ -376,12 +365,6 @@ jl_value_t *jl_environ(int i)
     char *env = environ[i];
     return env ? jl_pchar_to_string(env, strlen(env)) : jl_nothing;
 }
-#ifdef _OS_WINDOWS_
-jl_value_t *jl_env_done(char *pos)
-{
-    return (*pos==0)?jl_true:jl_false;
-}
-#endif
 
 // -- child process status --
 
@@ -423,6 +406,11 @@ DLLEXPORT void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
 {
 #if defined _MSC_VER
     __cpuid(CPUInfo, InfoType);
+#elif defined(__arm__)
+    CPUInfo[0] = 0x41; // ARMv7
+    CPUInfo[1] = 0; // godspeed
+    CPUInfo[2] = 0; // to anyone
+    CPUInfo[3] = 0; // using <v7
 #else
     __asm__ __volatile__ (
         #if defined(__i386__) && defined(__PIC__)
@@ -486,7 +474,8 @@ DLLEXPORT uint8_t jl_zero_subnormals(uint8_t isZero)
 
 // -- processor native alignment information --
 
-DLLEXPORT void jl_native_alignment(uint_t* int8align, uint_t* int16align, uint_t* int32align, uint_t* int64align, uint_t* float32align, uint_t* float64align)
+DLLEXPORT void jl_native_alignment(uint_t *int8align, uint_t *int16align, uint_t *int32align,
+                                   uint_t *int64align, uint_t *float32align, uint_t *float64align)
 {
     LLVMTargetDataRef tgtdata = LLVMCreateTargetData("");
     *int8align = LLVMPreferredAlignmentOfType(tgtdata, LLVMInt8Type());
@@ -528,6 +517,24 @@ long jl_getpagesize(void)
 long jl_getpagesize(void)
 {
     return sysconf(_SC_PAGESIZE);
+}
+#endif
+
+#ifdef _OS_WINDOWS_
+static long cachedAllocationGranularity = 0;
+long jl_getallocationgranularity(void)
+{
+    if (!cachedAllocationGranularity) {
+        SYSTEM_INFO systemInfo;
+        GetSystemInfo (&systemInfo);
+        cachedAllocationGranularity = systemInfo.dwAllocationGranularity;
+    }
+    return cachedAllocationGranularity;
+}
+#else
+long jl_getallocationgranularity(void)
+{
+    return jl_getpagesize();
 }
 #endif
 
@@ -618,20 +625,37 @@ DLLEXPORT const char *jl_pathname_for_handle(uv_lib_t *uv_lib)
                 return info.dli_fname;
         }
     }
-#endif
 
-#ifdef _OS_LINUX_
+#elif defined(_OS_WINDOWS_)
+
+    wchar_t *pth16 = (wchar_t*)malloc(32768); // max long path length
+    DWORD n16 = GetModuleFileNameW(handle,pth16,32768);
+    if (n16 <= 0) {
+        free(pth16);
+        return NULL;
+    }
+    pth16[n16] = L'\0';
+    DWORD n8 = WideCharToMultiByte(CP_UTF8, 0, pth16, -1, NULL, 0, NULL, NULL);
+    if (n8 == 0) {
+        free(pth16);
+        return NULL;
+    }
+    char *filepath = (char*)malloc(++n8);
+    if (!WideCharToMultiByte(CP_UTF8, 0, pth16, -1, filepath, n8, NULL, NULL)) {
+        free(pth16);
+        free(filepath);
+        return NULL;
+    }
+    free(pth16);
+    return filepath;
+
+#else // Linux, FreeBSD, ...
+
     struct link_map *map;
     dlinfo(handle, RTLD_DI_LINKMAP, &map);
     if (map)
         return map->l_name;
-#endif
 
-#ifdef _OS_WINDOWS_
-    char tclfile[260];
-    int len = GetModuleFileNameA(handle,tclfile,sizeof(tclfile));
-    if (len)
-        return strdup(tclfile);
 #endif
     return NULL;
 }

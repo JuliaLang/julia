@@ -132,21 +132,14 @@ jl_value_t *jl_eqtable_pop(jl_array_t *h, void *key, jl_value_t *deflt)
 }
 
 DLLEXPORT
-jl_value_t *jl_eqtable_next(jl_array_t *t, uint32_t i)
+size_t jl_eqtable_nextind(jl_array_t *t, size_t i)
 {
     if (i&1) i++;
     size_t alen = jl_array_dim0(t);
     while (i < alen && ((void**)t->data)[i+1] == NULL)
         i+=2;
-    if (i >= alen) return (jl_value_t*)jl_null;
-    jl_value_t *vi=NULL, *vt=NULL, *vv=NULL;
-    JL_GC_PUSH2(&vi, &vt);
-    vi = jl_box_uint32(i+2);
-    vt = (jl_value_t*)jl_tuple2(((jl_value_t**)t->data)[i],
-                                ((jl_value_t**)t->data)[i+1]);
-    vv = (jl_value_t*)jl_tuple2(vt, vi);
-    JL_GC_POP();
-    return vv;
+    if (i >= alen) return (size_t)-1;
+    return i;
 }
 
 #undef hash_size

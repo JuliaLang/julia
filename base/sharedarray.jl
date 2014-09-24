@@ -184,7 +184,6 @@ end
 # pidx, which is relevant to the current process only
 function serialize(s, S::SharedArray)
     serialize_type(s, typeof(S))
-    serialize(s, length(SharedArray.names))
     for n in SharedArray.names
         if n in [:s, :pidx, :loc_subarr_1d]
             writetag(s, UndefRefTag)
@@ -317,9 +316,9 @@ function print_shmem_limits(slen)
         @linux_only pfx = "kernel"
         @osx_only pfx = "kern.sysv"
 
-        shmmax_MB = div(int(split(readall(readsfrom(`sysctl $(pfx).shmmax`)[1]))[end]), 1024*1024)
-        page_size = int(split(readall(readsfrom(`getconf PAGE_SIZE`)[1]))[end])
-        shmall_MB = div(int(split(readall(readsfrom(`sysctl $(pfx).shmall`)[1]))[end]) * page_size, 1024*1024)
+        shmmax_MB = div(int(split(readall(`sysctl $(pfx).shmmax`))[end]), 1024*1024)
+        page_size = int(split(readall(`getconf PAGE_SIZE`))[end])
+        shmall_MB = div(int(split(readall(`sysctl $(pfx).shmall`))[end]) * page_size, 1024*1024)
 
         println("System max size of single shmem segment(MB) : ", shmmax_MB,
             "\nSystem max size of all shmem segments(MB) : ", shmall_MB,

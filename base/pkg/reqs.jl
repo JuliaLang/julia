@@ -24,7 +24,7 @@ immutable Requirement <: Line
         package = shift!(fields)
         all(field->ismatch(Base.VERSION_REGEX, field), fields) ||
             error("invalid requires entry for $package: $content")
-        versions = [ convert(VersionNumber, field) for field in fields ]
+        versions = [VersionNumber(field) for field in fields]
         issorted(versions) || error("invalid requires entry for $package: $content")
         new(content, package, VersionSet(versions), system)
     end
@@ -95,6 +95,18 @@ function parse(lines::Vector{Line})
     return reqs
 end
 parse(x) = parse(read(x))
+
+function dependents(packagename::String)
+    pkgs = String[]
+    cd(Pkg.dir()) do
+        for (pkg,latest) in Pkg.Read.latest()
+            if haskey(latest.requires, packagename)
+                push!(pkgs, pkg)
+            end
+        end
+    end
+    pkgs
+end
 
 # add & rm – edit the content a requires file
 

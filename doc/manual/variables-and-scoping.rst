@@ -43,7 +43,7 @@ current scope are as follows:
 -  A function's arguments are introduced as new local variables into the
    function's body scope.
 -  An assignment ``x = y`` introduces a new local variable ``x`` only if
-   ``x`` is neither declared global nor explicitly introduced as local
+   ``x`` is neither declared global nor introduced as local
    by any enclosing scope before *or after* the current line of code.
 
 In the following example, there is only one ``x`` assigned both inside
@@ -167,6 +167,24 @@ inside the loop. However, in code not entered into the interactive
 prompt this declaration would be necessary in order to modify a global
 variable.
 
+Multiple variables can be declared global using the following syntax::
+
+    function foo()
+        global x=1, y="bar", z=3
+    end
+    
+    julia> foo()
+    3
+    
+    julia> x
+    1
+    
+    julia> y
+    "bar"
+    
+    julia> z
+    3
+
 The ``let`` statement provides a different way to introduce variables.
 Unlike assignments to local variables, ``let`` statements allocate new
 variable bindings each time they run. An assignment modifies an existing
@@ -242,18 +260,18 @@ block without creating any new bindings:
            end
     1
 
-The first example is illegal because you cannot declare the same
-variable as local in the same scope twice. The second example is legal
+The first example is invalid because you cannot declare the same
+variable as local in the same scope twice. The second example is valid
 since the ``let`` introduces a new scope block, so the inner local ``x``
 is a different variable than the outer local ``x``.
 
 For Loops and Comprehensions
 ----------------------------
 
-For loops and comprehensions have a special additional behavior: any
-new variables introduced in their body scopes are freshly allocated for
-each loop iteration. Therefore these constructs are similar to ``while``
-loops with ``let`` blocks inside::
+``for`` loops and :ref:`comprehensions <comprehensions>` have a special
+additional behavior: any new variables introduced in their body scopes are
+freshly allocated for each loop iteration. Therefore these constructs are
+similar to ``while`` loops with ``let`` blocks inside::
 
     Fs = cell(2)
     for i = 1:2

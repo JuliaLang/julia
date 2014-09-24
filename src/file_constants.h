@@ -21,3 +21,6 @@ const JL_O_SEQUENTIAL   = O_SEQUENTIAL
 #ifdef O_RANDOM
 const JL_O_RANDOM       = O_RANDOM
 #endif
+#ifdef O_NOCTTY
+const JL_O_NOCTTY       = O_NOCTTY
+#endif

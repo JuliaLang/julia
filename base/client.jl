@@ -236,7 +236,7 @@ function process_options(args::Vector{UTF8String})
             addprocs(np)
         elseif args[i]=="--machinefile"
             i+=1
-            machines = split(readall(args[i]), '\n', false)
+            machines = split(readall(args[i]), '\n'; keep=false)
             addprocs(machines)
         elseif args[i]=="-v" || args[i]=="--version"
             println("julia version ", VERSION)
@@ -319,8 +319,8 @@ end
 function load_juliarc()
     # If the user built us with a specific Base.SYSCONFDIR, check that location first for a juliarc.jl file
     #   If it is not found, then continue on to the relative path based on JULIA_HOME
-    if !isempty(Base.SYSCONFDIR) && isfile(joinpath(Base.SYSCONFDIR,"julia","juliarc.jl"))
-        include(abspath(Base.SYSCONFDIR,"julia","juliarc.jl"))
+    if !isempty(Base.SYSCONFDIR) && isfile(joinpath(JULIA_HOME,Base.SYSCONFDIR,"julia","juliarc.jl"))
+        include(abspath(JULIA_HOME,Base.SYSCONFDIR,"julia","juliarc.jl"))
     else
         try_include(abspath(JULIA_HOME,"..","etc","julia","juliarc.jl"))
     end
@@ -354,6 +354,7 @@ function _start()
         (quiet,repl,startup,color_set,no_history_file) = process_options(copy(ARGS))
 
         local term
+        global active_repl
         if repl
             if !isa(STDIN,TTY)
                 global is_interactive |= !isa(STDIN,Union(File,IOStream))
@@ -362,6 +363,17 @@ function _start()
                 term = Terminals.TTYTerminal(get(ENV,"TERM",@windows? "" : "dumb"),STDIN,STDOUT,STDERR)
                 global is_interactive = true
                 color_set || (global have_color = Terminals.hascolor(term))
+                quiet || REPL.banner(term,term)
+                if term.term_type == "dumb"
+                    active_repl = REPL.BasicREPL(term)
+                else
+                    active_repl = REPL.LineEditREPL(term, true)
+                    active_repl.no_history_file = no_history_file
+                    active_repl.hascolor = have_color
+                end
+                # Make sure any displays pushed in .juliarc.jl ends up above the
+                # REPLDisplay
+                pushdisplay(REPL.REPLDisplay(active_repl))
             end
         end
 
@@ -384,15 +396,7 @@ function _start()
                 end
                 quit()
             end
-            quiet || REPL.banner(term,term)
-            local repl
-            if term.term_type == "dumb"
-                repl = REPL.BasicREPL(term)
-            else
-                repl = REPL.LineEditREPL(term)
-                repl.no_history_file = no_history_file
-            end
-            REPL.run_repl(repl)
+            REPL.run_repl(active_repl)
         end
     catch err
         display_error(err,catch_backtrace())

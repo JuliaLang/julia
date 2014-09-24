@@ -24,6 +24,11 @@ differences that may trip up Julia users accustomed to MATLAB:
    function which grows ``Vectors`` much more efficiently than Matlab's
    ``a(end+1) = val``.
 -  The imaginary unit ``sqrt(-1)`` is represented in julia with ``im``.
+-  Literal numbers without a decimal point (such as ``42``) create integers 
+   instead of floating point numbers. Arbitrarily large integer
+   literals are supported. But this means that some operations such as
+   ``2^-1`` will throw a domain error as the result is not an integer (see
+   :ref:`the FAQ entry on domain errors <man-domain-error>` for details).
 -  Multiple values are returned and assigned with parentheses,
    ``return (a, b)`` and ``(a, b) = f(x)``.
 -  Julia has 1-dimensional arrays. Column vectors are of size ``N``, not
@@ -49,6 +54,8 @@ differences that may trip up Julia users accustomed to MATLAB:
    behavior for 1xN arrays; the argument is returned unmodified since it
    still performs ``sort(A,1)``. To sort a 1xN matrix like a vector, use
    ``sort(A,2)``.
+-  If ``A`` is a 2-dimensional array ``fft(A)`` computes a 2D FFT. In particular, 
+   it is not equivalent to ``fft(A,1)``, which computes a 1D FFT acting column-wise.
 -  Parentheses must be used to call a function with zero arguments, as
    in ``tic()`` and ``toc()``.
 -  Do not use semicolons to end statements. The results of statements are
@@ -68,7 +75,8 @@ differences that may trip up Julia users accustomed to MATLAB:
    using ``...``, as in ``xs=[1,2]; f(xs...)``.
 -  Julia's ``svd`` returns singular values as a vector instead of as a
    full diagonal matrix.
--  In Julia, ``...`` is not used to continue lines of code.
+-  In Julia, ``...`` is not used to continue lines of code. Instead, incomplete
+   expressions automatically continue onto the next line.
 -  The variable ``ans`` is set to the value of the last expression issued
    in an interactive session, but not set when Julia code is run in other
    ways.
@@ -95,10 +103,14 @@ One of Julia's goals is to provide an effective language for data analysis and s
 - Julia is careful to distinguish scalars, vectors and matrices. In R, ``1`` and ``c(1)`` are the same. In Julia, they can not be used interchangeably. One potentially confusing result of this is that ``x' * y`` for vectors ``x`` and ``y`` is a 1-element vector, not a scalar. To get a scalar, use ``dot(x, y)``.
 - Julia's ``diag()`` and ``diagm()`` are not like R's.
 - Julia cannot assign to the results of function calls on the left-hand of an assignment operation: you cannot write ``diag(M) = ones(n)``.
-- Julia discourages populating the main namespace with functions. Most statistical functionality for Julia is found in `packages <http://docs.julialang.org/en/latest/packages/packagelist/>`_ like the DataFrames and Distributions packages:
-	- Distributions functions are found in the `Distributions package <https://github.com/JuliaStats/Distributions.jl>`_
-	- The `DataFrames package <https://github.com/HarlanH/DataFrames.jl>`_ provides data frames.
-	- Formulas for GLM's must be escaped: use ``:(y ~ x)`` instead of ``y ~ x``.
+- Julia discourages populating the main namespace with functions. Most statistical
+  functionality for Julia is found in `packages <http://pkg.julialang.org/>`_ like the
+  DataFrames and Distributions packages:
+
+	- Distributions functions are found in the `Distributions package <https://github.com/JuliaStats/Distributions.jl>`_.
+	- The `DataFrames package <https://github.com/JuliaStats/DataFrames.jl>`_ provides data frames.
+	- Generalized linear models are provided by the `GLM package <https://github.com/JuliaStats/GLM.jl>`_.
+
 - Julia provides tuples and real hash tables, but not R's lists. When returning multiple items, you should typically use a tuple: instead of ``list(a = 1, b = 2)``, use ``(1, 2)``.
 - Julia encourages all users to write their own types. Julia's types are much easier to use than S3 or S4 objects in R. Julia's multiple dispatch system means that ``table(x::TypeA)`` and ``table(x::TypeB)`` act like R's ``table.TypeA(x)`` and ``table.TypeB(x)``.
 - In Julia, values are passed and assigned by reference. If a function modifies an array, the changes will be visible in the caller. This is very different from R and allows new functions to operate on large data structures much more efficiently.

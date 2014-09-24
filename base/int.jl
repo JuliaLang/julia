@@ -88,6 +88,9 @@ fld(x::Unsigned, y::Signed) = div(x,y)-(signbit(y)&(rem(x,y)!=0))
 mod(x::Signed, y::Unsigned) = rem(y+unsigned(rem(x,y)),y)
 mod(x::Unsigned, y::Signed) = rem(y+signed(rem(x,y)),y)
 
+cld(x::Signed, y::Unsigned) = div(x,y)+(!signbit(x)&(rem(x,y)!=0))
+cld(x::Unsigned, y::Signed) = div(x,y)+(!signbit(y)&(rem(x,y)!=0))
+
 # Don't promote integers for div/rem/mod since there no danger of overflow,
 # while there is a substantial performance penalty to 64-bit promotion.
 typealias Signed64 Union(Int8,Int16,Int32,Int64)
@@ -104,6 +107,9 @@ mod{T<:Unsigned}(x::T, y::T) = rem(x,y)
 
 fld{T<:Unsigned}(x::T, y::T) = div(x,y)
 fld{T<:Integer }(x::T, y::T) = div(x,y)-(signbit(x$y)&(rem(x,y)!=0))
+
+cld{T<:Unsigned}(x::T, y::T) = div(x,y)+(rem(x,y)!=0)
+cld{T<:Integer }(x::T, y::T) = div(x,y)+(!signbit(x$y)&(rem(x,y)!=0))
 
 ## integer bitwise operations ##
 
@@ -479,17 +485,6 @@ typemax(::Type{Uint64}) = 0xffffffffffffffff
     typemax(::Type{Int128} ) = $(int128((uint128(-1))>>int32(1)))
 end
 
-sizeof(::Type{Int8})    = 1
-sizeof(::Type{Uint8})   = 1
-sizeof(::Type{Int16})   = 2
-sizeof(::Type{Uint16})  = 2
-sizeof(::Type{Int32})   = 4
-sizeof(::Type{Uint32})  = 4
-sizeof(::Type{Int64})   = 8
-sizeof(::Type{Uint64})  = 8
-sizeof(::Type{Int128})  = 16
-sizeof(::Type{Uint128}) = 16
-
 widen(::Type{Int8}) = Int
 widen(::Type{Int16}) = Int
 widen(::Type{Int32}) = Int64
@@ -503,14 +498,11 @@ widen(::Type{Uint64}) = Uint128
 
 # requires int arithmetic defined, for the loops to work
 
-for f in (:int, :int8, :int16, :int32, :signed, :integer)
-    @eval ($f)(x::FloatingPoint) = ($f)(iround(x))
-end
-
-for (f,t) in ((:uint8,:Uint8), (:uint16,:Uint16), (:uint32,:Uint32),
-              (:int64,:Int64), (:uint64,:Uint64),
+for (f,t) in ((:uint8,:Uint8), (:uint16,:Uint16), (:uint32,:Uint32), (:uint64,:Uint64),
+              (:int8,:Int8),   (:int16,:Int16),   (:int32,:Int32),   (:int64,:Int64),
               (:int128,:Int128), (:uint128,:Uint128),
-              (:unsigned,:Uint), (:uint,:Uint))
+              (:signed,:Int), (:unsigned,:Uint), (:integer,:Int),
+              (:int,:Int), (:uint,:Uint))
     @eval ($f)(x::FloatingPoint) = iround($t,x)
 end
 

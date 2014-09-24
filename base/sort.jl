@@ -157,9 +157,9 @@ end
 # returns the range of indices of v equal to x
 # if v does not contain x, returns a 0-length range
 # indicating the insertion point of x
-function searchsorted(v::AbstractVector, x, lo::Int, hi::Int, o::Ordering)
-    lo = lo-1
-    hi = hi+1
+function searchsorted(v::AbstractVector, x, ilo::Int, ihi::Int, o::Ordering)
+    lo = ilo-1
+    hi = ihi+1
     @inbounds while lo < hi-1
         m = (lo+hi)>>>1
         if lt(o, v[m], x)
@@ -167,8 +167,8 @@ function searchsorted(v::AbstractVector, x, lo::Int, hi::Int, o::Ordering)
         elseif lt(o, x, v[m])
             hi = m
         else
-            a = searchsortedfirst(v, x, max(lo,1), m, o)
-            b = searchsortedlast(v, x, m, min(hi,length(v)), o)
+            a = searchsortedfirst(v, x, max(lo,ilo), m, o)
+            b = searchsortedlast(v, x, m, min(hi,ihi), o)
             return a:b
         end
     end
@@ -285,11 +285,13 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, a::QuickSortAlg, o::Ordering
     return v
 end
 
-function sort!(v::AbstractVector, lo::Int, hi::Int, a::MergeSortAlg, o::Ordering, t=similar(v))
+function sort!(v::AbstractVector, lo::Int, hi::Int, a::MergeSortAlg, o::Ordering, t=similar(v,0))
     @inbounds if lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
 
         m = (lo+hi)>>>1
+        isempty(t) && resize!(t, m-lo+1)
+
         sort!(v, lo,  m,  a, o, t)
         sort!(v, m+1, hi, a, o, t)
 

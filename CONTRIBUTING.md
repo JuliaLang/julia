@@ -6,7 +6,7 @@ Hi! Thanks for checking out Julia. If you have questions or problems, the [Julia
 
 * Create a [GitHub account](https://github.com/signup/free).
 
-* [Fork Julia](https://github.com/JuliaLang/julia/fork_select).
+* [Fork Julia](https://github.com/JuliaLang/julia/fork).
 
 * Build the software and libraries (the first time takes a while, but it's fast after that). Detailed build instructions are in the [README](https://github.com/JuliaLang/julia/tree/master/README.md). Julia depends on several external packages; most are automatically downloaded and installed, but are less frequently updated than Julia itself.
 
@@ -23,8 +23,8 @@ A useful bug report filed as a Github issue provides information about how to re
 1. Before opening a new [Github issue](https://github.com/JuliaLang/julia/issues):
   - Try searching the existing issues or the [`julia-users` mailing list](https://groups.google.com/forum/#!forum/julia-users) to see if someone else has already noticed the same problem.
   - Try some simple debugging techniques to help isolate the problem.
-    - Try running the code with the debug REPL. If you have a source distribution of Julia, you can build your own debug REPL with `make debug`, which produces the `usr/bin/julia-debug-basic` REPL.
-    - Consider running the debug REPL in a debugger such as `gdb` or `lldb`. Obtaining even a simple [backtrace](http://www.unknownroad.com/rtfm/gdbtut/gdbsegfault.html) is very useful.
+    - Try running the code with the debug build of Julia with `make debug`, which produces the `usr/bin/julia-debug`.
+    - Consider running `julia-debug` with a debugger such as `gdb` or `lldb`. Obtaining even a simple [backtrace](http://www.unknownroad.com/rtfm/gdbtut/gdbsegfault.html) is very useful.
     - If Julia segfaults, try following [these debugging tips](https://gist.github.com/staticfloat/6188418#segfaults-during-bootstrap-sysimgjl) to help track down the specific origin of the bug.
 
 2. If the problem is caused by a Julia package rather than core Julia, file a bug report with the relevant package author rather than here.
@@ -34,13 +34,13 @@ A useful bug report filed as a Github issue provides information about how to re
   - A minimal working example, i.e. the smallest chunk of code that triggers the error. Ideally, this should be code that can be pasted into a REPL or run from a source file. If the code is larger than (say) 50 lines, consider putting it in a [gist](https://gist.github.com).
   - The version of Julia you are using as provided by the `versioninfo()` command. Occasionally, the longer output produced by `versioninfo(true)` may be useful also, especially if the issue is related to a specific package.
 
-4. When pasting code or output, put triple backquotes (```) around the code block and output block so that Github will format it nicely. 
+4. When pasting code blocks or output, put triple backquotes (\`\`\`) around the text so Github will format it nicely. You can format code statements by surrounding it in single backquotes (\`). Be aware that the `@` sign tags users on GitHub, so references to macros should always be in single backquotes. See [GitHub's guide on Markdown](https://guides.github.com/features/mastering-markdown/) for more formatting tricks.
 
 ## Submitting your contributions
 
 ### Contributing a Julia package
 
-Julia has a built-in [package manager](https://github.com/JuliaLang/METADATA.jl) based on git. A number of [packages](http://docs.julialang.org/en/latest/packages/packagelist/) across many domains are already available for Julia. Developers are encouraged to provide their libraries as a Julia package. The Julia manual provides instructions on [creating Julia packages](http://docs.julialang.org/en/latest/manual/packages/). 
+Julia has a built-in [package manager](https://github.com/JuliaLang/METADATA.jl) based on git. A number of [packages](http://pkg.julialang.org/) across many domains are already available for Julia. Developers are encouraged to provide their libraries as a Julia package. The Julia manual provides instructions on [creating Julia packages](http://docs.julialang.org/en/latest/manual/packages/).
 
 For developers who need to wrap C libraries so that they can be called from Julia, the [Clang.jl](https://github.com/ihnorton/Clang.jl) package can help generate the wrappers automatically from the C header files.
 

@@ -51,7 +51,7 @@ lexcmp(x,y) = cmp(x,y)
 lexless(x,y) = lexcmp(x,y)<0
 
 # cmp returns -1, 0, +1 indicating ordering
-cmp(x::Real, y::Real) = int(sign(x-y))
+cmp(x::Integer, y::Integer) = ifelse(isless(x,y), -1, ifelse(isless(y,x), 1, 0))
 
 max(x,y) = ifelse(y < x, x, y)
 min(x,y) = ifelse(x < y, x, y)
@@ -94,8 +94,10 @@ end
 .\(x::Number,y::Number) = y./x
 .*(x::Number,y::Number) = x*y
 .^(x::Number,y::Number) = x^y
-.+(x,y) = x+y
-.-(x,y) = x-y
+.+(x::Number,y::Number) = x+y
+.-(x::Number,y::Number) = x-y
+.<<(x::Number,y::Number) = x<<y
+.>>(x::Number,y::Number) = x>>y
 
 .==(x::Number,y::Number) = x == y
 .!=(x::Number,y::Number) = x != y
@@ -112,13 +114,15 @@ const .≠ = .!=
 >>(x,y::Integer)  = x >> convert(Int32,y)
 >>>(x,y::Integer) = x >>> convert(Int32,y)
 
-# fallback div and fld implementations
+# fallback div, fld, and cld implementations
 # NOTE: C89 fmod() and x87 FPREM implicitly provide truncating float division,
 # so it is used here as the basis of float div().
 div{T<:Real}(x::T, y::T) = convert(T,round((x-rem(x,y))/y))
 fld{T<:Real}(x::T, y::T) = convert(T,round((x-mod(x,y))/y))
+cld{T<:Real}(x::T, y::T) = convert(T,round((x-modCeil(x,y))/y))
 #rem{T<:Real}(x::T, y::T) = convert(T,x-y*trunc(x/y))
 #mod{T<:Real}(x::T, y::T) = convert(T,x-y*floor(x/y))
+modCeil{T<:Real}(x::T, y::T) = convert(T,x-y*ceil(x/y))
 
 # operator alias
 const % = rem
@@ -129,6 +133,11 @@ const ÷ = div
 mod1{T<:Real}(x::T, y::T) = y-mod(y-x,y)
 rem1{T<:Real}(x::T, y::T) = rem(x-1,y)+1
 fld1{T<:Real}(x::T, y::T) = fld(x-1,y)+1
+
+# transpose
+transpose(x) = x
+ctranspose(x) = conj(transpose(x))
+conj(x) = x
 
 # transposed multiply
 Ac_mul_B (a,b) = ctranspose(a)*b
@@ -159,18 +168,14 @@ oftype{T}(x::T,c) = convert(T,c)
 
 widen{T<:Number}(x::T) = convert(widen(T), x)
 
-sizeof(T::Type) = error(string("size of type ",T," unknown"))
-sizeof(T::DataType) = if isleaftype(T) T.size else error("type does not have a native size") end
-sizeof(::Type{Symbol}) = error("type does not have a native size")
-sizeof{T<:Array}(::Type{T}) = error("type $(T) does not have a native size")
-sizeof(x) = sizeof(typeof(x))
+sizeof(x) = Core.sizeof(x)
 
 # copying immutable things
 copy(x::Union(Symbol,Number,String,Function,Tuple,LambdaStaticData,
               TopNode,QuoteNode,DataType,UnionType)) = x
 
 # function pipelining
-|>(x, f::Function) = f(x)
+|>(x, f::Callable) = f(x)
 
 # array shape rules
 
@@ -313,6 +318,39 @@ to_index(I::(Any,Any,Any,Any)) = (to_index(I[1]), to_index(I[2]), to_index(I[3])
 to_index(I::Tuple) = map(to_index, I)
 to_index(i) = error("invalid index: $i")
 
+# Addition/subtraction of ranges
+for f in (:+, :-)
+    @eval begin
+        function $f(r1::OrdinalRange, r2::OrdinalRange)
+            r1l = length(r1)
+            r1l == length(r2) || error("argument dimensions must match")
+            range($f(r1.start,r2.start), $f(step(r1),step(r2)), r1l)
+        end
+
+        function $f{T<:FloatingPoint}(r1::FloatRange{T}, r2::FloatRange{T})
+            len = r1.len
+            len == r2.len || error("argument dimensions must match")
+            divisor1, divisor2 = r1.divisor, r2.divisor
+            if divisor1 == divisor2
+                FloatRange{T}($f(r1.start,r2.start), $f(r1.step,r2.step),
+                              len, divisor1)
+            else
+                d1 = int(divisor1)
+                d2 = int(divisor2)
+                d = lcm(d1,d2)
+                s1 = div(d,d1)
+                s2 = div(d,d2)
+                FloatRange{T}($f(r1.start*s1, r2.start*s2),
+                              $f(r1.step*s1, r2.step*s2),  len, d)
+            end
+        end
+
+        $f(r1::FloatRange, r2::FloatRange) = $f(promote(r1,r2)...)
+        $f(r1::FloatRange, r2::OrdinalRange) = $f(promote(r1,r2)...)
+        $f(r1::OrdinalRange, r2::FloatRange) = $f(promote(r1,r2)...)
+    end
+end
+
 # vectorization
 
 macro vectorize_1arg(S,f)
@@ -363,7 +401,7 @@ function ifelse(c::AbstractArray{Bool}, x, y::AbstractArray)
 end
 
 # some operators not defined yet
-global //, .>>, .<<, >:, <|, |>, hcat, hvcat, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √
+global //, .>>, .<<, >:, <|, |>, hcat, hvcat, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
 
 module Operators
 
@@ -429,6 +467,7 @@ export
     ∩,
     ∪,
     √,
+    ∛,
     colon,
     hcat,
     vcat,
@@ -442,6 +481,6 @@ import Base: !, !=, $, %, .%, &, *, +, -, .!=, .+, .-, .*, ./, .<, .<=, .==, .>,
     .>=, .\, .^, /, //, <, <:, <<, <=, ==, >, >=, >>, .>>, .<<, >>>,
     <|, |>, \, ^, |, ~, !==, >:, colon, hcat, vcat, hvcat, getindex, setindex!,
     transpose, ctranspose,
-    ≥, ≤, ≠, .≥, .≤, .≠, ÷, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √
+    ≥, ≤, ≠, .≥, .≤, .≠, ÷, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
 
 end
