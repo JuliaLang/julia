@@ -261,6 +261,7 @@ typedef struct _jl_methlist_t {
     JL_DATA_TYPE
     jl_tuple_t *sig;
     int8_t va;
+    int8_t isstaged;
     jl_tuple_t *tvars;
     jl_function_t *func;
     // cache of specializations of this method for invoke(), i.e.
@@ -422,7 +423,7 @@ extern jl_sym_t *compositetype_sym; extern jl_sym_t *type_goto_sym;
 extern jl_sym_t *global_sym;  extern jl_sym_t *tuple_sym;
 extern jl_sym_t *boundscheck_sym; extern jl_sym_t *copyast_sym;
 extern jl_sym_t *simdloop_sym; extern jl_sym_t *meta_sym;
-
+extern jl_sym_t *arrow_sym; extern jl_sym_t *ldots_sym;
 
 // object accessors -----------------------------------------------------------
 
@@ -672,9 +673,9 @@ DLLEXPORT jl_sym_t *jl_get_root_symbol(void);
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 jl_function_t *jl_new_generic_function(jl_sym_t *name);
 void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth,
-                   jl_tuple_t *tvars);
+                   jl_tuple_t *tvars, int8_t isstaged);
 DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
-                                    jl_tuple_t *argtypes, jl_function_t *f);
+                                    jl_tuple_t *argtypes, jl_function_t *f, jl_value_t *isstaged);
 DLLEXPORT jl_value_t *jl_box_bool(int8_t x);
 DLLEXPORT jl_value_t *jl_box_int8(int32_t x);
 DLLEXPORT jl_value_t *jl_box_uint8(uint32_t x);

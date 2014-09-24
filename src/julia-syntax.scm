@@ -437,7 +437,7 @@
 	   (pair? (caddr e)) (eq? (car (caddr e)) 'quote)
 	   (symbol? (cadr (caddr e))))))
 
-(define (method-def-expr- name sparams argl body)
+(define (method-def-expr- name sparams argl body isstaged)
   (receive
    (names bounds) (sparam-name-bounds sparams '() '())
    (begin
@@ -455,12 +455,12 @@
      (let* ((types (llist-types argl))
 	    (body  (method-lambda-expr argl body)))
        (if (null? sparams)
-	   `(method ,name (tuple (tuple ,@types) (tuple)) ,body)
+	   `(method ,name (tuple (tuple ,@types) (tuple)) ,body ,isstaged)
 	   `(method ,name
 		    (call (lambda ,names
 			    (tuple (tuple ,@types) (tuple ,@names)))
 			  ,@(symbols->typevars names bounds #t))
-		    ,body))))))
+		    ,body ,isstaged))))))
 
 (define (vararg? x) (and (pair? x) (eq? (car x) '...)))
 (define (trans?  x) (and (pair? x) (eq? (car x) '|.'|)))
@@ -469,7 +469,7 @@
 (define (const-default? x)
   (or (number? x) (string? x) (char? x) (and (pair? x) (eq? (car x) 'quote))))
 
-(define (keywords-method-def-expr name sparams argl body)
+(define (keywords-method-def-expr name sparams argl body isstaged)
   (let* ((kargl (cdar argl))  ;; keyword expressions (= k v)
          (pargl (cdr argl))   ;; positional args
 	 (body  (if (and (pair? body) (eq? (car body) 'block))
@@ -533,7 +533,7 @@
 	  `(block
 	    ,@(if (null? lno) '()
 		  (list (append (car lno) (list (undot-name name)))))
-	    ,@stmts))
+	    ,@stmts) isstaged)
 
 	;; call with no keyword args
 	,(method-def-expr-
@@ -551,7 +551,7 @@
 			  ,@(if (null? restkw) '() '((cell1d)))
 			  ,@(map arg-name pargl)
 			  ,@(if (null? vararg) '()
-				(list `(... ,(arg-name (car vararg)))))))))
+				(list `(... ,(arg-name (car vararg)))))))) isstaged)
 
 	;; call with unsorted keyword args. this sorts and re-dispatches.
 	,(method-def-expr-
@@ -628,11 +628,12 @@
 			  ,@(if (null? restkw) '() (list rkw))
 			  ,@(map arg-name pargl)
 			  ,@(if (null? vararg) '()
-				(list `(... ,(arg-name (car vararg)))))))))
+				(list `(... ,(arg-name (car vararg))))))))
+        isstaged)
 	;; return primary function
 	,name))))
 
-(define (optional-positional-defs name sparams req opt dfl body overall-argl . kw)
+(define (optional-positional-defs name sparams req opt dfl body isstaged overall-argl . kw)
   (let ((lno  (if (and (pair? body) (pair? (cdr body))
 		       (pair? (cadr body)) (eq? (caadr body) 'line))
 		  (list (cadr body))
@@ -668,11 +669,11 @@
 			 `(block
 			   ,@lno
 			   (call ,name ,@kw ,@(map arg-name passed) ,@vals)))))
-	       (method-def-expr name sp (append kw passed) body)))
+	       (method-def-expr name sp (append kw passed) body isstaged)))
 	   (iota (length opt)))
-    ,(method-def-expr name sparams overall-argl body))))
+    ,(method-def-expr name sparams overall-argl body isstaged))))
 
-(define (method-def-expr name sparams argl body)
+(define (method-def-expr name sparams argl body isstaged)
   (if (any kwarg? argl)
       ;; has optional positional args
       (begin
@@ -697,20 +698,20 @@
 		 (check-kw-args (cdr kw))
 		 (receive
 		  (vararg req) (separate vararg? argl)
-		  (optional-positional-defs name sparams req opt dfl body
+		  (optional-positional-defs name sparams req opt dfl body isstaged
 					    (cons kw (append req opt vararg))
 					    `(parameters (... ,(gensy))))))
 	       ;; optional positional only
 	       (receive
 		(vararg req) (separate vararg? argl)
-		(optional-positional-defs name sparams req opt dfl body
+		(optional-positional-defs name sparams req opt dfl body isstaged
 					  (append req opt vararg)))))))
       (if (has-parameters? argl)
 	  ;; keywords only
 	  (begin (check-kw-args (cdar argl))
-		 (keywords-method-def-expr name sparams argl body))
+		 (keywords-method-def-expr name sparams argl body isstaged))
 	  ;; neither
-	  (method-def-expr- name sparams argl body))))
+	  (method-def-expr- name sparams argl body isstaged))))
 
 (define (struct-def-expr name params super fields mut)
   (receive
@@ -796,9 +797,15 @@
 	   (pattern-lambda (function (call (curly name . p) . sig) body)
 			   `(function (call (curly ,(if (eq? name Tname) iname name) ,@p) ,@sig)
 				      ,(ctor-body body)))
+       (pattern-lambda (stagedfunction (call (curly name . p) . sig) body)
+               `(stagedfunction (call (curly ,(if (eq? name Tname) iname name) ,@p) ,@sig)
+                      ,(ctor-body body)))
 	   (pattern-lambda (function (call name . sig) body)
 			   `(function (call ,(if (eq? name Tname) iname name) ,@sig)
 				      ,(ctor-body body)))
+       (pattern-lambda (stagedfunction (call name . sig) body)
+               `(stagedfunction (call ,(if (eq? name Tname) iname name) ,@sig)
+                      ,(ctor-body body)))
 	   (pattern-lambda (= (call (curly name . p) . sig) body)
 			   `(= (call (curly ,(if (eq? name Tname) iname name) ,@p) ,@sig)
 			       ,(ctor-body body)))
@@ -985,6 +992,7 @@
   (cond ((or (atom? e) (quoted? e)) e)
 	((or (eq? (car e) 'lambda)
 	     (eq? (car e) 'function)
+         (eq? (car e) 'stagedfunction)
 	     (eq? (car e) '->)) e)
 	((eq? (car e) 'return)
 	 `(block ,@(if ret `((= ,ret true)) '())
@@ -998,7 +1006,7 @@
    ((quoted? e) e)
    (else
     (case (car e)
-      ((function)
+      ((function stagedfunction)
        (let ((name (cadr e)))
 	 (if (pair? name)
 	     (if (eq? (car name) 'call)
@@ -1008,11 +1016,11 @@
 		      (method-def-expr (cadr (cadr name))
 				       (cddr (cadr name))
 				       (fix-arglist (cddr name))
-				       (caddr e))
+				       (caddr e) (eq? (car e) 'stagedfunction))
 		      (method-def-expr (cadr name)
 				       '()
 				       (fix-arglist (cddr name))
-				       (caddr e))))
+				       (caddr e) (eq? (car e) 'stagedfunction))))
 		 (if (eq? (car name) 'tuple)
 		     (expand-binding-forms
 		      `(-> ,name ,(caddr e)))
@@ -2848,6 +2856,7 @@ So far only the second case can actually occur.
 (define (free-vars e)
   (table.keys (free-vars- e (table) *free-vars-secret-value*)))
 
+(define (caddddr x) (car (cdr (cdr (cdr (cdr x))))))
 ; convert each lambda's (locals ...) to
 ;   ((localvars...) var-info-lst captured-var-infos)
 ; where var-info-lst is a list of var-info records
@@ -2951,7 +2960,8 @@ So far only the second case can actually occur.
 		     (vinfo:set-iasg! vi #t)))))
 	 `(method ,(cadr e)
 		  ,(analyze-vars (caddr  e) env captvars)
-		  ,(analyze-vars (cadddr e) env captvars)))
+		  ,(analyze-vars (cadddr e) env captvars)
+          ,(caddddr e)))
 	(else (cons (car e)
 		    (map (lambda (x) (analyze-vars x env captvars))
 			 (cdr e)))))))
