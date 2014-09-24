@@ -210,6 +210,14 @@ end
 <=(x::Float32, y::Union(Int32,Uint32)) = float64(x)<=float64(y)
 <=(x::Union(Int32,Uint32), y::Float32) = float64(x)<=float64(y)
 
+==(x::Float16,y::Integer) = float32(x) == y
+==(x::Integer,y::Float16) = x == float32(y)
+< (x::Float16,y::Integer) = float32(x) < y
+< (x::Integer,y::Float16) = x < float32(y)
+<=(x::Float16,y::Integer) = float32(x) <= y
+<=(x::Integer,y::Float16) = x <= float32(y)
+
+
 abs(x::Float64) = box(Float64,abs_float(unbox(Float64,x)))
 abs(x::Float32) = box(Float32,abs_float(unbox(Float32,x)))
 

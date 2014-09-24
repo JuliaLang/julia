@@ -94,6 +94,17 @@ Special values:
 decompose(x::Integer) = x, 0, 1
 decompose(x::Rational) = num(x), 0, den(x)
 
+function decompose(x::Float16)
+    isnan(x) && return 0, 0, 0
+    isinf(x) && return ifelse(x < 0, -1, 1), 0, 0
+    n = reinterpret(Int16, x)
+    s = int16(n & 0x03ff)
+    e = int16(n & 0x7c00 >> 10)
+    s |= int16(e != 0) << 10
+    d = ifelse(signbit(n), -1, 1)
+    int(s), int(e - 25 + (e == 0)), d
+end
+
 function decompose(x::Float32)
     isnan(x) && return 0, 0, 0
     isinf(x) && return ifelse(x < 0, -1, 1), 0, 0

@@ -17,13 +17,42 @@ convert{T<:Integer}(::Type{Rational{T}}, x::MathConst) = convert(Rational{T}, fl
 ==(::MathConst, ::MathConst) = false
 
 <(x::MathConst, y::MathConst) = float(x) < float(y)
+<=(x::MathConst, y::MathConst) = float(x) <= float(y)
+
 <(x::Real, y::MathConst) = x <= prevfloat(y)
 <(x::MathConst, y::Real) = nextfloat(x) <= y
-<=(x::MathConst, y::MathConst) = float(x) <= float(y)
+
+function <(x::BigFloat, c::MathConst)
+    p = precision(x)
+    y = with_bigfloat_precision(p) do
+        big(c)
+    end
+    while x == y
+        p += 16
+        y = with_bigfloat_precision(p) do
+            big(c)
+        end
+    end
+    x < y
+end
+function <(c::MathConst, x::BigFloat)
+    p = precision(x)
+    y = with_bigfloat_precision(p) do
+        big(c)
+    end
+    while x == y
+        p += 16
+        y = with_bigfloat_precision(p) do
+            big(c)
+        end
+    end
+    y < x
+end
+
 <=(x::Real, y::MathConst) = x < y
 <=(x::MathConst, y::Real) = x < y
 
-# TODO: BigFloat, Rationals
+# TODO: Rationals
 
 hash(x::MathConst, h::Uint) = hash(object_id(x), h)
 
