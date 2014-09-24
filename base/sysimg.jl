@@ -282,7 +282,7 @@ end
 
 include("precompile.jl")
 
-include = include_from_node1
+include = include_from_node1host
 
 end # baremodule Base
 

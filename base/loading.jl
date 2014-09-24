@@ -21,7 +21,7 @@ function find_in_path(name::String)
     return nothing
 end
 
-find_in_node1_path(name) = myid()==1 ?
+find_in_node1host_path(name) = same_host_as_node1() ?
     find_in_path(name) : remotecall_fetch(1, find_in_path, name)
 
 function find_source_file(file)
@@ -43,7 +43,7 @@ require(f::String, fs::String...) = (require(f); for x in fs require(x); end)
 toplevel_load = true
 
 function require(name::String)
-    path = find_in_node1_path(name)
+    path = find_in_node1host_path(name)
     path == nothing && error("$name not found")
 
     if myid() == 1 && toplevel_load
@@ -73,7 +73,7 @@ end
 
 function reload(name::String)
     global toplevel_load
-    path = find_in_node1_path(name)
+    path = find_in_node1host_path(name)
     path == nothing && error("$name not found")
     refs = nothing
     if myid() == 1 && toplevel_load
@@ -115,7 +115,7 @@ end
 
 macro __FILE__() source_path() end
 
-function include_from_node1(path::String)
+function include_from_node1host(path::String)
     prev = source_path(nothing)
     path = (prev == nothing) ? abspath(path) : joinpath(dirname(prev),path)
     tls = task_local_storage()
@@ -127,6 +127,8 @@ function include_from_node1(path::String)
             nprocs()>1 && sleep(0.005)
             result = Core.include(path)
             nprocs()>1 && sleep(0.005)
+        elseif same_host_as_node1()
+            result = Core.include(path)
         else
             result = include_string(remotecall_fetch(1, readall, path), path)
         end
@@ -149,7 +151,7 @@ function reload_path(path::String)
     tls = task_local_storage()
     prev = pop!(tls, :SOURCE_PATH, nothing)
     try
-        eval(Main, :(Base.include_from_node1($path)))
+        eval(Main, :(Base.include_from_node1host($path)))
     catch e
         had || delete!(package_list, path)
         rethrow(e)

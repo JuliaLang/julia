@@ -1605,6 +1605,15 @@ function check_same_host(pids)
     end
 end
 
+_same_host_as_node1 = nothing
+function same_host_as_node1()
+    global _same_host_as_node1
+    if _same_host_as_node1 == nothing
+        _same_host_as_node1 = myid() == 1 ? true : check_same_host((1,myid()))
+    end
+    _same_host_as_node1::Bool
+end
+
 function terminate_all_workers()
     if myid() != 1
         return
