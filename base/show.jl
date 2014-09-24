@@ -246,7 +246,7 @@ const expr_infix_wide = Set([:(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(&=),
 const expr_infix = Set([:(:), :(<:), :(->), :(=>), symbol("::")])
 const expr_calls  = [:call =>('(',')'), :calldecl =>('(',')'), :ref =>('[',']'), :curly =>('{','}')]
 const expr_parens = [:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>('{','}'),
-                     :hcat =>('[',']'), :row =>('[',']')]
+                     :hcat =>('[',']'), :row =>('[',']'), :dict  =>('[',']')]
 
 ## AST decoding helpers ##
 
@@ -428,7 +428,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
 
     # list (i.e. "(1,2,3)" or "[1,2,3]")
-    elseif haskey(expr_parens, head)               # :tuple/:vcat/:cell1d
+    elseif haskey(expr_parens, head)               # :tuple/:vcat/:cell1d/:hcat/:row/:dict
         op, cl = expr_parens[head]
         if head === :vcat && !isempty(args) && is_expr(args[1], :row)
             sep = ";"
@@ -547,7 +547,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, "...")
 
     elseif (nargs == 1 && head in (:return, :abstract, :const)) ||
-                          head in (:local,  :global)
+                          head in (:local,  :global, :export, :import)
         print(io, head, ' ')
         show_list(io, args, ", ", indent)
 
@@ -617,6 +617,37 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     elseif is(head, :&) && length(args) == 1
         print(io, '&')
         show_unquoted(io, args[1])
+    elseif head in (symbol('\''), :(.')) && length(args) == 1
+        if isa(args[1], Expr) && !is(args[1].head, :(.))
+            print(io, "(")
+            show_unquoted(io, args[1], indent+indent_width)
+            print(io, ")")
+        else
+            show_unquoted(io, args[1], indent+indent_width)
+        end
+        print(io, "$head")
+    elseif head in (:comprehension, :dict_comprehension) && length(args) >= 2
+        print(io, "[")
+        show_unquoted(io, args[1], indent+indent_width)
+        print(io, " for ")
+        show_list(io, args[2:end], ", ", indent)
+        print(io, "]")
+    elseif is(head, :typed_comprehension) && length(args) >= 3
+        print(io, args[1])
+        show_unquoted(io, Expr(:comprehension, args[2:end]...), indent+indent_width)
+    elseif is(head, :typed_dict_comprehension) && length(args) >= 3
+        print(io, "($(args[1]))")
+        show_unquoted(io, Expr(:dict_comprehension, args[2:end]...), indent+indent_width)
+    elseif is(head, :typed_dict) && length(args) >= 1
+        if args[1] == Expr(:(=>), TopNode(:Any), TopNode(:Any))
+            show_enclosed_list(io, "{", args[2:end], ",", "}", indent)
+        else
+            print(io, "($(args[1]))")
+            show_enclosed_list(io, "[", args[2:end], ",", "]", indent)
+        end
+    elseif is(head, :module) && length(args) == 3
+        show_block(io, args[1] ? "module $(args[2])" : "baremodule $(args[2])", args[3], indent)
+        print(io, "end")
 
     # transpose
     elseif is(head, symbol('\'')) && length(args) == 1
