@@ -449,14 +449,37 @@ function poplinenum(ex::Expr)
     ex
 end
 
+## Resolve expressions at parsing time ##
+
+const exprresolve_arith_dict = (Symbol=>Function)[:+ => +,
+    :- => -, :* => *, :/ => /, :^ => ^]
+const exprresolve_cond_dict = (Symbol=>Function)[:(==) => ==,
+    :(<) => <, :(>) => >, :(<=) => <=, :(>=) => >=]
+
+function exprresolve_arith(ex::Expr)
+    if ex.head == :call && haskey(exprresolve_arith_dict, ex.args[1]) && all([isa(ex.args[i], Number) for i = 2:length(ex.args)])
+        return true, exprresolve_arith_dict[ex.args[1]](ex.args[2:end]...)
+    end
+    false, 0
+end
+
+exprresolve_conditional(b::Bool) = true, b
+function exprresolve_conditional(ex::Expr)
+    if ex.head == :conditional && isa(ex.args[1], Number) && isa(ex.args[3], Number)
+        return true, exprresolve_cond_dict[ex.args[2]](ex.args[1], ex.args[3])
+    end
+    false, false
+end
+
 exprresolve(arg) = arg
 function exprresolve(ex::Expr)
     for i = 1:length(ex.args)
         ex.args[i] = exprresolve(ex.args[i])
     end
     # Handle simple arithmetic
-    if ex.head == :call && in(ex.args[1], (:+, :-, :*, :/)) && all([isa(ex.args[i], Number) for i = 2:length(ex.args)])
-        return eval(ex)
+    can_eval, result = exprresolve_arith(ex)
+    if can_eval
+        return result
     elseif ex.head == :call && (ex.args[1] == :+ || ex.args[1] == :-) && length(ex.args) == 3 && ex.args[3] == 0
         # simplify x+0 and x-0
         return ex.args[2]
@@ -472,10 +495,15 @@ function exprresolve(ex::Expr)
     end
     # Resolve conditionals
     if ex.head == :if
-        try
-            tf = eval(ex.args[1])
+        can_eval, tf = exprresolve_conditional(ex.args[1])
+        if can_eval
             ex = tf?ex.args[2]:ex.args[3]
-        catch
+        else
+            try
+                tf = eval(ex.args[1])
+                ex = tf?ex.args[2]:ex.args[3]
+            catch
+            end
         end
     end
     ex
