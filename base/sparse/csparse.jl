@@ -17,6 +17,8 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
                                 nrow::Integer, ncol::Integer, combine::Function)
 
     if length(I) == 0; return spzeros(eltype(V),nrow,ncol); end
+    N = length(I)
+    ((N == length(J)) && (N == length(V))) || throw(BoundsError())
 
     # Work array
     Wj = Array(Ti, max(nrow,ncol)+1)
@@ -26,7 +28,7 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
     Rnz = zeros(Ti, nrow+1)
     Rnz[1] = 1
     nz = 0
-    for k=1:length(I)
+    for k=1:N
         if V[k] != 0
             Rnz[I[k]+1] += 1
             nz += 1
@@ -39,25 +41,27 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
     # Construct row form
     # place triplet (i,j,x) in column i of R
     # Use work array for temporary row pointers
-    for i=1:nrow; Wj[i] = Rp[i]; end
+    @simd for i=1:nrow; @inbounds Wj[i] = Rp[i]; end
 
-    for k=1:length(I)
-        ind = I[k]
-        p = Wj[ind]
+    @inbounds for k=1:N
+        iind = I[k]
+        jind = J[k]
+        ((iind > 0) && (jind > 0)) || throw(BoundsError())
+        p = Wj[iind]
         Vk = V[k]
         if Vk != 0
-            Wj[ind] += 1
+            Wj[iind] += 1
             Rx[p] = Vk
-            Ri[p] = J[k]
+            Ri[p] = jind
         end
     end
 
     # Reset work array for use in counting duplicates
-    for j=1:ncol; Wj[j] = 0; end
+    @simd for j=1:ncol; @inbounds Wj[j] = 0; end
 
     # Sum up duplicates and squeeze
     anz = 0
-    for i=1:nrow
+    @inbounds for i=1:nrow
         p1 = Rp[i]
         p2 = Rp[i+1] - 1
         pdest = p1
@@ -87,8 +91,8 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
 
     # Reset work array to build the final colptr
     Wj[1] = 1
-    for i=2:(ncol+1); Wj[i] = 0; end
-    for j = 1:nrow
+    @simd for i=2:(ncol+1); @inbounds Wj[i] = 0; end
+    @inbounds for j = 1:nrow
         p1 = Rp[j]
         p2 = p1 + Rnz[j] - 1        
         for p = p1:p2
@@ -97,9 +101,9 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
     end
     RpT = cumsum(Wj[1:(ncol+1)])
 
-    # Transpose 
-    for i=1:length(RpT); Wj[i] = RpT[i]; end
-    for j = 1:nrow
+    # Transpose
+    @simd for i=1:length(RpT); @inbounds Wj[i] = RpT[i]; end
+    @inbounds for j = 1:nrow
         p1 = Rp[j]
         p2 = p1 + Rnz[j] - 1
         for p = p1:p2
@@ -119,22 +123,27 @@ end
 # Based on Direct Methods for Sparse Linear Systems, T. A. Davis, SIAM, Philadelphia, Sept. 2006.
 # Section 2.5: Transpose
 # http://www.cise.ufl.edu/research/sparse/CSparse/
-
-# NOTE: When calling transpose!(S,T), the colptr in the result matrix T must be set up
-# by counting the nonzeros in every row of S.
 function transpose!{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, T::SparseMatrixCSC{Tv,Ti})
+    (mS, nS) = size(S)
+    nnzS = nnz(S)
+    colptr_S = S.colptr
+    rowval_S = S.rowval
+    nzval_S = S.nzval
+
     (mT, nT) = size(T)
     colptr_T = T.colptr
     rowval_T = T.rowval
     nzval_T = T.nzval
 
-    nnzS = nfilled(S)
-    colptr_S = S.colptr
-    rowval_S = S.rowval
-    nzval_S = S.nzval
+    fill!(colptr_T, 0)
+    colptr_T[1] = 1
+    for i=1:nnzS
+        @inbounds colptr_T[rowval_S[i]+1] += 1
+    end
+    cumsum!(colptr_T, colptr_T)
 
     w = copy(colptr_T)
-    @inbounds for j = 1:mT, p = colptr_S[j]:(colptr_S[j+1]-1)
+    @inbounds for j = 1:nS, p = colptr_S[j]:(colptr_S[j+1]-1)
         ind = rowval_S[p]
         q = w[ind]
         w[ind] += 1
@@ -142,43 +151,41 @@ function transpose!{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, T::SparseMatrixCSC{Tv,Ti})
         nzval_T[q] = nzval_S[p]
     end
 
-    return SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
+    return T
 end
 
 function transpose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     (nT, mT) = size(S)
-    nnzS = nfilled(S)    
-    rowval_S = S.rowval
-
+    nnzS = nnz(S)
+    colptr_T = Array(Ti, nT+1)
     rowval_T = Array(Ti, nnzS)
     nzval_T = Array(Tv, nnzS)
-
-    colptr_T = zeros(Ti, nT+1)
-    colptr_T[1] = 1
-    @inbounds for i=1:nfilled(S)
-        colptr_T[rowval_S[i]+1] += 1
-    end
-    colptr_T = cumsum(colptr_T)
 
     T = SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
     return transpose!(S, T)
 end
 
-# NOTE: When calling ctranspose!(S,T), the colptr in the result matrix T must be set up
-# by counting the nonzeros in every row of S.
 function ctranspose!{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, T::SparseMatrixCSC{Tv,Ti})
+    (mS, nS) = size(S)
+    nnzS = nnz(S)
+    colptr_S = S.colptr
+    rowval_S = S.rowval
+    nzval_S = S.nzval
+
     (mT, nT) = size(T)
     colptr_T = T.colptr
     rowval_T = T.rowval
     nzval_T = T.nzval
 
-    nnzS = nfilled(S)
-    colptr_S = S.colptr
-    rowval_S = S.rowval
-    nzval_S = S.nzval
+    fill!(colptr_T, 0)
+    colptr_T[1] = 1
+    for i=1:nnzS
+        @inbounds colptr_T[rowval_S[i]+1] += 1
+    end
+    cumsum!(colptr_T, colptr_T)
 
     w = copy(colptr_T)
-    @inbounds for j = 1:mT, p = colptr_S[j]:(colptr_S[j+1]-1)
+    @inbounds for j = 1:nS, p = colptr_S[j]:(colptr_S[j+1]-1)
         ind = rowval_S[p]
         q = w[ind]
         w[ind] += 1
@@ -186,23 +193,15 @@ function ctranspose!{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, T::SparseMatrixCSC{Tv,Ti}
         nzval_T[q] = conj(nzval_S[p])
     end
 
-    return SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
+    return T
 end
 
 function ctranspose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}) 
     (nT, mT) = size(S)
-    nnzS = nfilled(S)
-    rowval_S = S.rowval
-    
+    nnzS = nnz(S)
+    colptr_T = Array(Ti, nT+1)
     rowval_T = Array(Ti, nnzS)
     nzval_T = Array(Tv, nnzS)
-
-    colptr_T = zeros(Ti, nT+1)
-    colptr_T[1] = 1
-    @inbounds for i=1:nfilled(S)
-        colptr_T[rowval_S[i]+1] += 1
-    end
-    colptr_T = cumsum(colptr_T)
 
     T = SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
     return ctranspose!(S, T)
@@ -335,7 +334,7 @@ end
 # Section 2.7: Removing entries from a matrix
 # http://www.cise.ufl.edu/research/sparse/CSparse/
 function fkeep!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f, other)
-    nzorig = nfilled(A)
+    nzorig = nnz(A)
     nz = 1
     for j = 1:A.n
         p = A.colptr[j]                 # record current position

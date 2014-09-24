@@ -6,6 +6,14 @@ include("pcre_h.jl")
 
 const VERSION = bytestring(ccall((:pcre_version, :libpcre), Ptr{Uint8}, ()))
 
+global JIT_STACK = C_NULL
+function __init__()
+    JIT_STACK_START_SIZE = 32768
+    JIT_STACK_MAX_SIZE = 1048576
+    global JIT_STACK = ccall((:pcre_jit_stack_alloc, :libpcre), Ptr{Void},
+                             (Cint, Cint), JIT_STACK_START_SIZE, JIT_STACK_MAX_SIZE)
+end
+
 # supported options for different use cases
 
 const COMPILE_MASK      =
@@ -85,6 +93,7 @@ function compile(pattern::String, options::Integer)
               " at position $(erroff[1]+1)",
               " in $(repr(pattern))")
     end
+
     re_ptr
 end
 
@@ -97,8 +106,13 @@ function study(regex::Ptr{Void}, options::Integer)
     if errstr[1] != C_NULL
         error("$(bytestring(errstr[1]))")
     end
+
+    ccall((:pcre_assign_jit_stack, :libpcre), Void,
+          (Ptr{Void}, Ptr{Void}, Ptr{Void}),
+          extra, C_NULL, JIT_STACK)
     extra
 end
+
 study(re::Ptr{Void}) = study(re, int32(0))
 
 free_study(extra::Ptr{Void}) =
@@ -106,17 +120,24 @@ free_study(extra::Ptr{Void}) =
 free(regex::Ptr{Void}) =
     ccall(unsafe_load(cglobal((:pcre_free, :libpcre),Ptr{Void})), Void, (Ptr{Void},), regex)
 
-exec(regex::Ptr{Void}, extra::Ptr{Void}, str::SubString, offset::Integer, options::Integer, cap::Bool) =
-    exec(regex, extra, str.string, str.offset, offset, sizeof(str), options, cap)
-exec(regex::Ptr{Void}, extra::Ptr{Void}, str::ByteString, offset::Integer, options::Integer, cap::Bool) =
-    exec(regex, extra, str, 0, offset, sizeof(str), options, cap)
+function exec(regex::Ptr{Void}, extra::Ptr{Void}, str::SubString, offset::Integer,
+              options::Integer, ovec::Vector{Int32})
+    return exec(regex, extra, str.string, str.offset, offset, sizeof(str),
+                options, ovec)
+end
+
+function exec(regex::Ptr{Void}, extra::Ptr{Void}, str::ByteString, offset::Integer,
+              options::Integer, ovec::Vector{Int32})
+    return exec(regex, extra, str, 0, offset, sizeof(str), options, ovec)
+end
+
 function exec(regex::Ptr{Void}, extra::Ptr{Void},
-              str::ByteString, shift::Integer, offset::Integer, len::Integer, options::Integer, cap::Bool)
+              str::ByteString, shift::Integer, offset::Integer,
+              len::Integer, options::Integer,
+              ovec::Vector{Int32})
     if offset < 0 || len < offset || len+shift > sizeof(str)
         error(BoundsError)
     end
-    ncap = info(regex, extra, INFO_CAPTURECOUNT, Int32)
-    ovec = Array(Int32, 3(ncap+1))
     n = ccall((:pcre_exec, :libpcre), Int32,
               (Ptr{Void}, Ptr{Void}, Ptr{Uint8}, Int32,
                Int32, Int32, Ptr{Int32}, Int32),
@@ -125,7 +146,7 @@ function exec(regex::Ptr{Void}, extra::Ptr{Void},
     if n < -1
         error("error $n")
     end
-    cap ? ((n > -1 ? ovec[1:2(ncap+1)] : Array(Int32,0)), ncap) : n > -1
+    return n > -1
 end
 
 end # module

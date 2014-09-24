@@ -222,8 +222,7 @@ Macros for creating functions
 
         @nsplat N 2:3 absgetindex(A, I::NTuple{N,Real}...) = abs(getindex(A, I...))
 
-    generates
-::
+    generates::
 
         absgetindex(A, I_1::Real, I_2::Real) = abs(getindex(A, I_1, I_2))
         absgetindex(A, I_1::Real, I_2::Real, I_3::Real) = abs(getindex(A, I_1, I_2, I_3))
@@ -271,7 +270,7 @@ Macros for function bodies
     either be an iteration-symbol prefix, or an anonymous-function
     expression.
 
-.. function:: @nexpr N expr
+.. function:: @nexprs N expr
 
     Generate ``N`` expressions. ``expr`` should be an
     anonymous-function expression.
@@ -293,8 +292,7 @@ Macros for function bodies
 
         @nif 3 d->(i_d >= size(A,d)) d->(error("Dimension ", d, " too big")) d->println("All OK")
 
-    would generate
-::
+    would generate::
 
         if i_1 > size(A, 1)
 	    error("Dimension ", 1, " too big")
@@ -303,3 +301,13 @@ Macros for function bodies
         else
 	    println("All OK")
 	end
+
+
+Frequently asked questions
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+I got an error ``ERROR: N not defined`` when using ``@ngenerate``. Why?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Most likely you forgot to define your function with ``N`` as a type parameter, e.g., ``@ngenerate N returntype myfunc{N}(...)``.

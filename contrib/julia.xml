@@ -253,6 +253,8 @@
       <item> Cssize_t </item>
       <item> Clonglong </item>
       <item> Culonglong </item>
+      <item> Cintmax_t </item>
+      <item> Cuintmax_t </item>
       <item> Coff_t </item>
       <item> Cfloat </item>
       <item> Cdouble </item>

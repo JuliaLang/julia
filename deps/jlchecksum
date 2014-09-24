@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 #
 # usage: jlchecksum <filename>
 #
@@ -9,7 +9,7 @@ if [ -z "$1" ]; then
 fi
 
 # Get the directory of this script
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+DIR="$( cd "$( dirname "$0" )" && pwd )"
 
 # Get the basename of the file we're trying to checksum
 BASENAME=$(basename $1)
@@ -19,8 +19,9 @@ print_hash()
 {
     if [ ${#1} -gt 64 ]; then
         NUM_LINES=$(( (${#1} + 63) / 64))
-        for (( i=0; i<$NUM_LINES; i++ )); do
-            echo "      ${1:$((i*64)):64}"
+        for i in `seq 0 1 $((NUM_LINES - 1))`; do
+            str_piece=$(echo "$1" | awk "{ string=substr(\$0, $((i*64 + 1)), $(((i+1)*64))); print string; }")
+            echo "      $str_piece"
         done
     else
         echo "      $1" >&2

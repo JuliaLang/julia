@@ -29,6 +29,7 @@ static const ptrint_t SmallInt64_tag = 27;
 static const ptrint_t IdTable_tag    = 28;
 static const ptrint_t Int32_tag      = 29;
 static const ptrint_t Array1d_tag    = 30;
+static const ptrint_t Singleton_tag    = 31;
 static const ptrint_t Null_tag         = 253;
 static const ptrint_t ShortBackRef_tag = 254;
 static const ptrint_t BackRef_tag      = 255;
@@ -42,9 +43,6 @@ static jl_value_t *jl_idtable_type=NULL;
 
 // queue of types to cache
 static jl_array_t *datatype_list=NULL;
-
-// queue of modules to initialize
-static arraylist_t modules_to_init;
 
 #define write_uint8(s, n) ios_putc((n), (s))
 #define read_uint8(s) ((uint8_t)ios_getc(s))
@@ -98,13 +96,13 @@ static void write_as_tag(ios_t *s, uint8_t tag)
 #define jl_serialize_value(s, v) jl_serialize_value_(s,(jl_value_t*)(v))
 static void jl_serialize_value_(ios_t *s, jl_value_t *v);
 static jl_value_t *jl_deserialize_value(ios_t *s);
-static jl_value_t *jl_deserialize_value_internal(ios_t *s);
 jl_value_t ***sysimg_gvars = NULL;
 
 extern int globalUnique;
 extern void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType);
 extern const char *jl_cpu_string;
 uv_lib_t *jl_sysimg_handle = NULL;
+char *jl_sysimage_name = NULL;
 
 static void jl_load_sysimg_so(char *fname)
 {
@@ -118,7 +116,7 @@ static void jl_load_sysimg_so(char *fname)
         const char *cpu_target = (const char*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_target");
         if (strcmp(cpu_target,jl_cpu_string) != 0)
             jl_error("Julia and the system image were compiled for different architectures.\n"
-                     "Please delete or regenerate sys.{so,dll,dylib}.");
+                     "Please delete or regenerate sys.{so,dll,dylib}.\n");
         uint32_t info[4];
         jl_cpuid((int32_t*)info, 1);
         if (strcmp(cpu_target, "native") == 0) {
@@ -126,16 +124,13 @@ static void jl_load_sysimg_so(char *fname)
             if (saved_cpuid != (((uint64_t)info[2])|(((uint64_t)info[3])<<32)))
                 jl_error("Target architecture mismatch. Please delete or regenerate sys.{so,dll,dylib}.");
         }
-        else if(strcmp(cpu_target,"core2") == 0) {
-            int HasSSSE3 = (info[3] & 1<<9);
+        else if (strcmp(cpu_target,"core2") == 0) {
+            int HasSSSE3 = (info[2] & 1<<9);
             if (!HasSSSE3)
                 jl_error("The current host does not support SSSE3, but the system image was compiled for Core2.\n"
                          "Please delete or regenerate sys.{so,dll,dylib}.");
         }
-        else {
-            jl_error("System image has unknown target cpu architecture.\n"
-                     "Please delete or regenerate sys.{so,dll,dylib}.");
-        }
+        jl_sysimage_name = strdup(fname);
     }
     else {
         sysimg_gvars = 0;
@@ -291,25 +286,24 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
     size_t nf = jl_tuple_len(dt->names);
     write_uint16(s, nf);
     write_int32(s, dt->size);
+    int has_instance = !!(dt->instance != NULL);
+    write_uint8(s, dt->abstract | (dt->mutabl<<1) | (dt->pointerfree<<2) | (has_instance<<3));
+    if (!dt->abstract)
+        write_int32(s, dt->uid);
+    if (has_instance)
+        jl_serialize_value(s, dt->instance);
     if (nf > 0) {
         write_int32(s, dt->alignment);
         ios_write(s, (char*)&dt->fields[0], nf*sizeof(jl_fielddesc_t));
         jl_serialize_value(s, dt->names);
         jl_serialize_value(s, dt->types);
     }
-    int has_instance = !!(dt->instance != NULL);
-    write_uint8(s, dt->abstract | (dt->mutabl<<1) | (dt->pointerfree<<2) | (has_instance<<3));
-    if (!dt->abstract)
-        write_int32(s, dt->uid);
 
     jl_serialize_value(s, dt->parameters);
     jl_serialize_value(s, dt->name);
     jl_serialize_value(s, dt->super);
-    jl_serialize_value(s, dt->ctor_factory);
     jl_serialize_value(s, dt->env);
     jl_serialize_value(s, dt->linfo);
-    if (has_instance)
-        jl_serialize_value(s, dt->instance);
     jl_serialize_fptr(s, (void*)dt->fptr);
 }
 
@@ -528,6 +522,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)li->roots);
         jl_serialize_value(s, (jl_value_t*)li->def);
         jl_serialize_value(s, (jl_value_t*)li->capt);
+        jl_serialize_value(s, (jl_value_t*)li->unspecialized);
         // save functionObject pointers
         write_int32(s, li->functionID);
         write_int32(s, li->cFunctionID);
@@ -551,6 +546,10 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
             write_int32(s, (int32_t)*(int32_t*)data);
         }
         else {
+            if (v == t->instance) {
+                writetag(s, (jl_value_t*)Singleton_tag);
+                return;
+            }
             if ((jl_value_t*)t == jl_idtable_type)
                 writetag(s, (jl_value_t*)IdTable_tag);
             else
@@ -603,13 +602,12 @@ static jl_fptr_t jl_deserialize_fptr(ios_t *s)
     return *(jl_fptr_t*)pbp;
 }
 
-#define DTINSTANCE_PLACEHOLDER ((void*)2)
-
 static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
 {
     int tag = read_uint8(s);
     uint16_t nf = read_uint16(s);
     size_t size = read_int32(s);
+    uint8_t flags = read_uint8(s);
     jl_datatype_t *dt;
     if (tag == 2)
         dt = jl_int32_type;
@@ -622,7 +620,18 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
     dt->size = size;
     dt->struct_decl = NULL;
     dt->instance = NULL;
-
+    dt->abstract = flags&1;
+    dt->mutabl = (flags>>1)&1;
+    dt->pointerfree = (flags>>2)&1;
+    if (!dt->abstract)
+        dt->uid = read_int32(s);
+    else
+        dt->uid = 0;
+    int has_instance = (flags>>3)&1;
+    if (has_instance) {
+        dt->instance = jl_deserialize_value(s);
+        dt->instance->type = (jl_value_t*)dt;
+    }
     assert(tree_literal_values==NULL);
     ptrhash_put(&backref_table, (void*)(ptrint_t)pos, dt);
 
@@ -638,27 +647,11 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
             dt->alignment = MAX_ALIGN;
         dt->names = dt->types = jl_null;
     }
-    uint8_t flags = read_uint8(s);
-    dt->abstract = flags&1;
-    dt->mutabl = (flags>>1)&1;
-    dt->pointerfree = (flags>>2)&1;
-    int has_instance = (flags>>3)&1;
-    if (!dt->abstract)
-        dt->uid = read_int32(s);
-    else
-        dt->uid = 0;
     dt->parameters = (jl_tuple_t*)jl_deserialize_value(s);
     dt->name = (jl_typename_t*)jl_deserialize_value(s);
     dt->super = (jl_datatype_t*)jl_deserialize_value(s);
-    dt->ctor_factory = jl_deserialize_value(s);
     dt->env = jl_deserialize_value(s);
     dt->linfo = (jl_lambda_info_t*)jl_deserialize_value(s);
-    if (has_instance) {
-        jl_value_t *instance = (jl_value_t*)jl_deserialize_value_internal(s);
-        if (instance == DTINSTANCE_PLACEHOLDER)
-            instance = jl_new_struct_uninit(dt);
-        dt->instance = instance;
-    }
     dt->fptr = jl_deserialize_fptr(s);
     if (dt->name == jl_array_type->name || dt->name == jl_pointer_type->name ||
         dt->name == jl_type_type->name || dt->name == jl_vararg_type->name ||
@@ -669,14 +662,12 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
         // parametric types here.
         jl_cell_1d_push(datatype_list, (jl_value_t*)dt);
     }
-
     return (jl_value_t*)dt;
 }
 
 jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val);
 
-// Internal jl_deserialize_value. May return the placeholder value DTINSTANCE_PLACEHOLDER, unlike jl_deserialize_value
-static jl_value_t *jl_deserialize_value_internal(ios_t *s)
+static jl_value_t *jl_deserialize_value(ios_t *s)
 {
     int pos = ios_pos(s);
     int32_t tag = read_uint8(s);
@@ -830,7 +821,7 @@ static jl_value_t *jl_deserialize_value_internal(ios_t *s)
         li->cFunctionObject = NULL;
         li->inInference = 0;
         li->inCompile = 0;
-        li->unspecialized = NULL;
+        li->unspecialized = (jl_function_t*)jl_deserialize_value(s);
         li->functionID = 0;
         li->cFunctionID = 0;
         int32_t cfunc_llvm, func_llvm;
@@ -864,8 +855,6 @@ static jl_value_t *jl_deserialize_value_internal(ios_t *s)
             arraylist_push(&m->usings, jl_deserialize_value(s));
         }
         m->constant_table = (jl_array_t*)jl_deserialize_value(s);
-        if (jl_module_has_initializer(m))
-            arraylist_push(&modules_to_init, m);
         return (jl_value_t*)m;
     }
     else if (vtag == (jl_value_t*)SmallInt64_tag) {
@@ -881,14 +870,6 @@ static jl_value_t *jl_deserialize_value_internal(ios_t *s)
         return v;
     }
     else if (vtag == (jl_value_t*)jl_datatype_type || vtag == (jl_value_t*)IdTable_tag) {
-        // If the value v we are about to deserialize is some dt->instance, we have a circular 
-        // reference, because v == v->type->instance. To avoid this, we put a null value in 
-        // the backref table to reserve the space. If jl_deserialize_value encounters this,
-        // it knows to do the allocation itself. This work, because in all instances where
-        // v->type->instance != null, v->type has no fields, so there is no further serialized
-        // data stored that we would need to construct the type. 
-        if (usetable)
-            ptrhash_put(&backref_table, (void*)(ptrint_t)pos, DTINSTANCE_PLACEHOLDER);
         jl_datatype_t *dt = (jl_datatype_t*)jl_deserialize_value(s);
         if (dt == jl_datatype_type)
             return jl_deserialize_datatype(s, pos);
@@ -921,11 +902,6 @@ static jl_value_t *jl_deserialize_value_internal(ios_t *s)
                 ptrhash_put(&backref_table, (void*)(ptrint_t)pos, v);
         }
         else {
-            if (dt->instance) {
-                if (usetable)
-                    *ptrhash_bp(&backref_table, (void*)(ptrint_t)pos) = dt->instance;
-                return dt->instance;
-            }
             v = jl_new_struct_uninit(dt);
             if (usetable)
                 ptrhash_put(&backref_table, (void*)(ptrint_t)pos, v);
@@ -949,18 +925,19 @@ static jl_value_t *jl_deserialize_value_internal(ios_t *s)
         // TODO: put WeakRefs on the weak_refs list
         return v;
     }
+    else if (vtag == (jl_value_t*)Singleton_tag) {
+        jl_value_t *v = allocobj(sizeof(void*));
+        if (usetable)
+            ptrhash_put(&backref_table, (void*)(ptrint_t)pos, v);
+        return v;
+    }
     assert(0);
     return NULL;
 }
 
-static jl_value_t* jl_deserialize_value(ios_t *s)
-{
-    jl_value_t *v = jl_deserialize_value_internal(s);
-    assert(v != DTINSTANCE_PLACEHOLDER);
-    return v;
-}
-
 // --- entry points ---
+
+extern jl_array_t *jl_module_init_order;
 
 DLLEXPORT
 void jl_save_system_image(char *fname)
@@ -1009,6 +986,17 @@ void jl_save_system_image(char *fname)
     jl_serialize_gv_syms(&f, jl_get_root_symbol()); // serialize symbols with GlobalValue references
     jl_serialize_value(&f, NULL); // signal the end of the symbols list
 
+    // save module initialization order
+    if (jl_module_init_order != NULL) {
+        for(i=0; i < jl_array_len(jl_module_init_order); i++) {
+            // NULL out any modules that weren't saved
+            jl_value_t *mod = jl_cellref(jl_module_init_order, i);
+            if (ptrhash_get(&backref_table, mod) == HT_NOTFOUND)
+                jl_cellset(jl_module_init_order, i, NULL);
+        }
+    }
+    jl_serialize_value(&f, jl_module_init_order);
+
     write_int32(&f, jl_get_t_uid_ctr());
     write_int32(&f, jl_get_gs_ctr());
     htable_reset(&backref_table, 0);
@@ -1021,7 +1009,7 @@ extern jl_function_t *jl_typeinf_func;
 extern int jl_boot_file_loaded;
 extern void jl_get_builtin_hooks(void);
 extern void jl_get_system_hooks(void);
-extern void jl_get_uv_hooks(int);
+extern void jl_get_uv_hooks();
 
 DLLEXPORT
 void jl_restore_system_image(char *fname)
@@ -1032,7 +1020,7 @@ void jl_restore_system_image(char *fname)
         JL_PRINTF(JL_STDERR, "System image file \"%s\" not found\n", fname);
         exit(1);
     }
-    int build_mode = (jl_compileropts.build_path != NULL);
+    int build_mode = 0;
 #ifdef _OS_WINDOWS_
     //XXX: the windows linker forces our system image to be
     //     linked against only one dll, I picked libjulia-release
@@ -1074,6 +1062,8 @@ void jl_restore_system_image(char *fname)
     jl_deserialize_globalvals(&f);
     jl_deserialize_gv_syms(&f);
 
+    jl_module_init_order = (jl_array_t*)jl_deserialize_value(&f);
+
     // cache builtin parametric types
     for(int i=0; i < jl_array_len(datatype_list); i++) {
         jl_value_t *v = jl_cellref(datatype_list, i);
@@ -1084,7 +1074,7 @@ void jl_restore_system_image(char *fname)
 
     jl_get_builtin_hooks();
     jl_get_system_hooks();
-    jl_get_uv_hooks(1);
+    jl_get_uv_hooks();
     jl_boot_file_loaded = 1;
     jl_typeinf_func = (jl_function_t*)jl_get_global(jl_base_module,
                                                     jl_symbol("typeinf_ext"));
@@ -1104,16 +1094,21 @@ void jl_restore_system_image(char *fname)
     jl_get_binding_wr(jl_core_module, jl_symbol("JULIA_HOME"))->value =
         jl_cstr_to_string(julia_home);
     jl_update_all_fptrs();
-#ifndef _OS_WINDOWS_
-    // restore the line information for Julia backtraces
-    if (jl_sysimg_handle != NULL) jl_restore_linedebug_info(jl_sysimg_handle);
-#endif
 }
 
 void jl_init_restored_modules()
 {
-    while (modules_to_init.len > 0) {
-        jl_module_run_initializer((jl_module_t *) arraylist_pop(&modules_to_init));
+    if (jl_module_init_order != NULL) {
+        jl_array_t *temp = jl_module_init_order;
+        jl_module_init_order = NULL;
+        JL_GC_PUSH1(&temp);
+        int i;
+        for(i=0; i < jl_array_len(temp); i++) {
+            jl_value_t *mod = jl_cellref(temp, i);
+            jl_module_run_initializer((jl_module_t*)mod);
+        }
+        jl_module_init_order = NULL;
+        JL_GC_POP();
     }
 }
 
@@ -1197,14 +1192,13 @@ void jl_init_serializer(void)
     htable_new(&fptr_to_id, 0);
     htable_new(&id_to_fptr, 0);
     htable_new(&backref_table, 50000);
-    arraylist_new(&modules_to_init, 0);
 
     void *tags[] = { jl_symbol_type, jl_datatype_type,
                      jl_function_type, jl_tuple_type, jl_array_type,
                      jl_expr_type, (void*)LongSymbol_tag, (void*)LongTuple_tag,
                      (void*)LongExpr_tag, (void*)LiteralVal_tag,
                      (void*)SmallInt64_tag, (void*)IdTable_tag,
-                     (void*)Int32_tag, (void*)Array1d_tag,
+                     (void*)Int32_tag, (void*)Array1d_tag, (void*)Singleton_tag,
                      jl_module_type, jl_tvar_type, jl_lambda_info_type,
 
                      jl_null, jl_false, jl_true, jl_any_type, jl_symbol("Any"),
@@ -1341,7 +1335,7 @@ void jl_init_serializer(void)
                           jl_f_invoke, jl_apply_generic,
                           jl_unprotect_stack, jl_f_task,
                           jl_f_yieldto, jl_f_ctor_trampoline,
-                          jl_f_new_module,
+                          jl_f_new_module, jl_f_sizeof,
                           NULL };
     i=2;
     while (fptrs[i-2] != NULL) {

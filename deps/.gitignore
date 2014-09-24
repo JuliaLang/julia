@@ -4,14 +4,11 @@
 /Clp-*
 /clp-*
 /compiler-rt-*
-/double-conversion-*
 /dsfmt-*
 /fftw-*
 !fftw-config-nopthreads.patch
 /git-*
 /gmp-*
-/grisu-*
-/libgrisu.so
 /lapack-*
 /libunwind-*
 /libosxunwind-*
@@ -22,8 +19,13 @@
 /openblas-*
 /patchelf-*
 /pcre-*
+!pcre-gcc49-compile.patch
 /root
 /SuiteSparse-*
 /zlib-*
 /utf8proc-*
 /librandom.*
+# obsolete dependencies
+/double-conversion-*
+grisu-*
+/libgrisu.so

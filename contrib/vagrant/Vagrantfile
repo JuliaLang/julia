@@ -2,8 +2,6 @@
 # vi: set ft=ruby :
 
 $script = <<SCRIPT
-rm /home/vagrant/postinstall.sh
-
 cat - > /home/vagrant/.bash_aliases <<"EOF"
 export JULIA_VAGRANT_BUILD=1
 BUILDOPTS="LLVM_CONFIG=llvm-config-3.3 USE_BLAS64=0"
@@ -18,7 +16,7 @@ apt-get update -qq -y
 apt-get install python-software-properties -y
 add-apt-repository ppa:staticfloat/julia-deps -y
 apt-get update -qq -y
-apt-get install g++ git make patchelf gfortran llvm-3.3 libsuitesparse-dev libopenblas-dev liblapack-dev libarpack2-dev libfftw3-dev libgmp-dev libpcre3-dev libunwind7-dev libdouble-conversion-dev libopenlibm-dev librmath-dev libmpfr-dev -y
+apt-get install g++ git make patchelf gfortran llvm-3.3 libsuitesparse-dev libopenblas-dev liblapack-dev libarpack2-dev libfftw3-dev libgmp-dev libpcre3-dev libunwind8-dev libmpfr-dev cmake -y
 SCRIPT
 
 Vagrant.configure("2") do |config|
@@ -27,11 +25,11 @@ Vagrant.configure("2") do |config|
   # please see the online documentation at vagrantup.com.
 
   # Every Vagrant virtual environment requires a box to build off of.
-  config.vm.box = "precise64"
+  config.vm.box = "trusty64"
 
   # The url from where the 'config.vm.box' box will be fetched if it
   # doesn't already exist on the user's system.
-  config.vm.box_url = "http://files.vagrantup.com/precise64.box"
+  config.vm.box_url = "https://cloud-images.ubuntu.com/vagrant/trusty/current/trusty-server-cloudimg-amd64-vagrant-disk1.box" 
 
   # Share an additional folder to the guest VM. The first argument is
   # the path on the host to the actual folder. The second argument is
@@ -42,17 +40,12 @@ Vagrant.configure("2") do |config|
   # Provider-specific configuration so you can fine-tune various
   # backing providers for Vagrant. These expose provider-specific options.
   # Example for VirtualBox:
-  #
-  # config.vm.provider :virtualbox do |vb|
-  #   # Don't boot with headless mode
-  #   vb.gui = true
-  #
-  #   # Use VBoxManage to customize the VM. For example to change memory:
-  #   vb.customize ["modifyvm", :id, "--memory", "1024"]
-  # end
-  #
+  config.vm.provider :virtualbox do |vb|
+     # Use VBoxManage to customize the VM. For example to change memory:
+     vb.memory = 2048
+   end
+  
   # View the documentation for the provider you're using for more
   # information on available options.
-
   config.vm.provision :shell, :inline => $script
 end

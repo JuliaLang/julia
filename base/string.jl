@@ -64,8 +64,8 @@ getindex(s::String, v::AbstractVector) =
 
 symbol(s::String) = symbol(bytestring(s))
 
-print(io::IO, s::String) = write(io, s)
-write(io::IO, s::String) = for c in s write(io, c) end
+print(io::IO, s::String) = (write(io, s); nothing)
+write(io::IO, s::String) = (len = 0; for c in s; len += write(io, c); end; len)
 show(io::IO, s::String) = print_quoted(io, s)
 
 sizeof(s::String) = error("type $(typeof(s)) has no canonical binary representation")
@@ -95,6 +95,8 @@ end
 
 isvalid(s::DirectIndexString, i::Integer) = (start(s) <= i <= endof(s))
 function isvalid(s::String, i::Integer)
+    i < 1 && return false
+    done(s,i) && return false
     try
         next(s,i)
         true
@@ -139,8 +141,13 @@ function nextind(s::String, i::Integer)
     next(s,e)[2] # out of range
 end
 
-ind2chr(s::DirectIndexString, i::Integer) = i
-chr2ind(s::DirectIndexString, i::Integer) = i
+checkbounds(s::String, i::Integer) = start(s) <= i <= endof(s) || throw(BoundsError())
+checkbounds(s::String, i::Real) = checkbounds(s, to_index(i))
+checkbounds{T<:Integer}(s::String, r::Range{T}) = isempty(r) || (minimum(r) >= start(s) && maximum(r) <= endof(s)) || throw(BoundsError())
+checkbounds{T<:Real}(s::String, I::AbstractArray{T}) = all(i -> checkbounds(s, i), I)
+
+ind2chr(s::DirectIndexString, i::Integer) = begin checkbounds(s,i); i end
+chr2ind(s::DirectIndexString, i::Integer) = begin checkbounds(s,i); i end
 
 function ind2chr(s::String, i::Integer)
     s[i] # throws error if invalid
@@ -157,9 +164,7 @@ function ind2chr(s::String, i::Integer)
 end
 
 function chr2ind(s::String, i::Integer)
-    if i < 1
-        return i
-    end
+    i < start(s) && throw(BoundsError())
     j = 1
     k = start(s)
     while true
@@ -461,7 +466,7 @@ function rsearch(s::String, t::String, i::Integer=endof(s))
     end
 end
 
-contains(a::String, b::String) = searchindex(a,b)!=0
+contains(haystack::String, needle::String) = searchindex(haystack,needle)!=0
 
 in(::String, ::String) = error("use contains(x,y) for string containment")
 
@@ -536,21 +541,9 @@ strwidth(s::String) = (w=0; for c in s; w += charwidth(c); end; w)
 strwidth(s::ByteString) = int(ccall(:u8_strwidth, Csize_t, (Ptr{Uint8},), s.data))
 # TODO: implement and use u8_strnwidth that takes a length argument
 
-## libc character class predicates ##
-
 isascii(c::Char) = c < 0x80
 isascii(s::String) = all(isascii, s)
 isascii(s::ASCIIString) = true
-
-for name = ("alnum", "alpha", "cntrl", "digit", "graph",
-            "lower", "print", "punct", "space", "upper")
-    f = symbol(string("is",name))
-    @eval ($f)(c::Char) = bool(ccall($(string("isw",name)), Int32, (Cwchar_t,), c))
-    @eval $f(s::String) = all($f, s)
-end
-
-isblank(c::Char) = c==' ' || c=='\t'
-isblank(s::String) = all(isblank, s)
 
 ## generic string uses only endof and next ##
 
@@ -560,33 +553,6 @@ end
 
 endof(s::GenericString) = endof(s.string)
 next(s::GenericString, i::Int) = next(s.string, i)
-
-## plain old character arrays ##
-
-immutable UTF32String <: DirectIndexString
-    data::Array{Char,1}
-
-    UTF32String(a::Array{Char,1}) = new(a)
-    UTF32String(c::Char...) = new([ c[i] for i=1:length(c) ])
-end
-UTF32String(x...) = UTF32String(map(char,x)...)
-
-next(s::UTF32String, i::Int) = (s.data[i], i+1)
-endof(s::UTF32String) = length(s.data)
-length(s::UTF32String) = length(s.data)
-
-utf32(x) = convert(UTF32String, x)
-convert(::Type{UTF32String}, s::UTF32String) = s
-convert(::Type{UTF32String}, s::String) = UTF32String(Char[c for c in s])
-convert{T<:String}(::Type{T}, v::Vector{Char}) = convert(T, UTF32String(v))
-convert(::Type{Array{Char,1}}, s::UTF32String) = s.data
-convert(::Type{Array{Char}}, s::UTF32String) = s.data
-
-reverse(s::UTF32String) = UTF32String(reverse(s.data))
-
-sizeof(s::UTF32String) = sizeof(s.data)
-convert{T<:Union(Int32,Uint32,Char)}(::Type{Ptr{T}}, s::UTF32String) =
-    convert(Ptr{T}, s.data)
 
 ## substrings reference original strings ##
 
@@ -623,6 +589,17 @@ print(io::IOBuffer, s::SubString) = write(io, s)
 
 sizeof{T<:ByteString}(s::SubString{T}) = s.endof==0 ? 0 : next(s,s.endof)[2]-1
 
+# TODO: length(s::SubString) = ??
+# default implementation will work but it's slow
+# can this be delegated efficiently somehow?
+# that may require additional string interfaces
+length{T<:DirectIndexString}(s::SubString{T}) = endof(s)
+
+function length(s::SubString{UTF8String})
+    return s.endof==0 ? 0 : int(ccall(:u8_charnum, Csize_t, (Ptr{Uint8}, Csize_t),
+                                      pointer(s), next(s,s.endof)[2]-1))
+end
+
 function next(s::SubString, i::Int)
     if i < 1 || i > s.endof
         error(BoundsError)
@@ -639,10 +616,15 @@ function getindex(s::SubString, i::Int)
 end
 
 endof(s::SubString) = s.endof
-# TODO: length(s::SubString) = ??
-# default implementation will work but it's slow
-# can this be delegated efficiently somehow?
-# that may require additional string interfaces
+
+function isvalid(s::SubString, i::Integer)
+    return (start(s) <= i <= endof(s)) &&  isvalid(s.string, s.offset+i)
+end
+
+isvalid{T<:DirectIndexString}(s::SubString{T}, i::Integer) = (start(s) <= i <= endof(s))
+
+ind2chr{T<:DirectIndexString}(s::SubString{T}, i::Integer) = begin checkbounds(s,i); i end
+chr2ind{T<:DirectIndexString}(s::SubString{T}, i::Integer) = begin checkbounds(s,i); i end
 
 nextind(s::SubString, i::Integer) = nextind(s.string, i+s.offset)-s.offset
 prevind(s::SubString, i::Integer) = prevind(s.string, i+s.offset)-s.offset
@@ -672,6 +654,16 @@ end
 
 isascii(s::SubString{ASCIIString}) = true
 
+## hashing strings ##
+
+const memhash = Uint == Uint64 ? :memhash_seed : :memhash32_seed
+
+function hash{T<:ByteString}(s::Union(T,SubString{T}), h::Uint)
+    h += uint(0x71e729fd56419c81)
+    ccall(memhash, Uint, (Ptr{Uint8}, Csize_t, Uint32), s, sizeof(s), h) + h
+end
+hash(s::String, h::Uint) = hash(bytestring(s), h)
+
 ## efficient representation of repeated strings ##
 
 immutable RepString <: String
@@ -679,15 +671,27 @@ immutable RepString <: String
     repeat::Integer
 end
 
-endof(s::RepString)  = endof(s.string)*s.repeat
+function endof(s::RepString)
+    e = endof(s.string)
+    (next(s.string,e)[2]-1) * (s.repeat-1) + e
+end
 length(s::RepString) = length(s.string)*s.repeat
 sizeof(s::RepString) = sizeof(s.string)*s.repeat
 
 function next(s::RepString, i::Int)
-    if i < 1 || i > endof(s)
-        error(BoundsError)
+    if i < 1
+        throw(BoundsError())
     end
-    j = mod1(i,length(s.string))
+    e = endof(s.string)
+    sz = next(s.string,e)[2]-1
+
+    r, j = divrem(i-1, sz)
+    j += 1
+
+    if r >= s.repeat || j > e
+        throw(BoundsError())
+    end
+
     c, k = next(s.string, j)
     c, k-j+i
 end
@@ -797,6 +801,9 @@ end
 
 ## string map, filter, has ##
 
+map_result(s::String, a::Vector{Uint8}) = UTF8String(a)
+map_result(s::Union(ASCIIString,SubString{ASCIIString}), a::Vector{Uint8}) = bytestring(a)
+
 function map(f::Function, s::String)
     out = IOBuffer(Array(Uint8,endof(s)),true,true)
     truncate(out,0)
@@ -807,7 +814,7 @@ function map(f::Function, s::String)
         end
         write(out, c2::Char)
     end
-    takebuf_string(out)
+    map_result(s, takebuf_array(out))
 end
 
 function filter(f::Function, s::String)
@@ -968,7 +975,7 @@ end
 function indentation(s::String)
     count = 0
     for c in s
-        if isblank(c)
+        if c == ' ' || c == '\t'
             count += blank_width(c)
         else
             return count, false
@@ -978,6 +985,7 @@ function indentation(s::String)
 end
 
 function unindent(s::String, indent::Int)
+    indent == 0 && return s
     buf = IOBuffer(Array(Uint8,endof(s)), true, true)
     truncate(buf,0)
     a = i = start(s)
@@ -985,10 +993,12 @@ function unindent(s::String, indent::Int)
     cut = 0
     while !done(s,i)
         c,i_ = next(s,i)
-        if cutting && isblank(c)
+        if cutting && (c == ' ' || c == '\t')
             a = i_
             cut += blank_width(c)
-            if cut > indent
+            if cut == indent
+                cutting = false
+            elseif cut > indent
                 cutting = false
                 for _ = (indent+1):cut write(buf, ' ') end
             end
@@ -1010,7 +1020,7 @@ function triplequoted(args...)
     sx = { isa(arg,ByteString) ? arg : esc(arg) for arg in args }
 
     indent = 0
-    rlines = split(RevString(sx[end]), '\n', 2)
+    rlines = split(RevString(sx[end]), '\n'; limit=2)
     last_line = rlines[1]
     if length(rlines) > 1 && lstrip(last_line) == ""
         indent,_ = indentation(last_line)
@@ -1265,8 +1275,8 @@ cpad(s, n::Integer, p=" ") = rpad(lpad(s,div(n+strwidth(s),2),p),n,p)
 
 # splitter can be a Char, Vector{Char}, String, Regex, ...
 # any splitter that provides search(s::String, splitter)
-split{T<:SubString}(str::T, splitter, limit::Integer, keep_empty::Bool) = _split(str, splitter, limit, keep_empty, T[])
-split{T<:String}(str::T, splitter, limit::Integer, keep_empty::Bool) = _split(str, splitter, limit, keep_empty, SubString{T}[])
+split{T<:SubString}(str::T, splitter; limit::Integer=0, keep::Bool=true) = _split(str, splitter, limit, keep, T[])
+split{T<:String}(str::T, splitter; limit::Integer=0, keep::Bool=true) = _split(str, splitter, limit, keep, SubString{T}[])
 function _split{T<:String,U<:Array}(str::T, splitter, limit::Integer, keep_empty::Bool, strs::U)
     i = start(str)
     n = endof(str)
@@ -1288,17 +1298,13 @@ function _split{T<:String,U<:Array}(str::T, splitter, limit::Integer, keep_empty
     end
     return strs
 end
-split(s::String, spl, n::Integer) = split(s, spl, n, true)
-split(s::String, spl, keep::Bool) = split(s, spl, 0, keep)
-split(s::String, spl)             = split(s, spl, 0, true)
 
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
 const _default_delims = [' ','\t','\n','\v','\f','\r']
-split(str::String)                = split(str, _default_delims, 0, false)
+split(str::String) = split(str, _default_delims; limit=0, keep=false)
 
-
-rsplit{T<:SubString}(str::T, splitter, limit::Integer, keep_empty::Bool) = _rsplit(str, splitter, limit, keep_empty, T[])
-rsplit{T<:String}(str::T, splitter, limit::Integer, keep_empty::Bool) = _rsplit(str, splitter, limit, keep_empty, SubString{T}[])
+rsplit{T<:SubString}(str::T, splitter; limit::Integer=0, keep::Bool=true) = _rsplit(str, splitter, limit, keep, T[])
+rsplit{T<:String}(str::T, splitter   ; limit::Integer=0, keep::Bool=true) = _rsplit(str, splitter, limit, keep, SubString{T}[])
 function _rsplit{T<:String,U<:Array}(str::T, splitter, limit::Integer, keep_empty::Bool, strs::U)
     i = start(str)
     n = endof(str)
@@ -1318,9 +1324,6 @@ function _rsplit{T<:String,U<:Array}(str::T, splitter, limit::Integer, keep_empt
     (keep_empty || (n > 0)) && unshift!(strs, SubString(str,1,n))
     return strs
 end
-rsplit(s::String, spl, n::Integer) = rsplit(s, spl, n, true)
-rsplit(s::String, spl, keep::Bool) = rsplit(s, spl, 0, keep)
-rsplit(s::String, spl)             = rsplit(s, spl, 0, true)
 #rsplit(str::String) = rsplit(str, _default_delims, 0, false)
 
 function replace(str::ByteString, pattern, repl::Function, limit::Integer)
@@ -1669,6 +1672,14 @@ function repr(x)
     takebuf_string(s)
 end
 
+if sizeof(Cwchar_t) == 2
+    const WString = UTF16String # const, not typealias, to get constructor
+    const wstring = utf16
+elseif sizeof(Cwchar_t) == 4
+    const WString = UTF32String # const, not typealias, to get constructor
+    const wstring = utf32
+end
+
 # pointer conversions of ASCII/UTF8/UTF16/UTF32 strings:
 pointer(x::Union(ByteString,UTF16String,UTF32String)) = pointer(x.data)
 pointer{T<:ByteString}(x::SubString{T}) = pointer(x.string.data) + x.offset
@@ -1677,3 +1688,4 @@ pointer{T<:ByteString}(x::SubString{T}, i::Integer) = pointer(x.string.data) + x
 pointer(x::Union(UTF16String,UTF32String), i::Integer) = pointer(x)+(i-1)*sizeof(eltype(x.data))
 pointer{T<:Union(UTF16String,UTF32String)}(x::SubString{T}) = pointer(x.string.data) + x.offset*sizeof(eltype(x.data))
 pointer{T<:Union(UTF16String,UTF32String)}(x::SubString{T}, i::Integer) = pointer(x.string.data) + (x.offset + (i-1))*sizeof(eltype(x.data))
+

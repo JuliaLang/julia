@@ -1,5 +1,6 @@
 {
   global:
+    __asan*;
     alloc_*w;
     allocobj;
     asprintf;
@@ -17,13 +18,11 @@
     rec_backtrace;
     julia_*;
     libsupport_init;
-    locale_is_utf8;
     localtime_r;
     memhash;
     memhash32;
     memhash32_seed;
     memhash_seed;
-    open_any_tcp_port;
     restore_arg_area_loc;
     restore_signals;
     rl_clear_input;

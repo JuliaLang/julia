@@ -9,8 +9,6 @@ promote_rule{T<:Number}(::Type{Bool}, ::Type{T}) = T
 bool(x::Bool) = x
 bool(x::Number) = convert(Bool, x)
 
-sizeof(::Type{Bool}) = 1
-
 typemin(::Type{Bool}) = false
 typemax(::Type{Bool}) = true
 
@@ -50,11 +48,15 @@ end
 
 function *{T<:Number}(x::Bool, y::T)
     ifelse(x, convert(promote_type(Bool,T),y),
-           ifelse(signbit(y)==0, zero(promote_type(Bool,T)), -zero(promote_type(Bool,T))))
+           ifelse(signbit(y), -zero(promote_type(Bool,T)), zero(promote_type(Bool,T))))
+end
+function *{T<:Unsigned}(x::Bool, y::T)
+    ifelse(x, convert(promote_type(Bool,T),y), zero(promote_type(Bool,T)))
 end
 *(y::Number, x::Bool) = x * y
 
 div(x::Bool, y::Bool) = y ? x : throw(DivideError())
 fld(x::Bool, y::Bool) = div(x,y)
+cld(x::Bool, y::Bool) = div(x,y)
 rem(x::Bool, y::Bool) = y ? false : throw(DivideError())
 mod(x::Bool, y::Bool) = rem(x,y)

@@ -124,6 +124,6 @@ Legend:
 +---+-----------------------------------------------------------------------------------------------------------------------------------+------------------------+
 
 The uniform scaling operator
---------------------------
+----------------------------
 A ``UniformScaling`` operator represents a scalar times the identity operator, ``λ*I``. The identity operator ``I`` is defined as a constant and is an instance of ``UniformScaling``. The size of these operators are generic and match the other matrix in the binary operations ``+``,``-``,``*`` and ``\``. For ``A+I`` and ``A-I`` this means that ``A`` must be square. Multiplication with the identity operator ``I`` is a noop (except for checking that the scaling factor is one) and therefore almost without overhead. 
 

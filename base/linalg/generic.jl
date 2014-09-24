@@ -11,25 +11,34 @@ end
 
 scale{R<:Real}(s::Complex, X::AbstractArray{R}) = scale(X, s)
 
-function scale!(X::AbstractArray, s::Number)
-    for i in 1:length(X)
+# For better performance when input and output are the same array
+# See https://github.com/JuliaLang/julia/issues/8415#issuecomment-56608729
+function generic_scale!(X::AbstractArray, s::Number)
+    for i = 1:length(X)
         @inbounds X[i] *= s
     end
     X
 end
-scale!(s::Number, X::AbstractArray) = scale!(X, s)
+
+function generic_scale!(C::AbstractArray, X::AbstractArray, s::Number)
+    length(C) == length(X) || error("C must be the same length as X")
+    for i = 1:length(X)
+        @inbounds C[i] = X[i]*s
+    end
+    C
+end
+scale!(C::AbstractArray, s::Number, X::AbstractArray) = generic_scale!(C, X, s)
+scale!(C::AbstractArray, X::AbstractArray, s::Number) = generic_scale!(C, X, s)
+scale!(X::AbstractArray, s::Number) = generic_scale!(X, s)
+scale!(s::Number, X::AbstractArray) = generic_scale!(X, s)
 
 cross(a::AbstractVector, b::AbstractVector) = [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
 
-triu(M::AbstractMatrix) = triu(M,0)
-tril(M::AbstractMatrix) = tril(M,0)
-#triu{T}(M::AbstractMatrix{T}, k::Integer)
-#tril{T}(M::AbstractMatrix{T}, k::Integer)
+triu(M::AbstractMatrix) = triu!(copy(M))
+tril(M::AbstractMatrix) = tril!(copy(M))
 triu!(M::AbstractMatrix) = triu!(M,0)
 tril!(M::AbstractMatrix) = tril!(M,0)
 
-#diff(a::AbstractVector)
-#diff(a::AbstractMatrix, dim::Integer)
 diff(a::AbstractMatrix) = diff(a, 1)
 diff(a::AbstractVector) = [ a[i+1] - a[i] for i=1:length(a)-1 ]
 
@@ -44,15 +53,13 @@ end
 
 gradient(F::AbstractVector) = gradient(F, [1:length(F)])
 gradient(F::AbstractVector, h::Real) = gradient(F, [h*(1:length(F))])
-#gradient(F::AbstractVector, h::AbstractVector)
 
 diag(A::AbstractVector) = error("use diagm instead of diag to construct a diagonal matrix")
-#diag(A::AbstractMatrix)
 
 #diagm{T}(v::AbstractVecOrMat{T})
 
 # special cases of vecnorm; note that they don't need to handle isempty(x)
-function vecnormMinusInf(x)
+function generic_vecnormMinusInf(x)
     s = start(x)
     (v, s) = next(x, s)
     minabs = abs(v)
@@ -62,7 +69,8 @@ function vecnormMinusInf(x)
     end
     return float(minabs)
 end
-function vecnormInf(x)
+
+function generic_vecnormInf(x)
     s = start(x)
     (v, s) = next(x, s)
     maxabs = abs(v)
@@ -72,7 +80,8 @@ function vecnormInf(x)
     end
     return float(maxabs)
 end
-function vecnorm1(x)
+
+function generic_vecnorm1(x)
     s = start(x)
     (v, s) = next(x, s)
     av = float(abs(v))
@@ -84,7 +93,8 @@ function vecnorm1(x)
     end
     return convert(T, sum)
 end
-function vecnorm2(x)
+
+function generic_vecnorm2(x)
     maxabs = vecnormInf(x)
     maxabs == 0 && return maxabs
     s = start(x)
@@ -100,7 +110,8 @@ function vecnorm2(x)
     end
     return convert(T, maxabs * sqrt(sum))
 end
-function vecnormp(x, p)
+
+function generic_vecnormp(x, p)
     if p > 1 || p < 0 # need to rescale to avoid overflow/underflow
         maxabs = vecnormInf(x)
         maxabs == 0 && return maxabs
@@ -129,6 +140,13 @@ function vecnormp(x, p)
         return convert(T, sum^inv(pp))
     end
 end
+
+vecnormMinusInf(x) = generic_vecnormMinusInf(x)
+vecnormInf(x) = generic_vecnormInf(x)
+vecnorm1(x) = generic_vecnorm1(x)
+vecnorm2(x) = generic_vecnorm2(x)
+vecnormp(x, p) = generic_vecnormp(x, p)
+
 function vecnorm(itr, p::Real=2)
     isempty(itr) && return float(real(zero(eltype(itr))))
     p == 2 && return vecnorm2(itr)
@@ -213,7 +231,7 @@ trace(x::Number) = x
 
 inv(a::AbstractVector) = error("argument must be a square matrix")
 function inv{T}(A::AbstractMatrix{T})
-    S = typeof(one(T)/one(T))
+    S = typeof(zero(T)/one(T))
     A_ldiv_B!(convert(AbstractMatrix{S}, A), eye(S, chksquare(A)))
 end
 
@@ -239,7 +257,7 @@ function issym(A::AbstractMatrix)
     m, n = size(A)
     m==n || return false
     for i = 1:(n-1), j = (i+1):n
-        if A[i,j] != A[j,i]
+        if A[i,j] != transpose(A[j,i])
             return false
         end
     end
@@ -252,7 +270,7 @@ function ishermitian(A::AbstractMatrix)
     m, n = size(A)
     m==n || return false
     for i = 1:n, j = i:n
-        if A[i,j] != conj(A[j,i])
+        if A[i,j] != ctranspose(A[j,i])
             return false
         end
     end
@@ -403,3 +421,11 @@ function elementaryRightTrapezoid!(A::AbstractMatrix, row::Integer)
     end
     conj(ξ1/ν)
 end
+
+function det(A::AbstractMatrix)
+    (istriu(A) || istril(A)) && return det(Triangular(A, :U, false))
+    return det(lufact(A))
+end
+det(x::Number) = x
+
+logdet(A::AbstractMatrix) = logdet(lufact(A))

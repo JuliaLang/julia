@@ -240,6 +240,15 @@ to ``Int`` or ``Uint`` from narrower integer types.  (However,
 divisions, remainders, and bitwise operations do not promote narrower
 types.)
 
+Division errors
+~~~~~~~~~~~~~~~
+
+Integer division (the ``div`` function) has two exceptional cases: dividing by
+zero, and dividing the lowest negative number (``typemin``) by -1. Both of
+these cases throw a ``DivideError``. The remainder and modulus functions
+(``rem`` and ``mod``) throw a ``DivideError`` when their second argument is
+zero.
+
 Floating-Point Numbers
 ----------------------
 
@@ -555,7 +564,7 @@ Arbitrary Precision Arithmetic
 ------------------------------
 
 To allow computations with arbitrary-precision integers and floating point numbers, 
-Julia wraps the `GNU Multiple Precision Arithmetic Library (GMP) <http://gmplib.org>`_ and the `GNU MPFR Library <http://www.mpfr.org>`_, respectively. 
+Julia wraps the `GNU Multiple Precision Arithmetic Library (GMP) <https://gmplib.org>`_ and the `GNU MPFR Library <http://www.mpfr.org>`_, respectively. 
 The `BigInt` and `BigFloat` types are available in Julia for arbitrary precision 
 integer and floating point numbers respectively. 
 
@@ -601,7 +610,7 @@ However, type promotion between the primitive types above and
     -9223372036854775809
     
     julia> typeof(y)
-    BigInt (constructor with 7 methods)
+    BigInt (constructor with 10 methods)
 
 The default precision (in number of bits of the significand) and rounding
 mode of `BigFloat` operations can be changed, and all further calculations 

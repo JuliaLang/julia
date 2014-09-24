@@ -19,7 +19,7 @@ include("mandelbrot.jl")
 @timeit mandelbrot(200, rpath("mandelbrot-output-julia.txt")) "mandelbrot" "Generate Mandelbrot set portable bitmap file"
 
 include("meteor_contest.jl")
-@timeit1 meteor_contest() "meteor_contest" "Search for solutions to shape packing puzzle"
+@timeit meteor_contest() "meteor_contest" "Search for solutions to shape packing puzzle"
 
 include("nbody.jl")
 using NBody

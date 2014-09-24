@@ -15,8 +15,6 @@
 	((memq (car s1) s2) (diff (cdr s1) s2))
 	(else               (cons (car s1) (diff (cdr s1) s2)))))
 
-(define (unique lst) (delete-duplicates lst))
-
 (define (has-dups lst)
   (if (null? lst)
       #f
@@ -47,7 +45,7 @@
 		(cdr expr)))))
 
 ;; find all subexprs satisfying `p`, applying `key` to each one
-(define (expr-find-all p expr (key: identity))
+(define (expr-find-all p expr key)
   (let ((found (if (p expr)
 		   (list (key expr))
 		   '())))
@@ -55,7 +53,7 @@
 	found
 	(apply nconc
 	       found
-	       (map (lambda (x) (expr-find-all p x key: key))
+	       (map (lambda (x) (expr-find-all p x key))
 		    (cdr expr))))))
 
 (define (butlast lst)

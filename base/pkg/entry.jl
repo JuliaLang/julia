@@ -102,30 +102,32 @@ function installed(pkg::String)
     return nothing # registered but not installed
 end
 
-function status(io::IO)
+function status(io::IO; pkgname::String = "")
+    showpkg(pkg) = (pkgname == "") ? (true) : (pkg == pkgname)
     reqs = Reqs.parse("REQUIRE")
     instd = Read.installed()
     required = sort!([keys(reqs)...])
     if !isempty(required)
-        println(io, "$(length(required)) required packages:")
+        showpkg("") && println(io, "$(length(required)) required packages:")
         for pkg in required
             ver,fix = pop!(instd,pkg)
-            status(io,pkg,ver,fix)
+            showpkg(pkg) && status(io,pkg,ver,fix)
         end
     end
     additional = sort!([keys(instd)...])
     if !isempty(additional)
-        println(io, "$(length(additional)) additional packages:")
+        showpkg("") && println(io, "$(length(additional)) additional packages:")
         for pkg in additional
             ver,fix = instd[pkg]
-            status(io,pkg,ver,fix)
+            showpkg(pkg) && status(io,pkg,ver,fix)
         end
     end
     if isempty(required) && isempty(additional)
         println(io, "No packages installed")
     end
 end
-# TODO: status(io::IO, pkg::String)
+
+status(io::IO, pkg::String) = status(io, pkgname = pkg)
 
 function status(io::IO, pkg::String, ver::VersionNumber, fix::Bool)
     @printf io " - %-29s " pkg
@@ -150,12 +152,14 @@ function clone(url::String, pkg::String)
         Git.run(`clone -q $url $pkg`)
         Git.set_remote_url(url, dir=pkg)
     catch
-        run(`rm -rf $pkg`)
+        Base.rm(pkg, recursive=true)
         rethrow()
     end
-    isempty(Reqs.parse("$pkg/REQUIRE")) && return
     info("Computing changes...")
-    resolve()
+    if !edit(Reqs.add, pkg)
+        isempty(Reqs.parse("$pkg/REQUIRE")) && return
+        resolve()
+    end
 end
 
 function clone(url_or_pkg::String)
@@ -173,10 +177,10 @@ function clone(url_or_pkg::String)
     clone(url,pkg)
 end
 
-function _checkout(pkg::String, what::String, merge::Bool=false, pull::Bool=false)
+function _checkout(pkg::String, what::String, merge::Bool=false, pull::Bool=false, branch::Bool=false)
     Git.transact(dir=pkg) do
         Git.dirty(dir=pkg) && error("$pkg is dirty, bailing")
-        Git.run(`checkout -q $what`, dir=pkg)
+        branch ? Git.run(`checkout -q -B $what -t origin/$what`, dir=pkg) : Git.run(`checkout -q $what`, dir=pkg)
         merge && Git.run(`merge -q --ff-only $what`, dir=pkg)
         if pull
             info("Pulling $pkg latest $what...")
@@ -189,7 +193,7 @@ end
 function checkout(pkg::String, branch::String, merge::Bool, pull::Bool)
     ispath(pkg,".git") || error("$pkg is not a git repo")
     info("Checking out $pkg $branch...")
-    _checkout(pkg,branch,merge,pull)
+    _checkout(pkg,branch,merge,pull,true)
 end
 
 function free(pkg::String)
@@ -293,7 +297,7 @@ function pull_request(dir::String, commit::String="", url::String="")
     info("Pushing changes as branch $branch")
     Git.run(`push -q $fork $commit:refs/heads/$branch`, dir=dir)
     pr_url = "$(response["html_url"])/compare/$branch"
-    @osx? run(`open $pr_url`) : info("To create a pull-request open:\n\n  $pr_url\n")
+    @osx? run(`open $pr_url`) : info("To create a pull-request, open:\n\n  $pr_url\n")
 end
 
 function submit(pkg::String, commit::String="")
@@ -369,8 +373,12 @@ function resolve(
 
     for pkg in keys(reqs)
         if !haskey(deps,pkg)
-            error("$pkg's requirements can't be satisfied because of the following fixed packages: ",
+            if "julia" in conflicts[pkg]
+                error("$pkg can't be installed because it has no versions that support ", VERSION, " of julia")
+            else
+                error("$pkg's requirements can't be satisfied because of the following fixed packages: ",
                    join(conflicts[pkg], ", ", " and "))
+            end
         end
     end
 
@@ -596,11 +604,12 @@ function check_metadata()
 end
 
 function warnbanner(msg...; label="[ WARNING ]", prefix="")
-    warn(prefix="", Base.cpad(label,Base.tty_cols(),"="))
+    cols = Base.tty_size()[2]
+    warn(prefix="", Base.cpad(label,cols,"="))
     println(STDERR)
     warn(prefix=prefix, msg...)
     println(STDERR)
-    warn(prefix="", "="^Base.tty_cols())
+    warn(prefix="", "="^cols)
 end
 
 function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
@@ -665,21 +674,26 @@ function updatehook(pkgs::Vector)
     """)
 end
 
-function test!(pkg::String, errs::Vector{String}, notests::Vector{String})
-    const reqs_path = abspath(pkg,"test","REQUIRE")
+function test!(pkg::String, errs::Vector{String}, notests::Vector{String}; coverage::Bool=false)
+    reqs_path = abspath(pkg,"test","REQUIRE")
     if isfile(reqs_path)
-        const tests_require = Reqs.parse(reqs_path)
+        tests_require = Reqs.parse(reqs_path)
         if (!isempty(tests_require))
             info("Computing test dependencies for $pkg...")
-            resolve(tests_require)
+            resolve(merge(Reqs.parse("REQUIRE"), tests_require))
         end
     end
-    const test_path = abspath(pkg,"test","runtests.jl")
+    test_path = abspath(pkg,"test","runtests.jl")
     if isfile(test_path)
         info("Testing $pkg")
         cd(dirname(test_path)) do
             try
-                run(`$JULIA_HOME/julia $test_path`)
+                if coverage
+                    cmd = `$JULIA_HOME/julia --code-coverage $test_path`
+                else
+                    cmd = `$JULIA_HOME/julia $test_path`
+                end
+                run(cmd)
                 info("$pkg tests passed")
             catch err
                 warnbanner(err, label="[ ERROR: $pkg ]")
@@ -692,11 +706,11 @@ function test!(pkg::String, errs::Vector{String}, notests::Vector{String})
     resolve()
 end
 
-function test(pkgs::Vector{String})
+function test(pkgs::Vector{String}; coverage::Bool=false)
     errs = String[]
     notests = String[]
     for pkg in pkgs
-        test!(pkg,errs,notests)
+        test!(pkg,errs,notests; coverage=coverage)
     end
     if !isempty(errs) || !isempty(notests)
         messages = String[]
@@ -706,6 +720,6 @@ function test(pkgs::Vector{String})
     end
 end
 
-test() = test(sort!(String[keys(installed())...]))
+test(;coverage::Bool=false) = test(sort!(String[keys(installed())...]); coverage=coverage)
 
 end # module

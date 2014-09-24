@@ -26,22 +26,25 @@
    thk))
 
 ;; assigned variables except those marked local or inside inner functions
-(define (find-possible-globals e)
-  (cond ((atom? e)   '())
-	((quoted? e) '())
+(define (find-possible-globals- e tab)
+  (cond ((atom? e)   tab)
+	((quoted? e) tab)
 	(else (case (car e)
-		((=)            (list (decl-var (cadr e))))
+		((=)            (put! tab (decl-var (cadr e)) #t))
 		((method)       (let ((n (method-expr-name e)))
 				  (if (symbol? n)
-				      (list n)
-				      '())))
-		((lambda)       '())
-		((local local!) '())
-		((break-block)  (find-possible-globals (caddr e)))
+				      (put! tab n #t)
+				      tab)))
+		((lambda)       tab)
+		((local local!) tab)
+		((break-block)  (find-possible-globals- (caddr e) tab))
 		(else
-		 (delete-duplicates
-		  (apply append!
-			 (map find-possible-globals (cdr e)))))))))
+		 (for-each (lambda (x) (find-possible-globals- x tab))
+			   (cdr e))
+		 tab)))))
+
+(define (find-possible-globals e)
+  (table.keys (find-possible-globals- e (table))))
 
 ;; this is overwritten when we run in actual julia
 (define (defined-julia-global v) #f)
@@ -51,14 +54,18 @@
 
 ;; find variables that should be forced to be global in a toplevel expr
 (define (toplevel-expr-globals e)
-  (delete-duplicates
+  (diff
+   (delete-duplicates
+    (append
+     ;; vars assigned at the outer level
+     (filter (lambda (x) (not (some-gensym? x))) (find-assigned-vars e '()))
+     ;; vars declared const outside any scope block
+     (find-decls 'const e '())
+     ;; vars assigned anywhere, if they have been defined as global
+     (filter defined-julia-global (find-possible-globals e))))
    (append
-    ;; vars assigned at the outer level
-    (filter (lambda (x) (not (some-gensym? x))) (find-assigned-vars e '()))
-    ;; vars declared const outside any scope block
-    (find-decls 'const e '())
-    ;; vars assigned anywhere, if they have been defined as global
-    (filter defined-julia-global (find-possible-globals e)))))
+    (find-decls 'local  e '())
+    (find-decls 'local! e '()))))
 
 ;; return a lambda expression representing a thunk for a top-level expression
 ;; note: expansion of stuff inside module is delayed, so the contents obey

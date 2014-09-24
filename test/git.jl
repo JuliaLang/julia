@@ -8,6 +8,8 @@ mkdir(dir)
 try cd(dir) do
 
     run(`git init -q`)
+    run(`git config user.name "Julia Tester"`)
+    run(`git config user.email test@julialang.org`)
     run(`git commit -q --allow-empty -m "initial empty commit"`)
     git_verify(Dict(), Dict(), Dict())
 
@@ -30,4 +32,4 @@ try cd(dir) do
     end
     git_verify(states[1:3]...)
 
-end finally run(`rm -rf $dir`) end
+end finally rm(dir, recursive=true) end

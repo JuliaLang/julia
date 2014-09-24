@@ -48,8 +48,9 @@ lt(o::Lt,                    a, b) = o.lt(a,b)
 lt(o::LexicographicOrdering, a, b) = lexcmp(a,b) < 0
 
 function lt(p::Perm, a::Int, b::Int)
-    lt(p.order, p.data[a], p.data[b]) ? true :
-    lt(p.order, p.data[b], p.data[a]) ? false : a < b
+    da = p.data[a]
+    db = p.data[b]
+    lt(p.order, da, db) | (!lt(p.order, db, da) & (a < b))
 end
 function lt(p::Perm{LexicographicOrdering}, a::Int, b::Int)
     c = lexcmp(p.data[a], p.data[b])
@@ -84,12 +85,10 @@ uint_mapping(o::Lt,   x     ) = error("uint_mapping does not work with general L
 ordtype(o::ReverseOrdering, vs::AbstractArray) = ordtype(o.fwd, vs)
 ordtype(o::Perm,            vs::AbstractArray) = ordtype(o.order, o.data)
 # TODO: here, we really want the return type of o.by, without calling it
-ordtype(o::By,              vs::AbstractArray) = try typeof(o.by(vs[1])) catch Any end
+ordtype(o::By,              vs::AbstractArray) = try typeof(o.by(vs[1])) catch; Any end
 ordtype(o::Ordering,        vs::AbstractArray) = eltype(vs)
 
 function ord(lt::Function, by::Function, rev::Bool, order::Ordering=Forward)
-    order == Forward || order == Lexicographic ||
-        Base.warn_once("the `order` keyword is deprecated, use `lt`, `by` and `rev` instead")
     o = (lt===isless) & (by===identity) ? order  :
         (lt===isless) & (by!==identity) ? By(by) :
         (lt!==isless) & (by===identity) ? Lt(lt) :

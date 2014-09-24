@@ -227,23 +227,21 @@ a normal value:
 
     julia> str[end/3]
     ERROR: InexactError()
-     in getindex at string.jl:58
+     in getindex at string.jl:59
 
     julia> str[end/4]
     ERROR: InexactError()
-     in getindex at string.jl:58
+     in getindex at string.jl:59
 
-Using an index less than 1 or greater than ``end`` raises an error:
-
-.. doctest::
+Using an index less than 1 or greater than ``end`` raises an error::
 
     julia> str[0]
     ERROR: BoundsError()
-     in getindex at ascii.jl:11
+     in getindex at /Users/sabae/src/julia/usr/lib/julia/sys.dylib (repeats 2 times)
 
     julia> str[end+1]
     ERROR: BoundsError()
-     in getindex at ascii.jl:11
+     in getindex at /Users/sabae/src/julia/usr/lib/julia/sys.dylib (repeats 2 times)
 
 You can also extract a substring using range indexing:
 
@@ -299,11 +297,13 @@ such an invalid byte index, an error is thrown:
 
     julia> s[2]
     ERROR: invalid UTF-8 character index
-     in getindex at utf8.jl:63
+     in next at ./utf8.jl:68
+     in getindex at string.jl:57
 
     julia> s[3]
     ERROR: invalid UTF-8 character index
-     in getindex at utf8.jl:63
+     in next at ./utf8.jl:68
+     in getindex at string.jl:57
 
     julia> s[4]
     ' '
@@ -311,12 +311,12 @@ such an invalid byte index, an error is thrown:
 In this case, the character ``∀`` is a three-byte character, so the
 indices 2 and 3 are invalid and the next character's index is 4.
 
-Because of variable-length encodings, the number of character in a
+Because of variable-length encodings, the number of characters in a
 string (given by ``length(s)``) is not always the same as the last index.
 If you iterate through the indices 1 through ``endof(s)`` and index
-into ``s``, the sequence of characters returned, when errors aren't
-thrown, is the sequence of characters comprising the string ``s``.
-Thus, we do have the identity that ``length(s) <= endof(s)`` since each
+into ``s``, the sequence of characters returned when errors aren't
+thrown is the sequence of characters comprising the string ``s``.
+Thus we have the identity that ``length(s) <= endof(s)``, since each
 character in a string must have its own index. The following is an
 inefficient and verbose way to iterate through the characters of ``s``:
 
@@ -356,9 +356,14 @@ exception handling required:
     y
 
 UTF-8 is not the only encoding that Julia supports, and adding support
-for new encodings is quite easy, but discussion of other encodings and
-how to implement support for them is beyond the scope of this document
-for the time being. For further discussion of UTF-8 encoding issues, see
+for new encodings is quite easy.  In particular, Julia also provides
+``UTF16String`` and ``UTF32String`` types, constructed by the
+``utf16(s)`` and ``utf32(s)`` functions respectively, for UTF-16 and
+UTF-32 encodings.  It also provides aliases ``WString`` and
+``wstring(s)`` for either UTF-16 or UTF-32 strings, depending on the
+size of ``Cwchar_t``. Additional discussion of other encodings and how to
+implement support for them is beyond the scope of this document for
+the time being. For further discussion of UTF-8 encoding issues, see
 the section below on `byte array literals <#Byte+Array+Literals>`_,
 which goes into some greater detail.
 
@@ -416,7 +421,7 @@ sessions:
      3
 
     julia> "v: $v"
-    "v: 1\n2\n3\n"
+    "v: [1,2,3]"
 
 The ``string`` function is the identity for ``String`` and ``Char``
 values, so these are interpolated into strings as themselves, unquoted
@@ -595,6 +600,20 @@ text after the comment character. We could do the following:
     julia> m = match(r"^\s*(?:#\s*(.*?)\s*$|$)", "# a comment ")
     RegexMatch("# a comment ", 1="a comment")
 
+When calling ``match``, you have the option to specify an index at
+which to start the search. For example:
+
+.. doctest::
+
+   julia> m = match(r"[0-9]","aaaa1aaaa2aaaa3",1)
+   RegexMatch("1")
+
+   julia> m = match(r"[0-9]","aaaa1aaaa2aaaa3",6)
+   RegexMatch("2")
+
+   julia> m = match(r"[0-9]","aaaa1aaaa2aaaa3",11)
+   RegexMatch("3")
+
 You can extract the following info from a ``RegexMatch`` object:
 
 -  the entire substring matched: ``m.match``
@@ -605,9 +624,7 @@ You can extract the following info from a ``RegexMatch`` object:
 For when a capture doesn't match, instead of a substring, ``m.captures``
 contains ``nothing`` in that position, and ``m.offsets`` has a zero
 offset (recall that indices in Julia are 1-based, so a zero offset into
-a string is invalid). Here's is a pair of somewhat contrived examples:
-
-.. doctest::
+a string is invalid). Here's is a pair of somewhat contrived examples::
 
     julia> m = match(r"(a|b)(c)?(d)", "acd")
     RegexMatch("acd", 1="a", 2="c", 3="d")
@@ -616,7 +633,7 @@ a string is invalid). Here's is a pair of somewhat contrived examples:
     "acd"
 
     julia> m.captures
-    3-element Array{Union(Nothing,SubString{UTF8String}),1}:
+    3-element Array{Union(SubString{UTF8String},Nothing),1}:
      "a"
      "c"
      "d"
@@ -637,7 +654,7 @@ a string is invalid). Here's is a pair of somewhat contrived examples:
     "ad"
 
     julia> m.captures
-    3-element Array{Union(Nothing,SubString{UTF8String}),1}:
+    3-element Array{Union(SubString{UTF8String},Nothing),1}:
      "a"
      nothing
      "d"
@@ -652,9 +669,7 @@ a string is invalid). Here's is a pair of somewhat contrived examples:
      2
 
 It is convenient to have captures returned as a tuple so that one can
-use tuple destructuring syntax to bind them to local variables:
-
-.. doctest::
+use tuple destructuring syntax to bind them to local variables::
 
     julia> first, second, third = m.captures; first
     "a"
@@ -812,7 +827,7 @@ pre-release/build annotations), ``v"2"`` is equivalent to ``v"2.0.0"``, and so
 on.
 
 ``VersionNumber`` objects are mostly useful to easily and correctly compare two
-(or more) versions. For example, the constant ``VERSION`` holds Julia verison
+(or more) versions. For example, the constant ``VERSION`` holds Julia version
 number as a ``VersionNumber`` object, and therefore one can define some
 version-specific behaviour using simple statements as::
 
@@ -838,7 +853,7 @@ for ``v"0.2-rc2"``.
 It is good practice to use such special versions in comparisons (particularly,
 the trailing ``-`` should always be used on upper bounds unless there's a good
 reason not to), but they must not be used as the actual version number of
-anything, as they are illegal in the semantic versioning scheme.
+anything, as they are invalid in the semantic versioning scheme.
 
 Besides being used for the ``VERSION`` constant, ``VersionNumber`` objects are
 widely used in the ``Pkg`` module, to specify packages versions and their

@@ -3,6 +3,10 @@
 hash(x::Any) = hash(x, zero(Uint))
 hash(w::WeakRef, h::Uint) = hash(w.value, h)
 
+## hashing general objects ##
+
+hash(x::ANY, h::Uint) = hash(object_id(x), h)
+
 ## core data hashing functions ##
 
 function hash_64_64(n::Uint64)
@@ -56,7 +60,7 @@ hash(x::Uint64,  h::Uint) = hx(x, float64(x), h)
 hash(x::Int64,   h::Uint) = hx(reinterpret(Uint64,x), float64(x), h)
 hash(x::Float64, h::Uint) = isnan(x) ? (hx_NaN $ h) : hx(box(Uint64,fptosi(unbox(Float64,x))), x, h)
 
-hash(x::Union(Int8,Uint8,Int16,Uint16,Int32,Uint32), h::Uint) = hash(int64(x), h)
+hash(x::Union(Bool,Char,Int8,Uint8,Int16,Uint16,Int32,Uint32), h::Uint) = hash(int64(x), h)
 hash(x::Float32, h::Uint) = hash(float64(x), h)
 
 ## hashing complex numbers ##
@@ -69,11 +73,6 @@ function hash(z::Complex, h::Uint)
     # hash(real(z), h $ hash(imag(z), h $ h_imag) $ hash(0, h $ h_imag))
     hash(real(z), h $ hash(imag(z), h_imag) $ hash_0_imag)
 end
-
-## special hashing for booleans and characters ##
-
-hash(x::Bool, h::Uint) = hash(int(x), h + uint(0x4cd135a1755139a5))
-hash(x::Char, h::Uint) = hash(int(x), h + uint(0x10f989ff0f886f11))
 
 ## symbol & expression hashing ##
 

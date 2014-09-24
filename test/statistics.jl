@@ -1,9 +1,23 @@
-@test median([1.]) == 1.
-@test median([1.,3]) == 2.
-@test median([1.,3,2]) == 2.
+# middle
 
-@test median([1,3,2]) == 2.0
-@test median([1,3,2,4]) == 2.5
+@test middle(3) === 3.0
+@test middle(2, 3) === 2.5
+@test middle(1:8) === 4.5
+@test middle([1:8]) === 4.5
+
+# ensure type-correctness
+for T in [Bool,Int8,Int16,Int32,Int64,Int128,Uint8,Uint16,Uint32,Uint64,Uint128,Float16,Float32,Float64]
+    @test middle(one(T)) === middle(one(T), one(T))
+end
+
+
+# median
+@test median([1.]) === 1.
+@test median([1.,3]) === 2.
+@test median([1.,3,2]) === 2.
+
+@test median([1,3,2]) === 2.0
+@test median([1,3,2,4]) === 2.5
 
 @test median([0.0,Inf]) == Inf
 @test median([0.0,-Inf]) == -Inf
@@ -26,6 +40,40 @@
 @test mean([1 2 3; 4 5 6], 1) == [2.5 3.5 4.5]
 
 # test var & std
+
+# edge case: empty vector
+# iterable; this has to throw for type stability
+@test_throws ErrorException var(())
+@test_throws ErrorException var((); corrected=false)
+@test_throws ErrorException var((); mean=2)
+@test_throws ErrorException var((); mean=2, corrected=false)
+# reduction
+@test isnan(var(Int[]))
+@test isnan(var(Int[]; corrected=false))
+@test isnan(var(Int[]; mean=2))
+@test isnan(var(Int[]; mean=2, corrected=false))
+# reduction across dimensions
+@test_approx_eq var(Int[], 1) [NaN]
+@test_approx_eq var(Int[], 1; corrected=false) [NaN]
+@test_approx_eq var(Int[], 1; mean=[2]) [NaN]
+@test_approx_eq var(Int[], 1; mean=[2], corrected=false) [NaN]
+
+# edge case: one-element vector
+# iterable
+@test isnan(@inferred(var((1,))))
+@test var((1,); corrected=false) === 0.0
+@test var((1,); mean=2) === Inf
+@test var((1,); mean=2, corrected=false) === 1.0
+# reduction
+@test isnan(@inferred(var([1])))
+@test var([1]; corrected=false) === 0.0
+@test var([1]; mean=2) === Inf
+@test var([1]; mean=2, corrected=false) === 1.0
+# reduction across dimensions
+@test_approx_eq @inferred(var([1], 1)) [NaN]
+@test_approx_eq var([1], 1; corrected=false) [0.0]
+@test_approx_eq var([1], 1; mean=[2]) [Inf]
+@test_approx_eq var([1], 1; mean=[2], corrected=false) [1.0]
 
 @test var(1:8) == 6.
 

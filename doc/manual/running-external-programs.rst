@@ -12,7 +12,7 @@ Ruby. However, in Julia, writing
     julia> `echo hello`
     `echo hello`
 
-differs in a several aspects from the behavior in various shells, Perl,
+differs in several aspects from the behavior in various shells, Perl,
 or Ruby:
 
 -  Instead of immediately running the command, backticks create a
@@ -29,7 +29,7 @@ or Ruby:
    syntax. The command is run as ``julia``'s immediate child process,
    using ``fork`` and ``exec`` calls.
 
-Here's a simple example of actually running an external program::
+Here's a simple example of running an external program::
 
     julia> run(`echo hello`)
     hello
@@ -46,6 +46,15 @@ can be used instead::
 
     julia> (chomp(a)) == "hello"
     true
+
+More generally, you can use ``open`` to read from or write to an external
+command.  For example::
+
+    julia> open(`less`, "w", STDOUT) do io
+               for i = 1:1000
+                   println(io, i)
+               end
+           end
 
 .. _man-command-interpolation:
 
@@ -237,7 +246,9 @@ This prints the highest five user IDs on a UNIX system. The ``cut``,
 the current ``julia`` process, with no intervening shell process. Julia
 itself does the work to setup pipes and connect file descriptors that is
 normally done by the shell. Since Julia does this itself, it retains
-better control and can do some things that shells cannot.
+better control and can do some things that shells cannot. Note that ``|>``
+only redirects ``stdout``. To redirect ``stderr``, use ``.>``
+
 
 Julia can run multiple commands in parallel::
 

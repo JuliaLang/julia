@@ -8,7 +8,7 @@ function pwd()
 end
 
 function cd(dir::String) 
-    uv_error("chdir $dir", ccall(:uv_chdir, Cint, (Ptr{Uint8},), bytestring(dir)))
+    uv_error("chdir $dir", ccall(:uv_chdir, Cint, (Ptr{Uint8},), dir))
 end
 cd() = cd(homedir())
 
@@ -35,8 +35,8 @@ end
 cd(f::Function) = cd(f, homedir())
 
 function mkdir(path::String, mode::Unsigned=0o777)
-    @unix_only ret = ccall(:mkdir, Int32, (Ptr{Uint8},Uint32), bytestring(path), mode)
-    @windows_only ret = ccall(:_mkdir, Int32, (Ptr{Uint8},), bytestring(path))
+    @unix_only ret = ccall(:mkdir, Int32, (Ptr{Uint8},Uint32), path, mode)
+    @windows_only ret = ccall(:_wmkdir, Int32, (Ptr{Uint16},), utf16(path))
     systemerror(:mkdir, ret != 0)
 end
 
@@ -45,69 +45,79 @@ function mkpath(path::String, mode::Unsigned=0o777)
     dir = dirname(path)
     (path == dir || isdir(path)) && return
     mkpath(dir, mode)
-    mkdir(path)
+    mkdir(path, mode)
 end
 
 mkdir(path::String, mode::Signed) = error("mode must be an unsigned integer; try 0o$mode")
 mkpath(path::String, mode::Signed) = error("mode must be an unsigned integer; try 0o$mode")
 
-function rmdir(path::String)
-    @unix_only ret = ccall(:rmdir, Int32, (Ptr{Uint8},), bytestring(path))
-    @windows_only ret = ccall(:_rmdir, Int32, (Ptr{Uint8},), bytestring(path))
-    systemerror(:rmdir, ret != 0)
+function rm(path::String; recursive::Bool=false)
+    if islink(path) || !isdir(path)
+        @windows_only if !iswritable(path); chmod(path, 0o777); end
+        FS.unlink(path)
+    else
+        if recursive
+            for p in readdir(path)
+                rm(joinpath(path, p), recursive=true)
+            end
+        end
+        @unix_only ret = ccall(:rmdir, Int32, (Ptr{Uint8},), path)
+        @windows_only ret = ccall(:_wrmdir, Int32, (Ptr{Uint16},), utf16(path))
+        systemerror(:rmdir, ret != 0)
+    end
 end
+
 
 # The following use Unix command line facilites
 
-rm(path::String) = FS.unlink(path)
 cp(src::String, dst::String) = FS.sendfile(src, dst)
 mv(src::String, dst::String) = FS.rename(src, dst)
 touch(path::String) = run(`touch $path`)
 
 # Obtain a temporary filename.
-function tempname()
+@unix_only function tempname()
     d = get(ENV, "TMPDIR", C_NULL) # tempnam ignores TMPDIR on darwin
-    @unix_only p = ccall(:tempnam, Ptr{Uint8}, (Ptr{Uint8},Ptr{Uint8}), d, "julia")
-    @windows_only p = ccall(:_tempnam, Ptr{Uint8}, (Ptr{Uint8},Ptr{Uint8}), d, "julia")
+    p = ccall(:tempnam, Ptr{Uint8}, (Ptr{Uint8},Ptr{Uint8}), d, "julia")
     systemerror(:tempnam, p == C_NULL)
     s = bytestring(p)
     c_free(p)
-    s
+    return s
 end
 
 # Obtain a temporary directory's path.
-tempdir() = dirname(tempname())
+@unix_only tempdir() = dirname(tempname())
 
 # Create and return the name of a temporary file along with an IOStream
 @unix_only function mktemp()
     b = joinpath(tempdir(), "tmpXXXXXX")
-    p = ccall(:mkstemp, Int32, (Ptr{Uint8}, ), b)
+    p = ccall(:mkstemp, Int32, (Ptr{Uint8}, ), b) # modifies b
     return (b, fdio(p, true))
 end
 
 @windows_only begin 
-function GetTempPath()
-    temppath = Array(Uint8,261)
-    lentemppath = ccall(:GetTempPathA,stdcall,Uint32,(Uint32,Ptr{Uint8}),length(temppath),temppath)
+function tempdir()
+    temppath = Array(Uint16,32767)
+    lentemppath = ccall(:GetTempPathW,stdcall,Uint32,(Uint32,Ptr{Uint16}),length(temppath),temppath)
     if lentemppath >= length(temppath) || lentemppath == 0
-        error("GetTempPath failed")
+        error("GetTempPath failed: $(FormatMessage())")
     end
-    resize!(temppath,lentemppath)
-    return convert(ASCIIString,temppath)
+    resize!(temppath,lentemppath+1)
+    return utf8(UTF16String(temppath))
 end
-GetTempFileName(uunique::Uint32) = GetTempFileName(GetTempPath(), uunique)
-function GetTempFileName(temppath::String,uunique::Uint32)
-    tname = Array(Uint8,261)
-    uunique = ccall(:GetTempFileNameA,stdcall,Uint32,(Ptr{Uint8},Ptr{Uint8},Uint32,Ptr{Uint8}),temppath,"julia",uunique,tname)
+tempname(uunique::Uint32=uint32(0)) = tempname(tempdir(), uunique)
+function tempname(temppath::String,uunique::Uint32)
+    tname = Array(Uint16,32767)
+    uunique = ccall(:GetTempFileNameW,stdcall,Uint32,(Ptr{Uint16},Ptr{Uint16},Uint32,Ptr{Uint16}),
+        utf16(temppath),utf16("jul"),uunique,tname)
     lentname = findfirst(tname,0)-1
     if uunique == 0 || lentname <= 0
-        error("GetTempFileName failed")
+        error("GetTempFileName failed: $(FormatMessage())")
     end
-    resize!(tname,lentname)
-    return convert(ASCIIString, tname)
+    resize!(tname,lentname+1)
+    return utf8(UTF16String(tname))
 end
 function mktemp()
-    filename = GetTempFileName(uint32(0))
+    filename = tempname()
     return (filename, open(filename,"r+"))
 end
 end
@@ -120,10 +130,14 @@ end
 end
 
 @windows_only function mktempdir()
-    seed = rand(Uint32)
+    seed::Uint32 = rand(Uint32)
+    dir = tempdir()
     while true
-        filename = GetTempFileName(seed)
-        ret = ccall(:_mkdir, Int32, (Ptr{Uint8},), filename)
+        if uint16(seed) == 0
+            seed += 1
+        end
+        filename = tempname(dir, seed)
+        ret = ccall(:_wmkdir, Int32, (Ptr{Uint16},), utf16(filename))
         if ret == 0
             return filename
         end
@@ -138,7 +152,7 @@ function readdir(path::String)
 
     # defined in sys.c, to call uv_fs_readdir, which sets errno on error.
     file_count = ccall(:jl_readdir, Int32, (Ptr{Uint8}, Ptr{Uint8}),
-                       bytestring(path), uv_readdir_req)
+                        path, uv_readdir_req)
     systemerror("unable to read directory $path", file_count < 0)
 
     # The list of dir entries is returned as a contiguous sequence of null-terminated

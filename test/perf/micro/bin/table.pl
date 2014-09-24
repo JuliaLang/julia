@@ -27,13 +27,13 @@ our $R_ver = `R --version | grep "R version" | cut -f3 -d" "`;
 our $octave_ver = `octave -v | grep version | cut -f4 -d" "`;
 our $go_ver = `go version | cut -f3 -d" "`;
 our $lua_ver = `gsl-shell -v 2>&1 | grep Shell | cut -f3 -d" " | cut -f1 -d,`;
-our $javascript_ver = `node -e "console.log(process.versions.v8)"`;
+our $javascript_ver = `nodejs -e "console.log(process.versions.v8)"`;
 our $mathematica_ver = `echo quit | math -version | head -n 1 | cut -f2 -d" "`;
 our $stata_ver = `stata -q -b version && grep version stata.log | cut -f2 -d" " && rm stata.log`;
 our $java_ver = `java -version 2>&1 |grep "version" | cut -f 3 -d " " | cut -c 2-9`;
 
 our %systems = (
-  "fortran"    => ["Fortran"     , "GCC $fortran_ver" ],
+  "fortran"    => ["Fortran"     , "gcc $fortran_ver" ],
   "julia"      => ["Julia"       , $julia_ver  ],
   "python"     => ["Python"      , $python_ver ],
   "matlab"     => ["Matlab"      , "R$matlab_ver" ],
@@ -41,13 +41,13 @@ our %systems = (
   "r"          => ["R"           , $R_ver ],
   "javascript" => ["JavaScript"  , "V8 $javascript_ver" ],
   "go"         => ["Go"          , $go_ver ],
-  "mathematica"=> ["Mathematica" , $mathematica_ver ],
+  "mathematica"=> ["Mathe-matica" , $mathematica_ver ],
   "lua"	       => ["LuaJIT"      , "gsl-shell $lua_ver" ],
   "stata"      => ["Stata"       , $stata_ver ],
   "java"       => ["Java"        , $java_ver ],
 );
 
-our @systems = qw(fortran julia python r matlab octave mathematica javascript go lua);
+our @systems = qw(fortran julia python r matlab octave mathematica javascript go lua java);
 
 print qq[<table class="benchmarks">\n];
 print qq[<colgroup>\n];

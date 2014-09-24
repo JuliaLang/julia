@@ -13,6 +13,7 @@ end
 
 test_complete(s) = completions(s,endof(s))
 test_scomplete(s) = shell_completions(s,endof(s))
+test_latexcomplete(s) = latex_completions(s,endof(s))[2]
 
 s = ""
 c,r = test_complete(s)
@@ -60,6 +61,18 @@ c,r = test_complete(s)
 @test r == 19:23
 @test s[r] == "getin"
 
+# inexistent completion inside a string
+s = "Pkg.add(\"lol"
+c,r,res = test_complete(s)
+@test res == false
+
+# test latex symbol completions
+s = "\\alpha"
+c,r = test_latexcomplete(s)
+@test c[1] == "α"
+@test r == 1:length(s)
+@test length(c) == 1
+
 ## Test completion of packages
 #mkp(p) = ((@assert !isdir(p)); mkdir(p))
 #temp_pkg_dir() do
@@ -82,14 +95,39 @@ c,r = test_complete(s)
 #    @test "CompletionFoo2" in c
 #    @test s[r] == "Completion"
 #
-#    rmdir(Pkg.dir("MyAwesomePackage"))
-#    rmdir(Pkg.dir("CompletionFooPackage"))
+#    rm(Pkg.dir("MyAwesomePackage"))
+#    rm(Pkg.dir("CompletionFooPackage"))
 #end
 
 @unix_only begin
     #Assume that we can rely on the existence and accessibility of /tmp
+
+    # Tests path in Julia code and closing " if it's a file
+    # Issue #8047
+    s = "@show \"/dev/nul"
+    c,r = test_complete(s)
+    @test "null\"" in c
+    @test r == 13:15
+    @test s[r] == "nul"
+
+    # Tests path in Julia code and not closing " if it's a directory
+    # Issue #8047
+    s = "@show \"/tm"
+    c,r = test_complete(s)
+    @test "tmp/" in c
+    @test r == 9:10
+    @test s[r] == "tm"
+
+    # Tests path in Julia code and not double-closing "
+    # Issue #8047
+    s = "@show \"/dev/nul\""
+    c,r = completions(s, 15)
+    @test "null" in c
+    @test r == 13:15
+    @test s[r] == "nul"
+
     s = "/t"
-    c,r = test_scomplete("/t")
+    c,r = test_scomplete(s)
     @test "tmp/" in c
     @test r == 2:2
     @test s[r] == "t"

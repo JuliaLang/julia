@@ -36,7 +36,7 @@ copy(n::GetfieldNode) = GetfieldNode(n.value, n.name, n.typ)
 
 # copy parts of an AST that the compiler mutates
 astcopy(x::Union(SymbolNode,GetfieldNode,Expr)) = copy(x)
-astcopy(x::Array{Any,1}) = map(astcopy, x)
+astcopy(x::Array{Any,1}) = Any[astcopy(a) for a in x]
 astcopy(x) = x
 
 ==(x::Expr, y::Expr) = x.head === y.head && x.args == y.args
@@ -62,6 +62,13 @@ macroexpand(x) = ccall(:jl_macroexpand, Any, (Any,), x)
 macro eval(x)
     :($(esc(:eval))($(Expr(:quote,x))))
 end
+
+macro inline(ex)
+    esc(_inline(ex))
+end
+
+_inline(ex::Expr) = pushmeta!(ex, :inline)
+_inline(arg) = arg
 
 ## some macro utilities ##
 
@@ -95,3 +102,37 @@ function localize_vars(expr, esca)
     end
     Expr(:localize, :(()->($expr)), v...)
 end
+
+function pushmeta!(ex::Expr, sym::Symbol)
+    if ex.head == :function
+        body::Expr = ex.args[2]
+        if !isempty(body.args) && isa(body.args[1], Expr) && (body.args[1]::Expr).head == :meta
+            push!((body.args[1]::Expr).args, sym)
+        else
+            unshift!(body.args, Expr(:meta, sym))
+        end
+    elseif (ex.head == :(=) && typeof(ex.args[1]) == Expr && ex.args[1].head == :call)
+        ex = Expr(:function, ex.args[1], Expr(:block, Expr(:meta, sym), ex.args[2]))
+#     else
+#         ex = Expr(:withmeta, ex, sym)
+    end
+    ex
+end
+
+function popmeta!(body::Expr, sym::Symbol)
+    if isa(body.args[1],Expr) && (body.args[1]::Expr).head === :meta
+        metaargs = (body.args[1]::Expr).args
+        for i = 1:length(metaargs)
+            if metaargs[i] == sym
+                if length(metaargs) == 1
+                    shift!(body.args)        # get rid of :meta Expr
+                else
+                    deleteat!(metaargs, i)   # delete this portion of the metadata
+                end
+                return true
+            end
+        end
+    end
+    false
+end
+popmeta!(arg, sym) = false

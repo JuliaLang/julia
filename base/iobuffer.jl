@@ -10,17 +10,29 @@ type IOBuffer <: IO
     size::Int
     maxsize::Int # pre-allocated, fixed array size
     ptr::Int # read (and maybe write) pointer
+    mark::Int
+
     IOBuffer(data::Vector{Uint8},readable::Bool,writable::Bool,seekable::Bool,append::Bool,maxsize::Int) = 
-        new(data,readable,writable,seekable,append,length(data),maxsize,1)
+        new(data,readable,writable,seekable,append,length(data),maxsize,1,-1)
 end
 
 function copy(b::IOBuffer) 
     ret = IOBuffer(b.writable?copy(b.data):b.data,
-            b.readable,b.writable,b.seekable,b.append,b.maxsize)
+                   b.readable,b.writable,b.seekable,b.append,b.maxsize)
     ret.size = b.size
     ret.ptr  = b.ptr
     ret
 end
+
+show(io::IO, b::IOBuffer) = print(io, "IOBuffer(data=Uint8[...], ",
+                                      "readable=", b.readable, ", ",
+                                      "writable=", b.writable, ", ",
+                                      "seekable=", b.seekable, ", ",
+                                      "append=",   b.append, ", ",
+                                      "size=",     b.size, ", ",
+                                      "maxsize=",  b.maxsize == typemax(Int) ? "Inf" : b.maxsize, ", ",
+                                      "ptr=",      b.ptr, ", ",
+                                      "mark=",     b.mark, ")")
 
 # PipeBuffers behave like Unix Pipes. They are readable and writable, the act appendable, and not seekable.
 PipeBuffer(data::Vector{Uint8},maxsize::Int) = IOBuffer(data,true,true,false,true,maxsize)
@@ -99,15 +111,18 @@ function skip(io::IOBuffer, n::Integer)
     io.ptr = min(io.ptr + n, io.size+1)
     return io
 end
+
 function seek(io::IOBuffer, n::Integer)
-    if !io.seekable error("seek failed") end
+    !io.seekable && (!ismarked(io) || n!=io.mark) && error("seek failed")
     io.ptr = min(n+1, io.size+1)
     return io
 end
+
 function seekend(io::IOBuffer)
     io.ptr = io.size+1
     return io
 end
+
 function truncate(io::IOBuffer, n::Integer)
     if !io.writable error("truncate failed") end
     if !io.seekable error("truncate failed") end #because absolute offsets are meaningless
@@ -118,30 +133,46 @@ function truncate(io::IOBuffer, n::Integer)
     io.data[io.size+1:n] = 0
     io.size = n
     io.ptr = min(io.ptr, n+1)
+    ismarked(io) && io.mark > n && unmark(io)
     return io
 end
+
 function compact(io::IOBuffer)
     if !io.writable error("compact failed") end
     if io.seekable error("compact failed") end
-    ccall(:memmove, Ptr{Void}, (Ptr{Void},Ptr{Void},Uint),
-          io.data, pointer(io.data,io.ptr), nb_available(io))
-    io.size -= io.ptr - 1
-    io.ptr = 1
+    local ptr::Int, bytes_to_move::Int
+    if ismarked(io) && io.mark < io.ptr
+        if io.mark == 0; return; end
+        ptr = io.mark
+        bytes_to_move = nb_available(io) + (io.ptr-io.mark)
+    else
+        ptr = io.ptr
+        bytes_to_move = nb_available(io)
+    end
+    ccall(:memmove, Ptr{Void}, (Ptr{Void},Ptr{Void},Uint), 
+          io.data, pointer(io.data,ptr), bytes_to_move)
+    io.size -= ptr - 1
+    io.ptr -= ptr - 1
+    io.mark -= ptr - 1
     return io
 end
+
 function ensureroom(io::IOBuffer, nshort::Int)
     if !io.writable error("ensureroom failed") end
     if !io.seekable
         if nshort < 0 error("ensureroom failed") end
-        if io.ptr > 1 && io.size <= io.ptr - 1
+        if !ismarked(io) && io.ptr > 1 && io.size <= io.ptr - 1
             io.ptr = 1
             io.size = 0
-        elseif (io.size+nshort > io.maxsize) ||
-                (io.ptr > io.size - io.ptr > 4096) ||
-                (io.ptr > 262144)
-            # apply somewhat arbitrary heuristics to decide when to destroy 
-            # old, read data to make more room for new data
-            compact(io)
+        else
+            datastart = ismarked(io) ? io.mark : io.ptr
+            if (io.size+nshort > io.maxsize) ||
+                (datastart > 4096 && datastart > io.size - io.ptr) ||
+                (datastart > 262144)
+                # apply somewhat arbitrary heuristics to decide when to destroy
+                # old, read data to make more room for new data
+                compact(io)
+            end
         end
     end
     n = min(nshort + (io.append ? io.size : io.ptr-1), io.maxsize)
@@ -163,6 +194,7 @@ function close(io::IOBuffer)
     io.size = 0
     io.maxsize = 0
     io.ptr = 1
+    io.mark = -1
     nothing
 end
 isopen(io::IOBuffer) = io.readable || io.writable || io.seekable || nb_available(io) > 0
@@ -172,6 +204,7 @@ function bytestring(io::IOBuffer)
     bytestring(pointer(io.data), io.size)
 end
 function takebuf_array(io::IOBuffer)
+    ismarked(io) && unmark(io)
     if io.seekable
         data = io.data
         if io.writable
@@ -215,10 +248,15 @@ function write_sub{T}(to::IOBuffer, a::Array{T}, offs, nel)
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
     end
-    if !isbits(T)
-        error("write to IOBuffer only supports bits types or arrays of bits types; got "*string(T))
+    if isbits(T)
+        write(to, pointer(a,offs), nel*sizeof(T))
+    else
+        nb = 0
+        for i = offs:offs+nel-1
+            nb += write(to, a[i])
+        end
+        nb
     end
-    write(to, pointer(a,offs), nel*sizeof(T))
 end
 
 write(to::IOBuffer, a::Array) = write_sub(to, a, 1, length(a))
@@ -255,10 +293,28 @@ function search(buf::IOBuffer, delim)
     q = ccall(:memchr,Ptr{Uint8},(Ptr{Uint8},Int32,Csize_t),p,delim,nb_available(buf))
     nb = (q == C_NULL ? 0 : q-p+1)
 end
+
 function readuntil(io::IOBuffer, delim::Uint8)
-    nb = search(io, delim)
-    if nb == 0
-        nb = nb_available(io)
+    lb = 70
+    A = Array(Uint8, lb)
+    n = 0
+    data = io.data
+    for i = io.ptr : io.size
+        n += 1
+        if n > lb
+            lb = n*2
+            resize!(A, lb)
+        end
+        @inbounds b = data[i]
+        @inbounds A[n] = b
+        if b == delim
+            break
+        end
     end
-    read!(io, Array(Uint8, nb))
+    io.ptr += n
+    if lb != n
+        resize!(A, n)
+    end
+    A
 end
+

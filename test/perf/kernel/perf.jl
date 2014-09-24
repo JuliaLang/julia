@@ -60,16 +60,16 @@ include("bench_eu.jl")
 
 # issue #1163
 include("actor_centrality.jl")
-@timeit1 actor_centrality() "actorgraph" "Centrality of actors in IMDB database"
+@timeit actor_centrality() "actorgraph" "Centrality of actors in IMDB database"
 
 # issue #1168
 include("laplace.jl")
-@timeit1 laplace_vec() "laplace_vec" "Vectorized Laplacian"
+@timeit laplace_vec() "laplace_vec" "Vectorized Laplacian"
 @timeit laplace_devec() "laplace_devec" "Devectorized Laplacian"
 
 # issue #1169
 include("go_benchmark.jl")
-@timeit1 benchmark(10) "go_benchmark" "Simulation of random games of Go"
+@timeit benchmark(10) "go_benchmark" "Simulation of random games of Go"
 
 # issue #3142
 include("simplex.jl")

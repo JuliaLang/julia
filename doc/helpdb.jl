@@ -12,7 +12,7 @@
 ("Base","quit","quit()
 
    Quit the program indicating that the processes completed
-   succesfully. This function calls \"exit(0)\" (see \"exit()\").
+   successfully. This function calls \"exit(0)\" (see \"exit()\").
 
 "),
 
@@ -30,8 +30,8 @@
 
 ("Base","whos","whos([Module,] [pattern::Regex])
 
-   Print information about global variables in a module, optionally
-   restricted to those matching \"pattern\".
+   Print information about exported global variables in a module,
+   optionally restricted to those matching \"pattern\".
 
 "),
 
@@ -96,12 +96,16 @@
 ("Base","require","require(file::String...)
 
    Load source files once, in the context of the \"Main\" module, on
-   every active node, searching the system-wide \"LOAD_PATH\" for
-   files. \"require\" is considered a top-level operation, so it sets
-   the current \"include\" path but does not use it to search for
-   files (see help for \"include\"). This function is typically used
-   to load library code, and is implicitly called by \"using\" to load
+   every active node, searching standard locations for files.
+   \"require\" is considered a top-level operation, so it sets the
+   current \"include\" path but does not use it to search for files
+   (see help for \"include\"). This function is typically used to load
+   library code, and is implicitly called by \"using\" to load
    packages.
+
+   When searching for files, \"require\" first looks in the current
+   working directory, then looks for package code under \"Pkg.dir()\",
+   then tries paths in the global array \"LOAD_PATH\".
 
 "),
 
@@ -169,11 +173,14 @@
 
 "),
 
-("Base","methodswith","methodswith(typ[, showparents])
+("Base","methodswith","methodswith(typ[, module or function][, showparents])
 
    Return an array of methods with an argument of type \"typ\". If
    optional \"showparents\" is \"true\", also return arguments with a
    parent type of \"typ\", excluding type \"Any\".
+
+   The optional second argument restricts the search to a particular
+   module or function.
 
 "),
 
@@ -191,13 +198,26 @@
 
 "),
 
-("Base","is","is(x, y) -> Bool
+("Base","workspace","workspace()
+
+   Replace the top-level module (\"Main\") with a new one, providing a
+   clean workspace. The previous \"Main\" module is made available as
+   \"LastMain\". A previously-loaded package can be accessed using a
+   statement such as \"using LastMain.Package\".
+
+   This function should only be used interactively.
+
+"),
+
+("Base","≡","is(x, y) -> Bool
+===(x, y) -> Bool
+≡(x, y) -> Bool
 
    Determine whether \"x\" and \"y\" are identical, in the sense that
    no program could distinguish them. Compares mutable objects by
    address in memory, and compares immutable objects (such as numbers)
    by contents at the bit level. This function is sometimes called
-   \"egal\". The \"===\" operator is an alias for this function.
+   \"egal\".
 
 "),
 
@@ -377,8 +397,11 @@
    precision as the argument, and usually more). Otherwise the
    argument \"x\" is converted to \"widen(typeof(x))\".
 
-   **Example**: \"widen(Int32) === Int64\" **Example**: \"widen(1.5f0)
-   === 1.5\"
+      julia> widen(Int32)
+      Int64
+
+      julia> widen(1.5f0)
+      1.5
 
 "),
 
@@ -484,10 +507,10 @@
 
    Determine a type big enough to hold values of each argument type
    without loss, whenever possible. In some cases, where no type
-   exists which to which both types can be promoted losslessly, some
-   loss is tolerated; for example, \"promote_type(Int64,Float64)\"
-   returns \"Float64\" even though strictly, not all \"Int64\" values
-   can be represented exactly as \"Float64\" values.
+   exists to which both types can be promoted losslessly, some loss is
+   tolerated; for example, \"promote_type(Int64,Float64)\" returns
+   \"Float64\" even though strictly, not all \"Int64\" values can be
+   represented exactly as \"Float64\" values.
 
 "),
 
@@ -522,8 +545,22 @@
    For example, we could use it in the following manner to summarize
    information about a struct type:
 
-      structinfo(T) = [zip(fieldoffsets(T),names(T),T.types)...]
-      structinfo(StatStruct)
+      julia> structinfo(T) = [zip(fieldoffsets(T),names(T),T.types)...];
+
+      julia> structinfo(StatStruct)
+      12-element Array{(Int64,Symbol,DataType),1}:
+       (0,:device,Uint64)
+       (8,:inode,Uint64)
+       (16,:mode,Uint64)
+       (24,:nlink,Int64)
+       (32,:uid,Uint64)
+       (40,:gid,Uint64)
+       (48,:rdev,Uint64)
+       (56,:size,Int64)
+       (64,:blksize,Int64)
+       (72,:blocks,Int64)
+       (80,:mtime,Float64)
+       (88,:ctime,Float64)
 
 "),
 
@@ -547,6 +584,12 @@
    contains no references to other values. Typical examples are
    numeric types such as \"Uint8\", \"Float64\", and
    \"Complex{Float64}\".
+
+      julia> isbits(Complex{Float64})
+      true
+
+      julia> isbits(Complex)
+      false
 
 "),
 
@@ -576,10 +619,18 @@
    Accepts a function and several arguments, each of which must be
    iterable. The elements generated by all the arguments are appended
    into a single list, which is then passed to \"f\" as its argument
-   list. \"apply\" is called to implement the \"...\" argument
-   splicing syntax, and is usually not called directly.
+   list.
 
-   **Example**: \"apply(f,x) === f(x...)\"
+      julia> function f(x, y) # Define a function f
+                 x + y
+             end;
+
+      julia> apply(f, [1 2]) # Apply f with 1 and 2 as arguments
+      3
+
+   \"apply\" is called to implement the \"...\" argument splicing
+   syntax, and is usually not called directly: \"apply(f,x) ===
+   f(x...)\"
 
 "),
 
@@ -588,14 +639,25 @@
    Determine whether the given generic function has a method matching
    the given tuple of argument types.
 
-   **Example**: \"method_exists(length, (Array,)) = true\"
+      julia> method_exists(length, (Array,))
+      true
 
 "),
 
-("Base","applicable","applicable(f, args...)
+("Base","applicable","applicable(f, args...) -> Bool
 
    Determine whether the given generic function has a method
    applicable to the given arguments.
+
+      julia> function f(x, y)
+                 x + y
+             end;
+
+      julia> applicable(f, 1)
+      false
+
+      julia> applicable(f, 1, 2)
+      true
 
 "),
 
@@ -613,10 +675,11 @@
 
 ("Base","|>","|>(x, f)
 
-   Applies a function to the preceding argument which allows for easy
+   Applies a function to the preceding argument. This allows for easy
    function chaining.
 
-   **Example**: \"[1:5] |> x->x.^2 |> sum |> inv\"
+      julia> [1:5] |> x->x.^2 |> sum |> inv
+      0.01818181818181818
 
 "),
 
@@ -646,9 +709,10 @@
 ("Base","esc","esc(e::ANY)
 
    Only valid in the context of an Expr returned from a macro.
-   Prevents the macro hygine pass from turning embedded variables into
-   gensym variables. See the *Macros* section of the Metaprogramming
-   chapter of the manual for more details and examples.
+   Prevents the macro hygiene pass from turning embedded variables
+   into gensym variables. See the *Macros* section of the
+   Metaprogramming chapter of the manual for more details and
+   examples.
 
 "),
 
@@ -661,8 +725,8 @@
 
 ("Base","@gensym","@gensym()
 
-   Generates a gensym symbol for a variable. For example, *@gensym x
-   y* is transformed into *x = gensym(\"x\"); y = gensym(\"y\")*.
+   Generates a gensym symbol for a variable. For example, \"@gensym x
+   y\" is transformed into \"x = gensym(\"x\"); y = gensym(\"y\")\".
 
 "),
 
@@ -722,14 +786,31 @@
 ("Base","enumerate","enumerate(iter)
 
    Return an iterator that yields \"(i, x)\" where \"i\" is an index
-   starting at 1, and \"x\" is the \"ith\" value from the given
-   iterator.
+   starting at 1, and \"x\" is the \"i\"th value from the given
+   iterator. It's useful when you need not only the values \"x\" over
+   which you are iterating, but also the index \"i\" of the
+   iterations.
+
+      julia> a = [\"a\", \"b\", \"c\"];
+
+      julia> for (index, value) in enumerate(a)
+                 println(\"\$index \$value\")
+             end
+      1 a
+      2 b
+      3 c
 
 "),
 
 ("Base","isempty","isempty(collection) -> Bool
 
    Determine whether a collection is empty (has no elements).
+
+      julia> isempty([])
+      true
+
+      julia> isempty([1 2 3])
+      false
 
 "),
 
@@ -751,14 +832,16 @@
 
    Returns the last index of the collection.
 
-   **Example**:
-
       julia> endof([1,2,4])
       3
 
 "),
 
-("Base","in","in(item, collection) -> Bool
+("Base","∌","in(item, collection) -> Bool
+∈(item, collection) -> Bool
+∋(collection, item) -> Bool
+∉(item, collection) -> Bool
+∌(collection, item) -> Bool
 
    Determine whether an item is in the given collection, in the sense
    that it is \"==\" to one of the values generated by iterating over
@@ -823,15 +906,33 @@
 
 "),
 
+("Base","reduce","reduce(op, itr)
+
+   Like \"reduce\" but using the first element as v0.
+
+"),
+
 ("Base","foldl","foldl(op, v0, itr)
 
    Like \"reduce\", but with guaranteed left associativity.
 
 "),
 
+("Base","foldl","foldl(op, itr)
+
+   Like \"foldl\", but using the first element as v0.
+
+"),
+
 ("Base","foldr","foldr(op, v0, itr)
 
    Like \"reduce\", but with guaranteed right associativity.
+
+"),
+
+("Base","foldr","foldr(op, itr)
+
+   Like \"foldr\", but using the last element as v0.
 
 "),
 
@@ -898,9 +999,61 @@
 
 "),
 
+("Base","findmax","findmax(A, dims) -> (maxval, index)
+
+   For an array input, returns the value and index of the maximum over
+   the given dimensions.
+
+"),
+
 ("Base","findmin","findmin(itr) -> (x, index)
 
    Returns the minimum element and its index.
+
+"),
+
+("Base","findmin","findmin(A, dims) -> (minval, index)
+
+   For an array input, returns the value and index of the minimum over
+   the given dimensions.
+
+"),
+
+("Base","maxabs","maxabs(itr)
+
+   Compute the maximum absolute value of a collection of values.
+
+"),
+
+("Base","maxabs","maxabs(A, dims)
+
+   Compute the maximum absolute values over given dimensions.
+
+"),
+
+("Base","maxabs!","maxabs!(r, A)
+
+   Compute the maximum absolute values over the singleton dimensions
+   of \"r\", and write values to \"r\".
+
+"),
+
+("Base","minabs","minabs(itr)
+
+   Compute the minimum absolute value of a collection of values.
+
+"),
+
+("Base","minabs","minabs(A, dims)
+
+   Compute the minimum absolute values over given dimensions.
+
+"),
+
+("Base","minabs!","minabs!(r, A)
+
+   Compute the minimum absolute values over the singleton dimensions
+   of \"r\", and write values to \"r\".
 
 "),
 
@@ -927,6 +1080,48 @@
 
    Sum the results of calling function \"f\" on each element of
    \"itr\".
+
+"),
+
+("Base","sumabs","sumabs(itr)
+
+   Sum absolute values of all elements in a collection. This is
+   equivalent to *sum(abs(itr))* but faster.
+
+"),
+
+("Base","sumabs","sumabs(A, dims)
+
+   Sum absolute values of elements of an array over the given
+   dimensions.
+
+"),
+
+("Base","sumabs!","sumabs!(r, A)
+
+   Sum absolute values of elements of \"A\" over the singleton
+   dimensions of \"r\", and write results to \"r\".
+
+"),
+
+("Base","sumabs2","sumabs2(itr)
+
+   Sum squared absolute values of all elements in a collection. This
+   is equivalent to *sum(abs2(itr))* but faster.
+
+"),
+
+("Base","sumabs2","sumabs2(A, dims)
+
+   Sum squared absolute values of elements of an array over the given
+   dimensions.
+
+"),
+
+("Base","sumabs2!","sumabs2!(r, A)
+
+   Sum squared absolute values of elements of \"A\" over the singleton
+   dimensions of \"r\", and write results to \"r\".
 
 "),
 
@@ -1008,7 +1203,8 @@
    Determine whether predicate \"p\" returns true for all elements of
    \"itr\".
 
-   **Example**: \"all(i->(4<=i<=6), [4,5,6]) = true\"
+      julia> all(i->(4<=i<=6), [4,5,6])
+      true
 
 "),
 
@@ -1017,12 +1213,17 @@
    Transform collection \"c\" by applying \"f\" to each element. For
    multiple collection arguments, apply \"f\" elementwise.
 
-   **Examples**:
-
       julia> map((x) -> x * 2, [1, 2, 3])
-      [2, 4, 6]
+      3-element Array{Int64,1}:
+       2
+       4
+       6
+
       julia> map(+, [1, 2, 3], [10, 20, 30])
-      [11, 22, 33]
+      3-element Array{Int64,1}:
+       11
+       22
+       33
 
 "),
 
@@ -1032,12 +1233,21 @@
 
 "),
 
+("Base","map!","map!(function, destination, collection...)
+
+   Like \"map()\", but stores the result in \"destination\" rather
+   than a new collection. \"destination\" must be at least as large as
+   the first collection.
+
+"),
+
 ("Base","mapreduce","mapreduce(f, op, itr)
 
    Applies function \"f\" to each element in \"itr\" and then reduces
    the result using the binary function \"op\".
 
-   **Example**: \"mapreduce(x->x^2, +, [1:3]) == 1 + 4 + 9 == 14\"
+      julia> mapreduce(x->x^2, +, [1:3]) # == 1 + 4 + 9
+      14
 
    The associativity of the reduction is implementation-dependent; if
    you need a particular associativity, e.g. left-to-right, you should
@@ -1047,7 +1257,8 @@
 
 ("Base","first","first(coll)
 
-   Get the first element of an iterable collection.
+   Get the first element of an iterable collection. Returns the start
+   point of a \"Range\" even if it is empty.
 
 "),
 
@@ -1055,7 +1266,8 @@
 
    Get the last element of an ordered collection, if it can be
    computed in O(1) time. This is accomplished by calling \"endof\" to
-   get the last index.
+   get the last index. Returns the end point of a \"Range\" even if it
+   is empty.
 
 "),
 
@@ -1079,7 +1291,10 @@
 
 "),
 
-("Base","issubset","issubset(a, b)
+("Base","⊊","issubset(a, b)
+⊆(A, S) -> Bool
+⊈(A, S) -> Bool
+⊊(A, S) -> Bool
 
    Determine whether every element of \"a\" is also in \"b\", using
    the \"in\" function.
@@ -1120,14 +1335,15 @@
 
 ("Base","Dict","Dict()
 
-   \"Dict{K,V}()\" constructs a hashtable with keys of type K and
-   values of type V. The literal syntax is \"{\"A\"=>1, \"B\"=>2}\"
-   for a \"Dict{Any,Any}\", or \"[\"A\"=>1, \"B\"=>2]\" for a \"Dict\"
-   of inferred type.
+   \"Dict{K,V}()\" constructs a hash
+
+   table with keys of type K and values of type V. The literal syntax
+   is \"{\"A\"=>1, \"B\"=>2}\" for a \"Dict{Any,Any}\", or
+   \"[\"A\"=>1, \"B\"=>2]\" for a \"Dict\" of inferred type.
 
 "),
 
-("Base","haskey","haskey(collection, key)
+("Base","haskey","haskey(collection, key) -> Bool
 
    Determine whether a collection has a mapping for a given key.
 
@@ -1150,7 +1366,7 @@
 
       get(dict, key) do
           # default value calculated here
-          time()
+               time()
       end
 
 "),
@@ -1171,7 +1387,7 @@
 
       get!(dict, key) do
           # default value calculated here
-          time()
+               time()
       end
 
 "),
@@ -1186,7 +1402,7 @@
 ("Base","delete!","delete!(collection, key)
 
    Delete the mapping for the given key in a collection, and return
-   the colection.
+   the collection.
 
 "),
 
@@ -1243,13 +1459,14 @@
 
    Construct a sorted set of the integers generated by the given
    iterable object, or an empty set. Implemented as a bit string, and
-   therefore designed for dense integer sets. If the set will be
-   sparse (for example holding a single very large integer), use
-   \"Set\" instead.
+   therefore designed for dense integer sets. Only non-negative
+   integers can be stored. If the set will be sparse (for example
+   holding a single very large integer), use \"Set\" instead.
 
 "),
 
-("Base","union","union(s1, s2...)
+("Base","∪","union(s1, s2...)
+∪(s1, s2)
 
    Construct the union of two or more sets. Maintains order with
    arrays.
@@ -1262,7 +1479,8 @@
 
 "),
 
-("Base","intersect","intersect(s1, s2...)
+("Base","∩","intersect(s1, s2...)
+∩(s1, s2)
 
    Construct the intersection of two or more sets. Maintains order and
    multiplicity of the first argument for arrays and ranges.
@@ -1315,26 +1533,28 @@
 
 ("Base","complement","complement(s)
 
-   Returns the set-complement of IntSet s.
+   Returns the set-complement of IntSet \"s\".
 
 "),
 
 ("Base","complement!","complement!(s)
 
-   Mutates IntSet s into its set-complement.
+   Mutates IntSet \"s\" into its set-complement.
 
 "),
 
 ("Base","intersect!","intersect!(s1, s2)
 
-   Intersects IntSets s1 and s2 and overwrites the set s1 with the
-   result. If needed, s1 will be expanded to the size of s2.
+   Intersects IntSets \"s1\" and \"s2\" and overwrites the set \"s1\"
+   with the result. If needed, s1 will be expanded to the size of
+   \"s2\".
 
 "),
 
-("Base","issubset","issubset(A, S) -> Bool
+("Base","⊆","issubset(A, S) -> Bool
+⊆(A, S) -> Bool
 
-   True if \"A ⊆ S\" (A is a subset of or equal to S)
+   True if A is a subset of or equal to S.
 
 "),
 
@@ -1377,9 +1597,9 @@
 
 ("Base","deleteat!","deleteat!(collection, itr)
 
-   Remove the items at the indices given by *itr*, and return the
+   Remove the items at the indices given by \"itr\", and return the
    modified collection. Subsequent items are shifted to fill the
-   resulting gap.  *itr* must be sorted and unique.
+   resulting gap.  \"itr\" must be sorted and unique.
 
 "),
 
@@ -1390,6 +1610,9 @@
    specified, replacement values from an ordered collection will be
    spliced in place of the removed item.
 
+   To insert \"replacement\" before an index \"n\" without removing
+   any items, use \"splice!(collection, n:n-1, replacement)\".
+
 "),
 
 ("Base","splice!","splice!(collection, range[, replacement]) -> items
@@ -1398,6 +1621,9 @@
    containing the removed items. Subsequent items are shifted down to
    fill the resulting gap. If specified, replacement values from an
    ordered collection will be spliced in place of the removed items.
+
+   To insert \"replacement\" before an index \"n\" without removing
+   any items, use \"splice!(collection, n:n-1, replacement)\".
 
 "),
 
@@ -1410,14 +1636,24 @@
 ("Base","append!","append!(collection, items) -> collection.
 
    Add the elements of \"items\" to the end of a collection.
-   \"append!([1],[2,3]) => [1,2,3]\"
+
+      julia> append!([1],[2,3])
+      3-element Array{Int64,1}:
+       1
+       2
+       3
 
 "),
 
 ("Base","prepend!","prepend!(collection, items) -> collection
 
    Insert the elements of \"items\" to the beginning of a collection.
-   \"prepend!([3],[1,2]) => [1,2,3]\"
+
+      julia> prepend!([3],[1,2])
+      3-element Array{Int64,1}:
+       1
+       2
+       3
 
 "),
 
@@ -1438,7 +1674,8 @@
    Concatenate strings. The \"*\" operator is an alias to this
    function.
 
-   **Example**:: julia> \"Hello \" * \"world\" \"Hello world\"
+      julia> \"Hello \" * \"world\"
+      \"Hello world\"
 
 "),
 
@@ -1447,7 +1684,8 @@
    Repeat \"n\" times the string \"s\". The \"^\" operator is an alias
    to this function.
 
-   **Example**: \"\"Julia \"^3 == \"Julia Julia Julia \"\"
+      julia> \"Test \"^3
+      \"Test Test Test \"
 
 "),
 
@@ -1600,7 +1838,8 @@
    and return a RegexMatch object containing the match, or nothing if
    the match failed. The matching substring can be retrieved by
    accessing \"m.match\" and the captured sequences can be retrieved
-   by accessing \"m.captures\"
+   by accessing \"m.captures\" The optional \"idx\" argument specifies
+   an index at which to start the search.
 
 "),
 
@@ -1635,7 +1874,7 @@
 
 ("Base","search","search(string, chars[, start])
 
-   Search for the first occurance of the given characters within the
+   Search for the first occurrence of the given characters within the
    given string. The second argument may be a single character, a
    vector or a set of characters, a string, or a regular expression
    (though regular expressions are only allowed on contiguous strings,
@@ -1654,7 +1893,7 @@
 
 ("Base","rsearch","rsearch(string, chars[, start])
 
-   Similar to \"search\", but returning the last occurance of the
+   Similar to \"search\", but returning the last occurrence of the
    given characters within the given string, searching in reverse from
    \"start\".
 
@@ -1691,21 +1930,21 @@
 
 "),
 
-("Base","split","split(string, [chars, [limit,] [include_empty]])
+("Base","split","split(string, [chars]; limit=0, keep=true)
 
    Return an array of substrings by splitting the given string on
    occurrences of the given character delimiters, which may be
    specified in any of the formats allowed by \"search\"'s second
    argument (i.e. a single character, collection of characters,
    string, or regular expression). If \"chars\" is omitted, it
-   defaults to the set of all space characters, and \"include_empty\"
-   is taken to be false. The last two arguments are also optional:
-   they are are a maximum size for the result and a flag determining
-   whether empty fields should be included in the result.
+   defaults to the set of all space characters, and \"keep\" is taken
+   to be false. The two keyword arguments are optional: they are are a
+   maximum size for the result and a flag determining whether empty
+   fields should be kept in the result.
 
 "),
 
-("Base","rsplit","rsplit(string, [chars, [limit,] [include_empty]])
+("Base","rsplit","rsplit(string, [chars]; limit=0, keep=true)
 
    Similar to \"split\", but starting from the end of the string.
 
@@ -1714,36 +1953,40 @@
 ("Base","strip","strip(string[, chars])
 
    Return \"string\" with any leading and trailing whitespace removed.
-   If a string \"chars\" is provided, instead remove characters
-   contained in that string.
+   If \"chars\" (a character, or vector or set of characters) is
+   provided, instead remove characters contained in it.
 
 "),
 
 ("Base","lstrip","lstrip(string[, chars])
 
-   Return \"string\" with any leading whitespace removed. If a string
-   \"chars\" is provided, instead remove characters contained in that
-   string.
+   Return \"string\" with any leading whitespace removed. If \"chars\"
+   (a character, or vector or set of characters) is provided, instead
+   remove characters contained in it.
 
 "),
 
 ("Base","rstrip","rstrip(string[, chars])
 
-   Return \"string\" with any trailing whitespace removed. If a string
-   \"chars\" is provided, instead remove characters contained in that
-   string.
+   Return \"string\" with any trailing whitespace removed. If
+   \"chars\" (a character, or vector or set of characters) is
+   provided, instead remove characters contained in it.
 
 "),
 
-("Base","beginswith","beginswith(string, prefix)
+("Base","beginswith","beginswith(string, prefix | chars)
 
-   Returns \"true\" if \"string\" starts with \"prefix\".
+   Returns \"true\" if \"string\" starts with \"prefix\". If the
+   second argument is a vector or set of characters, tests whether the
+   first character of \"string\" belongs to that set.
 
 "),
 
-("Base","endswith","endswith(string, suffix)
+("Base","endswith","endswith(string, suffix | chars)
 
-   Returns \"true\" if \"string\" ends with \"suffix\".
+   Returns \"true\" if \"string\" ends with \"suffix\". If the second
+   argument is a vector or set of characters, tests whether the last
+   character of \"string\" belongs to that set.
 
 "),
 
@@ -1841,98 +2084,117 @@
 
 "),
 
-("Base","isalnum","isalnum(c::Union(Char, String))
+("Base","isalnum","isalnum(c::Union(Char, String)) -> Bool
 
    Tests whether a character is alphanumeric, or whether this is true
-   for all elements of a string.
+   for all elements of a string.  A character is classified as
+   alphabetic if it belongs to the Unicode general category Letter or
+   Number, i.e. a character whose category code begins with 'L' or
+   'N'.
 
 "),
 
-("Base","isalpha","isalpha(c::Union(Char, String))
+("Base","isalpha","isalpha(c::Union(Char, String)) -> Bool
 
    Tests whether a character is alphabetic, or whether this is true
-   for all elements of a string.
+   for all elements of a string. A character is classified as
+   alphabetic if it belongs to the Unicode general category Letter,
+   i.e. a character whose category code begins with 'L'.
 
 "),
 
-("Base","isascii","isascii(c::Union(Char, String))
+("Base","isascii","isascii(c::Union(Char, String)) -> Bool
 
    Tests whether a character belongs to the ASCII character set, or
    whether this is true for all elements of a string.
 
 "),
 
-("Base","isblank","isblank(c::Union(Char, String))
-
-   Tests whether a character is a tab or space, or whether this is
-   true for all elements of a string.
-
-"),
-
-("Base","iscntrl","iscntrl(c::Union(Char, String))
+("Base","iscntrl","iscntrl(c::Union(Char, String)) -> Bool
 
    Tests whether a character is a control character, or whether this
-   is true for all elements of a string.
+   is true for all elements of a string.  Control characters are the
+   non-printing characters of the Latin-1 subset of Unicode.
 
 "),
 
-("Base","isdigit","isdigit(c::Union(Char, String))
+("Base","isdigit","isdigit(c::Union(Char, String)) -> Bool
 
    Tests whether a character is a numeric digit (0-9), or whether this
    is true for all elements of a string.
 
 "),
 
-("Base","isgraph","isgraph(c::Union(Char, String))
+("Base","isgraph","isgraph(c::Union(Char, String)) -> Bool
 
    Tests whether a character is printable, and not a space, or whether
-   this is true for all elements of a string.
+   this is true for all elements of a string.  Any character that
+   would cause a printer to use ink should be classified with
+   isgraph(c)==true.
 
 "),
 
-("Base","islower","islower(c::Union(Char, String))
+("Base","islower","islower(c::Union(Char, String)) -> Bool
 
    Tests whether a character is a lowercase letter, or whether this is
-   true for all elements of a string.
+   true for all elements of a string.  A character is classified as
+   lowercase if it belongs to Unicode category Ll, Letter: Lowercase.
 
 "),
 
-("Base","isprint","isprint(c::Union(Char, String))
+("Base","isnumber","isnumber(c::Union(Char, String)) -> Bool
 
-   Tests whether a character is printable, including space, or whether
-   this is true for all elements of a string.
-
-"),
-
-("Base","ispunct","ispunct(c::Union(Char, String))
-
-   Tests whether a character is printable, and not a space or
-   alphanumeric, or whether this is true for all elements of a string.
+   Tests whether a character is numeric, or whether this is true for
+   all elements of a string.   A character is classified as numeric if
+   it belongs to the Unicode general category Number, i.e. a character
+   whose category code begins with 'N'.
 
 "),
 
-("Base","isspace","isspace(c::Union(Char, String))
+("Base","isprint","isprint(c::Union(Char, String)) -> Bool
 
-   Tests whether a character is any whitespace character, or whether
-   this is true for all elements of a string.
+   Tests whether a character is printable, including spaces, but not a
+   control character. For strings, tests whether this is true for all
+   elements of the string.
 
 "),
 
-("Base","isupper","isupper(c::Union(Char, String))
+("Base","ispunct","ispunct(c::Union(Char, String)) -> Bool
+
+   Tests whether a character belongs to the Unicode general category
+   Punctuation, i.e. a character whose category code begins with 'P'.
+   For strings, tests whether this is true for all elements of the
+   string.
+
+"),
+
+("Base","isspace","isspace(c::Union(Char, String)) -> Bool
+
+   Tests whether a character is any whitespace character.  Includes
+   ASCII characters 't', 'n', 'v', 'f', 'r', and ' ', Latin-1
+   character U+0085, and characters in Unicode category Zs.  For
+   strings, tests whether this    is true for all elements of the
+   string.
+
+"),
+
+("Base","isupper","isupper(c::Union(Char, String)) -> Bool
 
    Tests whether a character is an uppercase letter, or whether this
-   is true for all elements of a string.
+   is true for all elements of a string.    A character is classified
+   as uppercase if it belongs to Unicode category Lu, Letter:
+   Uppercase, or Lt, Letter: Titlecase.
 
 "),
 
-("Base","isxdigit","isxdigit(c::Union(Char, String))
+("Base","isxdigit","isxdigit(c::Union(Char, String)) -> Bool
 
    Tests whether a character is a valid hexadecimal digit, or whether
    this is true for all elements of a string.
 
 "),
 
-("Base","symbol","symbol(str)
+("Base","symbol","symbol(str) -> Symbol
 
    Convert a string to a \"Symbol\".
 
@@ -1959,11 +2221,67 @@
    byte arrays check for a byte-order marker in the first two bytes,
    and do not include it in the resulting string.)
 
+   Note that the resulting \"UTF16String\" data is terminated by the
+   NUL codepoint (16-bit zero), which is not treated as a character in
+   the string (so that it is mostly invisible in Julia); this allows
+   the string to be passed directly to external functions requiring
+   NUL-terminated data.  This NUL is appended automatically by the
+   *utf16(s)* conversion function.  If you have a \"Uint16\" array
+   \"A\" that is already NUL-terminated valid UTF-16 data, then you
+   can instead use *UTF16String(A)`* to construct the string without
+   making a copy of the data and treating the NUL as a terminator
+   rather than as part of the string.
+
 "),
 
-("Base","is_valid_utf16","is_valid_utf16(s)
+("Base","utf16","utf16(::Union(Ptr{Uint16}, Ptr{Int16})[, length])
+
+   Create a string from the address of a NUL-terminated UTF-16 string.
+   A copy is made; the pointer can be safely freed. If \"length\" is
+   specified, the string does not have to be NUL-terminated.
+
+"),
+
+("Base","is_valid_utf16","is_valid_utf16(s) -> Bool
 
    Returns true if the string or \"Uint16\" array is valid UTF-16.
+
+"),
+
+("Base","utf32","utf32(s)
+
+   Create a UTF-32 string from a byte array, array of \"Uint32\", or
+   any other string type.  (Conversions of byte arrays check for a
+   byte-order marker in the first four bytes, and do not include it in
+   the resulting string.)
+
+   Note that the resulting \"UTF32String\" data is terminated by the
+   NUL codepoint (32-bit zero), which is not treated as a character in
+   the string (so that it is mostly invisible in Julia); this allows
+   the string to be passed directly to external functions requiring
+   NUL-terminated data.  This NUL is appended automatically by the
+   *utf32(s)* conversion function.  If you have a \"Uint32\" array
+   \"A\" that is already NUL-terminated UTF-32 data, then you can
+   instead use *UTF32String(A)`* to construct the string without
+   making a copy of the data and treating the NUL as a terminator
+   rather than as part of the string.
+
+"),
+
+("Base","utf32","utf32(::Union(Ptr{Char}, Ptr{Uint32}, Ptr{Int32})[, length])
+
+   Create a string from the address of a NUL-terminated UTF-32 string.
+   A copy is made; the pointer can be safely freed. If \"length\" is
+   specified, the string does not have to be NUL-terminated.
+
+"),
+
+("Base","wstring","wstring(s)
+
+   This is a synonym for either \"utf32(s)\" or \"utf16(s)\",
+   depending on whether \"Cwchar_t\" is 32 or 16 bits, respectively.
+   The synonym \"WString\" for \"UTF32String\" or \"UTF16String\" is
+   also provided.
 
 "),
 
@@ -2170,7 +2488,43 @@
 
 "),
 
-("Base","eof","eof(stream)
+("Base","mark","mark(s)
+
+   Add a mark at the current position of stream \"s\".  Returns the
+   marked position.
+
+   See also \"unmark()\", \"reset()\", \"ismarked()\"
+
+"),
+
+("Base","unmark","unmark(s)
+
+   Remove a mark from stream \"s\". Returns \"true\" if the stream was
+   marked, \"false\" otherwise.
+
+   See also \"mark()\", \"reset()\", \"ismarked()\"
+
+"),
+
+("Base","reset","reset(s)
+
+   Reset a stream \"s\" to a previously marked position, and remove
+   the mark. Returns the previously marked position. Throws an error
+   if the stream is not marked.
+
+   See also \"mark()\", \"unmark()\", \"ismarked()\"
+
+"),
+
+("Base","ismarked","ismarked(s)
+
+   Returns true if stream \"s\" is marked.
+
+   See also \"mark()\", \"unmark()\", \"reset()\"
+
+"),
+
+("Base","eof","eof(stream) -> Bool
 
    Tests whether an I/O stream is at end-of-file. If the stream is not
    yet exhausted, this function will block to wait for more data if
@@ -2181,13 +2535,13 @@
 
 "),
 
-("Base","isreadonly","isreadonly(stream)
+("Base","isreadonly","isreadonly(stream) -> Bool
 
    Determine whether a stream is read-only.
 
 "),
 
-("Base","isopen","isopen(stream)
+("Base","isopen","isopen(stream) -> Bool
 
    Determine whether a stream is open (i.e. has not been closed yet).
    If the connection has been closed remotely (in case of e.g. a
@@ -2404,7 +2758,7 @@
    +-----------+------------------------------------------------------------------------+
    | rdev      | If this file refers to a device, the ID of the device it refers to     |
    +-----------+------------------------------------------------------------------------+
-   | blksize   | The file-system preffered block size for the file                      |
+   | blksize   | The file-system preferred block size for the file                      |
    +-----------+------------------------------------------------------------------------+
    | blocks    | The number of such blocks allocated                                    |
    +-----------+------------------------------------------------------------------------+
@@ -2459,7 +2813,7 @@
    | 04   | Read Permission       |
    +------+-----------------------+
 
-   For allowed arguments, see the stat method.
+   For allowed arguments, see \"stat\".
 
 "),
 
@@ -2499,10 +2853,11 @@
 
 "),
 
-("Base","rm","rm(path::String)
+("Base","rm","rm(path::String; recursive=false)
 
-   Delete the file at the given path. Note that this does not work on
-   directories.
+   Delete the file, link, or empty directory at the given path. If
+   \"recursive=true\" is passed and the path is a directory, then all
+   contents are removed recursively.
 
 "),
 
@@ -2725,9 +3080,16 @@
 
 "),
 
-("Base","readall","readall(stream)
+("Base","readall","readall(stream::IO)
 
    Read the entire contents of an I/O stream as a string.
+
+"),
+
+("Base","readall","readall(filename::String)
+
+   Open \"filename\", read the entire contents as a string, then close
+   the file. Equivalent to \"open(readall, filename)\".
 
 "),
 
@@ -2757,7 +3119,7 @@
 
 "),
 
-("Base","readdlm","readdlm(source, delim::Char, T::Type, eol::Char; has_header=false, use_mmap=true, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
+("Base","readdlm","readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
 
    Read a matrix from the source where each line (separated by
    \"eol\") gives one row, with elements separated by the given
@@ -2770,12 +3132,20 @@
    or zero. Other useful values of \"T\" include \"ASCIIString\",
    \"String\", and \"Any\".
 
-   If \"has_header\" is \"true\", the first row of data would be read
-   as headers and the tuple \"(data_cells, header_cells)\" is returned
+   If \"header\" is \"true\", the first row of data will be read as
+   header and the tuple \"(data_cells, header_cells)\" is returned
    instead of only \"data_cells\".
 
+   Specifying \"skipstart\" will ignore the corresponding number of
+   initial lines from the input.
+
+   If \"skipblanks\" is \"true\", blank lines in the input will be
+   ignored.
+
    If \"use_mmap\" is \"true\", the file specified by \"source\" is
-   memory mapped for potential speedups.
+   memory mapped for potential speedups. Default is \"true\" except on
+   Windows. On Windows, you may want to specify \"true\" if the file
+   is large, and is only read once and not written to.
 
    If \"ignore_invalid_chars\" is \"true\", bytes in \"source\" with
    invalid character encoding will be ignored. Otherwise an error is
@@ -2897,7 +3267,7 @@ display(d::Display, mime, x)
 
    There are also two variants with a \"mime\" argument (a MIME type
    string, such as \"\"image/png\"\"), which attempt to display \"x\"
-   using the requesed MIME type *only*, throwing a \"MethodError\" if
+   using the requested MIME type *only*, throwing a \"MethodError\" if
    this type is not supported by either the display(s) or by \"x\".
    With these variants, one can also supply the \"raw\" data in the
    requested MIME type by passing \"x::String\" (for MIME types with
@@ -2920,8 +3290,8 @@ redisplay(d::Display, mime, x)
 
 "),
 
-("Base","displayable","displayable(mime)
-displayable(d::Display, mime)
+("Base","displayable","displayable(mime) -> Bool
+displayable(d::Display, mime) -> Bool
 
    Returns a boolean value indicating whether the given \"mime\" type
    (string) is displayable by any of the displays in the current
@@ -3036,7 +3406,7 @@ popdisplay(d::Display)
    conversions are possible (this is a limitation of operating
    systems, not Julia).
 
-   dims is a tuple specifying the size of the array.
+   \"dims\" is a tuple specifying the size of the array.
 
    The file is passed via the stream argument.  When you initialize
    the stream, use \"\"r\"\" for a \"read-only\" array, and \"\"w+\"\"
@@ -3046,7 +3416,7 @@ popdisplay(d::Display)
    you want to skip over a header in the file. The default value for
    the offset is the current stream position.
 
-   **Example**:
+   For example, the following code:
 
       # Create a file for mmapping
       # (you could alternatively use mmap_array to do this step, too)
@@ -3065,7 +3435,7 @@ popdisplay(d::Display)
       n = read(s, Int)
       A2 = mmap_array(Int, (m,n), s)
 
-   This would create a m-by-n \"Matrix{Int}\", linked to the file
+   creates a \"m\"-by-\"n\" \"Matrix{Int}\", linked to the file
    associated with stream \"s\".
 
    A more portable file would need to encode the word size---32 bit or
@@ -3099,10 +3469,11 @@ popdisplay(d::Display)
 
 ("Base","msync","msync(ptr, len[, flags])
 
-   Forces synchronization of the mmap'd memory region from ptr to
-   ptr+len. Flags defaults to MS_SYNC, but can be a combination of
-   MS_ASYNC, MS_SYNC, or MS_INVALIDATE. See your platform man page for
-   specifics. The flags argument is not valid on Windows.
+   Forces synchronization of the \"mmap()\"ped memory region from
+   \"ptr\" to \"ptr+len\". Flags defaults to \"MS_SYNC\", but can be a
+   combination of \"MS_ASYNC\", \"MS_SYNC\", or \"MS_INVALIDATE\". See
+   your platform man page for specifics. The flags argument is not
+   valid on Windows.
 
    You may not need to call \"msync\", because synchronization is
    performed at intervals automatically by the operating system.
@@ -3113,36 +3484,36 @@ popdisplay(d::Display)
 
 ("Base","MS_ASYNC","MS_ASYNC
 
-   Enum constant for msync. See your platform man page for details.
-   (not available on Windows).
+   Enum constant for \"msync()\". See your platform man page for
+   details. (not available on Windows).
 
 "),
 
 ("Base","MS_SYNC","MS_SYNC
 
-   Enum constant for msync. See your platform man page for details.
-   (not available on Windows).
+   Enum constant for \"msync()\". See your platform man page for
+   details. (not available on Windows).
 
 "),
 
 ("Base","MS_INVALIDATE","MS_INVALIDATE
 
-   Enum constant for msync. See your platform man page for details.
-   (not available on Windows).
+   Enum constant for \"msync()\". See your platform man page for
+   details. (not available on Windows).
 
 "),
 
 ("Base","mmap","mmap(len, prot, flags, fd, offset)
 
-   Low-level interface to the mmap system call. See the man page.
+   Low-level interface to the \"mmap\" system call. See the man page.
 
 "),
 
 ("Base","munmap","munmap(pointer, len)
 
    Low-level interface for unmapping memory (see the man page). With
-   mmap_array you do not need to call this directly; the memory is
-   unmapped for you when the array goes out of scope.
+   \"mmap_array()\" you do not need to call this directly; the memory
+   is unmapped for you when the array goes out of scope.
 
 "),
 
@@ -3152,93 +3523,106 @@ popdisplay(d::Display)
 
 "),
 
-("Base","+","+(x, y)
+("Base","+","+(x, y...)
 
-   Binary addition operator.
+   Addition operator. \"x+y+z+...\" calls this function with all
+   arguments, i.e. \"+(x, y, z, ...)\".
 
 "),
 
 ("Base","-","-(x, y)
 
-   Binary subtraction operator.
+   Subtraction operator.
 
 "),
 
-("Base","*","*(x, y)
+("Base","*","*(x, y...)
 
-   Binary multiplication operator.
+   Multiplication operator. \"x*y*z*...\" calls this function with all
+   arguments, i.e. \"*(x, y, z, ...)\".
 
 "),
 
 ("Base","/","/(x, y)
 
-   Binary left-division operator.
+   Right division operator: multiplication of \"x\" by the inverse of
+   \"y\" on the right. Gives floating-point results for integer
+   arguments.
 
 "),
 
 ("Base","\\","\\(x, y)
 
-   Binary right-division operator.
+   Left division operator: multiplication of \"y\" by the inverse of
+   \"x\" on the left. Gives floating-point results for integer
+   arguments.
 
 "),
 
 ("Base","^","^(x, y)
 
-   Binary exponentiation operator.
+   Exponentiation operator.
 
 "),
 
 ("Base",".+",".+(x, y)
 
-   Element-wise binary addition operator.
+   Element-wise addition operator.
 
 "),
 
 ("Base",".-",".-(x, y)
 
-   Element-wise binary subtraction operator.
+   Element-wise subtraction operator.
 
 "),
 
 ("Base",".*",".*(x, y)
 
-   Element-wise binary multiplication operator.
+   Element-wise multiplication operator.
 
 "),
 
 ("Base","./","./(x, y)
 
-   Element-wise binary left division operator.
+   Element-wise right division operator.
 
 "),
 
 ("Base",".\\",".\\(x, y)
 
-   Element-wise binary right division operator.
+   Element-wise left division operator.
 
 "),
 
 ("Base",".^",".^(x, y)
 
-   Element-wise binary exponentiation operator.
+   Element-wise exponentiation operator.
 
 "),
 
-("Base","div","div(a, b)
+("Base","÷","div(a, b)
+÷(a, b)
 
-   Compute a/b, truncating to an integer
+   Compute a/b, truncating to an integer.
 
 "),
 
 ("Base","fld","fld(a, b)
 
-   Largest integer less than or equal to a/b
+   Largest integer less than or equal to a/b.
+
+"),
+
+("Base","cld","cld(a, b)
+
+   Smallest integer larger than or equal to a/b.
 
 "),
 
 ("Base","mod","mod(x, m)
 
-   Modulus after division, returning in the range [0,m)
+   Modulus after division, returning in the range [0,m).
 
 "),
 
@@ -3255,13 +3639,13 @@ popdisplay(d::Display)
 
 ("Base","rem","rem(x, m)
 
-   Remainder after division
+   Remainder after division.
 
 "),
 
 ("Base","divrem","divrem(x, y)
 
-   Compute \"x/y\" and \"x%y\" at the same time
+   Returns \"(x/y, x%y)\".
 
 "),
 
@@ -3285,13 +3669,16 @@ popdisplay(d::Display)
 
 ("Base","//","//(num, den)
 
-   Rational division
+   Divide two integers or rational numbers, giving a \"Rational\"
+   result.
 
 "),
 
-("Base","rationalize","rationalize([Type], x)
+("Base","rationalize","rationalize([Type=Int], x; tol=eps(x))
 
-   Approximate the number x as a rational fraction
+   Approximate floating point number \"x\" as a Rational number with
+   components of the given integer type. The result will differ from
+   \"x\" by no more than \"tol\".
 
 "),
 
@@ -3309,19 +3696,19 @@ popdisplay(d::Display)
 
 ("Base","<<","<<(x, n)
 
-   Left shift operator.
+   Left bit shift operator.
 
 "),
 
 ("Base",">>",">>(x, n)
 
-   Right shift operator.
+   Right bit shift operator, preserving the sign of \"x\".
 
 "),
 
 ("Base",">>>",">>>(x, n)
 
-   Unsigned right shift operator.
+   Unsigned right bit shift operator.
 
 "),
 
@@ -3347,6 +3734,12 @@ popdisplay(d::Display)
 
 "),
 
+("Base","linrange","linrange(start, end, length)
+
+   Construct a range by length, given a starting and ending value.
+
+"),
+
 ("Base","==","==(x, y)
 
    Generic equality operator, giving a single \"Bool\" result. Falls
@@ -3367,7 +3760,8 @@ popdisplay(d::Display)
 
 "),
 
-("Base","!=","!=(x, y)
+("Base","≠","!=(x, y)
+≠(x, y)
 
    Not-equals comparison operator. Always gives the opposite answer as
    \"==\". New types should generally not implement this, and rely on
@@ -3375,13 +3769,15 @@ popdisplay(d::Display)
 
 "),
 
-("Base","===","===(x, y)
+("Base","≡","===(x, y)
+≡(x, y)
 
    See the \"is()\" operator
 
 "),
 
-("Base","!==","!==(x, y)
+("Base","≢","!==(x, y)
+≢(x, y)
 
    Equivalent to \"!is(x, y)\"
 
@@ -3397,7 +3793,8 @@ popdisplay(d::Display)
 
 "),
 
-("Base","<=","<=(x, y)
+("Base","≤","<=(x, y)
+≤(x, y)
 
    Less-than-or-equals comparison operator.
 
@@ -3411,7 +3808,8 @@ popdisplay(d::Display)
 
 "),
 
-("Base",">=",">=(x, y)
+("Base","≥",">=(x, y)
+≥(x, y)
 
    Greater-than-or-equals comparison operator.
 
@@ -3423,7 +3821,8 @@ popdisplay(d::Display)
 
 "),
 
-("Base",".!=",".!=(x, y)
+("Base",".≠",".!=(x, y)
+.≠(x, y)
 
    Element-wise not-equals comparison operator.
 
@@ -3435,7 +3834,8 @@ popdisplay(d::Display)
 
 "),
 
-("Base",".<=",".<=(x, y)
+("Base",".≤",".<=(x, y)
+.≤(x, y)
 
    Element-wise less-than-or-equals comparison operator.
 
@@ -3447,7 +3847,8 @@ popdisplay(d::Display)
 
 "),
 
-("Base",".>=",".>=(x, y)
+("Base",".≥",".>=(x, y)
+.≥(x, y)
 
    Element-wise greater-than-or-equals comparison operator.
 
@@ -4115,8 +4516,8 @@ popdisplay(d::Display)
 
 ("Base","signbit","signbit(x)
 
-   Returns \"1\" if the value of the sign of \"x\" is negative,
-   otherwise \"0\".
+   Returns \"true\" if the value of the sign of \"x\" is negative,
+   otherwise \"false\".
 
 "),
 
@@ -4130,7 +4531,8 @@ popdisplay(d::Display)
 ("Base","sqrt","sqrt(x)
 
    Return \\sqrt{x}. Throws \"DomainError\" for negative \"Real\"
-   arguments. Use complex negative arguments instead.
+   arguments. Use complex negative arguments instead.  The prefix
+   operator \"√\" is equivalent to \"sqrt\".
 
 "),
 
@@ -4143,7 +4545,8 @@ popdisplay(d::Display)
 
 ("Base","cbrt","cbrt(x)
 
-   Return x^{1/3}
+   Return x^{1/3}.  The prefix operator \"∛\" is equivalent to
+   \"cbrt\".
 
 "),
 
@@ -4232,8 +4635,7 @@ popdisplay(d::Display)
 
 ("Base","cis","cis(z)
 
-   Return \"cos(z) + i*sin(z)\" if z is real. Return \"(cos(real(z)) +
-   i*sin(real(z)))/exp(imag(z))\" if \"z\" is complex
+   Return \\exp(iz).
 
 "),
 
@@ -4255,7 +4657,7 @@ popdisplay(d::Display)
 
 "),
 
-("Base","factor","factor(n)
+("Base","factor","factor(n) -> Dict
 
    Compute the prime factorization of an integer \"n\". Returns a
    dictionary. The keys of the dictionary correspond to the factors,
@@ -4263,7 +4665,10 @@ popdisplay(d::Display)
    each key indicates the number of times the factor appears in the
    factorization.
 
-   **Example**: 100=2*2*5*5; then, \"factor(100) -> [5=>2,2=>2]\"
+      julia> factor(100) # == 2*2*5*5
+      Dict{Int64,Int64} with 2 entries:
+        2 => 2
+        5 => 2
 
 "),
 
@@ -4282,12 +4687,26 @@ popdisplay(d::Display)
 
 ("Base","gcdx","gcdx(x, y)
 
-   Greatest common (positive) divisor, also returning integer
-   coefficients \"u\" and \"v\" that solve \"ux+vy == gcd(x,y)\"
+   Computes the greatest common (positive) divisor of \"x\" and \"y\"
+   and their Bézout coefficients, i.e. the integer coefficients \"u\"
+   and \"v\" that satisfy ux+vy = d = gcd(x,y).
+
+      julia> gcdx(12, 42)
+      (6,-3,1)
+
+      julia> gcdx(240, 46)
+      (2,-9,47)
+
+   Note: Bézout coefficients are *not* uniquely defined. \"gcdx\" returns
+     the minimal Bézout coefficients that are computed by the extended
+     Euclid algorithm. (Ref: D. Knuth, TAoCP, 2/e, p. 325, Algorithm
+     X.) These coefficients \"u\" and \"v\" are minimal in the sense
+     that |u| < |\\frac y d and |v| < |\\frac x d. Furthermore, the
+     signs of \"u\" and \"v\" are chosen so that \"d\" is positive.
 
 "),
 
-("Base","ispow2","ispow2(n)
+("Base","ispow2","ispow2(n) -> Bool
 
    Test whether \"n\" is a power of two
 
@@ -4339,8 +4758,8 @@ popdisplay(d::Display)
 
 ("Base","invmod","invmod(x, m)
 
-   Take the inverse of \"x\" modulo \"m\": *y* such that xy = 1 \\pmod
-   m
+   Take the inverse of \"x\" modulo \"m\": \"y\" such that xy = 1
+   \\pmod m
 
 "),
 
@@ -4431,6 +4850,16 @@ popdisplay(d::Display)
 
 "),
 
+("Base","airyx","airyx(k, x)
+
+   scaled kth derivative of the Airy function, return
+   \\operatorname{Ai}(x) e^{\\frac{2}{3} x \\sqrt{x}} for \"k == 0 ||
+   k == 1\", and \\operatorname{Ai}(x) e^{- \\left| \\operatorname{Re}
+   \\left( \\frac{2}{3} x \\sqrt{x} \\right) \\right|} for \"k == 2 ||
+   k == 3\".
+
+"),
+
 ("Base","besselj0","besselj0(x)
 
    Bessel function of the first kind of order 0, J_0(x).
@@ -4446,6 +4875,13 @@ popdisplay(d::Display)
 ("Base","besselj","besselj(nu, x)
 
    Bessel function of the first kind of order \"nu\", J_\\nu(x).
+
+"),
+
+("Base","besseljx","besseljx(nu, x)
+
+   Scaled Bessel function of the first kind of order \"nu\", J_\\nu(x)
+   e^{- | \\operatorname{Im}(x) |}.
 
 "),
 
@@ -4467,15 +4903,36 @@ popdisplay(d::Display)
 
 "),
 
+("Base","besselyx","besselyx(nu, x)
+
+   Scaled Bessel function of the second kind of order \"nu\",
+   Y_\\nu(x) e^{- | \\operatorname{Im}(x) |}.
+
+"),
+
 ("Base","hankelh1","hankelh1(nu, x)
 
    Bessel function of the third kind of order \"nu\", H^{(1)}_\\nu(x).
 
 "),
 
+("Base","hankelh1x","hankelh1x(nu, x)
+
+   Scaled Bessel function of the third kind of order \"nu\",
+   H^{(1)}_\\nu(x) e^{-x i}.
+
+"),
+
 ("Base","hankelh2","hankelh2(nu, x)
 
    Bessel function of the third kind of order \"nu\", H^{(2)}_\\nu(x).
+
+"),
+
+("Base","hankelh2x","hankelh2x(nu, x)
+
+   Scaled Bessel function of the third kind of order \"nu\",
+   H^{(2)}_\\nu(x) e^{x i}.
 
 "),
 
@@ -4494,10 +4951,24 @@ popdisplay(d::Display)
 
 "),
 
+("Base","besselix","besselix(nu, x)
+
+   Scaled modified Bessel function of the first kind of order \"nu\",
+   I_\\nu(x) e^{- | \\operatorname{Re}(x) |}.
+
+"),
+
 ("Base","besselk","besselk(nu, x)
 
    Modified Bessel function of the second kind of order \"nu\",
    K_\\nu(x).
+
+"),
+
+("Base","besselkx","besselkx(nu, x)
+
+   Scaled modified Bessel function of the second kind of order \"nu\",
+   K_\\nu(x) e^x.
 
 "),
 
@@ -4522,9 +4993,16 @@ popdisplay(d::Display)
 
 "),
 
-("Base","zeta","zeta(x)
+("Base","zeta","zeta(s)
 
    Riemann zeta function \\zeta(s).
+
+"),
+
+("Base","zeta","zeta(s, z)
+
+   Hurwitz zeta function \\zeta(s, z).  (This is equivalent to the
+   Riemann zeta function \\zeta(s) for the case of \"z=1\".)
 
 "),
 
@@ -4537,6 +5015,16 @@ popdisplay(d::Display)
 ("Base","widemul","widemul(x, y)
 
    Multiply \"x\" and \"y\", giving the result as a larger type.
+
+"),
+
+("Base","@evalpoly","@evalpoly(z, c...)
+
+   Evaluate the polynomial \\sum_k c[k] z^{k-1} for the coefficients
+   \"c[1]\", \"c[2]\", ...; that is, the coefficients are given in
+   ascending order by power of \"z\".  This macro expands to efficient
+   inline code that uses either Horner's method or, for complex \"z\",
+   a more efficient Goertzel-like algorithm.
 
 "),
 
@@ -4583,6 +5071,16 @@ popdisplay(d::Display)
    optionally padded with zeros to a specified size. More significant
    digits are at higher indexes, such that \"n ==
    sum([digits[k]*base^(k-1) for k=1:length(digits)])\".
+
+"),
+
+("Base","digits!","digits!(array, n[, base])
+
+   Fills an array of the digits of \"n\" in the given base. More
+   significant digits are at higher indexes. If the array length is
+   insufficient, the least significant digits are filled up to the
+   array length. If the array length is excessive, the excess portion
+   is filled with zeros.
 
 "),
 
@@ -4650,7 +5148,7 @@ popdisplay(d::Display)
 
 "),
 
-("Base","unsigned","unsigned(x)
+("Base","unsigned","unsigned(x) -> Unsigned
 
    Convert a number to an unsigned integer
 
@@ -4754,7 +5252,10 @@ popdisplay(d::Display)
 
    Convert a number, array, or string to a \"FloatingPoint\" data
    type. For numeric data, the smallest suitable \"FloatingPoint\"
-   type is used. For strings, it converts to \"Float64\".
+   type is used. Converts strings to \"Float64\".
+
+   This function is not recommended for arrays. It is better to use a
+   more specific function such as \"float32\" or \"float64\".
 
 "),
 
@@ -4763,8 +5264,11 @@ popdisplay(d::Display)
    Extract the significand(s) (a.k.a. mantissa), in binary
    representation, of a floating-point number or array.
 
-   For example, \"significand(15.2)/15.2 == 0.125\", and
-   \"significand(15.2)*8 == 15.2\"
+      julia> significand(15.2)/15.2
+      0.125
+
+      julia> significand(15.2)*8
+      15.2
 
 "),
 
@@ -4774,27 +5278,29 @@ popdisplay(d::Display)
 
 "),
 
-("Base","complex64","complex64(r, i)
+("Base","complex64","complex64(r[, i])
 
-   Convert to \"r+i*im\" represented as a \"Complex64\" data type
+   Convert to \"r + i*im\" represented as a \"Complex64\" data type.
+   \"i\" defaults to zero.
 
 "),
 
-("Base","complex128","complex128(r, i)
+("Base","complex128","complex128(r[, i])
 
-   Convert to \"r+i*im\" represented as a \"Complex128\" data type
+   Convert to \"r + i*im\" represented as a \"Complex128\" data type.
+   \"i\" defaults to zero.
+
+"),
+
+("Base","complex","complex(r[, i])
+
+   Convert real numbers or arrays to complex. \"i\" defaults to zero.
 
 "),
 
 ("Base","char","char(x)
 
    Convert a number or array to \"Char\" data type
-
-"),
-
-("Base","complex","complex(r, i)
-
-   Convert real numbers or arrays to complex
 
 "),
 
@@ -4847,7 +5353,8 @@ popdisplay(d::Display)
 
 "),
 
-("Base","pi","pi
+("Base","π","pi
+π
 
    The constant pi
 
@@ -4868,6 +5375,18 @@ popdisplay(d::Display)
 ("Base","catalan","catalan
 
    Catalan's constant
+
+"),
+
+("Base","γ","γ
+
+   Euler's constant
+
+"),
+
+("Base","φ","φ
+
+   The golden ratio
 
 "),
 
@@ -4919,13 +5438,13 @@ popdisplay(d::Display)
 
 "),
 
-("Base","isinf","isinf(f)
+("Base","isinf","isinf(f) -> Bool
 
    Test whether a number is infinite
 
 "),
 
-("Base","isnan","isnan(f)
+("Base","isnan","isnan(f) -> Bool
 
    Test whether a floating point number is not a number (NaN)
 
@@ -4933,15 +5452,15 @@ popdisplay(d::Display)
 
 ("Base","inf","inf(f)
 
-   Returns infinity in the same floating point type as \"f\" (or \"f\"
-   can by the type itself)
+   Returns positive infinity of the floating point type \"f\" or of
+   the same floating point type as \"f\"
 
 "),
 
 ("Base","nan","nan(f)
 
-   Returns NaN in the same floating point type as \"f\" (or \"f\" can
-   by the type itself)
+   Returns NaN (not-a-number) of the floating point type \"f\" or of
+   the same floating point type as \"f\"
 
 "),
 
@@ -4951,20 +5470,20 @@ popdisplay(d::Display)
 
 "),
 
-("Base","prevfloat","prevfloat(f) -> Float
+("Base","prevfloat","prevfloat(f) -> FloatingPoint
 
    Get the previous floating point number in lexicographic order
 
 "),
 
-("Base","isinteger","isinteger(x)
+("Base","isinteger","isinteger(x) -> Bool
 
    Test whether \"x\" or all its elements are numerically equal to
    some integer
 
 "),
 
-("Base","isreal","isreal(x)
+("Base","isreal","isreal(x) -> Bool
 
    Test whether \"x\" or all its elements are numerically equal to
    some real number
@@ -5027,7 +5546,8 @@ popdisplay(d::Display)
 
    Number of ones in the binary representation of \"x\".
 
-   **Example**: \"count_ones(7) -> 3\"
+      julia> count_ones(7)
+      3
 
 "),
 
@@ -5035,7 +5555,8 @@ popdisplay(d::Display)
 
    Number of zeros in the binary representation of \"x\".
 
-   **Example**: \"count_zeros(int32(2 ^ 16 - 1)) -> 16\"
+      julia> count_zeros(int32(2 ^ 16 - 1))
+      16
 
 "),
 
@@ -5043,7 +5564,8 @@ popdisplay(d::Display)
 
    Number of zeros leading the binary representation of \"x\".
 
-   **Example**: \"leading_zeros(int32(1)) -> 31\"
+      julia> leading_zeros(int32(1))
+      31
 
 "),
 
@@ -5051,7 +5573,8 @@ popdisplay(d::Display)
 
    Number of ones leading the binary representation of \"x\".
 
-   **Example**: \"leading_ones(int32(2 ^ 32 - 2)) -> 31\"
+      julia> leading_ones(int32(2 ^ 32 - 2))
+      31
 
 "),
 
@@ -5059,7 +5582,8 @@ popdisplay(d::Display)
 
    Number of zeros trailing the binary representation of \"x\".
 
-   **Example**: \"trailing_zeros(2) -> 1\"
+      julia> trailing_zeros(2)
+      1
 
 "),
 
@@ -5067,7 +5591,8 @@ popdisplay(d::Display)
 
    Number of ones trailing the binary representation of \"x\".
 
-   **Example**: \"trailing_ones(3) -> 2\"
+      julia> trailing_ones(3)
+      2
 
 "),
 
@@ -5075,7 +5600,8 @@ popdisplay(d::Display)
 
    Returns \"true\" if \"x\" is prime, and \"false\" otherwise.
 
-   **Example**: \"isprime(3) -> true\"
+      julia> isprime(3)
+      true
 
 "),
 
@@ -5090,7 +5616,11 @@ popdisplay(d::Display)
    Returns \"true\" if \"x\" is odd (that is, not divisible by 2), and
    \"false\" otherwise.
 
-   **Example**: \"isodd(9) -> false\"
+      julia> isodd(9)
+      true
+
+      julia> isodd(10)
+      false
 
 "),
 
@@ -5099,7 +5629,11 @@ popdisplay(d::Display)
    Returns \"true\" is \"x\" is even (that is, divisible by 2), and
    \"false\" otherwise.
 
-   **Example**: \"iseven(1) -> false\"
+      julia> iseven(9)
+      false
+
+      julia> iseven(10)
+      true
 
 "),
 
@@ -5134,12 +5668,14 @@ popdisplay(d::Display)
 
 "),
 
-("Base","srand","srand([rng], seed)
+("Base","srand","srand([rng][, seed])
 
-   Seed the RNG with a \"seed\", which may be an unsigned integer or a
-   vector of unsigned integers. \"seed\" can even be a filename, in
-   which case the seed is read from a file. If the argument \"rng\" is
-   not provided, the default global RNG is seeded.
+   Reseed the random number generator. If a \"seed\" is provided, the
+   RNG will give a reproducible sequence of numbers, otherwise Julia
+   will get entropy from the system. The \"seed\" may be an unsigned
+   integer, a vector of unsigned integers or a filename, in which case
+   the seed is read from a file. If the argument \"rng\" is not
+   provided, the default global RNG is seeded.
 
 "),
 
@@ -5151,7 +5687,7 @@ popdisplay(d::Display)
 
 "),
 
-("Base","rand","rand()
+("Base","rand","rand() -> Float64
 
    Generate a \"Float64\" random number uniformly in [0,1)
 
@@ -5179,18 +5715,17 @@ popdisplay(d::Display)
 
 "),
 
-("Base","rand","rand(Int32|Uint32|Int64|Uint64|Int128|Uint128[, dims...])
+("Base","rand","rand(t::Type[, dims...])
 
-   Generate a random integer of the given type. Optionally, generate
-   an array of random integers of the given type by specifying dims.
+   Generate a random number or array of random numbes of the given
+   type.
 
 "),
 
 ("Base","rand","rand(r[, dims...])
 
-   Generate a random integer from the inclusive interval specified by
-   \"Range1 r\" (for example, \"1:n\"). Optionally, generate a random
-   integer array.
+   Pick a random element or array of random elements from range \"r\"
+   (for example, \"1:n\" or \"0:2:10\").
 
 "),
 
@@ -5198,13 +5733,6 @@ popdisplay(d::Display)
 
    Generate a random boolean value. Optionally, generate an array of
    random boolean values.
-
-"),
-
-("Base","randbool!","randbool!(A)
-
-   Fill an array with random boolean values. A may be an \"Array\" or
-   a \"BitArray\".
 
 "),
 
@@ -5251,7 +5779,8 @@ popdisplay(d::Display)
 
    Counts the number of nonzero values in array A (dense or sparse).
    Note that this is not a constant-time operation. For sparse
-   matrices, one should usually use \"nfilled\" instead.
+   matrices, one should usually use \"nnz\", which returns the number
+   of stored values.
 
 "),
 
@@ -5315,13 +5844,29 @@ popdisplay(d::Display)
 
 ("Base","zeros","zeros(type, dims)
 
-   Create an array of all zeros of specified type
+   Create an array of all zeros of specified type. The type defaults
+   to Float64 if not specified.
+
+"),
+
+("Base","zeros","zeros(A)
+
+   Create an array of all zeros with the same element type and shape
+   as A.
 
 "),
 
 ("Base","ones","ones(type, dims)
 
-   Create an array of all ones of specified type
+   Create an array of all ones of specified type. The type defaults to
+   Float64 if not specified.
+
+"),
+
+("Base","ones","ones(A)
+
+   Create an array of all ones with the same element type and shape as
+   A.
 
 "),
 
@@ -5337,15 +5882,15 @@ popdisplay(d::Display)
 
 "),
 
-("Base","fill","fill(v, dims)
+("Base","fill","fill(x, dims)
 
-   Create an array filled with \"v\"
+   Create an array filled with the value \"x\"
 
 "),
 
 ("Base","fill!","fill!(A, x)
 
-   Fill array \"A\" with value \"x\"
+   Fill the array \"A\" with the value \"x\"
 
 "),
 
@@ -5398,7 +5943,8 @@ popdisplay(d::Display)
 ("Base","linspace","linspace(start, stop, n)
 
    Construct a vector of \"n\" linearly-spaced elements from \"start\"
-   to \"stop\".
+   to \"stop\". See also: \"linrange()\" that constructs a range
+   object.
 
 "),
 
@@ -5573,7 +6119,7 @@ popdisplay(d::Display)
 ("Base","find","find(A)
 
    Return a vector of the linear indexes of the non-zeros in \"A\"
-   (determined by \"A[i]!=0\"). A common use of this is to convert a
+   (determined by \"A[i]!=0\").  A common use of this is to convert a
    boolean array to an array of indexes of the \"true\" elements.
 
 "),
@@ -5597,13 +6143,6 @@ popdisplay(d::Display)
    Return a tuple \"(I, J, V)\" where \"I\" and \"J\" are the row and
    column indexes of the non-zero values in matrix \"A\", and \"V\" is
    a vector of the non-zero values.
-
-"),
-
-("Base","nonzeros","nonzeros(A)
-
-   Return a vector of the non-zero values in array \"A\" (determined
-   by \"A[i]!=0\").
 
 "),
 
@@ -5711,32 +6250,47 @@ popdisplay(d::Display)
 
 ("Base","cumprod","cumprod(A[, dim])
 
-   Cumulative product along a dimension.
+   Cumulative product along a dimension. The dimension defaults to 1.
+
+"),
+
+("Base","cumprod!","cumprod!(B, A[, dim])
+
+   Cumulative product of \"A\" along a dimension, storing the result
+   in \"B\". The dimension defaults to 1.
 
 "),
 
 ("Base","cumsum","cumsum(A[, dim])
 
-   Cumulative sum along a dimension.
+   Cumulative sum along a dimension. The dimension defaults to 1.
+
+"),
+
+("Base","cumsum!","cumsum!(B, A[, dim])
+
+   Cumulative sum of \"A\" along a dimension, storing the result in
+   \"B\". The dimension defaults to 1.
 
 "),
 
 ("Base","cumsum_kbn","cumsum_kbn(A[, dim])
 
    Cumulative sum along a dimension, using the Kahan-Babuska-Neumaier
-   compensated summation algorithm for additional accuracy.
+   compensated summation algorithm for additional accuracy. The
+   dimension defaults to 1.
 
 "),
 
 ("Base","cummin","cummin(A[, dim])
 
-   Cumulative minimum along a dimension.
+   Cumulative minimum along a dimension. The dimension defaults to 1.
 
 "),
 
 ("Base","cummax","cummax(A[, dim])
 
-   Cumulative maximum along a dimension.
+   Cumulative maximum along a dimension. The dimension defaults to 1.
 
 "),
 
@@ -5806,7 +6360,6 @@ popdisplay(d::Display)
 
    Given a \"dims\" tuple of integers \"(m, n, ...)\", call \"f\" on
    all combinations of integers in the ranges \"1:m\", \"1:n\", etc.
-   Example:
 
       julia> cartesianmap(println, (2,2))
       11
@@ -5952,7 +6505,7 @@ popdisplay(d::Display)
    Generate all integer arrays that sum to \"n\". Because the number
    of partitions can be very large, this function returns an iterator
    object. Use \"collect(partitions(n))\" to get an array of all
-   partitions. The number of partitions to generete can be efficiently
+   partitions. The number of partitions to generate can be efficiently
    computed using \"length(partitions(n))\".
 
 "),
@@ -5962,7 +6515,7 @@ popdisplay(d::Display)
    Generate all arrays of \"m\" integers that sum to \"n\". Because
    the number of partitions can be very large, this function returns
    an iterator object. Use \"collect(partitions(n,m))\" to get an
-   array of all partitions. The number of partitions to generete can
+   array of all partitions. The number of partitions to generate can
    be efficiently computed using \"length(partitions(n,m))\".
 
 "),
@@ -5973,7 +6526,7 @@ popdisplay(d::Display)
    represented as arrays of arrays. Because the number of partitions
    can be very large, this function returns an iterator object. Use
    \"collect(partitions(array))\" to get an array of all partitions.
-   The number of partitions to generete can be efficiently computed
+   The number of partitions to generate can be efficiently computed
    using \"length(partitions(array))\".
 
 "),
@@ -6478,9 +7031,18 @@ popdisplay(d::Display)
 
 "),
 
-("Base","filt","filt(b, a, x)
+("Base","filt","filt(b, a, x[, si])
 
-   Apply filter described by vectors \"a\" and \"b\" to vector \"x\".
+   Apply filter described by vectors \"a\" and \"b\" to vector \"x\",
+   with an optional initial filter state vector \"si\" (defaults to
+   zeros).
+
+"),
+
+("Base","filt!","filt!(out, b, a, x[, si])
+
+   Same as \"filt()\" but writes the result into the \"out\" argument,
+   which may alias the input \"x\" to modify it in-place.
 
 "),
 
@@ -6779,7 +7341,7 @@ popdisplay(d::Display)
 
    Store a value to a remote reference. Implements \"shared queue of
    length 1\" semantics: if a value is already present, blocks until
-   the value is removed with \"take\". Returns its first argument.
+   the value is removed with \"take!\". Returns its first argument.
 
 "),
 
@@ -6790,13 +7352,22 @@ popdisplay(d::Display)
 
 "),
 
-("Base","isready","isready(RemoteRef)
+("Base","isready","isready(r::RemoteRef)
 
    Determine whether a \"RemoteRef\" has a value stored to it. Note
-   that this function can easily cause race conditions, since by the
-   time you receive its result it may no longer be true. It is
-   recommended that this function only be used on a \"RemoteRef\" that
-   is assigned once.
+   that this function can cause race conditions, since by the time you
+   receive its result it may no longer be true. It is recommended that
+   this function only be used on a \"RemoteRef\" that is assigned
+   once.
+
+   If the argument \"RemoteRef\" is owned by a different node, this
+   call will block to wait for the answer. It is recommended to wait
+   for \"r\" in a separate task instead, or to use a local
+   \"RemoteRef\" as a proxy:
+
+      rr = RemoteRef()
+      @async put!(rr, remotecall_fetch(p, long_computation))
+      isready(rr)  # will not block
 
 "),
 
@@ -6887,13 +7458,13 @@ popdisplay(d::Display)
 
 ("Base","DArray","DArray(init, dims[, procs, dist])
 
-   Construct a distributed array. \"init\" is a function that accepts
-   a tuple of index ranges. This function should allocate a local
-   chunk of the distributed array and initialize it for the specified
-   indices. \"dims\" is the overall size of the distributed array.
-   \"procs\" optionally specifies a vector of process IDs to use. If
-   unspecified, the array is distributed over all worker processes
-   only. Typically, when runnning in distributed mode, i.e.,
+   Construct a distributed array. The parameter \"init\" is a function
+   that accepts a tuple of index ranges. This function should allocate
+   a local chunk of the distributed array and initialize it for the
+   specified indices. \"dims\" is the overall size of the distributed
+   array. \"procs\" optionally specifies a vector of process IDs to
+   use. If unspecified, the array is distributed over all worker
+   processes only. Typically, when running in distributed mode, i.e.,
    \"nprocs() > 1\", this would mean that no chunk of the distributed
    array exists on the process hosting the interactive julia prompt.
    \"dist\" is an integer vector specifying how many chunks the
@@ -7051,19 +7622,24 @@ popdisplay(d::Display)
 
 "),
 
-("Base","readsfrom","readsfrom(command)
+("Base","open","open(command, mode::String=\"r\", stdio=DevNull)
 
-   Starts running a command asynchronously, and returns a tuple
-   (stream,process). The first value is a stream reading from the
-   process' standard output.
+   Start running \"command\" asynchronously, and return a tuple
+   \"(stream,process)\".  If \"mode\" is \"\"r\"\", then \"stream\"
+   reads from the process's standard output and \"stdio\" optionally
+   specifies the process's standard input stream.  If \"mode\" is
+   \"\"w\"\", then \"stream\" writes to the process's standard input
+   and \"stdio\" optionally specifies the process's standard output
+   stream.
 
 "),
 
-("Base","writesto","writesto(command)
+("Base","open","open(f::Function, command, mode::String=\"r\", stdio=DevNull)
 
-   Starts running a command asynchronously, and returns a tuple
-   (stream,process). The first value is a stream writing to the
-   process' standard input.
+   Similar to \"open(command, mode, stdio)\", but calls \"f(stream)\"
+   on the resulting read or write stream, then closes the stream and
+   waits for the process to complete.  Returns the value returned by
+   \"f\".
 
 "),
 
@@ -7090,11 +7666,14 @@ popdisplay(d::Display)
 
 "),
 
-("Base","setenv","setenv(command, env)
+("Base","setenv","setenv(command, env; dir=working_dir)
 
    Set environment variables to use when running the given command.
    \"env\" is either a dictionary mapping strings to strings, or an
    array of strings of the form \"\"var=val\"\".
+
+   The \"dir\" keyword argument can be used to specify a working
+   directory for the command.
 
 "),
 
@@ -7149,8 +7728,7 @@ popdisplay(d::Display)
 
 ("Base","cd","cd(dir::String)
 
-   Set the current working directory. Returns the new current
-   directory.
+   Set the current working directory.
 
 "),
 
@@ -7177,9 +7755,19 @@ popdisplay(d::Display)
 
 "),
 
-("Base","rmdir","rmdir(path)
+("Base","symlink","symlink(target, link)
 
-   Remove the directory named \"path\".
+   Creates a symbolic link to \"target\" with the name \"link\".
+
+   Note: This function raises an error under operating systems that do not
+     support soft symbolic links, such as Windows XP.
+
+"),
+
+("Base","chmod","chmod(path, mode)
+
+   Change the permissions mode of \"path\" to \"mode\". Only integer
+   \"mode\"s (e.g. 0o777) are currently supported.
 
 "),
 
@@ -7356,9 +7944,9 @@ popdisplay(d::Display)
    For example:
 
       function foo()
-        # body
+          # body
 
-        retval::Float64
+          retval::Float64
       end
 
       bar = cfunction(foo, Float64, ())
@@ -7370,14 +7958,15 @@ popdisplay(d::Display)
    Load a shared library, returning an opaque handle.
 
    The optional flags argument is a bitwise-or of zero or more of
-   RTLD_LOCAL, RTLD_GLOBAL, RTLD_LAZY, RTLD_NOW, RTLD_NODELETE,
-   RTLD_NOLOAD, RTLD_DEEPBIND, and RTLD_FIRST.  These are converted to
-   the corresponding flags of the POSIX (and/or GNU libc and/or MacOS)
-   dlopen command, if possible, or are ignored if the specified
-   functionality is not available on the current platform.  The
-   default is RTLD_LAZY|RTLD_DEEPBIND|RTLD_LOCAL.  An important usage
-   of these flags, on POSIX platforms, is to specify
-   RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL in order for the library's
+   \"RTLD_LOCAL\", \"RTLD_GLOBAL\", \"RTLD_LAZY\", \"RTLD_NOW\",
+   \"RTLD_NODELETE\", \"RTLD_NOLOAD\", \"RTLD_DEEPBIND\", and
+   \"RTLD_FIRST\".  These are converted to the corresponding flags of
+   the POSIX (and/or GNU libc and/or MacOS) dlopen command, if
+   possible, or are ignored if the specified functionality is not
+   available on the current platform.  The default is
+   \"RTLD_LAZY|RTLD_DEEPBIND|RTLD_LOCAL\".  An important usage of
+   these flags, on POSIX platforms, is to specify
+   \"RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL\" in order for the library's
    symbols to be available for usage in other shared libraries, in
    situations where there are dependencies between shared libraries.
 
@@ -7385,64 +7974,64 @@ popdisplay(d::Display)
 
 ("Base","dlopen_e","dlopen_e(libfile::String[, flags::Integer])
 
-   Similar to \"dlopen\", except returns a NULL pointer instead of
-   raising errors.
+   Similar to \"dlopen()\", except returns a \"NULL\" pointer instead
+   of raising errors.
 
 "),
 
 ("Base","RTLD_DEEPBIND","RTLD_DEEPBIND
 
-   Enum constant for dlopen. See your platform man page for details,
-   if applicable.
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
 
 "),
 
 ("Base","RTLD_FIRST","RTLD_FIRST
 
-   Enum constant for dlopen. See your platform man page for details,
-   if applicable.
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
 
 "),
 
 ("Base","RTLD_GLOBAL","RTLD_GLOBAL
 
-   Enum constant for dlopen. See your platform man page for details,
-   if applicable.
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
 
 "),
 
 ("Base","RTLD_LAZY","RTLD_LAZY
 
-   Enum constant for dlopen. See your platform man page for details,
-   if applicable.
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
 
 "),
 
 ("Base","RTLD_LOCAL","RTLD_LOCAL
 
-   Enum constant for dlopen. See your platform man page for details,
-   if applicable.
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
 
 "),
 
 ("Base","RTLD_NODELETE","RTLD_NODELETE
 
-   Enum constant for dlopen. See your platform man page for details,
-   if applicable.
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
 
 "),
 
 ("Base","RTLD_NOLOAD","RTLD_NOLOAD
 
-   Enum constant for dlopen. See your platform man page for details,
-   if applicable.
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
 
 "),
 
 ("Base","RTLD_NOW","RTLD_NOW
 
-   Enum constant for dlopen. See your platform man page for details,
-   if applicable.
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
 
 "),
 
@@ -7545,13 +8134,15 @@ popdisplay(d::Display)
 ("Base","copy!","copy!(dest, src)
 
    Copy all elements from collection \"src\" to array \"dest\".
+   Returns \"dest\".
 
 "),
 
 ("Base","copy!","copy!(dest, do, src, so, N)
 
    Copy \"N\" elements from collection \"src\" starting at offset
-   \"so\", to array \"dest\" starting at offset \"do\".
+   \"so\", to array \"dest\" starting at offset \"do\". Returns
+   \"dest\".
 
 "),
 
@@ -7699,6 +8290,18 @@ popdisplay(d::Display)
 ("Base","Culonglong","Culonglong
 
    Equivalent to the native \"unsigned long long\" c-type (Uint64)
+
+"),
+
+("Base","Cintmax_t","Cintmax_t
+
+   Equivalent to the native \"intmax_t\" c-type (Int64)
+
+"),
+
+("Base","Cuintmax_t","Cuintmax_t
+
+   Equivalent to the native \"uintmax_t\" c-type (Uint64)
 
 "),
 
@@ -7891,7 +8494,7 @@ popdisplay(d::Display)
 
 "),
 
-("Base","istaskdone","istaskdone(task)
+("Base","istaskdone","istaskdone(task) -> Bool
 
    Tell whether a task has exited.
 
@@ -7994,16 +8597,16 @@ popdisplay(d::Display)
 
 ("Base","sleep","sleep(seconds)
 
-   Block the current task for a specified number of seconds.
+   Block the current task for a specified number of seconds. The
+   minimum sleep time is 1 millisecond or input of \"0.001\".
 
 "),
 
 ("Base","Timer","Timer(f::Function)
 
    Create a timer to call the given callback function. The callback is
-   passed two arguments: the timer object itself, and a status code,
-   which will be 0 unless an error occurs. The timer can be started
-   and stopped with \"start_timer\" and \"stop_timer\".
+   passed one argument, the timer object itself. The timer can be
+   started and stopped with \"start_timer\" and \"stop_timer\".
 
 "),
 
@@ -8050,10 +8653,16 @@ popdisplay(d::Display)
 
 "),
 
-("Base","names","names(x)
+("Base","names","names(x::Module[, all=false[, imported=false]])
 
-   Get an array of the names exported by a module, or the fields of a
-   data type.
+   Get an array of the names exported by a module, with optionally
+   more module globals according to the additional parameters.
+
+"),
+
+("Base","names","names(x::DataType)
+
+   Get an array of the fields of a data type.
 
 "),
 
@@ -8193,16 +8802,17 @@ popdisplay(d::Display)
 
 ("Base","precompile","precompile(f, args::(Any..., ))
 
-   Compile the given function *f* for the argument tuple (of types)
-   *args*, but do not execute it.
+   Compile the given function \"f\" for the argument tuple (of types)
+   \"args\", but do not execute it.
 
 "),
 
-("Base.Collections","PriorityQueue{K,V}","PriorityQueue{K,V}([ord])
+("Base.Collections","PriorityQueue","PriorityQueue(K, V[, ord])
 
-   Construct a new PriorityQueue, with keys of type K and
-   values/priorites of type V. If an order is not given, the priority
-   queue is min-ordered using the default comparison for V.
+   Construct a new PriorityQueue, with keys of type \"K\" and
+   values/priorites of type \"V\". If an order is not given, the
+   priority queue is min-ordered using the default comparison for
+   \"V\".
 
 "),
 
@@ -8304,6 +8914,474 @@ popdisplay(d::Display)
 
    An array of paths (as strings) where the \"require\" function looks
    for code.
+
+"),
+
+("Dates","DateTime","DateTime(y[, m, d, h, mi, s, ms]) -> DateTime
+
+   Construct a DateTime type by parts. Arguments must be convertible
+   to \"Int64\".
+
+"),
+
+("Dates","DateTime","DateTime(periods::Period...) -> DateTime
+
+   Constuct a DateTime type by \"Period\" type parts. Arguments may be
+   in any order. DateTime parts not provided will default to the value
+   of \"Dates.default(period)\".
+
+"),
+
+("Dates","DateTime","DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) -> DateTime
+
+   Create a DateTime through the adjuster API. The starting point will
+   be constructed from the provided \"y, m, d...\" arguments, and will
+   be adjusted until \"f::Function\" returns true. The step size in
+   adjusting can be provided manually through the \"step\" keyword. If
+   \"negate=true\", then the adjusting will stop when \"f::Function\"
+   returns false instead of true. \"limit\" provides a limit to the
+   max number of iterations the adjustment API will pursue before
+   throwing an error (in the case that \"f::Function\" is never
+   satisfied).
+
+"),
+
+("Dates","DateTime","DateTime(dt::Date) -> DateTime
+
+   Converts a \"Date\" type to a \"DateTime\". The hour, minute,
+   second, and millisecond parts of the new \"DateTime\" are assumed
+   to be zero.
+
+"),
+
+("Dates","DateTime","DateTime(dt::String, format::String; locale=\"english\") -> DateTime
+
+   Construct a DateTime type by parsing the \"dt\" date string
+   following the pattern given in the \"format\" string. The following
+   codes can be used for constructing format strings:
+
+   +-----------------+-----------+-----------------------------------------------------------------+
+   | Code            | Matches   | Comment                                                         |
+   +-----------------+-----------+-----------------------------------------------------------------+
+   | \\\"y\\\"           | 1996, 96  | Returns year of 1996, 0096                                      |
+   +-----------------+-----------+-----------------------------------------------------------------+
+   | \\\"m\\\"           | 1, 01     | Matches 1 or 2-digit months                                     |
+   +-----------------+-----------+-----------------------------------------------------------------+
+   | \\\"u\\\"           | Jan       | Matches abbreviated months according to the \\\"locale\\\" keyword  |
+   +-----------------+-----------+-----------------------------------------------------------------+
+   | \\\"U\\\"           | January   | Matches full month names according to the \\\"locale\\\" keyword    |
+   +-----------------+-----------+-----------------------------------------------------------------+
+   | \\\"d\\\"           | 1, 01     | Matches 1 or 2-digit days                                       |
+   +-----------------+-----------+-----------------------------------------------------------------+
+   | \\\"H\\\"           | 00        | Matches hours                                                   |
+   +-----------------+-----------+-----------------------------------------------------------------+
+   | \\\"M\\\"           | 00        | Matches minutes                                                 |
+   +-----------------+-----------+-----------------------------------------------------------------+
+   | \\\"S\\\"           | 00        | Matches seconds                                                 |
+   +-----------------+-----------+-----------------------------------------------------------------+
+   | \\\"s\\\"           | .500      | Matches milliseconds                                            |
+   +-----------------+-----------+-----------------------------------------------------------------+
+   | \\\"e\\\"           | Mon, Tues | Matches abbreviated days of the week                            |
+   +-----------------+-----------+-----------------------------------------------------------------+
+   | \\\"E\\\"           | Monday    | Matches full name days of the week                              |
+   +-----------------+-----------+-----------------------------------------------------------------+
+   | \\\"yyyymmdd\\\"    | 19960101  | Matches fixed-width year, month, and day                        |
+   +-----------------+-----------+-----------------------------------------------------------------+
+
+   All characters not listed above are treated as delimiters between
+   date and time slots. So a \"dt\" string of
+   \"1996-01-15T00:00:00.0\" would have a \"format\" string like
+   \"y-m-dTH:M:S.s\".
+
+"),
+
+("Dates","Date","Date(y[, m, d]) -> Date
+
+   Construct a \"Date\" type by parts. Arguments must be convertible
+   to \"Int64\".
+
+"),
+
+("Dates","Date","Date(period::Period...) -> Date
+
+   Constuct a Date type by \"Period\" type parts. Arguments may be in
+   any order. Date parts not provided will default to the value of
+   \"Dates.default(period)\".
+
+"),
+
+("Dates","Date","Date(f::Function, y[, m]; step=Day(1), negate=false, limit=10000) -> Date
+
+   Create a Date through the adjuster API. The starting point will be
+   constructed from the provided \"y, m\" arguments, and will be
+   adjusted until \"f::Function\" returns true. The step size in
+   adjusting can be provided manually through the \"step\" keyword. If
+   \"negate=true\", then the adjusting will stop when \"f::Function\"
+   returns false instead of true. \"limit\" provides a limit to the
+   max number of iterations the adjustment API will pursue before
+   throwing an error (given that \"f::Function\" is never satisfied).
+
+"),
+
+("Dates","Date","Date(dt::DateTime) -> Date
+
+   Converts a \"DateTime\" type to a \"Date\". The hour, minute,
+   second, and millisecond parts of the \"DateTime\" are truncated, so
+   only the year, month and day parts are used in construction.
+
+"),
+
+("Dates","Date","Date(dt::String, format::String; locale=\"english\") -> Date
+
+   Construct a Date type by parsing a \"dt\" date string following the
+   pattern given in the \"format\" string. Follows the same
+   conventions as \"DateTime\" above.
+
+"),
+
+("Dates","now","now() -> DateTime
+
+   Returns a DateTime corresponding to the user's system time
+   including the system timezone locale.
+
+"),
+
+("Dates","nowutc","nowutc() -> DateTime
+
+   Returns a DateTime corresponding to the user's system time as
+   UTC/GMT.
+
+"),
+
+("Dates","millisecond","year(dt::TimeType) -> Int64
+month(dt::TimeType) -> Int64
+week(dt::TimeType) -> Int64
+day(dt::TimeType) -> Int64
+hour(dt::TimeType) -> Int64
+minute(dt::TimeType) -> Int64
+second(dt::TimeType) -> Int64
+millisecond(dt::TimeType) -> Int64
+
+   Return the field part of a Date or DateTime as an \"Int64\".
+
+"),
+
+("Dates","Millisecond","Year(dt::TimeType) -> Year
+Month(dt::TimeType) -> Month
+Week(dt::TimeType) -> Week
+Day(dt::TimeType) -> Day
+Hour(dt::TimeType) -> Hour
+Minute(dt::TimeType) -> Minute
+Second(dt::TimeType) -> Second
+Millisecond(dt::TimeType) -> Millisecond
+
+   Return the field part of a Date or DateTime as a \"Period\" type.
+
+"),
+
+("Dates","yearmonth","yearmonth(dt::TimeType) -> (Int64, Int64)
+
+   Simultaneously return the year and month parts of a Date or
+   DateTime.
+
+"),
+
+("Dates","monthday","monthday(dt::TimeType) -> (Int64, Int64)
+
+   Simultaneously return the month and day parts of a Date or
+   DateTime.
+
+"),
+
+("Dates","yearmonthday","yearmonthday(dt::TimeType) -> (Int64, Int64, Int64)
+
+   Simultaneously return the year, month, and day parts of a Date or
+   DateTime.
+
+"),
+
+("Dates","dayname","dayname(dt::TimeType; locale=\"english\") -> String
+
+   Return the full day name corresponding to the day of the week of
+   the Date or DateTime in the given \"locale\".
+
+"),
+
+("Dates","dayabbr","dayabbr(dt::TimeType; locale=\"english\") -> String
+
+   Return the abbreviated name corresponding to the day of the week of
+   the Date or DateTime in the given \"locale\".
+
+"),
+
+("Dates","dayofweek","dayofweek(dt::TimeType) -> Int64
+
+   Returns the day of the week as an \"Int64\" with \"1 = Monday, 2 =
+   Tuesday, etc.\".
+
+"),
+
+("Dates","dayofweekofmonth","dayofweekofmonth(dt::TimeType) -> Int
+
+   For the day of week of \"dt\", returns which number it is in
+   \"dt\"'s month. So if the day of the week of \"dt\" is Monday, then
+   \"1 = First Monday of the month, 2 = Second Monday of the month,
+   etc.\" In the range 1:5.
+
+"),
+
+("Dates","daysofweekinmonth","daysofweekinmonth(dt::TimeType) -> Int
+
+   For the day of week of \"dt\", returns the total number of that day
+   of the week in \"dt\"'s month. Returns 4 or 5. Useful in temporal
+   expressions for specifying the last day of a week in a month by
+   including \"dayofweekofmonth(dt) == daysofweekinmonth(dt)\" in the
+   adjuster function.
+
+"),
+
+("Dates","monthname","monthname(dt::TimeType; locale=\"english\") -> String
+
+   Return the full name of the month of the Date or DateTime in the
+   given \"locale\".
+
+"),
+
+("Dates","monthabbr","monthabbr(dt::TimeType; locale=\"english\") -> String
+
+   Return the abbreviated month name of the Date or DateTime in the
+   given \"locale\".
+
+"),
+
+("Dates","daysinmonth","daysinmonth(dt::TimeType) -> Int
+
+   Returns the number of days in the month of \"dt\". Value will be
+   28, 29, 30, or 31.
+
+"),
+
+("Dates","isleapyear","isleapyear(dt::TimeType) -> Bool
+
+   Returns true if the year of \"dt\" is a leap year.
+
+"),
+
+("Dates","dayofyear","dayofyear(dt::TimeType) -> Int
+
+   Returns the day of the year for \"dt\" with January 1st being day
+   1.
+
+"),
+
+("Dates","daysinyear","daysinyear(dt::TimeType) -> Int
+
+   Returns 366 if the year of \"dt\" is a leap year, otherwise returns
+   365.
+
+"),
+
+("Dates","quarterofyear","quarterofyear(dt::TimeType) -> Int
+
+   Returns the quarter that \"dt\" resides in. Range of value is 1:4.
+
+"),
+
+("Dates","dayofquarter","dayofquarter(dt::TimeType) -> Int
+
+   Returns the day of the current quarter of \"dt\". Range of value is
+   1:92.
+
+"),
+
+("Dates","trunc","trunc(dt::TimeType, ::Type{Period}) -> TimeType
+
+   Truncates the value of \"dt\" according to the provided \"Period\"
+   type. E.g. if \"dt\" is \"1996-01-01T12:30:00\", then
+   \"trunc(dt,Day) == 1996-01-01T00:00:00\".
+
+"),
+
+("Dates","firstdayofweek","firstdayofweek(dt::TimeType) -> TimeType
+
+   Adjusts \"dt\" to the Monday of it's week.
+
+"),
+
+("Dates","lastdayofweek","lastdayofweek(dt::TimeType) -> TimeType
+
+   Adjusts \"dt\" to the Sunday of it's week.
+
+"),
+
+("Dates","firstdayofmonth","firstdayofmonth(dt::TimeType) -> TimeType
+
+   Adjusts \"dt\" to the first day of it's month.
+
+"),
+
+("Dates","lastdayofmonth","lastdayofmonth(dt::TimeType) -> TimeType
+
+   Adjusts \"dt\" to the last day of it's month.
+
+"),
+
+("Dates","firstdayofyear","firstdayofyear(dt::TimeType) -> TimeType
+
+   Adjusts \"dt\" to the first day of it's year.
+
+"),
+
+("Dates","lastdayofyear","lastdayofyear(dt::TimeType) -> TimeType
+
+   Adjusts \"dt\" to the last day of it's year.
+
+"),
+
+("Dates","firstdayofquarter","firstdayofquarter(dt::TimeType) -> TimeType
+
+   Adjusts \"dt\" to the first day of it's quarter.
+
+"),
+
+("Dates","lastdayofquarter","lastdayofquarter(dt::TimeType) -> TimeType
+
+   Adjusts \"dt\" to the last day of it's quarter.
+
+"),
+
+("Dates","tonext","tonext(dt::TimeType, dow::Int;same::Bool=false) -> TimeType
+
+   Adjusts \"dt\" to the next day of week corresponding to \"dow\"
+   with \"1 = Monday, 2 = Tuesday, etc\". Setting \"same=true\" allows
+   the current \"dt\" to be considered as the next \"dow\", allowing
+   for no adjustment to occur.
+
+"),
+
+("Dates","toprev","toprev(dt::TimeType, dow::Int;same::Bool=false) -> TimeType
+
+   Adjusts \"dt\" to the previous day of week corresponding to \"dow\"
+   with \"1 = Monday, 2 = Tuesday, etc\". Setting \"same=true\" allows
+   the current \"dt\" to be considered as the previous \"dow\",
+   allowing for no adjustment to occur.
+
+"),
+
+("Dates","tofirst","tofirst(dt::TimeType, dow::Int;of=Month) -> TimeType
+
+   Adjusts \"dt\" to the first \"dow\" of it's month. Alternatively,
+   \"of=Year\" will adjust to the first \"dow\" of the year.
+
+"),
+
+("Dates","tolast","tolast(dt::TimeType, dow::Int;of=Month) -> TimeType
+
+   Adjusts \"dt\" to the last \"dow\" of it's month. Alternatively,
+   \"of=Year\" will adjust to the last \"dow\" of the year.
+
+"),
+
+("Dates","tonext","tonext(func::Function, dt::TimeType;step=Day(1), negate=false, limit=10000, same=false) -> TimeType
+
+   Adjusts \"dt\" by iterating at most \"limit\" iterations by
+   \"step\" increments until \"func\" returns true. \"func\" must take
+   a single \"TimeType\" argument and return a \"Bool\". \"same\"
+   allows \"dt\" to be considered in satisfying \"func\". \"negate\"
+   will make the adjustment process terminate when \"func\" returns
+   false instead of true.
+
+"),
+
+("Dates","toprev","toprev(func::Function, dt::TimeType;step=Day(-1), negate=false, limit=10000, same=false) -> TimeType
+
+   Adjusts \"dt\" by iterating at most \"limit\" iterations by
+   \"step\" increments until \"func\" returns true. \"func\" must take
+   a single \"TimeType\" argument and return a \"Bool\". \"same\"
+   allows \"dt\" to be considered in satisfying \"func\". \"negate\"
+   will make the adjustment process terminate when \"func\" returns
+   false instead of true.
+
+"),
+
+("Dates","recur{T<:TimeType}","recur{T<:TimeType}(func::Function, dr::StepRange{T};negate=false, limit=10000) -> Vector{T}
+
+   \"func\" takes a single TimeType argument and returns a \"Bool\"
+   indicating whether the input should be \"included\" in the final
+   set. \"recur\" applies \"func\" over each element in the range of
+   \"dr\", including those elements for which \"func\" returns
+   \"true\" in the resulting Array, unless \"negate=true\", then only
+   elements where \"func\" returns \"false\" are included.
+
+"),
+
+("Dates","Millisecond","Year(v)
+Month(v)
+Week(v)
+Day(v)
+Hour(v)
+Minute(v)
+Second(v)
+Millisecond(v)
+
+   Construct a \"Period\" type with the given \"v\" value. Input must
+   be losslessly convertible to an \"Int64\".
+
+"),
+
+("","default(p::Period) => Period","default(p::Period) => Period
+
+   Returns a sensible \"default\" value for the input Period by
+   returning \"one(p)\" for Year, Month, and Day, and \"zero(p)\" for
+   Hour, Minute, Second, and Millisecond.
+
+"),
+
+("Dates","today","today() -> Date
+
+   Returns the date portion of \"now()\".
+
+"),
+
+("Dates","unix2datetime","unix2datetime(x) -> DateTime
+
+   Takes the number of seconds since unix epoch
+   \"1970-01-01T00:00:00\" and converts to the corresponding DateTime.
+
+"),
+
+("Dates","datetime2unix","datetime2unix(dt::DateTime) -> Float64
+
+   Takes the given DateTime and returns the number of seconds since
+   the unix epoch as a \"Float64\".
+
+"),
+
+("Dates","julian2datetime","julian2datetime(julian_days) -> DateTime
+
+   Takes the number of Julian calendar days since epoch
+   \"-4713-11-24T12:00:00\" and returns the corresponding DateTime.
+
+"),
+
+("Dates","datetime2julian","datetime2julian(dt::DateTime) -> Float64
+
+   Takes the given DateTime and returns the number of Julian calendar
+   days since the julian epoch as a \"Float64\".
+
+"),
+
+("Dates","rata2datetime","rata2datetime(days) -> DateTime
+
+   Takes the number of Rata Die days since epoch
+   \"0000-12-31T00:00:00\" and returns the corresponding DateTime.
+
+"),
+
+("Dates","datetime2rata","datetime2rata(dt::TimeType) -> Int64
+
+   Returns the number of Rata Die days since epoch from the given Date
+   or DateTime.
 
 "),
 
@@ -8417,6 +9495,14 @@ popdisplay(d::Display)
 ("Base","basename","basename(path::String) -> String
 
    Get the file name part of a path.
+
+"),
+
+("Base","@__FILE__","@__FILE__() -> String
+
+   \"@__FILE__\" expands to a string with the absolute path and file
+   name of the script being run. Returns \"nothing\" if run from a
+   REPL or an empty string if evaluated by \"julia -e <expr>\".
 
 "),
 
@@ -8679,14 +9765,16 @@ popdisplay(d::Display)
 
 "),
 
-("Base","dot","dot(x, y)
+("Base","⋅","dot(x, y)
+⋅(x, y)
 
    Compute the dot product. For complex vectors, the first vector is
    conjugated.
 
 "),
 
-("Base","cross","cross(x, y)
+("Base","×","cross(x, y)
+×(x, y)
 
    Compute the cross product of two 3-vectors.
 
@@ -8733,15 +9821,15 @@ popdisplay(d::Display)
    \"Complex{Float64}\" the return type is \"UmfpackLU\". Some
    examples are shown in the table below.
 
-      +-------------------------+---------------------------+------------------------------------------+
-      | Type of input \\\"A\\\"     | Type of output \\\"F\\\"      | Relationship between \\\"F\\\" and \\\"A\\\"     |
-      +-------------------------+---------------------------+------------------------------------------+
-      | \\\"Matrix()\\\"            | \\\"LU\\\"                    | \\\"F[:L]*F[:U] == A[F[:p], :]\\\"           |
-      +-------------------------+---------------------------+------------------------------------------+
-      | \\\"Tridiagonal()\\\"       | \\\"LU{T,Tridiagonal{T}}\\\"  | N/A                                      |
-      +-------------------------+---------------------------+------------------------------------------+
-      | \\\"SparseMatrixCSC()\\\"   | \\\"UmfpackLU\\\"             | \\\"F[:L]*F[:U] == Rs .* A[F[:p], F[:q]]\\\" |
-      +-------------------------+---------------------------+------------------------------------------+
+      +-------------------------+---------------------------+----------------------------------------------+
+      | Type of input \\\"A\\\"     | Type of output \\\"F\\\"      | Relationship between \\\"F\\\" and \\\"A\\\"         |
+      +-------------------------+---------------------------+----------------------------------------------+
+      | \\\"Matrix()\\\"            | \\\"LU\\\"                    | \\\"F[:L]*F[:U] == A[F[:p], :]\\\"               |
+      +-------------------------+---------------------------+----------------------------------------------+
+      | \\\"Tridiagonal()\\\"       | \\\"LU{T,Tridiagonal{T}}\\\"  | N/A                                          |
+      +-------------------------+---------------------------+----------------------------------------------+
+      | \\\"SparseMatrixCSC()\\\"   | \\\"UmfpackLU\\\"             | \\\"F[:L]*F[:U] == F[:Rs] .* A[F[:p], F[:q]]\\\" |
+      +-------------------------+---------------------------+----------------------------------------------+
 
    The individual components of the factorization \"F\" can be
    accessed by indexing:
@@ -8858,9 +9946,9 @@ popdisplay(d::Display)
       +------------------+-------------------+-----------+---------------------------------------+
       | \\\"QR\\\"           | not \\\"BlasFloat\\\" | either    | \\\"A==F[:Q]*F[:R]\\\"                    |
       +------------------+-------------------+-----------+---------------------------------------+
-      | \\\"QRCompactWY\\\"  | \\\"BlasFloat\\\"     | \\\"true\\\"  | \\\"A==F[:Q]*F[:R]\\\"                    |
+      | \\\"QRCompactWY\\\"  | \\\"BlasFloat\\\"     | \\\"false\\\" | \\\"A==F[:Q]*F[:R]\\\"                    |
       +------------------+-------------------+-----------+---------------------------------------+
-      | \\\"QRPivoted\\\"    | \\\"BlasFloat\\\"     | \\\"false\\\" | \\\"A[:,F[:p]]==F[:Q]*F[:R]\\\"           |
+      | \\\"QRPivoted\\\"    | \\\"BlasFloat\\\"     | \\\"true\\\"  | \\\"A[:,F[:p]]==F[:Q]*F[:R]\\\"           |
       +------------------+-------------------+-----------+---------------------------------------+
 
    \"BlasFloat\" refers to any of: \"Float32\", \"Float64\",
@@ -8965,12 +10053,10 @@ popdisplay(d::Display)
 
 ("Base","eig","eig(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> D, V
 
-   Compute eigenvalues and eigenvectors of \"A\". See \"eigfact()\"
+   Computes eigenvalues and eigenvectors of \"A\". See \"eigfact()\"
    for details on the \"balance\" keyword argument.
 
-   Example:
-
-      julia> eig(a = [1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
+      julia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
       ([1.0,3.0,18.0],
       3x3 Array{Float64,2}:
        1.0  0.0  0.0
@@ -9024,10 +10110,12 @@ popdisplay(d::Display)
 
 "),
 
-("Base","eigvecs","eigvecs(A, [eigvals,][permute=true,][scale=true])
+("Base","eigvecs","eigvecs(A, [eigvals,][permute=true,][scale=true]) -> Matrix
 
-   Returns the eigenvectors of \"A\". The \"permute\" and \"scale\"
-   keywords are the same as for \"eigfact()\".
+   Returns a matrix \"M\" whose columns are the eigenvectors of \"A\".
+   (The \"k``th eigenvector can be obtained from the slice ``M[:,
+   k]\".) The \"permute\" and \"scale\" keywords are the same as for
+   \"eigfact()\".
 
    For \"SymTridiagonal()\" matrices, if the optional vector of
    eigenvalues \"eigvals\" is specified, returns the specific
@@ -9035,42 +10123,47 @@ popdisplay(d::Display)
 
 "),
 
-("Base","eigfact","eigfact(A,[il,][iu,][vl,][vu,][permute=true,][scale=true])
+("Base","eigfact","eigfact(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> Eigen
 
-   Compute the eigenvalue decomposition of \"A\" and return an
-   \"Eigen\" object. If \"F\" is the factorization object, the
-   eigenvalues can be accessed with \"F[:values]\" and the
-   eigenvectors with \"F[:vectors]\". The following functions are
-   available for \"Eigen\" objects: \"inv\", \"det\".
+   Computes the eigenvalue decomposition of \"A\", returning an
+   \"Eigen\" factorization object \"F\" which contains the eigenvalues
+   in \"F[:values]\" and the eigenvectors in the columns of the matrix
+   \"F[:vectors]\". (The \"k``th eigenvector can be obtained from the
+   slice ``F[:vectors][:, k]\".)
 
-   If \"A\" is \"Symmetric\", \"Hermitian\" or \"SymTridiagonal\", it
-   is possible to calculate only a subset of the eigenvalues by
-   specifying either a *UnitRange`* \"irange\" covering indices of the
-   sorted eigenvalues or a pair \"vl\" and \"vu\" for the lower and
-   upper boundaries of the eigenvalues.
+   The following functions are available for \"Eigen\" objects:
+   \"inv\", \"det\".
 
-   For general non-symmetric matrices it is possible to specify how
-   the matrix is balanced before the eigenvector calculation. The
-   option \"permute=true\" permutes the matrix to become closer to
-   upper triangular, and \"scale=true\" scales the matrix by its
-   diagonal elements to make rows and columns more equal in norm. The
-   default is \"true\" for both options.
+   If \"A\" is \"Symmetric()\", \"Hermitian()\" or
+   \"SymTridiagonal()\", it is possible to calculate only a subset of
+   the eigenvalues by specifying either a \"UnitRange()\" \"irange\"
+   covering indices of the sorted eigenvalues or a pair \"vl\" and
+   \"vu\" for the lower and upper boundaries of the eigenvalues.
+
+   For general nonsymmetric matrices it is possible to specify how the
+   matrix is balanced before the eigenvector calculation. The option
+   \"permute=true\" permutes the matrix to become closer to upper
+   triangular, and \"scale=true\" scales the matrix by its diagonal
+   elements to make rows and columns more equal in norm. The default
+   is \"true\" for both options.
 
 "),
 
-("Base","eigfact","eigfact(A, B)
+("Base","eigfact","eigfact(A, B) -> GeneralizedEigen
 
-   Compute the generalized eigenvalue decomposition of \"A\" and \"B\"
-   and return an \"GeneralizedEigen\" object. If \"F\" is the
-   factorization object, the eigenvalues can be accessed with
-   \"F[:values]\" and the eigenvectors with \"F[:vectors]\".
+   Computes the generalized eigenvalue decomposition of \"A\" and
+   \"B\", returning a \"GeneralizedEigen\" factorization object \"F\"
+   which contains the generalized eigenvalues in \"F[:values]\" and
+   the generalized eigenvectors in the columns of the matrix
+   \"F[:vectors]\". (The \"k``th generalized eigenvector can be
+   obtained from the slice ``F[:vectors][:, k]\".)
 
 "),
 
 ("Base","eigfact!","eigfact!(A[, B])
 
-   \"eigfact!\" is the same as \"eigfact()\", but saves space by
-   overwriting the input A (and B), instead of creating a copy.
+   Same as \"eigfact()\", but saves space by overwriting the input
+   \"A\" (and \"B\"), instead of creating a copy.
 
 "),
 
@@ -9253,7 +10346,11 @@ popdisplay(d::Display)
 
 "),
 
-("Base","scale","scale(A, b), scale(b, A)
+("Base","scale","scale(A, b)
+
+"),
+
+("Base","scale","scale(b, A)
 
    Scale an array \"A\" by a scalar \"b\", returning a new array.
 
@@ -9268,7 +10365,11 @@ popdisplay(d::Display)
 
 "),
 
-("Base","scale!","scale!(A, b), scale!(b, A)
+("Base","scale!","scale!(A, b)
+
+"),
+
+("Base","scale!","scale!(b, A)
 
    Scale an array \"A\" by a scalar \"b\", similar to \"scale()\" but
    overwriting \"A\" in-place.
@@ -9333,7 +10434,8 @@ popdisplay(d::Display)
    \"abs(A)\", whereas \"norm(A, -Inf)\" returns the smallest.
 
    For matrices, valid values of \"p\" are \"1\", \"2\", or \"Inf\".
-   Use \"vecnorm()\" to compute the Frobenius norm.
+   (Note that for sparse matrices, \"p=2\" is currently not
+   implemented.) Use \"vecnorm()\" to compute the Frobenius norm.
 
 "),
 
@@ -9448,7 +10550,9 @@ popdisplay(d::Display)
    Linear Regression. Returns \"a\" and \"b\" such that \"a+b*x\" is
    the closest line to the given points \"(x,y)\". In other words,
    this function determines parameters \"[a, b]\" that minimize the
-   squared error between \"y\" and \"a+b*x\". **Example**:
+   squared error between \"y\" and \"a+b*x\".
+
+   **Example**:
 
       using PyPlot;
       x = float([1:12])
@@ -9471,38 +10575,55 @@ popdisplay(d::Display)
 
 "),
 
-("Base","issym","issym(A)
+("Base","lyap","lyap(A, C)
+
+   Computes the solution \"X\" to the continuous Lyapunov equation
+   \"AX + XA' + C = 0\", where no eigenvalue of \"A\" has a zero real
+   part and no two eigenvalues are negative complex conjugates of each
+   other.
+
+"),
+
+("Base","sylvester","sylvester(A, B, C)
+
+   Computes the solution \"X\" to the Sylvester equation \"AX + XB + C
+   = 0\", where \"A\", \"B\" and \"C\" have compatible dimensions and
+   \"A\" and \"-B\" have no eigenvalues with equal real part.
+
+"),
+
+("Base","issym","issym(A) -> Bool
 
    Test whether a matrix is symmetric.
 
 "),
 
-("Base","isposdef","isposdef(A)
+("Base","isposdef","isposdef(A) -> Bool
 
    Test whether a matrix is positive definite.
 
 "),
 
-("Base","isposdef!","isposdef!(A)
+("Base","isposdef!","isposdef!(A) -> Bool
 
    Test whether a matrix is positive definite, overwriting \"A\" in
    the processes.
 
 "),
 
-("Base","istril","istril(A)
+("Base","istril","istril(A) -> Bool
 
    Test whether a matrix is lower triangular.
 
 "),
 
-("Base","istriu","istriu(A)
+("Base","istriu","istriu(A) -> Bool
 
    Test whether a matrix is upper triangular.
 
 "),
 
-("Base","ishermitian","ishermitian(A)
+("Base","ishermitian","ishermitian(A) -> Bool
 
    Test whether a matrix is Hermitian.
 
@@ -9520,42 +10641,43 @@ popdisplay(d::Display)
 
 "),
 
-("Base","eigs","eigs(A; nev=6, which=\"LM\", tol=0.0, maxiter=1000, sigma=nothing, ritzvec=true, op_part=:real, v0=zeros((0, ))) -> (d[, v], nconv, niter, nmult, resid)
+("Base","eigs","eigs(A[, B], ; nev=6, which=\"LM\", tol=0.0, maxiter=1000, sigma=nothing, ritzvec=true, v0=zeros((0, ))) -> (d[, v], nconv, niter, nmult, resid)
 
    \"eigs\" computes eigenvalues \"d\" of \"A\" using Lanczos or
    Arnoldi iterations for real symmetric or general nonsymmetric
-   matrices respectively. The following keyword arguments are
-   supported:
+   matrices respectively. If \"B\" is provided, the generalized eigen-
+   problem is solved.  The following keyword arguments are supported:
       * \"nev\": Number of eigenvalues
+
+      * \"ncv\": Number of Krylov vectors used in the computation;
+        should satisfy \"nev+1 <= ncv <= n\" for real symmetric
+        problems and \"nev+2 <= ncv <= n\" for other problems; default
+        is \"ncv = max(20,2*nev+1)\".
 
       * \"which\": type of eigenvalues to compute. See the note below.
 
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"which\\\" | type of eigenvalues                                                                                                    |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"\\\"LM\\\"\\ | eigenvalues of largest magnitude                                                                                       |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"\\\"SM\\\"\\ | eigenvalues of smallest magnitude                                                                                      |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"\\\"LA\\\"\\ | largest algebraic eigenvalues (real symmetric \\\"A\\\" only)                                                              |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"\\\"SA\\\"\\ | smallest algebraic eigenvalues (real symmetric \\\"A\\\" only)                                                             |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"\\\"BE\\\"\\ | compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (symmetric \\\"A\\\" only) |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"\\\"LR\\\"\\ | eigenvalues of largest real part (nonsymmetric \\\"A\\\" only)                                                             |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"\\\"SR\\\"\\ | eigenvalues of smallest real part (nonsymmetric \\\"A\\\" only)                                                            |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"\\\"LI\\\"\\ | eigenvalues of largest imaginary part (nonsymmetric \\\"A\\\" only)                                                        |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
-        | \\\"\\\"SI\\\"\\ | eigenvalues of smallest imaginary part (nonsymmetric \\\"A\\\" only)                                                       |
-        +-----------+------------------------------------------------------------------------------------------------------------------------+
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\"which\\\" | type of eigenvalues                                                                                                         |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\":LM\\\"   | eigenvalues of largest magnitude (default)                                                                                  |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\":SM\\\"   | eigenvalues of smallest magnitude                                                                                           |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\":LR\\\"   | eigenvalues of largest real part                                                                                            |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\":SR\\\"   | eigenvalues of smallest real part                                                                                           |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\":LI\\\"   | eigenvalues of largest imaginary part (nonsymmetric or complex \\\"A\\\" only)                                                  |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\":SI\\\"   | eigenvalues of smallest imaginary part (nonsymmetric or complex \\\"A\\\" only)                                                 |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\":BE\\\"   | compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric \\\"A\\\" only) |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
 
       * \"tol\": tolerance (tol \\le 0.0 defaults to
         \"DLAMCH('EPS')\")
 
-      * \"maxiter\": Maximum number of iterations
+      * \"maxiter\": Maximum number of iterations (default = 300)
 
       * \"sigma\": Specifies the level shift used in inverse
         iteration. If \"nothing\" (default), defaults to ordinary
@@ -9564,9 +10686,6 @@ popdisplay(d::Display)
 
       * \"ritzvec\": Returns the Ritz vectors \"v\" (eigenvectors) if
         \"true\"
-
-      * \"op_part\": which part of linear operator to use for real
-        \"A\" (\":real\", \":imag\")
 
       * \"v0\": starting vector from which to start the iterations
 
@@ -9595,11 +10714,11 @@ popdisplay(d::Display)
 ("Base","peakflops","peakflops(n; parallel=false)
 
    \"peakflops\" computes the peak flop rate of the computer by using
-   BLAS double precision \"gemm!()\". By default, if no arguments are
-   specified, it multiplies a matrix of size \"n x n\", where \"n =
-   2000\". If the underlying BLAS is using multiple threads, higher
-   flop rates are realized. The number of BLAS threads can be set with
-   \"blas_set_num_threads(n)\".
+   double precision \"Base.LinAlg.BLAS.gemm!()\". By default, if no
+   arguments are specified, it multiplies a matrix of size \"n x n\",
+   where \"n = 2000\". If the underlying BLAS is using multiple
+   threads, higher flop rates are realized. The number of BLAS threads
+   can be set with \"blas_set_num_threads(n)\".
 
    If the keyword argument \"parallel\" is set to \"true\",
    \"peakflops\" is run in parallel on all the worker processors. The
@@ -9904,23 +11023,22 @@ popdisplay(d::Display)
 
 "),
 
-("Base.LinAlg.BLAS","trsv!","trsv!(side, ul, tA, dA, alpha, A, b)
+("Base.LinAlg.BLAS","trsv!","trsv!(ul, tA, dA, A, b)
 
-   Overwrite \"b\" with the solution to \"A*X = alpha*b\" or one of
-   the other three variants determined by \"side\" (A on left or right
-   of \"X\") and \"tA\" (transpose A). Only the \"ul\" triangle of
-   \"A\" is used.  \"dA\" indicates if \"A\" is unit-triangular (the
-   diagonal is assumed to be all ones).  Returns the updated \"b\".
+   Overwrite \"b\" with the solution to \"A*x = b\" or one of the
+   other two variants determined by \"tA\" (transpose A) and \"ul\"
+   (triangle of \"A\" used).  \"dA\" indicates if \"A\" is unit-
+   triangular (the diagonal is assumed to be all ones).  Returns the
+   updated \"b\".
 
 "),
 
-("Base.LinAlg.BLAS","trsv","trsv(side, ul, tA, dA, alpha, A, b)
+("Base.LinAlg.BLAS","trsv","trsv(ul, tA, dA, A, b)
 
-   Returns the solution to \"A*X = alpha*b\" or one of the other three
-   variants determined by \"side\" (A on left or right of \"X\") and
-   \"tA\" (transpose A). Only the \"ul\" triangle of \"A\" is used.
-   \"dA\" indicates if \"A\" is unit-triangular (the diagonal is
-   assumed to be all ones).
+   Returns the solution to \"A*x = b\" or one of the other two
+   variants determined by \"tA\" (transpose A) and \"ul\" (triangle of
+   \"A\" is used.) \"dA\" indicates if \"A\" is unit-triangular (the
+   diagonal is assumed to be all ones).
 
 "),
 
@@ -9950,11 +11068,15 @@ popdisplay(d::Display)
 
 "),
 
-("Base.Pkg","init","init()
+("Base.Pkg","init","init(meta::String=DEFAULT_META, branch::String=META_BRANCH)
 
    Initialize \"Pkg.dir()\" as a package directory. This will be done
    automatically when the \"JULIA_PKGDIR\" is not set and
-   \"Pkg.dir()\" uses its default value.
+   \"Pkg.dir()\" uses its default value. As part of this process,
+   clones a local METADATA git repository from the site and branch
+   specified by its arguments, which are typically not provided.
+   Explicit (non-default) arguments can be used to support a custom
+   METADATA setup.
 
 "),
 
@@ -10091,10 +11213,10 @@ popdisplay(d::Display)
 
 ("Base.Pkg","build","build(pkgs...)
 
-   Run the build scripts for each package in \"pkgs\" and all of their
-   dependencies in depth-first recursive order. This is called
-   automatically by \"Pkg.resolve()\" on all installed or updated
-   packages.
+   Run the build script in \"deps/build.jl\" for each package in
+   \"pkgs\" and all of their dependencies in depth-first recursive
+   order. This is called automatically by \"Pkg.resolve()\" on all
+   installed or updated packages.
 
 "),
 
@@ -10132,7 +11254,7 @@ popdisplay(d::Display)
    For each new package version tagged in \"METADATA\" not already
    published, make sure that the tagged package commits have been
    pushed to the repo at the registered URL for the package and if
-   they all have, push \"METADATA\".
+   they all have, open a pull request to \"METADATA\".
 
 "),
 
@@ -10188,13 +11310,15 @@ popdisplay(d::Display)
 
 "),
 
-("Base.Profile","init","init(n::Integer, delay::Float64)
+("Base.Profile","init","init(; n::Integer, delay::Float64)
 
    Configure the \"delay\" between backtraces (measured in seconds),
    and the number \"n\" of instruction pointers that may be stored.
    Each instruction pointer corresponds to a single line of code;
    backtraces generally consist of a long list of instruction
-   pointers. Default settings are \"n=10^6\" and \"delay=0.001\".
+   pointers. Default settings can be obtained by calling this function
+   with no arguments, and each can be set independently using keywords
+   or in the order \"(n, delay)\".
 
 "),
 
@@ -10222,7 +11346,7 @@ popdisplay(d::Display)
 "),
 
 
-("Base","sort!","sort!(v, [dim,] [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+("Base","sort!","sort!(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Sort the vector \"v\" in place. \"QuickSort\" is used by default
    for numeric arrays while \"MergeSort\" is used for other arrays.
@@ -10318,12 +11442,11 @@ popdisplay(d::Display)
    Partially sort the vector \"v\" in place, according to the order
    specified by \"by\", \"lt\" and \"rev\" so that the value at index
    \"k\" (or range of adjacent values if \"k\" is a range) occurs at
-   the position where it would appear if the array were fully sorted.
-   If \"k\" is a single index, that values is returned; if \"k\" is a
-   range, an array of values at those indices is returned. Note that
-   \"select!\" does not fully sort the input array, but does leave the
-   returned elements where they would be if the array were fully
-   sorted.
+   the position where it would appear if the array were fully sorted
+   via a non-stable algorithm. If \"k\" is a single index, that value
+   is returned; if \"k\" is a range, an array of values at those
+   indices is returned. Note that \"select!\" does not fully sort the
+   input array.
 
 "),
 
@@ -10391,10 +11514,9 @@ popdisplay(d::Display)
 
 "),
 
-("Base","nfilled","nfilled(A)
+("Base","nnz","nnz(A)
 
    Returns the number of stored (filled) elements in a sparse matrix.
-   For dense arrays, this returns the length of the array.
 
 "),
 
@@ -10475,6 +11597,16 @@ popdisplay(d::Display)
 
 "),
 
+("Base","nonzeros","nonzeros(A)
+
+   Return a vector of the structural nonzero values in sparse matrix
+   \"A\". This includes zeros that are explicitly stored in the sparse
+   matrix. The returned vector points directly to the internal nonzero
+   storage of \"A\", and any modifications to the returned vector will
+   mutate \"A\" as well.
+
+"),
+
 ("Base.Test","@test","@test(ex)
 
    Test the expression \"ex\" and calls the current handler to handle
@@ -10482,15 +11614,10 @@ popdisplay(d::Display)
 
 "),
 
-("Base.Test","@test_throws","@test_throws(ex)
+("Base.Test","@test_throws","@test_throws(extype, ex)
 
-   Test the expression \"ex\" and calls the current handler to handle
-   the result in the following manner:
-
-   * If the test doesn't throw an error, the \"Failure\" case is
-     called.
-
-   * If the test throws an error, the \"Success\" case is called.
+   Test that the expression \"ex\" throws an exception of type
+   \"extype\" and calls the current handler to handle the result.
 
 "),
 
@@ -10511,6 +11638,13 @@ popdisplay(d::Display)
 ("Base.Test","with_handler","with_handler(f, handler)
 
    Run the function \"f\" using the \"handler\" as the handler.
+
+"),
+
+("Base","runtests","runtests([tests=[\"all\"][, numcores=iceil(CPU_CORES/2)]])
+
+   Run the Julia unit tests listed in \"tests\", which can be either a
+   string or an array of strings, using \"numcores\" processors.
 
 "),
 

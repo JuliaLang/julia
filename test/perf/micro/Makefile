@@ -2,6 +2,8 @@ JULIAHOME = $(abspath ../../..)
 include $(JULIAHOME)/Make.inc
 include $(JULIAHOME)/deps/Versions.make
 
+NODEJSBIN = nodejs
+
 ifeq ($(OS), WINNT)
 MATHEMATICABIN = MathKernel
 else ifeq ($(OS), Darwin)
@@ -92,7 +94,7 @@ benchmarks/r.csv: perf.R
 	for t in 1 2 3 4 5; do cat $< | R --vanilla --slave 2>/dev/null; done >$@
 
 benchmarks/javascript.csv: perf.js
-	for t in 1 2 3 4 5; do node $<; done >$@
+	for t in 1 2 3 4 5; do $(NODEJSBIN) $<; done >$@
 
 benchmarks/mathematica.csv: perf.nb
 	for t in 1 2 3 4 5; do $(MATHEMATICABIN) -noprompt -run "<<$<; Exit[]"; done >$@
@@ -104,7 +106,7 @@ benchmarks/lua.csv: perf.lua
 	for t in 1 2 3 4 5; do gsl-shell $<; done >$@
 
 benchmarks/java.csv: java/src/main/java/PerfBLAS.java
-	for t in 1 2 3 4 5; do cd java; mvn -q exec:java; done >$@
+	cd java; sh setup.sh; for t in 1 2 3 4 5; do mvn -q exec:java; done >../$@
 
 BENCHMARKS = \
 	benchmarks/c.csv \

@@ -62,7 +62,7 @@ function generic_lufact!{T}(A::StridedMatrix{T}; pivot = true)
     LU{T,typeof(A)}(A, ipiv, convert(BlasInt, info))
 end
 lufact{T<:BlasFloat}(A::AbstractMatrix{T}; pivot = true) = lufact!(copy(A), pivot=pivot)
-lufact{T}(A::AbstractMatrix{T}; pivot = true) = (S = typeof(one(T)/one(T)); S != T ? lufact!(convert(AbstractMatrix{S}, A), pivot=pivot) : lufact!(copy(A), pivot=pivot))
+lufact{T}(A::AbstractMatrix{T}; pivot = true) = (S = typeof(zero(T)/one(T)); S != T ? lufact!(convert(AbstractMatrix{S}, A), pivot=pivot) : lufact!(copy(A), pivot=pivot))
 lufact(x::Number) = LU(fill(x, 1, 1), BlasInt[1], x == 0 ? one(BlasInt) : zero(BlasInt))
 lufact(F::LU) = F
 
@@ -93,8 +93,12 @@ end
 
 function getindex{T,S<:StridedMatrix}(A::LU{T,S}, d::Symbol)
     m, n = size(A)
-    d == :L && return tril(A.factors[1:m, 1:min(m,n)], -1) + eye(T, m, min(m,n))
-    d == :U && return triu(A.factors[1:min(m,n),1:n])
+    if d == :L
+        L = tril!(A.factors[1:m, 1:min(m,n)])
+        for i = 1:min(m,n); L[i,i] = one(T); end
+        return L
+    end
+    d == :U && return triu!(A.factors[1:min(m,n), 1:n])
     d == :p && return ipiv2perm(A.ipiv, m)
     if d == :P
         p = A[:p]
@@ -144,7 +148,7 @@ end
 
 inv{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}) = @assertnonsingular LAPACK.getri!(copy(A.factors), A.ipiv) A.info
 
-cond{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}, p::Number) = inv(LAPACK.gecon!(p == 1 ? '1' : 'I', A.factors, norm(A[:L][A[:p],:]*A[:U], p)))
+cond{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}, p::Number) = inv(LAPACK.gecon!(p == 1 ? '1' : 'I', A.factors, norm((A[:L]*A[:U])[A[:p],:], p)))
 cond(A::LU, p::Number) = norm(A[:L]*A[:U],p)*norm(inv(A),p)
 
 # Tridiagonal

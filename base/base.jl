@@ -31,6 +31,13 @@ ptr_arg_convert(::Type{Ptr{Void}}, x) = x
 
 # conversion used by ccall
 cconvert(T, x) = convert(T, x)
+# the following 3 definitions implement a 0.3 deprecation
+cconvert{T}(::Type{Ptr{T}}, x::Array{T}) = convert(Ptr{T}, x)
+cconvert(::Type{Ptr{None}}, x::Array) = convert(Ptr{None}, x)
+function cconvert{T}(::Type{Ptr{T}}, x::Array)
+    depwarn("ccall Ptr argument types must now match exactly, or be Ptr{Void}.", :cconvert)
+    convert(Ptr{T}, pointer(x))
+end
 # use the code in ccall.cpp to safely allocate temporary pointer arrays
 cconvert{T}(::Type{Ptr{Ptr{T}}}, a::Array) = a
 # convert strings to ByteString to pass as pointers
@@ -148,6 +155,39 @@ function append_any(xs...)
     out
 end
 
+# used by { } syntax
+function cell_1d(xs::ANY...)
+    n = length(xs)
+    a = Array(Any,n)
+    for i=1:n
+        arrayset(a,xs[i],i)
+    end
+    a
+end
+
+function cell_2d(nr, nc, xs::ANY...)
+    a = Array(Any,nr,nc)
+    for i=1:(nr*nc)
+        arrayset(a,xs[i],i)
+    end
+    a
+end
+
+# simple Array{Any} operations needed for bootstrap
+setindex!(A::Array{Any}, x::ANY, i::Real) = arrayset(A, x, to_index(i))
+
+function length_checked_equal(args...)
+    n = length(args[1])
+    for i=2:length(args)
+        if length(args[i]) != n
+            error("argument dimensions must match")
+        end
+    end
+    n
+end
+
+map(f::Callable, a::Array{Any,1}) = { f(a[i]) for i=1:length(a) }
+
 macro thunk(ex); :(()->$(esc(ex))); end
 macro L_str(s); s; end
 
@@ -168,6 +208,14 @@ end
 
 macro inbounds(blk)
     :(@boundscheck false $(esc(blk)))
+end
+
+macro label(name::Symbol)
+    Expr(:symboliclabel, name)
+end
+
+macro goto(name::Symbol)
+    Expr(:symbolicgoto, name)
 end
 
 # NOTE: Base shares Array with Core so we can add definitions to it
