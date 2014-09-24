@@ -288,11 +288,27 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: schurfact!(A)
 
-   Computer the Schur factorization of ``A``, overwriting ``A`` in the process. See :func:`schurfact`
+   Computes the Schur factorization of ``A``, overwriting ``A`` in the process. See :func:`schurfact`
 
 .. function:: schur(A) -> Schur[:T], Schur[:Z], Schur[:values]
 
    See :func:`schurfact`
+
+.. function:: ordschur(Q, T, select) -> Schur
+
+   Reorders the Schur factorization of a real matrix ``A=Q*T*Q'`` according to the logical array ``select`` returning a Schur object ``F``. The selected eigenvalues appear in the leading diagonal of ``F[:Schur]`` and the the corresponding leading columns of ``F[:vectors]`` form an orthonormal basis of the corresponding right invariant subspace. A complex conjugate pair of eigenvalues must be either both included or excluded via ``select``. 
+
+.. function:: ordschur!(Q, T, select) -> Schur
+
+   Reorders the Schur factorization of a real matrix ``A=Q*T*Q'``, overwriting ``Q`` and ``T`` in the process. See :func:`ordschur`
+
+.. function:: ordschur(S, select) -> Schur
+
+   Reorders the Schur factorization ``S`` of type ``Schur``.
+
+.. function:: ordschur!(S, select) -> Schur
+
+   Reorders the Schur factorization ``S`` of type ``Schur``, overwriting ``S`` in the process. See :func:`ordschur`
 
 .. function:: schurfact(A, B) -> GeneralizedSchur
 
