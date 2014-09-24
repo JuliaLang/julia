@@ -106,7 +106,7 @@ function getindex(s::UTF8String, r::UnitRange{Int})
         throw(BoundsError())
     end
     j = nextind(s,j)-1
-    UTF8String(d[i:j])
+    UTF8String(copy(d[i:j]))
 end
 
 function search(s::UTF8String, c::Char, i::Integer)
