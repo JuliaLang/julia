@@ -782,6 +782,16 @@ end
 @test nextfloat(0.0) == 1//(BigInt(2)^1074)
 @test nextfloat(0.0) != 1//(BigInt(2)^1074-1)
 
+@test 1/3 < 1//3
+@test !(1//3 < 1/3)
+@test -1/3 < 1//3
+@test -1/3 > -1//3
+@test 1/3 > -1//3
+@test 1//3 < Inf
+@test 0//1 < Inf
+@test !(1//0 < Inf)
+@test !(1//3 < NaN)
+
 @test sqrt(2) == 1.4142135623730951
 
 @test 1+1.5 == 2.5

@@ -198,6 +198,10 @@ ndigits(x::Unsigned)             = x==0 ? 1 : ndigits0z(x)
 ndigits(x::Integer, b::Integer) = b >= 0 ? ndigits(unsigned(abs(x)),int(b)) : ndigitsnb(x, b)
 ndigits(x::Integer) = ndigits(unsigned(abs(x)))
 
+nbits(x::Integer) = ndigits(x,2) # fallback
+nbits(x::Unsigned) = x == 0 ? 1 : 8*sizeof(x)-leading_zeros(x)
+nbits(x::Signed) = x == 0 ? 1 : 8*sizeof(x)-leading_zeros(abs(x))
+
 ## integer to string functions ##
 
 function bin(x::Unsigned, pad::Int, neg::Bool)

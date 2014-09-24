@@ -204,3 +204,98 @@ function hash(r::Range, h::Uint)
     h = hash(step(r), h)
     h = hash(last(r), h)
 end
+
+
+## Fallback comparisons for reals
+#=
+Non-finite comparisons:
+x    y   == < <=
+NaN  ?    . . .
+?    NaN  . . .
++Inf +Inf t . t
++Inf R    . . .
++Inf -Inf . . .
+-Inf +Inf . t t
+-Inf R    . t t
+-Inf -Inf t . t
+R    +Inf . t t
+R    -Inf . . .
+=#
+
+function ==(x::Real, y::Real)
+    xnf, ynf = !isfinite(x), !isfinite(y)
+    if xnf || ynf
+        (isnan(x) || isnan(y)) && return false
+        (xnf && ynf && sign(x) == sign(y)) && return true
+        return false
+    end
+    xs, ys = int(sign(x)), int(sign(y))
+    xs != ys && return false
+    xs == 0  && return true
+
+    xn, xp, xd = decompose(x)
+    yn, yp, yd = decompose(y)
+    xc, yc = widemul(xn,yd), widemul(yn,xd)
+    xb, yb = nbits(xc) + xp, nbits(yc) + yp
+
+    (xb == yb) && begin
+        xc, yc = promote(xc,yc)
+        if xp > yp
+            (xc<<(xp-yp)) == yc
+        else
+            xc == (yc<<(yp-xp))
+        end
+    end
+end
+
+function <(x::Real, y::Real)
+    xnf, ynf = !isfinite(x), !isfinite(y)
+    if xnf || ynf
+        (isnan(x) || isnan(y)) && return false
+        ((xnf && sign(x) > 0) || (ynf && sign(y) < 0)) && return false
+        return true
+    end
+    xs, ys = int(sign(x)), int(sign(y))
+    xs < ys && return true
+    xs > ys && return false
+    xs == 0 && return false
+
+    xn, xp, xd = decompose(x)
+    yn, yp, yd = decompose(y)
+    xc, yc = xs*widemul(xn,yd), ys*widemul(yn,xd)
+    xb, yb = nbits(xc) + xp, nbits(yc) + yp
+    (xb*xs < yb*ys) || (xb == yb) && begin
+        xc, yc = promote(xc,yc)
+        if xp > yp
+            (xc<<(xp-yp)) < yc
+        else
+            xc < (yc<<(yp-xp))
+        end
+    end
+end
+
+function <=(x::Real, y::Real)
+    xnf, ynf = !isfinite(x), !isfinite(y)
+    if xnf || ynf
+        (isnan(x) || isnan(y)) && return false
+        ((xnf && sign(x) < 0) || (ynf && sign(y) > 0)) && return true
+        return false
+    end
+    xs, ys = int(sign(x)), int(sign(y))
+    xs < ys && return true
+    xs > ys && return false
+    xs == 0 && return true
+
+    xn, xp, xd = decompose(x)
+    yn, yp, yd = decompose(y)
+    xc, yc = xs*widemul(xn,yd), ys*widemul(yn,xd)
+    xb, yb = nbits(xc) + xp, nbits(yc) + yp
+    (xb*xs < yb*ys) || (xb == yb) && begin
+        xc, yc = promote(xc,yc)
+        if xp > yp
+            (xc<<(xp-yp)) <= yc
+        else
+            xc <= (yc<<(yp-xp))
+        end
+    end
+end

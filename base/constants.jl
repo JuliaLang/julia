@@ -16,6 +16,15 @@ convert{T<:Integer}(::Type{Rational{T}}, x::MathConst) = convert(Rational{T}, fl
 =={s}(::MathConst{s}, ::MathConst{s}) = true
 ==(::MathConst, ::MathConst) = false
 
+<(x::MathConst, y::MathConst) = float(x) < float(y)
+<(x::Real, y::MathConst) = x <= prevfloat(y)
+<(x::MathConst, y::Real) = nextfloat(x) <= y
+<=(x::MathConst, y::MathConst) = float(x) <= float(y)
+<=(x::Real, y::MathConst) = x < y
+<=(x::MathConst, y::Real) = x < y
+
+# TODO: BigFloat, Rationals
+
 hash(x::MathConst, h::Uint) = hash(object_id(x), h)
 
 -(x::MathConst) = -float64(x)
@@ -41,6 +50,9 @@ macro math_const(sym, val, def)
         const $esym = MathConst{$qsym}()
         $bigconvert
         Base.convert(::Type{Float64}, ::MathConst{$qsym}) = $val
+        # TODO: fix this
+        Base.prevfloat(::MathConst{$qsym}) = $val
+        Base.nextfloat(::MathConst{$qsym}) = $val
         Base.convert(::Type{Float32}, ::MathConst{$qsym}) = $(float32(val))
         @assert isa(big($esym), BigFloat)
         @assert float64($esym) == float64(big($esym))

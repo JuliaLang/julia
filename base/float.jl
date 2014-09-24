@@ -137,6 +137,10 @@ cld{T<:FloatingPoint}(x::T, y::T) = -fld(-x,y)
 mod{T<:FloatingPoint}(x::T, y::T) = rem(y+rem(x,y),y)
 
 ## floating point comparisons ##
+==(x::FloatingPoint, y::FloatingPoint) = (==)(promote(x,y)...)
+< (x::FloatingPoint, y::FloatingPoint) = (< )(promote(x,y)...)
+<=(x::FloatingPoint, y::FloatingPoint) = (<=)(promote(x,y)...)
+
 
 ==(x::Float32, y::Float32) = eq_float(unbox(Float32,x),unbox(Float32,y))
 ==(x::Float64, y::Float64) = eq_float(unbox(Float64,x),unbox(Float64,y))
