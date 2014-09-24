@@ -28,7 +28,7 @@ typealias SubOrDArray{T,N}         Union(DArray{T,N}, SubDArray{T,N})
 # dist == size(chunks)
 function DArray(init, dims, procs, dist)
     np = prod(dist)
-    procs = procs[1:np]
+    procs = copy(procs[1:np])
     idxs, cuts = chunk_idxs([dims...], dist)
     chunks = Array(RemoteRef, dist...)
     for i = 1:np

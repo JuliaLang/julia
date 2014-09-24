@@ -68,7 +68,7 @@ sizeof(s::UTF32String) = sizeof(s.data) - sizeof(Char)
 convert{T<:Union(Int32,Uint32,Char)}(::Type{Ptr{T}}, s::UTF32String) =
     convert(Ptr{T}, pointer(s))
 
-function convert(T::Type{UTF32String}, bytes::AbstractArray{Uint8})
+function convert(::Type{UTF32String}, bytes::Array{Uint8})
     isempty(bytes) && return UTF32String(Char[0])
     length(bytes) & 3 != 0 && throw(ArgumentError("need multiple of 4 bytes"))
     data = reinterpret(Char, bytes)    
@@ -88,6 +88,7 @@ function convert(T::Type{UTF32String}, bytes::AbstractArray{Uint8})
     d[end] = 0 # NULL terminate
     UTF32String(d)
 end
+convert(::Type{UTF32String}, bytes::ArrayView) = convert(UTF32String, copy(bytes))
 
 utf32(p::Ptr{Char}, len::Integer) = utf32(pointer_to_array(p, len))
 utf32(p::Union(Ptr{Uint32}, Ptr{Int32}), len::Integer) = utf32(convert(Ptr{Char}, p), len)

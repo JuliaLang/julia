@@ -35,16 +35,17 @@ end
 const chm_com_sz = ccall((:jl_cholmod_common_size,:libsuitesparse_wrapper),Int,())
 const chm_com    = fill(0xff, chm_com_sz)
 const chm_l_com  = fill(0xff, chm_com_sz)             
+
 ## chm_com and chm_l_com must be initialized at runtime because they contain pointers
 ## to functions in libc.so, whose addresses can change             
 function cmn(::Type{Int32})
-    if isnan(reinterpret(Float64,chm_com[1:8])[1])
+    if isnan(reinterpret(Float64, copy(chm_com[1:8]))[1])
         @isok ccall((:cholmod_start, :libcholmod), Cint, (Ptr{Uint8},), chm_com)
     end
     chm_com
 end
 function cmn(::Type{Int64})             
-    if isnan(reinterpret(Float64,chm_l_com[1:8])[1])
+    if isnan(reinterpret(Float64, copy(chm_l_com[1:8]))[1])
         @isok ccall((:cholmod_l_start, :libcholmod), Cint, (Ptr{Uint8},), chm_l_com)
     end
     chm_l_com
@@ -314,7 +315,7 @@ eltype{T<:CHMVTypes}(A::CholmodTriplet{T}) = T
 
 ## The CholmodDense! constructor does not copy the contents, which is generally what you
 ## want as most uses of CholmodDense objects are read-only.
-function CholmodDense!{T<:CHMVTypes}(aa::VecOrMat{T}) # uses the memory from Julia
+function CholmodDense!{T<:CHMVTypes}(aa::StridedVecOrMat{T}) # uses the memory from Julia
     m = size(aa,1); n = size(aa,2)
     CholmodDense(c_CholmodDense{T}(m, n, m*n, stride(aa,2), convert(Ptr{T}, aa),
                                    C_NULL, xtyp(T), dtyp(T)),
@@ -322,7 +323,7 @@ function CholmodDense!{T<:CHMVTypes}(aa::VecOrMat{T}) # uses the memory from Jul
 end
 
 ## The CholmodDense constructor copies the contents             
-function CholmodDense{T<:CHMVTypes}(aa::VecOrMat{T})
+function CholmodDense{T<:CHMVTypes}(aa::StridedVecOrMat{T})
     m = size(aa,1); n = size(aa,2)
     acp = length(size(aa)) == 2 ? copy(aa) : reshape(copy(aa), (m,n))
     CholmodDense(c_CholmodDense{T}(m, n, m*n, stride(aa,2), convert(Ptr{T}, acp),
@@ -836,7 +837,7 @@ end
 (*){Tv<:CHMVTypes}(A::CholmodSparse{Tv},B::VecOrMat{Tv}) = chm_sdmult(A,false,1.,0.,CholmodDense(B))
 
 (\){T<:CHMVTypes}(L::CholmodFactor{T},B::CholmodDense{T}) = solve(L,B,CHOLMOD_A)
-(\){T<:CHMVTypes}(L::CholmodFactor{T},B::VecOrMat{T}) = solve(L,CholmodDense!(B),CHOLMOD_A).mat
+(\){T<:CHMVTypes}(L::CholmodFactor{T},B::StridedVecOrMat{T}) = solve(L,CholmodDense!(B),CHOLMOD_A).mat
 function (\){Tv<:CHMVTypes,Ti<:CHMITypes}(L::CholmodFactor{Tv,Ti},B::CholmodSparse{Tv,Ti})
     solve(L,B,CHOLMOD_A)
 end

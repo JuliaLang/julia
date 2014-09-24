@@ -244,7 +244,8 @@ function getindex(s::SubArray, is::Integer...)
     s.parent[index]
 end
 
-function getindex_bool_1d(S::SubArray, I::AbstractArray{Bool})
+function getindex_bool_1d(S::StridedArray, I::AbstractArray{Bool})
+    checkbounds(S, I)
     n = sum(I)
     out = similar(S, n)
     c = 1
@@ -257,11 +258,7 @@ function getindex_bool_1d(S::SubArray, I::AbstractArray{Bool})
     out
 end
 
-getindex{T}(S::SubArray{T,1}, I::AbstractArray{Bool,1}) = getindex_bool_1d(S, I)
-getindex{T}(S::SubArray{T,2}, I::AbstractArray{Bool,2}) = getindex_bool_1d(S, I)
-getindex{T}(S::SubArray{T,3}, I::AbstractArray{Bool,3}) = getindex_bool_1d(S, I)
-getindex{T}(S::SubArray{T,4}, I::AbstractArray{Bool,4}) = getindex_bool_1d(S, I)
-getindex{T}(S::SubArray{T,5}, I::AbstractArray{Bool,5}) = getindex_bool_1d(S, I)
+getindex{T,N}(S::SubArray{T,N}, I::AbstractArray{Bool,N}) = getindex_bool_1d(S, I)
 
 getindex{T}(s::SubArray{T,1}, I::UnitRange{Int}) =
     getindex(s.parent, (s.first_index+(first(I)-1)*s.strides[1]):s.strides[1]:(s.first_index+(last(I)-1)*s.strides[1]))

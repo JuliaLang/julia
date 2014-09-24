@@ -84,7 +84,7 @@ function print_help_entries(io::IO, entries)
     end
 end
 
-func_expr_from_symbols(s::Vector{Symbol}) = length(s) == 1 ? s[1] : Expr(:., func_expr_from_symbols(s[1:end-1]), Expr(:quote, s[end]))
+func_expr_from_symbols(s) = length(s) == 1 ? s[1] : Expr(:., func_expr_from_symbols(s[1:end-1]), Expr(:quote, s[end]))
 
 function help(io::IO, fname::String, obj=0)
     init_help()

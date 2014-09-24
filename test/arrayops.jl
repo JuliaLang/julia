@@ -859,19 +859,20 @@ A = [NaN]; B = [NaN]
 # complete testsuite for reducedim
 
 # Inferred types
-Nmax = 3 # TODO: go up to CARTESIAN_DIMS+2 (currently this exposes problems)
-for N = 1:Nmax
-    #indexing with (Range1, Range1, Range1)
-    args = ntuple(N, d->Range1{Int})
-    @test Base.return_types(getindex, tuple(Array{Float32, N}, args...)) == {Array{Float32, N}}
-    @test Base.return_types(getindex, tuple(BitArray{N}, args...)) == {BitArray{N}}
-    @test Base.return_types(setindex!, tuple(Array{Float32, N}, Array{Int, 1}, args...)) == {Array{Float32, N}}
-    # Indexing with (Range1, Range1, Float64)
-    args = ntuple(N, d->d<N ? Range1{Int} : Float64)
-    N > 1 && @test Base.return_types(getindex, tuple(Array{Float32, N}, args...)) == {Array{Float32, N-1}}
-    N > 1 && @test Base.return_types(getindex, tuple(BitArray{N}, args...)) == {BitArray{N-1}}
-    N > 1 && @test Base.return_types(setindex!, tuple(Array{Float32, N}, Array{Int, 1}, args...)) == {Array{Float32, N}}
-end
+# Commented out while transitioning to array view
+# Nmax = 3 # TODO: go up to CARTESIAN_DIMS+2 (currently this exposes problems)
+# for N = 1:Nmax
+#     #indexing with (Range1, Range1, Range1)
+#     args = ntuple(N, d->Range1{Int})
+#     @test Base.return_types(getindex, tuple(Array{Float32, N}, args...)) == {Array{Float32, N}}
+#     @test Base.return_types(getindex, tuple(BitArray{N}, args...)) == {BitArray{N}}
+#     @test Base.return_types(setindex!, tuple(Array{Float32, N}, Array{Int, 1}, args...)) == {Array{Float32, N}}
+#     # Indexing with (Range1, Range1, Float64)
+#     args = ntuple(N, d->d<N ? Range1{Int} : Float64)
+#     N > 1 && @test Base.return_types(getindex, tuple(Array{Float32, N}, args...)) == {Array{Float32, N-1}}
+#     N > 1 && @test Base.return_types(getindex, tuple(BitArray{N}, args...)) == {BitArray{N-1}}
+#     N > 1 && @test Base.return_types(setindex!, tuple(Array{Float32, N}, Array{Int, 1}, args...)) == {Array{Float32, N}}
+# end
 
 # issue #6645 (32-bit)
 let

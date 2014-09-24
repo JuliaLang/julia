@@ -1,8 +1,7 @@
 # contrank arithmetics
-
-using ArrayViews
+# using ArrayViews
 using Base.Test
-import ArrayViews: Subs, ContRank, contrank
+using Base.ArrayViews: Subs, ContRank, contrank
 
 const irealn = 3
 const icolon = (:)

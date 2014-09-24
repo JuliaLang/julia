@@ -1,3 +1,5 @@
+typealias ByteArray Union(Array{Uint8,1}, Array{Int8,1}, ContiguousView{Uint8,1,Array{Uint8,1}}, ContiguousView{Int8,1,Array{Int8,1}})
+
 ## core text I/O ##
 
 print(io::IO, x) = show(io, x)
@@ -31,7 +33,7 @@ string(s::String) = s
 string(xs...) = print_to_string(xs...)
 
 bytestring() = ""
-bytestring(s::Array{Uint8,1}) = bytestring(pointer(s),length(s))
+bytestring(s::ByteArray) = bytestring(pointer(s),length(s))
 bytestring(s::String...) = print_to_string(s...)
 
 function bytestring(p::Union(Ptr{Uint8},Ptr{Int8}))
@@ -296,7 +298,7 @@ function _searchindex(s::Array, t::Array, i)
     0
 end
 
-searchindex(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8,1}),i) = _searchindex(s,t,i)
+searchindex(s::ByteArray,t::ByteArray,i) = _searchindex(s,t,i)
 searchindex(s::String, t::String, i::Integer) = _searchindex(s,t,i)
 searchindex(s::String, t::String) = searchindex(s,t,start(s))
 
@@ -308,7 +310,7 @@ function searchindex(s::ByteString, t::ByteString, i::Integer=1)
     end
 end
 
-function search(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8,1}),i)
+function search(s::ByteArray,t::ByteArray,i)
     idx = searchindex(s,t,i)
     if isempty(t)
         idx:idx-1
@@ -367,7 +369,7 @@ function _rsearchindex(s, t, i)
     end
 end
 
-function _rsearchindex(s::Array, t::Array, k)
+function _rsearchindex(s::ByteArray, t::Array, k)
     n = length(t)
     m = length(s)
 
@@ -428,7 +430,7 @@ function _rsearchindex(s::Array, t::Array, k)
     0
 end
 
-rsearchindex(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8,1}),i) = _rsearchindex(s,t,i)
+rsearchindex(s::ByteArray, t::ByteArray, i) = _rsearchindex(s,t,i)
 rsearchindex(s::String, t::String, i::Integer) = _rsearchindex(s,t,i)
 rsearchindex(s::String, t::String) = (isempty(s) && isempty(t)) ? 1 : rsearchindex(s,t,endof(s))
 
@@ -448,7 +450,7 @@ function rsearchindex(s::ByteString, t::ByteString, i::Integer)
     end
 end
 
-function rsearch(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8,1}),i)
+function rsearch(s::ByteArray,t::ByteArray,i)
     idx = rsearchindex(s,t,i)
     if isempty(t)
         idx:idx-1
@@ -465,6 +467,43 @@ function rsearch(s::String, t::String, i::Integer=endof(s))
         idx:(idx > 0 ? idx + endof(t) - 1 : -1)
     end
 end
+
+# find the index of the first occurrence of a value in a byte array
+
+function search(a::ByteArray, b::Union(Int8, Uint8), i::Integer)
+    if i < 1 error(BoundsError) end
+    n = length(a)
+    if i > n return i == n+1 ? 0 : error(BoundsError) end
+    p = pointer(a)
+    q = ccall(:memchr, Ptr{Uint8}, (Ptr{Uint8}, Int32, Csize_t), p+i-1, b, n-i+1)
+    q == C_NULL ? 0 : int(q-p+1)
+end
+function search(a::ByteArray, b::Char, i::Integer)
+    if isascii(b)
+        search(a,uint8(b),i)
+    else
+        search(a,string(b).data,i).start
+    end
+end
+search(a::ByteArray, b::Union(Int8, Uint8, Char)) = search(a,b,1)
+
+function rsearch(a::ByteArray, b::Union(Int8, Uint8), i::Integer)
+    if i < 1 return i == 0 ? 0 : error(BoundsError) end
+    n = length(a)
+    if i > n return i == n+1 ? 0 : error(BoundsError) end
+    p = pointer(a)
+    q = ccall(:memrchr, Ptr{Uint8}, (Ptr{Uint8}, Int32, Csize_t), p, b, i)
+    q == C_NULL ? 0 : int(q-p+1)
+end
+function rsearch(a::ByteArray, b::Char, i::Integer)
+    if isascii(b)
+        rsearch(a,uint8(b),i)
+    else
+        rsearch(a,string(b).data,i).start
+    end
+end
+rsearch(a::ByteArray, b::Union(Int8, Uint8, Char)) = rsearch(a,b,length(a))
+
 
 contains(haystack::String, needle::String) = searchindex(haystack,needle)!=0
 
@@ -1595,44 +1634,6 @@ for conv in (:float, :float32, :float64,
              :uint, :uint8, :uint16, :uint32, :uint64)
     @eval ($conv){S<:String}(a::AbstractArray{S}) = map($conv, a)
 end
-
-# find the index of the first occurrence of a value in a byte array
-
-typealias ByteArray Union(Array{Uint8,1},Array{Int8,1})
-
-function search(a::ByteArray, b::Union(Int8,Uint8), i::Integer)
-    if i < 1 error(BoundsError) end
-    n = length(a)
-    if i > n return i == n+1 ? 0 : error(BoundsError) end
-    p = pointer(a)
-    q = ccall(:memchr, Ptr{Uint8}, (Ptr{Uint8}, Int32, Csize_t), p+i-1, b, n-i+1)
-    q == C_NULL ? 0 : int(q-p+1)
-end
-function search(a::ByteArray, b::Char, i::Integer)
-    if isascii(b)
-        search(a,uint8(b),i)
-    else
-        search(a,string(b).data,i).start
-    end
-end
-search(a::ByteArray, b::Union(Int8,Uint8,Char)) = search(a,b,1)
-
-function rsearch(a::Union(Array{Uint8,1},Array{Int8,1}), b::Union(Int8,Uint8), i::Integer)
-    if i < 1 return i == 0 ? 0 : error(BoundsError) end
-    n = length(a)
-    if i > n return i == n+1 ? 0 : error(BoundsError) end
-    p = pointer(a)
-    q = ccall(:memrchr, Ptr{Uint8}, (Ptr{Uint8}, Int32, Csize_t), p, b, i)
-    q == C_NULL ? 0 : int(q-p+1)
-end
-function rsearch(a::ByteArray, b::Char, i::Integer)
-    if isascii(b)
-        rsearch(a,uint8(b),i)
-    else
-        rsearch(a,string(b).data,i).start
-    end
-end
-rsearch(a::ByteArray, b::Union(Int8,Uint8,Char)) = rsearch(a,b,length(a))
 
 # return a random string (often useful for temporary filenames/dirnames)
 let

@@ -1,18 +1,19 @@
 ## Diagonal matrices
 
-immutable Diagonal{T} <: AbstractMatrix{T}
-    diag::Vector{T}
+immutable Diagonal{T,S<:AbstractVector{T}} <: AbstractMatrix{T}
+    diag::S
 end
-Diagonal(A::Matrix) = Diagonal(diag(A))
+Diagonal{T}(v::AbstractVector{T}) = Diagonal{T,typeof(v)}(v)
+Diagonal(A::AbstractMatrix) = Diagonal(diag(A))
 
 convert{T}(::Type{Diagonal{T}}, D::Diagonal{T}) = D
-convert{T}(::Type{Diagonal{T}}, D::Diagonal) = Diagonal{T}(convert(Vector{T}, D.diag))
+convert{T}(::Type{Diagonal{T}}, D::Diagonal) = Diagonal{T,Vector{T}}(convert(Vector{T}, D.diag))
 convert{T}(::Type{AbstractMatrix{T}}, D::Diagonal) = convert(Diagonal{T}, D)
 convert{T}(::Type{Triangular}, A::Diagonal{T}) = Triangular{T, Diagonal{T}, :U, false}(A)
 
 function similar{T}(D::Diagonal, ::Type{T}, d::(Int,Int))
     d[1] == d[2] || throw(ArgumentError("Diagonal matrix must be square"))
-    return Diagonal{T}(Array(T,d[1]))
+    return Diagonal{T,Vector{T}}(Array(T, d[1]))
 end
 
 copy!(D1::Diagonal, D2::Diagonal) = (copy!(D1.diag, D2.diag); D1)

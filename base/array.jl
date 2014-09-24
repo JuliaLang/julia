@@ -245,7 +245,10 @@ getindex(A::Array, i0::Real, i1::Real, i2::Real, i3::Real,  i4::Real, i5::Real, 
     arrayref(A,to_index(i0),to_index(i1),to_index(i2),to_index(i3),to_index(i4),to_index(i5),to_index(I)...)
 
 # Fast copy using copy! for UnitRange
-getindex(A::Array, I::UnitRange{Int}) = view(A, I)
+function getindex(A::Array, I::UnitRange{Int})
+    checkbounds(A, I)
+    view(A, I)
+end
 # function getindex(A::Array, I::UnitRange{Int})
 #     lI = length(I)
 #     X = similar(A, lI)
@@ -269,19 +272,19 @@ end
 
 # logical indexing
 
-function getindex_bool_1d(A::Array, I::AbstractArray{Bool})
-    checkbounds(A, I)
-    n = sum(I)
-    out = similar(A, n)
-    c = 1
-    for i = 1:length(I)
-        if I[i]
-            out[c] = A[i]
-            c += 1
-        end
-    end
-    out
-end
+# function getindex_bool_1d(A::StridedArray, I::AbstractArray{Bool})
+#     checkbounds(A, I)
+#     n = sum(I)
+#     out = similar(A, n)
+#     c = 1
+#     for i = 1:length(I)
+#         if I[i]
+#             out[c] = A[i]
+#             c += 1
+#         end
+#     end
+#     out
+# end
 
 getindex(A::Vector, I::AbstractVector{Bool}) = getindex_bool_1d(A, I)
 getindex(A::Vector, I::AbstractArray{Bool}) = getindex_bool_1d(A, I)
@@ -598,7 +601,7 @@ function splice!(a::Vector, i::Integer, ins=_default_splice)
 end
 
 function splice!{T<:Integer}(a::Vector, r::UnitRange{T}, ins=_default_splice)
-    v = a[r]
+    v = copy(a[r])
     m = length(ins)
     if m == 0
         deleteat!(a, r)

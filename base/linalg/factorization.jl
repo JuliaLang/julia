@@ -402,10 +402,11 @@ print_matrix(io::IO, A::Union(QRPackedQ,QRCompactWYQ,HessenbergQ), sz::(Integer,
 #######################
 
 # Eigenvalues
-immutable Eigen{T,V} <: Factorization{T}
-    values::Vector{V}
-    vectors::Matrix{T}
+immutable Eigen{T,S,Avals<:DenseVector{T},Avecs<:DenseMatrix{S}} <: Factorization{T}
+    values::Avals
+    vectors::Avecs
 end
+Eigen{T,S}(values::DenseVector{T}, vectors::DenseMatrix{S}) = Eigen{T,S,typeof(values),typeof(vectors)}(values, vectors)
 
 # Generalized eigenvalue problem.
 immutable GeneralizedEigen{T,V} <: Factorization{T}

@@ -1,14 +1,9 @@
 module ArrayViews
 
-import Base: eltype, ndims, size, length, stride, strides
-import Base: to_index, getindex, setindex!, parent, similar
-import Base: convert, Ptr, pointer
+import Base: Ptr, convert, eltype, getindex, getindex_bool_1d, length, ndims, parent, pointer, setindex!, similar, size, stride, strides, to_index
 
-export ArrayView, ContiguousView, StridedView
-export ContiguousArray, ContiguousVector, ContiguousMatrix
-export contiguous_view, strided_view, view, ellipview, reshape_view
-export iscontiguous, contiguousrank
-
+export ArrayView, ContiguousArray, ContiguousVector, ContiguousMatrix, ContiguousView, StridedView
+export contiguousrank, contiguous_view, ellipview, iscontiguous, reshape_view, strided_view, view
 
 #################################################
 #
@@ -93,6 +88,7 @@ size{T,N}(a::ArrayView{T,N}, d::Integer) = getdim(size(a), d)
 
 pointer(a::ArrayView) = pointer(parent(a), offset(a)+1)
 convert{T}(::Type{Ptr{T}}, a::ArrayView{T}) = pointer(a)
+convert{T,N}(::Type{Array{T,N}}, A::ArrayView{T,N}) = copy(A)
 
 similar{T}(a::ArrayView{T}) = Array(T, size(a))
 similar{T}(a::ArrayView{T}, dims::Dims) = Array(T, dims)
@@ -222,6 +218,8 @@ getindex(a::ArrayView, i1::Real, i2::Real, i3::Real, i4::Real, i5::Real) =
 getindex(a::ArrayView, i1::Real, i2::Real, i3::Real, i4::Real, i5::Real, i6::Real, I::Int...) = 
     getindex(a, to_index(i1), to_index(i2), to_index(i3), 
                 to_index(i4), to_index(i5), to_index(i6), I...)
+
+getindex{T,N}(S::ArrayView{T,N}, I::AbstractArray{Bool,N}) = getindex_bool_1d(S, I)
 
 # setindex!
 

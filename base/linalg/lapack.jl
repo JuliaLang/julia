@@ -2285,7 +2285,7 @@ for (stev, stebz, stegr, stein, elty) in
         #     $                   IWORK, IFAIL, INFO )
         # We allow the user to specify exactly which eigenvectors to get by
         # specifying the eigenvalues (which may be approximate) via w_in
-        function stein!(dv::Vector{$elty}, ev_in::Vector{$elty}, w_in::Vector{$elty}, iblock_in::Vector{BlasInt}, isplit_in::Vector{BlasInt})
+        function stein!(dv::StridedVector{$elty}, ev_in::StridedVector{$elty}, w_in::StridedVector{$elty}, iblock_in::StridedVector{BlasInt}, isplit_in::StridedVector{BlasInt})
             n = length(dv)
             if length(ev_in) != (n-1) throw(DimensionMismatch("stein!")) end
             ev = [ev_in; zeros($elty,1)]
@@ -2332,9 +2332,9 @@ end
 stegr!(jobz::BlasChar, dv::Vector, ev::Vector) = stegr!(jobz, 'A', dv, ev, 0.0, 0.0, 0, 0)
         
 # Allow user to skip specification of iblock and isplit
-stein!(dv::Vector, ev::Vector, w_in::Vector)=stein!(dv, ev, w_in, zeros(BlasInt,0), zeros(BlasInt,0))
+stein!(dv::StridedVector, ev::StridedVector, w_in::StridedVector)=stein!(dv, ev, w_in, zeros(BlasInt,0), zeros(BlasInt,0))
 # Allow user to specify just one eigenvector to get in stein!
-stein!(dv::Vector, ev::Vector, eval::Real)=stein!(dv, ev, [eval], zeros(BlasInt,0), zeros(BlasInt,0))
+stein!(dv::StridedVector, ev::StridedVector, eval::Real)=stein!(dv, ev, [eval], zeros(BlasInt,0), zeros(BlasInt,0))
 
 ## (SY) symmetric real matrices - Bunch-Kaufman decomposition,
 ## solvers (direct and factored) and inverse.

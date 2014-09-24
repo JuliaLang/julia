@@ -467,7 +467,7 @@ function recv(sock::UDPSocket)
         error("Invalid socket state")
     end
     _recv_start(sock)
-    stream_wait(sock,sock.recvnotify)::Vector{Uint8}
+    convert(Vector{Uint8}, stream_wait(sock,sock.recvnotify))
 end
 
 function _uv_hook_recv(sock::UDPSocket, nread::Int, buf_addr::Ptr{Void}, buf_size::Uint, addr::Ptr{Void}, flags::Int32)
@@ -477,7 +477,7 @@ function _uv_hook_recv(sock::UDPSocket, nread::Int, buf_addr::Ptr{Void}, buf_siz
         notify_error(sock.recvnotify,"Partial message received")
     end
     buf = pointer_to_array(convert(Ptr{Uint8},buf_addr),int(buf_size),true)
-    notify(sock.recvnotify,buf[1:nread])
+    notify(sock.recvnotify,copy(buf[1:nread]))
 end
 
 function _send(sock::UDPSocket,ipaddr::IPv4,port::Uint16,buf) 

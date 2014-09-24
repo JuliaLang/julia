@@ -32,6 +32,30 @@ scale!(C::AbstractArray, X::AbstractArray, s::Number) = generic_scale!(C, X, s)
 scale!(X::AbstractArray, s::Number) = generic_scale!(X, s)
 scale!(s::Number, X::AbstractArray) = generic_scale!(X, s)
 
+# multiply by diagonal matrix as vector
+function scale!(C::StridedMatrix, A::StridedMatrix, b::StridedVector)
+    m, n = size(A)
+    n == length(b) || throw(DimensionMismatch(""))
+    for j = 1:n
+        bj = b[j]
+        for i = 1:m
+            C[i,j] = A[i,j]*bj
+        end
+    end
+    C
+end
+
+function scale!(C::StridedMatrix, b::StridedVector, A::StridedMatrix)
+    m, n = size(A)
+    m == length(b) || throw(DimensionMismatch(""))
+    for j = 1:n, i = 1:m
+        C[i,j] = A[i,j]*b[i]
+    end
+    C
+end
+scale(A::StridedMatrix, b::StridedVector) = scale!(similar(A, promote_type(eltype(A),eltype(b))), A, b)
+scale(b::StridedVector, A::StridedMatrix) = scale!(similar(b, promote_type(eltype(A),eltype(b)), size(A)), b, A)
+
 cross(a::AbstractVector, b::AbstractVector) = [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
 
 triu(M::AbstractMatrix) = triu!(copy(M))

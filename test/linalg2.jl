@@ -182,12 +182,12 @@ for elty in (Float32, Float64, Complex64, Complex128)
     end
     A = convert(Array{elty, 2}, A)
     Asym = A'A
-    vals, Z = LinAlg.LAPACK.syevr!('V', copy(Asym))
+    vals, Z = LAPACK.syevr!('V', copy(Asym))
     @test_approx_eq Z*scale(vals, Z') Asym
     @test all(vals .> 0.0)
-    @test_approx_eq LinAlg.LAPACK.syevr!('N','V','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] vals[vals .< 1.0]
-    @test_approx_eq LinAlg.LAPACK.syevr!('N','I','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] vals[4:5]
-    @test_approx_eq vals LinAlg.LAPACK.syev!('N','U',copy(Asym))
+    @test_approx_eq LAPACK.syevr!('N','V','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] vals[vals .< 1.0]
+    @test_approx_eq LAPACK.syevr!('N','I','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] vals[4:5]
+    @test_approx_eq vals LAPACK.syev!('N','U',copy(Asym))
 end
 
 # Test gglse

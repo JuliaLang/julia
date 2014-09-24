@@ -3,30 +3,6 @@
 arithtype(T) = T
 arithtype(::Type{Bool}) = Int
 
-# multiply by diagonal matrix as vector
-function scale!(C::Matrix, A::Matrix, b::Vector)
-    m, n = size(A)
-    n==length(b) || throw(DimensionMismatch(""))
-    for j = 1:n
-        bj = b[j]
-        for i = 1:m
-            C[i,j] = A[i,j]*bj
-        end
-    end
-    C
-end
-
-function scale!(C::Matrix, b::Vector, A::Matrix)
-    m, n = size(A)
-    m==length(b) || throw(DimensionMismatch(""))
-    for j=1:n, i=1:m
-        C[i,j] = A[i,j]*b[i]
-    end
-    C
-end
-scale(A::Matrix, b::Vector) = scale!(similar(A, promote_type(eltype(A),eltype(b))), A, b)
-scale(b::Vector, A::Matrix) = scale!(similar(b, promote_type(eltype(A),eltype(b)), size(A)), b, A)
-
 # Dot products
 
 dot{T<:BlasReal}(x::Vector{T}, y::Vector{T}) = BLAS.dot(x, y)

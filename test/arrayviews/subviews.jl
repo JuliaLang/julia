@@ -1,11 +1,11 @@
-# testing subviews
+debug = false
+debug && println("testing subviews")
 
-using ArrayViews
 using Base.Test
 
-#### Test Subviews
+debug && println("Test Subviews")
 
-## tools to facilitate array view testing
+debug && println("tools to facilitate array view testing")
 function _test_arrview(a, r, subs...)
     v = view(a, subs...)
 
@@ -31,17 +31,17 @@ macro test_arrview(a_, subs...)
     esc(:(_test_arrview($a_, ($a_)[$(subs...)], $(subs...))))
 end
 
-#### test views from arrays
+debug && println("test views from arrays")
 
 avparent = reshape(1.:1680., (8, 7, 6, 5))
 
-# 1D
+debug && println("1D")
 @test_arrview(avparent, 3)
 @test_arrview(avparent, :)
 @test_arrview(avparent, 1:12)
 @test_arrview(avparent, 3:2:36)
 
-# 2D
+debug && println("2D")
 @test_arrview(avparent, 4, 2)
 @test_arrview(avparent, 4, :)
 @test_arrview(avparent, 4, 3:10)
@@ -62,7 +62,7 @@ avparent = reshape(1.:1680., (8, 7, 6, 5))
 @test_arrview(avparent, 1:2:8, 3:10)
 @test_arrview(avparent, 1:2:8, 2:2:10)
 
-# 3D
+debug && println("3D")
 @test_arrview(avparent, 4, 3, 2)
 @test_arrview(avparent, 4, 3, :)
 @test_arrview(avparent, 4, 3, 2:5)
@@ -143,7 +143,7 @@ avparent = reshape(1.:1680., (8, 7, 6, 5))
 @test_arrview(avparent, 1:2:7, 1:2:5, 2:5)
 @test_arrview(avparent, 1:2:7, 1:2:5, 1:2:6)
 
-# Some 4D Tests
+debug && println("Some 4D Tests")
 @test_arrview(avparent, 4, :,     3, 4)
 @test_arrview(avparent, 4, :,     :, 4)
 @test_arrview(avparent, 4, :,   3:5, 4)
@@ -205,7 +205,7 @@ avparent = reshape(1.:1680., (8, 7, 6, 5))
 @test_arrview(avparent, 1:2:7, :, 1:2:5, 2:5)
 
 
-#### Test Subviews of Views
+debug && println("Test Subviews of Views")
 
 function print_subscripts(subs1, subs2)
     println("Error happens on: ")
@@ -244,7 +244,7 @@ end
 
 avparent = reshape(1:6912, (12, 12, 8, 6))
 
-# 1D --> 1D
+debug && println("1D --> 1D")
 for sa in {(:), 1:36, 2:2:36}
     v1 = view(avparent, sa)
     for sb in {4, (:), 1:length(v1), 3:2:length(v1)}
@@ -252,7 +252,7 @@ for sa in {(:), 1:36, 2:2:36}
     end
 end
 
-# 2D --> 2D
+debug && println("2D --> 2D")
 for sa1 in {(:), 1:10, 2:2:12}, sa2 = {(:), 1:12, 2:2:16}
     v1 = view(avparent, sa1, sa2)
     for sb1 in {4, (:), 2:size(v1,1), 2:2:size(v1,1)}, 
@@ -261,7 +261,7 @@ for sa1 in {(:), 1:10, 2:2:12}, sa2 = {(:), 1:12, 2:2:16}
     end
 end
 
-# 3D --> 3D
+debug && println("3D --> 3D")
 for sa1 in {(:), 1:10, 2:2:12}, 
     sa2 in {(:), 1:10, 2:2:12}, 
     sa3 in {(:), 1:7, 2:2:8}
@@ -274,7 +274,7 @@ for sa1 in {(:), 1:10, 2:2:12},
     end
 end
 
-# Test Linear Algebra on views
+debug && println("Test Linear Algebra on views")
 
 avparent = rand(7, 8)
 bvparent = rand(8, 5)
