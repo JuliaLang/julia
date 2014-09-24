@@ -731,8 +731,8 @@ function match_input(keymap::Dict, s, cs=Char[])
     c = read(terminal(s), Char)
     push!(cs, c)
     k = haskey(keymap, c) ? c : '\0'
-    return match_input(keymap[k], s, cs)
-    # perhaps better would be: match_input(get(keymap, k, nothing), s, cs) ?
+    # if we don't match on the key, look for a default action then fallback on 'nothing' to ignore
+    return match_input(get(keymap, k, nothing), s, cs)
 end
 
 keymap_fcn(f::Nothing, s, c) = (s, p) -> return :ok
