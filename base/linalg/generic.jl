@@ -11,7 +11,15 @@ end
 
 scale{R<:Real}(s::Complex, X::AbstractArray{R}) = scale(X, s)
 
-generic_scale!(X::AbstractArray, s::Number) = generic_scale!(X, X, s)
+# For better performance when input and output are the same array
+# See https://github.com/JuliaLang/julia/issues/8415#issuecomment-56608729
+function generic_scale!(X::AbstractArray, s::Number)
+    for i = 1:length(X)
+        @inbounds X[i] *= s
+    end
+    X
+end
+
 function generic_scale!(C::AbstractArray, X::AbstractArray, s::Number)
     length(C) == length(X) || error("C must be the same length as X")
     for i = 1:length(X)
@@ -21,8 +29,8 @@ function generic_scale!(C::AbstractArray, X::AbstractArray, s::Number)
 end
 scale!(C::AbstractArray, s::Number, X::AbstractArray) = generic_scale!(C, X, s)
 scale!(C::AbstractArray, X::AbstractArray, s::Number) = generic_scale!(C, X, s)
-scale!(X::AbstractArray, s::Number) = generic_scale!(X, X, s)
-scale!(s::Number, X::AbstractArray) = generic_scale!(X, X, s)
+scale!(X::AbstractArray, s::Number) = generic_scale!(X, s)
+scale!(s::Number, X::AbstractArray) = generic_scale!(X, s)
 
 cross(a::AbstractVector, b::AbstractVector) = [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
 
