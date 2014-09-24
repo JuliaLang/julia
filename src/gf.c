@@ -972,8 +972,8 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
     size_t nargs = jl_tuple_len(tt);
     size_t i;
     jl_value_t *ti=(jl_value_t*)jl_bottom_type;
-    jl_tuple_t *newsig=NULL, *env = jl_null;
-    JL_GC_PUSH2(&env, &newsig);
+    jl_tuple_t *newsig=NULL, *env = jl_null, *func = NULL;
+    JL_GC_PUSH3(&env, &newsig, &func);
 
     while (m != JL_NULL) {
         if (m->tvars!=jl_null) {
@@ -1008,7 +1008,6 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
         m = m->next;
     }
 
-    jl_function_t *func = NULL;
     if (ti == (jl_value_t*)jl_bottom_type) {
         if (m != JL_NULL) {
             func = m->func;
