@@ -452,7 +452,7 @@ end
 ## Resolve expressions at parsing time ##
 
 const exprresolve_arith_dict = (Symbol=>Function)[:+ => +,
-    :- => -, :* => *, :/ => /, :^ => ^]
+    :- => -, :* => *, :/ => /, :^ => ^, :div => div]
 const exprresolve_cond_dict = (Symbol=>Function)[:(==) => ==,
     :(<) => <, :(>) => >, :(<=) => <=, :(>=) => >=]
 
@@ -465,7 +465,7 @@ end
 
 exprresolve_conditional(b::Bool) = true, b
 function exprresolve_conditional(ex::Expr)
-    if ex.head == :conditional && isa(ex.args[1], Number) && isa(ex.args[3], Number)
+    if ex.head == :comparison && isa(ex.args[1], Number) && isa(ex.args[3], Number)
         return true, exprresolve_cond_dict[ex.args[2]](ex.args[1], ex.args[3])
     end
     false, false
@@ -498,12 +498,6 @@ function exprresolve(ex::Expr)
         can_eval, tf = exprresolve_conditional(ex.args[1])
         if can_eval
             ex = tf?ex.args[2]:ex.args[3]
-        else
-            try
-                tf = eval(ex.args[1])
-                ex = tf?ex.args[2]:ex.args[3]
-            catch
-            end
         end
     end
     ex
