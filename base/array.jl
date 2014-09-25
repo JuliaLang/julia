@@ -324,7 +324,6 @@ function setindex!{T}(A::Array{T}, X::Array{T}, I::UnitRange{Int})
     copy!(A, first(I), X, 1, length(I))
     return A
 end
-setindex!{T}(A::Array{T}, X::Array{T}, I::Colon) = setindex!(A, X, 1:length(X))
     
 function setindex!{T<:Real}(A::Array, X::AbstractArray, I::AbstractVector{T})
     if length(X) != length(I)
@@ -340,7 +339,7 @@ function setindex!{T<:Real}(A::Array, X::AbstractArray, I::AbstractVector{T})
     end
     return A
 end
-setindex!{T<:Real}(A::Array, X::AbstractArray, I::Colon) = setindex!(A, X, 1:length(X))
+setindex!(A::Array, X::AbstractArray, I::Colon) = setindex!(A, X, 1:length(X))
 
 # logical indexing
 
