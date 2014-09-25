@@ -24,7 +24,6 @@
 #endif
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/JITEventListener.h"
-#include "llvm/ExecutionEngine/JITMemoryManager.h"
 #include "llvm/PassManager.h"
 #include "llvm/Target/TargetLibraryInfo.h"
 #include "llvm/Support/TargetRegistry.h"
@@ -38,6 +37,8 @@
 #endif
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 6
 #define LLVM36 1
+#else
+#include "llvm/ExecutionEngine/JITMemoryManager.h"
 #endif
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 5
 #define LLVM35 1
