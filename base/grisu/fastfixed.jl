@@ -110,8 +110,8 @@ function fillfractionals(fractionals, exponent,
     return len, decimal_point
 end
 
-low(x) = uint64(x)
-high(x) = uint64(x >> 64)
+low(x) = uint64(x&0xffffffffffffffff)
+high(x) = uint64(x >>> 64)
 bitat(x::Uint128,y) = y >= 64 ? (int32(high(x) >> (y-64)) & 1) : (int32(low(x) >> y) & 1)
 function divrem2(x,power)
     h = high(x)

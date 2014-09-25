@@ -43,23 +43,23 @@ abs(x::Signed) = flipsign(x,x)
 
 ~(n::Integer) = -n-1
 
-asunsigned(x::Integer) = reinterpret(typeof(unsigned(zero(x))), x)
-asunsigned(x::Bool) = unsigned(x)
-asunsigned(x) = unsigned(x)
-assigned(x::Integer) = reinterpret(typeof(signed(zero(x))), x)
-assigned(x) = signed(x)
+unsigned(x::Signed) = reinterpret(typeof(convert(Unsigned,zero(x))), x)
+unsigned(x::Bool) = convert(Unsigned, x)
+unsigned(x) = convert(Unsigned, x)
+signed(x::Unsigned) = reinterpret(typeof(convert(Signed,zero(x))), x)
+signed(x) = convert(Signed, x)
 
-div(x::Signed, y::Unsigned) = flipsign(assigned(div(asunsigned(abs(x)),y)),x)
-div(x::Unsigned, y::Signed) = asunsigned(flipsign(assigned(div(x,asunsigned(abs(y)))),y))
+div(x::Signed, y::Unsigned) = flipsign(signed(div(unsigned(abs(x)),y)),x)
+div(x::Unsigned, y::Signed) = unsigned(flipsign(signed(div(x,unsigned(abs(y)))),y))
 
-rem(x::Signed, y::Unsigned) = flipsign(assigned(rem(asunsigned(abs(x)),y)),x)
-rem(x::Unsigned, y::Signed) = rem(x,asunsigned(abs(y)))
+rem(x::Signed, y::Unsigned) = flipsign(signed(rem(unsigned(abs(x)),y)),x)
+rem(x::Unsigned, y::Signed) = rem(x,unsigned(abs(y)))
 
 fld(x::Signed, y::Unsigned) = div(x,y)-(signbit(x)&(rem(x,y)!=0))
 fld(x::Unsigned, y::Signed) = div(x,y)-(signbit(y)&(rem(x,y)!=0))
 
-mod(x::Signed, y::Unsigned) = rem(y+asunsigned(rem(x,y)),y)
-mod(x::Unsigned, y::Signed) = rem(y+assigned(rem(x,y)),y)
+mod(x::Signed, y::Unsigned) = rem(y+unsigned(rem(x,y)),y)
+mod(x::Unsigned, y::Signed) = rem(y+signed(rem(x,y)),y)
 
 cld(x::Signed, y::Unsigned) = div(x,y)+(!signbit(x)&(rem(x,y)!=0))
 cld(x::Unsigned, y::Signed) = div(x,y)+(!signbit(y)&(rem(x,y)!=0))
@@ -138,12 +138,12 @@ for T in IntTypes
     end
 end
 
-==(x::Signed,   y::Unsigned) = (x >= 0) & (asunsigned(x) == y)
-==(x::Unsigned, y::Signed  ) = (y >= 0) & (x == asunsigned(y))
-< (x::Signed,   y::Unsigned) = (x <  0) | (asunsigned(x) <  y)
-< (x::Unsigned, y::Signed  ) = (y >  0) & (x <  asunsigned(y))
-<=(x::Signed,   y::Unsigned) = (x <= 0) | (asunsigned(x) <= y)
-<=(x::Unsigned, y::Signed  ) = (y >= 0) & (x <= asunsigned(y))
+==(x::Signed,   y::Unsigned) = (x >= 0) & (unsigned(x) == y)
+==(x::Unsigned, y::Signed  ) = (y >= 0) & (x == unsigned(y))
+< (x::Signed,   y::Unsigned) = (x <  0) | (unsigned(x) <  y)
+< (x::Unsigned, y::Signed  ) = (y >  0) & (x <  unsigned(y))
+<=(x::Signed,   y::Unsigned) = (x <= 0) | (unsigned(x) <= y)
+<=(x::Unsigned, y::Signed  ) = (y >= 0) & (x <= unsigned(y))
 
 ## integer conversions ##
 
@@ -165,11 +165,15 @@ for to in tuple(IntTypes...,Char), from in tuple(IntTypes...,Char,Bool)
         elseif !(issubtype(from,Signed) === issubtype(to,Signed))
             # raise InexactError if x's top bit is set
             @eval convert(::Type{$to}, x::($from)) = box($to,check_top_bit(unbox($from,x)))
+            @eval itrunc(::Type{$to}, x::($from)) = box($to,unbox($from,x))
         else
             @eval convert(::Type{$to}, x::($from)) = box($to,unbox($from,x))
         end
     end
 end
+
+itrunc{T<:Integer}(::Type{T}, x::T) = x
+itrunc(::Type{Bool}, x::Integer) = ((x&1)!=0)
 
 for to in (Int8, Int16, Int32, Int64)
     @eval begin
@@ -240,8 +244,6 @@ uint32(x) = convert(Uint32,x)
 uint64(x) = convert(Uint64,x)
 uint128(x) = convert(Uint128,x)
 
-signed(x) = convert(Signed,x)
-unsigned(x) = convert(Unsigned,x)
 integer(x) = convert(Integer,x)
 
 round(x::Integer) = x
@@ -356,12 +358,12 @@ typemax(::Type{Uint64}) = 0xffffffffffffffff
 @eval typemin(::Type{Int128} ) = $(convert(Int128,1)<<int32(127))
 @eval typemax(::Type{Int128} ) = $(box(Int128,unbox(Uint128,typemax(Uint128)>>int32(1))))
 
-widen(::Type{Int8}) = Int16
-widen(::Type{Int16}) = Int32
+widen(::Type{Int8}) = Int
+widen(::Type{Int16}) = Int
 widen(::Type{Int32}) = Int64
 widen(::Type{Int64}) = Int128
-widen(::Type{Uint8}) = Uint16
-widen(::Type{Uint16}) = Uint32
+widen(::Type{Uint8}) = Uint
+widen(::Type{Uint16}) = Uint
 widen(::Type{Uint32}) = Uint64
 widen(::Type{Uint64}) = Uint128
 

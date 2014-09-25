@@ -179,7 +179,7 @@ for (T, U) in [(Uint8, Uint32), (Uint16, Uint32),
                (Int8, Uint32), (Int16, Uint32), (Int32, Uint32), (Int64, Uint64), (Int128, Uint128),
                (Bool, Uint32), (Char, Uint32)]
 
-    @eval RandIntGen(r::UnitRange{$T}) = isempty(r) ? error("range must be non-empty") : RandIntGen(first(r), convert($U, last(r) - first(r) + 1)) # overflow ok
+    @eval RandIntGen(r::UnitRange{$T}) = isempty(r) ? error("range must be non-empty") : RandIntGen(first(r), convert($U, unsigned(last(r) - first(r) + one($T)))) # overflow ok
 end
 
 # this function uses 32 bit entropy for small ranges of length <= typemax(Uint32) + 1
@@ -205,8 +205,7 @@ function rand{T<:Integer, U<:Unsigned}(g::RandIntGen{T,U})
     while x > g.u
         x = rand(U)
     end
-    # TODO: fix for when T is smaller than U
-    reinterpret(T, Base.asunsigned(g.a) + rem_knuth(x, g.k))
+    itrunc(T, g.a + rem_knuth(x, g.k))
 end
 
 rand{T<:Union(Signed,Unsigned,Bool,Char)}(r::UnitRange{T}) = rand(RandIntGen(r))
