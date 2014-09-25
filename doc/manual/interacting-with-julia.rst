@@ -174,7 +174,7 @@ In both the Julian and help modes of the REPL, one can enter the first few chara
     StridedArray    StridedVecOrMat  String
     StridedMatrix   StridedVector
 
-The tab key can also be used to substitute LaTeX math symbols with their unicode equivalents,
+The tab key can also be used to substitute LaTeX math symbols with their Unicode equivalents,
 and get a list of LaTeX matches as well::
 
     julia> \pi[TAB]
@@ -203,3 +203,5 @@ and get a list of LaTeX matches as well::
     julia> \h[TAB]
     \hat              \heartsuit         \hksearow          \hookleftarrow     \hslash
     \hbar             \hermitconjmatrix  \hkswarow          \hookrightarrow    \hspace
+
+A full list of tab-completions can be found in the :ref:`man-unicode-input` section of the manual.

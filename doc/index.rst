@@ -45,6 +45,7 @@
    manual/style-guide
    manual/faq
    manual/noteworthy-differences
+   manual/unicode-input
 
 .. _stdlib:
 
