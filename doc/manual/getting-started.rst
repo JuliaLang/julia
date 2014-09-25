@@ -77,23 +77,13 @@ same location as the current host. Each machine definition takes the form
     
     
 If you have code that you want executed whenever julia is run, you can
-put it in ``~/.juliarc.jl``:
-
-.. raw:: latex
-
-    \begin{CJK*}{UTF8}{mj}
-
-::
+put it in ``~/.juliarc.jl``::
 
     $ echo 'println("Greetings! 你好! 안녕하세요?")' > ~/.juliarc.jl
     $ julia
     Greetings! 你好! 안녕하세요?
     
     ...
-
-.. raw:: latex
-
-    \end{CJK*}
 
 There are various ways to run Julia code and provide options, similar to
 those available for the ``perl`` and ``ruby`` programs::
