@@ -121,13 +121,13 @@ $(build_private_libdir)/sys%$(SHLIB_EXT): $(build_private_libdir)/sys%o
 
 $(build_private_libdir)/sys0.o:
 	@$(QUIET_JULIA) cd base && \
-	$(call spawn,$(JULIA_EXECUTABLE)) --build $(call cygpath_w,$(build_private_libdir)/sys0) sysimg.jl
+	$(call spawn, $(JULIA_EXECUTABLE)) --build $(call cygpath_w,$(build_private_libdir)/sys0) sysimg.jl
 
 BASE_SRCS := $(wildcard base/*.jl base/*/*.jl base/*/*/*.jl)
 
 $(build_private_libdir)/sys.o: VERSION $(BASE_SRCS) $(build_datarootdir)/julia/helpdb.jl $(build_private_libdir)/sys0.$(SHLIB_EXT)
 	@$(QUIET_JULIA) cd base && \
-	$(call spawn,$(JULIA_EXECUTABLE)) --build $(call cygpath_w,$(build_private_libdir)/sys) \
+	$(call spawn, lldb -- $(JULIA_EXECUTABLE)) --build $(call cygpath_w,$(build_private_libdir)/sys) \
 		-J$(call cygpath_w,$(build_private_libdir))/$$([ -e $(build_private_libdir)/sys.ji ] && echo sys.ji || echo sys0.ji) -f sysimg.jl \
 		|| (echo "*** This error is usually fixed by running 'make clean'. If the error persists, try 'make cleanall'. ***" && false)
 

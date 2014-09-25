@@ -306,7 +306,7 @@
 ; replace end inside ex with (call (top size) a n)
 ; affects only the closest ref expression, so doesn't go inside nested refs
 (define (replace-end ex a n tuples last)
-  (cond ((eq? ex 'end)                (end-val a n tuples last))
+  (cond ((eq? ex 'end) (end-val a n tuples last))
 	((or (atom? ex) (quoted? ex)) ex)
 	((eq? (car ex) 'ref)
 	 ;; inside ref only replace within the first argument

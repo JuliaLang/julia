@@ -1,9 +1,8 @@
 module ArrayViews
-
 import Base: Ptr, convert, eltype, getindex, getindex_bool_1d, length, ndims, parent, pointer, setindex!, similar, size, stride, strides, to_index
 
-export ArrayView, ContiguousArray, ContiguousVector, ContiguousMatrix, ContiguousView, StridedView
-export contiguousrank, contiguous_view, ellipview, iscontiguous, reshape_view, strided_view, view
+export ArrayView, ContiguousArray, ContiguousVector, ContiguousMatrix, ContiguousView, StridedView, 
+       contiguousrank, contiguous_view, ellipview, iscontiguous, reshape_view, strided_view, view
 
 #################################################
 #
@@ -102,6 +101,7 @@ parent(a::ContiguousView) = a.arr
 offset(a::ContiguousView) = a.offset
 length(a::ContiguousView) = a.len
 size(a::ContiguousView) = a.shp
+size(a::ContiguousView, d::Integer) = getdim(a.shp, d)
 
 iscontiguous(a::AbstractArray) = false
 iscontiguous(a::Array) = true
@@ -152,11 +152,11 @@ parent(a::StridedView) = a.arr
 offset(a::StridedView) = a.offset
 length(a::StridedView) = a.len
 size(a::StridedView) = a.shp
+size(a::StridedView, d::Integer) = getdim(a.shp, d)
 
 strides(a::StridedView) = a.strides
 stride{T,N}(a::StridedView{T,N}, d::Integer) = 
-    (1 <= d <= N || error("dimension out of range."); 
-     a.strides[d])
+    (1 <= d <= N || error("dimension out of range."); a.strides[d])
 
 iscontiguous{T,N}(a::StridedView{T,N,N}) = true;
 iscontiguous{T,N}(a::StridedView{T,N,N}) = true;
@@ -167,16 +167,12 @@ _iscontiguous(shp::(Int,), strides::(Int,)) = (strides[1] == 1)
 _iscontiguous(shp::(Int,Int), strides::(Int,Int)) = 
     (strides[1] == 1 && strides[2] == shp[1])
 _iscontiguous(shp::(Int,Int,Int), strides::(Int,Int,Int)) = 
-    (strides[1] == 1 && 
-     strides[2] == shp[1] &&
-     strides[3] == shp[1] * shp[2])
+    (strides[1] == 1 && strides[2] == shp[1] && strides[3] == shp[1] * shp[2])
 
 function _iscontiguous{N}(shp::NTuple{N,Int}, strides::NTuple{N,Int})
     s = 1
     for i = 1:N
-        if strides[i] != s
-            return false
-        end
+        strides[i] != s && return false
         s *= shp[i]
     end
     return true
@@ -333,10 +329,9 @@ end
 ## auxiliary union types to simplify method definition
 ## (for internal use only)
 
-
-typealias Subs Union(Real,Colon,Range)
-typealias SubsNC Union(Real,Range)
-typealias SubsRange Union(Colon,Range)
+typealias Subs Union(Real,Colon,OrdinalRange)
+typealias SubsNC Union(Real,OrdinalRange)
+typealias SubsRange Union(Colon,OrdinalRange)
 
 ##### Compute offset #####
 
@@ -556,7 +551,6 @@ vstrides(a::DenseArray, i1::Subs, i2::Subs) =
     (stride(a,1) * _step(i1), stride(a,2) * _step(i2))
 
 # 3D
-
 vstrides(a::ContiguousArray, i1::Subs, i2::Real, i3::Real) = 
     (_step(i1),)
 vstrides(a::ContiguousArray, i1::Subs, i2::Subs, i3::Real) = 
@@ -644,7 +638,6 @@ function reshape_view{N}(a::ContiguousArray, shp::NTuple{N,Int})
     prod(shp) == length(a) || throw(DimensionMismatch("Inconsistent array size."))
     contiguous_view(parent(a), offset(a), shp)
 end
-
 
 ## ellipview
 
@@ -745,6 +738,6 @@ acontrank{T,N,M}(a::ArrayView{T,N,M}, i1::Subs, i2::Subs, i3::Subs, i4::Subs, i5
 
 # Added by Andreas Noack 24 September 2014 when including this in Base
 getindex{T,N}(A::ArrayView{T,N}, I::AbstractArray{Bool,N}) = getindex_bool_1d(A, I)
-#getindex(A::ArrayView, I::Subs...) = view(A, I...)
+getindex(A::ArrayView, I::Subs...) = view(A, I...)
 
 end  # module ArrayViews

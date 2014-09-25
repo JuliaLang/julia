@@ -769,7 +769,7 @@ function invoke_tfunc(f, types, argtypes)
             return Any
         end
         if typeseq(m[1],types)
-            tvars = m[2][1:2:end]
+            tvars = copy(m[2][1:2:end])
             (ti, env) = ccall(:jl_match_method, Any, (Any,Any,Any),
                               argtypes, m[1], tvars)::(Any,Any)
             (_tree,rt) = typeinf(linfo, ti, env, linfo)
@@ -800,7 +800,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
         if !is(af,false)
             aargtypes = map(to_tuple_of_Types, argtypes[2:end])
             if all(x->isa(x,Tuple), aargtypes) &&
-                !any(isvatuple, aargtypes[1:(length(aargtypes)-1)])
+                !any(isvatuple, copy(aargtypes[1:(length(aargtypes)-1)]))
                 e.head = :call1
                 # apply with known func with known tuple types
                 # can be collapsed to a call to the applied func
@@ -847,7 +847,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
             sig = argtypes[2]
             if isa(sig,Tuple) && all(isType, sig)
                 sig = map(t->t.parameters[1], sig)
-                return invoke_tfunc(af, sig, argtypes[3:end])
+                return invoke_tfunc(af, sig, copy(argtypes[3:end]))
             end
         end
     end
@@ -873,7 +873,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
             if isgeneric(ff) && isdefined(ff.env,:kwsorter)
                 # use the fact that kwcall(...) calls ff.env.kwsorter
                 kwcount = fargs[2]
-                posargt = argtypes[(4+2*kwcount):end]
+                posargt = copy(argtypes[(4+2*kwcount):end])
                 return abstract_call_gf(ff.env.kwsorter, (),
                                         tuple(Array{Any,1}, posargt...), e)
             end
@@ -897,7 +897,7 @@ function abstract_eval_arg(a::ANY, vtypes::ANY, sv::StaticVarInfo)
 end
 
 function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
-    fargs = e.args[2:end]
+    fargs = copy(e.args[2:end])
     argtypes = tuple([abstract_eval_arg(a, vtypes, sv) for a in fargs]...)
     if any(x->is(x,None), argtypes)
         return None
@@ -1370,7 +1370,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                 end
                 s[1][args[la]] = Tuple
             else
-                s[1][args[la]] = limit_tuple_depth(atypes[la:end])
+                s[1][args[la]] = limit_tuple_depth(copy(atypes[la:end]))
             end
             la -= 1
         else
@@ -1683,7 +1683,7 @@ function eval_annotate(e::ANY, vtypes::ANY, sv::StaticVarInfo, decls, clo)
     end
     if (head === :call || head === :call1) && isa(e.args[1],LambdaStaticData)
         called = e.args[1]
-        fargs = e.args[2:end]
+        fargs = copy(e.args[2:end])
         argtypes = tuple([abstract_eval_arg(a, vtypes, sv) for a in fargs]...)
         # recur inside inner functions once we have all types
         tr,ty = typeinf(called, argtypes, called.sparams, called, false)
@@ -2037,7 +2037,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
     if !(isa(f,Function) || isstructtype(f) || isa(f,IntrinsicFunction))
         return NF
     end
-    argexprs = e.args[2:end]
+    argexprs = copy(e.args[2:end])
 
     if is(f, convert_default) && length(atypes)==3
         # builtin case of convert. convert(T,x::S) => x, when S<:T
@@ -2249,8 +2249,8 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
             end
         else
             # construct tuple-forming expression for argument tail
-            vararg = mk_tuplecall(argexprs[na:end])
-            argexprs = {argexprs[1:(na-1)]..., vararg}
+            vararg = mk_tuplecall(copy(argexprs[na:end]))
+            argexprs = {copy(argexprs[1:(na-1)])..., vararg}
             isva = true
         end
     elseif na != length(argexprs)
@@ -2329,7 +2329,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
                         methitype = ()
                     end
                 else
-                    methitype = tuple(methargs[i:end]...)
+                    methitype = tuple(copy(methargs[i:end])...)
                 end
                 isva = false
             else
@@ -2670,7 +2670,7 @@ function inlining_pass(e::Expr, sv, ast)
             end
 
             for ninline = 1:100
-                atypes = tuple(Any[exprtype(x) for x in e.args[2:end]]...)
+                atypes = tuple(Any[exprtype(x) for x in copy(e.args[2:end])]...)
                 if length(atypes) > MAX_TUPLETYPE_LEN
                     atypes = limit_tuple_type(atypes)
                 end
@@ -2701,7 +2701,7 @@ function inlining_pass(e::Expr, sv, ast)
                         t = to_tuple_of_Types(exprtype(aarg))
                         if isa(aarg,Expr) && is_known_call(aarg, tuple, sv)
                             # apply(f,tuple(x,y,...)) => f(x,y,...)
-                            newargs[i-2] = aarg.args[2:end]
+                            newargs[i-2] = copy(aarg.args[2:end])
                         elseif isa(aarg, Tuple)
                             newargs[i-2] = { QuoteNode(x) for x in aarg }
                         elseif isa(t,Tuple) && !isvatuple(t) && effect_free(aarg,sv,true)

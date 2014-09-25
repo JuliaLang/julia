@@ -124,8 +124,8 @@ macro ccallable(def)
     if isa(def,Expr) && (def.head === :(=) || def.head === :function)
         sig = def.args[1]
         if sig.head === :call
-            name = sig.args[1]
-            at = map(sig.args[2:end]) do a
+            name = sig.args[1] 
+            at = map(copy(sig.args[2:end])) do a
                 if isa(a,Expr) && a.head === :(::)
                     a.args[2]
                 else
