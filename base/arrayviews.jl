@@ -745,6 +745,6 @@ acontrank{T,N,M}(a::ArrayView{T,N,M}, i1::Subs, i2::Subs, i3::Subs, i4::Subs, i5
 
 # Added by Andreas Noack 24 September 2014 when including this in Base
 getindex{T,N}(A::ArrayView{T,N}, I::AbstractArray{Bool,N}) = getindex_bool_1d(A, I)
-getindex(A::ArrayView, I::Subs...) = view(A, I...)
+#getindex(A::ArrayView, I::Subs...) = view(A, I...)
 
 end  # module ArrayViews
