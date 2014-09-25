@@ -450,7 +450,7 @@ const _grow_none_errmsg =
     "[] cannot grow. Instead, initialize the array with \"T[]\", where T is the desired element type."
 
 function push!{T}(a::Array{T,1}, item)
-    if is(T,None)
+    if is(T,Bottom)
         error(_grow_none_errmsg)
     end
     # convert first so we don't grow the array if the assignment won't work
@@ -467,7 +467,7 @@ function push!(a::Array{Any,1}, item::ANY)
 end
 
 function append!{T}(a::Array{T,1}, items::AbstractVector)
-    if is(T,None)
+    if is(T,Bottom)
         error(_grow_none_errmsg)
     end
     n = length(items)
@@ -477,7 +477,7 @@ function append!{T}(a::Array{T,1}, items::AbstractVector)
 end
 
 function prepend!{T}(a::Array{T,1}, items::AbstractVector)
-    if is(T,None)
+    if is(T,Bottom)
         error(_grow_none_errmsg)
     end
     n = length(items)
@@ -518,7 +518,7 @@ function pop!(a::Vector)
 end
 
 function unshift!{T}(a::Array{T,1}, item)
-    if is(T,None)
+    if is(T,Bottom)
         error(_grow_none_errmsg)
     end
     item = convert(T, item)

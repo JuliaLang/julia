@@ -20,7 +20,7 @@ convert(::Type{Ptr{Uint8}}, s::ByteString) = convert(Ptr{Uint8}, s.data)
 convert(::Type{Ptr{Int8}}, s::ByteString) = convert(Ptr{Int8}, s.data)
 
 convert{T}(::Type{Ptr{T}}, a::Array{T}) = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
-convert(::Type{Ptr{None}}, a::Array) = ccall(:jl_array_ptr, Ptr{None}, (Any,), a)
+convert(::Type{Ptr{Void}}, a::Array) = ccall(:jl_array_ptr, Ptr{Void}, (Any,), a)
 
 # note: these definitions don't mean any AbstractArray is convertible to
 # pointer. they just map the array element type to the pointer type for

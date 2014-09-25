@@ -152,7 +152,7 @@ function get_splatinfo(ex::Expr, itersym::Symbol)
             end
         end
     end
-    "", Nothing
+    "", Void
 end
 
 # Replace splatted with desplatted for a specific number of arguments

@@ -43,7 +43,7 @@ astcopy(x) = x
 ==(x::QuoteNode, y::QuoteNode) = x.value == y.value
 
 function show(io::IO, tv::TypeVar)
-    if !is(tv.lb, None)
+    if !is(tv.lb, Bottom)
         show(io, tv.lb)
         print(io, "<:")
     end

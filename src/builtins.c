@@ -1058,9 +1058,9 @@ void jl_init_primitives(void)
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);
-    add_builtin("None", (jl_value_t*)jl_bottom_type);
-    add_builtin("Void", (jl_value_t*)jl_bottom_type);
     add_builtin("Top",  (jl_value_t*)jl_top_type);
+    add_builtin("Void", (jl_value_t*)jl_void_type);
+    add_builtin("nothing", (jl_value_t*)jl_nothing);
     add_builtin("TypeVar", (jl_value_t*)jl_tvar_type);
     add_builtin("TypeName", (jl_value_t*)jl_typename_type);
     add_builtin("TypeConstructor", (jl_value_t*)jl_typector_type);
@@ -1223,11 +1223,11 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
     else if (v == jl_false) {
         n += JL_PRINTF(out, "false");
     }
+    else if (v == jl_nothing) {
+        n += JL_PRINTF(out, "nothing");
+    }
     else if (jl_is_byte_string(v)) {
         n += JL_PRINTF(out, "\"%s\"", jl_iostr_data(v));
-    }
-    else if (v == jl_bottom_type) {
-        n += JL_PRINTF(out, "Void");
     }
     else if (jl_is_uniontype(v)) {
         n += JL_PRINTF(out, "Union");

@@ -711,7 +711,7 @@ end
 # If we ever actually want to match \0 in input, this will have to be reworked
 function normalize_keymap(keymap::Dict)
     ret = Dict{Char,Any}()
-    direct_keys = filter((k,v) -> isa(v, Union(Function, Nothing)), keymap)
+    direct_keys = filter((k,v) -> isa(v, Union(Function, Void)), keymap)
     # first direct entries
     for key in keys(direct_keys)
         add_nested_key!(ret, key, keymap[key])
@@ -726,7 +726,7 @@ function normalize_keymap(keymap::Dict)
 end
 
 match_input(k::Function, s, cs) = (update_key_repeats(s, cs); return keymap_fcn(k, s, last(cs)))
-match_input(k::Nothing, s, cs) = (s,p) -> return :ok
+match_input(k::Void, s, cs) = (s,p) -> return :ok
 function match_input(keymap::Dict, s, cs=Char[])
     c = read(terminal(s), Char)
     push!(cs, c)
@@ -735,7 +735,7 @@ function match_input(keymap::Dict, s, cs=Char[])
     return match_input(get(keymap, k, nothing), s, cs)
 end
 
-keymap_fcn(f::Nothing, s, c) = (s, p) -> return :ok
+keymap_fcn(f::Void, s, c) = (s, p) -> return :ok
 function keymap_fcn(f::Function, s, c::Char)
     return (s, p) -> begin
         r = f(s, p, c)

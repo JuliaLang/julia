@@ -29,7 +29,7 @@ type CallStack
     prev::Union(EmptyCallStack,CallStack)
     sv::StaticVarInfo
 
-    CallStack(ast, mod, types, prev) = new(ast, mod, types, false, 0, None, prev)
+    CallStack(ast, mod, types, prev) = new(ast, mod, types, false, 0, Bottom, prev)
 end
 
 inference_stack = EmptyCallStack()
@@ -89,7 +89,7 @@ isvarargtype(t::ANY) = isa(t,DataType)&&is((t::DataType).name,Vararg.name)
 
 const t_func = ObjectIdDict()
 #t_func[tuple] = (0, Inf, (args...)->limit_tuple_depth(args))
-t_func[throw] = (1, 1, x->None)
+t_func[throw] = (1, 1, x->Bottom)
 t_func[box] = (2, 2, (t,v)->(isType(t) ? t.parameters[1] : Any))
 t_func[eq_int] = (2, 2, cmp_tfunc)
 t_func[ne_int] = (2, 2, cmp_tfunc)
@@ -115,17 +115,15 @@ t_func[fpiseq] = (2, 2, cmp_tfunc)
 t_func[fpislt] = (2, 2, cmp_tfunc)
 t_func[nan_dom_err] = (2, 2, (a, b)->a)
 t_func[eval(Core.Intrinsics,:ccall)] =
-    (3, Inf, (fptr, rt, at, a...)->(is(rt,Type{Void}) ? Nothing :
-                                    isType(rt) ? rt.parameters[1] : Any))
+    (3, Inf, (fptr, rt, at, a...)->(isType(rt) ? rt.parameters[1] : Any))
 t_func[eval(Core.Intrinsics,:llvmcall)] =
-    (3, Inf, (fptr, rt, at, a...)->(is(rt,Type{Void}) ? Nothing :
-                                    isType(rt) ? rt.parameters[1] : 
+    (3, Inf, (fptr, rt, at, a...)->(isType(rt) ? rt.parameters[1] :
                                     isa(rt,Tuple) ? map(x->x.parameters[1],rt) : Any))
 t_func[eval(Core.Intrinsics,:cglobal)] =
     (1, 2, (fptr, t...)->(isempty(t) ? Ptr{Void} :
                           isType(t[1]) ? Ptr{t[1].parameters[1]} : Ptr))
 t_func[eval(Core.Intrinsics,:select_value)] =
-    # TODO: return None if cnd is definitely not a Bool
+    # TODO: return Bottom if cnd is definitely not a Bool
     (3, 3, (cnd, x, y)->Union(x,y))
 t_func[is] = (2, 2, cmp_tfunc)
 t_func[issubtype] = (2, 2, cmp_tfunc)
@@ -225,7 +223,7 @@ const tupleref_tfunc = function (A, t, i)
         return Any
     end
     if is(t,())
-        return None
+        return Bottom
     end
     n = length(t)
     last = tupleref(t,n)
@@ -237,12 +235,12 @@ const tupleref_tfunc = function (A, t, i)
             if vararg
                 T = last.parameters[1]
             else
-                return None
+                return Bottom
             end
         elseif i == n && vararg
             T = last.parameters[1]
         elseif i <= 0
-            return None
+            return Bottom
         else
             T = tupleref(t,i)
         end
@@ -256,7 +254,7 @@ const tupleref_tfunc = function (A, t, i)
         if !isa(types, Type)
             return Any
         end
-        T = reduce(tmerge, None, types)
+        T = reduce(tmerge, Bottom, types)
         if wrapType
             return isleaftype(T) || isa(T,TypeVar) ? Type{T} : Type{TypeVar(:_,T)}
         else
@@ -288,7 +286,7 @@ function limit_type_depth(t::ANY, d::Int, cov::Bool, vars)
             end
         end
     elseif isa(t,UnionType)
-        t === None && return t
+        t === Bottom && return t
         if d > MAX_TYPE_DEPTH
             R = Any
         else
@@ -334,7 +332,7 @@ const getfield_tfunc = function (A, s0, name)
         end
     end
     if isa(s,UnionType)
-        return reduce(tmerge, None, map(t->getfield_tfunc(A, t, name), s.types))
+        return reduce(tmerge, Bottom, map(t->getfield_tfunc(A, t, name), s.types))
     end
     if !isa(s,DataType) || s.abstract
         return Any
@@ -373,18 +371,18 @@ const getfield_tfunc = function (A, s0, name)
                 end
             end
         end
-        return None
+        return Bottom
     elseif isa(A[2],Int)
         if isa(A[1],Module) || s === Module
-            return None
+            return Bottom
         end
         i::Int = A[2]
         if i < 1 || i > length(s.names)
-            return None
+            return Bottom
         end
         return s.types[i]
     else
-        return reduce(tmerge, None, s.types)#Union(s.types...)
+        return reduce(tmerge, Bottom, s.types)#Union(s.types...)
     end
 end
 t_func[getfield] = (2, 2, getfield_tfunc)
@@ -400,7 +398,7 @@ const fieldtype_tfunc = function (A, s, name)
         return Type
     end
     t = getfield_tfunc(A, s, name)
-    if is(t,None)
+    if is(t,Bottom)
         return t
     end
     Type{isleaftype(t) || isa(t,TypeVar) ? t : TypeVar(:_, t)}
@@ -455,7 +453,7 @@ const apply_type_tfunc = function (A, args...)
             end
             if i-1 > length(headtype.parameters)
                 # too many parameters for type
-                return None
+                return Bottom
             end
             uncertain = true
             tparams = tuple(tparams..., headtype.parameters[i-1])
@@ -498,7 +496,7 @@ function builtin_tfunction(f::ANY, args::ANY, argtypes::ANY)
         return tuple_tfunc(argtypes, true)
     elseif is(f,arrayset)
         if length(argtypes) < 3 && !isva
-            return None
+            return Bottom
         end
         a1 = argtypes[1]
         if isvarargtype(a1)
@@ -507,14 +505,14 @@ function builtin_tfunction(f::ANY, args::ANY, argtypes::ANY)
         return a1
     elseif is(f,arrayref)
         if length(argtypes) < 2 && !isva
-            return None
+            return Bottom
         end
         a = argtypes[1]
         return (isa(a,DataType) && a<:Array ?
                 a.parameters[1] : Any)
     elseif is(f,Expr)
         if length(argtypes) < 1 && !isva
-            return None
+            return Bottom
         end
         return Expr
     end
@@ -536,7 +534,7 @@ function builtin_tfunction(f::ANY, args::ANY, argtypes::ANY)
         end
     elseif !(tf[1] <= length(argtypes) <= tf[2])
         # wrong # of args
-        return None
+        return Bottom
     end
     if is(f,typeassert) || is(f,tupleref) || is(f,getfield) ||
        is(f,apply_type) || is(f,fieldtype)
@@ -627,7 +625,7 @@ const limit_tuple_type_n = function (t::Tuple, lim::Int)
             last = last.parameters[1]
         end
         tail = tuple(t[lim:(n-1)]..., last)
-        tail = typeintersect(reduce(tmerge, None, tail), Any)
+        tail = typeintersect(reduce(tmerge, Bottom, tail), Any)
         return tuple(t[1:(lim-1)]..., Vararg{tail})
     end
     return t
@@ -684,11 +682,11 @@ function abstract_call_gf(f, fargs, argtypes, e)
     # typically, considering many methods means spending lots of time
     # obtaining poor type information.
     # It is important for N to be >= the number of methods in the error()
-    # function, so we can still know that error() is always None.
+    # function, so we can still know that error() is always Bottom.
     # here I picked 4.
     argtypes = limit_tuple_type(argtypes)
     applicable = _methods(f, argtypes, 4)
-    rettype = None
+    rettype = Bottom
     if is(applicable,false)
         # this means too many methods matched
         isa(e,Expr) && (e.head = :call)
@@ -697,7 +695,7 @@ function abstract_call_gf(f, fargs, argtypes, e)
     x::Array{Any,1} = applicable
     if isempty(x)
         # no methods match
-        # TODO: it would be nice to return None here, but during bootstrap we
+        # TODO: it would be nice to return Bottom here, but during bootstrap we
         # often compile code that calls methods not defined yet, so it is much
         # safer just to fall back on dynamic dispatch.
         return Any
@@ -747,15 +745,15 @@ function abstract_call_gf(f, fargs, argtypes, e)
             break
         end
     end
-    # if rettype is None we've found a method not found error
+    # if rettype is Bottom we've found a method not found error
     #print("=> ", rettype, "\n")
     return rettype
 end
 
 function invoke_tfunc(f, types, argtypes)
     argtypes = typeintersect(types,limit_tuple_type(argtypes))
-    if is(argtypes,None)
-        return None
+    if is(argtypes,Bottom)
+        return Bottom
     end
     applicable = _methods(f, types, -1)
     if isempty(applicable)
@@ -862,7 +860,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
     end
     if is(f,kwcall)
         if length(argtypes) < 3
-            return None
+            return Bottom
         end
         if length(fargs) < 2
             return Any
@@ -890,7 +888,7 @@ function abstract_eval_arg(a::ANY, vtypes::ANY, sv::StaticVarInfo)
     if isa(a,Symbol) || isa(a,SymbolNode)
         t = typeintersect(t,Any)  # remove Undef
     end
-    if isa(t,TypeVar) && t.lb == None && isleaftype(t.ub)
+    if isa(t,TypeVar) && t.lb == Bottom && isleaftype(t.ub)
         t = t.ub
     end
     return t
@@ -899,8 +897,8 @@ end
 function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
     fargs = e.args[2:end]
     argtypes = tuple([abstract_eval_arg(a, vtypes, sv) for a in fargs]...)
-    if any(x->is(x,None), argtypes)
-        return None
+    if any(x->is(x,Bottom), argtypes)
+        return Bottom
     end
     called = e.args[1]
     func = isconstantfunc(called, sv)
@@ -957,7 +955,7 @@ function abstract_eval(e::ANY, vtypes, sv::StaticVarInfo)
     if is(e.head,:call) || is(e.head,:call1)
         t = abstract_eval_call(e, vtypes, sv)
     elseif is(e.head,:null)
-        t = Nothing
+        t = Void
     elseif is(e.head,:new)
         t = abstract_eval(e.args[1], vtypes, sv)
         if isType(t)
@@ -979,12 +977,12 @@ function abstract_eval(e::ANY, vtypes, sv::StaticVarInfo)
             # remove unnecessary typevars
             t = t.name.primary
         end
-        if is(t,None) && Undef<:t0
+        if is(t,Bottom) && Undef<:t0
             # the first time we see this statement the variable will probably
-            # be Undef; return None so this doesn't contribute to the type
+            # be Undef; return Bottom so this doesn't contribute to the type
             # we eventually pick.
-        elseif is(t,None)
-            t = Type{None}
+        elseif is(t,Bottom)
+            t = Type{Bottom}
         elseif isleaftype(t)
             t = Type{t}
         elseif isleaftype(inference_stack.types)
@@ -1013,7 +1011,7 @@ function abstract_eval(e::ANY, vtypes, sv::StaticVarInfo)
     else
         t = Any
     end
-    if isa(t,TypeVar) && t.lb === None
+    if isa(t,TypeVar) && t.lb === Bottom
         # no need to use a typevar as the type of an expression
         t = t.ub
     end
@@ -1037,9 +1035,9 @@ function abstract_eval_constant(x::ANY)
 end
 
 # Undef is the static type of a value location (e.g. variable) that is
-# undefined. The corresponding run-time type is None, since accessing an
+# undefined. The corresponding run-time type is Bottom, since accessing an
 # undefined location is an error. A non-lvalue expression cannot have
-# type Undef, only None.
+# type Undef, only Bottom.
 # typealias Top Union(Any,Undef)
 
 abstract_eval_global(s::Symbol) =
@@ -1255,7 +1253,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     #dbg =
     #dotrace = true
     local ast::Expr, tfunc_idx
-    curtype = None
+    curtype = Bottom
     redo = false
     # check cached t-functions
     tf = def.tfunc
@@ -1669,7 +1667,7 @@ function eval_annotate(e::ANY, vtypes::ANY, sv::StaticVarInfo, decls, clo)
         e.args[2] = eval_annotate(e.args[2], vtypes, sv, decls, clo)
         # TODO: if this def does not reach any uses, maybe don't do this
         rhstype = exprtype(e.args[2])
-        if !is(rhstype,None)
+        if !is(rhstype,Bottom)
             record_var_type(s, rhstype, decls)
         end
         return e
@@ -2309,7 +2307,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
         icall = LabelNode(label_counter(body.args)+1)
         partmatch = Expr(:gotoifnot, false, icall.label)
         thrw = Expr(:call, :throw, Expr(:call, Main.Base.MethodError, (f, :inline), t))
-        thrw.typ = None
+        thrw.typ = Bottom
     end
 
     for i=na:-1:1 # stmts_free needs to be calculated in reverse-argument order
@@ -2413,7 +2411,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
             end
         end
         free = effect_free(aei,sv,true)
-        if ((occ==0 && is(aeitype,None)) || islocal || (occ > 1 && !inline_worthy(aei, occ*2)) ||
+        if ((occ==0 && is(aeitype,Bottom)) || islocal || (occ > 1 && !inline_worthy(aei, occ*2)) ||
                 (affect_free && !free) || (!affect_free && !effect_free(aei,sv,false)))
             if occ != 0 # islocal=true is implied by occ!=0
                 vnew = unique_name(enclosing_ast, ast)

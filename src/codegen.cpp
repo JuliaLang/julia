@@ -718,8 +718,7 @@ static Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_value_
     }
     JL_TYPECHK(jl_function_ptr, tuple, argt);
     JL_TYPECHK(jl_function_ptr, type, argt);
-    if (jl_is_gf(f) && (rt == NULL || jl_is_leaf_type(rt) || rt == (jl_value_t*)jl_bottom_type) &&
-        jl_is_leaf_type(argt)) {
+    if (jl_is_gf(f) && (rt == NULL || jl_is_leaf_type(rt)) && jl_is_leaf_type(argt)) {
         jl_function_t *ff = jl_get_specialization(f, (jl_tuple_t*)argt);
         if (ff != NULL && ff->env==(jl_value_t*)jl_null && ff->linfo != NULL) {
             if (ff->linfo->cFunctionObject == NULL) {
@@ -733,8 +732,7 @@ static Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_value_
                 }
                 if (rt != NULL) {
                     jl_value_t *astrt = jl_ast_rettype(li, li->ast);
-                    if (!jl_types_equal(astrt, rt) &&
-                        !(astrt==(jl_value_t*)jl_nothing->type && rt==(jl_value_t*)jl_bottom_type)) {
+                    if (!jl_types_equal(astrt, rt)) {
                         if (astrt == (jl_value_t*)jl_bottom_type) {
                             jl_errorf("cfunction: %s does not return", li->name->name);
                         }
@@ -2551,7 +2549,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
         jl_varinfo_t &vi = ctx->vars[s];
         jl_value_t *rt = expr_type(r,ctx);
         if ((jl_is_symbol(r) || jl_is_symbolnode(r)) && rt == jl_bottom_type) {
-            // sometimes x = y::None occurs
+            // sometimes x = y::Union() occurs
             if (builder.GetInsertBlock()->getTerminator() != NULL)
                 return;
         }
@@ -3462,7 +3460,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
                 fsig.push_back(ty);
             }
         }
-        Type *rt = (jlrettype == (jl_value_t*)jl_nothing->type ? T_void : julia_type_to_llvm(jlrettype));
+        Type *rt = (jlrettype == (jl_value_t*)jl_void_type ? T_void : julia_type_to_llvm(jlrettype));
         f = Function::Create(FunctionType::get(rt, fsig, false),
                              Function::ExternalLinkage, funcName.str(), m);
         if (lam->cFunctionObject == NULL) {
@@ -4044,7 +4042,7 @@ extern "C" void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
                 if (ty != T_void && !ty->isEmptyTy())
                     fsig.push_back(ty);
             }
-            Type *rt = (jlrettype == (jl_value_t*)jl_nothing->type ? T_void : julia_type_to_llvm(jlrettype));
+            Type *rt = (jlrettype == (jl_value_t*)jl_void_type ? T_void : julia_type_to_llvm(jlrettype));
             Function *f = Function::Create(FunctionType::get(rt, fsig, false),
 #ifdef USE_MCJIT
                                            Function::ExternalLinkage, funcName, shadow_module);

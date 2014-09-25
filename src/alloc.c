@@ -55,6 +55,7 @@ jl_datatype_t *jl_methoderror_type;
 jl_datatype_t *jl_loaderror_type;
 jl_datatype_t *jl_undefvarerror_type;
 jl_datatype_t *jl_pointer_type;
+jl_datatype_t *jl_void_type;
 jl_datatype_t *jl_voidpointer_type;
 jl_value_t *jl_an_empty_cell=NULL;
 jl_value_t *jl_stackovf_exception;
