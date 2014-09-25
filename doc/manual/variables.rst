@@ -27,10 +27,6 @@ Julia provides an extremely flexible system for naming variables.
 Variable names are case-sensitive, and have no semantic meaning (that is,
 the language will not treat variables differently based on their names).
 
-.. raw:: latex
-
-    \begin{CJK*}{UTF8}{gbsn}
-
 .. doctest::
 
     julia> x = 1.0
@@ -48,15 +44,7 @@ the language will not treat variables differently based on their names).
     julia> UniversalDeclarationOfHumanRightsStart = "人人生而自由，在尊严和权力上一律平等。"
     "人人生而自由，在尊严和权力上一律平等。"
 
-.. raw:: latex
-
-    \end{CJK*}
-
 Unicode names (in UTF-8 encoding) are allowed:
-
-.. raw:: latex
-
-    \begin{CJK*}{UTF8}{mj}
 
 .. doctest::
 
@@ -71,10 +59,6 @@ can type many Unicode math symbols by typing the backslashed LaTeX symbol
 name followed by tab.  For example, the variable name ``δ`` can be
 entered by typing ``\delta``-*tab*, or even ``α̂₂`` by
 ``\alpha``-*tab*-``\hat``-*tab*-``\_2``-*tab*.
-
-.. raw:: latex
-
-    \end{CJK*}
 
 Julia will even let you redefine built-in constants and functions if needed:
 
