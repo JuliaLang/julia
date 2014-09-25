@@ -21,7 +21,8 @@ function edit(file::String, line::Integer)
     end
     issrc = length(file)>2 && file[end-2:end] == ".jl"
     if issrc
-        file = find_source_file(file)
+        f = find_source_file(file)
+        f != nothing && (file = f)
     end
     if beginswith(edname, "emacs")
         spawn(`$edpath +$line $file`)
