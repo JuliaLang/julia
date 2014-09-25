@@ -330,8 +330,8 @@ operator should be used for elementwise operations.
 5.  Binary Boolean or bitwise — ``&``, ``|``, ``$``
 
 Some operators without dots operate elementwise anyway when one argument is a
-scalar. These operators are ``*``, ``/``, ``\``, and the bitwise
-operators.
+scalar. These operators are ``*``, ``+``, ``-``, and the bitwise operators. The
+operators ``/`` and ``\`` operate elementwise when the denominator is a scalar.
 
 Note that comparisons such as ``==`` operate on whole arrays, giving a single
 boolean answer. Use dot operators for elementwise comparisons.
