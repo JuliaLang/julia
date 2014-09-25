@@ -99,7 +99,7 @@ include_string(txt::String, fname::String) =
 
 include_string(txt::String) = include_string(txt, "string")
 
-function source_path(default::Union(String,Nothing)="")
+function source_path(default::Union(String,Void)="")
     t = current_task()
     while true
         s = t.storage

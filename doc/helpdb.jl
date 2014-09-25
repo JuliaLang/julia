@@ -30,8 +30,8 @@
 
 ("Base","whos","whos([Module,] [pattern::Regex])
 
-   Print information about exported global variables in a module, optionally
-   restricted to those matching \"pattern\".
+   Print information about exported global variables in a module,
+   optionally restricted to those matching \"pattern\".
 
 "),
 
@@ -1611,7 +1611,7 @@
    spliced in place of the removed item.
 
    To insert \"replacement\" before an index \"n\" without removing
-   any items, use \"splice(collection, n-1:n, replacement)\".
+   any items, use \"splice!(collection, n:n-1, replacement)\".
 
 "),
 
@@ -1623,7 +1623,7 @@
    ordered collection will be spliced in place of the removed items.
 
    To insert \"replacement\" before an index \"n\" without removing
-   any items, use \"splice(collection, n-1:n, replacement)\".
+   any items, use \"splice!(collection, n:n-1, replacement)\".
 
 "),
 
@@ -4516,8 +4516,8 @@ popdisplay(d::Display)
 
 ("Base","signbit","signbit(x)
 
-   Returns \"1\" if the value of the sign of \"x\" is negative,
-   otherwise \"0\".
+   Returns \"true\" if the value of the sign of \"x\" is negative,
+   otherwise \"false\".
 
 "),
 
@@ -5715,17 +5715,17 @@ popdisplay(d::Display)
 
 "),
 
-("Base","rand","rand(Int32|Uint32|Int64|Uint64|Int128|Uint128[, dims...])
+("Base","rand","rand(t::Type[, dims...])
 
-   Generate a random integer of the given type. Optionally, generate
-   an array of random integers of the given type by specifying dims.
+   Generate a random number or array of random numbes of the given
+   type.
 
 "),
 
 ("Base","rand","rand(r[, dims...])
 
-   Generate a random integer in the range \"r\" (for example, \"1:n\"
-   or \"0:2:10\"). Optionally, generate a random integer array.
+   Pick a random element or array of random elements from range \"r\"
+   (for example, \"1:n\" or \"0:2:10\").
 
 "),
 
@@ -5733,13 +5733,6 @@ popdisplay(d::Display)
 
    Generate a random boolean value. Optionally, generate an array of
    random boolean values.
-
-"),
-
-("Base","randbool!","randbool!(A)
-
-   Fill an array with random boolean values. A may be an \"Array\" or
-   a \"BitArray\".
 
 "),
 
@@ -5851,13 +5844,29 @@ popdisplay(d::Display)
 
 ("Base","zeros","zeros(type, dims)
 
-   Create an array of all zeros of specified type
+   Create an array of all zeros of specified type. The type defaults
+   to Float64 if not specified.
+
+"),
+
+("Base","zeros","zeros(A)
+
+   Create an array of all zeros with the same element type and shape
+   as A.
 
 "),
 
 ("Base","ones","ones(type, dims)
 
-   Create an array of all ones of specified type
+   Create an array of all ones of specified type. The type defaults to
+   Float64 if not specified.
+
+"),
+
+("Base","ones","ones(A)
+
+   Create an array of all ones with the same element type and shape as
+   A.
 
 "),
 
@@ -5873,15 +5882,15 @@ popdisplay(d::Display)
 
 "),
 
-("Base","fill","fill(v, dims)
+("Base","fill","fill(x, dims)
 
-   Create an array filled with \"v\"
+   Create an array filled with the value \"x\"
 
 "),
 
 ("Base","fill!","fill!(A, x)
 
-   Fill array \"A\" with value \"x\"
+   Fill the array \"A\" with the value \"x\"
 
 "),
 
@@ -9812,15 +9821,15 @@ Millisecond(v)
    \"Complex{Float64}\" the return type is \"UmfpackLU\". Some
    examples are shown in the table below.
 
-      +-------------------------+---------------------------+------------------------------------------+
-      | Type of input \\\"A\\\"     | Type of output \\\"F\\\"      | Relationship between \\\"F\\\" and \\\"A\\\"     |
-      +-------------------------+---------------------------+------------------------------------------+
-      | \\\"Matrix()\\\"            | \\\"LU\\\"                    | \\\"F[:L]*F[:U] == A[F[:p], :]\\\"           |
-      +-------------------------+---------------------------+------------------------------------------+
-      | \\\"Tridiagonal()\\\"       | \\\"LU{T,Tridiagonal{T}}\\\"  | N/A                                      |
-      +-------------------------+---------------------------+------------------------------------------+
-      | \\\"SparseMatrixCSC()\\\"   | \\\"UmfpackLU\\\"             | \\\"F[:L]*F[:U] == Rs .* A[F[:p], F[:q]]\\\" |
-      +-------------------------+---------------------------+------------------------------------------+
+      +-------------------------+---------------------------+----------------------------------------------+
+      | Type of input \\\"A\\\"     | Type of output \\\"F\\\"      | Relationship between \\\"F\\\" and \\\"A\\\"         |
+      +-------------------------+---------------------------+----------------------------------------------+
+      | \\\"Matrix()\\\"            | \\\"LU\\\"                    | \\\"F[:L]*F[:U] == A[F[:p], :]\\\"               |
+      +-------------------------+---------------------------+----------------------------------------------+
+      | \\\"Tridiagonal()\\\"       | \\\"LU{T,Tridiagonal{T}}\\\"  | N/A                                          |
+      +-------------------------+---------------------------+----------------------------------------------+
+      | \\\"SparseMatrixCSC()\\\"   | \\\"UmfpackLU\\\"             | \\\"F[:L]*F[:U] == F[:Rs] .* A[F[:p], F[:q]]\\\" |
+      +-------------------------+---------------------------+----------------------------------------------+
 
    The individual components of the factorization \"F\" can be
    accessed by indexing:
@@ -10044,7 +10053,7 @@ Millisecond(v)
 
 ("Base","eig","eig(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> D, V
 
-   Compute eigenvalues and eigenvectors of \"A\". See \"eigfact()\"
+   Computes eigenvalues and eigenvectors of \"A\". See \"eigfact()\"
    for details on the \"balance\" keyword argument.
 
       julia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
@@ -10101,10 +10110,12 @@ Millisecond(v)
 
 "),
 
-("Base","eigvecs","eigvecs(A, [eigvals,][permute=true,][scale=true])
+("Base","eigvecs","eigvecs(A, [eigvals,][permute=true,][scale=true]) -> Matrix
 
-   Returns the eigenvectors of \"A\". The \"permute\" and \"scale\"
-   keywords are the same as for \"eigfact()\".
+   Returns a matrix \"M\" whose columns are the eigenvectors of \"A\".
+   (The \"k``th eigenvector can be obtained from the slice ``M[:,
+   k]\".) The \"permute\" and \"scale\" keywords are the same as for
+   \"eigfact()\".
 
    For \"SymTridiagonal()\" matrices, if the optional vector of
    eigenvalues \"eigvals\" is specified, returns the specific
@@ -10112,42 +10123,47 @@ Millisecond(v)
 
 "),
 
-("Base","eigfact","eigfact(A,[il,][iu,][vl,][vu,][permute=true,][scale=true])
+("Base","eigfact","eigfact(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> Eigen
 
-   Compute the eigenvalue decomposition of \"A\" and return an
-   \"Eigen\" object. If \"F\" is the factorization object, the
-   eigenvalues can be accessed with \"F[:values]\" and the
-   eigenvectors with \"F[:vectors]\". The following functions are
-   available for \"Eigen\" objects: \"inv\", \"det\".
+   Computes the eigenvalue decomposition of \"A\", returning an
+   \"Eigen\" factorization object \"F\" which contains the eigenvalues
+   in \"F[:values]\" and the eigenvectors in the columns of the matrix
+   \"F[:vectors]\". (The \"k``th eigenvector can be obtained from the
+   slice ``F[:vectors][:, k]\".)
 
-   If \"A\" is \"Symmetric\", \"Hermitian\" or \"SymTridiagonal\", it
-   is possible to calculate only a subset of the eigenvalues by
-   specifying either a *UnitRange`* \"irange\" covering indices of the
-   sorted eigenvalues or a pair \"vl\" and \"vu\" for the lower and
-   upper boundaries of the eigenvalues.
+   The following functions are available for \"Eigen\" objects:
+   \"inv\", \"det\".
 
-   For general non-symmetric matrices it is possible to specify how
-   the matrix is balanced before the eigenvector calculation. The
-   option \"permute=true\" permutes the matrix to become closer to
-   upper triangular, and \"scale=true\" scales the matrix by its
-   diagonal elements to make rows and columns more equal in norm. The
-   default is \"true\" for both options.
+   If \"A\" is \"Symmetric()\", \"Hermitian()\" or
+   \"SymTridiagonal()\", it is possible to calculate only a subset of
+   the eigenvalues by specifying either a \"UnitRange()\" \"irange\"
+   covering indices of the sorted eigenvalues or a pair \"vl\" and
+   \"vu\" for the lower and upper boundaries of the eigenvalues.
+
+   For general nonsymmetric matrices it is possible to specify how the
+   matrix is balanced before the eigenvector calculation. The option
+   \"permute=true\" permutes the matrix to become closer to upper
+   triangular, and \"scale=true\" scales the matrix by its diagonal
+   elements to make rows and columns more equal in norm. The default
+   is \"true\" for both options.
 
 "),
 
-("Base","eigfact","eigfact(A, B)
+("Base","eigfact","eigfact(A, B) -> GeneralizedEigen
 
-   Compute the generalized eigenvalue decomposition of \"A\" and \"B\"
-   and return an \"GeneralizedEigen\" object. If \"F\" is the
-   factorization object, the eigenvalues can be accessed with
-   \"F[:values]\" and the eigenvectors with \"F[:vectors]\".
+   Computes the generalized eigenvalue decomposition of \"A\" and
+   \"B\", returning a \"GeneralizedEigen\" factorization object \"F\"
+   which contains the generalized eigenvalues in \"F[:values]\" and
+   the generalized eigenvectors in the columns of the matrix
+   \"F[:vectors]\". (The \"k``th generalized eigenvector can be
+   obtained from the slice ``F[:vectors][:, k]\".)
 
 "),
 
 ("Base","eigfact!","eigfact!(A[, B])
 
-   \"eigfact!\" is the same as \"eigfact()\", but saves space by
-   overwriting the input A (and B), instead of creating a copy.
+   Same as \"eigfact()\", but saves space by overwriting the input
+   \"A\" (and \"B\"), instead of creating a copy.
 
 "),
 
@@ -11052,11 +11068,15 @@ Millisecond(v)
 
 "),
 
-("Base.Pkg","init","init()
+("Base.Pkg","init","init(meta::String=DEFAULT_META, branch::String=META_BRANCH)
 
    Initialize \"Pkg.dir()\" as a package directory. This will be done
    automatically when the \"JULIA_PKGDIR\" is not set and
-   \"Pkg.dir()\" uses its default value.
+   \"Pkg.dir()\" uses its default value. As part of this process,
+   clones a local METADATA git repository from the site and branch
+   specified by its arguments, which are typically not provided.
+   Explicit (non-default) arguments can be used to support a custom
+   METADATA setup.
 
 "),
 

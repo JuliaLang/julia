@@ -68,9 +68,7 @@ function show(io::IO, x::IntrinsicFunction)
 end
 
 function show(io::IO, x::UnionType)
-    if is(x,None)
-        print(io, "None")
-    elseif is(x,Top)
+    if is(x,Top)
         print(io, "Top")
     else
         print(io, "Union", x.types)
@@ -107,14 +105,13 @@ macro show(exs...)
 end
 
 show(io::IO, tn::TypeName) = print(io, tn.name)
-show(io::IO, ::Nothing) = print(io, "nothing")
+show(io::IO, ::Void) = print(io, "nothing")
 show(io::IO, b::Bool) = print(io, b ? "true" : "false")
 show(io::IO, n::Signed) = (write(io, dec(n)); nothing)
 show(io::IO, n::Unsigned) = print(io, "0x", hex(n,sizeof(n)<<1))
 print(io::IO, n::Unsigned) = print(io, dec(n))
 
-show{T}(io::IO, p::Ptr{T}) =
-    print(io, is(T,None) ? "Ptr{Void}" : typeof(p), " @0x$(hex(unsigned(p), WORD_SIZE>>2))")
+show{T}(io::IO, p::Ptr{T}) = print(io, typeof(p), " @0x$(hex(unsigned(p), WORD_SIZE>>2))")
 
 function show(io::IO, m::Module)
     if is(m,Main)
@@ -197,12 +194,6 @@ show_comma_array(io::IO, itr, o, c) = show_delim_array(io, itr, o, ',', c, false
 show(io::IO, t::Tuple) = show_delim_array(io, t, '(', ',', ')', true)
 
 show(io::IO, s::Symbol) = show_unquoted(io, QuoteNode(s))
-show(io::IO, tn::TypeName) = print(io, tn.name)
-show(io::IO, ::Nothing) = print(io, "nothing")
-show(io::IO, b::Bool) = print(io, b ? "true" : "false")
-show(io::IO, n::Signed) = (write(io, dec(n)); nothing)
-show(io::IO, n::Unsigned) = print(io, "0x", hex(n,sizeof(n)<<1))
-print(io::IO, n::Unsigned) = print(io, dec(n))
 
 ## Abstract Syntax Tree (AST) printing ##
 
@@ -617,6 +608,11 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     elseif is(head, :&) && length(args) == 1
         print(io, '&')
         show_unquoted(io, args[1])
+
+    # transpose
+    elseif is(head, symbol('\'')) && length(args) == 1
+        show_unquoted(io, args[1])
+        print(io, '\'')
 
     # print anything else as "Expr(head, args...)"
     else

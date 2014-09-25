@@ -21,7 +21,7 @@ let i = 2
              UTF16String, UTF32String, Float16,
              :reserved9, :reserved10, :reserved11, :reserved12,
              
-             (), Bool, Any, :Any, None, Top, Undef, Type,
+             (), Bool, Any, :Any, Bottom, Top, Undef, Type,
              :Array, :TypeVar, :Box,
              :lambda, :body, :return, :call, symbol("::"),
              :(=), :null, :gotoifnot, :A, :B, :C, :M, :N, :T, :S, :X, :Y,

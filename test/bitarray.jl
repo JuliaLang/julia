@@ -478,6 +478,20 @@ for m1 = 1 : v1 + 1
             i = splice!(i2, m1:m2, i3)
             @test isequal(bitunpack(b2), i2)
             @test b == i
+            b2 = copy(b1)
+            i2 = copy(i1)
+            i3 = int(randbool(v2))
+            b = splice!(b2, m1:m2, i3)
+            i = splice!(i2, m1:m2, i3)
+            @test isequal(bitunpack(b2), i2)
+            @test b == i
+            b2 = copy(b1)
+            i2 = copy(i1)
+            i3 = [j => rand(0:3) for j = 1:v2]
+            b = splice!(b2, m1:m2, values(i3))
+            i = splice!(i2, m1:m2, values(i3))
+            @test isequal(bitunpack(b2), i2)
+            @test b == i
         end
     end
 end
@@ -492,6 +506,20 @@ for m1 = 1 : v1
         i3 = bitunpack(b3)
         b = splice!(b2, m1, b3)
         i = splice!(i2, m1, i3)
+        @test isequal(bitunpack(b2), i2)
+        @test b == i
+        b2 = copy(b1)
+        i2 = copy(i1)
+        i3 = int(randbool(v2))
+        b = splice!(b2, m1:m2, i3)
+        i = splice!(i2, m1:m2, i3)
+        @test isequal(bitunpack(b2), i2)
+        @test b == i
+        b2 = copy(b1)
+        i2 = copy(i1)
+        i3 = [j => rand(0:3) for j = 1:v2]
+        b = splice!(b2, m1:m2, values(i3))
+        i = splice!(i2, m1:m2, values(i3))
         @test isequal(bitunpack(b2), i2)
         @test b == i
     end

@@ -8,9 +8,13 @@ testnames = [
     "resolve", "pollfd", "mpfr", "broadcast", "complex", "socket",
     "floatapprox", "readdlm", "reflection", "regex", "float16", "combinatorics",
     "sysinfo", "rounding", "ranges", "mod2pi", "euler", "show",
-    "lineedit", "replcompletions", "repl", "test", "examples", "goto",
-    "llvmcall", "grisu"
+    "lineedit", "replcompletions", "repl", "test", "goto",
+    "llvmcall", "grisu", "nullable", "meta", "staged"
 ]
+
+if isdir(joinpath(dirname(@__FILE__), "..", "examples"))
+    push!(testnames, "examples")
+end
 @unix_only push!(testnames, "unicode")
 
 # parallel tests depend on other workers - do them last
@@ -21,7 +25,7 @@ tests = (ARGS==["all"] || isempty(ARGS)) ? testnames : ARGS
 if "linalg" in tests
     # specifically selected case
     filter!(x -> x != "linalg", tests)
-    prepend!(tests, ["linalg1", "linalg2", "linalg3", "linalg4", "linalg/triangular"])
+    prepend!(tests, ["linalg1", "linalg2", "linalg3", "linalg4", "linalg/triangular", "linalg/tridiag"])
 end
 
 net_required_for = ["socket", "parallel"]
@@ -35,7 +39,7 @@ end
 
 cd(dirname(@__FILE__)) do
     n = 1
-    if net_on 
+    if net_on
         n = min(8, CPU_CORES, length(tests))
         n > 1 && addprocs(n; exeflags=`--check-bounds=yes`)
         blas_set_num_threads(1)

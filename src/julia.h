@@ -261,6 +261,7 @@ typedef struct _jl_methlist_t {
     JL_DATA_TYPE
     jl_tuple_t *sig;
     int8_t va;
+    int8_t isstaged;
     jl_tuple_t *tvars;
     jl_function_t *func;
     // cache of specializations of this method for invoke(), i.e.
@@ -358,6 +359,7 @@ extern DLLEXPORT jl_datatype_t *jl_float32_type;
 extern DLLEXPORT jl_datatype_t *jl_float64_type;
 extern DLLEXPORT jl_datatype_t *jl_floatingpoint_type;
 extern DLLEXPORT jl_datatype_t *jl_number_type;
+extern DLLEXPORT jl_datatype_t *jl_void_type;
 extern DLLEXPORT jl_datatype_t *jl_voidpointer_type;
 extern DLLEXPORT jl_datatype_t *jl_pointer_type;
 
@@ -421,8 +423,8 @@ extern jl_sym_t *abstracttype_sym; extern jl_sym_t *bitstype_sym;
 extern jl_sym_t *compositetype_sym; extern jl_sym_t *type_goto_sym;
 extern jl_sym_t *global_sym;  extern jl_sym_t *tuple_sym;
 extern jl_sym_t *boundscheck_sym; extern jl_sym_t *copyast_sym;
-extern jl_sym_t *simdloop_sym;
-
+extern jl_sym_t *simdloop_sym; extern jl_sym_t *meta_sym;
+extern jl_sym_t *arrow_sym; extern jl_sym_t *ldots_sym;
 
 // object accessors -----------------------------------------------------------
 
@@ -639,11 +641,11 @@ jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_datatype_t *super,
                                    jl_tuple_t *parameters);
 DLLEXPORT jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields);
 DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
-                               jl_tuple_t *parameters,
-                               jl_tuple_t *fnames, jl_tuple_t *ftypes,
-                               int abstract, int mutabl);
+                                         jl_tuple_t *parameters,
+                                         jl_tuple_t *fnames, jl_tuple_t *ftypes,
+                                         int abstract, int mutabl);
 DLLEXPORT jl_datatype_t *jl_new_bitstype(jl_value_t *name, jl_datatype_t *super,
-                               jl_tuple_t *parameters, size_t nbits);
+                                         jl_tuple_t *parameters, size_t nbits);
 jl_datatype_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
 jl_datatype_t *jl_wrap_vararg(jl_value_t *t); // x -> x...
 
@@ -672,9 +674,9 @@ DLLEXPORT jl_sym_t *jl_get_root_symbol(void);
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 jl_function_t *jl_new_generic_function(jl_sym_t *name);
 void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth,
-                   jl_tuple_t *tvars);
+                   jl_tuple_t *tvars, int8_t isstaged);
 DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
-                                    jl_tuple_t *argtypes, jl_function_t *f);
+                                    jl_tuple_t *argtypes, jl_function_t *f, jl_value_t *isstaged);
 DLLEXPORT jl_value_t *jl_box_bool(int8_t x);
 DLLEXPORT jl_value_t *jl_box_int8(int32_t x);
 DLLEXPORT jl_value_t *jl_box_uint8(uint32_t x);

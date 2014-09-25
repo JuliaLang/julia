@@ -285,7 +285,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             jl_check_static_parameter_conflicts((jl_lambda_info_t*)args[2], (jl_tuple_t*)jl_t1(atypes), fname);
         }
         meth = eval(args[2], locals, nl);
-        jl_method_def(fname, bp, b, (jl_tuple_t*)atypes, (jl_function_t*)meth);
+        jl_method_def(fname, bp, b, (jl_tuple_t*)atypes, (jl_function_t*)meth, args[3]);
         JL_GC_POP();
         return *bp;
     }
@@ -453,6 +453,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         return (jl_value_t*)jl_nothing;
     }
     else if (ex->head == simdloop_sym) {
+        return (jl_value_t*)jl_nothing;
+    }
+    else if (ex->head == meta_sym) {
         return (jl_value_t*)jl_nothing;
     }
     jl_errorf("unsupported or misplaced expression %s", ex->head->name);

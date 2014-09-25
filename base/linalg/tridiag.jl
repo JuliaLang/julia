@@ -49,6 +49,30 @@ end
 /(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv/B, A.ev/B)
 ==(A::SymTridiagonal, B::SymTridiagonal) = (A.dv==B.dv) && (A.ev==B.ev)
 
+function A_mul_B!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
+    m, n = size(B, 1), size(B, 2)
+    m == size(S, 1) == size(C, 1) || throw(DimensionMismatch(""))
+    n == size(C, 2) || throw(DimensionMismatch(""))
+
+    α = S.dv
+    β = S.ev
+    @inbounds begin
+        for j = 1:n
+            x₀, x₊ = B[1, j], B[2, j]
+            β₀ = β[1]
+            C[1, j] = α[1]*x₀ + x₊*β₀
+            for i = 2:m - 1
+                x₋, x₀, x₊ = x₀, x₊, B[i + 1, j]
+                β₋, β₀ = β₀, β[i]
+                C[i, j] = β₋*x₋ + α[i]*x₀ + β₀*x₊
+            end
+            C[m, j] = β₀*x₀ + α[m]*x₊
+        end
+    end
+
+    return C
+end
+
 ## Solver
 function \{T<:BlasFloat}(M::SymTridiagonal{T}, rhs::StridedVecOrMat{T})
     if stride(rhs, 1) == 1
@@ -239,16 +263,17 @@ function A_mul_B!(C::AbstractVecOrMat, A::Tridiagonal, B::AbstractVecOrMat)
     u = A.du
     @inbounds begin
         for j = 1:nB
-            C[1,j] = d[1]*B[1,j] + u[1]*B[2,j]
-            for i = 2:nA-1
-                C[i,j] = l[i-1]*B[i-1,j] + d[i]*B[i,j] + u[i]*B[i+1,j]
+            b₀, b₊ = B[1, j], B[2, j]
+            C[1, j] = d[1]*b₀ + u[1]*b₊
+            for i = 2:nA - 1
+                b₋, b₀, b₊ = b₀, b₊, B[i + 1, j]
+                C[i, j] = l[i - 1]*b₋ + d[i]*b₀ + u[i]*b₊
             end
-            C[nA,j] = l[nA-1]*B[nA-1,j] + d[nA]*B[nA,j]
+            C[nA, j] = l[nA - 1]*b₀ + d[nA]*b₊
         end
     end
     C
 end
-*(A::Tridiagonal, B::AbstractVecOrMat) = A_mul_B!(similar(B), A, B)
 
 A_ldiv_B!(A::Tridiagonal,B::AbstractVecOrMat) = A_ldiv_B!(lufact!(A), B)
 At_ldiv_B!(A::Tridiagonal,B::AbstractVecOrMat) = At_ldiv_B!(lufact!(A), B)

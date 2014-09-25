@@ -1,6 +1,6 @@
 ### From array.jl
 
-@ngenerate N Nothing function checksize(A::AbstractArray, I::NTuple{N, Any}...)
+@ngenerate N Void function checksize(A::AbstractArray, I::NTuple{N, Any}...)
     @nexprs N d->(size(A, d) == length(I_d) || throw(DimensionMismatch("index $d has length $(length(I_d)), but size(A, $d) = $(size(A,d))")))
     nothing
 end
