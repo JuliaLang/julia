@@ -731,7 +731,7 @@ end
 
 const _default_bit_splice = BitVector(0)
 
-function splice!(B::BitVector, r::Union(UnitRange{Int}, Integer), ins::BitVector = _default_bit_splice)
+function splice!(B::BitVector, r::Union(UnitRange{Int}, Integer), ins::AbstractArray = _default_bit_splice)
     n = length(B)
     i_f = first(r)
     i_l = last(r)
@@ -739,8 +739,10 @@ function splice!(B::BitVector, r::Union(UnitRange{Int}, Integer), ins::BitVector
     1 <= i_f <= n+1 || throw(BoundsError())
     i_l <= n || throw(BoundsError())
 
+    Bins = convert(BitArray, ins)
+
     if (i_f > n)
-        append!(B, ins)
+        append!(B, Bins)
         return BitVector(0)
     end
 
@@ -748,7 +750,7 @@ function splice!(B::BitVector, r::Union(UnitRange{Int}, Integer), ins::BitVector
 
     Bc = B.chunks
 
-    lins = length(ins)
+    lins = length(Bins)
     ldel = length(r)
 
     new_l = length(B) + lins - ldel
@@ -757,7 +759,7 @@ function splice!(B::BitVector, r::Union(UnitRange{Int}, Integer), ins::BitVector
     delta_k > 0 && ccall(:jl_array_grow_end, Void, (Any, Uint), Bc, delta_k)
 
     copy_chunks!(Bc, i_f+lins, Bc, i_l+1, n-i_l)
-    copy_chunks!(Bc, i_f, ins.chunks, 1, lins)
+    copy_chunks!(Bc, i_f, Bins.chunks, 1, lins)
 
     delta_k < 0 && ccall(:jl_array_del_end, Void, (Any, Uint), Bc, -delta_k)
 
@@ -769,7 +771,17 @@ function splice!(B::BitVector, r::Union(UnitRange{Int}, Integer), ins::BitVector
 
     return v
 end
-splice!(B::BitVector, r::Union(UnitRange{Int}, Integer), ins::AbstractVector{Bool}) = splice!(B, r, bitpack(ins))
+
+function splice!(B::BitVector, r::Union(UnitRange{Int}, Integer), ins)
+    Bins = BitArray(length(ins))
+    i = 1
+    for x in ins
+        Bins[i] = bool(x)
+        i += 1
+    end
+    return splice!(B, r, Bins)
+end
+
 
 function empty!(B::BitVector)
     ccall(:jl_array_del_end, Void, (Any, Uint), B.chunks, length(B.chunks))

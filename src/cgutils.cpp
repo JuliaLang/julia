@@ -529,8 +529,8 @@ static jl_value_t *llvm_type_to_julia(Type *t, bool throw_error)
     if (t == T_int64) return (jl_value_t*)jl_int64_type;
     if (t == T_float32) return (jl_value_t*)jl_float32_type;
     if (t == T_float64) return (jl_value_t*)jl_float64_type;
-    if (t == T_void) return (jl_value_t*)jl_bottom_type;
-    if (t->isEmptyTy()) return (jl_value_t*)jl_nothing->type;
+    if (t == T_void) return (jl_value_t*)jl_void_type;
+    if (t->isEmptyTy()) return (jl_value_t*)jl_void_type;
     if (t == jl_pvalue_llvmt)
         return (jl_value_t*)jl_any_type;
     if (t->isPointerTy()) {
@@ -1289,7 +1289,8 @@ static Value *emit_arraylen_prim(Value *t, jl_value_t *ty)
 {
 #ifdef STORE_ARRAY_LEN
     (void)ty;
-    return emit_nthptr_recast(t, 2, tbaa_arraylen, T_psize);
+    Value* addr = builder.CreateStructGEP(builder.CreateBitCast(t,jl_parray_llvmt), 2);
+    return tbaa_decorate(tbaa_arraylen, builder.CreateLoad(addr, false));
 #else
     jl_value_t *p1 = jl_tparam1(ty);
     if (jl_is_long(p1)) {
@@ -1320,7 +1321,8 @@ static Value *emit_arraylen(Value *t, jl_value_t *ex, jl_codectx_t *ctx)
 
 static Value *emit_arrayptr(Value *t)
 {
-    return emit_nthptr(t, 1, tbaa_arrayptr);
+    Value* addr = builder.CreateStructGEP(builder.CreateBitCast(t,jl_parray_llvmt), 1);
+    return tbaa_decorate(tbaa_arrayptr, builder.CreateLoad(addr, false));
 }
 
 static Value *emit_arrayptr(Value *t, jl_value_t *ex, jl_codectx_t *ctx)
@@ -1455,7 +1457,7 @@ static jl_value_t *static_void_instance(jl_value_t *jt)
         //assert(jb->instance != NULL);
         return (jl_value_t*)jb->instance;
     }
-    else if (jt == jl_typeof(jl_nothing) || jt == jl_bottom_type) {
+    else if (jt == (jl_value_t*)jl_void_type) {
         return (jl_value_t*)jl_nothing;
     }
     assert(jl_is_tuple(jt));
@@ -1494,6 +1496,14 @@ static jl_value_t *static_constant_instance(Constant *constant, jl_value_t *jt)
         assert(jl_is_cpointer_type(jt));
         uint64_t val = 0;
         return jl_new_bits(jt,&val);
+    }
+
+    // issue #8464
+    ConstantExpr *ce = dyn_cast<ConstantExpr>(constant);
+    if (ce != NULL) {
+        if (ce->isCast()) {
+            return static_constant_instance(dyn_cast<Constant>(ce->getOperand(0)), jt);
+        }
     }
 
     assert(jl_is_tuple(jt));
@@ -1539,8 +1549,10 @@ static Value *boxed(Value *v, jl_codectx_t *ctx, jl_value_t *jt)
         if (jl_subtype(jt2, jt, 0))
             jt = jt2;
     }
+    if (jt == jl_bottom_type)
+        return UndefValue::get(jl_pvalue_llvmt);
     UndefValue *uv = NULL;
-    if (jt == jl_bottom_type || v == NULL || (uv = dyn_cast<UndefValue>(v)) != 0 || t == NoopType) {
+    if (v == NULL || (uv = dyn_cast<UndefValue>(v)) != 0 || t == NoopType) {
         if (uv != NULL && jl_is_datatype(jt)) {
             jl_datatype_t *jb = (jl_datatype_t*)jt;
             // We have an undef value on a hopefully dead branch

@@ -109,6 +109,9 @@ end
 
 Base.show(io::IO, x::FloatingPoint) = _show(io, x, SHORTEST, 0, true)
 
+Base.print(io::IO, x::Float32) = _show(io, x, SHORTEST, 0, false)
+Base.print(io::IO, x::Float16) = _show(io, x, SHORTEST, 0, false)
+
 Base.showcompact(io::IO, x::Float64) = _show(io, x, PRECISION, 6, false)
 Base.showcompact(io::IO, x::Float32) = _show(io, x, PRECISION, 6, false)
 Base.showcompact(io::IO, x::Float16) = _show(io, x, PRECISION, 5, false)

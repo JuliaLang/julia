@@ -200,7 +200,6 @@ function copy!(dest::AbstractArray, doffs::Integer, src::AbstractArray, soffs::I
 end
 
 copy(a::AbstractArray) = copy!(similar(a), a)
-copy(a::AbstractArray{None}) = a # cannot be assigned into so is immutable
 
 function copy!{R,S}(B::AbstractMatrix{R}, ir_dest::Range{Int}, jr_dest::Range{Int}, A::AbstractMatrix{S}, ir_src::Range{Int}, jr_src::Range{Int})
     if length(ir_dest) != length(ir_src) || length(jr_dest) != length(jr_src)
@@ -502,14 +501,14 @@ get(A::AbstractArray, I::RangeVecIntList, default) = get!(similar(A, typeof(defa
 
 ## Concatenation ##
 
-promote_eltype() = None
+promote_eltype() = Bottom
 promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
 
 #TODO: ERROR CHECK
-cat(catdim::Integer) = Array(None, 0)
+cat(catdim::Integer) = Array(Bottom, 0)
 
-vcat() = Array(None, 0)
-hcat() = Array(None, 0)
+vcat() = Array(Bottom, 0)
+hcat() = Array(Bottom, 0)
 
 ## cat: special cases
 hcat{T}(X::T...)         = T[ X[j] for i=1, j=1:length(X) ]
@@ -518,7 +517,7 @@ vcat{T}(X::T...)         = T[ X[i] for i=1:length(X) ]
 vcat{T<:Number}(X::T...) = T[ X[i] for i=1:length(X) ]
 
 function vcat(X::Number...)
-    T = None
+    T = Bottom
     for x in X
         T = promote_type(T,typeof(x))
     end
@@ -526,7 +525,7 @@ function vcat(X::Number...)
 end
 
 function hcat(X::Number...)
-    T = None
+    T = Bottom
     for x in X
         T = promote_type(T,typeof(x))
     end
@@ -941,7 +940,7 @@ end
 function ipermutedims(A::AbstractArray,perm)
     iperm = Array(Int,length(perm))
     for i = 1:length(perm)
-	iperm[perm[i]] = i
+        iperm[perm[i]] = i
     end
     return permutedims(A,iperm)
 end
@@ -1287,7 +1286,7 @@ function promote_to!{T}(f::Callable, offs, dest::AbstractArray{T}, A::AbstractAr
 end
 
 function map_promote(f::Callable, A::AbstractArray)
-    if isempty(A); return similar(A, None); end
+    if isempty(A); return similar(A, Bottom); end
     first = f(A[1])
     dest = similar(A, typeof(first))
     dest[1] = first

@@ -123,22 +123,27 @@ end
 # Based on Direct Methods for Sparse Linear Systems, T. A. Davis, SIAM, Philadelphia, Sept. 2006.
 # Section 2.5: Transpose
 # http://www.cise.ufl.edu/research/sparse/CSparse/
-
-# NOTE: When calling transpose!(S,T), the colptr in the result matrix T must be set up
-# by counting the nonzeros in every row of S.
 function transpose!{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, T::SparseMatrixCSC{Tv,Ti})
-    (mT, nT) = size(T)
-    colptr_T = T.colptr
-    rowval_T = T.rowval
-    nzval_T = T.nzval
-
+    (mS, nS) = size(S)
     nnzS = nnz(S)
     colptr_S = S.colptr
     rowval_S = S.rowval
     nzval_S = S.nzval
 
+    (mT, nT) = size(T)
+    colptr_T = T.colptr
+    rowval_T = T.rowval
+    nzval_T = T.nzval
+
+    fill!(colptr_T, 0)
+    colptr_T[1] = 1
+    for i=1:nnzS
+        @inbounds colptr_T[rowval_S[i]+1] += 1
+    end
+    cumsum!(colptr_T, colptr_T)
+
     w = copy(colptr_T)
-    @inbounds for j = 1:mT, p = colptr_S[j]:(colptr_S[j+1]-1)
+    @inbounds for j = 1:nS, p = colptr_S[j]:(colptr_S[j+1]-1)
         ind = rowval_S[p]
         q = w[ind]
         w[ind] += 1
@@ -146,43 +151,41 @@ function transpose!{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, T::SparseMatrixCSC{Tv,Ti})
         nzval_T[q] = nzval_S[p]
     end
 
-    return SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
+    return T
 end
 
 function transpose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     (nT, mT) = size(S)
-    nnzS = nnz(S)    
-    rowval_S = S.rowval
-
+    nnzS = nnz(S)
+    colptr_T = Array(Ti, nT+1)
     rowval_T = Array(Ti, nnzS)
     nzval_T = Array(Tv, nnzS)
-
-    colptr_T = zeros(Ti, nT+1)
-    colptr_T[1] = 1
-    @simd for i=1:nnz(S)
-        @inbounds colptr_T[rowval_S[i]+1] += 1
-    end
-    colptr_T = cumsum(colptr_T)
 
     T = SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
     return transpose!(S, T)
 end
 
-# NOTE: When calling ctranspose!(S,T), the colptr in the result matrix T must be set up
-# by counting the nonzeros in every row of S.
 function ctranspose!{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, T::SparseMatrixCSC{Tv,Ti})
-    (mT, nT) = size(T)
-    colptr_T = T.colptr
-    rowval_T = T.rowval
-    nzval_T = T.nzval
-
+    (mS, nS) = size(S)
     nnzS = nnz(S)
     colptr_S = S.colptr
     rowval_S = S.rowval
     nzval_S = S.nzval
 
+    (mT, nT) = size(T)
+    colptr_T = T.colptr
+    rowval_T = T.rowval
+    nzval_T = T.nzval
+
+    fill!(colptr_T, 0)
+    colptr_T[1] = 1
+    for i=1:nnzS
+        @inbounds colptr_T[rowval_S[i]+1] += 1
+    end
+    cumsum!(colptr_T, colptr_T)
+
     w = copy(colptr_T)
-    @inbounds for j = 1:mT, p = colptr_S[j]:(colptr_S[j+1]-1)
+    @inbounds for j = 1:nS, p = colptr_S[j]:(colptr_S[j+1]-1)
         ind = rowval_S[p]
         q = w[ind]
         w[ind] += 1
@@ -190,23 +193,15 @@ function ctranspose!{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, T::SparseMatrixCSC{Tv,Ti}
         nzval_T[q] = conj(nzval_S[p])
     end
 
-    return SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
+    return T
 end
 
 function ctranspose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}) 
     (nT, mT) = size(S)
     nnzS = nnz(S)
-    rowval_S = S.rowval
-    
+    colptr_T = Array(Ti, nT+1)
     rowval_T = Array(Ti, nnzS)
     nzval_T = Array(Tv, nnzS)
-
-    colptr_T = zeros(Ti, nT+1)
-    colptr_T[1] = 1
-    @inbounds for i=1:nnz(S)
-        colptr_T[rowval_S[i]+1] += 1
-    end
-    colptr_T = cumsum(colptr_T)
 
     T = SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
     return ctranspose!(S, T)
@@ -363,8 +358,8 @@ function fkeep!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f, other)
 end
 
 droptol!(A::SparseMatrixCSC, tol) = fkeep!(A, (i,j,x,other)->abs(x)>other, tol)
-dropzeros!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->x!=0, None)
-triu!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->(j>=i), None)
+dropzeros!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->x!=0, nothing)
+triu!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->(j>=i), nothing)
 triu(A::SparseMatrixCSC) = triu!(copy(A))
-tril!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->(i>=j), None)
+tril!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->(i>=j), nothing)
 tril(A::SparseMatrixCSC) = tril!(copy(A))

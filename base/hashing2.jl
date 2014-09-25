@@ -101,7 +101,7 @@ function decompose(x::Float32)
     s = int32(n & 0x007fffff)
     e = int32(n & 0x7f800000 >> 23)
     s |= int32(e != 0) << 23
-    d = ifelse(signbit(n) == 1, -1, 1)
+    d = ifelse(signbit(n), -1, 1)
     int(s), int(e - 150 + (e == 0)), d
 end
 
@@ -112,7 +112,7 @@ function decompose(x::Float64)
     s = int64(n & 0x000fffffffffffff)
     e = int64(n & 0x7ff0000000000000 >> 52)
     s |= int64(e != 0) << 52
-    d = ifelse(signbit(n) == 1, -1, 1)
+    d = ifelse(signbit(n), -1, 1)
     int(s), int(e - 1075 + (e == 0)), d
 end
 

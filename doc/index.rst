@@ -80,3 +80,4 @@ Developer Documentation
    :maxdepth: 1
 
    devdocs/cartesian
+   devdocs/meta
