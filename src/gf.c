@@ -961,7 +961,8 @@ DLLEXPORT jl_function_t *jl_instantiate_staged(jl_methlist_t *m, jl_tuple_t *tt)
         }
     }
     jl_cellset(ex->args, 1, jl_apply(m->func, tt->data, jl_tuple_len(tt)));
-    func = (jl_function_t*)jl_toplevel_eval(jl_expand((jl_value_t*)ex));
+    code = jl_expand((jl_value_t*)ex);
+    func = (jl_function_t*)jl_toplevel_eval(code);
     JL_GC_POP();
     return func;
 }
@@ -972,7 +973,8 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
     size_t nargs = jl_tuple_len(tt);
     size_t i;
     jl_value_t *ti=(jl_value_t*)jl_bottom_type;
-    jl_tuple_t *newsig=NULL, *env = jl_null, *func = NULL;
+    jl_tuple_t *newsig=NULL, *env = jl_null;
+    jl_function_t *func = NULL;
     JL_GC_PUSH3(&env, &newsig, &func);
 
     while (m != JL_NULL) {
