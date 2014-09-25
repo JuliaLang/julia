@@ -21,7 +21,7 @@ end
 ####
 #### User-level functions
 ####
-function init(; n::Union(Nothing,Integer) = nothing, delay::Union(Nothing,Float64) = nothing)
+function init(; n::Union(Void,Integer) = nothing, delay::Union(Void,Float64) = nothing)
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
     delay_cur = ccall(:jl_profile_delay_nsec, Uint64, ())/10^9
     if n == nothing && delay == nothing

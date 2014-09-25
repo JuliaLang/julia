@@ -881,7 +881,7 @@ let
 end
 
 # issue #6977
-@test []' == Array(None,1,0)
+@test size([]') == (1,0)
 
 # issue #6996
 @test { 1 2; 3 4 }' == { 1 2; 3 4 }.'

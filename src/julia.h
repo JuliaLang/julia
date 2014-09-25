@@ -359,6 +359,7 @@ extern DLLEXPORT jl_datatype_t *jl_float32_type;
 extern DLLEXPORT jl_datatype_t *jl_float64_type;
 extern DLLEXPORT jl_datatype_t *jl_floatingpoint_type;
 extern DLLEXPORT jl_datatype_t *jl_number_type;
+extern DLLEXPORT jl_datatype_t *jl_void_type;
 extern DLLEXPORT jl_datatype_t *jl_voidpointer_type;
 extern DLLEXPORT jl_datatype_t *jl_pointer_type;
 
@@ -640,11 +641,11 @@ jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_datatype_t *super,
                                    jl_tuple_t *parameters);
 DLLEXPORT jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields);
 DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
-                               jl_tuple_t *parameters,
-                               jl_tuple_t *fnames, jl_tuple_t *ftypes,
-                               int abstract, int mutabl);
+                                         jl_tuple_t *parameters,
+                                         jl_tuple_t *fnames, jl_tuple_t *ftypes,
+                                         int abstract, int mutabl);
 DLLEXPORT jl_datatype_t *jl_new_bitstype(jl_value_t *name, jl_datatype_t *super,
-                               jl_tuple_t *parameters, size_t nbits);
+                                         jl_tuple_t *parameters, size_t nbits);
 jl_datatype_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
 jl_datatype_t *jl_wrap_vararg(jl_value_t *t); // x -> x...
 

@@ -905,10 +905,10 @@ static jl_value_t *lookup_match(jl_value_t *a, jl_value_t *b, jl_tuple_t **penv,
                 ee[n++] = val;
                 /*
                   since "a" is a concrete type, we assume that
-                  (a∩b != None) => a<:b. However if a static parameter is
-                  forced to equal None, then part of "b" might become None,
+                  (a∩b != Union()) => a<:b. However if a static parameter is
+                  forced to equal Union(), then part of "b" might become Union(),
                   and therefore a subtype of "a". For example
-                  (Type{None},Int) ∩ (Type{T},T)
+                  (Type{Union()},Int) ∩ (Type{T},T)
                   issue #5254
                 */
                 if (val == (jl_value_t*)jl_bottom_type) {

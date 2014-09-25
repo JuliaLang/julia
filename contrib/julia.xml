@@ -142,8 +142,6 @@
       <item> LU </item>
       <item> MathConst </item>
       <item> Matrix </item>
-      <item> Nothing </item>
-      <item> None </item>
       <item> NTuple </item>
       <item> Number </item>
       <item> ObjectIdDict </item>

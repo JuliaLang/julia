@@ -47,7 +47,7 @@ function curl(url::String, opts::Cmd=``)
     end
     error("strangely formatted HTTP response")
 end
-curl(url::String, data::Nothing, opts::Cmd=``) = curl(url,opts)
+curl(url::String, data::Void, opts::Cmd=``) = curl(url,opts)
 curl(url::String, data, opts::Cmd=``) =
     curl(url,`--data $(sprint(io->json().print(io,data))) $opts`)
 

@@ -38,7 +38,7 @@ function depwarn(msg, funcsym)
     warn(msg, once=(caller!=C_NULL), key=caller, bt=bt)
 end
 
-function firstcaller(bt::Array{Ptr{None},1}, funcsym::Symbol)
+function firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol)
     # Identify the calling line
     i = 1
     while i <= length(bt)
@@ -179,3 +179,9 @@ const IpAddr = IPAddr
 @deprecate isblank(s::String) all(c -> c == ' ' || c == '\t', s)
 
 @deprecate randbool! rand!
+
+export Nothing
+const Nothing = Void
+
+export None
+const None = Union()

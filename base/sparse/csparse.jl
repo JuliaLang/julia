@@ -358,8 +358,8 @@ function fkeep!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f, other)
 end
 
 droptol!(A::SparseMatrixCSC, tol) = fkeep!(A, (i,j,x,other)->abs(x)>other, tol)
-dropzeros!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->x!=0, None)
-triu!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->(j>=i), None)
+dropzeros!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->x!=0, nothing)
+triu!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->(j>=i), nothing)
 triu(A::SparseMatrixCSC) = triu!(copy(A))
-tril!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->(i>=j), None)
+tril!(A::SparseMatrixCSC) = fkeep!(A, (i,j,x,other)->(i>=j), nothing)
 tril(A::SparseMatrixCSC) = tril!(copy(A))
