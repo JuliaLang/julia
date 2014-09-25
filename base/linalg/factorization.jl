@@ -276,8 +276,8 @@ function A_ldiv_B!{T<:BlasFloat}(A::Union(QRCompactWY{T},QRPivoted{T}), B::Strid
     xmax = ones(T, 1)
     tmin = tmax = ar
     while rnk < nr
-        tmin, smin, cmin = LAPACK.laic1!(2, xmin, tmin, sub(A.factors, 1:rnk, rnk + 1), A.factors[rnk + 1, rnk + 1])
-        tmax, smax, cmax = LAPACK.laic1!(1, xmax, tmax, sub(A.factors, 1:rnk, rnk + 1), A.factors[rnk + 1, rnk + 1])
+        tmin, smin, cmin = LAPACK.laic1!(2, xmin, tmin, A.factors[1:rnk, rnk + 1], A.factors[rnk + 1, rnk + 1])
+        tmax, smax, cmax = LAPACK.laic1!(1, xmax, tmax, A.factors[1:rnk, rnk + 1], A.factors[rnk + 1, rnk + 1])
         tmax*rcond > tmin && break
         push!(xmin, cmin)
         push!(xmax, cmax)
@@ -288,10 +288,10 @@ function A_ldiv_B!{T<:BlasFloat}(A::Union(QRCompactWY{T},QRPivoted{T}), B::Strid
         rnk += 1
         # if cond(r[1:rnk, 1:rnk])*rcond < 1 break end
     end
-    C, τ = LAPACK.tzrzf!(A.factors[1:rnk,:])
-    A_ldiv_B!(Triangular(C[1:rnk,1:rnk],:U),sub(Ac_mul_B!(getq(A),sub(B, 1:mA, 1:nrhs)),1:rnk,1:nrhs))
+    C, τ = LAPACK.tzrzf!(copy(A.factors[1:rnk,:]))
+    A_ldiv_B!(Triangular(C[1:rnk,1:rnk],:U), Ac_mul_B!(getq(A), B[1:mA, 1:nrhs])[1:rnk, 1:nrhs])
     B[rnk+1:end,:] = zero(T)
-    LAPACK.ormrz!('L', iseltype(B, Complex) ? 'C' : 'T', C, τ, sub(B,1:nA,1:nrhs))
+    LAPACK.ormrz!('L', iseltype(B, Complex) ? 'C' : 'T', C, τ, B[1:nA, 1:nrhs])
     return isa(A,QRPivoted) ? B[invperm(A[:p]::Vector{BlasInt}),:] : B[1:nA,:], rnk
 end
 A_ldiv_B!{T<:BlasFloat}(A::Union(QRCompactWY{T},QRPivoted{T}), B::StridedVector{T}) = vec(A_ldiv_B!(A,reshape(B,length(B),1)))

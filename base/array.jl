@@ -245,7 +245,7 @@ getindex(A::Array, i0::Real, i1::Real, i2::Real, i3::Real,  i4::Real, i5::Real, 
     arrayref(A,to_index(i0),to_index(i1),to_index(i2),to_index(i3),to_index(i4),to_index(i5),to_index(I)...)
 
 # Fast copy using copy! for UnitRange
-function getindex(A::Array, I::UnitRange{Int})
+function getindex(A::Array, I::Union(Colon,UnitRange{Int}))
     checkbounds(A, I)
     view(A, I)
 end

@@ -40,6 +40,10 @@ end
     dest
 end
 
+function getindex(A::Array, I::Union(Colon,UnitRange{Int},Real)...)
+    checkbounds(A, I...)
+    view(A, I...)
+end
 # It's most efficient to call checkbounds first, then to_index, and finally
 # allocate the output. Hence the different variants.
 _getindex(A, I::(Union(Int,AbstractVector)...)) =

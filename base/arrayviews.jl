@@ -219,8 +219,6 @@ getindex(a::ArrayView, i1::Real, i2::Real, i3::Real, i4::Real, i5::Real, i6::Rea
     getindex(a, to_index(i1), to_index(i2), to_index(i3), 
                 to_index(i4), to_index(i5), to_index(i6), I...)
 
-getindex{T,N}(S::ArrayView{T,N}, I::AbstractArray{Bool,N}) = getindex_bool_1d(S, I)
-
 # setindex!
 
 setindex!{T}(a::ArrayView{T}, v, i::Int) = setindex!(parent(a), convert(T, v), uindex(a, i))
@@ -744,5 +742,9 @@ acontrank{T,N,M}(a::ArrayView{T,N,M}, i1::Subs, i2::Subs, i3::Subs, i4::Subs) =
     minrank(contrank(i1, i2, i3, i4), ContRank{M})
 acontrank{T,N,M}(a::ArrayView{T,N,M}, i1::Subs, i2::Subs, i3::Subs, i4::Subs, i5::Subs, I::Subs...) = 
     minrank(contrank(i1, i2, i3, i4, i5, I...), ContRank{M})
+
+# Added by Andreas Noack 24 September 2014 when including this in Base
+getindex{T,N}(A::ArrayView{T,N}, I::AbstractArray{Bool,N}) = getindex_bool_1d(A, I)
+getindex(A::ArrayView, I::Subs...) = view(A, I...)
 
 end  # module ArrayViews
