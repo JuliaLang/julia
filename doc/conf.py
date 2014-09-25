@@ -199,7 +199,11 @@ latex_elements = {
 
     'inputenc': r'\newcommand{\DeclareUnicodeCharacter}[2]{}',
     'fontenc': r'\usepackage{fontspec}',
-    'preamble': r''''''
+    'preamble': r'''
+\setmainfont{Times}
+\setsansfont{Helvetica}
+\setmonofont{Inconsolata}
+'''
 }
 
 # Grouping the document tree into LaTeX files. List of tuples
@@ -215,10 +219,10 @@ latex_documents = [
 
 # For "manual" documents, if this is true, then toplevel headings are parts,
 # not chapters.
-#latex_use_parts = False
+latex_use_parts = True
 
 # If true, show page references after internal links.
-#latex_show_pagerefs = False
+latex_show_pagerefs = True
 
 # If true, show URL addresses after external links.
 #latex_show_urls = False
