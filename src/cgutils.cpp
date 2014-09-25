@@ -1498,6 +1498,14 @@ static jl_value_t *static_constant_instance(Constant *constant, jl_value_t *jt)
         return jl_new_bits(jt,&val);
     }
 
+    // issue #8464
+    ConstantExpr *ce = dyn_cast<ConstantExpr>(constant);
+    if (ce != NULL) {
+        if (ce->isCast()) {
+            return static_constant_instance(dyn_cast<Constant>(ce->getOperand(0)), jt);
+        }
+    }
+
     assert(jl_is_tuple(jt));
 
     size_t nargs = 0;
