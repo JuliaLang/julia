@@ -505,10 +505,10 @@ promote_eltype() = Bottom
 promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
 
 #TODO: ERROR CHECK
-cat(catdim::Integer) = Array(Bottom, 0)
+cat(catdim::Integer) = Array(Any, 0)
 
-vcat() = Array(Bottom, 0)
-hcat() = Array(Bottom, 0)
+vcat() = Array(Any, 0)
+hcat() = Array(Any, 0)
 
 ## cat: special cases
 hcat{T}(X::T...)         = T[ X[j] for i=1, j=1:length(X) ]
