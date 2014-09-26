@@ -476,20 +476,24 @@ function history_move_prefix(s::LineEdit.MIState,
     pos = position(buf)
     prefix = bytestring_beforecursor(buf)
     allbuf = bytestring(buf)
-    idxs = backwards ? ((hist.cur_idx-1):-1:1) : ((hist.cur_idx+1):length(hist.history))
+    cur_idx = hist.cur_idx
+    if hist.last_idx > 0
+        cur_idx = hist.last_idx
+        hist.last_idx = -1
+    end
+    idxs = backwards ? ((cur_idx-1):-1:1) : ((cur_idx+1):length(hist.history))
     for idx in idxs
         if beginswith(hist.history[idx], prefix) && hist.history[idx] != allbuf
             history_move(s, hist, idx)
             seek(LineEdit.buffer(s), pos)
             LineEdit.refresh_line(s)
-            return
+            return :ok
         end
     end
     Terminals.beep(LineEdit.terminal(s))
 end
 history_next_prefix(s::LineEdit.MIState, hist::REPLHistoryProvider) =
-    hist.cur_idx == length(hist.history) ?
-        history_next(s, hist) : history_move_prefix(s, hist, false)
+    history_move_prefix(s, hist, false)
 history_prev_prefix(s::LineEdit.MIState, hist::REPLHistoryProvider) =
     history_move_prefix(s, hist, true)
 
