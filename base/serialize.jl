@@ -228,7 +228,7 @@ function lambda_number(l::LambdaStaticData)
     end
     # a hash function that always gives the same number to the same
     # object on the same machine, and is unique over all machines.
-    ln = hash(lnumber_salt+(uint64(myid())<<44))
+    ln = lnumber_salt+(uint64(myid())<<44)
     lnumber_salt += 1
     lambda_numbers[l] = ln
     return ln
