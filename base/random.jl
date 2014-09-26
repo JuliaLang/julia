@@ -154,12 +154,12 @@ rem_knuth{T<:Unsigned}(a::T, b::T) = b != 0 ? a % b : a
 
 # maximum multiple of k <= 2^bits(T) decremented by one,
 # that is 0xFFFFFFFF if k = typemax(T) - typemin(T) with intentional underflow
-maxmultiple(k::Uint32) = convert(Uint32, div(0x0000000100000000,k + (k == 0))*k - 1)
-maxmultiple(k::Uint64) = convert(Uint64, div(0x00000000000000010000000000000000, k + (k == 0))*k - 1)
+maxmultiple(k::Uint32) = itrunc(Uint32, div(0x0000000100000000,k + (k == 0))*k - 1)
+maxmultiple(k::Uint64) = itrunc(Uint64, div(0x00000000000000010000000000000000, k + (k == 0))*k - 1)
 # maximum multiple of k within 1:typemax(Uint128)
 maxmultiple(k::Uint128) = div(typemax(Uint128), k + (k == 0))*k - 1
 # maximum multiple of k within 1:2^32 or 1:2^64, depending on size
-maxmultiplemix(k::Uint64) = convert(Uint64, div((k >> 32 != 0)*0x0000000000000000FFFFFFFF00000000 + 0x0000000100000000, k + (k == 0))*k - 1)
+maxmultiplemix(k::Uint64) = itrunc(Uint64, div((k >> 32 != 0)*0x0000000000000000FFFFFFFF00000000 + 0x0000000100000000, k + (k == 0))*k - 1)
 
 immutable RandIntGen{T<:Integer, U<:Unsigned}
     a::T   # first element of the range
@@ -173,13 +173,14 @@ RandIntGen{T}(a::T, k::Uint64) = RandIntGen{T,Uint64}(a, k, maxmultiplemix(k))
 
 
 # generator for ranges
-RandIntGen{T<:Unsigned}(r::UnitRange{T}) = isempty(r) ? error("range must be non-empty") : RandIntGen(first(r), convert(T,last(r) - first(r) + 1))
+RandIntGen{T<:Unsigned}(r::UnitRange{T}) = isempty(r) ? error("range must be non-empty") : RandIntGen(first(r), last(r) - first(r) + one(T))
+
 # specialized versions
 for (T, U) in [(Uint8, Uint32), (Uint16, Uint32),
                (Int8, Uint32), (Int16, Uint32), (Int32, Uint32), (Int64, Uint64), (Int128, Uint128),
                (Bool, Uint32), (Char, Uint32)]
 
-    @eval RandIntGen(r::UnitRange{$T}) = isempty(r) ? error("range must be non-empty") : RandIntGen(first(r), convert($U, unsigned(last(r) - first(r) + one($T)))) # overflow ok
+    @eval RandIntGen(r::UnitRange{$T}) = isempty(r) ? error("range must be non-empty") : RandIntGen(first(r), convert($U, unsigned(last(r) - first(r)) + one($U))) # overflow ok
 end
 
 # this function uses 32 bit entropy for small ranges of length <= typemax(Uint32) + 1
@@ -205,7 +206,7 @@ function rand{T<:Integer, U<:Unsigned}(g::RandIntGen{T,U})
     while x > g.u
         x = rand(U)
     end
-    itrunc(T, g.a + rem_knuth(x, g.k))
+    itrunc(T, unsigned(g.a) + rem_knuth(x, g.k))
 end
 
 rand{T<:Union(Signed,Unsigned,Bool,Char)}(r::UnitRange{T}) = rand(RandIntGen(r))

@@ -239,6 +239,8 @@ int128(x) = convert(Int128,x)
 uint8(x) = convert(Uint8, x)
 uint8(x::Integer) = itrunc(Uint8,x)
 uint8(x::Int8) = box(Uint8,unbox(Int8,x))
+uint8(x::Bool) = convert(Uint8, x)
+
 uint16(x) = convert(Uint16,x)
 uint32(x) = convert(Uint32,x)
 uint64(x) = convert(Uint64,x)
