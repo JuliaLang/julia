@@ -242,10 +242,10 @@ sumabs2(a) = mapreduce(Abs2Fun(), AddFun(), a)
 # of a considerable increase in computational expense.
 function sum_kbn{T<:FloatingPoint}(A::AbstractArray{T})
     n = length(A)
+    c = r_promote(AddFun(), zero(T)::T)
     if n == 0
-        return sumzero(T)
+        return c
     end
-    c = zero(T)
     s = A[1] + c
     for i in 2:n
         @inbounds Ai = A[i]
