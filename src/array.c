@@ -526,6 +526,9 @@ void jl_arrayunset(jl_array_t *a, size_t i)
 #define MALLOC_THRESH 1048576
 
 // allocate buffer of newlen elements, placing old data at given offset (in #elts)
+//     newlen: new length (#elts), including offset
+//     oldlen: old length (#elts), excluding offset
+//     offs: new offset
 static void array_resize_buffer(jl_array_t *a, size_t newlen, size_t oldlen, size_t offs)
 {
     size_t es = a->elsize;
