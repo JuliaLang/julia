@@ -41,8 +41,10 @@ evaluate(f::Callable, x, y) = f(x, y)
 
 # r_promote: promote x to the type of reduce(op, [x])
 r_promote(op, x) = x
-r_promote(::AddFun, x) = x + zero(x)
-r_promote(::MulFun, x) = x * one(x)
+r_promote(::AddFun, x::Number) = x + zero(x)
+r_promote(::MulFun, x::Number) = x * one(x)
+r_promote(::AddFun, x) = x
+r_promote(::MulFun, x) = x
 
 
 ## foldl && mapfoldl
