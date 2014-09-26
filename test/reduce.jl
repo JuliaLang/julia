@@ -87,6 +87,7 @@ end
 @test typeof(sum(Int8[])) == typeof(sum(Int8[1])) == typeof(sum(Int8[1 7]))
 
 @test sum_kbn([1,1e100,1,-1e100]) == 2
+@test sum_kbn(Float64[]) == 0.0
 
 # prod
 
