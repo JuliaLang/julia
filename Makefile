@@ -115,8 +115,8 @@ $(build_private_libdir)/sys%ji: $(build_private_libdir)/sys%o
 
 $(build_private_libdir)/sys%$(SHLIB_EXT): $(build_private_libdir)/sys%o
 	$(CXX) -shared -fPIC -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ $< \
-		$$([ $(OS) = Darwin ] && echo -Wl,-undefined,dynamic_lookup || echo -Wl,--unresolved-symbols,ignore-all ) \
-		$$([ $(OS) = WINNT ] && echo -ljulia -lssp)
+		$$([ $(OS) = Darwin ] && echo '' -Wl,-undefined,dynamic_lookup || echo '' -Wl,--unresolved-symbols,ignore-all ) \
+		$$([ $(OS) = WINNT ] && echo '' -ljulia -lssp)
 	$(DSYMUTIL) $@
 
 $(build_private_libdir)/sys0.o:
