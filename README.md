@@ -373,6 +373,9 @@ The following distributions include julia, but the versions may be out of date d
 
 * [Arch Linux](https://www.archlinux.org/packages/community/i686/julia/)
 * [Debian GNU/Linux](http://packages.debian.org/sid/julia)
+* [Fedora Linux](https://admin.fedoraproject.org/pkgdb/package/julia/), RHEL/CentOS/OEL/Scientific Linux (EPEL)
+  * [Current stable release for Fedora/EPEL](https://copr.fedoraproject.org/coprs/nalimilan/julia/)
+  * [Nightly builds for Fedora/EPEL](https://copr.fedoraproject.org/coprs/nalimilan/julia-nightlies/)
 * [Gentoo Linux](https://packages.gentoo.org/package/dev-lang/julia)
   * Git Package in the [Science overlay](https://wiki.gentoo.org/wiki/Project:Science/Overlay)
 * openSUSE
