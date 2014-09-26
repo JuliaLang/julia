@@ -127,8 +127,8 @@ function mapreduce_pairwise_impl(f, op, A::AbstractArray, ifirst::Int, ilast::In
         return mapreduce_seq_impl(f, op, A, ifirst, ilast)
     else
         imid = (ifirst + ilast) >>> 1
-        v1 = mapreduce_seq_impl(f, op, A, ifirst, imid)
-        v2 = mapreduce_seq_impl(f, op, A, imid+1, ilast)
+        v1 = mapreduce_pairwise_impl(f, op, A, ifirst, imid, blksize)
+        v2 = mapreduce_pairwise_impl(f, op, A, imid+1, ilast, blksize)
         return evaluate(op, v1, v2)
     end
 end
