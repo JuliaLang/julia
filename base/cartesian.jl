@@ -462,6 +462,7 @@ function exprresolve_arith(ex::Expr)
     end
     false, 0
 end
+exprresolve_arith(arg) = false, 0
 
 exprresolve_conditional(b::Bool) = true, b
 function exprresolve_conditional(ex::Expr)
@@ -470,6 +471,7 @@ function exprresolve_conditional(ex::Expr)
     end
     false, false
 end
+exprresolve_conditional(arg) = false, false
 
 exprresolve(arg) = arg
 function exprresolve(ex::Expr)
