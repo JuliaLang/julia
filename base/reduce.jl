@@ -126,7 +126,7 @@ foldr(op, itr) = mapfoldr(IdFun(), op, itr)
 
 # mapreduce_***_impl require ifirst < ilast
 function mapreduce_seq_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int)
-    @inbounds fx1 = evaluate(f, A[ifirst])
+    @inbounds fx1 = r_promote(op, evaluate(f, A[ifirst]))
     @inbounds fx2 = evaluate(f, A[ifirst+=1])
     @inbounds v = evaluate(op, fx1, fx2)
     while ifirst < ilast
@@ -208,7 +208,7 @@ reduce(op, a::Number) = a
 function mapreduce_seq_impl(f, op::AddFun, a::AbstractArray, ifirst::Int, ilast::Int)
     @inbounds if ifirst + 6 >= ilast  # length(a) < 8
         i = ifirst
-        s = evaluate(f, a[i]) + evaluate(f, a[i+1])
+        s = r_promote(op, evaluate(f, a[i])) + evaluate(f, a[i+1])
         i = i+1
         while i < ilast
             s += evaluate(f, a[i+=1])
@@ -216,10 +216,10 @@ function mapreduce_seq_impl(f, op::AddFun, a::AbstractArray, ifirst::Int, ilast:
         return s
 
     else # length(a) >= 8, manual unrolling
-        s1 = evaluate(f, a[ifirst]) + evaluate(f, a[ifirst + 4])
-        s2 = evaluate(f, a[ifirst + 1]) + evaluate(f, a[ifirst + 5])
-        s3 = evaluate(f, a[ifirst + 2]) + evaluate(f, a[ifirst + 6])
-        s4 = evaluate(f, a[ifirst + 3]) + evaluate(f, a[ifirst + 7])
+        s1 = r_promote(op, evaluate(f, a[ifirst])) + evaluate(f, a[ifirst + 4])
+        s2 = r_promote(op, evaluate(f, a[ifirst + 1])) + evaluate(f, a[ifirst + 5])
+        s3 = r_promote(op, evaluate(f, a[ifirst + 2])) + evaluate(f, a[ifirst + 6])
+        s4 = r_promote(op, evaluate(f, a[ifirst + 3])) + evaluate(f, a[ifirst + 7])
         i = ifirst + 8
         il = ilast - 3
         while i <= il
@@ -256,10 +256,10 @@ sumabs2(a) = mapreduce(Abs2Fun(), AddFun(), a)
 # of a considerable increase in computational expense.
 function sum_kbn{T<:FloatingPoint}(A::AbstractArray{T})
     n = length(A)
+    c = r_promote(AddFun(), zero(T)::T)
     if n == 0
-        return sumzero(T)
+        return c
     end
-    c = zero(T)
     s = A[1] + c
     for i in 2:n
         @inbounds Ai = A[i]

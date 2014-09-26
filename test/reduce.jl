@@ -87,6 +87,7 @@ end
 @test typeof(sum(Int8[])) == typeof(sum(Int8[1])) == typeof(sum(Int8[1 7]))
 
 @test sum_kbn([1,1e100,1,-1e100]) == 2
+@test sum_kbn(Float64[]) == 0.0
 
 # prod
 
@@ -214,3 +215,5 @@ end
 @test isequal(cummin([1 0; 0 1], 1), [1 0; 0 0])
 @test isequal(cummin([1 0; 0 1], 2), [1 0; 0 0])
 
+@test sum(collect(uint8(0:255))) == 32640
+@test sum(collect(uint8(254:255))) == 509
