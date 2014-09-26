@@ -734,7 +734,10 @@ static Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_value_
                     jl_value_t *astrt = jl_ast_rettype(li, li->ast);
                     if (!jl_types_equal(astrt, rt)) {
                         if (astrt == (jl_value_t*)jl_bottom_type) {
-                            jl_errorf("cfunction: %s does not return", li->name->name);
+                            if (rt != (jl_value_t*)jl_void_type) {
+                                // a function that doesn't return can be passed to C as void
+                                jl_errorf("cfunction: %s does not return", li->name->name);
+                            }
                         }
                         else {
                             jl_errorf("cfunction: return type of %s does not match",
