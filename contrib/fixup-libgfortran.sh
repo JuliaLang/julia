@@ -17,8 +17,6 @@ else
     SHLIB_EXT="so"
 fi
 
-echo "UNAME: $UNAME, SHLIB_EXT: $SHLIB_EXT"
-
 private_libdir=$1
 
 if [ ! -f "$private_libdir/libarpack.$SHLIB_EXT" ]; then
