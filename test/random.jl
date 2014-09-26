@@ -42,6 +42,12 @@ for T in (Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Int128, Uint
     @test typeof(r) == T
     @test 97 <= r <= 122
     @test mod(r,2)==1
+
+    if T<:Integer && T!==Char
+        x = rand(typemin(T):typemax(T))
+        @test isa(x,T)
+        @test typemin(T) <= x <= typemax(T)
+    end
 end
 
 if sizeof(Int32) < sizeof(Int)
