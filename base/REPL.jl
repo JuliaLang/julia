@@ -477,10 +477,11 @@ function history_move_prefix(s::LineEdit.MIState,
     prefix = bytestring_beforecursor(buf)
     allbuf = bytestring(buf)
     cur_idx = hist.cur_idx
-    if hist.last_idx > 0
+    # when searching forward, start at last_idx
+    if !backwards && hist.last_idx > 0
         cur_idx = hist.last_idx
-        hist.last_idx = -1
     end
+    hist.last_idx = -1
     idxs = backwards ? ((cur_idx-1):-1:1) : ((cur_idx+1):length(hist.history))
     for idx in idxs
         if beginswith(hist.history[idx], prefix) && hist.history[idx] != allbuf
