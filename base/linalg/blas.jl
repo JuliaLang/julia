@@ -73,33 +73,52 @@ for (fname, elty) in ((:dcopy_,:Float64),
 end
 
 ## scal
-for (fname, elty) in ((:dscal_,:Float64),    
+for (fname, elty) in ((:dscal_,:Float64),
                       (:sscal_,:Float32),
-                      (:zscal_,:Complex128), 
+                      (:zscal_,:Complex128),
                       (:cscal_,:Complex64))
     @eval begin
         # SUBROUTINE DSCAL(N,DA,DX,INCX)
-        function scal!(n::Integer, DA::$elty, DX::Union(Ptr{$elty},StridedArray{$elty}), incx::Integer)
+        function scal!(n::Integer, DA::$elty, DX::Union(Ptr{$elty},Array{$elty}), incx::Integer)
             ccall(($(string(fname)),libblas), Void,
                   (Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}),
                   &n, &DA, DX, &incx)
             DX
         end
+        function scal!(DA::$elty, DX::Union(StridedVector{$elty},Array{$elty}))
+            scal!(length(DX), DA, pointer(DX), stride(DX,1))
+        end
+        function scal(DA::$elty, DX::Union(StridedVector{$elty},Array{$elty}))
+            scal!(DA,copy(DX))
+        end
     end
 end
-scal(n, DA, DX, incx) = scal!(n, DA, copy(DX), incx)
 # In case DX is complex, and DA is real, use dscal/sscal to save flops
 for (fname, elty, celty) in ((:sscal_, :Float32, :Complex64),
                              (:dscal_, :Float64, :Complex128))
     @eval begin
-        function scal!(n::Integer, DA::$elty, DX::Union(Ptr{$celty},StridedArray{$celty}), incx::Integer)
+        function scal!(n::Integer, DA::$elty, DX::Union(Ptr{$celty},Array{$celty}), incx::Integer)
+            # this method will not work as expected with a stride > 1
+            # the real and imaginary parts of a complex number are stored
+            # contiguously, sscal and dscal will stride over individual numbers,
+            # not pairs of numbers
+            if incx != 1
+                throw ArgumentError("scal! requires incx == 1 in case where DA is real and DX is complex")
+            end
             ccall(($(string(fname)),libblas), Void,
                   (Ptr{BlasInt}, Ptr{$elty}, Ptr{$celty}, Ptr{BlasInt}),
                   &(2*n), &DA, DX, &incx)
             DX
         end
+        function scal!(DA::$elty, DX::Array{$celty})
+            scal!(length(DX), DA, pointer(DX), stride(DX,1))
+        end
+        function scal(DA::$elty, DX::Array{$celty})
+            scal!(DA,copy(DX))
+        end
     end
 end
+scal(n, DA, DX, incx) = scal!(n, DA, copy(DX), incx)
 
 ## dot
 for (fname, elty) in ((:ddot_,:Float64), 
