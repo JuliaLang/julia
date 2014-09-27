@@ -87,6 +87,7 @@ for (fname, elty) in ((:dscal_,:Float64),
         end
         function scal!(DA::$elty, DX::Union(StridedVector{$elty},Array{$elty}))
             scal!(length(DX), DA, pointer(DX), stride(DX,1))
+            DX
         end
         function scal(DA::$elty, DX::Union(StridedVector{$elty},Array{$elty}))
             scal!(DA,copy(DX))
@@ -111,7 +112,7 @@ for (fname, elty, celty) in ((:sscal_, :Float32, :Complex64),
             DX
         end
         function scal!(DA::$elty, DX::Array{$celty})
-            scal!(length(DX), DA, pointer(DX), stride(DX,1))
+            scal!(length(DX), DA, DX, stride(DX,1))
         end
         function scal(DA::$elty, DX::Array{$celty})
             scal!(DA,copy(DX))
