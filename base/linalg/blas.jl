@@ -103,7 +103,7 @@ for (fname, elty, celty) in ((:sscal_, :Float32, :Complex64),
             # contiguously, sscal and dscal will stride over individual numbers,
             # not pairs of numbers
             if incx != 1
-                throw ArgumentError("scal! requires incx == 1 in case where DA is real and DX is complex")
+                throw(ArgumentError("scal! requires incx == 1 in case where DA is real and DX is complex"))
             end
             ccall(($(string(fname)),libblas), Void,
                   (Ptr{BlasInt}, Ptr{$elty}, Ptr{$celty}, Ptr{BlasInt}),
