@@ -324,7 +324,6 @@ For example, the following code will not work as intended::
       a[i] = i
     end
 
-Notice that the reduction operator can be omitted if it is not needed.
 However, this code will not initialize all of ``a``, since each
 process will have a separate copy of it. Parallel for loops like these
 must be avoided. Fortunately, distributed arrays can be used to get
@@ -341,6 +340,14 @@ the variables are read-only::
 Here each iteration applies ``f`` to a randomly-chosen sample from a
 vector ``a`` shared by all processes.
 
+As you could see, the reduction operator can be omitted if it is not needed.
+In that case, the loop executes asynchronously, i.e. it spawns independent
+tasks on all available workers and returns an array of ``RemoteRef``
+immediately without waiting for completion.
+The caller can wait for the ``RemoteRef`` completions at a later
+point by calling ``fetch`` on them, or wait for completion at the end of the
+loop by prefixing it with ``@sync``, like ``@sync @parallel for``.
+
 In some cases no reduction operator is needed, and we merely wish to
 apply a function to all integers in some range (or, more generally, to
 all elements in some collection). This is another useful operation
@@ -354,8 +361,8 @@ random matrices in parallel as follows::
 Julia's ``pmap`` is designed for the case where each function call does
 a large amount of work. In contrast, ``@parallel for`` can handle
 situations where each iteration is tiny, perhaps merely summing two
-numbers. Only worker processes are used by both ``pmap`` and ``@parallel for`` 
-for the parallel computation. In case of ``@parallel for``, the final reduction 
+numbers. Only worker processes are used by both ``pmap`` and ``@parallel for``
+for the parallel computation. In case of ``@parallel for``, the final reduction
 is done on the calling process.
 
 
