@@ -633,34 +633,73 @@ ClusterManagers
 Julia worker processes can also be spawned on arbitrary machines,
 enabling Julia's natural parallelism to function quite transparently
 in a cluster environment. The ``ClusterManager`` interface provides a
-way to specify a means to launch and manage worker processes. For
-example, ``ssh`` clusters are also implemented using a ``ClusterManager``::
+way to specify a means to launch and manage worker processes. 
 
-    immutable SSHManager <: ClusterManager
-        launch::Function
-        manage::Function
-        machines::AbstractVector
+Thus, a custom cluster manager would need to :
 
-        SSHManager(; machines=[]) = new(launch_ssh_workers, manage_ssh_workers, machines)
+- be a subtype of the abstract ``ClusterManager``
+- implement ``launch``, a method responsible for launching new workers
+- implement ``manage``, which is called at various events during a worker's lifetime
+
+As an example let us see how the LocalManager, the manager responsible for 
+starting workers on the same host, is implemented::
+
+    immutable LocalManager <: ClusterManager
     end
 
-    function launch_ssh_workers(cman::SSHManager, np::Integer, config::Dict)
+    function launch(manager::LocalManager, np::Integer, config::Dict, resp_arr::Array, c::Condition)
         ...
     end
 
-    function manage_ssh_workers(id::Integer, config::Dict, op::Symbol)
+    function manage(manager::LocalManager, id::Integer, config::Dict, op::Symbol)
         ...
     end
 
-where ``launch_ssh_workers`` is responsible for instantiating new
-Julia processes and ``manage_ssh_workers`` provides a means to manage
-those processes, e.g. for sending interrupt signals. New processes can
-then be added at runtime using ``addprocs``::
+    
+The ``launch`` method takes the following arguments:
+    ``manager::LocalManager`` - used to dispatch the call to the appropriate implementation 
+    ``np::Integer`` - number of workers to be launched 
+    ``config::Dict`` - all the keyword arguments provided as part of the ``addprocs`` call 
+    ``resp_arr::Array`` - the array to append one or more worker information tuples too 
+    ``c::Condition`` - the condition variable to be notified as and when workers are launched.
+                       
+The ``launch`` method is called asynchronously in a separate task. The termination of this task 
+signals that all requested workers have been launched. Hence the ``launch`` function MUST exit as soon 
+as all the requested workers have been launched.
 
-    addprocs(5, cman=LocalManager())
+Arrays of worker information tuples that are appended to ``resp_arr`` can take any one of 
+the following forms::
 
-which specifies a number of processes to add and a ``ClusterManager`` to
-use for launching those processes.
+    (io::IO, config::Dict)
+    
+    (io::IO, host::String, config::Dict)
+    
+    (io::IO, host::String, port::Integer, config::Dict)
+    
+    (host::String, port::Integer, config::Dict)
+
+where:
+
+    - ``io::IO`` is the output stream of the worker.
+    - ``host::String`` and ``port::Integer`` are the host:port to connect to. If not provided
+      they are read from the ``io`` stream provided.
+    - ``config::Dict`` is the configuration dictionary for the worker. The ``launch``
+      function can add/modify any data that may be required for managing 
+      the worker.
+      
+
+The ``manage`` method takes the following arguments:
+    ``manager::ClusterManager`` - used to dispatch the call to the appropriate implementation 
+    ``id::Integer`` - The julia process id
+    ``config::Dict`` - configuration dictionary for the worker. The data may have been modified 
+                       by the ``launch`` method
+    ``op::Symbol`` - The ``manage`` method is called at different times during the worker's lifetime.
+                    ``op`` is one of ``:register``, ``:deregister``, ``:interrupt`` or ``:finalize``
+                    ``manage`` is called with ``:register`` and ``:deregister`` when a worker is 
+                    added / removed from the julia worker pool. With ``:interrupt`` when 
+                    ``interrupt(workers)`` is called. The cluster manager should signal the appropriate 
+                    worker with an interrupt signal. With ``:finalize`` for cleanup purposes.
+                    
 
 .. rubric:: Footnotes
 

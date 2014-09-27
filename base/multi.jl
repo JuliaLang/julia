@@ -243,9 +243,7 @@ function add_worker(pg::ProcessGroup, w)
 
     send_msg_now(w, :join_pgrp, w.id, all_locs, isa(w.manager, LocalManager))
 
-    @schedule begin
-        manage(w.manager, w.id, w.config, :register)
-    end
+    @schedule manage(w.manager, w.id, w.config, :register)
 
     (w.id, rr_join)
 end
@@ -990,26 +988,25 @@ function start_cluster_workers(np::Integer, config::Dict, manager::ClusterManage
     instance_sets = {}
     instances_ntfy = Condition()
 
-    @schedule launch(manager, np, config, instance_sets, instances_ntfy)
+    t = @schedule launch(manager, np, config, instance_sets, instances_ntfy)
 
     while true
-        if length(instance_sets) == 0
+        if (length(instance_sets) == 0) 
+            istaskdone(t) && break
+            @schedule (sleep(1); notify(instances_ntfy))
             wait(instances_ntfy)
         end
 
-        instances = shift!(instance_sets)
-        if instances == :DONE
-            break
-        end
-
-        for inst in instances
-            (io, bind_addr, port, pubhost, wconfig) = read_cb_response(inst...)
-            push!(resp_arr, create_worker(bind_addr, port, pubhost, io, wconfig, manager))
-            notify(launched_ntfy)
+        if length(instance_sets) > 0 
+            instances = shift!(instance_sets)
+            for inst in instances
+                (io, bind_addr, port, pubhost, wconfig) = read_cb_response(inst...)
+                push!(resp_arr, create_worker(bind_addr, port, pubhost, io, wconfig, manager))
+                notify(launched_ntfy)
+            end
         end
     end
 
-    push!(resp_arr, :DONE)
     notify(launched_ntfy)
 end
 
@@ -1119,7 +1116,6 @@ function launch(manager::LocalManager, np::Integer, config::Dict, resp_arr::Arra
 
     # ...and then read the host:port info. This optimizes overall start times.
     push!(resp_arr, collect(zip(io_objs, configs)))
-    push!(resp_arr, :DONE)
     notify(c)
 end
 
@@ -1163,7 +1159,6 @@ function launch(manager::SSHManager, np::Integer, config::Dict, resp_arr::Array,
         end
     end
 
-    push!(resp_arr, :DONE)
     notify(machines_launch_ntfy)
 end
 
@@ -1281,25 +1276,26 @@ function addprocs_internal(np::Integer;
     config={:dir=>dir, :exename=>exename, :exeflags=>`$exeflags --worker`, :tunnel=>tunnel, :sshflags=>sshflags, :max_parallel=>max_parallel}
     disable_threaded_libs()
 
-    ret = Array(Int, np)
-    rr_join = Array(RemoteRef, np)
+    ret = Array(Int, 0)
+    rr_join = Array(RemoteRef, 0)
 
     resp_arr = {}
     c = Condition()
 
-    @schedule start_cluster_workers(np, config, manager, resp_arr, c)
+    t = @schedule start_cluster_workers(np, config, manager, resp_arr, c)
 
-    i=1
     while true
         if length(resp_arr) == 0
+            istaskdone(t) && break
+            @schedule (sleep(1); notify(c))
             wait(c)
         end
-        w = shift!(resp_arr)
-        if w == :DONE
-            break
-        else
-            ret[i], rr_join[i] = add_worker(PGRP, w)
-            i += 1
+        
+        if length(resp_arr) > 0
+            w = shift!(resp_arr)
+            id, rr = add_worker(PGRP, w)
+            push!(ret, id)
+            push!(rr_join, rr)
         end
     end
 
@@ -1307,6 +1303,7 @@ function addprocs_internal(np::Integer;
         wait(rr)
     end
 
+    assert(length(ret) == np)
     ret
 end
 
