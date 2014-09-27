@@ -126,7 +126,7 @@
   (rx "<:" (1+ space) (group (1+ (or word ?_))) (0+ space) (or "\n" "{" "end")))
 
 (defconst julia-macro-regex
-  "@\\w+")
+  (rx symbol-start (group  "@" (1+ (or word ?_ ?!)))))
 
 (defconst julia-keyword-regex
   (regexp-opt
