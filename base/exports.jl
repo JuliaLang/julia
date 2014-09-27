@@ -1183,6 +1183,8 @@ export
     fetch,
     interrupt,
     isready,
+    launch,
+    manage,
     myid,
     nprocs,
     nworkers,
