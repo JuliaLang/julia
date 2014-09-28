@@ -24,7 +24,7 @@ end
 pmax = 1000
 n = 10000
 r = rand(1:pmax, n)
-priorities = Dict(1:n, r)
+priorities = Dict(zip(1:n, r))
 
 # building from a dict
 pq = PriorityQueue(priorities)
@@ -36,7 +36,7 @@ test_isrequested!(pq, 1:n)
 # building from two lists
 ks, vs = 1:n, rand(1:pmax, n)
 pq = PriorityQueue(ks, vs)
-priorities = Dict(ks, vs)
+priorities = Dict(zip(ks, vs))
 test_issorted!(pq, priorities)
 
 
