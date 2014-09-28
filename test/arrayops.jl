@@ -117,7 +117,6 @@ sA = sub(A, 2, 1:5, :)
 @test parentindexes(sA) == (2:2, 1:5, 1:8)
 @test Base.parentdims(sA) == [1:3]
 @test size(sA) == (1, 5, 8)
-@test_throws BoundsError sA[2, 1:8]
 @test sA[1, 2, 1:8][:] == [5:15:120]
 sA[2:5:end] = -1
 @test all(sA[2:5:end] .== -1)
@@ -178,29 +177,6 @@ sA = slice(A, 1:2:3, 3, 1:2:8)
 a = [5:8]
 @test parent(a) == a
 @test parentindexes(a) == (1:4,)
-
-# issue #4335
-@test_throws BoundsError slice(A, 1:2)
-@test_throws BoundsError slice(A, 1:2, 3:4)
-@test_throws BoundsError slice(A, 1:2, 3:4, 5:6, 7:8)
-
-# Out-of-bounds construction. See #4044
-A = rand(7,7)
-rng = 1:4
-sA = sub(A, 2, rng-1)
-@test_throws BoundsError sA[1,1]
-@test sA[1,2] == A[2,1]
-sA = sub(A, 2, rng)
-B = sub(sA, 1, rng-1)
-C = sub(B, 1, rng+1)
-@test C == sA
-sA = slice(A, 2, rng-1)
-@test_throws BoundsError sA[1]
-@test sA[2] == A[2,1]
-sA = slice(A, 2, rng)
-B = slice(sA, rng-1)
-C = sub(B, rng+1)
-@test C == sA
 
 # issue #6218 - logical indexing
 A = rand(2, 2, 3)
