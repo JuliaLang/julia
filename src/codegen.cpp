@@ -2649,9 +2649,11 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
                 rval = emit_unbox(vt->getContainedType(0), emit_unboxed(r, ctx), vi.declType);
             }
             else {
-                rval = boxed(emit_expr(r, ctx, true), ctx);
-                Value* box = builder.CreateGEP(bp, ConstantInt::get(T_size, -1));
-                if (!is_stack(bp)) emit_write_barrier(ctx, box, rval);
+                rval = boxed(emit_expr(r, ctx, true), ctx, rt);
+                if (!is_stack(bp)) {
+                    Value* box = builder.CreateGEP(bp, ConstantInt::get(T_size, -1));
+                    emit_write_barrier(ctx, box, rval);
+                }
             }
             if (builder.GetInsertBlock()->getTerminator() == NULL) {
                 builder.CreateStore(rval, bp, vi.isVolatile);
@@ -4757,7 +4759,6 @@ extern "C" void jl_init_codegen(void)
 #endif 
     options.NoFramePointerElim = true;
 #ifndef LLVM34
-    options.JITExceptionHandling = 1;
     options.NoFramePointerElimNonLeaf = true;
 #endif
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)

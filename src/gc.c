@@ -30,19 +30,25 @@ extern "C" {
 
 #pragma pack(push, 1)
 
-#define GC_PG_LG2 14
-#define GC_PAGE_SZ (4*4096) // ((1 << GC_PAGE_W) - 16)
-#define SYS_PAGE_SZ 4096
+#define GC_PAGE_LG2 14
 #define REGION_PG_COUNT 8*4096
-
+#define GC_PAGE_SZ (1 << GC_PAGE_LG2) // 16k
+// contiguous storage for up to REGION_PG_COUNT naturally aligned GC_PAGE_SZ blocks
+// uses a very naive allocator (see malloc_page & free_page)
 typedef struct {
-    uint32_t freemap[SYS_PAGE_SZ/4];
+    uint32_t freemap[REGION_PG_COUNT/32];
     char pages[REGION_PG_COUNT][GC_PAGE_SZ];
 } region_t;
-
 #define HEAP_COUNT 64
 static region_t *heaps[HEAP_COUNT] = {NULL};
+// store a lower bound of the first free block in each region
 static int heaps_lb[HEAP_COUNT] = {0};
+
+// every 2^PAGE_GROUP_COUNT_LG2 gc page is reserved for the following pages' metadata
+// this requires :
+// sizeof(gcpage_t)*2^PAGE_GROUP_COUNT_LG2 <= GC_PAGE_SZ
+#define PAGE_GROUP_COUNT_LG2 5 // log2(32)
+#define PAGE_GROUP_LG2 (GC_PAGE_LG2 + PAGE_GROUP_COUNT_LG2)
 
 typedef struct _bigval_t {
     struct _bigval_t *next;
@@ -95,6 +101,7 @@ typedef struct _pool_t {
     };
 } pool_t;
 
+// pool page metadata
 typedef struct _gcpage_t {
     struct {
         uint16_t pool_n : 8;
@@ -114,31 +121,20 @@ typedef struct _gcpage_t {
     uint32_t data_offset; // this is not strictly necessary
     char age[2*GC_PAGE_SZ/(8*8)]; // two bits per object
 } gcpage_t;
+// access page data given a pointer to its metadata
 #define PAGE_DATA_PRE(p) ((char*)(p) + (p)->data_offset)
 #define PAGE_DATA(p) ((char*)GC_PAGES(p) + GC_PAGE_SZ*(((char*)(p) - (char*)GC_PAGES(p))/sizeof(gcpage_t) + 1))
 #define PAGE_PFL_BEG(p) ((gcval_t**)(PAGE_DATA(p) + (p)->fl_begin_offset))
 #define PAGE_PFL_END(p) ((gcval_t**)(PAGE_DATA(p) + (p)->fl_end_offset))
 
-#define PAGE_GROUP_COUNT 31
-// We pack pages by groups of 31 which means a little less than 512k = 32*4 vm pages
-#define PAGE_GROUP_LG2 19
-#define PAGE_GROUP_SZ 1 << PAGE_GROUP_LG2
-
-typedef struct {
-    union {
-        gcpage_t pages[PAGE_GROUP_COUNT];
-        char _pad[GC_PAGE_SZ];
-    };
-    char data[PAGE_GROUP_COUNT][GC_PAGE_SZ];
-} gcpages_t;
-
+// access page data given a pointer to somewhere inside its data
 #define GC_PAGES(x) ((gcpage_t*)(((uintptr_t)x) >> PAGE_GROUP_LG2 << PAGE_GROUP_LG2))
 #define GC_PAGE_IDX(x) (((uintptr_t)(x) - (uintptr_t)GC_PAGES(x) - GC_PAGE_SZ)/GC_PAGE_SZ)
 #define GC_PAGE(x) ((gcpage_t*)(&(GC_PAGES(x)[GC_PAGE_IDX(x)])))
-#define GC_PAGE_DATA(x) ((char*)((uintptr_t)(x) >> GC_PG_LG2 << GC_PG_LG2))
+#define GC_PAGE_DATA(x) ((char*)((uintptr_t)(x) >> GC_PAGE_LG2 << GC_PAGE_LG2))
+
 #define GC_POOL_END_OFS(osize) (((GC_PAGE_SZ/osize) - 1)*osize)
 
-    //static int free_lb = 0;
 
 // GC knobs and self-measurement variables
 static int64_t last_gc_total_bytes = 0;
@@ -186,7 +182,7 @@ static htable_t obj_sizes[3];
 
 #ifdef GC_FINAL_STATS
 static size_t total_freed_bytes=0;
-static double max_pause = 0.0;
+static uint64_t max_pause = 0;
 static uint64_t total_sweep_time=0;
 static uint64_t total_mark_time=0;
 static uint64_t total_fin_time=0;
@@ -344,8 +340,9 @@ static inline int gc_setmark_pool(void *o, int mark_mode)
 #endif
     gcpage_t* page = GC_PAGE(o);
     int bits = gc_bits(o);
-    if (bits == GC_QUEUED || bits == GC_MARKED)
+    if (bits == GC_QUEUED || bits == GC_MARKED) {
         mark_mode = GC_MARKED;
+    }
 #ifdef OBJPROFILE
     if (!(bits & GC_MARKED)) {
         objprofile_count(jl_typeof(o), mark_mode == GC_MARKED, page->osize);
@@ -419,7 +416,7 @@ static __attribute__((noinline)) void *malloc_page(void)
 #ifdef _OS_WINDOWS_
             char* mem = VirtualAlloc(NULL, sizeof(region_t) + GC_PAGE_SZ*32, MEM_RESERVE, PAGE_READWRITE);
 #else
-            char* mem = mmap(NULL, sizeof(region_t) + GC_PAGE_SZ*32, PROT_READ | PROT_WRITE, MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+            char* mem = mmap(0, sizeof(region_t) + GC_PAGE_SZ*32, PROT_READ | PROT_WRITE, MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
             mem = mem == MAP_FAILED ? NULL : mem;
 #endif
             if (mem == NULL) {
@@ -427,7 +424,7 @@ static __attribute__((noinline)) void *malloc_page(void)
                 abort();
             }
             // we may waste up to around 500k of virtual address space for alignment but those pages are never committed
-            heap = (region_t*)((char*)GC_PAGES(mem + SYS_PAGE_SZ + GC_PAGE_SZ*32 - 1) - SYS_PAGE_SZ);
+            heap = (region_t*)((char*)GC_PAGES(mem + REGION_PG_COUNT/8 + GC_PAGE_SZ*32 - 1) - REGION_PG_COUNT/8);
             heaps[heap_i] = heap;
 #ifdef _OS_WINDOWS_
             VirtualAlloc(heap->freemap, REGION_PG_COUNT/8, MEM_COMMIT, PAGE_READWRITE);
@@ -474,7 +471,7 @@ static inline void free_page(void *p)
     int i;
     for(i = 0; i < HEAP_COUNT && heaps[i] != NULL; i++) {
         pg_idx = ((uintptr_t)p - (uintptr_t)heaps[i]->pages[0])/GC_PAGE_SZ;
-        if (pg_idx >= 0 && pg_idx < 8*SYS_PAGE_SZ) break;
+        if (pg_idx >= 0 && pg_idx < REGION_PG_COUNT) break;
     }
     assert(i < HEAP_COUNT && heaps[i] != NULL);
     region_t *heap = heaps[i];
@@ -2051,16 +2048,18 @@ void jl_gc_collect(void)
         }*/
         allocd_bytes_since_sweep += allocd_bytes + (int64_t)collect_interval/gc_steps;
 
-#ifdef GC_FINAL_STATS
-        total_mark_time += mark_pause;
+#if defined(GC_TIME) || defined(GC_FINAL_STATS)
+        uint64_t mark_pause = jl_hrtime() - t0;
 #endif
 #ifdef GC_TIME
-        uint64_t mark_pause = jl_hrtime() - t0;
         JL_PRINTF(JL_STDOUT, "GC mark pause %.2f ms | scanned %ld kB = %ld + %ld | stack %d -> %d (wb %d) | remset %d %d %d\n", NS2MS(mark_pause), (scanned_bytes + perm_scanned_bytes)/1024, scanned_bytes/1024, perm_scanned_bytes/1024, saved_mark_sp, mark_sp, wb_activations, last_remset->len, rem_bindings_len, allocd_bytes/1024);
         saved_mark_sp = mark_sp;
 #endif
+#ifdef GC_FINAL_STATS
+        total_mark_time += mark_pause;
+#endif
     }
-#ifdef GC_TIME
+#if defined(GC_TIME) || defined(GC_FINAL_STATS)
     int64_t bonus = -1, SAVE = -1, SAVE2 = -1, SAVE3 = -1, pct = -1;
     uint64_t post_time = 0, finalize_time = 0;
 #endif
@@ -2186,11 +2185,10 @@ void jl_gc_collect(void)
 #endif
     }
     n_pause++;
-    double pause = jl_hrtime() - t0;
+    uint64_t pause = jl_hrtime() - t0;
     total_gc_time += pause;
 #ifdef GC_FINAL_STATS
-    // do not count the first pause as it is always a full collection
-    //    max_pause = (max_pause < pause && n_pause > 1) ? pause : max_pause;
+    max_pause = max_pause < pause ? pause : max_pause;
 #endif
     JL_SIGATOMIC_END();
     jl_in_gc = 0;
@@ -2353,10 +2351,13 @@ void jl_print_gc_stats(JL_STREAM *s)
     malloc_stats();
     double ptime = clock_now()-process_t0;
     jl_printf(s, "exec time\t%.5f sec\n", ptime);
-    jl_printf(s, "gc time  \t%.5f sec (%2.1f%%)\n", NS_TO_S(total_gc_time),
-              (NS_TO_S(total_gc_time)/ptime)*100);
-    jl_printf(s, "gc pause \t%.2f ms avg\n\t\t%.2f ms max\n", (NS_TO_S(total_gc_time)/n_pause)*1000, max_pause*1000);
-    jl_printf(s, "\t\t(%2.1f%% mark, %2.1f%% sweep, %2.1f%% finalizers)\n", (total_mark_time/NS_TO_S(total_gc_time))*100, (total_sweep_time/NS_TO_S(total_gc_time))*100, (total_fin_time/NS_TO_S(total_gc_time))*100);
+    jl_printf(s, "gc time  \t%.5f sec (%2.1f%%) in %d collections\n",
+              NS_TO_S(total_gc_time), (NS_TO_S(total_gc_time)/ptime)*100, n_pause);
+    jl_printf(s, "gc pause \t%.2f ms avg\n\t\t%2.0f ms max\n",
+              NS2MS(total_gc_time)/n_pause, NS2MS(max_pause));
+    jl_printf(s, "\t\t(%2d%% mark, %2d%% sweep, %2d%% finalizers)\n",
+              (total_mark_time*100)/total_gc_time, (total_sweep_time*100)/total_gc_time,
+              (total_fin_time*100)/total_gc_time);
     struct mallinfo mi = mallinfo();
     jl_printf(s, "malloc size\t%d MB\n", mi.uordblks/1024/1024);
     jl_printf(s, "max page alloc\t%ld MB\n", max_pg_count*GC_PAGE_SZ/1024/1024);
@@ -2378,7 +2379,6 @@ void jl_gc_init(void)
         norm_pools[i].freelist = NULL;
         norm_pools[i].end_offset = ((GC_PAGE_SZ/szc[i]) - 1)*szc[i];
     }
-    assert(offsetof(gcpages_t, data) == GC_PAGE_SZ);
     
     collect_interval = default_collect_interval;
     allocd_bytes = -default_collect_interval;
