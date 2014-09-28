@@ -240,3 +240,5 @@ const Uint128 = UInt128
 @deprecate ifloor{T}(::Type{T},x) floor(T,x)
 @deprecate iround(x)              round(Integer,x)
 @deprecate iround{T}(::Type{T},x) round(T,x)
+
+@deprecate RemoteRef RemoteChannel

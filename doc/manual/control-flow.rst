@@ -1000,3 +1000,16 @@ Symbol         Meaning
 ``:done``      Successfully finished executing
 ``:failed``    Finished with an uncaught exception
 =============  ==================================================
+
+Tasks and channels
+~~~~~~~~~~~~~~~~~~
+
+A ``Channel`` is is a first-in, first-out queue object available for 
+inter-task communication. They can hold ``n`` objects of the type specified 
+at construction time. A `Channel{Any}` can hold objects of any type.
+
+``wait``, ``fetch``, ``take!`` and ``put!`` are blocking operations, 
+they lead to control being switched to other tasks if the channel is 
+empty(or full).
+
+

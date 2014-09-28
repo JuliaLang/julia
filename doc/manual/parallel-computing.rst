@@ -27,17 +27,17 @@ operations typically do not look like "message send" and "message
 receive" but rather resemble higher-level operations like calls to user
 functions.
 
-Parallel programming in Julia is built on two primitives: *remote
-references* and *remote calls*. A remote reference is an object that can
-be used from any process to refer to an object stored on a particular
-process. A remote call is a request by one process to call a certain
-function on certain arguments on another (possibly the same) process.
-A remote call returns a remote reference to its result. Remote calls
-return immediately; the process that made the call proceeds to its
-next operation while the remote call happens somewhere else. You can
-wait for a remote call to finish by calling ``wait`` on its remote
-reference, and you can obtain the full value of the result using
-``fetch``. You can store a value to a remote reference using ``put!``.
+Parallel programming in Julia is built on two primitives: *remote channels* 
+and *remote calls*. A remote channel is an object that can be used from any 
+process to refer to a ``Channel`` stored on a  particular process. A remote
+call is a request by one process to call a certain function on certain
+arguments on another (possibly the same) process. A remote call returns a
+remote channel to its result. Remote calls return immediately; the process 
+that made the call proceeds to its next operation while the remote call
+happens somewhere else. You can wait for a remote call to finish by calling
+``wait`` on its remote channel, and you can obtain the full value of the
+result using ``fetch``. You can store a value to a remote channel using
+``put!``.
 
 Let's try this out. Starting with ``julia -p n`` provides ``n`` worker
 processes on the local machine. Generally it makes sense for ``n`` to
@@ -48,7 +48,7 @@ equal the number of CPU cores on the machine.
     $ ./julia -p 2
 
     julia> r = remotecall(2, rand, 2, 2)
-    RemoteRef(2,1,5)
+    RemoteChannel(2,1,5)
 
     julia> fetch(r)
     2x2 Float64 Array:
@@ -56,7 +56,7 @@ equal the number of CPU cores on the machine.
      0.174572  0.157411
 
     julia> s = @spawnat 2 1 .+ fetch(r)
-    RemoteRef(2,1,7)
+    RemoteChannel(2,1,7)
 
     julia> fetch(s)
     2x2 Float64 Array:
@@ -72,7 +72,7 @@ to call, and the remaining arguments will be passed to this
 function. As you can see, in the first line we asked process 2 to
 construct a 2-by-2 random matrix, and in the second line we asked it
 to add 1 to it. The result of both calculations is available in the
-two remote references, ``r`` and ``s``. The ``@spawnat`` macro
+two remote channels, ``r`` and ``s``. The ``@spawnat`` macro
 evaluates the expression in the second argument on the process
 specified by the first argument.
 
@@ -96,10 +96,10 @@ The syntax of ``remotecall`` is not especially convenient. The macro
 a function, and picks where to do the operation for you::
 
     julia> r = @spawn rand(2,2)
-    RemoteRef(1,1,0)
+    RemoteChannel(1,1,0)
 
     julia> s = @spawn 1 .+ fetch(r)
-    RemoteRef(1,1,1)
+    RemoteChannel(1,1,1)
 
     julia> fetch(s)
     1.10824216411304866 1.13798233877923116
@@ -132,10 +132,10 @@ type the following into the julia prompt::
      1.15119   0.918912
 
     julia> @spawn rand2(2,2)
-    RemoteRef(1,1,1)
+    RemoteChannel(1,1,1)
 
     julia> @spawn rand2(2,2)
-    RemoteRef(2,1,2)
+    RemoteChannel(2,1,2)
 
     julia> exception on 2: in anonymous: rand2 not defined 
 
@@ -166,7 +166,7 @@ Starting julia with ``julia -p 2``, you can use this to verify the following:
 - ``using DummyModule`` causes the module to be loaded on all processes; however, the module is brought into scope only on the one executing the statement.
 - As long as ``DummyModule`` is loaded on process 2, commands like ::
 
-    rr = RemoteRef(2)
+    rr = RemoteChannel(2)
     put!(rr, MyType(7))
 
   allow you to store an object of type ``MyType`` on process 2 even if ``DummyModule`` is not in scope on process 2.

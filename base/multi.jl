@@ -6,13 +6,13 @@
 ##
 ## remotecall(w, func, args...) -
 ##     tell a worker to call a function on the given arguments.
-##     returns a RemoteRef to the result.
+##     returns a RemoteChannel to the result.
 ##
 ## remote_do(w, f, args...) - remote function call with no result
 ##
-## wait(rr) - wait for a RemoteRef to be finished computing
+## wait(rr) - wait for a RemoteChannel to be finished computing
 ##
-## fetch(rr) - wait for and get the value of a RemoteRef
+## fetch(rr) - wait for and get the value of a RemoteChannel
 ##
 ## remotecall_fetch(w, func, args...) - faster fetch(remotecall(...))
 ##
@@ -20,14 +20,14 @@
 ##     call a function on each element of lst (some 1-d thing), in
 ##     parallel.
 ##
-## RemoteRef() - create an uninitialized RemoteRef on the local processor
+## RemoteChannel() - create an uninitialized RemoteChannel on the local processor
 ##
-## RemoteRef(p) - ...or on a particular processor
+## RemoteChannel(p) - ...or on a particular processor
 ##
-## put!(r, val) - store a value to an uninitialized RemoteRef
+## put!(r, val) - store a value to an uninitialized RemoteChannel
 ##
 ## @spawn expr -
-##     evaluate expr somewhere. returns a RemoteRef. all variables in expr
+##     evaluate expr somewhere. returns a RemoteChannel. all variables in expr
 ##     are copied to the remote processor.
 ##
 ## @spawnat p expr - @spawn specifying where to run
@@ -235,7 +235,7 @@ function add_worker(pg::ProcessGroup, w)
     # NOTE: currently only node 1 can add new nodes, since nobody else
     # has the full list of address:port
     assert(LPROC.id == 1)
-    rr_join = RemoteRef()
+    rr_join = RemoteChannel()
     w.id = get_next_pid()
     register_worker(w)
     create_message_handler_loop(w.socket; ntfy_join_complete=rr_join)
@@ -373,9 +373,9 @@ function deregister_worker(pg, pid)
     end
     push!(map_del_wrkr, pid)
 
-    # delete this worker from our RemoteRef client sets
-    ids = []
-    tonotify = []
+    # delete this worker from our RemoteChannel client sets
+    ids = {}
+    tonotify = {}
     for (id,rv) in pg.refs
         if in(pid,rv.clientset)
             push!(ids, id)
@@ -390,7 +390,7 @@ function deregister_worker(pg, pid)
 
     # throw exception to tasks waiting for this pid
     for (id,rv) in tonotify
-        notify_error(rv.full, ProcessExitedException())
+        notify_error(rv.c, ProcessExitedException())
         delete!(pg.refs, id)
     end
 end
@@ -399,13 +399,13 @@ end
 
 const client_refs = WeakKeyDict()
 
-type RemoteRef
+type RemoteChannel <: AbstractChannel
     where::Int
     whence::Int
     id::Int
     # TODO: cache value if it's fetched, but don't serialize the cached value
 
-    function RemoteRef(w, wh, id)
+    function RemoteChannel(w, wh, id)
         r = new(w,wh,id)
         found = getkey(client_refs, r, false)
         if !is(found,false)
@@ -417,8 +417,9 @@ type RemoteRef
     end
 
     REQ_ID::Int = 0
-    function RemoteRef(pid::Integer)
-        rr = RemoteRef(pid, myid(), REQ_ID)
+    function RemoteChannel(pid::Integer; T::Type=Any, sz=1)
+        assert(sz > 0)
+        rr = RemoteChannel(pid, myid(), REQ_ID)
         REQ_ID += 1
         if mod(REQ_ID,200) == 0
             # force gc after making a lot of refs since they take up
@@ -426,40 +427,60 @@ type RemoteRef
             # is responsible for freeing them.
             gc()
         end
+        
+        if (T != Any) || (sz > 1)
+            # For any and size 1, the Channel is created only at the time of first access
+            # this saves a round trip. However for other types/sizes, we will need to create it 
+            # at RemoteChannel creation time itself.
+            call_on_owner(setup_ref, rr, T, sz)
+        end
+        
         rr
     end
 
-    RemoteRef(w::LocalProcess) = RemoteRef(w.id)
-    RemoteRef(w::Worker) = RemoteRef(w.id)
-    RemoteRef() = RemoteRef(myid())
+    RemoteChannel(w::LocalProcess) = RemoteChannel(w.id)
+    RemoteChannel(w::Worker) = RemoteChannel(w.id)
+    RemoteChannel(; kwargs...) = RemoteChannel(myid(); kwargs...)
 
     global next_id
     next_id() = (id=(myid(),REQ_ID); REQ_ID+=1; id)
 end
 
-hash(r::RemoteRef, h::UInt) = hash(r.whence, hash(r.id, h))
-==(r::RemoteRef, s::RemoteRef) = (r.whence==s.whence && r.id==s.id)
+hash(r::RemoteChannel, h::UInt) = hash(r.whence, hash(r.id, h))
+==(r::RemoteChannel, s::RemoteChannel) = (r.whence==s.whence && r.id==s.id)
 
-rr2id(r::RemoteRef) = (r.whence, r.id)
+eltype_ref(rid) = eltype(lookup_ref(rid))
+eltype(c::RemoteChannel) = call_on_owner(eltype_ref, c)
+
+size_ref(rid) = size(lookup_ref(rid))
+size(c::RemoteChannel) = call_on_owner(size_ref, c)
+
+rr2id(r::RemoteChannel) = (r.whence, r.id)
 
 lookup_ref(id) = lookup_ref(PGRP, id)
 function lookup_ref(pg, id)
     rv = get(pg.refs, id, false)
     if rv === false
         # first we've heard of this ref
-        rv = RemoteValue()
-        pg.refs[id] = rv
-        push!(rv.clientset, id[1])
+        rv = setup_ref(pg, id, Any, 1)
     end
     rv
 end
 
-function isready(rr::RemoteRef)
+setup_ref(id, T, sz) = setup_ref(PGRP, id, T, sz)
+function setup_ref(pg, id, T, sz)
+    rv = RemoteChannelStore(T, sz)
+    pg.refs[id] = rv
+    push!(rv.clientset, id[1])
+    rv
+end
+
+function isready(rr::RemoteChannel)
     rid = rr2id(rr)
     if rr.where == myid()
-        lookup_ref(rid).done
+        return isready(lookup_ref(rid).c)
     else
-        remotecall_fetch(rr.where, id->lookup_ref(id).done, rid)
+        remotecall_fetch(rr.where, id->isready(lookup_ref(id).c) , rid)
     end
 end
 
@@ -488,7 +509,7 @@ function start_gc_msgs_task()
     end
 end
 
-function send_del_client(rr::RemoteRef)
+function send_del_client(rr::RemoteChannel)
     if rr.where == myid()
         del_client(rr2id(rr), myid())
     else
@@ -516,7 +537,7 @@ function add_clients(pairs::(Any,Any)...)
     end
 end
 
-function send_add_client(rr::RemoteRef, i)
+function send_add_client(rr::RemoteChannel, i)
     if rr.where == myid()
         add_client(rr2id(rr), i)
     elseif i != rr.where
@@ -531,7 +552,7 @@ function send_add_client(rr::RemoteRef, i)
     end
 end
 
-function serialize(s, rr::RemoteRef)
+function serialize(s, rr::RemoteChannel)
     i = worker_id_from_socket(s)
     #println("$(myid()) serializing $rr to $i")
     if i != -1
@@ -541,49 +562,42 @@ function serialize(s, rr::RemoteRef)
     invoke(serialize, (Any, Any), s, rr)
 end
 
-function deserialize(s, t::Type{RemoteRef})
+function deserialize(s, t::Type{RemoteChannel})
     rr = invoke(deserialize, (Any, DataType), s, t)
     where = rr.where
     if where == myid()
         add_client(rr2id(rr), myid())
     end
     # call ctor to make sure this rr gets added to the client_refs table
-    RemoteRef(where, rr.whence, rr.id)
+    RemoteChannel(where, rr.whence, rr.id)
 end
 
-# data stored by the owner of a RemoteRef
-type RemoteValue
-    done::Bool
-    result
-    full::Condition   # waiting for a value
-    empty::Condition  # waiting for value to be removed
+# data stored by the owner of a RemoteChannel
+type RemoteChannelStore{T}
+    c::Channel{T}
     clientset::IntSet
     waitingfor::Int   # processor we need to hear from to fill this, or 0
-
-    RemoteValue() = new(false, nothing, Condition(), Condition(), IntSet(), 0)
+    RemoteChannelStore(c) = new(c, IntSet(), 0)
 end
 
-function work_result(rv::RemoteValue)
-    v = rv.result
+RemoteChannelStore() = RemoteChannelStore(Any, 1)
+function RemoteChannelStore(T, sz)
+    assert(sz > 0)
+    RemoteChannelStore{T}(Channel(T, sz))
+end
+
+eltype(rv::RemoteChannelStore) = eltype(rv.c)
+size(rv::RemoteChannelStore) = rv.c.sz_max
+
+function fetch(rv::RemoteChannelStore)
+    v = fetch(rv.c)
     if isa(v,WeakRef)
         v = v.value
     end
     v
 end
 
-function wait_full(rv::RemoteValue)
-    while !rv.done
-        wait(rv.full)
-    end
-    return work_result(rv)
-end
-
-function wait_empty(rv::RemoteValue)
-    while rv.done
-        wait(rv.empty)
-    end
-    return nothing
-end
+wait(rv::RemoteChannelStore)=wait(rv.c)
 
 ## core messages: do, call, fetch, wait, ref, put! ##
 
@@ -598,13 +612,13 @@ function run_work_thunk(thunk)
     end
     result
 end
-function run_work_thunk(rv::RemoteValue, thunk)
+function run_work_thunk(rv::RemoteChannelStore, thunk)
     put!(rv, run_work_thunk(thunk))
     nothing
 end
 
 function schedule_call(rid, thunk)
-    rv = RemoteValue()
+    rv = RemoteChannelStore()
     (PGRP::ProcessGroup).refs[rid] = rv
     push!(rv.clientset, rid[1])
     schedule(@task(run_work_thunk(rv,thunk)))
@@ -613,7 +627,7 @@ end
 
 #localize_ref(b::Box) = Box(localize_ref(b.contents))
 
-#function localize_ref(r::RemoteRef)
+#function localize_ref(r::RemoteChannel)
 #    if r.where == myid()
 #        fetch(r)
 #    else
@@ -647,13 +661,13 @@ function local_remotecall_thunk(f, args)
 end
 
 function remotecall(w::LocalProcess, f, args...)
-    rr = RemoteRef(w)
+    rr = RemoteChannel(w)
     schedule_call(rr2id(rr), local_remotecall_thunk(f,args))
     rr
 end
 
 function remotecall(w::Worker, f, args...)
-    rr = RemoteRef(w)
+    rr = RemoteChannel(w)
     #println("$(myid()) asking for $rr")
     send_msg(w, :call, rr2id(rr), f, args)
     rr
@@ -673,7 +687,7 @@ function remotecall_fetch(w::Worker, f, args...)
     rv = lookup_ref(oid)
     rv.waitingfor = w.id
     send_msg(w, :call_fetch, oid, f, args)
-    v = wait_full(rv)
+    v = fetch(rv)
     delete!(PGRP.refs, oid)
     v
 end
@@ -688,9 +702,9 @@ function remotecall_wait(w::Worker, f, args...)
     prid = next_id()
     rv = lookup_ref(prid)
     rv.waitingfor = w.id
-    rr = RemoteRef(w)
+    rr = RemoteChannel(w)
     send_msg(w, :call_wait, rr2id(rr), prid, f, args)
-    wait_full(rv)
+    wait(rv)
     delete!(PGRP.refs, prid)
     rr
 end
@@ -715,7 +729,7 @@ end
 remote_do(id::Integer, f, args...) = remote_do(worker_from_id(id), f, args...)
 
 # have the owner of rr call f on it
-function call_on_owner(f, rr::RemoteRef, args...)
+function call_on_owner(f, rr::RemoteChannel, args...)
     rid = rr2id(rr)
     if rr.where == myid()
         f(rid, args...)
@@ -724,36 +738,20 @@ function call_on_owner(f, rr::RemoteRef, args...)
     end
 end
 
-wait_ref(rid) = (wait_full(lookup_ref(rid)); nothing)
-wait(r::RemoteRef) = (call_on_owner(wait_ref, r); r)
+wait_ref(rid) = wait(lookup_ref(rid))
+wait(r::RemoteChannel) = (call_on_owner(wait_ref, r); r)
 
-fetch_ref(rid) = wait_full(lookup_ref(rid))
-fetch(r::RemoteRef) = call_on_owner(fetch_ref, r)
+fetch_ref(rid) = fetch(lookup_ref(rid))
+fetch(r::RemoteChannel) = call_on_owner(fetch_ref, r)
 fetch(x::ANY) = x
 
-# storing a value to a Ref
-function put!(rv::RemoteValue, val::ANY)
-    wait_empty(rv)
-    rv.result = val
-    rv.done = true
-    notify_full(rv)
-    rv
-end
-
+put!(rv::RemoteChannelStore, v::ANY)=put!(rv.c, v)
 put_ref(rid, v) = put!(lookup_ref(rid), v)
-put!(rr::RemoteRef, val::ANY) = (call_on_owner(put_ref, rr, val); rr)
+put!(rr::RemoteChannel, val) = (call_on_owner(put_ref, rr, val); rr)
 
-function take!(rv::RemoteValue)
-    wait_full(rv)
-    val = rv.result
-    rv.done = false
-    rv.result = nothing
-    notify_empty(rv)
-    val
-end
-
+take!(rv::RemoteChannelStore) = take!(rv.c)
 take_ref(rid) = take!(lookup_ref(rid))
-take!(rr::RemoteRef) = call_on_owner(take_ref, rr)
+take!(rr::RemoteChannel) = call_on_owner(take_ref, rr)
 
 function deliver_result(sock::IO, msg, oid, value)
     #print("$(myid()) sending result $oid\n")
@@ -780,10 +778,6 @@ function deliver_result(sock::IO, msg, oid, value)
         end
     end
 end
-
-# notify waiters that a certain job has finished or Ref has been emptied
-notify_full (rv::RemoteValue) = notify(rv.full, work_result(rv))
-notify_empty(rv::RemoteValue) = notify(rv.empty)
 
 ## message event handlers ##
 
@@ -838,7 +832,7 @@ function create_message_handler_loop(sock::AsyncStream; ntfy_join_complete=nothi
                     let f=f, args=args, id=id, msg=msg, notify_id=notify_id
                         @schedule begin
                             rv = schedule_call(id, ()->f(args...))
-                            deliver_result(sock, msg, notify_id, wait_full(rv))
+                            deliver_result(sock, msg, notify_id, fetch(rv))
                         end
                     end
                 elseif is(msg, :do)
@@ -847,7 +841,7 @@ function create_message_handler_loop(sock::AsyncStream; ntfy_join_complete=nothi
                     #print("got args: $args\n")
                     let f=f, args=args
                         @schedule begin
-                            run_work_thunk(RemoteValue(), ()->f(args...))
+                            run_work_thunk(RemoteChannelStore(), ()->f(args...))
                         end
                     end
                 elseif is(msg, :result)
@@ -1289,7 +1283,7 @@ function addprocs_internal(np::Integer;
     disable_threaded_libs()
 
     ret = Array(Int, 0)
-    rr_join = Array(RemoteRef, 0)
+    rr_join = Array(RemoteChannel, 0)
 
     resp_arr = []
     c = Condition()
@@ -1343,7 +1337,7 @@ let nextidx = 0
                 if isa(v,Box)
                     v = v.contents
                 end
-                if isa(v,RemoteRef)
+                if isa(v,RemoteChannel)
                     p = v.where; break
                 end
             end
@@ -1600,7 +1594,7 @@ end
 
 function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
     start = time()
-    done = RemoteRef()
+    done = RemoteChannel()
     timercb(aw) = begin
         try
             if testcb()

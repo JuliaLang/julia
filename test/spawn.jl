@@ -107,7 +107,7 @@ rm(file)
 
 # issue #3373
 # fixing up Conditions after interruptions
-r = RemoteRef()
+r = RemoteChannel()
 t = @async begin
     try
         wait(r)

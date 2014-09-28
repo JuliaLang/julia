@@ -4,8 +4,8 @@ importall Base
 # sum a vector using a tree on top of local reductions.
 function sum(v::DArray)
     P = procs(v)
-    nodeval = [RemoteRef(p) for p=P]
-    answer = RemoteRef()
+    nodeval = [ RemoteChannel(p) for p=P ]
+    answer = RemoteChannel()
     np = numel(P)
 
     for i=0:np-1
@@ -37,9 +37,9 @@ end
 # possibly-useful abstraction:
 
 type RefGroup
-    refs::Array{RemoteRef,1}
+    refs::Array{RemoteChannel,1}
 
-    RefGroup(P) = new([ RemoteRef(p) for p=P ])
+    RefGroup(P) = new([ RemoteChannel(p) for p=P ])
 end
 
 getindex(r::RefGroup, i) = fetch(r.refs[i])
