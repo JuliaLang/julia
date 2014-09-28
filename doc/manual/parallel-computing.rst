@@ -302,7 +302,7 @@ the variables are read-only::
 
     a = randn(1000)
     @parallel (+) for i=1:100000
-      f(a[randi(end)])
+      f(a[rand(1:end)])
     end
 
 Here each iteration applies ``f`` to a randomly-chosen sample from a
