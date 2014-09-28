@@ -260,7 +260,7 @@ endif
 	mkdir -p $(DESTDIR)$(datarootdir)/icons/hicolor/scalable/apps/
 	$(INSTALL_F) contrib/julia.svg $(DESTDIR)$(datarootdir)/icons/hicolor/scalable/apps/
 	-touch --no-create $(DESTDIR)$(datarootdir)/icons/hicolor/
-	-gtk-update-icon-cache $(DESTDIR)$(datarootdir)/icons/hicolor/
+	-gtk-update-icon-cache --ignore-theme-index $(DESTDIR)$(datarootdir)/icons/hicolor/
 	mkdir -p $(DESTDIR)$(datarootdir)/applications/
 	$(INSTALL_F) contrib/julia.desktop $(DESTDIR)$(datarootdir)/applications/
 
