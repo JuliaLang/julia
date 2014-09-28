@@ -5044,12 +5044,12 @@ some built-in integration support in Julia.
 Parallel Computing
 ------------------
 
-.. function:: addprocs(n; cman::ClusterManager=LocalManager()) -> List of process identifiers
+.. function:: addprocs(n; manager::ClusterManager=LocalManager()) -> List of process identifiers
 
    ``addprocs(4)`` will add 4 processes on the local machine. This can be used to take 
    advantage of multiple cores.
    
-   Keyword argument ``cman`` can be used to provide a custom cluster manager to start workers. 
+   Keyword argument ``manager`` can be used to provide a custom cluster manager to start workers. 
    For example Beowulf clusters are  supported via a custom cluster manager implemented 
    in  package ``ClusterManagers``.
    
@@ -5073,6 +5073,7 @@ Parallel Computing
 
    ``sshflags`` : specifies additional ssh options, e.g. :literal:`sshflags=\`-i /home/foo/bar.pem\`` .
 
+   ``max_parallel`` : specifies the maximum number of workers being launched in parallel at a host. Defaults to 10.
    
 .. function:: nprocs()
 
