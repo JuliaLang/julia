@@ -413,6 +413,11 @@ next(p::Pair, i) = (getfield(p,i), i+1)
 
 indexed_next(p::Pair, i::Int, state) = (getfield(p,i), i+1)
 
+hash(p::Pair, h::Uint) = hash(p.second, hash(p.first, h))
+
+==(p::Pair, q::Pair) = (p.first==q.first) & (p.second==q.second)
+isequal(p::Pair, q::Pair) = isequal(p.first,q.first) & isequal(p.second,q.second)
+
 # some operators not defined yet
 global //, .>>, .<<, >:, <|, |>, hcat, hvcat, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
 
