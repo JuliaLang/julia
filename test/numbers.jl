@@ -1983,3 +1983,8 @@ let a = zeros(Int, 3)
     @test a == [1, 1, 1]
 end
 
+@test_throws InexactError convert(Uint8, 256)
+@test_throws InexactError convert(Uint, -1)
+@test_throws InexactError convert(Int, big(2)^100)
+@test_throws InexactError convert(Int16, big(2)^100)
+@test_throws InexactError convert(Int, typemax(Uint))
