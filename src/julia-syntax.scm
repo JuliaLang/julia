@@ -1761,14 +1761,13 @@
 
    'dict
    (lambda (e)
+     ;; TODO: deprecate
      `(call (top Dict)
-	    (call (top tuple)
-		  ,.(map (lambda (x) (expand-forms (cadr  x))) (cdr e)))
-	    (call (top tuple)
-		  ,.(map (lambda (x) (expand-forms (caddr x))) (cdr e)))))
+	    ,.(map expand-forms (cdr e))))
 
    'typed_dict
    (lambda (e)
+     ;; TODO: deprecate
      (let ((atypes (cadr e))
 	   (args   (cddr e)))
        (if (and (length= atypes 3)
@@ -1776,11 +1775,11 @@
 	   `(call (call (top apply_type) (top Dict)
 			,(expand-forms (cadr atypes))
 			,(expand-forms (caddr atypes)))
-		  (call (top tuple)
-			,.(map (lambda (x) (expand-forms (cadr  x))) args))
-		  (call (top tuple)
-			,.(map (lambda (x) (expand-forms (caddr x))) args)))
+		  ,.(map expand-forms args))
 	   (error (string "invalid \"typed_dict\" syntax " (deparse atypes))))))
+
+   '=>
+   (lambda (e) `(call (top Pair) ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
 
    'cell1d
    (lambda (e)

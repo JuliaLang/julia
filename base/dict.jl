@@ -318,15 +318,6 @@ type Dict{K,V} <: Associative{K,V}
         n = 16
         new(zeros(Uint8,n), Array(K,n), Array(V,n), 0, 0, identity)
     end
-    function Dict(ks, vs)
-        # TODO: eventually replace with a call to Dict(zip(ks,vs))
-        n = min(length(ks), length(vs))
-        h = Dict{K,V}()
-        for i=1:n
-            h[ks[i]] = vs[i]
-        end
-        return h
-    end
     function Dict(kv)
         h = Dict{K,V}()
         for (k,v) in kv
@@ -334,11 +325,34 @@ type Dict{K,V} <: Associative{K,V}
         end
         return h
     end
+    Dict(p::Pair) = setindex!(Dict{K,V}(), p.second, p.first)
+    function Dict(ps::Pair...)
+        h = Dict{K,V}()
+        sizehint(h, length(ps))
+        for p in ps
+            h[p.first] = p.second
+        end
+        return h
+    end
 end
 Dict() = Dict{Any,Any}()
+Dict(kv::()) = Dict()
 
-Dict{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V}) = Dict{K,V}(ks,vs)
-Dict(ks, vs) = Dict{Any,Any}(ks, vs)
+# TODO: this can probably be simplified using `eltype` as a THT (Tim Holy trait)
+Dict{K,V}(kv::((K,V)...,))     = Dict{K,V}(kv)
+Dict{K  }(kv::((K,Any)...,))   = Dict{K,Any}(kv)
+Dict{V  }(kv::((Any,V)...,))   = Dict{Any,V}(kv)
+Dict{K,V}(kv::(Pair{K,V}...,)) = Dict{K,V}(kv)
+Dict     (kv::(Pair...,))      = Dict{Any,Any}(kv)
+
+Dict{K,V}(kv::AbstractArray{(K,V)})     = Dict{K,V}(kv)
+Dict{K,V}(kv::AbstractArray{Pair{K,V}}) = Dict{K,V}(kv)
+Dict{K,V}(kv::Associative{K,V})         = Dict{K,V}(kv)
+
+Dict{K,V}(ps::Pair{K,V}...) = Dict{K,V}(ps)
+Dict     (ps::Pair...)      = Dict{Any,Any}(ps)
+
+similar{K,V}(d::Dict{K,V}) = Dict{K,V}()
 
 # conversion between Dict types
 function convert{K,V}(::Type{Dict{K,V}},d::Dict)
@@ -354,16 +368,6 @@ function convert{K,V}(::Type{Dict{K,V}},d::Dict)
     return h
 end
 convert{K,V}(::Type{Dict{K,V}},d::Dict{K,V}) = d
-
-# syntax entry points
-Dict{K,V}(ks::(K...), vs::(V...)) = Dict{K  ,V  }(ks, vs)
-Dict{K  }(ks::(K...), vs::Tuple ) = Dict{K  ,Any}(ks, vs)
-Dict{V  }(ks::Tuple , vs::(V...)) = Dict{Any,V  }(ks, vs)
-
-Dict{K,V}(kv::AbstractArray{(K,V)}) = Dict{K,V}(kv)
-Dict{K,V}(kv::Associative{K,V}) = Dict{K,V}(kv)
-
-similar{K,V}(d::Dict{K,V}) = (K=>V)[]
 
 function serialize(s, t::Dict)
     serialize_type(s, typeof(t))

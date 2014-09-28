@@ -400,6 +400,19 @@ function ifelse(c::AbstractArray{Bool}, x, y::AbstractArray)
     reshape([ifelse(c[i], x, y[i]) for i = 1 : length(c)], shp)
 end
 
+# Pair
+
+immutable Pair{A,B}
+    first::A
+    second::B
+end
+
+start(p::Pair) = 1
+done(p::Pair, i) = i>2
+next(p::Pair, i) = (getfield(p,i), i+1)
+
+indexed_next(p::Pair, i::Int, state) = (getfield(p,i), i+1)
+
 # some operators not defined yet
 global //, .>>, .<<, >:, <|, |>, hcat, hvcat, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
 
