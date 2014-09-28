@@ -5073,6 +5073,7 @@ Parallel Computing
 
    ``sshflags`` : specifies additional ssh options, e.g. :literal:`sshflags=\`-i /home/foo/bar.pem\`` .
 
+   ``max_parallel`` : specifies the maximum number of workers being launched in parallel at a host. Defaults to 10.
    
 .. function:: nprocs()
 
