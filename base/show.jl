@@ -113,6 +113,12 @@ print(io::IO, n::Unsigned) = print(io, dec(n))
 
 show{T}(io::IO, p::Ptr{T}) = print(io, typeof(p), " @0x$(hex(unsigned(p), WORD_SIZE>>2))")
 
+function show(io::IO, p::Pair)
+    show(io, p.first)
+    print(io, "=>")
+    show(io, p.second)
+end
+
 function show(io::IO, m::Module)
     if is(m,Main)
         print(io, "Main")

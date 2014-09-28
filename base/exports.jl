@@ -64,6 +64,7 @@ export
     Nullable,
     ObjectIdDict,
     OrdinalRange,
+    Pair,
     PollingFileWatcher,
     ProcessGroup,
     QuickSort,
