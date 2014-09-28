@@ -717,8 +717,8 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
 .. function:: gemv!(tA, alpha, A, x, beta, y)
 
-   Update the vector ``y`` as ``alpha*A*x + beta*x`` or
-   ``alpha*A'x + beta*x`` according to ``tA`` (transpose ``A``).
+   Update the vector ``y`` as ``alpha*A*x + beta*y`` or
+   ``alpha*A'x + beta*y`` according to ``tA`` (transpose ``A``).
    Returns the updated ``y``.
 
 .. function:: gemv(tA, alpha, A, x)
