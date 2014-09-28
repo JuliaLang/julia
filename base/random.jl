@@ -1,6 +1,6 @@
 module Random
 
-using Base.dSFMT
+using Base: dSFMT, Integer128, Signed128, as_unsigned
 
 export srand,
        rand, rand!,
@@ -13,30 +13,42 @@ abstract AbstractRNG
 
 type MersenneTwister <: AbstractRNG
     state::DSFMT_state
-    seed::Union(Uint32,Vector{Uint32})
+    seed::Vector{Uint32}
 
-    function MersenneTwister(seed::Vector{Uint32})
+    function MersenneTwister(seed::Union(Integer,Vector{Uint32}))
         state = DSFMT_state()
-        dsfmt_init_by_array(state, seed)
-        return new(state, seed)
+        return srand(new(state), seed)
     end
 
-    MersenneTwister(seed=0) = MersenneTwister(make_seed(seed))
+    MersenneTwister() = MersenneTwister(0)
 end
 
-function srand(r::MersenneTwister, seed) 
-    r.seed = seed
-    dsfmt_init_gen_rand(r.state, seed)
-    return r
-end
+
+# random numbers of the following types are implemented:
+MTRealTypes = Union(Bool, Integer128, Float16, Float32, Float64)
+MTTypes = Union(MTRealTypes, [Complex{T} for T in MTRealTypes.types]...)
+
+## rand: a non-specified RNG defaults to GlobalRNG()
+
+rand() = rand(GlobalRNG())
+rand{T<:MTTypes}(::Type{T}) = rand(GlobalRNG(), T)
+rand(dims::Dims) = rand(GlobalRNG(), dims)
+rand(dims::Int...) = rand(dims)
+rand{T<:MTTypes}(::Type{T}, dims::Dims) = rand(GlobalRNG(), T, dims)
+rand{T<:MTTypes}(::Type{T}, d1::Int, dims::Int...) = rand(T, tuple(d1, dims...))
+rand!{T<:MTTypes}(A::AbstractArray{T}) = rand!(GlobalRNG(), A)
 
 ## initialization
 
-function srand()
+__init__() = srand()
+
+## make_seed()
+
+function make_seed()
 
 @unix_only begin
     try
-        srand("/dev/urandom")
+        return make_seed("/dev/urandom", 4)
     catch
         println(STDERR, "Entropy pool not available to seed RNG; using ad-hoc entropy sources.")
         seed = reinterpret(Uint64, time())
@@ -44,26 +56,18 @@ function srand()
         try
         seed = hash(seed, parseint(Uint64, readall(`ifconfig` |> `sha1sum`)[1:40], 16))
         end
-        srand(seed)
+        return make_seed(seed)
     end
 end
 
 @windows_only begin
     a = zeros(Uint32, 2)
     win32_SystemFunction036!(a)
-    srand(a)
+    return make_seed(a)
 end
 end
 
-__init__() = srand()
-
-## srand()
-
-function srand(seed::Vector{Uint32})
-    global RANDOM_SEED = seed
-    dsfmt_gv_init_by_array(seed)
-end
-srand(n::Integer) = srand(make_seed(n))
+make_seed(seed::Vector{Uint32}) = seed
 
 function make_seed(n::Integer)
     n < 0 && throw(DomainError())
@@ -77,74 +81,82 @@ function make_seed(n::Integer)
     end
 end
 
-function srand(filename::String, n::Integer)
+function make_seed(filename::String, n::Integer)
     open(filename) do io
         a = Array(Uint32, int(n))
         read!(io, a)
-        srand(a)
+        a
     end
 end
-srand(filename::String) = srand(filename, 4)
+
+## srand()
+
+srand() = srand(make_seed())
+
+srand(r::MersenneTwister) = srand(r, make_seed())
+
+function srand(seed::Union(Integer, Vector{Uint32}))
+    srand(GlobalRNG(), seed)
+    global RANDOM_SEED = GLOBAL_RNG.seed
+end
+
+function srand(r::MersenneTwister, seed::Union(Integer, Vector{Uint32}))
+    r.seed = make_seed(seed)
+    dsfmt_init_by_array(r.state, r.seed)
+    return r
+end
+
+srand(filename::String, n::Integer=4) = srand(make_seed(filename, n))
+
+srand(r::MersenneTwister, filename::String, n::Integer=4) = srand(r, make_seed(filename, n))
+
+## Global RNG: needs srand to be instanciated
+
+GLOBAL_RNG = MersenneTwister()
+GlobalRNG() = GLOBAL_RNG
 
 ## random floating point values
 
-rand(::Type{Float64}) = dsfmt_gv_genrand_close_open()
-rand() = dsfmt_gv_genrand_close_open()
+rand(r::AbstractRNG) = rand(r, Float64)
 
-rand(::Type{Float32}) = float32(rand())
-rand(::Type{Float16}) = float16(rand())
+# MersenneTwister
+rand(r::MersenneTwister, ::Type{Float64}) = dsfmt_genrand_close_open(r.state)
 
-rand{T<:Real}(::Type{Complex{T}}) = complex(rand(T),rand(T))
+rand{T<:Union(Float16, Float32)}(r::MersenneTwister, ::Type{T}) = convert(T, rand(r))
 
+## random integers (MersenneTwister)
 
-rand(r::MersenneTwister) = dsfmt_genrand_close_open(r.state)
+rand(r::MersenneTwister, ::Type{Uint32}) = dsfmt_genrand_uint32(r.state)
 
-## random integers
+rand(r::MersenneTwister, ::Type{Bool})    = bool(   rand(r, Uint32) & 1)
+rand(r::MersenneTwister, ::Type{Uint8})   = uint8(  rand(r, Uint32))
+rand(r::MersenneTwister, ::Type{Uint16})  = uint16( rand(r, Uint32))
+rand(r::MersenneTwister, ::Type{Uint64})  = uint64( rand(r, Uint32))<<32 | rand(r, Uint32)
+rand(r::MersenneTwister, ::Type{Uint128}) = uint128(rand(r, Uint64))<<64 | rand(r, Uint64)
 
-dsfmt_randui32() = dsfmt_gv_genrand_uint32()
-dsfmt_randui64() = uint64(dsfmt_randui32()) | (uint64(dsfmt_randui32())<<32)
+rand{T<:Signed128}(r::MersenneTwister, ::Type{T}) = convert(T, rand(r, as_unsigned(T)))
 
-rand(::Type{Uint8})   = uint8(rand(Uint32))
-rand(::Type{Uint16})  = uint16(rand(Uint32))
-rand(::Type{Uint32})  = dsfmt_randui32()
-rand(::Type{Uint64})  = dsfmt_randui64()
-rand(::Type{Uint128}) = uint128(rand(Uint64))<<64 | rand(Uint64)
+## random complex values (AbstractRNG)
 
-rand(::Type{Int8})    = int8(rand(Uint8))
-rand(::Type{Int16})   = int16(rand(Uint16))
-rand(::Type{Int32})   = int32(rand(Uint32))
-rand(::Type{Int64})   = int64(rand(Uint64))
-rand(::Type{Int128})  = int128(rand(Uint128))
+rand{T<:Real}(r::AbstractRNG, ::Type{Complex{T}}) = complex(rand(r, T), rand(r, T))
 
-# Arrays of random numbers
+## Arrays of random numbers (AbstractRNG)
 
-rand(::Type{Float64}, dims::Dims) = rand!(Array(Float64, dims))
-rand(::Type{Float64}, dims::Int...) = rand(Float64, dims)
-
-rand(dims::Dims) = rand(Float64, dims)
-rand(dims::Int...) = rand(Float64, dims)
-
-rand(r::AbstractRNG, dims::Dims) = rand!(r, Array(Float64, dims))
+rand(r::AbstractRNG, dims::Dims) = rand(r, Float64, dims)
 rand(r::AbstractRNG, dims::Int...) = rand(r, dims)
 
-function rand!{T}(A::Array{T})
+rand(r::AbstractRNG, T::Type, dims::Dims) = rand!(r, Array(T, dims))
+rand(r::AbstractRNG, T::Type, d1::Int, dims::Int...) = rand(r, T, tuple(d1, dims...))
+# note: the above method would trigger an ambiguity warning if d1 was not separated out:
+# rand(r, ()) would match both this method and rand(r, dims::Dims)
+# moreover, a call like rand(r, NotImplementedType()) would be an infinite loop
+
+function rand!{T}(r::AbstractRNG, A::AbstractArray{T})
     for i=1:length(A)
-        A[i] = rand(T)
+        @inbounds A[i] = rand(r, T)
     end
     A
 end
-
-function rand!(r::AbstractRNG, A::AbstractArray)
-    for i=1:length(A)
-        @inbounds A[i] = rand(r)
-    end
-    A
-end
-
-rand(T::Type, dims::Dims) = rand!(Array(T, dims))
-rand{T<:Number}(::Type{T}) = error("no random number generator for type $T; try a more specific type")
-rand{T<:Number}(::Type{T}, dims::Int...) = rand(T, dims)
-
 
 ## Generate random integer within a range
 
@@ -231,16 +243,18 @@ end
 rand{T}(r::Range{T}, dims::Dims) = rand!(r, Array(T, dims))
 rand(r::Range, dims::Int...) = rand(r, dims)
 
+## random BitArrays (AbstractRNG)
 
-## random Bools
+rand!(r::AbstractRNG, B::BitArray) = Base.bitarray_rand_fill!(r, B)
 
-rand!(B::BitArray) = Base.bitarray_rand_fill!(B)
+randbool(r::AbstractRNG, dims::Dims)   = rand!(r, BitArray(dims))
+randbool(r::AbstractRNG, dims::Int...) = rand!(r, BitArray(dims))
 
-randbool(dims::Dims) = rand!(BitArray(dims))
+randbool(dims::Dims)   = rand!(BitArray(dims))
 randbool(dims::Int...) = rand!(BitArray(dims))
 
-randbool() = ((dsfmt_randui32() & 1) == 1)
-rand(::Type{Bool}) = randbool()
+randbool(r::AbstractRNG=GlobalRNG()) = rand(r, Bool)
+
 
 ## randn() - Normally distributed random numbers using Ziggurat algorithm
 
@@ -736,8 +750,7 @@ ziggurat_nor_inv_r  = inv(ziggurat_nor_r)
 ziggurat_exp_r      = 7.6971174701310497140446280481
 
 rand(state::DSFMT_state) = dsfmt_genrand_close_open(state)
-randi() = reinterpret(Uint64,dsfmt_gv_genrand_close1_open2()) & 0x000fffffffffffff
-randi(state::DSFMT_state) = reinterpret(Uint64,dsfmt_genrand_close1_open2(state)) & 0x000fffffffffffff
+randi(state::DSFMT_state=GLOBAL_RNG.state) = reinterpret(Uint64,dsfmt_genrand_close1_open2(state)) & 0x000fffffffffffff
 for (lhs, rhs) in (([], []), 
                   ([:(state::DSFMT_state)], [:state]))
     @eval begin                

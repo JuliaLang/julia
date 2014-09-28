@@ -19,12 +19,17 @@ srand(0); rand(); x = rand(384);
 # Try a seed larger than 2^32
 @test rand(MersenneTwister(5294967296)) == 0.3498809918210497
 
-# Test array filling, Issue #7643
+# Test array filling, Issues #7643, #8360
 @test rand(MersenneTwister(0), 1) == [0.8236475079774124]
 A = zeros(2, 2)
 rand!(MersenneTwister(0), A)
 @test A == [0.8236475079774124  0.16456579813368521;
             0.9103565379264364  0.17732884646626457]
+@test rand(MersenneTwister(0), Int64, 1) == [172014471070449746]
+A = zeros(Int64, 2, 2)
+rand!(MersenneTwister(0), A)
+@test A == [  172014471070449746  -193283627354378518;
+            -4679130500738884555 -9008350441255501549]
 
 # randn
 @test randn(MersenneTwister(42)) == -0.5560268761463861
