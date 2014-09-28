@@ -647,7 +647,8 @@ starting workers on the same host, is implemented::
     immutable LocalManager <: ClusterManager
     end
 
-    function launch(manager::LocalManager, np::Integer, config::Dict, resp_arr::Array, c::Condition)
+    function launch(manager::LocalManager, np::Integer, config::Dict, 
+                                                resp_arr::Array, c::Condition)
         ...
     end
 
@@ -655,13 +656,12 @@ starting workers on the same host, is implemented::
         ...
     end
 
-    
 The ``launch`` method takes the following arguments:
-    ``manager::LocalManager`` - used to dispatch the call to the appropriate implementation 
-    ``np::Integer`` - number of workers to be launched 
-    ``config::Dict`` - all the keyword arguments provided as part of the ``addprocs`` call 
-    ``resp_arr::Array`` - the array to append one or more worker information tuples too 
-    ``c::Condition`` - the condition variable to be notified as and when workers are launched.
+    - ``manager::LocalManager`` - used to dispatch the call to the appropriate implementation 
+    - ``np::Integer`` - number of workers to be launched 
+    - ``config::Dict`` - all the keyword arguments provided as part of the ``addprocs`` call 
+    - ``resp_arr::Array`` - the array to append one or more worker information tuples too 
+    - ``c::Condition`` - the condition variable to be notified as and when workers are launched.
                        
 The ``launch`` method is called asynchronously in a separate task. The termination of this task 
 signals that all requested workers have been launched. Hence the ``launch`` function MUST exit as soon 
@@ -686,17 +686,15 @@ where:
     - ``config::Dict`` is the configuration dictionary for the worker. The ``launch``
       function can add/modify any data that may be required for managing 
       the worker.
-      
 
 The ``manage`` method takes the following arguments:
-    ``manager::ClusterManager`` - used to dispatch the call to the appropriate implementation 
-    ``id::Integer`` - The julia process id
-    ``config::Dict`` - configuration dictionary for the worker. The data may have been modified 
-                       by the ``launch`` method
-    ``op::Symbol`` - The ``manage`` method is called at different times during the worker's lifetime.
-                    ``op`` is one of ``:register``, ``:deregister``, ``:interrupt`` or ``:finalize``
+    - ``manager::ClusterManager`` - used to dispatch the call to the appropriate implementation 
+    - ``id::Integer`` - The Julia process id
+    - ``config::Dict`` - configuration dictionary for the worker. The data may have been modified by the ``launch`` method
+    - ``op::Symbol`` - The ``manage`` method is called at different times during the worker's lifetime.
+                    ``op`` is one of ``:register``, ``:deregister``, ``:interrupt`` or ``:finalize``.
                     ``manage`` is called with ``:register`` and ``:deregister`` when a worker is 
-                    added / removed from the julia worker pool. With ``:interrupt`` when 
+                    added / removed from the Julia worker pool. With ``:interrupt`` when 
                     ``interrupt(workers)`` is called. The cluster manager should signal the appropriate 
                     worker with an interrupt signal. With ``:finalize`` for cleanup purposes.
                     
