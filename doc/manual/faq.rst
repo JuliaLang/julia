@@ -697,21 +697,23 @@ situation can be detected using the ``isdefined`` function.
 
 Some functions are used only for their side effects, and do not need to
 return a value. In these cases, the convention is to return the value
-``nothing``, which is just a singleton object of type ``Nothing``. This
+``nothing``, which is just a singleton object of type ``Void``. This
 is an ordinary type with no fields; there is nothing special about it
 except for this convention, and that the REPL does not print anything
 for it. Some language constructs that would not otherwise have a value
 also yield ``nothing``, for example ``if false; end``.
 
-Note that ``Nothing`` (uppercase) is the type of ``nothing``, and should
-only be used in a context where a type is required (e.g. a declaration).
-
-You may occasionally see ``None``, which is quite different. It is the
-empty (or "bottom") type, a type with no values and no subtypes (except
-itself). You will generally not need to use this type.
+For situations where a value exists only sometimes (for example, missing
+statistical data), it is best to use the ``Nullable{T}`` type, which allows
+specifying the type of a missing value.
 
 The empty tuple (``()``) is another form of nothingness. But, it should not
 really be thought of as nothing but rather a tuple of zero values.
+
+In code written for Julia prior to version 0.4 you may occasionally see ``None``,
+which is quite different. It is the empty (or "bottom") type, a type with no values
+and no subtypes (except itself). This is now written as ``Union()`` (an empty union
+type). You will generally not need to use this type.
 
 Julia Releases
 ----------------
