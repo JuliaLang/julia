@@ -352,6 +352,11 @@ Dict{K,V}(kv::Associative{K,V})         = Dict{K,V}(kv)
 Dict{K,V}(ps::Pair{K,V}...) = Dict{K,V}(ps)
 Dict     (ps::Pair...)      = Dict{Any,Any}(ps)
 
+Dict(kv) = dict_with_eltype(kv, eltype(kv))
+dict_with_eltype{K,V}(kv, ::Type{(K,V)}) = Dict{K,V}(kv)
+dict_with_eltype{K,V}(kv, ::Type{Pair{K,V}}) = Dict{K,V}(kv)
+dict_with_eltype{K,V}(kv, t) = Dict{Any,Any}(kv)
+
 similar{K,V}(d::Dict{K,V}) = Dict{K,V}()
 
 # conversion between Dict types

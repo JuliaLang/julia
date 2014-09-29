@@ -418,6 +418,9 @@ hash(p::Pair, h::Uint) = hash(p.second, hash(p.first, h))
 ==(p::Pair, q::Pair) = (p.first==q.first) & (p.second==q.second)
 isequal(p::Pair, q::Pair) = isequal(p.first,q.first) & isequal(p.second,q.second)
 
+isless(p::Pair, q::Pair) = ifelse(!isequal(p.first,q.first), isless(p.first,q.first),
+                                                             isless(p.second,q.second))
+
 # some operators not defined yet
 global //, .>>, .<<, >:, <|, |>, hcat, hvcat, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
 
