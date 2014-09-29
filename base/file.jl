@@ -133,7 +133,7 @@ end
     seed::Uint32 = rand(Uint32)
     dir = tempdir()
     while true
-        if uint16(seed) == 0
+        if (seed & typemax(Uint16)) == 0
             seed += 1
         end
         filename = tempname(dir, seed)
