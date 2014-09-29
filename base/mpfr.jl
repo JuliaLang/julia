@@ -20,7 +20,7 @@ import
         realmin, realmax, get_rounding, set_rounding, maxintfloat, widen,
         significand, frexp
 
-import Base.GMP: ClongMax, CulongMax, BitsFloat
+import Base.GMP: ClongMax, CulongMax, CdoubleMax
 
 import Base.Math.lgamma_r
 
@@ -168,12 +168,12 @@ for (fJ, fC) in ((:+,:add), (:*,:mul))
         ($fJ)(c::ClongMax, x::BigFloat) = ($fJ)(x,c)
 
         # Float32/Float64
-        function ($fJ)(x::BigFloat, c::BitsFloat)
+        function ($fJ)(x::BigFloat, c::CdoubleMax)
             z = BigFloat()
             ccall(($(string(:mpfr_,fC,:_d)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Cdouble, Int32), &z, &x, c, ROUNDING_MODE[end])
             return z
         end
-        ($fJ)(c::BitsFloat, x::BigFloat) = ($fJ)(x,c)
+        ($fJ)(c::CdoubleMax, x::BigFloat) = ($fJ)(x,c)
 
         # BigInt
         function ($fJ)(x::BigFloat, c::BigInt)
@@ -219,12 +219,12 @@ for (fJ, fC) in ((:-,:sub), (:/,:div))
         end
 
         # Float32/Float64
-        function ($fJ)(x::BigFloat, c::BitsFloat)
+        function ($fJ)(x::BigFloat, c::CdoubleMax)
             z = BigFloat()
             ccall(($(string(:mpfr_,fC,:_d)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Cdouble, Int32), &z, &x, c, ROUNDING_MODE[end])
             return z
         end
-        function ($fJ)(c::BitsFloat, x::BigFloat)
+        function ($fJ)(c::CdoubleMax, x::BigFloat)
             z = BigFloat()
             ccall(($(string(:mpfr_,:d_,fC)), :libmpfr), Int32, (Ptr{BigFloat}, Cdouble, Ptr{BigFloat}, Int32), &z, c, &x, ROUNDING_MODE[end])
             return z
@@ -536,26 +536,26 @@ end
 cmp(x::BigFloat, y::Integer) = cmp(x,big(y))
 cmp(x::Integer, y::BigFloat) = -cmp(y,x)
 
-function cmp(x::BigFloat, y::BitsFloat)
+function cmp(x::BigFloat, y::CdoubleMax)
     (isnan(x) || isnan(y)) && throw(DomainError())
     ccall((:mpfr_cmp_d, :libmpfr), Int32, (Ptr{BigFloat}, Cdouble), &x, y)
 end
-cmp(x::BitsFloat, y::BigFloat) = -cmp(y,x)
+cmp(x::CdoubleMax, y::BigFloat) = -cmp(y,x)
 
 ==(x::BigFloat, y::Integer)   = !isnan(x) && cmp(x,y) == 0
 ==(x::Integer, y::BigFloat)   = y == x
-==(x::BigFloat, y::BitsFloat) = !isnan(x) && !isnan(y) && cmp(x,y) == 0
-==(x::BitsFloat, y::BigFloat) = y == x
+==(x::BigFloat, y::CdoubleMax) = !isnan(x) && !isnan(y) && cmp(x,y) == 0
+==(x::CdoubleMax, y::BigFloat) = y == x
 
 <(x::BigFloat, y::Integer)   = !isnan(x) && cmp(x,y) < 0
 <(x::Integer, y::BigFloat)   = !isnan(y) && cmp(y,x) > 0
-<(x::BigFloat, y::BitsFloat) = !isnan(x) && !isnan(y) && cmp(x,y) < 0
-<(x::BitsFloat, y::BigFloat) = !isnan(x) && !isnan(y) && cmp(y,x) > 0
+<(x::BigFloat, y::CdoubleMax) = !isnan(x) && !isnan(y) && cmp(x,y) < 0
+<(x::CdoubleMax, y::BigFloat) = !isnan(x) && !isnan(y) && cmp(y,x) > 0
 
 <=(x::BigFloat, y::Integer)   = !isnan(x) && cmp(x,y) <= 0
 <=(x::Integer, y::BigFloat)   = !isnan(y) && cmp(y,x) >= 0
-<=(x::BigFloat, y::BitsFloat) = !isnan(x) && !isnan(y) && cmp(x,y) <= 0
-<=(x::BitsFloat, y::BigFloat) = !isnan(x) && !isnan(y) && cmp(y,x) >= 0
+<=(x::BigFloat, y::CdoubleMax) = !isnan(x) && !isnan(y) && cmp(x,y) <= 0
+<=(x::CdoubleMax, y::BigFloat) = !isnan(x) && !isnan(y) && cmp(y,x) >= 0
 
 signbit(x::BigFloat) = ccall((:mpfr_signbit, :libmpfr), Int32, (Ptr{BigFloat},), &x) != 0
 
