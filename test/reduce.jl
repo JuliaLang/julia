@@ -42,7 +42,9 @@ fz = float(z)
 @test_throws ErrorException sum(sin, Int[])
 @test sum(sin, 3) == sin(3.0)
 @test sum(sin, [3]) == sin(3.0)
-@test sum(sin, z) == sum(sin, fz) == sum(sin(fz))
+a = sum(sin, z)
+@test_approx_eq a sum(sin, fz)
+@test_approx_eq a sum(sin(fz))
 
 z = [-4, -3, 2, 5]
 fz = float(z)
