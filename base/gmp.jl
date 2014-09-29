@@ -239,48 +239,40 @@ for (fJ, fC) in ((:+, :add), (:*, :mul), (:&, :and), (:|, :ior), (:$, :xor))
 end
 
 # Basic arithmetic without promotion
-function +(x::BigInt, c::Culong)
+function +(x::BigInt, c::CulongMax)
     z = BigInt()
     ccall((:__gmpz_add_ui, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Culong), &z, &x, c)
     return z
 end
-+(c::Culong, x::BigInt) = x + c
-+(c::CulongMax, x::BigInt) = x + convert(Culong, c)
-+(x::BigInt, c::CulongMax) = x + convert(Culong, c)
-+(x::BigInt, c::ClongMax) = c < 0 ? -(x, convert(Culong, -c)) : x + convert(Culong, c)
-+(c::ClongMax, x::BigInt) = c < 0 ? -(x, convert(Culong, -c)) : x + convert(Culong, c)
++(c::CulongMax, x::BigInt) = x + c
 
-function -(x::BigInt, c::Culong)
+function -(x::BigInt, c::CulongMax)
     z = BigInt()
     ccall((:__gmpz_sub_ui, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Culong), &z, &x, c)
     return z
 end
-function -(c::Culong, x::BigInt)
+function -(c::CulongMax, x::BigInt)
     z = BigInt()
     ccall((:__gmpz_ui_sub, :libgmp), Void, (Ptr{BigInt}, Culong, Ptr{BigInt}), &z, c, &x)
     return z
 end
--(x::BigInt, c::CulongMax) = -(x, convert(Culong, c))
--(c::CulongMax, x::BigInt) = -(convert(Culong, c), x)
++(x::BigInt, c::ClongMax) = c < 0 ? -(x, convert(Culong, -c)) : x + convert(Culong, c)
++(c::ClongMax, x::BigInt) = c < 0 ? -(x, convert(Culong, -c)) : x + convert(Culong, c)
 -(x::BigInt, c::ClongMax) = c < 0 ? +(x, convert(Culong, -c)) : -(x, convert(Culong, c))
 -(c::ClongMax, x::BigInt) = c < 0 ? -(x + convert(Culong, -c)) : -(convert(Culong, c), x)
 
-function *(x::BigInt, c::Culong)
+function *(x::BigInt, c::CulongMax)
     z = BigInt()
     ccall((:__gmpz_mul_ui, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Culong), &z, &x, c)
     return z
 end
-*(c::Culong, x::BigInt) = x * c
-*(c::CulongMax, x::BigInt) = x * convert(Culong, c)
-*(x::BigInt, c::CulongMax) = x * convert(Culong, c)
-function *(x::BigInt, c::Clong)
+*(c::CulongMax, x::BigInt) = x * c
+function *(x::BigInt, c::ClongMax)
     z = BigInt()
     ccall((:__gmpz_mul_si, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Clong), &z, &x, c)
     return z
 end
-*(c::Clong, x::BigInt) = x * c
-*(x::BigInt, c::ClongMax) = x * convert(Clong, c)
-*(c::ClongMax, x::BigInt) = x * convert(Clong, c)
+*(c::ClongMax, x::BigInt) = x * c
 
 # unary ops
 for (fJ, fC) in ((:-, :neg), (:~, :com))
