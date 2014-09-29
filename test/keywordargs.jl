@@ -174,3 +174,12 @@ function test4974(;kwargs...)
 end
 
 @test test4974(a=1) == (2, {(:a,1)})
+
+# issue #7704, computed keywords
+@test kwf1(1; (:tens, 2)) == 21
+let
+    p = (:hundreds, 3)
+    q = (:tens, 1)
+    @test kwf1(0; p, q) == 310
+    @test kwf1(0; q, hundreds=4) == 410
+end
