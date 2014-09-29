@@ -111,7 +111,8 @@ endif
 # use sys.ji if it exists, otherwise run two stages
 $(build_private_libdir)/sys%ji: $(build_private_libdir)/sys%o
 
-.PRECIOUS: $(build_private_libdir)/sys%o
+.SECONDARY: $(build_private_libdir)/sys.o
+.SECONDARY: $(build_private_libdir)/sys0.o
 
 $(build_private_libdir)/sys%$(SHLIB_EXT): $(build_private_libdir)/sys%o
 	$(CXX) -shared -fPIC -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ $< \
