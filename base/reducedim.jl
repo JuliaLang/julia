@@ -101,8 +101,6 @@ reducedim_init(f, op::OrFun, A::AbstractArray, region) = reducedim_initarray(A, 
 
 # specialize to make initialization more efficient for common cases
 
-typealias CommonReduceResult Union(Uint64,Uint128,Int64,Int128,Float32,Float64)
-
 for (IT, RT) in ((CommonReduceResult, :(eltype(A))), (SmallSigned, :Int), (SmallUnsigned, :Uint))
     T = Union([AbstractArray{t} for t in IT.types]..., [AbstractArray{Complex{t}} for t in IT.types]...)
     @eval begin
@@ -192,18 +190,24 @@ end
 
 mapreducedim!(f, op, R::AbstractArray, A::AbstractArray) = _mapreducedim!(f, op, R, A)
 
-function mapreducedim!(f::Function, op, R::AbstractArray, A::AbstractArray)
-    is(op, +) ? _mapreducedim!(f, AddFun(), R, A) :
-    is(op, *) ? _mapreducedim!(f, MulFun(), R, A) :
-    is(op, &) ? _mapreducedim!(f, AndFun(), R, A) :
-    is(op, |) ? _mapreducedim!(f, OrFun(), R, A) :
-    _mapreducedim!(f, op, R, A)
+to_op(op) = op
+function to_op(op::Function)
+    is(op, +) ? AddFun() :
+    is(op, *) ? MulFun() :
+    is(op, &) ? AndFun() :
+    is(op, |) ? OrFun() : op
 end
 
-reducedim!{RT}(op, R::AbstractArray{RT}, A::AbstractArray) = mapreducedim!(IdFun(), op, R, A, zero(RT))
+mapreducedim!(f::Function, op, R::AbstractArray, A::AbstractArray) =
+    _mapreducedim!(f, to_op(op), R, A)
 
-mapreducedim(f, op, A::AbstractArray, region, v0) = mapreducedim!(f, op, reducedim_initarray(A, region, v0), A)
-mapreducedim{T}(f, op, A::AbstractArray{T}, region) = mapreducedim!(f, op, reducedim_init(f, op, A, region), A)
+reducedim!{RT}(op, R::AbstractArray{RT}, A::AbstractArray) =
+    mapreducedim!(IdFun(), op, R, A, zero(RT))
+
+mapreducedim(f, op, A::AbstractArray, region, v0) =
+    mapreducedim!(f, op, reducedim_initarray(A, region, v0), A)
+mapreducedim{T}(f, op, A::AbstractArray{T}, region) =
+    mapreducedim!(f, op, reducedim_init(f, to_op(op), A, region), A)
 
 reducedim(op, A::AbstractArray, region, v0) = mapreducedim(IdFun(), op, A, region, v0)
 reducedim(op, A::AbstractArray, region) = mapreducedim(IdFun(), op, A, region)

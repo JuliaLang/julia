@@ -235,7 +235,7 @@ All Objects
 
 .. function:: convert(type, x)
 
-   Try to convert ``x`` to the given type. Conversions from floating point to integer, rational to integer, and complex to real will raise an ``InexactError`` if ``x`` cannot be represented exactly in the new type.
+   Try to convert ``x`` to the given type. Conversion to a different numeric type will raise an ``InexactError`` if ``x`` cannot be represented exactly in the new type.
 
 .. function:: promote(xs...)
 
@@ -3090,9 +3090,9 @@ Mathematical Functions
 
    Returns the nearest integral value of the same type as ``x`` not greater in magnitude than ``x``. ``digits`` and ``base`` work as above.
 
-.. function:: iround(x) -> Integer
+.. function:: iround([T,]x) -> Integer
 
-   Returns the nearest integer to ``x``.
+   Returns the nearest integer to ``x``, converted to an integer type, optionally passed as the first argument.
 
 .. function:: iceil(x) -> Integer
 
@@ -3102,9 +3102,9 @@ Mathematical Functions
 
    Returns the nearest integer not greater than ``x``.
 
-.. function:: itrunc(x) -> Integer
+.. function:: itrunc([T,]x) -> Integer
 
-   Returns the nearest integer not greater in magnitude than ``x``.
+   Returns the nearest integer not greater in magnitude than ``x``, converted to an integer type, optionally passed as the first argument.
 
 .. function:: signif(x, digits, [base])
 
@@ -3545,11 +3545,11 @@ Data Formats
 
 .. function:: signed(x)
 
-   Convert a number to a signed integer
+   Convert a number to a signed integer. If the argument is unsigned, it is reinterpreted as signed without checking for overflow.
 
 .. function:: unsigned(x) -> Unsigned
 
-   Convert a number to an unsigned integer
+   Convert a number to an unsigned integer. If the argument is signed, it is reinterpreted as unsigned without checking for negative values.
 
 .. function:: int8(x)
 

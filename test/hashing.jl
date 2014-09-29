@@ -16,9 +16,24 @@ vals = [
     typemax(Int64),
 ]
 
+function coerce(T::Type, x)
+    if T<:Rational
+        return convert(T, coerce(typeof(num(zero(T))), x))
+    end
+    if !(T<:Integer) || T===Bool
+        convert(T, x)
+    elseif sizeof(T) < sizeof(x)
+        itrunc(T, x)
+    elseif sizeof(T) == sizeof(x)
+        reinterpret(T, x)
+    else
+        convert(T, x)
+    end
+end
+
 for T=types, S=types, x=vals
-    a = convert(T,x)
-    b = convert(S,x)
+    a = coerce(T,x)
+    b = coerce(S,x)
     if (isa(a,Char) && !is_valid_char(a)) || (isa(b,Char) && !is_valid_char(b))
         continue
     end
