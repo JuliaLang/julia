@@ -176,8 +176,15 @@ function init_bind_addr(args::Vector{UTF8String})
     # --worker, -n and --machinefile options are affected by it
     btoidx = findfirst(args, "--bind-to")
     if btoidx > 0
-        bind_addr = parseip(args[btoidx+1])
+        bind_to = split(args[btoidx+1], ":")
+        bind_addr = parseip(bind_to[1])
+        if length(bind_to) > 1
+            bind_port = parseint(bind_to[2])
+        else
+            bind_port = 0
+        end
     else
+        bind_port = 0
         try
             bind_addr = getipaddr()
         catch
@@ -188,6 +195,7 @@ function init_bind_addr(args::Vector{UTF8String})
     end
     global LPROC
     LPROC.bind_addr = bind_addr
+    LPROC.bind_port = uint16(bind_port)
 end
 
 

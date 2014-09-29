@@ -665,7 +665,10 @@ The ``launch`` method takes the following arguments:
                        
 The ``launch`` method is called asynchronously in a separate task. The termination of this task 
 signals that all requested workers have been launched. Hence the ``launch`` function MUST exit as soon 
-as all the requested workers have been launched.
+as all the requested workers have been launched. The julia worker MUST be launched with a ``--worker``
+argument. Optionally ``--bind-to bind_addr[:port]`` may also be specified to enable other workers 
+to connect to it only at the specified ``bind_addr`` and ``port``.
+
 
 Arrays of worker information tuples that are appended to ``resp_arr`` can take any one of 
 the following forms::
