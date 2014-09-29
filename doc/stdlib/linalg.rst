@@ -754,7 +754,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
 .. function:: symv!(ul, alpha, A, x, beta, y)
 
-   Update the vector ``y`` as ``alpha*A*y + beta*y``. ``A`` is assumed
+   Update the vector ``y`` as ``alpha*A*x + beta*y``. ``A`` is assumed
    to be symmetric.  Only the ``ul`` triangle of ``A`` is used.
    Returns the updated ``y``.
 
