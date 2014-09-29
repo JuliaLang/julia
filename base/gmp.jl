@@ -16,7 +16,7 @@ else
     typealias ClongMax Union(Int8, Int16, Int32, Int64)
     typealias CulongMax Union(Uint8, Uint16, Uint32, Uint64)
 end
-typealias BitsFloat Union(Float32, Float64)
+typealias CdoubleMax Union(Float16, Float32, Float64)
 
 type BigInt <: Integer
     alloc::Cint
@@ -327,11 +327,11 @@ end
 cmp(x::BigInt, y::Integer) = cmp(x,big(y))
 cmp(x::Integer, y::BigInt) = -cmp(y,x)
 
-function cmp(x::BigInt, y::BitsFloat)
+function cmp(x::BigInt, y::CdoubleMax)
     isnan(y) && throw(DomainError())
     ccall((:__gmpz_cmp_d, :libgmp), Int32, (Ptr{BigInt}, Cdouble), &x, y)
 end
-cmp(x::BitsFloat, y::BigInt) = -cmp(y,x)
+cmp(x::CdoubleMax, y::BigInt) = -cmp(y,x)
 
 function isqrt(x::BigInt)
     z = BigInt()
@@ -417,20 +417,20 @@ binomial(n::BigInt, k::Integer) = k < 0 ? throw(DomainError()) : binomial(n, uin
 ==(x::BigInt, y::BigInt) = cmp(x,y) == 0
 ==(x::BigInt, i::Integer) = cmp(x,i) == 0
 ==(i::Integer, x::BigInt) = cmp(x,i) == 0
-==(x::BigInt, f::BitsFloat) = isnan(f) ? false : cmp(x,f) == 0
-==(f::BitsFloat, x::BigInt) = isnan(f) ? false : cmp(x,f) == 0
+==(x::BigInt, f::CdoubleMax) = isnan(f) ? false : cmp(x,f) == 0
+==(f::CdoubleMax, x::BigInt) = isnan(f) ? false : cmp(x,f) == 0
 
 <=(x::BigInt, y::BigInt) = cmp(x,y) <= 0
 <=(x::BigInt, i::Integer) = cmp(x,i) <= 0
 <=(i::Integer, x::BigInt) = cmp(x,i) >= 0
-<=(x::BigInt, f::BitsFloat) = isnan(f) ? false : cmp(x,f) <= 0
-<=(f::BitsFloat, x::BigInt) = isnan(f) ? false : cmp(x,f) >= 0
+<=(x::BigInt, f::CdoubleMax) = isnan(f) ? false : cmp(x,f) <= 0
+<=(f::CdoubleMax, x::BigInt) = isnan(f) ? false : cmp(x,f) >= 0
 
 <(x::BigInt, y::BigInt) = cmp(x,y) < 0
 <(x::BigInt, i::Integer) = cmp(x,i) < 0
 <(i::Integer, x::BigInt) = cmp(x,i) > 0
-<(x::BigInt, f::BitsFloat) = isnan(f) ? false : cmp(x,f) < 0
-<(f::BitsFloat, x::BigInt) = isnan(f) ? false : cmp(x,f) > 0
+<(x::BigInt, f::CdoubleMax) = isnan(f) ? false : cmp(x,f) < 0
+<(f::CdoubleMax, x::BigInt) = isnan(f) ? false : cmp(x,f) > 0
 
 string(x::BigInt) = dec(x)
 show(io::IO, x::BigInt) = print(io, string(x))
