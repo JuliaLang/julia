@@ -8,7 +8,7 @@ export
 
 import
     Base: (*), +, -, /, <, <=, ==, >, >=, ^, besselj, besselj0, besselj1, bessely,
-        bessely0, bessely1, ceil, convert, copysign, deg2rad,
+        bessely0, bessely1, ceil, cmp, convert, copysign, deg2rad,
         exp, exp2, exponent, factorial, floor, hypot, isinteger, iround,
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
         nextfloat, prevfloat, promote_rule, rad2deg, rem, round, show,
@@ -20,7 +20,7 @@ import
         realmin, realmax, get_rounding, set_rounding, maxintfloat, widen,
         significand, frexp
 
-import Base.GMP: ClongMax, CulongMax
+import Base.GMP: ClongMax, CulongMax, BitsFloat
 
 import Base.Math.lgamma_r
 
@@ -600,24 +600,41 @@ end
 <(x::BigFloat, y::BigFloat) = ccall((:mpfr_less_p, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &x, &y) != 0
 >(x::BigFloat, y::BigFloat) = ccall((:mpfr_greater_p, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &x, &y) != 0
 
-function ==(i::BigInt, f::BigFloat)
-    !isnan(f) && ccall((:mpfr_cmp_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigInt}), &f, &i) == 0
+function cmp(x::BigFloat, y::BigInt)
+    isnan(x) && throw(DomainError())
+    ccall((:mpfr_cmp_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigInt}), &x, &y)
 end
-
-==(f::BigFloat, i::BigInt) = i == f
-
-function <(i::BigInt, f::BigFloat)
-    # note: mpfr_cmp_z returns 0 if isnan(f)
-    ccall((:mpfr_cmp_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigInt}), &f, &i) > 0
+function cmp(x::BigFloat, y::ClongMax)
+    isnan(x) && throw(DomainError())
+    ccall((:mpfr_cmp_si, :libmpfr), Int32, (Ptr{BigFloat}, Clong), &x, y)
 end
-
-function <(f::BigFloat, i::BigInt)
-    # note: mpfr_cmp_z returns 0 if isnan(f)
-    ccall((:mpfr_cmp_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigInt}), &f, &i) < 0
+function cmp(x::BigFloat, y::CulongMax)
+    isnan(x) && throw(DomainError())
+    ccall((:mpfr_cmp_ui, :libmpfr), Int32, (Ptr{BigFloat}, Culong), &x, y)
 end
+cmp(x::BigFloat, y::Integer) = cmp(x,big(y))
+cmp(x::Integer, y::BigFloat) = -cmp(y,x)
 
-<=(i::BigInt, f::BigFloat) = !isnan(f) && !(f < i)
-<=(f::BigFloat, i::BigInt) = !isnan(f) && !(i < f)
+function cmp(x::BigFloat, y::BitsFloat)
+    (isnan(x) || isnan(y)) && throw(DomainError())
+    ccall((:mpfr_cmp_d, :libmpfr), Int32, (Ptr{BigFloat}, Cdouble), &x, y)
+end
+cmp(x::BitsFloat, y::BigFloat) = -cmp(y,x)
+
+==(x::BigFloat, y::Integer)   = !isnan(x) && cmp(x,y) == 0
+==(x::Integer, y::BigFloat)   = y == x
+==(x::BigFloat, y::BitsFloat) = !isnan(x) && !isnan(y) && cmp(x,y) == 0
+==(x::BitsFloat, y::BigFloat) = y == x
+
+<(x::BigFloat, y::Integer)   = !isnan(x) && cmp(x,y) < 0
+<(x::Integer, y::BigFloat)   = !isnan(y) && cmp(y,x) > 0
+<(x::BigFloat, y::BitsFloat) = !isnan(x) && !isnan(y) && cmp(x,y) < 0
+<(x::BitsFloat, y::BigFloat) = !isnan(x) && !isnan(y) && cmp(y,x) > 0
+
+<=(x::BigFloat, y::Integer)   = !isnan(x) && cmp(x,y) <= 0
+<=(x::Integer, y::BigFloat)   = !isnan(y) && cmp(y,x) >= 0
+<=(x::BigFloat, y::BitsFloat) = !isnan(x) && !isnan(y) && cmp(x,y) <= 0
+<=(x::BitsFloat, y::BigFloat) = !isnan(x) && !isnan(y) && cmp(y,x) >= 0
 
 signbit(x::BigFloat) = ccall((:mpfr_signbit, :libmpfr), Int32, (Ptr{BigFloat},), &x) != 0
 

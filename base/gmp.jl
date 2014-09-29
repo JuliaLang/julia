@@ -16,6 +16,7 @@ else
     typealias ClongMax Union(Int8, Int16, Int32, Int64)
     typealias CulongMax Union(Uint8, Uint16, Uint32, Uint64)
 end
+typealias BitsFloat Union(Float32, Float64)
 
 type BigInt <: Integer
     alloc::Cint
@@ -325,6 +326,20 @@ end
 function cmp(x::BigInt, y::BigInt)
     ccall((:__gmpz_cmp, :libgmp), Int32, (Ptr{BigInt}, Ptr{BigInt}), &x, &y)
 end
+function cmp(x::BigInt, y::ClongMax)
+    ccall((:__gmpz_cmp_si, :libgmp), Int32, (Ptr{BigInt}, Clong), &x, y)
+end
+function cmp(x::BigInt, y::CulongMax)
+    ccall((:__gmpz_cmp_ui, :libgmp), Int32, (Ptr{BigInt}, Culong), &x, y)
+end
+cmp(x::BigInt, y::Integer) = cmp(x,big(y))
+cmp(x::Integer, y::BigInt) = -cmp(y,x)
+
+function cmp(x::BigInt, y::BitsFloat)
+    isnan(y) && throw(DomainError())
+    ccall((:__gmpz_cmp_d, :libgmp), Int32, (Ptr{BigInt}, Cdouble), &x, y)
+end
+cmp(x::BitsFloat, y::BigInt) = -cmp(y,x)
 
 function isqrt(x::BigInt)
     z = BigInt()
@@ -408,10 +423,22 @@ end
 binomial(n::BigInt, k::Integer) = k < 0 ? throw(DomainError()) : binomial(n, uint(k))
 
 ==(x::BigInt, y::BigInt) = cmp(x,y) == 0
+==(x::BigInt, i::Integer) = cmp(x,i) == 0
+==(i::Integer, x::BigInt) = cmp(x,i) == 0
+==(x::BigInt, f::BitsFloat) = isnan(f) ? false : cmp(x,f) == 0
+==(f::BitsFloat, x::BigInt) = isnan(f) ? false : cmp(x,f) == 0
+
 <=(x::BigInt, y::BigInt) = cmp(x,y) <= 0
->=(x::BigInt, y::BigInt) = cmp(x,y) >= 0
+<=(x::BigInt, i::Integer) = cmp(x,i) <= 0
+<=(i::Integer, x::BigInt) = cmp(x,i) >= 0
+<=(x::BigInt, f::BitsFloat) = isnan(f) ? false : cmp(x,f) <= 0
+<=(f::BitsFloat, x::BigInt) = isnan(f) ? false : cmp(x,f) >= 0
+
 <(x::BigInt, y::BigInt) = cmp(x,y) < 0
->(x::BigInt, y::BigInt) = cmp(x,y) > 0
+<(x::BigInt, i::Integer) = cmp(x,i) < 0
+<(i::Integer, x::BigInt) = cmp(x,i) > 0
+<(x::BigInt, f::BitsFloat) = isnan(f) ? false : cmp(x,f) < 0
+<(f::BitsFloat, x::BigInt) = isnan(f) ? false : cmp(x,f) > 0
 
 string(x::BigInt) = dec(x)
 show(io::IO, x::BigInt) = print(io, string(x))
