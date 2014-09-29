@@ -115,7 +115,7 @@ latex: juliadoc-pkg
 latexpdf: juliadoc-pkg
 	$(SPHINXBUILD) -b latex $(ALLSPHINXOPTS) $(BUILDDIR)/latex
 	@#Monkey-patch sphinx style file
-	sed -i bak '/graphicx/d' $(BUILDDIR)/latex/sphinx.sty
+	sed -ibak '/graphicx/d' $(BUILDDIR)/latex/sphinx.sty
 	cd $(BUILDDIR)/latex; latexmk -lualatex JuliaLanguage
 	@echo "lualatex finished; the PDF files are in $(BUILDDIR)/latex."
 
