@@ -787,10 +787,18 @@ end
 @test -1/3 < 1//3
 @test -1/3 > -1//3
 @test 1/3 > -1//3
+@test 1/5 > 1//5
 @test 1//3 < Inf
 @test 0//1 < Inf
+@test 1//0 == Inf
+@test -1//0 == -Inf
+@test -1//0 != Inf
+@test 1//0 != -Inf
 @test !(1//0 < Inf)
 @test !(1//3 < NaN)
+@test !(1//3 == NaN)
+@test !(1//3 > NaN)
+
 
 @test sqrt(2) == 1.4142135623730951
 

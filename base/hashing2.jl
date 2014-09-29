@@ -96,34 +96,34 @@ decompose(x::Rational) = num(x), 0, den(x)
 
 function decompose(x::Float16)
     isnan(x) && return 0, 0, 0
-    isinf(x) && return ifelse(x < 0, -1, 1), 0, 0
-    n = reinterpret(Int16, x)
+    isinf(x) && return ifelse(x < zero(x), -1, 1), 0, 0
+    n = reinterpret(Uint16, x)
     s = int16(n & 0x03ff)
     e = int16(n & 0x7c00 >> 10)
     s |= int16(e != 0) << 10
-    d = ifelse(signbit(n), -1, 1)
+    d = ifelse(n >= 0x8000, -1, 1)
     int(s), int(e - 25 + (e == 0)), d
 end
 
 function decompose(x::Float32)
     isnan(x) && return 0, 0, 0
-    isinf(x) && return ifelse(x < 0, -1, 1), 0, 0
-    n = reinterpret(Int32, x)
+    isinf(x) && return ifelse(x < zero(x), -1, 1), 0, 0
+    n = reinterpret(Uint32, x)
     s = int32(n & 0x007fffff)
     e = int32(n & 0x7f800000 >> 23)
     s |= int32(e != 0) << 23
-    d = ifelse(signbit(n), -1, 1)
+    d = ifelse(n >= 0x8000_0000, -1, 1)
     int(s), int(e - 150 + (e == 0)), d
 end
 
 function decompose(x::Float64)
     isnan(x) && return 0, 0, 0
-    isinf(x) && return ifelse(x < 0, -1, 1), 0, 0
-    n = reinterpret(Int64, x)
+    isinf(x) && return ifelse(x < zero(x), -1, 1), 0, 0
+    n = reinterpret(Uint64, x)
     s = int64(n & 0x000fffffffffffff)
     e = int64(n & 0x7ff0000000000000 >> 52)
     s |= int64(e != 0) << 52
-    d = ifelse(signbit(n), -1, 1)
+    d = ifelse(n >= 0x8000_0000_0000_0000, -1, 1)
     int(s), int(e - 1075 + (e == 0)), d
 end
 
@@ -233,80 +233,62 @@ R    +Inf . t t
 R    -Inf . . .
 =#
 
-function ==(x::Real, y::Real)
-    xnf, ynf = !isfinite(x), !isfinite(y)
-    if xnf || ynf
-        (isnan(x) || isnan(y)) && return false
-        (xnf && ynf && sign(x) == sign(y)) && return true
-        return false
-    end
-    xs, ys = int(sign(x)), int(sign(y))
-    xs != ys && return false
-    xs == 0  && return true
+
+function cmp(x::Real, y::Real)
+    (isnan(x) || isnan(y)) && throw(DomainError())
 
     xn, xp, xd = decompose(x)
     yn, yp, yd = decompose(y)
-    xc, yc = widemul(xn,yd), widemul(yn,xd)
-    xb, yb = nbits(xc) + xp, nbits(yc) + yp
 
-    (xb == yb) && begin
+    xd == 0 && yd == 0 && return cmp(xn,yn)
+
+    if xd < 0
+        xn = -xn
+        xd = -xd
+    end
+    if yd < 0
+        yn = -yn
+        yd = -yd
+    end
+
+    xc, yc = widemul(xn,yd), widemul(yn,xd)
+    if xc == 0 || yc == 0 || xc < 0  && yc > 0 || xc > 0  && yc < 0
+        return cmp(xc,yc)
+    end
+
+    xb, yb = nbits(xc) + xp, nbits(yc) + yp
+    cb = cmp(xb,yb)
+
+    if xb == yb
         xc, yc = promote(xc,yc)
         if xp > yp
-            (xc<<(xp-yp)) == yc
+            xc = (xc<<(xp-yp)) 
         else
-            xc == (yc<<(yp-xp))
+            yc = (yc<<(yp-xp))
         end
+        return cmp(xc,yc)
+    else
+        c = cmp(xb,yb)
+        if xc < 0
+            c = -c
+        end
+        return c
     end
+end
+    
+    
+
+function ==(x::Real, y::Real)
+    (isnan(x) || isnan(y)) && return false
+    cmp(x,y) == 0
 end
 
 function <(x::Real, y::Real)
-    xnf, ynf = !isfinite(x), !isfinite(y)
-    if xnf || ynf
-        (isnan(x) || isnan(y)) && return false
-        ((xnf && sign(x) > 0) || (ynf && sign(y) < 0)) && return false
-        return true
-    end
-    xs, ys = int(sign(x)), int(sign(y))
-    xs < ys && return true
-    xs > ys && return false
-    xs == 0 && return false
-
-    xn, xp, xd = decompose(x)
-    yn, yp, yd = decompose(y)
-    xc, yc = xs*widemul(xn,yd), ys*widemul(yn,xd)
-    xb, yb = nbits(xc) + xp, nbits(yc) + yp
-    (xb*xs < yb*ys) || (xb == yb) && begin
-        xc, yc = promote(xc,yc)
-        if xp > yp
-            (xc<<(xp-yp)) < yc
-        else
-            xc < (yc<<(yp-xp))
-        end
-    end
+    (isnan(x) || isnan(y)) && return false
+    cmp(x,y) < 0
 end
 
 function <=(x::Real, y::Real)
-    xnf, ynf = !isfinite(x), !isfinite(y)
-    if xnf || ynf
-        (isnan(x) || isnan(y)) && return false
-        ((xnf && sign(x) < 0) || (ynf && sign(y) > 0)) && return true
-        return false
-    end
-    xs, ys = int(sign(x)), int(sign(y))
-    xs < ys && return true
-    xs > ys && return false
-    xs == 0 && return true
-
-    xn, xp, xd = decompose(x)
-    yn, yp, yd = decompose(y)
-    xc, yc = xs*widemul(xn,yd), ys*widemul(yn,xd)
-    xb, yb = nbits(xc) + xp, nbits(yc) + yp
-    (xb*xs < yb*ys) || (xb == yb) && begin
-        xc, yc = promote(xc,yc)
-        if xp > yp
-            (xc<<(xp-yp)) <= yc
-        else
-            xc <= (yc<<(yp-xp))
-        end
-    end
+    (isnan(x) || isnan(y)) && return false
+    cmp(x,y) <= 0
 end

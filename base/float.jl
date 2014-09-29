@@ -161,16 +161,6 @@ function cmp(x::FloatingPoint, y::FloatingPoint)
     ifelse(x<y, -1, ifelse(x>y, 1, 0))
 end
 
-function cmp(x::Real, y::FloatingPoint)
-    isnan(y) && throw(DomainError())
-    ifelse(x<y, -1, ifelse(x>y, 1, 0))
-end
-
-function cmp(x::FloatingPoint, y::Real)
-    isnan(x) && throw(DomainError())
-    ifelse(x<y, -1, ifelse(x>y, 1, 0))
-end
-
 ==(x::Float64, y::Int64  ) = eqfsi64(unbox(Float64,x),unbox(Int64,y))
 ==(x::Float64, y::Uint64 ) = eqfui64(unbox(Float64,x),unbox(Uint64,y))
 ==(x::Int64  , y::Float64) = eqfsi64(unbox(Float64,y),unbox(Int64,x))
@@ -210,12 +200,12 @@ end
 <=(x::Float32, y::Union(Int32,Uint32)) = float64(x)<=float64(y)
 <=(x::Union(Int32,Uint32), y::Float32) = float64(x)<=float64(y)
 
-==(x::Float16,y::Integer) = float32(x) == y
-==(x::Integer,y::Float16) = x == float32(y)
-< (x::Float16,y::Integer) = float32(x) < y
-< (x::Integer,y::Float16) = x < float32(y)
-<=(x::Float16,y::Integer) = float32(x) <= y
-<=(x::Integer,y::Float16) = x <= float32(y)
+==(x::Float16,y::Union(Signed,Unsigned)) = float32(x) == y
+==(x::Union(Signed,Unsigned),y::Float16) = x == float32(y)
+< (x::Float16,y::Union(Signed,Unsigned)) = float32(x) < y
+< (x::Union(Signed,Unsigned),y::Float16) = x < float32(y)
+<=(x::Float16,y::Union(Signed,Unsigned)) = float32(x) <= y
+<=(x::Union(Signed,Unsigned),y::Float16) = x <= float32(y)
 
 
 abs(x::Float64) = box(Float64,abs_float(unbox(Float64,x)))

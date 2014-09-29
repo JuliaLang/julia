@@ -557,13 +557,6 @@ cmp(x::CdoubleMax, y::BigFloat) = -cmp(y,x)
 <=(x::BigFloat, y::CdoubleMax) = !isnan(x) && !isnan(y) && cmp(x,y) <= 0
 <=(x::CdoubleMax, y::BigFloat) = !isnan(x) && !isnan(y) && cmp(y,x) >= 0
 
-==(i::Integer,f::BigFloat) = big(i) == f
-==(f::BigFloat,i::Integer) = f == big(i)
-<(i::Integer,f::BigFloat) = big(i) < f
-<(f::BigFloat,i::Integer) = f < big(i)
-<=(i::Integer,f::BigFloat) = big(i) <= f
-<=(f::BigFloat,i::Integer) = f <= big(i)
-
 signbit(x::BigFloat) = ccall((:mpfr_signbit, :libmpfr), Int32, (Ptr{BigFloat},), &x) != 0
 
 function precision(x::BigFloat)

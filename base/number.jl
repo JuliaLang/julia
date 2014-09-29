@@ -32,6 +32,8 @@ inv(x::Number) = one(x)/x
 angle(z::Real) = atan2(zero(z), z)
 
 widemul(x::Number, y::Number) = widen(x)*widen(y)
+widemul(x::Int64, y::Uint64) = widen(x)*int128(y)
+widemul(x::Uint64, y::Int64) = int128(x)*widen(y)
 
 start(x::Number) = false
 next(x::Number, state) = (x, true)
