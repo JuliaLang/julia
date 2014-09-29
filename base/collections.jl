@@ -1,4 +1,3 @@
-
 module Collections
 
 import Base: setindex!, done, get, hash, haskey, isempty, length, next, getindex, start
@@ -183,7 +182,7 @@ function percolate_down!(pq::PriorityQueue, i::Integer)
             break
         end
     end
-    pq.index[x.second] = i
+    pq.index[x.first] = i
     pq.xs[i] = x
 end
 

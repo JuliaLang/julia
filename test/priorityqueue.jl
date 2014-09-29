@@ -1,6 +1,4 @@
-
 using Base.Collections
-
 
 # Test dequeing in sorted order.
 function test_issorted!(pq::PriorityQueue, priorities)
@@ -93,4 +91,3 @@ for priority in values(priorities)
     heappush!(xs, priority)
 end
 @test issorted([heappop!(xs) for _ in length(priorities)])
-
