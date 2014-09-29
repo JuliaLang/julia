@@ -1454,7 +1454,9 @@
 				  "\" (expected assignment)"))))))))
 
 (define (lower-kw-call f kw pa)
-  (check-kw-args kw)
+  (if (any (lambda (x) (and (pair? x) (eq? (car x) 'parameters)))
+	   kw)
+      (error "more than one semicolon in argument list"))
   (receive
    (keys restkeys) (separate kwarg? kw)
    (let ((keyargs (apply append
@@ -1476,12 +1478,16 @@
 	     ,@(let ((k (gensy))
 		     (v (gensy)))
 		 (map (lambda (rk)
-			`(for (= (tuple ,k ,v) ,(cadr rk))
-			      (ccall 'jl_cell_1d_push2 Void
-				     (tuple Any Any Any)
-				     ,container
-				     (|::| ,k (top Symbol))
-				     ,v)))
+			(let ((push-expr `(ccall 'jl_cell_1d_push2 Void
+						 (tuple Any Any Any)
+						 ,container
+						 (|::| ,k (top Symbol))
+						 ,v)))
+			  (if (vararg? rk)
+			      `(for (= (tuple ,k ,v) ,(cadr rk))
+				    ,push-expr)
+			      `(block (= (tuple ,k ,v) ,rk)
+				      ,push-expr))))
 		      restkeys))
 	     (if (call (top isempty) ,container)
 		 (call ,f ,@pa)
