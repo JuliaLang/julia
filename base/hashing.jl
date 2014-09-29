@@ -29,7 +29,7 @@ function hash_64_32(n::Uint64)
     a =  a $ a >> 11
     a =  a + a << 6
     a =  a $ a >> 22
-    return uint32(a)
+    return itrunc(Uint32, a)
 end
 
 function hash_32_32(n::Uint32)
