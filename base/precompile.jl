@@ -430,6 +430,10 @@ precompile(Base.REPL.start_repl_backend, (RemoteRef, RemoteRef))
 precompile(Base.Multimedia.TextDisplay, (Base.TTY,))
 precompile(Base.Multimedia.display, (Int,))
 
+precompile(Base.require, (ASCIIString,))
+precompile(Base._require, (ASCIIString,))
+precompile(Base.reload_path, (ASCIIString,))
+
 # The following are intended to help speed Pkg.update()
 precompile(Base.Pkg.Entry.update, (ASCIIString,))
 precompile(Base.Pkg.Query.prune_dependencies, (Dict{ByteString, Base.Pkg.Types.VersionSet}, Dict{ByteString, Dict{VersionNumber, Base.Pkg.Types.Available}}))
