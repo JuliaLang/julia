@@ -49,9 +49,18 @@ for T in (Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Int128, Uint
     @test mod(r,2)==1
 
     if T<:Integer && T!==Char
-        x = rand(typemin(T):typemax(T))
-        @test isa(x,T)
-        @test typemin(T) <= x <= typemax(T)
+        if T.size < Int.size
+            x = rand(typemin(T):typemax(T))
+            @test isa(x,T)
+            @test typemin(T) <= x <= typemax(T)
+        else # we bound the length of the range to typemax(T) so that there is no overflow
+            for (a, b) in ((typemin(T),typemin(T)+typemax(T)-one(T)),
+                           (one(T),typemax(T)))
+                x = rand(a:b)
+                @test isa(x,T)
+                @test a <= x <= b
+            end
+        end
     end
 end
 
