@@ -62,7 +62,7 @@ immutable UnitRange{T<:Real} <: OrdinalRange{T,Int}
     start::T
     stop::T
 
-    UnitRange(start, stop) = new(start, ifelse(stop >= start, stop, start-1))
+    UnitRange(start, stop) = new(start, ifelse(stop >= start, stop, start-one(stop-start)))
 end
 UnitRange{T<:Real}(start::T, stop::T) = UnitRange{T}(start, stop)
 
