@@ -160,22 +160,23 @@ maxmultiplemix(k::Uint64) = k >> 32 == 0 ? uint64(maxmultiple(itrunc(Uint32, k))
 immutable RandIntGen{T<:Integer, U<:Unsigned}
     k::U   # range length
     u::U   # rejection threshold
-end
-# generators with 32, 128 bits entropy
-RandIntGen{U<:Union(Uint32, Uint128)}(T::Type, k::U) = RandIntGen{T, U}(k, maxmultiple(k))
-# mixed 32/64 bits entropy generator
-RandIntGen(T::Type, k::Uint64) = RandIntGen{T,Uint64}(k, maxmultiplemix(k))
 
+    function RandIntGen(k::U)
+        @assert U in (Uint32, Uint64, Uint128) # respectively 32, mixed 32/64 and 128 bits of entropy
+        k < 1 && error("No integers in the range [1, $k]. Did you try to pick an element from a empty collection?")
+        new(k, U == Uint64 ? maxmultiplemix(k) : maxmultiple(k))
+    end
+end
 
 # generator API
 # randintgen(k) returns a helper object for generating random integers in the range 1:k
-randintgen{T<:Unsigned}(k::T) = k<1 ? error("range must be non-empty") : RandIntGen(T, k)
+randintgen{T<:Unsigned}(k::T) = RandIntGen{T, T}(k)
 # specialized versions
 for (T, U) in [(Uint8, Uint32), (Uint16, Uint32),
                (Int8, Uint32), (Int16, Uint32), (Int32, Uint32), (Int64, Uint64), (Int128, Uint128),
                (Bool, Uint32), (Char, Uint32)]
 
-    @eval randintgen(k::$T) = k<1 ? error("range must be non-empty") : RandIntGen($T, convert($U, k))
+    @eval randintgen(k::$T) = RandIntGen{$T,$U}(convert($U, k))
 end
 
 @inline function rand_lessthan{U}(u::U)
