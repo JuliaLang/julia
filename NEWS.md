@@ -55,6 +55,8 @@ Library improvements
 
   * New `Nullable` type for missing data ([#8152]).
 
+  * New ordschur and ordschur! functions for sorting a schur factorization by the eigenvalues
+
 
 Julia v0.3.0 Release Notes
 ==========================
