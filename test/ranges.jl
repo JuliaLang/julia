@@ -363,3 +363,12 @@ for f in (mean, median)
         @test_approx_eq f(2:0.1:n) f([2:0.1:n])
     end
 end
+
+# issue #8531
+let smallint = (Int === Int64 ?
+                (Int8,Uint8,Int16,Uint16,Int32,Uint32) :
+                (Int8,Uint8,Int16,Uint16))
+    for T in smallint
+        @test length(typemin(T):typemax(T)) == 2^(8*sizeof(T))
+    end
+end
