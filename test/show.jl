@@ -150,7 +150,7 @@ end"""
 @test sprint(show, symbol("foo bar")) == "symbol(\"foo bar\")"
 @test sprint(show, symbol("foo \"bar")) == "symbol(\"foo \\\"bar\")"
 @test sprint(show, :+) == ":+"
-@test sprint(show, symbol("end")) == "symbol(\"end\")"
+@test sprint(show, :end) == ":end"
 
 # Function and array reference precedence
 @test_repr "([2] + 3)[1]"
@@ -160,3 +160,16 @@ end"""
 
 # issue #7921
 @test replace(sprint(show, Expr(:function, :(==(a, b)), Expr(:block,:(return a == b)))), r"\s+", " ") == ":(function ==(a,b) return a == b end)"
+
+# unicode operator printing
+#@test sprint(show, :(1 ⊕ (2 ⊗ 3))) == ":(1 ⊕ 2 ⊗ 3)"
+#@test sprint(show, :((1 ⊕ 2) ⊗ 3)) == ":((1 ⊕ 2) ⊗ 3)"
+
+# issue #8155
+@test_repr "foo(x,y; z=bar)"
+@test_repr "foo(x,y,z=bar)"
+
+@test_repr "Int[i for i=1:10]"
+@test_repr "Int[(i, j) for (i, j) in zip(1:10,1:0)]"
+
+@test_repr "[1 2 3; 4 5 6; 7 8 9]'"

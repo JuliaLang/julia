@@ -18,10 +18,12 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
    Equivalent to ``normpath(Pkg.dir(),names...)`` – i.e. it appends path components to the package directory and normalizes the resulting path.
    In particular, ``Pkg.dir(pkg)`` returns the path to the package ``pkg``.
 
-.. function:: init()
+.. function:: init(meta::String=DEFAULT_META, branch::String=META_BRANCH)
 
-   Initialize ``Pkg.dir()`` as a package directory.
+   Initialize ``Pkg.dir()`` as a package directory.  
    This will be done automatically when the ``JULIA_PKGDIR`` is not set and ``Pkg.dir()`` uses its default value.
+   As part of this process, clones a local METADATA git repository from the site and branch specified by its arguments, which
+   are typically not provided.  Explicit (non-default) arguments can be used to support a custom METADATA setup.
 
 .. function:: resolve()
 

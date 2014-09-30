@@ -21,7 +21,8 @@ function edit(file::String, line::Integer)
     end
     issrc = length(file)>2 && file[end-2:end] == ".jl"
     if issrc
-        file = find_source_file(file)
+        f = find_source_file(file)
+        f != nothing && (file = f)
     end
     if beginswith(edname, "emacs")
         spawn(`$edpath +$line $file`)
@@ -354,8 +355,8 @@ function runtests(tests = ["all"], numcores = iceil(CPU_CORES/2))
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_CORES"] = "$numcores"
     try
-        run(setenv(`$(joinpath(JULIA_HOME, "julia")) $(joinpath(JULIA_HOME, "..",
-            "share", "julia", "test", "runtests.jl")) $tests`, ENV2))
+        run(setenv(`$(joinpath(JULIA_HOME, "julia")) $(joinpath(JULIA_HOME,
+            Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
     catch
         buf = PipeBuffer()
         versioninfo(buf)

@@ -41,8 +41,10 @@ evaluate(f::Callable, x, y) = f(x, y)
 
 # r_promote: promote x to the type of reduce(op, [x])
 r_promote(op, x) = x
-r_promote(::AddFun, x) = x + zero(x)
-r_promote(::MulFun, x) = x * one(x)
+r_promote(::AddFun, x::Number) = x + zero(x)
+r_promote(::MulFun, x::Number) = x * one(x)
+r_promote(::AddFun, x) = x
+r_promote(::MulFun, x) = x
 
 
 ## foldl && mapfoldl
@@ -125,8 +127,8 @@ function mapreduce_pairwise_impl(f, op, A::AbstractArray, ifirst::Int, ilast::In
         return mapreduce_seq_impl(f, op, A, ifirst, ilast)
     else
         imid = (ifirst + ilast) >>> 1
-        v1 = mapreduce_seq_impl(f, op, A, ifirst, imid)
-        v2 = mapreduce_seq_impl(f, op, A, imid+1, ilast)
+        v1 = mapreduce_pairwise_impl(f, op, A, ifirst, imid, blksize)
+        v2 = mapreduce_pairwise_impl(f, op, A, imid+1, ilast, blksize)
         return evaluate(op, v1, v2)
     end
 end
@@ -240,10 +242,10 @@ sumabs2(a) = mapreduce(Abs2Fun(), AddFun(), a)
 # of a considerable increase in computational expense.
 function sum_kbn{T<:FloatingPoint}(A::AbstractArray{T})
     n = length(A)
+    c = r_promote(AddFun(), zero(T)::T)
     if n == 0
-        return sumzero(T)
+        return c
     end
-    c = zero(T)
     s = A[1] + c
     for i in 2:n
         @inbounds Ai = A[i]

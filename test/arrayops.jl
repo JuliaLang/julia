@@ -667,6 +667,7 @@ begin
 
     # other types than Number
     @test mapslices(prod,["1" "2"; "3" "4"],1) == ["13" "24"]
+    @test mapslices(prod,["1"],1) == ["1"]
 
     # issue #5177
 

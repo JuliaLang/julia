@@ -1104,7 +1104,7 @@ Dequeues
    are shifted down to fill the resulting gap. If specified, replacement values from
    an ordered collection will be spliced in place of the removed item.
 
-   To insert `replacement` before an index `n` without removing any items, use ``splice(collection, n-1:n, replacement)``.
+   To insert ``replacement`` before an index ``n`` without removing any items, use ``splice!(collection, n:n-1, replacement)``.
 
 .. function:: splice!(collection, range, [replacement]) -> items
 
@@ -1113,7 +1113,7 @@ Dequeues
    If specified, replacement values from an ordered collection will be spliced in place
    of the removed items.
 
-   To insert `replacement` before an index `n` without removing any items, use ``splice(collection, n-1:n, replacement)``.
+   To insert ``replacement`` before an index ``n`` without removing any items, use ``splice!(collection, n:n-1, replacement)``.
 
 .. function:: resize!(collection, n) -> collection
 
@@ -2021,9 +2021,14 @@ Text I/O
 
    Show all structure of a value, including all fields of objects.
 
-.. function:: readall(stream)
+.. function:: readall(stream::IO)
 
    Read the entire contents of an I/O stream as a string.
+
+.. function:: readall(filename::String)
+
+   Open ``filename``, read the entire contents as a string, then close the file.
+   Equivalent to ``open(readall, filename)``.
 
 .. function:: readline(stream=STDIN)
 
@@ -3048,7 +3053,7 @@ Mathematical Functions
 
 .. function:: signbit(x)
 
-   Returns ``1`` if the value of the sign of ``x`` is negative, otherwise ``0``.
+   Returns ``true`` if the value of the sign of ``x`` is negative, otherwise ``false``.
 
 .. function:: flipsign(x, y)
 
@@ -3893,11 +3898,19 @@ Constructors
    Construct an uninitialized cell array (heterogeneous array). ``dims`` can be either a tuple or a series of integer arguments.
 .. function:: zeros(type, dims)
 
-   Create an array of all zeros of specified type
+   Create an array of all zeros of specified type. The type defaults to Float64 if not specified.
+
+.. function:: zeros(A)
+
+   Create an array of all zeros with the same element type and shape as A.
 
 .. function:: ones(type, dims)
 
-   Create an array of all ones of specified type
+   Create an array of all ones of specified type. The type defaults to Float64 if not specified.
+
+.. function:: ones(A)
+
+   Create an array of all ones with the same element type and shape as A.
 
 .. function:: trues(dims)
 
@@ -3907,13 +3920,13 @@ Constructors
 
    Create a ``BitArray`` with all values set to false
 
-.. function:: fill(v, dims)
+.. function:: fill(x, dims)
 
-   Create an array filled with ``v``
+   Create an array filled with the value ``x``
 
 .. function:: fill!(A, x)
 
-   Fill array ``A`` with value ``x``
+   Fill the array ``A`` with the value ``x``
 
 .. function:: reshape(A, dims)
 
@@ -4513,8 +4526,11 @@ Statistics
 Signal Processing
 -----------------
 
-Fast Fourier transform (FFT) functions in Julia are largely implemented by
-calling functions from `FFTW <http://www.fftw.org>`_.
+Fast Fourier transform (FFT) functions in Julia are largely
+implemented by calling functions from `FFTW
+<http://www.fftw.org>`_. By default, Julia does not use multi-threaded
+FFTW. Higher performance may be obtained by experimenting with
+multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
 .. function:: fft(A [, dims])
 
@@ -4536,6 +4552,10 @@ calling functions from `FFTW <http://www.fftw.org>`_.
    
    A multidimensional FFT simply performs this operation along each transformed
    dimension of ``A``.
+
+   Higher performance is usually possible with multi-threading. Use
+   `FFTW.set_num_threads(np)` to use `np` threads, if you have `np`
+   processors.
 
 .. function:: fft!(A [, dims])
 

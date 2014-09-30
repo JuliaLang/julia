@@ -1271,8 +1271,8 @@ static Value *emit_arraylen_prim(Value *t, jl_value_t *ty)
 {
 #ifdef STORE_ARRAY_LEN
     (void)ty;
-    Value *lenbits = emit_nthptr(t, 2, tbaa_arraylen);
-    return builder.CreatePtrToInt(lenbits, T_size);
+    Value* addr = builder.CreateStructGEP(builder.CreateBitCast(t,jl_parray_llvmt), 2);
+    return tbaa_decorate(tbaa_arraylen, builder.CreateLoad(addr, false));
 #else
     jl_value_t *p1 = jl_tparam1(ty);
     if (jl_is_long(p1)) {
@@ -1303,7 +1303,8 @@ static Value *emit_arraylen(Value *t, jl_value_t *ex, jl_codectx_t *ctx)
 
 static Value *emit_arrayptr(Value *t)
 {
-    return emit_nthptr(t, 1, tbaa_arrayptr);
+    Value* addr = builder.CreateStructGEP(builder.CreateBitCast(t,jl_parray_llvmt), 1);
+    return tbaa_decorate(tbaa_arrayptr, builder.CreateLoad(addr, false));
 }
 
 static Value *emit_arrayptr(Value *t, jl_value_t *ex, jl_codectx_t *ctx)
@@ -1475,6 +1476,14 @@ static jl_value_t *static_constant_instance(Constant *constant, jl_value_t *jt)
         assert(jl_is_cpointer_type(jt));
         uint64_t val = 0;
         return jl_new_bits(jt,&val);
+    }
+
+    // issue #8464
+    ConstantExpr *ce = dyn_cast<ConstantExpr>(constant);
+    if (ce != NULL) {
+        if (ce->isCast()) {
+            return static_constant_instance(dyn_cast<Constant>(ce->getOperand(0)), jt);
+        }
     }
 
     assert(jl_is_tuple(jt));

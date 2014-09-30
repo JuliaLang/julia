@@ -115,6 +115,11 @@ r = (-4*int64(maxintfloat(is(Int,Int32) ? Float32 : Float64))):5
 @test (0:2:10)[7:6] == 12:2:10
 @test_throws BoundsError (0:2:10)[7:7]
 
+# indexing with negative ranges (#8351)
+for a={3:6, 0:2:10}, b={0:1, 2:-1:0}
+    @test_throws BoundsError a[b]
+end
+
 # avoiding intermediate overflow (#5065)
 @test length(1:4:typemax(Int)) == div(typemax(Int),4) + 1
 

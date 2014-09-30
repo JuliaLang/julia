@@ -190,6 +190,10 @@ mfe22 = eye(Float64, 2)
 K,J,V = findnz(SparseMatrixCSC(2,1,[1,3],[1,2],[1.0,0.0]))
 @test length(K) == length(J) == length(V) == 1
 
+# https://groups.google.com/d/msg/julia-users/Yq4dh8NOWBQ/GU57L90FZ3EJ
+A = speye(Bool, 5)
+@test find(A) == find(x -> x == true, A) == find(full(A))
+
 # issue #5437
 @test nnz(sparse([1,2,3],[1,2,3],[0.0,1.0,2.0])) == 2
 

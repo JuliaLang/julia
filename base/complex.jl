@@ -63,7 +63,7 @@ end
 function complex_show(io::IO, z::Complex, compact::Bool)
     r, i = reim(z)
     compact ? showcompact(io,r) : show(io,r)
-    if signbit(i)==1 && !isnan(i)
+    if signbit(i) && !isnan(i)
         i = -i
         print(io, compact ? "-" : " - ")
     else

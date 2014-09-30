@@ -136,7 +136,7 @@ run-julia:
 run:
 	@$(call spawn,$(cmd))
 
-$(build_bindir)/stringreplace: $(build_bindir) contrib/stringreplace.c
+$(build_bindir)/stringreplace: contrib/stringreplace.c | $(build_bindir)
 	@$(call PRINT_CC, $(CC) -o $(build_bindir)/stringreplace contrib/stringreplace.c)
 
 
@@ -212,7 +212,6 @@ endif
 $(eval $(call std_dll,ssp-0))
 endif
 
-prefix ?= $(abspath julia-$(JULIA_COMMIT))
 install: $(build_bindir)/stringreplace
 	@$(MAKE) $(QUIET_MAKE) release
 	@$(MAKE) $(QUIET_MAKE) debug
@@ -259,7 +258,7 @@ endif
 	# Copy in beautiful new man page!
 	$(INSTALL_F) $(build_datarootdir)/man/man1/julia.1 $(DESTDIR)$(datarootdir)/man/man1/
 
-	# Update RPATH entries of Julia if $(private_libdir_rel) != $(build_private_libdir_rel)
+	# Update RPATH entries and JL_SYSTEM_IMAGE_PATH if $(private_libdir_rel) != $(build_private_libdir_rel)
 ifneq ($(private_libdir_rel),$(build_private_libdir_rel))
 ifeq ($(OS), Darwin)
 	for julia in $(DESTDIR)$(bindir)/julia* ; do \
@@ -271,12 +270,12 @@ else ifeq ($(OS), Linux)
 		patchelf --set-rpath '$$ORIGIN/$(private_libdir_rel):$$ORIGIN/$(libdir_rel)' $$julia; \
 	done
 endif
-endif
 
-	# Overwrite JL_SYSTEM_IMAGE_PATH in julia binaries:
+	# Overwrite JL_SYSTEM_IMAGE_PATH in julia binaries
 	for julia in $(DESTDIR)$(bindir)/julia* ; do \
 		$(build_bindir)/stringreplace $$(strings -t x - $$julia | grep "sys.ji$$" | awk '{print $$1;}' ) "$(private_libdir_rel)/sys.ji" 256 $(call cygpath_w,$$julia); \
 	done
+endif
 
 	mkdir -p $(DESTDIR)$(sysconfdir)
 	cp -R $(build_sysconfdir)/julia $(DESTDIR)$(sysconfdir)/
@@ -299,8 +298,8 @@ ifneq ($(DESTDIR),)
 endif
 	@$(MAKE) install
 	cp LICENSE.md $(prefix)
-ifeq ($(OS), Darwin)
-	-./contrib/mac/fixup-libgfortran.sh $(DESTDIR)$(private_libdir)
+ifneq ($(OS), WINNT)
+	-./contrib/fixup-libgfortran.sh $(DESTDIR)$(private_libdir)
 endif
 	# Copy in juliarc.jl files per-platform for binary distributions as well
 	# Note that we don't install to sysconfdir: we always install to $(DESTDIR)$(prefix)/etc.
