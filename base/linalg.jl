@@ -85,6 +85,8 @@ export
     lyap,
     norm,
     null,
+    ordschur!,
+    ordschur,
     peakflops,
     pinv,
     qr,
