@@ -43,7 +43,7 @@ function hash_32_32(n::Uint32)
     return a
 end
 
-if Uint == Uint64
+if Uint === Uint64
     hash_uint64(x::Uint64) = hash_64_64(x)
     hash_uint(x::Uint)     = hash_64_64(x)
 else
@@ -65,7 +65,11 @@ hash(x::Float32, h::Uint) = hash(float64(x), h)
 
 ## hashing complex numbers ##
 
-const h_imag = uint(0x32a7a07f3e7cd1f9)
+if Uint === Uint64
+    const h_imag = 0x32a7a07f3e7cd1f9
+else
+    const h_imag = 0x3e7cd1f9
+end
 const hash_0_imag = hash(0, h_imag)
 
 function hash(z::Complex, h::Uint)
@@ -77,4 +81,8 @@ end
 ## symbol & expression hashing ##
 
 hash(x::Symbol, h::Uint) = hash(object_id(x), h)
-hash(x::Expr, h::Uint) = hash(x.args, hash(x.head, h + uint(0x83c7900696d26dc6)))
+if Uint === Uint64
+    hash(x::Expr, h::Uint) = hash(x.args, hash(x.head, h + 0x83c7900696d26dc6))
+else
+    hash(x::Expr, h::Uint) = hash(x.args, hash(x.head, h + 0x96d26dc6))
+end
