@@ -16,6 +16,7 @@ else
     typealias ClongMax Union(Int8, Int16, Int32, Int64)
     typealias CulongMax Union(Uint8, Uint16, Uint32, Uint64)
 end
+typealias CdoubleMax Union(Float16, Float32, Float64)
 
 type BigInt <: Integer
     alloc::Cint
@@ -238,48 +239,40 @@ for (fJ, fC) in ((:+, :add), (:*, :mul), (:&, :and), (:|, :ior), (:$, :xor))
 end
 
 # Basic arithmetic without promotion
-function +(x::BigInt, c::Culong)
+function +(x::BigInt, c::CulongMax)
     z = BigInt()
     ccall((:__gmpz_add_ui, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Culong), &z, &x, c)
     return z
 end
-+(c::Culong, x::BigInt) = x + c
-+(c::CulongMax, x::BigInt) = x + convert(Culong, c)
-+(x::BigInt, c::CulongMax) = x + convert(Culong, c)
-+(x::BigInt, c::ClongMax) = c < 0 ? -(x, convert(Culong, -c)) : x + convert(Culong, c)
-+(c::ClongMax, x::BigInt) = c < 0 ? -(x, convert(Culong, -c)) : x + convert(Culong, c)
++(c::CulongMax, x::BigInt) = x + c
 
-function -(x::BigInt, c::Culong)
+function -(x::BigInt, c::CulongMax)
     z = BigInt()
     ccall((:__gmpz_sub_ui, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Culong), &z, &x, c)
     return z
 end
-function -(c::Culong, x::BigInt)
+function -(c::CulongMax, x::BigInt)
     z = BigInt()
     ccall((:__gmpz_ui_sub, :libgmp), Void, (Ptr{BigInt}, Culong, Ptr{BigInt}), &z, c, &x)
     return z
 end
--(x::BigInt, c::CulongMax) = -(x, convert(Culong, c))
--(c::CulongMax, x::BigInt) = -(convert(Culong, c), x)
++(x::BigInt, c::ClongMax) = c < 0 ? -(x, convert(Culong, -c)) : x + convert(Culong, c)
++(c::ClongMax, x::BigInt) = c < 0 ? -(x, convert(Culong, -c)) : x + convert(Culong, c)
 -(x::BigInt, c::ClongMax) = c < 0 ? +(x, convert(Culong, -c)) : -(x, convert(Culong, c))
 -(c::ClongMax, x::BigInt) = c < 0 ? -(x + convert(Culong, -c)) : -(convert(Culong, c), x)
 
-function *(x::BigInt, c::Culong)
+function *(x::BigInt, c::CulongMax)
     z = BigInt()
     ccall((:__gmpz_mul_ui, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Culong), &z, &x, c)
     return z
 end
-*(c::Culong, x::BigInt) = x * c
-*(c::CulongMax, x::BigInt) = x * convert(Culong, c)
-*(x::BigInt, c::CulongMax) = x * convert(Culong, c)
-function *(x::BigInt, c::Clong)
+*(c::CulongMax, x::BigInt) = x * c
+function *(x::BigInt, c::ClongMax)
     z = BigInt()
     ccall((:__gmpz_mul_si, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Clong), &z, &x, c)
     return z
 end
-*(c::Clong, x::BigInt) = x * c
-*(x::BigInt, c::ClongMax) = x * convert(Clong, c)
-*(c::ClongMax, x::BigInt) = x * convert(Clong, c)
+*(c::ClongMax, x::BigInt) = x * c
 
 # unary ops
 for (fJ, fC) in ((:-, :neg), (:~, :com))
@@ -325,6 +318,20 @@ end
 function cmp(x::BigInt, y::BigInt)
     ccall((:__gmpz_cmp, :libgmp), Int32, (Ptr{BigInt}, Ptr{BigInt}), &x, &y)
 end
+function cmp(x::BigInt, y::ClongMax)
+    ccall((:__gmpz_cmp_si, :libgmp), Int32, (Ptr{BigInt}, Clong), &x, y)
+end
+function cmp(x::BigInt, y::CulongMax)
+    ccall((:__gmpz_cmp_ui, :libgmp), Int32, (Ptr{BigInt}, Culong), &x, y)
+end
+cmp(x::BigInt, y::Integer) = cmp(x,big(y))
+cmp(x::Integer, y::BigInt) = -cmp(y,x)
+
+function cmp(x::BigInt, y::CdoubleMax)
+    isnan(y) && throw(DomainError())
+    ccall((:__gmpz_cmp_d, :libgmp), Int32, (Ptr{BigInt}, Cdouble), &x, y)
+end
+cmp(x::CdoubleMax, y::BigInt) = -cmp(y,x)
 
 function isqrt(x::BigInt)
     z = BigInt()
@@ -408,10 +415,22 @@ end
 binomial(n::BigInt, k::Integer) = k < 0 ? throw(DomainError()) : binomial(n, uint(k))
 
 ==(x::BigInt, y::BigInt) = cmp(x,y) == 0
+==(x::BigInt, i::Integer) = cmp(x,i) == 0
+==(i::Integer, x::BigInt) = cmp(x,i) == 0
+==(x::BigInt, f::CdoubleMax) = isnan(f) ? false : cmp(x,f) == 0
+==(f::CdoubleMax, x::BigInt) = isnan(f) ? false : cmp(x,f) == 0
+
 <=(x::BigInt, y::BigInt) = cmp(x,y) <= 0
->=(x::BigInt, y::BigInt) = cmp(x,y) >= 0
+<=(x::BigInt, i::Integer) = cmp(x,i) <= 0
+<=(i::Integer, x::BigInt) = cmp(x,i) >= 0
+<=(x::BigInt, f::CdoubleMax) = isnan(f) ? false : cmp(x,f) <= 0
+<=(f::CdoubleMax, x::BigInt) = isnan(f) ? false : cmp(x,f) >= 0
+
 <(x::BigInt, y::BigInt) = cmp(x,y) < 0
->(x::BigInt, y::BigInt) = cmp(x,y) > 0
+<(x::BigInt, i::Integer) = cmp(x,i) < 0
+<(i::Integer, x::BigInt) = cmp(x,i) > 0
+<(x::BigInt, f::CdoubleMax) = isnan(f) ? false : cmp(x,f) < 0
+<(f::CdoubleMax, x::BigInt) = isnan(f) ? false : cmp(x,f) > 0
 
 string(x::BigInt) = dec(x)
 show(io::IO, x::BigInt) = print(io, string(x))
