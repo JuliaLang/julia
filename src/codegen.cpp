@@ -515,7 +515,7 @@ static Value *make_gcroot(Value *v, jl_codectx_t *ctx);
 static Value *emit_boxed_rooted(jl_value_t *e, jl_codectx_t *ctx);
 static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
                                      jl_binding_t **pbnd, bool assign);
-static Value *emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx);
+static Value *emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx, bool isvol=false);
 static bool might_need_root(jl_value_t *ex);
 static Value *emit_condition(jl_value_t *cond, const std::string &msg, jl_codectx_t *ctx);
 
@@ -2441,9 +2441,9 @@ static Value *var_binding_pointer(jl_sym_t *s, jl_binding_t **pbnd,
     return l;
 }
 
-static Value *emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx)
+static Value *emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx, bool isvol)
 {
-    Value *v = tpropagate(bp, builder.CreateLoad(bp, false));
+    Value *v = tpropagate(bp, builder.CreateLoad(bp, isvol));
     // in unreachable code, there might be a poorly-typed instance of a variable
     // that has a concrete type everywhere it's actually used. tolerate this
     // situation by just skipping the NULL check if it wouldn't be valid. (issue #7836)
@@ -2525,9 +2525,9 @@ static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx, bool is
     if (arg != NULL ||    // arguments are always defined
         (!is_var_closed(sym, ctx) &&
          !jl_subtype((jl_value_t*)jl_undef_type, ty, 0))) {
-        return tpropagate(bp, builder.CreateLoad(bp, false));
+        return tpropagate(bp, builder.CreateLoad(bp, vi.isVolatile));
     }
-    return emit_checked_var(bp, sym, ctx);
+    return emit_checked_var(bp, sym, ctx, vi.isVolatile);
 }
 
 static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)

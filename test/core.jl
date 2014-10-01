@@ -561,6 +561,25 @@ end
 @test test7307({}, true) == {"inner","outer"}
 @test test7307({}, false) == {"inner","outer"}
 
+# issue #8277
+function test8277(a)
+    i = 0
+    for j=1:2
+        try
+            if i == 0
+                push!(a,0)
+            end
+            i += 1
+            error()
+        catch
+        end
+    end
+end
+let a = {}
+    test8277(a)
+    @test length(a) == 1
+end
+
 # chained and multiple assignment behavior (issue #2913)
 begin
     local x, a, b, c, d, e
