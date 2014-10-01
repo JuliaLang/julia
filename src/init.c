@@ -1018,13 +1018,13 @@ DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *
         if (asprintf(&build_ji, "%s.ji",build_path) > 0) {
             jl_save_system_image(build_ji);
             free(build_ji);
-            if (jl_compileropts.dumpbitcode == JL_COMPILEROPT_DUMPBITCODE_ON)
-            {
+            if (jl_compileropts.dumpbitcode == JL_COMPILEROPT_DUMPBITCODE_ON) {
                 char *build_bc;
                 if (asprintf(&build_bc, "%s.bc",build_path) > 0) {
                     jl_dump_bitcode(build_bc);
                     free(build_bc);
-                } else {
+                }
+                else {
                     ios_printf(ios_stderr,"\nWARNING: failed to create string for .bc build path\n");
                 }
             }
