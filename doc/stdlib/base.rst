@@ -3946,7 +3946,7 @@ Random number generation in Julia uses the `Mersenne Twister library <http://www
 
 .. function:: rand!([rng], A)
 
-   Populate the array A with random number generated from the specified RNG.
+   Populate the array A with random numbers generated from the specified RNG.
 
 .. function:: rand(rng::AbstractRNG, [dims...])
 
@@ -3960,9 +3960,13 @@ Random number generation in Julia uses the `Mersenne Twister library <http://www
 
    Generate a random number or array of random numbes of the given type.
 
-.. function:: rand(r, [dims...])
+.. function:: rand(coll, [dims...])
 
-   Pick a random element or array of random elements from range ``r`` (for example, ``1:n`` or ``0:2:10``).
+   Pick a random element or array of random elements from the indexable collection  ``coll`` (for example, ``1:n`` or ``['x','y','z']``).
+
+.. function:: rand!(r, A)
+
+   Populate the array A with random values drawn uniformly from the range ``r``.
 
 .. function:: randbool([dims...])
 
