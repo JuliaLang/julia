@@ -402,23 +402,12 @@ JL_CALLABLE(jl_f_kwcall)
 
 extern int jl_lineno;
 
-JL_CALLABLE(jl_f_top_eval)
+DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
 {
-    jl_module_t *m;
-    jl_value_t *ex;
-    if (nargs == 1) {
+    if (m == NULL)
         m = jl_main_module;
-        ex = args[0];
-    }
-    else {
-        JL_NARGS(eval, 2, 2);
-        JL_TYPECHK(eval, module, args[0]);
-        m = (jl_module_t*)args[0];
-        ex = args[1];
-    }
-    if (jl_is_symbol(ex)) {
+    if (jl_is_symbol(ex))
         return jl_eval_global_var(m, (jl_sym_t*)ex);
-    }
     jl_value_t *v=NULL;
     int last_lineno = jl_lineno;
     jl_module_t *last_m = jl_current_module;
@@ -438,6 +427,23 @@ JL_CALLABLE(jl_f_top_eval)
     jl_current_task->current_module = task_last_m;
     assert(v);
     return v;
+}
+
+JL_CALLABLE(jl_f_top_eval)
+{
+    jl_module_t *m;
+    jl_value_t *ex;
+    if (nargs == 1) {
+        m = jl_main_module;
+        ex = args[0];
+    }
+    else {
+        JL_NARGS(eval, 2, 2);
+        JL_TYPECHK(eval, module, args[0]);
+        m = (jl_module_t*)args[0];
+        ex = args[1];
+    }
+    return jl_toplevel_eval_in(m, ex);
 }
 
 JL_CALLABLE(jl_f_isdefined)
