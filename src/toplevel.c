@@ -549,8 +549,13 @@ jl_value_t *jl_parse_eval_all(char *fname)
         fn = jl_pchar_to_string(fname, strlen(fname));
         ln = jl_box_long(jl_lineno);
         jl_lineno = last_lineno;
-        jl_rethrow_other(jl_new_struct(jl_loaderror_type, fn, ln,
-                                       jl_exception_in_transit));
+        if (jl_loaderror_type == NULL) {
+            jl_rethrow();
+        }
+        else {
+            jl_rethrow_other(jl_new_struct(jl_loaderror_type, fn, ln,
+                                           jl_exception_in_transit));
+        }
     }
     jl_stop_parsing();
     jl_lineno = last_lineno;
