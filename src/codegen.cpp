@@ -874,7 +874,8 @@ void *jl_get_llvmf(jl_function_t *f, jl_tuple_t *types, bool getwrapper)
         if (sf->linfo->functionObject == NULL) {
             jl_compile(sf);
         }
-    } else {
+    }
+    else {
         if (sf->linfo->cFunctionObject == NULL) {
             jl_cstyle_compile(sf);
         }
@@ -1088,8 +1089,7 @@ static bool local_var_occurs(jl_value_t *e, jl_sym_t *s)
     return false;
 }
 
-static std::set<jl_sym_t*> assigned_in_try(jl_array_t *stmts, int s, long l,
-                                           int *pend)
+static std::set<jl_sym_t*> assigned_in_try(jl_array_t *stmts, int s, long l, int *pend)
 {
     std::set<jl_sym_t*> av;
     size_t slength = jl_array_dim0(stmts);
@@ -3004,9 +3004,8 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         return builder.CreateCall(prepare_call(jlcopyast_func), emit_expr(arg, ctx));
     }
     else if (head == simdloop_sym) {
-        if( !llvm::annotateSimdLoop(builder.GetInsertBlock()) )
-            JL_PRINTF(JL_STDERR,
-                      "Warning: could not attach metadata for @simd loop.\n");
+        if (!llvm::annotateSimdLoop(builder.GetInsertBlock()))
+            JL_PRINTF(JL_STDERR, "Warning: could not attach metadata for @simd loop.\n");
         return NULL;
     }
     else if (head == meta_sym) {
@@ -3900,11 +3899,12 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
                 if (jl_is_symbol(a1)) {
                     jl_sym_t *file = (jl_sym_t*)a1;
                     // If the string is not empty
-                    if(*file->name != '\0') {
+                    if (*file->name != '\0') {
                         std::map<jl_sym_t *, MDNode *>::iterator it = filescopes.find(file);
                         if (it != filescopes.end()) {
                             dfil = it->second;
-                        } else {
+                        }
+                        else {
                             dfil = filescopes[file] = (MDNode*)dbuilder.createFile(file->name, ".");
                         }
                     }
@@ -4033,7 +4033,8 @@ extern "C" void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
         if (!specsig) {
             lam->fptr = (jl_fptr_t)fptr; // in imaging mode, it's fine to use the fptr, but we don't want it in the shadow_module
         }
-    } else {
+    }
+    else {
         // this assigns a function pointer (from loading the system image), to the function object
         std::string funcName = lam->name->name;
         funcName = "julia_" + funcName;

@@ -703,13 +703,13 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             std::stringstream name;
             name << (ctx->f->getName().str()) << i++;
             ir_name = name.str();
-            if(jl_Module->getFunction(ir_name) == NULL)
+            if (jl_Module->getFunction(ir_name) == NULL)
                 break;
         }
 
         bool first = true;
         for (std::vector<Type *>::iterator it = argtypes.begin(); it != argtypes.end(); ++it) {
-            if(!first)
+            if (!first)
                 argstream << ",";
             else 
                 first = false;
@@ -741,7 +741,8 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             jl_error(stream.str().c_str());
         }
         f = m->getFunction(ir_name);
-    } else {
+    }
+    else {
         assert(isPtr);
         // Create Function skeleton
         f = (llvm::Function*)jl_unbox_voidpointer(ir);
@@ -788,8 +789,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
     JL_GC_POP();
 
-    if(inst->getType() != rettype)
-    {
+    if (inst->getType() != rettype) {
         jl_error("Return type of llvmcall'ed function does not match declared return type");
     }
 
