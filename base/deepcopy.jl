@@ -27,7 +27,7 @@ function deepcopy_internal(x, stackdict::ObjectIdDict)
 end
 
 function _deepcopy_t(x, T::DataType, stackdict::ObjectIdDict)
-    isempty(T.names) && return x
+    isbits(T) | isempty(T.names) && return x
     if T.mutable
         y = ccall(:jl_new_struct_uninit, Any, (Any,), T)
         stackdict[x] = y
