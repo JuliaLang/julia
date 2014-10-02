@@ -44,7 +44,7 @@ help:
 clean:
 	-rm -rf $(BUILDDIR)/*
 	# We also need to remove .pyc files
-	-find . -name *.pyc | xargs rm
+	-find . -name *.pyc -delete
 
 cleanall: clean
 
