@@ -116,8 +116,8 @@ $(build_private_libdir)/sys%ji: $(build_private_libdir)/sys%o
 
 $(build_private_libdir)/sys%$(SHLIB_EXT): $(build_private_libdir)/sys%o
 	$(CXX) -shared -fPIC -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ $< \
-		$$([ $(OS) = Darwin ] && echo -Wl,-undefined,dynamic_lookup || echo -Wl,--unresolved-symbols,ignore-all ) \
-		$$([ $(OS) = WINNT ] && echo -ljulia -lssp)
+		$$([ $(OS) = Darwin ] && echo '' -Wl,-undefined,dynamic_lookup || echo '' -Wl,--unresolved-symbols,ignore-all ) \
+		$$([ $(OS) = WINNT ] && echo '' -ljulia -lssp)
 	$(DSYMUTIL) $@
 
 $(build_private_libdir)/sys0.o:
@@ -130,7 +130,7 @@ $(build_private_libdir)/sys.o: VERSION $(BASE_SRCS) $(build_datarootdir)/julia/h
 	@$(QUIET_JULIA) cd base && \
 	$(call spawn,$(JULIA_EXECUTABLE)) --build $(call cygpath_w,$(build_private_libdir)/sys) \
 		-J$(call cygpath_w,$(build_private_libdir))/$$([ -e $(build_private_libdir)/sys.ji ] && echo sys.ji || echo sys0.ji) -f sysimg.jl \
-		|| (echo "*** This error is usually fixed by running 'make clean'. If the error persists, try 'make cleanall'. ***" && false)
+		|| { echo "*** This error is usually fixed by running 'make clean'. If the error persists, try 'make cleanall'. ***" && false; }
 
 run-julia-debug run-julia-release: run-julia-%:
 	$(MAKE) $(QUIET_MAKE) run-julia JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$*)"
