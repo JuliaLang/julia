@@ -1366,7 +1366,7 @@ static void emit_write_barrier(jl_codectx_t* ctx, Value *parent, Value *ptr)
           return;*/
     parent = builder.CreateBitCast(parent, T_psize);
     Value* parent_type = builder.CreateLoad(parent);
-    Value* parent_mark_bits = builder.CreateAnd(parent_type, 3);
+    Value* parent_mark_bits = builder.CreateAnd(parent_type, 1);
 
     // the branch hint does not seem to make it to the generated code
     //builder.CreateCall2(expect_func, parent_marked, ConstantInt::get(T_int1, 0));

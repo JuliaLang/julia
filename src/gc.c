@@ -30,19 +30,26 @@ extern "C" {
 
 #pragma pack(push, 1)
 
-#define GC_PAGE_LG2 14
-#define REGION_PG_COUNT 8*4096
+#define GC_PAGE_LG2 14 // log2(size of a page)
 #define GC_PAGE_SZ (1 << GC_PAGE_LG2) // 16k
+
 // contiguous storage for up to REGION_PG_COUNT naturally aligned GC_PAGE_SZ blocks
 // uses a very naive allocator (see malloc_page & free_page)
+#ifdef _P64
+#define REGION_PG_COUNT 16*8*4096 // 8G because virtual memory is cheap
+#else
+#define REGION_PG_COUNT 8*4096 // 512M
+#endif
+#define HEAP_COUNT 8
 typedef struct {
     uint32_t freemap[REGION_PG_COUNT/32];
     char pages[REGION_PG_COUNT][GC_PAGE_SZ];
 } region_t;
-#define HEAP_COUNT 64
 static region_t *heaps[HEAP_COUNT] = {NULL};
 // store a lower bound of the first free block in each region
 static int heaps_lb[HEAP_COUNT] = {0};
+// same with an upper bound
+static int heaps_ub[HEAP_COUNT] = {0};
 
 // every 2^PAGE_GROUP_COUNT_LG2 gc page is reserved for the following pages' metadata
 // this requires :
@@ -188,14 +195,23 @@ static uint64_t total_mark_time=0;
 static uint64_t total_fin_time=0;
 #endif
 static int n_pause = 0;
+static int n_full_sweep = 0;
+int sweeping = 0;
 
 // manipulating mark bits
-#define GC_CLEAN 0
-#define GC_MARKED 1
-#define GC_QUEUED 2
-#define GC_MARKED_NOESC (GC_MARKED | GC_QUEUED)
 
-int sweeping = 0;
+#define GC_CLEAN 0 // freshly allocated
+#define GC_MARKED 1 // reachable and old
+#define GC_QUEUED 2 // if it is reachable it will be marked as old
+#define GC_MARKED_NOESC (GC_MARKED | GC_QUEUED) // reachable and young
+// When a reachable object has survived more than PROMOTE_AGE+1 collections
+// it is tagged with GC_QUEUED during sweep and will be promoted on next mark
+// because at that point we can know easily if it references young objects.
+// Marked old objects that reference young ones are kept in the remset.
+// When a write barrier triggers, the offending marked object is both queued,
+// so as not to trigger the barrier again, and put in the remset.
+// Old objects are put back in clean state only on major collection
+// (or more precisely, while sweeping at the previous collection)
 
 #ifdef GC_INC
 static int64_t scanned_bytes;
@@ -296,7 +312,7 @@ static inline void gc_setmark_other(void *o, int mark_mode)
 }
 
 #define inc_sat(v,s) v = (v) >= s ? s : (v)+1;
-#define PROMOTE_AGE 2
+#define PROMOTE_AGE 1
 
 static inline int gc_setmark_big(void *o, int mark_mode)
 {
@@ -309,7 +325,7 @@ static inline int gc_setmark_big(void *o, int mark_mode)
     bigval_t* hdr = bigval_header(o);
     int bits = gc_bits(o);
     if (bits == GC_QUEUED || bits == GC_MARKED)
-        mark_mode = GC_MARKED;    
+        mark_mode = GC_MARKED;
     if ((mark_mode == GC_MARKED) & (bits != GC_MARKED)) {
         *hdr->prev = hdr->next;
         if (hdr->next)
@@ -335,7 +351,7 @@ static inline int gc_setmark_pool(void *o, int mark_mode)
 #ifdef GC_VERIFY
     if (verifying) {
         _gc_setmark(o, mark_mode);
-        return;
+        return mark_mode;
     }
 #endif
     gcpage_t* page = GC_PAGE(o);
@@ -447,6 +463,8 @@ static __attribute__((noinline)) void *malloc_page(void)
     }
     if (heaps_lb[heap_i] < i)
         heaps_lb[heap_i] = i;
+    if (heaps_ub[heap_i] < i)
+        heaps_ub[heap_i] = i;
     int j = (ffs(heap->freemap[i]) - 1);
     heap->freemap[i] &= ~(uint32_t)(1 << j);
     if (j == 0) { // reserve a page for metadata (every 31 data pages)
@@ -467,10 +485,10 @@ static __attribute__((noinline)) void *malloc_page(void)
 
 static inline void free_page(void *p)
 {
-    int pg_idx = -1;
+    size_t pg_idx = -1;
     int i;
     for(i = 0; i < HEAP_COUNT && heaps[i] != NULL; i++) {
-        pg_idx = ((uintptr_t)p - (uintptr_t)heaps[i]->pages[0])/GC_PAGE_SZ;
+        pg_idx = ((char*)p - (char*)&heaps[i]->pages[0])/GC_PAGE_SZ;
         if (pg_idx >= 0 && pg_idx < REGION_PG_COUNT) break;
     }
     assert(i < HEAP_COUNT && heaps[i] != NULL);
@@ -720,7 +738,6 @@ void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
 
 static __attribute__((noinline)) void *alloc_big(size_t sz)
 {
-    //    jl_printf(JL_STDOUT, "BIG: %d\n", sz);
     maybe_collect();
     size_t offs = BVOFFS*sizeof(void*);
     if (sz+offs+15 < offs+15)  // overflow in adding offs, size was "negative"
@@ -1569,7 +1586,7 @@ static int push_root(jl_value_t *v, int d, int bits)
 
  ret:
 #ifdef GC_VERIFY
-    if (verifying) return;
+    if (verifying) return bits;
 #endif
     if ((bits == GC_MARKED) && (refyoung == GC_MARKED_NOESC)) {
         arraylist_push(remset, v);
@@ -2033,7 +2050,6 @@ void jl_gc_collect(void)
                 n_bnd_refyoung++;
             }
         }
-        int rem_bindings_len = rem_bindings.len;
         rem_bindings.len = n_bnd_refyoung;
         perm_scanned_bytes = SA;
         
@@ -2052,7 +2068,7 @@ void jl_gc_collect(void)
         uint64_t mark_pause = jl_hrtime() - t0;
 #endif
 #ifdef GC_TIME
-        JL_PRINTF(JL_STDOUT, "GC mark pause %.2f ms | scanned %ld kB = %ld + %ld | stack %d -> %d (wb %d) | remset %d %d %d\n", NS2MS(mark_pause), (scanned_bytes + perm_scanned_bytes)/1024, scanned_bytes/1024, perm_scanned_bytes/1024, saved_mark_sp, mark_sp, wb_activations, last_remset->len, rem_bindings_len, allocd_bytes/1024);
+        JL_PRINTF(JL_STDOUT, "GC mark pause %.2f ms | scanned %ld kB = %ld + %ld | stack %d -> %d (wb %d) | remset %d %d\n", NS2MS(mark_pause), (scanned_bytes + perm_scanned_bytes)/1024, scanned_bytes/1024, perm_scanned_bytes/1024, saved_mark_sp, mark_sp, wb_activations, last_remset->len, allocd_bytes/1024);
         saved_mark_sp = mark_sp;
 #endif
 #ifdef GC_FINAL_STATS
@@ -2122,6 +2138,7 @@ void jl_gc_collect(void)
             }
             else {
                 remset->len = 0;
+                n_full_sweep++;
             }
 
             sweep_weak_refs();
@@ -2136,7 +2153,7 @@ void jl_gc_collect(void)
 #endif
 
             if (sweep_mask == GC_MARKED_NOESC) {
-                collect_interval = default_collect_interval/4;
+                collect_interval = default_collect_interval;
                 if (freed_bytes >= actual_allocd) {
                     quick_count--;
                 }
@@ -2351,13 +2368,18 @@ void jl_print_gc_stats(JL_STREAM *s)
     malloc_stats();
     double ptime = clock_now()-process_t0;
     jl_printf(s, "exec time\t%.5f sec\n", ptime);
-    jl_printf(s, "gc time  \t%.5f sec (%2.1f%%) in %d collections\n",
-              NS_TO_S(total_gc_time), (NS_TO_S(total_gc_time)/ptime)*100, n_pause);
-    jl_printf(s, "gc pause \t%.2f ms avg\n\t\t%2.0f ms max\n",
-              NS2MS(total_gc_time)/n_pause, NS2MS(max_pause));
-    jl_printf(s, "\t\t(%2d%% mark, %2d%% sweep, %2d%% finalizers)\n",
-              (total_mark_time*100)/total_gc_time, (total_sweep_time*100)/total_gc_time,
-              (total_fin_time*100)/total_gc_time);
+    if (n_pause > 0) {
+        jl_printf(s, "gc time  \t%.5f sec (%2.1f%%) in %d (%d full) collections\n",
+                  NS_TO_S(total_gc_time), (NS_TO_S(total_gc_time)/ptime)*100, n_pause, n_full_sweep);
+        jl_printf(s, "gc pause \t%.2f ms avg\n\t\t%2.0f ms max\n",
+                  NS2MS(total_gc_time)/n_pause, NS2MS(max_pause));
+        jl_printf(s, "\t\t(%2d%% mark, %2d%% sweep, %2d%% finalizers)\n",
+                  (total_mark_time*100)/total_gc_time, (total_sweep_time*100)/total_gc_time,
+                  (total_fin_time*100)/total_gc_time);
+    }
+    int i = 0;
+    while (i < HEAP_COUNT && heaps[i]) i++;
+    jl_printf(s, "max allocated regions : %d\n", i);
     struct mallinfo mi = mallinfo();
     jl_printf(s, "malloc size\t%d MB\n", mi.uordblks/1024/1024);
     jl_printf(s, "max page alloc\t%ld MB\n", max_pg_count*GC_PAGE_SZ/1024/1024);

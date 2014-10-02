@@ -1382,7 +1382,7 @@ DLLEXPORT void gc_wb_slow(void* parent, void* ptr);
 static inline void gc_wb_binding(void *bnd, void *val)
 {
     #ifdef GC_INC
-    if (__unlikely((*(uintptr_t*)bnd & 3) == 1 && (*(uintptr_t*)val & 1) == 0))
+    if (__unlikely((*(uintptr_t*)bnd & 1) == 1 && (*(uintptr_t*)val & 1) == 0))
         gc_queue_binding(bnd);
     #endif
 }
@@ -1391,7 +1391,7 @@ static inline void gc_wb_fwd(void* parent, void* ptr)
 {
     #ifdef GC_INC
     // if parent is marked and ptr is clean
-    if(__unlikely((*((uintptr_t*)parent) & 3) == 1 && (*((uintptr_t*)ptr) & 1) == 0)) {
+    if(__unlikely((*((uintptr_t*)parent) & 1) == 1 && (*((uintptr_t*)ptr) & 1) == 0)) {
         gc_queue_root((void*)((uintptr_t)ptr | 1));
     }
     #endif
@@ -1399,7 +1399,7 @@ static inline void gc_wb_fwd(void* parent, void* ptr)
 
 static inline void gc_wb(void *parent, void *ptr)
 {
-    if (__unlikely((*((uintptr_t*)parent) & 3) == 1 &&
+    if (__unlikely((*((uintptr_t*)parent) & 1) == 1 &&
                    (*((uintptr_t*)ptr) & 1) == 0))
         gc_queue_root(parent);
 }
@@ -1408,7 +1408,7 @@ static inline void gc_wb_buf(void *parent, void *bufptr)
 {
     #ifdef GC_INC
     // if parent is marked and buf is not
-    if (__unlikely((*((uintptr_t*)parent) & 3) == 1))
+    if (__unlikely((*((uintptr_t*)parent) & 1) == 1))
                    //                   (*((uintptr_t*)bufptr) & 3) != 1))
           gc_setmark_buf(bufptr, *(uintptr_t*)parent & 3);
     #endif
@@ -1418,7 +1418,7 @@ static inline void gc_wb_back(void *ptr)
 {
     #ifdef GC_INC
     // if ptr is marked
-    if(__unlikely((*((uintptr_t*)ptr) & 3) == 1)) {
+    if(__unlikely((*((uintptr_t*)ptr) & 1) == 1)) {
         //        *((uintptr_t*)ptr) &= ~(uintptr_t)3; // clear the mark
         gc_queue_root(ptr);
     }
