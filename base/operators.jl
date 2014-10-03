@@ -407,6 +407,8 @@ immutable Pair{A,B}
     second::B
 end
 
+const => = Pair
+
 start(p::Pair) = 1
 done(p::Pair, i) = i>2
 next(p::Pair, i) = (getfield(p,i), i+1)

@@ -1788,7 +1788,7 @@
 	   (error (string "invalid \"typed_dict\" syntax " (deparse atypes))))))
 
    '=>
-   (lambda (e) `(call (top Pair) ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
+   (lambda (e) `(call => ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
 
    'cell1d
    (lambda (e)

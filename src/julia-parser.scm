@@ -1650,7 +1650,8 @@
 ; parse numbers, identifiers, parenthesized expressions, lists, vectors, etc.
 (define (parse-atom s)
   (let ((ex (parse-atom- s)))
-    (if (or (syntactic-op? ex)
+    ;; TODO: remove this hack when we remove the special Dict syntax
+    (if (or (and (not (eq? ex '=>)) (syntactic-op? ex))
 	    (eq? ex '....))
 	(error (string "invalid identifier name \"" ex "\"")))
     ex))
