@@ -372,7 +372,7 @@ struct jl_varinfo_t {
 };
 
 // --- helpers for reloading IR image
-static void jl_gen_llvm_gv_array();
+static void jl_gen_llvm_gv_array(llvm::Module *mod);
 
 extern "C"
 void jl_dump_bitcode(char *fname)
@@ -388,10 +388,11 @@ void jl_dump_bitcode(char *fname)
     std::string err;
     raw_fd_ostream OS(fname, err);
 #endif
-    jl_gen_llvm_gv_array();
 #ifdef USE_MCJIT
+    jl_gen_llvm_gv_array(shadow_module);
     WriteBitcodeToFile(shadow_module, OS);
 #else
+    jl_gen_llvm_gv_array(jl_Module);
     WriteBitcodeToFile(jl_Module, OS);
 #endif
 }
@@ -411,7 +412,6 @@ void jl_dump_objfile(char *fname, int jit_model)
     raw_fd_ostream OS(fname, err);
 #endif
     formatted_raw_ostream FOS(OS);
-    jl_gen_llvm_gv_array();
 
     // We don't want to use MCJIT's target machine because
     // it uses the large code model and we may potentially
@@ -453,8 +453,10 @@ void jl_dump_objfile(char *fname, int jit_model)
     }
 
 #ifdef USE_MCJIT
+    jl_gen_llvm_gv_array(shadow_module);
     PM.run(*shadow_module);
 #else
+    jl_gen_llvm_gv_array(jl_Module);
     PM.run(*jl_Module);
 #endif
 }

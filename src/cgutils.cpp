@@ -226,20 +226,20 @@ extern "C" {
     extern void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType);
 }
 
-static void jl_gen_llvm_gv_array()
+static void jl_gen_llvm_gv_array(llvm::Module *mod)
 {
     // emit the variable table into the code image (can only call this once)
     // used just before dumping bitcode
     ArrayType *atype = ArrayType::get(T_psize,jl_sysimg_gvars.size());
     new GlobalVariable(
-            *jl_Module,
+            *mod,
             atype,
             true,
             GlobalVariable::ExternalLinkage,
             ConstantArray::get(atype, ArrayRef<Constant*>(jl_sysimg_gvars)),
             "jl_sysimg_gvars");
     new GlobalVariable(
-            *jl_Module,
+            *mod,
             T_size,
             true,
             GlobalVariable::ExternalLinkage,
@@ -247,7 +247,7 @@ static void jl_gen_llvm_gv_array()
             "jl_globalUnique");
 
     Constant *feature_string = ConstantDataArray::getString(jl_LLVMContext, jl_cpu_string);
-    new GlobalVariable(*jl_Module,
+    new GlobalVariable(*mod,
                        feature_string->getType(),
                        true,
                        GlobalVariable::ExternalLinkage,
@@ -259,7 +259,7 @@ static void jl_gen_llvm_gv_array()
         uint32_t info[4];
 
         jl_cpuid((int32_t*)info, 1);
-        new GlobalVariable(*jl_Module,
+        new GlobalVariable(*mod,
                            T_int64,
                            true,
                            GlobalVariable::ExternalLinkage,
