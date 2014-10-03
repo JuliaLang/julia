@@ -157,14 +157,13 @@ maxmultiple(k::Uint128) = div(typemax(Uint128), k)*k - 1
 # 32 or 64 bits version depending on size
 maxmultiplemix(k::Uint64) = k >> 32 == 0 ? uint64(maxmultiple(itrunc(Uint32, k))) : maxmultiple(k)
 
-immutable RandIntGen{T<:Integer, U<:Unsigned}
+immutable RandIntGen{T<:Integer, U<:Union(Uint32, Uint64, Uint128)}
     k::U   # range length
     u::U   # rejection threshold
 
     function RandIntGen(k::U)
-        @assert U in (Uint32, Uint64, Uint128) # respectively 32, mixed 32/64 and 128 bits of entropy
         k < 1 && error("No integers in the range [1, $k]. Did you try to pick an element from a empty collection?")
-        new(k, U == Uint64 ? maxmultiplemix(k) : maxmultiple(k))
+        new(k, isa(k, Uint64) ? maxmultiplemix(k) : maxmultiple(k))
     end
 end
 
