@@ -157,7 +157,7 @@ hash(x::Float16, h::Uint) = hash(float64(x), h)
 ## hashing collections ##
 const hashaa_seed = Uint === Uint64 ? 0x7f53e68ceb575e76 : 0xeb575e76
 function hash(a::AbstractArray, h::Uint)
-    h += uint(hashaa_seed)
+    h += hashaa_seed
     h += hash(size(a))
     for x in a
         h = hash(x, h)
@@ -167,7 +167,7 @@ end
 
 const hasha_seed = Uint === Uint64 ? 0x6d35bb51952d5539 : 0x952d5539
 function hash(a::Associative, h::Uint)
-    h += uint(hasha_seed)
+    h += hasha_seed
     for (k,v) in a
         h $= hash(k, hash(v))
     end
@@ -176,7 +176,7 @@ end
 
 const hashs_seed = Uint === Uint64 ? 0x852ada37cfe8e0ce : 0xcfe8e0ce
 function hash(s::Set, h::Uint)
-    h += uint(hashs_seed)
+    h += hashs_seed
     for x in s
         h $= hash(x)
     end
@@ -185,7 +185,7 @@ end
 
 const hashis_seed = Uint === Uint64 ? 0x88989f1fc7dea67d : 0xc7dea67d
 function hash(s::IntSet, h::Uint)
-    h += uint(hashis_seed)
+    h += hashis_seed
     h += hash(s.fill1s)
     filln = s.fill1s ? ~zero(eltype(s.bits)) : zero(eltype(s.bits))
     for x in s.bits
@@ -199,7 +199,7 @@ end
 # hashing ranges by component at worst leads to collisions for very similar ranges
 const hashr_seed = Uint === Uint64 ? 0x80707b6821b70087 : 0x21b70087
 function hash(r::Range, h::Uint)
-    h += uint(hashr_seed)
+    h += hashr_seed
     h = hash(first(r), h)
     h = hash(step(r), h)
     h = hash(last(r), h)

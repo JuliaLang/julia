@@ -87,7 +87,7 @@ function ==(t1::Tuple, t2::Tuple)
 end
 
 const tuplehash_seed = Uint === Uint64 ? 0x77cfa1eef01bca90 : 0xf01bca90
-hash(::(), h::Uint) = h + uint(tuplehash_seed)
+hash(::(), h::Uint) = h + tuplehash_seed
 hash(x::(Any,), h::Uint)    = hash(x[1], hash((), h))
 hash(x::(Any,Any), h::Uint) = hash(x[1], hash(x[2], hash((), h)))
 hash(x::Tuple, h::Uint)     = hash(x[1], hash(x[2], hash(tupletail(x), h)))

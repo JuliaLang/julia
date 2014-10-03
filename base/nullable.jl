@@ -45,8 +45,8 @@ const nullablehash_seed = Uint === Uint64 ? 0x932e0143e51d0171 : 0xe51d0171
 
 function hash(x::Nullable, h::Uint)
     if x.isnull
-        return h + uint(nullablehash_seed)
+        return h + nullablehash_seed
     else
-        return hash(x.value, h + uint(nullablehash_seed))
+        return hash(x.value, h + nullablehash_seed)
     end
 end
