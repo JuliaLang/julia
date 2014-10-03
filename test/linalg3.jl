@@ -200,7 +200,7 @@ Ai = int(ceil(Ar*100))
 @test isequal(scale(BigFloat[1.0], 2.0f0im),   Complex{BigFloat}[2.0im])
 
 # issue #6450
-@test dot({1.0,2.0},{3.5,4.5}) === 12.5
+@test dot(Any[1.0,2.0], Any[3.5,4.5]) === 12.5
 
 # issue #7181
 A = [ 1  5  9

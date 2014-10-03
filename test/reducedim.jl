@@ -14,9 +14,9 @@ safe_maxabs{T}(A::Array{T}, region) = safe_mapslices(maximum, abs(A), region)
 safe_minabs{T}(A::Array{T}, region) = safe_mapslices(minimum, abs(A), region)
 
 Areduc = rand(3, 4, 5, 6)
-for region in {
+for region in Any[
     1, 2, 3, 4, 5, (1, 2), (1, 3), (1, 4), (2, 3), (2, 4), (3, 4),
-    (1, 2, 3), (1, 3, 4), (2, 3, 4), (1, 2, 3, 4)}
+    (1, 2, 3), (1, 3, 4), (2, 3, 4), (1, 2, 3, 4)]
     # println("region = $region")
     r = fill(NaN, Base.reduced_dims(size(Areduc), region))
     @test_approx_eq sum!(r, Areduc) safe_sum(Areduc, region)
@@ -88,5 +88,5 @@ A = [1.0 3.0 6.0;
 # issue #6672
 @test sum(Real[1 2 3; 4 5.3 7.1], 2) == reshape([6, 16.4], 2, 1)
 @test std(FloatingPoint[1,2,3], 1) == [1.0]
-@test sum({1 2;3 4},1) == [4 6]
+@test sum(Any[1 2;3 4],1) == [4 6]
 @test sum(Vector{Int}[[1,2],[4,3]], 1)[1] == [5,5]

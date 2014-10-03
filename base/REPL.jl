@@ -50,7 +50,7 @@ function eval_user_input(ast::ANY, backend::REPLBackend)
                 ans = backend.ans
                 # note: value wrapped in a non-syntax value to avoid evaluating
                 # possibly-invalid syntax (issue #6763).
-                eval(Main, :(ans = $({ans})[1]))
+                eval(Main, :(ans = $(Any[ans])[1]))
                 value = eval(Main, ast)
                 backend.ans = value
                 put!(backend.response_channel, (value, nothing))
@@ -704,7 +704,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
         extra_repl_keymap = [extra_repl_keymap]
     end
 
-    const repl_keymap = {
+    const repl_keymap = (Any=>Any)[
         ';' => function (s,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
                 buf = copy(LineEdit.buffer(s))
@@ -775,14 +775,14 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
                 end
             end
         end,
-    }
+    ]
 
     a = Dict{Any,Any}[hkeymap, repl_keymap, LineEdit.history_keymap, LineEdit.default_keymap, LineEdit.escape_defaults]
     prepend!(a, extra_repl_keymap)
 
     julia_prompt.keymap_func = LineEdit.keymap(a)
 
-    const mode_keymap = {
+    const mode_keymap = (Any=>Any)[
         '\b' => function (s,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
                 buf = copy(LineEdit.buffer(s))
@@ -801,7 +801,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
             transition(s, :reset)
             LineEdit.refresh_line(s)
         end
-    }
+    ]
 
     b = Dict{Any,Any}[hkeymap, mode_keymap, LineEdit.history_keymap, LineEdit.default_keymap, LineEdit.escape_defaults]
     prepend!(b, extra_repl_keymap)

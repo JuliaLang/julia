@@ -463,7 +463,7 @@ function nextsetpartition(s::AbstractVector, a, b, n, m)
         filter!(x->!isempty(x), temp)
     end
 
-    if isempty(s);  return ({s}, ([1], Int[], n, 1));  end
+    if isempty(s);  return ([s], ([1], Int[], n, 1));  end
 
     part = makeparts(s,a,m)
 

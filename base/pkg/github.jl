@@ -3,11 +3,11 @@ module GitHub
 import Main, ..Git, ..Dir
 
 const AUTH_NOTE = "Julia Package Manager"
-const AUTH_DATA = {
+const AUTH_DATA = (Any=>Any)[
     "scopes" => ["repo"],
     "note" => AUTH_NOTE,
     "note_url" => "http://docs.julialang.org/en/latest/manual/packages/",
-}
+]
 
 function user()
     if !success(`git config --global github.user`)

@@ -62,7 +62,7 @@ duplicates(slots) = any(map(x->count(y->x.period==y.period,slots),slots) .> 1)
 
 function DateFormat(f::String,locale::String="english")
     slots = Slot[]
-    trans = {}
+    trans = []
     begtran = match(r"^.*?(?=[ymuUdHMSsEe])",f).match
     ss = split(f,r"^.*?(?=[ymuUdHMSsEe])")
     s = split(begtran == "" ? ss[1] : ss[2],r"[^ymuUdHMSsEe]+|(?<=([ymuUdHMSsEe])(?!\1))")

@@ -1018,7 +1018,7 @@ function unindent(s::String, indent::Int)
 end
 
 function triplequoted(args...)
-    sx = { isa(arg,ByteString) ? arg : esc(arg) for arg in args }
+    sx = Any[ isa(arg,ByteString) ? arg : esc(arg) for arg in args ]
 
     indent = 0
     rlines = split(RevString(sx[end]), '\n'; limit=2)
@@ -1067,13 +1067,13 @@ macro mstr(s...); triplequoted(s...); end
 function shell_parse(raw::String, interp::Bool)
     s = strip(raw)
     last_parse = 0:-1
-    isempty(s) && return interp ? (Expr(:tuple,:()),last_parse) : ({},last_parse)
+    isempty(s) && return interp ? (Expr(:tuple,:()),last_parse) : ([],last_parse)
 
     in_single_quotes = false
     in_double_quotes = false
 
-    args = {}
-    arg = {}
+    args = []
+    arg = []
     i = start(s)
     j = i
 
@@ -1083,9 +1083,9 @@ function shell_parse(raw::String, interp::Bool)
         end
     end
     function append_arg()
-        if isempty(arg); arg = {"",}; end
+        if isempty(arg); arg = Any["",]; end
         push!(args, arg)
-        arg = {}
+        arg = []
     end
 
     while !done(s,j)
