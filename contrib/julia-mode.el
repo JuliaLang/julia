@@ -113,6 +113,16 @@
       ;; The function name itself
       (group (1+ (or word ?_ ?!)))))
 
+(defconst julia-function-assignment-regex
+  (rx line-start symbol-start
+      (group (1+ (or word ?_ ?!)))
+      (* space)
+      (? "{" (* (not (any "}"))) "}")
+      (* space)
+      "(" (* (not (any ")"))) ")"
+      (* space)
+      "="))
+
 (defconst julia-type-regex
   (rx symbol-start (or "immutable" "type" "abstract") (1+ space) (group (1+ (or word ?_)))))
 
@@ -126,7 +136,7 @@
   (rx "<:" (1+ space) (group (1+ (or word ?_))) (0+ space) (or "\n" "{" "end")))
 
 (defconst julia-macro-regex
-  "@\\w+")
+  (rx symbol-start (group  "@" (1+ (or word ?_ ?!)))))
 
 (defconst julia-keyword-regex
   (regexp-opt
@@ -158,6 +168,7 @@
     (list julia-char-regex 2 'font-lock-string-face)
     (list julia-forloop-in-regex 1 'font-lock-keyword-face)
     (list julia-function-regex 1 'font-lock-function-name-face)
+    (list julia-function-assignment-regex 1 'font-lock-function-name-face)
     (list julia-type-regex 1 'font-lock-type-face)
     (list julia-type-annotation-regex 1 'font-lock-type-face)
     ;;(list julia-type-parameter-regex 1 'font-lock-type-face)

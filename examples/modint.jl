@@ -17,4 +17,9 @@ Base.promote_rule{n}(::Type{ModInt{n}}, ::Type{Int}) = ModInt{n}
 Base.show{n}(io::IO, k::ModInt{n}) = print(io, "$(k.k) mod $n")
 Base.showcompact(io::IO, k::ModInt) = print(io, k.k)
 
+function Base.inv{n}(a::ModInt{n})
+    thegcd, x = gcdx(a.k, n)
+    thegcd==1 ? ModInt{n}(x) : error("Inverse of $(a.k) mod $n doesn't exist")
+end
+    
 end # module

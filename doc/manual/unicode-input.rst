@@ -1,7 +1,14 @@
 .. _man-unicode-input:
 
-*************************************
+***************
  Unicode Input  
-*************************************
+***************
 
-.. include:: unicode-input-table.rst
+.. only:: html
+
+   .. include:: unicode-input-table.rst
+
+.. only:: latex
+
+   Please see the online documentation.
+

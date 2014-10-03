@@ -298,6 +298,19 @@ DEBUGFLAGS = -O0 -g -DJL_DEBUG_BUILD -fstack-protector-all
 SHIPFLAGS = -O3 -g -falign-functions
 endif
 
+ifeq ($(USECCACHE), 1)
+CC := ccache $(CC)
+CXX := ccache $(CXX)
+ifeq ($(USECLANG),1)
+# ccache and Clang don't do well together
+# http://petereisentraut.blogspot.be/2011/05/ccache-and-clang.html
+CC += -Qunused-arguments -fcolor-diagnostics
+CXX += -Qunused-arguments -fcolor-diagnostics
+# http://petereisentraut.blogspot.be/2011/09/ccache-and-clang-part-2.html
+export CCACHE_CPP2 := yes
+endif
+endif
+
 ifeq ($(LLVM_VER),svn)
 JCXXFLAGS += -std=c++11
 endif

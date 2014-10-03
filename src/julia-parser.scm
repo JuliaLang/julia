@@ -1004,8 +1004,8 @@
 
 ; parse expressions or blocks introduced by syntactic reserved words
 (define (parse-resword s word)
-  (with-bindings ((expect-end-current-line (input-port-line (ts:port s))))
   (define (expect-end s) (expect-end- s word))
+  (with-bindings ((expect-end-current-line (input-port-line (ts:port s))))
   (with-normal-ops
   (without-whitespace-newline
   (case word
@@ -1404,7 +1404,10 @@
 			(cons 'vcat (reverse (cons nxt lst))))
 		 (loop (cons nxt lst) (parse-eq* s))))
 	    ((#\;)
-	     (error "unexpected semicolon in array expression"))
+	     (if (eqv? (require-token s) closer)
+		 (loop lst nxt)
+		 (let ((params (parse-arglist s closer)))
+		   `(vcat ,@params ,@lst ,nxt))))
 	    ((#\] #\})
 	     (error (string "unexpected \"" t "\"")))
 	    (else

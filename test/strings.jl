@@ -1241,3 +1241,7 @@ end
 @test isalpha("23435")==false
 @test iscntrl( string(char(0x0080))) == true
 @test ispunct( "‡؟჻") ==true
+
+# This caused JuliaLang/JSON.jl#82
+@test first('\x00':'\x7f') === '\x00'
+@test last('\x00':'\x7f') === '\x7f'

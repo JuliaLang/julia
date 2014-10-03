@@ -41,10 +41,12 @@ end
 
 =={S, T}(x::Nullable{S}, y::Nullable{T}) = throw(NullException())
 
+const nullablehash_seed = Uint === Uint64 ? 0x932e0143e51d0171 : 0xe51d0171
+
 function hash(x::Nullable, h::Uint)
     if x.isnull
-        return h + uint(0x932e0143e51d0171)
+        return h + nullablehash_seed
     else
-        return hash(x.value, h + uint(0x932e0143e51d0171))
+        return hash(x.value, h + nullablehash_seed)
     end
 end

@@ -39,8 +39,22 @@ evaluate(f::Callable, x, y) = f(x, y)
 
 ###### Generic (map)reduce functions ######
 
+if Int === Int32
+typealias SmallSigned Union(Int8,Int16)
+typealias SmallUnsigned Union(Uint8,Uint16)
+else
+typealias SmallSigned Union(Int8,Int16,Int32)
+typealias SmallUnsigned Union(Uint8,Uint16,Uint32)
+end
+
+typealias CommonReduceResult Union(Uint64,Uint128,Int64,Int128,Float32,Float64)
+typealias WidenReduceResult Union(SmallSigned, SmallUnsigned, Float16)
+
 # r_promote: promote x to the type of reduce(op, [x])
+r_promote(op, x::WidenReduceResult) = widen(x)
 r_promote(op, x) = x
+r_promote(::AddFun, x::WidenReduceResult) = widen(x)
+r_promote(::MulFun, x::WidenReduceResult) = widen(x)
 r_promote(::AddFun, x::Number) = x + zero(x)
 r_promote(::MulFun, x::Number) = x * one(x)
 r_promote(::AddFun, x) = x
@@ -112,7 +126,7 @@ foldr(op, itr) = mapfoldr(IdFun(), op, itr)
 
 # mapreduce_***_impl require ifirst < ilast
 function mapreduce_seq_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int)
-    @inbounds fx1 = evaluate(f, A[ifirst])
+    @inbounds fx1 = r_promote(op, evaluate(f, A[ifirst]))
     @inbounds fx2 = evaluate(f, A[ifirst+=1])
     @inbounds v = evaluate(op, fx1, fx2)
     while ifirst < ilast
@@ -157,8 +171,8 @@ function _mapreduce{T}(f, op, A::AbstractArray{T})
     elseif n == 1
         return r_promote(op, evaluate(f, A[1]))
     elseif n < 16
-        @inbounds fx1 = evaluate(f, A[1])
-        @inbounds fx2 = evaluate(f, A[2])
+        @inbounds fx1 = r_promote(op, evaluate(f, A[1]))
+        @inbounds fx2 = r_promote(op, evaluate(f, A[2]))
         s = evaluate(op, fx1, fx2)
         i = 2
         while i < n
@@ -193,7 +207,7 @@ reduce(op, a::Number) = a
 
 function mapreduce_seq_impl(f, op::AddFun, a::AbstractArray, ifirst::Int, ilast::Int)
     @inbounds begin
-        s = evaluate(f, a[ifirst]) + evaluate(f, a[ifirst+1])
+        s = r_promote(op, evaluate(f, a[ifirst])) + evaluate(f, a[ifirst+1])
         @simd for i = ifirst+2:ilast
             s += evaluate(f, a[i])
         end

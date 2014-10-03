@@ -219,7 +219,7 @@ All Objects
 
 .. function:: deepcopy(x)
 
-   Create a deep copy of ``x``: everything is copied recursively, resulting in a fully independent object. For example, deep-copying an array produces a new array whose elements are deep-copies of the original elements.
+   Create a deep copy of ``x``: everything is copied recursively, resulting in a fully independent object. For example, deep-copying an array produces a new array whose elements are deep copies of the original elements. Calling `deepcopy` on an object should generally have the same effect as serializing and then deserializing it.
 
    As a special case, functions can only be actually deep-copied if they are anonymous, otherwise they are just copied. The difference is only relevant in the case of closures, i.e. functions which may contain hidden internal references.
 
@@ -235,7 +235,7 @@ All Objects
 
 .. function:: convert(type, x)
 
-   Try to convert ``x`` to the given type. Conversions from floating point to integer, rational to integer, and complex to real will raise an ``InexactError`` if ``x`` cannot be represented exactly in the new type.
+   Try to convert ``x`` to the given type. Conversion to a different numeric type will raise an ``InexactError`` if ``x`` cannot be represented exactly in the new type.
 
 .. function:: promote(xs...)
 
@@ -3090,9 +3090,9 @@ Mathematical Functions
 
    Returns the nearest integral value of the same type as ``x`` not greater in magnitude than ``x``. ``digits`` and ``base`` work as above.
 
-.. function:: iround(x) -> Integer
+.. function:: iround([T,]x) -> Integer
 
-   Returns the nearest integer to ``x``.
+   Returns the nearest integer to ``x``, converted to an integer type, optionally passed as the first argument.
 
 .. function:: iceil(x) -> Integer
 
@@ -3102,9 +3102,9 @@ Mathematical Functions
 
    Returns the nearest integer not greater than ``x``.
 
-.. function:: itrunc(x) -> Integer
+.. function:: itrunc([T,]x) -> Integer
 
-   Returns the nearest integer not greater in magnitude than ``x``.
+   Returns the nearest integer not greater in magnitude than ``x``, converted to an integer type, optionally passed as the first argument.
 
 .. function:: signif(x, digits, [base])
 
@@ -3545,11 +3545,11 @@ Data Formats
 
 .. function:: signed(x)
 
-   Convert a number to a signed integer
+   Convert a number to a signed integer. If the argument is unsigned, it is reinterpreted as signed without checking for overflow.
 
 .. function:: unsigned(x) -> Unsigned
 
-   Convert a number to an unsigned integer
+   Convert a number to an unsigned integer. If the argument is signed, it is reinterpreted as unsigned without checking for negative values.
 
 .. function:: int8(x)
 
@@ -5061,9 +5061,10 @@ Parallel Computing
    Add processes on remote machines via SSH. 
    Requires julia to be installed in the same location on each node, or to be available via a shared file system.
    
-   ``machines`` is a vector of host definitions of the form ``[user@]host[:port] [bind_addr]``. ``user`` defaults 
-   to current user, ``port`` to the standard ssh port. Optionally, in case of multi-homed hosts, ``bind_addr`` 
-   may be used to explicitly specify an interface.
+   ``machines`` is a vector of host definitions of the form ``[user@]host[:port] [bind_addr[:port]]``. ``user`` defaults 
+   to current user, ``port`` to the standard ssh port. A worker is started at each host definition. 
+   If the optional ``[bind_addr[:port]]`` is specified, other workers will connect to this worker at the 
+   specified ``bind_addr`` and ``port``.
    
    Keyword arguments:
 

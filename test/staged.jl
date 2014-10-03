@@ -76,3 +76,14 @@ stagedfunction mygetindex(S::SubArray, indexes::Real...)
     ex
 end
 @test mygetindex(B,2,2) == A[2,2,2]
+
+# issue #8497
+module MyTest8497
+internalfunction(x) = x+1
+stagedfunction h(x)
+    quote
+        internalfunction(x)
+    end
+end
+end
+@test MyTest8497.h(3) == 4
