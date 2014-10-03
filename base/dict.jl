@@ -18,14 +18,14 @@ end
 
 function show{K,V}(io::IO, t::Associative{K,V})
     if isempty(t)
-        print(io, typeof(t),"()")
+        print(io, typeof(t), "()")
     else
-        if K === Any && V === Any
-            delims = ['{','}']
+        if isleaftype(K) && isleaftype(V)
+            print(io, typeof(t).name)
         else
-            delims = ['[',']']
+            print(io, typeof(t))
         end
-        print(io, delims[1])
+        print(io, '(')
         first = true
         for (k, v) in t
             first || print(io, ',')
@@ -34,7 +34,7 @@ function show{K,V}(io::IO, t::Associative{K,V})
             print(io, "=>")
             show(io, v)
         end
-        print(io, delims[2])
+        print(io, ')')
     end
 end
 
