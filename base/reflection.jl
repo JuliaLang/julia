@@ -24,7 +24,7 @@ function fullname(m::Module)
     end
 end
 
-names(m::Module, all::Bool, imported::Bool) = ccall(:jl_module_names, Array{Symbol,1}, (Any,Int32,Int32), m, all, imported)
+names(m::Module, all::Bool, imported::Bool) = sort(ccall(:jl_module_names, Array{Symbol,1}, (Any,Int32,Int32), m, all, imported))
 names(m::Module, all::Bool) = names(m, all, false)
 names(m::Module) = names(m, false, false)
 names(t::DataType) = collect(t.names)
