@@ -245,31 +245,31 @@ end
 # conversions
 function fooo()
     local x::Int8
-    x = 1000
+    x = 100
     x
 end
-@test int32(fooo()) == -24
+@test fooo() === convert(Int8,100)
 function fooo_2()
     local x::Int8
-    x = 1000
+    x = 100
 end
-@test fooo_2() == 1000
+@test fooo_2() === 100
 function fooo_3()
     local x::Int8
-    y = x = 1000
-    @test x == -24
+    y = x = 100
+    @test isa(x,Int8)
     y
 end
-@test fooo_3() == 1000
+@test fooo_3() === 100
 function foo()
     local x::Int8
     function bar()
-        x = 1000
+        x = 100
     end
     bar()
     x
 end
-@test int32(foo()) == -24
+@test foo() === convert(Int8,100)
 
 function bar{T}(x::T)
     local z::Complex{T}
@@ -560,6 +560,25 @@ function test7307(a, ret)
 end
 @test test7307({}, true) == {"inner","outer"}
 @test test7307({}, false) == {"inner","outer"}
+
+# issue #8277
+function test8277(a)
+    i = 0
+    for j=1:2
+        try
+            if i == 0
+                push!(a,0)
+            end
+            i += 1
+            error()
+        catch
+        end
+    end
+end
+let a = {}
+    test8277(a)
+    @test length(a) == 1
+end
 
 # chained and multiple assignment behavior (issue #2913)
 begin

@@ -28,7 +28,7 @@ namespace JL_I {
         fptrunc, fpext,
         // checked conversion
         fpsiround, fpuiround, checked_fptosi, checked_fptoui,
-        checked_trunc_sint, checked_trunc_uint,
+        checked_trunc_sint, checked_trunc_uint, check_top_bit,
         // checked arithmetic
         checked_sadd, checked_uadd, checked_ssub, checked_usub,
         checked_smul, checked_umul,
@@ -424,6 +424,9 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     if (vxt != llvmt) {
         if (vxt == T_void)
             return vx;
+        if (!vxt->isSingleValueType()) {
+            jl_error("box: argument not of a primitive type");
+        }
         if (llvmt == T_int1) {
             vx = builder.CreateTrunc(vx, llvmt);
         }
@@ -436,7 +439,7 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
                 !(vxt->isPointerTy() && llvmt->getPrimitiveSizeInBits() == sizeof(void*)*8) &&
                 !(llvmt->isPointerTy() && vxt->getPrimitiveSizeInBits() == sizeof(void*)*8)) {
                 emit_error("box: argument is of incorrect size", ctx);
-                return vx;
+                return UndefValue::get(llvmt);
             }
             // PtrToInt and IntToPtr ignore size differences
             if (vxt->isPointerTy() && !llvmt->isPointerTy()) {
@@ -1089,6 +1092,16 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return builder.CreateExtractValue(res, ArrayRef<unsigned>(0));
     }
 
+    HANDLE(check_top_bit,1)
+        // raise InexactError if argument's top bit is set
+        x = JL_INT(x);
+        raise_exception_if(builder.
+                           CreateTrunc(builder.
+                                       CreateLShr(x, ConstantInt::get(t, t->getPrimitiveSizeInBits()-1)),
+                                       T_int1),
+                           prepare_global(jlinexacterr_var), ctx);
+        return x;
+
     HANDLE(eq_int,2)  return builder.CreateICmpEQ(JL_INT(x), JL_INT(y));
     HANDLE(ne_int,2)  return builder.CreateICmpNE(JL_INT(x), JL_INT(y));
     HANDLE(slt_int,2) return builder.CreateICmpSLT(JL_INT(x), JL_INT(y));
@@ -1503,6 +1516,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(checked_fptosi); ADD_I(checked_fptoui);
     ADD_I(checked_trunc_sint);
     ADD_I(checked_trunc_uint);
+    ADD_I(check_top_bit);
     ADD_I(nan_dom_err);
     ADD_I(ccall); ADD_I(cglobal);
     ADD_I(jl_alloca);

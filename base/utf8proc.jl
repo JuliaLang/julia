@@ -5,11 +5,11 @@ import Base: show, showcompact, ==, string, symbol, isless
 
 # also exported by Base:
 export normalize_string, is_valid_char, is_assigned_char,
-   islower, isupper, isalpha, isdigit, isnumber, isalnum, 
+   islower, isupper, isalpha, isdigit, isnumber, isalnum,
    iscntrl, ispunct, isspace, isprint, isgraph, isblank
 
 # whether codepoints are valid Unicode
-is_valid_char(c) = bool(ccall(:utf8proc_codepoint_valid, Cchar, (Int32,), c))
+is_valid_char(c) = (0 <= c <= 0x110000) && bool(ccall(:utf8proc_codepoint_valid, Cuchar, (Int32,), c))
 
 # utf8 category constants
 const UTF8PROC_CATEGORY_LU = 1

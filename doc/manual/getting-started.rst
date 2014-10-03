@@ -71,19 +71,30 @@ worker processes, while ``--machinefile file`` will launch a worker
 for each line in file ``file``. The machines defined in ``file`` must be 
 accessible via a passwordless ``ssh`` login, with Julia installed at the
 same location as the current host. Each machine definition takes the form 
-``[user@]host[:port] [bind_addr]`` . ``user`` defaults to current user, 
-``port`` to the standard ssh port. Optionally, in case of multi-homed hosts, 
-``bind_addr`` may be used to explicitly specify an interface.
+``[user@]host[:port] [bind_addr[:port]]`` . ``user`` defaults to current user, 
+``port`` to the standard ssh port. The optional ``bind-to bind_addr[:port]`` 
+specifies the ip-address and port that other workers should use to 
+connect to this worker.
     
     
 If you have code that you want executed whenever julia is run, you can
-put it in ``~/.juliarc.jl``::
+put it in ``~/.juliarc.jl``:
+
+.. raw:: latex
+
+    \begin{CJK*}{UTF8}{mj}
+
+::
 
     $ echo 'println("Greetings! 你好! 안녕하세요?")' > ~/.juliarc.jl
     $ julia
     Greetings! 你好! 안녕하세요?
     
     ...
+
+.. raw:: latex
+
+    \end{CJK*}
 
 There are various ways to run Julia code and provide options, similar to
 those available for the ``perl`` and ``ruby`` programs::

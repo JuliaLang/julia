@@ -14,7 +14,7 @@ type Regex
 
     function Regex(pattern::String, options::Integer)
         pattern = bytestring(pattern)
-        options = uint32(options)
+        options = int32(options)
         if (options & ~PCRE.OPTIONS_MASK) != 0
             error("invalid regex options: $options")
         end

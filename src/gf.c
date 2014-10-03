@@ -931,12 +931,10 @@ static jl_value_t *lookup_match(jl_value_t *a, jl_value_t *b, jl_tuple_t **penv,
 
 DLLEXPORT jl_function_t *jl_instantiate_staged(jl_methlist_t *m, jl_tuple_t *tt)
 {
-    jl_lambda_info_t *newlinfo = NULL;
-    jl_value_t *code = NULL;
     jl_expr_t *ex = NULL;
     jl_expr_t *oldast = NULL;
     jl_function_t *func = NULL;
-    JL_GC_PUSH4(&code, &newlinfo, &ex, &oldast);
+    JL_GC_PUSH2(&ex, &oldast);
     if (jl_is_expr(m->func->linfo->ast))
         oldast = (jl_expr_t*)m->func->linfo;
     else
@@ -955,14 +953,14 @@ DLLEXPORT jl_function_t *jl_instantiate_staged(jl_methlist_t *m, jl_tuple_t *tt)
             jl_expr_t *dd_expr = jl_exprn(ldots_sym,1);
             jl_cellset(dd_expr->args,0,arg);
             jl_cellset(argnames->args,i,dd_expr);
-        } else {
+        }
+        else {
             assert(jl_is_symbol(arg));
             jl_cellset(argnames->args,i,arg);
         }
     }
     jl_cellset(ex->args, 1, jl_apply(m->func, tt->data, jl_tuple_len(tt)));
-    code = jl_expand((jl_value_t*)ex);
-    func = (jl_function_t*)jl_toplevel_eval(code);
+    func = (jl_function_t*)jl_toplevel_eval_in(m->func->linfo->module, (jl_value_t*)ex);
     JL_GC_POP();
     return func;
 }

@@ -23,7 +23,7 @@
 # sum
 
 @test sum(Int8[]) === 0
-@test sum(Int[]) === 0
+@test sum(Int[]) === int(0)
 @test sum(Float64[]) === 0.0
 
 @test sum(int8(3)) === int8(3)
@@ -42,7 +42,9 @@ fz = float(z)
 @test_throws ErrorException sum(sin, Int[])
 @test sum(sin, 3) == sin(3.0)
 @test sum(sin, [3]) == sin(3.0)
-@test sum(sin, z) == sum(sin, fz) == sum(sin(fz))
+a = sum(sin, z)
+@test_approx_eq a sum(sin, fz)
+@test_approx_eq a sum(sin(fz))
 
 z = [-4, -3, 2, 5]
 fz = float(z)
@@ -106,7 +108,7 @@ prod(fz) === 120.0
 prod2(itr) = invoke(prod, (Any,), itr)
 @test prod(Int[]) === prod2(Int[]) === 1
 @test prod(Int[7]) === prod2(Int[7]) === 7
-@test typeof(prod(Int8[])) == typeof(prod(Int8[1])) == typeof(prod(Int8[1, 7])) == Int 
+@test typeof(prod(Int8[])) == typeof(prod(Int8[1])) == typeof(prod(Int8[1, 7])) == Int
 @test typeof(prod2(Int8[])) == typeof(prod2(Int8[1])) == typeof(prod2(Int8[1 7])) == Int
 
 # maximum & minimum & extrema
@@ -215,3 +217,5 @@ end
 @test isequal(cummin([1 0; 0 1], 1), [1 0; 0 0])
 @test isequal(cummin([1 0; 0 1], 2), [1 0; 0 0])
 
+@test sum(collect(uint8(0:255))) == 32640
+@test sum(collect(uint8(254:255))) == 509

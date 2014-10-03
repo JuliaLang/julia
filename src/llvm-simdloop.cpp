@@ -20,7 +20,8 @@ static MDNode* simd_loop_md = NULL;
 
 /// Mark loop as a SIMD loop.  Return false if loop cannot be marked.
 /// incr should be the basic block that increments the loop counter.
-bool annotateSimdLoop(BasicBlock* incr) {
+bool annotateSimdLoop(BasicBlock* incr)
+{
     DEBUG(dbgs() << "LSL: annotating simd_loop\n");
     // Lazy initialization
     if (!simd_loop_mdkind) {
@@ -38,7 +39,8 @@ bool annotateSimdLoop(BasicBlock* incr) {
                 DEBUG(dbgs() << "LSL: setting simd_loop metadata\n");
                 i.setMetadata(simd_loop_mdkind, simd_loop_md);
                 return true;
-            } else {
+            }
+            else {
                 return false;
             }
         }
@@ -65,7 +67,8 @@ private:
     void enableUnsafeAlgebraIfReduction(PHINode* Phi, Loop* L) const;
 };
 
-bool LowerSIMDLoop::hasSIMDLoopMetadata(Loop *L) const {
+bool LowerSIMDLoop::hasSIMDLoopMetadata(Loop *L) const
+{
     // Note: If a loop has 0 or multiple latch blocks, it's probably not a simd_loop anyway.
     if (BasicBlock* latch = L->getLoopLatch())
         for (BasicBlock::iterator II = latch->begin(), EE = latch->end(); II!=EE; ++II)
@@ -74,7 +77,8 @@ bool LowerSIMDLoop::hasSIMDLoopMetadata(Loop *L) const {
     return false;
 }
 
-void LowerSIMDLoop::enableUnsafeAlgebraIfReduction(PHINode* Phi, Loop* L) const {
+void LowerSIMDLoop::enableUnsafeAlgebraIfReduction(PHINode* Phi, Loop* L) const
+{
     typedef SmallVector<Instruction*, 8> chainVector;
     chainVector chain;
     Instruction *J;
@@ -111,7 +115,8 @@ void LowerSIMDLoop::enableUnsafeAlgebraIfReduction(PHINode* Phi, Loop* L) const 
                 DEBUG(dbgs() << "LSL: chain broke at " << *J << " because of wrong opcode\n");
                 return;
             }
-        } else {
+        }
+        else {
             // First arithmetic op in the chain.
             opcode = J->getOpcode();
             if (opcode!=Instruction::FAdd && opcode!=Instruction::FMul) {
@@ -127,7 +132,8 @@ void LowerSIMDLoop::enableUnsafeAlgebraIfReduction(PHINode* Phi, Loop* L) const 
     }
 }
 
-bool LowerSIMDLoop::runOnLoop(Loop *L, LPPassManager &LPM) {
+bool LowerSIMDLoop::runOnLoop(Loop *L, LPPassManager &LPM)
+{
     if (!simd_loop_mdkind)
         return false;           // Fast rejection test.
 
@@ -137,7 +143,7 @@ bool LowerSIMDLoop::runOnLoop(Loop *L, LPPassManager &LPM) {
     DEBUG(dbgs() << "LSL: simd_loop found\n");
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 4
     MDNode* n = L->getLoopID();
-    if( !n ) {
+    if (!n) {
         // Loop does not have a LoopID yet, so give it one.
         n = MDNode::get(getGlobalContext(), ArrayRef<Value*>(NULL));
         n->replaceOperandWith(0,n);

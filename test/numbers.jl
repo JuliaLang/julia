@@ -802,15 +802,15 @@ end
 
 for T in {Int8,Int16,Int32,Int64,Int128}
     @test abs(typemin(T)) == -typemin(T)
-    for x in {typemin(T),convert(T,-1),zero(T),one(T),typemax(T)}
-        @test signed(unsigned(x)) == x
-    end
+    #for x in {typemin(T),convert(T,-1),zero(T),one(T),typemax(T)}
+    #    @test signed(unsigned(x)) == x
+    #end
 end
 
-for T in {Uint8,Uint16,Uint32,Uint64,Uint128},
-    x in {typemin(T),one(T),typemax(T)}
-    @test unsigned(signed(x)) == x
-end
+#for T in {Uint8,Uint16,Uint32,Uint64,Uint128},
+#    x in {typemin(T),one(T),typemax(T)}
+#    @test unsigned(signed(x)) == x
+#end
 
 for S = {Int8,  Int16,  Int32,  Int64},
     U = {Uint8, Uint16, Uint32, Uint64}
@@ -1153,19 +1153,19 @@ for x=0:5, y=1:5
     @test div(uint(x),uint(y)) == div(x,y)
     @test div(uint(x),y) == div(x,y)
     @test div(x,uint(y)) == div(x,y)
-    @test div(uint(x),-y) == uint(div(x,-y))
+    @test div(uint(x),-y) == reinterpret(Uint,div(x,-y))
     @test div(-x,uint(y)) == div(-x,y)
 
     @test fld(uint(x),uint(y)) == fld(x,y)
     @test fld(uint(x),y) == fld(x,y)
     @test fld(x,uint(y)) == fld(x,y)
-    @test fld(uint(x),-y) == uint(fld(x,-y))
+    @test fld(uint(x),-y) == reinterpret(Uint,fld(x,-y))
     @test fld(-x,uint(y)) == fld(-x,y)
 
     @test cld(uint(x),uint(y)) == cld(x,y)
     @test cld(uint(x),y) == cld(x,y)
     @test cld(x,uint(y)) == cld(x,y)
-    @test cld(uint(x),-y) == uint(cld(x,-y))
+    @test cld(uint(x),-y) == reinterpret(Uint,cld(x,-y))
     @test cld(-x,uint(y)) == cld(-x,y)
 
     @test rem(uint(x),uint(y)) == rem(x,y)
@@ -1459,7 +1459,7 @@ end
 @test -0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001 ==
     -(0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001)
 
-@test isa(-0x00,Uint)
+@test isa(-0x00,Uint8)
 @test isa(-0x0000000000000000,Uint64)
 @test isa(-0x00000000000000000,Uint128)
 @test isa(-0x00000000000000000000000000000000,Uint128)
@@ -1901,9 +1901,9 @@ end
 
 for T = (Uint8,Int8,Uint16,Int16,Uint32,Int32,Uint64,Int64,Uint128,Int128)
     for n = 1:2:1000
-        @test convert(T,n*(n^typemax(T))) == one(T)
+        @test n*(n^typemax(T)) & typemax(T) == 1
         n = rand(T) | one(T)
-        @test convert(T,n*(n^typemax(T))) == one(T)
+        @test n*(n^typemax(T)) == 1
     end
 end
 
@@ -1983,3 +1983,8 @@ let a = zeros(Int, 3)
     @test a == [1, 1, 1]
 end
 
+@test_throws InexactError convert(Uint8, 256)
+@test_throws InexactError convert(Uint, -1)
+@test_throws InexactError convert(Int, big(2)^100)
+@test_throws InexactError convert(Int16, big(2)^100)
+@test_throws InexactError convert(Int, typemax(Uint))

@@ -7,10 +7,29 @@ New language features
   * Unicode version 7 is now supported for identifiers etcetera ([#7917]).
 
   * Type parameters now permit any arbitrary `isbits` type, not just
-    `Int` and `Bool` ([#6081]). 
+    `Int` and `Bool` ([#6081]).
+
+  * Keyword argument names can be computed, using syntax such as `f(; (name, val))` ([#7704]).
+
+  * (TODO pending final syntax) staged functions ([#7311]).
+
+Language changes
+----------------
+
+  * `None` is deprecated; use `Union()` instead ([#8423]).
+
+  * `Nothing` (the type of `nothing`) is renamed to `Void` ([#8423]).
 
 Library improvements
 --------------------
+
+  * `convert` now checks for overflow when truncating integers or converting between
+    signed and unsigned ([#5413]).
+
+  * Arithmetic is type-preserving for more types; e.g. `(x::Int8) + (y::Int8)` now
+    yields an `Int8` ([#3759]).
+
+  * Reductions (e.g. `reduce`, `sum`) widen small types (integers smaller than `Int`, and `Float16`).
 
   * New `Dates` module for calendar dates and other time-interval calculations ([#7654]).
 
@@ -34,6 +53,11 @@ Library improvements
     to provide uniform cross-platform behavior and up-to-date, locale-independent support
     for Unicode standards ([#5939]).
 
+  * New `Nullable` type for missing data ([#8152]).
+
+  * New `ordschur` and `ordschur!` functions for sorting a schur factorization by the eigenvalues.
+
+  * `deepcopy` recurses through immutable types and makes copies of their mutable fields ([#8560]).
 
 Julia v0.3.0 Release Notes
 ==========================
@@ -961,3 +985,9 @@ Too numerous to mention.
 [#7992]: https://github.com/JuliaLang/julia/issues/7992
 [#8011]: https://github.com/JuliaLang/julia/issues/8011
 [#8089]: https://github.com/JuliaLang/julia/issues/8089
+[#7704]: https://github.com/JuliaLang/julia/issues/7704
+[#5413]: https://github.com/JuliaLang/julia/issues/5413
+[#3759]: https://github.com/JuliaLang/julia/issues/3759
+[#7311]: https://github.com/JuliaLang/julia/issues/7311
+[#8423]: https://github.com/JuliaLang/julia/issues/8423
+[#8152]: https://github.com/JuliaLang/julia/pull/8152

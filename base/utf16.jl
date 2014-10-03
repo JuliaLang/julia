@@ -11,7 +11,7 @@ end
 utf16_is_lead(c::Uint16) = (c & 0xfc00) == 0xd800
 utf16_is_trail(c::Uint16) = (c & 0xfc00) == 0xdc00
 utf16_is_surrogate(c::Uint16) = (c & 0xf800) == 0xd800
-utf16_get_supplementary(lead::Uint16, trail::Uint16) = char((lead-0xd7f7)<<10 + trail)
+utf16_get_supplementary(lead::Uint16, trail::Uint16) = char(uint32(lead-0xd7f7)<<10 + trail)
 
 function endof(s::UTF16String)
     d = s.data
@@ -91,7 +91,7 @@ convert(T::Type{UTF16String}, data::AbstractArray{Int16}) =
 function convert(T::Type{UTF16String}, bytes::AbstractArray{Uint8})
     isempty(bytes) && return UTF16String(Uint16[0])
     isodd(length(bytes)) && throw(ArgumentError("odd number of bytes"))
-    data = reinterpret(Uint16, bytes)    
+    data = reinterpret(Uint16, bytes)
     # check for byte-order mark (BOM):
     if data[1] == 0xfeff        # native byte order
         d = Array(Uint16, length(data))

@@ -62,7 +62,7 @@ immutable UnitRange{T<:Real} <: OrdinalRange{T,Int}
     start::T
     stop::T
 
-    UnitRange(start, stop) = new(start, ifelse(stop >= start, stop, start-1))
+    UnitRange(start, stop) = new(start, ifelse(stop >= start, stop, start-one(stop-start)))
 end
 UnitRange{T<:Real}(start::T, stop::T) = UnitRange{T}(start, stop)
 
@@ -207,10 +207,10 @@ let smallint = (Int === Int64 ?
 
     function length{T <: smallint}(r::StepRange{T})
         isempty(r) && return int(0)
-        div(int(r.stop+r.step - r.start), int(r.step))
+        div(int(r.stop)+int(r.step) - int(r.start), int(r.step))
     end
 
-    length{T <: smallint}(r::UnitRange{T}) = int(r.stop - r.start + 1)
+    length{T <: smallint}(r::UnitRange{T}) = int(r.stop) - int(r.start) + 1
 end
 
 first{T}(r::OrdinalRange{T}) = oftype(T, r.start)

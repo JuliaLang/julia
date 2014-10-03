@@ -367,7 +367,7 @@ using ...Order
 
 import Core.Intrinsics: unbox, slt_int
 import ..Sort: sort!
-import ...Order: lt, DirectOrdering, uint_mapping
+import ...Order: lt, DirectOrdering
 
 typealias Floats Union(Float32,Float64)
 
