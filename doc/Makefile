@@ -31,7 +31,7 @@ help:
 	@echo "  devhelp    to make HTML files and a Devhelp project"
 	@echo "  epub       to make an epub"
 	@echo "  latex      to make LaTeX files, you can set PAPER=a4 or PAPER=letter"
-	@echo "  latexpdf   to make LaTeX files and run them through lualatex"
+	@echo "  latexpdf   to make LaTeX files and run them through pdflatex"
 	@echo "  text       to make text files"
 	@echo "  man        to make manual pages"
 	@echo "  texinfo    to make Texinfo files"
@@ -114,10 +114,9 @@ latex: juliadoc-pkg
 
 latexpdf: juliadoc-pkg
 	$(SPHINXBUILD) -b latex $(ALLSPHINXOPTS) $(BUILDDIR)/latex
-	@#Monkey-patch sphinx style file
-	sed -ibak '/graphicx/d' $(BUILDDIR)/latex/sphinx.sty
-	cd $(BUILDDIR)/latex; latexmk -lualatex JuliaLanguage
-	@echo "lualatex finished; the PDF files are in $(BUILDDIR)/latex."
+	@echo "Running LaTeX files through pdflatex..."
+	$(MAKE) -C $(BUILDDIR)/latex all-pdf
+	@echo "pdflatex finished; the PDF files are in $(BUILDDIR)/latex."
 
 text: juliadoc-pkg
 	$(SPHINXBUILD) -b text $(ALLSPHINXOPTS) $(BUILDDIR)/text
