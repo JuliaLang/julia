@@ -1458,10 +1458,9 @@ for (gtsv, gttrf, gttrs, elty) in
                        B::StridedVecOrMat{$elty})
             chkstride1(B)
             n = length(d)
-            if length(dl) != n - 1 || length(du) != n - 1
-                throw(DimensionMismatch("gtsv!"))
-            end
-            if n != size(B,1) throw(DimensionMismatch("gtsv!")) end
+            n >= length(dl) >= n - 1 && n >= length(du) >= n - 1 || throw(DimensionMismatch("sub- or superdiagonal has wrong length"))
+            n == size(B,1) || throw(DimensionMismatch("right hand side has wrong number of rows"))
+            n == 0 && return B # Early exit if possible
             info = Array(BlasInt, 1)
             ccall(($(string(gtsv)),liblapack), Void,
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
