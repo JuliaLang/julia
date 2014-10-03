@@ -188,6 +188,7 @@ end
 type LocalProcess
     id::Int
     bind_addr::IPAddr
+    bind_port::Uint16
     LocalProcess() = new(1)
 end
 
@@ -944,10 +945,15 @@ function start_worker(out::IO)
     # exit when process 1 shut down. Don't yet know why.
     #redirect_stderr(STDOUT)
 
-    (actual_port,sock) = listenany(uint16(9009))
+    if LPROC.bind_port == 0
+        (actual_port,sock) = listenany(uint16(9009))
+        LPROC.bind_port = actual_port
+    else
+        sock = listen(LPROC.bind_port)
+    end
     sock.ccb = accept_handler
     print(out, "julia_worker:")  # print header
-    print(out, "$(dec(actual_port))#") # print port
+    print(out, "$(dec(LPROC.bind_port))#") # print port
     print(out, LPROC.bind_addr)
     print(out, '\n')
     flush(out)
@@ -1171,7 +1177,7 @@ function launch_on_machine(manager::SSHManager, config::Dict, resp_arr::Array, m
 
     thisconfig = copy(config) # config for this worker
 
-    # machine could be of the format [user@]host[:port] bind_addr
+    # machine could be of the format [user@]host[:port] bind_addr[:bind_port]
     machine_bind = split(machine)
     if length(machine_bind) > 1
         exeflags = `--bind-to $(machine_bind[2]) $exeflags_base`
