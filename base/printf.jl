@@ -7,7 +7,7 @@ const SmallFloatingPoint = Union(Float64,Float32,Float16)
 const SmallNumber = Union(SmallFloatingPoint,Base.Signed64,Base.Unsigned64,Uint128,Int128)
 
 function gen(s::String)
-    args = {}
+    args = []
     blk = Expr(:block, :(local neg, pt, len, exp, do_out, args))
     for x in parse(s)
         if isa(x,String)
@@ -34,7 +34,7 @@ end
 
 function parse(s::String)
     # parse format string in to stings and format tuples
-    list = {}
+    list = []
     i = j = start(s)
     while !done(s,j)
         c, k = next(s,j)

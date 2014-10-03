@@ -84,7 +84,7 @@ end
 subtypes(m::Module, x::DataType) = sort(collect(_subtypes(m, x)), by=string)
 subtypes(x::DataType) = subtypes(Main, x)
 
-subtypetree(x::DataType, level=-1) = (level == 0 ? (x, {}) : (x, {subtypetree(y, level-1) for y in subtypes(x)}))
+subtypetree(x::DataType, level=-1) = (level == 0 ? (x, []) : (x, Any[subtypetree(y, level-1) for y in subtypes(x)]))
 
 # function reflection
 isgeneric(f::ANY) = (isa(f,Function)||isa(f,DataType)) && isa(f.env,MethodTable)
@@ -93,7 +93,7 @@ function_name(f::Function) = isgeneric(f) ? f.env.name : (:anonymous)
 
 code_lowered(f::Callable,t::(Type...)) = map(m->uncompressed_ast(m.func.code), methods(f,t))
 methods(f::ANY,t::ANY) = Any[m[3] for m in _methods(f,t,-1)]
-_methods(f::ANY,t::ANY,lim) = _methods(f,{(t::Tuple)...},length(t::Tuple),lim,{})
+_methods(f::ANY,t::ANY,lim) = _methods(f, Any[(t::Tuple)...], length(t::Tuple), lim, [])
 function _methods(f::ANY,t::Array,i,lim::Integer,matching::Array{Any,1})
     if i == 0
         new = ccall(:jl_matching_methods, Any, (Any,Any,Int32), f, tuple(t...), lim)

@@ -19,7 +19,7 @@ convert{T<:Integer}(::Type{Rational{T}}, x::MathConst) = convert(Rational{T}, fl
 hash(x::MathConst, h::Uint) = hash(object_id(x), h)
 
 -(x::MathConst) = -float64(x)
-for op in {:+, :-, :*, :/, :^}
+for op in Symbol[:+, :-, :*, :/, :^]
     @eval $op(x::MathConst, y::MathConst) = $op(float64(x),float64(y))
 end
 

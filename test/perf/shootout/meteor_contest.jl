@@ -15,17 +15,17 @@ const W  = 3
 const SW = 4
 const SE = 5
 
-const rotate = {E => NE, NE => NW, NW => W, W => SW, SW => SE, SE => E}
-const flip   = {E => W, NE => NW, NW => NE, W => E, SW => SE, SE => SW}
+const rotate = (Int=>Int)[E => NE, NE => NW, NW => W, W => SW, SW => SE, SE => E]
+const flip   = (Int=>Int)[E => W, NE => NW, NW => NE, W => E, SW => SE, SE => SW]
 
-const move = {
+const move = (Int=>Function)[
     E  => (x, y) -> (x +   1,     y),
     W  => (x, y) -> (x -   1,     y),
     NE => (x, y) -> (x + y%2,     y - 1),
     NW => (x, y) -> (x + y%2 - 1, y - 1),
     SE => (x, y) -> (x + y%2,     y + 1),
     SW => (x, y) -> (x + y%2 - 1, y + 1)
-}
+]
 
 const pieces = (
     (E,  E,  E,  SE),

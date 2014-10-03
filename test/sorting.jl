@@ -7,7 +7,7 @@
 @test select([3,6,30,1,9],3) == 6
 @test select([3,6,30,1,9],3:4) == [6,9]
 let a=[1:10]
-    for r in {2:4, 1:2, 10:10, 4:2, 2:1, 4:-1:2, 2:-1:1, 10:-1:10, 4:1:3, 1:2:8, 10:-3:1}
+    for r in Any[2:4, 1:2, 10:10, 4:2, 2:1, 4:-1:2, 2:-1:1, 10:-1:10, 4:1:3, 1:2:8, 10:-3:1]
         @test select(a, r) == [r]
         @test select(a, r, rev=true) == (11 .- [r])
     end
@@ -26,7 +26,7 @@ end
 @test searchsorted([1:5, 1:5, 1:5], 1, 6, 10, Base.Order.Forward) == 6:6
 @test searchsorted(ones(15), 1, 6, 10, Base.Order.Forward) == 6:10
 
-for (rg,I) in {(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)}
+for (rg,I) in [(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)]
     rg_r = reverse(rg)
     rgv, rgv_r = [rg], [rg_r]
     for i = I

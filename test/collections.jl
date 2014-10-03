@@ -36,7 +36,7 @@ end
 for i=10000:20000
     @test h[i]==i+1
 end
-h = {"a" => 3}
+h = (Any=>Any)["a" => 3]
 @test h["a"] == 3
 h["a","b"] = 4
 @test h["a","b"] == h[("a","b")] == 4
@@ -54,7 +54,7 @@ let
     @test get_KeyError
 end
 
-_d = {"a"=>0}
+_d = (Any=>Any)["a"=>0]
 @test isa([k for k in filter(x->length(x)==1, collect(keys(_d)))], Vector{Any})
 
 # issue #1821
@@ -100,10 +100,10 @@ begin
 end
 
 @test  isequal(Dict(), Dict())
-@test  isequal({1 => 1}, {1 => 1})
-@test !isequal({1 => 1}, {})
-@test !isequal({1 => 1}, {1 => 2})
-@test !isequal({1 => 1}, {2 => 1})
+@test  isequal((Any=>Any)[1 => 1], (Any=>Any)[1 => 1])
+@test !isequal((Any=>Any)[1 => 1], Dict())
+@test !isequal((Any=>Any)[1 => 1], (Any=>Any)[1 => 2])
+@test !isequal((Any=>Any)[1 => 1], (Any=>Any)[2 => 1])
 
 # Generate some data to populate dicts to be compared
 data_in = [ (rand(1:1000), randstring(2)) for _ in 1:1001 ]
@@ -144,14 +144,12 @@ d4[1001] = randstring(3)
 # Here is what currently happens when dictionaries of different types
 # are compared. This is not necessarily desirable. These tests are
 # descriptive rather than proscriptive.
-@test !isequal({1 => 2}, {"dog" => "bone"})
+@test !isequal((Any=>Any)[1 => 2], (Any=>Any)["dog" => "bone"])
 @test isequal(Dict{Int, Int}(), Dict{String, String}())
 
 # get! (get with default values assigned to the given location)
 
-let f(x) = x^2,
-    d = {8=>19},
-    def = {}
+let f(x) = x^2, d = (Any=>Any)[8=>19]
 
     @test get!(d, 8, 5) == 19
     @test get!(d, 19, 2) == 2
@@ -168,7 +166,7 @@ let f(x) = x^2,
         f(4)
     end == 16
 
-    @test d == {8=>19, 19=>2, 42=>4}
+    @test d == (Any=>Any)[8=>19, 19=>2, 42=>4]
 end
 
 # show
@@ -206,9 +204,8 @@ end
 
 
 # issue #2540
-d = {x => 1
-    for x in ['a', 'b', 'c']}
-@test d == {'a'=>1, 'b'=>1, 'c'=> 1}
+d = (Any=>Any)[x => 1 for x in ['a', 'b', 'c']]
+@test d == (Any=>Any)['a'=>1, 'b'=>1, 'c'=> 1]
 
 # issue #2629
 d = (String => String)[ a => "foo" for a in ["a","b","c"]]
@@ -234,7 +231,7 @@ end
 @test  isempty(Set())
 @test !isempty(Set([1]))
 @test !isempty(Set(["banana", "apple"]))
-@test !isempty(Set({1, 1:10, "pear"}))
+@test !isempty(Set([1, 1:10, "pear"]))
 
 # ordering
 @test Set() < Set([1])
@@ -284,7 +281,7 @@ data_out = collect(s)
 @test is(typeof(Set{Int}([3])), Set{Int})
 
 # eltype
-@test is(eltype(Set({1,"hello"})), Any)
+@test is(eltype(Set([1,"hello"])), Any)
 @test is(eltype(Set{String}()), String)
 
 # no duplicates
@@ -437,8 +434,8 @@ s3 = Set{ASCIIString}(["baz"])
 # isequal
 @test  isequal(Set(), Set())
 @test !isequal(Set(), Set(1))
-@test  isequal(Set{Any}({1,2}), Set{Int}([1,2]))
-@test !isequal(Set{Any}({1,2}), Set{Int}([1,2,3]))
+@test  isequal(Set{Any}(Any[1,2]), Set{Int}([1,2]))
+@test !isequal(Set{Any}(Any[1,2]), Set{Int}([1,2,3]))
 
 # Comparison of unrelated types seems rather inconsistent
 

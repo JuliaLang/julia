@@ -273,7 +273,7 @@ map(f::Callable, S::SharedArray) = (S2 = similar(S); S2[:] = S[:]; map!(f, S2); 
 
 reduce(f::Function, S::SharedArray) =
     mapreduce(fetch, f,
-              { @spawnat p reduce(f, S.loc_subarr_1d) for p in procs(S) })
+              Any[ @spawnat p reduce(f, S.loc_subarr_1d) for p in procs(S) ])
 
 
 function map!(f::Callable, S::SharedArray)

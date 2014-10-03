@@ -300,19 +300,19 @@ function show_block(io::IO, head, args::Vector, body, indent::Int)
     show_list(io, args, ", ", indent)
 
     ind = is(head, :module) || is(head, :baremodule) ? indent : indent + indent_width
-    exs = (is_expr(body, :block) || is_expr(body, :body)) ? body.args : {body}
+    exs = (is_expr(body, :block) || is_expr(body, :body)) ? body.args : Any[body]
     for ex in exs
         if !is_linenumber(ex); print(io, '\n', " "^ind); end
         show_unquoted(io, ex, ind)
     end
     print(io, '\n', " "^indent)
 end
-show_block(io::IO,head,    block,i::Int) = show_block(io,head,{},   block,i)
+show_block(io::IO,head,    block,i::Int) = show_block(io,head, [], block,i)
 function show_block(io::IO, head, arg, block, i::Int)
     if is_expr(arg, :block)
         show_block(io, head, arg.args, block, i)
     else
-        show_block(io, head, {arg}, block, i)
+        show_block(io, head, Any[arg], block, i)
     end
 end
 
@@ -849,7 +849,7 @@ function alignment(
     rows::AbstractVector, cols::AbstractVector,
     cols_if_complete::Integer, cols_otherwise::Integer, sep::Integer
 )
-    a = {}
+    a = []
     for j in cols
         l = r = 0
         for i in rows

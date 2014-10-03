@@ -651,10 +651,10 @@ cf1 = complex(f1)
 @check_bit_operation (.-)(u1, b2)  Matrix{Uint8}
 @check_bit_operation (.*)(u1, b2) Matrix{Uint8}
 
-for (x1,t1) = {(f1, Float64),
-               (ci1, Complex{Int}),
-               (cu1, Complex{Uint8}),
-               (cf1, Complex128)}
+for (x1,t1) = [(f1, Float64),
+              (ci1, Complex{Int}),
+              (cu1, Complex{Uint8}),
+              (cf1, Complex128)]
     @check_bit_operation (.+)(x1, b2)  Matrix{t1}
     @check_bit_operation (.-)(x1, b2)  Matrix{t1}
     @check_bit_operation (.*)(x1, b2) Matrix{t1}
@@ -837,7 +837,7 @@ timesofar("datamove")
 
 ## countnz & find ##
 
-for m = 0:v1, b1 in {randbool(m), trues(m), falses(m)}
+for m = 0:v1, b1 in Any[randbool(m), trues(m), falses(m)]
     @check_bit_operation countnz(b1) Int
 
     @check_bit_operation findfirst(b1) Int

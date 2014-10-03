@@ -272,7 +272,7 @@ function setindex!(a::Array, s::SubDArray, I::UnitRange{Int}...)
     offs = [isa(J[i],Int) ? J[i]-1 : first(J[i])-1 for i=1:n]
     @sync begin
         for i = 1:length(d.chunks)
-            K_c = {d.indexes[i]...}
+            K_c = Any[d.indexes[i]...]
             K = [ intersect(J[j],K_c[j]) for j=1:n ]
             if !any(isempty, K)
                 idxs = [ I[j][K[j]-offs[j]] for j=1:n ]
@@ -302,7 +302,7 @@ map(f::Callable, d::DArray) = DArray(I->map(f, localpart(d)), d)
 
 reduce(f::Function, d::DArray) =
     mapreduce(fetch, f,
-              { @spawnat p reduce(f, localpart(d)) for p in procs(d) })
+              Any[ @spawnat p reduce(f, localpart(d)) for p in procs(d) ])
 
               
 function map!(f::Callable, d::DArray) 

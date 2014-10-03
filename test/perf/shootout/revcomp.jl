@@ -6,7 +6,7 @@
 # FIXME(davekong) Is there support in Julia for doing more efficient IO and
 # handling of byte arrays?
 
-const revcompdata = {
+const revcompdata = (Char=>Char)[
    'A'=> 'T', 'a'=> 'T',
    'C'=> 'G', 'c'=> 'G',
    'G'=> 'C', 'g'=> 'C',
@@ -23,7 +23,7 @@ const revcompdata = {
    'D'=> 'H', 'd'=> 'H',
    'B'=> 'V', 'b'=> 'V',
    'N'=> 'N', 'n'=> 'N',
-}
+]
 
 function print_buff(b)
     br = reverse(b)
