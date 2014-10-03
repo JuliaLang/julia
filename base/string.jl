@@ -656,10 +656,11 @@ isascii(s::SubString{ASCIIString}) = true
 
 ## hashing strings ##
 
-const memhash = Uint == Uint64 ? :memhash_seed : :memhash32_seed
+const memhash = Uint === Uint64 ? :memhash_seed : :memhash32_seed
+const memhash_seed = Uint === Uint64 ? 0x71e729fd56419c81 : 0x56419c81
 
 function hash{T<:ByteString}(s::Union(T,SubString{T}), h::Uint)
-    h += uint(0x71e729fd56419c81)
+    h += memhash_seed
     ccall(memhash, Uint, (Ptr{Uint8}, Csize_t, Uint32), s, sizeof(s), itrunc(Uint32,h)) + h
 end
 hash(s::String, h::Uint) = hash(bytestring(s), h)
