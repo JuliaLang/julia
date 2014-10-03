@@ -185,7 +185,7 @@ end
 
 const hashis_seed = Uint === Uint64 ? 0x88989f1fc7dea67d : 0xc7dea67d
 function hash(s::IntSet, h::Uint)
-    h += uint(0x88989f1fc7dea67d)
+    h += uint(hashis_seed)
     h += hash(s.fill1s)
     filln = s.fill1s ? ~zero(eltype(s.bits)) : zero(eltype(s.bits))
     for x in s.bits
