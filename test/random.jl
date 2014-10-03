@@ -26,11 +26,6 @@ rand!(MersenneTwister(0), A)
 @test A == [0.8236475079774124  0.16456579813368521;
             0.9103565379264364  0.17732884646626457]
 
-@test rand(0:3:1000) in 0:3:1000
-coll = {2, uint128(128), big(619), "string", 'c'}
-@test rand(coll) in coll
-@test issubset(rand(coll, 2, 3), coll)
-
 # randn
 @test randn(MersenneTwister(42)) == -0.5560268761463861
 A = zeros(2, 2)
@@ -49,18 +44,9 @@ for T in (Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Int128, Uint
     @test mod(r,2)==1
 
     if T<:Integer && T!==Char
-        if T.size < Int.size
-            x = rand(typemin(T):typemax(T))
-            @test isa(x,T)
-            @test typemin(T) <= x <= typemax(T)
-        else # we bound the length of the range to typemax(T) so that there is no overflow
-            for (a, b) in ((typemin(T),typemin(T)+typemax(T)-one(T)),
-                           (one(T),typemax(T)))
-                x = rand(a:b)
-                @test isa(x,T)
-                @test a <= x <= b
-            end
-        end
+        x = rand(typemin(T):typemax(T))
+        @test isa(x,T)
+        @test typemin(T) <= x <= typemax(T)
     end
 end
 
