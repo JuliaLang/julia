@@ -227,7 +227,7 @@ function syrk_wrapper!{T<:BlasFloat}(C::StridedMatrix{T}, tA::Char, A::StridedMa
         tAt = 'T'
     end
     nC == mA || throw(DimensionMismatch("output matrix has size: $(nC), but should have size $(mA)"))
-    if mA == 0 || nA == 0; return C; end
+    if mA == 0 || nA == 0; return fill!(C,0); end
     if mA == 2 && nA == 2; return matmul2x2!(C,tA,tAt,A,A); end
     if mA == 3 && nA == 3; return matmul3x3!(C,tA,tAt,A,A); end
 
@@ -245,7 +245,7 @@ function herk_wrapper!{T<:BlasFloat}(C::StridedMatrix{T}, tA::Char, A::StridedMa
         tAt = 'C'
     end
     nC == mA || throw(DimensionMismatch("output matrix has size: $(nC), but should have size $(mA)"))
-    if mA == 0 || nA == 0; return C; end
+    if mA == 0 || nA == 0; return fill!(C,0); end
     if mA == 2 && nA == 2; return matmul2x2!(C,tA,tAt,A,A); end
     if mA == 3 && nA == 3; return matmul3x3!(C,tA,tAt,A,A); end
 
