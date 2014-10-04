@@ -33,7 +33,6 @@ function underline(str, maxlen)
 	join(map(n->str^n, maxlen), " ")
 end
 
-println(":orphan:\n")
 isheader = true
 println(underline("=", maxlen))
 for entry in entries
