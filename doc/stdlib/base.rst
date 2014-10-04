@@ -1648,11 +1648,11 @@ I/O
 
 .. function:: takebuf_array(b::IOBuffer)
 
-   Obtain the contents of an ``IOBuffer`` as an array, without copying.
+   Obtain the contents of an ``IOBuffer`` as an array, without copying. Afterwards, the IOBuffer is reset to its initial state.
 
 .. function:: takebuf_string(b::IOBuffer)
 
-   Obtain the contents of an ``IOBuffer`` as a string, without copying.
+   Obtain the contents of an ``IOBuffer`` as a string, without copying. Afterwards, the IOBuffer is reset to its initial state.
 
 .. function:: fdio([name::String, ]fd::Integer[, own::Bool]) -> IOStream
 

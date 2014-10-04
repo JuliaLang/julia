@@ -339,8 +339,9 @@
 
    Create a deep copy of \"x\": everything is copied recursively,
    resulting in a fully independent object. For example, deep-copying
-   an array produces a new array whose elements are deep-copies of the
-   original elements.
+   an array produces a new array whose elements are deep copies of the
+   original elements. Calling *deepcopy* on an object should generally
+   have the same effect as serializing and then deserializing it.
 
    As a special case, functions can only be actually deep-copied if
    they are anonymous, otherwise they are just copied. The difference
@@ -370,10 +371,9 @@
 
 ("Base","convert","convert(type, x)
 
-   Try to convert \"x\" to the given type. Conversions from floating
-   point to integer, rational to integer, and complex to real will
-   raise an \"InexactError\" if \"x\" cannot be represented exactly in
-   the new type.
+   Try to convert \"x\" to the given type. Conversion to a different
+   numeric type will raise an \"InexactError\" if \"x\" cannot be
+   represented exactly in the new type.
 
 "),
 
@@ -2375,14 +2375,14 @@
 ("Base","takebuf_array","takebuf_array(b::IOBuffer)
 
    Obtain the contents of an \"IOBuffer\" as an array, without
-   copying.
+   copying. Afterwards, the IOBuffer is reset to its initial state.
 
 "),
 
 ("Base","takebuf_string","takebuf_string(b::IOBuffer)
 
    Obtain the contents of an \"IOBuffer\" as a string, without
-   copying.
+   copying. Afterwards, the IOBuffer is reset to its initial state.
 
 "),
 
@@ -4427,9 +4427,10 @@ popdisplay(d::Display)
 
 "),
 
-("Base","iround","iround(x) -> Integer
+("Base","iround","iround([T], x) -> Integer
 
-   Returns the nearest integer to \"x\".
+   Returns the nearest integer to \"x\", converted to an integer type,
+   optionally passed as the first argument.
 
 "),
 
@@ -4445,9 +4446,11 @@ popdisplay(d::Display)
 
 "),
 
-("Base","itrunc","itrunc(x) -> Integer
+("Base","itrunc","itrunc([T], x) -> Integer
 
-   Returns the nearest integer not greater in magnitude than \"x\".
+   Returns the nearest integer not greater in magnitude than \"x\",
+   converted to an integer type, optionally passed as the first
+   argument.
 
 "),
 
@@ -5144,13 +5147,16 @@ popdisplay(d::Display)
 
 ("Base","signed","signed(x)
 
-   Convert a number to a signed integer
+   Convert a number to a signed integer. If the argument is unsigned,
+   it is reinterpreted as signed without checking for overflow.
 
 "),
 
 ("Base","unsigned","unsigned(x) -> Unsigned
 
-   Convert a number to an unsigned integer
+   Convert a number to an unsigned integer. If the argument is signed,
+   it is reinterpreted as unsigned without checking for negative
+   values.
 
 "),
 
@@ -6769,6 +6775,10 @@ popdisplay(d::Display)
    A multidimensional FFT simply performs this operation along each
    transformed dimension of \"A\".
 
+   Higher performance is usually possible with multi-threading. Use
+   *FFTW.set_num_threads(np)* to use *np* threads, if you have *np*
+   processors.
+
 "),
 
 ("Base","fft!","fft!(A[, dims])
@@ -7182,13 +7192,13 @@ popdisplay(d::Display)
 
 "),
 
-("Base","addprocs","addprocs(n; cman::ClusterManager=LocalManager()) -> List of process identifiers
+("Base","addprocs","addprocs(n; manager::ClusterManager=LocalManager()) -> List of process identifiers
 
    \"addprocs(4)\" will add 4 processes on the local machine. This can
    be used to take advantage of multiple cores.
 
-   Keyword argument \"cman\" can be used to provide a custom cluster
-   manager to start workers. For example Beowulf clusters are
+   Keyword argument \"manager\" can be used to provide a custom
+   cluster manager to start workers. For example Beowulf clusters are
    supported via a custom cluster manager implemented in  package
    \"ClusterManagers\".
 
@@ -7204,10 +7214,11 @@ popdisplay(d::Display)
    a shared file system.
 
    \"machines\" is a vector of host definitions of the form
-   \"[user@]host[:port] [bind_addr]\". \"user\" defaults to current
-   user, \"port\" to the standard ssh port. Optionally, in case of
-   multi-homed hosts, \"bind_addr\" may be used to explicitly specify
-   an interface.
+   \"[user@]host[:port] [bind_addr[:port]]\". \"user\" defaults to
+   current user, \"port\" to the standard ssh port. A worker is
+   started at each host definition. If the optional
+   \"[bind_addr[:port]]\" is specified, other workers will connect to
+   this worker at the specified \"bind_addr\" and \"port\".
 
    Keyword arguments:
 
@@ -7219,6 +7230,9 @@ popdisplay(d::Display)
 
    \"sshflags\" : specifies additional ssh options, e.g.
    \"sshflags=`-i /home/foo/bar.pem`\" .
+
+   \"max_parallel\" : specifies the maximum number of workers being
+   launched in parallel at a host. Defaults to 10.
 
 "),
 
@@ -9758,10 +9772,10 @@ Millisecond(v)
    \"A\".  For Hermitian \"A\" (equivalent to symmetric \"A\" for non-
    complex \"A\") the \"BunchKaufman\" factorization is used.
    Otherwise an LU factorization is used. For rectangular \"A\" the
-   result is the minimum-norm least squares solution computed by
-   reducing \"A\" to bidiagonal form and solving the bidiagonal least
-   squares problem.  For sparse, square \"A\" the LU factorization
-   (from UMFPACK) is used.
+   result is the minimum-norm least squares solution computed by a
+   pivoted QR factorization of \"A\" and a rank estimate of A based on
+   the R factor. For sparse, square \"A\" the LU factorization (from
+   UMFPACK) is used.
 
 "),
 
@@ -10199,7 +10213,7 @@ Millisecond(v)
 
 ("Base","schurfact!","schurfact!(A)
 
-   Computer the Schur factorization of \"A\", overwriting \"A\" in the
+   Computes the Schur factorization of \"A\", overwriting \"A\" in the
    process. See \"schurfact()\"
 
 "),
@@ -10207,6 +10221,38 @@ Millisecond(v)
 ("Base","schur","schur(A) -> Schur[:T], Schur[:Z], Schur[:values]
 
    See \"schurfact()\"
+
+"),
+
+("Base","ordschur","ordschur(Q, T, select) -> Schur
+
+   Reorders the Schur factorization of a real matrix \"A=Q*T*Q'\"
+   according to the logical array \"select\" returning a Schur object
+   \"F\". The selected eigenvalues appear in the leading diagonal of
+   \"F[:Schur]\" and the the corresponding leading columns of
+   \"F[:vectors]\" form an orthonormal basis of the corresponding
+   right invariant subspace. A complex conjugate pair of eigenvalues
+   must be either both included or excluded via \"select\".
+
+"),
+
+("Base","ordschur!","ordschur!(Q, T, select) -> Schur
+
+   Reorders the Schur factorization of a real matrix \"A=Q*T*Q'\",
+   overwriting \"Q\" and \"T\" in the process. See \"ordschur()\"
+
+"),
+
+("Base","ordschur","ordschur(S, select) -> Schur
+
+   Reorders the Schur factorization \"S\" of type \"Schur\".
+
+"),
+
+("Base","ordschur!","ordschur!(S, select) -> Schur
+
+   Reorders the Schur factorization \"S\" of type \"Schur\",
+   overwriting \"S\" in the process. See \"ordschur()\"
 
 "),
 
@@ -10894,8 +10940,8 @@ Millisecond(v)
 
 ("Base.LinAlg.BLAS","gemv!","gemv!(tA, alpha, A, x, beta, y)
 
-   Update the vector \"y\" as \"alpha*A*x + beta*x\" or \"alpha*A'x +
-   beta*x\" according to \"tA\" (transpose \"A\"). Returns the updated
+   Update the vector \"y\" as \"alpha*A*x + beta*y\" or \"alpha*A'x +
+   beta*y\" according to \"tA\" (transpose \"A\"). Returns the updated
    \"y\".
 
 "),
@@ -10945,7 +10991,7 @@ Millisecond(v)
 
 ("Base.LinAlg.BLAS","symv!","symv!(ul, alpha, A, x, beta, y)
 
-   Update the vector \"y\" as \"alpha*A*y + beta*y\". \"A\" is assumed
+   Update the vector \"y\" as \"alpha*A*x + beta*y\". \"A\" is assumed
    to be symmetric.  Only the \"ul\" triangle of \"A\" is used.
    Returns the updated \"y\".
 
