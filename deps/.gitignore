@@ -30,3 +30,4 @@
 /utf8proc-*
 /librandom.*
 /virtualenv-*
+/julia-env
