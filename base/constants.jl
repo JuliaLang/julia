@@ -15,42 +15,57 @@ convert{T<:Integer}(::Type{Rational{T}}, x::MathConst) = convert(Rational{T}, fl
 
 =={s}(::MathConst{s}, ::MathConst{s}) = true
 ==(::MathConst, ::MathConst) = false
+==(::Real, ::MathConst) = false
+==(::MathConst, ::Real) = false
 
 <(x::MathConst, y::MathConst) = float(x) < float(y)
 <=(x::MathConst, y::MathConst) = float(x) <= float(y)
 
-<(x::Real, y::MathConst) = x <= prevfloat(y)
-<(x::MathConst, y::Real) = nextfloat(x) <= y
+<{T<:FloatingPoint}(x::T, y::MathConst) = x <= prevfloat(T,y)
+<{T<:FloatingPoint}(x::MathConst, y::T) = nextfloat(T,x) <= y
+
+<(x::Integer, y::MathConst) = x < float(y)
+<(x::MathConst, y::Integer) = float(x) < y
+
 
 function <(x::BigFloat, c::MathConst)
     p = precision(x)
-    y = with_bigfloat_precision(p) do
+    y = with_bigfloat_precision(p+32) do
         big(c)
-    end
-    while x == y
-        p += 16
-        y = with_bigfloat_precision(p) do
-            big(c)
-        end
     end
     x < y
 end
 function <(c::MathConst, x::BigFloat)
     p = precision(x)
-    y = with_bigfloat_precision(p) do
+    y = with_bigfloat_precision(p+32) do
         big(c)
-    end
-    while x == y
-        p += 16
-        y = with_bigfloat_precision(p) do
-            big(c)
-        end
     end
     y < x
 end
 
 <=(x::Real, y::MathConst) = x < y
 <=(x::MathConst, y::Real) = x < y
+
+# temporary fix until #8505 
+untype{T}(::Type{Type{T}}) = T
+
+stagedfunction prevfloat{T<:FloatingPoint,s}(t::Type{T},c::MathConst{s})
+    bc = big(c())
+    f = with_rounding(BigFloat,RoundDown) do
+        convert(untype(t),bc)
+    end
+    :($f)
+end
+stagedfunction nextfloat{T<:FloatingPoint,s}(t::Type{T},c::MathConst{s})
+    bc = big(c())
+    f = with_rounding(BigFloat,RoundUp) do
+        convert(untype(t),bc)
+    end
+    :($f)
+end
+nextfloat(c::MathConst) = nextfloat(Float64,c)
+prevfloat(c::MathConst) = prevfloat(Float64,c)
+
 
 # TODO: Rationals
 
@@ -80,8 +95,6 @@ macro math_const(sym, val, def)
         $bigconvert
         Base.convert(::Type{Float64}, ::MathConst{$qsym}) = $val
         # TODO: fix this
-        Base.prevfloat(::MathConst{$qsym}) = $val
-        Base.nextfloat(::MathConst{$qsym}) = $val
         Base.convert(::Type{Float32}, ::MathConst{$qsym}) = $(float32(val))
         @assert isa(big($esym), BigFloat)
         @assert float64($esym) == float64(big($esym))

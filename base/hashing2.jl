@@ -275,8 +275,6 @@ function cmp(x::Real, y::Real)
         return c
     end
 end
-    
-    
 
 function ==(x::Real, y::Real)
     (isnan(x) || isnan(y)) && return false

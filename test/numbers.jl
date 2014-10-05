@@ -799,6 +799,11 @@ end
 @test !(1//3 == NaN)
 @test !(1//3 > NaN)
 
+@test float(pi) < pi
+@test !(float(pi) > pi)
+@test float(pi) <= pi
+@test !(float(pi) >= pi)
+@test float(pi) != pi
 
 @test sqrt(2) == 1.4142135623730951
 
