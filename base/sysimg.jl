@@ -220,6 +220,7 @@ include("REPLCompletions.jl")
 include("REPL.jl")
 include("client.jl")
 include("markdown/Markdown.jl")
+include("docs.jl")
 
 # (s)printf macros
 include("printf.jl")
