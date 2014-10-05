@@ -1408,7 +1408,7 @@
 		 (loop lst nxt)
 		 (let ((params (parse-arglist s closer)))
 		   `(vcat ,@params ,@lst ,nxt))))
-	    ((#\] #\})
+	    ((#\])
 	     (error (string "unexpected \"" t "\"")))
 	    (else
 	     (error "missing separator in array expression")))))))
@@ -1758,45 +1758,9 @@
 		     (else
 		      (error "missing separator in tuple")))))))))
 
-	  ;; cell expression
+	  ;; TODO this awaits a decision on {} syntax in 0.4
 	  ((eqv? t #\{ )
-	   (take-token s)
-	   (if (eqv? (require-token s) #\})
-	       (begin (take-token s) '(cell1d))
-	       (let ((vex (parse-cat s #\})))
-                 (if (null? vex)
-                     '(cell1d)
-                     (case (car vex)
-                       ((comprehension)
-                        `(typed_comprehension (top Any) ,@(cdr vex)))
-                       ((dict_comprehension)
-                        `(typed_dict_comprehension (=> (top Any) (top Any)) ,@(cdr vex)))
-                       ((dict)
-                        `(typed_dict (=> (top Any) (top Any)) ,@(cdr vex)))
-                       ((hcat)
-                        `(cell2d 1 ,(length (cdr vex)) ,@(cdr vex)))
-                       (else  ; (vcat ...)
-			(if (and (pair? (cadr vex)) (eq? (caadr vex) 'row))
-			    (let ((nr (length (cdr vex)))
-				  (nc (length (cdadr vex))))
-			      ;; make sure all rows are the same length
-			      (if (not (every
-					(lambda (x)
-					  (and (pair? x)
-					       (eq? (car x) 'row)
-					       (length= (cdr x) nc)))
-					(cddr vex)))
-				  (error "inconsistent shape in cell expression"))
-			      `(cell2d ,nr ,nc
-				       ,@(apply append
-						;; transpose to storage order
-						(apply map list
-						       (map cdr (cdr vex))))))
-			    (if (any (lambda (x) (and (pair? x)
-						      (eq? (car x) 'row)))
-				     (cddr vex))
-				(error "inconsistent shape in cell expression")
-				`(cell1d ,@(cdr vex))))))))))
+	   (error "{} syntax for Any arrays / dicts has been removed in 0.4dev"))
 
 	  ;; cat expression
 	  ((eqv? t #\[ )
