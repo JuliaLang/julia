@@ -1017,6 +1017,9 @@ export
     DateTime,
     now,
 
+# docstrings
+    Docstrings,
+
 # errors
     assert,
     backtrace,
