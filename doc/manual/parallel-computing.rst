@@ -729,13 +729,15 @@ The ``manage`` method takes the following arguments:
     - ``manager::ClusterManager`` - used to dispatch the call to the appropriate implementation 
     - ``id::Integer`` - The Julia process id
     - ``config::Dict`` - configuration dictionary for the worker. The data may have been modified by the ``launch`` method
-    - ``op::Symbol`` - The ``manage`` method is called at different times during the worker's lifetime.
-                    ``op`` is one of ``:register``, ``:deregister``, ``:interrupt`` or ``:finalize``.
-                    ``manage`` is called with ``:register`` and ``:deregister`` when a worker is 
-                    added / removed from the Julia worker pool. With ``:interrupt`` when 
-                    ``interrupt(workers)`` is called. The cluster manager should signal the appropriate 
-                    worker with an interrupt signal. With ``:finalize`` for cleanup purposes.
-                    
+    - ``op::Symbol`` - one of ``:register``, ``:deregister``, ``:interrupt`` or ``:finalize``.
+      The ``manage`` method is called at different times during the worker's lifetime:
+
+      - with ``:register``/``:deregister`` when a worker is added / removed
+        from the Julia worker pool.
+      - with ``:interrupt`` when ``interrupt(workers)`` is called. The
+        ``ClusterManager`` should signal the appropriate worker with an
+        interrupt signal.
+      - with ``:finalize`` for cleanup purposes.
 
 .. rubric:: Footnotes
 
