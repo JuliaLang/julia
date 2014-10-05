@@ -164,17 +164,15 @@ Starting julia with ``julia -p 2``, you can use this to verify the following:
 
 - ``include("DummyModule.jl")`` loads the file on just a single process (whichever one executes the statement).
 - ``using DummyModule`` causes the module to be loaded on all processes; however, the module is brought into scope only on the one executing the statement.
-- As long as ``DummyModule`` is loaded on process 2, commands like
-::
+- As long as ``DummyModule`` is loaded on process 2, commands like ::
 
     rr = RemoteRef(2)
     put!(rr, MyType(7))
 
-allow you to store an object of type ``MyType`` on process 2 even if ``DummyModule`` is not in scope on process 2.
+  allow you to store an object of type ``MyType`` on process 2 even if ``DummyModule`` is not in scope on process 2.
 
 You can force a command to run on all processes using the ``@everywhere`` macro.
-Consequently, an easy way to load *and* use a package on all processes is
-::
+Consequently, an easy way to load *and* use a package on all processes is::
 
     @everywhere using DummyModule
 
