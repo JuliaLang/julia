@@ -72,7 +72,15 @@ end
 
 cp(src::String, dst::String) = FS.sendfile(src, dst)
 mv(src::String, dst::String) = FS.rename(src, dst)
-touch(path::String) = run(`touch $path`)
+
+function touch(path::String)
+    f = FS.open(path,JL_O_WRONLY | JL_O_CREAT, 0o0666)
+    if f.handle >= 0
+        t = time()
+        futime(f,t,t)
+        FS.close(f)
+    end
+end
 
 # Obtain a temporary filename.
 @unix_only function tempname()
