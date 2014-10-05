@@ -205,8 +205,9 @@ The base Julia installation has in-built support for two types of clusters:
 Functions ``addprocs``, ``rmprocs``, ``workers``, and others are available as a programmatic means of 
 adding, removing and querying the processes in a cluster.
 
-Other types of clusters can be supported by writing your own custom ClusterManager. See section on 
-ClusterManagers.
+Other types of clusters can be supported by writing your own custom
+``ClusterManager``, as described below in the :ref:`man-clustermanagers`
+section.
 
 Data Movement
 -------------
@@ -659,6 +660,8 @@ execute (for any particular element of ``S``) will have its ``pid``
 retained.
 
 
+.. _man-clustermanagers:
+
 ClusterManagers
 ---------------
 
@@ -673,7 +676,7 @@ Thus, a custom cluster manager would need to :
 - implement ``launch``, a method responsible for launching new workers
 - implement ``manage``, which is called at various events during a worker's lifetime
 
-As an example let us see how the LocalManager, the manager responsible for 
+As an example let us see how the ``LocalManager``, the manager responsible for 
 starting workers on the same host, is implemented::
 
     immutable LocalManager <: ClusterManager
