@@ -94,11 +94,11 @@ macro math_const(sym, val, def)
         const $esym = MathConst{$qsym}()
         $bigconvert
         Base.convert(::Type{Float64}, ::MathConst{$qsym}) = $val
-        # TODO: fix this
         Base.convert(::Type{Float32}, ::MathConst{$qsym}) = $(float32(val))
         @assert isa(big($esym), BigFloat)
         @assert float64($esym) == float64(big($esym))
         @assert float32($esym) == float32(big($esym))
+        @assert float($esym) == prevfloat($esym) || float($esym) == nextfloat($esym)
     end
 end
 
