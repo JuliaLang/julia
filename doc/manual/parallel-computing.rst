@@ -205,8 +205,9 @@ The base Julia installation has in-built support for two types of clusters:
 Functions ``addprocs``, ``rmprocs``, ``workers``, and others are available as a programmatic means of 
 adding, removing and querying the processes in a cluster.
 
-Other types of clusters can be supported by writing your own custom ClusterManager. See section on 
-ClusterManagers.
+Other types of clusters can be supported by writing your own custom
+``ClusterManager``, as described below in the :ref:`man-clustermanagers`
+section.
 
 Data Movement
 -------------
@@ -658,6 +659,8 @@ would result in undefined behavior: because each process fills the
 execute (for any particular element of ``S``) will have its ``pid``
 retained.
 
+
+.. _man-clustermanagers:
 
 ClusterManagers
 ---------------
