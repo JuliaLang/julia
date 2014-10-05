@@ -372,3 +372,6 @@ let smallint = (Int === Int64 ?
         @test length(typemin(T):typemax(T)) == 2^(8*sizeof(T))
     end
 end
+
+# issue #8584
+@test (0:1//2:2)[1:2:3] == 0:1//1:1
