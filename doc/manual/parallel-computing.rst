@@ -670,7 +670,7 @@ enabling Julia's natural parallelism to function quite transparently
 in a cluster environment. The ``ClusterManager`` interface provides a
 way to specify a means to launch and manage worker processes. 
 
-Thus, a custom cluster manager would need to :
+Thus, a custom cluster manager would need to:
 
 - be a subtype of the abstract ``ClusterManager``
 - implement ``launch``, a method responsible for launching new workers
@@ -692,6 +692,7 @@ starting workers on the same host, is implemented::
     end
 
 The ``launch`` method takes the following arguments:
+
     - ``manager::LocalManager`` - used to dispatch the call to the appropriate implementation 
     - ``np::Integer`` - number of workers to be launched 
     - ``config::Dict`` - all the keyword arguments provided as part of the ``addprocs`` call 
@@ -726,6 +727,7 @@ where:
       the worker.
 
 The ``manage`` method takes the following arguments:
+
     - ``manager::ClusterManager`` - used to dispatch the call to the appropriate implementation 
     - ``id::Integer`` - The Julia process id
     - ``config::Dict`` - configuration dictionary for the worker. The data may have been modified by the ``launch`` method
