@@ -338,6 +338,8 @@ end
 Dict() = Dict{Any,Any}()
 Dict(kv::()) = Dict()
 
+const AnyDict = Dict{Any,Any}
+
 # TODO: this can probably be simplified using `eltype` as a THT (Tim Holy trait)
 Dict{K,V}(kv::((K,V)...,))     = Dict{K,V}(kv)
 Dict{K  }(kv::((K,Any)...,))   = Dict{K,Any}(kv)
@@ -355,7 +357,7 @@ Dict     (ps::Pair...)      = Dict{Any,Any}(ps)
 Dict(kv) = dict_with_eltype(kv, eltype(kv))
 dict_with_eltype{K,V}(kv, ::Type{(K,V)}) = Dict{K,V}(kv)
 dict_with_eltype{K,V}(kv, ::Type{Pair{K,V}}) = Dict{K,V}(kv)
-dict_with_eltype{K,V}(kv, t) = Dict{Any,Any}(kv)
+dict_with_eltype(kv, t) = Dict{Any,Any}(kv)
 
 similar{K,V}(d::Dict{K,V}) = Dict{K,V}()
 
@@ -730,7 +732,7 @@ end
 type WeakKeyDict{K,V} <: Associative{K,V}
     ht::Dict{Any,V}
 
-    WeakKeyDict() = new((Any=>V)[])
+    WeakKeyDict() = new(Dict{Any,V}())
 end
 WeakKeyDict() = WeakKeyDict{Any,Any}()
 

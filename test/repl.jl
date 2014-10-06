@@ -86,9 +86,9 @@ begin
     help_mode = interface.modes[3]
     histp = interface.modes[4]
 
-    hp = REPL.REPLHistoryProvider((Symbol=>Any)[:julia => repl_mode,
-                                           :shell => shell_mode,
-                                           :help  => help_mode])
+    hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:julia => repl_mode,
+                                                   :shell => shell_mode,
+                                                   :help  => help_mode))
     fakehistory =
     """
     # time: 2014-06-30 17:32:49 EDT

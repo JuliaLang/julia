@@ -451,10 +451,10 @@ end
 
 ## Resolve expressions at parsing time ##
 
-const exprresolve_arith_dict = (Symbol=>Function)[:+ => +,
-    :- => -, :* => *, :/ => /, :^ => ^, :div => div]
-const exprresolve_cond_dict = (Symbol=>Function)[:(==) => ==,
-    :(<) => <, :(>) => >, :(<=) => <=, :(>=) => >=]
+const exprresolve_arith_dict = Dict{Symbol,Function}(:+ => +,
+    :- => -, :* => *, :/ => /, :^ => ^, :div => div)
+const exprresolve_cond_dict = Dict{Symbol,Function}(:(==) => ==,
+    :(<) => <, :(>) => >, :(<=) => <=, :(>=) => >=)
 
 function exprresolve_arith(ex::Expr)
     if ex.head == :call && haskey(exprresolve_arith_dict, ex.args[1]) && all([isa(ex.args[i], Number) for i = 2:length(ex.args)])

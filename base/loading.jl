@@ -33,9 +33,9 @@ function find_source_file(file)
 end
 
 # Store list of files and their load time
-package_list = (ByteString=>Float64)[]
+package_list = Dict{ByteString,Float64}()
 # to synchronize multiple tasks trying to require something
-package_locks = (ByteString=>Any)[]
+package_locks = Dict{ByteString,Any}()
 require(fname::String) = require(bytestring(fname))
 require(f::String, fs::String...) = (require(f); for x in fs require(x); end)
 
