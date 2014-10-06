@@ -32,8 +32,8 @@ for (i,dt) in enumerate([jan,feb,mar,apr,may,jun,jul,aug,sep,oct,nov,dec])
 end
 
 # Customizing locale
-const french_daysofweek = [1=>"Lundi",2=>"Mardi",3=>"Mercredi",4=>"Jeudi",
-                           5=>"Vendredi",6=>"Samedi",7=>"Dimanche"]
+const french_daysofweek = Dict(1=>"Lundi",2=>"Mardi",3=>"Mercredi",4=>"Jeudi",
+                               5=>"Vendredi",6=>"Samedi",7=>"Dimanche")
 Dates.VALUETODAYOFWEEK["french"] = french_daysofweek
 @test Dates.dayname(nov;locale="french") == "Lundi"
 @test Dates.dayname(jan;locale="french") == "Mardi"
@@ -43,8 +43,8 @@ Dates.VALUETODAYOFWEEK["french"] = french_daysofweek
 @test Dates.dayname(feb;locale="french") == "Samedi"
 @test Dates.dayname(may;locale="french") == "Dimanche"
 
-const french_months = [1=>"janvier",2=>"février",3=>"mars",4=>"avril",5=>"mai",6=>"juin",
-                       7=>"juillet",8=>"août",9=>"septembre",10=>"octobre",11=>"novembre",12=>"décembre"]
+const french_months = Dict(1=>"janvier",2=>"février",3=>"mars",4=>"avril",5=>"mai",6=>"juin",
+                           7=>"juillet",8=>"août",9=>"septembre",10=>"octobre",11=>"novembre",12=>"décembre")
 Dates.VALUETOMONTH["french"] = french_months
 @test Dates.monthname(jan;locale="french") == "janvier"
 @test Dates.monthname(feb;locale="french") == "février"
