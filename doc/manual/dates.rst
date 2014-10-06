@@ -210,7 +210,7 @@ As well as information about the ``TimeType``'s year and quarter::
 
 The ``dayname`` and ``monthname`` methods can also take an optional ``locale`` keyword that can be used to return the name of the day or month of the year for other languages/locales::
 
-  julia> const french_daysofweek = [1=>"Lundi",2=>"Mardi",3=>"Mercredi",4=>"Jeudi",5=>"Vendredi",6=>"Samedi",7=>"Dimanche"];
+  julia> const french_daysofweek = Dict(1=>"Lundi",2=>"Mardi",3=>"Mercredi",4=>"Jeudi",5=>"Vendredi",6=>"Samedi",7=>"Dimanche");
 
   # Load the mapping into the Dates module under locale name "french"
   julia> Dates.VALUETODAYOFWEEK["french"] = french_daysofweek;
