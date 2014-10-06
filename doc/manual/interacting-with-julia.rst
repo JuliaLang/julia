@@ -169,12 +169,12 @@ Julia's REPL keybindings may be fully customized to a user's preferences by pass
 
     import Base: LineEdit, REPL
 
-    const mykeys = {
+    const mykeys = Dict{Any,Any}(
       # Up Arrow
       "\e[A" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_prev(s, LineEdit.mode(s).hist)),
       # Down Arrow
       "\e[B" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_next(s, LineEdit.mode(s).hist))
-    }
+    )
 
     Base.active_repl.interface = REPL.setup_interface(Base.active_repl; extra_repl_keymap = mykeys)
 

@@ -94,6 +94,18 @@
 			 abstract typealias type bitstype immutable ccall do
 			 module baremodule using import export importall))
 
+(define (assignment? e)
+  (and (pair? e) (eq? (car e) '=)))
+
+(define (assignment-like? e)
+  (and (pair? e) (is-prec-assignment? (car e))))
+
+(define (kwarg? e)
+  (and (pair? e) (eq? (car e) 'kw)))
+
+(define (dict-literal? l)
+  (and (length= l 3) (eq? (car l) '=>)))
+
 ;; Parser state variables
 
 ; disable range colon for parsing ternary conditional operator
@@ -139,18 +151,6 @@
 (define-macro (without-whitespace-newline . body)
   `(with-bindings ((whitespace-newline #f))
 		  ,@body))
-
-(define (assignment? e)
-  (and (pair? e) (eq? (car e) '=)))
-
-(define (assignment-like? e)
-  (and (pair? e) (is-prec-assignment? (car e))))
-
-(define (kwarg? e)
-  (and (pair? e) (eq? (car e) 'kw)))
-
-(define (dict-literal? l)
-  (and (length= l 3) (eq? (car l) '=>)))
 
 ;; --- lexer ---
 
@@ -498,6 +498,21 @@
    (begin0 (ts:last-tok s)
 	   (ts:set-tok! s #f))))
 
+;; --- misc ---
+
+(define (syntax-deprecation-warning s what instead)
+  (io.write
+   *stderr*
+   (string
+    #\newline "WARNING: deprecated syntax \"" what "\""
+    (if (eq? current-filename 'none)
+	""
+	(string " at " current-filename ":" (input-port-line (ts:port s))))
+    "."
+    (if (equal? instead "")
+	""
+	(string #\newline "Use \"" instead "\" instead." #\newline)))))
+
 ;; --- parser ---
 
 ; parse left-to-right binary operator
@@ -653,16 +668,7 @@
 			ex)
 		 (let ((argument
 			(cond ((closing-token? (peek-token s))
-			       (io.write
-				*stderr*
-				(string
-				 #\newline "WARNING: deprecated syntax \"x[i:]\""
-				 (if (eq? current-filename 'none)
-				     ""
-				     (string
-				      " at "
-				      current-filename ":" (input-port-line (ts:port s))))
-				 "." #\newline "Use \"x[i:end]\" instead." #\newline))
+			       (syntax-deprecation-warning s "x[i:]" "x[i:end]")
 			       ':)  ; missing last argument
 			      ((newline? (peek-token s))
 			       (error "line break in \":\" expression"))
@@ -898,6 +904,11 @@
 	(parse-resword s ex)
 	(parse-call-chain s ex #f))))
 
+(define (deprecated-dict-replacement ex)
+  (if (dict-literal? ex)
+      (string "Dict{" (deparse (cadr ex)) #\, (deparse (caddr ex)) "}")
+      "Dict"))
+
 (define (parse-call-chain s ex one-call)
   (let loop ((ex ex))
     (let ((t (peek-token s)))
@@ -928,13 +939,21 @@
 	     ;; ref is syntax, so we can distinguish
 	     ;; a[i] = x  from
 	     ;; ref(a,i) = x
-	     (let ((al (with-end-symbol (parse-cat s #\] ))))
+	     (let ((al (with-end-symbol (parse-cat s #\] (dict-literal? ex)))))
 	       (if (null? al)
 		   (if (dict-literal? ex)
-		       (loop (list 'typed_dict ex))
+		       (begin
+			 (syntax-deprecation-warning
+			  s (string #\( (deparse ex) #\) "[]")
+			  (string (deprecated-dict-replacement ex) "()"))
+			 (loop (list 'typed_dict ex)))
 		       (loop (list 'ref ex)))
 		   (case (car al)
-		     ((dict)  (loop (list* 'typed_dict ex (cdr al))))
+		     ((dict)
+		      (syntax-deprecation-warning
+		       s (string #\( (deparse ex) #\) "[a=>b, ...]")
+		       (string (deprecated-dict-replacement ex) "(a=>b, ...)"))
+		      (loop (list* 'typed_dict ex (cdr al))))
 		     ((hcat)  (loop (list* 'typed_hcat ex (cdr al))))
 		     ((vcat)
 		      (if (any (lambda (x)
@@ -1476,7 +1495,7 @@
                (loop (peek-token s)))
         t)))
 
-(define (parse-cat s closer)
+(define (parse-cat s closer . isdict)
   (with-normal-ops
    (with-inside-vec
     (if (eqv? (require-token s) closer)
@@ -1489,7 +1508,12 @@
                  (take-token s)
                  (parse-dict-comprehension s first closer))
                 (else
-                 (parse-dict s first closer)))
+		 (if (eqv? closer #\})
+		     (syntax-deprecation-warning s "{a=>b, ...}" "Dict{Any,Any}(a=>b, ...)")
+		     (or
+		      (and (pair? isdict) (car isdict))
+		      (syntax-deprecation-warning s "[a=>b, ...]" "Dict(a=>b, ...)")))
+		 (parse-dict s first closer)))
               (case (peek-token s)
                 ((#\,)
                  (parse-vcat s first closer))
@@ -1650,7 +1674,8 @@
 ; parse numbers, identifiers, parenthesized expressions, lists, vectors, etc.
 (define (parse-atom s)
   (let ((ex (parse-atom- s)))
-    (if (or (syntactic-op? ex)
+    ;; TODO: remove this hack when we remove the special Dict syntax
+    (if (or (and (not (eq? ex '=>)) (syntactic-op? ex))
 	    (eq? ex '....))
 	(error (string "invalid identifier name \"" ex "\"")))
     ex))
