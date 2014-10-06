@@ -9,7 +9,7 @@ export normalize_string, is_valid_char, is_assigned_char,
    iscntrl, ispunct, isspace, isprint, isgraph, isblank
 
 # whether codepoints are valid Unicode
-is_valid_char(c) = (0 <= c <= 0x110000) && bool(ccall(:utf8proc_codepoint_valid, Cuchar, (Int32,), c))
+is_valid_char(c) = (0x0 <= c <= 0x110000) && bool(ccall(:utf8proc_codepoint_valid, Cuchar, (Int32,), c))
 
 # utf8 category constants
 const UTF8PROC_CATEGORY_LU = 1

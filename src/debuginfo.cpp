@@ -245,7 +245,7 @@ bool getObjUUID(llvm::object::MachOObjectFile *obj, uint8_t uuid[16])
 }
 #endif
 
-extern char *jl_sysimage_name;
+extern "C" char *jl_sysimage_name;
 
 bool jl_is_sysimg(const char *path)
 {

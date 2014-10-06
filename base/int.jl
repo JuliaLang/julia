@@ -162,12 +162,14 @@ for to in tuple(IntTypes...,Char), from in tuple(IntTypes...,Char,Bool)
             else
                 @eval convert(::Type{$to}, x::($from)) = box($to,zext_int($to,unbox($from,x)))
             end
-        elseif !(issubtype(from,Signed) === issubtype(to,Signed))
-            # raise InexactError if x's top bit is set
-            @eval convert(::Type{$to}, x::($from)) = box($to,check_top_bit(unbox($from,x)))
-            @eval itrunc(::Type{$to}, x::($from)) = box($to,unbox($from,x))
         else
-            @eval convert(::Type{$to}, x::($from)) = box($to,unbox($from,x))
+            if !(issubtype(from,Signed) === issubtype(to,Signed))
+                # raise InexactError if x's top bit is set
+                @eval convert(::Type{$to}, x::($from)) = box($to,check_top_bit(unbox($from,x)))
+            else
+                @eval convert(::Type{$to}, x::($from)) = box($to,unbox($from,x))
+            end
+            @eval itrunc(::Type{$to}, x::($from)) = box($to,unbox($from,x))
         end
     end
 end
@@ -386,17 +388,17 @@ end
 if WORD_SIZE==32
     function widemul(u::Int64, v::Int64)
         local u0::Uint64, v0::Uint64, w0::Uint64
-        local u1::Int64, v1::Int64, w1::Int64, w2::Int64, t::Int64
+        local u1::Int64, v1::Int64, w1::Uint64, w2::Int64, t::Uint64
 
         u0 = u&0xffffffff; u1 = u>>32
         v0 = v&0xffffffff; v1 = v>>32
         w0 = u0*v0
-        t = u1*v0 + (w0>>>32)
-        w2 = t>>32
-        w1 = u0*v1 + (t&0xffffffff)
-        hi = u1*v1 + w2 + (w1 >> 32)
+        t = reinterpret(Uint64,u1)*v0 + (w0>>>32)
+        w2 = reinterpret(Int64,t) >> 32
+        w1 = u0*reinterpret(Uint64,v1) + (t&0xffffffff)
+        hi = u1*v1 + w2 + (reinterpret(Int64,w1) >> 32)
         lo = w0&0xffffffff + (w1 << 32)
-        int128(hi)<<64 + int128(uint128(lo))
+        int128(hi)<<64 + int128(lo)
     end
 
     function widemul(u::Uint64, v::Uint64)
@@ -415,15 +417,14 @@ if WORD_SIZE==32
     end
 
     function *(u::Int128, v::Int128)
-        u0 = uint64(u); u1 = int64(u>>64)
-        v0 = uint64(v); v1 = int64(v>>64)
+        u0 = itrunc(Uint64,u); u1 = int64(u>>64)
+        v0 = itrunc(Uint64,v); v1 = int64(v>>64)
         lolo = widemul(u0, v0)
-        lohi = widemul(int64(u0), v1)
-        hilo = widemul(u1, int64(v0))
-        t = hilo + (lolo>>>64)
-        w2 = t>>64
-        w1 = lohi + (t&0xffffffffffffffff)
-        int128(lolo&0xffffffffffffffff) + int128(w1)<<64
+        lohi = widemul(reinterpret(Int64,u0), v1)
+        hilo = widemul(u1, reinterpret(Int64,v0))
+        t = reinterpret(Uint128,hilo) + (lolo>>>64)
+        w1 = reinterpret(Uint128,lohi) + (t&0xffffffffffffffff)
+        int128(lolo&0xffffffffffffffff) + reinterpret(Int128,w1)<<64
     end
 
     function *(u::Uint128, v::Uint128)
@@ -433,7 +434,6 @@ if WORD_SIZE==32
         lohi = widemul(u0, v1)
         hilo = widemul(u1, v0)
         t = hilo + (lolo>>>64)
-        w2 = t>>>64
         w1 = lohi + (t&0xffffffffffffffff)
         (lolo&0xffffffffffffffff) + uint128(w1)<<64
     end

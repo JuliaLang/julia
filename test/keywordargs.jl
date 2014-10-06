@@ -66,7 +66,7 @@ opkwf1(a=0,b=1;k=2) = (a,b,k)
 @test isequal(opkwf1(k=8),       ( 0, 1,8))
 
 # dictionaries as keywords
-@test kwf1(4; (Any=>Any)[:hundreds=>9, :tens=>5]...) == 954
+@test kwf1(4; Dict(:hundreds=>9, :tens=>5)...) == 954
 
 # with inner function
 let
@@ -85,7 +85,7 @@ extravagant_args(x,y=0,rest...;color="blue",kw...) =
 
 @test isequal(extravagant_args(1), (1,0,(),"blue",86))
 @test isequal(extravagant_args(1;hundreds=7), (1,0,(),"blue",786))
-@test isequal(extravagant_args(1,2,3;[:color=>"red", :hundreds=>3]...),
+@test isequal(extravagant_args(1,2,3;Dict(:color=>"red", :hundreds=>3)...),
               (1,2,(3,),"red",386))
 
 # passing empty kw container to function with no kwargs

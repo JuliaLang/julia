@@ -24,6 +24,7 @@ MAKE_COMMON = DESTDIR="" prefix=$(build_prefix) bindir=$(build_bindir) libdir=$(
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
+STAGE1_DEPS =
 STAGE2_DEPS = Rmath
 STAGE3_DEPS = suitesparse-wrapper
 
@@ -139,7 +140,7 @@ install: $(addprefix install-, $(DEP_LIBS))
 cleanall: $(addprefix clean-, $(DEP_LIBS))
 distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-uv get-pcre get-openlibm get-openspecfun get-dsfmt get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-mojibake
+getall: get-llvm get-uv get-pcre get-openlibm get-openspecfun get-dsfmt get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-mojibake get-virtualenv
 
 ## PATHS ##
 # sort is used to remove potential duplicates
@@ -328,7 +329,7 @@ llvm-$(LLVM_VER)/python2_path:
 	ln -sf /usr/bin/python2 "llvm-$(LLVM_VER)/python2_path/python"
 llvm_python_workaround=llvm-$(LLVM_VER)/python2_path
 else
-  LLVM_FLAGS += --with-python="$(shell ./find_python_for_llvm)"
+  LLVM_FLAGS += --with-python="$(shell ./find_python2)"
 endif
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
@@ -517,6 +518,7 @@ install-llvm: $(LLVM_OBJ_TARGET)
 
 UV_SRC_TARGET = libuv/.libs/libuv.a
 UV_OBJ_TARGET = $(build_libdir)/libuv.a
+
 UV_CFLAGS = 
 ifeq ($(USEMSVC), 1)
 UV_CFLAGS += -DBUILDING_UV_SHARED
@@ -525,9 +527,14 @@ ifeq ($(USEICC), 1)
 UV_CFLAGS += -static-intel
 endif
 
-UV_OPTS += LDFLAGS="$(LDFLAGS) $(CLDFLAGS) -v"
+UV_MFLAGS += LDFLAGS="$(LDFLAGS) $(CLDFLAGS) -v"
 ifneq ($(UV_CFLAGS),)
-UV_OPTS += CFLAGS="$(UV_CFLAGS)"
+UV_MFLAGS += CFLAGS="$(UV_CFLAGS)"
+endif
+ifneq ($(USEMSVC), 1)
+UV_FLAGS = $(UV_MFLAGS)
+else
+UV_FLAGS = --disable-shared $(UV_MFLAGS)
 endif
 
 libuv/configure:
@@ -540,14 +547,14 @@ libuv/config.status: $(JULIAHOME)/.git/modules/deps/libuv/HEAD
 endif
 libuv/config.status: libuv/configure
 	cd libuv && \
-	./configure --with-pic $(CONFIGURE_COMMON) $(UV_OPTS)
+	./configure --with-pic $(CONFIGURE_COMMON) $(UV_FLAGS)
 	touch -c $@
 $(UV_SRC_TARGET): libuv/config.status
 	touch -c libuv/aclocal.m4
 	touch -c libuv/Makefile.in
 	touch -c libuv/configure
 	touch -c libuv/config.status
-	$(MAKE) -C libuv $(UV_OPTS)
+	$(MAKE) -C libuv $(UV_MFLAGS)
 	touch -c $@
 libuv/checked: $(UV_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
@@ -1248,7 +1255,7 @@ ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/libmojibake ] && echo 
 $(MOJIBAKE_SRC_TARGET): $(JULIAHOME)/.git/modules/deps/libmojibake/HEAD
 endif
 $(MOJIBAKE_SRC_TARGET): libmojibake/Makefile
-	$(MAKE) -C libmojibake cc="$(CC) -O2 -std=c99 $(fPIC)" AR="$(AR)" libmojibake.a
+	$(MAKE) -C libmojibake cc="$(CC) -O2 -std=c99 $(fPIC) -DMOJIBAKE_EXPORTS" AR="$(AR)" libmojibake.a
 	touch -c $@
 libmojibake/checked: $(MOJIBAKE_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
@@ -1634,6 +1641,33 @@ configure-git: git-$(GIT_VER)/config.status
 compile-git: $(GIT_SOURCE)
 check-git: git-$(GIT_VER)/checked
 install-git: $(GIT_TARGET)
+
+## virtualenv
+
+VIRTUALENV_SOURCE = virtualenv-$(VIRTUALENV_VER)/virtualenv.py
+VIRTUALENV_TARGET = julia-env
+
+virtualenv-$(VIRTUALENV_VER).tar.gz:
+	$(JLDOWNLOAD) $@ https://pypi.python.org/packages/source/v/virtualenv/$@
+$(VIRTUALENV_SOURCE): virtualenv-$(VIRTUALENV_VER).tar.gz
+	$(JLCHECKSUM) $<
+	$(TAR) zxf $<
+	touch -c $@
+$(VIRTUALENV_TARGET): $(VIRTUALENV_SOURCE)
+	"$(shell ./find_python2)" $< $@
+	touch -c $@
+
+clean-virtualenv:
+	-$(MAKE) -C virtualenv-$(VIRTUALENV_VER) clean
+	-rm -f $(VIRTUALENV_TARGET)
+distclean-virtualenv:
+	-rm -rf virtualenv-$(VIRTUALENV_VER).tar.gz virtualenv-$(VIRTUALENV_VER)
+
+get-virtualenv: virtualenv-$(VIRTUALENV_VER).tar.gz
+configure-virtualenv: get-virtualenv
+compile-virtualenv: $(VIRTUALENV_SOURCE)
+check-virtualenv: compile-virtualenv
+install-virtualenv: $(VIRTUALENV_TARGET)
 
 ## phony targets ##
 
