@@ -161,6 +161,16 @@ function cmp(x::FloatingPoint, y::FloatingPoint)
     ifelse(x<y, -1, ifelse(x>y, 1, 0))
 end
 
+function cmp(x::Union(Float16,Float32,Float64), y::Union(Signed,Unsigned))
+    isnan(x) && throw(DomainError())
+    ifelse(x<y, -1, ifelse(x>y, 1, 0))
+end
+function cmp(x::Union(Signed,Unsigned), y::Union(Float16,Float32,Float64))
+    isnan(y) && throw(DomainError())
+    ifelse(x<y, -1, ifelse(x>y, 1, 0))
+end
+
+
 ==(x::Float64, y::Int64  ) = eqfsi64(unbox(Float64,x),unbox(Int64,y))
 ==(x::Float64, y::Uint64 ) = eqfui64(unbox(Float64,x),unbox(Uint64,y))
 ==(x::Int64  , y::Float64) = eqfsi64(unbox(Float64,y),unbox(Int64,x))
@@ -191,21 +201,12 @@ end
 <=(x::Int64  , y::Float32) = lesif64(unbox(Int64,x),unbox(Float64,float64(y)))
 <=(x::Uint64 , y::Float32) = leuif64(unbox(Uint64,x),unbox(Float64,float64(y)))
 
-==(x::Float32, y::Union(Int32,Uint32)) = float64(x)==float64(y)
-==(x::Union(Int32,Uint32), y::Float32) = float64(x)==float64(y)
-
-<(x::Float32, y::Union(Int32,Uint32)) = float64(x)<float64(y)
-<(x::Union(Int32,Uint32), y::Float32) = float64(x)<float64(y)
-
-<=(x::Float32, y::Union(Int32,Uint32)) = float64(x)<=float64(y)
-<=(x::Union(Int32,Uint32), y::Float32) = float64(x)<=float64(y)
-
-==(x::Float16,y::Union(Signed,Unsigned)) = float32(x) == y
-==(x::Union(Signed,Unsigned),y::Float16) = x == float32(y)
-< (x::Float16,y::Union(Signed,Unsigned)) = float32(x) < y
-< (x::Union(Signed,Unsigned),y::Float16) = x < float32(y)
-<=(x::Float16,y::Union(Signed,Unsigned)) = float32(x) <= y
-<=(x::Union(Signed,Unsigned),y::Float16) = x <= float32(y)
+==(x::Union(Float16,Float32,Float64), y::Union(Signed,Unsigned)) = float64(x)==float64(y)
+==(x::Union(Signed,Unsigned), y::Union(Float16,Float32,Float64)) = float64(x)==float64(y)
+<(x::Union(Float16,Float32,Float64), y::Union(Signed,Unsigned)) = float64(x)<float64(y)
+<(x::Union(Signed,Unsigned), y::Union(Float16,Float32,Float64)) = float64(x)<float64(y)
+<=(x::Union(Float16,Float32,Float64), y::Union(Signed,Unsigned)) = float64(x)<=float64(y)
+<=(x::Union(Signed,Unsigned), y::Union(Float16,Float32,Float64)) = float64(x)<=float64(y)
 
 
 abs(x::Float64) = box(Float64,abs_float(unbox(Float64,x)))

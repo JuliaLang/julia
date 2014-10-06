@@ -365,7 +365,7 @@ typemax(::Type{Uint64}) = 0xffffffffffffffff
 @eval typemax(::Type{Int128} ) = $(box(Int128,unbox(Uint128,typemax(Uint128)>>int32(1))))
 
 widen(::Type{Bool}) = Int
-widen(::Type{Char}) = Int
+widen(::Type{Char}) = Int64
 widen(::Type{Int8}) = Int
 widen(::Type{Int16}) = Int
 widen(::Type{Int32}) = Int64

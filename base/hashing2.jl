@@ -276,17 +276,6 @@ function cmp(x::Real, y::Real)
     end
 end
 
-function ==(x::Real, y::Real)
-    (isnan(x) || isnan(y)) && return false
-    cmp(x,y) == 0
-end
-
-function <(x::Real, y::Real)
-    (isnan(x) || isnan(y)) && return false
-    cmp(x,y) < 0
-end
-
-function <=(x::Real, y::Real)
-    (isnan(x) || isnan(y)) && return false
-    cmp(x,y) <= 0
-end
+==(x::Real, y::Real) = !isnan(x) && !isnan(y) && cmp(x,y) == 0
+<(x::Real, y::Real) = !isnan(x) && !isnan(y) && cmp(x,y) < 0
+<=(x::Real, y::Real) = !isnan(x) && !isnan(y) && cmp(x,y) <= 0

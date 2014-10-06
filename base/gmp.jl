@@ -417,20 +417,14 @@ binomial(n::BigInt, k::Integer) = k < 0 ? throw(DomainError()) : binomial(n, uin
 ==(x::BigInt, y::BigInt) = cmp(x,y) == 0
 ==(x::BigInt, i::Integer) = cmp(x,i) == 0
 ==(i::Integer, x::BigInt) = cmp(x,i) == 0
-==(x::BigInt, f::CdoubleMax) = isnan(f) ? false : cmp(x,f) == 0
-==(f::CdoubleMax, x::BigInt) = isnan(f) ? false : cmp(x,f) == 0
 
 <=(x::BigInt, y::BigInt) = cmp(x,y) <= 0
 <=(x::BigInt, i::Integer) = cmp(x,i) <= 0
 <=(i::Integer, x::BigInt) = cmp(x,i) >= 0
-<=(x::BigInt, f::CdoubleMax) = isnan(f) ? false : cmp(x,f) <= 0
-<=(f::CdoubleMax, x::BigInt) = isnan(f) ? false : cmp(x,f) >= 0
 
 <(x::BigInt, y::BigInt) = cmp(x,y) < 0
 <(x::BigInt, i::Integer) = cmp(x,i) < 0
 <(i::Integer, x::BigInt) = cmp(x,i) > 0
-<(x::BigInt, f::CdoubleMax) = isnan(f) ? false : cmp(x,f) < 0
-<(f::CdoubleMax, x::BigInt) = isnan(f) ? false : cmp(x,f) > 0
 
 string(x::BigInt) = dec(x)
 show(io::IO, x::BigInt) = print(io, string(x))
