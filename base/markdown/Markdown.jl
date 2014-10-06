@@ -58,4 +58,16 @@ macro doc_mstr(s, t...)
   docexpr(s, t...)
 end
 
+function writemime(io::IO, m, md::Vector{MD})
+  for md in md
+    writemime(io, m, md)
+  end
+end
+
+function Base.display(d::Base.REPL.REPLDisplay, md::Vector{MD})
+  for md in md
+    display(d, md)
+  end
+end
+
 end
