@@ -2,7 +2,7 @@ module Docs
 
 import Base.Markdown: @doc_str, @doc_mstr
 
-export doc, @doc, @doc_mstr
+export doc, @doc
 
 # Basic API
 
