@@ -1510,7 +1510,7 @@ static void _compile_all(jl_module_t *m, htable_t *h)
 {
     size_t i;
     size_t sz = m->bindings.size;
-    void **table = malloc(sz * sizeof(void*));
+    void **table = (void**) malloc(sz * sizeof(void*));
     memcpy(table, m->bindings.table, sz*sizeof(void*));
     ptrhash_put(h, m, m);
     for(i=1; i < sz; i+=2) {

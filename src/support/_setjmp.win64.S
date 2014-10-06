@@ -2,8 +2,11 @@
 
 #ifndef _MSC_VER
 .intel_syntax noprefix
-#endif
 ENTRY(jl_setjmp)
+#else
+.code
+jl_setjmp proc
+#endif
     mov    rdx,QWORD PTR [rsp]
     mov    QWORD PTR [rcx],0
     mov    QWORD PTR [rcx+8],rbx
@@ -29,4 +32,7 @@ ENTRY(jl_setjmp)
     movaps XMMWORD PTR [rcx+240],xmm15
     xor    rax,rax
     ret
+#ifdef _MSC_VER
+jl_setjmp endp
+#endif
 END(jl_setjmp)
