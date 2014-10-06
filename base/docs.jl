@@ -2,7 +2,9 @@ module Docs
 
 import Base.Markdown: @doc_str, @doc_mstr
 
-export doc, @doc
+export doc, @doc, @doc_mstr
+
+# Basic API
 
 const META = Dict()
 
@@ -12,18 +14,33 @@ end
 
 doc(obj) = get(META, obj, nothing)
 
+doc(obj::Union(Symbol, String)) = get(META, current_module().(symbol(obj)), nothing)
+
+# Macros
+
+isexpr(x::Expr, ts...) = x.head in ts
+isexpr{T}(x::T, ts...) = T in ts
+
 function mdify(ex)
-  if isa(ex, String)
+  if isexpr(ex, String)
     :(@doc_str $(esc(ex)))
-  elseif isa(ex, Expr) && ex.head == :macrocall && ex.args[1] == symbol("@mstr")
+  elseif isexpr(ex, :macrocall) && ex.args[1] == symbol("@mstr")
     :(@doc_mstr $(esc(ex.args[2])))
   else
     esc(ex)
   end
 end
 
+function getdoc(ex)
+  if isexpr(ex, :macrocall)
+    :(doc($(esc(ex.args[1]))))
+  else
+    :(doc($(esc(ex))))
+  end
+end
+
 macro doc (ex)
-  (isa(ex, Expr) && ex.head == :(->)) || error("Please use @doc meta -> func")
+  isexpr(ex, :(->)) || return getdoc(ex)
   meta, def = ex.args
   quote
     f = $(esc(def))

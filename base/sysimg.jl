@@ -219,6 +219,9 @@ include("LineEdit.jl")
 include("REPLCompletions.jl")
 include("REPL.jl")
 include("client.jl")
+
+# Documentation
+
 include("markdown/Markdown.jl")
 include("docs.jl")
 
