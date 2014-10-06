@@ -1107,6 +1107,8 @@ void *reallocb(void*, size_t);
 DLLEXPORT void *allocobj(size_t sz);
 
 DLLEXPORT void jl_clear_malloc_data(void);
+DLLEXPORT int64_t jl_gc_num_pause(void);
+DLLEXPORT int64_t jl_gc_num_full_sweep(void);
 
 #else
 

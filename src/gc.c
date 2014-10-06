@@ -48,8 +48,8 @@ typedef struct {
 static region_t *heaps[HEAP_COUNT] = {NULL};
 // store a lower bound of the first free block in each region
 static int heaps_lb[HEAP_COUNT] = {0};
-// same with an upper bound
-static int heaps_ub[HEAP_COUNT] = {0};
+// an upper bound of the last non-free block
+static int heaps_ub[HEAP_COUNT] = {REGION_PG_COUNT/32-1};
 
 // every 2^PAGE_GROUP_COUNT_LG2 gc page is reserved for the following pages' metadata
 // this requires :
@@ -507,7 +507,7 @@ static inline void free_page(void *p)
         VirtualFree(&heap->pages[pg_idx], GC_PAGE_SZ, MEM_DECOMMIT);
 #else
         madvise(&heap->pages[pg_idx], GC_PAGE_SZ, MADV_DONTNEED);
-#endif        
+#endif
     }
     if (heaps_lb[i] > pg_idx/32) heaps_lb[i] = pg_idx/32;
     current_pg_count--;
@@ -1042,16 +1042,20 @@ static int lazy_freed_pages = 0;
 static int page_done = 0;
 static gcval_t** sweep_page(pool_t* p, gcpage_t* pg, gcval_t **pfl,int,int);
 static void _update_freelist(pool_t* p, gcval_t* next);
-static void sweep_pool_region(region_t* heap, int sweep_mask)
+static void sweep_pool_region(int heap_i, int sweep_mask)
 {
+    region_t* heap = heaps[heap_i];
     gcval_t **pfl[N_POOLS];
     for (int i = 0; i < N_POOLS; i++) {
         _update_freelist(&norm_pools[i], NULL);
         pfl[i] = &norm_pools[i].freelist;
     }
-    for (int pg_i = 0; pg_i < REGION_PG_COUNT/32; pg_i++) {
+    int ub = 0;
+    int lb = heaps_lb[heap_i];
+    for (int pg_i = 0; pg_i <= heaps_ub[heap_i]; pg_i++) {
         uint32_t line = heap->freemap[pg_i];
         if (!!~line) {
+            ub = pg_i;
             for (int j = 1; j < 32; j++) {
                 if (!((line >> j) & 1)) {
                     gcpage_t *pg = GC_PAGE(heap->pages[pg_i*32 + j]);
@@ -1061,8 +1065,10 @@ static void sweep_pool_region(region_t* heap, int sweep_mask)
                     pfl[p_n] = sweep_page(p, pg, pfl[p_n], sweep_mask, osize);
                 }
             }
-        }
+        } else if (pg_i < lb) lb = pg_i;
     }
+    heaps_ub[heap_i] = ub;
+    heaps_lb[heap_i] = lb;
     int i = 0;
     for (pool_t* p = norm_pools; p < norm_pools + N_POOLS; p++) {
         *pfl[i++] = NULL;
@@ -1161,7 +1167,7 @@ static gcval_t** sweep_page(pool_t* p, gcpage_t* pg, gcval_t **pfl, int sweep_ma
     // the eager one uses less memory.
     pg_total++;
     if (freedall) {
-        if (prev_sweep_mask == GC_MARKED_NOESC && lazy_freed_pages <= default_collect_interval/4*4096) {
+        if (sweep_mask == GC_MARKED_NOESC && lazy_freed_pages <= default_collect_interval/(4*4096)) {
             gcval_t *begin = reset_page(p, pg, 0);
             *prev_pfl = begin;
             pfl = (gcval_t**)((char*)begin + ((int)pg->nfree - 1)*osize);
@@ -1245,13 +1251,15 @@ static int gc_sweep_inc(int sweep_mask)
 #endif
     for (int i = 0; i < HEAP_COUNT; i++) {
         if (heaps[i])
-            /*finished &= */sweep_pool_region(heaps[i], sweep_mask);
+            /*finished &= */sweep_pool_region(i, sweep_mask);
     }
 #ifdef GC_INC
     check_timeout = ct;
 #endif
 #ifdef GC_TIME
-    JL_PRINTF(JL_STDOUT, "GC sweep pools %s %.2f (skipped %d%% of %d, done %d pgs, %d freed with %d lazily) mask %d\n", finished ? "end" : "inc", (clock_now() - t0)*1000, total_pages ? (skipped_pages*100)/total_pages : 0, total_pages, page_done, freed_pages, lazy_freed_pages,  sweep_mask);
+    double sweep_pool_sec = clock_now() - t0;
+    double sweep_speed = (((double)total_pages)*GC_PAGE_SZ)/(1024*1024);
+    JL_PRINTF(JL_STDOUT, "GC sweep pools %s %.2f at %.1f MB/s (skipped %d%% of %d, done %d pgs, %d freed with %d lazily) mask %d\n", finished ? "end" : "inc", sweep_pool_sec*1000, sweep_speed, total_pages ? (skipped_pages*100)/total_pages : 0, total_pages, page_done, freed_pages, lazy_freed_pages,  sweep_mask);
 #endif
     return finished;
 }
@@ -1940,6 +1948,8 @@ DLLEXPORT int jl_gc_is_enabled(void) { return is_gc_enabled; }
 
 DLLEXPORT int64_t jl_gc_total_bytes(void) { return total_allocd_bytes + allocd_bytes + collect_interval/gc_steps; }
 DLLEXPORT uint64_t jl_gc_total_hrtime(void) { return total_gc_time; }
+DLLEXPORT int64_t jl_gc_num_pause(void) { return n_pause; }
+DLLEXPORT int64_t jl_gc_num_full_sweep(void) { return n_full_sweep; }
 
 int64_t diff_gc_total_bytes(void)
 {
@@ -2182,11 +2192,11 @@ void jl_gc_collect(void)
             allocd_bytes_since_sweep = 0;
             freed_bytes = 0;
             
-#ifdef GC_TIME
+#if defined(GC_FINAL_STATS) || defined(GC_TIME)
             finalize_time = jl_hrtime();
 #endif
             run_finalizers();
-#ifdef GC_TIME
+#if defined(GC_FINAL_STATS) || defined(GC_TIME)
             finalize_time = jl_hrtime() - finalize_time;
 #endif
         }
