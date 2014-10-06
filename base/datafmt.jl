@@ -285,7 +285,7 @@ end
 
 const valid_opts = [:header, :has_header, :ignore_invalid_chars, :use_mmap, :quotes, :comments, :dims, :comment_char, :skipstart, :skipblanks]
 const valid_opt_types = [Bool, Bool, Bool, Bool, Bool, Bool, NTuple{2,Integer}, Char, Integer, Bool]
-const deprecated_opts = [ :has_header => :header ]
+const deprecated_opts = Dict(:has_header => :header)
 function val_opts(opts)
     d = Dict{Symbol,Union(Bool,NTuple{2,Integer},Char,Integer)}()
     for (opt_name, opt_val) in opts

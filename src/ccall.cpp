@@ -22,18 +22,18 @@ extern "C" DLLEXPORT void jl_read_sonames(void)
         if (n == -1)
             break;
         if (n > 2 && isspace((unsigned char)line[0])) {
-            int i=0;
 #ifdef __linux__
+            int i = 0;
             while (isspace((unsigned char)line[++i])) ;
             char *name = &line[i];
             char *dot = strstr(name, ".so");
+            i = 0;
 #else
             char *name = strstr(line, ":-l");
             if (name == NULL) continue;
             strncpy(name, "lib", 3);
             char *dot = strchr(name, '.');
 #endif
-            i=0;
 
             if (NULL == dot)
                 continue;
@@ -651,7 +651,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     jl_value_t *rtt = rt;
 
     size_t nargt = jl_tuple_len(tt);
-    Value *argvals[nargt];
+    Value **argvals = (Value**) alloca(nargt*sizeof(Value*));
     std::vector<llvm::Type*> argtypes;
     /*
      * Semantics for arguments are as follows:

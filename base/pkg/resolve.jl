@@ -48,10 +48,10 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
 
     deps, eq_classes = Query.prune_versions(deps)
 
-    ndeps = (ByteString=>Dict{VersionNumber,Int})[]
+    ndeps = Dict{ByteString,Dict{VersionNumber,Int}}()
 
     for (p,depsp) in deps
-        ndeps[p] = ndepsp = (VersionNumber=>Int)[]
+        ndeps[p] = ndepsp = Dict{VersionNumber,Int}()
         for (vn,a) in depsp
             ndepsp[vn] = length(a.requires)
         end
@@ -83,7 +83,7 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
             continue
         end
 
-        sub_reqs = (ByteString=>VersionSet)[p=>VersionSet([vn, nvn])]
+        sub_reqs = Dict{ByteString,VersionSet}(p=>VersionSet([vn, nvn]))
         sub_deps = Query.prune_dependencies(sub_reqs, deps)
 
         interface = Interface(sub_reqs, sub_deps)

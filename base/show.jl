@@ -1,4 +1,3 @@
-
 show(x) = show(STDOUT::IO, x)
 
 print(io::IO, s::Symbol) = (write(io,s);nothing)
@@ -112,6 +111,12 @@ show(io::IO, n::Unsigned) = print(io, "0x", hex(n,sizeof(n)<<1))
 print(io::IO, n::Unsigned) = print(io, dec(n))
 
 show{T}(io::IO, p::Ptr{T}) = print(io, typeof(p), " @0x$(hex(unsigned(p), WORD_SIZE>>2))")
+
+function show(io::IO, p::Pair)
+    show(io, p.first)
+    print(io, "=>")
+    show(io, p.second)
+end
 
 function show(io::IO, m::Module)
     if is(m,Main)
@@ -235,9 +240,9 @@ const uni_ops = Set{Symbol}([:(+), :(-), :(!), :(¬), :(~), :(<:), :(>:), :(√)
 const expr_infix_wide = Set([:(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(&=),
     :(|=), :($=), :(>>>=), :(>>=), :(<<=), :(&&), :(||)])
 const expr_infix = Set([:(:), :(<:), :(->), :(=>), symbol("::")])
-const expr_calls  = [:call =>('(',')'), :calldecl =>('(',')'), :ref =>('[',']'), :curly =>('{','}')]
-const expr_parens = [:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>('{','}'),
-                     :hcat =>('[',']'), :row =>('[',']')]
+const expr_calls  = Dict(:call =>('(',')'), :calldecl =>('(',')'), :ref =>('[',']'), :curly =>('{','}'))
+const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>('{','}'),
+                         :hcat =>('[',']'), :row =>('[',']'))
 
 ## AST decoding helpers ##
 

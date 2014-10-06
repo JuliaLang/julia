@@ -31,13 +31,19 @@ end
 ## Test Julia fallbacks to BLAS routines
 
 # matrices with zero dimensions
-@test ones(0,5)*ones(5,3) == zeros(0,3)
-@test ones(3,5)*ones(5,0) == zeros(3,0)
-@test ones(3,0)*ones(0,4) == zeros(3,4)
-@test ones(0,5)*ones(5,0) == zeros(0,0)
-@test ones(0,0)*ones(0,4) == zeros(0,4)
-@test ones(3,0)*ones(0,0) == zeros(3,0)
-@test ones(0,0)*ones(0,0) == zeros(0,0)
+for i = 1:10
+    @test ones(0,5)*ones(5,3) == zeros(0,3)
+    @test ones(3,5)*ones(5,0) == zeros(3,0)
+    @test ones(3,0)*ones(0,4) == zeros(3,4)
+    @test ones(0,5)*ones(5,0) == zeros(0,0)
+    @test ones(0,0)*ones(0,4) == zeros(0,4)
+    @test ones(3,0)*ones(0,0) == zeros(3,0)
+    @test ones(0,0)*ones(0,0) == zeros(0,0)
+    @test Array(Float64, 5, 0) |> t -> t't == zeros(0,0)
+    @test Array(Float64, 5, 0) |> t -> t*t' == zeros(5,5)
+    @test Array(Complex128, 5, 0) |> t -> t't == zeros(0,0)
+    @test Array(Complex128, 5, 0) |> t -> t*t' == zeros(5,5)
+end
 
 # 2x2
 A = [1 2; 3 4]

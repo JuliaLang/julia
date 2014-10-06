@@ -472,7 +472,7 @@ static jl_sym_t *mk_symbol(const char *str)
     sym = (jl_sym_t*)malloc(nb);
 #else
     if (sym_pool == NULL || pool_ptr+nb > sym_pool+SYM_POOL_SIZE) {
-        sym_pool = malloc(SYM_POOL_SIZE);
+        sym_pool = (char*)malloc(SYM_POOL_SIZE);
         pool_ptr = sym_pool;
     }
     sym = (jl_sym_t*)pool_ptr;

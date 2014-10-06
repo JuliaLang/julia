@@ -1117,7 +1117,7 @@ function launch(manager::LocalManager, np::Integer, config::Dict, resp_arr::Arra
     for i in 1:np
         io, pobj = open(detach(`$(dir)/$(exename) $exeflags --bind-to $(LPROC.bind_addr)`), "r")
         io_objs[i] = io
-        configs[i] = merge(config, (Any=>Any)[:process => pobj])
+        configs[i] = merge(config, AnyDict(:process => pobj))
     end
 
     # ...and then read the host:port info. This optimizes overall start times.
@@ -1278,9 +1278,8 @@ function addprocs_internal(np::Integer;
                            tunnel=false, dir=JULIA_HOME,
                            exename=(ccall(:jl_is_debugbuild,Cint,())==0?"./julia":"./julia-debug"),
                            sshflags::Cmd=``, manager=LocalManager(), exeflags=``, max_parallel=10)
-
-    config=(Any=>Any)[:dir=>dir, :exename=>exename, :exeflags=>`$exeflags --worker`,
-                      :tunnel=>tunnel, :sshflags=>sshflags, :max_parallel=>max_parallel]
+    
+    config = AnyDict(:dir=>dir, :exename=>exename, :exeflags=>`$exeflags --worker`, :tunnel=>tunnel, :sshflags=>sshflags, :max_parallel=>max_parallel)
     disable_threaded_libs()
 
     ret = Array(Int, 0)

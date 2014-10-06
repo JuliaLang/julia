@@ -51,6 +51,7 @@ their own licenses:
 - [FFTW](http://fftw.org/doc/License-and-Copyright.html)
 - [GMP](http://gmplib.org/manual/Copying.html#Copying)
 - [MPFR](http://www.mpfr.org/mpfr-current/mpfr.html#Copying)
+- [MUSL](http://git.musl-libc.org/cgit/musl/tree/COPYRIGHT)
 - [OPENBLAS](https://raw.github.com/xianyi/OpenBLAS/master/LICENSE)
 - [LAPACK](http://netlib.org/lapack/LICENSE.txt)
 - [PCRE](http://www.pcre.org/licence.txt)
