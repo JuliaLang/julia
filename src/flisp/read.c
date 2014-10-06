@@ -408,7 +408,7 @@ static u_int32_t peek(void)
 
 // NOTE: this is NOT an efficient operation. it is only used by the
 // reader, and requires at least 1 and up to 3 garbage collections!
-static value_t vector_grow(value_t v)
+static value_t vector_grow(value_t v, int rewrite_refs)
 {
     size_t i, s = vector_size(v);
     size_t d = vector_grow_amt(s);
@@ -419,7 +419,7 @@ static value_t vector_grow(value_t v)
         vector_elt(newv, i) = vector_elt(v, i);
     // use gc to rewrite references from the old vector to the new
     Stack[SP-1] = newv;
-    if (s > 0) {
+    if (s > 0 && rewrite_refs) {
         ((size_t*)ptr(v))[0] |= 0x1;
         vector_elt(v, 0) = newv;
         gc(0);
@@ -439,7 +439,7 @@ static value_t read_vector(value_t label, u_int32_t closer)
             lerror(ParseError, "read: unexpected end of input");
         v = Stack[SP-1]; // reload after possible alloc in peek()
         if (i >= vector_size(v)) {
-            v = Stack[SP-1] = vector_grow(v);
+            v = Stack[SP-1] = vector_grow(v, label != UNBOUND);
             if (label != UNBOUND)
                 ptrhash_put(&readstate->backrefs, (void*)label, (void*)v);
         }

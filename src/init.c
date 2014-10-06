@@ -84,7 +84,8 @@ jl_compileropts_t jl_compileropts = { NULL, // build_path
                                       0,    // malloc_log
                                       JL_COMPILEROPT_CHECK_BOUNDS_DEFAULT,
                                       JL_COMPILEROPT_DUMPBITCODE_OFF,
-                                      0     // int32_literals
+                                      0,    // int_literals
+                                      JL_COMPILEROPT_COMPILE_DEFAULT
 };
 
 int jl_boot_file_loaded = 0;
@@ -740,7 +741,11 @@ void julia_init(char *imageFile)
 #ifdef _OS_WINDOWS_
     uv_dlopen("ntdll.dll", jl_ntdll_handle); // bypass julia's pathchecking for system dlls
     uv_dlopen("kernel32.dll", jl_kernel32_handle);
+#if _MSC_VER == 1800
+    uv_dlopen("msvcr120.dll", jl_crtdll_handle);
+#else
     uv_dlopen("msvcrt.dll", jl_crtdll_handle);
+#endif
     uv_dlopen("ws2_32.dll", jl_winsock_handle);
     _jl_exe_handle.handle = GetModuleHandleA(NULL);
     if (!DuplicateHandle(GetCurrentProcess(), GetCurrentThread(),
@@ -801,14 +806,15 @@ void julia_init(char *imageFile)
 
     if (!imageFile) {
         jl_core_module = jl_new_module(jl_symbol("Core"));
+        jl_init_intrinsic_functions();
+        jl_init_primitives();
+
         jl_new_main_module();
         jl_internal_main_module = jl_main_module;
 
         jl_current_module = jl_core_module;
         jl_root_task->current_module = jl_current_module;
 
-        jl_init_intrinsic_functions();
-        jl_init_primitives();
         jl_load("boot.jl");
         jl_get_builtin_hooks();
         jl_boot_file_loaded = 1;
@@ -991,6 +997,8 @@ DLLEXPORT void jl_install_sigint_handler()
 extern int asprintf(char **str, const char *fmt, ...);
 extern void *__stack_chk_guard;
 
+void jl_compile_all(void);
+
 DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *av[]))
 {
 #if defined(_OS_WINDOWS_)
@@ -1008,17 +1016,19 @@ DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *
     int ret = pmain(argc, argv);
     char *build_path = jl_compileropts.build_path;
     if (build_path) {
+        if (jl_compileropts.compile_enabled == JL_COMPILEROPT_COMPILE_ALL)
+            jl_compile_all();
         char *build_ji;
         if (asprintf(&build_ji, "%s.ji",build_path) > 0) {
             jl_save_system_image(build_ji);
             free(build_ji);
-            if (jl_compileropts.dumpbitcode == JL_COMPILEROPT_DUMPBITCODE_ON)
-            {
+            if (jl_compileropts.dumpbitcode == JL_COMPILEROPT_DUMPBITCODE_ON) {
                 char *build_bc;
                 if (asprintf(&build_bc, "%s.bc",build_path) > 0) {
                     jl_dump_bitcode(build_bc);
                     free(build_bc);
-                } else {
+                }
+                else {
                     ios_printf(ios_stderr,"\nWARNING: failed to create string for .bc build path\n");
                 }
             }
@@ -1062,7 +1072,6 @@ static jl_value_t *basemod(char *name)
 // fetch references to things defined in boot.jl
 void jl_get_builtin_hooks(void)
 {
-    jl_nothing = core("nothing");
     jl_root_task->tls = jl_nothing;
     jl_root_task->consumers = jl_nothing;
     jl_root_task->donenotify = jl_nothing;

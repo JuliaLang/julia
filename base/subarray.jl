@@ -400,7 +400,7 @@ stride(s::SubArray, i::Integer) = i <= length(s.strides) ? s.strides[i] : s.stri
 
 convert{T}(::Type{Ptr{T}}, x::SubArray{T}) =
     pointer(x.parent) + (x.first_index-1)*sizeof(T)
-convert{T}(::Type{Ptr{None}}, x::SubArray{T}) = convert(Ptr{None}, convert(Ptr{T},x))
+convert{T}(::Type{Ptr{Void}}, x::SubArray{T}) = convert(Ptr{Void}, convert(Ptr{T},x))
 convert{T,S,N}(::Type{Array{T,N}},A::SubArray{S,N}) = copy!(Array(T,size(A)), A)
 
 pointer(s::SubArray, i::Int) = pointer(s, ind2sub(size(s), i))

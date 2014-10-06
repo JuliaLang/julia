@@ -21,7 +21,8 @@ function edit(file::String, line::Integer)
     end
     issrc = length(file)>2 && file[end-2:end] == ".jl"
     if issrc
-        file = find_source_file(file)
+        f = find_source_file(file)
+        f != nothing && (file = f)
     end
     if beginswith(edname, "emacs")
         spawn(`$edpath +$line $file`)
@@ -257,22 +258,41 @@ end
 
 # `methodswith` -- shows a list of methods using the type given
 
+function type_close_enough(x::ANY, t::ANY)
+    x == t && return true
+    return (isa(x,DataType) && isa(t,DataType) && x.name === t.name &&
+            !isleaftype(t) && x <: t)
+end
+
+function methodswith(t::Type, f::Callable, showparents::Bool=false, meths = Method[])
+    if isa(f,DataType)
+        methods(f) # force constructor creation
+    end
+    if !isa(f.env, MethodTable)
+        return meths
+    end
+    d = f.env.defs
+    while !is(d,())
+        if any(x -> (type_close_enough(x, t) ||
+                     (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
+                      (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
+                     x != Any && x != ANY),
+               d.sig)
+            push!(meths, d)
+        end
+        d = d.next
+    end
+    return meths
+end
+
 function methodswith(t::Type, m::Module, showparents::Bool=false)
     meths = Method[]
     for nm in names(m)
-        try
-           mt = eval(m, nm)
-           d = mt.env.defs
-           while !is(d,())
-               if any(map(x -> begin
-                                   x == t || (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
-                                                            (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
-                                   x != Any && x != ANY
-                               end, d.sig))
-                   push!(meths, d)
-               end
-               d = d.next
-           end
+        if isdefined(m, nm)
+            f = eval(m, nm)
+            if isa(f, Callable)
+                methodswith(t, f, showparents, meths)
+            end
         end
     end
     return unique(meths)
@@ -286,11 +306,11 @@ function methodswith(t::Type, showparents::Bool=false)
         if isdefined(mainmod,nm)
             mod = eval(mainmod, nm)
             if isa(mod, Module)
-                meths = [meths, methodswith(t, mod, showparents)]
+                append!(meths, methodswith(t, mod, showparents))
             end
         end
     end
-    return meths
+    return unique(meths)
 end
 
 ## file downloading ##
@@ -354,8 +374,8 @@ function runtests(tests = ["all"], numcores = iceil(CPU_CORES/2))
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_CORES"] = "$numcores"
     try
-        run(setenv(`$(joinpath(JULIA_HOME, "julia")) $(joinpath(JULIA_HOME, "..",
-            "share", "julia", "test", "runtests.jl")) $tests`, ENV2))
+        run(setenv(`$(joinpath(JULIA_HOME, "julia")) $(joinpath(JULIA_HOME,
+            Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
     catch
         buf = PipeBuffer()
         versioninfo(buf)

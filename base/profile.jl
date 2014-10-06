@@ -21,7 +21,7 @@ end
 ####
 #### User-level functions
 ####
-function init(; n::Union(Nothing,Integer) = nothing, delay::Union(Nothing,Float64) = nothing)
+function init(; n::Union(Void,Integer) = nothing, delay::Union(Void,Float64) = nothing)
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
     delay_cur = ccall(:jl_profile_delay_nsec, Uint64, ())/10^9
     if n == nothing && delay == nothing
@@ -104,7 +104,7 @@ const UNKNOWN = LineInfo("?", "?", -1, true, 0)
 ==(a::LineInfo, b::LineInfo) = a.line == b.line && a.fromC == b.fromC && a.func == b.func && a.file == b.file
 
 function hash(li::LineInfo, h::Uint)
-    h += uint(0xf4fbda67fe20ce88)
+    h += itrunc(Uint,0xf4fbda67fe20ce88)
     h = hash(li.line, h)
     h = hash(li.file, h)
     h = hash(li.func, h)

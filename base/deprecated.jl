@@ -38,7 +38,7 @@ function depwarn(msg, funcsym)
     warn(msg, once=(caller!=C_NULL), key=caller, bt=bt)
 end
 
-function firstcaller(bt::Array{Ptr{None},1}, funcsym::Symbol)
+function firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol)
     # Identify the calling line
     i = 1
     while i <= length(bt)
@@ -159,3 +159,29 @@ scale!{T<:Base.LinAlg.BlasReal}(X::Array{T}, s::Complex) = error("scale!: Cannot
 
 @deprecate which(f::Callable, args...) @which f(args...)
 @deprecate rmdir rm
+
+# 0.4 deprecations
+
+@deprecate split(x,y,l::Integer,k::Bool) split(x,y;limit=l,keep=k)
+@deprecate split(x,y,l::Integer) split(x,y;limit=l)
+@deprecate split(x,y,k::Bool) split(x,y;keep=k)
+
+@deprecate rsplit(x,y,l::Integer,k::Bool) rsplit(x,y;limit=l,keep=k)
+@deprecate rsplit(x,y,l::Integer) rsplit(x,y;limit=l)
+@deprecate rsplit(x,y,k::Bool) rsplit(x,y;keep=k)
+
+export TcpSocket, UdpSocket, IpAddr
+const TcpSocket = TCPSocket
+const UdpSocket = UDPSocket
+const IpAddr = IPAddr
+
+@deprecate isblank(c::Char) c == ' ' || c == '\t'
+@deprecate isblank(s::String) all(c -> c == ' ' || c == '\t', s)
+
+@deprecate randbool! rand!
+
+export Nothing
+const Nothing = Void
+
+export None
+const None = Union()

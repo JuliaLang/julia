@@ -576,6 +576,8 @@ built-in ``Exception``\ s listed below all interrupt the normal flow of control.
 +------------------------+
 | ``UndefRefError``      |
 +------------------------+
+| ``UndefVarError``      |
++------------------------+
 
 For example, the ``sqrt`` function throws a ``DomainError()`` if applied to a
 negative real value:

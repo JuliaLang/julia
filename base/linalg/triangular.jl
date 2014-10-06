@@ -7,10 +7,26 @@ function Triangular{T}(A::AbstractMatrix{T}, uplo::Symbol, isunit::Bool=false)
     return Triangular{T,typeof(A),uplo,isunit}(A)
 end
 
-+{T, MT, uplo}(A::Triangular{T, MT, uplo}, B::Triangular{T, MT, uplo}) = Triangular(A.data + B.data, uplo)
-+{T, MT, uplo1, uplo2}(A::Triangular{T, MT, uplo1}, B::Triangular{T, MT, uplo2}) = full(A) + full(B)
--{T, MT, uplo}(A::Triangular{T, MT, uplo}, B::Triangular{T, MT, uplo}) = Triangular(A.data - B.data, uplo)
--{T, MT, uplo1, uplo2}(A::Triangular{T, MT, uplo1}, B::Triangular{T, MT, uplo2}) = full(A) - full(B)
+const CHARU = 'U'
+const CHARL = 'L'
+char_uplo(uplo::Symbol) = uplo == :U ? CHARU : (uplo == :L ? CHARL : throw(ArgumentError("uplo argument must be either :U or :L")))
+
++{T, MT, uplo}(A::Triangular{T, MT, uplo, false}, B::Triangular{T, MT, uplo, false}) = Triangular(A.data + B.data, uplo)
++{T, MT}(A::Triangular{T, MT, :U, false}, B::Triangular{T, MT, :U, true}) = Triangular(A.data + triu(B.data, 1) + I, :U)
++{T, MT}(A::Triangular{T, MT, :L, false}, B::Triangular{T, MT, :L, true}) = Triangular(A.data + tril(B.data, -1) + I, :L)
++{T, MT}(A::Triangular{T, MT, :U, true}, B::Triangular{T, MT, :U, false}) = Triangular(triu(A.data, 1) + B.data + I, :U)
++{T, MT}(A::Triangular{T, MT, :L, true}, B::Triangular{T, MT, :L, false}) = Triangular(tril(A.data, -1) + B.data + I, :L)
++{T, MT}(A::Triangular{T, MT, :U, true}, B::Triangular{T, MT, :U, true}) = Triangular(triu(A.data, 1) + triu(B.data, 1) + 2I, :U)
++{T, MT}(A::Triangular{T, MT, :L, true}, B::Triangular{T, MT, :L, true}) = Triangular(tril(A.data, -1) + tril(B.data, -1) + 2I, :L)
++{T, MT, uplo1, uplo2, IsUnit1, IsUnit2}(A::Triangular{T, MT, uplo1, IsUnit1}, B::Triangular{T, MT, uplo2, IsUnit2}) = full(A) + full(B)
+-{T, MT, uplo}(A::Triangular{T, MT, uplo, false}, B::Triangular{T, MT, uplo, false}) = Triangular(A.data - B.data, uplo)
+-{T, MT}(A::Triangular{T, MT, :U, false}, B::Triangular{T, MT, :U, true}) = Triangular(A.data - triu(B.data, 1) - I, :U)
+-{T, MT}(A::Triangular{T, MT, :L, false}, B::Triangular{T, MT, :L, true}) = Triangular(A.data - tril(B.data, -1) - I, :L)
+-{T, MT}(A::Triangular{T, MT, :U, true}, B::Triangular{T, MT, :U, false}) = Triangular(triu(A.data, 1) - B.data + I, :U)
+-{T, MT}(A::Triangular{T, MT, :L, true}, B::Triangular{T, MT, :L, false}) = Triangular(tril(A.data, -1) - B.data + I, :L)
+-{T, MT}(A::Triangular{T, MT, :U, true}, B::Triangular{T, MT, :U, true}) = Triangular(triu(A.data, 1) - triu(B.data, 1), :U)
+-{T, MT}(A::Triangular{T, MT, :L, true}, B::Triangular{T, MT, :L, true}) = Triangular(tril(A.data, -1) - tril(B.data, -1), :L)
+-{T, MT, uplo1, uplo2, IsUnit1, IsUnit2}(A::Triangular{T, MT, uplo1, IsUnit1}, B::Triangular{T, MT, uplo2, IsUnit2}) = full(A) - full(B)
 
 ######################
 # BlasFloat routines #
@@ -133,11 +149,11 @@ function similar{T,S,UpLo,IsUnit,Tnew}(A::Triangular{T,S,UpLo,IsUnit}, ::Type{Tn
     return Triangular{Tnew, typeof(A), UpLo, IsUnit}(A)
 end
 
-getindex{T,S}(A::Triangular{T,S,:L,true}, i::Integer, j::Integer) = i == j ? one(T) : (i > j ? A.data[i,j] : zero(T))
-getindex{T,S}(A::Triangular{T,S,:L,false}, i::Integer, j::Integer) = i >= j ? A.data[i,j] : zero(T)
-getindex{T,S}(A::Triangular{T,S,:U,true}, i::Integer, j::Integer) = i == j ? one(T) : (i < j ? A.data[i,j] : zero(T))
-getindex{T,S}(A::Triangular{T,S,:U,false}, i::Integer, j::Integer) = i <= j ? A.data[i,j] : zero(T)
-getindex{T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, i::Integer) = ((m, n) = divrem(i - 1, size(A,1)); A[m + 1, n + 1])
+getindex{T,S}(A::Triangular{T,S,:L,true}, i::Integer, j::Integer) = i == j ? one(T) : (i > j ? A.data[i,j] : zero(A.data[i,j]))
+getindex{T,S}(A::Triangular{T,S,:L,false}, i::Integer, j::Integer) = i >= j ? A.data[i,j] : zero(A.data[i,j])
+getindex{T,S}(A::Triangular{T,S,:U,true}, i::Integer, j::Integer) = i == j ? one(T) : (i < j ? A.data[i,j] : zero(A.data[i,j]))
+getindex{T,S}(A::Triangular{T,S,:U,false}, i::Integer, j::Integer) = i <= j ? A.data[i,j] : zero(A.data[i,j])
+getindex(A::Triangular, i::Integer) = ((m, n) = divrem(i - 1, size(A,1)); A[m + 1, n + 1])
 
 istril{T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}) = UpLo == :L
 istriu{T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}) = UpLo == :U
@@ -154,21 +170,45 @@ end
 
 function (*){T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, x::Number)
     n = size(A,1)
+    B = copy(A.data)
     for j = 1:n
-        for i = UpLo == :L ? j:n : 1:j
-            A.data[i,j] = i == j & IsUnit ? x : A.data[i,j]*x
+        for i = UpLo == :L ? (j:n) : (1:j)
+            B[i,j] = (i == j && IsUnit ? x : B[i,j]*x)
         end
     end
-    A
+    Triangular{T,S,UpLo,false}(B)
 end
 function (*){T,S,UpLo,IsUnit}(x::Number, A::Triangular{T,S,UpLo,IsUnit})
     n = size(A,1)
+    B = copy(A.data)
     for j = 1:n
-        for i = UpLo == :L ? j:n : 1:j
-            A.data[i,j] = i == j & IsUnit ? x : x*A.data[i,j]
+        for i = UpLo == :L ? (j:n) : (1:j)
+            B[i,j] = i == j && IsUnit ? x : x*B[i,j]
         end
     end
-    A
+    Triangular{T,S,UpLo,false}(B)
+end
+function (/){T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, x::Number)
+    n = size(A,1)
+    B = copy(A.data)
+    invx = one(T)/x
+    for j = 1:n
+        for i = UpLo == :L ? (j:n) : (1:j)
+            B[i,j] = (i == j && IsUnit ? invx : B[i,j]/x)
+        end
+    end
+    Triangular{T,S,UpLo,false}(B)
+end
+function (\){T,S,UpLo,IsUnit}(x::Number, A::Triangular{T,S,UpLo,IsUnit})
+    n = size(A,1)
+    B = copy(A.data)
+    invx = one(T)/x
+    for j = 1:n
+        for i = UpLo == :L ? (j:n) : (1:j)
+            B[i,j] = i == j && IsUnit ? invx : x\B[i,j]
+        end
+    end
+    Triangular{T,S,UpLo,false}(B)
 end
 
 A_mul_B!{T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, B::Triangular{T,S,UpLo,IsUnit}) = Triangular{T,S,UpLo,IsUnit}(A*full!(B))
@@ -219,7 +259,7 @@ function naivesub!{T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, b::AbstractV
                 x[j] -= A[j,k] * x[k]
             end
             if !IsUnit
-                x[j]/= A[j,j]==0 ? throw(SingularException(j)) : A[j,j]
+                x[j] = A[j,j]==0 ? throw(SingularException(j)) : A[j,j]\x[j]
             end
         end
     elseif UpLo == :U #do backward substitution
@@ -229,7 +269,7 @@ function naivesub!{T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, b::AbstractV
                 x[j] -= A[j,k] * x[k]
             end
             if !IsUnit
-                x[j]/= A[j,j]==0 ? throw(SingularException(j)) : A[j,j]
+                x[j] = A[j,j]==0 ? throw(SingularException(j)) : A[j,j]\x[j]
             end
         end
     else

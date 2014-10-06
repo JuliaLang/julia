@@ -176,8 +176,15 @@ function init_bind_addr(args::Vector{UTF8String})
     # --worker, -n and --machinefile options are affected by it
     btoidx = findfirst(args, "--bind-to")
     if btoidx > 0
-        bind_addr = parseip(args[btoidx+1])
+        bind_to = split(args[btoidx+1], ":")
+        bind_addr = parseip(bind_to[1])
+        if length(bind_to) > 1
+            bind_port = parseint(bind_to[2])
+        else
+            bind_port = 0
+        end
     else
+        bind_port = 0
         try
             bind_addr = getipaddr()
         catch
@@ -188,6 +195,7 @@ function init_bind_addr(args::Vector{UTF8String})
     end
     global LPROC
     LPROC.bind_addr = bind_addr
+    LPROC.bind_port = uint16(bind_port)
 end
 
 
@@ -236,7 +244,7 @@ function process_options(args::Vector{UTF8String})
             addprocs(np)
         elseif args[i]=="--machinefile"
             i+=1
-            machines = split(readall(args[i]), '\n', false)
+            machines = split(readall(args[i]), '\n'; keep=false)
             addprocs(machines)
         elseif args[i]=="-v" || args[i]=="--version"
             println("julia version ", VERSION)
@@ -319,8 +327,8 @@ end
 function load_juliarc()
     # If the user built us with a specific Base.SYSCONFDIR, check that location first for a juliarc.jl file
     #   If it is not found, then continue on to the relative path based on JULIA_HOME
-    if !isempty(Base.SYSCONFDIR) && isfile(joinpath(Base.SYSCONFDIR,"julia","juliarc.jl"))
-        include(abspath(Base.SYSCONFDIR,"julia","juliarc.jl"))
+    if !isempty(Base.SYSCONFDIR) && isfile(joinpath(JULIA_HOME,Base.SYSCONFDIR,"julia","juliarc.jl"))
+        include(abspath(JULIA_HOME,Base.SYSCONFDIR,"julia","juliarc.jl"))
     else
         try_include(abspath(JULIA_HOME,"..","etc","julia","juliarc.jl"))
     end

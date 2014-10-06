@@ -9,8 +9,6 @@ promote_rule{T<:Number}(::Type{Bool}, ::Type{T}) = T
 bool(x::Bool) = x
 bool(x::Number) = convert(Bool, x)
 
-sizeof(::Type{Bool}) = 1
-
 typemin(::Type{Bool}) = false
 typemax(::Type{Bool}) = true
 
@@ -59,5 +57,6 @@ end
 
 div(x::Bool, y::Bool) = y ? x : throw(DivideError())
 fld(x::Bool, y::Bool) = div(x,y)
+cld(x::Bool, y::Bool) = div(x,y)
 rem(x::Bool, y::Bool) = y ? false : throw(DivideError())
 mod(x::Bool, y::Bool) = rem(x,y)

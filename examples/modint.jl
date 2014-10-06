@@ -17,4 +17,6 @@ Base.promote_rule{n}(::Type{ModInt{n}}, ::Type{Int}) = ModInt{n}
 Base.show{n}(io::IO, k::ModInt{n}) = print(io, "$(k.k) mod $n")
 Base.showcompact(io::IO, k::ModInt) = print(io, k.k)
 
+Base.inv{n}(a::ModInt{n}) = ModInt{n}(invmod(a.k, n))
+
 end # module

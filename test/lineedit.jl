@@ -4,24 +4,24 @@ using TestHelpers
 a_foo = 0
 
 const foo_keymap = {
-    'a' => :( global a_foo; a_foo += 1)
+    'a' => (o...)->(global a_foo; a_foo += 1)
 }
 
 b_foo = 0
 
 const foo2_keymap = {
-    'b' => :( global b_foo; b_foo += 1)
+    'b' => (o...)->(global b_foo; b_foo += 1)
 }
 
 a_bar = 0
 b_bar = 0
 
 const bar_keymap = {
-    'a' => :( global a_bar; a_bar += 1),
-    'b' => :( global b_bar; b_bar += 1)
+    'a' => (o...)->(global a_bar; a_bar += 1),
+    'b' => (o...)->(global b_bar; b_bar += 1)
 }
 
-test1_func = @eval @LineEdit.keymap $foo_keymap
+test1_func = LineEdit.keymap([foo_keymap])
 
 function run_test(f,buf)
     global a_foo, a_bar, b_bar
@@ -34,13 +34,13 @@ end
 run_test(test1_func,IOBuffer("aa"))
 @test a_foo == 2
 
-test2_func = @eval @LineEdit.keymap $([foo2_keymap, foo_keymap])
+test2_func = LineEdit.keymap([foo2_keymap, foo_keymap])
 
 run_test(test2_func,IOBuffer("aaabb"))
 @test a_foo == 3
 @test b_foo == 2
 
-test3_func = @eval @LineEdit.keymap $([bar_keymap, foo_keymap])
+test3_func = LineEdit.keymap([bar_keymap, foo_keymap])
 
 run_test(test3_func,IOBuffer("aab"))
 @test a_bar == 2
@@ -186,7 +186,7 @@ end
 
 let
     term = TestHelpers.FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
-    s = LineEdit.init_state(term, Base.REPL.ModalInterface([Base.REPL.Prompt("test> ")]))
+    s = LineEdit.init_state(term, ModalInterface([Prompt("test> ")]))
     buf = LineEdit.buffer(s)
 
     LineEdit.edit_insert(s,"first line\nsecond line\nthird line")

@@ -23,10 +23,12 @@ struct ObjectInfo {
 };
 #endif
 
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+#if defined(_OS_WINDOWS_)
 #include <dbghelp.h>
+#if defined(_CPU_X86_64_)
 extern "C" EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord,void *EstablisherFrame, PCONTEXT ContextRecord, void *DispatcherContext);
 extern "C" volatile int jl_in_stackwalk;
+#endif
 #endif
 
 struct revcomp {
@@ -243,7 +245,7 @@ bool getObjUUID(llvm::object::MachOObjectFile *obj, uint8_t uuid[16])
 }
 #endif
 
-extern char *jl_sysimage_name;
+extern "C" char *jl_sysimage_name;
 
 bool jl_is_sysimg(const char *path)
 {
@@ -300,18 +302,23 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
 #endif
         if (it == objfilemap.end()) {
 #ifdef _OS_DARWIN_
-            // First find the uuid of the object file (we'll use this to make sure we find the
-            // correct debug symbol file).
-            uint8_t uuid[16], uuid2[16];
-
+           // First find the uuid of the object file (we'll use this to make sure we find the
+           // correct debug symbol file).
+           uint8_t uuid[16], uuid2[16];
+#ifdef LLVM36
+	   std::unique_ptr<MemoryBuffer> membuf = MemoryBuffer::getMemBuffer(
+                StringRef((const char *)fbase, (size_t)(((uint64_t)-1)-fbase)),"",false);
+	   auto origerrorobj = llvm::object::ObjectFile::createObjectFile(
+	        membuf->getMemBufferRef(), sys::fs::file_magic::unknown);
+#elif LLVM35
             MemoryBuffer *membuf = MemoryBuffer::getMemBuffer(
                 StringRef((const char *)fbase, (size_t)(((uint64_t)-1)-fbase)),"",false);
-
-#ifdef LLVM35
             std::unique_ptr<MemoryBuffer> buf(membuf);
             auto origerrorobj = llvm::object::ObjectFile::createObjectFile(
                 buf, sys::fs::file_magic::unknown);
 #else
+            MemoryBuffer *membuf = MemoryBuffer::getMemBuffer(
+	        StringRef((const char *)fbase, (size_t)(((uint64_t)-1)-fbase)),"",false);
             llvm::object::ObjectFile *origerrorobj = llvm::object::ObjectFile::createObjectFile(
                 membuf);
 #endif
@@ -357,7 +364,8 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
 #endif
 #ifdef LLVM36
             if (errorobj) {
-                obj = errorobj.get().release();
+                obj = errorobj.get().getBinary().release();
+                errorobj.get().getBuffer().release();
 #elif LLVM35
             if (errorobj) {
                 obj = errorobj.get();

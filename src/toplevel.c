@@ -60,6 +60,8 @@ jl_module_t *jl_new_main_module(void)
                   (jl_value_t*)jl_main_module);
     jl_current_task->current_module = jl_main_module;
 
+    jl_module_import(jl_main_module, jl_core_module, jl_symbol("eval"));
+
     return old_main;
 }
 
@@ -450,7 +452,8 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
     int ewc = 0;
     JL_GC_PUSH3(&thunk, &thk, &ex);
 
-    if (ex->head != body_sym && ex->head != thunk_sym) {
+    if (ex->head != body_sym && ex->head != thunk_sym && ex->head != return_sym &&
+        ex->head != method_sym) {
         // not yet expanded
         ex = (jl_expr_t*)jl_expand(e);
     }
@@ -546,8 +549,13 @@ jl_value_t *jl_parse_eval_all(char *fname)
         fn = jl_pchar_to_string(fname, strlen(fname));
         ln = jl_box_long(jl_lineno);
         jl_lineno = last_lineno;
-        jl_rethrow_other(jl_new_struct(jl_loaderror_type, fn, ln,
-                                       jl_exception_in_transit));
+        if (jl_loaderror_type == NULL) {
+            jl_rethrow();
+        }
+        else {
+            jl_rethrow_other(jl_new_struct(jl_loaderror_type, fn, ln,
+                                           jl_exception_in_transit));
+        }
     }
     jl_stop_parsing();
     jl_lineno = last_lineno;
@@ -561,7 +569,7 @@ jl_value_t *jl_load(const char *fname)
         //This deliberatly uses ios, because stdio initialization has been moved to Julia
         jl_printf(JL_STDOUT, "%s\r\n", fname);
 #ifdef _OS_WINDOWS_        
-        uv_run(uv_default_loop(), 1);
+        uv_run(uv_default_loop(), (uv_run_mode)1);
 #endif
     }
     char *fpath = (char*)fname;
@@ -639,7 +647,7 @@ static int type_contains(jl_value_t *ty, jl_value_t *x)
 void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li);
 
 DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
-                                    jl_tuple_t *argtypes, jl_function_t *f)
+                                    jl_tuple_t *argtypes, jl_function_t *f, jl_value_t *isstaged)
 {
     // argtypes is a tuple ((types...), (typevars...))
     jl_tuple_t *t = (jl_tuple_t*)jl_t1(argtypes);
@@ -699,7 +707,7 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_
     assert(jl_is_tuple(argtypes));
     assert(jl_is_tuple(t));
 
-    jl_add_method((jl_function_t*)gf, argtypes, f, t);
+    jl_add_method((jl_function_t*)gf, argtypes, f, t, isstaged == jl_true);
     if (jl_boot_file_loaded &&
         f->linfo && f->linfo->ast && jl_is_expr(f->linfo->ast)) {
         jl_lambda_info_t *li = f->linfo;

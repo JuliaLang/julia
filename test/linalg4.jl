@@ -25,151 +25,6 @@ end
 
 n=12 #Size of matrix problem to test
 
-debug && println("Triangular matrices")
-for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
-    debug && println("elty is $(elty), relty is $(relty)")
-    A = convert(Matrix{elty}, randn(n, n))
-    b = convert(Matrix{elty}, randn(n, 2))
-    if elty <: Complex
-        A += im*convert(Matrix{elty}, randn(n, n))
-        b += im*convert(Matrix{elty}, randn(n, 2))
-    end
-
-    for (M, TM) in ((triu(A), Triangular(A, :U)), (tril(A), Triangular(A, :L)))
-        
-        ##Idempotent tests #XXX - not implemented
-        #for func in (conj, transpose, ctranspose)
-        #    @test full(func(func(TM))) == M
-        #end
-
-        debug && println("Linear solver")
-        x = M \ b
-        tx = TM \ b
-        condM = elty <:BlasFloat ? cond(TM, Inf) : convert(relty, cond(complex128(M), Inf))
-        @test norm(x-tx,Inf) <= 4*condM*max(eps()*norm(tx,Inf), eps(relty)*norm(x,Inf))
-        if elty <: BlasFloat #test naivesub! against LAPACK
-            tx = [LinAlg.naivesub!(TM, b[:,1]) LinAlg.naivesub!(TM, b[:,2])]
-            @test norm(x-tx,Inf) <= 4*condM*max(eps()*norm(tx,Inf), eps(relty)*norm(x,Inf))
-        end
-
-        debug && println("Eigensystems")
-        vals1, vecs1 = eig(complex128(M))
-        vals2, vecs2 = eig(TM)
-        res1=norm(complex128(vecs1*diagm(vals1)*inv(vecs1) - M))
-        res2=norm(complex128(vecs2*diagm(vals2)*inv(vecs2) - full(TM)))
-        @test_approx_eq_eps res1 res2 res1+res2
-
-        if elty <:BlasFloat
-            debug && println("Condition number tests - can be VERY approximate")
-            for p in [1.0, Inf]
-                @test_approx_eq_eps cond(TM, p) cond(M, p) (cond(TM,p)+cond(M,p))
-            end
-        end
-
-        debug && println("Binary operations")
-        B = convert(Matrix{elty}, randn(n, n))
-        for (M2, TM2) in ((triu(B), Triangular(B, :U)), (tril(B), Triangular(B, :L)))
-            for op in (*, +, -)
-                @test_approx_eq full(op(TM, TM2)) op(M, M2)
-                @test_approx_eq full(op(TM, M2)) op(M, M2)
-                @test_approx_eq full(op(M, TM2)) op(M, M2)
-            end
-        end
-    end
-end
-
-debug && println("Tridiagonal matrices")
-for relty in (Float32, Float64), elty in (relty, Complex{relty})
-    debug && println("relty is $(relty), elty is $(elty)")
-    a = convert(Vector{elty}, randn(n-1))
-    b = convert(Vector{elty}, randn(n))
-    c = convert(Vector{elty}, randn(n-1))
-    if elty <: Complex
-        a += im*convert(Vector{elty}, randn(n-1))
-        b += im*convert(Vector{elty}, randn(n))
-        c += im*convert(Vector{elty}, randn(n-1))
-    end
-
-    A=Tridiagonal(a, b, c)
-    fA=(elty<:Complex?complex128:float64)(full(A))
-
-    debug && println("Simple unary functions")
-    for func in (det, inv)
-        @test_approx_eq_eps func(A) func(fA) n^2*sqrt(eps(relty))
-    end
-
-    debug && println("Binary operations")
-    a = convert(Vector{elty}, randn(n-1))
-    b = convert(Vector{elty}, randn(n))
-    c = convert(Vector{elty}, randn(n-1))
-    if elty <: Complex
-        a += im*convert(Vector{elty}, randn(n-1))
-        b += im*convert(Vector{elty}, randn(n))
-        c += im*convert(Vector{elty}, randn(n-1))
-    end
-
-    B=Tridiagonal(a, b, c)
-    fB=(elty<:Complex?complex128:float64)(full(B))
-
-    for op in (+, -, *)
-        @test_approx_eq full(op(A, B)) op(fA, fB)
-    end
-end
-
-debug && println("SymTridiagonal (symmetric tridiagonal) matrices")
-for relty in (Float32, Float64), elty in (relty, )#XXX Complex{relty}) doesn't work
-    debug && println("elty is $(elty), relty is $(relty)")
-    a = convert(Vector{elty}, randn(n))
-    b = convert(Vector{elty}, randn(n-1))
-    if elty <: Complex
-        a += im*convert(Vector{elty}, randn(n))
-        b += im*convert(Vector{elty}, randn(n-1))
-    end
-
-    A=SymTridiagonal(a, b)
-    fA=(elty<:Complex?complex128:float64)(full(A))
-    
-    debug && println("Idempotent tests")
-    for func in (conj, transpose, ctranspose)
-        @test func(func(A)) == A
-    end
-
-    debug && println("Simple unary functions")
-    for func in (det, inv)
-        @test_approx_eq_eps func(A) func(fA) n^2*sqrt(eps(relty))
-    end
-
-    debug && println("Eigensystems")
-    zero, infinity = convert(elty, 0), convert(elty, Inf)
-    debug && println("This tests eigenvalue and eigenvector computations using stebz! and stein!")
-    w, iblock, isplit = LinAlg.LAPACK.stebz!('V','B',-infinity,infinity,0,0,zero,a,b)
-    evecs = LinAlg.LAPACK.stein!(a,b,w)
-
-    (e, v)=eig(SymTridiagonal(a,b))
-    @test_approx_eq e w
-    test_approx_eq_vecs(v, evecs)
-
-    debug && println("stein! call using iblock and isplit")
-    w, iblock, isplit = LinAlg.LAPACK.stebz!('V','B',-infinity,infinity,0,0,zero,a,b)
-    evecs = LinAlg.LAPACK.stein!(a,b,w,iblock,isplit)
-    test_approx_eq_vecs(v, evecs)
-
-    debug && println("Binary operations")
-    a = convert(Vector{elty}, randn(n))
-    b = convert(Vector{elty}, randn(n-1))
-    if elty <: Complex
-        a += im*convert(Vector{elty}, randn(n-1))
-        b += im*convert(Vector{elty}, randn(n))
-    end
-
-    B=SymTridiagonal(a, b)
-    fB=(elty<:Complex?complex128:float64)(full(B))
-
-    for op in (+, -, *)
-        @test_approx_eq full(op(A, B)) op(fA, fB)
-    end
-end
-
 #Issue #7647: test xsyevr, xheevr, xstevr drivers
 for Mi7647 in {Symmetric(diagm(1.0:3.0)), Hermitian(diagm(1.0:3.0)),
           Hermitian(diagm(complex(1.0:3.0))), SymTridiagonal([1.0:3.0;], zeros(2))}
@@ -331,6 +186,19 @@ for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Triangular, Matrix]
     @test full(convert(newtype, A)) == full(A)
 end
 
+# Test generic cholfact!
+for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
+    if elty <: Complex
+        A = complex(randn(5,5), randn(5,5))
+    else
+        A = randn(5,5)
+    end
+    A = convert(Matrix{elty}, A'A)
+    for ul in (:U, :L)
+        @test_approx_eq full(cholfact(A, ul)[ul]) full(invoke(Base.LinAlg.chol!, (AbstractMatrix,Symbol),copy(A), ul))
+    end
+end
+
 # Issue #7886
 x, r = LAPACK.gelsy!([0 1; 0 2; 0 3.], [2, 4, 6.])
 @test_approx_eq x [0,2]
@@ -341,3 +209,11 @@ A7933 = [1 2; 3 4]
 B7933 = copy(A7933)
 C7933 = full(Symmetric(A7933))
 @test A7933 == B7933
+
+# Issues #8057 and #8058
+for f in (eigfact, eigvals)
+    for A in (Symmetric(randn(2,2)), Hermitian(complex(randn(2,2), randn(2,2))))
+        @test_throws ArgumentError f(A, 3, 2)
+        @test_throws ArgumentError f(A, 1:4)
+    end
+end

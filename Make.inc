@@ -25,8 +25,6 @@ USE_SYSTEM_GMP=0
 USE_SYSTEM_MPFR=0
 USE_SYSTEM_ARPACK=0
 USE_SYSTEM_SUITESPARSE=0
-USE_SYSTEM_ZLIB=0
-USE_SYSTEM_GRISU=0
 USE_SYSTEM_RMATH=0
 USE_SYSTEM_LIBUV=0
 USE_SYSTEM_UTF8PROC=0
@@ -67,7 +65,7 @@ endif
 # disable automatic Makefile rules
 .SUFFIXES:
 
-# find out if git repository is availible
+# find out if git repository is available
 ifeq ($(shell [ -e $(JULIAHOME)/.git ] && echo true || echo "Warning: git information unavailable; versioning information limited" >&2), true)
 NO_GIT = 0
 else
@@ -82,6 +80,7 @@ JULIA_COMMIT = $(JULIA_VERSION)
 endif
 
 # Directories where said libraries get installed to
+prefix ?= $(abspath julia-$(JULIA_COMMIT))
 bindir = $(prefix)/bin
 libdir = $(prefix)/lib
 private_libdir = $(libdir)/julia
@@ -100,6 +99,14 @@ build_datarootdir = $(build_prefix)/share
 build_includedir = $(build_prefix)/include
 build_sysconfdir = $(build_prefix)/etc
 
+
+# Calculate relative paths to libdir, private_libdir, datarootdir, and sysconfdir
+build_libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(build_bindir) $(build_libdir))
+libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(libdir))
+build_private_libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(build_bindir) $(build_private_libdir))
+private_libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(private_libdir))
+datarootdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(datarootdir))
+sysconfdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(sysconfdir))
 
 # This used for debian packaging, to conform to library layout guidelines
 ifeq ($(MULTIARCH_INSTALL), 1)
@@ -287,14 +294,21 @@ CXX = icpc
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -fp-model precise -fp-model except -no-ftz
 JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
-DEBUGFLAGS = -O0 -ggdb3 -DJL_DEBUG_BUILD -fstack-protector-all
+DEBUGFLAGS = -O0 -g -DJL_DEBUG_BUILD -fstack-protector-all
 SHIPFLAGS = -O3 -g -falign-functions
 endif
 
-ifneq ($(USEICC),1)
-JCFLAGS += -m$(BINARY)
-JCXXFLAGS += -m$(BINARY)
-JFFLAGS += -m$(BINARY)
+ifeq ($(USECCACHE), 1)
+CC := ccache $(CC)
+CXX := ccache $(CXX)
+ifeq ($(USECLANG),1)
+# ccache and Clang don't do well together
+# http://petereisentraut.blogspot.be/2011/05/ccache-and-clang.html
+CC += -Qunused-arguments -fcolor-diagnostics
+CXX += -Qunused-arguments -fcolor-diagnostics
+# http://petereisentraut.blogspot.be/2011/09/ccache-and-clang-part-2.html
+export CCACHE_CPP2 := yes
+endif
 endif
 
 ifeq ($(LLVM_VER),svn)
@@ -320,13 +334,6 @@ LD := link
 endif
 RANLIB := $(CROSS_COMPILE)ranlib
 
-
-# Calculate relative paths to libdir and private_libdir
-build_libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(build_bindir) $(build_libdir))
-libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(libdir))
-
-build_private_libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(build_bindir) $(build_private_libdir))
-private_libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(private_libdir))
 
 # if not absolute, then relative to the directory of the julia executable
 JCPPFLAGS += "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys.ji\""
@@ -414,6 +421,15 @@ AS += -q
 endif
 endif
 
+# Set some ARCH-specific flags
+ifneq ($(USEICC),1)
+ifneq ($(ARCH), arm)
+JCFLAGS += -m$(BINARY)
+JCXXFLAGS += -m$(BINARY)
+JFFLAGS += -m$(BINARY)
+endif
+endif
+
 JULIA_CPU_TARGET ?= native
 JCPPFLAGS += -DJULIA_TARGET_ARCH=$(JULIA_CPU_TARGET)
 
@@ -434,12 +450,15 @@ else ifeq ($(ARCH),i686)
 BINARY=32
 else ifeq ($(ARCH),x86_64)
 BINARY=64
+else ifeq ($(ARCH),arm)
+BINARY=32
 else
 $(error "unknown word-size for arch: $(ARCH)")
 endif
 
 ifeq ($(USEGCC),1)
-ifneq ($(ARCH), ppc64)
+ifeq ($(ARCH), arm)
+else ifneq ($(ARCH), ppc64)
   SHIPFLAGS += -momit-leaf-frame-pointer
 endif
 endif
@@ -628,7 +647,7 @@ JLDFLAGS += -Wl,--large-address-aware
 endif
 else
 OSLIBS += kernel32.lib ws2_32.lib psapi.lib advapi32.lib iphlpapi.lib shell32.lib winmm.lib
-JLDFLAGS =
+JLDFLAGS = -stack:8388608
 endif
 JCPPFLAGS += -D_WIN32_WINNT=0x0600
 UNTRUSTED_SYSTEM_LIBM = 1
@@ -742,22 +761,20 @@ else
 endif
 endef
 
-ifeq ($(BUILD_OS), WINNT)
+ifeq ($(BUILD_OS), WINNT) # MSYS
 spawn = $(1)
-else ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
+cygpath_w = $(1)
+else ifneq (,$(findstring CYGWIN,$(BUILD_OS))) # Cygwin
 spawn = $(1)
-else
-ifeq ($(OS), WINNT)
-spawn = wine $(1)
-else
-spawn = $(1)
-endif
-endif
-
-ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
 cygpath_w = `cygpath -w $(1)`
 else
+ifeq ($(OS), WINNT) # unix-to-Windows cross-compile
+spawn = wine $(1)
+cygpath_w = `winepath -w $(1)`
+else # not Windows
+spawn = $(1)
 cygpath_w = $(1)
+endif
 endif
 
 exec = $(shell $(call spawn,$(1)))
@@ -771,14 +788,7 @@ pathsearch = $(firstword $(wildcard $(addsuffix /$(1),$(subst :, ,$(2)))))
 
 JULIA_EXECUTABLE_debug = $(build_bindir)/julia-debug$(EXE)
 JULIA_EXECUTABLE_release = $(build_bindir)/julia$(EXE)
-
-ifeq ($(OS), WINNT)
 JULIA_EXECUTABLE = $(JULIA_EXECUTABLE_release)
-else ifdef JULIA_VAGRANT_BUILD
-JULIA_EXECUTABLE = $(JULIA_EXECUTABLE_release)
-else
-JULIA_EXECUTABLE = $(JULIAHOME)/julia
-endif
 
 # Colors for make
 ifndef VERBOSE
