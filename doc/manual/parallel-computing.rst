@@ -37,7 +37,7 @@ return immediately; the process that made the call proceeds to its
 next operation while the remote call happens somewhere else. You can
 wait for a remote call to finish by calling ``wait`` on its remote
 reference, and you can obtain the full value of the result using
-``fetch``. You can store a value to a remote reference using ``put``.
+``fetch``. You can store a value to a remote reference using ``put!``.
 
 Let's try this out. Starting with ``julia -p n`` provides ``n`` worker
 processes on the local machine. Generally it makes sense for ``n`` to
@@ -115,8 +115,12 @@ process that owns ``r``, so the ``fetch`` will be a no-op.
 as a :ref:`macro <man-macros>`. It is possible to define your
 own such constructs.)
 
-One important point is that your code must be available on any process
-that runs it. For example, type the following into the julia prompt::
+
+Code Availability and Loading Packages
+--------------------------------------
+
+Your code must be available on any process that runs it. For example,
+type the following into the julia prompt::
 
     julia> function rand2(dims...)
              return 2*rand(dims...)
@@ -136,20 +140,48 @@ that runs it. For example, type the following into the julia prompt::
     julia> exception on 2: in anonymous: rand2 not defined 
 
 Process 1 knew about the function ``rand2``, but process 2 did not.
-To make your code available to all processes, the ``require`` function will
-automatically load a source file on all currently available processes::
 
-    julia> require("myfile")
+Most commonly you'll be loading code from files or packages, and you
+have a considerable amount of flexibility in controlling which
+processes load code.  Consider a file, ``"DummyModule.jl"``, containing
+the following code::
 
-In a cluster, the contents of the file (and any files loaded recursively)
-will be sent over the network. It is also useful to execute a statement on all processes. This can be done with the ``@everywhere`` macro::
+    module DummyModule
+
+    export MyType, f
+
+    type MyType
+        a::Int
+    end
+
+    f(x) = x^2+1
+
+    println("loaded")
+
+    end
+
+Starting julia with ``julia -p 2``, you can use this to verify the following:
+
+- ``include("DummyModule.jl")`` loads the file on just a single process (whichever one executes the statement).
+- ``using DummyModule`` causes the module to be loaded on all processes; however, the module is brought into scope only on the one executing the statement.
+- As long as ``DummyModule`` is loaded on process 2, commands like ::
+
+    rr = RemoteRef(2)
+    put!(rr, MyType(7))
+
+  allow you to store an object of type ``MyType`` on process 2 even if ``DummyModule`` is not in scope on process 2.
+
+You can force a command to run on all processes using the ``@everywhere`` macro.
+Consequently, an easy way to load *and* use a package on all processes is::
+
+    @everywhere using DummyModule
+
+``@everywhere`` can also be used to directly define a function on all processes::
 
     julia> @everywhere id = myid()
 
     julia> remotecall_fetch(2, ()->id)
     2
-
-    @everywhere include("defs.jl")
 
 A file can also be preloaded on multiple processes at startup, and a driver script can be used to drive the computation::
 
@@ -173,8 +205,9 @@ The base Julia installation has in-built support for two types of clusters:
 Functions ``addprocs``, ``rmprocs``, ``workers``, and others are available as a programmatic means of 
 adding, removing and querying the processes in a cluster.
 
-Other types of clusters can be supported by writing your own custom ClusterManager. See section on 
-ClusterManagers.
+Other types of clusters can be supported by writing your own custom
+``ClusterManager``, as described below in the :ref:`man-clustermanagers`
+section.
 
 Data Movement
 -------------
@@ -302,7 +335,7 @@ the variables are read-only::
 
     a = randn(1000)
     @parallel (+) for i=1:100000
-      f(a[randi(end)])
+      f(a[rand(1:end)])
     end
 
 Here each iteration applies ``f`` to a randomly-chosen sample from a
@@ -627,40 +660,86 @@ execute (for any particular element of ``S``) will have its ``pid``
 retained.
 
 
+.. _man-clustermanagers:
+
 ClusterManagers
 ---------------
 
 Julia worker processes can also be spawned on arbitrary machines,
 enabling Julia's natural parallelism to function quite transparently
 in a cluster environment. The ``ClusterManager`` interface provides a
-way to specify a means to launch and manage worker processes. For
-example, ``ssh`` clusters are also implemented using a ``ClusterManager``::
+way to specify a means to launch and manage worker processes. 
 
-    immutable SSHManager <: ClusterManager
-        launch::Function
-        manage::Function
-        machines::AbstractVector
+Thus, a custom cluster manager would need to:
 
-        SSHManager(; machines=[]) = new(launch_ssh_workers, manage_ssh_workers, machines)
+- be a subtype of the abstract ``ClusterManager``
+- implement ``launch``, a method responsible for launching new workers
+- implement ``manage``, which is called at various events during a worker's lifetime
+
+As an example let us see how the ``LocalManager``, the manager responsible for 
+starting workers on the same host, is implemented::
+
+    immutable LocalManager <: ClusterManager
     end
 
-    function launch_ssh_workers(cman::SSHManager, np::Integer, config::Dict)
+    function launch(manager::LocalManager, np::Integer, config::Dict, 
+                                                resp_arr::Array, c::Condition)
         ...
     end
 
-    function manage_ssh_workers(id::Integer, config::Dict, op::Symbol)
+    function manage(manager::LocalManager, id::Integer, config::Dict, op::Symbol)
         ...
     end
 
-where ``launch_ssh_workers`` is responsible for instantiating new
-Julia processes and ``manage_ssh_workers`` provides a means to manage
-those processes, e.g. for sending interrupt signals. New processes can
-then be added at runtime using ``addprocs``::
+The ``launch`` method takes the following arguments:
 
-    addprocs(5, cman=LocalManager())
+    - ``manager::LocalManager`` - used to dispatch the call to the appropriate implementation 
+    - ``np::Integer`` - number of workers to be launched 
+    - ``config::Dict`` - all the keyword arguments provided as part of the ``addprocs`` call 
+    - ``resp_arr::Array`` - the array to append one or more worker information tuples too 
+    - ``c::Condition`` - the condition variable to be notified as and when workers are launched.
+                       
+The ``launch`` method is called asynchronously in a separate task. The termination of this task 
+signals that all requested workers have been launched. Hence the ``launch`` function MUST exit as soon 
+as all the requested workers have been launched. The julia worker MUST be launched with a ``--worker``
+argument. Optionally ``--bind-to bind_addr[:port]`` may also be specified to enable other workers 
+to connect to it only at the specified ``bind_addr`` and ``port``.
 
-which specifies a number of processes to add and a ``ClusterManager`` to
-use for launching those processes.
+
+Arrays of worker information tuples that are appended to ``resp_arr`` can take any one of 
+the following forms::
+
+    (io::IO, config::Dict)
+    
+    (io::IO, host::String, config::Dict)
+    
+    (io::IO, host::String, port::Integer, config::Dict)
+    
+    (host::String, port::Integer, config::Dict)
+
+where:
+
+    - ``io::IO`` is the output stream of the worker.
+    - ``host::String`` and ``port::Integer`` are the host:port to connect to. If not provided
+      they are read from the ``io`` stream provided.
+    - ``config::Dict`` is the configuration dictionary for the worker. The ``launch``
+      function can add/modify any data that may be required for managing 
+      the worker.
+
+The ``manage`` method takes the following arguments:
+
+    - ``manager::ClusterManager`` - used to dispatch the call to the appropriate implementation 
+    - ``id::Integer`` - The Julia process id
+    - ``config::Dict`` - configuration dictionary for the worker. The data may have been modified by the ``launch`` method
+    - ``op::Symbol`` - one of ``:register``, ``:deregister``, ``:interrupt`` or ``:finalize``.
+      The ``manage`` method is called at different times during the worker's lifetime:
+
+      - with ``:register``/``:deregister`` when a worker is added / removed
+        from the Julia worker pool.
+      - with ``:interrupt`` when ``interrupt(workers)`` is called. The
+        ``ClusterManager`` should signal the appropriate worker with an
+        interrupt signal.
+      - with ``:finalize`` for cleanup purposes.
 
 .. rubric:: Footnotes
 

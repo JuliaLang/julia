@@ -285,11 +285,13 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, a::QuickSortAlg, o::Ordering
     return v
 end
 
-function sort!(v::AbstractVector, lo::Int, hi::Int, a::MergeSortAlg, o::Ordering, t=similar(v))
+function sort!(v::AbstractVector, lo::Int, hi::Int, a::MergeSortAlg, o::Ordering, t=similar(v,0))
     @inbounds if lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
 
         m = (lo+hi)>>>1
+        isempty(t) && resize!(t, m-lo+1)
+
         sort!(v, lo,  m,  a, o, t)
         sort!(v, m+1, hi, a, o, t)
 
@@ -365,7 +367,7 @@ using ...Order
 
 import Core.Intrinsics: unbox, slt_int
 import ..Sort: sort!
-import ...Order: lt, DirectOrdering, uint_mapping
+import ...Order: lt, DirectOrdering
 
 typealias Floats Union(Float32,Float64)
 

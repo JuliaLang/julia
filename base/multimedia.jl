@@ -38,7 +38,7 @@ mimewritable{mime}(::MIME{mime}, x) =
   method_exists(writemime, (IO, MIME{mime}, typeof(x)))
 
 # it is convenient to accept strings instead of ::MIME
-writemime(io, m::String, x) = writemime(io, MIME(m), x)
+writemime(io::IO, m::String, x) = writemime(io, MIME(m), x)
 mimewritable(m::String, x) = mimewritable(MIME(m), x)
 
 ###########################################################################

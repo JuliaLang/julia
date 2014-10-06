@@ -4,7 +4,7 @@ type Cmd <: AbstractCmd
     exec::Vector{ByteString}
     ignorestatus::Bool
     detach::Bool
-    env::Union(Array{ByteString},Nothing)
+    env::Union(Array{ByteString},Void)
     dir::UTF8String
     Cmd(exec::Vector{ByteString}) = new(exec, false, false, nothing, "")
 end

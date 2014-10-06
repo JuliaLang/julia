@@ -246,7 +246,7 @@ end
 # test hist
 
 @test sum(hist([1,2,3])[2]) == 3
-@test hist([])[2] == []
+@test hist(Union()[])[2] == []
 @test hist([1])[2] == [1]
 @test hist([1,2,3],[0,2,4]) == ([0,2,4],[2,1])
 @test hist([1,2,3],0:2:4) == (0:2:4,[2,1])

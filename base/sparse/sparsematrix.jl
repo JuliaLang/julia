@@ -210,6 +210,7 @@ function sparsevec(I::AbstractVector, V, m::Integer, combine::Function)
     p = sortperm(I)
     @inbounds I = I[p]
     (nI==0 || m >= I[end]) || throw(DimensionMismatch("indices cannot be larger than length of vector"))
+    (nI==0 || I[1] > 0) || throw(BoundsError())
     V = V[p]
     sparse_IJ_sorted!(I, ones(eltype(I), nI), V, m, 1, combine)
 end
@@ -430,24 +431,24 @@ end
 
 # Operations that may map nonzeros to zero, and zero to zero
 # Result is sparse
-for (op, restype) in ((:iceil, Int), (:ceil, Nothing),
-                      (:ifloor, Int), (:floor, Nothing),
-                      (:itrunc, Int), (:trunc, Nothing),
-                      (:iround, Int), (:round, Nothing),
-                      (:sin, Nothing), (:tan, Nothing),
-                      (:sinh, Nothing), (:tanh, Nothing),
-                      (:asin, Nothing), (:atan, Nothing),
-                      (:asinh, Nothing), (:atanh, Nothing),
-                      (:sinpi, Nothing), (:cosc, Nothing),
-                      (:sind, Nothing), (:tand, Nothing),
-                      (:asind, Nothing), (:atand, Nothing) )
+for (op, restype) in ((:iceil, Int), (:ceil, Void),
+                      (:ifloor, Int), (:floor, Void),
+                      (:itrunc, Int), (:trunc, Void),
+                      (:iround, Int), (:round, Void),
+                      (:sin, Void), (:tan, Void),
+                      (:sinh, Void), (:tanh, Void),
+                      (:asin, Void), (:atan, Void),
+                      (:asinh, Void), (:atanh, Void),
+                      (:sinpi, Void), (:cosc, Void),
+                      (:sind, Void), (:tand, Void),
+                      (:asind, Void), (:atand, Void) )
     @eval begin
 
         function ($op){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti})
             nfilledA = nnz(A)
             colptrB = Array(Ti, A.n+1)
             rowvalB = Array(Ti, nfilledA)
-            nzvalB = Array($(restype==Nothing ? (:Tv) : restype), nfilledA)
+            nzvalB = Array($(restype==Void ? (:Tv) : restype), nfilledA)
 
             k = 0 # number of additional zeros introduced by op(A)
             @inbounds for i = 1 : A.n
@@ -514,7 +515,7 @@ end
 
 ## Binary arithmetic and boolean operators
 
-for (op, restype) in ( (:+, Nothing), (:-, Nothing), (:.*, Nothing),
+for (op, restype) in ( (:+, Void), (:-, Void), (:.*, Void),
                        (:(.<), Bool) )
     @eval begin
 
@@ -537,7 +538,7 @@ for (op, restype) in ( (:+, Nothing), (:-, Nothing), (:.*, Nothing),
             nnzS = nnz(A) + nnz(B)
             colptrS = Array(Ti, A.n+1)
             rowvalS = Array(Ti, nnzS)
-            nzvalS = Array($(restype==Nothing ? (:Tv) : restype), nnzS)
+            nzvalS = Array($(restype==Void ? (:Tv) : restype), nnzS)
 
             z = zero(Tv)
 

@@ -161,3 +161,63 @@ The Julia REPL makes great use of key bindings.  Several control-key bindings we
 +------------------------+----------------------------------------------------+
 | Delete, ``^D``         | Forward delete one character (when buffer has text)|
 +------------------------+----------------------------------------------------+
+
+Customizing keybindings
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Julia's REPL keybindings may be fully customized to a user's preferences by passing a dictionary to ``REPL.setup_interface()``. The keys of this dictionary may be characters or strings. The key ``'*'`` refers to the default action. Control plus character ``x`` bindings are indicated with ``"^x"``. Meta plus ``x`` can be written ``"\\Mx"``. The values of the custom keymap must be ``nothing`` (indicating that the input should be ignored) or functions that accept the signature ``(PromptState, AbstractREPL, Char)``. For example, to bind the up and down arrow keys to move through history without prefix search, one could put the following code in ``.juliarc.jl``::
+
+    import Base: LineEdit, REPL
+
+    const mykeys = {
+      # Up Arrow
+      "\e[A" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_prev(s, LineEdit.mode(s).hist)),
+      # Down Arrow
+      "\e[B" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_next(s, LineEdit.mode(s).hist))
+    }
+
+    Base.active_repl.interface = REPL.setup_interface(Base.active_repl; extra_repl_keymap = mykeys)
+
+Users should refer to ``base/LineEdit.jl`` to discover the available actions on key input.
+
+Tab completion
+--------------
+
+In both the Julian and help modes of the REPL, one can enter the first few characters of a function or type and then press the tab key to get a list all matches::
+
+    julia> stri
+    stride     strides     string      stringmime  strip
+
+    julia> Stri
+    StridedArray    StridedVecOrMat  String
+    StridedMatrix   StridedVector
+
+The tab key can also be used to substitute LaTeX math symbols with their unicode equivalents,
+and get a list of LaTeX matches as well::
+
+    julia> \pi[TAB]
+    julia> π
+    π = 3.1415926535897...
+
+    julia> e\_1[TAB] = [1,0]
+    julia> e₁ = [1,0]
+    2-element Array{Int64,1}:
+     1
+     0
+
+    julia> e\^1[TAB] = [1 0]
+    julia> e¹ = [1 0]
+    1x2 Array{Int64,2}:
+     1  0
+
+    julia> \sqrt[TAB]2     # √ is equivalent to the sqrt() function
+    julia> √2
+    1.4142135623730951
+
+    julia> \hbar[TAB](h) = h / 2\pi[TAB]
+    julia> ħ(h) = h / 2π
+    ħ (generic function with 1 method)
+
+    julia> \h[TAB]
+    \hat              \heartsuit         \hksearow          \hookleftarrow     \hslash
+    \hbar             \hermitconjmatrix  \hkswarow          \hookrightarrow    \hspace

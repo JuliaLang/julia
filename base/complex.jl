@@ -11,8 +11,6 @@ typealias Complex128 Complex{Float64}
 typealias Complex64  Complex{Float32}
 typealias Complex32  Complex{Float16}
 
-sizeof{T<:Real}(::Type{Complex{T}}) = 2*sizeof(T)
-
 convert{T<:Real}(::Type{Complex{T}}, x::Real) = Complex{T}(x,0)
 convert{T<:Real}(::Type{Complex{T}}, z::Complex) = Complex{T}(real(z),imag(z))
 convert{T<:Real}(::Type{T}, z::Complex) =
@@ -63,7 +61,7 @@ end
 function complex_show(io::IO, z::Complex, compact::Bool)
     r, i = reim(z)
     compact ? showcompact(io,r) : show(io,r)
-    if signbit(i)==1 && !isnan(i)
+    if signbit(i) && !isnan(i)
         i = -i
         print(io, compact ? "-" : " - ")
     else
@@ -122,11 +120,10 @@ sign(z::Complex) = z/abs(z)
 -(x::Real, z::Complex) = Complex(x - real(z), -imag(z))
 -(z::Complex, x::Real) = Complex(real(z) - x, imag(z))
 
-/(z::Number, w::Complex) = z*inv(w)
 /(a::Real  , w::Complex) = a*inv(w)
 /(z::Complex, x::Real) = Complex(real(z)/x, imag(z)/x)
 
-function /(a::Complex, b::Complex)
+function /{T<:Real}(a::Complex{T}, b::Complex{T})
     are = real(a); aim = imag(a); bre = real(b); bim = imag(b)
     if abs(bre) <= abs(bim)
         if isinf(bre) && isinf(bim)
@@ -143,12 +140,15 @@ function /(a::Complex, b::Complex)
             r = bim / bre
         end
         den = bre + r*bim
-        complex((are + aim*r)/den, (aim - are*r)/den)
+        Complex((are + aim*r)/den, (aim - are*r)/den)
     end
 end
 
 inv{T<:Union(Float16,Float32)}(z::Complex{T}) =
-    oftype(z, conj(complex128(z))/abs2(complex128(z)))
+    oftype(z, conj(widen(z))/abs2(widen(z)))
+
+/{T<:Union(Float16,Float32)}(z::Complex{T}, w::Complex{T}) =
+    oftype(z, widen(z)*inv(widen(w)))
 
 # robust complex division for double precision
 # the first step is to scale variables if appropriate ,then do calculations

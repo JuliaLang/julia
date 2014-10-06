@@ -94,7 +94,7 @@ As stated before, you can accomplish the same thing by editing your ``~/.julia/v
      - Stats                         0.2.6
 
 This is functionally equivalent to calling ``Pkg.add("UTF16")``, except that ``Pkg.add`` doesn't change ``REQUIRE`` until *after* installation has completed, so if there are problems, ``REQUIRE`` will be left as it was before calling ``Pkg.add``.
-The format of the ``REQUIRE`` file is described in `Requirements`_;
+The format of the ``REQUIRE`` file is described in `Requirements Specification`_;
 it allows, among other things, requiring specific ranges of versions of packages.
 
 When you decide that you don't want to have a package around any more, you can use ``Pkg.rm`` to remove the requirement for it from the ``REQUIRE`` file::
@@ -276,12 +276,16 @@ if you feel like cleaning them up, you can go into the repo and delete those bra
 
 .. [2] Packages that aren't on branches will also be marked as dirty if you make changes in the repo, but that's a less common thing to do.
 
+*******************
 Package Development
--------------------
+*******************
 
 Julia's package manager is designed so that when you have a package installed, you are already in a position to look at its source code and full development history.
 You are also able to make changes to packages, commit them using git, and easily contribute fixes and enhancements upstream.
 Similarly, the system is designed so that if you want to create a new package, the simplest way to do so is within the infrastructure provided by the package manager.
+
+Initial Setup
+-------------
 
 Since packages are git repositories, before doing any package development you should setup the following standard global git configuration settings::
 
@@ -299,6 +303,9 @@ Once you do this, the package manager knows your GitHub user name and can config
 You should also `upload <https://github.com/settings/ssh>`_ your public SSH key to GitHub and set up an `SSH agent <http://linux.die.net/man/1/ssh-agent>`_ on your development machine so that you can push changes with minimal hassle.
 In the future, we will make this system extensible and support other common git hosting options like `BitBucket <https://bitbucket.org>`_ and allow developers to choose their favorite.
 
+Generating a New Package
+------------------------
+
 Suppose you want to create a new Julia package called ``FooBar``.
 To get started, do ``Pkg.generate(pkg,license)`` where ``pkg`` is the new package name and ``license`` is the name of a license that the package generator knows about::
 
@@ -308,6 +315,7 @@ To get started, do ``Pkg.generate(pkg,license)`` where ``pkg`` is the new packag
     INFO: Generating LICENSE.md
     INFO: Generating README.md
     INFO: Generating src/FooBar.jl
+    INFO: Generating test/runtests.jl
     INFO: Generating .travis.yml
     INFO: Committing FooBar generated files
 
@@ -324,16 +332,16 @@ This creates the directory ``~/.julia/v0.3/FooBar``, initializes it as a git rep
             license: MIT
             authors: Stefan Karpinski
             years:   2013
-            github:  true
-            travis:  true
+            user:    StefanKarpinski
 
-        Julia Version 0.2.0-rc1+23 [2039ec61a5]
+        Julia Version 0.3.0-prerelease+3217 [5fcfb13*]
 
-     .travis.yml   | 13 +++++++++++++
-     LICENSE.md    | 23 +++++++++++++++++++++++
-     README.md     |  3 +++
-     src/FooBar.jl |  5 +++++
-     4 files changed, 44 insertions(+)
+     .travis.yml      | 16 +++++++++++++
+     LICENSE.md       | 22 +++++++++++++++++++++++
+     README.md        |  3 +++
+     src/FooBar.jl    |  5 +++++
+     test/runtests.jl |  5 +++++
+     5 files changed, 51 insertions(+)
 
 At the moment, the package manager knows about the MIT "Expat" License, indicated by ``"MIT"``, the Simplified BSD License, indicated by ``"BSD"``, and version 2.0 of the Apache Software License, indicated by ``"ASL"``.
 If you want to use a different license, you can ask us to add it to the package generator, or just pick one of these three and then modify the ``~/.julia/v0.3/PACKAGE/LICENSE.md`` file after it has been generated.
@@ -342,6 +350,9 @@ If you created a GitHub account and configured git to know about it, ``Pkg.gener
 It will also automatically generate a ``.travis.yml`` file for using the `Travis <https://travis-ci.org>`_ automated testing service.
 You will have to enable testing on the Travis website for your package repository, but once you've done that, it will already have working tests.
 Of course, all the default testing does is verify that ``using FooBar`` in Julia works.
+
+Making Your Package Available
+-----------------------------
 
 Once you've made some commits and you're happy with how ``FooBar`` is working, you may want to get some other people to try it out.
 First you'll need to create the remote repository and push your code to it;
@@ -354,13 +365,12 @@ For your package, it will be your GitHub user name and the name of your package,
 People you send this URL to can use ``Pkg.clone`` to install the package and try it out::
 
     julia> Pkg.clone("git://github.com/StefanKarpinski/FooBar.jl.git")
-    INFO: Cloning FooBar from git://github.com/StefanKarpinski/FooBar.jl.git
-    Cloning into 'FooBar'...
-    remote: Counting objects: 22, done.
-    remote: Compressing objects: 100% (12/12), done.
-    remote: Total 22 (delta 7), reused 21 (delta 6)
-    Receiving objects: 100% (22/22), done.
-    Resolving deltas: 100% (7/7), done.
+    INFO: Cloning FooBar from git@github.com:StefanKarpinski/FooBar.jl.git
+
+.. [3] Installing and using GitHub's `"hub" tool <https://github.com/github/hub>`_ is highly recommended. It allows you to do things like run ``hub create`` in the package repo and have it automatically created via GitHub's API.
+
+Publishing Your Package
+-----------------------
 
 Once you've decided that ``FooBar`` is ready to be registered as an official package, you can add it to your local copy of ``METADATA`` using ``Pkg.register``::
 
@@ -389,24 +399,40 @@ This creates a commit in the ``~/.julia/v0.3/METADATA`` repo::
 This commit is only locally visible, however.  In order to make it visible to
 the world, you need to merge your local ``METADATA`` upstream into the official
 repo.  The ``Pkg.publish()`` command will fork the ``METADATA`` repository on
-GitHub, push your changes to your fork, and open a pull request.
+GitHub, push your changes to your fork, and open a pull request::
+
+    julia> Pkg.publish()
+    INFO: Validating METADATA
+    INFO: No new package versions to publish
+    INFO: Submitting METADATA changes
+    INFO: Forking JuliaLang/METADATA.jl to StefanKarpinski
+    INFO: Pushing changes as branch pull-request/ef45f54b
+    INFO: To create a pull-request open:
+
+      https://github.com/StefanKarpinski/METADATA.jl/compare/pull-request/ef45f54b
+
+For various reasons ``Pkg.publish()`` sometimes does not succeed.  
+In those cases, you may make a pull request on GitHub, which is `not difficult <https://help.github.com/articles/creating-a-pull-request>`_.
 
 Once the package URL for ``FooBar`` is registered in the official ``METADATA`` repo, people know where to clone the package from, but there still aren't any registered versions available.
 This means that ``Pkg.add("FooBar")`` won't work yet since it only installs official versions.
-People can, however, clone the package with just ``Pkg.clone("FooBar")`` without having to specify a URL for it.
+``Pkg.clone("FooBar")`` without having to specify a URL for it.
 Moreover, when they run ``Pkg.update()``, they will get the latest version of ``FooBar`` that you've pushed to the repo.
 This is a good way to have people test out your packages as you work on them, before they're ready for an official release.
 
-Once you are ready to make an official version of your package, you can tag and register it with the ``Pkg.tag`` command::
+Tagging Package Versions
+------------------------
+
+Once you are ready to make an official version your package, you can tag and register it with the ``Pkg.tag`` command::
 
     julia> Pkg.tag("FooBar")
-    INFO: Tagging FooBar v0.0.0
+    INFO: Tagging FooBar v0.0.1
     INFO: Committing METADATA for FooBar
 
-This tags ``v0.0.0`` in the ``FooBar`` repo::
+This tags ``v0.0.1`` in the ``FooBar`` repo::
 
     $ cd ~/.julia/v0.3/FooBar && git tag
-    v0.0.0
+    v0.0.1
 
 It also creates a new version entry in your local ``METADATA`` repo for ``FooBar``::
 
@@ -415,41 +441,65 @@ It also creates a new version entry in your local ``METADATA`` repo for ``FooBar
     Author: Stefan Karpinski <stefan@karpinski.org>
     Date:   Wed Oct 16 23:06:18 2013 -0400
 
-        Tag FooBar v0.0.0
+        Tag FooBar v0.0.1
 
-    diff --git a/FooBar/versions/0.0.0/sha1 b/FooBar/versions/0.0.0/sha1
+    diff --git a/FooBar/versions/0.0.1/sha1 b/FooBar/versions/0.0.1/sha1
     new file mode 100644
     index 0000000..c1cb1c1
     --- /dev/null
-    +++ b/FooBar/versions/0.0.0/sha1
+    +++ b/FooBar/versions/0.0.1/sha1
     @@ -0,0 +1 @@
     +84b8e266dae6de30ab9703150b3bf771ec7b6285
+
+If there is a ``REQUIRE`` file in your package repo, it will be copied into the appropriate spot in ``METADATA`` when you tag a version.
+Package developers should make sure that the ``REQUIRE`` file in their package correctly reflects the requirements of their package, which will automatically flow into the official metadata if you're using ``Pkg.tag``.
+See the `Requirements Specification <#man-package-requirements>`_ for the full format of ``REQUIRE``.
 
 The ``Pkg.tag`` command takes an optional second argument that is either an explicit version number object like ``v"0.0.1"`` or one of the symbols ``:patch``, ``:minor`` or ``:major``.
 These increment the patch, minor or major version number of your package intelligently.
 
-These changes to ``METADATA`` aren't available to anyone else until they've
-been included upstream.  You can use the ``Pkg.publish()`` command, which first
-makes sure that individual package repos have been tagged, pushes them if they
-haven't already been, and then opens a pull request to ``METADATA``.
+As with ``Pkg.register``, these changes to ``METADATA`` aren't
+available to anyone else until they've been included upstream.  Again,
+use the ``Pkg.publish()`` command, which first makes sure that
+individual package repos have been tagged, pushes them if they haven't
+already been, and then opens a pull request to ``METADATA``::
 
-If there is a ``REQUIRE`` file in your package repo, it will be copied into the appropriate spot in ``METADATA`` when you tag a version.
-Package developers should make sure that the ``REQUIRE`` file in their package correctly reflects the requirements of their package, which will automatically flow into the official metadata if you're using ``Pkg.tag``.
-If you need to fix the registered requirements of an already-published package version, you can do so just by editing the metadata for that version, which will still have the same commit hash – the hash associated with a version is permanent.
+    julia> Pkg.publish()
+    INFO: Validating METADATA
+    INFO: Pushing FooBar permanent tags: v0.0.1
+    INFO: Submitting METADATA changes
+    INFO: Forking JuliaLang/METADATA.jl to StefanKarpinski
+    INFO: Pushing changes as branch pull-request/3ef4f5c4
+    INFO: To create a pull-request open:
+
+      https://github.com/StefanKarpinski/METADATA.jl/compare/pull-request/3ef4f5c4
+
+Fixing Package Requirements
+---------------------------
+
+If you need to fix the registered requirements of an already-published package version, you can do so just by editing the metadata for that version, which will still have the same commit hash – the hash associated with a version is permanent::
+
+    $ cd ~/.julia/v0.3/METADATA/FooBar/versions/0.0.1 && cat requires
+    julia 0.3-
+    $ vi requires
+
 Since the commit hash stays the same, the contents of the ``REQUIRE`` file that will be checked out in the repo will **not** match the requirements in ``METADATA`` after such a change;
 this is unavoidable.
 When you fix the requirements in ``METADATA`` for a previous version of a package, however, you should also fix the ``REQUIRE`` file in the current version of the package.
 
-.. [3] Installing and using GitHub's `"hub" tool <https://github.com/github/hub>`_ is highly recommended. It allows you to do things like run ``hub create`` in the package repo and have it automatically created via GitHub's API.
+.. _man-package-requirements:
 
-Requirements
-------------
+Requirements Specification
+--------------------------
 
-The ``~/.julia/v0.3/REQUIRE`` file and ``REQUIRE`` files inside of packages use a simple line-based format to express what ranges of package versions are needed.
+The ``~/.julia/v0.3/REQUIRE`` file, the ``REQUIRE`` file inside packages, and the ``METADATA`` package ``requires`` files use a simple line-based format to express the ranges of package versions which need to be installed.  Package ``REQUIRE`` and ``METADATA requires`` files should also include the range of versions of ``julia`` the package is expected to work with.
+
 Here's how these files are parsed and interpreted.
-Everything after a ``#`` mark is stripped from each line as a comment.
-If nothing but whitespace is left, the line is ignored;
-if there are non-whitespace characters remaining, the line is a requirement and is split on whitespace into words.
+
+* Everything after a ``#`` mark is stripped from each line as a comment.
+* If nothing but whitespace is left, the line is ignored.
+* If there are non-whitespace characters remaining, the line is a requirement and the is split on whitespace into words.
+
 The simplest possible requirement is just the name of a package name on a line by itself::
 
     Distributions
@@ -520,3 +570,6 @@ various releases of Julia. Examples of runtime checks::
     VERSION >= v"0.2.1" #get at least version 0.2.1
 
 See the section on :ref:`version number literals <man-version-number-literals>` for a more complete description.
+
+
+

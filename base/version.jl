@@ -79,7 +79,7 @@ function split_idents(s::String)
     end
 end
 
-function convert(::Type{VersionNumber}, v::String)
+VersionNumber(v::String) = begin
     m = match(VERSION_REGEX, v)
     if m == nothing error("invalid version string: $v") end
     major, minor, patch, minus, prerl, plus, build = m.captures
@@ -94,7 +94,9 @@ function convert(::Type{VersionNumber}, v::String)
     VersionNumber(major, minor, patch, prerl, build)
 end
 
-macro v_str(v); convert(VersionNumber, v); end
+convert(::Type{VersionNumber}, v::String) = VersionNumber(v)
+
+macro v_str(v); VersionNumber(v); end 
 
 typemin(::Type{VersionNumber}) = v"0-"
 typemax(::Type{VersionNumber}) = VersionNumber(typemax(Int),typemax(Int),typemax(Int),(),("",))
@@ -149,7 +151,7 @@ function isless(a::VersionNumber, b::VersionNumber)
 end
 
 function hash(v::VersionNumber, h::Uint)
-    h += uint(0x8ff4ffdb75f9fede)
+    h += itrunc(Uint,0x8ff4ffdb75f9fede)
     h = hash(v.major, h)
     h = hash(v.minor, h)
     h = hash(v.patch, h)

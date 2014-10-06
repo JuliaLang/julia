@@ -90,7 +90,7 @@
 (define operator? (Set operators))
 
 (define reserved-words '(begin while if for try return break continue
-			 function macro quote let local global const
+			 stagedfunction function macro quote let local global const
 			 abstract typealias type bitstype immutable ccall do
 			 module baremodule using import export importall))
 
@@ -1000,8 +1000,8 @@
 
 ; parse expressions or blocks introduced by syntactic reserved words
 (define (parse-resword s word)
-  (with-bindings ((expect-end-current-line (input-port-line (ts:port s))))
   (define (expect-end s) (expect-end- s word))
+  (with-bindings ((expect-end-current-line (input-port-line (ts:port s))))
   (with-normal-ops
   (without-whitespace-newline
   (case word
@@ -1070,7 +1070,7 @@
        (if const
 	   `(const ,expr)
 	   expr)))
-    ((function macro)
+    ((stagedfunction function macro)
      (let* ((paren (eqv? (require-token s) #\())
 	    (sig   (parse-call s))
 	    (def   (if (or (symbol? sig)
@@ -1399,7 +1399,10 @@
 			(cons 'vect (reverse (cons nxt lst))))
 		 (loop (cons nxt lst) (parse-eq* s))))
 	    ((#\;)
-	     (error "unexpected semicolon in array expression"))
+	     (if (eqv? (require-token s) closer)
+		 (loop lst nxt)
+		 (let ((params (parse-arglist s closer)))
+		   `(vcat ,@params ,@lst ,nxt))))
 	    ((#\] #\})
 	     (error (string "unexpected \"" t "\"")))
 	    (else

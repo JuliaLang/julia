@@ -61,6 +61,11 @@ c,r = test_complete(s)
 @test r == 19:23
 @test s[r] == "getin"
 
+# inexistent completion inside a string
+s = "Pkg.add(\"lol"
+c,r,res = test_complete(s)
+@test res == false
+
 # test latex symbol completions
 s = "\\alpha"
 c,r = test_latexcomplete(s)
@@ -96,8 +101,33 @@ c,r = test_latexcomplete(s)
 
 @unix_only begin
     #Assume that we can rely on the existence and accessibility of /tmp
+
+    # Tests path in Julia code and closing " if it's a file
+    # Issue #8047
+    s = "@show \"/dev/nul"
+    c,r = test_complete(s)
+    @test "null\"" in c
+    @test r == 13:15
+    @test s[r] == "nul"
+
+    # Tests path in Julia code and not closing " if it's a directory
+    # Issue #8047
+    s = "@show \"/tm"
+    c,r = test_complete(s)
+    @test "tmp/" in c
+    @test r == 9:10
+    @test s[r] == "tm"
+
+    # Tests path in Julia code and not double-closing "
+    # Issue #8047
+    s = "@show \"/dev/nul\""
+    c,r = completions(s, 15)
+    @test "null" in c
+    @test r == 13:15
+    @test s[r] == "nul"
+
     s = "/t"
-    c,r = test_scomplete("/t")
+    c,r = test_scomplete(s)
     @test "tmp/" in c
     @test r == 2:2
     @test s[r] == "t"

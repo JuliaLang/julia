@@ -12,25 +12,12 @@ Prerequisites for building the documentation
 The documentation is built using [Sphinx](http://sphinx.pocoo.org/) and LaTeX.
 On ubuntu, you'll need the following packages installed:
 
-    python-sphinx
-    python-pip
     latex-cjk-all
     texlive
     texlive-lang-cjk
     texlive-latex-extra
 
-Use pip to install sphinx_rtd_theme:
-
-    $ sudo pip install sphinx_rtd_theme
-
-
-On OS X, you can install these packages with [homebrew](http://brew.sh/) and [MacTex](https://tug.org/mactex/)
-
-    brew install python
-    brew install sphinx
-	(install MacTex using the GUI installer)
-
-and install sphinx_rtd_theme as for Ubuntu.
+On OS X, you can install install MacTex using the GUI installer
 
 
 Building the documentation

@@ -29,13 +29,21 @@ value_t fl_skipws(value_t *args, u_int32_t nargs)
     ios_t *s = fl_toiostream(args[0], "skip-ws");
     int newlines = (args[1]!=FL_F);
     uint32_t wc=0;
-    if (ios_peekutf8(s, &wc) == IOS_EOF)
-        return FL_EOF;
     value_t skipped = FL_F;
-    while (!ios_eof(s) && (is_uws(wc) || is_bom(wc)) && (newlines || wc!=10)) {
-        skipped = FL_T;
-        ios_getutf8(s, &wc);
-        ios_peekutf8(s, &wc);
+    while (1) {
+        if (ios_peekutf8(s, &wc) == IOS_EOF) {
+            ios_getutf8(s, &wc);  // to set EOF flag if this is a true EOF
+            if (!ios_eof(s))
+                lerror(symbol("error"), "incomplete character");
+            return FL_EOF;
+        }
+        if (!ios_eof(s) && (is_uws(wc) || is_bom(wc)) && (newlines || wc!=10)) {
+            skipped = FL_T;
+            ios_getutf8(s, &wc);
+        }
+        else {
+            break;
+        }
     }
     return skipped;
 }

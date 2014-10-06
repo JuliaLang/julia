@@ -115,7 +115,7 @@ shuffle(a::AbstractVector) = shuffle!(copy(a))
 function randperm(n::Integer)
     a = Array(typeof(n), n)
     a[1] = 1
-    for i = 2:n
+    @inbounds for i = 2:n
         j = rand(1:i)
         a[i] = a[j]
         a[j] = i
@@ -126,7 +126,7 @@ end
 function randcycle(n::Integer)
     a = Array(typeof(n), n)
     a[1] = 1
-    for i = 2:n
+    @inbounds for i = 2:n
         j = rand(1:i-1)
         a[i] = a[j]
         a[j] = i

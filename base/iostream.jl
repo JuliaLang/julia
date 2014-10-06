@@ -71,7 +71,7 @@ function position(s::IOStream)
     return pos
 end
 
-eof(s::IOStream) = bool(ccall(:jl_ios_eof, Int32, (Ptr{Void},), s.ios))
+eof(s::IOStream) = ccall(:ios_eof_blocking, Int32, (Ptr{Void},), s.ios)!=0
 
 # For interfacing with C FILE* functions
 

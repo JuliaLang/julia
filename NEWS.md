@@ -6,8 +6,58 @@ New language features
 
   * Unicode version 7 is now supported for identifiers etcetera ([#7917]).
 
+  * Type parameters now permit any arbitrary `isbits` type, not just
+    `Int` and `Bool` ([#6081]).
+
+  * Keyword argument names can be computed, using syntax such as `f(; (name, val))` ([#7704]).
+
+  * (TODO pending final syntax) staged functions ([#7311]).
+
+Language changes
+----------------
+
+  * `None` is deprecated; use `Union()` instead ([#8423]).
+
+  * `Nothing` (the type of `nothing`) is renamed to `Void` ([#8423]).
+
 Library improvements
 --------------------
+
+  * `convert` now checks for overflow when truncating integers or converting between
+    signed and unsigned ([#5413]).
+
+  * Arithmetic is type-preserving for more types; e.g. `(x::Int8) + (y::Int8)` now
+    yields an `Int8` ([#3759]).
+
+  * Reductions (e.g. `reduce`, `sum`) widen small types (integers smaller than `Int`, and `Float16`).
+
+  * New `Dates` module for calendar dates and other time-interval calculations ([#7654]).
+
+  * Added generic Cholesky factorization, and the Cholesky factorization is now parametrized on the matrix type ([#7236]).
+
+  * Symmetric and Hermitian immutables are now parametrized on matrix type ([#7992]).
+
+  * Switch from `O(N)` to `O(logN)` algorithm for `dequeue!(pq, key)`
+    with `PriorityQueue`. This provides major speedups for large
+    queues ([#8011]).
+
+  * `PriorityQueue` now includes the order type among its parameters,
+    `PriorityQueue{KeyType,ValueType,OrderType}`. An empty queue can
+    be constructed as `pq = PriorityQueue(KeyType,ValueType)`, if you
+    intend to use the default `Forward` order, or
+    `pq = PriorityQueue(KeyType, ValueType, OrderType)` otherwise ([#8011]).
+
+  * Efficient `mean` and `median` for ranges ([#8089]).
+
+  * Character predicates such as `islower()`, `isspace()`, etc. use utf8proc/libmojibake
+    to provide uniform cross-platform behavior and up-to-date, locale-independent support
+    for Unicode standards ([#5939]).
+
+  * New `Nullable` type for missing data ([#8152]).
+
+  * New `ordschur` and `ordschur!` functions for sorting a schur factorization by the eigenvalues.
+
+  * `deepcopy` recurses through immutable types and makes copies of their mutable fields ([#8560]).
 
 Julia v0.3.0 Release Notes
 ==========================
@@ -42,7 +92,7 @@ New language features
 
   * Multi-line comments ([#69], [#6128]): `#= .... =#`
 
-  * `--bounds-check=yes|no` compiler option
+  * `--check-bounds=yes|no` compiler option
 
   * Unicode identifiers are normalized (NFC) so that different encodings
     of equivalent strings are treated as the same identifier ([#5462]).
@@ -883,10 +933,12 @@ Too numerous to mention.
 [#5832]: https://github.com/JuliaLang/julia/issues/5832
 [#5927]: https://github.com/JuliaLang/julia/issues/5927
 [#5936]: https://github.com/JuliaLang/julia/issues/5936
+[#5939]: https://github.com/JuliaLang/julia/issues/5939
 [#5970]: https://github.com/JuliaLang/julia/issues/5970
 [#6056]: https://github.com/JuliaLang/julia/issues/6056
 [#6057]: https://github.com/JuliaLang/julia/issues/6057
 [#6073]: https://github.com/JuliaLang/julia/issues/6073
+[#6081]: https://github.com/JuliaLang/julia/issues/6081
 [#6116]: https://github.com/JuliaLang/julia/issues/6116
 [#6128]: https://github.com/JuliaLang/julia/issues/6128
 [#6169]: https://github.com/JuliaLang/julia/issues/6169
@@ -918,6 +970,7 @@ Too numerous to mention.
 [#7125]: https://github.com/JuliaLang/julia/issues/7125
 [#7131]: https://github.com/JuliaLang/julia/issues/7131
 [#7146]: https://github.com/JuliaLang/julia/issues/7146
+[#7236]: https://github.com/JuliaLang/julia/issues/7236
 [#7242]: https://github.com/JuliaLang/julia/issues/7242
 [#7359]: https://github.com/JuliaLang/julia/issues/7359
 [#7365]: https://github.com/JuliaLang/julia/issues/7365
@@ -927,3 +980,14 @@ Too numerous to mention.
 [#7464]: https://github.com/JuliaLang/julia/issues/7464
 [#7513]: https://github.com/JuliaLang/julia/issues/7513
 [#7647]: https://github.com/JuliaLang/julia/issues/7647
+[#7654]: https://github.com/JuliaLang/julia/issues/7654
+[#7917]: https://github.com/JuliaLang/julia/issues/7917
+[#7992]: https://github.com/JuliaLang/julia/issues/7992
+[#8011]: https://github.com/JuliaLang/julia/issues/8011
+[#8089]: https://github.com/JuliaLang/julia/issues/8089
+[#7704]: https://github.com/JuliaLang/julia/issues/7704
+[#5413]: https://github.com/JuliaLang/julia/issues/5413
+[#3759]: https://github.com/JuliaLang/julia/issues/3759
+[#7311]: https://github.com/JuliaLang/julia/issues/7311
+[#8423]: https://github.com/JuliaLang/julia/issues/8423
+[#8152]: https://github.com/JuliaLang/julia/pull/8152

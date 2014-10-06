@@ -15,6 +15,9 @@
 		 (next (read in)))))
     (io.close in)))
 
-(for-each (lambda (file)
-	    (compile-file file))
-	  (cdr *argv*))
+(define (do-boot0)
+  (for-each (lambda (file)
+	      (compile-file file))
+	    (cdr *argv*)))
+
+(do-boot0)

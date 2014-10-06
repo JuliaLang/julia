@@ -20,7 +20,7 @@ scale!{T<:BlasFloat}(X::Array{T}, s::Number) = scale!(X, convert(T, s))
 scale!{T<:BlasComplex}(X::Array{T}, s::Real) = BLAS.scal!(length(X), oftype(real(zero(T)),s), X, 1)
 
 #Test whether a matrix is positive-definite
-isposdef!{T<:BlasFloat}(A::StridedMatrix{T}, UL::Symbol) = LAPACK.potrf!(string(UL)[1], A)[2] == 0
+isposdef!{T<:BlasFloat}(A::StridedMatrix{T}, UL::Symbol) = LAPACK.potrf!(char_uplo(UL), A)[2] == 0
 isposdef!(A::StridedMatrix) = ishermitian(A) && isposdef!(A, :U)
 
 isposdef{T}(A::AbstractMatrix{T}, UL::Symbol) = (S = typeof(sqrt(one(T))); isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A), UL))
@@ -60,13 +60,13 @@ vecnorm1{T<:BlasReal}(x::Union(Array{T},StridedVector{T})) =
 vecnorm2{T<:BlasFloat}(x::Union(Array{T},StridedVector{T})) = 
     length(x) < NRM2_CUTOFF ? generic_vecnorm2(x) : BLAS.nrm2(x)
 
-function triu!{T}(M::Matrix{T}, k::Integer)
+function triu!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
     idx = 1
     for j = 0:n-1
         ii = min(max(0, j+1-k), m)
         for i = (idx+ii):(idx+m-1)
-            M[i] = zero(T)
+            M[i] = zero(M[i])
         end
         idx += m
     end
@@ -75,13 +75,13 @@ end
 
 triu(M::Matrix, k::Integer) = triu!(copy(M), k)
 
-function tril!{T}(M::Matrix{T}, k::Integer)
+function tril!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
     idx = 1
     for j = 0:n-1
         ii = min(max(0, j-k), m)
         for i = idx:(idx+ii-1)
-            M[i] = zero(T)
+            M[i] = zero(M[i])
         end
         idx += m
     end
@@ -269,7 +269,7 @@ function expm!{T<:BlasFloat}(A::StridedMatrix{T})
         end
     end
 
-	# Undo the balancing
+    # Undo the balancing
     for j = ilo:ihi
         scj = scale[j]
         for i = 1:n

@@ -11,7 +11,7 @@ static GlobalVariable *prepare_global(GlobalVariable *G)
                                     G->isConstant(), GlobalVariable::ExternalLinkage,
                                     NULL, G->getName());
         }
-        return gv;     
+        return gv;
     }
 #endif
     return G;
@@ -226,20 +226,20 @@ extern "C" {
     extern void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType);
 }
 
-static void jl_gen_llvm_gv_array()
+static void jl_gen_llvm_gv_array(llvm::Module *mod)
 {
     // emit the variable table into the code image (can only call this once)
     // used just before dumping bitcode
     ArrayType *atype = ArrayType::get(T_psize,jl_sysimg_gvars.size());
     new GlobalVariable(
-            *jl_Module,
+            *mod,
             atype,
             true,
             GlobalVariable::ExternalLinkage,
             ConstantArray::get(atype, ArrayRef<Constant*>(jl_sysimg_gvars)),
             "jl_sysimg_gvars");
     new GlobalVariable(
-            *jl_Module,
+            *mod,
             T_size,
             true,
             GlobalVariable::ExternalLinkage,
@@ -247,7 +247,7 @@ static void jl_gen_llvm_gv_array()
             "jl_globalUnique");
 
     Constant *feature_string = ConstantDataArray::getString(jl_LLVMContext, jl_cpu_string);
-    new GlobalVariable(*jl_Module,
+    new GlobalVariable(*mod,
                        feature_string->getType(),
                        true,
                        GlobalVariable::ExternalLinkage,
@@ -259,7 +259,7 @@ static void jl_gen_llvm_gv_array()
         uint32_t info[4];
 
         jl_cpuid((int32_t*)info, 1);
-        new GlobalVariable(*jl_Module,
+        new GlobalVariable(*mod,
                            T_int64,
                            true,
                            GlobalVariable::ExternalLinkage,
@@ -400,7 +400,8 @@ static Type *julia_struct_to_llvm(jl_value_t *jt);
 
 static bool jltupleisbits(jl_value_t *jt, bool allow_unsized = true);
 
-static Type *julia_type_to_llvm(jl_value_t *jt)
+extern "C" {
+DLLEXPORT Type *julia_type_to_llvm(jl_value_t *jt)
 {
     if (jt == (jl_value_t*)jl_bool_type) return T_int1;
     if (jt == (jl_value_t*)jl_bottom_type) return T_void;
@@ -475,14 +476,12 @@ static Type *julia_type_to_llvm(jl_value_t *jt)
     }
     if (jl_isbits(jt)) {
         if (((jl_datatype_t*)jt)->size == 0) {
-            // TODO: come up with a representation for a 0-size value,
-            // and make this 0 size everywhere. as an argument, simply
-            // skip passing it.
-            return jl_pvalue_llvmt;
+            return T_void;
         }
         return julia_struct_to_llvm(jt);
     }
     return jl_pvalue_llvmt;
+}
 }
 
 static Type *julia_struct_to_llvm(jl_value_t *jt)
@@ -493,7 +492,7 @@ static Type *julia_struct_to_llvm(jl_value_t *jt)
         jl_datatype_t *jst = (jl_datatype_t*)jt;
         if (jst->struct_decl == NULL) {
             size_t ntypes = jl_tuple_len(jst->types);
-            if (ntypes == 0)
+            if (ntypes == 0 || jst->size == 0)
                 return T_void;
             StructType *structdecl = StructType::create(getGlobalContext(), jst->name->name->name);
             jst->struct_decl = structdecl;
@@ -506,6 +505,8 @@ static Type *julia_struct_to_llvm(jl_value_t *jt)
                     lty = jl_pvalue_llvmt;
                 else
                     lty = ty==(jl_value_t*)jl_bool_type ? T_int8 : julia_type_to_llvm(ty);
+                if (lty == T_void || lty->isEmptyTy())
+                    continue;
                 latypes.push_back(lty);
             }
             structdecl->setBody(latypes);
@@ -528,8 +529,8 @@ static jl_value_t *llvm_type_to_julia(Type *t, bool throw_error)
     if (t == T_int64) return (jl_value_t*)jl_int64_type;
     if (t == T_float32) return (jl_value_t*)jl_float32_type;
     if (t == T_float64) return (jl_value_t*)jl_float64_type;
-    if (t == T_void) return (jl_value_t*)jl_bottom_type;
-    if (t->isEmptyTy()) return (jl_value_t*)jl_nothing->type;
+    if (t == T_void) return (jl_value_t*)jl_void_type;
+    if (t->isEmptyTy()) return (jl_value_t*)jl_void_type;
     if (t == jl_pvalue_llvmt)
         return (jl_value_t*)jl_any_type;
     if (t->isPointerTy()) {
@@ -874,11 +875,21 @@ static Value *emit_nthptr(Value *v, Value *idx, MDNode *tbaa)
     return tbaa_decorate(tbaa,builder.CreateLoad(vptr, false));
 }
 
+static Value *emit_nthptr_recast(Value *v, size_t n, MDNode *tbaa, Type* ptype) {
+    // p = (jl_value_t**)v; *(ptype)&p[n]
+    Value *vptr = emit_nthptr_addr(v, n);
+    return tbaa_decorate(tbaa,builder.CreateLoad(builder.CreateBitCast(vptr,ptype), false));
+}
+
+static Value *ghostValue(jl_value_t *ty);
+ 
 static Value *typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
                          jl_codectx_t *ctx)
 {
     Type *elty = julia_type_to_llvm(jltype);
     assert(elty != NULL);
+    if (elty == T_void)
+        return ghostValue(jltype);
     bool isbool=false;
     if (elty==T_int1) { elty = T_int8; isbool=true; }
     Value *data;
@@ -897,11 +908,13 @@ static Value *typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
 
 static Value *emit_unbox(Type *to, Value *x, jl_value_t *jt);
 
-static Value *typed_store(Value *ptr, Value *idx_0based, Value *rhs,
-                          jl_value_t *jltype, jl_codectx_t *ctx)
+static void typed_store(Value *ptr, Value *idx_0based, Value *rhs,
+                        jl_value_t *jltype, jl_codectx_t *ctx)
 {
     Type *elty = julia_type_to_llvm(jltype);
     assert(elty != NULL);
+    if (elty == T_void)
+        return;
     if (elty==T_int1) { elty = T_int8; }
     if (jl_isbits(jltype) && ((jl_datatype_t*)jltype)->size > 0)
         rhs = emit_unbox(elty, rhs, jltype);
@@ -912,7 +925,7 @@ static Value *typed_store(Value *ptr, Value *idx_0based, Value *rhs,
         data = builder.CreateBitCast(ptr, PointerType::get(elty, 0));
     else
         data = ptr;
-    return tbaa_decorate(tbaa_user, builder.CreateStore(rhs, builder.CreateGEP(data, idx_0based)));
+    tbaa_decorate(tbaa_user, builder.CreateStore(rhs, builder.CreateGEP(data, idx_0based)));
 }
 
 // --- convert boolean value to julia ---
@@ -1011,8 +1024,7 @@ static Value *emit_tuplelen(Value *t,jl_value_t *jt)
         return builder.CreateLShr(builder.CreatePtrToInt(lenbits, T_int64),
                                   ConstantInt::get(T_int32, 52));
 #else
-        Value *lenbits = emit_nthptr(t, 1, tbaa_tuplelen);
-        return builder.CreatePtrToInt(lenbits, T_size);
+        return emit_nthptr_recast(t, 1, tbaa_tuplelen, T_psize);
 #endif
     }
     else { //unboxed
@@ -1277,8 +1289,8 @@ static Value *emit_arraylen_prim(Value *t, jl_value_t *ty)
 {
 #ifdef STORE_ARRAY_LEN
     (void)ty;
-    Value *lenbits = emit_nthptr(t, 2, tbaa_arraylen);
-    return builder.CreatePtrToInt(lenbits, T_size);
+    Value* addr = builder.CreateStructGEP(builder.CreateBitCast(t,jl_parray_llvmt), 2);
+    return tbaa_decorate(tbaa_arraylen, builder.CreateLoad(addr, false));
 #else
     jl_value_t *p1 = jl_tparam1(ty);
     if (jl_is_long(p1)) {
@@ -1309,7 +1321,8 @@ static Value *emit_arraylen(Value *t, jl_value_t *ex, jl_codectx_t *ctx)
 
 static Value *emit_arrayptr(Value *t)
 {
-    return emit_nthptr(t, 1, tbaa_arrayptr);
+    Value* addr = builder.CreateStructGEP(builder.CreateBitCast(t,jl_parray_llvmt), 1);
+    return tbaa_decorate(tbaa_arrayptr, builder.CreateLoad(addr, false));
 }
 
 static Value *emit_arrayptr(Value *t, jl_value_t *ex, jl_codectx_t *ctx)
@@ -1438,11 +1451,13 @@ static jl_value_t *static_void_instance(jl_value_t *jt)
     if (jl_is_datatype(jt)) {
         jl_datatype_t *jb = (jl_datatype_t*)jt;
         if (jb->instance == NULL)
-            jl_new_struct_uninit(jb);
-        assert(jb->instance != NULL);
+            // if we can't get an instance then this was an UndefValue due
+            // to throwing an error.
+            return (jl_value_t*)jl_nothing;
+        //assert(jb->instance != NULL);
         return (jl_value_t*)jb->instance;
     }
-    else if (jt == jl_typeof(jl_nothing) || jt == jl_bottom_type) {
+    else if (jt == (jl_value_t*)jl_void_type) {
         return (jl_value_t*)jl_nothing;
     }
     assert(jl_is_tuple(jt));
@@ -1481,6 +1496,14 @@ static jl_value_t *static_constant_instance(Constant *constant, jl_value_t *jt)
         assert(jl_is_cpointer_type(jt));
         uint64_t val = 0;
         return jl_new_bits(jt,&val);
+    }
+
+    // issue #8464
+    ConstantExpr *ce = dyn_cast<ConstantExpr>(constant);
+    if (ce != NULL) {
+        if (ce->isCast()) {
+            return static_constant_instance(dyn_cast<Constant>(ce->getOperand(0)), jt);
+        }
     }
 
     assert(jl_is_tuple(jt));
@@ -1526,8 +1549,10 @@ static Value *boxed(Value *v, jl_codectx_t *ctx, jl_value_t *jt)
         if (jl_subtype(jt2, jt, 0))
             jt = jt2;
     }
+    if (jt == jl_bottom_type)
+        return UndefValue::get(jl_pvalue_llvmt);
     UndefValue *uv = NULL;
-    if (jt == jl_bottom_type || v == NULL || (uv = dyn_cast<UndefValue>(v)) != 0 || t == NoopType) {
+    if (v == NULL || (uv = dyn_cast<UndefValue>(v)) != 0 || t == NoopType) {
         if (uv != NULL && jl_is_datatype(jt)) {
             jl_datatype_t *jb = (jl_datatype_t*)jt;
             // We have an undef value on a hopefully dead branch
@@ -1602,8 +1627,6 @@ static Value *boxed(Value *v, jl_codectx_t *ctx, jl_value_t *jt)
     }
 
     if (!jb->abstract && jb->size == 0) {
-        if (jb->instance == NULL)
-            jl_new_struct_uninit(jb);
         assert(jb->instance != NULL);
         return literal_pointer_val(jb->instance);
     }

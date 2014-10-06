@@ -164,10 +164,10 @@ conversions declared in
 `rational.jl <https://github.com/JuliaLang/julia/blob/master/base/rational.jl>`_,
 right after the declaration of the type and its constructors::
 
-    convert{T<:Int}(::Type{Rational{T}}, x::Rational) = Rational(convert(T,x.num),convert(T,x.den))
-    convert{T<:Int}(::Type{Rational{T}}, x::Int) = Rational(convert(T,x), convert(T,1))
+    convert{T<:Integer}(::Type{Rational{T}}, x::Rational) = Rational(convert(T,x.num),convert(T,x.den))
+    convert{T<:Integer}(::Type{Rational{T}}, x::Integer) = Rational(convert(T,x), convert(T,1))
 
-    function convert{T<:Int}(::Type{Rational{T}}, x::FloatingPoint, tol::Real)
+    function convert{T<:Integer}(::Type{Rational{T}}, x::FloatingPoint, tol::Real)
         if isnan(x); return zero(T)//zero(T); end
         if isinf(x); return sign(x)//zero(T); end
         y = x
@@ -182,10 +182,10 @@ right after the declaration of the type and its constructors::
             y = 1/y
         end
     end
-    convert{T<:Int}(rt::Type{Rational{T}}, x::FloatingPoint) = convert(rt,x,eps(x))
+    convert{T<:Integer}(rt::Type{Rational{T}}, x::FloatingPoint) = convert(rt,x,eps(x))
 
     convert{T<:FloatingPoint}(::Type{T}, x::Rational) = convert(T,x.num)/convert(T,x.den)
-    convert{T<:Int}(::Type{T}, x::Rational) = div(convert(T,x.num),convert(T,x.den))
+    convert{T<:Integer}(::Type{T}, x::Rational) = div(convert(T,x.num),convert(T,x.den))
 
 The initial four convert methods provide conversions to rational types.
 The first method converts one type of rational to another type of
@@ -359,10 +359,10 @@ Finally, we finish off our ongoing case study of Julia's rational number
 type, which makes relatively sophisticated use of the promotion
 mechanism with the following promotion rules::
 
-    promote_rule{T<:Int}(::Type{Rational{T}}, ::Type{T}) = Rational{T}
-    promote_rule{T<:Int,S<:Int}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
-    promote_rule{T<:Int,S<:Int}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
-    promote_rule{T<:Int,S<:FloatingPoint}(::Type{Rational{T}}, ::Type{S}) = promote_type(T,S)
+    promote_rule{T<:Integer}(::Type{Rational{T}}, ::Type{T}) = Rational{T}
+    promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
+    promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
+    promote_rule{T<:Integer,S<:FloatingPoint}(::Type{Rational{T}}, ::Type{S}) = promote_type(T,S)
 
 The first rule asserts that promotion of a rational number with its own
 numerator/denominator type, simply promotes to itself. The second rule

@@ -243,7 +243,7 @@ function init_stdio(handle)
         if t == UV_TTY
             ret = TTY(handle)
         elseif t == UV_TCP
-            ret = TcpSocket(handle)
+            ret = TCPSocket(handle)
         elseif t == UV_NAMED_PIPE
             ret = Pipe(handle)
         else
@@ -932,7 +932,7 @@ for (x,writable,unix_fd,c_symbol) in ((:STDIN,false,0,:jl_uv_stdin),(:STDOUT,tru
         function ($_f)(stream)
             global $x
             @windows? (
-                ccall(:SetStdHandle,stdcall,Int32,(Uint32,Ptr{Void}),
+                ccall(:SetStdHandle,stdcall,Int32,(Int32,Ptr{Void}),
                     $(-10-unix_fd),_get_osfhandle(_fd(stream)).handle) :
                 dup(_fd(stream),  RawFD($unix_fd)) )
             $x = stream
