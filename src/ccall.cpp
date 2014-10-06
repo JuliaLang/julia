@@ -651,7 +651,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     jl_value_t *rtt = rt;
 
     size_t nargt = jl_tuple_len(tt);
-    Value *argvals[nargt];
+    Value **argvals = (Value**) alloca(nargt*sizeof(Value*));
     std::vector<llvm::Type*> argtypes;
     /*
      * Semantics for arguments are as follows:

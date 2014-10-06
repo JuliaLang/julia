@@ -13,15 +13,18 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#ifndef _MSC_VER
-#include <unistd.h>
-#include <libgen.h>
-#endif
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
-#include <getopt.h>
 #include <ctype.h>
+
+#ifndef _MSC_VER
+#include <unistd.h>
+#include <libgen.h>
+#include <getopt.h>
+#else
+#include "getopt.h"
+#endif
 
 #include "uv.h"
 #define WHOLE_ARCHIVE

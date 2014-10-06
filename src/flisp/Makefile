@@ -16,15 +16,15 @@ SRCS += basename.c dirname.c
 endif
 
 OBJS = $(SRCS:%.c=%.o)
-DOBJS = $(SRCS:%.c=%.do)
+DOBJS = $(SRCS:%.c=%.dbg.obj)
 LLTDIR = ../support
 LLT = $(LLTDIR)/libsupport.a $(LIBUV) $(LIBMOJIBAKE)
 
 FLAGS = -I$(LLTDIR) $(CFLAGS) $(HFILEDIRS:%=-I%) \
         -I$(LIBUV_INC) -I$(build_includedir) $(LIBDIRS:%=-L%) \
-        -DLIBRARY_EXPORTS
+        -DLIBRARY_EXPORTS -DMOJIBAKE_EXPORTS
 ifneq ($(USEMSVC), 1)
-FLAGS += -Wall -Wno-strict-aliasing -DUSE_COMPUTED_GOTO -fvisibility=hidden 
+FLAGS += -Wall -Wno-strict-aliasing -DUSE_COMPUTED_GOTO -fvisibility=hidden
 endif
 LIBFILES = $(LLT)
 LIBS = $(LIBFILES)
@@ -45,13 +45,13 @@ HEADERS = $(wildcard *.h) $(LIBUV_INC)/uv.h
 
 %.o: %.c $(HEADERS)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(SHIPFLAGS) -DNDEBUG -c $< -o $@)
-%.do: %.c $(HEADERS)
+%.dbg.obj: %.c $(HEADERS)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 flisp.o:   flisp.c cvalues.c types.c flisp.h print.c read.c equal.c
-flisp.do:  flisp.c cvalues.c types.c flisp.h print.c read.c equal.c
+flisp.dbg.obj:  flisp.c cvalues.c types.c flisp.h print.c read.c equal.c
 flmain.o:  flmain.c flisp.h
-flmain.do: flmain.c flisp.h
+flmain.dbg.obj: flmain.c flisp.h
 
 $(LLT): $(LLTDIR)/*.h $(LLTDIR)/*.c
 	cd $(LLTDIR) && $(MAKE)
@@ -71,8 +71,8 @@ else
 CCLD = $(LD)
 endif
 
-$(EXENAME)-debug: $(DOBJS) $(LIBFILES) $(LIBTARGET)-debug.a flmain.do
-	@$(call PRINT_LINK, $(CCLD) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME)-debug $(LIBTARGET).a $(LIBS) $(OSLIBS))
+$(EXENAME)-debug: $(DOBJS) $(LIBFILES) $(LIBTARGET)-debug.a flmain.dbg.obj
+	@$(call PRINT_LINK, $(CCLD) $(DEBUGFLAGS) $(DOBJS) flmain.dbg.obj -o $(EXENAME)-debug $(LIBTARGET).a $(LIBS) $(OSLIBS))
 
 $(EXENAME): $(OBJS) $(LIBFILES) $(LIBTARGET).a flmain.o
 	@$(call PRINT_LINK, $(CCLD) $(SHIPFLAGS) $(OBJS) flmain.o -o $(EXENAME) $(LIBTARGET).a $(LIBS) $(OSLIBS))
@@ -84,7 +84,7 @@ endif
 
 clean:
 	rm -f *.o
-	rm -f *.do
+	rm -f *.dbg.obj
 	rm -f *.a
 	rm -f $(EXENAME)
 	rm -f $(EXENAME)-debug

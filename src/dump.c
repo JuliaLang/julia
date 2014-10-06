@@ -926,7 +926,7 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         return v;
     }
     else if (vtag == (jl_value_t*)Singleton_tag) {
-        jl_value_t *v = allocobj(sizeof(void*));
+        jl_value_t *v = (jl_value_t*)allocobj(sizeof(void*));
         if (usetable)
             ptrhash_put(&backref_table, (void*)(ptrint_t)pos, v);
         return v;
