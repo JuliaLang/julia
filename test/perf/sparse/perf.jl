@@ -122,7 +122,7 @@ end
 intinds = nothing
 logicalinds = nothing # needs to be generated for a specific matrix size.
 rangeinds = 121:237
-orderedinds = [rangeinds]
+orderedinds = [rangeinds;]
 disorderedinds = orderedinds[randperm(length(orderedinds))]
 
 inds = [(intinds, "integers"), (logicalinds, "logical array"), (rangeinds, "a range"),

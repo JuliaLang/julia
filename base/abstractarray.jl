@@ -6,7 +6,7 @@ typealias AbstractVecOrMat{T} Union(AbstractVector{T}, AbstractMatrix{T})
 
 ## Basic functions ##
 
-vect() = Array(None, 0)
+vect() = Array(Void, 0)
 vect{T}(X::T...) = T[ X[i] for i=1:length(X) ]
 
 const _oldstyle_array_vcat_ = true
@@ -23,7 +23,7 @@ if _oldstyle_array_vcat_
             before = "a,b,..."
             after  = "a;b;..."
         end
-        warn_once("[$before] concatenation is deprecated; use [$after] instead")
+        warn("[$before] concatenation is deprecated; use [$after] instead")
     end
     function vect(A::AbstractArray...)
         oldstyle_vcat_warning(length(A))

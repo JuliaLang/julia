@@ -359,8 +359,8 @@ end
 # mean/median
 for f in (mean, median)
     for n = 2:5
-        @test f(2:n) == f([2:n])
-        @test_approx_eq f(2:0.1:n) f([2:0.1:n])
+        @test f(2:n) == f([2:n;])
+        @test_approx_eq f(2:0.1:n) f([2:0.1:n;])
     end
 end
 
