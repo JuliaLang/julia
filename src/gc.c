@@ -1258,8 +1258,8 @@ static int gc_sweep_inc(int sweep_mask)
 #endif
 #ifdef GC_TIME
     double sweep_pool_sec = clock_now() - t0;
-    double sweep_speed = (((double)total_pages)*GC_PAGE_SZ)/(1024*1024);
-    JL_PRINTF(JL_STDOUT, "GC sweep pools %s %.2f at %.1f MB/s (skipped %d%% of %d, done %d pgs, %d freed with %d lazily) mask %d\n", finished ? "end" : "inc", sweep_pool_sec*1000, sweep_speed, total_pages ? (skipped_pages*100)/total_pages : 0, total_pages, page_done, freed_pages, lazy_freed_pages,  sweep_mask);
+    double sweep_speed = ((((double)total_pages)*GC_PAGE_SZ)/(1024*1024*1024))/sweep_pool_sec;
+    JL_PRINTF(JL_STDOUT, "GC sweep pools %s %.2f at %.1f GB/s (skipped %d%% of %d, done %d pgs, %d freed with %d lazily) mask %d\n", finished ? "end" : "inc", sweep_pool_sec*1000, sweep_speed, total_pages ? (skipped_pages*100)/total_pages : 0, total_pages, page_done, freed_pages, lazy_freed_pages,  sweep_mask);
 #endif
     return finished;
 }

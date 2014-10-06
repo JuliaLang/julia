@@ -2891,7 +2891,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         make_gcroot(a1, ctx);
         Value *a2 = boxed(emit_expr(args[2], ctx),ctx);
         make_gcroot(a2, ctx);
-        Value *mdargs[6] = { name, bp, bp_owner, literal_pointer_val(bnd), a1, a2, literal_pointer_val(args[3]) };
+        Value *mdargs[7] = { name, bp, bp_owner, literal_pointer_val(bnd), a1, a2, literal_pointer_val(args[3]) };
         ctx->argDepth = last_depth;
         return builder.CreateCall(prepare_call(jlmethod_func), ArrayRef<Value*>(&mdargs[0], 6));
     }
