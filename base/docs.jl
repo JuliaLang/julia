@@ -53,16 +53,18 @@ end
 type FuncDoc
   order::Vector{Method}
   meta::Dict{Method, Any}
+  source::Dict{Method, Any}
 end
 
-FuncDoc() = FuncDoc(Method[], Dict())
+FuncDoc() = FuncDoc(Method[], Dict(), Dict())
 
 getset(coll, key, default) = coll[key] = get(coll, key, default)
 
-function doc(f::Function, m::Method, meta)
+function doc(f::Function, m::Method, meta, source)
   fd = getset(META, f, FuncDoc())
   !haskey(fd.meta, m) && push!(fd.order, m)
   fd.meta[m] = meta
+  fd.source[m] = source
 end
 
 function doc(f::Function)
@@ -115,7 +117,7 @@ end
 function funcdoc(meta, def)
   quote
     f, m = $(trackmethod(def))
-    doc(f, m, $(mdify(meta)))
+    doc(f, m, $(mdify(meta)), $(Expr(:quote, unblock(def))))
     f
   end
 end
