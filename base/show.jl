@@ -240,9 +240,9 @@ const uni_ops = Set{Symbol}([:(+), :(-), :(!), :(¬), :(~), :(<:), :(>:), :(√)
 const expr_infix_wide = Set([:(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(&=),
     :(|=), :($=), :(>>>=), :(>>=), :(<<=), :(&&), :(||)])
 const expr_infix = Set([:(:), :(<:), :(->), :(=>), symbol("::")])
-const expr_calls  = [:call =>('(',')'), :calldecl =>('(',')'), :ref =>('[',']'), :curly =>('{','}')]
-const expr_parens = [:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>('{','}'),
-                     :hcat =>('[',']'), :row =>('[',']')]
+const expr_calls  = Dict(:call =>('(',')'), :calldecl =>('(',')'), :ref =>('[',']'), :curly =>('{','}'))
+const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>('{','}'),
+                         :hcat =>('[',']'), :row =>('[',']'))
 
 ## AST decoding helpers ##
 
