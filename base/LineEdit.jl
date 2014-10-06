@@ -834,7 +834,7 @@ function keymap{D<:Dict}(keymaps::Array{D})
 end
 
 const escape_defaults = merge!(
-    {char(i) => nothing for i=[1:26, 28:31]}, # Ignore control characters by default
+    {char(i) => nothing for i=vcat(1:26, 28:31)}, # Ignore control characters by default
     { # And ignore other escape sequences by default
     "\e*" => nothing,
     "\e[*" => nothing,

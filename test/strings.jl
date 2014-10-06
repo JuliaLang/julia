@@ -497,18 +497,18 @@ end
 @test isequal(split("foo,bar,baz", ','), ["foo","bar","baz"])
 @test isequal(split("foo,bar,baz", ","), ["foo","bar","baz"])
 @test isequal(split("foo,bar,baz", r","), ["foo","bar","baz"])
-@test isequal(split("foo,bar,baz", ',', 0), ["foo","bar","baz"])
-@test isequal(split("foo,bar,baz", ',', 1), ["foo,bar,baz"])
-@test isequal(split("foo,bar,baz", ',', 2), ["foo","bar,baz"])
-@test isequal(split("foo,bar,baz", ',', 3), ["foo","bar","baz"])
+@test isequal(split("foo,bar,baz", ','; limit=0), ["foo","bar","baz"])
+@test isequal(split("foo,bar,baz", ','; limit=1), ["foo,bar,baz"])
+@test isequal(split("foo,bar,baz", ','; limit=2), ["foo","bar,baz"])
+@test isequal(split("foo,bar,baz", ','; limit=3), ["foo","bar","baz"])
 @test isequal(split("foo,bar", "o,b"), ["fo","ar"])
 
 @test isequal(split("", ','), [""])
 @test isequal(split(",", ','), ["",""])
 @test isequal(split(",,", ','), ["","",""])
-@test isequal(split("", ',', false), [])
-@test isequal(split(",", ',', false), [])
-@test isequal(split(",,", ',', false), [])
+@test isequal(split("", ','  ; keep=false), [])
+@test isequal(split(",", ',' ; keep=false), [])
+@test isequal(split(",,", ','; keep=false), [])
 
 @test isequal(split("a b c"), ["a","b","c"])
 @test isequal(split("a  b \t c\n"), ["a","b","c"])
@@ -516,39 +516,39 @@ end
 @test isequal(rsplit("foo,bar,baz", 'x'), ["foo,bar,baz"])
 @test isequal(rsplit("foo,bar,baz", ','), ["foo","bar","baz"])
 @test isequal(rsplit("foo,bar,baz", ","), ["foo","bar","baz"])
-@test isequal(rsplit("foo,bar,baz", ',', 0), ["foo","bar","baz"])
-@test isequal(rsplit("foo,bar,baz", ',', 1), ["foo,bar,baz"])
-@test isequal(rsplit("foo,bar,baz", ',', 2), ["foo,bar","baz"])
-@test isequal(rsplit("foo,bar,baz", ',', 3), ["foo","bar","baz"])
+@test isequal(rsplit("foo,bar,baz", ','; limit=0), ["foo","bar","baz"])
+@test isequal(rsplit("foo,bar,baz", ','; limit=1), ["foo,bar,baz"])
+@test isequal(rsplit("foo,bar,baz", ','; limit=2), ["foo,bar","baz"])
+@test isequal(rsplit("foo,bar,baz", ','; limit=3), ["foo","bar","baz"])
 @test isequal(rsplit("foo,bar", "o,b"), ["fo","ar"])
 
 @test isequal(rsplit("", ','), [""])
 @test isequal(rsplit(",", ','), ["",""])
 @test isequal(rsplit(",,", ','), ["","",""])
-@test isequal(rsplit(",,", ',', 2), [",",""])
-@test isequal(rsplit("", ',', false), [])
-@test isequal(rsplit(",", ',', false), [])
-@test isequal(rsplit(",,", ',', false), [])
+@test isequal(rsplit(",,", ','; limit=2), [",",""])
+@test isequal(rsplit("", ','  ; keep=false), [])
+@test isequal(rsplit(",", ',' ; keep=false), [])
+@test isequal(rsplit(",,", ','; keep=false), [])
 
 #@test isequal(rsplit("a b c"), ["a","b","c"])
 #@test isequal(rsplit("a  b \t c\n"), ["a","b","c"])
 
 let str = "a.:.ba..:..cba.:.:.dcba.:."
 @test isequal(split(str, ".:."), ["a","ba.",".cba",":.dcba",""])
-@test isequal(split(str, ".:.", false), ["a","ba.",".cba",":.dcba"])
+@test isequal(split(str, ".:."; keep=false), ["a","ba.",".cba",":.dcba"])
 @test isequal(split(str, ".:."), ["a","ba.",".cba",":.dcba",""])
 @test isequal(split(str, r"\.(:\.)+"), ["a","ba.",".cba","dcba",""])
-@test isequal(split(str, r"\.(:\.)+", false), ["a","ba.",".cba","dcba"])
+@test isequal(split(str, r"\.(:\.)+"; keep=false), ["a","ba.",".cba","dcba"])
 @test isequal(split(str, r"\.+:\.+"), ["a","ba","cba",":.dcba",""])
-@test isequal(split(str, r"\.+:\.+", false), ["a","ba","cba",":.dcba"])
+@test isequal(split(str, r"\.+:\.+"; keep=false), ["a","ba","cba",":.dcba"])
 
 @test isequal(rsplit(str, ".:."), ["a","ba.",".cba.:","dcba",""])
-@test isequal(rsplit(str, ".:.", false), ["a","ba.",".cba.:","dcba"])
-@test isequal(rsplit(str, ".:.", 2), ["a.:.ba..:..cba.:.:.dcba", ""])
-@test isequal(rsplit(str, ".:.", 3), ["a.:.ba..:..cba.:", "dcba", ""])
-@test isequal(rsplit(str, ".:.", 4), ["a.:.ba.", ".cba.:", "dcba", ""])
-@test isequal(rsplit(str, ".:.", 5), ["a", "ba.", ".cba.:", "dcba", ""])
-@test isequal(rsplit(str, ".:.", 6), ["a", "ba.", ".cba.:", "dcba", ""])
+@test isequal(rsplit(str, ".:."; keep=false), ["a","ba.",".cba.:","dcba"])
+@test isequal(rsplit(str, ".:."; limit=2), ["a.:.ba..:..cba.:.:.dcba", ""])
+@test isequal(rsplit(str, ".:."; limit=3), ["a.:.ba..:..cba.:", "dcba", ""])
+@test isequal(rsplit(str, ".:."; limit=4), ["a.:.ba.", ".cba.:", "dcba", ""])
+@test isequal(rsplit(str, ".:."; limit=5), ["a", "ba.", ".cba.:", "dcba", ""])
+@test isequal(rsplit(str, ".:."; limit=6), ["a", "ba.", ".cba.:", "dcba", ""])
 end
 
 # zero-width splits
@@ -749,7 +749,7 @@ arr = ["a","b","c"]
 
 # string iteration, and issue #1454
 str = "é"
-str_a = [str...]
+str_a = vcat(str...)
 @test length(str_a)==1
 @test str_a[1] == str[1]
 
@@ -895,6 +895,14 @@ bin_val = hex2bytes("07bf")
 @test (@sprintf "%s" "tést") == "tést"
 # reasonably complex
 @test (@sprintf "Test: %s%c%C%c%#-.0f." "t" 65 66 67 -42) == "Test: tABC-42.."
+#test simple splatting
+@test (@sprintf "%d%d" [1 2]...) == "12"
+# combo
+@test (@sprintf "%f %d %d %f" 1.0 [3 4]... 5) == "1.000000 3 4 5.000000"
+# multi
+@test (@sprintf "%s %f %9.5f %d %d %d %d%d%d%d" [1:6;]... [7,8,9,10]...) == "1 2.000000   3.00000 4 5 6 78910"
+# comprehension
+@test (@sprintf "%s %s %s %d %d %d %f %f %f" {10^x+y for x=1:3,y=1:3 }...) == "11 101 1001 12 102 1002 13.000000 103.000000 1003.000000"
 
 # issue #4183
 @test split(SubString(ascii("x"), 2, 0), "y") == String[""]
@@ -1097,3 +1105,143 @@ let
     @test srep[7] == 'β'
     @test_throws BoundsError srep[8]
 end
+
+#issue #5939  uft8proc/libmojibake character predicates
+let
+    alower=['a', 'd', 'j', 'y', 'z']
+    ulower=['α', 'β', 'γ', 'δ', 'ф', 'я']
+    for c in vcat(alower,ulower)
+        @test islower(c) == true
+        @test isupper(c) == false
+        @test isdigit(c) == false
+        @test isnumber(c) == false
+    end
+
+    aupper=['A', 'D', 'J', 'Y', 'Z']
+    uupper= ['Δ', 'Γ', 'Π', 'Ψ', 'ǅ', 'Ж', 'Д']
+
+    for c in vcat(aupper,uupper)
+        @test islower(c) == false
+        @test isupper(c) == true
+        @test isdigit(c) == false
+        @test isnumber(c) == false
+    end
+
+    nocase=['א','ﺵ']
+    alphas=vcat(alower,ulower,aupper,uupper,nocase)
+
+    for c in alphas
+         @test isalpha(c) == true
+         @test isnumber(c) == false
+    end
+
+
+    anumber=['0', '1', '5', '9']
+    unumber=['٣', '٥', '٨', '¹', 'ⅳ' ]
+
+    for c in anumber
+         @test isdigit(c) == true
+         @test isnumber(c) == true
+    end
+    for c in unumber
+         @test isdigit(c) == false
+         @test isnumber(c) == true
+    end
+
+    alnums=vcat(alphas,anumber,unumber)
+    for c in alnums
+         @test isalnum(c) == true
+         @test ispunct(c) == false
+    end
+
+    asymbol = ['(',')', '~', '$' ]
+    usymbol = ['∪', '∩', '⊂', '⊃', '√', '€', '¥', '↰', '△', '§']
+
+    apunct =['.',',',';',':','&']
+    upunct =['‡', '؟', '჻' ]
+
+    for c in vcat(apunct,upunct)
+         @test ispunct(c) == true
+         @test isalnum(c) == false
+    end
+
+    for c in vcat(alnums,asymbol,usymbol,apunct,upunct)
+        @test isprint(c) == true
+        @test isgraph(c) == true
+        @test isspace(c) == false
+        @test iscntrl(c) == false
+    end
+
+    NBSP = char(0x0000A0)
+    ENSPACE = char(0x002002)
+    EMSPACE = char(0x002003)
+    THINSPACE = char(0x002009)
+    ZWSPACE = char(0x002060)
+
+    uspace = [ENSPACE, EMSPACE, THINSPACE]
+    aspace = [' ']
+    acntrl_space = ['\t', '\n', '\v', '\f', '\r']
+    for c in vcat(aspace,uspace)
+        @test isspace(c) == true
+        @test isprint(c) == true
+        @test isgraph(c) == false
+    end
+
+    for c in vcat(acntrl_space)
+        @test isspace(c) == true
+        @test isprint(c) == false
+        @test isgraph(c) == false
+    end
+
+    @test isspace(ZWSPACE) == false # zero-width space
+
+    acontrol = [ char(0x001c), char(0x001d), char(0x001e), char(0x001f)]
+    latincontrol = [ char(0x0080), char(0x0085) ]
+    ucontrol = [ char(0x200E), char(0x202E) ]
+
+    for c in vcat(acontrol, acntrl_space, latincontrol)
+        @test iscntrl(c) == true
+        @test isalnum(c) == false
+        @test isprint(c) == false
+        @test isgraph(c) == false
+    end
+
+    for c in ucontrol  #non-latin1 controls
+        if c!=char(0x0085)
+            @test iscntrl(c) == false
+            @test isspace(c) == false
+            @test isalnum(c) == false
+            @test isprint(c) == false
+            @test isgraph(c) == false
+        end
+    end
+
+end
+
+@test isspace("  \t   \n   \r  ")==true
+@test isgraph("  \t   \n   \r  ")==false
+@test isprint("  \t   \n   \r  ")==false
+@test isalpha("  \t   \n   \r  ")==false
+@test isnumber("  \t   \n   \r  ")==false
+@test ispunct("  \t   \n   \r  ")==false
+
+@test isspace("ΣβΣβ")==false
+@test isalpha("ΣβΣβ")==true
+@test isgraph("ΣβΣβ")==true
+@test isprint("ΣβΣβ")==true
+@test isupper("ΣβΣβ")==false
+@test islower("ΣβΣβ")==false
+@test isnumber("ΣβΣβ")==false
+@test iscntrl("ΣβΣβ")==false
+@test ispunct("ΣβΣβ")==false
+
+@test isnumber("23435")==true
+@test isdigit("23435")==true
+@test isalnum("23435")==true
+@test isalpha("23435")==false
+@test iscntrl( string(char(0x0080))) == true
+@test ispunct( "‡؟჻") ==true
+
+# This caused JuliaLang/JSON.jl#82
+@test first('\x00':'\x7f') === '\x00'
+@test last('\x00':'\x7f') === '\x7f'

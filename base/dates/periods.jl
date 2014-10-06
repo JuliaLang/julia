@@ -48,8 +48,8 @@ Base.isless(x::Period,y::Period) = throw(ArgumentError("Can't compare $(typeof(x
 
 #Period Arithmetic:
 import Base.div, Base.mod, Base.gcd, Base.lcm
-let vec_ops = [:.+,:.-,:.*,:.%,:div]
-    for op in [:+,:-,:*,:%,:mod,:gcd,:lcm,vec_ops]
+let vec_ops = Symbol[:.+, :.-, :.*, :.%, :div]
+    for op in [:+; :-; :*; :%; :mod; :gcd; :lcm; vec_ops]
         @eval begin
         #Period-Period
         ($op){P<:Period}(x::P,y::P) = P(($op)(value(x),value(y)))
@@ -101,7 +101,7 @@ function Base.string(x::CompoundPeriod)
     for p in x.periods
         s *= ", " * string(p)
     end
-    return s[3:end]
+    return s[3:end;]
 end
 Base.show(io::IO,x::CompoundPeriod) = print(io,string(x))
 # E.g. Year(1) + Day(1)
