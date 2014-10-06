@@ -3,7 +3,7 @@
 
 const ARGS = UTF8String[]
 
-const text_colors = {
+const text_colors = AnyDict(
     :black   => "\033[1m\033[30m",
     :red     => "\033[1m\033[31m",
     :green   => "\033[1m\033[32m",
@@ -14,7 +14,7 @@ const text_colors = {
     :white   => "\033[1m\033[37m",
     :normal  => "\033[0m",
     :bold    => "\033[1m",
-}
+)
 
 have_color = false
 @unix_only default_color_answer = text_colors[:bold]

@@ -428,6 +428,6 @@ $(copyright(years,authors))
 >      of your accepting any such warranty or additional liability.
 """
 
-const LICENSES = [ "MIT" => mit, "BSD" => bsd, "ASL" => asl ]
+const LICENSES = Dict("MIT" => mit, "BSD" => bsd, "ASL" => asl)
 
 end # module

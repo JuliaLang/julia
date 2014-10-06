@@ -20,6 +20,15 @@ Language changes
 
   * `Nothing` (the type of `nothing`) is renamed to `Void` ([#8423]).
 
+  * `Dict` literal syntax `[a=>b,c=>d]` is replaced with `Dict(a=>b,c=>d)`.
+    `{a=>b}` is replaced with `Dict{Any,Any}(a=>b)`.
+    `(K=>V)[...]` is replaced with `Dict{K,V}(...)`.
+    The new syntax has many advantages: all of its components are first-class,
+    it generalizes to other types of containers, it is easier to guess how to
+    specify key and value types, and the syntaxes for empty and pre-populated
+    dicts are synchronized. As part of this change, `=>` is parsed as a normal
+    operator, and `Base` defines it to construct `Pair` objects ([#6739]).
+
 Library improvements
 --------------------
 
@@ -74,7 +83,7 @@ New language features
     generated. Constructors that look like `MyType(a, b) = new(a, b)` do not
     need to be added manually ([#4026], [#7071]).
 
-  * Expanded array type hierarchy to include an abstract ``DenseArray`` for
+  * Expanded array type hierarchy to include an abstract `DenseArray` for
     in-memory arrays with standard strided storage ([#987], [#2345],
     [#6212]).
 
@@ -199,8 +208,8 @@ Library improvements
 
     * `writedlm` and `writecsv` now accept any iterable collection of
       iterable rows, in addition to `AbstractArray` arguments, and the
-      ``writedlm`` delimiter can be any printable object (e.g. a
-      ``String``) instead of just a ``Char``.
+      `writedlm` delimiter can be any printable object (e.g. a
+      `String`) instead of just a `Char`.
 
     * `isempty` now works for any iterable collection ([#5827]).
 
@@ -991,3 +1000,4 @@ Too numerous to mention.
 [#7311]: https://github.com/JuliaLang/julia/issues/7311
 [#8423]: https://github.com/JuliaLang/julia/issues/8423
 [#8152]: https://github.com/JuliaLang/julia/pull/8152
+[#6739]: https://github.com/JuliaLang/julia/issues/6739

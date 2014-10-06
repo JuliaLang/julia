@@ -458,5 +458,5 @@ end
 @test_throws BoundsError sparse([0],[-1],[1.0],2,2)
 
 # issue #8363
-@test_throws BoundsError sparsevec([-1=>1,1=>2])
+@test_throws BoundsError sparsevec(Dict(-1=>1,1=>2))
 

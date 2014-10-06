@@ -1,7 +1,7 @@
 module QuadGK
 export gauss, kronrod, quadgk
 using Base.Collections
-import Base.isless, Base.Order.Reverse
+import Base: isless, Order.Reverse, AnyDict
 
 # Adaptive Gauss-Kronrod quadrature routines (arbitrary precision),
 # written and contributed to Julia by Steven G. Johnson, 2013.
@@ -11,7 +11,7 @@ import Base.isless, Base.Order.Reverse
 # cache of (T,n) -> (x,w,gw) Kronrod rules, to avoid recomputing them
 # unnecessarily for repeated integration.   We initialize it with the
 # default n=7 rule for double-precision calculations.
-const rulecache = (Any=>Any)[ (Float64,7) => # precomputed in 100-bit arith.
+const rulecache = AnyDict( (Float64,7) => # precomputed in 100-bit arith.
   ([-9.9145537112081263920685469752598e-01,
     -9.4910791234275852452618968404809e-01,
     -8.6486442335976907278971278864098e-01,
@@ -31,7 +31,7 @@ const rulecache = (Any=>Any)[ (Float64,7) => # precomputed in 100-bit arith.
     [1.2948496616886969327061143267787e-01,
      2.797053914892766679014677714229e-01,
      3.8183005050511894495036977548818e-01,
-     4.1795918367346938775510204081658e-01]) ]
+     4.1795918367346938775510204081658e-01]) )
 
 # integration segment (a,b), estimated integral I, and estimated error E
 immutable Segment
