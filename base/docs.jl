@@ -16,6 +16,30 @@ doc(obj) = get(META, obj, nothing)
 
 doc(obj::Union(Symbol, String)) = get(META, current_module().(symbol(obj)), nothing)
 
+# Function / Method support
+
+macro trackmethod(def)
+  name = unblock(def).args[1].args[1]
+  f = esc(name)
+  quote
+    if isdefined($(Expr(:quote, name)))
+      funcs = [def => def.func for def in methods($f)]
+      $(esc(def))
+      last = nothing
+      for def in methods($f)
+        if !haskey(funcs, def) || def.func != funcs[def]
+          last = def
+          break
+        end
+      end
+      $f, last
+    else
+      $(esc(def))
+      $f, $f.env.defs
+    end
+  end
+end
+
 # Macros
 
 isexpr(x::Expr, ts...) = x.head in ts
