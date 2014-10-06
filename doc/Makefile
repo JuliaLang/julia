@@ -21,17 +21,17 @@ $(JULIA_ENV)/bin/activate:
 
 SPHINX_BUILD=$(JULIA_ENV)/bin/sphinx-build
 $(SPHINX_BUILD): $(JULIA_ENV)/bin/activate
-	source $(JULIA_ENV)/bin/activate && \
+	. $(JULIA_ENV)/bin/activate && \
 	  pip install sphinx==1.1.3
 	touch -c $@
 
 SPHINX_RTD_THEME=$(JULIA_ENV)/lib/python2.7/site-packages/sphinx_rtd_theme
 $(SPHINX_RTD_THEME): $(SPHINX_BUILD)
-	source $(JULIA_ENV)/bin/activate && \
+	. $(JULIA_ENV)/bin/activate && \
 	  pip install sphinx_rtd_theme
 	touch -c $@
 
-SPHINXBUILD=source $(JULIA_ENV)/bin/activate && env PYTHONPATH=juliadoc sphinx-build
+SPHINXBUILD = . $(JULIA_ENV)/bin/activate && env PYTHONPATH=juliadoc sphinx-build
 
 .PHONY: help clean cleanall html dirhtml singlehtml pickle json htmlhelp qthelp devhelp \
 	epub latex latexpdf text man changes linkcheck doctest gettext
