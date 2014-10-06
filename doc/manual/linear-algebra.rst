@@ -1,5 +1,5 @@
 ****************
- Linear algebra 
+ Linear algebra
 ****************
 
 Matrix factorizations
@@ -28,7 +28,7 @@ in the :ref:`stdlib-linalg` section of the standard library documentation.
 ``GeneralizedSVD``  `Generalized SVD <http://en.wikipedia.org/wiki/Generalized_singular_value_decomposition#Higher_order_version>`_
 =================== ===========
 
-Special matrices 
+Special matrices
 ================
 
 `Matrices with special symmetries and structures <http://www2.imm.dtu.dk/pubdb/views/publication_details.php?id=3274>`_
@@ -47,11 +47,11 @@ for them in LAPACK are available.
 +--------------------+-----------------------------------------------------------------------------------+
 | ``Triangular``     | Upper/lower `triangular matrix <http://en.wikipedia.org/wiki/Triangular_matrix>`_ |
 +--------------------+-----------------------------------------------------------------------------------+
-| ``Tridiagonal``    | `Tridiagonal matrix <http://en.wikipedia.org/wiki/Tridiagonal_matrix>`_           | 
+| ``Tridiagonal``    | `Tridiagonal matrix <http://en.wikipedia.org/wiki/Tridiagonal_matrix>`_           |
 +--------------------+-----------------------------------------------------------------------------------+
 | ``SymTridiagonal`` | Symmetric tridiagonal matrix                                                      |
 +--------------------+-----------------------------------------------------------------------------------+
-| ``Bidiagonal``     | Upper/lower `bidiagonal matrix <http://en.wikipedia.org/wiki/Bidiagonal_matrix>`_ | 
+| ``Bidiagonal``     | Upper/lower `bidiagonal matrix <http://en.wikipedia.org/wiki/Bidiagonal_matrix>`_ |
 +--------------------+-----------------------------------------------------------------------------------+
 | ``Diagonal``       | `Diagonal matrix <http://en.wikipedia.org/wiki/Diagonal_matrix>`_                 |
 +--------------------+-----------------------------------------------------------------------------------+
@@ -120,10 +120,9 @@ Legend:
 +--------------+-----------------------------------------------------------------------------------------------------------------------------------+------------------------+
 | I (interval) | An optimized method to find the characteristic values in the interval [``vl``, ``vh``] is available                               | ``eigvals(M, vl, vh)`` |
 +--------------+-----------------------------------------------------------------------------------------------------------------------------------+------------------------+
-| V (vectors)  | An optimized method to find the characteristic vectors corresponding to the characteristic values ``x=[x1, x2,...]`` is available | ``eigvecs(M, x)``      |
+| V (vectors)  | An optimized method to find the characteristic vectors corresponding to the characteristic values ``x=[x1, x2,⋯]`` is available | ``eigvecs(M, x)``      |
 +--------------+-----------------------------------------------------------------------------------------------------------------------------------+------------------------+
 
 The uniform scaling operator
 ----------------------------
-A ``UniformScaling`` operator represents a scalar times the identity operator, ``λ*I``. The identity operator ``I`` is defined as a constant and is an instance of ``UniformScaling``. The size of these operators are generic and match the other matrix in the binary operations ``+``, ``-``, ``*`` and ``\``. For ``A+I`` and ``A-I`` this means that ``A`` must be square. Multiplication with the identity operator ``I`` is a noop (except for checking that the scaling factor is one) and therefore almost without overhead. 
-
+A ``UniformScaling`` operator represents a scalar times the identity operator, ``λ*I``. The identity operator ``I`` is defined as a constant and is an instance of ``UniformScaling``. The size of these operators are generic and match the other matrix in the binary operations ``+``, ``-``, ``*`` and ``\``. For ``A+I`` and ``A-I`` this means that ``A`` must be square. Multiplication with the identity operator ``I`` is a noop (except for checking that the scaling factor is one) and therefore almost without overhead.

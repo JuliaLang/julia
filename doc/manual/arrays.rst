@@ -54,28 +54,28 @@ Construction and Initialization
 -------------------------------
 
 Many functions for constructing and initializing arrays are provided. In
-the following list of such functions, calls with a ``dims...`` argument
+the following list of such functions, calls with a ``dims⋯`` argument
 can either take a single tuple of dimension sizes or a series of
 dimension sizes passed as a variable number of arguments.
 
 ===================================== =====================================================================
 Function                              Description
 ===================================== =====================================================================
-``Array(type, dims...)``              an uninitialized dense array
-``cell(dims...)``                     an uninitialized cell array (heterogeneous array)
-``zeros(type, dims...)``              an array of all zeros of specified type, defaults to ``Float64`` if 
+``Array(type, dims⋯)``               an uninitialized dense array
+``cell(dims⋯)``                      an uninitialized cell array (heterogeneous array)
+``zeros(type, dims⋯)``               an array of all zeros of specified type, defaults to ``Float64`` if
                                       ``type`` not specified
 ``zeros(A)``                          an array of all zeros of same element type and shape of ``A``
-``ones(type, dims...)``               an array of all ones of specified type, defaults to ``Float64`` if
+``ones(type, dims⋯)``                an array of all ones of specified type, defaults to ``Float64`` if
                                       if ``type`` not specified
 ``ones(A)``                           an array of all ones of same element type and shape of ``A``
-``trues(dims...)``                    a ``Bool`` array with all values ``true``
-``falses(dims...)``                   a ``Bool`` array with all values ``false``
-``reshape(A, dims...)``               an array with the same data as the given array, but with
+``trues(dims⋯)``                     a ``Bool`` array with all values ``true``
+``falses(dims⋯)``                    a ``Bool`` array with all values ``false``
+``reshape(A, dims⋯)``                an array with the same data as the given array, but with
                                       different dimensions.
 ``copy(A)``                           copy ``A``
 ``deepcopy(A)``                       copy ``A``, recursively copying its elements
-``similar(A, element_type, dims...)`` an uninitialized array of the same type as the given array
+``similar(A, element_type, dims⋯)``  an uninitialized array of the same type as the given array
                                       (dense, sparse, etc.), but with the specified element type and
                                       dimensions. The second and third arguments are both optional,
                                       defaulting to the element type and dimensions of ``A`` if omitted.
@@ -103,9 +103,9 @@ functions:
 ================ ======================================================
 Function         Description
 ================ ======================================================
-``cat(k, A...)`` concatenate input n-d arrays along the dimension ``k``
-``vcat(A...)``   shorthand for ``cat(1, A...)``
-``hcat(A...)``   shorthand for ``cat(2, A...)``
+``cat(k, A⋯)`` concatenate input n-d arrays along the dimension ``k``
+``vcat(A⋯)``   shorthand for ``cat(1, A⋯)``
+``hcat(A⋯)``   shorthand for ``cat(2, A⋯)``
 ================ ======================================================
 
 Scalar values passed to these functions are treated as 1-element arrays.
@@ -115,9 +115,9 @@ The concatenation functions are used so often that they have special syntax:
 =================== =========
 Expression          Calls
 =================== =========
-``[A B C ...]``     ``hcat``
-``[A, B, C, ...]``  ``vcat``
-``[A B; C D; ...]`` ``hvcat``
+``[A B C ⋯]``     ``hcat``
+``[A, B, C, ⋯]``  ``vcat``
+``[A B; C D; ⋯]`` ``hvcat``
 =================== =========
 
 ``hvcat`` concatenates in both dimension 1 (with semicolons) and dimension 2
@@ -127,7 +127,7 @@ Typed array initializers
 ------------------------
 
 An array with a specific element type can be constructed using the syntax
-``T[A, B, C, ...]``. This will construct a 1-d array with element type
+``T[A, B, C, ⋯]``. This will construct a 1-d array with element type
 ``T``, initialized to contain elements ``A``, ``B``, ``C``, etc.
 
 Special syntax is available for constructing arrays with element type
@@ -136,9 +136,9 @@ Special syntax is available for constructing arrays with element type
 =================== =========
 Expression          Yields
 =================== =========
-``{A B C ...}``     A 1xN ``Any`` array
-``{A, B, C, ...}``  A 1-d ``Any`` array (vector)
-``{A B; C D; ...}`` A 2-d ``Any`` array
+``{A B C ⋯}``     A 1xN ``Any`` array
+``{A, B, C, ⋯}``  A 1-d ``Any`` array (vector)
+``{A B; C D; ⋯}`` A 2-d ``Any`` array
 =================== =========
 
 Note that this form does not do any concatenation; each argument becomes
@@ -153,15 +153,15 @@ Comprehensions provide a general and powerful way to construct arrays.
 Comprehension syntax is similar to set construction notation in
 mathematics::
 
-    A = [ F(x,y,...) for x=rx, y=ry, ... ]
+    A = [ F(x,y,⋯) for x=rx, y=ry, ⋯ ]
 
-The meaning of this form is that ``F(x,y,...)`` is evaluated with the
+The meaning of this form is that ``F(x,y,⋯)`` is evaluated with the
 variables ``x``, ``y``, etc. taking on each value in their given list of
 values. Values can be specified as any iterable object, but will
 commonly be ranges like ``1:n`` or ``2:(n-1)``, or explicit arrays of
 values like ``[1.2, 3.4, 5.7]``. The result is an N-d dense array with
 dimensions that are the concatenation of the dimensions of the variable
-ranges ``rx``, ``ry``, etc. and each ``F(x,y,...)`` evaluation returns a
+ranges ``rx``, ``ry``, etc. and each ``F(x,y,⋯)`` evaluation returns a
 scalar.
 
 The following example computes a weighted average of the current element
@@ -181,7 +181,7 @@ and its left and right neighbor along a 1-d grid. :
      0.699456
      0.977653
      0.994953
-     0.41084 
+     0.41084
      0.809411
 
     julia> [ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
@@ -190,7 +190,7 @@ and its left and right neighbor along a 1-d grid. :
      0.57468
      0.685417
      0.912429
-     0.8446  
+     0.8446
      0.656511
 
 .. note:: In the above example, ``x`` is declared as constant because type
@@ -222,7 +222,7 @@ Indexing
 
 The general syntax for indexing into an n-dimensional array A is::
 
-    X = A[I_1, I_2, ..., I_n]
+    X = A[I_1, I_2, ⋯, I_n]
 
 where each I\_k may be:
 
@@ -232,16 +232,16 @@ where each I\_k may be:
 4. A boolean vector
 
 The result X generally has dimensions
-``(length(I_1), length(I_2), ..., length(I_n))``, with location
-``(i_1, i_2, ..., i_n)`` of X containing the value
-``A[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``. Trailing dimensions indexed with
+``(length(I_1), length(I_2), ⋯, length(I_n))``, with location
+``(i_1, i_2, ⋯, i_n)`` of X containing the value
+``A[I_1[i_1], I_2[i_2], ⋯, I_n[i_n]]``. Trailing dimensions indexed with
 scalars are dropped. For example, the dimensions of ``A[I, 1]`` will be
 ``(length(I),)``. Boolean vectors are first transformed with ``find``; the size of
 a dimension indexed by a boolean vector will be the number of true values in the vector.
 
 Indexing syntax is equivalent to a call to ``getindex``::
 
-    X = getindex(A, I_1, I_2, ..., I_n)
+    X = getindex(A, I_1, I_2, ⋯, I_n)
 
 Example:
 
@@ -260,7 +260,7 @@ Example:
      7  11
 
 Empty ranges of the form ``n:n-1`` are sometimes used to indicate the inter-index
-location between ``n-1`` and ``n``.  For example, the ``searchsorted`` function uses 
+location between ``n-1`` and ``n``.  For example, the ``searchsorted`` function uses
 this convention to indicate the insertion point of a value not found in a sorted
 array:
 
@@ -276,7 +276,7 @@ Assignment
 
 The general syntax for assigning values in an n-dimensional array A is::
 
-    A[I_1, I_2, ..., I_n] = X
+    A[I_1, I_2, ⋯, I_n] = X
 
 where each I\_k may be:
 
@@ -285,9 +285,9 @@ where each I\_k may be:
 3. An arbitrary integer vector, including the empty vector ``[]``
 4. A boolean vector
 
-If ``X`` is an array, its size must be ``(length(I_1), length(I_2), ..., length(I_n))``,
-and the value in location ``i_1, i_2, ..., i_n`` of ``A`` is overwritten with
-the value ``X[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``. If ``X`` is not an array, its
+If ``X`` is an array, its size must be ``(length(I_1), length(I_2), ⋯, length(I_n))``,
+and the value in location ``i_1, i_2, ⋯, i_n`` of ``A`` is overwritten with
+the value ``X[I_1[i_1], I_2[i_2], ⋯, I_n[i_n]]``. If ``X`` is not an array, its
 value is written to all referenced locations of ``A``.
 
 A boolean vector used as an index behaves as in ``getindex`` (it is first transformed
@@ -295,7 +295,7 @@ with ``find``).
 
 Index assignment syntax is equivalent to a call to ``setindex!``::
 
-      setindex!(A, X, I_1, I_2, ..., I_n)
+      setindex!(A, X, I_1, I_2, ⋯, I_n)
 
 Example:
 
@@ -448,7 +448,7 @@ implementations of it might be quite different from conventional
 arrays. For example, elements might be computed on request rather than
 stored.  However, any concrete ``AbstractArray{T,N}`` type should
 generally implement at least ``size(A)`` (returing an ``Int`` tuple),
-``getindex(A,i)`` and ``getindex(A,i1,...,iN)`` (returning an element
+``getindex(A,i)`` and ``getindex(A,i1,⋯,iN)`` (returning an element
 of type ``T``); mutable arrays should also implement ``setindex!``.  It
 is recommended that these operations have nearly constant time complexity,
 or technically Õ(1) complexity, as otherwise some array functions may
@@ -566,9 +566,9 @@ beyond the point of insertion have to be moved one place over.
 All operations on sparse matrices are carefully implemented to exploit
 the CSC data structure for performance, and to avoid expensive operations.
 
-If you have data in CSC format from a different application or library, 
+If you have data in CSC format from a different application or library,
 and wish to import it in Julia, make sure that you use 1-based indexing.
-The row indices in every column need to be sorted. If your `SparseMatrixCSC` 
+The row indices in every column need to be sorted. If your `SparseMatrixCSC`
 object contains unsorted row indices, one quick way to sort them is by
 doing a double transpose.
 
@@ -713,5 +713,3 @@ reference.
 |                       |                   | elements with probability *d* (*d* =0.5|
 |                       |                   | for ``randbool``.)                     |
 +-----------------------+-------------------+----------------------------------------+
-
-

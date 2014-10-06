@@ -46,7 +46,7 @@ while developing you might use a workflow something like this::
     obj1 = MyModule.ObjConstructor(a, b) # old objects are no longer valid, must reconstruct
     obj2 = MyModule.somefunction(obj1)   # this time it worked!
     obj3 = MyModule.someotherfunction(obj2, c)
-    ...
+    ⋮
 
 Functions
 ---------
@@ -64,7 +64,7 @@ Suppose you call a function like this::
 	julia> x # x is unchanged!
 	10
 
-In Julia, any function (including ``change_value!()``) can't change the binding of a local variable. If ``x`` (in the calling scope) is bound to a immutable object (like a real number), you can't modify the object; likewise, if x is bound in the calling scope to a Dict, you can't change it to be bound to an ASCIIString. 
+In Julia, any function (including ``change_value!()``) can't change the binding of a local variable. If ``x`` (in the calling scope) is bound to a immutable object (like a real number), you can't modify the object; likewise, if x is bound in the calling scope to a Dict, you can't change it to be bound to an ASCIIString.
 
 But here is a thing you should pay attention to: suppose ``x`` is bound to an Array (or any other mutable type). You cannot "unbind" ``x`` from this Array. But, since an Array is a *mutable* type, you can change its content. For example::
 
@@ -97,8 +97,8 @@ inside a specific function or set of functions, you have two options:
 1.  Use ``import``::
 
         import Foo
-        function bar(...)
-            ... refer to Foo symbols via Foo.baz ...
+        function bar(⋯)
+            ⋯ refer to Foo symbols via Foo.baz ⋯
         end
 
 
@@ -113,8 +113,8 @@ inside a specific function or set of functions, you have two options:
         module Bar
         export bar
         using Foo
-        function bar(...)
-            ... refer to Foo.baz as simply baz ....
+        function bar(⋯)
+            ⋯ refer to Foo.baz as simply baz ⋯.
         end
         end
         using Bar
@@ -193,7 +193,7 @@ Julia uses machine arithmetic for integer computations. This means that the rang
 
     julia> typemax(Int)
     9223372036854775807
-    
+
     julia> ans+1
     -9223372036854775808
 
@@ -255,13 +255,13 @@ At first blush, this seems reasonable enough since 9223372036854775807 is much c
 
     >> n = int64(2)^62
     4611686018427387904
-    
+
     >> n + (n - 1)
     9223372036854775807
-    
+
     >> (n + n) - 1
     9223372036854775806
-    
+
 This makes it hard to write many basic integer algorithms since a lot of
 common techniques depend on the fact that machine addition with overflow *is*
 associative. Consider finding the midpoint between integer values ``lo`` and
@@ -269,7 +269,7 @@ associative. Consider finding the midpoint between integer values ``lo`` and
 
     julia> n = 2^62
     4611686018427387904
-    
+
     julia> (n + 2n) >>> 1
     6917529027641081856
 
@@ -277,9 +277,9 @@ See? No problem. That's the correct midpoint between 2^62 and 2^63, despite
 the fact that ``n + 2n`` is -4611686018427387904. Now try it in Matlab::
 
     >> (n + 2*n)/2
-    
+
     ans =
-    
+
       4611686018427387904
 
 Oops. Adding a ``>>>`` operator to Matlab wouldn't help, because saturation
@@ -471,7 +471,7 @@ to change the type of field ``a``:
 
     julia> t.a = 4.5f0
     4.5f0
-    
+
     julia> typeof(t.a)
     Float32
 
@@ -482,10 +482,10 @@ change:
 
     julia> m.a = 4.5f0
     4.5
-    
+
     julia> typeof(m.a)
     Float64
-    
+
 The fact that the type of ``m.a`` is known from ``m``'s type---coupled
 with the fact that its type cannot change mid-function---allows the
 compiler to generate highly-optimized code for objects like ``m`` but
@@ -502,10 +502,10 @@ an abstract type:
 
     julia> typeof(m.a)
     Float64
-    
+
     julia> m.a = 4.5f0
     4.5f0
-    
+
     julia> typeof(m.a)
     Float32
 
@@ -602,10 +602,10 @@ versions of the outer function for different element types of
 ``a``. You could do it like this::
 
     function myfun{T<:FloatingPoint}(c::MySimpleContainer{Vector{T}})
-        ...
+        ⋮
     end
     function myfun{T<:Integer}(c::MySimpleContainer{Vector{T}})
-        ...
+        ⋮
     end
 
 This works fine for ``Vector{T}``, but we'd also have to write
@@ -645,7 +645,7 @@ With this approach, one can write functions such as::
 
     julia> myfunc(MyContainer(1:3))
     2
-    
+
     julia> myfunc(MyContainer(1.0:3))
     3.0
 

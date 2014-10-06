@@ -1,7 +1,7 @@
 .. _man-functions:
 
 ***********
- Functions  
+ Functions
 ***********
 
 In Julia, a function is an object that maps a tuple of argument values
@@ -185,9 +185,9 @@ names. These are:
 =================== ==============
 Expression          Calls
 =================== ==============
-``[A B C ...]``     ``hcat``
-``[A, B, C, ...]``  ``vcat``
-``[A B; C D; ...]`` ``hvcat``
+``[A B C ⋯]``     ``hcat``
+``[A, B, C, ⋯]``  ``vcat``
+``[A B; C D; ⋯]`` ``hvcat``
 ``A'``              ``ctranspose``
 ``A.'``             ``transpose``
 ``1:n``             ``colon``
@@ -304,7 +304,7 @@ It is often convenient to be able to write functions taking an arbitrary
 number of arguments. Such functions are traditionally known as "varargs"
 functions, which is short for "variable number of arguments". You can
 define a varargs function by following the last argument with an
-ellipsis:
+ellipsis (three period characters ``...``):
 
 .. doctest::
 
@@ -465,14 +465,14 @@ Functions with keyword arguments are defined using a semicolon in the
 signature::
 
     function plot(x, y; style="solid", width=1, color="black")
-        ###
+        ⋮
     end
 
 Extra keyword arguments can be collected using ``...``, as in varargs
 functions::
 
     function f(x; y=0, args...)
-        ###
+        ⋮
     end
 
 Inside ``f``, ``args`` will be a collection of ``(key,value)`` tuples,
@@ -543,7 +543,7 @@ The ``do x`` syntax creates an anonymous function with argument ``x``
 and passes it as the first argument to ``map``. Similarly, ``do a,b``
 would create a two-argument anonymous function, and a plain ``do``
 would declare that what follows is an anonymous function of the form
-``() -> ...``.
+``() -> ⋯``.
 
 How these arguments are initialized depends on the "outer" function;
 here, ``map`` will sequentially set ``x`` to ``A``, ``B``, ``C``,

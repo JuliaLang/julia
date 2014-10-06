@@ -543,7 +543,7 @@ which are parsed into a state machine that can be used to efficiently
 search for patterns in strings. In Julia, regular expressions are input
 using non-standard string literals prefixed with various identifiers
 beginning with ``r``. The most basic regular expression literal without
-any options turned on just uses ``r"..."``:
+any options turned on just uses ``r"⋯"``:
 
 .. doctest::
 
@@ -718,7 +718,7 @@ For example, the following regex has all three flags turned on:
     julia> match(r"a+.*b+.*?d$"ism, "Goodbye,\nOh, angry,\nBad world\n")
     RegexMatch("angry,\nBad world")
 
-Triple-quoted regex strings, of the form ``r"""..."""``, are also
+Triple-quoted regex strings, of the form ``r"""⋯"""``, are also
 supported (and may be convenient for regular expressions containing
 quotation marks or newlines).
 
@@ -726,7 +726,7 @@ Byte Array Literals
 -------------------
 
 Another useful non-standard string literal is the byte-array string
-literal: ``b"..."``. This form lets you use string notation to express
+literal: ``b"⋯"``. This form lets you use string notation to express
 literal byte arrays — i.e. arrays of ``Uint8`` values. The convention is
 that non-standard literals with uppercase prefixes produce actual string
 objects, while those with lowercase prefixes produce non-string objects
@@ -815,7 +815,7 @@ Version Number Literals
 -----------------------
 
 Version numbers can easily be expressed with non-standard string literals of
-the form ``v"..."``. Version number literals create ``VersionNumber`` objects
+the form ``v"⋯"``. Version number literals create ``VersionNumber`` objects
 which follow the specifications of `semantic versioning <http://semver.org>`_,
 and therefore are composed of major, minor and patch numeric values, followed
 by pre-release and build alpha-numeric annotations. For example,

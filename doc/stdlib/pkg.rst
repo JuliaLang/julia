@@ -13,14 +13,14 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
    If the ``JULIA_PKGDIR`` environment variable is set, that path is used instead.
    If ``JULIA_PKGDIR`` is a relative path, it is interpreted relative to whatever the current working directory is.
 
-.. function:: dir(names...) -> String
+.. function:: dir(names⋯) -> String
 
-   Equivalent to ``normpath(Pkg.dir(),names...)`` – i.e. it appends path components to the package directory and normalizes the resulting path.
+   Equivalent to ``normpath(Pkg.dir(),names⋯)`` – i.e. it appends path components to the package directory and normalizes the resulting path.
    In particular, ``Pkg.dir(pkg)`` returns the path to the package ``pkg``.
 
 .. function:: init(meta::String=DEFAULT_META, branch::String=META_BRANCH)
 
-   Initialize ``Pkg.dir()`` as a package directory.  
+   Initialize ``Pkg.dir()`` as a package directory.
    This will be done automatically when the ``JULIA_PKGDIR`` is not set and ``Pkg.dir()`` uses its default value.
    As part of this process, clones a local METADATA git repository from the site and branch specified by its arguments, which
    are typically not provided.  Explicit (non-default) arguments can be used to support a custom METADATA setup.
@@ -36,7 +36,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
    Opens ``Pkg.dir("REQUIRE")`` in the editor specified by the ``VISUAL`` or ``EDITOR`` environment variables;
    when the editor command returns, it runs ``Pkg.resolve()`` to determine and install a new optimal set of installed package versions.
 
-.. function:: add(pkg, vers...)
+.. function:: add(pkg, vers⋯)
 
    Add a requirement entry for ``pkg`` to ``Pkg.dir("REQUIRE")`` and call ``Pkg.resolve()``.
    If ``vers`` are given, they must be ``VersionNumber`` objects and they specify acceptable version intervals for ``pkg``.
@@ -107,7 +107,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
    Run the build scripts for all installed packages in depth-first recursive order.
 
-.. function:: build(pkgs...)
+.. function:: build(pkgs⋯)
 
    Run the build script in "deps/build.jl" for each package in ``pkgs`` and all of their dependencies in depth-first recursive order.
    This is called automatically by ``Pkg.resolve()`` on all installed or updated packages.
@@ -137,7 +137,6 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
    Run the tests for all installed packages ensuring that each package's test dependencies are installed for the duration of the test. A package is tested by running its ``test/runtests.jl`` file and test dependencies are specified in ``test/REQUIRE``.
 
-.. function:: test(pkgs...)
+.. function:: test(pkgs⋯)
 
    Run the tests for each package in ``pkgs`` ensuring that each package's test dependencies are installed for the duration of the test. A package is tested by running its ``test/runtests.jl`` file and test dependencies are specified in ``test/REQUIRE``.
-

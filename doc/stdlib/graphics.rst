@@ -18,7 +18,7 @@ Geometry
 
    Creates a box in two dimensions with the given edges
 
-.. function:: BoundingBox(objs...)
+.. function:: BoundingBox(objs⋯)
 
    Creates a box in two dimensions that encloses all objects
 

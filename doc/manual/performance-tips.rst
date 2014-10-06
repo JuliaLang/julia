@@ -185,7 +185,7 @@ share this knowledge with the compiler::
     function foo(a::Array{Any,1})
         x = a[1]::Int32
         b = x+1
-        ...
+        ⋮
     end
 
 Here, we happened to know that the first element of ``a`` would be an
@@ -199,7 +199,7 @@ Declare types of keyword arguments
 Keyword arguments can have declared types::
 
     function with_keyword(x; name::Int = 1)
-        ...
+        ⋮
     end
 
 Functions are specialized on the types of keyword arguments, so these
@@ -474,7 +474,7 @@ with
         end
         y
     end
-    
+
 Timing results::
 
     julia> @time loopinc()
@@ -551,8 +551,8 @@ properties.
    Be certain before doing this. If the subscripts are ever out of bounds,
    you may suffer crashes or silent corruption.
 -  Write ``@simd`` in front of ``for`` loops that are amenable to vectorization.
-   **This feature is experimental** and could change or disappear in future 
-   versions of Julia.  
+   **This feature is experimental** and could change or disappear in future
+   versions of Julia.
 
 Here is an example with both forms of markup::
 
@@ -571,7 +571,7 @@ Here is an example with both forms of markup::
         end
         s
     end
- 
+
     function timeit( n, reps )
         x = rand(Float32,n)
         y = rand(Float32,n)
@@ -604,14 +604,13 @@ properties of the loop:
    possibly causing different results than without ``@simd``.
 -  No iteration ever waits on another iteration to make forward progress.
 
-Using ``@simd`` merely gives the compiler license to vectorize. Whether 
-it actually does so depends on the compiler. To actually benefit from the 
-current implementation, your loop should have the following additional 
+Using ``@simd`` merely gives the compiler license to vectorize. Whether
+it actually does so depends on the compiler. To actually benefit from the
+current implementation, your loop should have the following additional
 properties:
 
 -  The loop must be an innermost loop.
 -  The loop body must be straight-line code. This is why ``@inbounds`` is currently needed for all array accesses.
 -  Accesses must have a stride pattern and cannot be "gathers" (random-index reads) or "scatters" (random-index writes).
 - The stride should be unit stride.
-- In some simple cases, for example with 2-3 arrays accessed in a loop, the LLVM auto-vectorization may kick in automatically, leading to no further speedup with ``@simd``. 
-
+- In some simple cases, for example with 2-3 arrays accessed in a loop, the LLVM auto-vectorization may kick in automatically, leading to no further speedup with ``@simd``.

@@ -50,9 +50,9 @@ Real applications will not just need to execute expressions, but also return the
         printf("sqrt(2.0) in C: %e \n", ret_unboxed);
     }
 
-In order to check whether ``ret`` is of a specific Julia type, we can use the ``jl_is_...`` functions. By typing ``typeof(sqrt(2.0))`` into the Julia shell we can see that the return type is ``Float64`` (``double`` in C). To convert the boxed Julia value into a C double the ``jl_unbox_float64`` function is used in the above code snippet.
+In order to check whether ``ret`` is of a specific Julia type, we can use the ``jl_is_⋯`` functions. By typing ``typeof(sqrt(2.0))`` into the Julia shell we can see that the return type is ``Float64`` (``double`` in C). To convert the boxed Julia value into a C double the ``jl_unbox_float64`` function is used in the above code snippet.
 
-Corresponding ``jl_box_...`` functions are used to convert the other way::
+Corresponding ``jl_box_⋯`` functions are used to convert the other way::
 
     jl_value_t *a = jl_box_float64(3.0);
     jl_value_t *b = jl_box_float32(3.0f);
@@ -82,7 +82,7 @@ As we have seen, Julia objects are represented in C as pointers. This raises the
 
 Typically, Julia objects are freed by a garbage collector (GC), but the GC does not automatically know that we are holding a reference to a Julia value from C. This means the GC can free objects out from under you, rendering pointers invalid.
 
-The GC can only run when Julia objects are allocated. Calls like ``jl_box_float64`` perform allocation, and allocation might also happen at any point in running Julia code. However, it is generally safe to use pointers in between ``jl_...`` calls. But in order to make sure that values can survive ``jl_...`` calls, we have to tell Julia that we hold a reference to a Julia value. This can be done using the ``JL_GC_PUSH`` macros::
+The GC can only run when Julia objects are allocated. Calls like ``jl_box_float64`` perform allocation, and allocation might also happen at any point in running Julia code. However, it is generally safe to use pointers in between ``jl_⋯`` calls. But in order to make sure that values can survive ``jl_⋯`` calls, we have to tell Julia that we hold a reference to a Julia value. This can be done using the ``JL_GC_PUSH`` macros::
 
     jl_value_t *ret = jl_eval_string("sqrt(2.0)");
     JL_GC_PUSH1(&ret);
@@ -97,7 +97,7 @@ Several Julia values can be pushed at once using the ``JL_GC_PUSH2`` , ``JL_GC_P
     JL_GC_PUSHARGS(args, 2); // args can now hold 2 `jl_value_t*` objects
     args[0] = some_value;
     args[1] = some_other_value;
-    // Do something with args (e.g. call jl_... functions)
+    // Do something with args (e.g. call jl_⋯ functions)
     JL_GC_POP();
 
 Manipulating the Garbage Collector
@@ -131,18 +131,18 @@ Alternatively, if you have already allocated the array you can generate a thin w
 
     double *existingArray = (double*)malloc(sizeof(double)*10);
     jl_array_t *x = jl_ptr_to_array_1d(array_type, existingArray, 10, 0);
-    
+
 The last argument is a boolean indicating whether Julia should take ownership of the data. If this argument is non-zero, the GC will call ``free`` on the data pointer when the array is no longer referenced.
 
 In order to access the data of x, we can use ``jl_array_data``::
 
     double *xData = (double*)jl_array_data(x);
-    
+
 Now we can fill the array::
 
     for(size_t i=0; i<jl_array_len(x); i++)
         xData[i] = i;
-      
+
 Now let us call a Julia function that performs an in-place operation on ``x``::
 
     jl_function_t *func  = jl_get_function(jl_base_module, "reverse!");
@@ -212,7 +212,7 @@ When writing Julia callable functions, it might be necessary to validate argumen
 General exceptions can be raised using the funtions::
 
     void jl_error(const char *str);
-    void jl_errorf(const char *fmt, ...);
+    void jl_errorf(const char *fmt, ⋯);
 
 ``jl_error`` takes a C string, and ``jl_errorf`` is called like ``printf``::
 

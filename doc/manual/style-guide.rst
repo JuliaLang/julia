@@ -71,14 +71,14 @@ Instead of::
 
     function foo(x, y)
         x = int(x); y = int(y)
-        ...
+        ⋮
     end
     foo(x, y)
 
 use::
 
     function foo(x::Int, y::Int)
-        ...
+        ⋮
     end
     foo(int(x), int(y))
 
@@ -153,7 +153,7 @@ Use naming conventions consistent with Julia's ``base/``
   When necessary, use underscores as word separators.
   Underscores are also used to indicate a combination of
   concepts (``remotecall_fetch`` as a more efficient implementation
-  of ``remotecall(fetch(...))``) or as modifiers (``sum_kbn``).
+  of ``remotecall(fetch(⋯))``) or as modifiers (``sum_kbn``).
 - conciseness is valued, but avoid abbreviation
   (``indexin`` rather than ``indxin``) as it becomes difficult to
   remember whether and how particular words are abbreviated.
@@ -191,11 +191,11 @@ Don't use unnecessary static parameters
 
 A function signature::
 
-    foo{T<:Real}(x::T) = ...
+    foo{T<:Real}(x::T) = ⋯
 
 should be written as::
 
-    foo(x::Real) = ...
+    foo(x::Real) = ⋯
 
 instead, especially if ``T`` is not used in the function body.
 Even if ``T`` is used, it can be replaced with ``typeof(x)`` if convenient.
@@ -212,7 +212,7 @@ Avoid confusion about whether something is an instance or a type
 
 Sets of definitions like the following are confusing::
 
-    foo(::Type{MyType}) = ...
+    foo(::Type{MyType}) = ⋯
     foo(::MyType) = foo(MyType)
 
 Decide whether the concept in question will be written as ``MyType`` or
@@ -245,7 +245,7 @@ If you have a type that uses a native pointer::
 
     type NativeType
         p::Ptr{Uint8}
-        ...
+        ⋮
     end
 
 don't write definitions like the following::
@@ -263,7 +263,7 @@ Don't overload methods of base container types
 
 It is possible to write definitions like the following::
 
-    show(io::IO, v::Vector{MyType}) = ...
+    show(io::IO, v::Vector{MyType}) = ⋯
 
 This would provide custom showing of vectors with a specific new element type.
 While tempting, this should be avoided. The trouble is that users will expect

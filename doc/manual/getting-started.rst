@@ -1,7 +1,7 @@
 .. _man-getting-started:
 
 *****************
- Getting Started  
+ Getting Started
 *****************
 
 Julia installation is straightforward, whether using precompiled
@@ -45,7 +45,7 @@ To evaluate expressions written in a source file ``file.jl``, write
 To run code in a file non-interactively, you can give it as the first
 argument to the julia command::
 
-    $ julia script.jl arg1 arg2...
+    $ julia script.jl arg1 arg2⋯
 
 As the example implies, the following command-line arguments to julia
 are taken as command-line arguments to the program ``script.jl``, passed
@@ -65,18 +65,18 @@ Or you could put that code into a script and run it::
     foo
     bar
 
-Julia can be started in parallel mode with either the ``-p`` or the 
-``--machinefile`` options. ``-p n`` will launch an additional ``n`` 
-worker processes, while ``--machinefile file`` will launch a worker 
-for each line in file ``file``. The machines defined in ``file`` must be 
+Julia can be started in parallel mode with either the ``-p`` or the
+``--machinefile`` options. ``-p n`` will launch an additional ``n``
+worker processes, while ``--machinefile file`` will launch a worker
+for each line in file ``file``. The machines defined in ``file`` must be
 accessible via a passwordless ``ssh`` login, with Julia installed at the
-same location as the current host. Each machine definition takes the form 
-``[user@]host[:port] [bind_addr[:port]]`` . ``user`` defaults to current user, 
-``port`` to the standard ssh port. The optional ``bind-to bind_addr[:port]`` 
-specifies the ip-address and port that other workers should use to 
+same location as the current host. Each machine definition takes the form
+``[user@]host[:port] [bind_addr[:port]]`` . ``user`` defaults to current user,
+``port`` to the standard ssh port. The optional ``bind-to bind_addr[:port]``
+specifies the ip-address and port that other workers should use to
 connect to this worker.
-    
-    
+
+
 If you have code that you want executed whenever julia is run, you can
 put it in ``~/.juliarc.jl``:
 
@@ -89,8 +89,8 @@ put it in ``~/.juliarc.jl``:
     $ echo 'println("Greetings! 你好! 안녕하세요?")' > ~/.juliarc.jl
     $ julia
     Greetings! 你好! 안녕하세요?
-    
-    ...
+
+    ⋮
 
 .. raw:: latex
 
@@ -99,7 +99,7 @@ put it in ``~/.juliarc.jl``:
 There are various ways to run Julia code and provide options, similar to
 those available for the ``perl`` and ``ruby`` programs::
 
-    julia [options] [program] [args...]
+    julia [options] [program] [args⋯]
      -v, --version            Display version information
      -h, --help               Print this message
      -q, --quiet              Quiet startup without banner
@@ -137,4 +137,3 @@ help new users get started with julia:
 - `An introductory presentation <https://raw.githubusercontent.com/ViralBShah/julia-presentations/master/Fifth-Elephant-2013/Fifth-Elephant-2013.pdf>`_
 - `Videos from the Julia tutorial at MIT <http://julialang.org/blog/2013/03/julia-tutorial-MIT/>`_
 - `Forio Julia Tutorials <http://forio.com/labs/julia-studio/tutorials/>`_
-

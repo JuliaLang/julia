@@ -280,7 +280,7 @@ You can easily experiment in the same way with the associativity and
 precedence of various combinations of ``&&`` and ``||`` operators.
 
 This behavior is frequently used in Julia to form an alternative to very short
-``if`` statements. Instead of ``if <cond> <statement> end``, one can write 
+``if`` statements. Instead of ``if <cond> <statement> end``, one can write
 ``<cond> && <statement>`` (which could be read as: <cond> *and then* <statement>).
 Similarly, instead of ``if ! <cond> <statement> end``, one can write
 ``<cond> || <statement>`` (which could be read as: <cond> *or else* <statement>).
@@ -295,13 +295,13 @@ For example, a recursive factorial routine could be defined like this:
                n * factorial(n-1)
            end
     factorial (generic function with 1 method)
-    
+
     julia> factorial(5)
     120
-    
+
     julia> factorial(0)
     1
-    
+
     julia> factorial(-1)
     ERROR: n must be non-negative
      in factorial at none:2
@@ -326,7 +326,7 @@ infix operator syntax, but always evaluate their arguments:
 
 Just like condition expressions used in ``if``, ``elseif`` or the
 ternary operator, the operands of ``&&`` or ``||`` must be boolean
-values (``true`` or ``false``). Using a non-boolean value anywhere 
+values (``true`` or ``false``). Using a non-boolean value anywhere
 except for the last entry in a conditional chain is an error:
 
 .. doctest::
@@ -334,7 +334,7 @@ except for the last entry in a conditional chain is an error:
     julia> 1 && true
     ERROR: type: non-boolean (Int64) used in boolean context
 
-On the other hand, any type of expression can be used at the end of a conditional chain.  
+On the other hand, any type of expression can be used at the end of a conditional chain.
 It will be evaluated and returned depending on the preceding conditionals:
 
 .. testsetup::
@@ -607,10 +607,10 @@ if the argument is negative:
 
     julia> f(x) = x>=0 ? exp(-x) : throw(DomainError())
     f (generic function with 1 method)
-    
+
     julia> f(1)
     0.36787944117144233
-    
+
     julia> f(-1)
     ERROR: DomainError
      in f at none:1
@@ -622,7 +622,7 @@ exception. It needs to be called to obtain an ``Exception`` object:
 
     julia> typeof(DomainError()) <: Exception
     true
-    
+
     julia> typeof(DomainError) <: Exception
     false
 
@@ -703,11 +703,11 @@ execution.:
     julia> info("Hi"); 1+1
     INFO: Hi
     2
-    
+
     julia> warn("Hi"); 1+1
     WARNING: Hi
     2
-    
+
     julia> error("Hi"); 1+1
     ERROR: Hi
      in error at error.jl:21
@@ -729,10 +729,10 @@ call either the real or complex square root method on demand using
              sqrt(complex(x, 0))
            end
     f (generic function with 1 method)
-    
+
     julia> f(1)
     1.0
-    
+
     julia> f(-1)
     0.0 + 1.0im
 
@@ -757,16 +757,16 @@ assumes ``x`` is a real number and returns its square root:
              end
            end
     sqrt_second (generic function with 1 method)
-    
+
     julia> sqrt_second([1 4])
     2.0
-    
+
     julia> sqrt_second([1 -4])
     0.0 + 2.0im
-    
+
     julia> sqrt_second(9)
     3.0
-    
+
     julia> sqrt_second(-9)
     ERROR: DomainError
      in sqrt_second at none:7
@@ -917,7 +917,7 @@ function <man-anonymous-functions>`. This can be done either
 directly or by use of a convenience macro::
 
     function mytask(myarg)
-        ...
+        ⋮
     end
 
     taskHdl = Task(() -> mytask(7))
