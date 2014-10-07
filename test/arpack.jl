@@ -74,6 +74,13 @@ d, = eigs(A6965,which=:SM,nev=2,ncv=4,tol=eps())
 @test_approx_eq real(d[2]) 2.6159972444834976
 @test_approx_eq abs(imag(d[2])) 1.2917858749046127
 
+# Requires ARPACK 3.2 or a patched 3.1.5
+#T6965 = [ 0.9  0.05  0.05
+#          0.8  0.1   0.1 
+#          0.7  0.1   0.2 ]
+#d,v,nconv = eigs(T6965,nev=1,which=:LM)
+#@test_approx_eq_eps T6965*v d[1]*v 1e-6
+
 # Example from Quantum Information Theory
 import Base: size, issym, ishermitian
 
