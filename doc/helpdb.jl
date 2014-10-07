@@ -6612,11 +6612,11 @@ popdisplay(d::Display)
 ("Base","median","median(v; checknan::Bool=true)
 
    Compute the median of a vector \"v\". If the keyword argument
-   \"checknan\" is true (the default), \"NaN\" is returned if the
-   data contains any \"NaN\" values. Note: Julia does not ignore
-   \"NaN\" values in the computation. For applications requiring
-   the handling of missing data, the \"DataArray\" package is
-   recommended.
+   \"checknan\" is true (the default), \"NaN\" is returned if the data
+   contains any \"NaN\" values. If \"checknan\" is false, then \"NaN\"
+   values are included in the computation. Note: Because Julia does not
+   ignore \"NaN\" values, the \"DataArray\" package is recommended for
+   applications that must handle missing data.
 
 "),
 
