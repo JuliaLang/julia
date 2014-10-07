@@ -265,6 +265,9 @@ endif
 	-gtk-update-icon-cache $(DESTDIR)$(datarootdir)/icons/hicolor/
 	mkdir -p $(DESTDIR)$(datarootdir)/applications/
 	$(INSTALL_F) contrib/julia.desktop $(DESTDIR)$(datarootdir)/applications/
+	# Install appdata file
+	mkdir -p $(DESTDIR)$(datarootdir)/appdata/
+	$(INSTALL_F) contrib/julia.appdata.xml $(DESTDIR)$(datarootdir)/appdata/
 
 	# Update RPATH entries and JL_SYSTEM_IMAGE_PATH if $(private_libdir_rel) != $(build_private_libdir_rel)
 ifneq ($(private_libdir_rel),$(build_private_libdir_rel))
