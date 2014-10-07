@@ -1427,7 +1427,7 @@
 		 (loop lst nxt)
 		 (let ((params (parse-arglist s closer)))
 		   `(vcat ,@params ,@lst ,nxt))))
-	    ((#\])
+	    ((#\] #\})
 	     (error (string "unexpected \"" t "\"")))
 	    (else
 	     (error "missing separator in array expression")))))))
@@ -1508,11 +1508,8 @@
                  (take-token s)
                  (parse-dict-comprehension s first closer))
                 (else
-		 (if (eqv? closer #\})
-		     (syntax-deprecation-warning s "{a=>b, ...}" "Dict{Any,Any}(a=>b, ...)")
-		     (or
-		      (and (pair? isdict) (car isdict))
-		      (syntax-deprecation-warning s "[a=>b, ...]" "Dict(a=>b, ...)")))
+		 (if (and (pair? isdict) (car isdict))
+		      (syntax-deprecation-warning s "[a=>b, ...]" "Dict(a=>b, ...)"))
 		 (parse-dict s first closer)))
               (case (peek-token s)
                 ((#\,)
@@ -1783,9 +1780,58 @@
 		     (else
 		      (error "missing separator in tuple")))))))))
 
-	  ;; TODO this awaits a decision on {} syntax in 0.4
+	  ;; cell expression
 	  ((eqv? t #\{ )
-	   (error "{} syntax for Any arrays / dicts has been removed in 0.4dev"))
+	   (take-token s)
+	   (if (eqv? (require-token s) #\})
+	       (begin 
+		      (syntax-deprecation-warning s "{}" "[]")
+		      (take-token s) 
+		      '(cell1d))
+	       (let ((vex (parse-cat s #\})))
+                 (if (null? vex)
+		     (begin
+		         (syntax-deprecation-warning s "{}" "[]")
+                         '(cell1d))
+                     (case (car vex)
+                       ((comprehension)
+		         (syntax-deprecation-warning s "{a for a in b}" "Any[a for a in b]")
+                        `(typed_comprehension (top Any) ,@(cdr vex)))
+                       ((dict_comprehension)
+		         (syntax-deprecation-warning s "{a=>b for (a,b) in c}" "Dict{Any,Any}([a=>b for (a,b) in c])")
+                        `(typed_dict_comprehension (=> (top Any) (top Any)) ,@(cdr vex)))
+                       ((dict)
+		         (syntax-deprecation-warning s "{a=>b, ...}" "Dict{Any,Any}(a=>b, ...)")
+                        `(typed_dict (=> (top Any) (top Any)) ,@(cdr vex)))
+                       ((hcat)
+		         (syntax-deprecation-warning s "{a b ...}" "Any[a b ...]")
+                        `(cell2d 1 ,(length (cdr vex)) ,@(cdr vex)))
+                       (else  ; (vcat ...)
+			(if (and (pair? (cadr vex)) (eq? (caadr vex) 'row))
+			    (let ((nr (length (cdr vex)))
+				  (nc (length (cdadr vex))))
+			      ;; make sure all rows are the same length
+			      (if (not (every
+					(lambda (x)
+					  (and (pair? x)
+					       (eq? (car x) 'row)
+					       (length= (cdr x) nc)))
+					(cddr vex)))
+				  (error "inconsistent shape in cell expression"))
+			      (begin
+		                  (syntax-deprecation-warning s "{[a,b] [c,d]}" "Any[[a,b] [c,d]]"))
+			          `(cell2d ,nr ,nc
+				       ,@(apply append
+						;; transpose to storage order
+						(apply map list
+						       (map cdr (cdr vex))))))
+			    (if (any (lambda (x) (and (pair? x)
+						      (eq? (car x) 'row)))
+				     (cddr vex))
+				(error "inconsistent shape in cell expression")
+				(begin
+		         	    (syntax-deprecation-warning s "{a,b, ...}" "Any[a,b,...]")
+				    `(cell1d ,@(cdr vex)))))))))))
 
 	  ;; cat expression
 	  ((eqv? t #\[ )
