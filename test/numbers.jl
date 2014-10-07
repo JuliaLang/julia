@@ -1798,7 +1798,8 @@ end
 @test 3//2 <= typemax(Int)
 
 # check gcd and related functions against GMP
-for i = -20:20, j = -20:20
+for T in (Int32,Int64), ii = -20:20, jj = -20:20
+    i::T, j::T = ii, jj
     local d = gcd(i,j)
     @test d >= 0
     @test lcm(i,j) >= 0
