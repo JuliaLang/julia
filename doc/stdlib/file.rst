@@ -88,7 +88,7 @@ Filesystem
 
    Determines whether a path refers to a directory (for example, ends with a path separator).
 
-.. function:: joinpath(parts...) -> String
+.. function:: joinpath(parts⋯) -> String
 
    Join path components into a full path. If some argument is an absolute
    path, then prior components are dropped.

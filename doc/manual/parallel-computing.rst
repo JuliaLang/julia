@@ -1,7 +1,7 @@
 .. _man-parallel-computing:
 
 ********************
- Parallel Computing  
+ Parallel Computing
 ********************
 
 Most modern computers possess more than one CPU, and several computers
@@ -79,7 +79,7 @@ specified by the first argument.
 Occasionally you might want a remotely-computed value immediately. This
 typically happens when you read from a remote object to obtain data
 needed by the next local operation. The function ``remotecall_fetch``
-exists for this purpose. It is equivalent to ``fetch(remotecall(...))``
+exists for this purpose. It is equivalent to ``fetch(remotecall(⋯))``
 but is more efficient.
 
 ::
@@ -137,7 +137,7 @@ type the following into the julia prompt::
     julia> @spawn rand2(2,2)
     RemoteRef(2,1,2)
 
-    julia> exception on 2: in anonymous: rand2 not defined 
+    julia> exception on 2: in anonymous: rand2 not defined
 
 Process 1 knew about the function ``rand2``, but process 2 did not.
 
@@ -186,7 +186,7 @@ Consequently, an easy way to load *and* use a package on all processes is::
 A file can also be preloaded on multiple processes at startup, and a driver script can be used to drive the computation::
 
     julia -p <n> -L file1.jl -L file2.jl driver.jl
-    
+
 Each process has an associated identifier. The process providing the interactive julia prompt
 always has an id equal to 1, as would the julia process running the driver script in the
 example above.
@@ -194,15 +194,15 @@ The processes used by default for parallel operations are referred to as ``worke
 When there is only one process, process 1 is considered a worker. Otherwise, workers are
 considered to be all processes other than process 1.
 
-The base Julia installation has in-built support for two types of clusters: 
+The base Julia installation has in-built support for two types of clusters:
 
-    - A local cluster specified with the ``-p`` option as shown above.  
-    
-    - A cluster spanning machines using the ``--machinefile`` option. This uses a passwordless 
+    - A local cluster specified with the ``-p`` option as shown above.
+
+    - A cluster spanning machines using the ``--machinefile`` option. This uses a passwordless
       ``ssh`` login to start julia worker processes (from the same path as the current host)
       on the specified machines.
-    
-Functions ``addprocs``, ``rmprocs``, ``workers``, and others are available as a programmatic means of 
+
+Functions ``addprocs``, ``rmprocs``, ``workers``, and others are available as a programmatic means of
 adding, removing and querying the processes in a cluster.
 
 Other types of clusters can be supported by writing your own custom
@@ -228,12 +228,12 @@ random matrix::
     # method 1
     A = rand(1000,1000)
     Bref = @spawn A^2
-    ...
+    ⋮
     fetch(Bref)
 
     # method 2
     Bref = @spawn rand(1000,1000)^2
-    ...
+    ⋮
     fetch(Bref)
 
 The difference seems trivial, but in fact is quite significant due to
@@ -354,8 +354,8 @@ random matrices in parallel as follows::
 Julia's ``pmap`` is designed for the case where each function call does
 a large amount of work. In contrast, ``@parallel for`` can handle
 situations where each iteration is tiny, perhaps merely summing two
-numbers. Only worker processes are used by both ``pmap`` and ``@parallel for`` 
-for the parallel computation. In case of ``@parallel for``, the final reduction 
+numbers. Only worker processes are used by both ``pmap`` and ``@parallel for``
+for the parallel computation. In case of ``@parallel for``, the final reduction
 is done on the calling process.
 
 
@@ -403,7 +403,7 @@ it completes its current task. This can be seen in the implementation of
         nextidx() = (idx=i; i+=1; idx)
         @sync begin
             for p=1:np
-                if p != myid() || np == 1 
+                if p != myid() || np == 1
                     @async begin
                         while true
                             idx = nextidx()
@@ -573,7 +573,7 @@ is ``DArray``\ -specific, but we list it here for completeness::
     end
 
 
-    
+
 Shared Arrays (Experimental, UNIX-only feature)
 -----------------------------------------------
 
@@ -604,7 +604,7 @@ across the processes specified by ``pids``.  Unlike distributed
 arrays, a shared array is accessible only from those participating
 workers specified by the ``pids`` named argument (and the creating
 process too, if it is on the same host).
-  
+
 If an ``init`` function, of signature ``initfn(S::SharedArray)``, is
 specified, it is called on all the participating workers.  You can
 arrange it so that each worker runs the ``init`` function on a
@@ -668,7 +668,7 @@ ClusterManagers
 Julia worker processes can also be spawned on arbitrary machines,
 enabling Julia's natural parallelism to function quite transparently
 in a cluster environment. The ``ClusterManager`` interface provides a
-way to specify a means to launch and manage worker processes. 
+way to specify a means to launch and manage worker processes.
 
 Thus, a custom cluster manager would need to:
 
@@ -676,45 +676,45 @@ Thus, a custom cluster manager would need to:
 - implement ``launch``, a method responsible for launching new workers
 - implement ``manage``, which is called at various events during a worker's lifetime
 
-As an example let us see how the ``LocalManager``, the manager responsible for 
+As an example let us see how the ``LocalManager``, the manager responsible for
 starting workers on the same host, is implemented::
 
     immutable LocalManager <: ClusterManager
     end
 
-    function launch(manager::LocalManager, np::Integer, config::Dict, 
+    function launch(manager::LocalManager, np::Integer, config::Dict,
                                                 resp_arr::Array, c::Condition)
-        ...
+        ⋮
     end
 
     function manage(manager::LocalManager, id::Integer, config::Dict, op::Symbol)
-        ...
+        ⋮
     end
 
 The ``launch`` method takes the following arguments:
 
-    - ``manager::LocalManager`` - used to dispatch the call to the appropriate implementation 
-    - ``np::Integer`` - number of workers to be launched 
-    - ``config::Dict`` - all the keyword arguments provided as part of the ``addprocs`` call 
-    - ``resp_arr::Array`` - the array to append one or more worker information tuples too 
+    - ``manager::LocalManager`` - used to dispatch the call to the appropriate implementation
+    - ``np::Integer`` - number of workers to be launched
+    - ``config::Dict`` - all the keyword arguments provided as part of the ``addprocs`` call
+    - ``resp_arr::Array`` - the array to append one or more worker information tuples too
     - ``c::Condition`` - the condition variable to be notified as and when workers are launched.
-                       
-The ``launch`` method is called asynchronously in a separate task. The termination of this task 
-signals that all requested workers have been launched. Hence the ``launch`` function MUST exit as soon 
+
+The ``launch`` method is called asynchronously in a separate task. The termination of this task
+signals that all requested workers have been launched. Hence the ``launch`` function MUST exit as soon
 as all the requested workers have been launched. The julia worker MUST be launched with a ``--worker``
-argument. Optionally ``--bind-to bind_addr[:port]`` may also be specified to enable other workers 
+argument. Optionally ``--bind-to bind_addr[:port]`` may also be specified to enable other workers
 to connect to it only at the specified ``bind_addr`` and ``port``.
 
 
-Arrays of worker information tuples that are appended to ``resp_arr`` can take any one of 
+Arrays of worker information tuples that are appended to ``resp_arr`` can take any one of
 the following forms::
 
     (io::IO, config::Dict)
-    
+
     (io::IO, host::String, config::Dict)
-    
+
     (io::IO, host::String, port::Integer, config::Dict)
-    
+
     (host::String, port::Integer, config::Dict)
 
 where:
@@ -723,12 +723,12 @@ where:
     - ``host::String`` and ``port::Integer`` are the host:port to connect to. If not provided
       they are read from the ``io`` stream provided.
     - ``config::Dict`` is the configuration dictionary for the worker. The ``launch``
-      function can add/modify any data that may be required for managing 
+      function can add/modify any data that may be required for managing
       the worker.
 
 The ``manage`` method takes the following arguments:
 
-    - ``manager::ClusterManager`` - used to dispatch the call to the appropriate implementation 
+    - ``manager::ClusterManager`` - used to dispatch the call to the appropriate implementation
     - ``id::Integer`` - The Julia process id
     - ``config::Dict`` - configuration dictionary for the worker. The data may have been modified by the ``launch`` method
     - ``op::Symbol`` - one of ``:register``, ``:deregister``, ``:interrupt`` or ``:finalize``.

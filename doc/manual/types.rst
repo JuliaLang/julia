@@ -106,7 +106,7 @@ exception is thrown, otherwise, the left-hand value is returned:
 
 This allows a type assertion to be attached to any expression
 in-place. The most common usage of ``::`` as an assertion is in
-function/methods signatures, such as ``f(x::Int8) = ...`` (see
+function/methods signatures, such as ``f(x::Int8) = ⋯`` (see
 :ref:`man-methods`).
 
 
@@ -251,15 +251,15 @@ Assuming no method more specific than the above is found, Julia next internally
 defines and compiles a method called ``myplus`` specifically for two ``Int``
 arguments based on the generic function given above, i.e., it implicitly
 defines and compiles::
- 
+
     function myplus(x::Int,y::Int)
      x+y
     end
-    
+
 and finally, it invokes this specific method.
 
 Thus, abstract types allow programmers to write generic functions that can
-later be used as the default method by many combinations of concrete types.  
+later be used as the default method by many combinations of concrete types.
 Thanks to multiple dispatch, the programmer has full control over whether the
 default or more specific method is used.
 
@@ -410,7 +410,7 @@ You may find a list of field names using the ``names`` function.
      :bar
      :baz
      :qux
-     
+
 You can access the field values of a composite object using the
 traditional ``foo.bar`` notation:
 
@@ -508,7 +508,7 @@ i.e., if the fields of objects passed around by copying could be modified,
 then it would become more difficult to reason about certain instances of generic code.  For example,
 suppose ``x`` is a function argument of an abstract type, and suppose that the function
 changes a field: ``x.isprocessed = true``.  Depending on whether ``x`` is passed by copying
-or by reference, this statement may or may not alter the actual argument in the 
+or by reference, this statement may or may not alter the actual argument in the
 calling routine.  Julia
 sidesteps the possibility of creating functions with unknown effects in this
 scenario by forbidding modification of fields

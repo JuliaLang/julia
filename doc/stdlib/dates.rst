@@ -13,15 +13,15 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
    Construct a DateTime type by parts. Arguments must be convertible to
    ``Int64``.
 
-.. function:: DateTime(periods::Period...) -> DateTime
+.. function:: DateTime(periods::Period⋯) -> DateTime
 
-   Constuct a DateTime type by ``Period`` type parts. Arguments may be in any order.
+   Construct a DateTime type by ``Period`` type parts. Arguments may be in any order.
    DateTime parts not provided will default to the value of ``Dates.default(period)``.
 
 .. function:: DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) -> DateTime
 
-    Create a DateTime through the adjuster API. The starting point will be constructed from the 
-    provided ``y, m, d...`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in
+    Create a DateTime through the adjuster API. The starting point will be constructed from the
+    provided ``y, m, d⋯`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in
     adjusting can be provided manually through the ``step`` keyword. If ``negate=true``, then the adjusting
     will stop when ``f::Function`` returns false instead of true. ``limit`` provides a limit to
     the max number of iterations the adjustment API will pursue before throwing an error (in the case that ``f::Function``
@@ -63,14 +63,14 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
    Construct a ``Date`` type by parts. Arguments must be convertible to
    ``Int64``.
 
-.. function:: Date(period::Period...) -> Date
+.. function:: Date(period::Period⋯) -> Date
 
    Constuct a Date type by ``Period`` type parts. Arguments may be in any order.
    Date parts not provided will default to the value of ``Dates.default(period)``.
 
 .. function:: Date(f::Function, y[, m]; step=Day(1), negate=false, limit=10000) -> Date
 
-    Create a Date through the adjuster API. The starting point will be constructed from the 
+    Create a Date through the adjuster API. The starting point will be constructed from the
     provided ``y, m`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in
     adjusting can be provided manually through the ``step`` keyword. If ``negate=true``, then the adjusting
     will stop when ``f::Function`` returns false instead of true. ``limit`` provides a limit to
@@ -93,10 +93,10 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
    time including the system timezone locale.
 
 .. function:: nowutc() -> DateTime
-  
+
    Returns a DateTime corresponding to the user's system
    time as UTC/GMT.
-   
+
 Accessor Functions
 ~~~~~~~~~~~~~~~~~~
 
@@ -176,7 +176,7 @@ Query Functions
 
     Returns the number of days in the month of ``dt``. Value will be 28, 29, 30, or 31.
 
-.. function:: isleapyear(dt::TimeType) -> Bool 
+.. function:: isleapyear(dt::TimeType) -> Bool
 
     Returns true if the year of ``dt`` is a leap year.
 
@@ -238,13 +238,13 @@ Adjuster Functions
 
 .. function:: tonext(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
 
-    Adjusts ``dt`` to the next day of week corresponding to ``dow`` with 
+    Adjusts ``dt`` to the next day of week corresponding to ``dow`` with
     ``1 = Monday, 2 = Tuesday, etc``. Setting ``same=true`` allows the current
     ``dt`` to be considered as the next ``dow``, allowing for no adjustment to occur.
 
 .. function:: toprev(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
 
-    Adjusts ``dt`` to the previous day of week corresponding to ``dow`` with 
+    Adjusts ``dt`` to the previous day of week corresponding to ``dow`` with
     ``1 = Monday, 2 = Tuesday, etc``. Setting ``same=true`` allows the current
     ``dt`` to be considered as the previous ``dow``, allowing for no adjustment to occur.
 
@@ -275,7 +275,7 @@ Adjuster Functions
 .. function:: recur{T<:TimeType}(func::Function,dr::StepRange{T};negate=false,limit=10000) -> Vector{T}
 
     ``func`` takes a single TimeType argument and returns a ``Bool`` indicating whether the input
-    should be "included" in the final set. ``recur`` applies ``func`` over each element in the 
+    should be "included" in the final set. ``recur`` applies ``func`` over each element in the
     range of ``dr``, including those elements for which ``func`` returns ``true`` in the resulting
     Array, unless ``negate=true``, then only elements where ``func`` returns ``false`` are included.
 
@@ -374,4 +374,3 @@ Variable        Abbr.     Value (Int64)
 ``November``    ``Nov``   11
 ``December``    ``Dec``   12
 =============== ========= =============
-

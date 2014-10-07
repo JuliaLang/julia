@@ -3,7 +3,7 @@
 .. currentmodule:: Base
 
 *****************
- Metaprogramming  
+ Metaprogramming
 *****************
 
 The strongest legacy of Lisp in the Julia language is its metaprogramming
@@ -47,7 +47,7 @@ There is special syntax for "quoting" code (analogous to quoting
 strings) that makes it easy to create expression objects without
 explicitly constructing ``Expr`` objects. There are two forms: a short
 form for inline expressions using ``:`` followed by a single expression,
-and a long form for blocks of code, enclosed in ``quote ... end``. Here
+and a long form for blocks of code, enclosed in ``quote ⋯ end``. Here
 is an example of the short form used to quote an arithmetic expression:
 
 .. doctest::
@@ -274,7 +274,7 @@ slightly more tersely using the ``:`` prefix quoting form::
     end
 
 This sort of in-language code generation, however, using the
-``eval(quote(...))`` pattern, is common enough that Julia comes with a
+``eval(quote(⋯))`` pattern, is common enough that Julia comes with a
 macro to abbreviate this pattern::
 
     for op = (:+, :*, :&, :|, :$)
@@ -303,31 +303,31 @@ Macros
 ------
 
 Macros are the analogue of functions for expression generation at
-compile time. Just as functions map a tuple of argument values to a 
+compile time. Just as functions map a tuple of argument values to a
 return value, macros map a tuple of argument *expressions* to a returned
 *expression*. They allow the programmer to arbitrarily transform the
 written code to a resulting expression, which then takes the place of
 the macro call in the final syntax tree. Macros are invoked with the
 following general syntax::
 
-    @name expr1 expr2 ...
-    @name(expr1, expr2, ...)
+    @name expr1 expr2 ⋯
+    @name(expr1, expr2, ⋯)
 
 Note the distinguishing ``@`` before the macro name and the lack of
 commas between the argument expressions in the first form, and the
 lack of whitespace after ``@name`` in the second form. The two styles
 should not be mixed. For example, the following syntax is different
-from the examples above; it passes the tuple ``(expr1, expr2, ...)`` as
+from the examples above; it passes the tuple ``(expr1, expr2, ⋯)`` as
 one argument to the macro::
 
-    @name (expr1, expr2, ...)
+    @name (expr1, expr2, ⋯)
 
 Before the program runs, this statement will be replaced with the
 returned result of calling an expander function for ``@name`` on the
 expression arguments. Expanders are defined with the ``macro`` keyword::
 
-    macro name(expr1, expr2, ...)
-        ...
+    macro name(expr1, expr2, ⋯)
+        ⋮
         return resulting_expr
     end
 
@@ -358,9 +358,9 @@ the test condition slot, while the value of ``string(:(1==1.0))`` is
 spliced into the assertion message slot. The entire expression, thus
 constructed, is placed into the syntax tree where the ``@assert`` macro
 call occurs. Then at execution time, if the test expression evaluates to
-true, then ``nothing`` is returned, whereas if the test is false, an error 
-is raised indicating the asserted expression that was false. Notice that 
-it would not be possible to write this as a function, since only the 
+true, then ``nothing`` is returned, whereas if the test is false, an error
+is raised indicating the asserted expression that was false. Notice that
+it would not be possible to write this as a function, since only the
 *value* of the condition is available and it would be impossible to
 display the expression that computed it in the error message.
 
@@ -403,9 +403,9 @@ function:
 There is yet another case that the actual ``@assert`` macro handles: what
 if, in addition to printing "a should equal b," we wanted to print their
 values? One might naively try to use string interpolation in the custom
-message, e.g., ``@assert a==b "a ($a) should equal b ($b)!"``, but this 
+message, e.g., ``@assert a==b "a ($a) should equal b ($b)!"``, but this
 won't work as expected with the above macro. Can you see why? Recall
-from :ref:`string interpolation <man-string-interpolation>` that an 
+from :ref:`string interpolation <man-string-interpolation>` that an
 interpolated string is rewritten to a call to the ``string`` function.
 Compare:
 
@@ -498,7 +498,7 @@ One problem remains however. Consider the following use of this macro::
     module MyModule
     import Base.@time
 
-    time() = ... # compute something
+    time() = ⋯ # compute something
 
     @time time()
     end
@@ -510,9 +510,9 @@ macro call environment. This is done by "escaping" the expression with
 the ``esc`` function::
 
     macro time(ex)
-        ...
+        ⋮
         local val = $(esc(ex))
-        ...
+        ⋮
     end
 
 An expression wrapped in this manner is left alone by the macro expander
@@ -654,7 +654,7 @@ each field in a ``Point`` is stored in the ``types`` field of the Point object::
 **Subtypes** The *direct* subtypes of any DataType may be listed using
 ``subtypes(t::DataType)``. For example, the abstract DataType ``FloatingPoint``
 has four (concrete) subtypes::
-	
+
 	julia> subtypes(FloatingPoint)
 	4-element Array{Any,1}:
 	 BigFloat
@@ -672,7 +672,7 @@ stored with C-compatible aligment. The offsets of each field may be listed
 using ``fieldoffsets(T::DataType)``.
 
 **Function methods** The methods of any function may be listed using
-``methods(f::Function)``. 
+``methods(f::Function)``.
 
 **Function representations** Functions may be introspected at several levels
 of representation. The lowered form of a function is available

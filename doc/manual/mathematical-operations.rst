@@ -1,7 +1,7 @@
 .. _man-mathematical-operations:
 
 **************************************************
- Mathematical Operations and Elementary Functions 
+ Mathematical Operations and Elementary Functions
 **************************************************
 
 Julia provides a complete collection of basic arithmetic and bitwise
@@ -66,7 +66,7 @@ operators <http://en.wikipedia.org/wiki/Bitwise_operation#Bitwise_operators>`_
 are supported on all primitive integer types:
 
 ===========  =========================================================================
-Expression   Name        
+Expression   Name
 ===========  =========================================================================
 ``~x``       bitwise not
 ``x & y``    bitwise and
@@ -233,7 +233,7 @@ Function          Tests if
 
     julia> isequal([1 NaN], [1 NaN])
     true
-    
+
     julia> isequal(NaN,NaN32)
     true
 
@@ -306,7 +306,7 @@ be used explicitly (see :ref:`man-short-circuit-evaluation`).
 Operator Precedence
 ~~~~~~~~~~~~~~~~~~~
 
-Julia applies the following order of operations, from highest precedence 
+Julia applies the following order of operations, from highest precedence
 to lowest:
 
 ================= =============================================================================================
@@ -364,8 +364,8 @@ Function        Description
 ``divrem(x,y)`` returns ``(div(x,y),rem(x,y))``
 ``mod(x,y)``    modulus; satisfies ``x == fld(x,y)*y + mod(x,y)``; sign matches ``y``
 ``mod2pi(x)``   modulus with respect to 2pi;  ``0 <= mod2pi(x)  < 2pi``
-``gcd(x,y...)`` greatest common divisor of ``x``, ``y``,...; sign matches ``x``
-``lcm(x,y...)`` least common multiple of ``x``, ``y``,...; sign matches ``x``
+``gcd(x,y⋯)``  greatest common divisor of ``x``, ``y``,⋯; sign matches ``x``
+``lcm(x,y⋯)``  least common multiple of ``x``, ``y``,⋯; sign matches ``x``
 =============== =======================================================================
 
 Sign and absolute value functions
@@ -459,31 +459,29 @@ Function                               Description
 ``lbeta(x,y)``                         accurate ``log(beta(x,y))`` for large ``x`` or ``y``
 ``eta(x)``                             the `Dirichlet eta function <http://en.wikipedia.org/wiki/Dirichlet_eta_function>`_ at ``x``
 ``zeta(x)``                            the `Riemann zeta function <http://en.wikipedia.org/wiki/Riemann_zeta_function>`_ at ``x``
-|airylist|                             the `Airy Ai function <http://en.wikipedia.org/wiki/Airy_function>`_ at ``z`` 
-|airyprimelist|                        the derivative of the Airy Ai function at ``z`` 
-``airybi(z)``, ``airy(2,z)``           the `Airy Bi function <http://en.wikipedia.org/wiki/Airy_function>`_ at ``z`` 
-``airybiprime(z)``, ``airy(3,z)``      the derivative of the Airy Bi function at ``z`` 
-``airyx(z)``, ``airyx(k,z)``           the scaled Airy AI function and ``k`` th derivatives at ``z`` 
-``besselj(nu,z)``                      the `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the first kind of order ``nu`` at ``z`` 
-``besselj0(z)``                        ``besselj(0,z)``  
-``besselj1(z)``                        ``besselj(1,z)``  
-``besseljx(nu,z)``                     the scaled Bessel function of the first kind of order ``nu`` at ``z`` 
-``bessely(nu,z)``                      the `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the second kind of order ``nu`` at ``z``  
-``bessely0(z)``                        ``bessely(0,z)``  
-``bessely1(z)``                        ``bessely(1,z)``  
-``besselyx(nu,z)``                     the scaled Bessel function of the second kind of order ``nu`` at ``z``  
-``besselh(nu,k,z)``                    the `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the third kind (a.k.a. Hankel function) of order ``nu`` at ``z``; ``k`` must be either ``1`` or ``2``  
-``hankelh1(nu,z)``                     ``besselh(nu, 1, z)``  
-``hankelh1x(nu,z)``                    scaled ``besselh(nu, 1, z)``  
-``hankelh2(nu,z)``                     ``besselh(nu, 2, z)``  
-``hankelh2x(nu,z)``                    scaled ``besselh(nu, 2, z)``  
-``besseli(nu,z)``                      the modified `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the first kind of order ``nu`` at ``z``  
-``besselix(nu,z)``                     the scaled modified Bessel function of the first kind of order ``nu`` at ``z``  
-``besselk(nu,z)``                      the modified `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the second kind of order ``nu`` at ``z``  
-``besselkx(nu,z)``                     the scaled modified Bessel function of the second kind of order ``nu`` at ``z``  
+|airylist|                             the `Airy Ai function <http://en.wikipedia.org/wiki/Airy_function>`_ at ``z``
+|airyprimelist|                        the derivative of the Airy Ai function at ``z``
+``airybi(z)``, ``airy(2,z)``           the `Airy Bi function <http://en.wikipedia.org/wiki/Airy_function>`_ at ``z``
+``airybiprime(z)``, ``airy(3,z)``      the derivative of the Airy Bi function at ``z``
+``airyx(z)``, ``airyx(k,z)``           the scaled Airy AI function and ``k`` th derivatives at ``z``
+``besselj(nu,z)``                      the `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the first kind of order ``nu`` at ``z``
+``besselj0(z)``                        ``besselj(0,z)``
+``besselj1(z)``                        ``besselj(1,z)``
+``besseljx(nu,z)``                     the scaled Bessel function of the first kind of order ``nu`` at ``z``
+``bessely(nu,z)``                      the `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the second kind of order ``nu`` at ``z``
+``bessely0(z)``                        ``bessely(0,z)``
+``bessely1(z)``                        ``bessely(1,z)``
+``besselyx(nu,z)``                     the scaled Bessel function of the second kind of order ``nu`` at ``z``
+``besselh(nu,k,z)``                    the `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the third kind (a.k.a. Hankel function) of order ``nu`` at ``z``; ``k`` must be either ``1`` or ``2``
+``hankelh1(nu,z)``                     ``besselh(nu, 1, z)``
+``hankelh1x(nu,z)``                    scaled ``besselh(nu, 1, z)``
+``hankelh2(nu,z)``                     ``besselh(nu, 2, z)``
+``hankelh2x(nu,z)``                    scaled ``besselh(nu, 2, z)``
+``besseli(nu,z)``                      the modified `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the first kind of order ``nu`` at ``z``
+``besselix(nu,z)``                     the scaled modified Bessel function of the first kind of order ``nu`` at ``z``
+``besselk(nu,z)``                      the modified `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the second kind of order ``nu`` at ``z``
+``besselkx(nu,z)``                     the scaled modified Bessel function of the second kind of order ``nu`` at ``z``
 ====================================== ==============================================================================
 
 .. |airylist| replace:: ``airy(z)``, ``airyai(z)``, ``airy(0,z)``
 .. |airyprimelist| replace:: ``airyprime(z)``, ``airyaiprime(z)``, ``airy(1,z)``
-
-
