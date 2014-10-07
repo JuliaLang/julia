@@ -16,23 +16,23 @@ include("render/terminal/render.jl")
 
 export readme, license, @md_str, @md_mstr, @doc_str, @doc_mstr
 
-parse(markdown::String; flavour = julia) = parse(IOBuffer(markdown), flavour = flavour)
-parse_file(file::String; flavour = julia) = parse(readall(file), flavour = flavour)
+parse(markdown::String; flavor = julia) = parse(IOBuffer(markdown), flavor = flavor)
+parse_file(file::String; flavor = julia) = parse(readall(file), flavor = flavor)
 
-readme(pkg::String; flavour = github) = parse_file(Pkg.dir(pkg, "README.md"), flavour = flavour)
-readme(pkg::Module; flavour = github) = readme(string(pkg), flavour = flavour)
+readme(pkg::String; flavor = github) = parse_file(Pkg.dir(pkg, "README.md"), flavor = flavor)
+readme(pkg::Module; flavor = github) = readme(string(pkg), flavor = flavor)
 
-license(pkg::String; flavour = github) = parse_file(Pkg.dir(pkg, "LICENSE.md"), flavour = flavour)
-license(pkg::Module; flavour = github) = license(string(pkg), flavour = flavour)
+license(pkg::String; flavor = github) = parse_file(Pkg.dir(pkg, "LICENSE.md"), flavor = flavor)
+license(pkg::Module; flavor = github) = license(string(pkg), flavor = flavor)
 
-function mdexpr(s, flavour = :julia)
-  md = parse(s, flavour = symbol(flavour))
+function mdexpr(s, flavor = :julia)
+  md = parse(s, flavor = symbol(flavor))
   esc(toexpr(md))
 end
 
-function docexpr(s, flavour = :julia)
+function docexpr(s, flavor = :julia)
   quote
-    let md = $(mdexpr(s, flavour))
+    let md = $(mdexpr(s, flavor))
       md.meta[:path] = @__FILE__
       md.meta[:module] = current_module()
       md

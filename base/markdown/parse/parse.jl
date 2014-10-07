@@ -74,11 +74,11 @@ function parse(stream::IO, block::MD, config::Config; breaking = false)
   return false
 end
 
-function parse(stream::IO; flavour = julia)
-  isa(flavour, Symbol) && (flavour = flavours[flavour])
+function parse(stream::IO; flavor = julia)
+  isa(flavor, Symbol) && (flavor = flavors[flavor])
   markdown = MD()
-  withconfig(flavour) do
-    while parse(stream, markdown, flavour) end
+  withconfig(flavor) do
+    while parse(stream, markdown, flavor) end
   end
   return markdown
 end
