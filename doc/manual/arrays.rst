@@ -1,8 +1,8 @@
 .. _man-arrays:
 
-**************************
- Multi-dimensional Arrays
-**************************
+**************************************
+ Arrays (Single and Multi-Dimensional)
+**************************************
 
 Julia, like most technical computing languages, provides a first-class
 array implementation. Most technical computing languages pay a lot of

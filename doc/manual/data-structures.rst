@@ -13,7 +13,7 @@ Variables
 
 These typically contain scalar values, as explained in the Variables section.
 
-.. doctest:: variables-rand
+.. doctest::
 
     julia> const x = rand(8)
     8-element Array{Float64,1}:
