@@ -103,7 +103,7 @@ function blockquote(stream::IO, block::MD, config::Config)
     end
     md = takebuf_string(buffer)
     if !isempty(md)
-      push!(block, BlockQuote(parse(md, flavour = config).content))
+      push!(block, BlockQuote(parse(md, flavor = config).content))
       return true
     else
       return false

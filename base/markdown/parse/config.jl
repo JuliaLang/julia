@@ -70,12 +70,12 @@ end
 
 # Flavour definitions
 
-const flavours = Dict{Symbol, Config}()
+const flavors = Dict{Symbol, Config}()
 
-macro flavour (name, features)
+macro flavor (name, features)
   quote
     const $(esc(name)) = config($(map(esc,features.args)...))
-    flavours[$(Expr(:quote, name))] = $(esc(name))
+    flavors[$(Expr(:quote, name))] = $(esc(name))
   end
 end
 
