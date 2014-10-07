@@ -12,8 +12,7 @@ Variables
 =========
 
 These typically contain scalar values, as explained in the Variables section.
-
-.. doctest::
+::
 
     julia> const x = rand(8)
     8-element Array{Float64,1}:
@@ -40,9 +39,7 @@ Arrays (1-dimensional)
 
 Julia has first-class arrays, which may be accessed and assigned using square
 bracket notion. Arrays must be pre-allocated or allocated by assignment, and are
-not resizeable. For example,
-
-::
+not resizeable. For example,::
 
     # Assign an array to x, automatically allocates memory
     julia> x = [1, 2, 10]
@@ -59,7 +56,7 @@ not resizeable. For example,
     julia> x[4] = 1
     ERROR: BoundsError()
 
-Arrays usually have a type, which may be assigned explicitly
+Arrays usually have a type, which may be assigned explicitly::
 
     x = Float64[1, 2, 10]
 
@@ -76,7 +73,7 @@ Matlab-like notation can be used, in which case the square brackets are
 used with space between elements across a row, and rows demarcated by
 semicolons or carriage returns:
 
-.. doctest::
+::
 
     # 2D array with spaces and semi-colons
     julia> A = [1 2 3; 4 5 6]
@@ -115,7 +112,7 @@ semicolons or carriage returns:
 Multi-dimensional arrays may also be constructed. The colon operator can be
 used to access slices. Similar to Matlab, the keyword ``end`` is recognized.
 
-.. doctest::
+::
 
     # allocate and initialize a three-dimensional array
     julia> A = ones(Int, 2, 3, 1)
@@ -163,7 +160,7 @@ Unicode names (in UTF-8 encoding) are allowed:
 
 Julia will even let you redefine built-in constants and functions if needed:
 
-.. doctest::
+::
 
     julia> pi
     π = 3.1415926535897...
@@ -209,7 +206,7 @@ user-defined methods (e.g. you can use ``const ⊗ = kron`` to define
 The only explicitly disallowed names for variables are the names of built-in
 statements:
 
-.. doctest::
+::
 
     julia> else = false
     ERROR: syntax: unexpected "else"
