@@ -1,3 +1,4 @@
+.. _man-data-structures:
 
 ***********
  Data Structures
@@ -12,7 +13,7 @@ Variables
 
 These typically contain scalar values, as explained in the Variables section.
 
-.. doctest:: array-rand
+.. doctest:: variables-rand
 
     julia> const x = rand(8)
     8-element Array{Float64,1}:
@@ -41,7 +42,7 @@ Julia has first-class arrays, which may be accessed and assigned using square
 bracket notion. Arrays must be pre-allocated or allocated by assignment, and are
 not resizeable. For example,
 
-.. doctest::
+::
 
     # Assign an array to x, automatically allocates memory
     julia> x = [1, 2, 10]
