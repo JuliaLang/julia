@@ -9,6 +9,26 @@ function gcd{T<:Integer}(a::T, b::T)
     abs(a)
 end
 
+# binary GCD (aka Stein's) algorithm
+# about 1.7x (2.1x) faster for random Int64s (Int128s)
+function gcd{T<:Union(Int64,Uint64,Int128,Uint128)}(a::T, b::T)
+    a == 0 && return abs(b)
+    b == 0 && return abs(a)
+    za = trailing_zeros(a)
+    zb = trailing_zeros(b)
+    k = min(za, zb)
+    u = abs(a >> za)
+    v = abs(b >> zb)
+    while u != v
+        if u > v
+            u, v = v, u
+        end
+        v -= u
+        v >>= trailing_zeros(v)
+    end
+    u << k
+end
+
 # explicit a==0 test is to handle case of lcm(0,0) correctly
 lcm{T<:Integer}(a::T, b::T) = a == 0 ? a : abs(a * div(b, gcd(b,a)))
 
