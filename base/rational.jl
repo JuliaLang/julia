@@ -82,8 +82,10 @@ function rationalize{T<:Integer}(::Type{T}, x::FloatingPoint; tol::Real=eps(x))
     while r > nt
         try
             ia = convert(T,a)
-            p, pp = checked_add(checked_mul(ia,p),pp), p
-            q, qq = checked_add(checked_mul(ia,q),qq), q
+            np = checked_add(checked_mul(ia,p),pp)
+            nq = checked_add(checked_mul(ia,q),qq)
+            p, pp = np, p
+            q, qq = nq, q
         catch e
             isa(e,InexactError) || isa(e,OverflowError) || rethrow(e)
             return p // q
@@ -101,9 +103,9 @@ function rationalize{T<:Integer}(::Type{T}, x::FloatingPoint; tol::Real=eps(x))
     a = cld(x-tt,y+t)
     try
         ia = convert(T,a)
-        p = checked_add(checked_mul(ia,p),pp)
-        q = checked_add(checked_mul(ia,q),qq)
-        return p // q
+        np = checked_add(checked_mul(ia,p),pp)
+        nq = checked_add(checked_mul(ia,q),qq)
+        return np // nq
     catch e
         isa(e,InexactError) || isa(e,OverflowError) || rethrow(e)
         return p // q
