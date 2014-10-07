@@ -12,6 +12,28 @@ Variables
 
 These typically contain scalar values, as explained in the Variables section.
 
+.. doctest:: array-rand
+
+    julia> const x = rand(8)
+    8-element Array{Float64,1}:
+     0.843025
+     0.869052
+     0.365105
+     0.699456
+     0.977653
+     0.994953
+     0.41084
+     0.809411
+
+    julia> [ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
+    6-element Array{Float64,1}:
+     0.736559
+     0.57468
+     0.685417
+     0.912429
+     0.8446
+     0.656511
+
 Arrays (1-dimensional)
 ======================
 
