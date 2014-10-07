@@ -3,23 +3,23 @@ using TestHelpers
 
 a_foo = 0
 
-const foo_keymap = {
+const foo_keymap = Dict(
     'a' => (o...)->(global a_foo; a_foo += 1)
-}
+)
 
 b_foo = 0
 
-const foo2_keymap = {
+const foo2_keymap = Dict(
     'b' => (o...)->(global b_foo; b_foo += 1)
-}
+)
 
 a_bar = 0
 b_bar = 0
 
-const bar_keymap = {
+const bar_keymap = Dict(
     'a' => (o...)->(global a_bar; a_bar += 1),
     'b' => (o...)->(global b_bar; b_bar += 1)
-}
+)
 
 test1_func = LineEdit.keymap([foo_keymap])
 
