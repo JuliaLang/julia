@@ -1050,12 +1050,13 @@ ARPACK_FLAGS += LDFLAGS="$(LDFLAGS) -Wl,-rpath,'$(build_libdir)'"
 endif
 
 # ARPACK-NG upstream keeps changing their download filenames
-arpack-ng_$(ARPACK_VER).tar.gz:
-	$(JLDOWNLOAD) $@ http://forge.scilab.org/index.php/p/arpack-ng/downloads/get/$@
+arpack-ng-$(ARPACK_VER).tar.gz:
+	$(JLDOWNLOAD) $@ https://github.com/opencollab/arpack-ng/archive/$(ARPACK_VER).tar.gz
 	touch -c $@
-arpack-ng-$(ARPACK_VER)/configure: arpack-ng_$(ARPACK_VER).tar.gz
+arpack-ng-$(ARPACK_VER)/configure: arpack-ng-$(ARPACK_VER).tar.gz
 	$(JLCHECKSUM) $<
 	$(TAR) zxf $<
+	( cd arpack-ng-$(ARPACK_VER) && patch -p1 < ../arpack.xlahqr2.patch )
 	touch -c $@
 
 ifeq ($(USE_ATLAS), 1)
