@@ -57,6 +57,40 @@ end
 _d = Dict("a"=>0)
 @test isa([k for k in filter(x->length(x)==1, collect(keys(_d)))], Vector{Any})
 
+let
+    d = Dict(((1, 2), (3, 4)))
+    @test d[1] === 2
+    @test d[3] === 4
+    d2 = Dict(1 => 2, 3 => 4)
+    d3 = Dict((1 => 2, 3 => 4))
+    @test d == d2 == d3
+    @test typeof(d) == typeof(d2) == typeof(d3) == Dict{Int,Int}
+
+    d = Dict(((1, 2), (3, "b")))
+    @test d[1] === 2
+    @test d[3] == "b"
+    d2 = Dict(1 => 2, 3 => "b")
+    d3 = Dict((1 => 2, 3 => "b"))
+    @test d == d2 == d3
+    @test typeof(d) == typeof(d2) == typeof(d3) == Dict{Int,Any}
+
+    d = Dict(((1, 2), ("a", 4)))
+    @test d[1] === 2
+    @test d["a"] === 4
+    d2 = Dict(1 => 2, "a" => 4)
+    d3 = Dict((1 => 2, "a" => 4))
+    @test d == d2 == d3
+    @test typeof(d) == typeof(d2) == typeof(d3) == Dict{Any,Int}
+
+    d = Dict(((1, 2), ("a", "b")))
+    @test d[1] === 2
+    @test d["a"] == "b"
+    d2 = Dict(1 => 2, "a" => "b")
+    d3 = Dict((1 => 2, "a" => "b"))
+    @test d == d2 == d3
+    @test typeof(d) == typeof(d2) == typeof(d3) == Dict{Any,Any}
+end
+
 # issue #1821
 let
     d = Dict{UTF8String, Vector{Int}}()
