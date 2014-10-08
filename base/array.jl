@@ -1148,7 +1148,7 @@ indmin(a) = findmin(a)[2]
 # similar to Matlab's ismember
 # returns a vector containing the highest index in b for each value in a that is a member of b
 function indexin(a::AbstractArray, b::AbstractArray)
-    bdict = Dict(b, 1:length(b))
+    bdict = Dict(zip(b, 1:length(b)))
     [get(bdict, i, 0) for i in a]
 end
 
