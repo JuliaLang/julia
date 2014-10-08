@@ -144,7 +144,7 @@ fill!(A::Triangular, x) = (fill!(A.data, x); A)
 
 function similar{T,S,UpLo,IsUnit,Tnew}(A::Triangular{T,S,UpLo,IsUnit}, ::Type{Tnew}, dims::Dims)
     dims[1] == dims[2] || throw(ArgumentError("a Triangular matrix must be square"))
-    length(dims) == 2 || throw(ArgumentError("a Traigular matrix must have two dimensions"))
+    length(dims) == 2 || throw(ArgumentError("a Triangular matrix must have two dimensions"))
     A = similar(A.data, Tnew, dims)
     return Triangular{Tnew, typeof(A), UpLo, IsUnit}(A)
 end
