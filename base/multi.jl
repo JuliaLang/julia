@@ -797,7 +797,7 @@ function accept_handler(server::TCPServer, status::Int32)
 end
 
 function create_message_handler_loop(sock::AsyncStream; ntfy_join_complete=nothing) #returns immediately
-    schedule(@task begin
+    @schedule begin
         global PGRP
         #println("message_handler_loop")
         disable_nagle(sock)
@@ -823,26 +823,32 @@ function create_message_handler_loop(sock::AsyncStream; ntfy_join_complete=nothi
                     id = deserialize(sock)
                     f = deserialize(sock)
                     args = deserialize(sock)
-                    @schedule begin
-                        v = run_work_thunk(()->f(args...))
-                        deliver_result(sock, msg, id, v)
-                        v
+                    let f=f, args=args, id=id, msg=msg
+                        @schedule begin
+                            v = run_work_thunk(()->f(args...))
+                            deliver_result(sock, msg, id, v)
+                            v
+                        end
                     end
                 elseif is(msg, :call_wait)
                     id = deserialize(sock)
                     notify_id = deserialize(sock)
                     f = deserialize(sock)
                     args = deserialize(sock)
-                    @schedule begin
-                        rv = schedule_call(id, ()->f(args...))
-                        deliver_result(sock, msg, notify_id, wait_full(rv))
+                    let f=f, args=args, id=id, msg=msg, notify_id=notify_id
+                        @schedule begin
+                            rv = schedule_call(id, ()->f(args...))
+                            deliver_result(sock, msg, notify_id, wait_full(rv))
+                        end
                     end
                 elseif is(msg, :do)
                     f = deserialize(sock)
                     args = deserialize(sock)
                     #print("got args: $args\n")
-                    @schedule begin
-                        run_work_thunk(RemoteValue(), ()->f(args...))
+                    let f=f, args=args
+                        @schedule begin
+                            run_work_thunk(RemoteValue(), ()->f(args...))
+                        end
                     end
                 elseif is(msg, :result)
                     # used to deliver result of wait or fetch
@@ -924,7 +930,7 @@ function create_message_handler_loop(sock::AsyncStream; ntfy_join_complete=nothi
 
             return nothing
         end
-    end)
+    end
 end
 
 function disable_threaded_libs()
