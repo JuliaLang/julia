@@ -81,6 +81,7 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         end
     end
 end
+@test_throws DimensionMismatch Triangular(randn(5, 4), :L)
 
 debug && println("Tridiagonal matrices")
 for relty in (Float32, Float64), elty in (relty, Complex{relty})
