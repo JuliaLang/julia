@@ -4,9 +4,9 @@ arithtype(T) = T
 arithtype(::Type{Bool}) = Int
 
 # multiply by diagonal matrix as vector
-function scale!(C::Matrix, A::Matrix, b::Vector)
+function scale!(C::AbstractMatrix, A::AbstractMatrix, b::AbstractVector)
     m, n = size(A)
-    n==length(b) || throw(DimensionMismatch(""))
+    n == length(b) || throw(DimensionMismatch(""))
     for j = 1:n
         bj = b[j]
         for i = 1:m
@@ -16,10 +16,10 @@ function scale!(C::Matrix, A::Matrix, b::Vector)
     C
 end
 
-function scale!(C::Matrix, b::Vector, A::Matrix)
+function scale!(C::AbstractMatrix, b::AbstractVector, A::AbstractMatrix)
     m, n = size(A)
-    m==length(b) || throw(DimensionMismatch(""))
-    for j=1:n, i=1:m
+    m == length(b) || throw(DimensionMismatch(""))
+    for j = 1:n, i = 1:m
         C[i,j] = A[i,j]*b[i]
     end
     C
@@ -29,8 +29,8 @@ scale(b::Vector, A::Matrix) = scale!(similar(b, promote_type(eltype(A),eltype(b)
 
 # Dot products
 
-dot{T<:BlasReal}(x::Vector{T}, y::Vector{T}) = BLAS.dot(x, y)
-dot{T<:BlasComplex}(x::Vector{T}, y::Vector{T}) = BLAS.dotc(x, y)
+dot{T<:BlasReal}(x::StridedVector{T}, y::StridedVector{T}) = BLAS.dot(x, y)
+dot{T<:BlasComplex}(x::StridedVector{T}, y::StridedVector{T}) = BLAS.dotc(x, y)
 function dot{T<:BlasReal, TI<:Integer}(x::Vector{T}, rx::Union(UnitRange{TI},Range{TI}), y::Vector{T}, ry::Union(UnitRange{TI},Range{TI}))
     length(rx)==length(ry) || throw(DimensionMismatch(""))
     if minimum(rx) < 1 || maximum(rx) > length(x) || minimum(ry) < 1 || maximum(ry) > length(y)
@@ -58,9 +58,9 @@ function dot(x::AbstractVector, y::AbstractVector)
     s
 end
 dot(x::Number, y::Number) = conj(x) * y
-Ac_mul_B(x::Vector, y::Vector) = [dot(x, y)]
-At_mul_B{T<:Real}(x::Vector{T}, y::Vector{T}) = [dot(x, y)]
-At_mul_B{T<:BlasComplex}(x::Vector{T}, y::Vector{T}) = [BLAS.dotu(x, y)]
+Ac_mul_B(x::AbstractVector, y::AbstractVector) = [dot(x, y)]
+At_mul_B{T<:Real}(x::AbstractVector{T}, y::AbstractVector{T}) = [dot(x, y)]
+At_mul_B{T<:BlasComplex}(x::StridedVector{T}, y::StridedVector{T}) = [BLAS.dotu(x, y)]
 
 # Matrix-vector multiplication
 function (*){T<:BlasFloat,S}(A::StridedMatrix{T}, x::StridedVector{S})
