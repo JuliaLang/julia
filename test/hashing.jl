@@ -13,7 +13,7 @@ vals = [
     integer(maxintfloat(Float32))+(-1:4),
     typemax(Int32),
     int64(maxintfloat(Float64))+Int64[-1:4],
-    typemax(Int64),
+    typemax(Int64), 
 ]
 
 function coerce(T::Type, x)
@@ -32,13 +32,12 @@ function coerce(T::Type, x)
 end
 
 for T=types, S=types, x=vals
+    # println("$T $S $x")
     a = coerce(T,x)
     b = coerce(S,x)
     if (isa(a,Char) && !is_valid_char(a)) || (isa(b,Char) && !is_valid_char(b))
         continue
     end
-    #println("$(typeof(a)) $a")
-    #println("$(typeof(b)) $b")
     @test isequal(a,b) == (hash(a)==hash(b))
     # for y=vals
     #     println("T=$T; S=$S; x=$x; y=$y")
@@ -47,6 +46,20 @@ for T=types, S=types, x=vals
     #     @test !isequal(a,b) || hash(a)==hash(b)
     # end
 end
+
+fvals = {-0.0,0.0,0.5,1e3,-1/3,1/3,sqrt(2f0),sqrt(2.0),float(pi)}
+ftypes = {Float16,Float32,Float64}
+
+for T=ftypes, S=ftypes, x=fvals
+    # println("$T $S $x")
+    a = coerce(T,x)
+    b = coerce(S,x)
+    if (isa(a,Char) && !is_valid_char(a)) || (isa(b,Char) && !is_valid_char(b))
+        continue
+    end
+    @test isequal(a,b) == (hash(a)==hash(b))
+end
+
 
 # hashing collections (e.g. issue #6870)
 vals = {[1,2,3,4], [1 3;2 4], {1,2,3,4}, [1,3,2,4],

@@ -127,6 +127,10 @@ leading_ones (x::Integer) = leading_zeros(~x)
 trailing_ones(x::Integer) = trailing_zeros(~x)
 
 ## integer comparisons ##
+< (x::Integer, y::Integer) = (< )(promote(x,y)...)
+<=(x::Integer, y::Integer) = (<=)(promote(x,y)...)
+==(x::Integer, y::Integer) = (==)(promote(x,y)...)
+=={T<:Integer}(x::T, y::T) = x === y
 
 for T in IntTypes
     if issubtype(T,Signed)
@@ -362,6 +366,8 @@ typemax(::Type{Uint64}) = 0xffffffffffffffff
 @eval typemin(::Type{Int128} ) = $(convert(Int128,1)<<int32(127))
 @eval typemax(::Type{Int128} ) = $(box(Int128,unbox(Uint128,typemax(Uint128)>>int32(1))))
 
+widen(::Type{Bool}) = Int
+widen(::Type{Char}) = Int64
 widen(::Type{Int8}) = Int
 widen(::Type{Int16}) = Int
 widen(::Type{Int32}) = Int64

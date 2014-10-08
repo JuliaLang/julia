@@ -127,6 +127,8 @@ typemin{T<:Integer}(::Type{Rational{T}}) = -one(T)//zero(T)
 typemax{T<:Integer}(::Type{Rational{T}}) = one(T)//zero(T)
 
 isinteger(x::Rational) = x.den == 1
+isinf(x::Rational) = x.den == 0
+isfinite(x::Rational) = x.den != 0
 
 -(x::Rational) = (-x.num) // x.den
 for op in (:+, :-, :rem, :mod)
@@ -149,23 +151,15 @@ end
 ==(z::Complex , x::Rational) = isreal(z) & (real(z) == x)
 ==(x::Rational, z::Complex ) = isreal(z) & (real(z) == x)
 
-==(x::FloatingPoint, q::Rational) = count_ones(q.den) <= 1 & (x == q.num/q.den) & (x*q.den == q.num)
-==(q::Rational, x::FloatingPoint) = count_ones(q.den) <= 1 & (x == q.num/q.den) & (x*q.den == q.num)
-
-# TODO: fix inequalities to be in line with equality check
 < (x::Rational, y::Rational) = x.den == y.den ? x.num < y.num :
                                widemul(x.num,y.den) < widemul(x.den,y.num)
 < (x::Rational, y::Integer ) = x.num < widemul(x.den,y)
-< (x::Rational, y::Real    ) = x.num < x.den*y
 < (x::Integer , y::Rational) = widemul(x,y.den) < y.num
-< (x::Real    , y::Rational) = x*y.den < y.num
 
 <=(x::Rational, y::Rational) = x.den == y.den ? x.num <= y.num :
                                widemul(x.num,y.den) <= widemul(x.den,y.num)
 <=(x::Rational, y::Integer ) = x.num <= widemul(x.den,y)
-<=(x::Rational, y::Real    ) = x.num <= x.den*y
 <=(x::Integer , y::Rational) = widemul(x,y.den) <= y.num
-<=(x::Real    , y::Rational) = x*y.den <= y.num
 
 div(x::Rational, y::Rational) = div(x.num*y.den, x.den*y.num)
 div(x::Rational, y::Real    ) = div(x.num, x.den*y)

@@ -137,6 +137,10 @@ cld{T<:FloatingPoint}(x::T, y::T) = -fld(-x,y)
 mod{T<:FloatingPoint}(x::T, y::T) = rem(y+rem(x,y),y)
 
 ## floating point comparisons ##
+==(x::FloatingPoint, y::FloatingPoint) = (==)(promote(x,y)...)
+< (x::FloatingPoint, y::FloatingPoint) = (< )(promote(x,y)...)
+<=(x::FloatingPoint, y::FloatingPoint) = (<=)(promote(x,y)...)
+
 
 ==(x::Float32, y::Float32) = eq_float(unbox(Float32,x),unbox(Float32,y))
 ==(x::Float64, y::Float64) = eq_float(unbox(Float64,x),unbox(Float64,y))
@@ -157,15 +161,15 @@ function cmp(x::FloatingPoint, y::FloatingPoint)
     ifelse(x<y, -1, ifelse(x>y, 1, 0))
 end
 
-function cmp(x::Real, y::FloatingPoint)
+function cmp(x::Union(Float16,Float32,Float64), y::Union(Signed,Unsigned))
+    isnan(x) && throw(DomainError())
+    ifelse(x<y, -1, ifelse(x>y, 1, 0))
+end
+function cmp(x::Union(Signed,Unsigned), y::Union(Float16,Float32,Float64))
     isnan(y) && throw(DomainError())
     ifelse(x<y, -1, ifelse(x>y, 1, 0))
 end
 
-function cmp(x::FloatingPoint, y::Real)
-    isnan(x) && throw(DomainError())
-    ifelse(x<y, -1, ifelse(x>y, 1, 0))
-end
 
 ==(x::Float64, y::Int64  ) = eqfsi64(unbox(Float64,x),unbox(Int64,y))
 ==(x::Float64, y::Uint64 ) = eqfui64(unbox(Float64,x),unbox(Uint64,y))
@@ -197,14 +201,13 @@ end
 <=(x::Int64  , y::Float32) = lesif64(unbox(Int64,x),unbox(Float64,float64(y)))
 <=(x::Uint64 , y::Float32) = leuif64(unbox(Uint64,x),unbox(Float64,float64(y)))
 
-==(x::Float32, y::Union(Int32,Uint32)) = float64(x)==float64(y)
-==(x::Union(Int32,Uint32), y::Float32) = float64(x)==float64(y)
+==(x::Union(Float16,Float32,Float64), y::Union(Signed,Unsigned)) = float64(x)==float64(y)
+==(x::Union(Signed,Unsigned), y::Union(Float16,Float32,Float64)) = float64(x)==float64(y)
+<(x::Union(Float16,Float32,Float64), y::Union(Signed,Unsigned)) = float64(x)<float64(y)
+<(x::Union(Signed,Unsigned), y::Union(Float16,Float32,Float64)) = float64(x)<float64(y)
+<=(x::Union(Float16,Float32,Float64), y::Union(Signed,Unsigned)) = float64(x)<=float64(y)
+<=(x::Union(Signed,Unsigned), y::Union(Float16,Float32,Float64)) = float64(x)<=float64(y)
 
-<(x::Float32, y::Union(Int32,Uint32)) = float64(x)<float64(y)
-<(x::Union(Int32,Uint32), y::Float32) = float64(x)<float64(y)
-
-<=(x::Float32, y::Union(Int32,Uint32)) = float64(x)<=float64(y)
-<=(x::Union(Int32,Uint32), y::Float32) = float64(x)<=float64(y)
 
 abs(x::Float64) = box(Float64,abs_float(unbox(Float64,x)))
 abs(x::Float32) = box(Float32,abs_float(unbox(Float32,x)))
