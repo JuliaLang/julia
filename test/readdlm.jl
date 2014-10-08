@@ -1,13 +1,6 @@
 
 isequaldlm(m1, m2, t) = isequal(m1, m2) && (eltype(m1) == eltype(m2) == t)
 
-let dlm_data = readdlm(joinpath("perf", "kernel", "imdb-1.tsv"), '\t')
-    @test size(dlm_data) == (31383,3)
-    @test dlm_data[12345,2] == "Gladiator"
-    @test dlm_data[31383,3] == 2005
-    @test dlm_data[1,1] == "McClure, Marc (I)"
-end
-
 @test isequaldlm(readdlm(IOBuffer("1\t2\n3\t4\n5\t6\n")), [1. 2; 3 4; 5 6], Float64)
 @test isequaldlm(readdlm(IOBuffer("1\t2\n3\t4\n5\t6\n"), Int), [1 2; 3 4; 5 6], Int)
 
@@ -199,4 +192,8 @@ let i18n_data = ["Origin (English)", "Name (English)", "Origin (Native)", "Name 
     data = i18n_arr[2:end, :]
     writedlm(i18n_buff, i18n_arr, ',')
     @test (data, hdr) == readcsv(i18n_buff, header=true)
+
+    writedlm(i18n_buff, i18n_arr, '\t')
+    @test (data, hdr) == readdlm(i18n_buff, '\t', header=true)
 end
+

@@ -446,13 +446,7 @@ end
 
 ## Dequeue functionality ##
 
-const _grow_none_errmsg =
-    "[] cannot grow. Instead, initialize the array with \"T[]\", where T is the desired element type."
-
 function push!{T}(a::Array{T,1}, item)
-    if is(T,None)
-        error(_grow_none_errmsg)
-    end
     # convert first so we don't grow the array if the assignment won't work
     item = convert(T, item)
     ccall(:jl_array_grow_end, Void, (Any, Uint), a, 1)
@@ -467,9 +461,6 @@ function push!(a::Array{Any,1}, item::ANY)
 end
 
 function append!{T}(a::Array{T,1}, items::AbstractVector)
-    if is(T,None)
-        error(_grow_none_errmsg)
-    end
     n = length(items)
     ccall(:jl_array_grow_end, Void, (Any, Uint), a, n)
     copy!(a, length(a)-n+1, items, 1, n)
@@ -477,9 +468,6 @@ function append!{T}(a::Array{T,1}, items::AbstractVector)
 end
 
 function prepend!{T}(a::Array{T,1}, items::AbstractVector)
-    if is(T,None)
-        error(_grow_none_errmsg)
-    end
     n = length(items)
     ccall(:jl_array_grow_beg, Void, (Any, Uint), a, n)
     if a === items
@@ -518,9 +506,6 @@ function pop!(a::Vector)
 end
 
 function unshift!{T}(a::Array{T,1}, item)
-    if is(T,None)
-        error(_grow_none_errmsg)
-    end
     item = convert(T, item)
     ccall(:jl_array_grow_beg, Void, (Any, Uint), a, 1)
     a[1] = item
@@ -591,7 +576,7 @@ end
 
 const _default_splice = []
 
-function splice!(a::Vector, i::Integer, ins::AbstractArray=_default_splice)
+function splice!(a::Vector, i::Integer, ins=_default_splice)
     v = a[i]
     m = length(ins)
     if m == 0
@@ -600,14 +585,16 @@ function splice!(a::Vector, i::Integer, ins::AbstractArray=_default_splice)
         a[i] = ins[1]
     else
         _growat!(a, i, m-1)
-        for k = 1:m
-            a[i+k-1] = ins[k]
+        k = 1
+        for x in ins
+            a[i+k-1] = x
+            k += 1
         end
     end
     return v
 end
 
-function splice!{T<:Integer}(a::Vector, r::UnitRange{T}, ins::AbstractArray=_default_splice)
+function splice!{T<:Integer}(a::Vector, r::UnitRange{T}, ins=_default_splice)
     v = a[r]
     m = length(ins)
     if m == 0
@@ -636,8 +623,10 @@ function splice!{T<:Integer}(a::Vector, r::UnitRange{T}, ins::AbstractArray=_def
         end
     end
 
-    for k = 1:m
-        a[f+k-1] = ins[k]
+    k = 1
+    for x in ins
+        a[f+k-1] = x
+        k += 1
     end
     return v
 end
@@ -743,7 +732,7 @@ for f in (:+, :-, :div, :mod, :&, :|, :$)
         end
     end
 end
-for f in (:.+, :.-, :.*, :./, :.\, :.%, :div, :mod, :rem, :&, :|, :$)
+for f in (:.+, :.-, :.*, :./, :.\, :.%, :.<<, :.>>, :div, :mod, :rem, :&, :|, :$)
     @eval begin
         function ($f){T}(A::Number, B::StridedArray{T})
             F = similar(B, promote_array_type(typeof(A),T))
@@ -1054,7 +1043,7 @@ function findnext(testf::Function, A, start::Integer)
 end
 findfirst(testf::Function, A) = findnext(testf, A, 1)
 
-function find(testf::Function, A::StridedArray)
+function find(testf::Function, A::AbstractArray)
     # use a dynamic-length array to store the indexes, then copy to a non-padded
     # array for the return
     tmpI = Array(Int, 0)
@@ -1063,7 +1052,7 @@ function find(testf::Function, A::StridedArray)
             push!(tmpI, i)
         end
     end
-    I = similar(A, Int, length(tmpI))
+    I = Array(Int, length(tmpI))
     copy!(I, tmpI)
     I
 end
@@ -1082,7 +1071,7 @@ function find(A::StridedArray)
 end
 
 find(x::Number) = x == 0 ? Array(Int,0) : [1]
-find(testf::Function, x) = find(testf(x))
+find(testf::Function, x::Number) = !testf(x) ? Array(Int,0) : [1]
 
 findn(A::AbstractVector) = find(A)
 

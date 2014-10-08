@@ -32,8 +32,6 @@
 #    types::Tuple
 #end
 
-#None = Union()
-
 #type TypeVar
 #    name::Symbol
 #    lb::Type
@@ -44,6 +42,10 @@
 #    parameters::Tuple
 #    body
 #end
+
+#immutable Void
+#end
+#const nothing = Void()
 
 #abstract AbstractArray{T,N}
 #abstract DenseArray{T,N} <: AbstractArray{T,N}
@@ -115,12 +117,12 @@ import Core.Intrinsics.ccall
 
 export
     # key types
-    Any, DataType, Vararg, ANY, NTuple, None, Top,
+    Any, DataType, Vararg, ANY, NTuple, Top,
     Tuple, Type, TypeConstructor, TypeName, TypeVar, Union, UnionType, Void,
     AbstractArray, DenseArray,
     # special objects
     Box, Function, IntrinsicFunction, LambdaStaticData, Method, MethodTable,
-    Module, Nothing, Symbol, Task, Array,
+    Module, Symbol, Task, Array,
     # numeric types
     Bool, FloatingPoint, Float16, Float32, Float64, Number, Integer, Int, Int8, Int16,
     Int32, Int64, Int128, Ptr, Real, Signed, Uint, Uint8, Uint16, Uint32,
@@ -151,7 +153,7 @@ export
     #ccall, cglobal, llvmcall, abs_float, add_float, add_int, and_int, ashr_int,
     #box, bswap_int, checked_fptosi, checked_fptoui, checked_sadd,
     #checked_smul, checked_ssub, checked_uadd, checked_umul, checked_usub,
-    #checked_trunc_sint, checked_trunc_uint,
+    #checked_trunc_sint, checked_trunc_uint, check_top_bit,
     #nan_dom_err, copysign_float, ctlz_int, ctpop_int, cttz_int,
     #div_float, eq_float, eq_int, eqfsi64, eqfui64, flipsign_int, select_value,
     #sqrt_llvm, powi_llvm,
@@ -163,9 +165,6 @@ export
     #srem_int, sub_float, sub_int, trunc_int, udiv_int, uitofp,
     #ule_int, ult_int, unbox, urem_int, xor_int, sext_int, zext_int
 
-
-immutable Nothing; end
-const nothing = Nothing()
 
 const (===) = is
 

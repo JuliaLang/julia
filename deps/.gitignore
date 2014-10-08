@@ -29,3 +29,5 @@
 /double-conversion-*
 grisu-*
 /libgrisu.so
+/virtualenv-*
+/julia-env

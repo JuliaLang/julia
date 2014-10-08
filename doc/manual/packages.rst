@@ -36,7 +36,11 @@ Packages can be in more complicated states, indicated by annotations to the righ
 For programmatic usage, ``Pkg.installed()`` returns a dictionary, mapping installed package names to the version of that package which is installed::
 
     julia> Pkg.installed()
-    ["Distributions"=>v"0.2.8","Stats"=>v"0.2.6","UTF16"=>v"0.2.0","NumericExtensions"=>v"0.2.17"]
+    Dict{ASCIIString,VersionNumber} with 4 entries:
+    "Distributions"     => v"0.2.8"
+    "Stats"             => v"0.2.6"
+    "UTF16"             => v"0.2.0"
+    "NumericExtensions" => v"0.2.17"
 
 Adding and Removing Packages
 ----------------------------

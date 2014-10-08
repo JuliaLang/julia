@@ -37,6 +37,7 @@
    manual/networking-and-streams
    manual/parallel-computing
    manual/dates
+   manual/nullable-types
    manual/running-external-programs
    manual/calling-c-and-fortran-code
    manual/interacting-with-julia
@@ -46,6 +47,7 @@
    manual/style-guide
    manual/faq
    manual/noteworthy-differences
+   manual/unicode-input
 
 .. _stdlib:
 
@@ -80,3 +82,4 @@ Developer Documentation
    :maxdepth: 1
 
    devdocs/cartesian
+   devdocs/meta

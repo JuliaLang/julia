@@ -9,6 +9,26 @@ function gcd{T<:Integer}(a::T, b::T)
     abs(a)
 end
 
+# binary GCD (aka Stein's) algorithm
+# about 1.7x (2.1x) faster for random Int64s (Int128s)
+function gcd{T<:Union(Int64,Uint64,Int128,Uint128)}(a::T, b::T)
+    a == 0 && return abs(b)
+    b == 0 && return abs(a)
+    za = trailing_zeros(a)
+    zb = trailing_zeros(b)
+    k = min(za, zb)
+    u = abs(a >> za)
+    v = abs(b >> zb)
+    while u != v
+        if u > v
+            u, v = v, u
+        end
+        v -= u
+        v >>= trailing_zeros(v)
+    end
+    u << k
+end
+
 # explicit a==0 test is to handle case of lcm(0,0) correctly
 lcm{T<:Integer}(a::T, b::T) = a == 0 ? a : abs(a * div(b, gcd(b,a)))
 
@@ -109,10 +129,10 @@ end
 
 # smallest power of 2 >= x
 nextpow2(x::Unsigned) = one(x)<<((sizeof(x)<<3)-leading_zeros(x-1))
-nextpow2(x::Integer) = oftype(x,x < 0 ? -nextpow2(unsigned(-x)) : nextpow2(unsigned(x)))
+nextpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -nextpow2(unsigned(-x)) : nextpow2(unsigned(x)))
 
 prevpow2(x::Unsigned) = (one(x)>>(x==0)) << ((sizeof(x)<<3)-leading_zeros(x)-1)
-prevpow2(x::Integer) = oftype(x,x < 0 ? -prevpow2(unsigned(-x)) : prevpow2(unsigned(x)))
+prevpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -prevpow2(unsigned(-x)) : prevpow2(unsigned(x)))
 
 ispow2(x::Integer) = count_ones(x)==1
 
@@ -158,29 +178,44 @@ ndigits0z(x::Integer) = ndigits0z(unsigned(abs(x)))
 
 const ndigits_max_mul = WORD_SIZE==32 ? 69000000 : 290000000000000000
 
-function ndigits0z(n::Unsigned, b::Int)
-    b == 2  && return (sizeof(n)<<3-leading_zeros(n))
-    b == 8  && return div((sizeof(n)<<3)-leading_zeros(n)+2,3)
-    b == 16 && return (sizeof(n)<<1)-(leading_zeros(n)>>2)
-    b == 10 && return ndigits0z(n)
+function ndigits0znb(n::Int, b::Int)
     d = 0
-    while ndigits_max_mul < n
-        n = div(n,b)
+    while n != 0
+        n = cld(n,b)
         d += 1
     end
-    m = 1
-    while m <= n
-        m *= b
-        d += 1
+    return d
+end
+
+function ndigits0z(n::Unsigned, b::Int)
+    d = 0
+    if b < 0
+        d = ndigits0znb(signed(n), b)
+    else
+        b == 2  && return (sizeof(n)<<3-leading_zeros(n))
+        b == 8  && return div((sizeof(n)<<3)-leading_zeros(n)+2,3)
+        b == 16 && return (sizeof(n)<<1)-(leading_zeros(n)>>2)
+        b == 10 && return ndigits0z(n)
+        while ndigits_max_mul < n
+            n = div(n,b)
+            d += 1
+        end
+        m = 1
+        while m <= n
+            m *= b
+            d += 1
+        end
     end
     return d
 end
 ndigits0z(x::Integer, b::Integer) = ndigits0z(unsigned(abs(x)),int(b))
 
+ndigitsnb(x::Integer, b::Integer) = x==0 ? 1 : ndigits0znb(x, b)
+
 ndigits(x::Unsigned, b::Integer) = x==0 ? 1 : ndigits0z(x,int(b))
 ndigits(x::Unsigned)             = x==0 ? 1 : ndigits0z(x)
 
-ndigits(x::Integer, b::Integer) = ndigits(unsigned(abs(x)),int(b))
+ndigits(x::Integer, b::Integer) = b >= 0 ? ndigits(unsigned(abs(x)),int(b)) : ndigitsnb(x, b)
 ndigits(x::Integer) = ndigits(unsigned(abs(x)))
 
 ## integer to string functions ##

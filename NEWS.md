@@ -7,10 +7,38 @@ New language features
   * Unicode version 7 is now supported for identifiers etcetera ([#7917]).
 
   * Type parameters now permit any arbitrary `isbits` type, not just
-    `Int` and `Bool` ([#6081]). 
+    `Int` and `Bool` ([#6081]).
+
+  * Keyword argument names can be computed, using syntax such as `f(; (name, val))` ([#7704]).
+
+  * (TODO pending final syntax) staged functions ([#7311]).
+
+Language changes
+----------------
+
+  * `None` is deprecated; use `Union()` instead ([#8423]).
+
+  * `Nothing` (the type of `nothing`) is renamed to `Void` ([#8423]).
+
+  * `Dict` literal syntax `[a=>b,c=>d]` is replaced with `Dict(a=>b,c=>d)`.
+    `{a=>b}` is replaced with `Dict{Any,Any}(a=>b)`.
+    `(K=>V)[...]` is replaced with `Dict{K,V}(...)`.
+    The new syntax has many advantages: all of its components are first-class,
+    it generalizes to other types of containers, it is easier to guess how to
+    specify key and value types, and the syntaxes for empty and pre-populated
+    dicts are synchronized. As part of this change, `=>` is parsed as a normal
+    operator, and `Base` defines it to construct `Pair` objects ([#6739]).
 
 Library improvements
 --------------------
+
+  * `convert` now checks for overflow when truncating integers or converting between
+    signed and unsigned ([#5413]).
+
+  * Arithmetic is type-preserving for more types; e.g. `(x::Int8) + (y::Int8)` now
+    yields an `Int8` ([#3759]).
+
+  * Reductions (e.g. `reduce`, `sum`) widen small types (integers smaller than `Int`, and `Float16`).
 
   * New `Dates` module for calendar dates and other time-interval calculations ([#7654]).
 
@@ -30,6 +58,16 @@ Library improvements
 
   * Efficient `mean` and `median` for ranges ([#8089]).
 
+  * Character predicates such as `islower()`, `isspace()`, etc. use utf8proc/libmojibake
+    to provide uniform cross-platform behavior and up-to-date, locale-independent support
+    for Unicode standards ([#5939]).
+
+  * New `Nullable` type for missing data ([#8152]).
+
+  * New `ordschur` and `ordschur!` functions for sorting a schur factorization by the eigenvalues.
+
+  * `deepcopy` recurses through immutable types and makes copies of their mutable fields ([#8560]).
+
 Julia v0.3.0 Release Notes
 ==========================
 
@@ -45,7 +83,7 @@ New language features
     generated. Constructors that look like `MyType(a, b) = new(a, b)` do not
     need to be added manually ([#4026], [#7071]).
 
-  * Expanded array type hierarchy to include an abstract ``DenseArray`` for
+  * Expanded array type hierarchy to include an abstract `DenseArray` for
     in-memory arrays with standard strided storage ([#987], [#2345],
     [#6212]).
 
@@ -170,8 +208,8 @@ Library improvements
 
     * `writedlm` and `writecsv` now accept any iterable collection of
       iterable rows, in addition to `AbstractArray` arguments, and the
-      ``writedlm`` delimiter can be any printable object (e.g. a
-      ``String``) instead of just a ``Char``.
+      `writedlm` delimiter can be any printable object (e.g. a
+      `String`) instead of just a `Char`.
 
     * `isempty` now works for any iterable collection ([#5827]).
 
@@ -904,6 +942,7 @@ Too numerous to mention.
 [#5832]: https://github.com/JuliaLang/julia/issues/5832
 [#5927]: https://github.com/JuliaLang/julia/issues/5927
 [#5936]: https://github.com/JuliaLang/julia/issues/5936
+[#5939]: https://github.com/JuliaLang/julia/issues/5939
 [#5970]: https://github.com/JuliaLang/julia/issues/5970
 [#6056]: https://github.com/JuliaLang/julia/issues/6056
 [#6057]: https://github.com/JuliaLang/julia/issues/6057
@@ -955,3 +994,10 @@ Too numerous to mention.
 [#7992]: https://github.com/JuliaLang/julia/issues/7992
 [#8011]: https://github.com/JuliaLang/julia/issues/8011
 [#8089]: https://github.com/JuliaLang/julia/issues/8089
+[#7704]: https://github.com/JuliaLang/julia/issues/7704
+[#5413]: https://github.com/JuliaLang/julia/issues/5413
+[#3759]: https://github.com/JuliaLang/julia/issues/3759
+[#7311]: https://github.com/JuliaLang/julia/issues/7311
+[#8423]: https://github.com/JuliaLang/julia/issues/8423
+[#8152]: https://github.com/JuliaLang/julia/pull/8152
+[#6739]: https://github.com/JuliaLang/julia/issues/6739

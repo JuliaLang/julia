@@ -1458,10 +1458,9 @@ for (gtsv, gttrf, gttrs, elty) in
                        B::StridedVecOrMat{$elty})
             chkstride1(B)
             n = length(d)
-            if length(dl) != n - 1 || length(du) != n - 1
-                throw(DimensionMismatch("gtsv!"))
-            end
-            if n != size(B,1) throw(DimensionMismatch("gtsv!")) end
+            n >= length(dl) >= n - 1 && n >= length(du) >= n - 1 || throw(DimensionMismatch("sub- or superdiagonal has wrong length"))
+            n == size(B,1) || throw(DimensionMismatch("right hand side has wrong number of rows"))
+            n == 0 && return B # Early exit if possible
             info = Array(BlasInt, 1)
             ccall(($(string(gtsv)),liblapack), Void,
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
@@ -3505,6 +3504,104 @@ for (gees, gges, elty, relty) in
             end
             @lapackerror
             A, B, alpha, beta, vsl[1:(jobvsl == 'V' ? n : 0),:], vsr[1:(jobvsr == 'V' ? n : 0),:]
+        end
+    end
+end
+# Reorder Schur forms
+for (trsen, elty) in
+    ((:dtrsen_,:Float64),
+     (:strsen_,:Float32))
+    @eval begin
+        function trsen!(select::Array{Int}, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty})
+# *     .. Scalar Arguments ..
+#       CHARACTER          COMPQ, JOB
+#       INTEGER            INFO, LDQ, LDT, LIWORK, LWORK, M, N
+#       DOUBLE PRECISION   S, SEP
+# *     ..
+# *     .. Array Arguments ..
+#       LOGICAL            SELECT( * )
+#       INTEGER            IWORK( * )
+#       DOUBLE PRECISION   Q( LDQ, * ), T( LDT, * ), WI( * ), WORK( * ), WR( * )
+            chkstride1(T, Q)
+            n = chksquare(T)
+            ld = max(1, n)
+            wr = similar(T, $elty, n)
+            wi = similar(T, $elty, n)
+            m = sum(select)
+            work = Array($elty, 1)
+            lwork = blas_int(-1)
+            iwork = Array(BlasInt, 1)
+            liwork = blas_int(-1)
+            info = Array(BlasInt, 1)
+            select = convert(Array{BlasInt}, select)
+
+            for i = 1:2
+                ccall(($(string(trsen)), liblapack), Void,
+                    (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt},
+                    Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                    Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{Void}, Ptr{Void},
+                    Ptr{$elty}, Ptr  {BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
+                    Ptr{BlasInt}),
+                    &'N', &'V', select, &n,
+                    T, &ld, Q, &ld,
+                    wr, wi, &m, C_NULL, C_NULL,
+                    work, &lwork, iwork, &liwork,
+                    info)
+                @lapackerror
+                if i == 1 # only estimated optimal lwork, liwork
+                    lwork  = blas_int(real(work[1]))
+                    liwork = blas_int(real(iwork[1]))
+                    work   = Array($elty, lwork)
+                    iwork  = Array(BlasInt, liwork)
+                end
+            end
+            T, Q, all(wi .== 0) ? wr : complex(wr, wi)
+        end
+    end
+end
+
+for (trsen, elty) in
+    ((:ztrsen_,:Complex128),
+     (:ctrsen_,:Complex64))
+    @eval begin
+        function trsen!(select::Array{Int}, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty})
+# *     .. Scalar Arguments ..
+#       CHARACTER          COMPQ, JOB
+#       INTEGER            INFO, LDQ, LDT, LWORK, M, N
+#       DOUBLE PRECISION   S, SEP
+# *     ..
+# *     .. Array Arguments ..
+#       LOGICAL            SELECT( * )
+#       COMPLEX            Q( LDQ, * ), T( LDT, * ), W( * ), WORK( * )
+            chkstride1(T, Q)
+            n = chksquare(T)
+            ld = max(1, n)
+            w = similar(T, $elty, n)
+            m = sum(select)
+            work = Array($elty, 1)
+            lwork = blas_int(-1)
+            info = Array(BlasInt, 1)
+            select = convert(Array{BlasInt}, select)
+
+            for i = 1:2
+                ccall(($(string(trsen)), liblapack), Void,
+                    (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt},
+                    Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                    Ptr{$elty}, Ptr{BlasInt}, Ptr{Void}, Ptr{Void},
+                    Ptr{$elty}, Ptr  {BlasInt},
+                    Ptr{BlasInt}),
+                    &'N', &'V', select, &n,
+                    T, &ld, Q, &ld,
+                    w, &m, C_NULL, C_NULL,
+                    work, &lwork,
+                    info)
+                @lapackerror
+                if i == 1 # only estimated optimal lwork, liwork
+                    lwork  = blas_int(real(work[1]))
+                    work   = Array($elty, lwork)
+                end
+            end
+            T, Q, w
         end
     end
 end

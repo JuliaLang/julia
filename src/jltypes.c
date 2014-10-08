@@ -395,7 +395,7 @@ static jl_value_t *intersect_union(jl_uniontype_t *a, jl_value_t *b,
     return tu;
 }
 
-// if returns with *bot!=0, then intersection is None
+// if returns with *bot!=0, then intersection is Union()
 static size_t tuple_intersect_size(jl_tuple_t *a, jl_tuple_t *b, int *bot)
 {
     size_t al = jl_tuple_len(a);
@@ -524,7 +524,7 @@ static jl_value_t *intersect_tag(jl_datatype_t *a, jl_datatype_t *b,
                 ti = jl_type_intersect(ap,bp,penv,eqc,invariant);
                 if (bp == (jl_value_t*)jl_bottom_type &&
                     !((jl_tvar_t*)ap)->bound) {
-                    // "None" as a type parameter
+                    // "Union()" as a type parameter
                     jl_tupleset(p, i, ti);
                     continue;
                 }
@@ -533,7 +533,7 @@ static jl_value_t *intersect_tag(jl_datatype_t *a, jl_datatype_t *b,
                 ti = jl_type_intersect(ap,bp,penv,eqc,invariant);
                 if (ap == (jl_value_t*)jl_bottom_type &&
                     !((jl_tvar_t*)bp)->bound) {
-                    // "None" as a type parameter
+                    // "Union()" as a type parameter
                     jl_tupleset(p, i, ti);
                     continue;
                 }
@@ -553,7 +553,7 @@ static jl_value_t *intersect_tag(jl_datatype_t *a, jl_datatype_t *b,
                 else if (type_eqv_(ap,bp)) {
                     ti = ap;
                     if (ti == (jl_value_t*)jl_bottom_type) {
-                        // "None" as a type parameter
+                        // "Union()" as a type parameter
                         jl_tupleset(p, i, ti);
                         continue;
                     }
@@ -1017,7 +1017,7 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
     // uses to instantiate its supertype. this tells us what subtype parameter
     // values are implied by the intersected supertype, or that the
     // intersected supertype cannot come from this subtype (in which case
-    // our final answer is None).
+    // our final answer is Union()).
     size_t i;
     // hack: we need type_match to find assignments for all typevars
     int prev_mim = match_intersection_mode;
@@ -1064,7 +1064,7 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
             if (jl_tupleref(env, e) == tp) {
                 elt = jl_type_intersect(elt, jl_tupleref(env, e+1),
                                         penv, eqc, invariant);
-                // note: elt might be None if "None" was the type parameter
+                // note: elt might be Union() if "Union()" was the type parameter
                 break;
             }
         }
@@ -2086,7 +2086,7 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int invariant)
         }
     }
     else if (a == b) {
-        // None <: None
+        // Union() <: Union()
         return 1;
     }
     size_t i;
@@ -2857,7 +2857,6 @@ void jl_init_types(void)
 
     jl_null = (jl_tuple_t*)newobj((jl_value_t*)jl_tuple_type, 1);
     jl_tuple_set_len_unsafe(jl_null, 0);
-    jl_nothing = (jl_value_t*)jl_null; // for bootstrapping
 
     jl_any_type = jl_new_abstracttype((jl_value_t*)jl_symbol("Any"), NULL, jl_null);
     jl_any_type->super = jl_any_type;
@@ -2937,6 +2936,11 @@ void jl_init_types(void)
     jl_sym_type->mutabl = 1;
 
     // now they can be used to create the remaining base kinds and types
+    jl_void_type = jl_new_datatype(jl_symbol("Void"), jl_any_type, jl_null,
+                                   jl_null, jl_null, 0, 0);
+    jl_nothing = newstruct(jl_void_type);
+    jl_void_type->instance = jl_nothing;
+
     jl_uniontype_type = jl_new_datatype(jl_symbol("UnionType"),
                                         jl_type_type, jl_null,
                                         jl_tuple(1, jl_symbol("types")),
@@ -3001,10 +3005,10 @@ void jl_init_types(void)
 
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), jl_any_type, jl_null,
-                        jl_tuple(6, jl_symbol("sig"), jl_symbol("va"),
+                        jl_tuple(7, jl_symbol("sig"), jl_symbol("va"), jl_symbol("isstaged"),
                                  jl_symbol("tvars"), jl_symbol("func"),
                                  jl_symbol("invokes"), jl_symbol("next")),
-                        jl_tuple(6, jl_tuple_type, jl_bool_type,
+                        jl_tuple(7, jl_tuple_type, jl_bool_type, jl_bool_type,
                                  jl_tuple_type, jl_any_type,
                                  jl_any_type, jl_any_type),
                         0, 1);
@@ -3187,7 +3191,7 @@ void jl_init_types(void)
 
     // complete builtin type metadata
     jl_value_t *pointer_void = jl_apply_type((jl_value_t*)jl_pointer_type,
-                                             jl_tuple(1,jl_bottom_type));
+                                             jl_tuple(1,jl_void_type));
     jl_voidpointer_type = (jl_datatype_t*)pointer_void;
     jl_tupleset(jl_datatype_type->types, 0, pointer_void);
     jl_tupleset(jl_datatype_type->types, 9, jl_int32_type);
@@ -3261,6 +3265,9 @@ void jl_init_types(void)
     newvar_sym = jl_symbol("newvar");
     copyast_sym = jl_symbol("copyast");
     simdloop_sym = jl_symbol("simdloop");
+    meta_sym = jl_symbol("meta");
+    arrow_sym = jl_symbol("->");
+    ldots_sym = jl_symbol("...");
 }
 
 #ifdef __cplusplus

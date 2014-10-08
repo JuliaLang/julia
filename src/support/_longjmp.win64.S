@@ -2,8 +2,11 @@
 
 #ifndef _MSC_VER
 .intel_syntax noprefix
-#endif
 ENTRY(jl_longjmp)
+#else
+.code
+jl_longjmp proc
+#endif
     mov    rbx,QWORD PTR [rcx+8]
     mov    rsp,QWORD PTR [rcx+16]
     mov    rbp,QWORD PTR [rcx+24]
@@ -30,4 +33,7 @@ ENTRY(jl_longjmp)
     inc    eax
 a:  mov    QWORD PTR [rsp],r8
     ret
+#ifdef _MSC_VER
+jl_longjmp endp
+#endif
 END(jl_longjmp)

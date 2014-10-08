@@ -3,10 +3,9 @@
 
 # You can set these variables from the command line.
 SPHINXOPTS    =
-SPHINXBUILD   = PYTHONPATH=$(PYTHONPATH):juliadoc sphinx-build
 PAPER         =
 BUILDDIR      = _build
-JULIA         = ../julia
+JULIAHOME     = $(abspath ..)
 
 # Internal variables.
 PAPEROPT_a4     = -D latex_paper_size=a4
@@ -14,6 +13,21 @@ PAPEROPT_letter = -D latex_paper_size=letter
 ALLSPHINXOPTS   = -d $(BUILDDIR)/doctrees $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) .
 # the i18n builder cannot share the environment and doctrees with the others
 I18NSPHINXOPTS  = $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) .
+
+JULIA_ENV     = $(JULIAHOME)/deps/julia-env
+ACTIVATE      = $(JULIA_ENV)/bin/activate
+SPHINX_BUILD  = $(JULIA_ENV)/bin/sphinx-build
+
+$(ACTIVATE):
+	$(MAKE) -C $(JULIAHOME)/deps install-virtualenv
+	touch -c $@
+
+$(SPHINX_BUILD): $(ACTIVATE) requirements.txt
+	. $(ACTIVATE) && pip install sphinx==1.2.3 \
+	              && pip install -r requirements.txt
+	touch -c $@
+
+SPHINXBUILD = . $(ACTIVATE) && sphinx-build
 
 .PHONY: help clean cleanall html dirhtml singlehtml pickle json htmlhelp qthelp devhelp \
 	epub latex latexpdf text man changes linkcheck doctest gettext
@@ -43,46 +57,41 @@ help:
 
 clean:
 	-rm -rf $(BUILDDIR)/*
-	# We also need to remove .pyc files
-	-find . -name *.pyc | xargs rm
 
 cleanall: clean
 
-juliadoc-pkg: juliadoc/juliadoc/__init__.py
-	@-cd .. && git submodule update doc/juliadoc
-
-html: juliadoc-pkg
+html: $(SPHINX_BUILD)
 	$(SPHINXBUILD) -b html $(ALLSPHINXOPTS) $(BUILDDIR)/html
 	@echo
 	@echo "Build finished. The HTML pages are in $(BUILDDIR)/html."
 
-dirhtml: juliadoc-pkg
+dirhtml: $(SPHINX_BUILD)
 	$(SPHINXBUILD) -b dirhtml $(ALLSPHINXOPTS) $(BUILDDIR)/dirhtml
 	@echo
 	@echo "Build finished. The HTML pages are in $(BUILDDIR)/dirhtml."
 
-singlehtml: juliadoc-pkg
+singlehtml: $(SPHINX_BUILD)
 	$(SPHINXBUILD) -b singlehtml $(ALLSPHINXOPTS) $(BUILDDIR)/singlehtml
 	@echo
 	@echo "Build finished. The HTML page is in $(BUILDDIR)/singlehtml."
 
-pickle: juliadoc-pkg
+pickle: $(SPHINX_BUILD)
 	$(SPHINXBUILD) -b pickle $(ALLSPHINXOPTS) $(BUILDDIR)/pickle
 	@echo
 	@echo "Build finished; now you can process the pickle files."
 
-json: juliadoc-pkg
+json: $(SPHINX_BUILD)
 	$(SPHINXBUILD) -b json $(ALLSPHINXOPTS) $(BUILDDIR)/json
 	@echo
 	@echo "Build finished; now you can process the JSON files."
 
-htmlhelp: juliadoc-pkg
+htmlhelp: $(SPHINX_BUILD)
 	$(SPHINXBUILD) -b htmlhelp $(ALLSPHINXOPTS) $(BUILDDIR)/htmlhelp
 	@echo
 	@echo "Build finished; now you can run HTML Help Workshop with the" \
 	      ".hhp project file in $(BUILDDIR)/htmlhelp."
 
-qthelp: juliadoc-pkg
+qthelp: $(SPHINX_BUILD)
 	$(SPHINXBUILD) -b qthelp $(ALLSPHINXOPTS) $(BUILDDIR)/qthelp
 	@echo
 	@echo "Build finished; now you can run "qcollectiongenerator" with the" \
@@ -91,7 +100,7 @@ qthelp: juliadoc-pkg
 	@echo "To view the help file:"
 	@echo "# assistant -collectionFile $(BUILDDIR)/qthelp/JuliaLanguage.qhc"
 
-devhelp: juliadoc-pkg
+devhelp: $(SPHINX_BUILD)
 	$(SPHINXBUILD) -b devhelp $(ALLSPHINXOPTS) $(BUILDDIR)/devhelp
 	@echo
 	@echo "Build finished."
@@ -100,68 +109,68 @@ devhelp: juliadoc-pkg
 	@echo "# ln -s $(BUILDDIR)/devhelp $$HOME/.local/share/devhelp/JuliaLanguage"
 	@echo "# devhelp"
 
-epub: juliadoc-pkg
+epub: $(SPHINX_BUILD)
 	$(SPHINXBUILD) -b epub $(ALLSPHINXOPTS) $(BUILDDIR)/epub
 	@echo
 	@echo "Build finished. The epub file is in $(BUILDDIR)/epub."
 
-latex: juliadoc-pkg
+latex: $(SPHINX_BUILD)
 	$(SPHINXBUILD) -b latex $(ALLSPHINXOPTS) $(BUILDDIR)/latex
 	@echo
 	@echo "Build finished; the LaTeX files are in $(BUILDDIR)/latex."
 	@echo "Run 'make' in that directory to run these through (pdf)latex" \
 	      "(use 'make latexpdf' here to do that automatically)."
 
-latexpdf: juliadoc-pkg
+latexpdf: $(SPHINX_BUILD)
 	$(SPHINXBUILD) -b latex $(ALLSPHINXOPTS) $(BUILDDIR)/latex
 	@echo "Running LaTeX files through pdflatex..."
 	$(MAKE) -C $(BUILDDIR)/latex all-pdf
 	@echo "pdflatex finished; the PDF files are in $(BUILDDIR)/latex."
 
-text: juliadoc-pkg
+text: $(SPHINX_BUILD)
 	$(SPHINXBUILD) -b text $(ALLSPHINXOPTS) $(BUILDDIR)/text
 	@echo
 	@echo "Build finished. The text files are in $(BUILDDIR)/text."
 
-man: juliadoc-pkg
+man: $(SPHINX_BUILD)
 	$(SPHINXBUILD) -b man $(ALLSPHINXOPTS) $(BUILDDIR)/man
 	@echo
 	@echo "Build finished. The manual pages are in $(BUILDDIR)/man."
 
-texinfo: juliadoc-pkg
+texinfo: $(SPHINX_BUILD)
 	$(SPHINXBUILD) -b texinfo $(ALLSPHINXOPTS) $(BUILDDIR)/texinfo
 	@echo
 	@echo "Build finished. The Texinfo files are in $(BUILDDIR)/texinfo."
 	@echo "Run 'make' in that directory to run these through makeinfo" \
 	      "(use 'make info' here to do that automatically)."
 
-info: juliadoc-pkg
+info: $(SPHINX_BUILD)
 	$(SPHINXBUILD) -b texinfo $(ALLSPHINXOPTS) $(BUILDDIR)/texinfo
 	@echo "Running Texinfo files through makeinfo..."
 	make -C $(BUILDDIR)/texinfo info
 	@echo "makeinfo finished; the Info files are in $(BUILDDIR)/texinfo."
 
-gettext: juliadoc-pkg
+gettext: $(SPHINX_BUILD)
 	$(SPHINXBUILD) -b gettext $(I18NSPHINXOPTS) $(BUILDDIR)/locale
 	@echo
 	@echo "Build finished. The message catalogs are in $(BUILDDIR)/locale."
 
-changes: juliadoc-pkg
+changes: $(SPHINX_BUILD)
 	$(SPHINXBUILD) -b changes $(ALLSPHINXOPTS) $(BUILDDIR)/changes
 	@echo
 	@echo "The overview file is in $(BUILDDIR)/changes."
 
-linkcheck: juliadoc-pkg
+linkcheck: $(SPHINX_BUILD)
 	$(SPHINXBUILD) -b linkcheck $(ALLSPHINXOPTS) $(BUILDDIR)/linkcheck
 	@echo
 	@echo "Link check complete; look for any errors in the above output " \
 	      "or in $(BUILDDIR)/linkcheck/output.txt."
 
-doctest: juliadoc-pkg
+doctest: $(SPHINX_BUILD)
 	PATH=$(PATH):$(build_bindir) $(SPHINXBUILD) -b doctest $(ALLSPHINXOPTS) $(BUILDDIR)/doctest
 	@echo "Testing of doctests in the sources finished, look at the " \
 	      "results in $(BUILDDIR)/doctest/output.txt."
 
-helpdb.jl: stdlib/*.rst juliadoc-pkg
+helpdb.jl: stdlib/*.rst $(SPHINX_BUILD)
 	$(SPHINXBUILD) -b jlhelp $(ALLSPHINXOPTS) $(BUILDDIR)/jlhelp
 	mv $(BUILDDIR)/jlhelp/jlhelp.jl helpdb.jl

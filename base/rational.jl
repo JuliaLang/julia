@@ -65,31 +65,53 @@ promote_rule{T<:Integer,S<:FloatingPoint}(::Type{Rational{T}}, ::Type{S}) = prom
 widen{T}(::Type{Rational{T}}) = Rational{widen(T)}
 
 function rationalize{T<:Integer}(::Type{T}, x::FloatingPoint; tol::Real=eps(x))
-    if isnan(x);       return zero(T)//zero(T); end
-    if x < typemin(T); return -one(T)//zero(T); end
-    if typemax(T) < x; return  one(T)//zero(T); end
-    tm = x < 0 ? typemin(T) : typemax(T)
-    z = x*tm
-    if z <= 0.5 return zero(T)//one(T) end
-    if z <= 1.0 return one(T)//tm end
-    y = x
-    a = d = 1
-    b = c = 0
-    while true
-        f = itrunc(y); y -= f
-        p, q = f*a+c, f*b+d
-        typemin(T) <= p <= typemax(T) &&
-        typemin(T) <= q <= typemax(T) || break
-        0 != sign(a)*sign(b) != sign(p)*sign(q) && break
-        a, b, c, d = p, q, a, b
-        if y == 0 || abs(a/b-x) <= tol
-            break
+    tol < 0 && throw(ArgumentError("negative tolerance"))
+    isnan(x) && return zero(T)//zero(T)
+    isinf(x) && return (x < 0 ? -one(T) : one(T))//zero(T)
+
+    p,  q  = (x < 0 ? -one(T) : one(T)), zero(T)
+    pp, qq = zero(T), one(T)
+
+    x = abs(x)
+    a = trunc(x)
+    r = x-a
+    y = one(x)
+
+    nt, t, tt = tol, zero(tol), zero(tol)
+
+    while r > nt
+        try
+            ia = convert(T,a)
+            np = checked_add(checked_mul(ia,p),pp)
+            nq = checked_add(checked_mul(ia,q),qq)
+            p, pp = np, p
+            q, qq = nq, q
+        catch e
+            isa(e,InexactError) || isa(e,OverflowError) || rethrow(e)
+            return p // q
         end
-        y = inv(y)
+
+        t, tt = nt, t
+        x, y = y, r
+
+        a, r = divrem(x,y)
+        nt = a*t + tt
     end
-    return convert(T,a)//convert(T,b)
+
+    # find optimal semiconvergent
+    # smallest a such that x-a*y < a*t+tt
+    a = cld(x-tt,y+t)
+    try
+        ia = convert(T,a)
+        np = checked_add(checked_mul(ia,p),pp)
+        nq = checked_add(checked_mul(ia,q),qq)
+        return np // nq
+    catch e
+        isa(e,InexactError) || isa(e,OverflowError) || rethrow(e)
+        return p // q
+    end
 end
-rationalize(x::Union(Float64,Float32); tol::Real=eps(x)) = rationalize(Int, x, tol=tol)
+rationalize(x::FloatingPoint; kvs...) = rationalize(Int, x; kvs...)
 
 num(x::Integer) = x
 den(x::Integer) = one(x)
@@ -153,9 +175,13 @@ fld(x::Rational, y::Rational) = fld(x.num*y.den, x.den*y.num)
 fld(x::Rational, y::Real    ) = fld(x.num, x.den*y)
 fld(x::Real    , y::Rational) = fld(x*y.den, y.num)
 
+cld(x::Rational, y::Rational) = cld(x.num*y.den, x.den*y.num)
+cld(x::Rational, y::Real    ) = cld(x.num, x.den*y)
+cld(x::Real    , y::Rational) = cld(x*y.den, y.num)
+
 itrunc(x::Rational) = div(x.num,x.den)
 ifloor(x::Rational) = fld(x.num,x.den)
-iceil (x::Rational) = -fld(-x.num,x.den)
+iceil (x::Rational) = cld(x.num,x.den)
 iround(x::Rational) = div(x.num*2 + copysign(x.den,x.num), x.den*2)
 
 trunc(x::Rational) = Rational(itrunc(x))

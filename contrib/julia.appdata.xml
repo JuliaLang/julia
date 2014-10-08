@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2014 Paul Lange <palango@gmx.de> -->
+<application>
+ <id type="desktop">julia.desktop</id>
+ <metadata_license>CC-BY-SA-3.0</metadata_license>
+ <project_license>MIT and LGPL-2.1+ and GPL-2.0+</project_license>
+ <description>
+  <p>
+   Julia is a high-level, high-performance dynamic programming language for
+   technical computing, with syntax that is familiar to users of other
+   technical computing environments. It provides a sophisticated compiler,
+   distributed parallel execution, numerical accuracy, and an extensive
+   mathematical function library.
+  </p>
+  <p>
+   The library, largely written in Julia itself,
+   also integrates mature, best-of-breed C and Fortran libraries for linear
+   algebra, random number generation, signal processing, and string processing.
+   In addition, the Julia developer community is contributing a number of
+   external packages through Julia’s built-in package manager at a rapid pace.
+  </p>
+ </description>
+ <screenshots>
+  <screenshot type="default">http://julialang.org/images/julia-gnome.png</screenshot>
+ </screenshots>
+ <url type="homepage">http://julialang.org/</url>
+ <updatecontact>julia-dev@googlegroups.com</updatecontact>
+</application>

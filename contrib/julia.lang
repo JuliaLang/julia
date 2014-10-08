@@ -232,7 +232,7 @@
 
     <!-- Sources: base/exports.jl and examples/typetree.jl -->
     <context id="type" style-ref="type">
-      <keyword>Any|None|Nothing|Void</keyword>
+      <keyword>Any|Void</keyword>
       <keyword>Type(Constructor|Name|Var|_Array)?|(Union|Data|NonTuple)Type</keyword>
       <keyword>(Abstract|Strided|Bit)?(Array|Matrix|Vector)</keyword>
       <keyword>Abstract(Cmd|RNG|SparseMatrix)</keyword>

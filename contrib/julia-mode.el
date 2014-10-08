@@ -51,7 +51,6 @@
   (let ((table (make-syntax-table)))
     (modify-syntax-entry ?_ "w" table)   ; underscores in words
     (modify-syntax-entry ?@ "w" table)
-    (modify-syntax-entry ?. "_" table)
     (modify-syntax-entry ?# "< 14" table)  ; # single-line and multiline start
     (modify-syntax-entry ?= ". 23bn" table)
     (modify-syntax-entry ?\n ">" table)  ; \n single-line comment end
@@ -66,10 +65,12 @@
     (modify-syntax-entry ?\" "\"" table)
     (modify-syntax-entry ?` "\"" table)
     ;; (modify-syntax-entry ?\" "." table)
+    (modify-syntax-entry ?. "." table)
     (modify-syntax-entry ?? "." table)
     (modify-syntax-entry ?$ "." table)
     (modify-syntax-entry ?& "." table)
     (modify-syntax-entry ?* "." table)
+    (modify-syntax-entry ?/ "." table)
     (modify-syntax-entry ?+ "." table)
     (modify-syntax-entry ?- "." table)
     (modify-syntax-entry ?< "." table)
@@ -112,6 +113,16 @@
       ;; The function name itself
       (group (1+ (or word ?_ ?!)))))
 
+(defconst julia-function-assignment-regex
+  (rx line-start symbol-start
+      (group (1+ (or word ?_ ?!)))
+      (* space)
+      (? "{" (* (not (any "}"))) "}")
+      (* space)
+      "(" (* (not (any ")"))) ")"
+      (* space)
+      "="))
+
 (defconst julia-type-regex
   (rx symbol-start (or "immutable" "type" "abstract") (1+ space) (group (1+ (or word ?_)))))
 
@@ -125,7 +136,7 @@
   (rx "<:" (1+ space) (group (1+ (or word ?_))) (0+ space) (or "\n" "{" "end")))
 
 (defconst julia-macro-regex
-  "@\\w+")
+  (rx symbol-start (group  "@" (1+ (or word ?_ ?!)))))
 
 (defconst julia-keyword-regex
   (regexp-opt
@@ -144,7 +155,7 @@
 
 (defconst julia-font-lock-keywords
   (list
-   '("\\<\\(\\|Uint\\(8\\|16\\|32\\|64\\|128\\)\\|Int\\(8\\|16\\|32\\|64\\|128\\)\\|BigInt\\|Integer\\|BigFloat\\|FloatingPoint\\|Float16\\|Float32\\|Float64\\|Complex128\\|Complex64\\|ComplexPair\\|Bool\\|Char\\|DataType\\|Number\\|Real\\|Int\\|Uint\\|Array\\|DArray\\|AbstractArray\\|AbstractVector\\|AbstractMatrix\\|AbstractSparseMatrix\\|SubArray\\|StridedArray\\|StridedVector\\|StridedMatrix\\|VecOrMat\\|StridedVecOrMat\\|DenseArray\\|Range\\|OrdinalRange\\|StepRange\\|UnitRange\\|FloatRange\\|SparseMatrixCSC\\|Tuple\\|NTuple\\|Symbol\\|Function\\|Vector\\|Matrix\\|Union\\|Type\\|Any\\|Complex\\|None\\|String\\|Ptr\\|Void\\|Exception\\|Task\\|Signed\\|Unsigned\\|Associative\\|Dict\\|IO\\|IOStream\\|Rational\\|Regex\\|RegexMatch\\|Set\\|IntSet\\|ASCIIString\\|UTF8String\\|ByteString\\|Expr\\|WeakRef\\|Nothing\\|ObjectIdDict\\|SubString\\)\\>" .
+   '("\\<\\(\\|Uint\\(8\\|16\\|32\\|64\\|128\\)\\|Int\\(8\\|16\\|32\\|64\\|128\\)\\|BigInt\\|Integer\\|BigFloat\\|FloatingPoint\\|Float16\\|Float32\\|Float64\\|Complex128\\|Complex64\\|ComplexPair\\|Bool\\|Char\\|DataType\\|Number\\|Real\\|Int\\|Uint\\|Array\\|DArray\\|AbstractArray\\|AbstractVector\\|AbstractMatrix\\|AbstractSparseMatrix\\|SubArray\\|StridedArray\\|StridedVector\\|StridedMatrix\\|VecOrMat\\|StridedVecOrMat\\|DenseArray\\|Range\\|OrdinalRange\\|StepRange\\|UnitRange\\|FloatRange\\|SparseMatrixCSC\\|Tuple\\|NTuple\\|Symbol\\|Function\\|Vector\\|Matrix\\|Union\\|Type\\|Any\\|Complex\\|String\\|Ptr\\|Void\\|Exception\\|Task\\|Signed\\|Unsigned\\|Associative\\|Dict\\|IO\\|IOStream\\|Rational\\|Regex\\|RegexMatch\\|Set\\|IntSet\\|ASCIIString\\|UTF8String\\|ByteString\\|Expr\\|WeakRef\\|ObjectIdDict\\|SubString\\)\\>" .
      font-lock-type-face)
     (cons julia-keyword-regex 'font-lock-keyword-face)
     (cons julia-macro-regex 'font-lock-keyword-face)
@@ -157,6 +168,7 @@
     (list julia-char-regex 2 'font-lock-string-face)
     (list julia-forloop-in-regex 1 'font-lock-keyword-face)
     (list julia-function-regex 1 'font-lock-function-name-face)
+    (list julia-function-assignment-regex 1 'font-lock-function-name-face)
     (list julia-type-regex 1 'font-lock-type-face)
     (list julia-type-annotation-regex 1 'font-lock-type-face)
     ;;(list julia-type-parameter-regex 1 'font-lock-type-face)

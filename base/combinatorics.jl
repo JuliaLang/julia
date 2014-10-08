@@ -115,7 +115,7 @@ shuffle(a::AbstractVector) = shuffle!(copy(a))
 function randperm(n::Integer)
     a = Array(typeof(n), n)
     a[1] = 1
-    for i = 2:n
+    @inbounds for i = 2:n
         j = rand(1:i)
         a[i] = a[j]
         a[j] = i
@@ -126,7 +126,7 @@ end
 function randcycle(n::Integer)
     a = Array(typeof(n), n)
     a[1] = 1
-    for i = 2:n
+    @inbounds for i = 2:n
         j = rand(1:i-1)
         a[i] = a[j]
         a[j] = i
@@ -354,7 +354,7 @@ function nextpartition(n, as)
     xs
 end
 
-let _npartitions = (Int=>Int)[]
+let _npartitions = Dict{Int,Int}()
     global npartitions
     function npartitions(n::Int)
         if n < 0
@@ -424,7 +424,7 @@ function nextfixedpartition(n, m, bs)
     return as
 end
 
-let _nipartitions = ((Int,Int)=>Int)[]
+let _nipartitions = Dict{(Int,Int),Int}()
     global npartitions
     function npartitions(n::Int,m::Int)
         if n < m || m == 0
@@ -489,7 +489,7 @@ function nextsetpartition(s::AbstractVector, a, b, n, m)
 
 end
 
-let _nsetpartitions = (Int=>Int)[]
+let _nsetpartitions = Dict{Int,Int}()
     global nsetpartitions
     function nsetpartitions(n::Int)
         if n < 0

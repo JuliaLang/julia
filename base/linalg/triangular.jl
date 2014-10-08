@@ -7,10 +7,26 @@ function Triangular{T}(A::AbstractMatrix{T}, uplo::Symbol, isunit::Bool=false)
     return Triangular{T,typeof(A),uplo,isunit}(A)
 end
 
-+{T, MT, uplo}(A::Triangular{T, MT, uplo}, B::Triangular{T, MT, uplo}) = Triangular(A.data + B.data, uplo)
-+{T, MT, uplo1, uplo2}(A::Triangular{T, MT, uplo1}, B::Triangular{T, MT, uplo2}) = full(A) + full(B)
--{T, MT, uplo}(A::Triangular{T, MT, uplo}, B::Triangular{T, MT, uplo}) = Triangular(A.data - B.data, uplo)
--{T, MT, uplo1, uplo2}(A::Triangular{T, MT, uplo1}, B::Triangular{T, MT, uplo2}) = full(A) - full(B)
+const CHARU = 'U'
+const CHARL = 'L'
+char_uplo(uplo::Symbol) = uplo == :U ? CHARU : (uplo == :L ? CHARL : throw(ArgumentError("uplo argument must be either :U or :L")))
+
++{T, MT, uplo}(A::Triangular{T, MT, uplo, false}, B::Triangular{T, MT, uplo, false}) = Triangular(A.data + B.data, uplo)
++{T, MT}(A::Triangular{T, MT, :U, false}, B::Triangular{T, MT, :U, true}) = Triangular(A.data + triu(B.data, 1) + I, :U)
++{T, MT}(A::Triangular{T, MT, :L, false}, B::Triangular{T, MT, :L, true}) = Triangular(A.data + tril(B.data, -1) + I, :L)
++{T, MT}(A::Triangular{T, MT, :U, true}, B::Triangular{T, MT, :U, false}) = Triangular(triu(A.data, 1) + B.data + I, :U)
++{T, MT}(A::Triangular{T, MT, :L, true}, B::Triangular{T, MT, :L, false}) = Triangular(tril(A.data, -1) + B.data + I, :L)
++{T, MT}(A::Triangular{T, MT, :U, true}, B::Triangular{T, MT, :U, true}) = Triangular(triu(A.data, 1) + triu(B.data, 1) + 2I, :U)
++{T, MT}(A::Triangular{T, MT, :L, true}, B::Triangular{T, MT, :L, true}) = Triangular(tril(A.data, -1) + tril(B.data, -1) + 2I, :L)
++{T, MT, uplo1, uplo2, IsUnit1, IsUnit2}(A::Triangular{T, MT, uplo1, IsUnit1}, B::Triangular{T, MT, uplo2, IsUnit2}) = full(A) + full(B)
+-{T, MT, uplo}(A::Triangular{T, MT, uplo, false}, B::Triangular{T, MT, uplo, false}) = Triangular(A.data - B.data, uplo)
+-{T, MT}(A::Triangular{T, MT, :U, false}, B::Triangular{T, MT, :U, true}) = Triangular(A.data - triu(B.data, 1) - I, :U)
+-{T, MT}(A::Triangular{T, MT, :L, false}, B::Triangular{T, MT, :L, true}) = Triangular(A.data - tril(B.data, -1) - I, :L)
+-{T, MT}(A::Triangular{T, MT, :U, true}, B::Triangular{T, MT, :U, false}) = Triangular(triu(A.data, 1) - B.data + I, :U)
+-{T, MT}(A::Triangular{T, MT, :L, true}, B::Triangular{T, MT, :L, false}) = Triangular(tril(A.data, -1) - B.data + I, :L)
+-{T, MT}(A::Triangular{T, MT, :U, true}, B::Triangular{T, MT, :U, true}) = Triangular(triu(A.data, 1) - triu(B.data, 1), :U)
+-{T, MT}(A::Triangular{T, MT, :L, true}, B::Triangular{T, MT, :L, true}) = Triangular(tril(A.data, -1) - tril(B.data, -1), :L)
+-{T, MT, uplo1, uplo2, IsUnit1, IsUnit2}(A::Triangular{T, MT, uplo1, IsUnit1}, B::Triangular{T, MT, uplo2, IsUnit2}) = full(A) - full(B)
 
 ######################
 # BlasFloat routines #
@@ -128,7 +144,7 @@ fill!(A::Triangular, x) = (fill!(A.data, x); A)
 
 function similar{T,S,UpLo,IsUnit,Tnew}(A::Triangular{T,S,UpLo,IsUnit}, ::Type{Tnew}, dims::Dims)
     dims[1] == dims[2] || throw(ArgumentError("a Triangular matrix must be square"))
-    length(dims) == 2 || throw(ArgumentError("a Traigular matrix must have two dimensions"))
+    length(dims) == 2 || throw(ArgumentError("a Triangular matrix must have two dimensions"))
     A = similar(A.data, Tnew, dims)
     return Triangular{Tnew, typeof(A), UpLo, IsUnit}(A)
 end
@@ -154,21 +170,45 @@ end
 
 function (*){T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, x::Number)
     n = size(A,1)
+    B = copy(A.data)
     for j = 1:n
-        for i = UpLo == :L ? j:n : 1:j
-            A.data[i,j] = i == j & IsUnit ? x : A.data[i,j]*x
+        for i = UpLo == :L ? (j:n) : (1:j)
+            B[i,j] = (i == j && IsUnit ? x : B[i,j]*x)
         end
     end
-    A
+    Triangular{T,S,UpLo,false}(B)
 end
 function (*){T,S,UpLo,IsUnit}(x::Number, A::Triangular{T,S,UpLo,IsUnit})
     n = size(A,1)
+    B = copy(A.data)
     for j = 1:n
-        for i = UpLo == :L ? j:n : 1:j
-            A.data[i,j] = i == j & IsUnit ? x : x*A.data[i,j]
+        for i = UpLo == :L ? (j:n) : (1:j)
+            B[i,j] = i == j && IsUnit ? x : x*B[i,j]
         end
     end
-    A
+    Triangular{T,S,UpLo,false}(B)
+end
+function (/){T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, x::Number)
+    n = size(A,1)
+    B = copy(A.data)
+    invx = one(T)/x
+    for j = 1:n
+        for i = UpLo == :L ? (j:n) : (1:j)
+            B[i,j] = (i == j && IsUnit ? invx : B[i,j]/x)
+        end
+    end
+    Triangular{T,S,UpLo,false}(B)
+end
+function (\){T,S,UpLo,IsUnit}(x::Number, A::Triangular{T,S,UpLo,IsUnit})
+    n = size(A,1)
+    B = copy(A.data)
+    invx = one(T)/x
+    for j = 1:n
+        for i = UpLo == :L ? (j:n) : (1:j)
+            B[i,j] = i == j && IsUnit ? invx : x\B[i,j]
+        end
+    end
+    Triangular{T,S,UpLo,false}(B)
 end
 
 A_mul_B!{T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, B::Triangular{T,S,UpLo,IsUnit}) = Triangular{T,S,UpLo,IsUnit}(A*full!(B))

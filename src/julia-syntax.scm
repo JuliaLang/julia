@@ -437,7 +437,7 @@
 	   (pair? (caddr e)) (eq? (car (caddr e)) 'quote)
 	   (symbol? (cadr (caddr e))))))
 
-(define (method-def-expr- name sparams argl body)
+(define (method-def-expr- name sparams argl body isstaged)
   (receive
    (names bounds) (sparam-name-bounds sparams '() '())
    (begin
@@ -455,12 +455,12 @@
      (let* ((types (llist-types argl))
 	    (body  (method-lambda-expr argl body)))
        (if (null? sparams)
-	   `(method ,name (tuple (tuple ,@types) (tuple)) ,body)
+	   `(method ,name (tuple (tuple ,@types) (tuple)) ,body ,isstaged)
 	   `(method ,name
 		    (call (lambda ,names
 			    (tuple (tuple ,@types) (tuple ,@names)))
 			  ,@(symbols->typevars names bounds #t))
-		    ,body))))))
+		    ,body ,isstaged))))))
 
 (define (vararg? x) (and (pair? x) (eq? (car x) '...)))
 (define (trans?  x) (and (pair? x) (eq? (car x) '|.'|)))
@@ -469,9 +469,12 @@
 (define (const-default? x)
   (or (number? x) (string? x) (char? x) (and (pair? x) (eq? (car x) 'quote))))
 
-(define (keywords-method-def-expr name sparams argl body)
+(define (keywords-method-def-expr name sparams argl body isstaged)
   (let* ((kargl (cdar argl))  ;; keyword expressions (= k v)
          (pargl (cdr argl))   ;; positional args
+	 (body  (if (and (pair? body) (eq? (car body) 'block))
+		    body
+		    `(block ,body)))
 	 ;; 1-element list of vararg argument, or empty if none
 	 (vararg (let ((l (if (null? pargl) '() (last pargl))))
 		   (if (vararg? l)
@@ -530,7 +533,7 @@
 	  `(block
 	    ,@(if (null? lno) '()
 		  (list (append (car lno) (list (undot-name name)))))
-	    ,@stmts))
+	    ,@stmts) isstaged)
 
 	;; call with no keyword args
 	,(method-def-expr-
@@ -548,7 +551,7 @@
 			  ,@(if (null? restkw) '() '((cell1d)))
 			  ,@(map arg-name pargl)
 			  ,@(if (null? vararg) '()
-				(list `(... ,(arg-name (car vararg)))))))))
+				(list `(... ,(arg-name (car vararg)))))))) isstaged)
 
 	;; call with unsorted keyword args. this sorts and re-dispatches.
 	,(method-def-expr-
@@ -625,11 +628,12 @@
 			  ,@(if (null? restkw) '() (list rkw))
 			  ,@(map arg-name pargl)
 			  ,@(if (null? vararg) '()
-				(list `(... ,(arg-name (car vararg)))))))))
+				(list `(... ,(arg-name (car vararg))))))))
+        isstaged)
 	;; return primary function
 	,name))))
 
-(define (optional-positional-defs name sparams req opt dfl body overall-argl . kw)
+(define (optional-positional-defs name sparams req opt dfl body isstaged overall-argl . kw)
   (let ((lno  (if (and (pair? body) (pair? (cdr body))
 		       (pair? (cadr body)) (eq? (caadr body) 'line))
 		  (list (cadr body))
@@ -665,11 +669,11 @@
 			 `(block
 			   ,@lno
 			   (call ,name ,@kw ,@(map arg-name passed) ,@vals)))))
-	       (method-def-expr name sp (append kw passed) body)))
+	       (method-def-expr name sp (append kw passed) body isstaged)))
 	   (iota (length opt)))
-    ,(method-def-expr name sparams overall-argl body))))
+    ,(method-def-expr name sparams overall-argl body isstaged))))
 
-(define (method-def-expr name sparams argl body)
+(define (method-def-expr name sparams argl body isstaged)
   (if (any kwarg? argl)
       ;; has optional positional args
       (begin
@@ -694,20 +698,20 @@
 		 (check-kw-args (cdr kw))
 		 (receive
 		  (vararg req) (separate vararg? argl)
-		  (optional-positional-defs name sparams req opt dfl body
+		  (optional-positional-defs name sparams req opt dfl body isstaged
 					    (cons kw (append req opt vararg))
 					    `(parameters (... ,(gensy))))))
 	       ;; optional positional only
 	       (receive
 		(vararg req) (separate vararg? argl)
-		(optional-positional-defs name sparams req opt dfl body
+		(optional-positional-defs name sparams req opt dfl body isstaged
 					  (append req opt vararg)))))))
       (if (has-parameters? argl)
 	  ;; keywords only
 	  (begin (check-kw-args (cdar argl))
-		 (keywords-method-def-expr name sparams argl body))
+		 (keywords-method-def-expr name sparams argl body isstaged))
 	  ;; neither
-	  (method-def-expr- name sparams argl body))))
+	  (method-def-expr- name sparams argl body isstaged))))
 
 (define (struct-def-expr name params super fields mut)
   (receive
@@ -793,9 +797,15 @@
 	   (pattern-lambda (function (call (curly name . p) . sig) body)
 			   `(function (call (curly ,(if (eq? name Tname) iname name) ,@p) ,@sig)
 				      ,(ctor-body body)))
+       (pattern-lambda (stagedfunction (call (curly name . p) . sig) body)
+               `(stagedfunction (call (curly ,(if (eq? name Tname) iname name) ,@p) ,@sig)
+                      ,(ctor-body body)))
 	   (pattern-lambda (function (call name . sig) body)
 			   `(function (call ,(if (eq? name Tname) iname name) ,@sig)
 				      ,(ctor-body body)))
+       (pattern-lambda (stagedfunction (call name . sig) body)
+               `(stagedfunction (call ,(if (eq? name Tname) iname name) ,@sig)
+                      ,(ctor-body body)))
 	   (pattern-lambda (= (call (curly name . p) . sig) body)
 			   `(= (call (curly ,(if (eq? name Tname) iname name) ,@p) ,@sig)
 			       ,(ctor-body body)))
@@ -982,6 +992,7 @@
   (cond ((or (atom? e) (quoted? e)) e)
 	((or (eq? (car e) 'lambda)
 	     (eq? (car e) 'function)
+         (eq? (car e) 'stagedfunction)
 	     (eq? (car e) '->)) e)
 	((eq? (car e) 'return)
 	 `(block ,@(if ret `((= ,ret true)) '())
@@ -995,7 +1006,7 @@
    ((quoted? e) e)
    (else
     (case (car e)
-      ((function)
+      ((function stagedfunction)
        (let ((name (cadr e)))
 	 (if (pair? name)
 	     (if (eq? (car name) 'call)
@@ -1005,11 +1016,11 @@
 		      (method-def-expr (cadr (cadr name))
 				       (cddr (cadr name))
 				       (fix-arglist (cddr name))
-				       (caddr e))
+				       (caddr e) (eq? (car e) 'stagedfunction))
 		      (method-def-expr (cadr name)
 				       '()
 				       (fix-arglist (cddr name))
-				       (caddr e))))
+				       (caddr e) (eq? (car e) 'stagedfunction))))
 		 (if (eq? (car name) 'tuple)
 		     (expand-binding-forms
 		      `(-> ,name ,(caddr e)))
@@ -1443,7 +1454,9 @@
 				  "\" (expected assignment)"))))))))
 
 (define (lower-kw-call f kw pa)
-  (check-kw-args kw)
+  (if (any (lambda (x) (and (pair? x) (eq? (car x) 'parameters)))
+	   kw)
+      (error "more than one semicolon in argument list"))
   (receive
    (keys restkeys) (separate kwarg? kw)
    (let ((keyargs (apply append
@@ -1465,12 +1478,16 @@
 	     ,@(let ((k (gensy))
 		     (v (gensy)))
 		 (map (lambda (rk)
-			`(for (= (tuple ,k ,v) ,(cadr rk))
-			      (ccall 'jl_cell_1d_push2 Void
-				     (tuple Any Any Any)
-				     ,container
-				     (|::| ,k (top Symbol))
-				     ,v)))
+			(let ((push-expr `(ccall 'jl_cell_1d_push2 Void
+						 (tuple Any Any Any)
+						 ,container
+						 (|::| ,k (top Symbol))
+						 ,v)))
+			  (if (vararg? rk)
+			      `(for (= (tuple ,k ,v) ,(cadr rk))
+				    ,push-expr)
+			      `(block (= (tuple ,k ,v) ,rk)
+				      ,push-expr))))
 		      restkeys))
 	     (if (call (top isempty) ,container)
 		 (call ,f ,@pa)
@@ -1674,7 +1691,10 @@
 
    'ref
    (lambda (e)
-     (expand-forms (partially-expand-ref e)))
+     (let ((args (cddr e)))
+       (if (has-parameters? args)
+	 (error "unexpected semicolon in array expression")
+	 (expand-forms (partially-expand-ref e)))))
 
    'curly
    (lambda (e)
@@ -1689,9 +1709,9 @@
 		       (eq? (car (caddr e)) 'parameters))
 		  ;; (call f (parameters . kwargs) ...)
 		  (expand-forms
-		   (receive
-		    (kws args) (separate kwarg? (cdddr e))
-		    (lower-kw-call f (append kws (cdr (caddr e))) args))))
+		    (receive
+		      (kws args) (separate kwarg? (cdddr e))
+		      (lower-kw-call f (append kws (cdr (caddr e))) args))))
 		 ((any kwarg? (cddr e))
 		  ;; (call f ... (kw a b) ...)
 		  (expand-forms
@@ -1750,14 +1770,13 @@
 
    'dict
    (lambda (e)
+     ;; TODO: deprecate
      `(call (top Dict)
-	    (call (top tuple)
-		  ,.(map (lambda (x) (expand-forms (cadr  x))) (cdr e)))
-	    (call (top tuple)
-		  ,.(map (lambda (x) (expand-forms (caddr x))) (cdr e)))))
+	    ,.(map expand-forms (cdr e))))
 
    'typed_dict
    (lambda (e)
+     ;; TODO: deprecate
      (let ((atypes (cadr e))
 	   (args   (cddr e)))
        (if (and (length= atypes 3)
@@ -1765,16 +1784,18 @@
 	   `(call (call (top apply_type) (top Dict)
 			,(expand-forms (cadr atypes))
 			,(expand-forms (caddr atypes)))
-		  (call (top tuple)
-			,.(map (lambda (x) (expand-forms (cadr  x))) args))
-		  (call (top tuple)
-			,.(map (lambda (x) (expand-forms (caddr x))) args)))
+		  ,.(map expand-forms args))
 	   (error (string "invalid \"typed_dict\" syntax " (deparse atypes))))))
+
+   '=>
+   (lambda (e) `(call => ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
 
    'cell1d
    (lambda (e)
      (let ((args (cdr e)))
-       (cond ((any vararg? args)
+       (cond ((has-parameters? args)
+	      (error "unexpected semicolon in array expression"))
+	     ((any vararg? args)
 	      (expand-forms
 	       `(call (top cell_1d) ,@args)))
 	     (else
@@ -1893,20 +1914,22 @@
    'vcat
    (lambda (e)
      (let ((a (cdr e)))
-       (expand-forms
-	(if (any (lambda (x)
-		   (and (pair? x) (eq? (car x) 'row)))
-		 a)
-	    ;; convert nested hcat inside vcat to hvcat
-	    (let ((rows (map (lambda (x)
+       (if (has-parameters? a)
+	 (error "unexpected semicolon in array expression")
+         (expand-forms
+	   (if (any (lambda (x)
+		      (and (pair? x) (eq? (car x) 'row)))
+		    a)
+	     ;; convert nested hcat inside vcat to hvcat
+	     (let ((rows (map (lambda (x)
 			       (if (and (pair? x) (eq? (car x) 'row))
 				   (cdr x)
 				   (list x)))
 			     a)))
-	      `(call hvcat
-		     (tuple ,.(map length rows))
+	       `(call hvcat
+		   (tuple ,.(map length rows))
 		     ,.(apply nconc rows)))
-	    `(call vcat ,@a)))))
+	     `(call vcat ,@a))))))
 
    'typed_hcat
    (lambda (e)
@@ -2845,6 +2868,7 @@ So far only the second case can actually occur.
 (define (free-vars e)
   (table.keys (free-vars- e (table) *free-vars-secret-value*)))
 
+(define (caddddr x) (car (cdr (cdr (cdr (cdr x))))))
 ; convert each lambda's (locals ...) to
 ;   ((localvars...) var-info-lst captured-var-infos)
 ; where var-info-lst is a list of var-info records
@@ -2948,7 +2972,8 @@ So far only the second case can actually occur.
 		     (vinfo:set-iasg! vi #t)))))
 	 `(method ,(cadr e)
 		  ,(analyze-vars (caddr  e) env captvars)
-		  ,(analyze-vars (cadddr e) env captvars)))
+		  ,(analyze-vars (cadddr e) env captvars)
+          ,(caddddr e)))
 	(else (cons (car e)
 		    (map (lambda (x) (analyze-vars x env captvars))
 			 (cdr e)))))))

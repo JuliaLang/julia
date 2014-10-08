@@ -233,7 +233,7 @@ end
 
 # schedule an expression to run asynchronously, with minimal ceremony
 macro schedule(expr)
-    expr = localize_vars(:(()->($expr)), false)
+    expr = :(()->($expr))
     :(enq_work(Task($(esc(expr)))))
 end
 

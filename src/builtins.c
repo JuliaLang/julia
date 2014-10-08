@@ -427,30 +427,14 @@ JL_CALLABLE(jl_f_kwcall)
 
 extern int jl_lineno;
 
-JL_CALLABLE(jl_f_top_eval)
+DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
 {
-    jl_module_t *m;
-    jl_value_t *ex;
-    if (nargs == 1) {
+    if (m == NULL)
         m = jl_main_module;
-        ex = args[0];
-    }
-    else {
-        JL_NARGS(eval, 2, 2);
-        JL_TYPECHK(eval, module, args[0]);
-        m = (jl_module_t*)args[0];
-        ex = args[1];
-    }
-    if (jl_is_symbol(ex)) {
+    if (jl_is_symbol(ex))
         return jl_eval_global_var(m, (jl_sym_t*)ex);
-    }
     jl_value_t *v=NULL;
     int last_lineno = jl_lineno;
-    if (m == jl_current_module) {
-        v = jl_toplevel_eval(ex);
-        jl_lineno = last_lineno;
-        return v;
-    }
     jl_module_t *last_m = jl_current_module;
     jl_module_t *task_last_m = jl_current_task->current_module;
     JL_TRY {
@@ -468,6 +452,23 @@ JL_CALLABLE(jl_f_top_eval)
     jl_current_task->current_module = task_last_m;
     assert(v);
     return v;
+}
+
+JL_CALLABLE(jl_f_top_eval)
+{
+    jl_module_t *m;
+    jl_value_t *ex;
+    if (nargs == 1) {
+        m = jl_main_module;
+        ex = args[0];
+    }
+    else {
+        JL_NARGS(eval, 2, 2);
+        JL_TYPECHK(eval, module, args[0]);
+        m = (jl_module_t*)args[0];
+        ex = args[1];
+    }
+    return jl_toplevel_eval_in(m, ex);
 }
 
 JL_CALLABLE(jl_f_isdefined)
@@ -679,7 +680,7 @@ DLLEXPORT int jl_substrtod(char *str, size_t offset, int len, double *out)
     int err = 0;
     if (!(*pend == '\0' || isspace((unsigned char)*pend) || *pend == ',')) {
         // confusing data outside substring. must copy.
-        char *newstr = malloc(len+1);
+        char *newstr = (char*)malloc(len+1);
         memcpy(newstr, bstr, len);
         newstr[len] = 0;
         bstr = newstr;
@@ -724,7 +725,7 @@ DLLEXPORT int jl_substrtof(char *str, int offset, int len, float *out)
     int err = 0;
     if (!(*pend == '\0' || isspace((unsigned char)*pend) || *pend == ',')) {
         // confusing data outside substring. must copy.
-        char *newstr = malloc(len+1);
+        char *newstr = (char*)malloc(len+1);
         memcpy(newstr, bstr, len);
         newstr[len] = 0;
         bstr = newstr;
@@ -1083,9 +1084,9 @@ void jl_init_primitives(void)
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);
-    add_builtin("None", (jl_value_t*)jl_bottom_type);
-    add_builtin("Void", (jl_value_t*)jl_bottom_type);
     add_builtin("Top",  (jl_value_t*)jl_top_type);
+    add_builtin("Void", (jl_value_t*)jl_void_type);
+    add_builtin("nothing", (jl_value_t*)jl_nothing);
     add_builtin("TypeVar", (jl_value_t*)jl_tvar_type);
     add_builtin("TypeName", (jl_value_t*)jl_typename_type);
     add_builtin("TypeConstructor", (jl_value_t*)jl_typector_type);
@@ -1248,11 +1249,11 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
     else if (v == jl_false) {
         n += JL_PRINTF(out, "false");
     }
+    else if (v == jl_nothing) {
+        n += JL_PRINTF(out, "nothing");
+    }
     else if (jl_is_byte_string(v)) {
         n += JL_PRINTF(out, "\"%s\"", jl_iostr_data(v));
-    }
-    else if (v == jl_bottom_type) {
-        n += JL_PRINTF(out, "Void");
     }
     else if (jl_is_uniontype(v)) {
         n += JL_PRINTF(out, "Union");

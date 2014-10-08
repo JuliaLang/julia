@@ -14,7 +14,8 @@ import Base:
     AsyncStream,
     Display,
     display,
-    writemime
+    writemime,
+    AnyDict
 
 import ..LineEdit:
     CompletionProvider,
@@ -476,20 +477,25 @@ function history_move_prefix(s::LineEdit.MIState,
     pos = position(buf)
     prefix = bytestring_beforecursor(buf)
     allbuf = bytestring(buf)
-    idxs = backwards ? ((hist.cur_idx-1):-1:1) : ((hist.cur_idx+1):length(hist.history))
+    cur_idx = hist.cur_idx
+    # when searching forward, start at last_idx
+    if !backwards && hist.last_idx > 0
+        cur_idx = hist.last_idx
+    end
+    hist.last_idx = -1
+    idxs = backwards ? ((cur_idx-1):-1:1) : ((cur_idx+1):length(hist.history))
     for idx in idxs
         if beginswith(hist.history[idx], prefix) && hist.history[idx] != allbuf
             history_move(s, hist, idx)
             seek(LineEdit.buffer(s), pos)
             LineEdit.refresh_line(s)
-            return
+            return :ok
         end
     end
     Terminals.beep(LineEdit.terminal(s))
 end
 history_next_prefix(s::LineEdit.MIState, hist::REPLHistoryProvider) =
-    hist.cur_idx == length(hist.history) ?
-        history_next(s, hist) : history_move_prefix(s, hist, false)
+    history_move_prefix(s, hist, false)
 history_prev_prefix(s::LineEdit.MIState, hist::REPLHistoryProvider) =
     history_move_prefix(s, hist, true)
 
@@ -670,9 +676,9 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
 
     # Setup history
     # We will have a unified history for all REPL modes
-    hp = REPLHistoryProvider((Symbol=>Any)[:julia => julia_prompt,
-                                           :shell => shell_mode,
-                                           :help  => help_mode])
+    hp = REPLHistoryProvider(Dict{Symbol,Any}(:julia => julia_prompt,
+                                              :shell => shell_mode,
+                                              :help  => help_mode))
     if !repl.no_history_file
         try
             f = open(find_hist_file(), true, true, true, false, false)
@@ -699,8 +705,8 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
         extra_repl_keymap = [extra_repl_keymap]
     end
 
-    const repl_keymap = {
-        ';' => function (s)
+    const repl_keymap = AnyDict(
+        ';' => function (s,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
                 buf = copy(LineEdit.buffer(s))
                 transition(s, shell_mode)
@@ -710,7 +716,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
                 edit_insert(s, ';')
             end
         end,
-        '?' => function (s)
+        '?' => function (s,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
                 buf = copy(LineEdit.buffer(s))
                 transition(s, help_mode)
@@ -722,7 +728,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
         end,
 
         # Bracketed Paste Mode
-        "\e[200~" => s->begin
+        "\e[200~" => (s,o...)->begin
             ps = LineEdit.state(s, LineEdit.mode(s))
             input = readuntil(ps.terminal, "\e[201~")[1:(end-6)]
             input = replace(input, '\r', '\n')
@@ -770,15 +776,15 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
                 end
             end
         end,
-    }
+    )
 
-    a = Dict{Any,Any}[hkeymap, repl_keymap, LineEdit.history_keymap(hp), LineEdit.default_keymap, LineEdit.escape_defaults]
+    a = Dict{Any,Any}[hkeymap, repl_keymap, LineEdit.history_keymap, LineEdit.default_keymap, LineEdit.escape_defaults]
     prepend!(a, extra_repl_keymap)
 
-    julia_prompt.keymap_func = @eval @LineEdit.keymap $(a)
+    julia_prompt.keymap_func = LineEdit.keymap(a)
 
-    const mode_keymap = {
-        '\b' => function (s)
+    const mode_keymap = AnyDict(
+        '\b' => function (s,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
                 buf = copy(LineEdit.buffer(s))
                 transition(s, julia_prompt)
@@ -788,7 +794,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
                 LineEdit.edit_backspace(s)
             end
         end,
-        "^C" => function (s)
+        "^C" => function (s,o...)
             LineEdit.move_input_end(s)
             LineEdit.refresh_line(s)
             print(LineEdit.terminal(s), "^C\n\n")
@@ -796,11 +802,12 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
             transition(s, :reset)
             LineEdit.refresh_line(s)
         end
-    }
+    )
 
-    b = Dict{Any,Any}[hkeymap, mode_keymap, LineEdit.history_keymap(hp), LineEdit.default_keymap, LineEdit.escape_defaults]
+    b = Dict{Any,Any}[hkeymap, mode_keymap, LineEdit.history_keymap, LineEdit.default_keymap, LineEdit.escape_defaults]
+    prepend!(b, extra_repl_keymap)
 
-    shell_mode.keymap_func = help_mode.keymap_func = @eval @LineEdit.keymap $(b)
+    shell_mode.keymap_func = help_mode.keymap_func = LineEdit.keymap(b)
 
     ModalInterface([julia_prompt, shell_mode, help_mode,hkp])
 end

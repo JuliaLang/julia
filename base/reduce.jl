@@ -39,10 +39,26 @@ evaluate(f::Callable, x, y) = f(x, y)
 
 ###### Generic (map)reduce functions ######
 
+if Int === Int32
+typealias SmallSigned Union(Int8,Int16)
+typealias SmallUnsigned Union(Uint8,Uint16)
+else
+typealias SmallSigned Union(Int8,Int16,Int32)
+typealias SmallUnsigned Union(Uint8,Uint16,Uint32)
+end
+
+typealias CommonReduceResult Union(Uint64,Uint128,Int64,Int128,Float32,Float64)
+typealias WidenReduceResult Union(SmallSigned, SmallUnsigned, Float16)
+
 # r_promote: promote x to the type of reduce(op, [x])
+r_promote(op, x::WidenReduceResult) = widen(x)
 r_promote(op, x) = x
-r_promote(::AddFun, x) = x + zero(x)
-r_promote(::MulFun, x) = x * one(x)
+r_promote(::AddFun, x::WidenReduceResult) = widen(x)
+r_promote(::MulFun, x::WidenReduceResult) = widen(x)
+r_promote(::AddFun, x::Number) = x + zero(x)
+r_promote(::MulFun, x::Number) = x * one(x)
+r_promote(::AddFun, x) = x
+r_promote(::MulFun, x) = x
 
 
 ## foldl && mapfoldl
@@ -110,7 +126,7 @@ foldr(op, itr) = mapfoldr(IdFun(), op, itr)
 
 # mapreduce_***_impl require ifirst < ilast
 function mapreduce_seq_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int)
-    @inbounds fx1 = evaluate(f, A[ifirst])
+    @inbounds fx1 = r_promote(op, evaluate(f, A[ifirst]))
     @inbounds fx2 = evaluate(f, A[ifirst+=1])
     @inbounds v = evaluate(op, fx1, fx2)
     while ifirst < ilast
@@ -125,8 +141,8 @@ function mapreduce_pairwise_impl(f, op, A::AbstractArray, ifirst::Int, ilast::In
         return mapreduce_seq_impl(f, op, A, ifirst, ilast)
     else
         imid = (ifirst + ilast) >>> 1
-        v1 = mapreduce_seq_impl(f, op, A, ifirst, imid)
-        v2 = mapreduce_seq_impl(f, op, A, imid+1, ilast)
+        v1 = mapreduce_pairwise_impl(f, op, A, ifirst, imid, blksize)
+        v2 = mapreduce_pairwise_impl(f, op, A, imid+1, ilast, blksize)
         return evaluate(op, v1, v2)
     end
 end
@@ -155,8 +171,8 @@ function _mapreduce{T}(f, op, A::AbstractArray{T})
     elseif n == 1
         return r_promote(op, evaluate(f, A[1]))
     elseif n < 16
-        @inbounds fx1 = evaluate(f, A[1])
-        @inbounds fx2 = evaluate(f, A[2])
+        @inbounds fx1 = r_promote(op, evaluate(f, A[1]))
+        @inbounds fx2 = r_promote(op, evaluate(f, A[2]))
         s = evaluate(op, fx1, fx2)
         i = 2
         while i < n
@@ -190,38 +206,17 @@ reduce(op, a::Number) = a
 ## sum
 
 function mapreduce_seq_impl(f, op::AddFun, a::AbstractArray, ifirst::Int, ilast::Int)
-    @inbounds if ifirst + 6 >= ilast  # length(a) < 8
-        i = ifirst
-        s = evaluate(f, a[i]) + evaluate(f, a[i+1])
-        i = i+1
-        while i < ilast
-            s += evaluate(f, a[i+=1])
+    @inbounds begin
+        s = r_promote(op, evaluate(f, a[ifirst])) + evaluate(f, a[ifirst+1])
+        @simd for i = ifirst+2:ilast
+            s += evaluate(f, a[i])
         end
-        return s
-
-    else # length(a) >= 8, manual unrolling
-        s1 = evaluate(f, a[ifirst]) + evaluate(f, a[ifirst + 4])
-        s2 = evaluate(f, a[ifirst + 1]) + evaluate(f, a[ifirst + 5])
-        s3 = evaluate(f, a[ifirst + 2]) + evaluate(f, a[ifirst + 6])
-        s4 = evaluate(f, a[ifirst + 3]) + evaluate(f, a[ifirst + 7])
-        i = ifirst + 8
-        il = ilast - 3
-        while i <= il
-            s1 += evaluate(f, a[i])
-            s2 += evaluate(f, a[i+1])
-            s3 += evaluate(f, a[i+2])
-            s4 += evaluate(f, a[i+3])
-            i += 4
-        end
-        while i <= ilast
-            s1 += evaluate(f, a[i])
-            i += 1
-        end
-        return s1 + s2 + s3 + s4
-    end    
+    end
+    s
 end
 
-# Note: sum_seq uses four accumulators, so each accumulator gets at most 256 numbers
+# Note: sum_seq usually uses four or more accumulators after partial
+# unrolling, so each accumulator gets at most 256 numbers
 sum_pairwise_blocksize(f) = 1024
 
 # This appears to show a benefit from a larger block size
@@ -240,10 +235,10 @@ sumabs2(a) = mapreduce(Abs2Fun(), AddFun(), a)
 # of a considerable increase in computational expense.
 function sum_kbn{T<:FloatingPoint}(A::AbstractArray{T})
     n = length(A)
+    c = r_promote(AddFun(), zero(T)::T)
     if n == 0
-        return sumzero(T)
+        return c
     end
-    c = zero(T)
     s = A[1] + c
     for i in 2:n
         @inbounds Ai = A[i]
