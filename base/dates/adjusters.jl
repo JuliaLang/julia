@@ -107,13 +107,13 @@ function DateTime(func::Function,y,m,d,h,mi,s;step::Period=Millisecond(1),negate
 end
 
 # Return the next TimeType that falls on dow
-ISDAYOFWEEK = [Mon=>DateFunction(ismonday,false,Date(0)),
-               Tue=>DateFunction(istuesday,false,Date(0)),
-               Wed=>DateFunction(iswednesday,false,Date(0)),
-               Thu=>DateFunction(isthursday,false,Date(0)),
-               Fri=>DateFunction(isfriday,false,Date(0)),
-               Sat=>DateFunction(issaturday,false,Date(0)),
-               Sun=>DateFunction(issunday,false,Date(0))]
+ISDAYOFWEEK = Dict(Mon=>DateFunction(ismonday,false,Date(0)),
+                   Tue=>DateFunction(istuesday,false,Date(0)),
+                   Wed=>DateFunction(iswednesday,false,Date(0)),
+                   Thu=>DateFunction(isthursday,false,Date(0)),
+                   Fri=>DateFunction(isfriday,false,Date(0)),
+                   Sat=>DateFunction(issaturday,false,Date(0)),
+                   Sun=>DateFunction(issunday,false,Date(0)))
 
 # "same" indicates whether the current date can be considered or not
 tonext(dt::TimeType,dow::Int;same::Bool=false) = adjust(ISDAYOFWEEK[dow],same ? dt : dt+Day(1),Day(1),7)

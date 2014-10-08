@@ -5,25 +5,52 @@
 @test exponent(12.8) == 3
 
 # degree-based trig functions
-for T = (Float32,Float64)
+for T = (Float32,Float64,Rational{Int})
+    fT = typeof(float(one(T)))
     for x = -400:40:400
-        @test_approx_eq_eps sind(convert(T,x))::T convert(T,sin(pi/180*x)) eps(deg2rad(convert(T,x)))
-        @test_approx_eq_eps cosd(convert(T,x))::T convert(T,cos(pi/180*x)) eps(deg2rad(convert(T,x)))
+        @test_approx_eq_eps sind(convert(T,x))::fT convert(fT,sin(pi/180*x)) eps(deg2rad(convert(fT,x)))
+        @test_approx_eq_eps cosd(convert(T,x))::fT convert(fT,cos(pi/180*x)) eps(deg2rad(convert(fT,x)))
     end
-    for x = 0.0:180:720
-        @test sind(convert(T,x)) === zero(T)
-        @test sind(-convert(T,x)) === -zero(T)
-    end
+    
+    @test sind(convert(T,0.0))::fT === zero(fT)
+    @test sind(convert(T,180.0))::fT === zero(fT)
+    @test sind(convert(T,360.0))::fT === zero(fT)
+    T != Rational{Int} && @test sind(convert(T,-0.0))::fT === -zero(fT)
+    @test sind(convert(T,-180.0))::fT === -zero(fT)
+    @test sind(convert(T,-360.0))::fT === -zero(fT)
+
+    @test cosd(convert(T,90))::fT === zero(fT)
+    @test cosd(convert(T,270))::fT === zero(fT)
+    @test cosd(convert(T,-90))::fT === zero(fT)
+    @test cosd(convert(T,-270))::fT === zero(fT)
+
 
     for x = -3:0.3:3
-        @test_approx_eq_eps sinpi(convert(T,x))::T convert(T,sin(pi*x)) eps(pi*convert(T,x))
-        @test_approx_eq_eps cospi(convert(T,x))::T convert(T,cos(pi*x)) eps(pi*convert(T,x))
+        @test_approx_eq_eps sinpi(convert(T,x))::fT convert(fT,sin(pi*x)) eps(pi*convert(fT,x))
+        @test_approx_eq_eps cospi(convert(T,x))::fT convert(fT,cos(pi*x)) eps(pi*convert(fT,x))
     end
-    for x = 0.0:1.0:4.0
-        @test sinpi(convert(T,x)) === zero(T)
-        @test sinpi(-convert(T,x)) === -zero(T)
-    end
+
+    @test sinpi(convert(T,0.0))::fT === zero(fT)
+    @test sinpi(convert(T,1.0))::fT === zero(fT)
+    @test sinpi(convert(T,2.0))::fT === zero(fT)
+    T != Rational{Int} && @test sinpi(convert(T,-0.0))::fT === -zero(fT)
+    @test sinpi(convert(T,-1.0))::fT === -zero(fT)
+    @test sinpi(convert(T,-2.0))::fT === -zero(fT)
+
+    @test cospi(convert(T,0.5))::fT === zero(fT)
+    @test cospi(convert(T,1.5))::fT === zero(fT)
+    @test cospi(convert(T,-0.5))::fT === zero(fT)
+    @test cospi(convert(T,-1.5))::fT === zero(fT)
+
+    # check exact values
+    @test sind(convert(T,30)) == 0.5
+    @test cosd(convert(T,60)) == 0.5
+    @test sind(convert(T,150)) == 0.5
+    @test sinpi(one(T)/convert(T,6)) == 0.5
+    T != Float32 && @test cospi(one(T)/convert(T,3)) == 0.5
+    T == Rational{Int} && @test sinpi(5//6) == 0.5
 end
+
 
 # check type stability
 for T = (Float32,Float64,BigFloat)

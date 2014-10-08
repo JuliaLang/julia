@@ -22,18 +22,18 @@ extern "C" DLLEXPORT void jl_read_sonames(void)
         if (n == -1)
             break;
         if (n > 2 && isspace((unsigned char)line[0])) {
-            int i=0;
 #ifdef __linux__
+            int i = 0;
             while (isspace((unsigned char)line[++i])) ;
             char *name = &line[i];
             char *dot = strstr(name, ".so");
+            i = 0;
 #else
             char *name = strstr(line, ":-l");
             if (name == NULL) continue;
             strncpy(name, "lib", 3);
             char *dot = strchr(name, '.');
 #endif
-            i=0;
 
             if (NULL == dot)
                 continue;
@@ -302,8 +302,10 @@ extern "C" DLLEXPORT void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, in
         return jl_string_data(v);
     }
     if (jl_is_array_type(jvt)) {
-        if (jl_tparam0(jl_typeof(v)) == jt || jt==(jl_value_t*)jl_bottom_type)
+        if (jl_tparam0(jl_typeof(v)) == jt || jt == (jl_value_t*)jl_bottom_type ||
+            jt == (jl_value_t*)jl_void_type) {
             return ((jl_array_t*)v)->data;
+        }
         if (jl_is_cpointer_type(jt)) {
             jl_array_t *ar = (jl_array_t*)v;
             void **temp=(void**)alloc_temp_arg_space((1+jl_array_len(ar))*sizeof(void*));
@@ -375,8 +377,8 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
         assert(ty->isPointerTy());
         jl_value_t *aty = expr_type(argex, ctx);
         if (jl_is_array_type(aty) &&
-            (jl_tparam0(jt) == jl_tparam0(aty) ||
-             jl_tparam0(jt) == (jl_value_t*)jl_bottom_type)) {
+            (jl_tparam0(jt) == jl_tparam0(aty) || jl_tparam0(jt) == (jl_value_t*)jl_bottom_type ||
+             jl_tparam0(jt) == (jl_value_t*)jl_void_type)) {
             // array to pointer
             return builder.CreateBitCast(emit_arrayptr(jv), ty);
         }
@@ -649,7 +651,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     jl_value_t *rtt = rt;
 
     size_t nargt = jl_tuple_len(tt);
-    Value *argvals[nargt];
+    Value **argvals = (Value**) alloca(nargt*sizeof(Value*));
     std::vector<llvm::Type*> argtypes;
     /*
      * Semantics for arguments are as follows:
@@ -701,13 +703,13 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             std::stringstream name;
             name << (ctx->f->getName().str()) << i++;
             ir_name = name.str();
-            if(jl_Module->getFunction(ir_name) == NULL)
+            if (jl_Module->getFunction(ir_name) == NULL)
                 break;
         }
 
         bool first = true;
         for (std::vector<Type *>::iterator it = argtypes.begin(); it != argtypes.end(); ++it) {
-            if(!first)
+            if (!first)
                 argstream << ",";
             else 
                 first = false;
@@ -739,7 +741,8 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             jl_error(stream.str().c_str());
         }
         f = m->getFunction(ir_name);
-    } else {
+    }
+    else {
         assert(isPtr);
         // Create Function skeleton
         f = (llvm::Function*)jl_unbox_voidpointer(ir);
@@ -786,8 +789,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
     JL_GC_POP();
 
-    if(inst->getType() != rettype)
-    {
+    if (inst->getType() != rettype) {
         jl_error("Return type of llvmcall'ed function does not match declared return type");
     }
 

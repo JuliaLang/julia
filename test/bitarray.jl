@@ -39,7 +39,7 @@ allsizes = [((), BitArray{0}), ((v1,), BitVector),
 ## Conversions ##
 
 for (sz,T) in allsizes
-    b1 = randbool!(falses(sz...))
+    b1 = rand!(falses(sz...))
     @test isequal(bitpack(bitunpack(b1)), b1)
     @test isequal(convert(Array{Float64,ndims(b1)}, b1),
                   convert(Array{Float64,ndims(b1)}, bitunpack(b1)))
@@ -62,7 +62,7 @@ for (sz,T) in allsizes
     @test isequal(bitunpack(trues(sz...)), ones(Bool, sz...))
     @test isequal(bitunpack(falses(sz...)), zeros(Bool, sz...))
 
-    b1 = randbool!(falses(sz...))
+    b1 = rand!(falses(sz...))
     @test isa(b1, T)
 
     @check_bit_operation length(b1) Int
@@ -79,7 +79,7 @@ timesofar("utils")
 
 # 0d
 for (sz,T) in allsizes
-    b1 = randbool!(falses(sz...))
+    b1 = rand!(falses(sz...))
     @check_bit_operation getindex(b1)         Bool
     @check_bit_operation setindex!(b1, true)  T
     @check_bit_operation setindex!(b1, false) T
@@ -89,7 +89,7 @@ end
 # linear
 for (sz,T) in allsizes[2:end]
     l = *(sz...)
-    b1 = randbool!(falses(sz...))
+    b1 = rand!(falses(sz...))
     for j = 1:l
         @check_bit_operation getindex(b1, j) Bool
     end
@@ -478,6 +478,20 @@ for m1 = 1 : v1 + 1
             i = splice!(i2, m1:m2, i3)
             @test isequal(bitunpack(b2), i2)
             @test b == i
+            b2 = copy(b1)
+            i2 = copy(i1)
+            i3 = int(randbool(v2))
+            b = splice!(b2, m1:m2, i3)
+            i = splice!(i2, m1:m2, i3)
+            @test isequal(bitunpack(b2), i2)
+            @test b == i
+            b2 = copy(b1)
+            i2 = copy(i1)
+            i3 = [j => rand(0:3) for j = 1:v2]
+            b = splice!(b2, m1:m2, values(i3))
+            i = splice!(i2, m1:m2, values(i3))
+            @test isequal(bitunpack(b2), i2)
+            @test b == i
         end
     end
 end
@@ -492,6 +506,20 @@ for m1 = 1 : v1
         i3 = bitunpack(b3)
         b = splice!(b2, m1, b3)
         i = splice!(i2, m1, i3)
+        @test isequal(bitunpack(b2), i2)
+        @test b == i
+        b2 = copy(b1)
+        i2 = copy(i1)
+        i3 = int(randbool(v2))
+        b = splice!(b2, m1:m2, i3)
+        i = splice!(i2, m1:m2, i3)
+        @test isequal(bitunpack(b2), i2)
+        @test b == i
+        b2 = copy(b1)
+        i2 = copy(i1)
+        i3 = [j => rand(0:3) for j = 1:v2]
+        b = splice!(b2, m1:m2, values(i3))
+        i = splice!(i2, m1:m2, values(i3))
         @test isequal(bitunpack(b2), i2)
         @test b == i
     end

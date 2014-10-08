@@ -33,7 +33,7 @@ else
        $(warn "Submodules could not be updated because git is unavailable")
 endif
 
-debug release: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test $(build_datarootdir)/julia/doc $(build_datarootdir)/julia/examples $(build_sysconfdir)/julia/juliarc.jl
+debug release: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test $(build_datarootdir)/julia/doc $(build_datarootdir)/julia/examples $(build_sysconfdir)/julia/juliarc.jl $(build_datarootdir)/man/man1/julia.1
 	@$(MAKE) $(QUIET_MAKE) julia-$@
 	@export private_libdir=$(private_libdir) && \
 	$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(build_libdir):$(LD_LIBRARY_PATH) JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$@)" $(build_private_libdir)/sys.$(SHLIB_EXT)
@@ -111,23 +111,30 @@ endif
 # use sys.ji if it exists, otherwise run two stages
 $(build_private_libdir)/sys%ji: $(build_private_libdir)/sys%o
 
-.PRECIOUS: $(build_private_libdir)/sys%o
+.SECONDARY: $(build_private_libdir)/sys.o
+.SECONDARY: $(build_private_libdir)/sys0.o
 
 $(build_private_libdir)/sys%$(SHLIB_EXT): $(build_private_libdir)/sys%o
+ifneq ($(USEMSVC), 1)
 	$(CXX) -shared -fPIC -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ $< \
-		$$([ $(OS) = Darwin ] && echo -Wl,-undefined,dynamic_lookup || echo -Wl,--unresolved-symbols,ignore-all ) \
-		$$([ $(OS) = WINNT ] && echo -ljulia -lssp)
+		$$([ $(OS) = Darwin ] && echo '' -Wl,-undefined,dynamic_lookup || echo '' -Wl,--unresolved-symbols,ignore-all ) \
+		$$([ $(OS) = WINNT ] && echo '' -ljulia -lssp)
 	$(DSYMUTIL) $@
+else
+	@true
+endif
 
 $(build_private_libdir)/sys0.o:
 	@$(QUIET_JULIA) cd base && \
 	$(call spawn,$(JULIA_EXECUTABLE)) --build $(call cygpath_w,$(build_private_libdir)/sys0) sysimg.jl
 
-$(build_private_libdir)/sys.o: VERSION base/*.jl base/pkg/*.jl base/linalg/*.jl base/sparse/*.jl $(build_datarootdir)/julia/helpdb.jl $(build_datarootdir)/man/man1/julia.1 $(build_private_libdir)/sys0.$(SHLIB_EXT)
+BASE_SRCS := $(wildcard base/*.jl base/*/*.jl base/*/*/*.jl)
+
+$(build_private_libdir)/sys.o: VERSION $(BASE_SRCS) $(build_datarootdir)/julia/helpdb.jl $(build_private_libdir)/sys0.$(SHLIB_EXT)
 	@$(QUIET_JULIA) cd base && \
 	$(call spawn,$(JULIA_EXECUTABLE)) --build $(call cygpath_w,$(build_private_libdir)/sys) \
 		-J$(call cygpath_w,$(build_private_libdir))/$$([ -e $(build_private_libdir)/sys.ji ] && echo sys.ji || echo sys0.ji) -f sysimg.jl \
-		|| (echo "*** This error is usually fixed by running 'make clean'. If the error persists, try 'make cleanall'. ***" && false)
+		|| { echo "*** This error is usually fixed by running 'make clean'. If the error persists, try 'make cleanall'. ***" && false; }
 
 run-julia-debug run-julia-release: run-julia-%:
 	$(MAKE) $(QUIET_MAKE) run-julia JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$*)"
@@ -136,7 +143,7 @@ run-julia:
 run:
 	@$(call spawn,$(cmd))
 
-$(build_bindir)/stringreplace: $(build_bindir) contrib/stringreplace.c
+$(build_bindir)/stringreplace: contrib/stringreplace.c | $(build_bindir)
 	@$(call PRINT_CC, $(CC) -o $(build_bindir)/stringreplace contrib/stringreplace.c)
 
 
@@ -177,7 +184,7 @@ ifeq ($(USE_SYSTEM_ARPACK),0)
 JL_PRIVATE_LIBS += arpack
 endif
 ifeq ($(USE_SYSTEM_SUITESPARSE),0)
-JL_PRIVATE_LIBS += amd camd ccolamd cholmod colamd umfpack spqr
+JL_PRIVATE_LIBS += amd camd ccolamd cholmod colamd umfpack spqr suitesparseconfig
 endif
 ifeq ($(OS),Darwin)
 ifeq ($(USE_SYSTEM_BLAS),1)
@@ -209,7 +216,6 @@ endif
 $(eval $(call std_dll,ssp-0))
 endif
 
-prefix ?= $(abspath julia-$(JULIA_COMMIT))
 install: $(build_bindir)/stringreplace
 	@$(MAKE) $(QUIET_MAKE) release
 	@$(MAKE) $(QUIET_MAKE) debug
@@ -255,8 +261,18 @@ endif
 	-rm -f $(DESTDIR)$(datarootdir)/julia/doc/juliadoc/.gitignore
 	# Copy in beautiful new man page!
 	$(INSTALL_F) $(build_datarootdir)/man/man1/julia.1 $(DESTDIR)$(datarootdir)/man/man1/
+	# Copy icon and .desktop file
+	mkdir -p $(DESTDIR)$(datarootdir)/icons/hicolor/scalable/apps/
+	$(INSTALL_F) contrib/julia.svg $(DESTDIR)$(datarootdir)/icons/hicolor/scalable/apps/
+	-touch --no-create $(DESTDIR)$(datarootdir)/icons/hicolor/
+	-gtk-update-icon-cache $(DESTDIR)$(datarootdir)/icons/hicolor/
+	mkdir -p $(DESTDIR)$(datarootdir)/applications/
+	$(INSTALL_F) contrib/julia.desktop $(DESTDIR)$(datarootdir)/applications/
+	# Install appdata file
+	mkdir -p $(DESTDIR)$(datarootdir)/appdata/
+	$(INSTALL_F) contrib/julia.appdata.xml $(DESTDIR)$(datarootdir)/appdata/
 
-	# Update RPATH entries of Julia if $(private_libdir_rel) != $(build_private_libdir_rel)
+	# Update RPATH entries and JL_SYSTEM_IMAGE_PATH if $(private_libdir_rel) != $(build_private_libdir_rel)
 ifneq ($(private_libdir_rel),$(build_private_libdir_rel))
 ifeq ($(OS), Darwin)
 	for julia in $(DESTDIR)$(bindir)/julia* ; do \
@@ -268,12 +284,12 @@ else ifeq ($(OS), Linux)
 		patchelf --set-rpath '$$ORIGIN/$(private_libdir_rel):$$ORIGIN/$(libdir_rel)' $$julia; \
 	done
 endif
-endif
 
-	# Overwrite JL_SYSTEM_IMAGE_PATH in julia binaries:
+	# Overwrite JL_SYSTEM_IMAGE_PATH in julia binaries
 	for julia in $(DESTDIR)$(bindir)/julia* ; do \
 		$(call spawn,$(build_bindir)/stringreplace $$(strings -t x - $$julia | grep "sys.ji$$" | awk '{print $$1;}' ) "$(private_libdir_rel)/sys.ji" 256 $(call cygpath_w,$$julia)); \
 	done
+endif
 
 	mkdir -p $(DESTDIR)$(sysconfdir)
 	cp -R $(build_sysconfdir)/julia $(DESTDIR)$(sysconfdir)/
@@ -296,8 +312,8 @@ ifneq ($(DESTDIR),)
 endif
 	@$(MAKE) install
 	cp LICENSE.md $(prefix)
-ifeq ($(OS), Darwin)
-	-./contrib/mac/fixup-libgfortran.sh $(DESTDIR)$(private_libdir)
+ifneq ($(OS), WINNT)
+	-./contrib/fixup-libgfortran.sh $(DESTDIR)$(private_libdir)
 endif
 	# Copy in juliarc.jl files per-platform for binary distributions as well
 	# Note that we don't install to sysconfdir: we always install to $(DESTDIR)$(prefix)/etc.

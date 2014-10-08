@@ -180,6 +180,18 @@ debug && println("Schur")
         @test istriu(f[:Schur]) || iseltype(a,Real)
     end
 
+debug && println("Reorder Schur")
+    if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
+        # use asym for real schur to enforce tridiag structure
+        # avoiding partly selection of conj. eigenvalues
+        ordschura = eltya <: Complex ? a : asym
+        S = schurfact(ordschura)
+        select = rand(range(0,2), n)
+        O = ordschur(S, select)
+        bool(sum(select)) && @test_approx_eq S[:values][find(select)] O[:values][1:sum(select)]
+        @test_approx_eq O[:vectors]*O[:Schur]*O[:vectors]' ordschura
+    end
+
 debug && println("Generalized Schur")
     if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
         f = schurfact(a[1:5,1:5], a[6:10,6:10])

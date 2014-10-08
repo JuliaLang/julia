@@ -14,7 +14,7 @@ type Regex
 
     function Regex(pattern::String, options::Integer)
         pattern = bytestring(pattern)
-        options = uint32(options)
+        options = int32(options)
         if (options & ~PCRE.OPTIONS_MASK) != 0
             error("invalid regex options: $options")
         end
@@ -80,7 +80,7 @@ end
 
 immutable RegexMatch
     match::SubString{UTF8String}
-    captures::Vector{Union(Nothing,SubString{UTF8String})}
+    captures::Vector{Union(Void,SubString{UTF8String})}
     offset::Int
     offsets::Vector{Int}
 end
@@ -121,7 +121,7 @@ function match(re::Regex, str::UTF8String, idx::Integer, add_opts::Uint32=uint32
     end
     n = length(re.ovec)/3 - 1
     mat = SubString(str, re.ovec[1]+1, re.ovec[2])
-    cap = Union(Nothing,SubString{UTF8String})[
+    cap = Union(Void,SubString{UTF8String})[
             re.ovec[2i+1] < 0 ? nothing : SubString(str, re.ovec[2i+1]+1, re.ovec[2i+2]) for i=1:n ]
     off = Int[ re.ovec[2i+1]::Int32+1 for i=1:n ]
     RegexMatch(mat, cap, re.ovec[1]+1, off)

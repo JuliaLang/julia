@@ -22,6 +22,14 @@ b = a+a
 @test isequal(1./[1,2,5], [1.0,0.5,0.2])
 @test isequal([1,2,3]/5, [0.2,0.4,0.6])
 
+@test isequal(1.<<[1,2,5], [2,4,32])
+@test isequal(128.>>[1,2,5], [64,32,4])
+@test isequal(2.>>1, 1)
+@test isequal(1.<<1, 2)
+@test isequal([1,2,5].<<[1,2,5], [2,8,160])
+@test isequal([10,20,50].>>[1,2,5], [5,5,1])
+
+
 a = ones(2,2)
 a[1,1] = 1
 a[1,2] = 2
@@ -667,6 +675,7 @@ begin
 
     # other types than Number
     @test mapslices(prod,["1" "2"; "3" "4"],1) == ["13" "24"]
+    @test mapslices(prod,["1"],1) == ["1"]
 
     # issue #5177
 
@@ -873,7 +882,7 @@ let
 end
 
 # issue #6977
-@test []' == Array(None,1,0)
+@test size([]') == (1,0)
 
 # issue #6996
 @test { 1 2; 3 4 }' == { 1 2; 3 4 }.'

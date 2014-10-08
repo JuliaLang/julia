@@ -61,8 +61,10 @@ export
     MathConst,
     Matrix,
     MergeSort,
+    Nullable,
     ObjectIdDict,
     OrdinalRange,
+    Pair,
     PollingFileWatcher,
     ProcessGroup,
     QuickSort,
@@ -119,6 +121,7 @@ export
     Cdouble,
     Cfloat,
     Cint,
+    Cintmax_t,
     Clong,
     Clonglong,
     Coff_t,
@@ -128,12 +131,11 @@ export
     Cssize_t,
     Cuchar,
     Cuint,
+    Cuintmax_t,
     Culong,
     Culonglong,
     Cushort,
     Cwchar_t,
-    #Ccomplex_float,
-    #Ccomplex_double,
 
 # Exceptions
     ArgumentError,
@@ -143,6 +145,7 @@ export
     KeyError,
     LoadError,
     MethodError,
+    NullException,
     ParseError,
     ProcessExitedException,
     SystemError,
@@ -195,7 +198,7 @@ export
     ≠,
     !==,
     ≡,
-    ≢, 
+    ≢,
     $,
     %,
     &,
@@ -239,6 +242,7 @@ export
     ~,
     :,
     ÷,
+    =>,
     A_ldiv_B!,
     A_ldiv_Bc,
     A_ldiv_Bt,
@@ -298,6 +302,7 @@ export
     ceil,
     cis,
     clamp,
+    cld,
     cmp,
     combinations,
     complex,
@@ -663,6 +668,8 @@ export
     lyap,
     norm,
     null,
+    ordschur!,
+    ordschur,
     peakflops,
     pinv,
     qr,
@@ -823,12 +830,12 @@ export
     isalnum,
     isalpha,
     isascii,
-    isblank,
     iscntrl,
     isdigit,
     isgraph,
     islower,
     ismatch,
+    isnumber,
     isprint,
     ispunct,
     isspace,
@@ -892,7 +899,6 @@ export
     MersenneTwister,
     rand!,
     rand,
-    randbool!,
     randbool,
     randn!,
     randn,
@@ -962,7 +968,7 @@ export
     rfft,
     xcorr,
 
-#   numerical integration
+# numerical integration
     quadgk,
 
 # iteration
@@ -1008,7 +1014,7 @@ export
     toc,
     toq,
 
-#dates
+# dates
     Date,
     DateTime,
     now,
@@ -1181,6 +1187,8 @@ export
     fetch,
     interrupt,
     isready,
+    launch,
+    manage,
     myid,
     nprocs,
     nworkers,
@@ -1227,7 +1235,7 @@ export
 # shared arrays
     sdata,
     indexpids,
-    
+
 # paths and file names
     abspath,
     basename,
@@ -1321,6 +1329,9 @@ export
     unsafe_pointer_to_objref,
     unsafe_store!,
 
+# nullable types
+    isnull,
+
 # Macros
     @__FILE__,
     @b_str,
@@ -1379,4 +1390,5 @@ export
     @inbounds,
     @simd,
     @label,
-    @goto
+    @goto,
+    @inline

@@ -609,7 +609,7 @@ versions of the outer function for different element types of
     end
 
 This works fine for ``Vector{T}``, but we'd also have to write
-explicit versions for ``Range1{T}`` or other abstract types. To
+explicit versions for ``UnitRange{T}`` or other abstract types. To
 prevent such tedium, you can use two parameters in the declaration of
 ``MyContainer``::
 
@@ -621,7 +621,7 @@ prevent such tedium, you can use two parameters in the declaration of
     julia> b = MyContainer(1.3:5);
 
     julia> typeof(b)
-    MyContainer{Float64,Range1{Float64}}
+    MyContainer{Float64,UnitRange{Float64}}
 
 Note the somewhat surprising fact that ``T`` doesn't appear in the
 declaration of field ``a``, a point that we'll return to in a moment.
@@ -659,10 +659,10 @@ However, there's one remaining hole: we haven't enforced that ``A``
 has element type ``T``, so it's perfectly possible to construct an
 object like this::
 
-  julia> b = MyContainer{Int64, Range1{Float64}}(1.3:5);
+  julia> b = MyContainer{Int64, UnitRange{Float64}}(1.3:5);
 
   julia> typeof(b)
-  MyContainer{Int64,Range1{Float64}}
+  MyContainer{Int64,UnitRange{Float64}}
 
 To prevent this, we can add an inner constructor::
 
@@ -677,10 +677,10 @@ To prevent this, we can add an inner constructor::
     julia> b = MyBetterContainer(1.3:5);
 
     julia> typeof(b)
-    MyBetterContainer{Float64,Range1{Float64}}
+    MyBetterContainer{Float64,UnitRange{Float64}}
 
-    julia> b = MyBetterContainer{Int64, Range1{Float64}}(1.3:5);
-    ERROR: no method MyBetterContainer(Range1{Float64},)
+    julia> b = MyBetterContainer{Int64, UnitRange{Float64}}(1.3:5);
+    ERROR: no method MyBetterContainer(UnitRange{Float64},)
 
 The inner constructor requires that the element type of ``A`` be ``T``.
 
@@ -697,21 +697,23 @@ situation can be detected using the ``isdefined`` function.
 
 Some functions are used only for their side effects, and do not need to
 return a value. In these cases, the convention is to return the value
-``nothing``, which is just a singleton object of type ``Nothing``. This
+``nothing``, which is just a singleton object of type ``Void``. This
 is an ordinary type with no fields; there is nothing special about it
 except for this convention, and that the REPL does not print anything
 for it. Some language constructs that would not otherwise have a value
 also yield ``nothing``, for example ``if false; end``.
 
-Note that ``Nothing`` (uppercase) is the type of ``nothing``, and should
-only be used in a context where a type is required (e.g. a declaration).
-
-You may occasionally see ``None``, which is quite different. It is the
-empty (or "bottom") type, a type with no values and no subtypes (except
-itself). You will generally not need to use this type.
+For situations where a value exists only sometimes (for example, missing
+statistical data), it is best to use the ``Nullable{T}`` type, which allows
+specifying the type of a missing value.
 
 The empty tuple (``()``) is another form of nothingness. But, it should not
 really be thought of as nothing but rather a tuple of zero values.
+
+In code written for Julia prior to version 0.4 you may occasionally see ``None``,
+which is quite different. It is the empty (or "bottom") type, a type with no values
+and no subtypes (except itself). This is now written as ``Union()`` (an empty union
+type). You will generally not need to use this type.
 
 Julia Releases
 ----------------
@@ -721,7 +723,7 @@ Do I want to use a release, beta, or nightly version of Julia?
 
 You may prefer the release version of Julia if you are looking for a stable code base. Releases generally occur every 6 months, giving you a stable platform for writing code.
 
-You may prefer the beta version of Julia if you don't mind being slightly behind the latest bugfixes and changes, but find the slightly slower rate of changes more appealing. Additionally, these binaries are tested before they are published to ensure they are fully functional.
+You may prefer the beta version of Julia if you don't mind being slightly behind the latest bugfixes and changes, but find the slightly faster rate of changes more appealing. Additionally, these binaries are tested before they are published to ensure they are fully functional.
 
 You may prefer the nightly version of Julia if you want to take advantage of the latest updates to the language, and don't mind if the version available today occasionally doesn't actually work.
 

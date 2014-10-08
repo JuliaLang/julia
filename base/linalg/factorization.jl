@@ -659,6 +659,11 @@ function schur(A::AbstractMatrix)
     SchurF[:T], SchurF[:Z], SchurF[:values]
 end
 
+ordschur!{Ty<:BlasFloat}(Q::StridedMatrix{Ty}, T::StridedMatrix{Ty}, select::Array{Int}) = Schur(LinAlg.LAPACK.trsen!(select, T , Q)...)
+ordschur{Ty<:BlasFloat}(Q::StridedMatrix{Ty}, T::StridedMatrix{Ty}, select::Array{Int}) = ordschur!(copy(Q), copy(T), select)
+ordschur!{Ty<:BlasFloat}(schur::Schur{Ty}, select::Array{Int}) = (res=ordschur!(schur.Z, schur.T, select); schur[:values][:]=res[:values]; res)
+ordschur{Ty<:BlasFloat}(schur::Schur{Ty}, select::Array{Int}) = ordschur(schur.Z, schur.T, select)
+
 immutable GeneralizedSchur{Ty<:BlasFloat} <: Factorization{Ty}
     S::Matrix{Ty}
     T::Matrix{Ty}

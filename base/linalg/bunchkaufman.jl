@@ -11,12 +11,12 @@ end
 
 function bkfact!{T<:BlasReal}(A::StridedMatrix{T}, uplo::Symbol=:U, symmetric::Bool=issym(A))
     symmetric || error("The Bunch-Kaufman decomposition is only valid for symmetric matrices")
-    LD, ipiv = LAPACK.sytrf!(string(uplo)[1] , A)
-    BunchKaufman(LD, ipiv, string(uplo)[1], symmetric)
+    LD, ipiv = LAPACK.sytrf!(char_uplo(uplo) , A)
+    BunchKaufman(LD, ipiv, char_uplo(uplo), symmetric)
 end
 function bkfact!{T<:BlasComplex}(A::StridedMatrix{T}, uplo::Symbol=:U, symmetric::Bool=issym(A))
-    LD, ipiv = (symmetric ? LAPACK.sytrf! : LAPACK.hetrf!)(string(uplo)[1] , A)
-    BunchKaufman(LD, ipiv, string(uplo)[1], symmetric)
+    LD, ipiv = (symmetric ? LAPACK.sytrf! : LAPACK.hetrf!)(char_uplo(uplo) , A)
+    BunchKaufman(LD, ipiv, char_uplo(uplo), symmetric)
 end
 bkfact{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U, symmetric::Bool=issym(A)) = bkfact!(copy(A), uplo, symmetric)
 bkfact{T}(A::StridedMatrix{T}, uplo::Symbol=:U, symmetric::Bool=issym(A)) = bkfact!(convert(Matrix{promote_type(Float32,typeof(sqrt(one(T))))},A),uplo,symmetric)

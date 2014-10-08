@@ -193,7 +193,13 @@ char *jl_dlfind_win32(char *f_name)
     if (jl_dlsym_e(jl_ntdll_handle, f_name))
         return "ntdll";
     if (jl_dlsym_e(jl_crtdll_handle, f_name))
+#if _MSC_VER == 1800
+        return "msvcr120";
+#elif defined(_MSC_VER)
+#error This version of MSVC has not been tested.
+#else
         return "msvcrt";
+#endif
     if (jl_dlsym(jl_winsock_handle, f_name))
         return "ws2_32";
     // additional common libraries (libc?) could be added here, but in general,

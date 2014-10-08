@@ -65,32 +65,32 @@ Elementary operations
 | Matrix type        | ``+`` | ``-`` | ``*`` | ``\`` | Other functions with|
 |                    |       |       |       |       | optimized methods   |
 +--------------------+-------+-------+-------+-------+---------------------+
-| ``Hermitian``      |       |       |       |   XY  | ``inv``,            |
+| ``Hermitian``      |       |       |       |   MV  | ``inv``,            |
 |                    |       |       |       |       | ``sqrtm``, ``expm`` |
 +--------------------+-------+-------+-------+-------+---------------------+
-| ``Triangular``     |       |       |  XY   |   XY  | ``inv``, ``det``    |
+| ``Triangular``     |       |       |  MV   |   MV  | ``inv``, ``det``    |
 +--------------------+-------+-------+-------+-------+---------------------+
-| ``SymTridiagonal`` |   X   |   X   |  XZ   |   XY  | ``eigmax/min``      |
+| ``SymTridiagonal`` |   M   |   M   |  MS   |   MV  | ``eigmax/min``      |
 +--------------------+-------+-------+-------+-------+---------------------+
-| ``Tridiagonal``    |   X   |   X   |  XZ   |   XY  |                     |
+| ``Tridiagonal``    |   M   |   M   |  MS   |   MV  |                     |
 +--------------------+-------+-------+-------+-------+---------------------+
-| ``Bidiagonal``     |   X   |   X   |  XZ   |   XY  |                     |
+| ``Bidiagonal``     |   M   |   M   |  MS   |   MV  |                     |
 +--------------------+-------+-------+-------+-------+---------------------+
-| ``Diagonal``       |   X   |   X   |  XY   |   XY  | ``inv``, ``det``,   |
+| ``Diagonal``       |   M   |   M   |  MV   |   MV  | ``inv``, ``det``,   |
 |                    |       |       |       |       | ``logdet``, ``/``   |
 +--------------------+-------+-------+-------+-------+---------------------+
-| ``UniformScaling`` |   X   |   X   |  XYZ  |  XYZ  | ``/``               |
+| ``UniformScaling`` |   M   |   M   |  MVS  |  MVS  | ``/``               |
 +--------------------+-------+-------+-------+-------+---------------------+
 
 Legend:
 
-+---+---------------------------------------------------------------+
-| X | An optimized method for matrix-matrix operations is available |
-+---+---------------------------------------------------------------+
-| Y | An optimized method for matrix-vector operations is available |
-+---+---------------------------------------------------------------+
-| Z | An optimized method for matrix-scalar operations is available |
-+---+---------------------------------------------------------------+
++------------+---------------------------------------------------------------+
+| M (matrix) | An optimized method for matrix-matrix operations is available |
++------------+---------------------------------------------------------------+
+| V (vector) | An optimized method for matrix-vector operations is available |
++------------+---------------------------------------------------------------+
+| S (scalar) | An optimized method for matrix-scalar operations is available |
++------------+---------------------------------------------------------------+
 
 Matrix factorizations
 ---------------------
@@ -98,11 +98,11 @@ Matrix factorizations
 +--------------------+--------+---------+-------------+-------------+---------+-------------------+
 | Matrix type        | LAPACK | ``eig`` | ``eigvals`` | ``eigvecs`` | ``svd`` | ``svdvals``       |
 +====================+========+=========+=============+=============+=========+===================+
-| ``Hermitian``      |   HE   |         |     ABC     |             |         |                   |
+| ``Hermitian``      |   HE   |         |     ARI     |             |         |                   |
 +--------------------+--------+---------+-------------+-------------+---------+-------------------+
 | ``Triangular``     |   TR   |         |             |             |         |                   |
 +--------------------+--------+---------+-------------+-------------+---------+-------------------+
-| ``SymTridiagonal`` |   ST   |    A    |     ABC     |     AD      |         |                   |
+| ``SymTridiagonal`` |   ST   |    A    |     ARI     |     AV      |         |                   |
 +--------------------+--------+---------+-------------+-------------+---------+-------------------+
 | ``Tridiagonal``    |   GT   |         |             |             |         |                   |
 +--------------------+--------+---------+-------------+-------------+---------+-------------------+
@@ -113,17 +113,17 @@ Matrix factorizations
 
 Legend:
 
-+---+-----------------------------------------------------------------------------------------------------------------------------------+------------------------+
-| A | An optimized method to find all the characteristic values and/or vectors is available                                             | e.g. ``eigvals(M)``    |
-+---+-----------------------------------------------------------------------------------------------------------------------------------+------------------------+
-| B | An optimized method to find the ``il``:sup:`th` through the ``ih``:sup:`th` characteristic values are available                   | ``eigvals(M, il, ih)`` |
-+---+-----------------------------------------------------------------------------------------------------------------------------------+------------------------+
-| C | An optimized method to find the characteristic values in the interval [``vl``, ``vh``] is available                               | ``eigvals(M, vl, vh)`` |
-+---+-----------------------------------------------------------------------------------------------------------------------------------+------------------------+
-| D | An optimized method to find the characteristic vectors corresponding to the characteristic values ``x=[x1, x2,...]`` is available | ``eigvecs(M, x)``      |
-+---+-----------------------------------------------------------------------------------------------------------------------------------+------------------------+
++--------------+-----------------------------------------------------------------------------------------------------------------------------------+------------------------+
+| A (all)      | An optimized method to find all the characteristic values and/or vectors is available                                             | e.g. ``eigvals(M)``    |
++--------------+-----------------------------------------------------------------------------------------------------------------------------------+------------------------+
+| R (range)    | An optimized method to find the ``il``:sup:`th` through the ``ih``:sup:`th` characteristic values are available                   | ``eigvals(M, il, ih)`` |
++--------------+-----------------------------------------------------------------------------------------------------------------------------------+------------------------+
+| I (interval) | An optimized method to find the characteristic values in the interval [``vl``, ``vh``] is available                               | ``eigvals(M, vl, vh)`` |
++--------------+-----------------------------------------------------------------------------------------------------------------------------------+------------------------+
+| V (vectors)  | An optimized method to find the characteristic vectors corresponding to the characteristic values ``x=[x1, x2,...]`` is available | ``eigvecs(M, x)``      |
++--------------+-----------------------------------------------------------------------------------------------------------------------------------+------------------------+
 
 The uniform scaling operator
 ----------------------------
-A ``UniformScaling`` operator represents a scalar times the identity operator, ``λ*I``. The identity operator ``I`` is defined as a constant and is an instance of ``UniformScaling``. The size of these operators are generic and match the other matrix in the binary operations ``+``,``-``,``*`` and ``\``. For ``A+I`` and ``A-I`` this means that ``A`` must be square. Multiplication with the identity operator ``I`` is a noop (except for checking that the scaling factor is one) and therefore almost without overhead. 
+A ``UniformScaling`` operator represents a scalar times the identity operator, ``λ*I``. The identity operator ``I`` is defined as a constant and is an instance of ``UniformScaling``. The size of these operators are generic and match the other matrix in the binary operations ``+``, ``-``, ``*`` and ``\``. For ``A+I`` and ``A-I`` this means that ``A`` must be square. Multiplication with the identity operator ``I`` is a noop (except for checking that the scaling factor is one) and therefore almost without overhead. 
 

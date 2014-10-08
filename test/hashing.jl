@@ -16,9 +16,24 @@ vals = [
     typemax(Int64),
 ]
 
+function coerce(T::Type, x)
+    if T<:Rational
+        return convert(T, coerce(typeof(num(zero(T))), x))
+    end
+    if !(T<:Integer) || T===Bool
+        convert(T, x)
+    elseif sizeof(T) < sizeof(x)
+        itrunc(T, x)
+    elseif sizeof(T) == sizeof(x)
+        reinterpret(T, x)
+    else
+        convert(T, x)
+    end
+end
+
 for T=types, S=types, x=vals
-    a = convert(T,x)
-    b = convert(S,x)
+    a = coerce(T,x)
+    b = coerce(S,x)
     if (isa(a,Char) && !is_valid_char(a)) || (isa(b,Char) && !is_valid_char(b))
         continue
     end
@@ -39,12 +54,12 @@ vals = {[1,2,3,4], [1 3;2 4], {1,2,3,4}, [1,3,2,4],
         Set([1,2,3,4]),
         Set([1:10]),                 # these lead to different key orders
         Set([7,9,4,10,2,3,5,8,6,1]), #
-        [42 => 101, 77 => 93], {42 => 101, 77 => 93},
+        Dict(42 => 101, 77 => 93), Dict(42 => 101, 77 => 93),
         (1,2,3,4), (1.0,2.0,3.0,4.0), (1,3,2,4),
         ("a","b"), (SubString("a",1,1), SubString("b",1,1)),
         # issue #6900
         [x => x for x in 1:10],
-        [7=>7,9=>9,4=>4,10=>10,2=>2,3=>3,8=>8,5=>5,6=>6,1=>1]}
+        Dict(7=>7,9=>9,4=>4,10=>10,2=>2,3=>3,8=>8,5=>5,6=>6,1=>1)}
 
 for a in vals, b in vals
     @test isequal(a,b) == (hash(a)==hash(b))

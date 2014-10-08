@@ -21,7 +21,7 @@ let i = 2
              UTF16String, UTF32String, Float16,
              :reserved9, :reserved10, :reserved11, :reserved12,
              
-             (), Bool, Any, :Any, None, Top, Undef, Type,
+             (), Bool, Any, :Any, Bottom, Top, Undef, Type,
              :Array, :TypeVar, :Box,
              :lambda, :body, :return, :call, symbol("::"),
              :(=), :null, :gotoifnot, :A, :B, :C, :M, :N, :T, :S, :X, :Y,
@@ -228,7 +228,7 @@ function lambda_number(l::LambdaStaticData)
     end
     # a hash function that always gives the same number to the same
     # object on the same machine, and is unique over all machines.
-    ln = hash(lnumber_salt+(uint64(myid())<<44))
+    ln = lnumber_salt+(uint64(myid())<<44)
     lnumber_salt += 1
     lambda_numbers[l] = ln
     return ln

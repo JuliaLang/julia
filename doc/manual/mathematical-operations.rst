@@ -359,6 +359,7 @@ Function        Description
 =============== =======================================================================
 ``div(x,y)``    truncated division; quotient rounded towards zero
 ``fld(x,y)``    floored division; quotient rounded towards ``-Inf``
+``cld(x,y)``    ceiling division; quotient rounded towards ``+Inf``
 ``rem(x,y)``    remainder; satisfies ``x == div(x,y)*y + rem(x,y)``; sign matches ``x``
 ``divrem(x,y)`` returns ``(div(x,y),rem(x,y))``
 ``mod(x,y)``    modulus; satisfies ``x == fld(x,y)*y + mod(x,y)``; sign matches ``y``
@@ -376,7 +377,7 @@ Function          Description
 ``abs(x)``        a positive value with the magnitude of ``x``
 ``abs2(x)``       the squared magnitude of ``x``
 ``sign(x)``       indicates the sign of ``x``, returning -1, 0, or +1
-``signbit(x)``    indicates whether the sign bit is on (1) or off (0)
+``signbit(x)``    indicates whether the sign bit is on (true) or off (false)
 ``copysign(x,y)`` a value with the magnitude of ``x`` and the sign of ``y``
 ``flipsign(x,y)`` a value with the magnitude of ``x`` and the sign of ``x*y``
 ================= ===========================================================

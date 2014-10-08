@@ -24,6 +24,7 @@ MAKE_COMMON = DESTDIR="" prefix=$(build_prefix) bindir=$(build_bindir) libdir=$(
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
+STAGE1_DEPS =
 STAGE2_DEPS = Rmath
 STAGE3_DEPS = suitesparse-wrapper
 
@@ -139,7 +140,7 @@ install: $(addprefix install-, $(DEP_LIBS))
 cleanall: $(addprefix clean-, $(DEP_LIBS))
 distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-uv get-pcre get-openlibm get-openspecfun get-dsfmt get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-mojibake
+getall: get-llvm get-uv get-pcre get-openlibm get-openspecfun get-dsfmt get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-mojibake get-virtualenv
 
 ## PATHS ##
 # sort is used to remove potential duplicates
@@ -176,15 +177,15 @@ ifeq ($(LLVM_SANITIZE),1)
 LLVM_BUILDTYPE := $(LLVM_BUILDTYPE)+Sanitize
 endif
 
-LLVM_LIB_FILE = libLLVMJIT.a
+LLVM_LIB_FILE = libLLVMCodeGen.a
 LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/$(LLVM_FLAVOR)/lib/$(LLVM_LIB_FILE)
 LLVM_OBJ_TARGET = $(build_libdir)/$(LLVM_LIB_FILE)
 
 ifneq ($(LLVM_VER),svn)
-ifeq ($(LLVM_VER), 3.0)
-LLVM_TAR=llvm-$(LLVM_VER).tar.gz
-else
+ifeq ($(LLVM_VER), 3.3)
 LLVM_TAR=llvm-$(LLVM_VER).src.tar.gz
+else
+LLVM_TAR=llvm-$(LLVM_VER).src.tar.xz
 endif
 
 ifeq ($(BUILD_LLVM_CLANG),1)
@@ -194,6 +195,9 @@ LLVM_COMPILER_RT_TAR=
 else ifeq ($(LLVM_VER), 3.3)
 LLVM_CLANG_TAR=cfe-$(LLVM_VER).src.tar.gz
 LLVM_COMPILER_RT_TAR=compiler-rt-$(LLVM_VER).src.tar.gz
+else ifeq ($(LLVM_VER), 3.5.0)
+LLVM_CLANG_TAR=cfe-$(LLVM_VER).src.tar.xz
+LLVM_COMPILER_RT_TAR=compiler-rt-$(LLVM_VER).src.tar.xz
 else
 LLVM_CLANG_TAR=clang-$(LLVM_VER).src.tar.gz
 LLVM_COMPILER_RT_TAR=compiler-rt-$(LLVM_VER).src.tar.gz
@@ -325,7 +329,7 @@ llvm-$(LLVM_VER)/python2_path:
 	ln -sf /usr/bin/python2 "llvm-$(LLVM_VER)/python2_path/python"
 llvm_python_workaround=llvm-$(LLVM_VER)/python2_path
 else
-  LLVM_FLAGS += --with-python="$(shell ./find_python_for_llvm)"
+  LLVM_FLAGS += --with-python="$(shell ./find_python2)"
 endif
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
@@ -514,6 +518,7 @@ install-llvm: $(LLVM_OBJ_TARGET)
 
 UV_SRC_TARGET = libuv/.libs/libuv.a
 UV_OBJ_TARGET = $(build_libdir)/libuv.a
+
 UV_CFLAGS = 
 ifeq ($(USEMSVC), 1)
 UV_CFLAGS += -DBUILDING_UV_SHARED
@@ -522,9 +527,14 @@ ifeq ($(USEICC), 1)
 UV_CFLAGS += -static-intel
 endif
 
-UV_OPTS += LDFLAGS="$(LDFLAGS) $(CLDFLAGS) -v"
+UV_MFLAGS += LDFLAGS="$(LDFLAGS) $(CLDFLAGS) -v"
 ifneq ($(UV_CFLAGS),)
-UV_OPTS += CFLAGS="$(UV_CFLAGS)"
+UV_MFLAGS += CFLAGS="$(UV_CFLAGS)"
+endif
+ifneq ($(USEMSVC), 1)
+UV_FLAGS = $(UV_MFLAGS)
+else
+UV_FLAGS = --disable-shared $(UV_MFLAGS)
 endif
 
 libuv/configure:
@@ -537,14 +547,14 @@ libuv/config.status: $(JULIAHOME)/.git/modules/deps/libuv/HEAD
 endif
 libuv/config.status: libuv/configure
 	cd libuv && \
-	./configure --with-pic $(CONFIGURE_COMMON) $(UV_OPTS)
+	./configure --with-pic $(CONFIGURE_COMMON) $(UV_FLAGS)
 	touch -c $@
 $(UV_SRC_TARGET): libuv/config.status
 	touch -c libuv/aclocal.m4
 	touch -c libuv/Makefile.in
 	touch -c libuv/configure
 	touch -c libuv/config.status
-	$(MAKE) -C libuv $(UV_OPTS)
+	$(MAKE) -C libuv $(UV_MFLAGS)
 	touch -c $@
 libuv/checked: $(UV_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
@@ -826,7 +836,6 @@ endif
 ifneq ($(BUILD_OS),$(OS))
 OPENBLAS_BUILD_OPTS += OSNAME=$(OS) CROSS=1 HOSTCC=$(HOSTCC)
 endif
-
 ifeq ($(OS),WINNT)
 ifneq ($(ARCH),x86_64)
 OPENBLAS_BUILD_OPTS += CFLAGS="$(CFLAGS) -mincoming-stack-boundary=2"
@@ -862,7 +871,8 @@ $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/config.status
 $(OPENBLAS_OBJ_TARGET): $(OPENBLAS_OBJ_SOURCE) | $(build_shlibdir)
 	cp -f openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT) $(build_shlibdir)
 ifeq ($(OS), Linux)
-	ln -sf $(build_shlibdir)/libopenblas.$(SHLIB_EXT) $(build_shlibdir)/libopenblas.$(SHLIB_EXT).0
+	cd $(build_shlibdir) && \
+	ln -sf libopenblas.$(SHLIB_EXT) libopenblas.$(SHLIB_EXT).0
 endif
 	$(INSTALL_NAME_CMD)libopenblas.$(SHLIB_EXT) $(build_shlibdir)/libopenblas.$(SHLIB_EXT)
 
@@ -1040,12 +1050,13 @@ ARPACK_FLAGS += LDFLAGS="$(LDFLAGS) -Wl,-rpath,'$(build_libdir)'"
 endif
 
 # ARPACK-NG upstream keeps changing their download filenames
-arpack-ng_$(ARPACK_VER).tar.gz:
-	$(JLDOWNLOAD) $@ http://forge.scilab.org/index.php/p/arpack-ng/downloads/get/$@
+arpack-ng-$(ARPACK_VER).tar.gz:
+	$(JLDOWNLOAD) $@ https://github.com/opencollab/arpack-ng/archive/$(ARPACK_VER).tar.gz
 	touch -c $@
-arpack-ng-$(ARPACK_VER)/configure: arpack-ng_$(ARPACK_VER).tar.gz
+arpack-ng-$(ARPACK_VER)/configure: arpack-ng-$(ARPACK_VER).tar.gz
 	$(JLCHECKSUM) $<
 	$(TAR) zxf $<
+	( cd arpack-ng-$(ARPACK_VER) && patch -p1 < ../arpack.xlahqr2.patch )
 	touch -c $@
 
 ifeq ($(USE_ATLAS), 1)
@@ -1109,13 +1120,17 @@ endif
 FFTW_SINGLE_OBJ_TARGET = $(build_shlibdir)/libfftw3f.$(SHLIB_EXT)
 FFTW_DOUBLE_OBJ_TARGET = $(build_shlibdir)/libfftw3.$(SHLIB_EXT)
 
-FFTW_CONFIG = --enable-shared --disable-fortran --disable-mpi --enable-fma --enable-threads
-ifneq ($(ARCH), ppc64)
-  FFTW_CONFIG += --enable-sse2
+FFTW_CONFIG = --enable-shared --disable-fortran --disable-mpi --enable-threads
+ifeq ($(ARCH), arm)
+  FFTW_CONFIG += --enable-neon
+else ifeq ($(ARCH), ppc)
+  FFTW_CONFIG += --enable-altivec
+else ifeq ($(ARCH), x86_64)
+  FFTW_CONFIG += --enable-sse2 --enable-fma
 endif
 ifeq ($(OS),WINNT)
 FFTW_CONFIG += --with-our-malloc --with-combined-threads
-ifneq ($(OS),x86_64)
+ifneq ($(ARCH),x86_64)
 FFTW_CONFIG += --with-incoming-stack-boundary=2
 endif
 endif
@@ -1127,10 +1142,6 @@ fftw-$(FFTW_VER)-single/configure: fftw-$(FFTW_VER).tar.gz
 	$(JLCHECKSUM) $<
 	mkdir -p fftw-$(FFTW_VER)-single && \
 	$(TAR) -C fftw-$(FFTW_VER)-single --strip-components 1 -xf $<
-ifeq ($(OS),WINNT)
-	patch fftw-$(FFTW_VER)-single/configure < fftw-config-nopthreads.patch
-	patch fftw-$(FFTW_VER)-single/kernel/ifftw.h < ifftw.h.patch
-endif
 	touch -c $@
 fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
 	cd fftw-$(FFTW_VER)-single && \
@@ -1165,10 +1176,6 @@ fftw-$(FFTW_VER)-double/configure: fftw-$(FFTW_VER).tar.gz
 	$(JLCHECKSUM) $<
 	mkdir -p fftw-$(FFTW_VER)-double && \
 	$(TAR) -C fftw-$(FFTW_VER)-double --strip-components 1 -xf $<
-ifeq ($(OS),WINNT)
-	patch fftw-$(FFTW_VER)-double/configure < fftw-config-nopthreads.patch
-	patch fftw-$(FFTW_VER)-double/kernel/ifftw.h < ifftw.h.patch
-endif
 	touch -c $@
 fftw-$(FFTW_VER)-double/config.status: fftw-$(FFTW_VER)-double/configure
 	cd fftw-$(FFTW_VER)-double && \
@@ -1249,7 +1256,7 @@ ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/libmojibake ] && echo 
 $(MOJIBAKE_SRC_TARGET): $(JULIAHOME)/.git/modules/deps/libmojibake/HEAD
 endif
 $(MOJIBAKE_SRC_TARGET): libmojibake/Makefile
-	$(MAKE) -C libmojibake cc="$(CC) -O2 -std=c99 $(fPIC)" AR="$(AR)" libmojibake.a
+	$(MAKE) -C libmojibake cc="$(CC) -O2 -std=c99 $(fPIC) -DMOJIBAKE_EXPORTS" AR="$(AR)" libmojibake.a
 	touch -c $@
 libmojibake/checked: $(MOJIBAKE_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
@@ -1298,7 +1305,7 @@ SUITESPARSE_MFLAGS = CC="$(CC)" CXX="$(CXX)" F77="$(FC)" AR="$(AR)" RANLIB="$(RA
 	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)"
 
 SuiteSparse-$(SUITESPARSE_VER).tar.gz:
-	$(JLDOWNLOAD) $@ http://www.cise.ufl.edu/research/sparse/SuiteSparse/$@ 
+	$(JLDOWNLOAD) $@ http://faculty.cse.tamu.edu/davis/SuiteSparse/$@
 SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	$(JLCHECKSUM) $<
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)
@@ -1327,19 +1334,21 @@ $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
 	cd SuiteSparse-$(SUITESPARSE_VER)/lib && \
 	rm -f *.a && \
 	cp -f `find .. -name libamd.a -o -name libcolamd.a -o -name libcamd.a -o -name libccolamd.a -o -name libcholmod.a -o -name libumfpack.a -o -name libsuitesparseconfig.a -o -name libspqr.a 2>/dev/null` . && \
-	$(CC) -shared $(WHOLE_ARCHIVE) libamd.a $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libamd.$(SHLIB_EXT) && \
+	$(CC) -shared $(WHOLE_ARCHIVE) libsuitesparseconfig.a $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libsuitesparseconfig.$(SHLIB_EXT) && \
+	$(INSTALL_NAME_CMD)libsuitesparseconfig.$(SHLIB_EXT) $(build_shlibdir)/libsuitesparseconfig.$(SHLIB_EXT) && \
+	$(CC) -shared $(WHOLE_ARCHIVE) libamd.a $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libamd.$(SHLIB_EXT) $(LDFLAGS) -L$(build_shlibdir) -lsuitesparseconfig $(RPATH_ORIGIN) && \
 	$(INSTALL_NAME_CMD)libamd.$(SHLIB_EXT) $(build_shlibdir)/libamd.$(SHLIB_EXT) && \
-	$(CC) -shared $(WHOLE_ARCHIVE) libcolamd.a  $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libcolamd.$(SHLIB_EXT) && \
+	$(CC) -shared $(WHOLE_ARCHIVE) libcolamd.a $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libcolamd.$(SHLIB_EXT) $(LDFLAGS) -L$(build_shlibdir) -lsuitesparseconfig $(RPATH_ORIGIN) && \
 	$(INSTALL_NAME_CMD)libcolamd.$(SHLIB_EXT) $(build_shlibdir)/libcolamd.$(SHLIB_EXT) && \
-	$(CC) -shared $(WHOLE_ARCHIVE) libcamd.a $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libcamd.$(SHLIB_EXT) && \
+	$(CC) -shared $(WHOLE_ARCHIVE) libcamd.a $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libcamd.$(SHLIB_EXT) $(LDFLAGS) -L$(build_shlibdir) -lsuitesparseconfig $(RPATH_ORIGIN) && \
 	$(INSTALL_NAME_CMD)libcamd.$(SHLIB_EXT) $(build_shlibdir)/libcamd.$(SHLIB_EXT) && \
-	$(CC) -shared $(WHOLE_ARCHIVE) libccolamd.a $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libccolamd.$(SHLIB_EXT) && \
+	$(CC) -shared $(WHOLE_ARCHIVE) libccolamd.a $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libccolamd.$(SHLIB_EXT) $(LDFLAGS) -L$(build_shlibdir) -lsuitesparseconfig $(RPATH_ORIGIN) && \
 	$(INSTALL_NAME_CMD)libccolamd.$(SHLIB_EXT) $(build_shlibdir)/libccolamd.$(SHLIB_EXT) && \
-	$(CXX) -shared $(WHOLE_ARCHIVE) libsuitesparseconfig.a libcholmod.a  $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libcholmod.$(SHLIB_EXT) $(LDFLAGS) -L$(build_shlibdir) -lcolamd -lamd -lcamd -lccolamd $(LIBBLAS) $(RPATH_ORIGIN) && \
+	$(CXX) -shared $(WHOLE_ARCHIVE) libcholmod.a $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libcholmod.$(SHLIB_EXT) $(LDFLAGS) -L$(build_shlibdir) -lcolamd -lamd -lcamd -lccolamd -lsuitesparseconfig $(LIBBLAS) $(RPATH_ORIGIN) && \
 	$(INSTALL_NAME_CMD)libcholmod.$(SHLIB_EXT) $(build_shlibdir)/libcholmod.$(SHLIB_EXT) && \
-	$(CXX) -shared $(WHOLE_ARCHIVE) libsuitesparseconfig.a libumfpack.a  $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libumfpack.$(SHLIB_EXT) $(LDFLAGS) -L$(build_shlibdir) -lcholmod -lcolamd -lamd $(LIBBLAS) $(RPATH_ORIGIN) && \
+	$(CXX) -shared $(WHOLE_ARCHIVE) libumfpack.a $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libumfpack.$(SHLIB_EXT) $(LDFLAGS) -L$(build_shlibdir) -lcholmod -lcolamd -lamd -lsuitesparseconfig $(LIBBLAS) $(RPATH_ORIGIN) && \
 	$(INSTALL_NAME_CMD)libumfpack.$(SHLIB_EXT) $(build_shlibdir)/libumfpack.$(SHLIB_EXT) && \
-	$(CXX) -shared $(WHOLE_ARCHIVE) libsuitesparseconfig.a libspqr.a  $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libspqr.$(SHLIB_EXT) $(LDFLAGS) -L$(build_shlibdir) -lcholmod -lcolamd -lamd $(LIBLAPACK) $(LIBBLAS) $(RPATH_ORIGIN) && \
+	$(CXX) -shared $(WHOLE_ARCHIVE) libspqr.a $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libspqr.$(SHLIB_EXT) $(LDFLAGS) -L$(build_shlibdir) -lcholmod -lcolamd -lamd -lsuitesparseconfig $(LIBLAPACK) $(LIBBLAS) $(RPATH_ORIGIN) && \
 	$(INSTALL_NAME_CMD)libspqr.$(SHLIB_EXT) $(build_shlibdir)/libspqr.$(SHLIB_EXT)
 
 clean-suitesparse:
@@ -1468,10 +1477,13 @@ GMP_SRC_TARGET = gmp-$(GMP_VER)/.libs/libgmp.$(SHLIB_EXT)
 GMP_OBJ_TARGET = $(build_shlibdir)/libgmp.$(SHLIB_EXT)
 
 gmp-$(GMP_VER).tar.bz2:
-	$(JLDOWNLOAD) $@ ftp://ftp.gmplib.org/pub/gmp-$(GMP_VER)/$@
+	$(JLDOWNLOAD) $@ https://gmplib.org/download/gmp/$@
 gmp-$(GMP_VER)/configure: gmp-$(GMP_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	$(TAR) jxf $<
+ifeq ($(OS), Darwin)
+	cd gmp-$(GMP_VER) && patch -p1 < ../gmp_6.0.0_osx.patch
+endif
 	touch -c $@
 gmp-$(GMP_VER)/config.status: gmp-$(GMP_VER)/configure
 	cd gmp-$(GMP_VER) && \
@@ -1630,6 +1642,33 @@ configure-git: git-$(GIT_VER)/config.status
 compile-git: $(GIT_SOURCE)
 check-git: git-$(GIT_VER)/checked
 install-git: $(GIT_TARGET)
+
+## virtualenv
+
+VIRTUALENV_SOURCE = virtualenv-$(VIRTUALENV_VER)/virtualenv.py
+VIRTUALENV_TARGET = julia-env
+
+virtualenv-$(VIRTUALENV_VER).tar.gz:
+	$(JLDOWNLOAD) $@ https://pypi.python.org/packages/source/v/virtualenv/$@
+$(VIRTUALENV_SOURCE): virtualenv-$(VIRTUALENV_VER).tar.gz
+	$(JLCHECKSUM) $<
+	$(TAR) zxf $<
+	touch -c $@
+$(VIRTUALENV_TARGET): $(VIRTUALENV_SOURCE)
+	"$(shell ./find_python2)" $< $@
+	touch -c $@
+
+clean-virtualenv:
+	-$(MAKE) -C virtualenv-$(VIRTUALENV_VER) clean
+	-rm -f $(VIRTUALENV_TARGET)
+distclean-virtualenv:
+	-rm -rf virtualenv-$(VIRTUALENV_VER).tar.gz virtualenv-$(VIRTUALENV_VER)
+
+get-virtualenv: virtualenv-$(VIRTUALENV_VER).tar.gz
+configure-virtualenv: get-virtualenv
+compile-virtualenv: $(VIRTUALENV_SOURCE)
+check-virtualenv: compile-virtualenv
+install-virtualenv: $(VIRTUALENV_TARGET)
 
 ## phony targets ##
 

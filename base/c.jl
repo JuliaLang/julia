@@ -61,12 +61,12 @@ end
 typealias Cptrdiff_t Int
 typealias Csize_t Uint
 typealias Cssize_t Int
+typealias Cintmax_t Int64
+typealias Cuintmax_t Uint64
 typealias Clonglong Int64
 typealias Culonglong Uint64
 typealias Cfloat Float32
 typealias Cdouble Float64
-#typealias Ccomplex_float Complex64
-#typealias Ccomplex_double Complex128
 
 const sizeof_off_t = ccall(:jl_sizeof_off_t, Cint, ())
 

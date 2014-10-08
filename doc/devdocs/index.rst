@@ -10,3 +10,4 @@
    :maxdepth: 1
 
    cartesian
+   meta

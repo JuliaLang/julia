@@ -12,7 +12,7 @@ function argtype_decl(n, t) # -> (argname, argtype)
     if t === Any && !isempty(s)
         return s, ""
     end
-    if t <: Vararg && t !== None && t.parameters[1] === Any
+    if t <: Vararg && t !== Union() && t.parameters[1] === Any
         return string(s, "..."), ""
     end
     return s, string(t)

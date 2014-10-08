@@ -24,7 +24,7 @@ function complete_symbol(sym, ffunc)
 
     mod = context_module
     lookup_module = true
-    t = None
+    t = Union()
     for name in strs[1:(end-1)]
         s = symbol(name)
         if lookup_module
