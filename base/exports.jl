@@ -14,6 +14,7 @@ export
     LAPACK,
 
 # Types
+    AbstractFixedArray,
     AbstractMatrix,
     AbstractSparseArray,
     AbstractSparseMatrix,
@@ -49,6 +50,8 @@ export
     FileMonitor,
     FileOffset,
     Filter,
+    FixedArrayI,
+    FixedArrayM,
     FloatRange,
     Hermitian,
     UniformScaling,
