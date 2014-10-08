@@ -348,7 +348,7 @@ Do not move back beyond MIN."
 
 (defvar julia-latexsubs (make-hash-table :test 'equal))
 
-(defun julia-latexsub (arg)
+(defun julia-latexsub ()
   "Perform a LaTeX-like Unicode symbol substitution."
   (interactive "*i")
   (let ((orig-pt (point)))
@@ -371,8 +371,8 @@ Do not move back beyond MIN."
 (defun julia-latexsub-or-indent (arg)
   "Either indent according to mode or perform a LaTeX-like symbol substution"
   (interactive "*i")
-  (if (latexsub arg)
-      (indent-according-to-mode)))
+  (if (latexsub)
+      (indent-for-tab-command arg)))
 (define-key julia-mode-map (kbd "TAB") 'julia-latexsub-or-indent)
 
 (defalias 'latexsub-or-indent 'julia-latexsub-or-indent)
