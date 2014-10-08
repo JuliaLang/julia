@@ -189,24 +189,10 @@
     (or (equal item (car lst))
 	(julia-member item (cdr lst)))))
 
-(if (not (fboundp 'evenp))
-    (defun evenp (x) (zerop (% x 2))))
-
-(defun julia-find-comment-open (p0)
-  (if (< (point) p0)
-      nil
-    (if (and (equal (char-after (point)) ?#)
-	     (evenp (julia-strcount
-		     (buffer-substring p0 (point)) ?\")))
-	t
-      (if (= (point) p0)
-	  nil
-	(progn (backward-char 1)
-	       (julia-find-comment-open p0))))))
-
 (defun julia-in-comment ()
-  (save-excursion
-    (julia-find-comment-open (line-beginning-position))))
+  "Return non-nil if point is inside a comment.
+Handles both single-line and multi-line comments."
+  (nth 4 (syntax-ppss)))
 
 (defun julia-strcount (str chr)
   (let ((i 0)
