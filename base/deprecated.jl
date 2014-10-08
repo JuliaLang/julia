@@ -185,3 +185,7 @@ const Nothing = Void
 
 export None
 const None = Union()
+
+@deprecate median(v::AbstractArray; checknan::Bool=true)  median(v)
+@deprecate median(v::AbstractArray, region; checknan::Bool=true)  median(v, region)
+@deprecate median!(v::AbstractVector; checknan::Bool=true)  median!(v)
