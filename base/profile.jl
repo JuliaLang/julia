@@ -63,7 +63,7 @@ end
 
 function getdict(data::Vector{Uint})
     uip = unique(data)
-    Dict(uip, [lookup(ip) for ip in uip])
+    Dict{Uint, LineInfo}([ip=>lookup(ip) for ip in uip])
 end
 
 function callers(funcname::ByteString, bt::Vector{Uint}, lidict; filename = nothing, linerange = nothing)
