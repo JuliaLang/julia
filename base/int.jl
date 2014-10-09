@@ -162,12 +162,14 @@ for to in tuple(IntTypes...,Char), from in tuple(IntTypes...,Char,Bool)
             else
                 @eval convert(::Type{$to}, x::($from)) = box($to,zext_int($to,unbox($from,x)))
             end
-        elseif !(issubtype(from,Signed) === issubtype(to,Signed))
-            # raise InexactError if x's top bit is set
-            @eval convert(::Type{$to}, x::($from)) = box($to,check_top_bit(unbox($from,x)))
-            @eval itrunc(::Type{$to}, x::($from)) = box($to,unbox($from,x))
         else
-            @eval convert(::Type{$to}, x::($from)) = box($to,unbox($from,x))
+            if !(issubtype(from,Signed) === issubtype(to,Signed))
+                # raise InexactError if x's top bit is set
+                @eval convert(::Type{$to}, x::($from)) = box($to,check_top_bit(unbox($from,x)))
+            else
+                @eval convert(::Type{$to}, x::($from)) = box($to,unbox($from,x))
+            end
+            @eval itrunc(::Type{$to}, x::($from)) = box($to,unbox($from,x))
         end
     end
 end

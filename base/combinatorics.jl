@@ -354,7 +354,7 @@ function nextpartition(n, as)
     xs
 end
 
-let _npartitions = (Int=>Int)[]
+let _npartitions = Dict{Int,Int}()
     global npartitions
     function npartitions(n::Int)
         if n < 0
@@ -424,7 +424,7 @@ function nextfixedpartition(n, m, bs)
     return as
 end
 
-let _nipartitions = ((Int,Int)=>Int)[]
+let _nipartitions = Dict{(Int,Int),Int}()
     global npartitions
     function npartitions(n::Int,m::Int)
         if n < m || m == 0
@@ -463,7 +463,7 @@ function nextsetpartition(s::AbstractVector, a, b, n, m)
         filter!(x->!isempty(x), temp)
     end
 
-    if isempty(s);  return ({s}, ([1], Int[], n, 1));  end
+    if isempty(s);  return ([s], ([1], Int[], n, 1));  end
 
     part = makeparts(s,a,m)
 
@@ -489,7 +489,7 @@ function nextsetpartition(s::AbstractVector, a, b, n, m)
 
 end
 
-let _nsetpartitions = (Int=>Int)[]
+let _nsetpartitions = Dict{Int,Int}()
     global nsetpartitions
     function nsetpartitions(n::Int)
         if n < 0

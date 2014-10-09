@@ -18,7 +18,11 @@ ifeq ($(JULIA_DIST_TARNAME),)
 endif
 
 all: default
+ifeq ($(JULIA_DEBUG), 1)
+default: debug
+else
 default: release
+endif
 
 # sort is used to remove potential duplicates
 DIRS = $(sort $(build_bindir) $(build_libdir) $(build_private_libdir) $(build_libexecdir) $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_datarootdir)/man/man1)
@@ -115,10 +119,14 @@ $(build_private_libdir)/sys%ji: $(build_private_libdir)/sys%o
 .SECONDARY: $(build_private_libdir)/sys0.o
 
 $(build_private_libdir)/sys%$(SHLIB_EXT): $(build_private_libdir)/sys%o
+ifneq ($(USEMSVC), 1)
 	$(CXX) -shared -fPIC -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ $< \
 		$$([ $(OS) = Darwin ] && echo '' -Wl,-undefined,dynamic_lookup || echo '' -Wl,--unresolved-symbols,ignore-all ) \
 		$$([ $(OS) = WINNT ] && echo '' -ljulia -lssp)
 	$(DSYMUTIL) $@
+else
+	@true
+endif
 
 $(build_private_libdir)/sys0.o:
 	@$(QUIET_JULIA) cd base && \
@@ -264,6 +272,9 @@ endif
 	-gtk-update-icon-cache $(DESTDIR)$(datarootdir)/icons/hicolor/
 	mkdir -p $(DESTDIR)$(datarootdir)/applications/
 	$(INSTALL_F) contrib/julia.desktop $(DESTDIR)$(datarootdir)/applications/
+	# Install appdata file
+	mkdir -p $(DESTDIR)$(datarootdir)/appdata/
+	$(INSTALL_F) contrib/julia.appdata.xml $(DESTDIR)$(datarootdir)/appdata/
 
 	# Update RPATH entries and JL_SYSTEM_IMAGE_PATH if $(private_libdir_rel) != $(build_private_libdir_rel)
 ifneq ($(private_libdir_rel),$(build_private_libdir_rel))

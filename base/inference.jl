@@ -367,7 +367,7 @@ const getfield_tfunc = function (A, s0, name)
                     return R
                 else
                     return limit_type_depth(R, 0, true,
-                                            filter!(x->isa(x,TypeVar), {s.parameters...}))
+                                            filter!(x->isa(x,TypeVar), Any[s.parameters...]))
                 end
             end
         end
@@ -1353,7 +1353,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     rec = false
     toprec = false
 
-    s = { () for i=1:n }
+    s = Any[ () for i=1:n ]
     # initial types
     s[1] = ObjectIdDict()
     for v in vars
@@ -1412,7 +1412,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
 
     # exception handlers
     cur_hand = ()
-    handler_at = { () for i=1:n }
+    handler_at = Any[ () for i=1:n ]
 
     push!(W,1)  # initial set of pc
 
@@ -1573,7 +1573,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
 
     if !redo
         if is(def.tfunc,())
-            def.tfunc = {}
+            def.tfunc = []
         end
         tfarr = def.tfunc::Array{Any,1}
         idx = -1
@@ -1698,7 +1698,7 @@ function type_annotate(ast::Expr, states::Array{Any,1}, sv::ANY, rettype::ANY,
     for arg in args
         decls[arg] = states[1][arg]
     end
-    closures = {}
+    closures = []
     body = ast.args[3].args::Array{Any,1}
     for i=1:length(body)
         st_i = states[i]
@@ -1916,7 +1916,7 @@ function exprtype(x::ANY)
 end
 
 function without_linenums(a::Array{Any,1})
-    l = {}
+    l = []
     for x in a
         if (isa(x,Expr) && is(x.head,:line)) || isa(x,LineNumberNode)
         else
@@ -1926,9 +1926,11 @@ function without_linenums(a::Array{Any,1})
     l
 end
 
+# known affect-free calls (also effect-free)
+const _pure_builtins = Any[tuple, tupleref, tuplelen, fieldtype, apply_type, is, isa, typeof, typeassert] 
 
-const _pure_builtins = {tuple, tupleref, tuplelen, fieldtype, apply_type, is, isa, typeof, typeassert} # known affect-free calls (also effect-free)
-const _pure_builtins_volatile = {getfield, arrayref} # known effect-free calls (might not be affect-free)
+# known effect-free calls (might not be affect-free)
+const _pure_builtins_volatile = Any[getfield, arrayref]
 
 function is_pure_builtin(f)
     if contains_is(_pure_builtins, f)
@@ -2128,7 +2130,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
 
     sp = meth[2]::Tuple
     sp = tuple(sp..., linfo.sparams...)
-    spvals = { sp[i] for i in 2:2:length(sp) }
+    spvals = Any[ sp[i] for i in 2:2:length(sp) ]
     for i=1:length(spvals)
         if isa(spvals[i], TypeVar)
             return NF
@@ -2185,27 +2187,27 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
             numarg = length(argexprs)
             newnames = unique_names(ast,numarg)
             sp = ()
-            spvals = {}
+            spvals = []
             meth = (methargs, sp)
-            locals = {}
+            locals = []
             newcall = Expr(:call, e.args[1])
             newcall.typ = ty
             for i = 1:numarg
                 name = newnames[i]
                 argtype = exprtype(argexprs[i])
                 argtype = typeintersect(argtype,Any)  # remove Undef
-                push!(locals, {name,argtype,0})
+                push!(locals, Any[name,argtype,0])
                 push!(newcall.args, argtype===Any ? name : SymbolNode(name, argtype))
             end
-            body.args = {Expr(:return, newcall)}
-            ast = Expr(:lambda, newnames, {{}, locals, {}}, body)
+            body.args = Any[Expr(:return, newcall)]
+            ast = Expr(:lambda, newnames, Any[[], locals, []], body)
             need_mod_annotate = false
         else
             return NF
         end
     end
 
-    spnames = { sp[i].name for i=1:2:length(sp) }
+    spnames = Any[ sp[i].name for i=1:2:length(sp) ]
     enc_vinflist = enclosing_ast.args[2][2]::Array{Any,1}
     enc_locllist = enclosing_ast.args[2][1]::Array{Any,1}
     locllist = ast.args[2][1]::Array{Any,1}
@@ -2237,7 +2239,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
             for vi in vinflist
                 if vi[1] === vaname && vi[2] != 0
                     islocal = true
-                    push!(enc_vinflist, {vnew, vi[2], vi[3]})
+                    push!(enc_vinflist, Any[vnew, vi[2], vi[3]])
                 end
             end
             if islocal
@@ -2248,7 +2250,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
         else
             # construct tuple-forming expression for argument tail
             vararg = mk_tuplecall(argexprs[na:end])
-            argexprs = {argexprs[1:(na-1)]..., vararg}
+            argexprs = Any[argexprs[1:(na-1)]..., vararg]
             isva = true
         end
     elseif na != length(argexprs)
@@ -2275,7 +2277,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
         push!(enc_locllist, vnew)
         for vi in vinflist
             if vi[1] === localval
-                push!(enc_vinflist, {vnew, vi[2], vi[3]})
+                push!(enc_vinflist, Any[vnew, vi[2], vi[3]])
             end
         end
     end
@@ -2294,7 +2296,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
     end
 
     # see if each argument occurs only once in the body expression
-    stmts = {}
+    stmts = []
     stmts_free = true # true = all entries of stmts are effect_free
 
     # when 1 method matches the inferred types, there is still a chance
@@ -2562,7 +2564,7 @@ function inlining_pass(e::Expr, sv, ast)
         return (e,())
     end
     arg1 = eargs[1]
-    stmts = {}
+    stmts = []
     if e.head === :body
         i = 1
         while i <= length(eargs)
@@ -2657,10 +2659,10 @@ function inlining_pass(e::Expr, sv, ast)
                     if isa(a1,basenumtype) || ((isa(a1,Symbol) || isa(a1,SymbolNode)) &&
                                                exprtype(a1) <: basenumtype)
                         if e.args[3]==2
-                            e.args = {TopNode(:*), a1, a1}
+                            e.args = Any[TopNode(:*), a1, a1]
                             f = *
                         elseif e.args[3]==3
-                            e.args = {TopNode(:*), a1, a1, a1}
+                            e.args = Any[TopNode(:*), a1, a1, a1]
                             f = *
                         end
                     end
@@ -2701,16 +2703,16 @@ function inlining_pass(e::Expr, sv, ast)
                             # apply(f,tuple(x,y,...)) => f(x,y,...)
                             newargs[i-2] = aarg.args[2:end]
                         elseif isa(aarg, Tuple)
-                            newargs[i-2] = { QuoteNode(x) for x in aarg }
+                            newargs[i-2] = Any[ QuoteNode(x) for x in aarg ]
                         elseif isa(t,Tuple) && !isvatuple(t) && effect_free(aarg,sv,true)
                             # apply(f,t::(x,y)) => f(t[1],t[2])
-                            newargs[i-2] = { mk_tupleref(aarg,j,t[j]) for j=1:length(t) }
+                            newargs[i-2] = Any[ mk_tupleref(aarg,j,t[j]) for j=1:length(t) ]
                         else
                             # not all args expandable
                             return (e,stmts)
                         end
                     end
-                    e.args = [{e.args[2]}, newargs...]
+                    e.args = [Any[e.args[2]], newargs...]
 
                     # now try to inline the simplified call
 
@@ -2729,17 +2731,17 @@ function inlining_pass(e::Expr, sv, ast)
 end
 
 function add_variable(ast, name, typ, is_sa)
-    vinf = {name,typ,2+16*is_sa}
+    vinf = Any[name, typ, 2+16*is_sa]
     locllist = ast.args[2][1]::Array{Any,1}
     vinflist = ast.args[2][2]::Array{Any,1}
     push!(locllist, name)
     push!(vinflist, vinf)
 end
 
-const some_names = {:_var0, :_var1, :_var2, :_var3, :_var4, :_var5, :_var6,
-                    :_var7, :_var8, :_var9, :_var10, :_var11, :_var12,
-                    :_var13, :_var14, :_var15, :_var16, :_var17, :_var18,
-                    :_var19, :_var20, :_var21, :_var22, :_var23, :_var24}
+const some_names = Symbol[:_var0, :_var1, :_var2, :_var3, :_var4, :_var5, :_var6,
+                          :_var7, :_var8, :_var9, :_var10, :_var11, :_var12,
+                          :_var13, :_var14, :_var15, :_var16, :_var17, :_var18,
+                          :_var19, :_var20, :_var21, :_var22, :_var23, :_var24]
 function contains_is1(vinflist::Array{Any,1}, x::Symbol)
     for y in vinflist
         if is(y[1],x)
@@ -2779,7 +2781,7 @@ function unique_name(ast1, ast2)
 end
 
 function unique_names(ast, n)
-    ns = {}
+    ns = []
     locllist = ast.args[2][2]::Array{Any,1}
     for g in some_names
         if !contains_is1(locllist, g)
@@ -2856,7 +2858,7 @@ function remove_redundant_temp_vars(ast, sa)
                     # everywhere later in the function
 
                     delete_var!(ast, v)
-                    sym_replace(ast.args[3], {v}, {}, {init}, {})
+                    sym_replace(ast.args[3], [v], [], [init], [])
                 end
             end
         end
@@ -3056,7 +3058,7 @@ function replace_tupleref!(ast, e::ANY, tupname, vals, sv, i0)
 end
 
 function code_typed(f::Callable, types::(Type...))
-    asts = {}
+    asts = []
     for x in _methods(f,types,-1)
         linfo = func_for_method(x[3],types)
         (tree, ty) = typeinf(linfo, x[1], x[2])
@@ -3070,7 +3072,7 @@ function code_typed(f::Callable, types::(Type...))
 end
 
 function return_types(f::Callable, types)
-    rt = {}
+    rt = []
     for x in _methods(f,types,-1)
         linfo = func_for_method(x[3],types)
         (tree, ty) = typeinf(linfo, x[1], x[2])

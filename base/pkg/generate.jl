@@ -34,7 +34,7 @@ function package(
     authors::Union(String,Array) = "",
     years::Union(Int,String) = copyright_year(),
     user::String = github_user(),
-    config::Dict = {},
+    config::Dict = Dict(),
 )
     isnew = !ispath(pkg)
     try
@@ -428,6 +428,6 @@ $(copyright(years,authors))
 >      of your accepting any such warranty or additional liability.
 """
 
-const LICENSES = [ "MIT" => mit, "BSD" => bsd, "ASL" => asl ]
+const LICENSES = Dict("MIT" => mit, "BSD" => bsd, "ASL" => asl)
 
 end # module

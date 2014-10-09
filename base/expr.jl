@@ -72,7 +72,7 @@ _inline(arg) = arg
 
 ## some macro utilities ##
 
-find_vars(e) = find_vars(e, {})
+find_vars(e) = find_vars(e, [])
 function find_vars(e, lst)
     if isa(e,Symbol)
         if current_module()===Main && isdefined(e)

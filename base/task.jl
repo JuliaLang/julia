@@ -181,7 +181,7 @@ isempty(::Task) = error("isempty not defined for Tasks")
 type Condition
     waitq::Vector{Any}
 
-    Condition() = new({})
+    Condition() = new([])
 end
 
 function wait(c::Condition)
@@ -233,7 +233,7 @@ end
 
 # schedule an expression to run asynchronously, with minimal ceremony
 macro schedule(expr)
-    expr = localize_vars(:(()->($expr)), false)
+    expr = :(()->($expr))
     :(enq_work(Task($(esc(expr)))))
 end
 
@@ -298,7 +298,7 @@ end
 
 ## dynamically-scoped waiting for multiple items
 
-sync_begin() = task_local_storage(:SPAWNS, ({}, get(task_local_storage(), :SPAWNS, ())))
+sync_begin() = task_local_storage(:SPAWNS, ([], get(task_local_storage(), :SPAWNS, ())))
 
 function sync_end()
     spawns = get(task_local_storage(), :SPAWNS, ())

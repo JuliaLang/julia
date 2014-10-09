@@ -108,7 +108,7 @@ eval(Sys, :(@deprecate shlib_list dllist))
 @deprecate put      put!
 @deprecate take     take!
 
-@deprecate Set(a, b...) Set({a, b...})
+@deprecate Set(a, b...) Set(Any[a, b...])
 # for a bit of backwards compatibility
 IntSet(xs::Integer...) = (s=IntSet(); for a in xs; push!(s,a); end; s)
 Set{T<:Number}(xs::T...) = Set{T}(xs)
@@ -185,3 +185,13 @@ const Nothing = Void
 
 export None
 const None = Union()
+
+@deprecate median(v::AbstractArray; checknan::Bool=true)  median(v)
+@deprecate median(v::AbstractArray, region; checknan::Bool=true)  median(v, region)
+@deprecate median!(v::AbstractVector; checknan::Bool=true)  median!(v)
+
+@deprecate Dict{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V}) Dict{K,V}(zip(ks, vs))
+@deprecate Dict{K,V}(ks::(K...), vs::(V...))                     Dict{K,V}(zip(ks, vs))
+@deprecate Dict{K}(ks::(K...), vs::Tuple)                        Dict{K,Any}(zip(ks, vs))
+@deprecate Dict{V}(ks::Tuple, vs::(V...))                        Dict{Any,V}(zip(ks, vs))
+@deprecate Dict(ks, vs)                                          Dict{Any,Any}(zip(ks, vs))

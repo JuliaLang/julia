@@ -169,12 +169,12 @@ Julia's REPL keybindings may be fully customized to a user's preferences by pass
 
     import Base: LineEdit, REPL
 
-    const mykeys = {
+    const mykeys = Dict{Any,Any}(
       # Up Arrow
       "\e[A" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_prev(s, LineEdit.mode(s).hist)),
       # Down Arrow
       "\e[B" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_next(s, LineEdit.mode(s).hist))
-    }
+    )
 
     Base.active_repl.interface = REPL.setup_interface(Base.active_repl; extra_repl_keymap = mykeys)
 
@@ -192,7 +192,7 @@ In both the Julian and help modes of the REPL, one can enter the first few chara
     StridedArray    StridedVecOrMat  String
     StridedMatrix   StridedVector
 
-The tab key can also be used to substitute LaTeX math symbols with their unicode equivalents,
+The tab key can also be used to substitute LaTeX math symbols with their Unicode equivalents,
 and get a list of LaTeX matches as well::
 
     julia> \pi[TAB]
@@ -221,3 +221,5 @@ and get a list of LaTeX matches as well::
     julia> \h[TAB]
     \hat              \heartsuit         \hksearow          \hookleftarrow     \hslash
     \hbar             \hermitconjmatrix  \hkswarow          \hookrightarrow    \hspace
+
+A full list of tab-completions can be found in the :ref:`man-unicode-input` section of the manual.

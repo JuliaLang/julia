@@ -1,5 +1,5 @@
 # string escaping & unescaping
-cx = {
+cx = Any[
     0x00000000      '\0'        "\\0"
     0x00000001      '\x01'      "\\x01"
     0x00000006      '\x06'      "\\x06"
@@ -49,7 +49,7 @@ cx = {
     0x000fffff      '\Ufffff'   "\\Ufffff"
     0x00100000      '\U100000'  "\\U100000"
     0x0010ffff      '\U10ffff'  "\\U10ffff"
-}
+]
 
 for i = 1:size(cx,1)
     @test cx[i,1] == cx[i,2]
@@ -63,8 +63,8 @@ for i = 1:size(cx,1)
     end
 end
 
-for i = 0:0x7f, p = {"","\0","x","xxx","\x7f","\uFF","\uFFF",
-                     "\uFFFF","\U10000","\U10FFF","\U10FFFF"}
+for i = 0:0x7f, p = ["","\0","x","xxx","\x7f","\uFF","\uFFF",
+                     "\uFFFF","\U10000","\U10FFF","\U10FFFF"]
     c = char(i)
     cp = string(c,p)
     op = string(char(div(i,8)), oct(i%8), p)
@@ -252,7 +252,7 @@ astr = "Hello, world.\n"
 u8str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
 
 # ascii search
-for str in {astr, Base.GenericString(astr)}
+for str in [astr, Base.GenericString(astr)]
     @test search(str, 'x') == 0
     @test search(str, '\0') == 0
     @test search(str, '\u80') == 0
@@ -269,7 +269,7 @@ for str in {astr, Base.GenericString(astr)}
 end
 
 # ascii rsearch
-for str in {astr}
+for str in [astr]
     @test rsearch(str, 'x') == 0
     @test rsearch(str, '\0') == 0
     @test rsearch(str, '\u80') == 0
@@ -287,7 +287,7 @@ for str in {astr}
 end
 
 # utf-8 search
-for str in {u8str, Base.GenericString(u8str)}
+for str in (u8str, Base.GenericString(u8str))
     @test search(str, 'z') == 0
     @test search(str, '\0') == 0
     @test search(str, '\u80') == 0
@@ -308,7 +308,7 @@ for str in {u8str, Base.GenericString(u8str)}
 end
 
 # utf-8 rsearch
-for str in {u8str}
+for str in [u8str]
     @test rsearch(str, 'z') == 0
     @test rsearch(str, '\0') == 0
     @test rsearch(str, '\u80') == 0
@@ -902,14 +902,14 @@ bin_val = hex2bytes("07bf")
 # multi
 @test (@sprintf "%s %f %9.5f %d %d %d %d%d%d%d" [1:6]... [7,8,9,10]...) == "1 2.000000   3.00000 4 5 6 78910"
 # comprehension
-@test (@sprintf "%s %s %s %d %d %d %f %f %f" {10^x+y for x=1:3,y=1:3 }...) == "11 101 1001 12 102 1002 13.000000 103.000000 1003.000000"
+@test (@sprintf "%s %s %s %d %d %d %f %f %f" Any[10^x+y for x=1:3,y=1:3 ]...) == "11 101 1001 12 102 1002 13.000000 103.000000 1003.000000"
 
 # issue #4183
 @test split(SubString(ascii("x"), 2, 0), "y") == String[""]
 @test split(SubString(utf8("x"), 2, 0), "y") == String[""]
 
 # issue #4586
-@test rsplit(RevString("ailuj"),'l') == {"ju","ia"}
+@test rsplit(RevString("ailuj"),'l') == ["ju","ia"]
 @test float64(RevString("64")) === 46.0
 
 # issue #6772
@@ -1042,13 +1042,13 @@ end
 
 # isvalid(), chr2ind() and ind2chr() for SubString{DirectIndexString}
 let s="lorem ipsum",
-    sdict=[SubString(s,1,11)=>s, 
-        SubString(s,1,6)=>"lorem ",
-        SubString(s,1,0)=>"", 
-        SubString(s,2,4)=>"ore", 
-        SubString(s,2,16)=>"orem ipsum", 
-        SubString(s,12,14)=>""
-    ]
+    sdict=Dict(SubString(s,1,11)=>s,
+               SubString(s,1,6)=>"lorem ",
+               SubString(s,1,0)=>"",
+               SubString(s,2,4)=>"ore",
+               SubString(s,2,16)=>"orem ipsum",
+               SubString(s,12,14)=>""
+               )
     for (ss,s) in sdict
         for i in -1:12
             @test isvalid(ss,i)==isvalid(s,i)

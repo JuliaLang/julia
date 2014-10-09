@@ -63,7 +63,7 @@ end
 
 function getdict(data::Vector{Uint})
     uip = unique(data)
-    Dict(uip, [lookup(ip) for ip in uip])
+    Dict{Uint, LineInfo}([ip=>lookup(ip) for ip in uip])
 end
 
 function callers(funcname::ByteString, bt::Vector{Uint}, lidict; filename = nothing, linerange = nothing)
@@ -104,7 +104,7 @@ const UNKNOWN = LineInfo("?", "?", -1, true, 0)
 ==(a::LineInfo, b::LineInfo) = a.line == b.line && a.fromC == b.fromC && a.func == b.func && a.file == b.file
 
 function hash(li::LineInfo, h::Uint)
-    h += uint(0xf4fbda67fe20ce88)
+    h += itrunc(Uint,0xf4fbda67fe20ce88)
     h = hash(li.line, h)
     h = hash(li.file, h)
     h = hash(li.func, h)
@@ -132,11 +132,11 @@ function lookup(ip::Uint)
     end
 end
 
-error_codes = (Int=>ASCIIString)[
+error_codes = Dict{Int,ASCIIString}(
     -1=>"cannot specify signal action for profiling",
     -2=>"cannot create the timer for profiling",
     -3=>"cannot start the timer for profiling",
-    -4=>"cannot unblock SIGUSR1"]
+    -4=>"cannot unblock SIGUSR1")
 
 function fetch()
     len = len_data()
@@ -157,7 +157,7 @@ const btskip = 0
 ## Print as a flat list
 # Counts the number of times each line appears, at any nesting level
 function count_flat{T<:Unsigned}(data::Vector{T})
-    linecount = (T=>Int)[]
+    linecount = Dict{T,Int}()
     toskip = btskip
     for ip in data
         if toskip > 0
@@ -193,6 +193,9 @@ function parse_flat(iplist, n, lidict, C::Bool)
 end
 
 function flat{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict, C::Bool, combine::Bool, cols::Integer)
+    if !C
+        data = purgeC(data, lidict)
+    end
     iplist, n = count_flat(data)
     if isempty(n)
         warning_empty()
@@ -249,7 +252,7 @@ end
 # Identify and counts repetitions of all unique backtraces
 function tree_aggregate{T<:Unsigned}(data::Vector{T})
     iz = find(data .== 0)  # find the breaks between backtraces
-    treecount = (Vector{T}=>Int)[]
+    treecount = Dict{Vector{T},Int}()
     istart = 1+btskip
     for iend in iz
         tmp = data[iend-1:-1:istart]
@@ -321,7 +324,7 @@ function tree{T<:Unsigned}(io::IO, bt::Vector{Vector{T}}, counts::Vector{Int}, l
     # Organize backtraces into groups that are identical up to this level
     if combine
         # Combine based on the line information
-        d = (LineInfo=>Vector{Int})[]
+        d = Dict{LineInfo,Vector{Int}}()
         for i = 1:length(bt)
             ip = bt[i][level+1]
             key = lidict[ip]
@@ -346,7 +349,7 @@ function tree{T<:Unsigned}(io::IO, bt::Vector{Vector{T}}, counts::Vector{Int}, l
         end
     else
         # Combine based on the instruction pointer
-        d = (T=>Vector{Int})[]
+        d = Dict{T,Vector{Int}}()
         for i = 1:length(bt)
             key = bt[i][level+1]
             indx = Base.ht_keyindex(d, key)
