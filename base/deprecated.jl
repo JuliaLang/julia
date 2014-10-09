@@ -108,7 +108,7 @@ eval(Sys, :(@deprecate shlib_list dllist))
 @deprecate put      put!
 @deprecate take     take!
 
-@deprecate Set(a, b...) Set([a, b...])
+@deprecate Set(a, b...) Set(Any[a, b...])
 # for a bit of backwards compatibility
 IntSet(xs::Integer...) = (s=IntSet(); for a in xs; push!(s,a); end; s)
 Set{T<:Number}(xs::T...) = Set{T}(xs)
