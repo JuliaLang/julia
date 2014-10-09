@@ -48,6 +48,10 @@ for T=types, S=types, x=vals
     # end
 end
 
+# issue #8619
+@test hash(nextfloat(2.0^63)) == hash(uint(nextfloat(2.0^63)))
+@test hash(prevfloat(2.0^64)) == hash(uint(prevfloat(2.0^64)))
+
 # hashing collections (e.g. issue #6870)
 vals = Any[
     [1,2,3,4], [1 3;2 4], Any[1,2,3,4], [1,3,2,4],
