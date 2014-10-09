@@ -39,7 +39,7 @@ function trackmethod (def)
   name = unblock(def).args[1].args[1]
   f = esc(name)
   quote
-    if isdefined($(Expr(:quote, name)))
+    if isdefined($(Expr(:quote, name))) && isgeneric($f)
       funcs = [def => def.func for def in methods($f)]
       $(esc(def))
       $f, newmethod(funcs, $f)
@@ -130,11 +130,13 @@ function objdoc(meta, def)
   end
 end
 
+fexpr(ex) = isexpr(ex, :function) || (isexpr(ex, :(=)) && isexpr(ex.args[1], :call))
+
 macro doc (ex)
   isexpr(ex, :->) || return getdoc(ex)
   meta, def = ex.args
   isexpr(unblock(def), :macro) && return macrodoc(meta, def)
-  isexpr(unblock(def), :function, :(=)) && return funcdoc(meta, def)
+  fexpr(unblock(def)) && return funcdoc(meta, def)
   return objdoc(meta, def)
 end
 
