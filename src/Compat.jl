@@ -1,6 +1,4 @@
-module v03to04
-
-export @Dict
+module Compat
 
 if VERSION < v"0.4.0-dev+980"
     macro Dict(pairs...)
