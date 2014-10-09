@@ -49,8 +49,8 @@ for T=types, S=types, x=vals
 end
 
 # issue #8619
-@test hash(nextfloat(2.0^63)) == hash(uint(nextfloat(2.0^63)))
-@test hash(prevfloat(2.0^64)) == hash(uint(prevfloat(2.0^64)))
+@test hash(nextfloat(2.0^63)) == hash(uint64(nextfloat(2.0^63)))
+@test hash(prevfloat(2.0^64)) == hash(uint64(prevfloat(2.0^64)))
 
 # hashing collections (e.g. issue #6870)
 vals = Any[
