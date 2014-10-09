@@ -70,10 +70,10 @@ end
 function doc(f::Function)
   fd = get(META, f, nothing)
   fd == nothing && return
-  doccat([fd.meta[m] for m in fd.order]...)
+  catdoc([fd.meta[m] for m in fd.order]...)
 end
 
-doccat(xs...) = [xs...]
+catdoc(xs...) = [xs...]
 
 # Macros
 
