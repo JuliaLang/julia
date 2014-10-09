@@ -1,5 +1,5 @@
 module Compatibility
 
-# package code goes here
+include("v03to04.jl")
 
 end # module
