@@ -125,7 +125,7 @@ end
 
 getindex(T::(Type...)) = Array(T,0)
 
-# T[a:b] and T[a:s:b] also contruct typed ranges
+# T[a:b] and T[a:s:b] also construct typed ranges
 function getindex{T<:Number}(::Type{T}, r::Range)
     copy!(Array(T,length(r)), r)
 end
