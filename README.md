@@ -1,3 +1,3 @@
 # Compatibility
 
-[![Build Status](https://travis-ci.org/StefanKarpinski/Compatibility.jl.svg?branch=master)](https://travis-ci.org/StefanKarpinski/Compatibility.jl)
+[![Build Status](https://travis-ci.org/JuliaLang/Compat.svg?branch=master)](https://travis-ci.org/JuliaLang/Compat.jl)
