@@ -902,3 +902,11 @@ function i7197()
     ind2sub(size(S), 5)
 end
 @test i7197() == (2,2)
+
+# PR #8622 and general indexin test
+function pr8622()
+    x=[1,3,5,7]
+    y=[5,4,3]
+    return indexin(x,y)
+end
+@test pr8622() == [0,3,1,0]

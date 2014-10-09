@@ -341,18 +341,22 @@ Dict(kv::()) = Dict()
 const AnyDict = Dict{Any,Any}
 
 # TODO: this can probably be simplified using `eltype` as a THT (Tim Holy trait)
-Dict{K,V}(kv::((K,V)...,))     = Dict{K,V}(kv)
-Dict{K  }(kv::((K,Any)...,))   = Dict{K,Any}(kv)
-Dict{V  }(kv::((Any,V)...,))   = Dict{Any,V}(kv)
-Dict{K,V}(kv::(Pair{K,V}...,)) = Dict{K,V}(kv)
-Dict     (kv::(Pair...,))      = Dict{Any,Any}(kv)
+Dict{K,V}(kv::((K,V)...,))               = Dict{K,V}(kv)
+Dict{K  }(kv::((K,Any)...,))             = Dict{K,Any}(kv)
+Dict{V  }(kv::((Any,V)...,))             = Dict{Any,V}(kv)
+Dict{K,V}(kv::(Pair{K,V}...,))           = Dict{K,V}(kv)
+Dict{K}  (kv::(Pair{K}...,))             = Dict{K,Any}(kv)
+Dict{V}  (kv::(Pair{TypeVar(:K),V}...,)) = Dict{Any,V}(kv)
+Dict     (kv::(Pair...,))                = Dict{Any,Any}(kv)
 
 Dict{K,V}(kv::AbstractArray{(K,V)})     = Dict{K,V}(kv)
 Dict{K,V}(kv::AbstractArray{Pair{K,V}}) = Dict{K,V}(kv)
 Dict{K,V}(kv::Associative{K,V})         = Dict{K,V}(kv)
 
-Dict{K,V}(ps::Pair{K,V}...) = Dict{K,V}(ps)
-Dict     (ps::Pair...)      = Dict{Any,Any}(ps)
+Dict{K,V}(ps::Pair{K,V}...)            = Dict{K,V}(ps)
+Dict{K}  (ps::Pair{K}...,)             = Dict{K,Any}(ps)
+Dict{V}  (ps::Pair{TypeVar(:K),V}...,) = Dict{Any,V}(ps)
+Dict     (ps::Pair...)                 = Dict{Any,Any}(ps)
 
 Dict(kv) = dict_with_eltype(kv, eltype(kv))
 dict_with_eltype{K,V}(kv, ::Type{(K,V)}) = Dict{K,V}(kv)
@@ -468,8 +472,10 @@ end
 function empty!{K,V}(h::Dict{K,V})
     fill!(h.slots, 0x0)
     sz = length(h.slots)
-    h.keys = Array(K, sz)
-    h.vals = Array(V, sz)
+    empty!(h.keys)
+    empty!(h.vals)
+    resize!(h.keys, sz)
+    resize!(h.vals, sz)
     h.ndel = 0
     h.count = 0
     return h

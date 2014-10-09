@@ -1799,8 +1799,13 @@ function hcat(X::SparseMatrixCSC...)
     @inbounds for i = 1 : num
         XI = X[i]
         colptr[(1 : nX[i] + 1) + nX_sofar] = XI.colptr .+ nnz_sofar
-        rowval[(1 : nnzX[i]) + nnz_sofar] = XI.rowval
-        nzval[(1 : nnzX[i]) + nnz_sofar] = XI.nzval
+        if nnzX[i] == length(XI.rowval)
+            rowval[(1 : nnzX[i]) + nnz_sofar] = XI.rowval
+            nzval[(1 : nnzX[i]) + nnz_sofar] = XI.nzval
+        else
+            rowval[(1 : nnzX[i]) + nnz_sofar] = XI.rowval[1:nnzX[i]]
+            nzval[(1 : nnzX[i]) + nnz_sofar] = XI.nzval[1:nnzX[i]]
+        end
         nnz_sofar += nnzX[i]
         nX_sofar += nX[i]
     end
