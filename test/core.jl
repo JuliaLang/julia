@@ -466,7 +466,7 @@ begin
     function mytype(vec)
         convert(Vector{(ASCIIString, DataType)}, vec)
     end
-    some_data = {("a", Int32), ("b", Int32)}
+    some_data = Any[("a", Int32), ("b", Int32)]
     @test isa(mytype(some_data),Vector{(ASCIIString, DataType)})
 end
 
@@ -558,8 +558,8 @@ function test7307(a, ret)
     end
     return a
 end
-@test test7307({}, true) == {"inner","outer"}
-@test test7307({}, false) == {"inner","outer"}
+@test test7307([], true) == ["inner","outer"]
+@test test7307([], false) == ["inner","outer"]
 
 # issue #8277
 function test8277(a)
@@ -575,7 +575,7 @@ function test8277(a)
         end
     end
 end
-let a = {}
+let a = []
     test8277(a)
     @test length(a) == 1
 end
@@ -867,7 +867,10 @@ end
 
 # issue #2098
 let
-    i2098() = (c={2.0};[1:1:c[1]])
+    i2098() = begin
+        c = Any[2.0]
+        [1:1:c[1]]
+    end
     @test isequal(i2098(), [1.0,2.0])
 end
 
@@ -1001,7 +1004,7 @@ end
 function f3471(y)
     convert(Array{typeof(y[1]),1}, y)
 end
-@test isa(f3471({1.0,2.0}), Vector{Float64})
+@test isa(f3471(Any[1.0,2.0]), Vector{Float64})
 
 # issue #3729
 typealias A3729{B} Vector{Vector{B}}
@@ -1106,7 +1109,7 @@ type MyType4154{T}
     a2
 end
 
-foo4154(x) = MyType4154(x, {})
+foo4154(x) = MyType4154(x, [])
 h4154() = typeof(foo4154(rand(2,2,2)))
 g4154() = typeof(foo4154(rand(2,2,2,2,2,2,2,2,2)))
 
@@ -1381,14 +1384,14 @@ cnvt{S, T, N}(::Type{Array{S, N}}, x::Array{T, N}) = convert(Array{S}, x)
 
 function tighttypes!(adf)
     T = Bottom
-    tt = {Int}
+    tt = Any[Int]
     for t in tt
         T = typejoin(T, t)
     end
     cnvt(Vector{T}, adf[1])
 end
 
-@test isequal(tighttypes!({Any[1.0,2.0]}), [1,2])
+@test isequal(tighttypes!(Any[Any[1.0,2.0],]), [1,2])
 
 # issue #5142
 bitstype 64 Int5142
@@ -1521,7 +1524,7 @@ for (str, tag) in Dict("" => :none, "\"" => :string, "#=" => :comment, "'" => :c
                        "let;" => :block, "for i=1;" => :block, "function f();" => :block,
                        "f() do x;" => :block, "module X;" => :block, "type X;" => :block,
                        "immutable X;" => :block, "(" => :other, "[" => :other,
-                       "{" => :other, "begin" => :other, "quote" => :other,
+                       "begin" => :other, "quote" => :other,
                        "let" => :other, "for" => :other, "function" => :other,
                        "f() do" => :other, "module" => :other, "type" => :other,
                        "immutable" => :other)
@@ -1534,7 +1537,7 @@ macro m6031(x); x; end
 @test (@m6031 [2,4,6])[2] == 4
 
 # issue #6050
-@test Base.getfield_tfunc({nothing,QuoteNode(:vals)},
+@test Base.getfield_tfunc([nothing, QuoteNode(:vals)],
                           Dict{Int64,(Range1{Int64},Range1{Int64})},
                           :vals) == Array{(Range1{Int64},Range1{Int64}),1}
 
@@ -1795,12 +1798,12 @@ end
 
 # issue #5154
 let
-    v = {}
+    v = []
     for i=1:3, j=1:3
         push!(v, (i, j))
         i == 1 && j == 2 && break
     end
-    @test v == {(1,1), (1,2)}
+    @test v == Any[(1,1), (1,2)]
 end
 
 # addition of ¬ (\neg) parsing
@@ -1825,7 +1828,7 @@ i7652()
 @test a7652.a == 3
 
 # issue #7679
-@test map(f->f(), { ()->i for i=1:3 }) == {1,2,3}
+@test map(f->f(), Any[ ()->i for i=1:3 ]) == Any[1,2,3]
 
 # issue #7810
 type Foo7810{T<:AbstractVector}

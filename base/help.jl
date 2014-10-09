@@ -48,11 +48,11 @@ function init_help()
                 mfunc = func
             end
             if !haskey(FUNCTION_DICT, mfunc)
-                FUNCTION_DICT[mfunc] = {}
+                FUNCTION_DICT[mfunc] = []
             end
             push!(FUNCTION_DICT[mfunc], desc)
             if !haskey(MODULE_DICT, func)
-                MODULE_DICT[func] = {}
+                MODULE_DICT[func] = []
             end
             if !in(mod, MODULE_DICT[func])
                 push!(MODULE_DICT[func], mod)
@@ -94,7 +94,7 @@ function help(io::IO, fname::String, obj=0)
         found = true
     elseif haskey(MODULE_DICT, fname)
         allmods = MODULE_DICT[fname]
-        alldesc = {}
+        alldesc = []
         for mod in allmods
             mfname = isempty(mod) ? fname : mod * "." * fname
             if isgeneric(obj)

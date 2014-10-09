@@ -206,9 +206,8 @@ function _jl_spawn(cmd::Ptr{Uint8}, argv::Ptr{Ptr{Uint8}}, loop::Ptr{Void}, pp::
     proc = c_malloc(_sizeof_uv_process)
     error = ccall(:jl_spawn, Int32,
         (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{Void}, Ptr{Void}, Any, Int32,
-         Ptr{Void},    Int32,       Ptr{Void},     Int32,       Ptr{Void},
-         Int32, Ptr{Ptr{Uint8}}, Ptr{Uint8}),
-         cmd,        argv,            loop,      proc,      pp,  uvtype(in),
+         Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Ptr{Uint8}}, Ptr{Uint8}),
+         cmd, argv, loop, proc, pp, uvtype(in),
          uvhandle(in), uvtype(out), uvhandle(out), uvtype(err), uvhandle(err),
          pp.cmd.detach, pp.cmd.env === nothing ? C_NULL : pp.cmd.env, isempty(pp.cmd.dir) ? C_NULL : pp.cmd.dir)
     if error != 0
