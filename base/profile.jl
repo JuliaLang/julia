@@ -193,6 +193,9 @@ function parse_flat(iplist, n, lidict, C::Bool)
 end
 
 function flat{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict, C::Bool, combine::Bool, cols::Integer)
+    if !C
+        data = purgeC(data, lidict)
+    end
     iplist, n = count_flat(data)
     if isempty(n)
         warning_empty()
