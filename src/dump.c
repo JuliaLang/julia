@@ -625,6 +625,59 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
     }
 }
 
+void jl_serialize_methtable_from_mod(ios_t *s, jl_module_t *m, jl_sym_t *name, jl_methtable_t *mt, int8_t iskw)
+{
+    if (iskw) {
+        if (!mt->kwsorter)
+            return;
+        assert(jl_is_gf(mt->kwsorter));
+        mt = jl_gf_mtable(mt->kwsorter);
+        assert(!mt->kwsorter);
+    }
+    jl_methlist_t *ml = mt->defs;
+    while (ml != JL_NULL) {
+        if (is_submodule(jl_current_module, ml->func->linfo->module)) {
+            jl_serialize_value(s, m);
+            jl_serialize_value(s, name);
+            write_int8(s, iskw);
+            jl_serialize_value(s, ml->sig);
+            jl_serialize_value(s, ml->func);
+            jl_serialize_value(s, ml->tvars);
+            write_int8(s, ml->isstaged);
+        }
+        ml = ml->next;
+    }
+}
+
+void jl_serialize_lambdas_from_mod(ios_t *s, jl_module_t *m)
+{
+    if (m == jl_current_module) return;
+    size_t i;
+    void **table = m->bindings.table;
+    for(i=1; i < m->bindings.size; i+=2) {
+        if (table[i] != HT_NOTFOUND) {
+            jl_binding_t *b = (jl_binding_t*)table[i];
+            if (b->owner == m && b->value) {
+                if (jl_is_function(b->value)) {
+                    jl_function_t *gf = (jl_function_t*)b->value;
+                    if (jl_is_gf(gf)) {
+                        jl_methtable_t *mt = jl_gf_mtable(gf);
+                        jl_serialize_methtable_from_mod(s, m, b->name, mt, 0);
+                        jl_serialize_methtable_from_mod(s, m, b->name, mt, 1);
+                    }
+                }
+                else if (jl_is_module(b->value)) {
+                    jl_module_t *child = (jl_module_t*)b->value;
+                    if (child != m && child->parent == m && child->name == b->name) {
+                        // this is the original/primary binding for the submodule
+                        jl_serialize_lambdas_from_mod(s, (jl_module_t*)b->value);
+                    }
+                }
+            }
+        }
+    }
+}
+
 // --- deserialize ---
 
 static jl_fptr_t jl_deserialize_fptr(ios_t *s)
@@ -644,7 +697,8 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
     if (tag == 5) {
         jl_module_t *m = (jl_module_t*)jl_deserialize_value(s);
         jl_sym_t *sym = (jl_sym_t*)jl_deserialize_value(s);
-        jl_value_t *dtv = jl_apply_type(jl_get_global(m, sym), (jl_tuple_t*)jl_deserialize_value(s));
+        jl_tuple_t *parameters = (jl_tuple_t*)jl_deserialize_value(s);
+        jl_value_t *dtv = jl_apply_type(jl_get_global(m, sym), parameters);
         ptrhash_put(&backref_table, (void*)(ptrint_t)pos, dtv);
         return dtv;
     }
@@ -658,7 +712,7 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
         dt = jl_bool_type;
     else if (tag == 4)
         dt = jl_int64_type;
-    else
+    else //tag == 0
         dt = jl_new_uninitialized_datatype(nf);
     dt->size = size;
     dt->struct_decl = NULL;
@@ -676,6 +730,8 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
         dt->instance->type = (jl_value_t*)dt;
     }
     assert(tree_literal_values==NULL && mode != MODE_AST);
+    if (tag == 0)
+        dt->name = NULL;
     ptrhash_put(&backref_table, (void*)(ptrint_t)pos, dt);
 
     if (nf > 0) {
@@ -991,6 +1047,37 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, int pos, jl_value_t *vtag) {
     return NULL;
 }
 
+void jl_deserialize_lambdas_from_mod(ios_t *s)
+{
+    while (1) {
+        jl_module_t *mod = (jl_module_t*)jl_deserialize_value(s);
+        if (mod == NULL)
+            return;
+        jl_sym_t *name = (jl_sym_t*)jl_deserialize_value(s);
+        jl_function_t *gf = (jl_function_t*)jl_get_global(mod, name);
+        int8_t iskw = read_int8(s);
+        if (!jl_is_gf(gf)) {
+            if (jl_is_datatype(gf) &&
+                ((jl_function_t*)gf)->fptr == jl_f_ctor_trampoline) {
+                jl_add_constructors((jl_datatype_t*)gf);
+            }
+            assert(jl_is_gf(gf));
+        }
+        if (iskw) {
+            if (!jl_gf_mtable(gf)->kwsorter) {
+                jl_gf_mtable(gf)->kwsorter = jl_new_generic_function(jl_gf_name(gf));
+            }
+            gf = jl_gf_mtable(gf)->kwsorter;
+            assert(jl_is_gf(gf));
+        }
+        jl_tuple_t *types = (jl_tuple_t*)jl_deserialize_value(s);
+        jl_function_t *meth = (jl_function_t*)jl_deserialize_value(s);
+        jl_tuple_t *tvars = (jl_tuple_t*)jl_deserialize_value(s);
+        int8_t isstaged = read_int8(s);
+        jl_add_method(gf, types, meth, tvars, isstaged);
+    }
+}
+
 // --- entry points ---
 
 extern jl_array_t *jl_module_init_order;
@@ -1253,6 +1340,7 @@ jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data)
     return v;
 }
 
+DLLEXPORT
 int jl_save_new_module(char *fname, jl_module_t *mod)
 {
     ios_t f;
@@ -1271,8 +1359,10 @@ int jl_save_new_module(char *fname, jl_module_t *mod)
     jl_module_t *lastmod = jl_current_module;
     jl_current_module = mod;
     jl_serialize_value(&f, mod);
-    mode = last_mode;
+    jl_serialize_lambdas_from_mod(&f, jl_main_module);
+    jl_serialize_value(&f, NULL);
     jl_current_module = lastmod;
+    mode = last_mode;
     jl_gc_ephemeral_off();
     if (en) jl_gc_enable();
     
@@ -1282,6 +1372,7 @@ int jl_save_new_module(char *fname, jl_module_t *mod)
     return 0;
 }
 
+DLLEXPORT
 jl_module_t *jl_restore_new_module(char *fname)
 {
     ios_t f;
@@ -1295,20 +1386,34 @@ jl_module_t *jl_restore_new_module(char *fname)
     }
     htable_new(&backref_table, 5000);
     ptrhash_put(&backref_table, (void*)(intptr_t)-1, jl_main_module);
+    datatype_list = jl_alloc_cell_1d(0);
     
     int en = jl_gc_is_enabled();
     jl_gc_disable();
-    jl_gc_ephemeral_on();
     DUMP_MODES last_mode = mode;
     mode = MODE_MODULE;
-    jl_module_t *mod = (jl_module_t*)jl_deserialize_value(&f);
+    jl_module_t *newm = (jl_module_t*)jl_deserialize_value(&f);
+    jl_deserialize_lambdas_from_mod(&f);
     mode = last_mode;
-    jl_gc_ephemeral_off();
     if (en) jl_gc_enable();
-
     htable_reset(&backref_table, 0);
     ios_close(&f);
-    return mod;
+
+    // cache builtin parametric types
+    for(int i=0; i < jl_array_len(datatype_list); i++) {
+        jl_value_t *v = jl_cellref(datatype_list, i);
+        uint32_t uid = ((jl_datatype_t*)v)->uid;
+        jl_cache_type_((jl_datatype_t*)v);
+        ((jl_datatype_t*)v)->uid = uid;
+    }
+
+    jl_binding_t *b = jl_get_binding_wr(newm->parent, newm->name);
+    jl_declare_constant(b);
+    if (b->value != NULL) {
+        JL_PRINTF(JL_STDERR, "Warning: replacing module %s\n", newm->name->name);
+    }
+    b->value = (jl_value_t*)newm;
+    return newm;
 }
 
 // --- init ---

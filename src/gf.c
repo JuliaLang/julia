@@ -841,7 +841,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     assert(!(newmeth->linfo && newmeth->linfo->ast) ||
            newmeth->fptr == &jl_trampoline);
     */
-    if (newmeth->linfo&&newmeth->linfo->ast&&newmeth->fptr!=&jl_trampoline) {
+    if (newmeth->linfo && newmeth->linfo->ast && newmeth->fptr != &jl_trampoline) {
         newmeth->fptr = &jl_trampoline;
     }
 
