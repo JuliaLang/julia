@@ -75,9 +75,13 @@ mv(src::String, dst::String) = FS.rename(src, dst)
 
 function touch(path::String)
     f = FS.open(path,JL_O_WRONLY | JL_O_CREAT, 0o0666)
-    if f.handle >= 0
+    if f.handle < 0
+        error("touch: error opening file")
+    end
+    try
         t = time()
         futime(f,t,t)
+    finally
         FS.close(f)
     end
 end
