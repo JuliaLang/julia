@@ -668,8 +668,8 @@
 			ex)
 		 (let ((argument
 			(cond ((closing-token? (peek-token s))
-			       (syntax-deprecation-warning s "x[i:]" "x[i:end]")
-			       ':)  ; missing last argument
+			       (error  (string "missing last argument in \"" 
+					       (deparse ex) ":\" range expression ")))
 			      ((newline? (peek-token s))
 			       (error "line break in \":\" expression"))
 			      (else
@@ -1426,7 +1426,7 @@
 	     (if (eqv? (require-token s) closer)
 		 (loop lst nxt)
 		 (let ((params (parse-arglist s closer)))
-		   `(vcat ,@params ,@lst ,nxt))))
+		   `(vcat ,@params ,@(reverse lst) ,nxt))))
 	    ((#\] #\})
 	     (error (string "unexpected \"" t "\"")))
 	    (else
