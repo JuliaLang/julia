@@ -46,7 +46,7 @@ while developing you might use a workflow something like this::
     obj1 = MyModule.ObjConstructor(a, b) # old objects are no longer valid, must reconstruct
     obj2 = MyModule.somefunction(obj1)   # this time it worked!
     obj3 = MyModule.someotherfunction(obj2, c)
-    ...
+    ⋮
 
 Functions
 ---------
@@ -97,8 +97,8 @@ inside a specific function or set of functions, you have two options:
 1.  Use ``import``::
 
         import Foo
-        function bar(...)
-            ... refer to Foo symbols via Foo.baz ...
+        function bar(⋯)
+            ⋯ refer to Foo symbols via Foo.baz ⋯
         end
 
 
@@ -113,8 +113,8 @@ inside a specific function or set of functions, you have two options:
         module Bar
         export bar
         using Foo
-        function bar(...)
-            ... refer to Foo.baz as simply baz ....
+        function bar(⋯)
+            ⋯ refer to Foo.baz as simply baz ⋯.
         end
         end
         using Bar
@@ -602,10 +602,10 @@ versions of the outer function for different element types of
 ``a``. You could do it like this::
 
     function myfun{T<:FloatingPoint}(c::MySimpleContainer{Vector{T}})
-        ...
+        ⋮
     end
     function myfun{T<:Integer}(c::MySimpleContainer{Vector{T}})
-        ...
+        ⋮
     end
 
 This works fine for ``Vector{T}``, but we'd also have to write

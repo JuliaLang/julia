@@ -7,7 +7,7 @@
 .. index:: module, baremodule, using, import, export, importall
 
 Modules in Julia are separate global variable workspaces. They are
-delimited syntactically, inside ``module Name ... end``. Modules allow
+delimited syntactically, inside ``module Name ⋯ end``. Modules allow
 you to create top-level definitions without worrying about name conflicts
 when your code is used together with somebody else's. Within a module, you
 can control which names from other modules are visible (via importing),
@@ -179,7 +179,7 @@ keyword ``baremodule`` instead. In terms of ``baremodule``, a standard
     eval(x) = Core.eval(Mod, x)
     eval(m,x) = Core.eval(m, x)
 
-    ...
+    ⋮
 
     end
 
@@ -202,12 +202,12 @@ any of its enclosing modules::
     module Parent
 
     module Utils
-    ...
+    ⋮
     end
 
     using .Utils
 
-    ...
+    ⋮
     end
 
 Here module ``Parent`` contains a submodule ``Utils``, and code in

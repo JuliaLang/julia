@@ -106,7 +106,7 @@ exception is thrown, otherwise, the left-hand value is returned:
 
 This allows a type assertion to be attached to any expression
 in-place. The most common usage of ``::`` as an assertion is in
-function/methods signatures, such as ``f(x::Int8) = ...`` (see
+function/methods signatures, such as ``f(x::Int8) = ⋯`` (see
 :ref:`man-methods`).
 
 

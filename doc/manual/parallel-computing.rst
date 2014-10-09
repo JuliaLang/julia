@@ -228,12 +228,12 @@ random matrix::
     # method 1
     A = rand(1000,1000)
     Bref = @spawn A^2
-    ...
+    ⋮
     fetch(Bref)
 
     # method 2
     Bref = @spawn rand(1000,1000)^2
-    ...
+    ⋮
     fetch(Bref)
 
 The difference seems trivial, but in fact is quite significant due to

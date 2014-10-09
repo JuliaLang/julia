@@ -47,7 +47,7 @@ There is special syntax for "quoting" code (analogous to quoting
 strings) that makes it easy to create expression objects without
 explicitly constructing ``Expr`` objects. There are two forms: a short
 form for inline expressions using ``:`` followed by a single expression,
-and a long form for blocks of code, enclosed in ``quote ... end``. Here
+and a long form for blocks of code, enclosed in ``quote ⋯ end``. Here
 is an example of the short form used to quote an arithmetic expression:
 
 .. doctest::
@@ -274,7 +274,7 @@ slightly more tersely using the ``:`` prefix quoting form::
     end
 
 This sort of in-language code generation, however, using the
-``eval(quote(...))`` pattern, is common enough that Julia comes with a
+``eval(quote(⋯))`` pattern, is common enough that Julia comes with a
 macro to abbreviate this pattern::
 
     for op = (:+, :*, :&, :|, :$)
@@ -310,24 +310,24 @@ written code to a resulting expression, which then takes the place of
 the macro call in the final syntax tree. Macros are invoked with the
 following general syntax::
 
-    @name expr1 expr2 ...
-    @name(expr1, expr2, ...)
+    @name expr1 expr2 ⋯
+    @name(expr1, expr2, ⋯)
 
 Note the distinguishing ``@`` before the macro name and the lack of
 commas between the argument expressions in the first form, and the
 lack of whitespace after ``@name`` in the second form. The two styles
 should not be mixed. For example, the following syntax is different
-from the examples above; it passes the tuple ``(expr1, expr2, ...)`` as
+from the examples above; it passes the tuple ``(expr1, expr2, ⋯)`` as
 one argument to the macro::
 
-    @name (expr1, expr2, ...)
+    @name (expr1, expr2, ⋯)
 
 Before the program runs, this statement will be replaced with the
 returned result of calling an expander function for ``@name`` on the
 expression arguments. Expanders are defined with the ``macro`` keyword::
 
-    macro name(expr1, expr2, ...)
-        ...
+    macro name(expr1, expr2, ⋯)
+        ⋮
         return resulting_expr
     end
 
@@ -498,7 +498,7 @@ One problem remains however. Consider the following use of this macro::
     module MyModule
     import Base.@time
 
-    time() = ... # compute something
+    time() = ⋯ # compute something
 
     @time time()
     end
@@ -510,9 +510,9 @@ macro call environment. This is done by "escaping" the expression with
 the ``esc`` function::
 
     macro time(ex)
-        ...
+        ⋮
         local val = $(esc(ex))
-        ...
+        ⋮
     end
 
 An expression wrapped in this manner is left alone by the macro expander

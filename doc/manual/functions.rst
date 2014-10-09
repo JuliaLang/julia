@@ -185,9 +185,9 @@ names. These are:
 =================== ==============
 Expression          Calls
 =================== ==============
-``[A B C ...]``     ``hcat``
-``[A, B, C, ...]``  ``vcat``
-``[A B; C D; ...]`` ``hvcat``
+``[A B C ⋯]``     ``hcat``
+``[A, B, C, ⋯]``  ``vcat``
+``[A B; C D; ⋯]`` ``hvcat``
 ``A'``              ``ctranspose``
 ``A.'``             ``transpose``
 ``1:n``             ``colon``
@@ -304,16 +304,17 @@ It is often convenient to be able to write functions taking an arbitrary
 number of arguments. Such functions are traditionally known as "varargs"
 functions, which is short for "variable number of arguments". You can
 define a varargs function by following the last argument with an
-ellipsis:
+ellipsis ``...`` (three periods in a row):
 
 .. doctest::
 
     julia> bar(a,b,x...) = (a,b,x)
     bar (generic function with 1 method)
 
-The variables ``a`` and ``b`` are bound to the first two argument values
-as usual, and the variable ``x`` is bound to an iterable collection of
-the zero or more values passed to ``bar`` after its first two arguments:
+The variables ``a`` and ``b`` are bound to the first two
+argument values as usual, and the variable ``x`` is bound to ("slurps") an
+iterable collection of the zero or more values passed to ``bar`` after its
+first two arguments:
 
 .. doctest::
 
@@ -332,8 +333,8 @@ the zero or more values passed to ``bar`` after its first two arguments:
 In all these cases, ``x`` is bound to a tuple of the trailing values
 passed to ``bar``.
 
-On the flip side, it is often handy to "splice" the values contained in
-an iterable collection into a function call as individual arguments. To
+On the flip side, it is often handy to "splice" or "splat" the values contained
+in an iterable collection into a function call as individual arguments. To
 do this, one also uses ``...`` but in the function call instead:
 
 .. doctest::
@@ -344,8 +345,8 @@ do this, one also uses ``...`` but in the function call instead:
     julia> bar(1,2,x...)
     (1,2,(3,4))
 
-In this case a tuple of values is spliced into a varargs call precisely
-where the variable number of arguments go. This need not be the case,
+In this case a tuple of values is spliced (splatted) into a varargs call
+precisely where the variable number of arguments go. This need not be the case,
 however:
 
 .. doctest::
@@ -468,8 +469,8 @@ signature::
         ###
     end
 
-Extra keyword arguments can be collected using ``...``, as in varargs
-functions::
+Extra keyword arguments can be collected ("slurped") using ``...``, as in
+varargs functions::
 
     function f(x; y=0, args...)
         ###
@@ -543,7 +544,7 @@ The ``do x`` syntax creates an anonymous function with argument ``x``
 and passes it as the first argument to ``map``. Similarly, ``do a,b``
 would create a two-argument anonymous function, and a plain ``do``
 would declare that what follows is an anonymous function of the form
-``() -> ...``.
+``() -> ⋯``.
 
 How these arguments are initialized depends on the "outer" function;
 here, ``map`` will sequentially set ``x`` to ``A``, ``B``, ``C``,
