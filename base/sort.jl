@@ -212,7 +212,7 @@ end
 searchsorted{T<:Real}(a::Range{T}, x::Real, o::DirectOrdering) =
     searchsortedfirst(a,x,o):searchsortedlast(a,x,o)
 
-for s in {:searchsortedfirst, :searchsortedlast, :searchsorted}
+for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
     @eval begin
         $s(v::AbstractVector, x, o::Ordering) = $s(v,x,1,length(v),o)
         $s(v::AbstractVector, x;

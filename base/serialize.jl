@@ -11,7 +11,8 @@ const ser_tag = ObjectIdDict()
 const deser_tag = ObjectIdDict()
 let i = 2
     global ser_tag, deser_tag
-    for t = {Symbol, Int8, Uint8, Int16, Uint16, Int32, Uint32,
+    for t = Any[
+             Symbol, Int8, Uint8, Int16, Uint16, Int32, Uint32,
              Int64, Uint64, Int128, Uint128, Float32, Float64, Char, Ptr,
              DataType, UnionType, Function,
              Tuple, Array, Expr, LongSymbol, LongTuple, LongExpr,
@@ -35,7 +36,7 @@ let i = 2
              :reserved17, :reserved18, :reserved19, :reserved20,
              false, true, nothing, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
              12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-             28, 29, 30, 31, 32}
+             28, 29, 30, 31, 32]
         ser_tag[t] = int32(i)
         deser_tag[int32(i)] = t
         i += 1
@@ -241,7 +242,7 @@ function serialize(s, linfo::LambdaStaticData)
     if isdefined(linfo.def, :roots)
         serialize(s, linfo.def.roots)
     else
-        serialize(s, {})
+        serialize(s, [])
     end
     serialize(s, linfo.sparams)
     serialize(s, linfo.inferred)
@@ -482,7 +483,7 @@ function deserialize_expr(s, len)
     hd = deserialize(s)::Symbol
     ty = deserialize(s)
     e = Expr(hd)
-    e.args = { deserialize(s) for i=1:len }
+    e.args = Any[ deserialize(s) for i=1:len ]
     e.typ = ty
     e
 end
@@ -553,7 +554,7 @@ function deserialize(s, t::DataType)
             f3 = deserialize(s)
             return ccall(:jl_new_struct, Any, (Any,Any...), t, f1, f2, f3)
         else
-            flds = { deserialize(s) for i = 1:nf }
+            flds = Any[ deserialize(s) for i = 1:nf ]
             return ccall(:jl_new_structv, Any, (Any,Ptr{Void},Uint32),
                          t, flds, nf)
         end

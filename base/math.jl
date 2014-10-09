@@ -57,7 +57,7 @@ end
 macro evalpoly(z, p...)
     a = :($(esc(p[end])))
     b = :($(esc(p[end-1])))
-    as = {}
+    as = []
     for i = length(p)-2:-1:1
         ai = symbol(string("a", i))
         push!(as, :($ai = $a))

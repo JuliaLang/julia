@@ -392,7 +392,7 @@ function resolve(
     isempty(changes) && return info("No packages to install, update or remove")
 
     # prefetch phase isolates network activity, nothing to roll back
-    missing = {}
+    missing = []
     for (pkg,(ver1,ver2)) in changes
         vers = ASCIIString[]
         ver1 !== nothing && push!(vers,Git.head(dir=pkg))
@@ -410,7 +410,7 @@ function resolve(
     end
 
     # try applying changes, roll back everything if anything fails
-    changed = {}
+    changed = []
     try
         for (pkg,(ver1,ver2)) in changes
             if ver1 === nothing

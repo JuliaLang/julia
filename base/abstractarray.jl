@@ -1182,7 +1182,7 @@ end
 ##
 # generic map on any iterator
 function map(f::Callable, iters...)
-    result = {}
+    result = []
     len = length(iters)
     states = [start(iters[idx]) for idx in 1:len]
     nxtvals = cell(len)
