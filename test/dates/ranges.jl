@@ -249,8 +249,8 @@ dr18 = typemax(Dates.DateTime):Dates.Month(-100000):typemin(Dates.DateTime)
 dr19 = typemax(Dates.DateTime):Dates.Year(-1000000):typemin(Dates.DateTime)
 dr20 = typemin(Dates.DateTime):Dates.Day(2):typemax(Dates.DateTime)
 
-drs = {dr,dr1,dr2,dr3,dr4,dr5,dr6,dr7,dr8,dr9,dr10,
-       dr11,dr12,dr13,dr14,dr15,dr16,dr17,dr18,dr19,dr20}
+drs = Any[dr,dr1,dr2,dr3,dr4,dr5,dr6,dr7,dr8,dr9,dr10,
+          dr11,dr12,dr13,dr14,dr15,dr16,dr17,dr18,dr19,dr20]
 drs2 = map(x->Dates.Date(first(x)):step(x):Dates.Date(last(x)),drs)
 
 @test map(length,drs) == map(x->size(x)[1],drs)
@@ -330,8 +330,8 @@ dr18 = typemax(Dates.Date):Dates.Month(-100000):typemin(Dates.Date)
 dr19 = typemax(Dates.Date):Dates.Year(-1000000):typemin(Dates.Date)
 dr20 = typemin(Dates.Date):Dates.Day(2):typemax(Dates.Date)
 
-drs = {dr,dr1,dr2,dr3,dr4,dr5,dr6,dr7,dr8,dr9,dr10,
-       dr11,dr12,dr13,dr14,dr15,dr16,dr17,dr18,dr19,dr20}
+drs = Any[dr,dr1,dr2,dr3,dr4,dr5,dr6,dr7,dr8,dr9,dr10,
+          dr11,dr12,dr13,dr14,dr15,dr16,dr17,dr18,dr19,dr20]
 
 @test map(length,drs) == map(x->size(x)[1],drs)
 @test all(map(x->findin(x,x)==[1:length(x)],drs[1:4]))

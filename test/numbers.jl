@@ -800,20 +800,20 @@ end
 @test (Complex(1,2)/Complex(2.5,3.0))*Complex(2.5,3.0) == Complex(1,2)
 @test 0.7 < real(sqrt(Complex(0,1))) < 0.707107
 
-for T in {Int8,Int16,Int32,Int64,Int128}
+for T in [Int8, Int16, Int32, Int64, Int128]
     @test abs(typemin(T)) == -typemin(T)
-    #for x in {typemin(T),convert(T,-1),zero(T),one(T),typemax(T)}
+    #for x in (typemin(T),convert(T,-1),zero(T),one(T),typemax(T))
     #    @test signed(unsigned(x)) == x
     #end
 end
 
-#for T in {Uint8,Uint16,Uint32,Uint64,Uint128},
-#    x in {typemin(T),one(T),typemax(T)}
+#for T in (Uint8,Uint16,Uint32,Uint64,Uint128)
+#    x in (typemin(T),one(T),typemax(T))
 #    @test unsigned(signed(x)) == x
 #end
 
-for S = {Int8,  Int16,  Int32,  Int64},
-    U = {Uint8, Uint16, Uint32, Uint64}
+for S = [Int8,  Int16,  Int32,  Int64],
+    U = [Uint8, Uint16, Uint32, Uint64]
     @test !(-one(S) == typemax(U))
     @test -one(S) != typemax(U)
     @test -one(S) < typemax(U)
@@ -821,7 +821,7 @@ for S = {Int8,  Int16,  Int32,  Int64},
 end
 
 # check type of constructed rationals
-int_types = {Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64}
+int_types = [Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64]
 for N = int_types, D = int_types
     T = promote_type(N,D)
     @test typeof(convert(N,2)//convert(D,3)) <: Rational{T}
@@ -831,9 +831,9 @@ end
 @test typeof(convert(Rational{Integer},1)) === Rational{Integer}
 
 # check type of constructed complexes
-real_types = {Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Float32, Float64,
+real_types = [Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Float32, Float64,
               Rational{Int8}, Rational{Uint8}, Rational{Int16}, Rational{Uint16},
-              Rational{Int32}, Rational{Uint32}, Rational{Int64}, Rational{Uint64}}
+              Rational{Int32}, Rational{Uint32}, Rational{Int64}, Rational{Uint64}]
 for A = real_types, B = real_types
     T = promote_type(A,B)
     @test typeof(Complex(convert(A,2),convert(B,3))) <: Complex{T}
@@ -844,15 +844,15 @@ end
 @test_throws MethodError complex(1,2) > complex(0,0)
 
 # div, fld, cld, rem, mod
-for yr = {
+for yr = Any[
     1:6,
     0.25:0.25:6.0,
     1//4:1//4:6//1
-}, xr = {
+], xr = Any[
     0:6,
     0.0:0.25:6.0,
     0//1:1//4:6//1
-}
+]
     for y = yr, x = xr
         # check basic div functionality
         if 0 <= x < 1y
@@ -1133,10 +1133,10 @@ end
 @test cld(typemin(Int64)+3,-2) ==  4611686018427387903
 @test cld(typemin(Int64)+3,-7) ==  1317624576693539401
 
-for x={typemin(Int64), -typemax(Int64), -typemax(Int64)+1, -typemax(Int64)+2,
-       typemax(Int64)-2, typemax(Int64)-1, typemax(Int64),
-       typemax(Uint64)-1, typemax(Uint64)-2, typemax(Uint64)},
-    y={-7,-2,-1,1,2,7}
+for x=Any[typemin(Int64), -typemax(Int64), -typemax(Int64)+1, -typemax(Int64)+2,
+          typemax(Int64)-2, typemax(Int64)-1, typemax(Int64),
+          typemax(Uint64)-1, typemax(Uint64)-2, typemax(Uint64)],
+    y=[-7,-2,-1,1,2,7]
     if x >= 0
         @test div(unsigned(x),y) == unsigned(div(x,y))
         @test fld(unsigned(x),y) == unsigned(fld(x,y))
@@ -1608,14 +1608,34 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 @test isa(convert(Float64, big(1)//2), Float64)
 
 # issue 5935
-@test rationalize(Int64, nextfloat(0.1)) == 1//10
-@test rationalize(Int128,nextfloat(0.1)) == 1//10
-@test rationalize(BigInt,nextfloat(0.1)) == 1//10
-@test rationalize(BigInt,nextfloat(BigFloat("0.1"))) == 1//10
-@test rationalize(Int64, nextfloat(0.1),tol=0) == 379250494936463//3792504949364629
-@test rationalize(Int128,nextfloat(0.1),tol=0) == 379250494936463//3792504949364629
-@test rationalize(BigInt,nextfloat(0.1),tol=0) == 379250494936463//3792504949364629
-@test rationalize(BigInt,nextfloat(BigFloat("0.1")),tol=0) == 5449039493520762137579811059232372134271528690147791248915651012137088453645//54490394935207621375798110592323721342715286901477912489156510121370884536449
+@test rationalize(Int8,  nextfloat(0.1)) == 1//10
+@test rationalize(Int64, nextfloat(0.1)) == 300239975158034//3002399751580339
+@test rationalize(Int128,nextfloat(0.1)) == 300239975158034//3002399751580339
+@test rationalize(BigInt,nextfloat(0.1)) == 300239975158034//3002399751580339
+@test rationalize(Int8,  nextfloat(0.1),tol=0.5eps(0.1)) == 1//10
+@test rationalize(Int64, nextfloat(0.1),tol=0.5eps(0.1)) == 379250494936463//3792504949364629
+@test rationalize(Int128,nextfloat(0.1),tol=0.5eps(0.1)) == 379250494936463//3792504949364629
+@test rationalize(BigInt,nextfloat(0.1),tol=0.5eps(0.1)) == 379250494936463//3792504949364629
+@test rationalize(Int8,  nextfloat(0.1),tol=1.5eps(0.1)) == 1//10
+@test rationalize(Int64, nextfloat(0.1),tol=1.5eps(0.1)) == 1//10
+@test rationalize(Int128,nextfloat(0.1),tol=1.5eps(0.1)) == 1//10
+@test rationalize(BigInt,nextfloat(0.1),tol=1.5eps(0.1)) == 1//10
+@test rationalize(BigInt,nextfloat(BigFloat("0.1")),tol=1.5eps(big(0.1))) == 1//10
+@test rationalize(Int64, nextfloat(0.1),tol=0) == 7205759403792795//72057594037927936
+@test rationalize(Int128,nextfloat(0.1),tol=0) == 7205759403792795//72057594037927936
+@test rationalize(BigInt,nextfloat(0.1),tol=0) == 7205759403792795//72057594037927936
+
+@test rationalize(Int8,  prevfloat(0.1)) == 1//10
+@test rationalize(Int64, prevfloat(0.1)) == 1//10
+@test rationalize(Int128,prevfloat(0.1)) == 1//10
+@test rationalize(BigInt,prevfloat(0.1)) == 1//10
+@test rationalize(BigInt,prevfloat(BigFloat("0.1"))) == 1//10
+@test rationalize(Int64, prevfloat(0.1),tol=0) == 7205759403792793//72057594037927936
+@test rationalize(Int128,prevfloat(0.1),tol=0) == 7205759403792793//72057594037927936
+@test rationalize(BigInt,prevfloat(0.1),tol=0) == 7205759403792793//72057594037927936
+
+@test rationalize(BigInt,nextfloat(BigFloat("0.1")),tol=0) == 46316835694926478169428394003475163141307993866256225615783033603165251855975//463168356949264781694283940034751631413079938662562256157830336031652518559744
+
 
 @test rationalize(Int8, 200f0) == 1//0
 @test rationalize(Int8, -200f0) == -1//0
@@ -1798,7 +1818,8 @@ end
 @test 3//2 <= typemax(Int)
 
 # check gcd and related functions against GMP
-for i = -20:20, j = -20:20
+for T in (Int32,Int64), ii = -20:20, jj = -20:20
+    i::T, j::T = ii, jj
     local d = gcd(i,j)
     @test d >= 0
     @test lcm(i,j) >= 0

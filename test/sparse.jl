@@ -212,7 +212,7 @@ end
 @test 4 <= mean(sprb45nnzs) <= 16
 
 # issue #5853, sparse diff
-for i=1:2, a={[1 2 3], [1 2 3]', eye(3)}
+for i=1:2, a=Any[[1 2 3], [1 2 3]', eye(3)]
     @test all(diff(sparse(a),i) == diff(a,i))
 end
 
@@ -458,5 +458,5 @@ end
 @test_throws BoundsError sparse([0],[-1],[1.0],2,2)
 
 # issue #8363
-@test_throws BoundsError sparsevec([-1=>1,1=>2])
+@test_throws BoundsError sparsevec(Dict(-1=>1,1=>2))
 

@@ -93,7 +93,7 @@ type Worker
     config::Dict
 
     Worker(host::String, port::Integer, sock::TCPSocket, id::Int) =
-        new(bytestring(host), uint16(port), sock, IOBuffer(), {}, {}, id, false)
+        new(bytestring(host), uint16(port), sock, IOBuffer(), [], [], id, false)
 end
 Worker(host::String, port::Integer, sock::TCPSocket) =
     Worker(host, port, sock, 0)
@@ -216,7 +216,7 @@ type ProcessGroup
 
     ProcessGroup(w::Array{Any,1}) = new("pg-default", w, Dict())
 end
-const PGRP = ProcessGroup({})
+const PGRP = ProcessGroup([])
 
 get_bind_addr(pid::Integer) = get_bind_addr(worker_from_id(pid))
 function get_bind_addr(w::Union(Worker, LocalProcess))
@@ -374,8 +374,8 @@ function deregister_worker(pg, pid)
     push!(map_del_wrkr, pid)
 
     # delete this worker from our RemoteRef client sets
-    ids = {}
-    tonotify = {}
+    ids = []
+    tonotify = []
     for (id,rv) in pg.refs
         if in(pid,rv.clientset)
             push!(ids, id)
@@ -797,7 +797,7 @@ function accept_handler(server::TCPServer, status::Int32)
 end
 
 function create_message_handler_loop(sock::AsyncStream; ntfy_join_complete=nothing) #returns immediately
-    schedule(@task begin
+    @schedule begin
         global PGRP
         #println("message_handler_loop")
         disable_nagle(sock)
@@ -823,26 +823,32 @@ function create_message_handler_loop(sock::AsyncStream; ntfy_join_complete=nothi
                     id = deserialize(sock)
                     f = deserialize(sock)
                     args = deserialize(sock)
-                    @schedule begin
-                        v = run_work_thunk(()->f(args...))
-                        deliver_result(sock, msg, id, v)
-                        v
+                    let f=f, args=args, id=id, msg=msg
+                        @schedule begin
+                            v = run_work_thunk(()->f(args...))
+                            deliver_result(sock, msg, id, v)
+                            v
+                        end
                     end
                 elseif is(msg, :call_wait)
                     id = deserialize(sock)
                     notify_id = deserialize(sock)
                     f = deserialize(sock)
                     args = deserialize(sock)
-                    @schedule begin
-                        rv = schedule_call(id, ()->f(args...))
-                        deliver_result(sock, msg, notify_id, wait_full(rv))
+                    let f=f, args=args, id=id, msg=msg, notify_id=notify_id
+                        @schedule begin
+                            rv = schedule_call(id, ()->f(args...))
+                            deliver_result(sock, msg, notify_id, wait_full(rv))
+                        end
                     end
                 elseif is(msg, :do)
                     f = deserialize(sock)
                     args = deserialize(sock)
                     #print("got args: $args\n")
-                    @schedule begin
-                        run_work_thunk(RemoteValue(), ()->f(args...))
+                    let f=f, args=args
+                        @schedule begin
+                            run_work_thunk(RemoteValue(), ()->f(args...))
+                        end
                     end
                 elseif is(msg, :result)
                     # used to deliver result of wait or fetch
@@ -924,7 +930,7 @@ function create_message_handler_loop(sock::AsyncStream; ntfy_join_complete=nothi
 
             return nothing
         end
-    end)
+    end
 end
 
 function disable_threaded_libs()
@@ -991,7 +997,7 @@ read_cb_response(host::String, port::Integer, config::Dict) = (nothing, host, po
 
 function start_cluster_workers(np::Integer, config::Dict, manager::ClusterManager, resp_arr::Array, launched_ntfy::Condition)
     # Get the cluster manager to launch the instance
-    instance_sets = {}
+    instance_sets = []
     instances_ntfy = Condition()
 
     t = @schedule launch(manager, np, config, instance_sets, instances_ntfy)
@@ -1117,7 +1123,7 @@ function launch(manager::LocalManager, np::Integer, config::Dict, resp_arr::Arra
     for i in 1:np
         io, pobj = open(detach(`$(dir)/$(exename) $exeflags --bind-to $(LPROC.bind_addr)`), "r")
         io_objs[i] = io
-        configs[i] = merge(config, {:process => pobj})
+        configs[i] = merge(config, AnyDict(:process => pobj))
     end
 
     # ...and then read the host:port info. This optimizes overall start times.
@@ -1207,11 +1213,11 @@ function launch_on_machine(manager::SSHManager, config::Dict, resp_arr::Array, m
         maxp = div(maxp,2) + 1   # Since the tunnel will also take up one ssh connection
     end
 
-    ios_to_check = {}
+    ios_to_check = []
 
     t_check=time()
     while cnt > 0
-        ios_to_check2 = {}
+        ios_to_check2 = []
         for io in ios_to_check
             if nb_available(io) == 0
                 push!(ios_to_check2, io)
@@ -1278,14 +1284,14 @@ function addprocs_internal(np::Integer;
                            tunnel=false, dir=JULIA_HOME,
                            exename=(ccall(:jl_is_debugbuild,Cint,())==0?"./julia":"./julia-debug"),
                            sshflags::Cmd=``, manager=LocalManager(), exeflags=``, max_parallel=10)
-
-    config={:dir=>dir, :exename=>exename, :exeflags=>`$exeflags --worker`, :tunnel=>tunnel, :sshflags=>sshflags, :max_parallel=>max_parallel}
+    
+    config = AnyDict(:dir=>dir, :exename=>exename, :exeflags=>`$exeflags --worker`, :tunnel=>tunnel, :sshflags=>sshflags, :max_parallel=>max_parallel)
     disable_threaded_libs()
 
     ret = Array(Int, 0)
     rr_join = Array(RemoteRef, 0)
 
-    resp_arr = {}
+    resp_arr = []
     c = Condition()
 
     t = @schedule start_cluster_workers(np, config, manager, resp_arr, c)
@@ -1394,7 +1400,7 @@ end
 function pmap_static(f, lsts...)
     np = nprocs()
     n = length(lsts[1])
-    { remotecall(PGRP.workers[(i-1)%np+1].id, f, map(L->L[i], lsts)...) for i = 1:n }
+    Any[ remotecall(PGRP.workers[(i-1)%np+1].id, f, map(L->L[i], lsts)...) for i = 1:n ]
 end
 
 pmap(f) = f()
@@ -1410,7 +1416,7 @@ function pmap(f, lsts...; err_retry=true, err_stop=false)
 
     results = Dict{Int,Any}()
 
-    retryqueue = {}
+    retryqueue = []
     task_in_err = false
     is_task_in_error() = task_in_err
     set_task_in_error() = (task_in_err = true)

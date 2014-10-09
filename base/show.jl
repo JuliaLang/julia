@@ -1,4 +1,3 @@
-
 show(x) = show(STDOUT::IO, x)
 
 print(io::IO, s::Symbol) = (write(io,s);nothing)
@@ -112,6 +111,12 @@ show(io::IO, n::Unsigned) = print(io, "0x", hex(n,sizeof(n)<<1))
 print(io::IO, n::Unsigned) = print(io, dec(n))
 
 show{T}(io::IO, p::Ptr{T}) = print(io, typeof(p), " @0x$(hex(unsigned(p), WORD_SIZE>>2))")
+
+function show(io::IO, p::Pair)
+    show(io, p.first)
+    print(io, "=>")
+    show(io, p.second)
+end
 
 function show(io::IO, m::Module)
     if is(m,Main)
@@ -235,9 +240,9 @@ const uni_ops = Set{Symbol}([:(+), :(-), :(!), :(¬), :(~), :(<:), :(>:), :(√)
 const expr_infix_wide = Set([:(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(&=),
     :(|=), :($=), :(>>>=), :(>>=), :(<<=), :(&&), :(||)])
 const expr_infix = Set([:(:), :(<:), :(->), :(=>), symbol("::")])
-const expr_calls  = [:call =>('(',')'), :calldecl =>('(',')'), :ref =>('[',']'), :curly =>('{','}')]
-const expr_parens = [:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>('{','}'),
-                     :hcat =>('[',']'), :row =>('[',']')]
+const expr_calls  = Dict(:call =>('(',')'), :calldecl =>('(',')'), :ref =>('[',']'), :curly =>('{','}'))
+const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>('{','}'),
+                         :hcat =>('[',']'), :row =>('[',']'))
 
 ## AST decoding helpers ##
 
@@ -300,19 +305,19 @@ function show_block(io::IO, head, args::Vector, body, indent::Int)
     show_list(io, args, ", ", indent)
 
     ind = is(head, :module) || is(head, :baremodule) ? indent : indent + indent_width
-    exs = (is_expr(body, :block) || is_expr(body, :body)) ? body.args : {body}
+    exs = (is_expr(body, :block) || is_expr(body, :body)) ? body.args : Any[body]
     for ex in exs
         if !is_linenumber(ex); print(io, '\n', " "^ind); end
         show_unquoted(io, ex, ind)
     end
     print(io, '\n', " "^indent)
 end
-show_block(io::IO,head,    block,i::Int) = show_block(io,head,{},   block,i)
+show_block(io::IO,head,    block,i::Int) = show_block(io,head, [], block,i)
 function show_block(io::IO, head, arg, block, i::Int)
     if is_expr(arg, :block)
         show_block(io, head, arg.args, block, i)
     else
-        show_block(io, head, {arg}, block, i)
+        show_block(io, head, Any[arg], block, i)
     end
 end
 
@@ -849,7 +854,7 @@ function alignment(
     rows::AbstractVector, cols::AbstractVector,
     cols_if_complete::Integer, cols_otherwise::Integer, sep::Integer
 )
-    a = {}
+    a = []
     for j in cols
         l = r = 0
         for i in rows

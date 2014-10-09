@@ -33,9 +33,9 @@ function find_source_file(file)
 end
 
 # Store list of files and their load time
-package_list = (ByteString=>Float64)[]
+package_list = Dict{ByteString,Float64}()
 # to synchronize multiple tasks trying to require something
-package_locks = (ByteString=>Any)[]
+package_locks = Dict{ByteString,Any}()
 require(fname::String) = require(bytestring(fname))
 require(f::String, fs::String...) = (require(f); for x in fs require(x); end)
 
@@ -47,7 +47,7 @@ function require(name::String)
     path == nothing && error("$name not found")
 
     if myid() == 1 && toplevel_load
-        refs = { @spawnat p _require(path) for p in filter(x->x!=1, procs()) }
+        refs = Any[ @spawnat p _require(path) for p in filter(x->x!=1, procs()) ]
         _require(path)
         for r in refs; wait(r); end
     else
@@ -77,7 +77,7 @@ function reload(name::String)
     path == nothing && error("$name not found")
     refs = nothing
     if myid() == 1 && toplevel_load
-        refs = { @spawnat p reload_path(path) for p in filter(x->x!=1, procs()) }
+        refs = Any[ @spawnat p reload_path(path) for p in filter(x->x!=1, procs()) ]
     end
     last = toplevel_load
     toplevel_load = false

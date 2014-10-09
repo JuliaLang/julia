@@ -7,7 +7,7 @@
 #=
 using LightXML
 xdoc = parse_file("unicode.xml")
-latexsym = {}
+latexsym = []
 Ls = Set()
 for c in child_nodes(root(xdoc))
     if name(c) == "character" && is_elementnode(c)
@@ -60,7 +60,7 @@ end
 
 # Finally, we also add some symbols manually (at the top) as needed.
 
-const latex_symbols = [
+const latex_symbols = Dict(
 
 # manual additions:
 
@@ -2535,4 +2535,4 @@ const latex_symbols = [
     "\\mtteight" => "𝟾",  # mathematical monospace digit 8
     "\\mttnine" => "𝟿",  # mathematical monospace digit 9
 
-]
+)

@@ -5,7 +5,7 @@ using ..Terminals
 import ..Terminals: raw!, width, height, cmove, getX,
                        getY, clear_line, beep
 
-import Base: ensureroom, peek, show
+import Base: ensureroom, peek, show, AnyDict
 
 abstract TextInterface
 
@@ -834,8 +834,8 @@ function keymap{D<:Dict}(keymaps::Array{D})
 end
 
 const escape_defaults = merge!(
-    {char(i) => nothing for i=[1:26, 28:31]}, # Ignore control characters by default
-    { # And ignore other escape sequences by default
+    AnyDict([char(i) => nothing for i=[1:26, 28:31]]), # Ignore control characters by default
+    AnyDict( # And ignore other escape sequences by default
     "\e*" => nothing,
     "\e[*" => nothing,
     # Also ignore extended escape sequences
@@ -856,7 +856,7 @@ const escape_defaults = merge!(
     "\eOD"  => "\e[D",
     "\eOH"  => "\e[H",
     "\eOF"  => "\e[F",
-})
+))
 
 function write_response_buffer(s::PromptState, data)
     offset = s.input_buffer.ptr
@@ -997,7 +997,7 @@ end
 
 function setup_search_keymap(hp)
     p = HistoryPrompt(hp)
-    pkeymap = {
+    pkeymap = AnyDict(
         "^R"      => (s,data,c)->(history_set_backward(data, true); history_next_result(s, data)),
         "^S"      => (s,data,c)->(history_set_backward(data, false); history_next_result(s, data)),
         '\r'      => (s,o...)->accept_result(s, p),
@@ -1066,12 +1066,12 @@ function setup_search_keymap(hp)
             edit_insert(data.query_buffer, input); update_display_buffer(s, data)
         end,
         "*"       => (s,data,c)->(edit_insert(data.query_buffer, c); update_display_buffer(s, data))
-    }
+    )
     p.keymap_func = keymap([pkeymap, escape_defaults])
-    skeymap = {
+    skeymap = AnyDict(
         "^R"    => (s,o...)->(enter_search(s, p, true)),
         "^S"    => (s,o...)->(enter_search(s, p, false)),
-    }
+    )
     (p, skeymap)
 end
 
@@ -1118,7 +1118,7 @@ function commit_line(s)
 end
 
 const default_keymap =
-{
+AnyDict(
     # Tab
     '\t' => (s,o...)->begin
         buf = buffer(s)
@@ -1226,9 +1226,9 @@ const default_keymap =
         edit_insert(s, input)
     end,
     "^T" => (s,o...)->edit_transpose(s),
-}
+)
 
-const history_keymap = {
+const history_keymap = AnyDict(
     "^P" => (s,o...)->(history_prev(s, mode(s).hist)),
     "^N" => (s,o...)->(history_next(s, mode(s).hist)),
     # Up Arrow
@@ -1239,7 +1239,7 @@ const history_keymap = {
     "\e[5~" => (s,o...)->(history_prev(s, mode(s).hist)),
     # Page Down
     "\e[6~" => (s,o...)->(history_next(s, mode(s).hist))
-}
+)
 
 function deactivate(p::Union(Prompt,HistoryPrompt), s::Union(SearchState,PromptState), termbuf)
     clear_input_area(termbuf, s)

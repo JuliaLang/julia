@@ -3,7 +3,7 @@
 
 const ARGS = UTF8String[]
 
-const text_colors = {
+const text_colors = AnyDict(
     :black   => "\033[1m\033[30m",
     :red     => "\033[1m\033[31m",
     :green   => "\033[1m\033[32m",
@@ -14,7 +14,7 @@ const text_colors = {
     :white   => "\033[1m\033[37m",
     :normal  => "\033[0m",
     :bold    => "\033[1m",
-}
+)
 
 have_color = false
 @unix_only default_color_answer = text_colors[:bold]
@@ -70,7 +70,7 @@ function repl_hook(input::String)
          macroexpand(Expr(:macrocall,symbol("@cmd"),input)))
 end
 
-display_error(er) = display_error(er, {})
+display_error(er) = display_error(er, [])
 function display_error(er, bt)
     with_output_color(:red, STDERR) do io
         print(io, "ERROR: ")
@@ -420,7 +420,7 @@ function _start()
     ccall(:uv_atexit_hook, Void, ())
 end
 
-const atexit_hooks = {}
+const atexit_hooks = []
 
 atexit(f::Function) = (unshift!(atexit_hooks, f); nothing)
 

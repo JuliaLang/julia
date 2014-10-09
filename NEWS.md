@@ -20,6 +20,15 @@ Language changes
 
   * `Nothing` (the type of `nothing`) is renamed to `Void` ([#8423]).
 
+  * `Dict` literal syntax `[a=>b,c=>d]` is replaced with `Dict(a=>b,c=>d)`.
+    `{a=>b}` is replaced with `Dict{Any,Any}(a=>b)`.
+    `(K=>V)[...]` is replaced with `Dict{K,V}(...)`.
+    The new syntax has many advantages: all of its components are first-class,
+    it generalizes to other types of containers, it is easier to guess how to
+    specify key and value types, and the syntaxes for empty and pre-populated
+    dicts are synchronized. As part of this change, `=>` is parsed as a normal
+    operator, and `Base` defines it to construct `Pair` objects ([#6739]).
+
 Library improvements
 --------------------
 
@@ -59,6 +68,11 @@ Library improvements
 
   * `deepcopy` recurses through immutable types and makes copies of their mutable fields ([#8560]).
 
+Deprecated or removed
+---------------------
+
+  * `median` and `median!` no longer accept a `checknan` keyword argument ([#8605]).
+
 Julia v0.3.0 Release Notes
 ==========================
 
@@ -74,7 +88,7 @@ New language features
     generated. Constructors that look like `MyType(a, b) = new(a, b)` do not
     need to be added manually ([#4026], [#7071]).
 
-  * Expanded array type hierarchy to include an abstract ``DenseArray`` for
+  * Expanded array type hierarchy to include an abstract `DenseArray` for
     in-memory arrays with standard strided storage ([#987], [#2345],
     [#6212]).
 
@@ -199,8 +213,8 @@ Library improvements
 
     * `writedlm` and `writecsv` now accept any iterable collection of
       iterable rows, in addition to `AbstractArray` arguments, and the
-      ``writedlm`` delimiter can be any printable object (e.g. a
-      ``String``) instead of just a ``Char``.
+      `writedlm` delimiter can be any printable object (e.g. a
+      `String`) instead of just a `Char`.
 
     * `isempty` now works for any iterable collection ([#5827]).
 
@@ -843,6 +857,7 @@ Too numerous to mention.
 [#3688]: https://github.com/JuliaLang/julia/issues/3688
 [#3697]: https://github.com/JuliaLang/julia/issues/3697
 [#3719]: https://github.com/JuliaLang/julia/issues/3719
+[#3759]: https://github.com/JuliaLang/julia/issues/3759
 [#3790]: https://github.com/JuliaLang/julia/issues/3790
 [#3819]: https://github.com/JuliaLang/julia/issues/3819
 [#3872]: https://github.com/JuliaLang/julia/issues/3872
@@ -904,6 +919,7 @@ Too numerous to mention.
 [#5381]: https://github.com/JuliaLang/julia/issues/5381
 [#5387]: https://github.com/JuliaLang/julia/issues/5387
 [#5403]: https://github.com/JuliaLang/julia/issues/5403
+[#5413]: https://github.com/JuliaLang/julia/issues/5413
 [#5423]: https://github.com/JuliaLang/julia/issues/5423
 [#5427]: https://github.com/JuliaLang/julia/issues/5427
 [#5428]: https://github.com/JuliaLang/julia/issues/5428
@@ -953,6 +969,7 @@ Too numerous to mention.
 [#6678]: https://github.com/JuliaLang/julia/issues/6678
 [#6716]: https://github.com/JuliaLang/julia/issues/6716
 [#6726]: https://github.com/JuliaLang/julia/issues/6726
+[#6739]: https://github.com/JuliaLang/julia/issues/6739
 [#6769]: https://github.com/JuliaLang/julia/issues/6769
 [#6773]: https://github.com/JuliaLang/julia/issues/6773
 [#6911]: https://github.com/JuliaLang/julia/issues/6911
@@ -972,6 +989,7 @@ Too numerous to mention.
 [#7146]: https://github.com/JuliaLang/julia/issues/7146
 [#7236]: https://github.com/JuliaLang/julia/issues/7236
 [#7242]: https://github.com/JuliaLang/julia/issues/7242
+[#7311]: https://github.com/JuliaLang/julia/issues/7311
 [#7359]: https://github.com/JuliaLang/julia/issues/7359
 [#7365]: https://github.com/JuliaLang/julia/issues/7365
 [#7373]: https://github.com/JuliaLang/julia/issues/7373
@@ -981,13 +999,12 @@ Too numerous to mention.
 [#7513]: https://github.com/JuliaLang/julia/issues/7513
 [#7647]: https://github.com/JuliaLang/julia/issues/7647
 [#7654]: https://github.com/JuliaLang/julia/issues/7654
+[#7704]: https://github.com/JuliaLang/julia/issues/7704
 [#7917]: https://github.com/JuliaLang/julia/issues/7917
 [#7992]: https://github.com/JuliaLang/julia/issues/7992
 [#8011]: https://github.com/JuliaLang/julia/issues/8011
 [#8089]: https://github.com/JuliaLang/julia/issues/8089
-[#7704]: https://github.com/JuliaLang/julia/issues/7704
-[#5413]: https://github.com/JuliaLang/julia/issues/5413
-[#3759]: https://github.com/JuliaLang/julia/issues/3759
-[#7311]: https://github.com/JuliaLang/julia/issues/7311
+[#8152]: https://github.com/JuliaLang/julia/issues/8152
 [#8423]: https://github.com/JuliaLang/julia/issues/8423
-[#8152]: https://github.com/JuliaLang/julia/pull/8152
+[#8560]: https://github.com/JuliaLang/julia/issues/8560
+[#8605]: https://github.com/JuliaLang/julia/issues/8605

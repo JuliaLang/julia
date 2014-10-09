@@ -46,8 +46,8 @@ function parallel_wordcount(text)
     lines=split(text,'\n',false)
     np=nprocs()
     unitsize=ceil(length(lines)/np)
-    wcounts={}
-    rrefs={}
+    wcounts=[]
+    rrefs=[]
     # spawn procs
     for i=1:np
         first=unitsize*(i-1)+1

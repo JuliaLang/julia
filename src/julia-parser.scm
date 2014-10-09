@@ -94,6 +94,18 @@
 			 abstract typealias type bitstype immutable ccall do
 			 module baremodule using import export importall))
 
+(define (assignment? e)
+  (and (pair? e) (eq? (car e) '=)))
+
+(define (assignment-like? e)
+  (and (pair? e) (is-prec-assignment? (car e))))
+
+(define (kwarg? e)
+  (and (pair? e) (eq? (car e) 'kw)))
+
+(define (dict-literal? l)
+  (and (length= l 3) (eq? (car l) '=>)))
+
 ;; Parser state variables
 
 ; disable range colon for parsing ternary conditional operator
@@ -139,18 +151,6 @@
 (define-macro (without-whitespace-newline . body)
   `(with-bindings ((whitespace-newline #f))
 		  ,@body))
-
-(define (assignment? e)
-  (and (pair? e) (eq? (car e) '=)))
-
-(define (assignment-like? e)
-  (and (pair? e) (is-prec-assignment? (car e))))
-
-(define (kwarg? e)
-  (and (pair? e) (eq? (car e) 'kw)))
-
-(define (dict-literal? l)
-  (and (length= l 3) (eq? (car l) '=>)))
 
 ;; --- lexer ---
 
@@ -498,6 +498,21 @@
    (begin0 (ts:last-tok s)
 	   (ts:set-tok! s #f))))
 
+;; --- misc ---
+
+(define (syntax-deprecation-warning s what instead)
+  (io.write
+   *stderr*
+   (string
+    #\newline "WARNING: deprecated syntax \"" what "\""
+    (if (eq? current-filename 'none)
+	""
+	(string " at " current-filename ":" (input-port-line (ts:port s))))
+    "."
+    (if (equal? instead "")
+	""
+	(string #\newline "Use \"" instead "\" instead." #\newline)))))
+
 ;; --- parser ---
 
 ; parse left-to-right binary operator
@@ -653,17 +668,8 @@
 			ex)
 		 (let ((argument
 			(cond ((closing-token? (peek-token s))
-			       (io.write
-				*stderr*
-				(string
-				 #\newline "WARNING: deprecated syntax \"x[i:]\""
-				 (if (eq? current-filename 'none)
-				     ""
-				     (string
-				      " at "
-				      current-filename ":" (input-port-line (ts:port s))))
-				 "." #\newline "Use \"x[i:end]\" instead." #\newline))
-			       ':)  ; missing last argument
+			       (error  (string "missing last argument in \"" 
+					       (deparse ex) ":\" range expression ")))
 			      ((newline? (peek-token s))
 			       (error "line break in \":\" expression"))
 			      (else
@@ -898,6 +904,11 @@
 	(parse-resword s ex)
 	(parse-call-chain s ex #f))))
 
+(define (deprecated-dict-replacement ex)
+  (if (dict-literal? ex)
+      (string "Dict{" (deparse (cadr ex)) #\, (deparse (caddr ex)) "}")
+      "Dict"))
+
 (define (parse-call-chain s ex one-call)
   (let loop ((ex ex))
     (let ((t (peek-token s)))
@@ -928,13 +939,21 @@
 	     ;; ref is syntax, so we can distinguish
 	     ;; a[i] = x  from
 	     ;; ref(a,i) = x
-	     (let ((al (with-end-symbol (parse-cat s #\] ))))
+	     (let ((al (with-end-symbol (parse-cat s #\] (dict-literal? ex)))))
 	       (if (null? al)
 		   (if (dict-literal? ex)
-		       (loop (list 'typed_dict ex))
+		       (begin
+			 (syntax-deprecation-warning
+			  s (string #\( (deparse ex) #\) "[]")
+			  (string (deprecated-dict-replacement ex) "()"))
+			 (loop (list 'typed_dict ex)))
 		       (loop (list 'ref ex)))
 		   (case (car al)
-		     ((dict)  (loop (list* 'typed_dict ex (cdr al))))
+		     ((dict)
+		      (syntax-deprecation-warning
+		       s (string #\( (deparse ex) #\) "[a=>b, ...]")
+		       (string (deprecated-dict-replacement ex) "(a=>b, ...)"))
+		      (loop (list* 'typed_dict ex (cdr al))))
 		     ((hcat)  (loop (list* 'typed_hcat ex (cdr al))))
 		     ((vcat)
 		      (if (any (lambda (x)
@@ -1407,7 +1426,7 @@
 	     (if (eqv? (require-token s) closer)
 		 (loop lst nxt)
 		 (let ((params (parse-arglist s closer)))
-		   `(vcat ,@params ,@lst ,nxt))))
+		   `(vcat ,@params ,@(reverse lst) ,nxt))))
 	    ((#\] #\})
 	     (error (string "unexpected \"" t "\"")))
 	    (else
@@ -1476,7 +1495,7 @@
                (loop (peek-token s)))
         t)))
 
-(define (parse-cat s closer)
+(define (parse-cat s closer . isdict)
   (with-normal-ops
    (with-inside-vec
     (if (eqv? (require-token s) closer)
@@ -1489,7 +1508,9 @@
                  (take-token s)
                  (parse-dict-comprehension s first closer))
                 (else
-                 (parse-dict s first closer)))
+		 (if (and (pair? isdict) (car isdict))
+		      (syntax-deprecation-warning s "[a=>b, ...]" "Dict(a=>b, ...)"))
+		 (parse-dict s first closer)))
               (case (peek-token s)
                 ((#\,)
                  (parse-vcat s first closer))
@@ -1650,7 +1671,8 @@
 ; parse numbers, identifiers, parenthesized expressions, lists, vectors, etc.
 (define (parse-atom s)
   (let ((ex (parse-atom- s)))
-    (if (or (syntactic-op? ex)
+    ;; TODO: remove this hack when we remove the special Dict syntax
+    (if (or (and (not (eq? ex '=>)) (syntactic-op? ex))
 	    (eq? ex '....))
 	(error (string "invalid identifier name \"" ex "\"")))
     ex))
@@ -1762,18 +1784,27 @@
 	  ((eqv? t #\{ )
 	   (take-token s)
 	   (if (eqv? (require-token s) #\})
-	       (begin (take-token s) '(cell1d))
+	       (begin 
+		      (syntax-deprecation-warning s "{}" "[]")
+		      (take-token s) 
+		      '(cell1d))
 	       (let ((vex (parse-cat s #\})))
                  (if (null? vex)
-                     '(cell1d)
+		     (begin
+		         (syntax-deprecation-warning s "{}" "[]")
+                         '(cell1d))
                      (case (car vex)
                        ((comprehension)
+		         (syntax-deprecation-warning s "{a for a in b}" "Any[a for a in b]")
                         `(typed_comprehension (top Any) ,@(cdr vex)))
                        ((dict_comprehension)
+		         (syntax-deprecation-warning s "{a=>b for (a,b) in c}" "Dict{Any,Any}([a=>b for (a,b) in c])")
                         `(typed_dict_comprehension (=> (top Any) (top Any)) ,@(cdr vex)))
                        ((dict)
+		         (syntax-deprecation-warning s "{a=>b, ...}" "Dict{Any,Any}(a=>b, ...)")
                         `(typed_dict (=> (top Any) (top Any)) ,@(cdr vex)))
                        ((hcat)
+		         (syntax-deprecation-warning s "{a b ...}" "Any[a b ...]")
                         `(cell2d 1 ,(length (cdr vex)) ,@(cdr vex)))
                        (else  ; (vcat ...)
 			(if (and (pair? (cadr vex)) (eq? (caadr vex) 'row))
@@ -1787,7 +1818,9 @@
 					       (length= (cdr x) nc)))
 					(cddr vex)))
 				  (error "inconsistent shape in cell expression"))
-			      `(cell2d ,nr ,nc
+			      (begin
+		                  (syntax-deprecation-warning s "{a b; c d}" "Any[a b; c d]"))
+			          `(cell2d ,nr ,nc
 				       ,@(apply append
 						;; transpose to storage order
 						(apply map list
@@ -1796,7 +1829,9 @@
 						      (eq? (car x) 'row)))
 				     (cddr vex))
 				(error "inconsistent shape in cell expression")
-				`(cell1d ,@(cdr vex))))))))))
+				(begin
+				    (syntax-deprecation-warning s "{a,b, ...}" "Any[a,b, ...]")
+				    `(cell1d ,@(cdr vex)))))))))))
 
 	  ;; cat expression
 	  ((eqv? t #\[ )
