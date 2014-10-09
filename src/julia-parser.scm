@@ -1819,7 +1819,7 @@
 					(cddr vex)))
 				  (error "inconsistent shape in cell expression"))
 			      (begin
-		                  (syntax-deprecation-warning s "{[a,b] [c,d]}" "Any[[a,b] [c,d]]"))
+		                  (syntax-deprecation-warning s "{a b; c d}" "Any[a b; c d]"))
 			          `(cell2d ,nr ,nc
 				       ,@(apply append
 						;; transpose to storage order
@@ -1830,7 +1830,7 @@
 				     (cddr vex))
 				(error "inconsistent shape in cell expression")
 				(begin
-		         	    (syntax-deprecation-warning s "{a,b, ...}" "Any[a,b,...]")
+				    (syntax-deprecation-warning s "{a,b, ...}" "Any[a,b, ...]")
 				    `(cell1d ,@(cdr vex)))))))))))
 
 	  ;; cat expression
