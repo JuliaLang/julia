@@ -322,3 +322,37 @@ of consumers, and the stages have different latency so they use a
 different number of parallel workers, to maintain saturated throughput.
 
 We strongly encourage you to try all these examples to see how they work.
+
+File Redirection
+----------------
+
+In addition to pipelines between ``Cmd`` objects, Julia also supports redirection
+of standard input and output streams from/to files. File names, e.g. ``"junk.txt"``,
+are denoted in a pipeline by double-quoted literal strings or ``String`` variables::
+
+    julia> mystr = """Line 1
+           Line 2
+           Line 3
+           """
+    "Line 1\nLine 2\nLine 3\n"
+    
+    julia> run(`echo $mystr` |> "junk.txt")
+    
+    julia> run("junk.txt" |> `cat`)
+    Line 1
+    Line 2
+    Line 3
+
+In the above example, any previous contents of ``junk.txt`` are destroyed.  If it is 
+desired to append new lines to the existing contents of the file, use the ``>>`` operator::
+    
+    julia> run(`echo $mystr` >> "junk.txt")
+    
+    julia> run("junk.txt" |> `cat`)
+    Line 1
+    Line 2
+    Line 3
+    
+    Line 1
+    Line 2
+    Line 3
