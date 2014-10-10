@@ -18,7 +18,8 @@ extern "C" {
 static htable_t ser_tag;
 static jl_value_t* deser_tag[256];
 static htable_t backref_table;
-static arraylist_t flagref_table;
+static arraylist_t flagref_list;
+static arraylist_t methtable_list;
 static htable_t fptr_to_id;
 static htable_t id_to_fptr;
 
@@ -293,14 +294,14 @@ static void jl_serialize_fptr(ios_t *s, void *fptr)
 static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
 {
     int tag = 0;
-    if (mode == MODE_MODULE) {
+    if (mode == MODE_MODULE && dt->uid != 0) {
         if (is_submodule(jl_current_module, dt->name->module)) {
-            tag = 5;
+            tag = 5; // internal type
         }
         else if (jl_is_null(dt->parameters)) {
-            tag = 6;
+            tag = 6; // external type that can be immediately recreated
         }
-        else {
+        else { // anything else
             // flag this in the backref table
             uptrint_t *bp = (uptrint_t*)ptrhash_bp(&backref_table, dt);
             assert(*bp != (uptrint_t)HT_NOTFOUND);
@@ -756,15 +757,15 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
         dt->instance = jl_deserialize_value(s, &dt->instance);
         dt->instance->type = (jl_value_t*)dt;
         if (mode == MODE_MODULE) {
-            arraylist_push(&flagref_table, dt);
-            arraylist_push(&flagref_table, &dt->instance->type);
+            arraylist_push(&flagref_list, dt);
+            arraylist_push(&flagref_list, &dt->instance->type);
         }
     }
     assert(tree_literal_values==NULL && mode != MODE_AST);
     ptrhash_put(&backref_table, (void*)(ptrint_t)pos, dt);
     if (mode == MODE_MODULE && loc != NULL) {
-        arraylist_push(&flagref_table, dt);
-        arraylist_push(&flagref_table, loc);
+        arraylist_push(&flagref_list, dt);
+        arraylist_push(&flagref_list, loc);
     }
 
     if (nf > 0) {
@@ -825,8 +826,8 @@ static jl_value_t *jl_deserialize_value(ios_t *s, jl_value_t **loc)
         void **bp = ptrhash_bp(&backref_table, (void*)(ptrint_t)offs);
         assert(*bp != HT_NOTFOUND);
         if (isdatatype && loc != NULL) {
-            arraylist_push(&flagref_table, *bp);
-            arraylist_push(&flagref_table, loc);
+            arraylist_push(&flagref_list, *bp);
+            arraylist_push(&flagref_list, loc);
         }
         return (jl_value_t*)*bp;
     }
@@ -1104,6 +1105,8 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, int pos, jl_value_t *vtag, jl
                     jl_set_nth_field(v, i, jl_deserialize_value(s,
                         (dt->fields[i].isptr) ? (jl_value_t**)(data+jl_field_offset(dt, i)) : NULL));
                 }
+                if (mode == MODE_MODULE && jl_is_mtable(v))
+                    arraylist_push(&methtable_list, v);
             }
         }
         // TODO: put WeakRefs on the weak_refs list
@@ -1119,8 +1122,8 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, int pos, jl_value_t *vtag, jl
             ptrhash_put(&backref_table, (void*)(ptrint_t)pos, (void*)v);
             if (mode == MODE_MODULE) {
                 assert(loc != NULL);
-                arraylist_push(&flagref_table, v);
-                arraylist_push(&flagref_table, loc);
+                arraylist_push(&flagref_list, v);
+                arraylist_push(&flagref_list, loc);
             }
         }
         return v;
@@ -1449,6 +1452,8 @@ int jl_save_new_module(char *fname, jl_module_t *mod)
     return 0;
 }
 
+void mtcache_rehash(jl_array_t **pa);
+
 DLLEXPORT
 jl_module_t *jl_restore_new_module(char *fname)
 {
@@ -1463,7 +1468,8 @@ jl_module_t *jl_restore_new_module(char *fname)
     }
     htable_new(&backref_table, 5000);
     ptrhash_put(&backref_table, (void*)(intptr_t)-1, jl_main_module);
-    arraylist_new(&flagref_table, 0);
+    arraylist_new(&flagref_list, 0);
+    arraylist_new(&methtable_list, 0);
     
     int en = jl_gc_is_enabled();
     jl_gc_disable();
@@ -1479,8 +1485,8 @@ jl_module_t *jl_restore_new_module(char *fname)
     b->value = jl_deserialize_value(&f, &b->value);
 
     size_t i = 0;
-    while (i < flagref_table.len) {
-        jl_value_t *v, *o = flagref_table.items[i++];
+    while (i < flagref_list.len) {
+        jl_value_t *v, *o = flagref_list.items[i++];
         jl_datatype_t *dt;
         if (jl_is_datatype(o)) {
             dt = (jl_datatype_t*)o;
@@ -1490,7 +1496,7 @@ jl_module_t *jl_restore_new_module(char *fname)
             v = o;
         }
         jl_datatype_t *t = (jl_datatype_t*)jl_cache_type_(dt);
-        jl_value_t **loc = (jl_value_t**)flagref_table.items[i++];
+        jl_value_t **loc = (jl_value_t**)flagref_list.items[i++];
         if (v == o) {
             if (t->instance != v) *loc = v;
         }
@@ -1498,32 +1504,40 @@ jl_module_t *jl_restore_new_module(char *fname)
             if (t != dt) *loc = (jl_value_t*)t;
         }
         size_t j = i;
-        while (j < flagref_table.len) {
-            if (flagref_table.items[j] == dt) {
+        while (j < flagref_list.len) {
+            if (flagref_list.items[j] == dt) {
                 if (t != dt)
-                    *(jl_value_t**)flagref_table.items[j+1] = (jl_value_t*)t;
+                    *(jl_value_t**)flagref_list.items[j+1] = (jl_value_t*)t;
             }
-            else if (flagref_table.items[j] == v) {
+            else if (flagref_list.items[j] == v) {
                 if (t->instance != v)
-                    *(jl_value_t**)flagref_table.items[j+1] = v;
+                    *(jl_value_t**)flagref_list.items[j+1] = v;
             }
             else {
                 j += 2;
                 continue;
             }
-            flagref_table.len -= 2;
-            if (j >= flagref_table.len)
+            flagref_list.len -= 2;
+            if (j >= flagref_list.len)
                 break;
-            flagref_table.items[j+0] = flagref_table.items[flagref_table.len+0];
-            flagref_table.items[j+1] = flagref_table.items[flagref_table.len+1];
+            flagref_list.items[j+0] = flagref_list.items[flagref_list.len+0];
+            flagref_list.items[j+1] = flagref_list.items[flagref_list.len+1];
         }
     }
 
     jl_deserialize_lambdas_from_mod(&f);
+
+    for (i = 0; i < methtable_list.len; i++) {
+        jl_methtable_t *mt = (jl_methtable_t*)methtable_list.items[i];
+        mtcache_rehash(&mt->cache_targ);
+        mtcache_rehash(&mt->cache_arg1);
+    }
+
     mode = last_mode;
     if (en) jl_gc_enable();
     htable_reset(&backref_table, 0);
-    arraylist_free(&flagref_table);
+    arraylist_free(&flagref_list);
+    arraylist_free(&methtable_list);
     ios_close(&f);
 
     return (jl_module_t*)b->value;
