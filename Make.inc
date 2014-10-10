@@ -108,6 +108,9 @@ private_libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(p
 datarootdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(datarootdir))
 sysconfdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(sysconfdir))
 
+INSTALL_F = $(JULIAHOME)/contrib/install.sh 644
+INSTALL_M = $(JULIAHOME)/contrib/install.sh 755
+
 # This used for debian packaging, to conform to library layout guidelines
 ifeq ($(MULTIARCH_INSTALL), 1)
 MULTIARCH = $(shell gcc -print-multiarch)

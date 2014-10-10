@@ -9,8 +9,6 @@ include $(JULIAHOME)/Make.inc
 # so that prefix/share/julia/VERSDIR can be overwritten without touching
 # third-party code).
 VERSDIR = v`cut -d. -f1-2 < VERSION`
-INSTALL_F = contrib/install.sh 644
-INSTALL_M = contrib/install.sh 755
 
 #file name of make dist result
 ifeq ($(JULIA_DIST_TARNAME),)
