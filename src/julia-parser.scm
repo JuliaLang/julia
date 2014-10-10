@@ -1508,11 +1508,8 @@
                  (take-token s)
                  (parse-dict-comprehension s first closer))
                 (else
-		 (if (eqv? closer #\})
-		     (syntax-deprecation-warning s "{a=>b, ...}" "Dict{Any,Any}(a=>b, ...)")
-		     (or
-		      (and (pair? isdict) (car isdict))
-		      (syntax-deprecation-warning s "[a=>b, ...]" "Dict(a=>b, ...)")))
+		 (if (and (pair? isdict) (car isdict))
+		      (syntax-deprecation-warning s "[a=>b, ...]" "Dict(a=>b, ...)"))
 		 (parse-dict s first closer)))
               (case (peek-token s)
                 ((#\,)
@@ -1787,18 +1784,27 @@
 	  ((eqv? t #\{ )
 	   (take-token s)
 	   (if (eqv? (require-token s) #\})
-	       (begin (take-token s) '(cell1d))
+	       (begin 
+		      (syntax-deprecation-warning s "{}" "[]")
+		      (take-token s) 
+		      '(cell1d))
 	       (let ((vex (parse-cat s #\})))
                  (if (null? vex)
-                     '(cell1d)
+		     (begin
+		         (syntax-deprecation-warning s "{}" "[]")
+                         '(cell1d))
                      (case (car vex)
                        ((comprehension)
+		         (syntax-deprecation-warning s "{a for a in b}" "Any[a for a in b]")
                         `(typed_comprehension (top Any) ,@(cdr vex)))
                        ((dict_comprehension)
+		         (syntax-deprecation-warning s "{a=>b for (a,b) in c}" "Dict{Any,Any}([a=>b for (a,b) in c])")
                         `(typed_dict_comprehension (=> (top Any) (top Any)) ,@(cdr vex)))
                        ((dict)
+		         (syntax-deprecation-warning s "{a=>b, ...}" "Dict{Any,Any}(a=>b, ...)")
                         `(typed_dict (=> (top Any) (top Any)) ,@(cdr vex)))
                        ((hcat)
+		         (syntax-deprecation-warning s "{a b ...}" "Any[a b ...]")
                         `(cell2d 1 ,(length (cdr vex)) ,@(cdr vex)))
                        (else  ; (vcat ...)
 			(if (and (pair? (cadr vex)) (eq? (caadr vex) 'row))
@@ -1812,7 +1818,9 @@
 					       (length= (cdr x) nc)))
 					(cddr vex)))
 				  (error "inconsistent shape in cell expression"))
-			      `(cell2d ,nr ,nc
+			      (begin
+		                  (syntax-deprecation-warning s "{a b; c d}" "Any[a b; c d]"))
+			          `(cell2d ,nr ,nc
 				       ,@(apply append
 						;; transpose to storage order
 						(apply map list
@@ -1821,7 +1829,9 @@
 						      (eq? (car x) 'row)))
 				     (cddr vex))
 				(error "inconsistent shape in cell expression")
-				`(cell1d ,@(cdr vex))))))))))
+				(begin
+				    (syntax-deprecation-warning s "{a,b, ...}" "Any[a,b, ...]")
+				    `(cell1d ,@(cdr vex)))))))))))
 
 	  ;; cat expression
 	  ((eqv? t #\[ )

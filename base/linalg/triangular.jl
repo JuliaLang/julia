@@ -3,6 +3,7 @@ immutable Triangular{T,S<:AbstractMatrix{T},UpLo,IsUnit} <: AbstractMatrix{T}
     data::S
 end
 function Triangular{T}(A::AbstractMatrix{T}, uplo::Symbol, isunit::Bool=false)
+    chksquare(A)
     uplo != :L && uplo != :U && throw(ArgumentError("uplo argument must be either :U or :L"))
     return Triangular{T,typeof(A),uplo,isunit}(A)
 end

@@ -93,7 +93,7 @@ type Worker
     config::Dict
 
     Worker(host::String, port::Integer, sock::TCPSocket, id::Int) =
-        new(bytestring(host), uint16(port), sock, IOBuffer(), {}, {}, id, false)
+        new(bytestring(host), uint16(port), sock, IOBuffer(), [], [], id, false)
 end
 Worker(host::String, port::Integer, sock::TCPSocket) =
     Worker(host, port, sock, 0)
@@ -216,7 +216,7 @@ type ProcessGroup
 
     ProcessGroup(w::Array{Any,1}) = new("pg-default", w, Dict())
 end
-const PGRP = ProcessGroup({})
+const PGRP = ProcessGroup([])
 
 get_bind_addr(pid::Integer) = get_bind_addr(worker_from_id(pid))
 function get_bind_addr(w::Union(Worker, LocalProcess))
@@ -374,8 +374,8 @@ function deregister_worker(pg, pid)
     push!(map_del_wrkr, pid)
 
     # delete this worker from our RemoteRef client sets
-    ids = {}
-    tonotify = {}
+    ids = []
+    tonotify = []
     for (id,rv) in pg.refs
         if in(pid,rv.clientset)
             push!(ids, id)
@@ -997,7 +997,7 @@ read_cb_response(host::String, port::Integer, config::Dict) = (nothing, host, po
 
 function start_cluster_workers(np::Integer, config::Dict, manager::ClusterManager, resp_arr::Array, launched_ntfy::Condition)
     # Get the cluster manager to launch the instance
-    instance_sets = {}
+    instance_sets = []
     instances_ntfy = Condition()
 
     t = @schedule launch(manager, np, config, instance_sets, instances_ntfy)
@@ -1213,11 +1213,11 @@ function launch_on_machine(manager::SSHManager, config::Dict, resp_arr::Array, m
         maxp = div(maxp,2) + 1   # Since the tunnel will also take up one ssh connection
     end
 
-    ios_to_check = {}
+    ios_to_check = []
 
     t_check=time()
     while cnt > 0
-        ios_to_check2 = {}
+        ios_to_check2 = []
         for io in ios_to_check
             if nb_available(io) == 0
                 push!(ios_to_check2, io)
@@ -1284,14 +1284,14 @@ function addprocs_internal(np::Integer;
                            tunnel=false, dir=JULIA_HOME,
                            exename=(ccall(:jl_is_debugbuild,Cint,())==0?"./julia":"./julia-debug"),
                            sshflags::Cmd=``, manager=LocalManager(), exeflags=``, max_parallel=10)
-
+    
     config = AnyDict(:dir=>dir, :exename=>exename, :exeflags=>`$exeflags --worker`, :tunnel=>tunnel, :sshflags=>sshflags, :max_parallel=>max_parallel)
     disable_threaded_libs()
 
     ret = Array(Int, 0)
     rr_join = Array(RemoteRef, 0)
 
-    resp_arr = {}
+    resp_arr = []
     c = Condition()
 
     t = @schedule start_cluster_workers(np, config, manager, resp_arr, c)
@@ -1400,7 +1400,7 @@ end
 function pmap_static(f, lsts...)
     np = nprocs()
     n = length(lsts[1])
-    { remotecall(PGRP.workers[(i-1)%np+1].id, f, map(L->L[i], lsts)...) for i = 1:n }
+    Any[ remotecall(PGRP.workers[(i-1)%np+1].id, f, map(L->L[i], lsts)...) for i = 1:n ]
 end
 
 pmap(f) = f()
@@ -1416,7 +1416,7 @@ function pmap(f, lsts...; err_retry=true, err_stop=false)
 
     results = Dict{Int,Any}()
 
-    retryqueue = {}
+    retryqueue = []
     task_in_err = false
     is_task_in_error() = task_in_err
     set_task_in_error() = (task_in_err = true)

@@ -116,7 +116,7 @@ r = (-4*int64(maxintfloat(is(Int,Int32) ? Float32 : Float64))):5
 @test_throws BoundsError (0:2:10)[7:7]
 
 # indexing with negative ranges (#8351)
-for a={3:6, 0:2:10}, b={0:1, 2:-1:0}
+for a=Range[3:6, 0:2:10], b=Range[0:1, 2:-1:0]
     @test_throws BoundsError a[b]
 end
 
@@ -265,8 +265,8 @@ end
 
 # comparing and hashing ranges
 let
-    Rs = {1:2, int32(1:3:17), int64(1:3:17), 1:0, 17:-3:0,
-          0.0:0.1:1.0, float32(0.0:0.1:1.0)}
+    Rs = Range[1:2, int32(1:3:17), int64(1:3:17), 1:0, 17:-3:0,
+               0.0:0.1:1.0, float32(0.0:0.1:1.0)]
     for r in Rs
         ar = collect(r)
         @test r != ar

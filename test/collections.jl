@@ -57,6 +57,40 @@ end
 _d = Dict("a"=>0)
 @test isa([k for k in filter(x->length(x)==1, collect(keys(_d)))], Vector{Any})
 
+let
+    d = Dict(((1, 2), (3, 4)))
+    @test d[1] === 2
+    @test d[3] === 4
+    d2 = Dict(1 => 2, 3 => 4)
+    d3 = Dict((1 => 2, 3 => 4))
+    @test d == d2 == d3
+    @test typeof(d) == typeof(d2) == typeof(d3) == Dict{Int,Int}
+
+    d = Dict(((1, 2), (3, "b")))
+    @test d[1] === 2
+    @test d[3] == "b"
+    d2 = Dict(1 => 2, 3 => "b")
+    d3 = Dict((1 => 2, 3 => "b"))
+    @test d == d2 == d3
+    @test typeof(d) == typeof(d2) == typeof(d3) == Dict{Int,Any}
+
+    d = Dict(((1, 2), ("a", 4)))
+    @test d[1] === 2
+    @test d["a"] === 4
+    d2 = Dict(1 => 2, "a" => 4)
+    d3 = Dict((1 => 2, "a" => 4))
+    @test d == d2 == d3
+    @test typeof(d) == typeof(d2) == typeof(d3) == Dict{Any,Int}
+
+    d = Dict(((1, 2), ("a", "b")))
+    @test d[1] === 2
+    @test d["a"] == "b"
+    d2 = Dict(1 => 2, "a" => "b")
+    d3 = Dict((1 => 2, "a" => "b"))
+    @test d == d2 == d3
+    @test typeof(d) == typeof(d2) == typeof(d3) == Dict{Any,Any}
+end
+
 # issue #1821
 let
     d = Dict{UTF8String, Vector{Int}}()
@@ -101,7 +135,7 @@ end
 
 @test  isequal(Dict(), Dict())
 @test  isequal(Dict(1 => 1), Dict(1 => 1))
-@test !isequal(Dict(1 => 1), {})
+@test !isequal(Dict(1 => 1), Dict())
 @test !isequal(Dict(1 => 1), Dict(1 => 2))
 @test !isequal(Dict(1 => 1), Dict(2 => 1))
 
@@ -145,13 +179,11 @@ d4[1001] = randstring(3)
 # are compared. This is not necessarily desirable. These tests are
 # descriptive rather than proscriptive.
 @test !isequal(Dict(1 => 2), Dict("dog" => "bone"))
-@test isequal(Dict{Int, Int}(), Dict{String, String}())
+@test isequal(Dict{Int,Int}(), Dict{String,String}())
 
 # get! (get with default values assigned to the given location)
 
-let f(x) = x^2,
-    d = Dict(8=>19),
-    def = {}
+let f(x) = x^2, d = Dict(8=>19)
 
     @test get!(d, 8, 5) == 19
     @test get!(d, 19, 2) == 2
@@ -206,8 +238,7 @@ end
 
 
 # issue #2540
-d = {x => 1
-    for x in ['a', 'b', 'c']}
+d = Dict{Any,Any}([x => 1 for x in ['a', 'b', 'c']])
 @test d == Dict('a'=>1, 'b'=>1, 'c'=> 1)
 
 # issue #2629
@@ -234,7 +265,7 @@ end
 @test  isempty(Set())
 @test !isempty(Set([1]))
 @test !isempty(Set(["banana", "apple"]))
-@test !isempty(Set({1, 1:10, "pear"}))
+@test !isempty(Set([1, 1:10, "pear"]))
 
 # ordering
 @test Set() < Set([1])
@@ -284,7 +315,7 @@ data_out = collect(s)
 @test is(typeof(Set{Int}([3])), Set{Int})
 
 # eltype
-@test is(eltype(Set({1,"hello"})), Any)
+@test is(eltype(Set([1,"hello"])), Any)
 @test is(eltype(Set{String}()), String)
 
 # no duplicates
@@ -437,8 +468,8 @@ s3 = Set{ASCIIString}(["baz"])
 # isequal
 @test  isequal(Set(), Set())
 @test !isequal(Set(), Set(1))
-@test  isequal(Set{Any}({1,2}), Set{Int}([1,2]))
-@test !isequal(Set{Any}({1,2}), Set{Int}([1,2,3]))
+@test  isequal(Set{Any}(Any[1,2]), Set{Int}([1,2]))
+@test !isequal(Set{Any}(Any[1,2]), Set{Int}([1,2,3]))
 
 # Comparison of unrelated types seems rather inconsistent
 

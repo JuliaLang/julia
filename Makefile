@@ -18,7 +18,11 @@ ifeq ($(JULIA_DIST_TARNAME),)
 endif
 
 all: default
+ifeq ($(JULIA_DEBUG), 1)
+default: debug
+else
 default: release
+endif
 
 # sort is used to remove potential duplicates
 DIRS = $(sort $(build_bindir) $(build_libdir) $(build_private_libdir) $(build_libexecdir) $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_datarootdir)/man/man1)

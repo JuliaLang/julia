@@ -224,7 +224,7 @@ let
 end
 
 ## arrays as dequeues
-l = {1}
+l = Any[1]
 push!(l,2,3,8)
 @test l[1]==1 && l[2]==2 && l[3]==3 && l[4]==8
 v = pop!(l)
@@ -349,7 +349,7 @@ p = permutedims(s, [2,1])
 
 ## ipermutedims ##
 
-tensors = {rand(1,2,3,4),rand(2,2,2,2),rand(5,6,5,6),rand(1,1,1,1)}
+tensors = Any[rand(1,2,3,4),rand(2,2,2,2),rand(5,6,5,6),rand(1,1,1,1)]
 for i = tensors
     perm = randperm(4)
     @test isequal(i,ipermutedims(permutedims(i,perm),perm))
@@ -545,7 +545,7 @@ begin
     @test R[8, 8, 8] == 8
 
     A = rand(4,4)
-    for s in {A[1:2:4, 1:2:4], sub(A, 1:2:4, 1:2:4)}
+    for s in Any[A[1:2:4, 1:2:4], sub(A, 1:2:4, 1:2:4)]
         c = cumsum(s, 1)
         @test c[1,1] == A[1,1]
         @test c[2,1] == A[1,1]+A[3,1]
@@ -771,9 +771,9 @@ rt = Base.return_types(fill!, (Array{Int32, 3}, Uint8))
 @test length(rt) == 1 && rt[1] == Array{Int32, 3}
 
 # splice!
-for idx in {1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
-            8:9, 9:10, 6:9, 7:10}
-    for repl in {[], [11], [11,22], [11,22,33,44,55]}
+for idx in Any[1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
+               8:9, 9:10, 6:9, 7:10]
+    for repl in Any[[], [11], [11,22], [11,22,33,44,55]]
         a = [1:10]; acopy = copy(a)
         @test splice!(a, idx, repl) == acopy[idx]
         @test a == [acopy[1:(first(idx)-1)], repl, acopy[(last(idx)+1):end]]
@@ -781,8 +781,8 @@ for idx in {1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
 end
 
 # deleteat!
-for idx in {1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
-            8:9, 9:10, 6:9, 7:10}
+for idx in Any[1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
+               8:9, 9:10, 6:9, 7:10]
     a = [1:10]; acopy = copy(a)
     @test deleteat!(a, idx) == [acopy[1:(first(idx)-1)], acopy[(last(idx)+1):end]]
 end
@@ -864,14 +864,14 @@ Nmax = 3 # TODO: go up to CARTESIAN_DIMS+2 (currently this exposes problems)
 for N = 1:Nmax
     #indexing with (Range1, Range1, Range1)
     args = ntuple(N, d->Range1{Int})
-    @test Base.return_types(getindex, tuple(Array{Float32, N}, args...)) == {Array{Float32, N}}
-    @test Base.return_types(getindex, tuple(BitArray{N}, args...)) == {BitArray{N}}
-    @test Base.return_types(setindex!, tuple(Array{Float32, N}, Array{Int, 1}, args...)) == {Array{Float32, N}}
+    @test Base.return_types(getindex, tuple(Array{Float32, N}, args...)) == [Array{Float32, N}]
+    @test Base.return_types(getindex, tuple(BitArray{N}, args...)) == Any[BitArray{N}]
+    @test Base.return_types(setindex!, tuple(Array{Float32, N}, Array{Int, 1}, args...)) == [Array{Float32, N}]
     # Indexing with (Range1, Range1, Float64)
     args = ntuple(N, d->d<N ? Range1{Int} : Float64)
-    N > 1 && @test Base.return_types(getindex, tuple(Array{Float32, N}, args...)) == {Array{Float32, N-1}}
-    N > 1 && @test Base.return_types(getindex, tuple(BitArray{N}, args...)) == {BitArray{N-1}}
-    N > 1 && @test Base.return_types(setindex!, tuple(Array{Float32, N}, Array{Int, 1}, args...)) == {Array{Float32, N}}
+    N > 1 && @test Base.return_types(getindex, tuple(Array{Float32, N}, args...)) == [Array{Float32, N-1}]
+    N > 1 && @test Base.return_types(getindex, tuple(BitArray{N}, args...)) == [BitArray{N-1}]
+    N > 1 && @test Base.return_types(setindex!, tuple(Array{Float32, N}, Array{Int, 1}, args...)) == [Array{Float32, N}]
 end
 
 # issue #6645 (32-bit)
@@ -885,7 +885,7 @@ end
 @test size([]') == (1,0)
 
 # issue #6996
-@test { 1 2; 3 4 }' == { 1 2; 3 4 }.'
+@test Any[ 1 2; 3 4 ]' == Any[ 1 2; 3 4 ].'
 
 # map with promotion (issue #6541)
 @test map(join, ["z", "я"]) == ["z", "я"]
@@ -902,3 +902,11 @@ function i7197()
     ind2sub(size(S), 5)
 end
 @test i7197() == (2,2)
+
+# PR #8622 and general indexin test
+function pr8622()
+    x=[1,3,5,7]
+    y=[5,4,3]
+    return indexin(x,y)
+end
+@test pr8622() == [0,3,1,0]

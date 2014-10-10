@@ -70,7 +70,7 @@ function repl_hook(input::String)
          macroexpand(Expr(:macrocall,symbol("@cmd"),input)))
 end
 
-display_error(er) = display_error(er, {})
+display_error(er) = display_error(er, [])
 function display_error(er, bt)
     with_output_color(:red, STDERR) do io
         print(io, "ERROR: ")
@@ -420,7 +420,7 @@ function _start()
     ccall(:uv_atexit_hook, Void, ())
 end
 
-const atexit_hooks = {}
+const atexit_hooks = []
 
 atexit(f::Function) = (unshift!(atexit_hooks, f); nothing)
 
