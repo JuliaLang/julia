@@ -63,7 +63,11 @@ First, acquire the source code by cloning the git repository:
 
 Be sure to also configure your system to use the appropriate proxy settings, e.g. by setting the `https_proxy` and `http_proxy` variables.)
 
-Next, enter the `julia/` directory and run `make` to build the `julia` executable. To perform a parallel build, use `make -j N` and supply the maximum number of concurrent processes.
+By default you will be building the latest unstable version of Julia. However, most users should use the most recent stable version of Julia, which is currently the `0.3` series of releases. You can get this version by changing to the Julia directory and running
+
+    git checkout release-0.3
+    
+Now run `make` to build the `julia` executable. To perform a parallel build, use `make -j N` and supply the maximum number of concurrent processes.
 When compiled the first time, it will automatically download and build its [external dependencies](#Required-Build-Tools-External-Libraries).
 This takes a while, but only has to be done once. If the defaults in the build do not work for you, and you need to set specific make parameters, you can save them in `Make.user`. The build will automatically check for the existence of `Make.user` and use it if it exists.
 Building Julia requires 1.5GiB of disk space and approximately 700MiB of virtual memory.

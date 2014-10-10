@@ -57,8 +57,8 @@ hx(a::Uint64, b::Float64, h::Uint) = hash_uint64((3a + reinterpret(Uint64,b)) - 
 const hx_NaN = hx(uint64(0), NaN, uint(0  ))
 
 hash(x::Uint64,  h::Uint) = hx(x, float64(x), h)
-hash(x::Int64,   h::Uint) = hx(reinterpret(Uint64,x), float64(x), h)
-hash(x::Float64, h::Uint) = isnan(x) ? (hx_NaN $ h) : hx(box(Uint64,fptosi(unbox(Float64,x))), x, h)
+hash(x::Int64,   h::Uint) = hx(reinterpret(Uint64,abs(x)), float64(x), h)
+hash(x::Float64, h::Uint) = isnan(x) ? (hx_NaN $ h) : hx(box(Uint64,fptoui(unbox(Float64,abs(x)))), x, h)
 
 hash(x::Union(Bool,Char,Int8,Uint8,Int16,Uint16,Int32,Uint32), h::Uint) = hash(int64(x), h)
 hash(x::Float32, h::Uint) = hash(float64(x), h)

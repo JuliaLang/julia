@@ -1,9 +1,9 @@
-types = {
+types = Any[
     Bool, Char,
     Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Float32, Float64,
     Rational{Int8}, Rational{Uint8}, Rational{Int16}, Rational{Uint16},
     Rational{Int32}, Rational{Uint32}, Rational{Int64}, Rational{Uint64}
-}
+]
 vals = [
     typemin(Int64),
     -int64(maxintfloat(Float64))+Int64[-4:1],
@@ -48,18 +48,24 @@ for T=types, S=types, x=vals
     # end
 end
 
+# issue #8619
+@test hash(nextfloat(2.0^63)) == hash(uint64(nextfloat(2.0^63)))
+@test hash(prevfloat(2.0^64)) == hash(uint64(prevfloat(2.0^64)))
+
 # hashing collections (e.g. issue #6870)
-vals = {[1,2,3,4], [1 3;2 4], {1,2,3,4}, [1,3,2,4],
-        [1,0], [true,false], bitpack([true,false]),
-        Set([1,2,3,4]),
-        Set([1:10]),                 # these lead to different key orders
-        Set([7,9,4,10,2,3,5,8,6,1]), #
-        Dict(42 => 101, 77 => 93), Dict(42 => 101, 77 => 93),
-        (1,2,3,4), (1.0,2.0,3.0,4.0), (1,3,2,4),
-        ("a","b"), (SubString("a",1,1), SubString("b",1,1)),
-        # issue #6900
-        [x => x for x in 1:10],
-        Dict(7=>7,9=>9,4=>4,10=>10,2=>2,3=>3,8=>8,5=>5,6=>6,1=>1)}
+vals = Any[
+    [1,2,3,4], [1 3;2 4], Any[1,2,3,4], [1,3,2,4],
+    [1,0], [true,false], bitpack([true,false]),
+    Set([1,2,3,4]),
+    Set([1:10]),                 # these lead to different key orders
+    Set([7,9,4,10,2,3,5,8,6,1]), #
+    Dict(42 => 101, 77 => 93), Dict{Any,Any}(42 => 101, 77 => 93),
+    (1,2,3,4), (1.0,2.0,3.0,4.0), (1,3,2,4),
+    ("a","b"), (SubString("a",1,1), SubString("b",1,1)),
+    # issue #6900
+    [x => x for x in 1:10],
+    Dict(7=>7,9=>9,4=>4,10=>10,2=>2,3=>3,8=>8,5=>5,6=>6,1=>1)
+]
 
 for a in vals, b in vals
     @test isequal(a,b) == (hash(a)==hash(b))

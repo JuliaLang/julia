@@ -10,33 +10,33 @@ med = 10^4
 large = 10^5
 huge = 10^6
 # # 1 entry per line
-# ss = {}
+# ss = []
 # push!(ss, sprand(small, small, 1e-3))
 # #push!(ss, sprand(med, med, 1e-4))
 # push!(ss, sprand(large, large, 1e-5))
 
 # 10 entries per line
-ts = {}
+ts = []
 push!(ts, sprand(small, small, 1e-2))
 #push!(ts, sprand(med, med, 1e-3))
 push!(ts, sprand(large, large, 1e-4))
 
 # 100 entries per line
-us = {}
+us = []
 push!(us, sprand(small, small, 1e-1))
 #push!(us, sprand(med, med, 1e-2))
 push!(us, sprand(large, large, 1e-3))
 #push!(us, sprand(huge, huge, 1e-4))
 
 # # 1000 entries per line
-# vs = {}
+# vs = []
 # push!(vs, sprand(small, small, 1.0))
 # #push!(vs, sprand(med, med, 1e-1))
 # push!(vs, sprand(large, large, 1e-2))
 # #push!(vs, sprand(huge, huge, 1e-3))
 
 ## using uint32 (works up to 10^9)
-uus = {}
+uus = []
 for u in us
     push!(uus, SparseMatrixCSC(u.m, u.n, uint32(u.colptr), uint32(u.rowval), u.nzval))
 end    

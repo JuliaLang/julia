@@ -34,7 +34,7 @@ function package(
     authors::Union(String,Array) = "",
     years::Union(Int,String) = copyright_year(),
     user::String = github_user(),
-    config::Dict = {},
+    config::Dict = Dict(),
 )
     isnew = !ispath(pkg)
     try

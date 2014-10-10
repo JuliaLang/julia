@@ -125,7 +125,7 @@ end
 
 getindex(T::(Type...)) = Array(T,0)
 
-# T[a:b] and T[a:s:b] also contruct typed ranges
+# T[a:b] and T[a:s:b] also construct typed ranges
 function getindex{T<:Number}(::Type{T}, r::Range)
     copy!(Array(T,length(r)), r)
 end
@@ -1148,7 +1148,7 @@ indmin(a) = findmin(a)[2]
 # similar to Matlab's ismember
 # returns a vector containing the highest index in b for each value in a that is a member of b
 function indexin(a::AbstractArray, b::AbstractArray)
-    bdict = Dict(b, 1:length(b))
+    bdict = Dict(zip(b, 1:length(b)))
     [get(bdict, i, 0) for i in a]
 end
 

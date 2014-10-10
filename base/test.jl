@@ -36,7 +36,7 @@ with_handler(f::Function, handler) =
 
 import Base.showerror
 
-showerror(io::IO, r::Error) = showerror(io, r, {})
+showerror(io::IO, r::Error) = showerror(io, r, [])
 function showerror(io::IO, r::Error, bt)
     println(io, "test error in expression: $(r.expr)")
     showerror(io, r.err, r.backtrace)
