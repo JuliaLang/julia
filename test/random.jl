@@ -27,7 +27,7 @@ rand!(MersenneTwister(0), A)
             0.9103565379264364  0.17732884646626457]
 
 @test rand(0:3:1000) in 0:3:1000
-coll = {2, uint128(128), big(619), "string", 'c'}
+coll = Any[2, uint128(128), big(619), "string", 'c']
 @test rand(coll) in coll
 @test issubset(rand(coll, 2, 3), coll)
 
@@ -49,18 +49,9 @@ for T in (Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Int128, Uint
     @test mod(r,2)==1
 
     if T<:Integer && T!==Char
-        if T.size < Int.size
-            x = rand(typemin(T):typemax(T))
-            @test isa(x,T)
-            @test typemin(T) <= x <= typemax(T)
-        else # we bound the length of the range to typemax(T) so that there is no overflow
-            for (a, b) in ((typemin(T),typemin(T)+typemax(T)-one(T)),
-                           (one(T),typemax(T)))
-                x = rand(a:b)
-                @test isa(x,T)
-                @test a <= x <= b
-            end
-        end
+        x = rand(typemin(T):typemax(T))
+        @test isa(x,T)
+        @test typemin(T) <= x <= typemax(T)
     end
 end
 
@@ -68,9 +59,7 @@ if sizeof(Int32) < sizeof(Int)
     r = rand(int32(-1):typemax(Int32))
     @test typeof(r) == Int32
     @test -1 <= r <= typemax(Int32)
-    @test all([div(0x00010000000000000000,k)*k - 1 == Base.Random.randintgen(uint64(k)).u for k in 13 .+ int64(2).^(32:62)])
-    @test all([div(0x00010000000000000000,k)*k - 1 == Base.Random.randintgen(int64(k)).u for k in 13 .+ int64(2).^(32:61)])
-
+    @test all([div(0x00010000000000000000,k)*k - 1 == Base.Random.randintgen(uint64(k)-1).u for k in 13 .+ int64(2).^(32:62)])
 end
 
 randn(100000)
@@ -174,8 +163,7 @@ r = uint64(rand(uint32(97:122)))
 srand(seed)
 @test r == rand(uint64(97:122))
 
-@test all([div(0x000100000000,k)*k - 1 == Base.Random.randintgen(uint64(k)).u for k in 13 .+ int64(2).^(1:30)])
-@test all([div(0x000100000000,k)*k - 1 == Base.Random.randintgen(int64(k)).u for k in 13 .+ int64(2).^(1:30)])
+@test all([div(0x000100000000,k)*k - 1 == Base.Random.randintgen(uint64(k)-1).u for k in 13 .+ int64(2).^(1:30)])
 
 import Base.Random: uuid4, UUID
 

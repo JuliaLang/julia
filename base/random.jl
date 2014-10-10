@@ -1,6 +1,6 @@
 module Random
 
-using Base.dSFMT
+using Base: dSFMT, cget, cendof
 
 export srand,
        rand, rand!,
@@ -146,7 +146,7 @@ rand{T<:Number}(::Type{T}) = error("no random number generator for type $T; try 
 rand{T<:Number}(::Type{T}, dims::Int...) = rand(T, dims)
 
 
-## Generate random integer within a range 1:n
+## Generate random integer within a range 0:k-1
 
 # maxmultiple: precondition: k>0
 # maximum multiple of k <= 2^numbits(k), decremented by one
@@ -157,26 +157,24 @@ maxmultiple(k::Uint128) = div(typemax(Uint128), k)*k - 1
 # 32 or 64 bits version depending on size
 maxmultiplemix(k::Uint64) = k >> 32 == 0 ? uint64(maxmultiple(itrunc(Uint32, k))) : maxmultiple(k)
 
-immutable RandIntGen{T<:Integer, U<:Union(Uint32, Uint64, Uint128)}
-    k::U   # range length
+immutable RandIntGen{U<:Union(Uint32, Uint64, Uint128)}
+    k::U   # range length or zero for full range
     u::U   # rejection threshold
 
     function RandIntGen(k::U)
-        k < 1 && error("No integers in the range [1, $k]. Did you try to pick an element from a empty collection?")
-        new(k, isa(k, Uint64) ? maxmultiplemix(k) : maxmultiple(k))
+        u = k == zero(U) ? typemax(U) :
+            U === Uint64 ? maxmultiplemix(k) :
+                           maxmultiple(k)
+        new(k, u)
     end
 end
 
 # generator API
-# randintgen(k) returns a helper object for generating random integers in the range 1:k
-randintgen{T<:Unsigned}(k::T) = RandIntGen{T, T}(k)
+# randintgen(k) returns a helper object for generating random integers in the range 0:k
+randintgen{U<:Unsigned}(k::U) = RandIntGen{U}(one(U)+k)
 # specialized versions
-for (T, U) in [(Uint8, Uint32), (Uint16, Uint32),
-               (Int8, Uint32), (Int16, Uint32), (Int32, Uint32), (Int64, Uint64), (Int128, Uint128),
-               (Bool, Uint32), (Char, Uint32)]
-
-    @eval randintgen(k::$T) = RandIntGen{$T,$U}(convert($U, k))
-end
+randintgen(k::Uint8)  = randintgen(convert(Uint32, k))
+randintgen(k::Uint16) = randintgen(convert(Uint32, k))
 
 @inline function rand_lessthan{U}(u::U)
     while true
@@ -187,20 +185,23 @@ end
 
 # this function uses 32 bit entropy for small ranges of length <= typemax(Uint32) + 1
 # RandIntGen is responsible for providing the right value of k
-function rand{T}(g::RandIntGen{T,Uint64})
+function rand(g::RandIntGen{Uint64})
+    g.k == zero(Uint64) && return rand(Uint64)
     x = (g.k - 1) >> 32 == 0 ?
         uint64(rand_lessthan(itrunc(Uint32, g.u))) :
         rand_lessthan(g.u)
-    return reinterpret(T, one(Uint64) + x % g.k)
+    return x % g.k
 end
 
-rand{T,U}(g::RandIntGen{T,U}) = itrunc(T, one(U) + rand_lessthan(g.u) % g.k)
+rand{U}(g::RandIntGen{U}) = g.k == zero(U) ? rand(U) : rand_lessthan(g.u) % g.k
 
 
 ## Randomly draw a sample from an AbstractArray r
 # (e.g. r is a range 0:2:8 or a vector [2, 3, 5, 7])
 
-rand(r::AbstractArray) = r[rand(randintgen(length(r)))]
+check_nonempty(r::AbstractArray) = (isempty(r) && error(ArgumentError("cannot randomly pick an element from an empty collection")); r)
+
+rand(r::AbstractArray) = cget(r, rand(randintgen(cendof(check_nonempty(r)))))
 
 # Arrays of random integers
 
@@ -208,9 +209,9 @@ rand!(r::Range, A::AbstractArray) = rand!(r, A, ())
 
 # TODO: this more general version is "disabled" until #8246 is resolved
 function rand!(r::AbstractArray, A::AbstractArray, ::())
-    g = randintgen(length(r))
+    g = randintgen(cendof(check_nonempty(r)))
     for i = 1 : length(A)
-        @inbounds A[i] = r[rand(g)]
+        @inbounds A[i] = cget(r, rand(g))
     end
     return A
 end
