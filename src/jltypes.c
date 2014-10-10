@@ -55,8 +55,6 @@ jl_datatype_t *jl_number_type;
 jl_tuple_t *jl_null;
 jl_value_t *jl_nothing;
 
-void jl_add_constructors(jl_datatype_t *t);
-
 // --- type properties and predicates ---
 
 int jl_is_type(jl_value_t *v)

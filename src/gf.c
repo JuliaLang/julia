@@ -1386,7 +1386,6 @@ jl_function_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t na
     return sf;
 }
 
-void jl_add_constructors(jl_datatype_t *t);
 DLLEXPORT jl_value_t *jl_matching_methods(jl_function_t *gf, jl_value_t *type, int lim);
 
 // compile-time method lookup
