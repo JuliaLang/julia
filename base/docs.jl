@@ -4,17 +4,36 @@ import Base.Markdown: @doc_str, @doc_mstr
 
 export doc, @doc
 
-# Basic API
+# Basic API / Storage
 
-const META = Dict()
+const modules = Module[]
 
-function doc(obj, meta)
-  META[obj] = meta
+meta() = current_module().META
+
+macro init ()
+  META = esc(:META)
+  quote
+    if !isdefined(:META)
+      const $META = ObjectIdDict()
+      push!(modules, current_module())
+      nothing
+    end
+  end
 end
 
-doc(obj) = get(META, obj, nothing)
+function doc(obj, data)
+  meta()[obj] = data
+end
 
-doc(obj::Union(Symbol, String)) = get(META, current_module().(symbol(obj)), nothing)
+function doc(obj)
+  for mod in modules
+    haskey(mod.META, obj) && return mod.META[obj]
+  end
+end
+
+function doc(obj::Union(Symbol, String))
+  doc(current_module().(symbol(obj)))
+end
 
 # Function / Method support
 
@@ -35,7 +54,7 @@ function newmethod(funcs, f)
   return newmethod(applicable)
 end
 
-function trackmethod (def)
+function trackmethod(def)
   name = unblock(def).args[1].args[1]
   f = esc(name)
   quote
@@ -60,16 +79,29 @@ FuncDoc() = FuncDoc(Method[], Dict(), Dict())
 
 getset(coll, key, default) = coll[key] = get(coll, key, default)
 
-function doc(f::Function, m::Method, meta)
-  fd = getset(META, f, FuncDoc())
+function doc(f::Function, m::Method, data, source)
+  fd = getset(meta(), f, FuncDoc())
+  isa(fd, FuncDoc) || error("Can't document a method when the function already has metadata")
   !haskey(fd.meta, m) && push!(fd.order, m)
-  fd.meta[m] = meta
+  fd.meta[m] = data
+  fd.source[m] = source
 end
 
 function doc(f::Function)
-  fd = get(META, f, nothing)
-  fd == nothing && return
-  catdoc([fd.meta[m] for m in fd.order]...)
+  docs = {}
+  for mod in modules
+    if haskey(mod.META, f)
+      fd = mod.META[f]
+      if isa(fd, FuncDoc)
+        for m in fd.order
+          push!(docs, fd.meta[m])
+        end
+      elseif length(docs) == 0
+        return fd
+      end
+    end
+  end
+  return catdoc(docs...)
 end
 
 catdoc() = nothing
@@ -108,6 +140,7 @@ end
 function macrodoc(meta, def)
   name = esc(symbol(string("@", unblock(def).args[1].args[1])))
   quote
+    @init
     $(esc(def))
     doc($name, $(mdify(meta)))
     nothing
@@ -116,6 +149,7 @@ end
 
 function funcdoc(meta, def)
   quote
+    @init
     f, m = $(trackmethod(def))
     doc(f, m, $(mdify(meta)), $(esc(Expr(:quote, def))))
     f
@@ -124,6 +158,7 @@ end
 
 function objdoc(meta, def)
   quote
+    @init
     f = $(esc(def))
     doc(f, $(mdify(meta)))
     f
