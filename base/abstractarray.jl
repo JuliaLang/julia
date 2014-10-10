@@ -22,6 +22,7 @@ ndims{T,n}(::Type{AbstractArray{T,n}}) = n
 ndims{T<:AbstractArray}(::Type{T}) = ndims(super(T))
 length(t::AbstractArray) = prod(size(t))::Int
 endof(a::AbstractArray) = length(a)
+cendof(a::AbstractArray) = unsigned(length(a) - 1) # precondition: !isempty(a)
 first(a::AbstractArray) = a[1]
 first(a) = next(a,start(a))[1]
 last(a) = a[end]
@@ -374,6 +375,8 @@ imag{T<:Real}(x::AbstractArray{T}) = zero(x)
 
 getindex(t::AbstractArray, i::Real) = error("indexing not defined for ", typeof(t))
 
+cget(t::AbstractArray, i::Real) = @inbounds return t[i+1]
+
 # linear indexing with a single multi-dimensional index
 function getindex(A::AbstractArray, I::AbstractArray)
     x = similar(A, size(I))
@@ -439,6 +442,8 @@ end
 setindex!(t::AbstractArray, x, i::Real) =
     error("setindex! not defined for ",typeof(t))
 setindex!(t::AbstractArray, x) = throw(MethodError(setindex!, (t, x)))
+
+cset!(t::AbstractArray, x, i::Real) = @inbounds return t[i+1] = x
 
 ## Indexing: handle more indices than dimensions if "extra" indices are 1
 

@@ -372,3 +372,15 @@ let smallint = (Int === Int64 ?
         @test length(typemin(T):typemax(T)) == 2^(8*sizeof(T))
     end
 end
+
+# cendof, cget
+for r in (typemin(Int):typemax(Int), typemin(Int):1:typemax(Int))
+    @test Base.cendof(r)  == typemax(Uint)
+    @test Base.cget(r, 0) == typemin(Int)
+    @test Base.cget(r, Base.cendof(r)) == typemax(Int)
+end
+let r = typemax(Int):-1:typemin(Int)
+    @test Base.cendof(r) == typemax(Uint)
+    @test Base.cget(r, 0) == typemax(Int)
+    @test Base.cget(r, Base.cendof(r)) == typemin(Int)
+end

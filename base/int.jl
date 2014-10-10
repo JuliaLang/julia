@@ -1,8 +1,5 @@
 ## integer arithmetic ##
 
-const IntTypes = (Int8, Uint8, Int16, Uint16, Int32, Uint32,
-                  Int64, Uint64, Int128, Uint128)
-
 +(x::Int, y::Int) = box(Int,add_int(unbox(Int,x),unbox(Int,y)))
 <(x::Int, y::Int) = slt_int(unbox(Int,x),unbox(Int,y))
 
