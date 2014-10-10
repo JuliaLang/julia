@@ -840,26 +840,19 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
             if isa(af,Function) || isa(af,DataType)
                 aargtypes = map(to_tuple_of_Types, argtypes[3:end])
                 return abstract_apply(af, aargtypes, vtypes, sv, e)
-            else
-                call_func = isconstantfunc(fargs[1])
-                if !is(call_func,false)
-                    aargtypes = map(to_tuple_of_Types, argtypes[2:end])
-                    aargtypes[1] = (aargtypes[1],)  # don't splat "function"
-                    return abstract_apply(_ieval(call_func), aargtypes, vtypes, sv, e)
-                end
-            end
-        else
-            # non-constant function
-            if !(Function <: a2type) && typeintersect(DataType, a2type)==Bottom
-                # would definitely use call()
-                call_func = isconstantfunc(fargs[1])
-                if !is(call_func,false)
-                    aargtypes = map(to_tuple_of_Types, argtypes[2:end])
-                    aargtypes[1] = (aargtypes[1],)  # don't splat "function"
-                    return abstract_apply(_ieval(call_func), aargtypes, vtypes, sv, e)
-                end
             end
         end
+        # TODO: this slows down inference a lot
+        # if !(a2type===Function || a2type===DataType) && isleaftype(a2type)
+        #     # would definitely use call()
+        #     call_func = isconstantfunc(fargs[1])
+        #     if !is(call_func,false)
+        #         aargtypes = Any[ to_tuple_of_Types(argtypes[i]) for i=2:length(argtypes) ]
+        #         aargtypes[1] = (aargtypes[1],)  # don't splat "function"
+        #         return abstract_apply(_ieval(call_func), tuple(aargtypes...), vtypes, sv, e)
+        #     end
+        # end
+        return Any
     end
     if isgeneric(f)
         return abstract_call_gf(f, fargs, argtypes, e)
@@ -904,11 +897,9 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
         # TODO: call() case
         return Any
     end
-    if !isa(f,Function) && !isa(f,DataType) && !isa(f,IntrinsicFunction)
-        call_func = isconstantfunc(:call, sv)
-        if !is(call_func,false)
-            return abstract_call(_ieval(call_func), e.args, tuple(typeof(f),argtypes...), vtypes, sv, e)
-        end
+    if !isa(f,Function) && !isa(f,DataType) && !isa(f,IntrinsicFunction) && _iisdefined(:call)
+        call_func = _ieval(:call)
+        return abstract_call(call_func, e.args, tuple(Any[typeof(f),argtypes...]...), vtypes, sv, e)
     end
     rt = builtin_tfunction(f, fargs, argtypes)
     #print("=> ", rt, "\n")
@@ -956,11 +947,9 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
                 return st
             end
         end
-        if !(Function <: ft) && typeintersect(DataType, ft)==Bottom
-            call_func = isconstantfunc(:call, sv)
-            if !is(call_func,false)
-                return abstract_call(_ieval(call_func), e.args, tuple(ft,argtypes...), vtypes, sv, e)
-            end
+        if !(Function <: ft) && typeintersect(DataType, ft)==Bottom && _iisdefined(:call)
+            call_func = _ieval(:call)
+            return abstract_call(call_func, e.args, tuple(Any[ft,argtypes...]...), vtypes, sv, e)
         end
         return Any
     end
