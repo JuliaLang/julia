@@ -137,9 +137,9 @@ export
     Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode, SymbolNode, TopNode,
     GetfieldNode, NewvarNode,
     # object model functions
-    apply, fieldtype, getfield, setfield!, yieldto, throw, tuple, is, ===, isdefined,
+    fieldtype, getfield, setfield!, yieldto, throw, tuple, is, ===, isdefined,
     # arraylen, arrayref, arrayset, arraysize, tuplelen, tupleref, convert_default,
-    # kwcall,
+    # _apply, kwcall,
     # sizeof    # not exported, to avoid conflicting with Base.sizeof
     # type reflection
     issubtype, typeof, isa,
@@ -167,6 +167,11 @@ export
 
 
 const (===) = is
+
+# simple convert for use by constructors of types in Core
+convert(T, x) = convert_default(T, x, convert)
+
+call(T::Type, arg) = convert(T, arg)
 
 abstract Number
 abstract Real     <: Number
@@ -216,9 +221,6 @@ type InterruptException <: Exception end
 
 abstract String
 abstract DirectIndexString <: String
-
-# simple convert for use by constructors of types in Core
-convert(T, x) = convert_default(T, x, convert)
 
 type SymbolNode
     name::Symbol

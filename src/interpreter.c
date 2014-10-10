@@ -211,7 +211,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         if (jl_is_func(f))
             return do_call(f, &args[1], nargs-1, NULL, locals, nl);
         else
-            return do_call(jl_call_func, args, nargs, (jl_value_t*)f, locals, nl);
+            return do_call(jl_module_call_func(jl_current_module), args, nargs, (jl_value_t*)f, locals, nl);
     }
     else if (ex->head == assign_sym) {
         jl_value_t *sym = args[0];

@@ -185,3 +185,9 @@ const Nothing = Void
 
 export None
 const None = Union()
+
+export apply
+function apply(f, args...)
+    depwarn("apply() is deprecated, use `...` instead", :apply)
+    return Core._apply(call, f, args...)
+end

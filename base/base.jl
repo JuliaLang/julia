@@ -11,8 +11,11 @@ convert(T, x) = convert_default(T, x, convert)
 convert(::(), ::()) = ()
 convert(::Type{Tuple}, x::Tuple) = x
 
+# fall back to Core.call
+call(args...) = Core.call(args...)
+
 # allow convert to be called as if it were a single-argument constructor
-call{T}(::Type{T}, x) = convert(T, x)
+# call(T::Type, x) = convert(T, x)
 
 argtail(x, rest...) = rest
 tupletail(x::Tuple) = argtail(x...)

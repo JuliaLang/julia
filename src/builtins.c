@@ -284,13 +284,18 @@ extern size_t jl_page_size;
 
 JL_CALLABLE(jl_f_apply)
 {
-    JL_NARGSV(apply, 1);
+    JL_NARGSV(apply, 2);
     jl_function_t *f;
-    if (jl_is_function(args[0]))
-        f = (jl_function_t*)args[0];
+    jl_function_t *call_func = (jl_function_t*)args[0];
+    assert(jl_is_function(call_func));
+    if (jl_is_function(args[1])) {
+        f = (jl_function_t*)args[1];
+        --nargs; ++args; /* args[1] becomes args[0] */
+    }
     else { /* do generic call(args...) instead */
-        f = jl_call_func;
-        ++nargs; --args; /* args[0] becomes args[1] */
+        f = call_func;
+        // protect "function" arg from splicing
+        args[1] = (jl_value_t*)jl_tuple1(args[1]);
     }
     if (nargs == 2) {
         if (f->fptr == &jl_f_tuple) {
@@ -372,18 +377,28 @@ void jl_add_constructors(jl_datatype_t *t);
 
 JL_CALLABLE(jl_f_kwcall)
 {
-    if (nargs < 3)
+    if (nargs < 4)
         jl_error("internal error: malformed keyword argument call");
     jl_function_t *f;
-    jl_value_t *args0;
-    if (jl_is_function(args[0])) {
-        f = (jl_function_t*)args[0];
-        args0 = NULL;
+    jl_function_t *call_func = (jl_function_t*)args[0];
+    assert(jl_is_function(call_func));
+    size_t nkeys = jl_unbox_long(args[1]);
+    size_t pa = 4 + 2*nkeys;
+    jl_array_t *container = (jl_array_t*)args[pa-2];
+    assert(jl_array_len(container) > 0);
+    f = (jl_function_t*)args[pa-1];
+    if (!jl_is_function(f)) {
+        // do generic call(args...; kws...) instead
+        f = call_func;
+        pa--;
     }
-    else { /* do generic call(args...; kws...) instead */
-        f = jl_call_func;
-        args0 = args[0];
+    else {
+        // switch (container f pa...) to (f container pa...)
+        // TODO: this is not as legitimate as it could be.
+        args[pa-1] = args[pa-2];
+        args[pa-2] = (jl_value_t*)f;
     }
+
     if (f->fptr == jl_f_ctor_trampoline)
         jl_add_constructors((jl_datatype_t*)f);
     if (!jl_is_gf(f))
@@ -394,10 +409,6 @@ JL_CALLABLE(jl_f_kwcall)
                   jl_gf_name(f)->name);
     }
 
-    size_t nkeys = jl_unbox_long(args[1]);
-    size_t pa = 3 + 2*nkeys;
-    jl_array_t *container = (jl_array_t*)args[pa-1];
-    assert(jl_array_len(container) > 0);
     for(size_t i=0; i < nkeys*2; i+=2) {
         jl_cellset(container, i  , args[2+i]);
         jl_cellset(container, i+1, args[2+i+1]);
@@ -405,15 +416,6 @@ JL_CALLABLE(jl_f_kwcall)
 
     args += pa-1;
     nargs -= pa-1;
-    if (args0) {
-         jl_value_t **newargs = (jl_value_t**)alloca((nargs+1) * sizeof(jl_value_t*));
-         newargs[0] = args[0];
-         newargs[1] = args0; /* original 0th argument = "function" */
-         memcpy(newargs+2, args+1, sizeof(jl_value_t*) * (nargs-1));
-         args = newargs;
-         nargs += 1;
-    }
-
     assert(jl_is_gf(sorter));
     jl_function_t *m = jl_method_lookup((jl_methtable_t*)sorter->env, args, nargs, 1);
     if (m == jl_bottom_func) {
@@ -1055,7 +1057,7 @@ void jl_init_primitives(void)
     add_builtin_func("issubtype", jl_f_subtype);
     add_builtin_func("isa", jl_f_isa);
     add_builtin_func("typeassert", jl_f_typeassert);
-    add_builtin_func("apply", jl_f_apply);
+    add_builtin_func("_apply", jl_f_apply);
     add_builtin_func("kwcall", jl_f_kwcall);
     add_builtin_func("throw", jl_f_throw);
     add_builtin_func("tuple", jl_f_tuple);

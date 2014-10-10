@@ -255,6 +255,7 @@ typedef struct _jl_module_t {
     htable_t bindings;
     arraylist_t usings;  // modules with all bindings potentially imported
     jl_array_t *constant_table;
+    jl_function_t *call_func;  // cached lookup of `call` within this module
 } jl_module_t;
 
 typedef struct _jl_methlist_t {
@@ -817,6 +818,7 @@ STATIC_INLINE jl_function_t *jl_get_function(jl_module_t *m, const char *name)
 }
 DLLEXPORT int jl_module_has_initializer(jl_module_t *m);
 DLLEXPORT void jl_module_run_initializer(jl_module_t *m);
+jl_function_t *jl_module_call_func(jl_module_t *m);
 
 // eq hash tables
 DLLEXPORT jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val);

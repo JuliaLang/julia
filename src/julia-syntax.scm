@@ -1469,9 +1469,9 @@
 				`((quote ,(cadr a)) ,(caddr a)))
 			      keys))))
      (if (null? restkeys)
-	 `(call (top kwcall) ,f ,(length keys) ,@keyargs
+	 `(call (top kwcall) call ,(length keys) ,@keyargs
 		(call (top Array) (top Any) ,(* 2 (length keys)))
-		,@pa)
+		,f ,@pa)
 	 (let ((container (gensy)))
 	   `(block
 	     (= ,container (call (top Array) (top Any) ,(* 2 (length keys))))
@@ -1491,8 +1491,8 @@
 		      restkeys))
 	     (if (call (top isempty) ,container)
 		 (call ,f ,@pa)
-		 (call (top kwcall) ,f ,(length keys) ,@keyargs
-		       ,container ,@pa))))))))
+		 (call (top kwcall) call ,(length keys) ,@keyargs
+		       ,container ,f ,@pa))))))))
 
 (define (expand-transposed-op e ops)
   (let ((a (caddr e))
@@ -1737,7 +1737,7 @@
 					   (tuple-wrap (cdr a) '())))
 				(tuple-wrap (cdr a) (cons x run))))))
 		    (expand-forms
-		     `(call (top apply) ,f ,@(tuple-wrap argl '())))))
+		     `(call (top _apply) call ,f ,@(tuple-wrap argl '())))))
 
 		 ((and (eq? (cadr e) '*) (length= e 4))
 		  (expand-transposed-op
