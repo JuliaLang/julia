@@ -1121,7 +1121,6 @@ DLLEXPORT void jl_get_system_hooks(void)
     jl_methoderror_type = (jl_datatype_t*)basemod("MethodError");
     jl_loaderror_type = (jl_datatype_t*)basemod("LoadError");
     jl_weakref_type = (jl_datatype_t*)basemod("WeakRef");
-    jl_call_func = (jl_function_t*)basemod("call");
 }
 
 DLLEXPORT void jl_exit_on_sigint(int on) {exit_on_sigint = on;}

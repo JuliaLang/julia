@@ -2357,7 +2357,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx, jl_
             assert(!jl_typeis(f,jl_intrinsic_type) || result!=NULL);
         }
         else {
-            result = emit_known_call((jl_value_t*)jl_call_func,
+            result = emit_known_call((jl_value_t*)jl_module_call_func(ctx->module),
                                      args-1, nargs+1, ctx, &theFptr, &f, expr);
         }
         if (result != NULL) return result;
@@ -2377,8 +2377,8 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx, jl_
 
     if (definitely_not_function) {
         if (f == NULL) {
-            f = jl_call_func;
-            Value *r = emit_known_call((jl_value_t*)jl_call_func,
+            f = jl_module_call_func(ctx->module);
+            Value *r = emit_known_call((jl_value_t*)f,
                                        args-1, nargs+1, ctx, &theFptr, &f, expr);
             assert(r == NULL);
             assert(theFptr != NULL);
@@ -2442,7 +2442,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx, jl_
         myargs = builder.CreateGEP(ctx->argTemp,
                                    ConstantInt::get(T_size, argStart+ctx->argSpaceOffs));
         Value *r2 = builder.CreateCall3(prepare_call(jlapplygeneric_func),
-                                        literal_pointer_val((jl_value_t*)jl_call_func),
+                                        literal_pointer_val((jl_value_t*)jl_module_call_func(ctx->module)),
                                         myargs,
                                         ConstantInt::get(T_int32,nargs+1));
         builder.CreateBr(mergeBB1);
