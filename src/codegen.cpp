@@ -1189,8 +1189,8 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
                         jl_function_t *ff = (jl_function_t*)fv;
                         if (ff->fptr == jl_f_tuplelen ||
                             ff->fptr == jl_f_tupleref ||
-                            (ff->fptr == jl_f_apply && alen==3 &&
-                             expr_type(jl_exprarg(e,1),ctx) == (jl_value_t*)jl_function_type)) {
+                            (ff->fptr == jl_f_apply && alen==4 &&
+                             expr_type(jl_exprarg(e,2),ctx) == (jl_value_t*)jl_function_type)) {
                             esc = false;
                         }
                     }
@@ -1811,10 +1811,10 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             }
         }
     }
-    else if (f->fptr == &jl_f_apply && nargs==2 && ctx->vaStack &&
-             symbol_eq(args[2], ctx->vaName)) {
-        Value *theF = emit_expr(args[1],ctx);
-        Value *theFptr = emit_nthptr_recast(theF,1, tbaa_func,jl_pfptr_llvmt);
+    else if (f->fptr == &jl_f_apply && nargs==3 && ctx->vaStack &&
+             symbol_eq(args[3], ctx->vaName) && expr_type(args[2],ctx) == (jl_value_t*)jl_function_type) {
+        Value *theF = emit_expr(args[2],ctx);
+        Value *theFptr = emit_nthptr_recast(theF,1, tbaa_func, jl_pfptr_llvmt);
         Value *nva = emit_n_varargs(ctx);
 #ifdef _P64
         nva = builder.CreateTrunc(nva, T_int32);
