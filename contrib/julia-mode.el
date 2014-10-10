@@ -251,7 +251,7 @@ Do not move back beyond MIN."
 	   (+ julia-basic-offset (current-indentation))))))
 
 (defun julia-paren-indent ()
-  "Return indent by last opening paren."
+  "Return indent amount of the last opening paren."
   (let* ((p (parse-partial-sexp
              (save-excursion
                ;; only indent by paren if the last open
@@ -272,27 +272,29 @@ Do not move back beyond MIN."
   (let* ((point-offset (- (current-column) (current-indentation))))
     (end-of-line)
     (indent-line-to
-     (or (save-excursion (ignore-errors (julia-paren-indent)))
-         (save-excursion
-           (let ((endtok (progn
-                           (beginning-of-line)
-                           (forward-to-indentation 0)
-                           (julia-at-keyword julia-block-end-keywords))))
-             (ignore-errors (+ (julia-last-open-block (point-min))
-                               (if endtok (- julia-basic-offset) 0)))))
-         ;; previous line ends in =
-         (save-excursion
-           (if (and (not (equal (point-min) (line-beginning-position)))
-                    (progn
-                      (forward-line -1)
-                      (end-of-line) (backward-char 1)
-                      (equal (char-after (point)) ?=)))
-               (+ julia-basic-offset (current-indentation))
-             nil))
-         ;; take same indentation as previous line
-         (save-excursion (forward-line -1)
-                         (current-indentation))
-         0))
+     (or
+      ;; If we're inside an open paren, indent to line up arguments.
+      (save-excursion (ignore-errors (julia-paren-indent)))
+      ;; If we're on a block end keyword, unindent.
+      (save-excursion
+        (beginning-of-line)
+        (forward-to-indentation 0)
+        (let ((endtok (julia-at-keyword julia-block-end-keywords)))
+          (ignore-errors (+ (julia-last-open-block (point-min))
+                            (if endtok (- julia-basic-offset) 0)))))
+      ;; If the previous line ends in =, increase the indent.
+      (save-excursion
+        (if (and (not (equal (point-min) (line-beginning-position)))
+                 (progn
+                   (forward-line -1)
+                   (end-of-line) (backward-char 1)
+                   (equal (char-after (point)) ?=)))
+            (+ julia-basic-offset (current-indentation))
+          nil))
+      ;; Otherwise, use the same indentation as previous line.
+      (save-excursion (forward-line -1)
+                      (current-indentation))
+      0))
     ;; Point is now at the beginning of indentation, restore it
     ;; to its original position (relative to indentation).
     (when (>= point-offset 0)
