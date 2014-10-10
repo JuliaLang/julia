@@ -661,7 +661,7 @@ const memhash_seed = Uint === Uint64 ? 0x71e729fd56419c81 : 0x56419c81
 
 function hash{T<:ByteString}(s::Union(T,SubString{T}), h::Uint)
     h += memhash_seed
-    ccall(memhash, Uint, (Ptr{Uint8}, Csize_t, Uint32), s, sizeof(s), itrunc(Uint32,h)) + h
+    ccall(memhash, Uint, (Ptr{Uint8}, Csize_t, Uint32), s, sizeof(s), mod(h,Uint32)) + h
 end
 hash(s::String, h::Uint) = hash(bytestring(s), h)
 
