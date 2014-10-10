@@ -2044,14 +2044,14 @@ for (trcon, trevc, trrfs, elty) in
         #$                   WORK( * ), X( LDX, * )
         function trrfs!(uplo::BlasChar, trans::BlasChar, diag::BlasChar,
                 A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, X::StridedVecOrMat{$elty},
-                Ferr::StridedVector{$elty}=similar(B, $elty, size(B,2)), Berr::StridedVector{$elty}=similar(B, $elty, size(B,2)))
+                Ferr::StridedVector{$elty}=similar(B, $elty, size(B,2)), Berr::StridedVector{$elty} = similar(B, $elty, size(B,2)))
             @chkuplo
-            n=size(A,2)
-            nrhs=size(B,2)
-            nrhs==size(X,2) || throw(DimensionMismatch(""))
-            work=Array($elty, 3n)
-            iwork=Array(BlasInt, n)
-            info=Array(BlasInt, 1)
+            n = size(A,2)
+            nrhs = size(B,2)
+            nrhs == size(X,2) || throw(DimensionMismatch(""))
+            work = Array($elty, 3n)
+            iwork = Array(BlasInt, n)
+            info = Array(BlasInt, 1)
             ccall(($(string(trrfs)),liblapack), Void,
                 (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, 
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
