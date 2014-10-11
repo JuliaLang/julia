@@ -1,9 +1,9 @@
 # Bidiagonal matrices
 type Bidiagonal{T} <: AbstractMatrix{T}
-    dv::AbstractVector{T} # diagonal
-    ev::AbstractVector{T} # sub/super diagonal
+    dv::Vector{T} # diagonal
+    ev::Vector{T} # sub/super diagonal
     isupper::Bool # is upper bidiagonal (true) or lower (false)
-    function Bidiagonal{T}(dv::AbstractVector{T}, ev::AbstractVector{T}, isupper::Bool)
+    function Bidiagonal{T}(dv::Vector{T}, ev::Vector{T}, isupper::Bool)
         length(ev)==length(dv)-1 ? new(dv, ev, isupper) : throw(DimensionMismatch(""))
     end
 end
