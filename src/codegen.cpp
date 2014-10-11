@@ -2324,13 +2324,7 @@ static Value *emit_is_function(Value *x, jl_codectx_t *ctx)
 {
     Value *xty = emit_typeof(x);
     Value *isfunc =
-        builder.
-        CreateOr(builder.
-                 CreateICmpEQ(xty,
-                              literal_pointer_val((jl_value_t*)jl_function_type)),
-                 builder.
-                 CreateICmpEQ(xty,
-                              literal_pointer_val((jl_value_t*)jl_datatype_type)));
+        builder.CreateICmpEQ(xty, literal_pointer_val((jl_value_t*)jl_function_type));
     return isfunc;
 }
 
@@ -2364,10 +2358,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx, jl_
     }
 
     hdtype = expr_type(a0, ctx);
-    definitely_function |= (hdtype == (jl_value_t*)jl_function_type ||
-                            hdtype == (jl_value_t*)jl_datatype_type ||
-                            (jl_is_type_type(hdtype) &&
-                             jl_is_datatype(jl_tparam0(hdtype))));
+    definitely_function |= (hdtype == (jl_value_t*)jl_function_type);
     definitely_not_function |= (jl_is_leaf_type(hdtype) && !definitely_function);
 
     assert(!(definitely_function && definitely_not_function));
@@ -2894,9 +2885,11 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         make_gcroot(a1, ctx);
         Value *a2 = boxed(emit_expr(args[2], ctx),ctx);
         make_gcroot(a2, ctx);
-        Value *mdargs[6] = { name, bp, literal_pointer_val(bnd), a1, a2, literal_pointer_val(args[3]) };
+        Value *mdargs[7] =
+            { name, bp, literal_pointer_val(bnd), a1, a2, literal_pointer_val(args[3]),
+              literal_pointer_val((jl_value_t*)jl_module_call_func(ctx->module)) };
         ctx->argDepth = last_depth;
-        return builder.CreateCall(prepare_call(jlmethod_func), ArrayRef<Value*>(&mdargs[0], 6));
+        return builder.CreateCall(prepare_call(jlmethod_func), ArrayRef<Value*>(&mdargs[0], 7));
     }
     else if (head == const_sym) {
         jl_sym_t *sym = (jl_sym_t*)args[0];
@@ -4460,6 +4453,7 @@ static void init_julia_llvm_env(Module *m)
     std::vector<Type*> mdargs(0);
     mdargs.push_back(jl_pvalue_llvmt);
     mdargs.push_back(jl_ppvalue_llvmt);
+    mdargs.push_back(jl_pvalue_llvmt);
     mdargs.push_back(jl_pvalue_llvmt);
     mdargs.push_back(jl_pvalue_llvmt);
     mdargs.push_back(jl_pvalue_llvmt);

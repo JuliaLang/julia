@@ -29,7 +29,7 @@ type CallStack
     prev::Union(EmptyCallStack,CallStack)
     sv::StaticVarInfo
 
-    CallStack(ast, mod, types, prev) = new(ast, mod, types, false, 0, Bottom, prev)
+    CallStack(ast, mod, types::ANY, prev) = new(ast, mod, types, false, 0, Bottom, prev)
 end
 
 inference_stack = EmptyCallStack()
@@ -516,10 +516,6 @@ function builtin_tfunction(f::ANY, args::ANY, argtypes::ANY)
     end
     tf = get(t_func::ObjectIdDict, f, false)
     if is(tf,false)
-        # struct constructor
-        if isstructtype(f)
-            return f
-        end
         # unknown/unhandled builtin
         return Any
     end
@@ -828,30 +824,25 @@ end
 function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
     if is(f,_apply) && length(fargs)>1
         a2type = argtypes[2]
-        if isType(a2type) && isleaftype(a2type.parameters[1])
-            af = a2type.parameters[1]
-            _methods(af,(),0)
-        else
-            af = isconstantfunc(fargs[2], sv)
-        end
+        af = isconstantfunc(fargs[2], sv)
 
         if !is(af,false)
             af = _ieval(af)
-            if isa(af,Function) || isa(af,DataType)
+            if isa(af,Function)
                 aargtypes = map(to_tuple_of_Types, argtypes[3:end])
                 return abstract_apply(af, aargtypes, vtypes, sv, e)
             end
         end
         # TODO: this slows down inference a lot
-        # if !(a2type===Function || a2type===DataType) && isleaftype(a2type)
-        #     # would definitely use call()
-        #     call_func = isconstantfunc(fargs[1])
-        #     if !is(call_func,false)
-        #         aargtypes = Any[ to_tuple_of_Types(argtypes[i]) for i=2:length(argtypes) ]
-        #         aargtypes[1] = (aargtypes[1],)  # don't splat "function"
-        #         return abstract_apply(_ieval(call_func), tuple(aargtypes...), vtypes, sv, e)
-        #     end
-        # end
+        if !(a2type===Function) && isleaftype(a2type)
+            # would definitely use call()
+            call_func = isconstantfunc(fargs[1], sv)
+            if !is(call_func,false)
+                aargtypes = Any[ to_tuple_of_Types(argtypes[i]) for i=2:length(argtypes) ]
+                aargtypes[1] = (aargtypes[1],)  # don't splat "function"
+                return abstract_apply(_ieval(call_func), tuple(aargtypes...), vtypes, sv, e)
+            end
+        end
         return Any
     end
     if isgeneric(f)
@@ -897,9 +888,9 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
         # TODO: call() case
         return Any
     end
-    if !isa(f,Function) && !isa(f,DataType) && !isa(f,IntrinsicFunction) && _iisdefined(:call)
+    if !isa(f,Function) && !isa(f,IntrinsicFunction) && _iisdefined(:call)
         call_func = _ieval(:call)
-        return abstract_call(call_func, e.args, tuple(Any[typeof(f),argtypes...]...), vtypes, sv, e)
+        return abstract_call(call_func, e.args, tuple(Any[abstract_eval_constant(f),argtypes...]...), vtypes, sv, e)
     end
     rt = builtin_tfunction(f, fargs, argtypes)
     #print("=> ", rt, "\n")
@@ -933,21 +924,7 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
             return result
         end
         ft = abstract_eval(called, vtypes, sv)
-        if isType(ft)
-            st = ft.parameters[1]
-            if isa(st,TypeVar)
-                st = st.ub
-            end
-            if isa(st,DataType)
-                _methods(st,(),0)
-                if isgeneric(st) && isleaftype(st)
-                    return abstract_call_gf(st, fargs, argtypes, e)
-                end
-                # struct constructor
-                return st
-            end
-        end
-        if !(Function <: ft) && typeintersect(DataType, ft)==Bottom && _iisdefined(:call)
+        if !(Function <: ft) && _iisdefined(:call)
             call_func = _ieval(:call)
             return abstract_call(call_func, e.args, tuple(Any[ft,argtypes...]...), vtypes, sv, e)
         end
@@ -1300,6 +1277,10 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
             end
         end
     end
+    # TODO: typeinf currently gets stuck without this
+    if linfo.name === :abstract_interpret || linfo.name === :tuple_elim_pass || linfo.name === :abstract_call_gf
+        return (linfo.ast, Any)
+    end
 
     ast0 = def.ast
 
@@ -1621,6 +1602,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         # just the return type in place of it.
         tfarr[idx+1] = rec ? frame.result : fulltree
         tfarr[idx+2] = rec
+        #tfunc_idx = idx+1
     else
         def.tfunc[tfunc_idx] = rec ? frame.result : fulltree
         def.tfunc[tfunc_idx+1] = rec
@@ -2063,7 +2045,7 @@ end
 # static parameters are ok if all the static parameter values are leaf types,
 # meaning they are fully known.
 function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
-    if !(isa(f,Function) || isstructtype(f) || isa(f,IntrinsicFunction))
+    if !(isa(f,Function) || isa(f,IntrinsicFunction))
         return NF
     end
     argexprs = e.args[2:end]
@@ -2675,18 +2657,13 @@ function inlining_pass(e::Expr, sv, ast)
         end
         if is(e.head,:call1)
             e.head = :call
-            ET = exprtype(arg1)
-            if isType(ET)
-                f = ET.parameters[1]
-            else
-                f1 = f = isconstantfunc(arg1, sv)
-                if !is(f,false)
-                    f = _ieval(f)
-                end
-                if f1===false || !(isa(f,Function) || isa(f,Type) || isa(f,IntrinsicFunction))
-                    f = _ieval(:call)
-                    e.args = Any[f, e.args...]
-                end
+            f1 = f = isconstantfunc(arg1, sv)
+            if !is(f,false)
+                f = _ieval(f)
+            end
+            if f1===false || !(isa(f,Function) || isa(f,IntrinsicFunction))
+                f = _ieval(:call)
+                e.args = Any[f, e.args...]
             end
 
             if is(f, ^) || is(f, .^)

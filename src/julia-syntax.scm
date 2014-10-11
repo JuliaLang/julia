@@ -732,7 +732,7 @@
 	  `(function (call ,name ,@field-names)
 		     (block
 		      (call new ,@field-names)))))
-    (if gen-specific?
+    (if (and gen-specific? (any (lambda (t) (not (eq? t 'Any))) field-types))
 	(list
 	 ;; definition with field types for all arguments
 	 `(function (call ,name
@@ -775,8 +775,42 @@
 	     `(block ,stmt ,@(cdr body))))
       body))
 
+;; insert item at start of arglist
+(define (arglist-unshift sig item)
+  (if (and (pair? sig) (pair? (car sig)) (eq? (caar sig) 'parameters))
+      `(,(car sig) ,item ,@(cdr sig))
+      `(,item ,@sig)))
+
+(define (ctor-signature name params method-params sig)
+  (if (null? params)
+      (if (null? method-params)
+	  (cons `(call call
+		       ,@(arglist-unshift sig `(|::| ,(gensy) (curly Type ,name))))
+		params)
+	  (cons `(call (curly call ,@method-params)
+		       ,@(arglist-unshift sig `(|::| ,(gensy) (curly Type ,name))))
+		params))
+      (if (null? method-params)
+	  (cons `(call (curly call ,@params)
+		       ,@(arglist-unshift sig `(|::| ,(gensy) (curly Type (curly ,name ,@params)))))
+		params)
+	  ;; rename parameters that conflict with user-written method parameters
+	  (let ((new-params (map (lambda (p) (if (memq p method-params)
+						 (gensy)
+						 p))
+				 params)))
+	    (cons `(call (curly call ,@new-params ,@method-params)
+			 ,@(arglist-unshift sig `(|::| ,(gensy) (curly Type (curly ,name ,@new-params)))))
+		  new-params)))))
+
+(define (ctor-def keyword name params method-params sig ctor-body body)
+  (let* ((temp   (ctor-signature name params method-params sig))
+	 (sig    (car temp))
+	 (params (cdr temp)))
+    `(,keyword ,sig ,(ctor-body body params))))
+
 (define (rewrite-ctor ctor Tname params field-names field-types mutabl iname)
-  (define (ctor-body body)
+  (define (ctor-body body params)
     (pattern-replace (pattern-set
 		      (pattern-lambda
 		       (call (-/ new) . args)
@@ -791,29 +825,39 @@
 				 field-types
 				 mutabl)))
 		     body))
-  (let ((ctor2
-	 (pattern-replace
-	  (pattern-set
-	   (pattern-lambda (function (call (curly name . p) . sig) body)
-			   `(function (call (curly ,(if (eq? name Tname) iname name) ,@p) ,@sig)
-				      ,(ctor-body body)))
-       (pattern-lambda (stagedfunction (call (curly name . p) . sig) body)
-               `(stagedfunction (call (curly ,(if (eq? name Tname) iname name) ,@p) ,@sig)
-                      ,(ctor-body body)))
-	   (pattern-lambda (function (call name . sig) body)
-			   `(function (call ,(if (eq? name Tname) iname name) ,@sig)
-				      ,(ctor-body body)))
-       (pattern-lambda (stagedfunction (call name . sig) body)
-               `(stagedfunction (call ,(if (eq? name Tname) iname name) ,@sig)
-                      ,(ctor-body body)))
-	   (pattern-lambda (= (call (curly name . p) . sig) body)
-			   `(= (call (curly ,(if (eq? name Tname) iname name) ,@p) ,@sig)
-			       ,(ctor-body body)))
-	   (pattern-lambda (= (call name . sig) body)
-			   `(= (call ,(if (eq? name Tname) iname name) ,@sig)
-			       ,(ctor-body body))))
-	  ctor)))
-    ctor2))
+  (pattern-replace
+   (pattern-set
+    (pattern-lambda (function (call (curly name . p) . sig) body)
+		    (if (eq? name Tname)
+			(ctor-def 'function name params p sig ctor-body body)
+			`(function (call (curly ,name ,@p) ,@sig)
+				   ,(ctor-body body params))))
+    (pattern-lambda (stagedfunction (call (curly name . p) . sig) body)
+		    (if (eq? name Tname)
+			(ctor-def 'stagedfunction name params p sig ctor-body body)
+			`(stagedfunction (call (curly ,name ,@p) ,@sig)
+					 ,(ctor-body body params))))
+    (pattern-lambda (function (call name . sig) body)
+		    (if (eq? name Tname)
+			(ctor-def 'function name params '() sig ctor-body body)
+			`(function (call ,name ,@sig)
+				   ,(ctor-body body params))))
+    (pattern-lambda (stagedfunction (call name . sig) body)
+		    (if (eq? name Tname)
+			(ctor-def 'stagedfunction name params '() sig ctor-body body)
+			`(stagedfunction (call ,name ,@sig)
+					 ,(ctor-body body params))))
+    (pattern-lambda (= (call (curly name . p) . sig) body)
+		    (if (eq? name Tname)
+			(ctor-def 'function name params p sig ctor-body body)
+			`(function (call (curly ,name ,@p) ,@sig)
+				   ,(ctor-body body params))))
+    (pattern-lambda (= (call name . sig) body)
+		    (if (eq? name Tname)
+			(ctor-def 'function name params '() sig ctor-body body)
+			`(function (call ,name ,@sig)
+				   ,(ctor-body body params)))))
+   ctor))
 
 ;; remove line numbers and nested blocks
 (define (flatten-blocks e)
@@ -854,6 +898,7 @@
 	      (scope-block
 	       (block
 		(global ,name)
+		(global call)
 		,@(map (lambda (c)
 			 (rewrite-ctor c name '() field-names field-types mut name))
 		       defs2)))))
@@ -868,25 +913,24 @@
 	     ,@(map make-assignment params (symbols->typevars params bounds #t))
 	     (composite_type ,name (tuple ,@params)
 			     (tuple ,@(map (lambda (x) `',x) field-names))
-			     ,(let ((instantiation-name (gensy)))
-				`(lambda (,instantiation-name)
-				   (scope-block
-				    ;; don't capture params; in here they are static
-				    ;; parameters
-				    (block
-				     (global ,@params)
-				     ,@(map
-					(lambda (c)
-					  (rewrite-ctor c name params field-names
-							field-types mut instantiation-name))
-					defs2)
-				     ,name))))
+			     (null)
 			     ,super (tuple ,@field-types)
 			     ,mut)))
+	   ;; "inner" constructors
+	   (call
+	    (lambda ()
+	      (scope-block
+	       (block
+		(global ,name)
+		(global call)
+		,@(map (lambda (c)
+			 (rewrite-ctor c name params field-names
+				       field-types mut name))
+		       defs2)))))
+	   ;; "outer" constructors
 	   (scope-block
 	    (block
 	     (global ,name)
-	     (global ,@params)
 	     ,@(if (and (null? defs)
 			;; don't generate an outer constructor if the type has
 			;; parameters not mentioned in the field types. such a

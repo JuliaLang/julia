@@ -123,6 +123,14 @@ function getindex(T::NonTupleType, vals...)
     return a
 end
 
+function getindex(::Type{Any}, vals::ANY...)
+    a = Array(Any,length(vals))
+    for i = 1:length(vals)
+        a[i] = vals[i]
+    end
+    return a
+end
+
 getindex(T::(Type...)) = Array(T,0)
 
 # T[a:b] and T[a:s:b] also construct typed ranges

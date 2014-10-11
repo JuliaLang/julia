@@ -373,8 +373,6 @@ JL_CALLABLE(jl_f_apply)
     return result;
 }
 
-void jl_add_constructors(jl_datatype_t *t);
-
 JL_CALLABLE(jl_f_kwcall)
 {
     if (nargs < 4)
@@ -399,8 +397,6 @@ JL_CALLABLE(jl_f_kwcall)
         args[pa-2] = (jl_value_t*)f;
     }
 
-    if (f->fptr == jl_f_ctor_trampoline)
-        jl_add_constructors((jl_datatype_t*)f);
     if (!jl_is_gf(f))
         jl_error("function does not accept keyword arguments");
     jl_function_t *sorter = ((jl_methtable_t*)f->env)->kwsorter;
@@ -856,47 +852,13 @@ JL_CALLABLE(jl_f_instantiate_type)
     return jl_apply_type_(args[0], &args[1], nargs-1);
 }
 
-JL_CALLABLE(jl_f_new_type_constructor)
+DLLEXPORT jl_value_t *jl_new_type_constructor(jl_tuple_t *p, jl_value_t *t)
 {
-    JL_NARGS(new_type_constructor, 2, 2);
-    JL_TYPECHK(new_type_constructor, tuple, args[0]);
-    if (!jl_is_type(args[1]))
-        jl_type_error("typealias", (jl_value_t*)jl_type_type, args[1]);
-    jl_tuple_t *p = (jl_tuple_t*)args[0];
-    jl_value_t *tc = (jl_value_t*)jl_new_type_ctor(p, args[1]);
+    jl_value_t *tc = (jl_value_t*)jl_new_type_ctor(p, t);
     int i;
     for(i=0; i < jl_tuple_len(p); i++)
         ((jl_tvar_t*)jl_tupleref(p,i))->bound = 0;
     return tc;
-}
-
-JL_CALLABLE(jl_f_typevar)
-{
-    if (nargs < 1 || nargs > 3) {
-        JL_NARGS(TypeVar, 1, 1);
-    }
-    JL_TYPECHK(TypeVar, symbol, args[0]);
-    jl_value_t *lb = (jl_value_t*)jl_bottom_type;
-    jl_value_t *ub = (jl_value_t*)jl_any_type;
-    int b = 0;
-    if (args[nargs-1] == jl_true) {
-        b = 1;
-        nargs--;
-    }
-    if (nargs > 1) {
-        JL_TYPECHK(TypeVar, type, args[1]);
-        if (nargs > 2) {
-            JL_TYPECHK(TypeVar, type, args[2]);
-            lb = args[1];
-            ub = args[2];
-        }
-        else {
-            ub = args[1];
-        }
-    }
-    jl_tvar_t *tv = jl_new_typevar((jl_sym_t*)args[0], lb, ub);
-    tv->bound = b;
-    return (jl_value_t*)tv;
 }
 
 JL_CALLABLE(jl_f_union)

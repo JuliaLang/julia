@@ -302,9 +302,6 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
     jl_serialize_value(s, dt->parameters);
     jl_serialize_value(s, dt->name);
     jl_serialize_value(s, dt->super);
-    jl_serialize_value(s, dt->env);
-    jl_serialize_value(s, dt->linfo);
-    jl_serialize_fptr(s, (void*)dt->fptr);
 }
 
 static void jl_serialize_module(ios_t *s, jl_module_t *m)
@@ -650,9 +647,6 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
     dt->parameters = (jl_tuple_t*)jl_deserialize_value(s);
     dt->name = (jl_typename_t*)jl_deserialize_value(s);
     dt->super = (jl_datatype_t*)jl_deserialize_value(s);
-    dt->env = jl_deserialize_value(s);
-    dt->linfo = (jl_lambda_info_t*)jl_deserialize_value(s);
-    dt->fptr = jl_deserialize_fptr(s);
     if (dt->name == jl_array_type->name || dt->name == jl_pointer_type->name ||
         dt->name == jl_type_type->name || dt->name == jl_vararg_type->name ||
         dt->name == jl_abstractarray_type->name ||
@@ -969,8 +963,6 @@ void jl_save_system_image(char *fname)
 
     jl_idtable_type = jl_get_global(jl_base_module, jl_symbol("ObjectIdDict"));
 
-    jl_serialize_value(&f, jl_array_type->env);
-
     jl_serialize_value(&f, jl_main_module);
 
     // deser_tag is an array indexed from 2 until HT_NOTFOUND
@@ -1040,8 +1032,6 @@ void jl_restore_system_image(char *fname)
 
     datatype_list = jl_alloc_cell_1d(0);
 
-    jl_array_type->env = jl_deserialize_value(&f);
-    
     jl_main_module = (jl_module_t*)jl_deserialize_value(&f);
     jl_internal_main_module = jl_main_module;
     jl_core_module = (jl_module_t*)jl_get_global(jl_main_module,
@@ -1314,8 +1304,7 @@ void jl_init_serializer(void)
     assert(i <= Null_tag);
     VALUE_TAGS = (ptrint_t)ptrhash_get(&ser_tag, jl_null);
 
-    jl_fptr_t fptrs[] = { jl_f_new_expr, jl_f_new_box,
-                          jl_f_throw, jl_f_is,
+    jl_fptr_t fptrs[] = { jl_f_throw, jl_f_is,
                           jl_f_no_function, jl_f_typeof,
                           jl_f_subtype, jl_f_isa,
                           jl_f_typeassert, jl_f_apply,
@@ -1327,13 +1316,11 @@ void jl_init_serializer(void)
                           jl_f_arrayset, jl_f_arraysize,
                           jl_f_instantiate_type, jl_f_kwcall,
                           jl_f_convert_default,
-                          jl_trampoline, jl_f_new_type_constructor,
-                          jl_f_typevar, jl_f_union,
+                          jl_trampoline, jl_f_union,
                           jl_f_methodexists, jl_f_applicable,
                           jl_f_invoke, jl_apply_generic,
-                          jl_unprotect_stack, jl_f_task,
-                          jl_f_yieldto, jl_f_ctor_trampoline,
-                          jl_f_new_module, jl_f_sizeof,
+                          jl_unprotect_stack,
+                          jl_f_yieldto, jl_f_sizeof,
                           NULL };
     i=2;
     while (fptrs[i-2] != NULL) {
