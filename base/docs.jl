@@ -129,14 +129,6 @@ function mdify(ex)
   end
 end
 
-function getdoc(ex)
-  if isexpr(ex, :macrocall)
-    :(doc($(esc(ex.args[1]))))
-  else
-    :(doc($(esc(ex))))
-  end
-end
-
 function macrodoc(meta, def)
   name = esc(symbol(string("@", unblock(def).args[1].args[1])))
   quote
@@ -167,12 +159,23 @@ end
 
 fexpr(ex) = isexpr(ex, :function) || (isexpr(ex, :(=)) && isexpr(ex.args[1], :call))
 
-macro doc (ex)
-  isexpr(ex, :->) || return getdoc(ex)
-  meta, def = ex.args
+function docm(meta, def)
   isexpr(unblock(def), :macro) && return macrodoc(meta, def)
   fexpr(unblock(def)) && return funcdoc(meta, def)
   return objdoc(meta, def)
+end
+
+function docm(ex)
+  isexpr(ex, :->) && return docm(ex.args...)
+  if isexpr(ex, :macrocall)
+    :(doc($(esc(ex.args[1]))))
+  else
+    :(doc($(esc(ex))))
+  end
+end
+
+macro doc (args...)
+  docm(args...)
 end
 
 # Text / HTML objects
