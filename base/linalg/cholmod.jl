@@ -294,7 +294,7 @@ type c_CholmodTriplet{Tv<:CHMVTypes,Ti<:CHMITypes}
     j::Ptr{Ti}
     x::Ptr{Tv}
     z::Ptr{Void}
-    stype:Cint
+    stype::Cint
     itype::Cint
     xtype::Cint
     dtype::Cint
