@@ -35,17 +35,8 @@ jl_module_t *jl_new_module(jl_sym_t *name)
     return m;
 }
 
-JL_CALLABLE(jl_f_new_module)
+DLLEXPORT jl_value_t *jl_f_new_module(jl_sym_t *name)
 {
-    jl_sym_t *name;
-    if (nargs == 0) {
-        name = anonymous_sym;
-    }
-    else {
-        JL_NARGS(Module, 1, 1);
-        JL_TYPECHK(Module, symbol, args[0]);
-        name = (jl_sym_t*)args[0];
-    }
     jl_module_t *m = jl_new_module(name);
     m->parent = jl_main_module;
     jl_add_standard_imports(m);

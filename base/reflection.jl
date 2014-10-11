@@ -87,7 +87,7 @@ subtypes(x::DataType) = subtypes(Main, x)
 subtypetree(x::DataType, level=-1) = (level == 0 ? (x, []) : (x, Any[subtypetree(y, level-1) for y in subtypes(x)]))
 
 # function reflection
-isgeneric(f::ANY) = (isa(f,Function)||isa(f,DataType)) && isa(f.env,MethodTable)
+isgeneric(f::ANY) = (isa(f,Function) && isa(f.env,MethodTable))
 
 function_name(f::Function) = isgeneric(f) ? f.env.name : (:anonymous)
 
@@ -126,8 +126,8 @@ function methods(f::Function)
     f.env
 end
 
-methods(t::DataType) = (_methods(t,Tuple,0);  # force constructor creation
-                        t.env)
+#methods(t::DataType) = (_methods(t,Tuple,0);  # force constructor creation
+#                        t.env)
 
 function length(mt::MethodTable)
     n = 0

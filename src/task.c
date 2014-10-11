@@ -714,7 +714,8 @@ DLLEXPORT void gdblookup(ptrint_t ip)
 
 DLLEXPORT void jlbacktrace()
 {
-    for(size_t i=0; i < bt_size; i++)
+    size_t n = bt_size; //bt_size > 40 ? 40 : bt_size;
+    for(size_t i=0; i < n; i++)
         gdblookup(bt_data[i]);
 }
 
@@ -770,7 +771,7 @@ DLLEXPORT void jl_throw_with_superfluous_argument(jl_value_t *e, int line)
     jl_throw(e);
 }
 
-jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
+DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 {
     size_t pagesz = jl_page_size;
     jl_task_t *t = (jl_task_t*)allocobj(sizeof(jl_task_t));
@@ -827,27 +828,6 @@ JL_CALLABLE(jl_unprotect_stack)
     return (jl_value_t*)jl_null;
 }
 
-#define JL_MIN_STACK     (4096*sizeof(void*))
-#define JL_DEFAULT_STACK (2*12288*sizeof(void*))
-
-JL_CALLABLE(jl_f_task)
-{
-    JL_NARGS(Task, 1, 2);
-    JL_TYPECHK(Task, function, args[0]);
-    /*
-      we need a somewhat large stack, because execution can trigger
-      compilation, which uses perhaps too much stack space.
-    */
-    size_t ssize = JL_DEFAULT_STACK;
-    if (nargs == 2) {
-        JL_TYPECHK(Task, long, args[1]);
-        ssize = jl_unbox_long(args[1]);
-        if (ssize < JL_MIN_STACK)
-            jl_error("Task: stack size too small");
-    }
-    return (jl_value_t*)jl_new_task((jl_function_t*)args[0], ssize);
-}
-
 JL_CALLABLE(jl_f_yieldto)
 {
     JL_NARGSV(yieldto, 1);
@@ -894,7 +874,6 @@ void jl_init_tasks(void *stack, size_t ssize)
                                             jl_any_type, jl_any_type, jl_function_type),
                                    0, 1);
     jl_tupleset(jl_task_type->types, 0, (jl_value_t*)jl_task_type);
-    jl_task_type->fptr = jl_f_task;
 
     done_sym = jl_symbol("done");
     failed_sym = jl_symbol("failed");

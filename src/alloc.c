@@ -578,8 +578,6 @@ jl_typename_t *jl_new_typename(jl_sym_t *name)
     tn->module = jl_current_module;
     tn->primary = NULL;
     tn->cache = (jl_value_t*)jl_null;
-    tn->ctor_factory = (jl_value_t*)jl_null;
-    tn->static_ctor_factory = NULL;
     return tn;
 }
 
@@ -592,65 +590,6 @@ jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_datatype_t *super,
 }
 
 jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp);
-
-void jl_add_constructors(jl_datatype_t *t)
-{
-    if (t->name == jl_array_typename) {
-        t->fptr = jl_f_no_function;
-        return;
-    }
-
-    jl_initialize_generic_function((jl_function_t*)t, t->name->name);
-
-    if (t->name->ctor_factory == (jl_value_t*)jl_nothing ||
-        t->name->ctor_factory == (jl_value_t*)jl_null) {
-    }
-    else {
-        assert(jl_tuple_len(t->parameters) > 0);
-        if (t == (jl_datatype_t*)t->name->primary)
-            return;
-        jl_function_t *cfactory = NULL;
-        jl_tuple_t *env = NULL;
-        JL_GC_PUSH2(&cfactory, &env);
-        if (jl_compileropts.compile_enabled) {
-            // instantiating
-            assert(jl_is_function(t->name->ctor_factory));
-            // add type's static parameters to the ctor factory
-            size_t np = jl_tuple_len(t->parameters);
-            env = jl_alloc_tuple_uninit(np*2);
-            for(size_t i=0; i < np; i++) {
-                jl_tupleset(env, i*2+0,
-                            jl_tupleref(((jl_datatype_t*)t->name->primary)->parameters, i));
-                jl_tupleset(env, i*2+1,
-                            jl_tupleref(t->parameters, i));
-            }
-            cfactory = jl_instantiate_method((jl_function_t*)t->name->ctor_factory, env);
-            cfactory->linfo->ast = jl_prepare_ast(cfactory->linfo,
-                                                  cfactory->linfo->sparams);
-        }
-        else {
-            cfactory = ((jl_datatype_t*)t)->name->static_ctor_factory;
-            if (cfactory == NULL) {
-                JL_PRINTF(JL_STDERR,"code missing for type %s\n", t->name->name);
-                exit(1);
-            }
-            // in generically-compiled case, pass static parameters via closure
-            // environment.
-            env = jl_tuple_append((jl_tuple_t*)cfactory->env, t->parameters);
-            cfactory = jl_new_closure(cfactory->fptr, (jl_value_t*)env, cfactory->linfo);
-        }
-        // call user-defined constructor factory on (type,)
-        jl_value_t *cfargs[1] = { (jl_value_t*)t };
-        jl_apply(cfactory, cfargs, 1);
-        JL_GC_POP();
-    }
-}
-
-JL_CALLABLE(jl_f_ctor_trampoline)
-{
-    jl_add_constructors((jl_datatype_t*)F);
-    return jl_apply((jl_function_t*)F, args, nargs);
-}
 
 jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields)
 {
@@ -732,9 +671,6 @@ jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
     t->abstract = abstract;
     t->mutabl = mutabl;
     t->pointerfree = 0;
-    t->fptr = jl_f_no_function;
-    t->env = (jl_value_t*)t;
-    t->linfo = NULL;
     t->instance = NULL;
     t->struct_decl = NULL;
     t->size = 0;
@@ -956,55 +892,20 @@ jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
     return ex;
 }
 
-// this constructor has to be built-in for bootstrapping, because we can't
-// do anything without being able to make Exprs.
-JL_CALLABLE(jl_f_new_expr)
+DLLEXPORT jl_value_t *jl_new_expr(jl_sym_t *head, jl_tuple_t *args)
 {
-    JL_NARGSV(Expr, 1);
-    JL_TYPECHK(Expr, symbol, args[0]);
-    jl_array_t *ar = jl_alloc_cell_1d(nargs-1);
+    size_t nargs = jl_tuple_len(args);
+    jl_array_t *ar = jl_alloc_cell_1d(nargs);
     JL_GC_PUSH1(&ar);
-    for(size_t i=1; i < nargs; i++)
-        jl_cellset(ar, i-1, args[i]);
+    for(size_t i=0; i < nargs; i++)
+        jl_cellset(ar, i, jl_tupleref(args,i));
     jl_expr_t *ex = (jl_expr_t*)alloc_4w();
     ex->type = (jl_value_t*)jl_expr_type;
-    ex->head = (jl_sym_t*)args[0];
+    ex->head = head;
     ex->args = ar;
     ex->etype = (jl_value_t*)jl_any_type;
     JL_GC_POP();
     return (jl_value_t*)ex;
-}
-
-JL_CALLABLE(jl_f_new_box)
-{
-    JL_NARGS(Box, 1, 1);
-    jl_value_t *box = (jl_value_t*)alloc_2w();
-    box->type = jl_box_any_type;
-    ((jl_value_t**)box)[1] = args[0];
-    return box;
-}
-
-JL_CALLABLE(jl_f_default_ctor_1)
-{
-    if (nargs != 1)
-        jl_error("wrong number of arguments (expected 1)");
-    jl_value_t *ft = jl_t0(((jl_datatype_t*)F)->types);
-    if (!jl_subtype(args[0], ft, 1))
-        jl_type_error(((jl_datatype_t*)F)->name->name->name, ft, args[0]);
-    return jl_new_struct((jl_datatype_t*)F, args[0]);
-}
-
-JL_CALLABLE(jl_f_default_ctor_2)
-{
-    if (nargs != 2)
-        jl_error("wrong number of arguments (expected 2)");
-    jl_value_t *ft = jl_t0(((jl_datatype_t*)F)->types);
-    if (!jl_subtype(args[0], ft, 1))
-        jl_type_error(((jl_datatype_t*)F)->name->name->name, ft, args[0]);
-    ft = jl_t1(((jl_datatype_t*)F)->types);
-    if (!jl_subtype(args[1], ft, 1))
-        jl_type_error(((jl_datatype_t*)F)->name->name->name, ft, args[1]);
-    return jl_new_struct((jl_datatype_t*)F, args[0], args[1]);
 }
 
 #ifdef __cplusplus

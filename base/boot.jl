@@ -245,3 +245,34 @@ end
 typealias ByteString Union(ASCIIString,UTF8String)
 
 include(fname::ByteString) = ccall(:jl_load_, Any, (Any,), fname)
+
+# constructors for built-in types
+
+TypeVar(n::Symbol) =
+    ccall(:jl_new_typevar, Any, (Any, Any, Any), n, Union(), Any)::TypeVar
+TypeVar(n::Symbol, ub::ANY) =
+    ccall(:jl_new_typevar, Any, (Any, Any, Any), n, Union(), ub::Type)::TypeVar
+TypeVar(n::Symbol, lb::ANY, ub::ANY) =
+    ccall(:jl_new_typevar, Any, (Any, Any, Any), n, lb::Type, ub::Type)::TypeVar
+TypeVar(n::Symbol, b::Bool) =
+    ccall(:jl_new_typevar_, Any, (Any, Any, Any, Any), n, Union(), Any, b)::TypeVar
+TypeVar(n::Symbol, ub::ANY, b::Bool) =
+    ccall(:jl_new_typevar_, Any, (Any, Any, Any, Any), n, Union(), ub::Type, b)::TypeVar
+TypeVar(n::Symbol, lb::ANY, ub::ANY, b::Bool) =
+    ccall(:jl_new_typevar_, Any, (Any, Any, Any, Any), n, lb::Type, ub::Type, b)::TypeVar
+
+TypeConstructor(p::ANY, t::ANY) = ccall(:jl_new_type_constructor, Any, (Any, Any), p::Tuple, t::Type)
+
+Expr(hd::Symbol, args::ANY...) = ccall(:jl_new_expr, Any, (Any, Any), hd, args)::Expr
+
+LineNumberNode(n::Int) = ccall(:jl_new_struct, Any, (Any,Any...), LineNumberNode, n)::LineNumberNode
+LabelNode(n::Int) = ccall(:jl_new_struct, Any, (Any,Any...), LabelNode, n)::LabelNode
+GotoNode(n::Int) = ccall(:jl_new_struct, Any, (Any,Any...), GotoNode, n)::GotoNode
+QuoteNode(x::ANY) = ccall(:jl_new_struct, Any, (Any,Any...), QuoteNode, x)::QuoteNode
+NewvarNode(s::Symbol) = ccall(:jl_new_struct, Any, (Any,Any...), NewvarNode, s)::NewvarNode
+TopNode(s::Symbol) = ccall(:jl_new_struct, Any, (Any,Any...), TopNode, s)::TopNode
+
+Module(name::Symbol) = ccall(:jl_f_new_module, Any, (Any,), name)::Module
+Module() = Module(:anonymous)
+
+Task(f::ANY) = ccall(:jl_new_task, Any, (Any, Int), f::Function, 0)::Task
