@@ -24,6 +24,7 @@ export File,
        sendfile,
        symlink,
        chmod,
+       futime,
        JL_O_WRONLY,
        JL_O_RDONLY,
        JL_O_RDWR,
@@ -201,6 +202,15 @@ function truncate(f::File, n::Integer)
                 eventloop(),req,f.handle,n,C_NULL)
     c_free(req)
     uv_error("ftruncate", err)
+    f
+end
+
+function futime(f::File, atime::Float64, mtime::Float64)
+    req = Base.c_malloc(_sizeof_uv_fs)
+    err = ccall(:uv_fs_futime,Int32,(Ptr{Void},Ptr{Void},Int32,Float64,Float64,Ptr{Void}),
+                eventloop(),req,f.handle,atime,mtime,C_NULL)
+    c_free(req)
+    uv_error("futime", err)
     f
 end
 
