@@ -212,17 +212,6 @@ that the result is of type ``Float64`` by writing::
 
     Float64[ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
 
-Using curly brackets instead of square brackets is a shorthand notation for an
-array of type ``Any``:
-
-.. doctest::
-
-    julia> { i/2 for i = 1:3 }
-    3-element Array{Any,1}:
-     0.5
-     1.0
-     1.5
-
 .. _man-array-indexing:
 
 Indexing
