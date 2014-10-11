@@ -4485,7 +4485,7 @@ Combinatorics
 
    Generate all permutations of an indexable object.  Because the
    number of permutations can be very large, this function returns an
-   iterator object. Use ``collect(permutations(array,n))`` to get an array
+   iterator object. Use ``collect(permutations(array))`` to get an array
    of all permutations.
 
 .. function:: partitions(n)
