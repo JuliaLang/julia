@@ -120,13 +120,13 @@ using the ``convert`` function:
 .. doctest:: foo-func
 
     julia> function foo()
-             x::Int8 = 1000
+             x::Int8 = 100
              x
            end
     foo (generic function with 1 method)
 
     julia> foo()
-    -24
+    100
 
     julia> typeof(ans)
     Int8
