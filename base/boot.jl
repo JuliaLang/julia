@@ -171,8 +171,6 @@ const (===) = is
 # simple convert for use by constructors of types in Core
 convert(T, x) = convert_default(T, x, convert)
 
-call(T::Type, arg) = convert(T, arg)
-
 abstract Number
 abstract Real     <: Number
 abstract FloatingPoint <: Real
@@ -251,13 +249,13 @@ include(fname::ByteString) = ccall(:jl_load_, Any, (Any,), fname)
 TypeVar(n::Symbol) =
     ccall(:jl_new_typevar, Any, (Any, Any, Any), n, Union(), Any)::TypeVar
 TypeVar(n::Symbol, ub::ANY) =
-    ccall(:jl_new_typevar, Any, (Any, Any, Any), n, Union(), ub::Type)::TypeVar
+    (isa(ub,Bool) ?
+     ccall(:jl_new_typevar_, Any, (Any, Any, Any, Any), n, Union(), Any, ub)::TypeVar :
+     ccall(:jl_new_typevar, Any, (Any, Any, Any), n, Union(), ub::Type)::TypeVar)
 TypeVar(n::Symbol, lb::ANY, ub::ANY) =
-    ccall(:jl_new_typevar, Any, (Any, Any, Any), n, lb::Type, ub::Type)::TypeVar
-TypeVar(n::Symbol, b::Bool) =
-    ccall(:jl_new_typevar_, Any, (Any, Any, Any, Any), n, Union(), Any, b)::TypeVar
-TypeVar(n::Symbol, ub::ANY, b::Bool) =
-    ccall(:jl_new_typevar_, Any, (Any, Any, Any, Any), n, Union(), ub::Type, b)::TypeVar
+    (isa(ub,Bool) ?
+     ccall(:jl_new_typevar_, Any, (Any, Any, Any, Any), n, Union(), lb::Type, ub)::TypeVar :
+     ccall(:jl_new_typevar, Any, (Any, Any, Any), n, lb::Type, ub::Type)::TypeVar)
 TypeVar(n::Symbol, lb::ANY, ub::ANY, b::Bool) =
     ccall(:jl_new_typevar_, Any, (Any, Any, Any, Any), n, lb::Type, ub::Type, b)::TypeVar
 
