@@ -115,7 +115,7 @@ isexpr{T}(x::T, ts...) = T in ts
 function unblock(ex)
   isexpr(ex, :block) || return ex
   exs = filter(ex->!isexpr(ex, :line), ex.args)
-  length(exs) > 1 && return ex
+  length(exs) == 1 || return ex
   return exs[1]
 end
 
@@ -162,16 +162,14 @@ fexpr(ex) = isexpr(ex, :function) || (isexpr(ex, :(=)) && isexpr(ex.args[1], :ca
 function docm(meta, def)
   isexpr(unblock(def), :macro) && return macrodoc(meta, def)
   fexpr(unblock(def)) && return funcdoc(meta, def)
+  isexpr(def, :macrocall) && (def = def.args[1])
   return objdoc(meta, def)
 end
 
 function docm(ex)
   isexpr(ex, :->) && return docm(ex.args...)
-  if isexpr(ex, :macrocall)
-    :(doc($(esc(ex.args[1]))))
-  else
-    :(doc($(esc(ex))))
-  end
+  isexpr(ex, :macrocall) && (ex = ex.args[1])
+  :(doc($(esc(ex))))
 end
 
 macro doc (args...)
