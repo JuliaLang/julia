@@ -692,21 +692,33 @@ void jl_serialize_methtable_from_mod(ios_t *s, jl_module_t *m, jl_sym_t *name, j
         mt = jl_gf_mtable(mt->kwsorter);
         assert(!mt->kwsorter);
     }
+    struct _chain {
+        jl_methlist_t *ml;
+        struct _chain *next;
+    } *chain = NULL;
     jl_methlist_t *ml = mt->defs;
     while (ml != JL_NULL) {
         if (is_submodule(jl_current_module, ml->func->linfo->module)) {
-            jl_serialize_value(s, m);
-            jl_serialize_value(s, name);
-            write_int8(s, iskw);
-            jl_serialize_value(s, ml->sig);
-            jl_serialize_value(s, ml->func);
-            if (jl_is_tuple(ml->tvars))
-                jl_serialize_value(s, ml->tvars);
-            else
-                jl_serialize_value(s, jl_tuple1(ml->tvars));
-            write_int8(s, ml->isstaged);
+            struct _chain *link = (struct _chain*)alloca(sizeof(struct _chain));
+            link->ml = ml;
+            link->next = chain;
+            chain = link;
         }
         ml = ml->next;
+    }
+    while (chain) {
+        ml = chain->ml;
+        jl_serialize_value(s, m);
+        jl_serialize_value(s, name);
+        write_int8(s, iskw);
+        jl_serialize_value(s, ml->sig);
+        jl_serialize_value(s, ml->func);
+        if (jl_is_tuple(ml->tvars))
+            jl_serialize_value(s, ml->tvars);
+        else
+            jl_serialize_value(s, jl_tuple1(ml->tvars));
+        write_int8(s, ml->isstaged);
+        chain = chain->next;
     }
 }
 
@@ -726,6 +738,7 @@ void jl_serialize_lambdas_from_mod(ios_t *s, jl_module_t *m)
                         jl_serialize_methtable_from_mod(s, m, b->name, mt, 0);
                         jl_serialize_methtable_from_mod(s, m, b->name, mt, 1);
                     }
+                    //TODO: look in datatype cache?
                 }
                 else if (jl_is_module(b->value)) {
                     jl_module_t *child = (jl_module_t*)b->value;
