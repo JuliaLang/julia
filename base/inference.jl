@@ -875,7 +875,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
             return Any
         end
         kwcount = fargs[2]
-        ff = isconstantfunc(fargs[4 + 2*kwcount], sv)
+        ff = isconstantfunc(fargs[3 + 2*kwcount], sv)
         if !(ff===false)
             ff = _ieval(ff)
             if isgeneric(ff) && isdefined(ff.env,:kwsorter)

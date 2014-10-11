@@ -382,19 +382,13 @@ JL_CALLABLE(jl_f_kwcall)
     assert(jl_is_function(call_func));
     size_t nkeys = jl_unbox_long(args[1]);
     size_t pa = 4 + 2*nkeys;
-    jl_array_t *container = (jl_array_t*)args[pa-2];
+    jl_array_t *container = (jl_array_t*)args[pa-1];
     assert(jl_array_len(container) > 0);
-    f = (jl_function_t*)args[pa-1];
+    f = (jl_function_t*)args[pa-2];
     if (!jl_is_function(f)) {
         // do generic call(args...; kws...) instead
         f = call_func;
         pa--;
-    }
-    else {
-        // switch (container f pa...) to (f container pa...)
-        // TODO: this is not as legitimate as it could be.
-        args[pa-1] = args[pa-2];
-        args[pa-2] = (jl_value_t*)f;
     }
 
     if (!jl_is_gf(f))
