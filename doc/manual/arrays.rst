@@ -29,7 +29,7 @@ technical computing languages pass arrays by value, and this is
 convenient in many cases. In Julia, modifications made to input arrays
 within a function will be visible in the parent function. The entire
 Julia array library ensures that inputs are not modified by library
-functions. User code, if it needs to exhibit similar behaviour, should
+functions. User code, if it needs to exhibit similar behavior, should
 take care to create a copy of inputs that it may modify.
 
 Arrays
