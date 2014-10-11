@@ -188,7 +188,7 @@ such as integers are given by the ``typemin`` and ``typemax`` functions:
     julia> (typemin(Int32), typemax(Int32))
     (-2147483648,2147483647)
 
-    julia> for T = {Int8,Int16,Int32,Int64,Int128,Uint8,Uint16,Uint32,Uint64,Uint128}
+    julia> for T in [Int8,Int16,Int32,Int64,Int128,Uint8,Uint16,Uint32,Uint64,Uint128]
              println("$(lpad(T,7)): [$(typemin(T)),$(typemax(T))]")
            end
        Int8: [-128,127]
