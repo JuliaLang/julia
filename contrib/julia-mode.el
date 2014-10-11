@@ -154,10 +154,24 @@
    '()
    'symbols))
 
+(defconst julia-builtin-types-regex
+  (regexp-opt
+   '("Number" "Real" "BigInt" "Integer"
+     "Uint" "Uint8" "Uint16" "Uint32" "Uint64" "Uint128"
+     "Int" "Int8" "Int16" "Int32" "Int64" "Int128"
+     "BigFloat" "FloatingPoint" "Float16" "Float32" "Float64"
+     "Complex128" "Complex64" "ComplexPair"
+     "Bool"
+     "Char" "ASCIIString" "UTF8String" "ByteString" "SubString"
+     "Array" "DArray" "AbstractArray" "AbstractVector" "AbstractMatrix" "AbstractSparseMatrix" "SubArray" "StridedArray" "StridedVector" "StridedMatrix" "VecOrMat" "StridedVecOrMat" "DenseArray" "SparseMatrixCSC"
+     "Range" "Range1" "OrdinalRange" "StepRange" "UnitRange" "FloatRange"
+     "Tuple" "NTuple"
+     "DataType" "Symbol" "Function" "Vector" "Matrix" "Union" "Type" "Any" "Complex" "None" "String" "Ptr" "Void" "Exception" "Task" "Signed" "Unsigned" "Associative" "Dict" "IO" "IOStream" "Ranges" "Rational" "Regex" "RegexMatch" "Set" "IntSet" "Expr" "WeakRef" "Nothing" "ObjectIdDict")
+   'symbols))
+
 (defconst julia-font-lock-keywords
   (list
-   '("\\<\\(\\|Uint\\(8\\|16\\|32\\|64\\|128\\)\\|Int\\(8\\|16\\|32\\|64\\|128\\)\\|BigInt\\|Integer\\|BigFloat\\|FloatingPoint\\|Float16\\|Float32\\|Float64\\|Complex128\\|Complex64\\|ComplexPair\\|Bool\\|Char\\|DataType\\|Number\\|Real\\|Int\\|Uint\\|Array\\|DArray\\|AbstractArray\\|AbstractVector\\|AbstractMatrix\\|AbstractSparseMatrix\\|SubArray\\|StridedArray\\|StridedVector\\|StridedMatrix\\|VecOrMat\\|StridedVecOrMat\\|DenseArray\\|Range\\|OrdinalRange\\|StepRange\\|UnitRange\\|FloatRange\\|SparseMatrixCSC\\|Tuple\\|NTuple\\|Symbol\\|Function\\|Vector\\|Matrix\\|Union\\|Type\\|Any\\|Complex\\|String\\|Ptr\\|Void\\|Exception\\|Task\\|Signed\\|Unsigned\\|Associative\\|Dict\\|IO\\|IOStream\\|Rational\\|Regex\\|RegexMatch\\|Set\\|IntSet\\|ASCIIString\\|UTF8String\\|ByteString\\|Expr\\|WeakRef\\|ObjectIdDict\\|SubString\\)\\>" .
-     font-lock-type-face)
+    (cons julia-builtin-types-regex 'font-lock-type-face)
     (cons julia-keyword-regex 'font-lock-keyword-face)
     (cons julia-macro-regex 'font-lock-keyword-face)
     (cons
