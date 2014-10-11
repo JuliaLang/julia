@@ -1254,6 +1254,9 @@ CYCLE_ID = 1
 # def is the original unspecialized version of a method. we aggregate all
 # saved type inference data there.
 function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
+    if linfo.module === Core
+        atypes = Tuple
+    end
     #dbg =
     #dotrace = true
     local ast::Expr, tfunc_idx
