@@ -156,7 +156,7 @@ jl_methlist_t *mtcache_hash_lookup(jl_array_t *a, jl_value_t *ty, int tparam)
     return (jl_methlist_t*)JL_NULL;
 }
 
-void mtcache_rehash(jl_array_t **pa)
+static void mtcache_rehash(jl_array_t **pa)
 {
     size_t len = (*pa)->nrows;
     jl_value_t **d = (jl_value_t**)(*pa)->data;
@@ -324,7 +324,6 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
                                      jl_function_t *method, jl_tuple_t *tvars,
                                      int check_amb, int8_t isstaged);
 
-static
 jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tuple_t *type,
                                       jl_function_t *method)
 {

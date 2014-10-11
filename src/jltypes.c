@@ -1725,7 +1725,8 @@ void jl_set_t_uid_ctr(int i) { t_uid_ctr=i; }
 
 int jl_assign_type_uid(void)
 {
-    return int32hash(t_uid_ctr++);
+    assert(t_uid_ctr != 0);
+    return t_uid_ctr++;
 }
 
 static void cache_type_(jl_value_t *type)
