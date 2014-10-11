@@ -1514,8 +1514,8 @@
 			      keys))))
      (if (null? restkeys)
 	 `(call (top kwcall) call ,(length keys) ,@keyargs
-		(call (top Array) (top Any) ,(* 2 (length keys)))
-		,f ,@pa)
+		,f (call (top Array) (top Any) ,(* 2 (length keys)))
+		,@pa)
 	 (let ((container (gensy)))
 	   `(block
 	     (= ,container (call (top Array) (top Any) ,(* 2 (length keys))))
@@ -1536,7 +1536,7 @@
 	     (if (call (top isempty) ,container)
 		 (call ,f ,@pa)
 		 (call (top kwcall) call ,(length keys) ,@keyargs
-		       ,container ,f ,@pa))))))))
+		       ,f ,container ,@pa))))))))
 
 (define (expand-transposed-op e ops)
   (let ((a (caddr e))

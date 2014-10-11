@@ -263,17 +263,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
                 fname = (jl_sym_t*)jl_exprarg(fname, 0);
             }
             gf = eval((jl_value_t*)fname, locals, nl);
-            jl_value_t *bp_f = gf;
-            if (jl_is_datatype(bp_f))
-                bp_f = jl_module_call_func(jl_current_module);
-            assert(jl_is_function(bp_f)); // TODO: type check for this
-            assert(jl_is_gf(bp_f));
             if (jl_is_expr(fname))
                 fname = (jl_sym_t*)jl_fieldref(jl_exprarg(fname, 2), 0);
-            if (!kw)
-                bp = &gf;
-            else
-                bp = (jl_value_t**)&((jl_methtable_t*)((jl_function_t*)bp_f)->env)->kwsorter;
+            bp = &gf;
             assert(jl_is_symbol(fname));
         }
         else {
@@ -295,7 +287,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             jl_check_static_parameter_conflicts((jl_lambda_info_t*)args[2], (jl_tuple_t*)jl_t1(atypes), fname);
         }
         meth = eval(args[2], locals, nl);
-        jl_method_def(fname, bp, b, (jl_tuple_t*)atypes, (jl_function_t*)meth, args[3], NULL);
+        jl_method_def(fname, bp, b, (jl_tuple_t*)atypes, (jl_function_t*)meth, args[3], NULL, kw);
         JL_GC_POP();
         return *bp;
     }

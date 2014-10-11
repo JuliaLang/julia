@@ -2863,13 +2863,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         Value *name = literal_pointer_val(mn);
         jl_binding_t *bnd = NULL;
         Value *bp;
-        if (iskw) {
-            // fenv = theF->env
-            Value *fenv = emit_nthptr(theF, 2, tbaa_func);
-            // bp = &((jl_methtable_t*)fenv)->kwsorter
-            bp = emit_nthptr_addr(fenv, 7);
-        }
-        else if (theF != NULL) {
+        if (theF != NULL) {
             bp = make_gcroot(theF, ctx);
         }
         else {
@@ -2885,11 +2879,12 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         make_gcroot(a1, ctx);
         Value *a2 = boxed(emit_expr(args[2], ctx),ctx);
         make_gcroot(a2, ctx);
-        Value *mdargs[7] =
+        Value *mdargs[8] =
             { name, bp, literal_pointer_val(bnd), a1, a2, literal_pointer_val(args[3]),
-              literal_pointer_val((jl_value_t*)jl_module_call_func(ctx->module)) };
+              literal_pointer_val((jl_value_t*)jl_module_call_func(ctx->module)),
+              ConstantInt::get(T_int32, (int)iskw) };
         ctx->argDepth = last_depth;
-        return builder.CreateCall(prepare_call(jlmethod_func), ArrayRef<Value*>(&mdargs[0], 7));
+        return builder.CreateCall(prepare_call(jlmethod_func), ArrayRef<Value*>(&mdargs[0], 8));
     }
     else if (head == const_sym) {
         jl_sym_t *sym = (jl_sym_t*)args[0];
@@ -4458,6 +4453,7 @@ static void init_julia_llvm_env(Module *m)
     mdargs.push_back(jl_pvalue_llvmt);
     mdargs.push_back(jl_pvalue_llvmt);
     mdargs.push_back(jl_pvalue_llvmt);
+    mdargs.push_back(T_int32);
     jlmethod_func =
         Function::Create(FunctionType::get(jl_pvalue_llvmt, mdargs, false),
                          Function::ExternalLinkage,

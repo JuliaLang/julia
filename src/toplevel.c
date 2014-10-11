@@ -647,7 +647,7 @@ void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li);
 
 DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
                                     jl_tuple_t *argtypes, jl_function_t *f, jl_value_t *isstaged,
-                                    jl_value_t *call_func)
+                                    jl_value_t *call_func, int iskw)
 {
     // argtypes is a tuple ((types...), (typevars...))
     jl_tuple_t *t = (jl_tuple_t*)jl_t1(argtypes);
@@ -665,7 +665,6 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_
         if (!jl_is_gf(gf)) {
             if (jl_is_datatype(gf)) {
                 // DataType: define `call`, for backwards compat with outer constructors
-                // TODO: this does not yet handle keyword sorters correctly
                 if (call_func == NULL)
                     call_func = (jl_value_t*)jl_module_call_func(jl_current_module);
                 size_t na = jl_tuple_len(argtypes);
@@ -679,7 +678,8 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_
                 argtypes = newargtypes;
                 JL_GC_POP();
                 gf = call_func;
-                // TODO: edit args, insert type first
+                name = call_sym;
+                // edit args, insert type first
                 if (!jl_is_expr(f->linfo->ast))
                     f->linfo->ast = jl_uncompress_ast(f->linfo, f->linfo->ast);
                 jl_array_t *al = jl_lam_args((jl_expr_t*)f->linfo->ast);
@@ -695,6 +695,10 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_
             if (!jl_is_gf(gf)) {
                 jl_error("invalid method definition: not a generic function");
             }
+        }
+        if (iskw) {
+            bp = (jl_value_t**)&((jl_methtable_t*)((jl_function_t*)gf)->env)->kwsorter;
+            gf = *bp;
         }
     }
 
