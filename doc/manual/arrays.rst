@@ -130,6 +130,28 @@ An array with a specific element type can be constructed using the syntax
 ``T[A, B, C, ...]``. This will construct a 1-d array with element type
 ``T``, initialized to contain elements ``A``, ``B``, ``C``, etc.
 
+An array constructed with an explicit type annotation does not automatically concatenate its arguments.
+
+.. doctest::
+
+    julia> [[1 2] [3 4]]
+    1x4 Array{Int64,2}:
+     1  2  3  4
+
+    julia> Int64[[1 2] [3 4]]
+    ERROR: `convert` has no method matching convert(::Type{Int64}, ::Array{Int64,2})
+    <BLANKLINE>
+    You might have used a 2d row vector where a 1d column vector was required.
+    Note the difference between 1d column vector [1,2,3] and 2d row vector [1 2 3].
+    You can convert to a column vector with the vec() function.
+     in setindex! at array.jl:307
+
+    julia> Array[[1 2] [3 4]]
+    1x2 Array{Array{T,N},2}:
+     1x2 Array{Int64,2}:
+     1  2  1x2 Array{Int64,2}:
+     3  4
+
 .. _comprehensions:
 
 Comprehensions
