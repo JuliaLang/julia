@@ -130,20 +130,6 @@ An array with a specific element type can be constructed using the syntax
 ``T[A, B, C, ...]``. This will construct a 1-d array with element type
 ``T``, initialized to contain elements ``A``, ``B``, ``C``, etc.
 
-Special syntax is available for constructing arrays with element type
-``Any``:
-
-=================== =========
-Expression          Yields
-=================== =========
-``{A B C ...}``     A 1xN ``Any`` array
-``{A, B, C, ...}``  A 1-d ``Any`` array (vector)
-``{A B; C D; ...}`` A 2-d ``Any`` array
-=================== =========
-
-Note that this form does not do any concatenation; each argument becomes
-an element of the resulting array.
-
 .. _comprehensions:
 
 Comprehensions
