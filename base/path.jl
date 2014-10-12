@@ -157,7 +157,8 @@ end
 
 @windows_only expanduser(path::String) = path # on windows, ~ means "temporary file"
 @unix_only function expanduser(path::String)
-    m = match(r"^~([^/ \n]*)", path)
+    # TODO: expanduser("~=~") -> $HOME=~
+    m = match(r"^~([^:/ \n]*)", path)
     m == nothing && return path
     user = m.captures[1]
 
