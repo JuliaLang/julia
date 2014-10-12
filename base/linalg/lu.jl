@@ -1,7 +1,7 @@
 ####################
 # LU Factorization #
 ####################
-immutable LU{T,S<:AbstractMatrix{T}} <: Factorization{T}
+immutable LU{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     ipiv::Vector{BlasInt}
     info::BlasInt
