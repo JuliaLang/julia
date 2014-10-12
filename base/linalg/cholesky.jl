@@ -1,7 +1,7 @@
 ##########################
 # Cholesky Factorization #
 ##########################
-immutable Cholesky{T,S<:AbstractMatrix{T},UpLo} <: Factorization{T}
+immutable Cholesky{T,S<:AbstractMatrix,UpLo} <: Factorization{T}
     UL::S
 end
 immutable CholeskyPivoted{T} <: Factorization{T}
