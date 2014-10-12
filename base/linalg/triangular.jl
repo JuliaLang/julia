@@ -1,5 +1,5 @@
 ## Triangular
-immutable Triangular{T,S<:AbstractMatrix{T},UpLo,IsUnit} <: AbstractMatrix{T}
+immutable Triangular{T,S<:AbstractMatrix,UpLo,IsUnit} <: AbstractMatrix{T}
     data::S
 end
 function Triangular{T}(A::AbstractMatrix{T}, uplo::Symbol, isunit::Bool=false)
