@@ -379,7 +379,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         temp = eval(args[2], locals, nl);  // field names
         dt = jl_new_datatype((jl_sym_t*)name, jl_any_type, (jl_tuple_t*)para,
                              (jl_tuple_t*)temp, NULL,
-                             0, args[6]==jl_true ? 1 : 0);
+                             0, args[5]==jl_true ? 1 : 0);
 
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)name);
         temp = b->value;  // save old value
@@ -390,10 +390,10 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         JL_TRY {
             // operations that can fail
             inside_typedef = 1;
-            dt->types = (jl_tuple_t*)eval(args[5], locals, nl);
+            dt->types = (jl_tuple_t*)eval(args[4], locals, nl);
             inside_typedef = 0;
             jl_check_type_tuple(dt->types, dt->name->name, "type definition");
-            super = eval(args[4], locals, nl);
+            super = eval(args[3], locals, nl);
             jl_set_datatype_super(dt, super);
         }
         JL_CATCH {
