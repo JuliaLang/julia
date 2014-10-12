@@ -201,11 +201,6 @@ for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
     end
 end
 
-# Issue #7886
-x, r = LAPACK.gelsy!([0 1; 0 2; 0 3.], [2, 4, 6.])
-@test_approx_eq x [0,2]
-@test r == 1
-
 # Issue #7933
 A7933 = [1 2; 3 4]
 B7933 = copy(A7933)
