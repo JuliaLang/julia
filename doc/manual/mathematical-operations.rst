@@ -122,6 +122,17 @@ are::
     +=  -=  *=  /=  \=  %=  ^=  &=  |=  $=  >>>=  >>=  <<=
 
 
+It should be noted that updating operators can change the type of the variable.  For example, after the first 
+statement below, ``x`` is of type ``Uint32``, but after the second statement, it is of type ``Int``::
+
+ 
+    x = 0x00000001
+    x *= 2
+ 
+ 
+This is in consistent with the equivalence between ``x *= 2`` and ``x = x * 2``: any assignment statement to
+a plain variable may change its type.
+ 
 .. _man-numeric-comparisons:
 
 Numeric Comparisons
