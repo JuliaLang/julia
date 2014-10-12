@@ -7,8 +7,30 @@
     const path_ext_splitter = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"
 
     splitdrive(path::String) = ("",path)
-    homedir() = ENV["HOME"]
+    function homedir(; user::String="")
+        # TODO: this needs to be replaced with libc's getpwnam ASAP
+        function getpwnam(user::String)
+            open("/etc/passwd") do f
+                for line in eachline(f)
+                    beginswith(line, '#') && continue
+                    fields = split(chomp(line), ':')
+                    fields[1] == user && return fields
+                end
+                return split("::::::", ':')
+            end
+        end
+
+        if isempty(user)
+            user = ENV["USER"]
+            home = get(ENV, "HOME", getpwnam(user)[6])
+        else
+            home = getpwnam(user)[6]
+        end
+
+        isempty(home) ? error("unable to find home directory for $(user)") : home
+    end
 end
+
 @windows_only begin
     const path_separator    = "\\"
     const path_separator_re = r"[/\\]+"
@@ -21,8 +43,10 @@ end
         m = match(r"^(\w+:|\\\\\w+\\\w+|\\\\\?\\UNC\\\w+\\\w+|\\\\\?\\\w+:|)(.*)$", path)
         bytestring(m.captures[1]), bytestring(m.captures[2])
     end
-    homedir() = get(ENV,"HOME",string(ENV["HOMEDRIVE"],ENV["HOMEPATH"]))
+    homedir(; user::String="") = get(ENV,"HOME",string(ENV["HOMEDRIVE"],ENV["HOMEPATH"]))
 end
+
+homedir(path::String...; user::String="") = joinpath(homedir(user=user), path...)
 
 isabspath(path::String) = ismatch(path_absolute_re, path)
 isdirpath(path::String) = ismatch(path_directory_re, splitdrive(path)[2])
@@ -133,11 +157,14 @@ end
 
 @windows_only expanduser(path::String) = path # on windows, ~ means "temporary file"
 @unix_only function expanduser(path::String)
-    i = start(path)
-    c, i = next(path,i)
-    if c != '~' return path end
-    if done(path,i) return homedir() end
-    c, j = next(path,i)
-    if c == '/' return homedir()*path[i:end] end
-    error("~user tilde expansion not yet implemented")
+    m = match(r"^~([^\/ \n]*)", path)
+    m == nothing && return path
+    user = m.captures[1]
+
+    try
+        home = homedir(user=user)
+        return replace(path, "~"*user, home, 1)
+    catch
+        return path
+    end
 end
