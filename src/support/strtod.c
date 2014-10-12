@@ -133,7 +133,7 @@ double strtod_c(const char *nptr, char **endptr)
     p = nptr;
     
     /* parse leading spaces */
-    while (isspace(*p)) {
+    while (isspace((unsigned char)*p)) {
         p++;
     }
     

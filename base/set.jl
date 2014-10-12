@@ -1,8 +1,8 @@
 type Set{T}
-    dict::Dict{T,Nothing}
+    dict::Dict{T,Void}
 
-    Set() = new(Dict{T,Nothing}())
-    Set(itr) = union!(new(Dict{T,Nothing}()), itr)
+    Set() = new(Dict{T,Void}())
+    Set(itr) = union!(new(Dict{T,Void}()), itr)
 end
 Set() = Set{Any}()
 Set(itr) = Set{eltype(itr)}(itr)
@@ -37,7 +37,7 @@ next(s::Set, i)     = (s.dict.keys[i], skip_deleted(s.dict,i+1))
 # TODO: simplify me?
 pop!(s::Set) = (val = s.dict.keys[start(s.dict)]; delete!(s.dict, val); val)
 
-join_eltype() = None
+join_eltype() = Bottom
 join_eltype(v1, vs...) = typejoin(eltype(v1), join_eltype(vs...))
 
 union() = Set()

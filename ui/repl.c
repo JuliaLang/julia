@@ -13,15 +13,18 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#ifndef _MSC_VER
-#include <unistd.h>
-#include <libgen.h>
-#endif
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
-#include <getopt.h>
 #include <ctype.h>
+
+#ifndef _MSC_VER
+#include <unistd.h>
+#include <libgen.h>
+#include <getopt.h>
+#else
+#include "getopt.h"
+#endif
 
 #include "uv.h"
 #define WHOLE_ARCHIVE
@@ -48,7 +51,8 @@ extern DLLEXPORT char *julia_home;
 char system_image[256] = JL_SYSTEM_IMAGE_PATH;
 
 static int lisp_prompt = 0;
-static int codecov=0;
+static int codecov  = JL_LOG_NONE;
+static int malloclog= JL_LOG_NONE;
 static char *program = NULL;
 char *image_file = NULL;
 
@@ -61,8 +65,8 @@ static const char *opts =
 
     " -e, --eval <expr>        Evaluate <expr>\n"
     " -E, --print <expr>       Evaluate and show <expr>\n"
-    " -P, --post-boot <expr>   Evaluate <expr> right after boot\n"
-    " -L, --load <file>        Load <file> right after boot on all processors\n"
+    " -P, --post-boot <expr>   Evaluate <expr>, but don't disable interactive mode\n"
+    " -L, --load <file>        Load <file> immediately on all processors\n"
     " -J, --sysimage <file>    Start up with the given system image file\n\n"
 
     " -p <n>                   Run n local processes\n"
@@ -74,9 +78,15 @@ static const char *opts =
     " -F                       Load ~/.juliarc.jl, then handle remaining inputs\n"
     " --color={yes|no}         Enable or disable color text\n\n"
 
-    " --code-coverage          Count executions of source lines\n"
+    " --compile={yes|no|all}   Enable or disable compiler, or request exhaustive compilation\n\n"
+
+    " --code-coverage={none|user|all}, --code-coverage\n"
+    "                          Count executions of source lines (omitting setting is equivalent to 'user')\n"
+    " --track-allocation={none|user|all}\n"
+    "                          Count bytes allocated by each source line\n"
     " --check-bounds={yes|no}  Emit bounds checks always or never (ignoring declarations)\n"
-    " --int-literals={32|64}   Select integer literal size independent of platform\n";
+    " --int-literals={32|64}   Select integer literal size independent of platform\n"
+    " --dump-bitcode={yes|no}  Dump bitcode for the system image (used with --build)\n";
 
 void parse_opts(int *argcp, char ***argvp)
 {
@@ -88,9 +98,12 @@ void parse_opts(int *argcp, char ***argvp)
         { "lisp",          no_argument,       &lisp_prompt, 1 },
         { "help",          no_argument,       0, 'h' },
         { "sysimage",      required_argument, 0, 'J' },
-        { "code-coverage", no_argument,       &codecov, 1 },
+        { "code-coverage", optional_argument, 0, 'c' },
+        { "track-allocation",required_argument, 0, 'm' },
         { "check-bounds",  required_argument, 0, 300 },
         { "int-literals",  required_argument, 0, 301 },
+        { "dump-bitcode",  required_argument, 0, 302 },
+        { "compile",       required_argument, 0, 303 },
         { 0, 0, 0, 0 }
     };
     int c;
@@ -122,6 +135,29 @@ void parse_opts(int *argcp, char ***argvp)
         case 'h':
             printf("%s%s", usage, opts);
             exit(0);
+	case 'c':
+	    if (optarg != NULL) {
+		if (!strcmp(optarg,"user"))
+		    codecov = JL_LOG_USER;
+		else if (!strcmp(optarg,"all"))
+		    codecov = JL_LOG_ALL;
+		else if (!strcmp(optarg,"none"))
+		    codecov = JL_LOG_NONE;
+	        break;
+	    }
+	    else
+		codecov = JL_LOG_USER;
+	    break;
+	case 'm':
+	    if (optarg != NULL) {
+		if (!strcmp(optarg,"user"))
+		    malloclog = JL_LOG_USER;
+		else if (!strcmp(optarg,"all"))
+		    malloclog = JL_LOG_ALL;
+		else if (!strcmp(optarg,"none"))
+		    malloclog = JL_LOG_NONE;
+	        break;
+	    }
         case 300:
             if (!strcmp(optarg,"yes"))
                 jl_compileropts.check_bounds = JL_COMPILEROPT_CHECK_BOUNDS_ON;
@@ -138,6 +174,24 @@ void parse_opts(int *argcp, char ***argvp)
                 exit(1);
             }
             break;
+        case 302:
+            if (!strcmp(optarg,"yes"))
+                jl_compileropts.dumpbitcode = JL_COMPILEROPT_DUMPBITCODE_ON;
+            else if (!strcmp(optarg,"no"))
+                jl_compileropts.dumpbitcode = JL_COMPILEROPT_DUMPBITCODE_OFF;
+            break;
+        case 303:
+            if (!strcmp(optarg,"yes"))
+                jl_compileropts.compile_enabled = 1;
+            else if (!strcmp(optarg,"no"))
+                jl_compileropts.compile_enabled = 0;
+            else if (!strcmp(optarg,"all"))
+                jl_compileropts.compile_enabled = 2;
+            else {
+                ios_printf(ios_stderr, "julia: invalid argument to --compile (%s)\n", optarg);
+                exit(1);
+            }
+            break;
         default:
             ios_printf(ios_stderr, "julia: unhandled option -- %c\n",  c);
             ios_printf(ios_stderr, "This is a bug, please report it.\n");
@@ -145,6 +199,7 @@ void parse_opts(int *argcp, char ***argvp)
         }
     }
     jl_compileropts.code_coverage = codecov;
+    jl_compileropts.malloc_log    = malloclog;
     if (!julia_home) {
         julia_home = getenv("JULIA_HOME");
         if (julia_home) {
@@ -300,16 +355,31 @@ int true_main(int argc, char *argv[])
     return iserr;
 }
 
+#ifndef _OS_WINDOWS_
 int main(int argc, char *argv[])
 {
+#else
+int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
+{
+    int i;
+    for (i=0; i<argc; i++) { // write the command line to UTF8
+        wchar_t *warg = argv[i];
+        size_t wlen = wcslen(warg)+1;
+        size_t len = WideCharToMultiByte(CP_UTF8, 0, warg, wlen, NULL, 0, NULL, NULL);
+        if (!len) return 1;
+        char *arg = (char*)alloca(len);
+        if (!WideCharToMultiByte(CP_UTF8, 0, warg, wlen, arg, len, NULL, NULL)) return 1;
+        argv[i] = (wchar_t*)arg;
+    }
+#endif
     libsupport_init();
-    parse_opts(&argc, &argv);
+    parse_opts(&argc, (char***)&argv);
     if (lisp_prompt) {
         jl_lisp_prompt();
         return 0;
     }
     julia_init(lisp_prompt ? NULL : image_file);
-    return julia_trampoline(argc, argv, true_main);
+    return julia_trampoline(argc, (char**)argv, true_main);
 }
 
 #ifdef __cplusplus

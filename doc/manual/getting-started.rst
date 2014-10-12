@@ -71,13 +71,14 @@ worker processes, while ``--machinefile file`` will launch a worker
 for each line in file ``file``. The machines defined in ``file`` must be 
 accessible via a passwordless ``ssh`` login, with Julia installed at the
 same location as the current host. Each machine definition takes the form 
-``[user@]host[:port] [bind_addr]`` . ``user`` defaults to current user, 
-``port`` to the standard ssh port. Optionally, in case of multi-homed hosts, 
-``bind_addr`` may be used to explicitly specify an interface.
+``[user@]host[:port] [bind_addr[:port]]`` . ``user`` defaults to current user, 
+``port`` to the standard ssh port. The optional ``bind-to bind_addr[:port]`` 
+specifies the ip-address and port that other workers should use to 
+connect to this worker.
     
     
 If you have code that you want executed whenever julia is run, you can
-put it in ``~\.juliarc.jl``:
+put it in ``~/.juliarc.jl``:
 
 .. raw:: latex
 
@@ -130,10 +131,10 @@ Resources
 In addition to this manual, there are various other resources that may
 help new users get started with julia:
 
-- `Julia and IJulia cheatsheet <http://math.mit.edu/%7Estevenj/Julia-cheatsheet.pdf>`_
+- `Julia and IJulia cheatsheet <http://math.mit.edu/~stevenj/Julia-cheatsheet.pdf>`_
 - `Learn Julia in a few minutes <http://learnxinyminutes.com/docs/julia/>`_
 - `Tutorial for Homer Reid's numerical analysis class <http://homerreid.dyndns.org/teaching/18.330/JuliaProgramming.shtml>`_
-- `An introductory presentation <https://github.com/ViralBShah/julia-presentations/raw/master/Fifth-Elephant-2013/Fifth-Elephant-2013.pdf>`_
+- `An introductory presentation <https://raw.githubusercontent.com/ViralBShah/julia-presentations/master/Fifth-Elephant-2013/Fifth-Elephant-2013.pdf>`_
 - `Videos from the Julia tutorial at MIT <http://julialang.org/blog/2013/03/julia-tutorial-MIT/>`_
-- `Forio Julia Tutorials <http://forio.com/julia/tutorials-list>`_
+- `Forio Julia Tutorials <http://forio.com/labs/julia-studio/tutorials/>`_
 

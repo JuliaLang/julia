@@ -26,6 +26,7 @@ installed() = cd(Entry.installed)
 installed(pkg::String) = cd(Entry.installed,pkg)
 
 status(io::IO=STDOUT) = cd(Entry.status,io)
+status(pkg::String = "", io::IO=STDOUT) = cd(Entry.status,io,pkg)
 
 clone(url_or_pkg::String) = cd(Entry.clone,url_or_pkg)
 clone(url::String, pkg::String) = cd(Entry.clone,url,pkg)
@@ -49,7 +50,7 @@ tag(pkg::String, sym::Symbol, commit::String) = cd(Entry.tag,pkg,sym,false,commi
 
 tag(pkg::String, ver::VersionNumber; force::Bool=false) = cd(Entry.tag,pkg,ver,force)
 tag(pkg::String, ver::VersionNumber, commit::String; force::Bool=false) =
-	cd(Entry.tag,pkg,ver,force,commit)
+    cd(Entry.tag,pkg,ver,force,commit)
 
 submit(pkg::String) = cd(Entry.submit,pkg)
 submit(pkg::String, commit::String) = cd(Entry.submit,pkg,commit)
@@ -59,12 +60,14 @@ publish() = cd(Entry.publish,META_BRANCH)
 build() = cd(Entry.build)
 build(pkgs::String...) = cd(Entry.build,[pkgs...])
 
-generate(pkg::String, license::String; force::Bool=false) =
-	cd(Generate.package,pkg,license,force=force)
+generate(pkg::String, license::String; force::Bool=false, authors::Union(String,Array) = [], config::Dict=Dict()) =
+    cd(Generate.package,pkg,license,force=force,authors=authors,config=config)
 
 
-test() = cd(Entry.test)
-test(pkgs::String...) = cd(Entry.test,String[pkgs...])
+test(;coverage::Bool=false) = cd(Entry.test; coverage=coverage)
+test(pkgs::String...; coverage::Bool=false) = cd(Entry.test,String[pkgs...]; coverage=coverage)
+
+dependents(packagename::String) = Reqs.dependents(packagename)
 
 @deprecate release free
 @deprecate fixup build

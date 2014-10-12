@@ -31,13 +31,19 @@ end
 ## Test Julia fallbacks to BLAS routines
 
 # matrices with zero dimensions
-@test ones(0,5)*ones(5,3) == zeros(0,3)
-@test ones(3,5)*ones(5,0) == zeros(3,0)
-@test ones(3,0)*ones(0,4) == zeros(3,4)
-@test ones(0,5)*ones(5,0) == zeros(0,0)
-@test ones(0,0)*ones(0,4) == zeros(0,4)
-@test ones(3,0)*ones(0,0) == zeros(3,0)
-@test ones(0,0)*ones(0,0) == zeros(0,0)
+for i = 1:10
+    @test ones(0,5)*ones(5,3) == zeros(0,3)
+    @test ones(3,5)*ones(5,0) == zeros(3,0)
+    @test ones(3,0)*ones(0,4) == zeros(3,4)
+    @test ones(0,5)*ones(5,0) == zeros(0,0)
+    @test ones(0,0)*ones(0,4) == zeros(0,4)
+    @test ones(3,0)*ones(0,0) == zeros(3,0)
+    @test ones(0,0)*ones(0,0) == zeros(0,0)
+    @test Array(Float64, 5, 0) |> t -> t't == zeros(0,0)
+    @test Array(Float64, 5, 0) |> t -> t*t' == zeros(5,5)
+    @test Array(Complex128, 5, 0) |> t -> t't == zeros(0,0)
+    @test Array(Complex128, 5, 0) |> t -> t*t' == zeros(5,5)
+end
 
 # 2x2
 A = [1 2; 3 4]
@@ -200,15 +206,34 @@ Ai = int(ceil(Ar*100))
 @test isequal(scale(BigFloat[1.0], 2.0f0im),   Complex{BigFloat}[2.0im])
 
 # issue #6450
-@test dot({1.0,2.0},{3.5,4.5}) === 12.5
+@test dot(Any[1.0,2.0], Any[3.5,4.5]) === 12.5
 
-# Issue 7181
-A = reshape([1:9], (3, 3))
-@test_throws BoundsError diag(A, 3)
-@test [7] == diag(A, 2)
-@test [4, 8] == diag(A, 1)
-@test [1,5,9] == diag(A, 0)
-@test [2,6] == diag(A, -1)
-@test [3] == diag(A, -2)
-@test_throws BoundsError diag(A, -3)
+# issue #7181
+A = [ 1  5  9
+      2  6 10
+      3  7 11
+      4  8 12 ]
+@test_throws BoundsError diag(A, -5)
+@test diag(A,-4) == []
+@test diag(A,-3) == [4]
+@test diag(A,-2) == [3,8]
+@test diag(A,-1) == [2,7,12]
+@test diag(A, 0) == [1,6,11]
+@test diag(A, 1) == [5,10]
+@test diag(A, 2) == [9]
+@test diag(A, 3) == []
+@test_throws BoundsError diag(A, 4)
 
+@test diag(zeros(0,0)) == []
+@test_throws BoundsError diag(zeros(0,0),1)
+@test_throws BoundsError diag(zeros(0,0),-1)
+
+@test diag(zeros(1,0)) == []
+@test diag(zeros(1,0),-1) == []
+@test_throws BoundsError diag(zeros(1,0),1)
+@test_throws BoundsError diag(zeros(1,0),-2)
+
+@test diag(zeros(0,1)) == []
+@test diag(zeros(0,1),1) == []
+@test_throws BoundsError diag(zeros(0,1),-1)
+@test_throws BoundsError diag(zeros(0,1),2)

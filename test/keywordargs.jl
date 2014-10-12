@@ -66,7 +66,7 @@ opkwf1(a=0,b=1;k=2) = (a,b,k)
 @test isequal(opkwf1(k=8),       ( 0, 1,8))
 
 # dictionaries as keywords
-@test kwf1(4; {:hundreds=>9, :tens=>5}...) == 954
+@test kwf1(4; Dict(:hundreds=>9, :tens=>5)...) == 954
 
 # with inner function
 let
@@ -85,14 +85,14 @@ extravagant_args(x,y=0,rest...;color="blue",kw...) =
 
 @test isequal(extravagant_args(1), (1,0,(),"blue",86))
 @test isequal(extravagant_args(1;hundreds=7), (1,0,(),"blue",786))
-@test isequal(extravagant_args(1,2,3;{:color=>"red", :hundreds=>3}...),
+@test isequal(extravagant_args(1,2,3;Dict(:color=>"red", :hundreds=>3)...),
               (1,2,(3,),"red",386))
 
 # passing empty kw container to function with no kwargs
-@test sin(1.0) == sin(1.0;{}...)
+@test sin(1.0) == sin(1.0; Dict()...)
 
 # passing junk kw container
-@test_throws BoundsError extravagant_args(1; {[]}...)
+@test_throws BoundsError extravagant_args(1; Any[[]]...)
 
 # keyword args with static parmeters
 kwf6{T}(x; k::T=1) = T
@@ -173,4 +173,13 @@ function test4974(;kwargs...)
     end
 end
 
-@test test4974(a=1) == (2, {(:a,1)})
+@test test4974(a=1) == (2, [(:a, 1)])
+
+# issue #7704, computed keywords
+@test kwf1(1; (:tens, 2)) == 21
+let
+    p = (:hundreds, 3)
+    q = (:tens, 1)
+    @test kwf1(0; p, q) == 310
+    @test kwf1(0; q, hundreds=4) == 410
+end

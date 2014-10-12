@@ -39,7 +39,7 @@ allsizes = [((), BitArray{0}), ((v1,), BitVector),
 ## Conversions ##
 
 for (sz,T) in allsizes
-    b1 = randbool!(falses(sz...))
+    b1 = rand!(falses(sz...))
     @test isequal(bitpack(bitunpack(b1)), b1)
     @test isequal(convert(Array{Float64,ndims(b1)}, b1),
                   convert(Array{Float64,ndims(b1)}, bitunpack(b1)))
@@ -62,7 +62,7 @@ for (sz,T) in allsizes
     @test isequal(bitunpack(trues(sz...)), ones(Bool, sz...))
     @test isequal(bitunpack(falses(sz...)), zeros(Bool, sz...))
 
-    b1 = randbool!(falses(sz...))
+    b1 = rand!(falses(sz...))
     @test isa(b1, T)
 
     @check_bit_operation length(b1) Int
@@ -79,7 +79,7 @@ timesofar("utils")
 
 # 0d
 for (sz,T) in allsizes
-    b1 = randbool!(falses(sz...))
+    b1 = rand!(falses(sz...))
     @check_bit_operation getindex(b1)         Bool
     @check_bit_operation setindex!(b1, true)  T
     @check_bit_operation setindex!(b1, false) T
@@ -89,7 +89,7 @@ end
 # linear
 for (sz,T) in allsizes[2:end]
     l = *(sz...)
-    b1 = randbool!(falses(sz...))
+    b1 = rand!(falses(sz...))
     for j = 1:l
         @check_bit_operation getindex(b1, j) Bool
     end
@@ -478,6 +478,20 @@ for m1 = 1 : v1 + 1
             i = splice!(i2, m1:m2, i3)
             @test isequal(bitunpack(b2), i2)
             @test b == i
+            b2 = copy(b1)
+            i2 = copy(i1)
+            i3 = int(randbool(v2))
+            b = splice!(b2, m1:m2, i3)
+            i = splice!(i2, m1:m2, i3)
+            @test isequal(bitunpack(b2), i2)
+            @test b == i
+            b2 = copy(b1)
+            i2 = copy(i1)
+            i3 = [j => rand(0:3) for j = 1:v2]
+            b = splice!(b2, m1:m2, values(i3))
+            i = splice!(i2, m1:m2, values(i3))
+            @test isequal(bitunpack(b2), i2)
+            @test b == i
         end
     end
 end
@@ -492,6 +506,20 @@ for m1 = 1 : v1
         i3 = bitunpack(b3)
         b = splice!(b2, m1, b3)
         i = splice!(i2, m1, i3)
+        @test isequal(bitunpack(b2), i2)
+        @test b == i
+        b2 = copy(b1)
+        i2 = copy(i1)
+        i3 = int(randbool(v2))
+        b = splice!(b2, m1:m2, i3)
+        i = splice!(i2, m1:m2, i3)
+        @test isequal(bitunpack(b2), i2)
+        @test b == i
+        b2 = copy(b1)
+        i2 = copy(i1)
+        i3 = [j => rand(0:3) for j = 1:v2]
+        b = splice!(b2, m1:m2, values(i3))
+        i = splice!(i2, m1:m2, values(i3))
         @test isequal(bitunpack(b2), i2)
         @test b == i
     end
@@ -623,10 +651,10 @@ cf1 = complex(f1)
 @check_bit_operation (.-)(u1, b2)  Matrix{Uint8}
 @check_bit_operation (.*)(u1, b2) Matrix{Uint8}
 
-for (x1,t1) = {(f1, Float64),
-               (ci1, Complex{Int}),
-               (cu1, Complex{Uint8}),
-               (cf1, Complex128)}
+for (x1,t1) = [(f1, Float64),
+              (ci1, Complex{Int}),
+              (cu1, Complex{Uint8}),
+              (cf1, Complex128)]
     @check_bit_operation (.+)(x1, b2)  Matrix{t1}
     @check_bit_operation (.-)(x1, b2)  Matrix{t1}
     @check_bit_operation (.*)(x1, b2) Matrix{t1}
@@ -809,23 +837,22 @@ timesofar("datamove")
 
 ## countnz & find ##
 
-b1 = randbool(v1)
-@check_bit_operation countnz(b1) Int
+for m = 0:v1, b1 in Any[randbool(m), trues(m), falses(m)]
+    @check_bit_operation countnz(b1) Int
 
-@check_bit_operation findfirst(b1)         Int
-@check_bit_operation findfirst(trues(v1))  Int
-@check_bit_operation findfirst(falses(v1)) Int
+    @check_bit_operation findfirst(b1) Int
 
-@check_bit_operation findfirst(b1, true)  Int
-@check_bit_operation findfirst(b1, false) Int
-@check_bit_operation findfirst(b1, 3)     Int
+    @check_bit_operation findfirst(b1, true)  Int
+    @check_bit_operation findfirst(b1, false) Int
+    @check_bit_operation findfirst(b1, 3)     Int
 
-@check_bit_operation findfirst(x->x, b1)     Int
-@check_bit_operation findfirst(x->!x, b1)    Int
-@check_bit_operation findfirst(x->true, b1)  Int
-@check_bit_operation findfirst(x->false, b1) Int
+    @check_bit_operation findfirst(x->x, b1)     Int
+    @check_bit_operation findfirst(x->!x, b1)    Int
+    @check_bit_operation findfirst(x->true, b1)  Int
+    @check_bit_operation findfirst(x->false, b1) Int
 
-@check_bit_operation find(b1) Vector{Int}
+    @check_bit_operation find(b1) Vector{Int}
+end
 
 b1 = trues(v1)
 for i = 0:v1-1
@@ -836,8 +863,8 @@ end
 for i = 3:v1-1
     for j = 2:i
         submask = b1 << (v1-j+1)
-        @test findnext((b1 >> i) | submask,j) == i+1
-        @test Base.findnextnot((~(b1 >> i)) $ submask,j) == i+1
+        @test findnext((b1 >> i) | submask, j) == i+1
+        @test Base.findnextnot((~(b1 >> i)) $ submask, j) == i+1
     end
 end
 
@@ -990,3 +1017,7 @@ b2 = randbool(s3, s4)
 #@check_bit_operation diff(b1) Vector{Int}
 
 timesofar("linalg")
+
+# issue #7515
+@test sizeof(BitArray(64)) == 8
+@test sizeof(BitArray(65)) == 16

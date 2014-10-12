@@ -3,10 +3,8 @@ immutable Rational{T<:Integer} <: Real
     den::T
 
     function Rational(num::T, den::T)
-        if num == 0 && den == 0
-            error("invalid rational: 0//0")
-        end
-        g = den < 0 ? -gcd(den,num) : gcd(den, num)
+        num == den == 0 && error("invalid rational: 0//0")
+        g = den < 0 ? -gcd(den, num) : gcd(den, num)
         new(div(num, g), div(den, g))
     end
 end
@@ -32,15 +30,13 @@ end
 .//(y::Number, X::AbstractArray) = reshape([ y // x for x in X ], size(X))
 
 function show(io::IO, x::Rational)
-    if isinf(x)
-        print(io, x.num > 0 ? "Inf" : "-Inf")
-    else
-        show(io, num(x)); print(io, "//"); show(io, den(x))
-    end
+    show(io, num(x))
+    print(io, "//")
+    show(io, den(x))
 end
 
-convert{T<:Integer}(::Type{Rational{T}}, x::Rational) = Rational(convert(T,x.num),convert(T,x.den))
-convert{T<:Integer}(::Type{Rational{T}}, x::Integer) = Rational(convert(T,x), convert(T,1))
+convert{T<:Integer}(::Type{Rational{T}}, x::Rational) = Rational{T}(convert(T,x.num),convert(T,x.den))
+convert{T<:Integer}(::Type{Rational{T}}, x::Integer) = Rational{T}(convert(T,x), convert(T,1))
 
 convert(::Type{Rational}, x::Rational) = x
 convert(::Type{Rational}, x::Integer) = convert(Rational{typeof(x)},x)
@@ -56,7 +52,7 @@ end
 
 function convert{T<:Integer}(::Type{Rational{T}}, x::FloatingPoint)
     r = rationalize(T, x, tol=0)
-    x === convert(typeof(x), r) || throw(InexactError())
+    x == convert(typeof(x), r) || throw(InexactError())
     r
 end
 convert(::Type{Rational}, x::Float64) = convert(Rational{Int64}, x)
@@ -69,31 +65,53 @@ promote_rule{T<:Integer,S<:FloatingPoint}(::Type{Rational{T}}, ::Type{S}) = prom
 widen{T}(::Type{Rational{T}}) = Rational{widen(T)}
 
 function rationalize{T<:Integer}(::Type{T}, x::FloatingPoint; tol::Real=eps(x))
-    if isnan(x);       return zero(T)//zero(T); end
-    if x < typemin(T); return -one(T)//zero(T); end
-    if typemax(T) < x; return  one(T)//zero(T); end
-    tm = x < 0 ? typemin(T) : typemax(T)
-    z = x*tm
-    if z <= 0.5 return zero(T)//one(T) end
-    if z <= 1.0 return one(T)//tm end
-    y = x
-    a = d = 1
-    b = c = 0
-    while true
-        f = itrunc(y); y -= f
-        p, q = f*a+c, f*b+d
-        typemin(T) <= p <= typemax(T) &&
-        typemin(T) <= q <= typemax(T) || break
-        0 != sign(a)*sign(b) != sign(p)*sign(q) && break
-        a, b, c, d = p, q, a, b
-        if y == 0 || abs(a/b-x) <= tol
-            break
+    tol < 0 && throw(ArgumentError("negative tolerance"))
+    isnan(x) && return zero(T)//zero(T)
+    isinf(x) && return (x < 0 ? -one(T) : one(T))//zero(T)
+
+    p,  q  = (x < 0 ? -one(T) : one(T)), zero(T)
+    pp, qq = zero(T), one(T)
+
+    x = abs(x)
+    a = trunc(x)
+    r = x-a
+    y = one(x)
+
+    nt, t, tt = tol, zero(tol), zero(tol)
+
+    while r > nt
+        try
+            ia = convert(T,a)
+            np = checked_add(checked_mul(ia,p),pp)
+            nq = checked_add(checked_mul(ia,q),qq)
+            p, pp = np, p
+            q, qq = nq, q
+        catch e
+            isa(e,InexactError) || isa(e,OverflowError) || rethrow(e)
+            return p // q
         end
-        y = inv(y)
+
+        t, tt = nt, t
+        x, y = y, r
+
+        a, r = divrem(x,y)
+        nt = a*t + tt
     end
-    return convert(T,a)//convert(T,b)
+
+    # find optimal semiconvergent
+    # smallest a such that x-a*y < a*t+tt
+    a = cld(x-tt,y+t)
+    try
+        ia = convert(T,a)
+        np = checked_add(checked_mul(ia,p),pp)
+        nq = checked_add(checked_mul(ia,q),qq)
+        return np // nq
+    catch e
+        isa(e,InexactError) || isa(e,OverflowError) || rethrow(e)
+        return p // q
+    end
 end
-rationalize(x::Union(Float64,Float32); tol::Real=eps(x)) = rationalize(Int, x, tol=tol)
+rationalize(x::FloatingPoint; kvs...) = rationalize(Int, x; kvs...)
 
 num(x::Integer) = x
 den(x::Integer) = one(x)
@@ -131,8 +149,8 @@ end
 ==(z::Complex , x::Rational) = isreal(z) & (real(z) == x)
 ==(x::Rational, z::Complex ) = isreal(z) & (real(z) == x)
 
-==(x::FloatingPoint, q::Rational) = ispow2(q.den) & (x == q.num/q.den) & (x*q.den == q.num)
-==(q::Rational, x::FloatingPoint) = ispow2(q.den) & (x == q.num/q.den) & (x*q.den == q.num)
+==(x::FloatingPoint, q::Rational) = count_ones(q.den) <= 1 & (x == q.num/q.den) & (x*q.den == q.num)
+==(q::Rational, x::FloatingPoint) = count_ones(q.den) <= 1 & (x == q.num/q.den) & (x*q.den == q.num)
 
 # TODO: fix inequalities to be in line with equality check
 < (x::Rational, y::Rational) = x.den == y.den ? x.num < y.num :
@@ -157,9 +175,13 @@ fld(x::Rational, y::Rational) = fld(x.num*y.den, x.den*y.num)
 fld(x::Rational, y::Real    ) = fld(x.num, x.den*y)
 fld(x::Real    , y::Rational) = fld(x*y.den, y.num)
 
+cld(x::Rational, y::Rational) = cld(x.num*y.den, x.den*y.num)
+cld(x::Rational, y::Real    ) = cld(x.num, x.den*y)
+cld(x::Real    , y::Rational) = cld(x*y.den, y.num)
+
 itrunc(x::Rational) = div(x.num,x.den)
 ifloor(x::Rational) = fld(x.num,x.den)
-iceil (x::Rational) = -fld(-x.num,x.den)
+iceil (x::Rational) = cld(x.num,x.den)
 iround(x::Rational) = div(x.num*2 + copysign(x.den,x.num), x.den*2)
 
 trunc(x::Rational) = Rational(itrunc(x))

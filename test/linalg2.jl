@@ -510,4 +510,10 @@ let
     @test S*T == [z z; 0 0]
 end
 
+#Issue 7304
+let
+    A=[-√.5 -√.5; -√.5 √.5]
+    Q=full(qrfact(A)[:Q])
+    @test vecnorm(A-Q) < eps()
+end
 

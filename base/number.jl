@@ -39,7 +39,7 @@ done(x::Number, state) = state
 isempty(x::Number) = false
 in(x::Number, y::Number) = x == y
 
-reinterpret{T<:Real}(::Type{T}, x::Real) = box(T,x)
+reinterpret{T,S}(::Type{T}, x::S) = box(T,unbox(S,x))
 
 map(f::Callable, x::Number) = f(x)
 
@@ -51,4 +51,5 @@ one{T<:Number}(::Type{T}) = oftype(T,1)
 const _numeric_conversion_func_names =
     (:int,:integer,:signed,:int8,:int16,:int32,:int64,:int128,
      :uint,:unsigned,:uint8,:uint16,:uint32,:uint64,:uint128,
-     :float,:float16,:float32,:float64)
+     :float,:float16,:float32,:float64,
+     :big)

@@ -21,13 +21,13 @@ enum {
     OP_LOADG, OP_LOADGL,
     OP_LOADA, OP_LOADAL, OP_LOADC, OP_LOADCL,
     OP_SETG, OP_SETGL,
-    OP_SETA, OP_SETAL, OP_SETC, OP_SETCL,
+    OP_SETA, OP_SETAL, OP_REMOVED_SETC, OP_REMOVED_SETCL,
 
     OP_CLOSURE, OP_ARGC, OP_VARGC, OP_TRYCATCH, OP_FOR,
     OP_TAPPLY, OP_ADD2, OP_SUB2, OP_NEG, OP_LARGC, OP_LVARGC,
-    OP_LOADA0, OP_LOADA1, OP_LOADC00, OP_LOADC01, OP_CALLL, OP_TCALLL,
+    OP_LOADA0, OP_LOADA1, OP_LOADC0, OP_LOADC1, OP_CALLL, OP_TCALLL,
     OP_BRNE, OP_BRNEL, OP_CADR, OP_BRNN, OP_BRNNL, OP_BRN, OP_BRNL,
-    OP_OPTARGS, OP_BRBOUND, OP_KEYARGS,
+    OP_OPTARGS, OP_BRBOUND, OP_KEYARGS, OP_BOX, OP_BOXL, OP_SHIFT,
 
     OP_BOOL_CONST_T, OP_BOOL_CONST_F, OP_THE_EMPTY_LIST, OP_EOF_OBJECT,
 
@@ -61,16 +61,17 @@ NULL, &&L_OP_DUP, &&L_OP_POP, &&L_OP_CALL, &&L_OP_TCALL, &&L_OP_JMP, \
     &&L_OP_LOADG, &&L_OP_LOADGL,                                        \
     &&L_OP_LOADA, &&L_OP_LOADAL, &&L_OP_LOADC, &&L_OP_LOADCL,           \
     &&L_OP_SETG, &&L_OP_SETGL,                                          \
-    &&L_OP_SETA, &&L_OP_SETAL, &&L_OP_SETC, &&L_OP_SETCL,               \
+    &&L_OP_SETA, &&L_OP_SETAL, NULL, NULL,                              \
                                                                         \
     &&L_OP_CLOSURE, &&L_OP_ARGC, &&L_OP_VARGC, &&L_OP_TRYCATCH,         \
     &&L_OP_FOR,                                                         \
     &&L_OP_TAPPLY, &&L_OP_ADD2, &&L_OP_SUB2, &&L_OP_NEG, &&L_OP_LARGC,  \
     &&L_OP_LVARGC,                                                      \
-    &&L_OP_LOADA0, &&L_OP_LOADA1, &&L_OP_LOADC00, &&L_OP_LOADC01,       \
+    &&L_OP_LOADA0, &&L_OP_LOADA1, &&L_OP_LOADC0, &&L_OP_LOADC1,         \
     &&L_OP_CALLL, &&L_OP_TCALLL, &&L_OP_BRNE, &&L_OP_BRNEL, &&L_OP_CADR,\
     &&L_OP_BRNN, &&L_OP_BRNNL, &&L_OP_BRN, &&L_OP_BRNL,                 \
-    &&L_OP_OPTARGS, &&L_OP_BRBOUND, &&L_OP_KEYARGS                      \
+    &&L_OP_OPTARGS, &&L_OP_BRBOUND, &&L_OP_KEYARGS,                     \
+    &&L_OP_BOX, &&L_OP_BOXL, &&L_OP_SHIFT                               \
     }
 
 #define VM_APPLY_LABELS                                                 \

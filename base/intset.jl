@@ -36,6 +36,8 @@ function push!(s::IntSet, n::Integer)
             lim = int(n + div(n,2))
             sizehint(s, lim)
         end
+    elseif n < 0
+        throw(ArgumentError("IntSet elements cannot be negative"))
     end
     s.bits[n>>5 + 1] |= (uint32(1)<<(n&31))
     return s
@@ -100,6 +102,8 @@ function symdiff!(s::IntSet, n::Integer)
     if n >= s.limit
         lim = int(n + dim(n,2))
         sizehint(s, lim)
+    elseif n < 0
+        throw(ArgumentError("IntSet elements cannot be negative"))
     end
     s.bits[n>>5 + 1] $= (uint32(1)<<(n&31))
     return s
@@ -122,6 +126,8 @@ function in(n::Integer, s::IntSet)
         # max IntSet length is typemax(Int), so highest possible element is
         # typemax(Int)-1
         s.fill1s && n >= 0 && n < typemax(Int)
+    elseif n < 0
+        return false
     else
         (s.bits[n>>5 + 1] & (uint32(1)<<(n&31))) != 0
     end

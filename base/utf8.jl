@@ -39,7 +39,7 @@ function endof(s::UTF8String)
 end
 length(s::UTF8String) = int(ccall(:u8_strlen, Csize_t, (Ptr{Uint8},), s.data))
 
-function getindex(s::UTF8String, i::Int)
+function next(s::UTF8String, i::Int)
     # potentially faster version
     # d = s.data
     # a::Uint32 = d[i]
@@ -62,11 +62,12 @@ function getindex(s::UTF8String, i::Int)
             # b is a continuation byte of a valid UTF-8 character
             error("invalid UTF-8 character index")
         end
-        return '\ufffd'
+        # move past 1 byte in case the data is actually Latin-1
+        return '\ufffd', i+1
     end
     trailing = utf8_trailing[b+1]
     if length(d) < i + trailing
-        return '\ufffd'
+        return '\ufffd', i+1
     end
     c::Uint32 = 0
     for j = 1:trailing+1
@@ -75,11 +76,8 @@ function getindex(s::UTF8String, i::Int)
         i += 1
     end
     c -= utf8_offset[trailing+1]
-    char(c)
+    char(c), i
 end
-
-# this is a trick to allow inlining and tuple elision
-next(s::UTF8String, i::Int) = (s[i], i+1+utf8_trailing[s.data[i]+1])
 
 function first_utf8_byte(c::Char)
     c < 0x80    ? uint8(c)            :

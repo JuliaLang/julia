@@ -3,7 +3,7 @@
 Package Manager Functions
 -------------------------
 
-All Package manager functions are defined in the ``Pkg`` module; note that none of the ``Pkg`` module's functions are exported;
+All package manager functions are defined in the ``Pkg`` module. None of the ``Pkg`` module's functions are exported;
 to use them, you'll need to prefix each function call with an explicit ``Pkg.``, e.g. ``Pkg.status()`` or ``Pkg.dir()``.
 
 .. function:: dir() -> String
@@ -18,10 +18,12 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
    Equivalent to ``normpath(Pkg.dir(),names...)`` – i.e. it appends path components to the package directory and normalizes the resulting path.
    In particular, ``Pkg.dir(pkg)`` returns the path to the package ``pkg``.
 
-.. function:: init()
+.. function:: init(meta::String=DEFAULT_META, branch::String=META_BRANCH)
 
-   Initialize ``Pkg.dir()`` as a package directory.
+   Initialize ``Pkg.dir()`` as a package directory.  
    This will be done automatically when the ``JULIA_PKGDIR`` is not set and ``Pkg.dir()`` uses its default value.
+   As part of this process, clones a local METADATA git repository from the site and branch specified by its arguments, which
+   are typically not provided.  Explicit (non-default) arguments can be used to support a custom METADATA setup.
 
 .. function:: resolve()
 
@@ -107,7 +109,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
 .. function:: build(pkgs...)
 
-   Run the build scripts for each package in ``pkgs`` and all of their dependencies in depth-first recursive order.
+   Run the build script in "deps/build.jl" for each package in ``pkgs`` and all of their dependencies in depth-first recursive order.
    This is called automatically by ``Pkg.resolve()`` on all installed or updated packages.
 
 .. function:: generate(pkg,license)

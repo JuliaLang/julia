@@ -31,8 +31,8 @@ jl_value_t *jl_interpret_toplevel_expr_with(jl_value_t *e,
     return eval(e, locals, nl);
 }
 
-jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
-                                          jl_value_t **locals, size_t nl)
+DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
+                                                    jl_value_t **locals, size_t nl)
 {
     jl_value_t *v=NULL;
     jl_module_t *last_m = jl_current_module;
@@ -285,7 +285,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             jl_check_static_parameter_conflicts((jl_lambda_info_t*)args[2], (jl_tuple_t*)jl_t1(atypes), fname);
         }
         meth = eval(args[2], locals, nl);
-        jl_method_def(fname, bp, b, (jl_tuple_t*)atypes, (jl_function_t*)meth);
+        jl_method_def(fname, bp, b, (jl_tuple_t*)atypes, (jl_function_t*)meth, args[3]);
         JL_GC_POP();
         return *bp;
     }
@@ -380,7 +380,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
                              (jl_tuple_t*)temp, NULL,
                              0, args[6]==jl_true ? 1 : 0);
         dt->fptr = jl_f_ctor_trampoline;
-        dt->ctor_factory = eval(args[3], locals, nl);
+        dt->name->ctor_factory = eval(args[3], locals, nl);
 
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)name);
         temp = b->value;  // save old value
@@ -405,6 +405,8 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             ((jl_tvar_t*)jl_tupleref(para,i))->bound = 0;
         }
         jl_compute_field_offsets(dt);
+        if (para == (jl_value_t*)jl_null && jl_is_datatype_singleton(dt))
+            dt->instance = newstruct(dt);
 
         b->value = temp;
         if (temp==NULL || !equiv_type(dt, (jl_datatype_t*)temp)) {
@@ -413,7 +415,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             jl_add_constructors(dt);
         }
         else {
-            // TODO: remove all old ctors and set temp->ctor_factory = dt->ctor_factory
+            // TODO: remove all old ctors and set temp->name->ctor_factory = dt->name->ctor_factory
         }
 
         JL_GC_POP();
@@ -451,6 +453,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         return (jl_value_t*)jl_nothing;
     }
     else if (ex->head == simdloop_sym) {
+        return (jl_value_t*)jl_nothing;
+    }
+    else if (ex->head == meta_sym) {
         return (jl_value_t*)jl_nothing;
     }
     jl_errorf("unsupported or misplaced expression %s", ex->head->name);

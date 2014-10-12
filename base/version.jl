@@ -79,7 +79,7 @@ function split_idents(s::String)
     end
 end
 
-function convert(::Type{VersionNumber}, v::String)
+VersionNumber(v::String) = begin
     m = match(VERSION_REGEX, v)
     if m == nothing error("invalid version string: $v") end
     major, minor, patch, minus, prerl, plus, build = m.captures
@@ -94,7 +94,9 @@ function convert(::Type{VersionNumber}, v::String)
     VersionNumber(major, minor, patch, prerl, build)
 end
 
-macro v_str(v); convert(VersionNumber, v); end
+convert(::Type{VersionNumber}, v::String) = VersionNumber(v)
+
+macro v_str(v); VersionNumber(v); end 
 
 typemin(::Type{VersionNumber}) = v"0-"
 typemax(::Type{VersionNumber}) = VersionNumber(typemax(Int),typemax(Int),typemax(Int),(),("",))
@@ -149,7 +151,7 @@ function isless(a::VersionNumber, b::VersionNumber)
 end
 
 function hash(v::VersionNumber, h::Uint)
-    h += uint(0x8ff4ffdb75f9fede)
+    h += itrunc(Uint,0x8ff4ffdb75f9fede)
     h = hash(v.major, h)
     h = hash(v.minor, h)
     h = hash(v.patch, h)
@@ -230,7 +232,7 @@ function banner(io::IO = STDOUT)
         print(io,"""\033[1m               $(d3)_
            $(d1)_       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  A fresh approach to technical computing
           $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |  Documentation: http://docs.julialang.org
-           $(jl)_ _   _| |_  __ _$(tx)   |  Type \"help()\" to list help topics
+           $(jl)_ _   _| |_  __ _$(tx)   |  Type \"help()\" for help.
           $(jl)| | | | | | |/ _` |$(tx)  |
           $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
          $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
@@ -242,7 +244,7 @@ function banner(io::IO = STDOUT)
                        _
            _       _ _(_)_     |  A fresh approach to technical computing
           (_)     | (_) (_)    |  Documentation: http://docs.julialang.org
-           _ _   _| |_  __ _   |  Type \"help()\" to list help topics
+           _ _   _| |_  __ _   |  Type \"help()\" for help.
           | | | | | | |/ _` |  |
           | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
          _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)

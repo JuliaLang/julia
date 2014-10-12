@@ -97,7 +97,7 @@ in
 
     function getenv(var::String)
       val = ccall( (:getenv, "libc"),
-                  Ptr{Uint8}, (Ptr{Uint8},), bytestring(var))
+                  Ptr{Uint8}, (Ptr{Uint8},), var)
       if val == C_NULL
         error("getenv: undefined variable: ", var)
       end
@@ -217,8 +217,6 @@ Julia type with the same name, prefixed by C. This can help for writing portable
 **System-independent:**
 
 +------------------------+-------------------+--------------------------------+
-| ``signed char``        |                   | ``Int8``                       |
-+------------------------+-------------------+--------------------------------+
 | ``unsigned char``      | ``Cuchar``        | ``Uint8``                      |
 +------------------------+-------------------+--------------------------------+
 | ``short``              | ``Cshort``        | ``Int16``                      |
@@ -233,6 +231,10 @@ Julia type with the same name, prefixed by C. This can help for writing portable
 +------------------------+-------------------+--------------------------------+
 | ``unsigned long long`` | ``Culonglong``    | ``Uint64``                     |
 +------------------------+-------------------+--------------------------------+
+| ``intmax_t``           | ``Cintmax_t``     | ``Int64``                      |
++------------------------+-------------------+--------------------------------+
+| ``uintmax_t``          | ``Cuintmax_t``    | ``Uint64``                     |
++------------------------+-------------------+--------------------------------+
 | ``float``              | ``Cfloat``        | ``Float32``                    |
 +------------------------+-------------------+--------------------------------+
 | ``double``             | ``Cdouble``       | ``Float64``                    |
@@ -242,10 +244,6 @@ Julia type with the same name, prefixed by C. This can help for writing portable
 | ``ssize_t``            | ``Cssize_t``      | ``Int``                        |
 +------------------------+-------------------+--------------------------------+
 | ``size_t``             | ``Csize_t``       | ``Uint``                       |
-+------------------------+-------------------+--------------------------------+
-| ``complex float``      | ``Ccomplex_float`` (future addition)               |
-+------------------------+-------------------+--------------------------------+
-| ``complex double``     | ``Ccomplex_double`` (future addition)              |
 +------------------------+-------------------+--------------------------------+
 | ``void``               |                   | ``Void``                       |
 +------------------------+-------------------+--------------------------------+
@@ -529,7 +527,7 @@ For more details on how to pass callbacks to C libraries, see this
 C++
 ---
 
-Limited support for C++ is provided by the `Cpp <http://github.com/timholy/Cpp.jl>`_ 
+Limited support for C++ is provided by the `Cpp <https://github.com/timholy/Cpp.jl>`_ 
 and `Clang <https://github.com/ihnorton/Clang.jl>`_ packages.
 
 Handling Platform Variations

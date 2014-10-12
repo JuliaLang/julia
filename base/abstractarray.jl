@@ -200,7 +200,6 @@ function copy!(dest::AbstractArray, doffs::Integer, src::AbstractArray, soffs::I
 end
 
 copy(a::AbstractArray) = copy!(similar(a), a)
-copy(a::AbstractArray{None}) = a # cannot be assigned into so is immutable
 
 function copy!{R,S}(B::AbstractMatrix{R}, ir_dest::Range{Int}, jr_dest::Range{Int}, A::AbstractMatrix{S}, ir_src::Range{Int}, jr_src::Range{Int})
     if length(ir_dest) != length(ir_src) || length(jr_dest) != length(jr_src)
@@ -296,6 +295,10 @@ for (f,t) in ((:integer, Integer),
     end
 end
 
+big{T<:FloatingPoint,N}(x::AbstractArray{T,N}) = convert(AbstractArray{BigFloat,N}, x)
+big{T<:FloatingPoint,N}(x::AbstractArray{Complex{T},N}) = convert(AbstractArray{Complex{BigFloat},N}, x)
+big{T<:Integer,N}(x::AbstractArray{T,N}) = convert(AbstractArray{BigInt,N}, x)
+
 bool(x::AbstractArray{Bool}) = x
 bool(x::AbstractArray) = copy!(similar(x,Bool), x)
 
@@ -341,7 +344,7 @@ for fn in _numeric_conversion_func_names
     end
 end
 
-for fn in (:float,:float16,:float32,:float64)
+for fn in (:float,:float16,:float32,:float64,:big)
     @eval begin
         $fn(r::FloatRange) = FloatRange($fn(r.start), $fn(r.step), r.len, $fn(r.divisor))
     end
@@ -356,7 +359,7 @@ real{T<:Real}(x::AbstractArray{T}) = x
 imag{T<:Real}(x::AbstractArray{T}) = zero(x)
 
 +{T<:Number}(x::AbstractArray{T}) = x
-*{T<:Number}(x::AbstractArray{T}) = x
+*{T<:Number}(x::AbstractArray{T,2}) = x
 
 ## Binary arithmetic operators ##
 
@@ -419,16 +422,15 @@ end
 flipud(A::AbstractArray) = flipdim(A, 1)
 fliplr(A::AbstractArray) = flipdim(A, 2)
 
-circshift(a, shiftamt::Real) = circshift(a, [integer(shiftamt)])
-function circshift(a, shiftamts)
-    n = ndims(a)
-    I = cell(n)
-    for i=1:n
+circshift(a::AbstractArray, shiftamt::Real) = circshift(a, [integer(shiftamt)])
+function circshift{T,N}(a::AbstractArray{T,N}, shiftamts)
+    I = ()
+    for i=1:N
         s = size(a,i)
         d = i<=length(shiftamts) ? shiftamts[i] : 0
-        I[i] = d==0 ? (1:s) : mod([-d:s-1-d], s).+1
+        I = tuple(I..., d==0 ? [1:s] : mod([-d:s-1-d], s).+1)
     end
-    a[I...]::typeof(a)
+    a[(I::NTuple{N,Vector{Int}})...]
 end
 
 ## Indexing: setindex! ##
@@ -499,14 +501,14 @@ get(A::AbstractArray, I::RangeVecIntList, default) = get!(similar(A, typeof(defa
 
 ## Concatenation ##
 
-promote_eltype() = None
+promote_eltype() = Bottom
 promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
 
 #TODO: ERROR CHECK
-cat(catdim::Integer) = Array(None, 0)
+cat(catdim::Integer) = Array(Any, 0)
 
-vcat() = Array(None, 0)
-hcat() = Array(None, 0)
+vcat() = Array(Any, 0)
+hcat() = Array(Any, 0)
 
 ## cat: special cases
 hcat{T}(X::T...)         = T[ X[j] for i=1, j=1:length(X) ]
@@ -515,7 +517,7 @@ vcat{T}(X::T...)         = T[ X[i] for i=1:length(X) ]
 vcat{T<:Number}(X::T...) = T[ X[i] for i=1:length(X) ]
 
 function vcat(X::Number...)
-    T = None
+    T = Bottom
     for x in X
         T = promote_type(T,typeof(x))
     end
@@ -523,19 +525,11 @@ function vcat(X::Number...)
 end
 
 function hcat(X::Number...)
-    T = None
+    T = Bottom
     for x in X
         T = promote_type(T,typeof(x))
     end
     hvcat_fill(Array(T,1,length(X)), X)
-end
-
-function hcat{T}(V::AbstractVector{T}...)
-    height = length(V[1])
-    for j = 2:length(V)
-        if length(V[j]) != height; error("vector must have same lengths"); end
-    end
-    [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
 end
 
 function vcat{T}(V::AbstractVector{T}...)
@@ -547,10 +541,9 @@ function vcat{T}(V::AbstractVector{T}...)
     pos = 1
     for k=1:length(V)
         Vk = V[k]
-        for i=1:length(Vk)
-            a[pos] = Vk[i]
-            pos += 1
-        end
+        p1 = pos+length(Vk)-1
+        a[pos:p1] = Vk
+        pos = p1+1
     end
     a
 end
@@ -907,7 +900,7 @@ function cumsum_kbn{T<:FloatingPoint}(v::AbstractVector{T})
 end
 
 # Uses K-B-N summation
-function cumsum_kbn{T<:FloatingPoint}(A::AbstractArray{T}, axis::Integer)
+function cumsum_kbn{T<:FloatingPoint}(A::AbstractArray{T}, axis::Integer=1)
     dimsA = size(A)
     ndimsA = ndims(A)
     axis_size = dimsA[axis]
@@ -947,7 +940,7 @@ end
 function ipermutedims(A::AbstractArray,perm)
     iperm = Array(Int,length(perm))
     for i = 1:length(perm)
-	iperm[perm[i]] = i
+        iperm[perm[i]] = i
     end
     return permutedims(A,iperm)
 end
@@ -1189,7 +1182,7 @@ end
 ##
 # generic map on any iterator
 function map(f::Callable, iters...)
-    result = {}
+    result = []
     len = length(iters)
     states = [start(iters[idx]) for idx in 1:len]
     nxtvals = cell(len)
@@ -1293,7 +1286,7 @@ function promote_to!{T}(f::Callable, offs, dest::AbstractArray{T}, A::AbstractAr
 end
 
 function map_promote(f::Callable, A::AbstractArray)
-    if isempty(A); return similar(A, None); end
+    if isempty(A); return similar(A, Bottom); end
     first = f(A[1])
     dest = similar(A, typeof(first))
     dest[1] = first

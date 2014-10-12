@@ -7,7 +7,7 @@
 @test select([3,6,30,1,9],3) == 6
 @test select([3,6,30,1,9],3:4) == [6,9]
 let a=[1:10]
-    for r in {2:4, 1:2, 10:10, 4:2, 2:1, 4:-1:2, 2:-1:1, 10:-1:10, 4:1:3, 1:2:8, 10:-3:1}
+    for r in Any[2:4, 1:2, 10:10, 4:2, 2:1, 4:-1:2, 2:-1:1, 10:-1:10, 4:1:3, 1:2:8, 10:-3:1]
         @test select(a, r) == [r]
         @test select(a, r, rev=true) == (11 .- [r])
     end
@@ -23,8 +23,10 @@ end
 
 @test searchsorted([1:10], 1, by=(x -> x >= 5)) == 1:4
 @test searchsorted([1:10], 10, by=(x -> x >= 5)) == 5:10
+@test searchsorted([1:5, 1:5, 1:5], 1, 6, 10, Base.Order.Forward) == 6:6
+@test searchsorted(ones(15), 1, 6, 10, Base.Order.Forward) == 6:10
 
-for (rg,I) in {(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)}
+for (rg,I) in [(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)]
     rg_r = reverse(rg)
     rgv, rgv_r = [rg], [rg_r]
     for i = I
@@ -50,9 +52,9 @@ end
 @test searchsorted(1:10, 1, by=(x -> x >= 5)) == searchsorted([1:10], 1, by=(x -> x >= 5))
 @test searchsorted(1:10, 10, by=(x -> x >= 5)) == searchsorted([1:10], 10, by=(x -> x >= 5))
 
-@test_throws BoundsError searchsortedfirst(1:10, 5,  0, 7, Base.Order.Forward)
-@test_throws BoundsError searchsortedfirst(1:10, 5,  1, 11, Base.Order.Forward)
-@test_throws BoundsError searchsortedfirst(1:10, 5,  5, 1, Base.Order.Forward)
+@test searchsorted([], 0) == 1:0
+@test searchsorted([1,2,3], 0) == 1:0
+@test searchsorted([1,2,3], 4) == 4:3
 
 a = rand(1:10000, 1000)
 

@@ -96,3 +96,18 @@ function utf32(p::Union(Ptr{Char}, Ptr{Uint32}, Ptr{Int32}))
     while unsafe_load(p, len+1) != 0; len += 1; end
     utf32(p, len)
 end
+
+function map(f::Function, s::UTF32String)
+    d = s.data
+    out = similar(d)
+    out[end] = 0
+
+    for i = 1:(length(d)-1)
+        c2 = f(d[i])
+        if !isa(c2,Char)
+            error("map(f,s::String) requires f to return Char; try map(f,collect(s)) or a comprehension instead")
+        end
+        out[i] = (c2::Char)
+    end
+    UTF32String(out)
+end

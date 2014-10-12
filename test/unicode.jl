@@ -91,3 +91,11 @@ else
     end
     rm(unicodedir)
 end
+
+# check utf8proc handling of CN category constants
+
+let c_ll = 'β', c_cn = '\u038B'
+    @test Base.UTF8proc.category_code(c_ll) == Base.UTF8proc.UTF8PROC_CATEGORY_LL
+    # check codepoint with category code CN
+    @test Base.UTF8proc.category_code(c_cn) == Base.UTF8proc.UTF8PROC_CATEGORY_CN
+end

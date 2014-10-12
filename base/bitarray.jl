@@ -520,7 +520,7 @@ function resize!(B::BitVector, n::Integer)
     n == n0 && return B
     n >= 0 || throw(BoundsError())
     if n < n0
-        splice!(B, n+1:n0)
+        deleteat!(B, n+1:n0)
         return B
     end
     Bc = B.chunks
@@ -731,7 +731,7 @@ end
 
 const _default_bit_splice = BitVector(0)
 
-function splice!(B::BitVector, r::Union(UnitRange{Int}, Integer), ins::BitVector = _default_bit_splice)
+function splice!(B::BitVector, r::Union(UnitRange{Int}, Integer), ins::AbstractArray = _default_bit_splice)
     n = length(B)
     i_f = first(r)
     i_l = last(r)
@@ -739,8 +739,10 @@ function splice!(B::BitVector, r::Union(UnitRange{Int}, Integer), ins::BitVector
     1 <= i_f <= n+1 || throw(BoundsError())
     i_l <= n || throw(BoundsError())
 
+    Bins = convert(BitArray, ins)
+
     if (i_f > n)
-        append!(B, ins)
+        append!(B, Bins)
         return BitVector(0)
     end
 
@@ -748,7 +750,7 @@ function splice!(B::BitVector, r::Union(UnitRange{Int}, Integer), ins::BitVector
 
     Bc = B.chunks
 
-    lins = length(ins)
+    lins = length(Bins)
     ldel = length(r)
 
     new_l = length(B) + lins - ldel
@@ -757,7 +759,7 @@ function splice!(B::BitVector, r::Union(UnitRange{Int}, Integer), ins::BitVector
     delta_k > 0 && ccall(:jl_array_grow_end, Void, (Any, Uint), Bc, delta_k)
 
     copy_chunks!(Bc, i_f+lins, Bc, i_l+1, n-i_l)
-    copy_chunks!(Bc, i_f, ins.chunks, 1, lins)
+    copy_chunks!(Bc, i_f, Bins.chunks, 1, lins)
 
     delta_k < 0 && ccall(:jl_array_del_end, Void, (Any, Uint), Bc, -delta_k)
 
@@ -769,7 +771,17 @@ function splice!(B::BitVector, r::Union(UnitRange{Int}, Integer), ins::BitVector
 
     return v
 end
-splice!(B::BitVector, r::Union(UnitRange{Int}, Integer), ins::AbstractVector{Bool}) = splice!(B, r, bitpack(ins))
+
+function splice!(B::BitVector, r::Union(UnitRange{Int}, Integer), ins)
+    Bins = BitArray(length(ins))
+    i = 1
+    for x in ins
+        Bins[i] = bool(x)
+        i += 1
+    end
+    return splice!(B, r, Bins)
+end
+
 
 function empty!(B::BitVector)
     ccall(:jl_array_del_end, Void, (Any, Uint), B.chunks, length(B.chunks))
@@ -1057,11 +1069,6 @@ function (==)(A::BitArray, B::BitArray)
     return A.chunks == B.chunks
 end
 
-function (!=)(A::BitArray, B::BitArray)
-    size(A) != size(B) && return true
-    return A.chunks != B.chunks
-end
-
 
 ## Data movement ##
 
@@ -1285,20 +1292,20 @@ function findnextnot(B::BitArray, start::Integer)
     within_chunk_start = @_mod64(start-1)
     mask = ~(_msk64 << within_chunk_start)
 
-    @inbounds begin
+    @inbounds if chunk_start < l
         if Bc[chunk_start] | mask != _msk64
             return (chunk_start-1) << 6 + trailing_ones(Bc[chunk_start] | mask) + 1
         end
-
         for i = chunk_start+1:l-1
             if Bc[i] != _msk64
                 return (i-1) << 6 + trailing_ones(Bc[i]) + 1
             end
         end
-        ce = Bc[end]
-    end
-    if ce != @_msk_end length(B)
-        return (l-1) << 6 + trailing_ones(ce) + 1
+        if Bc[l] != @_msk_end length(B)
+            return (l-1) << 6 + trailing_ones(Bc[l]) + 1
+        end
+    elseif Bc[l] | mask != @_msk_end length(B)
+        return (l-1) << 6 + trailing_ones(Bc[l] | mask) + 1
     end
     return 0
 end
@@ -1711,3 +1718,11 @@ function cat(catdim::Integer, X::Union(BitArray, Integer)...)
 end
 
 # hvcat -> use fallbacks in abstractarray.jl
+
+
+# BitArray I/O
+
+write(s::IO, B::BitArray) = write(s, B.chunks)
+read!(s::IO, B::BitArray) = read!(s, B.chunks)
+
+sizeof(B::BitArray) = sizeof(B.chunks)

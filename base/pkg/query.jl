@@ -25,9 +25,9 @@ function requirements(reqs::Dict, fix::Dict, avail::Dict)
     reqs
 end
 
-function dependencies(avail::Dict, fix::Dict = (ByteString=>Fixed)["julia"=>Fixed(VERSION)])
+function dependencies(avail::Dict, fix::Dict = Dict{ByteString,Fixed}("julia"=>Fixed(VERSION)))
     avail = deepcopy(avail)
-    conflicts = (ByteString=>Set{ByteString})[]
+    conflicts = Dict{ByteString,Set{ByteString}}()
     for (fp,fx) in fix
         delete!(avail, fp)
         for (ap,av) in avail, (v,a) in copy(av)
@@ -64,7 +64,7 @@ function dependencies(avail::Dict, fix::Dict = (ByteString=>Fixed)["julia"=>Fixe
     avail, conflicts
 end
 
-typealias PackageState Union(Nothing,VersionNumber) 
+typealias PackageState Union(Void,VersionNumber)
 
 function diff(have::Dict, want::Dict, avail::Dict, fixed::Dict)
     change = Array((ByteString,(PackageState,PackageState)),0)
@@ -126,13 +126,13 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
     # To each version in each package, we associate a BitVector.
     # It is going to hold a pattern such that all versions with
     # the same pattern are equivalent.
-    vmask = (ByteString=>Dict{VersionNumber, BitVector})[]
+    vmask = Dict{ByteString,Dict{VersionNumber, BitVector}}()
 
     # Parse requirements and store allowed versions.
-    allowed = (ByteString=>Dict{VersionNumber, Bool})[]
+    allowed = Dict{ByteString,Dict{VersionNumber, Bool}}()
     for (p,vs) in reqs
         @assert !haskey(allowed, p)
-        allowed[p] = (VersionNumber=>Bool)[]
+        allowed[p] = Dict{VersionNumber,Bool}()
         allowedp = allowed[p]
         for vn in keys(deps[p])
             allowedp[vn] = vn in vs
@@ -141,10 +141,10 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
         @assert any(collect(values(allowedp)))
     end
 
-    filtered_deps = (ByteString=>Dict{VersionNumber,Available})[]
+    filtered_deps = Dict{ByteString,Dict{VersionNumber,Available}}()
     for (p,depsp) in deps
-        filtered_deps[p] = (VersionNumber=>Available)[]
-        allowedp = get(allowed, p, (VersionNumber=>Bool)[])
+        filtered_deps[p] = Dict{VersionNumber,Available}()
+        allowedp = get(allowed, p, Dict{VersionNumber,Bool}())
         fdepsp = filtered_deps[p]
         for (vn,a) in depsp
             if !isempty(allowedp) && !allowedp[vn]
@@ -177,7 +177,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
         # Grow the pattern by the number of classes
         luds = length(uniqdepssets)
         @assert !haskey(vmask, p)
-        vmask[p] = (VersionNumber=>BitVector)[]
+        vmask[p] = Dict{VersionNumber,BitVector}()
         vmaskp = vmask[p]
         for vn in keys(fdepsp)
             vmaskp[vn] = falses(luds)
@@ -209,8 +209,8 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
 
     # At this point, the vmask patterns are computed. We divide them into
     # classes so that we can keep just one version for each class.
-    pruned_vers = (ByteString=>Vector{VersionNumber})[]
-    eq_classes = (ByteString=>Dict{VersionNumber,Vector{VersionNumber}})[]
+    pruned_vers = Dict{ByteString,Vector{VersionNumber}}()
+    eq_classes = Dict{ByteString,Dict{VersionNumber,Vector{VersionNumber}}}()
     for (p, vmaskp) in vmask
         vmask0_uniq = unique(values(vmaskp))
         nc = length(vmask0_uniq)
@@ -224,7 +224,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
         # For each nonempty class, we store only the highest version)
         pruned_vers[p] = VersionNumber[]
         prunedp = pruned_vers[p]
-        eq_classes[p] = (VersionNumber=>Vector{VersionNumber})[]
+        eq_classes[p] = Dict{VersionNumber,Vector{VersionNumber}}()
         eqclassp = eq_classes[p]
         for cl in classes
             if !isempty(cl)
@@ -248,7 +248,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
     # Put all remaining packages into eq_classes
     for (p, depsp) in deps
         haskey(eq_classes, p) && continue
-        eq_classes[p] = (VersionNumber=>Vector{VersionNumber})[]
+        eq_classes[p] = Dict{VersionNumber,Vector{VersionNumber}}()
         eqclassp = eq_classes[p]
         for vn in keys(depsp)
             eqclassp[vn] = [vn]
@@ -257,7 +257,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
 
 
     # Recompute deps. We could simplify them, but it's not worth it
-    new_deps = (ByteString=>Dict{VersionNumber,Available})[]
+    new_deps = Dict{ByteString,Dict{VersionNumber,Available}}()
 
     for (p,depsp) in deps
         @assert !haskey(new_deps, p)
@@ -265,7 +265,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
             new_deps[p] = depsp
             continue
         end
-        new_deps[p] = (VersionNumber=>Available)[]
+        new_deps[p] = Dict{VersionNumber,Available}()
         pruned_versp = pruned_vers[p]
         for (vn,a) in depsp
             in(vn, pruned_versp) || continue
@@ -297,7 +297,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
     return new_deps, eq_classes
 end
 prune_versions(deps::Dict{ByteString,Dict{VersionNumber,Available}}) =
-    prune_versions((ByteString=>VersionSet)[], deps)
+    prune_versions(Dict{ByteString,VersionSet}(), deps)
 
 # Build a subgraph incuding only the (direct and indirect) dependencies
 # of a given package set
@@ -320,7 +320,7 @@ function dependencies_subset(deps::Dict{ByteString,Dict{VersionNumber,Available}
 
     sub_deps = Dict{ByteString,Dict{VersionNumber,Available}}()
     for p in allpkgs
-        haskey(sub_deps, p) || (sub_deps[p] = (VersionNumber=>Available)[])
+        haskey(sub_deps, p) || (sub_deps[p] = Dict{VersionNumber,Available}())
         sub_depsp = sub_deps[p]
         for (vn, a) in deps[p]
             sub_depsp[vn] = a

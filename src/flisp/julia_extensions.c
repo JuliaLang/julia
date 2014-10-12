@@ -3,7 +3,7 @@
 #include <string.h>
 #include <assert.h>
 #include "flisp.h"
-#include "utf8proc.h"
+#include "mojibake.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,13 +29,21 @@ value_t fl_skipws(value_t *args, u_int32_t nargs)
     ios_t *s = fl_toiostream(args[0], "skip-ws");
     int newlines = (args[1]!=FL_F);
     uint32_t wc=0;
-    if (ios_peekutf8(s, &wc) == IOS_EOF)
-        return FL_EOF;
     value_t skipped = FL_F;
-    while (!ios_eof(s) && (is_uws(wc) || is_bom(wc)) && (newlines || wc!=10)) {
-        skipped = FL_T;
-        ios_getutf8(s, &wc);
-        ios_peekutf8(s, &wc);
+    while (1) {
+        if (ios_peekutf8(s, &wc) == IOS_EOF) {
+            ios_getutf8(s, &wc);  // to set EOF flag if this is a true EOF
+            if (!ios_eof(s))
+                lerror(symbol("error"), "incomplete character");
+            return FL_EOF;
+        }
+        if (!ios_eof(s) && (is_uws(wc) || is_bom(wc)) && (newlines || wc!=10)) {
+            skipped = FL_T;
+            ios_getutf8(s, &wc);
+        }
+        else {
+            break;
+        }
     }
     return skipped;
 }
@@ -93,7 +101,7 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_propval_t cat)
             (wc >= 0x309B && wc <= 0x309C)); // katakana-hiragana sound marks
 }
 
-static int jl_id_start_char(uint32_t wc)
+DLLEXPORT int jl_id_start_char(uint32_t wc)
 {
     if ((wc >= 'A' && wc <= 'Z') || (wc >= 'a' && wc <= 'z') || wc == '_')
         return 1;
@@ -103,7 +111,7 @@ static int jl_id_start_char(uint32_t wc)
     return is_wc_cat_id_start(wc, prop->category);
 }
 
-static int jl_id_char(uint32_t wc)
+DLLEXPORT int jl_id_char(uint32_t wc)
 {
     if ((wc >= 'A' && wc <= 'Z') || (wc >= 'a' && wc <= 'z') || wc == '_' ||
         (wc >= '0' && wc <= '9') || wc == '!')
@@ -117,8 +125,8 @@ static int jl_id_char(uint32_t wc)
         cat == UTF8PROC_CATEGORY_ND || cat == UTF8PROC_CATEGORY_PC ||
         cat == UTF8PROC_CATEGORY_SK || cat == UTF8PROC_CATEGORY_ME ||
         cat == UTF8PROC_CATEGORY_NO ||
-        // primes
-        (wc >= 0x2032 && wc <= 0x2034) ||
+        // primes (single, double, triple, their reverses, and quadruple)
+        (wc >= 0x2032 && wc <= 0x2037) || (wc == 0x2057) ||
         // Other_ID_Continue
         wc == 0x0387 || wc == 0x19da || (wc >= 0x1369 && wc <= 0x1371))
         return 1;

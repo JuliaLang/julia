@@ -158,6 +158,12 @@ x = BigFloat(Inf)
 x = BigFloat(15.674)
 @test exponent(x) == exponent(15.674)
 
+# frexp
+for i in [big(0.2), big(1.2), big(1220.0), big(23414.123)]
+    mantissa, ex = frexp(i)
+    @test i == mantissa * 2. ^ ex
+end
+
 # significand
 for i in [big(0.2), big(1.2), big(1220.0), big(23414.123)]
     @test i == significand(i) * 2. ^ exponent(i)
@@ -791,3 +797,6 @@ i3 = itrunc(f)
 err(z, x) = abs(z - x) / abs(x)
 @test 1e-60 > err(eta(BigFloat("1.005")), BigFloat("0.693945708117842473436705502427198307157819636785324430166786"))
 @test 1e-60 > err(exp(eta(big(1.0))), 2.0)
+
+# issue 8318
+@test convert(Int64,big(500_000_000_000_000.)) == 500_000_000_000_000

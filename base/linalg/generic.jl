@@ -11,12 +11,24 @@ end
 
 scale{R<:Real}(s::Complex, X::AbstractArray{R}) = scale(X, s)
 
+# For better performance when input and output are the same array
+# See https://github.com/JuliaLang/julia/issues/8415#issuecomment-56608729
 function generic_scale!(X::AbstractArray, s::Number)
     for i = 1:length(X)
         @inbounds X[i] *= s
     end
     X
 end
+
+function generic_scale!(C::AbstractArray, X::AbstractArray, s::Number)
+    length(C) == length(X) || error("C must be the same length as X")
+    for i = 1:length(X)
+        @inbounds C[i] = X[i]*s
+    end
+    C
+end
+scale!(C::AbstractArray, s::Number, X::AbstractArray) = generic_scale!(C, X, s)
+scale!(C::AbstractArray, X::AbstractArray, s::Number) = generic_scale!(C, X, s)
 scale!(X::AbstractArray, s::Number) = generic_scale!(X, s)
 scale!(s::Number, X::AbstractArray) = generic_scale!(X, s)
 
@@ -219,7 +231,7 @@ trace(x::Number) = x
 
 inv(a::AbstractVector) = error("argument must be a square matrix")
 function inv{T}(A::AbstractMatrix{T})
-    S = typeof(one(T)/one(T))
+    S = typeof(zero(T)/one(T))
     A_ldiv_B!(convert(AbstractMatrix{S}, A), eye(S, chksquare(A)))
 end
 
@@ -409,3 +421,11 @@ function elementaryRightTrapezoid!(A::AbstractMatrix, row::Integer)
     end
     conj(ξ1/ν)
 end
+
+function det(A::AbstractMatrix)
+    (istriu(A) || istril(A)) && return det(Triangular(A, :U, false))
+    return det(lufact(A))
+end
+det(x::Number) = x
+
+logdet(A::AbstractMatrix) = logdet(lufact(A))

@@ -28,21 +28,20 @@ end
 @test !islink(file)
 @test isreadable(file)
 @test iswritable(file)
-# Here's something else that might be UNIX-specific?
-run(`chmod -w $file`)
+chmod(file, filemode(file) & 0o7555)
 @test !iswritable(file)
-run(`chmod +w $file`)
+chmod(file, filemode(file) | 0o222)
 @test !isexecutable(file)
 @test filesize(file) == 0
 # On windows the filesize of a folder is the accumulation of all the contained
 # files and is thus zero in this case.
 @windows_only @test filesize(dir) == 0
 @unix_only @test filesize(dir) > 0
-let skew = 0.1  # allow 100ms skew
+let skew = 10  # allow 10s skew
     now   = time()
     mfile = mtime(file)
     mdir  = mtime(dir)
-    @test now >= mfile-skew  &&  now >= mdir-skew  &&  mfile >= mdir-skew
+    @test abs(now - mfile) <= skew && abs(now - mdir) <= skew && abs(mfile - mdir) <= skew
 end
 #@test int(time()) >= int(mtime(file)) >= int(mtime(dir)) >= 0 # 1 second accuracy should be sufficient
 
@@ -236,6 +235,34 @@ close(s)
 A2=nothing; A3=nothing; A4=nothing; gc(); gc(); # cause munmap finalizer to run & free resources
 rm(fname)
 
+##############
+# mark/reset #
+##############
+
+s = open(file, "w")
+write(s, "Marked!\n")
+write(s, "Hello world!\n")
+write(s, "Goodbye world!\n")
+close(s)
+s = open(file)
+mark(s)
+str = readline(s)
+@test beginswith(str, "Marked!")
+@test ismarked(s)
+reset(s)
+@test !ismarked(s)
+str = readline(s)
+@test beginswith(str, "Marked!")
+mark(s)
+@test readline(s) == "Hello world!\n"
+@test ismarked(s)
+unmark(s)
+@test !ismarked(s)
+@test_throws ErrorException reset(s)
+@test !unmark(s)
+@test !ismarked(s)
+close(s)
+
 #######################################################################
 # This section tests temporary file and directory creation.           #
 #######################################################################
@@ -304,5 +331,6 @@ rm(file)
 rm(subdir)
 rm(dir)
 
-@test !ispath(file)
-@test !ispath(dir)
+# The following fail on Windows with "stat: operation not permitted (EPERM)"
+@unix_only @test !ispath(file)
+@unix_only @test !ispath(dir)

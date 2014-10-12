@@ -84,6 +84,12 @@ void jl_type_error_rt(const char *fname, const char *context,
     jl_throw(ex);
 }
 
+void jl_type_error_rt_line(const char *fname, const char *context,
+                           jl_value_t *ty, jl_value_t *got, int line)
+{
+    jl_type_error_rt(fname, context, ty, got);
+}
+
 void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got)
 {
     jl_type_error_rt(fname, "", expected, got);
@@ -210,6 +216,35 @@ JL_CALLABLE(jl_f_typeof)
 {
     JL_NARGS(typeof, 1, 1);
     return jl_full_type(args[0]);
+}
+
+JL_CALLABLE(jl_f_sizeof)
+{
+    JL_NARGS(sizeof, 1, 1);
+    jl_value_t *x = args[0];
+    if (jl_is_datatype(x)) {
+        jl_datatype_t *dx = (jl_datatype_t*)x;
+        if (dx->name == jl_array_typename || dx == jl_symbol_type)
+            jl_error("type does not have a canonical binary representation");
+        if (!(dx->names == jl_null && dx->size > 0)) {
+            // names===() and size > 0  =>  bitstype, size always known
+            if (dx->abstract || !jl_is_leaf_type(x))
+                jl_error("argument is an abstract type; size is indeterminate");
+        }
+        return jl_box_long(jl_datatype_size(x));
+    }
+    if (jl_is_array(x)) {
+        return jl_box_long(jl_array_len(x) * ((jl_array_t*)x)->elsize);
+    }
+    if (jl_is_tuple(x)) {
+        jl_error("tuples do not yet have a canonical binary representation");
+    }
+    jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(x);
+    assert(jl_is_datatype(dt));
+    assert(!dt->abstract);
+    if (dt == jl_symbol_type)
+        jl_error("value does not have a canonical binary representation");
+    return jl_box_long(jl_datatype_size(dt));
 }
 
 JL_CALLABLE(jl_f_subtype)
@@ -367,30 +402,14 @@ JL_CALLABLE(jl_f_kwcall)
 
 extern int jl_lineno;
 
-JL_CALLABLE(jl_f_top_eval)
+DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
 {
-    jl_module_t *m;
-    jl_value_t *ex;
-    if (nargs == 1) {
+    if (m == NULL)
         m = jl_main_module;
-        ex = args[0];
-    }
-    else {
-        JL_NARGS(eval, 2, 2);
-        JL_TYPECHK(eval, module, args[0]);
-        m = (jl_module_t*)args[0];
-        ex = args[1];
-    }
-    if (jl_is_symbol(ex)) {
+    if (jl_is_symbol(ex))
         return jl_eval_global_var(m, (jl_sym_t*)ex);
-    }
     jl_value_t *v=NULL;
     int last_lineno = jl_lineno;
-    if (m == jl_current_module) {
-        v = jl_toplevel_eval(ex);
-        jl_lineno = last_lineno;
-        return v;
-    }
     jl_module_t *last_m = jl_current_module;
     jl_module_t *task_last_m = jl_current_task->current_module;
     JL_TRY {
@@ -408,6 +427,23 @@ JL_CALLABLE(jl_f_top_eval)
     jl_current_task->current_module = task_last_m;
     assert(v);
     return v;
+}
+
+JL_CALLABLE(jl_f_top_eval)
+{
+    jl_module_t *m;
+    jl_value_t *ex;
+    if (nargs == 1) {
+        m = jl_main_module;
+        ex = args[0];
+    }
+    else {
+        JL_NARGS(eval, 2, 2);
+        JL_TYPECHK(eval, module, args[0]);
+        m = (jl_module_t*)args[0];
+        ex = args[1];
+    }
+    return jl_toplevel_eval_in(m, ex);
 }
 
 JL_CALLABLE(jl_f_isdefined)
@@ -550,7 +586,6 @@ JL_CALLABLE(jl_f_set_field)
 JL_CALLABLE(jl_f_field_type)
 {
     JL_NARGS(fieldtype, 2, 2);
-    JL_TYPECHK(fieldtype, symbol, args[1]);
     jl_value_t *v = args[0];
     jl_value_t *vt = (jl_value_t*)jl_typeof(v);
     if (vt == (jl_value_t*)jl_module_type)
@@ -558,8 +593,17 @@ JL_CALLABLE(jl_f_field_type)
     if (!jl_is_datatype(vt))
         jl_type_error("fieldtype", (jl_value_t*)jl_datatype_type, v);
     jl_datatype_t *st = (jl_datatype_t*)vt;
-    jl_sym_t *fld = (jl_sym_t*)args[1];
-    return jl_tupleref(st->types, jl_field_index(st, fld, 1));
+    int field_index;
+    if (jl_is_long(args[1])) {
+        field_index = jl_unbox_long(args[1]) - 1;
+        if (field_index < 0 || field_index >= jl_tuple_len(st->names))
+            jl_throw(jl_bounds_exception);
+    }
+    else {
+        JL_TYPECHK(fieldtype, symbol, args[1]);
+        field_index = jl_field_index(st, (jl_sym_t*)args[1], 1);
+    }
+    return jl_tupleref(st->types, field_index);
 }
 
 // conversion -----------------------------------------------------------------
@@ -609,9 +653,9 @@ DLLEXPORT int jl_substrtod(char *str, size_t offset, int len, double *out)
     char *bstr = str+offset;
     char *pend = bstr+len;
     int err = 0;
-    if (!(*pend == '\0' || isspace(*pend) || *pend == ',')) {
+    if (!(*pend == '\0' || isspace((unsigned char)*pend) || *pend == ',')) {
         // confusing data outside substring. must copy.
-        char *newstr = malloc(len+1);
+        char *newstr = (char*)malloc(len+1);
         memcpy(newstr, bstr, len);
         newstr[len] = 0;
         bstr = newstr;
@@ -635,7 +679,7 @@ DLLEXPORT int jl_strtod(char *str, double *out)
         (errno==ERANGE && (*out==0 || *out==HUGE_VAL || *out==-HUGE_VAL)))
         return 1;
     while (*p != '\0') {
-        if (!isspace(*p))
+        if (!isspace((unsigned char)*p))
             return 1;
         p++;
     }
@@ -654,9 +698,9 @@ DLLEXPORT int jl_substrtof(char *str, int offset, int len, float *out)
     char *bstr = str+offset;
     char *pend = bstr+len;
     int err = 0;
-    if (!(*pend == '\0' || isspace(*pend) || *pend == ',')) {
+    if (!(*pend == '\0' || isspace((unsigned char)*pend) || *pend == ',')) {
         // confusing data outside substring. must copy.
-        char *newstr = malloc(len+1);
+        char *newstr = (char*)malloc(len+1);
         memcpy(newstr, bstr, len);
         newstr[len] = 0;
         bstr = newstr;
@@ -689,7 +733,7 @@ DLLEXPORT int jl_strtof(char *str, float *out)
         (errno==ERANGE && (*out==0 || *out==HUGE_VALF || *out==-HUGE_VALF)))
         return 1;
     while (*p != '\0') {
-        if (!isspace(*p))
+        if (!isspace((unsigned char)*p))
             return 1;
         p++;
     }
@@ -743,10 +787,8 @@ extern int jl_in_inference;
 extern int jl_boot_file_loaded;
 int jl_eval_with_compiler_p(jl_expr_t *expr, int compileloops);
 
-JL_CALLABLE(jl_trampoline)
+void jl_trampoline_compile_function(jl_function_t *f, int always_infer, jl_tuple_t *sig)
 {
-    assert(jl_is_func(F));
-    jl_function_t *f = (jl_function_t*)F;
     assert(f->linfo != NULL);
     // to run inference on all thunks. slows down loading files.
     // NOTE: if this call to inference is removed, type_annotate in inference.jl
@@ -756,8 +798,8 @@ JL_CALLABLE(jl_trampoline)
             if (!jl_is_expr(f->linfo->ast)) {
                 f->linfo->ast = jl_uncompress_ast(f->linfo, f->linfo->ast);
             }
-            if (jl_eval_with_compiler_p(jl_lam_body((jl_expr_t*)f->linfo->ast),1)) {
-                jl_type_infer(f->linfo, jl_tuple_type, f->linfo);
+            if (always_infer || jl_eval_with_compiler_p(jl_lam_body((jl_expr_t*)f->linfo->ast),1)) {
+                jl_type_infer(f->linfo, sig, f->linfo);
             }
         }
     }
@@ -769,6 +811,13 @@ JL_CALLABLE(jl_trampoline)
     if (jl_boot_file_loaded && jl_is_expr(f->linfo->ast)) {
         f->linfo->ast = jl_compress_ast(f->linfo, f->linfo->ast);
     }
+}
+
+JL_CALLABLE(jl_trampoline)
+{
+    assert(jl_is_func(F));
+    jl_function_t *f = (jl_function_t*)F;
+    jl_trampoline_compile_function(f, 0, jl_tuple_type);
     return jl_apply(f, args, nargs);
 }
 
@@ -977,6 +1026,7 @@ void jl_init_primitives(void)
 {
     add_builtin_func("is", jl_f_is);
     add_builtin_func("typeof", jl_f_typeof);
+    add_builtin_func("sizeof", jl_f_sizeof);
     add_builtin_func("issubtype", jl_f_subtype);
     add_builtin_func("isa", jl_f_isa);
     add_builtin_func("typeassert", jl_f_typeassert);
@@ -1009,9 +1059,9 @@ void jl_init_primitives(void)
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);
-    add_builtin("None", (jl_value_t*)jl_bottom_type);
-    add_builtin("Void", (jl_value_t*)jl_bottom_type);
     add_builtin("Top",  (jl_value_t*)jl_top_type);
+    add_builtin("Void", (jl_value_t*)jl_void_type);
+    add_builtin("nothing", (jl_value_t*)jl_nothing);
     add_builtin("TypeVar", (jl_value_t*)jl_tvar_type);
     add_builtin("TypeName", (jl_value_t*)jl_typename_type);
     add_builtin("TypeConstructor", (jl_value_t*)jl_typector_type);
@@ -1174,11 +1224,11 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
     else if (v == jl_false) {
         n += JL_PRINTF(out, "false");
     }
+    else if (v == jl_nothing) {
+        n += JL_PRINTF(out, "nothing");
+    }
     else if (jl_is_byte_string(v)) {
         n += JL_PRINTF(out, "\"%s\"", jl_iostr_data(v));
-    }
-    else if (v == jl_bottom_type) {
-        n += JL_PRINTF(out, "Void");
     }
     else if (jl_is_uniontype(v)) {
         n += JL_PRINTF(out, "Union");
@@ -1220,9 +1270,10 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
         n += JL_PRINTF(out, "goto %d", jl_gotonode_label(v));
     }
     else if (jl_is_quotenode(v)) {
-        n += JL_PRINTF(out, "quote ");
-        n += jl_static_show(out, jl_fieldref(v,0));
-        n += JL_PRINTF(out, " end");
+        jl_value_t *qv = jl_fieldref(v,0);
+        if (!jl_is_symbol(qv)) { n += JL_PRINTF(out, "quote "); }
+        n += jl_static_show(out, qv);
+        if (!jl_is_symbol(qv)) { n += JL_PRINTF(out, " end"); }
     }
     else if (jl_is_topnode(v)) {
         n += JL_PRINTF(out, "top(");
@@ -1333,7 +1384,7 @@ DLLEXPORT void jl_(void *jl_value)
     in_jl_--;
 }
 
-DLLEXPORT void jl_breakpoint(jl_value_t* v)
+DLLEXPORT void jl_breakpoint(jl_value_t *v)
 {
     // put a breakpoint in you debugger here
 }

@@ -20,7 +20,7 @@ convert(::Type{Ptr{Uint8}}, s::ByteString) = convert(Ptr{Uint8}, s.data)
 convert(::Type{Ptr{Int8}}, s::ByteString) = convert(Ptr{Int8}, s.data)
 
 convert{T}(::Type{Ptr{T}}, a::Array{T}) = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
-convert(::Type{Ptr{None}}, a::Array) = ccall(:jl_array_ptr, Ptr{None}, (Any,), a)
+convert(::Type{Ptr{Void}}, a::Array) = ccall(:jl_array_ptr, Ptr{Void}, (Any,), a)
 
 # note: these definitions don't mean any AbstractArray is convertible to
 # pointer. they just map the array element type to the pointer type for
@@ -31,7 +31,7 @@ pointer{T}(x::AbstractArray{T}, i::Integer) = convert(Ptr{T},x) + (i-1)*elsize(x
 # unsafe pointer to array conversions
 pointer_to_array(p, d::Integer, own=false) = pointer_to_array(p, (d,), own)
 function pointer_to_array{T,N}(p::Ptr{T}, dims::NTuple{N,Int}, own::Bool=false)
-    ccall(:jl_ptr_to_array, Array{T,N}, (Any, Ptr{T}, Any, Int32),
+    ccall(:jl_ptr_to_array, Array{T,N}, (Any, Ptr{Void}, Any, Int32),
           Array{T,N}, p, dims, own)
 end
 function pointer_to_array{T,N}(p::Ptr{T}, dims::NTuple{N,Integer}, own::Bool=false)
@@ -55,7 +55,6 @@ pointer_from_objref(x::Any) = ccall(:jl_value_ptr, Ptr{Void}, (Any,), x)
 integer(x::Ptr) = convert(Uint, x)
 unsigned(x::Ptr) = convert(Uint, x)
 
-@eval sizeof{T<:Ptr}(::Type{T}) = $(div(WORD_SIZE,8))
 eltype{T}(::Ptr{T}) = T
 
 ## limited pointer arithmetic & comparison ##

@@ -25,12 +25,12 @@ using namespace llvm;
 namespace {
 class FuncMCView : public MemoryObject {
 private:
-    const char* Fptr;
+    const char *Fptr;
     size_t Fsize;
 public:
-    FuncMCView(const void* fptr, size_t size) : Fptr((const char*)fptr), Fsize(size) {}
+    FuncMCView(const void *fptr, size_t size) : Fptr((const char*)fptr), Fsize(size) {}
 
-    const char* operator[] (const size_t idx) { return (Fptr+idx); }
+    const char *operator[] (const size_t idx) { return (Fptr+idx); }
 
     uint64_t getBase() const { return 0; }
     uint64_t getExtent() const { return Fsize; }
@@ -156,8 +156,8 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
                                            IP, CE, MAB, ShowInst));
     Streamer->InitSections();
 
-#ifndef USE_MCJIT
-// LLVM33 version
+#ifndef USE_MCJIT // LLVM33 version
+
     // Make the MemoryObject wrapper
     FuncMCView memoryObject(Fptr, Fsize);
 
@@ -168,11 +168,12 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
     // Set up the line info
     typedef std::vector<JITEvent_EmittedFunctionDetails::LineStart> LInfoVec;
     LInfoVec::iterator lineIter = lineinfo.begin();
-    lineIter = lineinfo.begin();
+    LInfoVec::iterator lineEnd  = lineinfo.end();
+
     uint64_t nextLineAddr = -1;
     DISubprogram debugscope;
 
-    if (lineIter != lineinfo.end()) {
+    if (lineIter != lineEnd) {
         nextLineAddr = (*lineIter).Address;
         debugscope = DISubprogram((*lineIter).Loc.getScope(jl_LLVMContext));
 
@@ -222,22 +223,26 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
     FuncMCView memoryObject(Fptr, Fsize); // MemoryObject wrapper
 
     if (!objectfile) return;
+#ifdef LLVM36
+    DIContext *di_ctx = DIContext::getDWARFContext(*objectfile);
+#else
     DIContext *di_ctx = DIContext::getDWARFContext(objectfile);
+#endif
     if (di_ctx == NULL) return;
     DILineInfoTable lineinfo = di_ctx->getLineInfoForAddressRange((size_t)Fptr, Fsize);
 
     // Set up the line info
-    DILineInfoTable::iterator lines_iter = lineinfo.begin();
-    DILineInfoTable::iterator lines_end = lineinfo.end();
+    DILineInfoTable::iterator lineIter = lineinfo.begin();
+    DILineInfoTable::iterator lineEnd = lineinfo.end();
 
     uint64_t nextLineAddr = -1;
 
-    if (lines_iter != lineinfo.end()) {
-        nextLineAddr = lines_iter->first;
+    if (lineIter != lineEnd) {
+        nextLineAddr = lineIter->first;
         #ifdef LLVM35
-        stream << "Filename: " << lines_iter->second.FileName << "\n";
+        stream << "Filename: " << lineIter->second.FileName << "\n";
         #else
-        stream << "Filename: " << lines_iter->second.getFileName() << "\n";
+        stream << "Filename: " << lineIter->second.getFileName() << "\n";
         #endif
     }
 
@@ -251,11 +256,11 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
         
         if (nextLineAddr != (uint64_t)-1 && absAddr == nextLineAddr) {
             #ifdef LLVM35
-            stream << "Source line: " << lines_iter->second.Line << "\n";
+            stream << "Source line: " << lineIter->second.Line << "\n";
             #else
-            stream << "Source line: " << lines_iter->second.getLine() << "\n";
+            stream << "Source line: " << lineIter->second.getLine() << "\n";
             #endif
-            nextLineAddr = (++lines_iter)->first;
+            nextLineAddr = (++lineIter)->first;
         }
 
         MCInst Inst;

@@ -1,6 +1,6 @@
 ### From array.jl
 
-@ngenerate N Nothing function checksize(A::AbstractArray, I::NTuple{N, Any}...)
+@ngenerate N Void function checksize(A::AbstractArray, I::NTuple{N, Any}...)
     @nexprs N d->(size(A, d) == length(I_d) || throw(DimensionMismatch("index $d has length $(length(I_d)), but size(A, $d) = $(size(A,d))")))
     nothing
 end
@@ -134,13 +134,13 @@ end
 
 eval(ngenerate(:N, nothing, :(setindex!{T}(s::SubArray{T,N}, v, ind::Integer)), gen_setindex!_body, 2:5, false))
 
- cumsum(A::AbstractArray, axis::Integer) =  cumsum!(similar(A, Base._cumsum_type(A)), A, axis)
-cumprod(A::AbstractArray, axis::Integer) = cumprod!(similar(A), A, axis)
+ cumsum(A::AbstractArray, axis::Integer=1) =  cumsum!(similar(A, Base._cumsum_type(A)), A, axis)
+cumprod(A::AbstractArray, axis::Integer=1) = cumprod!(similar(A), A, axis)
 
 for (f, op) in ((:cumsum!, :+),
                 (:cumprod!, :*))
     @eval begin
-        @ngenerate N typeof(B) function ($f){T,N}(B, A::AbstractArray{T,N}, axis::Integer)
+        @ngenerate N typeof(B) function ($f){T,N}(B, A::AbstractArray{T,N}, axis::Integer=1)
             if size(B, axis) < 1
                 return B
             end
@@ -475,7 +475,7 @@ end
 
 ## permutedims
 
-for (V, PT, BT) in {((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)}
+for (V, PT, BT) in [((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)]
     @eval @ngenerate N typeof(P) function permutedims!{$(V...)}(P::$PT{$(V...)}, B::$BT{$(V...)}, perm)
         dimsB = size(B)
         length(perm) == N || error("expected permutation of size $N, but length(perm)=$(length(perm))")

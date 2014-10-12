@@ -1,16 +1,16 @@
 ## conversions to floating-point ##
 
-convert(::Type{Float32}, x::Int128)  = float32(uint128(abs(x)))*(1-2(x<0))
-convert(::Type{Float32}, x::Uint128) = float32(uint64(x)) + ldexp(float32(uint64(x>>>64)),64)
+convert(::Type{Float32}, x::Int128)  = float32(reinterpret(Uint128,abs(x)))*(1-2(x<0))
+convert(::Type{Float32}, x::Uint128) = float32(uint64(x&0xffffffffffffffff)) + ldexp(float32(uint64(x>>>64)),64)
 promote_rule(::Type{Float32}, ::Type{Int128} ) = Float32
 promote_rule(::Type{Float32}, ::Type{Uint128}) = Float32
 
-convert(::Type{Float64}, x::Int128)  = float64(uint128(abs(x)))*(1-2(x<0))
-convert(::Type{Float64}, x::Uint128) = float64(uint64(x)) + ldexp(float64(uint64(x>>>64)),64)
+convert(::Type{Float64}, x::Int128)  = float64(reinterpret(Uint128,abs(x)))*(1-2(x<0))
+convert(::Type{Float64}, x::Uint128) = float64(uint64(x&0xffffffffffffffff)) + ldexp(float64(uint64(x>>>64)),64)
 promote_rule(::Type{Float64}, ::Type{Int128} ) = Float64
 promote_rule(::Type{Float64}, ::Type{Uint128}) = Float64
 
-convert(::Type{Float16}, x::Union(Signed,Unsigned)) = convert(Float16, convert(Float32,x))
+convert(::Type{Float16}, x::Integer) = convert(Float16, convert(Float32,x))
 for t in (Bool,Char,Int8,Int16,Int32,Int64,Uint8,Uint16,Uint32,Uint64)
     @eval promote_rule(::Type{Float16}, ::Type{$t}) = Float32
 end
@@ -70,33 +70,28 @@ iround{T<:Integer}(::Type{T}, x::FloatingPoint) = convert(T,round(x))
 
 ## fast specific type conversions ##
 
-if WORD_SIZE == 64
-    iround(x::Float32) = iround(float64(x))
-    itrunc(x::Float32) = box(Int64,fptosi(Int64,unbox(Float32,x)))
-    iround(x::Float64) = box(Int64,fpsiround(unbox(Float64,x)))
-    itrunc(x::Float64) = box(Int64,fptosi(unbox(Float64,x)))
-else
-    iround(x::Float32) = box(Int32,fpsiround(unbox(Float32,x)))
-    itrunc(x::Float32) = box(Int32,fptosi(unbox(Float32,x)))
-    iround(x::Float64) = int32(box(Int64,fpsiround(unbox(Float64,x))))
-    itrunc(x::Float64) = int32(box(Int64,fptosi(unbox(Float64,x))))
-end
+iround(x::Float32) = iround(Int, x)
+iround(x::Float64) = iround(Int, x)
+itrunc(x::Float32) = itrunc(Int, x)
+itrunc(x::Float64) = itrunc(Int, x)
 
-for to in (Int8, Uint8, Int16, Uint16)
+for to in (Int8, Int16, Int32, Int64)
     @eval begin
-        iround(::Type{$to}, x::Float32) = box($to,trunc_int($to,fpsiround(unbox(Float32,x))))
-        iround(::Type{$to}, x::Float64) = box($to,trunc_int($to,fpsiround(unbox(Float64,x))))
+        iround(::Type{$to}, x::Float32) = box($to,fpsiround($to,unbox(Float32,x)))
+        iround(::Type{$to}, x::Float64) = box($to,fpsiround($to,unbox(Float64,x)))
+        itrunc(::Type{$to}, x::Float32) = box($to,fptosi($to,unbox(Float32,x)))
+        itrunc(::Type{$to}, x::Float64) = box($to,fptosi($to,unbox(Float64,x)))
     end
 end
 
-iround(::Type{Int32}, x::Float32) = box(Int32,fpsiround(unbox(Float32,x)))
-iround(::Type{Int32}, x::Float64) = box(Int32,trunc_int(Int32,fpsiround(unbox(Float64,x))))
-iround(::Type{Uint32}, x::Float32) = box(Uint32,fpuiround(unbox(Float32,x)))
-iround(::Type{Uint32}, x::Float64) = box(Uint32,trunc_int(Uint32,fpuiround(unbox(Float64,x))))
-iround(::Type{Int64}, x::Float32) = box(Int64,fpsiround(float64(x)))
-iround(::Type{Int64}, x::Float64) = box(Int64,fpsiround(unbox(Float64,x)))
-iround(::Type{Uint64}, x::Float32) = box(Uint64,fpuiround(float64(x)))
-iround(::Type{Uint64}, x::Float64) = box(Uint64,fpuiround(unbox(Float64,x)))
+for to in (Uint8, Uint16, Uint32, Uint64)
+    @eval begin
+        iround(::Type{$to}, x::Float32) = box($to,fpuiround($to,unbox(Float32,x)))
+        iround(::Type{$to}, x::Float64) = box($to,fpuiround($to,unbox(Float64,x)))
+        itrunc(::Type{$to}, x::Float32) = box($to,fptoui($to,unbox(Float32,x)))
+        itrunc(::Type{$to}, x::Float64) = box($to,fptoui($to,unbox(Float64,x)))
+    end
+end
 
 iround(::Type{Int128}, x::Float32) = convert(Int128,round(x))
 iround(::Type{Int128}, x::Float64) = convert(Int128,round(x))
@@ -136,6 +131,8 @@ widen(::Type{Float32}) = Float64
 
 rem(x::Float32, y::Float32) = box(Float32,rem_float(unbox(Float32,x),unbox(Float32,y)))
 rem(x::Float64, y::Float64) = box(Float64,rem_float(unbox(Float64,x),unbox(Float64,y)))
+
+cld{T<:FloatingPoint}(x::T, y::T) = -fld(-x,y)
 
 mod{T<:FloatingPoint}(x::T, y::T) = rem(y+rem(x,y),y)
 
@@ -294,10 +291,6 @@ prevfloat(x::FloatingPoint) = nextfloat(x,-1)
     eps(::Type{Float64}) = $(box(Float64,unbox(Uint64,0x3cb0000000000000)))
     eps() = eps(Float64)
 end
-
-sizeof(::Type{Float16}) = 2
-sizeof(::Type{Float32}) = 4
-sizeof(::Type{Float64}) = 8
 
 ## byte order swaps for arbitrary-endianness serialization/deserialization ##
 bswap(x::Float32) = box(Float32,bswap_int(unbox(Float32,x)))

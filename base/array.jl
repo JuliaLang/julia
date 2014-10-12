@@ -31,7 +31,7 @@ isassigned(a::Array, i::Int...) = isdefined(a, i...)
 ## copy ##
 
 function unsafe_copy!{T}(dest::Ptr{T}, src::Ptr{T}, N)
-    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint),
+    ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint),
           dest, src, N*sizeof(T))
     return dest
 end
@@ -58,6 +58,7 @@ copy!{T}(dest::Array{T}, src::Array{T}) = copy!(dest, 1, src, 1, length(src))
 
 function reinterpret{T,S}(::Type{T}, a::Array{S,1})
     nel = int(div(length(a)*sizeof(S),sizeof(T)))
+    # TODO: maybe check that remainder is zero?
     return reinterpret(T, a, (nel,))
 end
 
@@ -81,7 +82,6 @@ function reinterpret{T,S,N}(::Type{T}, a::Array{S}, dims::NTuple{N,Int})
     end
     ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
 end
-reinterpret(t::Type,x) = reinterpret(t,[x])[1]
 
 # reshaping to same # of dimensions
 function reshape{T,N}(a::Array{T,N}, dims::NTuple{N,Int})
@@ -125,7 +125,7 @@ end
 
 getindex(T::(Type...)) = Array(T,0)
 
-# T[a:b] and T[a:s:b] also contruct typed ranges
+# T[a:b] and T[a:s:b] also construct typed ranges
 function getindex{T<:Number}(::Type{T}, r::Range)
     copy!(Array(T,length(r)), r)
 end
@@ -166,7 +166,7 @@ cell(dims::(Integer...)) = Array(Any, convert((Int...), dims))
 
 for (fname, felt) in ((:zeros,:zero), (:ones,:one))
     @eval begin
-        ($fname){T}(::Type{T}, dims...)  = fill!(Array(T, dims...), ($felt)(T))
+        ($fname)(T::Type, dims...)       = fill!(Array(T, dims...), ($felt)(T))
         ($fname)(dims...)                = fill!(Array(Float64, dims...), ($felt)(Float64))
         ($fname){T}(A::AbstractArray{T}) = fill!(similar(A), ($felt)(T))
     end
@@ -446,13 +446,7 @@ end
 
 ## Dequeue functionality ##
 
-const _grow_none_errmsg =
-    "[] cannot grow. Instead, initialize the array with \"T[]\", where T is the desired element type."
-
 function push!{T}(a::Array{T,1}, item)
-    if is(T,None)
-        error(_grow_none_errmsg)
-    end
     # convert first so we don't grow the array if the assignment won't work
     item = convert(T, item)
     ccall(:jl_array_grow_end, Void, (Any, Uint), a, 1)
@@ -467,9 +461,6 @@ function push!(a::Array{Any,1}, item::ANY)
 end
 
 function append!{T}(a::Array{T,1}, items::AbstractVector)
-    if is(T,None)
-        error(_grow_none_errmsg)
-    end
     n = length(items)
     ccall(:jl_array_grow_end, Void, (Any, Uint), a, n)
     copy!(a, length(a)-n+1, items, 1, n)
@@ -477,9 +468,6 @@ function append!{T}(a::Array{T,1}, items::AbstractVector)
 end
 
 function prepend!{T}(a::Array{T,1}, items::AbstractVector)
-    if is(T,None)
-        error(_grow_none_errmsg)
-    end
     n = length(items)
     ccall(:jl_array_grow_beg, Void, (Any, Uint), a, n)
     if a === items
@@ -518,9 +506,6 @@ function pop!(a::Vector)
 end
 
 function unshift!{T}(a::Array{T,1}, item)
-    if is(T,None)
-        error(_grow_none_errmsg)
-    end
     item = convert(T, item)
     ccall(:jl_array_grow_beg, Void, (Any, Uint), a, 1)
     a[1] = item
@@ -591,7 +576,7 @@ end
 
 const _default_splice = []
 
-function splice!(a::Vector, i::Integer, ins::AbstractArray=_default_splice)
+function splice!(a::Vector, i::Integer, ins=_default_splice)
     v = a[i]
     m = length(ins)
     if m == 0
@@ -600,14 +585,16 @@ function splice!(a::Vector, i::Integer, ins::AbstractArray=_default_splice)
         a[i] = ins[1]
     else
         _growat!(a, i, m-1)
-        for k = 1:m
-            a[i+k-1] = ins[k]
+        k = 1
+        for x in ins
+            a[i+k-1] = x
+            k += 1
         end
     end
     return v
 end
 
-function splice!{T<:Integer}(a::Vector, r::UnitRange{T}, ins::AbstractArray=_default_splice)
+function splice!{T<:Integer}(a::Vector, r::UnitRange{T}, ins=_default_splice)
     v = a[r]
     m = length(ins)
     if m == 0
@@ -636,8 +623,10 @@ function splice!{T<:Integer}(a::Vector, r::UnitRange{T}, ins::AbstractArray=_def
         end
     end
 
-    for k = 1:m
-        a[f+k-1] = ins[k]
+    k = 1
+    for x in ins
+        a[f+k-1] = x
+        k += 1
     end
     return v
 end
@@ -743,7 +732,7 @@ for f in (:+, :-, :div, :mod, :&, :|, :$)
         end
     end
 end
-for f in (:.+, :.-, :.*, :./, :.\, :.%, :div, :mod, :rem, :&, :|, :$)
+for f in (:.+, :.-, :.*, :./, :.\, :.%, :.<<, :.>>, :div, :mod, :rem, :&, :|, :$)
     @eval begin
         function ($f){T}(A::Number, B::StridedArray{T})
             F = similar(B, promote_array_type(typeof(A),T))
@@ -989,7 +978,7 @@ function reverse!(v::StridedVector, s=1, n=length(v))
     v
 end
 
-function vcat{T}(arrays::Array{T,1}...)
+function vcat{T}(arrays::Vector{T}...)
     n = 0
     for a in arrays
         n += length(a)
@@ -1009,6 +998,14 @@ function vcat{T}(arrays::Array{T,1}...)
         offset += nba
     end
     return arr
+end
+
+function hcat{T}(V::Vector{T}...)
+    height = length(V[1])
+    for j = 2:length(V)
+        if length(V[j]) != height; error("vector must have same lengths"); end
+    end
+    [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
 end
 
 ## find ##
@@ -1046,7 +1043,7 @@ function findnext(testf::Function, A, start::Integer)
 end
 findfirst(testf::Function, A) = findnext(testf, A, 1)
 
-function find(testf::Function, A::StridedArray)
+function find(testf::Function, A::AbstractArray)
     # use a dynamic-length array to store the indexes, then copy to a non-padded
     # array for the return
     tmpI = Array(Int, 0)
@@ -1055,7 +1052,7 @@ function find(testf::Function, A::StridedArray)
             push!(tmpI, i)
         end
     end
-    I = similar(A, Int, length(tmpI))
+    I = Array(Int, length(tmpI))
     copy!(I, tmpI)
     I
 end
@@ -1074,7 +1071,7 @@ function find(A::StridedArray)
 end
 
 find(x::Number) = x == 0 ? Array(Int,0) : [1]
-find(testf::Function, x) = find(testf(x))
+find(testf::Function, x::Number) = !testf(x) ? Array(Int,0) : [1]
 
 findn(A::AbstractVector) = find(A)
 
@@ -1151,7 +1148,7 @@ indmin(a) = findmin(a)[2]
 # similar to Matlab's ismember
 # returns a vector containing the highest index in b for each value in a that is a member of b
 function indexin(a::AbstractArray, b::AbstractArray)
-    bdict = Dict(b, 1:length(b))
+    bdict = Dict(zip(b, 1:length(b)))
     [get(bdict, i, 0) for i in a]
 end
 
@@ -1216,7 +1213,7 @@ function filter!(f::Function, a::Vector)
             insrt += 1
         end
     end
-    splice!(a, insrt:length(a))
+    deleteat!(a, insrt:length(a))
     return a
 end
 

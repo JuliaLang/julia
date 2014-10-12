@@ -1,13 +1,6 @@
 
 isequaldlm(m1, m2, t) = isequal(m1, m2) && (eltype(m1) == eltype(m2) == t)
 
-let dlm_data = readdlm(joinpath("perf", "kernel", "imdb-1.tsv"), '\t')
-    @test size(dlm_data) == (31383,3)
-    @test dlm_data[12345,2] == "Gladiator"
-    @test dlm_data[31383,3] == 2005
-    @test dlm_data[1,1] == "McClure, Marc (I)"
-end
-
 @test isequaldlm(readdlm(IOBuffer("1\t2\n3\t4\n5\t6\n")), [1. 2; 3 4; 5 6], Float64)
 @test isequaldlm(readdlm(IOBuffer("1\t2\n3\t4\n5\t6\n"), Int), [1 2; 3 4; 5 6], Int)
 
@@ -30,8 +23,8 @@ end
 @test size(readdlm(IOBuffer("1\t 2 3 4\n1 2 3\n"))) == (2,4)
 @test size(readdlm(IOBuffer("1,,2,3,4\n1,2,3\n"), ',')) == (2,5)
 
-let result1 = reshape({"", "", "", "", "", "", 1.0, 1.0, "", "", "", "", "", 1.0, 2.0, "", 3.0, "", "", "", "", "", 4.0, "", "", ""}, 2, 13),
-    result2 = reshape({1.0, 1.0, 2.0, 1.0, 3.0, "", 4.0, ""}, 2, 4)
+let result1 = reshape(Any["", "", "", "", "", "", 1.0, 1.0, "", "", "", "", "", 1.0, 2.0, "", 3.0, "", "", "", "", "", 4.0, "", "", ""], 2, 13),
+    result2 = reshape(Any[1.0, 1.0, 2.0, 1.0, 3.0, "", 4.0, ""], 2, 4)
 
     @test isequaldlm(readdlm(IOBuffer(",,,1,,,,2,3,,,4,\n,,,1,,,1\n"), ','), result1, Any)
     @test isequaldlm(readdlm(IOBuffer("   1    2 3   4 \n   1   1\n")), result2, Any)
@@ -39,11 +32,11 @@ let result1 = reshape({"", "", "", "", "", "", 1.0, 1.0, "", "", "", "", "", 1.0
     @test isequaldlm(readdlm(IOBuffer("1 2\n3 4 \n")), [[1.0, 3.0] [2.0, 4.0]], Float64)
 end
 
-let result1 = reshape({"", "", "", "", "", "", "भारत", 1.0, "", "", "", "", "", 1.0, 2.0, "", 3.0, "", "", "", "", "", 4.0, "", "", ""}, 2, 13)
+let result1 = reshape(Any["", "", "", "", "", "", "भारत", 1.0, "", "", "", "", "", 1.0, 2.0, "", 3.0, "", "", "", "", "", 4.0, "", "", ""], 2, 13)
     @test isequaldlm(readdlm(IOBuffer(",,,भारत,,,,2,3,,,4,\n,,,1,,,1\n"), ',') , result1, Any)
 end
 
-let result1 = reshape({1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, ""}, 2, 4)
+let result1 = reshape(Any[1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, ""], 2, 4)
     @test isequaldlm(readdlm(IOBuffer("1\t 2 3 4\n1 2 3")), result1, Any)
     @test isequaldlm(readdlm(IOBuffer("1\t 2 3 4\n1 2 3 ")), result1, Any)
     @test isequaldlm(readdlm(IOBuffer("1\t 2 3 4\n1 2 3\n")), result1, Any)
@@ -53,20 +46,30 @@ let result1 = reshape({1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, ""}, 2, 4)
     @test isequaldlm(readdlm(IOBuffer("1,2,3,\"4\"\r\n1,2,3\r\n"), ','), result1, Any)
 end
 
-let result1 = reshape({"abc", "hello", "def,ghi", " \"quote\" ", "new\nline", "world"}, 2, 3),
-    result2 = reshape({"abc", "line\"", "\"hello\"", "\"def", "", "\" \"\"quote\"\" \"", "ghi\"", "", "world", "\"new", "", ""}, 3, 4)
+let result1 = reshape(Any["abc", "hello", "def,ghi", " \"quote\" ", "new\nline", "world"], 2, 3),
+    result2 = reshape(Any["abc", "line\"", "\"hello\"", "\"def", "", "\" \"\"quote\"\" \"", "ghi\"", "", "world", "\"new", "", ""], 3, 4)
 
     @test isequaldlm(readdlm(IOBuffer("abc,\"def,ghi\",\"new\nline\"\n\"hello\",\" \"\"quote\"\" \",world"), ','), result1, Any)
     @test isequaldlm(readdlm(IOBuffer("abc,\"def,ghi\",\"new\nline\"\n\"hello\",\" \"\"quote\"\" \",world"), ',', quotes=false), result2, Any)
 end
 
-let result1 = reshape({"t", "c", "", "c"}, 2, 2),
-    result2 = reshape({"t", "\"c", "t", "c"}, 2, 2)
+let result1 = reshape(Any["t", "c", "", "c"], 2, 2),
+    result2 = reshape(Any["t", "\"c", "t", "c"], 2, 2)
     @test isequaldlm(readdlm(IOBuffer("t  \n\"c\" c")), result1, Any)
     @test isequaldlm(readdlm(IOBuffer("t t \n\"\"\"c\" c")), result2, Any)
 end
 
-@test isequaldlm(readcsv(IOBuffer("\n1,2,3\n4,5,6\n\n\n")), reshape({"",1.0,4.0,"","","",2.0,5.0,"","","",3.0,6.0,"",""}, 5, 3), Any)
+@test isequaldlm(readcsv(IOBuffer("\n1,2,3\n4,5,6\n\n\n"), skipblanks=false), 
+                 reshape(Any["",1.0,4.0,"","","",2.0,5.0,"","","",3.0,6.0,"",""], 5, 3), Any)
+@test isequaldlm(readcsv(IOBuffer("\n1,2,3\n4,5,6\n\n\n"), skipblanks=true), reshape([1.0,4.0,2.0,5.0,3.0,6.0], 2, 3), Float64)
+@test isequaldlm(readcsv(IOBuffer("1,2\n\n4,5"), skipblanks=false), reshape(Any[1.0,"",4.0,2.0,"",5.0], 3, 2), Any)
+@test isequaldlm(readcsv(IOBuffer("1,2\n\n4,5"), skipblanks=true), reshape([1.0,4.0,2.0,5.0], 2, 2), Float64)
+
+let x = randbool(5, 10), io = IOBuffer()
+    writedlm(io, x)
+    seek(io, 0)
+    @test readdlm(io, Bool) == x
+end
 
 let x = [1,2,3], y = [4,5,6], io = IOBuffer()
     writedlm(io, zip(x,y), ",  ")
@@ -190,4 +193,8 @@ let i18n_data = ["Origin (English)", "Name (English)", "Origin (Native)", "Name 
     data = i18n_arr[2:end, :]
     writedlm(i18n_buff, i18n_arr, ',')
     @test (data, hdr) == readcsv(i18n_buff, header=true)
+
+    writedlm(i18n_buff, i18n_arr, '\t')
+    @test (data, hdr) == readdlm(i18n_buff, '\t', header=true)
 end
+

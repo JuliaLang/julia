@@ -1,19 +1,12 @@
 JULIAHOME = $(abspath ..)
 include ../Make.inc
 
-TESTS = all core keywordargs numbers strings unicode collections hashing	\
-	remote iobuffer arrayops reduce reducedim \
-	simdloop linalg blas fft dsp sparse bitarray random \
-	math functional bigint sorting statistics spawn parallel arpack file	\
-	git pkg resolve suitesparse complex version pollfd mpfr	broadcast       \
-	socket floatapprox priorityqueue readdlm regex float16 combinatorics    \
-	sysinfo rounding ranges mod2pi euler show lineedit      \
-	replcompletions backtrace repl test goto
+TESTS = all linalg $(filter-out TestHelpers runtests testdefs,$(subst .jl,,$(wildcard *.jl)))
 
 default: all
 
 $(TESTS) ::
-	@$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) -f ./runtests.jl $@)
+	@$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --check-bounds=yes -f ./runtests.jl $@)
 
 perf:
 	@$(MAKE) -C perf all

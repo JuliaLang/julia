@@ -4,10 +4,12 @@ module UTF8proc
 import Base: show, showcompact, ==, string, symbol, isless
 
 # also exported by Base:
-export normalize_string, is_valid_char, is_assigned_char
+export normalize_string, is_valid_char, is_assigned_char,
+   islower, isupper, isalpha, isdigit, isnumber, isalnum,
+   iscntrl, ispunct, isspace, isprint, isgraph, isblank
 
 # whether codepoints are valid Unicode
-is_valid_char(c) = bool(ccall(:utf8proc_codepoint_valid, Cchar, (Int32,), c))
+is_valid_char(c) = (0x0 <= c <= 0x110000) && bool(ccall(:utf8proc_codepoint_valid, Cuchar, (Int32,), c))
 
 # utf8 category constants
 const UTF8PROC_CATEGORY_LU = 1
@@ -63,7 +65,7 @@ let
     function utf8proc_map(s::String, flags::Integer)
         result = ccall(:utf8proc_map, Cssize_t,
                        (Ptr{Uint8}, Cssize_t, Ptr{Ptr{Uint8}}, Cint),
-                       bytestring(s), 0, p, flags | UTF8PROC_NULLTERM)
+                       s, 0, p, flags | UTF8PROC_NULLTERM)
         result < 0 && error(bytestring(ccall(:utf8proc_errmsg, Ptr{Uint8},
                                              (Cssize_t,), result)))
         a = ccall(:jl_ptr_to_array_1d, Vector{Uint8}, 
@@ -107,15 +109,77 @@ function normalize_string(s::String, nf::Symbol)
                     throw(ArgumentError(":$nf is not one of :NFC, :NFD, :NFKC, :NFKD")))
 end
     
-# returns UTF8PROC_CATEGORY code in 0..30 giving Unicode category
+# returns UTF8PROC_CATEGORY code in 1:30 giving Unicode category
 function category_code(c)
-    # note: utf8proc returns 0, not UTF8PROC_CATEGORY_CN, for unassigned c
     c > 0x10FFFF && return 0x0000 # see utf8proc_get_property docs
-    unsafe_load(ccall(:utf8proc_get_property, Ptr{Uint16}, (Int32,), c))
+    cat = unsafe_load(ccall(:utf8proc_get_property, Ptr{Uint16}, (Int32,), c))
+    # note: utf8proc returns 0, not UTF8PROC_CATEGORY_CN, for unassigned c
+    cat == 0 ? UTF8PROC_CATEGORY_CN : cat
 end
 
-is_assigned_char(c) = category_code(c) != 0
+is_assigned_char(c) = category_code(c) != UTF8PROC_CATEGORY_CN
+
+# category_code() modified to ignore case of unassigned category CN
+#  used by character class predicates for improved performance
+function _catcode(c)
+    c > 0x10FFFF && return 0x0000 # see utf8proc_get_property docs
+    cat = unsafe_load(ccall(:utf8proc_get_property, Ptr{Uint16}, (Int32,), c))
+end
 
 # TODO: use UTF8PROC_CHARBOUND to extract graphemes from a string, e.g. to iterate over graphemes?
+
+
+## libc character class predicates ##
+
+islower(c::Char) = (_catcode(c)==UTF8PROC_CATEGORY_LL)
+
+# true for Unicode upper and mixed case
+function isupper(c::Char)
+    ccode=_catcode(c)
+    return ccode==UTF8PROC_CATEGORY_LU || ccode==UTF8PROC_CATEGORY_LT
+end
+
+isalpha(c::Char) = (UTF8PROC_CATEGORY_LU <= _catcode(c) <=
+                                            UTF8PROC_CATEGORY_LO)
+
+isdigit(c::Char) = ('0' <= c <= '9')
+
+isnumber(c::Char) = (UTF8PROC_CATEGORY_ND <= _catcode(c) <=
+                                            UTF8PROC_CATEGORY_NO)
+
+function isalnum(c::Char)
+    ccode=_catcode(c)
+    return (UTF8PROC_CATEGORY_LU <= ccode <= UTF8PROC_CATEGORY_LO) ||
+                    (UTF8PROC_CATEGORY_ND <= ccode <= UTF8PROC_CATEGORY_NO)
+end
+
+# following C++ only control characters from the Latin-1 subset return true
+iscntrl(c::Char) = (uint(c)<= 0x1f || 0x7f<=uint(c)<=0x9f)
+
+ispunct(c::Char) = (UTF8PROC_CATEGORY_PC <=_catcode(c) <= UTF8PROC_CATEGORY_PO)
+
+# 0x85 is the Unicode Next Line (NEL) character
+isspace(c::Char) = c==' ' || '\t'<=c<='\r' || c==0x85 || _catcode(c)==UTF8PROC_CATEGORY_ZS
+
+isprint(c::Char) = (UTF8PROC_CATEGORY_LU <= _catcode(c) <= UTF8PROC_CATEGORY_ZS)
+
+# true in principal if a printer would use ink
+isgraph(c::Char) = (UTF8PROC_CATEGORY_LU <= _catcode(c) <= UTF8PROC_CATEGORY_SO)
+
+for name = ("alnum", "alpha", "cntrl", "digit", "number", "graph",
+            "lower", "print", "punct", "space", "upper")
+    f = symbol(string("is",name))
+    @eval begin
+        function $f(s::String)
+            for c in s
+                if !$f(c)
+                    return false
+                end
+            end
+            return true
+        end
+    end
+end
+
 
 end # module

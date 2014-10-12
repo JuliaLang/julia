@@ -19,6 +19,13 @@ srand(0); rand(); x = rand(384);
 # Try a seed larger than 2^32
 @test rand(MersenneTwister(5294967296)) == 0.3498809918210497
 
+# Test array filling, Issue #7643
+@test rand(MersenneTwister(0), 1) == [0.8236475079774124]
+A = zeros(2, 2)
+rand!(MersenneTwister(0), A)
+@test A == [0.8236475079774124  0.16456579813368521;
+            0.9103565379264364  0.17732884646626457]
+
 # randn
 @test randn(MersenneTwister(42)) == -0.5560268761463861
 A = zeros(2, 2)
@@ -35,6 +42,12 @@ for T in (Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Int128, Uint
     @test typeof(r) == T
     @test 97 <= r <= 122
     @test mod(r,2)==1
+
+    if T<:Integer && T!==Char
+        x = rand(typemin(T):typemax(T))
+        @test isa(x,T)
+        @test typemin(T) <= x <= typemax(T)
+    end
 end
 
 if sizeof(Int32) < sizeof(Int)
@@ -45,6 +58,11 @@ if sizeof(Int32) < sizeof(Int)
     @test all([div(0x00010000000000000000,k)*k - 1 == Base.Random.RandIntGen(int64(1:k)).u for k in 13 .+ int64(2).^(32:61)])
 
 end
+
+randn(100000)
+randn!(Array(Float64, 100000))
+randn(MersenneTwister(10), 100000)
+randn!(MersenneTwister(10), Array(Float64, 100000))
 
 # Test ziggurat tables
 ziggurat_table_size = 256
@@ -122,12 +140,12 @@ function randmtzig_fill_ziggurat_tables() # Operates on the global arrays
     return nothing
 end
 randmtzig_fill_ziggurat_tables()
-@test all(ki == Base.LibRandom.ki)
-@test all(wi == Base.LibRandom.wi)
-@test all(fi == Base.LibRandom.fi)
-@test all(ke == Base.LibRandom.ke)
-@test all(we == Base.LibRandom.we)
-@test all(fe == Base.LibRandom.fe)
+@test all(ki == Base.Random.ki)
+@test all(wi == Base.Random.wi)
+@test all(fi == Base.Random.fi)
+@test all(ke == Base.Random.ke)
+@test all(we == Base.Random.we)
+@test all(fe == Base.Random.fe)
 
 #same random numbers on for small ranges on all systems
 
@@ -153,3 +171,9 @@ a = uuid4()
 @test_throws ArgumentError UUID("550e8400e29b-41d4-a716-446655440000")
 @test_throws ArgumentError UUID("550e8400e29b-41d4-a716-44665544000098")
 @test_throws ArgumentError UUID("z50e8400-e29b-41d4-a716-446655440000")
+
+#issue 8257
+i8257 = 1:1/3:100
+for i = 1:100
+    @test rand(i8257) in i8257
+end

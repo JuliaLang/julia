@@ -32,7 +32,7 @@ function mmap(len::Integer, prot::Integer, flags::Integer, fd, offset::Integer)
     len_page::Int = (offset-offset_page) + len
     # Mmap the file
     p = ccall(:jl_mmap, Ptr{Void}, (Ptr{Void}, Csize_t, Cint, Cint, Cint, FileOffset), C_NULL, len_page, prot, flags, fd, offset_page)
-    systemerror("memory mapping failed", int(p) == -1)
+    systemerror("memory mapping failed", reinterpret(Int,p) == -1)
     # Also return a pointer that compensates for any adjustment in the offset
     return p, int(offset-offset_page)
 end

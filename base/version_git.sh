@@ -22,6 +22,9 @@ if [  "$#" = "1"  -a "$1" = "NO_GIT" ]; then
 fi
 # Collect temporary variables
 origin=$(git config -l 2>/dev/null | grep 'remote\.\w*\.url.*JuliaLang/julia.git' | sed -n 's/remote\.\([a-zA-Z]*\)\..*/\1\//p')
+if [ -z "$origin" ]; then
+    origin="origin/"
+fi
 last_tag=$(git describe --tags --abbrev=0)
 git_time=$(git log -1 --pretty=format:%ct)
 
@@ -39,11 +42,18 @@ branch=$(git branch | sed -n '/\* /s///p')
 build_number=$(git rev-list HEAD ^$last_tag | wc -l | sed -e 's/[^[:digit:]]//g')
 
 date_string=$git_time
-if [ "$(uname)" = "Darwin" ] || [ "$(uname)" = "FreeBSD" ]; then
+case $(uname) in
+  Darwin | FreeBSD)
     date_string="$(/bin/date -jr $git_time -u '+%Y-%m-%d %H:%M %Z')"
-else
+    ;;
+  MINGW*)
+    git_time=$(git log -1 --pretty=format:%ci)
+    date_string="$(/bin/date --date="$git_time" -u '+%Y-%m-%d %H:%M %Z')"
+    ;;
+  *)
     date_string="$(/bin/date --date="@$git_time" -u '+%Y-%m-%d %H:%M %Z')"
-fi
+    ;;
+esac
 if [ $(git describe --tags --exact-match 2> /dev/null) ]; then
     tagged_commit="true"
 else

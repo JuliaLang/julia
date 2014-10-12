@@ -62,6 +62,19 @@ or if we had wanted to read the entire line instead::
 Note that depending on your terminal settings, your TTY may be line buffered and might thus require an additional enter before the data
 is sent to julia.
 
+To read every line from STDIN you can use the eachline method::
+
+    for line in eachline(STDIN)
+        print("Found $line")
+    end
+
+or if you wanted to read by character instead::
+
+    while !eof(STDIN)
+        x = read(STDIN, Char)
+        println("Found: $x")
+    end
+
 Text I/O
 --------
 

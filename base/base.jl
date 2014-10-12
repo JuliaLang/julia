@@ -1,14 +1,10 @@
-# important core definitions
-
-using Core: Intrinsics, arraylen, arrayref, arrayset, arraysize,
-            tuplelen, tupleref, convert_default, kwcall,
-            typeassert, apply_type
-
 import Core.Array  # to add methods
 
 const NonTupleType = Union(DataType,UnionType,TypeConstructor)
 
 typealias Callable Union(Function,DataType)
+
+const Bottom = Union()
 
 convert(T, x) = convert_default(T, x, convert)
 
@@ -179,7 +175,7 @@ function length_checked_equal(args...)
     n
 end
 
-map(f::Callable, a::Array{Any,1}) = { f(a[i]) for i=1:length(a) }
+map(f::Callable, a::Array{Any,1}) = Any[ f(a[i]) for i=1:length(a) ]
 
 macro thunk(ex); :(()->$(esc(ex))); end
 macro L_str(s); s; end

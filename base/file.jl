@@ -8,7 +8,7 @@ function pwd()
 end
 
 function cd(dir::String) 
-    uv_error("chdir $dir", ccall(:uv_chdir, Cint, (Ptr{Uint8},), bytestring(dir)))
+    uv_error("chdir $dir", ccall(:uv_chdir, Cint, (Ptr{Uint8},), dir))
 end
 cd() = cd(homedir())
 
@@ -35,7 +35,7 @@ end
 cd(f::Function) = cd(f, homedir())
 
 function mkdir(path::String, mode::Unsigned=0o777)
-    @unix_only ret = ccall(:mkdir, Int32, (Ptr{Uint8},Uint32), bytestring(path), mode)
+    @unix_only ret = ccall(:mkdir, Int32, (Ptr{Uint8},Uint32), path, mode)
     @windows_only ret = ccall(:_wmkdir, Int32, (Ptr{Uint16},), utf16(path))
     systemerror(:mkdir, ret != 0)
 end
@@ -45,7 +45,7 @@ function mkpath(path::String, mode::Unsigned=0o777)
     dir = dirname(path)
     (path == dir || isdir(path)) && return
     mkpath(dir, mode)
-    mkdir(path)
+    mkdir(path, mode)
 end
 
 mkdir(path::String, mode::Signed) = error("mode must be an unsigned integer; try 0o$mode")
@@ -53,6 +53,7 @@ mkpath(path::String, mode::Signed) = error("mode must be an unsigned integer; tr
 
 function rm(path::String; recursive::Bool=false)
     if islink(path) || !isdir(path)
+        @windows_only if !iswritable(path); chmod(path, 0o777); end
         FS.unlink(path)
     else
         if recursive
@@ -60,7 +61,7 @@ function rm(path::String; recursive::Bool=false)
                 rm(joinpath(path, p), recursive=true)
             end
         end
-        @unix_only ret = ccall(:rmdir, Int32, (Ptr{Uint8},), bytestring(path))
+        @unix_only ret = ccall(:rmdir, Int32, (Ptr{Uint8},), path)
         @windows_only ret = ccall(:_wrmdir, Int32, (Ptr{Uint16},), utf16(path))
         systemerror(:rmdir, ret != 0)
     end
@@ -71,7 +72,17 @@ end
 
 cp(src::String, dst::String) = FS.sendfile(src, dst)
 mv(src::String, dst::String) = FS.rename(src, dst)
-touch(path::String) = run(`touch $path`)
+
+function touch(path::String)
+    f = FS.open(path,JL_O_WRONLY | JL_O_CREAT, 0o0666)
+    @assert f.handle >= 0
+    try
+        t = time()
+        futime(f,t,t)
+    finally
+        FS.close(f)
+    end
+end
 
 # Obtain a temporary filename.
 @unix_only function tempname()
@@ -132,7 +143,7 @@ end
     seed::Uint32 = rand(Uint32)
     dir = tempdir()
     while true
-        if uint16(seed) == 0
+        if (seed & typemax(Uint16)) == 0
             seed += 1
         end
         filename = tempname(dir, seed)
@@ -151,7 +162,7 @@ function readdir(path::String)
 
     # defined in sys.c, to call uv_fs_readdir, which sets errno on error.
     file_count = ccall(:jl_readdir, Int32, (Ptr{Uint8}, Ptr{Uint8}),
-                       bytestring(path), uv_readdir_req)
+                        path, uv_readdir_req)
     systemerror("unable to read directory $path", file_count < 0)
 
     # The list of dir entries is returned as a contiguous sequence of null-terminated

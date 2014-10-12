@@ -10,7 +10,7 @@ promote_rule{s,T<:Number}(::Type{MathConst{s}}, ::Type{T}) = promote_type(Float6
 
 convert(::Type{FloatingPoint}, x::MathConst) = float64(x)
 convert(::Type{Float16}, x::MathConst) = float16(float32(x))
-convert{T<:Real}(::Type{Complex{T}}, x::MathConst) = convert(Complex{T}, float64(x))
+convert{T<:Real}(::Type{Complex{T}}, x::MathConst) = convert(Complex{T}, convert(T,x))
 convert{T<:Integer}(::Type{Rational{T}}, x::MathConst) = convert(Rational{T}, float64(x))
 
 =={s}(::MathConst{s}, ::MathConst{s}) = true
@@ -19,7 +19,7 @@ convert{T<:Integer}(::Type{Rational{T}}, x::MathConst) = convert(Rational{T}, fl
 hash(x::MathConst, h::Uint) = hash(object_id(x), h)
 
 -(x::MathConst) = -float64(x)
-for op in {:+, :-, :*, :/, :^}
+for op in Symbol[:+, :-, :*, :/, :^]
     @eval $op(x::MathConst, y::MathConst) = $op(float64(x),float64(y))
 end
 

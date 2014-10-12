@@ -3,7 +3,7 @@
 // --- library symbol lookup ---
 
 // map from "libX" to full soname "libX.so.ver"
-#if defined(__linux__)
+#if defined(__linux__) || defined(__FreeBSD__)
 static std::map<std::string, std::string> sonameMap;
 static bool got_sonames = false;
 
@@ -11,27 +11,39 @@ extern "C" DLLEXPORT void jl_read_sonames(void)
 {
     char *line=NULL;
     size_t sz=0;
+#if defined(__linux__)
     FILE *ldc = popen("/sbin/ldconfig -p", "r");
+#else
+    FILE *ldc = popen("/sbin/ldconfig -r", "r");
+#endif
 
     while (!feof(ldc)) {
         ssize_t n = getline(&line, &sz, ldc);
         if (n == -1)
             break;
-        if (n > 2 && isspace(line[0])) {
-            int i=0;
-            while (isspace(line[++i])) ;
+        if (n > 2 && isspace((unsigned char)line[0])) {
+#ifdef __linux__
+            int i = 0;
+            while (isspace((unsigned char)line[++i])) ;
             char *name = &line[i];
             char *dot = strstr(name, ".so");
-            i=0;
+            i = 0;
+#else
+            char *name = strstr(line, ":-l");
+            if (name == NULL) continue;
+            strncpy(name, "lib", 3);
+            char *dot = strchr(name, '.');
+#endif
 
             if (NULL == dot)
                 continue;
 
+#ifdef __linux__
             // Detect if this entry is for the current architecture
-            while (!isspace(dot[++i])) ;
-            while (isspace(dot[++i])) ;
+            while (!isspace((unsigned char)dot[++i])) ;
+            while (isspace((unsigned char)dot[++i])) ;
             int j = i;
-            while (!isspace(dot[++j])) ;
+            while (!isspace((unsigned char)dot[++j])) ;
             char *arch = strstr(dot+i,"x86-64");
             if (arch != NULL && arch < dot + j) {
 #ifdef _P32
@@ -43,6 +55,7 @@ extern "C" DLLEXPORT void jl_read_sonames(void)
                 continue;
 #endif
             }
+#endif // __linux__
 
             char *abslibpath = strrchr(line, ' ');
             if (dot != NULL && abslibpath != NULL) {
@@ -58,7 +71,7 @@ extern "C" DLLEXPORT void jl_read_sonames(void)
     pclose(ldc);
 }
 
-extern "C" const char *jl_lookup_soname(char *pfx, size_t n)
+extern "C" DLLEXPORT const char *jl_lookup_soname(char *pfx, size_t n)
 {
     if (!got_sonames) {
         jl_read_sonames();
@@ -263,7 +276,7 @@ static void *alloc_temp_arg_copy(void *obj, uint32_t sz)
 // this is a run-time function
 // warning: cannot allocate memory except using alloc_temp_arg_space
 extern "C" DLLEXPORT void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn,
-                                     int addressof)
+                                               int addressof)
 {
     jl_value_t *jvt = (jl_value_t*)jl_typeof(v);
     if (addressof) {
@@ -289,8 +302,10 @@ extern "C" DLLEXPORT void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, in
         return jl_string_data(v);
     }
     if (jl_is_array_type(jvt)) {
-        if (jl_tparam0(jl_typeof(v)) == jt || jt==(jl_value_t*)jl_bottom_type)
+        if (jl_tparam0(jl_typeof(v)) == jt || jt == (jl_value_t*)jl_bottom_type ||
+            jt == (jl_value_t*)jl_void_type) {
             return ((jl_array_t*)v)->data;
+        }
         if (jl_is_cpointer_type(jt)) {
             jl_array_t *ar = (jl_array_t*)v;
             void **temp=(void**)alloc_temp_arg_space((1+jl_array_len(ar))*sizeof(void*));
@@ -362,8 +377,8 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
         assert(ty->isPointerTy());
         jl_value_t *aty = expr_type(argex, ctx);
         if (jl_is_array_type(aty) &&
-            (jl_tparam0(jt) == jl_tparam0(aty) ||
-             jl_tparam0(jt) == (jl_value_t*)jl_bottom_type)) {
+            (jl_tparam0(jt) == jl_tparam0(aty) || jl_tparam0(jt) == (jl_value_t*)jl_bottom_type ||
+             jl_tparam0(jt) == (jl_value_t*)jl_void_type)) {
             // array to pointer
             return builder.CreateBitCast(emit_arrayptr(jv), ty);
         }
@@ -568,7 +583,235 @@ static Value *emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     return mark_julia_type(res, rt);
 }
 
+// llvmcall(ir, (rettypes...), (argtypes...), args...)
+static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
+{
+
+    JL_NARGSV(llvmcall, 3)
+    jl_value_t *rt = NULL, *at = NULL, *ir = NULL;
+    JL_GC_PUSH3(&ir, &rt, &at);
+    {
+    JL_TRY {
+        at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
+                                            &jl_tupleref(ctx->sp,0),
+                                            jl_tuple_len(ctx->sp)/2);
+    }
+    JL_CATCH {
+        jl_rethrow_with_add("error interpreting llvmcall return type");
+    }
+    }
+    {
+    JL_TRY {
+        rt  = jl_interpret_toplevel_expr_in(ctx->module, args[2],
+                                            &jl_tupleref(ctx->sp,0),
+                                            jl_tuple_len(ctx->sp)/2);
+    }
+    JL_CATCH {
+        jl_rethrow_with_add("error interpreting llvmcall argument tuple");
+    }
+    }
+    {
+    JL_TRY {
+        ir  = jl_interpret_toplevel_expr_in(ctx->module, args[1],
+                                            &jl_tupleref(ctx->sp,0),
+                                            jl_tuple_len(ctx->sp)/2);
+    }
+    JL_CATCH {
+        jl_rethrow_with_add("error interpreting IR argument");
+    }
+    }
+    int i = 1;
+    if (ir == NULL) {
+        jl_error("Cannot statically evaluate first argument to llvmcall");
+    }
+    bool isString = jl_is_byte_string(ir);
+    bool isPtr = jl_is_cpointer(ir);
+    if (!isString && !isPtr)
+    {
+        jl_error("First argument to llvmcall must be a string or pointer to an LLVM Function");
+    }
+
+    JL_TYPECHK(llvmcall, type, rt);
+    JL_TYPECHK(llvmcall, tuple, at);
+    JL_TYPECHK(llvmcall, type, at);
+
+    std::stringstream ir_stream;
+
+    jl_tuple_t *stt = jl_alloc_tuple(nargs - 3);
+
+    for (size_t i = 0; i < nargs-3; ++i)
+    {
+        jl_tupleset(stt,i,expr_type(args[4+i],ctx));
+    }
+
+    // Generate arguments
+    std::string arguments;
+    llvm::raw_string_ostream argstream(arguments);
+    jl_tuple_t *tt = (jl_tuple_t*)at;
+    jl_value_t *rtt = rt;
+
+    size_t nargt = jl_tuple_len(tt);
+    Value **argvals = (Value**) alloca(nargt*sizeof(Value*));
+    std::vector<llvm::Type*> argtypes;
+    /*
+     * Semantics for arguments are as follows:
+     * If the argument type is immutable (including bitstype), we pass the loaded llvm value
+     * type. Otherwise we pass a pointer to a jl_value_t.
+     */
+    for (size_t i = 0; i < nargt; ++i)
+    {
+        jl_value_t *tti = jl_tupleref(tt,i);
+        Type *t = julia_type_to_llvm(tti);
+        argtypes.push_back(t);
+        if (4+i > nargs)
+        {
+            jl_error("Missing arguments to llvmcall!");
+        }
+        jl_value_t *argi = args[4+i];
+        Value *arg;
+        bool needroot = false;
+        if (t == jl_pvalue_llvmt || !jl_isbits(tti)) {
+            arg = emit_expr(argi, ctx, true);
+            if (t == jl_pvalue_llvmt && arg->getType() != jl_pvalue_llvmt) {
+                arg = boxed(arg, ctx);
+                needroot = true;
+            }
+        }
+        else {
+            arg = emit_unboxed(argi, ctx);
+            if (jl_is_bitstype(expr_type(argi, ctx))) {
+                arg = emit_unbox(t, arg, tti);
+            }
+        }
+
+#ifdef JL_GC_MARKSWEEP
+        // make sure args are rooted
+        if (t == jl_pvalue_llvmt && (needroot || might_need_root(argi))) {
+            make_gcroot(arg, ctx);
+        }
+#endif
+        bool mightNeedTempSpace = false;
+        argvals[i] = julia_to_native(t,tti,arg,argi,false,i,ctx,&mightNeedTempSpace,&mightNeedTempSpace);
+    }
+
+    Function *f;
+    Type *rettype = julia_type_to_llvm(rtt);
+    if (isString) {
+        // Make sure to find a unique name
+        std::string ir_name;
+        while(true) {
+            std::stringstream name;
+            name << (ctx->f->getName().str()) << i++;
+            ir_name = name.str();
+            if (jl_Module->getFunction(ir_name) == NULL)
+                break;
+        }
+
+        bool first = true;
+        for (std::vector<Type *>::iterator it = argtypes.begin(); it != argtypes.end(); ++it) {
+            if (!first)
+                argstream << ",";
+            else 
+                first = false;
+            (*it)->print(argstream);
+            argstream << " ";
+        }
+
+        std::string rstring;
+        llvm::raw_string_ostream rtypename(rstring);
+        rettype->print(rtypename);
+
+        ir_stream << "; Number of arguments: " << nargt << "\n"
+        << "define "<<rtypename.str()<<" @\"" << ir_name << "\"("<<argstream.str()<<") {\n"
+        << jl_string_data(ir) << "\n}";
+        SMDiagnostic Err = SMDiagnostic();
+        std::string ir_string = ir_stream.str();
+#ifdef LLVM36
+        Module *m = NULL;
+        bool failed = parseAssemblyInto(llvm::MemoryBufferRef(ir_string,"llvmcall"),*jl_Module,Err);
+        if (!failed)
+            m = jl_Module;
+#else
+        Module *m = ParseAssemblyString(ir_string.data(),jl_Module,Err,jl_LLVMContext);
+#endif
+        if (m == NULL) {
+            std::string message = "Failed to parse LLVM Assembly: \n";
+            llvm::raw_string_ostream stream(message);
+            Err.print("julia",stream,true);
+            jl_error(stream.str().c_str());
+        }
+        f = m->getFunction(ir_name);
+    }
+    else {
+        assert(isPtr);
+        // Create Function skeleton
+        f = (llvm::Function*)jl_unbox_voidpointer(ir);
+        assert(f->getReturnType() == rettype);
+        int i = 0;
+        for (std::vector<Type *>::iterator it = argtypes.begin();
+            it != argtypes.end(); ++it, ++i)
+            assert(*it == f->getFunctionType()->getParamType(i));
+
+#ifdef USE_MCJIT
+        if (f->getParent() != jl_Module)
+        {
+            FunctionMover mover(jl_Module,f->getParent());
+            f = (llvm::Function*)MapValue(f,mover.VMap,RF_None,NULL,&mover);
+        }
+#endif
+
+        //f->dump();
+        #ifndef LLVM35
+        if (verifyFunction(*f,PrintMessageAction)) {
+        #else
+        llvm::raw_fd_ostream out(1,false);
+        if (verifyFunction(*f,&out))
+        {
+        #endif
+            f->dump();
+            jl_error("Malformed LLVM Function");
+        }
+    }
+
+    /*
+     * It might be tempting to just try to set the Always inline attribute on the function
+     * and hope for the best. However, this doesn't work since that would require an inlining
+     * pass (which is a Call Graph pass and cannot be managed by a FunctionPassManager). Instead
+     * We are sneaky and call the inliner directly. This however doesn't work until we've actually
+     * generated the entire function, so we need to store it in the context until the end of the
+     * function. This also has the benefit of looking exactly like we cut/pasted it in in `code_llvm`.
+     */
+    f->setLinkage(GlobalValue::LinkOnceODRLinkage);
+
+    // the actual call
+    CallInst *inst = builder.CreateCall(prepare_call(f),ArrayRef<Value*>(&argvals[0],nargt));
+    ctx->to_inline.push_back(inst);
+
+    JL_GC_POP();
+
+    if (inst->getType() != rettype) {
+        jl_error("Return type of llvmcall'ed function does not match declared return type");
+    }
+
+    return mark_julia_type(inst,rtt);
+}
+
 // --- code generator for ccall itself ---
+
+int try_to_determine_bitstype_nbits(jl_value_t *targ, jl_codectx_t *ctx);
+
+static Value *mark_or_box_ccall_result(Value *result, jl_value_t *rt_expr, jl_value_t *rt, bool static_rt, jl_codectx_t *ctx)
+{
+    if (!static_rt && rt != (jl_value_t*)jl_any_type) {
+        // box if type was not statically known
+        int nbits = try_to_determine_bitstype_nbits(rt_expr, ctx);
+        return allocate_box_dynamic(emit_expr(rt_expr, ctx),
+                                    ConstantInt::get(T_size, nbits/8),
+                                    result);
+    }
+
+    return mark_julia_type(result, rt);
+}
 
 // ccall(pointer, rettype, (argtypes...), args...)
 static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
@@ -591,14 +834,34 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         return literal_pointer_val(jl_nothing);
     }
 
-    {
+    jl_value_t *rtt_ = expr_type(args[2], ctx);
+    bool static_rt = true;  // is return type fully statically known?
+    if (jl_is_type_type(rtt_) && jl_is_leaf_type(jl_tparam0(rtt_))) {
+        rt = jl_tparam0(rtt_);
+    }
+    else {
         JL_TRY {
             rt  = jl_interpret_toplevel_expr_in(ctx->module, args[2],
                                                 &jl_tupleref(ctx->sp,0),
                                                 jl_tuple_len(ctx->sp)/2);
         }
         JL_CATCH {
-            jl_rethrow_with_add("error interpreting ccall return type");
+            static_rt = false;
+            if (jl_is_type_type(rtt_)) {
+                if (jl_subtype(jl_tparam0(rtt_), (jl_value_t*)jl_pointer_type, 0)) {
+                    // substitute Ptr{Void} for statically-unknown pointer type
+                    rt = (jl_value_t*)jl_voidpointer_type;
+                }
+                else if (jl_subtype(jl_tparam0(rtt_), (jl_value_t*)jl_array_type, 0)) {
+                    // `Array` used as return type just returns a julia object reference
+                    rt = (jl_value_t*)jl_any_type;
+                }
+            }
+            if (rt == NULL) {
+                emit_error("error interpreting ccall return type", ctx);
+                JL_GC_POP();
+                return UndefValue::get(T_void);
+            }
         }
     }
     if (jl_is_tuple(rt)) {
@@ -609,6 +872,14 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     if (rt == (jl_value_t*)jl_pointer_type)
         jl_error("ccall: return type Ptr should have an element type, Ptr{T}");
 
+    JL_TYPECHK(ccall, type, rt);
+    Type *lrt = julia_struct_to_llvm(rt);
+    if (lrt == NULL) {
+        JL_GC_POP();
+        emit_error("ccall: return type doesn't correspond to a C type", ctx);
+        return literal_pointer_val(jl_nothing);
+    }
+
     {
         JL_TRY {
             at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
@@ -616,19 +887,15 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                                                 jl_tuple_len(ctx->sp)/2);
         }
         JL_CATCH {
-            jl_rethrow_with_add("error interpreting ccall argument tuple");
+            //jl_rethrow_with_add("error interpreting ccall argument tuple");
+            emit_error("error interpreting ccall argument tuple", ctx);
+            JL_GC_POP();
+            return UndefValue::get(lrt);
         }
     }
 
-    JL_TYPECHK(ccall, type, rt);
     JL_TYPECHK(ccall, tuple, at);
     JL_TYPECHK(ccall, type, at);
-    Type *lrt = julia_struct_to_llvm(rt);
-    if (lrt == NULL) {
-        JL_GC_POP();
-        emit_error("ccall: return type doesn't correspond to a C type", ctx);
-        return literal_pointer_val(jl_nothing);
-    }
     jl_tuple_t *tt = (jl_tuple_t*)at;
     std::vector<Type *> fargt(0);
     std::vector<Type *> fargt_sig(0);
@@ -730,14 +997,15 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         jl_error("ccall: wrong number of arguments to C function");
 
     // some special functions
-    if (fptr == &jl_array_ptr ||
+    if (fptr == (void *) &jl_array_ptr ||
         (f_lib==NULL && f_name && !strcmp(f_name,"jl_array_ptr"))) {
         assert(lrt->isPointerTy());
         Value *ary = emit_expr(args[4], ctx);
         JL_GC_POP();
-        return mark_julia_type(builder.CreateBitCast(emit_arrayptr(ary),lrt), rt);
+        return mark_or_box_ccall_result(builder.CreateBitCast(emit_arrayptr(ary),lrt),
+                                        args[2], rt, static_rt, ctx);
     }
-    if (fptr == &jl_value_ptr ||
+    if (fptr == (void *) &jl_value_ptr ||
         (f_lib==NULL && f_name && !strcmp(f_name,"jl_value_ptr"))) {
         assert(lrt->isPointerTy());
         jl_value_t *argi = args[4];
@@ -748,14 +1016,13 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         }
         Value *ary = boxed(emit_expr(argi, ctx),ctx);
         JL_GC_POP();
-        return mark_julia_type(
-                builder.CreateBitCast(emit_nthptr_addr(ary, addressOf?1:0), lrt),
-                rt);
+        return mark_or_box_ccall_result(builder.CreateBitCast(emit_nthptr_addr(ary, addressOf?1:0), lrt),
+                                        args[2], rt, static_rt, ctx);
     }
-    if (fptr == &jl_is_leaf_type ||
+    if (fptr == (void *) &jl_is_leaf_type ||
         (f_lib==NULL && f_name && !strcmp(f_name, "jl_is_leaf_type"))) {
         jl_value_t *arg = args[4];
-        jl_value_t* ty = expr_type(arg, ctx);
+        jl_value_t *ty = expr_type(arg, ctx);
         if (jl_is_type_type(ty) && !jl_is_typevar(jl_tparam0(ty))) {
             int isleaf = jl_is_leaf_type(jl_tparam0(ty));
             JL_GC_POP();
@@ -944,9 +1211,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
 
     // the actual call
-    Value *ret = builder.CreateCall(
-            prepare_call(llvmf),
-            ArrayRef<Value*>(&argvals[0],(nargs-3)/2+sret));
+    Value *ret = builder.CreateCall(prepare_call(llvmf),
+                                    ArrayRef<Value*>(&argvals[0],(nargs-3)/2+sret));
 
     attr_type attributes;
 #ifdef LLVM33
@@ -1001,10 +1267,10 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         builder.CreateStore(literal_pointer_val((jl_value_t*)rt),
                             emit_nthptr_addr(strct, (size_t)0));
         builder.CreateStore(result,
-                            builder.CreateBitCast(
-                                emit_nthptr_addr(strct, (size_t)1),
-                                PointerType::get(lrt,0)));
+                            builder.CreateBitCast(emit_nthptr_addr(strct, (size_t)1),
+                                                  PointerType::get(lrt,0)));
         return mark_julia_type(strct, rt);
     }
-    return mark_julia_type(result, rt);
+
+    return mark_or_box_ccall_result(result, args[2], rt, static_rt, ctx);
 }

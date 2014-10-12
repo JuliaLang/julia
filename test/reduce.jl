@@ -23,7 +23,7 @@
 # sum
 
 @test sum(Int8[]) === 0
-@test sum(Int[]) === 0
+@test sum(Int[]) === int(0)
 @test sum(Float64[]) === 0.0
 
 @test sum(int8(3)) === int8(3)
@@ -42,19 +42,27 @@ fz = float(z)
 @test_throws ErrorException sum(sin, Int[])
 @test sum(sin, 3) == sin(3.0)
 @test sum(sin, [3]) == sin(3.0)
-@test sum(sin, z) == sum(sin, fz) == sum(sin(fz))
+a = sum(sin, z)
+@test_approx_eq a sum(sin, fz)
+@test_approx_eq a sum(sin(fz))
 
 z = [-4, -3, 2, 5]
 fz = float(z)
-@test Base.sumabs(Float64[]) === 0.0
-@test Base.sumabs([int8(-2)]) === 2
-@test Base.sumabs(z) === 14
-@test Base.sumabs(fz) === 14.0
+a = randn(32) # need >16 elements to trigger BLAS code path
+b = complex(randn(32), randn(32))
+@test sumabs(Float64[]) === 0.0
+@test sumabs([int8(-2)]) === 2
+@test sumabs(z) === 14
+@test sumabs(fz) === 14.0
+@test_approx_eq sumabs(a) sum(abs(a))
+@test_approx_eq sumabs(b) sum(abs(b))
 
-@test Base.sumabs2(Float64[]) === 0.0
-@test Base.sumabs2([int8(-2)]) === 4
-@test Base.sumabs2(z) === 54
-@test Base.sumabs2(fz) === 54.0
+@test sumabs2(Float64[]) === 0.0
+@test sumabs2([int8(-2)]) === 4
+@test sumabs2(z) === 54
+@test sumabs2(fz) === 54.0
+@test_approx_eq sumabs2(a) sum(abs2(a))
+@test_approx_eq sumabs2(b) sum(abs2(b))
 
 # check variants of summation for type-stability and other issues (#6069)
 sum2(itr) = invoke(sum, (Any,), itr)
@@ -81,6 +89,7 @@ end
 @test typeof(sum(Int8[])) == typeof(sum(Int8[1])) == typeof(sum(Int8[1 7]))
 
 @test sum_kbn([1,1e100,1,-1e100]) == 2
+@test sum_kbn(Float64[]) == 0.0
 
 # prod
 
@@ -99,7 +108,7 @@ prod(fz) === 120.0
 prod2(itr) = invoke(prod, (Any,), itr)
 @test prod(Int[]) === prod2(Int[]) === 1
 @test prod(Int[7]) === prod2(Int[7]) === 7
-@test typeof(prod(Int8[])) == typeof(prod(Int8[1])) == typeof(prod(Int8[1, 7])) == Int 
+@test typeof(prod(Int8[])) == typeof(prod(Int8[1])) == typeof(prod(Int8[1, 7])) == Int
 @test typeof(prod2(Int8[])) == typeof(prod2(Int8[1])) == typeof(prod2(Int8[1 7])) == Int
 
 # maximum & minimum & extrema
@@ -127,13 +136,13 @@ prod2(itr) = invoke(prod, (Any,), itr)
 @test minimum([4., 3., NaN, 5., 2.]) == 2.
 @test extrema([4., 3., NaN, 5., 2.]) == (2., 5.)
 
-@test Base.maxabs(Int[]) == 0
+@test maxabs(Int[]) == 0
 @test_throws ErrorException Base.minabs(Int[])
 
-@test Base.maxabs(-2) == 2
-@test Base.minabs(-2) == 2
-@test Base.maxabs([1, -2, 3, -4]) == 4
-@test Base.minabs([-1, 2, -3, 4]) == 1
+@test maxabs(-2) == 2
+@test minabs(-2) == 2
+@test maxabs([1, -2, 3, -4]) == 4
+@test minabs([-1, 2, -3, 4]) == 1
 
 @test maximum(x->abs2(x), 3:7) == 49
 @test minimum(x->abs2(x), 3:7) == 9
@@ -208,3 +217,5 @@ end
 @test isequal(cummin([1 0; 0 1], 1), [1 0; 0 0])
 @test isequal(cummin([1 0; 0 1], 2), [1 0; 0 0])
 
+@test sum(collect(uint8(0:255))) == 32640
+@test sum(collect(uint8(254:255))) == 509

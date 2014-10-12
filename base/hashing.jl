@@ -29,7 +29,7 @@ function hash_64_32(n::Uint64)
     a =  a $ a >> 11
     a =  a + a << 6
     a =  a $ a >> 22
-    return uint32(a)
+    return itrunc(Uint32, a)
 end
 
 function hash_32_32(n::Uint32)
@@ -43,7 +43,7 @@ function hash_32_32(n::Uint32)
     return a
 end
 
-if Uint == Uint64
+if Uint === Uint64
     hash_uint64(x::Uint64) = hash_64_64(x)
     hash_uint(x::Uint)     = hash_64_64(x)
 else
@@ -57,15 +57,19 @@ hx(a::Uint64, b::Float64, h::Uint) = hash_uint64((3a + reinterpret(Uint64,b)) - 
 const hx_NaN = hx(uint64(0), NaN, uint(0  ))
 
 hash(x::Uint64,  h::Uint) = hx(x, float64(x), h)
-hash(x::Int64,   h::Uint) = hx(reinterpret(Uint64,x), float64(x), h)
-hash(x::Float64, h::Uint) = isnan(x) ? (hx_NaN $ h) : hx(box(Uint64,fptosi(unbox(Float64,x))), x, h)
+hash(x::Int64,   h::Uint) = hx(reinterpret(Uint64,abs(x)), float64(x), h)
+hash(x::Float64, h::Uint) = isnan(x) ? (hx_NaN $ h) : hx(box(Uint64,fptoui(unbox(Float64,abs(x)))), x, h)
 
 hash(x::Union(Bool,Char,Int8,Uint8,Int16,Uint16,Int32,Uint32), h::Uint) = hash(int64(x), h)
 hash(x::Float32, h::Uint) = hash(float64(x), h)
 
 ## hashing complex numbers ##
 
-const h_imag = uint(0x32a7a07f3e7cd1f9)
+if Uint === Uint64
+    const h_imag = 0x32a7a07f3e7cd1f9
+else
+    const h_imag = 0x3e7cd1f9
+end
 const hash_0_imag = hash(0, h_imag)
 
 function hash(z::Complex, h::Uint)
@@ -77,4 +81,8 @@ end
 ## symbol & expression hashing ##
 
 hash(x::Symbol, h::Uint) = hash(object_id(x), h)
-hash(x::Expr, h::Uint) = hash(x.args, hash(x.head, h + uint(0x83c7900696d26dc6)))
+if Uint === Uint64
+    hash(x::Expr, h::Uint) = hash(x.args, hash(x.head, h + 0x83c7900696d26dc6))
+else
+    hash(x::Expr, h::Uint) = hash(x.args, hash(x.head, h + 0x96d26dc6))
+end

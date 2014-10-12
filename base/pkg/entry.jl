@@ -102,30 +102,32 @@ function installed(pkg::String)
     return nothing # registered but not installed
 end
 
-function status(io::IO)
+function status(io::IO; pkgname::String = "")
+    showpkg(pkg) = (pkgname == "") ? (true) : (pkg == pkgname)
     reqs = Reqs.parse("REQUIRE")
     instd = Read.installed()
     required = sort!([keys(reqs)...])
     if !isempty(required)
-        println(io, "$(length(required)) required packages:")
+        showpkg("") && println(io, "$(length(required)) required packages:")
         for pkg in required
             ver,fix = pop!(instd,pkg)
-            status(io,pkg,ver,fix)
+            showpkg(pkg) && status(io,pkg,ver,fix)
         end
     end
     additional = sort!([keys(instd)...])
     if !isempty(additional)
-        println(io, "$(length(additional)) additional packages:")
+        showpkg("") && println(io, "$(length(additional)) additional packages:")
         for pkg in additional
             ver,fix = instd[pkg]
-            status(io,pkg,ver,fix)
+            showpkg(pkg) && status(io,pkg,ver,fix)
         end
     end
     if isempty(required) && isempty(additional)
         println(io, "No packages installed")
     end
 end
-# TODO: status(io::IO, pkg::String)
+
+status(io::IO, pkg::String) = status(io, pkgname = pkg)
 
 function status(io::IO, pkg::String, ver::VersionNumber, fix::Bool)
     @printf io " - %-29s " pkg
@@ -153,9 +155,11 @@ function clone(url::String, pkg::String)
         Base.rm(pkg, recursive=true)
         rethrow()
     end
-    isempty(Reqs.parse("$pkg/REQUIRE")) && return
     info("Computing changes...")
-    resolve()
+    if !edit(Reqs.add, pkg)
+        isempty(Reqs.parse("$pkg/REQUIRE")) && return
+        resolve()
+    end
 end
 
 function clone(url_or_pkg::String)
@@ -369,8 +373,12 @@ function resolve(
 
     for pkg in keys(reqs)
         if !haskey(deps,pkg)
-            error("$pkg's requirements can't be satisfied because of the following fixed packages: ",
+            if "julia" in conflicts[pkg]
+                error("$pkg can't be installed because it has no versions that support ", VERSION, " of julia")
+            else
+                error("$pkg's requirements can't be satisfied because of the following fixed packages: ",
                    join(conflicts[pkg], ", ", " and "))
+            end
         end
     end
 
@@ -384,7 +392,7 @@ function resolve(
     isempty(changes) && return info("No packages to install, update or remove")
 
     # prefetch phase isolates network activity, nothing to roll back
-    missing = {}
+    missing = []
     for (pkg,(ver1,ver2)) in changes
         vers = ASCIIString[]
         ver1 !== nothing && push!(vers,Git.head(dir=pkg))
@@ -402,7 +410,7 @@ function resolve(
     end
 
     # try applying changes, roll back everything if anything fails
-    changed = {}
+    changed = []
     try
         for (pkg,(ver1,ver2)) in changes
             if ver1 === nothing
@@ -666,21 +674,26 @@ function updatehook(pkgs::Vector)
     """)
 end
 
-function test!(pkg::String, errs::Vector{String}, notests::Vector{String})
-    const reqs_path = abspath(pkg,"test","REQUIRE")
+function test!(pkg::String, errs::Vector{String}, notests::Vector{String}; coverage::Bool=false)
+    reqs_path = abspath(pkg,"test","REQUIRE")
     if isfile(reqs_path)
-        const tests_require = Reqs.parse(reqs_path)
+        tests_require = Reqs.parse(reqs_path)
         if (!isempty(tests_require))
             info("Computing test dependencies for $pkg...")
-            resolve(tests_require)
+            resolve(merge(Reqs.parse("REQUIRE"), tests_require))
         end
     end
-    const test_path = abspath(pkg,"test","runtests.jl")
+    test_path = abspath(pkg,"test","runtests.jl")
     if isfile(test_path)
         info("Testing $pkg")
         cd(dirname(test_path)) do
             try
-                run(`$JULIA_HOME/julia $test_path`)
+                if coverage
+                    cmd = `$JULIA_HOME/julia --code-coverage $test_path`
+                else
+                    cmd = `$JULIA_HOME/julia $test_path`
+                end
+                run(cmd)
                 info("$pkg tests passed")
             catch err
                 warnbanner(err, label="[ ERROR: $pkg ]")
@@ -693,11 +706,11 @@ function test!(pkg::String, errs::Vector{String}, notests::Vector{String})
     resolve()
 end
 
-function test(pkgs::Vector{String})
+function test(pkgs::Vector{String}; coverage::Bool=false)
     errs = String[]
     notests = String[]
     for pkg in pkgs
-        test!(pkg,errs,notests)
+        test!(pkg,errs,notests; coverage=coverage)
     end
     if !isempty(errs) || !isempty(notests)
         messages = String[]
@@ -707,6 +720,6 @@ function test(pkgs::Vector{String})
     end
 end
 
-test() = test(sort!(String[keys(installed())...]))
+test(;coverage::Bool=false) = test(sort!(String[keys(installed())...]); coverage=coverage)
 
 end # module

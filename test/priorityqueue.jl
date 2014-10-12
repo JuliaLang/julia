@@ -1,6 +1,4 @@
-
 using Base.Collections
-
 
 # Test dequeing in sorted order.
 function test_issorted!(pq::PriorityQueue, priorities)
@@ -12,19 +10,31 @@ function test_issorted!(pq::PriorityQueue, priorities)
     end
 end
 
+function test_isrequested!(pq::PriorityQueue, keys)
+    i = 0
+    while !isempty(pq)
+        krqst =  keys[i+=1]
+        krcvd = dequeue!(pq, krqst)
+        @test krcvd == krqst
+    end
+end
+
 pmax = 1000
 n = 10000
-priorities = Dict(1:n, rand(1:pmax, n))
+r = rand(1:pmax, n)
+priorities = Dict(zip(1:n, r))
 
 # building from a dict
 pq = PriorityQueue(priorities)
 test_issorted!(pq, priorities)
 
+pq = PriorityQueue(priorities)
+test_isrequested!(pq, 1:n)
 
 # building from two lists
 ks, vs = 1:n, rand(1:pmax, n)
 pq = PriorityQueue(ks, vs)
-priorities = Dict(ks, vs)
+priorities = Dict(zip(ks, vs))
 test_issorted!(pq, priorities)
 
 
@@ -81,4 +91,3 @@ for priority in values(priorities)
     heappush!(xs, priority)
 end
 @test issorted([heappop!(xs) for _ in length(priorities)])
-

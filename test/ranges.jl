@@ -29,6 +29,17 @@ r = [5:-1:1]
 @test length(1.1:1.3:3) == 2
 @test length(1:1:1.8) == 1
 
+@test (1:5)[1:4] == 1:4
+@test (2:6)[1:4] == 2:5
+@test (1:6)[2:5] == 2:5
+@test typeof((1:6)[2:5]) == typeof(2:5)
+@test (1:6)[2:2:5] == 2:2:4
+@test typeof((1:6)[2:2:5]) == typeof(2:2:4)
+@test (1:2:13)[2:6] == 3:2:11
+@test typeof((1:2:13)[2:6]) == typeof(3:2:11)
+@test (1:2:13)[2:3:7] == 3:6:13
+@test typeof((1:2:13)[2:3:7]) == typeof(3:6:13)
+
 let
     span = 5:20
     r = -7:3:42
@@ -103,6 +114,11 @@ r = (-4*int64(maxintfloat(is(Int,Int32) ? Float32 : Float64))):5
 @test_throws BoundsError (3:6)[5]
 @test (0:2:10)[7:6] == 12:2:10
 @test_throws BoundsError (0:2:10)[7:7]
+
+# indexing with negative ranges (#8351)
+for a=Range[3:6, 0:2:10], b=Range[0:1, 2:-1:0]
+    @test_throws BoundsError a[b]
+end
 
 # avoiding intermediate overflow (#5065)
 @test length(1:4:typemax(Int)) == div(typemax(Int),4) + 1
@@ -232,7 +248,16 @@ for T = (Float32, Float64,),# BigFloat),
     start = convert(T,a)/den
     step  = convert(T,s)/den
     stop  = convert(T,(a+(n-1)*s))/den
-    @test [start:step:stop] == T[a:s:a+(n-1)*s]./den
+    r = start:step:stop
+    @test [r] == T[a:s:a+(n-1)*s]./den
+    # issue #7420
+    n = length(r)
+    @test [r[1:n]] == [r]
+    @test [r[2:n]] == [r][2:end]
+    @test [r[1:3:n]] == [r][1:3:n]
+    @test [r[2:2:n]] == [r][2:2:n]
+    @test [r[n:-1:2]] == [r][n:-1:2]
+    @test [r[n:-2:1]] == [r][n:-2:1]
 end
 
 # near-equal ranges
@@ -240,8 +265,8 @@ end
 
 # comparing and hashing ranges
 let
-    Rs = {1:2, int32(1:3:17), int64(1:3:17), 1:0, 17:-3:0,
-          0.0:0.1:1.0, float32(0.0:0.1:1.0)}
+    Rs = Range[1:2, int32(1:3:17), int64(1:3:17), 1:0, 17:-3:0,
+               0.0:0.1:1.0, float32(0.0:0.1:1.0)]
     for r in Rs
         ar = collect(r)
         @test r != ar
@@ -301,3 +326,49 @@ r = -0.004532318104333742:1.2597349521122731e-5:0.008065031416788989
 @test_approx_eq r[5:-2:1][2] r[3]
 @test_throws BoundsError r[0:10]
 @test_throws BoundsError r[1:10000]
+
+r = linrange(1/3,5/7,6)
+@test length(r) == 6
+@test r[1] == 1/3
+@test abs(r[end] - 5/7) <= eps(5/7)
+r = linrange(0.25,0.25,1)
+@test length(r) == 1
+@test_throws Exception linrange(0.25,0.5,1)
+
+# issue #7426
+@test [typemax(Int):1:typemax(Int)] == [typemax(Int)]
+
+#issue #7484
+r7484 = 0.1:0.1:1
+@test [reverse(r7484)] == reverse([r7484])
+
+# issue #7387
+for r in (0:1, 0.0:1.0)
+    @test r+im == [r]+im
+    @test r-im == [r]-im
+    @test r*im == [r]*im
+    @test r/im == [r]/im
+end
+
+# issue #7709
+@test length(map(identity, 0x01:0x05)) == 5
+@test length(map(identity, 0x0001:0x0005)) == 5
+@test length(map(identity, uint64(1):uint64(5))) == 5
+@test length(map(identity, uint128(1):uint128(5))) == 5
+
+# mean/median
+for f in (mean, median)
+    for n = 2:5
+        @test f(2:n) == f([2:n])
+        @test_approx_eq f(2:0.1:n) f([2:0.1:n])
+    end
+end
+
+# issue #8531
+let smallint = (Int === Int64 ?
+                (Int8,Uint8,Int16,Uint16,Int32,Uint32) :
+                (Int8,Uint8,Int16,Uint16))
+    for T in smallint
+        @test length(typemin(T):typemax(T)) == 2^(8*sizeof(T))
+    end
+end

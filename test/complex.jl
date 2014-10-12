@@ -720,3 +720,7 @@ end
 
 # inv
 @test inv(1e300+0im) == 1e-300 - 0.0im
+
+# issue #7904
+@test log10(10+0im) === 1.0 + 0.0im
+@test log2(2+0im) === 1.0 + 0.0im

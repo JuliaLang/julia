@@ -1,3 +1,4 @@
+:orphan:
 
 .. _devdocs-index:
 
@@ -9,3 +10,4 @@
    :maxdepth: 1
 
    cartesian
+   meta

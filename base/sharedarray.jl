@@ -184,7 +184,6 @@ end
 # pidx, which is relevant to the current process only
 function serialize(s, S::SharedArray)
     serialize_type(s, typeof(S))
-    serialize(s, length(SharedArray.names))
     for n in SharedArray.names
         if n in [:s, :pidx, :loc_subarr_1d]
             writetag(s, UndefRefTag)
@@ -274,7 +273,7 @@ map(f::Callable, S::SharedArray) = (S2 = similar(S); S2[:] = S[:]; map!(f, S2); 
 
 reduce(f::Function, S::SharedArray) =
     mapreduce(fetch, f,
-              { @spawnat p reduce(f, S.loc_subarr_1d) for p in procs(S) })
+              Any[ @spawnat p reduce(f, S.loc_subarr_1d) for p in procs(S) ])
 
 
 function map!(f::Callable, S::SharedArray)
