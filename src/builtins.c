@@ -387,6 +387,9 @@ JL_CALLABLE(jl_f_kwcall)
     f = (jl_function_t*)args[pa-2];
     if (!jl_is_function(f)) {
         // do generic call(args...; kws...) instead
+        // switch (f container pa...) to (container f pa...)
+        args[pa-2] = args[pa-1];     // TODO: this might not be safe
+        args[pa-1] = (jl_value_t*)f;
         f = call_func;
         pa--;
     }

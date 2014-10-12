@@ -670,10 +670,17 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_
                 size_t na = jl_tuple_len(argtypes);
                 jl_tuple_t *newargtypes = jl_alloc_tuple(1 + na);
                 JL_GC_PUSH1(&newargtypes);
-                jl_tupleset(newargtypes, 0, jl_wrap_Type(gf));
-                size_t i;
-                for(i=0; i < na; i++) {
-                    jl_tupleset(newargtypes, i+1, jl_tupleref(argtypes, i));
+                size_t i=0;
+                if (iskw) {
+                    assert(na > 0);
+                    // for kw sorter, keep container argument first
+                    jl_tupleset(newargtypes, 0, jl_tupleref(argtypes, 0));
+                    i++;
+                }
+                jl_tupleset(newargtypes, i, jl_wrap_Type(gf));
+                i++;
+                for(; i < na+1; i++) {
+                    jl_tupleset(newargtypes, i, jl_tupleref(argtypes, i-1));
                 }
                 argtypes = newargtypes;
                 JL_GC_POP();
@@ -690,7 +697,13 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_
                 else {
                     jl_array_grow_beg(al, 1);
                 }
-                jl_cellset(al, 0, (jl_value_t*)jl_gensym());
+                if (iskw) {
+                    jl_cellset(al, 0, jl_cellref(al, 1));
+                    jl_cellset(al, 1, (jl_value_t*)jl_gensym());
+                }
+                else {
+                    jl_cellset(al, 0, (jl_value_t*)jl_gensym());
+                }
             }
             if (!jl_is_gf(gf)) {
                 jl_error("invalid method definition: not a generic function");
