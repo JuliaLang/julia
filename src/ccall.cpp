@@ -1,6 +1,10 @@
 // This file is a part of Julia. License is MIT: http://julialang.org/license
+#include "support/hashing.h"
 
 // --- the ccall, cglobal, and llvm intrinsics ---
+
+// keep track of llvmcall declarations
+static std::set<u_int64_t> llvmcallDecls;
 
 static std::map<std::string, GlobalVariable*> libMapGV;
 static std::map<std::string, GlobalVariable*> symMapGV;
@@ -510,10 +514,20 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
     if (ir == NULL) {
         jl_error("Cannot statically evaluate first argument to llvmcall");
     }
+    jl_value_t *decl = NULL;
+    if (jl_is_tuple(ir)) {
+        // if the IR is a tuple, we expect (declarations, ir)
+        if (jl_nfields(ir) != 2)
+            jl_error("Tuple as first argument to llvmcall must have exactly two children");
+        decl = jl_fieldref(ir,0);
+        ir = jl_fieldref(ir,1);
+        if (!jl_is_byte_string(decl))
+            jl_error("Declarations passed to llvmcall must be a string");
+    }
     bool isString = jl_is_byte_string(ir);
     bool isPtr = jl_is_cpointer(ir);
     if (!isString && !isPtr) {
-        jl_error("First argument to llvmcall must be a string or pointer to an LLVM Function");
+        jl_error("IR passed to llvmcall must be a string or pointer to an LLVM Function");
     }
 
     JL_TYPECHK(llvmcall, type, rt);
@@ -600,6 +614,14 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
         llvm::raw_string_ostream rtypename(rstring);
         rettype->print(rtypename);
 
+        if (decl != NULL) {
+            char *declstr = jl_string_data(decl);
+            u_int64_t declhash = memhash(declstr, strlen(declstr));
+            if (llvmcallDecls.count(declhash) == 0) {
+                ir_stream << "; Declarations\n" << declstr << "\n";
+                llvmcallDecls.insert(declhash);
+            }
+        }
         ir_stream << "; Number of arguments: " << nargt << "\n"
         << "define "<<rtypename.str()<<" @\"" << ir_name << "\"("<<argstream.str()<<") {\n"
         << jl_string_data(ir) << "\n}";
