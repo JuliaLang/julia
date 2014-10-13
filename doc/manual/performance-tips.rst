@@ -185,7 +185,7 @@ share this knowledge with the compiler::
     function foo(a::Array{Any,1})
         x = a[1]::Int32
         b = x+1
-        ...
+        ⋮
     end
 
 Here, we happened to know that the first element of ``a`` would be an
@@ -199,7 +199,7 @@ Declare types of keyword arguments
 Keyword arguments can have declared types::
 
     function with_keyword(x; name::Int = 1)
-        ...
+        ⋮
     end
 
 Functions are specialized on the types of keyword arguments, so these
