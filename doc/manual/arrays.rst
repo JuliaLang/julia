@@ -29,7 +29,7 @@ technical computing languages pass arrays by value, and this is
 convenient in many cases. In Julia, modifications made to input arrays
 within a function will be visible in the parent function. The entire
 Julia array library ensures that inputs are not modified by library
-functions. User code, if it needs to exhibit similar behaviour, should
+functions. User code, if it needs to exhibit similar behavior, should
 take care to create a copy of inputs that it may modify.
 
 Arrays
@@ -130,19 +130,27 @@ An array with a specific element type can be constructed using the syntax
 ``T[A, B, C, ...]``. This will construct a 1-d array with element type
 ``T``, initialized to contain elements ``A``, ``B``, ``C``, etc.
 
-Special syntax is available for constructing arrays with element type
-``Any``:
+An array constructed with an explicit type annotation does not automatically concatenate its arguments.
 
-=================== =========
-Expression          Yields
-=================== =========
-``{A B C ...}``     A 1xN ``Any`` array
-``{A, B, C, ...}``  A 1-d ``Any`` array (vector)
-``{A B; C D; ...}`` A 2-d ``Any`` array
-=================== =========
+.. doctest::
 
-Note that this form does not do any concatenation; each argument becomes
-an element of the resulting array.
+    julia> [[1 2] [3 4]]
+    1x4 Array{Int64,2}:
+     1  2  3  4
+
+    julia> Int64[[1 2] [3 4]]
+    ERROR: `convert` has no method matching convert(::Type{Int64}, ::Array{Int64,2})
+    <BLANKLINE>
+    You might have used a 2d row vector where a 1d column vector was required.
+    Note the difference between 1d column vector [1,2,3] and 2d row vector [1 2 3].
+    You can convert to a column vector with the vec() function.
+     in setindex! at array.jl:307
+
+    julia> Array[[1 2] [3 4]]
+    1x2 Array{Array{T,N},2}:
+     1x2 Array{Int64,2}:
+     1  2  1x2 Array{Int64,2}:
+     3  4
 
 .. _comprehensions:
 
@@ -203,17 +211,6 @@ in the above example we could have avoided declaring ``x`` as constant, and ensu
 that the result is of type ``Float64`` by writing::
 
     Float64[ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
-
-Using curly brackets instead of square brackets is a shorthand notation for an
-array of type ``Any``:
-
-.. doctest::
-
-    julia> { i/2 for i = 1:3 }
-    3-element Array{Any,1}:
-     0.5
-     1.0
-     1.5
 
 .. _man-array-indexing:
 
