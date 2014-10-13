@@ -735,6 +735,15 @@ end
 @test -1//0 == -1//0
 @test -7//0 == -1//0
 
+@test_throws OverflowError -(0x01//0x0f)
+@test_throws OverflowError -(typemin(Int)//1)
+@test_throws OverflowError (typemax(Int)//3) + 1
+@test_throws OverflowError (typemax(Int)//3) * 2
+@test (typemax(Int)//1) * (1//typemax(Int)) == 1
+@test (typemax(Int)//1) / (typemax(Int)//1) == 1
+@test (1//typemax(Int)) / (1//typemax(Int)) == 1
+@test_throws OverflowError (1//2)^63
+
 for a = -5:5, b = -5:5
     if a == b == 0; continue; end
     if ispow2(b)
