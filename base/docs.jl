@@ -55,7 +55,7 @@ function newmethod(funcs, f)
 end
 
 function trackmethod(def)
-  name = unblock(def).args[1].args[1]
+  name = namify(unblock(def))
   f = esc(name)
   quote
     if isdefined($(Expr(:quote, name))) && isgeneric($f)
@@ -119,22 +119,24 @@ function unblock(ex)
   return exs[1]
 end
 
+namify(ex::Expr) = namify(ex.args[1])
+namify(sy::Symbol) = sy
+
 function mdify(ex)
   if isa(ex, String)
     :(@doc_str $(esc(ex)))
-  elseif isexpr(ex, :macrocall) && ex.args[1] == symbol("@mstr")
+  elseif isexpr(ex, :macrocall) && namify(ex) == symbol("@mstr")
     :(@doc_mstr $(esc(ex.args[2])))
   else
     esc(ex)
   end
 end
 
-function macrodoc(meta, def)
-  name = esc(symbol(string("@", unblock(def).args[1].args[1])))
+function namedoc(meta, def, name)
   quote
     @init
     $(esc(def))
-    doc($name, $(mdify(meta)))
+    doc($(esc(name)), $(mdify(meta)))
     nothing
   end
 end
@@ -160,15 +162,18 @@ end
 fexpr(ex) = isexpr(ex, :function) || (isexpr(ex, :(=)) && isexpr(ex.args[1], :call))
 
 function docm(meta, def)
-  isexpr(unblock(def), :macro) && return macrodoc(meta, def)
-  fexpr(unblock(def)) && return funcdoc(meta, def)
-  isexpr(def, :macrocall) && (def = def.args[1])
+  def′ = unblock(def)
+  isexpr(def′, :macro) && return namedoc(meta, def,
+                                         symbol(string("@", namify(def′))))
+  isexpr(def′, :type) && return namedoc(meta, def, namify(def′.args[2]))
+  fexpr(def′) && return funcdoc(meta, def)
+  isexpr(def, :macrocall) && (def = namify(def))
   return objdoc(meta, def)
 end
 
 function docm(ex)
   isexpr(ex, :->) && return docm(ex.args...)
-  isexpr(ex, :macrocall) && (ex = ex.args[1])
+  isexpr(ex, :macrocall) && (ex = namify(ex))
   :(doc($(esc(ex))))
 end
 
