@@ -14,7 +14,7 @@ macro init ()
   META = esc(:META)
   quote
     if !isdefined(:META)
-      const $META = Dict()
+      const $META = ObjectIdDict()
       push!(modules, current_module())
       nothing
     end
