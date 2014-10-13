@@ -15,6 +15,7 @@ macro init ()
   quote
     if !isdefined(:META)
       const $META = ObjectIdDict()
+      doc($META, doc"Documentation metadata for $(string(current_module())).")
       push!(modules, current_module())
       nothing
     end
@@ -181,6 +182,46 @@ macro doc (args...)
   docm(args...)
 end
 
+# Metametadata
+
+@doc """
+  # Documentation
+  The `@doc` macro can be used to both set and retrieve documentation /
+  metadata. By default, documentation is written as Markdown, but any
+  object can be placed before the arrow. For example:
+
+      @doc \"""
+        # The Foo Function
+        `foo(x)`: Foo the hell out of `x`.
+      \""" ->
+      function foo() ...
+
+  The `->` is not required if the object is on the same line, e.g.
+
+      @doc "foo" foo
+
+  # Retrieving Documentation
+  You can retrieve docs for functions, macros and other objects as
+  follows:
+
+      @doc foo
+      @doc @time
+      @doc md""
+
+  # Functions & Methods
+  Placing documentation before a method definition (e.g. `function foo()
+  ...` or `foo() = ...`) will cause that specific method to be
+  documented, as opposed to the whole function. Method docs are
+  concatenated together in the order they were defined to provide docs
+  for the function.
+  """ @doc
+
+@doc "`doc(obj)`: Get the doc metadata for `obj`." doc
+
+@doc """
+  `catdoc(xs...)`: Combine the documentation metadata `xs` into a single meta object.
+  """ catdoc
+
 # Text / HTML objects
 
 import Base: print, writemime
@@ -189,6 +230,17 @@ export HTML, @html_str, @html_mstr
 
 export HTML, Text
 
+@doc """
+`HTML(s)`: Create an object that renders `s` as html.
+
+    HTML("<div>foo</div>")
+
+You can also use a stream for large amounts of data:
+
+    HTML() do io
+      println(io, "<div>foo</div>")
+    end
+""" ->
 type HTML{T}
   content::T
 end
@@ -204,10 +256,12 @@ end
 writemime(io::IO, ::MIME"text/html", h::HTML) = print(io, h.content)
 writemime(io::IO, ::MIME"text/html", h::HTML{Function}) = h.content(io)
 
+@doc "Create an `HTML` object from a literal string." ->
 macro html_str (s)
   :(HTML($s))
 end
 
+@doc (@doc html"") ->
 macro html_mstr (s)
   :(HTML($(Base.triplequoted(s))))
 end
@@ -222,6 +276,17 @@ end
 
 export Text, @text_str, @text_mstr
 
+# @doc """
+# `Text(s)`: Create an object that renders `s` as plain text.
+
+#     HTML("foo")
+
+# You can also use a stream for large amounts of data:
+
+#     Text() do io
+#       println(io, "foo")
+#     end
+# """ ->
 type Text{T}
   content::T
 end
@@ -230,10 +295,12 @@ print(io::IO, t::Text) = print(io, t.content)
 print(io::IO, t::Text{Function}) = t.content(io)
 writemime(io::IO, ::MIME"text/plain", t::Text) = print(io, t)
 
+@doc "Create a `Text` object from a literal string." ->
 macro text_str (s)
   :(Text($s))
 end
 
+@doc (@doc text"") ->
 macro text_mstr (s)
   :(Text($(Base.triplequoted(s))))
 end
