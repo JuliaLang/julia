@@ -2164,19 +2164,26 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     assert(llvm_st->isStructTy());
                     // TODO: move these allocas to the first basic block instead of
                     // frobbing the stack
-                    Instruction *stacksave =
-                        CallInst::Create(Intrinsic::getDeclaration(jl_Module,
-                                                                   Intrinsic::stacksave));
-                    builder.Insert(stacksave);
-                    Value *tempSpace = builder.CreateAlloca(llvm_st);
-                    builder.CreateStore(strct, tempSpace);
-                    jl_value_t *jt = jl_t0(stt->types);
-                    idx = emit_bounds_check(idx, ConstantInt::get(T_size, nfields), ctx);
-                    Value *ptr = builder.CreateGEP(tempSpace, ConstantInt::get(T_size, 0));
-                    Value *fld = typed_load(ptr, idx, jt, ctx);
-                    builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
-                                                                 Intrinsic::stackrestore),
-                                       stacksave);
+                    Value *fld;
+                    if (nfields == 0) {
+                        emit_bounds_check(idx, ConstantInt::get(T_size, nfields), ctx);
+                        fld = UndefValue::get(jl_pvalue_llvmt);
+                    }
+                    else {
+                        Instruction *stacksave =
+                            CallInst::Create(Intrinsic::getDeclaration(jl_Module,
+                                                                       Intrinsic::stacksave));
+                        builder.Insert(stacksave);
+                        Value *tempSpace = builder.CreateAlloca(llvm_st);
+                        builder.CreateStore(strct, tempSpace);
+                        jl_value_t *jt = jl_t0(stt->types);
+                        idx = emit_bounds_check(idx, ConstantInt::get(T_size, nfields), ctx);
+                        Value *ptr = builder.CreateGEP(tempSpace, ConstantInt::get(T_size, 0));
+                        fld = typed_load(ptr, idx, jt, ctx);
+                        builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
+                                                                     Intrinsic::stackrestore),
+                                           stacksave);
+                    }
                     JL_GC_POP();
                     return fld;
                 }
