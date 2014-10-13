@@ -1003,6 +1003,10 @@ b1 = triu(randbool(n1, n2))
 b1 = triu(randbool(n2, n1))
 @check_bit_operation istriu(b1) Bool
 
+b1 = randbool(n1,n1)
+b1 |= b1.'
+@check_bit_operation issym(b1) Bool
+
 b1 = randbool(n1)
 b2 = randbool(n2)
 @check_bit_operation kron(b1, b2) BitVector
