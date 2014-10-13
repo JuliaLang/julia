@@ -71,8 +71,8 @@ differences that may trip up Julia users accustomed to MATLAB:
    across arrays and can be used to combine logical arrays, but note the
    difference in order of operations—parentheses may be required (e.g.,
    to select elements of ``A`` equal to 1 or 2 use ``(A .== 1) | (A .== 2)``).
--  The elements of a collection can be passed as arguments to a function
-   using ``...``, as in ``xs=[1,2]; f(xs...)``.
+-  The elements of a collection can be passed ("splatted") as arguments to a
+   function using ``...``, as in ``xs=[1,2]; f(xs...)``.
 -  Julia's ``svd`` returns singular values as a vector instead of as a
    full diagonal matrix.
 -  In Julia, ``...`` is not used to continue lines of code. Instead, incomplete

@@ -50,9 +50,9 @@ Real applications will not just need to execute expressions, but also return the
         printf("sqrt(2.0) in C: %e \n", ret_unboxed);
     }
 
-In order to check whether ``ret`` is of a specific Julia type, we can use the ``jl_is_...`` functions. By typing ``typeof(sqrt(2.0))`` into the Julia shell we can see that the return type is ``Float64`` (``double`` in C). To convert the boxed Julia value into a C double the ``jl_unbox_float64`` function is used in the above code snippet.
+In order to check whether ``ret`` is of a specific Julia type, we can use the ``jl_is_⋯`` functions. By typing ``typeof(sqrt(2.0))`` into the Julia shell we can see that the return type is ``Float64`` (``double`` in C). To convert the boxed Julia value into a C double the ``jl_unbox_float64`` function is used in the above code snippet.
 
-Corresponding ``jl_box_...`` functions are used to convert the other way::
+Corresponding ``jl_box_⋯`` functions are used to convert the other way::
 
     jl_value_t *a = jl_box_float64(3.0);
     jl_value_t *b = jl_box_float32(3.0f);
@@ -97,7 +97,7 @@ Several Julia values can be pushed at once using the ``JL_GC_PUSH2`` , ``JL_GC_P
     JL_GC_PUSHARGS(args, 2); // args can now hold 2 `jl_value_t*` objects
     args[0] = some_value;
     args[1] = some_other_value;
-    // Do something with args (e.g. call jl_... functions)
+    // Do something with args (e.g. call jl_⋯ functions)
     JL_GC_POP();
 
 Manipulating the Garbage Collector
@@ -212,7 +212,7 @@ When writing Julia callable functions, it might be necessary to validate argumen
 General exceptions can be raised using the funtions::
 
     void jl_error(const char *str);
-    void jl_errorf(const char *fmt, ...);
+    void jl_errorf(const char *fmt, ⋯);
 
 ``jl_error`` takes a C string, and ``jl_errorf`` is called like ``printf``::
 

@@ -917,7 +917,7 @@ function <man-anonymous-functions>`. This can be done either
 directly or by use of a convenience macro::
 
     function mytask(myarg)
-        ...
+        ⋮
     end
 
     taskHdl = Task(() -> mytask(7))

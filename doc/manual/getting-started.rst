@@ -45,7 +45,7 @@ To evaluate expressions written in a source file ``file.jl``, write
 To run code in a file non-interactively, you can give it as the first
 argument to the julia command::
 
-    $ julia script.jl arg1 arg2...
+    $ julia script.jl arg1 arg2⋯
 
 As the example implies, the following command-line arguments to julia
 are taken as command-line arguments to the program ``script.jl``, passed
@@ -89,8 +89,8 @@ put it in ``~/.juliarc.jl``:
     $ echo 'println("Greetings! 你好! 안녕하세요?")' > ~/.juliarc.jl
     $ julia
     Greetings! 你好! 안녕하세요?
-    
-    ...
+
+    ⋮
 
 .. raw:: latex
 
@@ -99,7 +99,7 @@ put it in ``~/.juliarc.jl``:
 There are various ways to run Julia code and provide options, similar to
 those available for the ``perl`` and ``ruby`` programs::
 
-    julia [options] [program] [args...]
+    julia [options] [program] [args⋯]
      -v, --version            Display version information
      -h, --help               Print this message
      -q, --quiet              Quiet startup without banner
