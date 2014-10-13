@@ -64,13 +64,14 @@ int jl_is_type(jl_value_t *v)
         size_t i, l = jl_tuple_len(t);
         for(i=0; i < l; i++) {
             jl_value_t *vv = jl_tupleref(t, i);
-            if (!jl_is_typevar(vv) && !jl_is_type(vv))
+            if (!jl_is_type(vv))
                 return 0;
             if (i < l-1 && jl_is_vararg_type(vv))
                 return 0;
         }
         return 1;
     }
+    if (jl_is_typevar(v)) return 1;
     return jl_is_nontuple_type(v);
 }
 
@@ -720,11 +721,19 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
                 jl_value_t *ti = jl_type_intersection(b, penv->data[i+1]);
                 if (ti == (jl_value_t*)jl_bottom_type)
                     return ti;
-                penv->data[i+1] = ti;
-                return (jl_value_t*)a;
+                break;
             }
         }
         extend((jl_value_t*)a, b, penv);
+        if (jl_is_typevar(b)) {
+            return (jl_value_t*)a;
+        }
+        else {
+            jl_tvar_t *new_b = jl_new_typevar(underscore_sym, jl_bottom_type, b);
+            extend((jl_value_t*)new_b, b, penv);
+            extend((jl_value_t*)new_b, (jl_value_t*)a, penv);
+            return (jl_value_t*)new_b;
+        }
     }
     return (jl_value_t*)a;
 }
@@ -1215,6 +1224,11 @@ static jl_value_t *meet(jl_value_t *X, jl_value_t *Y, variance_t var)
             if (var==invariant) {
                 return (jl_types_equal(X,Y) ? X : NULL);
             }
+            else {
+                if (jl_subtype(X,Y,0)) return X;
+                if (jl_subtype(Y,X,0)) return Y;
+                return NULL;
+            }
         }
         return (jl_subtype(X,Y,0) ? X : NULL);
     }
@@ -1225,120 +1239,145 @@ static jl_value_t *meet(jl_value_t *X, jl_value_t *Y, variance_t var)
     return (v == (jl_value_t*)jl_bottom_type ?  NULL : v);
 }
 
-static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
-{
-    //JL_PRINTF(JL_STDOUT, "\n");
-    jl_value_t *v=NULL;
-    for(int i=0; i < env->n; i+=2) {
-        jl_value_t *T = env->data[i];
-        jl_value_t *S = env->data[i+1];
-        jl_value_t **pT;
-        pT = tvar_lookup(soln, &T);
-        if (pT != &T) {
-            // T=U is in the results
-            jl_value_t **pU = pT;
-            //jl_value_t *U = *pU;
-            if (is_btv(S)) {
-                // S is a typevar
-                jl_value_t **pS;
-                pS = tvar_lookup(soln, &S);
-                if (pS != &S) {
-                    // S=R is in the results
-                    jl_value_t **pR = pS;
-                    *pR = meet(*pR, *pU, invariant);
-                    if (*pR == NULL) {
-                        return 0;
-                    }
-                }
-                else {
-                    v = meet(*pU, S, covariant);
-                    if (v == NULL) {
-                        return 0;
-                    }
-                    extend(S, v, soln);
-                }
-                if (pS != pU)
-                    *pU = S;
-            }
-            else {
-                if (jl_is_long(*pU) && jl_is_long(S)) {
-                    int bot = 0;
-                    long mv = meet_tuple_lengths(~jl_unbox_long(S),
-                                                  jl_unbox_long(*pU), &bot);
-                    if (bot)
-                        return 0;
-                    v = jl_box_long(mv);
-                }
-                else if (!jl_is_type(S) && jl_is_typevar(*pU)) {
-                    // combine T<:2 with T==N  =>  T==N
-                    v = *pU;
-                }
-                else {
-                    if (!jl_subtype(*pU, S, 0)) {
-                        // T<:S and T=U and !(U<:S)
-                        return 0;
-                    }
-                    v = meet(*pU, S, covariant);
-                    if (v == NULL)
-                        return 0;
-                }
-                if (is_btv(*pU)) {
-                    extend(*pU, v, soln);
-                }
-                else {
-                    *pU = v;
-                }
-            }
-        }
-        else {
-            if (jl_is_typevar(S)) {
-                if (*tvar_lookup(soln, &S) != T)
-                    extend(T, S, soln);
-            }
-            else if (jl_is_type(S)) {
-                // ints in the <: env are not definite
-                if (jl_is_leaf_type(S) || S == (jl_value_t*)jl_bottom_type) {
-                    v = S;
-                }
-                else {
-                    assert(jl_is_typevar(T));
-                    v = meet(S, T, covariant);
-                    if (v == NULL)
-                        return 0;
-                    if (!jl_is_typevar(v)) {
-                        v = (jl_value_t*)
-                            jl_new_typevar(underscore_sym,
-                                           (jl_value_t*)jl_bottom_type, v);
-                    }
-                }
-                extend(T, v, soln);
-            }
-        }
-    }
-    return 1;
-}
-
 /*
-char *type_summary(jl_value_t *t)
-{
-    if (jl_is_tuple(t)) return "Tuple";
-    if (jl_is_datatype(t))
-        return ((jl_datatype_t*)t)->name->name->name;
-    return "?";
-}
 void print_env(cenv_t *soln)
 {
     for(int i=0; i < soln->n; i+=2) {
         jl_value_t *T, *S;
         T = soln->data[i]; S = soln->data[i+1];
-        JL_PRINTF(JL_STDOUT,
-                   "%s@%x=%s ",
-                   ((jl_tvar_t*)T)->name->name, T,
-                   type_summary(S));
+        JL_PRINTF(JL_STDOUT, "%s@%x=", ((jl_tvar_t*)T)->name->name, T);
+        jl_static_show(JL_STDOUT, S);
+        JL_PRINTF(JL_STDOUT, " ");
     }
     JL_PRINTF(JL_STDOUT, "\n");
 }
 */
+
+static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
+{
+    while (1) {
+        int old_n = soln->n;
+
+        // 1. replace each T=S with T=find(S)
+        for(int i=0; i < soln->n; i+=2) {
+            jl_value_t **pS = &soln->data[i+1];
+            if (jl_is_typevar(*pS))
+                *pS = *tvar_lookup(soln, pS);
+        }
+
+        // 2. instantiate all RHSes using soln
+        if (soln->n > 0) {
+            for(int i=0; i < env->n; i+=2) {
+                jl_value_t **pS = &env->data[i+1];
+                JL_TRY {
+                    *pS = jl_instantiate_type_with(*pS, &soln->data[0], soln->n/2);
+                }
+                JL_CATCH {
+                }
+            }
+        }
+
+        // 3. given T, let S´ = intersect(all S s.t. (T=S) or (S=T) ∈ env). add (T=S´) to soln.
+        for(int i=0; i < env->n; i+=2) {
+            jl_value_t *T = env->data[i];
+            jl_value_t **pS = &env->data[i+1];
+            jl_value_t *S = *pS;
+            if (!jl_is_typevar(S)) {
+                for(int j=i+2; j < env->n; j+=2) {
+                    jl_value_t *TT = env->data[j];
+                    jl_value_t *SS = env->data[j+1];
+                    if (TT == T) {
+                        // found T=SS in env
+                        if (!jl_is_typevar(SS)) {
+                            jl_value_t *m = meet(S, SS, covariant);
+                            if (m == NULL) return 0;
+                            S = m;
+                        }
+                    }
+                    else if (SS == T) {
+                        // found TT=T in env; meet with TT
+                        jl_value_t **pTT = tvar_lookup(soln, &TT);
+                        if (pTT != &TT) {
+                            jl_value_t *m = meet(S, *pTT, covariant);
+                            if (m == NULL) return 0;
+                            S = m;
+                        }
+                    }
+                }
+
+                if (!(jl_is_leaf_type(S) || S == (jl_value_t*)jl_bottom_type)) {
+                    goto next_in_env;
+                }
+
+                jl_value_t **pT = tvar_lookup(soln, &T);
+                if (pT != &T) {
+                    if (jl_is_long(S) && jl_is_long(*pT)) {
+                        int bot = 0;
+                        long mv = meet_tuple_lengths(~jl_unbox_long(S), jl_unbox_long(*pT), &bot);
+                        if (bot)
+                            return 0;
+                        // NOTE: this is unused. can we do anything with it?
+                        (void)mv;
+                        //S = jl_box_long(mv);
+                    }
+                    else {
+                        if (meet(*pT,S,covariant) == NULL)
+                            return 0;
+                    }
+                }
+                else {
+                    extend(T, S, soln);
+                }
+            }
+            else {
+                jl_value_t **pT = tvar_lookup(soln, &T);
+                if (pT != &T) {
+                    if (tvar_lookup(soln, &S) == &S) {
+                        jl_value_t *v = meet(S, *pT, covariant);
+                        if (v == NULL) return 0;
+                        extend(S, v, soln);
+                        *pT = S;
+                    }
+                }
+            }
+        next_in_env:
+            ;
+        }
+        if (soln->n == old_n)
+            break;
+    }
+
+    for(int i=0; i < env->n; i+=2) {
+        jl_value_t *T = env->data[i];
+        jl_value_t **pS = &env->data[i+1];
+        jl_value_t *S = *pS;
+        if (tvar_lookup(soln, &T) == &T) {
+            for(int j=i+2; j < env->n; j+=2) {
+                jl_value_t *TT = env->data[j];
+                jl_value_t *SS = env->data[j+1];
+                if (TT == T) {
+                    jl_value_t *m = meet(S, SS, covariant);
+                    if (m == NULL) return 0;
+                    S = m;
+                }
+                else if (SS == T) {
+                    jl_value_t *m = meet(S, *tvar_lookup(soln, &TT), covariant);
+                    if (m == NULL) return 0;
+                    S = m;
+                }
+            }
+            if (jl_is_type(S)) {
+                if (!jl_is_typevar(S) && !jl_is_leaf_type(S) && S != jl_bottom_type) {
+                    S = (jl_value_t*)jl_new_typevar(underscore_sym,
+                                                    (jl_value_t*)jl_bottom_type, S);
+                }
+                extend(T, S, soln);
+            }
+        }
+    }
+
+    return 1;
+}
 
 jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
                                           jl_tuple_t **penv, jl_tuple_t *tvars)
@@ -2932,7 +2971,7 @@ void jl_init_types(void)
     jl_bottom_type = (jl_value_t*)jl_new_struct(jl_uniontype_type, jl_null);
 
     jl_tvar_type = jl_new_datatype(jl_symbol("TypeVar"),
-                                   jl_any_type, jl_null,
+                                   jl_type_type, jl_null,
                                    jl_tuple(4, jl_symbol("name"),
                                             jl_symbol("lb"), jl_symbol("ub"),
                                             jl_symbol("bound")),

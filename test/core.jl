@@ -41,7 +41,7 @@ let T = TypeVar(:T,true)
                   (Int, Array{Int,1}))
 
     @test isequal(typeintersect((T, AbstractArray{T}),(Int, Array{Number,1})),
-                  Bottom)
+                  (Int, Array{Number,1}))
 
     @test isequal(typeintersect((T, AbstractArray{T}),(Any, Array{Number,1})),
                   (Number, Array{Number,1}))
@@ -68,6 +68,8 @@ let T = TypeVar(:T,true)
 
     @test typeintersect(Type{(Bool,Int...)}, Type{(T...)}) === Bottom
     @test typeintersect(Type{(Bool,Int...)}, Type{(T,T...)}) === Bottom
+
+    @test typeintersect((Rational{T},T), (Rational{Integer},Int)) === (Rational{Integer},Int)
 end
 let N = TypeVar(:N,true)
     @test isequal(typeintersect((NTuple{N,Integer},NTuple{N,Integer}),
@@ -651,7 +653,7 @@ begin
     c = Vector[a]
 
     @test my_func(c,c)==0
-    @test_throws MethodError my_func(a,c)
+    @test my_func(a,c)==1
 end
 
 begin
