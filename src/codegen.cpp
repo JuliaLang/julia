@@ -4508,6 +4508,8 @@ static Function *emit_function(jl_lambda_info_t *lam)
         m = new Module(funcName.str(), jl_LLVMContext);
         jl_setup_module(m);
     }
+    // clear the list of llvmcall declarations as we'll be using a clean module
+    llvmcallDecls.clear();
 #else
     m = jl_Module;
 #endif
