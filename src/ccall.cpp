@@ -2,15 +2,15 @@
 
 // --- the ccall intrinsic ---
 
+// keep track of llvmcall declarations
+static std::set<u_int64_t> llvmcallDecls;
+
 // --- library symbol lookup ---
 
 // map from "libX" to full soname "libX.so.ver"
 #if defined(__linux__) || defined(__FreeBSD__)
 static std::map<std::string, std::string> sonameMap;
 static bool got_sonames = false;
-
-// keep track of llvmcall declarations
-static std::set<u_int64_t> llvmcallDecls;
 
 extern "C" DLLEXPORT void jl_read_sonames(void)
 {
