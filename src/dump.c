@@ -933,8 +933,7 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
 
 extern jl_array_t *jl_module_init_order;
 
-DLLEXPORT
-void jl_save_system_image(char *fname)
+DLLEXPORT void jl_save_system_image(char *fname)
 {
     jl_gc_collect();
     jl_gc_collect();
@@ -949,17 +948,6 @@ void jl_save_system_image(char *fname)
 
     // orphan old Base module if present
     jl_base_module = (jl_module_t*)jl_get_global(jl_main_module, jl_symbol("Base"));
-
-    // delete cached slow ASCIIString constructor if present
-    jl_methtable_t *mt = jl_gf_mtable((jl_function_t*)jl_ascii_string_type);
-    jl_array_t *spec = mt->defs->func->linfo->specializations;
-    if (spec != NULL && jl_array_len(spec) > 0 &&
-        ((jl_lambda_info_t*)jl_cellref(spec,0))->inferred == 0) {
-        mt->cache = (jl_methlist_t*)JL_NULL;
-        mt->cache_arg1 = (jl_array_t*)JL_NULL;
-        mt->defs->func->linfo->tfunc = (jl_value_t*)jl_null;
-        mt->defs->func->linfo->specializations = NULL;
-    }
 
     jl_idtable_type = jl_get_global(jl_base_module, jl_symbol("ObjectIdDict"));
 
