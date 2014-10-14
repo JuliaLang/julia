@@ -138,7 +138,7 @@ export
     GetfieldNode, NewvarNode,
     # object model functions
     fieldtype, getfield, setfield!, yieldto, throw, tuple, is, ===, isdefined,
-    # arraylen, arrayref, arrayset, arraysize, tuplelen, tupleref, convert_default,
+    # arraylen, arrayref, arrayset, arraysize, tuplelen, tupleref,
     # _apply, kwcall,
     # sizeof    # not exported, to avoid conflicting with Base.sizeof
     # type reflection
@@ -167,9 +167,6 @@ export
 
 
 const (===) = is
-
-# simple convert for use by constructors of types in Core
-convert(T, x) = convert_default(T, x, convert)
 
 abstract Number
 abstract Real     <: Number
@@ -274,3 +271,6 @@ Module(name::Symbol) = ccall(:jl_f_new_module, Any, (Any,), name)::Module
 Module() = Module(:anonymous)
 
 Task(f::ANY) = ccall(:jl_new_task, Any, (Any, Int), f::Function, 0)::Task
+
+# simple convert for use by constructors of types in Core
+convert{T}(::Type{T}, x::T) = x

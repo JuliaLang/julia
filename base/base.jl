@@ -6,19 +6,22 @@ typealias Callable Union(Function,DataType)
 
 const Bottom = Union()
 
-convert(T, x) = convert_default(T, x, convert)
+# fall back to Core.call
+call(args...) = Core.call(args...)
+
+convert{T}(::Type{T}, x::T) = x
 
 convert(::(), ::()) = ()
 convert(::Type{Tuple}, x::Tuple) = x
-
-# fall back to Core.call
-call(args...) = Core.call(args...)
 
 # allow convert to be called as if it were a single-argument constructor
 # call(T::Type, x) = convert(T, x)
 
 argtail(x, rest...) = rest
 tupletail(x::Tuple) = argtail(x...)
+
+convert(T::(Type, Type...), x::(Any, Any...)) =
+    tuple(convert(T[1],x[1]), convert(tupletail(T), tupletail(x))...)
 
 convert(T::(Any, Any...), x::(Any, Any...)) =
     tuple(convert(T[1],x[1]), convert(tupletail(T), tupletail(x))...)

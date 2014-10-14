@@ -628,16 +628,6 @@ JL_CALLABLE(jl_f_field_type)
 
 // conversion -----------------------------------------------------------------
 
-JL_CALLABLE(jl_f_convert_default)
-{
-    jl_value_t *to = args[0];
-    jl_value_t *x = args[1];
-    if (!jl_subtype(x, (jl_value_t*)to, 1)) {
-        jl_no_method_error((jl_function_t*)args[2], args, 2);
-    }
-    return x;
-}
-
 DLLEXPORT void *jl_symbol_name(jl_sym_t *s)
 {
     return s->name;
@@ -1029,7 +1019,6 @@ void jl_init_primitives(void)
     add_builtin_func("yieldto", jl_f_yieldto);
     
     // functions for internal use
-    add_builtin_func("convert_default", jl_f_convert_default);
     add_builtin_func("tupleref",  jl_f_tupleref);
     add_builtin_func("tuplelen",  jl_f_tuplelen);
     add_builtin_func("getfield",  jl_f_get_field);
@@ -1142,7 +1131,7 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
             JL_PUTS(".", out); n += 1;
         }
         n += JL_PRINTF(out, "%s", dv->name->name->name);
-        if (dv->parameters) {
+        if (dv->parameters && (jl_value_t*)dv != dv->name->primary) {
             size_t j, tlen = jl_tuple_len(dv->parameters);
             if (tlen > 0) {
                 n += JL_PRINTF(out, "{");
@@ -1224,8 +1213,11 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
         n += jl_static_show(out, ((jl_typector_t*)v)->body);
     }
     else if (jl_is_typevar(v)) {
-        n += jl_static_show(out, ((jl_tvar_t*)v)->lb);
-        n += JL_PRINTF(out, "<:%s<:", ((jl_tvar_t*)v)->name->name);
+        if (((jl_tvar_t*)v)->lb != jl_bottom_type) {
+            n += jl_static_show(out, ((jl_tvar_t*)v)->lb);
+            n += JL_PRINTF(out, "<:");
+        }
+        n += JL_PRINTF(out, "%s<:", ((jl_tvar_t*)v)->name->name);
         n += jl_static_show(out, ((jl_tvar_t*)v)->ub);
     }
     else if (jl_is_module(v)) {

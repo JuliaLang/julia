@@ -9,8 +9,7 @@ eval(m,x) = Core.eval(m,x)
 include = Core.include
 
 using Core: Intrinsics, arraylen, arrayref, arrayset, arraysize,
-            tuplelen, tupleref, convert_default, kwcall, _apply,
-            typeassert, apply_type
+            tuplelen, tupleref, kwcall, _apply, typeassert, apply_type
 
 include("exports.jl")
 
