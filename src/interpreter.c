@@ -60,14 +60,12 @@ static jl_value_t *do_call(jl_function_t *f, jl_value_t **args, size_t nargs,
     size_t i;
     argv[0] = (jl_value_t*)f;
     for(i=1; i < nargs+1; i++) argv[i] = NULL;
+    i = 0;
     if (eval0) { /* 0-th argument has already been evaluated */
-        argv[1] = eval0;
-        for(i=1; i < nargs; i++)
-            argv[i+1] = eval(args[i], locals, nl);
+        argv[1] = eval0; i++;
     }
-    else {
-        for(i=0; i < nargs; i++)
-            argv[i+1] = eval(args[i], locals, nl);
+    for(; i < nargs; i++) {
+        argv[i+1] = eval(args[i], locals, nl);
     }
     jl_value_t *result = jl_apply(f, &argv[1], nargs);
     JL_GC_POP();

@@ -1309,8 +1309,6 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     end
 
     #if dbg print("typeinf ", linfo.name, " ", atypes, "\n") end
-    #ccall(:jl_,Void,(Any,),linfo.name)
-    #ccall(:jl_,Void,(Any,),atypes)
 
     if cop
         sparams = tuple(sparams..., linfo.sparams...)
@@ -1590,7 +1588,6 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         # just the return type in place of it.
         tfarr[idx+1] = rec ? frame.result : fulltree
         tfarr[idx+2] = rec
-        #tfunc_idx = idx+1
     else
         def.tfunc[tfunc_idx] = rec ? frame.result : fulltree
         def.tfunc[tfunc_idx+1] = rec

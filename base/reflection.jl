@@ -126,9 +126,6 @@ function methods(f::Function)
     f.env
 end
 
-#methods(t::DataType) = (_methods(t,Tuple,0);  # force constructor creation
-#                        t.env)
-
 function length(mt::MethodTable)
     n = 0
     d = mt.defs

@@ -313,8 +313,7 @@ JL_CALLABLE(jl_f_apply)
             }
         }
         if (jl_is_tuple(args[1])) {
-            return jl_apply(f, &jl_tupleref(args[1],0),
-                            jl_tuple_len(args[1]));
+            return jl_apply(f, &jl_tupleref(args[1],0), jl_tuple_len(args[1]));
         }
     }
     jl_value_t *argarr = NULL;
@@ -332,8 +331,7 @@ JL_CALLABLE(jl_f_apply)
         else {
             if (jl_append_any_func == NULL) {
                 jl_append_any_func =
-                    (jl_function_t*)jl_get_global(jl_base_module,
-                                                  jl_symbol("append_any"));
+                    (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("append_any"));
                 if (jl_append_any_func == NULL) {
                     // error if append_any not available
                     JL_TYPECHK(apply, tuple, args[i]);
