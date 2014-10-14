@@ -258,7 +258,7 @@ TypeVar(n::Symbol, lb::ANY, ub::ANY, b::Bool) =
 
 TypeConstructor(p::ANY, t::ANY) = ccall(:jl_new_type_constructor, Any, (Any, Any), p::Tuple, t::Type)
 
-Expr(hd::Symbol, args::ANY...) = ccall(:jl_new_expr, Any, (Any, Any), hd, args)::Expr
+Expr(args::ANY...) = _expr(args...)
 
 LineNumberNode(n::Int) = ccall(:jl_new_struct, Any, (Any,Any...), LineNumberNode, n)::LineNumberNode
 LabelNode(n::Int) = ccall(:jl_new_struct, Any, (Any,Any...), LabelNode, n)::LabelNode
@@ -273,4 +273,5 @@ Module() = Module(:anonymous)
 Task(f::ANY) = ccall(:jl_new_task, Any, (Any, Int), f::Function, 0)::Task
 
 # simple convert for use by constructors of types in Core
+convert(::Type{Any}, x::ANY) = x
 convert{T}(::Type{T}, x::T) = x
