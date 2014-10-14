@@ -784,8 +784,7 @@
 (define (ctor-signature name params bounds method-params sig)
   (if (null? params)
       (if (null? method-params)
-	  (cons `(call call
-		       ,@(arglist-unshift sig `(|::| ,(gensy) (curly Type ,name))))
+	  (cons `(call call ,@(arglist-unshift sig `(|::| ,(gensy) (curly Type ,name))))
 		params)
 	  (cons `(call (curly call ,@method-params)
 		       ,@(arglist-unshift sig `(|::| ,(gensy) (curly Type ,name))))
@@ -799,8 +798,7 @@
 						 (gensy)
 						 p))
 				 params)))
-	    (cons `(call (curly call
-				,@(map (lambda (p b) `(<: ,p ,b)) new-params bounds)
+	    (cons `(call (curly call ,@(map (lambda (p b) `(<: ,p ,b)) new-params bounds)
 				,@method-params)
 			 ,@(arglist-unshift sig `(|::| ,(gensy) (curly Type (curly ,name ,@new-params)))))
 		  new-params)))))
@@ -874,8 +872,7 @@
 	       field-names)
      (if (null? params)
 	 `(block
-	   (global ,name)
-	   (const ,name)
+	   (global ,name) (const ,name)
 	   (composite_type ,name (tuple ,@params)
 			   (tuple ,@(map (lambda (x) `',x) field-names))
 			   ,super (tuple ,@field-types) ,mut)
@@ -883,8 +880,7 @@
 	    (lambda ()
 	      (scope-block
 	       (block
-		(global ,name)
-		(global call)
+		(global ,name) (global call)
 		,@(map (lambda (c)
 			 (rewrite-ctor c name '() '() field-names field-types mut))
 		       defs2)))))
@@ -893,8 +889,7 @@
 	 `(block
 	   (scope-block
 	    (block
-	     (global ,name)
-	     (const ,name)
+	     (global ,name) (const ,name)
 	     ,@(map (lambda (v) `(local ,v)) params)
 	     ,@(map make-assignment params (symbols->typevars params bounds #t))
 	     (composite_type ,name (tuple ,@params)
@@ -905,8 +900,7 @@
 	    (lambda ()
 	      (scope-block
 	       (block
-		(global ,name)
-		(global call)
+		(global ,name) (global call)
 		,@(map (lambda (c)
 			 (rewrite-ctor c name params bounds field-names field-types mut))
 		       defs2)))))

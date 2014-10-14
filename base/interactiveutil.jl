@@ -265,9 +265,6 @@ function type_close_enough(x::ANY, t::ANY)
 end
 
 function methodswith(t::Type, f::Callable, showparents::Bool=false, meths = Method[])
-    if isa(f,DataType)
-        methods(f) # force constructor creation
-    end
     if !isa(f.env, MethodTable)
         return meths
     end

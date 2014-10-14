@@ -2171,8 +2171,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     }
                     else {
                         Instruction *stacksave =
-                            CallInst::Create(Intrinsic::getDeclaration(jl_Module,
-                                                                       Intrinsic::stacksave));
+                            CallInst::Create(Intrinsic::getDeclaration(jl_Module,Intrinsic::stacksave));
                         builder.Insert(stacksave);
                         Value *tempSpace = builder.CreateAlloca(llvm_st);
                         builder.CreateStore(strct, tempSpace);
@@ -2180,8 +2179,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                         idx = emit_bounds_check(idx, ConstantInt::get(T_size, nfields), ctx);
                         Value *ptr = builder.CreateGEP(tempSpace, ConstantInt::get(T_size, 0));
                         fld = typed_load(ptr, idx, jt, ctx);
-                        builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
-                                                                     Intrinsic::stackrestore),
+                        builder.CreateCall(Intrinsic::getDeclaration(jl_Module,Intrinsic::stackrestore),
                                            stacksave);
                     }
                     JL_GC_POP();
@@ -2353,8 +2351,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx, jl_
         definitely_function = jl_is_func(f);
         definitely_not_function = !definitely_function;
         if (jl_typeis(f, jl_intrinsic_type) || jl_is_func(f)) {
-            result = emit_known_call((jl_value_t*)f, args, nargs, ctx,
-                                     &theFptr, &f, expr);
+            result = emit_known_call((jl_value_t*)f, args, nargs, ctx, &theFptr, &f, expr);
             assert(!jl_typeis(f,jl_intrinsic_type) || result!=NULL);
         }
         else {
@@ -2376,8 +2373,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx, jl_
     if (definitely_not_function) {
         if (f == NULL) {
             f = jl_module_call_func(ctx->module);
-            Value *r = emit_known_call((jl_value_t*)f,
-                                       args-1, nargs+1, ctx, &theFptr, &f, expr);
+            Value *r = emit_known_call((jl_value_t*)f, args-1, nargs+1, ctx, &theFptr, &f, expr);
             assert(r == NULL);
             assert(theFptr != NULL);
         }

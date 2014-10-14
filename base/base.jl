@@ -2,7 +2,7 @@ import Core.Array  # to add methods
 
 const NonTupleType = Union(DataType,UnionType,TypeConstructor)
 
-typealias Callable Union(Function,DataType)
+typealias Callable Function
 
 const Bottom = Union()
 
@@ -22,7 +22,6 @@ tupletail(x::Tuple) = argtail(x...)
 
 convert(T::(Type, Type...), x::(Any, Any...)) =
     tuple(convert(T[1],x[1]), convert(tupletail(T), tupletail(x))...)
-
 convert(T::(Any, Any...), x::(Any, Any...)) =
     tuple(convert(T[1],x[1]), convert(tupletail(T), tupletail(x))...)
 
