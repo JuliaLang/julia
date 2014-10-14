@@ -136,6 +136,7 @@ t_func[Union] = (0, Inf,
                              else
                                  Type
                              end))
+t_func[_expr] = (1, Inf, (args...)->Expr)
 t_func[method_exists] = (2, 2, cmp_tfunc)
 t_func[applicable] = (1, Inf, (f, args...)->Bool)
 t_func[tuplelen] = (1, 1, x->Int)

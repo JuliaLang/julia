@@ -221,6 +221,7 @@ int jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err)
 jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i)
 {
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
+    assert(i < jl_tuple_len(st->names));
     size_t offs = jl_field_offset(st,i) + sizeof(void*);
     if (st->fields[i].isptr) {
         return *(jl_value_t**)((char*)v + offs);
@@ -892,16 +893,17 @@ jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
     return ex;
 }
 
-DLLEXPORT jl_value_t *jl_new_expr(jl_sym_t *head, jl_tuple_t *args)
+JL_CALLABLE(jl_f_new_expr)
 {
-    size_t nargs = jl_tuple_len(args);
-    jl_array_t *ar = jl_alloc_cell_1d(nargs);
+    JL_NARGSV(Expr, 1);
+    JL_TYPECHK(Expr, symbol, args[0]);
+    jl_array_t *ar = jl_alloc_cell_1d(nargs-1);
     JL_GC_PUSH1(&ar);
-    for(size_t i=0; i < nargs; i++)
-        jl_cellset(ar, i, jl_tupleref(args,i));
+    for(size_t i=0; i < nargs-1; i++)
+        jl_cellset(ar, i, args[i+1]);
     jl_expr_t *ex = (jl_expr_t*)alloc_4w();
     ex->type = (jl_value_t*)jl_expr_type;
-    ex->head = head;
+    ex->head = (jl_sym_t*)args[0];
     ex->args = ar;
     ex->etype = (jl_value_t*)jl_any_type;
     JL_GC_POP();

@@ -3213,7 +3213,7 @@ So far only the second case can actually occur.
 	((not (contains (lambda (e) (and (pair? e) (eq? (car e) '$))) e))
 	 `(copyast (inert ,e)))
 	((not (any splice-expr? e))
-	 `(call (top Expr) ,.(map expand-backquote e)))
+	 `(call (top _expr) ,.(map expand-backquote e)))
 	(else
 	 (let loop ((p (cdr e)) (q '()))
 	   (if (null? p)
