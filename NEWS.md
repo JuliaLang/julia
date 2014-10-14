@@ -75,6 +75,8 @@ Library improvements
 
   * `deepcopy` recurses through immutable types and makes copies of their mutable fields ([#8560]).
 
+  * Givens type doesn't have a size anymore and is no longer a subtype of AbstractMatrix ([#8660])
+
 Deprecated or removed
 ---------------------
 
