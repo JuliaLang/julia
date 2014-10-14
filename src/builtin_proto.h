@@ -29,7 +29,6 @@ JL_CALLABLE(jl_f_arrayref);
 JL_CALLABLE(jl_f_arrayset);
 JL_CALLABLE(jl_f_arraysize);
 JL_CALLABLE(jl_f_instantiate_type);
-JL_CALLABLE(jl_f_convert_default);
 JL_CALLABLE(jl_f_typevar);
 JL_CALLABLE(jl_f_union);
 JL_CALLABLE(jl_f_methodexists);

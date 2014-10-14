@@ -159,21 +159,6 @@ t_func[arraysize] = (1, 2, arraysize_tfunc)
 t_func[pointerref] = (2,2,(a,i)->(isa(a,DataType) && a<:Ptr ? a.parameters[1] : Any))
 t_func[pointerset] = (3, 3, (a,v,i)->a)
 
-const convert_default_tfunc = function (to, from, f)
-    to === () && return to
-    !isType(to) && return Any
-    to = to.parameters[1]
-
-    if isa(to,TypeVar)
-        return to
-    end
-    if from <: to
-        return from
-    end
-    return typeintersect(from,to)
-end
-t_func[convert_default] = (3, 3, convert_default_tfunc)
-
 const typeof_tfunc = function (t)
     if isType(t)
         t = t.parameters[1]
@@ -2053,14 +2038,6 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
     end
     argexprs = e.args[2:end]
 
-    if is(f, convert_default) && length(atypes)==3
-        # builtin case of convert. convert(T,x::S) => x, when S<:T
-        if isType(atypes[1]) && isleaftype(atypes[1]) &&
-            atypes[2] <: atypes[1].parameters[1]
-            # todo: if T expression has side effects??!
-            return (e.args[3],())
-        end
-    end
     if is(f, typeassert) && length(atypes)==2
         # typeassert(x::S, T) => x, when S<:T
         if isType(atypes[2]) && isleaftype(atypes[2]) &&

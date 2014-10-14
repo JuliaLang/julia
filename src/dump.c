@@ -1315,7 +1315,6 @@ void jl_init_serializer(void)
                           jl_f_arraylen, jl_f_arrayref,
                           jl_f_arrayset, jl_f_arraysize,
                           jl_f_instantiate_type, jl_f_kwcall,
-                          jl_f_convert_default,
                           jl_trampoline, jl_f_union,
                           jl_f_methodexists, jl_f_applicable,
                           jl_f_invoke, jl_apply_generic,

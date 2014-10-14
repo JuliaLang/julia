@@ -593,7 +593,9 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             }
         }
         else if (jl_is_type_type(elt) && jl_is_type_type(jl_tparam0(elt)) &&
-                 (decl_i==NULL || !jl_has_typevars(decl_i))) {
+                 // give up on specializing static parameters for Type{Type{Type{...}}}
+                 (jl_is_type_type(jl_tparam0(jl_tparam0(elt))) ||
+                  decl_i==NULL || !jl_has_typevars(decl_i))) {
             /*
               actual argument was Type{...}, we computed its type as
               Type{Type{...}}. we must avoid unbounded nesting here, so
@@ -608,6 +610,8 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                     declt = jl_tparam0(declt);
                 jl_tupleset(type, i,
                             jl_type_intersection(declt, (jl_value_t*)jl_typetype_type));
+                // TODO: recompute static parameter values, so in extreme cases we
+                // can give `T=Type` instead of `T=Type{Type{Type{...`.
             }
             else {
                 jl_tupleset(type, i, (jl_value_t*)jl_typetype_type);
