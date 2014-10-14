@@ -1219,22 +1219,8 @@ static jl_value_t *meet(jl_value_t *X, jl_value_t *Y, variance_t var)
             return NULL;
         return tv;
     }
-    if (!jl_has_typevars_(X,1)) {
-        if (!jl_has_typevars_(Y,1)) {
-            if (var==invariant) {
-                return (jl_types_equal(X,Y) ? X : NULL);
-            }
-            else {
-                if (jl_subtype(X,Y,0)) return X;
-                if (jl_subtype(Y,X,0)) return Y;
-                return NULL;
-            }
-        }
-        return (jl_subtype(X,Y,0) ? X : NULL);
-    }
-    if (!jl_has_typevars_(Y,1)) {
-        return (jl_subtype(Y,X,0) ? Y : NULL);
-    }
+    if (jl_subtype(X,Y,0)) return X;
+    if (jl_subtype(Y,X,0)) return Y;
     jl_value_t *v = jl_type_intersection(X, Y);
     return (v == (jl_value_t*)jl_bottom_type ?  NULL : v);
 }
@@ -1513,6 +1499,8 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
     }
 
     JL_GC_POP();
+    if (jl_is_typevar(*pti) && !(jl_is_typevar(a) && jl_is_typevar(b)))
+        return ((jl_tvar_t*)*pti)->ub;
     return *pti;
 }
 
