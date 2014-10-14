@@ -29,6 +29,13 @@ Language changes
     dicts are synchronized. As part of this change, `=>` is parsed as a normal
     operator, and `Base` defines it to construct `Pair` objects ([#6739]).
 
+Compiler improvements
+---------------------
+
+  * Functions may be annotated with metadata (`:meta` expressions) to be used by the compiler ([#8297]).
+
+  * `@inline` before a function definition forces the compiler to inline the function ([#8297]).
+
 Library improvements
 --------------------
 
@@ -1008,3 +1015,4 @@ Too numerous to mention.
 [#8423]: https://github.com/JuliaLang/julia/issues/8423
 [#8560]: https://github.com/JuliaLang/julia/issues/8560
 [#8605]: https://github.com/JuliaLang/julia/issues/8605
+[#8297]: https://github.com/JuliaLang/julia/pull/8297
