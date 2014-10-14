@@ -67,6 +67,8 @@ Library improvements
   * New `ordschur` and `ordschur!` functions for sorting a schur factorization by the eigenvalues.
 
   * `deepcopy` recurses through immutable types and makes copies of their mutable fields ([#8560]).
+ 
+  * `@simd` now rejects invalid control flow (`@goto` / break / continue) in the inner loop body at compile time ([#8624]).
 
 Julia v0.3.0 Release Notes
 ==========================
