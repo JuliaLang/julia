@@ -430,8 +430,8 @@ if WORD_SIZE==32
     end
 
     function *(u::Uint128, v::Uint128)
-        u0 = u % Uint64; u1 = int64(u>>64)
-        v0 = v % Uint64; v1 = int64(v>>64)
+        u0 = u % Uint64; u1 = uint64(u>>>64)
+        v0 = v % Uint64; v1 = uint64(v>>>64)
         lolo = widemul(u0, v0)
         lohi = widemul(u0, v1)
         hilo = widemul(u1, v0)
