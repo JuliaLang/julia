@@ -155,14 +155,14 @@ for to in tuple(IntTypes...,Char), from in tuple(IntTypes...,Char,Bool)
             else
                 @eval convert(::Type{$to}, x::($from)) = box($to,checked_trunc_uint($to,unbox($from,x)))
             end
-            @eval mod(x::($from), ::Type{$to}) = box($to,trunc_int($to,unbox($from,x)))
+            @eval rem(x::($from), ::Type{$to}) = box($to,trunc_int($to,unbox($from,x)))
         elseif from.size < to.size || from === Bool
             if issubtype(from, Signed)
                 @eval convert(::Type{$to}, x::($from)) = box($to,sext_int($to,unbox($from,x)))
             else
                 @eval convert(::Type{$to}, x::($from)) = box($to,zext_int($to,unbox($from,x)))
             end
-            @eval mod(x::($from), ::Type{$to}) = convert($to,x)
+            @eval rem(x::($from), ::Type{$to}) = convert($to,x)
         else
             if !(issubtype(from,Signed) === issubtype(to,Signed))
                 # raise InexactError if x's top bit is set
@@ -170,13 +170,14 @@ for to in tuple(IntTypes...,Char), from in tuple(IntTypes...,Char,Bool)
             else
                 @eval convert(::Type{$to}, x::($from)) = box($to,unbox($from,x))
             end
-            @eval mod(x::($from), ::Type{$to}) = box($to,unbox($from,x))
+            @eval rem(x::($from), ::Type{$to}) = box($to,unbox($from,x))
         end
     end
 end
 
-mod{T<:Integer}(x::T, ::Type{T}) = x
-mod(x::Integer, ::Type{Bool}) = ((x&1)!=0)
+rem{T<:Integer}(x::T, ::Type{T}) = x
+rem(x::Integer, ::Type{Bool}) = ((x&1)!=0)
+mod{T<:Integer}(x::Integer, ::Type{T}) = rem(x, T)
 
 for to in (Int8, Int16, Int32, Int64)
     @eval begin
@@ -240,7 +241,7 @@ int64(x) = convert(Int64,x)
 int128(x) = convert(Int128,x)
 
 uint8(x) = convert(Uint8,x)
-uint8(x::Integer) = mod(x,Uint8)
+uint8(x::Integer) = x % Uint8
 uint8(x::Int8) = box(Uint8,unbox(Int8,x))
 uint8(x::Bool) = convert(Uint8,x)
 
@@ -418,8 +419,8 @@ if WORD_SIZE==32
     end
 
     function *(u::Int128, v::Int128)
-        u0 = mod(u,Uint64); u1 = int64(u>>64)
-        v0 = mod(v,Uint64); v1 = int64(v>>64)
+        u0 = u % Uint64; u1 = int64(u>>64)
+        v0 = v % Uint64; v1 = int64(v>>64)
         lolo = widemul(u0, v0)
         lohi = widemul(reinterpret(Int64,u0), v1)
         hilo = widemul(u1, reinterpret(Int64,v0))
@@ -429,8 +430,8 @@ if WORD_SIZE==32
     end
 
     function *(u::Uint128, v::Uint128)
-        u0 = mod(u,Uint64); u1 = int64(u>>64)
-        v0 = mod(v,Uint64); v1 = int64(v>>64)
+        u0 = u % Uint64; u1 = int64(u>>64)
+        v0 = v % Uint64; v1 = int64(v>>64)
         lolo = widemul(u0, v0)
         lohi = widemul(u0, v1)
         hilo = widemul(u1, v0)
@@ -497,7 +498,7 @@ for T in (Int8,Uint8)
     @eval function checked_mul(x::$T, y::$T)
         xy = widemul(x,y)
         (typemin($T) <= xy <= typemax($T)) || throw(OverflowError())
-        return mod(xy,$T)
+        return xy % $T
     end
 end
 
@@ -506,7 +507,7 @@ for T in (Int64,Uint64)
     @eval function checked_mul(x::$T, y::$T)
         xy = int128(x)*int128(y)
         (typemin($T) <= xy <= typemax($T)) || throw(OverflowError())
-        return mod(xy,$T)
+        return xy % $T
     end
 end
 else
