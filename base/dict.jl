@@ -771,3 +771,55 @@ function next{K}(t::WeakKeyDict{K}, i)
     ((kv[1].value::K,kv[2]), i)
 end
 length(t::WeakKeyDict) = length(t.ht)
+
+function checkcorrectness(d::Dict, io::IO)
+    sz = length(d.vals)
+    if length(d.slots) != sz || length(d.keys) != sz
+        println(io, "Mismatch among internal array lengths. No further checking done.")
+        return false
+    end
+    if sz < 16 || sz & (sz - 1) != 0 
+        println(io, "Size < 16 or not a power of two. No further checking done.")
+        return false
+    end
+    startpos = 0
+    for j = 1 : sz
+        if d.slots[j] == 0x0
+            startpos = j
+            break
+        end
+    end
+    if startpos == 0
+        println(io, "No empty slots. No further checking done.")
+        return false
+    end
+    pos = startpos
+    lastzero = pos
+    allcorrect = true
+    while true
+        pos = (pos & (sz - 1)) + 1
+        pos == startpos && break
+        d.slots[pos] == 0x2 && continue
+        if d.slots[pos] == 0x0
+            lastzero = pos
+            continue
+        end
+        # Reach here if the slot contains live data
+        h = hashindex(d.keys[pos], sz)
+        if (lastzero < pos && (h <= lastzero || h > pos)) ||
+            (lastzero >=  pos && (h <= lastzero && h > pos))
+            println(io, "key ", d.keys[pos], " appears at incorrect hash entry")
+            allcorrect = false
+        end
+        j = lastzero + 1
+        while j != pos
+            if isequal(d.keys[j], d.keys[pos])
+                println(io, "key ", d.keys[pos], " appears twice")
+                allcorrect = false
+            end
+            j = (j & (sz - 1)) + 1
+        end
+    end
+    allcorrect
+end
+
