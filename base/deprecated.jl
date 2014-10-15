@@ -196,4 +196,4 @@ const None = Union()
 @deprecate Dict{V}(ks::Tuple, vs::(V...))                        Dict{Any,V}(zip(ks, vs))
 @deprecate Dict(ks, vs)                                          Dict{Any,Any}(zip(ks, vs))
 
-@deprecate itrunc{T<:Integer}(::Type{T}, n::Integer) mod(n, T)
+@deprecate itrunc{T<:Integer}(::Type{T}, n::Integer) (n % T)
