@@ -3208,7 +3208,7 @@
 
 ("Base","writedlm","writedlm(f, A, delim='t')
 
-   Write \"A\" (either an array type or an iterable collection of
+   Write \"A\" (a vector, matrix or an iterable collection of
    iterable rows) as text to \"f\" (either a filename string or an
    \"IO\" stream) using the given delimeter \"delim\" (which defaults
    to tab, but can be any printable Julia object, typically a \"Char\"
