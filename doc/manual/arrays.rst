@@ -639,9 +639,8 @@ into a sparse matrix using the ``sparse`` function:
             [4, 4]  =  1.0
             [5, 5]  =  1.0
 
-You can go in the other direction using the ``dense`` or the ``full``
-function. The ``issparse`` function can be used to query if a matrix
-is sparse.
+You can go in the other direction using the ``full`` function. The 
+``issparse`` function can be used to query if a matrix is sparse.
 
 .. doctest::
 
