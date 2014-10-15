@@ -24,7 +24,9 @@ function edit(file::String, line::Integer)
         f = find_source_file(file)
         f != nothing && (file = f)
     end
-    if beginswith(edname, "emacs")
+    if OS_NAME == :Windows
+        spawn(`cmd /c $edname $file`)
+    elseif beginswith(edname, "emacs")
         spawn(`$edpath +$line $file`)
     elseif edname == "vim"
         run(`$edpath $file +$line`)
@@ -32,8 +34,6 @@ function edit(file::String, line::Integer)
         spawn(`$edpath $file -l $line`)
     elseif beginswith(edname, "subl")
         spawn(`$(shell_split(edpath)) $file:$line`)
-    elseif OS_NAME == :Windows && (edname == "start" || edname == "open")
-        spawn(`start /b $file`)
     elseif OS_NAME == :Darwin && (edname == "start" || edname == "open")
         spawn(`open -t $file`)
     elseif edname == "kate"
