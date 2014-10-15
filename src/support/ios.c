@@ -73,9 +73,12 @@ static int _enonfatal(int err)
 
 #define SLEEP_TIME 5//ms
 
-#ifdef __APPLE__
+#if defined(__APPLE__)
 #define MAXSIZE ((1l << 31) - 1)   // OSX cannot handle blocks larger than this
 #define LIMIT_IO_SIZE(n) ((n) < MAXSIZE ? (n) : MAXSIZE)
+#elif defined(_OS_WINDOWS_)
+#define MAXSIZE (0x7fffffff)       // Windows read() takes a uint
+#define LIMIT_IO_SIZE(n) ((n) < (size_t)MAXSIZE ? (unsigned int)(n) : MAXSIZE)
 #else
 #define LIMIT_IO_SIZE(n) (n)
 #endif
