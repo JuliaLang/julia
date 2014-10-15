@@ -1,5 +1,7 @@
 .. _man-conversion-and-promotion:
 
+.. currentmodule:: Base
+
 **************************
  Conversion and Promotion  
 **************************
@@ -63,8 +65,8 @@ defining what types they should promote to when mixed with other types.
 Conversion
 ----------
 
-Conversion of values to various types is performed by the ``convert``
-function. The ``convert`` function generally takes two arguments: the
+Conversion of values to various types is performed by the :func:`convert`
+function. The :func:`convert` function generally takes two arguments: the
 first is a type object while the second is a value to convert to that
 type; the returned value is the value converted to an instance of given
 type. The simplest way to understand this function is to see it in
@@ -91,7 +93,7 @@ action:
     Float64
 
 Conversion isn't always possible, in which case a no method error is
-thrown indicating that ``convert`` doesn't know how to perform the
+thrown indicating that :func:`convert` doesn't know how to perform the
 requested conversion:
 
 .. doctest::
@@ -109,7 +111,7 @@ representations of numbers, and only a very limited subset of them are.
 Defining New Conversions
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-To define a new conversion, simply provide a new method for ``convert``.
+To define a new conversion, simply provide a new method for :func:`convert`.
 That's really all there is to it. For example, the method to convert a
 number to a boolean is simply this::
 
@@ -145,8 +147,8 @@ to zero:
 
 The method signatures for conversion methods are often quite a bit more
 involved than this example, especially for parametric types. The example 
-above is meant to be pedagogical, and is not the actual julia behaviour.
-This is the actual implementation in julia::
+above is meant to be pedagogical, and is not the actual Julia behavior.
+This is the actual implementation in Julia::
 
     convert{T<:Real}(::Type{T}, z::Complex) = (imag(z)==0 ? convert(T,real(z)) :
                                                throw(InexactError()))
@@ -187,7 +189,7 @@ right after the declaration of the type and its constructors::
     convert{T<:FloatingPoint}(::Type{T}, x::Rational) = convert(T,x.num)/convert(T,x.den)
     convert{T<:Integer}(::Type{T}, x::Rational) = div(convert(T,x.num),convert(T,x.den))
 
-The initial four convert methods provide conversions to rational types.
+The initial four :func:`convert` methods provide conversions to rational types.
 The first method converts one type of rational to another type of
 rational by converting the numerator and denominator to the appropriate
 integer type. The second method does the same conversion for integers by
@@ -200,7 +202,7 @@ one should have ``a//b == convert(Rational{Int64}, a/b)``.
 The last two convert methods provide conversions from rational types to
 floating-point and integer types. To convert to floating point, one
 simply converts both numerator and denominator to that floating point
-type and then divides. To convert to integer, one can use the ``div``
+type and then divides. To convert to integer, one can use the :func:`div`
 operator for truncated integer division (rounded towards zero).
 
 .. _man-promotion:
@@ -221,7 +223,7 @@ everything to do with converting between alternate representations. For
 instance, although every ``Int32`` value can also be represented as a
 ``Float64`` value, ``Int32`` is not a subtype of ``Float64``.
 
-Promotion to a common supertype is performed in Julia by the ``promote``
+Promotion to a common supertype is performed in Julia by the :func:`promote`
 function, which takes any number of arguments, and returns a tuple of
 the same number of values, converted to a common type, or throws an
 exception if promotion is not possible. The most common use case for
@@ -276,8 +278,8 @@ promotion to a common numeric type for arithmetic operations — it just
 happens automatically. There are definitions of catch-all promotion
 methods for a number of other arithmetic and mathematical functions in
 `promotion.jl <https://github.com/JuliaLang/julia/blob/master/base/promotion.jl>`_,
-but beyond that, there are hardly any calls to ``promote`` required in
-the Julia standard library. The most common usages of ``promote`` occur
+but beyond that, there are hardly any calls to :func:`promote` required in
+the Julia standard library. The most common usages of :func:`promote` occur
 in outer constructors methods, provided for convenience, to allow
 constructor calls with mixed types to delegate to an inner type with
 fields promoted to an appropriate common type. For example, recall that
@@ -304,12 +306,12 @@ convenient to do promotion automatically.
 Defining Promotion Rules
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-Although one could, in principle, define methods for the ``promote``
+Although one could, in principle, define methods for the :func:`promote`
 function directly, this would require many redundant definitions for all
 possible permutations of argument types. Instead, the behavior of
-``promote`` is defined in terms of an auxiliary function called
-``promote_rule``, which one can provide methods for. The
-``promote_rule`` function takes a pair of type objects and returns
+:func:`promote` is defined in terms of an auxiliary function called
+:func:`promote_rule`, which one can provide methods for. The
+:func:`promote_rule` function takes a pair of type objects and returns
 another type object, such that instances of the argument types will be
 promoted to the returned type. Thus, by defining the rule::
 
@@ -331,21 +333,21 @@ result in plain old integers unless explicitly cast back to characters
 (see :ref:`man-characters`). Also note that one does not need to
 define both ``promote_rule(::Type{A}, ::Type{B})`` and
 ``promote_rule(::Type{B}, ::Type{A})`` — the symmetry is implied by
-the way ``promote_rule`` is used in the promotion process.
+the way :func:`promote_rule` is used in the promotion process.
 
-The ``promote_rule`` function is used as a building block to define a
-second function called ``promote_type``, which, given any number of type
+The :func:`promote_rule` function is used as a building block to define a
+second function called :func:`promote_type`, which, given any number of type
 objects, returns the common type to which those values, as arguments to
-``promote`` should be promoted. Thus, if one wants to know, in absence
+:func:`promote` should be promoted. Thus, if one wants to know, in absence
 of actual values, what type a collection of values of certain types
-would promote to, one can use ``promote_type``:
+would promote to, one can use :func:`promote_type`:
 
 .. doctest::
 
     julia> promote_type(Int8, Uint16)
     Int64
 
-Internally, ``promote_type`` is used inside of ``promote`` to determine
+Internally, :func:`promote_type` is used inside of :func:`promote` to determine
 what type argument values should be converted to for promotion. It can,
 however, be useful in its own right. The curious reader can read the
 code in
