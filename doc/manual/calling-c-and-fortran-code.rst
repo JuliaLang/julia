@@ -1,5 +1,7 @@
 .. _man-calling-c-and-fortran-code:
 
+.. currentmodule:: Base
+
 ****************************
  Calling C and Fortran Code  
 ****************************
@@ -11,7 +13,7 @@ and efficient to call C and Fortran functions. Julia has a "no
 boilerplate" philosophy: functions can be called directly from Julia
 without any "glue" code, code generation, or compilation — even from the
 interactive prompt. This is accomplished just by making an appropriate call
-with ``ccall`` syntax, which looks like an ordinary function call.
+with :func:`ccall` syntax, which looks like an ordinary function call.
 
 The code to be called must be available as a shared library. Most C and
 Fortran libraries ship compiled as shared libraries already, but if you
@@ -38,10 +40,10 @@ the current process. This form can be used to call C library functions,
 functions in the Julia runtime, or functions in an application linked to
 Julia.
 
-Finally, you can use ``ccall`` to actually generate a call to the
-library function. Arguments to ``ccall`` are as follows:
+Finally, you can use :func:`ccall` to actually generate a call to the
+library function. Arguments to :func:`ccall` are as follows:
 
-1. (:function, "library") pair (must be a constant, but see below).
+1. ``(:function, "library")`` pair (must be a constant, but see below).
 2. Return type, which may be any bits type, including ``Int32``,
    ``Int64``, ``Float64``, or ``Ptr{T}`` for any type parameter ``T``,
    indicating a pointer to values of type ``T``, or ``Ptr{Void}`` for
@@ -86,7 +88,7 @@ rather than ``(Ptr{Uint8})``. This is because ``(Ptr{Uint8})`` is just
     (Ptr{Uint8},)
 
 In practice, especially when providing reusable functionality, one
-generally wraps ``ccall`` uses in Julia functions that set up arguments
+generally wraps :func:`ccall` uses in Julia functions that set up arguments
 and then check for errors in whatever manner the C or Fortran function
 indicates them, propagating to the Julia caller as exceptions. This is
 especially important since C and Fortran APIs are notoriously
@@ -164,9 +166,9 @@ a real address operator, it may be used with any syntax, such as
 ``&0`` or ``&f(x)``.
 
 Note that no C header files are used anywhere in the process. Currently,
-it is not possible to pass structs and other non-primitive types from
+it is not possible to pass ``struct``\ s and other non-primitive types from
 Julia to C libraries. However, C functions that generate and use opaque
-struct types by passing pointers to them can return such values
+``struct`` types by passing pointers to them can return such values
 to Julia as ``Ptr{Void}``, which can then be passed to other C functions
 as ``Ptr{Void}``. Memory allocation and deallocation of such objects
 must be handled by calls to the appropriate cleanup routines in the
@@ -175,7 +177,7 @@ libraries being used, just like in any C program.
 Mapping C Types to Julia
 ------------------------
 
-Julia automatically inserts calls to the ``convert`` function to convert
+Julia automatically inserts calls to the :func:`convert` function to convert
 each argument to the specified type. For example, the following call::
 
     ccall( (:foo, "libfoo"), Void, (Int32, Float64),
@@ -198,7 +200,7 @@ array matches ``T``, and the address of the first element is passed.
 This is done in order to avoid copying arrays unnecessarily.
 
 Therefore, if an ``Array`` contains data in the wrong format, it will
-have to be explicitly converted using a call such as ``int32(a)``.
+have to be explicitly converted using a call such as :func:`int32(A) <int32>`.
 
 To pass an array ``A`` as a pointer of a different type *without*
 converting the data beforehand (for example, to pass a ``Float64`` array
@@ -212,7 +214,9 @@ Type correspondences
 
 On all systems we currently support, basic C/C++ value types may be
 translated to Julia types as follows. Every C type also has a corresponding
-Julia type with the same name, prefixed by C. This can help for writing portable code (and remembering that an int in C is not the same as an Int in Julia).
+Julia type with the same name, prefixed by C. This can help for writing
+portable code (and remembering that an ``int`` in C is not the same as an
+``Int`` in Julia).
 
 **System-independent:**
 
@@ -300,11 +304,11 @@ can be called via the following Julia code::
 
 For ``wchar_t*`` arguments, the Julia type should be ``Ptr{Wchar_t}``,
 and data can be converted to/from ordinary Julia strings by the
-``wstring(s)`` function (equivalent to either ``utf16(s)`` or ``utf32(s)``
-depending upon the width of ``Cwchar_t``.    Note also that ASCII, UTF-8,
-UTF-16, and UTF-32 string data in Julia is internally NUL-terminated, so
-it can be passed to C functions expecting NUL-terminated data without making
-a copy.
+:func:`wstring(s) <wstring>` function (equivalent to either :func:`utf16(s)
+<utf16>` or :func:`utf32(s) <utf32>` depending upon the width of ``Cwchar_t``.
+Note also that ASCII, UTF-8, UTF-16, and UTF-32 string data in Julia is
+internally NUL-terminated, so it can be passed to C functions expecting
+NUL-terminated data without making a copy.
 
 Accessing Data through a Pointer
 --------------------------------
@@ -313,9 +317,10 @@ to terminate abruptly or corrupt arbitrary process memory due to a bad pointer
 or type declaration.
 
 Given a ``Ptr{T}``, the contents of type ``T`` can generally be copied from
-the referenced memory into a Julia object using ``unsafe_load(ptr, [index])``. The
-index argument is optional (default is 1), and performs 1-based indexing. This
-function is intentionally similar to the behavior of ``getindex()`` and ``setindex!()``
+the referenced memory into a Julia object using :func:`unsafe_load(ptr,
+[index]) <unsafe_load>`. The index argument is optional (default is 1), and
+performs 1-based indexing. This function is intentionally similar to the
+behavior of :func:`getindex` and :func:`setindex!`
 (e.g. ``[]`` access syntax).
 
 The return value will be a new object initialized
@@ -330,21 +335,23 @@ count, but the new reference does) to ensure the memory is not prematurely freed
 Note that if the object was not originally allocated by Julia, the new object
 will never be finalized by Julia's garbage collector.  If the ``Ptr`` itself
 is actually a ``jl_value_t*``, it can be converted back to a Julia object
-reference by ``unsafe_pointer_to_objref(ptr)``.  (Julia values ``v``
-can be converted to ``jl_value_t*`` pointers, as ``Ptr{Void}``, by calling
-``pointer_from_objref(v)``.)
+reference by :func:`unsafe_pointer_to_objref(ptr) <unsafe_pointer_to_objref>`.
+(Julia values ``v`` can be converted to ``jl_value_t*`` pointers, as
+``Ptr{Void}``, by calling :func:`pointer_from_objref(v)
+<pointer_from_objref>`.)
 
-The reverse operation (writing data to a Ptr{T}), can be performed using
-``unsafe_store!(ptr, value, [index])``.  Currently, this is only supported
-for bitstypes or other pointer-free (``isbits``) immutable types.
+The reverse operation (writing data to a ``Ptr{T}``), can be performed using
+:func:`unsafe_store!(ptr, value, [index]) <unsafe_store!>`. Currently, this is
+only supported for bitstypes or other pointer-free (:func:`isbits <isbits>`)
+immutable types.
 
 Any operation that throws an error is probably currently unimplemented
 and should be posted as a bug so that it can be resolved.
 
 If the pointer of interest is a plain-data array (bitstype or immutable), the
-function ``pointer_to_array(ptr,dims,[own])`` may be more useful. The final
+function :func:`pointer_to_array(ptr,dims,[own]) <pointer_to_array>` may be more useful. The final
 parameter should be true if Julia should "take ownership" of the underlying
-buffer and call ``free(ptr)`` when the returned ``Array`` object is finalized.
+buffer and call :func:`free(ptr) <free>` when the returned ``Array`` object is finalized.
 If the ``own`` parameter is omitted or false, the caller must ensure the
 buffer remains in existence until all access is complete.
 
@@ -359,8 +366,8 @@ Passing Pointers for Modifying Inputs
 
 Because C doesn't support multiple return values, often C functions will take
 pointers to data that the function will modify. To accomplish this within a
-``ccall`` you need to encapsulate the value inside an array of the appropriate
-type. When you pass the array as an argument with a ``Ptr`` type, julia will
+:func:`ccall` you need to encapsulate the value inside an array of the appropriate
+type. When you pass the array as an argument with a ``Ptr`` type, Julia will
 automatically pass a C pointer to the encapsulated data::
 
     width = Cint[0]
@@ -372,11 +379,11 @@ is passed to LAPACK by reference, and on return, includes the success code.
 
 Garbage Collection Safety
 -------------------------
-When passing data to a ccall, it is best to avoid using the ``pointer()``
+When passing data to :func:`ccall`, it is best to avoid using the :func:`pointer`
 function. Instead define a convert method and pass the variables directly to
-the ccall. ccall automatically arranges that all of its arguments will be
+the :func:`ccall`. :func:`ccall` automatically arranges that all of its arguments will be
 preserved from garbage collection until the call returns. If a C API will
-store a reference to memory allocated by Julia, after the ccall returns, you
+store a reference to memory allocated by Julia, after the :func:`ccall` returns, you
 must arrange that the object remains visible to the garbage collector. The
 suggested way to handle this is to make a global variable of type 
 ``Array{Any,1}`` to hold these values, until C interface notifies you that
@@ -384,9 +391,9 @@ it is finished with them.
 
 Whenever you have created a pointer to Julia data, you must ensure the original data
 exists until you are done with using the pointer. Many methods in Julia such as
-``unsafe_load()`` and ``bytestring()`` make copies of data instead of taking ownership
+:func:`unsafe_load` and :func:`bytestring` make copies of data instead of taking ownership
 of the buffer, so that it is safe to free (or alter) the original data without
-affecting Julia. A notable exception is ``pointer_to_array()`` which, for performance
+affecting Julia. A notable exception is :func:`pointer_to_array` which, for performance
 reasons, shares (or can be told to take ownership of) the underlying buffer.
 
 The garbage collector does not guarantee any order of finalization. That is, if ``a`` 
@@ -401,35 +408,36 @@ Non-constant Function Specifications
 
 A ``(name, library)`` function specification must be a constant expression.
 However, it is possible to use computed values as function names by staging
-through ``eval`` as follows::
+through :func:`eval` as follows::
 
     @eval ccall(($(string("a","b")),"lib"), ...
 
-This expression constructs a name using ``string``, then substitutes this
-name into a new ``ccall`` expression, which is then evaluated. Keep in mind that
-``eval`` only operates at the top level, so within this expression local
+This expression constructs a name using :func:`string`, then substitutes this
+name into a new :func:`ccall` expression, which is then evaluated. Keep in mind that
+:func:`eval` only operates at the top level, so within this expression local
 variables will not be available (unless their values are substituted with
-``$``). For this reason, ``eval`` is typically only used to form top-level
+``$``). For this reason, :func:`eval` is typically only used to form top-level
 definitions, for example when wrapping libraries that contain many
 similar functions.
 
 Indirect Calls
 --------------
 
-The first argument to ``ccall`` can also be an expression evaluated at
+The first argument to :func:`ccall` can also be an expression evaluated at
 run time. In this case, the expression must evaluate to a ``Ptr``,
 which will be used as the address of the native function to call. This
-behavior occurs when the first ``ccall`` argument contains references
+behavior occurs when the first :func:`ccall` argument contains references
 to non-constants, such as local variables or function arguments.
 
 Calling Convention
 ------------------
 
-The second argument to ``ccall`` can optionally be a calling convention
+The second argument to :func:`ccall` can optionally be a calling convention
 specifier (immediately preceding return type). Without any specifier,
 the platform-default C calling convention is used. Other supported 
 conventions are: ``stdcall``, ``cdecl``, ``fastcall``, and ``thiscall``.
-For example (from base/libc.jl)::
+For example (from 
+`libc.jl <https://github.com/JuliaLang/julia/blob/master/base/libc.jl>`_::
 
     hn = Array(Uint8, 256)
     err=ccall(:gethostname, stdcall, Int32, (Ptr{Uint8}, Uint32), hn, length(hn))
@@ -442,15 +450,15 @@ Accessing Global Variables
 --------------------------
 
 Global variables exported by native libraries can be accessed by name using the
-``cglobal`` function. The arguments to ``cglobal`` are a symbol specification
-identical to that used by ``ccall``, and a type describing the value stored in
+:func:`cglobal` function. The arguments to :func:`cglobal` are a symbol specification
+identical to that used by :func:`ccall`, and a type describing the value stored in
 the variable::
 
     julia> cglobal((:errno,:libc), Int32)
     Ptr{Int32} @0x00007f418d0816b8
 
 The result is a pointer giving the address of the value. The value can be
-manipulated through this pointer using ``unsafe_load`` and ``unsafe_store``.
+manipulated through this pointer using :func:`unsafe_load` and :func:`unsafe_store`.
 
 Passing Julia Callback Functions to C
 -------------------------------------
@@ -478,14 +486,14 @@ some arbitrary type T::
     end
 
 Notice that we have to be careful about the return type: ``qsort`` expects a function
-returning a C ``int``, so we must be sure to return ``Cint`` via a call to ``convert``.
+returning a C ``int``, so we must be sure to return ``Cint`` via a call to :func:`convert`.
 
 In order to pass this function to C, we obtain its address using the function
-``cfunction``::
+:func:`cfunction`::
 
     const mycompare_c = cfunction(mycompare, Cint, (Ptr{Cdouble}, Ptr{Cdouble}))
 
-``cfunction`` accepts three arguments: the Julia function (``mycompare``), the return
+:func:`cfunction` accepts three arguments: the Julia function (``mycompare``), the return
 type (``Cint``), and a tuple of the argument types, in this case to sort an array of
 ``Cdouble`` (Float64) elements.
 
@@ -515,7 +523,7 @@ triggered, which you'll probably just ignore) to ``SingleAsyncWork``::
 
   cb = Base.SingleAsyncWork(data -> my_real_callback(args))
 
-The callback you pass to C should only execute a ``ccall`` to
+The callback you pass to C should only execute a :func:`ccall` to
 ``:uv_async_send``, passing ``cb.handle`` as the argument.
 
 More About Callbacks
@@ -534,11 +542,12 @@ Handling Platform Variations
 ----------------------------
 
 When dealing with platform libraries, it is often necessary to provide special cases
-for various platforms. The variable ``OS_NAME`` can be used to write these special
+for various platforms. The variable :data:`OS_NAME` can be used to write these special
 cases. Additionally, there are several macros intended to make this easier:
-``@windows``, ``@unix``, ``@linux``, and ``@osx``. Note that linux and osx are mutually 
-exclusive subsets of unix. Their usage takes the form of a ternary conditional
-operator, as demonstrated in the following examples.
+:func:`@windows`, :func:`@unix`, :func:`@linux`, and :func:`@osx`. Note that
+:func:`@linux` and :func:`@osx` are mutually exclusive subsets of
+:func:`@unix`.  Their usage takes the form of a ternary conditional operator,
+as demonstrated in the following examples.
 
 Simple blocks::
 
