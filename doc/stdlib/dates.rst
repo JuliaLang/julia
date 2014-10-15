@@ -307,7 +307,7 @@ Adjuster Functions
     ``same`` allows ``dt`` to be considered in satisfying ``func``. ``negate`` will make the adjustment
     process terminate when ``func`` returns false instead of true.
 
-.. function:: recur{T<:TimeType}(func::Function,dr::StepRange{T};negate=false,limit=10000) -> Vector{T}
+.. function:: recur(func::Function,dr::StepRange{TimeType};negate=false,limit=10000) -> Vector{TimeType}
 
     ``func`` takes a single TimeType argument and returns a ``Bool`` indicating whether the input
     should be "included" in the final set. ``recur`` applies ``func`` over each element in the 
