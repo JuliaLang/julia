@@ -967,6 +967,17 @@ As with arrays, ``Dicts`` may be created with comprehensions. For example,
 
 Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if it exists) or throws an error, and ``D[x] = y`` stores the key-value pair ``x => y`` in ``D`` (replacing any existing value for the key ``x``).  Multiple arguments to ``D[...]`` are converted to tuples; for example, the syntax ``D[x,y]``  is equivalent to ``D[(x,y)]``, i.e. it refers to the value keyed by the tuple ``(x,y)``.
 
+Keys for a ``Dict`` may be either mutable or immutable.  In the case of mutable keys, the
+user should not mutate a key once it is in a dictionary.  For example, in the following snippet::
+
+   a = [1,2,3]
+   b = Dict(a=>0)
+   a[3] = -1
+
+the indexing structure of ``b`` is left in a corrupted state by the reassignment of ``a[3].``  In case
+a user of ``Dict`` is concerned about having accidentally clobbered a dictionary's index in this manner,
+the ``checkcorrectness`` function described below can be helpful.
+
 .. function:: Dict([itr])
 
    ``Dict{K,V}()`` constructs a hash table with keys of type K and values of type V.
@@ -1041,7 +1052,12 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 .. function:: sizehint(s, n)
 
    Suggest that collection ``s`` reserve capacity for at least ``n`` elements. This can improve performance.
+   
+.. function:: checkcorrectness(associative, io) -> Bool
 
+   Verify that keys in a ``Dict`` match hash values.  Useful for debugging code
+   involving dictionaries with mutable keys.  Not exported.
+   
 Fully implemented by: ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``.
 
 Partially implemented by: ``IntSet``, ``Set``, ``EnvHash``, ``Array``, ``BitArray``.
