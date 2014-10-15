@@ -156,12 +156,13 @@ for to in tuple(IntTypes...,Char), from in tuple(IntTypes...,Char,Bool)
                 @eval convert(::Type{$to}, x::($from)) = box($to,checked_trunc_uint($to,unbox($from,x)))
             end
             @eval mod(x::($from), ::Type{$to}) = box($to,trunc_int($to,unbox($from,x)))
-        elseif from.size < to.size || from===Bool
+        elseif from.size < to.size || from === Bool
             if issubtype(from, Signed)
                 @eval convert(::Type{$to}, x::($from)) = box($to,sext_int($to,unbox($from,x)))
             else
                 @eval convert(::Type{$to}, x::($from)) = box($to,zext_int($to,unbox($from,x)))
             end
+            @eval mod(x::($from), ::Type{$to}) = convert($to,x)
         else
             if !(issubtype(from,Signed) === issubtype(to,Signed))
                 # raise InexactError if x's top bit is set
@@ -169,7 +170,7 @@ for to in tuple(IntTypes...,Char), from in tuple(IntTypes...,Char,Bool)
             else
                 @eval convert(::Type{$to}, x::($from)) = box($to,unbox($from,x))
             end
-            @eval itrunc(::Type{$to}, x::($from)) = box($to,unbox($from,x))
+            @eval mod(x::($from), ::Type{$to}) = box($to,unbox($from,x))
         end
     end
 end
