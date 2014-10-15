@@ -1,5 +1,7 @@
 .. _man-constructors:
 
+.. currentmodule:: Base
+
 **************
  Constructors  
 **************
@@ -427,7 +429,7 @@ the following outer method definition to make all calls to the general
 
     julia> Point(x::Real, y::Real) = Point(promote(x,y)...);
 
-The ``promote`` function converts all its arguments to a common type
+The :func:`promote` function converts all its arguments to a common type
 — in this case ``Float64``. With this method definition, the ``Point``
 constructor promotes its arguments the same way that numeric operators
 like ``+`` do, and works for all kinds of real numbers:
@@ -518,17 +520,17 @@ turns integer values into rationals by supplying a value of ``1`` as the
 denominator.
 
 Following the outer constructor definitions, we have a number of methods
-for the ``//`` operator, which provides a syntax for writing rationals.
-Before these definitions, ``//`` is a completely undefined operator with
+for the :func:`// <//>` operator, which provides a syntax for writing rationals.
+Before these definitions, :func:`// <//>` is a completely undefined operator with
 only syntax and no meaning. Afterwards, it behaves just as described in
 :ref:`man-rational-numbers`
 — its entire behavior is defined in these few lines. The first and most
 basic definition just makes ``a//b`` construct a ``Rational`` by
 applying the ``Rational`` constructor to ``a`` and ``b`` when they are
-integers. When one of the operands of ``//`` is already a rational
+integers. When one of the operands of :func:`// <//>` is already a rational
 number, we construct a new rational for the resulting ratio slightly
 differently; this behavior is actually identical to division of a
-rational with an integer. Finally, applying ``//`` to complex integral
+rational with an integer. Finally, applying :func:`// <//>` to complex integral
 values creates an instance of ``Complex{Rational}`` — a complex number
 whose real and imaginary parts are rationals:
 
@@ -543,7 +545,7 @@ whose real and imaginary parts are rationals:
     julia> ans <: Complex{Rational}
     false
 
-Thus, although the ``//`` operator usually returns an instance of
+Thus, although the :func:`// <//>` operator usually returns an instance of
 ``Rational``, if either of its arguments are complex integers, it will
 return an instance of ``Complex{Rational}`` instead. The interested
 reader should consider perusing the rest of
