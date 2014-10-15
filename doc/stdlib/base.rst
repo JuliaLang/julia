@@ -3845,7 +3845,7 @@ Integers
 
    .. doctest::
 
-      julia> leading_ones(int32(2 ^ 32 - 2))
+      julia> leading_ones(uint32(2 ^ 32 - 2))
       31
 
 .. function:: trailing_zeros(x::Integer) -> Integer
