@@ -2150,7 +2150,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                                               &jl_tupleref(ctx->sp,0),
                                               jl_tuple_len(ctx->sp)/2);
             if (jl_is_leaf_type(ty)) {
-                if (jl_has_typevars(ty)) {
+                if (jl_has_typevars(ty) || jl_is_tuple(ty)) {
                     // add root for types not cached. issue #7065
                     jl_add_linfo_root(ctx->linfo, ty);
                 }
