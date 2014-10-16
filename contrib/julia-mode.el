@@ -47,6 +47,19 @@
 (when (not (fboundp 'ignore-errors))
   (defmacro ignore-errors (body) `(condition-case nil ,body (error nil))))
 
+(defun julia--regexp-opt (strings &optional paren)
+  "Emacs 23 provides `regexp-opt', but it does not support PAREN taking the value 'symbols.
+This function provides equivalent functionality, but makes no efforts to optimise the regexp."
+  (cond
+   ((>= emacs-major-version 24)
+    (regexp-opt strings paren))
+   ((not (eq paren 'symbols))
+    (regexp-opt strings paren))
+   ((null strings)
+    "")
+   ('t
+    (rx-to-string `(seq symbol-start (or ,@strings) symbol-end)))))
+
 (defvar julia-mode-syntax-table
   (let ((table (make-syntax-table)))
     (modify-syntax-entry ?_ "_" table)
@@ -140,7 +153,7 @@
   (rx symbol-start (group "@" (1+ (or word (syntax symbol))))))
 
 (defconst julia-keyword-regex
-  (regexp-opt
+  (julia--regexp-opt
    '("if" "else" "elseif" "while" "for" "begin" "end" "quote"
      "try" "catch" "return" "local" "abstract" "function" "macro" "ccall"
      "finally" "typealias" "break" "continue" "type" "global"
@@ -149,13 +162,13 @@
    'symbols))
 
 (defconst julia-builtin-regex
-  (regexp-opt
+  (julia--regexp-opt
    ;;'("error" "throw")
    '()
    'symbols))
 
 (defconst julia-builtin-types-regex
-  (regexp-opt
+  (julia--regexp-opt
    '("Number" "Real" "BigInt" "Integer"
      "Uint" "Uint8" "Uint16" "Uint32" "Uint64" "Uint128"
      "Int" "Int8" "Int16" "Int32" "Int64" "Int128"
@@ -171,25 +184,25 @@
 
 (defconst julia-font-lock-keywords
   (list
-    (cons julia-builtin-types-regex 'font-lock-type-face)
-    (cons julia-keyword-regex 'font-lock-keyword-face)
-    (cons julia-macro-regex 'font-lock-keyword-face)
-    (cons
-     (regexp-opt
-      '("true" "false" "C_NULL" "Inf" "NaN" "Inf32" "NaN32" "nothing")
-      'symbols)
-     'font-lock-constant-face)
-    (list julia-unquote-regex 2 'font-lock-constant-face)
-    (list julia-char-regex 2 'font-lock-string-face)
-    (list julia-forloop-in-regex 1 'font-lock-keyword-face)
-    (list julia-function-regex 1 'font-lock-function-name-face)
-    (list julia-function-assignment-regex 1 'font-lock-function-name-face)
-    (list julia-type-regex 1 'font-lock-type-face)
-    (list julia-type-annotation-regex 1 'font-lock-type-face)
-    ;;(list julia-type-parameter-regex 1 'font-lock-type-face)
-    (list julia-subtype-regex 1 'font-lock-type-face)
-    (list julia-builtin-regex 1 'font-lock-builtin-face)
-))
+   (cons julia-builtin-types-regex 'font-lock-type-face)
+   (cons julia-keyword-regex 'font-lock-keyword-face)
+   (cons julia-macro-regex 'font-lock-keyword-face)
+   (cons
+    (julia--regexp-opt
+     '("true" "false" "C_NULL" "Inf" "NaN" "Inf32" "NaN32" "nothing")
+     'symbols)
+    'font-lock-constant-face)
+   (list julia-unquote-regex 2 'font-lock-constant-face)
+   (list julia-char-regex 2 'font-lock-string-face)
+   (list julia-forloop-in-regex 1 'font-lock-keyword-face)
+   (list julia-function-regex 1 'font-lock-function-name-face)
+   (list julia-function-assignment-regex 1 'font-lock-function-name-face)
+   (list julia-type-regex 1 'font-lock-type-face)
+   (list julia-type-annotation-regex 1 'font-lock-type-face)
+   ;;(list julia-type-parameter-regex 1 'font-lock-type-face)
+   (list julia-subtype-regex 1 'font-lock-type-face)
+   (list julia-builtin-regex 1 'font-lock-builtin-face)
+   ))
 
 (defconst julia-block-start-keywords
   (list "if" "while" "for" "begin" "try" "function" "type" "let" "macro"
