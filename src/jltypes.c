@@ -1760,6 +1760,7 @@ static void cache_type_(jl_value_t *type)
             memcpy(nc->data, ((jl_tuple_t*)cache)->data, sizeof(void*)*jl_tuple_len(cache));
             cache = (jl_value_t*)nc;
             ((jl_datatype_t*)type)->name->cache = cache;
+            gc_wb(((jl_datatype_t*)type)->name, cache);
         }
         assert(jl_is_array(cache));
         jl_cell_1d_push((jl_array_t*)cache, (jl_value_t*)type);
@@ -1771,6 +1772,7 @@ static void cache_type_(jl_value_t *type)
         memcpy(nc->data, ((jl_tuple_t*)cache)->data, sizeof(void*) * n);
         jl_tupleset(nc, n, (jl_value_t*)type);
         ((jl_datatype_t*)type)->name->cache = (jl_value_t*)nc;
+        gc_wb(((jl_datatype_t*)type)->name, nc);
     }
 }
 
@@ -1927,9 +1929,12 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
         top.prev = stack;
         stack = &top;
         ndt->name = tn;
+        gc_wb(ndt, ndt->name);
         ndt->super = jl_any_type;
         ndt->parameters = iparams_tuple;
+        gc_wb(ndt, ndt->parameters);
         ndt->names = dt->names;
+        gc_wb(ndt, ndt->names);
         ndt->types = jl_null; // to be filled in below
         if (isabstract || !jl_is_function(tn->ctor_factory))
             ndt->fptr = jl_f_no_function;
@@ -1938,16 +1943,20 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
         ndt->mutabl = dt->mutabl;
         ndt->abstract = dt->abstract;
         ndt->env = (jl_value_t*)ndt;
+        gc_wb(ndt, ndt->env);
         ndt->linfo = NULL;
         ndt->instance = NULL;
         ndt->uid = 0;
         ndt->struct_decl = NULL;
         ndt->size = ndt->alignment = 0;
+
         ndt->super = (jl_datatype_t*)inst_type_w_((jl_value_t*)dt->super, env,n,stack, 1);
+        gc_wb(ndt, ndt->super);
         ftypes = dt->types;
         if (ftypes != NULL) {
             // recursively instantiate the types of the fields
             ndt->types = (jl_tuple_t*)inst_type_w_((jl_value_t*)ftypes, env, n, stack, 1);
+            gc_wb(ndt, ndt->types);
             if (!isabstract) {
                 if (jl_tuple_len(ftypes) == 0) {
                     ndt->alignment = ndt->size = dt->size;
@@ -2014,9 +2023,11 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t)
         env[i*2+1] = env[i*2];
     }
     t->super = (jl_datatype_t*)inst_type_w_((jl_value_t*)t->super, env, n, &top, 1);
+    gc_wb(t, t->super);
     if (jl_is_datatype(t)) {
         jl_datatype_t *st = (jl_datatype_t*)t;
         st->types = (jl_tuple_t*)inst_type_w_((jl_value_t*)st->types, env, n, &top, 1);
+        gc_wb(st, st->types);
     }
 }
 

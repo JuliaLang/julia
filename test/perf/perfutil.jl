@@ -1,4 +1,5 @@
-const ntrials = 5
+const mintrials = 5
+const mintime = 2000.0
 print_output = isempty(ARGS)
 codespeed = length(ARGS) > 0 && ARGS[1] == "codespeed"
 
@@ -62,13 +63,17 @@ end
 
 macro timeit(ex,name,desc,group...)
     quote
-        t = zeros(ntrials)
-        for i=0:ntrials
+        t = Float64[]
+        tot = 0.0
+        i = 0
+        while i < mintrials || tot < mintime
             e = 1000*(@elapsed $(esc(ex)))
+            tot += e
             if i > 0
                 # warm up on first iteration
-                t[i] = e
+                push!(t, e)
             end
+            i += 1
         end
         @output_timings t $name $desc $group
     end
@@ -88,6 +93,18 @@ macro timeit_init(ex,init,name,desc,group...)
         @output_timings t $name $desc $group
     end
 end
+
+@linux? macro maxrss(name)
+    quote
+        rus = Array(Int64, div(144,8))
+        fill!(rus, 0x0)
+        res = ccall(:getrusage, Int32, (Int32, Ptr{Void}), 0, rus)
+        if res == 0
+            mx = rus[5]/1024
+            @printf "julia,%s.mem,%f,%f,%f,%f\n" $name mx mx mx 0
+        end
+    end
+end : macro maxrss(name) end
 
 
 # seed rng for more consistent timings

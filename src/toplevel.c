@@ -109,6 +109,9 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     jl_module_t *newm = jl_new_module(name);
     newm->parent = parent_module;
     b->value = (jl_value_t*)newm;
+
+    gc_wb(parent_module, newm);
+
     if (parent_module == jl_main_module && name == jl_symbol("Base")) {
         // pick up Base module during bootstrap
         jl_old_base_module = jl_base_module;
@@ -397,7 +400,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
             jl_error("syntax: malformed \"importall\" statement");
         m = (jl_module_t*)jl_eval_global_var(m, name);
         if (!jl_is_module(m))
-	    jl_errorf("invalid %s statement: name exists but does not refer to a module", ex->head->name);
+            jl_errorf("invalid %s statement: name exists but does not refer to a module", ex->head->name);
         jl_module_importall(jl_current_module, m);
         return jl_nothing;
     }
@@ -615,6 +618,7 @@ void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
         jl_errorf("invalid subtyping in definition of %s",tt->name->name->name);
     }
     tt->super = (jl_datatype_t*)super;
+    gc_wb(tt, tt->super);
     if (jl_tuple_len(tt->parameters) > 0) {
         tt->name->cache = (jl_value_t*)jl_null;
         jl_reinstantiate_inner_types(tt);
@@ -646,8 +650,10 @@ static int type_contains(jl_value_t *ty, jl_value_t *x)
 
 void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li);
 
-DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
-                                    jl_tuple_t *argtypes, jl_function_t *f, jl_value_t *isstaged)
+DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp,
+                                    jl_value_t *bp_owner, jl_binding_t *bnd,
+                                    jl_tuple_t *argtypes, jl_function_t *f,
+                                    jl_value_t *isstaged)
 {
     // argtypes is a tuple ((types...), (typevars...))
     jl_tuple_t *t = (jl_tuple_t*)jl_t1(argtypes);
@@ -701,6 +707,7 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_
     if (*bp == NULL) {
         gf = (jl_value_t*)jl_new_generic_function(name);
         *bp = gf;
+        if (bp_owner) gc_wb(bp_owner, gf);
     }
     JL_GC_PUSH1(&gf);
     assert(jl_is_function(f));
@@ -712,6 +719,7 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_
         f->linfo && f->linfo->ast && jl_is_expr(f->linfo->ast)) {
         jl_lambda_info_t *li = f->linfo;
         li->ast = jl_compress_ast(li, li->ast);
+        gc_wb(li, li->ast);
     }
     JL_GC_POP();
     return gf;

@@ -217,3 +217,4 @@ logical_y = map(iseven, 1:length(x))
 @timeit (for n=1:100 add1!(x,logical_y) end) "add1_logical" "Increment x_i if y_i is true"
 @timeit (for n=1:100 devec_add1_logical!(x,logical_y) end) "devec_add1_logical" "Devectorized increment x_i if y_i is true"
 
+@maxrss "kernel"
