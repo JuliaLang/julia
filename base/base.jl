@@ -2,7 +2,7 @@ import Core.Array  # to add methods
 
 const NonTupleType = Union(DataType,UnionType,TypeConstructor)
 
-typealias Callable Function
+typealias Callable Union(Function,DataType)
 
 const Bottom = Union()
 
