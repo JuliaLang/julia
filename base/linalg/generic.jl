@@ -237,6 +237,7 @@ end
 
 function \{TA,TB,N}(A::AbstractMatrix{TA}, B::AbstractArray{TB,N})
     TC = typeof(one(TA)/one(TB))
+    size(A,1) == size(B,1) || throw(DimensionMismatch("LHS and RHS should have the same number of rows. LHS has $(size(A,1)) rows, but RHS has $(size(B,1)) rows."))
     A_ldiv_B!(TA == TC ? copy(A) : convert(AbstractMatrix{TC}, A), TB == TC ? copy(B) : convert(AbstractArray{TC,N}, B))
 end
 \(a::AbstractVector, b::AbstractArray) = reshape(a, length(a), 1) \ b

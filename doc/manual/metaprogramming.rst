@@ -668,7 +668,7 @@ full type tree.
 
 **Type internals** The internal representation of types is critically important
 when interfacing with C code. ``isbits(T::DataType)`` returns true if `T` is
-stored with C-compatible aligment. The offsets of each field may be listed
+stored with C-compatible alignment. The offsets of each field may be listed
 using ``fieldoffsets(T::DataType)``.
 
 **Function methods** The methods of any function may be listed using

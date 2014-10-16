@@ -1,5 +1,4 @@
-immutable Givens{T} <: AbstractMatrix{T}
-    size::Int
+immutable Givens{T}
     i1::Int
     i2::Int
     c::T
@@ -11,6 +10,10 @@ type Rotation{T}
 end
 typealias AbstractRotation Union(Givens, Rotation)
 
+realmin2(::Type{Float32}) = reinterpret(Float32, 0x26000000)
+realmin2(::Type{Float64}) = reinterpret(Float64, 0x21a0000000000000)
+realmin2{T}(::Type{T}) = (twopar = 2one(T); twopar^itrunc(log(realmin(T)/eps(T))/log(twopar)/twopar))
+
 function givensAlgorithm{T<:FloatingPoint}(f::T, g::T)
     zeropar = zero(T)
     onepar = one(T)
@@ -18,7 +21,7 @@ function givensAlgorithm{T<:FloatingPoint}(f::T, g::T)
 
     safmin = realmin(T)
     epspar = eps(T)
-    safmn2 = twopar^itrunc(log(safmin/epspar)/log(twopar)/twopar)
+    safmn2 = realmin2(T)
     safmx2 = onepar/safmn2
 
     if g == 0
@@ -84,7 +87,7 @@ function givensAlgorithm{T<:FloatingPoint}(f::Complex{T}, g::Complex{T})
     abs1(ff) = max(abs(real(ff)), abs(imag(ff)))
     safmin = realmin(T)
     epspar = eps(T)
-    safmn2 = twopar^itrunc(log(safmin/epspar)/log(twopar)/twopar)
+    safmn2 = realmin2(T)
     safmx2 = onepar/safmn2
     scalepar = max(abs1(f), abs1(g))
     fs = f
@@ -181,33 +184,25 @@ function givensAlgorithm{T<:FloatingPoint}(f::Complex{T}, g::Complex{T})
     return cs, sn, r
 end
 
-function givens{T}(f::T, g::T, i1::Integer, i2::Integer, size::Integer)
-    i2 <= size || error("indices cannot be larger than size Givens rotation matrix")
+function givens{T}(f::T, g::T, i1::Integer, i2::Integer)
     i1 < i2 || error("second index must be larger than the first")
-    h = givensAlgorithm(f, g)
-    Givens(size, i1, i2, convert(T, h[1]), convert(T, h[2]), convert(T, h[3]))
+    c, s, r = givensAlgorithm(f, g)
+    Givens(i1, i2, convert(T, c), convert(T, s), convert(T, r))
 end
 
 function givens{T}(A::AbstractMatrix{T}, i1::Integer, i2::Integer, col::Integer)
     i1 < i2 || error("second index must be larger than the first")
-    h = givensAlgorithm(A[i1,col], A[i2,col])
-    Givens(size(A, 1), i1, i2, convert(T, h[1]), convert(T, h[2]), convert(T, h[3]))
+    c, s, r = givensAlgorithm(A[i1,col], A[i2,col])
+    Givens(i1, i2, convert(T, c), convert(T, s), convert(T, r))
 end
 
-*{T}(G1::Givens{T}, G2::Givens{T}) = Rotation(push!(push!(Givens{T}[], G2), G1))
-*(G::Givens, B::BitArray{2}) = error("method not defined")
-*{TBf,TBi}(G::Givens, B::SparseMatrixCSC{TBf,TBi}) = error("method not defined")
-*(R::AbstractRotation, A::AbstractMatrix) = A_mul_B!(R, copy(A))
-
-A_mul_Bc(A::AbstractMatrix, R::Rotation) = A_mul_Bc!(copy(A), R)
-
 getindex(G::Givens, i::Integer, j::Integer) = i == j ? (i == G.i1 || i == G.i2 ? G.c : one(G.c)) : (i == G.i1 && j == G.i2 ? G.s : (i == G.i2 && j == G.i1 ? -G.s : zero(G.s)))
-size(G::Givens) = (G.size, G.size)
-size(G::Givens, i::Integer) = 1 <= i <= 2 ? G.size : 1
+
 A_mul_B!(G1::Givens, G2::Givens) = error("Operation not supported. Consider *")
 function A_mul_B!(G::Givens, A::AbstractMatrix)
     m, n = size(A)
-    for i = 1:n
+    G.i2 <= m || throw(DimensionMismatch("column indices for rotation are outside the matrix"))
+    @inbounds @simd for i = 1:n
         tmp = G.c*A[G.i1,i] + G.s*A[G.i2,i]
         A[G.i2,i] = G.c*A[G.i2,i] - conj(G.s)*A[G.i1,i]
         A[G.i1,i] = tmp
@@ -216,7 +211,8 @@ function A_mul_B!(G::Givens, A::AbstractMatrix)
 end
 function A_mul_Bc!(A::AbstractMatrix, G::Givens)
     m, n = size(A)
-    for i = 1:m
+    G.i2 <= n || throw(DimensionMismatch("column indices for rotation are outside the matrix"))
+    @inbounds @simd for i = 1:m
         tmp = G.c*A[i,G.i1] + conj(G.s)*A[i,G.i2]
         A[i,G.i2] = G.c*A[i,G.i2] - G.s*A[i,G.i1]
         A[i,G.i1] = tmp
@@ -228,14 +224,18 @@ function A_mul_B!(G::Givens, R::Rotation)
     return R
 end
 function A_mul_B!(R::Rotation, A::AbstractMatrix)
-    for i = 1:length(R.rotations)
+    @inbounds for i = 1:length(R.rotations)
         A_mul_B!(R.rotations[i], A)
     end
     return A
 end
 function A_mul_Bc!(A::AbstractMatrix, R::Rotation)
-    for i = 1:length(R.rotations)
+    @inbounds for i = 1:length(R.rotations)
         A_mul_Bc!(A, R.rotations[i])
     end
     return A
 end
+*{T}(G1::Givens{T}, G2::Givens{T}) = Rotation(push!(push!(Givens{T}[], G2), G1))
+*(R::AbstractRotation, A::AbstractMatrix) = A_mul_B!(R, copy(A))
+
+A_mul_Bc(A::AbstractMatrix, R::AbstractRotation) = A_mul_Bc!(copy(A), R)

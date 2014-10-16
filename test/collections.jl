@@ -509,6 +509,10 @@ sizehint(t, 20000) #check that hash does not depend on size of internal Array{Ui
 @test hash(s) == hash(t)
 @test hash(complement(s)) == hash(complement(t))
 
+# issue #8570
+s = IntSet(2^32)
+@test length(s) == 1
+for b in s; b; end
 
 # Ranges
 
