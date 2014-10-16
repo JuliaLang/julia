@@ -1348,15 +1348,16 @@ static jl_tuple_t *arg_type_tuple(jl_value_t **args, size_t nargs)
     JL_GC_PUSH1(&tt);
     size_t i;
     for(i=0; i < nargs; i++) {
+        jl_value_t *ai = args[i];
         jl_value_t *a;
-        if (jl_is_type(args[i])) {
-            a = (jl_value_t*)jl_wrap_Type(args[i]);
+        if (!jl_is_typevar(ai) && jl_is_type(ai)) {
+            a = (jl_value_t*)jl_wrap_Type(ai);
         }
-        else if (!jl_is_tuple(args[i])) {
-            a = jl_typeof(args[i]);
+        else if (!jl_is_tuple(ai)) {
+            a = jl_typeof(ai);
         }
         else {
-            a = (jl_value_t*)arg_type_tuple(&jl_tupleref(args[i],0), jl_tuple_len(args[i]));
+            a = (jl_value_t*)arg_type_tuple(&jl_tupleref(ai,0), jl_tuple_len(ai));
         }
         jl_tupleset(tt, i, a);
     }
