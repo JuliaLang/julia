@@ -1,6 +1,6 @@
 module Random
 
-using Base: dSFMT, cget, cendof
+using Base: dSFMT, IntTypes
 
 export srand,
        rand, rand!,
@@ -200,6 +200,16 @@ rand{U}(g::RandIntGen{U}) = g.k == zero(U) ? rand(U) : rand_lessthan(g.u) % g.k
 # (e.g. r is a range 0:2:8 or a vector [2, 3, 5, 7])
 
 check_nonempty(r::AbstractArray) = (isempty(r) && error(ArgumentError("cannot randomly pick an element from an empty collection")); r)
+
+# special code which can handle "full ranges" (a workaround to error in e.g. `length(typemin(Int):typemax(Int))`)
+# cget/cendof work like getindex/endof respectively, but with indexes starting at 0
+cget(t::AbstractArray, i::Real) = @inbounds return t[i+1]
+cget{T<:Union(IntTypes...)}(r::Range{T}, i::Integer) = itrunc(T, unsigned(first(r)) +  unsigned(i)*unsigned(step(r)))
+cendof(a::AbstractArray) = unsigned(length(a) - 1) # precondition: !isempty(a)
+cendof{T<:Union(IntTypes...),S<:Union(IntTypes...)}(r::StepRange{T,S}) = r.step > 0 ?
+                                                                         div(unsigned(r.stop - r.start), r.step) :
+                                                                         div(unsigned(r.start - r.stop), -r.step)
+cendof{T<:Union(IntTypes...)}(r::UnitRange{T}) = unsigned(r.stop - r.start)
 
 rand(r::AbstractArray) = cget(r, rand(randintgen(cendof(check_nonempty(r)))))
 

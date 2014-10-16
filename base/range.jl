@@ -213,21 +213,6 @@ let smallint = (Int === Int64 ?
     length{T <: smallint}(r::UnitRange{T}) = int(r.stop) - int(r.start) + 1
 end
 
-cendof(r::StepRange) = unsigned(endof(r) - 1)
-
-const IntTypes = (Int8, Uint8, Int16, Uint16, Int32, Uint32,
-                  Int64, Uint64, Int128, Uint128)
-
-function cendof{T<:Union(IntTypes...),S<:Union(IntTypes...)}(r::StepRange{T,S})
-    if r.step > 0
-        div(unsigned(r.stop - r.start), r.step)
-    else
-        div(unsigned(r.start - r.stop), -r.step)
-    end
-end
-
-cendof{T<:Union(IntTypes...)}(r::UnitRange{T}) = unsigned(r.stop - r.start)
-
 first{T}(r::OrdinalRange{T}) = oftype(T, r.start)
 first(r::FloatRange) = r.start/r.divisor
 
@@ -277,8 +262,6 @@ function getindex{T}(r::FloatRange{T}, i::Integer)
     1 <= i <= length(r) || error(BoundsError)
     oftype(T, (r.start + (i-1)*r.step)/r.divisor)
 end
-
-cget{T<:Union(IntTypes...)}(r::Range{T}, i::Integer) = itrunc(T, unsigned(first(r)) +  unsigned(i)*unsigned(step(r)))
 
 function check_indexingrange(s, r)
     sl = length(s)
