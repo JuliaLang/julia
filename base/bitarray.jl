@@ -342,8 +342,9 @@ end
 ## Indexing: getindex ##
 
 function unsafe_bitgetindex(Bc::Vector{Uint64}, i::Int)
-    return (Bc[@_div64(i-1)+1] & (uint64(1)<<@_mod64(i-1))) != 0
+    return @inbounds (Bc[@_div64(i-1)+1] & (uint64(1)<<@_mod64(i-1))) != 0
 end
+unsafe_getindex(v::BitArray, ind::Int) = Base.unsafe_bitgetindex(v.chunks, ind)
 
 function getindex(B::BitArray, i::Int)
     1 <= i <= length(B) || throw(BoundsError())
@@ -408,6 +409,7 @@ function unsafe_bitsetindex!(Bc::Array{Uint64}, x::Bool, i::Int)
         end
     end
 end
+unsafe_setindex!(v::BitArray, x::Bool, ind::Int) = (Base.unsafe_bitsetindex!(v.chunks, x, ind); v)
 
 setindex!(B::BitArray, x) = setindex!(B, convert(Bool,x), 1)
 

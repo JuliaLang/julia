@@ -783,6 +783,8 @@ export
     union!,
     union,
     unique,
+    unsafe_getindex,
+    unsafe_setindex!,
     values,
     ∈,
     ∉,

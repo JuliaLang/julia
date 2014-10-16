@@ -241,21 +241,25 @@ collect(itr) = collect(eltype(itr), itr)
 
 ## Indexing: getindex ##
 
-getindex(a::Array) = arrayref(a,1)
+for (getindexfn, transform) in ((:getindex, x->x), (:unsafe_getindex, x->:(@boundscheck false return $x)))
+    @eval begin
+        $getindexfn(a::Array) = $(transform(:(arrayref(a,1))))
 
-getindex(A::Array, i0::Real) = arrayref(A,to_index(i0))
-getindex(A::Array, i0::Real, i1::Real) = arrayref(A,to_index(i0),to_index(i1))
-getindex(A::Array, i0::Real, i1::Real, i2::Real) =
-    arrayref(A,to_index(i0),to_index(i1),to_index(i2))
-getindex(A::Array, i0::Real, i1::Real, i2::Real, i3::Real) =
-    arrayref(A,to_index(i0),to_index(i1),to_index(i2),to_index(i3))
-getindex(A::Array, i0::Real, i1::Real, i2::Real, i3::Real,  i4::Real) =
-    arrayref(A,to_index(i0),to_index(i1),to_index(i2),to_index(i3),to_index(i4))
-getindex(A::Array, i0::Real, i1::Real, i2::Real, i3::Real,  i4::Real, i5::Real) =
-    arrayref(A,to_index(i0),to_index(i1),to_index(i2),to_index(i3),to_index(i4),to_index(i5))
+        $getindexfn(A::Array, i0::Real) = $(transform(:(arrayref(A,to_index(i0)))))
+        $getindexfn(A::Array, i0::Real, i1::Real) = $(transform(:(arrayref(A,to_index(i0),to_index(i1)))))
+        $getindexfn(A::Array, i0::Real, i1::Real, i2::Real) =
+            $(transform(:(arrayref(A,to_index(i0),to_index(i1),to_index(i2)))))
+        $getindexfn(A::Array, i0::Real, i1::Real, i2::Real, i3::Real) =
+            $(transform(:(arrayref(A,to_index(i0),to_index(i1),to_index(i2),to_index(i3)))))
+        $getindexfn(A::Array, i0::Real, i1::Real, i2::Real, i3::Real,  i4::Real) =
+            $(transform(:(arrayref(A,to_index(i0),to_index(i1),to_index(i2),to_index(i3),to_index(i4)))))
+        $getindexfn(A::Array, i0::Real, i1::Real, i2::Real, i3::Real,  i4::Real, i5::Real) =
+            $(transform(:(arrayref(A,to_index(i0),to_index(i1),to_index(i2),to_index(i3),to_index(i4),to_index(i5)))))
 
-getindex(A::Array, i0::Real, i1::Real, i2::Real, i3::Real,  i4::Real, i5::Real, I::Real...) =
-    arrayref(A,to_index(i0),to_index(i1),to_index(i2),to_index(i3),to_index(i4),to_index(i5),to_index(I)...)
+        $getindexfn(A::Array, i0::Real, i1::Real, i2::Real, i3::Real,  i4::Real, i5::Real, I::Real...) =
+            $(transform(:(arrayref(A,to_index(i0),to_index(i1),to_index(i2),to_index(i3),to_index(i4),to_index(i5),to_index(I)...))))
+    end
+end
 
 # Fast copy using copy! for UnitRange
 function getindex(A::Array, I::UnitRange{Int})
@@ -302,21 +306,26 @@ getindex(A::Array, I::AbstractArray{Bool}) = getindex_bool_1d(A, I)
 
 
 ## Indexing: setindex! ##
-setindex!{T}(A::Array{T}, x) = arrayset(A, convert(T,x), 1)
 
-setindex!{T}(A::Array{T}, x, i0::Real) = arrayset(A, convert(T,x), to_index(i0))
-setindex!{T}(A::Array{T}, x, i0::Real, i1::Real) =
-    arrayset(A, convert(T,x), to_index(i0), to_index(i1))
-setindex!{T}(A::Array{T}, x, i0::Real, i1::Real, i2::Real) =
-    arrayset(A, convert(T,x), to_index(i0), to_index(i1), to_index(i2))
-setindex!{T}(A::Array{T}, x, i0::Real, i1::Real, i2::Real, i3::Real) =
-    arrayset(A, convert(T,x), to_index(i0), to_index(i1), to_index(i2), to_index(i3))
-setindex!{T}(A::Array{T}, x, i0::Real, i1::Real, i2::Real, i3::Real, i4::Real) =
-    arrayset(A, convert(T,x), to_index(i0), to_index(i1), to_index(i2), to_index(i3), to_index(i4))
-setindex!{T}(A::Array{T}, x, i0::Real, i1::Real, i2::Real, i3::Real, i4::Real, i5::Real) =
-    arrayset(A, convert(T,x), to_index(i0), to_index(i1), to_index(i2), to_index(i3), to_index(i4), to_index(i5))
-setindex!{T}(A::Array{T}, x, i0::Real, i1::Real, i2::Real, i3::Real, i4::Real, i5::Real, I::Real...) =
-    arrayset(A, convert(T,x), to_index(i0), to_index(i1), to_index(i2), to_index(i3), to_index(i4), to_index(i5), to_index(I)...)
+for (setindexfn, transform) in ((:setindex!, x->x), (:unsafe_setindex!, x->:(@boundscheck false return $x)))
+    @eval begin
+        $setindexfn{T}(A::Array{T}, x) = $(transform(:(arrayset(A, convert(T,x), 1))))
+
+        $setindexfn{T}(A::Array{T}, x, i0::Real) = $(transform(:(arrayset(A, convert(T,x), to_index(i0)))))
+        $setindexfn{T}(A::Array{T}, x, i0::Real, i1::Real) =
+            $(transform(:(arrayset(A, convert(T,x), to_index(i0), to_index(i1)))))
+        $setindexfn{T}(A::Array{T}, x, i0::Real, i1::Real, i2::Real) =
+            $(transform(:(arrayset(A, convert(T,x), to_index(i0), to_index(i1), to_index(i2)))))
+        $setindexfn{T}(A::Array{T}, x, i0::Real, i1::Real, i2::Real, i3::Real) =
+            $(transform(:(arrayset(A, convert(T,x), to_index(i0), to_index(i1), to_index(i2), to_index(i3)))))
+        $setindexfn{T}(A::Array{T}, x, i0::Real, i1::Real, i2::Real, i3::Real, i4::Real) =
+            $(transform(:(arrayset(A, convert(T,x), to_index(i0), to_index(i1), to_index(i2), to_index(i3), to_index(i4)))))
+        $setindexfn{T}(A::Array{T}, x, i0::Real, i1::Real, i2::Real, i3::Real, i4::Real, i5::Real) =
+            $(transform(:(arrayset(A, convert(T,x), to_index(i0), to_index(i1), to_index(i2), to_index(i3), to_index(i4), to_index(i5)))))
+        $setindexfn{T}(A::Array{T}, x, i0::Real, i1::Real, i2::Real, i3::Real, i4::Real, i5::Real, I::Real...) =
+            $(transform(:(arrayset(A, convert(T,x), to_index(i0), to_index(i1), to_index(i2), to_index(i3), to_index(i4), to_index(i5), to_index(I)...))))
+    end
+end
 
 function setindex!{T<:Real}(A::Array, x, I::AbstractVector{T})
     for i in I

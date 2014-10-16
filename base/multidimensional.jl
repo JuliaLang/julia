@@ -5,16 +5,6 @@
     nothing
 end
 
-unsafe_getindex(v::Real, ind::Int) = v
-unsafe_getindex(v::Range, ind::Int) = first(v) + (ind-1)*step(v)
-unsafe_getindex(v::BitArray, ind::Int) = Base.unsafe_bitgetindex(v.chunks, ind)
-unsafe_getindex(v::AbstractArray, ind::Int) = v[ind]
-unsafe_getindex(v, ind::Real) = unsafe_getindex(v, to_index(ind))
-
-unsafe_setindex!{T}(v::AbstractArray{T}, x::T, ind::Int) = (v[ind] = x; v)
-unsafe_setindex!(v::BitArray, x::Bool, ind::Int) = (Base.unsafe_bitsetindex!(v.chunks, x, ind); v)
-unsafe_setindex!{T}(v::AbstractArray{T}, x::T, ind::Real) = unsafe_setindex!(v, x, to_index(ind))
-
 # Version that uses cartesian indexing for src
 @ngenerate N typeof(dest) function _getindex!(dest::Array, src::AbstractArray, I::NTuple{N,Union(Int,AbstractVector)}...)
     checksize(dest, I...)
