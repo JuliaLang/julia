@@ -243,7 +243,7 @@ All Objects
 
 .. function:: oftype(x, y)
 
-   Convert ``y`` to the type of ``x``.
+   Convert ``y`` to the type of ``x`` (``convert(typeof(x), y)``).
 
 .. function:: widen(type | x)
 

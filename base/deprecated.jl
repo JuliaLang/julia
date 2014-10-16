@@ -195,3 +195,5 @@ const None = Union()
 @deprecate Dict{K}(ks::(K...), vs::Tuple)                        Dict{K,Any}(zip(ks, vs))
 @deprecate Dict{V}(ks::Tuple, vs::(V...))                        Dict{Any,V}(zip(ks, vs))
 @deprecate Dict(ks, vs)                                          Dict{Any,Any}(zip(ks, vs))
+
+@deprecate oftype{T}(::Type{T},c)  convert(T,c)
