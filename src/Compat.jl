@@ -35,22 +35,19 @@ function rewrite_dict(ex)
     newex
 end
 
-function _compat!(ex::Expr)
+function _compat(ex::Expr)
     if ex.head == :call
         f = ex.args[1]
         if VERSION < v"0.4.0-dev+980" && (f == :Dict || (isexpr(f, :curly) && length(f.args) == 3 && f.args[1] == :Dict))
             return rewrite_dict(ex)
         end
     end
-    for i = 1:length(ex.args)
-        ex.args[i] = _compat!(ex.args[i])
-    end
-    ex
+    return Expr(ex.head, map(_compat, ex.args)...)
 end
-_compat!(ex) = ex
+_compat(ex) = ex
 
 macro compat(ex)
-    esc(_compat!(ex))
+    esc(_compat(ex))
 end
 
 export @compat
