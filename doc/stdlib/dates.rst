@@ -1,5 +1,40 @@
 .. module:: Dates
 
+Dates Types
+-----------
+
+.. data:: Period
+.. data:: Year
+.. data:: Month
+.. data:: Week
+.. data:: Day
+.. data:: Hour
+.. data:: Minute
+.. data:: Second
+.. data:: Millisecond
+   
+   ``Period`` types represent discrete, human representations of time.
+
+.. data:: Instant
+
+   ``Instant`` types represent integer-based, machine representations of time as continuous timelines starting from an epoch.
+   
+.. data:: UTInstant{T}
+
+   The ``UTInstant`` represents a machine timeline based on `UT` time (1 day = one revolution of the earth). The ``{T}`` is a ``Period`` parameter that indicates the resolution or precision of the instant.
+
+.. data:: TimeType
+
+   ``TimeType`` types wrap ``Instant`` machine instances to provide human representations of the machine instant.
+   
+.. data:: DateTime
+
+   ``DateTime`` wraps a ``UTInstant{Millisecond}`` and interprets it according to the proleptic Gregorian calendar.
+   
+.. data:: Date
+
+   ``Date`` wraps a ``UTInstant{Day}`` and interprets it according to the proleptic Gregorian calendar.
+
 Dates Functions
 ---------------
 

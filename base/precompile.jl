@@ -214,6 +214,7 @@ precompile(Base.print_joined, (IOBuffer, Array{SubString{ASCIIString}, 1}, ASCII
 precompile(Base.print_joined, (IOBuffer, Array{UTF8String,1}, Char))
 precompile(Base.println, (Base.TTY,))
 precompile(Base.println, (Base.Terminals.TTYTerminal,))
+precompile(Base.promote_type, (Type{Int}, Bool))
 precompile(Base.push!, (Array{Char, 1}, Char))
 precompile(Base.push!, (Array{String, 1}, ASCIIString))
 precompile(Base.push!, (Array{String,1}, UTF8String))

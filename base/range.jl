@@ -39,9 +39,9 @@ immutable StepRange{T,S} <: OrdinalRange{T,S}
                 if T<:Signed && (diff > zero(diff)) != (stop > start)
                     # handle overflowed subtraction with unsigned rem
                     if diff > zero(diff)
-                        remain = -oftype(T, unsigned(-diff) % step)
+                        remain = -convert(T, unsigned(-diff) % step)
                     else
-                        remain = oftype(T, unsigned(diff) % step)
+                        remain = convert(T, unsigned(diff) % step)
                     end
                 else
                     remain = steprem(start,stop,step)
@@ -85,7 +85,7 @@ colon{T<:Real}(start::T, step, stop::T) = StepRange(start, step, stop)
 
 colon{T}(start::T, step, stop::T) = StepRange(start, step, stop)
 
-range{T,S}(a::T, step::S, len::Integer) = StepRange{T,S}(a, step, a+step*(len-1))
+range{T,S}(a::T, step::S, len::Integer) = StepRange{T,S}(a, step, convert(T, a+step*(len-1)))
 
 ## floating point ranges
 
@@ -188,9 +188,9 @@ length(r::FloatRange) = integer(r.len)
 function length{T<:Union(Int,Uint,Int64,Uint64)}(r::StepRange{T})
     isempty(r) && return zero(T)
     if r.step > 1
-        return checked_add(oftype(T, div(unsigned(r.stop - r.start), r.step)), one(T))
+        return checked_add(convert(T, div(unsigned(r.stop - r.start), r.step)), one(T))
     elseif r.step < -1
-        return checked_add(oftype(T, div(unsigned(r.start - r.stop), -r.step)), one(T))
+        return checked_add(convert(T, div(unsigned(r.start - r.stop), -r.step)), one(T))
     else
         checked_add(div(checked_sub(r.stop, r.start), r.step), one(T))
     end
@@ -213,12 +213,12 @@ let smallint = (Int === Int64 ?
     length{T <: smallint}(r::UnitRange{T}) = int(r.stop) - int(r.start) + 1
 end
 
-first{T}(r::OrdinalRange{T}) = oftype(T, r.start)
+first{T}(r::OrdinalRange{T}) = convert(T, r.start)
 first(r::FloatRange) = r.start/r.divisor
 
 last{T}(r::StepRange{T}) = r.stop
 last(r::UnitRange) = r.stop
-last{T}(r::FloatRange{T}) = oftype(T, (r.start + (r.len-1)*r.step)/r.divisor)
+last{T}(r::FloatRange{T}) = convert(T, (r.start + (r.len-1)*r.step)/r.divisor)
 
 minimum(r::UnitRange) = isempty(r) ? error("range must be non-empty") : first(r)
 maximum(r::UnitRange) = isempty(r) ? error("range must be non-empty") : last(r)
@@ -235,18 +235,18 @@ copy(r::Range) = r
 ## iteration
 
 start(r::FloatRange) = 0
-next{T}(r::FloatRange{T}, i) = (oftype(T, (r.start + i*r.step)/r.divisor), i+1)
+next{T}(r::FloatRange{T}, i) = (convert(T, (r.start + i*r.step)/r.divisor), i+1)
 done(r::FloatRange, i) = (length(r) <= i)
 
 # NOTE: For ordinal ranges, we assume start+step might be from a
 # lifted domain (e.g. Int8+Int8 => Int); use that for iterating.
 start(r::StepRange) = convert(typeof(r.start+r.step), r.start)
-next{T}(r::StepRange{T}, i) = (oftype(T,i), i+r.step)
+next{T}(r::StepRange{T}, i) = (convert(T,i), i+r.step)
 done{T,S}(r::StepRange{T,S}, i) = isempty(r) | (i < min(r.start, r.stop)) | (i > max(r.start, r.stop))
 done{T,S}(r::StepRange{T,S}, i::Integer) = isempty(r) | (i == r.stop+r.step)
 
 start(r::UnitRange) = oftype(r.start+1, r.start)
-next{T}(r::UnitRange{T}, i) = (oftype(T,i), i+1)
+next{T}(r::UnitRange{T}, i) = (convert(T,i), i+1)
 done(r::UnitRange, i) = i==oftype(i,r.stop)+1
 
 
@@ -256,11 +256,11 @@ getindex(r::Range, i::Real) = getindex(r, to_index(i))
 
 function getindex{T}(r::Range{T}, i::Integer)
     1 <= i <= length(r) || error(BoundsError)
-    oftype(T, first(r) + (i-1)*step(r))
+    convert(T, first(r) + (i-1)*step(r))
 end
 function getindex{T}(r::FloatRange{T}, i::Integer)
     1 <= i <= length(r) || error(BoundsError)
-    oftype(T, (r.start + (i-1)*r.step)/r.divisor)
+    convert(T, (r.start + (i-1)*r.step)/r.divisor)
 end
 
 function check_indexingrange(s, r)

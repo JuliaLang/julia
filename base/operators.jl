@@ -163,8 +163,7 @@ A_ldiv_Bt (a,b) = a\transpose(b)
 At_ldiv_Bt(a,b) = transpose(a)\transpose(b)
 
 
-oftype{T}(::Type{T},c) = convert(T,c)
-oftype{T}(x::T,c) = convert(T,c)
+oftype(x,c) = convert(typeof(x),c)
 
 widen{T<:Number}(x::T) = convert(widen(T), x)
 

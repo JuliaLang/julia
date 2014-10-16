@@ -170,35 +170,6 @@ for elty in (Complex64, Complex128)
     @test_approx_eq triu(LinAlg.BLAS.her2k('U','C',U,V)) triu(U'*V + V'*U)        
 end
 
-# LAPACK tests
-srand(123)
-Ainit = randn(5,5)
-for elty in (Float32, Float64, Complex64, Complex128)
-    # syevr!
-    if elty == Complex64 || elty == Complex128
-        A = complex(Ainit, Ainit)
-    else
-        A = Ainit
-    end
-    A = convert(Array{elty, 2}, A)
-    Asym = A'A
-    vals, Z = LinAlg.LAPACK.syevr!('V', copy(Asym))
-    @test_approx_eq Z*scale(vals, Z') Asym
-    @test all(vals .> 0.0)
-    @test_approx_eq LinAlg.LAPACK.syevr!('N','V','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] vals[vals .< 1.0]
-    @test_approx_eq LinAlg.LAPACK.syevr!('N','I','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] vals[4:5]
-    @test_approx_eq vals LinAlg.LAPACK.syev!('N','U',copy(Asym))
-end
-
-# Test gglse
-for elty in (Float32, Float64, Complex64, Complex128)
-    A = convert(Array{elty, 2}, [1 1 1 1; 1 3 1 1; 1 -1 3 1; 1 1 1 3; 1 1 1 -1])
-    c = convert(Array{elty, 1}, [2, 1, 6, 3, 1])
-    B = convert(Array{elty, 2}, [1 1 1 -1; 1 -1 1 1; 1 1 -1 1])
-    d = convert(Array{elty, 1}, [1, 3, -1])
-    @test_approx_eq LinAlg.LAPACK.gglse!(A, c, B, d)[1] convert(Array{elty}, [0.5, -0.5, 1.5, 0.5])
-end
-
 # Test givens rotations
 for elty in (Float32, Float64, Complex64, Complex128)
     if elty <: Real

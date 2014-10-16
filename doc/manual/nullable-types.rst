@@ -26,18 +26,23 @@ To construct an object representing a missing value of type ``T``, use the
 
 .. doctest::
 
-    x1 = Nullable{Int}()
-    x2 = Nullable{Float64}()
-    x3 = Nullable{Vector{Int}}()
+    julia> x1 = Nullable{Int}()
+    julia> x2 = Nullable{Float64}()
+    julia> x3 = Nullable{Vector{Int}}()
 
 To construct an object representing a non-missing value of type ``T``, use the
 ``Nullable(x::T)`` function:
 
 .. doctest::
 
-    x1 = Nullable(1)
-    x2 = Nullable(1.0)
-    x3 = Nullable([1, 2, 3])
+    julia> x1 = Nullable(1)
+    Nullable(1)
+
+    julia> x2 = Nullable(1.0)
+    Nullable(1.0)
+
+    julia> x3 = Nullable([1, 2, 3])
+    Nullable([1, 2, 3])
 
 Note the core distinction between these two ways of constructing a ``Nullable``
 object: in one style, you provide a type, ``T``, as a function parameter; in
@@ -51,8 +56,11 @@ function:
 
 .. doctest::
 
-    isnull(Nullable{Float64}())
-    isnull(Nullable(0.0))
+    julia> isnull(Nullable{Float64}())
+    true
+
+    julia> isnull(Nullable(0.0))
+    false
 
 Safely accessing the value of an ``Nullable`` object
 ----------------------------------------------------
@@ -62,8 +70,12 @@ function:
 
 .. doctest::
 
-    get(Nullable{Float64}())
-    get(Nullable(1.0))
+    julia> get(Nullable{Float64}())
+    ERROR: NullException()
+     in get at nullable.jl:26
+
+    julia> get(Nullable(1.0))
+    1.0
 
 If the value is not present, as it would be for ``Nullable{Float64}``, a
 ``NullException`` error will be thrown. The error-throwing nature of the
@@ -76,8 +88,11 @@ default value as a second argument to ``get``:
 
 .. doctest::
 
-    get(Nullable{Float64}(), 0)
-    get(Nullable(1.0), 0)
+    julia> get(Nullable{Float64}(), 0)
+    0.0
+
+    julia> get(Nullable(1.0), 0)
+    1.0
 
 Note that this default value will automatically be converted to the type of
 the ``Nullable`` object that you attempt to access using the ``get`` function.
