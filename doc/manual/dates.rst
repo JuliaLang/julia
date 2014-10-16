@@ -319,25 +319,6 @@ This is useful with the do-block syntax for more complex temporal expressions:
            end
     2014-11-27
 
-The :func:`tofirst` and :func:`tolast` similarly take a ``DateFunction`` as first argument, but adjust to the first or last of the month by default, with a keyword to specify the first or last of the year instead:
-
-<<<<<<< HEAD
-=======
-.. doctest::
-
-    julia> Dates.tofirst(istuesday, Date(2014,7,13)) # Defaults to 1st of the month
-    2014-07-01
-
-    julia> Dates.tofirst(istuesday, Date(2014,7,13); of=Dates.Year)
-    2014-01-07
-
-    julia> Dates.tolast(istuesday, Date(2014,7,13))
-    2014-07-29
-
-    julia> Dates.tolast(istuesday, Date(2014,7,13); of=Dates.Year)
-    2014-12-30
-
->>>>>>> Convert dates codeblocks to doctests
 The final method in the adjuster API is the :func:`recur` function. :func:`recur` vectorizes the adjustment process by taking a start and stop date (optionally specified by a ``StepRange``), along with a ``DateFunction`` to specify all valid dates/moments to be returned in the specified range. In this case, the ``DateFunction`` is often referred to as the "inclusion" function because it specifies (by returning true) which dates/moments should be included in the returned vector of dates.
 
 .. doctest::
