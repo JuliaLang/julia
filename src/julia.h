@@ -432,11 +432,7 @@ extern jl_sym_t *arrow_sym; extern jl_sym_t *ldots_sym;
 #ifdef OVERLAP_TUPLE_LEN
 #define jl_typeof(v) ((jl_value_t*)((uptrint_t)((jl_value_t*)(v))->type & 0x000ffffffffffffeULL))
 #else
-#ifdef GC_INC
 #define jl_typeof(v) ((jl_value_t*)((uptrint_t)((jl_value_t*)(v))->type & ((uintptr_t)~3)))
-#else
-#define jl_typeof(v) (((jl_value_t*)(v))->type)
-#endif
 #endif
 
 #define jl_typeis(v,t) (jl_typeof(v)==(jl_value_t*)(t))
@@ -1383,20 +1379,18 @@ DLLEXPORT void gc_wb_slow(void* parent, void* ptr);
 
 static inline void gc_wb_binding(void *bnd, void *val)
 {
-    #ifdef GC_INC
     if (__unlikely((*(uintptr_t*)bnd & 1) == 1 && (*(uintptr_t*)val & 1) == 0))
         gc_queue_binding(bnd);
-    #endif
 }
 
 static inline void gc_wb_fwd(void* parent, void* ptr)
 {
-    #ifdef GC_INC
     // if parent is marked and ptr is clean
     if(__unlikely((*((uintptr_t*)parent) & 1) == 1 && (*((uintptr_t*)ptr) & 1) == 0)) {
+        // the set lsb indicates this object must stay in the remset until the next
+        // long collection
         gc_queue_root((void*)((uintptr_t)ptr | 1));
     }
-    #endif
 }
 
 static inline void gc_wb(void *parent, void *ptr)
@@ -1408,23 +1402,18 @@ static inline void gc_wb(void *parent, void *ptr)
 
 static inline void gc_wb_buf(void *parent, void *bufptr)
 {
-    #ifdef GC_INC
     // if parent is marked and buf is not
     if (__unlikely((*((uintptr_t*)parent) & 1) == 1))
                    //                   (*((uintptr_t*)bufptr) & 3) != 1))
           gc_setmark_buf(bufptr, *(uintptr_t*)parent & 3);
-    #endif
 }
 
 static inline void gc_wb_back(void *ptr)
 {
-    #ifdef GC_INC
     // if ptr is marked
     if(__unlikely((*((uintptr_t*)ptr) & 1) == 1)) {
-        //        *((uintptr_t*)ptr) &= ~(uintptr_t)3; // clear the mark
         gc_queue_root(ptr);
     }
-    #endif
 }
 
 #ifdef __cplusplus

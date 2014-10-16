@@ -1361,7 +1361,6 @@ static Value *emit_boxed_rooted(jl_value_t *e, jl_codectx_t *ctx)
 // if ptr is NULL this emits a write barrier _back_
 static void emit_write_barrier(jl_codectx_t* ctx, Value *parent, Value *ptr)
 {
-    #ifdef GC_INC
     /*    builder.CreateCall2(wbfunc, builder.CreateBitCast(parent, jl_pvalue_llvmt), builder.CreateBitCast(ptr, jl_pvalue_llvmt));
           return;*/
     parent = builder.CreateBitCast(parent, T_psize);
@@ -1386,12 +1385,10 @@ static void emit_write_barrier(jl_codectx_t* ctx, Value *parent, Value *ptr)
     builder.CreateBr(cont);
     ctx->f->getBasicBlockList().push_back(cont);
     builder.SetInsertPoint(cont);
-    #endif
 }
 
 static void emit_checked_write_barrier(jl_codectx_t *ctx, Value *parent, Value *ptr)
 {
-#ifdef GC_INC
     BasicBlock *cont;
     Value *not_null = builder.CreateICmpNE(ptr, V_null);
     BasicBlock *if_not_null = BasicBlock::Create(getGlobalContext(), "wb_not_null", ctx->f);
@@ -1402,7 +1399,6 @@ static void emit_checked_write_barrier(jl_codectx_t *ctx, Value *parent, Value *
     builder.CreateBr(cont);
     ctx->f->getBasicBlockList().push_back(cont);
     builder.SetInsertPoint(cont);
-#endif
 }
 
 
