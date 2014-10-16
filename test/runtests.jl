@@ -42,3 +42,8 @@ td[1] = 1.0
 	Dict(a => b, c => d)
 end
 @test f() == Dict([(:a, :b), (:c, :d)])
+
+@test @compat split("a,b,,c", ',', limit=2) == ["a", "b,,c"]
+@test @compat split("a,b,,c", ',', limit=2,keep=true) == ["a", "b,,c"]
+@test @compat split("a,b,,c", ',', keep=false) == ["a", "b", "c"]
+@test @compat split("a,b,,c", ',', keep=true) == ["a", "b", "", "c"]

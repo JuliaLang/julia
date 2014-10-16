@@ -35,11 +35,43 @@ function rewrite_dict(ex)
     newex
 end
 
+# rewrite Julia 0.4-style split(str, splitter; kws...) into 0.2/0.3-style
+# positional arguments
+function rewrite_split(ex)
+    limit = nothing
+    keep = nothing
+    for i in 4:length(ex.args)
+        if isexpr(ex.args[i], :kw)
+            kw = ex.args[i].args
+            if kw[1] == :limit
+                limit = kw[2]
+            elseif kw[1] == :keep
+                keep = kw[2]
+            end
+        end
+    end
+    if limit == nothing
+        if keep == nothing
+            return Expr(:call, :split, ex.args[2], ex.args[3])
+        else
+            return Expr(:call, :split, ex.args[2], ex.args[3], keep)
+        end
+    else
+        if keep == nothing
+            return Expr(:call, :split, ex.args[2], ex.args[3], limit)
+        else
+            return Expr(:call, :split, ex.args[2], ex.args[3], limit, keep)
+        end
+    end
+end
+
 function _compat(ex::Expr)
     if ex.head == :call
         f = ex.args[1]
         if VERSION < v"0.4.0-dev+980" && (f == :Dict || (isexpr(f, :curly) && length(f.args) == 3 && f.args[1] == :Dict))
             ex = rewrite_dict(ex)
+        elseif VERSION < v"0.4-" && f == :split && length(ex.args) >= 4 && isexpr(ex.args[4], :kw)
+            ex = rewrite_split(ex)
         end
     end
     return Expr(ex.head, map(_compat, ex.args)...)

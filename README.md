@@ -35,3 +35,5 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `@compat Dict(foo => bar, baz => qux)` - type-inferred `Dict` construction.
 
 * `@compat Dict{Foo,Bar}(foo => bar, baz => qux)` - type-declared `Dict` construction.
+
+* `@compat split(str, splitter; keywords...)` - the Julia 0.4-style keyword-based `split` function
