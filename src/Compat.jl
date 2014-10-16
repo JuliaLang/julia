@@ -70,7 +70,7 @@ function _compat(ex::Expr)
         f = ex.args[1]
         if VERSION < v"0.4.0-dev+980" && (f == :Dict || (isexpr(f, :curly) && length(f.args) == 3 && f.args[1] == :Dict))
             ex = rewrite_dict(ex)
-        elseif VERSION < v"0.4-" && f == :split && length(ex.args) >= 4 && isexpr(ex.args[4], :kw)
+        elseif VERSION < v"0.4.0-dev+129" && f == :split && length(ex.args) >= 4 && isexpr(ex.args[4], :kw)
             ex = rewrite_split(ex)
         end
     end
