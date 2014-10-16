@@ -1605,7 +1605,7 @@ function record_var_type(e::Symbol, t::ANY, decls)
     otherTy = get(decls::ObjectIdDict, e, false)
     # keep track of whether a variable is always the same type
     if !is(otherTy,false)
-        if !is(otherTy, t)
+        if !typeseq(otherTy, t)
             decls[e] = Any
         end
     else

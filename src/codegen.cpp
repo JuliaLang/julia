@@ -1011,10 +1011,10 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
                             return b->value;
                     }
                 }
-                else if (fptr == &jl_f_tuple) {
+                else if (fptr == &jl_f_tuple || fptr == &jl_f_instantiate_type) {
                     size_t i;
                     size_t n = jl_array_dim0(e->args)-1;
-                    if (n==0) return (jl_value_t*)jl_null;
+                    if (n==0 && fptr == &jl_f_tuple) return (jl_value_t*)jl_null;
                     if (!allow_alloc)
                         return NULL;
                     jl_value_t **v;
@@ -1027,12 +1027,9 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
                             return NULL;
                         }
                     }
-                    jl_tuple_t *tup = jl_alloc_tuple_uninit(n);
-                    for(i=0; i < n; i++) {
-                        jl_tupleset(tup, i, v[i]);
-                    }
+                    jl_value_t *result = fptr(f, v, n);
                     JL_GC_POP();
-                    return (jl_value_t*)tup;
+                    return result;
                 }
             }
         // The next part is probably valid, but it is untested

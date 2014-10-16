@@ -1072,8 +1072,8 @@ function shell_parse(raw::String, interp::Bool)
     in_single_quotes = false
     in_double_quotes = false
 
-    args = []
-    arg = []
+    args::Vector{Any} = []
+    arg::Vector{Any} = []
     i = start(s)
     j = i
 
