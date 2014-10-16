@@ -246,7 +246,7 @@ function expm!{T<:BlasFloat}(A::StridedMatrix{T})
         s  = log2(nA/5.4)               # power of 2 later reversed by squaring
         if s > 0
             si = iceil(s)
-            A /= oftype(T,2^si)
+            A /= convert(T,2^si)
         end
         CC = T[64764752532480000.,32382376266240000.,7771770303897600.,
                 1187353796428800.,  129060195264000.,  10559470521600.,

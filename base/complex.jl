@@ -286,7 +286,7 @@ angle(z::Complex) = atan2(imag(z), real(z))
 function log{T<:FloatingPoint}(z::Complex{T})
     const T1::T  = 1.25
     const T2::T  = 3
-    const ln2::T = log(oftype(T,2))  #0.6931471805599453
+    const ln2::T = log(convert(T,2))  #0.6931471805599453
     x, y = reim(z)
     ρ, k = ssqs(x,y)
     ax = abs(x)
