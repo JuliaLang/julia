@@ -32,6 +32,8 @@ td[1] = 1.0
 @test @compat(Dict{Any,Any}()) == Dict{Any,Any}()
 @test @compat(Dict([(1, 1)])) == Dict([(1, 1)])
 
+@test @compat(Dict(:a => Dict(:b => 1))) == Dict([(:a, Dict([(:b, 1)]))])
+
 @compat function f()
 	a = :a
 	b = :b

@@ -39,7 +39,7 @@ function _compat(ex::Expr)
     if ex.head == :call
         f = ex.args[1]
         if VERSION < v"0.4.0-dev+980" && (f == :Dict || (isexpr(f, :curly) && length(f.args) == 3 && f.args[1] == :Dict))
-            return rewrite_dict(ex)
+            ex = rewrite_dict(ex)
         end
     end
     return Expr(ex.head, map(_compat, ex.args)...)
