@@ -1,4 +1,4 @@
-immutable LDLt{T,S<:AbstractMatrix{T}} <: Factorization{T}
+immutable LDLt{T,S<:AbstractMatrix} <: Factorization{T}
     data::S
 end
 

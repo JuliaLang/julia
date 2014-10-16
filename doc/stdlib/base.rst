@@ -3845,7 +3845,7 @@ Integers
 
    .. doctest::
 
-      julia> leading_ones(int32(2 ^ 32 - 2))
+      julia> leading_ones(uint32(2 ^ 32 - 2))
       31
 
 .. function:: trailing_zeros(x::Integer) -> Integer
@@ -4478,18 +4478,18 @@ Combinatorics
 
    In-place version of :func:`reverse`.
 
-.. function:: combinations(arr, n)
+.. function:: combinations(array, n)
 
    Generate all combinations of ``n`` elements from an indexable
    object.  Because the number of combinations can be very large, this
    function returns an iterator object. Use
-   ``collect(combinations(a,n))`` to get an array of all combinations.
+   ``collect(combinations(array,n))`` to get an array of all combinations.
 
-.. function:: permutations(arr)
+.. function:: permutations(array)
 
    Generate all permutations of an indexable object.  Because the
    number of permutations can be very large, this function returns an
-   iterator object. Use ``collect(permutations(a,n))`` to get an array
+   iterator object. Use ``collect(permutations(array))`` to get an array
    of all permutations.
 
 .. function:: partitions(n)

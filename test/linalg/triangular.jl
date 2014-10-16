@@ -1,8 +1,89 @@
 debug = false
 using Base.Test
-using Base.LinAlg: BlasFloat, naivesub!
+using Base.LinAlg: BlasFloat, errorbounds, naivesub!
 
 debug && println("Triangular matrices")
+
+n = 20
+srand(123)
+
+# A = rand(n, n)
+
+Areal   = randn(n, n)/2
+Aimg    = randn(n, n)/2
+A2real  = randn(n, n)/2
+A2img   = randn(n, n)/2
+
+for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
+    A = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(Areal, Aimg) : Areal)
+    # a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(a2real, a2img) : a2real)
+    εa = eps(abs(float(one(eltya))))
+
+    for eltyb in (Float32, Float64, Complex64, Complex128)
+        εb = eps(abs(float(one(eltyb))))
+        ε = max(εa,εb)
+
+        debug && println("\ntype of A: ", eltya, " type of b: ", eltyb, "\n")
+    
+        debug && println("Solve upper triangular system")
+        Atri = Triangular(lufact(A)[:U], :U) |> t -> eltya <: Complex && eltyb <: Real ? real(t) : t # Here the triangular matrix can't be too badly conditioned
+        b = convert(Matrix{eltyb}, eltya <: Complex ? full(Atri)*ones(n, 2) : full(Atri)*ones(n, 2))
+        x = full(Atri) \ b
+    
+        debug && println("Test error estimates")
+        if eltya != BigFloat && eltyb != BigFloat
+            for i = 1:2
+                @test  norm(x[:,1] .- 1) <= errorbounds(Triangular(A, :U), x, b)[1][i]
+            end
+        end
+        debug && println("Test forward error [JIN 5705] if this is not a BigFloat")
+        
+        x = Atri \ b
+        γ = n*ε/(1 - n*ε)
+        if eltya != BigFloat
+            bigA = big(Atri)
+            x̂ = ones(n, 2)
+            for i = 1:size(b, 2)
+                @test norm(x̂[:,i] - x[:,i], Inf)/norm(x̂[:,i], Inf) <= condskeel(bigA, x̂[:,i])*γ/(1 - condskeel(bigA)*γ)
+            end
+        end
+        
+        debug && println("Test backward error [JIN 5705]")
+        for i = 1:size(b, 2)
+            @test norm(abs(b[:,i] - Atri*x[:,i]), Inf) <= γ * norm(Atri, Inf) * norm(x[:,i], Inf)
+        end
+    
+        debug && println("Solve lower triangular system")
+        Atri = Triangular(lufact(A)[:U], :U) |> t -> eltya <: Complex && eltyb <: Real ? real(t) : t # Here the triangular matrix can't be too badly conditioned
+        b = convert(Matrix{eltyb}, eltya <: Complex ? full(Atri)*ones(n, 2) : full(Atri)*ones(n, 2))
+        x = full(Atri)\b
+    
+        debug && println("Test error estimates")
+        if eltya != BigFloat && eltyb != BigFloat
+            for i = 1:2
+                @test  norm(x[:,1] .- 1) <= errorbounds(Triangular(A, :U), x, b)[1][i]
+            end
+        end
+
+        debug && println("Test forward error [JIN 5705] if this is not a BigFloat")
+        b = eltyb == Int ? itrunc(Atri*ones(n, 2)) : convert(Matrix{eltyb}, Atri*ones(eltya, n, 2))
+        x = Atri \ b
+        γ = n*ε/(1 - n*ε)
+        if eltya != BigFloat
+            bigA = big(Atri)
+            x̂ = ones(n, 2)
+            for i = 1:size(b, 2)
+                @test norm(x̂[:,i] - x[:,i], Inf)/norm(x̂[:,i], Inf) <= condskeel(bigA, x̂[:,i])*γ/(1 - condskeel(bigA)*γ)
+            end
+        end
+    
+        debug && println("Test backward error [JIN 5705]")
+        for i = 1:size(b, 2)
+            @test norm(abs(b[:,i] - Atri*x[:,i]), Inf) <= γ * norm(Atri, Inf) * norm(x[:,i], Inf)
+        end
+    end
+end
+
 n = 11
 for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
 
@@ -30,17 +111,12 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
 
     for (M, TM) in ((triu(A), Triangular(A, :U)), 
     				(tril(A), Triangular(A, :L)))
-        
-        ##Idempotent tests #XXX - not implemented
-        #for func in (conj, transpose, ctranspose)
-        #    @test full(func(func(TM))) == M
-        #end
 
         debug && println("Linear solver")
         x = M \ b
         tx = TM \ b
         condM = elty <:BlasFloat ? cond(TM, Inf) : convert(relty, cond(complex128(M), Inf))
-        @test norm(x-tx,Inf) <= 4*condM*max(eps()*norm(tx,Inf), eps(relty)*norm(x,Inf))
+        @test norm(x - tx,Inf) <= 4*condM*max(eps()*norm(tx,Inf), eps(relty)*norm(x,Inf))
         if elty <: BlasFloat #test naivesub! against LAPACK
             tx = [naivesub!(TM, b[:,1]) naivesub!(TM, b[:,2])]
             @test norm(x-tx,Inf) <= 4*condM*max(eps()*norm(tx,Inf), eps(relty)*norm(x,Inf))
@@ -77,3 +153,4 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
 end
 
 @test_throws DimensionMismatch Triangular(randn(5, 4), :L)
+

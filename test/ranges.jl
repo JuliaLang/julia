@@ -373,6 +373,9 @@ let smallint = (Int === Int64 ?
     end
 end
 
+# issue #8584
+@test (0:1//2:2)[1:2:3] == 0:1//1:1
+
 # cendof, cget
 for r in (typemin(Int):typemax(Int), typemin(Int):1:typemax(Int))
     @test Base.cendof(r)  == typemax(Uint)

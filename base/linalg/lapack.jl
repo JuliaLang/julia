@@ -2044,14 +2044,14 @@ for (trcon, trevc, trrfs, elty) in
         #$                   WORK( * ), X( LDX, * )
         function trrfs!(uplo::BlasChar, trans::BlasChar, diag::BlasChar,
                 A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, X::StridedVecOrMat{$elty},
-                Ferr::StridedVector{$elty}=similar(B, $elty, size(B,2)), Berr::StridedVector{$elty}=similar(B, $elty, size(B,2)))
+                Ferr::StridedVector{$elty}=similar(B, $elty, size(B,2)), Berr::StridedVector{$elty} = similar(B, $elty, size(B,2)))
             @chkuplo
-            n=size(A,2)
-            nrhs=size(B,2)
-            nrhs==size(X,2) || throw(DimensionMismatch(""))
-            work=Array($elty, 3n)
-            iwork=Array(BlasInt, n)
-            info=Array(BlasInt, 1)
+            n = size(A,2)
+            nrhs = size(B,2)
+            nrhs == size(X,2) || throw(DimensionMismatch(""))
+            work = Array($elty, 3n)
+            iwork = Array(BlasInt, n)
+            info = Array(BlasInt, 1)
             ccall(($(string(trrfs)),liblapack), Void,
                 (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, 
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
@@ -3102,25 +3102,41 @@ for (bdsqr, relty, elty) in
         #*> a real N-by-N (upper or lower) bidiagonal matrix B using the implicit
         #*> zero-shift QR algorithm.
         function bdsqr!(uplo::BlasChar, d::Vector{$relty}, e_::Vector{$relty},
-            vt::StridedMatrix{$elty}, u::StridedMatrix{$elty}, c::StridedMatrix{$elty})
-            @chkuplo
+            Vt::StridedMatrix{$elty}, U::StridedMatrix{$elty}, C::StridedMatrix{$elty})
+            
+            # Extract number
             n = length(d)
-            if length(e_) != n-1 throw(DimensionMismatch("bdsqr!")) end
-            ncvt, nru, ncc = size(vt, 2), size(u, 1), size(c, 2)
-            ldvt, ldu, ldc = max(1,stride(vt,2)), max(1,stride(u,2)), max(1,stride(c,2))
+            ncvt, nru, ncc = size(Vt, 2), size(U, 1), size(C, 2)
+            ldvt, ldu, ldc = max(1, stride(Vt,2)), max(1, stride(U, 2)), max(1, stride(C,2))
+            
+            # Do checks
+            @chkuplo
+            length(e_) == n - 1 || throw(DimensionMismatch("off-diagonal has length $(length(e_)) but should have length $(n - 1)"))
+            if ncvt > 0
+                ldvt >= n || throw(DimensionMismatch("leading dimension of Vt must be at least $n"))
+            end
+            ldu >= nru || throw(DimensionMismatch("leading dimension of U must be at least $nru"))
+            size(U, 2) == n || throw(DimensionMismatch("U must have $n columns but have $(size(U, 2))"))
+            if ncc > 0
+                ldc >= n || throw(DimensionMismatch("leading dimension of C must be at least $n"))
+            end
+
+            # Allocate
             work = Array($elty, 4n)
             info = Array(BlasInt,1)
 
             ccall(($(string(bdsqr)),liblapack), Void,
-                (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
-                Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
-                Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}), 
-                &uplo, &n, ncvt, &nru, &ncc,
-                d, e_, vt, &ldvt, u,
-                &ldu, c, &ldc, work, info)
+                (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, 
+                 Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, 
+                 Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, 
+                 Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}), 
+                &uplo, &n, &ncvt, &nru, 
+                &ncc, d, e_, Vt, 
+                &ldvt, U, &ldu, C, &ldc, 
+                work, info)
 
             @lapackerror
-            d, vt, u, c #singular values in descending order, P**T * VT, U * Q, Q**T * C
+            d, Vt, U, C #singular values in descending order, P**T * VT, U * Q, Q**T * C
         end
    end
 end

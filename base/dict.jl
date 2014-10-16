@@ -366,7 +366,7 @@ dict_with_eltype(kv, t) = Dict{Any,Any}(kv)
 similar{K,V}(d::Dict{K,V}) = Dict{K,V}()
 
 # conversion between Dict types
-function convert{K,V}(::Type{Dict{K,V}},d::Dict)
+function convert{K,V}(::Type{Dict{K,V}},d::Associative)
     h = Dict{K,V}()
     for (k,v) in d
         ck = convert(K,k)

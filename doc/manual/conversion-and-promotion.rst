@@ -98,7 +98,7 @@ requested conversion:
 
     julia> convert(FloatingPoint, "foo")
     ERROR: `convert` has no method matching convert(::Type{FloatingPoint}, ::ASCIIString)
-     in convert at base.jl:13
+     in convert at base.jl:9
 
 Some languages consider parsing strings as numbers or formatting
 numbers as strings to be conversions (many dynamic languages will even
@@ -138,7 +138,7 @@ to zero:
 
     julia> convert(Bool, 1im)
     ERROR: InexactError()
-     in convert at complex.jl:18
+     in convert at complex.jl:16
 
     julia> convert(Bool, 0im)
     false
@@ -294,7 +294,7 @@ This allows calls like the following to work:
     -3//1
 
     julia> typeof(ans)
-    Rational{Int64} (constructor with 1 method)
+    Rational{Int32} (constructor with 1 method)
 
 For most user-defined types, it is better practice to require
 programmers to supply the expected types to constructor functions

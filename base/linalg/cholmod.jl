@@ -294,7 +294,7 @@ type c_CholmodTriplet{Tv<:CHMVTypes,Ti<:CHMITypes}
     j::Ptr{Ti}
     x::Ptr{Tv}
     z::Ptr{Void}
-    stype:Cint
+    stype::Cint
     itype::Cint
     xtype::Cint
     dtype::Cint
@@ -790,6 +790,7 @@ for Ti in (:Int32,:Int64)
         end
         function solve{Tv<:CHMVTypes}(L::CholmodFactor{Tv,$Ti},
                                       B::CholmodDense{Tv}, typ::Integer)
+            size(L,1) == size(B,1) || throw(DimensionMismatch("LHS and RHS should have the same number of rows. LHS has $(size(L,1)) rows, but RHS has $(size(B,1)) rows."))
             CholmodDense(ccall((@chm_nm "solve" $Ti
                                 ,:libcholmod), Ptr{c_CholmodDense{Tv}},
                                (Cint, Ptr{c_CholmodFactor{Tv,$Ti}},
@@ -799,6 +800,7 @@ for Ti in (:Int32,:Int64)
         function solve{Tv<:CHMVTypes}(L::CholmodFactor{Tv,$Ti},
                                       B::CholmodSparse{Tv,$Ti},
                                       typ::Integer)
+            size(L,1) == size(B,1) || throw(DimensionMismatch("LHS and RHS should have the same number of rows. LHS has $(size(L,1)) rows, but RHS has $(size(B,1)) rows."))
             CholmodSparse(ccall((@chm_nm "spsolve" $Ti
                                  ,:libcholmod), Ptr{c_CholmodSparse{Tv,$Ti}},
                                 (Cint, Ptr{c_CholmodFactor{Tv,$Ti}},

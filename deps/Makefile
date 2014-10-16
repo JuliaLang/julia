@@ -1487,8 +1487,6 @@ endif
 	touch -c $@
 gmp-$(GMP_VER)/config.status: gmp-$(GMP_VER)/configure
 	cd gmp-$(GMP_VER) && \
-	sed -ibackup 's|includeexecdir = $$(exec_prefix)/include|includeexecdir = $$(includedir)|g' Makefile.in && \
-	sed -ibackup 's|includeexecdir = $$(exec_prefix)/include|includeexecdir = $$(includedir)|g' Makefile.am && \
 	./configure $(CONFIGURE_COMMON) F77= --enable-shared --disable-static
 	touch -c $@
 $(GMP_SRC_TARGET): gmp-$(GMP_VER)/config.status
@@ -1498,13 +1496,10 @@ ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C gmp-$(GMP_VER) $(LIBTOOL_CCLD) check
 endif
 	echo 1 > $@
-$(GMP_OBJ_TARGET): $(GMP_SRC_TARGET) gmp-$(GMP_VER)/checked
-	$(MAKE) -C gmp-$(GMP_VER) $(LIBTOOL_CCLD) install $(MAKE_COMMON)
-ifeq ($(OS),WINNT)
-	mv -f $(build_libdir)/libgmp.$(SHLIB_EXT) $@
-endif
+$(GMP_OBJ_TARGET): $(GMP_SRC_TARGET) gmp-$(GMP_VER)/checked | $(build_shlibdir) $(build_includedir)
+	$(INSTALL_M) gmp-$(GMP_VER)/.libs/libgmp.*$(SHLIB_EXT)* $(build_shlibdir)
+	$(INSTALL_F) gmp-$(GMP_VER)/gmp.h $(build_includedir)
 	$(INSTALL_NAME_CMD)libgmp.$(SHLIB_EXT) $@
-	touch -c $@
 
 clean-gmp:
 	-$(MAKE) -C gmp-$(GMP_VER) clean

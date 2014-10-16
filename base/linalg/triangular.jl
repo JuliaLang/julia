@@ -1,5 +1,5 @@
 ## Triangular
-immutable Triangular{T,S<:AbstractMatrix{T},UpLo,IsUnit} <: AbstractMatrix{T}
+immutable Triangular{T,S<:AbstractMatrix,UpLo,IsUnit} <: AbstractMatrix{T}
     data::S
 end
 function Triangular{T}(A::AbstractMatrix{T}, uplo::Symbol, isunit::Bool=false)
@@ -37,12 +37,6 @@ char_uplo(uplo::Symbol) = uplo == :U ? CHARU : (uplo == :L ? CHARL : throw(Argum
 for (func1, func2) in ((:*, :A_mul_B!), (:Ac_mul_B, :Ac_mul_B!), (:/, :A_rdiv_B!))
     @eval begin
         ($func1){T<:BlasFloat,S<:StridedMatrix,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, B::Triangular{T,S,UpLo,IsUnit}) = ($func2)(A, full(B))
-        ($func1){T<:BlasFloat,S<:StridedMatrix,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, B::StridedVecOrMat) = ($func2)(A, copy(B))
-    end
-end
-for (func1, func2) in ((:A_mul_Bc, :A_mul_Bc!), (:A_rdiv_Bc, :A_rdiv_Bc!))
-    @eval begin
-        ($func1){T<:BlasFloat,S<:StridedMatrix,UpLo,IsUnit}(A::StridedMatrix, B::Triangular{T,S,UpLo,IsUnit}) = ($func2)(copy(A), B)
     end
 end
 
@@ -60,25 +54,31 @@ Ac_mul_B!{T<:BlasReal,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, B::StridedM
 A_mul_Bc!{T<:BlasComplex,S,UpLo,IsUnit}(A::StridedMatrix{T}, B::Triangular{T,S,UpLo,IsUnit}) = BLAS.trmm!('R', UpLo == :L ? 'L' : 'U', 'C', IsUnit ? 'U' : 'N', one(T), B.data, A)
 A_mul_Bc!{T<:BlasReal,S,UpLo,IsUnit}(A::StridedMatrix{T}, B::Triangular{T,S,UpLo,IsUnit}) = BLAS.trmm!('R', UpLo == :L ? 'L' : 'U', 'T', IsUnit ? 'U' : 'N', one(T), B.data, A)
 
-A_ldiv_B!{T<:BlasFloat,S<:AbstractMatrix,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, B::StridedVecOrMat{T}) = LAPACK.trtrs!(UpLo == :L ? 'L' : 'U', 'N', IsUnit ? 'U' : 'N', A.data, B)
-function \{T<:BlasFloat,S<:AbstractMatrix,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, B::StridedVecOrMat{T})
-    x = A_ldiv_B!(A, copy(B))
-    errors = LAPACK.trrfs!(UpLo == :L ? 'L' : 'U', 'N', IsUnit ? 'U' : 'N', A.data, B, x)
-    all(isfinite, [errors...]) || all([errors...] .< one(T)/eps(T)) || warn("""Unreasonably large error in computed solution:
-forward errors:
-$(errors[1])
-backward errors:
-$(errors[2])""")
-    x
-end
-Ac_ldiv_B!{T<:BlasReal,S<:AbstractMatrix,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, B::StridedVecOrMat{T}) = LAPACK.trtrs!(UpLo == :L ? 'L' : 'U', 'T', IsUnit ? 'U' : 'N', A.data, B)
-Ac_ldiv_B!{T<:BlasComplex,S<:AbstractMatrix,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, B::StridedVecOrMat{T}) = LAPACK.trtrs!(UpLo == :L ? 'L' : 'U', 'C', IsUnit ? 'U' : 'N', A.data, B)
+A_ldiv_B!{T<:BlasFloat,S<:StridedMatrix,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, B::StridedVecOrMat{T}) = LAPACK.trtrs!(UpLo == :L ? 'L' : 'U', 'N', IsUnit ? 'U' : 'N', A.data, B)
+Ac_ldiv_B!{T<:BlasReal,S<:StridedMatrix,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, B::StridedVecOrMat{T}) = LAPACK.trtrs!(UpLo == :L ? 'L' : 'U', 'T', IsUnit ? 'U' : 'N', A.data, B)
+Ac_ldiv_B!{T<:BlasComplex,S<:StridedMatrix,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, B::StridedVecOrMat{T}) = LAPACK.trtrs!(UpLo == :L ? 'L' : 'U', 'C', IsUnit ? 'U' : 'N', A.data, B)
 
 A_rdiv_B!{T<:BlasFloat,S<:AbstractMatrix,UpLo,IsUnit}(A::StridedVecOrMat{T}, B::Triangular{T,S,UpLo,IsUnit}) = BLAS.trsm!('R', UpLo == :L ? 'L' : 'U', 'N', IsUnit ? 'U' : 'N', one(T), B.data, A)
 A_rdiv_Bc!{T<:BlasReal,S<:AbstractMatrix,UpLo,IsUnit}(A::StridedMatrix{T}, B::Triangular{T,S,UpLo,IsUnit}) = BLAS.trsm!('R', UpLo == :L ? 'L' : 'U', 'T', IsUnit ? 'U' : 'N', one(T), B.data, A)
 A_rdiv_Bc!{T<:BlasComplex,S<:AbstractMatrix,UpLo,IsUnit}(A::StridedMatrix{T}, B::Triangular{T,S,UpLo,IsUnit}) = BLAS.trsm!('R', UpLo == :L ? 'L' : 'U', 'C', IsUnit ? 'U' : 'N', one(T), B.data, A)
 
 inv{T<:BlasFloat,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}) = Triangular{T,S,UpLo,IsUnit}(LAPACK.trtri!(UpLo == :L ? 'L' : 'U', IsUnit ? 'U' : 'N', copy(A.data)))
+
+function \{T,AT,UpLo,S}(A::Triangular{T,AT,UpLo,true}, B::AbstractVecOrMat{S})
+    TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
+    TS == S ? A_ldiv_B!(A, copy(B)) : A_ldiv_B!(A, convert(AbstractArray{TS}, B))
+end
+
+function \{T,AT,UpLo,S}(A::Triangular{T,AT,UpLo,false}, B::AbstractVecOrMat{S})
+    TS = typeof((zero(T)*zero(S) + zero(T)*zero(S))/one(S))
+    TS == S ? A_ldiv_B!(A, copy(B)) : A_ldiv_B!(A, convert(AbstractArray{TS}, B))
+end
+
+errorbounds{T<:BlasFloat,S<:StridedMatrix,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, X::StridedVecOrMat{T}, B::StridedVecOrMat{T}) = LAPACK.trrfs!(UpLo == :L ? 'L' : 'U', 'N', IsUnit ? 'U' : 'N', A.data, B, X)
+function errorbounds{TA<:Number,S<:StridedMatrix,UpLo,IsUnit,TX<:Number,TB<:Number}(A::Triangular{TA,S,UpLo,IsUnit}, X::StridedVecOrMat{TX}, B::StridedVecOrMat{TB})
+    TAXB = promote_type(TA, TB, TX, Float32)
+    errorbounds(convert(AbstractMatrix{TAXB}, A), convert(AbstractArray{TAXB}, X), convert(AbstractArray{TAXB}, B))
+end
 
 #Eigensystems
 function eigvecs{T<:BlasFloat,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit})
@@ -150,6 +150,8 @@ function similar{T,S,UpLo,IsUnit,Tnew}(A::Triangular{T,S,UpLo,IsUnit}, ::Type{Tn
     return Triangular{Tnew, typeof(A), UpLo, IsUnit}(A)
 end
 
+copy{T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}) = Triangular{T,S,UpLo,IsUnit}(copy(A))
+
 getindex{T,S}(A::Triangular{T,S,:L,true}, i::Integer, j::Integer) = i == j ? one(T) : (i > j ? A.data[i,j] : zero(A.data[i,j]))
 getindex{T,S}(A::Triangular{T,S,:L,false}, i::Integer, j::Integer) = i >= j ? A.data[i,j] : zero(A.data[i,j])
 getindex{T,S}(A::Triangular{T,S,:U,true}, i::Integer, j::Integer) = i == j ? one(T) : (i < j ? A.data[i,j] : zero(A.data[i,j]))
@@ -166,8 +168,11 @@ ctranspose!{T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}) = Triangular{T, S, 
 diag{T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}) = IsUnit ? ones(T, size(A,1)) : diag(A.data)
 function big{T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit})
     M = big(A.data)
-    Triangular{T,typeof(M),UpLo,IsUnit}(M)
+    Triangular{eltype(M),typeof(M),UpLo,IsUnit}(M)
 end
+
+real{T<:Real}(A::Triangular{T}) = A
+real{T<:Complex,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}) = (B = real(A.data); Triangular{eltype(B), typeof(B), UpLo, IsUnit}(B))
 
 function (*){T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, x::Number)
     n = size(A,1)

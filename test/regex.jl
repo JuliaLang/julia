@@ -16,6 +16,8 @@ for f in [matchall, collect_eachmatch]
     @test f(r"aa", "aaaa", true) == ["aa", "aa", "aa"]
     @test f(r"", "aaa") == ["", "", "", ""]
     @test f(r"", "aaa", true) == ["", "", "", ""]
+    @test f(r"GCG","GCGCG") == ["GCG"]
+    @test f(r"GCG","GCGCG",true) == ["GCG","GCG"]
 end
 
 # Issue 8278

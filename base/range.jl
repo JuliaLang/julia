@@ -85,7 +85,7 @@ colon{T<:Real}(start::T, step, stop::T) = StepRange(start, step, stop)
 
 colon{T}(start::T, step, stop::T) = StepRange(start, step, stop)
 
-range{T,S}(a::T, step::S, len::Integer) = StepRange{T,S}(a, step, a+step*(len-1))
+range{T,S}(a::T, step::S, len::Integer) = StepRange{T,S}(a, step, convert(T, a+step*(len-1)))
 
 ## floating point ranges
 
