@@ -376,14 +376,15 @@ end
 # issue #8584
 @test (0:1//2:2)[1:2:3] == 0:1//1:1
 
-# cendof, cget
+# endof_0, getindex_0
+using Base.Random: endof_0, getindex_0
 for r in (typemin(Int):typemax(Int), typemin(Int):1:typemax(Int))
-    @test Base.cendof(r)  == typemax(Uint)
-    @test Base.cget(r, 0) == typemin(Int)
-    @test Base.cget(r, Base.cendof(r)) == typemax(Int)
+    @test endof_0(r)  == typemax(Uint)
+    @test getindex_0(r, 0) == typemin(Int)
+    @test getindex_0(r, endof_0(r)) == typemax(Int)
 end
 let r = typemax(Int):-1:typemin(Int)
-    @test Base.cendof(r) == typemax(Uint)
-    @test Base.cget(r, 0) == typemax(Int)
-    @test Base.cget(r, Base.cendof(r)) == typemin(Int)
+    @test endof_0(r) == typemax(Uint)
+    @test getindex_0(r, 0) == typemax(Int)
+    @test getindex_0(r, endof_0(r)) == typemin(Int)
 end

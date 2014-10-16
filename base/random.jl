@@ -202,16 +202,16 @@ rand{U}(g::RandIntGen{U}) = g.k == zero(U) ? rand(U) : rand_lessthan(g.u) % g.k
 check_nonempty(r::AbstractArray) = (isempty(r) && error(ArgumentError("cannot randomly pick an element from an empty collection")); r)
 
 # special code which can handle "full ranges" (a workaround to error in e.g. `length(typemin(Int):typemax(Int))`)
-# cget/cendof work like getindex/endof respectively, but with indexes starting at 0
-cget(t::AbstractArray, i::Real) = @inbounds return t[i+1]
-cget{T<:Union(IntTypes...)}(r::Range{T}, i::Integer) = itrunc(T, unsigned(first(r)) +  unsigned(i)*unsigned(step(r)))
-cendof(a::AbstractArray) = unsigned(length(a) - 1) # precondition: !isempty(a)
-cendof{T<:Union(IntTypes...),S<:Union(IntTypes...)}(r::StepRange{T,S}) = r.step > 0 ?
+# getindex_0/endof_0 work like getindex/endof respectively, but with indexes starting at 0
+getindex_0(t::AbstractArray, i::Real) = @inbounds return t[i+1]
+getindex_0{T<:Union(IntTypes...)}(r::Range{T}, i::Integer) = itrunc(T, unsigned(first(r)) +  unsigned(i)*unsigned(step(r)))
+endof_0(a::AbstractArray) = unsigned(length(a) - 1) # precondition: !isempty(a)
+endof_0{T<:Union(IntTypes...),S<:Union(IntTypes...)}(r::StepRange{T,S}) = r.step > 0 ?
                                                                          div(unsigned(r.stop - r.start), r.step) :
                                                                          div(unsigned(r.start - r.stop), -r.step)
-cendof{T<:Union(IntTypes...)}(r::UnitRange{T}) = unsigned(r.stop - r.start)
+endof_0{T<:Union(IntTypes...)}(r::UnitRange{T}) = unsigned(r.stop - r.start)
 
-rand(r::AbstractArray) = cget(r, rand(randintgen(cendof(check_nonempty(r)))))
+rand(r::AbstractArray) = getindex_0(r, rand(randintgen(endof_0(check_nonempty(r)))))
 
 # Arrays of random integers
 
@@ -219,9 +219,9 @@ rand!(r::Range, A::AbstractArray) = rand!(r, A, ())
 
 # TODO: this more general version is "disabled" until #8246 is resolved
 function rand!(r::AbstractArray, A::AbstractArray, ::())
-    g = randintgen(cendof(check_nonempty(r)))
+    g = randintgen(endof_0(check_nonempty(r)))
     for i = 1 : length(A)
-        @inbounds A[i] = cget(r, rand(g))
+        @inbounds A[i] = getindex_0(r, rand(g))
     end
     return A
 end
