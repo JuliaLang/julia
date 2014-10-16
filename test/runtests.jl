@@ -30,18 +30,21 @@ td[1] = 1.0
 
 @test @compat(Dict()) == Dict()
 @test @compat(Dict{Any,Any}()) == Dict{Any,Any}()
-@test @compat(Dict([(1, 1)])) == Dict([(1, 1)])
+if VERSION >= v"0.3.0-"
+	@test @compat(Dict([(1, 1)])) == d
+end
 
-@test @compat(Dict(:a => Dict(:b => 1))) == Dict([(:a, Dict([(:b, 1)]))])
+d2 = Dict{Symbol,Dict{Symbol,Int}}()
+d2[:a] = Dict{Symbol,Int}()
+d2[:a][:b] = 1
+@test @compat(Dict(:a => Dict(:b => 1))) == d2
 
 @compat function f()
 	a = :a
-	b = :b
-	c = :c
-	d = :d
-	Dict(a => b, c => d)
+	b = Dict(:b => 1)
+	Dict(a => b)
 end
-@test f() == Dict([(:a, :b), (:c, :d)])
+@test f() == d2
 
 @test @compat split("a,b,,c", ',', limit=2) == ["a", "b,,c"]
 @test @compat split("a,b,,c", ',', limit=2,keep=true) == ["a", "b,,c"]
