@@ -202,4 +202,6 @@ end
 @deprecate Dict{V}(ks::Tuple, vs::(V...))                        Dict{Any,V}(zip(ks, vs))
 @deprecate Dict(ks, vs)                                          Dict{Any,Any}(zip(ks, vs))
 
+@deprecate itrunc{T<:Integer}(::Type{T}, n::Integer) (n % T)
+
 @deprecate oftype{T}(::Type{T},c)  convert(T,c)
