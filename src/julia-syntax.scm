@@ -751,18 +751,24 @@
 	       (block
 		(call (curly ,name ,@params) ,@field-names)))))
 
-(define (new-call Texpr args field-names field-types mutabl)
+(define (new-call Tname type-params params args field-names field-types mutabl)
   (if (any vararg? args)
       (error "... is not supported inside \"new\""))
   (if (any kwarg? args)
       (error "\"new\" does not accept keyword arguments"))
-  (cond ((length> args (length field-names))
-	 `(call (top error) "new: too many arguments"))
-	(else
-	 `(new ,Texpr
-	       ,@(map (lambda (fty val)
-			`(call (top convert) ,fty ,val))
-		      (list-head field-types (length args)) args)))))
+  (if (length> params (length type-params))
+      (error "too few type parameters specified in \"new{...}\""))
+  (let ((Texpr (if (null? type-params)
+		   `(|.| ,(current-julia-module) ',Tname)
+		   `(curly (|.| ,(current-julia-module) ',Tname)
+			   ,@type-params))))
+    (cond ((length> args (length field-names))
+	   `(call (top error) "new: too many arguments"))
+	  (else
+	   `(new ,Texpr
+		 ,@(map (lambda (fty val)
+			  `(call (top convert) ,fty ,val))
+			(list-head field-types (length args)) args))))))
 
 ;; insert a statement after line number node
 (define (prepend-stmt stmt body)
@@ -810,23 +816,21 @@
 	     (params (cdr temp)))
 	`(,keyword ,sig ,(ctor-body body params)))
       `(,keyword (call (curly ,name ,@method-params) ,@sig)
-		 ,(ctor-body body params))))
+		 ;; pass '() in order to require user-specified parameters with
+		 ;; new{...} inside a non-ctor inner definition.
+		 ,(ctor-body body '()))))
 
 (define (rewrite-ctor ctor Tname params bounds field-names field-types mutabl)
-  (define (ctor-body body params)
+  (define (ctor-body body type-params)
     (pattern-replace (pattern-set
 		      (pattern-lambda
 		       (call (-/ new) . args)
-		       (new-call (if (null? params)
-				     ;; be careful to avoid possible conflicts
-				     ;; with local & arg names
-				     `(|.| ,(current-julia-module) ',Tname)
-				     `(curly (|.| ,(current-julia-module) ',Tname)
-					     ,@params))
-				 args
-				 field-names
-				 field-types
-				 mutabl)))
+		       (new-call Tname type-params params
+				 args field-names field-types mutabl))
+		      (pattern-lambda
+		       (call (curly (-/ new) . p) . args)
+		       (new-call Tname p params
+				 args field-names field-types mutabl)))
 		     body))
   (pattern-replace
    (pattern-set
