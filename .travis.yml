@@ -27,9 +27,9 @@ before_install:
         sudo apt-get install patchelf gfortran llvm-3.3-dev libsuitesparse-dev libopenblas-dev liblapack-dev libarpack2-dev libfftw3-dev libgmp-dev libpcre3-dev libunwind7-dev libopenlibm-dev librmath-dev libmpfr-dev -y;
       elif [ `uname` = "Darwin" ]; then
         brew tap staticfloat/julia;
-        brew install -v --only-dependencies --HEAD julia;
+        brew rm --force $(brew deps --HEAD julia);
         brew update;
-        brew upgrade gcc;
+        brew install -v --only-dependencies --HEAD julia;
         BUILDOPTS="USECLANG=1 LLVM_CONFIG=$(brew --prefix llvm33-julia)/bin/llvm-config-3.3 VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC=-I$(brew --prefix suite-sparse-julia)/include";
         BUILDOPTS="$BUILDOPTS LIBBLAS=-lopenblas LIBBLASNAME=libopenblas LIBLAPACK=-lopenblas LIBLAPACKNAME=libopenblas";
         for lib in LLVM ZLIB SUITESPARSE ARPACK BLAS FFTW LAPACK GMP MPFR PCRE LIBUNWIND; do
