@@ -154,7 +154,11 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
 #endif
                                            /*useDwarfDirectory*/ true,
                                            IP, CE, MAB, ShowInst));
+#ifdef LLVM36
+    Streamer->InitSections(true);
+#else
     Streamer->InitSections();
+#endif
 
 #ifndef USE_MCJIT // LLVM33 version
 
