@@ -1154,7 +1154,10 @@ function tmerge(typea::ANY, typeb::ANY)
     if typeb <: typea
         return typea
     end
-    if typea <: Tuple && typeb <: Tuple
+    if isa(typea, Tuple) && isa(typeb, Tuple)
+        if length(typea) == length(typeb) && !isvatuple(typea) && !isvatuple(typeb)
+            return typejoin(typea, typeb)
+        end
         return Tuple
     end
     u = Union(typea, typeb)
