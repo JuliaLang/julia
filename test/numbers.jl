@@ -797,7 +797,7 @@ end
 @test Complex(1,2) + 1//2 == Complex(3//2,2//1)
 @test Complex(1,2) + 1//2 * 0.5 == Complex(1.25,2.0)
 @test (Complex(1,2) + 1//2) * 0.5 == Complex(0.75,1.0)
-@test_approx_eq (Complex(1,2)/Complex(2.5,3.0))*Complex(2.5,3.0) == Complex(1,2)
+@test_approx_eq (Complex(1,2)/Complex(2.5,3.0))*Complex(2.5,3.0) Complex(1,2)
 @test 0.7 < real(sqrt(Complex(0,1))) < 0.707107
 
 for T in [Int8, Int16, Int32, Int64, Int128]
