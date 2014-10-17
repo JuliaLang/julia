@@ -1882,3 +1882,20 @@ let ex = Expr(:(=), :(f8338(x;y=4)), :(x*y))
     eval(ex)
     @test f8338(2) == 8
 end
+
+# call overloading (#2403)
+Base.call(x::Int, y::Int) = x + 3y
+issue2403func(f) = f(7)
+let x = 10
+    @test x(3) == 19
+    @test x((3,)...) == 19
+    @test issue2403func(x) == 31
+end
+type Issue2403
+    x
+end
+Base.call(i::Issue2403, y) = i.x + 2y
+let x = Issue2403(20)
+    @test x(3) == 26
+    @test issue2403func(x) == 34
+end

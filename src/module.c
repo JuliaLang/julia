@@ -22,6 +22,7 @@ jl_module_t *jl_new_module(jl_sym_t *name)
     assert(jl_is_symbol(name));
     m->name = name;
     m->constant_table = NULL;
+    m->call_func = NULL;
     htable_new(&m->bindings, 0);
     arraylist_new(&m->usings, 0);
     if (jl_core_module) {
@@ -444,6 +445,17 @@ void jl_module_run_initializer(jl_module_t *m)
         jl_static_show(JL_STDERR, jl_exception_in_transit);
         JL_PRINTF(JL_STDERR, "\n");
     }
+}
+
+jl_function_t *jl_module_call_func(jl_module_t *m)
+{
+    if (m->call_func == NULL) {
+        jl_function_t *cf = (jl_function_t*)jl_get_global(m, call_sym);
+        if (cf == NULL || !jl_is_function(cf))
+            cf = jl_bottom_func;
+        m->call_func = cf;
+    }
+    return m->call_func;
 }
 
 #ifdef __cplusplus

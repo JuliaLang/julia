@@ -186,6 +186,12 @@ const Nothing = Void
 export None
 const None = Union()
 
+export apply
+function apply(f, args...)
+    depwarn("apply() is deprecated, use `...` instead", :apply)
+    return Core._apply(call, f, args...)
+end
+
 @deprecate median(v::AbstractArray; checknan::Bool=true)  median(v)
 @deprecate median(v::AbstractArray, region; checknan::Bool=true)  median(v, region)
 @deprecate median!(v::AbstractVector; checknan::Bool=true)  median!(v)
