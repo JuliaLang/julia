@@ -15,15 +15,15 @@ type SubArray{T,N,A<:AbstractArray,I<:(RangeIndex...,)} <: AbstractArray{T,N}
     #linear indexing constructor (scalar)
     global call
     function call{T,A<:Array,I<:(Any,)}(::Type{SubArray{T,0,A,I}}, p::A, i::(Int,))
-        new(p, i, (), Int[], i[1])
+        new{T,0,A,I}(p, i, (), Int[], i[1])
     end
 
     function call{T,A<:Array,I<:(Any,)}(::Type{SubArray{T,1,A,I}}, p::A, i::(UnitRange{Int},))
-        new(p, i, (length(i[1]),), [1], first(i[1]))
+        new{T,1,A,I}(p, i, (length(i[1]),), [1], first(i[1]))
     end
 
     function call{T,A<:Array,I<:(Any,)}(::Type{SubArray{T,1,A,I}}, p::A, i::(Range{Int},))
-        new(p, i, (length(i[1]),), [step(i[1])], first(i[1]))
+        new{T,1,A,I}(p, i, (length(i[1]),), [step(i[1])], first(i[1]))
     end
 
     function SubArray(p::A, i::I)
