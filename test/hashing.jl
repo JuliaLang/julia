@@ -23,7 +23,7 @@ function coerce(T::Type, x)
     if !(T<:Integer) || T===Bool
         convert(T, x)
     elseif sizeof(T) < sizeof(x)
-        itrunc(T, x)
+        x % T
     elseif sizeof(T) == sizeof(x)
         reinterpret(T, x)
     else

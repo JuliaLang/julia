@@ -104,7 +104,7 @@ const UNKNOWN = LineInfo("?", "?", -1, true, 0)
 ==(a::LineInfo, b::LineInfo) = a.line == b.line && a.fromC == b.fromC && a.func == b.func && a.file == b.file
 
 function hash(li::LineInfo, h::Uint)
-    h += itrunc(Uint,0xf4fbda67fe20ce88)
+    h += 0xf4fbda67fe20ce88 % Uint
     h = hash(li.line, h)
     h = hash(li.file, h)
     h = hash(li.func, h)
