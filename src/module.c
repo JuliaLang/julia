@@ -97,7 +97,7 @@ jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var)
             jl_binding_t *b2 = jl_get_binding(b->owner, var);
             if (b2 == NULL)
                 jl_errorf("invalid method definition: imported function %s.%s does not exist", b->owner->name->name, var->name);
-            if (!b->imported)
+            if (!b->imported && b->value!=NULL && jl_is_function(b->value))
                 jl_errorf("error in method definition: function %s.%s must be explicitly imported to be extended", b->owner->name->name, var->name);
             return b2;
         }
