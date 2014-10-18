@@ -1,13 +1,35 @@
-import Core.Array  # to add methods
-
 const NonTupleType = Union(DataType,UnionType,TypeConstructor)
 
 typealias Callable Union(Function,DataType)
 
 const Bottom = Union()
 
-# fall back to Core.call
-call(args...) = Core.call(args...)
+# constructors for Core types in boot.jl
+call(T::Type{BoundsError}) = Core.call(T)
+call(T::Type{DivideError}) = Core.call(T)
+call(T::Type{DomainError}) = Core.call(T)
+call(T::Type{OverflowError}) = Core.call(T)
+call(T::Type{InexactError}) = Core.call(T)
+call(T::Type{MemoryError}) = Core.call(T)
+call(T::Type{StackOverflowError}) = Core.call(T)
+call(T::Type{UndefRefError}) = Core.call(T)
+call(T::Type{UndefVarError}, var::Symbol) = Core.call(T, var)
+call(T::Type{InterruptException}) = Core.call(T)
+call(T::Type{SymbolNode}, name::Symbol, t::ANY) = Core.call(T, name, t)
+call(T::Type{GetfieldNode}, value, name::Symbol, typ) = Core.call(T, value, name, typ)
+call(T::Type{ASCIIString}, d::Array{Uint8,1}) = Core.call(T, d)
+call(T::Type{UTF8String}, d::Array{Uint8,1}) = Core.call(T, d)
+call(T::Type{TypeVar}, args...) = Core.call(T, args...)
+call(T::Type{TypeConstructor}, args...) = Core.call(T, args...)
+call(T::Type{Expr}, args::ANY...) = _expr(args...)
+call(T::Type{LineNumberNode}, n::Int) = Core.call(T, n)
+call(T::Type{LabelNode}, n::Int) = Core.call(T, n)
+call(T::Type{GotoNode}, n::Int) = Core.call(T, n)
+call(T::Type{QuoteNode}, x::ANY) = Core.call(T, x)
+call(T::Type{NewvarNode}, s::Symbol) = Core.call(T, s)
+call(T::Type{TopNode}, s::Symbol) = Core.call(T, s)
+call(T::Type{Module}, args...) = Core.call(T, args...)
+call(T::Type{Task}, f::ANY) = Core.call(T, f)
 
 convert{T}(::Type{T}, x::T) = x
 
@@ -214,8 +236,6 @@ end
 macro goto(name::Symbol)
     Expr(:symbolicgoto, name)
 end
-
-# NOTE: Base shares Array with Core so we can add definitions to it
 
 Array{T,N}(::Type{T}, d::NTuple{N,Int}) =
     ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
