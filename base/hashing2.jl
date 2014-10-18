@@ -52,7 +52,7 @@ function hash(x::Real, h::Uint)
 
     # handle values representable as Int64, Uint64, Float64
     if den == 1
-        left = ndigits0z(num,2) + pow
+        left = int(ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &num, 2)) + pow
         right = trailing_zeros(num) + pow
         if -1074 <= right
             if 0 <= right && left <= 64
