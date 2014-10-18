@@ -78,3 +78,23 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: nonzeros(A)
 
    Return a vector of the structural nonzero values in sparse matrix ``A``. This includes zeros that are explicitly stored in the sparse matrix. The returned vector points directly to the internal nonzero storage of ``A``, and any modifications to the returned vector will mutate ``A`` as well.
+
+.. function:: rowvals(A)
+
+   Return a vector of the row indices of a sparse matrix ``A``. The returned vector points directly to the internal row indices of ``A``, and any modifications to the returned vector will mutate ``A`` as well.
+
+.. function:: nzrange(A, col)
+
+   Return a range of the non-zero elements of a sparse matrix column. This allows for convenient iterating over non-zero column elements as ::
+
+      A = sparse(I,J,V)
+      rows = rowvals(A)
+      vals = nonzeros(A)
+      m, n = size(A)
+      for i = 1:n
+         for j in nzrange(A, i)
+            row = rows[j]
+            val = vals[j]
+            # perform sparse wizardry...
+         end
+      end
