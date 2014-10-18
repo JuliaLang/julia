@@ -16,6 +16,7 @@ function gen(s::String)
             c = lowercase(x[end])
             f = c=='f' ? gen_f :
                 c=='e' ? gen_e :
+                c=='a' ? gen_a :
                 c=='g' ? gen_g :
                 c=='c' ? gen_c :
                 c=='s' ? gen_s :
@@ -42,7 +43,6 @@ function parse(s::String)
             isempty(s[i:j-1]) || push!(list, s[i:j-1])
             flags, width, precision, conversion, k = parse1(s,k)
             '\'' in flags && error("printf format flag ' not yet supported")
-            conversion == 'a'    && error("printf feature %a not yet supported")
             conversion == 'n'    && error("printf feature %n not supported")
             push!(list, conversion == '%' ? "%" : (flags,width,precision,conversion))
             i = j = k
@@ -198,7 +198,7 @@ function print_fixed(out, precision, pt, ndigits)
     end
 end
 
-function print_exp(out, exp::Integer)
+function print_exp_e(out, exp::Integer)
     write(out, exp < 0 ? '-' : '+')
     exp = abs(exp)
     d = div(exp,100)
@@ -213,6 +213,13 @@ function print_exp(out, exp::Integer)
     write(out, char('0'+div(exp,10)))
     write(out, char('0'+rem(exp,10)))
 end
+
+function print_exp_a(out, exp::Integer)
+    write(out, exp < 0 ? '-' : '+')
+    exp = abs(exp)
+    print(out, exp)
+end
+
 
 function gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print integer:
@@ -442,7 +449,115 @@ function gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     for ch in expmark
         push!(blk.args, :(write(out, $ch)))
     end
-    push!(blk.args, :(print_exp(out, exp)))
+    push!(blk.args, :(print_exp_e(out, exp)))
+    # print space padding
+    if padding != nothing && '-' in flags
+        push!(blk.args, pad(width, padding, ' '))
+    end
+    # return arg, expr
+    :(($x)::Real), ex
+end
+
+function gen_a(flags::ASCIIString, width::Int, precision::Int, c::Char)
+    # print float in hexadecimal format
+    #  [a]: lowercase hex float, e.g. -0x1.cfp-2
+    #  [A]: uppercase hex float, e.g. -0X1.CFP-2
+    #
+    # flags:
+    #  (#): always print a decimal point
+    #  (0): pad left with zeros
+    #  (-): left justify
+    #  ( ): precede non-negative values with " "
+    #  (+): precede non-negative values with "+"
+    #
+    x, ex, blk = special_handler(flags,width)
+    if c == 'A'
+        hexmark, expmark = "0X", "P"
+        fn = :ini_HEX
+    else
+        hexmark, expmark = "0x", "p"
+        fn = :ini_hex
+    end
+    # if no precision, print max non-zero
+    if precision < 0
+        push!(blk.args, :((do_out, args) = $fn(out,$x, $flags, $width, $precision, $c)))
+    else
+        ndigits = min(precision+1,length(DIGITS)-1)
+        push!(blk.args, :((do_out, args) = $fn(out,$x,$ndigits, $flags, $width, $precision, $c)))
+    end
+    ifblk = Expr(:if, :do_out, Expr(:block))
+    push!(blk.args, ifblk)
+    blk = ifblk.args[2]
+    push!(blk.args, :((len, exp, neg) = args))
+    if precision==0 && '#' in flags
+        expmark = string(".",expmark)
+    end
+    # calculate padding
+    padding = nothing
+    if precision > 0
+        width -= precision+length(hexmark)+length(expmark)+4
+        # 4 = leading + expsign + 1 exp digit + decimal
+    else
+        width -= length(hexmark)+length(expmark)+3+(precision<0 && '#' in flags)
+        # 3 = leading + expsign + 1 exp digit
+    end
+    if '+' in flags || ' ' in flags
+        width -= 1 # for the sign indicator
+        if width > 0
+            padding = :($(width+1) - Base.ndigits(exp))
+        end
+    else
+        if width > 0
+            padding = :($(width+1) - neg - Base.ndigits(exp))
+        end
+    end
+    if precision < 0 && width > 0
+        if '#' in flags
+            padding = :($padding - (len-1))
+        else
+            padding = :($padding - (len>1?len:0))
+        end
+    end
+    # print space padding
+    if padding != nothing && !('-' in flags) && !('0' in flags)
+        push!(blk.args, pad(width, padding, ' '))
+    end
+    # print sign
+    '+' in flags ? push!(blk.args, :(write(out, neg?'-':'+'))) :
+    ' ' in flags ? push!(blk.args, :(write(out, neg?'-':' '))) :
+                    push!(blk.args, :(neg && write(out, '-')))
+    # hex prefix
+    for ch in hexmark
+        push!(blk.args, :(write(out, $ch)))
+    end
+    # print zero padding
+    if padding != nothing && !('-' in flags) && '0' in flags
+        push!(blk.args, pad(width, padding, '0'))
+    end
+    # print digits
+    push!(blk.args, :(write(out, DIGITS[1])))
+    if precision > 0
+        push!(blk.args, :(write(out, '.')))
+        push!(blk.args, :(write(out, pointer(DIGITS)+1, $(ndigits-1))))
+        if ndigits < precision+1
+            n = precision+1-ndigits
+            push!(blk.args, pad(n, n, '0'))
+        end
+    elseif precision < 0
+        ifvpblk = Expr(:if, :(len > 1), Expr(:block))
+        vpblk = ifvpblk.args[2]
+        if '#' in flags
+            push!(blk.args, :(write(out, '.')))
+        else
+            push!(vpblk.args, :(write(out, '.')))
+        end
+        push!(vpblk.args, :(write(out, pointer(DIGITS)+1, len-1)))
+        push!(blk.args, ifvpblk)
+    end
+    for ch in expmark
+        push!(blk.args, :(write(out, $ch)))
+    end
+    push!(blk.args, :(print_exp_a(out, exp)))
     # print space padding
     if padding != nothing && '-' in flags
         push!(blk.args, pad(width, padding, ' '))
@@ -549,6 +664,10 @@ decode_hex(out, d, flags::ASCIIString, width::Int, precision::Int, c::Char) = (t
 decode_HEX(out, d, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, decode_HEX(d))
 fix_dec(out, d, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, fix_dec(d, precision))
 ini_dec(out, d, ndigits::Int, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, ini_dec(d, ndigits))
+ini_hex(out, d, ndigits::Int, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, ini_hex(d, ndigits))
+ini_HEX(out, d, ndigits::Int, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, ini_HEX(d, ndigits))
+ini_hex(out, d, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, ini_hex(d))
+ini_HEX(out, d, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true, ini_HEX(d))
 
 
 # fallbacks for Real types without explicit decode_* implementation
@@ -772,9 +891,70 @@ function ini_dec(x::BigInt, n::Int)
     return (n, d, decode_dec(iround(x/big(10)^(d-n)))[3])
 end
 
+
+ini_hex(x::Real, n::Int) = ini_hex(x,n,hex_symbols)
+ini_HEX(x::Real, n::Int) = ini_hex(x,n,HEX_symbols)
+
+ini_hex(x::Real) = ini_hex(x,hex_symbols)
+ini_HEX(x::Real) = ini_hex(x,HEX_symbols)
+
+ini_hex(x::Real, n::Int, symbols::Array{Uint8,1}) = ini_hex(float(x), n, symbols)
+ini_hex(x::Real, symbols::Array{Uint8,1}) = ini_hex(float(x), symbols)
+
+function ini_hex(x::SmallFloatingPoint, n::Int, symbols::Array{Uint8,1})
+    x = float64(x)
+    if x == 0.0
+        ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', n)
+        return int32(1), int32(0), signbit(x)
+    else
+        s, p = frexp(x)
+        sigbits = 4*min(n-1,13)
+        s = 0.25*Base.Math.rint(ldexp(s,1+sigbits))
+        # ensure last 2 exponent bits either 01 or 10
+        u = (reinterpret(Uint64,s) & 0x003f_ffff_ffff_ffff) >> (52-sigbits)
+        if n > 14
+            ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', n)
+        end
+        i = (sizeof(u)<<1)-(leading_zeros(u)>>2)
+        while i > 0
+            DIGITS[i] = symbols[(u&0xf)+1]
+            u >>= 4
+            i -= 1
+        end
+        # pt is the binary exponent
+        return int32(n), int32(p-1), x < 0.0
+    end
+end
+
+function ini_hex(x::SmallFloatingPoint, symbols::Array{Uint8,1})
+    x = float64(x)
+    if x == 0.0
+        ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', 1)
+        return int32(1), int32(0), signbit(x)
+    else
+        s, p = frexp(x)
+        s *= 2.0
+        u = (reinterpret(Uint64,s) & 0x001f_ffff_ffff_ffff)
+        t = (trailing_zeros(u) >> 2)
+        u >>= (t<<2)
+        n = 14-t
+        for i = n:-1:1
+            DIGITS[i] = symbols[(u&0xf)+1]
+            u >>= 4
+        end
+        # pt is the binary exponent
+        return int32(n), int32(p-1), x < 0.0
+    end
+end
+
+
 #BigFloat
 fix_dec(out, d::BigFloat, flags::ASCIIString, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
 ini_dec(out, d::BigFloat, ndigits::Int, flags::ASCIIString, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
+ini_hex(out, d::BigFloat, ndigits::Int, flags::ASCIIString, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
+ini_HEX(out, d::BigFloat, ndigits::Int, flags::ASCIIString, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
+ini_hex(out, d::BigFloat, flags::ASCIIString, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
+ini_HEX(out, d::BigFloat, flags::ASCIIString, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
 function bigfloat_printf(out, d, flags::ASCIIString, width::Int, precision::Int, c::Char)
     fmt_len = sizeof(flags)+4
     if width > 0
