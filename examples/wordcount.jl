@@ -6,13 +6,13 @@
 #
 # To run in parallel on a string stored in variable `text`:
 #  julia -p <N> 
-#  julia> require("<julia_dir>/examples/wordcount.jl")
+#  julia> require("<julia_doc_dir>/examples/wordcount.jl")
 #  julia> ...(define text)...
 #  julia> counts=parallel_wordcount(text)
 #
 # Or to run on a group of files, writing results to an output file:
 #  julia -p <N>
-#  julia> require("<julia_dir>/examples/wordcount.jl")
+#  julia> require("<julia_doc_dir>/examples/wordcount.jl")
 #  julia> wordcount_files("/tmp/output.txt", "/tmp/input1.txt","/tmp/input2.txt",...) 
 
 # "Map" function.

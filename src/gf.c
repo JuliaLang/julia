@@ -940,7 +940,7 @@ DLLEXPORT jl_function_t *jl_instantiate_staged(jl_methlist_t *m, jl_tuple_t *tt)
     jl_function_t *func = NULL;
     JL_GC_PUSH2(&ex, &oldast);
     if (jl_is_expr(m->func->linfo->ast))
-        oldast = (jl_expr_t*)m->func->linfo;
+        oldast = (jl_expr_t*)m->func->linfo->ast;
     else
         oldast = (jl_expr_t*)jl_uncompress_ast(m->func->linfo, m->func->linfo->ast);
     assert(oldast->head == lambda_sym);
