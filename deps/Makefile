@@ -829,7 +829,10 @@ endif
 
 # 64-bit BLAS interface
 ifeq ($(USE_BLAS64), 1)
-OPENBLAS_BUILD_OPTS += INTERFACE64=1
+OPENBLAS_BUILD_OPTS += INTERFACE64=1 SYMBOLSUFFIX="64_"
+ifeq ($(OS),Darwin)
+OPENBLAS_BUILD_OPTS += OBJCONV=$(JULIAHOME)/deps/objconv/objconv
+endif
 endif
 
 # Decide whether to build for 32-bit or 64-bit arch
@@ -864,6 +867,7 @@ endif
 	mkdir -p openblas-$(OPENBLAS_VER) && \
 	$(TAR) -C openblas-$(OPENBLAS_VER) --strip-components 1 -xf $<
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' openblas-$(OPENBLAS_VER)/Makefile.system
+	cd openblas-$(OPENBLAS_VER) && patch -p1 < ../openblas-symbol-rename.patch
 	echo 1 > $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/config.status
 	$(MAKE) -C openblas-$(OPENBLAS_VER) $(OPENBLAS_BUILD_OPTS) || (echo "*** Clean the OpenBLAS build with 'make -C deps clean-openblas'. Rebuild with 'make OPENBLAS_USE_THREAD=0 if OpenBLAS had trouble linking libpthread.so, and with 'make OPENBLAS_TARGET_ARCH=NEHALEM' if there were errors building SandyBridge support. Both these options can also be used simultaneously. ***" && false)
@@ -1026,12 +1030,28 @@ install-lapack: $(LAPACK_OBJ_TARGET)
 
 ## ARPACK ##
 ARPACK_FFLAGS = $(GFORTBLAS_FFLAGS)
+ARPACK_CFLAGS =
 
 ifeq ($(USE_BLAS64), 1)
 ifeq ($(USEIFC),1)
 ARPACK_FFLAGS += -i8
 else
 ARPACK_FFLAGS += -fdefault-integer-8
+ifeq ($(USE_SYSTEM_BLAS), 0)
+ifneq ($(USE_INTEL_MKL), 1)
+ARPACK_FFLAGS += -cpp -ffixed-line-length-none
+ARPACK_OPENBLASFCNS1 = axpy copy gemv geqr2 lacpy lahqr lanhs larnv lartg lascl laset scal trevc trmm trsen
+ARPACK_OPENBLASFCNS2 = dot ger labad laev2 lamch lanst lanv2 lapy2 larf larfg lasr nrm2 orm2r rot steqr swap
+ARPACK_OPENBLASFCNS3 = dotc geru unm2r
+ARPACK_OPENBLASFCNS4 = COPY LABAD LAMCH LANHS LANV2 LARFG ROT
+ARPACK_FFLAGS += $(foreach fcn, $(ARPACK_OPENBLASFCNS1) $(ARPACK_OPENBLASFCNS2), -Ds$(fcn)=s$(fcn)_64 -Dd$(fcn)=d$(fcn)_64)
+ARPACK_FFLAGS += $(foreach fcn, $(ARPACK_OPENBLASFCNS1) $(ARPACK_OPENBLASFCNS3), -Dc$(fcn)=c$(fcn)_64 -Dz$(fcn)=z$(fcn)_64)
+ARPACK_FFLAGS += $(foreach fcn, $(ARPACK_OPENBLASFCNS4), -DS$(fcn)=S$(fcn)_64 -DD$(fcn)=D$(fcn)_64)
+ARPACK_FFLAGS += -Dscnrm2=scnrm2_64 -Ddznrm2=dznrm2_64 -Dcsscal=csscal_64 -Dzdscal=zdscal_64
+# CFLAGS are for the configure checks
+ARPACK_CFLAGS += -Dsgemm_=sgemm_64_ -Dcheev_=cheev_64_
+endif
+endif
 endif
 endif
 
@@ -1044,7 +1064,7 @@ ARPACK_OBJ_TARGET = $(build_shlibdir)/libarpack.$(SHLIB_EXT)
 
 ARPACK_MFLAGS = F77="$(FC)" MPIF77="$(FC)"
 ARPACK_FFLAGS += $(FFLAGS) $(JFFLAGS)
-ARPACK_FLAGS = --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared FFLAGS="$(ARPACK_FFLAGS)"
+ARPACK_FLAGS = --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared FFLAGS="$(ARPACK_FFLAGS)" CFLAGS="$(ARPACK_CFLAGS)"
 ifneq ($(OS),WINNT)
 ARPACK_FLAGS += LDFLAGS="$(LDFLAGS) -Wl,-rpath,'$(build_libdir)'"
 endif
@@ -1287,8 +1307,16 @@ SUITESPARSE_OBJ_SOURCE = SuiteSparse-$(SUITESPARSE_VER)/UMFPACK/Lib/libumfpack.a
 SUITESPARSE_OBJ_TARGET = $(build_shlibdir)/libspqr.$(SHLIB_EXT)
 
 ifeq ($(USE_BLAS64), 1)
-UMFPACK_CONFIG = -DLONGBLAS='long long' 
-CHOLMOD_CONFIG = -DLONGBLAS='long long' 
+UMFPACK_CONFIG = -DLONGBLAS='long long'
+CHOLMOD_CONFIG = -DLONGBLAS='long long'
+SPQR_CONFIG = -DLONGBLAS='long long'
+ifeq ($(USE_SYSTEM_BLAS), 0)
+ifneq ($(USE_INTEL_MKL), 1)
+UMFPACK_CONFIG += -DSUN64
+CHOLMOD_CONFIG += -DSUN64
+SPQR_CONFIG += -DSUN64
+endif
+endif
 endif
 
 SUITE_SPARSE_LIB = -lm
@@ -1302,7 +1330,7 @@ SUITE_SPARSE_LIB += -Wl,-rpath,'$(build_libdir)'
 endif
 SUITESPARSE_MFLAGS = CC="$(CC)" CXX="$(CXX)" F77="$(FC)" AR="$(AR)" RANLIB="$(RANLIB)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" \
 	  INSTALL_LIB="$(build_libdir)" INSTALL_INCLUDE="$(build_includedir)" LIB="$(SUITE_SPARSE_LIB)" \
-	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)"
+	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)" SPQR_CONFIG="$(SPQR_CONFIG)"
 
 SuiteSparse-$(SUITESPARSE_VER).tar.gz:
 	$(JLDOWNLOAD) $@ http://faculty.cse.tamu.edu/davis/SuiteSparse/$@
