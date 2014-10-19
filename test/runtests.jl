@@ -12,7 +12,7 @@ testnames = [
     "llvmcall", "grisu", "nullable", "meta", "staged", "profile"
 ]
 
-if isdir(joinpath(dirname(@__FILE__), "..", "examples"))
+if isdir(joinpath(JULIA_HOME, Base.DOCDIR, "examples"))
     push!(testnames, "examples")
 end
 @unix_only push!(testnames, "unicode")
