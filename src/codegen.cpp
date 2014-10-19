@@ -1347,6 +1347,7 @@ static Value *emit_boxed_rooted(jl_value_t *e, jl_codectx_t *ctx)
 
 static void jl_add_linfo_root(jl_lambda_info_t *li, jl_value_t *val)
 {
+    JL_GC_PUSH1(&val);
     li = li->def;
     if (li->roots == NULL) {
         li->roots = jl_alloc_cell_1d(1);
@@ -1355,11 +1356,14 @@ static void jl_add_linfo_root(jl_lambda_info_t *li, jl_value_t *val)
     else {
         size_t rlen = jl_array_dim0(li->roots);
         for(size_t i=0; i < rlen; i++) {
-            if (jl_arrayref(li->roots,i) == val)
+            if (jl_arrayref(li->roots,i) == val) {
+                JL_GC_POP();
                 return;
+            }
         }
         jl_cell_1d_push(li->roots, val);
     }
+    JL_GC_POP();
 }
 
 static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
