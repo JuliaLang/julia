@@ -1107,6 +1107,7 @@ Do not move back beyond MIN."
 (puthash "\\vdash" "⊢" julia-latexsubs)
 (puthash "\\dashv" "⊣" julia-latexsubs)
 (puthash "\\top" "⊤" julia-latexsubs)
+(puthash "\\bot" "⊥" julia-latexsubs)
 (puthash "\\models" "⊧" julia-latexsubs)
 (puthash "\\vDash" "⊨" julia-latexsubs)
 (puthash "\\Vdash" "⊩" julia-latexsubs)
