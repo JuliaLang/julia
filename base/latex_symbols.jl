@@ -26,6 +26,9 @@ for c in child_nodes(root(xdoc))
                 if L in Ls
                     println("# duplicated symbol $L ($id)")
                 else
+                    if U[1] == '\u22a5' # unicode.xml incorrectly uses \perp for \bot
+                        L = "\\bot"
+                    end
                     push!(latexsym, (L, U))
                     push!(Ls, L)
                 end
@@ -625,7 +628,7 @@ const latex_symbols = Dict(
     "\\vdash" => "⊢",
     "\\dashv" => "⊣",
     "\\top" => "⊤",
-    "\\perp" => "⊥",
+    "\\bot" => "⊥",
     "\\models" => "⊧",
     "\\vDash" => "⊨",
     "\\Vdash" => "⊩",

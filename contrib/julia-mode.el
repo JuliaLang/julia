@@ -47,10 +47,24 @@
 (when (not (fboundp 'ignore-errors))
   (defmacro ignore-errors (body) `(condition-case nil ,body (error nil))))
 
+(defun julia--regexp-opt (strings &optional paren)
+  "Emacs 23 provides `regexp-opt', but it does not support PAREN taking the value 'symbols.
+This function provides equivalent functionality, but makes no efforts to optimise the regexp."
+  (cond
+   ((>= emacs-major-version 24)
+    (regexp-opt strings paren))
+   ((not (eq paren 'symbols))
+    (regexp-opt strings paren))
+   ((null strings)
+    "")
+   ('t
+    (rx-to-string `(seq symbol-start (or ,@strings) symbol-end)))))
+
 (defvar julia-mode-syntax-table
   (let ((table (make-syntax-table)))
-    (modify-syntax-entry ?_ "w" table)   ; underscores in words
-    (modify-syntax-entry ?@ "w" table)
+    (modify-syntax-entry ?_ "_" table)
+    (modify-syntax-entry ?@ "_" table)
+    (modify-syntax-entry ?! "_" table)
     (modify-syntax-entry ?# "< 14" table)  ; # single-line and multiline start
     (modify-syntax-entry ?= ". 23bn" table)
     (modify-syntax-entry ?\n ">" table)  ; \n single-line comment end
@@ -106,16 +120,16 @@
 ].* \\(in\\)\\(\\s-\\|$\\)+")
 
 (defconst julia-function-regex
-  (rx symbol-start "function"
+  (rx line-start symbol-start "function"
       (1+ space)
       ;; Don't highlight module names in function declarations:
-      (* (seq (1+ (or word ?_)) "."))
+      (* (seq (1+ (or word (syntax symbol))) "."))
       ;; The function name itself
-      (group (1+ (or word ?_ ?!)))))
+      (group (1+ (or word (syntax symbol))))))
 
 (defconst julia-function-assignment-regex
   (rx line-start symbol-start
-      (group (1+ (or word ?_ ?!)))
+      (group (1+ (or word (syntax symbol))))
       (* space)
       (? "{" (* (not (any "}"))) "}")
       (* space)
@@ -124,22 +138,22 @@
       "="))
 
 (defconst julia-type-regex
-  (rx symbol-start (or "immutable" "type" "abstract") (1+ space) (group (1+ (or word ?_)))))
+  (rx symbol-start (or "immutable" "type" "abstract") (1+ space) (group (1+ (or word (syntax symbol))))))
 
 (defconst julia-type-annotation-regex
-  (rx "::" (group (1+ (or word ?_)))))
+  (rx "::" (group (1+ (or word (syntax symbol))))))
 
 ;;(defconst julia-type-parameter-regex
-;;  (rx symbol-start (1+ (or word ?_)) "{" (group (1+ (or word ?_))) "}"))
+;;  (rx symbol-start (1+ (or (or word (syntax symbol)) ?_)) "{" (group (1+ (or (or word (syntax symbol)) ?_))) "}"))
 
 (defconst julia-subtype-regex
-  (rx "<:" (1+ space) (group (1+ (or word ?_))) (0+ space) (or "\n" "{" "end")))
+  (rx "<:" (1+ space) (group (1+ (or word (syntax symbol)))) (0+ space) (or "\n" "{" "end")))
 
 (defconst julia-macro-regex
-  (rx symbol-start (group  "@" (1+ (or word ?_ ?!)))))
+  (rx symbol-start (group "@" (1+ (or word (syntax symbol))))))
 
 (defconst julia-keyword-regex
-  (regexp-opt
+  (julia--regexp-opt
    '("if" "else" "elseif" "while" "for" "begin" "end" "quote"
      "try" "catch" "return" "local" "abstract" "function" "macro" "ccall"
      "finally" "typealias" "break" "continue" "type" "global"
@@ -148,33 +162,47 @@
    'symbols))
 
 (defconst julia-builtin-regex
-  (regexp-opt
+  (julia--regexp-opt
    ;;'("error" "throw")
    '()
    'symbols))
 
+(defconst julia-builtin-types-regex
+  (julia--regexp-opt
+   '("Number" "Real" "BigInt" "Integer"
+     "Uint" "Uint8" "Uint16" "Uint32" "Uint64" "Uint128"
+     "Int" "Int8" "Int16" "Int32" "Int64" "Int128"
+     "BigFloat" "FloatingPoint" "Float16" "Float32" "Float64"
+     "Complex128" "Complex64" "ComplexPair"
+     "Bool"
+     "Char" "ASCIIString" "UTF8String" "ByteString" "SubString"
+     "Array" "DArray" "AbstractArray" "AbstractVector" "AbstractMatrix" "AbstractSparseMatrix" "SubArray" "StridedArray" "StridedVector" "StridedMatrix" "VecOrMat" "StridedVecOrMat" "DenseArray" "SparseMatrixCSC"
+     "Range" "Range1" "OrdinalRange" "StepRange" "UnitRange" "FloatRange"
+     "Tuple" "NTuple"
+     "DataType" "Symbol" "Function" "Vector" "Matrix" "Union" "Type" "Any" "Complex" "None" "String" "Ptr" "Void" "Exception" "Task" "Signed" "Unsigned" "Associative" "Dict" "IO" "IOStream" "Ranges" "Rational" "Regex" "RegexMatch" "Set" "IntSet" "Expr" "WeakRef" "Nothing" "ObjectIdDict")
+   'symbols))
+
 (defconst julia-font-lock-keywords
   (list
-   '("\\<\\(\\|Uint\\(8\\|16\\|32\\|64\\|128\\)\\|Int\\(8\\|16\\|32\\|64\\|128\\)\\|BigInt\\|Integer\\|BigFloat\\|FloatingPoint\\|Float16\\|Float32\\|Float64\\|Complex128\\|Complex64\\|ComplexPair\\|Bool\\|Char\\|DataType\\|Number\\|Real\\|Int\\|Uint\\|Array\\|DArray\\|AbstractArray\\|AbstractVector\\|AbstractMatrix\\|AbstractSparseMatrix\\|SubArray\\|StridedArray\\|StridedVector\\|StridedMatrix\\|VecOrMat\\|StridedVecOrMat\\|DenseArray\\|Range\\|OrdinalRange\\|StepRange\\|UnitRange\\|FloatRange\\|SparseMatrixCSC\\|Tuple\\|NTuple\\|Symbol\\|Function\\|Vector\\|Matrix\\|Union\\|Type\\|Any\\|Complex\\|String\\|Ptr\\|Void\\|Exception\\|Task\\|Signed\\|Unsigned\\|Associative\\|Dict\\|IO\\|IOStream\\|Rational\\|Regex\\|RegexMatch\\|Set\\|IntSet\\|ASCIIString\\|UTF8String\\|ByteString\\|Expr\\|WeakRef\\|ObjectIdDict\\|SubString\\)\\>" .
-     font-lock-type-face)
-    (cons julia-keyword-regex 'font-lock-keyword-face)
-    (cons julia-macro-regex 'font-lock-keyword-face)
-    (cons
-     (regexp-opt
-      '("true" "false" "C_NULL" "Inf" "NaN" "Inf32" "NaN32" "nothing")
-      'symbols)
-     'font-lock-constant-face)
-    (list julia-unquote-regex 2 'font-lock-constant-face)
-    (list julia-char-regex 2 'font-lock-string-face)
-    (list julia-forloop-in-regex 1 'font-lock-keyword-face)
-    (list julia-function-regex 1 'font-lock-function-name-face)
-    (list julia-function-assignment-regex 1 'font-lock-function-name-face)
-    (list julia-type-regex 1 'font-lock-type-face)
-    (list julia-type-annotation-regex 1 'font-lock-type-face)
-    ;;(list julia-type-parameter-regex 1 'font-lock-type-face)
-    (list julia-subtype-regex 1 'font-lock-type-face)
-    (list julia-builtin-regex 1 'font-lock-builtin-face)
-))
+   (cons julia-builtin-types-regex 'font-lock-type-face)
+   (cons julia-keyword-regex 'font-lock-keyword-face)
+   (cons julia-macro-regex 'font-lock-keyword-face)
+   (cons
+    (julia--regexp-opt
+     '("true" "false" "C_NULL" "Inf" "NaN" "Inf32" "NaN32" "nothing")
+     'symbols)
+    'font-lock-constant-face)
+   (list julia-unquote-regex 2 'font-lock-constant-face)
+   (list julia-char-regex 2 'font-lock-string-face)
+   (list julia-forloop-in-regex 1 'font-lock-keyword-face)
+   (list julia-function-regex 1 'font-lock-function-name-face)
+   (list julia-function-assignment-regex 1 'font-lock-function-name-face)
+   (list julia-type-regex 1 'font-lock-type-face)
+   (list julia-type-annotation-regex 1 'font-lock-type-face)
+   ;;(list julia-type-parameter-regex 1 'font-lock-type-face)
+   (list julia-subtype-regex 1 'font-lock-type-face)
+   (list julia-builtin-regex 1 'font-lock-builtin-face)
+   ))
 
 (defconst julia-block-start-keywords
   (list "if" "while" "for" "begin" "try" "function" "type" "let" "macro"
@@ -251,7 +279,7 @@ Do not move back beyond MIN."
 	   (+ julia-basic-offset (current-indentation))))))
 
 (defun julia-paren-indent ()
-  "Return indent by last opening paren."
+  "Return indent amount of the last opening paren."
   (let* ((p (parse-partial-sexp
              (save-excursion
                ;; only indent by paren if the last open
@@ -272,27 +300,29 @@ Do not move back beyond MIN."
   (let* ((point-offset (- (current-column) (current-indentation))))
     (end-of-line)
     (indent-line-to
-     (or (save-excursion (ignore-errors (julia-paren-indent)))
-         (save-excursion
-           (let ((endtok (progn
-                           (beginning-of-line)
-                           (forward-to-indentation 0)
-                           (julia-at-keyword julia-block-end-keywords))))
-             (ignore-errors (+ (julia-last-open-block (point-min))
-                               (if endtok (- julia-basic-offset) 0)))))
-         ;; previous line ends in =
-         (save-excursion
-           (if (and (not (equal (point-min) (line-beginning-position)))
-                    (progn
-                      (forward-line -1)
-                      (end-of-line) (backward-char 1)
-                      (equal (char-after (point)) ?=)))
-               (+ julia-basic-offset (current-indentation))
-             nil))
-         ;; take same indentation as previous line
-         (save-excursion (forward-line -1)
-                         (current-indentation))
-         0))
+     (or
+      ;; If we're inside an open paren, indent to line up arguments.
+      (save-excursion (ignore-errors (julia-paren-indent)))
+      ;; If we're on a block end keyword, unindent.
+      (save-excursion
+        (beginning-of-line)
+        (forward-to-indentation 0)
+        (let ((endtok (julia-at-keyword julia-block-end-keywords)))
+          (ignore-errors (+ (julia-last-open-block (point-min))
+                            (if endtok (- julia-basic-offset) 0)))))
+      ;; If the previous line ends in =, increase the indent.
+      (save-excursion
+        (if (and (not (equal (point-min) (line-beginning-position)))
+                 (progn
+                   (forward-line -1)
+                   (end-of-line) (backward-char 1)
+                   (equal (char-after (point)) ?=)))
+            (+ julia-basic-offset (current-indentation))
+          nil))
+      ;; Otherwise, use the same indentation as previous line.
+      (save-excursion (forward-line -1)
+                      (current-indentation))
+      0))
     ;; Point is now at the beginning of indentation, restore it
     ;; to its original position (relative to indentation).
     (when (>= point-offset 0)
@@ -1077,6 +1107,7 @@ Do not move back beyond MIN."
 (puthash "\\vdash" "⊢" julia-latexsubs)
 (puthash "\\dashv" "⊣" julia-latexsubs)
 (puthash "\\top" "⊤" julia-latexsubs)
+(puthash "\\bot" "⊥" julia-latexsubs)
 (puthash "\\models" "⊧" julia-latexsubs)
 (puthash "\\vDash" "⊨" julia-latexsubs)
 (puthash "\\Vdash" "⊩" julia-latexsubs)

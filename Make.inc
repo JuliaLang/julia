@@ -86,6 +86,9 @@ libdir = $(prefix)/lib
 private_libdir = $(libdir)/julia
 libexecdir = $(prefix)/libexec
 datarootdir = $(prefix)/share
+docdir = $(datarootdir)/doc/julia
+mandir = $(datarootdir)/man
+man1dir = $(mandir)/man1
 includedir = $(prefix)/include
 sysconfdir = $(prefix)/etc
 
@@ -96,6 +99,9 @@ build_libdir = $(build_prefix)/lib
 build_private_libdir = $(build_prefix)/lib/julia
 build_libexecdir = $(build_prefix)/libexec
 build_datarootdir = $(build_prefix)/share
+build_docdir = $(build_datarootdir)/doc/julia
+build_mandir = $(build_datarootdir)/man
+build_man1dir = $(build_mandir)/man1
 build_includedir = $(build_prefix)/include
 build_sysconfdir = $(build_prefix)/etc
 
@@ -106,6 +112,7 @@ libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(libdir))
 build_private_libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(build_bindir) $(build_private_libdir))
 private_libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(private_libdir))
 datarootdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(datarootdir))
+docdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(docdir))
 sysconfdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(sysconfdir))
 
 INSTALL_F = $(JULIAHOME)/contrib/install.sh 644

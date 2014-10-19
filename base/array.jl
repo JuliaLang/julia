@@ -1237,9 +1237,9 @@ end
 
 ## Transpose ##
 const transposebaselength=64
-function transpose!(B::StridedMatrix,A::StridedMatrix)
+function transpose!(B::StridedVecOrMat,A::StridedMatrix)
     m, n = size(A)
-    size(B) == (n,m) || throw(DimensionMismatch("transpose"))
+    size(B,1) == n && size(B,2) == m || throw(DimensionMismatch("transpose"))
 
     if m*n<=4*transposebaselength
         @inbounds begin
@@ -1254,7 +1254,7 @@ function transpose!(B::StridedMatrix,A::StridedMatrix)
     end
     return B
 end
-function transposeblock!(B::StridedMatrix,A::StridedMatrix,m::Int,n::Int,offseti::Int,offsetj::Int)
+function transposeblock!(B::StridedVecOrMat,A::StridedMatrix,m::Int,n::Int,offseti::Int,offsetj::Int)
     if m*n<=transposebaselength
         @inbounds begin
             for j = offsetj+(1:n)
@@ -1274,9 +1274,9 @@ function transposeblock!(B::StridedMatrix,A::StridedMatrix,m::Int,n::Int,offseti
     end
     return B
 end
-function ctranspose!(B::StridedMatrix,A::StridedMatrix)
+function ctranspose!(B::StridedVecOrMat,A::StridedMatrix)
     m, n = size(A)
-    size(B) == (n,m) || throw(DimensionMismatch("transpose"))
+    size(B,1) == n && size(B,2) == m || throw(DimensionMismatch("transpose"))
 
     if m*n<=4*transposebaselength
         @inbounds begin
@@ -1291,7 +1291,7 @@ function ctranspose!(B::StridedMatrix,A::StridedMatrix)
     end
     return B
 end
-function ctransposeblock!(B::StridedMatrix,A::StridedMatrix,m::Int,n::Int,offseti::Int,offsetj::Int)
+function ctransposeblock!(B::StridedVecOrMat,A::StridedMatrix,m::Int,n::Int,offseti::Int,offsetj::Int)
     if m*n<=transposebaselength
         @inbounds begin
             for j = offsetj+(1:n)
