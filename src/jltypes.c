@@ -2627,6 +2627,9 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
                     if (jl_type_morespecific_(child, pv, 0)) {
                         return jl_true;
                     }
+                    else if (!jl_is_typevar(child) && !jl_type_morespecific_(pv, child, 0)) {
+                        return jl_true;
+                    }
                     else if (jl_subtype(pv, child, 0)) {
                         env->data[i+1] = (jl_value_t*)child;
                         return jl_true;

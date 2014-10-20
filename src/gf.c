@@ -1065,7 +1065,7 @@ static int sigs_eq(jl_value_t *a, jl_value_t *b, int useenv)
     return jl_subtype(a, b, 0) && jl_subtype(b, a, 0);
 }
 
-int jl_args_morespecific(jl_value_t *a, jl_value_t *b)
+DLLEXPORT int jl_args_morespecific(jl_value_t *a, jl_value_t *b)
 {
     int msp = jl_type_morespecific(a,b);
     int btv = jl_has_typevars(b);
