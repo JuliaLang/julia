@@ -3051,7 +3051,8 @@ function replace_tupleref!(ast, e::ANY, tupname, vals, sv, i0)
     end
 end
 
-function code_typed(f::Callable, types::(Type...))
+code_typed(f, types) = code_typed(call, tuple(isa(f,Type)?Type{f}:typeof(f), types...))
+function code_typed(f::Function, types::(Type...))
     asts = []
     for x in _methods(f,types,-1)
         linfo = func_for_method(x[3],types)
@@ -3065,7 +3066,8 @@ function code_typed(f::Callable, types::(Type...))
     asts
 end
 
-function return_types(f::Callable, types)
+return_types(f, types) = return_types(call, tuple(isa(f,Type)?Type{f}:typeof(f), types...))
+function return_types(f::Function, types)
     rt = []
     for x in _methods(f,types,-1)
         linfo = func_for_method(x[3],types)

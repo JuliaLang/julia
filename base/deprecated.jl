@@ -157,7 +157,7 @@ end
 
 scale!{T<:Base.LinAlg.BlasReal}(X::Array{T}, s::Complex) = error("scale!: Cannot scale a real array by a complex value in-place.  Use scale(X::Array{Real}, s::Complex) instead.")
 
-@deprecate which(f::Callable, args...) @which f(args...)
+@deprecate which(f, args...) @which f(args...)
 @deprecate rmdir rm
 
 # 0.4 deprecations
