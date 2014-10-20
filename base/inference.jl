@@ -2520,7 +2520,7 @@ const inline_incompletematch_allowed = false
 
 inline_worthy(body, cost::Real) = true
 function inline_worthy(body::Expr, cost::Real=1.0) # precondition: 0<cost
-    if popmeta!(body, :inline)
+    if popmeta!(body, :inline)[1]
         return true
     end
     symlim = 1+5/cost

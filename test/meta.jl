@@ -24,4 +24,27 @@ g_inlined(x) = f_inlined(2x)
 @test g(3) == g_inlined(3)
 @test f(3) == f_inlined(3)
 
+
+using Base.pushmeta!, Base.popmeta!
+
+macro attach(val, ex)
+    esc(_attach(val, ex))
+end
+
+_attach(val, ex) = pushmeta!(ex, :test, val)
+
+@attach 42 function dummy()
+    false
+end
+
+asts = code_lowered(dummy, ())
+@assert length(asts) == 1
+ast = asts[1]
+
+body = Expr(:block)
+body.args = ast.args[3].args
+
+@test popmeta!(body, :test) == (true, [42])
+@test popmeta!(body, :nonexistent) == (false, [])
+
 end
