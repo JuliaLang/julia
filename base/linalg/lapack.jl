@@ -1995,23 +1995,29 @@ for (trcon, trevc, trrfs, elty) in
         # LOGICAL            SELECT( * )
         # DOUBLE PRECISION   T( LDT, * ), VL( LDVL, * ), VR( LDVR, * ),
         #$                   WORK( * )
-        function trevc!(side::BlasChar, howmny::BlasChar,
-                select::Vector{Bool}, A::StridedMatrix{$elty},
-                VL::StridedMatrix{$elty}=similar(A), VR::StridedMatrix{$elty}=similar(A))
-            chkstride1(A)
-            chksquare(A)
-            ldt, n = size(A)
-            ldvl, mm = size(VL)
-            ldvr, mm = size(VR)
+        function trevc!(side::Char, howmny::Char, select::Vector{BlasInt}, T::StridedMatrix{$elty},
+                VL::StridedMatrix{$elty} = similar(T), VR::StridedMatrix{$elty} = similar(T))
+            # Extract
+            n, mm = chksquare(T), size(VL, 2)
+            ldt, ldvl, ldvr = stride(T, 2), stride(VL, 2), stride(VR, 2)
+            
+            # Check
+            chkstride1(T)
+
+            # Allocate
             m = Array(BlasInt, 1)
             work = Array($elty, 3n)
             info = Array(BlasInt, 1)
+            
             ccall(($(string(trevc)),liblapack), Void,
-            (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{Bool}, Ptr{BlasInt}, Ptr{$elty},
-            Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-            Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
-            &side, &howmny, select, &n, A, &ldt, VL, &ldvl, VR, &ldvr, &mm,
-            m, work, info)
+                (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, 
+                 Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
+                 Ptr{$elty}, Ptr{BlasInt},Ptr{BlasInt}, Ptr{BlasInt}, 
+                 Ptr{$elty}, Ptr{BlasInt}),
+                &side, &howmny, select, &n, 
+                T, &ldt, VL, &ldvl, 
+                VR, &ldvr, &mm, m, 
+                work, info)
             @lapackerror
 
             #Decide what exactly to return
@@ -2106,25 +2112,31 @@ for (trcon, trevc, trrfs, elty, relty) in
         # LOGICAL            SELECT( * )
         # DOUBLE PRECISION   RWORK( * )
         # COMPLEX*16         T( LDT, * ), VL( LDVL, * ), VR( LDVR, * ),
-        #$                   WORK( * )
-        function trevc!(side::BlasChar, howmny::BlasChar,
-                select::Vector{Bool}, A::StridedMatrix{$elty},
-                VL::StridedMatrix{$elty}=similar(A), VR::StridedMatrix{$elty}=similar(A))
-            chkstride1(A)
-            chksquare(A)
-            ldt, n = size(A)
-            ldvl, mm = size(VL)
-            ldvr, mm = size(VR)
+        #$                   WORK( * ) 
+        function trevc!(side::Char, howmny::Char, select::Vector{BlasInt}, T::StridedMatrix{$elty},
+                VL::StridedMatrix{$elty} = similar(T), VR::StridedMatrix{$elty} = similar(T))
+            # Extract
+            n, mm = chksquare(T), size(VL, 2)
+            ldt, ldvl, ldvr = stride(T, 2), stride(VL, 2), stride(VR, 2)
+            
+            # Check
+            chkstride1(T)
+
+            # Allocate
             m = Array(BlasInt, 1)
             work = Array($elty, 2n)
             rwork = Array($relty, n)
             info = Array(BlasInt, 1)
+            
             ccall(($(string(trevc)),liblapack), Void,
-            (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{Bool}, Ptr{BlasInt}, Ptr{$elty},
-            Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-            Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}),
-            &side, &howmny, select, &n, A, &ldt, VL, &ldvl, VR, &ldvr, &mm,
-            m, work, rwork, info)
+                (Ptr{Char}, Ptr{Char}, Ptr{BlasInt}, Ptr{BlasInt}, 
+                 Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
+                 Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, 
+                 Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}),
+                &side, &howmny, select, &n, 
+                T, &ldt, VL, &ldvl, 
+                VR, &ldvr, &mm, m, 
+                work, rwork, info)
             @lapackerror
 
             #Decide what exactly to return
@@ -2146,7 +2158,6 @@ for (trcon, trevc, trrfs, elty, relty) in
                 end
             end
         end
-
         # SUBROUTINE ZTRRFS( UPLO, TRANS, DIAG, N, NRHS, A, LDA, B, LDB, X,
         #                    LDX, FERR, BERR, WORK, IWORK, INFO )
         # .. Scalar Arguments ..
