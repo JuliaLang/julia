@@ -1514,10 +1514,13 @@
 			      `(block (= (tuple ,k ,v) ,rk)
 				      ,push-expr))))
 		      restkeys))
-	     (if (call (top isempty) ,container)
-		 (call ,f ,@pa)
-		 (call (top kwcall) call ,(length keys) ,@keyargs
-		       ,f ,container ,@pa))))))))
+	     ,(let ((kw-call `(call (top kwcall) call ,(length keys) ,@keyargs
+				    ,f ,container ,@pa)))
+		(if (not (null? keys))
+		    kw-call
+		    `(if (call (top isempty) ,container)
+			 (call ,f ,@pa)
+			 ,kw-call)))))))))
 
 (define (expand-transposed-op e ops)
   (let ((a (caddr e))
