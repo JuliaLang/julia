@@ -1144,7 +1144,6 @@ type Foo4376{T}
 end
 
 @test isa(Foo4376{Float32}(Foo4376{Int}(2)), Foo4376{Float32})
-@test_throws MethodError Foo4376{Float32}(Foo4376{Float32}(2.0f0))
 
 type _0_test_ctor_syntax_
     _0_test_ctor_syntax_{T<:String}(files::Vector{T},step) = 0
