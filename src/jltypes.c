@@ -718,6 +718,8 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
         int i;
         for(i=0; i < penv->n; i+=2) {
             if (penv->data[i] == (jl_value_t*)a && !jl_is_typevar(penv->data[i+1])) {
+                if (jl_types_equal(b, penv->data[i+1]))
+                    return (jl_value_t*)a;
                 jl_value_t *ti = jl_type_intersection(b, penv->data[i+1]);
                 if (ti == (jl_value_t*)jl_bottom_type)
                     return ti;
