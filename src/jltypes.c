@@ -2213,8 +2213,11 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int invariant)
                     if (jl_subtype_le(a, jl_tparam0(b), 0, 1))
                         return 1;
                 }
+                if (invariant && ttb == (jl_datatype_t*)ttb->name->primary)
+                    return 0;
                 assert(jl_tuple_len(tta->parameters) == jl_tuple_len(ttb->parameters));
-                for(i=0; i < jl_tuple_len(tta->parameters); i++) {
+                size_t l = jl_tuple_len(tta->parameters);
+                for(i=0; i < l; i++) {
                     jl_value_t *apara = jl_tupleref(tta->parameters,i);
                     jl_value_t *bpara = jl_tupleref(ttb->parameters,i);
                     if (invariant && jl_is_typevar(bpara) &&
