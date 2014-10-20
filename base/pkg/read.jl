@@ -167,4 +167,11 @@ function free(inst::Dict=installed())
     return pkgs
 end
 
+function issue_url(pkg::String)
+    ispath(pkg,".git") || return ""
+    m = match(Git.GITHUB_REGEX, url(pkg))
+    m == nothing && return ""
+    return "https://github.com/" * m.captures[1] * "/issues"
+end
+
 end # module
