@@ -295,14 +295,24 @@ write(af, "This is indeed a test")
 bfile = joinpath(dir, "b.txt")
 cp(afile, bfile)
 
+# issue #8698
+cfile = joinpath(dir, "c.txt")
+open(cfile, "w") do cf
+    write(cf, "This is longer than the contents of afile")
+end
+cp(afile, cfile)
+
 a_stat = stat(afile)
 b_stat = stat(bfile)
+c_stat = stat(cfile)
 @test a_stat.mode == b_stat.mode
 @test a_stat.size == b_stat.size
+@test a_stat.size == c_stat.size
 
 close(af)
 rm(afile)
 rm(bfile)
+rm(cfile)
 
 ###################
 # FILE* interface #
