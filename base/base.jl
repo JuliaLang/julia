@@ -210,7 +210,11 @@ map(f::Callable, a::Array{Any,1}) = Any[ f(a[i]) for i=1:length(a) ]
 macro thunk(ex); :(()->$(esc(ex))); end
 macro L_str(s); s; end
 
-function precompile(f, args::Tuple)
+function precompile(f::ANY, args::Tuple)
+    if isa(f,DataType)
+        args = tuple(Type{f}, args...)
+        f = f.name.module.call
+    end
     if isgeneric(f)
         ccall(:jl_compile_hint, Void, (Any, Any), f, args)
     end
