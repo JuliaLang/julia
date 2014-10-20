@@ -24,24 +24,28 @@ function edit(file::String, line::Integer)
         f = find_source_file(file)
         f != nothing && (file = f)
     end
+    no_line_msg = "Unknown editor: no line number information passed.\nThe method is defined at line $line."
     if beginswith(edname, "emacs")
         spawn(`$edpath +$line $file`)
     elseif edname == "vim"
         run(`$edpath $file +$line`)
     elseif edname == "textmate" || edname == "mate"
         spawn(`$edpath $file -l $line`)
-    elseif beginswith(edname, "subl")
+    elseif beginswith(edname, "subl") || edname == "atom"
         spawn(`$(shell_split(edpath)) $file:$line`)
     elseif OS_NAME == :Windows && (edname == "start" || edname == "open")
-        spawn(`start /b $file`)
+        spawn(`cmd /c start /b $file`)
+        println(no_line_msg)
     elseif OS_NAME == :Darwin && (edname == "start" || edname == "open")
         spawn(`open -t $file`)
+        println(no_line_msg)
     elseif edname == "kate"
         spawn(`$edpath $file -l $line`)
     elseif edname == "nano"
         run(`$edpath +$line $file`)
     else
         run(`$(shell_split(edpath)) $file`)
+        println(no_line_msg)
     end
     nothing
 end
