@@ -27,8 +27,6 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
 
     isbits(T) || error("Type of Shared Array elements must be bits types")
 
-    nbytes = prod(dims)*sizeof(T)
-
     if isempty(pids)
         # only use workers on the current host
         pids = procs(myid())
