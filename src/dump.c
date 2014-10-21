@@ -151,7 +151,7 @@ static void jl_load_sysimg_so(char *fname)
     // attempt to load the pre-compiled sysimg at fname
     // if this succeeds, sysimg_gvars will be a valid array
     // otherwise, it will be NULL
-    jl_sysimg_handle = jl_load_dynamic_library_e(fname, JL_RTLD_DEFAULT | JL_RTLD_GLOBAL);
+    jl_sysimg_handle = (uv_lib_t *) jl_load_dynamic_library_e(fname, JL_RTLD_DEFAULT | JL_RTLD_GLOBAL);
     if (jl_sysimg_handle != 0) {
         sysimg_gvars = (jl_value_t***)jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars");
         globalUnique = *(size_t*)jl_dlsym(jl_sysimg_handle, "jl_globalUnique");

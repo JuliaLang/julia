@@ -907,7 +907,7 @@ DLLEXPORT char *jl_ios_buf_base(ios_t *ios)
     return ios->buf;
 }
 
-DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle)
+DLLEXPORT jl_uv_libhandle jl_wrap_raw_dl_handle(void *handle)
 {
     uv_lib_t *lib = (uv_lib_t*)malloc(sizeof(uv_lib_t));
     #ifdef _OS_WINDOWS_
@@ -916,7 +916,7 @@ DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle)
     lib->handle=handle;
     #endif
     lib->errmsg=NULL;
-    return lib;
+    return (jl_uv_libhandle) lib;
 }
 
 #ifndef _OS_WINDOWS_
