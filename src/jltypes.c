@@ -55,8 +55,6 @@ jl_datatype_t *jl_number_type;
 jl_tuple_t *jl_null;
 jl_value_t *jl_nothing;
 
-void jl_add_constructors(jl_datatype_t *t);
-
 // --- type properties and predicates ---
 
 int jl_is_type(jl_value_t *v)
@@ -1727,7 +1725,8 @@ void jl_set_t_uid_ctr(int i) { t_uid_ctr=i; }
 
 int jl_assign_type_uid(void)
 {
-    return int32hash(t_uid_ctr++);
+    assert(t_uid_ctr != 0);
+    return t_uid_ctr++;
 }
 
 static void cache_type_(jl_value_t *type)

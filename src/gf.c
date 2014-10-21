@@ -324,7 +324,6 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
                                      jl_function_t *method, jl_tuple_t *tvars,
                                      int check_amb, int8_t isstaged);
 
-static
 jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tuple_t *type,
                                       jl_function_t *method)
 {
@@ -841,7 +840,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     assert(!(newmeth->linfo && newmeth->linfo->ast) ||
            newmeth->fptr == &jl_trampoline);
     */
-    if (newmeth->linfo&&newmeth->linfo->ast&&newmeth->fptr!=&jl_trampoline) {
+    if (newmeth->linfo && newmeth->linfo->ast && newmeth->fptr != &jl_trampoline) {
         newmeth->fptr = &jl_trampoline;
     }
 
@@ -1386,7 +1385,6 @@ jl_function_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t na
     return sf;
 }
 
-void jl_add_constructors(jl_datatype_t *t);
 DLLEXPORT jl_value_t *jl_matching_methods(jl_function_t *gf, jl_value_t *type, int lim);
 
 // compile-time method lookup

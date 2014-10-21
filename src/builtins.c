@@ -1131,6 +1131,12 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
     if (v == NULL) {
         n += JL_PRINTF(out, "#<null>");
     }
+    else if (v->type == NULL) {
+        n += JL_PRINTF(out, "<?::#null>");
+    }
+    else if ((uptrint_t)v->type < 4096U) {
+        n += JL_PRINTF(out, "<?::#%d>", (int)(uptrint_t)v->type);
+    }
     else if (jl_is_lambda_info(v)) {
         jl_lambda_info_t *li = (jl_lambda_info_t*)v;
         n += jl_static_show(out, (jl_value_t*)li->module);
@@ -1141,6 +1147,8 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
         else {
             n += JL_PRINTF(out, "(?)");
         }
+        JL_PRINTF(out, " -> ");
+        jl_static_show(out, !jl_is_expr(li->ast) ? jl_uncompress_ast(li, li->ast) : li->ast);
     }
     else if (jl_is_tuple(v)) {
         n += jl_show_tuple(out, (jl_tuple_t*)v, "(", ")", 1);
@@ -1239,7 +1247,7 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
     }
     else if (jl_is_typevar(v)) {
         n += jl_static_show(out, ((jl_tvar_t*)v)->lb);
-        n += JL_PRINTF(out, "<:%s<:", ((jl_tvar_t*)v)->name->name);
+        n += JL_PRINTF(out, "<:%s%s<:", (((jl_tvar_t*)v)->bound)?"#":"", ((jl_tvar_t*)v)->name->name); 
         n += jl_static_show(out, ((jl_tvar_t*)v)->ub);
     }
     else if (jl_is_module(v)) {

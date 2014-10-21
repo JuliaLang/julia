@@ -877,6 +877,8 @@ DLLEXPORT extern char *julia_home;
 
 DLLEXPORT void jl_save_system_image(char *fname);
 DLLEXPORT void jl_restore_system_image(char *fname);
+int jl_save_new_module(char *fname, jl_module_t *mod);
+jl_module_t *jl_restore_new_module(char *fname);
 void jl_init_restored_modules();
 
 // front end interface
@@ -1050,6 +1052,10 @@ extern DLLEXPORT jl_gcframe_t *jl_pgcstack;
 
 #define JL_GC_PUSH4(arg1, arg2, arg3, arg4)                               \
   void *__gc_stkf[] = {(void*)9, jl_pgcstack, arg1, arg2, arg3, arg4};    \
+  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
+
+#define JL_GC_PUSH5(arg1, arg2, arg3, arg4, arg5)                               \
+  void *__gc_stkf[] = {(void*)11, jl_pgcstack, arg1, arg2, arg3, arg4, arg5};    \
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 
 #define JL_GC_PUSHARGS(rts_var,n)                               \
