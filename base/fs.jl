@@ -125,15 +125,13 @@ end
 
 # For copy command
 function sendfile(src::String, dst::String)
-    flags = JL_O_RDONLY
-    src_file = open(src, flags)
+    src_file = open(src, JL_O_RDONLY)
     if !src_file.open
         error("Src file is not open")
     end
 
-    flags = JL_O_CREAT | JL_O_RDWR
-    mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH | S_IWOTH
-    dst_file = open(dst, flags, mode)
+    dst_file = open(dst, JL_O_CREAT | JL_O_TRUNC | JL_O_WRONLY,
+                    S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH | S_IWOTH)
     if !dst_file.open
         error("Dst file is not open")
     end
