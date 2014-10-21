@@ -624,7 +624,6 @@ void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 // method definition ----------------------------------------------------------
 
 extern int jl_boot_file_loaded;
-void jl_add_constructors(jl_datatype_t *t);
 
 static int type_contains(jl_value_t *ty, jl_value_t *x)
 {
