@@ -877,8 +877,8 @@ DLLEXPORT extern char *julia_home;
 
 DLLEXPORT void jl_save_system_image(char *fname);
 DLLEXPORT void jl_restore_system_image(char *fname);
-int jl_save_new_module(char *fname, jl_module_t *mod);
-jl_module_t *jl_restore_new_module(char *fname);
+DLLEXPORT int jl_save_new_module(char *fname, jl_module_t *mod);
+DLLEXPORT jl_module_t *jl_restore_new_module(char *fname);
 void jl_init_restored_modules();
 
 // front end interface

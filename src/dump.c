@@ -79,7 +79,7 @@ typedef enum _DUMP_MODES {
     MODE_MODULE, // first-stage (pre type-uid assignment)
     MODE_MODULE_LAMBDAS, // second-stage (post type-uid assignment)
 } DUMP_MODES;
-static DUMP_MODES mode = 0;
+static DUMP_MODES mode = (DUMP_MODES) 0;
 
 static jl_value_t *jl_idtable_type=NULL;
 
@@ -1021,7 +1021,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, int pos, jl_value_t *vtag, jl
         if (usetable)
             ptrhash_put(&backref_table, (void*)(ptrint_t)pos, (jl_value_t*)e);
         e->etype = jl_deserialize_value(s, &e->etype);
-        jl_value_t **data = e->args->data;
+        jl_value_t **data = (jl_value_t**)(e->args->data);
         for(i=0; i < len; i++) {
             data[i] = jl_deserialize_value(s, &data[i]);
         }
@@ -1588,7 +1588,7 @@ jl_module_t *jl_restore_new_module(char *fname)
 
     size_t i = 0;
     while (i < flagref_list.len) {
-        jl_value_t *v, *o = flagref_list.items[i++];
+        jl_value_t *v, *o = (jl_value_t*)flagref_list.items[i++];
         jl_datatype_t *dt;
         if (jl_is_datatype(o)) {
             dt = (jl_datatype_t*)o;
@@ -1654,8 +1654,8 @@ jl_module_t *jl_restore_new_module(char *fname)
         jl_methtable_t *mt = (jl_methtable_t*)methtable_list.items[i];
         jl_array_t *cache_targ = mt->cache_targ;
         jl_array_t *cache_arg1 = mt->cache_arg1;
-        mt->cache_targ = JL_NULL;
-        mt->cache_arg1 = JL_NULL;
+        mt->cache_targ = (jl_array_t*)JL_NULL;
+        mt->cache_arg1 = (jl_array_t*)JL_NULL;
         if (cache_targ != JL_NULL) {
             size_t j, l = jl_array_len(cache_targ);
             for (j = 0; j < l; j++) {
