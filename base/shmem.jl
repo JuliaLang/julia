@@ -8,9 +8,12 @@ mmap_array_shm{T,N}(::Type{T}, dims::NTuple{N,Integer}, name::String, create::Bo
 
 # OS-specific code
 
-@unix_only begin
 
-typealias SharedMemory IOStream
+@unix_only type SharedMemory
+    stream :: IOStream
+end
+
+@unix_only begin
 
 function open_shm(name::String, size::Integer, create::Bool, readonly::Bool)
     oflags = (create ? JL_O_CREAT : 0) | (readonly ? JL_O_RDONLY : JL_O_RDWR)
@@ -19,7 +22,7 @@ function open_shm(name::String, size::Integer, create::Bool, readonly::Bool)
     if create && ccall(:ftruncate, Cint, (Cint, Cint), fd, size) != 0
         error("unable to ftruncate shared memory segment " * name)
     end
-    fdio(name, fd, true)
+    SharedMemory(fdio(name, fd, true))
 end
 
 function unlink_shm(name::String)
@@ -29,26 +32,25 @@ function unlink_shm(name::String)
 end
 
 function mmap_array_shm{T,N}(::Type{T}, dims::NTuple{N,Integer}, shm::SharedMemory, offset::FileOffset)
-    mmap_array(T, dims, shm, offset, grow=false)
+    mmap_array(T, dims, shm.stream, offset, grow=false)
 end
 
 end # @unix_only
 
-@windows_only begin
-
-const SHM_GRANULARITY::Int = ccall(:jl_getallocationgranularity, Clong, ())
-
-type SharedMemory
+@windows_only type SharedMemory
     handle :: Ptr{Void}
     readonly :: Bool
 end
 
+@windows_only begin
+
 function open_shm(name::String, size::Integer, create::Bool, readonly::Bool)
+    const granularity::Int = ccall(:jl_getallocationgranularity, Clong, ())
     
     if size < 0
         error("requested size is negative")
     end
-    if size > typemax(Int)-SHM_GRANULARITY
+    if size > typemax(Int)-granularity
         error("size is too large to memory-map on this platform")
     end
     
@@ -69,14 +71,13 @@ function open_shm(name::String, size::Integer, create::Bool, readonly::Bool)
     if hdl == C_NULL
         error("could not create shared memory object: $(FormatMessage())")
     end
-    shm = SharedMemory(hdl)
+    shm = SharedMemory(hdl,readonly)
 
-    function finalizer_closure()
+    finalizer(shm,x -> begin
         if !bool(ccall(:CloseHandle, stdcall, Cint, (Ptr{Void},), hdl))
             error("could not close shared memory object: $(FormatMessage())")
         end
-    end
-    finalizer(shm,x->finalizer_closure())
+    end)        
 
     shm
 end
@@ -86,15 +87,17 @@ function unlink_shm(name::String)
 end
 
 function mmap_array_shm{T,N}(::Type{T}, dims::NTuple{N,Integer}, shm::SharedMemory, offset::FileOffset)
+    const granularity::Int = ccall(:jl_getallocationgranularity, Clong, ())
+    
     len = prod(dims)*sizeof(T)
-    pgoff::FileOffset = div(offset, SHM_GRANULARITY)*SHM_GRANULARITY
+    pgoff::FileOffset = div(offset, granularity)*granularity
     szf = convert(Csize_t, len+offset)
     sza = szf - convert(Csize_t, pgoff)
     ro = shm.readonly ? 4 : 2
     pgoffhi = pgoff>>32
     pgofflo = pgoff&typemax(Uint32)
     hdl = ccall(:MapViewOfFile, stdcall, Ptr{Void},
-                (Ptr{Void}, Cint, Cint, Csize_t),
+                (Ptr{Void}, Cint, Cint, Cint, Csize_t),
                 shm.handle, ro, pgoffhi, pgofflo, sza)
     if hdl == C_NULL
         error("could not create mapping view: $(FormatMessage())")
@@ -102,13 +105,11 @@ function mmap_array_shm{T,N}(::Type{T}, dims::NTuple{N,Integer}, shm::SharedMemo
     
     A = pointer_to_array(convert(Ptr{T}, hdl+offset-pgoff), dims)
 
-    function finalizer_closure()
+    finalizer(A,x -> begin
         if !bool(ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Void},), hdl))
             error("could not unmap view: $(FormatMessage())")
         end
-    end
-    finalizer(A,x->finalizer_closure())
-
+    end)
     A
 end
 
