@@ -912,7 +912,8 @@ static jl_value_t *jl_deserialize_value(ios_t *s, jl_value_t **loc)
         if (mode == MODE_MODULE) {
             isdatatype = !!(offs & 1);
             offs >>= 1;
-        } else if (mode == MODE_MODULE_LAMBDAS) {
+        }
+        else if (mode == MODE_MODULE_LAMBDAS) {
             offs >>= 1;
         }
         void **bp = ptrhash_bp(&backref_table, (void*)offs);
@@ -936,7 +937,8 @@ static jl_value_t *jl_deserialize_value(ios_t *s, jl_value_t **loc)
     return v;
 }
 
-static jl_value_t *jl_deserialize_value_(ios_t *s, int pos, jl_value_t *vtag, jl_value_t **loc) {
+static jl_value_t *jl_deserialize_value_(ios_t *s, int pos, jl_value_t *vtag, jl_value_t **loc)
+{
     int usetable = (mode != MODE_AST);
 
     size_t i;
@@ -1085,7 +1087,8 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, int pos, jl_value_t *vtag, jl
         int ref_only = 0;
         if (mode == MODE_MODULE_LAMBDAS) {
             ref_only = 1;
-        } else if (mode == MODE_MODULE) {
+        }
+        else if (mode == MODE_MODULE) {
             ref_only = read_uint8(s);
         }
         if (ref_only) {
@@ -1593,7 +1596,8 @@ jl_module_t *jl_restore_new_module(char *fname)
         if (jl_is_datatype(o)) {
             dt = (jl_datatype_t*)o;
             v = dt->instance;
-        } else {
+        }
+        else {
             dt = (jl_datatype_t*)jl_typeof(o);
             v = o;
         }
@@ -1606,7 +1610,8 @@ jl_module_t *jl_restore_new_module(char *fname)
                 if (loc) *loc = (jl_value_t*)t;
                 if (offs) ptrhash_put(&backref_table, offs, t);
             }
-        } else if (!t->fptr) {
+        }
+        else if (!t->fptr) {
             jl_add_constructors(t);
         }
         if (t->instance != v) {
