@@ -137,25 +137,26 @@ void parse_opts(int *argcp, char ***argvp)
             exit(0);
         case 'c':
             if (optarg != NULL) {
-            if (!strcmp(optarg,"user"))
-                codecov = JL_LOG_USER;
-            else if (!strcmp(optarg,"all"))
-                codecov = JL_LOG_ALL;
-            else if (!strcmp(optarg,"none"))
-                codecov = JL_LOG_NONE;
+                if (!strcmp(optarg,"user"))
+                    codecov = JL_LOG_USER;
+                else if (!strcmp(optarg,"all"))
+                    codecov = JL_LOG_ALL;
+                else if (!strcmp(optarg,"none"))
+                    codecov = JL_LOG_NONE;
                 break;
             }
-            else
-            codecov = JL_LOG_USER;
+            else {
+                codecov = JL_LOG_USER;
+            }
             break;
         case 'm':
             if (optarg != NULL) {
-            if (!strcmp(optarg,"user"))
-                malloclog = JL_LOG_USER;
-            else if (!strcmp(optarg,"all"))
-                malloclog = JL_LOG_ALL;
-            else if (!strcmp(optarg,"none"))
-                malloclog = JL_LOG_NONE;
+                if (!strcmp(optarg,"user"))
+                    malloclog = JL_LOG_USER;
+                else if (!strcmp(optarg,"all"))
+                    malloclog = JL_LOG_ALL;
+                else if (!strcmp(optarg,"none"))
+                    malloclog = JL_LOG_NONE;
                 break;
             }
         case 300:

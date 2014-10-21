@@ -15,13 +15,35 @@
 extern "C" {
 #endif
 
+// hash of definitions for predefined tagged object
 static htable_t ser_tag;
+// array of definitions for the predefined tagged object types
+// (reverse of ser_tag)
 static jl_value_t* deser_tag[256];
+
+// table of all objects that have been deserialized, indexed by pos
+// (the location in the serializer stream) in MODE_MODULE, the low
+// bit is reserved for flagging certain entries and pos is
+// left shift by 1
 static htable_t backref_table;
+// list of (jl_value_t *value, jl_value_t **loc, size_t pos) entries
+// for anything that was flagged by the serializer for later rework of
+// some sort
 static arraylist_t flagref_list;
+
+// list of any methtable objects that were deserialized in MODE_MODULE
+// and need to be rehashed after assigning the uid fields to types
+// (only used in MODE_MODULE and MODE_MODULE_LAMBDAS)
 static arraylist_t methtable_list;
+
+// hash of definitions for predefined function pointers
 static htable_t fptr_to_id;
+// array of definitions for the predefined function pointers
+// (reverse of fptr_to_id)
 static htable_t id_to_fptr;
+
+// pointers to non-AST-ish objects in a compressed tree
+static jl_array_t *tree_literal_values=NULL; // (only used in MODE_AST)
 
 static const ptrint_t LongSymbol_tag = 23;
 static const ptrint_t LongTuple_tag  = 24;
@@ -39,20 +61,30 @@ static const ptrint_t BackRef_tag      = 255;
 static ptrint_t VALUE_TAGS;
 
 typedef enum _DUMP_MODES {
+    // not in the serializer at all, or
+    // something is seriously wrong
     MODE_INVALID = 0,
-    MODE_MODULE, MODE_MODULE_LAMBDAS,
+
+    // jl_uncompress_ast
+    // compressing / decompressing an AST Expr in a LambdaStaticData
     MODE_AST,
+
+    // jl_restore_system_image
+    // restoring an entire system image from disk
     MODE_SYSTEM_IMAGE,
+
+    // jl_restore_new_module
+    // restoring a single module from disk for integration
+    // into the currently running system image / environment
+    MODE_MODULE, // first-stage (pre type-uid assignment)
+    MODE_MODULE_LAMBDAS, // second-stage (post type-uid assignment)
 } DUMP_MODES;
 static DUMP_MODES mode = 0;
-
-// pointers to non-AST-ish objects in a compressed tree
-static jl_array_t *tree_literal_values=NULL;
 
 static jl_value_t *jl_idtable_type=NULL;
 
 // queue of types to cache
-static jl_array_t *datatype_list=NULL;
+static jl_array_t *datatype_list=NULL; // (only used in MODE_SYSTEM_IMAGE)
 
 #define write_uint8(s, n) ios_putc((n), (s))
 #define read_uint8(s) ((uint8_t)ios_getc(s))
@@ -692,6 +724,7 @@ void jl_serialize_methtable_from_mod(ios_t *s, jl_module_t *m, jl_sym_t *name, j
         mt = jl_gf_mtable(mt->kwsorter);
         assert(!mt->kwsorter);
     }
+    //XXX: we are reversing the list of methods due to #8652
     struct _chain {
         jl_methlist_t *ml;
         struct _chain *next;
@@ -1168,7 +1201,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, int pos, jl_value_t *vtag, jl
                     jl_set_nth_field(v, i, jl_deserialize_value(s,
                         (dt->fields[i].isptr) ? (jl_value_t**)(data+jl_field_offset(dt, i)) : NULL));
                 }
-                if (mode == MODE_MODULE && jl_is_mtable(v))
+                if ((mode == MODE_MODULE || mode == MODE_MODULE_LAMBDAS) && jl_is_mtable(v))
                     arraylist_push(&methtable_list, v);
             }
         }
@@ -1332,7 +1365,7 @@ void jl_restore_system_image(char *fname)
     datatype_list = jl_alloc_cell_1d(0);
 
     jl_array_type->env = jl_deserialize_value(&f, NULL);
-    
+
     jl_main_module = (jl_module_t*)jl_deserialize_value(&f, NULL);
     jl_internal_main_module = jl_main_module;
     jl_core_module = (jl_module_t*)jl_get_global(jl_main_module,
@@ -1513,7 +1546,7 @@ int jl_save_new_module(char *fname, jl_module_t *mod)
     mode = last_mode;
     jl_gc_ephemeral_off();
     if (en) jl_gc_enable();
-    
+
     htable_reset(&backref_table, 0);
     ios_close(&f);
 
@@ -1539,7 +1572,7 @@ jl_module_t *jl_restore_new_module(char *fname)
     ptrhash_put(&backref_table, (void*)(((uintptr_t)-4)>>1), jl_main_module);
     arraylist_new(&flagref_list, 0);
     arraylist_new(&methtable_list, 0);
-    
+
     int en = jl_gc_is_enabled();
     jl_gc_disable();
     DUMP_MODES last_mode = mode;
@@ -1614,6 +1647,9 @@ jl_module_t *jl_restore_new_module(char *fname)
         }
     }
 
+    mode = MODE_MODULE_LAMBDAS;
+    jl_deserialize_lambdas_from_mod(&f);
+
     for (i = 0; i < methtable_list.len; i++) {
         jl_methtable_t *mt = (jl_methtable_t*)methtable_list.items[i];
         jl_array_t *cache_targ = mt->cache_targ;
@@ -1644,8 +1680,6 @@ jl_module_t *jl_restore_new_module(char *fname)
         }
     }
 
-    mode = MODE_MODULE_LAMBDAS;
-    jl_deserialize_lambdas_from_mod(&f);
 
     mode = last_mode;
     if (en) jl_gc_enable();
@@ -1694,7 +1728,7 @@ void jl_init_serializer(void)
                      jl_symbol("T"), jl_symbol("S"),
                      jl_symbol("X"), jl_symbol("Y"),
                      jl_symbol("add_int"), jl_symbol("sub_int"),
-                     jl_symbol("mul_int"), 
+                     jl_symbol("mul_int"),
                      jl_symbol("add_float"), jl_symbol("sub_float"),
                      jl_symbol("mul_float"), jl_symbol("ccall"),
                      jl_symbol("box"), jl_symbol("unbox"),

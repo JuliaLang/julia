@@ -1147,8 +1147,10 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
         else {
             n += JL_PRINTF(out, "(?)");
         }
-        JL_PRINTF(out, " -> ");
-        jl_static_show(out, !jl_is_expr(li->ast) ? jl_uncompress_ast(li, li->ast) : li->ast);
+        // The following is nice for debugging, but allocates memory and generates a lot of output
+        // so it may not be a good idea to to have it active
+        //JL_PRINTF(out, " -> ");
+        //jl_static_show(out, !jl_is_expr(li->ast) ? jl_uncompress_ast(li, li->ast) : li->ast);
     }
     else if (jl_is_tuple(v)) {
         n += jl_show_tuple(out, (jl_tuple_t*)v, "(", ")", 1);
