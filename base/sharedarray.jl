@@ -46,31 +46,25 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
     local S = nothing
     local shmmem_create_pid
     try
-        function create_closure()
-            shm = open_shm(shm_seg_name, nbytes, true, false)
-            mmap_array_shm(T, dims, shm, 0)
-        end
-
         # On OSX, the shm_seg_name length must be < 32 characters
         shm_seg_name = string("/jl", getpid(), int64(time() * 10^9))
         if onlocalhost
             shmmem_create_pid = myid()
-            s = create_closure()
+            s = mmap_array_shm(T, dims, shm_seg_name, true)
         else
             # The shared array is created on a remote machine....
             shmmem_create_pid = pids[1]
             remotecall_fetch(pids[1], () -> begin
-                             create_closure(); nothing end)
-        end
-
-        function join_closure()
-            shm = open_shm(shm_seg_name, nbytes, false, false)
-            mmap_array_shm(T, dims, shm, 0)
+                mmap_array_shm(T, dims, shm_seg_name, true);
+                nothing
+            end)
         end
 
         refs = Array(RemoteRef, length(pids))
         for (i, p) in enumerate(pids)
-            refs[i] = remotecall(p, join_closure)
+            refs[i] = remotecall(p, () -> begin
+                mmap_array_shm(T, dims, shm_seg_name, false)
+            end) 
         end
 
         # Wait till all the workers have mapped the segment

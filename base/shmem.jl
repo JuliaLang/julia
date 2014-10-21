@@ -1,19 +1,25 @@
-# OS-specific code
-
-@unix_only
-
-type SharedMemory
-    stream :: IOStream
+function mmap_array_shm{T,N}(::Type{T}, dims::NTuple{N,Integer}, name::String, create::Bool, readonly::Bool)
+    sz = prod(dims)*sizeof(T)
+    shm = open_shm(name, sz, create, readonly)
+    mmap_array_shm(T, dims, shm, 0)
 end
 
+mmap_array_shm{T,N}(::Type{T}, dims::NTuple{N,Integer}, name::String, create::Bool) = mmap_array_shm(T, dims, name, create, false)
+
+# OS-specific code
+
+@unix_only begin
+
+typealias SharedMemory IOStream
+
 function open_shm(name::String, size::Integer, create::Bool, readonly::Bool)
-    oflags = (create ? JL_O_CREAT : 0) | (readonly ? O_RDONLY : O_RDWR)
+    oflags = (create ? JL_O_CREAT : 0) | (readonly ? JL_O_RDONLY : JL_O_RDWR)
     fd = ccall(:shm_open, Cint, (Ptr{Uint8}, Cint, Cint), 
                  name, oflags, S_IRUSR | S_IWUSR)
     if create && ccall(:ftruncate, Cint, (Cint, Cint), fd, size) != 0
         error("unable to ftruncate shared memory segment " * name)
     end
-    SharedMemory(fdio(name, fd, true))
+    fdio(name, fd, true)
 end
 
 function unlink_shm(name::String)
@@ -23,12 +29,12 @@ function unlink_shm(name::String)
 end
 
 function mmap_array_shm{T,N}(::Type{T}, dims::NTuple{N,Integer}, shm::SharedMemory, offset::FileOffset)
-    mmap_array(T, dims, shm.stream, offset, grow=false)
+    mmap_array(T, dims, shm, offset, grow=false)
 end
 
 end # @unix_only
 
-@windows_only
+@windows_only begin
 
 const SHM_GRANULARITY::Int = ccall(:jl_getallocationgranularity, Clong, ())
 
