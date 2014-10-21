@@ -28,7 +28,7 @@ function find_source_file(file)
     (isabspath(file) || isfile(file)) && return file
     file2 = find_in_path(file)
     file2 != nothing && return file2
-    file2 = "$JULIA_HOME/../share/julia/base/$file"
+    file2 = joinpath(JULIA_HOME, DATAROOTDIR, "julia", "base", file)
     isfile(file2) ? file2 : nothing
 end
 
