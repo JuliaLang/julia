@@ -490,6 +490,8 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
         }
     }
     jl_serialize_value(s, m->constant_table);
+    write_int32(s, (uint32_t)m->uuid);
+    write_int32(s, (uint32_t)(m->uuid>>32));
 }
 
 static int is_ast_node(jl_value_t *v)
@@ -1229,6 +1231,8 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         }
         m->constant_table = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&m->constant_table);
         if (m->constant_table != NULL) gc_wb(m, m->constant_table);
+        m->uuid = read_int32(s);
+        m->uuid |= ((uint64_t)read_int32(s))<<32;
         return (jl_value_t*)m;
     }
     else if (vtag == (jl_value_t*)SmallInt64_tag) {
