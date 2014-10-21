@@ -26,6 +26,7 @@ jl_module_t *jl_new_module(jl_sym_t *name)
     m->parent = NULL;
     m->constant_table = NULL;
     m->call_func = NULL;
+    m->uuid = uv_now(uv_default_loop());
     htable_new(&m->bindings, 0);
     arraylist_new(&m->usings, 0);
     if (jl_core_module) {
@@ -465,6 +466,7 @@ DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported)
 
 DLLEXPORT jl_sym_t *jl_module_name(jl_module_t *m) { return m->name; }
 DLLEXPORT jl_module_t *jl_module_parent(jl_module_t *m) { return m->parent; }
+DLLEXPORT uint64_t jl_module_uuid(jl_module_t *m) { return m->uuid; }
 
 jl_function_t *jl_module_get_initializer(jl_module_t *m)
 {

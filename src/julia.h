@@ -315,6 +315,7 @@ typedef struct _jl_module_t {
     arraylist_t usings;  // modules with all bindings potentially imported
     jl_array_t *constant_table;
     jl_function_t *call_func;  // cached lookup of `call` within this module
+    uint64_t uuid;
 } jl_module_t;
 
 typedef struct _jl_methlist_t {
