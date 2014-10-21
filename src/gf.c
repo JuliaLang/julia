@@ -324,7 +324,6 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
                                      jl_function_t *method, jl_tuple_t *tvars,
                                      int check_amb, int8_t isstaged);
 
-static
 jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tuple_t *type,
                                       jl_function_t *method)
 {
@@ -845,7 +844,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     assert(!(newmeth->linfo && newmeth->linfo->ast) ||
            newmeth->fptr == &jl_trampoline);
     */
-    if (newmeth->linfo&&newmeth->linfo->ast&&newmeth->fptr!=&jl_trampoline) {
+    if (newmeth->linfo && newmeth->linfo->ast && newmeth->fptr != &jl_trampoline) {
         newmeth->fptr = &jl_trampoline;
     }
 

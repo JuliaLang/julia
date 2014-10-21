@@ -85,7 +85,16 @@ function cholfact(x::Number, uplo::Symbol=:U)
     Cholesky{:U, eltype(xf), typeof(xf)}(xf)
 end
 
-chol(A::AbstractMatrix, uplo::Symbol=:U) = chol!(copy(A), uplo)
+chol(A::AbstractMatrix, uplo::Symbol) = chol!(copy(A), uplo)
+
+function chol(A::AbstractMatrix)
+    A = copy(A)
+    C, info = LAPACK.potrf!('U', A)
+    chksquare(C)
+    T = Triangular{eltype(C),typeof(C),:U,false}(C)
+    return @assertposdef T info
+end
+
 function chol!(x::Number, uplo::Symbol=:U)
     rx = real(x)
     rx == abs(x) || throw(DomainError())

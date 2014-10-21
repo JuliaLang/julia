@@ -451,7 +451,7 @@ function ndigits0z(x::BigInt, b::Integer=10)
     b < 0 && throw(DomainError()) # TODO: make this work correctly.
     # mpz_sizeinbase might return an answer 1 too big
     n = int(ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &x, b))
-    abs(x) < big(b)^(n-1) ? n-1 : n
+    ispow2(b) || abs(x) >= big(b)^(n-1) ? n : n-1
 end
 ndigits(x::BigInt, b::Integer=10) = x.size == 0 ? 1 : ndigits0z(x,b)
 
