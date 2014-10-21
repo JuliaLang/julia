@@ -102,7 +102,7 @@ static uv_lib_t *get_library(char *lib)
     hnd = libMap[lib];
     if (hnd != NULL)
         return hnd;
-    hnd = jl_load_dynamic_library(lib, JL_RTLD_DEFAULT);
+    hnd = (uv_lib_t *) jl_load_dynamic_library(lib, JL_RTLD_DEFAULT);
     if (hnd != NULL)
         libMap[lib] = hnd;
     return hnd;

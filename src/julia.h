@@ -9,7 +9,6 @@ extern "C" {
 
 #include "libsupport.h"
 #include <stdint.h>
-#include "uv.h"
 
 #include "htable.h"
 #include "arraylist.h"
@@ -385,17 +384,6 @@ extern DLLEXPORT jl_tuple_t *jl_null;
 DLLEXPORT extern jl_value_t *jl_true;
 DLLEXPORT extern jl_value_t *jl_false;
 DLLEXPORT extern jl_value_t *jl_nothing;
-
-DLLEXPORT extern uv_lib_t *jl_dl_handle;
-DLLEXPORT extern uv_lib_t *jl_RTLD_DEFAULT_handle;
-
-#if defined(_OS_WINDOWS_)
-DLLEXPORT extern uv_lib_t *jl_exe_handle;
-extern uv_lib_t *jl_ntdll_handle;
-extern uv_lib_t *jl_kernel32_handle;
-extern uv_lib_t *jl_crtdll_handle;
-extern uv_lib_t *jl_winsock_handle;
-#endif
 
 // some important symbols
 extern jl_sym_t *call_sym;
@@ -902,12 +890,14 @@ enum JL_RTLD_CONSTANT {
      /* MacOS X 10.5+: */ JL_RTLD_FIRST=64U
 };
 #define JL_RTLD_DEFAULT (JL_RTLD_LAZY | JL_RTLD_DEEPBIND)
-DLLEXPORT uv_lib_t *jl_load_dynamic_library(char *fname, unsigned flags);
-DLLEXPORT uv_lib_t *jl_load_dynamic_library_e(char *fname, unsigned flags);
-DLLEXPORT void *jl_dlsym_e(uv_lib_t *handle, char *symbol);
-DLLEXPORT void *jl_dlsym(uv_lib_t *handle, char *symbol);
-DLLEXPORT int jl_uv_dlopen(const char *filename, uv_lib_t *lib, unsigned flags);
-DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle);
+
+typedef void *jl_uv_libhandle; // uv_lib_t* (avoid uv.h dependency)
+DLLEXPORT jl_uv_libhandle jl_load_dynamic_library(char *fname, unsigned flags);
+DLLEXPORT jl_uv_libhandle jl_load_dynamic_library_e(char *fname, unsigned flags);
+DLLEXPORT void *jl_dlsym_e(jl_uv_libhandle handle, char *symbol);
+DLLEXPORT void *jl_dlsym(jl_uv_libhandle handle, char *symbol);
+DLLEXPORT int jl_uv_dlopen(const char *filename, jl_uv_libhandle lib, unsigned flags);
+DLLEXPORT jl_uv_libhandle jl_wrap_raw_dl_handle(void *handle);
 char *jl_dlfind_win32(char *name);
 DLLEXPORT int add_library_mapping(char *lib, void *hnd);
 
