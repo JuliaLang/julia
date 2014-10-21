@@ -1227,13 +1227,7 @@ void jl_deserialize_lambdas_from_mod(ios_t *s)
         jl_sym_t *name = (jl_sym_t*)jl_deserialize_value(s, NULL);
         jl_function_t *gf = (jl_function_t*)jl_get_global(mod, name);
         int8_t iskw = read_int8(s);
-        if (!jl_is_gf(gf)) {
-            if (jl_is_datatype(gf) &&
-                ((jl_function_t*)gf)->fptr == jl_f_ctor_trampoline) {
-                jl_add_constructors((jl_datatype_t*)gf);
-            }
-            assert(jl_is_gf(gf));
-        }
+        assert(jl_is_gf(gf));
         if (iskw) {
             if (!jl_gf_mtable(gf)->kwsorter) {
                 jl_gf_mtable(gf)->kwsorter = jl_new_generic_function(jl_gf_name(gf));
@@ -1579,9 +1573,6 @@ jl_module_t *jl_restore_new_module(char *fname)
                 if (loc) *loc = (jl_value_t*)t;
                 if (offs) ptrhash_put(&backref_table, offs, t);
             }
-        }
-        else if (!t->fptr) {
-            jl_add_constructors(t);
         }
         if (t->instance != v) {
             jl_typeof(v) = (jl_value_t*)(ptrint_t)1; // invalidate the old value to help catch errors
