@@ -26,7 +26,8 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
     N = length(dims)
 
     isbits(T) || error("Type of Shared Array elements must be bits types")
-    @windows_only error(" SharedArray is not supported on Windows yet.")
+
+    nbytes = prod(dims)*sizeof(T)
 
     if isempty(pids)
         # only use workers on the current host
@@ -45,22 +46,31 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
     local S = nothing
     local shmmem_create_pid
     try
+        function create_closure()
+            shm = open_shm(shm_seg_name, nbytes, true, false)
+            mmap_array_shm(T, dims, shm, 0)
+        end
+
         # On OSX, the shm_seg_name length must be < 32 characters
         shm_seg_name = string("/jl", getpid(), int64(time() * 10^9))
         if onlocalhost
             shmmem_create_pid = myid()
-            s = shm_mmap_array(T, dims, shm_seg_name, JL_O_CREAT | JL_O_RDWR)
+            s = create_closure()
         else
             # The shared array is created on a remote machine....
             shmmem_create_pid = pids[1]
-            remotecall_fetch(pids[1], () -> begin shm_mmap_array(T, dims, shm_seg_name, JL_O_CREAT | JL_O_RDWR); nothing end)
+            remotecall_fetch(pids[1], () -> begin
+                             create_closure(); nothing end)
         end
 
-        func_mapshmem = () -> shm_mmap_array(T, dims, shm_seg_name, JL_O_RDWR)
+        function join_closure()
+            shm = open_shm(shm_seg_name, nbytes, false, false)
+            mmap_array_shm(T, dims, shm, 0)
+        end
 
         refs = Array(RemoteRef, length(pids))
         for (i, p) in enumerate(pids)
-            refs[i] = remotecall(p, func_mapshmem)
+            refs[i] = remotecall(p, join_closure)
         end
 
         # Wait till all the workers have mapped the segment
@@ -71,9 +81,9 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
         # All good, immediately unlink the segment.
         if prod(dims) > 0
             if onlocalhost
-                shm_unlink(shm_seg_name)
+                unlink_shm(shm_seg_name)
             else
-                remotecall_fetch(shmmem_create_pid, shm_unlink, shm_seg_name)
+                remotecall_fetch(shmmem_create_pid, unlink_shm, shm_seg_name)
             end
         end
         S = SharedArray{T,N}(dims, pids, refs, shm_seg_name)
@@ -100,7 +110,7 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
 
     finally
         if shm_seg_name != ""
-            remotecall_fetch(shmmem_create_pid, shm_unlink, shm_seg_name)
+            remotecall_fetch(shmmem_create_pid, unlink_shm, shm_seg_name)
         end
     end
     S
@@ -330,50 +340,5 @@ function print_shmem_limits(slen)
         nothing # Ignore any errors in this...
     end
 end
-
-# utilities
-function shm_mmap_array(T, dims, shm_seg_name, mode)
-    local s = nothing
-    local A = nothing
-
-    if prod(dims) == 0
-        return Array(T, dims)
-    end
-    
-    try
-        fd_mem = shm_open(shm_seg_name, mode, S_IRUSR | S_IWUSR)
-        systemerror("shm_open() failed for " * shm_seg_name, fd_mem <= 0)
-
-        s = fdio(fd_mem, true)
-
-        # On OSX, ftruncate must to used to set size of segment, just lseek does not work.
-        # and only at creation time
-        if (mode & JL_O_CREAT) == JL_O_CREAT
-            rc = ccall(:ftruncate, Int, (Int, Int), fd_mem, prod(dims)*sizeof(T))
-            systemerror("ftruncate() failed for shm segment " * shm_seg_name, rc != 0)
-        end
-
-        A = mmap_array(T, dims, s, zero(FileOffset), grow=false)
-    catch e
-        print_shmem_limits(prod(dims)*sizeof(T))
-        rethrow(e)
-
-    finally
-        if s != nothing
-            close(s)
-        end
-    end
-    A
-end
-
-@unix_only begin
-function shm_unlink(shm_seg_name)
-    rc = ccall(:shm_unlink, Cint, (Ptr{Uint8},), shm_seg_name)
-    systemerror("Error unlinking shmem segment " * shm_seg_name, rc != 0)
-    rc
-end
-end
-
-@unix_only shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Int, (Ptr{Uint8}, Int, Int), shm_seg_name, oflags, permissions)
 
 
