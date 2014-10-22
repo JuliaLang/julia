@@ -910,3 +910,8 @@ function pr8622()
     return indexin(x,y)
 end
 @test pr8622() == [0,3,1,0]
+
+#Array of Array tests
+let A = [zeros(2,2) for i=1:2, j=1:2]
+    @test zero(A) == A
+end

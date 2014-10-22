@@ -237,7 +237,7 @@ function copy_transpose!{R,S}(B::AbstractVecOrMat{R}, ir_dest::Range{Int}, jr_de
     return B
 end
 
-zero{T}(x::AbstractArray{T}) = fill!(similar(x), zero(T))
+zero{T}(x::AbstractArray{T}) = fill!(similar(x), zero(isempty(x) ? T : x[1]))
 
 ## iteration support for arrays as ranges ##
 
