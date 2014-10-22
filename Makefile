@@ -87,6 +87,7 @@ release-candidate: release test
 	@echo 5. Follow packaging instructions in DISTRIBUTING.md to create binary packages for all platforms
 	@echo 6. Upload to AWS, update http://julialang.org/downloads links
 	@echo 7. Announce on mailing lists
+	@echo 8. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20
 	@echo
 
 julia-debug-symlink:
