@@ -2004,6 +2004,14 @@ let a = zeros(Int, 3)
     @test a == [1, 1, 1]
 end
 
+# Fill a pre allocated 2x4 matrix
+let a = zeros(Int,(2,4))
+    for i in 0:3
+        digits!(sub(a,:,i+1),i,2)
+    end
+    @test a == [0 1 0 1;
+                0 0 1 1]
+end
 @test_throws InexactError convert(Uint8, 256)
 @test_throws InexactError convert(Uint, -1)
 @test_throws InexactError convert(Int, big(2)^100)
