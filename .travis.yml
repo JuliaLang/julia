@@ -2,6 +2,16 @@ language: cpp
 os:
     - linux
     - osx
+env:
+    - XC_HOST=""
+    - XC_HOST="i686-w64-mingw32"
+    - XC_HOST="x86_64-w64-mingw32"
+matrix:
+  exclude:
+    - os: osx
+      env: XC_HOST="i686-w64-mingw32"
+    - os: osx
+      env: XC_HOST="x86_64-w64-mingw32"
 notifications:
     email: false
     irc:
@@ -15,7 +25,7 @@ notifications:
           - http://criid.ee.washington.edu:8000/travis-hook
           - http://julia.mit.edu:8000/travis-hook
 before_install:
-    - if [ `uname` = "Linux" ]; then
+    - if [ `uname` = "Linux" -a -z "$XC_HOST" ]; then
         BUILDOPTS="USEGCC=1 LLVM_CONFIG=llvm-config-3.3 LLVM_LLC=llc-3.3 VERBOSE=1 USE_BLAS64=0";
         for lib in LLVM ZLIB SUITESPARSE ARPACK BLAS FFTW LAPACK GMP MPFR PCRE LIBUNWIND OPENLIBM RMATH; do
             export BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";
@@ -25,6 +35,12 @@ before_install:
         sudo add-apt-repository ppa:staticfloat/julia-deps -y;
         sudo apt-get update -qq -y;
         sudo apt-get install patchelf gfortran llvm-3.3-dev libsuitesparse-dev libopenblas-dev liblapack-dev libarpack2-dev libfftw3-dev libgmp-dev libpcre3-dev libunwind7-dev libopenlibm-dev librmath-dev libmpfr-dev -y;
+      elif [ `uname` = "Linux" ]; then
+        sudo add-apt-repository ppa:ubuntu-wine/ppa -y;
+        sudo add-apt-repository ppa:tobydox/mingw -y;
+        sudo apt-get update -qq -y;
+        sudo apt-get install --no-install-recommends wine1.7 mingw32-x-gcc mingw64-x-gcc p7zip-full -y;
+        export PATH=$PATH:/opt/mingw32/bin:/opt/mingw64/bin;
       elif [ `uname` = "Darwin" ]; then
         brew tap staticfloat/julia;
         brew rm --force $(brew deps --HEAD julia);
@@ -44,13 +60,21 @@ script:
         echo "Error trailing whitespace found in source file(s)";
         exit 1;
       fi
-    - make $BUILDOPTS prefix=/tmp/julia install
+    - if [ -z "$XC_HOST" ]; then
+        make $BUILDOPTS prefix=/tmp/julia install;
+      else
+        VERBOSE=1 contrib/windows/msys_build.sh;
+      fi
     - if [ `uname` = "Darwin" ]; then
         for name in spqr umfpack colamd cholmod amd suitesparse_wrapper; do
             install -pm755 usr/lib/lib${name}*.dylib* /tmp/julia/lib/julia/;
         done;
       fi
-    - cd .. && mv julia julia2
-    - cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia-debug --check-bounds=yes runtests.jl all && /tmp/julia/bin/julia-debug --check-bounds=yes runtests.jl pkg
-    - cd - && mv julia2 julia
+    - if [ -z "$XC_HOST" ]; then
+        cd .. && mv julia julia2 &&
+        cd /tmp/julia/share/julia/test &&
+        /tmp/julia/bin/julia-debug --check-bounds=yes runtests.jl all &&
+        /tmp/julia/bin/julia-debug --check-bounds=yes runtests.jl pkg &&
+        cd - && mv julia2 julia;
+      fi
     - echo "Ready for packaging..."
