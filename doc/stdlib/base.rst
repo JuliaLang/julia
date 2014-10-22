@@ -4412,11 +4412,11 @@ Statistics
 
 .. function:: median(v; checknan::Bool=true)
 
-   Compute the median of a vector ``v``. If keyword argument ``checknan`` is true
-   (the default), an error is raised for data containing NaN values.
-   Note: Julia does not ignore ``NaN`` values in the computation.
-   For applications requiring the handling of missing data, the ``DataArray``
-   package is recommended.
+   Compute the median of a vector ``v``. If the keyword argument ``checknan``
+   is true (the default), ``NaN`` is returned for data containing ``NaN``
+   values. Otherwise the median is computed with ``NaN`` values sorted to the
+   last position. For applications requiring the handling of missing data, the
+   ``DataArrays`` package is recommended.
 
 .. function:: median!(v; checknan::Bool=true)
 
