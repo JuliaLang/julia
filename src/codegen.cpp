@@ -2587,7 +2587,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
             // Make sure this is already boxed. If not, there was
             // something wrong in the earlier analysis as this should
             // have been alloca'd 
-            assert(rval->getType() == jl_pvalue_llvmt);
+            assert(rval->getType() == jl_pvalue_llvmt || rval->getType() == NoopType);
         }
 
         if (builder.GetInsertBlock()->getTerminator() == NULL) {
