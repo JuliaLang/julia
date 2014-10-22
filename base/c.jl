@@ -91,7 +91,10 @@ disable_sigint(f::Function) = try sigatomic_begin(); f(); finally sigatomic_end(
 reenable_sigint(f::Function) = try sigatomic_end(); f(); finally sigatomic_begin(); end
 
 # flush C stdio output from external libraries
-flush_cstdio() = ccall(:jl_flush_cstdio, Void, ())
+function flush_cstdio()
+    ccall(:jl_flush_cstdio, Void, ())
+    process_events(true)
+end
 
 function find_library{T<:ByteString, S<:ByteString}(libnames::Array{T,1}, extrapaths::Array{S,1}=ASCIIString[])
     for lib in libnames
