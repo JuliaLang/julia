@@ -822,11 +822,11 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
         # TODO: this slows down inference a lot
         if !(a2type===Function) && isleaftype(a2type)
             # would definitely use call()
-            call_func = isconstantfunc(fargs[1], sv)
-            if !is(call_func,false)
+            call_func = _ieval(isconstantfunc(fargs[1], sv))
+            if isa(call_func,Function)
                 aargtypes = Any[ to_tuple_of_Types(argtypes[i]) for i=2:length(argtypes) ]
                 aargtypes[1] = (aargtypes[1],)  # don't splat "function"
-                return abstract_apply(_ieval(call_func), tuple(aargtypes...), vtypes, sv, e)
+                return abstract_apply(call_func, tuple(aargtypes...), vtypes, sv, e)
             end
         end
         return Any
@@ -876,7 +876,11 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
     end
     if !isa(f,Function) && !isa(f,IntrinsicFunction) && _iisdefined(:call)
         call_func = _ieval(:call)
-        return abstract_call(call_func, e.args, tuple(Any[abstract_eval_constant(f),argtypes...]...), vtypes, sv, e)
+        if isa(call_func,Function)
+            return abstract_call(call_func, e.args, tuple(Any[abstract_eval_constant(f),argtypes...]...), vtypes, sv, e)
+        else
+            return Any
+        end
     end
     rt = builtin_tfunction(f, fargs, argtypes)
     #print("=> ", rt, "\n")
@@ -912,7 +916,9 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
         ft = abstract_eval(called, vtypes, sv)
         if !(Function <: ft) && _iisdefined(:call)
             call_func = _ieval(:call)
-            return abstract_call(call_func, e.args, tuple(Any[ft,argtypes...]...), vtypes, sv, e)
+            if isa(call_func,Function)
+                return abstract_call(call_func, e.args, tuple(Any[ft,argtypes...]...), vtypes, sv, e)
+            end
         end
         return Any
     end
