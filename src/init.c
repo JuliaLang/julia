@@ -732,7 +732,7 @@ void julia_init(char *imageFile)
     jl_page_size = jl_getpagesize();
     jl_arr_xtralloc_limit = uv_get_total_memory() / 100;  // Extra allocation limited to 1% of total RAM 
     jl_find_stack_bottom();
-    jl_dl_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT);
+    jl_dl_handle = (uv_lib_t *) jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT);
 #ifdef RTLD_DEFAULT
     jl_RTLD_DEFAULT_handle->handle = RTLD_DEFAULT;
 #else
