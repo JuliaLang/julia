@@ -114,6 +114,9 @@ function pushmeta!(ex::Expr, sym::Symbol, args::Any...)
         body::Expr = ex.args[2]
         if !isempty(body.args) && isa(body.args[1], Expr) && (body.args[1]::Expr).head == :meta
             push!((body.args[1]::Expr).args, tag)
+        elseif isempty(body.args)
+            push!(body.args, Expr(:meta, tag))
+            push!(body.args, nothing)
         else
             unshift!(body.args, Expr(:meta, tag))
         end
