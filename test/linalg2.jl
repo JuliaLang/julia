@@ -1,7 +1,7 @@
 debug = false
 
-import Base.LinAlg
-import Base.LinAlg: BlasComplex, BlasFloat, BlasReal
+using Base.LinAlg
+using Base.LinAlg: BlasComplex, BlasFloat, BlasReal
 
 # basic tridiagonal operations
 n = 5
@@ -422,7 +422,7 @@ S = sprandn(3,3,0.5)
 @test A/I == A
 @test I/λ === UniformScaling(1/λ)
 @test I\J === J
-T = Triangular(randn(3,3),:L)
+T = Triangular(randn(3,3), Token{:L})
 @test T\I == inv(T)
 @test I\A == A
 @test A\I == inv(A)

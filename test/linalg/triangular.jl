@@ -1,6 +1,6 @@
 debug = false
 using Base.Test
-using Base.LinAlg: BlasFloat, errorbounds, full!, naivesub!, transpose!
+using Base.LinAlg: BlasFloat, Token, errorbounds, full!, naivesub!, transpose!
 
 debug && println("Triangular matrices")
 
@@ -8,8 +8,8 @@ n = 9
 srand(123)
 
 debug && println("Test basic type functionality")
-@test_throws DimensionMismatch Triangular(randn(5, 4), :L)
-@test Triangular(randn(3, 3), :L) |> t -> [size(t, i) for i = 1:3] == [size(full(t), i) for i = 1:3]
+@test_throws DimensionMismatch Triangular(randn(5, 4), Token{:L})
+@test Triangular(randn(3, 3), Token{:L}) |> t -> [size(t, i) for i = 1:3] == [size(full(t), i) for i = 1:3]
 
 # The following test block tries to call all methods in base/linalg/triangular.jl in order for a combination of input element types. Keep the ordering when adding code.
 for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
@@ -18,8 +18,8 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
             for uplo2 in (:U, :L)
                 for isunit1 in (true, false)
                     for isunit2 in (true, false)
-                        A1 = Triangular(elty1 == Int ? rand(1:7, n, n) : convert(Matrix{elty1}, (elty1 <: Complex ? complex(randn(n, n), randn(n, n)) : randn(n, n)) |> t-> chol(t't, uplo1)), uplo1, isunit1)
-                        A2 = Triangular(elty2 == Int ? rand(1:7, n, n) : convert(Matrix{elty2}, (elty2 <: Complex ? complex(randn(n, n), randn(n, n)) : randn(n, n)) |> t-> chol(t't, uplo2)), uplo2, isunit2)
+                        A1 = Triangular(elty1 == Int ? rand(1:7, n, n) : convert(Matrix{elty1}, (elty1 <: Complex ? complex(randn(n, n), randn(n, n)) : randn(n, n)) |> t-> chol(t't, Token{uplo1})), Token{uplo1}, Token{isunit1})
+                        A2 = Triangular(elty2 == Int ? rand(1:7, n, n) : convert(Matrix{elty2}, (elty2 <: Complex ? complex(randn(n, n), randn(n, n)) : randn(n, n)) |> t-> chol(t't, Token{uplo2})), Token{uplo2}, Token{isunit2})
 
                         for eltyB in (Float32, Float64, Complex64, Complex128)
                             B = convert(Matrix{eltyB}, elty1 <: Complex ? real(A1)*ones(n, n) : A1*ones(n, n))
@@ -29,9 +29,9 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
                             # Convert
                             @test convert(Triangular{elty1}, A1) == A1
                             if elty1 <: Real && !(elty2 <: Integer)
-                                @test convert(Triangular{elty2}, A1) == Triangular(convert(Matrix{elty2}, A1.data), uplo1, isunit1)
+                                @test convert(Triangular{elty2}, A1) == Triangular(convert(Matrix{elty2}, A1.data), Token{uplo1}, Token{isunit1})
                             elseif elty2 <: Real && !(elty1 <: Integer)
-                                @test_throws InexactError convert(Triangular{elty2}, A1) == Triangular(convert(Matrix{elty2}, A1.data), uplo1, isunit1)
+                                @test_throws InexactError convert(Triangular{elty2}, A1) == Triangular(convert(Matrix{elty2}, A1.data), Token{uplo1}, Token{isunit1})
                             end
                             @test convert(Matrix, A1) == full(A1)
 
@@ -39,7 +39,7 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
                             @test full!(copy(A1)) == full(A1)
 
                             # fill!
-                            @test full!(fill!(copy(A1), 1)) == full(Triangular(ones(size(A1)...), uplo1, isunit1))
+                            @test full!(fill!(copy(A1), 1)) == full(Triangular(ones(size(A1)...), Token{uplo1}, Token{isunit1}))
 
                             # similar
                             @test isa(similar(A1), Triangular{elty1, Matrix{elty1}, uplo1, isunit1})
@@ -170,14 +170,14 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         debug && println("\ntype of A: ", eltya, " type of b: ", eltyb, "\n")        
 
         debug && println("Solve upper triangular system")
-        Atri = Triangular(lufact(A)[:U], :U) |> t -> eltya <: Complex && eltyb <: Real ? real(t) : t # Here the triangular matrix can't be too badly conditioned
+        Atri = Triangular(lufact(A)[:U], Token{:U}) |> t -> eltya <: Complex && eltyb <: Real ? real(t) : t # Here the triangular matrix can't be too badly conditioned
         b = convert(Matrix{eltyb}, eltya <: Complex ? full(Atri)*ones(n, 2) : full(Atri)*ones(n, 2))
         x = full(Atri) \ b
     
         debug && println("Test error estimates")
         if eltya != BigFloat && eltyb != BigFloat
             for i = 1:2
-                @test  norm(x[:,1] .- 1) <= errorbounds(Triangular(A, :U), x, b)[1][i]
+                @test  norm(x[:,1] .- 1) <= errorbounds(Triangular(A, Token{:U}), x, b)[1][i]
             end
         end
         debug && println("Test forward error [JIN 5705] if this is not a BigFloat")
@@ -198,14 +198,14 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         end
     
         debug && println("Solve lower triangular system")
-        Atri = Triangular(lufact(A)[:U], :U) |> t -> eltya <: Complex && eltyb <: Real ? real(t) : t # Here the triangular matrix can't be too badly conditioned
+        Atri = Triangular(lufact(A)[:U], Token{:U}) |> t -> eltya <: Complex && eltyb <: Real ? real(t) : t # Here the triangular matrix can't be too badly conditioned
         b = convert(Matrix{eltyb}, eltya <: Complex ? full(Atri)*ones(n, 2) : full(Atri)*ones(n, 2))
         x = full(Atri)\b
     
         debug && println("Test error estimates")
         if eltya != BigFloat && eltyb != BigFloat
             for i = 1:2
-                @test  norm(x[:,1] .- 1) <= errorbounds(Triangular(A, :U), x, b)[1][i]
+                @test  norm(x[:,1] .- 1) <= errorbounds(Triangular(A, Token{:U}), x, b)[1][i]
             end
         end
 
