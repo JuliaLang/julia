@@ -1425,7 +1425,12 @@ jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types)
     }
 
     jl_methtable_t *mt = jl_gf_mtable(f);
-    jl_function_t *sf = jl_method_lookup_by_type(mt, types, 1, 1);
+    jl_function_t *sf = NULL;
+    JL_TRY {
+        sf = jl_method_lookup_by_type(mt, types, 1, 1);
+    } JL_CATCH {
+        return NULL;
+    }
     if (sf == jl_bottom_func) {
         return NULL;
     }
