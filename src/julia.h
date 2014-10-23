@@ -607,7 +607,7 @@ jl_value_t *jl_type_union(jl_tuple_t *types);
 jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
                                           jl_tuple_t **penv, jl_tuple_t *tvars);
 DLLEXPORT jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b);
-int jl_args_morespecific(jl_value_t *a, jl_value_t *b);
+DLLEXPORT int jl_args_morespecific(jl_value_t *a, jl_value_t *b);
 DLLEXPORT const char *jl_typename_str(jl_value_t *v);
 DLLEXPORT const char *jl_typeof_str(jl_value_t *v);
 
@@ -1164,7 +1164,7 @@ extern DLLEXPORT jl_task_t * volatile jl_current_task;
 extern DLLEXPORT jl_task_t *jl_root_task;
 extern DLLEXPORT jl_value_t *jl_exception_in_transit;
 
-jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
+DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
 jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
 DLLEXPORT void NORETURN jl_throw(jl_value_t *e);
 DLLEXPORT void NORETURN jl_throw_with_superfluous_argument(jl_value_t *e, int);
