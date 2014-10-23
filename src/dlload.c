@@ -176,7 +176,7 @@ void *jl_dlsym(jl_uv_libhandle handle, char *symbol)
     void *ptr;
     int  error = uv_dlsym((uv_lib_t *) handle, symbol, &ptr);
     if (error != 0) {
-        jl_printf(JL_STDERR, "symbol could not be found %s (%d): %s\n", symbol, error, uv_dlerror(handle));
+        jl_printf(JL_STDERR, "symbol could not be found %s (%d): %s\n", symbol, error, uv_dlerror((uv_lib_t *) handle));
     }
     return ptr;
 }
