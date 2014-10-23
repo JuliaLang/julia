@@ -313,6 +313,23 @@ jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp)
     return nf;
 }
 
+// append values of static parameters to closure environment
+static jl_function_t *with_appended_env(jl_function_t *meth, jl_tuple_t *sparams)
+{
+    if (sparams == jl_null)
+        return meth;
+    jl_value_t *temp = (jl_value_t*)jl_alloc_tuple(jl_tuple_len(sparams)/2);
+    JL_GC_PUSH1(&temp);
+    size_t i;
+    for(i=0; i < jl_tuple_len(temp); i++) {
+        jl_tupleset(temp, i, jl_tupleref(sparams,i*2+1));
+    }
+    temp = (jl_value_t*)jl_tuple_append((jl_tuple_t*)meth->env, (jl_tuple_t*)temp);
+    meth = jl_new_closure(meth->fptr, temp, meth->linfo);
+    JL_GC_POP();
+    return meth;
+}
+
 // make a new method that calls the generated code from the given linfo
 jl_function_t *jl_reinstantiate_method(jl_function_t *f, jl_lambda_info_t *li)
 {
@@ -814,12 +831,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                 newmeth = jl_new_closure(unspec->fptr, method->env, unspec->linfo);
 
             if (sparams != jl_null) {
-                temp = (jl_value_t*)jl_alloc_tuple(jl_tuple_len(sparams)/2);
-                for(i=0; i < jl_tuple_len(temp); i++) {
-                    jl_tupleset(temp, i, jl_tupleref(sparams,i*2+1));
-                }
-                temp = (jl_value_t*)jl_tuple_append((jl_tuple_t*)newmeth->env, (jl_tuple_t*)temp);
-                newmeth = jl_new_closure(newmeth->fptr, temp, newmeth->linfo);
+                newmeth = with_appended_env(newmeth, sparams);
             }
 
             (void)jl_method_cache_insert(mt, type, newmeth);
@@ -932,7 +944,7 @@ static jl_value_t *lookup_match(jl_value_t *a, jl_value_t *b, jl_tuple_t **penv,
     return ti;
 }
 
-DLLEXPORT jl_function_t *jl_instantiate_staged(jl_methlist_t *m, jl_tuple_t *tt)
+DLLEXPORT jl_function_t *jl_instantiate_staged(jl_methlist_t *m, jl_tuple_t *tt, jl_tuple_t *env)
 {
     jl_expr_t *ex = NULL;
     jl_expr_t *oldast = NULL;
@@ -962,7 +974,8 @@ DLLEXPORT jl_function_t *jl_instantiate_staged(jl_methlist_t *m, jl_tuple_t *tt)
             jl_cellset(argnames->args,i,arg);
         }
     }
-    jl_cellset(ex->args, 1, jl_apply(m->func, tt->data, jl_tuple_len(tt)));
+    func = with_appended_env(m->func, env);
+    jl_cellset(ex->args, 1, jl_apply(func, tt->data, jl_tuple_len(tt)));
     func = (jl_function_t*)jl_toplevel_eval_in(m->func->linfo->module, (jl_value_t*)ex);
     JL_GC_POP();
     return func;
@@ -1015,7 +1028,7 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
         if (m != JL_NULL) {
             func = m->func;
             if (m->isstaged)
-                func = jl_instantiate_staged(m,tt);
+                func = jl_instantiate_staged(m,tt,env);
             JL_GC_POP();
             if (!cache)
                 return func;
@@ -1029,7 +1042,7 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
     func = m->func;
 
     if (m->isstaged)
-        func = jl_instantiate_staged(m,tt);
+        func = jl_instantiate_staged(m,tt,env);
 
     // don't bother computing this if no arguments are tuples
     for(i=0; i < jl_tuple_len(tt); i++) {
@@ -1462,6 +1475,7 @@ static void all_p2c(jl_value_t *ast, jl_tuple_t *tvars)
         jl_lambda_info_t *li = (jl_lambda_info_t*)ast;
         li->ast = jl_prepare_ast(li, jl_null);
         parameters_to_closureenv(li->ast, tvars);
+        all_p2c(li->ast, tvars);
     }
     else if (jl_is_expr(ast)) {
         jl_expr_t *e = (jl_expr_t*)ast;
@@ -1477,9 +1491,7 @@ static void precompile_unspecialized(jl_function_t *func, jl_tuple_t *sig, jl_tu
         // add static parameter names to end of closure env; compile
         // assuming they are there. method cache will fill them in when
         // it constructs closures for new "specializations".
-        func->linfo->ast = jl_prepare_ast(func->linfo, jl_null);
-        parameters_to_closureenv(func->linfo->ast, tvars);
-        all_p2c(func->linfo->ast, tvars);
+        all_p2c((jl_value_t*)func->linfo, tvars);
     }
     jl_trampoline_compile_function(func, 1, sig ? sig : jl_tuple_type);
 }
@@ -1762,6 +1774,9 @@ void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth,
     assert(jl_is_mtable(jl_gf_mtable(gf)));
     if (meth->linfo != NULL)
         meth->linfo->name = jl_gf_name(gf);
+    if (isstaged && tvars != jl_null) {
+        all_p2c((jl_value_t*)meth->linfo, tvars);
+    }
     (void)jl_method_table_insert(jl_gf_mtable(gf), types, meth, tvars, isstaged);
 }
 

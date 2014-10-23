@@ -87,3 +87,10 @@ stagedfunction h(x)
 end
 end
 @test MyTest8497.h(3) == 4
+
+# static parameters (issue #8505)
+stagedfunction f8505{T}(x::Vector{T})
+    T
+end
+@test f8505([1.0]) === Float64
+@test f8505([1]) === Int

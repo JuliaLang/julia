@@ -611,11 +611,11 @@ const limit_tuple_type_n = function (t::Tuple, lim::Int)
     return t
 end
 
-function func_for_method(m::Method, tt)
+function func_for_method(m::Method, tt, env)
     if !m.isstaged
         return m.func.code
     end
-    (ccall(:jl_instantiate_staged,Any,(Any,Any),m,tt)).code
+    (ccall(:jl_instantiate_staged,Any,(Any,Any,Any),m,tt,env)).code
 end
 
 function abstract_call_gf(f, fargs, argtypes, e)
@@ -691,7 +691,7 @@ function abstract_call_gf(f, fargs, argtypes, e)
     for (m::Tuple) in x
         local linfo
         try
-            linfo = func_for_method(m[3],argtypes)
+            linfo = func_for_method(m[3],argtypes,m[2])
         catch
             rettype = Any
             break
@@ -742,7 +742,7 @@ function invoke_tfunc(f, types, argtypes)
     for (m::Tuple) in applicable
         local linfo
         try
-            linfo = func_for_method(m[3],types)
+            linfo = func_for_method(m[3],types,m[2])
         catch
             return Any
         end
@@ -2091,7 +2091,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
 
     local linfo
     try
-        linfo = func_for_method(meth[3],atypes)
+        linfo = func_for_method(meth[3],atypes,meth[2])
     catch
         return NF
     end
@@ -3061,7 +3061,7 @@ code_typed(f, types) = code_typed(call, tuple(isa(f,Type)?Type{f}:typeof(f), typ
 function code_typed(f::Function, types::(Type...))
     asts = []
     for x in _methods(f,types,-1)
-        linfo = func_for_method(x[3],types)
+        linfo = func_for_method(x[3],types,x[2])
         (tree, ty) = typeinf(linfo, x[1], x[2])
         if !isa(tree,Expr)
             push!(asts, ccall(:jl_uncompress_ast, Any, (Any,Any), linfo, tree))
@@ -3076,7 +3076,7 @@ return_types(f, types) = return_types(call, tuple(isa(f,Type)?Type{f}:typeof(f),
 function return_types(f::Function, types)
     rt = []
     for x in _methods(f,types,-1)
-        linfo = func_for_method(x[3],types)
+        linfo = func_for_method(x[3],types,x[2])
         (tree, ty) = typeinf(linfo, x[1], x[2])
         push!(rt, ty)
     end
