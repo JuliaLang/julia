@@ -230,13 +230,17 @@ for (Bsig, Asig, gbf, gbb) in
     end  # let broadcast_cache
 end
 
+broadcast(f::Function, T::Type, As...) =
+    broadcast!(f, Array(T, broadcast_shape(As...)), As...)
 
-broadcast(f::Function, As...) = broadcast!(f, Array(promote_eltype(As...), broadcast_shape(As...)), As...)
+broadcast(f::Function, As...) =
+    broadcast(f, promote_eltype(As...), As...)
 
 bitbroadcast(f::Function, As...) = broadcast!(f, BitArray(broadcast_shape(As...)), As...)
 
 broadcast!_function(f::Function) = (B, As...) -> broadcast!(f, B, As...)
 broadcast_function(f::Function) = (As...) -> broadcast(f, As...)
+broadcast_function(f::Function, T::Type) = (As...) -> broadcast(f, T, As...)
 
 broadcast_getindex(src::AbstractArray, I::AbstractArray...) = broadcast_getindex!(Array(eltype(src), broadcast_shape(I...)), src, I...)
 @ngenerate N typeof(dest) function broadcast_getindex!(dest::AbstractArray, src::AbstractArray, I::NTuple{N, AbstractArray}...)

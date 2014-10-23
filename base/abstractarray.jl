@@ -1379,6 +1379,16 @@ function map(f::Callable, As::AbstractArray...)
     return map_to!(f, 2, dest, As...)
 end
 
+# Explicit control over return eltype
+function map(f::Callable, T::Type, As::AbstractArray...)
+    shape = mapreduce(size, promote_shape, As)
+    prod(shape) == 0 && return similar(As[1], T, shape)
+
+    first = f(map(a->a[1], As)...)
+    dest = similar(As[1], T, shape)
+    return map_to!(f, first, dest, As...)
+end
+
 # multi-item push!, unshift! (built on top of type-specific 1-item version)
 # (note: must not cause a dispatch loop when 1-item case is not defined)
 push!(A) = A
