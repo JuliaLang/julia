@@ -2,6 +2,7 @@
 #define JULIA_INTERNAL_H
 
 #include "options.h"
+#include "uv.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -129,6 +130,17 @@ DLLEXPORT void jl_raise_debugger(void);
 // timers
 // Returns time in nanosec
 DLLEXPORT uint64_t jl_hrtime(void);
+
+// libuv stuff:
+DLLEXPORT extern uv_lib_t *jl_dl_handle;
+DLLEXPORT extern uv_lib_t *jl_RTLD_DEFAULT_handle;
+#if defined(_OS_WINDOWS_)
+DLLEXPORT extern uv_lib_t *jl_exe_handle;
+extern uv_lib_t *jl_ntdll_handle;
+extern uv_lib_t *jl_kernel32_handle;
+extern uv_lib_t *jl_crtdll_handle;
+extern uv_lib_t *jl_winsock_handle;
+#endif
 
 #ifdef __cplusplus
 }
