@@ -211,7 +211,7 @@ let
     @test x == 11
     x = get(A, (4,4), -12)
     @test x == -12
-    X = get(A, -5:5, nan(Float32))
+    X = get(A, -5:5, NaN32)
     @test eltype(X) == Float32
     @test isnan(X) == [trues(6),falses(5)]
     @test X[7:11] == [1:5]

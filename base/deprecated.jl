@@ -205,3 +205,8 @@ end
 @deprecate itrunc{T<:Integer}(::Type{T}, n::Integer) (n % T)
 
 @deprecate oftype{T}(::Type{T},c)  convert(T,c)
+
+@deprecate inf(x::FloatingPoint)  oftype(x,Inf)
+@deprecate nan(x::FloatingPoint)  oftype(x,NaN)
+@deprecate inf{T<:FloatingPoint}(::Type{T})  convert(T,Inf)
+@deprecate nan{T<:FloatingPoint}(::Type{T})  convert(T,NaN)
