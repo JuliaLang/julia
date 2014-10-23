@@ -1,6 +1,7 @@
 @test sort([2,3,1]) == [1,2,3]
 @test sort([2,3,1], rev=true) == [3,2,1]
 @test sortperm([2,3,1]) == [3,1,2]
+@test sortperm!([1,2,3], [2,3,1]) == [3,1,2]
 @test !issorted([2,3,1])
 @test issorted([1,2,3])
 @test reverse([2,3,1]) == [1,3,2]
@@ -66,9 +67,19 @@ for alg in [InsertionSort, MergeSort]
     @test issorted(b)
     @test a[ix] == b
 
+    sortperm!(ix, a, alg=alg)
+    b = a[ix]
+    @test issorted(b)
+    @test a[ix] == b
+
     b = sort(a, alg=alg, rev=true)
     @test issorted(b, rev=true)
     ix = sortperm(a, alg=alg, rev=true)
+    b = a[ix]
+    @test issorted(b, rev=true)
+    @test a[ix] == b
+
+    sortperm!(ix, a, alg=alg, rev=true)
     b = a[ix]
     @test issorted(b, rev=true)
     @test a[ix] == b
@@ -77,6 +88,10 @@ for alg in [InsertionSort, MergeSort]
     @test issorted(b, by=x->1/x)
     ix = sortperm(a, alg=alg, by=x->1/x)
     b = a[ix]
+    @test issorted(b, by=x->1/x)
+    @test a[ix] == b
+
+    sortperm!(ix, a, alg=alg, by=x->1/x)
     @test issorted(b, by=x->1/x)
     @test a[ix] == b
 
