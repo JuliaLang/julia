@@ -138,7 +138,7 @@ function popmeta!(body::Expr, sym::Symbol)
                 end
 
                 if isa(metaargs[i], Symbol)
-                    return (true, ())
+                    return (true, [])
                 elseif isa(metaargs[i], Expr)
                     return (true, metaargs[i].args)
                 end
