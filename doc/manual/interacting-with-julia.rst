@@ -162,6 +162,24 @@ The Julia REPL makes great use of key bindings.  Several control-key bindings we
 | Delete, ``^D``         | Forward delete one character (when buffer has text)|
 +------------------------+----------------------------------------------------+
 
+Customizing keybindings
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Julia's REPL keybindings may be fully customized to a user's preferences by passing a dictionary to ``REPL.setup_interface()``. The keys of this dictionary may be characters or strings. The key ``'*'`` refers to the default action. Control plus character ``x`` bindings are indicated with ``"^x"``. Meta plus ``x`` can be written ``"\\Mx"``. The values of the custom keymap must be ``nothing`` (indicating that the input should be ignored) or functions that accept the signature ``(PromptState, AbstractREPL, Char)``. For example, to bind the up and down arrow keys to move through history without prefix search, one could put the following code in ``.juliarc.jl``::
+
+    import Base: LineEdit, REPL
+
+    const mykeys = Dict{Any,Any}(
+      # Up Arrow
+      "\e[A" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_prev(s, LineEdit.mode(s).hist)),
+      # Down Arrow
+      "\e[B" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_next(s, LineEdit.mode(s).hist))
+    )
+
+    Base.active_repl.interface = REPL.setup_interface(Base.active_repl; extra_repl_keymap = mykeys)
+
+Users should refer to ``base/LineEdit.jl`` to discover the available actions on key input.
+
 Tab completion
 --------------
 
@@ -174,7 +192,7 @@ In both the Julian and help modes of the REPL, one can enter the first few chara
     StridedArray    StridedVecOrMat  String
     StridedMatrix   StridedVector
 
-The tab key can also be used to substitute LaTeX math symbols with their unicode equivalents,
+The tab key can also be used to substitute LaTeX math symbols with their Unicode equivalents,
 and get a list of LaTeX matches as well::
 
     julia> \pi[TAB]
@@ -203,3 +221,5 @@ and get a list of LaTeX matches as well::
     julia> \h[TAB]
     \hat              \heartsuit         \hksearow          \hookleftarrow     \hslash
     \hbar             \hermitconjmatrix  \hkswarow          \hookrightarrow    \hspace
+
+A full list of tab-completions can be found in the :ref:`man-unicode-input` section of the manual.

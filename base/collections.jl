@@ -1,11 +1,9 @@
-
 module Collections
 
 import Base: setindex!, done, get, hash, haskey, isempty, length, next, getindex, start
 import ..Order: Forward, Ordering, lt
 
 export
-    Pair,
     PriorityQueue,
     dequeue!,
     enqueue!,
@@ -107,17 +105,6 @@ end
 # PriorityQueue
 # -------------
 
-immutable Pair{A,B}
-    a::A
-    b::B
-end
-
-function hash(p::Pair, h::Uint)
-    h = hash(p.a, h)
-    hash(p.b, h)
-end
-hash(p::Pair) = hash(p, zero(Uint))
-
 # A PriorityQueue that acts like a Dict, mapping values to their priorities,
 # with the addition of a dequeue! function to remove the lowest priority
 # element.
@@ -179,23 +166,23 @@ PriorityQueue{K,V}(a::AbstractArray{(K,V)}, o::Ordering=Forward) = PriorityQueue
 length(pq::PriorityQueue) = length(pq.xs)
 isempty(pq::PriorityQueue) = isempty(pq.xs)
 haskey(pq::PriorityQueue, key) = haskey(pq.index, key)
-peek(pq::PriorityQueue) = (kv = pq.xs[1]; (kv.a, kv.b))
+peek(pq::PriorityQueue) = (kv = pq.xs[1]; (kv.first, kv.second))
 
 
 function percolate_down!(pq::PriorityQueue, i::Integer)
     x = pq.xs[i]
     @inbounds while (l = heapleft(i)) <= length(pq)
         r = heapright(i)
-        j = r > length(pq) || lt(pq.o, pq.xs[l].b, pq.xs[r].b) ? l : r
-        if lt(pq.o, pq.xs[j].b, x.b)
-            pq.index[pq.xs[j].a] = i
+        j = r > length(pq) || lt(pq.o, pq.xs[l].second, pq.xs[r].second) ? l : r
+        if lt(pq.o, pq.xs[j].second, x.second)
+            pq.index[pq.xs[j].first] = i
             pq.xs[i] = pq.xs[j]
             i = j
         else
             break
         end
     end
-    pq.index[x.a] = i
+    pq.index[x.first] = i
     pq.xs[i] = x
 end
 
@@ -204,15 +191,15 @@ function percolate_up!(pq::PriorityQueue, i::Integer)
     x = pq.xs[i]
     @inbounds while i > 1
         j = heapparent(i)
-        if lt(pq.o, x.b, pq.xs[j].b)
-            pq.index[pq.xs[j].a] = i
+        if lt(pq.o, x.second, pq.xs[j].second)
+            pq.index[pq.xs[j].first] = i
             pq.xs[i] = pq.xs[j]
             i = j
         else
             break
         end
     end
-    pq.index[x.a] = i
+    pq.index[x.first] = i
     pq.xs[i] = x
 end
 
@@ -221,22 +208,22 @@ function force_up!(pq::PriorityQueue, i::Integer)
     x = pq.xs[i]
     @inbounds while i > 1
         j = heapparent(i)
-        pq.index[pq.xs[j].a] = i
+        pq.index[pq.xs[j].first] = i
         pq.xs[i] = pq.xs[j]
         i = j
     end
-    pq.index[x.a] = i
+    pq.index[x.first] = i
     pq.xs[i] = x
 end
 
 function getindex{K,V}(pq::PriorityQueue{K,V}, key)
-    pq.xs[pq.index[key]].b
+    pq.xs[pq.index[key]].second
 end
 
 
 function get{K,V}(pq::PriorityQueue{K,V}, key, deflt)
     i = get(pq.index, key, 0)
-    i == 0 ? deflt : pq.xs[i].b
+    i == 0 ? deflt : pq.xs[i].second
 end
 
 
@@ -244,7 +231,7 @@ end
 function setindex!{K,V}(pq::PriorityQueue{K, V}, value, key)
     if haskey(pq, key)
         i = pq.index[key]
-        oldvalue = pq.xs[i].b
+        oldvalue = pq.xs[i].second
         pq.xs[i] = Pair{K,V}(key, value)
         if lt(pq.o, oldvalue, value)
             percolate_down!(pq, i)
@@ -275,11 +262,11 @@ function dequeue!(pq::PriorityQueue)
     y = pop!(pq.xs)
     if !isempty(pq)
         pq.xs[1] = y
-        pq.index[y.a] = 1
+        pq.index[y.first] = 1
         percolate_down!(pq, 1)
     end
-    delete!(pq.index, x.a)
-    x.a
+    delete!(pq.index, x.first)
+    x.first
 end
 
 function dequeue!(pq::PriorityQueue, key)
@@ -297,7 +284,7 @@ done(pq::PriorityQueue, i) = done(pq.index, i)
 
 function next(pq::PriorityQueue, i)
     (k, idx), i = next(pq.index, i)
-    return ((k, pq.xs[idx].b), i)
+    return ((k, pq.xs[idx].second), i)
 end
 
 

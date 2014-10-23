@@ -1,6 +1,6 @@
 ### From array.jl
 
-@ngenerate N Nothing function checksize(A::AbstractArray, I::NTuple{N, Any}...)
+@ngenerate N Void function checksize(A::AbstractArray, I::NTuple{N, Any}...)
     @nexprs N d->(size(A, d) == length(I_d) || throw(DimensionMismatch("index $d has length $(length(I_d)), but size(A, $d) = $(size(A,d))")))
     nothing
 end
@@ -475,7 +475,7 @@ end
 
 ## permutedims
 
-for (V, PT, BT) in {((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)}
+for (V, PT, BT) in [((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)]
     @eval @ngenerate N typeof(P) function permutedims!{$(V...)}(P::$PT{$(V...)}, B::$BT{$(V...)}, perm)
         dimsB = size(B)
         length(perm) == N || error("expected permutation of size $N, but length(perm)=$(length(perm))")

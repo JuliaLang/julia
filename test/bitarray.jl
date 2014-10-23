@@ -478,6 +478,20 @@ for m1 = 1 : v1 + 1
             i = splice!(i2, m1:m2, i3)
             @test isequal(bitunpack(b2), i2)
             @test b == i
+            b2 = copy(b1)
+            i2 = copy(i1)
+            i3 = int(randbool(v2))
+            b = splice!(b2, m1:m2, i3)
+            i = splice!(i2, m1:m2, i3)
+            @test isequal(bitunpack(b2), i2)
+            @test b == i
+            b2 = copy(b1)
+            i2 = copy(i1)
+            i3 = [j => rand(0:3) for j = 1:v2]
+            b = splice!(b2, m1:m2, values(i3))
+            i = splice!(i2, m1:m2, values(i3))
+            @test isequal(bitunpack(b2), i2)
+            @test b == i
         end
     end
 end
@@ -492,6 +506,20 @@ for m1 = 1 : v1
         i3 = bitunpack(b3)
         b = splice!(b2, m1, b3)
         i = splice!(i2, m1, i3)
+        @test isequal(bitunpack(b2), i2)
+        @test b == i
+        b2 = copy(b1)
+        i2 = copy(i1)
+        i3 = int(randbool(v2))
+        b = splice!(b2, m1:m2, i3)
+        i = splice!(i2, m1:m2, i3)
+        @test isequal(bitunpack(b2), i2)
+        @test b == i
+        b2 = copy(b1)
+        i2 = copy(i1)
+        i3 = [j => rand(0:3) for j = 1:v2]
+        b = splice!(b2, m1:m2, values(i3))
+        i = splice!(i2, m1:m2, values(i3))
         @test isequal(bitunpack(b2), i2)
         @test b == i
     end
@@ -623,10 +651,10 @@ cf1 = complex(f1)
 @check_bit_operation (.-)(u1, b2)  Matrix{Uint8}
 @check_bit_operation (.*)(u1, b2) Matrix{Uint8}
 
-for (x1,t1) = {(f1, Float64),
-               (ci1, Complex{Int}),
-               (cu1, Complex{Uint8}),
-               (cf1, Complex128)}
+for (x1,t1) = [(f1, Float64),
+              (ci1, Complex{Int}),
+              (cu1, Complex{Uint8}),
+              (cf1, Complex128)]
     @check_bit_operation (.+)(x1, b2)  Matrix{t1}
     @check_bit_operation (.-)(x1, b2)  Matrix{t1}
     @check_bit_operation (.*)(x1, b2) Matrix{t1}
@@ -809,7 +837,7 @@ timesofar("datamove")
 
 ## countnz & find ##
 
-for m = 0:v1, b1 in {randbool(m), trues(m), falses(m)}
+for m = 0:v1, b1 in Any[randbool(m), trues(m), falses(m)]
     @check_bit_operation countnz(b1) Int
 
     @check_bit_operation findfirst(b1) Int
@@ -974,6 +1002,10 @@ b1 = triu(randbool(n1, n2))
 @check_bit_operation istriu(b1) Bool
 b1 = triu(randbool(n2, n1))
 @check_bit_operation istriu(b1) Bool
+
+b1 = randbool(n1,n1)
+b1 |= b1.'
+@check_bit_operation issym(b1) Bool
 
 b1 = randbool(n1)
 b2 = randbool(n2)

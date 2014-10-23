@@ -86,6 +86,9 @@ libdir = $(prefix)/lib
 private_libdir = $(libdir)/julia
 libexecdir = $(prefix)/libexec
 datarootdir = $(prefix)/share
+docdir = $(datarootdir)/doc/julia
+mandir = $(datarootdir)/man
+man1dir = $(mandir)/man1
 includedir = $(prefix)/include
 sysconfdir = $(prefix)/etc
 
@@ -96,6 +99,9 @@ build_libdir = $(build_prefix)/lib
 build_private_libdir = $(build_prefix)/lib/julia
 build_libexecdir = $(build_prefix)/libexec
 build_datarootdir = $(build_prefix)/share
+build_docdir = $(build_datarootdir)/doc/julia
+build_mandir = $(build_datarootdir)/man
+build_man1dir = $(build_mandir)/man1
 build_includedir = $(build_prefix)/include
 build_sysconfdir = $(build_prefix)/etc
 
@@ -106,7 +112,11 @@ libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(libdir))
 build_private_libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(build_bindir) $(build_private_libdir))
 private_libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(private_libdir))
 datarootdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(datarootdir))
+docdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(docdir))
 sysconfdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(sysconfdir))
+
+INSTALL_F = $(JULIAHOME)/contrib/install.sh 644
+INSTALL_M = $(JULIAHOME)/contrib/install.sh 755
 
 # This used for debian packaging, to conform to library layout guidelines
 ifeq ($(MULTIARCH_INSTALL), 1)
@@ -294,8 +304,21 @@ CXX = icpc
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -fp-model precise -fp-model except -no-ftz
 JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
-DEBUGFLAGS = -O0 -ggdb3 -DJL_DEBUG_BUILD -fstack-protector-all
+DEBUGFLAGS = -O0 -g -DJL_DEBUG_BUILD -fstack-protector-all
 SHIPFLAGS = -O3 -g -falign-functions
+endif
+
+ifeq ($(USECCACHE), 1)
+CC := ccache $(CC)
+CXX := ccache $(CXX)
+ifeq ($(USECLANG),1)
+# ccache and Clang don't do well together
+# http://petereisentraut.blogspot.be/2011/05/ccache-and-clang.html
+CC += -Qunused-arguments -fcolor-diagnostics
+CXX += -Qunused-arguments -fcolor-diagnostics
+# http://petereisentraut.blogspot.be/2011/09/ccache-and-clang-part-2.html
+export CCACHE_CPP2 := yes
+endif
 endif
 
 ifeq ($(LLVM_VER),svn)
@@ -634,7 +657,7 @@ JLDFLAGS += -Wl,--large-address-aware
 endif
 else
 OSLIBS += kernel32.lib ws2_32.lib psapi.lib advapi32.lib iphlpapi.lib shell32.lib winmm.lib
-JLDFLAGS =
+JLDFLAGS = -stack:8388608
 endif
 JCPPFLAGS += -D_WIN32_WINNT=0x0600
 UNTRUSTED_SYSTEM_LIBM = 1

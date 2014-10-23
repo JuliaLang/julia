@@ -154,10 +154,14 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
 #endif
                                            /*useDwarfDirectory*/ true,
                                            IP, CE, MAB, ShowInst));
+#ifdef LLVM36
+    Streamer->InitSections(true);
+#else
     Streamer->InitSections();
+#endif
 
-#ifndef USE_MCJIT
-// LLVM33 version
+#ifndef USE_MCJIT // LLVM33 version
+
     // Make the MemoryObject wrapper
     FuncMCView memoryObject(Fptr, Fsize);
 
@@ -168,11 +172,12 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
     // Set up the line info
     typedef std::vector<JITEvent_EmittedFunctionDetails::LineStart> LInfoVec;
     LInfoVec::iterator lineIter = lineinfo.begin();
-    lineIter = lineinfo.begin();
+    LInfoVec::iterator lineEnd  = lineinfo.end();
+
     uint64_t nextLineAddr = -1;
     DISubprogram debugscope;
 
-    if (lineIter != lineinfo.end()) {
+    if (lineIter != lineEnd) {
         nextLineAddr = (*lineIter).Address;
         debugscope = DISubprogram((*lineIter).Loc.getScope(jl_LLVMContext));
 
@@ -231,17 +236,17 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
     DILineInfoTable lineinfo = di_ctx->getLineInfoForAddressRange((size_t)Fptr, Fsize);
 
     // Set up the line info
-    DILineInfoTable::iterator lines_iter = lineinfo.begin();
-    DILineInfoTable::iterator lines_end = lineinfo.end();
+    DILineInfoTable::iterator lineIter = lineinfo.begin();
+    DILineInfoTable::iterator lineEnd = lineinfo.end();
 
     uint64_t nextLineAddr = -1;
 
-    if (lines_iter != lineinfo.end()) {
-        nextLineAddr = lines_iter->first;
+    if (lineIter != lineEnd) {
+        nextLineAddr = lineIter->first;
         #ifdef LLVM35
-        stream << "Filename: " << lines_iter->second.FileName << "\n";
+        stream << "Filename: " << lineIter->second.FileName << "\n";
         #else
-        stream << "Filename: " << lines_iter->second.getFileName() << "\n";
+        stream << "Filename: " << lineIter->second.getFileName() << "\n";
         #endif
     }
 
@@ -255,11 +260,11 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
         
         if (nextLineAddr != (uint64_t)-1 && absAddr == nextLineAddr) {
             #ifdef LLVM35
-            stream << "Source line: " << lines_iter->second.Line << "\n";
+            stream << "Source line: " << lineIter->second.Line << "\n";
             #else
-            stream << "Source line: " << lines_iter->second.getLine() << "\n";
+            stream << "Source line: " << lineIter->second.getLine() << "\n";
             #endif
-            nextLineAddr = (++lines_iter)->first;
+            nextLineAddr = (++lineIter)->first;
         }
 
         MCInst Inst;

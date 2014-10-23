@@ -77,7 +77,7 @@ const PRIMES = primes(10000)
 
 function factor{T<:Integer}(n::T)
     0 < n || error("number to be factored must be positive")
-    h = (T=>Int)[]
+    h = Dict{T,Int}()
     n == 1 && return h
     n <= 3 && (h[n] = 1; return h)
     local s::T, p::T

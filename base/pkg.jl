@@ -50,7 +50,7 @@ tag(pkg::String, sym::Symbol, commit::String) = cd(Entry.tag,pkg,sym,false,commi
 
 tag(pkg::String, ver::VersionNumber; force::Bool=false) = cd(Entry.tag,pkg,ver,force)
 tag(pkg::String, ver::VersionNumber, commit::String; force::Bool=false) =
-	cd(Entry.tag,pkg,ver,force,commit)
+    cd(Entry.tag,pkg,ver,force,commit)
 
 submit(pkg::String) = cd(Entry.submit,pkg)
 submit(pkg::String, commit::String) = cd(Entry.submit,pkg,commit)
@@ -61,7 +61,7 @@ build() = cd(Entry.build)
 build(pkgs::String...) = cd(Entry.build,[pkgs...])
 
 generate(pkg::String, license::String; force::Bool=false, authors::Union(String,Array) = [], config::Dict=Dict()) =
-	cd(Generate.package,pkg,license,force=force,authors=authors,config=config)
+    cd(Generate.package,pkg,license,force=force,authors=authors,config=config)
 
 
 test(;coverage::Bool=false) = cd(Entry.test; coverage=coverage)

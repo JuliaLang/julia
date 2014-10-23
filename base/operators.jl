@@ -163,8 +163,7 @@ A_ldiv_Bt (a,b) = a\transpose(b)
 At_ldiv_Bt(a,b) = transpose(a)\transpose(b)
 
 
-oftype{T}(::Type{T},c) = convert(T,c)
-oftype{T}(x::T,c) = convert(T,c)
+oftype(x,c) = convert(typeof(x),c)
 
 widen{T<:Number}(x::T) = convert(widen(T), x)
 
@@ -400,6 +399,29 @@ function ifelse(c::AbstractArray{Bool}, x, y::AbstractArray)
     reshape([ifelse(c[i], x, y[i]) for i = 1 : length(c)], shp)
 end
 
+# Pair
+
+immutable Pair{A,B}
+    first::A
+    second::B
+end
+
+const => = Pair
+
+start(p::Pair) = 1
+done(p::Pair, i) = i>2
+next(p::Pair, i) = (getfield(p,i), i+1)
+
+indexed_next(p::Pair, i::Int, state) = (getfield(p,i), i+1)
+
+hash(p::Pair, h::Uint) = hash(p.second, hash(p.first, h))
+
+==(p::Pair, q::Pair) = (p.first==q.first) & (p.second==q.second)
+isequal(p::Pair, q::Pair) = isequal(p.first,q.first) & isequal(p.second,q.second)
+
+isless(p::Pair, q::Pair) = ifelse(!isequal(p.first,q.first), isless(p.first,q.first),
+                                                             isless(p.second,q.second))
+
 # some operators not defined yet
 global //, .>>, .<<, >:, <|, |>, hcat, hvcat, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
 
@@ -475,12 +497,13 @@ export
     getindex,
     setindex!,
     transpose,
-    ctranspose
+    ctranspose,
+    call
 
 import Base: !, !=, $, %, .%, &, *, +, -, .!=, .+, .-, .*, ./, .<, .<=, .==, .>,
     .>=, .\, .^, /, //, <, <:, <<, <=, ==, >, >=, >>, .>>, .<<, >>>,
     <|, |>, \, ^, |, ~, !==, >:, colon, hcat, vcat, hvcat, getindex, setindex!,
-    transpose, ctranspose,
+    transpose, ctranspose, call,
     ≥, ≤, ≠, .≥, .≤, .≠, ÷, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
 
 end

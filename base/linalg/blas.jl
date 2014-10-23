@@ -272,8 +272,8 @@ for (fname, elty) in ((:dgemv_,:Float64),
              #      CHARACTER TRANS
              #*     .. Array Arguments ..
              #      DOUBLE PRECISION A(LDA,*),X(*),Y(*)
-        function gemv!(trans::BlasChar, alpha::($elty), A::StridedMatrix{$elty}, X::StridedVector{$elty}, beta::($elty), Y::StridedVector{$elty})
-            m,n = size(A)
+        function gemv!(trans::BlasChar, alpha::($elty), A::StridedVecOrMat{$elty}, X::StridedVector{$elty}, beta::($elty), Y::StridedVector{$elty})
+            m,n = size(A,1),size(A,2)
             length(X) == (trans == 'N' ? n : m) && length(Y) == (trans == 'N' ? m : n) || throw(DimensionMismatch(""))
             ccall(($(string(fname)),libblas), Void,
                 (Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, 
@@ -556,7 +556,7 @@ for (gemm, elty) in
              #       CHARACTER TRANSA,TRANSB
              # *     .. Array Arguments ..
              #       DOUBLE PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
-        function gemm!(transA::BlasChar, transB::BlasChar, alpha::($elty), A::StridedVecOrMat{$elty}, B::StridedMatrix{$elty}, beta::($elty), C::StridedVecOrMat{$elty})
+        function gemm!(transA::BlasChar, transB::BlasChar, alpha::($elty), A::StridedVecOrMat{$elty}, B::StridedVecOrMat{$elty}, beta::($elty), C::StridedVecOrMat{$elty})
 #           if any([stride(A,1), stride(B,1), stride(C,1)] .!= 1)
 #               error("gemm!: BLAS module requires contiguous matrix columns")
 #           end  # should this be checked on every call?

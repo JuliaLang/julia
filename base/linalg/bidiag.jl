@@ -1,9 +1,9 @@
 # Bidiagonal matrices
 type Bidiagonal{T} <: AbstractMatrix{T}
-    dv::AbstractVector{T} # diagonal
-    ev::AbstractVector{T} # sub/super diagonal
+    dv::Vector{T} # diagonal
+    ev::Vector{T} # sub/super diagonal
     isupper::Bool # is upper bidiagonal (true) or lower (false)
-    function Bidiagonal{T}(dv::AbstractVector{T}, ev::AbstractVector{T}, isupper::Bool)
+    function Bidiagonal{T}(dv::Vector{T}, ev::Vector{T}, isupper::Bool)
         length(ev)==length(dv)-1 ? new(dv, ev, isupper) : throw(DimensionMismatch(""))
     end
 end
@@ -92,7 +92,7 @@ function +(A::Bidiagonal, B::Bidiagonal)
     if A.isupper==B.isupper
         Bidiagonal(A.dv+B.dv, A.ev+B.ev, A.isupper)
     else
-        apply(Tridiagonal, A.isupper ? (B.ev,A.dv+B.dv,A.ev) : (A.ev,A.dv+B.dv,B.ev))
+        Tridiagonal((A.isupper ? (B.ev,A.dv+B.dv,A.ev) : (A.ev,A.dv+B.dv,B.ev))...)
     end
 end
 
@@ -100,7 +100,7 @@ function -(A::Bidiagonal, B::Bidiagonal)
     if A.isupper==B.isupper
         Bidiagonal(A.dv-B.dv, A.ev-B.ev, A.isupper)
     else
-        apply(Tridiagonal, A.isupper ? (-B.ev,A.dv-B.dv,A.ev) : (A.ev,A.dv-B.dv,-B.ev))
+        Tridiagonal((A.isupper ? (-B.ev,A.dv-B.dv,A.ev) : (A.ev,A.dv-B.dv,-B.ev))...)
     end
 end
 
@@ -123,35 +123,27 @@ end
 
 
 #Linear solvers
-function \{TA<:Number,Tb<:Number}(A::Union(Bidiagonal{TA},Triangular{TA}), b::AbstractVector{Tb})
-    TAb = typeof(one(TA)/one(Tb))
-    naivesub!(A, b, similar(b, TAb))
-end
-function \{TA<:Number,TB<:Number}(A::Union(Bidiagonal{TA},Triangular{TA}), B::AbstractMatrix{TB})
-    TAB = typeof(one(TA)/one(TB))
-    hcat([naivesub!(A, B[:,i], similar(B[:,i], TAB)) for i=1:size(B,2)]...)
-end
-A_ldiv_B!(A::Union(Bidiagonal,Triangular), b::AbstractVector)=naivesub!(A,b)
-At_ldiv_B!(A::Union(Bidiagonal,Triangular), b::AbstractVector)=naivesub!(transpose(A),b)
-Ac_ldiv_B!(A::Union(Bidiagonal,Triangular), b::AbstractVector)=naivesub!(ctranspose(A),b)
+A_ldiv_B!(A::Union(Bidiagonal, Triangular), b::AbstractVector) = naivesub!(A, b)
+At_ldiv_B!(A::Union(Bidiagonal, Triangular), b::AbstractVector) = naivesub!(transpose(A), b)
+Ac_ldiv_B!(A::Union(Bidiagonal, Triangular), b::AbstractVector) = naivesub!(ctranspose(A), b)
 for func in (:A_ldiv_B!, :Ac_ldiv_B!, :At_ldiv_B!) @eval begin
-    function ($func)(A::Union(Bidiagonal,Triangular), B::AbstractMatrix)
+    function ($func)(A::Union(Bidiagonal, Triangular), B::AbstractMatrix)
         tmp = similar(B[:,1])
         n = size(B, 1)
-        for i=1:size(B,2)
-            copy!(tmp, 1, B, (i-1)*n+1, n)
+        for i = 1:size(B,2)
+            copy!(tmp, 1, B, (i - 1)*n + 1, n)
             ($func)(A, tmp)
-            copy!(B, (i-1)*n+1, tmp, 1, n) # Modify this when array view are implemented.
+            copy!(B, (i - 1)*n + 1, tmp, 1, n) # Modify this when array view are implemented.
         end
         B
     end
 end end
 for func in (:A_ldiv_Bt!, :Ac_ldiv_Bt!, :At_ldiv_Bt!) @eval begin
-    function ($func)(A::Union(Bidiagonal,Triangular), B::AbstractMatrix)
-        tmp = similar(B[:,2])
+    function ($func)(A::Union(Bidiagonal, Triangular), B::AbstractMatrix)
+        tmp = similar(B[:, 2])
         m, n = size(B)
         nm = n*m
-        for i=1:size(B,1)
+        for i = 1:size(B, 1)
             copy!(tmp, 1, B, i:m:nm, n)
             ($func)(A, tmp)
             copy!(B, i:m:nm, tmp, 1, n)
@@ -161,47 +153,52 @@ for func in (:A_ldiv_Bt!, :Ac_ldiv_Bt!, :At_ldiv_Bt!) @eval begin
 end end
 
 #Generic solver using naive substitution
-function naivesub!{T}(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector=b)
+function naivesub!{T}(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector = b)
     N = size(A, 2)
-    N==length(b)==length(x) || throw(DimensionMismatch(""))
+    N == length(b) == length(x) || throw(DimensionMismatch(""))
 
     if !A.isupper #do forward substitution
         for j = 1:N
             x[j] = b[j]
-            j>1 && (x[j] -= A.ev[j-1] * x[j-1])
-            x[j]/= A.dv[j]==zero(T) ? throw(SingularException(j)) : A.dv[j]
+            j > 1 && (x[j] -= A.ev[j-1] * x[j-1])
+            x[j] /= A.dv[j] == zero(T) ? throw(SingularException(j)) : A.dv[j]
         end
     else #do backward substitution
         for j = N:-1:1
             x[j] = b[j]
-            j<N && (x[j] -= A.ev[j] * x[j+1])
-            x[j]/= A.dv[j]==zero(T) ? throw(SingularException(j)) : A.dv[j]
+            j < N && (x[j] -= A.ev[j] * x[j+1])
+            x[j] /= A.dv[j] == zero(T) ? throw(SingularException(j)) : A.dv[j]
         end
     end
     x
+end
+
+function \{T,S}(A::Bidiagonal{T}, B::AbstractVecOrMat{S})
+    TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
+    TS == S ? A_ldiv_B!(A, copy(B)) : A_ldiv_B!(A, convert(AbstractArray{TS}, B))
 end
 
 # Eigensystems
 eigvals(M::Bidiagonal) = M.dv
 function eigvecs{T}(M::Bidiagonal{T})
     n = length(M.dv)
-    Q=Array(T, n, n)
-    blks = [0; find(x->x==0, M.ev); n]
+    Q = Array(T, n, n)
+    blks = [0; find(x -> x == 0, M.ev); n]
     if M.isupper
-        for idx_block=1:length(blks)-1, i=blks[idx_block]+1:blks[idx_block+1] #index of eigenvector
+        for idx_block = 1:length(blks) - 1, i = blks[idx_block] + 1:blks[idx_block + 1] #index of eigenvector
             v=zeros(T, n)
-            v[blks[idx_block]+1] = one(T)
-            for j=blks[idx_block]+1:i-1 #Starting from j=i, eigenvector elements will be 0
-                v[j+1] = (M.dv[i]-M.dv[j])/M.ev[j] * v[j]
+            v[blks[idx_block] + 1] = one(T)
+            for j = blks[idx_block] + 1:i - 1 #Starting from j=i, eigenvector elements will be 0
+                v[j+1] = (M.dv[i] - M.dv[j])/M.ev[j] * v[j]
             end
-            Q[:,i] = v/norm(v)
+            Q[:, i] = v/norm(v)
         end
     else
-        for idx_block=1:length(blks)-1, i=blks[idx_block+1]:-1:blks[idx_block]+1 #index of eigenvector
-            v=zeros(T, n)
+        for idx_block = 1:length(blks) - 1, i = blks[idx_block + 1]:-1:blks[idx_block] + 1 #index of eigenvector
+            v = zeros(T, n)
             v[blks[idx_block+1]] = one(T)
-            for j=(blks[idx_block+1]-1):-1:max(1,(i-1)) #Starting from j=i, eigenvector elements will be 0
-                v[j] = (M.dv[i]-M.dv[j+1])/M.ev[j] * v[j+1]
+            for j = (blks[idx_block+1] - 1):-1:max(1, (i - 1)) #Starting from j=i, eigenvector elements will be 0
+                v[j] = (M.dv[i] - M.dv[j+1])/M.ev[j] * v[j+1]
             end
             Q[:,i] = v/norm(v)
         end

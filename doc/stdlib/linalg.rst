@@ -17,7 +17,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: \\(A, B)
    :noindex:
 
-   Matrix division using a polyalgorithm. For input matrices ``A`` and ``B``, the result ``X`` is such that ``A*X == B`` when ``A`` is square.  The solver that is used depends upon the structure of ``A``.  A direct solver is used for upper- or lower triangular ``A``.  For Hermitian ``A`` (equivalent to symmetric ``A`` for non-complex ``A``) the ``BunchKaufman`` factorization is used.  Otherwise an LU factorization is used. For rectangular ``A`` the result is the minimum-norm least squares solution computed by reducing ``A`` to bidiagonal form and solving the bidiagonal least squares problem.  For sparse, square ``A`` the LU factorization (from UMFPACK) is used.
+   Matrix division using a polyalgorithm. For input matrices ``A`` and ``B``, the result ``X`` is such that ``A*X == B`` when ``A`` is square.  The solver that is used depends upon the structure of ``A``.  A direct solver is used for upper- or lower triangular ``A``.  For Hermitian ``A`` (equivalent to symmetric ``A`` for non-complex ``A``) the ``BunchKaufman`` factorization is used.  Otherwise an LU factorization is used. For rectangular ``A`` the result is the minimum-norm least squares solution computed by a pivoted QR factorization of ``A`` and a rank estimate of A based on the R factor. For sparse, square ``A`` the LU factorization (from UMFPACK) is used.
 
 .. function:: dot(x, y)
               ⋅(x,y)
@@ -95,11 +95,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: cholfact(A, [ll]) -> CholmodFactor
 
-   Compute the sparse Cholesky factorization of a sparse matrix ``A``.  If ``A`` is Hermitian its Cholesky factor is determined.  If ``A`` is not Hermitian the Cholesky factor of ``A*A'`` is determined. A fill-reducing permutation is used.  Methods for ``size``, ``solve``, ``\``, ``findn_nzs``, ``diag``, ``det`` and ``logdet``.  One of the solve methods includes an integer argument that can be used to solve systems involving parts of the factorization only.  The optional boolean argument, ``ll`` determines whether the factorization returned is of the ``A[p,p] = L*L'`` form, where ``L`` is lower triangular or ``A[p,p] = L*Diagonal(D)*L'`` form where ``L`` is unit lower triangular and ``D`` is a non-negative vector.  The default is LDL.
+   Compute the sparse Cholesky factorization of a sparse matrix ``A``.  If ``A`` is Hermitian its Cholesky factor is determined.  If ``A`` is not Hermitian the Cholesky factor of ``A*A'`` is determined. A fill-reducing permutation is used.  Methods for ``size``, ``solve``, ``\``, ``findn_nzs``, ``diag``, ``det`` and ``logdet`` are available for ``CholmodFactor`` objects.  One of the solve methods includes an integer argument that can be used to solve systems involving parts of the factorization only.  The optional boolean argument, ``ll`` determines whether the factorization returned is of the ``A[p,p] = L*L'`` form, where ``L`` is lower triangular or ``A[p,p] = L*Diagonal(D)*L'`` form where ``L`` is unit lower triangular and ``D`` is a non-negative vector.  The default is LDL. The symbolic factorization can also be reused for other matrices with the same structure as ``A`` by calling ``cholfact!``.
 
 .. function:: cholfact!(A, [LU,][pivot=false,][tol=-1.0]) -> Cholesky
 
-   ``cholfact!`` is the same as :func:`cholfact`, but saves space by overwriting the input ``A``, instead of creating a copy.
+   ``cholfact!`` is the same as :func:`cholfact`, but saves space by overwriting the input ``A``, instead of creating a copy. ``cholfact!`` can also reuse the symbolic factorization from a different matrix ``F`` with the same structure when used as: ``cholfact!(F::CholmodFactor, A)``.
 
 .. function:: ldltfact(A) -> LDLtFactorization
 
@@ -288,11 +288,27 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: schurfact!(A)
 
-   Computer the Schur factorization of ``A``, overwriting ``A`` in the process. See :func:`schurfact`
+   Computes the Schur factorization of ``A``, overwriting ``A`` in the process. See :func:`schurfact`
 
 .. function:: schur(A) -> Schur[:T], Schur[:Z], Schur[:values]
 
    See :func:`schurfact`
+
+.. function:: ordschur(Q, T, select) -> Schur
+
+   Reorders the Schur factorization of a real matrix ``A=Q*T*Q'`` according to the logical array ``select`` returning a Schur object ``F``. The selected eigenvalues appear in the leading diagonal of ``F[:Schur]`` and the the corresponding leading columns of ``F[:vectors]`` form an orthonormal basis of the corresponding right invariant subspace. A complex conjugate pair of eigenvalues must be either both included or excluded via ``select``. 
+
+.. function:: ordschur!(Q, T, select) -> Schur
+
+   Reorders the Schur factorization of a real matrix ``A=Q*T*Q'``, overwriting ``Q`` and ``T`` in the process. See :func:`ordschur`
+
+.. function:: ordschur(S, select) -> Schur
+
+   Reorders the Schur factorization ``S`` of type ``Schur``.
+
+.. function:: ordschur!(S, select) -> Schur
+
+   Reorders the Schur factorization ``S`` of type ``Schur``, overwriting ``S`` in the process. See :func:`ordschur`
 
 .. function:: schurfact(A, B) -> GeneralizedSchur
 
@@ -719,8 +735,8 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
 .. function:: gemv!(tA, alpha, A, x, beta, y)
 
-   Update the vector ``y`` as ``alpha*A*x + beta*x`` or
-   ``alpha*A'x + beta*x`` according to ``tA`` (transpose ``A``).
+   Update the vector ``y`` as ``alpha*A*x + beta*y`` or
+   ``alpha*A'x + beta*y`` according to ``tA`` (transpose ``A``).
    Returns the updated ``y``.
 
 .. function:: gemv(tA, alpha, A, x)
@@ -756,7 +772,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
 .. function:: symv!(ul, alpha, A, x, beta, y)
 
-   Update the vector ``y`` as ``alpha*A*y + beta*y``. ``A`` is assumed
+   Update the vector ``y`` as ``alpha*A*x + beta*y``. ``A`` is assumed
    to be symmetric.  Only the ``ul`` triangle of ``A`` is used.
    Returns the updated ``y``.
 

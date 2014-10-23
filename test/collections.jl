@@ -36,7 +36,7 @@ end
 for i=10000:20000
     @test h[i]==i+1
 end
-h = {"a" => 3}
+h = Dict{Any,Any}("a" => 3)
 @test h["a"] == 3
 h["a","b"] = 4
 @test h["a","b"] == h[("a","b")] == 4
@@ -54,8 +54,42 @@ let
     @test get_KeyError
 end
 
-_d = {"a"=>0}
+_d = Dict("a"=>0)
 @test isa([k for k in filter(x->length(x)==1, collect(keys(_d)))], Vector{Any})
+
+let
+    d = Dict(((1, 2), (3, 4)))
+    @test d[1] === 2
+    @test d[3] === 4
+    d2 = Dict(1 => 2, 3 => 4)
+    d3 = Dict((1 => 2, 3 => 4))
+    @test d == d2 == d3
+    @test typeof(d) == typeof(d2) == typeof(d3) == Dict{Int,Int}
+
+    d = Dict(((1, 2), (3, "b")))
+    @test d[1] === 2
+    @test d[3] == "b"
+    d2 = Dict(1 => 2, 3 => "b")
+    d3 = Dict((1 => 2, 3 => "b"))
+    @test d == d2 == d3
+    @test typeof(d) == typeof(d2) == typeof(d3) == Dict{Int,Any}
+
+    d = Dict(((1, 2), ("a", 4)))
+    @test d[1] === 2
+    @test d["a"] === 4
+    d2 = Dict(1 => 2, "a" => 4)
+    d3 = Dict((1 => 2, "a" => 4))
+    @test d == d2 == d3
+    @test typeof(d) == typeof(d2) == typeof(d3) == Dict{Any,Int}
+
+    d = Dict(((1, 2), ("a", "b")))
+    @test d[1] === 2
+    @test d["a"] == "b"
+    d2 = Dict(1 => 2, "a" => "b")
+    d3 = Dict((1 => 2, "a" => "b"))
+    @test d == d2 == d3
+    @test typeof(d) == typeof(d2) == typeof(d3) == Dict{Any,Any}
+end
 
 # issue #1821
 let
@@ -71,8 +105,8 @@ let
     bestkey(d, key) = key
     bestkey{K<:String,V}(d::Associative{K,V}, key) = string(key)
     bar(x) = bestkey(x, :y)
-    @test bar([:x => [1,2,5]]) == :y
-    @test bar(["x" => [1,2,5]]) == "y"
+    @test bar(Dict(:x => [1,2,5])) == :y
+    @test bar(Dict("x" => [1,2,5])) == "y"
 end
 
 # issue #1438
@@ -100,10 +134,10 @@ begin
 end
 
 @test  isequal(Dict(), Dict())
-@test  isequal({1 => 1}, {1 => 1})
-@test !isequal({1 => 1}, {})
-@test !isequal({1 => 1}, {1 => 2})
-@test !isequal({1 => 1}, {2 => 1})
+@test  isequal(Dict(1 => 1), Dict(1 => 1))
+@test !isequal(Dict(1 => 1), Dict())
+@test !isequal(Dict(1 => 1), Dict(1 => 2))
+@test !isequal(Dict(1 => 1), Dict(2 => 1))
 
 # Generate some data to populate dicts to be compared
 data_in = [ (rand(1:1000), randstring(2)) for _ in 1:1001 ]
@@ -144,14 +178,12 @@ d4[1001] = randstring(3)
 # Here is what currently happens when dictionaries of different types
 # are compared. This is not necessarily desirable. These tests are
 # descriptive rather than proscriptive.
-@test !isequal({1 => 2}, {"dog" => "bone"})
-@test isequal(Dict{Int, Int}(), Dict{String, String}())
+@test !isequal(Dict(1 => 2), Dict("dog" => "bone"))
+@test isequal(Dict{Int,Int}(), Dict{String,String}())
 
 # get! (get with default values assigned to the given location)
 
-let f(x) = x^2,
-    d = {8=>19},
-    def = {}
+let f(x) = x^2, d = Dict(8=>19)
 
     @test get!(d, 8, 5) == 19
     @test get!(d, 19, 2) == 2
@@ -168,15 +200,15 @@ let f(x) = x^2,
         f(4)
     end == 16
 
-    @test d == {8=>19, 19=>2, 42=>4}
+    @test d == Dict(8=>19, 19=>2, 42=>4)
 end
 
 # show
-for d in (["\n" => "\n", "1" => "\n", "\n" => "2"],
+for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
           [string(i) => i for i = 1:30],
           [reshape(1:i^2,i,i) => reshape(1:i^2,i,i) for i = 1:24],
           [utf8(Char['α':'α'+i]) => utf8(Char['α':'α'+i]) for i = (1:10)*10],
-          ["key" => zeros(0, 0)])
+          Dict("key" => zeros(0, 0)))
     for cols in (12, 40, 80), rows in (2, 10, 24)
         # Ensure output is limited as requested
         s = IOBuffer()
@@ -206,13 +238,12 @@ end
 
 
 # issue #2540
-d = {x => 1
-    for x in ['a', 'b', 'c']}
-@test d == {'a'=>1, 'b'=>1, 'c'=> 1}
+d = Dict{Any,Any}([x => 1 for x in ['a', 'b', 'c']])
+@test d == Dict('a'=>1, 'b'=>1, 'c'=> 1)
 
 # issue #2629
-d = (String => String)[ a => "foo" for a in ["a","b","c"]]
-@test d == ["a"=>"foo","b"=>"foo","c"=>"foo"]
+d = Dict{String,String}([ a => "foo" for a in ["a","b","c"]])
+@test d == Dict("a"=>"foo","b"=>"foo","c"=>"foo")
 
 # issue #5886
 d5886 = Dict()
@@ -234,7 +265,7 @@ end
 @test  isempty(Set())
 @test !isempty(Set([1]))
 @test !isempty(Set(["banana", "apple"]))
-@test !isempty(Set({1, 1:10, "pear"}))
+@test !isempty(Set([1, 1:10, "pear"]))
 
 # ordering
 @test Set() < Set([1])
@@ -284,7 +315,7 @@ data_out = collect(s)
 @test is(typeof(Set{Int}([3])), Set{Int})
 
 # eltype
-@test is(eltype(Set({1,"hello"})), Any)
+@test is(eltype(Set([1,"hello"])), Any)
 @test is(eltype(Set{String}()), String)
 
 # no duplicates
@@ -437,8 +468,8 @@ s3 = Set{ASCIIString}(["baz"])
 # isequal
 @test  isequal(Set(), Set())
 @test !isequal(Set(), Set(1))
-@test  isequal(Set{Any}({1,2}), Set{Int}([1,2]))
-@test !isequal(Set{Any}({1,2}), Set{Int}([1,2,3]))
+@test  isequal(Set{Any}(Any[1,2]), Set{Int}([1,2]))
+@test !isequal(Set{Any}(Any[1,2]), Set{Int}([1,2,3]))
 
 # Comparison of unrelated types seems rather inconsistent
 
@@ -478,6 +509,10 @@ sizehint(t, 20000) #check that hash does not depend on size of internal Array{Ui
 @test hash(s) == hash(t)
 @test hash(complement(s)) == hash(complement(t))
 
+# issue #8570
+s = IntSet(2^32)
+@test length(s) == 1
+for b in s; b; end
 
 # Ranges
 

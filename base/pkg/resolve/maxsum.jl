@@ -89,7 +89,7 @@ type Graph
         gadj = [ Int[] for i = 1:np ]
         gmsk = [ BitMatrix[] for i = 1:np ]
         gdir = [ Int[] for i = 1:np ]
-        adjdict = [ (Int=>Int)[] for i = 1:np ]
+        adjdict = [ Dict{Int,Int}() for i = 1:np ]
 
         for (p,d) in deps
             p0 = pdict[p]

@@ -49,10 +49,10 @@ function cos_kernel(x::DoubleFloat64)
 end
 
 function sin_kernel(x::DoubleFloat32)
-    S1 = -0x15555554cbac77.0p-55
-    S2 =  0x111110896efbb2.0p-59
-    S3 = -0x1a00f9e2cae774.0p-65
-    S4 =  0x16cd878c3b46a7.0p-71
+    S1 = -0.16666666641626524
+    S2 = 0.008333329385889463
+    S3 = -0.00019839334836096632
+    S4 = 2.718311493989822e-6
     
     z = x.hi*x.hi
     w = z*z
@@ -62,10 +62,10 @@ function sin_kernel(x::DoubleFloat32)
 end
 
 function cos_kernel(x::DoubleFloat32)
-    C0 = -0x1ffffffd0c5e81.0p-54
-    C1 =  0x155553e1053a42.0p-57
-    C2 = -0x16c087e80f1e27.0p-62
-    C3 =  0x199342e0ee5069.0p-68
+    C0 = -0.499999997251031
+    C1 = 0.04166662332373906
+    C2 = -0.001388676377460993
+    C3 = 2.439044879627741e-5
 
     z = x.hi*x.hi
     w = z*z

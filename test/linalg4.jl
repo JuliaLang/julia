@@ -25,101 +25,11 @@ end
 
 n=12 #Size of matrix problem to test
 
-debug && println("Tridiagonal matrices")
-for relty in (Float32, Float64), elty in (relty, Complex{relty})
-    debug && println("relty is $(relty), elty is $(elty)")
-    a = convert(Vector{elty}, randn(n-1))
-    b = convert(Vector{elty}, randn(n))
-    c = convert(Vector{elty}, randn(n-1))
-    if elty <: Complex
-        a += im*convert(Vector{elty}, randn(n-1))
-        b += im*convert(Vector{elty}, randn(n))
-        c += im*convert(Vector{elty}, randn(n-1))
-    end
-
-    A=Tridiagonal(a, b, c)
-    fA=(elty<:Complex?complex128:float64)(full(A))
-
-    debug && println("Simple unary functions")
-    for func in (det, inv)
-        @test_approx_eq_eps func(A) func(fA) n^2*sqrt(eps(relty))
-    end
-
-    debug && println("Binary operations")
-    a = convert(Vector{elty}, randn(n-1))
-    b = convert(Vector{elty}, randn(n))
-    c = convert(Vector{elty}, randn(n-1))
-    if elty <: Complex
-        a += im*convert(Vector{elty}, randn(n-1))
-        b += im*convert(Vector{elty}, randn(n))
-        c += im*convert(Vector{elty}, randn(n-1))
-    end
-
-    B=Tridiagonal(a, b, c)
-    fB=(elty<:Complex?complex128:float64)(full(B))
-
-    for op in (+, -, *)
-        @test_approx_eq full(op(A, B)) op(fA, fB)
-    end
-end
-
-debug && println("SymTridiagonal (symmetric tridiagonal) matrices")
-for relty in (Float32, Float64), elty in (relty, )#XXX Complex{relty}) doesn't work
-    debug && println("elty is $(elty), relty is $(relty)")
-    a = convert(Vector{elty}, randn(n))
-    b = convert(Vector{elty}, randn(n-1))
-    if elty <: Complex
-        a += im*convert(Vector{elty}, randn(n))
-        b += im*convert(Vector{elty}, randn(n-1))
-    end
-
-    A=SymTridiagonal(a, b)
-    fA=(elty<:Complex?complex128:float64)(full(A))
-    
-    debug && println("Idempotent tests")
-    for func in (conj, transpose, ctranspose)
-        @test func(func(A)) == A
-    end
-
-    debug && println("Simple unary functions")
-    for func in (det, inv)
-        @test_approx_eq_eps func(A) func(fA) n^2*sqrt(eps(relty))
-    end
-
-    debug && println("Eigensystems")
-    zero, infinity = convert(elty, 0), convert(elty, Inf)
-    debug && println("This tests eigenvalue and eigenvector computations using stebz! and stein!")
-    w, iblock, isplit = LinAlg.LAPACK.stebz!('V','B',-infinity,infinity,0,0,zero,a,b)
-    evecs = LinAlg.LAPACK.stein!(a,b,w)
-
-    (e, v)=eig(SymTridiagonal(a,b))
-    @test_approx_eq e w
-    test_approx_eq_vecs(v, evecs)
-
-    debug && println("stein! call using iblock and isplit")
-    w, iblock, isplit = LinAlg.LAPACK.stebz!('V','B',-infinity,infinity,0,0,zero,a,b)
-    evecs = LinAlg.LAPACK.stein!(a,b,w,iblock,isplit)
-    test_approx_eq_vecs(v, evecs)
-
-    debug && println("Binary operations")
-    a = convert(Vector{elty}, randn(n))
-    b = convert(Vector{elty}, randn(n-1))
-    if elty <: Complex
-        a += im*convert(Vector{elty}, randn(n-1))
-        b += im*convert(Vector{elty}, randn(n))
-    end
-
-    B=SymTridiagonal(a, b)
-    fB=(elty<:Complex?complex128:float64)(full(B))
-
-    for op in (+, -, *)
-        @test_approx_eq full(op(A, B)) op(fA, fB)
-    end
-end
-
 #Issue #7647: test xsyevr, xheevr, xstevr drivers
-for Mi7647 in {Symmetric(diagm([1.0:3.0])), Hermitian(diagm([1.0:3.0])),
-          Hermitian(diagm(complex([1.0:3.0]))), SymTridiagonal([1.0:3.0], zeros(2))}
+for Mi7647 in (Symmetric(diagm([1.0:3.0])),
+               Hermitian(diagm([1.0:3.0])),
+               Hermitian(diagm(complex([1.0:3.0]))),
+               SymTridiagonal([1.0:3.0], zeros(2)))
     debug && println("Eigenvalues in interval for $(typeof(Mi7647))")
     @test eigmin(Mi7647)  == eigvals(Mi7647, 0.5, 1.5)[1] == 1.0
     @test eigmax(Mi7647)  == eigvals(Mi7647, 2.5, 3.5)[1] == 3.0
@@ -290,11 +200,6 @@ for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
         @test_approx_eq full(cholfact(A, ul)[ul]) full(invoke(Base.LinAlg.chol!, (AbstractMatrix,Symbol),copy(A), ul))
     end
 end
-
-# Issue #7886
-x, r = LAPACK.gelsy!([0 1; 0 2; 0 3.], [2, 4, 6.])
-@test_approx_eq x [0,2]
-@test r == 1
 
 # Issue #7933
 A7933 = [1 2; 3 4]

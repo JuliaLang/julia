@@ -28,14 +28,14 @@ function find_source_file(file)
     (isabspath(file) || isfile(file)) && return file
     file2 = find_in_path(file)
     file2 != nothing && return file2
-    file2 = "$JULIA_HOME/../share/julia/base/$file"
+    file2 = joinpath(JULIA_HOME, DATAROOTDIR, "julia", "base", file)
     isfile(file2) ? file2 : nothing
 end
 
 # Store list of files and their load time
-package_list = (ByteString=>Float64)[]
+package_list = Dict{ByteString,Float64}()
 # to synchronize multiple tasks trying to require something
-package_locks = (ByteString=>Any)[]
+package_locks = Dict{ByteString,Any}()
 require(fname::String) = require(bytestring(fname))
 require(f::String, fs::String...) = (require(f); for x in fs require(x); end)
 
@@ -47,7 +47,7 @@ function require(name::String)
     path == nothing && error("$name not found")
 
     if myid() == 1 && toplevel_load
-        refs = { @spawnat p _require(path) for p in filter(x->x!=1, procs()) }
+        refs = Any[ @spawnat p _require(path) for p in filter(x->x!=1, procs()) ]
         _require(path)
         for r in refs; wait(r); end
     else
@@ -77,7 +77,7 @@ function reload(name::String)
     path == nothing && error("$name not found")
     refs = nothing
     if myid() == 1 && toplevel_load
-        refs = { @spawnat p reload_path(path) for p in filter(x->x!=1, procs()) }
+        refs = Any[ @spawnat p reload_path(path) for p in filter(x->x!=1, procs()) ]
     end
     last = toplevel_load
     toplevel_load = false
@@ -99,7 +99,7 @@ include_string(txt::String, fname::String) =
 
 include_string(txt::String) = include_string(txt, "string")
 
-function source_path(default::Union(String,Nothing)="")
+function source_path(default::Union(String,Void)="")
     t = current_task()
     while true
         s = t.storage

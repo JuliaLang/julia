@@ -63,7 +63,11 @@ First, acquire the source code by cloning the git repository:
 
 Be sure to also configure your system to use the appropriate proxy settings, e.g. by setting the `https_proxy` and `http_proxy` variables.)
 
-Next, enter the `julia/` directory and run `make` to build the `julia` executable. To perform a parallel build, use `make -j N` and supply the maximum number of concurrent processes.
+By default you will be building the latest unstable version of Julia. However, most users should use the most recent stable version of Julia, which is currently the `0.3` series of releases. You can get this version by changing to the Julia directory and running
+
+    git checkout release-0.3
+    
+Now run `make` to build the `julia` executable. To perform a parallel build, use `make -j N` and supply the maximum number of concurrent processes.
 When compiled the first time, it will automatically download and build its [external dependencies](#Required-Build-Tools-External-Libraries).
 This takes a while, but only has to be done once. If the defaults in the build do not work for you, and you need to set specific make parameters, you can save them in `Make.user`. The build will automatically check for the existence of `Make.user` and use it if it exists.
 Building Julia requires 1.5GiB of disk space and approximately 700MiB of virtual memory.
@@ -131,7 +135,12 @@ latest version.
    
    a. Special `make` targets exist to help wipe the existing build of a
       dependency. For example, `make -C deps clean-llvm` will clean out the
-      existing build of `llvm`.
+      existing build of `llvm` so that `llvm` will be rebuilt from the
+      downloaded source distribution the next time `make` is called.
+      `make -C deps distclean-llvm` is a stronger wipe which will also delete
+      the downloaded source distribution, ensuring that a fresh copy of the
+      source distribution will be downloaded and that any new patches will be
+      applied the next time `make` is called.
 
    b. To delete existing binaries of `julia` and all its dependencies,
       delete the `./usr` directory _in the source tree_.
@@ -311,12 +320,15 @@ SuiteSparse is a special case, since it is typically only installed as a static 
 
 ### Intel compilers and Math Kernel Libraries
 
-To use the Intel [MKL] BLAS and LAPACK libraries, make sure that MKL version 10.3.6 or higher is installed. For a 64-bit architecture, the MKL environment should be set up as follows:
+To use the Intel [MKL] BLAS and LAPACK libraries, make sure that MKL version 10.3.6 or higher is installed.
+For a 64-bit architecture, the environment should be set up as follows:
 
+    # bash
     source /path/to/mkl/bin/mklvars.sh intel64 ilp64
     export MKL_INTERFACE_LAYER=ILP64
 
-Julia can be built with the Intel compilers and MKL using the following flags.
+It is recommended that Intel compilers be used to build julia when using MKL.
+Add the following to the `Make.user` file:
 
     USEICC = 1
     USEIFC = 1
@@ -324,7 +336,7 @@ Julia can be built with the Intel compilers and MKL using the following flags.
     USE_INTEL_MKL_FFT = 1
     USE_INTEL_LIBM = 1
 
-It is highly recommended to use a fresh clone of the Julia repository. Also, it is recommended that Intel compilers be used to build julia when using MKL.
+It is highly recommended to start with a fresh clone of the Julia repository.
 
 <a name="Source-Code-Organization"/>
 ## Source Code Organization
@@ -365,6 +377,9 @@ The following distributions include julia, but the versions may be out of date d
 
 * [Arch Linux](https://www.archlinux.org/packages/community/i686/julia/)
 * [Debian GNU/Linux](http://packages.debian.org/sid/julia)
+* [Fedora Linux](https://admin.fedoraproject.org/pkgdb/package/julia/), RHEL/CentOS/OEL/Scientific Linux (EPEL)
+  * [Current stable release for Fedora/EPEL](https://copr.fedoraproject.org/coprs/nalimilan/julia/)
+  * [Nightly builds for Fedora/EPEL](https://copr.fedoraproject.org/coprs/nalimilan/julia-nightlies/)
 * [Gentoo Linux](https://packages.gentoo.org/package/dev-lang/julia)
   * Git Package in the [Science overlay](https://wiki.gentoo.org/wiki/Project:Science/Overlay)
 * openSUSE
@@ -378,6 +393,13 @@ The following distributions include julia, but the versions may be out of date d
 <a name="Editor-Terminal-Setup"/>
 ## Editor and Terminal Setup
 
-Currently, Julia editing mode support is available for Emacs, Vim, Textmate, Sublime Text, Notepad++, and Kate, in `contrib/`. There is early support for IDEs such as [Lighttable](https://github.com/one-more-minute/Jewel), [QTCreator based JuliaStudio](http://forio.com/labs/julia-studio/), and [Eclipse (LiClipse)](http://brainwy.github.io/liclipse/). A notebook interface is available through [IJulia](https://github.com/JuliaLang/IJulia.jl), which adds Julia support to the iPython notebook.
+Currently, Julia editing mode support is available for Emacs, Vim, Textmate,
+Sublime Text, Notepad++, and Kate, in `contrib/`. There is early support for
+IDEs such as [Light Table](https://github.com/one-more-minute/Julia-LT),
+[Eclipse (LiClipse)](http://brainwy.github.io/liclipse/). A notebook interface
+is available through [IJulia](https://github.com/JuliaLang/IJulia.jl), which
+adds Julia support to [IPython](http://ipython.org). The
+[Sublime-IJulia](https://github.com/quinnj/Sublime-IJulia) plugin enables
+interaction between IJulia and Sublime Text. 
 
-In the terminal, Julia makes great use of both control-key and meta-key bindings. To make the meta-key bindings more accessible, many terminal emulator programs (e.g., `Terminal`, `iTerm`, `xterm`, etc) allow you to use the alt or option key as meta.  See the section in the manual on [interacting with Julia](http://docs.julialang.org/en/latest/manual/interacting-with-julia/) for more details.
+In the terminal, Julia makes great use of both control-key and meta-key bindings. To make the meta-key bindings more accessible, many terminal emulator programs (e.g., `Terminal`, `iTerm`, `xterm`, etc.) allow you to use the alt or option key as meta.  See the section in the manual on [interacting with Julia](http://docs.julialang.org/en/latest/manual/interacting-with-julia/) for more details.

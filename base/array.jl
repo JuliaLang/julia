@@ -123,9 +123,17 @@ function getindex(T::NonTupleType, vals...)
     return a
 end
 
+function getindex(::Type{Any}, vals::ANY...)
+    a = Array(Any,length(vals))
+    for i = 1:length(vals)
+        a[i] = vals[i]
+    end
+    return a
+end
+
 getindex(T::(Type...)) = Array(T,0)
 
-# T[a:b] and T[a:s:b] also contruct typed ranges
+# T[a:b] and T[a:s:b] also construct typed ranges
 function getindex{T<:Number}(::Type{T}, r::Range)
     copy!(Array(T,length(r)), r)
 end
@@ -446,13 +454,7 @@ end
 
 ## Dequeue functionality ##
 
-const _grow_none_errmsg =
-    "[] cannot grow. Instead, initialize the array with \"T[]\", where T is the desired element type."
-
 function push!{T}(a::Array{T,1}, item)
-    if is(T,None)
-        error(_grow_none_errmsg)
-    end
     # convert first so we don't grow the array if the assignment won't work
     item = convert(T, item)
     ccall(:jl_array_grow_end, Void, (Any, Uint), a, 1)
@@ -467,9 +469,6 @@ function push!(a::Array{Any,1}, item::ANY)
 end
 
 function append!{T}(a::Array{T,1}, items::AbstractVector)
-    if is(T,None)
-        error(_grow_none_errmsg)
-    end
     n = length(items)
     ccall(:jl_array_grow_end, Void, (Any, Uint), a, n)
     copy!(a, length(a)-n+1, items, 1, n)
@@ -477,9 +476,6 @@ function append!{T}(a::Array{T,1}, items::AbstractVector)
 end
 
 function prepend!{T}(a::Array{T,1}, items::AbstractVector)
-    if is(T,None)
-        error(_grow_none_errmsg)
-    end
     n = length(items)
     ccall(:jl_array_grow_beg, Void, (Any, Uint), a, n)
     if a === items
@@ -518,9 +514,6 @@ function pop!(a::Vector)
 end
 
 function unshift!{T}(a::Array{T,1}, item)
-    if is(T,None)
-        error(_grow_none_errmsg)
-    end
     item = convert(T, item)
     ccall(:jl_array_grow_beg, Void, (Any, Uint), a, 1)
     a[1] = item
@@ -600,8 +593,10 @@ function splice!(a::Vector, i::Integer, ins=_default_splice)
         a[i] = ins[1]
     else
         _growat!(a, i, m-1)
-        for k = 1:m
-            a[i+k-1] = ins[k]
+        k = 1
+        for x in ins
+            a[i+k-1] = x
+            k += 1
         end
     end
     return v
@@ -636,8 +631,10 @@ function splice!{T<:Integer}(a::Vector, r::UnitRange{T}, ins=_default_splice)
         end
     end
 
-    for k = 1:m
-        a[f+k-1] = ins[k]
+    k = 1
+    for x in ins
+        a[f+k-1] = x
+        k += 1
     end
     return v
 end
@@ -1159,7 +1156,7 @@ indmin(a) = findmin(a)[2]
 # similar to Matlab's ismember
 # returns a vector containing the highest index in b for each value in a that is a member of b
 function indexin(a::AbstractArray, b::AbstractArray)
-    bdict = Dict(b, 1:length(b))
+    bdict = Dict(zip(b, 1:length(b)))
     [get(bdict, i, 0) for i in a]
 end
 
@@ -1240,9 +1237,9 @@ end
 
 ## Transpose ##
 const transposebaselength=64
-function transpose!(B::StridedMatrix,A::StridedMatrix)
+function transpose!(B::StridedVecOrMat,A::StridedMatrix)
     m, n = size(A)
-    size(B) == (n,m) || throw(DimensionMismatch("transpose"))
+    size(B,1) == n && size(B,2) == m || throw(DimensionMismatch("transpose"))
 
     if m*n<=4*transposebaselength
         @inbounds begin
@@ -1257,7 +1254,7 @@ function transpose!(B::StridedMatrix,A::StridedMatrix)
     end
     return B
 end
-function transposeblock!(B::StridedMatrix,A::StridedMatrix,m::Int,n::Int,offseti::Int,offsetj::Int)
+function transposeblock!(B::StridedVecOrMat,A::StridedMatrix,m::Int,n::Int,offseti::Int,offsetj::Int)
     if m*n<=transposebaselength
         @inbounds begin
             for j = offsetj+(1:n)
@@ -1277,9 +1274,9 @@ function transposeblock!(B::StridedMatrix,A::StridedMatrix,m::Int,n::Int,offseti
     end
     return B
 end
-function ctranspose!(B::StridedMatrix,A::StridedMatrix)
+function ctranspose!(B::StridedVecOrMat,A::StridedMatrix)
     m, n = size(A)
-    size(B) == (n,m) || throw(DimensionMismatch("transpose"))
+    size(B,1) == n && size(B,2) == m || throw(DimensionMismatch("transpose"))
 
     if m*n<=4*transposebaselength
         @inbounds begin
@@ -1294,7 +1291,7 @@ function ctranspose!(B::StridedMatrix,A::StridedMatrix)
     end
     return B
 end
-function ctransposeblock!(B::StridedMatrix,A::StridedMatrix,m::Int,n::Int,offseti::Int,offsetj::Int)
+function ctransposeblock!(B::StridedVecOrMat,A::StridedMatrix,m::Int,n::Int,offseti::Int,offsetj::Int)
     if m*n<=transposebaselength
         @inbounds begin
             for j = offsetj+(1:n)

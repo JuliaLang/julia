@@ -28,12 +28,7 @@ writemime(io::IO, ::MIME"text/plain", v::AbstractArray) =
 
 function writemime(io::IO, ::MIME"text/plain", v::DataType)
     show(io, v)
-    methods(v) # force constructor creation
-    if isgeneric(v)
-        n = length(v.env)
-        m = n==1 ? "method" : "methods"
-        print(io, " (constructor with $n $m)")
-    end
+    # TODO: maybe show constructor info?
 end
 
 writemime(io::IO, ::MIME"text/plain", t::Associative) = 
@@ -75,7 +70,7 @@ function showerror(io::IO, e, bt)
     end
 end
 
-showerror(io::IO, e::LoadError) = showerror(io, e, {})
+showerror(io::IO, e::LoadError) = showerror(io, e, [])
 function showerror(io::IO, e::LoadError, bt)
     showerror(io, e.error, bt)
     print(io, "\nwhile loading $(e.file), in expression starting on line $(e.line)")
@@ -132,7 +127,7 @@ function showerror(io::IO, e::MethodError)
         end
     end
     # Check for row vectors used where a column vector is intended.
-    vec_args = {}
+    vec_args = []
     hasrows = false
     for arg in e.args
         isrow = isa(arg,AbstractArray) && ndims(arg)==2 && size(arg,1)==1

@@ -6,7 +6,7 @@
 
 #include "platform.h"
 #include "julia.h"
-#include "uv.h"
+#include "julia_internal.h"
 #ifdef _OS_WINDOWS_
 #include <windows.h>
 #include <direct.h>
@@ -38,8 +38,9 @@ extern char *julia_home;
 
 #define JL_RTLD(flags, FLAG) (flags & JL_RTLD_ ## FLAG ? RTLD_ ## FLAG : 0)
 
-DLLEXPORT int jl_uv_dlopen(const char *filename, uv_lib_t *lib, unsigned flags)
+DLLEXPORT int jl_uv_dlopen(const char *filename, jl_uv_libhandle lib_, unsigned flags)
 {
+    uv_lib_t *lib = (uv_lib_t *) lib_;
 #if defined(_OS_WINDOWS_)
     needsSymRefreshModuleList = 1;
 #endif
@@ -152,30 +153,30 @@ done:
     return handle;
 }
 
-uv_lib_t *jl_load_dynamic_library_e(char *modname, unsigned flags)
+jl_uv_libhandle jl_load_dynamic_library_e(char *modname, unsigned flags)
 {
-    return jl_load_dynamic_library_(modname, flags, 0);
+    return (jl_uv_libhandle) jl_load_dynamic_library_(modname, flags, 0);
 }
 
-uv_lib_t *jl_load_dynamic_library(char *modname, unsigned flags)
+jl_uv_libhandle jl_load_dynamic_library(char *modname, unsigned flags)
 {
-    return jl_load_dynamic_library_(modname, flags, 1);
+    return (jl_uv_libhandle) jl_load_dynamic_library_(modname, flags, 1);
 }
 
-void *jl_dlsym_e(uv_lib_t *handle, char *symbol)
+void *jl_dlsym_e(jl_uv_libhandle handle, char *symbol)
 {
     void *ptr;
-    int  error=uv_dlsym(handle, symbol, &ptr);
+    int  error=uv_dlsym((uv_lib_t *) handle, symbol, &ptr);
     if (error) ptr=NULL;
     return ptr;
 }
 
-void *jl_dlsym(uv_lib_t *handle, char *symbol)
+void *jl_dlsym(jl_uv_libhandle handle, char *symbol)
 {
     void *ptr;
-    int  error = uv_dlsym(handle, symbol, &ptr);
+    int  error = uv_dlsym((uv_lib_t *) handle, symbol, &ptr);
     if (error != 0) {
-        jl_printf(JL_STDERR, "symbol could not be found %s (%d): %s\n", symbol, error, uv_dlerror(handle));
+        jl_printf(JL_STDERR, "symbol could not be found %s (%d): %s\n", symbol, error, uv_dlerror((uv_lib_t *) handle));
     }
     return ptr;
 }
@@ -193,7 +194,13 @@ char *jl_dlfind_win32(char *f_name)
     if (jl_dlsym_e(jl_ntdll_handle, f_name))
         return "ntdll";
     if (jl_dlsym_e(jl_crtdll_handle, f_name))
+#if _MSC_VER == 1800
+        return "msvcr120";
+#elif defined(_MSC_VER)
+#error This version of MSVC has not been tested.
+#else
         return "msvcrt";
+#endif
     if (jl_dlsym(jl_winsock_handle, f_name))
         return "ws2_32";
     // additional common libraries (libc?) could be added here, but in general,

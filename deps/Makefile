@@ -24,6 +24,7 @@ MAKE_COMMON = DESTDIR="" prefix=$(build_prefix) bindir=$(build_bindir) libdir=$(
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
+STAGE1_DEPS =
 STAGE2_DEPS = Rmath
 STAGE3_DEPS = suitesparse-wrapper
 
@@ -139,7 +140,7 @@ install: $(addprefix install-, $(DEP_LIBS))
 cleanall: $(addprefix clean-, $(DEP_LIBS))
 distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-uv get-pcre get-openlibm get-openspecfun get-dsfmt get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-mojibake
+getall: get-llvm get-uv get-pcre get-openlibm get-openspecfun get-dsfmt get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-mojibake get-virtualenv
 
 ## PATHS ##
 # sort is used to remove potential duplicates
@@ -176,7 +177,7 @@ ifeq ($(LLVM_SANITIZE),1)
 LLVM_BUILDTYPE := $(LLVM_BUILDTYPE)+Sanitize
 endif
 
-LLVM_LIB_FILE = libLLVMJIT.a
+LLVM_LIB_FILE = libLLVMCodeGen.a
 LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/$(LLVM_FLAVOR)/lib/$(LLVM_LIB_FILE)
 LLVM_OBJ_TARGET = $(build_libdir)/$(LLVM_LIB_FILE)
 
@@ -194,6 +195,9 @@ LLVM_COMPILER_RT_TAR=
 else ifeq ($(LLVM_VER), 3.3)
 LLVM_CLANG_TAR=cfe-$(LLVM_VER).src.tar.gz
 LLVM_COMPILER_RT_TAR=compiler-rt-$(LLVM_VER).src.tar.gz
+else ifeq ($(LLVM_VER), 3.5.0)
+LLVM_CLANG_TAR=cfe-$(LLVM_VER).src.tar.xz
+LLVM_COMPILER_RT_TAR=compiler-rt-$(LLVM_VER).src.tar.xz
 else
 LLVM_CLANG_TAR=clang-$(LLVM_VER).src.tar.gz
 LLVM_COMPILER_RT_TAR=compiler-rt-$(LLVM_VER).src.tar.gz
@@ -325,7 +329,7 @@ llvm-$(LLVM_VER)/python2_path:
 	ln -sf /usr/bin/python2 "llvm-$(LLVM_VER)/python2_path/python"
 llvm_python_workaround=llvm-$(LLVM_VER)/python2_path
 else
-  LLVM_FLAGS += --with-python="$(shell ./find_python_for_llvm)"
+  LLVM_FLAGS += --with-python="$(shell ./find_python2)"
 endif
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
@@ -514,6 +518,7 @@ install-llvm: $(LLVM_OBJ_TARGET)
 
 UV_SRC_TARGET = libuv/.libs/libuv.a
 UV_OBJ_TARGET = $(build_libdir)/libuv.a
+
 UV_CFLAGS = 
 ifeq ($(USEMSVC), 1)
 UV_CFLAGS += -DBUILDING_UV_SHARED
@@ -522,9 +527,14 @@ ifeq ($(USEICC), 1)
 UV_CFLAGS += -static-intel
 endif
 
-UV_OPTS += LDFLAGS="$(LDFLAGS) $(CLDFLAGS) -v"
+UV_MFLAGS += LDFLAGS="$(LDFLAGS) $(CLDFLAGS) -v"
 ifneq ($(UV_CFLAGS),)
-UV_OPTS += CFLAGS="$(UV_CFLAGS)"
+UV_MFLAGS += CFLAGS="$(UV_CFLAGS)"
+endif
+ifneq ($(USEMSVC), 1)
+UV_FLAGS = $(UV_MFLAGS)
+else
+UV_FLAGS = --disable-shared $(UV_MFLAGS)
 endif
 
 libuv/configure:
@@ -537,14 +547,14 @@ libuv/config.status: $(JULIAHOME)/.git/modules/deps/libuv/HEAD
 endif
 libuv/config.status: libuv/configure
 	cd libuv && \
-	./configure --with-pic $(CONFIGURE_COMMON) $(UV_OPTS)
+	./configure --with-pic $(CONFIGURE_COMMON) $(UV_FLAGS)
 	touch -c $@
 $(UV_SRC_TARGET): libuv/config.status
 	touch -c libuv/aclocal.m4
 	touch -c libuv/Makefile.in
 	touch -c libuv/configure
 	touch -c libuv/config.status
-	$(MAKE) -C libuv $(UV_OPTS)
+	$(MAKE) -C libuv $(UV_MFLAGS)
 	touch -c $@
 libuv/checked: $(UV_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
@@ -1040,12 +1050,13 @@ ARPACK_FLAGS += LDFLAGS="$(LDFLAGS) -Wl,-rpath,'$(build_libdir)'"
 endif
 
 # ARPACK-NG upstream keeps changing their download filenames
-arpack-ng_$(ARPACK_VER).tar.gz:
-	$(JLDOWNLOAD) $@ http://forge.scilab.org/index.php/p/arpack-ng/downloads/get/$@
+arpack-ng-$(ARPACK_VER).tar.gz:
+	$(JLDOWNLOAD) $@ https://github.com/opencollab/arpack-ng/archive/$(ARPACK_VER).tar.gz
 	touch -c $@
-arpack-ng-$(ARPACK_VER)/configure: arpack-ng_$(ARPACK_VER).tar.gz
+arpack-ng-$(ARPACK_VER)/configure: arpack-ng-$(ARPACK_VER).tar.gz
 	$(JLCHECKSUM) $<
 	$(TAR) zxf $<
+	( cd arpack-ng-$(ARPACK_VER) && patch -p1 < ../arpack.xlahqr2.patch )
 	touch -c $@
 
 ifeq ($(USE_ATLAS), 1)
@@ -1089,9 +1100,9 @@ clean-arpack:
 	-$(MAKE) -C arpack-ng-$(ARPACK_VER) clean
 	-rm -f $(ARPACK_OBJ_SOURCE) $(ARPACK_OBJ_TARGET)
 distclean-arpack:
-	-rm -rf arpack-ng_$(ARPACK_VER).tar.gz arpack-ng-$(ARPACK_VER)
+	-rm -rf arpack-ng-$(ARPACK_VER).tar.gz arpack-ng-$(ARPACK_VER)
 
-get-arpack: arpack-ng_$(ARPACK_VER).tar.gz
+get-arpack: arpack-ng-$(ARPACK_VER).tar.gz
 configure-arpack: arpack-ng-$(ARPACK_VER)/config.status
 compile-arpack: $(ARPACK_OBJ_SOURCE)
 check-arpack: arpack-ng-$(ARPACK_VER)/checked
@@ -1245,7 +1256,7 @@ ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/libmojibake ] && echo 
 $(MOJIBAKE_SRC_TARGET): $(JULIAHOME)/.git/modules/deps/libmojibake/HEAD
 endif
 $(MOJIBAKE_SRC_TARGET): libmojibake/Makefile
-	$(MAKE) -C libmojibake cc="$(CC) -O2 -std=c99 $(fPIC)" AR="$(AR)" libmojibake.a
+	$(MAKE) -C libmojibake cc="$(CC) -O2 -std=c99 $(fPIC) -DMOJIBAKE_EXPORTS" AR="$(AR)" libmojibake.a
 	touch -c $@
 libmojibake/checked: $(MOJIBAKE_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
@@ -1476,8 +1487,6 @@ endif
 	touch -c $@
 gmp-$(GMP_VER)/config.status: gmp-$(GMP_VER)/configure
 	cd gmp-$(GMP_VER) && \
-	sed -ibackup 's|includeexecdir = $$(exec_prefix)/include|includeexecdir = $$(includedir)|g' Makefile.in && \
-	sed -ibackup 's|includeexecdir = $$(exec_prefix)/include|includeexecdir = $$(includedir)|g' Makefile.am && \
 	./configure $(CONFIGURE_COMMON) F77= --enable-shared --disable-static
 	touch -c $@
 $(GMP_SRC_TARGET): gmp-$(GMP_VER)/config.status
@@ -1487,13 +1496,10 @@ ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C gmp-$(GMP_VER) $(LIBTOOL_CCLD) check
 endif
 	echo 1 > $@
-$(GMP_OBJ_TARGET): $(GMP_SRC_TARGET) gmp-$(GMP_VER)/checked
-	$(MAKE) -C gmp-$(GMP_VER) $(LIBTOOL_CCLD) install $(MAKE_COMMON)
-ifeq ($(OS),WINNT)
-	mv -f $(build_libdir)/libgmp.$(SHLIB_EXT) $@
-endif
+$(GMP_OBJ_TARGET): $(GMP_SRC_TARGET) gmp-$(GMP_VER)/checked | $(build_shlibdir) $(build_includedir)
+	$(INSTALL_M) gmp-$(GMP_VER)/.libs/libgmp.*$(SHLIB_EXT)* $(build_shlibdir)
+	$(INSTALL_F) gmp-$(GMP_VER)/gmp.h $(build_includedir)
 	$(INSTALL_NAME_CMD)libgmp.$(SHLIB_EXT) $@
-	touch -c $@
 
 clean-gmp:
 	-$(MAKE) -C gmp-$(GMP_VER) clean
@@ -1631,6 +1637,33 @@ configure-git: git-$(GIT_VER)/config.status
 compile-git: $(GIT_SOURCE)
 check-git: git-$(GIT_VER)/checked
 install-git: $(GIT_TARGET)
+
+## virtualenv
+
+VIRTUALENV_SOURCE = virtualenv-$(VIRTUALENV_VER)/virtualenv.py
+VIRTUALENV_TARGET = julia-env
+
+virtualenv-$(VIRTUALENV_VER).tar.gz:
+	$(JLDOWNLOAD) $@ https://pypi.python.org/packages/source/v/virtualenv/$@
+$(VIRTUALENV_SOURCE): virtualenv-$(VIRTUALENV_VER).tar.gz
+	$(JLCHECKSUM) $<
+	$(TAR) zxf $<
+	touch -c $@
+$(VIRTUALENV_TARGET): $(VIRTUALENV_SOURCE)
+	"$(shell ./find_python2)" $< $@
+	touch -c $@
+
+clean-virtualenv:
+	-$(MAKE) -C virtualenv-$(VIRTUALENV_VER) clean
+	-rm -f $(VIRTUALENV_TARGET)
+distclean-virtualenv:
+	-rm -rf virtualenv-$(VIRTUALENV_VER).tar.gz virtualenv-$(VIRTUALENV_VER)
+
+get-virtualenv: virtualenv-$(VIRTUALENV_VER).tar.gz
+configure-virtualenv: get-virtualenv
+compile-virtualenv: $(VIRTUALENV_SOURCE)
+check-virtualenv: compile-virtualenv
+install-virtualenv: $(VIRTUALENV_TARGET)
 
 ## phony targets ##
 

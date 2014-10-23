@@ -1,6 +1,6 @@
 ## type join (closest common ancestor, or least upper bound) ##
 
-typejoin() = None
+typejoin() = Bottom
 typejoin(t::ANY) = t
 typejoin(t::ANY, ts...) = typejoin(t, typejoin(ts...))
 function typejoin(a::ANY, b::ANY)
@@ -22,7 +22,7 @@ function typejoin(a::ANY, b::ANY)
         if !isa(u,UnionType)
             return u
         end
-        return reduce(typejoin, None, u.types)
+        return reduce(typejoin, Bottom, u.types)
     end
     if isa(a,Tuple)
         if !isa(b,Tuple)
@@ -82,7 +82,7 @@ end
 
 # reduce typejoin over tup[i:end]
 function tailjoin(tup, i)
-    t = None
+    t = Bottom
     for j = i:length(tup)
         tj = tup[j]
         t = typejoin(t, isvarargtype(tj)?tj.parameters[1]:tj)
@@ -92,30 +92,30 @@ end
 
 ## promotion mechanism ##
 
-promote_type()  = None
+promote_type()  = Bottom
 promote_type(T) = T
 promote_type(T, S   ) = typejoin(T, S)
 promote_type(T, S...) = promote_type(T, promote_type(S...))
 
-promote_type(::Type{None}, ::Type{None}) = None
+promote_type(::Type{Bottom}, ::Type{Bottom}) = Bottom
 promote_type{T}(::Type{T}, ::Type{T}) = T
-promote_type{T}(::Type{T}, ::Type{None}) = T
-promote_type{T}(::Type{None}, ::Type{T}) = T
+promote_type{T}(::Type{T}, ::Type{Bottom}) = T
+promote_type{T}(::Type{Bottom}, ::Type{T}) = T
 
 # Try promote_rule in both orders. Typically only one is defined,
-# and there is a fallback returning None below, so the common case is
+# and there is a fallback returning Bottom below, so the common case is
 #   promote_type(T, S) =>
-#   promote_result(T, S, result, None) =>
-#   typejoin(result, None) => result
+#   promote_result(T, S, result, Bottom) =>
+#   typejoin(result, Bottom) => result
 promote_type{T,S}(::Type{T}, ::Type{S}) =
     promote_result(T, S, promote_rule(T,S), promote_rule(S,T))
 
-promote_rule(T, S) = None
+promote_rule(T, S) = Bottom
 
 promote_result(t,s,T,S) = promote_type(T,S)
-# If no promote_rule is defined, both directions give None. In that
+# If no promote_rule is defined, both directions give Bottom. In that
 # case use typejoin on the original types instead.
-promote_result{T,S}(::Type{T},::Type{S},::Type{None},::Type{None}) = typejoin(T, S)
+promote_result{T,S}(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) = typejoin(T, S)
 
 promote() = ()
 promote(x) = (x,)
@@ -143,7 +143,7 @@ end
 # Otherwise, typejoin(T,S) is called (returning Number) so no conversion
 # happens, and +(promote(x,y)...) is called again, causing a stack
 # overflow.
-promote_result{T<:Number,S<:Number}(::Type{T},::Type{S},::Type{None},::Type{None}) =
+promote_result{T<:Number,S<:Number}(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) =
     promote_to_super(T, S, typejoin(T,S))
 
 # promote numeric types T and S to typejoin(T,S) if T<:S or S<:T

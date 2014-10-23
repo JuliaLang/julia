@@ -210,7 +210,7 @@ As well as information about the ``TimeType``'s year and quarter::
 
 The ``dayname`` and ``monthname`` methods can also take an optional ``locale`` keyword that can be used to return the name of the day or month of the year for other languages/locales::
 
-  julia> const french_daysofweek = [1=>"Lundi",2=>"Mardi",3=>"Mercredi",4=>"Jeudi",5=>"Vendredi",6=>"Samedi",7=>"Dimanche"];
+  julia> const french_daysofweek = Dict(1=>"Lundi",2=>"Mardi",3=>"Mercredi",4=>"Jeudi",5=>"Vendredi",6=>"Samedi",7=>"Dimanche");
 
   # Load the mapping into the Dates module under locale name "french"
   julia> Dates.VALUETODAYOFWEEK["french"] = french_daysofweek;
@@ -267,10 +267,10 @@ The ``Dates`` module provides the *adjuster* API through several convenient meth
   julia> Dates.lastdayofquarter(Date(2014,7,16))
   2014-09-30
 
-The next four higher-order methods, ``tofirst``, ``tolast``, ``tonext``, and ``toprev``, generalize working with temporal expressions by taking a ``DateFunction`` as first argument, along with a starting ``TimeType``. A ``DateFunction`` is just a function, usually anonymous, that takes a single ``TimeType`` as input and returns a ``Bool``, ``true`` indicating a satisfied adjustment criterion. 
+The next two higher-order methods, ``tonext``, and ``toprev``, generalize working with temporal expressions by taking a ``DateFunction`` as first argument, along with a starting ``TimeType``. A ``DateFunction`` is just a function, usually anonymous, that takes a single ``TimeType`` as input and returns a ``Bool``, ``true`` indicating a satisfied adjustment criterion. 
 For example::
 
-  julia> istuesday = x->Dates.dayofweek(x) == Dates.Tuesday  # Returns true if Tuesday
+  julia> istuesday = x->Dates.dayofweek(x) == Dates.Tuesday  # Returns true if the day of the week of x is Tuesday
   (anonymous function)
 
   julia> Dates.tonext(istuesday, Date(2014,7,13)) # 2014-07-13 is a Sunday
@@ -289,20 +289,6 @@ This is useful with the do-block syntax for more complex temporal expressions::
             Dates.month(x) == Dates.November
         end
   2014-11-27
-
-The ``tofirst`` and ``tolast`` similarly take a ``DateFunction`` as first argument, but adjust to the first or last of the month by default, with a keyword to specify the first or last of the year instead::
-
-  julia> Dates.tofirst(istuesday, Date(2014,7,13)) # Defaults to 1st of the month
-  2014-07-01
-
-  julia> Dates.tofirst(istuesday, Date(2014,7,13); of=Dates.Year)
-  2014-01-07
-
-  julia> Dates.tolast(istuesday, Date(2014,7,13))
-  2014-07-29
-
-  julia> Dates.tolast(istuesday, Date(2014,7,13); of=Dates.Year)
-  2014-12-30
 
 The final method in the adjuster API is the ``recur`` function. ``recur`` vectorizes the adjustment process by taking a start and stop date (optionally specificed by a ``StepRange``), along with a ``DateFunction`` to specify all valid dates/moments to be returned in the specified range. In this case, the ``DateFunction`` is often referred to as the "inclusion" function because it specifies (by returning true) which dates/moments should be included in the returned vector of dates.
 

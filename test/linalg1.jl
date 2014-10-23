@@ -180,6 +180,18 @@ debug && println("Schur")
         @test istriu(f[:Schur]) || iseltype(a,Real)
     end
 
+debug && println("Reorder Schur")
+    if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
+        # use asym for real schur to enforce tridiag structure
+        # avoiding partly selection of conj. eigenvalues
+        ordschura = eltya <: Complex ? a : asym
+        S = schurfact(ordschura)
+        select = rand(range(0,2), n)
+        O = ordschur(S, select)
+        bool(sum(select)) && @test_approx_eq S[:values][find(select)] O[:values][1:sum(select)]
+        @test_approx_eq O[:vectors]*O[:Schur]*O[:vectors]' ordschura
+    end
+
 debug && println("Generalized Schur")
     if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
         f = schurfact(a[1:5,1:5], a[6:10,6:10])
@@ -208,40 +220,6 @@ debug && println("Solve square general system of equations")
     @test_throws DimensionMismatch b'\b
     @test_throws DimensionMismatch b\b'
     @test norm(a*x - b, 1)/norm(b) < ε*κ*n*2 # Ad hoc, revisit!
-
-debug && println("Solve upper triangular system")
-    x = triu(a) \ b
-
-    #Test forward error [JIN 5705] if this is not a BigFloat
-    γ = n*ε/(1-n*ε)
-    if eltya != BigFloat
-        bigA = big(triu(a))
-        x̂ = bigA \ b
-        for i=1:size(b, 2)
-            @test norm(x̂[:,i]-x[:,i], Inf)/norm(x[:,i], Inf) <= abs(condskeel(bigA, x[:,i])*γ/(1-condskeel(bigA)*γ))
-        end
-    end
-    #Test backward error [JIN 5705]
-    for i=1:size(b, 2)
-        @test norm(abs(b[:,i] - triu(a)*x[:,i]), Inf) <= γ * norm(triu(a), Inf) * norm(x[:,i], Inf)
-    end
-
-debug && println("Solve lower triangular system")
-    x = tril(a)\b
-
-    #Test forward error [JIN 5705] if this is not a BigFloat
-    γ = n*ε/(1-n*ε)
-    if eltya != BigFloat
-        bigA = big(tril(a))
-        x̂ = bigA \ b
-        for i=1:size(b, 2)
-            @test norm(x̂[:,i]-x[:,i], Inf)/norm(x[:,i], Inf) <= abs(condskeel(bigA, x[:,i])*γ/(1-condskeel(bigA)*γ))
-        end
-    end
-    #Test backward error [JIN 5705]
-    for i=1:size(b, 2)
-        @test norm(abs(b[:,i] - tril(a)*x[:,i]), Inf) <= γ * norm(tril(a), Inf) * norm(x[:,i], Inf)
-    end
 
 debug && println("Test null")
     if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia

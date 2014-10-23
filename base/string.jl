@@ -656,11 +656,12 @@ isascii(s::SubString{ASCIIString}) = true
 
 ## hashing strings ##
 
-const memhash = Uint == Uint64 ? :memhash_seed : :memhash32_seed
+const memhash = Uint === Uint64 ? :memhash_seed : :memhash32_seed
+const memhash_seed = Uint === Uint64 ? 0x71e729fd56419c81 : 0x56419c81
 
 function hash{T<:ByteString}(s::Union(T,SubString{T}), h::Uint)
-    h += uint(0x71e729fd56419c81)
-    ccall(memhash, Uint, (Ptr{Uint8}, Csize_t, Uint32), s, sizeof(s), h) + h
+    h += memhash_seed
+    ccall(memhash, Uint, (Ptr{Uint8}, Csize_t, Uint32), s, sizeof(s), h % Uint32) + h
 end
 hash(s::String, h::Uint) = hash(bytestring(s), h)
 
@@ -859,7 +860,7 @@ function print_escaped(io, s::String, esc::String)
         c == '\e'       ? print(io, "\\e") :
         c == '\\'       ? print(io, "\\\\") :
         c in esc        ? print(io, '\\', c) :
-        7 <= c <= 13    ? print(io, '\\', "abtnvfr"[int(c-6)]) :
+        '\a' <= c <= '\r' ? print(io, '\\', "abtnvfr"[int(c)-6]) :
         isprint(c)      ? print(io, c) :
         c <= '\x7f'     ? print(io, "\\x", hex(c, 2)) :
         c <= '\uffff'   ? print(io, "\\u", hex(c, need_full_hex(s,j) ? 4 : 2)) :
@@ -1017,7 +1018,7 @@ function unindent(s::String, indent::Int)
 end
 
 function triplequoted(args...)
-    sx = { isa(arg,ByteString) ? arg : esc(arg) for arg in args }
+    sx = Any[ isa(arg,ByteString) ? arg : esc(arg) for arg in args ]
 
     indent = 0
     rlines = split(RevString(sx[end]), '\n'; limit=2)
@@ -1066,13 +1067,13 @@ macro mstr(s...); triplequoted(s...); end
 function shell_parse(raw::String, interp::Bool)
     s = strip(raw)
     last_parse = 0:-1
-    isempty(s) && return interp ? (Expr(:tuple,:()),last_parse) : ({},last_parse)
+    isempty(s) && return interp ? (Expr(:tuple,:()),last_parse) : ([],last_parse)
 
     in_single_quotes = false
     in_double_quotes = false
 
-    args = {}
-    arg = {}
+    args::Vector{Any} = []
+    arg::Vector{Any} = []
     i = start(s)
     j = i
 
@@ -1082,9 +1083,9 @@ function shell_parse(raw::String, interp::Bool)
         end
     end
     function append_arg()
-        if isempty(arg); arg = {"",}; end
+        if isempty(arg); arg = Any["",]; end
         push!(args, arg)
-        arg = {}
+        arg = []
     end
 
     while !done(s,j)

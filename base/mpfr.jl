@@ -8,7 +8,7 @@ export
 
 import
     Base: (*), +, -, /, <, <=, ==, >, >=, ^, besselj, besselj0, besselj1, bessely,
-        bessely0, bessely1, ceil, convert, copysign, deg2rad,
+        bessely0, bessely1, ceil, cmp, convert, copysign, deg2rad,
         exp, exp2, exponent, factorial, floor, hypot, isinteger, iround,
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
         nextfloat, prevfloat, promote_rule, rad2deg, rem, round, show,
@@ -20,7 +20,7 @@ import
         realmin, realmax, get_rounding, set_rounding, maxintfloat, widen,
         significand, frexp
 
-import Base.GMP: ClongMax, CulongMax
+import Base.GMP: ClongMax, CulongMax, CdoubleMax
 
 import Base.Math.lgamma_r
 
@@ -142,195 +142,111 @@ end
 deserialize(s, ::Type{BigFloat}) = BigFloat(deserialize(s))
 
 # Basic arithmetic without promotion
-# Unsigned addition
-function +(x::BigFloat, c::Culong)
-    z = BigFloat()
-    ccall((:mpfr_add_ui, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Culong, Int32), &z, &x, c, ROUNDING_MODE[end])
-    return z
-end
-+(c::Culong, x::BigFloat) = x + c
-+(c::CulongMax, x::BigFloat) = x + convert(Culong, c)
-+(x::BigFloat, c::CulongMax) = x + convert(Culong, c)
+for (fJ, fC) in ((:+,:add), (:*,:mul))
+    @eval begin 
+        # BigFloat
+        function ($fJ)(x::BigFloat, y::BigFloat)
+            z = BigFloat()
+            ccall(($(string(:mpfr_,fC)),:libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, &y, ROUNDING_MODE[end])
+            return z
+        end
 
-# Signed addition
-function +(x::BigFloat, c::Clong)
-    z = BigFloat()
-    ccall((:mpfr_add_si, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Clong, Int32), &z, &x, c, ROUNDING_MODE[end])
-    return z
-end
-+(c::Clong, x::BigFloat) = x + c
-+(x::BigFloat, c::ClongMax) = x + convert(Clong, c)
-+(c::ClongMax, x::BigFloat) = x + convert(Clong, c)
+        # Unsigned Integer
+        function ($fJ)(x::BigFloat, c::CulongMax)
+            z = BigFloat()
+            ccall(($(string(:mpfr_,fC,:_ui)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Culong, Int32), &z, &x, c, ROUNDING_MODE[end])
+            return z
+        end
+        ($fJ)(c::CulongMax, x::BigFloat) = ($fJ)(x,c)
 
-# Float64 addition
-function +(x::BigFloat, c::Float64)
-    z = BigFloat()
-    ccall((:mpfr_add_d, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Float64, Int32), &z, &x, c, ROUNDING_MODE[end])
-    return z
-end
-+(c::Float64, x::BigFloat) = x + c
-+(c::Float32, x::BigFloat) = x + convert(Float64, c)
-+(x::BigFloat, c::Float32) = x + convert(Float64, c)
+        # Signed Integer
+        function ($fJ)(x::BigFloat, c::ClongMax)
+            z = BigFloat()
+            ccall(($(string(:mpfr_,fC,:_si)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Clong, Int32), &z, &x, c, ROUNDING_MODE[end])
+            return z
+        end
+        ($fJ)(c::ClongMax, x::BigFloat) = ($fJ)(x,c)
 
-# BigInt addition
-function +(x::BigFloat, c::BigInt)
-    z = BigFloat()
-    ccall((:mpfr_add_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigInt}, Int32), &z, &x, &c, ROUNDING_MODE[end])
-    return z
-end
-+(c::BigInt, x::BigFloat) = x + c
+        # Float32/Float64
+        function ($fJ)(x::BigFloat, c::CdoubleMax)
+            z = BigFloat()
+            ccall(($(string(:mpfr_,fC,:_d)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Cdouble, Int32), &z, &x, c, ROUNDING_MODE[end])
+            return z
+        end
+        ($fJ)(c::CdoubleMax, x::BigFloat) = ($fJ)(x,c)
 
-# Unsigned subtraction
-function -(x::BigFloat, c::Culong)
-    z = BigFloat()
-    ccall((:mpfr_sub_ui, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Culong, Int32), &z, &x, c, ROUNDING_MODE[end])
-    return z
+        # BigInt
+        function ($fJ)(x::BigFloat, c::BigInt)
+            z = BigFloat()
+            ccall(($(string(:mpfr_,fC,:_z)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigInt}, Int32), &z, &x, &c, ROUNDING_MODE[end])
+            return z
+        end
+        ($fJ)(c::BigInt, x::BigFloat) = ($fJ)(x,c)
+    end
 end
-function -(c::Culong, x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_ui_sub, :libmpfr), Int32, (Ptr{BigFloat}, Culong, Ptr{BigFloat}, Int32), &z, c, &x, ROUNDING_MODE[end])
-    return z
-end
--(x::BigFloat, c::CulongMax) = -(x, convert(Culong, c))
--(c::CulongMax, x::BigFloat) = -(convert(Culong, c), x)
 
-# Signed subtraction
-function -(x::BigFloat, c::Clong)
-    z = BigFloat()
-    ccall((:mpfr_sub_si, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Clong, Int32), &z, &x, c, ROUNDING_MODE[end])
-    return z
-end
-function -(c::Clong, x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_si_sub, :libmpfr), Int32, (Ptr{BigFloat}, Clong, Ptr{BigFloat}, Int32), &z, c, &x, ROUNDING_MODE[end])
-    return z
-end
--(x::BigFloat, c::ClongMax) = -(x, convert(Clong, c))
--(c::ClongMax, x::BigFloat) = -(convert(Clong, c), x)
+for (fJ, fC) in ((:-,:sub), (:/,:div))
+    @eval begin 
+        # BigFloat
+        function ($fJ)(x::BigFloat, y::BigFloat)
+            z = BigFloat()
+            ccall(($(string(:mpfr_,fC)),:libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, &y, ROUNDING_MODE[end])
+            return z
+        end
 
-# Float64 subtraction
-function -(x::BigFloat, c::Float64)
-    z = BigFloat()
-    ccall((:mpfr_sub_d, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Float64, Int32), &z, &x, c, ROUNDING_MODE[end])
-    return z
-end
-function -(c::Float64, x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_d_sub, :libmpfr), Int32, (Ptr{BigFloat}, Float64, Ptr{BigFloat}, Int32), &z, c, &x, ROUNDING_MODE[end])
-    return z
-end
--(x::BigFloat, c::Float32) = -(x, convert(Float64, c))
--(c::Float32, x::BigFloat) = -(convert(Float64, c), x)
+        # Unsigned Int
+        function ($fJ)(x::BigFloat, c::CulongMax)
+            z = BigFloat()
+            ccall(($(string(:mpfr_,fC,:_ui)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Culong, Int32), &z, &x, c, ROUNDING_MODE[end])
+            return z
+        end
+        function ($fJ)(c::CulongMax, x::BigFloat)
+            z = BigFloat()
+            ccall(($(string(:mpfr_,:ui_,fC)), :libmpfr), Int32, (Ptr{BigFloat}, Culong, Ptr{BigFloat}, Int32), &z, c, &x, ROUNDING_MODE[end])
+            return z
+        end
+        
+        # Signed Integer
+        function ($fJ)(x::BigFloat, c::ClongMax)
+            z = BigFloat()
+            ccall(($(string(:mpfr_,fC,:_si)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Clong, Int32), &z, &x, c, ROUNDING_MODE[end])
+            return z
+        end
+        function ($fJ)(c::ClongMax, x::BigFloat)
+            z = BigFloat()
+            ccall(($(string(:mpfr_,:si_,fC)), :libmpfr), Int32, (Ptr{BigFloat}, Clong, Ptr{BigFloat}, Int32), &z, c, &x, ROUNDING_MODE[end])
+            return z
+        end
 
-# BigInt subtraction
-function -(x::BigFloat, c::BigInt)
-    z = BigFloat()
-    ccall((:mpfr_sub_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigInt}, Int32), &z, &x, &c, ROUNDING_MODE[end])
-    return z
+        # Float32/Float64
+        function ($fJ)(x::BigFloat, c::CdoubleMax)
+            z = BigFloat()
+            ccall(($(string(:mpfr_,fC,:_d)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Cdouble, Int32), &z, &x, c, ROUNDING_MODE[end])
+            return z
+        end
+        function ($fJ)(c::CdoubleMax, x::BigFloat)
+            z = BigFloat()
+            ccall(($(string(:mpfr_,:d_,fC)), :libmpfr), Int32, (Ptr{BigFloat}, Cdouble, Ptr{BigFloat}, Int32), &z, c, &x, ROUNDING_MODE[end])
+            return z
+        end
+
+        # BigInt
+        function ($fJ)(x::BigFloat, c::BigInt)
+            z = BigFloat()
+            ccall(($(string(:mpfr_,fC,:_z)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigInt}, Int32), &z, &x, &c, ROUNDING_MODE[end])
+            return z
+        end
+        # no :mpfr_z_div function
+    end
 end
+
 function -(c::BigInt, x::BigFloat)
     z = BigFloat()
     ccall((:mpfr_z_sub, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigInt}, Ptr{BigFloat}, Int32), &z, &c, &x, ROUNDING_MODE[end])
     return z
 end
 
-# Unsigned multiplication
-function *(x::BigFloat, c::Culong)
-    z = BigFloat()
-    ccall((:mpfr_mul_ui, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Culong, Int32), &z, &x, c, ROUNDING_MODE[end])
-    return z
-end
-*(c::Culong, x::BigFloat) = x * c
-*(c::CulongMax, x::BigFloat) = x * convert(Culong, c)
-*(x::BigFloat, c::CulongMax) = x * convert(Culong, c)
 
-# Signed multiplication
-function *(x::BigFloat, c::Clong)
-    z = BigFloat()
-    ccall((:mpfr_mul_si, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Clong, Int32), &z, &x, c, ROUNDING_MODE[end])
-    return z
-end
-*(c::Clong, x::BigFloat) = x * c
-*(x::BigFloat, c::ClongMax) = x * convert(Clong, c)
-*(c::ClongMax, x::BigFloat) = x * convert(Clong, c)
-
-# Float64 multiplication
-function *(x::BigFloat, c::Float64)
-    z = BigFloat()
-    ccall((:mpfr_mul_d, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Float64, Int32), &z, &x, c, ROUNDING_MODE[end])
-    return z
-end
-*(c::Float64, x::BigFloat) = x * c
-*(c::Float32, x::BigFloat) = x * convert(Float64, c)
-*(x::BigFloat, c::Float32) = x * convert(Float64, c)
-
-# BigInt multiplication
-function *(x::BigFloat, c::BigInt)
-    z = BigFloat()
-    ccall((:mpfr_mul_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigInt}, Int32), &z, &x, &c, ROUNDING_MODE[end])
-    return z
-end
-*(c::BigInt, x::BigFloat) = x * c
-
-# Unsigned division
-function /(x::BigFloat, c::Culong)
-    z = BigFloat()
-    ccall((:mpfr_div_ui, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Culong, Int32), &z, &x, c, ROUNDING_MODE[end])
-    return z
-end
-function /(c::Culong, x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_ui_div, :libmpfr), Int32, (Ptr{BigFloat}, Culong, Ptr{BigFloat}, Int32), &z, c, &x, ROUNDING_MODE[end])
-    return z
-end
-/(x::BigFloat, c::CulongMax) = /(x, convert(Culong, c))
-/(c::CulongMax, x::BigFloat) = /(convert(Culong, c), x)
-
-# Signed division
-function /(x::BigFloat, c::Clong)
-    z = BigFloat()
-    ccall((:mpfr_div_si, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Clong, Int32), &z, &x, c, ROUNDING_MODE[end])
-    return z
-end
-function /(c::Clong, x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_si_div, :libmpfr), Int32, (Ptr{BigFloat}, Clong, Ptr{BigFloat}, Int32), &z, c, &x, ROUNDING_MODE[end])
-    return z
-end
-/(x::BigFloat, c::ClongMax) = /(x, convert(Clong, c))
-/(c::ClongMax, x::BigFloat) = /(convert(Clong, c), x)
-
-# Float64 division
-function /(x::BigFloat, c::Float64)
-    z = BigFloat()
-    ccall((:mpfr_div_d, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Float64, Int32), &z, &x, c, ROUNDING_MODE[end])
-    return z
-end
-function /(c::Float64, x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_d_div, :libmpfr), Int32, (Ptr{BigFloat}, Float64, Ptr{BigFloat}, Int32), &z, c, &x, ROUNDING_MODE[end])
-    return z
-end
-/(x::BigFloat, c::Float32) = /(x, convert(Float64, c))
-/(c::Float32, x::BigFloat) = /(convert(Float64, c), x)
-
-# BigInt division
-function /(x::BigFloat, c::BigInt)
-    z = BigFloat()
-    ccall((:mpfr_div_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigInt}, Int32), &z, &x, &c, ROUNDING_MODE[end])
-    return z
-end
-
-# Basic operations
-for (fJ, fC) in ((:+,:add), (:-,:sub), (:*,:mul), (:/,:div), (:^, :pow))
-    @eval begin 
-        function ($fJ)(x::BigFloat, y::BigFloat)
-            z = BigFloat()
-            ccall(($(string(:mpfr_,fC)),:libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, &y, ROUNDING_MODE[end])
-            return z
-        end
-    end
-end
 
 # More efficient commutative operations
 for (fJ, fC, fI) in ((:+, :add, 0), (:*, :mul, 1))
@@ -379,6 +295,11 @@ sqrt(x::BigInt) = sqrt(BigFloat(x))
 rad2deg(z::BigFloat) = 180/big(pi)*z
 deg2rad(z::BigFloat) = big(pi)/180*z
 
+function ^(x::BigFloat, y::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_pow, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, &y, ROUNDING_MODE[end])
+    return z
+end
 
 function ^(x::BigFloat, y::CulongMax)
     z = BigFloat()
@@ -600,24 +521,41 @@ end
 <(x::BigFloat, y::BigFloat) = ccall((:mpfr_less_p, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &x, &y) != 0
 >(x::BigFloat, y::BigFloat) = ccall((:mpfr_greater_p, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &x, &y) != 0
 
-function ==(i::BigInt, f::BigFloat)
-    !isnan(f) && ccall((:mpfr_cmp_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigInt}), &f, &i) == 0
+function cmp(x::BigFloat, y::BigInt)
+    isnan(x) && throw(DomainError())
+    ccall((:mpfr_cmp_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigInt}), &x, &y)
 end
-
-==(f::BigFloat, i::BigInt) = i == f
-
-function <(i::BigInt, f::BigFloat)
-    # note: mpfr_cmp_z returns 0 if isnan(f)
-    ccall((:mpfr_cmp_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigInt}), &f, &i) > 0
+function cmp(x::BigFloat, y::ClongMax)
+    isnan(x) && throw(DomainError())
+    ccall((:mpfr_cmp_si, :libmpfr), Int32, (Ptr{BigFloat}, Clong), &x, y)
 end
-
-function <(f::BigFloat, i::BigInt)
-    # note: mpfr_cmp_z returns 0 if isnan(f)
-    ccall((:mpfr_cmp_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigInt}), &f, &i) < 0
+function cmp(x::BigFloat, y::CulongMax)
+    isnan(x) && throw(DomainError())
+    ccall((:mpfr_cmp_ui, :libmpfr), Int32, (Ptr{BigFloat}, Culong), &x, y)
 end
+cmp(x::BigFloat, y::Integer) = cmp(x,big(y))
+cmp(x::Integer, y::BigFloat) = -cmp(y,x)
 
-<=(i::BigInt, f::BigFloat) = !isnan(f) && !(f < i)
-<=(f::BigFloat, i::BigInt) = !isnan(f) && !(i < f)
+function cmp(x::BigFloat, y::CdoubleMax)
+    (isnan(x) || isnan(y)) && throw(DomainError())
+    ccall((:mpfr_cmp_d, :libmpfr), Int32, (Ptr{BigFloat}, Cdouble), &x, y)
+end
+cmp(x::CdoubleMax, y::BigFloat) = -cmp(y,x)
+
+==(x::BigFloat, y::Integer)   = !isnan(x) && cmp(x,y) == 0
+==(x::Integer, y::BigFloat)   = y == x
+==(x::BigFloat, y::CdoubleMax) = !isnan(x) && !isnan(y) && cmp(x,y) == 0
+==(x::CdoubleMax, y::BigFloat) = y == x
+
+<(x::BigFloat, y::Integer)   = !isnan(x) && cmp(x,y) < 0
+<(x::Integer, y::BigFloat)   = !isnan(y) && cmp(y,x) > 0
+<(x::BigFloat, y::CdoubleMax) = !isnan(x) && !isnan(y) && cmp(x,y) < 0
+<(x::CdoubleMax, y::BigFloat) = !isnan(x) && !isnan(y) && cmp(y,x) > 0
+
+<=(x::BigFloat, y::Integer)   = !isnan(x) && cmp(x,y) <= 0
+<=(x::Integer, y::BigFloat)   = !isnan(y) && cmp(y,x) >= 0
+<=(x::BigFloat, y::CdoubleMax) = !isnan(x) && !isnan(y) && cmp(x,y) <= 0
+<=(x::CdoubleMax, y::BigFloat) = !isnan(x) && !isnan(y) && cmp(y,x) >= 0
 
 signbit(x::BigFloat) = ccall((:mpfr_signbit, :libmpfr), Int32, (Ptr{BigFloat},), &x) != 0
 

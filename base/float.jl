@@ -1,16 +1,16 @@
 ## conversions to floating-point ##
 
-convert(::Type{Float32}, x::Int128)  = float32(uint128(abs(x)))*(1-2(x<0))
-convert(::Type{Float32}, x::Uint128) = float32(uint64(x)) + ldexp(float32(uint64(x>>>64)),64)
+convert(::Type{Float32}, x::Int128)  = float32(reinterpret(Uint128,abs(x)))*(1-2(x<0))
+convert(::Type{Float32}, x::Uint128) = float32(uint64(x&0xffffffffffffffff)) + ldexp(float32(uint64(x>>>64)),64)
 promote_rule(::Type{Float32}, ::Type{Int128} ) = Float32
 promote_rule(::Type{Float32}, ::Type{Uint128}) = Float32
 
-convert(::Type{Float64}, x::Int128)  = float64(uint128(abs(x)))*(1-2(x<0))
-convert(::Type{Float64}, x::Uint128) = float64(uint64(x)) + ldexp(float64(uint64(x>>>64)),64)
+convert(::Type{Float64}, x::Int128)  = float64(reinterpret(Uint128,abs(x)))*(1-2(x<0))
+convert(::Type{Float64}, x::Uint128) = float64(uint64(x&0xffffffffffffffff)) + ldexp(float64(uint64(x>>>64)),64)
 promote_rule(::Type{Float64}, ::Type{Int128} ) = Float64
 promote_rule(::Type{Float64}, ::Type{Uint128}) = Float64
 
-convert(::Type{Float16}, x::Union(Signed,Unsigned)) = convert(Float16, convert(Float32,x))
+convert(::Type{Float16}, x::Integer) = convert(Float16, convert(Float32,x))
 for t in (Bool,Char,Int8,Int16,Int32,Int64,Uint8,Uint16,Uint32,Uint64)
     @eval promote_rule(::Type{Float16}, ::Type{$t}) = Float32
 end

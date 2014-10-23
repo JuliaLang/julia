@@ -22,14 +22,14 @@ end
 Base.show(io::IO,x::Date) = print(io,string(x))
 
 ### Parsing
-const english = (UTF8String=>Int)["january"=>1,"february"=>2,"march"=>3,"april"=>4,
+const english = Dict{UTF8String,Int}("january"=>1,"february"=>2,"march"=>3,"april"=>4,
                  "may"=>5,"june"=>6,"july"=>7,"august"=>8,"september"=>9,
-                 "october"=>10,"november"=>11,"december"=>12]
-const abbrenglish = (UTF8String=>Int)["jan"=>1,"feb"=>2,"mar"=>3,"apr"=>4,
+                 "october"=>10,"november"=>11,"december"=>12)
+const abbrenglish = Dict{UTF8String,Int}("jan"=>1,"feb"=>2,"mar"=>3,"apr"=>4,
                      "may"=>5,"jun"=>6,"jul"=>7,"aug"=>8,"sep"=>9,
-                     "oct"=>10,"nov"=>11,"dec"=>12]
-const MONTHTOVALUE = (UTF8String=>Dict{UTF8String,Int})["english"=>english]
-const MONTHTOVALUEABBR = (UTF8String=>Dict{UTF8String,Int})["english"=>abbrenglish]
+                     "oct"=>10,"nov"=>11,"dec"=>12)
+const MONTHTOVALUE = Dict{UTF8String,Dict{UTF8String,Int}}("english"=>english)
+const MONTHTOVALUEABBR = Dict{UTF8String,Dict{UTF8String,Int}}("english"=>abbrenglish)
 
 # Date/DateTime Parsing
 abstract Slot{P<:AbstractTime}
@@ -62,7 +62,7 @@ duplicates(slots) = any(map(x->count(y->x.period==y.period,slots),slots) .> 1)
 
 function DateFormat(f::String,locale::String="english")
     slots = Slot[]
-    trans = {}
+    trans = []
     begtran = match(r"^.*?(?=[ymuUdHMSsEe])",f).match
     ss = split(f,r"^.*?(?=[ymuUdHMSsEe])")
     s = split(begtran == "" ? ss[1] : ss[2],r"[^ymuUdHMSsEe]+|(?<=([ymuUdHMSsEe])(?!\1))")

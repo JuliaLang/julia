@@ -37,6 +37,7 @@
       <item> do </item>
       <item> for </item>
       <item> function </item>
+      <item> stagedfunction </item>
       <item> if </item>
       <item> immutable </item>
       <item> let </item>
@@ -141,8 +142,6 @@
       <item> LU </item>
       <item> MathConst </item>
       <item> Matrix </item>
-      <item> Nothing </item>
-      <item> None </item>
       <item> NTuple </item>
       <item> Number </item>
       <item> ObjectIdDict </item>

@@ -65,7 +65,7 @@ type Interface
         end
 
         # generate vdict
-        vdict = [(VersionNumber=>Int)[] for p0 = 1:np]
+        vdict = [Dict{VersionNumber,Int}() for p0 = 1:np]
         for (p,depsp) in deps
             p0 = pdict[p]
             vdict0 = vdict[p0]
@@ -103,7 +103,7 @@ function compute_output_dict(sol::Vector{Int}, interface::Interface)
     pvers = interface.pvers
     spp = interface.spp
 
-    want = (ByteString=>VersionNumber)[]
+    want = Dict{ByteString,VersionNumber}()
     for p0 = 1:np
         p = pkgs[p0]
         s = sol[p0]
@@ -170,7 +170,7 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
     pdeps = [ Array(Requires, spp[p0]-1) for p0 = 1:np ]
     # prevdeps[p1][p0][v0] is the VersionSet of package p1 which package p0 version v0
     # depends upon
-    prevdeps = [ (Int=>Dict{Int,VersionSet})[] for p0 = 1:np ]
+    prevdeps = [ Dict{Int,Dict{Int,VersionSet}}() for p0 = 1:np ]
 
     for (p,d) in deps
         p0 = pdict[p]
@@ -181,7 +181,7 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
             for (rp, rvs) in a.requires
                 p1 = pdict[rp]
                 if !haskey(prevdeps[p1], p0)
-                    prevdeps[p1][p0] = (Int=>VersionSet)[]
+                    prevdeps[p1][p0] = Dict{Int,VersionSet}()
                 end
                 prevdeps[p1][p0][v0] = rvs
             end

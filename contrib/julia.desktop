@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Julia
+Comment=High-level, high-performance dynamic language for technical computing
+Exec=julia
+Icon=julia
+Terminal=true
+Type=Application
+Categories=Development;ComputerScience;Building;Science;Math;NumericalAnalysis;ParallelComputing;DataVisualization;ConsoleOnly;

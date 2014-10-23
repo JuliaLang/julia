@@ -3,11 +3,11 @@ module GitHub
 import Main, ..Git, ..Dir
 
 const AUTH_NOTE = "Julia Package Manager"
-const AUTH_DATA = {
+const AUTH_DATA = Dict{Any,Any}(
     "scopes" => ["repo"],
     "note" => AUTH_NOTE,
     "note_url" => "http://docs.julialang.org/en/latest/manual/packages/",
-}
+)
 
 function user()
     if !success(`git config --global github.user`)
@@ -36,7 +36,7 @@ function curl(url::String, opts::Cmd=``)
     out, proc = open(`curl -i -s -S $opts $url`,"r")
     head = readline(out)
     status = int(split(head,r"\s+";limit=3)[2])
-    header = (String=>String)[]
+    header = Dict{String,String}()
     for line in eachline(out)
         if !ismatch(r"^\s*$",line)
             (k,v) = split(line, r":\s*"; limit=2)
@@ -47,7 +47,7 @@ function curl(url::String, opts::Cmd=``)
     end
     error("strangely formatted HTTP response")
 end
-curl(url::String, data::Nothing, opts::Cmd=``) = curl(url,opts)
+curl(url::String, data::Void, opts::Cmd=``) = curl(url,opts)
 curl(url::String, data, opts::Cmd=``) =
     curl(url,`--data $(sprint(io->json().print(io,data))) $opts`)
 

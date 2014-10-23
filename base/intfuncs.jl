@@ -9,6 +9,26 @@ function gcd{T<:Integer}(a::T, b::T)
     abs(a)
 end
 
+# binary GCD (aka Stein's) algorithm
+# about 1.7x (2.1x) faster for random Int64s (Int128s)
+function gcd{T<:Union(Int64,Uint64,Int128,Uint128)}(a::T, b::T)
+    a == 0 && return abs(b)
+    b == 0 && return abs(a)
+    za = trailing_zeros(a)
+    zb = trailing_zeros(b)
+    k = min(za, zb)
+    u = abs(a >> za)
+    v = abs(b >> zb)
+    while u != v
+        if u > v
+            u, v = v, u
+        end
+        v -= u
+        v >>= trailing_zeros(v)
+    end
+    u << k
+end
+
 # explicit a==0 test is to handle case of lcm(0,0) correctly
 lcm{T<:Integer}(a::T, b::T) = a == 0 ? a : abs(a * div(b, gcd(b,a)))
 
@@ -109,10 +129,10 @@ end
 
 # smallest power of 2 >= x
 nextpow2(x::Unsigned) = one(x)<<((sizeof(x)<<3)-leading_zeros(x-1))
-nextpow2(x::Integer) = oftype(x,x < 0 ? -nextpow2(unsigned(-x)) : nextpow2(unsigned(x)))
+nextpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -nextpow2(unsigned(-x)) : nextpow2(unsigned(x)))
 
 prevpow2(x::Unsigned) = (one(x)>>(x==0)) << ((sizeof(x)<<3)-leading_zeros(x)-1)
-prevpow2(x::Integer) = oftype(x,x < 0 ? -prevpow2(unsigned(-x)) : prevpow2(unsigned(x)))
+prevpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -prevpow2(unsigned(-x)) : prevpow2(unsigned(x)))
 
 ispow2(x::Integer) = count_ones(x)==1
 
@@ -294,7 +314,7 @@ function digits{T<:Integer}(n::Integer, base::T=10, pad::Int=1)
     return a
 end
 
-function digits!{T<:Integer}(a::Array{T,1}, n::Integer, base::T=10)
+function digits!{T<:Integer}(a::AbstractArray{T,1}, n::Integer, base::T=10)
     2 <= base || error("invalid base: $base")
     for i = 1:length(a)
         a[i] = rem(n, base)

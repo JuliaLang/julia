@@ -3,7 +3,7 @@
   I/O and operating system utility functions
 */
 #include "julia.h"
-#include "uv.h"
+#include "julia_internal.h"
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <string.h>
@@ -629,7 +629,7 @@ DLLEXPORT const char *jl_pathname_for_handle(uv_lib_t *uv_lib)
 #elif defined(_OS_WINDOWS_)
 
     wchar_t *pth16 = (wchar_t*)malloc(32768); // max long path length
-    DWORD n16 = GetModuleFileNameW(handle,pth16,32768);
+    DWORD n16 = GetModuleFileNameW((HMODULE)handle,pth16,32768);
     if (n16 <= 0) {
         free(pth16);
         return NULL;
@@ -669,7 +669,7 @@ static BOOL CALLBACK jl_EnumerateLoadedModulesProc64(
   _In_opt_  PVOID a
 )
 {
-    jl_array_grow_end(a, 1);
+    jl_array_grow_end((jl_array_t*)a, 1);
     //XXX: change to jl_arrayset if array storage allocation for Array{String,1} changes:
     jl_value_t *v = jl_cstr_to_string(ModuleName);
     jl_cellset(a, jl_array_dim0(a)-1, v);
