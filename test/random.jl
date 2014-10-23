@@ -33,7 +33,7 @@ randn!(MersenneTwister(42), A)
 @test A == [-0.5560268761463861  0.027155338009193845;
             -0.444383357109696  -0.29948409035891055]
 
-for T in (Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Int128, Uint128,
+for T in (Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Int128, Uint128, BigInt,
           Char, Float16, Float32, Float64, Rational{Int})
     r = rand(convert(T, 97):convert(T, 122))
     @test typeof(r) == T
@@ -58,6 +58,20 @@ if sizeof(Int32) < sizeof(Int)
     @test all([div(0x00010000000000000000,k)*k - 1 == Base.Random.RandIntGen(int64(1:k)).u for k in 13 .+ int64(2).^(32:61)])
 
 end
+
+# BigInt specific
+s = big(typemax(Uint128)-1000):(big(typemax(Uint128)) + 10000)
+@test rand(s) != rand(s)
+@test big(typemax(Uint128)-1000) <= rand(s) <= big(typemax(Uint128)) + 10000
+r = rand(s, 1, 2)
+@test size(r) == (1, 2)
+@test typeof(r) == Matrix{BigInt}
+
+srand(0)
+r = rand(s)
+srand(0)
+@test rand(s) == r
+
 
 randn(100000)
 randn!(Array(Float64, 100000))
