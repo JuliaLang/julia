@@ -2372,14 +2372,17 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx, jl_
     Value *result;
 
     if (definitely_not_function) {
-        if (f == NULL) {
-            f = jl_module_call_func(ctx->module);
-            Value *r = emit_known_call((jl_value_t*)f, args-1, nargs+1, ctx, &theFptr, &f, expr);
-            assert(r == NULL);
-            assert(theFptr != NULL);
+        f = jl_module_call_func(ctx->module);
+        Value *r = emit_known_call((jl_value_t*)f, args-1, nargs+1, ctx, &theFptr, &f, expr);
+        assert(r == NULL);
+        if (theFptr == NULL) {
+            just_emit_error("\"call\" is not a function", ctx);
+            result = UndefValue::get(jl_pvalue_llvmt);
         }
-        theF = literal_pointer_val((jl_value_t*)f);
-        result = emit_call_function_object(f, theF, theFptr, true, args-1, nargs+1, ctx);
+        else {
+            theF = literal_pointer_val((jl_value_t*)f);
+            result = emit_call_function_object(f, theF, theFptr, true, args-1, nargs+1, ctx);
+        }
     }
     else if (definitely_function) {
         bool specialized = true;
