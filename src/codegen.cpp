@@ -1569,8 +1569,8 @@ static Value *emit_f_is(jl_value_t *rt1, jl_value_t *rt2,
 {
     if (jl_is_type_type(rt1) && jl_is_type_type(rt2) &&
         !jl_is_typevar(jl_tparam0(rt1)) && !jl_is_typevar(jl_tparam0(rt2)) &&
-        (!arg1 || is_constant(arg1, ctx)) &&
-        (!arg2 || is_constant(arg2, ctx))) {
+        (!arg1 || jl_is_symbol(arg1) || jl_is_symbolnode(arg1) || is_constant(arg1, ctx)) &&
+        (!arg2 || jl_is_symbol(arg2) || jl_is_symbolnode(arg2) || is_constant(arg2, ctx))) {
         if (jl_tparam0(rt1) == jl_tparam0(rt2))
             return ConstantInt::get(T_int1, 1);
         return ConstantInt::get(T_int1, 0);
