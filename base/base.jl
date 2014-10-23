@@ -38,9 +38,6 @@ convert{T}(::Type{T}, x::T) = x
 convert(::(), ::()) = ()
 convert(::Type{Tuple}, x::Tuple) = x
 
-# allow convert to be called as if it were a single-argument constructor
-# call(T::Type, x) = convert(T, x)
-
 argtail(x, rest...) = rest
 tupletail(x::Tuple) = argtail(x...)
 
