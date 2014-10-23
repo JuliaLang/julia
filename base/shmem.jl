@@ -60,7 +60,7 @@ function open_shm(name::String, size::Integer, create::Bool, readonly::Bool)
         szhi = sz>>32
         szlo = sz&typemax(Uint32)
         hdl = ccall(:CreateFileMappingA, stdcall, Ptr{Void}, 
-                    (Ptr{Void}, Ptr{Void}, Cint, Cint, Cint, Ptr{Uint8}),
+                    (Cptrdiff_t, Ptr{Void}, Cint, Cint, Cint, Ptr{Uint8}),
                     -1, C_NULL, ro, szhi, szlo, name)
     else
         ro = readonly ? 4 : 2
