@@ -30,9 +30,9 @@ function erfinv(x::Float64)
     a = abs(x)
     if a >= 1.0
         if x == 1.0
-            return inf(Float64)
+            return Inf
         elseif x == -1.0
-            return -inf(Float64)
+            return -Inf
         end
         throw(DomainError())
     elseif a <= 0.75 # Table 17 in Blair et al.
@@ -98,9 +98,9 @@ function erfinv(x::Float32)
     a = abs(x)
     if a >= 1.0f0
         if x == 1.0f0
-            return inf(Float32)
+            return Inf32
         elseif x == -1.0f0
-            return -inf(Float32)
+            return -Inf32
         end
         throw(DomainError())
     elseif a <= 0.75f0 # Table 10 in Blair et al.
@@ -147,7 +147,7 @@ function erfcinv(y::Float64)
         return erfinv(1.0 - y)
     elseif y <= 0.0
         if y == 0.0
-            return inf(Float64)
+            return Inf
         end
         throw(DomainError())
     elseif y >= 1e-100 # Table 57 in Blair et al.
@@ -199,7 +199,7 @@ function erfcinv(y::Float32)
         return erfinv(1.0f0 - y)
     elseif y <= 0.0f0
         if y == 0.0f0
-            return inf(Float32)
+            return Inf32
         end
         throw(DomainError())
     else # Table 50 in Blair et al.

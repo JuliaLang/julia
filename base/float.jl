@@ -253,15 +253,6 @@ nextfloat(x::FloatingPoint) = nextfloat(x,1)
 prevfloat(x::FloatingPoint) = nextfloat(x,-1)
 
 @eval begin
-    inf(::Type{Float16}) = $Inf16
-    nan(::Type{Float16}) = $NaN16
-    inf(::Type{Float32}) = $Inf32
-    nan(::Type{Float32}) = $NaN32
-    inf(::Type{Float64}) = $Inf
-    nan(::Type{Float64}) = $NaN
-    inf{T<:FloatingPoint}(x::T) = inf(T)
-    nan{T<:FloatingPoint}(x::T) = nan(T)
-
     issubnormal(x::Float32) = (abs(x) < $(box(Float32,unbox(Uint32,0x00800000)))) & (x!=0)
     issubnormal(x::Float64) = (abs(x) < $(box(Float64,unbox(Uint64,0x0010000000000000)))) & (x!=0)
 
@@ -285,7 +276,7 @@ prevfloat(x::FloatingPoint) = nextfloat(x,-1)
     realmin() = realmin(Float64)
     realmax() = realmax(Float64)
 
-    eps(x::FloatingPoint) = isfinite(x) ? abs(x) >= realmin(x) ? ldexp(eps(typeof(x)),exponent(x)) : nextfloat(zero(x)) : nan(x)
+    eps(x::FloatingPoint) = isfinite(x) ? abs(x) >= realmin(x) ? ldexp(eps(typeof(x)),exponent(x)) : nextfloat(zero(x)) : oftype(x,NaN)
     eps(::Type{Float16}) = $(box(Float16,unbox(Uint16,0x1400)))
     eps(::Type{Float32}) = $(box(Float32,unbox(Uint32,0x34000000)))
     eps(::Type{Float64}) = $(box(Float64,unbox(Uint64,0x3cb0000000000000)))
