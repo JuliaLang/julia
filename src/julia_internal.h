@@ -2,6 +2,7 @@
 #define JULIA_INTERNAL_H
 
 #include "options.h"
+#include "uv.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -33,13 +34,10 @@ void jl_set_gs_ctr(uint32_t ctr);
     DLLEXPORT jl_value_t *name(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 
 JL_CALLABLE(jl_trampoline);
-JL_CALLABLE(jl_f_ctor_trampoline);
 JL_CALLABLE(jl_apply_generic);
 JL_CALLABLE(jl_unprotect_stack);
 JL_CALLABLE(jl_f_no_function);
 JL_CALLABLE(jl_f_tuple);
-JL_CALLABLE(jl_f_default_ctor_1);
-JL_CALLABLE(jl_f_default_ctor_2);
 extern jl_function_t *jl_unprotect_stack_func;
 extern jl_function_t *jl_bottom_func;
 
@@ -129,6 +127,17 @@ DLLEXPORT void jl_raise_debugger(void);
 // timers
 // Returns time in nanosec
 DLLEXPORT uint64_t jl_hrtime(void);
+
+// libuv stuff:
+DLLEXPORT extern uv_lib_t *jl_dl_handle;
+DLLEXPORT extern uv_lib_t *jl_RTLD_DEFAULT_handle;
+#if defined(_OS_WINDOWS_)
+DLLEXPORT extern uv_lib_t *jl_exe_handle;
+extern uv_lib_t *jl_ntdll_handle;
+extern uv_lib_t *jl_kernel32_handle;
+extern uv_lib_t *jl_crtdll_handle;
+extern uv_lib_t *jl_winsock_handle;
+#endif
 
 #ifdef __cplusplus
 }

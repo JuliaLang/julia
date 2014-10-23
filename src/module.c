@@ -22,6 +22,7 @@ jl_module_t *jl_new_module(jl_sym_t *name)
     assert(jl_is_symbol(name));
     m->name = name;
     m->constant_table = NULL;
+    m->call_func = NULL;
     htable_new(&m->bindings, 0);
     arraylist_new(&m->usings, 0);
     if (jl_core_module) {
@@ -34,17 +35,8 @@ jl_module_t *jl_new_module(jl_sym_t *name)
     return m;
 }
 
-JL_CALLABLE(jl_f_new_module)
+DLLEXPORT jl_value_t *jl_f_new_module(jl_sym_t *name)
 {
-    jl_sym_t *name;
-    if (nargs == 0) {
-        name = anonymous_sym;
-    }
-    else {
-        JL_NARGS(Module, 1, 1);
-        JL_TYPECHK(Module, symbol, args[0]);
-        name = (jl_sym_t*)args[0];
-    }
     jl_module_t *m = jl_new_module(name);
     m->parent = jl_main_module;
     jl_add_standard_imports(m);
@@ -105,7 +97,7 @@ jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var)
             jl_binding_t *b2 = jl_get_binding(b->owner, var);
             if (b2 == NULL)
                 jl_errorf("invalid method definition: imported function %s.%s does not exist", b->owner->name->name, var->name);
-            if (!b->imported)
+            if (!b->imported && b->value!=NULL && jl_is_function(b->value))
                 jl_errorf("error in method definition: function %s.%s must be explicitly imported to be extended", b->owner->name->name, var->name);
             return b2;
         }
@@ -444,6 +436,17 @@ void jl_module_run_initializer(jl_module_t *m)
         jl_static_show(JL_STDERR, jl_exception_in_transit);
         JL_PRINTF(JL_STDERR, "\n");
     }
+}
+
+jl_function_t *jl_module_call_func(jl_module_t *m)
+{
+    if (m->call_func == NULL) {
+        jl_function_t *cf = (jl_function_t*)jl_get_global(m, call_sym);
+        if (cf == NULL || !jl_is_function(cf))
+            cf = jl_bottom_func;
+        m->call_func = cf;
+    }
+    return m->call_func;
 }
 
 #ifdef __cplusplus

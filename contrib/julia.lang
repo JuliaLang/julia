@@ -119,7 +119,6 @@
       <keyword>STDIN</keyword>
       <keyword>STDOUT</keyword>
       <!-- type-related -->
-      <keyword>T</keyword>
       <keyword>ANY</keyword>
     </context>
 
