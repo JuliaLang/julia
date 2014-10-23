@@ -574,16 +574,24 @@ end
 maxintfloat(x::BigFloat) = BigFloat(2)^precision(x)
 maxintfloat(::Type{BigFloat}) = BigFloat(2)^get_bigfloat_precision()
 
-function to_mpfr(r::RoundingMode)
-    c = r.code
-    if !(0 <= c <= 4)
-        error("invalid BigFloat rounding mode")
-    end
-    c
-end
+to_mpfr(::RoundingMode{:TiesToEven}) = 0
+to_mpfr(::RoundingMode{:TowardZero}) = 1
+to_mpfr(::RoundingMode{:TowardPositive}) = 2
+to_mpfr(::RoundingMode{:TowardNegative}) = 3
+to_mpfr(::RoundingMode{:AwayFromZero}) = 4
 
 function from_mpfr(c::Integer)
-    if !(0 <= c <= 4)
+    if c == 0
+        return RoundNearest
+    elseif c == 1
+        return RoundToZero
+    elseif c == 2
+        return RoundUp
+    elseif c == 3
+        return RoundDown
+    elseif c == 4
+        return RoundFromZero
+    else
         error("invalid MPFR rounding mode code")
     end
     RoundingMode(c)
