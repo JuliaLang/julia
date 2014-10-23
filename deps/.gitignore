@@ -25,9 +25,5 @@
 /zlib-*
 /utf8proc-*
 /librandom.*
-# obsolete dependencies
-/double-conversion-*
-grisu-*
-/libgrisu.so
 /virtualenv-*
 /julia-env
