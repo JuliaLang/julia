@@ -488,13 +488,6 @@ function deserialize_expr(s, len)
     e
 end
 
-function deserialize(s, ::Type{TypeVar})
-    name = deserialize(s)
-    lb = deserialize(s)
-    ub = deserialize(s)
-    TypeVar(name, lb, ub)
-end
-
 function deserialize(s, ::Type{UnionType})
     types = deserialize(s)
     Union(types...)

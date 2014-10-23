@@ -47,7 +47,7 @@ function show(io::IO, tv::TypeVar)
         show(io, tv.lb)
         print(io, "<:")
     end
-    print(io, tv.name)
+    write(io, tv.name)
     if !is(tv.ub, Any)
         print(io, "<:")
         show(io, tv.ub)

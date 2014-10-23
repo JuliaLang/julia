@@ -29,7 +29,7 @@ type CallStack
     prev::Union(EmptyCallStack,CallStack)
     sv::StaticVarInfo
 
-    CallStack(ast, mod, types, prev) = new(ast, mod, types, false, 0, Bottom, prev)
+    CallStack(ast, mod, types::ANY, prev) = new(ast, mod, types, false, 0, Bottom, prev)
 end
 
 inference_stack = EmptyCallStack()
@@ -136,6 +136,7 @@ t_func[Union] = (0, Inf,
                              else
                                  Type
                              end))
+t_func[_expr] = (1, Inf, (args...)->Expr)
 t_func[method_exists] = (2, 2, cmp_tfunc)
 t_func[applicable] = (1, Inf, (f, args...)->Bool)
 t_func[tuplelen] = (1, 1, x->Int)
@@ -158,21 +159,6 @@ end
 t_func[arraysize] = (1, 2, arraysize_tfunc)
 t_func[pointerref] = (2,2,(a,i)->(isa(a,DataType) && a<:Ptr ? a.parameters[1] : Any))
 t_func[pointerset] = (3, 3, (a,v,i)->a)
-
-const convert_default_tfunc = function (to, from, f)
-    to === () && return to
-    !isType(to) && return Any
-    to = to.parameters[1]
-
-    if isa(to,TypeVar)
-        return to
-    end
-    if from <: to
-        return from
-    end
-    return typeintersect(from,to)
-end
-t_func[convert_default] = (3, 3, convert_default_tfunc)
 
 const typeof_tfunc = function (t)
     if isType(t)
@@ -476,8 +462,6 @@ const apply_type_tfunc = function (A, args...)
 end
 t_func[apply_type] = (1, Inf, apply_type_tfunc)
 
-# other: apply
-
 function tuple_tfunc(argtypes::ANY, limit)
     t = argtypes
     if limit
@@ -518,10 +502,6 @@ function builtin_tfunction(f::ANY, args::ANY, argtypes::ANY)
     end
     tf = get(t_func::ObjectIdDict, f, false)
     if is(tf,false)
-        # struct constructor
-        if isstructtype(f)
-            return f
-        end
         # unknown/unhandled builtin
         return Any
     end
@@ -787,54 +767,69 @@ function to_tuple_of_Types(t::ANY)
     return t
 end
 
-function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
-    if is(f,apply) && length(fargs)>0
-        if isType(argtypes[1]) && isleaftype(argtypes[1].parameters[1])
-            af = argtypes[1].parameters[1]
-            _methods(af,(),0)
-        else
-            af = isconstantfunc(fargs[1], sv)
-        end
-        if !is(af,false)
-            aargtypes = map(to_tuple_of_Types, argtypes[2:end])
-            if all(x->isa(x,Tuple), aargtypes) &&
-                !any(isvatuple, aargtypes[1:(length(aargtypes)-1)])
-                e.head = :call1
-                # apply with known func with known tuple types
-                # can be collapsed to a call to the applied func
-                at = length(aargtypes) > 0 ?
-                     limit_tuple_type(apply(tuple,aargtypes...)) : ()
-                return abstract_call(_ieval(af), (), at, vtypes, sv, ())
-            end
-            af = _ieval(af)
-            if is(af,tuple) && length(fargs)==2
-                # tuple(xs...)
-                aat = aargtypes[1]
-                if aat <: AbstractArray
-                    # tuple(array...)
-                    # TODO: > 1 array of the same type
-                    tn = AbstractArray.name
-                    while isa(aat, DataType)
-                        if is(aat.name, tn)
-                            et = aat.parameters[1]
-                            if !isa(et,TypeVar)
-                                return (et...)
-                            end
-                        end
-                        if is(aat, Any)
-                            break
-                        end
-                        aat = aat.super
+# do apply(af, fargs...), where af is a function value
+function abstract_apply(af, aargtypes, vtypes, sv, e)
+    if all(x->isa(x,Tuple), aargtypes) &&
+        !any(isvatuple, aargtypes[1:(length(aargtypes)-1)])
+        e.head = :call1
+        # apply with known func with known tuple types
+        # can be collapsed to a call to the applied func
+        at = length(aargtypes) > 0 ?
+        limit_tuple_type(tuple(append_any(aargtypes...)...)) : ()
+        return abstract_call(af, (), at, vtypes, sv, ())
+    end
+    if is(af,tuple) && length(aargtypes)==1
+        # tuple(xs...)
+        aat = aargtypes[1]
+        if aat <: AbstractArray
+            # tuple(array...)
+            # TODO: > 1 array of the same type
+            tn = AbstractArray.name
+            while isa(aat, DataType)
+                if is(aat.name, tn)
+                    et = aat.parameters[1]
+                    if !isa(et,TypeVar)
+                        return (et...)
                     end
                 end
-                return Tuple
+                if is(aat, Any)
+                    break
+                end
+                aat = aat.super
             end
-            if is(af,kwcall)
-                return Any
-            end
-            # apply known function with unknown args => f(Any...)
-            return abstract_call(af, (), Tuple, vtypes, sv, ())
         end
+        return Tuple
+    end
+    if is(af,kwcall)
+        return Any
+    end
+    # apply known function with unknown args => f(Any...)
+    return abstract_call(af, (), Tuple, vtypes, sv, ())
+end
+
+function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
+    if is(f,_apply) && length(fargs)>1
+        a2type = argtypes[2]
+        af = isconstantfunc(fargs[2], sv)
+
+        if !is(af,false)
+            af = _ieval(af)
+            if isa(af,Function)
+                aargtypes = map(to_tuple_of_Types, argtypes[3:end])
+                return abstract_apply(af, aargtypes, vtypes, sv, e)
+            end
+        end
+        # TODO: this slows down inference a lot
+        if !(a2type===Function) && isleaftype(a2type)
+            # would definitely use call()
+            call_func = isconstantfunc(fargs[1], sv)
+            if !is(call_func,false)
+                aargtypes = Any[ to_tuple_of_Types(argtypes[i]) for i=2:length(argtypes) ]
+                aargtypes[1] = (aargtypes[1],)  # don't splat "function"
+                return abstract_apply(_ieval(call_func), tuple(aargtypes...), vtypes, sv, e)
+            end
+        end
+        return Any
     end
     if isgeneric(f)
         return abstract_call_gf(f, fargs, argtypes, e)
@@ -849,7 +844,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
             end
         end
     end
-    if !is(f,apply) && isa(e,Expr) && (isa(f,Function) || isa(f,IntrinsicFunction))
+    if !is(f,_apply) && isa(e,Expr) && (isa(f,Function) || isa(f,IntrinsicFunction))
         e.head = :call1
     end
     if is(f,getfield)
@@ -859,24 +854,29 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
         end
     end
     if is(f,kwcall)
-        if length(argtypes) < 3
+        if length(argtypes) < 4
             return Bottom
         end
-        if length(fargs) < 2
+        if length(fargs) < 3
             return Any
         end
-        ff = isconstantfunc(fargs[1], sv)
+        kwcount = fargs[2]
+        ff = isconstantfunc(fargs[3 + 2*kwcount], sv)
         if !(ff===false)
             ff = _ieval(ff)
             if isgeneric(ff) && isdefined(ff.env,:kwsorter)
                 # use the fact that kwcall(...) calls ff.env.kwsorter
-                kwcount = fargs[2]
-                posargt = argtypes[(4+2*kwcount):end]
+                posargt = argtypes[(5+2*kwcount):end]
                 return abstract_call_gf(ff.env.kwsorter, (),
                                         tuple(Array{Any,1}, posargt...), e)
             end
         end
+        # TODO: call() case
         return Any
+    end
+    if !isa(f,Function) && !isa(f,IntrinsicFunction) && _iisdefined(:call)
+        call_func = _ieval(:call)
+        return abstract_call(call_func, e.args, tuple(Any[abstract_eval_constant(f),argtypes...]...), vtypes, sv, e)
     end
     rt = builtin_tfunction(f, fargs, argtypes)
     #print("=> ", rt, "\n")
@@ -910,19 +910,9 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
             return result
         end
         ft = abstract_eval(called, vtypes, sv)
-        if isType(ft)
-            st = ft.parameters[1]
-            if isa(st,TypeVar)
-                st = st.ub
-            end
-            if isa(st,DataType)
-                _methods(st,(),0)
-                if isgeneric(st) && isleaftype(st)
-                    return abstract_call_gf(st, fargs, argtypes, e)
-                end
-                # struct constructor
-                return st
-            end
+        if !(Function <: ft) && _iisdefined(:call)
+            call_func = _ieval(:call)
+            return abstract_call(call_func, e.args, tuple(Any[ft,argtypes...]...), vtypes, sv, e)
         end
         return Any
     end
@@ -1164,7 +1154,10 @@ function tmerge(typea::ANY, typeb::ANY)
     if typeb <: typea
         return typea
     end
-    if typea <: Tuple && typeb <: Tuple
+    if isa(typea, Tuple) && isa(typeb, Tuple)
+        if length(typea) == length(typeb) && !isvatuple(typea) && !isvatuple(typeb)
+            return typejoin(typea, typeb)
+        end
         return Tuple
     end
     u = Union(typea, typeb)
@@ -1250,6 +1243,9 @@ CYCLE_ID = 1
 # def is the original unspecialized version of a method. we aggregate all
 # saved type inference data there.
 function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
+    if linfo.module === Core
+        atypes = Tuple
+    end
     #dbg =
     #dotrace = true
     local ast::Expr, tfunc_idx
@@ -1272,6 +1268,10 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                 return (code, curtype)
             end
         end
+    end
+    # TODO: typeinf currently gets stuck without this
+    if linfo.name === :abstract_interpret || linfo.name === :tuple_elim_pass || linfo.name === :abstract_call_gf
+        return (linfo.ast, Any)
     end
 
     ast0 = def.ast
@@ -2034,19 +2034,11 @@ end
 # static parameters are ok if all the static parameter values are leaf types,
 # meaning they are fully known.
 function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
-    if !(isa(f,Function) || isstructtype(f) || isa(f,IntrinsicFunction))
+    if !(isa(f,Function) || isa(f,IntrinsicFunction))
         return NF
     end
     argexprs = e.args[2:end]
 
-    if is(f, convert_default) && length(atypes)==3
-        # builtin case of convert. convert(T,x::S) => x, when S<:T
-        if isType(atypes[1]) && isleaftype(atypes[1]) &&
-            atypes[2] <: atypes[1].parameters[1]
-            # todo: if T expression has side effects??!
-            return (e.args[3],())
-        end
-    end
     if is(f, typeassert) && length(atypes)==2
         # typeassert(x::S, T) => x, when S<:T
         if isType(atypes[2]) && isleaftype(atypes[2]) &&
@@ -2646,11 +2638,13 @@ function inlining_pass(e::Expr, sv, ast)
         end
         if is(e.head,:call1)
             e.head = :call
-            ET = exprtype(arg1)
-            if isType(ET)
-                f = ET.parameters[1]
-            else
-                f = _ieval(arg1)
+            f1 = f = isconstantfunc(arg1, sv)
+            if !is(f,false)
+                f = _ieval(f)
+            end
+            if f1===false || !(isa(f,Function) || isa(f,IntrinsicFunction))
+                f = _ieval(:call)
+                e.args = Any[f, e.args...]
             end
 
             if is(f, ^) || is(f, .^)
@@ -2685,34 +2679,34 @@ function inlining_pass(e::Expr, sv, ast)
                 if !is(res,NF)
                     # iteratively inline apply(f, tuple(...), tuple(...), ...) in order
                     # to simplify long vararg lists as in multi-arg +
-                    if isa(res,Expr) && is_known_call(res, apply, sv)
+                    if isa(res,Expr) && is_known_call(res, _apply, sv)
                         e = res::Expr
-                        f = apply
+                        f = _apply
                     else
                         return (res,stmts)
                     end
                 end
 
-                if is(f,apply)
+                if is(f,_apply)
                     na = length(e.args)
-                    newargs = cell(na-2)
-                    for i = 3:na
+                    newargs = cell(na-3)
+                    for i = 4:na
                         aarg = e.args[i]
                         t = to_tuple_of_Types(exprtype(aarg))
                         if isa(aarg,Expr) && is_known_call(aarg, tuple, sv)
                             # apply(f,tuple(x,y,...)) => f(x,y,...)
-                            newargs[i-2] = aarg.args[2:end]
+                            newargs[i-3] = aarg.args[2:end]
                         elseif isa(aarg, Tuple)
-                            newargs[i-2] = Any[ QuoteNode(x) for x in aarg ]
+                            newargs[i-3] = Any[ QuoteNode(x) for x in aarg ]
                         elseif isa(t,Tuple) && !isvatuple(t) && effect_free(aarg,sv,true)
                             # apply(f,t::(x,y)) => f(t[1],t[2])
-                            newargs[i-2] = Any[ mk_tupleref(aarg,j,t[j]) for j=1:length(t) ]
+                            newargs[i-3] = Any[ mk_tupleref(aarg,j,t[j]) for j=1:length(t) ]
                         else
                             # not all args expandable
                             return (e,stmts)
                         end
                     end
-                    e.args = [Any[e.args[2]], newargs...]
+                    e.args = [Any[e.args[3]], newargs...]
 
                     # now try to inline the simplified call
 
@@ -3057,7 +3051,8 @@ function replace_tupleref!(ast, e::ANY, tupname, vals, sv, i0)
     end
 end
 
-function code_typed(f::Callable, types::(Type...))
+code_typed(f, types) = code_typed(call, tuple(isa(f,Type)?Type{f}:typeof(f), types...))
+function code_typed(f::Function, types::(Type...))
     asts = []
     for x in _methods(f,types,-1)
         linfo = func_for_method(x[3],types)
@@ -3071,7 +3066,8 @@ function code_typed(f::Callable, types::(Type...))
     asts
 end
 
-function return_types(f::Callable, types)
+return_types(f, types) = return_types(call, tuple(isa(f,Type)?Type{f}:typeof(f), types...))
+function return_types(f::Function, types)
     rt = []
     for x in _methods(f,types,-1)
         linfo = func_for_method(x[3],types)

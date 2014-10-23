@@ -157,7 +157,7 @@ end
 
 scale!{T<:Base.LinAlg.BlasReal}(X::Array{T}, s::Complex) = error("scale!: Cannot scale a real array by a complex value in-place.  Use scale(X::Array{Real}, s::Complex) instead.")
 
-@deprecate which(f::Callable, args...) @which f(args...)
+@deprecate which(f, args...) @which f(args...)
 @deprecate rmdir rm
 
 # 0.4 deprecations
@@ -185,6 +185,12 @@ const Nothing = Void
 
 export None
 const None = Union()
+
+export apply
+function apply(f, args...)
+    depwarn("apply(f, x) is deprecated, use `f(x...)` instead", :apply)
+    return Core._apply(call, f, args...)
+end
 
 @deprecate median(v::AbstractArray; checknan::Bool=true)  median(v)
 @deprecate median(v::AbstractArray, region; checknan::Bool=true)  median(v, region)

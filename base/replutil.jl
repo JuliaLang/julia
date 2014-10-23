@@ -28,12 +28,7 @@ writemime(io::IO, ::MIME"text/plain", v::AbstractArray) =
 
 function writemime(io::IO, ::MIME"text/plain", v::DataType)
     show(io, v)
-    methods(v) # force constructor creation
-    if isgeneric(v)
-        n = length(v.env)
-        m = n==1 ? "method" : "methods"
-        print(io, " (constructor with $n $m)")
-    end
+    # TODO: maybe show constructor info?
 end
 
 writemime(io::IO, ::MIME"text/plain", t::Associative) = 
