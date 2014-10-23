@@ -12,14 +12,34 @@ Rational{T<:Integer}(n::T, d::T) = Rational{T}(n,d)
 Rational(n::Integer, d::Integer) = Rational(promote(n,d)...)
 Rational(n::Integer) = Rational(n,one(n))
 
-//(n::Integer,  d::Integer ) = Rational(n,d)
-//(x::Rational, y::Integer ) = x.num//(x.den*y)
-//(x::Integer,  y::Rational) = (x*y.den)//y.num
-//(x::Rational, y::Rational) = (x.num*y.den)//(x.den*y.num)
-//(x::Complex,  y::Real    ) = complex(real(x)//y,imag(x)//y)
-//(x::Real,     y::Complex ) = x*y'//real(y*y')
+function divgcd(x::Integer,y::Integer)
+    g = gcd(x,y)
+    div(x,g), div(y,g)
+end
 
-function //(x::Complex, y::Complex)
+//(n::Integer,  d::Integer ) = Rational(n,d)
+
+function //(x::Rational, y::Integer )
+    xn,yn = divgcd(x.num,y)
+    xn//checked_mul(x.den,yn)
+end
+function //(x::Integer,  y::Rational)
+    xn,yn = divgcd(x,y.num)
+    checked_mul(xn,y.den)//yn
+end
+function //(x::Rational, y::Rational)
+    xn,yn = divgcd(x.num,y.num)
+    xd,yd = divgcd(x.den,y.den)
+    checked_mul(xn,yd)//checked_mul(xd,yn)
+end
+
+//(x::Complex,  y::Real    ) = complex(real(x)//y,imag(x)//y)
+function //(x::Number, y::Complex)
+    xr = complex(Rational(real(x)),Rational(imag(x)))
+    yr = complex(Rational(real(y)),Rational(imag(y)))
+    xr // yr
+end
+function //{Ra<:Rational,Rb<:Rational}(x::Complex{Ra}, y::Complex{Rb})
     xy = x*y'
     yy = real(y*y')
     complex(real(xy)//yy, imag(xy)//yy)
@@ -129,16 +149,31 @@ typemax{T<:Integer}(::Type{Rational{T}}) = one(T)//zero(T)
 isinteger(x::Rational) = x.den == 1
 
 -(x::Rational) = (-x.num) // x.den
-for op in (:+, :-, :rem, :mod)
+function -{T<:Signed}(x::Rational{T})
+    x.num == typemin(T) && throw(OverflowError())
+    (-x.num) // x.den
+end
+function -{T<:Unsigned}(x::Rational{T})
+    x.num != zero(T) && throw(OverflowError())
+    x
+end
+
+for (op,chop) in ((:+,:checked_add), (:-,:checked_sub),
+                  (:rem,:rem), (:mod,:mod))
     @eval begin
         function ($op)(x::Rational, y::Rational)
-            g = gcd(x.den, y.den)
-            Rational(($op)(x.num * div(y.den, g), y.num * div(x.den, g)), x.den * div(y.den, g))
+            xd, yd = divgcd(x.den, y.den)
+            Rational(($chop)(checked_mul(x.num,yd), checked_mul(y.num,xd)), checked_mul(x.den,yd))
         end
     end
 end
-*(x::Rational, y::Rational) = (x.num*y.num) // (x.den*y.den)
-/(x::Rational, y::Rational) = (x.num*y.den) // (x.den*y.num)
+
+function *(x::Rational, y::Rational)
+    xn,yd = divgcd(x.num,y.den)
+    xd,yn = divgcd(x.den,y.num)
+    checked_mul(xn,yn) // checked_mul(xd,yd)
+end
+/(x::Rational, y::Rational) = x//y
 /(x::Rational, z::Complex ) = inv(z/x)
 
 ==(x::Rational, y::Rational) = (x.den == y.den) & (x.num == y.num)
@@ -167,22 +202,32 @@ end
 <=(x::Integer , y::Rational) = widemul(x,y.den) <= y.num
 <=(x::Real    , y::Rational) = x*y.den <= y.num
 
-div(x::Rational, y::Rational) = div(x.num*y.den, x.den*y.num)
-div(x::Rational, y::Real    ) = div(x.num, x.den*y)
-div(x::Real    , y::Rational) = div(x*y.den, y.num)
-
-fld(x::Rational, y::Rational) = fld(x.num*y.den, x.den*y.num)
-fld(x::Rational, y::Real    ) = fld(x.num, x.den*y)
-fld(x::Real    , y::Rational) = fld(x*y.den, y.num)
-
-cld(x::Rational, y::Rational) = cld(x.num*y.den, x.den*y.num)
-cld(x::Rational, y::Real    ) = cld(x.num, x.den*y)
-cld(x::Real    , y::Rational) = cld(x*y.den, y.num)
+for op in (:div, :fld, :cld)
+    @eval begin
+        function ($op)(x::Rational, y::Integer )
+            xn,yn = divgcd(x.num,y)
+            ($op)(xn, checked_mul(x.den,yn))
+        end
+        function ($op)(x::Integer,  y::Rational)
+            xn,yn = divgcd(x,y.num)
+            ($op)(checked_mul(xn,y.den), yn)
+        end
+        function ($op)(x::Rational, y::Rational)
+            xn,yn = divgcd(x.num,y.num)
+            xd,yd = divgcd(x.den,y.den)
+            ($op)(checked_mul(xn,yd), checked_mul(xd,yn))
+        end
+    end
+end
 
 itrunc(x::Rational) = div(x.num,x.den)
 ifloor(x::Rational) = fld(x.num,x.den)
 iceil (x::Rational) = cld(x.num,x.den)
-iround(x::Rational) = div(x.num*2 + copysign(x.den,x.num), x.den*2)
+function iround(x::Rational)
+    t = itrunc(x)
+    r = x-t
+    abs(r.num) > (r.den-one(r.den))>>1 ? t + copysign(one(t),x) : t
+end
 
 trunc(x::Rational) = Rational(itrunc(x))
 floor(x::Rational) = Rational(ifloor(x))
@@ -197,13 +242,15 @@ for f in (:int8, :int16, :int32, :int64, :int128,
     @eval ($f)(x::Rational) = ($f)(iround(x))
 end
 
-^(x::Rational, y::Integer) = y < 0 ?
-    Rational(x.den^-y, x.num^-y) : Rational(x.num^y, x.den^y)
+function ^(x::Rational, n::Integer)
+    n >= 0 ? power_by_squaring(x,n) : power_by_squaring(inv(x),-n)
+end
 
 ^(x::Number, y::Rational) = x^(y.num/y.den)
 ^{T<:FloatingPoint}(x::T, y::Rational) = x^(convert(T,y.num)/y.den)
 ^{T<:FloatingPoint}(x::Complex{T}, y::Rational) = x^(convert(T,y.num)/y.den)
 
 ^{T<:Rational}(z::Complex{T}, n::Bool) = n ? z : one(z) # to resolve ambiguity
-^{T<:Rational}(z::Complex{T}, n::Integer) =
-    n>=0 ? power_by_squaring(z,n) : power_by_squaring(inv(z),-n)
+function ^{T<:Rational}(z::Complex{T}, n::Integer)
+    n >= 0 ? power_by_squaring(z,n) : power_by_squaring(inv(z),-n)
+end
