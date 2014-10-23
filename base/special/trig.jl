@@ -100,7 +100,7 @@ function sinpi(x::Real)
     if isinf(x)
         return throw(DomainError())
     elseif isnan(x)
-        return nan(x)
+        return oftype(x,NaN)
     end
 
     rx = copysign(rem(x,2),x)
@@ -131,7 +131,7 @@ function cospi(x::Real)
     if isinf(x)
         return throw(DomainError())
     elseif isnan(x)
-        return nan(x)
+        return oftype(x,NaN)
     end
 
     rx = abs(float(rem(x,2)))
@@ -236,7 +236,7 @@ function sind(x::Real)
     if isinf(x)
         return throw(DomainError())
     elseif isnan(x)
-        return nan(x)
+        return oftype(x,NaN)
     end
 
     rx = copysign(float(rem(x,360)),x)
@@ -268,7 +268,7 @@ function cosd(x::Real)
     if isinf(x)
         return throw(DomainError())
     elseif isnan(x)
-        return nan(x)
+        return oftype(x,NaN)
     end
 
     rx = abs(float(rem(x,360)))
