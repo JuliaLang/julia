@@ -197,10 +197,7 @@ versioninfo(verbose::Bool) = versioninfo(STDOUT,verbose)
 
 # searching definitions
 
-function which(f::Callable, t::(Type...))
-    if !isgeneric(f)
-        throw(ErrorException("not a generic function, no methods available"))
-    end
+function which(f, t::(Type...))
     ms = methods(f, t)
     isempty(ms) && error("no method found for the specified argument types")
     ms[1]
@@ -267,10 +264,7 @@ function type_close_enough(x::ANY, t::ANY)
             !isleaftype(t) && x <: t)
 end
 
-function methodswith(t::Type, f::Callable, showparents::Bool=false, meths = Method[])
-    if isa(f,DataType)
-        methods(f) # force constructor creation
-    end
+function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Method[])
     if !isa(f.env, MethodTable)
         return meths
     end
@@ -293,7 +287,7 @@ function methodswith(t::Type, m::Module, showparents::Bool=false)
     for nm in names(m)
         if isdefined(m, nm)
             f = eval(m, nm)
-            if isa(f, Callable)
+            if isa(f, Function)
                 methodswith(t, f, showparents, meths)
             end
         end

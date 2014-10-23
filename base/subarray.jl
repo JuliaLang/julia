@@ -11,39 +11,39 @@ type SubArray{T,N,A<:AbstractArray,I<:(RangeIndex...,)} <: AbstractArray{T,N}
     first_index::Int
 
     # Note: no bounds-checking on construction. See issue #4044
+
     #linear indexing constructor (scalar)
-    if N == 0 && length(I) == 1 && A <: Array
-        function SubArray(p::A, i::(Int,))
-            new(p, i, (), Int[], i[1])
-        end
-    #linear indexing constructor (ranges)
-    elseif N == 1 && length(I) == 1 && A <: Array
-        function SubArray(p::A, i::(UnitRange{Int},))
-            new(p, i, (length(i[1]),), [1], first(i[1]))
-        end
-        function SubArray(p::A, i::(Range{Int},))
-            new(p, i, (length(i[1]),), [step(i[1])], first(i[1]))
-        end
-    else
-        function SubArray(p::A, i::I)
-            newdims = Array(Int, 0)
-            newstrides = Array(Int, 0)
-            newfirst = 1
-            pstride = 1
-            for j = 1:length(i)
-                if isa(i[j], Int)
-                    newfirst += (i[j]-1)*pstride
-                else
-                    push!(newdims, length(i[j]))
-                    #may want to return error if step(i[j]) <= 0
-                    push!(newstrides, isa(i[j],UnitRange) ? pstride :
-                         pstride * step(i[j]))
-                    newfirst += (first(i[j])-1)*pstride
-                end
-                pstride *= size(p,j)
+    global call
+    function call{T,A<:Array,I<:(Any,)}(::Type{SubArray{T,0,A,I}}, p::A, i::(Int,))
+        new{T,0,A,I}(p, i, (), Int[], i[1])
+    end
+
+    function call{T,A<:Array,I<:(Any,)}(::Type{SubArray{T,1,A,I}}, p::A, i::(UnitRange{Int},))
+        new{T,1,A,I}(p, i, (length(i[1]),), [1], first(i[1]))
+    end
+
+    function call{T,A<:Array,I<:(Any,)}(::Type{SubArray{T,1,A,I}}, p::A, i::(Range{Int},))
+        new{T,1,A,I}(p, i, (length(i[1]),), [step(i[1])], first(i[1]))
+    end
+
+    function SubArray(p::A, i::I)
+        newdims = Array(Int, 0)
+        newstrides = Array(Int, 0)
+        newfirst = 1
+        pstride = 1
+        for j = 1:length(i)
+            if isa(i[j], Int)
+                newfirst += (i[j]-1)*pstride
+            else
+                push!(newdims, length(i[j]))
+                #may want to return error if step(i[j]) <= 0
+                push!(newstrides, isa(i[j],UnitRange) ? pstride :
+                      pstride * step(i[j]))
+                newfirst += (first(i[j])-1)*pstride
             end
-            new(p, i, tuple(newdims...), newstrides, newfirst)
+            pstride *= size(p,j)
         end
+        new(p, i, tuple(newdims...), newstrides, newfirst)
     end
 end
 
