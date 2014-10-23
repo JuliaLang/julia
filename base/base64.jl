@@ -21,7 +21,7 @@ type Base64Pipe <: IO
 
     function Base64Pipe(io::IO)
         b = new(io,0,0,0)
-        finalizer(b, close)
+        finalizer(close, b)
         return b
     end
 end

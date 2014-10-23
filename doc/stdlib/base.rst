@@ -209,7 +209,7 @@ All Objects
    The optional second argument ``h`` is a hash code to be mixed with the result.
    New types should implement the 2-argument form.
 
-.. function:: finalizer(x, function)
+.. function:: finalizer(function, x)
 
    Register a function ``f(x)`` to be called when there are no program-accessible references to ``x``. The behavior of this function is unpredictable if ``x`` is of a bits type.
 

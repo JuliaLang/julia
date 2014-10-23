@@ -222,7 +222,7 @@ type Plan{T<:fftwNumber}
     ialign::Int32 # alignment mod 16 of input
     function Plan(plan::Ptr{Void}, sz::Dims, istride::Dims, ialign::Int32)
         p = new(plan,sz,istride,ialign)
-        finalizer(p, p -> destroy_plan(T, p.plan))
+        finalizer(p -> destroy_plan(T, p.plan), p)
         return p
     end
 end

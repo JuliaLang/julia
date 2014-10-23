@@ -12,7 +12,7 @@ type FileMonitor
         end
         this = new(handle,cb,false,Condition())
         associate_julia_struct(handle,this)
-        finalizer(this,uvfinalize)
+        finalizer(uvfinalize, this)
         this        
     end
     FileMonitor(file) = FileMonitor(false,file)
@@ -80,7 +80,7 @@ type PollingFileWatcher <: UVPollingWatcher
         end
         this = new(handle, file, false, Condition(), cb)
         associate_julia_struct(handle,this)
-        finalizer(this,uvfinalize)
+        finalizer(uvfinalize, this)
         this
     end  
     PollingFileWatcher(file) =  PollingFileWatcher(false,file)
@@ -116,7 +116,7 @@ function FDWatcher(fd::RawFD)
     end
     this = FDWatcher(handle,fd,false,Condition(),false,FDEvent())
     associate_julia_struct(handle,this)
-    finalizer(this,uvfinalize)
+    finalizer(uvfinalize, this)
     this
 end
 @windows_only function FDWatcher(fd::WindowsRawSocket)
@@ -129,7 +129,7 @@ end
     end
     this = FDWatcher(handle,fd,false,Condition(),false,FDEvent())
     associate_julia_struct(handle,this)
-    finalizer(this,uvfinalize)
+    finalizer(uvfinalize, this)
     this
 end
 

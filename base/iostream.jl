@@ -16,7 +16,7 @@ function IOStream(name::String, finalize::Bool)
     buf = zeros(Uint8,sizeof_ios_t)
     x = IOStream(name, buf)
     if finalize
-        finalizer(x, close)
+        finalizer(close, x)
     end
     return x
 end
