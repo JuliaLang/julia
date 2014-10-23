@@ -226,7 +226,7 @@ function uvfinalize(proc::Process)
 end
 
 function _uv_hook_return_spawn(proc::Process, exit_status::Int64, termsignal::Int32)
-    proc.exitcode = exit_status
+    proc.exitcode = int32(exit_status)
     proc.termsignal = termsignal
     if isa(proc.exitcb, Function) proc.exitcb(proc, exit_status, termsignal) end
     ccall(:jl_close_uv, Void, (Ptr{Void},), proc.handle)

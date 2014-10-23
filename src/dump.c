@@ -151,7 +151,7 @@ static void jl_load_sysimg_so(char *fname)
     // attempt to load the pre-compiled sysimg at fname
     // if this succeeds, sysimg_gvars will be a valid array
     // otherwise, it will be NULL
-    jl_sysimg_handle = jl_load_dynamic_library_e(fname, JL_RTLD_DEFAULT | JL_RTLD_GLOBAL);
+    jl_sysimg_handle = (uv_lib_t *) jl_load_dynamic_library_e(fname, JL_RTLD_DEFAULT | JL_RTLD_GLOBAL);
     if (jl_sysimg_handle != 0) {
         sysimg_gvars = (jl_value_t***)jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars");
         globalUnique = *(size_t*)jl_dlsym(jl_sysimg_handle, "jl_globalUnique");
@@ -392,11 +392,6 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
     jl_serialize_value(s, dt->parameters);
     jl_serialize_value(s, dt->name);
     jl_serialize_value(s, dt->super);
-    if (tag != 8) {
-        jl_serialize_value(s, dt->env);
-        jl_serialize_value(s, dt->linfo);
-        jl_serialize_fptr(s, (void*)dt->fptr);
-    }
 }
 
 static void jl_serialize_module(ios_t *s, jl_module_t *m)
@@ -866,16 +861,6 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
     dt->parameters = (jl_tuple_t*)jl_deserialize_value(s, (jl_value_t**)&dt->parameters);
     dt->name = (jl_typename_t*)jl_deserialize_value(s, (jl_value_t**)&dt->name);
     dt->super = (jl_datatype_t*)jl_deserialize_value(s, (jl_value_t**)&dt->super);
-    if (tag != 8) {
-        dt->env = jl_deserialize_value(s, &dt->env);
-        dt->linfo = (jl_lambda_info_t*)jl_deserialize_value(s, (jl_value_t**)&dt->linfo);
-        dt->fptr = jl_deserialize_fptr(s);
-    }
-    else {
-        dt->env = NULL;
-        dt->linfo = NULL;
-        dt->fptr = NULL;
-    }
     if (datatype_list) {
         if (dt->name == jl_array_type->name || dt->name == jl_pointer_type->name ||
             dt->name == jl_type_type->name || dt->name == jl_vararg_type->name ||
@@ -1242,13 +1227,7 @@ void jl_deserialize_lambdas_from_mod(ios_t *s)
         jl_sym_t *name = (jl_sym_t*)jl_deserialize_value(s, NULL);
         jl_function_t *gf = (jl_function_t*)jl_get_global(mod, name);
         int8_t iskw = read_int8(s);
-        if (!jl_is_gf(gf)) {
-            if (jl_is_datatype(gf) &&
-                ((jl_function_t*)gf)->fptr == jl_f_ctor_trampoline) {
-                jl_add_constructors((jl_datatype_t*)gf);
-            }
-            assert(jl_is_gf(gf));
-        }
+        assert(jl_is_gf(gf));
         if (iskw) {
             if (!jl_gf_mtable(gf)->kwsorter) {
                 jl_gf_mtable(gf)->kwsorter = jl_new_generic_function(jl_gf_name(gf));
@@ -1268,8 +1247,7 @@ void jl_deserialize_lambdas_from_mod(ios_t *s)
 
 extern jl_array_t *jl_module_init_order;
 
-DLLEXPORT
-void jl_save_system_image(char *fname)
+DLLEXPORT void jl_save_system_image(char *fname)
 {
     jl_gc_collect();
     jl_gc_collect();
@@ -1285,20 +1263,7 @@ void jl_save_system_image(char *fname)
     // orphan old Base module if present
     jl_base_module = (jl_module_t*)jl_get_global(jl_main_module, jl_symbol("Base"));
 
-    // delete cached slow ASCIIString constructor if present
-    jl_methtable_t *mt = jl_gf_mtable((jl_function_t*)jl_ascii_string_type);
-    jl_array_t *spec = mt->defs->func->linfo->specializations;
-    if (spec != NULL && jl_array_len(spec) > 0 &&
-        ((jl_lambda_info_t*)jl_cellref(spec,0))->inferred == 0) {
-        mt->cache = (jl_methlist_t*)JL_NULL;
-        mt->cache_arg1 = (jl_array_t*)JL_NULL;
-        mt->defs->func->linfo->tfunc = (jl_value_t*)jl_null;
-        mt->defs->func->linfo->specializations = NULL;
-    }
-
     jl_idtable_type = jl_get_global(jl_base_module, jl_symbol("ObjectIdDict"));
-
-    jl_serialize_value(&f, jl_array_type->env);
 
     jl_serialize_value(&f, jl_main_module);
 
@@ -1366,8 +1331,6 @@ void jl_restore_system_image(char *fname)
     mode = MODE_SYSTEM_IMAGE;
 
     datatype_list = jl_alloc_cell_1d(0);
-
-    jl_array_type->env = jl_deserialize_value(&f, NULL);
 
     jl_main_module = (jl_module_t*)jl_deserialize_value(&f, NULL);
     jl_internal_main_module = jl_main_module;
@@ -1611,9 +1574,6 @@ jl_module_t *jl_restore_new_module(char *fname)
                 if (offs) ptrhash_put(&backref_table, offs, t);
             }
         }
-        else if (!t->fptr) {
-            jl_add_constructors(t);
-        }
         if (t->instance != v) {
             jl_typeof(v) = (jl_value_t*)(ptrint_t)1; // invalidate the old value to help catch errors
             if (v == o) {
@@ -1826,8 +1786,7 @@ void jl_init_serializer(void)
     assert(i <= Null_tag);
     VALUE_TAGS = (ptrint_t)ptrhash_get(&ser_tag, jl_null);
 
-    jl_fptr_t fptrs[] = { jl_f_new_expr, jl_f_new_box,
-                          jl_f_throw, jl_f_is,
+    jl_fptr_t fptrs[] = { jl_f_throw, jl_f_is,
                           jl_f_no_function, jl_f_typeof,
                           jl_f_subtype, jl_f_isa,
                           jl_f_typeassert, jl_f_apply,
@@ -1838,14 +1797,11 @@ void jl_init_serializer(void)
                           jl_f_arraylen, jl_f_arrayref,
                           jl_f_arrayset, jl_f_arraysize,
                           jl_f_instantiate_type, jl_f_kwcall,
-                          jl_f_convert_default,
-                          jl_trampoline, jl_f_new_type_constructor,
-                          jl_f_typevar, jl_f_union,
+                          jl_trampoline, jl_f_union,
                           jl_f_methodexists, jl_f_applicable,
                           jl_f_invoke, jl_apply_generic,
-                          jl_unprotect_stack, jl_f_task,
-                          jl_f_yieldto, jl_f_ctor_trampoline,
-                          jl_f_new_module, jl_f_sizeof,
+                          jl_unprotect_stack,
+                          jl_f_yieldto, jl_f_sizeof, jl_f_new_expr,
                           NULL };
     i=2;
     while (fptrs[i-2] != NULL) {

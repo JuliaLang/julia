@@ -41,7 +41,7 @@ let T = TypeVar(:T,true)
                   (Int, Array{Int,1}))
 
     @test isequal(typeintersect((T, AbstractArray{T}),(Int, Array{Number,1})),
-                  Bottom)
+                  (Int, Array{Number,1}))
 
     @test isequal(typeintersect((T, AbstractArray{T}),(Any, Array{Number,1})),
                   (Number, Array{Number,1}))
@@ -68,6 +68,8 @@ let T = TypeVar(:T,true)
 
     @test typeintersect(Type{(Bool,Int...)}, Type{(T...)}) === Bottom
     @test typeintersect(Type{(Bool,Int...)}, Type{(T,T...)}) === Bottom
+
+    @test typeintersect((Rational{T},T), (Rational{Integer},Int)) === (Rational{Integer},Int)
 end
 let N = TypeVar(:N,true)
     @test isequal(typeintersect((NTuple{N,Integer},NTuple{N,Integer}),
@@ -653,7 +655,7 @@ begin
     c = Vector[a]
 
     @test my_func(c,c)==0
-    @test_throws MethodError my_func(a,c)
+    @test my_func(a,c)==1
 end
 
 begin
@@ -1142,7 +1144,6 @@ type Foo4376{T}
 end
 
 @test isa(Foo4376{Float32}(Foo4376{Int}(2)), Foo4376{Float32})
-@test_throws MethodError Foo4376{Float32}(Foo4376{Float32}(2.0f0))
 
 type _0_test_ctor_syntax_
     _0_test_ctor_syntax_{T<:String}(files::Vector{T},step) = 0
@@ -1884,3 +1885,27 @@ let ex = Expr(:(=), :(f8338(x;y=4)), :(x*y))
     eval(ex)
     @test f8338(2) == 8
 end
+
+# call overloading (#2403)
+Base.call(x::Int, y::Int) = x + 3y
+issue2403func(f) = f(7)
+let x = 10
+    @test x(3) == 19
+    @test x((3,)...) == 19
+    @test issue2403func(x) == 31
+end
+type Issue2403
+    x
+end
+Base.call(i::Issue2403, y) = i.x + 2y
+let x = Issue2403(20)
+    @test x(3) == 26
+    @test issue2403func(x) == 34
+end
+
+# a method specificity issue
+c99991{T}(::Type{T},x::T) = 0
+c99991{T}(::Type{UnitRange{T}},x::FloatRange{T}) = 1
+c99991{T}(::Type{UnitRange{T}},x::Range{T}) = 2
+@test c99991(UnitRange{Float64}, 1.0:2.0) == 1
+@test c99991(UnitRange{Int}, 1:2) == 2

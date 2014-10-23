@@ -9,7 +9,6 @@ extern "C" {
 
 #include "libsupport.h"
 #include <stdint.h>
-#include "uv.h"
 
 #include "htable.h"
 #include "arraylist.h"
@@ -162,14 +161,11 @@ typedef struct _jl_lambda_info_t {
 
 #define LAMBDA_INFO_NW (NWORDS(sizeof(jl_lambda_info_t))-1)
 
-#define JL_FUNC_FIELDS                          \
-    jl_fptr_t fptr;                             \
-    jl_value_t *env;                            \
-    jl_lambda_info_t *linfo;
-
 typedef struct _jl_function_t {
     JL_DATA_TYPE
-    JL_FUNC_FIELDS
+    jl_fptr_t fptr;
+    jl_value_t *env;
+    jl_lambda_info_t *linfo;
 } jl_function_t;
 
 typedef struct {
@@ -188,9 +184,6 @@ typedef struct {
     // not the original.
     jl_value_t *primary;
     jl_value_t *cache;
-    // to create a set of constructors for this sort of type
-    jl_value_t *ctor_factory;
-    jl_function_t *static_ctor_factory;
 } jl_typename_t;
 
 typedef struct {
@@ -206,7 +199,6 @@ typedef struct {
 
 typedef struct _jl_datatype_t {
     JL_DATA_TYPE
-    JL_FUNC_FIELDS
     jl_typename_t *name;
     struct _jl_datatype_t *super;
     jl_tuple_t *parameters;
@@ -229,7 +221,7 @@ typedef struct {
     jl_sym_t *name;
     jl_value_t *lb;   // lower bound
     jl_value_t *ub;   // upper bound
-    uptrint_t bound;  // part of a constraint environment
+    uint8_t bound;    // part of a constraint environment
 } jl_tvar_t;
 
 typedef struct {
@@ -255,6 +247,7 @@ typedef struct _jl_module_t {
     htable_t bindings;
     arraylist_t usings;  // modules with all bindings potentially imported
     jl_array_t *constant_table;
+    jl_function_t *call_func;  // cached lookup of `call` within this module
 } jl_module_t;
 
 typedef struct _jl_methlist_t {
@@ -386,17 +379,6 @@ DLLEXPORT extern jl_value_t *jl_true;
 DLLEXPORT extern jl_value_t *jl_false;
 DLLEXPORT extern jl_value_t *jl_nothing;
 
-DLLEXPORT extern uv_lib_t *jl_dl_handle;
-DLLEXPORT extern uv_lib_t *jl_RTLD_DEFAULT_handle;
-
-#if defined(_OS_WINDOWS_)
-DLLEXPORT extern uv_lib_t *jl_exe_handle;
-extern uv_lib_t *jl_ntdll_handle;
-extern uv_lib_t *jl_kernel32_handle;
-extern uv_lib_t *jl_crtdll_handle;
-extern uv_lib_t *jl_winsock_handle;
-#endif
-
 // some important symbols
 extern jl_sym_t *call_sym;
 extern jl_sym_t *call1_sym;
@@ -525,7 +507,7 @@ extern jl_sym_t *arrow_sym; extern jl_sym_t *ldots_sym;
 #define jl_is_module(v)      jl_typeis(v,jl_module_type)
 #define jl_is_mtable(v)      jl_typeis(v,jl_methtable_type)
 #define jl_is_task(v)        jl_typeis(v,jl_task_type)
-#define jl_is_func(v)        (jl_typeis(v,jl_function_type) || jl_is_datatype(v))
+#define jl_is_func(v)        jl_typeis(v,jl_function_type)
 #define jl_is_function(v)    jl_is_func(v)
 #define jl_is_ascii_string(v) jl_typeis(v,jl_ascii_string_type)
 #define jl_is_utf8_string(v) jl_typeis(v,jl_utf8_string_type)
@@ -676,7 +658,8 @@ jl_function_t *jl_new_generic_function(jl_sym_t *name);
 void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth,
                    jl_tuple_t *tvars, int8_t isstaged);
 DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
-                                    jl_tuple_t *argtypes, jl_function_t *f, jl_value_t *isstaged);
+                                    jl_tuple_t *argtypes, jl_function_t *f, jl_value_t *isstaged,
+                                    jl_value_t *call_func, int iskw);
 DLLEXPORT jl_value_t *jl_box_bool(int8_t x);
 DLLEXPORT jl_value_t *jl_box_int8(int32_t x);
 DLLEXPORT jl_value_t *jl_box_uint8(uint32_t x);
@@ -817,6 +800,7 @@ STATIC_INLINE jl_function_t *jl_get_function(jl_module_t *m, const char *name)
 }
 DLLEXPORT int jl_module_has_initializer(jl_module_t *m);
 DLLEXPORT void jl_module_run_initializer(jl_module_t *m);
+jl_function_t *jl_module_call_func(jl_module_t *m);
 
 // eq hash tables
 DLLEXPORT jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val);
@@ -902,12 +886,14 @@ enum JL_RTLD_CONSTANT {
      /* MacOS X 10.5+: */ JL_RTLD_FIRST=64U
 };
 #define JL_RTLD_DEFAULT (JL_RTLD_LAZY | JL_RTLD_DEEPBIND)
-DLLEXPORT uv_lib_t *jl_load_dynamic_library(char *fname, unsigned flags);
-DLLEXPORT uv_lib_t *jl_load_dynamic_library_e(char *fname, unsigned flags);
-DLLEXPORT void *jl_dlsym_e(uv_lib_t *handle, char *symbol);
-DLLEXPORT void *jl_dlsym(uv_lib_t *handle, char *symbol);
-DLLEXPORT int jl_uv_dlopen(const char *filename, uv_lib_t *lib, unsigned flags);
-DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle);
+
+typedef void *jl_uv_libhandle; // uv_lib_t* (avoid uv.h dependency)
+DLLEXPORT jl_uv_libhandle jl_load_dynamic_library(char *fname, unsigned flags);
+DLLEXPORT jl_uv_libhandle jl_load_dynamic_library_e(char *fname, unsigned flags);
+DLLEXPORT void *jl_dlsym_e(jl_uv_libhandle handle, char *symbol);
+DLLEXPORT void *jl_dlsym(jl_uv_libhandle handle, char *symbol);
+DLLEXPORT int jl_uv_dlopen(const char *filename, jl_uv_libhandle lib, unsigned flags);
+DLLEXPORT jl_uv_libhandle jl_wrap_raw_dl_handle(void *handle);
 char *jl_dlfind_win32(char *name);
 DLLEXPORT int add_library_mapping(char *lib, void *hnd);
 
