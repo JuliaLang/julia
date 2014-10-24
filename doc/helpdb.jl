@@ -4129,10 +4129,22 @@ popdisplay(d::Display)
 
 "),
 
+("Base","atanpi","atanpi(x)
+
+   Compute \"atan(x)/pi\"
+
+"),
+
 ("Base","atan2","atan2(y, x)
 
    Compute the inverse tangent of \"y/x\", using the signs of both
    \"x\" and \"y\" to determine the quadrant of the return value.
+
+"),
+
+("Base","atan2pi","atan2pi(y, x)
+
+   Compute \"atan2(y, x)/pi\"
 
 "),
 
@@ -4338,10 +4350,24 @@ popdisplay(d::Display)
 
 "),
 
+("Base","log21p","log21p(x)
+
+   Compute \"log2(1+x)\". Throws \"DomainError\" for \"Real\" arguments
+   less than -1.
+
+"),
+
 ("Base","log10","log10(x)
 
    Compute the logarithm of \"x\" to base 10. Throws \"DomainError\"
    for negative \"Real\" arguments.
+
+"),
+
+("Base","log101p","log101p(x)
+
+   Compute \"log10(1+x)\". Throws \"DomainError\" for \"Real\" arguments
+   less than -1.
 
 "),
 
@@ -4371,9 +4397,21 @@ popdisplay(d::Display)
 
 "),
 
+("Base","exp2m1","exp2m1(x)
+
+   Compute 2^x - 1
+
+"),
+
 ("Base","exp10","exp10(x)
 
    Compute 10^x
+
+"),
+
+("Base","exp10m1","exp10m1(x)
+
+   Compute 10^x - 1
 
 "),
 
@@ -4538,6 +4576,19 @@ popdisplay(d::Display)
    Return \\sqrt{x}. Throws \"DomainError\" for negative \"Real\"
    arguments. Use complex negative arguments instead.  The prefix
    operator \"√\" is equivalent to \"sqrt\".
+
+"),
+
+("Base","rsqrt","rsqrt(n)
+
+   Return \"1/sqrt(n)\". Throws \"DomainError\" for negative \"Real\".
+
+"),
+
+("Base","rootn","rootn(x, n)
+
+   Return \"x^(1/n)\". If n is even throws \"DomainError\" for negative
+   \"Real\" values of x.
 
 "),
 
@@ -5031,6 +5082,13 @@ popdisplay(d::Display)
    ascending order by power of \"z\".  This macro expands to efficient
    inline code that uses either Horner's method or, for complex \"z\",
    a more efficient Goertzel-like algorithm.
+
+"),
+
+("Base","compound","compound(x, n)
+
+   Compute \"(1+x)^n\". \"x\" must be greater than -1 and \"n\" must be
+   integral.
 
 "),
 

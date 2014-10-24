@@ -18,7 +18,9 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        hankelh1, hankelh2, hankelh1x, hankelh2x,
        besseli, besselix, besselk, besselkx, besselh,
        beta, lbeta, eta, zeta, polygamma, invdigamma, digamma, trigamma,
-       erfinv, erfcinv, @evalpoly
+       erfinv, erfcinv, @evalpoly,
+       atanpi, exp2m1, exp10m1, log21p, log101p, rsqrt, atan2pi,
+       compound, rootn
 
 import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
@@ -103,6 +105,8 @@ for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :exp2, :
     end
 end
 
+atanpi(x::Real) = atan(x)/pi
+
 # fallback definitions to prevent infinite loop from $f(x::Real) def above
 cbrt(x::FloatingPoint) = x^(1//3)
 exp2(x::FloatingPoint) = 2^x
@@ -110,11 +114,15 @@ for f in (:sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :expm1)
     @eval ($f)(x::FloatingPoint) = error("not implemented for ", typeof(x))
 end
 
+exp2m1(x::Real) = exp2(x)-1
+
 # TODO: GNU libc has exp10 as an extension; should openlibm?
 exp10(x::Float64) = 10.0^x
 exp10(x::Float32) = 10.0f0^x
 exp10(x::Integer) = exp10(float(x))
 @vectorize_1arg Number exp10
+
+exp10m1(x::Real) = exp10(x)-1
 
 # functions that return NaN on non-NaN argument for domain error
 for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,
@@ -127,10 +135,16 @@ for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,
     end
 end
 
+log21p(x::Real) = log2(1+x)
+
+log101p(x::Real) = log10(1+x)
+
 sqrt(x::Float64) = box(Float64,sqrt_llvm(unbox(Float64,x)))
 sqrt(x::Float32) = box(Float32,sqrt_llvm(unbox(Float32,x)))
 sqrt(x::Real) = sqrt(float(x))
 @vectorize_1arg Number sqrt
+
+rsqrt(x::Real) = 1/sqrt(x)
 
 for f in (:ceil, :trunc, :significand) # :rint, :nearbyint
     @eval begin
@@ -176,6 +190,8 @@ for f in (:atan2, :hypot)
         @vectorize_2arg Number $f
     end
 end
+
+atan2pi(y::Real, x::Real) = atan2(y, x)/pi
 
 max{T<:FloatingPoint}(x::T, y::T) = ifelse((y > x) | (x != x), y, x)
 @vectorize_2arg Real max
@@ -266,6 +282,20 @@ end
     box(Float64, powi_llvm(unbox(Float64,x), unbox(Int32,int32(y))))
 ^(x::Float32, y::Integer) =
     box(Float32, powi_llvm(unbox(Float32,x), unbox(Int32,int32(y))))
+
+function compound(x::Real, y::Integer)
+    if x < -1
+        throw(DomainError())
+    end
+    (1+x)^n
+end
+
+function rootn(x::Real, y::Integer)
+    if x < 0 && iseven(n)
+        throw(DomainError())
+    end
+    x^(1/n)
+end
 
 function angle_restrict_symm(theta)
     const P1 = 4 * 7.8539812564849853515625e-01
