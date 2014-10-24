@@ -128,15 +128,15 @@ rand(r::AbstractRNG, dims::Dims) = rand!(r, Array(Float64, dims))
 rand(r::AbstractRNG, dims::Int...) = rand(r, dims)
 
 function rand!{T}(A::Array{T})
-    for i=1:length(A)
+    for i = 1:length(A)
         A[i] = rand(T)
     end
     A
 end
 
-function rand!(r::AbstractRNG, A::AbstractArray)
-    for i=1:length(A)
-        @inbounds A[i] = rand(r)
+function rand!{T}(r::AbstractRNG, A::AbstractArray{T})
+    for i = 1:length(A)
+        @inbounds A[i] = rand(r, T)
     end
     A
 end
