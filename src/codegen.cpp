@@ -2240,7 +2240,10 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         if (jl_is_type_type((jl_value_t*)sty) && !jl_is_typevar(jl_tparam0(sty))) {
             sty = (jl_datatype_t*)jl_tparam0(sty);
         }
-        if (jl_is_datatype(sty) && sty != jl_symbol_type && sty->name != jl_array_typename) {
+        if (jl_is_datatype(sty) && sty != jl_symbol_type && sty->name != jl_array_typename &&
+            // exclude DataType, since each DataType has its own size, not sizeof(DataType).
+            // this is issue #8798
+            sty != jl_datatype_type) {
             if (jl_is_leaf_type((jl_value_t*)sty) ||
                 (sty->names == jl_null && sty->size > 0)) {
                 JL_GC_POP();

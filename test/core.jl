@@ -1909,3 +1909,14 @@ c99991{T}(::Type{UnitRange{T}},x::FloatRange{T}) = 1
 c99991{T}(::Type{UnitRange{T}},x::Range{T}) = 2
 @test c99991(UnitRange{Float64}, 1.0:2.0) == 1
 @test c99991(UnitRange{Int}, 1:2) == 2
+
+# issue #8798
+let
+    const npy_typestrs = Dict("b1"=>Bool,
+                              "i1"=>Int8,      "u1"=>Uint8,
+                              "i2"=>Int16,     "u2"=>Uint16,
+                              "i4"=>Int32,     "u4"=>Uint32,
+                              "i8"=>Int64,     "u8"=>Uint64)
+    sizeof_lookup() = sizeof(npy_typestrs["i8"])
+    @test sizeof_lookup() == 8
+end
