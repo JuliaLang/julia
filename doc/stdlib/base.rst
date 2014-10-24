@@ -4104,6 +4104,11 @@ Constructors
 
    Construct a vector of ``n`` logarithmically-spaced numbers from ``10^start`` to ``10^stop``.
 
+.. function:: arrayslice(A, pos, dims)
+
+   Create an array of size ``dims`` with the data shared with the given array. The returned array uses the contiguous memory of ``A`` starting at ``pos`` of length ``prod(dims)``. The ``pos`` and ``dims`` arguments may be tuple or integer arguments.
+
+
 Mathematical operators and functions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

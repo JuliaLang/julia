@@ -735,6 +735,8 @@ DLLEXPORT jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data,
                                          size_t nel, int own_buffer);
 DLLEXPORT jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data,
                                       jl_tuple_t *dims, int own_buffer);
+DLLEXPORT jl_array_t *jl_slice_owned_array(jl_value_t *atype, jl_array_t *data, 
+                                           jl_tuple_t *dims, size_t offset);
 int jl_array_store_unboxed(jl_value_t *el_type);
 
 DLLEXPORT jl_array_t *jl_alloc_array_1d(jl_value_t *atype, size_t nr);

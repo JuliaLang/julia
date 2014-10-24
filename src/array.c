@@ -293,6 +293,64 @@ jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data, jl_tuple_t *dims,
     return a;
 }
 
+jl_array_t *jl_slice_owned_array(jl_value_t *atype, jl_array_t *data, jl_tuple_t *dims, size_t offset)
+{
+    size_t i;
+    jl_array_t *a;
+    size_t ndims = jl_tuple_len(dims);
+
+    int ndimwords = jl_array_ndimwords(ndims);
+    a = (jl_array_t*)allocobj((sizeof(jl_array_t) + sizeof(void*) + ndimwords*sizeof(size_t) + 15)&-16);
+    a->type = atype;
+    a->ndims = ndims;
+    a->offset = 0;
+    a->data = NULL;
+    a->isaligned = data->isaligned;
+    jl_value_t *el_type = jl_tparam0(atype);
+    if (store_unboxed(el_type)) {
+        a->elsize = jl_datatype_size(el_type);
+        a->ptrarray = 0;
+    }
+    else {
+        a->elsize = sizeof(void*);
+        a->ptrarray = 1;
+    }
+    JL_GC_PUSH1(&a);
+
+    jl_array_data_owner(a) = (jl_value_t*)data;
+    a->how = 3;
+    a->data = (data->data) + offset*(a->elsize);
+    a->isshared = 1;
+    data->isshared = 1;
+
+    if (ndims == 1) {
+        size_t l = jl_unbox_long(jl_tupleref(dims,0));
+#ifdef STORE_ARRAY_LEN
+        a->length = l;
+#endif
+        a->nrows = l;
+        a->maxsize = l;
+    }
+    else {
+        size_t *adims = &a->nrows;
+        size_t l=1;
+        wideint_t prod;
+        for(i=0; i < ndims; i++) {
+            adims[i] = jl_unbox_long(jl_tupleref(dims, i));
+            prod = (wideint_t)l * (wideint_t)adims[i];
+            if (prod > (wideint_t) MAXINTVAL)
+                jl_error("invalid Array dimensions");
+            l = prod;
+        }
+#ifdef STORE_ARRAY_LEN
+        a->length = l;
+#endif
+    }
+    JL_GC_POP();
+
+    return a;
+}
+
 jl_array_t *jl_new_array(jl_value_t *atype, jl_tuple_t *dims)
 {
     size_t ndims = jl_tuple_len(dims);

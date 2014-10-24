@@ -491,6 +491,7 @@ export
     zeta,
 
 # arrays
+    arrayslice,
     bitbroadcast,
     broadcast!,
     broadcast!_function,

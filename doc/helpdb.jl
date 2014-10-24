@@ -5964,6 +5964,15 @@ popdisplay(d::Display)
 
 "),
 
+("Base","arrayslice","arrayslice(A, pos, dims)
+
+   Create an array of size \"dims\" with the data shared with the 
+   given array. The returned array uses the contiguous memory of 
+   \"A\" starting at \"pos\" of length \"prod(dims)\". The \"pos\" and 
+   \"dims\" arguments may be tuple or integer arguments.
+
+"),
+
 ("Base","broadcast","broadcast(f, As...)
 
    Broadcasts the arrays \"As\" to a common size by expanding
