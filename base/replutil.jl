@@ -85,6 +85,9 @@ function showerror(io::IO, e::DomainError, bt)
                 print(io, "\n", code[1],
                       " will only return a complex result if called with a complex argument.",
                       "\ntry ", code[1], "(complex(x))")
+            elseif code[1] == :^ && code[2] == symbol("intfuncs.jl")
+                print(io, "\nCannot raise an integer x to a negative power -n. Make x a float by adding")
+                print(io, "\na zero decimal (e.g. 2.0^-n instead of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n")
             end
             break
         end
