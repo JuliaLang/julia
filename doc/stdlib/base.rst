@@ -2904,9 +2904,17 @@ Mathematical Functions
 
    Compute the inverse tangent of ``x``, where the output is in radians
 
+.. function:: atanpi(x)
+
+   Compute ``atan(x)/pi``
+
 .. function:: atan2(y, x)
 
    Compute the inverse tangent of ``y/x``, using the signs of both ``x`` and ``y`` to determine the quadrant of the return value.
+
+.. function:: atan2pi(y, x)
+
+   Compute ``atan2(y, x)/pi``
 
 .. function:: asind(x)
 
@@ -3037,9 +3045,17 @@ Mathematical Functions
 
    Compute the logarithm of ``x`` to base 2. Throws ``DomainError`` for negative ``Real`` arguments.
 
+.. function:: log21p(x)
+
+   Compute ``log2(1+x)``. Throws ``DomainError`` for ``Real`` arguments less than -1.
+
 .. function:: log10(x)
 
    Compute the logarithm of ``x`` to base 10. Throws ``DomainError`` for negative ``Real`` arguments.
+
+.. function:: log101p(x)
+
+   Compute ``log10(1+x)``. Throws ``DomainError`` for ``Real`` arguments less than -1.
 
 .. function:: log1p(x)
 
@@ -3058,9 +3074,17 @@ Mathematical Functions
 
    Compute :math:`2^x`
 
+.. function:: exp2m1(x)
+
+   Compute :math:`2^x - 1`
+
 .. function:: exp10(x)
 
    Compute :math:`10^x`
+
+.. function:: exp10m1(x)
+
+   Compute :math:`10^x - 1`
 
 .. function:: ldexp(x, n)
 
@@ -3155,6 +3179,14 @@ Mathematical Functions
 .. function:: sqrt(x)
 
    Return :math:`\sqrt{x}`. Throws ``DomainError`` for negative ``Real`` arguments. Use complex negative arguments instead.  The prefix operator ``√`` is equivalent to ``sqrt``.
+
+.. function:: rsqrt(x)
+
+   Return :math:`1/\sqrt{x}`. Throws ``DomainError`` for negative ``Real`` arguments.
+
+.. function:: rootn(x, n)
+
+   Return :math:`x^{1/n}`. If n is even throws ``DomainError`` for negative ``Real`` values of x.
 
 .. function:: isqrt(n)
 
@@ -3476,6 +3508,11 @@ Mathematical Functions
    given in ascending order by power of ``z``.  This macro expands to
    efficient inline code that uses either Horner's method or, for
    complex ``z``, a more efficient Goertzel-like algorithm.
+
+.. function:: compound(x, n)
+
+   Compute ``(1+x)^n``. ``x`` must be greater than -1 and ``n`` must be
+   integral.
 
 Data Formats
 ------------
