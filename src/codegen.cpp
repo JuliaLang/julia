@@ -2377,7 +2377,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx, jl_
     if (definitely_not_function) {
         f = jl_module_call_func(ctx->module);
         Value *r = emit_known_call((jl_value_t*)f, args-1, nargs+1, ctx, &theFptr, &f, expr);
-        assert(r == NULL);
+        assert(r == NULL); (void) r;
         if (theFptr == NULL) {
             just_emit_error("\"call\" is not a function", ctx);
             result = UndefValue::get(jl_pvalue_llvmt);
