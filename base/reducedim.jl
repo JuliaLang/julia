@@ -68,7 +68,7 @@ promote_union(T) = T
 function reducedim_init{S}(f, op::AddFun, A::AbstractArray{S}, region)
     T = promote_union(S)
     if method_exists(zero, (Type{T},))
-        x = evaluate(f, zero(T))
+        x = f(zero(T))
         z = zero(x) + zero(x)
         Tr = typeof(z) == typeof(x) && !isbits(T) ? T : typeof(z)
     else
@@ -81,7 +81,7 @@ end
 function reducedim_init{S}(f, op::MulFun, A::AbstractArray{S}, region)
     T = promote_union(S)
     if method_exists(zero, (Type{T},))
-        x = evaluate(f, zero(T))
+        x = f(zero(T))
         z = one(x) * one(x)
         Tr = typeof(z) == typeof(x) && !isbits(T) ? T : typeof(z)
     else
@@ -91,10 +91,10 @@ function reducedim_init{S}(f, op::MulFun, A::AbstractArray{S}, region)
     return reducedim_initarray(A, region, z, Tr)
 end
 
-reducedim_init{T}(f, op::MaxFun, A::AbstractArray{T}, region) = reducedim_initarray0(A, region, typemin(evaluate(f, zero(T))))
-reducedim_init{T}(f, op::MinFun, A::AbstractArray{T}, region) = reducedim_initarray0(A, region, typemax(evaluate(f, zero(T))))
+reducedim_init{T}(f, op::MaxFun, A::AbstractArray{T}, region) = reducedim_initarray0(A, region, typemin(f(zero(T))))
+reducedim_init{T}(f, op::MinFun, A::AbstractArray{T}, region) = reducedim_initarray0(A, region, typemax(f(zero(T))))
 reducedim_init{T}(f::Union(AbsFun,Abs2Fun), op::MaxFun, A::AbstractArray{T}, region) = 
-    reducedim_initarray(A, region, zero(evaluate(f, zero(T))))
+    reducedim_initarray(A, region, zero(f(zero(T))))
 
 reducedim_init(f, op::AndFun, A::AbstractArray, region) = reducedim_initarray(A, region, true)
 reducedim_init(f, op::OrFun, A::AbstractArray, region) = reducedim_initarray(A, region, false)
@@ -173,16 +173,16 @@ end
         @nloops N i d->(d>1? (1:size(A,d)) : (1:1)) d->(j_d = sizeR_d==1 ? 1 : i_d) begin
             @inbounds r = (@nref N R j)
             for i_1 = 1:sizA1
-                @inbounds v = evaluate(f, (@nref N A i))
-                r = evaluate(op, r, v)
+                @inbounds v = f(@nref N A i)
+                r = op(r, v)
             end
             @inbounds (@nref N R j) = r
         end 
     else
         # general implementation
         @nloops N i A d->(j_d = sizeR_d==1 ? 1 : i_d) begin
-            @inbounds v = evaluate(f, (@nref N A i))
-            @inbounds (@nref N R j) = evaluate(op, (@nref N R j), v)
+            @inbounds v = f(@nref N A i)
+            @inbounds (@nref N R j) = op((@nref N R j), v)
         end
     end
     return R    
