@@ -6,6 +6,7 @@ export DSFMT_state, dsfmt_get_min_array_size, dsfmt_get_idstring,
        dsfmt_genrand_close1_open2, dsfmt_gv_genrand_close1_open2,
        dsfmt_genrand_close_open, dsfmt_gv_genrand_close_open, 
        dsfmt_genrand_uint32, dsfmt_gv_genrand_uint32, 
+       dsfmt_fill_array_close_open!, dsfmt_fill_array_close1_open2!,
        win32_SystemFunction036!
 
 type DSFMT_state
@@ -93,6 +94,24 @@ function dsfmt_gv_genrand_uint32()
     ccall((:dsfmt_gv_genrand_uint32,:libdSFMT),
           Uint32,
           ())
+end
+
+# precondition for dsfmt_fill_array_*:
+# the underlying C array must be 16-byte aligned, which is the case for "Array"
+function dsfmt_fill_array_close1_open2!(s::DSFMT_state, A::Array{Float64}, n::Int)
+    @assert dsfmt_min_array_size <= n <= length(A)  && iseven(n)
+    ccall((:dsfmt_fill_array_close1_open2,:libdSFMT),
+          Void,
+          (Ptr{Void}, Ptr{Float64}, Int),
+          s.val, A, n)
+end
+
+function dsfmt_fill_array_close_open!(s::DSFMT_state, A::Array{Float64}, n::Int)
+    @assert dsfmt_min_array_size <= n <= length(A)  && iseven(n)
+    ccall((:dsfmt_fill_array_close_open,:libdSFMT),
+          Void,
+          (Ptr{Void}, Ptr{Float64}, Int),
+          s.val, A, n)
 end
 
 ## Windows entropy
