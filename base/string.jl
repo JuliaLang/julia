@@ -1076,7 +1076,24 @@ macro mstr(s...); triplequoted(s...); end
 ## shell-like command parsing ##
 
 function shell_parse(raw::String, interp::Bool)
-    s = strip(raw)
+    s = lstrip(raw)
+    #Strips the end but respects the space when the string endswith "\\ "
+    r = RevString(s)
+    i = start(r)
+    c_old = nothing
+    while !done(r, i)
+        c, j = next(r, i)
+        if c == '\\' && c_old == ' '
+            i -= 1
+            break
+        elseif !(c in _default_delims)
+            break
+        end
+        i = j
+        c_old = c
+    end
+    s = s[1:end-i+1]
+
     last_parse = 0:-1
     isempty(s) && return interp ? (Expr(:tuple,:()),last_parse) : ({},last_parse)
 
