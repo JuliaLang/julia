@@ -14,19 +14,39 @@ abstract AbstractRNG
 type MersenneTwister <: AbstractRNG
     state::DSFMT_state
     seed::Union(Uint32,Vector{Uint32})
+    vals::Vector{Float64}
+    idx::Int
 
     function MersenneTwister(seed::Vector{Uint32})
         state = DSFMT_state()
         dsfmt_init_by_array(state, seed)
-        return new(state, seed)
+        return new(state, seed, Array(Float64, dsfmt_get_min_array_size()), dsfmt_get_min_array_size())
     end
 
     MersenneTwister(seed=0) = MersenneTwister(make_seed(seed))
 end
 
+## Low level API for MersenneTwister
+
+function gen_rand(r::MersenneTwister)
+    dsfmt_fill_array_close1_open2!(r.state, r.vals, length(r.vals))
+    r.idx = 0
+end
+
+@inline gen_rand_maybe(r::MersenneTwister) = r.idx == length(r.vals) && gen_rand(r)
+
+# precondition: r.idx < length(r.vals)
+@inline rand_close1_open2_inbounds(r::MersenneTwister) =  (r.idx += 1; @inbounds return r.vals[r.idx])
+@inline rand_inbounds(r::MersenneTwister) = rand_close1_open2_inbounds(r) - 1.0
+
+# produce Float64 values
+@inline rand_close1_open2(r::MersenneTwister) = (gen_rand_maybe(r); rand_close1_open2_inbounds(r))
+@inline rand(r::MersenneTwister) = (gen_rand_maybe(r); rand_inbounds(r))
+
 function srand(r::MersenneTwister, seed)
     r.seed = seed
     dsfmt_init_gen_rand(r.state, seed)
+    r.idx = length(r.vals)
     return r
 end
 
@@ -96,9 +116,6 @@ rand(::Type{Float16}) = float16(rand())
 
 rand{T<:Real}(::Type{Complex{T}}) = complex(rand(T),rand(T))
 
-
-rand(r::MersenneTwister) = dsfmt_genrand_close_open(r.state)
-
 ## random integers
 
 dsfmt_randui32() = dsfmt_gv_genrand_uint32()
@@ -138,6 +155,41 @@ end
 function rand!{T}(r::AbstractRNG, A::AbstractArray{T})
     for i = 1:length(A)
         @inbounds A[i] = rand(r, T)
+    end
+    A
+end
+
+function rand_AbstractArray_Float64!(r::MersenneTwister, A::AbstractArray{Float64})
+    n = length(A)
+    # what follows is equivalent to this simple loop but more efficient:
+    # for i=1:n
+    #     @inbounds A[i] = rand(r)
+    # end
+    m = 0
+    while m < n
+        s = length(r.vals) - r.idx
+        if s == 0
+            gen_rand(r)
+            s = length(r.vals)
+        end
+        m2 = min(n, m+s)
+        for i=m+1:m2
+            @inbounds A[i] = rand_inbounds(r)
+        end
+        m = m2
+    end
+    A
+end
+
+rand!(r::MersenneTwister, A::AbstractArray{Float64}) = rand_AbstractArray_Float64!(r, A)
+
+function rand!(r::MersenneTwister, A::Array{Float64})
+    n = length(A)
+    if n < dsfmt_get_min_array_size()
+        rand_AbstractArray_Float64!(r, A)
+    else
+        dsfmt_fill_array_close_open!(r.state, A, 2*(n ÷ 2))
+        isodd(n) && (A[n] = rand(r))
     end
     A
 end
@@ -737,11 +789,10 @@ ziggurat_nor_r      = 3.6541528853610087963519472518
 ziggurat_nor_inv_r  = inv(ziggurat_nor_r)
 ziggurat_exp_r      = 7.6971174701310497140446280481
 
-rand(state::DSFMT_state) = dsfmt_genrand_close_open(state)
 randi() = reinterpret(Uint64,dsfmt_gv_genrand_close1_open2()) & 0x000fffffffffffff
-randi(state::DSFMT_state) = reinterpret(Uint64,dsfmt_genrand_close1_open2(state)) & 0x000fffffffffffff
+@inline randi(rng::MersenneTwister) = reinterpret(Uint64, rand_close1_open2(rng)) & 0x000fffffffffffff
 for (lhs, rhs) in (([], []), 
-                  ([:(state::DSFMT_state)], [:state]))
+                  ([:(rng::MersenneTwister)], [:rng]))
     @eval begin                
         function randmtzig_randn($(lhs...))
             @inbounds begin
@@ -787,9 +838,9 @@ for (lhs, rhs) in (([], []),
 end
 
 randn() = randmtzig_randn()
-randn(rng::MersenneTwister) = randmtzig_randn(rng.state)
+randn(rng::MersenneTwister) = randmtzig_randn(rng)
 randn!(A::Array{Float64}) = (for i = 1:length(A);A[i] = randmtzig_randn();end;A)
-randn!(rng::MersenneTwister, A::Array{Float64}) = (for i = 1:length(A);A[i] = randmtzig_randn(rng.state);end;A)
+randn!(rng::MersenneTwister, A::Array{Float64}) = (for i = 1:length(A);A[i] = randmtzig_randn(rng);end;A)
 randn(dims::Dims) = randn!(Array(Float64, dims))
 randn(dims::Int...) = randn!(Array(Float64, dims...))
 randn(rng::MersenneTwister, dims::Dims) = randn!(rng, Array(Float64, dims))
