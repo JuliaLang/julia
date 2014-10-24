@@ -600,6 +600,7 @@ export
     sort,
     sortcols,
     sortperm,
+    sortperm!,
     sortrows,
     squeeze,
     step,
