@@ -146,6 +146,15 @@ Sorting Functions
    sorting algorithm such as ``QuickSort``, a different permutation that puts the array
    into order may be returned. The order is specified using the same keywords as ``sort!``.
 
+   See also :func:`sortperm!`
+
+.. function:: sortperm!(ix, v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false,] [initialized=false])
+
+   Like ``sortperm``, but accepts a preallocated index vector ``ix``.  If ``initialized`` is ``false``
+   (the default), ix is initialized to contain the values ``1:length(v)``.
+
+   See also :func:`sortperm`
+
 .. function:: sortrows(A, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Sort the rows of matrix ``A`` lexicographically.
