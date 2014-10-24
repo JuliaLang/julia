@@ -821,7 +821,7 @@ DLLEXPORT jl_value_t *jl_environ(int i);
 
 // throwing common exceptions
 DLLEXPORT void NORETURN jl_error(const char *str);
-void NORETURN jl_errorf(const char *fmt, ...);
+DLLEXPORT void NORETURN jl_errorf(const char *fmt, ...);
 DLLEXPORT void jl_too_few_args(const char *fname, int min);
 DLLEXPORT void jl_too_many_args(const char *fname, int max);
 DLLEXPORT void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got);

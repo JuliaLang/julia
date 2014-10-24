@@ -45,7 +45,7 @@ DLLEXPORT void jl_error(const char *str)
     jl_throw(jl_new_struct(jl_errorexception_type, msg));
 }
 
-void jl_errorf(const char *fmt, ...)
+DLLEXPORT void jl_errorf(const char *fmt, ...)
 {
     va_list args;
     ios_t buf;
