@@ -177,6 +177,46 @@ function full{Tv}(S::SparseMatrixCSC{Tv})
     return A
 end
 
+function sortCSC!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti})
+    m, n = size(A)
+
+    colptr = A.colptr; rowval = A.rowval; nzval = A.nzval
+    
+    # Crude estimate for a preallocation
+    rows = min(int(((A.colptr[end] - 1)/A.n)*2), m)
+    row = Array(Ti, rows)
+    val = Array(Tv, rows)
+
+    for i = 1:n
+        @inbounds col_start = colptr[i]
+        @inbounds col_end = (colptr[i+1] - 1)
+ 
+        numrows = int((col_end - col_start) + 1)
+        if numrows > rows
+            rows = numrows
+            row = Array(Ti, numrows)
+            val = Array(Tv, numrows)
+        end
+
+        jj = 1
+        @simd for j = col_start:col_end
+            @inbounds row[jj] = rowval[j]
+            @inbounds val[jj] = nzval[j]
+            jj += 1
+        end
+
+        index = sortperm(row[1:numrows])
+
+        jj = 1;
+        @simd for j = col_start:col_end
+            @inbounds rowval[j] = row[index[jj]]
+            @inbounds nzval[j] = val[index[jj]]
+            jj += 1
+        end
+    end
+end
+
+
 float(S::SparseMatrixCSC) = SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), float(copy(S.nzval)))
 
 complex(S::SparseMatrixCSC) = SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), complex(copy(S.nzval)))
