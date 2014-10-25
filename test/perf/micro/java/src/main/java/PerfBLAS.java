@@ -245,32 +245,22 @@ public class PerfBLAS {
 	    return sum;
 	}
 
-	private static int mandel(double zReal, double zImag) {
+	private static int mandel(double re, double im) {
 	    int n = 0;
-	    double cReal = zReal;
-	    double cImag = zImag;
+	    Complex z = new Complex(re, im);
+	    Complex c = new Complex(re, im);
 	    for (n=0; n<=79; ++n) {
-	        if (complexAbs(zReal,zImag) > 2.0) {
+	        if (Complex.abs(z) > 2.0) {
 	            n -= 1;
 	            break;
 	        }
 	        
-	        // z^2
-	        double zSquaredReal = zReal*zReal-zImag*zImag;
-	        double zSquaredImag = zReal*zImag+zImag*zReal;
-	        
-	        // +c
-	        zReal = zSquaredReal+cReal;
-	        zImag = zSquaredImag+cImag;
-	        
+	        // z = z*z + c
+	        z = Complex.sum(Complex.prod(z, z), c)
 	    }
 	    return n+1;
 	}
 	
-	private static double complexAbs(double zReal, double zImag) {
-		return Math.sqrt(zReal*zReal + zImag*zImag);
-	}
-
 	private static int mandelperf() {
 	    int mandel_sum = 0;
 	    for (double re=-2.0; re<=0.5; re+=0.1) {
