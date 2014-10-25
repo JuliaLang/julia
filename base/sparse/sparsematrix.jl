@@ -2047,3 +2047,50 @@ function diagm{Tv,Ti}(v::SparseMatrixCSC{Tv,Ti})
 
     return SparseMatrixCSC{Tv,Ti}(n, n, colptr, rowval, nzval)
 end
+
+# Sort all the indices in each column of a CSC sparse matrix
+function sortSparseMatrixCSC!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti})
+    m, n = size(A)
+    colptr = A.colptr; rowval = A.rowval; nzval = A.nzval
+
+    index = zeros(Ti, m)
+    row = zeros(Ti, m)
+    val = zeros(Tv, m)
+
+    for i = 1:n
+        @inbounds col_start = colptr[i]
+        @inbounds col_end = (colptr[i+1] - 1)
+ 
+        numrows = col_end - col_start + 1
+        if numrows <= 1
+            continue
+        elseif numrows == 2
+            f = col_start
+            s = f+1
+            if rowval[f] > rowval[s]
+                @inbounds rowval[f], rowval[s] = rowval[s], rowval[f]
+                @inbounds nzval[f],  nzval[s]  = nzval[s],  nzval[f]
+            end
+            continue
+        end
+
+        jj = 1
+        @simd for j = col_start:col_end
+            @inbounds row[jj] = rowval[j]
+            @inbounds val[jj] = nzval[j]
+            jj += 1
+        end
+
+        sortperm!(pointer_to_array(pointer(index), numrows),
+                  pointer_to_array(pointer(row), numrows))
+
+        jj = 1;
+        @simd for j = col_start:col_end
+            @inbounds rowval[j] = row[index[jj]]
+            @inbounds nzval[j] = val[index[jj]]
+            jj += 1
+        end
+    end
+
+    return A
+end
