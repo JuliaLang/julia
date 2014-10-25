@@ -63,7 +63,8 @@ function write(s::IO, a::AbstractArray)
     nb
 end
 
-function write(s::IO, c::Char)
+function write(s::IO, ch::Char)
+    c = reinterpret(Uint32, ch)
     if c < 0x80
         write(s, uint8(c))
         return 1
@@ -149,7 +150,7 @@ function read(s::IO, ::Type{Char})
 end
 
 function readuntil(s::IO, delim::Char)
-    if delim < 0x80
+    if delim < char(0x80)
         data = readuntil(s, uint8(delim))
         enc = byte_string_classify(data)
         return (enc==1) ? ASCIIString(data) : UTF8String(data)

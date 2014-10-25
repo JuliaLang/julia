@@ -61,6 +61,8 @@ cconvert{T}(::Type{Ptr{Ptr{T}}}, a::Array) = a
 # convert strings to ByteString to pass as pointers
 cconvert{P<:Union(Int8,Uint8)}(::Type{Ptr{P}}, s::String) = bytestring(s)
 
+reinterpret{T,S}(::Type{T}, x::S) = box(T,unbox(S,x))
+
 abstract IO
 
 type ErrorException <: Exception

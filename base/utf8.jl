@@ -79,11 +79,12 @@ function next(s::UTF8String, i::Int)
     char(c), i
 end
 
-function first_utf8_byte(c::Char)
-    c < 0x80    ? uint8(c)            :
-    c < 0x800   ? uint8((c>>6 )|0xc0) :
-    c < 0x10000 ? uint8((c>>12)|0xe0) :
-                  uint8((c>>18)|0xf0)
+function first_utf8_byte(ch::Char)
+    c = reinterpret(Uint32, ch)
+    c < 0x80    ? uint8(c) :
+    c < 0x800   ? uint8((c>>6)  | 0xc0) :
+    c < 0x10000 ? uint8((c>>12) | 0xe0) :
+                  uint8((c>>18) | 0xf0)
 end
 
 ## overload methods for efficiency ##
@@ -110,20 +111,20 @@ function getindex(s::UTF8String, r::UnitRange{Int})
 end
 
 function search(s::UTF8String, c::Char, i::Integer)
-    if c < 0x80 return search(s.data, uint8(c), i) end
+    c < char(0x80) && return search(s.data, uint8(c), i)
     while true
         i = search(s.data, first_utf8_byte(c), i)
-        if i==0 || s[i]==c return i end
+        (i==0 || s[i] == c) && return i
         i = next(s,i)[2]
     end
 end
 
 function rsearch(s::UTF8String, c::Char, i::Integer)
-    if c < 0x80 return rsearch(s.data, uint8(c), i) end
+    c < char(0x80) && return rsearch(s.data, uint8(c), i)
     b = first_utf8_byte(c)
     while true
         i = rsearch(s.data, b, i)
-        if i==0 || s[i]==c return i end
+        (i==0 || s[i] == c) && return i
         i = prevind(s,i)
     end
 end
@@ -151,7 +152,7 @@ end
 
 ## outputing UTF-8 strings ##
 
-print(io::IO, s::UTF8String) = (write(io, s.data);nothing)
+print(io::IO, s::UTF8String) = (write(io, s.data); nothing)
 write(io::IO, s::UTF8String) = write(io, s.data)
 
 ## transcoding to UTF-8 ##
@@ -184,4 +185,4 @@ end
 convert(::Type{UTF8String}, s::String) = utf8(bytestring(s))
 
 # The last case is the replacement character 0xfffd (3 bytes)
-utf8sizeof(c::Char) = c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : c < 0x110000 ? 4 : 3
+utf8sizeof(c::Char) = c < char(0x80) ? 1 : c < char(0x800) ? 2 : c < char(0x10000) ? 3 : c < char(0x110000) ? 4 : 3

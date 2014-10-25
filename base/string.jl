@@ -541,7 +541,7 @@ strwidth(s::String) = (w=0; for c in s; w += charwidth(c); end; w)
 strwidth(s::ByteString) = int(ccall(:u8_strwidth, Csize_t, (Ptr{Uint8},), s.data))
 # TODO: implement and use u8_strnwidth that takes a length argument
 
-isascii(c::Char) = c < 0x80
+isascii(c::Char) = c < char(0x80)
 isascii(s::String) = all(isascii, s)
 isascii(s::ASCIIString) = true
 

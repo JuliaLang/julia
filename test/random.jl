@@ -34,7 +34,7 @@ randn!(MersenneTwister(42), A)
             -0.444383357109696  -0.29948409035891055]
 
 for T in (Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Int128, Uint128,
-          Char, Float16, Float32, Float64, Rational{Int})
+          Float16, Float32, Float64, Rational{Int})
     r = rand(convert(T, 97):convert(T, 122))
     @test typeof(r) == T
     @test 97 <= r <= 122
@@ -43,7 +43,7 @@ for T in (Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Int128, Uint
     @test 97 <= r <= 122
     @test mod(r,2)==1
 
-    if T<:Integer && T!==Char
+    if T<:Integer
         x = rand(typemin(T):typemax(T))
         @test isa(x,T)
         @test typemin(T) <= x <= typemax(T)
