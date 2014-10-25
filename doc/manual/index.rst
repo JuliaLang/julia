@@ -29,7 +29,6 @@
    networking-and-streams
    parallel-computing
    dates
-   nullable-types
    interacting-with-julia
    running-external-programs
    calling-c-and-fortran-code
