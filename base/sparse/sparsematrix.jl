@@ -2049,7 +2049,16 @@ function diagm{Tv,Ti}(v::SparseMatrixCSC{Tv,Ti})
 end
 
 # Sort all the indices in each column of a CSC sparse matrix
-function sortSparseMatrixCSC!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti})
+# sortSparseMatrixCSC!(A, sortindices = :sortcols)        # Sort each column with sort()
+# sortSparseMatrixCSC!(A, sortindices = :doubletranspose) # Sort with a double transpose
+function sortSparseMatrixCSC!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}; sortindices::Symbol = :sortcols)
+    if sortindices == :doubletranspose
+        B = similar(A)
+        transpose!(A, B)
+        transpose!(B, A)
+        return A
+    end
+
     m, n = size(A)
     colptr = A.colptr; rowval = A.rowval; nzval = A.nzval
 
