@@ -284,7 +284,7 @@ the standard bits types are all defined in the language itself::
     bitstype 64 Float64 <: FloatingPoint
 
     bitstype 8  Bool <: Integer
-    bitstype 32 Char <: Integer
+    bitstype 32 Char
 
     bitstype 8  Int8     <: Signed
     bitstype 8  Uint8    <: Unsigned

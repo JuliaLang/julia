@@ -38,7 +38,7 @@ There are a few noteworthy high-level features about Julia's strings:
    can be used in any function expecting a ``String``.
 -  Like C and Java, but unlike most dynamic languages, Julia has a
    first-class type representing a single character, called ``Char``.
-   This is just a special kind of 32-bit integer whose numeric value
+   This is just a special kind of 32-bit bitstype whose numeric value
    represents a Unicode code point.
 -  As in Java, strings are immutable: the value of a ``String`` object
    cannot be changed. To construct a different string value, you
@@ -62,7 +62,7 @@ Characters
 ----------
 
 A ``Char`` value represents a single character: it is just a 32-bit
-integer with a special literal representation and appropriate arithmetic
+bitstype with a special literal representation and appropriate arithmetic
 behaviors, whose numeric value is interpreted as a `Unicode code
 point <http://en.wikipedia.org/wiki/Code_point>`_. Here is how ``Char``
 values are input and shown:

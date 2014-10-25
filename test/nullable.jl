@@ -1,6 +1,5 @@
 types = [
     Bool,
-    Char,
     Float16,
     Float32,
     Float64,

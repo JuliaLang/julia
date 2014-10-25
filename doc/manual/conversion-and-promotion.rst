@@ -321,15 +321,13 @@ promotion type does not need to be one of the argument types, however;
 the following promotion rules both occur in Julia's standard library::
 
     promote_rule(::Type{Uint8}, ::Type{Int8}) = Int
-    promote_rule(::Type{Char}, ::Type{Uint8}) = Int32
+    promote_rule(::Type{BigInt}, ::Type{Int8}) = BigInt
 
 As a general rule, Julia promotes integers to `Int` during computation
 order to avoid overflow. In the latter case, the result type is
-``Int32`` since ``Int32`` is large enough to contain all possible
-Unicode code points, and numeric operations on characters always
-result in plain old integers unless explicitly cast back to characters
-(see :ref:`man-characters`). Also note that one does not need to
-define both ``promote_rule(::Type{A}, ::Type{B})`` and
+``BigInt`` since ``BigInt`` is the only type large enough to hold
+integers for arbitrary-precision integer arithmetic.  Also note that one
+does not need to define both ``promote_rule(::Type{A}, ::Type{B})`` and
 ``promote_rule(::Type{B}, ::Type{A})`` — the symmetry is implied by
 the way ``promote_rule`` is used in the promotion process.
 
