@@ -124,6 +124,7 @@ static jl_array_t *datatype_list=NULL; // (only used in MODE_SYSTEM_IMAGE)
 #define read_uint8(s) ((uint8_t)ios_getc(s))
 #define write_int8(s, n) write_uint8(s, n)
 #define read_int8(s) read_uint8(s)
+
 static void write_int32(ios_t *s, int32_t i)
 {
     write_uint8(s, i       & 0xff);
@@ -139,6 +140,19 @@ static int32_t read_int32(ios_t *s)
     int b2 = read_uint8(s);
     int b3 = read_uint8(s);
     return b0 | (b1<<8) | (b2<<16) | (b3<<24);
+}
+
+static void write_uint64(ios_t *s, uint64_t i)
+{
+    write_int32(s, i       & 0xffffffff);
+    write_int32(s, (i>>32) & 0xffffffff);
+}
+
+static uint64_t read_uint64(ios_t *s)
+{
+    uint64_t b0 = (uint32_t)read_int32(s);
+    uint64_t b1 = (uint32_t)read_int32(s);
+    return b0 | (b1<<32);
 }
 
 static void write_uint16(ios_t *s, uint16_t i)
@@ -484,8 +498,7 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
         }
     }
     jl_serialize_value(s, m->constant_table);
-    write_int32(s, (uint32_t)m->uuid);
-    write_int32(s, (uint32_t)(m->uuid>>32));
+    write_uint64(s, m->uuid);
 }
 
 static int is_ast_node(jl_value_t *v)
@@ -846,6 +859,32 @@ static void jl_serialize_lambdas_from_mod(ios_t *s, jl_module_t *m)
             }
         }
     }
+}
+
+void jl_serialize_mod_list(ios_t *s)
+{
+    jl_module_t *m = jl_main_module;
+    size_t i;
+    void **table = m->bindings.table;
+    for(i=1; i < m->bindings.size; i+=2) {
+        if (table[i] != HT_NOTFOUND) {
+            jl_binding_t *b = (jl_binding_t*)table[i];
+            if (b->owner == m &&
+                    b->value &&
+                    b->value != (jl_value_t*)jl_current_module &&
+                    jl_is_module(b->value)) {
+                jl_module_t *child = (jl_module_t*)b->value;
+                if (child->name == b->name) {
+                    // this is the original/primary binding for the submodule
+                    size_t l = strlen(child->name->name);
+                    write_int32(s, l);
+                    ios_write(s, child->name->name, l);
+                    write_uint64(s, child->uuid);
+                }
+            }
+        }
+    }
+    write_int32(s, 0);
 }
 
 // --- deserialize ---
@@ -1225,8 +1264,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         }
         m->constant_table = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&m->constant_table);
         if (m->constant_table != NULL) gc_wb(m, m->constant_table);
-        m->uuid = read_int32(s);
-        m->uuid |= ((uint64_t)read_int32(s))<<32;
+        m->uuid = read_uint64(s);
         return (jl_value_t*)m;
     }
     else if (vtag == (jl_value_t*)SmallInt64_tag) {
@@ -1362,6 +1400,32 @@ void jl_deserialize_lambdas_from_mod(ios_t *s)
         jl_svec_t *tvars = (jl_svec_t*)jl_deserialize_value(s, NULL);
         int8_t isstaged = read_int8(s);
         jl_add_method(gf, types, meth, tvars, isstaged);
+    }
+}
+
+int jl_deserialize_verify_mod_list(ios_t *s)
+{
+    while (1) {
+        size_t len = read_int32(s);
+        if (len == 0)
+            return 1;
+        char *name = (char*)alloca(len+1);
+        ios_read(s, name, len);
+        name[len] = '\0';
+        uint64_t uuid = read_uint64(s);
+        jl_module_t *m = (jl_module_t*)jl_get_global(jl_main_module, jl_symbol(name));
+        if (!m) {
+            jl_printf(JL_STDERR, "Module %s must be loaded first\n", name);
+            return 0;
+        }
+        if (!jl_is_module(m)) {
+            ios_close(s);
+            jl_errorf("typeassert: expected %s::Module", name);
+        }
+        if (m->uuid != uuid) {
+            jl_printf(JL_STDERR, "Module %s uuid did not match cache file\n", name);
+            return 0;
+        }
     }
 }
 
@@ -1632,6 +1696,9 @@ int jl_save_new_module(const char *fname, jl_module_t *mod)
         jl_printf(JL_STDERR, "Cannot open cache file \"%s\" for writing.\n", fname);
         return 1;
     }
+    jl_module_t *lastmod = jl_current_module;
+    jl_current_module = mod;
+    jl_serialize_mod_list(&f);
     htable_new(&backref_table, 5000);
     ptrhash_put(&backref_table, jl_main_module, (void*)(uintptr_t)0);
 
@@ -1639,8 +1706,6 @@ int jl_save_new_module(const char *fname, jl_module_t *mod)
     jl_gc_disable();
     DUMP_MODES last_mode = mode;
     mode = MODE_MODULE;
-    jl_module_t *lastmod = jl_current_module;
-    jl_current_module = mod;
     jl_serialize_value(&f, mod->parent);
     jl_serialize_value(&f, mod->name);
     jl_serialize_value(&f, mod);
@@ -1671,6 +1736,10 @@ jl_module_t *jl_restore_new_module(const char *fname)
         return NULL;
     }
     if (ios_eof(&f)) {
+        ios_close(&f);
+        return NULL;
+    }
+    if (!jl_deserialize_verify_mod_list(&f)) {
         ios_close(&f);
         return NULL;
     }
