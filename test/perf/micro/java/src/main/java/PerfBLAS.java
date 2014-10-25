@@ -256,7 +256,7 @@ public class PerfBLAS {
 	        }
 	        
 	        // z = z*z + c
-	        z = Complex.sum(Complex.prod(z, z), c)
+	        z = Complex.add(Complex.mul(z, z), c)
 	    }
 	    return n+1;
 	}
