@@ -11,11 +11,11 @@ public class Complex {
         return Math.sqrt(z.re*z.re + z.im*z.im);
     }
 
-    public static Complex sum(Complex a, Complex b) {
+    public static Complex add(Complex a, Complex b) {
         return new Complex(a.re + b.re, a.im + b.im);
     }
 
-    public static Complex prod(Complex a, Complex b) {
+    public static Complex mul(Complex a, Complex b) {
         return new Complex(a.re*b.re - a.im*b.im, a.re*b.im + a.im*b.re);
     }
 }
