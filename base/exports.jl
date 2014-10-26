@@ -713,6 +713,8 @@ export
     sprandn,
     spzeros,
     symperm,
+    rowvals,
+    nzrange,
 
 # bitarrays
     bitpack,
