@@ -1464,12 +1464,9 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
         }
     }
 
-    *penv = jl_alloc_tuple_uninit(eqc.n);
     for(int i=0; i < eqc.n; i+=2) {
-        jl_tupleset(*penv, i, eqc.data[i]);
-        jl_tupleset(*penv, i+1, *tvar_lookup(&eqc, &eqc.data[i+1]));
+        eqc.data[i+1] = *tvar_lookup(&eqc, &eqc.data[i+1]);
     }
-
     if (env0 > 0) {
         /*
           in a situation like this:
@@ -1479,24 +1476,30 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
           N = 1
           So we need to instantiate all the RHS's first.
         */
-        for(int i=1; i < eqc.n; i+=2) {
-            jl_value_t *rhs = jl_tupleref(*penv,i);
-            if (jl_has_typevars_(rhs,1)) {
-                JL_TRY {
-                    jl_tupleset(*penv, i,
-                                jl_instantiate_type_with(rhs,
-                                                         &jl_t0(*penv), eqc.n/2));
-                }
-                JL_CATCH {
-                }
+        for(int i=0; i < eqc.n; i+=2) {
+            JL_TRY {
+                eqc.data[i+1] = jl_instantiate_type_with(eqc.data[i+1], eqc.data, eqc.n/2);
+            }
+            JL_CATCH {
             }
         }
         JL_TRY {
-            *pti = (jl_value_t*)jl_instantiate_type_with((jl_value_t*)*pti,
-                                                         &jl_t0(*penv), eqc.n/2);
+            *pti = (jl_value_t*)jl_instantiate_type_with(*pti, eqc.data, eqc.n/2);
         }
         JL_CATCH {
             *pti = (jl_value_t*)jl_bottom_type;
+        }
+    }
+
+    // return environment in same order as tvars
+    *penv = jl_alloc_tuple_uninit(tvarslen*2);
+    for(int tk=0; tk < tvarslen; tk++) {
+        jl_tvar_t *tv = (jl_tvar_t*)tvs[tk];
+        for(e=0; e < eqc.n; e+=2) {
+            if (eqc.data[e] == (jl_value_t*)tv) {
+                jl_tupleset(*penv, tk*2, tv);
+                jl_tupleset(*penv, tk*2+1, eqc.data[e+1]);
+            }
         }
     }
 
