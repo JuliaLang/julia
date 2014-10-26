@@ -98,7 +98,7 @@ varzm{T}(A::AbstractArray{T}, region; corrected::Bool=true) =
 immutable CentralizedAbs2Fun{T<:Number} <: Func{1}
     m::T
 end
-evaluate(f::CentralizedAbs2Fun, x) = abs2(x - f.m)
+call(f::CentralizedAbs2Fun, x) = abs2(x - f.m)
 centralize_sumabs2(A::AbstractArray, m::Number, ifirst::Int, ilast::Int) =
     mapreduce_impl(CentralizedAbs2Fun(m), AddFun(), A, ifirst, ilast)
 
@@ -455,10 +455,10 @@ middle(x::Real, y::Real) = (x + y) / 2
 middle(a::Range) = middle(a[1], a[end])
 middle(a::AbstractArray) = ((v1, v2) = extrema(a); middle(v1, v2))
 
-function median!{T}(v::AbstractVector{T}; checknan::Bool=true)
+function median!{T}(v::AbstractVector{T})
     isempty(v) && error("median of an empty array is undefined")
-    if checknan && T<:FloatingPoint
-        for x in v
+    if T<:FloatingPoint
+        @inbounds for x in v
             isnan(x) && return x
         end
     end
@@ -471,10 +471,8 @@ function median!{T}(v::AbstractVector{T}; checknan::Bool=true)
     end
 end
 
-median{T}(v::AbstractArray{T}; checknan::Bool=true) =
-    median!(vec(copy(v)), checknan=checknan)
-median{T}(v::AbstractArray{T}, region; checknan::Bool=true) = 
-    mapslices( x->median(x; checknan=checknan), v, region )
+median{T}(v::AbstractArray{T}) = median!(vec(copy(v)))
+median{T}(v::AbstractArray{T}, region) = mapslices(median, v, region)
 
 # for now, use the R/S definition of quantile; may want variants later
 # see ?quantile in R -- this is type 7

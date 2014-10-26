@@ -72,7 +72,17 @@ end
 
 cp(src::String, dst::String) = FS.sendfile(src, dst)
 mv(src::String, dst::String) = FS.rename(src, dst)
-touch(path::String) = run(`touch $path`)
+
+function touch(path::String)
+    f = FS.open(path,JL_O_WRONLY | JL_O_CREAT, 0o0666)
+    @assert f.handle >= 0
+    try
+        t = time()
+        futime(f,t,t)
+    finally
+        FS.close(f)
+    end
+end
 
 # Obtain a temporary filename.
 @unix_only function tempname()
@@ -133,7 +143,7 @@ end
     seed::Uint32 = rand(Uint32)
     dir = tempdir()
     while true
-        if uint16(seed) == 0
+        if (seed & typemax(Uint16)) == 0
             seed += 1
         end
         filename = tempname(dir, seed)

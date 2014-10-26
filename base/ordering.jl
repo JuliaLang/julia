@@ -7,7 +7,7 @@ export # not exported by Base
     By, Lt, Perm,
     ReverseOrdering, ForwardOrdering, LexicographicOrdering,
     DirectOrdering,
-    lt, uint_mapping, ord, ordtype
+    lt, ord, ordtype
 
 abstract Ordering
 
@@ -47,40 +47,15 @@ lt(o::By,                    a, b) = isless(o.by(a),o.by(b))
 lt(o::Lt,                    a, b) = o.lt(a,b)
 lt(o::LexicographicOrdering, a, b) = lexcmp(a,b) < 0
 
-function lt(p::Perm, a::Int, b::Int)
+function lt(p::Perm, a::Integer, b::Integer)
     da = p.data[a]
     db = p.data[b]
     lt(p.order, da, db) | (!lt(p.order, db, da) & (a < b))
 end
-function lt(p::Perm{LexicographicOrdering}, a::Int, b::Int)
+function lt(p::Perm{LexicographicOrdering}, a::Integer, b::Integer)
     c = lexcmp(p.data[a], p.data[b])
     c != 0 ? c < 0 : a < b
 end
-
-# Map a bits-type to an unsigned int, maintaining sort order
-uint_mapping(::ForwardOrdering, x::Unsigned) = x
-uint_mapping(::ForwardOrdering, x::Int8)     = uint8  (x $ typemin(Int8))
-uint_mapping(::ForwardOrdering, x::Int16)    = uint16 (x $ typemin(Int16))
-uint_mapping(::ForwardOrdering, x::Int32)    = uint32 (x $ typemin(Int32))
-uint_mapping(::ForwardOrdering, x::Int64)    = uint64 (x $ typemin(Int64))
-uint_mapping(::ForwardOrdering, x::Int128)   = uint128(x $ typemin(Int128))
-uint_mapping(::ForwardOrdering, x::Float32)  = (y = reinterpret(Int32, x); uint32(y < 0 ? ~y : (y $ typemin(Int32))))
-uint_mapping(::ForwardOrdering, x::Float64)  = (y = reinterpret(Int64, x); uint64(y < 0 ? ~y : (y $ typemin(Int64))))
-
-uint_mapping{Fwd}(::ReverseOrdering{Fwd}, x) = ~uint_mapping(Fwd, x)
-#uint_mapping{T<:Real}(::ReverseOrdering{ForwardOrdering}, x::T) = ~uint_mapping(Forward, x)  ## Manually inlined
-uint_mapping(::ReverseOrdering{ForwardOrdering}, x::Unsigned) = ~x
-uint_mapping(::ReverseOrdering{ForwardOrdering}, x::Int8)     = ~uint8  (x $ typemin(Int8))
-uint_mapping(::ReverseOrdering{ForwardOrdering}, x::Int16)    = ~uint16 (x $ typemin(Int16))
-uint_mapping(::ReverseOrdering{ForwardOrdering}, x::Int32)    = ~uint32 (x $ typemin(Int32))
-uint_mapping(::ReverseOrdering{ForwardOrdering}, x::Int64)    = ~uint64 (x $ typemin(Int64))
-uint_mapping(::ReverseOrdering{ForwardOrdering}, x::Int128)   = ~uint128(x $ typemin(Int128))
-uint_mapping(::ReverseOrdering{ForwardOrdering}, x::Float32)  = (y = reinterpret(Int32, x); uint32(y < 0 ? y : ~(y $ typemin(Int32))))
-uint_mapping(::ReverseOrdering{ForwardOrdering}, x::Float64)  = (y = reinterpret(Int64, x); uint64(y < 0 ? y : ~(y $ typemin(Int64))))
-
-uint_mapping(o::By,   x     ) = uint_mapping(Forward, o.by(x))
-uint_mapping(o::Perm, i::Int) = uint_mapping(o.order, o.data[i])
-uint_mapping(o::Lt,   x     ) = error("uint_mapping does not work with general Lt Orderings")
 
 ordtype(o::ReverseOrdering, vs::AbstractArray) = ordtype(o.fwd, vs)
 ordtype(o::Perm,            vs::AbstractArray) = ordtype(o.order, o.data)

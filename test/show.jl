@@ -164,3 +164,24 @@ end"""
 # unicode operator printing
 @test sprint(show, :(1 ⊕ (2 ⊗ 3))) == ":(1 ⊕ 2 ⊗ 3)"
 @test sprint(show, :((1 ⊕ 2) ⊗ 3)) == ":((1 ⊕ 2) ⊗ 3)"
+
+# issue #8155
+@test_repr "foo(x,y; z=bar)"
+@test_repr "foo(x,y,z=bar)"
+
+@test_repr "Int[i for i=1:10]"
+@test_repr "Int[(i, j) for (i, j) in zip(1:10,1:0)]"
+
+@test_repr "[1 2 3; 4 5 6; 7 8 9]'"
+
+@test_repr "baremodule X
+importall ..A.b
+import ...B.c
+import D
+import B.C.D.E.F.g
+end"
+@test_repr "baremodule Y
+export A, B, C
+export D, E, F
+end"
+

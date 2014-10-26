@@ -4,7 +4,7 @@ importall Base
 # sum a vector using a tree on top of local reductions.
 function sum(v::DArray)
     P = procs(v)
-    nodeval = { RemoteRef(p) for p=P }
+    nodeval = [RemoteRef(p) for p=P]
     answer = RemoteRef()
     np = numel(P)
 
@@ -31,7 +31,7 @@ end
 
 function reduce(f, v::DArray)
     mapreduce(fetch, f,
-              { @spawnat p reduce(f,localpart(v)) for p = procs(v) })
+            [ @spawnat p reduce(f,localpart(v)) for p = procs(v) ])
 end
 
 # possibly-useful abstraction:

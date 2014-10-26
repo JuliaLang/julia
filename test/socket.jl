@@ -67,8 +67,8 @@ close(server)
 
 @test_throws Base.UVError connect(".invalid",80)
 
-a = UdpSocket()
-b = UdpSocket()
+a = UDPSocket()
+b = UDPSocket()
 bind(a,ip"127.0.0.1",port)
 bind(b,ip"127.0.0.1",port+1)
 
@@ -85,7 +85,7 @@ end
 send(b,ip"127.0.0.1",port,"Hello World")
 wait(c)
 
-@test_throws MethodError bind(UdpSocket(),port)
+@test_throws MethodError bind(UDPSocket(),port)
 
 close(a)
 close(b)

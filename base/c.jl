@@ -22,11 +22,17 @@ function dlsym_e(hnd::Ptr, s::Union(Symbol,String))
     ccall(:jl_dlsym_e, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
 end
 
+dlopen(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
+    dlopen(string(s), flags)
+
 dlopen(s::String, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
     ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},Uint32), s, flags)
 
 dlopen_e(s::String, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
     ccall(:jl_load_dynamic_library_e, Ptr{Void}, (Ptr{Uint8},Uint32), s, flags)
+
+dlopen_e(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
+    dlopen_e(string(s), flags)
 
 dlclose(p::Ptr) = if p!=C_NULL; ccall(:uv_dlclose,Void,(Ptr{Void},),p); end
 
@@ -55,12 +61,12 @@ end
 typealias Cptrdiff_t Int
 typealias Csize_t Uint
 typealias Cssize_t Int
+typealias Cintmax_t Int64
+typealias Cuintmax_t Uint64
 typealias Clonglong Int64
 typealias Culonglong Uint64
 typealias Cfloat Float32
 typealias Cdouble Float64
-#typealias Ccomplex_float Complex64
-#typealias Ccomplex_double Complex128
 
 const sizeof_off_t = ccall(:jl_sizeof_off_t, Cint, ())
 
@@ -106,11 +112,11 @@ function find_library{T<:ByteString, S<:ByteString}(libnames::Array{T,1}, extrap
     return ""
 end
 
-function ccallable(f::Callable, rt::Type, argt::(Type...), name::Union(String,Symbol)=string(f))
+function ccallable(f::Function, rt::Type, argt::(Type...), name::Union(String,Symbol)=string(f))
     ccall(:jl_extern_c, Void, (Any, Any, Any, Ptr{Uint8}), f, rt, argt, name)
 end
 
-function ccallable(f::Callable, argt::(Type...), name::Union(String,Symbol)=string(f))
+function ccallable(f::Function, argt::(Type...), name::Union(String,Symbol)=string(f))
     ccall(:jl_extern_c, Void, (Any, Ptr{Void}, Any, Ptr{Uint8}), f, C_NULL, argt, name)
 end
 

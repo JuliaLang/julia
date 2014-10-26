@@ -13,9 +13,9 @@ let io=IOBuffer(3)
     @test takebuf_string(io)=="12"
 end
 
-# map over [] should return []
+# map over Bottom[] should return Bottom[]
 # issue #6719
-@test isequal(typeof(map(x -> x, [])), Array{None,1})
+@test isequal(typeof(map(x -> x, Array(Union(),0))), Array{Union(),1})
 
 # maps of tuples (formerly in test/core.jl) -- tuple.jl
 @test map((x,y)->x+y,(1,2,3),(4,5,6)) == (5,7,9)
@@ -34,22 +34,22 @@ end
 
 # zip and filter iterators
 # issue #4718
-@test collect(filter(x->x[1], zip([true, false, true, false],"abcd"))) == {(true,'a'),(true,'c')}
+@test collect(filter(x->x[1], zip([true, false, true, false],"abcd"))) == [(true,'a'),(true,'c')]
 
 # enumerate (issue #6284)
-let b = IOBuffer("1\n2\n3\n"), a = {}
+let b = IOBuffer("1\n2\n3\n"), a = []
     for (i,x) in enumerate(eachline(b))
         push!(a, (i,x))
     end
-    @test a == {(1,"1\n"),(2,"2\n"),(3,"3\n")}
+    @test a == [(1,"1\n"),(2,"2\n"),(3,"3\n")]
 end
 
 # zip eachline (issue #7369)
 let zeb     = IOBuffer("1\n2\n3\n4\n5\n"),
     letters = ['a', 'b', 'c', 'd', 'e'],
-    res     = {}
+    res     = []
     for (number, letter) in zip(eachline(zeb), letters)
         push!(res, (int(strip(number)), letter))
     end
-    @test res == {(1, 'a'), (2, 'b'), (3, 'c'), (4, 'd'), (5, 'e')}
+    @test res == [(1, 'a'), (2, 'b'), (3, 'c'), (4, 'd'), (5, 'e')]
 end

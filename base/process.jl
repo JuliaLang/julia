@@ -4,7 +4,7 @@ type Cmd <: AbstractCmd
     exec::Vector{ByteString}
     ignorestatus::Bool
     detach::Bool
-    env::Union(Array{ByteString},Nothing)
+    env::Union(Array{ByteString},Void)
     dir::UTF8String
     Cmd(exec::Vector{ByteString}) = new(exec, false, false, nothing, "")
 end
@@ -206,9 +206,8 @@ function _jl_spawn(cmd::Ptr{Uint8}, argv::Ptr{Ptr{Uint8}}, loop::Ptr{Void}, pp::
     proc = c_malloc(_sizeof_uv_process)
     error = ccall(:jl_spawn, Int32,
         (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{Void}, Ptr{Void}, Any, Int32,
-         Ptr{Void},    Int32,       Ptr{Void},     Int32,       Ptr{Void},
-         Int32, Ptr{Ptr{Uint8}}, Ptr{Uint8}),
-         cmd,        argv,            loop,      proc,      pp,  uvtype(in),
+         Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Ptr{Uint8}}, Ptr{Uint8}),
+         cmd, argv, loop, proc, pp, uvtype(in),
          uvhandle(in), uvtype(out), uvhandle(out), uvtype(err), uvhandle(err),
          pp.cmd.detach, pp.cmd.env === nothing ? C_NULL : pp.cmd.env, isempty(pp.cmd.dir) ? C_NULL : pp.cmd.dir)
     if error != 0
@@ -227,7 +226,7 @@ function uvfinalize(proc::Process)
 end
 
 function _uv_hook_return_spawn(proc::Process, exit_status::Int64, termsignal::Int32)
-    proc.exitcode = exit_status
+    proc.exitcode = int32(exit_status)
     proc.termsignal = termsignal
     if isa(proc.exitcb, Function) proc.exitcb(proc, exit_status, termsignal) end
     ccall(:jl_close_uv, Void, (Ptr{Void},), proc.handle)

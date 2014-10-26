@@ -60,9 +60,11 @@ Julia's type system that should be mentioned up front are:
    distinction significant.
 -  Only values, not variables, have types — variables are simply names
    bound to values.
--  Both abstract and concrete types can be parameterized by other types
-   and by certain other values (currently integers, symbols, bools, and tuples thereof).
-   Type parameters may be completely omitted when they
+-  Both abstract and concrete types can be parameterized by other types.
+   They can also be parameterized by symbols, by values of any type for
+   which `isbits` returns true (essentially, things like numbers and bools
+   that are stored like C types or structs with no pointers to other objects),
+   and also by tuples thereof. Type parameters may be omitted when they
    do not need to be referenced or restricted.
 
 Julia's type system is designed to be powerful and expressive, yet
@@ -118,13 +120,13 @@ using the ``convert`` function:
 .. doctest:: foo-func
 
     julia> function foo()
-             x::Int8 = 1000
+             x::Int8 = 100
              x
            end
     foo (generic function with 1 method)
 
     julia> foo()
-    -24
+    100
 
     julia> typeof(ans)
     Int8
@@ -232,10 +234,41 @@ subtype of its right operand:
     julia> Integer <: FloatingPoint
     false
 
-Since abstract types have no instantiations and serve as no more than
-nodes in the type graph, there is not much more to say about them until
-we introduce parametric abstract types later on in `Parametric
-Types <#man-parametric-types>`_.
+An important use of abstract types is to provide default implementations for
+concrete types. To give a simple example, consider::
+
+    function myplus(x,y)
+     x+y
+    end
+
+The first thing to note is that the above argument declarations are equivalent
+to ``x::Any`` and ``y::Any``. When this function is invoked, say as
+``myplus(2,5)``, the dispatcher chooses the most specific method named
+``myplus`` that matches the given arguments. (See :ref:`man-methods` for more
+information on multiple dispatch.)
+
+Assuming no method more specific than the above is found, Julia next internally
+defines and compiles a method called ``myplus`` specifically for two ``Int``
+arguments based on the generic function given above, i.e., it implicitly
+defines and compiles::
+ 
+    function myplus(x::Int,y::Int)
+     x+y
+    end
+    
+and finally, it invokes this specific method.
+
+Thus, abstract types allow programmers to write generic functions that can
+later be used as the default method by many combinations of concrete types.  
+Thanks to multiple dispatch, the programmer has full control over whether the
+default or more specific method is used.
+
+An important point to note is that there is no loss in performance if the
+programmer relies on a function whose arguments are abstract types, because it
+is recompiled for each tuple of argument concrete types with which it is
+invoked. (There may be a performance issue, however, in the case of function
+arguments that are containers of abstract types; see :ref:`man-performance-tips`.)
+
 
 Bits Types
 ----------
@@ -459,6 +492,29 @@ would be considered identical, or if they might need to change independently
 over time. If they would be considered identical, the type should probably
 be immutable.
 
+To recap, two essential properties define immutability
+in Julia:
+
+* An object with an immutable type is passed around (both in assignment
+  statements and in function calls) by copying, whereas a mutable type is
+  passed around by reference.
+
+* It is not permitted to modify the fields of a composite immutable
+  type.
+
+It is instructive, particularly for readers whose background is C/C++, to consider
+why these two properties go hand in hand.  If they were separated,
+i.e., if the fields of objects passed around by copying could be modified,
+then it would become more difficult to reason about certain instances of generic code.  For example,
+suppose ``x`` is a function argument of an abstract type, and suppose that the function
+changes a field: ``x.isprocessed = true``.  Depending on whether ``x`` is passed by copying
+or by reference, this statement may or may not alter the actual argument in the 
+calling routine.  Julia
+sidesteps the possibility of creating functions with unknown effects in this
+scenario by forbidding modification of fields
+of objects passed around by copying.
+
+
 Declared Types
 --------------
 
@@ -573,14 +629,13 @@ union of no types is the "bottom" type, ``None``:
 
 .. doctest::
 
-    julia> Union()
-    None
+    julia> None
+    Union()
 
 Recall from the `discussion above <#Any+and+None>`_ that ``None`` is the
 abstract type which is the subtype of all other types, and which no
-object is an instance of. Since a zero-argument ``Union`` call has no
-argument types for objects to be instances of, it should produce a
-type which no objects are instances of — i.e. ``None``.
+object is an instance of. ``None`` is therefore synonymous with a zero-argument
+``Union`` type, which has no argument types for objects to be instances of.
 
 .. _man-parametric-types:
 
@@ -1042,7 +1097,7 @@ This is accomplished via the following code in ``base/boot.jl``::
     end
 
 Of course, this depends on what ``Int`` is aliased to — but that is
-pre-defined to be the correct type — either ``Int32`` or ``Int64``.
+predefined to be the correct type — either ``Int32`` or ``Int64``.
 
 For parametric types, ``typealias`` can be convenient for providing
 names for cases where some of the parameter choices are fixed.
@@ -1174,3 +1229,103 @@ If you apply ``super`` to other type objects (or non-type objects), a
 
     julia> super((Float64,Int64))
     ERROR: `super` has no method matching super(::Type{(Float64,Int64)})
+
+Nullable Types: Representing Missing Values
+-------------------------------------------
+
+In many settings, you need to interact with a value of type ``T`` that may or
+may not exist. To handle these settings, Julia provides a parametric type
+called ``Nullable{T}``, which can be thought of as a specialized container
+type that can contain either zero or one values. ``Nullable{T}`` provides a
+minimal interface designed to ensure that interactions with missing values
+are safe. At present, the interface consists of four possible interactions:
+
+- Construct a ``Nullable`` object.
+- Check if an ``Nullable`` object has a missing value.
+- Access the value of a ``Nullable`` object with a guarantee that a
+  ``NullException`` will be thrown if the object's value is missing.
+- Access the value of a ``Nullable`` object with a guarantee that a default
+  value of type ``T`` will be returned if the object's value is missing.
+
+Constructing ``Nullable`` objects
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To construct an object representing a missing value of type ``T``, use the
+``Nullable{T}()`` function:
+
+.. doctest::
+
+    julia> x1 = Nullable{Int}()
+    julia> x2 = Nullable{Float64}()
+    julia> x3 = Nullable{Vector{Int}}()
+
+To construct an object representing a non-missing value of type ``T``, use the
+``Nullable(x::T)`` function:
+
+.. doctest::
+
+    julia> x1 = Nullable(1)
+    Nullable(1)
+
+    julia> x2 = Nullable(1.0)
+    Nullable(1.0)
+
+    julia> x3 = Nullable([1, 2, 3])
+    Nullable([1, 2, 3])
+
+Note the core distinction between these two ways of constructing a ``Nullable``
+object: in one style, you provide a type, ``T``, as a function parameter; in
+the other style, you provide a single value of type ``T`` as an argument.
+
+Checking if an ``Nullable`` object has a value
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+You can check if a ``Nullable`` object has any value using the ``isnull``
+function:
+
+.. doctest::
+
+    julia> isnull(Nullable{Float64}())
+    true
+
+    julia> isnull(Nullable(0.0))
+    false
+
+Safely accessing the value of an ``Nullable`` object
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+You can safely access the value of an ``Nullable`` object using the ``get``
+function:
+
+.. doctest::
+
+    julia> get(Nullable{Float64}())
+    ERROR: NullException()
+     in get at nullable.jl:26
+
+    julia> get(Nullable(1.0))
+    1.0
+
+If the value is not present, as it would be for ``Nullable{Float64}``, a
+``NullException`` error will be thrown. The error-throwing nature of the
+``get`` function ensures that any attempt to access a missing value immediately
+fails.
+
+In cases for which a reasonable default value exists that could be used
+when a ``Nullable`` object's value turns out to be missing, you can provide this
+default value as a second argument to ``get``:
+
+.. doctest::
+
+    julia> get(Nullable{Float64}(), 0)
+    0.0
+
+    julia> get(Nullable(1.0), 0)
+    1.0
+
+Note that this default value will automatically be converted to the type of
+the ``Nullable`` object that you attempt to access using the ``get`` function.
+For example, in the code shown above the value ``0`` would be automatically
+converted to a ``Float64`` value before being returned. The presence of default
+replacement values makes it easy to use the ``get`` function to write
+type-stable code that interacts with sources of potentially missing values.

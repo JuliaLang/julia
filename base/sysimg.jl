@@ -8,6 +8,9 @@ eval(m,x) = Core.eval(m,x)
 
 include = Core.include
 
+using Core: Intrinsics, arraylen, arrayref, arrayset, arraysize, _expr,
+            tuplelen, tupleref, kwcall, _apply, typeassert, apply_type
+
 include("exports.jl")
 
 if false
@@ -49,8 +52,6 @@ include("rational.jl")
 
 # core data structures (used by type inference)
 include("abstractarray.jl")
-include("reduce.jl")
-
 include("subarray.jl")
 include("array.jl")
 include("bitarray.jl")
@@ -59,6 +60,12 @@ include("dict.jl")
 include("set.jl")
 include("hashing.jl")
 include("iterator.jl")
+
+# SIMD loops
+include("simdloop.jl")
+importall .SimdLoop
+
+include("reduce.jl")
 
 # compiler
 import Core.Undef  # used internally by compiler
@@ -176,7 +183,6 @@ importall .MPFR
 big(n::Integer) = convert(BigInt,n)
 big(x::FloatingPoint) = convert(BigFloat,x)
 big(q::Rational) = big(num(q))//big(den(q))
-big(z::Complex) = complex(big(real(z)),big(imag(z)))
 
 # more hashing definitions
 include("hashing2.jl")
@@ -205,10 +211,6 @@ include("help.jl")
 using .I18n
 using .Help
 push!(I18n.CALLBACKS, Help.clear_cache)
-
-# SIMD loops
-include("simdloop.jl")
-importall .SimdLoop
 
 # frontend
 include("Terminals.jl")
@@ -272,6 +274,10 @@ importall .Profile
 
 # dates
 include("Dates.jl")
+import .Dates: Date, DateTime, now
+
+# nullable types
+include("nullable.jl")
 
 function __init__()
     # Base library init

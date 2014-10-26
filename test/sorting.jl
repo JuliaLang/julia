@@ -1,13 +1,14 @@
 @test sort([2,3,1]) == [1,2,3]
 @test sort([2,3,1], rev=true) == [3,2,1]
 @test sortperm([2,3,1]) == [3,1,2]
+@test sortperm!([1,2,3], [2,3,1]) == [3,1,2]
 @test !issorted([2,3,1])
 @test issorted([1,2,3])
 @test reverse([2,3,1]) == [1,3,2]
 @test select([3,6,30,1,9],3) == 6
 @test select([3,6,30,1,9],3:4) == [6,9]
 let a=[1:10]
-    for r in {2:4, 1:2, 10:10, 4:2, 2:1, 4:-1:2, 2:-1:1, 10:-1:10, 4:1:3, 1:2:8, 10:-3:1}
+    for r in Any[2:4, 1:2, 10:10, 4:2, 2:1, 4:-1:2, 2:-1:1, 10:-1:10, 4:1:3, 1:2:8, 10:-3:1]
         @test select(a, r) == [r]
         @test select(a, r, rev=true) == (11 .- [r])
     end
@@ -26,7 +27,7 @@ end
 @test searchsorted([1:5, 1:5, 1:5], 1, 6, 10, Base.Order.Forward) == 6:6
 @test searchsorted(ones(15), 1, 6, 10, Base.Order.Forward) == 6:10
 
-for (rg,I) in {(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)}
+for (rg,I) in [(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)]
     rg_r = reverse(rg)
     rgv, rgv_r = [rg], [rg_r]
     for i = I
@@ -66,9 +67,19 @@ for alg in [InsertionSort, MergeSort]
     @test issorted(b)
     @test a[ix] == b
 
+    sortperm!(ix, a, alg=alg)
+    b = a[ix]
+    @test issorted(b)
+    @test a[ix] == b
+
     b = sort(a, alg=alg, rev=true)
     @test issorted(b, rev=true)
     ix = sortperm(a, alg=alg, rev=true)
+    b = a[ix]
+    @test issorted(b, rev=true)
+    @test a[ix] == b
+
+    sortperm!(ix, a, alg=alg, rev=true)
     b = a[ix]
     @test issorted(b, rev=true)
     @test a[ix] == b
@@ -77,6 +88,10 @@ for alg in [InsertionSort, MergeSort]
     @test issorted(b, by=x->1/x)
     ix = sortperm(a, alg=alg, by=x->1/x)
     b = a[ix]
+    @test issorted(b, by=x->1/x)
+    @test a[ix] == b
+
+    sortperm!(ix, a, alg=alg, by=x->1/x)
     @test issorted(b, by=x->1/x)
     @test a[ix] == b
 

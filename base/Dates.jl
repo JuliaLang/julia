@@ -12,7 +12,7 @@ include("dates/io.jl")
 
 export Period, DatePeriod, TimePeriod,
        Year, Month, Week, Day, Hour, Minute, Second, Millisecond,
-       TimeType, DateTime, Date,
+       TimeZone, UTC, TimeType, DateTime, Date,
        # accessors.jl
        yearmonthday, yearmonth, monthday, year, month, week, day,
        hour, minute, second, millisecond, dayofmonth,
@@ -35,6 +35,6 @@ export Period, DatePeriod, TimePeriod,
        firstdayofquarter, lastdayofquarter,
        adjust, tonext, toprev, tofirst, tolast, recur,
        # io.jl
-       ISODateTimeFormat, ISODateFormat, DateFormat
+       ISODateTimeFormat, ISODateFormat, DateFormat, RFC1123Format
 
 end # module

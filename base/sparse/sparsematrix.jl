@@ -18,6 +18,10 @@ size(S::SparseMatrixCSC) = (S.m, S.n)
 nnz(S::SparseMatrixCSC) = int(S.colptr[end]-1)
 countnz(S::SparseMatrixCSC) = countnz(S.nzval)
 
+nonzeros(S::SparseMatrixCSC) = S.nzval
+rowvals(S::SparseMatrixCSC) = S.rowval
+nzrange(S::SparseMatrixCSC, col::Integer) = S.colptr[col]:(S.colptr[col+1]-1)
+
 function Base.showarray(io::IO, S::SparseMatrixCSC;
                         header::Bool=true, limit::Bool=Base._limit_output,
                         rows = Base.tty_size()[1], repr=false)
@@ -210,6 +214,7 @@ function sparsevec(I::AbstractVector, V, m::Integer, combine::Function)
     p = sortperm(I)
     @inbounds I = I[p]
     (nI==0 || m >= I[end]) || throw(DimensionMismatch("indices cannot be larger than length of vector"))
+    (nI==0 || I[1] > 0) || throw(BoundsError())
     V = V[p]
     sparse_IJ_sorted!(I, ones(eltype(I), nI), V, m, 1, combine)
 end
@@ -351,8 +356,6 @@ function findnz{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     return (I, J, V)
 end
 
-nonzeros(S::SparseMatrixCSC) = S.nzval
-
 function sprand{T}(m::Integer, n::Integer, density::FloatingPoint,
                    rng::Function,::Type{T}=eltype(rng(1)))
     0 <= density <= 1 || throw(ArgumentError("$density not in [0,1]"))
@@ -430,24 +433,24 @@ end
 
 # Operations that may map nonzeros to zero, and zero to zero
 # Result is sparse
-for (op, restype) in ((:iceil, Int), (:ceil, Nothing),
-                      (:ifloor, Int), (:floor, Nothing),
-                      (:itrunc, Int), (:trunc, Nothing),
-                      (:iround, Int), (:round, Nothing),
-                      (:sin, Nothing), (:tan, Nothing),
-                      (:sinh, Nothing), (:tanh, Nothing),
-                      (:asin, Nothing), (:atan, Nothing),
-                      (:asinh, Nothing), (:atanh, Nothing),
-                      (:sinpi, Nothing), (:cosc, Nothing),
-                      (:sind, Nothing), (:tand, Nothing),
-                      (:asind, Nothing), (:atand, Nothing) )
+for (op, restype) in ((:iceil, Int), (:ceil, Void),
+                      (:ifloor, Int), (:floor, Void),
+                      (:itrunc, Int), (:trunc, Void),
+                      (:iround, Int), (:round, Void),
+                      (:sin, Void), (:tan, Void),
+                      (:sinh, Void), (:tanh, Void),
+                      (:asin, Void), (:atan, Void),
+                      (:asinh, Void), (:atanh, Void),
+                      (:sinpi, Void), (:cosc, Void),
+                      (:sind, Void), (:tand, Void),
+                      (:asind, Void), (:atand, Void) )
     @eval begin
 
         function ($op){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti})
             nfilledA = nnz(A)
             colptrB = Array(Ti, A.n+1)
             rowvalB = Array(Ti, nfilledA)
-            nzvalB = Array($(restype==Nothing ? (:Tv) : restype), nfilledA)
+            nzvalB = Array($(restype==Void ? (:Tv) : restype), nfilledA)
 
             k = 0 # number of additional zeros introduced by op(A)
             @inbounds for i = 1 : A.n
@@ -514,7 +517,7 @@ end
 
 ## Binary arithmetic and boolean operators
 
-for (op, restype) in ( (:+, Nothing), (:-, Nothing), (:.*, Nothing),
+for (op, restype) in ( (:+, Void), (:-, Void), (:.*, Void),
                        (:(.<), Bool) )
     @eval begin
 
@@ -537,7 +540,7 @@ for (op, restype) in ( (:+, Nothing), (:-, Nothing), (:.*, Nothing),
             nnzS = nnz(A) + nnz(B)
             colptrS = Array(Ti, A.n+1)
             rowvalS = Array(Ti, nnzS)
-            nzvalS = Array($(restype==Nothing ? (:Tv) : restype), nnzS)
+            nzvalS = Array($(restype==Void ? (:Tv) : restype), nnzS)
 
             z = zero(Tv)
 
@@ -1798,8 +1801,13 @@ function hcat(X::SparseMatrixCSC...)
     @inbounds for i = 1 : num
         XI = X[i]
         colptr[(1 : nX[i] + 1) + nX_sofar] = XI.colptr .+ nnz_sofar
-        rowval[(1 : nnzX[i]) + nnz_sofar] = XI.rowval
-        nzval[(1 : nnzX[i]) + nnz_sofar] = XI.nzval
+        if nnzX[i] == length(XI.rowval)
+            rowval[(1 : nnzX[i]) + nnz_sofar] = XI.rowval
+            nzval[(1 : nnzX[i]) + nnz_sofar] = XI.nzval
+        else
+            rowval[(1 : nnzX[i]) + nnz_sofar] = XI.rowval[1:nnzX[i]]
+            nzval[(1 : nnzX[i]) + nnz_sofar] = XI.nzval[1:nnzX[i]]
+        end
         nnz_sofar += nnzX[i]
         nX_sofar += nX[i]
     end
@@ -2040,4 +2048,61 @@ function diagm{Tv,Ti}(v::SparseMatrixCSC{Tv,Ti})
     end
 
     return SparseMatrixCSC{Tv,Ti}(n, n, colptr, rowval, nzval)
+end
+
+# Sort all the indices in each column of a CSC sparse matrix
+# sortSparseMatrixCSC!(A, sortindices = :sortcols)        # Sort each column with sort()
+# sortSparseMatrixCSC!(A, sortindices = :doubletranspose) # Sort with a double transpose
+function sortSparseMatrixCSC!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}; sortindices::Symbol = :sortcols)
+    if sortindices == :doubletranspose
+        nB, mB = size(A)
+        B = SparseMatrixCSC(mB, nB, Array(Ti, nB+1), similar(A.rowval), similar(A.nzval))
+        transpose!(A, B)
+        transpose!(B, A)
+        return A
+    end
+
+    m, n = size(A)
+    colptr = A.colptr; rowval = A.rowval; nzval = A.nzval
+
+    index = zeros(Ti, m)
+    row = zeros(Ti, m)
+    val = zeros(Tv, m)
+
+    for i = 1:n
+        @inbounds col_start = colptr[i]
+        @inbounds col_end = (colptr[i+1] - 1)
+ 
+        numrows = col_end - col_start + 1
+        if numrows <= 1
+            continue
+        elseif numrows == 2
+            f = col_start
+            s = f+1
+            if rowval[f] > rowval[s]
+                @inbounds rowval[f], rowval[s] = rowval[s], rowval[f]
+                @inbounds nzval[f],  nzval[s]  = nzval[s],  nzval[f]
+            end
+            continue
+        end
+
+        jj = 1
+        @simd for j = col_start:col_end
+            @inbounds row[jj] = rowval[j]
+            @inbounds val[jj] = nzval[j]
+            jj += 1
+        end
+
+        sortperm!(pointer_to_array(pointer(index), numrows),
+                  pointer_to_array(pointer(row), numrows))
+
+        jj = 1;
+        @simd for j = col_start:col_end
+            @inbounds rowval[j] = row[index[jj]]
+            @inbounds nzval[j] = val[index[jj]]
+            jj += 1
+        end
+    end
+
+    return A
 end

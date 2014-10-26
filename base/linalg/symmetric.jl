@@ -1,14 +1,14 @@
 #Symmetric and Hermitian matrices
-immutable Symmetric{T,S<:AbstractMatrix{T}} <: AbstractMatrix{T}
+immutable Symmetric{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     data::S
     uplo::Char
 end
-Symmetric(A::AbstractMatrix, uplo::Symbol=:U) = (chksquare(A);Symmetric{eltype(A),typeof(A)}(A, string(uplo)[1]))
-immutable Hermitian{T,S<:AbstractMatrix{T}} <: AbstractMatrix{T}
+Symmetric(A::AbstractMatrix, uplo::Symbol=:U) = (chksquare(A);Symmetric{eltype(A),typeof(A)}(A, char_uplo(uplo)))
+immutable Hermitian{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     data::S
     uplo::Char
 end
-Hermitian(A::AbstractMatrix, uplo::Symbol=:U) = (chksquare(A);Hermitian{eltype(A),typeof(A)}(A, string(uplo)[1]))
+Hermitian(A::AbstractMatrix, uplo::Symbol=:U) = (chksquare(A);Hermitian{eltype(A),typeof(A)}(A, char_uplo(uplo)))
 typealias HermOrSym{T,S} Union(Hermitian{T,S}, Symmetric{T,S})
 typealias RealHermSymComplexHerm{T<:Real,S} Union(Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S})
 
@@ -17,11 +17,11 @@ getindex(A::Symmetric, i::Integer, j::Integer) = (A.uplo == 'U') == (i < j) ? ge
 getindex(A::Hermitian, i::Integer, j::Integer) = (A.uplo == 'U') == (i < j) ? getindex(A.data, i, j) : conj(getindex(A.data, j, i))
 full(A::Symmetric) = copytri!(copy(A.data), A.uplo)
 full(A::Hermitian) = copytri!(copy(A.data), A.uplo, true)
-convert{T,S}(::Type{Symmetric{T,S}},A::Symmetric{T,S}) = A
-convert{T,S}(::Type{Symmetric{T,S}},A::Symmetric) = Symmetric{T,S}(convert(S,A.data),A.uplo)
+convert{T,S<:AbstractMatrix}(::Type{Symmetric{T,S}},A::Symmetric{T,S}) = A
+convert{T,S<:AbstractMatrix}(::Type{Symmetric{T,S}},A::Symmetric) = Symmetric{T,S}(convert(S,A.data),A.uplo)
 convert{T}(::Type{AbstractMatrix{T}}, A::Symmetric) = Symmetric(convert(AbstractMatrix{T}, A.data), symbol(A.uplo))
-convert{T,S}(::Type{Hermitian{T,S}},A::Hermitian{T,S}) = A
-convert{T,S}(::Type{Hermitian{T,S}},A::Hermitian) = Hermitian{T,S}(convert(S,A.data),A.uplo)
+convert{T,S<:AbstractMatrix}(::Type{Hermitian{T,S}},A::Hermitian{T,S}) = A
+convert{T,S<:AbstractMatrix}(::Type{Hermitian{T,S}},A::Hermitian) = Hermitian{T,S}(convert(S,A.data),A.uplo)
 convert{T}(::Type{AbstractMatrix{T}}, A::Hermitian) = Hermitian(convert(AbstractMatrix{T}, A.data), symbol(A.uplo))
 copy{T,S}(A::Symmetric{T,S}) = Symmetric{T,S}(copy(A.data),A.uplo)
 copy{T,S}(A::Hermitian{T,S}) = Hermitian{T,S}(copy(A.data),A.uplo)

@@ -79,10 +79,10 @@ ________
 
 A handler is a function defined for three kinds of arguments: ``Success``, ``Failure``, ``Error``::
 
-  # The definition of the default handler
-  default_handler(r::Success) = nothing
-  default_handler(r::Failure) = error("test failed: $(r.expr)")
-  default_handler(r::Error)   = rethrow(r)
+  # An example definition of a test handler
+  test_handler(r::Success) = nothing
+  test_handler(r::Failure) = error("test failed: $(r.expr)")
+  test_handler(r::Error)   = rethrow(r)
 
 A different handler can be used for a block (with :func:`with_handler`)::
 
@@ -109,6 +109,8 @@ A different handler can be used for a block (with :func:`with_handler`)::
    in anonymous at no file:3
    in task_local_storage at task.jl:28
    in with_handler at test.jl:24
+
+The ``Success`` and ``Failure`` types include an additonal field, ``resultexpr``, which is a partially evaluated expression. For example, in a comparison it will contain an expression with the left and right sides evaluated.
 
 Macros
 ______

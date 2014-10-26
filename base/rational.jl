@@ -12,14 +12,34 @@ Rational{T<:Integer}(n::T, d::T) = Rational{T}(n,d)
 Rational(n::Integer, d::Integer) = Rational(promote(n,d)...)
 Rational(n::Integer) = Rational(n,one(n))
 
-//(n::Integer,  d::Integer ) = Rational(n,d)
-//(x::Rational, y::Integer ) = x.num//(x.den*y)
-//(x::Integer,  y::Rational) = (x*y.den)//y.num
-//(x::Rational, y::Rational) = (x.num*y.den)//(x.den*y.num)
-//(x::Complex,  y::Real    ) = complex(real(x)//y,imag(x)//y)
-//(x::Real,     y::Complex ) = x*y'//real(y*y')
+function divgcd(x::Integer,y::Integer)
+    g = gcd(x,y)
+    div(x,g), div(y,g)
+end
 
-function //(x::Complex, y::Complex)
+//(n::Integer,  d::Integer ) = Rational(n,d)
+
+function //(x::Rational, y::Integer )
+    xn,yn = divgcd(x.num,y)
+    xn//checked_mul(x.den,yn)
+end
+function //(x::Integer,  y::Rational)
+    xn,yn = divgcd(x,y.num)
+    checked_mul(xn,y.den)//yn
+end
+function //(x::Rational, y::Rational)
+    xn,yn = divgcd(x.num,y.num)
+    xd,yd = divgcd(x.den,y.den)
+    checked_mul(xn,yd)//checked_mul(xd,yn)
+end
+
+//(x::Complex,  y::Real    ) = complex(real(x)//y,imag(x)//y)
+function //(x::Number, y::Complex)
+    xr = complex(Rational(real(x)),Rational(imag(x)))
+    yr = complex(Rational(real(y)),Rational(imag(y)))
+    xr // yr
+end
+function //{Ra<:Rational,Rb<:Rational}(x::Complex{Ra}, y::Complex{Rb})
     xy = x*y'
     yy = real(y*y')
     complex(real(xy)//yy, imag(xy)//yy)
@@ -65,31 +85,53 @@ promote_rule{T<:Integer,S<:FloatingPoint}(::Type{Rational{T}}, ::Type{S}) = prom
 widen{T}(::Type{Rational{T}}) = Rational{widen(T)}
 
 function rationalize{T<:Integer}(::Type{T}, x::FloatingPoint; tol::Real=eps(x))
-    if isnan(x);       return zero(T)//zero(T); end
-    if x < typemin(T); return -one(T)//zero(T); end
-    if typemax(T) < x; return  one(T)//zero(T); end
-    tm = x < 0 ? typemin(T) : typemax(T)
-    z = x*tm
-    if z <= 0.5 return zero(T)//one(T) end
-    if z <= 1.0 return one(T)//tm end
-    y = x
-    a = d = 1
-    b = c = 0
-    while true
-        f = itrunc(y); y -= f
-        p, q = f*a+c, f*b+d
-        typemin(T) <= p <= typemax(T) &&
-        typemin(T) <= q <= typemax(T) || break
-        0 != sign(a)*sign(b) != sign(p)*sign(q) && break
-        a, b, c, d = p, q, a, b
-        if y == 0 || abs(a/b-x) <= tol
-            break
+    tol < 0 && throw(ArgumentError("negative tolerance"))
+    isnan(x) && return zero(T)//zero(T)
+    isinf(x) && return (x < 0 ? -one(T) : one(T))//zero(T)
+
+    p,  q  = (x < 0 ? -one(T) : one(T)), zero(T)
+    pp, qq = zero(T), one(T)
+
+    x = abs(x)
+    a = trunc(x)
+    r = x-a
+    y = one(x)
+
+    nt, t, tt = tol, zero(tol), zero(tol)
+
+    while r > nt
+        try
+            ia = convert(T,a)
+            np = checked_add(checked_mul(ia,p),pp)
+            nq = checked_add(checked_mul(ia,q),qq)
+            p, pp = np, p
+            q, qq = nq, q
+        catch e
+            isa(e,InexactError) || isa(e,OverflowError) || rethrow(e)
+            return p // q
         end
-        y = inv(y)
+
+        t, tt = nt, t
+        x, y = y, r
+
+        a, r = divrem(x,y)
+        nt = a*t + tt
     end
-    return convert(T,a)//convert(T,b)
+
+    # find optimal semiconvergent
+    # smallest a such that x-a*y < a*t+tt
+    a = cld(x-tt,y+t)
+    try
+        ia = convert(T,a)
+        np = checked_add(checked_mul(ia,p),pp)
+        nq = checked_add(checked_mul(ia,q),qq)
+        return np // nq
+    catch e
+        isa(e,InexactError) || isa(e,OverflowError) || rethrow(e)
+        return p // q
+    end
 end
-rationalize(x::Union(Float64,Float32); tol::Real=eps(x)) = rationalize(Int, x, tol=tol)
+rationalize(x::FloatingPoint; kvs...) = rationalize(Int, x; kvs...)
 
 num(x::Integer) = x
 den(x::Integer) = one(x)
@@ -107,16 +149,31 @@ typemax{T<:Integer}(::Type{Rational{T}}) = one(T)//zero(T)
 isinteger(x::Rational) = x.den == 1
 
 -(x::Rational) = (-x.num) // x.den
-for op in (:+, :-, :rem, :mod)
+function -{T<:Signed}(x::Rational{T})
+    x.num == typemin(T) && throw(OverflowError())
+    (-x.num) // x.den
+end
+function -{T<:Unsigned}(x::Rational{T})
+    x.num != zero(T) && throw(OverflowError())
+    x
+end
+
+for (op,chop) in ((:+,:checked_add), (:-,:checked_sub),
+                  (:rem,:rem), (:mod,:mod))
     @eval begin
         function ($op)(x::Rational, y::Rational)
-            g = gcd(x.den, y.den)
-            Rational(($op)(x.num * div(y.den, g), y.num * div(x.den, g)), x.den * div(y.den, g))
+            xd, yd = divgcd(x.den, y.den)
+            Rational(($chop)(checked_mul(x.num,yd), checked_mul(y.num,xd)), checked_mul(x.den,yd))
         end
     end
 end
-*(x::Rational, y::Rational) = (x.num*y.num) // (x.den*y.den)
-/(x::Rational, y::Rational) = (x.num*y.den) // (x.den*y.num)
+
+function *(x::Rational, y::Rational)
+    xn,yd = divgcd(x.num,y.den)
+    xd,yn = divgcd(x.den,y.num)
+    checked_mul(xn,yn) // checked_mul(xd,yd)
+end
+/(x::Rational, y::Rational) = x//y
 /(x::Rational, z::Complex ) = inv(z/x)
 
 ==(x::Rational, y::Rational) = (x.den == y.den) & (x.num == y.num)
@@ -145,18 +202,32 @@ end
 <=(x::Integer , y::Rational) = widemul(x,y.den) <= y.num
 <=(x::Real    , y::Rational) = x*y.den <= y.num
 
-div(x::Rational, y::Rational) = div(x.num*y.den, x.den*y.num)
-div(x::Rational, y::Real    ) = div(x.num, x.den*y)
-div(x::Real    , y::Rational) = div(x*y.den, y.num)
-
-fld(x::Rational, y::Rational) = fld(x.num*y.den, x.den*y.num)
-fld(x::Rational, y::Real    ) = fld(x.num, x.den*y)
-fld(x::Real    , y::Rational) = fld(x*y.den, y.num)
+for op in (:div, :fld, :cld)
+    @eval begin
+        function ($op)(x::Rational, y::Integer )
+            xn,yn = divgcd(x.num,y)
+            ($op)(xn, checked_mul(x.den,yn))
+        end
+        function ($op)(x::Integer,  y::Rational)
+            xn,yn = divgcd(x,y.num)
+            ($op)(checked_mul(xn,y.den), yn)
+        end
+        function ($op)(x::Rational, y::Rational)
+            xn,yn = divgcd(x.num,y.num)
+            xd,yd = divgcd(x.den,y.den)
+            ($op)(checked_mul(xn,yd), checked_mul(xd,yn))
+        end
+    end
+end
 
 itrunc(x::Rational) = div(x.num,x.den)
 ifloor(x::Rational) = fld(x.num,x.den)
-iceil (x::Rational) = -fld(-x.num,x.den)
-iround(x::Rational) = div(x.num*2 + copysign(x.den,x.num), x.den*2)
+iceil (x::Rational) = cld(x.num,x.den)
+function iround(x::Rational)
+    t = itrunc(x)
+    r = x-t
+    abs(r.num) > (r.den-one(r.den))>>1 ? t + copysign(one(t),x) : t
+end
 
 trunc(x::Rational) = Rational(itrunc(x))
 floor(x::Rational) = Rational(ifloor(x))
@@ -171,13 +242,15 @@ for f in (:int8, :int16, :int32, :int64, :int128,
     @eval ($f)(x::Rational) = ($f)(iround(x))
 end
 
-^(x::Rational, y::Integer) = y < 0 ?
-    Rational(x.den^-y, x.num^-y) : Rational(x.num^y, x.den^y)
+function ^(x::Rational, n::Integer)
+    n >= 0 ? power_by_squaring(x,n) : power_by_squaring(inv(x),-n)
+end
 
 ^(x::Number, y::Rational) = x^(y.num/y.den)
 ^{T<:FloatingPoint}(x::T, y::Rational) = x^(convert(T,y.num)/y.den)
 ^{T<:FloatingPoint}(x::Complex{T}, y::Rational) = x^(convert(T,y.num)/y.den)
 
 ^{T<:Rational}(z::Complex{T}, n::Bool) = n ? z : one(z) # to resolve ambiguity
-^{T<:Rational}(z::Complex{T}, n::Integer) =
-    n>=0 ? power_by_squaring(z,n) : power_by_squaring(inv(z),-n)
+function ^{T<:Rational}(z::Complex{T}, n::Integer)
+    n >= 0 ? power_by_squaring(z,n) : power_by_squaring(inv(z),-n)
+end

@@ -204,11 +204,11 @@ if haskey(ENV, "PTEST_FULL")
 end
 
 # issue #7727
-let A = {}, B = {}
+let A = [], B = []
     t = @task produce(11)
     @sync begin
         @async for x in t; push!(A,x); end
         @async for x in t; push!(B,x); end
     end
-    @test (A == {11}) != (B == {11})
+    @test (A == [11]) != (B == [11])
 end

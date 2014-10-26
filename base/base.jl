@@ -1,16 +1,39 @@
-# important core definitions
-
-using Core: Intrinsics, arraylen, arrayref, arrayset, arraysize,
-            tuplelen, tupleref, convert_default, kwcall,
-            typeassert, apply_type
-
-import Core.Array  # to add methods
-
 const NonTupleType = Union(DataType,UnionType,TypeConstructor)
 
 typealias Callable Union(Function,DataType)
 
-convert(T, x) = convert_default(T, x, convert)
+const Bottom = Union()
+
+# constructors for Core types in boot.jl
+call(T::Type{BoundsError}) = Core.call(T)
+call(T::Type{DivideError}) = Core.call(T)
+call(T::Type{DomainError}) = Core.call(T)
+call(T::Type{OverflowError}) = Core.call(T)
+call(T::Type{InexactError}) = Core.call(T)
+call(T::Type{MemoryError}) = Core.call(T)
+call(T::Type{StackOverflowError}) = Core.call(T)
+call(T::Type{UndefRefError}) = Core.call(T)
+call(T::Type{UndefVarError}, var::Symbol) = Core.call(T, var)
+call(T::Type{InterruptException}) = Core.call(T)
+call(T::Type{SymbolNode}, name::Symbol, t::ANY) = Core.call(T, name, t)
+call(T::Type{GetfieldNode}, value, name::Symbol, typ) = Core.call(T, value, name, typ)
+call(T::Type{ASCIIString}, d::Array{Uint8,1}) = Core.call(T, d)
+call(T::Type{UTF8String}, d::Array{Uint8,1}) = Core.call(T, d)
+call(T::Type{TypeVar}, args...) = Core.call(T, args...)
+call(T::Type{TypeConstructor}, args...) = Core.call(T, args...)
+call(T::Type{Expr}, args::ANY...) = _expr(args...)
+call(T::Type{LineNumberNode}, n::Int) = Core.call(T, n)
+call(T::Type{LabelNode}, n::Int) = Core.call(T, n)
+call(T::Type{GotoNode}, n::Int) = Core.call(T, n)
+call(T::Type{QuoteNode}, x::ANY) = Core.call(T, x)
+call(T::Type{NewvarNode}, s::Symbol) = Core.call(T, s)
+call(T::Type{TopNode}, s::Symbol) = Core.call(T, s)
+call(T::Type{Module}, args...) = Core.call(T, args...)
+call(T::Type{Task}, f::ANY) = Core.call(T, f)
+
+call{T}(::Type{T}, args...) = convert(T, args...)::T
+
+convert{T}(::Type{T}, x::T) = x
 
 convert(::(), ::()) = ()
 convert(::Type{Tuple}, x::Tuple) = x
@@ -18,6 +41,8 @@ convert(::Type{Tuple}, x::Tuple) = x
 argtail(x, rest...) = rest
 tupletail(x::Tuple) = argtail(x...)
 
+convert(T::(Type, Type...), x::(Any, Any...)) =
+    tuple(convert(T[1],x[1]), convert(tupletail(T), tupletail(x))...)
 convert(T::(Any, Any...), x::(Any, Any...)) =
     tuple(convert(T[1],x[1]), convert(tupletail(T), tupletail(x))...)
 
@@ -31,13 +56,6 @@ ptr_arg_convert(::Type{Ptr{Void}}, x) = x
 
 # conversion used by ccall
 cconvert(T, x) = convert(T, x)
-# the following 3 definitions implement a 0.3 deprecation
-cconvert{T}(::Type{Ptr{T}}, x::Array{T}) = convert(Ptr{T}, x)
-cconvert(::Type{Ptr{None}}, x::Array) = convert(Ptr{None}, x)
-function cconvert{T}(::Type{Ptr{T}}, x::Array)
-    depwarn("ccall Ptr argument types must now match exactly, or be Ptr{Void}.", :cconvert)
-    convert(Ptr{T}, pointer(x))
-end
 # use the code in ccall.cpp to safely allocate temporary pointer arrays
 cconvert{T}(::Type{Ptr{Ptr{T}}}, a::Array) = a
 # convert strings to ByteString to pass as pointers
@@ -186,12 +204,16 @@ function length_checked_equal(args...)
     n
 end
 
-map(f::Callable, a::Array{Any,1}) = { f(a[i]) for i=1:length(a) }
+map(f::Callable, a::Array{Any,1}) = Any[ f(a[i]) for i=1:length(a) ]
 
 macro thunk(ex); :(()->$(esc(ex))); end
 macro L_str(s); s; end
 
-function precompile(f, args::Tuple)
+function precompile(f::ANY, args::Tuple)
+    if isa(f,DataType)
+        args = tuple(Type{f}, args...)
+        f = f.name.module.call
+    end
     if isgeneric(f)
         ccall(:jl_compile_hint, Void, (Any, Any), f, args)
     end
@@ -217,8 +239,6 @@ end
 macro goto(name::Symbol)
     Expr(:symbolicgoto, name)
 end
-
-# NOTE: Base shares Array with Core so we can add definitions to it
 
 Array{T,N}(::Type{T}, d::NTuple{N,Int}) =
     ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)

@@ -81,7 +81,7 @@ operm(st::StatStruct) = uint8(st.mode     ) & 0x7
 
 # mode predicate methods for file names
 
-for f in {
+for f in Symbol[
     :ispath
     :isfifo
     :ischardev
@@ -99,7 +99,7 @@ for f in {
     :uperm
     :gperm
     :operm
-}
+]
     @eval ($f)(path...)  = ($f)(stat(path...))
 end
 

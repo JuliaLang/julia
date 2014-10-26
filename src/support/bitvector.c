@@ -118,7 +118,7 @@ uint64_t bitvector_next(uint32_t *b, uint64_t n0, uint64_t n)
     while (i < nw-1) {
         w = b[i];
         if (w != 0) {
-            return ntz(w) + (i<<5);
+            return ntz(w) + (((uint64_t)i)<<5);
         }
         i++;
     }

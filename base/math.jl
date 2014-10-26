@@ -57,7 +57,7 @@ end
 macro evalpoly(z, p...)
     a = :($(esc(p[end])))
     b = :($(esc(p[end-1])))
-    as = {}
+    as = []
     for i = length(p)-2:-1:1
         ai = symbol(string("a", i))
         push!(as, :($ai = $a))
@@ -67,15 +67,16 @@ macro evalpoly(z, p...)
     ai = :a0
     push!(as, :($ai = $a))
     C = Expr(:block,
-             :(t = $(esc(z))),
-             :(x = real(t)),
-             :(y = imag(t)),
+             :(x = real(tt)),
+             :(y = imag(tt)),
              :(r = x + x),
              :(s = x*x + y*y),
              as...,
-             :($ai * t + $b))
-    R = Expr(:macrocall, symbol("@horner"), esc(z), p...)
-    :(isa($(esc(z)), Complex) ? $C : $R)
+             :($ai * tt + $b))
+    R = Expr(:macrocall, symbol("@horner"), :tt, p...)
+    :(let tt = $(esc(z))
+          isa(tt, Complex) ? $C : $R
+      end)
 end
 
 rad2deg(z::Real) = oftype(z, 57.29577951308232*z)
@@ -209,7 +210,7 @@ function frexp(x::Float64)
     k = int(xu >> 52) & 0x07ff
     if k == 0 # x is subnormal
         x == zero(x) && return x,0
-        x *= 0x1p54 # normalise significand
+        x *= 1.8014398509481984e16 # 0x1p54, normalise significand
         xu = reinterpret(Uint64,x)
         k = int(xu >> 52) & 0x07ff - 54
     elseif k == 0x07ff # NaN or Inf

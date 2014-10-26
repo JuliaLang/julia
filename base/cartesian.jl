@@ -30,6 +30,9 @@ const CARTESIAN_DIMS = 4
 #   myfunction(A::AbstractArray, I::Int...N)
 # where N can be an integer or symbol. Currently T...N generates a parser error.
 macro ngenerate(itersym, returntypeexpr, funcexpr)
+    if isa(funcexpr, Expr) && funcexpr.head == :macrocall && funcexpr.args[1] == symbol("@inline")
+        funcexpr = Base._inline(funcexpr.args[2])
+    end
     isfuncexpr(funcexpr) || error("Requires a function expression")
     esc(ngenerate(itersym, returntypeexpr, funcexpr.args[1], N->sreplace!(copy(funcexpr.args[2]), itersym, N)))
 end
@@ -56,6 +59,9 @@ macro nsplat(itersym, args...)
         rng = rangeexpr.args[1]:rangeexpr.args[2]
     else
         error("Wrong number of arguments")
+    end
+    if isa(funcexpr, Expr) && funcexpr.head == :macrocall && funcexpr.args[1] == symbol("@inline")
+        funcexpr = Base._inline(funcexpr.args[2])
     end
     isfuncexpr(funcexpr) || error("Second argument must be a function expression")
     prototype = funcexpr.args[1]
@@ -146,7 +152,7 @@ function get_splatinfo(ex::Expr, itersym::Symbol)
             end
         end
     end
-    "", Nothing
+    "", Void
 end
 
 # Replace splatted with desplatted for a specific number of arguments
@@ -443,14 +449,39 @@ function poplinenum(ex::Expr)
     ex
 end
 
+## Resolve expressions at parsing time ##
+
+const exprresolve_arith_dict = Dict{Symbol,Function}(:+ => +,
+    :- => -, :* => *, :/ => /, :^ => ^, :div => div)
+const exprresolve_cond_dict = Dict{Symbol,Function}(:(==) => ==,
+    :(<) => <, :(>) => >, :(<=) => <=, :(>=) => >=)
+
+function exprresolve_arith(ex::Expr)
+    if ex.head == :call && haskey(exprresolve_arith_dict, ex.args[1]) && all([isa(ex.args[i], Number) for i = 2:length(ex.args)])
+        return true, exprresolve_arith_dict[ex.args[1]](ex.args[2:end]...)
+    end
+    false, 0
+end
+exprresolve_arith(arg) = false, 0
+
+exprresolve_conditional(b::Bool) = true, b
+function exprresolve_conditional(ex::Expr)
+    if ex.head == :comparison && isa(ex.args[1], Number) && isa(ex.args[3], Number)
+        return true, exprresolve_cond_dict[ex.args[2]](ex.args[1], ex.args[3])
+    end
+    false, false
+end
+exprresolve_conditional(arg) = false, false
+
 exprresolve(arg) = arg
 function exprresolve(ex::Expr)
     for i = 1:length(ex.args)
         ex.args[i] = exprresolve(ex.args[i])
     end
     # Handle simple arithmetic
-    if ex.head == :call && in(ex.args[1], (:+, :-, :*, :/)) && all([isa(ex.args[i], Number) for i = 2:length(ex.args)])
-        return eval(ex)
+    can_eval, result = exprresolve_arith(ex)
+    if can_eval
+        return result
     elseif ex.head == :call && (ex.args[1] == :+ || ex.args[1] == :-) && length(ex.args) == 3 && ex.args[3] == 0
         # simplify x+0 and x-0
         return ex.args[2]
@@ -466,10 +497,9 @@ function exprresolve(ex::Expr)
     end
     # Resolve conditionals
     if ex.head == :if
-        try
-            tf = eval(ex.args[1])
+        can_eval, tf = exprresolve_conditional(ex.args[1])
+        if can_eval
             ex = tf?ex.args[2]:ex.args[3]
-        catch
         end
     end
     ex

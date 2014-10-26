@@ -213,14 +213,14 @@ overflow and promote results to bigger integer types such as ``Int128`` or
 ``BigInt`` in the case of overflow. Unfortunately, this introduces major
 overhead on every integer operation (think incrementing a loop counter) – it
 requires emitting code to perform run-time overflow checks after arithmetic
-instructions and braches to handle potential overflows. Worse still, this
+instructions and branches to handle potential overflows. Worse still, this
 would cause every computation involving integers to be type-unstable. As we
 mentioned above, `type-stability is crucial <#man-type-stable>`_ for effective
 generation of efficient code. If you can't count on the results of integer
 operations being integers, it's impossible to generate fast, simple code the
 way C and Fortran compilers do.
 
-A variation on this approach, which avoids the appearance of type instabilty is to merge the ``Int`` and ``BigInt`` types into a single hybrid integer type, that internally changes representation when a result no longer fits into the size of a machine integer. While this superficially avoids type-instability at the level of Julia code, it just sweeps the problem under the rug by foisting all of the same difficulties onto the C code implementing this hybrid integer type. This approach *can* be made to work and can even be made quite fast in many cases, but has several drawbacks. One problem is that the in-memory representation of integers and arrays of integers no longer match the natural representation used by C, Fortran and other languages with native machine integers. Thus, to interoperate with those languages, we would ultimately need to introduce native integer types anyway. Any unbounded representation of integers cannot have a fixed number of bits, and thus cannot be stored inline in an array with fixed-size slots – large integer values will always require separate heap-allocated storage. And of course, no matter how clever a hybrid integer implementation one uses, there are always performance traps – situations where performance degrades unexpectedly. Complex representation, lack of interoperability with C and Fortran, the inability to represent integer arrays without additional heap storage, and unpredictable performance characteristics make even the cleverest hybrid integer implementations a poor choice for high-performance numerical work.
+A variation on this approach, which avoids the appearance of type instability is to merge the ``Int`` and ``BigInt`` types into a single hybrid integer type, that internally changes representation when a result no longer fits into the size of a machine integer. While this superficially avoids type-instability at the level of Julia code, it just sweeps the problem under the rug by foisting all of the same difficulties onto the C code implementing this hybrid integer type. This approach *can* be made to work and can even be made quite fast in many cases, but has several drawbacks. One problem is that the in-memory representation of integers and arrays of integers no longer match the natural representation used by C, Fortran and other languages with native machine integers. Thus, to interoperate with those languages, we would ultimately need to introduce native integer types anyway. Any unbounded representation of integers cannot have a fixed number of bits, and thus cannot be stored inline in an array with fixed-size slots – large integer values will always require separate heap-allocated storage. And of course, no matter how clever a hybrid integer implementation one uses, there are always performance traps – situations where performance degrades unexpectedly. Complex representation, lack of interoperability with C and Fortran, the inability to represent integer arrays without additional heap storage, and unpredictable performance characteristics make even the cleverest hybrid integer implementations a poor choice for high-performance numerical work.
 
 An alternative to using hybrid integers or promoting to BigInts is to use
 saturating integer arithmetic, where adding to the largest integer value
@@ -251,7 +251,7 @@ value. This is precisely what Matlab™ does::
 
      -9223372036854775808
 
-At first blush, this seems reasonable enough since 9223372036854775807 is much closer to 9223372036854775808 than -9223372036854775808 is and integers are still represented with a fixed size in a natural way that is compatible with C and Fortran. Saturated integer arithmetic, however, is deeply problematic. The first and most obvious issue is that this is not the way machine integer arithmetic works, so implementing saturated operations requires emiting instructions after each machine integer operation to check for underflow or overflow and replace the result with ``typemin(Int)`` or ``typemax(Int)`` as appropriate. This alone expands each integer operation from a single, fast instruction into half a dozen instructions, probably including branches. Ouch. But it gets worse – saturating integer arithmetic isn't associative. Consider this Matlab computation::
+At first blush, this seems reasonable enough since 9223372036854775807 is much closer to 9223372036854775808 than -9223372036854775808 is and integers are still represented with a fixed size in a natural way that is compatible with C and Fortran. Saturated integer arithmetic, however, is deeply problematic. The first and most obvious issue is that this is not the way machine integer arithmetic works, so implementing saturated operations requires emitting instructions after each machine integer operation to check for underflow or overflow and replace the result with ``typemin(Int)`` or ``typemax(Int)`` as appropriate. This alone expands each integer operation from a single, fast instruction into half a dozen instructions, probably including branches. Ouch. But it gets worse – saturating integer arithmetic isn't associative. Consider this Matlab computation::
 
     >> n = int64(2)^62
     4611686018427387904
@@ -609,7 +609,7 @@ versions of the outer function for different element types of
     end
 
 This works fine for ``Vector{T}``, but we'd also have to write
-explicit versions for ``Range1{T}`` or other abstract types. To
+explicit versions for ``UnitRange{T}`` or other abstract types. To
 prevent such tedium, you can use two parameters in the declaration of
 ``MyContainer``::
 
@@ -621,7 +621,7 @@ prevent such tedium, you can use two parameters in the declaration of
     julia> b = MyContainer(1.3:5);
 
     julia> typeof(b)
-    MyContainer{Float64,Range1{Float64}}
+    MyContainer{Float64,UnitRange{Float64}}
 
 Note the somewhat surprising fact that ``T`` doesn't appear in the
 declaration of field ``a``, a point that we'll return to in a moment.
@@ -659,10 +659,10 @@ However, there's one remaining hole: we haven't enforced that ``A``
 has element type ``T``, so it's perfectly possible to construct an
 object like this::
 
-  julia> b = MyContainer{Int64, Range1{Float64}}(1.3:5);
+  julia> b = MyContainer{Int64, UnitRange{Float64}}(1.3:5);
 
   julia> typeof(b)
-  MyContainer{Int64,Range1{Float64}}
+  MyContainer{Int64,UnitRange{Float64}}
 
 To prevent this, we can add an inner constructor::
 
@@ -677,10 +677,10 @@ To prevent this, we can add an inner constructor::
     julia> b = MyBetterContainer(1.3:5);
 
     julia> typeof(b)
-    MyBetterContainer{Float64,Range1{Float64}}
+    MyBetterContainer{Float64,UnitRange{Float64}}
 
-    julia> b = MyBetterContainer{Int64, Range1{Float64}}(1.3:5);
-    ERROR: no method MyBetterContainer(Range1{Float64},)
+    julia> b = MyBetterContainer{Int64, UnitRange{Float64}}(1.3:5);
+    ERROR: no method MyBetterContainer(UnitRange{Float64},)
 
 The inner constructor requires that the element type of ``A`` be ``T``.
 
@@ -697,21 +697,23 @@ situation can be detected using the ``isdefined`` function.
 
 Some functions are used only for their side effects, and do not need to
 return a value. In these cases, the convention is to return the value
-``nothing``, which is just a singleton object of type ``Nothing``. This
+``nothing``, which is just a singleton object of type ``Void``. This
 is an ordinary type with no fields; there is nothing special about it
 except for this convention, and that the REPL does not print anything
 for it. Some language constructs that would not otherwise have a value
 also yield ``nothing``, for example ``if false; end``.
 
-Note that ``Nothing`` (uppercase) is the type of ``nothing``, and should
-only be used in a context where a type is required (e.g. a declaration).
-
-You may occasionally see ``None``, which is quite different. It is the
-empty (or "bottom") type, a type with no values and no subtypes (except
-itself). You will generally not need to use this type.
+For situations where a value exists only sometimes (for example, missing
+statistical data), it is best to use the ``Nullable{T}`` type, which allows
+specifying the type of a missing value.
 
 The empty tuple (``()``) is another form of nothingness. But, it should not
 really be thought of as nothing but rather a tuple of zero values.
+
+In code written for Julia prior to version 0.4 you may occasionally see ``None``,
+which is quite different. It is the empty (or "bottom") type, a type with no values
+and no subtypes (except itself). This is now written as ``Union()`` (an empty union
+type). You will generally not need to use this type.
 
 Julia Releases
 ----------------
@@ -721,7 +723,7 @@ Do I want to use a release, beta, or nightly version of Julia?
 
 You may prefer the release version of Julia if you are looking for a stable code base. Releases generally occur every 6 months, giving you a stable platform for writing code.
 
-You may prefer the beta version of Julia if you don't mind being slightly behind the latest bugfixes and changes, but find the slightly slower rate of changes more appealing. Additionally, these binaries are tested before they are published to ensure they are fully functional.
+You may prefer the beta version of Julia if you don't mind being slightly behind the latest bugfixes and changes, but find the slightly faster rate of changes more appealing. Additionally, these binaries are tested before they are published to ensure they are fully functional.
 
 You may prefer the nightly version of Julia if you want to take advantage of the latest updates to the language, and don't mind if the version available today occasionally doesn't actually work.
 

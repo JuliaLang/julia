@@ -1,5 +1,5 @@
 # fallback text/plain representation of any type:
-writemime(io, ::MIME"text/plain", x) = showlimited(io, x)
+writemime(io::IO, ::MIME"text/plain", x) = showlimited(io, x)
 
 function writemime(io::IO, ::MIME"text/plain", f::Function)
     if isgeneric(f)
@@ -28,12 +28,7 @@ writemime(io::IO, ::MIME"text/plain", v::AbstractArray) =
 
 function writemime(io::IO, ::MIME"text/plain", v::DataType)
     show(io, v)
-    methods(v) # force constructor creation
-    if isgeneric(v)
-        n = length(v.env)
-        m = n==1 ? "method" : "methods"
-        print(io, " (constructor with $n $m)")
-    end
+    # TODO: maybe show constructor info?
 end
 
 writemime(io::IO, ::MIME"text/plain", t::Associative) = 
@@ -75,7 +70,7 @@ function showerror(io::IO, e, bt)
     end
 end
 
-showerror(io::IO, e::LoadError) = showerror(io, e, {})
+showerror(io::IO, e::LoadError) = showerror(io, e, [])
 function showerror(io::IO, e::LoadError, bt)
     showerror(io, e.error, bt)
     print(io, "\nwhile loading $(e.file), in expression starting on line $(e.line)")
@@ -90,6 +85,9 @@ function showerror(io::IO, e::DomainError, bt)
                 print(io, "\n", code[1],
                       " will only return a complex result if called with a complex argument.",
                       "\ntry ", code[1], "(complex(x))")
+            elseif code[1] == :^ && code[2] == symbol("intfuncs.jl")
+                print(io, "\nCannot raise an integer x to a negative power -n. Make x a float by adding")
+                print(io, "\na zero decimal (e.g. 2.0^-n instead of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n")
             end
             break
         end
@@ -132,7 +130,7 @@ function showerror(io::IO, e::MethodError)
         end
     end
     # Check for row vectors used where a column vector is intended.
-    vec_args = {}
+    vec_args = []
     hasrows = false
     for arg in e.args
         isrow = isa(arg,AbstractArray) && ndims(arg)==2 && size(arg,1)==1

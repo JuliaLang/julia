@@ -269,8 +269,10 @@ DLLEXPORT int jl_process_events(uv_loop_t *loop)
 DLLEXPORT int jl_init_pipe(uv_pipe_t *pipe, int writable, int readable, int julia_only)
 {
      int flags = 0;
-     flags |= writable ? UV_PIPE_WRITABLE : 0;
-     flags |= readable ? UV_PIPE_READABLE : 0;
+     if (writable)
+         flags |= UV_PIPE_WRITABLE;
+     if (readable)
+         flags |= UV_PIPE_READABLE;
      if (!julia_only)
          flags |= UV_PIPE_SPAWN_SAFE;
      int err = uv_pipe_init(jl_io_loop, pipe, flags);
@@ -907,7 +909,7 @@ DLLEXPORT char *jl_ios_buf_base(ios_t *ios)
     return ios->buf;
 }
 
-DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle)
+DLLEXPORT jl_uv_libhandle jl_wrap_raw_dl_handle(void *handle)
 {
     uv_lib_t *lib = (uv_lib_t*)malloc(sizeof(uv_lib_t));
     #ifdef _OS_WINDOWS_
@@ -916,7 +918,7 @@ DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle)
     lib->handle=handle;
     #endif
     lib->errmsg=NULL;
-    return lib;
+    return (jl_uv_libhandle) lib;
 }
 
 #ifndef _OS_WINDOWS_

@@ -148,8 +148,10 @@ end
 # matrix multiplication and kron
 for i = 1:5
     a = sprand(10, 5, 0.7)
-    b = sprand(5, 10, 0.3)
+    b = sprand(5, 15, 0.3)
     @test maximum(abs(a*b - full(a)*full(b))) < 100*eps()
+    @test maximum(abs(Base.LinAlg.spmatmul(a,b,sortindices=:sortcols) - full(a)*full(b))) < 100*eps()
+    @test maximum(abs(Base.LinAlg.spmatmul(a,b,sortindices=:doubletranspose) - full(a)*full(b))) < 100*eps()
     @test full(kron(a,b)) == kron(full(a), full(b))
 end
 
@@ -190,6 +192,10 @@ mfe22 = eye(Float64, 2)
 K,J,V = findnz(SparseMatrixCSC(2,1,[1,3],[1,2],[1.0,0.0]))
 @test length(K) == length(J) == length(V) == 1
 
+# https://groups.google.com/d/msg/julia-users/Yq4dh8NOWBQ/GU57L90FZ3EJ
+A = speye(Bool, 5)
+@test find(A) == find(x -> x == true, A) == find(full(A))
+
 # issue #5437
 @test nnz(sparse([1,2,3],[1,2,3],[0.0,1.0,2.0])) == 2
 
@@ -208,7 +214,7 @@ end
 @test 4 <= mean(sprb45nnzs) <= 16
 
 # issue #5853, sparse diff
-for i=1:2, a={[1 2 3], [1 2 3]', eye(3)}
+for i=1:2, a=Any[[1 2 3], [1 2 3]', eye(3)]
     @test all(diff(sparse(a),i) == diff(a,i))
 end
 
@@ -449,4 +455,10 @@ let A = Array(Int,0,0), S = sparse(A)
     iS = try indmin(S) end
     @test iA == iS == false
 end
+
+# issue #8225
+@test_throws BoundsError sparse([0],[-1],[1.0],2,2)
+
+# issue #8363
+@test_throws BoundsError sparsevec(Dict(-1=>1,1=>2))
 

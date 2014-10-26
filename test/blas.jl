@@ -1,6 +1,6 @@
 import Base.LinAlg
 ## BLAS tests - testing the interface code to BLAS routines
-for elty in (Float32, Float64, Complex64, Complex128)
+for elty in [Float32, Float64, Complex64, Complex128]
 
     o4 = ones(elty, 4)
     z4 = zeros(elty, 4)

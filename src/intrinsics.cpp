@@ -28,7 +28,7 @@ namespace JL_I {
         fptrunc, fpext,
         // checked conversion
         fpsiround, fpuiround, checked_fptosi, checked_fptoui,
-        checked_trunc_sint, checked_trunc_uint,
+        checked_trunc_sint, checked_trunc_uint, check_top_bit,
         // checked arithmetic
         checked_sadd, checked_uadd, checked_ssub, checked_usub,
         checked_smul, checked_umul,
@@ -167,6 +167,7 @@ static Constant *julia_const_to_llvm(jl_value_t *e)
     }
     else if (jl_isbits(jt)) {
         size_t nf = jl_tuple_len(bt->names), i;
+        size_t llvm_nf = 0;
         Constant **fields = (Constant**)alloca(nf * sizeof(Constant*));
         jl_value_t *f=NULL;
         JL_GC_PUSH1(&f);
@@ -183,7 +184,8 @@ static Constant *julia_const_to_llvm(jl_value_t *e)
                 JL_GC_POP();
                 return NULL;
             }
-            fields[i] = val;
+            if (val->getType() != NoopType)
+                fields[llvm_nf++] = val;
         }
         JL_GC_POP();
         Type *t = julia_struct_to_llvm(jt);
@@ -191,7 +193,7 @@ static Constant *julia_const_to_llvm(jl_value_t *e)
             return UndefValue::get(NoopType);
         StructType *st = dyn_cast<StructType>(t);
         assert(st);
-        return ConstantStruct::get(st, ArrayRef<Constant*>(fields,nf));
+        return ConstantStruct::get(st, ArrayRef<Constant*>(fields,llvm_nf));
     }
     return NULL;
 }
@@ -317,7 +319,7 @@ static Value *auto_unbox(jl_value_t *x, jl_codectx_t *ctx)
 }
 
 // figure out how many bits a bitstype has at compile time, or -1
-static int try_to_determine_bitstype_nbits(jl_value_t *targ, jl_codectx_t *ctx)
+int try_to_determine_bitstype_nbits(jl_value_t *targ, jl_codectx_t *ctx)
 {
     jl_value_t *et = expr_type(targ, ctx);
     if (jl_is_type_type(et)) {
@@ -356,8 +358,11 @@ static Value *generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
         }
         JL_CATCH {
         }
-        if (bt == NULL || !jl_is_bitstype(bt))
-            jl_error("unbox: could not determine argument size");
+        if (bt == NULL || !jl_is_bitstype(bt)) {
+            //jl_error("unbox: could not determine argument size");
+            emit_error("unbox: could not determine argument size", ctx);
+            return UndefValue::get(T_void);
+        }
         nb = (bt==(jl_value_t*)jl_bool_type) ? 1 : jl_datatype_size(bt)*8;
     }
     Type *to = IntegerType::get(jl_LLVMContext, nb);
@@ -388,7 +393,8 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     if (bt == NULL) {
     }
     else if (!jl_is_bitstype(bt)) {
-        jl_error("box: expected bits type as first argument");
+        emit_error("reinterpret: expected bits type as first argument", ctx);
+        return UndefValue::get(jl_pvalue_llvmt);
     }
     else {
         llvmt = julia_type_to_llvm(bt);
@@ -401,8 +407,10 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
             nb = (bt==(jl_value_t*)jl_bool_type) ? 1 : jl_datatype_size(bt)*8;
     }
 
-    if (nb == -1)
-        jl_error("box: could not determine argument size");
+    if (nb == -1) {
+        emit_error("box: could not determine argument size", ctx);
+        return UndefValue::get(jl_pvalue_llvmt);
+    }
 
     if (llvmt == NULL)
         llvmt = IntegerType::get(jl_LLVMContext, nb);
@@ -416,6 +424,9 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     if (vxt != llvmt) {
         if (vxt == T_void)
             return vx;
+        if (!vxt->isSingleValueType()) {
+            jl_error("box: argument not of a primitive type");
+        }
         if (llvmt == T_int1) {
             vx = builder.CreateTrunc(vx, llvmt);
         }
@@ -428,7 +439,7 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
                 !(vxt->isPointerTy() && llvmt->getPrimitiveSizeInBits() == sizeof(void*)*8) &&
                 !(llvmt->isPointerTy() && vxt->getPrimitiveSizeInBits() == sizeof(void*)*8)) {
                 emit_error("box: argument is of incorrect size", ctx);
-                return vx;
+                return UndefValue::get(llvmt);
             }
             // PtrToInt and IntToPtr ignore size differences
             if (vxt->isPointerTy() && !llvmt->isPointerTy()) {
@@ -681,17 +692,32 @@ static Value *emit_iround(Type *to, Value *x, bool issigned, jl_codectx_t *ctx)
         return builder.CreateFPToUI(src, to);
 }
 
+static Value *emit_runtime_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
+{
+    Value *preffunc =
+        jl_Module->getOrInsertFunction("jl_pointerref",
+                                       FunctionType::get(jl_pvalue_llvmt, two_pvalue_llvmt, false));
+    int ldepth = ctx->argDepth;
+    Value *parg = emit_boxed_rooted(e, ctx);
+    Value *iarg = boxed(emit_expr(i, ctx), ctx);
+    Value *ret = builder.CreateCall2(prepare_call(preffunc), parg, iarg);
+    ctx->argDepth = ldepth;
+    return ret;
+}
+
 static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
 {
     jl_value_t *aty = expr_type(e, ctx);
     if (!jl_is_cpointer_type(aty))
-        jl_error("pointerref: expected pointer type as first argument");
+        return emit_runtime_pointerref(e, i, ctx);
+        //jl_error("pointerref: expected pointer type as first argument");
     jl_value_t *ety = jl_tparam0(aty);
     if (jl_is_typevar(ety))
-        jl_error("pointerref: invalid pointer");
-    if (expr_type(i, ctx) != (jl_value_t*)jl_long_type) {
-        jl_error("pointerref: invalid index type");
-    }
+        return emit_runtime_pointerref(e, i, ctx);
+        //jl_error("pointerref: invalid pointer");
+    if (expr_type(i, ctx) != (jl_value_t*)jl_long_type)
+        return emit_runtime_pointerref(e, i, ctx);
+        //jl_error("pointerref: invalid index type");
     Value *thePtr = auto_unbox(e,ctx);
     Value *idx = emit_unbox(T_size, emit_unboxed(i, ctx), (jl_value_t*)jl_long_type);
     Value *im1 = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
@@ -721,15 +747,31 @@ static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
     return typed_load(thePtr, im1, ety, ctx);
 }
 
+static Value *emit_runtime_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_codectx_t *ctx)
+{
+    Value *psetfunc =
+        jl_Module->getOrInsertFunction("jl_pointerset",
+                                       FunctionType::get(T_void, three_pvalue_llvmt, false));
+    int ldepth = ctx->argDepth;
+    Value *parg = emit_boxed_rooted(e, ctx);
+    Value *iarg = emit_boxed_rooted(i, ctx);
+    Value *xarg = boxed(emit_expr(x, ctx), ctx);
+    builder.CreateCall3(prepare_call(psetfunc), parg, xarg, iarg);
+    ctx->argDepth = ldepth;
+    return parg;
+}
+
 // e[i] = x
 static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_codectx_t *ctx)
 {
     jl_value_t *aty = expr_type(e, ctx);
     if (!jl_is_cpointer_type(aty))
-        jl_error("pointerset: expected pointer type as first argument");
+        return emit_runtime_pointerset(e, x, i, ctx);
+        //jl_error("pointerset: expected pointer type as first argument");
     jl_value_t *ety = jl_tparam0(aty);
     if (jl_is_typevar(ety))
-        jl_error("pointerset: invalid pointer");
+        return emit_runtime_pointerset(e, x, i, ctx);
+        //jl_error("pointerset: invalid pointer");
     jl_value_t *xty = expr_type(x, ctx);
     Value *val=NULL;
     if (!jl_subtype(xty, ety, 0)) {
@@ -737,7 +779,8 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
         emit_typecheck(val, ety, "pointerset: type mismatch in assign", ctx);
     }
     if (expr_type(i, ctx) != (jl_value_t*)jl_long_type)
-        jl_error("pointerset: invalid index type");
+        return emit_runtime_pointerset(e, x, i, ctx);
+        //jl_error("pointerset: invalid index type");
     Value *idx = emit_unbox(T_size, emit_unboxed(i, ctx),(jl_value_t*)jl_long_type);
     Value *im1 = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
     Value *thePtr = auto_unbox(e,ctx);
@@ -760,7 +803,7 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
             else
                 val = emit_unboxed(x,ctx);
         }
-        (void)typed_store(thePtr, im1, val, ety, ctx);
+        typed_store(thePtr, im1, val, ety, ctx);
     }
     return mark_julia_type(thePtr, aty);
 }
@@ -1048,6 +1091,16 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         raise_exception_if(obit, prepare_global(jlovferr_var), ctx);
         return builder.CreateExtractValue(res, ArrayRef<unsigned>(0));
     }
+
+    HANDLE(check_top_bit,1)
+        // raise InexactError if argument's top bit is set
+        x = JL_INT(x);
+        raise_exception_if(builder.
+                           CreateTrunc(builder.
+                                       CreateLShr(x, ConstantInt::get(t, t->getPrimitiveSizeInBits()-1)),
+                                       T_int1),
+                           prepare_global(jlinexacterr_var), ctx);
+        return x;
 
     HANDLE(eq_int,2)  return builder.CreateICmpEQ(JL_INT(x), JL_INT(y));
     HANDLE(ne_int,2)  return builder.CreateICmpNE(JL_INT(x), JL_INT(y));
@@ -1362,13 +1415,19 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         x = FP(x);
         y = JL_INT(y);
         Type *tx = x->getType();
-        // TODO: use powi when LLVM is fixed. issue #6506
-        // http://llvm.org/bugs/show_bug.cgi?id=19530
+#ifdef LLVM36
+        Type *ts[1] = { tx };
+        return builder.CreateCall2(Intrinsic::getDeclaration(jl_Module, Intrinsic::powi,
+                                                             ArrayRef<Type*>(ts)),
+                                   x, y);
+#else
+        // issue #6506
         Type *ts[2] = { tx, tx };
         return builder.
             CreateCall2(jl_Module->getOrInsertFunction(tx==T_float64 ? "pow" : "powf",
                                                        FunctionType::get(tx, ts, false)),
                         x, builder.CreateSIToFP(y, tx));
+#endif
     }
     default:
         assert(false);
@@ -1457,6 +1516,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(checked_fptosi); ADD_I(checked_fptoui);
     ADD_I(checked_trunc_sint);
     ADD_I(checked_trunc_uint);
+    ADD_I(check_top_bit);
     ADD_I(nan_dom_err);
     ADD_I(ccall); ADD_I(cglobal);
     ADD_I(jl_alloca);

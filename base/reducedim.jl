@@ -68,7 +68,7 @@ promote_union(T) = T
 function reducedim_init{S}(f, op::AddFun, A::AbstractArray{S}, region)
     T = promote_union(S)
     if method_exists(zero, (Type{T},))
-        x = evaluate(f, zero(T))
+        x = f(zero(T))
         z = zero(x) + zero(x)
         Tr = typeof(z) == typeof(x) && !isbits(T) ? T : typeof(z)
     else
@@ -81,7 +81,7 @@ end
 function reducedim_init{S}(f, op::MulFun, A::AbstractArray{S}, region)
     T = promote_union(S)
     if method_exists(zero, (Type{T},))
-        x = evaluate(f, zero(T))
+        x = f(zero(T))
         z = one(x) * one(x)
         Tr = typeof(z) == typeof(x) && !isbits(T) ? T : typeof(z)
     else
@@ -91,17 +91,15 @@ function reducedim_init{S}(f, op::MulFun, A::AbstractArray{S}, region)
     return reducedim_initarray(A, region, z, Tr)
 end
 
-reducedim_init{T}(f, op::MaxFun, A::AbstractArray{T}, region) = reducedim_initarray0(A, region, typemin(evaluate(f, zero(T))))
-reducedim_init{T}(f, op::MinFun, A::AbstractArray{T}, region) = reducedim_initarray0(A, region, typemax(evaluate(f, zero(T))))
+reducedim_init{T}(f, op::MaxFun, A::AbstractArray{T}, region) = reducedim_initarray0(A, region, typemin(f(zero(T))))
+reducedim_init{T}(f, op::MinFun, A::AbstractArray{T}, region) = reducedim_initarray0(A, region, typemax(f(zero(T))))
 reducedim_init{T}(f::Union(AbsFun,Abs2Fun), op::MaxFun, A::AbstractArray{T}, region) = 
-    reducedim_initarray(A, region, zero(evaluate(f, zero(T))))
+    reducedim_initarray(A, region, zero(f(zero(T))))
 
 reducedim_init(f, op::AndFun, A::AbstractArray, region) = reducedim_initarray(A, region, true)
 reducedim_init(f, op::OrFun, A::AbstractArray, region) = reducedim_initarray(A, region, false)
 
 # specialize to make initialization more efficient for common cases
-
-typealias CommonReduceResult Union(Uint64,Uint128,Int64,Int128,Float32,Float64)
 
 for (IT, RT) in ((CommonReduceResult, :(eltype(A))), (SmallSigned, :Int), (SmallUnsigned, :Uint))
     T = Union([AbstractArray{t} for t in IT.types]..., [AbstractArray{Complex{t}} for t in IT.types]...)
@@ -175,16 +173,16 @@ end
         @nloops N i d->(d>1? (1:size(A,d)) : (1:1)) d->(j_d = sizeR_d==1 ? 1 : i_d) begin
             @inbounds r = (@nref N R j)
             for i_1 = 1:sizA1
-                @inbounds v = evaluate(f, (@nref N A i))
-                r = evaluate(op, r, v)
+                @inbounds v = f(@nref N A i)
+                r = op(r, v)
             end
             @inbounds (@nref N R j) = r
         end 
     else
         # general implementation
         @nloops N i A d->(j_d = sizeR_d==1 ? 1 : i_d) begin
-            @inbounds v = evaluate(f, (@nref N A i))
-            @inbounds (@nref N R j) = evaluate(op, (@nref N R j), v)
+            @inbounds v = f(@nref N A i)
+            @inbounds (@nref N R j) = op((@nref N R j), v)
         end
     end
     return R    
@@ -192,18 +190,24 @@ end
 
 mapreducedim!(f, op, R::AbstractArray, A::AbstractArray) = _mapreducedim!(f, op, R, A)
 
-function mapreducedim!(f::Function, op, R::AbstractArray, A::AbstractArray)
-    is(op, +) ? _mapreducedim!(f, AddFun(), R, A) :
-    is(op, *) ? _mapreducedim!(f, MulFun(), R, A) :
-    is(op, &) ? _mapreducedim!(f, AndFun(), R, A) :
-    is(op, |) ? _mapreducedim!(f, OrFun(), R, A) :
-    _mapreducedim!(f, op, R, A)
+to_op(op) = op
+function to_op(op::Function)
+    is(op, +) ? AddFun() :
+    is(op, *) ? MulFun() :
+    is(op, &) ? AndFun() :
+    is(op, |) ? OrFun() : op
 end
 
-reducedim!{RT}(op, R::AbstractArray{RT}, A::AbstractArray) = mapreducedim!(IdFun(), op, R, A, zero(RT))
+mapreducedim!(f::Function, op, R::AbstractArray, A::AbstractArray) =
+    _mapreducedim!(f, to_op(op), R, A)
 
-mapreducedim(f, op, A::AbstractArray, region, v0) = mapreducedim!(f, op, reducedim_initarray(A, region, v0), A)
-mapreducedim{T}(f, op, A::AbstractArray{T}, region) = mapreducedim!(f, op, reducedim_init(f, op, A, region), A)
+reducedim!{RT}(op, R::AbstractArray{RT}, A::AbstractArray) =
+    mapreducedim!(IdFun(), op, R, A, zero(RT))
+
+mapreducedim(f, op, A::AbstractArray, region, v0) =
+    mapreducedim!(f, op, reducedim_initarray(A, region, v0), A)
+mapreducedim{T}(f, op, A::AbstractArray{T}, region) =
+    mapreducedim!(f, op, reducedim_init(f, to_op(op), A, region), A)
 
 reducedim(op, A::AbstractArray, region, v0) = mapreducedim(IdFun(), op, A, region, v0)
 reducedim(op, A::AbstractArray, region) = mapreducedim(IdFun(), op, A, region)

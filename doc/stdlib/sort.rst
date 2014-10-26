@@ -5,9 +5,8 @@ Sorting and Related Functions
 =============================
 
 Julia has an extensive, flexible API for sorting and interacting with
-already-sorted arrays of values. For many users, sorting in standard
-ascending order, letting Julia pick reasonable default algorithms
-will be sufficient:
+already-sorted arrays of values. By default, Julia picks reasonable
+algorithms and sorts in standard ascending order:
 
 .. doctest::
 
@@ -51,11 +50,11 @@ Instead of directly sorting an array, you can compute a permutation of the array
 
    julia> v = randn(5)
    5-element Array{Float64,1}:
-     0.297288 
-     0.382396 
-    -0.597634 
+     0.297288
+     0.382396
+    -0.597634
     -0.0104452
-    -0.839027 
+    -0.839027
 
    julia> p = sortperm(v)
    5-element Array{Int64,1}:
@@ -67,23 +66,23 @@ Instead of directly sorting an array, you can compute a permutation of the array
 
    julia> v[p]
    5-element Array{Float64,1}:
-    -0.839027 
-    -0.597634 
+    -0.839027
+    -0.597634
     -0.0104452
-     0.297288 
-     0.382396 
+     0.297288
+     0.382396
 
-Arrays can easily be sorted acording to an arbitrary transformation of their values:
+Arrays can easily be sorted according to an arbitrary transformation of their values:
 
 .. doctest::
 
    julia> sort(v, by=abs)
    5-element Array{Float64,1}:
     -0.0104452
-     0.297288 
-     0.382396 
-    -0.597634 
-    -0.839027 
+     0.297288
+     0.382396
+    -0.597634
+    -0.839027
 
 Or in reverse order by a transformation:
 
@@ -91,24 +90,28 @@ Or in reverse order by a transformation:
 
    julia> sort(v, by=abs, rev=true)
    5-element Array{Float64,1}:
-    -0.839027 
-    -0.597634 
-     0.382396 
-     0.297288 
+    -0.839027
+    -0.597634
+     0.382396
+     0.297288
     -0.0104452
 
-Reasonable sorting algorithms are used by default, but you can choose
-other algorithms as well:
+If needed, the sorting algorithm can be chosen:
 
 .. doctest::
 
    julia> sort(v, alg=InsertionSort)
    5-element Array{Float64,1}:
-    -0.839027 
-    -0.597634 
+    -0.839027
+    -0.597634
     -0.0104452
-     0.297288 
-     0.382396 
+     0.297288
+     0.382396
+
+All the sorting and order related functions rely on a "less than"
+relation defining a total order on the values to be manipulated. The
+``isless`` function is invoked by default, but the relation can be
+specified via the ``lt`` keyword.
 
 Sorting Functions
 -----------------
@@ -142,6 +145,15 @@ Sorting Functions
    i.e. indices of equal elements appear in ascending order. If you choose a non-stable
    sorting algorithm such as ``QuickSort``, a different permutation that puts the array
    into order may be returned. The order is specified using the same keywords as ``sort!``.
+
+   See also :func:`sortperm!`
+
+.. function:: sortperm!(ix, v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false,] [initialized=false])
+
+   Like ``sortperm``, but accepts a preallocated index vector ``ix``.  If ``initialized`` is ``false``
+   (the default), ix is initialized to contain the values ``1:length(v)``.
+
+   See also :func:`sortperm`
 
 .. function:: sortrows(A, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
@@ -184,10 +196,9 @@ Order-Related Functions
    Partially sort the vector ``v`` in place, according to the order specified by ``by``,
    ``lt`` and ``rev`` so that the value at index ``k`` (or range of adjacent values if
    ``k`` is a range) occurs at the position where it would appear if the array were
-   fully sorted. If ``k`` is a single index, that values is returned; if ``k`` is a
-   range, an array of values at those indices is returned. Note that ``select!`` does
-   not fully sort the input array, but does leave the returned elements where they
-   would be if the array were fully sorted.
+   fully sorted via a non-stable algorithm. If ``k`` is a single index, that value
+   is returned; if ``k`` is a range, an array of values at those indices is returned.
+   Note that ``select!`` does not fully sort the input array.
 
 .. function:: select(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
@@ -214,11 +225,29 @@ appeared in the array to be sorted. ``QuickSort`` is the default
 algorithm for numeric values, including integers and floats.
 
 ``MergeSort`` is an O(n log n) stable sorting algorithm but is not
-in-place – it requires a temporary array of equal size to the
+in-place – it requires a temporary array of half the size of the
 input array – and is typically not quite as fast as ``QuickSort``.
 It is the default algorithm for non-numeric data.
 
-The sort functions select a reasonable default algorithm, depending on
-the type of the array to be sorted. To force a specific algorithm to be
-used for ``sort`` or other soring functions, supply ``alg=<algorithm>``
-as a keyword argument after the array to be sorted.
+The default sorting algorithms are chosen on the basis that they are
+fast and stable, or *appear* to be so. For numeric types indeed,
+``QuickSort`` is selected as it is faster and indistinguishable in
+this case from a stable sort (unless the array records its mutations
+in some way). The stability property comes at a non-negligible cost,
+so if you don't need it, you may want to explicitly specify your
+preferred algorithm, e.g. ``sort!(v, alg=QuickSort)``.
+
+The mechanism by which Julia picks default sorting algorithms is
+implemented via the ``Base.Sort.defalg`` function. It allows a
+particular algorithm to be registered as the default in all sorting
+functions for specific arrays. For example, here are the two default
+methods from `sort.jl
+<https://github.com/JuliaLang/julia/blob/master/base/sort.jl>`_::
+
+    defalg(v::AbstractArray) = MergeSort
+    defalg{T<:Number}(v::AbstractArray{T}) = QuickSort
+
+As for numeric arrays, choosing a non-stable default algorithm for
+array types for which the notion of a stable sort is meaningless (i.e.
+when two values comparing equal can not be distinguished) may make
+sense.

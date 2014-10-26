@@ -20,7 +20,12 @@ function fetch(pkg::String, sha1::String)
     Base.LibGit2.remote_fetch(remote)
     Git.iscommit(sha1, dir=pkg) && return
     f = Git.iscommit(sha1, dir=Cache.path(pkg)) ? "fetch" : "prefetch"
-    error("$pkg: $f failed to get commit $(sha1[1:10]), please file a bug")
+    url = Read.issue_url(pkg)
+    if isempty(url)
+        error("$pkg: $f failed to get commit $(sha1[1:10]), please file a bug report with the package author.")
+    else
+        error("$pkg: $f failed to get commit $(sha1[1:10]), please file an issue at $url")
+    end
 end
 
 function checkout(pkg::String, sha1::String)

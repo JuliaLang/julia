@@ -51,6 +51,9 @@ abstract Calendar <: AbstractTime
 # ISOCalendar provides interpretation rules for UTInstants to civil date and time parts
 immutable ISOCalendar <: Calendar end
 
+abstract TimeZone
+immutable UTC <: TimeZone end
+
 # TimeTypes wrap Instants to provide human representations of time
 abstract TimeType <: AbstractTime
 

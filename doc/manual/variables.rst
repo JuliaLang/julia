@@ -140,7 +140,7 @@ While Julia imposes few restrictions on valid names, it has become useful to
 adopt the following conventions:
 
 - Names of variables are in lower case.
-- Word separation can be indicated by underscores (``'\_'``), but use of
+- Word separation can be indicated by underscores (``'_'``), but use of
   underscores is discouraged unless the name would be hard to read otherwise.
 - Names of ``Type``\ s begin with a capital letter and word separation is
   shown with CamelCase instead of underscores.

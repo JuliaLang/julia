@@ -576,6 +576,8 @@ built-in ``Exception``\ s listed below all interrupt the normal flow of control.
 +------------------------+
 | ``UndefRefError``      |
 +------------------------+
+| ``UndefVarError``      |
++------------------------+
 
 For example, the ``sqrt`` function throws a ``DomainError()`` if applied to a
 negative real value:
@@ -586,7 +588,7 @@ negative real value:
     ERROR: DomainError
     sqrt will only return a complex result if called with a complex argument.
     try sqrt(complex(x))
-     in sqrt at math.jl:131
+     in sqrt at math.jl:132
 
 You may define your own exceptions in the following way:
 

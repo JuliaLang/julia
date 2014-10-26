@@ -11,7 +11,8 @@ const ser_tag = ObjectIdDict()
 const deser_tag = ObjectIdDict()
 let i = 2
     global ser_tag, deser_tag
-    for t = {Symbol, Int8, Uint8, Int16, Uint16, Int32, Uint32,
+    for t = Any[
+             Symbol, Int8, Uint8, Int16, Uint16, Int32, Uint32,
              Int64, Uint64, Int128, Uint128, Float32, Float64, Char, Ptr,
              DataType, UnionType, Function,
              Tuple, Array, Expr, LongSymbol, LongTuple, LongExpr,
@@ -21,7 +22,7 @@ let i = 2
              UTF16String, UTF32String, Float16,
              :reserved9, :reserved10, :reserved11, :reserved12,
              
-             (), Bool, Any, :Any, None, Top, Undef, Type,
+             (), Bool, Any, :Any, Bottom, Top, Undef, Type,
              :Array, :TypeVar, :Box,
              :lambda, :body, :return, :call, symbol("::"),
              :(=), :null, :gotoifnot, :A, :B, :C, :M, :N, :T, :S, :X, :Y,
@@ -35,7 +36,7 @@ let i = 2
              :reserved17, :reserved18, :reserved19, :reserved20,
              false, true, nothing, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
              12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-             28, 29, 30, 31, 32}
+             28, 29, 30, 31, 32]
         ser_tag[t] = int32(i)
         deser_tag[int32(i)] = t
         i += 1
@@ -228,7 +229,7 @@ function lambda_number(l::LambdaStaticData)
     end
     # a hash function that always gives the same number to the same
     # object on the same machine, and is unique over all machines.
-    ln = hash(lnumber_salt+(uint64(myid())<<44))
+    ln = lnumber_salt+(uint64(myid())<<44)
     lnumber_salt += 1
     lambda_numbers[l] = ln
     return ln
@@ -241,7 +242,7 @@ function serialize(s, linfo::LambdaStaticData)
     if isdefined(linfo.def, :roots)
         serialize(s, linfo.def.roots)
     else
-        serialize(s, {})
+        serialize(s, [])
     end
     serialize(s, linfo.sparams)
     serialize(s, linfo.inferred)
@@ -482,16 +483,9 @@ function deserialize_expr(s, len)
     hd = deserialize(s)::Symbol
     ty = deserialize(s)
     e = Expr(hd)
-    e.args = { deserialize(s) for i=1:len }
+    e.args = Any[ deserialize(s) for i=1:len ]
     e.typ = ty
     e
-end
-
-function deserialize(s, ::Type{TypeVar})
-    name = deserialize(s)
-    lb = deserialize(s)
-    ub = deserialize(s)
-    TypeVar(name, lb, ub)
 end
 
 function deserialize(s, ::Type{UnionType})
@@ -553,7 +547,7 @@ function deserialize(s, t::DataType)
             f3 = deserialize(s)
             return ccall(:jl_new_struct, Any, (Any,Any...), t, f1, f2, f3)
         else
-            flds = { deserialize(s) for i = 1:nf }
+            flds = Any[ deserialize(s) for i = 1:nf ]
             return ccall(:jl_new_structv, Any, (Any,Ptr{Void},Uint32),
                          t, flds, nf)
         end

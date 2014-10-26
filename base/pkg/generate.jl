@@ -34,7 +34,7 @@ function package(
     authors::Union(String,Array) = "",
     years::Union(Int,String) = copyright_year(),
     user::String = github_user(),
-    config::Dict = {},
+    config::Dict = Dict(),
 )
     isnew = !ispath(pkg)
     try
@@ -152,7 +152,7 @@ function travis(pkg::String; force::Bool=false)
           - sudo apt-get install libpcre3-dev julia -y
           - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
         script:
-          - julia -e 'Pkg.init(); Pkg.clone(pwd()); Pkg.test("$pkg")'
+          - julia -e 'versioninfo(); Pkg.init(); Pkg.clone(pwd()); Pkg.test("$pkg")'
         """)
     end
 end
@@ -428,6 +428,6 @@ $(copyright(years,authors))
 >      of your accepting any such warranty or additional liability.
 """
 
-const LICENSES = [ "MIT" => mit, "BSD" => bsd, "ASL" => asl ]
+const LICENSES = Dict("MIT" => mit, "BSD" => bsd, "ASL" => asl)
 
 end # module

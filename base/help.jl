@@ -23,21 +23,19 @@ function decor_help_desc(func::String, mfunc::String, desc::String)
 end
 
 function helpdb_filename()
-    root = "$JULIA_HOME/../share/julia"
     file = "helpdb.jl"
     for loc in [Base.locale()]
-        fn = joinpath(root, loc, file)
+        fn = joinpath(JULIA_HOME, Base.DOCDIR, loc, file)
         if isfile(fn)
             return fn
         end
     end
-    joinpath(root, file)
+    joinpath(JULIA_HOME, Base.DOCDIR, file)
 end
 
 function init_help()
     global MODULE_DICT, FUNCTION_DICT
     if FUNCTION_DICT == nothing
-        info("Loading help data...")
         helpdb = evalfile(helpdb_filename())
         MODULE_DICT = Dict()
         FUNCTION_DICT = Dict()
@@ -49,11 +47,11 @@ function init_help()
                 mfunc = func
             end
             if !haskey(FUNCTION_DICT, mfunc)
-                FUNCTION_DICT[mfunc] = {}
+                FUNCTION_DICT[mfunc] = []
             end
             push!(FUNCTION_DICT[mfunc], desc)
             if !haskey(MODULE_DICT, func)
-                MODULE_DICT[func] = {}
+                MODULE_DICT[func] = []
             end
             if !in(mod, MODULE_DICT[func])
                 push!(MODULE_DICT[func], mod)
@@ -95,7 +93,7 @@ function help(io::IO, fname::String, obj=0)
         found = true
     elseif haskey(MODULE_DICT, fname)
         allmods = MODULE_DICT[fname]
-        alldesc = {}
+        alldesc = []
         for mod in allmods
             mfname = isempty(mod) ? fname : mod * "." * fname
             if isgeneric(obj)
@@ -134,7 +132,8 @@ function help(io::IO, fname::String, obj=0)
         elseif isgeneric(obj)
             writemime(io, "text/plain", obj); println()
         else
-            println(io, "No help information found.")
+            println(io, "Symbol not found. Falling back on apropos search ...")
+            apropos(io, fname)
         end
     end
 end
@@ -180,6 +179,7 @@ function help(io::IO, x)
 end
 
 help(args...) = help(STDOUT, args...)
+help(::IO, args...) = error("too many arguments to help()")
 
 # check whether an expression is a qualified name, e.g. Base.FFTW.FORWARD
 isname(n::Symbol) = true

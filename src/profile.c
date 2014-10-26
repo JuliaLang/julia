@@ -286,6 +286,7 @@ DLLEXPORT void jl_profile_stop_timer(void)
 //
 // BSD / Apple-System
 //
+#include <string.h>
 #include <sys/time.h>
 struct itimerval timerprof;
 
@@ -307,7 +308,6 @@ static void profile_bt(int sig)
 
 DLLEXPORT int jl_profile_start_timer(void)
 {
-    struct sigevent sigprof;
     struct sigaction sa;
     sigset_t ss;
 

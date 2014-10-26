@@ -11,8 +11,6 @@ typealias Complex128 Complex{Float64}
 typealias Complex64  Complex{Float32}
 typealias Complex32  Complex{Float16}
 
-sizeof{T<:Real}(::Type{Complex{T}}) = 2*sizeof(T)
-
 convert{T<:Real}(::Type{Complex{T}}, x::Real) = Complex{T}(x,0)
 convert{T<:Real}(::Type{Complex{T}}, z::Complex) = Complex{T}(real(z),imag(z))
 convert{T<:Real}(::Type{T}, z::Complex) =
@@ -63,7 +61,7 @@ end
 function complex_show(io::IO, z::Complex, compact::Bool)
     r, i = reim(z)
     compact ? showcompact(io,r) : show(io,r)
-    if signbit(i)==1 && !isnan(i)
+    if signbit(i) && !isnan(i)
         i = -i
         print(io, compact ? "-" : " - ")
     else
@@ -122,11 +120,10 @@ sign(z::Complex) = z/abs(z)
 -(x::Real, z::Complex) = Complex(x - real(z), -imag(z))
 -(z::Complex, x::Real) = Complex(real(z) - x, imag(z))
 
-/(z::Number, w::Complex) = z*inv(w)
 /(a::Real  , w::Complex) = a*inv(w)
 /(z::Complex, x::Real) = Complex(real(z)/x, imag(z)/x)
 
-function /(a::Complex, b::Complex)
+function /{T<:Real}(a::Complex{T}, b::Complex{T})
     are = real(a); aim = imag(a); bre = real(b); bim = imag(b)
     if abs(bre) <= abs(bim)
         if isinf(bre) && isinf(bim)
@@ -143,12 +140,15 @@ function /(a::Complex, b::Complex)
             r = bim / bre
         end
         den = bre + r*bim
-        complex((are + aim*r)/den, (aim - are*r)/den)
+        Complex((are + aim*r)/den, (aim - are*r)/den)
     end
 end
 
 inv{T<:Union(Float16,Float32)}(z::Complex{T}) =
-    oftype(z, conj(complex128(z))/abs2(complex128(z)))
+    oftype(z, conj(widen(z))/abs2(widen(z)))
+
+/{T<:Union(Float16,Float32)}(z::Complex{T}, w::Complex{T}) =
+    oftype(z, widen(z)*inv(widen(w)))
 
 # robust complex division for double precision
 # the first step is to scale variables if appropriate ,then do calculations
@@ -286,7 +286,7 @@ angle(z::Complex) = atan2(imag(z), real(z))
 function log{T<:FloatingPoint}(z::Complex{T})
     const T1::T  = 1.25
     const T2::T  = 3
-    const ln2::T = log(oftype(T,2))  #0.6931471805599453
+    const ln2::T = log(convert(T,2))  #0.6931471805599453
     x, y = reim(z)
     ρ, k = ssqs(x,y)
     ax = abs(x)
@@ -338,12 +338,12 @@ function exp(z::Complex)
     if isnan(zr)
         Complex(zr, zi==0 ? zi : zr)
     elseif !isfinite(zi)
-        if zr == inf(zr)
-            Complex(-zr, nan(zr))
-        elseif zr == -inf(zr)
+        if zr == Inf
+            Complex(-zr, oftype(zr,NaN))
+        elseif zr == -Inf
             Complex(-zero(zr), copysign(zero(zi), zi))
         else
-            Complex(nan(zr), nan(zi))
+            Complex(oftype(zr,NaN), oftype(zi,NaN))
         end
     else
         er = exp(zr)
@@ -360,12 +360,12 @@ function expm1(z::Complex)
     if isnan(zr)
         Complex(zr, zi==0 ? zi : zr)
     elseif !isfinite(zi)
-        if zr == inf(zr)
-            Complex(-zr, nan(zr))
-        elseif zr == -inf(zr)
+        if zr == Inf
+            Complex(-zr, oftype(zr,NaN))
+        elseif zr == -Inf
             Complex(-one(zr), copysign(zero(zi), zi))
         else
-            Complex(nan(zr), nan(zi))
+            Complex(oftype(zr,NaN), oftype(zi,NaN))
         end
     else
         erm1 = expm1(zr)        
@@ -391,9 +391,9 @@ function log1p{T}(z::Complex{T})
     elseif isnan(zr)
         Complex(zr, zr)
     elseif isfinite(zi)
-        Complex(inf(T), copysign(zr > 0 ? zero(T) : convert(T, pi), zi))
+        Complex(T(Inf), copysign(zr > 0 ? zero(T) : convert(T, pi), zi))
     else
-        Complex(inf(T), nan(T))
+        Complex(T(Inf), T(NaN))
     end
 end
 
@@ -636,7 +636,7 @@ function acosh(z::Complex)
             return Complex(oftype(zr, NaN), oftype(zi, NaN))
         end
     elseif zr==-Inf && zi===-0.0 #Edge case is wrong - WHY?
-        return Complex(inf(zr), oftype(zi, -pi))
+        return Complex(oftype(zr,Inf), oftype(zi, -pi))
     end
     ξ = asinh(real(sqrt(conj(z-1))*sqrt(z+1)))
     η = 2atan2(imag(sqrt(z-1)),real(sqrt(z+1)))

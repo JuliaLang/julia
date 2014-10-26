@@ -29,7 +29,7 @@ macro osx(qm,ex)
     _os_test(qm, ex, OS_NAME===:Darwin)
 end
 macro linux(qm,ex)
-    _os_test(qm, ex, is_unix(OS_NAME) && OS_NAME!==:Darwin)
+    _os_test(qm, ex, OS_NAME===:Linux)
 end
 
 macro windows_only(ex)

@@ -1,16 +1,16 @@
 ## conversions to floating-point ##
 
-convert(::Type{Float32}, x::Int128)  = float32(uint128(abs(x)))*(1-2(x<0))
-convert(::Type{Float32}, x::Uint128) = float32(uint64(x)) + ldexp(float32(uint64(x>>>64)),64)
+convert(::Type{Float32}, x::Int128)  = float32(reinterpret(Uint128,abs(x)))*(1-2(x<0))
+convert(::Type{Float32}, x::Uint128) = float32(uint64(x&0xffffffffffffffff)) + ldexp(float32(uint64(x>>>64)),64)
 promote_rule(::Type{Float32}, ::Type{Int128} ) = Float32
 promote_rule(::Type{Float32}, ::Type{Uint128}) = Float32
 
-convert(::Type{Float64}, x::Int128)  = float64(uint128(abs(x)))*(1-2(x<0))
-convert(::Type{Float64}, x::Uint128) = float64(uint64(x)) + ldexp(float64(uint64(x>>>64)),64)
+convert(::Type{Float64}, x::Int128)  = float64(reinterpret(Uint128,abs(x)))*(1-2(x<0))
+convert(::Type{Float64}, x::Uint128) = float64(uint64(x&0xffffffffffffffff)) + ldexp(float64(uint64(x>>>64)),64)
 promote_rule(::Type{Float64}, ::Type{Int128} ) = Float64
 promote_rule(::Type{Float64}, ::Type{Uint128}) = Float64
 
-convert(::Type{Float16}, x::Union(Signed,Unsigned)) = convert(Float16, convert(Float32,x))
+convert(::Type{Float16}, x::Integer) = convert(Float16, convert(Float32,x))
 for t in (Bool,Char,Int8,Int16,Int32,Int64,Uint8,Uint16,Uint32,Uint64)
     @eval promote_rule(::Type{Float16}, ::Type{$t}) = Float32
 end
@@ -132,6 +132,8 @@ widen(::Type{Float32}) = Float64
 rem(x::Float32, y::Float32) = box(Float32,rem_float(unbox(Float32,x),unbox(Float32,y)))
 rem(x::Float64, y::Float64) = box(Float64,rem_float(unbox(Float64,x),unbox(Float64,y)))
 
+cld{T<:FloatingPoint}(x::T, y::T) = -fld(-x,y)
+
 mod{T<:FloatingPoint}(x::T, y::T) = rem(y+rem(x,y),y)
 
 ## floating point comparisons ##
@@ -251,15 +253,6 @@ nextfloat(x::FloatingPoint) = nextfloat(x,1)
 prevfloat(x::FloatingPoint) = nextfloat(x,-1)
 
 @eval begin
-    inf(::Type{Float16}) = $Inf16
-    nan(::Type{Float16}) = $NaN16
-    inf(::Type{Float32}) = $Inf32
-    nan(::Type{Float32}) = $NaN32
-    inf(::Type{Float64}) = $Inf
-    nan(::Type{Float64}) = $NaN
-    inf{T<:FloatingPoint}(x::T) = inf(T)
-    nan{T<:FloatingPoint}(x::T) = nan(T)
-
     issubnormal(x::Float32) = (abs(x) < $(box(Float32,unbox(Uint32,0x00800000)))) & (x!=0)
     issubnormal(x::Float64) = (abs(x) < $(box(Float64,unbox(Uint64,0x0010000000000000)))) & (x!=0)
 
@@ -283,16 +276,12 @@ prevfloat(x::FloatingPoint) = nextfloat(x,-1)
     realmin() = realmin(Float64)
     realmax() = realmax(Float64)
 
-    eps(x::FloatingPoint) = isfinite(x) ? abs(x) >= realmin(x) ? ldexp(eps(typeof(x)),exponent(x)) : nextfloat(zero(x)) : nan(x)
+    eps(x::FloatingPoint) = isfinite(x) ? abs(x) >= realmin(x) ? ldexp(eps(typeof(x)),exponent(x)) : nextfloat(zero(x)) : oftype(x,NaN)
     eps(::Type{Float16}) = $(box(Float16,unbox(Uint16,0x1400)))
     eps(::Type{Float32}) = $(box(Float32,unbox(Uint32,0x34000000)))
     eps(::Type{Float64}) = $(box(Float64,unbox(Uint64,0x3cb0000000000000)))
     eps() = eps(Float64)
 end
-
-sizeof(::Type{Float16}) = 2
-sizeof(::Type{Float32}) = 4
-sizeof(::Type{Float64}) = 8
 
 ## byte order swaps for arbitrary-endianness serialization/deserialization ##
 bswap(x::Float32) = box(Float32,bswap_int(unbox(Float32,x)))
