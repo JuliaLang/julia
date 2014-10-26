@@ -124,6 +124,7 @@ rand(::Type{Float64}, dims::Int...) = rand(Float64, dims)
 rand(dims::Dims) = rand(Float64, dims)
 rand(dims::Int...) = rand(Float64, dims)
 
+rand(r::AbstractRNG) = rand(r, Float64)
 rand(r::AbstractRNG, dims::Dims) = rand!(r, Array(Float64, dims))
 rand(r::AbstractRNG, dims::Int...) = rand(r, dims)
 
