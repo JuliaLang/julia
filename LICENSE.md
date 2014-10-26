@@ -35,7 +35,6 @@ own licenses:
 - [LIBUNWIND](http://git.savannah.gnu.org/gitweb/?p=libunwind.git;a=blob_plain;f=LICENSE;hb=master)
 - [LIBUV](https://github.com/joyent/libuv/blob/master/LICENSE)
 - [LLVM](http://llvm.org/releases/3.3/LICENSE.TXT)
-- [LIBGIT2](https://github.com/libgit2/libgit2/blob/development/COPYING)
 - [LIBMOJIBAKE](https://github.com/JuliaLang/libmojibake)
 
 
@@ -51,6 +50,7 @@ their own licenses:
 - [FADDEEVA](http://ab-initio.mit.edu/Faddeeva)
 - [FFTW](http://fftw.org/doc/License-and-Copyright.html)
 - [GMP](http://gmplib.org/manual/Copying.html#Copying)
+- [LIBGIT2](https://github.com/libgit2/libgit2/blob/development/COPYING)
 - [MPFR](http://www.mpfr.org/mpfr-current/mpfr.html#Copying)
 - [MUSL](http://git.musl-libc.org/cgit/musl/tree/COPYRIGHT)
 - [OPENBLAS](https://raw.github.com/xianyi/OpenBLAS/master/LICENSE)
