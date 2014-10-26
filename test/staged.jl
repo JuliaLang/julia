@@ -89,8 +89,11 @@ end
 @test MyTest8497.h(3) == 4
 
 # static parameters (issue #8505)
-stagedfunction f8505{T}(x::Vector{T})
-    T
+stagedfunction foo1{N,T}(a::Array{T,N})
+    "N = $N, T = $T"
 end
-@test f8505([1.0]) === Float64
-@test f8505([1]) === Int
+stagedfunction foo2{T,N}(a::Array{T,N})
+    "N = $N, T = $T"
+end
+@test foo1(randn(3,3)) == "N = 2, T = Float64"
+@test foo2(randn(3,3)) == "N = 2, T = Float64"

@@ -993,8 +993,7 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
 
     while (m != JL_NULL) {
         if (m->tvars!=jl_null) {
-            ti = lookup_match((jl_value_t*)tt, (jl_value_t*)m->sig,
-                              &env, m->tvars);
+            ti = lookup_match((jl_value_t*)tt, (jl_value_t*)m->sig, &env, m->tvars);
             if (ti != (jl_value_t*)jl_bottom_type) {
                 // parametric methods only match if all typevars are matched by
                 // non-typevars.
