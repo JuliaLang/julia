@@ -18,6 +18,10 @@ size(S::SparseMatrixCSC) = (S.m, S.n)
 nnz(S::SparseMatrixCSC) = int(S.colptr[end]-1)
 countnz(S::SparseMatrixCSC) = countnz(S.nzval)
 
+nonzeros(S::SparseMatrixCSC) = S.nzval
+rowvals(S::SparseMatrixCSC) = S.rowval
+nzrange(S::SparseMatrixCSC, col::Integer) = S.colptr[col]:(S.colptr[col+1]-1)
+
 function Base.showarray(io::IO, S::SparseMatrixCSC;
                         header::Bool=true, limit::Bool=Base._limit_output,
                         rows = Base.tty_size()[1], repr=false)
@@ -351,8 +355,6 @@ function findnz{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
 
     return (I, J, V)
 end
-
-nonzeros(S::SparseMatrixCSC) = S.nzval
 
 function sprand{T}(m::Integer, n::Integer, density::FloatingPoint,
                    rng::Function,::Type{T}=eltype(rng(1)))
