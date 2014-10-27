@@ -36,6 +36,8 @@ namespace JL_I {
         // functions
         abs_float, copysign_float, flipsign_int, select_value,
         sqrt_llvm, powi_llvm,
+        // byte vectors
+        bytevec_len, bytevec_ref,
         // pointer access
         pointerref, pointerset, pointertoref,
         // c interface
@@ -996,7 +998,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     if (nargs < 1) jl_error("invalid intrinsic call");
     Value *x = auto_unbox(args[1], ctx);
     Value *y = NULL;
-    if (nargs>1) {
+    if (nargs > 1) {
         y = auto_unbox(args[2], ctx);
     }
     Type *t = x->getType();
@@ -1007,6 +1009,65 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     Value *den;
     Value *typemin;
     switch (f) {
+    HANDLE(bytevec_len,1) {
+        Value *b = JL_INT(x);
+        Value *hi_byte = builder.CreateExtractElement(
+            builder.CreateBitCast(b, T_vec_2word_bytes),
+            ConstantInt::get(T_int32, 2*sizeof(void*)-1)
+        );
+        Value *hi_word = builder.CreateExtractElement(
+            builder.CreateBitCast(b, T_vec_2word_ints),
+            ConstantInt::get(T_int32, 1)
+        );
+        return builder.CreateSelect(
+            builder.CreateICmpSLT(hi_byte, ConstantInt::get(T_uint8, 0)),
+            builder.CreateSub(ConstantInt::get(T_size, 0), hi_word),
+            builder.CreateZExt(hi_byte, T_size)
+        );
+    }
+    HANDLE(bytevec_ref,2) {
+        Value *b = JL_INT(x);
+        Value *i = builder.CreateSub(JL_INT(y), ConstantInt::get(T_size, 1));
+        BasicBlock *here  = BasicBlock::Create(getGlobalContext(), "here",  ctx->f);
+        BasicBlock *there = BasicBlock::Create(getGlobalContext(), "there", ctx->f);
+        BasicBlock *cont  = BasicBlock::Create(getGlobalContext(), "cont",  ctx->f);
+
+        // branch: "here" or "there"
+        Value *bytes = builder.CreateBitCast(b, T_vec_2word_bytes);
+        Value *hi_byte = builder.CreateExtractElement(
+            bytes, ConstantInt::get(T_int32, 2*sizeof(void*)-1)
+        );
+        builder.CreateCondBr(
+            builder.CreateICmpSGE(hi_byte, ConstantInt::get(T_uint8, 0)),
+            here, there
+        );
+
+        // decode "here" byte
+        builder.SetInsertPoint(here);
+        Value *here_byte = builder.CreateExtractElement(
+            bytes, builder.CreateTrunc(i, T_int32)
+        );
+        builder.CreateBr(cont);
+
+        // decode "there" byte
+        builder.SetInsertPoint(there);
+        Value *words = builder.CreateBitCast(b, T_vec_2word_ints);
+        Value *lo_word = builder.CreateExtractElement(
+            words, ConstantInt::get(T_int32, 0)
+        );
+        Value *addr = builder.CreateAdd(lo_word, i);
+        Value *ptr = builder.CreateIntToPtr(addr, T_pint8);
+        Value *there_byte = builder.CreateLoad(ptr, false);
+        builder.CreateBr(cont);
+
+        // merge branches
+        builder.SetInsertPoint(cont);
+        PHINode *ret = PHINode::Create(T_uint8, 2);
+        ret->addIncoming(here_byte, here);
+        ret->addIncoming(there_byte, there);
+        builder.Insert(ret);
+        return ret;
+    }
     HANDLE(neg_int,1) return builder.CreateSub(ConstantInt::get(t, 0), JL_INT(x));
     HANDLE(add_int,2) return builder.CreateAdd(JL_INT(x), JL_INT(y));
     HANDLE(sub_int,2) return builder.CreateSub(JL_INT(x), JL_INT(y));
@@ -1509,6 +1570,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(abs_float); ADD_I(copysign_float);
     ADD_I(flipsign_int); ADD_I(select_value); ADD_I(sqrt_llvm);
     ADD_I(powi_llvm);
+    ADD_I(bytevec_len); ADD_I(bytevec_ref);
     ADD_I(pointerref); ADD_I(pointerset); ADD_I(pointertoref);
     ADD_I(checked_sadd); ADD_I(checked_uadd);
     ADD_I(checked_ssub); ADD_I(checked_usub);

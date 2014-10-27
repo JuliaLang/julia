@@ -30,6 +30,7 @@ export
     BitArray,
     BitMatrix,
     BitVector,
+    ByteVec,
     CFILE,
     Cmd,
     Colon,
