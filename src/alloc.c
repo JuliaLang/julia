@@ -396,6 +396,22 @@ jl_tuple_t *jl_tuple_fill(size_t n, jl_value_t *v)
     return tup;
 }
 
+DLLEXPORT jl_bytes_t *jl_bytes(const uint8_t *data, size_t n)
+{
+    jl_bytes_t *b = (jl_bytes_t*)alloc_3w();
+    b->type = (jl_value_t*)jl_bytes_type;
+    if (n < 2*sizeof(void*)) {
+        memcpy(b->here.data, data, n);
+        memset(b->here.data + n, 0, (2*sizeof(void*)-1) - n);
+        b->here.length = n;
+    } else {
+        b->there.data = allocb(n);
+        memcpy(b->there.data, data, n);
+        b->there.neglen = -n;
+    }
+    return b;
+}
+
 DLLEXPORT jl_function_t *jl_new_closure(jl_fptr_t fptr, jl_value_t *env,
                                         jl_lambda_info_t *linfo)
 {

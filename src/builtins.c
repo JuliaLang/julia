@@ -540,6 +540,25 @@ JL_CALLABLE(jl_f_tuplelen)
     return jl_box_long(jl_tuple_len(args[0]));
 }
 
+JL_CALLABLE(jl_f_bytesref)
+{
+    JL_NARGS(bytesref, 2, 2);
+    JL_TYPECHK(bytesref, bytes, args[0]);
+    JL_TYPECHK(bytesref, long, args[1]);
+    jl_bytes_t *b = (jl_bytes_t*)args[0];
+    size_t i = jl_unbox_long(args[1])-1;
+    if (i >= jl_byteslen(b))
+        jl_throw(jl_bounds_exception);
+    return jl_box_uint8(jl_bytesref(b, i));
+}
+
+JL_CALLABLE(jl_f_byteslen)
+{
+    JL_NARGS(byteslen, 1, 1);
+    JL_TYPECHK(byteslen, bytes, args[0]);
+    return jl_box_long(jl_byteslen((jl_bytes_t*)args[0]));
+}
+
 // composite types ------------------------------------------------------------
 
 JL_CALLABLE(jl_f_get_field)
@@ -1015,10 +1034,12 @@ void jl_init_primitives(void)
     // functions for internal use
     add_builtin_func("tupleref",  jl_f_tupleref);
     add_builtin_func("tuplelen",  jl_f_tuplelen);
+    add_builtin_func("bytesref",  jl_f_bytesref);
+    add_builtin_func("byteslen",  jl_f_byteslen);
     add_builtin_func("getfield",  jl_f_get_field);
-    add_builtin_func("setfield!",  jl_f_set_field);
+    add_builtin_func("setfield!", jl_f_set_field);
     add_builtin_func("fieldtype", jl_f_field_type);
-    add_builtin_func("_expr", jl_f_new_expr);
+    add_builtin_func("_expr",     jl_f_new_expr);
 
     add_builtin_func("arraylen", jl_f_arraylen);
     add_builtin_func("arrayref", jl_f_arrayref);
@@ -1037,6 +1058,7 @@ void jl_init_primitives(void)
     add_builtin("TypeConstructor", (jl_value_t*)jl_typector_type);
     add_builtin("Tuple", (jl_value_t*)jl_tuple_type);
     add_builtin("NTuple", (jl_value_t*)jl_ntuple_type);
+    add_builtin("Bytes", (jl_value_t*)jl_bytes_type);
     add_builtin("Type", (jl_value_t*)jl_type_type);
     add_builtin("Vararg", (jl_value_t*)jl_vararg_type);
     add_builtin("DataType", (jl_value_t*)jl_datatype_type);

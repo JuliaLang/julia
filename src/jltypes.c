@@ -27,6 +27,7 @@ jl_tuple_t *jl_tuple_type;
 jl_value_t *jl_tupletype_type;
 jl_datatype_t *jl_ntuple_type;
 jl_typename_t *jl_ntuple_typename;
+jl_datatype_t *jl_bytes_type;
 jl_datatype_t *jl_tvar_type;
 jl_datatype_t *jl_uniontype_type;
 jl_datatype_t *jl_datatype_type;
@@ -3013,6 +3014,9 @@ void jl_init_types(void)
     jl_tupletype_type =
         (jl_value_t*)jl_tuple1(jl_apply_type((jl_value_t*)jl_vararg_type,
                                              jl_tuple1(jl_type_type)));
+
+    jl_bytes_type = jl_new_bitstype((jl_value_t*)jl_symbol("Bytes"),
+                                    jl_any_type, jl_null, 2*sizeof(void*)*8);
 
     // non-primitive definitions follow
     jl_int32_type = NULL;

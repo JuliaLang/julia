@@ -21,6 +21,8 @@ JL_CALLABLE(jl_f_isdefined);
 JL_CALLABLE(jl_f_tuple);
 JL_CALLABLE(jl_f_tupleref);
 JL_CALLABLE(jl_f_tuplelen);
+JL_CALLABLE(jl_f_bytesref);
+JL_CALLABLE(jl_f_byteslen);
 JL_CALLABLE(jl_f_get_field);
 JL_CALLABLE(jl_f_set_field);
 JL_CALLABLE(jl_f_field_type);
