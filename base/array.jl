@@ -1232,7 +1232,7 @@ end
 
 ## Transpose ##
 const transposebaselength=64
-function transpose!(B::StridedVecOrMat,A::StridedMatrix)
+function transpose!(B::StridedMatrix,A::StridedMatrix)
     m, n = size(A)
     size(B,1) == n && size(B,2) == m || throw(DimensionMismatch("transpose"))
 
@@ -1249,7 +1249,15 @@ function transpose!(B::StridedVecOrMat,A::StridedMatrix)
     end
     return B
 end
-function transposeblock!(B::StridedVecOrMat,A::StridedMatrix,m::Int,n::Int,offseti::Int,offsetj::Int)
+function transpose!(B::StridedVector, A::StridedMatrix)
+    length(B) == length(A) && size(A,1) == 1 || throw(DimensionMismatch("transpose"))
+    copy!(B, A)
+end
+function transpose!(B::StridedMatrix, A::StridedVector)
+    length(B) == length(A) && size(B,1) == 1 || throw(DimensionMismatch("transpose"))
+    copy!(B, A)
+end
+function transposeblock!(B::StridedMatrix,A::StridedMatrix,m::Int,n::Int,offseti::Int,offsetj::Int)
     if m*n<=transposebaselength
         @inbounds begin
             for j = offsetj+(1:n)
@@ -1269,7 +1277,7 @@ function transposeblock!(B::StridedVecOrMat,A::StridedMatrix,m::Int,n::Int,offse
     end
     return B
 end
-function ctranspose!(B::StridedVecOrMat,A::StridedMatrix)
+function ctranspose!(B::StridedMatrix,A::StridedMatrix)
     m, n = size(A)
     size(B,1) == n && size(B,2) == m || throw(DimensionMismatch("transpose"))
 
@@ -1286,7 +1294,15 @@ function ctranspose!(B::StridedVecOrMat,A::StridedMatrix)
     end
     return B
 end
-function ctransposeblock!(B::StridedVecOrMat,A::StridedMatrix,m::Int,n::Int,offseti::Int,offsetj::Int)
+function ctranspose!(B::StridedVector, A::StridedMatrix)
+    length(B) == length(A) && size(A,1) == 1 || throw(DimensionMismatch("transpose"))
+    ccopy!(B, A)
+end
+function ctranspose!(B::StridedMatrix, A::StridedVector)
+    length(B) == length(A) && size(B,1) == 1 || throw(DimensionMismatch("transpose"))
+    ccopy!(B, A)
+end
+function ctransposeblock!(B::StridedMatrix,A::StridedMatrix,m::Int,n::Int,offseti::Int,offsetj::Int)
     if m*n<=transposebaselength
         @inbounds begin
             for j = offsetj+(1:n)
@@ -1305,6 +1321,11 @@ function ctransposeblock!(B::StridedVecOrMat,A::StridedMatrix,m::Int,n::Int,offs
         ctransposeblock!(B,A,m,n-newn,offseti,offsetj+newn)
     end
     return B
+end
+function ccopy!(B, A)
+    for i = 1:length(A)
+        B[i] = ctranspose(A[i])
+    end
 end
 
 function transpose(A::StridedMatrix)
