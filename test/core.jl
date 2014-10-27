@@ -1818,11 +1818,12 @@ type A7652
     a :: Int
 end
 a7652 = A7652(0)
-f7652() = issubtype(fieldtype(a7652, :a), Int)
-@test f7652() == issubtype(fieldtype(a7652, :a), Int) == true
-g7652() = fieldtype(A7652, :types)
-@test g7652() == fieldtype(A7652, :types) == Tuple
-@test fieldtype(a7652, 1) == Int
+t_a7652 = A7652
+f7652() = issubtype(fieldtype(t_a7652, :a), Int)
+@test f7652() == issubtype(fieldtype(A7652, :a), Int) == true
+g7652() = fieldtype(DataType, :types)
+@test g7652() == fieldtype(DataType, :types) == Tuple
+@test fieldtype(t_a7652, 1) == Int
 h7652() = a7652.(1) = 2
 h7652()
 @test a7652.a == 2

@@ -765,10 +765,17 @@
     (cond ((length> args (length field-names))
 	   `(call (top error) "new: too many arguments"))
 	  (else
-	   `(new ,Texpr
-		 ,@(map (lambda (fty val)
-			  `(call (top convert) ,fty ,val))
-			(list-head field-types (length args)) args))))))
+	   (if (equal? type-params params)
+	       `(new ,Texpr ,@(map (lambda (fty val)
+				     `(call (top convert) ,fty ,val))
+				   (list-head field-types (length args)) args))
+	       (let ((tn (gensy)))
+		 `(let (new ,tn ,@(map (lambda (fld val)
+					 `(call (top convert)
+						(call (top fieldtype) ,tn (quote ,fld))
+						,val))
+				       (list-head field-names (length args)) args))
+		    (= ,tn ,Texpr))))))))
 
 ;; insert a statement after line number node
 (define (prepend-stmt stmt body)
@@ -1619,7 +1626,7 @@
 		  ,.(if (eq? bb b) '() `((= ,bb ,(expand-forms b))))
 		  (call (top setfield!) ,aa ,bb
 			(call (top convert)
-			      (call (top fieldtype) ,aa ,bb)
+			      (call (top fieldtype) (call (top typeof) ,aa) ,bb)
 			      ,(expand-forms rhs)))))))
 
 	   ((tuple)
