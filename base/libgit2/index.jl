@@ -1,5 +1,5 @@
 export GitIndex, IndexEntry, add_bypath!, write_tree!, write!, reload!, clear!,
-       remove!, remove_dir!, add!, getentry, read_tree!, add_all!, update_all!,
+       remove!, remove_dir!, getentry, read_tree!, add_all!, update_all!,
        remove_all!, has_conflicts
 
 type GitIndex
@@ -178,21 +178,21 @@ function IndexEntry(ptr::Ptr{api.GitIndexEntry})
 end
 
 #TODO: add! is defined in Base
-function Base.add!(idx::GitIndex, entry::IndexEntry)
-    @assert idx.ptr != C_NULL
-    gentry = api.GitIndexEntry(entry)
-    @check ccall((:git_index_add, api.libgit2), Cint,
-                 (Ptr{Void}, Ptr{api.GitIndexEntry}),
-                 idx.ptr, &gentry)
-    return idx
-end
+#function Base.add!(idx::GitIndex, entry::IndexEntry)
+#    @assert idx.ptr != C_NULL
+#    gentry = api.GitIndexEntry(entry)
+#    @check ccall((:git_index_add, api.libgit2), Cint,
+#                 (Ptr{Void}, Ptr{api.GitIndexEntry}),
+#                 idx.ptr, &gentry)
+#    return idx
+#end
 
-function Base.add!(idx::GitIndex, path::String)
-    @assert idx.ptr != C_NULL
-    bpath = bytestring(path)
-    @check api.git_index_add_bypath(idx.ptr, bpath)
-    return idx
-end
+#function Base.add!(idx::GitIndex, path::String)
+#    @assert idx.ptr != C_NULL
+#    bpath = bytestring(path)
+#    @check api.git_index_add_bypath(idx.ptr, bpath)
+#    return idx
+#end
 
 Base.getindex(idx::GitIndex, path::String, stage::Int=0) = begin
     return getentry(idx, path, stage)

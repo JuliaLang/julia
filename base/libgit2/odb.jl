@@ -115,7 +115,7 @@ function open_wstream{T<:GitObject}(::Type{T}, odb::Odb, len::Int)
 end
 
 Base.isreadable(io::OdbWrite) = false 
-Base.iswriteable(io::OdbWrite) = true
+Base.iswritable(io::OdbWrite) = true
 
 Base.write(io::OdbWrite, b::ByteString) = begin 
     @assert io.ptr != C_NULL
@@ -145,7 +145,7 @@ type OdbRead <: OdbIO
 end
 
 Base.isreadable(io::OdbRead) = true
-Base.iswriteable(io::OdbRead) = false
+Base.iswritable(io::OdbRead) = false
 
 #TODO: this is broken ...
 #Base.readbytes(io::OdbRead, nb=typemax(Int)) = begin

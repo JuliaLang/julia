@@ -64,18 +64,18 @@ Base.push!(w::GitRevWalker, cid::Oid) = begin
 end
 
 #TODO: this does not mimic Base's sortby! functionality so it should be renamed
-Base.sortby!(w::GitRevWalker, sort_mode::Symbol; rev::Bool=false) = begin
-    s = symbol_to_gitsort(sort_mode)
-    rev && (s |= api.SORT_REVERSE)
-    sortby!(w, s)
-    return 
-end
+#Base.sortby!(w::GitRevWalker, sort_mode::Symbol; rev::Bool=false) = begin
+#    s = symbol_to_gitsort(sort_mode)
+#    rev && (s |= api.SORT_REVERSE)
+#    sortby!(w, s)
+#    return
+#end
 
-Base.sortby!(w::GitRevWalker, sort_mode::Cint) = begin
-    @assert w.ptr != C_NULL
-    api.git_revwalk_sorting(w.ptr, sort_mode)
-    return 
-end
+#Base.sortby!(w::GitRevWalker, sort_mode::Cint) = begin
+#    @assert w.ptr != C_NULL
+#    api.git_revwalk_sorting(w.ptr, sort_mode)
+#    return
+#end
 
 function hide!(w::GitRevWalker, cid::Oid)
     @assert w.ptr != C_NULL
@@ -96,24 +96,24 @@ function symbol_to_gitsort(s::Symbol)
     error("unknown git sort flag :$s")
 end
 
-function walk(r::Repository, from::Oid, sorting=SortDate)
-    walker = GitRevWalker(r)
-    sortby!(walker, api.SORT_TIME)
-    push!(walker, from)
-    return (@task for c in walker
-        produce(c)
-    end)
-end
+#function walk(r::Repository, from::Oid, sorting=SortDate)
+#    walker = GitRevWalker(r)
+#    sortby!(walker, api.SORT_TIME)
+#    push!(walker, from)
+#    return (@task for c in walker
+#        produce(c)
+#    end)
+#end
 
 # walk(repo, oid) do commit
       # do something with commit
 # end
-function walk(f::Function, r::Repository, from::Oid, sorting=SortDate)
-    walker = GitRevWalker(r)
-    sortby!(walker, api.SORT_TIME)
-    push!(walker, from) 
-    for c in walker
-        f(c)
-    end
-    return 
-end
+#function walk(f::Function, r::Repository, from::Oid, sorting=SortDate)
+#    walker = GitRevWalker(r)
+#    sortby!(walker, api.SORT_TIME)
+#    push!(walker, from)
+#    for c in walker
+#        f(c)
+#    end
+#    return
+#end

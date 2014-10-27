@@ -167,19 +167,19 @@ RemoteHead(ghead::api.GitRemoteHead) = begin
                       ghead.name == C_NULL ? "" : bytestring(ghead.name))
 end
 
-Base.ls(r::GitRemote) = begin
-    @assert r.ptr != C_NULL
-    nheads = Csize_t[0]
-    head_ptrs = Array(Ptr{Ptr{api.GitRemoteHead}}, 1)
-    @check api.git_remote_ls(head_ptrs, nheads, r.ptr)
-    head_ptr = head_ptrs[1]
-    remote_heads = RemoteHead[]
-    for i in 1:nheads[1]
-        ghead = unsafe_load(unsafe_load(head_ptr, i))
-        push!(remote_heads, RemoteHead(ghead))
-    end
-    return remote_heads
-end
+#Base.ls(r::GitRemote) = begin
+#    @assert r.ptr != C_NULL
+#    nheads = Csize_t[0]
+#    head_ptrs = Array(Ptr{Ptr{api.GitRemoteHead}}, 1)
+#    @check api.git_remote_ls(head_ptrs, nheads, r.ptr)
+#    head_ptr = head_ptrs[1]
+#    remote_heads = RemoteHead[]
+#    for i in 1:nheads[1]
+#        ghead = unsafe_load(unsafe_load(head_ptr, i))
+#        push!(remote_heads, RemoteHead(ghead))
+#    end
+#    return remote_heads
+#end
 
 Base.download(r::GitRemote) = begin
     @assert r.ptr != C_NULL
