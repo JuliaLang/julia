@@ -855,6 +855,19 @@
 		    (ctor-def 'function name Tname params bounds '() sig ctor-body body)))
    ctor))
 
+;; check if there are any calls to new with fewer than n arguments
+(define (ctors-partial-new expr n)
+  (and (pair? expr)
+   (or
+    ((pattern-lambda
+      (call (-/ new) . args)
+      (not (length= args n))) (car expr))
+    ((pattern-lambda
+      (call (curly (-/ new) . p) . args)
+      (not (length= args n))) (car expr))
+    (ctors-partial-new (car expr) n)
+    (ctors-partial-new (cdr expr) n))))
+
 ;; remove line numbers and nested blocks
 (define (flatten-blocks e)
   (if (atom? e)
@@ -876,7 +889,8 @@
 	  (field-types (map decl-type fields))
 	  (defs2 (if (null? defs)
 		     (default-inner-ctors name field-names field-types (null? params))
-		     defs)))
+		     defs))
+	  (undeffree (not (ctors-partial-new defs (length fields)))))
      (for-each (lambda (v)
 		 (if (not (symbol? v))
 		     (error (string "field name \"" (deparse v) "\" is not a symbol"))))
@@ -886,7 +900,7 @@
 	   (global ,name) (const ,name)
 	   (composite_type ,name (tuple ,@params)
 			   (tuple ,@(map (lambda (x) `',x) field-names))
-			   ,super (tuple ,@field-types) ,mut)
+			   ,super (tuple ,@field-types) ,mut ,undeffree)
 	   (call
 	    (lambda ()
 	      (scope-block
@@ -905,7 +919,7 @@
 	     ,@(map make-assignment params (symbols->typevars params bounds #t))
 	     (composite_type ,name (tuple ,@params)
 			     (tuple ,@(map (lambda (x) `',x) field-names))
-			     ,super (tuple ,@field-types) ,mut)))
+			     ,super (tuple ,@field-types) ,mut ,undeffree)))
 	   ;; "inner" constructors
 	   (call
 	    (lambda ()

@@ -377,7 +377,7 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
     write_uint16(s, nf);
     write_int32(s, dt->size);
     int has_instance = !!(dt->instance != NULL);
-    write_uint8(s, dt->abstract | (dt->mutabl<<1) | (dt->pointerfree<<2) | (has_instance<<3));
+    write_uint8(s, dt->abstract | (dt->mutabl<<1) | (dt->pointerfree<<2) | (has_instance<<3) | (dt->undeffree<<4));
     if (!dt->abstract && mode != MODE_MODULE && mode != MODE_MODULE_LAMBDAS)
         write_int32(s, dt->uid);
     if (has_instance)
@@ -833,6 +833,7 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
         dt->instance = jl_deserialize_value(s, &dt->instance);
         dt->instance->type = (jl_value_t*)dt;
     }
+    dt->undeffree = (flags>>4)&1;
     assert(tree_literal_values==NULL && mode != MODE_AST);
     ptrhash_put(&backref_table, (void*)(ptrint_t)pos, dt);
     if (tag == 5 || tag == 8) {
