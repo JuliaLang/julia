@@ -134,11 +134,11 @@ end
 getindex(T::(Type...)) = Array(T,0)
 
 # T[a:b] and T[a:s:b] also construct typed ranges
-function getindex{T<:Number}(::Type{T}, r::Range)
+function getindex{T<:Union(Char,Number)}(::Type{T}, r::Range)
     copy!(Array(T,length(r)), r)
 end
 
-function getindex{T<:Number}(::Type{T}, r1::Range, rs::Range...)
+function getindex{T<:Union(Char,Number)}(::Type{T}, r1::Range, rs::Range...)
     a = Array(T,length(r1)+sum(length,rs))
     o = 1
     copy!(a, o, r1)

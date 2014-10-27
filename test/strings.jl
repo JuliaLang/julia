@@ -52,7 +52,7 @@ cx = Any[
 ]
 
 for i = 1:size(cx,1)
-    @test cx[i,1] == cx[i,2]
+    @test cx[i,1] == convert(Uint32, cx[i,2])
     @test string(cx[i,2]) == unescape_string(cx[i,3])
     if isascii(cx[i,2]) || !isprint(cx[i,2])
         @test cx[i,3] == escape_string(string(cx[i,2]))

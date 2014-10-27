@@ -10,6 +10,7 @@ export normalize_string, is_valid_char, is_assigned_char,
 
 # whether codepoints are valid Unicode
 is_valid_char(c) = (0x0 <= c <= 0x110000) && bool(ccall(:utf8proc_codepoint_valid, Cuchar, (Int32,), c))
+is_valid_char(c::Char) = is_valid_char(uint32(c))
 
 # utf8 category constants
 const UTF8PROC_CATEGORY_LU = 1
@@ -111,7 +112,7 @@ end
     
 # returns UTF8PROC_CATEGORY code in 1:30 giving Unicode category
 function category_code(c)
-    c > 0x10FFFF && return 0x0000 # see utf8proc_get_property docs
+    uint32(c) > 0x10FFFF && return 0x0000 # see utf8proc_get_property docs
     cat = unsafe_load(ccall(:utf8proc_get_property, Ptr{Uint16}, (Int32,), c))
     # note: utf8proc returns 0, not UTF8PROC_CATEGORY_CN, for unassigned c
     cat == 0 ? UTF8PROC_CATEGORY_CN : cat
@@ -121,9 +122,9 @@ is_assigned_char(c) = category_code(c) != UTF8PROC_CATEGORY_CN
 
 # category_code() modified to ignore case of unassigned category CN
 #  used by character class predicates for improved performance
-function _catcode(c)
-    c > 0x10FFFF && return 0x0000 # see utf8proc_get_property docs
-    cat = unsafe_load(ccall(:utf8proc_get_property, Ptr{Uint16}, (Int32,), c))
+function _catcode(c::Char)
+    c > char(0x10FFFF) && return uint16(0x0000) # see utf8proc_get_property docs
+    return unsafe_load(ccall(:utf8proc_get_property, Ptr{Uint16}, (Int32,), c))
 end
 
 # TODO: use UTF8PROC_CHARBOUND to extract graphemes from a string, e.g. to iterate over graphemes?
@@ -131,35 +132,31 @@ end
 
 ## libc character class predicates ##
 
-islower(c::Char) = (_catcode(c)==UTF8PROC_CATEGORY_LL)
+islower(c::Char) = (_catcode(c) == UTF8PROC_CATEGORY_LL)
 
 # true for Unicode upper and mixed case
 function isupper(c::Char)
-    ccode=_catcode(c)
-    return ccode==UTF8PROC_CATEGORY_LU || ccode==UTF8PROC_CATEGORY_LT
+    ccode = _catcode(c)
+    return ccode == UTF8PROC_CATEGORY_LU || ccode == UTF8PROC_CATEGORY_LT
 end
 
-isalpha(c::Char) = (UTF8PROC_CATEGORY_LU <= _catcode(c) <=
-                                            UTF8PROC_CATEGORY_LO)
-
-isdigit(c::Char) = ('0' <= c <= '9')
-
-isnumber(c::Char) = (UTF8PROC_CATEGORY_ND <= _catcode(c) <=
-                                            UTF8PROC_CATEGORY_NO)
+isdigit(c::Char)  = ('0' <= c <= '9')
+isalpha(c::Char)  = (UTF8PROC_CATEGORY_LU <= _catcode(c) <= UTF8PROC_CATEGORY_LO)
+isnumber(c::Char) = (UTF8PROC_CATEGORY_ND <= _catcode(c) <= UTF8PROC_CATEGORY_NO)
 
 function isalnum(c::Char)
-    ccode=_catcode(c)
+    ccode = _catcode(c)
     return (UTF8PROC_CATEGORY_LU <= ccode <= UTF8PROC_CATEGORY_LO) ||
-                    (UTF8PROC_CATEGORY_ND <= ccode <= UTF8PROC_CATEGORY_NO)
+           (UTF8PROC_CATEGORY_ND <= ccode <= UTF8PROC_CATEGORY_NO)
 end
 
 # following C++ only control characters from the Latin-1 subset return true
-iscntrl(c::Char) = (uint(c)<= 0x1f || 0x7f<=uint(c)<=0x9f)
+iscntrl(c::Char) = (c <= char(0x1f) || char(0x7f) <= c <= char(0x9f))
 
-ispunct(c::Char) = (UTF8PROC_CATEGORY_PC <=_catcode(c) <= UTF8PROC_CATEGORY_PO)
+ispunct(c::Char) = (UTF8PROC_CATEGORY_PC <= _catcode(c) <= UTF8PROC_CATEGORY_PO)
 
 # 0x85 is the Unicode Next Line (NEL) character
-isspace(c::Char) = c==' ' || '\t'<=c<='\r' || c==0x85 || _catcode(c)==UTF8PROC_CATEGORY_ZS
+isspace(c::Char) = c == ' ' || '\t' <= c <='\r' || c == char(0x85) || _catcode(c)==UTF8PROC_CATEGORY_ZS
 
 isprint(c::Char) = (UTF8PROC_CATEGORY_LU <= _catcode(c) <= UTF8PROC_CATEGORY_ZS)
 
@@ -180,6 +177,5 @@ for name = ("alnum", "alpha", "cntrl", "digit", "number", "graph",
         end
     end
 end
-
 
 end # module

@@ -39,8 +39,6 @@ done(x::Number, state) = state
 isempty(x::Number) = false
 in(x::Number, y::Number) = x == y
 
-reinterpret{T,S}(::Type{T}, x::S) = box(T,unbox(S,x))
-
 map(f::Callable, x::Number) = f(x)
 
 zero(x::Number) = oftype(x,0)

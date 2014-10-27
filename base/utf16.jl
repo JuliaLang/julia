@@ -31,7 +31,8 @@ end
 # TODO: optmize this
 function encode16(s::String)
     buf = Uint16[]
-    for c in s
+    for ch in s
+        c = reinterpret(Uint32, ch)
         if c < 0x10000
             push!(buf, uint16(c))
         else

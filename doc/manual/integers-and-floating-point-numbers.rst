@@ -40,12 +40,7 @@ Type         Signed?  Number of bits  Smallest value Largest value
 ``Int128``         ✓       128           -2^127          2^127 - 1
 ``Uint128``                128           0               2^128 - 1
 ``Bool``         N/A       8           ``false`` (0)  ``true`` (1)
-``Char``         N/A       32          ``'\0'``       ``'\Uffffffff'``
 ===========  =======  ==============  ============== ==================
-
-``Char`` natively supports representation of
-`Unicode characters <http://en.wikipedia.org/wiki/Unicode>`_; see
-:ref:`man-strings` for more details.
 
 -  **Floating-point types:**
 
