@@ -375,12 +375,8 @@ t_func[getfield] = (2, 2, getfield_tfunc)
 t_func[setfield!] = (3, 3, (o, f, v)->v)
 const fieldtype_tfunc = function (A, s, name)
     if isType(s)
-        # fieldtype of a type only depends on its kind
-        # i.e. fieldtype(SomeDataType, :types) === (Any...,)
-        # rather than a specific type tuple
-        s = typeof(s.parameters[1])
-    end
-    if !isa(s,DataType)
+        s = s.parameters[1]
+    else
         return Type
     end
     t = getfield_tfunc(A, s, name)

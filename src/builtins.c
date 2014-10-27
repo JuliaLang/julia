@@ -604,13 +604,9 @@ JL_CALLABLE(jl_f_set_field)
 JL_CALLABLE(jl_f_field_type)
 {
     JL_NARGS(fieldtype, 2, 2);
-    jl_value_t *v = args[0];
-    jl_value_t *vt = (jl_value_t*)jl_typeof(v);
-    if (vt == (jl_value_t*)jl_module_type)
-        jl_error("cannot assign variables in other modules");
-    if (!jl_is_datatype(vt))
-        jl_type_error("fieldtype", (jl_value_t*)jl_datatype_type, v);
-    jl_datatype_t *st = (jl_datatype_t*)vt;
+    jl_datatype_t *st = (jl_datatype_t*)args[0];
+    if (!jl_is_datatype(st))
+        jl_type_error("fieldtype", (jl_value_t*)jl_datatype_type, (jl_value_t*)st);
     int field_index;
     if (jl_is_long(args[1])) {
         field_index = jl_unbox_long(args[1]) - 1;

@@ -365,9 +365,9 @@ Types
        (80,:mtime,Float64)
        (88,:ctime,Float64)
 
-.. function:: fieldtype(value, name::Symbol)
+.. function:: fieldtype(type, name::Symbol | index::Int)
 
-   Determine the declared type of a named field in a value of composite type.
+   Determine the declared type of a field (specified by name or index) in a composite type.
 
 .. function:: isimmutable(v)
 
