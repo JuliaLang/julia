@@ -48,11 +48,19 @@ function add(pkg::String, vers::VersionSet)
             info("Nothing to be done")
         end
         branch = Pkg.META_BRANCH
+
         if Git.branch(dir="METADATA") == branch
-            if !Git.success(`diff --quiet origin/$branch`, dir="METADATA")
+            repo = Git.get_repo("METADATA")
+            #if !Git.success(`diff --quiet origin/$branch`, dir="METADATA")
+            if length(Base.LibGit2.diff(repo, "origin/$branch", Base.LibGit2.repo_index(repo))) > 0
                 outdated = :yes
             else
                 try
+                    # for remote in remotes(repo)
+                    #     Base.LibGit2.remote_fetch(remote)
+                    # end
+                    # outdated = length(Base.LibGit2.diff(repo, "origin/$branch", Base.LibGit2.repo_index(repo))) == 0 ?
+                    #   (:no) : (:yes)
                     run(Git.cmd(`fetch -q --all`, dir="METADATA") |>DevNull .>DevNull)
                     outdated = Git.success(`diff --quiet origin/$branch`, dir="METADATA") ?
                         (:no) : (:yes)
@@ -237,11 +245,15 @@ end
 function update(branch::String)
     info("Updating METADATA...")
     cd("METADATA") do
-        if Git.branch() != branch
-            Git.dirty() && error("METADATA is dirty and not on $branch, bailing")
-            Git.attached() || error("METADATA is detached not on $branch, bailing")
-            Git.run(`fetch -q --all`)
-            Git.run(`checkout -q HEAD^0`)
+        if Git.branch(dir=pwd()) != branch
+            Git.dirty(dir=pwd()) && error("METADATA is dirty and not on $branch, bailing")
+            Git.attached(dir=pwd()) || error("METADATA is detached not on $branch, bailing")
+            #Git.run(`fetch -q --all`)
+            for remote in Base.LibGit2.remotes(Git.get_repo(dir))
+                Base.LibGit2.remote_fetch(remote)
+            end
+            #Git.run(`checkout -q HEAD^0`)
+            Base.LibGit2.checkout_head!(Git.get_repo(dir), {:strategy => :safe})
             Git.run(`branch -f $branch refs/remotes/origin/$branch`)
             Git.run(`checkout -q $branch`)
         end
@@ -267,7 +279,10 @@ function update(branch::String)
             if Git.attached(dir=pkg) && !Git.dirty(dir=pkg)
                 info("Updating $pkg...")
                 @recover begin
-                    Git.run(`fetch -q --all`, dir=pkg)
+                    #Git.run(`fetch -q --all`, dir=pkg)
+                    for remote in Base.LibGit2.remotes(Git.get_repo(dir))
+                        Base.LibGit2.remote_fetch(remote)
+                    end
                     Git.success(`pull -q --ff-only`, dir=pkg) # suppress output
                 end
             end
@@ -507,9 +522,11 @@ function register(pkg::String, url::String)
 end
 
 function register(pkg::String)
-    Git.success(`config remote.origin.url`, dir=pkg) ||
+    conf = Base.LibGit2.config(Git.get_repo(pkg))
+    if conf["config remote.origin.url"] == nothing
         error("$pkg: no URL configured")
-    url = Git.readchomp(`config remote.origin.url`, dir=pkg)
+    end
+    url = conf["remote.origin.url"]
     register(pkg,Git.normalize_url(url))
 end
 

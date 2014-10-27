@@ -18,6 +18,10 @@ function git(d)
     `git --git-dir=$work_tree` : `git --work-tree=$work_tree --git-dir=$git_dir`
 end
 
+function get_repo(dir)
+    return Base.LibGit2.repo_open(dir)
+end
+
 cmd(args::Cmd; dir="") = `$(git(dir)) $args`
 run(args::Cmd; dir="", out=STDOUT) = Base.run(cmd(args,dir=dir) |> out)
 readall(args::Cmd; dir="") = Base.readall(cmd(args,dir=dir))
@@ -25,26 +29,65 @@ readchomp(args::Cmd; dir="") = Base.readchomp(cmd(args,dir=dir))
 
 function success(args::Cmd; dir="")
     g = git(dir)
-    Base.readchomp(`$g rev-parse --is-bare-repository`) == "false" &&
-        Base.run(`$g update-index -q --really-refresh`)
+    repo = get_repo(dir)
+    if !Base.LibGit2.repo_isbare(repo)
+        Base.LibGit2.update_all!(Base.LibGit2.repo_index(repo))
+    end
+    # Base.readchomp(`$g rev-parse --is-bare-repository`) == "false" &&
+    #     Base.run(`$g update-index -q --really-refresh`)
     Base.success(`$g $args`)
+end
+
+macro libgit2_success(args)
+    quote
+        begin
+            success = false
+            try
+                $args
+                success = true
+            catch
+                success = false
+            end
+            success
+        end
+    end
 end
 
 modules(args::Cmd; dir="") = readchomp(`config -f .gitmodules $args`, dir=dir)
 different(verA::String, verB::String, path::String; dir="") =
     !success(`diff-tree --quiet $verA $verB -- $path`, dir=dir)
 
-dirty(; dir="") = !success(`diff-index --quiet HEAD`, dir=dir)
+#dirty(; dir="") = !success(`diff-index --quiet HEAD`, dir=dir)
+function dirty(; dir="")
+    repo = get_repo(dir)
+    return length(Base.LibGit2.diff(repo, Base.LibGit2.repo_index(repo))) > 0
+end
 staged(; dir="") = !success(`diff-index --quiet --cached HEAD`, dir=dir)
-unstaged(; dir="") = !success(`diff-files --quiet`, dir=dir)
+#unstaged(; dir="") = !success(`diff-files --quiet`, dir=dir)
+function unstaged(; dir="")
+    repo = get_repo(dir)
+    return length(Base.LibGit2.diff(repo)) > 0
+end
 dirty(paths; dir="") = !success(`diff-index --quiet HEAD -- $paths`, dir=dir)
 staged(paths; dir="") = !success(`diff-index --quiet --cached HEAD -- $paths`, dir=dir)
 unstaged(paths; dir="") = !success(`diff-files --quiet -- $paths`, dir=dir)
 
-iscommit(name; dir="") = success(`cat-file commit $name`, dir=dir)
-attached(; dir="") = success(`symbolic-ref -q HEAD`, dir=dir)
-branch(; dir="") = readchomp(`rev-parse --symbolic-full-name --abbrev-ref HEAD`, dir=dir)
-head(; dir="") = readchomp(`rev-parse HEAD`, dir=dir)
+#iscommit(name; dir="") = success(`cat-file commit $name`, dir=dir)
+iscommit(name; dir="") = @libgit2_success(Base.LibGit2.lookup(get_repo(dir), Base.LibGit2.Oid(name))) ||
+    @libgit2_success(Base.LibGit2.lookup_ref(get_repo(dir), name))
+# function iscommit(name; dir="")
+#     ret = @libgit2_success(Base.LibGit2.lookup(get_repo(dir), Base.LibGit2.Oid(name)))
+#     println(ret)
+#     ret |= @libgit2_success(Base.LibGit2.lookup_ref(get_repo(dir), name))
+#     println(ret)
+#     return ret
+# end
+#attached(; dir="") = success(`symbolic-ref -q HEAD`, dir=dir)
+attached(; dir="") = !Base.LibGit2.ishead_detached(get_repo(dir))
+#branch(; dir="") = readchomp(`rev-parse --symbolic-full-name --abbrev-ref HEAD`, dir=dir)
+branch(; dir="") = Base.LibGit2.shorthand(Base.LibGit2.head(get_repo(dir)))
+#head(; dir="") = readchomp(`rev-parse HEAD`, dir=dir)
+head(; dir="") = string(Base.LibGit2.target(Base.LibGit2.head(get_repo(dir))))
 
 immutable State
     head::ASCIIString
@@ -84,20 +127,47 @@ function transact(f::Function; dir="")
     end
 end
 
+function merge_base(a::String, b::String; dir="")
+    repo = Git.get_repo(dir)
+    o1 = Base.LibGit2.rev_parse_oid(repo, a)
+    o2 = Base.LibGit2.rev_parse_oid(repo, b)
+    return Base.LibGit2.merge_base(repo, o1, o2)
+end
+
+function file_exists(file::String; dir="")
+    repo = Git.get_repo(dir)
+    @libgit2_success(Base.LibGit2.rev_parse(repo, file))
+end
+
+
 function is_ancestor_of(a::String, b::String; dir="")
-    A = readchomp(`rev-parse $a`, dir=dir)
-    readchomp(`merge-base $A $b`, dir=dir) == A
+    return merge_base(a, b; dir=dir) != nothing
+end
+
+function checkout(sha1::String; dir="", opts={:strategy => :force})
+    repo = Git.get_repo(dir)
+    Base.LibGit2.checkout!(repo, sha1, opts)
+    Base.LibGit2.set_head_detached!(repo, sha1)
+end
+
+function clone(url::String, path::String; opts={:strategy => :safe_create})
+    repo = Base.LibGit2.repo_clone(url, path)
+    Base.LibGit2.checkout_head!(repo, opts)
 end
 
 const GITHUB_REGEX =
     r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
 
 function set_remote_url(url::String; remote::String="origin", dir="")
-    run(`config remote.$remote.url $url`, dir=dir)
+    repo = Base.LibGit2.repo_open(dir)
+    config = Base.LibGit2.config(repo)
+    config["remote.$remote.url"] = url
     m = match(GITHUB_REGEX,url)
     m == nothing && return
     push = "git@github.com:$(m.captures[1]).git"
-    push != url && run(`config remote.$remote.pushurl $push`, dir=dir)
+    if push != url
+        config["remote.$remote.pushurl"] = push
+    end
 end
 
 function normalize_url(url::String)

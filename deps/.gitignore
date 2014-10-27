@@ -27,3 +27,4 @@
 /librandom.*
 /virtualenv-*
 /julia-env
+/libgit*

@@ -37,11 +37,13 @@ function init(meta::String=DEFAULT_META, branch::String=META_BRANCH)
         return
     end
     try
-        mkpath(dir)
+        mkpath(joinpath(dir, "METADATA"))
         Base.cd(dir) do
             info("Cloning METADATA from $meta")
-            run(`git clone -q -b $branch $meta METADATA`)
-            Git.set_remote_url(meta, dir="METADATA")
+            # repo = Base.LibGit2.repo_clone(meta, joinpath(dir, "METADATA"))
+            # Base.LibGit2.checkout_head!(repo, {:strategy => :safe_create})
+            Git.clone(meta, joinpath(dir, "METADATA"))
+            Git.set_remote_url(meta, dir=joinpath(dir,"METADATA"))
             run(`touch REQUIRE`)
         end
     catch e

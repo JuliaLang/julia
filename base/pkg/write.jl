@@ -9,7 +9,15 @@ end
 
 function fetch(pkg::String, sha1::String)
     refspec = "+refs/*:refs/remotes/cache/*"
-    Git.run(`fetch -q $(Cache.path(pkg)) $refspec`, dir=pkg)
+    # Git.run(`fetch -q $(Cache.path(pkg)) $refspec`, dir=pkg)
+    repo = Git.get_repo(pkg)
+    # Add a new remote with the given refspec and fetch from it
+    remote = if "cache" in Base.LibGit2.remote_names(repo)
+        Base.LibGit2.lookup_remote(repo, "cache")
+    else
+        Base.LibGit2.remote_add!(repo, "cache", Cache.path(pkg), refspec)
+    end
+    Base.LibGit2.remote_fetch(remote)
     Git.iscommit(sha1, dir=pkg) && return
     f = Git.iscommit(sha1, dir=Cache.path(pkg)) ? "fetch" : "prefetch"
     url = Read.issue_url(pkg)
@@ -22,7 +30,8 @@ end
 
 function checkout(pkg::String, sha1::String)
     Git.set_remote_url(Read.url(pkg), dir=pkg)
-    Git.run(`checkout -q $sha1`, dir=pkg)
+    Git.checkout(sha1, dir=pkg)
+    # Git.run(`checkout -q $sha1`, dir=pkg)
 end
 
 function install(pkg::String, sha1::String)
@@ -30,7 +39,8 @@ function install(pkg::String, sha1::String)
     if isdir(".trash/$pkg")
         mv(".trash/$pkg", "./$pkg")
     else
-        Git.run(`clone -q $(Cache.path(pkg)) $pkg`)
+        # Git.run(`clone -q $(Cache.path(pkg)) $pkg`)
+        Git.clone(Cache.path(pkg), pkg)
     end
     fetch(pkg, sha1)
     checkout(pkg, sha1)

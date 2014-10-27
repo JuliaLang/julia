@@ -29,6 +29,7 @@ USE_SYSTEM_RMATH=0
 USE_SYSTEM_LIBUV=0
 USE_SYSTEM_UTF8PROC=0
 USE_SYSTEM_MOJIBAKE=0
+USE_SYSTEM_LIBGIT2=0
 
 # Link to the LLVM shared library
 USE_LLVM_SHLIB = 0
@@ -140,6 +141,9 @@ BUILD_LLDB = 0
 #XC_HOST = i686-w64-mingw32
 #XC_HOST = x86_64-w64-mingw32
 
+# Path to cmake (override in Make.user if needed)
+CMAKE = cmake
+
 # Figure out OS and architecture
 BUILD_OS := $(shell uname)
 
@@ -232,6 +236,7 @@ FC = $(CROSS_COMPILE)gfortran
 endif
 
 STDLIBCPP_FLAG = 
+JFFLAGS = -O2 $(fPIC)
 
 ifeq ($(OS), Darwin)
 DARWINVER := $(shell uname -r | cut -b 1-2)
@@ -281,12 +286,12 @@ DEBUGFLAGS = -O0 -g -DJL_DEBUG_BUILD -fstack-protector-all
 SHIPFLAGS = -O3 -g
 ifeq ($(OS), Darwin)
 ifeq ($(USE_LIBCPP), 1)
-CC += -stdlib=libc++ -mmacosx-version-min=10.7
-CXX += -stdlib=libc++ -mmacosx-version-min=10.7
-FC += -mmacosx-version-min=10.7
+JCFLAGS += -stdlib=libc++ -mmacosx-version-min=10.7
+JCXXFLAGS += -stdlib=libc++ -mmacosx-version-min=10.7
+JFFLAGS += -mmacosx-version-min=10.7
 else
-CC += $(STDLIBCPP_FLAG) -mmacosx-version-min=10.6
-CXX += $(STDLIBCPP_FLAG) -mmacosx-version-min=10.6
+JCFLAGS += $(STDLIBCPP_FLAG) -mmacosx-version-min=10.6
+JCXXFLAGS += $(STDLIBCPP_FLAG) -mmacosx-version-min=10.6
 endif
 JCPPFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
@@ -308,6 +313,7 @@ DEBUGFLAGS = -O0 -g -DJL_DEBUG_BUILD -fstack-protector-all
 SHIPFLAGS = -O3 -g -falign-functions
 endif
 
+# FIXME: probably broken with cmake
 ifeq ($(USECCACHE), 1)
 CC := ccache $(CC)
 CXX := ccache $(CXX)
@@ -325,7 +331,6 @@ ifeq ($(LLVM_VER),svn)
 JCXXFLAGS += -std=c++11
 endif
 
-JFFLAGS = -O2 $(fPIC)
 JF2CFLAGS = -ff2c -fno-second-underscore
 ifneq ($(USEMSVC),1)
 CPP = $(CC) -E
@@ -411,22 +416,22 @@ MARCH = $(ARCH)
 endif
 
 ifneq ($(MARCH),)
-CC += -march=$(MARCH)
-CXX += -march=$(MARCH)
-FC += -march=$(MARCH)
+JCFLAGS += -march=$(MARCH)
+JCXXFLAGS += -march=$(MARCH)
+JFFLAGS += -march=$(MARCH)
 JULIA_CPU_TARGET ?= $(MARCH)
 ifeq ($(OS),Darwin)
 # on Darwin, the standalone `as` program doesn't know
 # how to handle AVX instructions, but it does know how
 # to dispatch to the clang assembler (if we ask it to)
 ifeq ($(USECLANG),1)
-CC += -integrated-as
-CXX += -integrated-as
+JCFLAGS += -integrated-as
+JCXXFLAGS += -integrated-as
 else
-CC += -Wa,-q
-CXX += -Wa,-q
+JCFLAGS += -Wa,-q
+JCXXFLAGS += -Wa,-q
 endif
-FC += -Wa,-q
+JFFLAGS += -Wa,-q
 AS += -q
 endif
 endif
