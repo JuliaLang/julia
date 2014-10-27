@@ -8,10 +8,10 @@ let io = IOBuffer()
 @test position(io) == 3
 @test eof(io)
 seek(io, 0)
-@test read(io,Uint8) == 'a'
+@test read(io,Uint8) == convert(Uint8, 'a')
 a = Array(Uint8, 2)
 @test read!(io, a) == a
-@test a == ['b','c']
+@test a == Uint8['b','c']
 @test bytestring(io) == "abc"
 seek(io, 1)
 truncate(io, 2)
@@ -46,7 +46,7 @@ let io = IOBuffer("hamster\nguinea pig\nturtle")
 @test readall(io) == "guinea pig\nturtle"
 @test_throws EOFError read(io,Uint8)
 seek(io,0)
-@test read(io,Uint8) == 'h'
+@test read(io,Uint8) == convert(Uint8, 'h')
 @test_throws ErrorException truncate(io,0)
 @test_throws ErrorException write(io,uint8(0))
 @test_throws ErrorException write(io,Uint8[0])

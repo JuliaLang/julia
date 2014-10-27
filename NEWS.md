@@ -29,6 +29,13 @@ Language changes
     dicts are synchronized. As part of this change, `=>` is parsed as a normal
     operator, and `Base` defines it to construct `Pair` objects ([#6739]).
 
+  * `Char` is no longer a subtype of `Integer`. ([#8816])
+    Char now supports a more limited set of operations with `Integer` types:
+       
+      * comparison / equality
+      * `Char` + `Int` = `Int`
+      * `Char` - `Char` = `Int` 
+
 Compiler improvements
 ---------------------
 

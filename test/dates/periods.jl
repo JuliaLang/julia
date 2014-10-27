@@ -114,7 +114,6 @@ y2 = Dates.Year(2)
 @test_throws InexactError Dates.Year(float16(1.2)) == y
 @test Dates.Year(true) == y
 @test Dates.Year(false) != y
-@test Dates.Year('\x01') == y
 @test_throws MethodError Dates.Year(:hey) == y
 @test Dates.Year(real(1)) == y
 @test_throws ArgumentError Dates.Year(m) == y
@@ -144,8 +143,6 @@ y2 = Dates.Year(2)
 @test 1 + y == Dates.Year(2)
 @test y + true == Dates.Year(2)
 @test true + y == Dates.Year(2)
-@test y + '\x01' == Dates.Year(2)
-@test '\x01' + y == Dates.Year(2)
 @test y + 1.0 == Dates.Year(2)
 @test_throws InexactError y + 1.2
 @test y + 1f0 == Dates.Year(2)
