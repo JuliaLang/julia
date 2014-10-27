@@ -224,16 +224,11 @@ endif
 endif
 
 ifeq ($(USEIFC), 1)
-FC = ifort
+FC_BASE = ifort
 else
-FC = $(CROSS_COMPILE)gfortran
+FC_BASE = $(CROSS_COMPILE)gfortran
 endif
-
-ifeq ($(USEIFC), 1)
-FC = ifort
-else
-FC = $(CROSS_COMPILE)gfortran
-endif
+FC = $(FC_BASE)
 
 STDLIBCPP_FLAG = 
 
@@ -266,8 +261,10 @@ endif
 ifeq ($(SANITIZE),1)
 $(error Address Sanitizer only supported with clang. Try setting SANITIZE=0)
 endif
-CC = $(CROSS_COMPILE)gcc
-CXX = $(CROSS_COMPILE)g++
+CC_BASE = $(CROSS_COMPILE)gcc
+CXX_BASE = $(CROSS_COMPILE)g++
+CC = $(CC_BASE)
+CXX = $(CXX_BASE)
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
@@ -276,8 +273,10 @@ SHIPFLAGS = -O3 -ggdb3 -falign-functions
 endif
 
 ifeq ($(USECLANG),1)
-CC = $(CROSS_COMPILE)clang
-CXX = $(CROSS_COMPILE)clang++
+CC_BASE = $(CROSS_COMPILE)clang
+CXX_BASE = $(CROSS_COMPILE)clang++
+CC = $(CC_BASE)
+CXX = $(CXX_BASE)
 JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
@@ -303,8 +302,10 @@ endif
 ifeq ($(SANITIZE),1)
 $(error Address Sanitizer only supported with clang. Try setting SANITIZE=0)
 endif
-CC  = icc
-CXX = icpc
+CC_BASE  = icc
+CXX_BASE = icpc
+CC = $(CC_BASE)
+CXX = $(CXX_BASE)
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -fp-model precise -fp-model except -no-ftz
 JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
@@ -438,9 +439,9 @@ endif
 # Set some ARCH-specific flags
 ifneq ($(USEICC),1)
 ifneq ($(ARCH), arm)
-JCFLAGS += -m$(BINARY)
-JCXXFLAGS += -m$(BINARY)
-JFFLAGS += -m$(BINARY)
+CC += -m$(BINARY)
+CXX += -m$(BINARY)
+FC += -m$(BINARY)
 endif
 endif
 
