@@ -1489,7 +1489,9 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
                 JL_GC_POP();
                 if (sty->fields[idx].isptr) {
                     Value *fldv = builder.CreateLoad(builder.CreateBitCast(addr,jl_ppvalue_llvmt));
-                    null_pointer_check(fldv, ctx);
+                    if (!sty->undeffree) {
+                        null_pointer_check(fldv, ctx);
+                    }
                     return fldv;
                 }
                 else {
@@ -1513,7 +1515,9 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
                     fldv = builder.CreateTrunc(fldv, T_int1);
                 }
                 else if (sty->fields[idx].isptr) {
-                    null_pointer_check(fldv, ctx);
+                    if (!sty->undeffree) {
+                        null_pointer_check(fldv, ctx);
+                    }
                 }
                 JL_GC_POP();
                 return mark_julia_type(fldv, jfty);
@@ -2142,7 +2146,9 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                                        CreateGEP(builder.
                                                  CreateBitCast(strct, jl_ppvalue_llvmt),
                                                  builder.CreateAdd(idx,ConstantInt::get(T_size,1)))));
-                        null_pointer_check(fld, ctx);
+                        if (!stt->undeffree) {
+                            null_pointer_check(fld, ctx);
+                        }
                         JL_GC_POP();
                         return fld;
                     }

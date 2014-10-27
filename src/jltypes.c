@@ -1991,6 +1991,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             if (tn == jl_array_typename)
                 ndt->pointerfree = 0;
         }
+        ndt->undeffree = dt->undeffree || jl_isbits(ndt);
         if (cacheable) cache_type_((jl_value_t*)ndt);
         result = (jl_value_t*)ndt;
 
@@ -2903,7 +2904,7 @@ void jl_init_types(void)
     jl_datatype_type->name->primary = (jl_value_t*)jl_datatype_type;
     jl_datatype_type->super = jl_type_type;
     jl_datatype_type->parameters = jl_null;
-    jl_datatype_type->names = jl_tuple(10, jl_symbol("name"),
+    jl_datatype_type->names = jl_tuple(11, jl_symbol("name"),
                                        jl_symbol("super"),
                                        jl_symbol("parameters"),
                                        jl_symbol("names"),
@@ -2912,12 +2913,13 @@ void jl_init_types(void)
                                        jl_symbol("size"),
                                        jl_symbol("abstract"),
                                        jl_symbol("mutable"),
-                                       jl_symbol("pointerfree"));
-    jl_datatype_type->types = jl_tuple(10, jl_typename_type, jl_type_type,
+                                       jl_symbol("pointerfree"),
+                                       jl_symbol("undeffree"));
+    jl_datatype_type->types = jl_tuple(11, jl_typename_type, jl_type_type,
                                        jl_tuple_type, jl_tuple_type,
                                        jl_tuple_type, jl_any_type,
                                        jl_any_type, //types will be fixed later
-                                       jl_any_type, jl_any_type, jl_any_type);
+                                       jl_any_type, jl_any_type, jl_any_type, jl_any_type);
     jl_datatype_type->instance = NULL;
     jl_datatype_type->uid = jl_assign_type_uid();
     jl_datatype_type->struct_decl = NULL;
@@ -2926,6 +2928,7 @@ void jl_init_types(void)
     // NOTE: types should not really be mutable, but the instance and
     // struct_decl fields are basically caches, which are mutated.
     jl_datatype_type->mutabl = 1;
+    jl_datatype_type->undeffree = 0;
 
     jl_typename_type->name = jl_new_typename(jl_symbol("TypeName"));
     jl_typename_type->name->primary = (jl_value_t*)jl_typename_type;
@@ -2941,6 +2944,7 @@ void jl_init_types(void)
     jl_typename_type->abstract = 0;
     jl_typename_type->pointerfree = 0;
     jl_typename_type->mutabl = 1;
+    jl_typename_type->undeffree = 0;
 
     jl_sym_type->name = jl_new_typename(jl_symbol("Symbol"));
     jl_sym_type->name->primary = (jl_value_t*)jl_sym_type;
@@ -2955,10 +2959,11 @@ void jl_init_types(void)
     jl_sym_type->abstract = 0;
     jl_sym_type->pointerfree = 0;
     jl_sym_type->mutabl = 1;
+    jl_sym_type->undeffree = 0;
 
     // now they can be used to create the remaining base kinds and types
     jl_void_type = jl_new_datatype(jl_symbol("Void"), jl_any_type, jl_null,
-                                   jl_null, jl_null, 0, 0);
+                                   jl_null, jl_null, 0, 0, 1);
     jl_nothing = newstruct(jl_void_type);
     jl_void_type->instance = jl_nothing;
 
@@ -2966,7 +2971,7 @@ void jl_init_types(void)
                                         jl_type_type, jl_null,
                                         jl_tuple(1, jl_symbol("types")),
                                         jl_tuple(1, jl_tuple_type),
-                                        0, 0);
+                                        0, 0, 0);
 
     jl_bottom_type = (jl_value_t*)jl_new_struct(jl_uniontype_type, jl_null);
 
@@ -2977,7 +2982,7 @@ void jl_init_types(void)
                                             jl_symbol("bound")),
                                    jl_tuple(4, jl_sym_type, jl_type_type,
                                             jl_type_type, jl_any_type),
-                                   0, 0);
+                                   0, 0, 0);
 
     jl_undef_type = jl_new_abstracttype((jl_value_t*)jl_symbol("Undef"),
                                         jl_any_type, jl_null);
@@ -3030,7 +3035,7 @@ void jl_init_types(void)
                         jl_tuple(7, jl_tuple_type, jl_bool_type, jl_bool_type,
                                  jl_tuple_type, jl_any_type,
                                  jl_any_type, jl_any_type),
-                        0, 1);
+                        0, 1, 0);
 
     jl_methtable_type =
         jl_new_datatype(jl_symbol("MethodTable"), jl_any_type, jl_null,
@@ -3041,7 +3046,7 @@ void jl_init_types(void)
                         jl_tuple(7, jl_sym_type, jl_any_type, jl_any_type,
                                  jl_any_type, jl_any_type, jl_long_type,
                                  jl_any_type),
-                        0, 1);
+                        0, 1, 0);
 
     tv = jl_tuple2(tvar("T"), tvar("N"));
     jl_abstractarray_type =
@@ -3062,9 +3067,10 @@ void jl_init_types(void)
                         (jl_datatype_t*)
                         jl_apply_type((jl_value_t*)jl_densearray_type, tv),
                         tv,
-                        jl_null, jl_null, 0, 1);
+                        jl_null, jl_null, 0, 1, 0);
     jl_array_typename = jl_array_type->name;
     jl_array_type->pointerfree = 0;
+    jl_array_type->undeffree = 0;
 
     jl_array_any_type =
         (jl_value_t*)jl_apply_type((jl_value_t*)jl_array_type,
@@ -3083,42 +3089,42 @@ void jl_init_types(void)
                                  jl_symbol("typ")),
                         jl_tuple(3, jl_sym_type, jl_array_any_type,
                                  jl_any_type),
-                        0, 1);
+                        0, 1, 0);
 
     jl_linenumbernode_type =
         jl_new_datatype(jl_symbol("LineNumberNode"), jl_any_type, jl_null,
                         jl_tuple(1, jl_symbol("line")),
-                        jl_tuple(1, jl_long_type), 0, 0);
+                        jl_tuple(1, jl_long_type), 0, 0, 1);
 
     jl_labelnode_type =
         jl_new_datatype(jl_symbol("LabelNode"), jl_any_type, jl_null,
                         jl_tuple(1, jl_symbol("label")),
-                        jl_tuple(1, jl_long_type), 0, 0);
+                        jl_tuple(1, jl_long_type), 0, 0, 1);
 
     jl_gotonode_type =
         jl_new_datatype(jl_symbol("GotoNode"), jl_any_type, jl_null,
                         jl_tuple(1, jl_symbol("label")),
-                        jl_tuple(1, jl_long_type), 0, 0);
+                        jl_tuple(1, jl_long_type), 0, 0, 1);
 
     jl_quotenode_type =
         jl_new_datatype(jl_symbol("QuoteNode"), jl_any_type, jl_null,
                         jl_tuple(1, jl_symbol("value")),
-                        jl_tuple(1, jl_any_type), 0, 0);
+                        jl_tuple(1, jl_any_type), 0, 0, 0);
 
     jl_newvarnode_type =
         jl_new_datatype(jl_symbol("NewvarNode"), jl_any_type, jl_null,
                         jl_tuple(1, jl_symbol("name")),
-                        jl_tuple(1, jl_sym_type), 0, 0);
+                        jl_tuple(1, jl_sym_type), 0, 0, 0);
 
     jl_topnode_type =
         jl_new_datatype(jl_symbol("TopNode"), jl_any_type, jl_null,
                         jl_tuple(1, jl_symbol("name")),
-                        jl_tuple(1, jl_sym_type), 0, 0);
+                        jl_tuple(1, jl_sym_type), 0, 0, 0);
 
     jl_module_type =
         jl_new_datatype(jl_symbol("Module"), jl_any_type, jl_null,
                         jl_tuple(2, jl_symbol("name"), jl_symbol("parent")),
-                        jl_tuple(2, jl_sym_type, jl_any_type), 0, 1);
+                        jl_tuple(2, jl_sym_type, jl_any_type), 0, 1, 0);
 
     jl_tupleset(jl_typename_type->types, 1, jl_module_type);
 
@@ -3144,13 +3150,13 @@ void jl_init_types(void)
                                  jl_any_type,
                                  jl_sym_type, jl_int32_type,
                                  jl_bool_type),
-                        0, 1);
+                        0, 1, 0);
 
     jl_box_type =
         jl_new_datatype(jl_symbol("Box"),
                         jl_any_type, jl_null,
                         jl_tuple(1, jl_symbol("contents")),
-                        jl_tuple(1, jl_any_type), 0, 1);
+                        jl_tuple(1, jl_any_type), 0, 1, 0);
     jl_box_typename = jl_box_type->name;
     jl_box_any_type = (jl_value_t*)jl_box_type;
 
@@ -3160,7 +3166,7 @@ void jl_init_types(void)
                         jl_tuple(2, jl_symbol("parameters"),
                                  jl_symbol("body")),
                         jl_tuple(2, jl_tuple_type, jl_any_type),
-                        0, 0);
+                        0, 0, 0);
 
     jl_function_type =
         jl_new_datatype(jl_symbol("Function"), jl_any_type, jl_null,
@@ -3168,7 +3174,7 @@ void jl_init_types(void)
                                  jl_symbol("code")),
                         jl_tuple(3, jl_any_type, jl_any_type,
                                  jl_lambda_info_type),
-                        0, 1);
+                        0, 1, 0);
 
     jl_tupleset(jl_method_type->types, 3, jl_function_type);
     jl_tupleset(jl_lambda_info_type->types, 6, jl_function_type);
@@ -3199,6 +3205,7 @@ void jl_init_types(void)
     jl_tupleset(jl_datatype_type->types, 7, (jl_value_t*)jl_bool_type);
     jl_tupleset(jl_datatype_type->types, 8, (jl_value_t*)jl_bool_type);
     jl_tupleset(jl_datatype_type->types, 9, (jl_value_t*)jl_bool_type);
+    jl_tupleset(jl_datatype_type->types, 10, (jl_value_t*)jl_bool_type);
     jl_tupleset(jl_function_type->types, 0, pointer_void);
     jl_tupleset(jl_tvar_type->types, 3, (jl_value_t*)jl_bool_type);
 
