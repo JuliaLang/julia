@@ -308,6 +308,21 @@ DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type)
     return jv;
 }
 
+DLLEXPORT jl_bytevec_struct_t jl_bytevec(const uint8_t *data, size_t n)
+{
+    jl_bytevec_struct_t b;
+    if (n < 2*sizeof(void*)) {
+        memcpy(b.here.data, data, n);
+        memset(b.here.data + n, 0, (2*sizeof(void*)-1) - n);
+        b.here.length = n;
+    } else {
+        b.there.data = allocb(n);
+        memcpy(b.there.data, data, n);
+        b.there.neglen = -n;
+    }
+    return b;
+}
+
 DLLEXPORT jl_function_t *jl_new_closure(jl_fptr_t fptr, jl_value_t *env,
                                         jl_lambda_info_t *linfo)
 {

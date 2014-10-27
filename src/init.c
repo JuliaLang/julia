@@ -1296,6 +1296,8 @@ void jl_get_builtin_hooks(void)
     jl_boundserror_type    = (jl_datatype_t*)core("BoundsError");
     jl_memory_exception    = jl_new_struct_uninit((jl_datatype_t*)core("OutOfMemoryError"));
 
+    jl_bytevec_type = (jl_datatype_t*)core("ByteVec");
+    jl_bytevec_type->pointerfree = 0;
     jl_ascii_string_type = (jl_datatype_t*)core("ASCIIString");
     jl_utf8_string_type = (jl_datatype_t*)core("UTF8String");
     jl_symbolnode_type = (jl_datatype_t*)core("SymbolNode");

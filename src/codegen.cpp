@@ -5329,6 +5329,7 @@ static void init_julia_llvm_env(Module *m)
     // LoopRotate strips metadata from terminator, so run LowerSIMD afterwards
     FPM->add(createLowerSimdLoopPass());        // Annotate loop marked with "simdloop" as LLVM parallel loop
     FPM->add(createLICMPass());                 // Hoist loop invariants
+    FPM->add(createEarlyCSEPass());             // Common subexpression elimination
     FPM->add(createLoopUnswitchPass());         // Unswitch loops.
     // Subsequent passes not stripping metadata from terminator
 #ifndef INSTCOMBINE_BUG

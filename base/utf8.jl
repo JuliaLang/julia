@@ -26,7 +26,7 @@ const utf8_trailing = [
     2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2, 3,3,3,3,3,3,3,3,4,4,4,4,5,5,5,5,
 ]
 
-is_utf8_start(byte::UInt8) = ((byte&0xc0)!=0x80)
+is_utf8_start(byte::Integer) = (byte & 0xc0) != 0x80
 
 ## required core functionality ##
 

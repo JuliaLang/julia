@@ -40,6 +40,8 @@ namespace JL_I {
         ceil_llvm, floor_llvm, trunc_llvm, rint_llvm,
         sqrt_llvm, powi_llvm,
         sqrt_llvm_fast,
+        // byte vectors
+        bytevec_ref, bytevec_ref32,
         // pointer access
         pointerref, pointerset,
         // c interface
@@ -903,7 +905,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     if (nargs < 1) jl_error("invalid intrinsic call");
     Value *x = auto_unbox(args[1], ctx);
     Value *y = NULL;
-    if (nargs>1) {
+    if (nargs > 1) {
         y = auto_unbox(args[2], ctx);
     }
     Value *z = NULL;
@@ -918,6 +920,180 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     Value *den;
     Value *typemin;
     switch (f) {
+    HANDLE(bytevec_ref,2) {
+        Value *b = JL_INT(x);
+        Value *i = builder.CreateSub(JL_INT(y), ConstantInt::get(T_size, 1));
+        bool check_bounds =
+#if CHECK_BOUNDS==1
+            ((ctx->boundsCheck.empty() || ctx->boundsCheck.back() == true) &&
+             jl_options.check_bounds != JL_OPTIONS_CHECK_BOUNDS_OFF) ||
+              jl_options.check_bounds == JL_OPTIONS_CHECK_BOUNDS_ON;
+#else
+            0;
+#endif
+        BasicBlock *here  = BasicBlock::Create(getGlobalContext(), "here",  ctx->f);
+        BasicBlock *check = BasicBlock::Create(getGlobalContext(), "check", ctx->f);
+        BasicBlock *there = BasicBlock::Create(getGlobalContext(), "there", ctx->f);
+        BasicBlock *oob   = BasicBlock::Create(getGlobalContext(), "oob",   ctx->f);
+        BasicBlock *cont  = BasicBlock::Create(getGlobalContext(), "cont",  ctx->f);
+
+        // branch: "here" or "there"
+        Value *is_here = builder.CreateICmpSGE(b, ConstantInt::get(b->getType(), 0));
+        Value *here_len = builder.CreateZExt(
+            builder.CreateTrunc(
+                builder.CreateLShr(
+                    b, ConstantInt::get(b->getType(), 8*(2*sizeof(void*)-1))
+                ), T_uint8
+            ), T_size
+        );
+        builder.CreateCondBr(
+            !check_bounds ? is_here :
+            builder.CreateAnd(is_here, builder.CreateICmpULT(i, here_len)),
+            here, check_bounds ? check : there
+        );
+
+        // decode here byte (known to be in-bounds)
+        builder.SetInsertPoint(here);
+        Value *here_byte = builder.CreateTrunc(
+            builder.CreateLShr(
+                b,
+                builder.CreateZExt(
+                    builder.CreateShl(i, ConstantInt::get(T_size, 3)),
+                    b->getType()
+                )
+            ),
+            T_uint8
+        );
+        builder.CreateBr(cont);
+
+        // check bounds (here & there)
+        if (check_bounds) {
+            builder.SetInsertPoint(check);
+            Value *there_len = builder.CreateSub(
+                ConstantInt::get(T_size, 0),
+                builder.CreateTrunc(
+                   builder.CreateAShr(b, ConstantInt::get(b->getType(), 8*sizeof(void*))),
+                   T_size
+                )
+            );
+            builder.CreateCondBr(
+                builder.CreateAnd(builder.CreateNot(is_here), builder.CreateICmpULT(i, there_len)),
+                there, oob
+            );
+
+            // raise out-of-bounds error
+            builder.SetInsertPoint(oob);
+            builder.CreateCall2(
+                prepare_call(jlthrow_line_func),
+                tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jlemptysvec_var))),
+                ConstantInt::get(T_int32, ctx->lineno)
+            );
+            builder.CreateUnreachable();
+        }
+
+        // decode there byte (known to be in-bounds)
+        builder.SetInsertPoint(there);
+        Value *lo_word = builder.CreateTrunc(b, T_size);
+        Value *addr = builder.CreateAdd(lo_word, i);
+        Value *ptr = builder.CreateIntToPtr(addr, T_pint8);
+        Value *there_byte = tbaa_decorate(tbaa_const, builder.CreateLoad(ptr, false));
+        builder.CreateBr(cont);
+
+        // merge branches
+        builder.SetInsertPoint(cont);
+        PHINode *ret = PHINode::Create(T_uint8, 2);
+        ret->addIncoming(here_byte, here);
+        ret->addIncoming(there_byte, there);
+        builder.Insert(ret);
+        return ret;
+    }
+    HANDLE(bytevec_ref32,2) {
+        Value *b = JL_INT(x);
+        Value *i = builder.CreateSub(JL_INT(y), ConstantInt::get(T_size, 1));
+        bool check_bounds =
+#if CHECK_BOUNDS==1
+            ((ctx->boundsCheck.empty() || ctx->boundsCheck.back() == true) &&
+             jl_options.check_bounds != JL_OPTIONS_CHECK_BOUNDS_OFF) ||
+              jl_options.check_bounds == JL_OPTIONS_CHECK_BOUNDS_ON;
+#else
+            0;
+#endif
+        BasicBlock *here  = BasicBlock::Create(getGlobalContext(), "here",  ctx->f);
+        BasicBlock *check = BasicBlock::Create(getGlobalContext(), "check", ctx->f);
+        BasicBlock *there = BasicBlock::Create(getGlobalContext(), "there", ctx->f);
+        BasicBlock *oob   = BasicBlock::Create(getGlobalContext(), "oob",   ctx->f);
+        BasicBlock *cont  = BasicBlock::Create(getGlobalContext(), "cont",  ctx->f);
+
+        // branch: "here" or "there"
+        Value *is_here = builder.CreateICmpSGE(b, ConstantInt::get(b->getType(), 0));
+        Value *here_len = builder.CreateZExt(
+            builder.CreateTrunc(
+                builder.CreateLShr(
+                    b, ConstantInt::get(b->getType(), 8*(2*sizeof(void*)-1))
+                ), T_uint8
+            ), T_size
+        );
+        builder.CreateCondBr(
+            !check_bounds ? is_here :
+            builder.CreateAnd(is_here, builder.CreateICmpULT(i, here_len)),
+            here, check_bounds ? check : there
+        );
+
+        // decode here byte (known to be in-bounds)
+        builder.SetInsertPoint(here);
+        Value *here_uint32 = builder.CreateTrunc(
+            builder.CreateLShr(
+                b,
+                builder.CreateZExt(
+                    builder.CreateShl(i, ConstantInt::get(T_size, 3)),
+                    b->getType()
+                )
+            ),
+            T_uint32
+        );
+        builder.CreateBr(cont);
+
+        // check bounds (here & there)
+        if (check_bounds) {
+            builder.SetInsertPoint(check);
+            Value *there_len = builder.CreateSub(
+                ConstantInt::get(T_size, 0),
+                builder.CreateTrunc(
+                   builder.CreateAShr(b, ConstantInt::get(b->getType(), 8*sizeof(void*))),
+                   T_size
+                )
+            );
+            builder.CreateCondBr(
+                builder.CreateAnd(builder.CreateNot(is_here), builder.CreateICmpULT(i, there_len)),
+                there, oob
+            );
+
+            // raise out-of-bounds error
+            builder.SetInsertPoint(oob);
+            builder.CreateCall2(
+                prepare_call(jlthrow_line_func),
+                tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jlemptysvec_var))),
+                ConstantInt::get(T_int32, ctx->lineno)
+            );
+            builder.CreateUnreachable();
+        }
+
+        // decode there byte (known to be in-bounds)
+        builder.SetInsertPoint(there);
+        Value *lo_word = builder.CreateTrunc(b, T_size);
+        Value *addr = builder.CreateAdd(lo_word, i);
+        Value *ptr = builder.CreateIntToPtr(addr, T_pint32);
+        Value *there_uint32 = tbaa_decorate(tbaa_const, builder.CreateLoad(ptr, false));
+        builder.CreateBr(cont);
+
+        // merge branches
+        builder.SetInsertPoint(cont);
+        PHINode *ret = PHINode::Create(T_uint32, 2);
+        ret->addIncoming(here_uint32, here);
+        ret->addIncoming(there_uint32, there);
+        builder.Insert(ret);
+        return ret;
+    }
     HANDLE(neg_int,1) return builder.CreateSub(ConstantInt::get(t, 0), JL_INT(x));
     HANDLE(add_int,2) return builder.CreateAdd(JL_INT(x), JL_INT(y));
     HANDLE(sub_int,2) return builder.CreateSub(JL_INT(x), JL_INT(y));
@@ -1356,6 +1532,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(sqrt_llvm); ADD_I(powi_llvm);
     ADD_I(sqrt_llvm_fast);
     ADD_I(pointerref); ADD_I(pointerset);
+    ADD_I(bytevec_ref); ADD_I(bytevec_ref32);
     ADD_I(checked_sadd); ADD_I(checked_uadd);
     ADD_I(checked_ssub); ADD_I(checked_usub);
     ADD_I(checked_smul); ADD_I(checked_umul);

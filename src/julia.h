@@ -179,6 +179,19 @@ STATIC_INLINE int jl_array_ndimwords(uint32_t ndims)
     return (ndims < 3 ? 0 : ndims-2);
 }
 
+typedef struct {
+    union {
+        struct {
+            uint8_t data[2*sizeof(void*)-1];
+            uint8_t length;
+        } here;
+        struct {
+            uint8_t *data;
+            intptr_t neglen;
+        } there;
+    };
+} jl_bytevec_struct_t;
+
 typedef jl_value_t *(*jl_fptr_t)(jl_value_t*, jl_value_t**, uint32_t);
 
 typedef struct _jl_datatype_t jl_tupletype_t;
@@ -373,6 +386,7 @@ extern DLLEXPORT jl_datatype_t *jl_anytuple_type;
 extern DLLEXPORT jl_datatype_t *jl_ntuple_type;
 extern DLLEXPORT jl_typename_t *jl_ntuple_typename;
 extern DLLEXPORT jl_datatype_t *jl_vararg_type;
+extern DLLEXPORT jl_datatype_t *jl_bytevec_type;
 extern DLLEXPORT jl_datatype_t *jl_tvar_type;
 extern DLLEXPORT jl_datatype_t *jl_task_type;
 
@@ -1000,6 +1014,9 @@ DLLEXPORT ssize_t jl_unbox_gensym(jl_value_t *v);
 #define jl_is_long(x)    jl_is_int32(x)
 #define jl_long_type     jl_int32_type
 #endif
+
+// byte vectors
+DLLEXPORT jl_bytevec_struct_t jl_bytevec(const uint8_t *data, size_t n);
 
 // structs
 DLLEXPORT int         jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err);
