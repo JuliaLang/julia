@@ -62,7 +62,9 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
 
 2. Install [Python 2.x](http://www.python.org/download/releases). Do **not** install Python 3.
 
-3. Install [MinGW-builds](http://sourceforge.net/projects/mingwbuilds/), a Windows port of GCC, as follows. Do **not** use the regular MinGW distribution.
+3. Install [CMake](http://www.cmake.org/download/).
+
+4. Install [MinGW-builds](http://sourceforge.net/projects/mingwbuilds/), a Windows port of GCC, as follows. Do **not** use the regular MinGW distribution.
   1. Download the [MinGW-builds installer](http://downloads.sourceforge.net/project/mingwbuilds/mingw-builds-install/mingw-builds-install.exe).
   2. Run the installer. When prompted, choose:
     - Version: the most recent version (these instructions were tested with 4.8.1)
@@ -74,7 +76,7 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
     - `C:\mingw-builds\x64-4.8.1-win32-seh-rev5` for 64 bits
     - `C:\mingw-builds\x32-4.8.1-win32-sjlj-rev5` for 32 bits
 
-4. Install and configure [MSYS2](http://sourceforge.net/projects/msys2), a minimal POSIX-like environment for Windows.
+5. Install and configure [MSYS2](http://sourceforge.net/projects/msys2), a minimal POSIX-like environment for Windows.
 
   1. Download the latest base [32-bit](http://sourceforge.net/projects/msys2/files/Base/i686/) or [64-bit](http://sourceforge.net/projects/msys2/files/Base/x86_64/) distribution, consistent with the architecture you chose for MinGW-builds. The archive will have a name like `msys2-base-x86_64-yyyymmdd.tar.xz` and these instructions were tested with `msys2-base-x86_64-20140216.tar.xz`.
 
@@ -114,7 +116,7 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
 
   6. Configuration of the toolchain is complete. Now `exit` the MSYS2 shell.
 
-5. Build Julia and its dependencies from source.
+6. Build Julia and its dependencies from source.
   1. Relaunch the MSYS2 shell and type
 
      ```
@@ -123,32 +125,23 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
 
      Ignore any warnings you see from `mount` about `/mingw` and `/python` not existing.
 
-  2. Get the Julia sources and start the build:
+  2. Get the Julia sources
     ```
     git clone https://github.com/JuliaLang/julia.git
     cd julia
-    make -j 4   # Adjust the number of cores (4) to match your build environment.
 ```
 
-  3. The Julia build can (as of 2014-02-28) fail after building OpenBLAS.
-  This appears (?) to be a result of the OpenBLAS build trying to run the Microsoft Visual C++ `lib.exe` tool  -- which we don't need to do -- without checking for its existence.
-    This uncaught error kills the Julia build. If this happens, follow the instructions in the helpful error message and continue the build, *viz.*
+  3. Specify the location where you installed CMake
 
      ```
-    cd deps/openblas-v0.2.9.rc1   # This path will depend on the version of OpenBLAS.
-    make install
-    cd ../..
-    make -j 4   # Adjust the number of cores (4) to match your build environment.
+    echo 'override CMAKE=/C/path/to/CMake/bin/cmake.exe' > Make.user
 ```
 
-  4. Some versions of PCRE (*e.g.* 8.31) will compile correctly but fail a test.
-  This will cause the Julia build to fail. To circumvent testing for PCRE and allow the rest
-  of the build to continue,
+  4. Start the build
     ```
-    touch deps/pcre-8.31/checked  # This path will depend on the version of PCRE.
     make -j 4   # Adjust the number of cores (4) to match your build environment.
 ```
-6. Setup Package Development Environment
+7. Setup Package Development Environment
   1. The `Pkg` module in Base provides many convenient tools for [developing and publishing packages](http://docs.julialang.org/en/latest/manual/packages/).
   One of the packages added through pacman above was `openssh`, which will allow secure access to GitHub APIs.
   Follow GitHub's [guide](https://help.github.com/articles/generating-ssh-keys) to setting up SSH keys to ensure your local machine can communicate with GitHub effectively.
