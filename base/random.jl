@@ -41,7 +41,11 @@ end
 
 # produce Float64 values
 @inline rand_close1_open2(r::MersenneTwister) = (gen_rand_maybe(r); rand_close1_open2_inbounds(r))
-@inline rand(r::MersenneTwister) = (gen_rand_maybe(r); rand_inbounds(r))
+@inline rand_close_open(r::MersenneTwister) = (gen_rand_maybe(r); rand_inbounds(r))
+
+# this is similar to `dsfmt_genrand_uint32` from dSFMT.h:
+@inline rand_ui32(r::MersenneTwister) = reinterpret(Uint64, rand_close1_open2(r)) % Uint32
+
 
 function srand(r::MersenneTwister, seed)
     r.seed = seed
@@ -80,8 +84,10 @@ __init__() = srand()
 ## srand()
 
 function srand(seed::Vector{Uint32})
-    global RANDOM_SEED = seed
-    dsfmt_gv_init_by_array(seed)
+    GLOBAL_RNG.seed = seed
+    dsfmt_init_by_array(GLOBAL_RNG.state, seed)
+    GLOBAL_RNG.idx = length(GLOBAL_RNG.vals)
+    return GLOBAL_RNG
 end
 srand(n::Integer) = srand(make_seed(n))
 
@@ -106,10 +112,16 @@ function srand(filename::String, n::Integer)
 end
 srand(filename::String) = srand(filename, 4)
 
+## Global RNG
+
+const GLOBAL_RNG = MersenneTwister()
+globalRNG() = GLOBAL_RNG
+
 ## random floating point values
 
-rand(::Type{Float64}) = dsfmt_gv_genrand_close_open()
-rand() = dsfmt_gv_genrand_close_open()
+rand(r::MersenneTwister=GLOBAL_RNG) = rand_close_open(r)
+
+rand(::Type{Float64}) = rand()
 
 rand(::Type{Float32}) = float32(rand())
 rand(::Type{Float16}) = float16(rand())
@@ -118,13 +130,10 @@ rand{T<:Real}(::Type{Complex{T}}) = complex(rand(T),rand(T))
 
 ## random integers
 
-dsfmt_randui32() = dsfmt_gv_genrand_uint32()
-dsfmt_randui64() = uint64(dsfmt_randui32()) | (uint64(dsfmt_randui32())<<32)
-
 rand(::Type{Uint8})   = rand(Uint32) % Uint8
 rand(::Type{Uint16})  = rand(Uint32) % Uint16
-rand(::Type{Uint32})  = dsfmt_randui32()
-rand(::Type{Uint64})  = dsfmt_randui64()
+rand(::Type{Uint32})  = rand_ui32(GLOBAL_RNG)
+rand(::Type{Uint64})  = uint64(rand(Uint32)) <<32 | rand(Uint32)
 rand(::Type{Uint128}) = uint128(rand(Uint64))<<64 | rand(Uint64)
 
 rand(::Type{Int8})    = rand(Uint32) % Int8
@@ -193,6 +202,9 @@ function rand!(r::MersenneTwister, A::Array{Float64})
     end
     A
 end
+
+rand!(A::AbstractArray{Float64}) = rand!(GLOBAL_RNG, A)
+rand!(A::Array{Float64}) = rand!(GLOBAL_RNG, A)
 
 rand(T::Type, dims::Dims) = rand!(Array(T, dims))
 rand{T<:Number}(::Type{T}) = error("no random number generator for type $T; try a more specific type")
@@ -293,7 +305,7 @@ rand!(B::BitArray) = Base.bitarray_rand_fill!(B)
 randbool(dims::Dims) = rand!(BitArray(dims))
 randbool(dims::Int...) = rand!(BitArray(dims))
 
-randbool() = ((dsfmt_randui32() & 1) == 1)
+randbool() = ((rand(Uint32) & 1) == 1)
 rand(::Type{Bool}) = randbool()
 
 ## randn() - Normally distributed random numbers using Ziggurat algorithm
@@ -789,8 +801,7 @@ ziggurat_nor_r      = 3.6541528853610087963519472518
 ziggurat_nor_inv_r  = inv(ziggurat_nor_r)
 ziggurat_exp_r      = 7.6971174701310497140446280481
 
-randi() = reinterpret(Uint64,dsfmt_gv_genrand_close1_open2()) & 0x000fffffffffffff
-@inline randi(rng::MersenneTwister) = reinterpret(Uint64, rand_close1_open2(rng)) & 0x000fffffffffffff
+@inline randi(rng::MersenneTwister=GLOBAL_RNG) = reinterpret(Uint64, rand_close1_open2(rng)) & 0x000fffffffffffff
 for (lhs, rhs) in (([], []), 
                   ([:(rng::MersenneTwister)], [:rng]))
     @eval begin                
