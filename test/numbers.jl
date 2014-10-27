@@ -735,6 +735,15 @@ end
 @test -1//0 == -1//0
 @test -7//0 == -1//0
 
+@test_throws OverflowError -(0x01//0x0f)
+@test_throws OverflowError -(typemin(Int)//1)
+@test_throws OverflowError (typemax(Int)//3) + 1
+@test_throws OverflowError (typemax(Int)//3) * 2
+@test (typemax(Int)//1) * (1//typemax(Int)) == 1
+@test (typemax(Int)//1) / (typemax(Int)//1) == 1
+@test (1//typemax(Int)) / (1//typemax(Int)) == 1
+@test_throws OverflowError (1//2)^63
+
 for a = -5:5, b = -5:5
     if a == b == 0; continue; end
     if ispow2(b)
@@ -797,7 +806,7 @@ end
 @test Complex(1,2) + 1//2 == Complex(3//2,2//1)
 @test Complex(1,2) + 1//2 * 0.5 == Complex(1.25,2.0)
 @test (Complex(1,2) + 1//2) * 0.5 == Complex(0.75,1.0)
-@test (Complex(1,2)/Complex(2.5,3.0))*Complex(2.5,3.0) == Complex(1,2)
+@test_approx_eq (Complex(1,2)/Complex(2.5,3.0))*Complex(2.5,3.0) Complex(1,2)
 @test 0.7 < real(sqrt(Complex(0,1))) < 0.707107
 
 for T in [Int8, Int16, Int32, Int64, Int128]
@@ -2004,6 +2013,14 @@ let a = zeros(Int, 3)
     @test a == [1, 1, 1]
 end
 
+# Fill a pre allocated 2x4 matrix
+let a = zeros(Int,(2,4))
+    for i in 0:3
+        digits!(sub(a,:,i+1),i,2)
+    end
+    @test a == [0 1 0 1;
+                0 0 1 1]
+end
 @test_throws InexactError convert(Uint8, 256)
 @test_throws InexactError convert(Uint, -1)
 @test_throws InexactError convert(Int, big(2)^100)

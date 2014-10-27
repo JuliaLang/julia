@@ -7,7 +7,16 @@ end
 Set() = Set{Any}()
 Set(itr) = Set{eltype(itr)}(itr)
 
-show(io::IO, s::Set) = (show(io, typeof(s)); show_comma_array(io, s,"({","})"))
+function show(io::IO, s::Set)
+    print(io,"Set")
+    if isempty(s)
+        print(io,"{",eltype(s),"}()")
+        return
+    end
+    print(io,"(")
+    show_vector(io,s,"[","]")
+    print(io,")")
+end
 
 isempty(s::Set) = isempty(s.dict)
 length(s::Set)  = length(s.dict)

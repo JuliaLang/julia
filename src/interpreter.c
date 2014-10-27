@@ -53,15 +53,20 @@ DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *
 }
 
 static jl_value_t *do_call(jl_function_t *f, jl_value_t **args, size_t nargs,
-                           jl_value_t **locals, size_t nl)
+                           jl_value_t *eval0, jl_value_t **locals, size_t nl)
 {
     jl_value_t **argv;
     JL_GC_PUSHARGS(argv, nargs+1);
     size_t i;
     argv[0] = (jl_value_t*)f;
     for(i=1; i < nargs+1; i++) argv[i] = NULL;
-    for(i=0; i < nargs; i++)
+    i = 0;
+    if (eval0) { /* 0-th argument has already been evaluated */
+        argv[1] = eval0; i++;
+    }
+    for(; i < nargs; i++) {
         argv[i+1] = eval(args[i], locals, nl);
+    }
     jl_value_t *result = jl_apply(f, &argv[1], nargs);
     JL_GC_POP();
     return result;
@@ -201,10 +206,10 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             }
         }
         jl_function_t *f = (jl_function_t*)eval(args[0], locals, nl);
-        if (!jl_is_func(f))
-            jl_type_error("apply", (jl_value_t*)jl_function_type,
-                          (jl_value_t*)f);
-        return do_call(f, &args[1], nargs-1, locals, nl);
+        if (jl_is_func(f))
+            return do_call(f, &args[1], nargs-1, NULL, locals, nl);
+        else
+            return do_call(jl_module_call_func(jl_current_module), args, nargs, (jl_value_t*)f, locals, nl);
     }
     else if (ex->head == assign_sym) {
         jl_value_t *sym = args[0];
@@ -256,14 +261,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
                 fname = (jl_sym_t*)jl_exprarg(fname, 0);
             }
             gf = eval((jl_value_t*)fname, locals, nl);
-            assert(jl_is_function(gf));
-            assert(jl_is_gf(gf));
             if (jl_is_expr(fname))
                 fname = (jl_sym_t*)jl_fieldref(jl_exprarg(fname, 2), 0);
-            if (!kw)
-                bp = &gf;
-            else
-                bp = (jl_value_t**)&((jl_methtable_t*)((jl_function_t*)gf)->env)->kwsorter;
+            bp = &gf;
             assert(jl_is_symbol(fname));
         }
         else {
@@ -285,7 +285,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             jl_check_static_parameter_conflicts((jl_lambda_info_t*)args[2], (jl_tuple_t*)jl_t1(atypes), fname);
         }
         meth = eval(args[2], locals, nl);
-        jl_method_def(fname, bp, b, (jl_tuple_t*)atypes, (jl_function_t*)meth, args[3]);
+        jl_method_def(fname, bp, b, (jl_tuple_t*)atypes, (jl_function_t*)meth, args[3], NULL, kw);
         JL_GC_POP();
         return *bp;
     }
@@ -366,7 +366,6 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         return (jl_value_t*)jl_nothing;
     }
     else if (ex->head == compositetype_sym) {
-        void jl_add_constructors(jl_datatype_t *t);
         jl_value_t *name = args[0];
         assert(jl_is_symbol(name));
         jl_value_t *para = eval(args[1], locals, nl);
@@ -378,9 +377,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         temp = eval(args[2], locals, nl);  // field names
         dt = jl_new_datatype((jl_sym_t*)name, jl_any_type, (jl_tuple_t*)para,
                              (jl_tuple_t*)temp, NULL,
-                             0, args[6]==jl_true ? 1 : 0);
-        dt->fptr = jl_f_ctor_trampoline;
-        dt->name->ctor_factory = eval(args[3], locals, nl);
+                             0, args[5]==jl_true ? 1 : 0);
 
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)name);
         temp = b->value;  // save old value
@@ -391,10 +388,10 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         JL_TRY {
             // operations that can fail
             inside_typedef = 1;
-            dt->types = (jl_tuple_t*)eval(args[5], locals, nl);
+            dt->types = (jl_tuple_t*)eval(args[4], locals, nl);
             inside_typedef = 0;
             jl_check_type_tuple(dt->types, dt->name->name, "type definition");
-            super = eval(args[4], locals, nl);
+            super = eval(args[3], locals, nl);
             jl_set_datatype_super(dt, super);
         }
         JL_CATCH {
@@ -411,8 +408,6 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         b->value = temp;
         if (temp==NULL || !equiv_type(dt, (jl_datatype_t*)temp)) {
             jl_checked_assignment(b, (jl_value_t*)dt);
-
-            jl_add_constructors(dt);
         }
         else {
             // TODO: remove all old ctors and set temp->name->ctor_factory = dt->name->ctor_factory

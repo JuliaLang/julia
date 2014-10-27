@@ -92,7 +92,7 @@ function +(A::Bidiagonal, B::Bidiagonal)
     if A.isupper==B.isupper
         Bidiagonal(A.dv+B.dv, A.ev+B.ev, A.isupper)
     else
-        apply(Tridiagonal, A.isupper ? (B.ev,A.dv+B.dv,A.ev) : (A.ev,A.dv+B.dv,B.ev))
+        Tridiagonal((A.isupper ? (B.ev,A.dv+B.dv,A.ev) : (A.ev,A.dv+B.dv,B.ev))...)
     end
 end
 
@@ -100,7 +100,7 @@ function -(A::Bidiagonal, B::Bidiagonal)
     if A.isupper==B.isupper
         Bidiagonal(A.dv-B.dv, A.ev-B.ev, A.isupper)
     else
-        apply(Tridiagonal, A.isupper ? (-B.ev,A.dv-B.dv,A.ev) : (A.ev,A.dv-B.dv,-B.ev))
+        Tridiagonal((A.isupper ? (-B.ev,A.dv-B.dv,A.ev) : (A.ev,A.dv-B.dv,-B.ev))...)
     end
 end
 

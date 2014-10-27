@@ -314,7 +314,7 @@ function digits{T<:Integer}(n::Integer, base::T=10, pad::Int=1)
     return a
 end
 
-function digits!{T<:Integer}(a::Array{T,1}, n::Integer, base::T=10)
+function digits!{T<:Integer}(a::AbstractArray{T,1}, n::Integer, base::T=10)
     2 <= base || error("invalid base: $base")
     for i = 1:length(a)
         a[i] = rem(n, base)

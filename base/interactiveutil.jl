@@ -1,4 +1,4 @@
-# editing
+# editing files
 
 function edit(file::String, line::Integer)
     if OS_NAME == :Windows || OS_NAME == :Darwin
@@ -24,44 +24,47 @@ function edit(file::String, line::Integer)
         f = find_source_file(file)
         f != nothing && (file = f)
     end
-    if beginswith(edname, "emacs")
+    no_line_msg = "Unknown editor: no line number information passed.\nThe method is defined at line $line."
+    if beginswith(edname, "emacs") || edname == "gedit"
         spawn(`$edpath +$line $file`)
-    elseif edname == "vim"
-        run(`$edpath $file +$line`)
-    elseif edname == "textmate" || edname == "mate"
+    elseif edname == "vim" || edname == "nano"
+        run(`$edpath +$line $file`)
+    elseif edname == "textmate" || edname == "mate" || edname == "kate"
         spawn(`$edpath $file -l $line`)
-    elseif beginswith(edname, "subl")
+    elseif beginswith(edname, "subl") || edname == "atom"
         spawn(`$(shell_split(edpath)) $file:$line`)
     elseif OS_NAME == :Windows && (edname == "start" || edname == "open")
-        spawn(`start /b $file`)
+        spawn(`cmd /c start /b $file`)
+        println(no_line_msg)
     elseif OS_NAME == :Darwin && (edname == "start" || edname == "open")
         spawn(`open -t $file`)
-    elseif edname == "kate"
-        spawn(`$edpath $file -l $line`)
-    elseif edname == "nano"
-        run(`$edpath +$line $file`)
+        println(no_line_msg)
     else
         run(`$(shell_split(edpath)) $file`)
+        println(no_line_msg)
     end
     nothing
 end
-edit(file::String) = edit(file, 1)
-
-function less(file::String, line::Integer)
-    pager = get(ENV, "PAGER", "less")
-    run(`$pager +$(line)g $file`)
-end
-less(file::String) = less(file, 1)
-edit(f::Callable)               = edit(functionloc(f)...)
-edit(f::Callable, t::(Type...)) = edit(functionloc(f,t)...)
-less(f::Callable)               = less(functionloc(f)...)
-less(f::Callable, t::(Type...)) = less(functionloc(f,t)...)
 
 function edit( m::Method )
     tv, decls, file, line = arg_decl_parts(m)
     edit( string(file), line )
 end
 
+edit(file::String) = edit(file, 1)
+edit(f::Callable)               = edit(functionloc(f)...)
+edit(f::Callable, t::(Type...)) = edit(functionloc(f,t)...)
+
+# terminal pager
+
+function less(file::String, line::Integer)
+    pager = get(ENV, "PAGER", "less")
+    run(`$pager +$(line)g $file`)
+end
+
+less(file::String) = less(file, 1)
+less(f::Callable)               = less(functionloc(f)...)
+less(f::Callable, t::(Type...)) = less(functionloc(f,t)...)
 
 # clipboard copy and paste
 
@@ -169,7 +172,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
         Sys.cpu_summary(io)
         println(io          )
     end
-    if Base.libblas_name == "libopenblas" || blas_vendor() == :openblas
+    if Base.libblas_name == "libopenblas" || blas_vendor() == :openblas || blas_vendor() == :openblas64
         openblas_config = openblas_get_config()
         println(io,         "  BLAS: libopenblas (", openblas_config, ")")
     else
@@ -194,10 +197,7 @@ versioninfo(verbose::Bool) = versioninfo(STDOUT,verbose)
 
 # searching definitions
 
-function which(f::Callable, t::(Type...))
-    if !isgeneric(f)
-        throw(ErrorException("not a generic function, no methods available"))
-    end
+function which(f, t::(Type...))
     ms = methods(f, t)
     isempty(ms) && error("no method found for the specified argument types")
     ms[1]
@@ -264,10 +264,7 @@ function type_close_enough(x::ANY, t::ANY)
             !isleaftype(t) && x <: t)
 end
 
-function methodswith(t::Type, f::Callable, showparents::Bool=false, meths = Method[])
-    if isa(f,DataType)
-        methods(f) # force constructor creation
-    end
+function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Method[])
     if !isa(f.env, MethodTable)
         return meths
     end
@@ -290,7 +287,7 @@ function methodswith(t::Type, m::Module, showparents::Bool=false)
     for nm in names(m)
         if isdefined(m, nm)
             f = eval(m, nm)
-            if isa(f, Callable)
+            if isa(f, Function)
                 methodswith(t, f, showparents, meths)
             end
         end
@@ -313,7 +310,7 @@ function methodswith(t::Type, showparents::Bool=false)
     return unique(meths)
 end
 
-## file downloading ##
+# file downloading
 
 downloadcmd = nothing
 @unix_only function download(url::String, filename::String)
@@ -352,6 +349,8 @@ function download(url::String)
     download(url, filename)
 end
 
+# workspace management
+
 function workspace()
     last = Core.Main
     b = last.Base
@@ -366,6 +365,8 @@ function workspace()
     empty!(package_locks)
     nothing
 end
+
+# testing
 
 function runtests(tests = ["all"], numcores = iceil(CPU_CORES/2))
     if isa(tests,String)

@@ -1,12 +1,39 @@
-import Core.Array  # to add methods
-
 const NonTupleType = Union(DataType,UnionType,TypeConstructor)
 
 typealias Callable Union(Function,DataType)
 
 const Bottom = Union()
 
-convert(T, x) = convert_default(T, x, convert)
+# constructors for Core types in boot.jl
+call(T::Type{BoundsError}) = Core.call(T)
+call(T::Type{DivideError}) = Core.call(T)
+call(T::Type{DomainError}) = Core.call(T)
+call(T::Type{OverflowError}) = Core.call(T)
+call(T::Type{InexactError}) = Core.call(T)
+call(T::Type{MemoryError}) = Core.call(T)
+call(T::Type{StackOverflowError}) = Core.call(T)
+call(T::Type{UndefRefError}) = Core.call(T)
+call(T::Type{UndefVarError}, var::Symbol) = Core.call(T, var)
+call(T::Type{InterruptException}) = Core.call(T)
+call(T::Type{SymbolNode}, name::Symbol, t::ANY) = Core.call(T, name, t)
+call(T::Type{GetfieldNode}, value, name::Symbol, typ) = Core.call(T, value, name, typ)
+call(T::Type{ASCIIString}, d::Array{Uint8,1}) = Core.call(T, d)
+call(T::Type{UTF8String}, d::Array{Uint8,1}) = Core.call(T, d)
+call(T::Type{TypeVar}, args...) = Core.call(T, args...)
+call(T::Type{TypeConstructor}, args...) = Core.call(T, args...)
+call(T::Type{Expr}, args::ANY...) = _expr(args...)
+call(T::Type{LineNumberNode}, n::Int) = Core.call(T, n)
+call(T::Type{LabelNode}, n::Int) = Core.call(T, n)
+call(T::Type{GotoNode}, n::Int) = Core.call(T, n)
+call(T::Type{QuoteNode}, x::ANY) = Core.call(T, x)
+call(T::Type{NewvarNode}, s::Symbol) = Core.call(T, s)
+call(T::Type{TopNode}, s::Symbol) = Core.call(T, s)
+call(T::Type{Module}, args...) = Core.call(T, args...)
+call(T::Type{Task}, f::ANY) = Core.call(T, f)
+
+call{T}(::Type{T}, args...) = convert(T, args...)::T
+
+convert{T}(::Type{T}, x::T) = x
 
 convert(::(), ::()) = ()
 convert(::Type{Tuple}, x::Tuple) = x
@@ -14,6 +41,8 @@ convert(::Type{Tuple}, x::Tuple) = x
 argtail(x, rest...) = rest
 tupletail(x::Tuple) = argtail(x...)
 
+convert(T::(Type, Type...), x::(Any, Any...)) =
+    tuple(convert(T[1],x[1]), convert(tupletail(T), tupletail(x))...)
 convert(T::(Any, Any...), x::(Any, Any...)) =
     tuple(convert(T[1],x[1]), convert(tupletail(T), tupletail(x))...)
 
@@ -180,7 +209,11 @@ map(f::Callable, a::Array{Any,1}) = Any[ f(a[i]) for i=1:length(a) ]
 macro thunk(ex); :(()->$(esc(ex))); end
 macro L_str(s); s; end
 
-function precompile(f, args::Tuple)
+function precompile(f::ANY, args::Tuple)
+    if isa(f,DataType)
+        args = tuple(Type{f}, args...)
+        f = f.name.module.call
+    end
     if isgeneric(f)
         ccall(:jl_compile_hint, Void, (Any, Any), f, args)
     end
@@ -206,8 +239,6 @@ end
 macro goto(name::Symbol)
     Expr(:symbolicgoto, name)
 end
-
-# NOTE: Base shares Array with Core so we can add definitions to it
 
 Array{T,N}(::Type{T}, d::NTuple{N,Int}) =
     ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)

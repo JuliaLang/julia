@@ -269,6 +269,7 @@ export
     At_mul_Bt!,
     At_rdiv_B,
     At_rdiv_Bt,
+    call,
 
 # scalar math
     @evalpoly,
@@ -360,7 +361,6 @@ export
     iceil,
     ifloor,
     imag,
-    inf,
     int,
     int128,
     int16,
@@ -401,7 +401,6 @@ export
     mod1,
     modf,
     mod2pi,
-    nan,
     nextfloat,
     nextpow,
     nextpow2,
@@ -601,6 +600,7 @@ export
     sort,
     sortcols,
     sortperm,
+    sortperm!,
     sortrows,
     squeeze,
     step,
@@ -713,6 +713,8 @@ export
     sprandn,
     spzeros,
     symperm,
+    rowvals,
+    nzrange,
 
 # bitarrays
     bitpack,

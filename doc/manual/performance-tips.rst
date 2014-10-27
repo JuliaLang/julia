@@ -254,8 +254,7 @@ some cases. But it can easily be fixed as follows::
     pos(x) = x < 0 ? zero(x) : x
 
 There is also a ``one`` function, and a more general ``oftype(x,y)``
-function, which returns ``y`` converted to the type of ``x``. The first
-argument to any of these functions can be either a value or a type.
+function, which returns ``y`` converted to the type of ``x``.
 
 Avoid changing the type of a variable
 -------------------------------------
@@ -604,14 +603,24 @@ properties of the loop:
    possibly causing different results than without ``@simd``.
 -  No iteration ever waits on another iteration to make forward progress.
 
+A loop containing ``break``, ``continue``, or ``goto`` will cause a 
+compile-time error.
+
 Using ``@simd`` merely gives the compiler license to vectorize. Whether 
 it actually does so depends on the compiler. To actually benefit from the 
 current implementation, your loop should have the following additional 
 properties:
 
 -  The loop must be an innermost loop.
--  The loop body must be straight-line code. This is why ``@inbounds`` is currently needed for all array accesses.
--  Accesses must have a stride pattern and cannot be "gathers" (random-index reads) or "scatters" (random-index writes).
-- The stride should be unit stride.
-- In some simple cases, for example with 2-3 arrays accessed in a loop, the LLVM auto-vectorization may kick in automatically, leading to no further speedup with ``@simd``. 
+-  The loop body must be straight-line code. This is why ``@inbounds`` is 
+   currently needed for all array accesses. The compiler can sometimes turn
+   short ``&&``, ``||``, and ``?:`` expressions into straight-line code, 
+   if it is safe to evaluate all operands unconditionally. Consider using 
+   ``ifelse`` instead of ``?:`` in the loop if it is safe to do so.
+-  Accesses must have a stride pattern and cannot be "gathers" (random-index reads) 
+   or "scatters" (random-index writes).
+-  The stride should be unit stride.
+-  In some simple cases, for example with 2-3 arrays accessed in a loop, the 
+   LLVM auto-vectorization may kick in automatically, leading to no further 
+   speedup with ``@simd``. 
 

@@ -448,10 +448,25 @@ function base(b::Integer, n::BigInt)
 end
 
 function ndigits0z(x::BigInt, b::Integer=10)
-    b < 0 && throw(DomainError()) # TODO: make this work correctly.
-    # mpz_sizeinbase might return an answer 1 too big
-    n = int(ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &x, b))
-    abs(x) < big(b)^(n-1) ? n-1 : n
+    b < 2 && throw(DomainError())
+    if ispow2(b)
+        int(ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &x, b))
+    else
+        # non-base 2 mpz_sizeinbase might return an answer 1 too big
+        # use property that log(b, x) < ndigits(x, b) <= log(b, x) + 1
+        n = int(ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &x, 2))
+        lb = log2(b) # assumed accurate to <1ulp (true for openlibm)
+        q,r = divrem(n,lb)
+        iq = int(q)
+        maxerr = q*eps(lb) # maximum error in remainder
+        if r-1.0 < maxerr 
+            abs(x) >= big(b)^iq ? iq+1 : iq
+        elseif lb-r < maxerr
+            abs(x) >= big(b)^(iq+1) ? iq+2 : iq+1
+        else
+            iq+1
+        end
+    end
 end
 ndigits(x::BigInt, b::Integer=10) = x.size == 0 ? 1 : ndigits0z(x,b)
 

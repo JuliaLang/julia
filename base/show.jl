@@ -241,7 +241,7 @@ const expr_infix_wide = Set([:(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(&=),
     :(|=), :($=), :(>>>=), :(>>=), :(<<=), :(&&), :(||)])
 const expr_infix = Set([:(:), :(<:), :(->), :(=>), symbol("::")])
 const expr_calls  = Dict(:call =>('(',')'), :calldecl =>('(',')'), :ref =>('[',']'), :curly =>('{','}'))
-const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>('{','}'),
+const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>("Any[","]"),
                          :hcat =>('[',']'), :row =>('[',']'))
 
 ## AST decoding helpers ##
@@ -1064,7 +1064,7 @@ whos(pat::Regex) = whos(current_module(), pat)
 _limit_output = false
 
 function print_matrix_repr(io, X::AbstractArray)
-    compact, prefix = array_eltype_show_how(eltype(X))
+    compact, prefix = array_eltype_show_how(X)
     prefix *= "["
     ind = " "^length(prefix)
     print(io, prefix)
@@ -1162,7 +1162,8 @@ function showlimited(io::IO, x)
 end
 
 # returns compact, prefix
-function array_eltype_show_how(e)
+function array_eltype_show_how(X)
+    e = eltype(X)
     leaf = isleaftype(e)
     plain = e<:Number || e<:String
     if isa(e,DataType) && e === e.name.primary
@@ -1170,28 +1171,23 @@ function array_eltype_show_how(e)
     else
         str = string(e)
     end
-    leaf&&plain, (e===Float64 || e===Int || (leaf && !plain) ? "" : str)
+    leaf&&plain, (!isempty(X) && (e===Float64 || e===Int || (leaf && !plain)) ? "" : str)
 end
 
 function show_vector(io::IO, v, opn, cls)
-    e = eltype(v)
-    compact = false
-    if e !== Any
-        compact, prefix = array_eltype_show_how(e)
-        print(io, prefix)
-    end
+    compact, prefix = array_eltype_show_how(v)
+    print(io, prefix)
     if _limit_output && length(v) > 20
         show_delim_array(io, sub(v,1:10), opn, ",", "", false, compact)
         print(io, "  \u2026  ")
         n = length(v)
         show_delim_array(io, sub(v,(n-9):n), "", ",", cls, false, compact)
     else
-        show_delim_array(io, v, opn, ",", cls, false, compact)
+        show_delim_array(io, v, opn, ",", cls, false)
     end
 end
 
-show(io::IO, v::AbstractVector{Any}) = show_vector(io, v, "{", "}")
-show(io::IO, v::AbstractVector)      = show_vector(io, v, "[", "]")
+show(io::IO, v::AbstractVector) = show_vector(io, v, "[", "]")
 
 # printing BitArrays
 

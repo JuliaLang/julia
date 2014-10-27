@@ -108,18 +108,30 @@ function blas_vendor()
         return :openblas
     end
     try
+        cglobal((:openblas_set_num_threads64_, Base.libblas_name), Void)
+        return :openblas64
+    end
+    try
         cglobal((:MKL_Set_Num_Threads, Base.libblas_name), Void)
         return :mkl
     end
     return :unknown
 end
 
-openblas_get_config() = strip(bytestring( ccall((:openblas_get_config, Base.libblas_name), Ptr{Uint8}, () )))
+if blas_vendor() == :openblas64
+    blasfunc(x) = string(x)*"64_"
+    openblas_get_config() = strip(bytestring( ccall((:openblas_get_config64_, Base.libblas_name), Ptr{Uint8}, () )))
+else
+    blasfunc(x) = string(x)
+    openblas_get_config() = strip(bytestring( ccall((:openblas_get_config, Base.libblas_name), Ptr{Uint8}, () )))
+end
 
 function blas_set_num_threads(n::Integer)
     blas = blas_vendor()
     if blas == :openblas
         return ccall((:openblas_set_num_threads, Base.libblas_name), Void, (Int32,), n)
+    elseif blas == :openblas64
+        return ccall((:openblas_set_num_threads64_, Base.libblas_name), Void, (Int32,), n)
     elseif blas == :mkl
         # MKL may let us set the number of threads in several ways
         return ccall((:MKL_Set_Num_Threads, Base.libblas_name), Void, (Cint,), n)
@@ -133,7 +145,7 @@ end
 
 function check_blas()
     blas = blas_vendor()
-    if blas == :openblas
+    if blas == :openblas || blas == :openblas64
         openblas_config = openblas_get_config()
         openblas64 = ismatch(r".*USE64BITINT.*", openblas_config)
         if Base.USE_BLAS64 != openblas64

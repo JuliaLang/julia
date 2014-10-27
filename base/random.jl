@@ -104,14 +104,14 @@ rand(r::MersenneTwister) = dsfmt_genrand_close_open(r.state)
 dsfmt_randui32() = dsfmt_gv_genrand_uint32()
 dsfmt_randui64() = uint64(dsfmt_randui32()) | (uint64(dsfmt_randui32())<<32)
 
-rand(::Type{Uint8})   = itrunc(Uint8,rand(Uint32))
-rand(::Type{Uint16})  = itrunc(Uint16,rand(Uint32))
+rand(::Type{Uint8})   = rand(Uint32) % Uint8
+rand(::Type{Uint16})  = rand(Uint32) % Uint16
 rand(::Type{Uint32})  = dsfmt_randui32()
 rand(::Type{Uint64})  = dsfmt_randui64()
 rand(::Type{Uint128}) = uint128(rand(Uint64))<<64 | rand(Uint64)
 
-rand(::Type{Int8})    = itrunc(Int8,rand(Uint32))
-rand(::Type{Int16})   = itrunc(Int16,rand(Uint32))
+rand(::Type{Int8})    = rand(Uint32) % Int8
+rand(::Type{Int16})   = rand(Uint32) % Int16
 rand(::Type{Int32})   = reinterpret(Int32,rand(Uint32))
 rand(::Type{Int64})   = reinterpret(Int64,rand(Uint64))
 rand(::Type{Int128})  = reinterpret(Int128,rand(Uint128))
@@ -124,19 +124,20 @@ rand(::Type{Float64}, dims::Int...) = rand(Float64, dims)
 rand(dims::Dims) = rand(Float64, dims)
 rand(dims::Int...) = rand(Float64, dims)
 
+rand(r::AbstractRNG) = rand(r, Float64)
 rand(r::AbstractRNG, dims::Dims) = rand!(r, Array(Float64, dims))
 rand(r::AbstractRNG, dims::Int...) = rand(r, dims)
 
 function rand!{T}(A::Array{T})
-    for i=1:length(A)
+    for i = 1:length(A)
         A[i] = rand(T)
     end
     A
 end
 
-function rand!(r::AbstractRNG, A::AbstractArray)
-    for i=1:length(A)
-        @inbounds A[i] = rand(r)
+function rand!{T}(r::AbstractRNG, A::AbstractArray{T})
+    for i = 1:length(A)
+        @inbounds A[i] = rand(r, T)
     end
     A
 end
@@ -154,12 +155,12 @@ rem_knuth{T<:Unsigned}(a::T, b::T) = b != 0 ? a % b : a
 
 # maximum multiple of k <= 2^bits(T) decremented by one,
 # that is 0xFFFFFFFF if k = typemax(T) - typemin(T) with intentional underflow
-maxmultiple(k::Uint32) = itrunc(Uint32, div(0x0000000100000000,k + (k == 0))*k - 1)
-maxmultiple(k::Uint64) = itrunc(Uint64, div(0x00000000000000010000000000000000, k + (k == 0))*k - 1)
+maxmultiple(k::Uint32) = (div(0x0000000100000000,k + (k == 0))*k - 1) % Uint32
+maxmultiple(k::Uint64) = (div(0x00000000000000010000000000000000, k + (k == 0))*k - 1) % Uint64
 # maximum multiple of k within 1:typemax(Uint128)
 maxmultiple(k::Uint128) = div(typemax(Uint128), k + (k == 0))*k - 1
 # maximum multiple of k within 1:2^32 or 1:2^64, depending on size
-maxmultiplemix(k::Uint64) = itrunc(Uint64, div((k >> 32 != 0)*0x0000000000000000FFFFFFFF00000000 + 0x0000000100000000, k + (k == 0))*k - 1)
+maxmultiplemix(k::Uint64) = (div((k >> 32 != 0)*0x0000000000000000FFFFFFFF00000000 + 0x0000000100000000, k + (k == 0))*k - 1) % Uint64
 
 immutable RandIntGen{T<:Integer, U<:Unsigned}
     a::T   # first element of the range
@@ -206,7 +207,7 @@ function rand{T<:Integer, U<:Unsigned}(g::RandIntGen{T,U})
     while x > g.u
         x = rand(U)
     end
-    itrunc(T, unsigned(g.a) + rem_knuth(x, g.k))
+    (unsigned(g.a) + rem_knuth(x, g.k)) % T
 end
 
 rand{T<:Union(Signed,Unsigned,Bool,Char)}(r::UnitRange{T}) = rand(RandIntGen(r))

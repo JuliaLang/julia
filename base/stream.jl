@@ -390,7 +390,7 @@ function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::
     if nread < 0
         if nread != UV_EOF
             # This is a fatal connectin error. Shutdown requests as per the usual 
-            # close function won't work and libuv will fail with an assertion failre
+            # close function won't work and libuv will fail with an assertion failure
             ccall(:jl_forceclose_uv,Void,(Ptr{Void},),stream.handle)
             notify_error(stream.readnotify, UVError("readcb",nread))
         else

@@ -47,7 +47,7 @@ function show(io::IO, tv::TypeVar)
         show(io, tv.lb)
         print(io, "<:")
     end
-    print(io, tv.name)
+    write(io, tv.name)
     if !is(tv.ub, Any)
         print(io, "<:")
         show(io, tv.ub)
@@ -103,16 +103,25 @@ function localize_vars(expr, esca)
     Expr(:localize, :(()->($expr)), v...)
 end
 
-function pushmeta!(ex::Expr, sym::Symbol)
+function pushmeta!(ex::Expr, sym::Symbol, args::Any...)
+    if length(args) == 0
+        tag = sym
+    else
+        tag = Expr(sym, args...)
+    end
+
     if ex.head == :function
         body::Expr = ex.args[2]
         if !isempty(body.args) && isa(body.args[1], Expr) && (body.args[1]::Expr).head == :meta
-            push!((body.args[1]::Expr).args, sym)
+            push!((body.args[1]::Expr).args, tag)
+        elseif isempty(body.args)
+            push!(body.args, Expr(:meta, tag))
+            push!(body.args, nothing)
         else
-            unshift!(body.args, Expr(:meta, sym))
+            unshift!(body.args, Expr(:meta, tag))
         end
     elseif (ex.head == :(=) && typeof(ex.args[1]) == Expr && ex.args[1].head == :call)
-        ex = Expr(:function, ex.args[1], Expr(:block, Expr(:meta, sym), ex.args[2]))
+        ex = Expr(:function, ex.args[1], Expr(:block, Expr(:meta, tag), ex.args[2]))
 #     else
 #         ex = Expr(:withmeta, ex, sym)
     end
@@ -123,16 +132,22 @@ function popmeta!(body::Expr, sym::Symbol)
     if isa(body.args[1],Expr) && (body.args[1]::Expr).head === :meta
         metaargs = (body.args[1]::Expr).args
         for i = 1:length(metaargs)
-            if metaargs[i] == sym
+            if (isa(metaargs[i], Symbol) && metaargs[i] == sym) ||
+               (isa(metaargs[i], Expr) && metaargs[i].head == sym)
                 if length(metaargs) == 1
                     shift!(body.args)        # get rid of :meta Expr
                 else
                     deleteat!(metaargs, i)   # delete this portion of the metadata
                 end
-                return true
+
+                if isa(metaargs[i], Symbol)
+                    return (true, [])
+                elseif isa(metaargs[i], Expr)
+                    return (true, metaargs[i].args)
+                end
             end
         end
     end
-    false
+    return (false, [])
 end
-popmeta!(arg, sym) = false
+popmeta!(arg, sym) = (false, [])

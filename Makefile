@@ -23,10 +23,20 @@ default: release
 endif
 
 # sort is used to remove potential duplicates
-DIRS = $(sort $(build_bindir) $(build_libdir) $(build_private_libdir) $(build_libexecdir) $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_datarootdir)/man/man1)
+DIRS = $(sort $(build_bindir) $(build_libdir) $(build_private_libdir) $(build_libexecdir) $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_man1dir))
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
-$(foreach link,base test doc examples,$(eval $(call symlink_target,$(link),$(build_datarootdir)/julia)))
+$(foreach link,base test,$(eval $(call symlink_target,$(link),$(build_datarootdir)/julia)))
+
+# doc needs to live under $(build_docdir), not under $(build_datarootdir)/julia/
+CLEAN_TARGETS += clean-$(build_docdir)
+clean-$(build_docdir):
+	@-rm -fr $(abspath $(build_docdir))
+$(subst $(abspath $(JULIAHOME))/,,$(abspath $(build_docdir))): $(build_docdir)
+$(build_docdir):
+	@mkdir -p $@/examples
+	@cp -R doc/devdocs doc/manual doc/stdlib $@
+	@cp -R examples/*.jl $@/examples/
 
 git-submodules:
 ifneq ($(NO_GIT), 1)
@@ -35,7 +45,7 @@ else
        $(warn "Submodules could not be updated because git is unavailable")
 endif
 
-debug release: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test $(build_datarootdir)/julia/doc $(build_datarootdir)/julia/examples $(build_sysconfdir)/julia/juliarc.jl $(build_datarootdir)/man/man1/julia.1
+debug release: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test $(build_docdir) $(build_sysconfdir)/julia/juliarc.jl $(build_man1dir)/julia.1
 	@$(MAKE) $(QUIET_MAKE) julia-$@
 	@export private_libdir=$(private_libdir) && \
 	$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(build_libdir):$(LD_LIBRARY_PATH) JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$@)" $(build_private_libdir)/sys.$(SHLIB_EXT)
@@ -73,10 +83,12 @@ release-candidate: release test
 	@echo 1. Remove deprecations in base/deprecated.jl
 	@echo 2. Bump VERSION
 	@echo 3. Create tag, push to github "\(git tag v\`cat VERSION\` && git push --tags\)"
-	@echo 4. Replace github release tarball with tarball created from make source-dist
-	@echo 5. Follow packaging instructions in DISTRIBUTING.md to create binary packages for all platforms
-	@echo 6. Upload to AWS, update http://julialang.org/downloads links
-	@echo 7. Announce on mailing lists
+	@echo 4. Clean out old .tar.gz files living in deps/, "\`git clean -fdx\`" seems to work
+	@echo 5. Replace github release tarball with tarball created from make source-dist
+	@echo 6. Follow packaging instructions in DISTRIBUTING.md to create binary packages for all platforms
+	@echo 7. Upload to AWS, update http://julialang.org/downloads and http://status.julialang.org/stable links
+	@echo 8. Announce on mailing lists
+	@echo 9. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20
 	@echo
 
 julia-debug-symlink:
@@ -96,11 +108,11 @@ ifndef JULIA_VAGRANT_BUILD
 endif
 endif
 
-$(build_datarootdir)/julia/helpdb.jl: doc/helpdb.jl | $(build_datarootdir)/julia
+$(build_docdir)/helpdb.jl: doc/helpdb.jl | $(build_docdir)
 	@cp $< $@
 
-$(build_datarootdir)/man/man1/julia.1: doc/man/julia.1 | $(build_datarootdir)/julia
-	@mkdir -p $(build_datarootdir)/man/man1
+$(build_man1dir)/julia.1: doc/man/julia.1 | $(build_man1dir)
+	@mkdir -p $(build_man1dir)
 	@cp $< $@
 
 $(build_sysconfdir)/julia/juliarc.jl: etc/juliarc.jl | $(build_sysconfdir)/julia
@@ -118,25 +130,26 @@ $(build_private_libdir)/sys%ji: $(build_private_libdir)/sys%o
 
 $(build_private_libdir)/sys%$(SHLIB_EXT): $(build_private_libdir)/sys%o
 ifneq ($(USEMSVC), 1)
-	$(CXX) -shared -fPIC -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ $< \
+	@$(call PRINT_LINK, $(CXX) -shared -fPIC -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ $< \
 		$$([ $(OS) = Darwin ] && echo '' -Wl,-undefined,dynamic_lookup || echo '' -Wl,--unresolved-symbols,ignore-all ) \
-		$$([ $(OS) = WINNT ] && echo '' -ljulia -lssp)
+		$$([ $(OS) = WINNT ] && echo '' -ljulia -lssp))
 	$(DSYMUTIL) $@
 else
 	@true
 endif
 
 $(build_private_libdir)/sys0.o:
-	@$(QUIET_JULIA) cd base && \
-	$(call spawn,$(JULIA_EXECUTABLE)) --build $(call cygpath_w,$(build_private_libdir)/sys0) sysimg.jl
+	@$(call PRINT_JULIA, cd base && \
+	$(call spawn,$(JULIA_EXECUTABLE)) --build $(call cygpath_w,$(build_private_libdir)/sys0) sysimg.jl)
 
 BASE_SRCS := $(wildcard base/*.jl base/*/*.jl base/*/*/*.jl)
 
-$(build_private_libdir)/sys.o: VERSION $(BASE_SRCS) $(build_datarootdir)/julia/helpdb.jl $(build_private_libdir)/sys0.$(SHLIB_EXT)
-	@$(QUIET_JULIA) cd base && \
+,:=,
+$(build_private_libdir)/sys.o: VERSION $(BASE_SRCS) $(build_docdir)/helpdb.jl $(build_private_libdir)/sys0.$(SHLIB_EXT)
+	@$(call PRINT_JULIA, cd base && \
 	$(call spawn,$(JULIA_EXECUTABLE)) --build $(call cygpath_w,$(build_private_libdir)/sys) \
 		-J$(call cygpath_w,$(build_private_libdir))/$$([ -e $(build_private_libdir)/sys.ji ] && echo sys.ji || echo sys0.ji) -f sysimg.jl \
-		|| { echo "*** This error is usually fixed by running 'make clean'. If the error persists, try 'make cleanall'. ***" && false; }
+		|| { echo '*** This error is usually fixed by running `make clean`. If the error persists$(,) try `make cleanall`. ***' && false; } )
 
 run-julia-debug run-julia-release: run-julia-%:
 	$(MAKE) $(QUIET_MAKE) run-julia JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$*)"
@@ -221,7 +234,7 @@ endif
 install: $(build_bindir)/stringreplace
 	@$(MAKE) $(QUIET_MAKE) release
 	@$(MAKE) $(QUIET_MAKE) debug
-	@for subdir in $(bindir) $(libexecdir) $(datarootdir)/julia/site/$(VERSDIR) $(datarootdir)/man/man1 $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir); do \
+	@for subdir in $(bindir) $(libexecdir) $(datarootdir)/julia/site/$(VERSDIR) $(docdir) $(man1dir) $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir); do \
 		mkdir -p $(DESTDIR)$$subdir; \
 	done
 
@@ -258,11 +271,15 @@ endif
 	$(INSTALL_M) $(build_private_libdir)/sys.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 	# Copy in all .jl sources as well
 	cp -R -L $(build_datarootdir)/julia $(DESTDIR)$(datarootdir)/
-	# Remove git repository of juliadoc
-	-rm -rf $(DESTDIR)$(datarootdir)/julia/doc/juliadoc/.git
-	-rm -f $(DESTDIR)$(datarootdir)/julia/doc/juliadoc/.gitignore
-	# Copy in beautiful new man page!
-	$(INSTALL_F) $(build_datarootdir)/man/man1/julia.1 $(DESTDIR)$(datarootdir)/man/man1/
+	# Copy documentation
+	cp -R -L $(build_docdir)/* $(DESTDIR)$(docdir)/
+	# Remove perf suite
+	-rm -rf $(DESTDIR)$(datarootdir)/julia/test/perf/
+	# Remove various files which should not be installed
+	-rm -f $(DESTDIR)$(datarootdir)/julia/base/version_git.sh
+	-rm -f $(DESTDIR)$(datarootdir)/julia/test/Makefile
+	# Copy in beautiful new man page 
+	$(INSTALL_F) $(build_man1dir)/julia.1 $(DESTDIR)$(man1dir)/
 	# Copy icon and .desktop file
 	mkdir -p $(DESTDIR)$(datarootdir)/icons/hicolor/scalable/apps/
 	$(INSTALL_F) contrib/julia.svg $(DESTDIR)$(datarootdir)/icons/hicolor/scalable/apps/
@@ -365,7 +382,7 @@ source-dist: git-submodules
 	# Create file source-dist.tmp to hold all the filenames that go into the tarball
 	echo "base/version_git.jl" > source-dist.tmp
 	git ls-files >> source-dist.tmp
-	ls deps/*.tar.gz deps/*.tar.bz2 deps/*.tgz >> source-dist.tmp
+	ls deps/*.tar.gz deps/*.tar.bz2 deps/*.tar.xz deps/*.tgz deps/*.zip >> source-dist.tmp
 	git submodule --quiet foreach 'git ls-files | sed "s&^&$$path/&"' >> source-dist.tmp
 
 	# Remove unwanted files

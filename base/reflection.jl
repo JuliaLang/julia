@@ -48,7 +48,7 @@ isconst(m::Module, s::Symbol) =
 object_id(x::ANY) = ccall(:jl_object_id, Uint, (Any,), x)
 
 # type predicates
-const isimmutable = x->(isa(x,Tuple) || !typeof(x).mutable)
+isimmutable(x::ANY) = (isa(x,Tuple) || !typeof(x).mutable)
 isstructtype(t::DataType) = t.names!=() || (t.size==0 && !t.abstract)
 isstructtype(x) = false
 isbits(t::DataType) = !t.mutable & t.pointerfree & isleaftype(t)
@@ -87,12 +87,13 @@ subtypes(x::DataType) = subtypes(Main, x)
 subtypetree(x::DataType, level=-1) = (level == 0 ? (x, []) : (x, Any[subtypetree(y, level-1) for y in subtypes(x)]))
 
 # function reflection
-isgeneric(f::ANY) = (isa(f,Function)||isa(f,DataType)) && isa(f.env,MethodTable)
+isgeneric(f::ANY) = (isa(f,Function) && isa(f.env,MethodTable))
 
 function_name(f::Function) = isgeneric(f) ? f.env.name : (:anonymous)
 
-code_lowered(f::Callable,t::(Type...)) = map(m->uncompressed_ast(m.func.code), methods(f,t))
-methods(f::ANY,t::ANY) = Any[m[3] for m in _methods(f,t,-1)]
+code_lowered(f::Function,t::(Type...)) = map(m->uncompressed_ast(m.func.code), methods(f,t))
+methods(f::Function,t::ANY) = Any[m[3] for m in _methods(f,t,-1)]
+methods(f::ANY,t::ANY) = methods(call, tuple(isa(f,Type) ? Type{f} : typeof(f), t...))
 _methods(f::ANY,t::ANY,lim) = _methods(f, Any[(t::Tuple)...], length(t::Tuple), lim, [])
 function _methods(f::ANY,t::Array,i,lim::Integer,matching::Array{Any,1})
     if i == 0
@@ -126,8 +127,7 @@ function methods(f::Function)
     f.env
 end
 
-methods(t::DataType) = (_methods(t,Tuple,0);  # force constructor creation
-                        t.env)
+methods(x::ANY) = methods(call, (isa(x,Type) ? Type{x} : typeof(x), Any...))
 
 function length(mt::MethodTable)
     n = 0
@@ -155,10 +155,10 @@ function _dump_function(f, t::ANY, native, wrapper)
     str
 end
 
-code_llvm  (f::Callable, types::(Type...)) = print(_dump_function(f, types, false, false))
-code_native(f::Callable, types::(Type...)) = print(_dump_function(f, types, true, false))
+code_llvm  (f::Function, types::(Type...)) = print(_dump_function(f, types, false, false))
+code_native(f::Function, types::(Type...)) = print(_dump_function(f, types, true, false))
 
-function functionlocs(f::Callable, types=(Type...))
+function functionlocs(f::ANY, types=(Type...))
     locs = Any[]
     for m in methods(f, types)
         lsd = m.func.code::LambdaStaticData
@@ -173,9 +173,9 @@ function functionlocs(f::Callable, types=(Type...))
     locs
 end
 
-functionloc(f::Callable, types=(Any...)) = functionlocs(f, types)[1]
+functionloc(f::ANY, types=(Any...)) = functionlocs(f, types)[1]
 
-function function_module(f::Function, types=(Any...))
+function function_module(f, types=(Any...))
     m = methods(f, types)
     if isempty(m)
         error("no matching methods")

@@ -133,6 +133,8 @@ sA = sub(A, 1:2:3, 1:3:5, 1:2:8)
 @test Base.parentdims(sA) == [1:3]
 @test strides(sA) == (2,9,30)
 @test sA[:] == A[1:2:3, 1:3:5, 1:2:8][:]
+# issue #8807
+@test sub(sub([1:5], 1:5), 1:5) == [1:5]
 
 # sub logical indexing #4763
 A = sub([1:10], 5:8)
@@ -211,7 +213,7 @@ let
     @test x == 11
     x = get(A, (4,4), -12)
     @test x == -12
-    X = get(A, -5:5, nan(Float32))
+    X = get(A, -5:5, NaN32)
     @test eltype(X) == Float32
     @test isnan(X) == [trues(6),falses(5)]
     @test X[7:11] == [1:5]

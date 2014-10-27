@@ -14,7 +14,7 @@ endof(x::Number) = 1
 getindex(x::Number) = x
 getindex(x::Number, i::Integer) = i == 1 ? x : throw(BoundsError())
 getindex(x::Number, I::Integer...) = all([i == 1 for i in I]) ? x : throw(BoundsError())
-getindex(x::Number, I::Real...) = getindex(x, to_index(i)...)
+getindex(x::Number, I::Real...) = getindex(x, to_index(I)...)
 first(x::Number) = x
 last(x::Number) = x
 
@@ -44,9 +44,9 @@ reinterpret{T,S}(::Type{T}, x::S) = box(T,unbox(S,x))
 map(f::Callable, x::Number) = f(x)
 
 zero(x::Number) = oftype(x,0)
-zero{T<:Number}(::Type{T}) = oftype(T,0)
+zero{T<:Number}(::Type{T}) = convert(T,0)
 one(x::Number)  = oftype(x,1)
-one{T<:Number}(::Type{T}) = oftype(T,1)
+one{T<:Number}(::Type{T}) = convert(T,1)
 
 const _numeric_conversion_func_names =
     (:int,:integer,:signed,:int8,:int16,:int32,:int64,:int128,

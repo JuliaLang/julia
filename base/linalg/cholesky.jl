@@ -15,7 +15,7 @@ end
 
 function chol!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U)
     C, info = LAPACK.potrf!(char_uplo(uplo), A)
-    return @assertposdef Triangular(C, uplo, false) info
+    return @assertposdef Triangular{eltype(C),typeof(C),uplo,false}(C) info
 end
 
 function chol!{T}(A::AbstractMatrix{T}, uplo::Symbol=:U)

@@ -1,6 +1,6 @@
 # automatically generated from files in doc/stdlib/ -- do not edit here
 
-{
+Any[
 
 ("Base","exit","exit([code])
 
@@ -386,7 +386,7 @@
 
 ("Base","oftype","oftype(x, y)
 
-   Convert \"y\" to the type of \"x\".
+   Convert \"y\" to the type of \"x\" (\"convert(typeof(x), y)\").
 
 "),
 
@@ -3208,7 +3208,7 @@
 
 ("Base","writedlm","writedlm(f, A, delim='t')
 
-   Write \"A\" (either an array type or an iterable collection of
+   Write \"A\" (a vector, matrix or an iterable collection of
    iterable rows) as text to \"f\" (either a filename string or an
    \"IO\" stream) using the given delimeter \"delim\" (which defaults
    to tab, but can be any printable Julia object, typically a \"Char\"
@@ -5582,7 +5582,7 @@ popdisplay(d::Display)
 
    Number of ones leading the binary representation of \"x\".
 
-      julia> leading_ones(int32(2 ^ 32 - 2))
+      julia> leading_ones(uint32(2 ^ 32 - 2))
       31
 
 "),
@@ -6491,21 +6491,22 @@ popdisplay(d::Display)
 
 "),
 
-("Base","combinations","combinations(arr, n)
+("Base","combinations","combinations(array, n)
 
    Generate all combinations of \"n\" elements from an indexable
    object.  Because the number of combinations can be very large, this
    function returns an iterator object. Use
-   \"collect(combinations(a,n))\" to get an array of all combinations.
+   \"collect(combinations(array,n))\" to get an array of all
+   combinations.
 
 "),
 
-("Base","permutations","permutations(arr)
+("Base","permutations","permutations(array)
 
    Generate all permutations of an indexable object.  Because the
    number of permutations can be very large, this function returns an
-   iterator object. Use \"collect(permutations(a,n))\" to get an array
-   of all permutations.
+   iterator object. Use \"collect(permutations(array))\" to get an
+   array of all permutations.
 
 "),
 
@@ -8933,6 +8934,81 @@ popdisplay(d::Display)
 
 "),
 
+("Dates","Period","Period
+
+"),
+
+("Dates","Year","Year
+
+"),
+
+("Dates","Month","Month
+
+"),
+
+("Dates","Week","Week
+
+"),
+
+("Dates","Day","Day
+
+"),
+
+("Dates","Hour","Hour
+
+"),
+
+("Dates","Minute","Minute
+
+"),
+
+("Dates","Second","Second
+
+"),
+
+("Dates","Millisecond","Millisecond
+
+   \"Period\" types represent discrete, human representations of time.
+
+"),
+
+("Dates","Instant","Instant
+
+   \"Instant\" types represent integer-based, machine representations
+   of time as continuous timelines starting from an epoch.
+
+"),
+
+("Dates","UTInstant{T}","UTInstant{T}
+
+   The \"UTInstant\" represents a machine timeline based on *UT* time
+   (1 day = one revolution of the earth). The \"{T}\" is a \"Period\"
+   parameter that indicates the resolution or precision of the
+   instant.
+
+"),
+
+("Dates","TimeType","TimeType
+
+   \"TimeType\" types wrap \"Instant\" machine instances to provide
+   human representations of the machine instant.
+
+"),
+
+("Dates","DateTime","DateTime
+
+   \"DateTime\" wraps a \"UTInstant{Millisecond}\" and interprets it
+   according to the proleptic Gregorian calendar.
+
+"),
+
+("Dates","Date","Date
+
+   \"Date\" wraps a \"UTInstant{Day}\" and interprets it according to
+   the proleptic Gregorian calendar.
+
+"),
+
 ("Dates","DateTime","DateTime(y[, m, d, h, mi, s, ms]) -> DateTime
 
    Construct a DateTime type by parts. Arguments must be convertible
@@ -9926,14 +10002,17 @@ Millisecond(v)
    If \"A\" is Hermitian its Cholesky factor is determined.  If \"A\"
    is not Hermitian the Cholesky factor of \"A*A'\" is determined. A
    fill-reducing permutation is used.  Methods for \"size\",
-   \"solve\", \"\\\", \"findn_nzs\", \"diag\", \"det\" and \"logdet\".
-   One of the solve methods includes an integer argument that can be
-   used to solve systems involving parts of the factorization only.
-   The optional boolean argument, \"ll\" determines whether the
-   factorization returned is of the \"A[p,p] = L*L'\" form, where
-   \"L\" is lower triangular or \"A[p,p] = L*Diagonal(D)*L'\" form
-   where \"L\" is unit lower triangular and \"D\" is a non-negative
-   vector.  The default is LDL.
+   \"solve\", \"\\\", \"findn_nzs\", \"diag\", \"det\" and \"logdet\"
+   are available for \"CholmodFactor\" objects.  One of the solve
+   methods includes an integer argument that can be used to solve
+   systems involving parts of the factorization only.  The optional
+   boolean argument, \"ll\" determines whether the factorization
+   returned is of the \"A[p,p] = L*L'\" form, where \"L\" is lower
+   triangular or \"A[p,p] = L*Diagonal(D)*L'\" form where \"L\" is
+   unit lower triangular and \"D\" is a non-negative vector.  The
+   default is LDL. The symbolic factorization can also be reused for
+   other matrices with the same structure as \"A\" by calling
+   \"cholfact!\".
 
 "),
 
@@ -9941,6 +10020,9 @@ Millisecond(v)
 
    \"cholfact!\" is the same as \"cholfact()\", but saves space by
    overwriting the input \"A\", instead of creating a copy.
+   \"cholfact!\" can also reuse the symbolic factorization from a
+   different matrix \"F\" with the same structure when used as:
+   \"cholfact!(F::CholmodFactor, A)\".
 
 "),
 
@@ -11451,6 +11533,18 @@ Millisecond(v)
    order may be returned. The order is specified using the same
    keywords as \"sort!\".
 
+   See also \"sortperm!()\"
+
+"),
+
+("Base","sortperm!","sortperm!(ix, v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false,] [initialized=false])
+
+   Like \"sortperm\", but accepts a preallocated index vector \"ix\".
+   If \"initialized\" is \"false\" (the default), ix is initialized to
+   contain the values \"1:length(v)\".
+
+   See also \"sortperm()\"
+
 "),
 
 ("Base","sortrows","sortrows(A, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
@@ -11711,4 +11805,4 @@ Millisecond(v)
 "),
 
 
-}
+]
