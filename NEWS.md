@@ -4,6 +4,13 @@ Julia v0.4.0 Release Notes
 New language features
 ---------------------
 
+  * Function-call overloading: for arbitrary objects `x` (not of type
+    `Function`), `x(...)` is transformed into `call(x, ...)`, and `Base.call`
+    can be overloaded as desired.  Constructors are now a special case of
+    this mechanism, which allows e.g. constructors for abstract types
+    and typealiases.  `T(...)` falls back to `convert(T, x)`, so all
+    `convert` methods implicitly define a constructor ([#8712], [#2403]).
+
   * Unicode version 7 is now supported for identifiers etcetera ([#7917]).
 
   * Type parameters now permit any arbitrary `isbits` type, not just
@@ -60,6 +67,8 @@ Library improvements
 
   * Symmetric and Hermitian immutables are now parametrized on matrix type ([#7992]).
 
+  * New `sortperm!` function for pre-allocated index arrays ([#8792]).
+
   * Switch from `O(N)` to `O(logN)` algorithm for `dequeue!(pq, key)`
     with `PriorityQueue`. This provides major speedups for large
     queues ([#8011]).
@@ -86,10 +95,18 @@ Library improvements
 
   * Givens type doesn't have a size anymore and is no longer a subtype of AbstractMatrix ([#8660])
 
+  * OpenBLAS 64-bit (ILP64) interface is now compiled with a `64_` suffix ([#8734]) to avoid conflicts with external libraries using a 32-bit BLAS ([#4923]).
+
 Deprecated or removed
 ---------------------
 
   * `median` and `median!` no longer accept a `checknan` keyword argument ([#8605]).
+
+  * `inf` and `nan` are now deprecated in favor of `T(Inf)` and `NaN`, respectively ([#8776]).
+
+  * `oftype` is deprecated in favor of `convert`.
+
+  * `{...}` syntax is deprecated in favor of `Any[...]` ([#8578]).
 
 Julia v0.3.0 Release Notes
 ==========================
@@ -829,6 +846,7 @@ Too numerous to mention.
 [#2370]: https://github.com/JuliaLang/julia/issues/2370
 [#2375]: https://github.com/JuliaLang/julia/issues/2375
 [#2380]: https://github.com/JuliaLang/julia/issues/2380
+[#2403]: https://github.com/JuliaLang/julia/issues/2403
 [#2468]: https://github.com/JuliaLang/julia/issues/2468
 [#2515]: https://github.com/JuliaLang/julia/issues/2515
 [#2516]: https://github.com/JuliaLang/julia/issues/2516
@@ -913,6 +931,7 @@ Too numerous to mention.
 [#4874]: https://github.com/JuliaLang/julia/issues/4874
 [#4882]: https://github.com/JuliaLang/julia/issues/4882
 [#4888]: https://github.com/JuliaLang/julia/issues/4888
+[#4923]: https://github.com/JuliaLang/julia/issues/4923
 [#4930]: https://github.com/JuliaLang/julia/issues/4930
 [#4934]: https://github.com/JuliaLang/julia/issues/4934
 [#4943]: https://github.com/JuliaLang/julia/issues/4943
@@ -1026,7 +1045,12 @@ Too numerous to mention.
 [#8297]: https://github.com/JuliaLang/julia/issues/8297
 [#8423]: https://github.com/JuliaLang/julia/issues/8423
 [#8560]: https://github.com/JuliaLang/julia/issues/8560
+[#8578]: https://github.com/JuliaLang/julia/issues/8578
 [#8605]: https://github.com/JuliaLang/julia/issues/8605
 [#8624]: https://github.com/JuliaLang/julia/issues/8624
 [#8660]: https://github.com/JuliaLang/julia/issues/8660
+[#8712]: https://github.com/JuliaLang/julia/issues/8712
+[#8734]: https://github.com/JuliaLang/julia/issues/8734
+[#8776]: https://github.com/JuliaLang/julia/issues/8776
+[#8792]: https://github.com/JuliaLang/julia/issues/8792
 [#8816]: https://github.com/JuliaLang/julia/issues/8816
