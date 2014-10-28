@@ -16,7 +16,11 @@ extern "C" {
 #include <setjmp.h>
 #ifndef _OS_WINDOWS_
 #  define jl_jmp_buf sigjmp_buf
-#  define MAX_ALIGN sizeof(void*)
+#  if defined(__arm__)
+#    define MAX_ALIGN 8
+#  else
+#    define MAX_ALIGN sizeof(void*)
+#  endif
 #else
 #  define jl_jmp_buf jmp_buf
 #  include <malloc.h> //for _resetstkoflw
