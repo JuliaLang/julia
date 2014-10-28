@@ -1295,11 +1295,11 @@ Strings
 
 .. function:: is_valid_ascii(s) -> Bool
 
-   Returns true if the string or byte vector is valid ASCII, false otherwise.
+   Returns true if the argument (``ASCIIString``, ``UTF8String``, or byte vector) is valid ASCII, false otherwise.
 
 .. function:: is_valid_utf8(s) -> Bool
 
-   Returns true if the string or byte vector is valid UTF-8, false otherwise.
+   Returns true if the argument (``ASCIIString``, ``UTF8String``, or byte vector) is valid UTF-8, false otherwise.
 
 .. function:: is_valid_char(c) -> Bool
 
@@ -1559,7 +1559,7 @@ Strings
 
 .. function:: is_valid_utf16(s) -> Bool
 
-   Returns true if the string or ``Uint16`` array is valid UTF-16.
+   Returns true if the argument (``UTF16String`` or ``Uint16`` array) is valid UTF-16.
 
 .. function:: utf32(s)
 
