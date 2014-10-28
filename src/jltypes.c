@@ -266,6 +266,7 @@ jl_tuple_t *jl_compute_type_union(jl_tuple_t *types)
             }
         }
     }
+    temp[n] = NULL;
     jl_tuple_t *result = jl_alloc_tuple_uninit(n - ndel);
     temp[n] = (jl_value_t*)result; // root result tuple while sorting
     j=0;
