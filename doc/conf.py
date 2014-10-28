@@ -208,6 +208,8 @@ latex_elements = {
         \DeclareUnicodeCharacter{27FA}{\ensuremath{\Longleftrightarrow}}
         \DeclareUnicodeCharacter{221A}{\ensuremath{\sqrt{}}}
         \DeclareUnicodeCharacter{221B}{\ensuremath{\sqrt[3]{}}}
+        \DeclareUnicodeCharacter{2295}{\ensuremath{\oplus}}
+        \DeclareUnicodeCharacter{2297}{\ensuremath{\otimes}}
     ''',
 }
 

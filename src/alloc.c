@@ -668,17 +668,12 @@ jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
         else if (!strcmp(((jl_sym_t*)name)->name, "Bool"))
             t = jl_bool_type;
     }
-    if (t == NULL) {
+    if (t == NULL)
         t = jl_new_uninitialized_datatype(jl_tuple_len(fnames));
-        if (jl_is_typename(name))
-            tn = (jl_typename_t*)name;
-        else
-            tn = jl_new_typename((jl_sym_t*)name);
-        t->name = tn;
-    }
+    else
+        tn = t->name;
 
-    if (t->name->primary == NULL)
-        t->name->primary = (jl_value_t*)t;
+    // init before possibly calling jl_new_typename
     t->super = super;
     t->parameters = parameters;
     t->names = fnames;
@@ -694,6 +689,19 @@ jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
     t->struct_decl = NULL;
     t->size = 0;
     t->alignment = 0;
+
+    if (tn == NULL) {
+        t->name = NULL;
+        if (jl_is_typename(name))
+            tn = (jl_typename_t*)name;
+        else
+            tn = jl_new_typename((jl_sym_t*)name);
+        t->name = tn;
+    }
+
+    if (t->name->primary == NULL)
+        t->name->primary = (jl_value_t*)t;
+
     if (abstract || jl_tuple_len(parameters) > 0) {
         t->uid = 0;
     }

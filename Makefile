@@ -111,7 +111,8 @@ endif
 # use sys.ji if it exists, otherwise run two stages
 $(build_private_libdir)/sys%ji: $(build_private_libdir)/sys%o
 
-.PRECIOUS: $(build_private_libdir)/sys%o
+.SECONDARY: $(build_private_libdir)/sys.o
+.SECONDARY: $(build_private_libdir)/sys0.o
 
 $(build_private_libdir)/sys%$(SHLIB_EXT): $(build_private_libdir)/sys%o
 	$(CXX) -shared -fPIC -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ $< \
@@ -257,6 +258,16 @@ endif
 	-rm $(DESTDIR)$(datarootdir)/julia/doc/juliadoc/.gitignore
 	# Copy in beautiful new man page!
 	$(INSTALL_F) $(build_datarootdir)/man/man1/julia.1 $(DESTDIR)$(datarootdir)/man/man1/
+	# Copy icon and .desktop file
+	mkdir -p $(DESTDIR)$(datarootdir)/icons/hicolor/scalable/apps/
+	$(INSTALL_F) contrib/julia.svg $(DESTDIR)$(datarootdir)/icons/hicolor/scalable/apps/
+	-touch --no-create $(DESTDIR)$(datarootdir)/icons/hicolor/
+	-gtk-update-icon-cache $(DESTDIR)$(datarootdir)/icons/hicolor/
+	mkdir -p $(DESTDIR)$(datarootdir)/applications/
+	$(INSTALL_F) contrib/julia.desktop $(DESTDIR)$(datarootdir)/applications/
+	# Install appdata file
+	mkdir -p $(DESTDIR)$(datarootdir)/appdata/
+	$(INSTALL_F) contrib/julia.appdata.xml $(DESTDIR)$(datarootdir)/appdata/
 
 	# Update RPATH entries and JL_SYSTEM_IMAGE_PATH if $(private_libdir_rel) != $(build_private_libdir_rel)
 ifneq ($(private_libdir_rel),$(build_private_libdir_rel))

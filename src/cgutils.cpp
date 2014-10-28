@@ -1444,7 +1444,7 @@ static jl_value_t *static_void_instance(jl_value_t *jt)
     if (jl_tuple_len(jt) == 0)
         return (jl_value_t*)jl_null;
     size_t nargs = jl_tuple_len(jt);
-    jl_value_t *tpl = (jl_value_t*)jl_alloc_tuple_uninit(nargs);
+    jl_value_t *tpl = (jl_value_t*)jl_alloc_tuple(nargs);
     JL_GC_PUSH1(&tpl);
     for(size_t i=0; i < nargs; i++) {
         jl_tupleset(tpl, i, static_void_instance(jl_tupleref(jt,i)));
@@ -1501,7 +1501,7 @@ static jl_value_t *static_constant_instance(Constant *constant, jl_value_t *jt)
     else
         assert(false && "Cannot process this type of constant");
 
-    jl_value_t *tpl = (jl_value_t*)jl_alloc_tuple_uninit(nargs);
+    jl_value_t *tpl = (jl_value_t*)jl_alloc_tuple(nargs);
     JL_GC_PUSH1(&tpl);
     for(size_t i=0; i < nargs; i++) {
         jl_tupleset(tpl, i, static_constant_instance(

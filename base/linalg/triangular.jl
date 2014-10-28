@@ -3,6 +3,7 @@ immutable Triangular{T,S<:AbstractMatrix{T},UpLo,IsUnit} <: AbstractMatrix{T}
     data::S
 end
 function Triangular{T}(A::AbstractMatrix{T}, uplo::Symbol, isunit::Bool=false)
+    chksquare(A)
     uplo != :L && uplo != :U && throw(ArgumentError("uplo argument must be either :U or :L"))
     return Triangular{T,typeof(A),uplo,isunit}(A)
 end
@@ -128,7 +129,7 @@ fill!(A::Triangular, x) = (fill!(A.data, x); A)
 
 function similar{T,S,UpLo,IsUnit,Tnew}(A::Triangular{T,S,UpLo,IsUnit}, ::Type{Tnew}, dims::Dims)
     dims[1] == dims[2] || throw(ArgumentError("a Triangular matrix must be square"))
-    length(dims) == 2 || throw(ArgumentError("a Traigular matrix must have two dimensions"))
+    length(dims) == 2 || throw(ArgumentError("a Triangular matrix must have two dimensions"))
     A = similar(A.data, Tnew, dims)
     return Triangular{Tnew, typeof(A), UpLo, IsUnit}(A)
 end
@@ -137,7 +138,7 @@ getindex{T,S}(A::Triangular{T,S,:L,true}, i::Integer, j::Integer) = i == j ? one
 getindex{T,S}(A::Triangular{T,S,:L,false}, i::Integer, j::Integer) = i >= j ? A.data[i,j] : zero(T)
 getindex{T,S}(A::Triangular{T,S,:U,true}, i::Integer, j::Integer) = i == j ? one(T) : (i < j ? A.data[i,j] : zero(T))
 getindex{T,S}(A::Triangular{T,S,:U,false}, i::Integer, j::Integer) = i <= j ? A.data[i,j] : zero(T)
-getindex{T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, i::Integer) = ((m, n) = divrem(i - 1, size(A,1)); A[m + 1, n + 1])
+getindex{T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, i::Integer) = ((m, n) = divrem(i - 1, size(A,1)); A[n + 1, m + 1])
 
 istril{T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}) = UpLo == :L
 istriu{T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}) = UpLo == :U

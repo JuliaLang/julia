@@ -392,11 +392,6 @@ JL_CALLABLE(jl_f_top_eval)
     }
     jl_value_t *v=NULL;
     int last_lineno = jl_lineno;
-    if (m == jl_current_module) {
-        v = jl_toplevel_eval(ex);
-        jl_lineno = last_lineno;
-        return v;
-    }
     jl_module_t *last_m = jl_current_module;
     jl_module_t *task_last_m = jl_current_task->current_module;
     JL_TRY {

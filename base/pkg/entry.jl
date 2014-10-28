@@ -153,9 +153,11 @@ function clone(url::String, pkg::String)
         Base.rm(pkg, recursive=true)
         rethrow()
     end
-    isempty(Reqs.parse("$pkg/REQUIRE")) && return
     info("Computing changes...")
-    resolve()
+    if !edit(Reqs.add, pkg)
+        isempty(Reqs.parse("$pkg/REQUIRE")) && return
+        resolve()
+    end
 end
 
 function clone(url_or_pkg::String)
