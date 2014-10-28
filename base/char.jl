@@ -37,6 +37,7 @@ in(x::Char, y::Char) = x == y
 < (x::Char, y::Char) = uint32(x) <  uint32(y)
 <=(x::Char, y::Char) = uint32(x) <= uint32(y)
 
+isless(x::Char, y::Char)    = isless(uint32(x), uint32(y))
 isless(x::Char, y::Integer) = isless(uint32(x), y)
 isless(x::Integer, y::Char) = isless(x, uint32(y))
 

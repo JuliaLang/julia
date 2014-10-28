@@ -1,5 +1,7 @@
 @test sort([2,3,1]) == [1,2,3]
 @test sort([2,3,1], rev=true) == [3,2,1]
+@test sort(['z':-1:'a']) == ['a':'z']
+@test sort(['a':'z'], rev=true) == ['z':-1:'a']
 @test sortperm([2,3,1]) == [3,1,2]
 @test sortperm!([1,2,3], [2,3,1]) == [3,1,2]
 @test !issorted([2,3,1])
