@@ -14,14 +14,21 @@ abstract AbstractRNG
 type MersenneTwister <: AbstractRNG
     state::DSFMT_state
     seed::Union(Uint32,Vector{Uint32})
+    vals::Vector{Float64}
+    idx::Int
 
     function MersenneTwister(seed::Vector{Uint32})
         state = DSFMT_state()
         dsfmt_init_by_array(state, seed)
-        return new(state, seed)
+        return new(state, seed, Array(Float64, dsfmt_get_min_array_size()), dsfmt_get_min_array_size())
     end
 
     MersenneTwister(seed=0) = MersenneTwister(make_seed(seed))
+end
+
+function gen_rand(r::MersenneTwister)
+    dsfmt_fill_array_close1_open2!(r.state, r.vals, length(r.vals))
+    r.idx = 0
 end
 
 function srand(r::MersenneTwister, seed)
@@ -96,8 +103,8 @@ rand(::Type{Float16}) = float16(rand())
 
 rand{T<:Real}(::Type{Complex{T}}) = complex(rand(T),rand(T))
 
-
-rand(r::MersenneTwister) = dsfmt_genrand_close_open(r.state)
+@inline rand_inbounds(r::MersenneTwister) =  (r.idx += 1; @inbounds return r.vals[r.idx] - 1.0)
+@inline rand(r::MersenneTwister) = (r.idx == length(r.vals) && gen_rand(r); rand_inbounds(r))
 
 ## random integers
 
@@ -138,6 +145,27 @@ end
 function rand!{T}(r::AbstractRNG, A::AbstractArray{T})
     for i = 1:length(A)
         @inbounds A[i] = rand(r, T)
+    end
+    A
+end
+
+function rand!(r::MersenneTwister, A::Array{Float64})
+    n = length(A)
+    if n < dsfmt_get_min_array_size()
+        s = length(r.vals) - r.idx
+        m = min(n, s)
+        for i=1:m
+            @inbounds A[i] = rand_inbounds(r)
+        end
+        if n > s
+            gen_rand(r)
+            for i=m+1:n
+                @inbounds A[i] = rand_inbounds(r)
+            end
+        end
+    else
+        dsfmt_fill_array_close_open!(r.state, A, n & (0xfffffffffffffffe % Int))
+        isodd(n) && (A[n] = rand(r))
     end
     A
 end
