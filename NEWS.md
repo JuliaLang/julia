@@ -104,7 +104,7 @@ Deprecated or removed
 
   * `inf` and `nan` are now deprecated in favor of `T(Inf)` and `NaN`, respectively ([#8776]).
 
-  * `oftype` is deprecated in favor of `convert`.
+  * `oftype(T::Type, x)` is deprecated in favor of `convert(T,x)` (or `T(x)`).
 
   * `{...}` syntax is deprecated in favor of `Any[...]` ([#8578]).
 
