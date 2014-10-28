@@ -51,7 +51,7 @@ function readdlm_auto(input, dlm::Char, T::Type, eol::Char, auto::Bool; opts...)
     optsd = val_opts(opts)
     use_mmap = get(optsd, :use_mmap, @windows ? false : true)
     isa(input, String) && (fsz = filesize(input); input = use_mmap && (fsz > 0) && fsz < typemax(Int) ? as_mmap(input,fsz) : readall(input))
-    sinp = isa(input, Vector{Uint8}) ? ccall(:jl_array_to_string, ByteString, (Array{Uint8,1},), input) :
+    sinp = isa(input, Vector{Uint8}) ? bytestring(input) :
            isa(input, IO) ? readall(input) :
            input
     readdlm_string(sinp, dlm, T, eol, auto, optsd)
@@ -64,13 +64,7 @@ function as_mmap(fname::String, fsz::Int64)
 end
 
 function ascii_if_possible(sbuff::String)
-    isa(sbuff, ASCIIString) && return sbuff
-    asci = true
-    d = sbuff.data
-    for idx in 1:length(d)
-        (char(d[idx]) < char(0x80)) ? continue : (asci = false; break)
-    end
-    asci ? ASCIIString(sbuff.data) : sbuff
+    isascii(sbuff) ? convert(ASCIIString,sbuff) : sbuff
 end
 
 # 
