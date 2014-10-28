@@ -33,7 +33,7 @@ Language changes
     Char now supports a more limited set of operations with `Integer` types:
        
       * comparison / equality
-      * `Char` + `Int` = `Int`
+      * `Char` + `Int` = `Char`
       * `Char` - `Char` = `Int` 
 
 Compiler improvements
@@ -1023,7 +1023,10 @@ Too numerous to mention.
 [#8011]: https://github.com/JuliaLang/julia/issues/8011
 [#8089]: https://github.com/JuliaLang/julia/issues/8089
 [#8152]: https://github.com/JuliaLang/julia/issues/8152
+[#8297]: https://github.com/JuliaLang/julia/issues/8297
 [#8423]: https://github.com/JuliaLang/julia/issues/8423
 [#8560]: https://github.com/JuliaLang/julia/issues/8560
 [#8605]: https://github.com/JuliaLang/julia/issues/8605
-[#8297]: https://github.com/JuliaLang/julia/pull/8297
+[#8624]: https://github.com/JuliaLang/julia/issues/8624
+[#8660]: https://github.com/JuliaLang/julia/issues/8660
+[#8816]: https://github.com/JuliaLang/julia/issues/8816
