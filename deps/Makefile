@@ -793,6 +793,34 @@ check-Rmath: compile-Rmath
 install-Rmath: $(RMATH_OBJ_TARGET) 
 
 
+## objconv ##
+
+OBJCONV_SOURCE = objconv/objconv
+OBJCONV_TARGET = $(build_bindir)/objconv
+
+objconv.zip:
+	$(JLDOWNLOAD) $@ http://www.agner.org/optimize/objconv.zip
+objconv/config.status: objconv.zip
+	unzip -d objconv $<
+	cd objconv && unzip source.zip
+	echo 1 > $@
+$(OBJCONV_SOURCE): objconv/config.status
+	cd objconv && $(CXX) -o objconv -O2 *.cpp
+$(OBJCONV_TARGET): $(OBJCONV_SOURCE) | $(build_bindir)
+	cp -f $< $@
+
+clean-objconv:
+	-rm -f $(OBJCONV_TARGET)
+distclean-objconv:
+	-rm -rf objconv.zip objconv
+
+get-objconv: objconv.zip
+configure-objconv: objconv/config.status
+compile-objconv: $(OBJCONV_SOURCE)
+check-objconv: compile-objconv
+install-objconv: $(OBJCONV_TARGET)
+
+
 ## OpenBLAS ##
 # LAPACK is built into OpenBLAS by default
 
@@ -837,7 +865,7 @@ ifeq ($(USE_BLAS64), 1)
 OPENBLAS_BUILD_OPTS += INTERFACE64=1 SYMBOLSUFFIX="64_"
 ifeq ($(OS), Darwin)
 OPENBLAS_BUILD_OPTS += OBJCONV=$(JULIAHOME)/deps/objconv/objconv
-$(OPENBLAS_OBJ_SOURCE): $(OBJCONV_TARGET)
+$(OPENBLAS_OBJ_SOURCE): $(OBJCONV_SOURCE)
 endif
 endif
 
@@ -1698,33 +1726,6 @@ configure-virtualenv: get-virtualenv
 compile-virtualenv: $(VIRTUALENV_SOURCE)
 check-virtualenv: compile-virtualenv
 install-virtualenv: $(VIRTUALENV_TARGET)
-
-## objconv ##
-
-OBJCONV_SOURCE = objconv/objconv
-OBJCONV_TARGET = $(build_bindir)/objconv
-
-objconv.zip:
-	$(JLDOWNLOAD) $@ http://www.agner.org/optimize/objconv.zip
-objconv/config.status: objconv.zip
-	unzip -d objconv $<
-	cd objconv && unzip source.zip
-	echo 1 > $@
-$(OBJCONV_SOURCE): objconv/config.status
-	cd objconv && $(CXX) -o objconv -O2 *.cpp
-$(OBJCONV_TARGET): $(OBJCONV_SOURCE) | $(build_bindir)
-	cp -f $< $@
-
-clean-objconv:
-	-rm -f $(OBJCONV_TARGET)
-distclean-objconv:
-	-rm -rf objconv.zip objconv
-
-get-objconv: objconv.zip
-configure-objconv: objconv/config.status
-compile-objconv: $(OBJCONV_SOURCE)
-check-objconv: compile-objconv
-install-objconv: $(OBJCONV_TARGET)
 
 ## phony targets ##
 
