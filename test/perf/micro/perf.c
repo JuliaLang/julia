@@ -239,8 +239,9 @@ int main() {
     int f = 0;
     tmin = INFINITY;
     for (int i=0; i<NITER; ++i) {
+        volatile int fibarg = 20; // prevent constant propagation
         t = clock_now();
-        f += fib(20);
+        f += fib(fibarg);
         t = clock_now()-t;
         if (t < tmin) tmin = t;
     }
