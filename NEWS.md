@@ -101,6 +101,8 @@ Library improvements
 
   * `String` has been renamed to `AbstractString`.
 
+  * Added optional rounding argument to floating-point constructors ([#8845])
+
 Deprecated or removed
 ---------------------
 
