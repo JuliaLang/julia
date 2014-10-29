@@ -19,7 +19,7 @@ length(c::Char) = 1
 endof(c::Char) = 1
 getindex(c::Char) = c
 getindex(c::Char, i::Integer) = i == 1 ? c : throw(BoundsError())
-getindex(c::Char, I::Integer...) = all([i == 1 for i in I]) ? c : throw(BoundsError())
+getindex(c::Char, I::Integer...) = all(EqX(1), I) ? c : throw(BoundsError())
 getindex(c::Char, I::Real...) = getindex(c, to_index(I)...)
 first(c::Char) = c
 last(c::Char) = c
@@ -33,9 +33,6 @@ in(x::Char, y::Char) = x == y
 ==(x::Char, y::Char) = uint32(x) == uint32(y)
 ==(x::Char, y::Integer) = uint32(x) == y
 ==(x::Integer, y::Char) = x == uint32(y)
-
-< (x::Char, y::Char) = uint32(x) <  uint32(y)
-<=(x::Char, y::Char) = uint32(x) <= uint32(y)
 
 isless(x::Char, y::Char)    = isless(uint32(x), uint32(y))
 isless(x::Char, y::Integer) = isless(uint32(x), y)
