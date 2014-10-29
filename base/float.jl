@@ -134,7 +134,17 @@ rem(x::Float64, y::Float64) = box(Float64,rem_float(unbox(Float64,x),unbox(Float
 
 cld{T<:FloatingPoint}(x::T, y::T) = -fld(-x,y)
 
-mod{T<:FloatingPoint}(x::T, y::T) = rem(y+rem(x,y),y)
+function mod{T<:FloatingPoint}(x::T, y::T)
+    r = rem(x,y)
+    if r == 0
+        copysign(r,y)
+    elseif (r > 0) $ (y > 0)
+        r+y
+    else
+        r
+    end
+end
+
 
 ## floating point comparisons ##
 

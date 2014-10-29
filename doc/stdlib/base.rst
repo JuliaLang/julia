@@ -2519,22 +2519,23 @@ Mathematical Operators
 
    Element-wise exponentiation operator.
 
-.. function:: div(a,b)
-              ÷(a,b)
+.. function:: div(x, y)
+              ÷(x, y)
 
-   Compute a/b, truncating to an integer.
+   The quotient from Euclidean division. Computes ``x/y``, truncated to an integer.
 
-.. function:: fld(a,b)
+.. function:: fld(x, y)
 
-   Largest integer less than or equal to a/b.
+   Largest integer less than or equal to ``x/y``.
 
-.. function:: cld(a,b)
+.. function:: cld(x, y)
 
-   Smallest integer larger than or equal to a/b.
+   Smallest integer larger than or equal to ``x/y``.
 
-.. function:: mod(x,m)
+.. function:: mod(x, y)
 
-   Modulus after division, returning in the range [0,m).
+   Modulus after division, returning in the range [0,``y``), if ``y`` is
+   positive, or (``y``,0] if ``y`` is negative.
 
 .. function:: mod2pi(x)
 
@@ -2545,18 +2546,15 @@ Mathematical Operators
    mod(x,2pi), which would compute the modulus of x relative to division by the
    floating-point number 2pi.
 
-.. function:: rem(x, m)
+.. function:: rem(x, y)
+              %(x, y)
 
-   Remainder after division.
+   Remainder from Euclidean division, returning a value of the same sign
+   as``x``, and smaller in magnitude than ``y``. This value is always exact.
 
 .. function:: divrem(x, y)
 
-   Returns ``(x/y, x%y)``.
-
-.. _%:
-.. function:: %(x, m)
-
-   Remainder after division. The operator form of ``rem``.
+   The quotient and remainder from Euclidean division. Equivalent to ``(x÷y, x%y)``.
 
 .. function:: mod1(x,m)
 
