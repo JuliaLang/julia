@@ -87,3 +87,29 @@ with_rounding(Float32,RoundDown) do
     @test a32 - b32 === -c32
     @test b32 - a32 === c32
 end
+
+# convert with rounding
+for v = [sqrt(2),-1/3,nextfloat(1.0),prevfloat(1.0),nextfloat(-1.0),prevfloat(-1.0)]
+    pn = convert(Float32,v)
+    @test pn == convert(Float32,v,RoundNearest)
+    pz = convert(Float32,v,RoundToZero)
+    pd = convert(Float32,v,RoundDown)
+    pu = convert(Float32,v,RoundUp)
+    @test pn == pd || pn == pu
+    @test v > 0 ? pz == pd : pz == pu
+    @test pu - pd == eps(pz)
+end
+
+for T in [Float32,Float64]
+    for v in [sqrt(big(2.0)),-big(1.0)/big(3.0),nextfloat(big(1.0)),
+              pi,e,eulergamma,catalan,golden]
+        pn = convert(T,v)
+        @test pn == convert(T,v,RoundNearest)
+        pz = convert(T,v,RoundToZero)
+        pd = convert(T,v,RoundDown)
+        pu = convert(T,v,RoundUp)
+        @test pn == pd || pn == pu
+        @test v > 0 ? pz == pd : pz == pu
+        @test pu - pd == eps(pz)
+    end
+end

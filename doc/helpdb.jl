@@ -369,11 +369,44 @@ Any[
 
 "),
 
-("Base","convert","convert(type, x)
+("Base","convert","convert(T, x[, r::RoundingMode])
 
-   Try to convert \"x\" to the given type. Conversion to a different
-   numeric type will raise an \"InexactError\" if \"x\" cannot be
-   represented exactly in the new type.
+   Convert the \"x\" to a value of type \"T\".
+
+   If \"T\" is an \"Integer\" type, an \"InexactError\" will be raised
+   if \"x\" is not representable by \"T\", for example if \"x\" is not
+   integer-valued, or is outside the range supported by \"T\".
+
+      julia> convert(Int, 3.0)
+      3
+
+      julia> convert(Int, 3.5)
+      ERROR: InexactError()
+       in convert at int.jl:185
+
+   If \"T\" is a \"FloatingPoint\" or \"Rational\" type, then it will
+   return the closest value to \"x\" representable by \"T\". If \"T\"
+   is a \"FloatingPoint\" type that is smaller than that of \"x\",
+   then the method accepts an optional argument \"r\" which determines
+   the direction of rounding.
+
+      julia> x = 1/3
+      0.3333333333333333
+
+      julia> convert(Float32, x)
+      0.33333334f0
+
+      julia> convert(Rational{Int32}, x)
+      1//3
+
+      julia> convert(Rational{Int64}, x)
+      6004799503160661//18014398509481984
+
+      julia> convert(Float32, x, RoundDown)
+      0.3333333f0
+
+      julia> convert(Float32, x, RoundUp)
+      0.33333334f0
 
 "),
 
@@ -564,10 +597,10 @@ Any[
 
 "),
 
-("Base","fieldtype","fieldtype(value, name::Symbol)
+("Base","fieldtype","fieldtype(type, name::Symbol | index::Int)
 
-   Determine the declared type of a named field in a value of
-   composite type.
+   Determine the declared type of a field (specified by name or index)
+   in a composite type.
 
 "),
 
@@ -1801,15 +1834,15 @@ Any[
 
 ("Base","is_valid_ascii","is_valid_ascii(s) -> Bool
 
-   Returns true if the string or byte vector is valid ASCII, false
-   otherwise.
+   Returns true if the argument (\"ASCIIString\", \"UTF8String\", or
+   byte vector) is valid ASCII, false otherwise.
 
 "),
 
 ("Base","is_valid_utf8","is_valid_utf8(s) -> Bool
 
-   Returns true if the string or byte vector is valid UTF-8, false
-   otherwise.
+   Returns true if the argument (\"ASCIIString\", \"UTF8String\", or
+   byte vector) is valid UTF-8, false otherwise.
 
 "),
 
@@ -2246,7 +2279,8 @@ Any[
 
 ("Base","is_valid_utf16","is_valid_utf16(s) -> Bool
 
-   Returns true if the string or \"Uint16\" array is valid UTF-16.
+   Returns true if the argument (\"UTF16String\" or \"Uint16\" array)
+   is valid UTF-16.
 
 "),
 
@@ -3208,11 +3242,11 @@ Any[
 
 ("Base","writedlm","writedlm(f, A, delim='t')
 
-   Write \"A\" (a vector, matrix or an iterable collection of
-   iterable rows) as text to \"f\" (either a filename string or an
-   \"IO\" stream) using the given delimeter \"delim\" (which defaults
-   to tab, but can be any printable Julia object, typically a \"Char\"
-   or \"String\").
+   Write \"A\" (a vector, matrix or an iterable collection of iterable
+   rows) as text to \"f\" (either a filename string or an \"IO\"
+   stream) using the given delimeter \"delim\" (which defaults to tab,
+   but can be any printable Julia object, typically a \"Char\" or
+   \"String\").
 
    For example, two vectors \"x\" and \"y\" of the same length can be
    written as two columns of tab-delimited text to \"f\" by either
@@ -6070,9 +6104,22 @@ popdisplay(d::Display)
 
 "),
 
-("Base","cat","cat(dim, A...)
+("Base","cat","cat(dims, A...)
 
-   Concatenate the input arrays along the specified dimension
+   Concatenate the input arrays along the specified dimensions in the
+   iterable \"dims\". For dimensions not in \"dims\", all input arrays
+   should have the same size, which will also be the size of the
+   output array along that dimension. For dimensions in \"dims\", the
+   size of the output array is the sum of the sizes of the input
+   arrays along that dimension. If \"dims\" is a single number, the
+   different arrays are tightly stacked along that dimension. If
+   \"dims\" is an iterable containing several dimensions, this allows
+   to construct block diagonal matrices and their higher-dimensional
+   analogues by simultaneously increasing several dimensions for every
+   new input array and putting zero blocks elsewhere. For example,
+   *cat([1,2], matrices...)* builds a block diagonal matrix, i.e. a
+   block matrix with *matrices[1]*, *matrices[2]*, ... as diagonal
+   blocks and matching zero blocks away from the diagonal.
 
 "),
 
@@ -11759,7 +11806,39 @@ Millisecond(v)
    \"A\". This includes zeros that are explicitly stored in the sparse
    matrix. The returned vector points directly to the internal nonzero
    storage of \"A\", and any modifications to the returned vector will
-   mutate \"A\" as well.
+   mutate \"A\" as well. See \"rowvals(A)\" and \"nzrange(A, col)\".
+
+"),
+
+("Base","rowvals","rowvals(A)
+
+   Return a vector of the row indices of \"A\", and any modifications
+   to the returned vector will mutate \"A\" as well. Given the
+   internal storage format of sparse matrices, providing access to how
+   the row indices are stored internally can be useful in conjuction
+   with iterating over structural nonzero values. See \"nonzeros(A)\"
+   and \"nzrange(A, col)\".
+
+"),
+
+("Base","nzrange","nzrange(A, col)
+
+   Return the range of indices to the structural nonzero values of a
+   sparse matrix column. In conjunction with \"nonzeros(A)\" and
+   \"rowvals(A)\", this allows for convenient iterating over a sparse
+   matrix
+
+      A = sparse(I,J,V)
+      rows = rowvals(A)
+      vals = nonzeros(A)
+      m, n = size(A)
+      for i = 1:n
+         for j in nzrange(A, i)
+            row = rows[j]
+            val = vals[j]
+            # perform sparse wizardry...
+         end
+      end
 
 "),
 
