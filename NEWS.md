@@ -16,7 +16,7 @@ New language features
   * Type parameters now permit any arbitrary `isbits` type, not just
     `Int` and `Bool` ([#6081]).
 
-  * Keyword argument names can be computed, using syntax such as `f(; (name, val))` ([#7704]).
+  * Keyword argument names can be computed, using syntax such as `f(; symbol => val)` ([#7704]).
 
   * (TODO pending final syntax) staged functions ([#7311]).
 
