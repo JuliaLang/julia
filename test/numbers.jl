@@ -1263,6 +1263,10 @@ end
 @test div(0.3,0.01) == 29.0
 # see https://github.com/JuliaLang/julia/issues/3127
 
+# issue #8831
+@test rem(prevfloat(1.0),1.0) == prevfloat(1.0)
+@test mod(prevfloat(1.0),1.0) == prevfloat(1.0)
+
 # issue #3046
 @test mod(int64(2),typemax(Int64)) == 2
 
