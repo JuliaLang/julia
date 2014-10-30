@@ -1921,3 +1921,10 @@ let
     sizeof_lookup() = sizeof(npy_typestrs["i8"])
     @test sizeof_lookup() == 8
 end
+
+# issue #8851
+abstract AbstractThing{T,N}
+type ConcreteThing{T<:FloatingPoint,N} <: AbstractThing{T,N}
+end
+
+@test typeintersect(AbstractThing{TypeVar(:T,true),2}, ConcreteThing) == ConcreteThing{TypeVar(:T,FloatingPoint),2}

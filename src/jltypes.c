@@ -2610,6 +2610,11 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
     if (jl_is_typector(parent))
         parent = (jl_value_t*)((jl_typector_t*)parent)->body;
     size_t i, j;
+    if (match_intersection_mode && jl_is_typevar(child) && !jl_is_typevar(parent)) {
+        tmp = child;
+        child = parent;
+        parent = tmp;
+    }
     if (jl_is_typevar(parent)) {
         // make sure type is within this typevar's bounds
         if (morespecific) {
