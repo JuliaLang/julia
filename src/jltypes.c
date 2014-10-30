@@ -1991,7 +1991,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             if (tn == jl_array_typename)
                 ndt->pointerfree = 0;
         }
-        ndt->undeffree = dt->undeffree || jl_isbits(ndt);
+        ndt->ninitialized = dt->ninitialized;
         if (cacheable) cache_type_((jl_value_t*)ndt);
         result = (jl_value_t*)ndt;
 
@@ -2904,7 +2904,7 @@ void jl_init_types(void)
     jl_datatype_type->name->primary = (jl_value_t*)jl_datatype_type;
     jl_datatype_type->super = jl_type_type;
     jl_datatype_type->parameters = jl_null;
-    jl_datatype_type->names = jl_tuple(11, jl_symbol("name"),
+    jl_datatype_type->names = jl_tuple(10, jl_symbol("name"),
                                        jl_symbol("super"),
                                        jl_symbol("parameters"),
                                        jl_symbol("names"),
@@ -2913,13 +2913,12 @@ void jl_init_types(void)
                                        jl_symbol("size"),
                                        jl_symbol("abstract"),
                                        jl_symbol("mutable"),
-                                       jl_symbol("pointerfree"),
-                                       jl_symbol("undeffree"));
-    jl_datatype_type->types = jl_tuple(11, jl_typename_type, jl_type_type,
+                                       jl_symbol("pointerfree"));
+    jl_datatype_type->types = jl_tuple(10, jl_typename_type, jl_type_type,
                                        jl_tuple_type, jl_tuple_type,
                                        jl_tuple_type, jl_any_type,
                                        jl_any_type, //types will be fixed later
-                                       jl_any_type, jl_any_type, jl_any_type, jl_any_type);
+                                       jl_any_type, jl_any_type, jl_any_type);
     jl_datatype_type->instance = NULL;
     jl_datatype_type->uid = jl_assign_type_uid();
     jl_datatype_type->struct_decl = NULL;
@@ -2928,7 +2927,7 @@ void jl_init_types(void)
     // NOTE: types should not really be mutable, but the instance and
     // struct_decl fields are basically caches, which are mutated.
     jl_datatype_type->mutabl = 1;
-    jl_datatype_type->undeffree = 0;
+    jl_datatype_type->ninitialized = 0;
 
     jl_typename_type->name = jl_new_typename(jl_symbol("TypeName"));
     jl_typename_type->name->primary = (jl_value_t*)jl_typename_type;
@@ -2944,7 +2943,7 @@ void jl_init_types(void)
     jl_typename_type->abstract = 0;
     jl_typename_type->pointerfree = 0;
     jl_typename_type->mutabl = 1;
-    jl_typename_type->undeffree = 0;
+    jl_typename_type->ninitialized = 0;
 
     jl_sym_type->name = jl_new_typename(jl_symbol("Symbol"));
     jl_sym_type->name->primary = (jl_value_t*)jl_sym_type;
@@ -2959,11 +2958,11 @@ void jl_init_types(void)
     jl_sym_type->abstract = 0;
     jl_sym_type->pointerfree = 0;
     jl_sym_type->mutabl = 1;
-    jl_sym_type->undeffree = 0;
+    jl_sym_type->ninitialized = 0;
 
     // now they can be used to create the remaining base kinds and types
     jl_void_type = jl_new_datatype(jl_symbol("Void"), jl_any_type, jl_null,
-                                   jl_null, jl_null, 0, 0, 1);
+                                   jl_null, jl_null, 0, 0, 0);
     jl_nothing = newstruct(jl_void_type);
     jl_void_type->instance = jl_nothing;
 
@@ -3070,7 +3069,7 @@ void jl_init_types(void)
                         jl_null, jl_null, 0, 1, 0);
     jl_array_typename = jl_array_type->name;
     jl_array_type->pointerfree = 0;
-    jl_array_type->undeffree = 0;
+    jl_array_type->ninitialized = 0;
 
     jl_array_any_type =
         (jl_value_t*)jl_apply_type((jl_value_t*)jl_array_type,
@@ -3205,7 +3204,7 @@ void jl_init_types(void)
     jl_tupleset(jl_datatype_type->types, 7, (jl_value_t*)jl_bool_type);
     jl_tupleset(jl_datatype_type->types, 8, (jl_value_t*)jl_bool_type);
     jl_tupleset(jl_datatype_type->types, 9, (jl_value_t*)jl_bool_type);
-    jl_tupleset(jl_datatype_type->types, 10, (jl_value_t*)jl_bool_type);
+    //jl_tupleset(jl_datatype_type->types, 10, jl_int32_type);
     jl_tupleset(jl_function_type->types, 0, pointer_void);
     jl_tupleset(jl_tvar_type->types, 3, (jl_value_t*)jl_bool_type);
 

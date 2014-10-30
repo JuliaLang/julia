@@ -856,17 +856,17 @@
    ctor))
 
 ;; check if there are any calls to new with fewer than n arguments
-(define (ctors-partial-new expr n)
+(define (ctors-min-initialized expr)
   (and (pair? expr)
-   (or
+   (min
     ((pattern-lambda
       (call (-/ new) . args)
-      (not (length= args n))) (car expr))
+      (length args)) (car expr))
     ((pattern-lambda
       (call (curly (-/ new) . p) . args)
-      (not (length= args n))) (car expr))
-    (ctors-partial-new (car expr) n)
-    (ctors-partial-new (cdr expr) n))))
+      (length args)) (car expr))
+    (ctors-min-initialized (car expr))
+    (ctors-min-initialized (cdr expr)))))
 
 ;; remove line numbers and nested blocks
 (define (flatten-blocks e)
@@ -890,7 +890,7 @@
 	  (defs2 (if (null? defs)
 		     (default-inner-ctors name field-names field-types (null? params))
 		     defs))
-	  (undeffree (not (ctors-partial-new defs (length fields)))))
+	  (min-initialized (min (ctors-min-initialized defs) (length fields))))
      (for-each (lambda (v)
 		 (if (not (symbol? v))
 		     (error (string "field name \"" (deparse v) "\" is not a symbol"))))
@@ -900,7 +900,7 @@
 	   (global ,name) (const ,name)
 	   (composite_type ,name (tuple ,@params)
 			   (tuple ,@(map (lambda (x) `',x) field-names))
-			   ,super (tuple ,@field-types) ,mut ,undeffree)
+			   ,super (tuple ,@field-types) ,mut ,min-initialized)
 	   (call
 	    (lambda ()
 	      (scope-block
@@ -919,7 +919,7 @@
 	     ,@(map make-assignment params (symbols->typevars params bounds #t))
 	     (composite_type ,name (tuple ,@params)
 			     (tuple ,@(map (lambda (x) `',x) field-names))
-			     ,super (tuple ,@field-types) ,mut ,undeffree)))
+			     ,super (tuple ,@field-types) ,mut ,min-initialized)))
 	   ;; "inner" constructors
 	   (call
 	    (lambda ()
