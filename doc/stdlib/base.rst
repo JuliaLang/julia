@@ -1510,7 +1510,7 @@ Strings
 
 .. function:: isspace(c::Union(Char,String)) -> Bool
 
-   Tests whether a character is any whitespace character.  Includes ASCII characters '\t', '\n', '\v', '\f', '\r', and ' ', Latin-1 character U+0085, and characters in Unicode category Zs.  For strings, tests whether this    is true for all elements of the string.
+   Tests whether a character is any whitespace character.  Includes ASCII characters '\\t', '\\n', '\\v', '\\f', '\\r', and ' ', Latin-1 character U+0085, and characters in Unicode category Zs.  For strings, tests whether this    is true for all elements of the string.
 
 .. function:: isupper(c::Union(Char,String)) -> Bool
 
