@@ -139,6 +139,14 @@ Getting Around
 
    This function should only be used interactively.
 
+.. function:: clear_malloc_data()
+
+   Clears any stored memory allocation data when running julia with
+   ``--track-allocation``.  Execute the command(s) you want to test
+   (to force JIT-compilation), then call ``clear_malloc_data()``.
+   Then execute your command(s) again, quit julia, and examine the
+   resulting ``*.mem`` files.
+
 All Objects
 -----------
 
