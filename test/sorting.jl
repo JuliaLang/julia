@@ -254,5 +254,5 @@ type Twain
 end
 Base.isless(x :: Twain, y :: Twain) = x.a < y.a
 let x = Twain(2,3), y = Twain(2,4)
-    @test (min(x,y), max(x,y)) == (x,y)
+    @test (min(x,y), max(x,y)) == (x,y) == minmax(x,y)
 end
