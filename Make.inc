@@ -5,9 +5,15 @@
 ##   your local machine, in a file named `Make.user` in this directory
 
 # OPENBLAS build options
-OPENBLAS_DYNAMIC_ARCH=1
-OPENBLAS_USE_THREAD=1
 OPENBLAS_TARGET_ARCH=
+
+# If OPENBLAS_TARGET_ARCH is set, we default to disabling OPENBLAS_DYNAMIC_ARCH
+ifneq ($(OPENBLAS_TARGET_ARCH),)
+OPENBLAS_DYNAMIC_ARCH=0
+else
+OPENBLAS_DYNAMIC_ARCH=1
+endif
+OPENBLAS_USE_THREAD=1
 
 # Use libraries available on the system instead of building them
 USE_SYSTEM_LLVM=0
