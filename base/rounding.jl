@@ -1,8 +1,6 @@
 module Rounding
 include("fenv_constants.jl")
 
-import Base: convert
-
 export
     RoundingMode, RoundNearest, RoundToZero, RoundUp, RoundDown, RoundFromZero,
     get_rounding, set_rounding, with_rounding
@@ -54,23 +52,23 @@ end
 
 
 # Should be equivalent to:
-#   convert(::Type{Float32},x::Float64,r::RoundingMode) = with_rounding(Float64,r) do
+#   call(::Type{Float32},x::Float64,r::RoundingMode) = with_rounding(Float64,r) do
 #       convert(Float32,x)
 #   end
 # but explicit checks are currently quicker (~20x). 
 # Assumes current rounding mode is RoundToNearest
 
-convert(::Type{Float32},x::Float64,r::RoundingMode{:TiesToEven}) = convert(Float32,x)
+call(::Type{Float32},x::Float64,r::RoundingMode{:TiesToEven}) = convert(Float32,x)
 
-function convert(::Type{Float32},x::Float64,r::RoundingMode{:TowardNegative})
+function call(::Type{Float32},x::Float64,r::RoundingMode{:TowardNegative})
     y = convert(Float32,x)
     y > x ? prevfloat(y) : y
 end
-function convert(::Type{Float32},x::Float64,r::RoundingMode{:TowardPositive})
+function call(::Type{Float32},x::Float64,r::RoundingMode{:TowardPositive})
     y = convert(Float32,x)
     y < x ? nextfloat(y) : y
 end
-function convert(::Type{Float32},x::Float64,r::RoundingMode{:TowardZero})
+function call(::Type{Float32},x::Float64,r::RoundingMode{:TowardZero})
     y = convert(Float32,x)
     if x > 0.0
         y > x ? prevfloat(y) : y

@@ -91,13 +91,13 @@ end
 # convert with rounding
 for v = [sqrt(2),-1/3,nextfloat(1.0),prevfloat(1.0),nextfloat(-1.0),
          prevfloat(-1.0),nextfloat(0.0),prevfloat(0.0)]
-    pn = convert(Float32,v)
-    @test pn == convert(Float32,v,RoundNearest)
-    pz = convert(Float32,v,RoundToZero)
+    pn = Float32(v,RoundNearest)
+    @test pn == convert(Float32,v)
+    pz = Float32(v,RoundToZero)
     @test pz == with_rounding(()->convert(Float32,v), Float64, RoundToZero)
-    pd = convert(Float32,v,RoundDown)
+    pd = Float32(v,RoundDown)
     @test pd == with_rounding(()->convert(Float32,v), Float64, RoundDown)
-    pu = convert(Float32,v,RoundUp)
+    pu = Float32(v,RoundUp)
     @test pu == with_rounding(()->convert(Float32,v), Float64, RoundUp)
 
     @test pn == pd || pn == pu
@@ -109,13 +109,13 @@ for T in [Float32,Float64]
     for v in [sqrt(big(2.0)),-big(1.0)/big(3.0),nextfloat(big(1.0)),
               prevfloat(big(1.0)),nextfloat(big(0.0)),prevfloat(big(0.0)),
               pi,e,eulergamma,catalan,golden,]
-        pn = convert(T,v)
-        @test pn == convert(T,v,RoundNearest)
-        pz = convert(T,v,RoundToZero)
+        pn = T(v,RoundNearest)
+        @test pn == convert(T,v)
+        pz = T(v,RoundToZero)
         @test pz == with_rounding(()->convert(T,v), BigFloat, RoundToZero)
-        pd = convert(T,v,RoundDown)
+        pd = T(v,RoundDown)
         @test pd == with_rounding(()->convert(T,v), BigFloat, RoundDown)
-        pu = convert(T,v,RoundUp)
+        pu = T(v,RoundUp)
         @test pu == with_rounding(()->convert(T,v), BigFloat, RoundUp)
 
         @test pn == pd || pn == pu

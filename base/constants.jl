@@ -13,8 +13,8 @@ convert(::Type{Float16}, x::MathConst) = float16(float32(x))
 convert{T<:Real}(::Type{Complex{T}}, x::MathConst) = convert(Complex{T}, convert(T,x))
 convert{T<:Integer}(::Type{Rational{T}}, x::MathConst) = convert(Rational{T}, float64(x))
 
-stagedfunction convert{T<:Union(Float32,Float64),s}(t::Type{T},c::MathConst{s},r::RoundingMode)
-    f = convert(T,big(c()),r())
+stagedfunction call{T<:Union(Float32,Float64),s}(t::Type{T},c::MathConst{s},r::RoundingMode)
+    f = T(big(c()),r())
     :($f)
 end
 

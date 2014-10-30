@@ -120,9 +120,9 @@ convert(::Type{Float64}, x::BigFloat) =
 convert(::Type{Float32}, x::BigFloat) =
     ccall((:mpfr_get_flt,:libmpfr), Float32, (Ptr{BigFloat},Int32), &x, ROUNDING_MODE[end])
 
-convert(::Type{Float64}, x::BigFloat, r::RoundingMode) =
+call(::Type{Float64}, x::BigFloat, r::RoundingMode) =
     ccall((:mpfr_get_d,:libmpfr), Float64, (Ptr{BigFloat},Int32), &x, to_mpfr(r))
-convert(::Type{Float32}, x::BigFloat, r::RoundingMode) =
+call(::Type{Float32}, x::BigFloat, r::RoundingMode) =
     ccall((:mpfr_get_flt,:libmpfr), Float32, (Ptr{BigFloat},Int32), &x, to_mpfr(r))
 
 convert(::Type{Integer}, x::BigFloat) = convert(BigInt, x)
