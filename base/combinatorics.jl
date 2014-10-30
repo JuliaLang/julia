@@ -446,7 +446,7 @@ immutable SetPartitions{T<:AbstractVector}
     s::T
 end
 
-length(p::SetPartitions) = nsetpartitions(length(p.s))
+length(p::SetPartitions) = bell(length(p.s)) ## nsetpartitions(length(p.s))
 
 partitions(s::AbstractVector) = SetPartitions(s)
 
@@ -506,6 +506,36 @@ let _nsetpartitions = Dict{Int,Int}()
             _nsetpartitions[n] = wn
         end
     end
+end
+
+function bell(n::Int)
+    if n<0
+        0
+    elseif n <= 25
+        bell(n, Int64)
+    elseif n <= 42
+        bell(n, Int128)
+    else
+        bell(n, BigInt)
+    end
+end
+
+## calculation via Bell triangle, no need for recursion
+## http://en.wikipedia.org/wiki/Bell_number#Triangle_scheme_for_calculations
+function bell(n::Int, T::Type)
+    b = Vector{T}[]
+    push!(b, ones(T,1))
+    while length(b) < n
+        lastb = last(b)
+        c = last(lastb)
+        next = [c]
+        for i in lastb
+            c += i
+            push!(next, c)
+        end
+        push!(b, next)
+    end
+    last(last(b))
 end
 
 immutable FixedSetPartitions{T<:AbstractVector}
