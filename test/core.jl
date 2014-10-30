@@ -1854,3 +1854,10 @@ let ex = Expr(:(=), :(f8338(x;y=4)), :(x*y))
     eval(ex)
     @test f8338(2) == 8
 end
+
+# issue #8851
+abstract AbstractThing{T,N}
+type ConcreteThing{T<:FloatingPoint,N} <: AbstractThing{T,N}
+end
+
+@test typeintersect(AbstractThing{TypeVar(:T,true),2}, ConcreteThing) == ConcreteThing{TypeVar(:T,FloatingPoint),2}
