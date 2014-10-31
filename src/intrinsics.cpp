@@ -744,7 +744,7 @@ static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
                             thePtr, size, 1);
         return mark_julia_type(strct, ety);
     }
-    return typed_load(thePtr, im1, ety, ctx);
+    return typed_load(thePtr, im1, ety, ctx, tbaa_user);
 }
 
 static Value *emit_runtime_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_codectx_t *ctx)
@@ -803,7 +803,7 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
             else
                 val = emit_unboxed(x,ctx);
         }
-        typed_store(thePtr, im1, val, ety, ctx);
+        typed_store(thePtr, im1, val, ety, ctx, tbaa_user);
     }
     return mark_julia_type(thePtr, aty);
 }
