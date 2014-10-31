@@ -5,7 +5,7 @@ module SparseMatrix
 importall Base
 import Base.NonTupleType, Base.float, Base.Order, Base.Sort.Forward
 
-export SparseMatrixCSC, 
+export SparseMatrixCSC, SparseVector,
        blkdiag, dense, diag, diagm, droptol!, dropzeros!, etree, full, 
        getindex, ishermitian, issparse, issym, istril, istriu, nnz,
        setindex!, sparse, sparsevec, spdiagm, speye, spones, 
@@ -14,5 +14,6 @@ export SparseMatrixCSC,
 
 include("sparse/sparsematrix.jl")
 include("sparse/csparse.jl")
+include("sparse/sparsevector.jl")
 
 end # module SparseMatrix
