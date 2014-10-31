@@ -264,10 +264,11 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, a::QuickSortAlg, o::Ordering
             v[mi], v[lo] = v[lo], v[mi]
         end
         if lt(o, v[hi], v[mi])
-            v[hi], v[mi] = v[mi], v[hi]
-        end
-        if lt(o, v[mi], v[lo])
-            v[mi], v[lo] = v[lo], v[mi]
+            if lt(o, v[hi], v[lo])
+                v[lo], v[mi], v[hi] = v[hi], v[lo], v[mi]
+            else
+                v[hi], v[mi] = v[mi], v[hi]
+            end
         end
         v[mi], v[lo] = v[lo], v[mi]
         i, j = lo, hi

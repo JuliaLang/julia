@@ -109,7 +109,7 @@ diagnose problems and improve the performance of your code:
   suspect a type problem.  You can also start julia with the
   ``--track-allocation=user`` option and examine the resulting
   ``*.mem`` files to see information about where those allocations
-  occur.
+  occur.  See :ref:`stdlib-track-allocation`.
 
 - The `TypeCheck <https://github.com/astrieanna/TypeCheck.jl>`_
   package can help identify certain kinds of type problems. A more
