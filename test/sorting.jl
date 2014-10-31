@@ -246,3 +246,13 @@ end
 @test sortperm([ 0.0, 1.0, 1.0], rev=true) == [2, 3, 1]
 @test sortperm([-0.0, 1.0, 1.0], rev=true) == [2, 3, 1]
 @test sortperm([-1.0, 1.0, 1.0], rev=true) == [2, 3, 1]
+
+# issue #8825 - stability of min/max
+type Twain
+    a :: Int
+    b :: Int
+end
+Base.isless(x :: Twain, y :: Twain) = x.a < y.a
+let x = Twain(2,3), y = Twain(2,4)
+    @test (min(x,y), max(x,y)) == (x,y) == minmax(x,y)
+end

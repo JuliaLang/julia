@@ -82,6 +82,13 @@ callers(funcname::ByteString; kwargs...) = callers(funcname, retrieve()...; kwar
 callers(func::Function, bt::Vector{Uint}, lidict; kwargs...) = callers(string(func), bt, lidict; kwargs...)
 callers(func::Function; kwargs...) = callers(string(func), retrieve()...; kwargs...)
 
+##
+## For --track-allocation
+##
+# Reset the malloc log. Used to avoid counting memory allocated during
+# compilation.
+clear_malloc_data() = ccall(:jl_clear_malloc_data, Void, ())
+
 
 ####
 #### Internal interface
