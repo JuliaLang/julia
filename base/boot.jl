@@ -199,7 +199,7 @@ else
     typealias Uint Uint32
 end
 
-immutable Bytes
+immutable Bytes <: AbstractArray{Uint8,1}
     pointer::Ptr{Uint8} # or bytes 1-8
     neglen::Int         # or bytes 9-15 & length
 end
