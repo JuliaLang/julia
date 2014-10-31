@@ -47,7 +47,6 @@ function eval_user_input(ast::ANY, backend::REPLBackend)
                 put!(backend.response_channel, (lasterr, bt))
                 iserr, lasterr = false, ()
             else
-                ast = expand(ast)
                 ans = backend.ans
                 # note: value wrapped in a non-syntax value to avoid evaluating
                 # possibly-invalid syntax (issue #6763).
