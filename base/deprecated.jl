@@ -86,7 +86,6 @@ const Ranges = Range
 export Range1
 const Range1 = UnitRange
 
-export clear_malloc_data
 @deprecate clear_malloc_data() Profile.clear_malloc_data()
 
 @deprecate set_rounding(r::RoundingMode) set_rounding(Float64,r)
