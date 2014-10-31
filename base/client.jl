@@ -244,7 +244,7 @@ function process_options(args::Vector{UTF8String})
             addprocs(np)
         elseif args[i]=="--machinefile"
             i+=1
-            machines = split(readall(args[i]), '\n'; keep=false)
+            machines = load_machine_file(args[i])
             addprocs(machines)
         elseif args[i]=="-v" || args[i]=="--version"
             println("julia version ", VERSION)
@@ -333,6 +333,19 @@ function load_juliarc()
         try_include(abspath(JULIA_HOME,"..","etc","julia","juliarc.jl"))
     end
     try_include(abspath(homedir(),".juliarc.jl"))
+end
+
+function load_machine_file(path::String)
+    machines = String[]
+    for line in split(readall(path),'\n'; keep=false)
+        s = split(line,'*'; keep=false)
+        if length(s) > 1
+            append!(machines,fill(s[2],int(s[1])))
+        else
+            push!(machines,line)
+        end
+    end
+    return machines
 end
 
 function early_init()
