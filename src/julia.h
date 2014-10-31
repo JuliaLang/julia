@@ -125,7 +125,6 @@ STATIC_INLINE int jl_array_ndimwords(uint32_t ndims)
 }
 
 typedef struct {
-    JL_DATA_TYPE
     union {
         struct {
             uint8_t data[2*sizeof(void*)-1];
@@ -136,7 +135,7 @@ typedef struct {
             long neglen;
         } there;
     };
-} jl_bytes_t;
+} jl_bytes_struct_t;
 
 typedef jl_value_t *(*jl_fptr_t)(jl_value_t*, jl_value_t**, uint32_t);
 
@@ -488,7 +487,6 @@ extern jl_sym_t *arrow_sym; extern jl_sym_t *ldots_sym;
 #define jl_is_null(v)        (((jl_value_t*)(v)) == ((jl_value_t*)jl_null))
 #define jl_is_nothing(v)     (((jl_value_t*)(v)) == ((jl_value_t*)jl_nothing))
 #define jl_is_tuple(v)       jl_typeis(v,jl_tuple_type)
-#define jl_is_bytes(v)       jl_typeis(v,jl_bytes_type)
 #define jl_is_datatype(v)    jl_typeis(v,jl_datatype_type)
 #define jl_is_pointerfree(t) (((jl_datatype_t*)t)->pointerfree)
 #define jl_is_mutable(t)     (((jl_datatype_t*)t)->mutabl)
@@ -535,16 +533,6 @@ extern jl_sym_t *arrow_sym; extern jl_sym_t *ldots_sym;
 #define jl_is_cpointer(v)    jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_pointer(v)     jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_gf(f)          (((jl_function_t*)(f))->fptr==jl_apply_generic)
-
-STATIC_INLINE uint8_t jl_bytesref(jl_bytes_t *b, size_t i)
-{
-    return b->there.neglen < 0 ? b->there.data[i] : b->here.data[i];
-}
-
-STATIC_INLINE size_t jl_byteslen(jl_bytes_t *b)
-{
-    return b->there.neglen < 0 ? -b->there.neglen : b->here.length;
-}
 
 STATIC_INLINE int jl_is_bitstype(void *v)
 {
@@ -677,7 +665,6 @@ DLLEXPORT jl_tuple_t *jl_alloc_tuple(size_t n);
 DLLEXPORT jl_tuple_t *jl_alloc_tuple_uninit(size_t n);
 DLLEXPORT jl_tuple_t *jl_tuple_append(jl_tuple_t *a, jl_tuple_t *b);
 DLLEXPORT jl_tuple_t *jl_tuple_fill(size_t n, jl_value_t *v);
-DLLEXPORT jl_bytes_t *jl_bytes(const uint8_t *data, size_t n);
 DLLEXPORT jl_sym_t *jl_symbol(const char *str);
 DLLEXPORT jl_sym_t *jl_symbol_lookup(const char *str);
 DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, int32_t len);
@@ -734,6 +721,10 @@ DLLEXPORT void *jl_unbox_voidpointer(jl_value_t *v);
 #define jl_is_long(x)    jl_is_int32(x)
 #define jl_long_type     jl_int32_type
 #endif
+
+// bytes
+DLLEXPORT jl_bytes_struct_t jl_bytes(const uint8_t *data, size_t n);
+DLLEXPORT uint8_t jl_bytesref(const jl_bytes_struct_t b, size_t i);
 
 // structs
 DLLEXPORT int         jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err);

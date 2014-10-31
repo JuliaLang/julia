@@ -1102,6 +1102,7 @@ void jl_get_builtin_hooks(void)
     jl_bounds_exception    = jl_new_struct((jl_datatype_t*)core("BoundsError"));
     jl_memory_exception    = jl_new_struct((jl_datatype_t*)core("MemoryError"));
 
+    jl_bytes_type = (jl_datatype_t*)core("Bytes");
     jl_ascii_string_type = (jl_datatype_t*)core("ASCIIString");
     jl_utf8_string_type = (jl_datatype_t*)core("UTF8String");
     jl_symbolnode_type = (jl_datatype_t*)core("SymbolNode");
