@@ -894,3 +894,8 @@ function i7197()
     ind2sub(size(S), 5)
 end
 @test i7197() == (2,2)
+
+# commit b718cbc72e90, getindex(::Number, ::Real)
+b718cbc = 5
+@test b718cbc[1.0] == 5
+@test_throws InexactError b718cbc[1.1]
