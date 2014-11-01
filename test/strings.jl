@@ -492,6 +492,13 @@ end
 @test search("foo,bar,baz", r"az") == 10:11
 @test search("foo,bar,baz", r"az", 12) == 0:-1
 
+# eachline
+@test isequal(collect(eachline("")), [])
+@test isequal(collect(eachline("foo")), ["foo", ])
+@test isequal(collect(eachline("foo\nbar\n")), ["foo\n", "bar\n"])
+@test isequal(collect(eachline("foo\n\nbar\n\n")), ["foo\n", "\n", "bar\n", "\n"])
+@test isequal(collect(eachline("鴨？\nかも…\n")), ["鴨？\n", "かも…\n"])
+
 # split
 @test isequal(split("foo,bar,baz", 'x'), ["foo,bar,baz"])
 @test isequal(split("foo,bar,baz", ','), ["foo","bar","baz"])
