@@ -564,10 +564,10 @@ Any[
 
 "),
 
-("Base","fieldtype","fieldtype(value, name::Symbol)
+("Base","fieldtype","fieldtype(type, name::Symbol | index::Int)
 
-   Determine the declared type of a named field in a value of
-   composite type.
+   Determine the declared type of a field (specified by name or index)
+   in a composite type.
 
 "),
 
@@ -1801,15 +1801,15 @@ Any[
 
 ("Base","is_valid_ascii","is_valid_ascii(s) -> Bool
 
-   Returns true if the string or byte vector is valid ASCII, false
-   otherwise.
+   Returns true if the argument (\"ASCIIString\", \"UTF8String\", or
+   byte vector) is valid ASCII, false otherwise.
 
 "),
 
 ("Base","is_valid_utf8","is_valid_utf8(s) -> Bool
 
-   Returns true if the string or byte vector is valid UTF-8, false
-   otherwise.
+   Returns true if the argument (\"ASCIIString\", \"UTF8String\", or
+   byte vector) is valid UTF-8, false otherwise.
 
 "),
 
@@ -2173,9 +2173,9 @@ Any[
 ("Base","isspace","isspace(c::Union(Char, String)) -> Bool
 
    Tests whether a character is any whitespace character.  Includes
-   ASCII characters 't', 'n', 'v', 'f', 'r', and ' ', Latin-1
-   character U+0085, and characters in Unicode category Zs.  For
-   strings, tests whether this    is true for all elements of the
+   ASCII characters '\\t', '\\n', '\\v', '\\f', '\\r', and ' ',
+   Latin-1 character U+0085, and characters in Unicode category Zs.
+   For strings, tests whether this    is true for all elements of the
    string.
 
 "),
@@ -2246,7 +2246,8 @@ Any[
 
 ("Base","is_valid_utf16","is_valid_utf16(s) -> Bool
 
-   Returns true if the string or \"Uint16\" array is valid UTF-16.
+   Returns true if the argument (\"UTF16String\" or \"Uint16\" array)
+   is valid UTF-16.
 
 "),
 
@@ -3208,11 +3209,11 @@ Any[
 
 ("Base","writedlm","writedlm(f, A, delim='t')
 
-   Write \"A\" (a vector, matrix or an iterable collection of
-   iterable rows) as text to \"f\" (either a filename string or an
-   \"IO\" stream) using the given delimeter \"delim\" (which defaults
-   to tab, but can be any printable Julia object, typically a \"Char\"
-   or \"String\").
+   Write \"A\" (a vector, matrix or an iterable collection of iterable
+   rows) as text to \"f\" (either a filename string or an \"IO\"
+   stream) using the given delimeter \"delim\" (which defaults to tab,
+   but can be any printable Julia object, typically a \"Char\" or
+   \"String\").
 
    For example, two vectors \"x\" and \"y\" of the same length can be
    written as two columns of tab-delimited text to \"f\" by either
@@ -3603,28 +3604,30 @@ popdisplay(d::Display)
 
 "),
 
-("Base","div","div(a, b)
-÷(a, b)
+("Base","div","div(x, y)
+÷(x, y)
 
-   Compute a/b, truncating to an integer.
-
-"),
-
-("Base","fld","fld(a, b)
-
-   Largest integer less than or equal to a/b.
+   The quotient from Euclidean division. Computes \"x/y\", truncated
+   to an integer.
 
 "),
 
-("Base","cld","cld(a, b)
+("Base","fld","fld(x, y)
 
-   Smallest integer larger than or equal to a/b.
+   Largest integer less than or equal to \"x/y\".
 
 "),
 
-("Base","mod","mod(x, m)
+("Base","cld","cld(x, y)
 
-   Modulus after division, returning in the range [0,m).
+   Smallest integer larger than or equal to \"x/y\".
+
+"),
+
+("Base","mod","mod(x, y)
+
+   Modulus after division, returning in the range [0,``y``), if \"y\"
+   is positive, or (\"y\",0] if \"y\" is negative.
 
 "),
 
@@ -3639,21 +3642,19 @@ popdisplay(d::Display)
 
 "),
 
-("Base","rem","rem(x, m)
+("Base","rem","rem(x, y)
+%(x, y)
 
-   Remainder after division.
+   Remainder from Euclidean division, returning a value of the same
+   sign as``x``, and smaller in magnitude than \"y\". This value is
+   always exact.
 
 "),
 
 ("Base","divrem","divrem(x, y)
 
-   Returns \"(x/y, x%y)\".
-
-"),
-
-("Base","%","%(x, m)
-
-   Remainder after division. The operator form of \"rem\".
+   The quotient and remainder from Euclidean division. Equivalent to
+   \"(x÷y, x%y)\".
 
 "),
 
@@ -5681,10 +5682,9 @@ popdisplay(d::Display)
 
    Reseed the random number generator. If a \"seed\" is provided, the
    RNG will give a reproducible sequence of numbers, otherwise Julia
-   will get entropy from the system. The \"seed\" may be an unsigned
-   integer, a vector of unsigned integers or a filename, in which case
-   the seed is read from a file. If the argument \"rng\" is not
-   provided, the default global RNG is seeded.
+   will get entropy from the system. The \"seed\" may be a non-
+   negative integer, a vector of \"Uint32\" integers or a filename, in
+   which case the seed is read from a file.
 
 "),
 
@@ -5696,38 +5696,16 @@ popdisplay(d::Display)
 
 "),
 
-("Base","rand","rand() -> Float64
+("Base","rand","rand([rng][, t::Type][, dims...])
 
-   Generate a \"Float64\" random number uniformly in [0,1)
+   Generate a random value or an array of random values of the given
+   type, \"t\", which defaults to \"Float64\".
 
 "),
 
 ("Base","rand!","rand!([rng], A)
 
-   Populate the array A with random number generated from the
-   specified RNG.
-
-"),
-
-("Base","rand","rand(rng::AbstractRNG[, dims...])
-
-   Generate a random \"Float64\" number or array of the size specified
-   by dims, using the specified RNG object. Currently,
-   \"MersenneTwister\" is the only available Random Number Generator
-   (RNG), which may be seeded using srand.
-
-"),
-
-("Base","rand","rand(dims or [dims...])
-
-   Generate a random \"Float64\" array of the size specified by dims
-
-"),
-
-("Base","rand","rand(t::Type[, dims...])
-
-   Generate a random number or array of random numbes of the given
-   type.
+   Populate the array A with random values.
 
 "),
 
@@ -5738,14 +5716,14 @@ popdisplay(d::Display)
 
 "),
 
-("Base","randbool","randbool([dims...])
+("Base","randbool","randbool([rng][, dims...])
 
-   Generate a random boolean value. Optionally, generate an array of
-   random boolean values.
+   Generate a random boolean value. Optionally, generate a
+   \"BitArray\" of random boolean values.
 
 "),
 
-("Base","randn","randn([rng], dims or [dims...])
+("Base","randn","randn([rng][, dims...])
 
    Generate a normally-distributed random number with mean 0 and
    standard deviation 1. Optionally generate an array of normally-
@@ -6070,9 +6048,22 @@ popdisplay(d::Display)
 
 "),
 
-("Base","cat","cat(dim, A...)
+("Base","cat","cat(dims, A...)
 
-   Concatenate the input arrays along the specified dimension
+   Concatenate the input arrays along the specified dimensions in the
+   iterable \"dims\". For dimensions not in \"dims\", all input arrays
+   should have the same size, which will also be the size of the
+   output array along that dimension. For dimensions in \"dims\", the
+   size of the output array is the sum of the sizes of the input
+   arrays along that dimension. If \"dims\" is a single number, the
+   different arrays are tightly stacked along that dimension. If
+   \"dims\" is an iterable containing several dimensions, this allows
+   to construct block diagonal matrices and their higher-dimensional
+   analogues by simultaneously increasing several dimensions for every
+   new input array and putting zero blocks elsewhere. For example,
+   *cat([1,2], matrices...)* builds a block diagonal matrix, i.e. a
+   block matrix with *matrices[1]*, *matrices[2]*, ... as diagonal
+   blocks and matching zero blocks away from the diagonal.
 
 "),
 
@@ -11489,6 +11480,16 @@ Millisecond(v)
 
 "),
 
+("Base.Profile","clear_malloc_data","clear_malloc_data()
+
+   Clears any stored memory allocation data when running julia with \"
+   --track-allocation\".  Execute the command(s) you want to test (to
+   force JIT-compilation), then call \"clear_malloc_data()\". Then
+   execute your command(s) again, quit julia, and examine the
+   resulting \"*.mem\" files.
+
+"),
+
 
 ("Base","sort!","sort!(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
@@ -11759,7 +11760,39 @@ Millisecond(v)
    \"A\". This includes zeros that are explicitly stored in the sparse
    matrix. The returned vector points directly to the internal nonzero
    storage of \"A\", and any modifications to the returned vector will
-   mutate \"A\" as well.
+   mutate \"A\" as well. See \"rowvals(A)\" and \"nzrange(A, col)\".
+
+"),
+
+("Base","rowvals","rowvals(A)
+
+   Return a vector of the row indices of \"A\", and any modifications
+   to the returned vector will mutate \"A\" as well. Given the
+   internal storage format of sparse matrices, providing access to how
+   the row indices are stored internally can be useful in conjuction
+   with iterating over structural nonzero values. See \"nonzeros(A)\"
+   and \"nzrange(A, col)\".
+
+"),
+
+("Base","nzrange","nzrange(A, col)
+
+   Return the range of indices to the structural nonzero values of a
+   sparse matrix column. In conjunction with \"nonzeros(A)\" and
+   \"rowvals(A)\", this allows for convenient iterating over a sparse
+   matrix
+
+      A = sparse(I,J,V)
+      rows = rowvals(A)
+      vals = nonzeros(A)
+      m, n = size(A)
+      for i = 1:n
+         for j in nzrange(A, i)
+            row = rows[j]
+            val = vals[j]
+            # perform sparse wizardry...
+         end
+      end
 
 "),
 
